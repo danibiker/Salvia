@@ -1,0 +1,60 @@
+D/amiga////
+D/contrib////
+D/msdos////
+D/nt////
+D/os2////
+/.cvsignore/0/dummy timestamp//
+/adler32.c/0/dummy timestamp//
+/algorithm.txt/0/dummy timestamp//
+/ChangeLog/0/dummy timestamp//
+/compress.c/0/dummy timestamp//
+/configure/0/dummy timestamp//
+/crc32.c/0/dummy timestamp//
+/deflate.c/0/dummy timestamp//
+/deflate.h/0/dummy timestamp//
+/descrip.mms/0/dummy timestamp//
+/example.c/0/dummy timestamp//
+/FAQ/0/dummy timestamp//
+/gvmat32.asm/0/dummy timestamp//
+/gvmat32c.c/0/dummy timestamp//
+/gzio.c/0/dummy timestamp//
+/INDEX/0/dummy timestamp//
+/infblock.c/0/dummy timestamp//
+/infblock.h/0/dummy timestamp//
+/infcodes.c/0/dummy timestamp//
+/infcodes.h/0/dummy timestamp//
+/inffast.c/0/dummy timestamp//
+/inffast.h/0/dummy timestamp//
+/inffixed.h/0/dummy timestamp//
+/inflate.c/0/dummy timestamp//
+/inftrees.c/0/dummy timestamp//
+/inftrees.h/0/dummy timestamp//
+/infutil.c/0/dummy timestamp//
+/infutil.h/0/dummy timestamp//
+/maketree.c/0/dummy timestamp//
+/minigzip.c/0/dummy timestamp//
+/miniunz.c/0/dummy timestamp//
+/minizip.c/0/dummy timestamp//
+/mkgvmt32.bat/0/dummy timestamp//
+/README/0/dummy timestamp//
+/trees.c/0/dummy timestamp//
+/trees.h/0/dummy timestamp//
+/uncompr.c/0/dummy timestamp//
+/unzip.c/0/dummy timestamp//
+/unzip.def/0/dummy timestamp//
+/unzip.h/0/dummy timestamp//
+/xzlibvc.sln/0/dummy timestamp//
+/xzlibvc.vcproj/0/dummy timestamp//
+/zconf.h/0/dummy timestamp//
+/zip.c/0/dummy timestamp//
+/zip.def/0/dummy timestamp//
+/zip.h/0/dummy timestamp//
+/zlib.3/0/dummy timestamp//
+/zlib.h/0/dummy timestamp//
+/zlib.html/0/dummy timestamp//
+/zlibvc.def/0/dummy timestamp//
+/zlibvc.sln/0/dummy timestamp//
+/zlibvc.vcproj/0/dummy timestamp//
+/zutil.c/0/dummy timestamp//
+/zutil.h/0/dummy timestamp//
+/xzlib.lib/0/dummy timestamp/-kb/

@@ -1,9 +1,19 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LocalDebuggerCommandArguments>$(ProjectDir)alex.sms</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>$(ProjectDir)\roms\sonicmd.gen</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerEnvironment>Path=$(Path);$(SolutionDir)..\..\libs\SDL-1.2.14\lib;$(SolutionDir)..\..\libs\SDL_ttf-2.0.11\lib\x86
-$(LocalDebuggerEnvironment)</LocalDebuggerEnvironment>
+    <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)..\..\libs\SDL-1.2.14\lib;$(ProjectDir)..\..\libs\SDL_ttf-2.0.11\lib\x86</LocalDebuggerEnvironment>
+    <LocalDebuggerCommand>$(TargetPath)</LocalDebuggerCommand>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LocalDebuggerCommandArguments>$(ProjectDir)\roms\sonicmd.gen</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)..\..\libs\SDL-1.2.14\lib;$(ProjectDir)..\..\libs\SDL_ttf-2.0.11\lib\x86</LocalDebuggerEnvironment>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <Xbox360DebuggerCommandArguments>
+    </Xbox360DebuggerCommandArguments>
+    <DebuggerFlavor>Xbox360Debugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>

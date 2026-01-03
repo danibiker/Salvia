@@ -1,0 +1,12 @@
+/.cvsignore/1.1.1.1/Thu Apr 26 16:45:45 2001//
+/Makefile.am/1.1.1.1/Thu Apr 26 16:45:45 2001//
+/SDL_active.c/1.4/Wed Mar  6 11:23:02 2002//
+/SDL_events.c/1.9/Wed May 29 23:31:33 2002//
+/SDL_events_c.h/1.5/Tue Aug 20 06:01:20 2002//
+/SDL_expose.c/1.4/Wed Mar  6 11:23:02 2002//
+/SDL_keyboard.c/1.8/Wed Mar  6 11:23:02 2002//
+/SDL_mouse.c/1.6/Mon Oct  7 15:19:34 2002//
+/SDL_quit.c/1.4/Wed Mar  6 11:23:02 2002//
+/SDL_resize.c/1.4/Wed Mar  6 11:23:02 2002//
+/SDL_sysevents.h/1.4/Wed Mar  6 11:23:02 2002//
+D

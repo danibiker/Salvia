@@ -1,0 +1,168 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Source Files\Xbox">
+      <UniqueIdentifier>{98cd4d9a-6034-490c-9061-2eaa3018aa6f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\SDL">
+      <UniqueIdentifier>{ebc24a59-6792-45b2-9417-7c178343fec8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="SDL\src\cdrom\xbox\SDL_syscdrom.c">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\thread\xbox\SDL_syscond.c">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\joystick\xbox\SDL_sysjoystick.c">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\thread\xbox\SDL_sysmutex.c">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\thread\xbox\SDL_syssem.c">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\thread\xbox\SDL_systhread.c">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\timer\xbox\SDL_systimer.c">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\audio\xbox\SDL_xboxaudio.c">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\xbox\SDL_xboxevents.c">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\xbox\SDL_xboxmouse.c">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\xbox\SDL_xboxvideo.c">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\SDL.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\events\SDL_active.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\audio\SDL_audio.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\audio\SDL_audiocvt.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\audio\SDL_audiomem.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_blit.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_blit_0.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_blit_1.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_blit_A.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_blit_N.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_bmp.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\cdrom\SDL_cdrom.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\cpuinfo\SDL_cpuinfo.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_cursor.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\endian\SDL_endian.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\SDL_error.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\events\SDL_events.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\events\SDL_expose.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\SDL_fatal.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_gamma.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\joystick\SDL_joystick.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\events\SDL_keyboard.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\audio\SDL_mixer.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\events\SDL_mouse.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_pixels.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\events\SDL_quit.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\events\SDL_resize.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_RLEaccel.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\file\SDL_rwops.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_stretch.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_surface.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\thread\SDL_thread.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\timer\SDL_timer.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_video.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\audio\SDL_wave.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_yuv.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+    <ClCompile Include="SDL\src\video\SDL_yuv_sw.c">
+      <Filter>Source Files\SDL</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="ReadMe.txt" />
+  </ItemGroup>
+</Project>
