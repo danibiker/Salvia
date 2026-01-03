@@ -1,44 +1,14 @@
+#pragma once
+
 #include <SDL.h>
 #include <SDL_ttf.h>
-
-#ifdef _XBOX
-	#include <xtl.h>
-	
-	#ifdef DEBUG
-		#ifdef __cplusplus
-		extern "C" {
-		#endif
-			//Parche para error de enlazado en Xbox 360.
-			//Muchos cores de Libretro esperan que esta función exista en la CRT,
-			//pero el XDK requiere una definición manual si se usan ciertas 
-			//funciones de string/file_stream.
-			void _chvalidator(void) {
-				// Se deja vacío. El core simplemente busca la dirección del símbolo.
-			}
-		#ifdef __cplusplus
-		}
-		#endif
-	#endif
-
-#elif  defined(WIN)
-	#include <windows.h>
-	#include <mmsystem.h> // Necesario para timeBeginPeriod
-#endif
-
 #include <string>
-#include <sstream>
-#include <algorithm>  //transform
-#include <vector>
 
-
-
-#include "Arimo_Regular.ttf.h"
+#include "engine.h"
 #include "io\video.h"
-#include "io\fileio.h"
-#include "const\constant.h"
-#include "audio\audiobuffer.h"
-#include "io\joystick.h"
-#include "io\sync.h"
+
+
+Engine engine;
 
 // Ya no declaramos punteros a función, sino que usamos las funciones 
 // que vendrán dentro del .lib (se resuelven al linkar)
@@ -58,17 +28,37 @@ extern "C" {
     bool retro_load_game(const struct retro_game_info *game);
 }
 
-SDL_Surface* screen;
-SDL_Joystick *g_joystick = NULL;
-TTF_Font* font;
-// Instancia global para los callbacks
-AudioBuffer g_audioBuffer;
-Sync sync;
-// Variable global para controlar la ejecución
-bool g_running = true;
+
 
 void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
-    va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
+    //va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
+	
+	if (!Constant::g_Logger) {
+		va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
+		return;
+	}
+
+    // 1. Mapear el nivel de Libretro a tus niveles internos
+    int myLevel;
+    switch (level) {
+        case RETRO_LOG_DEBUG: myLevel = L_DEBUG; break;
+        case RETRO_LOG_INFO:  myLevel = L_INFO;  break;
+        case RETRO_LOG_ERROR: myLevel = L_ERROR; break;
+        default:              myLevel = L_DEBUG;  break;
+    }
+
+    // 2. Procesar los argumentos variables (va_list) que envía el Core
+    char buffer[1024];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+
+    // 3. Llamar directamente al método write
+    // Nota: Como no podemos obtener el archivo/línea real del Core, 
+    // indicamos que el origen es "LIBRETRO_CORE"
+    Constant::g_Logger->write(myLevel, "[CORE] %s", buffer);
+
 }
 
 static bool retro_environment(unsigned cmd, void *data) {
@@ -88,7 +78,7 @@ static bool retro_environment(unsigned cmd, void *data) {
             // Opcional: Muchos cores preguntan si pueden usar RGB565 (1) o XRGB8888 (2)
             enum retro_pixel_format fmt = *(const enum retro_pixel_format *)data;
 
-			string msgformat = "Solicitando pixelformat: " + intToString(fmt) + "\n";
+			std::string msgformat = "Solicitando pixelformat: " + Constant::intToString(fmt) + "\n";
 			retro_log_printf(RETRO_LOG_INFO, msgformat.c_str());
 
             return true; 
@@ -101,54 +91,52 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
     // pitch < (width * 2) -> Asegúrate de que el core envíe al menos 16 bits
 	if (!data || width == 0 || height == 0 || pitch < (width * 2)) return;
 
-	//if (sync.g_sync == SYNC_NONE){
-	//	fast_video_blit((uint16_t*)data, (uint16_t*)screen->pixels, width, height, pitch, screen->w, screen->h, screen->pitch);
+	//if (engine.sync.g_sync == SYNC_NONE){
+	//	fast_video_blit((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
 	//} else {
-		scale_software_fixed_point((uint16_t*)data, (uint16_t*)screen->pixels, width, height, pitch, screen->w, screen->h, screen->pitch);
+		scale_software_fixed_point((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
 	//}
-	//scale_bilinear_fast((uint16_t*)data, (uint16_t*)screen->pixels, width, height, pitch, screen->w, screen->h, screen->pitch);
+	//scale_bilinear_fast((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
 
-	//scale2x_software((uint16_t*)data, (uint16_t*)screen->pixels, width, height, pitch, screen->w, screen->h, screen->pitch);
-	//scale3x_software((uint16_t*)data, (uint16_t*)screen->pixels, width, height, pitch, screen->w, screen->h, screen->pitch);
-	//scale4x_software((uint16_t*)data, (uint16_t*)screen->pixels, width, height, pitch, screen->w, screen->h, screen->pitch);
-	//scale_generic_software((uint16_t*)data, (uint16_t*)screen->pixels, width, height, pitch, screen->w, screen->h, screen->pitch, 3);
+	//scale2x_software((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
+	//scale3x_software((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
+	//scale4x_software((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
+	//scale_generic_software((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch, 3);
 	
-	//scale3x_advance((uint16_t*)data, (uint16_t*)screen->pixels, width, height, pitch, screen->w, screen->h, screen->pitch);
-	//scale4x_advance((uint16_t*)data, (uint16_t*)screen->pixels, width, height, pitch, screen->w, screen->h, screen->pitch);
+	//scale3x_advance((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
+	//scale4x_advance((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
 	
-	//scale_xBRZ_3x((uint16_t*)data, (uint16_t*)screen->pixels, width, height, pitch, screen->w, screen->h, screen->pitch);
-	//scale4x_xbrz_software((uint16_t*)data, (uint16_t*)screen->pixels, width, height, pitch, screen->w, screen->h, screen->pitch);
+	//scale_xBRZ_3x((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
+	//scale4x_xbrz_software((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
 	
 }
 
 //Audio Callbacks for Libretro
 // Callback para una sola muestra (menos eficiente, pero requerido)
 void retro_audio_sample(int16_t left, int16_t right) {
-	if (sync.g_sync == SYNC_NONE){
+	if (engine.sync.g_sync == SYNC_NONE){
 		return;
 	}
     int16_t samples[2] = { left, right };
-    g_audioBuffer.Write(samples, 2);
+    engine.g_audioBuffer.Write(samples, 2);
 }
 
 // Callback para ráfagas de muestras (el que usan casi todos los cores)
 std::size_t retro_audio_sample_batch(const int16_t *data, std::size_t frames) {
-    if (sync.g_sync == SYNC_NONE){
+    if (engine.sync.g_sync == SYNC_NONE){
 		return 0;
 	}
 	
 	// frames es el número de pares (izq, der), multiplicamos por 2 para el total
 	// Al usar WriteBlocking, retro_run() no terminará hasta que haya
     // sitio en el buffer, sincronizando así la ejecución al audio real.
-	if (sync.g_sync == SYNC_TO_AUDIO){
-		g_audioBuffer.WriteBlocking(data, frames * 2);
+	if (engine.sync.g_sync == SYNC_TO_AUDIO){
+		engine.g_audioBuffer.WriteBlocking(data, frames * 2);
 	} else {
-		g_audioBuffer.Write(data, frames * 2);
+		engine.g_audioBuffer.Write(data, frames * 2);
 	}
     return frames;
 }
-
-
 
 void savestate(){
 	// Lógica de guardado
@@ -187,7 +175,7 @@ void update_input() {
     while (SDL_PollEvent(&event)) {
 
 		if (event.type == SDL_QUIT) {
-            g_running = false; // Marcamos para salir
+            engine.running = false; // Marcamos para salir
         }
 
 		int player = event.jbutton.which; // Índice del mando (0, 1, 2...)
@@ -198,21 +186,21 @@ void update_input() {
             
             // Mapeo simple de botones SDL -> Libretro
             switch (event.jbutton.button) {
-                case SDL_BUTTON_A: g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_A] = pressed; break;
-                case SDL_BUTTON_B: g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_B] = pressed; break;
-                case SDL_BUTTON_X: g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_X] = pressed; break;
-                case SDL_BUTTON_Y: g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_Y] = pressed; break;
-                case SDL_BUTTON_START:  g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_START]  = pressed; break;
-                case SDL_BUTTON_SELECT: g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_SELECT] = pressed; break;
+                case SDL_BUTTON_A: engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_A] = pressed; break;
+                case SDL_BUTTON_B: engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_B] = pressed; break;
+                case SDL_BUTTON_X: engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_X] = pressed; break;
+                case SDL_BUTTON_Y: engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_Y] = pressed; break;
+                case SDL_BUTTON_START:  engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_START]  = pressed; break;
+                case SDL_BUTTON_SELECT: engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_SELECT] = pressed; break;
             }
         }
         
         // Manejo de la cruceta (D-PAD) mediante Ejes o Hats
         if (event.type == SDL_JOYHATMOTION) {
-            g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_UP]    = (event.jhat.value & SDL_HAT_UP) > 0;
-            g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_DOWN]  = (event.jhat.value & SDL_HAT_DOWN) > 0;
-            g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_LEFT]  = (event.jhat.value & SDL_HAT_LEFT) > 0;
-            g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_RIGHT] = (event.jhat.value & SDL_HAT_RIGHT) > 0;
+            engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_UP]    = (event.jhat.value & SDL_HAT_UP) > 0;
+            engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_DOWN]  = (event.jhat.value & SDL_HAT_DOWN) > 0;
+            engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_LEFT]  = (event.jhat.value & SDL_HAT_LEFT) > 0;
+            engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_RIGHT] = (event.jhat.value & SDL_HAT_RIGHT) > 0;
         }
 
 		if (event.type == SDL_KEYUP) {
@@ -221,14 +209,14 @@ void update_input() {
 			} else if (event.key.keysym.sym == SDLK_F9){
 				loadstate();
 			} else if (event.key.keysym.sym == SDLK_BACKSPACE){
-				sync.g_sync = sync.g_sync_last;
+				engine.sync.g_sync = engine.sync.g_sync_last;
 				SDL_PauseAudio(0);
 			}
 		} else if (event.type == SDL_KEYDOWN) {
 			if (event.key.keysym.sym == SDLK_BACKSPACE){
 				//Enabling fast forward
-				sync.g_sync_last = sync.g_sync;
-				sync.g_sync = SYNC_NONE;
+				engine.sync.g_sync_last = engine.sync.g_sync;
+				engine.sync.g_sync = SYNC_NONE;
 				SDL_PauseAudio(1);
 			}
 		}
@@ -245,7 +233,7 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
         return 0;
     
     // Devolvemos el estado del botón 'id' para el jugador 'port'
-    return g_joy_state[port][id] ? 1 : 0;
+    return engine.g_joy_state[port][id] ? 1 : 0;
 }
 
 static void drawText(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg){
@@ -259,25 +247,12 @@ static void drawText(SDL_Surface* surface, TTF_Font* font, const char *s, int x,
 	}
 }
 
-void initFont(){
-	font = NULL;
-	Fileio *fileio = new Fileio();
-	fileio->loadFromMem(Arimo_Regular_ttf, Arimo_Regular_ttf_size);
-	SDL_RWops *RWOps = SDL_RWFromMem(fileio->getFile(), (int)fileio->getFileSize());
-	if (RWOps != NULL){
-		font = TTF_OpenFontRW(RWOps,1, 24);
-		if (font == NULL) {
-			printf("Error al cargar fuente: %s\n", TTF_GetError());
-		} 
-	} 
-}
-
 //Audio callbacks for SDL
 void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
     // SDL pide bytes, pero trabajamos con muestras de 16 bits (2 bytes)
     int16_t* samples = (int16_t*)stream;
     std::size_t count = len / sizeof(int16_t);
-    g_audioBuffer.Read(samples, count);
+    engine.g_audioBuffer.Read(samples, count);
 }
 
 void init_sdl_audio(double sample_rate) {
@@ -295,61 +270,11 @@ void init_sdl_audio(double sample_rate) {
     SDL_PauseAudio(0); // Inicia el audio
 }
 
-void init_all_joysticks() {
-    SDL_InitSubSystem(SDL_INIT_JOYSTICK);
-    int num_joy = SDL_NumJoysticks();
-    
-    // Abrir todos los mandos disponibles hasta el límite de jugadores
-    for (int i = 0; i < num_joy && i < MAX_PLAYERS; i++) {
-        g_joysticks[i] = SDL_JoystickOpen(i);
-        if (g_joysticks[i]) {
-            printf("Mando %d abierto: %s\n", i, SDL_JoystickName(i));
-        }
-    }
-}
-
-void close_joysticks() {
-	for (int i = 0; i < MAX_PLAYERS; i++) {
-		if (g_joysticks[i]) {
-			SDL_JoystickClose(g_joysticks[i]);
-			g_joysticks[i] = NULL;
-		}
-	}
-}
-
-
 int main(int argc, char *argv[]) {
+	engine.initEngine();
+
 	// Variables para el cálculo de FPS
 	SDL_Color white = { 255, 255, 255 };
-
-	#ifdef WIN
-		// 1. Activar la precisión de 1ms en el reloj de Windows
-		timeBeginPeriod(1);
-		SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
-		sync.g_sync = SYNC_TO_VIDEO;
-		// Pantalla completa sin borde. Parece que pantalla completa sin borde es la forma de ejecucion mas rapida
-		//SDL_putenv("SDL_VIDEO_WINDOW_POS=0,0");
-		//video_flags = video_flags | SDL_NOFRAME;
-	#endif
-	
-	retro_log_printf(RETRO_LOG_INFO, "Starting video");
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
-		retro_log_printf(RETRO_LOG_ERROR, "Error starting SDL");
-		return 1;
-    }
-	
-	screen = SDL_SetVideoMode(video_width, video_height, video_bpp, video_flags);
-	
-	if (!screen){
-		retro_log_printf(RETRO_LOG_ERROR, "Error starting sdl videmode");
-	}
-
-	if (TTF_Init() == -1) {
-		retro_log_printf(RETRO_LOG_ERROR, "Error starting sdl TTF");
-        return 1;
-    }
-
-	initFont();
 
 	//Callback de environment
 	retro_set_environment(retro_environment);
@@ -362,10 +287,8 @@ int main(int argc, char *argv[]) {
 	retro_set_audio_sample(retro_audio_sample);
 	retro_set_audio_sample_batch(retro_audio_sample_batch);
 
-	init_all_joysticks(); // Inicializar mandos
-
     retro_init();
-	string rompath;
+	std::string rompath;
 	#ifdef _XBOX
 		rompath = "game:\\roms\\sonicmd.gen";
 	#else 
@@ -402,17 +325,17 @@ int main(int argc, char *argv[]) {
 	// Inicializar SDL Audio con la frecuencia del core
 	init_sdl_audio(av_info.timing.sample_rate);
 	//Iniciando el contador de fps
-	sync.init_fps_counter(av_info.timing.fps);
+	engine.sync.init_fps_counter(av_info.timing.fps);
 
 	// D. Renderizado de Texto
 	SDL_Rect rect = {0, video_height - 30, 120, 30};
-	Uint32 bkgText = SDL_MapRGB(screen->format, 40, 40, 40);
+	Uint32 bkgText = SDL_MapRGB(engine.screen->format, 40, 40, 40);
 	double nextFrameTime = (double)SDL_GetTicks();
 
-    while (g_running) {
-		if (sync.g_sync == SYNC_TO_VIDEO){
+    while (engine.running) {
+		if (engine.sync.g_sync == SYNC_TO_VIDEO){
 			// El tiempo en el que DEBERÍA empezar este frame
-			nextFrameTime += sync.frameDelay;
+			nextFrameTime += engine.sync.frameDelay;
 		}
 
 		// retro_run hace todo: 
@@ -422,26 +345,22 @@ int main(int argc, char *argv[]) {
 		// 4. Llama a video_refresh() -> (Aquí se dibuja el frame y los FPS)
         retro_run();
 
-		// Actualizamos el contador de media móvil
-		SDL_FillRect(screen, &rect, bkgText);
-		sync.update_fps_counter();
-		drawText(screen, font, sync.fpsText, 0, video_height - 30, white, 0);
+		// Actualizamos el contador de media de fps
+		SDL_FillRect(engine.screen, &rect, bkgText);
+		engine.sync.update_fps_counter();
+		drawText(engine.screen, engine.font, engine.sync.fpsText, 0, video_height - 30, white, 0);
 		
-		SDL_Flip(screen);
+		SDL_Flip(engine.screen);
 		//SDL_UpdateRect(screen, 0, 0, 0, 0);
 		
 		// --- LIMITADOR ---
-		if (sync.g_sync == SYNC_TO_VIDEO){
-			sync.limit_fps(nextFrameTime);
+		if (engine.sync.g_sync == SYNC_TO_VIDEO){
+			engine.sync.limit_fps(nextFrameTime);
 		}
     }
 
     retro_deinit();
-	close_joysticks();
-	// 3. Limpieza: Devolver el reloj del sistema a su estado normal
-	#ifdef WIN
-		timeEndPeriod(1);
-	#endif
-    SDL_Quit();
+	engine.stopEngine();
+
     return 0;
 }

@@ -3,8 +3,6 @@
 #include "const\constant.h"
 #include <stdint.h>
 
-SDL_Surface* core_surface;
-
 inline void check_center(uint16_t* src, uint16_t*& dst, int sw, int sh, std::size_t spitch, 
 						int dw, int dh, std::size_t dpitch, 
 						int scale, int &src_stride, int &dst_stride){

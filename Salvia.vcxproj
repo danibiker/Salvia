@@ -304,7 +304,7 @@
       <AdditionalDependencies>SDLmain.lib;SDL.lib;SDL_ttf.lib;Genesis-Plus-GX.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
@@ -348,17 +348,48 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\audio\audiobuffer.cpp" />
+    <ClCompile Include="src\const\constant.cpp" />
+    <ClCompile Include="src\engine.cpp" />
+    <ClCompile Include="src\gfx\SDL_gfxBlitFunc.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\gfx\SDL_gfxPrimitives.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\gfx\SDL_rotozoom.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\io\fileio.cpp" />
+    <ClCompile Include="src\io\sync.cpp">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsCpp</CompileAs>
+    </ClCompile>
     <ClCompile Include="src\salvia.cpp" />
+    <ClCompile Include="src\utils\logger.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Arimo_Regular.ttf.h" />
     <ClInclude Include="src\audio\audiobuffer.h" />
+    <ClInclude Include="src\beans\structures.h" />
     <ClInclude Include="src\const\constant.h" />
+    <ClInclude Include="src\engine.h" />
+    <ClInclude Include="src\gfx\SDL_gfxBlitFunc.h" />
+    <ClInclude Include="src\gfx\SDL_gfxPrimitives.h" />
+    <ClInclude Include="src\gfx\SDL_gfxPrimitives_font.h" />
+    <ClInclude Include="src\gfx\SDL_rotozoom.h" />
     <ClInclude Include="src\io\fileio.h" />
     <ClInclude Include="src\io\joystick.h" />
     <ClInclude Include="src\io\sync.h" />
     <ClInclude Include="src\io\video.h" />
     <ClInclude Include="src\libretro.h" />
+    <ClInclude Include="src\uiobjects\image.h" />
+    <ClInclude Include="src\uiobjects\listmenu.h" />
+    <ClInclude Include="src\uiobjects\object.h" />
+    <ClInclude Include="src\uiobjects\textarea.h" />
+    <ClInclude Include="src\uiobjects\tilemap.h" />
+    <ClInclude Include="src\utils\logger.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
