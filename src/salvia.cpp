@@ -2,13 +2,20 @@
 
 #include <SDL.h>
 #include <SDL_ttf.h>
+#include <SDL_image.h>
+
 #include <string>
 
-#include "engine.h"
+#include "gameMenu.h"
 #include "io\video.h"
+#include "io\cfgloader.h"
+#include "uiobjects\listmenu.h"
+#include "uiobjects\tilemap.h"
 
 
-Engine engine;
+
+GameMenu *gameMenu;
+Logger *logger;
 
 // Ya no declaramos punteros a función, sino que usamos las funciones 
 // que vendrán dentro del .lib (se resuelven al linkar)
@@ -28,12 +35,26 @@ extern "C" {
     bool retro_load_game(const struct retro_game_info *game);
 }
 
+const char Constant::FILE_SEPARATOR_UNIX = '/';
+const std::string Constant::MAME_SYS_ID = "75";
+const std::string Constant::WHITESPACE = " \n\r\t";
 
+#if defined(WIN) || defined(DOS) || defined(_XBOX)
+    char Constant::FILE_SEPARATOR = 0x5C; //Separador de directorios para win32
+#else
+    char Constant::FILE_SEPARATOR = Constant::FILE_SEPARATOR_UNIX; //Separador de directorios para unix
+#endif
+
+char Constant::tempFileSep[2] = {Constant::FILE_SEPARATOR,'\0'};
+std::string Constant::appDir = "";
+volatile uint32_t Constant::totalTicks = 0;
+int Constant::EXEC_METHOD = launch_batch;
+const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
 
 void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
     //va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
 	
-	if (!Constant::g_Logger) {
+	if (!logger) {
 		va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
 		return;
 	}
@@ -57,7 +78,7 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
     // 3. Llamar directamente al método write
     // Nota: Como no podemos obtener el archivo/línea real del Core, 
     // indicamos que el origen es "LIBRETRO_CORE"
-    Constant::g_Logger->write(myLevel, "[CORE] %s", buffer);
+    logger->write(myLevel, "[CORE] %s", buffer);
 
 }
 
@@ -91,49 +112,49 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
     // pitch < (width * 2) -> Asegúrate de que el core envíe al menos 16 bits
 	if (!data || width == 0 || height == 0 || pitch < (width * 2)) return;
 
-	//if (engine.sync.g_sync == SYNC_NONE){
-	//	fast_video_blit((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
+	//if (gameMenu->sync.g_sync == SYNC_NONE){
+	//	fast_video_blit((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
 	//} else {
-		scale_software_fixed_point((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
+		scale_software_fixed_point((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
 	//}
-	//scale_bilinear_fast((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
+	//scale_bilinear_fast((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
 
-	//scale2x_software((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
-	//scale3x_software((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
-	//scale4x_software((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
-	//scale_generic_software((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch, 3);
+	//scale2x_software((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
+	//scale3x_software((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
+	//scale4x_software((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
+	//scale_generic_software((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch, 3);
 	
-	//scale3x_advance((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
-	//scale4x_advance((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
+	//scale3x_advance((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
+	//scale4x_advance((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
 	
-	//scale_xBRZ_3x((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
-	//scale4x_xbrz_software((uint16_t*)data, (uint16_t*)engine.screen->pixels, width, height, pitch, engine.screen->w, engine.screen->h, engine.screen->pitch);
+	//scale_xBRZ_3x((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
+	//scale4x_xbrz_software((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
 	
 }
 
 //Audio Callbacks for Libretro
 // Callback para una sola muestra (menos eficiente, pero requerido)
 void retro_audio_sample(int16_t left, int16_t right) {
-	if (engine.sync.g_sync == SYNC_NONE){
+	if (gameMenu->sync.g_sync == SYNC_NONE){
 		return;
 	}
     int16_t samples[2] = { left, right };
-    engine.g_audioBuffer.Write(samples, 2);
+    gameMenu->g_audioBuffer.Write(samples, 2);
 }
 
 // Callback para ráfagas de muestras (el que usan casi todos los cores)
 std::size_t retro_audio_sample_batch(const int16_t *data, std::size_t frames) {
-    if (engine.sync.g_sync == SYNC_NONE){
+    if (gameMenu->sync.g_sync == SYNC_NONE){
 		return 0;
 	}
 	
 	// frames es el número de pares (izq, der), multiplicamos por 2 para el total
 	// Al usar WriteBlocking, retro_run() no terminará hasta que haya
     // sitio en el buffer, sincronizando así la ejecución al audio real.
-	if (engine.sync.g_sync == SYNC_TO_AUDIO){
-		engine.g_audioBuffer.WriteBlocking(data, frames * 2);
+	if (gameMenu->sync.g_sync == SYNC_TO_AUDIO){
+		gameMenu->g_audioBuffer.WriteBlocking(data, frames * 2);
 	} else {
-		engine.g_audioBuffer.Write(data, frames * 2);
+		gameMenu->g_audioBuffer.Write(data, frames * 2);
 	}
     return frames;
 }
@@ -175,7 +196,7 @@ void update_input() {
     while (SDL_PollEvent(&event)) {
 
 		if (event.type == SDL_QUIT) {
-            engine.running = false; // Marcamos para salir
+            gameMenu->running = false; // Marcamos para salir
         }
 
 		int player = event.jbutton.which; // Índice del mando (0, 1, 2...)
@@ -186,21 +207,21 @@ void update_input() {
             
             // Mapeo simple de botones SDL -> Libretro
             switch (event.jbutton.button) {
-                case SDL_BUTTON_A: engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_A] = pressed; break;
-                case SDL_BUTTON_B: engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_B] = pressed; break;
-                case SDL_BUTTON_X: engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_X] = pressed; break;
-                case SDL_BUTTON_Y: engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_Y] = pressed; break;
-                case SDL_BUTTON_START:  engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_START]  = pressed; break;
-                case SDL_BUTTON_SELECT: engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_SELECT] = pressed; break;
+                case SDL_BUTTON_A: gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_A] = pressed; break;
+                case SDL_BUTTON_B: gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_B] = pressed; break;
+                case SDL_BUTTON_X: gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_X] = pressed; break;
+                case SDL_BUTTON_Y: gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_Y] = pressed; break;
+                case SDL_BUTTON_START:  gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_START]  = pressed; break;
+                case SDL_BUTTON_SELECT: gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_SELECT] = pressed; break;
             }
         }
         
         // Manejo de la cruceta (D-PAD) mediante Ejes o Hats
         if (event.type == SDL_JOYHATMOTION) {
-            engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_UP]    = (event.jhat.value & SDL_HAT_UP) > 0;
-            engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_DOWN]  = (event.jhat.value & SDL_HAT_DOWN) > 0;
-            engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_LEFT]  = (event.jhat.value & SDL_HAT_LEFT) > 0;
-            engine.g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_RIGHT] = (event.jhat.value & SDL_HAT_RIGHT) > 0;
+            gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_UP]    = (event.jhat.value & SDL_HAT_UP) > 0;
+            gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_DOWN]  = (event.jhat.value & SDL_HAT_DOWN) > 0;
+            gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_LEFT]  = (event.jhat.value & SDL_HAT_LEFT) > 0;
+            gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_RIGHT] = (event.jhat.value & SDL_HAT_RIGHT) > 0;
         }
 
 		if (event.type == SDL_KEYUP) {
@@ -209,14 +230,14 @@ void update_input() {
 			} else if (event.key.keysym.sym == SDLK_F9){
 				loadstate();
 			} else if (event.key.keysym.sym == SDLK_BACKSPACE){
-				engine.sync.g_sync = engine.sync.g_sync_last;
+				gameMenu->sync.g_sync = gameMenu->sync.g_sync_last;
 				SDL_PauseAudio(0);
 			}
 		} else if (event.type == SDL_KEYDOWN) {
 			if (event.key.keysym.sym == SDLK_BACKSPACE){
 				//Enabling fast forward
-				engine.sync.g_sync_last = engine.sync.g_sync;
-				engine.sync.g_sync = SYNC_NONE;
+				gameMenu->sync.g_sync_last = gameMenu->sync.g_sync;
+				gameMenu->sync.g_sync = SYNC_NONE;
 				SDL_PauseAudio(1);
 			}
 		}
@@ -233,26 +254,17 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
         return 0;
     
     // Devolvemos el estado del botón 'id' para el jugador 'port'
-    return engine.g_joy_state[port][id] ? 1 : 0;
+    return gameMenu->g_joy_state[port][id] ? 1 : 0;
 }
 
-static void drawText(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg){
-    if (font) {
-		SDL_Surface* textSurf = TTF_RenderText_Solid(font, s, color);
-		if (textSurf) {
-			SDL_Rect dest = { x, y, 0, 0 };
-			SDL_BlitSurface(textSurf, NULL, surface, &dest);
-			SDL_FreeSurface(textSurf); // ¡Vital!
-		}
-	}
-}
+
 
 //Audio callbacks for SDL
 void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
     // SDL pide bytes, pero trabajamos con muestras de 16 bits (2 bytes)
     int16_t* samples = (int16_t*)stream;
     std::size_t count = len / sizeof(int16_t);
-    engine.g_audioBuffer.Read(samples, count);
+    gameMenu->g_audioBuffer.Read(samples, count);
 }
 
 void init_sdl_audio(double sample_rate) {
@@ -270,12 +282,102 @@ void init_sdl_audio(double sample_rate) {
     SDL_PauseAudio(0); // Inicia el audio
 }
 
+std::string initPathAndLog(char** argv){
+	//Needed to init the log subsistem
+	logger = new Logger(LOG_PATH);
+    dirutil dir;
+	std::string appDir;
+
+#ifdef _XBOX
+	appDir = dir.getDirActual();
+	Constant::setAppDir(appDir);
+#else
+    appDir = argv[0];
+    std::size_t pos = appDir.rfind(Constant::getFileSep());
+    if (pos == string::npos){
+        pos = appDir.rfind(Constant::FILE_SEPARATOR_UNIX);
+        #if defined(WIN) || defined(DOS)
+            appDir = Constant::replaceAll(appDir, "/", "\\");
+        #elif UNIX
+            Constant::FILE_SEPARATOR = Constant::FILE_SEPARATOR_UNIX;
+            Constant::tempFileSep[0] = Constant::FILE_SEPARATOR_UNIX;
+        #endif
+    }
+    appDir = appDir.substr(0, pos);
+
+    if (!dir.dirExists(appDir.c_str()) || pos == string::npos){
+        appDir = dir.getDirActual();
+    }
+    Constant::setAppDir(appDir);
+#endif
+    return appDir;
+}
+
+/**
+ * 
+ */
+void updateMenuScreen(TileMap &tileMap, ListMenu &listMenu, GameMenu* gameMenu, bool keypress){
+	Uint32 bkgText = SDL_MapRGB(gameMenu->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+
+    if (listMenu.animateBkg) 
+		tileMap.draw(gameMenu->video_page);
+    else 
+		SDL_FillRect(gameMenu->video_page, NULL, bkgText);
+    
+
+    gameMenu->refreshScreen(listMenu);
+
+    static uint32_t lastTime = SDL_GetTicks();
+    if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
+        tileMap.speed++;
+    }
+}
+
+void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoader){
+    struct ListStatus menuBeforeExit;
+    int retMenu = gameMenu.recoverGameMenuPos(menuData, menuBeforeExit);
+    if (retMenu == 0){
+        if (menuBeforeExit.layout != menuData.layout){
+            menuData.setLayout(menuBeforeExit.layout, gameMenu.screen->w, gameMenu.screen->h);
+        }
+        menuData.animateBkg = menuBeforeExit.animateBkg;
+    }
+    gameMenu.loadEmuCfg(menuData);
+    if (retMenu == 0 && menuData.maxLines == menuBeforeExit.maxLines){
+        menuData.iniPos = menuBeforeExit.iniPos;
+        menuData.endPos = menuBeforeExit.endPos;
+        menuData.curPos = menuBeforeExit.curPos;
+    }
+    
+    gameMenu.createMenuImages(menuData);
+    menuData.keyUp = true;
+}
+
 int main(int argc, char *argv[]) {
-	engine.initEngine();
+	initPathAndLog(argv);
 
-	// Variables para el cálculo de FPS
-	SDL_Color white = { 255, 255, 255 };
+	CfgLoader cfgLoader;
+	if (cfgLoader.isDebug()){
+        logger->errorLevel = L_DEBUG;
+    }
 
+	gameMenu = new GameMenu(&cfgLoader);
+	ListMenu listMenu(gameMenu->screen->w, gameMenu->screen->h);
+	listMenu.setLayout(LAYBOXES, gameMenu->screen->w, gameMenu->screen->h);
+	
+	if (!gameMenu->initDblBuffer(cfgLoader.getWidth(), cfgLoader.getHeight())){
+		LOG_ERROR("Could not create bitmap");
+        return 1;
+    }
+
+	Constant::drawTextCent(gameMenu->screen, Fonts::getFont(Fonts::FONTSMALL), "Loading games...", 0,0, 
+					true, true, textColor, 0);
+	SDL_Flip(gameMenu->screen);
+
+	initializeMenus(listMenu, *gameMenu, cfgLoader);
+	TileMap tileMap(9, 0, 16, 16);
+    tileMap.load(Constant::getAppDir() + "/assets/art/bricks2.png");
+	
 	//Callback de environment
 	retro_set_environment(retro_environment);
 	//Registrar callback de video
@@ -287,6 +389,7 @@ int main(int argc, char *argv[]) {
 	retro_set_audio_sample(retro_audio_sample);
 	retro_set_audio_sample_batch(retro_audio_sample_batch);
 
+	/*
     retro_init();
 	std::string rompath;
 	#ifdef _XBOX
@@ -325,17 +428,18 @@ int main(int argc, char *argv[]) {
 	// Inicializar SDL Audio con la frecuencia del core
 	init_sdl_audio(av_info.timing.sample_rate);
 	//Iniciando el contador de fps
-	engine.sync.init_fps_counter(av_info.timing.fps);
+	gameMenu->sync.init_fps_counter(av_info.timing.fps);
+	*/
 
 	// D. Renderizado de Texto
 	SDL_Rect rect = {0, video_height - 30, 120, 30};
-	Uint32 bkgText = SDL_MapRGB(engine.screen->format, 40, 40, 40);
+	Uint32 bkgText = SDL_MapRGB(gameMenu->screen->format, 40, 40, 40);
 	double nextFrameTime = (double)SDL_GetTicks();
 
-    while (engine.running) {
-		if (engine.sync.g_sync == SYNC_TO_VIDEO){
+    while (gameMenu->running) {
+		if (gameMenu->sync.g_sync == SYNC_TO_VIDEO){
 			// El tiempo en el que DEBERÍA empezar este frame
-			nextFrameTime += engine.sync.frameDelay;
+			nextFrameTime += gameMenu->sync.frameDelay;
 		}
 
 		// retro_run hace todo: 
@@ -343,24 +447,26 @@ int main(int argc, char *argv[]) {
 		// 2. Calcula la lógica del juego
 		// 3. Llama a audio_batch() -> (Aquí el audio bloquea si va muy rápido)
 		// 4. Llama a video_refresh() -> (Aquí se dibuja el frame y los FPS)
-        retro_run();
+        //retro_run();
+
+		updateMenuScreen(tileMap, listMenu, gameMenu, false);
 
 		// Actualizamos el contador de media de fps
-		SDL_FillRect(engine.screen, &rect, bkgText);
-		engine.sync.update_fps_counter();
-		drawText(engine.screen, engine.font, engine.sync.fpsText, 0, video_height - 30, white, 0);
+		SDL_FillRect(gameMenu->screen, &rect, bkgText);
+		gameMenu->sync.update_fps_counter();
+		Constant::drawText(gameMenu->screen, Fonts::getFont(Fonts::FONTSMALL), gameMenu->sync.fpsText, 0, video_height - 30, white, 0);
 		
-		SDL_Flip(engine.screen);
+		SDL_Flip(gameMenu->screen);
 		//SDL_UpdateRect(screen, 0, 0, 0, 0);
 		
 		// --- LIMITADOR ---
-		if (engine.sync.g_sync == SYNC_TO_VIDEO){
-			engine.sync.limit_fps(nextFrameTime);
+		if (gameMenu->sync.g_sync == SYNC_TO_VIDEO){
+			gameMenu->sync.limit_fps(nextFrameTime);
 		}
     }
 
+	delete logger;
     retro_deinit();
-	engine.stopEngine();
-
+	gameMenu->stopEngine();
     return 0;
 }

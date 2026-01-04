@@ -8,6 +8,11 @@
     #include <windows.h>
 #endif
 
+std::ofstream Logger::logFile;
+unsigned int Logger::numLogs;
+const char* Logger::ERRLEVELSTXT[L_MAX];
+int Logger::errorLevel;
+
 Logger::Logger(const char* filename) {
     logFile.open(filename, std::ios::app);
     numLogs = 0;

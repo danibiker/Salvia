@@ -1,0 +1,68 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="SDL_image Sources">
+      <UniqueIdentifier>{c65f8aa5-0073-42c3-93f7-503810df0886}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDL_image Headers">
+      <UniqueIdentifier>{edea3222-dc6a-4798-be50-370d8db7c494}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\IMG.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_bmp.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_gif.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_jpg.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_lbm.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_pcx.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_png.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_pnm.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_tga.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_tif.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_webp.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_xcf.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_xpm.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_xv.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\IMG_xxx.c">
+      <Filter>SDL_image Sources</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Version.rc">
+      <Filter>SDL_image Sources</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\SDL_image.h">
+      <Filter>SDL_image Headers</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "allegro.h"
-#include "alpng.h"
+#include <SDL.h>
 #include <random>
+#include <string>
 
 class TileMap {
     public:
@@ -17,8 +17,7 @@ class TileMap {
         }
 
         ~TileMap(){
-            Traza::print(Traza::T_DEBUG, "Deleting TileMap...");
-            destroy_bitmap(img);
+            SDL_FreeSurface(img);
         }
 
         int tileX;
@@ -27,28 +26,48 @@ class TileMap {
         int tileH;
         float speed;
 
-        void load(string imgpath){
-            PALETTE pal;
+        void load(std::string imgpath){
+            /*PALETTE pal;
             if ((img = load_png(imgpath.c_str(), pal)) != NULL){   
                 if (bitmap_color_depth(img) == 8)
                     set_palette(pal);
                 
                 findTile(tileX, tileY);
-            }
+            }*/
         }
 
         void findTile(int x, int y){
             if (tile != NULL)
-                destroy_bitmap(tile);
+				SDL_FreeSurface(tile);
 
             this->tileX = x;
             this->tileY = y;
 
-            tile = create_bitmap(tileW, tileW);
-            blit(img, tile, tileX * tileW, tileY * tileH, 0, 0, tileW, tileH);
+            //tile = create_bitmap(tileW, tileW);
+
+			tile = SDL_CreateRGBSurface( SDL_SWSURFACE, tileW, tileW, 16,
+                                        0,0,0,0);
+
+            //blit(img, tile, tileX * tileW, tileY * tileH, 0, 0, tileW, tileH);
+			// 1. Definir el recorte de origen (el tile específico dentro del tileset)
+			SDL_Rect srcRect;
+			srcRect.x = tileX * tileW;
+			srcRect.y = tileY * tileH;
+			srcRect.w = tileW;
+			srcRect.h = tileH;
+
+			// 2. Definir la posición de destino (esquina superior izquierda del tile destino)
+			SDL_Rect dstRect;
+			dstRect.x = 0;
+			dstRect.y = 0;
+			// w y h se toman automáticamente de srcRect
+
+			// 3. Ejecutar el Blit
+			// img es el tileset, tile es la superficie individual de destino
+			SDL_BlitSurface(img, &srcRect, tile, &dstRect);
         }
 
-        void draw(BITMAP *video_page){
+		void draw(SDL_Surface *video_page){
             //int spOffsetX = tileX * tileW;
             //int spOffsetY = tileY * tileH;
             //
@@ -61,16 +80,34 @@ class TileMap {
 
             //Much faster method than the above pixel based but just a little bit more memory required depending
             //on the tiles size
+			/*SDL_Rect srcRect;
+			SDL_Rect dstRect;
             for (int y = -tileH; y < video_page->h + tileH; y+= tileH){
                 for (int x= -tileW; x < video_page->w + tileW; x += tileW){
-                    blit(tile, video_page, 0, 0, x - ((int)(x + speed) % tileW), y - ((int)(y + speed) % tileH), tileW, tileH);
+                    //blit(tile, video_page, 0, 0, x - ((int)(x + speed) % tileW), y - ((int)(y + speed) % tileH), tileW, tileH);
+					// 1. Definir el área de origen (el tile completo)
+					
+					srcRect.x = 0;
+					srcRect.y = 0;
+					srcRect.w = tileW;
+					srcRect.h = tileH;
+
+					// 2. Definir la posición de destino con la misma lógica de scroll de tu código original
+					dstRect.x = x - ((int)(x + speed) % tileW);
+					dstRect.y = y - ((int)(y + speed) % tileH);
+					// Nota: SDL_BlitSurface ignora w y h en el rectángulo de destino, 
+					// usa siempre el tamaño del srcRect para el recorte.
+
+					// 3. Ejecutar el Blit
+					// tile es la superficie origen, video_page es la superficie destino (screen o buffer)
+					SDL_BlitSurface(tile, &srcRect, video_page, &dstRect);
                 }
-            }
+            }*/
         }
 
     private:
         int imageW;
         int imageH;
-        BITMAP* img;
-        BITMAP* tile;
+        SDL_Surface* img;
+        SDL_Surface* tile;
 };

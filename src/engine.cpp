@@ -1,5 +1,4 @@
 #include "engine.h"
-#include "Arimo_Regular.ttf.h"
 
 #ifdef _XBOX
 	#include <xtl.h>
@@ -40,7 +39,7 @@ Engine::~Engine(){
 	delete constant;
 }
 
-int Engine::initEngine(){
+int Engine::initEngine(CfgLoader &cfgLoader){
 	running = true;
 	LOG_DEBUG("Initiating engine\n");
 
@@ -67,11 +66,6 @@ int Engine::initEngine(){
 		return 1;
 	}
 
-	if (TTF_Init() == -1) {
-		LOG_ERROR("Error TTF_Init: %s\n", TTF_GetError());
-        return 1;
-    }
-
 	initFont();
 	init_all_joysticks();
 
@@ -88,16 +82,8 @@ void Engine::stopEngine(){
 }
 
 int Engine::initFont(){
-	font = NULL;
-	fileio.loadFromMem(Arimo_Regular_ttf, Arimo_Regular_ttf_size);
-	SDL_RWops *RWOps = SDL_RWFromMem(fileio.getFile(), (int)fileio.getFileSize());
-	if (RWOps != NULL){
-		font = TTF_OpenFontRW(RWOps,1, 24);
-		if (font == NULL) {
-			LOG_ERROR("Error al cargar fuente: %s\n", TTF_GetError());
-			return 1;
-		} 
-	}
+	fonts->init();
+	fonts->initFonts(24);
 	return 0;
 }
 

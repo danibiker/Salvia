@@ -159,3 +159,102 @@
 [2026-01-03 15:16:01] [DEBUG] [CORE] Mega CD (NTSC-J) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_J.brm
 [2026-01-03 15:16:01] [DEBUG] [CORE] Sega/Mega CD RAM CART is located at: 
 [2026-01-03 15:16:01] [INFO] [CORE] Loading 524288 bytes ...
+[2026-01-03 18:20:42] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:55] ERROR: Main config file not found: Döï[2026-01-03 18:20:46] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:60] ERROR: Main config file not found: Döï[2026-01-03 18:21:34] [DEBUG] [src\engine.cpp:45] Initiating engine
+[2026-01-03 18:21:34] [DEBUG] [src\engine.cpp:116] Mando 0 abierto: Controller (XBOX 360 For Windows)
+[2026-01-03 18:21:34] [INFO] [CORE] Solicitando pixelformat: 2
+[2026-01-03 18:21:34] [INFO] [CORE] Frontend supports RGB565 - will use that instead of XRGB1555.
+[2026-01-03 18:21:34] [INFO] [CORE] [genplus]: Defaulting system directory to D:\develop\Github\xbox360\project\Salvia\\roms.
+[2026-01-03 18:21:34] [INFO] [CORE] [genplus]: Defaulting save directory to D:\develop\Github\xbox360\project\Salvia\\roms.
+[2026-01-03 18:21:34] [DEBUG] [CORE] Game Genie ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\ggenie.bin
+[2026-01-03 18:21:34] [DEBUG] [CORE] Action Replay (Pro) ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\areplay.bin
+[2026-01-03 18:21:34] [DEBUG] [CORE] Sonic & Knuckles (2 MB) ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\sk.bin
+[2026-01-03 18:21:34] [DEBUG] [CORE] Sonic & Knuckles UPMEM (256 KB) ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\sk2chip.bin
+[2026-01-03 18:21:34] [DEBUG] [CORE] Mega Drive TMSS BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_MD.bin
+[2026-01-03 18:21:34] [DEBUG] [CORE] Game Gear TMSS BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios.gg
+[2026-01-03 18:21:34] [DEBUG] [CORE] Master System (PAL) BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_E.sms
+[2026-01-03 18:21:34] [DEBUG] [CORE] Master System (NTSC-U) BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_U.sms
+[2026-01-03 18:21:34] [DEBUG] [CORE] Master System (NTSC-J) BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_J.sms
+[2026-01-03 18:21:34] [DEBUG] [CORE] Mega CD (PAL) BIOS should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_CD_E.bin
+[2026-01-03 18:21:34] [DEBUG] [CORE] Sega CD (NTSC-U) BIOS should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_CD_U.bin
+[2026-01-03 18:21:34] [DEBUG] [CORE] Mega CD (NTSC-J) BIOS should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_CD_J.bin
+[2026-01-03 18:21:34] [DEBUG] [CORE] Mega CD (PAL) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_E.brm
+[2026-01-03 18:21:34] [DEBUG] [CORE] Sega CD (NTSC-U) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_U.brm
+[2026-01-03 18:21:34] [DEBUG] [CORE] Mega CD (NTSC-J) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_J.brm
+[2026-01-03 18:21:34] [DEBUG] [CORE] Sega/Mega CD RAM CART is located at: 
+[2026-01-03 18:21:34] [INFO] [CORE] Loading 524288 bytes ...
+[2026-01-03 18:21:44] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:55] ERROR: Main config file not found: D:\develop\Github\xbox360\project\Salvia\Debug\Win32\salvia.cfg[2026-01-03 18:21:49] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:60] ERROR: Main config file not found: D:\develop\Github\xbox360\project\Salvia\Debug\Win32\SALVIA.CFG[2026-01-03 18:22:25] [DEBUG] [src\engine.cpp:45] Initiating engine
+[2026-01-03 18:22:25] [DEBUG] [src\engine.cpp:116] Mando 0 abierto: Controller (XBOX 360 For Windows)
+[2026-01-03 18:22:25] [INFO] [CORE] Solicitando pixelformat: 2
+[2026-01-03 18:22:25] [INFO] [CORE] Frontend supports RGB565 - will use that instead of XRGB1555.
+[2026-01-03 18:22:25] [INFO] [CORE] [genplus]: Defaulting system directory to D:\develop\Github\xbox360\project\Salvia\\roms.
+[2026-01-03 18:22:25] [INFO] [CORE] [genplus]: Defaulting save directory to D:\develop\Github\xbox360\project\Salvia\\roms.
+[2026-01-03 18:22:25] [DEBUG] [CORE] Game Genie ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\ggenie.bin
+[2026-01-03 18:22:25] [DEBUG] [CORE] Action Replay (Pro) ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\areplay.bin
+[2026-01-03 18:22:25] [DEBUG] [CORE] Sonic & Knuckles (2 MB) ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\sk.bin
+[2026-01-03 18:22:25] [DEBUG] [CORE] Sonic & Knuckles UPMEM (256 KB) ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\sk2chip.bin
+[2026-01-03 18:22:25] [DEBUG] [CORE] Mega Drive TMSS BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_MD.bin
+[2026-01-03 18:22:25] [DEBUG] [CORE] Game Gear TMSS BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios.gg
+[2026-01-03 18:22:25] [DEBUG] [CORE] Master System (PAL) BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_E.sms
+[2026-01-03 18:22:25] [DEBUG] [CORE] Master System (NTSC-U) BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_U.sms
+[2026-01-03 18:22:25] [DEBUG] [CORE] Master System (NTSC-J) BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_J.sms
+[2026-01-03 18:22:25] [DEBUG] [CORE] Mega CD (PAL) BIOS should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_CD_E.bin
+[2026-01-03 18:22:25] [DEBUG] [CORE] Sega CD (NTSC-U) BIOS should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_CD_U.bin
+[2026-01-03 18:22:25] [DEBUG] [CORE] Mega CD (NTSC-J) BIOS should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_CD_J.bin
+[2026-01-03 18:22:25] [DEBUG] [CORE] Mega CD (PAL) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_E.brm
+[2026-01-03 18:22:25] [DEBUG] [CORE] Sega CD (NTSC-U) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_U.brm
+[2026-01-03 18:22:25] [DEBUG] [CORE] Mega CD (NTSC-J) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_J.brm
+[2026-01-03 18:22:25] [DEBUG] [CORE] Sega/Mega CD RAM CART is located at: 
+[2026-01-03 18:22:25] [INFO] [CORE] Loading 524288 bytes ...
+[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] ERROR: Emulator: Tñt[2026-01-03 18:25:36] [ERROR] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:193] ERROR: There is no config file for Tñt. Exiting...[2026-01-03 18:25:36] [DEBUG] [src\engine.cpp:45] Initiating engine
+[2026-01-03 18:25:36] [DEBUG] [src\engine.cpp:116] Mando 0 abierto: Controller (XBOX 360 For Windows)
+[2026-01-03 18:25:36] [INFO] [CORE] Solicitando pixelformat: 2
+[2026-01-03 18:25:36] [INFO] [CORE] Frontend supports RGB565 - will use that instead of XRGB1555.
+[2026-01-03 18:25:36] [INFO] [CORE] [genplus]: Defaulting system directory to D:\develop\Github\xbox360\project\Salvia\\roms.
+[2026-01-03 18:25:36] [INFO] [CORE] [genplus]: Defaulting save directory to D:\develop\Github\xbox360\project\Salvia\\roms.
+[2026-01-03 18:25:36] [DEBUG] [CORE] Game Genie ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\ggenie.bin
+[2026-01-03 18:25:36] [DEBUG] [CORE] Action Replay (Pro) ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\areplay.bin
+[2026-01-03 18:25:36] [DEBUG] [CORE] Sonic & Knuckles (2 MB) ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\sk.bin
+[2026-01-03 18:25:36] [DEBUG] [CORE] Sonic & Knuckles UPMEM (256 KB) ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\sk2chip.bin
+[2026-01-03 18:25:36] [DEBUG] [CORE] Mega Drive TMSS BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_MD.bin
+[2026-01-03 18:25:36] [DEBUG] [CORE] Game Gear TMSS BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios.gg
+[2026-01-03 18:25:36] [DEBUG] [CORE] Master System (PAL) BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_E.sms
+[2026-01-03 18:25:36] [DEBUG] [CORE] Master System (NTSC-U) BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_U.sms
+[2026-01-03 18:25:36] [DEBUG] [CORE] Master System (NTSC-J) BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_J.sms
+[2026-01-03 18:25:36] [DEBUG] [CORE] Mega CD (PAL) BIOS should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_CD_E.bin
+[2026-01-03 18:25:36] [DEBUG] [CORE] Sega CD (NTSC-U) BIOS should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_CD_U.bin
+[2026-01-03 18:25:36] [DEBUG] [CORE] Mega CD (NTSC-J) BIOS should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_CD_J.bin
+[2026-01-03 18:25:36] [DEBUG] [CORE] Mega CD (PAL) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_E.brm
+[2026-01-03 18:25:36] [DEBUG] [CORE] Sega CD (NTSC-U) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_U.brm
+[2026-01-03 18:25:36] [DEBUG] [CORE] Mega CD (NTSC-J) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_J.brm
+[2026-01-03 18:25:36] [DEBUG] [CORE] Sega/Mega CD RAM CART is located at: 
+[2026-01-03 18:25:36] [INFO] [CORE] Loading 524288 bytes ...
+[2026-01-03 18:30:43] [DEBUG] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] Emulator: genesis[2026-01-03 18:32:46] [DEBUG] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] Emulator: gamegear[2026-01-03 18:32:59] [DEBUG] [d:\develop\github\xbox360\project\salvia\src\io\cfgloader.h:122] Emulator: master[2026-01-03 18:33:00] [DEBUG] [src\engine.cpp:45] Initiating engine
+[2026-01-03 18:33:00] [DEBUG] [src\engine.cpp:116] Mando 0 abierto: Controller (XBOX 360 For Windows)
+[2026-01-03 18:33:00] [INFO] [CORE] Solicitando pixelformat: 2
+[2026-01-03 18:33:00] [INFO] [CORE] Frontend supports RGB565 - will use that instead of XRGB1555.
+[2026-01-03 18:33:00] [INFO] [CORE] [genplus]: Defaulting system directory to D:\develop\Github\xbox360\project\Salvia\\roms.
+[2026-01-03 18:33:00] [INFO] [CORE] [genplus]: Defaulting save directory to D:\develop\Github\xbox360\project\Salvia\\roms.
+[2026-01-03 18:33:00] [DEBUG] [CORE] Game Genie ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\ggenie.bin
+[2026-01-03 18:33:00] [DEBUG] [CORE] Action Replay (Pro) ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\areplay.bin
+[2026-01-03 18:33:00] [DEBUG] [CORE] Sonic & Knuckles (2 MB) ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\sk.bin
+[2026-01-03 18:33:00] [DEBUG] [CORE] Sonic & Knuckles UPMEM (256 KB) ROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\sk2chip.bin
+[2026-01-03 18:33:00] [DEBUG] [CORE] Mega Drive TMSS BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_MD.bin
+[2026-01-03 18:33:00] [DEBUG] [CORE] Game Gear TMSS BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios.gg
+[2026-01-03 18:33:00] [DEBUG] [CORE] Master System (PAL) BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_E.sms
+[2026-01-03 18:33:00] [DEBUG] [CORE] Master System (NTSC-U) BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_U.sms
+[2026-01-03 18:33:00] [DEBUG] [CORE] Master System (NTSC-J) BOOTROM should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_J.sms
+[2026-01-03 18:33:00] [DEBUG] [CORE] Mega CD (PAL) BIOS should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_CD_E.bin
+[2026-01-03 18:33:00] [DEBUG] [CORE] Sega CD (NTSC-U) BIOS should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_CD_U.bin
+[2026-01-03 18:33:00] [DEBUG] [CORE] Mega CD (NTSC-J) BIOS should be located at: D:\develop\Github\xbox360\project\Salvia\\roms\bios_CD_J.bin
+[2026-01-03 18:33:00] [DEBUG] [CORE] Mega CD (PAL) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_E.brm
+[2026-01-03 18:33:00] [DEBUG] [CORE] Sega CD (NTSC-U) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_U.brm
+[2026-01-03 18:33:00] [DEBUG] [CORE] Mega CD (NTSC-J) BRAM is located at: D:\develop\Github\xbox360\project\Salvia\\roms\scd_J.brm
+[2026-01-03 18:33:00] [DEBUG] [CORE] Sega/Mega CD RAM CART is located at: 
+[2026-01-03 18:33:00] [INFO] [CORE] Loading 524288 bytes ...
+[2026-01-04 15:20:04] [ERROR] [D:\develop\Github\xbox360\project\Salvia\src\io/cfgloader.h:56] ERROR: Main config file not found: D:\develop\Github\xbox360\project\Salvia\Debug\Win32\salvia.cfg[2026-01-04 15:20:04] [ERROR] [D:\develop\Github\xbox360\project\Salvia\src\io/cfgloader.h:61] ERROR: Main config file not found: D:\develop\Github\xbox360\project\Salvia\Debug\Win32\SALVIA.CFG[2026-01-04 15:20:06] [DEBUG] [src\engine.cpp:44] Initiating engine
+[2026-01-04 15:20:06] [DEBUG] [src\engine.cpp:102] Mando 0 abierto: Controller (XBOX 360 For Windows)
+[2026-01-04 15:22:31] [ERROR] [D:\develop\Github\xbox360\project\Salvia\src\io/cfgloader.h:56] ERROR: Main config file not found: D:\develop\Github\xbox360\project\Salvia\Debug\Win32\salvia.cfg[2026-01-04 15:22:31] [ERROR] [D:\develop\Github\xbox360\project\Salvia\src\io/cfgloader.h:61] ERROR: Main config file not found: D:\develop\Github\xbox360\project\Salvia\Debug\Win32\SALVIA.CFG[2026-01-04 15:22:34] [DEBUG] [src\engine.cpp:44] Initiating engine
+[2026-01-04 15:22:34] [DEBUG] [src\engine.cpp:102] Mando 0 abierto: Controller (XBOX 360 For Windows)
+[2026-01-04 15:23:41] [ERROR] [D:\develop\Github\xbox360\project\Salvia\src\io/cfgloader.h:56] ERROR: Main config file not found: D:\develop\Github\xbox360\project\Salvia\Debug\Win32\salvia.cfg[2026-01-04 15:23:41] [ERROR] [D:\develop\Github\xbox360\project\Salvia\src\io/cfgloader.h:61] ERROR: Main config file not found: D:\develop\Github\xbox360\project\Salvia\Debug\Win32\SALVIA.CFG[2026-01-04 15:23:41] [DEBUG] [src\engine.cpp:44] Initiating engine
+[2026-01-04 15:23:41] [DEBUG] [src\engine.cpp:102] Mando 0 abierto: Controller (XBOX 360 For Windows)
+[2026-01-04 18:40:18] [ERROR] [D:\develop\Github\xbox360\project\Salvia\src\io/cfgloader.h:56] ERROR: Main config file not found: D:\develop\Github\xbox360\project\Salvia\Release\Win32\salvia.cfg[2026-01-04 18:40:18] [ERROR] [D:\develop\Github\xbox360\project\Salvia\src\io/cfgloader.h:61] ERROR: Main config file not found: D:\develop\Github\xbox360\project\Salvia\Release\Win32\SALVIA.CFG

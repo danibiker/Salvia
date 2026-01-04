@@ -9,6 +9,8 @@
 #include "io\sync.h"
 #include "io\fileio.h"
 #include "libretro.h"
+#include "font\fonts.h"
+#include "io\cfgloader.h"
 
 class Engine{
     public:
@@ -18,14 +20,14 @@ class Engine{
 		SDL_Surface* screen;
 		SDL_Joystick* g_joysticks[MAX_PLAYERS];
 		bool g_joy_state[MAX_PLAYERS][RETRO_DEVICE_ID_JOYPAD_R3 + 1];
-		TTF_Font* font;
+		Fonts* fonts;
 		// Instancia global para los callbacks
 		AudioBuffer g_audioBuffer;
 		Sync sync;
 		// Variable global para controlar la ejecución
 		bool running;
 		
-		int initEngine();
+		int initEngine(CfgLoader &cfgLoader);
         void stopEngine();
 		void init_all_joysticks();
 

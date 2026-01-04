@@ -2,9 +2,6 @@
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Salvia", "Salvia.vcxproj", "{18DFBCD7-520F-4659-A7B3-75C102713C21}"
-	ProjectSection(ProjectDependencies) = postProject
-		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E} = {AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}
-	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libSDLx360", "libs\libSDLx360\libSDLx360.vcxproj", "{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}"
 EndProject

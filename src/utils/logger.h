@@ -18,11 +18,9 @@ enum {
 
 class Logger {
 private:
-    std::ofstream logFile;
-    unsigned int numLogs;
-    int errorLevel;
-    const char* ERRLEVELSTXT[L_MAX];
-
+    static std::ofstream logFile;
+    static unsigned int numLogs;
+    static const char* ERRLEVELSTXT[L_MAX];
 public:
     Logger(const char* filename);
 
@@ -33,12 +31,17 @@ public:
         }
     }
 
+	static int errorLevel;
     // Función principal con soporte de formato printf
-    void write(int level, const char* fmt, ...);
-
+    static void write(int level, const char* fmt, ...);
     // Helpers con formato
-    void debug(const char* fmt, ...);
-    void info(const char* fmt, ...);
-    void error(const char* fmt, ...);
+    static void debug(const char* fmt, ...);
+    static void info(const char* fmt, ...);
+    static void error(const char* fmt, ...);
 };
+
+// Macros para simplificar la llamada a los logs
+#define LOG_DEBUG(fmt, ...) Logger::write(L_DEBUG, "[%s:%d] " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define LOG_INFO(fmt, ...)  Logger::write(L_INFO,  fmt, ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...) Logger::write(L_ERROR, "[%s:%d] ERROR: " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 

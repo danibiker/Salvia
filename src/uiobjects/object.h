@@ -1,7 +1,7 @@
 #pragma once
 
-#include <allegro.h>
-#include "utils/beans/structures.h"
+#include <SDL.h>
+#include <beans/structures.h>
 
 enum {
     COBJECT = 0,
@@ -14,8 +14,8 @@ class Object{
     public:
         Object();
         virtual ~Object();
-        virtual void draw(BITMAP *video_page);
-        virtual void draw(BITMAP *video_page, GameTicks gameTicks);
+        virtual void draw(SDL_Surface *video_page);
+        virtual void draw(SDL_Surface *video_page, GameTicks gameTicks);
         virtual int getX(){return x;}
         virtual int getY(){return y;}
         virtual int getW(){return w;}
@@ -35,28 +35,3 @@ class Object{
         int h;          //Alto en pixeles del objeto
         int classType;  //Tipo de elemento al que hace referencia el objeto
 };
-
-Object::~Object(){
-}
-
-/**
- *
- */
-Object::Object(){
-    classType = COBJECT;
-    x = 0;
-    y = 0;
-    w = 0;
-    h = 0;
-}
-
-/**
-*
-*/
-void Object::draw(BITMAP *video_page){
-    //To implement on the child
-}
-
-void Object::draw(BITMAP *video_page, GameTicks gameTicks){
-    //To implement on the child
-}

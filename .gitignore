@@ -43,6 +43,10 @@ libs/SDL_ttf360/Debug/**
 libs/SDL_ttf360/Release/**
 libs/SDL_ttf360/_UpgradeReport*/**
 libs/SDL_ttf360/ipch/**
+libs/SDL_image-1.2.12/libjpeg/Release/**
+libs/SDL_image-1.2.12/lpng1513/projects/vstudio/**/Release/**
+libs/SDL_image-1.2.12/lpng1513/projects/vstudio/**/Debug/**
+libs/SDL_image-1.2.12/VisualC/**/Release/**
 *.sms
 *.zip
 *.gen
