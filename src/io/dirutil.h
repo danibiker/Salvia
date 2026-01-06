@@ -4,19 +4,19 @@
 
 #ifdef _MSC_VER
 	#include <direct.h>
-		#ifndef chdir
-			#define chdir _chdir
-		#endif
-		#ifndef getcwd
-			#define getcwd _getcwd
-		#endif
+	#ifndef chdir
+		#define chdir _chdir
+	#endif
+	#ifndef getcwd
+		#define getcwd _getcwd
+	#endif
+
+	#define mkdir(path) _mkdir(path)
 		
 	#ifdef _XBOX
 		#include <xtl.h>		
-		#define _CRT_SECURE_NO_WARNINGS
-		#define DIRENT_ANSI // Fuerza a dirent.h a usar FindFirstFileA en lugar de W
 		#define PATH_MAX MAX_PATH
-
+		
 		#ifndef S_ISDIR
 			#define S_ISDIR(mode) (((mode) & S_IFMT) == S_IFDIR)
 		#endif
@@ -59,6 +59,8 @@ class dirutil{
         string getFileName(string file);
         bool changeDirAbsolute(const char *str);
         bool borrarArchivo(string ruta);
+		void borrarDir(string path);
+		int createDir(std::string dir);
     private:
         char rutaActual[PATH_MAX]; //Ruta actual que se esta navegando
         char* formatdate(char* str, time_t val);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include "..\const\Constant.h"
+#include <const/Constant.h>
 
 using namespace std;
 
@@ -11,12 +11,12 @@ class FileProps{
         int filetype;
         string dir;
         int ico;
-        size_t fileSize;
+        std::size_t fileSize;
         string extension;
         string creationTime;
         string modificationTime;
-        int iCreationTime;
-        int iModificationTime;
+        time_t iCreationTime;
+        time_t iModificationTime;
         int compareMethod;
         
         FileProps(){

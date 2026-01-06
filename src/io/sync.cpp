@@ -6,9 +6,9 @@ Sync::Sync(){
 	g_frameTimeIndex = 0;
 	g_lastFrameTick = 0;
 	g_actualFps = 0.0f;
-	sprintf(fpsText, "FPS: %.0f", g_actualFps);
-	g_sync = SYNC_TO_AUDIO;
-	g_sync_last = SYNC_TO_AUDIO;
+	sprintf(fpsText, "%.0f", g_actualFps);
+	g_sync = SYNC_NONE;
+	g_sync_last = SYNC_NONE;
 	fps = FPS_DESIRED;
 	frameDelay = 1000 / (double)fps; // Aprox 16ms
 }
@@ -49,7 +49,7 @@ void Sync::update_fps_counter() {
 		// FPS = 1000ms / promedio_de_frame_en_ms
 		// Es lo mismo que: (1000 * cantidad_de_frames) / tiempo_total
 		g_actualFps = (1000.0f * FPS_AVG_COUNT) / totalTime;
-		sprintf(fpsText, "FPS: %.0f", Constant::round(g_actualFps));
+		sprintf(fpsText, "%.0f", Constant::round(g_actualFps));
 	}
 }
 

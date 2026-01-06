@@ -3,14 +3,14 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
-#include "const\Constant.h"
-#include "audio\audiobuffer.h"
-#include "io\joystick.h"
-#include "io\sync.h"
-#include "io\fileio.h"
-#include "libretro.h"
-#include "font\fonts.h"
-#include "io\cfgloader.h"
+#include <audio\audiobuffer.h>
+#include <const\Constant.h>
+#include <io\cfgloader.h>
+#include <io\joystick.h>
+#include <io\fileio.h>
+#include <io\sync.h>
+#include <font\fonts.h>
+#include <map>
 
 class Engine{
     public:
@@ -18,22 +18,20 @@ class Engine{
         ~Engine();
         // Variable usada para la velocidad
 		SDL_Surface* screen;
-		SDL_Joystick* g_joysticks[MAX_PLAYERS];
-		bool g_joy_state[MAX_PLAYERS][RETRO_DEVICE_ID_JOYPAD_R3 + 1];
+
 		Fonts* fonts;
 		// Instancia global para los callbacks
 		AudioBuffer g_audioBuffer;
 		Sync sync;
+		Joystick *joystick;
+
 		// Variable global para controlar la ejecución
 		bool running;
-		
-		int initEngine(CfgLoader &cfgLoader);
+		int initEngine(CfgLoader* cfgLoader);
         void stopEngine();
-		void init_all_joysticks();
-
+		tEvento WaitForKey();
     protected:
 		int initFont();
-		void close_joysticks();
 		Fileio fileio;
     private:
 		Constant *constant;

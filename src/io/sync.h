@@ -1,6 +1,6 @@
 #pragma once
 
-#include "..\const\constant.h"
+#include <const/constant.h>
 #include <stdint.h>
 
 enum {

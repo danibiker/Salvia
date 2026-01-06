@@ -1,7 +1,7 @@
 #pragma once
 
 #include "fonts.h"
-#include "../Arimo_Regular.ttf.h"
+#include <font/Arimo_Regular.ttf.h>
 
 Fileio Fonts::fileio;
 TTF_Font* Fonts::vFonts[2];
@@ -11,14 +11,6 @@ Fonts::Fonts(){
 
 Fonts::~Fonts(){
 	LOG_DEBUG("Deleting Fonts...");
-}
- /**
-    * 
-    */
-void Fonts::init(){
-    if (TTF_Init() == -1) {
-		LOG_ERROR("Error TTF_Init: %s\n", TTF_GetError());
-	}
 }
 
 /**

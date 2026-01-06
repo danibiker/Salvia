@@ -11,7 +11,7 @@ using namespace std;
 
 static const int waitTitleMove = 2000;
 static const float textFps = 20.0;
-static const int frameTimeText = 1000 / textFps;
+static const int frameTimeText = (int)(1000 / textFps);
 
 class ListMenu : public Object{
     private:

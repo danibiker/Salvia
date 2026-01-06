@@ -22,12 +22,12 @@ ListMenu::ListMenu(int screenw, int screenh){
     curPos = 0;
     listSize = 0;
     maxLines = 0;
-    marginX = floor((double)(screenw / 100));
-    marginY = screenh / SCREENHDIV * 1.5;
+    marginX = (int)floor((double)(screenw / 100));
+    marginY = (int) (screenh / SCREENHDIV * 1.5);
     lastSel = -1;
     pixelShift = 0;
     keyUp = false;
-    animateBkg = false;
+    animateBkg = true;
     setObjectType(GUILISTBOX);
     setLayout(LAYSIMPLE, screenw, screenh);
     //set_trans_blender(255, 255, 255, 190);
@@ -50,14 +50,14 @@ size_t ListMenu::getNumGames(){
 int ListMenu::getScreenNumLines(){
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 	int face_h = TTF_FontLineSkip(fontMenu);
-    return face_h != 0 ? std::ceil((double)getH() / face_h) : 0;
+    return face_h != 0 ? (int)std::floor((double)getH() / face_h) : 0;
 }
 
 /**
     * 
     */
 void ListMenu::setLayout(int layout, int screenw, int screenh){
-    this->marginY = screenh / SCREENHDIV * 1.5;
+    this->marginY = (int) (screenh / SCREENHDIV * 1.5);
     clearSelectedText();
 
     if (layout == LAYBOXES){
@@ -87,13 +87,9 @@ void ListMenu::setLayout(int layout, int screenw, int screenh){
     */
 void ListMenu::draw(SDL_Surface *video_page){
 	static const int bkg = SDL_MapRGB(video_page->format, bkgMenu.r, bkgMenu.g, bkgMenu.b);
-    //static const int transpink = SDL_MapRGB(video_page->format, 255, 0, 255);
-    //static int colorTrans = SDL_MapRGB(video_page->format, 247, 221, 114);
-
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 	int face_h = TTF_FontLineSkip(fontMenu);
 
-    const int centerPos = this->getX() + this->getW() / 2;
     //To scroll one letter in one second. We use the face_h because the width of 
     //a letter is not fixed.
     const float pixelsScrollFps = max(ceil(face_h / textFps), 1.0f);
@@ -110,19 +106,20 @@ void ListMenu::draw(SDL_Surface *video_page){
         if (i == this->curPos){
             int y = this->getY() + fontHeightRect;
             //Gaining some extra fps when the screen resolution is low
-            if (video_page->h >= 768){
+			SDL_Rect rectElem = {this->getX() + marginX, y, this->getW() - 2 * marginX, face_h};
+            if (video_page->h >= 480){
                 //Weird things happen if this line is not used here
                 //when using antialiased text
                 //set_trans_blender(255, 255, 255, 190);
                 //drawing_mode(DRAW_MODE_TRANS, video_page, this->getX(), this->getY());
                 //rectfill(video_page, this->getX() + marginX, y, this->getW() - marginX, y + fontMenu->face_h, colorTrans);
                 //drawing_mode(DRAW_MODE_SOLID, video_page, this->getX(), this->getY());
-				SDL_Rect rect = {this->getX(), this->getY(), this->getW() - marginX, y + face_h};
-				SDL_FillRect(video_page, &rect, bkg);
+				//SDL_FillRect(video_page, &rectElem, bkg);
+				DrawRectAlpha(video_page, rectElem, bkgMenu, 190);
             } else {
-                lineTextColor = lightgray;
+                lineTextColor = white;
             }
-			rect(video_page, this->getX() - 1 + marginX, y - 1, this->getW() + 1 - marginX, y + face_h, bkgMenu);
+			rect(video_page, rectElem.x - 1, rectElem.y - 1, rectElem.x + rectElem.w, rectElem.y + rectElem.h, bkgMenu);
         }
                 
         //Drawing the selected option in a separate bitmap to allow scrolling
@@ -139,7 +136,7 @@ void ListMenu::draw(SDL_Surface *video_page){
 				//clear_to_color(imgText, transpink);
                 //alfont_textout_ex(imgText, fontMenu, line.c_str(), 0, 0, lineTextColor, colorTrans);
 
-				imgText = SDL_CreateRGBSurface(
+				/*imgText = SDL_CreateRGBSurface(
 					video_page->flags,          // Mismos flags (SWSURFACE/HWSURFACE)
 					txtTotalWidth,              // Mismo ancho
 					face_h,              // Mismo alto
@@ -148,9 +145,12 @@ void ListMenu::draw(SDL_Surface *video_page){
 					video_page->format->Gmask,  // Máscara Verde
 					video_page->format->Bmask,  // Máscara Azul
 					video_page->format->Amask   // Máscara Alfa
-				);
+				);*/
 
-				Constant::drawText(imgText, fontMenu, line.c_str(), 0, 0, lineTextColor, bkg);
+				// 2. Crear la superficie con texto y fondo transparente
+				// "fuente" debe ser un TTF_Font* previamente cargado
+				imgText = TTF_RenderText_Blended(fontMenu, line.c_str(), lineTextColor);
+				//Constant::drawText(imgText, fontMenu, line.c_str(), 0, 0, lineTextColor, bkg);
                 lastSel = this->curPos;
             }
                     
@@ -159,10 +159,12 @@ void ListMenu::draw(SDL_Surface *video_page){
                 //Waiting at the beginning and the end of the scrolling
                 if (pixelShift == 0 || pixelShift + pixelsScrollFps >= txtDifWidth){
                     //Adding a decimal to not enter again while we should be waiting
-                    pixelShift += 0.1;
+                    pixelShift += 0.1f;
                     lastTick += waitTitleMove;
                 } else {
-                    pixelShift = (int)floor(pixelShift + pixelsScrollFps) % txtDifWidth;
+                    //pixelShift = (int)floor(pixelShift + pixelsScrollFps) % txtDifWidth;
+					// fmod permite hacer el "módulo" con números float/double
+					pixelShift = fmod(pixelShift + pixelsScrollFps, (float)txtDifWidth);
 					lastTick = SDL_GetTicks();
                 }
             }
@@ -183,7 +185,7 @@ void ListMenu::draw(SDL_Surface *video_page){
 						
 				// 1. Definir los rectángulos de origen (source) y destino (destination)
 				SDL_Rect srcRect;
-				srcRect.x = pixelShift;
+				srcRect.x = (Sint16)pixelShift;
 				srcRect.y = 0;
 				srcRect.w = this->getW() - 2 * this->marginX;
 				srcRect.h = face_h; // Usando la equivalencia de face_h
@@ -199,7 +201,7 @@ void ListMenu::draw(SDL_Surface *video_page){
 				// imgText es la superficie con el texto
 				SDL_BlitSurface(imgText, &srcRect, video_page, &dstRect);
             } else {
-                Constant::drawText(video_page, fontMenu, line.c_str(), this->getX() + marginX, 
+                Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX() + marginX, 
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
             }
         }

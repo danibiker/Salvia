@@ -28,6 +28,13 @@ static const string SNAPFS = "snapFs";
 static const string SYNOPSIS = "synopsis";
 static const string MENUTMP = "menu.tmp";
 
+enum status_emu
+{
+	//The emulation has ben started and it's running
+	EMU_STARTED = 0, 
+	//The menu is showing so, the emulation is paused
+	EMU_MENU
+};
 
 class GameMenu : public Engine{
     public:
@@ -40,17 +47,30 @@ class GameMenu : public Engine{
 		void createMenuImages(ListMenu &);
         void loadEmuCfg(ListMenu &);
         void refreshScreen(ListMenu &);
-        void launchProgram(ListMenu &);
+        vector<string> launchProgram(ListMenu &);
         bool initDblBuffer(int w, int h);
         int saveGameMenuPos(ListMenu &);
         int recoverGameMenuPos(ListMenu &, struct ListStatus &);
         void showMessage(string);
         ConfigEmu getNextCfgEmu();
         ConfigEmu getPrevCfgEmu();
+		ConfigEmu getCfgEmu();
+		void updateFps();
+
         void setCfgLoader(CfgLoader *cfgLoader);
 	    bool isDebug();
+		bool romLoaded;
+		void setEmuStatus(int tmpStat){
+			status = tmpStat;
+		}
+
+		int getEmuStatus(){
+			return status;
+		}
 
     private:
+		std::string configButtonsJOY();
+
         int emuCfgPos;
 		bool dblBufferEnabled;
 		std::string getPathPrefix(std::string);
@@ -59,4 +79,8 @@ class GameMenu : public Engine{
         std::map<std::string, Image> menuImages;
         std::map<std::string, TextArea> menuTextAreas;
 		void blit(SDL_Surface *, SDL_Surface *, int, int, int, int, int, int);
+		int status;
+		int fpsCountEnabled;
+		SDL_Rect rectFps;
+		Uint32 bkgTextFps;
 };

@@ -120,7 +120,7 @@ class CfgLoader{
             const char *filepath = strFilepath.c_str();
 
             //cout << " " << emuname << endl;
-			LOG_DEBUG("Emulator: %s", emuname.c_str());
+			LOG_DEBUG("Emulator: %s\n", emuname.c_str());
 
             bool fileopened = false;
             //cout << "Checking if exists" <<endl;
@@ -141,8 +141,8 @@ class CfgLoader{
                         if (line.length() > 1 && line.at(0) != '#' && line.find("=") != std::string::npos){
                             //cout << "splitting line and trimming" <<endl;
                             std::vector<std::string> keyvalue = Constant::splitChar(line, '=');        
-                            std::string key = Constant::Trim(keyvalue.at(0));
-                            std::string value = Constant::Trim(keyvalue.at(1));
+                            std::string key = keyvalue.size() > 0 ? Constant::Trim(keyvalue.at(0)) : "";
+                            std::string value = keyvalue.size() > 1 ? Constant::Trim(keyvalue.at(1)) : "";
 
                             if (keyvalue.size() < 2)
                                 continue;
@@ -191,7 +191,7 @@ class CfgLoader{
             if (!fileopened){
                 //textout_centre_ex(screen, font, msg.c_str(), screen->w / 2, screen->h / 2, textColor, -1);
                 //textout_centre_ex(screen, font, "Press a key to continue", screen->w / 2, screen->h / 2 + (font->height + 3), textColor, -1);
-                LOG_ERROR("There is no config file for %s. Exiting...", emuname);
+                LOG_ERROR("There is no config file for %s. Exiting...\n", emuname.c_str());
                 //readkey();
             }
         }

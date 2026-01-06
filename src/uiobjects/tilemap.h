@@ -1,8 +1,11 @@
 #pragma once
 
 #include <SDL.h>
+#include <SDL_image.h>
+
 #include <random>
 #include <string>
+#include <utils/logger.h>
 
 class TileMap {
     public:
@@ -34,9 +37,20 @@ class TileMap {
                 
                 findTile(tileX, tileY);
             }*/
+			if ((img = IMG_Load(imgpath.c_str())) != NULL){ 
+				findTile(tileX, tileY);
+			} else {
+				LOG_ERROR("Couldn't load %s\n", imgpath.c_str());
+			}
         }
 
         void findTile(int x, int y){
+
+			if (img == NULL) {
+				LOG_ERROR("Image surface is null...\n");
+				return;
+			}
+
             if (tile != NULL)
 				SDL_FreeSurface(tile);
 
@@ -68,7 +82,12 @@ class TileMap {
         }
 
 		void draw(SDL_Surface *video_page){
-            //int spOffsetX = tileX * tileW;
+			if (tile == NULL || video_page == NULL){
+				LOG_ERROR("Some surface is null...\n");
+				return;
+			}
+
+			//int spOffsetX = tileX * tileW;
             //int spOffsetY = tileY * tileH;
             //
             //if (tileW > 0 && tileH > 0 && video_page != NULL && img != NULL && img->w > 0 && img->h > 0)
@@ -80,7 +99,7 @@ class TileMap {
 
             //Much faster method than the above pixel based but just a little bit more memory required depending
             //on the tiles size
-			/*SDL_Rect srcRect;
+			SDL_Rect srcRect;
 			SDL_Rect dstRect;
             for (int y = -tileH; y < video_page->h + tileH; y+= tileH){
                 for (int x= -tileW; x < video_page->w + tileW; x += tileW){
@@ -102,7 +121,7 @@ class TileMap {
 					// tile es la superficie origen, video_page es la superficie destino (screen o buffer)
 					SDL_BlitSurface(tile, &srcRect, video_page, &dstRect);
                 }
-            }*/
+            }
         }
 
     private:

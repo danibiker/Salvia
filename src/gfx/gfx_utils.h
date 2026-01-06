@@ -9,7 +9,7 @@ inline int fastline(SDL_Surface * dst, Sint16 x1, Sint16 y1,
 }
 
 inline int fastlineA(SDL_Surface * dst, Sint16 x1, Sint16 y1,
-		Sint16 x2, Sint16 y2, SDL_Color color, Sint16 alpha){
+		Sint16 x2, Sint16 y2, SDL_Color color, Uint8 alpha){
 	return lineRGBA(dst, x1, y1, x2, y2, color.r, color.g, color.b, alpha);
 }
 

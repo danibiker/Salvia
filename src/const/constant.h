@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <stdint.h>
 
-#include "..\utils\logger.h"
+#include <utils/logger.h>
 
 static const int video_bpp = 16;
 static const int audio_samples = 1024;
@@ -19,8 +19,8 @@ static const int audio_samples = 1024;
 	static const char *LOG_PATH = "game:\\salvia.log";
 #elif  defined(WIN)
 	static Uint32 video_flags = SDL_SWSURFACE; //SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN;
-	static int video_width = 1280;
-	static int video_height = 720;
+	static int video_width = 1920;
+	static int video_height = 1080;
 	static const char *LOG_PATH = "salvia.log";
 #endif
 
@@ -34,15 +34,74 @@ static const SDL_Color menuBars = { 128, 128, 128, 255};
 static const SDL_Color bkgMenu = {247, 221, 114};
 
 static const int bkgSpeedPixPerS = 15;
-static const float bkgFrameTimeTick = 1000.0 / bkgSpeedPixPerS;
+static const double bkgFrameTimeTick = 1000.0 / bkgSpeedPixPerS;
 
 static const int SCREENHDIV = 15;
+
+static const unsigned long KEYRETRASO = 500;
+static const int JOYHATOFFSET = 100;
+static const int JOYAXISOFFSET = 200;
+static const int DEADZONE = 23000;
+static const unsigned long DBLCLICKSPEED = 300; //tiempo en ms para poder hacer un doble click
+static const unsigned long KEYDOWNSPEED = 50;
+static const unsigned long MOUSEVISIBLE = 8000;
+static const int CURSORVISIBLE = 1;
+
+typedef enum {
+    cursor_hidden,
+    cursor_arrow,
+    cursor_resize,
+    cursor_hand,
+    cursor_wait,
+    totalCursors
+} enumCursors;
+
+#define MOUSE_BUTTON_LEFT		1
+#define MOUSE_BUTTON_MIDDLE	2
+#define MOUSE_BUTTON_RIGHT	3
+#define MOUSE_BUTTON_WHEELUP	4
+#define MOUSE_BUTTON_WHEELDOWN	5
+#define MOUSE_BUTTON_X1         6
+#define MOUSE_BUTTON_X2         7
 
 typedef enum{ TIPODIRECTORIO, TIPOFICHERO} enumFileAttr;
 typedef enum{ COMPAREWHOLEWORD, COMPAREBEGINNING} enumFileCompare;
 typedef enum{ LAYTEXT, LAYSIMPLE, LAYBOXES} enumLayout;
 typedef enum{ ALIGN_TOP, ALIGN_MIDDLE} enumAlign;
 typedef enum{ SBTNCLICK, SBTNLOAD } enumSounds;
+
+typedef enum {JOY_BUTTON_A = 0,
+            JOY_BUTTON_B,
+            JOY_BUTTON_X,
+            JOY_BUTTON_Y,
+            JOY_BUTTON_L,
+            JOY_BUTTON_R,
+            JOY_BUTTON_SELECT,
+            JOY_BUTTON_START,
+            JOY_BUTTON_L3,
+            JOY_BUTTON_R3,
+            JOY_BUTTON_UP,
+            JOY_BUTTON_UPLEFT,
+            JOY_BUTTON_LEFT,
+            JOY_BUTTON_DOWNLEFT,
+            JOY_BUTTON_DOWN,
+            JOY_BUTTON_DOWNRIGHT,
+            JOY_BUTTON_RIGHT,
+            JOY_BUTTON_UPRIGHT,
+            JOY_BUTTON_VOLUP,
+            JOY_BUTTON_VOLDOWN,
+            JOY_BUTTON_CLICK,
+            JOY_AXIS1_RIGHT,
+            JOY_AXIS1_LEFT,
+            JOY_AXIS1_UP,
+            JOY_AXIS1_DOWN,
+            JOY_AXIS2_RIGHT,
+            JOY_AXIS2_LEFT,
+            JOY_AXIS2_UP,
+            JOY_AXIS2_DOWN,
+            JOY_AXIS_L2,
+            JOY_AXIS_R2,
+            MAXJOYBUTTONS} joystickButtons;
 
 typedef enum {
         page_white_text,
@@ -98,6 +157,17 @@ class Constant{
 			}
 		}
 
+		static void drawTextTransparent(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg){
+			if (font) {
+				SDL_Surface* textSurf = TTF_RenderText_Blended(font, s, color);
+				if (textSurf) {
+					SDL_Rect dest = { x, y, 0, 0 };
+					SDL_BlitSurface(textSurf, NULL, surface, &dest);
+					SDL_FreeSurface(textSurf); // ¡Vital!
+				}
+			}
+		}
+
 		static void drawTextCent(SDL_Surface* surface, TTF_Font* font, const char* dato, int x, int y, bool centx, bool centy, SDL_Color color, int bg){
 			if (font != NULL){
 				int pixelDato = 0;
@@ -114,9 +184,26 @@ class Constant{
 					posDatoy += y;
 				}
 				drawText(surface, font, dato,posDatox,posDatoy,color, bg);
-			} else {
-				//LOG_ERROR("Fallo en drawTextCent: La fuente es NULL");
-			}
+			} 
+		}
+
+		static void drawTextCentTransparent(SDL_Surface* surface, TTF_Font* font, const char* dato, int x, int y, bool centx, bool centy, SDL_Color color, int bg){
+			if (font != NULL){
+				int pixelDato = 0;
+				TTF_SizeText(font, dato, &pixelDato, NULL);
+				int posDatox = x;
+				int posDatoy = y;
+
+				if (centx){
+					posDatox = (surface->w - pixelDato)/2;
+					posDatox += x;
+				}
+				if (centy){
+					posDatoy = (surface->h)/2;
+					posDatoy += y;
+				}
+				drawTextTransparent(surface, font, dato,posDatox,posDatoy,color, bg);
+			} 
 		}
 
 		static double round(double number){
@@ -171,6 +258,26 @@ class Constant{
             return str;
         }
 
+		/**
+		*
+		*/
+		static std::vector<std::string> &Constant::split(std::string s, std::string delim, std::vector<std::string> &elems) {
+			std::stringstream ss(s);
+			std::string item;
+			while(std::getline(ss, item, delim.at(0))) {
+				elems.push_back(item);
+			}
+			return elems;
+		}
+
+		/**
+		*
+		*/
+		static std::vector<std::string> Constant::split(std::string s, std::string delim) {
+			std::vector<std::string> elems;
+			return split(s, delim, elems);
+		}
+
         /**
         *
         */
@@ -192,7 +299,7 @@ class Constant{
         }
 
         template<class TIPO> static std::string TipoToStr(TIPO number){
-           stringstream ss;//create a stringstream
+           std::stringstream ss;//create a stringstream
            ss << number;//add number to the stream
            return ss.str();//return a std::string with the contents of the stream
         }
@@ -207,7 +314,7 @@ class Constant{
 
         template<class TIPO> static TIPO strToTipo(std::string str){
                 TIPO i;
-                stringstream s_str( str );
+                std::stringstream s_str( str );
                 s_str >> i;
                 return i;
         }

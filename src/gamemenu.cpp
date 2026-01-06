@@ -1,22 +1,169 @@
 #include "gamemenu.h"
 
-#include "gfx/SDL_gfxPrimitives.h"
+#include <gfx/SDL_gfxPrimitives.h>
 #include <gfx/gfx_utils.h>
 #include <io/dirutil.h>
 #include <beans/structures.h>
+#include <io/joymapper.h>
 
 GameMenu::GameMenu(CfgLoader *cfgLoader){
-    emuCfgPos = 0;
+    status = EMU_MENU;
+	romLoaded = false;
+	emuCfgPos = 0;
 	gameTicks.ticks = 0;
 	video_page = NULL;
 	dblBufferEnabled = true;
 	this->cfgLoader = cfgLoader;
-	this->initEngine(*cfgLoader);
+	this->initEngine(cfgLoader);
+
+	int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
+	int pixelDato = 0;
+	TTF_SizeText(Fonts::getFont(Fonts::FONTSMALL), "888", &pixelDato, NULL);
+
+	rectFps.x = 0;
+	rectFps.y = screen->h - face_h;
+	rectFps.w = pixelDato + 3;
+	rectFps.h = face_h;
+	bkgTextFps = SDL_MapRGB(this->screen->format, 0, 0, 0);
+	fpsCountEnabled = true;
+
+	if (joystick->init_all_joysticks() && !JoyMapper::initJoyMapper()){
+		configButtonsJOY();
+	}
 };
 
 GameMenu::~GameMenu(){
 	LOG_DEBUG("Deleting GameMenu...");
     this->stopEngine();
+}
+
+std::string GameMenu::configButtonsJOY(){
+    bool salir = false;
+    string salida = "";
+	Uint32 bkgText = SDL_MapRGB(this->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	const int TIMETOLIMITFRAME = (int)(1000 / 30.0);
+	
+	int mNumJoysticks = SDL_NumJoysticks();
+	std::map<int, int>* mPrevAxisValues; //Almacena los valores de los ejes de cada joystick
+	std::map<int, int>* mPrevHatValues; //Almacena los valores de las crucetas de cada joystick
+	mPrevAxisValues = new std::map<int, int>[mNumJoysticks];
+    mPrevHatValues = new std::map<int, int>[mNumJoysticks];
+
+
+    long delay = 0;
+    unsigned long before = 0;
+    const char* JoystickButtonsMSG[] = {"Arriba","Abajo","Izquierda","Derecha","Aceptar","Cancelar", "Pagina anterior", "Pagina siguiente", "Select", "Buscar elemento"};
+    int JoyButtonsVal[] = {JOY_BUTTON_UP, JOY_BUTTON_DOWN, JOY_BUTTON_LEFT, JOY_BUTTON_RIGHT, JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_SELECT, JOY_BUTTON_R3};
+    //Posiciones de los botones calculadas en porcentaje respecto al alto y ancho de la imagen
+    //t_posicion_precise imgButtonsRelScreen[] = {{0.3512,0.682,0,0},{0.3512,0.84,0,0},{0.295,0.76,0,0},{0.4075,0.76,0,0},
+    //        {0.79375,0.616,0,0},{0.87625,0.496,0,0},{0.2225,0.194,0,0},{0.7775,0.194,0,0},{0.39375,0.512,0,0},{0.60875,0.512,0,0}};
+
+    int tam = 10;
+    int i=0;
+    /*UIPicture obj;
+
+    obj.setX(0);
+    obj.setY(0);
+    obj.setW(this->getWidth());
+    obj.setH(this->getHeight());
+    obj.loadImgFromFile(Constant::getAppDir() +  Constant::getFileSep() + "imgs" + Constant::getFileSep() + "xbox_360_controller-small.png");
+    //Para que se guarde la relacion de aspecto
+    obj.getImgGestor()->setBestfit(false);
+    //Para redimensionar la imagen al contenido
+    obj.getImgGestor()->setResize(true);*/
+
+    do{
+        SDL_Event event;
+        before = SDL_GetTicks();
+
+        /*if (!obj.getImgDrawed()){
+            //Limpiamos la pantalla
+            clearScr(cBgScreen);
+            //Dibujamos la imagen
+            drawImgObj(&obj);
+            //Obtenemos las variables que indican la posicion de la imagen una vez que
+            //ha sido pintada por pantalla
+            int imgX = obj.getImgGestor()->getImgLocationRelScreen().x;
+            int imgY = obj.getImgGestor()->getImgLocationRelScreen().y;
+            int imgW = obj.getImgGestor()->getImgLocationRelScreen().w;
+            int imgh = obj.getImgGestor()->getImgLocationRelScreen().h;
+            double relacionAncho =  obj.getImgGestor()->getImgOrigWidth() > 1 ? this->getWidth() / (double) obj.getImgGestor()->getImgOrigWidth()  : 0.2;
+            double relacionAlto =  obj.getImgGestor()->getImgOrigHeight() > 1 ? this->getHeight() / (double) obj.getImgGestor()->getImgOrigHeight()  : 0.2;
+            //Marcamos la posicion del boton que hay que pulsar
+            pintarCirculo(imgW * imgButtonsRelScreen[i].x + imgX, imgh * imgButtonsRelScreen[i].y + imgY, 40 * (relacionAncho < relacionAlto ? relacionAncho : relacionAlto), cRojo);
+//            pintarFillCircle(screen,
+//                             imgW * imgButtonsRelScreen[i].x + imgX,
+//                             imgh * imgButtonsRelScreen[i].y + imgY,
+//                             40 * relacionAncho,
+//                             SDL_MapRGB(screen->format, 255,0,0));
+
+            //Dibujamos el texto de la accion
+            drawTextCent(JoystickButtonsMSG[i], 0, 20, true, false, cBlanco);
+            cachearObjeto(&obj);
+        } else {
+            cachearObjeto(&obj);
+        }*/
+		
+		SDL_FillRect(this->screen, NULL, bkgText);
+		Constant::drawTextCent(this->screen, Fonts::getFont(Fonts::FONTSMALL), JoystickButtonsMSG[i], 0, 20, true, false, textColor, 0);
+        SDL_Flip(this->screen);
+
+        if( SDL_PollEvent( &event ) ){
+             switch( event.type ){
+                case SDL_QUIT:
+                    salir = true;
+                    break;
+                case SDL_KEYDOWN: // PC buttons
+                    if (event.key.keysym.sym == SDLK_ESCAPE){
+                        salir = true;
+                    }
+                    break;
+
+                case SDL_JOYBUTTONDOWN :
+                    JoyMapper::setJoyMapper(JoyButtonsVal[i], event.jbutton.button);
+                    i++;
+                    //obj.setImgDrawed(false);
+                    break;
+                case SDL_JOYHATMOTION:
+                    if (event.jhat.value != 0){ //Solo en el momento del joydown
+                        JoyMapper::setJoyMapper(JoyButtonsVal[i], JOYHATOFFSET + event.jhat.value);
+                        i++;
+                        //obj.setImgDrawed(false);
+                    }
+                    break;
+                case SDL_JOYAXISMOTION:
+                    int normValue;
+                    if((abs(event.jaxis.value) > DEADZONE) != (abs(mPrevAxisValues[event.jaxis.which][event.jaxis.axis]) > DEADZONE)){
+                        if(abs(event.jaxis.value) <= DEADZONE){
+                            normValue = 0;
+                        } else {
+                            if(event.jaxis.value > 0)
+                                normValue = 1;
+                            else
+                                normValue = -1;
+                        }
+                        if (normValue != 0){
+                            int valor = (abs(normValue) << 4 | event.jaxis.axis) * normValue;
+                            JoyMapper::setJoyMapper(JoyButtonsVal[i], JOYAXISOFFSET + valor);
+                            i++;
+                            //obj.setImgDrawed(false);
+                        }
+                    }
+                    mPrevAxisValues[event.jaxis.which][event.jaxis.axis] = event.jaxis.value;
+                    break;
+             }
+        }
+
+        if (i == tam){
+            salir = true;
+        }
+
+        delay = before - SDL_GetTicks() + TIMETOLIMITFRAME;
+        if(delay > 0) SDL_Delay(delay);
+    } while (!salir);
+
+    JoyMapper::saveJoyConfig();
+    return salida;
 }
 
 bool GameMenu::initDblBuffer(int w, int h){
@@ -58,6 +205,10 @@ ConfigEmu GameMenu::getPrevCfgEmu(){
     return cfgLoader->configEmus.at(emuCfgPos);
 }
 
+ConfigEmu GameMenu::getCfgEmu(){
+    return cfgLoader->configEmus.at(emuCfgPos);
+}
+
 bool GameMenu::isDebug(){
     return cfgLoader->configMain.debug;
 }
@@ -65,7 +216,6 @@ bool GameMenu::isDebug(){
 void GameMenu::setCfgLoader(CfgLoader *cfgLoader){
     this->cfgLoader = cfgLoader;
 }
-
 
 /**
  * 
@@ -121,7 +271,7 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
     const int sectionGap = 0;
     const int textAreaY = listMenu.getH() / 2 + listMenu.getY() + sectionGap;
     TextArea textarea(screen->w / 2, textAreaY, screen->w / 2, screen->h - textAreaY);
-    textarea.marginX = floor((double)screen->w / 100);
+    textarea.marginX = (int)floor((double)screen->w / 100);
     menuTextAreas.insert(make_pair(SYNOPSIS, textarea));
 }
 
@@ -145,7 +295,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
         
         if (!game->shortFileName.empty()){
             if (listMenu.layout == LAYBOXES) {
-				Constant::drawTextCent(video_page, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+				Constant::drawTextCentTransparent(video_page, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 					true, false, textColor, 0);
                 
 				fastline(this->video_page, listMenu.marginX, listMenu.marginY - 1 , screen->w - listMenu.marginX, listMenu.marginY - 1, menuBars);
@@ -153,11 +303,11 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
                 listMenu.draw(this->video_page);
 
                 //Drawing a transparent rectangle
-                if (screen->w >= 640){
-                    static const int transBGText = SDL_MapRGBA(this->video_page->format, 255, 255, 255, 160);
-					SDL_Rect rec = {halfWidth + 1, listMenu.marginY, screen->w - (halfWidth + 2), screen->h - listMenu.marginY - 1};
-					DrawRectAlpha(this->video_page, rec, white, 160);
-                }
+                //if (screen->w >= 640){
+                    //static const int transBGText = SDL_MapRGBA(this->video_page->format, 255, 255, 255, 20);
+					//SDL_Rect rec = {halfWidth + 1, listMenu.marginY, screen->w - (halfWidth + 2), screen->h - listMenu.marginY - 1};
+					//DrawRectAlpha(this->video_page, rec, white, 160);
+                //}
 
                 //Draw and update the screen because the loading of images can take a long time
                 if (listMenu.keyUp){
@@ -367,13 +517,13 @@ string GameMenu::encloseWithCharIfSpaces(string str, string encloseChar){
 /**
  * 
  */
-void GameMenu::launchProgram(ListMenu &menuData){
+vector<string> GameMenu::launchProgram(ListMenu &menuData){
     //Launcher launcher;
     dirutil dir;
     vector<string> commands;
 
     if (this->cfgLoader->configEmus.size() <= (std::size_t)this->emuCfgPos)
-        return;
+        return commands;
 
     ConfigEmu emu = this->cfgLoader->configEmus.at(this->emuCfgPos);
 
@@ -383,14 +533,14 @@ void GameMenu::launchProgram(ListMenu &menuData){
     if (emu.options_before_rom){
         vector<string> v = Constant::splitChar(emu.global_options, ' ');
         //for (auto s : v){
-		for (int i=0; i < v.size(); i++){
+		for (unsigned int i=0; i < v.size(); i++){
 			std::string s = v.at(i);
             commands.emplace_back(s);
         }
     }
 
     if (menuData.listGames.size() <= (std::size_t)menuData.curPos)
-        return;
+        return commands;
 
     auto game = menuData.listGames.at(menuData.curPos).get();
     
@@ -429,7 +579,15 @@ void GameMenu::launchProgram(ListMenu &menuData){
         #endif
 
         string rom = emu.use_extension ? romFile : dir.getFileNameNoExt(romFile);
-        commands.emplace_back(encloseWithCharIfSpaces(romdir + rom, "\"")); 
+        
+		std::string dirActual = dir.getDirActual();
+		if (dirActual.find_first_of(emu.executable) != string::npos){
+			//Tenemos que lanzar la rom en el propio ejecutable porque el soporte es correcto para esta rom
+			commands.emplace_back(romdir + rom);
+			return commands;
+		} else {
+			commands.emplace_back(encloseWithCharIfSpaces(romdir + rom, "\"")); 
+		}
     }
 
     //string romToLaunch = romdir + rom;
@@ -459,7 +617,6 @@ void GameMenu::launchProgram(ListMenu &menuData){
     #endif
 
 	LOG_DEBUG("Launching %s", commands.at(0));
-	
     /**TODO: IMPLEMENT
 	if (cfgLoader->configMain.alsaReset && resetAudio && Constant::getExecMethod() != launch_batch ){
         remove_sound();
@@ -488,6 +645,8 @@ void GameMenu::launchProgram(ListMenu &menuData){
         this->initSound();
     }
 	*/
+
+	return commands;
 }
 
 /**
@@ -549,4 +708,13 @@ int GameMenu::recoverGameMenuPos(ListMenu &menuData, struct ListStatus &read_str
 
     fclose(infile);
     return ret;
+}
+
+void GameMenu::updateFps(){
+	// Actualizamos el contador de media de fps
+	if (fpsCountEnabled){
+		SDL_FillRect(this->screen, &rectFps, bkgTextFps);
+		this->sync.update_fps_counter();
+		Constant::drawText(this->screen, Fonts::getFont(Fonts::FONTSMALL), this->sync.fpsText, rectFps.x + 3, rectFps.y, white, 0);
+	}
 }

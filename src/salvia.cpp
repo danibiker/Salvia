@@ -2,16 +2,16 @@
 
 #include <SDL.h>
 #include <SDL_ttf.h>
-#include <SDL_image.h>
 
 #include <string>
 
 #include "gameMenu.h"
-#include "io\video.h"
-#include "io\cfgloader.h"
-#include "uiobjects\listmenu.h"
-#include "uiobjects\tilemap.h"
-
+#include "io/joymapper.h"
+#include "io/video.h"
+#include "io/cfgloader.h"
+#include "uiobjects/listmenu.h"
+#include "uiobjects/tilemap.h"
+#include "unzip/unziptool.h"
 
 
 GameMenu *gameMenu;
@@ -33,6 +33,7 @@ extern "C" {
     void retro_set_input_poll(retro_input_poll_t);
     void retro_set_input_state(retro_input_state_t);
     bool retro_load_game(const struct retro_game_info *game);
+	void retro_unload_game(void);
 }
 
 const char Constant::FILE_SEPARATOR_UNIX = '/';
@@ -52,9 +53,9 @@ int Constant::EXEC_METHOD = launch_batch;
 const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
 
 void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
-    //va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
+    va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
 	
-	if (!logger) {
+	/*if (!logger) {
 		va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
 		return;
 	}
@@ -78,7 +79,7 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
     // 3. Llamar directamente al método write
     // Nota: Como no podemos obtener el archivo/línea real del Core, 
     // indicamos que el origen es "LIBRETRO_CORE"
-    logger->write(myLevel, "[CORE] %s", buffer);
+    logger->write(myLevel, "[CORE] %s", buffer);*/
 
 }
 
@@ -98,11 +99,14 @@ static bool retro_environment(unsigned cmd, void *data) {
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             // Opcional: Muchos cores preguntan si pueden usar RGB565 (1) o XRGB8888 (2)
             enum retro_pixel_format fmt = *(const enum retro_pixel_format *)data;
-
 			std::string msgformat = "Solicitando pixelformat: " + Constant::intToString(fmt) + "\n";
 			retro_log_printf(RETRO_LOG_INFO, msgformat.c_str());
 
-            return true; 
+			if (fmt = RETRO_PIXEL_FORMAT_RGB565){
+				return true; 
+			} else {
+				return false;
+			}
         }
     }
     return false; // Por defecto devolver false para comandos desconocidos
@@ -115,7 +119,13 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 	//if (gameMenu->sync.g_sync == SYNC_NONE){
 	//	fast_video_blit((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
 	//} else {
-		scale_software_fixed_point((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
+		//scale_software_fixed_point((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
+		#ifdef WIN
+			scale_software_fixed_point_sse2((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
+		#elif defined(_XBOX)
+			scale_software_fixed_point_ppc((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
+		#endif
+
 	//}
 	//scale_bilinear_fast((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
 
@@ -183,7 +193,7 @@ void loadstate(){
     
 		fread(buffer, 1, state_size, f);
 		if (retro_unserialize(buffer, state_size)) {
-			printf("Estado cargado con éxito.\n");
+			LOG_ERROR("Estado cargado con éxito.\n");
 		}
     
 		fclose(f);
@@ -193,8 +203,8 @@ void loadstate(){
 
 void update_input() {
     SDL_Event event;
-    while (SDL_PollEvent(&event)) {
 
+	while (SDL_PollEvent(&event)) {
 		if (event.type == SDL_QUIT) {
             gameMenu->running = false; // Marcamos para salir
         }
@@ -207,21 +217,30 @@ void update_input() {
             
             // Mapeo simple de botones SDL -> Libretro
             switch (event.jbutton.button) {
-                case SDL_BUTTON_A: gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_A] = pressed; break;
-                case SDL_BUTTON_B: gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_B] = pressed; break;
-                case SDL_BUTTON_X: gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_X] = pressed; break;
-                case SDL_BUTTON_Y: gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_Y] = pressed; break;
-                case SDL_BUTTON_START:  gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_START]  = pressed; break;
-                case SDL_BUTTON_SELECT: gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_SELECT] = pressed; break;
+                case SDL_BUTTON_A: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_A] = pressed; break;
+                case SDL_BUTTON_B: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_B] = pressed; break;
+                case SDL_BUTTON_X: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_X] = pressed; break;
+                case SDL_BUTTON_Y: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_Y] = pressed; break;
+                case SDL_BUTTON_START:  gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_START]  = pressed; break;
+                case SDL_BUTTON_SELECT: 
+					if (pressed && !gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_SELECT]){
+						gameMenu->joystick->lastSelectPress = SDL_GetTicks();
+						LOG_DEBUG("Setting the ticks on: %d\n", gameMenu->joystick->lastSelectPress);
+					} else if (!pressed){
+						gameMenu->joystick->lastSelectPress = 0;
+						LOG_DEBUG("Resseting ticks\n");
+					}
+					gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_SELECT] = pressed; 
+					break;
             }
         }
         
         // Manejo de la cruceta (D-PAD) mediante Ejes o Hats
         if (event.type == SDL_JOYHATMOTION) {
-            gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_UP]    = (event.jhat.value & SDL_HAT_UP) > 0;
-            gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_DOWN]  = (event.jhat.value & SDL_HAT_DOWN) > 0;
-            gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_LEFT]  = (event.jhat.value & SDL_HAT_LEFT) > 0;
-            gameMenu->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_RIGHT] = (event.jhat.value & SDL_HAT_RIGHT) > 0;
+            gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_UP]    = (event.jhat.value & SDL_HAT_UP) > 0;
+            gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_DOWN]  = (event.jhat.value & SDL_HAT_DOWN) > 0;
+            gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_LEFT]  = (event.jhat.value & SDL_HAT_LEFT) > 0;
+            gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_RIGHT] = (event.jhat.value & SDL_HAT_RIGHT) > 0;
         }
 
 		if (event.type == SDL_KEYUP) {
@@ -242,6 +261,12 @@ void update_input() {
 			}
 		}
     }
+
+	//LOG_DEBUG("ticks are: %d\n", SDL_GetTicks() - gameMenu->joystick->lastSelectPress);
+	if (gameMenu->joystick->lastSelectPress > 0 && SDL_GetTicks() - gameMenu->joystick->lastSelectPress > 2000){
+		gameMenu->joystick->lastSelectPress = 0;
+		gameMenu->setEmuStatus(EMU_MENU);
+	}
 }
 
 // Se llama antes de pedir el estado de los inputs
@@ -254,7 +279,7 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
         return 0;
     
     // Devolvemos el estado del botón 'id' para el jugador 'port'
-    return gameMenu->g_joy_state[port][id] ? 1 : 0;
+    return gameMenu->joystick->g_joy_state[port][id] ? 1 : 0;
 }
 
 
@@ -267,6 +292,9 @@ void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
     gameMenu->g_audioBuffer.Read(samples, count);
 }
 
+/**
+*
+*/
 void init_sdl_audio(double sample_rate) {
     SDL_AudioSpec wanted;
     wanted.freq = (int)sample_rate;
@@ -276,12 +304,15 @@ void init_sdl_audio(double sample_rate) {
     wanted.callback = sdl_audio_callback;
 
     if (SDL_OpenAudio(&wanted, NULL) < 0) {
-        fprintf(stderr, "Error SDL Audio: %s\n", SDL_GetError());
+        LOG_ERROR("Error SDL Audio: %s\n", SDL_GetError());
         return;
     }
     SDL_PauseAudio(0); // Inicia el audio
 }
 
+/**
+*
+*/
 std::string initPathAndLog(char** argv){
 	//Needed to init the log subsistem
 	logger = new Logger(LOG_PATH);
@@ -290,14 +321,19 @@ std::string initPathAndLog(char** argv){
 
 #ifdef _XBOX
 	appDir = dir.getDirActual();
-	Constant::setAppDir(appDir);
 #else
     appDir = argv[0];
-    std::size_t pos = appDir.rfind(Constant::getFileSep());
+#endif
+
+	std::size_t pos = appDir.rfind(Constant::getFileSep());
     if (pos == string::npos){
         pos = appDir.rfind(Constant::FILE_SEPARATOR_UNIX);
-        #if defined(WIN) || defined(DOS)
+        #if defined(WIN) || defined(DOS) 
             appDir = Constant::replaceAll(appDir, "/", "\\");
+		#elif defined(_XBOX)
+			if (pos == string::npos){
+				pos = appDir.rfind(Constant::FILE_SEPARATOR);
+			}
         #elif UNIX
             Constant::FILE_SEPARATOR = Constant::FILE_SEPARATOR_UNIX;
             Constant::tempFileSep[0] = Constant::FILE_SEPARATOR_UNIX;
@@ -308,31 +344,14 @@ std::string initPathAndLog(char** argv){
     if (!dir.dirExists(appDir.c_str()) || pos == string::npos){
         appDir = dir.getDirActual();
     }
-    Constant::setAppDir(appDir);
-#endif
+
+	Constant::setAppDir(appDir);
     return appDir;
 }
 
 /**
- * 
- */
-void updateMenuScreen(TileMap &tileMap, ListMenu &listMenu, GameMenu* gameMenu, bool keypress){
-	Uint32 bkgText = SDL_MapRGB(gameMenu->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
-
-    if (listMenu.animateBkg) 
-		tileMap.draw(gameMenu->video_page);
-    else 
-		SDL_FillRect(gameMenu->video_page, NULL, bkgText);
-    
-
-    gameMenu->refreshScreen(listMenu);
-
-    static uint32_t lastTime = SDL_GetTicks();
-    if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
-        tileMap.speed++;
-    }
-}
-
+*
+*/
 void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoader){
     struct ListStatus menuBeforeExit;
     int retMenu = gameMenu.recoverGameMenuPos(menuData, menuBeforeExit);
@@ -350,9 +369,198 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
     }
     
     gameMenu.createMenuImages(menuData);
-    menuData.keyUp = true;
 }
 
+/**
+*
+*/
+unzippedFileInfo unzipOrLoadFile(std::string rompath, void*& buffer){
+	std::string rompathLow = rompath;
+	unzippedFileInfo ret;
+	ret.errorCode = -1;
+    ret.rutaEscritura = "";
+    ret.romsize = 0;
+    ret.nFilesInZip = 0;
+    ret.nFilesWritten = 0;
+
+	dirutil dir;
+	Constant::lowerCase(&rompathLow);
+	
+	if (rompathLow.find(".zip") != std::string::npos){
+		UnzipTool unzipTool;
+		ConfigEmu emu = gameMenu->getCfgEmu();
+
+		//Llamada al core para saber si se requiere el path completo
+		struct retro_system_info info;
+		memset(&info, 0, sizeof(info));
+		retro_get_system_info(&info);
+
+		if (info.need_fullpath) {
+			//No nos queda otra que descomprimir a algun directorio temporal porque el core lo requiere
+			std::string destDir = Constant::getAppDir() + Constant::getFileSep() + "tmp";
+
+			if (dir.dirExists(destDir.c_str())){
+				dir.borrarDir(destDir);
+			}
+
+			if (!dir.dirExists(destDir.c_str()) && dir.createDir(destDir) < 0){
+				LOG_ERROR("No se ha podido crear el directorio %s\n", destDir.c_str());
+				return ret;
+			}
+			
+			unzippedFileInfo unzipedFileInfo = unzipTool.descomprimirZip(rompath.c_str(), destDir.c_str()); 
+			ConfigEmu emu = gameMenu->getCfgEmu();
+
+			for (unsigned int i=0; i < unzipedFileInfo.files.size(); i++){
+				FileProps fileprop = unzipedFileInfo.files.at(i);
+				std::string ext = Constant::replaceAll(fileprop.extension, ".", "");
+				if (emu.rom_extension.find_first_of(ext) != std::string::npos){
+					ret.romsize = fileprop.fileSize;
+					ret.rutaEscritura = fileprop.dir + Constant::getFileSep() + fileprop.filename;
+					break;
+				}
+			}
+		} else {
+			ret = unzipTool.descomprimirZipToMem(rompath, emu.rom_extension, buffer); 
+		}
+
+	} else {
+		FILE *f = fopen(rompath.c_str(), "rb");
+		if (!f){
+			LOG_ERROR("Error abriendo rom %s\n", rompath.c_str());
+			return ret;
+		}
+
+		fseek(f, 0, SEEK_END);
+		std::size_t size = ftell(f);
+		rewind(f);
+
+		// Usar memoria alineada si es posible
+		buffer = malloc(size); 
+		if (!buffer) { fclose(f); return ret; }
+		fread(buffer, 1, size, f);
+		fclose(f);
+		
+		ret.romsize = size;
+		ret.rutaEscritura = rompath;
+	}
+	return ret;
+}
+
+/**
+*
+*/
+int launchGame(std::string rompath){
+	if (gameMenu->romLoaded){
+		// 1. Pausar el procesamiento de audio para detener el hilo de callback
+		SDL_PauseAudio(1);
+		// 2. Cerrar el dispositivo y liberar el hardware
+		SDL_CloseAudio();
+		SDL_Delay(10);
+		//Liberar recursos de libretro
+		retro_unload_game();
+	}
+	gameMenu->romLoaded = false;
+	
+	void* buffer = NULL;
+	unzippedFileInfo unzipped = unzipOrLoadFile(rompath, buffer);
+	// Carga manual mínima para que el core tenga datos que procesar
+		
+	struct retro_game_info game = { unzipped.rutaEscritura.c_str(), buffer, unzipped.romsize, NULL };
+	bool success = retro_load_game(&game);
+	//Liberar la memoria tras la carga exitosa
+	// La mayoría de los cores de Libretro ya han copiado los datos a su propia RAM interna
+	free(buffer); 
+
+	// Es importante cargar la ROM antes de retro_run
+	if(!success) {
+		LOG_ERROR("Error cargando la ROM\n");
+		return 0;
+	}
+
+	// Antes de cargar el juego, el core dice su frecuencia en retro_get_system_av_info
+	struct retro_system_av_info av_info;
+	retro_get_system_av_info(&av_info);
+
+	// Inicializar SDL Audio con la frecuencia del core
+	init_sdl_audio(av_info.timing.sample_rate);
+	//Iniciando el contador de fps
+	gameMenu->sync.init_fps_counter(av_info.timing.fps);
+	gameMenu->romLoaded = true;
+	gameMenu->setEmuStatus(EMU_STARTED);
+	return 1;
+}
+
+/**
+ * 
+ */
+void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, bool keypress){
+	Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	tEvento askEvento;
+	//Procesamos los controles de la aplicacion
+	askEvento = gameMenu.WaitForKey();
+
+	if (askEvento.isJoy){
+		if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_UP)){
+			listMenu.prevPos();
+		} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_DOWN)){
+			listMenu.nextPos();
+		} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT)){
+			listMenu.prevPage();
+		} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
+			listMenu.nextPage();
+		} 
+
+		if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A)){
+			vector<string> game = gameMenu.launchProgram(listMenu);
+			if (game.size() > 1){
+				SDL_FillRect(gameMenu.screen, NULL, bkgText);
+				if (launchGame(game.at(1))){
+					gameMenu.setEmuStatus(EMU_STARTED);
+				}
+				gameMenu.joystick->resetAllValues();
+				gameMenu.joystick->lastSelectPress = 0;
+				return;
+			}
+		} 
+
+		if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_R)){
+            //Change to prev emulator
+            //sound.play(SBTNCLICK);
+            //gameMenu.showMessage("Refreshing gamelist...");
+            gameMenu.getNextCfgEmu();
+            gameMenu.loadEmuCfg(listMenu);
+        }
+        if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_L)){
+            //Change to next emulator
+            //sound.play(SBTNCLICK);
+            //gameMenu.showMessage("Refreshing gamelist...");
+            gameMenu.getPrevCfgEmu();
+            gameMenu.loadEmuCfg(listMenu);
+        } 
+	}
+
+	if (askEvento.quit){
+		gameMenu.running = false; // Marcamos para salir
+	}
+
+
+    if (listMenu.animateBkg) 
+		tileMap.draw(gameMenu.video_page);
+    else 
+		SDL_FillRect(gameMenu.video_page, NULL, bkgText);
+
+    gameMenu.refreshScreen(listMenu);
+
+    static uint32_t lastTime = SDL_GetTicks();
+    if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
+        tileMap.speed++;
+    }
+}
+
+/**
+*
+*/
 int main(int argc, char *argv[]) {
 	initPathAndLog(argv);
 
@@ -374,9 +582,15 @@ int main(int argc, char *argv[]) {
 					true, true, textColor, 0);
 	SDL_Flip(gameMenu->screen);
 
-	initializeMenus(listMenu, *gameMenu, cfgLoader);
 	TileMap tileMap(9, 0, 16, 16);
-    tileMap.load(Constant::getAppDir() + "/assets/art/bricks2.png");
+    tileMap.load(Constant::getAppDir() + Constant::getFileSep() + "assets" + Constant::getFileSep() + "art" + Constant::getFileSep() + "bricks2.png");
+	initializeMenus(listMenu, *gameMenu, cfgLoader);
+
+	//Workaround para mostrar una primera imagen del menu con las imagenes cargadas
+	listMenu.keyUp = true;
+	updateMenuScreen(tileMap, *gameMenu, listMenu, false);
+	SDL_Flip(gameMenu->screen);
+	listMenu.keyUp = false;
 	
 	//Callback de environment
 	retro_set_environment(retro_environment);
@@ -389,77 +603,33 @@ int main(int argc, char *argv[]) {
 	retro_set_audio_sample(retro_audio_sample);
 	retro_set_audio_sample_batch(retro_audio_sample_batch);
 
-	/*
-    retro_init();
-	std::string rompath;
-	#ifdef _XBOX
-		rompath = "game:\\roms\\sonicmd.gen";
-	#else 
-		rompath = argv[1];
-	#endif
+	retro_init();	
 
-	// Carga manual mínima para que el core tenga datos que procesar
-	FILE *f = fopen(rompath.c_str(), "rb");
-
-	if (!f){
-		retro_log_printf(RETRO_LOG_ERROR, "Error abriendo rom");
-		return 1;
-	}
-
-	fseek(f, 0, SEEK_END);
-	long size = ftell(f);
-	rewind(f);
-	void *buffer = malloc(size);
-	fread(buffer, 1, size, f);
-	fclose(f);
-
-	struct retro_game_info game = { rompath.c_str(), buffer, (std::size_t)size, NULL };
-
-    // Es importante cargar la ROM antes de retro_run
-    if(!retro_load_game(&game)) {
-        printf("Error cargando la ROM\n");
-        return 1;
-    }
-
-	// Antes de cargar el juego, el core te dirá su frecuencia en retro_get_system_av_info
-	struct retro_system_av_info av_info;
-	retro_get_system_av_info(&av_info);
-
-	// Inicializar SDL Audio con la frecuencia del core
-	init_sdl_audio(av_info.timing.sample_rate);
-	//Iniciando el contador de fps
-	gameMenu->sync.init_fps_counter(av_info.timing.fps);
-	*/
-
-	// D. Renderizado de Texto
-	SDL_Rect rect = {0, video_height - 30, 120, 30};
-	Uint32 bkgText = SDL_MapRGB(gameMenu->screen->format, 40, 40, 40);
 	double nextFrameTime = (double)SDL_GetTicks();
-
     while (gameMenu->running) {
 		if (gameMenu->sync.g_sync == SYNC_TO_VIDEO){
-			// El tiempo en el que DEBERÍA empezar este frame
+			// El tiempo en el que DEBERÍA empezar el siguiente frame
 			nextFrameTime += gameMenu->sync.frameDelay;
 		}
 
-		// retro_run hace todo: 
-		// 1. Llama a input_poll() -> update_input()
-		// 2. Calcula la lógica del juego
-		// 3. Llama a audio_batch() -> (Aquí el audio bloquea si va muy rápido)
-		// 4. Llama a video_refresh() -> (Aquí se dibuja el frame y los FPS)
-        //retro_run();
-
-		updateMenuScreen(tileMap, listMenu, gameMenu, false);
+		if (gameMenu->getEmuStatus() == EMU_MENU){
+			updateMenuScreen(tileMap, *gameMenu, listMenu, false);
+		} else if (gameMenu->getEmuStatus() == EMU_STARTED){
+			// retro_run hace todo: 
+			// 1. Llama a input_poll() -> update_input()
+			// 2. Calcula la lógica del juego
+			// 3. Llama a audio_batch() -> (Aquí el audio bloquea si va muy rápido)
+			// 4. Llama a video_refresh() -> (Aquí se dibuja el frame y los FPS)
+			retro_run();
+		}
 
 		// Actualizamos el contador de media de fps
-		SDL_FillRect(gameMenu->screen, &rect, bkgText);
-		gameMenu->sync.update_fps_counter();
-		Constant::drawText(gameMenu->screen, Fonts::getFont(Fonts::FONTSMALL), gameMenu->sync.fpsText, 0, video_height - 30, white, 0);
-		
+		gameMenu->updateFps();
+
+		// Actualizamos la pantalla
 		SDL_Flip(gameMenu->screen);
-		//SDL_UpdateRect(screen, 0, 0, 0, 0);
 		
-		// --- LIMITADOR ---
+		// Limitamos los frames si tenemos que sincronizar con el video
 		if (gameMenu->sync.g_sync == SYNC_TO_VIDEO){
 			gameMenu->sync.limit_fps(nextFrameTime);
 		}

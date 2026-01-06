@@ -13,7 +13,9 @@ class Fileio{
         char * getFile() {return memblock;}
 		std::ifstream::pos_type getFileSize() {return size;}
 		bool clearFile();
+		int writeToFile(const char *uri, char * memblocktowrite, size_t tam, int append);
     private:
+		void decodeError(int r);
         std::ifstream::pos_type size;
         char * memblock;
 };

@@ -1,4 +1,5 @@
-#include "engine.h"
+#include <engine.h>
+#include <io/joystick.h>
 
 #ifdef _XBOX
 	#include <xtl.h>
@@ -26,20 +27,13 @@
 
 Engine::Engine(){
 	constant = new Constant();
-
-	for (int i=0; i < MAX_PLAYERS; i++){
-		g_joysticks[i] = NULL;
-		for (int j=0; j < RETRO_DEVICE_ID_JOYPAD_R3 + 1; j++){
-			g_joy_state[i][j] = false;
-		}
-	}
 }
 
 Engine::~Engine(){
 	delete constant;
 }
 
-int Engine::initEngine(CfgLoader &cfgLoader){
+int Engine::initEngine(CfgLoader* cfgLoader){
 	running = true;
 	LOG_DEBUG("Initiating engine\n");
 
@@ -49,8 +43,8 @@ int Engine::initEngine(CfgLoader &cfgLoader){
 		SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 		sync.g_sync = SYNC_TO_VIDEO;
 		// Pantalla completa sin borde. Parece que pantalla completa sin borde es la forma de ejecucion mas rapida
-		//SDL_putenv("SDL_VIDEO_WINDOW_POS=0,0");
-		//video_flags = video_flags | SDL_NOFRAME;
+		SDL_putenv("SDL_VIDEO_WINDOW_POS=0,0");
+		video_flags = video_flags | SDL_NOFRAME;
 	#endif
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
@@ -66,14 +60,18 @@ int Engine::initEngine(CfgLoader &cfgLoader){
 		return 1;
 	}
 
+	if (TTF_Init() == -1) {
+		LOG_ERROR("Error TTF_Init: %s\n", TTF_GetError());
+	}
+
 	initFont();
-	init_all_joysticks();
+	joystick = new Joystick();
 
 	return 0;
 }
 
 void Engine::stopEngine(){
-	close_joysticks();
+	delete joystick;
 	// 3. Limpieza: Devolver el reloj del sistema a su estado normal
 	#ifdef WIN
 		timeEndPeriod(1);
@@ -82,33 +80,13 @@ void Engine::stopEngine(){
 }
 
 int Engine::initFont(){
-	fonts->init();
+	fonts = new Fonts();
 	fonts->initFonts(24);
 	return 0;
 }
 
-void Engine::init_all_joysticks() {
-    SDL_InitSubSystem(SDL_INIT_JOYSTICK);
-    int num_joy = SDL_NumJoysticks();
-    
-	if (num_joy <= 0){
-		return;
-	}
-
-    // Abrir todos los mandos disponibles hasta el límite de jugadores
-    for (int i = 0; i < num_joy && i < MAX_PLAYERS; i++) {
-        g_joysticks[i] = SDL_JoystickOpen(i);
-        if (g_joysticks[i]) {
-            LOG_DEBUG("Mando %d abierto: %s\n", i, SDL_JoystickName(i));
-        }
-    }
+tEvento Engine::WaitForKey(){
+	return joystick->WaitForKey(screen);
 }
 
-void Engine::close_joysticks() {
-	for (int i = 0; i < MAX_PLAYERS; i++) {
-		if (g_joysticks[i]) {
-			SDL_JoystickClose(g_joysticks[i]);
-			g_joysticks[i] = NULL;
-		}
-	}
-}
+

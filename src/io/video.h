@@ -1,7 +1,14 @@
 #pragma once
 
+#include <SDL_thread.h>
 #include "const\constant.h"
 #include <stdint.h>
+
+#ifdef _XBOX
+	#include <ppcintrinsics.h>
+#elif defined(WIN)
+	#include <emmintrin.h> // SSE2
+#endif
 
 inline void check_center(uint16_t* src, uint16_t*& dst, int sw, int sh, std::size_t spitch, 
 						int dw, int dh, std::size_t dpitch, 
@@ -388,6 +395,116 @@ inline void scale_software_fixed_point(uint16_t* src, uint16_t* dst_base, int sw
         }
     }
 }
+
+#ifdef WIN
+inline void scale_software_fixed_point_sse2(uint16_t* src, uint16_t* dst_base, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch) {
+    float scale = (float)dw / sw;
+    if ((float)dh / sh < scale) scale = (float)dh / sh;
+
+    int out_w = (int)(sw * scale);
+    int out_h = (int)(sh * scale);
+    int inv_scale_fp = (int)((1.0f / scale) * 65536.0f);
+
+    int src_stride = spitch >> 1;
+    int dst_stride = dpitch >> 1;
+    uint16_t* dst = dst_base + (((dh - out_h) / 2) * dst_stride) + ((dw - out_w) / 2);
+
+    // Precalculamos el incremento para 8 píxeles: [0, 1, 2, 3, 4, 5, 6, 7] * inv_scale_fp
+    __m128i step_v = _mm_set1_epi32(inv_scale_fp);
+    __m128i base_indices = _mm_set_epi32(3, 2, 1, 0); // Índices base
+    __m128i offsets_low = _mm_mullo_epi16(base_indices, step_v); // Esto es simplificado
+
+    for (int y = 0; y < out_h; y++) {
+        int src_y = (y * inv_scale_fp) >> 16;
+        uint16_t* line_src = src + (src_y * src_stride);
+        uint16_t* line_dst = dst + (y * dst_stride);
+
+        int x = 0;
+        // Procesar de 8 en 8 píxeles
+        for (; x <= out_w - 8; x += 8) {
+            // Calculamos los índices de los 8 píxeles actuales
+            // x_fp = (x + i) * inv_scale_fp
+            int x0 = (x * inv_scale_fp);
+            
+            // Cargamos y desplazamos para obtener la parte entera
+            // Nota: En SSE2/3 el "gather" es manual, pero calculamos los punteros rápido
+            line_dst[x + 0] = line_src[(x0 + 0 * inv_scale_fp) >> 16];
+            line_dst[x + 1] = line_src[(x0 + 1 * inv_scale_fp) >> 16];
+            line_dst[x + 2] = line_src[(x0 + 2 * inv_scale_fp) >> 16];
+            line_dst[x + 3] = line_src[(x0 + 3 * inv_scale_fp) >> 16];
+            line_dst[x + 4] = line_src[(x0 + 4 * inv_scale_fp) >> 16];
+            line_dst[x + 5] = line_src[(x0 + 5 * inv_scale_fp) >> 16];
+            line_dst[x + 6] = line_src[(x0 + 6 * inv_scale_fp) >> 16];
+            line_dst[x + 7] = line_src[(x0 + 7 * inv_scale_fp) >> 16];
+        }
+
+        // Bucle de limpieza para los píxeles restantes
+        int curr_src_x_fp = x * inv_scale_fp;
+        for (; x < out_w; x++) {
+            line_dst[x] = line_src[curr_src_x_fp >> 16];
+            curr_src_x_fp += inv_scale_fp;
+        }
+    }
+}
+#endif
+
+#ifdef _XBOX
+
+inline void scale_software_fixed_point_ppc(uint16_t* src, uint16_t* dst_base, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch) {
+    float scale = (float)dw / sw;
+    if ((float)dh / sh < scale) scale = (float)dh / sh;
+
+    int out_w = (int)(sw * scale);
+    int out_h = (int)(sh * scale);
+    int inv_scale_fp = (int)((1.0f / scale) * 65536.0f);
+
+    int src_stride = spitch >> 1;
+    int dst_stride = dpitch >> 1;
+    uint16_t* dst = dst_base + (((dh - out_h) / 2) * dst_stride) + ((dw - out_w) / 2);
+
+    for (int y = 0; y < out_h; y++) {
+        int src_y = (y * inv_scale_fp) >> 16;
+        uint16_t* line_src = src + (src_y * src_stride);
+        uint16_t* line_dst = dst + (y * dst_stride);
+
+        // Pre-carga la línea de origen en la caché de la Xbox 360
+        __dcbt(0, line_src);
+
+        int x = 0;
+        // Desenrollamos el bucle manualmente para el procesador Xenon
+        // Procesamos bloques de 8 píxeles para aprovechar el pipeline
+        for (; x <= out_w - 8; x += 8) {
+            int x_fp = x * inv_scale_fp;
+            
+            // Calculamos índices y leemos. 
+            // El procesador Xenon de 360 es In-Order, así que agrupamos lecturas
+            uint16_t p0 = line_src[(x_fp + 0 * inv_scale_fp) >> 16];
+            uint16_t p1 = line_src[(x_fp + 1 * inv_scale_fp) >> 16];
+            uint16_t p2 = line_src[(x_fp + 2 * inv_scale_fp) >> 16];
+            uint16_t p3 = line_src[(x_fp + 3 * inv_scale_fp) >> 16];
+            uint16_t p4 = line_src[(x_fp + 4 * inv_scale_fp) >> 16];
+            uint16_t p5 = line_src[(x_fp + 5 * inv_scale_fp) >> 16];
+            uint16_t p6 = line_src[(x_fp + 6 * inv_scale_fp) >> 16];
+            uint16_t p7 = line_src[(x_fp + 7 * inv_scale_fp) >> 16];
+
+            line_dst[x + 0] = p0;
+            line_dst[x + 1] = p1;
+            line_dst[x + 2] = p2;
+            line_dst[x + 3] = p3;
+            line_dst[x + 4] = p4;
+            line_dst[x + 5] = p5;
+            line_dst[x + 6] = p6;
+            line_dst[x + 7] = p7;
+        }
+
+        // Limpieza de píxeles restantes
+        for (; x < out_w; x++) {
+            line_dst[x] = line_src[(x * inv_scale_fp) >> 16];
+        }
+    }
+}
+
+#endif
 
 static inline void scale_bilinear_fast(uint16_t* src, uint16_t* dst, 
 									   int sw, int sh, std::size_t spitch,

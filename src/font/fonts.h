@@ -5,8 +5,8 @@
 #include <vector>
 #include <string>
 
-#include "../const/Constant.h"
-#include "../io/fileio.h"
+#include <const/Constant.h>
+#include <io/fileio.h>
 
 
 class Fonts{
@@ -15,7 +15,6 @@ class Fonts{
         Fonts();
         ~Fonts();
 
-		static void init();
 		static void exit();
 		static void initFonts(int fontSize);
 		static TTF_Font *getFont(int fontId);	

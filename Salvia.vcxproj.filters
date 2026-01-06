@@ -62,11 +62,26 @@
     <ClCompile Include="src\uiobjects\object.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\io\joystick.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\cursorgestor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\JoyMapper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\filelist.h">
+      <Filter>Header Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\minizip-1.2.5\ioapi.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\minizip-1.2.5\unzip.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\Arimo_Regular.ttf.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\libretro.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -143,6 +158,21 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\gfx\gfx_utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\font\Arimo_Regular.ttf.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\joymapper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\cursorgestor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\unzip\GZipHelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\unzip\unziptool.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

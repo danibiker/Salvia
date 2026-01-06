@@ -30,6 +30,8 @@ bool dirutil::isDir(const char* ruta){
         if (ret)
             closedir(dir);
         return ret;
+	//#elif defined(_XBOX)
+	//	return GetFileAttributes(ruta) != 0xFFFFFFFF;
     #else 
         struct stat info;
         stat(ruta, &info);
@@ -56,6 +58,8 @@ bool dirutil::fileExists(const char* file) {
         if (ret)
             f.close();
         return ret;
+	#elif defined(_XBOX)
+		return GetFileAttributes(file) != 0xFFFFFFFF;
     #else
         struct stat buf;
         return (stat(file, &buf) == 0);
@@ -74,14 +78,19 @@ bool dirutil::dirExists(const char* ruta){
 }
 
 /**
+*
 */
 char * dirutil::getDir(char *buffer){
 	if (!buffer) return NULL;
 
 #ifdef _XBOX
-	// En Xbox 360, el directorio de trabajo es siempre la unidad montada
-    // Usamos strncpy para evitar desbordamientos
-    strncpy(buffer, "game:", FILENAME_MAX);
+	memset(buffer, '\0', FILENAME_MAX-1);
+	//Como no se puede obtener la ruta con el ejecutable, lo tenemos que harcodear
+	//Hay que modificar Properties/Xbox360 image conversion/Output-file
+	//y Properties/general/Target Name en windows
+	//EMU_LIB_NAME es una macro que se puede modificar en el fichero Salvia.vcxproj
+	string ruta = "game:\\" + string(EMU_LIB_NAME) + ".xex"; 
+	strncpy(buffer, ruta.c_str(), FILENAME_MAX);
     return buffer;
 #else
 	memset(buffer, '\0',FILENAME_MAX-1);
@@ -213,7 +222,7 @@ unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr
     hFind = FindFirstFile(searchPath.c_str(), &findData);
 
     if (hFind == INVALID_HANDLE_VALUE) {
-        std::cout << "No se pudo abrir el directorio o está vacío." << std::endl;
+        std::cout << "No se pudo abrir el directorio o está vacío: " << strdir << std::endl;
         return 0;
     }
 	string extension;
@@ -405,4 +414,98 @@ bool dirutil::borrarArchivo(string ruta){
         else
             return false;
     }
+}
+
+/**
+*
+*/
+int dirutil::createDir(std::string dir){
+	if (!dirExists(dir.c_str())) {
+        #ifdef WIN
+            return mkdir(dir.c_str());
+        #else
+            return mkdir(dir.c_str(), 0777);
+        #endif
+    } else {
+        return 0;
+    }
+}
+
+void dirutil::borrarDir(string path)
+{
+#ifdef WIN
+    DIR *dir = opendir(path.c_str());
+    if (dir == NULL) return; // Error al abrir o no es un directorio
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        // Saltar "." y ".."
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+
+        // Construir ruta completa
+        string abs_path = path + "/" + entry->d_name;
+
+        // Intentar abrir como directorio para ver si es subcarpeta
+        DIR *sub_dir = opendir(abs_path.c_str());
+        if (sub_dir != NULL) 
+        {
+            closedir(sub_dir);       // Cerramos el test de apertura
+            borrarDir(abs_path);     // Llamada recursiva
+        }
+        else 
+        {
+            remove(abs_path.c_str()); // Es un archivo, borrar directamente
+        }
+    }
+
+    closedir(dir);            // <--- IMPRESCINDIBLE
+    rmdir(path.c_str());      // Borrar la carpeta actual ahora que está vacía
+#elif defined(_XBOX)
+	// En Xbox 360, las rutas deben terminar en \* para buscar contenido
+
+	std::string searchPath = path;
+	if (path.length() > 0 && path.at(path.length() -1) != '\\'){
+		searchPath = searchPath + "\\";
+	}
+	searchPath = searchPath + "*";
+
+    WIN32_FIND_DATA findData;
+    HANDLE hFind = FindFirstFile(searchPath.c_str(), &findData);
+
+    if (hFind == INVALID_HANDLE_VALUE) {
+        // Si no se puede abrir como directorio, intentamos borrarlo como archivo
+        remove(path.c_str());
+        return;
+    }
+
+    do {
+		const std::string name = findData.cFileName;
+
+        // Ignorar los directorios relativos . y ..
+        if (name == "." || name == "..") {
+            continue;
+        }
+
+        std::string fullPath = path + "\\" + name;
+
+        if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            // Es un directorio: Llamada recursiva
+            borrarDir(fullPath);
+        } else {
+            // Es un archivo: Quitar atributos de solo lectura si existen y borrar
+            SetFileAttributes(fullPath.c_str(), FILE_ATTRIBUTE_NORMAL);
+            if (!DeleteFile(fullPath.c_str())) {
+                // Opcional: manejar error de borrado
+            }
+        }
+
+    } while (FindNextFile(hFind, &findData));
+
+    FindClose(hFind);
+
+    // Finalmente borrar la carpeta actual (debe estar vacía)
+    RemoveDirectory(path.c_str());
+#endif
 }
