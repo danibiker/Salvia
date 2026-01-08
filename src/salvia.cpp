@@ -1,5 +1,8 @@
 #pragma once
 
+//Evita errores al usar el min o max de windows.h al incluir el filtro "io/xbrz/xbrz.h"
+#define NOMINMAX 
+
 #include <SDL.h>
 #include <SDL_ttf.h>
 
@@ -12,7 +15,7 @@
 #include "uiobjects/listmenu.h"
 #include "uiobjects/tilemap.h"
 #include "unzip/unziptool.h"
-
+#include "const/menuconst.h"
 
 GameMenu *gameMenu;
 Logger *logger;
@@ -53,9 +56,9 @@ int Constant::EXEC_METHOD = launch_batch;
 const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
 
 void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
-    va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
+    //va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
 	
-	/*if (!logger) {
+	if (!logger) {
 		va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
 		return;
 	}
@@ -79,8 +82,7 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
     // 3. Llamar directamente al método write
     // Nota: Como no podemos obtener el archivo/línea real del Core, 
     // indicamos que el origen es "LIBRETRO_CORE"
-    logger->write(myLevel, "[CORE] %s", buffer);*/
-
+    logger->write(myLevel, "[CORE] %s", buffer);
 }
 
 static bool retro_environment(unsigned cmd, void *data) {
@@ -113,33 +115,22 @@ static bool retro_environment(unsigned cmd, void *data) {
 }
 
 static void retro_video_refresh(const void *data, unsigned width, unsigned height, std::size_t pitch) {
-    // pitch < (width * 2) -> Asegúrate de que el core envíe al menos 16 bits
-	if (!data || width == 0 || height == 0 || pitch < (width * 2)) return;
+    // 1. Validación temprana
+    if (!data || width == 0 || height == 0 || pitch < (width * 2)) return;
 
-	//if (gameMenu->sync.g_sync == SYNC_NONE){
-	//	fast_video_blit((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
-	//} else {
-		//scale_software_fixed_point((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
-		#ifdef WIN
-			scale_software_fixed_point_sse2((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
-		#elif defined(_XBOX)
-			scale_software_fixed_point_ppc((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
-		#endif
-
-	//}
-	//scale_bilinear_fast((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
-
-	//scale2x_software((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
-	//scale3x_software((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
-	//scale4x_software((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
-	//scale_generic_software((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch, 3);
-	
-	//scale3x_advance((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
-	//scale4x_advance((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
-	
-	//scale_xBRZ_3x((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
-	//scale4x_xbrz_software((uint16_t*)data, (uint16_t*)gameMenu->screen->pixels, width, height, pitch, gameMenu->screen->w, gameMenu->screen->h, gameMenu->screen->pitch);
-	
+    // 2. Extraer variables locales (Optimización de caché y registros)
+    // Esto evita que la CPU navegue por la estructura gameMenu
+    SDL_Surface* screen = gameMenu->screen;
+    uint16_t* dst      = (uint16_t*)screen->pixels;
+    uint16_t* src      = (uint16_t*)data;
+    const int dw             = screen->w;
+    const int dh             = screen->h;
+    const std::size_t dpitch = screen->pitch;
+	const int scale = gameMenu->current_scaler_scale;
+	const float ratio = aspectRatioValues[gameMenu->getCfgLoader()->configMain.aspectRatio];
+    
+	// 3. LLAMADA DIRECTA (Sin switch, sin saltos condicionales)
+	gameMenu->current_scaler(src, dst, (int)width, (int)height, pitch, dw, dh, dpitch, scale, ratio);
 }
 
 //Audio Callbacks for Libretro
@@ -203,6 +194,7 @@ void loadstate(){
 
 void update_input() {
     SDL_Event event;
+	
 
 	while (SDL_PollEvent(&event)) {
 		if (event.type == SDL_QUIT) {
@@ -261,11 +253,12 @@ void update_input() {
 			}
 		}
     }
-
+	const Uint32 now = SDL_GetTicks();
 	//LOG_DEBUG("ticks are: %d\n", SDL_GetTicks() - gameMenu->joystick->lastSelectPress);
-	if (gameMenu->joystick->lastSelectPress > 0 && SDL_GetTicks() - gameMenu->joystick->lastSelectPress > 2000){
+	if (gameMenu->joystick->lastSelectPress > 0 && now - gameMenu->joystick->lastSelectPress > LONGKEYTIMEOUT){
 		gameMenu->joystick->lastSelectPress = 0;
 		gameMenu->setEmuStatus(EMU_MENU);
+		gameMenu->joystick->resetAllValues();
 	}
 }
 
@@ -482,6 +475,9 @@ int launchGame(std::string rompath){
 	struct retro_system_av_info av_info;
 	retro_get_system_av_info(&av_info);
 
+	//Obtener el aspect ratio
+	aspectRatioValues[RATIO_CORE] = av_info.geometry.aspect_ratio;
+
 	// Inicializar SDL Audio con la frecuencia del core
 	init_sdl_audio(av_info.timing.sample_rate);
 	//Iniciando el contador de fps
@@ -501,28 +497,55 @@ void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, 
 	askEvento = gameMenu.WaitForKey();
 
 	if (askEvento.isJoy){
-		if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_UP)){
-			listMenu.prevPos();
-		} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_DOWN)){
-			listMenu.nextPos();
-		} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT)){
-			listMenu.prevPage();
-		} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
-			listMenu.nextPage();
-		} 
+		ConfigEmu emu = gameMenu.getCfgEmu();
+		if (listMenu.getNumGames() == 0 && emu.generalConfig){
+			//Opciones para modificar el menu de configuracion
+			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_UP)){
+				gameMenu.configMenus->prevPos();
+			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_DOWN)){
+				gameMenu.configMenus->nextPos();
+			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT)){
+				gameMenu.configMenus->cambiarValor(-1);
+			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
+				gameMenu.configMenus->cambiarValor(1);
+			} 
 
-		if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A)){
-			vector<string> game = gameMenu.launchProgram(listMenu);
-			if (game.size() > 1){
-				SDL_FillRect(gameMenu.screen, NULL, bkgText);
-				if (launchGame(game.at(1))){
-					gameMenu.setEmuStatus(EMU_STARTED);
-				}
-				gameMenu.joystick->resetAllValues();
-				gameMenu.joystick->lastSelectPress = 0;
-				return;
+			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A)){
+				gameMenu.configMenus->confirmar();
+			} else if(askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_B)){
+				gameMenu.configMenus->volver();
 			}
-		} 
+
+			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A) || askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT) 
+				|| askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
+				gameMenu.processConfigChanges();
+			}
+
+		} else {
+			//Opciones para seleccionar una rom para el emulador
+			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_UP)){
+				listMenu.prevPos();
+			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_DOWN)){
+				listMenu.nextPos();
+			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT)){
+				listMenu.prevPage();
+			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
+				listMenu.nextPage();
+			} 
+
+			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A)){
+				vector<string> game = gameMenu.launchProgram(listMenu);
+				if (game.size() > 1){
+					SDL_FillRect(gameMenu.screen, NULL, bkgText);
+					if (launchGame(game.at(1))){
+						gameMenu.setEmuStatus(EMU_STARTED);
+					}
+					gameMenu.joystick->resetAllValues();
+					gameMenu.joystick->lastSelectPress = 0;
+					return;
+				}
+			} 
+		}
 
 		if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_R)){
             //Change to prev emulator
@@ -538,6 +561,14 @@ void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, 
             gameMenu.getPrevCfgEmu();
             gameMenu.loadEmuCfg(listMenu);
         } 
+
+		if (askEvento.longKeyPress[JoyMapper::getJoyMapper(JOY_BUTTON_SELECT)] && gameMenu.getLastStatus() == EMU_STARTED){
+			LOG_DEBUG("Detectada pulsacion larga del select\n");
+			gameMenu.setEmuStatus(EMU_STARTED);
+			SDL_FillRect(gameMenu.video_page, NULL, gameMenu.uBkgColor);
+			gameMenu.joystick->resetAllValues();
+			return;
+		}
 	}
 
 	if (askEvento.quit){
@@ -578,8 +609,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-	Constant::drawTextCent(gameMenu->screen, Fonts::getFont(Fonts::FONTSMALL), "Loading games...", 0,0, 
-					true, true, textColor, 0);
+	Constant::drawTextCent(gameMenu->screen, Fonts::getFont(Fonts::FONTSMALL), "Loading games...", 0,0, true, true, textColor, 0);
 	SDL_Flip(gameMenu->screen);
 
 	TileMap tileMap(9, 0, 16, 16);
@@ -611,6 +641,8 @@ int main(int argc, char *argv[]) {
 			// El tiempo en el que DEBERÍA empezar el siguiente frame
 			nextFrameTime += gameMenu->sync.frameDelay;
 		}
+		// Procesamos eventos como pulsaciones de hotkeys
+		gameMenu->processFrontendEvents();
 
 		if (gameMenu->getEmuStatus() == EMU_MENU){
 			updateMenuScreen(tileMap, *gameMenu, listMenu, false);
@@ -623,8 +655,8 @@ int main(int argc, char *argv[]) {
 			retro_run();
 		}
 
-		// Actualizamos el contador de media de fps
-		gameMenu->updateFps();
+		// Procesamos eventos como mensajes o actualizacion de fps
+		gameMenu->processFrontendEventsAfter();
 
 		// Actualizamos la pantalla
 		SDL_Flip(gameMenu->screen);

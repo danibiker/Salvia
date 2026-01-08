@@ -92,7 +92,7 @@ void ListMenu::draw(SDL_Surface *video_page){
 
     //To scroll one letter in one second. We use the face_h because the width of 
     //a letter is not fixed.
-    const float pixelsScrollFps = max(ceil(face_h / textFps), 1.0f);
+    const float pixelsScrollFps = max(ceil(face_h / (float)textFps), 1.0f);
 
     for (int i=this->iniPos; i < this->endPos; i++){
         auto game = this->listGames.at(i).get();

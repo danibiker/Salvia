@@ -16,8 +16,10 @@ class CfgLoader{
         CfgLoader(){
             loadMainConfig();
         }
-        ~CfgLoader(){
-        }
+        ~CfgLoader(){}
+
+		ConfigMain configMain;
+        std::vector<ConfigEmu> configEmus;
         
         int getWidth(){
             return configMain.resolution[0] < 0 ? 1280 : configMain.resolution[0];
@@ -38,10 +40,6 @@ class CfgLoader{
         bool isDebug(){
             return configMain.debug;
         }
-
-        ConfigMain configMain;
-        std::vector<ConfigEmu> configEmus;
-
     private:
         
         static const std::string CONFIGFILE;
@@ -62,13 +60,13 @@ class CfgLoader{
                 }
             }
 
-            fstream emucfg;
-            emucfg.open(filepath, ios::in);
+            fstream filecfg;
+            filecfg.open(filepath, ios::in);
 
-            bool fileopened = emucfg.is_open();
+            bool fileopened = filecfg.is_open();
             if (fileopened){
                 std::string line;
-                while(getline(emucfg, line)){
+                while(getline(filecfg, line)){
                     line = Constant::Trim(Constant::replaceAll(Constant::replaceAll(line, "\r", ""), "\n", ""));
                     if (line.length() > 1 && line.at(0) != '#' && line.find("=") != std::string::npos){
                         std::vector<std::string> keyvalue = Constant::splitChar(line, '=');
@@ -98,15 +96,21 @@ class CfgLoader{
                     }
                 }
             }
-            emucfg.close();
+            filecfg.close();
 
             if (fileopened){
                 if (configMain.debug) LOG_DEBUG("Loading emulators", "");
-                for (size_t i=0; i < configMain.emulators.size(); i++){
+                for (std::size_t i=0; i < configMain.emulators.size(); i++){
                     loadEmuConfig(configMain.emulators.at(i));
                 }
-                if (configMain.debug) cout << endl;
+                if (configMain.debug) cout << endl;         
             }
+
+			//Adding always the configuration options
+			ConfigEmu salviaConfig;
+			salviaConfig.generalConfig = true;
+			salviaConfig.name = "Options";
+			configEmus.emplace_back(salviaConfig);   
         }
 
         /**

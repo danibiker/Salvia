@@ -43,8 +43,8 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 		sync.g_sync = SYNC_TO_VIDEO;
 		// Pantalla completa sin borde. Parece que pantalla completa sin borde es la forma de ejecucion mas rapida
-		SDL_putenv("SDL_VIDEO_WINDOW_POS=0,0");
-		video_flags = video_flags | SDL_NOFRAME;
+		//SDL_putenv("SDL_VIDEO_WINDOW_POS=0,0");
+		//video_flags = video_flags | SDL_NOFRAME;
 	#endif
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {

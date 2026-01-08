@@ -1,14 +1,13 @@
 #pragma once
 
+#include <SDL.h>
 #include <SDL_thread.h>
-#include "const\constant.h"
+#include "const/constant.h"
+#include "io/xbrz/xbrz.h"
 #include <stdint.h>
 
-#ifdef _XBOX
-	#include <ppcintrinsics.h>
-#elif defined(WIN)
-	#include <emmintrin.h> // SSE2
-#endif
+//Todas las funciones de escalado, tienen que tener esta interfaz
+typedef void (*ScalerFunc)(uint16_t* __restrict , uint16_t* __restrict , int, int, std::size_t, int, int, std::size_t, int, float);
 
 inline void check_center(uint16_t* src, uint16_t*& dst, int sw, int sh, std::size_t spitch, 
 						int dw, int dh, std::size_t dpitch, 
@@ -33,14 +32,18 @@ inline void check_center(uint16_t* src, uint16_t*& dst, int sw, int sh, std::siz
 	//spitch y dpitch indican el numero de bytes(8Bits) que hay en cada fila.
 	//Como src_stride y dst_stride representan el numero de elementos de 16Bits(porque viene de un puntero uint16_t)
 	//tenemos que dividir por 2, lo que se consigue con la operacion de desplazamiento de 1 bit (>> 1)
-	src_stride = spitch >> 1;          // Pitch en uint16_t
+	src_stride = spitch >> 1;   // Pitch en uint16_t
     dst_stride = dpitch >> 1;   // Pitch de pantalla en uint16_t
 
     // Ajustar el puntero de destino al punto de centrado (X, Y)
     dst += (start_y * dst_stride) + start_x;
 }
 
-inline void fast_video_blit(uint16_t* src, uint16_t* dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch) {
+inline void no_video(uint16_t* __restrict src, uint16_t* __restrict dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale, float ratio) {
+	return;
+}
+
+inline void fast_video_blit(uint16_t* __restrict src, uint16_t* __restrict dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale, float ratio) {
     int src_stride = 0, dst_stride = 0;
 
     // 1. Usar check_center (escala 1 ya que no hay escalado manual aquí)
@@ -58,9 +61,142 @@ inline void fast_video_blit(uint16_t* src, uint16_t* dst, int sw, int sh, std::s
         memcpy(dst + (y * dst_stride), src + (y * src_stride), bytes_per_line);
     }
 }
+/**
+*
+*/
+inline void calcDestDimFromRatio(int sw, int sh, int dw, int dh, float ratio, int& out_w, int& out_h, int& inv_scale_x_fp, int& inv_scale_y_fp) {
+    if (ratio <= 0.0f) {
+        out_w = dw;
+        out_h = dh;
+    } else {
+        out_w = dw;
+        out_h = (int)((float)dw / ratio);
+
+        if (out_h > dh) {
+            out_h = dh;
+            out_w = (int)((float)dh * ratio);
+        }
+    }
+
+    // Usamos float para el cálculo intermedio y convertimos a punto fijo 16.16
+    inv_scale_x_fp = (int)(((float)sw / (float)out_w) * 65536.0f);
+    inv_scale_y_fp = (int)(((float)sh / (float)out_h) * 65536.0f);
+}
+
+/**
+* The best choice for speed and safeness
+*/
+inline void scale_software_fixed_point_safe2(uint16_t* __restrict src, uint16_t* __restrict dst_base, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale, float ratio) {
+    int out_w, out_h, inv_scale_x_fp, inv_scale_y_fp;
+    calcDestDimFromRatio(sw, sh, dw, dh, ratio, out_w, out_h, inv_scale_x_fp, inv_scale_y_fp);
+
+    int src_stride = (int)(spitch >> 1);
+    int dst_stride = (int)(dpitch >> 1);
+    uint16_t* dst = dst_base + (((dh - out_h) / 2) * dst_stride) + ((dw - out_w) / 2);
+
+    // SEGURIDAD: Limitar out_w para que nunca pueda leer sw
+    // Restamos un pequeño margen para asegurar que el acumulador no desborde sw-1
+    int safe_out_w = out_w;
+    if (safe_out_w > 0 && (((safe_out_w * inv_scale_x_fp) >> 16) >= sw)) safe_out_w--;
+
+    for (int y = 0; y < out_h; y++) {
+        int src_y = (y * inv_scale_y_fp) >> 16;
+        if (src_y >= sh) src_y = sh - 1;
+
+        uint16_t* line_src = src + (src_y * src_stride);
+        uint16_t* line_dst = dst + (y * dst_stride);
+
+        int curr_x_fp = 0;
+        int x = 0;
+
+        // BUCLE MAESTRO: Volvemos al acumulador simple (lo más rápido)
+        // Procesamos de 8 en 8. Sin multiplicaciones, solo sumas.
+        for (; x <= safe_out_w - 8; x += 8) {
+            line_dst[x + 0] = line_src[curr_x_fp >> 16]; curr_x_fp += inv_scale_x_fp;
+            line_dst[x + 1] = line_src[curr_x_fp >> 16]; curr_x_fp += inv_scale_x_fp;
+            line_dst[x + 2] = line_src[curr_x_fp >> 16]; curr_x_fp += inv_scale_x_fp;
+            line_dst[x + 3] = line_src[curr_x_fp >> 16]; curr_x_fp += inv_scale_x_fp;
+            line_dst[x + 4] = line_src[curr_x_fp >> 16]; curr_x_fp += inv_scale_x_fp;
+            line_dst[x + 5] = line_src[curr_x_fp >> 16]; curr_x_fp += inv_scale_x_fp;
+            line_dst[x + 6] = line_src[curr_x_fp >> 16]; curr_x_fp += inv_scale_x_fp;
+            line_dst[x + 7] = line_src[curr_x_fp >> 16]; curr_x_fp += inv_scale_x_fp;
+        }
+
+        // Limpieza final rápida
+        for (; x < out_w; x++) {
+            int sx = curr_x_fp >> 16;
+            line_dst[x] = line_src[sx >= sw ? sw - 1 : sx];
+            curr_x_fp += inv_scale_x_fp;
+        }
+    }
+}
+
+inline void scale_software_fixed_point_xbox_final(uint16_t* __restrict src, uint16_t* __restrict dst_base, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale, float ratio) {
+    int out_w, out_h, inv_scale_x_fp, inv_scale_y_fp;
+    calcDestDimFromRatio(sw, sh, dw, dh, ratio, out_w, out_h, inv_scale_x_fp, inv_scale_y_fp);
+
+    const int src_stride = (int)(spitch >> 1);
+    const int dst_stride = (int)(dpitch >> 1);
+    uint16_t* __restrict dst_ptr = dst_base + (((dh - out_h) / 2) * dst_stride) + ((dw - out_w) / 2);
+
+    // Bounding de seguridad (calculado una sola vez por frame)
+    int safe_out_w = out_w;
+    if (safe_out_w > 0 && (((safe_out_w * inv_scale_x_fp) >> 16) >= sw)) safe_out_w--;
+
+    // Pre-calculo de offsets para evitar multiplicaciones en el bucle
+    const int s1 = inv_scale_x_fp;
+    const int s2 = s1 * 2; const int s3 = s1 * 3; const int s4 = s1 * 4;
+    const int s5 = s1 * 5; const int s6 = s1 * 6; const int s7 = s1 * 7;
+    const int s8 = s1 * 8;
+
+    for (int y = 0; y < out_h; y++) {
+        int src_y = (y * inv_scale_y_fp) >> 16;
+        if (src_y >= sh) src_y = sh - 1;
+
+        const uint16_t* __restrict line_src = src + (src_y * src_stride);
+        uint16_t* __restrict line_dst = dst_ptr + (y * dst_stride);
+
+        int curr_x_fp = 0;
+        int x = 0;
+
+        // BUCLE GANADOR (Máximos FPS en Xenon)
+        // Usamos variables locales para que el compilador use los registros GPR (General Purpose Registers)
+        for (; x <= safe_out_w - 8; x += 8) {
+            // La CPU Xenon puede lanzar estas lecturas casi en paralelo si no hay IFs
+            uint16_t p0 = line_src[curr_x_fp >> 16];
+            uint16_t p1 = line_src[(curr_x_fp + s1) >> 16];
+            uint16_t p2 = line_src[(curr_x_fp + s2) >> 16];
+            uint16_t p3 = line_src[(curr_x_fp + s3) >> 16];
+            uint16_t p4 = line_src[(curr_x_fp + s4) >> 16];
+            uint16_t p5 = line_src[(curr_x_fp + s5) >> 16];
+            uint16_t p6 = line_src[(curr_x_fp + s6) >> 16];
+            uint16_t p7 = line_src[(curr_x_fp + s7) >> 16];
+
+            line_dst[x + 0] = p0;
+            line_dst[x + 1] = p1;
+            line_dst[x + 2] = p2;
+            line_dst[x + 3] = p3;
+            line_dst[x + 4] = p4;
+            line_dst[x + 5] = p5;
+            line_dst[x + 6] = p6;
+            line_dst[x + 7] = p7;
+
+            curr_x_fp += s8;
+        }
+
+        // Cleanup final
+        for (; x < out_w; x++) {
+            int sx = curr_x_fp >> 16;
+            line_dst[x] = line_src[sx >= sw ? sw - 1 : sx];
+            curr_x_fp += s1;
+        }
+    }
+}
+
+
 
 // Escalador 2x manual para RGB565
-inline void scale2x_software(uint16_t* src, uint16_t* dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch) {
+inline void scale2x_software(uint16_t* __restrict src, uint16_t* __restrict dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale, float ratio) {
 
 	int src_stride = 0, dst_stride = 0;
 	// 1. Usar check_center (escala 2 ya que no hay escalado manual aquí)
@@ -84,7 +220,10 @@ inline void scale2x_software(uint16_t* src, uint16_t* dst, int sw, int sh, std::
     }
 }
 
-inline void scale3x_software(uint16_t* src, uint16_t* dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch) {
+inline void scale3x_software(uint16_t* __restrict src, uint16_t* __restrict dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale, float ratio) {
+	if (sw * 3 > dw || sh * 3 > dh)
+		return;
+
 	int src_stride = 0, dst_stride = 0;
 	check_center(src, dst, sw, sh, spitch, dw, dh, dpitch, 3, src_stride, dst_stride);
 
@@ -109,8 +248,12 @@ inline void scale3x_software(uint16_t* src, uint16_t* dst, int sw, int sh, std::
     }
 }
 
-inline void scale4x_software(uint16_t* src, uint16_t* dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch) {
-    int src_stride = 0, dst_stride = 0;
+
+inline void scale4x_software(uint16_t* __restrict src, uint16_t* __restrict dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale, float ratio) {
+    if (sw * 4 > dw || sh * 4 > dh)
+		return;
+	
+	int src_stride = 0, dst_stride = 0;
     
     // Llamada para centrar la pantalla (factor 4)
     // Nota: Asegúrate de que tu check_center asigne a src_stride el valor de spitch/2 
@@ -143,8 +286,74 @@ inline void scale4x_software(uint16_t* src, uint16_t* dst, int sw, int sh, std::
     }
 }
 
-inline void scale3x_advance(uint16_t* src, uint16_t* dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch) {
+/**
+ * AdvMAME2x (Scale2x) para RGB565 con centrado de pantalla
+ * Optimizado para Xbox 360 / x86
+ */
+inline void scale2x_advance(uint16_t* __restrict src, uint16_t* __restrict dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale, float ratio) {
+    // Verificación de límites de seguridad para escalado 2x
+    if (!src || !dst || (sw * 2 > dw) || (sh * 2 > dh)) {
+        return;
+    }
+
     int src_stride = 0, dst_stride = 0;
+    
+    // Llamada obligatoria para centrar (Factor 2 para Scale2x)
+    check_center(src, dst, sw, sh, spitch, dw, dh, dpitch, 2, src_stride, dst_stride);
+
+    // Ajuste de punteros base (sumamos el offset calculado en píxeles)
+    uint16_t* s_ptr_base = src + src_stride;
+    uint16_t* d_ptr_base = dst + dst_stride;
+
+    const int s_gap = spitch / sizeof(uint16_t);
+    const int d_gap = dpitch / sizeof(uint16_t);
+
+    for (int y = 0; y < sh; ++y) {
+        // Punteros a las líneas de origen: previa, actual y siguiente
+        const uint16_t* s_curr = &s_ptr_base[y * s_gap];
+        const uint16_t* s_prev = (y > 0) ? &s_ptr_base[(y - 1) * s_gap] : s_curr;
+        const uint16_t* s_next = (y < sh - 1) ? &s_ptr_base[(y + 1) * s_gap] : s_curr;
+
+        // Cada línea de origen genera dos líneas de destino
+        uint16_t* d_top = &d_ptr_base[(y * 2) * d_gap];
+        uint16_t* d_bot = &d_ptr_base[(y * 2 + 1) * d_gap];
+
+        for (int x = 0; x < sw; ++x) {
+            // Píxel central y sus vecinos inmediatos
+            uint16_t E = s_curr[x];
+            uint16_t B = s_prev[x];
+            uint16_t D = (x > 0) ? s_curr[x - 1] : E;
+            uint16_t F = (x < sw - 1) ? s_curr[x + 1] : E;
+            uint16_t H = s_next[x];
+
+            /*
+               Matriz de salida 2x2 para el píxel E:
+               [p0][p1]  <- d_top
+               [p2][p3]  <- d_bot
+            */
+
+            if (B != H && D != F) {
+                // Aplicación de reglas AdvMAME2x
+                d_top[x * 2]     = (D == B) ? B : E; // p0
+                d_top[x * 2 + 1] = (B == F) ? F : E; // p1
+                d_bot[x * 2]     = (D == H) ? H : E; // p2
+                d_bot[x * 2 + 1] = (H == F) ? F : E; // p3
+            } else {
+                // Relleno simple para zonas sin diagonales
+                d_top[x * 2]     = E;
+                d_top[x * 2 + 1] = E;
+                d_bot[x * 2]     = E;
+                d_bot[x * 2 + 1] = E;
+            }
+        }
+    }
+}
+
+inline void scale3x_advance(uint16_t* __restrict src, uint16_t* __restrict dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale, float ratio) {
+     if (sw * 3 > dw || sh * 3 > dh)
+		return;
+
+	int src_stride = 0, dst_stride = 0;
     
     // Llamada obligatoria para centrar según tu estructura
     check_center(src, dst, sw, sh, spitch, dw, dh, dpitch, 3, src_stride, dst_stride);
@@ -209,8 +418,11 @@ inline void scale3x_advance(uint16_t* src, uint16_t* dst, int sw, int sh, std::s
  * Scale4x para 16 bits (RGB565/555)
  * Expande cada píxel en un bloque de 4x4 analizando sus vecinos.
  */
-inline void scale4x_advance(uint16_t* src, uint16_t* dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch) {
-    int src_stride = 0, dst_stride = 0;
+inline void scale4x_advance(uint16_t* __restrict src, uint16_t* __restrict dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale, float ratio) {
+    if (sw * 4 > dw || sh * 4 > dh)
+		return;
+	
+	int src_stride = 0, dst_stride = 0;
     
     // Llamada para centrar la imagen y obtener los offsets de inicio
     // El factor de escala es 4
@@ -275,416 +487,228 @@ inline void scale4x_advance(uint16_t* src, uint16_t* dst, int sw, int sh, std::s
     }
 }
 
-// Función auxiliar: Distancia de color para detectar bordes con precisión
-inline bool color_dist(uint16_t c1, uint16_t c2) {
-    if (c1 == c2) return false;
-    // Extraer canales RGB565
-    int r = ((c1 >> 11) & 0x1F) - ((c2 >> 11) & 0x1F);
-    int g = ((c1 >> 5) & 0x3F) - ((c2 >> 5) & 0x3F);
-    int b = (c1 & 0x1F) - (c2 & 0x1F);
-    // Umbral de luminancia para decidir si hay un borde real
-    return (r*r + g*g + b*b) > 200; 
-}
 
-inline void scale4x_xbrz_software(uint16_t* src, uint16_t* dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch) {
-    int src_stride = 0, dst_stride = 0;
-    check_center(src, dst, sw, sh, spitch, dw, dh, dpitch, 4, src_stride, dst_stride);
 
-    const int s_gap = spitch / sizeof(uint16_t);
-    const int d_gap = dpitch / sizeof(uint16_t);
+inline void convertRGB565ToARGB8888(const uint16_t* src, int sw, int sh, std::size_t spitch, uint32_t* dst, std::size_t dpitch) {
+    for (int y = 0; y < sh; ++y) {
+        // Calculamos el inicio de cada línea usando el pitch (bytes)
+        const uint16_t* srcLine = reinterpret_cast<const uint16_t*>(reinterpret_cast<const uint8_t*>(src) + (y * spitch));
+        uint32_t* dstLine = reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(dst) + (y * dpitch));
 
-    for (int y = 0; y < sh; y++) {
-        for (int x = 0; x < sw; x++) {
-            // Píxel actual (P) y sus vecinos cardinales
-            uint16_t P = src[y * s_gap + x];
-            uint16_t U = (y > 0) ? src[(y - 1) * s_gap + x] : P;
-            uint16_t D = (y < sh - 1) ? src[(y + 1) * s_gap + x] : P;
-            uint16_t L = (x > 0) ? src[y * s_gap + (x - 1)] : P;
-            uint16_t R = (x < sw - 1) ? src[y * s_gap + (x + 1)] : P;
+        for (int x = 0; x < sw; ++x) {
+            uint16_t p = srcLine[x];
+            // Conversión directa por registro (Endian-safe)
+            uint32_t r = ((p >> 11) & 0x1F);
+            uint32_t g = ((p >> 5) & 0x3F);
+            uint32_t b = (p & 0x1F);
 
-            uint16_t* out = dst + (y * 4 * d_gap) + (x * 4);
-
-            // Lógica simplificada de xBRZ: 
-            // Si detecta una diagonal (ej. arriba y derecha coinciden), suaviza la esquina.
-            // Si no, mantiene el bloque nítido.
-            
-            for (int dy = 0; dy < 4; dy++) {
-                for (int dx = 0; dx < 4; dx++) {
-                    uint16_t res = P;
-                    
-                    // Ejemplo de regla xBRZ para esquinas:
-                    if (dx > 2 && dy < 1 && !color_dist(U, R)) res = R; // Esquina superior derecha
-                    if (dx < 1 && dy > 2 && !color_dist(D, L)) res = L; // Esquina inferior izquierda
-                    if (dx > 2 && dy > 2 && !color_dist(D, R)) res = R; // Esquina inferior derecha
-                    if (dx < 1 && dy < 1 && !color_dist(U, L)) res = L; // Esquina superior izquierda
-
-                    out[dy * d_gap + dx] = res;
-                }
-            }
+            // Replicación de bits para color pleno (0x1F -> 0xFF)
+            dstLine[x] = (0xFF000000) |           // Alpha
+                         ((r << 3 | r >> 2) << 16) | // Red
+                         ((g << 2 | g >> 4) << 8)  | // Green
+                         (b << 3 | b >> 2);          // Blue
         }
     }
 }
 
 /**
- * Escalador genérico para cualquier factor entero (1x, 2x, 3x, 4x, etc.)
- * scale: el factor de multiplicación (ej: 2 para 2x)
+ * Convierte ARGB8888 a RGB565 de forma eficiente.
+ * @param src      Puntero a los datos de origen (32 bits).
+ * @param sw       Ancho de la imagen.
+ * @param sh       Alto de la imagen.
+ * @param spitch   Pitch (bytes por línea) de la superficie origen (32 bits).
+ * @param dst      Puntero al destino (16 bits).
+ * @param dpitch   Pitch (bytes por línea) de la superficie destino (16 bits).
  */
-inline void scale_generic_software(uint16_t* src, uint16_t* dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale) {
-    int src_stride = 0, dst_stride = 0;
+inline void convertARGB8888ToRGB565(const uint32_t* src, int sw, int sh, size_t spitch,
+                             uint16_t* dst, size_t dpitch) {
     
-    // Centrar la imagen según el factor de escala solicitado
-    check_center(src, dst, sw, sh, spitch, dw, dh, dpitch, scale, src_stride, dst_stride);
+    const uint8_t* srcLine = reinterpret_cast<const uint8_t*>(src);
+    uint8_t* dstLine = reinterpret_cast<uint8_t*>(dst);
 
-    uint16_t* s_ptr = src + src_stride;
-    uint16_t* d_ptr = dst + dst_stride;
-
-    const int s_gap = spitch / sizeof(uint16_t);
-    const int d_gap = dpitch / sizeof(uint16_t);
-
-    // Caso especial 1x para máxima velocidad (es un simple blit/copia)
-    if (scale == 1) {
-        for (int y = 0; y < sh; ++y) {
-            memcpy(d_ptr + (y * d_gap), s_ptr + (y * s_gap), sw * sizeof(uint16_t));
-        }
-        return;
-    }
-
-    // Escalado genérico para scale > 1
     for (int y = 0; y < sh; ++y) {
-        uint16_t* src_row = &s_ptr[y * s_gap];
-        uint16_t* dst_row_base = &d_ptr[(y * scale) * d_gap];
+        const uint32_t* srcPtr = reinterpret_cast<const uint32_t*>(srcLine);
+        uint16_t* dstPtr = reinterpret_cast<uint16_t*>(dstLine);
 
         for (int x = 0; x < sw; ++x) {
-            uint16_t color = src_row[x];
-            uint16_t* out = &dst_row_base[x * scale];
+            uint32_t pixel = srcPtr[x];
 
-            // Rellenar el bloque scale * scale
-            for (int dy = 0; dy < scale; ++dy) {
-                for (int dx = 0; dx < scale; ++dx) {
-                    out[dy * d_gap + dx] = color;
-                }
-            }
+            // Extraer canales (asumiendo 0xAARRGGBB en registro)
+            // Descartamos los bits bajos para quedarnos con 5-6-5
+            uint16_t r = (uint16_t)((pixel >> 19) & 0x1F); // Rojo: de bits 16-23 a 5 bits
+            uint16_t g = (uint16_t)((pixel >> 10) & 0x3F); // Verde: de bits 8-15 a 6 bits
+            uint16_t b = (uint16_t)((pixel >> 3)  & 0x1F); // Azul: de bits 0-7 a 5 bits
+
+            // Empaquetar en RGB565: RRRRRGGGGGGBBBBB
+            dstPtr[x] = (r << 11) | (g << 5) | b;
         }
+
+        srcLine += spitch;
+        dstLine += dpitch;
     }
 }
 
-inline void scale_software_fixed_point(uint16_t* src, uint16_t* dst_base, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch) {
-    float scale = (float)dw / sw;
-    if ((float)dh / sh < scale) scale = (float)dh / sh;
+struct XBRZJob {
+    int scale;
+    uint32_t* src;
+    uint32_t* dst;
+    int w, h;
+    xbrz::ScalerCfg* cfg;
+    int yFirst, yLast;
+};
 
-    int out_w = (int)(sw * scale);
-    int out_h = (int)(sh * scale);
-    
-    // Convertir el factor inverso a punto fijo (entero que representa decimales)
-    // Usamos un desplazamiento de 16 bits (65536)
-    int inv_scale_fp = (int)((1.0f / scale) * 65536.0f);
+inline int xbrz_thread_func(void* data) {
+    XBRZJob* job = (XBRZJob*)data;
 
-    int src_stride = spitch >> 1;
-    int dst_stride = dpitch >> 1;
-    uint16_t* dst = dst_base + (((dh - out_h) / 2) * dst_stride) + ((dw - out_w) / 2);
+	xbrz::scale(job->scale,
+        job->src,
+        job->dst,
+        job->w,
+        job->h,
+		*job->cfg,
+        job->yFirst,
+        job->yLast);
 
-    for (int y = 0; y < out_h; y++) {
-        int src_y = (y * inv_scale_fp) >> 16;
-        uint16_t* line_src = src + (src_y * src_stride);
-        uint16_t* line_dst = dst + (y * dst_stride);
-
-        int curr_src_x_fp = 0; // Acumulador de punto fijo
-        for (int x = 0; x < out_w; x++) {
-            line_dst[x] = line_src[curr_src_x_fp >> 16];
-            curr_src_x_fp += inv_scale_fp;
-        }
-    }
+    return 0;
 }
 
-#ifdef WIN
-inline void scale_software_fixed_point_sse2(uint16_t* src, uint16_t* dst_base, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch) {
-    float scale = (float)dw / sw;
-    if ((float)dh / sh < scale) scale = (float)dh / sh;
+inline void xbrz_scale_multithread(uint16_t* __restrict src, uint16_t* __restrict dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale, float ratio) {
 
-    int out_w = (int)(sw * scale);
-    int out_h = (int)(sh * scale);
-    int inv_scale_fp = (int)((1.0f / scale) * 65536.0f);
-
-    int src_stride = spitch >> 1;
-    int dst_stride = dpitch >> 1;
-    uint16_t* dst = dst_base + (((dh - out_h) / 2) * dst_stride) + ((dw - out_w) / 2);
-
-    // Precalculamos el incremento para 8 píxeles: [0, 1, 2, 3, 4, 5, 6, 7] * inv_scale_fp
-    __m128i step_v = _mm_set1_epi32(inv_scale_fp);
-    __m128i base_indices = _mm_set_epi32(3, 2, 1, 0); // Índices base
-    __m128i offsets_low = _mm_mullo_epi16(base_indices, step_v); // Esto es simplificado
-
-    for (int y = 0; y < out_h; y++) {
-        int src_y = (y * inv_scale_fp) >> 16;
-        uint16_t* line_src = src + (src_y * src_stride);
-        uint16_t* line_dst = dst + (y * dst_stride);
-
-        int x = 0;
-        // Procesar de 8 en 8 píxeles
-        for (; x <= out_w - 8; x += 8) {
-            // Calculamos los índices de los 8 píxeles actuales
-            // x_fp = (x + i) * inv_scale_fp
-            int x0 = (x * inv_scale_fp);
-            
-            // Cargamos y desplazamos para obtener la parte entera
-            // Nota: En SSE2/3 el "gather" es manual, pero calculamos los punteros rápido
-            line_dst[x + 0] = line_src[(x0 + 0 * inv_scale_fp) >> 16];
-            line_dst[x + 1] = line_src[(x0 + 1 * inv_scale_fp) >> 16];
-            line_dst[x + 2] = line_src[(x0 + 2 * inv_scale_fp) >> 16];
-            line_dst[x + 3] = line_src[(x0 + 3 * inv_scale_fp) >> 16];
-            line_dst[x + 4] = line_src[(x0 + 4 * inv_scale_fp) >> 16];
-            line_dst[x + 5] = line_src[(x0 + 5 * inv_scale_fp) >> 16];
-            line_dst[x + 6] = line_src[(x0 + 6 * inv_scale_fp) >> 16];
-            line_dst[x + 7] = line_src[(x0 + 7 * inv_scale_fp) >> 16];
-        }
-
-        // Bucle de limpieza para los píxeles restantes
-        int curr_src_x_fp = x * inv_scale_fp;
-        for (; x < out_w; x++) {
-            line_dst[x] = line_src[curr_src_x_fp >> 16];
-            curr_src_x_fp += inv_scale_fp;
-        }
-    }
-}
-#endif
-
-#ifdef _XBOX
-
-inline void scale_software_fixed_point_ppc(uint16_t* src, uint16_t* dst_base, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch) {
-    float scale = (float)dw / sw;
-    if ((float)dh / sh < scale) scale = (float)dh / sh;
-
-    int out_w = (int)(sw * scale);
-    int out_h = (int)(sh * scale);
-    int inv_scale_fp = (int)((1.0f / scale) * 65536.0f);
-
-    int src_stride = spitch >> 1;
-    int dst_stride = dpitch >> 1;
-    uint16_t* dst = dst_base + (((dh - out_h) / 2) * dst_stride) + ((dw - out_w) / 2);
-
-    for (int y = 0; y < out_h; y++) {
-        int src_y = (y * inv_scale_fp) >> 16;
-        uint16_t* line_src = src + (src_y * src_stride);
-        uint16_t* line_dst = dst + (y * dst_stride);
-
-        // Pre-carga la línea de origen en la caché de la Xbox 360
-        __dcbt(0, line_src);
-
-        int x = 0;
-        // Desenrollamos el bucle manualmente para el procesador Xenon
-        // Procesamos bloques de 8 píxeles para aprovechar el pipeline
-        for (; x <= out_w - 8; x += 8) {
-            int x_fp = x * inv_scale_fp;
-            
-            // Calculamos índices y leemos. 
-            // El procesador Xenon de 360 es In-Order, así que agrupamos lecturas
-            uint16_t p0 = line_src[(x_fp + 0 * inv_scale_fp) >> 16];
-            uint16_t p1 = line_src[(x_fp + 1 * inv_scale_fp) >> 16];
-            uint16_t p2 = line_src[(x_fp + 2 * inv_scale_fp) >> 16];
-            uint16_t p3 = line_src[(x_fp + 3 * inv_scale_fp) >> 16];
-            uint16_t p4 = line_src[(x_fp + 4 * inv_scale_fp) >> 16];
-            uint16_t p5 = line_src[(x_fp + 5 * inv_scale_fp) >> 16];
-            uint16_t p6 = line_src[(x_fp + 6 * inv_scale_fp) >> 16];
-            uint16_t p7 = line_src[(x_fp + 7 * inv_scale_fp) >> 16];
-
-            line_dst[x + 0] = p0;
-            line_dst[x + 1] = p1;
-            line_dst[x + 2] = p2;
-            line_dst[x + 3] = p3;
-            line_dst[x + 4] = p4;
-            line_dst[x + 5] = p5;
-            line_dst[x + 6] = p6;
-            line_dst[x + 7] = p7;
-        }
-
-        // Limpieza de píxeles restantes
-        for (; x < out_w; x++) {
-            line_dst[x] = line_src[(x * inv_scale_fp) >> 16];
-        }
-    }
-}
-
-#endif
-
-static inline void scale_bilinear_fast(uint16_t* src, uint16_t* dst, 
-									   int sw, int sh, std::size_t spitch,
-									   int dw, int dh, std::size_t dpitch) {
-    float f_scale = (float)dw / sw;
-    if ((float)dh / sh < f_scale) f_scale = (float)dh / sh;
-
-    int out_w = (int)(sw * f_scale);
-    int out_h = (int)(sh * f_scale);
-    int src_stride, dst_stride;
-
-    check_center(src, dst, out_w, out_h, spitch, dw, dh, dpitch, 1, src_stride, dst_stride);
-
-    int inv_scale_fp = (int)((1.0f / f_scale) * 65536.0f);
-
-    for (int y = 0; y < out_h; y++) {
-        int fp_y = y * inv_scale_fp;
-        int src_y = fp_y >> 16;
-        uint32_t y_fract = (fp_y >> 11) & 0x1F; // 5 bits de precisión son suficientes
-
-        uint16_t* s0 = src + (src_y * src_stride);
-        uint16_t* s1 = s0 + (src_y < (int)sh - 1 ? src_stride : 0);
-        uint16_t* line_dst = dst + (y * dst_stride);
-
-        for (int x = 0; x < out_w; x++) {
-            int fp_x = x * inv_scale_fp;
-            int src_x = fp_x >> 16;
-            uint32_t x_fract = (fp_x >> 11) & 0x1F;
-
-            uint32_t p00 = s0[src_x];
-            uint32_t p01 = s0[src_x + 1];
-            uint32_t p10 = s1[src_x];
-            uint32_t p11 = s1[src_x + 1];
-
-            // TRUCO DE BITS: Interpolar RB y G por separado
-            // Rojo y Azul (RB) se procesan juntos
-            uint32_t rb00 = p00 & 0xF81F;
-            uint32_t rb01 = p01 & 0xF81F;
-            uint32_t rb10 = p10 & 0xF81F;
-            uint32_t rb11 = p11 & 0xF81F;
-            
-            uint32_t rb = rb00 + (((rb01 - rb00) * x_fract) >> 5); // Simplificado para ejemplo
-            // En una implementación real, aquí harías el lerp completo 2D en 3 pasos
-            // Pero para máxima velocidad, el "Bilinear Aproximado" es mejor:
-            
-            // Si el rendimiento sigue bajo, usa Nearest Neighbor pero con Scanline Dimming
-            line_dst[x] = (uint16_t)p00; // Fallback a Nearest si buscas 60fps constantes
-        }
-    }
-}
-
-static uint8_t LUT_R50[32][32];
-static uint8_t LUT_G50[64][64];
-static uint8_t LUT_B50[32][32];
-
-static uint8_t LUT_R75[32][32];
-static uint8_t LUT_G75[64][64];
-static uint8_t LUT_B75[32][32];
-
-static bool lut_initialized = false;
-
-static uint16_t LUT_BLEND50[1 << 16];
-static uint16_t LUT_BLEND75[1 << 16];
-
-static inline uint8_t r5(uint16_t c) { return (c >> 11) & 0x1F; }
-static inline uint8_t g6(uint16_t c) { return (c >> 5) & 0x3F; }
-static inline uint8_t b5(uint16_t c) { return c & 0x1F; }
-
-static inline uint16_t make565(uint8_t r, uint8_t g, uint8_t b)
-{
-    return (uint16_t)((r << 11) | (g << 5) | b);
-}
-
-
-static void init_luts()
-{
-    if (lut_initialized) return;
-    lut_initialized = true;
-
-    for (int a = 0; a < 32; a++)
-    for (int b = 0; b < 32; b++)
-    {
-        LUT_R50[a][b] = (a + b) >> 1;
-        LUT_B50[a][b] = (a + b) >> 1;
-
-        LUT_R75[a][b] = (a * 3 + b) >> 2;
-        LUT_B75[a][b] = (a * 3 + b) >> 2;
-    }
-
-    for (int a = 0; a < 64; a++)
-    for (int b = 0; b < 64; b++)
-    {
-        LUT_G50[a][b] = (a + b) >> 1;
-        LUT_G75[a][b] = (a * 3 + b) >> 2;
-    }
-}
-
-static inline uint16_t blend50(uint16_t a, uint16_t b)
-{
-    return make565(
-        LUT_R50[r5(a)][r5(b)],
-        LUT_G50[g6(a)][g6(b)],
-        LUT_B50[b5(a)][b5(b)]
-    );
-}
-
-static inline uint16_t blend75(uint16_t a, uint16_t b)
-{
-    return make565(
-        LUT_R75[r5(a)][r5(b)],
-        LUT_G75[g6(a)][g6(b)],
-        LUT_B75[b5(a)][b5(b)]
-    );
-}
-
-
-void scale_xBRZ_3x(uint16_t* src, uint16_t* dst,
-                   int sw, int sh, std::size_t spitch,
-                   int dw, int dh, std::size_t dpitch)
-{
-    init_luts();
-
-    const int scale = 3;
-
-    int src_stride, dst_stride;
+	int src_stride = 0, dst_stride = 0;
+	// 1. Usar check_center (escala 2 ya que no hay escalado manual aquí)
+    // Esto ajustará el puntero 'dst' al punto exacto de centrado.
     check_center(src, dst, sw, sh, spitch, dw, dh, dpitch, scale, src_stride, dst_stride);
 
-    if (sw * 3 > dw || sh * 3 > dh)
-        return;
+	Uint32 init = SDL_GetTicks();
+	Uint32 time = init;
+	
+	SDL_Surface *src32 = SDL_CreateRGBSurface(SDL_SWSURFACE, sw, sh, 32, rmask, gmask, bmask, amask);
+	SDL_Surface *dst32 = SDL_CreateRGBSurface(SDL_SWSURFACE, sw * scale, sh * scale, 32, rmask, gmask, bmask, amask);
 
-    for (int y = 0; y < sh; y++)
-    {
-        uint16_t* rowM = src + y * src_stride;
-        uint16_t* rowU = src + (y > 0 ? y - 1 : y) * src_stride;
-        uint16_t* rowD = src + (y < sh - 1 ? y + 1 : y) * src_stride;
+	/*if (src32->w != sw || src32->h != sh){
+		SDL_FreeSurface(src32);
+		src32 = SDL_CreateRGBSurface(SDL_SWSURFACE, sw, sh, 32, rmask, gmask, bmask, amask);
+	}
 
-        for (int x = 0; x < sw; x++)
-        {
-            uint16_t C = rowM[x];
-            uint16_t A = rowU[x];
-            uint16_t B = rowM[x < sw - 1 ? x + 1 : x];
-            uint16_t D = rowD[x];
-            uint16_t E = rowM[x > 0 ? x - 1 : x];
+	if (dst32->w != dw || dst32->h != dh){
+		SDL_FreeSurface(dst32);
+		dst32 = SDL_CreateRGBSurface(SDL_SWSURFACE, sw * scale, sh * scale, 32, rmask, gmask, bmask, amask);
+	}*/
 
-            uint16_t* d0 = dst + (y * 3 + 0) * dst_stride + x * 3;
-            uint16_t* d1 = dst + (y * 3 + 1) * dst_stride + x * 3;
-            uint16_t* d2 = dst + (y * 3 + 2) * dst_stride + x * 3;
+	Uint32 timeSurfaces = SDL_GetTicks() - time;
 
-            d0[0] = d0[1] = d0[2] =
-            d1[0] = d1[1] = d1[2] =
-            d2[0] = d2[1] = d2[2] = C;
+	time = SDL_GetTicks();
+	convertRGB565ToARGB8888(src, sw, sh, spitch, (uint32_t*)src32->pixels, src32->pitch);
+	Uint32 timeConv8888 = SDL_GetTicks() - time;
+	time = SDL_GetTicks();
 
-            bool h = (E != B);
-            bool v = (A != D);
+	/*static int frame = 0;
+	if (frame % (60*3) == 0){
+		std::string file = "D:\\develop\\Github\\xbox360\\project\\Salvia\\Debug\\Win32\\imgs\\frame_" + Constant::intToString(frame) + ".bmp";
+		SDL_SaveBMP(src32, file.c_str());
+	}
+	frame++;*/
 
-            if (h || v)
-            {
-                if ((A != B) && (E != D))
-                {
-                    d0[1] = blend75(C, A);
-                    d1[2] = blend75(C, B);
-                    d1[1] = blend75(C, blend50(A, B));
-                }
-                else if ((A != E) && (B != D))
-                {
-                    d0[1] = blend75(C, A);
-                    d1[0] = blend75(C, E);
-                    d1[1] = blend75(C, blend50(A, E));
-                }
-                else if (h)
-                {
-                    d1[0] = blend75(C, E);
-                    d1[2] = blend75(C, B);
-                }
-                else if (v)
-                {
-                    d0[1] = blend75(C, A);
-                    d2[1] = blend75(C, D);
-                }
-            }
-        }
+	// 3. Llamar a xBRZ usando directamente los píxeles de SDL
+    auto* srcPixels = reinterpret_cast<uint32_t*>(src32->pixels);
+    auto* dstPixels = reinterpret_cast<uint32_t*>(dst32->pixels);
+
+    // xBRZ asume pitch en número de píxeles, no en bytes (en la API clásica tipo xbrzscale)
+    int srcPitchPixels = src32->pitch / 4;
+    int dstPitchPixels = dst32->pitch / 4;
+
+    SDL_Thread* threads[16];
+    XBRZJob jobs[16];
+
+	int numThreads = 2;
+    int slice = sh / numThreads;
+	xbrz::ScalerCfg cfg;  // o tu config
+
+    for (int i = 0; i < numThreads; i++) {
+        jobs[i].scale = scale;
+        jobs[i].src = srcPixels;
+        jobs[i].dst = dstPixels;
+        jobs[i].w = sw;
+        jobs[i].h = sh;
+        jobs[i].cfg = &cfg;
+
+        jobs[i].yFirst = i * slice;
+        jobs[i].yLast  = (i == numThreads - 1) ? sh : (i + 1) * slice;
+
+        threads[i] = SDL_CreateThread(xbrz_thread_func, &jobs[i]);
     }
+
+    for (int i = 0; i < numThreads; i++) {
+        SDL_WaitThread(threads[i], NULL);
+    }
+
+	Uint32 timeScaler = SDL_GetTicks() - time;
+	time = SDL_GetTicks();
+
+	SDL_FreeSurface(src32);
+	convertARGB8888ToRGB565((uint32_t*)dst32->pixels, dst32->w, dst32->h, dst32->pitch, dst, dpitch);
+	SDL_FreeSurface(dst32);
+	Uint32 timeConv565 = SDL_GetTicks() - time;
+
+	Uint32 end = SDL_GetTicks() - init;
+	LOG_DEBUG("New surf. %d = %.0f%%, conv32: %d = %.0f%%, scale: %d = %.0f%%, conv16: %d = %.0f%%\n", 
+		timeSurfaces, (timeSurfaces / (float)end) * 100.0, 
+		timeConv8888, (timeConv8888 / (float)end) * 100.0,
+		timeScaler, (timeScaler / (float)end) * 100.0,
+		timeConv565, (timeConv565 / (float)end) * 100.0);
+}
+
+
+// Escalador 2x manual para RGB565
+inline void scale_xBRZ_nx(uint16_t* __restrict src, uint16_t* __restrict dst, int sw, int sh, std::size_t spitch, int dw, int dh, std::size_t dpitch, int scale, float ratio) {
+
+	int src_stride = 0, dst_stride = 0;
+	// 1. Usar check_center (escala 2 ya que no hay escalado manual aquí)
+    // Esto ajustará el puntero 'dst' al punto exacto de centrado.
+    check_center(src, dst, sw, sh, spitch, dw, dh, dpitch, scale, src_stride, dst_stride);
+
+	Uint32 init = SDL_GetTicks();
+	Uint32 time = init;
+	
+	SDL_Surface *src32 = SDL_CreateRGBSurface(SDL_SWSURFACE, sw, sh, 32, rmask, gmask, bmask, amask);
+	SDL_Surface *dst32 = SDL_CreateRGBSurface(SDL_SWSURFACE, sw * scale, sh * scale, 32, rmask, gmask, bmask, amask);
+	Uint32 timeSurfaces = SDL_GetTicks() - time;
+
+	time = SDL_GetTicks();
+	convertRGB565ToARGB8888(src, sw, sh, spitch, (uint32_t*)src32->pixels, src32->pitch);
+	Uint32 timeConv8888 = SDL_GetTicks() - time;
+	time = SDL_GetTicks();
+
+	/*static int frame = 0;
+	if (frame % (60*3) == 0){
+		std::string file = "D:\\develop\\Github\\xbox360\\project\\Salvia\\Debug\\Win32\\imgs\\frame_" + Constant::intToString(frame) + ".bmp";
+		SDL_SaveBMP(src32, file.c_str());
+	}
+	frame++;*/
+
+	// 3. Llamar a xBRZ usando directamente los píxeles de SDL
+    auto* srcPixels = reinterpret_cast<uint32_t*>(src32->pixels);
+    auto* dstPixels = reinterpret_cast<uint32_t*>(dst32->pixels);
+
+    // xBRZ asume pitch en número de píxeles, no en bytes (en la API clásica tipo xbrzscale)
+    int srcPitchPixels = src32->pitch / 4;
+    int dstPitchPixels = dst32->pitch / 4;
+
+    xbrz::ScalerCfg cfg;  // o tu config
+    xbrz::scale(scale,srcPixels, dstPixels,sw, sh, cfg, 0, sh);
+
+	Uint32 timeScaler = SDL_GetTicks() - time;
+	time = SDL_GetTicks();
+
+	SDL_FreeSurface(src32);
+	convertARGB8888ToRGB565((uint32_t*)dst32->pixels, dst32->w, dst32->h, dst32->pitch, dst, dpitch);
+	SDL_FreeSurface(dst32);
+	Uint32 timeConv565 = SDL_GetTicks() - time;
+
+	Uint32 end = SDL_GetTicks() - init;
+	LOG_INFO("New surf. %d = %.0f%%, conv32: %d = %.0f%%, scale: %d = %.0f%%, conv16: %d = %.0f%%\n", 
+		timeSurfaces, (timeSurfaces / (float)end) * 100.0, 
+		timeConv8888, (timeConv8888 / (float)end) * 100.0,
+		timeScaler, (timeScaler / (float)end) * 100.0,
+		timeConv565, (timeConv565 / (float)end) * 100.0);
 }

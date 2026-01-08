@@ -4,6 +4,8 @@
 #include <vector>
 #include <stdint.h>
 
+#include <const/constant.h>
+#include <const/menuconst.h>
 
 class FileLaunch{
     public:
@@ -67,6 +69,8 @@ struct tEvento{
     bool keyjoydown;
     int width;
     int height;
+	//Uint32 lastPressTime[MAXJOYBUTTONS];
+	bool longKeyPress[MAXJOYBUTTONS];
 };
 
 struct GameTicks{
@@ -96,7 +100,7 @@ class GameFile{
     std::string shortFileName;
     std::string longFileName;
     std::string gameTitle;
-    size_t cutTitleIdx;
+    std::size_t cutTitleIdx;
     //std::string gameImage;
 };
 
@@ -112,24 +116,32 @@ class FileName8_3 {
 
 class ConfigMain{
     public:
-    ConfigMain(){
-        resolution[0] = 0;
-        resolution[1] = 0;
-        debug = false;
-        path_prefix = "";
-        alsaReset = false;
-        background_music = 0;
-        mp3_file = "";
-    }
-    ~ConfigMain(){
-    }
-    std::vector<std::string> emulators;
-    bool debug;
-    std::string path_prefix;
-    int resolution[2];
-    bool alsaReset;
-    int background_music;
-    std::string mp3_file;
+		ConfigMain(){
+			resolution[0] = 0;
+			resolution[1] = 0;
+			debug = false;
+			path_prefix = "";
+			alsaReset = false;
+			background_music = 0;
+			mp3_file = "";
+			aspectRatio = RATIO_CORE;
+			scaleMode = FULLSCREEN;
+			sonidoMode = 1;
+		}
+
+		~ConfigMain(){}
+
+		std::vector<std::string> emulators;
+		bool debug;
+		std::string path_prefix;
+		int resolution[2];
+		bool alsaReset;
+		int background_music;
+		std::string mp3_file;
+		int scaleMode;
+		int aspectRatio;
+		bool sonidoMode;
+	
 };
 
 class ConfigEmu{
@@ -139,10 +151,13 @@ class ConfigEmu{
         use_rom_file = false;
         use_extension = true;
         use_rom_directory = true;
+		generalConfig = false;
     }
     ~ConfigEmu(){
 
     }
+
+	bool generalConfig;
 
     std::string name;
     std::string system;

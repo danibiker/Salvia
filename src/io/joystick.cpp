@@ -89,6 +89,9 @@ void Joystick::resetAllValues(){
     }
 
 	lastEvento.keyjoydown = false;
+
+	clearEvento(&evento);
+	clearEvento(&lastEvento);
 }
 
 
@@ -104,6 +107,7 @@ void Joystick::close_joysticks() {
 tEvento Joystick::WaitForKey(SDL_Surface* screen){
 	static unsigned long lastClick = 0;
     static unsigned long lastKeyDown = 0;
+	static unsigned long longKeyDown = 0;
     static unsigned long retrasoTecla = KEYRETRASO;
     static unsigned long lastMouseMove = 0;
     static t_region mouseRegion = {0,0,0,0};
@@ -125,17 +129,18 @@ tEvento Joystick::WaitForKey(SDL_Surface* screen){
                 break;
             case SDL_JOYBUTTONDOWN: // JOYSTICK/GP2X buttons
                 if (event.jbutton.button >= 0 && event.jbutton.button < MAXJOYBUTTONS){
-//                    evento.joy = Constant::getJoyMapper(event.jbutton.button);
-                    evento.joy = event.jbutton.button;
+                    evento.joy = JoyMapper::getJoyMapper(event.jbutton.button);
                     evento.isJoy = true;
                     evento.keyjoydown = true;
                     lastEvento = evento;    //Guardamos el ultimo evento que hemos lanzado desde el teclado
                     lastKeyDown = SDL_GetTicks();  //reseteo del keydown
+					longKeyDown = lastKeyDown;
                 }
                 break;
             case SDL_JOYBUTTONUP:
                 lastEvento = evento;
                 evento.keyjoydown = false;
+				longKeyDown = 0;
                 break;
             case SDL_JOYHATMOTION:
                 mPrevHatValues[event.jhat.which][event.jhat.hat] = event.jhat.value;
@@ -274,6 +279,12 @@ tEvento Joystick::WaitForKey(SDL_Surface* screen){
     }
 	
 	if (lastEvento.keyjoydown == true){
+		if (longKeyDown > 0 && now - longKeyDown > LONGKEYTIMEOUT){
+			LOG_DEBUG("Long press detected for key %d\n", lastEvento.joy);
+			lastEvento.longKeyPress[lastEvento.joy] = true;
+			longKeyDown = 0;
+		} 
+
 		//printf("now %d vs %d\n", now, lastKeyDown + KEYDOWNSPEED + retrasoTecla);
         if (now > lastKeyDown + KEYDOWNSPEED + retrasoTecla){
             lastKeyDown = SDL_GetTicks();
@@ -311,5 +322,8 @@ void Joystick::clearEvento(tEvento *evento){
     evento->keyjoydown = false;
     evento->width = 0;
     evento->height = 0;
+	//evento->lastSelectPress = 0;
+	//evento->longKeyPress = false;
+	memset(evento->longKeyPress, 0, sizeof(evento->longKeyPress));
     //t_region region;
 }

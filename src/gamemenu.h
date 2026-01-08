@@ -10,6 +10,7 @@
 #include <uiobjects/image.h>
 #include <uiobjects/textarea.h>
 #include <uiobjects/listmenu.h>
+#include <menus/gestormenus.h>
 #include <io/cfgloader.h>
 #include <engine.h>
 
@@ -20,6 +21,7 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <io/video.h>
 
 static const string SNAP = "snap";
 static const string BOX2D = "box2d";
@@ -43,10 +45,18 @@ class GameMenu : public Engine{
         
 		SDL_Surface *video_page;
 		GameTicks gameTicks;
-		
+		GestorMenus *configMenus;
+
+		Uint32 uBkgColor;
+
 		void createMenuImages(ListMenu &);
         void loadEmuCfg(ListMenu &);
         void refreshScreen(ListMenu &);
+		void processFrontendEvents();
+		void processFrontendEventsAfter();
+		void processMessages();
+		void processHotkeys();
+
         vector<string> launchProgram(ListMenu &);
         bool initDblBuffer(int w, int h);
         int saveGameMenuPos(ListMenu &);
@@ -56,20 +66,30 @@ class GameMenu : public Engine{
         ConfigEmu getPrevCfgEmu();
 		ConfigEmu getCfgEmu();
 		void updateFps();
-
+		CfgLoader * getCfgLoader();
         void setCfgLoader(CfgLoader *cfgLoader);
 	    bool isDebug();
 		bool romLoaded;
-		void setEmuStatus(int tmpStat){
-			status = tmpStat;
-		}
+		void setEmuStatus(int tmpStat){lastStatus = status;status = tmpStat;}
+		int getEmuStatus(){return status;}
+		int getLastStatus(){return lastStatus;}
 
-		int getEmuStatus(){
-			return status;
-		}
+		void setMessage(std::string, Uint32 timeout);
+
+		struct t_messages {
+			std::string content;
+			Uint32 ticks;
+			Uint32 timeout;
+		} message;
+		
+		// En la clase Config o GameMenu
+		ScalerFunc current_scaler;
+		int current_scaler_scale;
+		void processConfigChanges();
 
     private:
 		std::string configButtonsJOY();
+		void selectScalerMode(int);
 
         int emuCfgPos;
 		bool dblBufferEnabled;
@@ -80,6 +100,7 @@ class GameMenu : public Engine{
         std::map<std::string, TextArea> menuTextAreas;
 		void blit(SDL_Surface *, SDL_Surface *, int, int, int, int, int, int);
 		int status;
+		int lastStatus;
 		int fpsCountEnabled;
 		SDL_Rect rectFps;
 		Uint32 bkgTextFps;

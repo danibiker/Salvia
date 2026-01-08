@@ -7,15 +7,16 @@
 
 #include <uiobjects/object.h>
 #include <io/fileprops.h>
+
 using namespace std;
 
-static const int waitTitleMove = 2000;
-static const float textFps = 20.0;
-static const int frameTimeText = (int)(1000 / textFps);
 
 class ListMenu : public Object{
     private:
         void clearSelectedText();
+		static const int waitTitleMove = 2000;
+		static const int textFps = 20;
+		static const int frameTimeText = (int)(1000 / textFps);
 
     public:
         ListMenu(int screenw, int screenh);
@@ -35,6 +36,7 @@ class ListMenu : public Object{
         int lastSel;
         float pixelShift;
         vector<unique_ptr<GameFile>> listGames;
+
         static SDL_Surface* imgText;
         
         void clear();

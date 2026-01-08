@@ -131,7 +131,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN;DEBUG;_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -204,6 +204,8 @@
     <ClCompile Include="src\io\sync.cpp">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsCpp</CompileAs>
     </ClCompile>
+    <ClCompile Include="src\io\xbrz\xbrz.cpp" />
+    <ClCompile Include="src\menus\gestormenus.cpp" />
     <ClCompile Include="src\salvia.cpp" />
     <ClCompile Include="src\uiobjects\image.cpp" />
     <ClCompile Include="src\uiobjects\listmenu.cpp" />
@@ -227,6 +229,7 @@
     <ClInclude Include="src\beans\structures.h" />
     <ClInclude Include="src\compat\dirent.h" />
     <ClInclude Include="src\const\constant.h" />
+    <ClInclude Include="src\const\menuconst.h" />
     <ClInclude Include="src\engine.h" />
     <ClInclude Include="src\font\Arimo_Regular.ttf.h" />
     <ClInclude Include="src\font\fonts.h" />
@@ -246,6 +249,7 @@
     <ClInclude Include="src\io\sync.h" />
     <ClInclude Include="src\io\video.h" />
     <ClInclude Include="src\libretro.h" />
+    <ClInclude Include="src\menus\gestormenus.h" />
     <ClInclude Include="src\uiobjects\image.h" />
     <ClInclude Include="src\uiobjects\listmenu.h" />
     <ClInclude Include="src\uiobjects\object.h" />

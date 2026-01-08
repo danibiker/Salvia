@@ -7,7 +7,8 @@ enum {
     COBJECT = 0,
     GUILISTBOX,
     GUIPICTURE,
-    GUITEXTAREA
+    GUITEXTAREA,
+	GUIOPTIONS
 };
 
 class Object{

@@ -80,6 +80,12 @@
     <ClCompile Include="src\unzip\minizip-1.2.5\unzip.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\menus\gestormenus.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\xbrz\xbrz.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\libretro.h">
@@ -173,6 +179,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\unzip\unziptool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\menus\gestormenus.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\const\menuconst.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

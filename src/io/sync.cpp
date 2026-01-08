@@ -7,8 +7,8 @@ Sync::Sync(){
 	g_lastFrameTick = 0;
 	g_actualFps = 0.0f;
 	sprintf(fpsText, "%.0f", g_actualFps);
-	g_sync = SYNC_NONE;
-	g_sync_last = SYNC_NONE;
+	g_sync = SYNC_TO_AUDIO;
+	g_sync_last = SYNC_TO_AUDIO;
 	fps = FPS_DESIRED;
 	frameDelay = 1000 / (double)fps; // Aprox 16ms
 }

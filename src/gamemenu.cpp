@@ -5,9 +5,12 @@
 #include <io/dirutil.h>
 #include <beans/structures.h>
 #include <io/joymapper.h>
+#include <libretro.h>
+
 
 GameMenu::GameMenu(CfgLoader *cfgLoader){
     status = EMU_MENU;
+	lastStatus = EMU_MENU;
 	romLoaded = false;
 	emuCfgPos = 0;
 	gameTicks.ticks = 0;
@@ -15,25 +18,34 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	dblBufferEnabled = true;
 	this->cfgLoader = cfgLoader;
 	this->initEngine(cfgLoader);
-
 	int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
 	int pixelDato = 0;
 	TTF_SizeText(Fonts::getFont(Fonts::FONTSMALL), "888", &pixelDato, NULL);
 
-	rectFps.x = 0;
-	rectFps.y = screen->h - face_h;
-	rectFps.w = pixelDato + 3;
+	rectFps.x = this->screen->w - pixelDato - 3;
+	rectFps.y = 0;
+	rectFps.w = pixelDato;
 	rectFps.h = face_h;
 	bkgTextFps = SDL_MapRGB(this->screen->format, 0, 0, 0);
+	uBkgColor = SDL_MapRGB(this->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+
 	fpsCountEnabled = true;
 
 	if (joystick->init_all_joysticks() && !JoyMapper::initJoyMapper()){
 		configButtonsJOY();
 	}
+
+	configMenus = new GestorMenus(screen->w, screen->h);
+	configMenus->inicializar(cfgLoader);
+	message.ticks = 0;
+	// En la clase Config o GameMenu
+	selectScalerMode(FULLSCREEN);
+	current_scaler_scale = cfgLoader->configMain.scaleMode;
 };
 
 GameMenu::~GameMenu(){
 	LOG_DEBUG("Deleting GameMenu...");
+	delete configMenus;
     this->stopEngine();
 }
 
@@ -217,6 +229,10 @@ void GameMenu::setCfgLoader(CfgLoader *cfgLoader){
     this->cfgLoader = cfgLoader;
 }
 
+CfgLoader * GameMenu::getCfgLoader(){
+	return this->cfgLoader;
+}
+
 /**
  * 
  */
@@ -368,14 +384,23 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
                 listMenu.draw(this->video_page);
             }
         }
-
+	} else if (listMenu.getNumGames() == 0 && emu.generalConfig){
+		configMenus->draw(video_page);
     } else if (listMenu.getNumGames() == 0){
-		Constant::drawTextCent(video_page, fontBig, emu.name.c_str(), 
-					cfgLoader->getWidth(), face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+		//Constant::drawTextCent(video_page, fontBig, emu.name.c_str(), 
+		//			cfgLoader->getWidth(), face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+		//			true, false, textColor, 0);
+
+		Constant::drawTextCentTransparent(video_page, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 					true, false, textColor, 0);
 
         fastline(this->video_page, listMenu.marginX, listMenu.marginY - 1, screen->w - listMenu.marginX, listMenu.marginY - 1, textColor);
 		Constant::drawTextCent(video_page, fontsmall, "No roms found", 0, 0, true, true, textColor, 0);
+
+		// Para renderizar, usas el puntero de la clase
+        Menu* m = configMenus->obtenerMenuActual();
+        // Dibujar m->titulo y m->opciones[i]->titulo...
+
     } else {
 		Constant::drawTextCent(video_page, fontsmall, "The configuration is not valid", 0, 0, true, true, textColor, 0);
 		Constant::drawTextCent(video_page, fontsmall, "Press TAB to select the next entry or", 0, face_h_small + 3, true, true, textColor, 0);
@@ -445,7 +470,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
         exit(0);
     }
 
-    if (this->cfgLoader->configEmus.size() <= (std::size_t)this->emuCfgPos){
+	if (this->cfgLoader->configEmus.size() <= (std::size_t)this->emuCfgPos){
         this->emuCfgPos = 0;
     } 
 
@@ -715,6 +740,186 @@ void GameMenu::updateFps(){
 	if (fpsCountEnabled){
 		SDL_FillRect(this->screen, &rectFps, bkgTextFps);
 		this->sync.update_fps_counter();
-		Constant::drawText(this->screen, Fonts::getFont(Fonts::FONTSMALL), this->sync.fpsText, rectFps.x + 3, rectFps.y, white, 0);
+		Constant::drawText(this->screen, Fonts::getFont(Fonts::FONTSMALL), this->sync.fpsText, rectFps.x, rectFps.y, white, 0);
 	}
+}
+
+void GameMenu::processFrontendEvents(){
+	processHotkeys();
+}
+
+void GameMenu::processFrontendEventsAfter(){
+	// Actualizamos el contador de media de fps
+	updateFps();
+	//Mostramos mensajes
+	processMessages();
+}
+
+void GameMenu::processHotkeys(){
+	static Uint32 lastHotKey = 0;
+	const Uint32 now = SDL_GetTicks();
+
+	int mode = -1;
+	if (now - lastHotKey > 300){
+		if (this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_SELECT] && this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_X]){
+			int modeOk = true;
+			int startingMode = this->getCfgLoader()->configMain.scaleMode;
+
+			struct retro_system_av_info av_info;
+			retro_get_system_av_info(&av_info);
+			unsigned ancho_base = av_info.geometry.base_width;
+			unsigned alto_base = av_info.geometry.base_height;
+		
+			do {
+				this->getCfgLoader()->configMain.scaleMode = (this->getCfgLoader()->configMain.scaleMode + 1) % TOTAL_VIDEO_SCALE;
+
+				mode = this->getCfgLoader()->configMain.scaleMode;
+				const int dw = this->video_page->w;
+				const int dh = this->video_page->h;
+				bool cannotScale2x = (mode == SCALE2X || mode == SCALE_XBRZ_2X) && ((int)ancho_base * 2 > dw || (int)alto_base * 2 > dh);
+				bool cannotScale3x = (mode == SCALE3X || mode == SCALE3X_ADV || mode == SCALE_XBRZ_3X) && ((int)ancho_base * 3 > dw || (int)alto_base * 3 > dh);
+				bool cannotScale4x = (mode == SCALE4X || mode == SCALE4X_ADV || mode == SCALE_XBRZ_4X) && ((int)ancho_base * 4 > dw || (int)alto_base * 4 > dh);
+
+				#ifdef _XBOX
+					//XBOX CPU can't handle this algorithm implementation at 60fps
+					cannotScale2x = cannotScale2x && mode == SCALE_XBRZ_2X;
+					cannotScale3x = cannotScale3x && mode == SCALE_XBRZ_3X;
+					cannotScale4x = cannotScale4x && mode == SCALE_XBRZ_4X;
+				#endif
+
+				if (cannotScale2x || cannotScale3x || cannotScale4x || mode == NO_VIDEO){
+					modeOk = false;
+				} else {
+					modeOk = true;
+				}
+			} while(!modeOk && mode != startingMode);
+
+			selectScalerMode(mode);
+			SDL_FillRect(this->video_page, NULL, this->uBkgColor);
+			lastHotKey = now;
+			this->joystick->lastSelectPress = now;
+			setMessage(videoScaleStrings[this->getCfgLoader()->configMain.scaleMode], 3000);
+		} else if (this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_SELECT] && this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_A]){
+			this->getCfgLoader()->configMain.aspectRatio = (this->getCfgLoader()->configMain.aspectRatio + 1) % TOTAL_VIDEO_RATIO;
+			SDL_FillRect(this->video_page, NULL, this->uBkgColor);
+			lastHotKey = now;
+			this->joystick->lastSelectPress = now;
+			setMessage(aspectRatioStrings[this->getCfgLoader()->configMain.aspectRatio], 3000);
+		}
+	}
+}
+
+void GameMenu::selectScalerMode(int mode){
+	// 3. Selector de escalado
+	switch(mode) {
+		case FULLSCREEN:
+				#ifdef WIN
+					//Tests made with Genesis Sonic 1, idle on the first stage 
+					//current_scaler = scale_software_fixed_point;				//520fps
+					current_scaler = scale_software_fixed_point_safe2;		    //508fps	
+					//current_scaler = scale_software_fixed_point_simple_safe;  //490fps
+					//current_scaler = scale_software_fixed_point_sse2_safe;    //490fps
+					//current_scaler = scale_software_fixed_point_simple;       //450fps
+					//current_scaler = scale_software_float_sse;		        //430fps
+					//current_scaler = scale_software_fixed_point_notif;        //400fps
+					//current_scaler = scale_software_fixed_point_x86_simd;	    //380fps	
+					//current_scaler = scale_software_fixed_point_noif_x86;	    //360fps
+					//current_scaler = scale_software_float;				    //265fps
+				#elif defined(_XBOX)
+					//current_scaler = scale_software_fixed_point_ppc;		//110fps
+					current_scaler = scale_software_fixed_point_xbox_final; //112fps
+				#else
+					current_scaler = scale_software_fixed_point_safe2;		//106fps
+				#endif
+			break;
+
+		case SCALE1X:
+			current_scaler = fast_video_blit;
+			break;
+
+		case SCALE2X:
+			current_scaler = scale2x_software;
+			break;
+
+		case SCALE3X:
+			current_scaler = scale3x_software;
+			break;
+
+		case SCALE4X:
+			current_scaler = scale4x_software;
+			break;
+
+		case SCALE2X_ADV:
+			current_scaler = scale2x_advance;
+			break;
+
+		case SCALE3X_ADV:
+			current_scaler = scale3x_advance;
+			break;
+
+		case SCALE4X_ADV:
+			current_scaler = scale4x_advance;
+			break;
+
+		case SCALE_XBRZ_2X: 
+			current_scaler = scale_xBRZ_nx;
+			current_scaler_scale = 2;
+			break;
+
+		case SCALE_XBRZ_3X: 
+			current_scaler = scale_xBRZ_nx;
+			current_scaler_scale = 3;
+			break;
+
+		case SCALE_XBRZ_3X_TH: 
+			current_scaler = xbrz_scale_multithread;
+			current_scaler_scale = 3;
+			break;
+
+		case SCALE_XBRZ_4X: 
+			current_scaler = scale_xBRZ_nx;
+			current_scaler_scale = 4;
+			break;
+
+		case NO_VIDEO:
+			current_scaler = no_video;
+			break;
+
+		default:
+			current_scaler = scale_software_fixed_point_safe2;
+			break;
+	}
+}
+
+void GameMenu::setMessage(std::string content, Uint32 timeout){
+	message.timeout = timeout;
+	message.content = content;
+	message.ticks = SDL_GetTicks();
+}
+
+void GameMenu::processMessages(){
+	static int pixelDato = 100;
+	static int face_h = 20;
+	static SDL_Rect rectText;
+	const Uint32 now = SDL_GetTicks();
+
+	if (message.ticks > 0 && now - message.ticks < message.timeout){
+		TTF_SizeText(Fonts::getFont(Fonts::FONTBIG), message.content.c_str(), &pixelDato, NULL);
+		int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
+		rectText.x = 0;
+		rectText.y = this->video_page->h - face_h - 4;
+		rectText.w = pixelDato + 2;
+		rectText.h = face_h + 4;
+		SDL_FillRect(this->video_page, &rectText, this->uBkgColor);
+		Constant::drawText(this->video_page, Fonts::getFont(Fonts::FONTBIG), message.content.c_str(), rectText.x + 1, rectText.y + 2, white, 0);
+	}  else if (message.ticks > 0){
+		//Limpiamos el rectangulo del mensaje, por si queda algun resto de texto
+		SDL_FillRect(this->video_page, &rectText, this->uBkgColor);
+		message.ticks = 0;
+	}
+}
+
+void GameMenu::processConfigChanges(){
+	const int mode = this->getCfgLoader()->configMain.scaleMode;
+	selectScalerMode(mode);
 }

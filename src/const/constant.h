@@ -19,8 +19,8 @@ static const int audio_samples = 1024;
 	static const char *LOG_PATH = "game:\\salvia.log";
 #elif  defined(WIN)
 	static Uint32 video_flags = SDL_SWSURFACE; //SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN;
-	static int video_width = 1920;
-	static int video_height = 1080;
+	static int video_width = 1280;
+	static int video_height = 720;
 	static const char *LOG_PATH = "salvia.log";
 #endif
 
@@ -46,6 +46,7 @@ static const unsigned long DBLCLICKSPEED = 300; //tiempo en ms para poder hacer 
 static const unsigned long KEYDOWNSPEED = 50;
 static const unsigned long MOUSEVISIBLE = 8000;
 static const int CURSORVISIBLE = 1;
+static const int LONGKEYTIMEOUT = 2000;
 
 typedef enum {
     cursor_hidden,
@@ -119,6 +120,22 @@ typedef enum {
     launch_create_process,  //2
     launch_batch
 } launchMethods;
+
+/* SDL 1.2: Definir máscaras según el orden de bytes del sistema */
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+    // Formato ARGB (Típico en PowerPC / Xbox 360)
+    static Uint32 rmask = 0x00FF0000;
+    static Uint32 gmask = 0x0000FF00;
+    static Uint32 bmask = 0x000000FF;
+    static Uint32 amask = 0xFF000000;
+#else
+    // Formato ARGB en Little Endian (x86) se almacena como BGRA en memoria, 
+    // pero SDL maneja estas máscaras para que el uint32_t sea 0xAARRGGBB
+    static Uint32 rmask = 0x00FF0000;
+    static Uint32 gmask = 0x0000FF00;
+    static Uint32 bmask = 0x000000FF;
+    static Uint32 amask = 0xFF000000;
+#endif
 
 class Constant{
 	public:
