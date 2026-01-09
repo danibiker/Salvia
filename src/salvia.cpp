@@ -19,6 +19,10 @@
 
 GameMenu *gameMenu;
 Logger *logger;
+enum retro_pixel_format fmt;
+// 1. Usa un buffer persistente para evitar allocs constantes
+static uint16_t* conversion_buffer = NULL;
+static std::size_t buffer_size = 0;
 
 // Ya no declaramos punteros a función, sino que usamos las funciones 
 // que vendrán dentro del .lib (se resuelven al linkar)
@@ -100,37 +104,56 @@ static bool retro_environment(unsigned cmd, void *data) {
 
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             // Opcional: Muchos cores preguntan si pueden usar RGB565 (1) o XRGB8888 (2)
-            enum retro_pixel_format fmt = *(const enum retro_pixel_format *)data;
+            fmt = *(const enum retro_pixel_format *)data;
 			std::string msgformat = "Solicitando pixelformat: " + Constant::intToString(fmt) + "\n";
 			retro_log_printf(RETRO_LOG_INFO, msgformat.c_str());
 
-			if (fmt = RETRO_PIXEL_FORMAT_RGB565){
+			//if (fmt == RETRO_PIXEL_FORMAT_RGB565){
 				return true; 
-			} else {
-				return false;
-			}
+			//} else {
+			//	return false;
+			//}
         }
+
+		case RETRO_ENVIRONMENT_GET_CAN_DUPE: {
+			// Aquí le decimos al núcleo que el frontend SÍ puede duplicar frames.
+			// En entornos modernos esto es casi siempre true.
+			*(bool*)data = true; 
+			return true;
+		}
     }
     return false; // Por defecto devolver false para comandos desconocidos
 }
 
 static void retro_video_refresh(const void *data, unsigned width, unsigned height, std::size_t pitch) {
-    // 1. Validación temprana
-    if (!data || width == 0 || height == 0 || pitch < (width * 2)) return;
+    if (!data || width == 0 || height == 0) return;
 
-    // 2. Extraer variables locales (Optimización de caché y registros)
-    // Esto evita que la CPU navegue por la estructura gameMenu
+    void* final_src = (void*)data;
+
+    if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
+        // 2. Gestionar buffer de conversión de forma eficiente
+        std::size_t needed = width * height * sizeof(uint16_t);
+        if (!conversion_buffer || buffer_size < needed) {
+            conversion_buffer = (uint16_t*)realloc(conversion_buffer, needed);
+            buffer_size = needed;
+        }
+        
+        // 3. Convertir (Comprobar que el pitch sea el original de 32 bits)
+        convertARGB8888ToRGB565((uint32_t*)data, width, height, pitch, conversion_buffer, width * 2);
+        final_src = (void*)conversion_buffer;
+        pitch = width * 2; // Actualizamos el pitch para el escalador
+    }
+
     SDL_Surface* screen = gameMenu->screen;
-    uint16_t* dst      = (uint16_t*)screen->pixels;
-    uint16_t* src      = (uint16_t*)data;
-    const int dw             = screen->w;
-    const int dh             = screen->h;
+    uint16_t* dst       = (uint16_t*)screen->pixels;
+    const int dw        = screen->w;
+    const int dh        = screen->h;
     const std::size_t dpitch = screen->pitch;
-	const int scale = gameMenu->current_scaler_scale;
-	const float ratio = aspectRatioValues[gameMenu->getCfgLoader()->configMain.aspectRatio];
+    const int scale     = gameMenu->current_scaler_scale;
+    const float ratio   = aspectRatioValues[gameMenu->getCfgLoader()->configMain.aspectRatio];
     
-	// 3. LLAMADA DIRECTA (Sin switch, sin saltos condicionales)
-	gameMenu->current_scaler(src, dst, (int)width, (int)height, pitch, dw, dh, dpitch, scale, ratio);
+    // 4. Pasar el buffer correcto (ya sea el original de 16 o el convertido)
+    gameMenu->current_scaler((uint16_t*)final_src, dst, (int)width, (int)height, pitch, dw, dh, dpitch, scale, ratio);
 }
 
 //Audio Callbacks for Libretro
@@ -381,7 +404,7 @@ unzippedFileInfo unzipOrLoadFile(std::string rompath, void*& buffer){
 	
 	if (rompathLow.find(".zip") != std::string::npos){
 		UnzipTool unzipTool;
-		ConfigEmu emu = gameMenu->getCfgEmu();
+		ConfigEmu *emu = gameMenu->getCfgEmu();
 
 		//Llamada al core para saber si se requiere el path completo
 		struct retro_system_info info;
@@ -402,19 +425,17 @@ unzippedFileInfo unzipOrLoadFile(std::string rompath, void*& buffer){
 			}
 			
 			unzippedFileInfo unzipedFileInfo = unzipTool.descomprimirZip(rompath.c_str(), destDir.c_str()); 
-			ConfigEmu emu = gameMenu->getCfgEmu();
-
 			for (unsigned int i=0; i < unzipedFileInfo.files.size(); i++){
 				FileProps fileprop = unzipedFileInfo.files.at(i);
 				std::string ext = Constant::replaceAll(fileprop.extension, ".", "");
-				if (emu.rom_extension.find_first_of(ext) != std::string::npos){
+				if (emu->rom_extension.find(ext) != std::string::npos){
 					ret.romsize = fileprop.fileSize;
 					ret.rutaEscritura = fileprop.dir + Constant::getFileSep() + fileprop.filename;
 					break;
 				}
 			}
 		} else {
-			ret = unzipTool.descomprimirZipToMem(rompath, emu.rom_extension, buffer); 
+			ret = unzipTool.descomprimirZipToMem(rompath, emu->rom_extension, buffer); 
 		}
 
 	} else {
@@ -497,8 +518,8 @@ void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, 
 	askEvento = gameMenu.WaitForKey();
 
 	if (askEvento.isJoy){
-		ConfigEmu emu = gameMenu.getCfgEmu();
-		if (listMenu.getNumGames() == 0 && emu.generalConfig){
+		ConfigEmu *emu = gameMenu.getCfgEmu();
+		if (listMenu.getNumGames() == 0 && emu->generalConfig){
 			//Opciones para modificar el menu de configuracion
 			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_UP)){
 				gameMenu.configMenus->prevPos();

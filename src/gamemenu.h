@@ -62,9 +62,9 @@ class GameMenu : public Engine{
         int saveGameMenuPos(ListMenu &);
         int recoverGameMenuPos(ListMenu &, struct ListStatus &);
         void showMessage(string);
-        ConfigEmu getNextCfgEmu();
-        ConfigEmu getPrevCfgEmu();
-		ConfigEmu getCfgEmu();
+        ConfigEmu *getNextCfgEmu();
+        ConfigEmu *getPrevCfgEmu();
+		ConfigEmu *getCfgEmu();
 		void updateFps();
 		CfgLoader * getCfgLoader();
         void setCfgLoader(CfgLoader *cfgLoader);

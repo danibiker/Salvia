@@ -251,7 +251,7 @@ bool ListMenu::compareUniquePtrs(const std::unique_ptr<GameFile>& a,
     string sB = !b->gameTitle.empty() ? b->gameTitle : b->shortFileName;
     Constant::lowerCase(&sA);
     Constant::lowerCase(&sB);
-    return sA.compare(sB) <= 0;
+    return sA.compare(sB) < 0;
 }
 
 /**

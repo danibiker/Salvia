@@ -19,7 +19,7 @@ class CfgLoader{
         ~CfgLoader(){}
 
 		ConfigMain configMain;
-        std::vector<ConfigEmu> configEmus;
+		std::vector<std::unique_ptr<ConfigEmu>> configEmus;
         
         int getWidth(){
             return configMain.resolution[0] < 0 ? 1280 : configMain.resolution[0];
@@ -110,7 +110,7 @@ class CfgLoader{
 			ConfigEmu salviaConfig;
 			salviaConfig.generalConfig = true;
 			salviaConfig.name = "Options";
-			configEmus.emplace_back(salviaConfig);   
+			configEmus.push_back(std::unique_ptr<ConfigEmu>(new ConfigEmu(salviaConfig)));
         }
 
         /**
@@ -186,7 +186,8 @@ class CfgLoader{
                         }
                     }             
                     //cout << "adding emu " << configEmus.size() <<endl;   
-                    configEmus.emplace_back(cfgEmu);            
+                    //configEmus.emplace_back(cfgEmu);            
+					configEmus.push_back(std::unique_ptr<ConfigEmu>(new ConfigEmu(cfgEmu)));
                 }
                 //cout << "closing file..." <<endl;   
                 fileCfg.close();

@@ -50,3 +50,5 @@ libs/SDL_image-1.2.12/VisualC/**/Release/**
 *.sms
 *.zip
 *.gen
+
+Debug_gambatte/**

@@ -548,6 +548,41 @@ inline void convertARGB8888ToRGB565(const uint32_t* src, int sw, int sh, size_t 
     }
 }
 
+inline SDL_Surface* crearSuperficie16Bits(int ancho, int alto) {
+    Uint32 rmask, gmask, bmask, amask;
+
+    /* Configuración de máscaras según el Endianness */
+    #if SDL_BYTEORDER == SDL_BIG_ENDIAN
+        /* Caso Xbox 360 / PowerPC: El byte más significativo va primero */
+        rmask = 0xf800; // 5 bits Red
+        gmask = 0x07e0; // 6 bits Green
+        bmask = 0x001f; // 5 bits Blue
+        amask = 0x0000;
+    #else
+        /* Caso PC / x86: Little Endian */
+        rmask = 0xf800;
+        gmask = 0x07e0;
+        bmask = 0x001f;
+        amask = 0x0000;
+        /* Nota: En SDL 1.2 sobre Little Endian, a veces se requiere 
+           reordenar los bytes dependiendo de cómo se vuelquen los datos. */
+    #endif
+
+    // Crear la superficie en memoria de sistema (recomendado para emuladores)
+    SDL_Surface* superficie = SDL_CreateRGBSurface(SDL_SWSURFACE, 
+                                                   ancho, 
+                                                   alto, 
+                                                   16, 
+                                                   rmask, gmask, bmask, amask);
+
+    if (superficie == NULL) {
+        fprintf(stderr, "Error creando superficie: %s\n", SDL_GetError());
+        return NULL;
+    }
+
+    return superficie;
+}
+
 struct XBRZJob {
     int scale;
     uint32_t* src;

@@ -77,13 +77,31 @@
     <ClCompile Include="src\unzip\minizip-1.2.5\ioapi.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\unzip\minizip-1.2.5\unzip.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\menus\gestormenus.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\io\xbrz\xbrz.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\minizip-1.2.5\unzip.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\adler32.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\crc32.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\inffast.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\inflate.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\inftrees.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\zutil.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -203,22 +203,22 @@ bool GameMenu::initDblBuffer(int w, int h){
     return video_page != NULL;
 }
 
-ConfigEmu GameMenu::getNextCfgEmu(){
+ConfigEmu* GameMenu::getNextCfgEmu(){
     emuCfgPos++;
     emuCfgPos = emuCfgPos % cfgLoader->configEmus.size();
-    return cfgLoader->configEmus.at(emuCfgPos);
+    return cfgLoader->configEmus.at(emuCfgPos).get();
 }
 
-ConfigEmu GameMenu::getPrevCfgEmu(){
+ConfigEmu* GameMenu::getPrevCfgEmu(){
     if (emuCfgPos <= 0 && cfgLoader->configEmus.size() > 0)
         emuCfgPos = cfgLoader->configEmus.size() - 1;
     else 
         emuCfgPos--;
-    return cfgLoader->configEmus.at(emuCfgPos);
+    return cfgLoader->configEmus.at(emuCfgPos).get();
 }
 
-ConfigEmu GameMenu::getCfgEmu(){
-    return cfgLoader->configEmus.at(emuCfgPos);
+ConfigEmu* GameMenu::getCfgEmu(){
+    return cfgLoader->configEmus.at(emuCfgPos).get();
 }
 
 bool GameMenu::isDebug(){
@@ -295,7 +295,7 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
  * 
  */
 void GameMenu::refreshScreen(ListMenu &listMenu){
-    ConfigEmu emu = this->cfgLoader->configEmus.at(this->emuCfgPos);
+    ConfigEmu emu = *this->cfgLoader->configEmus.at(this->emuCfgPos).get();
     //Drawing the emulator name
     TTF_Font *fontBig = Fonts::getFont(Fonts::FONTBIG);
     TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
@@ -475,17 +475,18 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
     } 
 
     dirutil dir;
-    ConfigEmu emu = this->cfgLoader->configEmus.at(this->emuCfgPos);
+    ConfigEmu *emu = this->cfgLoader->configEmus.at(this->emuCfgPos).get();
     string mapfilepath = Constant::getAppDir() //+ string(Constant::tempFileSep) + "gmenu" 
-            + string(Constant::tempFileSep) + "config" + string(Constant::tempFileSep) + emu.map_file;
+            + string(Constant::tempFileSep) + "config" + string(Constant::tempFileSep) + emu->map_file;
     
-    if (emu.use_rom_file && !emu.map_file.empty() && dir.fileExists(mapfilepath.c_str())){
+    if (emu->use_rom_file && !emu->map_file.empty() && dir.fileExists(mapfilepath.c_str())){
         menuData.mapFileToList(mapfilepath);
     } else {
-        mapfilepath = getPathPrefix(emu.rom_directory);
+        mapfilepath = getPathPrefix(emu->rom_directory);
         vector<unique_ptr<FileProps>> files;
-        emu.rom_extension = " " + emu.rom_extension;
-        string extFilter = Constant::replaceAll(emu.rom_extension, " ", ".");
+		
+		string extFilter = " " + emu->rom_extension;
+        extFilter = Constant::replaceAll(extFilter, " ", ".");
 
         if (cfgLoader->configMain.debug){
             SDL_FillRect(screen, NULL, cblack);
@@ -495,7 +496,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 
         dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, true, false);
 
-        ConfigEmu emu = this->cfgLoader->configEmus.at(this->emuCfgPos);
+        ConfigEmu emu = *this->cfgLoader->configEmus.at(this->emuCfgPos).get();
         string mapfilepath = getPathPrefix(emu.rom_directory);
 
         if (cfgLoader->configMain.debug){
@@ -517,7 +518,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
  * 
  */
 string GameMenu::getPathPrefix(string filepath){
-    ConfigEmu emu = this->cfgLoader->configEmus.at(this->emuCfgPos);
+    ConfigEmu emu = *this->cfgLoader->configEmus.at(this->emuCfgPos).get();
     string finalpath = cfgLoader->configMain.path_prefix + filepath;
 
     string drivestr = string(":") + string(Constant::tempFileSep);
@@ -550,7 +551,7 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
     if (this->cfgLoader->configEmus.size() <= (std::size_t)this->emuCfgPos)
         return commands;
 
-    ConfigEmu emu = this->cfgLoader->configEmus.at(this->emuCfgPos);
+    ConfigEmu emu = *this->cfgLoader->configEmus.at(this->emuCfgPos).get();
 
     commands.emplace_back(getPathPrefix(emu.directory) + string(Constant::tempFileSep)
         + emu.executable);

@@ -322,11 +322,13 @@ class Constant{
         }
 
         static void lowerCase(std::string *var){
-            std::transform(var->begin(), var->end(), var->begin(), ::tolower);
+			if (var != NULL)
+				std::transform(var->begin(), var->end(), var->begin(), ::tolower);
         }
 
         static void upperCase(std::string *var){
-            std::transform(var->begin(), var->end(), var->begin(), ::toupper);
+			if (var != NULL)
+				std::transform(var->begin(), var->end(), var->begin(), ::toupper);
         }
 
         template<class TIPO> static TIPO strToTipo(std::string str){
