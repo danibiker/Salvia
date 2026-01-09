@@ -3,34 +3,17 @@
 
 #ifdef _XBOX
 	#include <xtl.h>
-	
-	#ifdef DEBUG
-		#ifdef __cplusplus
-		extern "C" {
-		#endif
-			//Parche para error de enlazado en Xbox 360.
-			//Muchos cores de Libretro esperan que esta función exista en la CRT,
-			//pero el XDK requiere una definición manual si se usan ciertas 
-			//funciones de string/file_stream.
-			void _chvalidator(void) {
-				// Se deja vacío. El core simplemente busca la dirección del símbolo.
-			}
-		#ifdef __cplusplus
-		}
-		#endif
-	#endif
-
 #elif defined(WIN)
 	#include <windows.h>
 	#include <mmsystem.h> // Necesario para timeBeginPeriod
 #endif
 
 Engine::Engine(){
-	constant = new Constant();
+	
 }
 
 Engine::~Engine(){
-	delete constant;
+	stopEngine();
 }
 
 int Engine::initEngine(CfgLoader* cfgLoader){
@@ -41,7 +24,6 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		// 1. Activar la precisión de 1ms en el reloj de Windows
 		timeBeginPeriod(1);
 		SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
-		sync.g_sync = SYNC_TO_VIDEO;
 		// Pantalla completa sin borde. Parece que pantalla completa sin borde es la forma de ejecucion mas rapida
 		//SDL_putenv("SDL_VIDEO_WINDOW_POS=0,0");
 		//video_flags = video_flags | SDL_NOFRAME;
@@ -66,16 +48,19 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 
 	initFont();
 	joystick = new Joystick();
+	sync = new Sync(cfgLoader->configMain.syncMode);
 
 	return 0;
 }
 
 void Engine::stopEngine(){
 	delete joystick;
+	delete fonts;
 	// 3. Limpieza: Devolver el reloj del sistema a su estado normal
 	#ifdef WIN
 		timeEndPeriod(1);
 	#endif
+	SDL_FreeSurface(screen);
     SDL_Quit();
 }
 

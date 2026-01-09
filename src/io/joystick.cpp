@@ -10,7 +10,7 @@ Joystick::Joystick(){
 	lastSelectPress = 0;
 	clearEvento(&lastEvento);
     gestorCursor = new CursorGestor();
-    setCursor(cursor_arrow);
+	setCursor(cursor_hidden);
 
 	for (int i=0; i < MAX_PLAYERS; i++){
 		g_joysticks[i] = NULL;

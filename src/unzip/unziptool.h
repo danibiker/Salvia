@@ -199,7 +199,7 @@ unzippedFileInfo UnzipTool::extraerFichero(unzFile *myZip, const char *ruta, boo
         // Load rom file.
         ret = unzReadCurrentFile(*myZip, cartridge, rom_size);
         dirutil dir;
-        string filenameOut = dir.getFolder(ruta) + Constant::FILE_SEPARATOR + filename;
+		string filenameOut = dir.getFolder(ruta) + Constant::getFileSep() + filename;
 		Fileio fileio;
         if (fileio.writeToFile(filenameOut.c_str(), cartridge, rom_size, false) == 1){
             retorno.rutaEscritura = filenameOut;

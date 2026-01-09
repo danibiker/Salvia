@@ -20,7 +20,11 @@ class TileMap {
         }
 
         ~TileMap(){
-            SDL_FreeSurface(img);
+			if (img != NULL)
+				SDL_FreeSurface(img);
+
+			if (tile != NULL)
+				SDL_FreeSurface(tile);
         }
 
         int tileX;

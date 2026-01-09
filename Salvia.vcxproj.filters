@@ -205,5 +205,8 @@
     <ClInclude Include="src\const\menuconst.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\so\launcher.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

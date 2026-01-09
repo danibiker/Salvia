@@ -19,8 +19,9 @@
 
 GameMenu *gameMenu;
 Logger *logger;
+
+// 1. Usa un buffer persistente para evitar allocs constantes al convertir desde ARGB8888
 enum retro_pixel_format fmt;
-// 1. Usa un buffer persistente para evitar allocs constantes
 static uint16_t* conversion_buffer = NULL;
 static std::size_t buffer_size = 0;
 
@@ -43,18 +44,9 @@ extern "C" {
 	void retro_unload_game(void);
 }
 
-const char Constant::FILE_SEPARATOR_UNIX = '/';
 const std::string Constant::MAME_SYS_ID = "75";
 const std::string Constant::WHITESPACE = " \n\r\t";
 
-#if defined(WIN) || defined(DOS) || defined(_XBOX)
-    char Constant::FILE_SEPARATOR = 0x5C; //Separador de directorios para win32
-#else
-    char Constant::FILE_SEPARATOR = Constant::FILE_SEPARATOR_UNIX; //Separador de directorios para unix
-#endif
-
-char Constant::tempFileSep[2] = {Constant::FILE_SEPARATOR,'\0'};
-std::string Constant::appDir = "";
 volatile uint32_t Constant::totalTicks = 0;
 int Constant::EXEC_METHOD = launch_batch;
 const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
@@ -126,7 +118,8 @@ static bool retro_environment(unsigned cmd, void *data) {
 }
 
 static void retro_video_refresh(const void *data, unsigned width, unsigned height, std::size_t pitch) {
-    if (!data || width == 0 || height == 0) return;
+    if (!data || width == 0 || height == 0) 
+		return;
 
     void* final_src = (void*)data;
 
@@ -145,21 +138,29 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
     }
 
     SDL_Surface* screen = gameMenu->screen;
-    uint16_t* dst       = (uint16_t*)screen->pixels;
-    const int dw        = screen->w;
-    const int dh        = screen->h;
-    const std::size_t dpitch = screen->pitch;
-    const int scale     = gameMenu->current_scaler_scale;
-    const float ratio   = aspectRatioValues[gameMenu->getCfgLoader()->configMain.aspectRatio];
+
+	t_scale_props scaleProps = {0}; // Limpia todo el struct a cero antes de asignar
+	scaleProps.src = (uint16_t*)final_src;
+	scaleProps.sw = (int)width;
+	scaleProps.sh = (int)height;
+	scaleProps.spitch = pitch;
+	scaleProps.dst = (uint16_t*)screen->pixels;
+	scaleProps.dw = screen->w;
+	scaleProps.dh = screen->h;
+	scaleProps.dpitch = screen->pitch;
+	scaleProps.scale = gameMenu->current_scaler_scale;
+	scaleProps.ratio = aspectRatioValues[gameMenu->getCfgLoader()->configMain.aspectRatio];
+
     
     // 4. Pasar el buffer correcto (ya sea el original de 16 o el convertido)
-    gameMenu->current_scaler((uint16_t*)final_src, dst, (int)width, (int)height, pitch, dw, dh, dpitch, scale, ratio);
+    gameMenu->current_scaler(scaleProps);
 }
 
 //Audio Callbacks for Libretro
 // Callback para una sola muestra (menos eficiente, pero requerido)
 void retro_audio_sample(int16_t left, int16_t right) {
-	if (gameMenu->sync.g_sync == SYNC_NONE){
+	const int g_sync = gameMenu->getCfgLoader()->configMain.syncMode;
+	if (g_sync == SYNC_NONE){
 		return;
 	}
     int16_t samples[2] = { left, right };
@@ -168,14 +169,16 @@ void retro_audio_sample(int16_t left, int16_t right) {
 
 // Callback para ráfagas de muestras (el que usan casi todos los cores)
 std::size_t retro_audio_sample_batch(const int16_t *data, std::size_t frames) {
-    if (gameMenu->sync.g_sync == SYNC_NONE){
+	const int g_sync = gameMenu->getCfgLoader()->configMain.syncMode;
+
+    if (g_sync == SYNC_NONE){
 		return 0;
 	}
 	
 	// frames es el número de pares (izq, der), multiplicamos por 2 para el total
 	// Al usar WriteBlocking, retro_run() no terminará hasta que haya
     // sitio en el buffer, sincronizando así la ejecución al audio real.
-	if (gameMenu->sync.g_sync == SYNC_TO_AUDIO){
+	if (g_sync == SYNC_TO_AUDIO){
 		gameMenu->g_audioBuffer.WriteBlocking(data, frames * 2);
 	} else {
 		gameMenu->g_audioBuffer.Write(data, frames * 2);
@@ -264,14 +267,14 @@ void update_input() {
 			} else if (event.key.keysym.sym == SDLK_F9){
 				loadstate();
 			} else if (event.key.keysym.sym == SDLK_BACKSPACE){
-				gameMenu->sync.g_sync = gameMenu->sync.g_sync_last;
+				gameMenu->getCfgLoader()->configMain.syncMode = gameMenu->sync->g_sync_last;
 				SDL_PauseAudio(0);
 			}
 		} else if (event.type == SDL_KEYDOWN) {
 			if (event.key.keysym.sym == SDLK_BACKSPACE){
 				//Enabling fast forward
-				gameMenu->sync.g_sync_last = gameMenu->sync.g_sync;
-				gameMenu->sync.g_sync = SYNC_NONE;
+				gameMenu->sync->g_sync_last = gameMenu->getCfgLoader()->configMain.syncMode;
+				gameMenu->getCfgLoader()->configMain.syncMode = SYNC_NONE;
 				SDL_PauseAudio(1);
 			}
 		}
@@ -300,11 +303,19 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 
 
 
-//Audio callbacks for SDL
 void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
-    // SDL pide bytes, pero trabajamos con muestras de 16 bits (2 bytes)
+    // 1. Limpiar el buffer de salida de SDL (Opcional pero recomendado en SDL 1.2)
+    // Esto garantiza que si el emulador se pausa o va lento, haya silencio en lugar de ruido.
+    memset(stream, 0, len);
+
+    // 2. Convertir a puntero de 16 bits para trabajar con muestras
     int16_t* samples = (int16_t*)stream;
+    
+    // len es el tamaño en bytes. 
+    // Como usamos AUDIO_S16SYS (2 bytes por muestra), count es el número de muestras totales.
     std::size_t count = len / sizeof(int16_t);
+
+    // 3. Leer de tu buffer circular
     gameMenu->g_audioBuffer.Read(samples, count);
 }
 
@@ -312,11 +323,24 @@ void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
 *
 */
 void init_sdl_audio(double sample_rate) {
+
+	/*	
+		El equilibrio de latencia y seguridad
+		-------------------------------------
+		Buffer Total (AudioBuffer::AUDIO_BUFFER_SIZE = 4096): Tienes un margen de maniobra de unos 92ms (a 44.1kHz). 
+			Es suficiente para que Windows haga tareas en segundo plano sin que el audio sufra cortes.
+		Bloque SDL (1024): Al pedir 1024 muestras (AudioBuffer::AUDIO_BUFFER_SIZE / 4), la latencia de respuesta de la tarjeta de sonido es de unos 23ms. 
+			Es una latencia excelente, casi imperceptible para el oído humano.
+		La Proporción (1/4): Al ser el bloque 4 veces más pequeño que el buffer total, el hilo de audio de SDL 
+			llamará a tu callback 4 veces antes de vaciar el buffer por completo. Esto da al emulador mucho tiempo 
+			para rellenar el head antes de que el tail lo alcance.
+	*/
+
     SDL_AudioSpec wanted;
     wanted.freq = (int)sample_rate;
     wanted.format = AUDIO_S16SYS;	// 16 bits nativos
     wanted.channels = 2;			// Estéreo
-    wanted.samples = audio_samples; // Tamaño del bloque (latencia)
+	wanted.samples = AudioBuffer::AUDIO_BUFFER_SIZE / 4; // Tamaño del bloque (latencia)
     wanted.callback = sdl_audio_callback;
 
     if (SDL_OpenAudio(&wanted, NULL) < 0) {
@@ -330,39 +354,35 @@ void init_sdl_audio(double sample_rate) {
 *
 */
 std::string initPathAndLog(char** argv){
-	//Needed to init the log subsistem
-	logger = new Logger(LOG_PATH);
-    dirutil dir;
-	std::string appDir;
+	logger = new Logger("salviajournal.log");
 
-#ifdef _XBOX
-	appDir = dir.getDirActual();
-#else
-    appDir = argv[0];
-#endif
+	dirutil dir;
 
-	std::size_t pos = appDir.rfind(Constant::getFileSep());
-    if (pos == string::npos){
-        pos = appDir.rfind(Constant::FILE_SEPARATOR_UNIX);
-        #if defined(WIN) || defined(DOS) 
-            appDir = Constant::replaceAll(appDir, "/", "\\");
-		#elif defined(_XBOX)
-			if (pos == string::npos){
-				pos = appDir.rfind(Constant::FILE_SEPARATOR);
-			}
-        #elif UNIX
-            Constant::FILE_SEPARATOR = Constant::FILE_SEPARATOR_UNIX;
-            Constant::tempFileSep[0] = Constant::FILE_SEPARATOR_UNIX;
-        #endif
-    }
-    appDir = appDir.substr(0, pos);
+	#if defined(WIN) || defined(DOS) || defined(_XBOX)
+		Constant::tempFileSep[0] = '\\';
+	#else if defined(UNIX)
+		Constant::tempFileSep[0] = '/';
+	#endif
 
-    if (!dir.dirExists(appDir.c_str()) || pos == string::npos){
-        appDir = dir.getDirActual();
+	#ifdef _XBOX
+		Constant::setAppDir(dir.getDirActual() + string(EMU_LIB_NAME) + ".xex");
+	#else
+		Constant::setAppDir(argv[0]);
+	#endif	
+
+	std::size_t pos = Constant::getAppDir().rfind(Constant::getFileSep());
+	if (pos != string::npos && pos < Constant::getAppDir().length()){
+		Constant::setAppExecutable(Constant::getAppDir().substr(pos + 1));
+	}
+
+    Constant::setAppDir(Constant::getAppDir().substr(0, pos));
+    if (!dir.dirExists(Constant::getAppDir().c_str()) || pos == string::npos){
+        Constant::setAppDir(dir.getDirActual());
     }
 
-	Constant::setAppDir(appDir);
-    return appDir;
+	Constant::setExecMethod(launch_spawn);
+
+	return Constant::getAppDir();
 }
 
 /**
@@ -502,7 +522,7 @@ int launchGame(std::string rompath){
 	// Inicializar SDL Audio con la frecuencia del core
 	init_sdl_audio(av_info.timing.sample_rate);
 	//Iniciando el contador de fps
-	gameMenu->sync.init_fps_counter(av_info.timing.fps);
+	gameMenu->sync->init_fps_counter(av_info.timing.fps);
 	gameMenu->romLoaded = true;
 	gameMenu->setEmuStatus(EMU_STARTED);
 	return 1;
@@ -512,7 +532,7 @@ int launchGame(std::string rompath){
  * 
  */
 void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, bool keypress){
-	Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	static Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	tEvento askEvento;
 	//Procesamos los controles de la aplicacion
 	askEvento = gameMenu.WaitForKey();
@@ -541,7 +561,6 @@ void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, 
 				|| askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
 				gameMenu.processConfigChanges();
 			}
-
 		} else {
 			//Opciones para seleccionar una rom para el emulador
 			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_UP)){
@@ -555,10 +574,10 @@ void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, 
 			} 
 
 			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A)){
-				vector<string> game = gameMenu.launchProgram(listMenu);
-				if (game.size() > 1){
+				vector<string> launchCommand = gameMenu.launchProgram(listMenu);
+				if (launchCommand.size() > 1){
 					SDL_FillRect(gameMenu.screen, NULL, bkgText);
-					if (launchGame(game.at(1))){
+					if (launchGame(launchCommand.at(1))){
 						gameMenu.setEmuStatus(EMU_STARTED);
 					}
 					gameMenu.joystick->resetAllValues();
@@ -610,6 +629,52 @@ void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, 
     }
 }
 
+// En tu función de salida o desinicialización
+void cerrar_emulador() {
+    if (conversion_buffer != NULL) {
+        free(conversion_buffer);
+        conversion_buffer = NULL; // Importante ponerlo a NULL tras liberar
+        buffer_size = 0;
+    }
+
+	delete logger;
+    retro_deinit();
+	delete gameMenu;
+}
+
+bool loadGameAtStart(int argc, char *argv[]){
+	LOG_DEBUG("argc: %d\n", argc);
+	bool ret = false;
+
+	#ifdef WIN
+	if (argc > 1){
+		LOG_DEBUG("argv[1]: %s\n", argv[1]);
+		ret = launchGame(argv[1]);
+	}
+	#elif defined(_XBOX)
+		DWORD dwLaunchDataSize = 0;    
+		DWORD dwStatus = XGetLaunchDataSize( &dwLaunchDataSize );
+		if( dwStatus == ERROR_SUCCESS ){
+			BYTE* pLaunchData = new BYTE [ dwLaunchDataSize ];
+			dwStatus = XGetLaunchData( pLaunchData, dwLaunchDataSize );
+			char* mensaje = (char*)pLaunchData;
+			ret = launchGame(mensaje);
+			LOG_DEBUG("Parametros recibidos: %s\n", mensaje);
+		} else if (dwStatus == ERROR_NOT_FOUND) {
+			// El programa se lanzó normalmente (sin XSetLaunchData)
+			LOG_DEBUG("No se encontraron datos de lanzamiento.\n");
+		}
+	#endif	
+
+	if (ret){
+		gameMenu->setEmuStatus(EMU_STARTED);
+		gameMenu->joystick->resetAllValues();
+		gameMenu->joystick->lastSelectPress = 0;
+	}
+	
+	return ret;
+}
+
 /**
 *
 */
@@ -620,6 +685,9 @@ int main(int argc, char *argv[]) {
 	if (cfgLoader.isDebug()){
         logger->errorLevel = L_DEBUG;
     }
+
+	LOG_DEBUG("appdir: %s\n", Constant::getAppDir().c_str());
+	LOG_DEBUG("appexe: %s\n", Constant::getAppExecutable().c_str());
 
 	gameMenu = new GameMenu(&cfgLoader);
 	ListMenu listMenu(gameMenu->screen->w, gameMenu->screen->h);
@@ -636,12 +704,6 @@ int main(int argc, char *argv[]) {
 	TileMap tileMap(9, 0, 16, 16);
     tileMap.load(Constant::getAppDir() + Constant::getFileSep() + "assets" + Constant::getFileSep() + "art" + Constant::getFileSep() + "bricks2.png");
 	initializeMenus(listMenu, *gameMenu, cfgLoader);
-
-	//Workaround para mostrar una primera imagen del menu con las imagenes cargadas
-	listMenu.keyUp = true;
-	updateMenuScreen(tileMap, *gameMenu, listMenu, false);
-	SDL_Flip(gameMenu->screen);
-	listMenu.keyUp = false;
 	
 	//Callback de environment
 	retro_set_environment(retro_environment);
@@ -656,12 +718,17 @@ int main(int argc, char *argv[]) {
 
 	retro_init();	
 
+	if (!loadGameAtStart(argc, argv)){
+		//Workaround para mostrar una primera imagen del menu con las imagenes cargadas
+		listMenu.keyUp = true;
+		updateMenuScreen(tileMap, *gameMenu, listMenu, false);
+		SDL_Flip(gameMenu->screen);
+		listMenu.keyUp = false;
+	}
+
 	double nextFrameTime = (double)SDL_GetTicks();
     while (gameMenu->running) {
-		if (gameMenu->sync.g_sync == SYNC_TO_VIDEO){
-			// El tiempo en el que DEBERÍA empezar el siguiente frame
-			nextFrameTime += gameMenu->sync.frameDelay;
-		}
+		
 		// Procesamos eventos como pulsaciones de hotkeys
 		gameMenu->processFrontendEvents();
 
@@ -676,20 +743,21 @@ int main(int argc, char *argv[]) {
 			retro_run();
 		}
 
-		// Procesamos eventos como mensajes o actualizacion de fps
-		gameMenu->processFrontendEventsAfter();
+		// DIBUJO DE INTERFAZ (OSD, FPS, Mensajes)
+        gameMenu->processFrontendEventsAfter();
 
 		// Actualizamos la pantalla
 		SDL_Flip(gameMenu->screen);
-		
+
 		// Limitamos los frames si tenemos que sincronizar con el video
-		if (gameMenu->sync.g_sync == SYNC_TO_VIDEO){
-			gameMenu->sync.limit_fps(nextFrameTime);
+		if (gameMenu->getCfgLoader()->configMain.syncMode == SYNC_TO_VIDEO){
+			gameMenu->sync->limit_fps(nextFrameTime);
+			// El tiempo en el que DEBERÍA empezar el siguiente frame
+			nextFrameTime += gameMenu->sync->frameDelay;
 		}
     }
 
-	delete logger;
-    retro_deinit();
-	gameMenu->stopEngine();
+	cerrar_emulador();
+	
     return 0;
 }

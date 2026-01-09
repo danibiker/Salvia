@@ -38,6 +38,22 @@ enum status_emu
 	EMU_MENU
 };
 
+struct Message {
+    std::string content;
+    Uint32 ticks;
+    Uint32 timeout;
+    SDL_Surface* cache; // Nueva superficie para el mensaje renderizado
+    SDL_Rect rect;      // Para guardar el tamaño y posición calculados
+
+	Message(){
+		cache = NULL;
+		ticks = 0;
+		timeout = 0;
+		content = "";
+	}
+};
+
+
 class GameMenu : public Engine{
     public:
         GameMenu(CfgLoader *cfgLoader);
@@ -74,13 +90,7 @@ class GameMenu : public Engine{
 		int getEmuStatus(){return status;}
 		int getLastStatus(){return lastStatus;}
 
-		void setMessage(std::string, Uint32 timeout);
-
-		struct t_messages {
-			std::string content;
-			Uint32 ticks;
-			Uint32 timeout;
-		} message;
+		void showSystemMessage(std::string, uint32_t);
 		
 		// En la clase Config o GameMenu
 		ScalerFunc current_scaler;
@@ -104,4 +114,8 @@ class GameMenu : public Engine{
 		int fpsCountEnabled;
 		SDL_Rect rectFps;
 		Uint32 bkgTextFps;
+		SDL_Surface* fpsSurface;
+		uint32_t lastFpsUpdate;
+
+		Message message;
 };

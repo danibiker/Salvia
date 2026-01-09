@@ -33,6 +33,14 @@
       <Configuration>Profile</Configuration>
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_Gambatte|Win32">
+      <Configuration>Release_Gambatte</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_Gambatte|Xbox 360">
+      <Configuration>Release_Gambatte</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release_LTCG|Win32">
       <Configuration>Release_LTCG</Configuration>
       <Platform>Win32</Platform>
@@ -74,6 +82,9 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseOfAtl>false</UseOfAtl>
@@ -84,7 +95,7 @@
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseOfAtl>false</UseOfAtl>
     <CharacterSet>MultiByte</CharacterSet>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
@@ -102,6 +113,11 @@
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseOfAtl>false</UseOfAtl>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseOfAtl>false</UseOfAtl>
     <CharacterSet>MultiByte</CharacterSet>
@@ -127,6 +143,9 @@
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -145,12 +164,18 @@
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">$(ProjectDir)$(Configuration)\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">$(ProjectDir)$(Configuration)\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">$(Configuration)\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">$(Configuration)\</IntDir>
     <OutputFile Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">$(OutDir)$(ProjectName).lib</OutputFile>
+    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">$(OutDir)$(ProjectName).lib</OutputFile>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">$(ProjectDir)$(Configuration)\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">$(Configuration)\</IntDir>
     <OutputFile Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">$(OutDir)$(ProjectName).lib</OutputFile>
@@ -173,11 +198,17 @@
     <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'" />
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'" />
     <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Win32'">MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
+    <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Win32'" />
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
+    <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Win32'" />
     <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">AllRules.ruleset</CodeAnalysisRuleSet>
     <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" />
+    <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'" />
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" />
+    <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'" />
     <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Win32'">AllRules.ruleset</CodeAnalysisRuleSet>
     <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Win32'" />
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Win32'" />
@@ -204,6 +235,21 @@
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" />
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>include;../libSDLx360/SDL/include</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_DEBUG;_XBOX;_LIB</PreprocessorDefinitions>
+      <ExceptionHandling>false</ExceptionHandling>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <AdditionalIncludeDirectories>include;../libSDLx360/SDL/include</AdditionalIncludeDirectories>
@@ -263,7 +309,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
     <ClCompile>
       <Optimization>Full</Optimization>
-      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <AdditionalIncludeDirectories>include;../libSDLx360/SDL/include</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>NDEBUG;_XBOX;_LIB</PreprocessorDefinitions>
       <ExceptionHandling>false</ExceptionHandling>
@@ -272,6 +318,7 @@
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">
@@ -290,29 +337,75 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="SDL_ttf.c" />
-    <ClCompile Include="src\autohint\autohint.c" />
-    <ClCompile Include="src\bdf\bdf.c" />
-    <ClCompile Include="src\cff\cff.c" />
-    <ClCompile Include="src\base\ftbase.c" />
-    <ClCompile Include="src\cache\ftcache.c" />
-    <ClCompile Include="src\base\ftglyph.c" />
-    <ClCompile Include="src\gzip\ftgzip.c" />
-    <ClCompile Include="src\base\ftinit.c" />
-    <ClCompile Include="src\base\ftmm.c" />
-    <ClCompile Include="src\base\ftsystem.c" />
-    <ClCompile Include="src\pcf\pcf.c" />
-    <ClCompile Include="src\pfr\pfr.c" />
-    <ClCompile Include="src\psaux\psaux.c" />
-    <ClCompile Include="src\pshinter\pshinter.c" />
-    <ClCompile Include="src\psnames\psmodule.c" />
-    <ClCompile Include="src\raster\raster.c" />
-    <ClCompile Include="src\sfnt\sfnt.c" />
-    <ClCompile Include="src\smooth\smooth.c" />
-    <ClCompile Include="src\truetype\truetype.c" />
-    <ClCompile Include="src\type1\type1.c" />
-    <ClCompile Include="src\cid\type1cid.c" />
-    <ClCompile Include="src\winfonts\winfnt.c" />
+    <ClCompile Include="SDL_ttf.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\autohint\autohint.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\bdf\bdf.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\cff\cff.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\base\ftbase.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\cache\ftcache.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\base\ftglyph.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\gzip\ftgzip.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\base\ftinit.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\base\ftmm.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\base\ftsystem.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\pcf\pcf.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\pfr\pfr.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\psaux\psaux.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\pshinter\pshinter.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\psnames\psmodule.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\raster\raster.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\sfnt\sfnt.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\smooth\smooth.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\truetype\truetype.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\type1\type1.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\cid\type1cid.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\winfonts\winfnt.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\ft2build.h" />

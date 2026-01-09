@@ -10,7 +10,7 @@
 #include <utils/logger.h>
 
 static const int video_bpp = 16;
-static const int audio_samples = 1024;
+
 
 #ifdef _XBOX
 	static Uint32 video_flags = SDL_SWSURFACE;
@@ -121,6 +121,13 @@ typedef enum {
     launch_batch
 } launchMethods;
 
+enum {
+	SYNC_TO_AUDIO = 0,
+	SYNC_TO_VIDEO,
+	SYNC_NONE
+};
+
+
 /* SDL 1.2: Definir máscaras según el orden de bytes del sistema */
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
     // Formato ARGB (Típico en PowerPC / Xbox 360)
@@ -137,6 +144,8 @@ typedef enum {
     static Uint32 amask = 0xFF000000;
 #endif
 
+static const char FILE_SEPARATOR_UNIX = '/';
+
 class Constant{
 	public:
 		Constant();
@@ -144,8 +153,6 @@ class Constant{
 
 		static const std::string MAME_SYS_ID;
         static const std::string WHITESPACE;
-        static const char FILE_SEPARATOR_UNIX;
-        static char FILE_SEPARATOR;
         static char tempFileSep[2];
         static volatile uint32_t totalTicks;
 
@@ -155,6 +162,15 @@ class Constant{
         static void setAppDir(std::string var){
             appDir = var;
         }
+
+		static std::string getAppExecutable(){ 
+            return appExecutable; 
+        }
+        static void setAppExecutable(std::string var){
+            appExecutable = var;
+        }
+
+
 
 		// Función auxiliar para convertir int a std::string (VS2008 no tiene std::to_string)
 		static std::string intToString(int value) {
@@ -231,8 +247,7 @@ class Constant{
         * Obtiene el separador de directorios de windows o unix
         */
         static std::string getFileSep(){
-            char tmpFileSep[2] = {FILE_SEPARATOR,'\0'};
-            return std::string(tmpFileSep);
+            return std::string(tempFileSep);
         }
 
         static std::string replaceAll(std::string str, std::string tofind, std::string toreplace){
@@ -343,6 +358,7 @@ class Constant{
 		
 	private:
 		static std::string appDir;
+		static std::string appExecutable;
         static int EXEC_METHOD;
 };
 

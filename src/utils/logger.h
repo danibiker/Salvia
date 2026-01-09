@@ -25,12 +25,15 @@ public:
     Logger(const char* filename);
 
     ~Logger() {
-        if (logFile.is_open()) {
+        close();
+    }
+
+	static void close(){
+		if (logFile.is_open()) {
             logFile.flush();
             logFile.close();
         }
-    }
-
+	}
 	static int errorLevel;
     // Función principal con soporte de formato printf
     static void write(int level, const char* fmt, ...);

@@ -11,6 +11,7 @@ Fonts::Fonts(){
 
 Fonts::~Fonts(){
 	LOG_DEBUG("Deleting Fonts...");
+	exit();
 }
 
 /**
@@ -23,6 +24,8 @@ void Fonts::exit(){
             vFonts[i] = NULL;
         }
     }
+
+	fileio.clearFile();
 }
         
 /**
@@ -56,7 +59,7 @@ TTF_Font *Fonts::getFont(int fontId){
         return NULL;
 }
 
-size_t Fonts::idxToCutTTF(std::string text, int maxW, int fontId){
+std::size_t Fonts::idxToCutTTF(std::string text, int maxW, int fontId){
     if (text.empty())
         return 0;
 

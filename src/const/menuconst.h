@@ -1,5 +1,7 @@
 #pragma once
 
+#include <const/constant.h>
+
 static const enum videoScale { FULLSCREEN=0, SCALE1X, SCALE2X, SCALE2X_ADV, SCALE_XBRZ_2X, SCALE3X, SCALE3X_ADV, SCALE_XBRZ_3X, SCALE_XBRZ_3X_TH, SCALE4X, 
 	SCALE4X_ADV, SCALE_XBRZ_4X, NO_VIDEO, TOTAL_VIDEO_SCALE};
 
@@ -22,3 +24,6 @@ static float aspectRatioValues [] = {4/3.0f, 4/3.0f, 3/2.0f, 8/7.0f, 10/9.0f, 1,
 static const char* aspectRatioStrings[] = { "Proporcionado por el núcleo", "4:3 (Nes, N64, Psx)", "3:2 (Gba)", "8:7 (Snes)", "10:9 (Gb, Gg, Ngp, Ws)", "1:1 (Alt: Gb, Gg, Ngp, Ws)", "5:4 (Pc, X68000)", "16:9",
 	"16:10", "Rellenar todo", "No implementado"};
 
+
+static const enum syncOptions {OPT_SYNC_AUDIO = SYNC_TO_AUDIO, OPT_SYNC_VIDEO = SYNC_TO_VIDEO, OPT_SYNC_NONE = SYNC_NONE, TOTAL_VIDEO_SYNC};
+static const char* syncOptionsStrings[] = { "Sincronizacion de audio", "Sincronizacion de vídeo", "Sin sincronización", "No implementado"};

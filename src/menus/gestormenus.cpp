@@ -45,13 +45,22 @@ void GestorMenus::setLayout(int layout, int screenw, int screenh){
 void GestorMenus::inicializar(CfgLoader *refConfig) {
     // 1. Crear contenedores de menús
     menuRaiz = new Menu("Opciones");
-    Menu* menuVideo = new Menu("Configuración vídeo", menuRaiz);
+    Menu* menuVideo = new Menu("Vídeo", menuRaiz);
+	Menu* menuEmulation = new Menu("Emulación", menuRaiz);
         
     todosLosMenus.push_back(menuRaiz);
     todosLosMenus.push_back(menuVideo);
+	todosLosMenus.push_back(menuEmulation);
 
-    // 2. Poblar Menú Video
+	//Poblar menu emulacion
+	//Escalado de video
+    std::vector<std::string> syncvals;
+	for (int i=0; i < TOTAL_VIDEO_SYNC; i++){
+		syncvals.push_back(syncOptionsStrings[i]);
+	}
+	menuEmulation->opciones.push_back(new OpcionLista("Sincronización", syncvals, &refConfig->configMain.syncMode));
 
+    //Poblar Menú Video
 	//Relacion de aspecto
 	std::vector<std::string> aspectRates;
 	for (int i=0; i < TOTAL_VIDEO_RATIO; i++){
@@ -67,8 +76,8 @@ void GestorMenus::inicializar(CfgLoader *refConfig) {
 	menuVideo->opciones.push_back(new OpcionLista("Escalado", filtros, &refConfig->configMain.scaleMode));
 
     // 3. Poblar Menú Principal
-	menuRaiz->opciones.push_back(new OpcionBool("Sonido", &refConfig->configMain.sonidoMode));
     menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración vídeo", menuVideo));
+	menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración emulación", menuEmulation));
 
     // Establecer estado inicial
     menuActual = menuRaiz;
@@ -194,6 +203,7 @@ void GestorMenus::resetIndexPos(){
 		this->endPos = (int)this->listSize > this->maxLines ? this->maxLines : this->listSize;
 		this->pixelShift = 0;
 		this->lastSel = -1;
+		menuActual->seleccionado = 0;
 	}
 }
 

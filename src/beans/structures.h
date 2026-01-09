@@ -126,6 +126,7 @@ class ConfigMain{
 			mp3_file = "";
 			aspectRatio = RATIO_CORE;
 			scaleMode = FULLSCREEN;
+			syncMode = OPT_SYNC_VIDEO;
 			sonidoMode = 1;
 		}
 
@@ -138,8 +139,11 @@ class ConfigMain{
 		bool alsaReset;
 		int background_music;
 		std::string mp3_file;
+		
+		
 		int scaleMode;
 		int aspectRatio;
+		int syncMode;
 		bool sonidoMode;
 	
 };

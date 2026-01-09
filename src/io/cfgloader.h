@@ -1,8 +1,8 @@
 #pragma once
 
-#include "..\const\constant.h"
-#include "..\beans\structures.h"
-#include "..\io\dirutil.h"
+#include "const/constant.h"
+#include "beans/structures.h"
+#include "io/dirutil.h"
 
 
 #include <string>

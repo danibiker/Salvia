@@ -51,7 +51,7 @@ void Logger::write(int level, const char* fmt, ...) {
 	if (logFile.is_open()){
 		logFile << "[" << timestamp << "] [" << ERRLEVELSTXT[level] << "] " << messageBuffer;
 		// 4. Flush controlado
-		if (++numLogs % NUM_LOGS_TO_FLUSH == 0) {
+		if (errorLevel == L_DEBUG || ++numLogs % NUM_LOGS_TO_FLUSH == 0) {
 			logFile.flush();
 		}
 	}

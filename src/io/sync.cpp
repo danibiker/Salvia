@@ -1,34 +1,40 @@
 #include "sync.h"
 #include <SDL.h>
 
-Sync::Sync(){
-	g_frameTimes[FPS_AVG_COUNT];
+Sync::Sync(int syncMode){
 	g_frameTimeIndex = 0;
 	g_lastFrameTick = 0;
 	g_actualFps = 0.0f;
-	sprintf(fpsText, "%.0f", g_actualFps);
-	g_sync = SYNC_TO_AUDIO;
-	g_sync_last = SYNC_TO_AUDIO;
+	sprintf(fpsText, "%.1f", g_actualFps);
+	g_sync_last = syncMode;
 	fps = FPS_DESIRED;
-	frameDelay = 1000 / (double)fps; // Aprox 16ms
+	frameDelay = 1000.0 / (double)fps; // Aprox 16ms
 }
 
 void Sync::initAverages(uint32_t avg){
-	memset(g_frameTimes, avg, sizeof g_frameTimes);
+	//memset(g_frameTimes, avg, sizeof g_frameTimes);
+	for(int i = 0; i < FPS_AVG_COUNT; i++) {
+        g_frameTimes[i] = avg;
+    }
 }
 
 void Sync::init_fps_counter(double gameFps){
 	if (gameFps > 0){
-		frameDelay = 1000.0 / gameFps;
-		initAverages((uint32_t)frameDelay);
-		fps = gameFps;
-	} else {
-		initAverages((uint32_t)frameDelay);
-	}
+        this->fps = gameFps;
+        // Mantenemos el frameDelay como double para el limitador de alta precisión
+        this->frameDelay = 1000.0 / gameFps; 
+        
+        // Para los promedios (que parecen usar enteros), usamos el redondeo más cercano
+        initAverages((uint32_t)(frameDelay + 0.5));
+    } else {
+        // Fallback por si gameFps es inválido
+        initAverages((uint32_t)frameDelay);
+    }
 }
 
 void Sync::update_fps_counter() {
 	uint32_t currentTick = SDL_GetTicks();
+    if (g_lastFrameTick == 0) g_lastFrameTick = currentTick; // Inicialización en el primer uso
     
 	// Calculamos cuánto tiempo ha pasado realmente desde el frame anterior
 	uint32_t frameTime = currentTick - g_lastFrameTick;
@@ -48,8 +54,8 @@ void Sync::update_fps_counter() {
 	if (totalTime > 0) {
 		// FPS = 1000ms / promedio_de_frame_en_ms
 		// Es lo mismo que: (1000 * cantidad_de_frames) / tiempo_total
-		g_actualFps = (1000.0f * FPS_AVG_COUNT) / totalTime;
-		sprintf(fpsText, "%.0f", Constant::round(g_actualFps));
+		g_actualFps = (1000.0f * (double)FPS_AVG_COUNT) / (double)totalTime;
+		_snprintf(fpsText, sizeof(fpsText), "%.1f", g_actualFps);
 	}
 }
 

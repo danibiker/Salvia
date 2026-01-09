@@ -89,7 +89,7 @@ char * dirutil::getDir(char *buffer){
 	//Hay que modificar Properties/Xbox360 image conversion/Output-file
 	//y Properties/general/Target Name en windows
 	//EMU_LIB_NAME es una macro que se puede modificar en el fichero Salvia.vcxproj
-	string ruta = "game:\\" + string(EMU_LIB_NAME) + ".xex"; 
+	string ruta = "game:\\"; 
 	strncpy(buffer, ruta.c_str(), FILENAME_MAX);
     return buffer;
 #else
@@ -265,7 +265,7 @@ unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr
     string parentDir = strdir;
     //Miramos a ver si el directorio a explorar tiene una / al final
     if (strdir != NULL){
-        if (!parentDir.empty() && parentDir.at(parentDir.length()-1) != Constant::FILE_SEPARATOR){
+		if (!parentDir.empty() && parentDir.at(parentDir.length()-1) != Constant::getFileSep()[0]){
             parentDir.append(Constant::tempFileSep);
         }
         string extension;
@@ -309,15 +309,15 @@ string dirutil::getFileNameNoExt(string file){
     } else {
         size_t found, foundExt;
         
-        char sep = Constant::FILE_SEPARATOR;
-        if (file.find(sep) == string::npos && file.find(Constant::FILE_SEPARATOR_UNIX) != string::npos){
-            sep = Constant::FILE_SEPARATOR_UNIX;
+		string sep = Constant::getFileSep();
+        if (file.find(sep) == string::npos && file.find(FILE_SEPARATOR_UNIX) != string::npos){
+            sep = FILE_SEPARATOR_UNIX;
         } else if (file.find(sep) == string::npos && file.find(0x5C) != string::npos){
             sep = 0x5C;
         }
         
-        found = file.find_last_of(sep);
-        foundExt = file.find_last_of(".");
+        found = file.rfind(sep);
+        foundExt = file.rfind(".");
 
         if (found == string::npos){
             found = 0;
@@ -344,15 +344,15 @@ string dirutil::getFolder(string file){
     } else {
         size_t found;
 
-        char sep = Constant::FILE_SEPARATOR;
-        if (file.find(sep) == string::npos && file.find(Constant::FILE_SEPARATOR_UNIX) != string::npos){
-            sep = Constant::FILE_SEPARATOR_UNIX;
+		std::string sep = Constant::getFileSep();
+        if (file.find(sep) == string::npos && file.find(FILE_SEPARATOR_UNIX) != string::npos){
+            sep = FILE_SEPARATOR_UNIX;
         } else if (file.find(sep) == string::npos && file.find(0x5C) != string::npos){
             sep = 0x5C;
         }
 
-        found = file.find_last_of(sep);
-        if (found > 0){
+        found = file.rfind(sep);
+        if (found != string::npos){
             return file.substr(0,found);
         } else {
             return file;
@@ -369,9 +369,9 @@ string dirutil::getFileName(string file){
     } else {
         size_t found;
 
-        char sep = Constant::FILE_SEPARATOR;
-        if (file.find(sep) == string::npos && file.find(Constant::FILE_SEPARATOR_UNIX) != string::npos){
-            sep = Constant::FILE_SEPARATOR_UNIX;
+        std::string sep = Constant::getFileSep();
+        if (file.find(sep) == string::npos && file.find(FILE_SEPARATOR_UNIX) != string::npos){
+            sep = FILE_SEPARATOR_UNIX;
         } else if (file.find(sep) == string::npos && file.find(0x5C) != string::npos){
             sep = 0x5C;
         }

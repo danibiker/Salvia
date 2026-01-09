@@ -18,7 +18,7 @@ class Fonts{
 		static void exit();
 		static void initFonts(int fontSize);
 		static TTF_Font *getFont(int fontId);	
-		static size_t idxToCutTTF(std::string text, int maxW, int fontId);
+		static std::size_t idxToCutTTF(std::string text, int maxW, int fontId);
 		static int getSize(int, std::string);
 
     private:

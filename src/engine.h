@@ -22,7 +22,7 @@ class Engine{
 		Fonts* fonts;
 		// Instancia global para los callbacks
 		AudioBuffer g_audioBuffer;
-		Sync sync;
+		Sync *sync;
 		Joystick *joystick;
 
 		// Variable global para controlar la ejecución
@@ -34,5 +34,4 @@ class Engine{
 		int initFont();
 		Fileio fileio;
     private:
-		Constant *constant;
 };

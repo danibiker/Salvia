@@ -5,6 +5,7 @@
 #include <io/dirutil.h>
 #include <beans/structures.h>
 #include <io/joymapper.h>
+#include <so/launcher.h>
 #include <libretro.h>
 
 
@@ -20,7 +21,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	this->initEngine(cfgLoader);
 	int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
 	int pixelDato = 0;
-	TTF_SizeText(Fonts::getFont(Fonts::FONTSMALL), "888", &pixelDato, NULL);
+	TTF_SizeText(Fonts::getFont(Fonts::FONTSMALL), "888.8", &pixelDato, NULL);
 
 	rectFps.x = this->screen->w - pixelDato - 3;
 	rectFps.y = 0;
@@ -41,12 +42,16 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	// En la clase Config o GameMenu
 	selectScalerMode(FULLSCREEN);
 	current_scaler_scale = cfgLoader->configMain.scaleMode;
+
+	fpsSurface = NULL; 
+	lastFpsUpdate = 0;
 };
 
 GameMenu::~GameMenu(){
 	LOG_DEBUG("Deleting GameMenu...");
 	delete configMenus;
-    this->stopEngine();
+	if (fpsSurface) SDL_FreeSurface(fpsSurface);
+	if (message.cache) SDL_FreeSurface(message.cache);
 }
 
 std::string GameMenu::configButtonsJOY(){
@@ -523,7 +528,7 @@ string GameMenu::getPathPrefix(string filepath){
 
     string drivestr = string(":") + string(Constant::tempFileSep);
     //Checking if the path to the roms is absolute
-    if (!filepath.empty() && (filepath.at(0) == Constant::FILE_SEPARATOR || filepath.find(drivestr) != string::npos)){
+    if (!filepath.empty() && (filepath.at(0) == Constant::getFileSep()[0] || filepath.find(drivestr) != string::npos)){
         finalpath = filepath;
     }
     #if defined(WIN) || defined(DOS)
@@ -552,9 +557,14 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
         return commands;
 
     ConfigEmu emu = *this->cfgLoader->configEmus.at(this->emuCfgPos).get();
+	string pathPrefix = getPathPrefix(emu.directory);
+	
+	if (pathPrefix.at(pathPrefix.length()-1) != Constant::tempFileSep[0]){
+		pathPrefix += string(Constant::tempFileSep);
+	}
+	pathPrefix += emu.executable;
 
-    commands.emplace_back(getPathPrefix(emu.directory) + string(Constant::tempFileSep)
-        + emu.executable);
+    commands.emplace_back(pathPrefix);
     
     if (emu.options_before_rom){
         vector<string> v = Constant::splitChar(emu.global_options, ' ');
@@ -606,14 +616,23 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
 
         string rom = emu.use_extension ? romFile : dir.getFileNameNoExt(romFile);
         
-		std::string dirActual = dir.getDirActual();
-		if (dirActual.find_first_of(emu.executable) != string::npos){
-			//Tenemos que lanzar la rom en el propio ejecutable porque el soporte es correcto para esta rom
-			commands.emplace_back(romdir + rom);
-			return commands;
-		} else {
+		
+		#ifdef LIBRETRO
+			std::string execActual = Constant::getAppExecutable();
+			if (emu.executable.find(execActual) != string::npos){
+				//Tenemos que lanzar la rom en el propio ejecutable porque el soporte es correcto para esta rom
+				commands.emplace_back(romdir + rom);
+				return commands;
+			} else {
+				#ifdef WIN
+					commands.emplace_back(encloseWithCharIfSpaces(romdir + rom, "\"")); 
+				#elif defined(_XBOX)
+					commands.emplace_back(romdir + rom);
+				#endif
+			}
+		#else
 			commands.emplace_back(encloseWithCharIfSpaces(romdir + rom, "\"")); 
-		}
+		#endif	
     }
 
     //string romToLaunch = romdir + rom;
@@ -642,7 +661,15 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
         resetAudio = true;
     #endif
 
-	LOG_DEBUG("Launching %s", commands.at(0));
+	LOG_DEBUG("Launching %s\n", commands.at(0).c_str());
+
+	#ifdef LIBRETRO
+		Launcher launcher;
+		Logger::close();
+		launcher.launch(commands, cfgLoader->configMain.debug);
+		exit(0);
+	#endif
+
     /**TODO: IMPLEMENT
 	if (cfgLoader->configMain.alsaReset && resetAudio && Constant::getExecMethod() != launch_batch ){
         remove_sound();
@@ -737,12 +764,34 @@ int GameMenu::recoverGameMenuPos(ListMenu &menuData, struct ListStatus &read_str
 }
 
 void GameMenu::updateFps(){
-	// Actualizamos el contador de media de fps
-	if (fpsCountEnabled){
-		SDL_FillRect(this->screen, &rectFps, bkgTextFps);
-		this->sync.update_fps_counter();
-		Constant::drawText(this->screen, Fonts::getFont(Fonts::FONTSMALL), this->sync.fpsText, rectFps.x, rectFps.y, white, 0);
-	}
+    if (fpsCountEnabled) {
+        uint32_t currentTick = SDL_GetTicks();
+
+        // 1. Calculamos la media (esto es rápido, solo matemáticas)
+        this->sync->update_fps_counter();
+
+        // 2. ¿Ha pasado tiempo suficiente para actualizar el NÚMERO? (ej. cada 500ms)
+        if (currentTick - lastFpsUpdate > 500 || fpsSurface == NULL) {
+            // Liberamos la superficie anterior
+            if (fpsSurface) SDL_FreeSurface(fpsSurface);
+            
+            // Creamos la nueva superficie con el texto actualizado
+            // Asumimos que esta función devuelve una SDL_Surface* nueva
+            fpsSurface = TTF_RenderText_Blended(Fonts::getFont(Fonts::FONTSMALL), 
+                                                this->sync->fpsText, white);
+            lastFpsUpdate = currentTick;
+        }
+
+        // 3. DIBUJO (Esto se hace EN CADA FRAME y es muy rápido)
+        if (fpsSurface) {
+            // Borramos el fondo del OSD
+            SDL_FillRect(this->screen, &rectFps, bkgTextFps);
+            
+            // Copiamos la superficie ya renderizada a la pantalla
+            SDL_Rect dstRect = { rectFps.x, rectFps.y, 0, 0 };
+            SDL_BlitSurface(fpsSurface, NULL, this->screen, &dstRect);
+        }
+    }
 }
 
 void GameMenu::processFrontendEvents(){
@@ -799,13 +848,13 @@ void GameMenu::processHotkeys(){
 			SDL_FillRect(this->video_page, NULL, this->uBkgColor);
 			lastHotKey = now;
 			this->joystick->lastSelectPress = now;
-			setMessage(videoScaleStrings[this->getCfgLoader()->configMain.scaleMode], 3000);
+			showSystemMessage(videoScaleStrings[this->getCfgLoader()->configMain.scaleMode], 3000);
 		} else if (this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_SELECT] && this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_A]){
 			this->getCfgLoader()->configMain.aspectRatio = (this->getCfgLoader()->configMain.aspectRatio + 1) % TOTAL_VIDEO_RATIO;
 			SDL_FillRect(this->video_page, NULL, this->uBkgColor);
 			lastHotKey = now;
 			this->joystick->lastSelectPress = now;
-			setMessage(aspectRatioStrings[this->getCfgLoader()->configMain.aspectRatio], 3000);
+			showSystemMessage(aspectRatioStrings[this->getCfgLoader()->configMain.aspectRatio], 3000);
 		}
 	}
 }
@@ -892,32 +941,45 @@ void GameMenu::selectScalerMode(int mode){
 	}
 }
 
-void GameMenu::setMessage(std::string content, Uint32 timeout){
-	message.timeout = timeout;
-	message.content = content;
-	message.ticks = SDL_GetTicks();
+void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
+	if (message.cache) SDL_FreeSurface(message.cache);
+    
+    message.content = text;
+    message.timeout = duration;
+    message.ticks = SDL_GetTicks();
+
+    // Renderizamos el mensaje una sola vez
+    message.cache = TTF_RenderText_Blended(Fonts::getFont(Fonts::FONTBIG), text.c_str(), white);
+    
+    if (message.cache) {
+        int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
+        message.rect.x = 0;
+        message.rect.y = this->video_page->h - face_h - 4;
+        message.rect.w = message.cache->w + 2;
+        message.rect.h = face_h + 4;
+    }
 }
 
 void GameMenu::processMessages(){
-	static int pixelDato = 100;
-	static int face_h = 20;
-	static SDL_Rect rectText;
-	const Uint32 now = SDL_GetTicks();
+	if (message.ticks == 0 || !message.cache) return;
 
-	if (message.ticks > 0 && now - message.ticks < message.timeout){
-		TTF_SizeText(Fonts::getFont(Fonts::FONTBIG), message.content.c_str(), &pixelDato, NULL);
-		int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
-		rectText.x = 0;
-		rectText.y = this->video_page->h - face_h - 4;
-		rectText.w = pixelDato + 2;
-		rectText.h = face_h + 4;
-		SDL_FillRect(this->video_page, &rectText, this->uBkgColor);
-		Constant::drawText(this->video_page, Fonts::getFont(Fonts::FONTBIG), message.content.c_str(), rectText.x + 1, rectText.y + 2, white, 0);
-	}  else if (message.ticks > 0){
-		//Limpiamos el rectangulo del mensaje, por si queda algun resto de texto
-		SDL_FillRect(this->video_page, &rectText, this->uBkgColor);
-		message.ticks = 0;
-	}
+    const Uint32 now = SDL_GetTicks();
+
+    if (now - message.ticks < message.timeout) {
+        // 1. Dibujar el fondo del mensaje
+        SDL_FillRect(this->video_page, &message.rect, this->uBkgColor);
+        
+        // 2. Copiar el texto ya renderizado (Operación ultra rápida)
+        SDL_Rect dstText = { message.rect.x + 1, message.rect.y + 2, 0, 0 };
+        SDL_BlitSurface(message.cache, NULL, this->video_page, &dstText);
+    } else {
+        // El mensaje ha expirado
+        SDL_FreeSurface(message.cache);
+        message.cache = NULL;
+        message.ticks = 0;
+		// 1. Dibujar el fondo del mensaje
+        SDL_FillRect(this->video_page, &message.rect, this->uBkgColor);
+    }
 }
 
 void GameMenu::processConfigChanges(){
