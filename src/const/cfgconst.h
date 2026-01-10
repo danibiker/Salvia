@@ -1,0 +1,72 @@
+#pragma once
+
+#include <string>
+
+namespace cfg {
+	typedef enum {CFG_TYPE_INT = 0, CFG_TYPE_FLOAT, CFG_TYPE_BOOL, CFG_TYPE_STR} CFG_PROPS_TYPES;
+
+	typedef enum {emulators = 0, debug, resolution_width, resolution_height, path_prefix, alsaReset, background_music, mp3_file, aspectRatio, 
+			scaleMode, syncMode, soundMode, libretrosystem, region, nospritelimit, MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
+	
+	/*static const char *MAIN_CFG_PROPS_NAMES[] = {"emulators", "debug", "resolution_width", "resolution_height", "path_prefix", "alsaReset", "background_music", "mp3_file", "aspectRatio"
+			,"scaleMode", "syncMode", "soundMode"};
+	static const CFG_PROPS_TYPES MAIN_CFG_PROPS_TYPES [] = {CFG_TYPE_STR, CFG_TYPE_INT, CFG_TYPE_INT, CFG_TYPE_INT, CFG_TYPE_STR, CFG_TYPE_INT, CFG_TYPE_STR, CFG_TYPE_STR, CFG_TYPE_STR, 
+			CFG_TYPE_INT, CFG_TYPE_INT, CFG_TYPE_INT};
+	*/
+
+	struct t_cfg_props{
+		float valueFloat;    // 4 bytes
+		int valueInt;        // 4 bytes
+		cfg::CFG_PROPS_TYPES type; // 4 bytes (generalmente)
+		bool valueBool;      // 1 byte (+3 padding)
+		std::string name;    // Objeto complejo
+		std::string desc;    // Objeto complejo
+		std::string valueStr;// Objeto complejo
+		
+		t_cfg_props() : type(CFG_TYPE_INT), valueInt(0), valueFloat(0.f), valueBool(false) {}
+
+
+		t_cfg_props(std::string pstr, int val) : name(pstr), type(CFG_TYPE_INT), valueInt(val), valueFloat(0.f), valueBool(false), valueStr("") {};
+		t_cfg_props(std::string pstr, float val) : name(pstr), type(CFG_TYPE_FLOAT), valueFloat(val), valueInt(0), valueBool(false), valueStr("") {};
+		t_cfg_props(std::string pstr, bool val) : name(pstr), type(CFG_TYPE_BOOL), valueBool(val), valueInt(0), valueFloat(0.f), valueStr("") {};
+		t_cfg_props(std::string pstr, std::string val) : name(pstr), type(CFG_TYPE_STR), valueStr(val), valueInt(0), valueFloat(0.f), valueBool(false) {};
+		t_cfg_props(std::string pstr, const char * val) : name(pstr), type(CFG_TYPE_STR), valueStr(val), valueInt(0), valueFloat(0.f), valueBool(false) {};
+
+		int&   getIntRef()   { return valueInt; }
+		float& getFloatRef() { return valueFloat; }
+		bool&  getBoolRef()  { return valueBool; }
+		std::string getStringRef()  { return valueStr; }
+
+		void getPropValue(int& output) {
+			output = this->valueInt;
+		}
+
+		void getPropValue(float& output) {
+			output = this->valueFloat;
+		}
+
+		void getPropValue(bool& output) {
+			output = this->valueBool;
+		}
+
+		void getPropValue(std::string& output) {
+			output = this->valueStr;
+		}
+
+		void setPropValue(int input) {
+			this->valueInt = input;
+		}
+
+		void setPropValue(float input) {
+			this->valueFloat = input;
+		}
+
+		void setPropValue(bool input) {
+			this->valueBool = input;
+		}
+
+		void setPropValue(std::string input) {
+			this->valueStr = input;
+		}
+	};
+};

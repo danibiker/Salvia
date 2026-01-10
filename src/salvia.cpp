@@ -95,51 +95,126 @@ static bool retro_environment(unsigned cmd, void *data) {
             return false;
 
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
-            // Opcional: Muchos cores preguntan si pueden usar RGB565 (1) o XRGB8888 (2)
-            fmt = *(const enum retro_pixel_format *)data;
-			std::string msgformat = "Solicitando pixelformat: " + Constant::intToString(fmt) + "\n";
-			retro_log_printf(RETRO_LOG_INFO, msgformat.c_str());
+            // El core envía un puntero al formato que desea usar
+            enum retro_pixel_format *fmtAsked = (enum retro_pixel_format*)data;
+			std::string msgformat = "Solicitando pixelformat: " + Constant::intToString(*fmtAsked) + "\n";
+			LOG_DEBUG("Solicitando pixelformat %d\n", *fmtAsked);
 
-			//if (fmt == RETRO_PIXEL_FORMAT_RGB565){
-				return true; 
-			//} else {
-			//	return false;
-			//}
+			// Forzamos a que sea RGB565 (16 bits)
+            // Esto le dice a Nestopia: "Solo acepto 16 bits, configúrate así"
+            *fmtAsked = RETRO_PIXEL_FORMAT_RGB565;
+			fmt = *fmtAsked;
+            
+            // Retornamos true para confirmar que aceptamos el formato
+            return true;
         }
 
 		case RETRO_ENVIRONMENT_GET_CAN_DUPE: {
 			// Aquí le decimos al núcleo que el frontend SÍ puede duplicar frames.
-			// En entornos modernos esto es casi siempre true.
 			*(bool*)data = true; 
 			return true;
 		}
+
+		case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
+			return true;
+
+		case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:{
+			//static const char *dir = "."; // Punto (.) indica el directorio actual del ejecutable
+
+			static string dir;
+			gameMenu->getCfgLoader()->configMain[cfg::libretrosystem].getPropValue(dir);
+
+			// O se puede usar una ruta específica de la Xbox 360 si la tienes definida, ej: "game:\\system"
+			*(const char**)data = dir.c_str();
+			return true;
+		}
+
+		case RETRO_ENVIRONMENT_SET_GEOMETRY:{
+			const struct retro_game_geometry *geom = (const struct retro_game_geometry*)data;
+			// 1. Calcular el nuevo tamaño necesario (asumiendo conversión a 16 bits)
+			std::size_t needed = geom->max_width * geom->max_height * sizeof(uint16_t);
+
+			// 2. Solo redimensionar si el buffer actual es pequeño o no existe
+			if (!conversion_buffer || buffer_size < needed) {
+				//Solo estamos en este caso, si tenemos que hacer conversion, asi que actualizamos el campo
+				fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+				// En Xbox 360, es preferible liberar y asignar para asegurar alineación
+				if (conversion_buffer) 
+					free(conversion_buffer);
+        
+				conversion_buffer = (uint16_t*)malloc(needed);
+				buffer_size = needed;
+
+				
+
+				// Limpiar el buffer una vez para evitar basura visual
+				if (conversion_buffer) memset(conversion_buffer, 0, needed);
+				LOG_DEBUG("Buffer de conversión redimensionado en SET_GEOMETRY\n");
+			}
+			return true;
+		}
+		
+		case RETRO_ENVIRONMENT_GET_VARIABLE:{
+			struct retro_variable *var = (struct retro_variable*)data;
+			/**TODO: Cambiar para que se ajuste por sistema y no en el configmain*/
+			//Esto claramente es una opcion de core de nes
+			if (strcmp(var->key, "nestopia_favored_system") == 0){
+				// Obtener el valor de tu configuración (p. ej. "pal", "ntsc" o "auto")
+				// Es vital que el string sea exactamente lo que el core espera
+				static std::string region;
+				gameMenu->getCfgLoader()->configMain[cfg::region].getPropValue(region);
+				var->value = region.c_str(); 
+				return true;
+			} else if (strcmp(var->key, "nestopia_nospritelimit") == 0){
+				static std::string nospritelimit;
+				gameMenu->getCfgLoader()->configMain[cfg::nospritelimit].getPropValue(nospritelimit);
+				var->value = nospritelimit.c_str(); 
+				return true;
+			}
+			return false;
+		}
+
+		case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: {
+			// Solo devolvemos true si el usuario ha tocado algo en el menú
+			// de la Xbox 360 recientemente.
+			bool *updated = (bool*)data;
+			//*updated = gameMenu->options_changed_flag;
+    
+			// IMPORTANTE: Una vez que el core sabe que hubo un cambio, 
+			// reseteamos el flag para que en el siguiente frame no vuelva a procesar todo.
+			//gameMenu->options_changed_flag = false;
+			
+			*updated = false;
+			return true;
+		}
+		default: {
+			LOG_DEBUG("Comando no tratado: %s\n", Constant::TipoToStr(cmd));
+			// Para comandos desconocidos como 52 o 65587
+			return false; 
+		}
+		    
     }
     return false; // Por defecto devolver false para comandos desconocidos
 }
 
 static void retro_video_refresh(const void *data, unsigned width, unsigned height, std::size_t pitch) {
     if (!data || width == 0 || height == 0) 
-		return;
+		return;	
 
     void* final_src = (void*)data;
 
-    if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
-        // 2. Gestionar buffer de conversión de forma eficiente
-        std::size_t needed = width * height * sizeof(uint16_t);
-        if (!conversion_buffer || buffer_size < needed) {
-            conversion_buffer = (uint16_t*)realloc(conversion_buffer, needed);
-            buffer_size = needed;
-        }
-        
-        // 3. Convertir (Comprobar que el pitch sea el original de 32 bits)
-        convertARGB8888ToRGB565((uint32_t*)data, width, height, pitch, conversion_buffer, width * 2);
-        final_src = (void*)conversion_buffer;
-        pitch = width * 2; // Actualizamos el pitch para el escalador
-    }
+	//Hacemos la comprobacion del pitch >= width * 4, por si hemos solicitado el RETRO_PIXEL_FORMAT_RGB565
+	//pero el core no lo acepta
+    if ((fmt == RETRO_PIXEL_FORMAT_XRGB8888 || pitch >= width * 4) && conversion_buffer) {
+		convertARGB8888ToRGB565((uint32_t*)data, width, height, pitch, conversion_buffer, width * 2);
+		final_src = (void*)conversion_buffer;
+		pitch = width * 2;
+	}
 
     SDL_Surface* screen = gameMenu->screen;
 
 	t_scale_props scaleProps = {0}; // Limpia todo el struct a cero antes de asignar
+	// 4. Pasar el buffer correcto (ya sea el original de 16 o el convertido)
 	scaleProps.src = (uint16_t*)final_src;
 	scaleProps.sw = (int)width;
 	scaleProps.sh = (int)height;
@@ -149,39 +224,41 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 	scaleProps.dh = screen->h;
 	scaleProps.dpitch = screen->pitch;
 	scaleProps.scale = gameMenu->current_scaler_scale;
-	scaleProps.ratio = aspectRatioValues[gameMenu->getCfgLoader()->configMain.aspectRatio];
-
+	scaleProps.ratio = aspectRatioValues[*gameMenu->current_ratio];
     
-    // 4. Pasar el buffer correcto (ya sea el original de 16 o el convertido)
+    //Escalamos la imagen con el escalador que hay almacenado en el puntero a funcion
     gameMenu->current_scaler(scaleProps);
 }
 
 //Audio Callbacks for Libretro
 // Callback para una sola muestra (menos eficiente, pero requerido)
 void retro_audio_sample(int16_t left, int16_t right) {
-	const int g_sync = gameMenu->getCfgLoader()->configMain.syncMode;
-	if (g_sync == SYNC_NONE){
-		return;
-	}
+	// Creamos una referencia local al buffer
+    // Esto evita que la CPU haga: gameMenu -> buscar g_audioBuffer -> llamar Write
+    AudioBuffer& audio = gameMenu->g_audioBuffer;
+    const int mode = *gameMenu->current_sync;
+
+    if (mode == SYNC_NONE) return;
+
     int16_t samples[2] = { left, right };
-    gameMenu->g_audioBuffer.Write(samples, 2);
+    audio.Write(samples, 2);
 }
 
 // Callback para ráfagas de muestras (el que usan casi todos los cores)
-std::size_t retro_audio_sample_batch(const int16_t *data, std::size_t frames) {
-	const int g_sync = gameMenu->getCfgLoader()->configMain.syncMode;
+std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_t frames) {
 
-    if (g_sync == SYNC_NONE){
-		return 0;
-	}
+	AudioBuffer& audio = gameMenu->g_audioBuffer;
+    const int mode = *gameMenu->current_sync;
+
+	if (mode == SYNC_NONE) return 0;
 	
 	// frames es el número de pares (izq, der), multiplicamos por 2 para el total
 	// Al usar WriteBlocking, retro_run() no terminará hasta que haya
     // sitio en el buffer, sincronizando así la ejecución al audio real.
-	if (g_sync == SYNC_TO_AUDIO){
-		gameMenu->g_audioBuffer.WriteBlocking(data, frames * 2);
+	if (mode == SYNC_TO_AUDIO){
+		audio.WriteBlocking(data, frames * 2);
 	} else {
-		gameMenu->g_audioBuffer.Write(data, frames * 2);
+		audio.Write(data, frames * 2);
 	}
     return frames;
 }
@@ -267,14 +344,20 @@ void update_input() {
 			} else if (event.key.keysym.sym == SDLK_F9){
 				loadstate();
 			} else if (event.key.keysym.sym == SDLK_BACKSPACE){
-				gameMenu->getCfgLoader()->configMain.syncMode = gameMenu->sync->g_sync_last;
+				//gameMenu->getCfgLoader()->configMain[cfg::syncMode].setPropValue(gameMenu->sync->g_sync_last);
+				*gameMenu->current_sync = gameMenu->sync->g_sync_last;
+				//gameMenu->processConfigChanges();
 				SDL_PauseAudio(0);
 			}
 		} else if (event.type == SDL_KEYDOWN) {
 			if (event.key.keysym.sym == SDLK_BACKSPACE){
 				//Enabling fast forward
-				gameMenu->sync->g_sync_last = gameMenu->getCfgLoader()->configMain.syncMode;
-				gameMenu->getCfgLoader()->configMain.syncMode = SYNC_NONE;
+				//gameMenu->getCfgLoader()->configMain[cfg::syncMode].getPropValue(gameMenu->sync->g_sync_last);
+				//gameMenu->getCfgLoader()->configMain[cfg::syncMode].setPropValue(SYNC_NONE);
+				//gameMenu->processConfigChanges();
+				gameMenu->sync->g_sync_last = *gameMenu->current_sync;
+				*gameMenu->current_sync = SYNC_NONE;
+
 				SDL_PauseAudio(1);
 			}
 		}
@@ -300,8 +383,6 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
     // Devolvemos el estado del botón 'id' para el jugador 'port'
     return gameMenu->joystick->g_joy_state[port][id] ? 1 : 0;
 }
-
-
 
 void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
     // 1. Limpiar el buffer de salida de SDL (Opcional pero recomendado en SDL 1.2)
@@ -522,7 +603,7 @@ int launchGame(std::string rompath){
 	// Inicializar SDL Audio con la frecuencia del core
 	init_sdl_audio(av_info.timing.sample_rate);
 	//Iniciando el contador de fps
-	gameMenu->sync->init_fps_counter(av_info.timing.fps);
+	gameMenu->sync->init_fps_counter(av_info.timing.fps);	
 	gameMenu->romLoaded = true;
 	gameMenu->setEmuStatus(EMU_STARTED);
 	return 1;
@@ -646,12 +727,7 @@ bool loadGameAtStart(int argc, char *argv[]){
 	LOG_DEBUG("argc: %d\n", argc);
 	bool ret = false;
 
-	#ifdef WIN
-	if (argc > 1){
-		LOG_DEBUG("argv[1]: %s\n", argv[1]);
-		ret = launchGame(argv[1]);
-	}
-	#elif defined(_XBOX)
+	#ifdef _XBOX
 		DWORD dwLaunchDataSize = 0;    
 		DWORD dwStatus = XGetLaunchDataSize( &dwLaunchDataSize );
 		if( dwStatus == ERROR_SUCCESS ){
@@ -663,6 +739,11 @@ bool loadGameAtStart(int argc, char *argv[]){
 		} else if (dwStatus == ERROR_NOT_FOUND) {
 			// El programa se lanzó normalmente (sin XSetLaunchData)
 			LOG_DEBUG("No se encontraron datos de lanzamiento.\n");
+		}
+	#else 
+		if (argc > 1){
+			LOG_DEBUG("argv[1]: %s\n", argv[1]);
+			ret = launchGame(argv[1]);
 		}
 	#endif	
 
@@ -749,8 +830,9 @@ int main(int argc, char *argv[]) {
 		// Actualizamos la pantalla
 		SDL_Flip(gameMenu->screen);
 
+		const int mode = *gameMenu->current_sync;
 		// Limitamos los frames si tenemos que sincronizar con el video
-		if (gameMenu->getCfgLoader()->configMain.syncMode == SYNC_TO_VIDEO){
+		if (mode == SYNC_TO_VIDEO){
 			gameMenu->sync->limit_fps(nextFrameTime);
 			// El tiempo en el que DEBERÍA empezar el siguiente frame
 			nextFrameTime += gameMenu->sync->frameDelay;

@@ -96,6 +96,9 @@ class GameMenu : public Engine{
 		ScalerFunc current_scaler;
 		int current_scaler_scale;
 		void processConfigChanges();
+		int *current_scaler_mode;
+		int *current_ratio;
+		int *current_sync;
 
     private:
 		std::string configButtonsJOY();

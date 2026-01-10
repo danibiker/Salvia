@@ -58,7 +58,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig) {
 	for (int i=0; i < TOTAL_VIDEO_SYNC; i++){
 		syncvals.push_back(syncOptionsStrings[i]);
 	}
-	menuEmulation->opciones.push_back(new OpcionLista("Sincronización", syncvals, &refConfig->configMain.syncMode));
+	menuEmulation->opciones.push_back(new OpcionLista("Sincronización", syncvals, &refConfig->configMain[cfg::syncMode].getIntRef()));
 
     //Poblar Menú Video
 	//Relacion de aspecto
@@ -66,14 +66,14 @@ void GestorMenus::inicializar(CfgLoader *refConfig) {
 	for (int i=0; i < TOTAL_VIDEO_RATIO; i++){
 		aspectRates.push_back(aspectRatioStrings[i]);
 	}
-	menuVideo->opciones.push_back(new OpcionLista("Relación de aspecto", aspectRates, &refConfig->configMain.aspectRatio));
+	menuVideo->opciones.push_back(new OpcionLista("Relación de aspecto", aspectRates, &refConfig->configMain[cfg::aspectRatio].getIntRef()));
 
 	//Escalado de video
     std::vector<std::string> filtros;
 	for (int i=0; i < TOTAL_VIDEO_SCALE; i++){
 		filtros.push_back(videoScaleStrings[i]);
 	}
-	menuVideo->opciones.push_back(new OpcionLista("Escalado", filtros, &refConfig->configMain.scaleMode));
+	menuVideo->opciones.push_back(new OpcionLista("Escalado", filtros, &refConfig->configMain[cfg::scaleMode].getIntRef()));
 
     // 3. Poblar Menú Principal
     menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración vídeo", menuVideo));
@@ -140,7 +140,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 
     //To scroll one letter in one second. We use the face_h because the width of 
     //a letter is not fixed.
-    const float pixelsScrollFps = max(ceil(face_h / (float)textFps), 1.0f);
+    const float pixelsScrollFps = std::max(ceil(face_h / (float)textFps), 1.0f);
 
     for (int i=this->iniPos; i < this->endPos; i++){
         auto option = this->menuActual->opciones.at(i);

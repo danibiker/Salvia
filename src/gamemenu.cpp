@@ -41,7 +41,9 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	message.ticks = 0;
 	// En la clase Config o GameMenu
 	selectScalerMode(FULLSCREEN);
-	current_scaler_scale = cfgLoader->configMain.scaleMode;
+	this->current_scaler_mode = &getCfgLoader()->configMain[cfg::scaleMode].getIntRef();
+	this->current_ratio = &getCfgLoader()->configMain[cfg::aspectRatio].getIntRef();
+	this->current_sync = &getCfgLoader()->configMain[cfg::syncMode].getIntRef();
 
 	fpsSurface = NULL; 
 	lastFpsUpdate = 0;
@@ -227,7 +229,9 @@ ConfigEmu* GameMenu::getCfgEmu(){
 }
 
 bool GameMenu::isDebug(){
-    return cfgLoader->configMain.debug;
+	bool debug;
+	getCfgLoader()->configMain[cfg::debug].getPropValue(debug);
+    return debug;
 }
 
 void GameMenu::setCfgLoader(CfgLoader *cfgLoader){
@@ -493,7 +497,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 		string extFilter = " " + emu->rom_extension;
         extFilter = Constant::replaceAll(extFilter, " ", ".");
 
-        if (cfgLoader->configMain.debug){
+		if (isDebug()){
             SDL_FillRect(screen, NULL, cblack);
             string msg = "searching " + mapfilepath; 
 			Constant::drawTextCent(screen, fontsmall, msg.c_str(), screen->w / 2, screen->h / 2, true, true,  white, -1);
@@ -504,7 +508,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
         ConfigEmu emu = *this->cfgLoader->configEmus.at(this->emuCfgPos).get();
         string mapfilepath = getPathPrefix(emu.rom_directory);
 
-        if (cfgLoader->configMain.debug){
+        if (isDebug()){
             SDL_FillRect(screen, NULL, cblack);
             string msg = "roms found: " + Constant::TipoToStr(files.size()); 
             string msg2 = "In dir " + mapfilepath;
@@ -524,7 +528,13 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
  */
 string GameMenu::getPathPrefix(string filepath){
     ConfigEmu emu = *this->cfgLoader->configEmus.at(this->emuCfgPos).get();
-    string finalpath = cfgLoader->configMain.path_prefix + filepath;
+	string finalpath;
+	cfgLoader->configMain[cfg::path_prefix].getPropValue(finalpath);
+
+	if (finalpath.at(finalpath.length()-1) != Constant::getFileSep()[0] && filepath.at(0) != Constant::getFileSep()[0]){
+		finalpath += Constant::getFileSep();
+	}
+    finalpath += filepath;
 
     string drivestr = string(":") + string(Constant::tempFileSep);
     //Checking if the path to the roms is absolute
@@ -666,7 +676,7 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
 	#ifdef LIBRETRO
 		Launcher launcher;
 		Logger::close();
-		launcher.launch(commands, cfgLoader->configMain.debug);
+		launcher.launch(commands, isDebug());
 		exit(0);
 	#endif
 
@@ -809,11 +819,10 @@ void GameMenu::processHotkeys(){
 	static Uint32 lastHotKey = 0;
 	const Uint32 now = SDL_GetTicks();
 
-	int mode = -1;
 	if (now - lastHotKey > 300){
 		if (this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_SELECT] && this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_X]){
 			int modeOk = true;
-			int startingMode = this->getCfgLoader()->configMain.scaleMode;
+			int startingMode = *this->current_scaler_mode;
 
 			struct retro_system_av_info av_info;
 			retro_get_system_av_info(&av_info);
@@ -821,40 +830,39 @@ void GameMenu::processHotkeys(){
 			unsigned alto_base = av_info.geometry.base_height;
 		
 			do {
-				this->getCfgLoader()->configMain.scaleMode = (this->getCfgLoader()->configMain.scaleMode + 1) % TOTAL_VIDEO_SCALE;
+				*this->current_scaler_mode = ((*this->current_scaler_mode + 1) % TOTAL_VIDEO_SCALE);
 
-				mode = this->getCfgLoader()->configMain.scaleMode;
 				const int dw = this->video_page->w;
 				const int dh = this->video_page->h;
-				bool cannotScale2x = (mode == SCALE2X || mode == SCALE_XBRZ_2X) && ((int)ancho_base * 2 > dw || (int)alto_base * 2 > dh);
-				bool cannotScale3x = (mode == SCALE3X || mode == SCALE3X_ADV || mode == SCALE_XBRZ_3X) && ((int)ancho_base * 3 > dw || (int)alto_base * 3 > dh);
-				bool cannotScale4x = (mode == SCALE4X || mode == SCALE4X_ADV || mode == SCALE_XBRZ_4X) && ((int)ancho_base * 4 > dw || (int)alto_base * 4 > dh);
+				bool cannotScale2x = (*current_scaler_mode == SCALE2X || *current_scaler_mode == SCALE_XBRZ_2X) && ((int)ancho_base * 2 > dw || (int)alto_base * 2 > dh);
+				bool cannotScale3x = (*current_scaler_mode == SCALE3X || *current_scaler_mode == SCALE3X_ADV || *current_scaler_mode == SCALE_XBRZ_3X) && ((int)ancho_base * 3 > dw || (int)alto_base * 3 > dh);
+				bool cannotScale4x = (*current_scaler_mode == SCALE4X || *current_scaler_mode == SCALE4X_ADV || *current_scaler_mode == SCALE_XBRZ_4X) && ((int)ancho_base * 4 > dw || (int)alto_base * 4 > dh);
 
 				#ifdef _XBOX
 					//XBOX CPU can't handle this algorithm implementation at 60fps
-					cannotScale2x = cannotScale2x && mode == SCALE_XBRZ_2X;
-					cannotScale3x = cannotScale3x && mode == SCALE_XBRZ_3X;
-					cannotScale4x = cannotScale4x && mode == SCALE_XBRZ_4X;
+					cannotScale2x = cannotScale2x || current_scaler_mode == SCALE_XBRZ_2X;
+					cannotScale3x = cannotScale3x || current_scaler_mode == SCALE_XBRZ_3X;
+					cannotScale4x = cannotScale4x || current_scaler_mode == SCALE_XBRZ_4X;
 				#endif
 
-				if (cannotScale2x || cannotScale3x || cannotScale4x || mode == NO_VIDEO){
+				if (cannotScale2x || cannotScale3x || cannotScale4x || *current_scaler_mode == NO_VIDEO){
 					modeOk = false;
 				} else {
 					modeOk = true;
 				}
-			} while(!modeOk && mode != startingMode);
+			} while(!modeOk && *current_scaler_mode != startingMode);
 
-			selectScalerMode(mode);
+			selectScalerMode(*current_scaler_mode);
 			SDL_FillRect(this->video_page, NULL, this->uBkgColor);
 			lastHotKey = now;
 			this->joystick->lastSelectPress = now;
-			showSystemMessage(videoScaleStrings[this->getCfgLoader()->configMain.scaleMode], 3000);
+			showSystemMessage(videoScaleStrings[*current_scaler_mode], 3000);
 		} else if (this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_SELECT] && this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_A]){
-			this->getCfgLoader()->configMain.aspectRatio = (this->getCfgLoader()->configMain.aspectRatio + 1) % TOTAL_VIDEO_RATIO;
+			*this->current_ratio = (*this->current_ratio + 1) % TOTAL_VIDEO_RATIO;
 			SDL_FillRect(this->video_page, NULL, this->uBkgColor);
 			lastHotKey = now;
 			this->joystick->lastSelectPress = now;
-			showSystemMessage(aspectRatioStrings[this->getCfgLoader()->configMain.aspectRatio], 3000);
+			showSystemMessage(aspectRatioStrings[*this->current_ratio], 3000);
 		}
 	}
 }
@@ -983,6 +991,5 @@ void GameMenu::processMessages(){
 }
 
 void GameMenu::processConfigChanges(){
-	const int mode = this->getCfgLoader()->configMain.scaleMode;
-	selectScalerMode(mode);
+	selectScalerMode(*this->current_scaler_mode);
 }

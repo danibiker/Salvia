@@ -545,6 +545,35 @@ inline void convertRGB565ToARGB8888(const uint16_t* src, int sw, int sh, std::si
     }
 }
 
+/*inline void convertRGB565ToARGB8888(const uint16_t* __restrict src, int sw, int sh, std::size_t spitch, uint32_t* __restrict dst, std::size_t dpitch) {
+    // Definimos el salto de línea en unidades del tipo de dato (no en bytes)
+    const std::size_t s_stride = spitch >> 1; // uint16_t = 2 bytes
+    const std::size_t d_stride = dpitch >> 2; // uint32_t = 4 bytes
+
+    for (int y = 0; y < sh; ++y) {
+        const uint16_t* __restrict s_ptr = src + (y * s_stride);
+        uint32_t* __restrict d_ptr = dst + (y * d_stride);
+
+        for (int x = 0; x < sw; ++x) {
+            uint32_t p = s_ptr[x];
+
+            // Extraemos los componentes
+            // Nota: El Alpha se pone a 0xFF al final
+            uint32_t r = (p & 0xF800) << 8;  // Desplaza Rojo a su posición 8-bit
+            uint32_t g = (p & 0x07E0) << 5;  // Desplaza Verde
+            uint32_t b = (p & 0x001F) << 3;  // Desplaza Azul
+
+            // Replicación de bits rápida (para evitar pérdida de brillo)
+            // En lugar de (r << 3 | r >> 2), aproximamos para ganar velocidad:
+            r |= (r >> 5) & 0x00FF0000;
+            g |= (g >> 6) & 0x0000FF00;
+            b |= (b >> 5);
+
+            d_ptr[x] = 0xFF000000 | r | g | b;
+        }
+    }
+}*/
+
 /**
  * Convierte ARGB8888 a RGB565 de forma eficiente.
  * @param src      Puntero a los datos de origen (32 bits).
@@ -554,7 +583,7 @@ inline void convertRGB565ToARGB8888(const uint16_t* src, int sw, int sh, std::si
  * @param dst      Puntero al destino (16 bits).
  * @param dpitch   Pitch (bytes por línea) de la superficie destino (16 bits).
  */
-inline void convertARGB8888ToRGB565(const uint32_t* src, int sw, int sh, std::size_t spitch,
+/*inline void convertARGB8888ToRGB565(const uint32_t* src, int sw, int sh, std::size_t spitch,
                              uint16_t* dst, std::size_t dpitch) {
     
     const uint8_t* srcLine = reinterpret_cast<const uint8_t*>(src);
@@ -579,6 +608,27 @@ inline void convertARGB8888ToRGB565(const uint32_t* src, int sw, int sh, std::si
 
         srcLine += spitch;
         dstLine += dpitch;
+    }
+}*/
+
+inline void convertARGB8888ToRGB565(const uint32_t* __restrict src, int sw, int sh, std::size_t spitch,
+                                     uint16_t* __restrict dst, std::size_t dpitch) {
+    // Si los pitches coinciden con el ancho, usamos un bucle lineal directo
+    if (spitch == (std::size_t)sw * 4 && dpitch == (std::size_t)sw * 2) {
+        uint32_t total_pixels = sw * sh;
+        for (uint32_t i = 0; i < total_pixels; ++i) {
+            uint32_t p = src[i];
+            // Operación combinada: reduce ciclos de reloj en el procesador Xenon
+            dst[i] = ((p >> 8) & 0xF800) | ((p >> 5) & 0x07E0) | ((p >> 3) & 0x001F);
+        }
+    } else {
+        // Fallback para cuando hay padding en las líneas (menos común)
+        for (int y = 0; y < sh; ++y) {
+            for (int x = 0; x < sw; ++x) {
+                uint32_t p = src[x + (y * (spitch >> 2))];
+                dst[x + (y * (dpitch >> 1))] = ((p >> 8) & 0xF800) | ((p >> 5) & 0x07E0) | ((p >> 3) & 0x001F);
+            }
+        }
     }
 }
 

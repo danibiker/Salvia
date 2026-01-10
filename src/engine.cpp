@@ -48,7 +48,10 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 
 	initFont();
 	joystick = new Joystick();
-	sync = new Sync(cfgLoader->configMain.syncMode);
+
+	int syncMode;
+	cfgLoader->configMain[cfg::syncMode].getPropValue(syncMode);
+	sync = new Sync(syncMode);
 
 	return 0;
 }

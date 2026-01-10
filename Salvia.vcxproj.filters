@@ -104,6 +104,9 @@
     <ClCompile Include="src\unzip\zlib-1.2.11\zutil.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\io\cfgloader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\libretro.h">
@@ -206,6 +209,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\so\launcher.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\const\cfgconst.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

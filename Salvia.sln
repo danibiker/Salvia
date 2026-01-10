@@ -11,10 +11,14 @@ Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug_Gambatte|Win32 = Debug_Gambatte|Win32
 		Debug_Gambatte|Xbox 360 = Debug_Gambatte|Xbox 360
+		Debug_Nestopia|Win32 = Debug_Nestopia|Win32
+		Debug_Nestopia|Xbox 360 = Debug_Nestopia|Xbox 360
 		Debug|Win32 = Debug|Win32
 		Debug|Xbox 360 = Debug|Xbox 360
 		Release_Gambatte|Win32 = Release_Gambatte|Win32
 		Release_Gambatte|Xbox 360 = Release_Gambatte|Xbox 360
+		Release_Nestopia|Win32 = Release_Nestopia|Win32
+		Release_Nestopia|Xbox 360 = Release_Nestopia|Xbox 360
 		Release|Win32 = Release|Win32
 		Release|Xbox 360 = Release|Xbox 360
 	EndGlobalSection
@@ -24,6 +28,11 @@ Global
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_Gambatte|Xbox 360.ActiveCfg = Debug_Gambatte|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_Gambatte|Xbox 360.Build.0 = Debug_Gambatte|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_Gambatte|Xbox 360.Deploy.0 = Debug_Gambatte|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_Nestopia|Win32.ActiveCfg = Debug_Nestopia|Win32
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_Nestopia|Win32.Build.0 = Debug_Nestopia|Win32
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_Nestopia|Xbox 360.ActiveCfg = Debug_Nestopia|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_Nestopia|Xbox 360.Build.0 = Debug_Nestopia|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_Nestopia|Xbox 360.Deploy.0 = Debug_Nestopia|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug|Win32.ActiveCfg = Debug|Win32
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug|Win32.Build.0 = Debug|Win32
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug|Xbox 360.ActiveCfg = Debug|Xbox 360
@@ -33,6 +42,11 @@ Global
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_Gambatte|Xbox 360.ActiveCfg = Release_Gambatte|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_Gambatte|Xbox 360.Build.0 = Release_Gambatte|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_Gambatte|Xbox 360.Deploy.0 = Release_Gambatte|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_Nestopia|Win32.ActiveCfg = Release_Nestopia|Win32
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_Nestopia|Win32.Build.0 = Release_Nestopia|Win32
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_Nestopia|Xbox 360.ActiveCfg = Release_Nestopia|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_Nestopia|Xbox 360.Build.0 = Release_Nestopia|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_Nestopia|Xbox 360.Deploy.0 = Release_Nestopia|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release|Win32.ActiveCfg = Release|Win32
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release|Win32.Build.0 = Release|Win32
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release|Xbox 360.ActiveCfg = Release|Xbox 360
@@ -41,6 +55,10 @@ Global
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_Gambatte|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_Gambatte|Xbox 360.Build.0 = Debug|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_Gambatte|Xbox 360.Deploy.0 = Debug|Xbox 360
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_Nestopia|Win32.ActiveCfg = Debug|Xbox 360
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_Nestopia|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_Nestopia|Xbox 360.Build.0 = Debug|Xbox 360
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_Nestopia|Xbox 360.Deploy.0 = Debug|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug|Win32.ActiveCfg = Debug|Win32
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug|Xbox 360.Build.0 = Debug|Xbox 360
@@ -49,6 +67,10 @@ Global
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Gambatte|Xbox 360.ActiveCfg = Release_Gambatte|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Gambatte|Xbox 360.Build.0 = Release_Gambatte|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Gambatte|Xbox 360.Deploy.0 = Release_Gambatte|Xbox 360
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Nestopia|Win32.ActiveCfg = Release_LTCG|Xbox 360
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Nestopia|Xbox 360.ActiveCfg = Release_LTCG|Xbox 360
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Nestopia|Xbox 360.Build.0 = Release_LTCG|Xbox 360
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Nestopia|Xbox 360.Deploy.0 = Release_LTCG|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release|Win32.ActiveCfg = Release|Win32
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release|Xbox 360.ActiveCfg = Release|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release|Xbox 360.Build.0 = Release|Xbox 360
@@ -56,6 +78,10 @@ Global
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_Gambatte|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_Gambatte|Xbox 360.Build.0 = Debug|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_Gambatte|Xbox 360.Deploy.0 = Debug|Xbox 360
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_Nestopia|Win32.ActiveCfg = Debug|Xbox 360
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_Nestopia|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_Nestopia|Xbox 360.Build.0 = Debug|Xbox 360
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_Nestopia|Xbox 360.Deploy.0 = Debug|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug|Win32.ActiveCfg = Debug|Win32
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug|Xbox 360.Build.0 = Debug|Xbox 360
@@ -64,6 +90,10 @@ Global
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Gambatte|Xbox 360.ActiveCfg = Release_Gambatte|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Gambatte|Xbox 360.Build.0 = Release_Gambatte|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Gambatte|Xbox 360.Deploy.0 = Release_Gambatte|Xbox 360
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Nestopia|Win32.ActiveCfg = Release_LTCG|Xbox 360
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Nestopia|Xbox 360.ActiveCfg = Release_LTCG|Xbox 360
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Nestopia|Xbox 360.Build.0 = Release_LTCG|Xbox 360
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Nestopia|Xbox 360.Deploy.0 = Release_LTCG|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release|Win32.ActiveCfg = Release|Win32
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release|Xbox 360.ActiveCfg = Release|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release|Xbox 360.Build.0 = Release|Xbox 360
