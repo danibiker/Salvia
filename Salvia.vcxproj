@@ -62,10 +62,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Xbox 360'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Xbox 360'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Gambatte|Xbox 360'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -122,14 +124,14 @@
     <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
     <IntDir>$(Configuration)\$(Platform)\</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
-    <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_NESTOPIA)$(ImageExt)</ImageXexOutput>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
+    <OutDir>$(ProjectDir)Distro360\</OutDir>
     <IntDir>$(Configuration)\$(Platform)\</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
-    <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_NESTOPIA)$(ImageExt)</ImageXexOutput>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Gambatte|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -140,14 +142,14 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
+    <OutDir>$(ProjectDir)Distro360\</OutDir>
     <IntDir>$(Configuration)\$(Platform)\</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_GAMBATTE)$(ImageExt)</ImageXexOutput>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(ProjectDir)$(Configuration)\$(Platform)\</OutDir>
+    <OutDir>$(ProjectDir)Distro360\</OutDir>
     <IntDir>$(Configuration)\$(Platform)\</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
@@ -234,16 +236,18 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>true</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>DEBUG;_XBOX;EMU_LIB_NAME="$(EMU_LIB_NAME)";LIBRETRO</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;_XBOX;EMU_LIB_NAME="$(EMU_LIB_NESTOPIA)";LIBRETRO</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>libs\libSDLx360\SDL\include;libs\SDL_ttf360;$(ProjectDir)\src;$(ProjectDir)libs\SDL_image-1.2.12;$(ProjectDir)\src\unzip;$(ProjectDir)\src\unzip\minizip-1.2.5;</AdditionalIncludeDirectories>
       <WholeProgramOptimization>false</WholeProgramOptimization>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
-      <AdditionalDependencies>xapilibd.lib;d3d9d.lib;d3dx9.lib;xgraphicsd.lib;xboxkrnl.lib;xnet.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;Genesis-Plus-GX.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;../../project/Genesis-Plus-GX/Debug/Xbox 360;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release</AdditionalLibraryDirectories>
+      <AdditionalDependencies>xapilibd.lib;d3d9d.lib;d3dx9.lib;xgraphicsd.lib;xboxkrnl.lib;xnet.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;nestopia.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release;..\..\project\nestopia\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -260,26 +264,30 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <Optimization>Disabled</Optimization>
-      <ExceptionHandling>Sync</ExceptionHandling>
-      <MinimalRebuild>false</MinimalRebuild>
-      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <Optimization>Full</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>DEBUG;_XBOX;EMU_LIB_NAME="$(EMU_LIB_NAME)";LIBRETRO</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_XBOX;EMU_LIB_NAME="$(EMU_LIB_NESTOPIA)";LIBRETRO</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>libs\libSDLx360\SDL\include;libs\SDL_ttf360;$(ProjectDir)\src;$(ProjectDir)libs\SDL_image-1.2.12;$(ProjectDir)\src\unzip;$(ProjectDir)\src\unzip\minizip-1.2.5;</AdditionalIncludeDirectories>
-      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
     </ClCompile>
     <Link>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
-      <AdditionalDependencies>xapilibd.lib;d3d9d.lib;d3dx9.lib;xgraphicsd.lib;xboxkrnl.lib;xnet.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;Genesis-Plus-GX.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;../../project/Genesis-Plus-GX/Debug/Xbox 360;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release</AdditionalLibraryDirectories>
+      <AdditionalDependencies>xapilib.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xboxkrnl.lib;xnet.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;nestopia.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release;..\..\project\nestopia\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
-      <OptimizeReferences>true</OptimizeReferences>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <AdditionalOptions>/NODEFAULTLIB:XAPILIB  /NODEFAULTLIB:LIBCMT %(AdditionalOptions)</AdditionalOptions>
+      <OptimizeReferences>
+      </OptimizeReferences>
+      <EnableCOMDATFolding>
+      </EnableCOMDATFolding>
     </Link>
     <Deploy>
       <DeploymentFiles>$(RemoteRoot)=$(ImagePath)</DeploymentFiles>
@@ -332,6 +340,7 @@
       <AdditionalIncludeDirectories>libs\libSDLx360\SDL\include;libs\SDL_ttf360;$(ProjectDir)\src;$(ProjectDir)libs\SDL_image-1.2.12;$(ProjectDir)\src\unzip;$(ProjectDir)\src\unzip\minizip-1.2.5;</AdditionalIncludeDirectories>
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -363,6 +372,8 @@
       <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -410,7 +421,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\nestopia\Debug</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\nestopia\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>SDLmain.lib;SDL.lib;SDL_ttf.lib;SDL_image.lib;nestopia.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -437,7 +448,7 @@
       <ExceptionHandling>Sync</ExceptionHandling>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\nestopia\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\nestopia\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>SDLmain.lib;SDL.lib;SDL_ttf.lib;SDL_image.lib;Nestopia.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib; LIBCPMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -471,7 +482,7 @@
     <ClCompile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN;DEBUG;_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN;_CRT_SECURE_NO_WARNINGS;LIBRETRO</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <CompileAs>CompileAsCpp</CompileAs>
       <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include</AdditionalIncludeDirectories>
@@ -491,7 +502,7 @@
     <ClCompile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Full</Optimization>
-      <PreprocessorDefinitions>WIN;_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN;_CRT_SECURE_NO_WARNINGS;LIBRETRO</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <CompileAs>CompileAsCpp</CompileAs>
       <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include</AdditionalIncludeDirectories>
@@ -506,7 +517,7 @@
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
     </Link>
   </ItemDefinitionGroup>

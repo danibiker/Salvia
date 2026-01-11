@@ -99,12 +99,16 @@ static bool retro_environment(unsigned cmd, void *data) {
             enum retro_pixel_format *fmtAsked = (enum retro_pixel_format*)data;
 			std::string msgformat = "Solicitando pixelformat: " + Constant::intToString(*fmtAsked) + "\n";
 			LOG_DEBUG("Solicitando pixelformat %d\n", *fmtAsked);
-
-			// Forzamos a que sea RGB565 (16 bits)
-            // Esto le dice a Nestopia: "Solo acepto 16 bits, configúrate así"
-            *fmtAsked = RETRO_PIXEL_FORMAT_RGB565;
+			
 			fmt = *fmtAsked;
-            
+
+			if (*fmtAsked == RETRO_PIXEL_FORMAT_XRGB8888){
+				// Forzamos a que sea RGB565 (16 bits)
+				// Esto le dice a Nestopia: "Solo acepto 16 bits, configúrate así"
+				*fmtAsked = RETRO_PIXEL_FORMAT_RGB565;
+			} else if (*fmtAsked != RETRO_PIXEL_FORMAT_RGB565){
+				return false;
+			}
             // Retornamos true para confirmar que aceptamos el formato
             return true;
         }
@@ -130,7 +134,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 		}
 
 		case RETRO_ENVIRONMENT_SET_GEOMETRY:{
-			const struct retro_game_geometry *geom = (const struct retro_game_geometry*)data;
+			/*const struct retro_game_geometry *geom = (const struct retro_game_geometry*)data;
 			// 1. Calcular el nuevo tamaño necesario (asumiendo conversión a 16 bits)
 			std::size_t needed = geom->max_width * geom->max_height * sizeof(uint16_t);
 
@@ -150,7 +154,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 				// Limpiar el buffer una vez para evitar basura visual
 				if (conversion_buffer) memset(conversion_buffer, 0, needed);
 				LOG_DEBUG("Buffer de conversión redimensionado en SET_GEOMETRY\n");
-			}
+			}*/
 			return true;
 		}
 		
@@ -188,7 +192,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return true;
 		}
 		default: {
-			LOG_DEBUG("Comando no tratado: %s\n", Constant::TipoToStr(cmd));
+			//LOG_DEBUG("Comando no tratado: %s\n", Constant::TipoToStr(cmd).c_str());
 			// Para comandos desconocidos como 52 o 65587
 			return false; 
 		}
@@ -205,7 +209,16 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 
 	//Hacemos la comprobacion del pitch >= width * 4, por si hemos solicitado el RETRO_PIXEL_FORMAT_RGB565
 	//pero el core no lo acepta
-    if ((fmt == RETRO_PIXEL_FORMAT_XRGB8888 || pitch >= width * 4) && conversion_buffer) {
+    //if ((fmt == RETRO_PIXEL_FORMAT_XRGB8888 || pitch >= width * 4) && conversion_buffer) {
+	//if (fmt == RETRO_PIXEL_FORMAT_XRGB8888 || pitch >= width * 4) {
+	if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
+		// 2. Gestionar buffer de conversión de forma eficiente
+        std::size_t needed = width * height * sizeof(uint16_t);
+        if (!conversion_buffer || buffer_size < needed) {
+            conversion_buffer = (uint16_t*)realloc(conversion_buffer, needed);
+            buffer_size = needed;
+        }
+		
 		convertARGB8888ToRGB565((uint32_t*)data, width, height, pitch, conversion_buffer, width * 2);
 		final_src = (void*)conversion_buffer;
 		pitch = width * 2;
@@ -316,7 +329,7 @@ void update_input() {
                 case SDL_BUTTON_B: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_B] = pressed; break;
                 case SDL_BUTTON_X: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_X] = pressed; break;
                 case SDL_BUTTON_Y: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_Y] = pressed; break;
-                case SDL_BUTTON_START:  gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_START]  = pressed; break;
+                case SDL_BUTTON_START: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_START]  = pressed; break;
                 case SDL_BUTTON_SELECT: 
 					if (pressed && !gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_SELECT]){
 						gameMenu->joystick->lastSelectPress = SDL_GetTicks();
@@ -463,6 +476,9 @@ std::string initPathAndLog(char** argv){
 
 	Constant::setExecMethod(launch_spawn);
 
+	LOG_INFO("Directorio de app: %s\n", Constant::getAppDir().c_str());
+	LOG_INFO("Ejecutable: %s\n", Constant::getAppExecutable().c_str());
+
 	return Constant::getAppDir();
 }
 
@@ -532,6 +548,7 @@ unzippedFileInfo unzipOrLoadFile(std::string rompath, void*& buffer){
 				if (emu->rom_extension.find(ext) != std::string::npos){
 					ret.romsize = fileprop.fileSize;
 					ret.rutaEscritura = fileprop.dir + Constant::getFileSep() + fileprop.filename;
+					ret.errorCode = 0;
 					break;
 				}
 			}
@@ -558,6 +575,7 @@ unzippedFileInfo unzipOrLoadFile(std::string rompath, void*& buffer){
 		
 		ret.romsize = size;
 		ret.rutaEscritura = rompath;
+		ret.errorCode = 0;
 	}
 	return ret;
 }
@@ -580,6 +598,11 @@ int launchGame(std::string rompath){
 	void* buffer = NULL;
 	unzippedFileInfo unzipped = unzipOrLoadFile(rompath, buffer);
 	// Carga manual mínima para que el core tenga datos que procesar
+
+	if (unzipped.errorCode != 0){
+		LOG_ERROR("No se ha podido abrir el fichero o no se puede descomprimir: %s\n", rompath.c_str());
+		return 0;
+	}
 		
 	struct retro_game_info game = { unzipped.rutaEscritura.c_str(), buffer, unzipped.romsize, NULL };
 	bool success = retro_load_game(&game);

@@ -840,9 +840,9 @@ void GameMenu::processHotkeys(){
 
 				#ifdef _XBOX
 					//XBOX CPU can't handle this algorithm implementation at 60fps
-					cannotScale2x = cannotScale2x || current_scaler_mode == SCALE_XBRZ_2X;
-					cannotScale3x = cannotScale3x || current_scaler_mode == SCALE_XBRZ_3X;
-					cannotScale4x = cannotScale4x || current_scaler_mode == SCALE_XBRZ_4X;
+					cannotScale2x = cannotScale2x || *current_scaler_mode == SCALE_XBRZ_2X;
+					cannotScale3x = cannotScale3x || *current_scaler_mode == SCALE_XBRZ_3X || *current_scaler_mode == SCALE_XBRZ_3X_TH;
+					cannotScale4x = cannotScale4x || *current_scaler_mode == SCALE_XBRZ_4X;
 				#endif
 
 				if (cannotScale2x || cannotScale3x || cannotScale4x || *current_scaler_mode == NO_VIDEO){

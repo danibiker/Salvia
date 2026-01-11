@@ -307,6 +307,7 @@ unzippedFileInfo UnzipTool::extraerFicheroToMem(unzFile *myZip, std::string vali
 	if (ret >= 0 && (nfiles == 1 || validExtensions.find(extension) != std::string::npos)){
 		retorno.nFilesInZip = nfiles;
 		retorno.rutaEscritura = filename;
+		retorno.errorCode = 0;
 		return retorno;
 	} else {
 		free(cartridge);
