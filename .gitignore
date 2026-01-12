@@ -55,5 +55,8 @@ Debug_gambatte/**
 Release_gambatte/**
 Debug_Nestopia/**
 Release_Nestopia/**
+Debug_Snes9x/**
+Release_Snes9x/**
+DistroWin/**
 Distro360/**
 *.log

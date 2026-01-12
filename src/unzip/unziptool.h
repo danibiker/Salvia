@@ -231,24 +231,24 @@ unzippedFileInfo UnzipTool::descomprimirZipToMem(std::string rutaZip, std::strin
     retorno.nFilesWritten = 0;
 
     if (myZip == NULL){
-        cerr << "UnzipTool::descomprimirZip. Unable to open zip file: " + string(rutaZip) << endl;
+		LOG_ERROR("UnzipTool::descomprimirZip. Unable to open zip file: %s\n", rutaZip.c_str());
         return retorno;
     }
     else{
-        cout << "UnzipTool::descomprimirZip. File found: " + string(rutaZip) << endl;
+		LOG_DEBUG("UnzipTool::descomprimirZip. File found: %s\n", rutaZip.c_str());
     }
 
     ret = unzGetGlobalInfo(myZip, &zip_global_info);
     if (ret != UNZ_OK){
-        cerr << "unzGetGlobalInfo() call failed." << endl;
+		LOG_ERROR("unzGetGlobalInfo() call failed.\n");
         return retorno;
     } else {
-        cout << "Found files in archive." + zip_global_info.number_entry <<endl;
+		LOG_DEBUG("Found files in archive: %d\n", zip_global_info.number_entry);
     }
 
     ret = unzGoToFirstFile(myZip);
     if (ret != UNZ_OK){
-        cerr << "unzGoToFirstFile() call failed." << endl;
+		LOG_ERROR("unzGoToFirstFile() call failed.\n");
         return retorno;
     }
 
@@ -280,20 +280,20 @@ unzippedFileInfo UnzipTool::extraerFicheroToMem(unzFile *myZip, std::string vali
 	ret = unzGetCurrentFileInfo(*myZip, &zip_file_info, filename, MAX_FILENAME, NULL, 0, NULL, 0);
 
 	if (ret == UNZ_OK){
-        cout << "Uncompressed size is in bytes" + zip_file_info.uncompressed_size <<endl;
+		LOG_DEBUG("Uncompressed size is in bytes: %d\n", zip_file_info.uncompressed_size);
         retorno.romsize = zip_file_info.uncompressed_size;
     }
 
     ret = unzOpenCurrentFile(*myZip);
     if (ret != UNZ_OK){
-        cerr << "Unable to open file from zip archive." <<endl;
+		LOG_ERROR("Unable to open file from zip archive.\n");
         retorno.romsize = 0;
 		return retorno;
     }
 
 	cartridge = malloc(retorno.romsize); 
     if (cartridge == NULL){
-        cerr << "Unable allocate memory for cartridge." <<endl;
+		LOG_ERROR("Unable allocate memory for cartridge.\n");
         retorno.romsize = 0;
 		return retorno;
     }

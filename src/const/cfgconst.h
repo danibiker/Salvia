@@ -6,7 +6,10 @@ namespace cfg {
 	typedef enum {CFG_TYPE_INT = 0, CFG_TYPE_FLOAT, CFG_TYPE_BOOL, CFG_TYPE_STR} CFG_PROPS_TYPES;
 
 	typedef enum {emulators = 0, debug, resolution_width, resolution_height, path_prefix, alsaReset, background_music, mp3_file, aspectRatio, 
-			scaleMode, syncMode, soundMode, libretrosystem, region, nospritelimit, MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
+			scaleMode, syncMode, soundMode, libretrosystem, libretro_save, 
+			snes_fx, //Specific to snes. Move to the emulators section
+			nospritelimit, region, //Specific to nes. Move to the emulators section
+			MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
 	
 	/*static const char *MAIN_CFG_PROPS_NAMES[] = {"emulators", "debug", "resolution_width", "resolution_height", "path_prefix", "alsaReset", "background_music", "mp3_file", "aspectRatio"
 			,"scaleMode", "syncMode", "soundMode"};

@@ -16,6 +16,7 @@
 #include "uiobjects/tilemap.h"
 #include "unzip/unziptool.h"
 #include "const/menuconst.h"
+#include <map>
 
 GameMenu *gameMenu;
 Logger *logger;
@@ -44,6 +45,21 @@ extern "C" {
 	void retro_unload_game(void);
 }
 
+struct retro_core_variable {
+   const char *key;    // Nombre técnico: "nestopia_region"
+   const char *value;  // Nombre visual y opciones: "Region; Auto|NTSC|PAL"
+};
+
+void S9xTextMode( void)
+{
+}
+
+void S9xGraphicsMode ()
+{
+}
+
+
+std::map<std::string, std::string> defaultCoreValues;
 const std::string Constant::MAME_SYS_ID = "75";
 const std::string Constant::WHITESPACE = " \n\r\t";
 
@@ -157,7 +173,59 @@ static bool retro_environment(unsigned cmd, void *data) {
 			}*/
 			return true;
 		}
-		
+		case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: {
+			static std::string dir;
+			gameMenu->getCfgLoader()->configMain[cfg::libretro_save].getPropValue(dir);
+			*(const char**)data = dir.c_str();
+			return true;
+		}
+		case RETRO_ENVIRONMENT_SET_VARIABLES:
+		{
+			const struct retro_core_variable *vars = (const struct retro_core_variable*)data;
+			while (vars->key) 
+			{
+				std::string rawValue = vars->value;
+				std::size_t semiPos = rawValue.find(';');
+        
+				if (semiPos != std::string::npos) 
+				{
+					// 1. Extraemos todo lo que hay después del ';'
+					std::string optionsPart = rawValue.substr(semiPos + 1);
+            
+					// 2. El valor por defecto es lo que hay hasta el primer '|'
+					std::size_t pipePos = optionsPart.find('|');
+					std::string defaultValue;
+            
+					if (pipePos != std::string::npos)
+						defaultValue = optionsPart.substr(0, pipePos);
+					else
+						defaultValue = optionsPart; // Solo había una opción
+
+					// 3. Ahora puedes guardar defaultValue en tu configMain
+					// para que sea el valor inicial si el usuario no tiene uno guardado.
+					LOG_INFO("Opcion: %s, Por defecto: %s, rawValue: %s\n", vars->key, defaultValue.c_str(), rawValue.c_str());
+					defaultCoreValues.insert(std::make_pair(vars->key, defaultValue));
+				}
+				vars++;
+			}
+			return true;
+		}
+
+		case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
+		{
+			const struct retro_subsystem_info *info = (const struct retro_subsystem_info*)data;
+    
+			// 1. Limpiar lista de subsistemas previa
+			//gameMenu->clearSubsystems();
+
+			// 2. Iterar y guardar
+			while (info->ident) {
+				//gameMenu->registerSubsystem(info);
+				LOG_DEBUG("variable - %s:, %s, %d, %d, %s, %s \n", info->desc, info->ident, info->id, info->num_roms, info->roms->valid_extensions, info->roms->desc);
+				info++;
+			}
+			return true;
+		}
 		case RETRO_ENVIRONMENT_GET_VARIABLE:{
 			struct retro_variable *var = (struct retro_variable*)data;
 			/**TODO: Cambiar para que se ajuste por sistema y no en el configmain*/
@@ -174,6 +242,18 @@ static bool retro_environment(unsigned cmd, void *data) {
 				gameMenu->getCfgLoader()->configMain[cfg::nospritelimit].getPropValue(nospritelimit);
 				var->value = nospritelimit.c_str(); 
 				return true;
+			} else if (strcmp(var->key, "snes9x_overclock_superfx") == 0){
+				static std::string superfx;
+				gameMenu->getCfgLoader()->configMain[cfg::snes_fx].getPropValue(superfx);
+				var->value = superfx.c_str(); 
+				return true;
+			} else {
+				if (defaultCoreValues.find(var->key) != defaultCoreValues.end()) {
+					var->value = defaultCoreValues[var->key].c_str();
+					LOG_INFO("Asignando %s a %s\n", var->key, var->value);
+				} else {
+					LOG_INFO("Preguntando por: %s sin valor\n", var->key);
+				}
 			}
 			return false;
 		}
@@ -192,7 +272,9 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return true;
 		}
 		default: {
-			//LOG_DEBUG("Comando no tratado: %s\n", Constant::TipoToStr(cmd).c_str());
+			if (cmd < 65583){
+				LOG_DEBUG("Comando no tratado: %s\n", Constant::TipoToStr(cmd).c_str());
+			}
 			// Para comandos desconocidos como 52 o 65587
 			return false; 
 		}
@@ -241,39 +323,6 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
     
     //Escalamos la imagen con el escalador que hay almacenado en el puntero a funcion
     gameMenu->current_scaler(scaleProps);
-}
-
-//Audio Callbacks for Libretro
-// Callback para una sola muestra (menos eficiente, pero requerido)
-void retro_audio_sample(int16_t left, int16_t right) {
-	// Creamos una referencia local al buffer
-    // Esto evita que la CPU haga: gameMenu -> buscar g_audioBuffer -> llamar Write
-    AudioBuffer& audio = gameMenu->g_audioBuffer;
-    const int mode = *gameMenu->current_sync;
-
-    if (mode == SYNC_NONE) return;
-
-    int16_t samples[2] = { left, right };
-    audio.Write(samples, 2);
-}
-
-// Callback para ráfagas de muestras (el que usan casi todos los cores)
-std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_t frames) {
-
-	AudioBuffer& audio = gameMenu->g_audioBuffer;
-    const int mode = *gameMenu->current_sync;
-
-	if (mode == SYNC_NONE) return 0;
-	
-	// frames es el número de pares (izq, der), multiplicamos por 2 para el total
-	// Al usar WriteBlocking, retro_run() no terminará hasta que haya
-    // sitio en el buffer, sincronizando así la ejecución al audio real.
-	if (mode == SYNC_TO_AUDIO){
-		audio.WriteBlocking(data, frames * 2);
-	} else {
-		audio.Write(data, frames * 2);
-	}
-    return frames;
 }
 
 void savestate(){
@@ -397,11 +446,43 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
     return gameMenu->joystick->g_joy_state[port][id] ? 1 : 0;
 }
 
+//Audio Callbacks for Libretro
+// Callback para una sola muestra (menos eficiente, pero requerido)
+void retro_audio_sample(int16_t left, int16_t right) {
+	// Creamos una referencia local al buffer
+    // Esto evita que la CPU haga: gameMenu -> buscar g_audioBuffer -> llamar Write
+    AudioBuffer& audio = gameMenu->g_audioBuffer;
+    const int mode = *gameMenu->current_sync;
+
+    if (mode == SYNC_NONE) return;
+
+    int16_t samples[2] = { left, right };
+    audio.Write(samples, 2);
+}
+
+// Callback para ráfagas de muestras (el que usan casi todos los cores)
+std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_t frames) {
+	
+	AudioBuffer& audio = gameMenu->g_audioBuffer;
+    const int mode = *gameMenu->current_sync;
+
+	if (mode == SYNC_NONE) return 0;
+	
+	// frames es el número de pares (izq, der), multiplicamos por 2 para el total
+	// Al usar WriteBlocking, retro_run() no terminará hasta que haya
+    // sitio en el buffer, sincronizando así la ejecución al audio real.
+	if (mode == SYNC_TO_AUDIO){
+		audio.WriteBlocking(data, frames * 2);
+	} else {
+		audio.Write(data, frames * 2);
+	}
+    return frames;
+}
+
 void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
     // 1. Limpiar el buffer de salida de SDL (Opcional pero recomendado en SDL 1.2)
     // Esto garantiza que si el emulador se pausa o va lento, haya silencio en lugar de ruido.
-    memset(stream, 0, len);
-
+    //memset(stream, 0, len);
     // 2. Convertir a puntero de 16 bits para trabajar con muestras
     int16_t* samples = (int16_t*)stream;
     
@@ -412,6 +493,23 @@ void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
     // 3. Leer de tu buffer circular
     gameMenu->g_audioBuffer.Read(samples, count);
 }
+
+/*void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
+    memset(stream, 0, len); // Silencio por defecto
+    int16_t* samples = (int16_t*)stream;
+    std::size_t count = len / sizeof(int16_t);
+
+    // Comprobamos cuánto hay realmente
+    std::size_t disponible = gameMenu->g_audioBuffer.get_readable_samples();
+    
+    if (disponible >= count) {
+        gameMenu->g_audioBuffer.Read(samples, count);
+    } else {
+        // LOG: "Audio Underflow: %d de %d", disponible, count
+        // Si entra aquí mucho, el emulador es LENTO o el buffer es muy pequeño
+        gameMenu->g_audioBuffer.Read(samples, disponible);
+    }
+}*/
 
 /**
 *
@@ -434,11 +532,19 @@ void init_sdl_audio(double sample_rate) {
     wanted.freq = (int)sample_rate;
     wanted.format = AUDIO_S16SYS;	// 16 bits nativos
     wanted.channels = 2;			// Estéreo
+	// --- AJUSTE PARA XBOX 360 ---
+    // Si escuchas chasquidos (crackling), aumenta este valor.
+    // 1024 = ~23ms (Riesgo de cortes en 360)
+    // 2048 = ~46ms (Recomendado para estabilidad en emulación)
+    // 4096 = ~92ms (Seguro, pero con lag perceptible)
 	wanted.samples = AudioBuffer::AUDIO_BUFFER_SIZE / 4; // Tamaño del bloque (latencia)
+
+	//wanted.samples = 1024;
     wanted.callback = sdl_audio_callback;
 
     if (SDL_OpenAudio(&wanted, NULL) < 0) {
-        LOG_ERROR("Error SDL Audio: %s\n", SDL_GetError());
+		string error = "Error SDL Audio: " + string(SDL_GetError());
+        LOG_ERROR("%s\n", error.c_str());
         return;
     }
     SDL_PauseAudio(0); // Inicia el audio
@@ -626,7 +732,7 @@ int launchGame(std::string rompath){
 	// Inicializar SDL Audio con la frecuencia del core
 	init_sdl_audio(av_info.timing.sample_rate);
 	//Iniciando el contador de fps
-	gameMenu->sync->init_fps_counter(av_info.timing.fps);	
+	gameMenu->sync->init_fps_counter(av_info.timing.fps);
 	gameMenu->romLoaded = true;
 	gameMenu->setEmuStatus(EMU_STARTED);
 	return 1;

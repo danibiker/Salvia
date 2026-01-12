@@ -19,4 +19,5 @@ public:
     void WriteBlocking(const int16_t* samples, std::size_t count);
     void Read(int16_t* stream, std::size_t count);
 	std::size_t get_free_space() const;
+	std::size_t get_readable_samples() const;
 };

@@ -61,3 +61,14 @@ void AudioBuffer::Read(int16_t* stream, std::size_t count) {
         }
     }
 }
+
+std::size_t AudioBuffer::get_readable_samples() const {
+    std::size_t h = head;
+    std::size_t t = tail;
+
+    if (h >= t) {
+        return h - t;
+    } else {
+        return capacity - t + h;
+    }
+}
