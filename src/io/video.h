@@ -6,6 +6,12 @@
 #include "io/xbrz/xbrz.h"
 #include <stdint.h>
 
+#if defined(_XBOX)
+	#include <ppcintrinsics.h>
+	#include <xtl.h> 
+#endif
+
+
 struct t_scale_props{
 	// 1. Punteros (4 u 8 bytes dependiendo de la arquitectura)
     uint16_t* src; 
@@ -80,6 +86,31 @@ inline void fast_video_blit(const t_scale_props& props) {
         // Destino: puntero centrado + salto de línea (en píxeles)
         // Origen: puntero base + salto de línea (en píxeles)
         memcpy(dst_ptr + (y * dst_stride), props.src + (y * src_stride), bytes_per_line);
+    }
+}
+
+inline void fast_video_blit_xbox(const t_scale_props& props) {
+    int src_stride_px = 0, dst_stride_px = 0;
+    uint16_t* dst_ptr = props.dst; 
+
+    // 1. Calculamos el centrado y obtenemos los strides
+    check_center(props.src, dst_ptr, props.sw, props.sh, props.spitch, props.dw, props.dh, props.dpitch, 1, src_stride_px, dst_stride_px);
+
+    const std::size_t bytes_per_line = props.sw * sizeof(uint16_t);
+    
+    // Punteros de trabajo para evitar multiplicaciones en el bucle
+    const uint16_t* s_ptr = props.src;
+    uint16_t* d_ptr = dst_ptr;
+
+    // 2. Bucle de copiado usando la API nativa de Xbox 360
+    for (int y = 0; y < props.sh; y++) {
+        // XMemCpy es una función intrínseca del XDK que usa registros de 128 bits (VMX)
+        // Es ideal para copiar líneas de píxeles rápidamente.
+        XMemCpy(d_ptr, s_ptr, bytes_per_line);
+
+        // Avanzamos los punteros sumando el stride (salto de línea)
+        s_ptr += src_stride_px;
+        d_ptr += dst_stride_px;
     }
 }
 /**
@@ -171,39 +202,41 @@ inline void scale_software_fixed_point_xbox_final(const t_scale_props& props) {
     const int s8 = s1 * 8;
 
     for (int y = 0; y < out_h; y++) {
-        int src_y = (y * inv_scale_y_fp) >> 16;
-        if (src_y >= props.sh) src_y = props.sh - 1;
+		int src_y = (y * inv_scale_y_fp) >> 16;
+		if (src_y >= props.sh) src_y = props.sh - 1;
 
-        const uint16_t* __restrict line_src = props.src + (src_y * src_stride);
-        uint16_t* __restrict line_dst = dst_ptr + (y * dst_stride);
+		const uint16_t* __restrict line_src = props.src + (src_y * src_stride);
+		uint16_t* __restrict line_dst = dst_ptr + (y * dst_stride);
+    
+		// Sugerencia para la caché de la Xbox 360
+		__dcbt(0, line_src); 
 
-        int curr_x_fp = 0;
-        int x = 0;
+		int curr_x_fp = 0;
+		int x = 0;
 
-        // BUCLE GANADOR (Máximos FPS en Xenon)
-        // Usamos variables locales para que el compilador use los registros GPR (General Purpose Registers)
-        for (; x <= safe_out_w - 8; x += 8) {
-            // La CPU Xenon puede lanzar estas lecturas casi en paralelo si no hay IFs
-            uint16_t p0 = line_src[curr_x_fp >> 16];
-            uint16_t p1 = line_src[(curr_x_fp + s1) >> 16];
-            uint16_t p2 = line_src[(curr_x_fp + s2) >> 16];
-            uint16_t p3 = line_src[(curr_x_fp + s3) >> 16];
-            uint16_t p4 = line_src[(curr_x_fp + s4) >> 16];
-            uint16_t p5 = line_src[(curr_x_fp + s5) >> 16];
-            uint16_t p6 = line_src[(curr_x_fp + s6) >> 16];
-            uint16_t p7 = line_src[(curr_x_fp + s7) >> 16];
+		for (; x <= safe_out_w - 8; x += 8) {
+			// Pre-calculamos los índices para romper la dependencia de la suma
+			int i0 = curr_x_fp >> 16;
+			int i1 = (curr_x_fp + s1) >> 16;
+			int i2 = (curr_x_fp + s2) >> 16;
+			int i3 = (curr_x_fp + s3) >> 16;
+			int i4 = (curr_x_fp + s4) >> 16;
+			int i5 = (curr_x_fp + s5) >> 16;
+			int i6 = (curr_x_fp + s6) >> 16;
+			int i7 = (curr_x_fp + s7) >> 16;
 
-            line_dst[x + 0] = p0;
-            line_dst[x + 1] = p1;
-            line_dst[x + 2] = p2;
-            line_dst[x + 3] = p3;
-            line_dst[x + 4] = p4;
-            line_dst[x + 5] = p5;
-            line_dst[x + 6] = p6;
-            line_dst[x + 7] = p7;
+			// Las lecturas ahora pueden solaparse en el pipeline
+			line_dst[x + 0] = line_src[i0];
+			line_dst[x + 1] = line_src[i1];
+			line_dst[x + 2] = line_src[i2];
+			line_dst[x + 3] = line_src[i3];
+			line_dst[x + 4] = line_src[i4];
+			line_dst[x + 5] = line_src[i5];
+			line_dst[x + 6] = line_src[i6];
+			line_dst[x + 7] = line_src[i7];
 
-            curr_x_fp += s8;
-        }
+			curr_x_fp += s8;
+		}
 
         // Cleanup final
         for (; x < out_w; x++) {

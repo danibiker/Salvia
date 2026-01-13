@@ -892,7 +892,11 @@ void GameMenu::selectScalerMode(int mode){
 			break;
 
 		case SCALE1X:
-			current_scaler = fast_video_blit;
+			#ifdef WIN
+				current_scaler = fast_video_blit;
+			#elif defined(_XBOX)
+				current_scaler = fast_video_blit_xbox;
+			#endif
 			break;
 
 		case SCALE2X:

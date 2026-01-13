@@ -100,8 +100,8 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
 static bool retro_environment(unsigned cmd, void *data) {
     switch (cmd) {
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
-            struct retro_log_callback *log = (struct retro_log_callback*)data;
-            log->log = retro_log_printf;
+			struct retro_log_callback *log = (struct retro_log_callback*)data;
+			log->log = retro_log_printf;
             return true;
         }
 
@@ -196,7 +196,9 @@ static bool retro_environment(unsigned cmd, void *data) {
 					std::size_t pipePos = optionsPart.find('|');
 					std::string defaultValue;
             
-					if (pipePos != std::string::npos)
+					if (strcmp(vars->key, "vbanext_frameskip") == 0){
+						defaultValue = "1";
+					} else if (pipePos != std::string::npos)
 						defaultValue = optionsPart.substr(0, pipePos);
 					else
 						defaultValue = optionsPart; // Solo había una opción
@@ -647,14 +649,14 @@ unzippedFileInfo unzipOrLoadFile(std::string rompath, void*& buffer){
 				return ret;
 			}
 			
-			unzippedFileInfo unzipedFileInfo = unzipTool.descomprimirZip(rompath.c_str(), destDir.c_str()); 
+			unzippedFileInfo unzipedFileInfo = unzipTool.descomprimirZip(rompath.c_str(), destDir.c_str(), "romToLoad"); 
 			for (unsigned int i=0; i < unzipedFileInfo.files.size(); i++){
 				FileProps fileprop = unzipedFileInfo.files.at(i);
 				std::string ext = Constant::replaceAll(fileprop.extension, ".", "");
 				if (emu->rom_extension.find(ext) != std::string::npos){
 					ret.romsize = fileprop.fileSize;
 					ret.rutaEscritura = fileprop.dir + Constant::getFileSep() + fileprop.filename;
-					ret.errorCode = 0;
+					ret.errorCode = UNZ_OK;
 					break;
 				}
 			}
@@ -681,7 +683,7 @@ unzippedFileInfo unzipOrLoadFile(std::string rompath, void*& buffer){
 		
 		ret.romsize = size;
 		ret.rutaEscritura = rompath;
-		ret.errorCode = 0;
+		ret.errorCode = UNZ_OK;
 	}
 	return ret;
 }
@@ -705,7 +707,7 @@ int launchGame(std::string rompath){
 	unzippedFileInfo unzipped = unzipOrLoadFile(rompath, buffer);
 	// Carga manual mínima para que el core tenga datos que procesar
 
-	if (unzipped.errorCode != 0){
+	if (unzipped.errorCode != UNZ_OK){
 		LOG_ERROR("No se ha podido abrir el fichero o no se puede descomprimir: %s\n", rompath.c_str());
 		return 0;
 	}
@@ -890,7 +892,6 @@ bool loadGameAtStart(int argc, char *argv[]){
 */
 int main(int argc, char *argv[]) {
 	initPathAndLog(argv);
-
 	CfgLoader cfgLoader;
 	if (cfgLoader.isDebug()){
         logger->errorLevel = L_DEBUG;
@@ -942,15 +943,15 @@ int main(int argc, char *argv[]) {
 		// Procesamos eventos como pulsaciones de hotkeys
 		gameMenu->processFrontendEvents();
 
-		if (gameMenu->getEmuStatus() == EMU_MENU){
-			updateMenuScreen(tileMap, *gameMenu, listMenu, false);
-		} else if (gameMenu->getEmuStatus() == EMU_STARTED){
+		if (gameMenu->getEmuStatus() == EMU_STARTED){
 			// retro_run hace todo: 
 			// 1. Llama a input_poll() -> update_input()
 			// 2. Calcula la lógica del juego
 			// 3. Llama a audio_batch() -> (Aquí el audio bloquea si va muy rápido)
 			// 4. Llama a video_refresh() -> (Aquí se dibuja el frame y los FPS)
 			retro_run();
+		} else if (gameMenu->getEmuStatus() == EMU_MENU){
+			updateMenuScreen(tileMap, *gameMenu, listMenu, false);
 		}
 
 		// DIBUJO DE INTERFAZ (OSD, FPS, Mensajes)
@@ -967,8 +968,6 @@ int main(int argc, char *argv[]) {
 			nextFrameTime += gameMenu->sync->frameDelay;
 		}
     }
-
 	cerrar_emulador();
-	
     return 0;
 }

@@ -44,7 +44,13 @@ public:
 };
 
 // Macros para simplificar la llamada a los logs
-#define LOG_DEBUG(fmt, ...) Logger::write(L_DEBUG, "[%s:%d] " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
-#define LOG_INFO(fmt, ...)  Logger::write(L_INFO,  fmt, ##__VA_ARGS__)
-#define LOG_ERROR(fmt, ...) Logger::write(L_ERROR, "[%s:%d] ERROR: " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#ifdef DEBUG
+	#define LOG_DEBUG(fmt, ...) Logger::write(L_DEBUG, "[%s:%d] " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+	#define LOG_INFO(fmt, ...)  Logger::write(L_INFO,  fmt, ##__VA_ARGS__)
+	#define LOG_ERROR(fmt, ...) Logger::write(L_ERROR, "[%s:%d] ERROR: " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#else
+	#define LOG_DEBUG(fmt, ...) do { } while (0)
+    #define LOG_INFO(fmt, ...)  do { } while (0)
+    #define LOG_ERROR(fmt, ...) do { } while (0)
+#endif
 

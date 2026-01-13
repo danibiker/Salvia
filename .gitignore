@@ -41,6 +41,7 @@ libs/libSDLx360/_UpgradeReport*/**
 libs/libSDLx360/ipch/**
 libs/SDL_ttf360/Debug/**
 libs/SDL_ttf360/Release/**
+libs/SDL_ttf360/Debug/**
 libs/SDL_ttf360/_UpgradeReport*/**
 libs/SDL_ttf360/ipch/**
 libs/SDL_image-1.2.12/libjpeg/Release/**
@@ -57,6 +58,8 @@ Debug_Nestopia/**
 Release_Nestopia/**
 Debug_Snes9x/**
 Release_Snes9x/**
+Debug_vbanext/**
+Release_vbanext/**
 DistroWin/**
 Distro360/**
 *.log
