@@ -62,4 +62,6 @@ Debug_vbanext/**
 Release_vbanext/**
 DistroWin/**
 Distro360/**
+Release**/**
+Debug**/**
 *.log

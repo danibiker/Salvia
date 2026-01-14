@@ -476,7 +476,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 		Constant::drawTextCent(screen, fontsmall, "Press a key to continue", 0, face_h_small + 3, true, true, white, -1);
 		SDL_Flip(screen);
         SDL_Delay(3000);
-        exit(0);
+		return;
     }
 
 	if (this->cfgLoader->configEmus.size() <= (std::size_t)this->emuCfgPos){
@@ -625,8 +625,7 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
         #endif
 
         string rom = emu.use_extension ? romFile : dir.getFileNameNoExt(romFile);
-        
-		
+
 		#ifdef LIBRETRO
 			std::string execActual = Constant::getAppExecutable();
 			if (emu.executable.find(execActual) != string::npos){
@@ -634,10 +633,10 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
 				commands.emplace_back(romdir + rom);
 				return commands;
 			} else {
-				#ifdef WIN
-					commands.emplace_back(encloseWithCharIfSpaces(romdir + rom, "\"")); 
-				#elif defined(_XBOX)
+				#ifdef _XBOX
 					commands.emplace_back(romdir + rom);
+				#else
+					commands.emplace_back(encloseWithCharIfSpaces(romdir + rom, "\"")); 
 				#endif
 			}
 		#else
@@ -675,9 +674,7 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
 
 	#ifdef LIBRETRO
 		Launcher launcher;
-		Logger::close();
-		launcher.launch(commands, isDebug());
-		exit(0);
+		this->running = !launcher.launch(commands, isDebug());
 	#endif
 
     /**TODO: IMPLEMENT

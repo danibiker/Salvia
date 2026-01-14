@@ -25,6 +25,7 @@ Logger *logger;
 enum retro_pixel_format fmt;
 static uint16_t* conversion_buffer = NULL;
 static std::size_t buffer_size = 0;
+int launchGame(std::string);
 
 // Ya no declaramos punteros a función, sino que usamos las funciones 
 // que vendrán dentro del .lib (se resuelven al linkar)
@@ -435,6 +436,107 @@ void update_input() {
 	}
 }
 
+/**
+ * 
+ */
+void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, bool keypress){
+	static Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	tEvento askEvento;
+	//Procesamos los controles de la aplicacion
+	askEvento = gameMenu.WaitForKey();
+
+	if (askEvento.isJoy){
+		ConfigEmu *emu = gameMenu.getCfgEmu();
+		if (listMenu.getNumGames() == 0 && emu->generalConfig){
+			//Opciones para modificar el menu de configuracion
+			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_UP)){
+				gameMenu.configMenus->prevPos();
+			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_DOWN)){
+				gameMenu.configMenus->nextPos();
+			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT)){
+				gameMenu.configMenus->cambiarValor(-1);
+			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
+				gameMenu.configMenus->cambiarValor(1);
+			} 
+
+			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A)){
+				gameMenu.configMenus->confirmar();
+			} else if(askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_B)){
+				gameMenu.configMenus->volver();
+			}
+
+			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A) || askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT) 
+				|| askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
+				gameMenu.processConfigChanges();
+			}
+		} else {
+			//Opciones para seleccionar una rom para el emulador
+			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_UP)){
+				listMenu.prevPos();
+			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_DOWN)){
+				listMenu.nextPos();
+			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT)){
+				listMenu.prevPage();
+			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
+				listMenu.nextPage();
+			} 
+
+			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A)){
+				vector<string> launchCommand = gameMenu.launchProgram(listMenu);
+				if (launchCommand.size() > 1){
+					SDL_FillRect(gameMenu.screen, NULL, bkgText);
+					if (launchGame(launchCommand.at(1))){
+						gameMenu.setEmuStatus(EMU_STARTED);
+					}
+					gameMenu.joystick->resetAllValues();
+					gameMenu.joystick->lastSelectPress = 0;
+					return;
+				}
+			} 
+		}
+
+		if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_R)){
+            //Change to prev emulator
+            //sound.play(SBTNCLICK);
+            //gameMenu.showMessage("Refreshing gamelist...");
+            gameMenu.getNextCfgEmu();
+            gameMenu.loadEmuCfg(listMenu);
+        }
+        if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_L)){
+            //Change to next emulator
+            //sound.play(SBTNCLICK);
+            //gameMenu.showMessage("Refreshing gamelist...");
+            gameMenu.getPrevCfgEmu();
+            gameMenu.loadEmuCfg(listMenu);
+        } 
+
+		if (askEvento.longKeyPress[JoyMapper::getJoyMapper(JOY_BUTTON_SELECT)] && gameMenu.getLastStatus() == EMU_STARTED){
+			LOG_DEBUG("Detectada pulsacion larga del select\n");
+			gameMenu.setEmuStatus(EMU_STARTED);
+			SDL_FillRect(gameMenu.video_page, NULL, gameMenu.uBkgColor);
+			gameMenu.joystick->resetAllValues();
+			return;
+		}
+	}
+
+	if (askEvento.quit){
+		gameMenu.running = false; // Marcamos para salir
+	}
+
+
+    if (listMenu.animateBkg) 
+		tileMap.draw(gameMenu.video_page);
+    else 
+		SDL_FillRect(gameMenu.video_page, NULL, bkgText);
+
+    gameMenu.refreshScreen(listMenu);
+
+    static uint32_t lastTime = SDL_GetTicks();
+    if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
+        tileMap.speed++;
+    }
+}
+
 // Se llama antes de pedir el estado de los inputs
 void retro_input_poll(void) {
     update_input();
@@ -688,10 +790,7 @@ unzippedFileInfo unzipOrLoadFile(std::string rompath, void*& buffer){
 	return ret;
 }
 
-/**
-*
-*/
-int launchGame(std::string rompath){
+void closeGame(){
 	if (gameMenu->romLoaded){
 		// 1. Pausar el procesamiento de audio para detener el hilo de callback
 		SDL_PauseAudio(1);
@@ -699,8 +798,17 @@ int launchGame(std::string rompath){
 		SDL_CloseAudio();
 		SDL_Delay(10);
 		//Liberar recursos de libretro
+		 // 1. Limpieza total del juego anterior
 		retro_unload_game();
+		retro_deinit();
 	}
+}
+
+/**
+*
+*/
+int launchGame(std::string rompath){
+	closeGame();
 	gameMenu->romLoaded = false;
 	
 	void* buffer = NULL;
@@ -713,6 +821,7 @@ int launchGame(std::string rompath){
 	}
 		
 	struct retro_game_info game = { unzipped.rutaEscritura.c_str(), buffer, unzipped.romsize, NULL };
+	retro_init();	
 	bool success = retro_load_game(&game);
 	//Liberar la memoria tras la carga exitosa
 	// La mayoría de los cores de Libretro ya han copiado los datos a su propia RAM interna
@@ -740,119 +849,7 @@ int launchGame(std::string rompath){
 	return 1;
 }
 
-/**
- * 
- */
-void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, bool keypress){
-	static Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
-	tEvento askEvento;
-	//Procesamos los controles de la aplicacion
-	askEvento = gameMenu.WaitForKey();
 
-	if (askEvento.isJoy){
-		ConfigEmu *emu = gameMenu.getCfgEmu();
-		if (listMenu.getNumGames() == 0 && emu->generalConfig){
-			//Opciones para modificar el menu de configuracion
-			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_UP)){
-				gameMenu.configMenus->prevPos();
-			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_DOWN)){
-				gameMenu.configMenus->nextPos();
-			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT)){
-				gameMenu.configMenus->cambiarValor(-1);
-			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
-				gameMenu.configMenus->cambiarValor(1);
-			} 
-
-			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A)){
-				gameMenu.configMenus->confirmar();
-			} else if(askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_B)){
-				gameMenu.configMenus->volver();
-			}
-
-			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A) || askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT) 
-				|| askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
-				gameMenu.processConfigChanges();
-			}
-		} else {
-			//Opciones para seleccionar una rom para el emulador
-			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_UP)){
-				listMenu.prevPos();
-			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_DOWN)){
-				listMenu.nextPos();
-			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT)){
-				listMenu.prevPage();
-			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
-				listMenu.nextPage();
-			} 
-
-			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A)){
-				vector<string> launchCommand = gameMenu.launchProgram(listMenu);
-				if (launchCommand.size() > 1){
-					SDL_FillRect(gameMenu.screen, NULL, bkgText);
-					if (launchGame(launchCommand.at(1))){
-						gameMenu.setEmuStatus(EMU_STARTED);
-					}
-					gameMenu.joystick->resetAllValues();
-					gameMenu.joystick->lastSelectPress = 0;
-					return;
-				}
-			} 
-		}
-
-		if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_R)){
-            //Change to prev emulator
-            //sound.play(SBTNCLICK);
-            //gameMenu.showMessage("Refreshing gamelist...");
-            gameMenu.getNextCfgEmu();
-            gameMenu.loadEmuCfg(listMenu);
-        }
-        if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_L)){
-            //Change to next emulator
-            //sound.play(SBTNCLICK);
-            //gameMenu.showMessage("Refreshing gamelist...");
-            gameMenu.getPrevCfgEmu();
-            gameMenu.loadEmuCfg(listMenu);
-        } 
-
-		if (askEvento.longKeyPress[JoyMapper::getJoyMapper(JOY_BUTTON_SELECT)] && gameMenu.getLastStatus() == EMU_STARTED){
-			LOG_DEBUG("Detectada pulsacion larga del select\n");
-			gameMenu.setEmuStatus(EMU_STARTED);
-			SDL_FillRect(gameMenu.video_page, NULL, gameMenu.uBkgColor);
-			gameMenu.joystick->resetAllValues();
-			return;
-		}
-	}
-
-	if (askEvento.quit){
-		gameMenu.running = false; // Marcamos para salir
-	}
-
-
-    if (listMenu.animateBkg) 
-		tileMap.draw(gameMenu.video_page);
-    else 
-		SDL_FillRect(gameMenu.video_page, NULL, bkgText);
-
-    gameMenu.refreshScreen(listMenu);
-
-    static uint32_t lastTime = SDL_GetTicks();
-    if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
-        tileMap.speed++;
-    }
-}
-
-// En tu función de salida o desinicialización
-void cerrar_emulador() {
-    if (conversion_buffer != NULL) {
-        free(conversion_buffer);
-        conversion_buffer = NULL; // Importante ponerlo a NULL tras liberar
-        buffer_size = 0;
-    }
-
-	delete logger;
-    retro_deinit();
-	delete gameMenu;
-}
 
 bool loadGameAtStart(int argc, char *argv[]){
 	LOG_DEBUG("argc: %d\n", argc);
@@ -885,6 +882,18 @@ bool loadGameAtStart(int argc, char *argv[]){
 	}
 	
 	return ret;
+}
+
+// En tu función de salida o desinicialización
+void closeResources() {
+	closeGame();
+    if (conversion_buffer != NULL) {
+        free(conversion_buffer);
+        conversion_buffer = NULL; // Importante ponerlo a NULL tras liberar
+        buffer_size = 0;
+    }
+	delete logger;
+	delete gameMenu;
 }
 
 /**
@@ -927,8 +936,6 @@ int main(int argc, char *argv[]) {
 	retro_set_audio_sample(retro_audio_sample);
 	retro_set_audio_sample_batch(retro_audio_sample_batch);
 
-	retro_init();	
-
 	if (!loadGameAtStart(argc, argv)){
 		//Workaround para mostrar una primera imagen del menu con las imagenes cargadas
 		listMenu.keyUp = true;
@@ -968,6 +975,6 @@ int main(int argc, char *argv[]) {
 			nextFrameTime += gameMenu->sync->frameDelay;
 		}
     }
-	cerrar_emulador();
+	closeResources();
     return 0;
 }

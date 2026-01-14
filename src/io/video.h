@@ -89,6 +89,7 @@ inline void fast_video_blit(const t_scale_props& props) {
     }
 }
 
+#if defined(_XBOX)
 inline void fast_video_blit_xbox(const t_scale_props& props) {
     int src_stride_px = 0, dst_stride_px = 0;
     uint16_t* dst_ptr = props.dst; 
@@ -113,6 +114,7 @@ inline void fast_video_blit_xbox(const t_scale_props& props) {
         d_ptr += dst_stride_px;
     }
 }
+#endif
 /**
 *
 */
@@ -182,7 +184,7 @@ inline void scale_software_fixed_point_safe2(const t_scale_props& props) {
         }
     }
 }
-
+#if defined(_XBOX)
 inline void scale_software_fixed_point_xbox_final(const t_scale_props& props) {
     int out_w, out_h, inv_scale_x_fp, inv_scale_y_fp;
     calcDestDimFromRatio(props.sw, props.sh, props.dw, props.dh, props.ratio, out_w, out_h, inv_scale_x_fp, inv_scale_y_fp);
@@ -246,7 +248,7 @@ inline void scale_software_fixed_point_xbox_final(const t_scale_props& props) {
         }
     }
 }
-
+#endif
 
 
 // Escalador 2x manual para RGB565

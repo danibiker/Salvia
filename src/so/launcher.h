@@ -43,7 +43,7 @@ class Launcher{
         void deleteUnzipedRom(string romfile);
         int dosbatch(vector<string> &commands, string comando, bool debug);
         string getBatchPath();
-		void lanzarEnSuCarpeta(const std::string& rutaCompletaExe, const std::string& parametros);
+		int launchFromDirectory(const std::string& rutaCompletaExe, const std::string& parametros);
 };  
 
 /**
@@ -94,29 +94,13 @@ Executable Launcher::rutaEspecial(string ejecutable, string param, string filero
 bool Launcher::launch(vector<string> &commands, bool debug){
     bool launchOk = false;
     string comando;
-    //#ifdef WIN
-    //    comando = "start ";
-    //#endif
 
-    //clear_to_color(screen, Constant::backgroundColor);
-    //ALFONT_FONT *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
-    //Constant::drawTextCent(screen, fontsmall, "launching command", SCREEN_W / 2, SCREEN_H / 2, Constant::textColor, -1);
-
-    for (std::size_t i=0; i < commands.size(); i++){
+	for (std::size_t i=0; i < commands.size(); i++){
         string parm = Constant::Trim(commands.at(i));
         if (!parm.empty()){
             comando += (i > 0 ? " " : "") + parm;
         } 
-        //if (debug){
-        //    Constant::drawTextCent(screen, fontsmall, parm.c_str(), SCREEN_W / 2, SCREEN_H / 2 + (fontsmall->face_h + 3) * (i+1), Constant::textColor, -1);
-        //}
     }
-
-    //if (debug){
-    //    Constant::drawTextCentre(screen, fontsmall, comando.c_str(), SCREEN_W / 2, SCREEN_H / 2 + (fontsmall->face_h + 3) * (commands.size()+1), Constant::textColor, -1);
-    //    Constant::drawTextCentre(screen, fontsmall, "Press a key to continue", SCREEN_W / 2, SCREEN_H / 2 + (fontsmall->face_h + 3) * (commands.size()+2), Constant::textColor, -1);
-    //    readkey();
-    //}
 
     if (Constant::getExecMethod() == launch_system ){
 		#ifdef WIN
@@ -126,25 +110,25 @@ bool Launcher::launch(vector<string> &commands, bool debug){
 		#endif
     } else if (Constant::getExecMethod() == launch_spawn || Constant::getExecMethod() == launch_create_process){
         LOG_DEBUG("Launching command -> %s\n", comando.c_str());
-        // extra room for program name and sentinel
-        char **argv = new char* [commands.size()+1];  
-        std::size_t j = 0;
-        std::size_t posDirSep;
-        LOG_DEBUG("Launching command:\n");
+         #ifdef UNIX
+			// extra room for program name and sentinel
+			char **argv = new char* [commands.size()+1];  
+			std::size_t j = 0;
+			std::size_t posDirSep;
+			LOG_DEBUG("Launching command:\n");
 
-        for (; j < commands.size(); j++){
-            if (j==0 && ((posDirSep = commands[j].find_last_of(Constant::tempFileSep)) != string::npos)){
-                argv[j] = strdup(commands[j].substr(posDirSep + 1).c_str());
-            } else {
-                argv[j] = strdup(commands[j].c_str());
-            }
-			LOG_DEBUG("param_%d=%s\n", j, argv[j]);
-        }     
-        // end of arguments sentinel is NULL
-        argv [j] = NULL;  
-        
-        #ifdef UNIX
-            if ( fork() == 0 ){
+			for (; j < commands.size(); j++){
+				if (j==0 && ((posDirSep = commands[j].find_last_of(Constant::tempFileSep)) != string::npos)){
+					argv[j] = strdup(commands[j].substr(posDirSep + 1).c_str());
+				} else {
+					argv[j] = strdup(commands[j].c_str());
+				}
+				LOG_DEBUG("param_%d=%s\n", j, argv[j]);
+			}     
+			// end of arguments sentinel is NULL
+			argv [j] = NULL;  
+
+			if ( fork() == 0 ){
                 //by convention, argv[0] is the full program path
                 if (execv(commands[0].c_str(), argv) == -1){
                     Traza::print(Traza::T_ERROR, "No se ha podido ejecutar el programa");
@@ -157,41 +141,24 @@ bool Launcher::launch(vector<string> &commands, bool debug){
                 wait(&ret); 
                 Traza::print(Traza::T_DEBUG, "Comando terminado");
             }        
+			// Deallocate memory
+			for (j = 0; j < commands.size(); j++)     
+				free(argv[j]);
+			delete [] argv;
         #elif defined(WIN) || defined(_XBOX)
-			lanzarEnSuCarpeta(commands[0], commands[1]);
-			/*
-			// 1. Obtener la carpeta del nuevo EXE
-			std::string newDir = commands[0].substr(0, commands[0].find_last_of("\\/"));
-
-			// 2. Cambiar el directorio de trabajo del proceso actual
-			// El proceso que nazca con execv heredará este nuevo directorio
-			if (chdir(newDir.c_str()) == 0) {
-				if (execv(commands[0].c_str(), argv) == -1){
-					LOG_ERROR("No se ha podido ejecutar el programa");
-					return false;
-				} else {
-					LOG_DEBUG("Comando terminado");
-					return true;
-				}
-			} else {
-				// Error al cambiar de carpeta
-			}*/
+			launchOk = launchFromDirectory(commands[0], commands[1]) == 0;
         #endif 
-
-        // Deallocate memory
-        for (j = 0; j < commands.size(); j++)     
-            free(argv[j]);
-        delete [] argv;
-
-    } else if (Constant::getExecMethod() == launch_batch && dosbatch(commands, comando, debug) == 0){
-        LOG_DEBUG("Launching command -> %s", comando.c_str());
-        exit(0);
-    }
+    } 
+	//else if (Constant::getExecMethod() == launch_batch && dosbatch(commands, comando, debug) == 0){
+    //    LOG_DEBUG("Launching command -> %s", comando.c_str());
+    //    return false;
+    //}
     return launchOk;
 }
 
-void Launcher::lanzarEnSuCarpeta(const std::string& rutaCompletaExe, const std::string& parametros) {
+int Launcher::launchFromDirectory(const std::string& rutaCompletaExe, const std::string& parametros) {
 	#ifdef WIN
+		dirutil dir;
 		// Extraer la carpeta del ejecutable
 		std::string directory = rutaCompletaExe.substr(0, rutaCompletaExe.find_last_of("\\/"));
 
@@ -203,22 +170,18 @@ void Launcher::lanzarEnSuCarpeta(const std::string& rutaCompletaExe, const std::
 		sei.lpDirectory = directory.c_str(); // <--- ESTO fija el directorio de trabajo
 		sei.nShow = SW_SHOWNORMAL;
 
-		if (ShellExecuteExA(&sei)) {
-			exit(0); // Salida limpia
+		if (dir.fileExists(rutaCompletaExe.c_str()) && ShellExecuteExA(&sei)) {
+			return 0;
 		}
 	#elif defined(_XBOX)
-		// 2. Establecer los datos de lanzamiento (Argumentos)
-		// El sistema espera un puntero a los datos y el tamaño total.
-		// Pasamos la ruta de la ROM para que RetroArch la reciba.
-		XSetLaunchData((PVOID)parametros.c_str(), (DWORD)parametros.length() + 1);
-
-		// Montamos el dispositivo físico en el alias "Usb0:"
-		// El '1' indica que es un montaje de lectura/escritura (falso para sólo lectura)
 		if (GetFileAttributes(rutaCompletaExe.c_str()) != 0xFFFFFFFF){
+			XSetLaunchData((PVOID)parametros.c_str(), (DWORD)parametros.length() + 1);
 			XLaunchNewImage(rutaCompletaExe.c_str(), 0);
+			return 0;
 		}
-		exit(0); // Salida limpia
 	#endif
+
+	return 1;
 }
 
 int Launcher::dosbatch(vector<string> &commands, string comando, bool debug){
