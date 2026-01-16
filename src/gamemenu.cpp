@@ -30,9 +30,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	bkgTextFps = SDL_MapRGB(this->screen->format, 0, 0, 0);
 	uBkgColor = SDL_MapRGB(this->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 
-	fpsCountEnabled = true;
-
-	if (joystick->init_all_joysticks() && !JoyMapper::initJoyMapper()){
+	if (joystick->init_all_joysticks()){
 		configButtonsJOY();
 	}
 
@@ -127,7 +125,7 @@ std::string GameMenu::configButtonsJOY(){
 		Constant::drawTextCent(this->screen, Fonts::getFont(Fonts::FONTSMALL), JoystickButtonsMSG[i], 0, 20, true, false, textColor, 0);
         SDL_Flip(this->screen);
 
-        if( SDL_PollEvent( &event ) ){
+        while( SDL_PollEvent( &event ) ){
              switch( event.type ){
                 case SDL_QUIT:
                     salir = true;
@@ -137,36 +135,39 @@ std::string GameMenu::configButtonsJOY(){
                         salir = true;
                     }
                     break;
-
                 case SDL_JOYBUTTONDOWN :
-                    JoyMapper::setJoyMapper(JoyButtonsVal[i], event.jbutton.button);
+					joystick->buttonsMapperFrontend.buttons[event.jbutton.button] = JoyButtonsVal[i];
                     i++;
-                    //obj.setImgDrawed(false);
                     break;
                 case SDL_JOYHATMOTION:
-                    if (event.jhat.value != 0){ //Solo en el momento del joydown
-                        JoyMapper::setJoyMapper(JoyButtonsVal[i], JOYHATOFFSET + event.jhat.value);
+					if (event.jhat.value != 0){ //Solo en el momento del joydown
+						if (event.jhat.value & SDL_HAT_UP){
+							joystick->buttonsMapperFrontend.hats[event.jhat.value & SDL_HAT_UP] = JoyButtonsVal[i];
+						} else if (event.jhat.value & SDL_HAT_DOWN){
+							joystick->buttonsMapperFrontend.hats[event.jhat.value & SDL_HAT_DOWN] = JoyButtonsVal[i];
+						} else if (event.jhat.value & SDL_HAT_LEFT){
+							joystick->buttonsMapperFrontend.hats[event.jhat.value & SDL_HAT_LEFT] = JoyButtonsVal[i];
+						} else if (event.jhat.value & SDL_HAT_RIGHT){
+							joystick->buttonsMapperFrontend.hats[event.jhat.value & SDL_HAT_RIGHT] = JoyButtonsVal[i];
+						}
                         i++;
-                        //obj.setImgDrawed(false);
                     }
                     break;
                 case SDL_JOYAXISMOTION:
-                    int normValue;
+                    //int normValue;
                     if((abs(event.jaxis.value) > DEADZONE) != (abs(mPrevAxisValues[event.jaxis.which][event.jaxis.axis]) > DEADZONE)){
-                        if(abs(event.jaxis.value) <= DEADZONE){
-                            normValue = 0;
-                        } else {
-                            if(event.jaxis.value > 0)
-                                normValue = 1;
-                            else
-                                normValue = -1;
-                        }
-                        if (normValue != 0){
-                            int valor = (abs(normValue) << 4 | event.jaxis.axis) * normValue;
-                            JoyMapper::setJoyMapper(JoyButtonsVal[i], JOYAXISOFFSET + valor);
-                            i++;
-                            //obj.setImgDrawed(false);
-                        }
+						if (abs(event.jaxis.value) > DEADZONE) {
+							// 0 si es negativo (Izquierda/Arriba), 1 si es positivo (Derecha/Abajo)
+							int isPositive = (event.jaxis.value > 0);
+							int buttonIdx = (event.jaxis.axis * 2) + isPositive;
+
+							LOG_DEBUG("Eje: %d, Valor: %d -> Boton Virtual: %d", 
+									   event.jaxis.axis, event.jaxis.value, buttonIdx);
+
+							joystick->buttonsMapperFrontend.axis[buttonIdx] = JoyButtonsVal[i++];
+						} else {
+							// CENTRO: Opcionalmente manejar el reposo aquí si es necesario
+						}
                     }
                     mPrevAxisValues[event.jaxis.which][event.jaxis.axis] = event.jaxis.value;
                     break;
@@ -181,7 +182,7 @@ std::string GameMenu::configButtonsJOY(){
         if(delay > 0) SDL_Delay(delay);
     } while (!salir);
 
-    JoyMapper::saveJoyConfig();
+    joystick->saveButtonsFrontend(Constant::getAppDir() + Constant::getFileSep() + "joystick.ini");
     return salida;
 }
 
@@ -771,7 +772,10 @@ int GameMenu::recoverGameMenuPos(ListMenu &menuData, struct ListStatus &read_str
 }
 
 void GameMenu::updateFps(){
-    if (fpsCountEnabled) {
+	bool fps;
+	getCfgLoader()->configMain[cfg::showFps].getPropValue(fps);
+
+    if (fps) {
         uint32_t currentTick = SDL_GetTicks();
 
         // 1. Calculamos la media (esto es rápido, solo matemáticas)

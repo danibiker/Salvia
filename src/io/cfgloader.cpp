@@ -32,6 +32,8 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::soundMode] = cfg::t_cfg_props("soundMode", true);
 	configMain[cfg::libretrosystem] = cfg::t_cfg_props("libretrosystem", ".\\system");
 	configMain[cfg::libretro_save] = cfg::t_cfg_props("libretro_save", ".\\data\\saves");
+	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
+
 	configMain[cfg::region] = cfg::t_cfg_props("region", "auto"); //pal, ntsc, auto -> Para nes
 	configMain[cfg::nospritelimit] = cfg::t_cfg_props("nospritelimit", "enabled"); //enabled, disabled -> para nes
 	configMain[cfg::snes_fx] = cfg::t_cfg_props("snes9x_overclock_superfx", "100"); //Required to run FX cartdriges -> para snes

@@ -114,11 +114,10 @@ class GameMenu : public Engine{
 		void blit(SDL_Surface *, SDL_Surface *, int, int, int, int, int, int);
 		int status;
 		int lastStatus;
-		int fpsCountEnabled;
 		SDL_Rect rectFps;
 		Uint32 bkgTextFps;
 		SDL_Surface* fpsSurface;
 		uint32_t lastFpsUpdate;
-
+		void addControlerButtons(Menu*& menuControlesPuerto, int numPlayer);
 		Message message;
 };

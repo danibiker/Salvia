@@ -1,7 +1,11 @@
 #include <SDL.h>
 #include <io/joystick.h>
 #include <io/joymapper.h>
+#include <io/filelist.h>
 #include <const/constant.h>
+
+t_joy_retro_inputs Joystick::buttonsMapperLibretro[MAX_PLAYERS];
+t_joy_inputs Joystick::buttonsMapperFrontend;
 
 Joystick::Joystick(){
 	ignoreButtonRepeats = false;
@@ -44,37 +48,156 @@ bool Joystick::init_all_joysticks() {
 	
 	int axis = 0;
     int hats = 0;
+	int buttons = 0;
 
 	mPrevAxisValues = new std::map<int, int>[mNumJoysticks];
 	mPrevHatValues = new std::map<int, int>[mNumJoysticks];
 
     // Abrir todos los mandos disponibles hasta el límite de jugadores
-    for (int i = 0; i < mNumJoysticks && i < MAX_PLAYERS; i++) {
-        g_joysticks[i] = SDL_JoystickOpen(i);
-        if (g_joysticks[i]) {
-            LOG_DEBUG("Mando %d abierto: %s\n", i, SDL_JoystickName(i));
+    for (int joyId = 0; joyId < mNumJoysticks && joyId < MAX_PLAYERS; joyId++) {
+        g_joysticks[joyId] = SDL_JoystickOpen(joyId);
+        if (g_joysticks[joyId]) {
+            LOG_DEBUG("Mando %d abierto: %s\n", joyId, SDL_JoystickName(joyId));
         }
 
-		axis = SDL_JoystickNumAxes(g_joysticks[i]);
-        hats = SDL_JoystickNumHats(g_joysticks[i]);
+		axis = SDL_JoystickNumAxes(g_joysticks[joyId]);
+        hats = SDL_JoystickNumHats(g_joysticks[joyId]);
+		buttons = SDL_JoystickNumButtons(g_joysticks[joyId]);
+
         //cout << "hay " + Constant::TipoToStr(axis) + " axis en el joystick: " + Constant::TipoToStr(i) << endl;
         for(int k = 0; k < axis; k++){
-            mPrevAxisValues[i][k] = 0;
+            mPrevAxisValues[joyId][k] = 0;
         }
         for(int k = 0; k < hats; k++){
-            mPrevHatValues[i][k] = 0;
+            mPrevHatValues[joyId][k] = 0;
         }
+
+		//Almacenamos las posiciones mapeadas para cada boton del emulador
+		buttonsMapperLibretro[joyId].buttons = new t_retro_input [buttons];
+		buttonsMapperLibretro[joyId].hats = new t_retro_input [RETRO_DEVICE_ID_JOYPAD_R3 + 1];
+		buttonsMapperLibretro[joyId].axis = new t_retro_input [axis * 2];
+		buttonsMapperLibretro[joyId].nButtons = buttons;
+		buttonsMapperLibretro[joyId].nAxis = axis;
+		buttonsMapperLibretro[joyId].nHats = RETRO_DEVICE_ID_JOYPAD_R3 + 1;
+		loadButtonsEmupad(joyId);
+		
+		if (joyId == 0){
+			//creamos las posiciones mapeadas para cada boton del frontend 
+			//solo para el primer mando detectado
+			buttonsMapperFrontend.buttons = new int [buttons];
+			buttonsMapperFrontend.axis = new int [axis * 2];
+			buttonsMapperFrontend.hats = new int [MAX_HAT_POSITIONS];
+			std::fill(buttonsMapperFrontend.buttons, buttonsMapperFrontend.buttons + buttons, -1);
+			std::fill(buttonsMapperFrontend.axis, buttonsMapperFrontend.axis + (axis * 2), -1);
+			std::fill(buttonsMapperFrontend.hats, buttonsMapperFrontend.hats + MAX_HAT_POSITIONS, -1);
+
+			buttonsMapperFrontend.nButtons = buttons;
+			buttonsMapperFrontend.nAxis = axis;
+			buttonsMapperFrontend.nHats = MAX_HAT_POSITIONS;
+		}
     }
-	return true;
+
+	return loadButtonsFrontend(Constant::getAppDir() + Constant::getFileSep() + "joystick.ini");
 }
+
+void Joystick::loadButtonsEmupad(int joyId){
+	//Cada Posicion del array debe cuadrar con sdl
+	//TODO: Ajustar para el numero de botones correspondiente a cada joystick
+	buttonsMapperLibretro[joyId].setButton(0, RETRO_DEVICE_ID_JOYPAD_A);
+	buttonsMapperLibretro[joyId].setButton(1, RETRO_DEVICE_ID_JOYPAD_B);
+	buttonsMapperLibretro[joyId].setButton(2, RETRO_DEVICE_ID_JOYPAD_X);
+	buttonsMapperLibretro[joyId].setButton(3, RETRO_DEVICE_ID_JOYPAD_Y);
+	buttonsMapperLibretro[joyId].setButton(4, RETRO_DEVICE_ID_JOYPAD_L);
+	buttonsMapperLibretro[joyId].setButton(5, RETRO_DEVICE_ID_JOYPAD_R);
+	buttonsMapperLibretro[joyId].setButton(6, RETRO_DEVICE_ID_JOYPAD_SELECT);
+	buttonsMapperLibretro[joyId].setButton(7, RETRO_DEVICE_ID_JOYPAD_START);
+	buttonsMapperLibretro[joyId].setButton(8, RETRO_DEVICE_ID_JOYPAD_L3);
+	buttonsMapperLibretro[joyId].setButton(9, RETRO_DEVICE_ID_JOYPAD_R3);
+
+	buttonsMapperLibretro[joyId].setAxis(0, RETRO_DEVICE_ID_ANALOG_X);
+	buttonsMapperLibretro[joyId].setAxis(1, RETRO_DEVICE_ID_ANALOG_Y);
+
+	buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_UP, SDL_HAT_UP);
+	buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_RIGHT, SDL_HAT_RIGHT);
+	buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_DOWN, SDL_HAT_DOWN);
+	buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_LEFT, SDL_HAT_LEFT);
+}
+
+bool Joystick::loadButtonsFrontend(std::string rutaIni){
+	std::vector<std::string> fileConfigJoystick;
+	FileList::cargarVector(rutaIni, fileConfigJoystick);
+	int nLinesProcessed = 0;
+
+	if (fileConfigJoystick.size() > 0){
+		std::string linea = "";
+		bool foundFrontend;
+		std::size_t pos = 0;
+        for (unsigned int i=0; i<fileConfigJoystick.size(); i++){
+            linea = fileConfigJoystick.at(i);
+			LOG_DEBUG("Linea %s", linea.c_str());
+
+			if (foundFrontend && (pos = linea.find("btns=")) != std::string::npos){
+				linea = linea.substr(pos + 5);	
+				cargarValoresEnArray(buttonsMapperFrontend.buttons, linea, buttonsMapperFrontend.nButtons);
+				nLinesProcessed++;
+			} else if (foundFrontend && (pos = linea.find("hats=")) != std::string::npos){
+				linea = linea.substr(pos + 5);	
+				cargarValoresEnArray(buttonsMapperFrontend.hats, linea, buttonsMapperFrontend.nHats);
+				nLinesProcessed++;
+			} else if (foundFrontend && (pos = linea.find("axis=")) != std::string::npos){
+				linea = linea.substr(pos + 5);	
+				cargarValoresEnArray(buttonsMapperFrontend.axis, linea, buttonsMapperFrontend.nAxis);
+				nLinesProcessed++;
+			} else if (linea == "[FRONTEND]"){
+				foundFrontend = true;
+			}
+		}
+	}
+	return nLinesProcessed < 3;
+}
+
+void Joystick::cargarValoresEnArray(int *&array, std::string str, int maxValues){
+	std::vector<std::string> v = Constant::splitChar(str, ',');
+	for (int i=0; i < v.size() && i < maxValues; i++){
+		array[i] = Constant::strToTipo<int>(v[i]);
+	}
+}
+
+void Joystick::saveButtonsFrontend(std::string rutaIni){
+	std::vector<std::string> fileConfigJoystick;
+
+	fileConfigJoystick.push_back("[FRONTEND]");
+	std::string str = "btns=";
+	for (int i=0; i < buttonsMapperFrontend.nButtons; i++){
+		str += Constant::intToString(buttonsMapperFrontend.buttons[i]) + (i < buttonsMapperFrontend.nButtons-1 ? "," : "");
+	}
+	fileConfigJoystick.push_back(str);
+
+	str = "hats=";
+	for (int i=0; i < buttonsMapperFrontend.nHats; i++){
+		str += Constant::intToString(buttonsMapperFrontend.hats[i]) + (i < buttonsMapperFrontend.nHats-1 ? "," : "");
+	}
+	fileConfigJoystick.push_back(str);
+
+	str = "axis=";
+	for (int i=0; i < buttonsMapperFrontend.nAxis * 2; i++){
+		str += Constant::intToString(buttonsMapperFrontend.axis[i]) + (i < buttonsMapperFrontend.nAxis * 2 -1? "," : "");
+	}
+	fileConfigJoystick.push_back(str);
+	FileList::guardarVector(rutaIni, fileConfigJoystick);
+}
+
 
 void Joystick::resetAllValues(){
 	int axis = 0;
     int hats = 0;
+	int buttons = 0;
+
 	// Abrir todos los mandos disponibles hasta el límite de jugadores
     for (int i = 0; i < mNumJoysticks && i < MAX_PLAYERS; i++) {
 		axis = SDL_JoystickNumAxes(g_joysticks[i]);
         hats = SDL_JoystickNumHats(g_joysticks[i]);
+		buttons = SDL_JoystickNumButtons(g_joysticks[i]);
         //cout << "hay " + Constant::TipoToStr(axis) + " axis en el joystick: " + Constant::TipoToStr(i) << endl;
         for(int k = 0; k < axis; k++){
             mPrevAxisValues[i][k] = 0;
@@ -129,7 +252,7 @@ tEvento Joystick::WaitForKey(SDL_Surface* screen){
                 break;
             case SDL_JOYBUTTONDOWN: // JOYSTICK/GP2X buttons
                 if (event.jbutton.button >= 0 && event.jbutton.button < MAXJOYBUTTONS){
-                    evento.joy = JoyMapper::getJoyMapper(event.jbutton.button);
+					evento.joy = buttonsMapperFrontend.buttons[event.jbutton.button];
                     evento.isJoy = true;
                     evento.keyjoydown = true;
                     lastEvento = evento;    //Guardamos el ultimo evento que hemos lanzado desde el teclado
@@ -145,48 +268,43 @@ tEvento Joystick::WaitForKey(SDL_Surface* screen){
             case SDL_JOYHATMOTION:
                 mPrevHatValues[event.jhat.which][event.jhat.hat] = event.jhat.value;
                 evento.isJoy = true;
+                evento.joy = buttonsMapperFrontend.hats[event.jhat.value];
 
-                if (event.jhat.value & SDL_HAT_UP){
-                    evento.joy = JOYHATOFFSET + event.jhat.value;
-                } else if (event.jhat.value & SDL_HAT_DOWN){
-                    evento.joy = JOYHATOFFSET + event.jhat.value;
-                } else if (event.jhat.value & SDL_HAT_LEFT){
-                    evento.joy = JOYHATOFFSET + event.jhat.value;
-                } else if (event.jhat.value & SDL_HAT_RIGHT){
-                    evento.joy = JOYHATOFFSET + event.jhat.value;
-                }
-
-                if (event.jhat.value == 0) evento.keyjoydown = false;
-                else {
+				if (event.jhat.value == 0) {
+					evento.keyjoydown = false;
+				} else {
                     evento.keyjoydown = true;
                     lastKeyDown = SDL_GetTicks();  //reseteo del keydown
                 }
+
                 lastEvento = evento;    //Guardamos el ultimo evento que hemos lanzado
 
                 break;
             case SDL_JOYAXISMOTION:
                 if((abs(event.jaxis.value) > DEADZONE) != (abs(mPrevAxisValues[event.jaxis.which][event.jaxis.axis]) > DEADZONE))
                 {
-                    int normValue;
                     evento.isJoy = true;
-
                     if(abs(event.jaxis.value) <= DEADZONE){
-                        normValue = 0;
                         evento.keyjoydown = false;
                     } else {
-                        if(event.jaxis.value > 0)
-                            normValue = 1;
-                        else
-                            normValue = -1;
-
                         evento.keyjoydown = true;
                         lastKeyDown = SDL_GetTicks();  //reseteo del keydown
                     }
 
-                    int valor = (abs(normValue) << 4 | event.jaxis.axis) * normValue;
-                    evento.joy = JOYAXISOFFSET + valor;
-                    lastEvento = evento;    //Guardamos el ultimo evento que hemos lanzado desde el teclado
+					if (abs(event.jaxis.value) > DEADZONE) {
+						// 0 si es negativo (Izquierda/Arriba), 1 si es positivo (Derecha/Abajo)
+						int isPositive = (event.jaxis.value > 0);
+						int buttonIdx = (event.jaxis.axis * 2) + isPositive;
 
+						// Asignamos el valor mapeado al evento
+						evento.joy = buttonsMapperFrontend.axis[buttonIdx];
+
+						LOG_DEBUG("Eje: %d, Boton virtual: %d, Mapeo: %d", 
+								   event.jaxis.axis, buttonIdx, evento.joy);
+					} else {
+						// CENTRO: El eje ha vuelto a la zona muerta
+					}
+                    lastEvento = evento;    //Guardamos el ultimo evento que hemos lanzado desde el teclado
                 }
 
                 mPrevAxisValues[event.jaxis.which][event.jaxis.axis] = event.jaxis.value;

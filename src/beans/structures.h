@@ -148,6 +148,58 @@ class ConfigMain{
 	
 };
 
+struct t_joy_inputs{
+	int *buttons;
+	int *axis;
+	int *hats;
+
+	int nButtons;
+	int nAxis;
+	int nHats;
+};
+
+struct t_retro_input{
+	int joy;
+	int key;
+	int index;
+
+	void setJoy(int i){
+		joy = i;
+		index = i;
+	}
+
+	t_retro_input(){
+		joy = -1;
+		key = -1;
+		index = -1;
+	}
+};
+
+struct t_joy_retro_inputs{
+	t_retro_input *buttons;
+	t_retro_input *axis;
+	t_retro_input *hats;
+
+	void setButton(int sdlbtnidx, int retrobtn){
+		buttons[sdlbtnidx].joy = retrobtn;
+		buttons[sdlbtnidx].index = sdlbtnidx;
+	}
+
+	void setHat(int sdlbtnidx, int retrobtn){
+		hats[sdlbtnidx].joy = retrobtn;
+		hats[sdlbtnidx].index = retrobtn;
+	}
+
+	void setAxis(int sdlbtnidx, int retrobtn){
+		axis[sdlbtnidx].joy = retrobtn;
+		axis[sdlbtnidx].index = sdlbtnidx;
+	}
+
+	int nButtons;
+	int nAxis;
+	int nHats;
+};
+
 class ConfigEmu{
     public:
     ConfigEmu(){

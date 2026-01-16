@@ -51,15 +51,6 @@ struct retro_core_variable {
    const char *value;  // Nombre visual y opciones: "Region; Auto|NTSC|PAL"
 };
 
-void S9xTextMode( void)
-{
-}
-
-void S9xGraphicsMode ()
-{
-}
-
-
 std::map<std::string, std::string> defaultCoreValues;
 const std::string Constant::MAME_SYS_ID = "75";
 const std::string Constant::WHITESPACE = " \n\r\t";
@@ -274,6 +265,24 @@ static bool retro_environment(unsigned cmd, void *data) {
 			*updated = false;
 			return true;
 		}
+
+		case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: {
+            const struct retro_controller_info *info = (const struct retro_controller_info *)data;
+            
+            // Aquí el Core te está diciendo qué dispositivos soporta.
+            // Debes iterar sobre 'info' para saber qué mostrar en tus menús de configuración.
+            int port = 0;
+            while (info[port].types != NULL) {
+                for (unsigned i = 0; i < info[port].num_types; i++) {
+                    LOG_DEBUG("Puerto %d soporta: %s (ID: %u)", 
+                        port, 
+                        info[port].types[i].desc, 
+                        info[port].types[i].id);
+                }
+                port++;
+            }
+            return true;
+        }
 		default: {
 			if (cmd < 65583){
 				LOG_DEBUG("Comando no tratado: %s\n", Constant::TipoToStr(cmd).c_str());
@@ -360,162 +369,123 @@ void loadstate(){
 	}
 }
 
-void update_input() {
-    SDL_Event event;
-	
-
-	while (SDL_PollEvent(&event)) {
-		if (event.type == SDL_QUIT) {
-            gameMenu->running = false; // Marcamos para salir
-        }
-
-		int player = event.jbutton.which; // Índice del mando (0, 1, 2...)
-        if (player >= MAX_PLAYERS) continue;
-
-        if (event.type == SDL_JOYBUTTONDOWN || event.type == SDL_JOYBUTTONUP) {
-            bool pressed = (event.type == SDL_JOYBUTTONDOWN);
-            
-            // Mapeo simple de botones SDL -> Libretro
-            switch (event.jbutton.button) {
-                case SDL_BUTTON_A: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_A] = pressed; break;
-                case SDL_BUTTON_B: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_B] = pressed; break;
-                case SDL_BUTTON_X: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_X] = pressed; break;
-                case SDL_BUTTON_Y: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_Y] = pressed; break;
-                case SDL_BUTTON_START: gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_START]  = pressed; break;
-                case SDL_BUTTON_SELECT: 
-					if (pressed && !gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_SELECT]){
-						gameMenu->joystick->lastSelectPress = SDL_GetTicks();
-						LOG_DEBUG("Setting the ticks on: %d\n", gameMenu->joystick->lastSelectPress);
-					} else if (!pressed){
-						gameMenu->joystick->lastSelectPress = 0;
-						LOG_DEBUG("Resseting ticks\n");
-					}
-					gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_SELECT] = pressed; 
-					break;
-            }
-        }
-        
-        // Manejo de la cruceta (D-PAD) mediante Ejes o Hats
-        if (event.type == SDL_JOYHATMOTION) {
-            gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_UP]    = (event.jhat.value & SDL_HAT_UP) > 0;
-            gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_DOWN]  = (event.jhat.value & SDL_HAT_DOWN) > 0;
-            gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_LEFT]  = (event.jhat.value & SDL_HAT_LEFT) > 0;
-            gameMenu->joystick->g_joy_state[player][RETRO_DEVICE_ID_JOYPAD_RIGHT] = (event.jhat.value & SDL_HAT_RIGHT) > 0;
-        }
-
-		if (event.type == SDL_KEYUP) {
-			if (event.key.keysym.sym == SDLK_F6){
-				savestate();
-			} else if (event.key.keysym.sym == SDLK_F9){
-				loadstate();
-			} else if (event.key.keysym.sym == SDLK_BACKSPACE){
-				//gameMenu->getCfgLoader()->configMain[cfg::syncMode].setPropValue(gameMenu->sync->g_sync_last);
-				*gameMenu->current_sync = gameMenu->sync->g_sync_last;
-				//gameMenu->processConfigChanges();
-				SDL_PauseAudio(0);
-			}
-		} else if (event.type == SDL_KEYDOWN) {
-			if (event.key.keysym.sym == SDLK_BACKSPACE){
-				//Enabling fast forward
-				//gameMenu->getCfgLoader()->configMain[cfg::syncMode].getPropValue(gameMenu->sync->g_sync_last);
-				//gameMenu->getCfgLoader()->configMain[cfg::syncMode].setPropValue(SYNC_NONE);
-				//gameMenu->processConfigChanges();
-				gameMenu->sync->g_sync_last = *gameMenu->current_sync;
-				*gameMenu->current_sync = SYNC_NONE;
-
-				SDL_PauseAudio(1);
-			}
-		}
-    }
-	const Uint32 now = SDL_GetTicks();
-	//LOG_DEBUG("ticks are: %d\n", SDL_GetTicks() - gameMenu->joystick->lastSelectPress);
-	if (gameMenu->joystick->lastSelectPress > 0 && now - gameMenu->joystick->lastSelectPress > LONGKEYTIMEOUT){
-		gameMenu->joystick->lastSelectPress = 0;
-		gameMenu->setEmuStatus(EMU_MENU);
-		gameMenu->joystick->resetAllValues();
-	}
-}
-
 /**
  * 
  */
 void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, bool keypress){
 	static Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	tEvento askEvento;
-	//Procesamos los controles de la aplicacion
-	askEvento = gameMenu.WaitForKey();
 
-	if (askEvento.isJoy){
-		ConfigEmu *emu = gameMenu.getCfgEmu();
-		if (listMenu.getNumGames() == 0 && emu->generalConfig){
-			//Opciones para modificar el menu de configuracion
-			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_UP)){
-				gameMenu.configMenus->prevPos();
-			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_DOWN)){
-				gameMenu.configMenus->nextPos();
-			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT)){
-				gameMenu.configMenus->cambiarValor(-1);
-			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
-				gameMenu.configMenus->cambiarValor(1);
-			} 
-
-			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A)){
-				gameMenu.configMenus->confirmar();
-			} else if(askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_B)){
-				gameMenu.configMenus->volver();
-			}
-
-			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A) || askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT) 
-				|| askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
-				gameMenu.processConfigChanges();
-			}
-		} else {
-			//Opciones para seleccionar una rom para el emulador
-			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_UP)){
-				listMenu.prevPos();
-			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_DOWN)){
-				listMenu.nextPos();
-			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_LEFT)){
-				listMenu.prevPage();
-			} else if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_RIGHT)){
-				listMenu.nextPage();
-			} 
-
-			if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_A)){
-				vector<string> launchCommand = gameMenu.launchProgram(listMenu);
-				if (launchCommand.size() > 1){
-					SDL_FillRect(gameMenu.screen, NULL, bkgText);
-					if (launchGame(launchCommand.at(1))){
-						gameMenu.setEmuStatus(EMU_STARTED);
-					}
-					gameMenu.joystick->resetAllValues();
-					gameMenu.joystick->lastSelectPress = 0;
-					return;
+	if (gameMenu.configMenus->getStatus() == POLLING_INPUTS){
+		SDL_Event event;
+		while (SDL_PollEvent(&event)) {
+			switch (event.type) {
+				case SDL_QUIT:
+					gameMenu.running = false;
+					break;
+				case SDL_JOYBUTTONDOWN: {
+					gameMenu.configMenus->updateButton(event.jbutton.button);
+					break;
 				}
-			} 
+				case SDL_JOYHATMOTION:
+					if (event.jhat.value != 0){ //Solo en el momento del joydown
+						gameMenu.configMenus->updateButton(event.jhat.value);
+                    }
+                    break;
+				default:
+					break;
+			}
 		}
+		gameMenu.joystick->resetAllValues();
+		gameMenu.joystick->lastSelectPress = 0;
+	} else {
+		//Procesamos los controles de la aplicacion
+		askEvento = gameMenu.WaitForKey();
+		if (askEvento.isJoy){
+			ConfigEmu *emu = gameMenu.getCfgEmu();
+			if (listMenu.getNumGames() == 0 && emu->generalConfig){
+				switch(askEvento.joy){
+					case JOY_BUTTON_UP:{
+						gameMenu.configMenus->prevPos();
+						break;
+					}
+					case JOY_BUTTON_DOWN:{
+						gameMenu.configMenus->nextPos();
+						break;
+					}
+					case JOY_BUTTON_LEFT:{
+						gameMenu.configMenus->cambiarValor(-1);
+						break;
+					}
+					case JOY_BUTTON_RIGHT:{
+						gameMenu.configMenus->cambiarValor(1);
+						break;
+					}
+					case JOY_BUTTON_A:{
+						gameMenu.configMenus->confirmar();
+						break;
+					}
+					case JOY_BUTTON_B:{
+						gameMenu.configMenus->volver();
+						break;
+					}
+					default:
+						break;
+				}
 
-		if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_R)){
-            //Change to prev emulator
-            //sound.play(SBTNCLICK);
-            //gameMenu.showMessage("Refreshing gamelist...");
-            gameMenu.getNextCfgEmu();
-            gameMenu.loadEmuCfg(listMenu);
-        }
-        if (askEvento.joy == JoyMapper::getJoyMapper(JOY_BUTTON_L)){
-            //Change to next emulator
-            //sound.play(SBTNCLICK);
-            //gameMenu.showMessage("Refreshing gamelist...");
-            gameMenu.getPrevCfgEmu();
-            gameMenu.loadEmuCfg(listMenu);
-        } 
+				if (askEvento.joy == JOY_BUTTON_A || askEvento.joy == JOY_BUTTON_LEFT
+					|| askEvento.joy == JOY_BUTTON_RIGHT){
+					gameMenu.processConfigChanges();
+				}
 
-		if (askEvento.longKeyPress[JoyMapper::getJoyMapper(JOY_BUTTON_SELECT)] && gameMenu.getLastStatus() == EMU_STARTED){
-			LOG_DEBUG("Detectada pulsacion larga del select\n");
-			gameMenu.setEmuStatus(EMU_STARTED);
-			SDL_FillRect(gameMenu.video_page, NULL, gameMenu.uBkgColor);
-			gameMenu.joystick->resetAllValues();
-			return;
+			} else {
+				//Opciones para seleccionar una rom para el emulador
+				if (askEvento.joy == JOY_BUTTON_UP){
+					listMenu.prevPos();
+				} else if (askEvento.joy == JOY_BUTTON_DOWN){
+					listMenu.nextPos();
+				} else if (askEvento.joy == JOY_BUTTON_LEFT){
+					listMenu.prevPage();
+				} else if (askEvento.joy == JOY_BUTTON_RIGHT){
+					listMenu.nextPage();
+				} 
+
+				if (askEvento.joy == JOY_BUTTON_A){
+					vector<string> launchCommand = gameMenu.launchProgram(listMenu);
+					if (launchCommand.size() > 1){
+						SDL_FillRect(gameMenu.screen, NULL, bkgText);
+						if (launchGame(launchCommand.at(1))){
+							gameMenu.setEmuStatus(EMU_STARTED);
+						}
+						gameMenu.joystick->resetAllValues();
+						gameMenu.joystick->lastSelectPress = 0;
+						return;
+					}
+				} 
+			}
+
+			if (askEvento.joy == JOY_BUTTON_R){
+				//Change to prev emulator
+				//sound.play(SBTNCLICK);
+				//gameMenu.showMessage("Refreshing gamelist...");
+				gameMenu.getNextCfgEmu();
+				gameMenu.loadEmuCfg(listMenu);
+			}
+			if (askEvento.joy == JOY_BUTTON_L){
+				//Change to next emulator
+				//sound.play(SBTNCLICK);
+				//gameMenu.showMessage("Refreshing gamelist...");
+				gameMenu.getPrevCfgEmu();
+				gameMenu.loadEmuCfg(listMenu);
+			} 
+
+			if (askEvento.longKeyPress[JOY_BUTTON_SELECT] && gameMenu.getLastStatus() == EMU_STARTED){
+				LOG_DEBUG("Detectada pulsacion larga del select\n");
+				gameMenu.setEmuStatus(EMU_STARTED);
+				SDL_FillRect(gameMenu.video_page, NULL, gameMenu.uBkgColor);
+				gameMenu.joystick->resetAllValues();
+				return;
+			}
 		}
 	}
 
@@ -537,17 +507,131 @@ void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, 
     }
 }
 
+void update_input() {
+    SDL_Event event;
+
+	while (SDL_PollEvent(&event)) {
+		switch (event.type) {
+            case SDL_QUIT:
+                gameMenu->running = false;
+                break;
+
+            case SDL_JOYBUTTONDOWN:
+            case SDL_JOYBUTTONUP: {
+                const int p = event.jbutton.which;
+                if (p < MAX_PLAYERS) {
+                    const bool pressed = (event.type == SDL_JOYBUTTONDOWN);
+					if (event.jbutton.button >= Joystick::buttonsMapperLibretro[p].nButtons)
+						break;
+
+                    const int joyId = Joystick::buttonsMapperLibretro[p].buttons[event.jbutton.button].joy;
+					if (joyId >= 0) {
+						gameMenu->joystick->g_joy_state[p][joyId] = pressed;
+					}
+                    
+                    if (joyId == RETRO_DEVICE_ID_JOYPAD_SELECT) {
+                        gameMenu->joystick->lastSelectPress = pressed ? SDL_GetTicks() : 0;
+                    }
+                }
+                break;
+            }
+			
+			case SDL_JOYHATMOTION: {
+				const int player = event.jhat.which;
+				if (player < MAX_PLAYERS) {
+					const Uint8 hatVal = event.jhat.value;
+					const t_joy_retro_inputs &input = Joystick::buttonsMapperLibretro[player];
+        
+					// Creamos una referencia corta para no escribir tanto
+					bool* state = gameMenu->joystick->g_joy_state[player];
+
+					// Mapeo directo usando tus constantes guardadas
+					state[RETRO_DEVICE_ID_JOYPAD_UP]    = (hatVal & input.hats[RETRO_DEVICE_ID_JOYPAD_UP].joy) != 0;
+					state[RETRO_DEVICE_ID_JOYPAD_DOWN]  = (hatVal & input.hats[RETRO_DEVICE_ID_JOYPAD_DOWN].joy) != 0;
+					state[RETRO_DEVICE_ID_JOYPAD_LEFT]  = (hatVal & input.hats[RETRO_DEVICE_ID_JOYPAD_LEFT].joy) != 0;
+					state[RETRO_DEVICE_ID_JOYPAD_RIGHT] = (hatVal & input.hats[RETRO_DEVICE_ID_JOYPAD_RIGHT].joy) != 0;
+				}
+				break;
+			}
+
+			case SDL_JOYAXISMOTION: {
+				const int p = event.jbutton.which;
+                if (p < MAX_PLAYERS) {
+					const int isPositive = (event.jaxis.value > 0);
+					const int buttonIdx = (event.jaxis.axis * 2) + isPositive;
+					//LOG_DEBUG("Eje: %d, Valor: %d -> Boton Virtual: %d", event.jaxis.axis, event.jaxis.value, buttonIdx);
+					if (buttonIdx < MAX_ANALOG_AXIS) {
+						gameMenu->joystick->g_analog_state[p][buttonIdx] = event.jaxis.value;
+					}
+				}
+				break;
+			}
+
+			case SDL_KEYUP: {
+				if (event.key.keysym.sym == SDLK_F6){
+					savestate();
+				} else if (event.key.keysym.sym == SDLK_F9){
+					loadstate();
+				} else if (event.key.keysym.sym == SDLK_BACKSPACE){
+					*gameMenu->current_sync = gameMenu->sync->g_sync_last;
+					SDL_PauseAudio(0);
+				}
+				break;
+			} 
+			case SDL_KEYDOWN: {
+				if (event.key.keysym.sym == SDLK_BACKSPACE){
+					gameMenu->sync->g_sync_last = *gameMenu->current_sync;
+					*gameMenu->current_sync = SYNC_NONE;
+					SDL_PauseAudio(1);
+				}
+				break;
+			}
+		}
+	}
+
+	const Uint32 now = SDL_GetTicks();
+	//LOG_DEBUG("ticks are: %d\n", SDL_GetTicks() - gameMenu->joystick->lastSelectPress);
+	if (gameMenu->joystick->lastSelectPress > 0 && now - gameMenu->joystick->lastSelectPress > LONGKEYTIMEOUT){
+		gameMenu->joystick->lastSelectPress = 0;
+		gameMenu->setEmuStatus(EMU_MENU);
+		gameMenu->joystick->resetAllValues();
+	}
+}
+
 // Se llama antes de pedir el estado de los inputs
 void retro_input_poll(void) {
     update_input();
 }
 
 int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsigned id) {
-    if (port >= MAX_PLAYERS || device != RETRO_DEVICE_JOYPAD) 
+
+	if (port >= MAX_PLAYERS) 
         return 0;
+
+	if (device == RETRO_DEVICE_JOYPAD) {
+		// Devolvemos el estado del botón 'id' para el jugador 'port'
+		return gameMenu->joystick->g_joy_state[port][id] ? 1 : 0;
+	} 
+	//TODO: No lo tratamos por ahora
+	/*else if (device == RETRO_DEVICE_ANALOG) {
+		int sdl_axis = -1;
+
+        if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT) {
+            sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 0 : 1;
+        } else if (index == RETRO_DEVICE_INDEX_ANALOG_RIGHT) {
+            sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 2 : 3;
+        }
+
+		if (sdl_axis != -1) {
+			int16_t val = gameMenu->joystick->g_analog_state[port][sdl_axis];
+			LOG_DEBUG("port: %d, Valor: %d -> sdl_axis: %d", port, val, sdl_axis);
+            // Aplicar zona muerta (Deadzone) para evitar "drift"
+            if (abs(val) < DEADZONE) return 0;
+            return val;
+		}
+	}*/
     
-    // Devolvemos el estado del botón 'id' para el jugador 'port'
-    return gameMenu->joystick->g_joy_state[port][id] ? 1 : 0;
+	return 0;
 }
 
 //Audio Callbacks for Libretro

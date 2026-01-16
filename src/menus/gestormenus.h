@@ -1,12 +1,24 @@
 #include <uiobjects/object.h>
 #include <io/cfgloader.h>
+#include <beans/structures.h>
 
 #include <iostream>
 #include <vector>
 #include <string>
 
 // --- Definición de tipos de opciones ---
-enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_SUBMENU };
+enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_SUBMENU, OPC_INT, OPC_KEY};
+
+enum TipoKey{
+	KEY_JOY_BTN,
+	KEY_JOY_HAT
+};
+
+enum CONFIG_STATUS{
+	NORMAL,
+	POLLING_INPUTS,
+	MAX_CONFIG_STATUS
+};
 
 struct Menu; // Declaración anticipada
 
@@ -25,12 +37,35 @@ public:
     OpcionBool(std::string t, bool* v) : Opcion(t, OPC_BOOLEANA), valor(v) {}
 };
 
+class OpcionInt : public Opcion {
+public:
+    int* valor;
+	std::string description;
+    OpcionInt(std::string t, int* v, std::string desc) : Opcion(t, OPC_INT), valor(v), description(desc) {}
+};
+
+class OpcionKey : public Opcion {
+public:
+    t_joy_retro_inputs* valor;
+	int btn;
+	int gamepadId;
+	std::string description;
+	bool changeAsked; 
+	Uint32 lastTimeAsked;
+	TipoKey tipoKey;
+
+    OpcionKey(std::string t, t_joy_retro_inputs* v, int pgamepadId, int pbtn, TipoKey ptipoKey, std::string desc) : Opcion(t, OPC_KEY), valor(v), 
+		gamepadId(pgamepadId),btn(pbtn), description(desc), 
+		changeAsked(false), lastTimeAsked(0), tipoKey(ptipoKey) {}
+};
+
 class OpcionLista : public Opcion {
 public:
     std::vector<std::string> items;
     int* indice;
+
     OpcionLista(std::string t, std::vector<std::string> it, int* idx) 
-        : Opcion(t, OPC_LISTA), items(it), indice(idx) {}
+        : Opcion(t, OPC_LISTA), items(it), indice(idx)  {}
 };
 
 class OpcionSubMenu : public Opcion {
@@ -64,6 +99,8 @@ private:
     // Lista de todos los menús para liberar memoria al final
     std::vector<Menu*> todosLosMenus;
 
+	CONFIG_STATUS status;
+
 	int marginX;
     int marginY;
     int iniPos;
@@ -83,6 +120,10 @@ private:
 	void resetIndexPos();
 	void clearSelectedText();
 	void setLayout(int layout, int screenw, int screenh);
+	void addControlerButtons(Menu*&, int);
+
+	int findBtnPad(int, int);
+	int findBtnHat(int, int);
 
 public:
     GestorMenus(int screenw, int screenh);
@@ -100,6 +141,9 @@ public:
     // Método simple para obtener qué dibujar
     Menu* obtenerMenuActual();
 	void draw(SDL_Surface *video_page);
+	void updateButton(int);
+
+	CONFIG_STATUS getStatus(){ return status;}
 
 	void nextPos();
     void prevPos();
