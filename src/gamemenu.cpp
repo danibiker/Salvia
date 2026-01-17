@@ -6,7 +6,7 @@
 #include <beans/structures.h>
 #include <io/joymapper.h>
 #include <so/launcher.h>
-#include <libretro.h>
+#include <libretro/libretro.h>
 
 
 GameMenu::GameMenu(CfgLoader *cfgLoader){
@@ -35,7 +35,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	}
 
 	configMenus = new GestorMenus(screen->w, screen->h);
-	configMenus->inicializar(cfgLoader);
+	configMenus->inicializar(cfgLoader, joystick);
 	message.ticks = 0;
 	// En la clase Config o GameMenu
 	selectScalerMode(FULLSCREEN);

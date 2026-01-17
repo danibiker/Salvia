@@ -5,12 +5,16 @@
     </LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
-    <LocalDebuggerCommand>$(TargetPath)</LocalDebuggerCommand>
+    <LocalDebuggerCommand>$(ProjectDir)DistroWin\$(TargetName)$(TargetExt)</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)DistroWin</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LocalDebuggerCommandArguments>$(ProjectDir)\roms\sonicmd.gen</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>
+    </LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
+    <LocalDebuggerCommand>$(ProjectDir)DistroWin\$(TargetName)$(TargetExt)</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)DistroWin</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
     <Xbox360DebuggerCommandArguments>
@@ -27,6 +31,8 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Win32'">
     <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommand>$(ProjectDir)DistroWin\$(TargetName)$(TargetExt)</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)DistroWin</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">
     <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
@@ -71,5 +77,25 @@
     <LocalDebuggerWorkingDirectory>$(ProjectDir)DistroWin\</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Win32'">
+    <LocalDebuggerCommand>$(ProjectDir)DistroWin\$(TargetName)$(TargetExt)</LocalDebuggerCommand>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Win32'">
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)DistroWin</LocalDebuggerWorkingDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Win32'">
+    <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">
+    <LocalDebuggerCommand>$(ProjectDir)DistroWin\$(TargetName)$(TargetExt)</LocalDebuggerCommand>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)DistroWin</LocalDebuggerWorkingDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">
+    <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>

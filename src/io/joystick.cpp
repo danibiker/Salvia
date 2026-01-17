@@ -50,19 +50,23 @@ bool Joystick::init_all_joysticks() {
     int hats = 0;
 	int buttons = 0;
 
-	mPrevAxisValues = new std::map<int, int>[mNumJoysticks];
-	mPrevHatValues = new std::map<int, int>[mNumJoysticks];
+	mPrevAxisValues = new std::map<int, int>[MAX_PLAYERS];
+	mPrevHatValues = new std::map<int, int>[MAX_PLAYERS];
 
     // Abrir todos los mandos disponibles hasta el límite de jugadores
-    for (int joyId = 0; joyId < mNumJoysticks && joyId < MAX_PLAYERS; joyId++) {
+    for (int joyId = 0; joyId < MAX_PLAYERS; joyId++) {
         g_joysticks[joyId] = SDL_JoystickOpen(joyId);
-        if (g_joysticks[joyId]) {
+        
+		if (g_joysticks[joyId]) {
             LOG_DEBUG("Mando %d abierto: %s\n", joyId, SDL_JoystickName(joyId));
-        }
-
-		axis = SDL_JoystickNumAxes(g_joysticks[joyId]);
-        hats = SDL_JoystickNumHats(g_joysticks[joyId]);
-		buttons = SDL_JoystickNumButtons(g_joysticks[joyId]);
+			axis = SDL_JoystickNumAxes(g_joysticks[joyId]);
+			hats = SDL_JoystickNumHats(g_joysticks[joyId]);
+			buttons = SDL_JoystickNumButtons(g_joysticks[joyId]);
+        } else {
+			axis = MAX_ANALOG_AXIS;
+			hats = RETRO_DEVICE_ID_JOYPAD_R3 + 1;
+			buttons = 10;
+		}
 
         //cout << "hay " + Constant::TipoToStr(axis) + " axis en el joystick: " + Constant::TipoToStr(i) << endl;
         for(int k = 0; k < axis; k++){
@@ -74,6 +78,8 @@ bool Joystick::init_all_joysticks() {
 
 		//Almacenamos las posiciones mapeadas para cada boton del emulador
 		buttonsMapperLibretro[joyId].buttons = new t_retro_input [buttons];
+		buttonsMapperLibretro[joyId].retroButtons = new t_retro_input [RETRO_DEVICE_ID_JOYPAD_R3 + 1];
+
 		buttonsMapperLibretro[joyId].hats = new t_retro_input [RETRO_DEVICE_ID_JOYPAD_R3 + 1];
 		buttonsMapperLibretro[joyId].axis = new t_retro_input [axis * 2];
 		buttonsMapperLibretro[joyId].nButtons = buttons;
@@ -101,21 +107,19 @@ bool Joystick::init_all_joysticks() {
 }
 
 void Joystick::loadButtonsEmupad(int joyId){
+
+	int num_port_buttons = sizeof(configurablePortButtons) / sizeof(configurablePortButtons[0]);
+
 	//Cada Posicion del array debe cuadrar con sdl
 	//TODO: Ajustar para el numero de botones correspondiente a cada joystick
-	buttonsMapperLibretro[joyId].setButton(0, RETRO_DEVICE_ID_JOYPAD_A);
-	buttonsMapperLibretro[joyId].setButton(1, RETRO_DEVICE_ID_JOYPAD_B);
-	buttonsMapperLibretro[joyId].setButton(2, RETRO_DEVICE_ID_JOYPAD_X);
-	buttonsMapperLibretro[joyId].setButton(3, RETRO_DEVICE_ID_JOYPAD_Y);
-	buttonsMapperLibretro[joyId].setButton(4, RETRO_DEVICE_ID_JOYPAD_L);
-	buttonsMapperLibretro[joyId].setButton(5, RETRO_DEVICE_ID_JOYPAD_R);
-	buttonsMapperLibretro[joyId].setButton(6, RETRO_DEVICE_ID_JOYPAD_SELECT);
-	buttonsMapperLibretro[joyId].setButton(7, RETRO_DEVICE_ID_JOYPAD_START);
-	buttonsMapperLibretro[joyId].setButton(8, RETRO_DEVICE_ID_JOYPAD_L3);
-	buttonsMapperLibretro[joyId].setButton(9, RETRO_DEVICE_ID_JOYPAD_R3);
+	for (int i=0; i < buttonsMapperLibretro[joyId].nButtons; i++){
+		buttonsMapperLibretro[joyId].setButton(i, i < num_port_buttons ? configurablePortButtons[i] : -1);
+	}
 
-	buttonsMapperLibretro[joyId].setAxis(0, RETRO_DEVICE_ID_ANALOG_X);
-	buttonsMapperLibretro[joyId].setAxis(1, RETRO_DEVICE_ID_ANALOG_Y);
+	if (buttonsMapperLibretro[joyId].nAxis >= 2){
+		buttonsMapperLibretro[joyId].setAxis(0, RETRO_DEVICE_ID_ANALOG_X);
+		buttonsMapperLibretro[joyId].setAxis(1, RETRO_DEVICE_ID_ANALOG_Y);
+	}
 
 	buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_UP, SDL_HAT_UP);
 	buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_RIGHT, SDL_HAT_RIGHT);
@@ -130,7 +134,7 @@ bool Joystick::loadButtonsFrontend(std::string rutaIni){
 
 	if (fileConfigJoystick.size() > 0){
 		std::string linea = "";
-		bool foundFrontend;
+		bool foundFrontend = false;
 		std::size_t pos = 0;
         for (unsigned int i=0; i<fileConfigJoystick.size(); i++){
             linea = fileConfigJoystick.at(i);
@@ -146,7 +150,7 @@ bool Joystick::loadButtonsFrontend(std::string rutaIni){
 				nLinesProcessed++;
 			} else if (foundFrontend && (pos = linea.find("axis=")) != std::string::npos){
 				linea = linea.substr(pos + 5);	
-				cargarValoresEnArray(buttonsMapperFrontend.axis, linea, buttonsMapperFrontend.nAxis);
+				cargarValoresEnArray(buttonsMapperFrontend.axis, linea, buttonsMapperFrontend.nAxis * 2);
 				nLinesProcessed++;
 			} else if (linea == "[FRONTEND]"){
 				foundFrontend = true;
@@ -316,7 +320,8 @@ tEvento Joystick::WaitForKey(SDL_Surface* screen){
                 evento.unicode = event.key.keysym.unicode;
                 evento.isKey = true;
                 evento.keyjoydown = true;
-                if (evento.keyMod & KMOD_LCTRL && evento.key == SDLK_c) evento.quit = true;
+                if (evento.keyMod & KMOD_LCTRL && evento.key == SDLK_c) 
+					evento.quit = true;
                 lastEvento = evento;    //Guardamos el ultimo evento que hemos lanzado desde el teclado
                 lastKeyDown = SDL_GetTicks();  //reseteo del keydown
                 break;

@@ -1,5 +1,6 @@
 #include <uiobjects/object.h>
 #include <io/cfgloader.h>
+#include <io/joystick.h>
 #include <beans/structures.h>
 
 #include <iostream>
@@ -47,16 +48,20 @@ public:
 class OpcionKey : public Opcion {
 public:
     t_joy_retro_inputs* valor;
-	int btn;
+	int sdlBtn;
+	int axis;
+	int retroBtn;
+
 	int gamepadId;
+
 	std::string description;
 	bool changeAsked; 
 	Uint32 lastTimeAsked;
 	TipoKey tipoKey;
 
-    OpcionKey(std::string t, t_joy_retro_inputs* v, int pgamepadId, int pbtn, TipoKey ptipoKey, std::string desc) : Opcion(t, OPC_KEY), valor(v), 
-		gamepadId(pgamepadId),btn(pbtn), description(desc), 
-		changeAsked(false), lastTimeAsked(0), tipoKey(ptipoKey) {}
+    OpcionKey(std::string t, t_joy_retro_inputs* v, int pgamepadId, int psdlBtn, int pretroBtn, TipoKey ptipoKey, std::string desc) : Opcion(t, OPC_KEY), valor(v), 
+		gamepadId(pgamepadId), sdlBtn(psdlBtn), retroBtn(pretroBtn), description(desc), 
+		changeAsked(false), lastTimeAsked(0), tipoKey(ptipoKey), axis(-1) {}
 };
 
 class OpcionLista : public Opcion {
@@ -120,16 +125,17 @@ private:
 	void resetIndexPos();
 	void clearSelectedText();
 	void setLayout(int layout, int screenw, int screenh);
+	void addControlerOptions(Menu*&, int, Joystick *);
 	void addControlerButtons(Menu*&, int);
 
-	int findBtnPad(int, int);
+	int findBtnPad(int);
 	int findBtnHat(int, int);
 
 public:
     GestorMenus(int screenw, int screenh);
 	~GestorMenus();
     // Inicializa la estructura de menús
-    void inicializar(CfgLoader *refConfig);
+    void inicializar(CfgLoader *, Joystick *);
     // Lógica de navegación Arriba/Abajo
     void navegar(int dir);
     // Lógica para cambiar valores (Izquierda / Derecha)
@@ -142,6 +148,7 @@ public:
     Menu* obtenerMenuActual();
 	void draw(SDL_Surface *video_page);
 	void updateButton(int);
+	void updateAxis(int, int);
 
 	CONFIG_STATUS getStatus(){ return status;}
 

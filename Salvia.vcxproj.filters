@@ -214,5 +214,8 @@
     <ClInclude Include="src\const\cfgconst.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\libretro\vfs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

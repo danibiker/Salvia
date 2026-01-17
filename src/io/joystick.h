@@ -1,7 +1,7 @@
 #pragma once
 
 #include <map>
-#include <libretro.h>
+#include <libretro/libretro.h>
 #include <beans/structures.h>
 #include <io/cursorgestor.h>
 
@@ -50,6 +50,8 @@ static char * configurablePortHatsStr[] = {
 	"RETRO_DEVICE_ID_JOYPAD_LEFT",
 	"RETRO_DEVICE_ID_JOYPAD_RIGHT"
 };
+
+
 
 
 class Joystick{

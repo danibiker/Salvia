@@ -44,7 +44,7 @@ void GestorMenus::setLayout(int layout, int screenw, int screenh){
 }
 
 // Inicializa la estructura de menús
-void GestorMenus::inicializar(CfgLoader *refConfig) {
+void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
     // 1. Crear contenedores de menús
     menuRaiz = new Menu("Opciones");
     Menu* menuVideo = new Menu("Vídeo", menuRaiz);
@@ -92,6 +92,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig) {
 	for (int controlId = 0; controlId < MAX_PLAYERS; controlId++){
 		std::string controlStr = "Controles del puerto " + Constant::TipoToStr(controlId + 1);
 		Menu* menuControlesPuerto = new Menu(controlStr, menuAsignaciones);
+		addControlerOptions(menuControlesPuerto, controlId, joystick);
 		addControlerButtons(menuControlesPuerto, controlId);
 		menuAsignaciones->opciones.push_back(new OpcionSubMenu(controlStr, menuControlesPuerto));
 		todosLosMenus.push_back(menuControlesPuerto);
@@ -107,6 +108,10 @@ void GestorMenus::inicializar(CfgLoader *refConfig) {
 	resetIndexPos();
 }
 
+void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joystick){
+	menu->opciones.push_back(new OpcionBool("Eje analógico como pad", &joystick->buttonsMapperLibretro->axisAsPad));
+}
+
 void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
 	int num_port_buttons = sizeof(configurablePortButtons) / sizeof(configurablePortButtons[0]);
 	int num_port_hats = sizeof(configurablePortHats) / sizeof(configurablePortHats[0]);
@@ -119,17 +124,16 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
 
 	for (int i=0; i < num_port_hats; i++){
 		std::string text = configurablePortHatsStr[i];
-		//int btn = findBtnPad(controlId, configurablePortHats[i]);
 		if (nHats > 0){
-			menu->opciones.push_back(new OpcionKey(text, &Joystick::buttonsMapperLibretro[controlId], controlId, configurablePortHats[i], KEY_JOY_HAT, "Hat: "));	
+			menu->opciones.push_back(new OpcionKey(text, &Joystick::buttonsMapperLibretro[controlId], controlId, configurablePortHats[i], i, KEY_JOY_HAT, "Hat: "));	
 		}
 	}
 
 	for (int i=0; i < num_port_buttons; i++){
 		std::string text = configurablePortButtonsStr[i];
-		int btn = findBtnPad(controlId, configurablePortButtons[i]);
+		//int btn = findBtnPad(controlId, configurablePortButtons[i]);
 		if (nBtns > 0){
-			menu->opciones.push_back(new OpcionKey(text, &Joystick::buttonsMapperLibretro[controlId], controlId, btn, KEY_JOY_BTN, "Btn: "));	
+			menu->opciones.push_back(new OpcionKey(text, &Joystick::buttonsMapperLibretro[controlId], controlId, i, configurablePortButtons[i], KEY_JOY_BTN, "Btn: "));	
 		} 
 	}
 }
@@ -144,10 +148,18 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
 	return -1;
 }*/
 
-int GestorMenus::findBtnPad(int controlId, int btn){
-	int nBut = Joystick::buttonsMapperLibretro[controlId].nButtons;
+int GestorMenus::findBtnPad(int btn){
+	/*int nBut = Joystick::buttonsMapperLibretro[controlId].nButtons;
 	for (int i=0; i < nBut; i++){
 		if (Joystick::buttonsMapperLibretro[controlId].buttons[i].joy == btn){
+			return i;
+		}
+	}
+	return -1;*/
+
+	int num_port_buttons = sizeof(configurablePortButtons) / sizeof(configurablePortButtons[0]);
+	for (int i=0; i < num_port_buttons; i++){
+		if (configurablePortButtons[i] == btn){
 			return i;
 		}
 	}
@@ -166,33 +178,96 @@ void GestorMenus::navegar(int dir) { // -1 o 1
 /**
 *
 */
+void GestorMenus::updateAxis(int sdlAxisValue, int sdlAxis){
+	if (status != POLLING_INPUTS) return;
+	Opcion* opt = menuActual->opciones[menuActual->seleccionado];
+
+	if (opt->tipo == OPC_KEY) {
+		OpcionKey* k = static_cast<OpcionKey*>(opt);
+		if (k && k->valor && k->sdlBtn >= 0) {
+			if (abs(sdlAxisValue) > DEADZONE) {
+				// 0 si es negativo (Izquierda/Arriba), 1 si es positivo (Derecha/Abajo)
+				int isPositive = (sdlAxisValue > 0);
+				int buttonIdx = (sdlAxis * 2) + isPositive;
+
+				LOG_DEBUG("Eje: %d, Valor: %d -> Boton Virtual: %d", 
+							sdlAxis, sdlAxisValue, buttonIdx);
+
+				k->valor->setHat(k->sdlBtn, -1);
+				k->valor->setAxis(buttonIdx, k->sdlBtn);
+				k->axis = buttonIdx;
+
+				k->changeAsked = false;
+				k->lastTimeAsked = 0;
+				status = NORMAL;
+
+				//La posicion de la opcion 0 es el elemento que anyadimos en addControlerOptions
+				//en el orden de las inserciones en el vector.
+				if (menuActual->opciones.size() > 0 && menuActual->opciones[0]->tipo == OPC_BOOLEANA) {	
+					//Ponemos a true la opcion "Eje analógico como pad"
+					OpcionBool* b = (OpcionBool*)menuActual->opciones[0];
+					*(b->valor) = true;
+				}
+			} else {
+				// CENTRO: Opcionalmente manejar el reposo aquí si es necesario
+			}
+		}
+	}
+}
+
+/**
+*
+*/
 void GestorMenus::updateButton(int sdlbtn){
 	if (status != POLLING_INPUTS) return;
 	Opcion* opt = menuActual->opciones[menuActual->seleccionado];
 
 	if (opt->tipo == OPC_KEY) {
 		OpcionKey* k = static_cast<OpcionKey*>(opt);
-		if (k && k->valor && k->btn >= 0) {
+		if (k && k->valor) {
 			if (k->tipoKey == KEY_JOY_BTN){
-				// 1. Obtener el ID de Libretro que queremos asignar (ej: RETRO_DEVICE_ID_JOYPAD_A)
-				int retroID = k->valor->buttons[k->btn].joy; 
 				// Limpiar el mapeo antiguo para evitar que dos botones hagan lo mismo
-				k->valor->buttons[k->btn].joy = k->valor->buttons[sdlbtn].joy; 
-				//k->valor->buttons[k->btn].index = k->btn;
+				//k->valor->buttons[k->sdlBtn].joy = k->valor->buttons[sdlbtn].joy; 
 				k->changeAsked = false;
 				k->lastTimeAsked = 0;
 				status = NORMAL;
-				LOG_DEBUG("Change to %d, previous %d, retrobtn %d", sdlbtn, k->valor->buttons[k->btn].index, retroID);
-				// 3. Asignar al nuevo índice físico de SDL
-				k->valor->setButton(sdlbtn, retroID);
-				menuActual->opciones.clear();
-				addControlerButtons(menuActual, k->gamepadId);
+				LOG_DEBUG("Change to %d, previous %d, retrobtn %d", sdlbtn, k->sdlBtn, k->retroBtn);
+				std::vector<Opcion*> optButtons = menuActual->opciones;
+
+				int sdlPosFromRetroBtn = k->valor->retroButtons[k->retroBtn].joy;
+
+				bool found = false;
+				//Si hay algun elemento con el mismo valor de tecla sdl, lo actualizamos a -1
+				for (int i=0; i < optButtons.size(); i++){
+					//LOG_DEBUG("sdlbtn %d, k->retroBtn %d",i, k->valor->buttons[i].joy);	
+					if (i != menuActual->seleccionado && optButtons[i]->tipo == OPC_KEY) {
+						OpcionKey* kBtn = static_cast<OpcionKey*>(optButtons[i]);
+						if (kBtn->tipoKey == KEY_JOY_BTN && kBtn->sdlBtn == sdlbtn){
+							kBtn->valor->buttons[kBtn->sdlBtn].joy = -1;
+							kBtn->sdlBtn = -1;
+							found = true;
+							break;
+						}
+					}
+				}
+				if (found){
+					k->valor->buttons[sdlPosFromRetroBtn].joy = -1;
+				}
+
+				k->valor->setButton(sdlbtn, k->retroBtn);
+				k->sdlBtn = sdlbtn;
+
+				
+				for (int i=0; i < k->valor->nButtons; i++){
+					LOG_DEBUG("sdlbtn %d, k->retroBtn %d",i, k->valor->buttons[i].joy);	
+				}
+
 				//LOG_DEBUG("Accion Libretro %d ahora mapeada al boton SDL %d", retroID, sdlbtn);
 			} else if (k->tipoKey == KEY_JOY_HAT){
 				// Extraemos la dirección activa del Hat (limpiamos otros bits si fuera necesario)
-				Uint8 hatDir = (Uint8)(sdlbtn & (SDL_HAT_UP | SDL_HAT_DOWN | SDL_HAT_LEFT | SDL_HAT_RIGHT));
-				if (hatDir > 0) {
-					k->valor->setHat(k->valor->buttons[k->btn].index, hatDir);
+				Uint8 sdlHatDir = (Uint8)(sdlbtn & (SDL_HAT_UP | SDL_HAT_DOWN | SDL_HAT_LEFT | SDL_HAT_RIGHT));
+				if (sdlHatDir > 0) {
+					k->valor->setHat(k->sdlBtn, sdlHatDir);
 				}
 
 				k->changeAsked = false;
@@ -316,23 +391,34 @@ void GestorMenus::draw(SDL_Surface *video_page){
 				if (opt->changeAsked && SDL_GetTicks() - opt->lastTimeAsked < 4000){
 					str = "Esperando pulsación de tecla en " + Constant::intToString( (5000 - (SDL_GetTicks() - opt->lastTimeAsked)) / 1000 ) + " s";
 				} else if (opt->changeAsked) {
-					str = opt->description + Constant::intToString(opt->valor->buttons[opt->btn].index);
+					str = opt->description + Constant::intToString(opt->sdlBtn);
 					opt->changeAsked = false;
 					opt->lastTimeAsked = 0;
 					status = NORMAL;
+				} else if (opt->sdlBtn > -1) {
+					str = opt->description + Constant::intToString(opt->sdlBtn);
 				} else {
-					str = opt->description + Constant::intToString(opt->valor->buttons[opt->btn].index);
+					str = "-";
 				}
 			} else if (opt->tipoKey == KEY_JOY_HAT) {
 				if (opt->changeAsked && SDL_GetTicks() - opt->lastTimeAsked < 4000){
 					str = "Esperando pulsación de tecla en " + Constant::intToString( (5000 - (SDL_GetTicks() - opt->lastTimeAsked)) / 1000 ) + " s";
-				} else if (opt->changeAsked) {
-					str = opt->description + Constant::intToString(opt->valor->hats[opt->btn].index);
-					opt->changeAsked = false;
-					opt->lastTimeAsked = 0;
-					status = NORMAL;
+				} else if (opt->sdlBtn > -1 && opt->valor->hats[opt->sdlBtn].joy != -1){
+					str = opt->description + Constant::intToString(opt->valor->hats[opt->sdlBtn].joy);
+					if (opt->changeAsked) {
+						opt->changeAsked = false;
+						opt->lastTimeAsked = 0;
+						status = NORMAL;
+					} 
+				} else if (opt->axis > -1 && opt->valor->axis[opt->axis].joy != -1){
+					str = "Axis: " + Constant::intToString(opt->valor->axis[opt->axis].joy);
+					if (opt->changeAsked) {
+						opt->changeAsked = false;
+						opt->lastTimeAsked = 0;
+						status = NORMAL;
+					} 					
 				} else {
-					str = opt->description + Constant::intToString(opt->valor->hats[opt->btn].index);
+					str = "-";
 				}
 			}
 
