@@ -31,6 +31,11 @@ GestorMenus::~GestorMenus() {
     for(size_t i = 0; i < todosLosMenus.size(); i++) delete todosLosMenus[i];
 }
 
+void guardarJoysticks(Joystick* joy){
+	LOG_DEBUG("Guardando valores del joystick");
+	joy->saveButtonsRetro();
+}
+
 void GestorMenus::setLayout(int layout, int screenw, int screenh){
 	this->marginY = (int) (screenh / SCREENHDIV * 1.5);
     clearSelectedText();
@@ -79,6 +84,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 		filtros.push_back(videoScaleStrings[i]);
 	}
 	menuVideo->opciones.push_back(new OpcionLista("Escalado", filtros, &refConfig->configMain[cfg::scaleMode].getIntRef()));
+	menuVideo->opciones.push_back(new OpcionBool("Forzar pantalla completa", &refConfig->configMain[cfg::forceFS].getBoolRef()));
 
 	Menu* menuAsignaciones = new Menu("Asignaciones de Retropad", menuEntrada);
 	Menu* menuHotkeys = new Menu("Teclas rápidas", menuEntrada);
@@ -90,13 +96,15 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 
 
 	for (int controlId = 0; controlId < MAX_PLAYERS; controlId++){
-		std::string controlStr = "Controles del puerto " + Constant::TipoToStr(controlId + 1);
-		Menu* menuControlesPuerto = new Menu(controlStr, menuAsignaciones);
+		std::string controlStr = "Controles del puerto " + Constant::TipoToStr(controlId + 1) + " " +
+			joystick->buttonsMapperLibretro[controlId].joyName;
+		Menu* menuControlesPuerto = new Menu(controlStr , menuAsignaciones);
 		addControlerOptions(menuControlesPuerto, controlId, joystick);
 		addControlerButtons(menuControlesPuerto, controlId);
 		menuAsignaciones->opciones.push_back(new OpcionSubMenu(controlStr, menuControlesPuerto));
 		todosLosMenus.push_back(menuControlesPuerto);
 	}
+	menuAsignaciones->opciones.push_back(new OpcionExec("Guardar asignaciones", guardarJoysticks, joystick));
 
     // 3. Poblar Menú Principal
     menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración vídeo", menuVideo));
@@ -109,7 +117,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 }
 
 void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joystick){
-	menu->opciones.push_back(new OpcionBool("Eje analógico como pad", &joystick->buttonsMapperLibretro->axisAsPad));
+	menu->opciones.push_back(new OpcionBool("Eje analógico como pad", &joystick->buttonsMapperLibretro[controlId].axisAsPad));
 }
 
 void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
@@ -121,45 +129,40 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
 
 	const int nBtns = Joystick::buttonsMapperLibretro[controlId].nButtons;
 	const int nHats = Joystick::buttonsMapperLibretro[controlId].nHats;
+	const int nAxis = Joystick::buttonsMapperLibretro[controlId].nAxis;
 
-	for (int i=0; i < num_port_hats; i++){
-		std::string text = configurablePortHatsStr[i];
-		if (nHats > 0){
-			menu->opciones.push_back(new OpcionKey(text, &Joystick::buttonsMapperLibretro[controlId], controlId, configurablePortHats[i], i, KEY_JOY_HAT, "Hat: "));	
+	int retroAxisValue = 0;
+	int axisPos = 0;
+
+	for (int retroBtnIdx=0; retroBtnIdx < num_port_hats; retroBtnIdx++){
+		std::string text = configurablePortHatsStr[retroBtnIdx];
+		const int retroBtnValue = configurablePortHats[retroBtnIdx];
+
+		if (retroBtnIdx < nAxis * 2){
+			retroAxisValue = Joystick::buttonsMapperLibretro[controlId].axis[retroBtnIdx].joy;
+			axisPos = findAxisPos(retroAxisValue);
+		}
+
+		if (nHats > 0 && Joystick::buttonsMapperLibretro[controlId].hats[retroBtnValue].joy != -1){
+			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, retroBtnIdx, retroBtnValue, KEY_JOY_HAT, "Hat: "));	
+		} else if (axisPos != -1){
+			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, axisPos, retroBtnValue, KEY_JOY_AXIS, "Axis: "));	
 		}
 	}
 
-	for (int i=0; i < num_port_buttons; i++){
-		std::string text = configurablePortButtonsStr[i];
-		//int btn = findBtnPad(controlId, configurablePortButtons[i]);
+	for (int sdlBtnIdx=0; sdlBtnIdx < num_port_buttons; sdlBtnIdx++){
+		std::string text = configurablePortButtonsStr[sdlBtnIdx];
+		const int retroBtnValue = configurablePortButtons[sdlBtnIdx];
 		if (nBtns > 0){
-			menu->opciones.push_back(new OpcionKey(text, &Joystick::buttonsMapperLibretro[controlId], controlId, i, configurablePortButtons[i], KEY_JOY_BTN, "Btn: "));	
+			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, sdlBtnIdx, retroBtnValue, KEY_JOY_BTN, "Btn: "));	
 		} 
 	}
 }
 
-/*int GestorMenus::findBtnHat(int controlId, int btn){
-	int nHat = Joystick::buttonsMapperLibretro[controlId].nHats;
-	for (int i=0; i < nHat; i++){
-		if (Joystick::buttonsMapperLibretro[controlId].hats[i].joy == btn){
-			return i;
-		}
-	}
-	return -1;
-}*/
-
-int GestorMenus::findBtnPad(int btn){
-	/*int nBut = Joystick::buttonsMapperLibretro[controlId].nButtons;
-	for (int i=0; i < nBut; i++){
-		if (Joystick::buttonsMapperLibretro[controlId].buttons[i].joy == btn){
-			return i;
-		}
-	}
-	return -1;*/
-
-	int num_port_buttons = sizeof(configurablePortButtons) / sizeof(configurablePortButtons[0]);
-	for (int i=0; i < num_port_buttons; i++){
-		if (configurablePortButtons[i] == btn){
+int GestorMenus::findAxisPos(int retroDirection){
+	int num_port_hats = sizeof(configurablePortHats) / sizeof(configurablePortHats[0]);
+	for (int i=0; i < num_port_hats; i++){
+		if (configurablePortHats[i] == retroDirection){
 			return i;
 		}
 	}
@@ -189,13 +192,12 @@ void GestorMenus::updateAxis(int sdlAxisValue, int sdlAxis){
 				// 0 si es negativo (Izquierda/Arriba), 1 si es positivo (Derecha/Abajo)
 				int isPositive = (sdlAxisValue > 0);
 				int buttonIdx = (sdlAxis * 2) + isPositive;
-
-				LOG_DEBUG("Eje: %d, Valor: %d -> Boton Virtual: %d", 
-							sdlAxis, sdlAxisValue, buttonIdx);
+				LOG_DEBUG("Eje: %d, Valor: %d -> Boton Virtual: %d", sdlAxis, sdlAxisValue, buttonIdx);
 
 				k->valor->setHat(k->sdlBtn, -1);
 				k->valor->setAxis(buttonIdx, k->sdlBtn);
 				k->axis = buttonIdx;
+				k->tipoKey = KEY_JOY_AXIS;
 
 				k->changeAsked = false;
 				k->lastTimeAsked = 0;
@@ -263,11 +265,12 @@ void GestorMenus::updateButton(int sdlbtn){
 				}
 
 				//LOG_DEBUG("Accion Libretro %d ahora mapeada al boton SDL %d", retroID, sdlbtn);
-			} else if (k->tipoKey == KEY_JOY_HAT){
+			} else if (k->tipoKey == KEY_JOY_HAT || k->tipoKey == KEY_JOY_AXIS){
 				// Extraemos la dirección activa del Hat (limpiamos otros bits si fuera necesario)
 				Uint8 sdlHatDir = (Uint8)(sdlbtn & (SDL_HAT_UP | SDL_HAT_DOWN | SDL_HAT_LEFT | SDL_HAT_RIGHT));
 				if (sdlHatDir > 0) {
 					k->valor->setHat(k->sdlBtn, sdlHatDir);
+					k->tipoKey = KEY_JOY_HAT;
 				}
 
 				k->changeAsked = false;
@@ -277,6 +280,7 @@ void GestorMenus::updateButton(int sdlbtn){
 		}
 	}
 }
+
 
 // Lógica para cambiar valores (Izquierda / Derecha)
 void GestorMenus::cambiarValor(int dir) {
@@ -296,12 +300,7 @@ void GestorMenus::cambiarValor(int dir) {
 		LOG_DEBUG("a %s\n",  *(b->valor) ? "S" : "N");
     } else if (opt->tipo == OPC_INT) {
 		OpcionInt* i = (OpcionInt*)opt;
-	} else if (opt->tipo == OPC_KEY) {
-		OpcionKey* k = (OpcionKey*)opt;
-		k->changeAsked = true;
-		k->lastTimeAsked = SDL_GetTicks();
-		status = POLLING_INPUTS;
-	}
+	} 
 }
 
 // Lógica para confirmar (Botón A)
@@ -315,8 +314,14 @@ void GestorMenus::confirmar() {
     } else if (opt->tipo == OPC_BOOLEANA) {
         cambiarValor(1);
 	} else if (opt->tipo == OPC_KEY) {
-        cambiarValor(1);
-    }
+		OpcionKey* k = (OpcionKey*)opt;
+		k->changeAsked = true;
+		k->lastTimeAsked = SDL_GetTicks();
+		status = POLLING_INPUTS;
+    } else if (opt->tipo == OPC_EXEC) {
+		OpcionExec* e = (OpcionExec*)opt;
+		e->execfunc(e->joystick);
+	}
 }
 
 // Lógica para volver (Botón B)
@@ -365,6 +370,8 @@ void GestorMenus::draw(SDL_Surface *video_page){
 			line = option->titulo;// + " " + ((OpcionInt *)option)->description + Constant::intToString(*((OpcionInt *)option)->valor);
 		} else if (option->tipo == OPC_KEY){
 			line = option->titulo;
+		} else if (option->tipo == OPC_EXEC){
+			line = option->titulo;
 		}
 
         //Drawing a faded background selection rectangle
@@ -409,9 +416,16 @@ void GestorMenus::draw(SDL_Surface *video_page){
 						opt->changeAsked = false;
 						opt->lastTimeAsked = 0;
 						status = NORMAL;
-					} 
+					} 				
+				} else {
+					str = "-";
+				}
+			} else if (opt->tipoKey == KEY_JOY_AXIS) {
+				if (opt->changeAsked && SDL_GetTicks() - opt->lastTimeAsked < 4000){
+					str = "Esperando pulsación de tecla en " + Constant::intToString( (5000 - (SDL_GetTicks() - opt->lastTimeAsked)) / 1000 ) + " s";
 				} else if (opt->axis > -1 && opt->valor->axis[opt->axis].joy != -1){
-					str = "Axis: " + Constant::intToString(opt->valor->axis[opt->axis].joy);
+					//str = "Axis: " + Constant::intToString(opt->valor->axis[opt->axis].joy);
+					str = "Axis: " + Constant::intToString(opt->axis);
 					if (opt->changeAsked) {
 						opt->changeAsked = false;
 						opt->lastTimeAsked = 0;

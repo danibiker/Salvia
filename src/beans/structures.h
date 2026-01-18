@@ -152,6 +152,7 @@ struct t_joy_inputs{
 	int *buttons;
 	int *axis;
 	int *hats;
+	std::string joyName;
 
 	int nButtons;
 	int nAxis;
@@ -172,38 +173,103 @@ struct t_retro_input{
 	}
 };
 
-struct t_joy_retro_inputs{
-	t_retro_input *buttons;
-	t_retro_input *retroButtons;
+struct t_joy_retro_inputs {
+    t_retro_input *buttons;
+    t_retro_input *axis;
+    t_retro_input *hats;
+    t_retro_input *retroButtons;
+    
+    std::string joyName;
+    int nButtons;
+    int nAxis;
+    int nHats;
+    bool axisAsPad;
 
-	t_retro_input *axis;
-	t_retro_input *hats;
-	int nButtons;
-	int nAxis;
-	int nHats;
-	bool axisAsPad;
+    // 1. Constructor básico
+    t_joy_retro_inputs() : buttons(NULL), axis(NULL), hats(NULL), retroButtons(NULL) {
+        nButtons = 0; nAxis = 0; nHats = 0; 
+        axisAsPad = false;
+    }
 
-	t_joy_retro_inputs(){
-		nButtons = 0;
-		nAxis = 0;
-		nHats = 0; 
-		axisAsPad = false;
-	}
+    // 2. Destructor: Liberar memoria para evitar leaks
+    ~t_joy_retro_inputs() {
+        liberar();
+    }
 
-	void setButton(int sdlbtnidx, int retrobtn){
-		buttons[sdlbtnidx].joy = retrobtn;
-		if (retrobtn >= 0){
-			retroButtons[retrobtn].joy = sdlbtnidx;
-		}
-	}
+    // 3. Constructor de Copia: Necesario para std::map y pasar por valor
+    t_joy_retro_inputs(const t_joy_retro_inputs& other) : buttons(NULL), axis(NULL), hats(NULL), retroButtons(NULL) {
+        copiarDesde(other);
+    }
 
-	void setHat(int retroidx, int sdlHat){
-		hats[retroidx].joy = sdlHat;
-	}
+    // 4. Operador de Asignación: Crucial para "buttonsMapperLibretro[joyId] = ..."
+    t_joy_retro_inputs& operator=(const t_joy_retro_inputs& other) {
+        if (this != &other) {
+            liberar();
+            copiarDesde(other);
+        }
+        return *this;
+    }
 
-	void setAxis(int sdlbtnidx, int retrobtn){
-		axis[sdlbtnidx].joy = retrobtn;
-	}
+    // --- Funciones auxiliares de gestión ---
+    void liberar() {
+        if (buttons) delete[] buttons;
+        if (axis) delete[] axis;
+        if (hats) delete[] hats;
+        if (retroButtons) delete[] retroButtons;
+        buttons = axis = hats = retroButtons = NULL;
+    }
+
+    void copiarDesde(const t_joy_retro_inputs& other) {
+        joyName = other.joyName;
+        nButtons = other.nButtons;
+        nAxis = other.nAxis;
+        nHats = other.nHats;
+        axisAsPad = other.axisAsPad;
+
+        if (other.nButtons > 0 && other.buttons) {
+            buttons = new t_retro_input[nButtons];
+            memcpy(buttons, other.buttons, nButtons * sizeof(t_retro_input));
+        }
+        if (other.nAxis > 0 && other.axis) {
+            // Asumiendo que axis usa nAxis * 2 como en tu cargador previo
+            axis = new t_retro_input[nAxis * 2];
+            memcpy(axis, other.axis, (nAxis * 2) * sizeof(t_retro_input));
+        }
+        if (other.nHats > 0 && other.hats) {
+            hats = new t_retro_input[nHats];
+            memcpy(hats, other.hats, nHats * sizeof(t_retro_input));
+        }
+        if (other.retroButtons) {
+            // Ajusta el tamaño según tu constante de botones de Libretro (ej. 16 o 20)
+            retroButtons = new t_retro_input[20]; 
+            memcpy(retroButtons, other.retroButtons, 20 * sizeof(t_retro_input));
+        }
+    }
+
+    // --- Tus funciones originales de lógica ---
+    void setButton(int sdlbtnidx, int retrobtn) {
+        if (buttons && sdlbtnidx < nButtons) buttons[sdlbtnidx].joy = retrobtn;
+        if (retroButtons && retrobtn >= 0 && retrobtn < 20) retroButtons[retrobtn].joy = sdlbtnidx;
+    }
+
+    void setHat(int retroidx, int sdlHat) {
+        if (hats && retroidx < nHats) hats[retroidx].joy = sdlHat;
+    }
+
+    void setAxis(int sdlbtnidx, int retrobtn) {
+        if (axis && sdlbtnidx < nAxis * 2) axis[sdlbtnidx].joy = retrobtn;
+    }
+
+    bool equals(const t_joy_retro_inputs& p) const {
+        if (nButtons != p.nButtons || nAxis != p.nAxis || nHats != p.nHats || axisAsPad != p.axisAsPad) return false;
+        if (nButtons > 0 && buttons && p.buttons)
+            for (int i = 0; i < nButtons; i++) if (buttons[i].joy != p.buttons[i].joy) return false;
+        if (nAxis > 0 && axis && p.axis)
+            for (int i = 0; i < nAxis * 2; i++) if (axis[i].joy != p.axis[i].joy) return false;
+        if (nHats > 0 && hats && p.hats)
+            for (int i = 0; i < nHats; i++) if (hats[i].joy != p.hats[i].joy) return false;
+        return true;
+    }
 };
 
 class ConfigEmu{

@@ -28,10 +28,15 @@ struct t_scale_props{
     int dh; 
     int scale; 
     float ratio;
+	bool force_fs;
 };
 
 //Todas las funciones de escalado, tienen que tener esta interfaz
 typedef void (*ScalerFunc)(const t_scale_props& props);
+// Buffer para alojar el resultado de Scale2x (ej. 320x224 -> 640x448)
+// Reservamos para el caso máximo (ej. 512x512 -> 1024x1024)
+// 2048 * 1152 permite hasta Scale4x de una imagen de 512x256 o xBRZ alto
+static uint16_t temp_buffer[2048 * 1152]; // Ocupa aprox 4.5 MB
 
 inline void check_center(uint16_t* src, uint16_t*& dst, int sw, int sh, std::size_t spitch, 
 						int dw, int dh, std::size_t dpitch, 
@@ -67,27 +72,7 @@ inline void no_video(const t_scale_props& props) {
 	return;
 }
 
-inline void fast_video_blit(const t_scale_props& props) {
-    int src_stride = 0, dst_stride = 0;
 
-	// Crea una copia local del puntero para poder pasarla por referencia
-	uint16_t* dst_ptr = props.dst; 
-
-    // 1. Usar check_center (escala 1 ya que no hay escalado manual aquí)
-    // Esto ajustará el puntero 'dst' al punto exacto de centrado.
-    check_center(props.src, dst_ptr, props.sw, props.sh, props.spitch, props.dw, props.dh, props.dpitch, 1, src_stride, dst_stride);
-
-    // 2. El ancho a copiar en bytes (cada píxel uint16_t son 2 bytes)
-    const std::size_t bytes_per_line = props.sw * sizeof(uint16_t);
-
-    // 3. Bucle de copiado
-    for (int y = 0; y < props.sh; y++) {
-        // Usamos memcpy para máxima velocidad por línea
-        // Destino: puntero centrado + salto de línea (en píxeles)
-        // Origen: puntero base + salto de línea (en píxeles)
-        memcpy(dst_ptr + (y * dst_stride), props.src + (y * src_stride), bytes_per_line);
-    }
-}
 
 #if defined(_XBOX)
 inline void fast_video_blit_xbox(const t_scale_props& props) {
@@ -250,9 +235,48 @@ inline void scale_software_fixed_point_xbox_final(const t_scale_props& props) {
 }
 #endif
 
+inline void fast_video_blit(const t_scale_props& props) {
+	if (props.force_fs){
+		#ifdef WIN
+			scale_software_fixed_point_safe2(props);		    //508fps	
+		#elif defined(_XBOX)
+			scale_software_fixed_point_xbox_final(props);     //112fps
+		#endif
+		return;
+	}
+
+    int src_stride = 0, dst_stride = 0;
+
+	// Crea una copia local del puntero para poder pasarla por referencia
+	uint16_t* dst_ptr = props.dst; 
+
+    // 1. Usar check_center (escala 1 ya que no hay escalado manual aquí)
+    // Esto ajustará el puntero 'dst' al punto exacto de centrado.
+    check_center(props.src, dst_ptr, props.sw, props.sh, props.spitch, props.dw, props.dh, props.dpitch, 1, src_stride, dst_stride);
+
+    // 2. El ancho a copiar en bytes (cada píxel uint16_t son 2 bytes)
+    const std::size_t bytes_per_line = props.sw * sizeof(uint16_t);
+
+    // 3. Bucle de copiado
+    for (int y = 0; y < props.sh; y++) {
+        // Usamos memcpy para máxima velocidad por línea
+        // Destino: puntero centrado + salto de línea (en píxeles)
+        // Origen: puntero base + salto de línea (en píxeles)
+        memcpy(dst_ptr + (y * dst_stride), props.src + (y * src_stride), bytes_per_line);
+    }
+}
 
 // Escalador 2x manual para RGB565
 inline void scale2x_software(const t_scale_props& props) {
+	
+	if (props.force_fs){
+		#ifdef WIN
+			scale_software_fixed_point_safe2(props);		    //508fps	
+		#elif defined(_XBOX)
+			scale_software_fixed_point_xbox_final(props);     //112fps
+		#endif
+		return;
+	}
 
 	int src_stride = 0, dst_stride = 0;
 	// Crea una copia local del puntero para poder pasarla por referencia
@@ -280,6 +304,15 @@ inline void scale2x_software(const t_scale_props& props) {
 }
 
 inline void scale3x_software(const t_scale_props& props) {
+	if (props.force_fs){
+		#ifdef WIN
+			scale_software_fixed_point_safe2(props);		    //508fps	
+		#elif defined(_XBOX)
+			scale_software_fixed_point_xbox_final(props);     //112fps
+		#endif
+		return;
+	}
+
 	if (props.sw * 3 > props.dw || props.sh * 3 > props.dh)
 		return;
 	// Crea una copia local del puntero para poder pasarla por referencia
@@ -311,6 +344,15 @@ inline void scale3x_software(const t_scale_props& props) {
 
 
 inline void scale4x_software(const t_scale_props& props) {
+	if (props.force_fs){
+		#ifdef WIN
+			scale_software_fixed_point_safe2(props);		    //508fps	
+		#elif defined(_XBOX)
+			scale_software_fixed_point_xbox_final(props);     //112fps
+		#endif
+		return;
+	}
+
     if (props.sw * 4 > props.dw || props.sh * 4 > props.dh)
 		return;
 	
@@ -350,96 +392,98 @@ inline void scale4x_software(const t_scale_props& props) {
 }
 
 /**
+* Se decide si se hace Fullscreen o Centrado Píxel Perfecto
+*/
+inline void finalize_scaling(const t_scale_props& props, int scaled_w, int scaled_h) {
+    int t_stride = scaled_w; // Stride en píxeles del temp_buffer
+
+    if (props.force_fs) {
+        // Caso A: Estirar el resultado del filtro a pantalla completa
+        t_scale_props fsProps = props;
+        fsProps.src = temp_buffer;
+        fsProps.sw = scaled_w;
+        fsProps.sh = scaled_h;
+        fsProps.spitch = scaled_w * sizeof(uint16_t);
+        
+        scale_software_fixed_point_safe2(fsProps);
+    } 
+    else {
+        // Caso B: Centrado Píxel Perfecto
+        int src_s, dst_s;
+        uint16_t* d_ptr = props.dst;
+        
+        check_center(temp_buffer, d_ptr, scaled_w, scaled_h, 
+                     scaled_w * sizeof(uint16_t), props.dw, props.dh, 
+                     props.dpitch, 1, src_s, dst_s);
+
+        for (int y = 0; y < scaled_h; y++) {
+            memcpy(d_ptr + (y * dst_s), temp_buffer + (y * t_stride), scaled_w * sizeof(uint16_t));
+        }
+    }
+}
+
+/**
  * AdvMAME2x (Scale2x) para RGB565 con centrado de pantalla
  * Optimizado para Xbox 360 / x86
  */
 inline void scale2x_advance(const t_scale_props& props) {
-    // Verificación de límites de seguridad para escalado 2x
-    if (!props.src || !props.dst || (props.sw * 2 > props.dw) || (props.sh * 2 > props.dh)) {
-        return;
-    }
+    if (!props.src || !props.dst) return;
 
-    int src_stride = 0, dst_stride = 0;
-	// Crea una copia local del puntero para poder pasarla por referencia
-	uint16_t* dst_ptr = props.dst; 
-    
-    // Llamada obligatoria para centrar (Factor 2 para Scale2x)
-    check_center(props.src, dst_ptr, props.sw, props.sh, props.spitch, props.dw, props.dh, props.dpitch, 2, src_stride, dst_stride);
-
-    // Ajuste de punteros base (sumamos el offset calculado en píxeles)
-    uint16_t* s_ptr_base = props.src;
-    uint16_t* d_ptr_base = dst_ptr;
-
+    // 1. Configuramos los strides internos
+    // s_gap: Stride de la imagen original (en píxeles uint16_t)
+    // t_gap: Stride del buffer temporal (siempre el doble del ancho original)
     const int s_gap = props.spitch / sizeof(uint16_t);
-    const int d_gap = props.dpitch / sizeof(uint16_t);
+    const int t_gap = props.sw * 2;
 
+    // 2. Ejecución del algoritmo AdvMAME2x sobre el temp_buffer
     for (int y = 0; y < props.sh; ++y) {
-        // Punteros a las líneas de origen: previa, actual y siguiente
-        const uint16_t* s_curr = &s_ptr_base[y * s_gap];
-        const uint16_t* s_prev = (y > 0) ? &s_ptr_base[(y - 1) * s_gap] : s_curr;
-        const uint16_t* s_next = (y < props.sh - 1) ? &s_ptr_base[(y + 1) * s_gap] : s_curr;
+        const uint16_t* s_curr = &props.src[y * s_gap];
+        const uint16_t* s_prev = (y > 0) ? &props.src[(y - 1) * s_gap] : s_curr;
+        const uint16_t* s_next = (y < props.sh - 1) ? &props.src[(y + 1) * s_gap] : s_curr;
 
-        // Cada línea de origen genera dos líneas de destino
-        uint16_t* d_top = &d_ptr_base[(y * 2) * d_gap];
-        uint16_t* d_bot = &d_ptr_base[(y * 2 + 1) * d_gap];
+        // El destino siempre es el temp_buffer
+        uint16_t* d_top = &temp_buffer[(y * 2) * t_gap];
+        uint16_t* d_bot = &temp_buffer[(y * 2 + 1) * t_gap];
 
         for (int x = 0; x < props.sw; ++x) {
-            // Píxel central y sus vecinos inmediatos
             uint16_t E = s_curr[x];
             uint16_t B = s_prev[x];
             uint16_t D = (x > 0) ? s_curr[x - 1] : E;
             uint16_t F = (x < props.sw - 1) ? s_curr[x + 1] : E;
             uint16_t H = s_next[x];
 
-            /*
-               Matriz de salida 2x2 para el píxel E:
-               [p0][p1]  <- d_top
-               [p2][p3]  <- d_bot
-            */
-
             if (B != H && D != F) {
-                // Aplicación de reglas AdvMAME2x
-                d_top[x * 2]     = (D == B) ? B : E; // p0
-                d_top[x * 2 + 1] = (B == F) ? F : E; // p1
-                d_bot[x * 2]     = (D == H) ? H : E; // p2
-                d_bot[x * 2 + 1] = (H == F) ? F : E; // p3
+                d_top[x * 2]     = (D == B) ? B : E;
+                d_top[x * 2 + 1] = (B == F) ? F : E;
+                d_bot[x * 2]     = (D == H) ? H : E;
+                d_bot[x * 2 + 1] = (H == F) ? F : E;
             } else {
-                // Relleno simple para zonas sin diagonales
-                d_top[x * 2]     = E;
-                d_top[x * 2 + 1] = E;
-                d_bot[x * 2]     = E;
-                d_bot[x * 2 + 1] = E;
+                d_top[x * 2] = d_top[x * 2 + 1] = d_bot[x * 2] = d_bot[x * 2 + 1] = E;
             }
         }
     }
+
+    // 3. LLAMADA GENÉRICA DE FINALIZACIÓN
+    // Aquí se decide si se hace Fullscreen o Centrado Píxel Perfecto
+    finalize_scaling(props, props.sw * 2, props.sh * 2);
 }
 
 inline void scale3x_advance(const t_scale_props& props) {
-     if (props.sw * 3 > props.dw || props.sh * 3 > props.dh)
-		return;
+    if (!props.src || !props.dst)
+        return;
 
-	int src_stride = 0, dst_stride = 0;
-    // Crea una copia local del puntero para poder pasarla por referencia
-	uint16_t* dst_ptr = props.dst; 
-
-    // Llamada obligatoria para centrar según tu estructura
-    check_center(props.src, dst_ptr, props.sw, props.sh, props.spitch, props.dw, props.dh, props.dpitch, 3, src_stride, dst_stride);
-
-    // Ajuste de punteros base (sumamos el offset calculado en píxeles)
+    // 1. Origen: Mantenemos tu lógica de gaps
     uint16_t* s_ptr = props.src;
-    uint16_t* d_ptr = dst_ptr;
-
     const int s_gap = props.spitch / sizeof(uint16_t);
-    const int d_gap = props.dpitch / sizeof(uint16_t);
+
+    // 2. Destino: Ahora es SIEMPRE el temp_buffer
+    // El gap del buffer temporal es exactamente el triple del ancho original
+    uint16_t* d_ptr = temp_buffer; 
+    const int d_gap = props.sw * 3; 
 
     for (int y = 0; y < props.sh; ++y) {
         for (int x = 0; x < props.sw; ++x) {
-            /* 
-               Matriz de vecinos:
-               A B C
-               D E F
-               G H I
-            */
+            /* Matriz de vecinos original */
             uint16_t E = s_ptr[y * s_gap + x];
             uint16_t B = (y > 0) ? s_ptr[(y - 1) * s_gap + x] : E;
             uint16_t D = (x > 0) ? s_ptr[y * s_gap + (x - 1)] : E;
@@ -451,34 +495,37 @@ inline void scale3x_advance(const t_scale_props& props) {
             uint16_t G = (y < props.sh - 1 && x > 0) ? s_ptr[(y + 1) * s_gap + (x - 1)] : E;
             uint16_t I = (y < props.sh - 1 && x < props.sw - 1) ? s_ptr[(y + 1) * s_gap + (x + 1)] : E;
 
-            // Puntero al inicio del bloque 3x3 de salida
+            // Puntero al bloque 3x3 de salida dentro de temp_buffer
             uint16_t* out = &d_ptr[(y * 3) * d_gap + (x * 3)];
 
             if (B != H && D != F) {
-                // Fila superior del bloque 3x3
-                out[0] = (D == B) ? B : E;                                     // E0
-                out[1] = ((D == B && E != C) || (B == F && E != A)) ? B : E;   // E1
-                out[2] = (B == F) ? F : E;                                     // E2
+                // Fila superior
+                out[0] = (D == B) ? B : E;
+                out[1] = ((D == B && E != C) || (B == F && E != A)) ? B : E;
+                out[2] = (B == F) ? F : E;
 
-                // Fila central del bloque 3x3
-                out[d_gap + 0] = ((D == B && E != G) || (D == H && E != A)) ? D : E; // E3
-                out[d_gap + 1] = E;                                                  // E4 (Centro siempre es E)
-                out[d_gap + 2] = ((B == F && E != I) || (H == F && E != C)) ? F : E; // E5
+                // Fila central
+                out[d_gap + 0] = ((D == B && E != G) || (D == H && E != A)) ? D : E;
+                out[d_gap + 1] = E;
+                out[d_gap + 2] = ((B == F && E != I) || (H == F && E != C)) ? F : E;
 
-                // Fila inferior del bloque 3x3
-                out[2 * d_gap + 0] = (D == H) ? H : E;                               // E6
-                out[2 * d_gap + 1] = ((D == H && E != I) || (H == F && E != G)) ? H : E; // E7
-                out[2 * d_gap + 2] = (H == F) ? F : E;                               // E8
+                // Fila inferior
+                out[2 * d_gap + 0] = (D == H) ? H : E;
+                out[2 * d_gap + 1] = ((D == H && E != I) || (H == F && E != G)) ? H : E;
+                out[2 * d_gap + 2] = (H == F) ? F : E;
             } else {
-                // Si no se detectan bordes, el bloque de 3x3 es idéntico al original
+                // Relleno sólido del bloque 3x3 en temp_buffer
                 for (int j = 0; j < 3; ++j) {
-                    for (int i = 0; i < 3; ++i) {
-                        out[j * d_gap + i] = E;
-                    }
+                    out[j * d_gap + 0] = E;
+                    out[j * d_gap + 1] = E;
+                    out[j * d_gap + 2] = E;
                 }
             }
         }
     }
+
+    // 3. Finalización genérica: decide si estirar a FS o centrar en 1280x720
+    finalize_scaling(props, props.sw * 3, props.sh * 3);
 }
 
 /**
@@ -486,41 +533,31 @@ inline void scale3x_advance(const t_scale_props& props) {
  * Expande cada píxel en un bloque de 4x4 analizando sus vecinos.
  */
 inline void scale4x_advance(const t_scale_props& props) {
-    if (props.sw * 4 > props.dw || props.sh * 4 > props.dh)
-		return;
-	
-	int src_stride = 0, dst_stride = 0;
-	// Crea una copia local del puntero para poder pasarla por referencia
-	uint16_t* dst_ptr = props.dst; 
-    
-    // Llamada para centrar la imagen y obtener los offsets de inicio
-    // El factor de escala es 4
-    check_center(props.src, dst_ptr, props.sw, props.sh, props.spitch, props.dw, props.dh, props.dpitch, 4, src_stride, dst_stride);
+    if (!props.src || !props.dst)
+        return;
 
-    // Ajuste de punteros base según el cálculo de check_center
+    // 1. Origen: Usamos tu lógica de gaps
     uint16_t* s_ptr = props.src;
-    uint16_t* d_ptr = dst_ptr;
-
-    // Convertimos pitch de bytes a número de elementos uint16_t
     const int s_gap = props.spitch / sizeof(uint16_t);
-    const int d_gap = props.dpitch / sizeof(uint16_t);
+
+    // 2. Destino Intermedio: temp_buffer
+    // El gap es exactamente el cuádruple del ancho original
+    uint16_t* d_ptr = temp_buffer; 
+    const int d_gap = props.sw * 4; 
 
     for (int y = 0; y < props.sh; ++y) {
         for (int x = 0; x < props.sw; ++x) {
-            // Píxel central (E) y vecinos cardinales
+            // Píxel central (E) y vecinos cardinales originales
             uint16_t E = s_ptr[y * s_gap + x];
             uint16_t B = (y > 0) ? s_ptr[(y - 1) * s_gap + x] : E;
             uint16_t D = (x > 0) ? s_ptr[y * s_gap + (x - 1)] : E;
             uint16_t F = (x < props.sw - 1) ? s_ptr[y * s_gap + (x + 1)] : E;
             uint16_t H = (y < props.sh - 1) ? s_ptr[(y + 1) * s_gap + x] : E;
 
-            // Puntero al inicio del bloque 4x4 en el destino
+            // Puntero al inicio del bloque 4x4 en temp_buffer
             uint16_t* out = &d_ptr[(y * 4) * d_gap + (x * 4)];
 
             if (B != H && D != F) {
-                // El algoritmo Scale4x es efectivamente Scale2x aplicado sobre el resultado de un Scale2x.
-                // Aquí aplicamos la lógica simplificada para los 16 sub-píxeles:
-                
                 // Fila 0
                 out[0] = (D == B) ? B : E;
                 out[1] = (D == B) ? B : E;
@@ -529,14 +566,14 @@ inline void scale4x_advance(const t_scale_props& props) {
 
                 // Fila 1
                 out[d_gap + 0] = (D == B) ? B : E;
-                out[d_gap + 1] = E; // Centro-Arriba-Izquierda
-                out[d_gap + 2] = E; // Centro-Arriba-Derecha
+                out[d_gap + 1] = E; 
+                out[d_gap + 2] = E; 
                 out[d_gap + 3] = (B == F) ? F : E;
 
                 // Fila 2
                 out[2 * d_gap + 0] = (D == H) ? H : E;
-                out[2 * d_gap + 1] = E; // Centro-Abajo-Izquierda
-                out[2 * d_gap + 2] = E; // Centro-Abajo-Derecha
+                out[2 * d_gap + 1] = E; 
+                out[2 * d_gap + 2] = E; 
                 out[2 * d_gap + 3] = (H == F) ? F : E;
 
                 // Fila 3
@@ -545,15 +582,17 @@ inline void scale4x_advance(const t_scale_props& props) {
                 out[3 * d_gap + 2] = (H == F) ? F : E;
                 out[3 * d_gap + 3] = (H == F) ? F : E;
             } else {
-                // Si no hay variación, se rellena el bloque 4x4 con el color original
+                // Relleno sólido 4x4 en temp_buffer
                 for (int j = 0; j < 4; ++j) {
-                    for (int i = 0; i < 4; ++i) {
-                        out[j * d_gap + i] = E;
-                    }
+                    uint16_t* o_line = &out[j * d_gap];
+                    o_line[0] = o_line[1] = o_line[2] = o_line[3] = E;
                 }
             }
         }
     }
+
+    // 3. Finalización: Estirar a Fullscreen o Centrado Píxel Perfecto
+    finalize_scaling(props, props.sw * 4, props.sh * 4);
 }
 
 
@@ -727,60 +766,30 @@ inline int xbrz_thread_func(void* data) {
 }
 
 inline void xbrz_scale_multithread(const t_scale_props& props) {
+    if (!props.src || !props.dst) return;
 
-	int src_stride = 0, dst_stride = 0;
+    // 1. Preparar superficies SDL (32 bits)
+    SDL_Surface *src32 = SDL_CreateRGBSurface(SDL_SWSURFACE, props.sw, props.sh, 32, rmask, gmask, bmask, amask);
+    SDL_Surface *dst32 = SDL_CreateRGBSurface(SDL_SWSURFACE, props.sw * props.scale, props.sh * props.scale, 32, rmask, gmask, bmask, amask);
 
-	// Crea una copia local del puntero para poder pasarla por referencia
-	uint16_t* dst_ptr = props.dst; 
+    if (!src32 || !dst32) {
+        if (src32) SDL_FreeSurface(src32);
+        if (dst32) SDL_FreeSurface(dst32);
+        return;
+    }
 
-	// 1. Usar check_center (escala 2 ya que no hay escalado manual aquí)
-    // Esto ajustará el puntero 'dst' al punto exacto de centrado.
-    check_center(props.src, dst_ptr, props.sw, props.sh, props.spitch, props.dw, props.dh, props.dpitch, props.scale, src_stride, dst_stride);
+    // 2. Convertir origen 565 a 32 bits
+    convertRGB565ToARGB8888(props.src, props.sw, props.sh, props.spitch, (uint32_t*)src32->pixels, src32->pitch);
 
-	Uint32 init = SDL_GetTicks();
-	Uint32 time = init;
-	
-	SDL_Surface *src32 = SDL_CreateRGBSurface(SDL_SWSURFACE, props.sw, props.sh, 32, rmask, gmask, bmask, amask);
-	SDL_Surface *dst32 = SDL_CreateRGBSurface(SDL_SWSURFACE, props.sw * props.scale, props.sh * props.scale, 32, rmask, gmask, bmask, amask);
-
-	/*if (src32->w != sw || src32->h != sh){
-		SDL_FreeSurface(src32);
-		src32 = SDL_CreateRGBSurface(SDL_SWSURFACE, sw, sh, 32, rmask, gmask, bmask, amask);
-	}
-
-	if (dst32->w != dw || dst32->h != dh){
-		SDL_FreeSurface(dst32);
-		dst32 = SDL_CreateRGBSurface(SDL_SWSURFACE, sw * scale, sh * scale, 32, rmask, gmask, bmask, amask);
-	}*/
-
-	Uint32 timeSurfaces = SDL_GetTicks() - time;
-
-	time = SDL_GetTicks();
-	convertRGB565ToARGB8888(props.src, props.sw, props.sh, props.spitch, (uint32_t*)src32->pixels, src32->pitch);
-	Uint32 timeConv8888 = SDL_GetTicks() - time;
-	time = SDL_GetTicks();
-
-	/*static int frame = 0;
-	if (frame % (60*3) == 0){
-		std::string file = "D:\\develop\\Github\\xbox360\\project\\Salvia\\Debug\\Win32\\imgs\\frame_" + Constant::intToString(frame) + ".bmp";
-		SDL_SaveBMP(src32, file.c_str());
-	}
-	frame++;*/
-
-	// 3. Llamar a xBRZ usando directamente los píxeles de SDL
+    // 3. Configurar hilos y ejecutar xBRZ
     auto* srcPixels = reinterpret_cast<uint32_t*>(src32->pixels);
     auto* dstPixels = reinterpret_cast<uint32_t*>(dst32->pixels);
 
-    // xBRZ asume pitch en número de píxeles, no en bytes (en la API clásica tipo xbrzscale)
-    int srcPitchPixels = src32->pitch / 4;
-    int dstPitchPixels = dst32->pitch / 4;
-
     SDL_Thread* threads[16];
     XBRZJob jobs[16];
-
-	int numThreads = 2;
+    int numThreads = 2; // Recomendado 3 en Xbox 360 para aprovechar los 3 núcleos Xenon
     int slice = props.sh / numThreads;
-	xbrz::ScalerCfg cfg;  // o tu config
+    xbrz::ScalerCfg cfg;
 
     for (int i = 0; i < numThreads; i++) {
         jobs[i].scale = props.scale;
@@ -789,10 +798,8 @@ inline void xbrz_scale_multithread(const t_scale_props& props) {
         jobs[i].w = props.sw;
         jobs[i].h = props.sh;
         jobs[i].cfg = &cfg;
-
         jobs[i].yFirst = i * slice;
         jobs[i].yLast  = (i == numThreads - 1) ? props.sh : (i + 1) * slice;
-
         threads[i] = SDL_CreateThread(xbrz_thread_func, &jobs[i]);
     }
 
@@ -800,76 +807,59 @@ inline void xbrz_scale_multithread(const t_scale_props& props) {
         SDL_WaitThread(threads[i], NULL);
     }
 
-	Uint32 timeScaler = SDL_GetTicks() - time;
-	time = SDL_GetTicks();
+    // 4. CONVERSIÓN CRÍTICA: De 32 bits al temp_buffer (16 bits)
+    // El ancho y alto escalados
+    int tw = props.sw * props.scale;
+    int th = props.sh * props.scale;
+    // El pitch del temp_buffer es tw * 2 bytes
+    convertARGB8888ToRGB565((uint32_t*)dst32->pixels, tw, th, dst32->pitch, temp_buffer, tw * sizeof(uint16_t));
 
-	SDL_FreeSurface(src32);
-	convertARGB8888ToRGB565((uint32_t*)dst32->pixels, dst32->w, dst32->h, dst32->pitch, dst_ptr, props.dpitch);
-	SDL_FreeSurface(dst32);
-	Uint32 timeConv565 = SDL_GetTicks() - time;
+    // Liberar recursos de 32 bits para no saturar la memoria de la Xbox 360
+    SDL_FreeSurface(src32);
+    SDL_FreeSurface(dst32);
 
-	Uint32 end = SDL_GetTicks() - init;
-	LOG_DEBUG("New surf. %d = %.0f%%, conv32: %d = %.0f%%, scale: %d = %.0f%%, conv16: %d = %.0f%%\n", 
-		timeSurfaces, (timeSurfaces / (float)end) * 100.0, 
-		timeConv8888, (timeConv8888 / (float)end) * 100.0,
-		timeScaler, (timeScaler / (float)end) * 100.0,
-		timeConv565, (timeConv565 / (float)end) * 100.0);
+    // 5. LLAMADA GENÉRICA
+    // Se encarga de estirar a Fullscreen o centrar la imagen xBRZ
+    finalize_scaling(props, tw, th);
 }
 
 
-// Escalador 2x manual para RGB565
 inline void scale_xBRZ_nx(const t_scale_props& props) {
+    if (!props.src || !props.dst) return;
 
-	int src_stride = 0, dst_stride = 0;
-	// Crea una copia local del puntero para poder pasarla por referencia
-	uint16_t* dst_ptr = props.dst; 
+    // 1. Preparar superficies SDL de 32 bits
+    SDL_Surface *src32 = SDL_CreateRGBSurface(SDL_SWSURFACE, props.sw, props.sh, 32, rmask, gmask, bmask, amask);
+    SDL_Surface *dst32 = SDL_CreateRGBSurface(SDL_SWSURFACE, props.sw * props.scale, props.sh * props.scale, 32, rmask, gmask, bmask, amask);
 
-	// 1. Usar check_center (escala 2 ya que no hay escalado manual aquí)
-    // Esto ajustará el puntero 'dst' al punto exacto de centrado.
-    check_center(props.src, dst_ptr, props.sw, props.sh, props.spitch, props.dw, props.dh, props.dpitch, props.scale, src_stride, dst_stride);
+    if (!src32 || !dst32) {
+        if (src32) SDL_FreeSurface(src32);
+        if (dst32) SDL_FreeSurface(dst32);
+        return;
+    }
 
-	Uint32 init = SDL_GetTicks();
-	Uint32 time = init;
-	
-	SDL_Surface *src32 = SDL_CreateRGBSurface(SDL_SWSURFACE, props.sw, props.sh, 32, rmask, gmask, bmask, amask);
-	SDL_Surface *dst32 = SDL_CreateRGBSurface(SDL_SWSURFACE, props.sw * props.scale, props.sh * props.scale, 32, rmask, gmask, bmask, amask);
-	Uint32 timeSurfaces = SDL_GetTicks() - time;
+    // 2. Convertir origen RGB565 a ARGB8888 (32 bits)
+    convertRGB565ToARGB8888(props.src, props.sw, props.sh, props.spitch, (uint32_t*)src32->pixels, src32->pitch);
 
-	time = SDL_GetTicks();
-	convertRGB565ToARGB8888(props.src, props.sw, props.sh, props.spitch, (uint32_t*)src32->pixels, src32->pitch);
-	Uint32 timeConv8888 = SDL_GetTicks() - time;
-	time = SDL_GetTicks();
-
-	/*static int frame = 0;
-	if (frame % (60*3) == 0){
-		std::string file = "D:\\develop\\Github\\xbox360\\project\\Salvia\\Debug\\Win32\\imgs\\frame_" + Constant::intToString(frame) + ".bmp";
-		SDL_SaveBMP(src32, file.c_str());
-	}
-	frame++;*/
-
-	// 3. Llamar a xBRZ usando directamente los píxeles de SDL
+    // 3. Ejecutar xBRZ (Monohilo)
     auto* srcPixels = reinterpret_cast<uint32_t*>(src32->pixels);
     auto* dstPixels = reinterpret_cast<uint32_t*>(dst32->pixels);
+    
+    xbrz::ScalerCfg cfg;
+    xbrz::scale(props.scale, srcPixels, dstPixels, props.sw, props.sh, cfg, 0, props.sh);
 
-    // xBRZ asume pitch en número de píxeles, no en bytes (en la API clásica tipo xbrzscale)
-    int srcPitchPixels = src32->pitch / 4;
-    int dstPitchPixels = dst32->pitch / 4;
+    // 4. CONVERSIÓN: De 32 bits al temp_buffer (16 bits)
+    int tw = props.sw * props.scale;
+    int th = props.sh * props.scale;
+    int t_pitch = tw * sizeof(uint16_t);
+    
+    // IMPORTANTE: Volcamos a temp_buffer, no a props.dst
+    convertARGB8888ToRGB565((uint32_t*)dst32->pixels, tw, th, dst32->pitch, temp_buffer, t_pitch);
 
-    xbrz::ScalerCfg cfg;  // o tu config
-    xbrz::scale(props.scale,srcPixels, dstPixels, props.sw, props.sh, cfg, 0, props.sh);
+    // Liberar superficies inmediatamente
+    SDL_FreeSurface(src32);
+    SDL_FreeSurface(dst32);
 
-	Uint32 timeScaler = SDL_GetTicks() - time;
-	time = SDL_GetTicks();
-
-	SDL_FreeSurface(src32);
-	convertARGB8888ToRGB565((uint32_t*)dst32->pixels, dst32->w, dst32->h, dst32->pitch, dst_ptr, props.dpitch);
-	SDL_FreeSurface(dst32);
-	Uint32 timeConv565 = SDL_GetTicks() - time;
-
-	Uint32 end = SDL_GetTicks() - init;
-	LOG_INFO("New surf. %d = %.0f%%, conv32: %d = %.0f%%, scale: %d = %.0f%%, conv16: %d = %.0f%%\n", 
-		timeSurfaces, (timeSurfaces / (float)end) * 100.0, 
-		timeConv8888, (timeConv8888 / (float)end) * 100.0,
-		timeScaler, (timeScaler / (float)end) * 100.0,
-		timeConv565, (timeConv565 / (float)end) * 100.0);
+    // 5. LLAMADA GENÉRICA DE FINALIZACIÓN
+    // Se encarga de estirar a pantalla completa si force_fs es true o centrar de forma normal
+    finalize_scaling(props, tw, th);
 }

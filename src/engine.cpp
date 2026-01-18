@@ -42,6 +42,8 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		return 1;
 	}
 
+	SDL_WM_SetCaption("Salvia", NULL);
+
 	if (TTF_Init() == -1) {
 		LOG_ERROR("Error TTF_Init: %s\n", TTF_GetError());
 	}

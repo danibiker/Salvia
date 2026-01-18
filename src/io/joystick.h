@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <vector>
 #include <libretro/libretro.h>
 #include <beans/structures.h>
 #include <io/cursorgestor.h>
@@ -65,17 +66,28 @@ class Joystick{
 		bool g_joy_state[MAX_PLAYERS][RETRO_DEVICE_ID_JOYPAD_R3 + 1];
 		int16_t g_analog_state[MAX_PLAYERS][MAX_ANALOG_AXIS];
 
-		static t_joy_retro_inputs buttonsMapperLibretro[MAX_PLAYERS];
 		static t_joy_inputs buttonsMapperFrontend;
+
+		static t_joy_retro_inputs buttonsMapperLibretro[MAX_PLAYERS];
+		
 
 		int getNumJoysticks(){return mNumJoysticks;}
 		void resetAllValues();
 		Uint32 lastSelectPress;
 		bool loadButtonsFrontend(std::string);
 		void saveButtonsFrontend(std::string);
+		void saveButtonsRetro();
+		
 
     private:
 		void cargarValoresEnArray(int *&, std::string, int);
+		int cargarValoresEnArray(t_retro_input *&, std::string);
+		void addJoyToList(std::vector<std::string>&, t_joy_retro_inputs&);
+		std::string searchNewName(std::map<std::string, t_joy_retro_inputs>&, std::string);
+		std::vector<std::string> loadControllerPorts();
+		std::map<std::string, t_joy_retro_inputs> loadButtonsRetroList();
+		void loadButtonsEmupad(int, std::vector<std::string>& , std::map<std::string, t_joy_retro_inputs>&);
+
 		SDL_Joystick* g_joysticks[MAX_PLAYERS];
 
 		tEvento evento;
@@ -88,6 +100,6 @@ class Joystick{
 		int actualCursor;
 		CursorGestor *gestorCursor;
 		void setCursor(int cursor);
-		void loadButtonsEmupad(int);
+		
 };
 

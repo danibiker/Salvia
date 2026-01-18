@@ -53,12 +53,17 @@ bool Joystick::init_all_joysticks() {
 	mPrevAxisValues = new std::map<int, int>[MAX_PLAYERS];
 	mPrevHatValues = new std::map<int, int>[MAX_PLAYERS];
 
+	std::vector<std::string> joynamesOnPort = loadControllerPorts();
+	std::map<std::string, t_joy_retro_inputs> masterJoyList = loadButtonsRetroList();
+
     // Abrir todos los mandos disponibles hasta el límite de jugadores
     for (int joyId = 0; joyId < MAX_PLAYERS; joyId++) {
         g_joysticks[joyId] = SDL_JoystickOpen(joyId);
         
 		if (g_joysticks[joyId]) {
-            LOG_DEBUG("Mando %d abierto: %s\n", joyId, SDL_JoystickName(joyId));
+			buttonsMapperFrontend.joyName = Constant::Trim(SDL_JoystickName(joyId));
+			buttonsMapperLibretro[joyId].joyName = buttonsMapperFrontend.joyName;
+			LOG_DEBUG("Mando %d abierto: %s\n", joyId, buttonsMapperFrontend.joyName.c_str());
 			axis = SDL_JoystickNumAxes(g_joysticks[joyId]);
 			hats = SDL_JoystickNumHats(g_joysticks[joyId]);
 			buttons = SDL_JoystickNumButtons(g_joysticks[joyId]);
@@ -79,13 +84,12 @@ bool Joystick::init_all_joysticks() {
 		//Almacenamos las posiciones mapeadas para cada boton del emulador
 		buttonsMapperLibretro[joyId].buttons = new t_retro_input [buttons];
 		buttonsMapperLibretro[joyId].retroButtons = new t_retro_input [RETRO_DEVICE_ID_JOYPAD_R3 + 1];
-
 		buttonsMapperLibretro[joyId].hats = new t_retro_input [RETRO_DEVICE_ID_JOYPAD_R3 + 1];
 		buttonsMapperLibretro[joyId].axis = new t_retro_input [axis * 2];
 		buttonsMapperLibretro[joyId].nButtons = buttons;
 		buttonsMapperLibretro[joyId].nAxis = axis;
 		buttonsMapperLibretro[joyId].nHats = RETRO_DEVICE_ID_JOYPAD_R3 + 1;
-		loadButtonsEmupad(joyId);
+		loadButtonsEmupad(joyId, joynamesOnPort, masterJoyList);
 		
 		if (joyId == 0){
 			//creamos las posiciones mapeadas para cada boton del frontend 
@@ -93,6 +97,7 @@ bool Joystick::init_all_joysticks() {
 			buttonsMapperFrontend.buttons = new int [buttons];
 			buttonsMapperFrontend.axis = new int [axis * 2];
 			buttonsMapperFrontend.hats = new int [MAX_HAT_POSITIONS];
+
 			std::fill(buttonsMapperFrontend.buttons, buttonsMapperFrontend.buttons + buttons, -1);
 			std::fill(buttonsMapperFrontend.axis, buttonsMapperFrontend.axis + (axis * 2), -1);
 			std::fill(buttonsMapperFrontend.hats, buttonsMapperFrontend.hats + MAX_HAT_POSITIONS, -1);
@@ -106,25 +111,62 @@ bool Joystick::init_all_joysticks() {
 	return loadButtonsFrontend(Constant::getAppDir() + Constant::getFileSep() + "joystick.ini");
 }
 
-void Joystick::loadButtonsEmupad(int joyId){
+void Joystick::loadButtonsEmupad(int joyId, std::vector<std::string>& joyNamesOnPort, std::map<std::string, t_joy_retro_inputs>& masterJoyList) {
+    if (joyId >= 0 && joyId < (int)joyNamesOnPort.size()) {
+        std::string nameToFind = buttonsMapperLibretro[joyId].joyName;
+        // 2. Buscamos en el mapa que ya deberíamos tener precargado
+        if (masterJoyList.count(nameToFind) > 0) {
+            // 3. Copia de la configuración
+			t_joy_retro_inputs inputFound =  masterJoyList[nameToFind];
+			
+			for (int i=0; i < inputFound.nButtons; i++){
+				buttonsMapperLibretro[joyId].setButton(i, inputFound.buttons[i].joy);
+			}
 
-	int num_port_buttons = sizeof(configurablePortButtons) / sizeof(configurablePortButtons[0]);
+			for (int i=0; i < inputFound.nAxis * 2; i++){
+				buttonsMapperLibretro[joyId].setAxis(i, inputFound.axis[i].joy);
+			}
 
-	//Cada Posicion del array debe cuadrar con sdl
-	//TODO: Ajustar para el numero de botones correspondiente a cada joystick
-	for (int i=0; i < buttonsMapperLibretro[joyId].nButtons; i++){
-		buttonsMapperLibretro[joyId].setButton(i, i < num_port_buttons ? configurablePortButtons[i] : -1);
+			for (int i=0; i < inputFound.nHats; i++){
+				buttonsMapperLibretro[joyId].setHat(i, inputFound.hats[i].joy);
+			}
+			buttonsMapperLibretro[joyId].axisAsPad = inputFound.axisAsPad;
+
+
+            LOG_INFO("Configuración cargada para el puerto %d: %s", joyId, nameToFind.c_str());
+
+			for (int i=0; i < buttonsMapperLibretro[joyId].nAxis * 2; i++){
+				LOG_DEBUG("axis %d valor: %d", i, buttonsMapperLibretro[joyId].axis[i]);
+			}
+
+        } else {
+            LOG_DEBUG("No hay configuración definida para: %s", nameToFind.c_str());
+			int num_port_buttons = sizeof(configurablePortButtons) / sizeof(configurablePortButtons[0]);
+
+			//Cada Posicion del array debe cuadrar con sdl
+			//TODO: Ajustar para el numero de botones correspondiente a cada joystick
+			for (int i=0; i < buttonsMapperLibretro[joyId].nButtons; i++){
+				buttonsMapperLibretro[joyId].setButton(i, i < num_port_buttons ? configurablePortButtons[i] : -1);
+			}
+
+			if (buttonsMapperLibretro[joyId].nAxis >= 2){
+				buttonsMapperLibretro[joyId].setAxis(0, RETRO_DEVICE_ID_ANALOG_X);
+				buttonsMapperLibretro[joyId].setAxis(1, RETRO_DEVICE_ID_ANALOG_Y);
+			}
+
+			buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_UP, SDL_HAT_UP);
+			buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_RIGHT, SDL_HAT_RIGHT);
+			buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_DOWN, SDL_HAT_DOWN);
+			buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_LEFT, SDL_HAT_LEFT);
+        }
+    }
+}
+
+void Joystick::cargarValoresEnArray(int *&array, std::string str, int maxValues){
+	std::vector<std::string> v = Constant::splitChar(str, ',');
+	for (int i=0; i < v.size() && i < maxValues; i++){
+		array[i] = Constant::strToTipo<int>(v[i]);
 	}
-
-	if (buttonsMapperLibretro[joyId].nAxis >= 2){
-		buttonsMapperLibretro[joyId].setAxis(0, RETRO_DEVICE_ID_ANALOG_X);
-		buttonsMapperLibretro[joyId].setAxis(1, RETRO_DEVICE_ID_ANALOG_Y);
-	}
-
-	buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_UP, SDL_HAT_UP);
-	buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_RIGHT, SDL_HAT_RIGHT);
-	buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_DOWN, SDL_HAT_DOWN);
-	buttonsMapperLibretro[joyId].setHat(RETRO_DEVICE_ID_JOYPAD_LEFT, SDL_HAT_LEFT);
 }
 
 bool Joystick::loadButtonsFrontend(std::string rutaIni){
@@ -160,17 +202,12 @@ bool Joystick::loadButtonsFrontend(std::string rutaIni){
 	return nLinesProcessed < 3;
 }
 
-void Joystick::cargarValoresEnArray(int *&array, std::string str, int maxValues){
-	std::vector<std::string> v = Constant::splitChar(str, ',');
-	for (int i=0; i < v.size() && i < maxValues; i++){
-		array[i] = Constant::strToTipo<int>(v[i]);
-	}
-}
-
 void Joystick::saveButtonsFrontend(std::string rutaIni){
 	std::vector<std::string> fileConfigJoystick;
 
 	fileConfigJoystick.push_back("[FRONTEND]");
+	fileConfigJoystick.push_back("name=" + buttonsMapperFrontend.joyName);
+
 	std::string str = "btns=";
 	for (int i=0; i < buttonsMapperFrontend.nButtons; i++){
 		str += Constant::intToString(buttonsMapperFrontend.buttons[i]) + (i < buttonsMapperFrontend.nButtons-1 ? "," : "");
@@ -191,6 +228,204 @@ void Joystick::saveButtonsFrontend(std::string rutaIni){
 	FileList::guardarVector(rutaIni, fileConfigJoystick);
 }
 
+int Joystick::cargarValoresEnArray(t_retro_input *&arr, std::string str){
+	std::vector<std::string> v = Constant::splitChar(str, ',');
+	int maxValues = v.size();
+	arr = new t_retro_input [maxValues];
+
+	for (int i=0; i < v.size(); i++){
+		arr[i].joy = Constant::strToTipo<int>(v[i]);
+	}
+	return maxValues;
+}
+
+std::vector<std::string> Joystick::loadControllerPorts() {
+    std::vector<std::string> ports(MAX_PLAYERS, "None"); 
+    
+    std::string path = Constant::getAppDir() + Constant::getFileSep() + "retropad.ini";
+    std::ifstream file(path.c_str());
+    std::string linea;
+    bool foundports = false;
+    int portNumber = -1; // Empezamos en -1 para validar que se leyó un índice
+
+    while (std::getline(file, linea)) {
+        linea = Constant::Trim(linea);
+        if (linea.empty()) continue;
+
+        // Si encontramos otra sección, dejamos de buscar en RETROPAD
+        if (linea[0] == '[' ) {
+            if (linea == "[RETROPAD]") {
+                foundports = true;
+                continue;
+            } else if (foundports) {
+                break; // Ya terminamos con nuestra sección
+            }
+        }
+
+        if (!foundports) continue;
+
+        size_t pos = linea.find('=');
+        if (pos == std::string::npos) continue;
+
+        std::string key = Constant::Trim(linea.substr(0, pos));
+        std::string val = Constant::Trim(linea.substr(pos + 1));
+
+        if (key == "indx") {
+            portNumber = Constant::strToTipo<int>(val);
+        } else if (key == "name") {
+            // Verificamos que el índice sea válido (0-3) antes de asignar
+            if (portNumber >= 0 && portNumber < (int)ports.size()) {
+                ports[portNumber] = val;
+            }
+        }
+    }
+    return ports;
+}
+
+/**
+*
+*/
+std::map<std::string, t_joy_retro_inputs> Joystick::loadButtonsRetroList() {
+    std::map<std::string, t_joy_retro_inputs> joyList;
+    std::string path = Constant::getAppDir() + Constant::getFileSep() + "retropad.ini";
+    
+    std::ifstream file(path.c_str());
+    std::string linea;
+    t_joy_retro_inputs currentJoy;
+    bool foundList = false;
+
+    while (std::getline(file, linea)) {
+        // Trim simple (quitar \r o espacios)
+		linea = Constant::Trim(linea);
+
+        if (linea == "[RETROPAD_LIST]") { foundList = true; continue; }
+        if (linea == "[RETROPAD]") break;
+        if (!foundList) continue;
+
+        size_t pos = linea.find('=');
+        if (pos == std::string::npos) continue;
+
+        std::string key = Constant::Trim(linea.substr(0, pos));
+        std::string val = Constant::Trim(linea.substr(pos + 1));
+
+        if (key == "name") {
+            currentJoy.joyName = val;
+        } else if (key == "btns") {
+			currentJoy.nButtons = cargarValoresEnArray(currentJoy.buttons, val);
+        } else if (key == "hats") {
+            currentJoy.nHats = cargarValoresEnArray(currentJoy.hats, val);
+        } else if (key == "axis") {
+            currentJoy.nAxis = cargarValoresEnArray(currentJoy.axis, val) / 2;
+        } else if (key == "anal") {
+			currentJoy.axisAsPad = val == "1";
+            joyList[currentJoy.joyName] = currentJoy; // Guardar al completar el bloque
+        }
+    }
+    return joyList;
+}
+
+void Joystick::addJoyToList(std::vector<std::string> &fileConfigJoystick, t_joy_retro_inputs& retroInputs){
+	fileConfigJoystick.push_back("name=" + Constant::Trim(retroInputs.joyName));
+
+	std::string str = "btns=";
+	for (int i=0; i < retroInputs.nButtons; i++){
+		std::string istr = Constant::intToString(retroInputs.buttons[i].joy);
+		str += istr + (i < retroInputs.nButtons-1 ? "," : "");
+	}
+	fileConfigJoystick.push_back(str);
+
+	str = "hats=";
+	for (int i=0; i < retroInputs.nHats; i++){
+		str += Constant::intToString(retroInputs.hats[i].joy) + (i < retroInputs.nHats-1 ? "," : "");
+	}
+	fileConfigJoystick.push_back(str);
+
+	str = "axis=";
+	for (int i=0; i < retroInputs.nAxis * 2; i++){
+		str += Constant::intToString(retroInputs.axis[i].joy) + (i < retroInputs.nAxis * 2-1 ? "," : "");
+	}
+	fileConfigJoystick.push_back(str);
+	fileConfigJoystick.push_back("anal=" + std::string(retroInputs.axisAsPad ? "1" : "0"));
+	fileConfigJoystick.push_back("");
+}
+
+std::string Joystick::searchNewName(std::map<std::string, t_joy_retro_inputs>& retroInputs, std::string previousName){
+	int i=1;
+	int notFound = false;
+	std::string newName = "";
+
+	int iniPos = 0;
+	int endPos = 0;
+	if ((iniPos = previousName.find_last_of("(")) != std::string::npos && (endPos = previousName.find_last_of(")")) != std::string::npos
+		&& iniPos < endPos){
+		std::string lastNumber = previousName.substr(iniPos + 1, endPos - iniPos - 1);
+		if (Constant::esNumerico(lastNumber)){
+			i = Constant::strToTipo<int>(lastNumber);
+			previousName = previousName.substr(0, iniPos);
+		}
+	}
+
+	while (!notFound){
+		newName = previousName + "(" + Constant::intToString(i) + ")";
+		notFound = retroInputs.find(newName) == retroInputs.end();
+		i++;
+	}
+	return newName;
+}
+
+/**
+*
+*/
+void Joystick::saveButtonsRetro(){
+	std::vector<std::string> fileConfigJoystick;
+
+	fileConfigJoystick.push_back("[RETROPAD_LIST]");
+	std::map<std::string, t_joy_retro_inputs> joyList;
+
+	for (int p=0; p < MAX_PLAYERS; p++){
+		auto elemFound = joyList.find(buttonsMapperLibretro[p].joyName);
+		if (elemFound != joyList.end()){
+			//Si se ha encontrado el mismo elemento, comprobamos si son iguales
+			if (elemFound->second.equals(buttonsMapperLibretro[p])){
+				//Si tiene la misma configuracion, no hacemos nada
+				continue;
+			} else {
+				//Si tiene una configuracion distinta, debemos generar un nuevo nombre
+				buttonsMapperLibretro[p].joyName = searchNewName(joyList, buttonsMapperLibretro[p].joyName);
+			}
+			
+		}
+		addJoyToList(fileConfigJoystick, buttonsMapperLibretro[p]);
+		LOG_DEBUG("Adding joy to config: %s", buttonsMapperLibretro[p].joyName.c_str());
+		joyList[buttonsMapperLibretro[p].joyName] = buttonsMapperLibretro[p]; // Inserts or updates
+	}
+
+	std::map<std::string, t_joy_retro_inputs> joyListPrev = loadButtonsRetroList();
+	for (auto it = joyListPrev.begin(); it != joyListPrev.end(); ++it) {
+		auto elemFound = joyList.find(it->first);
+		if (elemFound == joyList.end()){
+			LOG_DEBUG("Adding joy to config: %s", it->first.c_str());
+			addJoyToList(fileConfigJoystick, it->second);
+		} else {
+			//Si hemos encontrado un joystick con el mismo nombre
+			//comprobamos si tiene las mismas asignaciones
+			if (!elemFound->second.equals(it->second)){
+				it->second.joyName = searchNewName(joyList, it->second.joyName);
+				addJoyToList(fileConfigJoystick, it->second);
+			}
+		}
+	}
+
+	fileConfigJoystick.push_back("");
+	fileConfigJoystick.push_back("[RETROPAD]");
+	for (int p=0; p < MAX_PLAYERS; p++){
+		fileConfigJoystick.push_back("indx=" + Constant::intToString(p));
+		fileConfigJoystick.push_back("name=" + buttonsMapperLibretro[p].joyName);
+		fileConfigJoystick.push_back("");
+	}
+	
+	FileList::guardarVector(Constant::getAppDir() + Constant::getFileSep() + "retropad.ini", fileConfigJoystick);
+}
 
 void Joystick::resetAllValues(){
 	int axis = 0;

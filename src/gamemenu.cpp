@@ -42,6 +42,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	this->current_scaler_mode = &getCfgLoader()->configMain[cfg::scaleMode].getIntRef();
 	this->current_ratio = &getCfgLoader()->configMain[cfg::aspectRatio].getIntRef();
 	this->current_sync = &getCfgLoader()->configMain[cfg::syncMode].getIntRef();
+	this->current_force_fs = &getCfgLoader()->configMain[cfg::forceFS].getBoolRef();
 
 	fpsSurface = NULL; 
 	lastFpsUpdate = 0;
@@ -847,6 +848,10 @@ void GameMenu::processHotkeys(){
 				#endif
 
 				if (cannotScale2x || cannotScale3x || cannotScale4x || *current_scaler_mode == NO_VIDEO){
+					modeOk = false;
+				} else if (*this->current_force_fs && (*current_scaler_mode == SCALE4X || *current_scaler_mode == SCALE3X 
+							|| *current_scaler_mode == SCALE2X || *current_scaler_mode == SCALE1X)) {
+					//Si queremos pantalla completa, no tiene sentido pasemos por un scalenx.
 					modeOk = false;
 				} else {
 					modeOk = true;

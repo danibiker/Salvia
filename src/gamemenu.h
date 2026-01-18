@@ -99,6 +99,7 @@ class GameMenu : public Engine{
 		int *current_scaler_mode;
 		int *current_ratio;
 		int *current_sync;
+		bool *current_force_fs;
 
     private:
 		std::string configButtonsJOY();

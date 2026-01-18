@@ -403,6 +403,7 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 	scaleProps.dpitch = screen->pitch;
 	scaleProps.scale = gameMenu->current_scaler_scale;
 	scaleProps.ratio = aspectRatioValues[*gameMenu->current_ratio];
+	scaleProps.force_fs = *gameMenu->current_force_fs;
     
     //Escalamos la imagen con el escalador que hay almacenado en el puntero a funcion
     gameMenu->current_scaler(scaleProps);
@@ -429,12 +430,10 @@ void loadstate(){
 	if (f) {
 		std::size_t state_size = retro_serialize_size();
 		void *buffer = malloc(state_size);
-    
 		fread(buffer, 1, state_size, f);
 		if (retro_unserialize(buffer, state_size)) {
-			LOG_ERROR("Estado cargado con éxito.\n");
+			LOG_DEBUG("Estado cargado con éxito.\n");
 		}
-    
 		fclose(f);
 		free(buffer);
 	}
@@ -1038,6 +1037,10 @@ int launchGame(std::string rompath){
 		LOG_ERROR("Error cargando la ROM\n");
 		return 0;
 	}
+
+	dirutil dir;
+	string romname = (gameMenu->getCfgEmu() != NULL ? gameMenu->getCfgEmu()->name + " - " : "") + dir.getFileNameNoExt(unzipped.rutaEscritura);
+	SDL_WM_SetCaption(romname.c_str(), NULL);
 
 	// Antes de cargar el juego, el core dice su frecuencia en retro_get_system_av_info
 	struct retro_system_av_info av_info;

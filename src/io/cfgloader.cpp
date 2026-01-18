@@ -33,6 +33,7 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::libretrosystem] = cfg::t_cfg_props("libretrosystem", ".\\system");
 	configMain[cfg::libretro_save] = cfg::t_cfg_props("libretro_save", ".\\data\\saves");
 	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
+	configMain[cfg::forceFS] = cfg::t_cfg_props("forceFS", true);
 
 	configMain[cfg::region] = cfg::t_cfg_props("region", "auto"); //pal, ntsc, auto -> Para nes
 	configMain[cfg::nospritelimit] = cfg::t_cfg_props("nospritelimit", "enabled"); //enabled, disabled -> para nes

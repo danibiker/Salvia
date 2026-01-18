@@ -8,11 +8,12 @@
 #include <string>
 
 // --- Definición de tipos de opciones ---
-enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_SUBMENU, OPC_INT, OPC_KEY};
+enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC};
 
 enum TipoKey{
 	KEY_JOY_BTN,
-	KEY_JOY_HAT
+	KEY_JOY_HAT,
+	KEY_JOY_AXIS
 };
 
 enum CONFIG_STATUS{
@@ -22,6 +23,9 @@ enum CONFIG_STATUS{
 };
 
 struct Menu; // Declaración anticipada
+
+//Interfaz para ejecutar funciones
+typedef void (*ExecFunc)(Joystick* joy);
 
 // Clase Base para las opciones del menú
 class Opcion {
@@ -45,13 +49,19 @@ public:
     OpcionInt(std::string t, int* v, std::string desc) : Opcion(t, OPC_INT), valor(v), description(desc) {}
 };
 
+class OpcionExec : public Opcion {
+public:
+    ExecFunc execfunc;
+	Joystick *joystick;
+    OpcionExec(std::string t, ExecFunc v, Joystick *pjoystick) : Opcion(t, OPC_EXEC), execfunc(v), joystick(pjoystick) {}
+};
+
 class OpcionKey : public Opcion {
 public:
     t_joy_retro_inputs* valor;
 	int sdlBtn;
 	int axis;
 	int retroBtn;
-
 	int gamepadId;
 
 	std::string description;
@@ -59,9 +69,29 @@ public:
 	Uint32 lastTimeAsked;
 	TipoKey tipoKey;
 
-    OpcionKey(std::string t, t_joy_retro_inputs* v, int pgamepadId, int psdlBtn, int pretroBtn, TipoKey ptipoKey, std::string desc) : Opcion(t, OPC_KEY), valor(v), 
-		gamepadId(pgamepadId), sdlBtn(psdlBtn), retroBtn(pretroBtn), description(desc), 
-		changeAsked(false), lastTimeAsked(0), tipoKey(ptipoKey), axis(-1) {}
+	OpcionKey(std::string t, t_joy_retro_inputs (&listaMapeos)[MAX_PLAYERS], int pgamepadId, int key, int value, TipoKey ptipoKey, std::string desc): Opcion(t, OPC_KEY){
+		sdlBtn = -1;
+		axis = -1;
+		retroBtn = -1;
+		gamepadId = pgamepadId;
+		tipoKey = ptipoKey;
+		description = desc;
+		lastTimeAsked = 0;
+		changeAsked = false;
+		valor = &listaMapeos[pgamepadId];
+		
+		if (ptipoKey == KEY_JOY_AXIS){
+			axis = key;
+			sdlBtn = value;
+			retroBtn = value;
+		} else if (ptipoKey == KEY_JOY_HAT){
+			sdlBtn = value;
+			retroBtn = key;
+		} else if (ptipoKey == KEY_JOY_BTN){
+			sdlBtn = key;
+			retroBtn = value;
+		}
+	}
 };
 
 class OpcionLista : public Opcion {
@@ -127,9 +157,7 @@ private:
 	void setLayout(int layout, int screenw, int screenh);
 	void addControlerOptions(Menu*&, int, Joystick *);
 	void addControlerButtons(Menu*&, int);
-
-	int findBtnPad(int);
-	int findBtnHat(int, int);
+	int findAxisPos(int retroDirection);
 
 public:
     GestorMenus(int screenw, int screenh);

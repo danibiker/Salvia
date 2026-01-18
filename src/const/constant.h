@@ -4,6 +4,7 @@
 #include <SDL_ttf.h>
 #include <string>
 #include <sstream>
+#include <cctype> // Para isdigit
 #include <algorithm>
 #include <stdint.h>
 
@@ -387,6 +388,20 @@ class Constant{
                 s_str >> i;
                 return i;
         }
+
+		static bool esNumerico(const std::string& s) {
+			if (s.empty()) return false;
+    
+			// Si permites números negativos, saltamos el signo '-'
+			std::size_t inicio = (s[0] == '-' && s.size() > 1) ? 1 : 0;
+
+			for (size_t i = inicio; i < s.size(); i++) {
+				if (!std::isdigit(static_cast<unsigned char>(s[i]))) {
+					return false;
+				}
+			}
+			return true;
+		}
 
         static void setExecMethod(int var){EXEC_METHOD = var;}
         static int getExecMethod(){return EXEC_METHOD;}
