@@ -161,6 +161,9 @@
     <ClCompile Include="SDL\src\video\SDL_yuv_sw.c">
       <Filter>Source Files\SDL</Filter>
     </ClCompile>
+    <ClCompile Include="SDL\src\video\xbox\SDL_xboxshaders.c">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />

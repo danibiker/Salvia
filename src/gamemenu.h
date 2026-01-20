@@ -14,6 +14,12 @@
 #include <io/cfgloader.h>
 #include <engine.h>
 
+#ifdef _XBOX
+	#include <io/video_direct.h>
+#else 
+	#include <io/video.h>
+#endif
+
 #include <memory>
 #include <string>
 #include <sstream>
@@ -21,7 +27,7 @@
 #include <iostream>
 #include <vector>
 #include <map>
-#include <io/video.h>
+
 
 static const string SNAP = "snap";
 static const string BOX2D = "box2d";
@@ -30,6 +36,8 @@ static const string SNAPFS = "snapFs";
 static const string SYNOPSIS = "synopsis";
 static const string MENUTMP = "menu.tmp";
 
+int initHqxFilter();
+
 enum status_emu
 {
 	//The emulation has ben started and it's running
@@ -37,22 +45,6 @@ enum status_emu
 	//The menu is showing so, the emulation is paused
 	EMU_MENU
 };
-
-struct Message {
-    std::string content;
-    Uint32 ticks;
-    Uint32 timeout;
-    SDL_Surface* cache; // Nueva superficie para el mensaje renderizado
-    SDL_Rect rect;      // Para guardar el tamaño y posición calculados
-
-	Message(){
-		cache = NULL;
-		ticks = 0;
-		timeout = 0;
-		content = "";
-	}
-};
-
 
 class GameMenu : public Engine{
     public:

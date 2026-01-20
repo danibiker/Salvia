@@ -455,8 +455,9 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PreprocessorDefinitions>DEBUG;_XBOX;EMU_LIB_NAME="$(EMU_LIB_NAME)";LIBRETRO</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
-      <AdditionalIncludeDirectories>libs\libSDLx360\SDL\include;libs\SDL_ttf360;$(ProjectDir)\src;$(ProjectDir)libs\SDL_image-1.2.12;$(ProjectDir)\src\unzip;$(ProjectDir)\src\unzip\minizip-1.2.5;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)libs\libSDLx360\SDL\include;libs\SDL_ttf360;$(ProjectDir)\src;$(ProjectDir)libs\SDL_image-1.2.12;$(ProjectDir)\src\unzip;$(ProjectDir)\src\unzip\minizip-1.2.5</AdditionalIncludeDirectories>
       <WholeProgramOptimization>false</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -824,6 +825,8 @@
       <EnablePREfast>false</EnablePREfast>
       <IntrinsicFunctions>false</IntrinsicFunctions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <SmallerTypeCheck>true</SmallerTypeCheck>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\Genesis-Plus-GX\Debug\Win32</AdditionalLibraryDirectories>
@@ -1379,6 +1382,14 @@
     <ClCompile Include="src\io\dirutil.cpp" />
     <ClCompile Include="src\io\fileio.cpp" />
     <ClCompile Include="src\io\filelist.h" />
+    <ClCompile Include="src\io\hqx_2\hq2x.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsCpp</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\io\hqx_2\hq3x.c" />
+    <ClCompile Include="src\io\hqx_2\init.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsCpp</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsCpp</CompileAs>
+    </ClCompile>
     <ClCompile Include="src\io\JoyMapper.cpp" />
     <ClCompile Include="src\io\joystick.cpp" />
     <ClCompile Include="src\io\sync.cpp">

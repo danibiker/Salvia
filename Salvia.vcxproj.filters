@@ -80,9 +80,6 @@
     <ClCompile Include="src\menus\gestormenus.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\io\xbrz\xbrz.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\unzip\minizip-1.2.5\unzip.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -105,6 +102,18 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\io\cfgloader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\hqx_2\init.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\xbrz\xbrz.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\hqx_2\hq2x.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\hqx_2\hq3x.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

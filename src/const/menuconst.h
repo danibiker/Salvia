@@ -2,10 +2,17 @@
 
 #include <const/constant.h>
 
-static const enum videoScale { FULLSCREEN=0, SCALE1X, SCALE2X, SCALE2X_ADV, SCALE_XBRZ_2X, SCALE3X, SCALE3X_ADV, SCALE_XBRZ_3X, SCALE_XBRZ_3X_TH, SCALE4X, 
+static const enum videoScale { FULLSCREEN=0, SCALE1X, SCALE2X, SCALE2X_ADV,
+	SCALE_HQ2X_ALT, 
+	SCALE_XBRZ_2X, SCALE_XBRZ_2X_TH, SCALE3X, SCALE3X_ADV, 
+	SCALE_HQ3X_ALT, 
+	SCALE_XBRZ_3X, SCALE_XBRZ_3X_TH, SCALE4X, 
 	SCALE4X_ADV, SCALE_XBRZ_4X, NO_VIDEO, TOTAL_VIDEO_SCALE};
 
-static const char* videoScaleStrings[] = { "Pantalla Completa", "Scale 1X", "Scale 2X", "Scale 2X Avanzado", "Xbrz 2X", "Scale 3X", "Scale 3X Avanzado",
+static const char* videoScaleStrings[] = { "Pantalla Completa", "Scale 1X", "Scale 2X", "Scale 2X Avanzado", 
+	"Scale HQ2X",
+	"Xbrz 2X", "Xbrz 2X Multihilo",  "Scale 3X", "Scale 3X Avanzado",
+	"Scale HQ3X",
 	"Xbrz 3X", "Xbrz 3X Multihilo", "Scale 4X", "Scale 4X Avanzado", "Xbrz 4X", "Sin vídeo", "No implementado"};
 
 /*

@@ -7,16 +7,15 @@
 #include <SDL_ttf.h>
 
 #include <string>
+#include <map>
 
 #include "gameMenu.h"
 #include "io/joymapper.h"
-#include "io/video.h"
 #include "io/cfgloader.h"
 #include "uiobjects/listmenu.h"
 #include "uiobjects/tilemap.h"
 #include "unzip/unziptool.h"
 #include "const/menuconst.h"
-#include <map>
 
 GameMenu *gameMenu;
 Logger *logger;
@@ -374,8 +373,6 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 
 	//Hacemos la comprobacion del pitch >= width * 4, por si hemos solicitado el RETRO_PIXEL_FORMAT_RGB565
 	//pero el core no lo acepta
-    //if ((fmt == RETRO_PIXEL_FORMAT_XRGB8888 || pitch >= width * 4) && conversion_buffer) {
-	//if (fmt == RETRO_PIXEL_FORMAT_XRGB8888 || pitch >= width * 4) {
 	if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
 		// 2. Gestionar buffer de conversión de forma eficiente
         std::size_t needed = width * height * sizeof(uint16_t);
@@ -495,7 +492,11 @@ void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, 
 						break;
 					}
 					case JOY_BUTTON_A:{
-						gameMenu.configMenus->confirmar();
+						std::string message = gameMenu.configMenus->confirmar();
+						if (!message.empty()){
+							gameMenu.showSystemMessage(message, 3000);
+						}
+						
 						break;
 					}
 					case JOY_BUTTON_B:{
@@ -587,7 +588,7 @@ void update_input() {
             case SDL_QUIT:
                 gameMenu->running = false;
                 break;
-
+			
             case SDL_JOYBUTTONDOWN:
             case SDL_JOYBUTTONUP: {
                 const int p = event.jbutton.which;
@@ -596,7 +597,7 @@ void update_input() {
 					if (event.jbutton.button >= Joystick::buttonsMapperLibretro[p].nButtons)
 						break;
 
-                    const int joyId = Joystick::buttonsMapperLibretro[p].buttons[event.jbutton.button].joy;
+                    const int8_t joyId = Joystick::buttonsMapperLibretro[p].getButton(event.jbutton.button);
 					if (joyId >= 0) {
 						gameMenu->joystick->g_joy_state[p][joyId] = pressed;
 					}
@@ -612,18 +613,28 @@ void update_input() {
 				const int player = event.jhat.which;
 				if (player < MAX_PLAYERS) {
 					const Uint8 hatVal = event.jhat.value;
-					const t_joy_retro_inputs &input = Joystick::buttonsMapperLibretro[player];
-					// Creamos una referencia corta para no escribir tanto
+					t_joy_retro_inputs &input = Joystick::buttonsMapperLibretro[player];
 					bool* state = gameMenu->joystick->g_joy_state[player];
-					// Mapeo directo usando tus constantes guardadas
-					state[RETRO_DEVICE_ID_JOYPAD_UP]    = (hatVal & input.hats[RETRO_DEVICE_ID_JOYPAD_UP].joy) != 0;
-					state[RETRO_DEVICE_ID_JOYPAD_DOWN]  = (hatVal & input.hats[RETRO_DEVICE_ID_JOYPAD_DOWN].joy) != 0;
-					state[RETRO_DEVICE_ID_JOYPAD_LEFT]  = (hatVal & input.hats[RETRO_DEVICE_ID_JOYPAD_LEFT].joy) != 0;
-					state[RETRO_DEVICE_ID_JOYPAD_RIGHT] = (hatVal & input.hats[RETRO_DEVICE_ID_JOYPAD_RIGHT].joy) != 0;
+
+					// Definimos las direcciones que queremos comprobar
+					// SDL_HAT_UP, DOWN, LEFT, RIGHT son las máscaras de bits
+       				auto updateHat = [&](Uint8 mask) {
+						// Buscamos qué botón de Libretro asignamos a esta dirección física
+						// OJO: asoumimos que se ha guardado el mapeo por cada bit
+						int8_t libretroBtn = input.getHat(mask); 
+						if (libretroBtn > -1) {
+							state[libretroBtn] = (hatVal & mask) != 0;
+						}
+					};
+
+					updateHat(SDL_HAT_UP);
+					updateHat(SDL_HAT_DOWN);
+					updateHat(SDL_HAT_LEFT);
+					updateHat(SDL_HAT_RIGHT);
 				}
 				break;
 			}
-
+			
 			/*case SDL_JOYAXISMOTION: {
 				const int p = event.jbutton.which;
                 if (p < MAX_PLAYERS) {
@@ -645,7 +656,7 @@ void update_input() {
 				}
 				break;
 			}*/
-
+		
 		   case SDL_JOYAXISMOTION: {
 				const int p = event.jaxis.which; // Cambiado event.jbutton por event.jaxis
 				if (p < MAX_PLAYERS) {
@@ -666,8 +677,8 @@ void update_input() {
 							bool* state = gameMenu->joystick->g_joy_state[p];
                 
 							// Obtenemos qué dirección de DPAD mapea este eje específico
-							const int joyTarget = Joystick::buttonsMapperLibretro[p].axis[buttonIdx].joy;
-							const int joyOpposite = Joystick::buttonsMapperLibretro[p].axis[oppositeIdx].joy;
+							const int8_t joyTarget = Joystick::buttonsMapperLibretro[p].getAxis(buttonIdx);
+							const int8_t joyOpposite = Joystick::buttonsMapperLibretro[p].getAxis(oppositeIdx);
 
 							// Solo modificamos las direcciones relacionadas con este eje
 							if (joyTarget >= 0 && joyTarget < maxJoyTargets) {

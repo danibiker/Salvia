@@ -25,7 +25,7 @@ enum CONFIG_STATUS{
 struct Menu; // Declaración anticipada
 
 //Interfaz para ejecutar funciones
-typedef void (*ExecFunc)(Joystick* joy);
+typedef std::string (*ExecFunc)(Joystick* joy);
 
 // Clase Base para las opciones del menú
 class Opcion {
@@ -58,10 +58,11 @@ public:
 
 class OpcionKey : public Opcion {
 public:
-    t_joy_retro_inputs* valor;
-	int sdlBtn;
-	int axis;
-	int retroBtn;
+    t_joy_retro_inputs* joyInputs;
+	//En idx tenemos el indice del array en el que se guardo el boton
+	int idx;
+	//En btn tenemos el boton de libretro asignado: RETRO_DEVICE_ID_JOYPAD_A, RETRO_DEVICE_ID_JOYPAD_B, ...
+	int btn;
 	int gamepadId;
 
 	std::string description;
@@ -69,28 +70,15 @@ public:
 	Uint32 lastTimeAsked;
 	TipoKey tipoKey;
 
-	OpcionKey(std::string t, t_joy_retro_inputs (&listaMapeos)[MAX_PLAYERS], int pgamepadId, int key, int value, TipoKey ptipoKey, std::string desc): Opcion(t, OPC_KEY){
-		sdlBtn = -1;
-		axis = -1;
-		retroBtn = -1;
+	OpcionKey(std::string t, t_joy_retro_inputs (&listaMapeos)[MAX_PLAYERS], int pgamepadId, int pIdx, int pBtn, TipoKey ptipoKey, std::string desc): Opcion(t, OPC_KEY){
+		idx = pIdx;
+		btn = pBtn;
 		gamepadId = pgamepadId;
 		tipoKey = ptipoKey;
 		description = desc;
 		lastTimeAsked = 0;
 		changeAsked = false;
-		valor = &listaMapeos[pgamepadId];
-		
-		if (ptipoKey == KEY_JOY_AXIS){
-			axis = key;
-			sdlBtn = value;
-			retroBtn = value;
-		} else if (ptipoKey == KEY_JOY_HAT){
-			sdlBtn = value;
-			retroBtn = key;
-		} else if (ptipoKey == KEY_JOY_BTN){
-			sdlBtn = key;
-			retroBtn = value;
-		}
+		joyInputs = &listaMapeos[pgamepadId];
 	}
 };
 
@@ -158,6 +146,7 @@ private:
 	void addControlerOptions(Menu*&, int, Joystick *);
 	void addControlerButtons(Menu*&, int);
 	int findAxisPos(int retroDirection);
+	void resetKeyElement(int, TipoKey);
 
 public:
     GestorMenus(int screenw, int screenh);
@@ -169,7 +158,7 @@ public:
     // Lógica para cambiar valores (Izquierda / Derecha)
     void cambiarValor(int dir);
     // Lógica para confirmar (Botón A)
-    void confirmar();
+    std::string confirmar();
     // Lógica para volver (Botón B)
     void volver();
     // Método simple para obtener qué dibujar

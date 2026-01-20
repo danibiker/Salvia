@@ -419,6 +419,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>CompileAsC</CompileAs>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Snes9x|Xbox 360'">
@@ -562,7 +563,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
     <ClCompile>
       <Optimization>Full</Optimization>
-      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <AdditionalIncludeDirectories>SDL;SDL\include;SDL\src\video;SDL\src\audio;SDL\src\cdrom;SDL\src\endian;SDL\src\events;SDL\src\file;SDL\src\joystick;SDL\src\thread;SDL\src\timer;SDL\src\thread\xbox</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>NDEBUG;_XBOX;_LIB;ENABLE_DIRECTX;__powerpc__;MUST_THREAD_EVENTS;__NOVSYNC</PreprocessorDefinitions>
@@ -575,6 +576,7 @@
       <CompileAs>CompileAsC</CompileAs>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <BufferSecurityCheck>false</BufferSecurityCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">
@@ -622,6 +624,7 @@
     <ClCompile Include="SDL\src\audio\xbox\SDL_xboxaudio.c" />
     <ClCompile Include="SDL\src\video\xbox\SDL_xboxevents.c" />
     <ClCompile Include="SDL\src\video\xbox\SDL_xboxmouse.c" />
+    <ClCompile Include="SDL\src\video\xbox\SDL_xboxshaders.c" />
     <ClCompile Include="SDL\src\video\xbox\SDL_xboxvideo.c" />
     <ClCompile Include="SDL\SDL.c" />
     <ClCompile Include="SDL\src\events\SDL_active.c" />

@@ -31,9 +31,9 @@ GestorMenus::~GestorMenus() {
     for(size_t i = 0; i < todosLosMenus.size(); i++) delete todosLosMenus[i];
 }
 
-void guardarJoysticks(Joystick* joy){
+std::string guardarJoysticks(Joystick* joy){
 	LOG_DEBUG("Guardando valores del joystick");
-	joy->saveButtonsRetro();
+	return "Fichero guardado en: " + joy->saveButtonsRetro();
 }
 
 void GestorMenus::setLayout(int layout, int screenw, int screenh){
@@ -134,28 +134,35 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
 	int retroAxisValue = 0;
 	int axisPos = 0;
 
+	t_joy_retro_inputs *input = &Joystick::buttonsMapperLibretro[controlId];
+
+	//Adding the axis or pad elements
 	for (int retroBtnIdx=0; retroBtnIdx < num_port_hats; retroBtnIdx++){
-		std::string text = configurablePortHatsStr[retroBtnIdx];
+		const std::string text = configurablePortHatsStr[retroBtnIdx];
 		const int retroBtnValue = configurablePortHats[retroBtnIdx];
 
-		if (retroBtnIdx < nAxis * 2){
-			retroAxisValue = Joystick::buttonsMapperLibretro[controlId].axis[retroBtnIdx].joy;
-			axisPos = findAxisPos(retroAxisValue);
-		}
-
-		if (nHats > 0 && Joystick::buttonsMapperLibretro[controlId].hats[retroBtnValue].joy != -1){
-			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, retroBtnIdx, retroBtnValue, KEY_JOY_HAT, "Hat: "));	
-		} else if (axisPos != -1){
-			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, axisPos, retroBtnValue, KEY_JOY_AXIS, "Axis: "));	
+		if (input->axisAsPad){
+			int8_t axisIdx = input->findButtonIdx(retroBtnValue, input->axis);
+			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, axisIdx, retroBtnValue, KEY_JOY_AXIS, "Axis: "));
+		} else {
+			int8_t hatIdx = input->findButtonIdx(retroBtnValue, input->hats);
+			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, hatIdx, retroBtnValue, KEY_JOY_HAT, "Hat: "));
 		}
 	}
 
+	//Adding the buttons elements
 	for (int sdlBtnIdx=0; sdlBtnIdx < num_port_buttons; sdlBtnIdx++){
 		std::string text = configurablePortButtonsStr[sdlBtnIdx];
 		const int retroBtnValue = configurablePortButtons[sdlBtnIdx];
-		if (nBtns > 0){
-			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, sdlBtnIdx, retroBtnValue, KEY_JOY_BTN, "Btn: "));	
-		} 
+		
+		int8_t btnIdx = input->findButtonIdx(retroBtnValue, input->buttons);
+		int8_t axisIdx = input->findButtonIdx(retroBtnValue, input->axis);
+
+		if (btnIdx > -1 || axisIdx == -1){
+			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, btnIdx, retroBtnValue, KEY_JOY_BTN, "Btn: "));	
+		} else if (axisIdx > -1){
+			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, axisIdx, retroBtnValue, KEY_JOY_AXIS, "Axis: "));
+		} 		
 	}
 }
 
@@ -178,6 +185,19 @@ void GestorMenus::navegar(int dir) { // -1 o 1
 	}
 }
 
+void GestorMenus::resetKeyElement(int sdlbtn, TipoKey tipoKey){
+	//Buscamos en todos los elementos de menu y si hay alguna opcion con el mismo indice, lo ponemos a -1
+	std::vector<Opcion*> optButtons = menuActual->opciones;
+	for (int i=0; i < optButtons.size(); i++){
+		if (optButtons[i]->tipo == OPC_KEY){
+			OpcionKey* keyToReset = static_cast<OpcionKey*>(optButtons[i]);
+			if (keyToReset->idx == sdlbtn && tipoKey == keyToReset->tipoKey){
+				keyToReset->idx = -1;
+			}
+		}
+	}
+}
+
 /**
 *
 */
@@ -187,22 +207,20 @@ void GestorMenus::updateAxis(int sdlAxisValue, int sdlAxis){
 
 	if (opt->tipo == OPC_KEY) {
 		OpcionKey* k = static_cast<OpcionKey*>(opt);
-		if (k && k->valor && k->sdlBtn >= 0) {
+		if (k && k->joyInputs) {
 			if (abs(sdlAxisValue) > DEADZONE) {
 				// 0 si es negativo (Izquierda/Arriba), 1 si es positivo (Derecha/Abajo)
 				int isPositive = (sdlAxisValue > 0);
 				int buttonIdx = (sdlAxis * 2) + isPositive;
 				LOG_DEBUG("Eje: %d, Valor: %d -> Boton Virtual: %d", sdlAxis, sdlAxisValue, buttonIdx);
-
-				k->valor->setHat(k->sdlBtn, -1);
-				k->valor->setAxis(buttonIdx, k->sdlBtn);
-				k->axis = buttonIdx;
 				k->tipoKey = KEY_JOY_AXIS;
-
+				k->description = "Axis: ";
+				resetKeyElement(buttonIdx, k->tipoKey);
+				k->joyInputs->setAxis(buttonIdx, k->btn);
+				k->idx = buttonIdx;
 				k->changeAsked = false;
 				k->lastTimeAsked = 0;
 				status = NORMAL;
-
 				//La posicion de la opcion 0 es el elemento que anyadimos en addControlerOptions
 				//en el orden de las inserciones en el vector.
 				if (menuActual->opciones.size() > 0 && menuActual->opciones[0]->tipo == OPC_BOOLEANA) {	
@@ -226,57 +244,39 @@ void GestorMenus::updateButton(int sdlbtn){
 
 	if (opt->tipo == OPC_KEY) {
 		OpcionKey* k = static_cast<OpcionKey*>(opt);
-		if (k && k->valor) {
+		if (k && k->joyInputs) {
 			if (k->tipoKey == KEY_JOY_BTN){
-				// Limpiar el mapeo antiguo para evitar que dos botones hagan lo mismo
-				//k->valor->buttons[k->sdlBtn].joy = k->valor->buttons[sdlbtn].joy; 
-				k->changeAsked = false;
-				k->lastTimeAsked = 0;
-				status = NORMAL;
-				LOG_DEBUG("Change to %d, previous %d, retrobtn %d", sdlbtn, k->sdlBtn, k->retroBtn);
-				std::vector<Opcion*> optButtons = menuActual->opciones;
-
-				int sdlPosFromRetroBtn = k->valor->retroButtons[k->retroBtn].joy;
-
-				bool found = false;
-				//Si hay algun elemento con el mismo valor de tecla sdl, lo actualizamos a -1
-				for (int i=0; i < optButtons.size(); i++){
-					//LOG_DEBUG("sdlbtn %d, k->retroBtn %d",i, k->valor->buttons[i].joy);	
-					if (i != menuActual->seleccionado && optButtons[i]->tipo == OPC_KEY) {
-						OpcionKey* kBtn = static_cast<OpcionKey*>(optButtons[i]);
-						if (kBtn->tipoKey == KEY_JOY_BTN && kBtn->sdlBtn == sdlbtn){
-							kBtn->valor->buttons[kBtn->sdlBtn].joy = -1;
-							kBtn->sdlBtn = -1;
-							found = true;
-							break;
-						}
-					}
-				}
-				if (found){
-					k->valor->buttons[sdlPosFromRetroBtn].joy = -1;
-				}
-
-				k->valor->setButton(sdlbtn, k->retroBtn);
-				k->sdlBtn = sdlbtn;
-
-				
-				for (int i=0; i < k->valor->nButtons; i++){
-					LOG_DEBUG("sdlbtn %d, k->retroBtn %d",i, k->valor->buttons[i].joy);	
-				}
-
-				//LOG_DEBUG("Accion Libretro %d ahora mapeada al boton SDL %d", retroID, sdlbtn);
+				//Actualizamos el elemento anterior a -1, tanto en el array
+				k->joyInputs->setButton(k->idx, -1);
+				//como en la propia tecla de la opcion del menu
+				if (k->idx != sdlbtn)
+					resetKeyElement(sdlbtn, k->tipoKey);
+				//Asignamos el boton del joystick pulsado con su funcion de libretro
+				k->joyInputs->setButton(sdlbtn, k->btn);
+				//Actualizamos el indice seleccionado para esta tecla
+				k->idx = sdlbtn;
 			} else if (k->tipoKey == KEY_JOY_HAT || k->tipoKey == KEY_JOY_AXIS){
 				// Extraemos la dirección activa del Hat (limpiamos otros bits si fuera necesario)
 				Uint8 sdlHatDir = (Uint8)(sdlbtn & (SDL_HAT_UP | SDL_HAT_DOWN | SDL_HAT_LEFT | SDL_HAT_RIGHT));
-				if (sdlHatDir > 0) {
-					k->valor->setHat(k->sdlBtn, sdlHatDir);
-					k->tipoKey = KEY_JOY_HAT;
-				}
-
-				k->changeAsked = false;
-				k->lastTimeAsked = 0;
-				status = NORMAL;
+				//En cualquier caso, indicamos que este boton se comporta como un hat
+				k->tipoKey = KEY_JOY_HAT;
+				k->description = "Hat: ";
+				//Actualizamos el elemento anterior a -1, tanto en el array
+				k->joyInputs->setHat(k->idx, -1);
+				//como en la propia tecla de la opcion del menu
+				if (k->idx != sdlHatDir)
+					resetKeyElement(sdlHatDir, k->tipoKey);
+				//Asignamos el boton del joystick pulsado con su funcion de libretro
+				k->joyInputs->setHat(sdlHatDir, k->btn);
+				//Actualizamos el indice seleccionado para esta tecla
+				k->idx = sdlHatDir;
 			}
+			
+
+			//Reseteamos el estado
+			k->changeAsked = false;
+			k->lastTimeAsked = 0;
+			status = NORMAL;
 		}
 	}
 }
@@ -304,8 +304,8 @@ void GestorMenus::cambiarValor(int dir) {
 }
 
 // Lógica para confirmar (Botón A)
-void GestorMenus::confirmar() {
-	if (status == POLLING_INPUTS || menuActual->opciones.size() == 0) return;
+std::string GestorMenus::confirmar() {
+	if (status == POLLING_INPUTS || menuActual->opciones.size() == 0) return "";
 
     Opcion* opt = menuActual->opciones[menuActual->seleccionado];
     if (opt->tipo == OPC_SUBMENU) {
@@ -320,8 +320,10 @@ void GestorMenus::confirmar() {
 		status = POLLING_INPUTS;
     } else if (opt->tipo == OPC_EXEC) {
 		OpcionExec* e = (OpcionExec*)opt;
-		e->execfunc(e->joystick);
+		return e->execfunc(e->joystick);
 	}
+
+	return std::string("");
 }
 
 // Lógica para volver (Botón B)
@@ -393,52 +395,22 @@ void GestorMenus::draw(SDL_Surface *video_page){
 		if (option->tipo == OPC_KEY && !((OpcionKey *)option)->description.empty()){
 			std::string str = "";
 			OpcionKey *opt = ((OpcionKey *)option);
-
-			if (opt->tipoKey == KEY_JOY_BTN){
-				if (opt->changeAsked && SDL_GetTicks() - opt->lastTimeAsked < 4000){
-					str = "Esperando pulsación de tecla en " + Constant::intToString( (5000 - (SDL_GetTicks() - opt->lastTimeAsked)) / 1000 ) + " s";
-				} else if (opt->changeAsked) {
-					str = opt->description + Constant::intToString(opt->sdlBtn);
+			
+			if (opt->changeAsked && SDL_GetTicks() - opt->lastTimeAsked < 4000){
+				str = "Esperando pulsación de tecla en " + Constant::intToString( (5000 - (SDL_GetTicks() - opt->lastTimeAsked)) / 1000 ) + " s";
+			} else if (opt->idx > -1){
+				str = opt->description + Constant::intToString(opt->idx);
+				if (opt->changeAsked) {
 					opt->changeAsked = false;
 					opt->lastTimeAsked = 0;
 					status = NORMAL;
-				} else if (opt->sdlBtn > -1) {
-					str = opt->description + Constant::intToString(opt->sdlBtn);
-				} else {
-					str = "-";
-				}
-			} else if (opt->tipoKey == KEY_JOY_HAT) {
-				if (opt->changeAsked && SDL_GetTicks() - opt->lastTimeAsked < 4000){
-					str = "Esperando pulsación de tecla en " + Constant::intToString( (5000 - (SDL_GetTicks() - opt->lastTimeAsked)) / 1000 ) + " s";
-				} else if (opt->sdlBtn > -1 && opt->valor->hats[opt->sdlBtn].joy != -1){
-					str = opt->description + Constant::intToString(opt->valor->hats[opt->sdlBtn].joy);
-					if (opt->changeAsked) {
-						opt->changeAsked = false;
-						opt->lastTimeAsked = 0;
-						status = NORMAL;
-					} 				
-				} else {
-					str = "-";
-				}
-			} else if (opt->tipoKey == KEY_JOY_AXIS) {
-				if (opt->changeAsked && SDL_GetTicks() - opt->lastTimeAsked < 4000){
-					str = "Esperando pulsación de tecla en " + Constant::intToString( (5000 - (SDL_GetTicks() - opt->lastTimeAsked)) / 1000 ) + " s";
-				} else if (opt->axis > -1 && opt->valor->axis[opt->axis].joy != -1){
-					//str = "Axis: " + Constant::intToString(opt->valor->axis[opt->axis].joy);
-					str = "Axis: " + Constant::intToString(opt->axis);
-					if (opt->changeAsked) {
-						opt->changeAsked = false;
-						opt->lastTimeAsked = 0;
-						status = NORMAL;
-					} 					
-				} else {
-					str = "-";
-				}
+				} 				
+			} else {
+				str = "-";
 			}
 
 			int pixelDato;
 			TTF_SizeText(fontMenu, str.c_str(), &pixelDato, NULL);
-
 			Constant::drawTextTransparent(video_page, fontMenu, str.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
 		}

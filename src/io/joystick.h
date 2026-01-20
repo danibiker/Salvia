@@ -22,7 +22,9 @@ static int configurablePortButtons[] = {
 	RETRO_DEVICE_ID_JOYPAD_SELECT,
 	RETRO_DEVICE_ID_JOYPAD_START,
 	RETRO_DEVICE_ID_JOYPAD_L3,
-	RETRO_DEVICE_ID_JOYPAD_R3	
+	RETRO_DEVICE_ID_JOYPAD_R3,
+	RETRO_DEVICE_ID_JOYPAD_L2,
+	RETRO_DEVICE_ID_JOYPAD_R2
 };
 
 static char * configurablePortButtonsStr[] = {
@@ -35,7 +37,9 @@ static char * configurablePortButtonsStr[] = {
 	"RETRO_DEVICE_ID_JOYPAD_SELECT",
 	"RETRO_DEVICE_ID_JOYPAD_START",
 	"RETRO_DEVICE_ID_JOYPAD_L3",
-	"RETRO_DEVICE_ID_JOYPAD_R3"	
+	"RETRO_DEVICE_ID_JOYPAD_R3",
+	"RETRO_DEVICE_ID_JOYPAD_L2",
+	"RETRO_DEVICE_ID_JOYPAD_R2"
 };
 
 static int configurablePortHats[] = {
@@ -67,7 +71,6 @@ class Joystick{
 		int16_t g_analog_state[MAX_PLAYERS][MAX_ANALOG_AXIS];
 
 		static t_joy_inputs buttonsMapperFrontend;
-
 		static t_joy_retro_inputs buttonsMapperLibretro[MAX_PLAYERS];
 		
 
@@ -76,11 +79,20 @@ class Joystick{
 		Uint32 lastSelectPress;
 		bool loadButtonsFrontend(std::string);
 		void saveButtonsFrontend(std::string);
-		void saveButtonsRetro();
+		std::string saveButtonsRetro();
 		
 
     private:
-		void cargarValoresEnArray(int *&, std::string, int);
+		void cargarValoresEnArray(int*&, std::string, int);
+
+		template <size_t N>
+		void cargarValoresEnArray(int8_t (&arr)[N], std::string str, int maxValues) {
+			std::vector<std::string> v = Constant::splitChar(str, ',');
+			for (int i=0; i < v.size() && i < maxValues; i++){
+				arr[i] = Constant::strToTipo<int8_t>(v[i]);
+			}
+		}
+		
 		int cargarValoresEnArray(t_retro_input *&, std::string);
 		void addJoyToList(std::vector<std::string>&, t_joy_retro_inputs&);
 		std::string searchNewName(std::map<std::string, t_joy_retro_inputs>&, std::string);

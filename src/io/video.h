@@ -5,38 +5,25 @@
 #include "const/constant.h"
 #include "io/xbrz/xbrz.h"
 #include <stdint.h>
+#include <io/hqx_2/hqx.h>
+
+//extern "C" {
+//#include "io/libavhqx/libavfilter_vf_hqx.h"
+//}
 
 #if defined(_XBOX)
 	#include <ppcintrinsics.h>
 	#include <xtl.h> 
 #endif
 
-
-struct t_scale_props{
-	// 1. Punteros (4 u 8 bytes dependiendo de la arquitectura)
-    uint16_t* src; 
-    uint16_t* dst; 
-
-    // 2. Tipos de 8 bytes (size_t en 64 bits o si usas uint64_t)
-    std::size_t spitch;
-    std::size_t dpitch; 
-
-    // 3. Tipos de 4 bytes (int y float)
-    int sw; 
-    int sh; 
-    int dw; 
-    int dh; 
-    int scale; 
-    float ratio;
-	bool force_fs;
-};
-
 //Todas las funciones de escalado, tienen que tener esta interfaz
 typedef void (*ScalerFunc)(const t_scale_props& props);
-// Buffer para alojar el resultado de Scale2x (ej. 320x224 -> 640x448)
-// Reservamos para el caso máximo (ej. 512x512 -> 1024x1024)
-// 2048 * 1152 permite hasta Scale4x de una imagen de 512x256 o xBRZ alto
-static uint16_t temp_buffer[2048 * 1152]; // Ocupa aprox 4.5 MB
+
+// 1. Preparar superficies SDL de 32 bits
+struct SrfConvert { 
+	SDL_Surface *src32;
+	SDL_Surface *dst32;
+} static srf_32_convert;
 
 inline void check_center(uint16_t* src, uint16_t*& dst, int sw, int sh, std::size_t spitch, 
 						int dw, int dh, std::size_t dpitch, 
@@ -762,8 +749,42 @@ inline int xbrz_thread_func(void* data) {
         job->yFirst,
         job->yLast);
 
+	/*xbrz::scale(
+        static_cast<std::size_t>(job->scale), // factor
+        job->src,                        // src
+        job->dst,                        // trg
+        job->w,
+        job->h,                      // srcHeight
+        xbrz::ColorFormat::ARGB,          // colFmt (ajustar según tu xbrz.h)
+        *job->cfg,                              // cfg
+        job->yFirst,                                // yFirst
+        job->yLast                          // yLast
+    );*/
+
     return 0;
 }
+
+#if !defined(WANT_SDL_THREAD) && !defined(_XBOX)
+	#include <ppl.h> // Librería nativa de VS2010 para paralelismo
+#elif !defined(WANT_SDL_THREAD)
+	#include <xtl.h> // Cabecera obligatoria del XDK de Xbox 360
+	#include <process.h>
+	
+	// Función worker compatible con la Xbox 360
+	inline unsigned __stdcall xbrz_xbox_thread_func(void* arg) {
+		XBRZJob* job = (XBRZJob*)arg;
+    
+		// Opcional: Forzar la afinidad del hilo al procesador asignado
+		// La Xbox 360 tiene 3 núcleos (0, 1, 2) con 2 hilos de hardware cada uno.
+		// XSetThreadProcessor(GetCurrentThread(), job->processorId);
+
+		xbrz::scale(job->scale, job->src, job->dst, job->w, job->h, 
+					*(job->cfg), job->yFirst, job->yLast);
+    
+		_endthreadex(0);
+		return 0;
+	}
+#endif
 
 inline void xbrz_scale_multithread(const t_scale_props& props) {
     if (!props.src || !props.dst) return;
@@ -784,12 +805,14 @@ inline void xbrz_scale_multithread(const t_scale_props& props) {
     // 3. Configurar hilos y ejecutar xBRZ
     auto* srcPixels = reinterpret_cast<uint32_t*>(src32->pixels);
     auto* dstPixels = reinterpret_cast<uint32_t*>(dst32->pixels);
+	xbrz::ScalerCfg cfg;
 
+	const int numThreads = 3; // Recomendado 3 en Xbox 360 para aprovechar los 3 núcleos Xenon
+    int slice = props.sh / numThreads;
+
+#ifdef WANT_SDL_THREAD
     SDL_Thread* threads[16];
     XBRZJob jobs[16];
-    int numThreads = 2; // Recomendado 3 en Xbox 360 para aprovechar los 3 núcleos Xenon
-    int slice = props.sh / numThreads;
-    xbrz::ScalerCfg cfg;
 
     for (int i = 0; i < numThreads; i++) {
         jobs[i].scale = props.scale;
@@ -806,6 +829,49 @@ inline void xbrz_scale_multithread(const t_scale_props& props) {
     for (int i = 0; i < numThreads; i++) {
         SDL_WaitThread(threads[i], NULL);
     }
+#elif !defined(_XBOX)
+	// 3. Ejecutar xBRZ en paralelo usando PPL
+    int sliceHeight = props.sh / numThreads;
+
+    Concurrency::parallel_for(0, numThreads, [&](int i) {
+        int yFirst = i * sliceHeight;
+        int yLast  = (i == numThreads - 1) ? props.sh : (i + 1) * sliceHeight;
+
+		xbrz::scale(props.scale, srcPixels, dstPixels, props.sw, props.sh, 
+			cfg,
+			i * slice,
+			(i == numThreads - 1) ? props.sh : (i + 1) * slice);
+    });
+#elif !defined(WANT_SDL_THREAD)
+	HANDLE threads[numThreads];
+    XBRZJob jobs[numThreads];
+    int sliceHeight = props.sh / numThreads;
+	
+	for (int i = 0; i < numThreads; i++) {
+        jobs[i].scale = props.scale;
+        jobs[i].src = srcPixels;
+        jobs[i].dst = dstPixels;
+        jobs[i].w = props.sw;
+        jobs[i].h = props.sh;
+        jobs[i].cfg = &cfg;
+        jobs[i].yFirst = i * sliceHeight;
+        jobs[i].yLast  = (i == numThreads - 1) ? props.sh : (i + 1) * sliceHeight;
+        
+        // Creamos el hilo usando la API de la consola
+        threads[i] = (HANDLE)_beginthreadex(NULL, 0, xbrz_xbox_thread_func, &jobs[i], 0, NULL);
+        
+        // IMPORTANTE en Xbox 360: Asignar cada hilo a un núcleo físico distinto
+        // Usamos núcleos 1, 3 y 5 para no colisionar con el hilo principal (núcleo 0)
+        XSetThreadProcessor(threads[i], (i * 2) + 1); 
+    }
+
+    // Esperar a que los 3 núcleos terminen el procesamiento del frame
+    WaitForMultipleObjects(numThreads, threads, TRUE, INFINITE);
+
+    for (int i = 0; i < numThreads; i++) {
+        CloseHandle(threads[i]);
+    }
+#endif
 
     // 4. CONVERSIÓN CRÍTICA: De 32 bits al temp_buffer (16 bits)
     // El ancho y alto escalados
@@ -846,6 +912,20 @@ inline void scale_xBRZ_nx(const t_scale_props& props) {
     
     xbrz::ScalerCfg cfg;
     xbrz::scale(props.scale, srcPixels, dstPixels, props.sw, props.sh, cfg, 0, props.sh);
+	// LLAMADA CORRECTA:
+    // El formato suele ser xbrz::ColorFormat::ARGB, pero depende de tu rmask/amask.
+    // Si usas el formato estándar de 32 bits de SDL, xbrz::RGB es suficiente.
+    /*xbrz::scale(
+        static_cast<std::size_t>(props.scale), // factor
+        srcPixels,                        // src
+        dstPixels,                        // trg
+        props.sw,                         // srcWidth
+        props.sh,                         // srcHeight
+        xbrz::ColorFormat::ARGB,          // colFmt (ajustar según tu xbrz.h)
+        cfg,                              // cfg
+        0,                                // yFirst
+        props.sh                          // yLast
+    );*/
 
     // 4. CONVERSIÓN: De 32 bits al temp_buffer (16 bits)
     int tw = props.sw * props.scale;
@@ -863,3 +943,89 @@ inline void scale_xBRZ_nx(const t_scale_props& props) {
     // Se encarga de estirar a pantalla completa si force_fs es true o centrar de forma normal
     finalize_scaling(props, tw, th);
 }
+
+inline void scale_hqnx_alt(const t_scale_props& props) {
+    if (!props.src || !props.dst) return;
+
+	if (!srf_32_convert.src32 || !srf_32_convert.dst32 || srf_32_convert.src32->w != props.sw || srf_32_convert.src32->h != props.sh
+		|| srf_32_convert.dst32->w != props.sw * props.scale || srf_32_convert.dst32->h != props.sh * props.scale){
+		if (srf_32_convert.src32) SDL_FreeSurface(srf_32_convert.src32);
+        if (srf_32_convert.dst32) SDL_FreeSurface(srf_32_convert.dst32);
+
+		srf_32_convert.src32 = SDL_CreateRGBSurface(SDL_SWSURFACE, props.sw, props.sh, 32, rmask, gmask, bmask, amask);
+		srf_32_convert.dst32 = SDL_CreateRGBSurface(SDL_SWSURFACE, props.sw * props.scale, props.sh * props.scale, 32, rmask, gmask, bmask, amask);
+	}
+
+    if (!srf_32_convert.src32 || !srf_32_convert.dst32) {
+        if (srf_32_convert.src32) SDL_FreeSurface(srf_32_convert.src32);
+        if (srf_32_convert.dst32) SDL_FreeSurface(srf_32_convert.dst32);
+        return;
+    }
+
+    // 2. Convertir origen RGB565 a ARGB8888 (32 bits)
+    convertRGB565ToARGB8888(props.src, props.sw, props.sh, props.spitch, (uint32_t*)srf_32_convert.src32->pixels, srf_32_convert.src32->pitch);
+
+    // 3. Ejecutar HQ2X (Monohilo)
+    auto* srcPixels = reinterpret_cast<uint32_t*>(srf_32_convert.src32->pixels);
+    auto* dstPixels = reinterpret_cast<uint32_t*>(srf_32_convert.dst32->pixels);
+	
+	switch (props.scale){
+		case 3: 
+			hq3x_32(srcPixels, dstPixels, props.sw, props.sh); 
+			break;
+		default: 
+			hq2x_32(srcPixels, dstPixels, props.sw, props.sh); 
+			break;
+	}
+
+    // 4. CONVERSIÓN: De 32 bits al temp_buffer (16 bits)
+    int tw = props.sw * props.scale;
+    int th = props.sh * props.scale;
+    int t_pitch = tw * sizeof(uint16_t);
+    
+    // IMPORTANTE: Volcamos a temp_buffer, no a props.dst
+    convertARGB8888ToRGB565((uint32_t*)srf_32_convert.dst32->pixels, tw, th, srf_32_convert.dst32->pitch, temp_buffer, t_pitch);
+	//convertARGB8888ToRGB565((uint32_t*)dst32->pixels, tw, th, dst32->pitch, props.dst, props.dpitch);
+
+    // Liberar superficies inmediatamente
+    //SDL_FreeSurface(src32);
+    //SDL_FreeSurface(dst32);
+
+    // 5. LLAMADA GENÉRICA DE FINALIZACIÓN
+    // Se encarga de estirar a pantalla completa si force_fs es true o centrar de forma normal
+    finalize_scaling(props, tw, th);
+}
+
+#ifdef _XBOX
+extern "C" LPDIRECT3DDEVICE9 D3D_Device;	
+
+inline void video_blit_xbox_shader(const t_scale_props& props) {
+    D3DLOCKED_RECT rect;
+    // 1. Enviar datos a la textura (está en memoria CPU_CACHED según tu CreateTexture)
+	if (IDirect3DTexture9_LockRect((IDirect3DTexture9*)props.dst, 0, &rect, NULL, 0) == D3D_OK) {
+        uint8_t* dest = (uint8_t*)rect.pBits;
+        uint8_t* src = (uint8_t*)props.src;
+        for (int y = 0; y < props.sh; y++) {
+            memcpy(dest + (y * rect.Pitch), src + (y * props.spitch), props.sw * 2);
+        }
+        IDirect3DTexture9_UnlockRect((IDirect3DTexture9*)props.dst, 0);
+    }
+
+    // 2. Configurar constantes del Vertex Shader
+    float vParams[4] = { (float)props.ratio, (float)props.force_fs, 0.0f, 0.0f };
+    float vRes[4]    = { (float)props.dw, (float)props.dh, (float)props.sw, (float)props.sh };
+    
+    IDirect3DDevice9_SetVertexShaderConstantF(D3D_Device, 0, vParams, 1);
+    IDirect3DDevice9_SetVertexShaderConstantF(D3D_Device, 1, vRes, 1);
+
+	// 2. Dibujar frame
+    IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0, 1.0f, 0);
+    IDirect3DDevice9_BeginScene(D3D_Device);
+    
+    // Dibujamos el Quad (los vértices ahora son fijos de -1 a 1, el VS hace el resto)
+    IDirect3DDevice9_DrawPrimitive(D3D_Device, D3DPT_TRIANGLESTRIP, 0, 2);
+    
+    IDirect3DDevice9_EndScene(D3D_Device);
+    IDirect3DDevice9_Present(D3D_Device, NULL, NULL, NULL, NULL);
+}
+#endif

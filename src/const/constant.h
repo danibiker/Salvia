@@ -58,6 +58,21 @@ typedef enum {
     totalCursors
 } enumCursors;
 
+struct Message {
+    std::string content;
+    Uint32 ticks;
+    Uint32 timeout;
+    SDL_Surface* cache; // Nueva superficie para el mensaje renderizado
+    SDL_Rect rect;      // Para guardar el tamaño y posición calculados
+
+	Message(){
+		cache = NULL;
+		ticks = 0;
+		timeout = 0;
+		content = "";
+	}
+};
+
 #define MOUSE_BUTTON_LEFT		1
 #define MOUSE_BUTTON_MIDDLE	2
 #define MOUSE_BUTTON_RIGHT	3
@@ -382,12 +397,22 @@ class Constant{
 				std::transform(var->begin(), var->end(), var->begin(), ::toupper);
         }
 
-        template<class TIPO> static TIPO strToTipo(std::string str){
-                TIPO i;
-                std::stringstream s_str( str );
-                s_str >> i;
-                return i;
-        }
+        template<class TIPO> 
+		static TIPO strToTipo(std::string str) {
+			std::stringstream s_str(str);
+    
+			// Si el tipo es de 1 byte (int8_t, uint8_t, char), 
+			// stringstream lo leería como carácter.
+			if (sizeof(TIPO) == 1) {
+				int temp;
+				s_str >> temp;
+				return static_cast<TIPO>(temp);
+			} else {
+				TIPO i;
+				s_str >> i;
+				return i;
+			}
+		}
 
 		static bool esNumerico(const std::string& s) {
 			if (s.empty()) return false;

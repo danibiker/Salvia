@@ -91,6 +91,31 @@ struct ListStatus{
     bool animateBkg;
 };
 
+struct t_scale_props{
+	// 1. Punteros (4 u 8 bytes dependiendo de la arquitectura)
+    uint16_t* src; 
+    uint16_t* dst; 
+
+    // 2. Tipos de 8 bytes (size_t en 64 bits o si usas uint64_t)
+    std::size_t spitch;
+    std::size_t dpitch; 
+
+    // 3. Tipos de 4 bytes (int y float)
+    int sw; 
+    int sh; 
+    int dw; 
+    int dh; 
+    int scale; 
+    float ratio;
+	bool force_fs;
+};
+
+// Buffer para alojar el resultado de Scale2x (ej. 320x224 -> 640x448)
+// Reservamos para el caso máximo (ej. 512x512 -> 1024x1024)
+// 2048 * 1152 permite hasta Scale4x de una imagen de 512x256 o xBRZ alto
+static uint16_t temp_buffer[2048 * 1152]; // Ocupa aprox 4.5 MB
+
+
 class GameFile{
     public:
     GameFile(){
@@ -173,103 +198,113 @@ struct t_retro_input{
 	}
 };
 
+#define MAX_BUTTONS 20
+#define MAX_AXIS 20
+#define MAX_HATS 10
+
 struct t_joy_retro_inputs {
-    t_retro_input *buttons;
-    t_retro_input *axis;
-    t_retro_input *hats;
-    t_retro_input *retroButtons;
+	//Cada posicion de los siguientes array corresponde a un boton del joystick
+	int8_t buttons[MAX_BUTTONS];
+    int8_t axis[MAX_AXIS];
+    int8_t hats[MAX_HATS];
     
     std::string joyName;
-    int nButtons;
-    int nAxis;
-    int nHats;
+    uint8_t nButtons;
+    uint8_t nAxis;
+    uint8_t nHats;
     bool axisAsPad;
 
-    // 1. Constructor básico
-    t_joy_retro_inputs() : buttons(NULL), axis(NULL), hats(NULL), retroButtons(NULL) {
-        nButtons = 0; nAxis = 0; nHats = 0; 
-        axisAsPad = false;
-    }
+	t_joy_retro_inputs(){
+		nButtons = MAX_BUTTONS;
+		nAxis = MAX_AXIS;
+		nHats = MAX_HATS;
+		axisAsPad = false;
+		std::fill(buttons, buttons + MAX_BUTTONS, -1);
+		std::fill(axis, axis + MAX_AXIS, -1);
+		std::fill(hats, hats + MAX_HATS, -1);
+	}
 
-    // 2. Destructor: Liberar memoria para evitar leaks
-    ~t_joy_retro_inputs() {
-        liberar();
-    }
+	template <size_t N>
+	uint8_t findButtonIdx(int8_t btn, int8_t (&arr)[N]) {
+		for (uint8_t i = 0; i < N; i++) {
+			if (arr[i] == btn) return i;
+		}
+		return -1;
+	}
 
-    // 3. Constructor de Copia: Necesario para std::map y pasar por valor
-    t_joy_retro_inputs(const t_joy_retro_inputs& other) : buttons(NULL), axis(NULL), hats(NULL), retroButtons(NULL) {
-        copiarDesde(other);
-    }
-
-    // 4. Operador de Asignación: Crucial para "buttonsMapperLibretro[joyId] = ..."
-    t_joy_retro_inputs& operator=(const t_joy_retro_inputs& other) {
-        if (this != &other) {
-            liberar();
-            copiarDesde(other);
-        }
-        return *this;
-    }
-
-    // --- Funciones auxiliares de gestión ---
-    void liberar() {
-        if (buttons) delete[] buttons;
-        if (axis) delete[] axis;
-        if (hats) delete[] hats;
-        if (retroButtons) delete[] retroButtons;
-        buttons = axis = hats = retroButtons = NULL;
-    }
-
-    void copiarDesde(const t_joy_retro_inputs& other) {
-        joyName = other.joyName;
-        nButtons = other.nButtons;
-        nAxis = other.nAxis;
-        nHats = other.nHats;
-        axisAsPad = other.axisAsPad;
-
-        if (other.nButtons > 0 && other.buttons) {
-            buttons = new t_retro_input[nButtons];
-            memcpy(buttons, other.buttons, nButtons * sizeof(t_retro_input));
-        }
-        if (other.nAxis > 0 && other.axis) {
-            // Asumiendo que axis usa nAxis * 2 como en tu cargador previo
-            axis = new t_retro_input[nAxis * 2];
-            memcpy(axis, other.axis, (nAxis * 2) * sizeof(t_retro_input));
-        }
-        if (other.nHats > 0 && other.hats) {
-            hats = new t_retro_input[nHats];
-            memcpy(hats, other.hats, nHats * sizeof(t_retro_input));
-        }
-        if (other.retroButtons) {
-            // Ajusta el tamaño según tu constante de botones de Libretro (ej. 16 o 20)
-            retroButtons = new t_retro_input[20]; 
-            memcpy(retroButtons, other.retroButtons, 20 * sizeof(t_retro_input));
-        }
-    }
-
-    // --- Tus funciones originales de lógica ---
-    void setButton(int sdlbtnidx, int retrobtn) {
-        if (buttons && sdlbtnidx < nButtons) buttons[sdlbtnidx].joy = retrobtn;
-        if (retroButtons && retrobtn >= 0 && retrobtn < 20) retroButtons[retrobtn].joy = sdlbtnidx;
-    }
-
-    void setHat(int retroidx, int sdlHat) {
-        if (hats && retroidx < nHats) hats[retroidx].joy = sdlHat;
-    }
-
-    void setAxis(int sdlbtnidx, int retrobtn) {
-        if (axis && sdlbtnidx < nAxis * 2) axis[sdlbtnidx].joy = retrobtn;
-    }
-
-    bool equals(const t_joy_retro_inputs& p) const {
+	bool equals(const t_joy_retro_inputs& p) const {
         if (nButtons != p.nButtons || nAxis != p.nAxis || nHats != p.nHats || axisAsPad != p.axisAsPad) return false;
         if (nButtons > 0 && buttons && p.buttons)
-            for (int i = 0; i < nButtons; i++) if (buttons[i].joy != p.buttons[i].joy) return false;
+            for (int i = 0; i < nButtons; i++) if (buttons[i] != p.buttons[i]) return false;
         if (nAxis > 0 && axis && p.axis)
-            for (int i = 0; i < nAxis * 2; i++) if (axis[i].joy != p.axis[i].joy) return false;
+            for (int i = 0; i < nAxis; i++) if (axis[i] != p.axis[i]) return false;
         if (nHats > 0 && hats && p.hats)
-            for (int i = 0; i < nHats; i++) if (hats[i].joy != p.hats[i].joy) return false;
+            for (int i = 0; i < nHats; i++) if (hats[i] != p.hats[i]) return false;
         return true;
     }
+
+	/**
+	* idx: Representa el numero de boton pulsado, ya sea obtenido mediante SDL, allegro...
+	* btn: Representa el boton de libretro RETRO_DEVICE_ID_JOYPAD_B, RETRO_DEVICE_ID_JOYPAD_A, ...
+	*/
+	void setButton(uint8_t idx, int8_t btn){
+		if (idx < nButtons){
+			buttons[idx] = btn;
+		}
+	}
+
+	/**
+	* idx: Representa el numero de boton pulsado, ya sea obtenido mediante SDL, allegro...
+	*/
+	int8_t getButton(uint8_t idx){
+		if (idx < nButtons){
+			return buttons[idx];
+		} else {
+			return -1;
+		}
+	}
+
+	/**
+	* idx: Representa el numero de boton pulsado, ya sea obtenido mediante SDL, allegro...
+	* btn: Representa el boton de libretro RETRO_DEVICE_ID_JOYPAD_B, RETRO_DEVICE_ID_JOYPAD_A, ...
+	*/
+	void setAxis(uint8_t idx, int8_t btn){
+		if (idx < nAxis){
+			axis[idx] = btn;
+		}
+	}
+
+	/**
+	* idx: Representa el numero de boton pulsado, ya sea obtenido mediante SDL, allegro...
+	*/
+	int8_t getAxis(uint8_t idx){
+		if (idx < nAxis){
+			return axis[idx];
+		} else {
+			return -1;
+		}
+	}
+
+	/**
+	* idx: Representa el numero de boton pulsado, ya sea obtenido mediante SDL, allegro...
+	* btn: Representa el boton de libretro RETRO_DEVICE_ID_JOYPAD_B, RETRO_DEVICE_ID_JOYPAD_A, ...
+	*/
+	void setHat(uint8_t idx, int8_t btn){
+		if (idx < nHats){
+			hats[idx] = btn;
+		}
+	}
+
+	/**
+	* idx: Representa el numero de boton pulsado, ya sea obtenido mediante SDL, allegro...
+	*/
+	int8_t getHat(uint8_t idx){
+		if (idx < nHats){
+			return hats[idx];
+		} else {
+			return -1;
+		}
+	}
 };
 
 class ConfigEmu{

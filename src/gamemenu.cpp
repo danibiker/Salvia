@@ -7,7 +7,12 @@
 #include <io/joymapper.h>
 #include <so/launcher.h>
 #include <libretro/libretro.h>
+#include <io/hqx_2/hqx.h>
 
+#ifdef _XBOX
+	extern "C" void XBOX_SetVideoFilter(int filterType);	
+	extern "C" void XBOX_SelectEffect(int effectID);	
+#endif
 
 GameMenu::GameMenu(CfgLoader *cfgLoader){
     status = EMU_MENU;
@@ -46,6 +51,10 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 
 	fpsSurface = NULL; 
 	lastFpsUpdate = 0;
+	#ifndef _XBOX
+		hqxInit();
+	#endif
+	//initHqxFilter();
 };
 
 GameMenu::~GameMenu(){
@@ -53,6 +62,12 @@ GameMenu::~GameMenu(){
 	delete configMenus;
 	if (fpsSurface) SDL_FreeSurface(fpsSurface);
 	if (message.cache) SDL_FreeSurface(message.cache);
+
+	#ifndef _XBOX
+		if (srf_32_convert.src32) SDL_FreeSurface(srf_32_convert.src32);
+		if (srf_32_convert.dst32) SDL_FreeSurface(srf_32_convert.dst32);
+		hqxClose();
+	#endif
 }
 
 std::string GameMenu::configButtonsJOY(){
@@ -820,6 +835,7 @@ void GameMenu::processFrontendEventsAfter(){
 void GameMenu::processHotkeys(){
 	static Uint32 lastHotKey = 0;
 	const Uint32 now = SDL_GetTicks();
+	static int actualFilter = 0;
 
 	if (now - lastHotKey > 300){
 		if (this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_SELECT] && this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_X]){
@@ -836,14 +852,19 @@ void GameMenu::processHotkeys(){
 
 				const int dw = this->video_page->w;
 				const int dh = this->video_page->h;
-				bool cannotScale2x = (*current_scaler_mode == SCALE2X || *current_scaler_mode == SCALE_XBRZ_2X) && ((int)ancho_base * 2 > dw || (int)alto_base * 2 > dh);
-				bool cannotScale3x = (*current_scaler_mode == SCALE3X || *current_scaler_mode == SCALE3X_ADV || *current_scaler_mode == SCALE_XBRZ_3X) && ((int)ancho_base * 3 > dw || (int)alto_base * 3 > dh);
-				bool cannotScale4x = (*current_scaler_mode == SCALE4X || *current_scaler_mode == SCALE4X_ADV || *current_scaler_mode == SCALE_XBRZ_4X) && ((int)ancho_base * 4 > dw || (int)alto_base * 4 > dh);
+				bool cannotScale2x = (*current_scaler_mode == SCALE2X || *current_scaler_mode == SCALE_HQ2X_ALT //|| *current_scaler_mode == SCALE_HQ2X 
+					|| *current_scaler_mode == SCALE_XBRZ_2X 
+					|| *current_scaler_mode == SCALE_XBRZ_2X_TH) && ((int)ancho_base * 2 > dw || (int)alto_base * 2 > dh);
+				bool cannotScale3x = (*current_scaler_mode == SCALE3X || *current_scaler_mode == SCALE3X_ADV 
+					|| *current_scaler_mode == SCALE_HQ3X_ALT || *current_scaler_mode == SCALE_XBRZ_3X 
+					|| *current_scaler_mode == SCALE_XBRZ_3X_TH) && ((int)ancho_base * 3 > dw || (int)alto_base * 3 > dh);
+				bool cannotScale4x = (*current_scaler_mode == SCALE4X || *current_scaler_mode == SCALE4X_ADV 
+					|| *current_scaler_mode == SCALE_XBRZ_4X) && ((int)ancho_base * 4 > dw || (int)alto_base * 4 > dh);
 
 				#ifdef _XBOX
-					//XBOX CPU can't handle this algorithm implementation at 60fps
-					cannotScale2x = cannotScale2x || *current_scaler_mode == SCALE_XBRZ_2X;
-					cannotScale3x = cannotScale3x || *current_scaler_mode == SCALE_XBRZ_3X || *current_scaler_mode == SCALE_XBRZ_3X_TH;
+					//XBOX CPU can't handle this algorithm implementations at 60fps
+					cannotScale2x = cannotScale2x || *current_scaler_mode == SCALE_XBRZ_2X  || *current_scaler_mode == SCALE_XBRZ_2X_TH || *current_scaler_mode == SCALE_HQ2X_ALT; //|| *current_scaler_mode == SCALE_HQ2X;
+					cannotScale3x = cannotScale3x || *current_scaler_mode == SCALE_XBRZ_3X || *current_scaler_mode == SCALE_XBRZ_3X_TH || *current_scaler_mode == SCALE_HQ3X_ALT;
 					cannotScale4x = cannotScale4x || *current_scaler_mode == SCALE_XBRZ_4X;
 				#endif
 
@@ -869,6 +890,14 @@ void GameMenu::processHotkeys(){
 			lastHotKey = now;
 			this->joystick->lastSelectPress = now;
 			showSystemMessage(aspectRatioStrings[*this->current_ratio], 3000);
+		} else if (this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_SELECT] && this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_B]){
+			#ifdef _XBOX
+				//Some tinkering with shaders
+				XBOX_SelectEffect((++actualFilter) % 3);
+			#endif
+			lastHotKey = now;
+			this->joystick->lastSelectPress = now;
+			showSystemMessage("changing filter", 3000);
 		}
 	}
 }
@@ -929,8 +958,23 @@ void GameMenu::selectScalerMode(int mode){
 			current_scaler = scale4x_advance;
 			break;
 
+		case SCALE_HQ2X_ALT:
+			current_scaler = scale_hqnx_alt;
+			current_scaler_scale = 2;
+			break;
+
+		case SCALE_HQ3X_ALT:
+			current_scaler = scale_hqnx_alt;
+			current_scaler_scale = 3;
+			break;
+
 		case SCALE_XBRZ_2X: 
 			current_scaler = scale_xBRZ_nx;
+			current_scaler_scale = 2;
+			break;
+
+		case SCALE_XBRZ_2X_TH:
+			current_scaler = xbrz_scale_multithread;
 			current_scaler_scale = 2;
 			break;
 
@@ -1003,3 +1047,4 @@ void GameMenu::processMessages(){
 void GameMenu::processConfigChanges(){
 	selectScalerMode(*this->current_scaler_mode);
 }
+

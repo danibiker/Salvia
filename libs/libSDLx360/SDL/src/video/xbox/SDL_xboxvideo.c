@@ -57,6 +57,7 @@ static char rcsid =
 #include "SDL_xboxevents_c.h"
 #include "SDL_xboxmouse_c.h"
 #include "../SDL_yuvfuncs.h"
+#include "SDL_xboxshaders.h"
 
 #define XBOXVID_DRIVER_NAME "XBOX"
  
@@ -99,7 +100,8 @@ struct private_yuvhwdata {
 	Uint8 *planes[3];
 };
 
- 
+ // Declaración global (debe ser un puntero a punteros)
+IDirect3DPixelShader9** pixelShaders = NULL;
 
 int have_vertexbuffer=0;
 int have_direct3dtexture=0;
@@ -112,45 +114,73 @@ D3DDECL_END()
 };
 
 //--------------------------------------------------------------------------------------
-// Vertex and pixel shaders for gradient background rendering
+// Vertex Shader (vs_3_0)
 //--------------------------------------------------------------------------------------
 static const CHAR* g_strGradientShader =
     "struct VS_IN                                              \n"
     "{                                                         \n"
-    "   float4   Position     : POSITION;                      \n"
-    "   float2   UV        : TEXCOORD0;                        \n"
+    "   float4 Position : POSITION;                            \n"
+    "   float2 UV       : TEXCOORD0;                           \n"
     "};                                                        \n"
     "                                                          \n"
     "struct VS_OUT                                             \n"
     "{                                                         \n"
-    "   float4 Position       : POSITION;                      \n"
-    "   float2 UV        : TEXCOORD0;                        \n"
+    "   float4 Position : POSITION;                            \n" // En vs_3_0 POSITION es válido
+    "   float2 UV       : TEXCOORD0;                           \n"
     "};                                                        \n"
     "                                                          \n"
     "VS_OUT GradientVertexShader( VS_IN In )                   \n"
     "{                                                         \n"
     "   VS_OUT Out;                                            \n"
     "   Out.Position = In.Position;                            \n"
-    "   Out.UV  = In.UV;                               \n"
+    "   Out.UV       = In.UV;                                  \n"
     "   return Out;                                            \n"
     "}                                                         \n";
    
 //-------------------------------------------------------------------------------------
-// Pixel shader
+// Pixel Shader (ps_3_0)
 //-------------------------------------------------------------------------------------
-const char*                                 g_strPixelShaderProgram =
+/*const char* g_strPixelShaderProgram =
     " struct PS_IN                                 "
     " {                                            "
-    "     float2 TexCoord : TEXCOORD;              "
-    " };                                           "  // the vertex shader
+    "     float2 TexCoord : TEXCOORD0;             " // TEXCOORD0 para coincidir con VS
+    " };                                           "
     "                                              "
-    " sampler detail;                              "
+    " sampler2D detail : register(s0);             " // Definición explícita de sampler2D
     "                                              "
-    " float4 main( PS_IN In ) : COLOR              "
+    " float4 main( PS_IN In ) : COLOR0             " // ps_3_0 usa COLOR0 como salida
     " {                                            "
-    "     return tex2D( detail, In.TexCoord );     "  // Output color
-    " }     ";   
- 
+    "     return tex2D( detail, In.TexCoord );     "
+    " }     ";
+*/
+
+const char* g_strPixelShaderProgram =
+    " float fFilterType : register(c0);            " // El parámetro vive aquí
+    "                                              "
+    " struct PS_IN                                 "
+    " {                                            "
+    "     float2 TexCoord : TEXCOORD0;             "
+    " };                                           "
+    "                                              "
+    " sampler2D detail : register(s0);             "
+    "                                              "
+    " float4 main( PS_IN In ) : COLOR0             "
+    " {                                            "
+    "     float4 color = tex2D( detail, In.TexCoord ); "
+    "                                              "
+    "     if (fFilterType > 0.5 && fFilterType < 1.5) { " // Tipo 1: Grises
+    "         float gray = dot(color.rgb, float3(0.299, 0.587, 0.114)); "
+    "         return float4(gray, gray, gray, color.a); "
+    "     }                                        "
+    "     else if (fFilterType > 1.5) {             " // Tipo 2: Sepia
+    "         float r = (color.r * 0.393) + (color.g * 0.769) + (color.b * 0.189); "
+    "         float g = (color.r * 0.349) + (color.g * 0.686) + (color.b * 0.168); "
+    "         float b = (color.r * 0.272) + (color.g * 0.534) + (color.b * 0.131); "
+    "         return float4(r, g, b, color.a);      "
+    "     }                                        "
+    "                                              "
+    "     return color;                            " // Tipo 0: Original
+    " }     ";
  
 static void XBOX_UpdateRects(_THIS, int numrects, SDL_Rect *rects);
 
@@ -224,43 +254,56 @@ VideoBootStrap XBOX_bootstrap = {
 
 int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat)
 {	 
-	if (!D3D)
-		D3D = Direct3DCreate9(D3D_SDK_VERSION);
+    // 1. TODAS las declaraciones de variables al principio
+    D3DCAPS9 caps; 
+    HRESULT hr;
 
-	ZeroMemory(&D3D_PP,sizeof(D3D_PP));
+    if (!D3D)
+        D3D = Direct3DCreate9(D3D_SDK_VERSION);
 
+    // 2. Ahora las instrucciones ejecutables
+    if (D3D) {
+        IDirect3D9_GetDeviceCaps(D3D, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, &caps);
+        
+        // Comprobar si soporta Shader Model 3.0 (0x0300)
+        if (caps.PixelShaderVersion < D3DPS_VERSION(3, 0)) {
+            return 0;
+        }
+    }
 
+    ZeroMemory(&D3D_PP, sizeof(D3D_PP));
 
-	D3D_PP.BackBufferWidth = 1280;
-	D3D_PP.BackBufferHeight = 720;
-	D3D_PP.BackBufferFormat = D3DFMT_X8R8G8B8;
-	
+    D3D_PP.BackBufferWidth = 1280;
+    D3D_PP.BackBufferHeight = 720;
+    D3D_PP.BackBufferFormat = D3DFMT_X8R8G8B8;
+    
+    // En Xbox 360, estas opciones son recomendadas para rendimiento
+    //D3D_PP.EnableAutoDepthStencil = TRUE;
+    //D3D_PP.AutoDepthStencilFormat = D3DFMT_D24S8;
 
 #ifdef NOVSYNC
-	//De esta forma podemos ir a la maxima velocidad que permite la consola
-	D3D_PP.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
-	D3D_PP.SwapEffect = D3DSWAPEFFECT_DISCARD;
-	//Fin De esta forma podemos ir a la maxima velocidad que permite la consola
+    D3D_PP.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+    D3D_PP.SwapEffect = D3DSWAPEFFECT_DISCARD;
 #else
-	D3D_PP.PresentationInterval = D3DPRESENT_INTERVAL_ONE ;
+    D3D_PP.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
 #endif
 
-	if (!D3D_Device)
-		IDirect3D9_CreateDevice(D3D,0,D3DDEVTYPE_HAL,NULL,D3DCREATE_HARDWARE_VERTEXPROCESSING,&D3D_PP,&D3D_Device);
+    if (!D3D_Device) {
+        // Usamos D3DCREATE_HARDWARE_VERTEXPROCESSING para asegurar soporte de VS_3_0
+        hr = IDirect3D9_CreateDevice(D3D, 0, D3DDEVTYPE_HAL, NULL, 
+                                     D3DCREATE_HARDWARE_VERTEXPROCESSING, 
+                                     &D3D_PP, &D3D_Device);
+        if (FAILED(hr)) return 0;
+    }
 
-	vformat->BitsPerPixel = 32;
-	vformat->BytesPerPixel = 4;
+    vformat->BitsPerPixel = 32;
+    vformat->BytesPerPixel = 4;
+    vformat->Amask = 0xFF000000;
+    vformat->Rmask = 0x00FF0000;
+    vformat->Gmask = 0x0000FF00;
+    vformat->Bmask = 0x000000FF;
 
-	vformat->Amask = 0xFF000000;
-	vformat->Rmask = 0x00FF0000;
-	vformat->Gmask = 0x0000FF00;
-	vformat->Bmask = 0x000000FF;
-
-
-	if (D3D_Device)
-		return(1);
-	else
-		return (0);
+    return (D3D_Device) ? 1 : 0;
 }
 
 const static SDL_Rect
@@ -286,6 +329,19 @@ const static SDL_Rect *vid_modes[] = {
 SDL_Rect **XBOX_ListModes(_THIS, SDL_PixelFormat *format, Uint32 flags)
 {
 	return &vid_modes;
+}
+
+void XBOX_SetVideoFilter(int filterType)
+{
+    // Creamos un array de 4 floats porque los registros c0-cN son float4
+    float values[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    
+    values[0] = (float)filterType; // El primer componente es nuestro selector
+
+    if (D3D_Device) {
+        // Enviamos el valor al registro c0 del Pixel Shader
+        IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 0, values, 1);
+    }
 }
 
 SDL_Surface *XBOX_SetVideoMode(_THIS, SDL_Surface *current,
@@ -355,55 +411,46 @@ SDL_Surface *XBOX_SetVideoMode(_THIS, SDL_Surface *current,
 	//	D3DResource_Release((D3DResource*)SDL_vertexbuffer);
 	//}
 
-	    // Compile pixel shader.
-
-   D3DXCompileShader( g_strPixelShaderProgram,
-                            ( UINT )strlen( g_strPixelShaderProgram ),
-                            NULL,
-                            NULL,
-                            "main",
-                            "ps_2_0",
-                            0,
-                            &pPixelShaderCode,
-                            &pPixelErrorMsg,
-                            NULL );
-    
-    // Create pixel shader.
-	g_pPixelShader = D3DDevice_CreatePixelShader( ( DWORD* )pPixelShaderCode->lpVtbl->GetBufferPointer(pPixelShaderCode));
+    initShaders();
+   	// Create pixel shader.
+	g_pPixelShader = pixelShaders[0];
+	XBOX_SetVideoFilter(0);
 	 
 	    // Create vertex declaration
     if( NULL == g_pGradientVertexDecl )
     {
+        // Nota: Para SM 3.0 es mejor asegurar que POSITION y TEXCOORD coincidan con el struct VS_IN
         static const D3DVERTEXELEMENT9 decl[] =
         {
-			{ 0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
-			{ 0, 16, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
+            { 0, 0,  D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+            { 0, 16, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
             D3DDECL_END()
         };
 
-       
-		 IDirect3DDevice9_CreateVertexDeclaration(D3D_Device,decl,&g_pGradientVertexDecl);
+        IDirect3DDevice9_CreateVertexDeclaration(D3D_Device, decl, &g_pGradientVertexDecl);
             
     }
  
-	    // Create vertex shader
+	// 3. Cambio en la compilación del Vertex Shader: vs_2_0 -> vs_3_0
     if( NULL == g_pGradientVertexShader )
     {
         ID3DXBuffer* pShaderCode;
-        if( FAILED( D3DXCompileShader( g_strGradientShader, strlen( g_strGradientShader ),
-                                       NULL, NULL, "GradientVertexShader", "vs_2_0", 0,
+        if( SUCCEEDED( D3DXCompileShader( g_strGradientShader, (UINT)strlen( g_strGradientShader ),
+                                       NULL, NULL, "GradientVertexShader", 
+                                       "vs_2_0", 0, // Cambiado a 3.0
                                        &pShaderCode, NULL, NULL ) ) )
-            return 0;
-		 
-        IDirect3DDevice9_CreateVertexShader(D3D_Device,( DWORD* )pShaderCode->lpVtbl->GetBufferPointer(pShaderCode), &g_pGradientVertexShader);
+        {
+            IDirect3DDevice9_CreateVertexShader(D3D_Device, (DWORD*)pShaderCode->lpVtbl->GetBufferPointer(pShaderCode), &g_pGradientVertexShader);
+        }
     }
  	 
-	IDirect3DDevice9_CreateVertexDeclaration(D3D_Device,decl,&vertexDeclaration);
-	IDirect3DDevice9_CreateVertexBuffer(D3D_Device,sizeof(triangleStripVertices), D3DUSAGE_WRITEONLY,0L, D3DPOOL_DEFAULT, &vertexBuffer, NULL );
+// 4. Corrección de llamadas a la API (Usar los métodos del Device correctamente)
+    IDirect3DDevice9_CreateVertexBuffer(D3D_Device, sizeof(triangleStripVertices), D3DUSAGE_WRITEONLY, 0, D3DPOOL_DEFAULT, &vertexBuffer, NULL );
 
-	D3DDevice_SetVertexShader(D3D_Device, g_pGradientVertexShader );
-	D3DDevice_SetPixelShader(D3D_Device, g_pPixelShader);
-	D3DDevice_SetVertexDeclaration(D3D_Device, g_pGradientVertexDecl);
+    IDirect3DDevice9_SetVertexShader(D3D_Device, g_pGradientVertexShader );
+    IDirect3DDevice9_SetPixelShader(D3D_Device, g_pPixelShader);
+    IDirect3DDevice9_SetVertexDeclaration(D3D_Device, g_pGradientVertexDecl);
+
 	D3DDevice_SetRenderState(D3D_Device, D3DRS_VIEWPORTENABLE, FALSE);
 
 	D3DDevice_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
@@ -586,6 +633,8 @@ void XBOX_VideoQuit(_THIS)
 	 }
 
 	 this->screen->pixels = NULL;
+
+	 destroyShaders();
 }
 
 static int XBOX_SetHWAlpha(_THIS, SDL_Surface *surface, Uint8 alpha)
@@ -788,3 +837,54 @@ void XBOX_FreeYUVOverlay(_THIS, SDL_Overlay *overlay)
 
 }
 
+HRESULT CreateShader(const char* source, IDirect3DPixelShader9** target) {
+    ID3DXBuffer* pCode = NULL;
+    ID3DXBuffer* pError = NULL;
+    HRESULT hr;
+
+    hr = D3DXCompileShader(source, (UINT)strlen(source), NULL, NULL, "main", "ps_2_0", 0, &pCode, &pError, NULL);
+    
+    if (FAILED(hr)) {
+        if (pError) OutputDebugString((char*)pError->lpVtbl->GetBufferPointer(pError));
+        return hr;
+    }
+
+    hr = IDirect3DDevice9_CreatePixelShader(D3D_Device, (DWORD*)pCode->lpVtbl->GetBufferPointer(pCode), target);
+    pCode->lpVtbl->Release(pCode);
+    return hr;
+}
+
+void initShaders() {
+    // Reservamos espacio para 3 PUNTEROS
+    pixelShaders = (IDirect3DPixelShader9**) malloc(3 * sizeof(IDirect3DPixelShader9*));
+
+    // Compilar efectos
+    CreateShader(g_strShaderNormalSource, &pixelShaders[0]);
+    CreateShader(g_strShaderGraySource,   &pixelShaders[1]);
+    CreateShader(g_strShaderSepiaSource,  &pixelShaders[2]);
+}
+
+void destroyShaders() {
+	int i;
+    if (pixelShaders == NULL) return;
+    for (i = 0; i < 3; i++) {
+        if (pixelShaders[i] != NULL) {
+            // Opción A: Casting a IUnknown (La más robusta en el SDK de Xbox)
+            ((IUnknown*)pixelShaders[i])->lpVtbl->Release((IUnknown*)pixelShaders[i]);
+            
+            // Opción B: Si estás en C++, simplemente:
+            // pixelShaders[i]->Release();
+            
+            pixelShaders[i] = NULL;
+        }
+    }
+    free(pixelShaders);
+    pixelShaders = NULL;
+}
+
+void XBOX_SelectEffect(int effectID) {
+    if (!D3D_Device || !pixelShaders) return;
+    
+    // Pasamos directamente el puntero almacenado en el array
+    IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[effectID]);
+}
