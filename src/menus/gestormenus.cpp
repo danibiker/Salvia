@@ -25,6 +25,7 @@ GestorMenus::GestorMenus(int screenw, int screenh){
     keyUp = false;
 	this->setLayout(0, screenw, screenh);
 	status = NORMAL;
+	options_changed_flag = false;
 }
 
 GestorMenus::~GestorMenus() {
@@ -55,11 +56,13 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
     Menu* menuVideo = new Menu("Vídeo", menuRaiz);
 	Menu* menuEmulation = new Menu("Emulación", menuRaiz);
 	Menu* menuEntrada = new Menu("Entrada", menuRaiz);
+	menuCoreOptions = new Menu("Opciones del core", menuRaiz);
         
     todosLosMenus.push_back(menuRaiz);
     todosLosMenus.push_back(menuVideo);
 	todosLosMenus.push_back(menuEmulation);
 	todosLosMenus.push_back(menuEntrada);
+	todosLosMenus.push_back(menuCoreOptions);
 
 	//Poblar menu emulacion
 	//Escalado de video
@@ -99,7 +102,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 		std::string controlStr = "Controles del puerto " + Constant::TipoToStr(controlId + 1) + " " +
 			joystick->buttonsMapperLibretro[controlId].joyName;
 		Menu* menuControlesPuerto = new Menu(controlStr , menuAsignaciones);
-		addControlerOptions(menuControlesPuerto, controlId, joystick);
+		addControlerOptions(menuControlesPuerto, controlId, joystick, refConfig);
 		addControlerButtons(menuControlesPuerto, controlId);
 		menuAsignaciones->opciones.push_back(new OpcionSubMenu(controlStr, menuControlesPuerto));
 		todosLosMenus.push_back(menuControlesPuerto);
@@ -110,14 +113,49 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
     menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración vídeo", menuVideo));
 	menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración emulación", menuEmulation));
 	menuRaiz->opciones.push_back(new OpcionSubMenu("Entrada", menuEntrada));
+	menuRaiz->opciones.push_back(new OpcionSubMenu("Opciones del core", menuCoreOptions));
 
     // Establecer estado inicial
     menuActual = menuRaiz;
 	resetIndexPos();
 }
 
-void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joystick){
+void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joystick, CfgLoader *refConfig){
+	menu->opciones.clear();
+	if (controlId < MAX_PLAYERS){
+		auto& controllerPad = refConfig->g_ports[controlId];
+		std::vector<std::string> gamepads;
+
+		for (int i=0; i < controllerPad.available_types.size(); i++){
+			if (i == 0 && controllerPad.current_device_id < 0){
+				controllerPad.current_device_id = controllerPad.available_types.at(i).first;
+				controllerPad.current_desc = controllerPad.available_types.at(i).second;
+			}
+			gamepads.push_back(controllerPad.available_types.at(i).second);
+		}
+		if (controllerPad.available_types.size() > 0){
+			menuCoreOptions->opciones.push_back(new OpcionLista(controllerPad.current_desc, gamepads, &controllerPad.current_device_id));
+		}
+	}
 	menu->opciones.push_back(new OpcionBool("Eje analógico como pad", &joystick->buttonsMapperLibretro[controlId].axisAsPad));
+}
+
+void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
+	//Poblar Opciones del core
+	auto& params = refConfig->startupLibretroParams;
+	for (auto it = params.begin(); it != params.end(); ++it) {
+		const std::string& key = it->first;
+		// IMPORTANTE: 'it->second' es el unique_ptr, usamos .get() para el puntero crudo
+		cfg::t_emu_props* props = it->second.get();
+		if (props) {
+			LOG_INFO("Key: %s, Selected: %d", key.c_str(), props->selected);
+			// Recorrer el vector de valores dentro
+			//LOG_INFO("  Option %d: %s", i, props->values[i].c_str());
+			menuCoreOptions->opciones.push_back(new OpcionLista(props->description, props->values, &props->selected));
+			//for (std::size_t i = 0; i < props->values.size(); ++i) {  
+			//}
+		}
+	}
 }
 
 void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
@@ -134,8 +172,9 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
 	int retroAxisValue = 0;
 	int axisPos = 0;
 
-	t_joy_retro_inputs *input = &Joystick::buttonsMapperLibretro[controlId];
 
+
+	t_joy_retro_inputs *input = &Joystick::buttonsMapperLibretro[controlId];
 	//Adding the axis or pad elements
 	for (int retroBtnIdx=0; retroBtnIdx < num_port_hats; retroBtnIdx++){
 		const std::string text = configurablePortHatsStr[retroBtnIdx];
@@ -361,11 +400,14 @@ void GestorMenus::draw(SDL_Surface *video_page){
         SDL_Color lineTextColor = i == this->curPos ? black : white;
 
 		std::string line;
+		std::string value;
+
 		if (option->tipo == OPC_BOOLEANA){
 			line = option->titulo + " " + std::string(*((OpcionBool *)option)->valor ? "Y" : "N");
 		} else if (option->tipo == OPC_LISTA){
 			int indice = *((OpcionLista *)option)->indice;
-			line = option->titulo + " <" + ((OpcionLista *)option)->items.at(indice) + ">";
+			line = option->titulo;
+			value = "< " + ((OpcionLista *)option)->items.at(indice) + " >";
 		} else if (option->tipo == OPC_SUBMENU){
 			line = option->titulo + " >";
 		} else if (option->tipo == OPC_INT){
@@ -413,6 +455,11 @@ void GestorMenus::draw(SDL_Surface *video_page){
 			TTF_SizeText(fontMenu, str.c_str(), &pixelDato, NULL);
 			Constant::drawTextTransparent(video_page, fontMenu, str.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
+		} else if (!value.empty()){
+			int pixelDato;
+			TTF_SizeText(fontMenu, value.c_str(), &pixelDato, NULL);
+			Constant::drawTextTransparent(video_page, fontMenu, value.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 
+                    this->getY() + fontHeightRect, lineTextColor, lineBackground);
 		}
     }
 }
@@ -447,6 +494,7 @@ void GestorMenus::resetIndexPos(){
 	}
 }
 
+/**
 void GestorMenus::nextPos(){
 	this->navegar(1);
 	this->curPos = menuActual->seleccionado;
@@ -456,6 +504,36 @@ void GestorMenus::prevPos(){
 	this->navegar(-1);
 	this->curPos = menuActual->seleccionado;
 }
+*/
+
+ void GestorMenus::nextPos(){
+    if (this->curPos < this->listSize - 1){
+        this->curPos++;
+		menuActual->seleccionado = this->curPos;
+        int posCursorInScreen = this->curPos - this->iniPos;
+		
+        if (posCursorInScreen > this->maxLines - 1){
+            this->iniPos++;
+            this->endPos++;
+        }
+        this->pixelShift = 0;
+        this->lastSel = -1;
+    }
+}
+
+void GestorMenus::prevPos(){
+    if (this->curPos > 0){
+        this->curPos--;
+		menuActual->seleccionado = this->curPos;
+        if (this->curPos < this->iniPos && this->curPos >= 0){
+            this->iniPos--;
+            this->endPos--;
+        }
+        this->pixelShift = 0;
+        this->lastSel = -1;
+    }
+}
+
 
 void GestorMenus::clearSelectedText(){
     if (imgText != NULL){

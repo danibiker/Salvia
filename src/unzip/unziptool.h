@@ -1,342 +1,156 @@
-#pragma once 
-
-#include <stdio.h>
 #include <iostream>
-#include <fstream>
 #include <vector>
-
-#undef Z_HAVE_UNISTD_H
+#include <string>
+#include <sstream>
+#include <algorithm>
+#include <cstdio>
+#include <cstring>
 #include <unzip/minizip-1.2.5/unzip.h>
 #include <unzip/zlib.h>
 
-#include "io/fileio.h"
-#include "io/dirutil.h"
-#include "io/fileprops.h"
-#include "const/constant.h"
-
-using namespace std;
-
-#define MAX_FILENAME 512
-
-struct unzippedFileInfo{
+// Estructura de salida
+struct unzippedFileInfo {
     int errorCode;
-    string rutaEscritura;
+    std::string originalPath;      // El .zip original
+    std::string extractedPath;     // Ruta en disco si se extrajo
+    std::string fileNameInsideZip; // Nombre del fichero real (ej: "Sonic.bin")
     std::size_t romsize;
-    uint32_t nFilesInZip;
-    uint32_t nFilesWritten;
-    vector<FileProps> files;
+    void* memoryBuffer;
+
+    unzippedFileInfo() : errorCode(-1), romsize(0), memoryBuffer(nullptr) {}
 };
 
-class UnzipTool
-{
-    public:
-        UnzipTool();
-        virtual ~UnzipTool();
-        unzippedFileInfo descomprimirZip(const char *);
-        unzippedFileInfo descomprimirZip(const char *rutaZip, const char *rutaDest);
-		unzippedFileInfo descomprimirZip(const char *rutaZip, const char *rutaDest, const char *forcedFileName);
-		unzippedFileInfo descomprimirZip(const char *rutaZip, const char *rutaDest, const char *forcedFilename, bool uncompress);
-        unzippedFileInfo descomprimirZip(const char *rutaZip, const char *rutaDest, bool uncompress);
-        unzippedFileInfo listZipContent(const char *rutaZip);
-		unzippedFileInfo descomprimirZipToMem(std::string, std::string, void*&);
-		
-    protected:
-    private:
-		unzippedFileInfo extraerFichero(unzFile *myZip, const char *ruta, const char *forcedFilename, bool uncompress);
-        unzippedFileInfo extraerFichero(unzFile *myZip, const char *ruta, bool uncompress);
-        unzippedFileInfo extraerFichero(unzFile *myZip, const char *ruta);
-		unzippedFileInfo extraerFicheroToMem(unzFile *, std::string, int, void*&);
-
-};
-
-UnzipTool::UnzipTool()
-{
-    //ctor
-}
-
-UnzipTool::~UnzipTool()
-{
-    //dtor
-}
-
-unzippedFileInfo UnzipTool::descomprimirZip(const char *ruta){
-    return descomprimirZip(ruta, ruta);
-}
-
-unzippedFileInfo UnzipTool::descomprimirZip(const char *rutaZip, const char *rutaDest){
-    return descomprimirZip(rutaZip, rutaDest, true);
-}
-
-unzippedFileInfo UnzipTool::descomprimirZip(const char *rutaZip, const char *rutaDest, const char *forcedFileName){
-    return descomprimirZip(rutaZip, rutaDest, forcedFileName, true);
-}
-
-unzippedFileInfo UnzipTool::listZipContent(const char *rutaZip){
-    return descomprimirZip(rutaZip, rutaZip, false);
-}
-
-unzippedFileInfo UnzipTool::descomprimirZip(const char *rutaZip, const char *rutaDest, bool uncompress){
-    return descomprimirZip(rutaZip, rutaZip, NULL, uncompress);
-}
-
-unzippedFileInfo UnzipTool::extraerFichero(unzFile *myZip, const char *ruta){
-    return extraerFichero(myZip, ruta, true);
-}
-
-unzippedFileInfo UnzipTool::extraerFichero(unzFile *myZip, const char *ruta, bool uncompress){
-   return extraerFichero(myZip, NULL, uncompress);
-}
-
-unzippedFileInfo UnzipTool::descomprimirZip(const char *rutaZip, const char *rutaDest, const char *forcedFilename, bool uncompress){
-	unzFile myZip = NULL;
-    myZip = unzOpen(rutaZip);
-    unz_global_info zip_global_info;
-    int ret;
-    dirutil dir;
-
-    unsigned long nFilesInZip = 0;
-    unzippedFileInfo retorno;
-    unzippedFileInfo tempRetorno;
-
-    tempRetorno.errorCode = -1;
-    tempRetorno.rutaEscritura = rutaZip;
-    tempRetorno.romsize = 0;
-    tempRetorno.nFilesInZip = 0;
-    tempRetorno.nFilesWritten = 0;
-    
-    retorno.errorCode = -1;
-    retorno.rutaEscritura = rutaZip;
-    retorno.romsize = 0;
-    retorno.nFilesInZip = 0;
-    retorno.nFilesWritten = 0;
-
-
-    if (myZip == NULL){
-        cerr << "UnzipTool::descomprimirZip. Unable to open zip file: " + string(rutaZip) << endl;
-        return(retorno);
+// Función auxiliar para separar las extensiones y normalizarlas
+std::vector<std::string> splitExtensions(const std::string& extensions) {
+    std::vector<std::string> list;
+    std::stringstream ss(extensions);
+    std::string ext;
+    while (ss >> ext) {
+        // Aseguramos que empiecen por punto para la comparacion
+        if (ext[0] != '.') ext = "." + ext;
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        list.push_back(ext);
     }
-    else{
-        cout << "UnzipTool::descomprimirZip. File found: " + string(rutaZip) << endl;
-    }
+    return list;
+}
 
-    ret = unzGetGlobalInfo(myZip, &zip_global_info);
-    if (ret != UNZ_OK){
-        cerr << "unzGetGlobalInfo() call failed." + nFilesInZip << endl;
-        return(retorno);
-    } else {
-        nFilesInZip = zip_global_info.number_entry;
-        tempRetorno.nFilesInZip = nFilesInZip;
-        cout << "Found files in archive." + nFilesInZip <<endl;
-    }
+unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& extensions, bool toMemory, const std::string& tempDir) {
+    unzippedFileInfo ret;
+    ret.originalPath = rompath;
+    std::vector<std::string> allowedExts = splitExtensions(extensions);
+	// Límite de 50 MB (50 * 1024 * 1024 bytes)
+    const std::size_t MAX_MEM_SIZE = 52428800;
 
-    ret = unzGoToFirstFile(myZip);
 
-    if (ret != UNZ_OK)
-    {
-        cerr << "unzGoToFirstFile() call failed." << endl;
-        return(retorno);
-    }
 
-    while (ret == UNZ_OK){
-        retorno = extraerFichero(&myZip, rutaDest, forcedFilename, uncompress);
-        if (retorno.romsize > tempRetorno.romsize){
-            tempRetorno.errorCode = retorno.errorCode;
-            tempRetorno.romsize = retorno.romsize;
-            tempRetorno.rutaEscritura = retorno.rutaEscritura;
-			
-			FileProps fileprop;
-            fileprop.filename = dir.getFileName(retorno.rutaEscritura);
-            fileprop.dir = dir.getFolder(retorno.rutaEscritura);
-			fileprop.extension = dir.getExtension(fileprop.filename);
-            fileprop.fileSize = retorno.romsize;
-            tempRetorno.files.push_back(fileprop);
+    // 1. Detección de ZIP por Magic Number
+    FILE* fTest = fopen(rompath.c_str(), "rb");
+    if (!fTest) return ret;
+    uint32_t magic = 0;
+    fread(&magic, 4, 1, fTest);
+    fclose(fTest);
+
+	#ifdef _XBOX
+    // Función nativa del SDK de Xbox para invertir bytes de 32 bits
+    magic = _byteswap_ulong(magic); 
+	#endif
+
+    // Si NO es un ZIP (PK\003\004)
+    // --- CASO: NO ES UN ZIP ---
+    if (magic != 0x04034b50) {
+        FILE* f = fopen(rompath.c_str(), "rb");
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            ret.romsize = ftell(f);
+            fseek(f, 0, SEEK_SET);
+
+            if (toMemory) {
+                // Validación de tamaño para archivos normales
+                if (ret.romsize > MAX_MEM_SIZE) {
+                    fclose(f);
+                    ret.errorCode = -2; // Código para "Archivo demasiado grande para RAM"
+                    return ret;
+                }
+                ret.memoryBuffer = malloc(ret.romsize);
+                if (ret.memoryBuffer) fread(ret.memoryBuffer, 1, ret.romsize, f);
+            }
+            ret.extractedPath = rompath;
+            ret.errorCode = 0;
+            fclose(f);
         }
-        
-        if (retorno.errorCode == UNZ_OK){
-            tempRetorno.nFilesWritten++;
-        }
-        
-        if (!uncompress){
-            FileProps fileprop;
-            fileprop.filename = dir.getFileName(retorno.rutaEscritura);
-            fileprop.dir = dir.getFolder(retorno.rutaEscritura);
-            fileprop.fileSize = retorno.romsize;
-			fileprop.extension = dir.getExtension(fileprop.filename);
-            tempRetorno.files.push_back(fileprop);
-        }
-        ret = unzGoToNextFile(myZip);
+        return ret;
     }
 
-    unzClose(myZip);
-    //unzCloseCurrentFile(myZip);
-    return tempRetorno;
-}
+    // 2. Es un ZIP, abrir con Minizip
+    unzFile uf = unzOpen(rompath.c_str());
+    if (!uf) return ret;
 
-/**
-*
-*/
-unzippedFileInfo UnzipTool::extraerFichero(unzFile *myZip, const char *ruta, const char *forcedFilename, bool uncompress){
-	 int ret;
-    unsigned long rom_size = 0;
-    char filename[MAX_FILENAME];
-    char *cartridge;
-    unzippedFileInfo retorno;
-    retorno.errorCode = -1;
-    retorno.rutaEscritura = ruta;
-    retorno.romsize = 0;
-    unz_file_info zip_file_info;
+    bool found = false;
+    int res = unzGoToFirstFile(uf);
+    while (res == UNZ_OK) {
+        char filenameInZip[256];
+        unz_file_info fileInfo;
+        unzGetCurrentFileInfo(uf, &fileInfo, filenameInZip, sizeof(filenameInZip), NULL, 0, NULL, 0);
 
-    ret = unzGetCurrentFileInfo(*myZip, &zip_file_info, filename, MAX_FILENAME, NULL, 0, NULL, 0);
-    if (ret == UNZ_OK){
-        LOG_DEBUG("Uncompressed size is in bytes %zu\n", zip_file_info.uncompressed_size);
-        rom_size = zip_file_info.uncompressed_size;
-        retorno.romsize = rom_size;
-    }
-
-    ret = unzOpenCurrentFile(*myZip);
-    if (ret != UNZ_OK){
-        LOG_ERROR("Unable to open file from zip archive.");
-        return(retorno);
-    }
-    
-    if (uncompress){
-        cartridge = new char[rom_size];
-        if (cartridge == NULL){
-            LOG_ERROR("Unable allocate memory for cartridge.");
-            return(retorno);
+        std::string currentFile = filenameInZip;
+        std::string currentExt = "";
+        std::size_t dotPos = currentFile.find_last_of(".");
+        if (dotPos != std::string::npos) {
+            currentExt = currentFile.substr(dotPos);
+            std::transform(currentExt.begin(), currentExt.end(), currentExt.begin(), ::tolower);
         }
 
-        // Load rom file.
-        ret = unzReadCurrentFile(*myZip, cartridge, rom_size);
-        dirutil dir;
-		
-		string filenameOut = dir.getFolder(ruta) + Constant::getFileSep();
-		
-		//To avoid writing errors due to the name of the rom, we can force the filename
-		if (forcedFilename != NULL){
-			string original_extension = dir.getExtension(filename);
-			filenameOut = filenameOut + forcedFilename + original_extension;
-		} else {
-			filenameOut = filenameOut + filename;
+        // Comprobar si la extensión del fichero actual está en nuestra lista
+        bool match = false;
+		for (std::size_t i = 0; i < allowedExts.size(); ++i) {
+			if (currentExt == allowedExts[i]) {
+				match = true;
+				break;
+			}
 		}
-		
-		Fileio fileio;
-        if (fileio.writeToFile(filenameOut.c_str(), cartridge, rom_size, false) == 1){
-            retorno.rutaEscritura = filenameOut;
-            retorno.errorCode = UNZ_OK;
-        } else {
-            LOG_ERROR("Error UnzipTool::extraerFichero");
+
+        if (match) {
+            if (unzOpenCurrentFile(uf) == UNZ_OK) {
+                ret.romsize = fileInfo.uncompressed_size;
+                ret.fileNameInsideZip = currentFile;
+
+                if (toMemory) {
+					// VALIDACIÓN CRÍTICA: No cargar si supera 50MB
+					if (ret.romsize > MAX_MEM_SIZE) {
+						unzClose(uf);
+						ret.errorCode = -2; 
+						return ret;
+					}
+
+					if (unzOpenCurrentFile(uf) == UNZ_OK) {
+						ret.memoryBuffer = malloc(ret.romsize);
+						if (ret.memoryBuffer) {
+							unzReadCurrentFile(uf, ret.memoryBuffer, (unsigned int)ret.romsize);
+							found = true;
+						}
+						unzCloseCurrentFile(uf);
+					}
+				} else {
+					ret.extractedPath = tempDir + Constant::getFileSep() + "extractedRom" + currentExt;
+                    FILE* fout = fopen(ret.extractedPath.c_str(), "wb");
+                    if (fout) {
+                        std::vector<char> buffer(16384);
+                        int read;
+                        while ((read = unzReadCurrentFile(uf, buffer.data(), (unsigned int)buffer.size())) > 0) {
+                            fwrite(buffer.data(), 1, read, fout);
+                        }
+                        fclose(fout);
+                        found = true;
+                    }
+                }
+                unzCloseCurrentFile(uf);
+                if (found) break;
+            }
         }
-        delete [] cartridge;
-    } else {
-        retorno.rutaEscritura = filename;
+        res = unzGoToNextFile(uf);
     }
 
-    return retorno;
-}
-
-
-/**
-*
-*/
-unzippedFileInfo UnzipTool::descomprimirZipToMem(std::string rutaZip, std::string validExtensions, void*& cartridge){
-    unzFile myZip = NULL;
-	myZip = unzOpen(rutaZip.c_str());
-    unz_global_info zip_global_info;
-    int ret;
-    dirutil dir;
-	bool uncompress = true;
-    unzippedFileInfo retorno;
-    
-    retorno.errorCode = -1;
-    retorno.rutaEscritura = rutaZip;
-    retorno.romsize = 0;
-    retorno.nFilesInZip = 0;
-    retorno.nFilesWritten = 0;
-
-    if (myZip == NULL){
-		LOG_ERROR("UnzipTool::descomprimirZip. Unable to open zip file: %s\n", rutaZip.c_str());
-        return retorno;
-    }
-    else{
-		LOG_DEBUG("UnzipTool::descomprimirZip. File found: %s\n", rutaZip.c_str());
-    }
-
-    ret = unzGetGlobalInfo(myZip, &zip_global_info);
-    if (ret != UNZ_OK){
-		LOG_ERROR("unzGetGlobalInfo() call failed.\n");
-        return retorno;
-    } else {
-		LOG_DEBUG("Found files in archive: %d\n", zip_global_info.number_entry);
-    }
-
-    ret = unzGoToFirstFile(myZip);
-    if (ret != UNZ_OK){
-		LOG_ERROR("unzGoToFirstFile() call failed.\n");
-        return retorno;
-    }
-
-    while (ret == UNZ_OK){
-        retorno = extraerFicheroToMem(&myZip, validExtensions, zip_global_info.number_entry, cartridge);
-		if (retorno.nFilesInZip == 1 || retorno.romsize > 0){
-			break;
-		}
-		ret = unzGoToNextFile(myZip); // Avanzar al siguiente
-    }
-    unzClose(myZip);
-    return retorno;
-}
-
-unzippedFileInfo UnzipTool::extraerFicheroToMem(unzFile *myZip, std::string validExtensions, int nfiles, void*& cartridge){
-	int ret;
-	char filename[MAX_FILENAME];
-	unz_file_info zip_file_info;
-	dirutil dir;
-	unzippedFileInfo retorno;
-	
-	retorno.errorCode = -1;
-    retorno.rutaEscritura = "";
-    retorno.romsize = 0;
-    retorno.nFilesInZip = 0;
-    retorno.nFilesWritten = 0;
-
-	retorno.romsize = 0;
-	ret = unzGetCurrentFileInfo(*myZip, &zip_file_info, filename, MAX_FILENAME, NULL, 0, NULL, 0);
-
-	if (ret == UNZ_OK){
-		LOG_DEBUG("Uncompressed size is in bytes: %zu\n", zip_file_info.uncompressed_size);
-        retorno.romsize = zip_file_info.uncompressed_size;
-    }
-
-    ret = unzOpenCurrentFile(*myZip);
-    if (ret != UNZ_OK){
-		LOG_ERROR("Unable to open file from zip archive.\n");
-        retorno.romsize = 0;
-		return retorno;
-    }
-
-	cartridge = malloc(retorno.romsize); 
-    if (cartridge == NULL){
-		LOG_ERROR("Unable allocate memory for cartridge.\n");
-        retorno.romsize = 0;
-		return retorno;
-    }
-
-    // Load rom file.
-    ret = unzReadCurrentFile(*myZip, cartridge, retorno.romsize);
-	// SIEMPRE cerrar el fichero interno después de leerlo
-	unzCloseCurrentFile(*myZip); 
-
-	std::string extension = Constant::replaceAll(dir.getExtension(string(filename)), ".", "");
-	if (ret >= 0 && (nfiles == 1 || validExtensions.find(extension) != std::string::npos)){
-		retorno.nFilesInZip = nfiles;
-		retorno.rutaEscritura = filename;
-		retorno.errorCode = UNZ_OK;
-		return retorno;
-	} else {
-		free(cartridge);
-		cartridge = NULL; 
-		retorno.romsize = 0;
-		return retorno;
-	}
+    unzClose(uf);
+    if (found) ret.errorCode = 0;
+    return ret;
 }

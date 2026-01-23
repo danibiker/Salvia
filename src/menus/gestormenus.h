@@ -121,6 +121,7 @@ private:
 
     // Lista de todos los menús para liberar memoria al final
     std::vector<Menu*> todosLosMenus;
+	Menu* menuCoreOptions;
 
 	CONFIG_STATUS status;
 
@@ -143,7 +144,7 @@ private:
 	void resetIndexPos();
 	void clearSelectedText();
 	void setLayout(int layout, int screenw, int screenh);
-	void addControlerOptions(Menu*&, int, Joystick *);
+	void addControlerOptions(Menu*&, int, Joystick *, CfgLoader *);
 	void addControlerButtons(Menu*&, int);
 	int findAxisPos(int retroDirection);
 	void resetKeyElement(int, TipoKey);
@@ -166,6 +167,13 @@ public:
 	void draw(SDL_Surface *video_page);
 	void updateButton(int);
 	void updateAxis(int, int);
+	bool options_changed_flag;
+
+	void poblarCoreOptions(CfgLoader *);
+
+	bool isCoreOptions(){
+		return obtenerMenuActual() == menuCoreOptions;
+	}
 
 	CONFIG_STATUS getStatus(){ return status;}
 

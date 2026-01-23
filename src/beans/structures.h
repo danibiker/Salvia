@@ -359,3 +359,4 @@ class ConfigEmu{
     //       no: "emulator.exe rom"
     bool use_rom_directory;
 };
+

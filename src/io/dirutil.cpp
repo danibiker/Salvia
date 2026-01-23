@@ -421,7 +421,20 @@ bool dirutil::borrarArchivo(string ruta){
 */
 int dirutil::createDir(std::string dir){
 	if (!dirExists(dir.c_str())) {
-        #ifdef WIN
+		
+		#ifdef _XBOX
+			if (CreateDirectory(dir.c_str(), NULL)) {
+				// Directorio creado con éxito
+				return true;
+			} else {
+				if (GetLastError() == ERROR_ALREADY_EXISTS) {
+					// El directorio ya existía
+					return true;
+				}
+				// Error al crear (ruta no válida, dispositivo no montado, etc.)
+				return false;
+			}
+        #elif defined(WIN)
             return mkdir(dir.c_str());
         #else
             return mkdir(dir.c_str(), 0777);

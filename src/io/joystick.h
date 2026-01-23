@@ -67,6 +67,7 @@ class Joystick{
 		tEvento WaitForKey(SDL_Surface* screen);
 		bool init_all_joysticks();
 		void close_joysticks();
+		int8_t startHoldFrames[MAX_PLAYERS];
 		bool g_joy_state[MAX_PLAYERS][RETRO_DEVICE_ID_JOYPAD_R3 + 1];
 		int16_t g_analog_state[MAX_PLAYERS][MAX_ANALOG_AXIS];
 

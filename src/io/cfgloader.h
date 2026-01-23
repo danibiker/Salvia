@@ -11,10 +11,11 @@ class CfgLoader{
 public:
 	CfgLoader();
 	~CfgLoader();
-	//ConfigMain configMain;
-	cfg::t_cfg_props configMain [cfg::MAIN_CFG_MAX];
 
-	std::vector<std::unique_ptr<ConfigEmu>> configEmus;
+	cfg::t_cfg_props configMain [cfg::MAIN_CFG_MAX];
+	std::vector<std::unique_ptr<cfg::t_cfg_emu>> emulators;
+	std::map<std::string, std::unique_ptr<cfg::t_emu_props>> startupLibretroParams;
+	cfg::t_controller_port g_ports[MAX_PLAYERS];
 
 	int getWidth();
 	int getHeight();

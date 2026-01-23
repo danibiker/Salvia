@@ -34,10 +34,6 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::libretro_save] = cfg::t_cfg_props("libretro_save", ".\\data\\saves");
 	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
 	configMain[cfg::forceFS] = cfg::t_cfg_props("forceFS", true);
-
-	configMain[cfg::region] = cfg::t_cfg_props("region", "auto"); //pal, ntsc, auto -> Para nes
-	configMain[cfg::nospritelimit] = cfg::t_cfg_props("nospritelimit", "enabled"); //enabled, disabled -> para nes
-	configMain[cfg::snes_fx] = cfg::t_cfg_props("snes9x_overclock_superfx", "100"); //Required to run FX cartdriges -> para snes
 }
 
 /**
@@ -110,10 +106,11 @@ void CfgLoader::loadMainConfig(){
 	}
 
 	//Adding always the configuration options
-	ConfigEmu salviaConfig;
-	salviaConfig.generalConfig = true;
-	salviaConfig.name = "Options";
-	configEmus.push_back(std::unique_ptr<ConfigEmu>(new ConfigEmu(salviaConfig)));
+	// Opción para C++11 (donde no existe make_unique)
+	std::unique_ptr<cfg::t_cfg_emu> salviaConfig(new cfg::t_cfg_emu);
+	salviaConfig->config.generalConfig = true;
+	salviaConfig->config.name = "Options";
+	emulators.push_back(std::move(salviaConfig));
 }
 
 /**
@@ -153,7 +150,7 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 		fileopened = fileCfg.is_open();
 		if (fileopened){
 			std::string line;
-			ConfigEmu cfgEmu;
+			std::unique_ptr<cfg::t_cfg_emu> cfgEmu(new cfg::t_cfg_emu);
 
 			while(getline(fileCfg, line)){
 				//cout << "reading line" <<endl;
@@ -168,41 +165,39 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 
 					//cout << "assigning value for: " << key <<endl;
 					if (key.compare("name") == 0){
-						cfgEmu.name = value;
+						cfgEmu->config.name = value;
 					} else if (key.compare("system") == 0){
-						cfgEmu.system = value;
+						cfgEmu->config.system = value;
 					} else if (key.compare("description") == 0){
-						cfgEmu.description = value;
+						cfgEmu->config.description = value;
 					} else if (key.compare("directory") == 0){
-						cfgEmu.directory = value;
+						cfgEmu->config.directory = value;
 					} else if (key.compare("executable") == 0){
-						cfgEmu.executable = value;
+						cfgEmu->config.executable = value;
 					} else if (key.compare("global_options") == 0){
-						cfgEmu.global_options = value;
+						cfgEmu->config.global_options = value;
 					} else if (key.compare("map_file") == 0){
-						cfgEmu.map_file = value;
+						cfgEmu->config.map_file = value;
 					} else if (key.compare("options_before_rom") == 0){
-						cfgEmu.options_before_rom = value.compare("yes") == 0 ? true : false;
+						cfgEmu->config.options_before_rom = value.compare("yes") == 0 ? true : false;
 					} else if (key.compare("screen_shot_directory") == 0){
-						cfgEmu.screen_shot_directory = value;
+						cfgEmu->config.screen_shot_directory = value;
 					} else if (key.compare("assets") == 0){
-						cfgEmu.assets = value;
+						cfgEmu->config.assets = value;
 					} else if (key.compare("use_rom_file") == 0){
-						cfgEmu.use_rom_file = value.compare("yes") == 0 ? true : false;
+						cfgEmu->config.use_rom_file = value.compare("yes") == 0 ? true : false;
 					} else if (key.compare("rom_directory") == 0){
-						cfgEmu.rom_directory = value;
+						cfgEmu->config.rom_directory = value;
 					} else if (key.compare("rom_extension") == 0){
-						cfgEmu.rom_extension = value;
+						cfgEmu->config.rom_extension = value;
 					} else if (key.compare("use_extension") == 0){
-						cfgEmu.use_extension = value.compare("yes") == 0 ? true : false;
+						cfgEmu->config.use_extension = value.compare("yes") == 0 ? true : false;
 					} else if (key.compare("use_rom_directory") == 0){
-						cfgEmu.use_rom_directory = value.compare("yes") == 0 ? true : false;
+						cfgEmu->config.use_rom_directory = value.compare("yes") == 0 ? true : false;
 					}
 				}
 			}             
-			//cout << "adding emu " << configEmus.size() <<endl;   
-			//configEmus.emplace_back(cfgEmu);            
-			configEmus.push_back(std::unique_ptr<ConfigEmu>(new ConfigEmu(cfgEmu)));
+			emulators.push_back(std::move(cfgEmu));
 		}
 		//cout << "closing file..." <<endl;   
 		fileCfg.close();

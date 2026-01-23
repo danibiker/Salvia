@@ -81,6 +81,7 @@ class GameMenu : public Engine{
 		void setEmuStatus(int tmpStat){lastStatus = status;status = tmpStat;}
 		int getEmuStatus(){return status;}
 		int getLastStatus(){return lastStatus;}
+		std::map<std::string, std::unique_ptr<cfg::t_emu_props>>& getLibretroParams();
 
 		void showSystemMessage(std::string, uint32_t);
 		

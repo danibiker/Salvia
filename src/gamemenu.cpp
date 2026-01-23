@@ -229,20 +229,25 @@ bool GameMenu::initDblBuffer(int w, int h){
 
 ConfigEmu* GameMenu::getNextCfgEmu(){
     emuCfgPos++;
-    emuCfgPos = emuCfgPos % cfgLoader->configEmus.size();
-    return cfgLoader->configEmus.at(emuCfgPos).get();
+    emuCfgPos = emuCfgPos % cfgLoader->emulators.size();
+	return &cfgLoader->emulators.at(emuCfgPos)->config;
 }
 
 ConfigEmu* GameMenu::getPrevCfgEmu(){
-    if (emuCfgPos <= 0 && cfgLoader->configEmus.size() > 0)
-        emuCfgPos = cfgLoader->configEmus.size() - 1;
+    if (emuCfgPos <= 0 && cfgLoader->emulators.size() > 0)
+        emuCfgPos = cfgLoader->emulators.size() - 1;
     else 
         emuCfgPos--;
-    return cfgLoader->configEmus.at(emuCfgPos).get();
+	return &cfgLoader->emulators.at(emuCfgPos)->config;
 }
 
 ConfigEmu* GameMenu::getCfgEmu(){
-    return cfgLoader->configEmus.at(emuCfgPos).get();
+    return &cfgLoader->emulators.at(emuCfgPos)->config;
+}
+
+std::map<std::string, std::unique_ptr<cfg::t_emu_props>>& GameMenu::getLibretroParams() {
+    // Retorna la referencia al mapa dentro del vector
+    return cfgLoader->emulators.at(emuCfgPos)->libretroParams;
 }
 
 bool GameMenu::isDebug(){
@@ -321,7 +326,7 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
  * 
  */
 void GameMenu::refreshScreen(ListMenu &listMenu){
-    ConfigEmu emu = *this->cfgLoader->configEmus.at(this->emuCfgPos).get();
+    ConfigEmu emu = cfgLoader->emulators.at(emuCfgPos)->config;
     //Drawing the emulator name
     TTF_Font *fontBig = Fonts::getFont(Fonts::FONTBIG);
     TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
@@ -486,7 +491,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 	int face_h_small = TTF_FontLineSkip(fontsmall);
 	static const int cblack = SDL_MapRGB(this->video_page->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 
-    if (this->cfgLoader->configEmus.size() == 0){
+    if (cfgLoader->emulators.size() == 0){
         SDL_FillRect(screen, NULL, cblack);
         string msg = "There are no emulators configured. Exiting..."; 
 		Constant::drawTextCent(screen, fontsmall, msg.c_str(), 0, 0, true, true,  white, -1);
@@ -496,12 +501,12 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 		return;
     }
 
-	if (this->cfgLoader->configEmus.size() <= (std::size_t)this->emuCfgPos){
+	if (cfgLoader->emulators.size() <= (std::size_t)this->emuCfgPos){
         this->emuCfgPos = 0;
     } 
 
     dirutil dir;
-    ConfigEmu *emu = this->cfgLoader->configEmus.at(this->emuCfgPos).get();
+    ConfigEmu *emu = &cfgLoader->emulators.at(emuCfgPos)->config;
     string mapfilepath = Constant::getAppDir() //+ string(Constant::tempFileSep) + "gmenu" 
             + string(Constant::tempFileSep) + "config" + string(Constant::tempFileSep) + emu->map_file;
     
@@ -522,7 +527,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 
         dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, true, false);
 
-        ConfigEmu emu = *this->cfgLoader->configEmus.at(this->emuCfgPos).get();
+        ConfigEmu emu = cfgLoader->emulators.at(emuCfgPos)->config;
         string mapfilepath = getPathPrefix(emu.rom_directory);
 
         if (isDebug()){
@@ -544,7 +549,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
  * 
  */
 string GameMenu::getPathPrefix(string filepath){
-    ConfigEmu emu = *this->cfgLoader->configEmus.at(this->emuCfgPos).get();
+    ConfigEmu emu = cfgLoader->emulators.at(emuCfgPos)->config;
 	string finalpath;
 	cfgLoader->configMain[cfg::path_prefix].getPropValue(finalpath);
 
@@ -580,10 +585,10 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
     dirutil dir;
     vector<string> commands;
 
-    if (this->cfgLoader->configEmus.size() <= (std::size_t)this->emuCfgPos)
+    if (cfgLoader->emulators.size() <= (std::size_t)this->emuCfgPos)
         return commands;
 
-    ConfigEmu emu = *this->cfgLoader->configEmus.at(this->emuCfgPos).get();
+    ConfigEmu emu = cfgLoader->emulators.at(emuCfgPos)->config;
 	string pathPrefix = getPathPrefix(emu.directory);
 	
 	if (pathPrefix.at(pathPrefix.length()-1) != Constant::tempFileSep[0]){

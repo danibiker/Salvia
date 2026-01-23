@@ -26,11 +26,11 @@ Joystick::Joystick(){
 
 Joystick::~Joystick(){
 	close_joysticks();
-	delete [] buttonsMapperFrontend.buttons;
-	delete [] buttonsMapperFrontend.axis;
-	delete [] buttonsMapperFrontend.hats;
-	delete [] mPrevAxisValues;
-	delete [] mPrevHatValues;
+	if (buttonsMapperFrontend.buttons) delete [] buttonsMapperFrontend.buttons;
+	if (buttonsMapperFrontend.axis) delete [] buttonsMapperFrontend.axis;
+	if (buttonsMapperFrontend.hats) delete [] buttonsMapperFrontend.hats;
+	if (mPrevAxisValues) delete [] mPrevAxisValues;
+	if (mPrevHatValues) delete [] mPrevHatValues;
 }
 
 /**

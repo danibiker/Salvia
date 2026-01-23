@@ -12,6 +12,7 @@
 #include "gameMenu.h"
 #include "io/joymapper.h"
 #include "io/cfgloader.h"
+#include "io/dirutil.h"
 #include "uiobjects/listmenu.h"
 #include "uiobjects/tilemap.h"
 #include "unzip/unziptool.h"
@@ -28,6 +29,8 @@ int launchGame(std::string);
 //Maximo de 30 MB. Los CHD que son grandes no debemos cargarlos en memoria. Ya se encarga
 //la implementacion de vfs
 const int MAX_FILE_LOAD_MEMORY = 1024 * 2014 * 30; 
+const int maxJoyTargets = RETRO_DEVICE_ID_JOYPAD_R3 + 1;
+int audio_opened = 0;
 
 // Ya no declaramos punteros a función, sino que usamos las funciones 
 // que vendrán dentro del .lib (se resuelven al linkar)
@@ -47,6 +50,7 @@ extern "C" {
     void retro_set_input_state(retro_input_state_t);
     bool retro_load_game(const struct retro_game_info *game);
 	void retro_unload_game(void);
+	void retro_set_controller_port_device(unsigned port, unsigned device);
 	// 1. Define el tipo de callback globalmente o en tu clase
 	retro_audio_buffer_status_callback_t audio_status_cb;
 }
@@ -56,7 +60,6 @@ struct retro_core_variable {
    const char *value;  // Nombre visual y opciones: "Region; Auto|NTSC|PAL"
 };
 
-std::map<std::string, std::string> defaultCoreValues;
 const std::string Constant::MAME_SYS_ID = "75";
 const std::string Constant::WHITESPACE = " \n\r\t";
 
@@ -178,6 +181,11 @@ static bool retro_environment(unsigned cmd, void *data) {
 		case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
 			return true;
 
+		case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS:
+			// Al devolver true, le decimos al core: 
+			// "Sí, puedes pedirme todos los botones de golpe".
+			return true;
+
 		case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:{
 			//static const char *dir = "."; // Punto (.) indica el directorio actual del ejecutable
 
@@ -189,8 +197,15 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return true;
 		}
 
+		case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:{
+			const struct retro_system_av_info *av_info = (const struct retro_system_av_info *)data;
+			gameMenu->sync->init_fps_counter(av_info->timing.fps);
+			return true;
+		}
+
 		case RETRO_ENVIRONMENT_SET_GEOMETRY:{
-			/*const struct retro_game_geometry *geom = (const struct retro_game_geometry*)data;
+			const struct retro_game_geometry *geom = (const struct retro_game_geometry*)data;
+			/*
 			// 1. Calcular el nuevo tamaño necesario (asumiendo conversión a 16 bits)
 			std::size_t needed = geom->max_width * geom->max_height * sizeof(uint16_t);
 
@@ -226,28 +241,38 @@ static bool retro_environment(unsigned cmd, void *data) {
 			{
 				std::string rawValue = vars->value;
 				std::size_t semiPos = rawValue.find(';');
-        
-				if (semiPos != std::string::npos) 
+				auto& params = gameMenu->getLibretroParams();
+				auto it = params.find(vars->key);
+
+				if (semiPos != std::string::npos && it == params.end())
 				{
 					// 1. Extraemos todo lo que hay después del ';'
 					std::string optionsPart = rawValue.substr(semiPos + 1);
-            
 					// 2. El valor por defecto es lo que hay hasta el primer '|'
 					std::size_t pipePos = optionsPart.find('|');
-					std::string defaultValue;
-            
-					if (strcmp(vars->key, "vbanext_frameskip") == 0){
-						defaultValue = "1";
-					} else if (pipePos != std::string::npos)
-						defaultValue = optionsPart.substr(0, pipePos);
-					else
-						defaultValue = optionsPart; // Solo había una opción
+					std::unique_ptr<cfg::t_emu_props> cfgEmuProps(new cfg::t_emu_props);
+					cfgEmuProps->selected = 0;
+					cfgEmuProps->description = rawValue.substr(0, semiPos);
 
-					// 3. Ahora puedes guardar defaultValue en tu configMain
-					// para que sea el valor inicial si el usuario no tiene uno guardado.
-					defaultValue = Constant::Trim(defaultValue);
-					LOG_INFO("Opcion: %s, Por defecto: %s, rawValue: %s", vars->key, defaultValue.c_str(), rawValue.c_str());
-					defaultCoreValues.insert(std::make_pair(vars->key, defaultValue));
+					if (pipePos != std::string::npos){
+						auto valuesList = Constant::splitChar(optionsPart, '|');
+						for (int i=0; i < valuesList.size(); i++){
+							cfgEmuProps->values.push_back(Constant::Trim(valuesList[i]));
+						}
+					} else{
+						cfgEmuProps->values.push_back(Constant::Trim(optionsPart));
+					}
+
+					// 2. CREAR LA COPIA para 'startupLibretroParams'
+					// Creamos un segundo unique_ptr y copiamos el CONTENIDO (*cfgEmuProps)
+					LOG_INFO("Opcion: %s = %s", vars->key, cfgEmuProps->values[0].c_str());	
+					std::unique_ptr<cfg::t_emu_props> copyForStartup(new cfg::t_emu_props(*cfgEmuProps));
+					gameMenu->getCfgLoader()->startupLibretroParams.insert(std::make_pair(vars->key, std::move(copyForStartup)));
+					params.insert(std::make_pair(vars->key, std::move(cfgEmuProps)));
+				
+				} else{
+					std::unique_ptr<cfg::t_emu_props> copyForStartup(new cfg::t_emu_props(*it->second));
+					gameMenu->getCfgLoader()->startupLibretroParams.insert(std::make_pair(vars->key, std::move(copyForStartup)));
 				}
 				vars++;
 			}
@@ -257,7 +282,6 @@ static bool retro_environment(unsigned cmd, void *data) {
 		case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
 		{
 			const struct retro_subsystem_info *info = (const struct retro_subsystem_info*)data;
-    
 			// 1. Limpiar lista de subsistemas previa
 			//gameMenu->clearSubsystems();
 
@@ -269,34 +293,25 @@ static bool retro_environment(unsigned cmd, void *data) {
 			}
 			return true;
 		}
-		case RETRO_ENVIRONMENT_GET_VARIABLE:{
+		case RETRO_ENVIRONMENT_GET_VARIABLE: {
 			struct retro_variable *var = (struct retro_variable*)data;
-			/**TODO: Cambiar para que se ajuste por sistema y no en el configmain*/
-			//Esto claramente es una opcion de core de nes
-			if (strcmp(var->key, "nestopia_favored_system") == 0){
-				// Obtener el valor de tu configuración (p. ej. "pal", "ntsc" o "auto")
-				// Es vital que el string sea exactamente lo que el core espera
-				static std::string region;
-				gameMenu->getCfgLoader()->configMain[cfg::region].getPropValue(region);
-				var->value = region.c_str(); 
-				return true;
-			} else if (strcmp(var->key, "nestopia_nospritelimit") == 0){
-				static std::string nospritelimit;
-				gameMenu->getCfgLoader()->configMain[cfg::nospritelimit].getPropValue(nospritelimit);
-				var->value = nospritelimit.c_str(); 
-				return true;
-			} else if (strcmp(var->key, "snes9x_overclock_superfx") == 0){
-				static std::string superfx;
-				gameMenu->getCfgLoader()->configMain[cfg::snes_fx].getPropValue(superfx);
-				var->value = superfx.c_str(); 
-				return true;
+			if (!var || !var->key) return false;
+
+			// 1. Buscamos el elemento una sola vez usando un iterador
+			//auto& params = gameMenu->getLibretroParams();
+			auto& params = gameMenu->getCfgLoader()->startupLibretroParams;
+			auto it = params.find(var->key);
+
+			if (it != params.end()) {
+				// Obtenemos el puntero crudo del unique_ptr
+				// 'it->second' es el unique_ptr<cfg::t_emu_props>
+				cfg::t_emu_props* param = it->second.get();
+				var->value = param->values.at(param->selected).c_str();
+				LOG_INFO("Asignando %s a %s", var->key, var->value);
+				return true; // Retornar true indica que encontramos la variable
 			} else {
-				if (defaultCoreValues.find(var->key) != defaultCoreValues.end()) {
-					var->value = defaultCoreValues[var->key].c_str();
-					LOG_INFO("Asignando %s a %s", var->key, var->value);
-				} else {
-					LOG_INFO("Preguntando por: %s sin valor", var->key);
-				}
+				LOG_DEBUG("Preguntando por: %s sin valor", var->key);
+				var->value = NULL;
 			}
 			return false;
 		}
@@ -305,31 +320,28 @@ static bool retro_environment(unsigned cmd, void *data) {
 			// Solo devolvemos true si el usuario ha tocado algo en el menú
 			// de la Xbox 360 recientemente.
 			bool *updated = (bool*)data;
-			//*updated = gameMenu->options_changed_flag;
-    
+			*updated = gameMenu->configMenus->options_changed_flag;
+			if (*updated){
+				LOG_DEBUG("Core options changed");
+			}
 			// IMPORTANTE: Una vez que el core sabe que hubo un cambio, 
 			// reseteamos el flag para que en el siguiente frame no vuelva a procesar todo.
-			//gameMenu->options_changed_flag = false;
-			
-			*updated = false;
+			gameMenu->configMenus->options_changed_flag = false;
 			return true;
 		}
 
 		case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: {
             const struct retro_controller_info *info = (const struct retro_controller_info *)data;
-            
             // Aquí el Core te está diciendo qué dispositivos soporta.
-            // Debes iterar sobre 'info' para saber qué mostrar en tus menús de configuración.
-            int port = 0;
-            while (info[port].types != NULL) {
-                for (unsigned i = 0; i < info[port].num_types; i++) {
-                    LOG_DEBUG("Puerto %d soporta: %s (ID: %u)", 
-                        port, 
-                        info[port].types[i].desc, 
-                        info[port].types[i].id);
-                }
-                port++;
-            }
+            for (unsigned i = 0; info[i].types && i < MAX_PLAYERS; ++i) {
+				//gameMenu->getCfgLoader()->g_ports[i].available_types.clear();
+				for (unsigned j = 0; j < info[i].num_types; ++j) {
+					unsigned id = info[i].types[j].id;
+					const char* desc = info[i].types[j].desc;
+					LOG_DEBUG("Puerto %d soporta: %s (ID: %u)", i, desc, id);
+					gameMenu->getCfgLoader()->g_ports[i].available_types.push_back(std::make_pair(id, desc));
+				}
+			}
             return true;
         }
 		
@@ -436,13 +448,37 @@ void loadstate(){
 	}
 }
 
+void cargar_sram(const char* sram_path) {
+    std::size_t size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    void* data = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+
+    if (size > 0 && data) {
+        FILE* fp = fopen(sram_path, "rb");
+        if (fp) {
+            fread(data, 1, size, fp);
+            fclose(fp);
+        }
+    }
+}
+
+void guardar_sram(const char* sram_path) {
+    std::size_t size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    void* data = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+
+    if (size > 0 && data) {
+        FILE* fp = fopen(sram_path, "wb");
+        if (fp) {
+            fwrite(data, 1, size, fp);
+            fclose(fp);
+        }
+    }
+}
+
 /**
  * 
  */
 void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, bool keypress){
 	static Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
-	
-
 	if (gameMenu.configMenus->getStatus() == POLLING_INPUTS){
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
@@ -485,9 +521,21 @@ void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, 
 					}
 					case JOY_BUTTON_LEFT:{
 						gameMenu.configMenus->cambiarValor(-1);
+						if (gameMenu.configMenus->isCoreOptions()){
+							gameMenu.configMenus->options_changed_flag = true;
+							/*Esta es la técnica que usan los frontends como RetroArch para previsualizar cambios en menús pausados:
+							Realiza un retro_serialize() para guardar el estado actual en memoria.
+							Aplica el cambio de variable.
+							Llama a retro_run() una vez para que el core procese el cambio y genere el nuevo frame.
+							Inmediatamente después, llama a retro_unserialize() para volver al estado anterior. 
+							Resultado: El usuario ve el frame actualizado con la nueva configuración, pero lógicamente el juego sigue en el mismo punto exacto.*/
+						}
 						break;
 					}
 					case JOY_BUTTON_RIGHT:{
+						if (gameMenu.configMenus->isCoreOptions()){
+							gameMenu.configMenus->options_changed_flag = true;
+						}
 						gameMenu.configMenus->cambiarValor(1);
 						break;
 					}
@@ -526,9 +574,13 @@ void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, 
 
 				if (askEvento.joy == JOY_BUTTON_A){
 					vector<string> launchCommand = gameMenu.launchProgram(listMenu);
+					
 					if (launchCommand.size() > 1){
+						std::string romToLaunch = launchCommand.at(1);
+						LOG_DEBUG("Launching rom %s", romToLaunch.c_str());
+
 						SDL_FillRect(gameMenu.screen, NULL, bkgText);
-						if (launchGame(launchCommand.at(1))){
+						if (launchGame(romToLaunch)){
 							gameMenu.setEmuStatus(EMU_STARTED);
 						}
 						gameMenu.joystick->resetAllValues();
@@ -598,7 +650,19 @@ void update_input() {
 						break;
 
                     const int8_t joyId = Joystick::buttonsMapperLibretro[p].getButton(event.jbutton.button);
-					if (joyId >= 0) {
+
+					// Solo aplicamos el "latch" al botón START, en la xbox360 el boton start no se detecta, 
+					// hasta que se suelta XD
+					if (joyId == RETRO_DEVICE_ID_JOYPAD_START) {
+						if (pressed) {
+							gameMenu->joystick->g_joy_state[p][joyId] = true;
+							gameMenu->joystick->startHoldFrames[p] = 0; // Reset por si acaso
+						} else {
+							// Al soltar, activamos el contador de persistencia
+							gameMenu->joystick->startHoldFrames[p] = 3; 
+						}
+					} else if (joyId >= 0) {
+						//LOG_DEBUG("Enviando boton %d para el sdlbtn %d", joyId, event.jbutton.button);
 						gameMenu->joystick->g_joy_state[p][joyId] = pressed;
 					}
                     
@@ -613,24 +677,18 @@ void update_input() {
 				const int player = event.jhat.which;
 				if (player < MAX_PLAYERS) {
 					const Uint8 hatVal = event.jhat.value;
-					t_joy_retro_inputs &input = Joystick::buttonsMapperLibretro[player];
 					bool* state = gameMenu->joystick->g_joy_state[player];
+					t_joy_retro_inputs &input = Joystick::buttonsMapperLibretro[player];
 
-					// Definimos las direcciones que queremos comprobar
-					// SDL_HAT_UP, DOWN, LEFT, RIGHT son las máscaras de bits
-       				auto updateHat = [&](Uint8 mask) {
-						// Buscamos qué botón de Libretro asignamos a esta dirección física
-						// OJO: asoumimos que se ha guardado el mapeo por cada bit
-						int8_t libretroBtn = input.getHat(mask); 
-						if (libretroBtn > -1) {
-							state[libretroBtn] = (hatVal & mask) != 0;
-						}
-					};
+					int8_t btnUp    = input.getHat(SDL_HAT_UP);
+					int8_t btnDown  = input.getHat(SDL_HAT_DOWN);
+					int8_t btnLeft  = input.getHat(SDL_HAT_LEFT);
+					int8_t btnRight = input.getHat(SDL_HAT_RIGHT);
 
-					updateHat(SDL_HAT_UP);
-					updateHat(SDL_HAT_DOWN);
-					updateHat(SDL_HAT_LEFT);
-					updateHat(SDL_HAT_RIGHT);
+					if (btnUp    >= 0) state[btnUp]    = (hatVal & SDL_HAT_UP) != 0;
+					if (btnDown  >= 0) state[btnDown]  = (hatVal & SDL_HAT_DOWN) != 0;
+					if (btnLeft  >= 0) state[btnLeft]  = (hatVal & SDL_HAT_LEFT) != 0;
+					if (btnRight >= 0) state[btnRight] = (hatVal & SDL_HAT_RIGHT) != 0;
 				}
 				break;
 			}
@@ -656,38 +714,33 @@ void update_input() {
 				}
 				break;
 			}*/
-		
+			
+		   
 		   case SDL_JOYAXISMOTION: {
 				const int p = event.jaxis.which; // Cambiado event.jbutton por event.jaxis
 				if (p < MAX_PLAYERS) {
-					const int axis = event.jaxis.axis;
-					const int value = event.jaxis.value;
-					const bool isPositive = (value > 0);
-					const int buttonIdx = (axis * 2) + isPositive;
-					const int oppositeIdx = (axis * 2) + !isPositive;
+					if (gameMenu->joystick->buttonsMapperLibretro[p].axisAsPad) {
+						const int axis = event.jaxis.axis;
+						const int value = event.jaxis.value;
+						const bool isPositive = (value > 0);
+						const int buttonIdx = (axis * 2) + isPositive;
+						const int oppositeIdx = (axis * 2) + !isPositive;
 
-					if (buttonIdx < MAX_ANALOG_AXIS) {
-						gameMenu->joystick->g_analog_state[p][buttonIdx] = value;
-						// IMPORTANTE: El valor del eje opuesto en este mismo axis debe ser 0
-						gameMenu->joystick->g_analog_state[p][oppositeIdx] = 0;
+						// Comprobamos si el valor actual supera el umbral (zona muerta)
+						const bool isPressed = abs(value) > DEADZONE;
+						bool* state = gameMenu->joystick->g_joy_state[p];
 
-						if (gameMenu->joystick->buttonsMapperLibretro[p].axisAsPad) {
-							const int maxJoyTargets = RETRO_DEVICE_ID_JOYPAD_R3 + 1;
-							const bool analogThreshold = abs(value) > DEADZONE;
-							bool* state = gameMenu->joystick->g_joy_state[p];
-                
-							// Obtenemos qué dirección de DPAD mapea este eje específico
-							const int8_t joyTarget = Joystick::buttonsMapperLibretro[p].getAxis(buttonIdx);
-							const int8_t joyOpposite = Joystick::buttonsMapperLibretro[p].getAxis(oppositeIdx);
+						const int8_t joyTarget = Joystick::buttonsMapperLibretro[p].getAxis(buttonIdx);
+						const int8_t joyOpposite = Joystick::buttonsMapperLibretro[p].getAxis(oppositeIdx);
 
-							// Solo modificamos las direcciones relacionadas con este eje
-							if (joyTarget >= 0 && joyTarget < maxJoyTargets) {
-								state[joyTarget] = analogThreshold;
-							}
-							// Si el eje se mueve a un lado, el lado opuesto del MISMO eje debe desactivarse
-							if (joyOpposite >= 0 && joyOpposite < maxJoyTargets) {
-								state[joyOpposite] = false;
-							}
+						// Actualizamos la dirección actual: true si está fuera de zona muerta, false si está dentro
+						if (joyTarget >= 0 && joyTarget < maxJoyTargets) {
+							state[joyTarget] = isPressed; 
+						}
+
+						// El lado opuesto del MISMO eje siempre debe ser false si este lado está activo
+						if (isPressed && joyOpposite >= 0 && joyOpposite < maxJoyTargets) {
+							state[joyOpposite] = false;
 						}
 					}
 				}
@@ -713,6 +766,7 @@ void update_input() {
 				}
 				break;
 			}
+			
 		}
 	}
 
@@ -736,11 +790,31 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
         return 0;
 
 	if (device == RETRO_DEVICE_JOYPAD) {
-		// Devolvemos el estado del botón 'id' para el jugador 'port'
-		return gameMenu->joystick->g_joy_state[port][id] ? 1 : 0;
-	} 
-	//TODO: No lo tratamos por ahora
-	else if (device == RETRO_DEVICE_ANALOG) {
+		// 1. Gestión del Latch de Start
+		if (gameMenu->joystick->startHoldFrames[port] > 0) {
+			gameMenu->joystick->startHoldFrames[port]--;
+			gameMenu->joystick->g_joy_state[port][RETRO_DEVICE_ID_JOYPAD_START] = true; // Forzamos true en el array
+
+			if (gameMenu->joystick->startHoldFrames[port] == 0) {
+				gameMenu->joystick->g_joy_state[port][RETRO_DEVICE_ID_JOYPAD_START] = false;
+			}
+		}
+
+		// 2. Respuesta al Core
+		if (id == RETRO_DEVICE_ID_JOYPAD_MASK) {
+			int16_t mask = 0;
+			const bool* portState = gameMenu->joystick->g_joy_state[port];
+			for (int i = 0; i < maxJoyTargets; i++) {
+				if (portState[i]) mask |= (1 << i);
+			}
+			return mask;
+		} else {
+			if (id < maxJoyTargets) {
+				return gameMenu->joystick->g_joy_state[port][id] ? 1 : 0;
+			}
+			return 0;
+		}
+	} else if (device == RETRO_DEVICE_ANALOG) {
 		int sdl_axis = -1;
         if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT) {
             sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 0 : 1;
@@ -750,7 +824,7 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 
 		if (sdl_axis != -1) {
 			int16_t val = gameMenu->joystick->g_analog_state[port][sdl_axis];
-			LOG_DEBUG("port: %d, Valor: %d -> sdl_axis: %d", port, val, sdl_axis);
+			// LOG_DEBUG("port: %d, Valor: %d -> sdl_axis: %d", port, val, sdl_axis);
             // Aplicar zona muerta (Deadzone) para evitar "drift"
             if (abs(val) < DEADZONE) return 0;
             return val;
@@ -861,6 +935,7 @@ void init_sdl_audio(double sample_rate) {
         LOG_ERROR("%s\n", error.c_str());
         return;
     }
+	audio_opened = 1;
     SDL_PauseAudio(0); // Inicia el audio
 }
 
@@ -927,96 +1002,21 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
     gameMenu.createMenuImages(menuData);
 }
 
-/**
-*
-*/
-unzippedFileInfo unzipOrLoadFile(std::string rompath, void*& buffer){
-	std::string rompathLow = rompath;
-	unzippedFileInfo ret;
-	ret.errorCode = -1;
-    ret.rutaEscritura = "";
-    ret.romsize = 0;
-    ret.nFilesInZip = 0;
-    ret.nFilesWritten = 0;
-
-	dirutil dir;
-	Constant::lowerCase(&rompathLow);
-
-	struct retro_system_info info;
-	memset(&info, 0, sizeof(info));
-	retro_get_system_info(&info);
-	
-	if (rompathLow.find(".zip") != std::string::npos){
-		UnzipTool unzipTool;
-		ConfigEmu *emu = gameMenu->getCfgEmu();
-
-		//Llamada al core para saber si se requiere el path completo
-		if (info.need_fullpath) {
-			//No nos queda otra que descomprimir a algun directorio temporal porque el core lo requiere
-			std::string destDir = Constant::getAppDir() + Constant::getFileSep() + "tmp";
-
-			if (dir.dirExists(destDir.c_str())){
-				dir.borrarDir(destDir);
-			}
-
-			if (!dir.dirExists(destDir.c_str()) && dir.createDir(destDir) < 0){
-				LOG_ERROR("No se ha podido crear el directorio %s\n", destDir.c_str());
-				return ret;
-			}
-			
-			unzippedFileInfo unzipedFileInfo = unzipTool.descomprimirZip(rompath.c_str(), destDir.c_str(), "romToLoad"); 
-			for (unsigned int i=0; i < unzipedFileInfo.files.size(); i++){
-				FileProps fileprop = unzipedFileInfo.files.at(i);
-				std::string ext = Constant::replaceAll(fileprop.extension, ".", "");
-				if (emu->rom_extension.find(ext) != std::string::npos){
-					ret.romsize = fileprop.fileSize;
-					ret.rutaEscritura = fileprop.dir + Constant::getFileSep() + fileprop.filename;
-					ret.errorCode = UNZ_OK;
-					break;
-				}
-			}
-		} else {
-			ret = unzipTool.descomprimirZipToMem(rompath, emu->rom_extension, buffer); 
-		}
-
-	} else {
-		FILE *f = fopen(rompath.c_str(), "rb");
-		if (!f){
-			LOG_ERROR("Error abriendo rom %s\n", rompath.c_str());
-			return ret;
-		}
-
-		fseek(f, 0, SEEK_END);
-		std::size_t size = ftell(f);
-		rewind(f);
-
-		//Guardamos el tamanyo y la ruta del fichero
-		ret.romsize = size;
-		ret.rutaEscritura = rompath;
-
-		if (size < MAX_FILE_LOAD_MEMORY){
-			// Usar memoria alineada si es posible
-			buffer = malloc(size); 
-			if (!buffer) { fclose(f); return ret; }
-			fread(buffer, 1, size, f);
-		}
-		fclose(f);
-		ret.errorCode = UNZ_OK;
-	}
-	return ret;
-}
-
 void closeGame(){
 	if (gameMenu->romLoaded){
-		// 1. Pausar el procesamiento de audio para detener el hilo de callback
-		SDL_PauseAudio(1);
 		// 2. Cerrar el dispositivo y liberar el hardware
-		SDL_CloseAudio();
-		SDL_Delay(10);
+		if (audio_opened) {
+			// 1. Pausar el procesamiento de audio para detener el hilo de callback
+			SDL_PauseAudio(1);
+			SDL_CloseAudio();
+			audio_opened = 0;
+			SDL_Delay(10);
+		}
 		//Liberar recursos de libretro
 		 // 1. Limpieza total del juego anterior
 		retro_unload_game();
 		retro_deinit();
+		gameMenu->romLoaded = false;
 	}
 }
 
@@ -1024,24 +1024,49 @@ void closeGame(){
 *
 */
 int launchGame(std::string rompath){
-	closeGame();
-	gameMenu->romLoaded = false;
+	std::string tempDir = Constant::getAppDir() + Constant::getFileSep() + "tmp";
+	ConfigEmu *emu = gameMenu->getCfgEmu();
 	
-	void* buffer = NULL;
-	unzippedFileInfo unzipped = unzipOrLoadFile(rompath, buffer);
-	// Carga manual mínima para que el core tenga datos que procesar
+	struct retro_system_info info;
+	dirutil dir;
 
-	if (unzipped.errorCode != UNZ_OK){
+	closeGame();
+
+	memset(&info, 0, sizeof(info));
+	retro_get_system_info(&info);
+
+	if (dir.dirExists(tempDir.c_str())){
+		dir.borrarDir(tempDir);
+	}
+
+	if (!dir.dirExists(tempDir.c_str()) && dir.createDir(tempDir) < 0){
+		LOG_ERROR("No se ha podido crear el directorio %s\n", tempDir.c_str());
+		return 0;
+	}
+
+	LOG_DEBUG("Unzipping rom %s", rompath.c_str());
+	unzippedFileInfo unzipped = unzipOrLoad(rompath, emu->rom_extension, !info.need_fullpath, tempDir);
+
+	if (unzipped.errorCode != 0){
 		LOG_ERROR("No se ha podido abrir el fichero o no se puede descomprimir: %s\n", rompath.c_str());
 		return 0;
 	}
-		
-	struct retro_game_info game = { unzipped.rutaEscritura.c_str(), buffer, unzipped.romsize, NULL };
+	
+	struct retro_game_info game = { unzipped.extractedPath.c_str(), unzipped.memoryBuffer, unzipped.romsize, NULL };
 	retro_init();	
 	bool success = retro_load_game(&game);
+
+	//Para el jugador 1
+	//retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
+	// Para el jugador 2
+	//retro_set_controller_port_device(1, RETRO_DEVICE_JOYPAD);
+
 	//Liberar la memoria tras la carga exitosa
 	// La mayoría de los cores de Libretro ya han copiado los datos a su propia RAM interna
-	free(buffer); 
+	if (unzipped.memoryBuffer){
+		free(unzipped.memoryBuffer);
+		unzipped.memoryBuffer = NULL;
+	} 
 
 	// Es importante cargar la ROM antes de retro_run
 	if(!success) {
@@ -1049,8 +1074,8 @@ int launchGame(std::string rompath){
 		return 0;
 	}
 
-	dirutil dir;
-	string romname = (gameMenu->getCfgEmu() != NULL ? gameMenu->getCfgEmu()->name + " - " : "") + dir.getFileNameNoExt(unzipped.rutaEscritura);
+	
+	string romname = (gameMenu->getCfgEmu() != NULL ? gameMenu->getCfgEmu()->name + " - " : "") + dir.getFileNameNoExt(unzipped.originalPath);
 	SDL_WM_SetCaption(romname.c_str(), NULL);
 
 	// Antes de cargar el juego, el core dice su frecuencia en retro_get_system_av_info
@@ -1068,8 +1093,6 @@ int launchGame(std::string rompath){
 	gameMenu->setEmuStatus(EMU_STARTED);
 	return 1;
 }
-
-
 
 bool loadGameAtStart(int argc, char *argv[]){
 	LOG_DEBUG("argc: %d\n", argc);
@@ -1164,9 +1187,14 @@ int main(int argc, char *argv[]) {
 		listMenu.keyUp = false;
 	}
 
+	//Poblamos las opciones del core. Lo tenemos que hacer aquí porque ya se deberian 
+	//haber obtenido.
+	gameMenu->configMenus->poblarCoreOptions(&cfgLoader);
+	//retro_set_controller_port_device(puerto, id_guardado);
+	//retro_set_controller_port_device(0, 1);
+
 	double nextFrameTime = (double)SDL_GetTicks();
     while (gameMenu->running) {
-		
 		// Procesamos eventos como pulsaciones de hotkeys
 		gameMenu->processFrontendEvents();
 
