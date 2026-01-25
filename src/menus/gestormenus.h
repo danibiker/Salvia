@@ -16,6 +16,8 @@ enum TipoKey{
 	KEY_JOY_AXIS
 };
 
+static const char *TipoKeyStr[] = {"Btn: ", "Hat: ", "Axis: "};
+
 enum CONFIG_STATUS{
 	NORMAL,
 	POLLING_INPUTS,
@@ -25,7 +27,7 @@ enum CONFIG_STATUS{
 struct Menu; // Declaración anticipada
 
 //Interfaz para ejecutar funciones
-typedef std::string (*ExecFunc)(Joystick* joy);
+//typedef std::string (*ExecFunc)(Joystick* joy);
 
 // Clase Base para las opciones del menú
 class Opcion {
@@ -33,6 +35,7 @@ public:
     std::string titulo;
     TipoOpcion tipo;
     Opcion(std::string t, TipoOpcion tp) : titulo(t), tipo(tp) {}
+	virtual std::string ejecutar() = 0; // Método virtual puro
     virtual ~Opcion() {}
 };
 
@@ -40,6 +43,9 @@ class OpcionBool : public Opcion {
 public:
     bool* valor;
     OpcionBool(std::string t, bool* v) : Opcion(t, OPC_BOOLEANA), valor(v) {}
+	std::string ejecutar() override {
+        return "";
+    }
 };
 
 class OpcionInt : public Opcion {
@@ -47,18 +53,34 @@ public:
     int* valor;
 	std::string description;
     OpcionInt(std::string t, int* v, std::string desc) : Opcion(t, OPC_INT), valor(v), description(desc) {}
+	std::string ejecutar() override {
+        return "";
+    }
 };
 
+template <typename T>
 class OpcionExec : public Opcion {
 public:
-    ExecFunc execfunc;
-	Joystick *joystick;
-    OpcionExec(std::string t, ExecFunc v, Joystick *pjoystick) : Opcion(t, OPC_EXEC), execfunc(v), joystick(pjoystick) {}
+    // Definimos el puntero a función que acepta el tipo específico T
+    typedef std::string (*FuncType)(T*);
+    
+    FuncType execfunc;
+    T* data;
+
+    OpcionExec(std::string t, FuncType v, T* p) 
+        : Opcion(t, OPC_EXEC), execfunc(v), data(p) {}
+
+    // Implementación del método virtual
+    std::string ejecutar() override {
+        return execfunc(data);
+    }
 };
 
 class OpcionKey : public Opcion {
 public:
     t_joy_retro_inputs* joyInputs;
+	int *intRef; 
+
 	//En idx tenemos el indice del array en el que se guardo el boton
 	int idx;
 	//En btn tenemos el boton de libretro asignado: RETRO_DEVICE_ID_JOYPAD_A, RETRO_DEVICE_ID_JOYPAD_B, ...
@@ -79,7 +101,23 @@ public:
 		lastTimeAsked = 0;
 		changeAsked = false;
 		joyInputs = &listaMapeos[pgamepadId];
+		intRef = NULL;
 	}
+	
+	//En este caso no se necesita conversion
+	OpcionKey(std::string t, int* pintRef, TipoKey ptipoKey, std::string desc): Opcion(t, OPC_KEY){
+		joyInputs = NULL;
+		tipoKey = ptipoKey;
+		description = desc;
+		lastTimeAsked = 0;
+		changeAsked = false;
+		intRef = pintRef;
+		idx = *pintRef;
+	}
+
+	std::string ejecutar() override {
+        return "";
+    }
 };
 
 class OpcionLista : public Opcion {
@@ -89,12 +127,19 @@ public:
 
     OpcionLista(std::string t, std::vector<std::string> it, int* idx) 
         : Opcion(t, OPC_LISTA), items(it), indice(idx)  {}
+	
+	std::string ejecutar() override {
+        return "";
+    }
 };
 
 class OpcionSubMenu : public Opcion {
 public:
     Menu* destino;
     OpcionSubMenu(std::string t, Menu* d) : Opcion(t, OPC_SUBMENU), destino(d) {}
+	std::string ejecutar() override {
+        return "";
+    }
 };
 
 // Estructura del Menú
@@ -165,11 +210,12 @@ public:
     // Método simple para obtener qué dibujar
     Menu* obtenerMenuActual();
 	void draw(SDL_Surface *video_page);
-	void updateButton(int);
+	void updateButton(int, TipoKey);
 	void updateAxis(int, int);
 	bool options_changed_flag;
 
 	void poblarCoreOptions(CfgLoader *);
+	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);
 
 	bool isCoreOptions(){
 		return obtenerMenuActual() == menuCoreOptions;

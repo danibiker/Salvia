@@ -421,7 +421,6 @@ bool dirutil::borrarArchivo(string ruta){
 */
 int dirutil::createDir(std::string dir){
 	if (!dirExists(dir.c_str())) {
-		
 		#ifdef _XBOX
 			if (CreateDirectory(dir.c_str(), NULL)) {
 				// Directorio creado con éxito
@@ -429,10 +428,10 @@ int dirutil::createDir(std::string dir){
 			} else {
 				if (GetLastError() == ERROR_ALREADY_EXISTS) {
 					// El directorio ya existía
-					return true;
+					return 1;
 				}
 				// Error al crear (ruta no válida, dispositivo no montado, etc.)
-				return false;
+				return 0;
 			}
         #elif defined(WIN)
             return mkdir(dir.c_str());
@@ -442,6 +441,38 @@ int dirutil::createDir(std::string dir){
     } else {
         return 0;
     }
+}
+
+int dirutil::createDirRecursive(const char* path) {
+    char temp[MAX_PATH];
+    const char* p = path;
+    
+    // Saltamos el prefijo de la unidad (ej: "game:\", "hdd:\")
+    if (strstr(path, ":\\")) {
+        p = strstr(path, ":\\") + 2;
+    }
+
+	while ((p = strchr(p, Constant::tempFileSep[0])) != NULL) {
+        size_t len = p - path;
+        memcpy(temp, path, len);
+        temp[len] = '\0';
+        
+        // Intentar crear el directorio intermedio
+		#if defined(WIN) || defined(_XBOX)
+			CreateDirectory(temp, NULL);
+		#else 
+			return mkdir(temp, 0777);
+		#endif
+        p++;
+    }
+    
+	// Crear el directorio final
+	#if defined(WIN) || defined(_XBOX)
+		return CreateDirectory(path, NULL) || GetLastError() == ERROR_ALREADY_EXISTS;
+	#else
+		return mkdir(path, 0777);
+	#endif
+
 }
 
 void dirutil::borrarDir(string path)

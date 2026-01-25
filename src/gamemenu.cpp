@@ -7,18 +7,11 @@
 #include <io/joymapper.h>
 #include <so/launcher.h>
 #include <libretro/libretro.h>
-#include <io/hqx_2/hqx.h>
-
-#ifdef _XBOX
-	extern "C" void XBOX_SetVideoFilter(int filterType);	
-	extern "C" void XBOX_SelectEffect(int effectID);	
-#endif
 
 GameMenu::GameMenu(CfgLoader *cfgLoader){
     status = EMU_MENU;
 	lastStatus = EMU_MENU;
 	romLoaded = false;
-	emuCfgPos = 0;
 	gameTicks.ticks = 0;
 	video_page = NULL;
 	dblBufferEnabled = true;
@@ -51,9 +44,6 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 
 	fpsSurface = NULL; 
 	lastFpsUpdate = 0;
-	#ifndef _XBOX
-		hqxInit();
-	#endif
 	//initHqxFilter();
 };
 
@@ -82,16 +72,20 @@ std::string GameMenu::configButtonsJOY(){
 	mPrevAxisValues = new std::map<int, int>[mNumJoysticks];
     mPrevHatValues = new std::map<int, int>[mNumJoysticks];
 
+	int buttons = SDL_JoystickNumButtons(joystick->g_joysticks[0]);
+
 
     long delay = 0;
     unsigned long before = 0;
-    const char* JoystickButtonsMSG[] = {"Arriba","Abajo","Izquierda","Derecha","Aceptar","Cancelar", "Pagina anterior", "Pagina siguiente", "Select", "Buscar elemento"};
-    int JoyButtonsVal[] = {JOY_BUTTON_UP, JOY_BUTTON_DOWN, JOY_BUTTON_LEFT, JOY_BUTTON_RIGHT, JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_SELECT, JOY_BUTTON_R3};
+    const char* JoystickButtonsMSG[] = {"Arriba","Abajo","Izquierda","Derecha","Aceptar","Cancelar", "X", "Y", 
+		"Pagina anterior", "Pagina siguiente", "Select", "Buscar elemento", "Click Stick Izquierdo", "Click Stick Derecho"};
+	int JoyButtonsVal[] = {JOY_BUTTON_UP, JOY_BUTTON_DOWN, JOY_BUTTON_LEFT, JOY_BUTTON_RIGHT, JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y
+		, JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_SELECT, JOY_BUTTON_START, JOY_BUTTON_L3, JOY_BUTTON_R3};
     //Posiciones de los botones calculadas en porcentaje respecto al alto y ancho de la imagen
     //t_posicion_precise imgButtonsRelScreen[] = {{0.3512,0.682,0,0},{0.3512,0.84,0,0},{0.295,0.76,0,0},{0.4075,0.76,0,0},
     //        {0.79375,0.616,0,0},{0.87625,0.496,0,0},{0.2225,0.194,0,0},{0.7775,0.194,0,0},{0.39375,0.512,0,0},{0.60875,0.512,0,0}};
 
-    int tam = 10;
+    int tam = 14;
     int i=0;
     /*UIPicture obj;
 
@@ -190,7 +184,8 @@ std::string GameMenu::configButtonsJOY(){
              }
         }
 
-        if (i == tam){
+		//buttons + 4 -> sumando las 4 crucetas
+        if (i == tam || i >= buttons + 4){
             salir = true;
         }
 
@@ -227,28 +222,7 @@ bool GameMenu::initDblBuffer(int w, int h){
     return video_page != NULL;
 }
 
-ConfigEmu* GameMenu::getNextCfgEmu(){
-    emuCfgPos++;
-    emuCfgPos = emuCfgPos % cfgLoader->emulators.size();
-	return &cfgLoader->emulators.at(emuCfgPos)->config;
-}
 
-ConfigEmu* GameMenu::getPrevCfgEmu(){
-    if (emuCfgPos <= 0 && cfgLoader->emulators.size() > 0)
-        emuCfgPos = cfgLoader->emulators.size() - 1;
-    else 
-        emuCfgPos--;
-	return &cfgLoader->emulators.at(emuCfgPos)->config;
-}
-
-ConfigEmu* GameMenu::getCfgEmu(){
-    return &cfgLoader->emulators.at(emuCfgPos)->config;
-}
-
-std::map<std::string, std::unique_ptr<cfg::t_emu_props>>& GameMenu::getLibretroParams() {
-    // Retorna la referencia al mapa dentro del vector
-    return cfgLoader->emulators.at(emuCfgPos)->libretroParams;
-}
 
 bool GameMenu::isDebug(){
 	bool debug;
@@ -326,7 +300,7 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
  * 
  */
 void GameMenu::refreshScreen(ListMenu &listMenu){
-    ConfigEmu emu = cfgLoader->emulators.at(emuCfgPos)->config;
+	ConfigEmu emu = *cfgLoader->getCfgEmu();
     //Drawing the emulator name
     TTF_Font *fontBig = Fonts::getFont(Fonts::FONTBIG);
     TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
@@ -501,12 +475,12 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 		return;
     }
 
-	if (cfgLoader->emulators.size() <= (std::size_t)this->emuCfgPos){
-        this->emuCfgPos = 0;
+	if (cfgLoader->emulators.size() <= (std::size_t)cfgLoader->emuCfgPos){
+        cfgLoader->emuCfgPos = 0;
     } 
 
     dirutil dir;
-    ConfigEmu *emu = &cfgLoader->emulators.at(emuCfgPos)->config;
+	ConfigEmu *emu = cfgLoader->getCfgEmu();
     string mapfilepath = Constant::getAppDir() //+ string(Constant::tempFileSep) + "gmenu" 
             + string(Constant::tempFileSep) + "config" + string(Constant::tempFileSep) + emu->map_file;
     
@@ -527,7 +501,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 
         dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, true, false);
 
-        ConfigEmu emu = cfgLoader->emulators.at(emuCfgPos)->config;
+		ConfigEmu emu = *cfgLoader->getCfgEmu();
         string mapfilepath = getPathPrefix(emu.rom_directory);
 
         if (isDebug()){
@@ -549,7 +523,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
  * 
  */
 string GameMenu::getPathPrefix(string filepath){
-    ConfigEmu emu = cfgLoader->emulators.at(emuCfgPos)->config;
+	ConfigEmu emu = *cfgLoader->getCfgEmu();
 	string finalpath;
 	cfgLoader->configMain[cfg::path_prefix].getPropValue(finalpath);
 
@@ -585,10 +559,10 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
     dirutil dir;
     vector<string> commands;
 
-    if (cfgLoader->emulators.size() <= (std::size_t)this->emuCfgPos)
+    if (cfgLoader->emulators.size() <= (std::size_t)cfgLoader->emuCfgPos)
         return commands;
 
-    ConfigEmu emu = cfgLoader->emulators.at(emuCfgPos)->config;
+	ConfigEmu emu = *cfgLoader->getCfgEmu();
 	string pathPrefix = getPathPrefix(emu.directory);
 	
 	if (pathPrefix.at(pathPrefix.length()-1) != Constant::tempFileSep[0]){
@@ -745,7 +719,7 @@ int GameMenu::saveGameMenuPos(ListMenu &menuData){
         return 1;
     }
 
-    struct ListStatus input1 = { this->emuCfgPos, menuData.iniPos, menuData.endPos, 
+    struct ListStatus input1 = { cfgLoader->emuCfgPos, menuData.iniPos, menuData.endPos, 
         menuData.curPos, menuData.maxLines, menuData.layout, menuData.animateBkg};
 
     int flag = 0;
@@ -783,7 +757,7 @@ int GameMenu::recoverGameMenuPos(ListMenu &menuData, struct ListStatus &read_str
             << "; layout: " << read_struct.layout
             << "; animateBkg: " << read_struct.animateBkg << endl;
         //Setting the emulator selected        
-        this->emuCfgPos = read_struct.emuLoaded;
+        cfgLoader->emuCfgPos = read_struct.emuLoaded;
     } else {
         ret = 1;
     }
@@ -826,8 +800,8 @@ void GameMenu::updateFps(){
     }
 }
 
-void GameMenu::processFrontendEvents(){
-	processHotkeys();
+void GameMenu::processFrontendEvents(HOTKEYS_LIST hotkey){
+	processHotkeys(hotkey);
 }
 
 void GameMenu::processFrontendEventsAfter(){
@@ -837,21 +811,19 @@ void GameMenu::processFrontendEventsAfter(){
 	processMessages();
 }
 
-void GameMenu::processHotkeys(){
-	static Uint32 lastHotKey = 0;
-	const Uint32 now = SDL_GetTicks();
+void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 	static int actualFilter = 0;
+	//this->joystick->lastSelectPress = SDL_GetTicks();
 
-	if (now - lastHotKey > 300){
-		if (this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_SELECT] && this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_X]){
-			int modeOk = true;
-			int startingMode = *this->current_scaler_mode;
+	int modeOk = true;
+	int startingMode = *this->current_scaler_mode;
+	struct retro_system_av_info av_info;
+	retro_get_system_av_info(&av_info);
+	const unsigned ancho_base = av_info.geometry.base_width;
+	const unsigned alto_base = av_info.geometry.base_height;
 
-			struct retro_system_av_info av_info;
-			retro_get_system_av_info(&av_info);
-			unsigned ancho_base = av_info.geometry.base_width;
-			unsigned alto_base = av_info.geometry.base_height;
-		
+	switch (hotkey){
+		case HK_SCALE:
 			do {
 				*this->current_scaler_mode = ((*this->current_scaler_mode + 1) % TOTAL_VIDEO_SCALE);
 
@@ -883,28 +855,33 @@ void GameMenu::processHotkeys(){
 					modeOk = true;
 				}
 			} while(!modeOk && *current_scaler_mode != startingMode);
-
 			selectScalerMode(*current_scaler_mode);
 			SDL_FillRect(this->video_page, NULL, this->uBkgColor);
-			lastHotKey = now;
-			this->joystick->lastSelectPress = now;
 			showSystemMessage(videoScaleStrings[*current_scaler_mode], 3000);
-		} else if (this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_SELECT] && this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_A]){
+			break;
+
+		case HK_RATIO:
 			*this->current_ratio = (*this->current_ratio + 1) % TOTAL_VIDEO_RATIO;
 			SDL_FillRect(this->video_page, NULL, this->uBkgColor);
-			lastHotKey = now;
-			this->joystick->lastSelectPress = now;
 			showSystemMessage(aspectRatioStrings[*this->current_ratio], 3000);
-		} else if (this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_SELECT] && this->joystick->g_joy_state[0][RETRO_DEVICE_ID_JOYPAD_B]){
+			break;
+
+		case HK_SHADER:
 			#ifdef _XBOX
 				//Some tinkering with shaders
 				XBOX_SelectEffect((++actualFilter) % 3);
 			#endif
-			lastHotKey = now;
-			this->joystick->lastSelectPress = now;
 			showSystemMessage("changing filter", 3000);
-		}
+			break;
+		case HK_EXIT_GAME:
+		case HK_VIEW_MENU:
+			//Por ahora los dos hacen lo mismo
+			setEmuStatus(EMU_MENU);
+			break;
 	}
+
+	joystick->resetButtonsCore();
+	
 }
 
 void GameMenu::selectScalerMode(int mode){
@@ -964,7 +941,12 @@ void GameMenu::selectScalerMode(int mode){
 			break;
 
 		case SCALE_HQ2X_ALT:
-			current_scaler = scale_hqnx_alt;
+			//current_scaler = scale_hqnx_alt;
+			#ifdef _XBOX
+			current_scaler = scale_hq2x_xbox;
+			#else
+			current_scaler = scale_hq2x_xbox;
+			#endif
 			current_scaler_scale = 2;
 			break;
 
@@ -1014,9 +996,10 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
     message.content = text;
     message.timeout = duration;
     message.ticks = SDL_GetTicks();
-
-    // Renderizamos el mensaje una sola vez
-    message.cache = TTF_RenderText_Blended(Fonts::getFont(Fonts::FONTBIG), text.c_str(), white);
+	
+	std::string newText = Fonts::recortarAlTamanyo(text, this->screen->w);
+	// Renderizamos el mensaje una sola vez
+    message.cache = TTF_RenderText_Blended(Fonts::getFont(Fonts::FONTBIG), newText.c_str(), white);
     
     if (message.cache) {
         int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
@@ -1049,7 +1032,35 @@ void GameMenu::processMessages(){
     }
 }
 
+
+
 void GameMenu::processConfigChanges(){
 	selectScalerMode(*this->current_scaler_mode);
 }
 
+void GameMenu::setRomPaths(std::string rp){
+	dirutil dir;
+	getRomPaths()->rompath = rp;
+
+	std::string statesDir = getCfgLoader()->configMain[cfg::libretro_state].valueStr + Constant::getFileSep() +
+		cfgLoader->getCfgEmu()->internalName;
+			
+	if (!dir.dirExists(statesDir.c_str())){
+		dir.createDirRecursive(statesDir.c_str());
+	}
+
+	getRomPaths()->savestate = statesDir + Constant::getFileSep() + 
+		dir.getFileNameNoExt(rp) + ".state";
+
+	std::string sramDir = getCfgLoader()->configMain[cfg::libretro_save].valueStr + Constant::getFileSep() +
+		cfgLoader->getCfgEmu()->internalName;
+			
+	if (!dir.dirExists(sramDir.c_str())){
+		dir.createDirRecursive(sramDir.c_str());
+	}
+
+	getRomPaths()->sram = sramDir + Constant::getFileSep() + 
+		dir.getFileNameNoExt(rp) + ".srm";
+
+
+}

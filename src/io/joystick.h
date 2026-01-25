@@ -5,6 +5,7 @@
 #include <libretro/libretro.h>
 #include <beans/structures.h>
 #include <io/cursorgestor.h>
+#include <io/hotkeys.h>
 
 //El comportamiento de un hat está estandarizado por el propio API: todos los hats 
 //se tratan como interruptores de posición de 8 direcciones (más la posición centrada), 
@@ -56,9 +57,6 @@ static char * configurablePortHatsStr[] = {
 	"RETRO_DEVICE_ID_JOYPAD_RIGHT"
 };
 
-
-
-
 class Joystick{
     public:
         Joystick();
@@ -68,20 +66,33 @@ class Joystick{
 		bool init_all_joysticks();
 		void close_joysticks();
 		int8_t startHoldFrames[MAX_PLAYERS];
-		bool g_joy_state[MAX_PLAYERS][RETRO_DEVICE_ID_JOYPAD_R3 + 1];
-		int16_t g_analog_state[MAX_PLAYERS][MAX_ANALOG_AXIS];
 
+		//This two arrays are used mainly to know the state of the buttons while the core is running
+		//They will be sent to the core
+		bool g_joy_state[MAX_PLAYERS][RETRO_DEVICE_ID_JOYPAD_R3 + 1];
+		// Sticks analógicos como botones digitales
+		bool g_axis_state[MAX_PLAYERS][RETRO_DEVICE_ID_JOYPAD_R3 + 1];     
+		//To store the positions of the analog axis, but is not used by any core actually
+		int16_t g_analog_state[MAX_PLAYERS][MAX_ANALOG_AXIS];
+		//Mapping of buttons for the frontend navigation
 		static t_joy_inputs buttonsMapperFrontend;
+		//Mapping of buttons for the core
 		static t_joy_retro_inputs buttonsMapperLibretro[MAX_PLAYERS];
-		
+		//This array is used mainly to detect hotkeys while the core is running
+		bool g_joy_frontend_state[1][MAXJOYBUTTONS + 1];
 
 		int getNumJoysticks(){return mNumJoysticks;}
 		void resetAllValues();
-		Uint32 lastSelectPress;
+		//Uint32 lastSelectPress;
 		bool loadButtonsFrontend(std::string);
 		void saveButtonsFrontend(std::string);
+		void resetButtonsFrontend();
+		void resetButtonsCore();
+
+		SDL_Joystick* g_joysticks[MAX_PLAYERS];
 		std::string saveButtonsRetro();
-		
+		Hotkeys hotkeys;
+		HOTKEYS_LIST findHotkey();
 
     private:
 		void cargarValoresEnArray(int*&, std::string, int);
@@ -101,7 +112,7 @@ class Joystick{
 		std::map<std::string, t_joy_retro_inputs> loadButtonsRetroList();
 		void loadButtonsEmupad(int, std::vector<std::string>& , std::map<std::string, t_joy_retro_inputs>&);
 
-		SDL_Joystick* g_joysticks[MAX_PLAYERS];
+		
 
 		tEvento evento;
         tEvento lastEvento;

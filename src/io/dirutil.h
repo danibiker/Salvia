@@ -61,6 +61,7 @@ class dirutil{
         bool borrarArchivo(string ruta);
 		void borrarDir(string path);
 		int createDir(std::string dir);
+		int createDirRecursive(const char* path);
     private:
         char rutaActual[PATH_MAX]; //Ruta actual que se esta navegando
         char* formatdate(char* str, time_t val);

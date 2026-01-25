@@ -20,6 +20,7 @@ class Fonts{
 		static TTF_Font *getFont(int fontId);	
 		static std::size_t idxToCutTTF(std::string text, int maxW, int fontId);
 		static int getSize(int, std::string);
+		static std::string recortarAlTamanyo(std::string text, int maxWidth);
 
     private:
         

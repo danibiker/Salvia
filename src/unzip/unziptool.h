@@ -41,8 +41,6 @@ unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& exte
 	// Límite de 50 MB (50 * 1024 * 1024 bytes)
     const std::size_t MAX_MEM_SIZE = 52428800;
 
-
-
     // 1. Detección de ZIP por Magic Number
     FILE* fTest = fopen(rompath.c_str(), "rb");
     if (!fTest) return ret;

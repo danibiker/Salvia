@@ -1,6 +1,7 @@
 #include <SDL.h>
 #include <io/joystick.h>
 #include <io/joymapper.h>
+#include <io/hotkeys.h>
 #include <io/filelist.h>
 #include <const/constant.h>
 
@@ -11,16 +12,36 @@ Joystick::Joystick(){
 	ignoreButtonRepeats = false;
 	this->w = 0;
     this->h = 0;
-	lastSelectPress = 0;
+	//lastSelectPress = 0;
 	clearEvento(&lastEvento);
     gestorCursor = new CursorGestor();
 	setCursor(cursor_hidden);
+	mPrevAxisValues = NULL;
+	mPrevHatValues = NULL;
 
 	for (int i=0; i < MAX_PLAYERS; i++){
 		g_joysticks[i] = NULL;
 		for (int j=0; j < RETRO_DEVICE_ID_JOYPAD_R3 + 1; j++){
 			g_joy_state[i][j] = false;
+			g_axis_state[i][j] = false;
 		}
+	}
+
+	resetButtonsFrontend();
+}
+
+void Joystick::resetButtonsCore(){
+	for (int i=0; i < MAX_PLAYERS; i++){
+		for (int j=0; j < RETRO_DEVICE_ID_JOYPAD_R3 + 1; j++){
+			g_joy_state[i][j] = false;
+			g_axis_state[i][j] = false;
+		}
+	}
+}
+
+void Joystick::resetButtonsFrontend(){
+	for (int i=0; i < MAXJOYBUTTONS + 1; i++){
+		g_joy_frontend_state[0][i] = false;
 	}
 }
 
@@ -328,7 +349,16 @@ std::map<std::string, t_joy_retro_inputs> Joystick::loadButtonsRetroList() {
         } else if (key == "anal") {
 			currentJoy.axisAsPad = val == "1";
             joyList[currentJoy.joyName] = currentJoy; // Guardar al completar el bloque
-        }
+        } else if (key == "htks") {
+			std::vector<std::string> v = Constant::splitChar(val, ',');
+			if (v.size() > 0){
+				//El primer elemento es el que activa las hotkeys
+				hotkeys.g_modifierButton = Constant::strToTipo<int>(v[0]);
+				for (int i = 1; i < v.size() && i < HK_MAX + 1; i++){
+					hotkeys.g_hotkeys[i - 1].triggerButton = Constant::strToTipo<int>(v[i]);
+				}
+			}
+		}
     }
     return joyList;
 }
@@ -355,8 +385,6 @@ void Joystick::addJoyToList(std::vector<std::string> &fileConfigJoystick, t_joy_
 	}
 	fileConfigJoystick.push_back(str);
 	fileConfigJoystick.push_back("anal=" + std::string(retroInputs.axisAsPad ? "1" : "0"));
-	fileConfigJoystick.push_back("");
-	
 }
 
 std::string Joystick::searchNewName(std::map<std::string, t_joy_retro_inputs>& retroInputs, std::string previousName){
@@ -408,6 +436,17 @@ std::string Joystick::saveButtonsRetro(){
 			}
 		}
 		addJoyToList(fileConfigJoystick, buttonsMapperLibretro[p]);
+
+		if (p == 0){
+			std::string strHotkeys = "htks=";
+			strHotkeys += Constant::intToString(hotkeys.g_modifierButton) + ",";
+			for (int i=0; i < hotkeys.g_hotkeys.size(); i++){
+				strHotkeys += Constant::intToString(hotkeys.g_hotkeys[i].triggerButton) +  (i < hotkeys.g_hotkeys.size() - 1 ? "," : "");
+			}
+			fileConfigJoystick.push_back(strHotkeys);
+		}
+
+		fileConfigJoystick.push_back("");
 		LOG_DEBUG("Adding joy to config: %s", buttonsMapperLibretro[p].joyName.c_str());
 		joyList[buttonsMapperLibretro[p].joyName] = buttonsMapperLibretro[p]; // Inserts or updates
 	}
@@ -461,6 +500,7 @@ void Joystick::resetAllValues(){
 		
 		for (int j=0; j < RETRO_DEVICE_ID_JOYPAD_R3 + 1; j++){
 			g_joy_state[i][j] = false;
+			g_axis_state[i][j] = false;
 		}
     }
 
@@ -515,7 +555,9 @@ tEvento Joystick::WaitForKey(SDL_Surface* screen){
                 break;
             case SDL_JOYBUTTONUP:
                 lastEvento = evento;
-                evento.keyjoydown = false;
+                evento.joy = buttonsMapperFrontend.buttons[event.jbutton.button];
+				evento.isJoy = true;
+				evento.keyjoydown = false;
 				longKeyDown = 0;
                 break;
             case SDL_JOYHATMOTION:
@@ -698,4 +740,8 @@ void Joystick::clearEvento(tEvento *evento){
 	//evento->longKeyPress = false;
 	memset(evento->longKeyPress, 0, sizeof(evento->longKeyPress));
     //t_region region;
+}
+
+HOTKEYS_LIST Joystick::findHotkey(){
+	return hotkeys.ProcesarHotkeys(g_joy_frontend_state[0]);
 }

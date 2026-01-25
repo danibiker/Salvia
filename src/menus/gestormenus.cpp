@@ -1,10 +1,12 @@
-#include <gfx/SDL_gfxPrimitives.h>
+#include <algorithm> // Imprescindible para std::sort
+#include <math.h>
+
 #include <menus/gestormenus.h>
 #include <const/constant.h>
-#include <gfx/gfx_utils.h>
-#include <font/fonts.h>
-#include <math.h>
 #include <const/menuconst.h>
+#include <gfx/gfx_utils.h>
+#include <gfx/SDL_gfxPrimitives.h>
+#include <font/fonts.h>
 #include <io/joystick.h>
 
 SDL_Surface* GestorMenus::imgText;
@@ -29,12 +31,18 @@ GestorMenus::GestorMenus(int screenw, int screenh){
 }
 
 GestorMenus::~GestorMenus() {
-    for(size_t i = 0; i < todosLosMenus.size(); i++) delete todosLosMenus[i];
+    for(std::size_t i = 0; i < todosLosMenus.size(); i++) 
+		delete todosLosMenus[i];
 }
 
 std::string guardarJoysticks(Joystick* joy){
 	LOG_DEBUG("Guardando valores del joystick");
 	return "Fichero guardado en: " + joy->saveButtonsRetro();
+}
+
+std::string guardarCoreConfig(CfgLoader *refConfig){
+	LOG_DEBUG("Guardando valores del configuracion");
+	return refConfig->saveCoreParams();
 }
 
 void GestorMenus::setLayout(int layout, int screenw, int screenh){
@@ -107,7 +115,9 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 		menuAsignaciones->opciones.push_back(new OpcionSubMenu(controlStr, menuControlesPuerto));
 		todosLosMenus.push_back(menuControlesPuerto);
 	}
-	menuAsignaciones->opciones.push_back(new OpcionExec("Guardar asignaciones", guardarJoysticks, joystick));
+	menuAsignaciones->opciones.push_back(new OpcionExec<Joystick>("Guardar asignaciones", guardarJoysticks, joystick));
+
+	poblarMenuHotkeys(menuHotkeys, joystick);
 
     // 3. Poblar Menú Principal
     menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración vídeo", menuVideo));
@@ -118,6 +128,25 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
     // Establecer estado inicial
     menuActual = menuRaiz;
 	resetIndexPos();
+}
+
+void GestorMenus::poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick){
+	TipoKey type = KEY_JOY_BTN;
+
+	menuHotkeys->opciones.push_back(new OpcionKey("Tecla para activar teclas rápidas", &joystick->hotkeys.g_modifierButton, type, TipoKeyStr[type]));
+
+	for (int i=0; i < joystick->hotkeys.g_hotkeys.size(); i++){
+		HotkeyConfig *hkCfg = &joystick->hotkeys.g_hotkeys[i];
+		if (hkCfg->action < HK_MAX){
+			if (hkCfg->triggerButton == JOY_BUTTON_DOWN || hkCfg->triggerButton == JOY_BUTTON_UP 
+				|| hkCfg->triggerButton == JOY_BUTTON_LEFT || hkCfg->triggerButton == JOY_BUTTON_RIGHT){
+					type = KEY_JOY_HAT;
+			} else {
+				type = KEY_JOY_BTN;
+			}
+			menuHotkeys->opciones.push_back(new OpcionKey(HOTKEYS_STR[hkCfg->action], &hkCfg->triggerButton, type, TipoKeyStr[type]));
+		}
+	}
 }
 
 void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joystick, CfgLoader *refConfig){
@@ -141,21 +170,40 @@ void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joys
 }
 
 void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
-	//Poblar Opciones del core
-	auto& params = refConfig->startupLibretroParams;
-	for (auto it = params.begin(); it != params.end(); ++it) {
-		const std::string& key = it->first;
-		// IMPORTANTE: 'it->second' es el unique_ptr, usamos .get() para el puntero crudo
-		cfg::t_emu_props* props = it->second.get();
-		if (props) {
-			LOG_INFO("Key: %s, Selected: %d", key.c_str(), props->selected);
-			// Recorrer el vector de valores dentro
-			//LOG_INFO("  Option %d: %s", i, props->values[i].c_str());
-			menuCoreOptions->opciones.push_back(new OpcionLista(props->description, props->values, &props->selected));
-			//for (std::size_t i = 0; i < props->values.size(); ++i) {  
-			//}
-		}
-	}
+    auto& params = refConfig->startupLibretroParams;
+    
+    // Estructura temporal para ordenar
+    struct TempElem {
+        std::string key;
+        std::string desc;
+    };
+    std::vector<TempElem> sorter;
+
+    // 1. Llenamos el vector con la clave y la descripción
+    for (auto it = params.begin(); it != params.end(); ++it) {
+        TempElem e = { it->first, it->second->description };
+        sorter.push_back(e);
+    }
+
+    // 2. Ordenamos por descripción usando una lambda o función estática
+    std::sort(sorter.begin(), sorter.end(), [](const TempElem& a, const TempElem& b) {
+        return Constant::compareNoCase(a.desc, b.desc);
+    });
+
+	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>("Guardar opciones", guardarCoreConfig, refConfig));
+
+    // 3. Ahora recorremos el vector ordenado y buscamos en el mapa original por KEY
+    for (auto it = sorter.begin(); it != sorter.end(); ++it) {
+        auto elem = params.find(it->key); // Ahora sí buscamos por la clave correcta
+        
+        if (elem != params.end()) { // Validación de seguridad fundamental
+            cfg::t_emu_props* props = elem->second.get();
+            if (props) {
+                LOG_INFO("Key: %s, Selected: %d", elem->first.c_str(), props->selected);
+                menuCoreOptions->opciones.push_back(new OpcionLista(props->description, props->values, &props->selected));
+            }
+        }
+    }
 }
 
 void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
@@ -172,8 +220,6 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
 	int retroAxisValue = 0;
 	int axisPos = 0;
 
-
-
 	t_joy_retro_inputs *input = &Joystick::buttonsMapperLibretro[controlId];
 	//Adding the axis or pad elements
 	for (int retroBtnIdx=0; retroBtnIdx < num_port_hats; retroBtnIdx++){
@@ -182,10 +228,10 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
 
 		if (input->axisAsPad){
 			int8_t axisIdx = input->findButtonIdx(retroBtnValue, input->axis);
-			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, axisIdx, retroBtnValue, KEY_JOY_AXIS, "Axis: "));
+			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, axisIdx, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS]));
 		} else {
 			int8_t hatIdx = input->findButtonIdx(retroBtnValue, input->hats);
-			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, hatIdx, retroBtnValue, KEY_JOY_HAT, "Hat: "));
+			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, hatIdx, retroBtnValue, KEY_JOY_HAT, TipoKeyStr[KEY_JOY_HAT]));
 		}
 	}
 
@@ -198,9 +244,9 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
 		int8_t axisIdx = input->findButtonIdx(retroBtnValue, input->axis);
 
 		if (btnIdx > -1 || axisIdx == -1){
-			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, btnIdx, retroBtnValue, KEY_JOY_BTN, "Btn: "));	
+			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, btnIdx, retroBtnValue, KEY_JOY_BTN, TipoKeyStr[KEY_JOY_BTN]));	
 		} else if (axisIdx > -1){
-			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, axisIdx, retroBtnValue, KEY_JOY_AXIS, "Axis: "));
+			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, axisIdx, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS]));
 		} 		
 	}
 }
@@ -253,7 +299,7 @@ void GestorMenus::updateAxis(int sdlAxisValue, int sdlAxis){
 				int buttonIdx = (sdlAxis * 2) + isPositive;
 				LOG_DEBUG("Eje: %d, Valor: %d -> Boton Virtual: %d", sdlAxis, sdlAxisValue, buttonIdx);
 				k->tipoKey = KEY_JOY_AXIS;
-				k->description = "Axis: ";
+				k->description = TipoKeyStr[k->tipoKey];
 				resetKeyElement(buttonIdx, k->tipoKey);
 				k->joyInputs->setAxis(buttonIdx, k->btn);
 				k->idx = buttonIdx;
@@ -277,7 +323,7 @@ void GestorMenus::updateAxis(int sdlAxisValue, int sdlAxis){
 /**
 *
 */
-void GestorMenus::updateButton(int sdlbtn){
+void GestorMenus::updateButton(int sdlbtn, TipoKey tipoKey){
 	if (status != POLLING_INPUTS) return;
 	Opcion* opt = menuActual->opciones[menuActual->seleccionado];
 
@@ -299,7 +345,7 @@ void GestorMenus::updateButton(int sdlbtn){
 				Uint8 sdlHatDir = (Uint8)(sdlbtn & (SDL_HAT_UP | SDL_HAT_DOWN | SDL_HAT_LEFT | SDL_HAT_RIGHT));
 				//En cualquier caso, indicamos que este boton se comporta como un hat
 				k->tipoKey = KEY_JOY_HAT;
-				k->description = "Hat: ";
+				k->description = TipoKeyStr[k->tipoKey];
 				//Actualizamos el elemento anterior a -1, tanto en el array
 				k->joyInputs->setHat(k->idx, -1);
 				//como en la propia tecla de la opcion del menu
@@ -310,9 +356,35 @@ void GestorMenus::updateButton(int sdlbtn){
 				//Actualizamos el indice seleccionado para esta tecla
 				k->idx = sdlHatDir;
 			}
-			
-
 			//Reseteamos el estado
+			k->changeAsked = false;
+			k->lastTimeAsked = 0;
+			status = NORMAL;
+		} else if (k && k->intRef) {
+			int btnToSend = sdlbtn;
+			k->description = TipoKeyStr[tipoKey];
+			if (tipoKey == KEY_JOY_HAT && (sdlbtn == SDL_HAT_DOWN || sdlbtn == SDL_HAT_UP || sdlbtn == SDL_HAT_LEFT || sdlbtn == SDL_HAT_RIGHT)){
+				k->tipoKey == KEY_JOY_HAT;
+				switch (sdlbtn){
+					case SDL_HAT_DOWN:
+						btnToSend = JOY_BUTTON_DOWN;
+						break;
+					case SDL_HAT_UP:
+						btnToSend = JOY_BUTTON_UP;
+						break;
+					case SDL_HAT_LEFT:
+						btnToSend = JOY_BUTTON_LEFT;
+						break;
+					case SDL_HAT_RIGHT:
+						btnToSend = JOY_BUTTON_RIGHT;
+						break;
+				}
+			} else {
+				k->tipoKey == KEY_JOY_BTN;
+			}
+
+			k->idx = btnToSend;
+			*k->intRef = btnToSend;
 			k->changeAsked = false;
 			k->lastTimeAsked = 0;
 			status = NORMAL;
@@ -358,8 +430,8 @@ std::string GestorMenus::confirmar() {
 		k->lastTimeAsked = SDL_GetTicks();
 		status = POLLING_INPUTS;
     } else if (opt->tipo == OPC_EXEC) {
-		OpcionExec* e = (OpcionExec*)opt;
-		return e->execfunc(e->joystick);
+		Opcion* e = (Opcion*)opt;
+		return e->ejecutar();
 	}
 
 	return std::string("");

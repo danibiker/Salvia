@@ -5,6 +5,7 @@
 #include "const/constant.h"
 #include "io/xbrz/xbrz.h"
 #include <stdint.h>
+#include <io/hq2xbox/hq2xx.h>
 
 #if defined(_XBOX)
 	#include <ppcintrinsics.h>
@@ -856,4 +857,17 @@ inline void scale_xBRZ_nx(const t_scale_props& props) {
 }
 
 inline void scale_hqnx_alt(const t_scale_props& props) {
+}
+
+inline void scale_hq2x_xbox(const t_scale_props& props) {
+		int src_stride = 0, dst_stride = 0;
+	// Crea una copia local del puntero para poder pasarla por referencia
+	uint16_t* dst_ptr = props.dst; 
+
+	// 1. Usar check_center (escala 2 ya que no hay escalado manual aquí)
+    // Esto ajustará el puntero 'dst' al punto exacto de centrado.
+    check_center(props.src, dst_ptr, props.sw, props.sh, props.spitch, props.dw, props.dh, props.dpitch, props.scale, src_stride, dst_stride);
+
+    // Llamada directa: Entrada 16 -> Proceso 32 -> Salida 16
+    Filter::HQ2x::render(dst_ptr, props.dpitch, props.src, props.spitch, props.sw, props.sh);
 }

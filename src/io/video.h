@@ -2,10 +2,12 @@
 
 #include <SDL.h>
 #include <SDL_thread.h>
+#include <stdint.h>
 #include "const/constant.h"
 #include "io/xbrz/xbrz.h"
-#include <stdint.h>
 #include <io/hqx_2/hqx.h>
+#include <io/hq2xbox/hq2xx.h>
+#include <beans/structures.h>
 
 //extern "C" {
 //#include "io/libavhqx/libavfilter_vf_hqx.h"
@@ -13,7 +15,7 @@
 
 #if defined(_XBOX)
 	#include <ppcintrinsics.h>
-	#include <xtl.h> 
+	#include <xtl.h>
 #endif
 
 //Todas las funciones de escalado, tienen que tener esta interfaz
@@ -130,7 +132,7 @@ inline void scale_software_fixed_point_safe2(const t_scale_props& props) {
         if (src_y >= props.sh) src_y = props.sh - 1;
 
         uint16_t* line_src = props.src + (src_y * src_stride);
-        uint16_t* line_dst = dst + (y * dst_stride);
+        volatile uint16_t* line_dst = (volatile uint16_t*)(dst + (y * dst_stride));
 
         int curr_x_fp = 0;
         int x = 0;
@@ -968,6 +970,17 @@ inline void scale_hqnx_alt(const t_scale_props& props) {
     // 3. Ejecutar HQ2X (Monohilo)
     auto* srcPixels = reinterpret_cast<uint32_t*>(srf_32_convert.src32->pixels);
     auto* dstPixels = reinterpret_cast<uint32_t*>(srf_32_convert.dst32->pixels);
+
+	static bool firstTime = true;
+	if (firstTime){
+		firstTime = false;
+		#ifdef _XBOX
+			Filter::HQ2x::initialize();
+		#else
+			hqxInit();
+		#endif
+	}
+
 	
 	switch (props.scale){
 		case 3: 
@@ -994,6 +1007,44 @@ inline void scale_hqnx_alt(const t_scale_props& props) {
     // 5. LLAMADA GENÉRICA DE FINALIZACIÓN
     // Se encarga de estirar a pantalla completa si force_fs es true o centrar de forma normal
     finalize_scaling(props, tw, th);
+}
+
+inline void scale_hq2x_xbox(const t_scale_props& props) {
+		int src_stride = 0, dst_stride = 0;
+	// Crea una copia local del puntero para poder pasarla por referencia
+	uint16_t* dst_ptr = props.dst; 
+
+	// 1. Usar check_center (escala 2 ya que no hay escalado manual aquí)
+    // Esto ajustará el puntero 'dst' al punto exacto de centrado.
+    //check_center(props.src, dst_ptr, props.sw, props.sh, props.spitch, props.dw, props.dh, props.dpitch, props.scale, src_stride, dst_stride);
+	int tw = props.sw * props.scale;
+    int th = props.sh * props.scale;
+    int t_pitch = tw * sizeof(uint16_t);
+
+    // Llamada directa: Entrada 16 -> Proceso 32 -> Salida 16
+    Filter::HQ2x::render(temp_buffer, t_pitch, props.src, props.spitch, props.sw, props.sh);
+	finalize_scaling(props, tw, th);
+}
+
+inline void scale_hq3x_xbox(const t_scale_props& props) {
+	//int src_stride = 0, dst_stride = 0;
+	// Crea una copia local del puntero para poder pasarla por referencia
+	uint16_t* dst_ptr = props.dst; 
+
+	// 1. Usar check_center (escala 2 ya que no hay escalado manual aquí)
+    // Esto ajustará el puntero 'dst' al punto exacto de centrado.
+    //check_center(props.src, dst_ptr, props.sw, props.sh, props.spitch, props.dw, props.dh, props.dpitch, props.scale, src_stride, dst_stride);
+
+    // Llamada directa: Entrada 16 -> Proceso 32 -> Salida 16
+	unsigned hq2xW = props.sw * 2;
+	unsigned hq2xH = props.sh * 2;
+	unsigned hq2xPitch = props.spitch * 2; // si el buffer es contiguo
+	//uint16_t* hq2xBuf = new uint16_t[hq2xW * hq2xH];
+	SDL_Surface *dsurf = crearSuperficie16Bits(hq2xW, hq2xH);
+
+	Filter::HQ2x::render((uint16_t*)dsurf->pixels, dsurf->pitch, props.src, props.spitch, props.sw, props.sh);
+	Filter::HQ2x::scale2x_to_3x_565((uint16_t*)dsurf->pixels, hq2xW, hq2xH, dsurf->pitch, props.dst, props.dpitch);
+	SDL_FreeSurface(dsurf);
 }
 
 #ifdef _XBOX

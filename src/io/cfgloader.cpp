@@ -1,7 +1,10 @@
 #include "cfgloader.h"
 #include "const/constant.h"
 #include "io/dirutil.h"
+#include <io/filelist.h>
 #include "const/cfgconst.h"
+
+#include <libretro/libretro.h>
 
 #include <sstream>
 #include <fstream>
@@ -9,6 +12,7 @@
 
 
 CfgLoader::CfgLoader(){
+	emuCfgPos = 0;
 	initMainConfig();
 	loadMainConfig();
 }
@@ -32,8 +36,12 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::soundMode] = cfg::t_cfg_props("soundMode", true);
 	configMain[cfg::libretrosystem] = cfg::t_cfg_props("libretrosystem", ".\\system");
 	configMain[cfg::libretro_save] = cfg::t_cfg_props("libretro_save", ".\\data\\saves");
+	configMain[cfg::libretro_state] = cfg::t_cfg_props("libretro_state", ".\\data\\states");
+	configMain[cfg::libretro_lang] = cfg::t_cfg_props("libretro_lang", (int)RETRO_LANGUAGE_SPANISH);
+	configMain[cfg::libretro_core] = cfg::t_cfg_props("libretro_core", (std::string)"");
 	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
 	configMain[cfg::forceFS] = cfg::t_cfg_props("forceFS", true);
+	
 }
 
 /**
@@ -129,7 +137,7 @@ int CfgLoader::findKeyCfg(const std::string& keyStr){
 * 
 */
 void CfgLoader::loadEmuConfig(std::string emuname){
-	ConfigEmu cfgEmu;
+	//ConfigEmu cfgEmu;
 	dirutil dir;
 	std::string strFilepath = Constant::getAppDir() + std::string(Constant::tempFileSep)
 		+ "config" + std::string(Constant::tempFileSep) + emuname + ".cfg";
@@ -151,6 +159,8 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 		if (fileopened){
 			std::string line;
 			std::unique_ptr<cfg::t_cfg_emu> cfgEmu(new cfg::t_cfg_emu);
+
+			cfgEmu->config.internalName = emuname;
 
 			while(getline(fileCfg, line)){
 				//cout << "reading line" <<endl;
@@ -236,4 +246,82 @@ bool CfgLoader::isDebug(){
 	bool val;
 	configMain[cfg::debug].getPropValue(val);
 	return val;
+}
+
+ConfigEmu* CfgLoader::getNextCfgEmu(){
+    emuCfgPos++;
+    emuCfgPos = emuCfgPos % emulators.size();
+	return &emulators.at(emuCfgPos)->config;
+}
+
+ConfigEmu* CfgLoader::getPrevCfgEmu(){
+    if (emuCfgPos <= 0 && emulators.size() > 0)
+        emuCfgPos = emulators.size() - 1;
+    else 
+        emuCfgPos--;
+	return &emulators.at(emuCfgPos)->config;
+}
+
+ConfigEmu* CfgLoader::getCfgEmu(){
+    return &emulators.at(emuCfgPos)->config;
+}
+
+std::map<std::string, std::unique_ptr<cfg::t_emu_props>>& CfgLoader::getLibretroParams() {
+    // Retorna la referencia al mapa dentro del vector
+    return startupLibretroParams;
+}
+
+std::string CfgLoader::saveCoreParams(){
+	std::vector<std::string> fileCoreCfg;
+	std::string optionValues;
+
+	for (auto it = startupLibretroParams.begin(); it != startupLibretroParams.end(); ++it) {
+        //TempElem e = { it->first, it->second->description };
+		optionValues = "";
+		for (int i=0; i < it->second->values.size(); i++){
+			optionValues += it->second->values[i] + (i<it->second->values.size() - 1 ? " | " : "");
+		}
+		fileCoreCfg.push_back("#" + optionValues);
+		fileCoreCfg.push_back(it->first + "=" + Constant::TipoToStr(it->second->selected));
+    }
+
+	std::string corepath = getCoreCfgPath();
+	FileList::guardarVector(corepath, fileCoreCfg);
+	return "Opciones guardadas en: " + corepath;
+}
+
+void CfgLoader::loadCoreParams(){
+	std::string corepath = getCoreCfgPath();
+	std::vector<std::string> fileConfig;
+	FileList::cargarVector(corepath, fileConfig);
+
+	if (fileConfig.empty()) return;
+
+	if (fileConfig.size() > 0){
+		std::string linea = "";
+		std::size_t pos = 0;
+
+        for (unsigned int i=0; i<fileConfig.size(); i++){
+            linea = fileConfig.at(i);
+			if (linea.empty() || linea[0] == '#') continue;
+
+			if ((pos = linea.find("=")) != std::string::npos){
+				cfg::t_emu_props *ptr = new cfg::t_emu_props();
+				std::string value = Constant::Trim(linea.substr(pos + 1));
+				ptr->selected = Constant::strToTipo<int>(value);
+				startupLibretroParams[linea.substr(0, pos)] = std::unique_ptr<cfg::t_emu_props>(ptr);
+			}
+		}
+	}
+}
+
+std::string CfgLoader::getCoreCfgPath(){
+	int last = configMain[cfg::path_prefix].valueStr.length() - 1;
+	bool lastFileSep = true;
+	if (last < configMain[cfg::path_prefix].valueStr.length()){
+		configMain[cfg::path_prefix].valueStr[last] == Constant::getFileSep()[0];
+	}
+
+	return configMain[cfg::path_prefix].valueStr + (lastFileSep ? "" : Constant::getFileSep()) + 
+		"config" + Constant::getFileSep() + "core_" + configMain[cfg::libretro_core].valueStr + ".cfg";
 }

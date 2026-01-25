@@ -7,7 +7,7 @@ namespace cfg {
 	typedef enum {CFG_TYPE_INT = 0, CFG_TYPE_FLOAT, CFG_TYPE_BOOL, CFG_TYPE_STR} CFG_PROPS_TYPES;
 
 	typedef enum {emulators = 0, debug, resolution_width, resolution_height, path_prefix, alsaReset, background_music, mp3_file, aspectRatio, 
-			scaleMode, syncMode, soundMode, libretrosystem, libretro_save, showFps, forceFS,			
+			scaleMode, syncMode, soundMode, libretrosystem, libretro_lang, libretro_save, libretro_state, libretro_core, showFps, forceFS,			
 			MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
 
 	typedef enum{generalConfig = 0, name,
@@ -36,7 +36,7 @@ namespace cfg {
 
 	struct t_cfg_emu{
 		ConfigEmu config;
-		std::map<std::string, std::unique_ptr<cfg::t_emu_props>> libretroParams;
+		//std::map<std::string, std::unique_ptr<cfg::t_emu_props>> libretroParams;
 		// Un array para los puertos soportados (normalmente 2 a 5)
 		t_controller_port g_ports[MAX_PLAYERS];
 	};

@@ -13,11 +13,15 @@
 #include <menus/gestormenus.h>
 #include <io/cfgloader.h>
 #include <engine.h>
+#include <io/dirutil.h>
 
 #ifdef _XBOX
 	#include <io/video_direct.h>
+	extern "C" void XBOX_SetVideoFilter(int filterType);	
+	extern "C" void XBOX_SelectEffect(int effectID);	
 #else 
 	#include <io/video.h>
+	#include <io/hqx_2/hqx.h>
 #endif
 
 #include <memory>
@@ -60,28 +64,43 @@ class GameMenu : public Engine{
 		void createMenuImages(ListMenu &);
         void loadEmuCfg(ListMenu &);
         void refreshScreen(ListMenu &);
-		void processFrontendEvents();
+		void processFrontendEvents(HOTKEYS_LIST);
 		void processFrontendEventsAfter();
 		void processMessages();
-		void processHotkeys();
+		void processHotkeys(HOTKEYS_LIST);
 
         vector<string> launchProgram(ListMenu &);
         bool initDblBuffer(int w, int h);
         int saveGameMenuPos(ListMenu &);
         int recoverGameMenuPos(ListMenu &, struct ListStatus &);
         void showMessage(string);
-        ConfigEmu *getNextCfgEmu();
-        ConfigEmu *getPrevCfgEmu();
-		ConfigEmu *getCfgEmu();
+        
+		
 		void updateFps();
 		CfgLoader * getCfgLoader();
         void setCfgLoader(CfgLoader *cfgLoader);
 	    bool isDebug();
-		bool romLoaded;
-		void setEmuStatus(int tmpStat){lastStatus = status;status = tmpStat;}
+		
+		void setEmuStatus(int tmpStat){
+			lastStatus = status;
+			status = tmpStat;
+			//Siempre que cambiemos de estado de emulacion,
+			//reseteamos los botones del joystick
+			joystick->resetButtonsFrontend();
+		}
+
 		int getEmuStatus(){return status;}
 		int getLastStatus(){return lastStatus;}
-		std::map<std::string, std::unique_ptr<cfg::t_emu_props>>& getLibretroParams();
+		
+		
+		struct t_rom_paths{
+			std::string rompath;
+			std::string savestate;
+			std::string sram;
+		};
+
+		t_rom_paths* getRomPaths(){return &romPaths;}
+		void setRomPaths(std::string rp);
 
 		void showSystemMessage(std::string, uint32_t);
 		
@@ -93,12 +112,12 @@ class GameMenu : public Engine{
 		int *current_ratio;
 		int *current_sync;
 		bool *current_force_fs;
+		bool romLoaded;
+		
 
     private:
 		std::string configButtonsJOY();
 		void selectScalerMode(int);
-
-        int emuCfgPos;
 		bool dblBufferEnabled;
 		std::string getPathPrefix(std::string);
         std::string encloseWithCharIfSpaces(std::string, std::string);
@@ -114,4 +133,5 @@ class GameMenu : public Engine{
 		uint32_t lastFpsUpdate;
 		void addControlerButtons(Menu*& menuControlesPuerto, int numPlayer);
 		Message message;
+		t_rom_paths romPaths;
 };

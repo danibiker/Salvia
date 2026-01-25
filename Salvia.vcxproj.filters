@@ -9,21 +9,27 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
     </Filter>
+    <Filter Include="Source Files\filters">
+      <UniqueIdentifier>{48d57c08-2d2f-4508-a161-18badc8ddf08}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\zip">
+      <UniqueIdentifier>{a4e3fe67-f220-4499-b7d5-529108d8cce1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\zip\zlib">
+      <UniqueIdentifier>{37a6daf7-f624-4851-962f-d0e8ec67d4fe}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\zip\minizip">
+      <UniqueIdentifier>{eaace7e6-b6bb-4807-a562-11bec4caaeb1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\frontend">
+      <UniqueIdentifier>{a18d684a-452e-4ae1-822c-29792654f581}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\frontend\ui">
+      <UniqueIdentifier>{13999ce8-f32a-4140-ab1d-fcd1e918e415}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\salvia.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\engine.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\utils\logger.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\const\constant.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\io\sync.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\io\fileio.cpp">
@@ -47,25 +53,7 @@
     <ClCompile Include="src\io\dirutil.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\gamemenu.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\uiobjects\listmenu.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\uiobjects\textarea.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\uiobjects\image.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\uiobjects\object.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\io\joystick.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\io\cursorgestor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\io\JoyMapper.cpp">
@@ -74,53 +62,113 @@
     <ClCompile Include="src\io\filelist.h">
       <Filter>Header Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\unzip\minizip-1.2.5\ioapi.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\menus\gestormenus.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\unzip\minizip-1.2.5\unzip.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\unzip\zlib-1.2.11\adler32.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\unzip\zlib-1.2.11\crc32.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\unzip\zlib-1.2.11\inffast.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\unzip\zlib-1.2.11\inflate.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\unzip\zlib-1.2.11\inftrees.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\unzip\zlib-1.2.11\zutil.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\io\cfgloader.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\io\hqx_2\init.c">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="src\io\hqx_2\hq2x.c">
+      <Filter>Source Files\filters</Filter>
     </ClCompile>
     <ClCompile Include="src\io\xbrz\xbrz.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\filters</Filter>
     </ClCompile>
-    <ClCompile Include="src\io\hqx_2\hq2x.c">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="src\io\hq2xbox\hq2xx.cpp">
+      <Filter>Source Files\filters</Filter>
     </ClCompile>
     <ClCompile Include="src\io\hqx_2\hq3x.c">
+      <Filter>Source Files\filters</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\adler32.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\crc32.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\inffast.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\inflate.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\inftrees.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\hqx_2\init.c">
+      <Filter>Source Files\filters</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\zutil.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\minizip-1.2.5\ioapi.c">
+      <Filter>Source Files\zip\minizip</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\minizip-1.2.5\unzip.c">
+      <Filter>Source Files\zip\minizip</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\compress.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\deflate.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\gzclose.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\gzlib.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\gzread.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\gzwrite.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\infback.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\trees.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\unzip\zlib-1.2.11\uncompr.c">
+      <Filter>Source Files\zip\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\salvia.cpp">
+      <Filter>Source Files\frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine.cpp">
+      <Filter>Source Files\frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gamemenu.cpp">
+      <Filter>Source Files\frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menus\gestormenus.cpp">
+      <Filter>Source Files\frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\hotkeys.cpp">
+      <Filter>Source Files\frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\cursorgestor.cpp">
+      <Filter>Source Files\frontend\ui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\uiobjects\listmenu.cpp">
+      <Filter>Source Files\frontend\ui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\uiobjects\image.cpp">
+      <Filter>Source Files\frontend\ui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\uiobjects\object.cpp">
+      <Filter>Source Files\frontend\ui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\uiobjects\textarea.cpp">
+      <Filter>Source Files\frontend\ui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\cfgloader.cpp">
+      <Filter>Source Files\frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\sync.cpp">
+      <Filter>Source Files\frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="src\utils\logger.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\libretro.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\const\constant.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -131,9 +179,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\io\joystick.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\io\video.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\io\sync.h">
@@ -225,6 +270,27 @@
     </ClInclude>
     <ClInclude Include="src\libretro\vfs.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\video.h">
+      <Filter>Source Files\filters</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\hq2xbox\hq2xx.h">
+      <Filter>Source Files\filters</Filter>
+    </ClInclude>
+    <ClInclude Include="src\statesram.h">
+      <Filter>Source Files\frontend</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\hotkeys.h">
+      <Filter>Source Files\frontend</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\inputsmenu.h">
+      <Filter>Source Files\frontend</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\inputscore.h">
+      <Filter>Source Files\frontend</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\video_direct.h">
+      <Filter>Source Files\filters</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

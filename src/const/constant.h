@@ -428,6 +428,15 @@ class Constant{
 			return true;
 		}
 
+		// Función auxiliar
+		static bool compareNoCase(const std::string& a, const std::string& b) {
+			for (size_t i = 0; i < a.length() && i < b.length(); ++i) {
+				if (tolower(a[i]) != tolower(b[i]))
+					return tolower(a[i]) < tolower(b[i]);
+			}
+			return a.length() < b.length();
+		}
+
         static void setExecMethod(int var){EXEC_METHOD = var;}
         static int getExecMethod(){return EXEC_METHOD;}
 		

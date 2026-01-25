@@ -322,6 +322,7 @@ class ConfigEmu{
 
 	bool generalConfig;
 
+	std::string internalName;
     std::string name;
     std::string system;
     std::string description;
