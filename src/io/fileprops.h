@@ -88,8 +88,26 @@ class FileProps{
         bool operator>=(const FileProps &c) const {
             return comparar(c) >= 0;
         }
+		
+		// Operador de asignación
+		FileProps& operator=(const FileProps &c) {
+			if (this != &c) { // Evitar auto-asignación
+				filename = c.filename;
+				filetype = c.filetype;
+				dir = c.dir;
+				ico = c.ico;
+				fileSize = c.fileSize;
+				extension = c.extension;
+				creationTime = c.creationTime;
+				modificationTime = c.modificationTime;
+				iCreationTime = c.iCreationTime;
+				iModificationTime = c.iModificationTime;
+				compareMethod = c.compareMethod; // ¡No olvides este!
+			}
+			return *this;
+		}
         
-        static bool sortByText (FileProps i,FileProps j) { 
+        static bool sortByText (const FileProps &i, const FileProps &j) { 
             return (i.filename < j.filename); 
         }
 
@@ -97,11 +115,11 @@ class FileProps{
             return (i->filename < j->filename); 
         }
         
-        static bool sortByTextReverse (FileProps i,FileProps j) { 
+        static bool sortByTextReverse (const FileProps &i, const FileProps &j) { 
             return (i.filename > j.filename); 
         }
         
-        static bool sortByTextCase (FileProps i,FileProps j) {
+        static bool sortByTextCase (const FileProps &i, const FileProps &j) {
             string file1 = i.filename;
             string file2 = j.filename;
             Constant::lowerCase(&file1);
@@ -109,7 +127,7 @@ class FileProps{
             return (file1 < file2); 
         }
         
-        static bool sortByTextReverseCase (FileProps i, FileProps j) { 
+        static bool sortByTextReverseCase (const FileProps &i, const FileProps &j) { 
             string file1 = i.filename;
             string file2 = j.filename;
             Constant::lowerCase(&file1);

@@ -1,6 +1,9 @@
+#define NOMINMAX
 #include <uiobjects/object.h>
 #include <io/cfgloader.h>
 #include <io/joystick.h>
+#include <io/dirutil.h>
+#include <uiobjects/image.h>
 #include <beans/structures.h>
 
 #include <iostream>
@@ -8,26 +11,35 @@
 #include <string>
 
 // --- Definición de tipos de opciones ---
-enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC};
+enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SAVESTATE};
 
-enum TipoKey{
-	KEY_JOY_BTN,
-	KEY_JOY_HAT,
-	KEY_JOY_AXIS
-};
-
+enum TipoKey{KEY_JOY_BTN,KEY_JOY_HAT,KEY_JOY_AXIS};
 static const char *TipoKeyStr[] = {"Btn: ", "Hat: ", "Axis: "};
 
-enum CONFIG_STATUS{
-	NORMAL,
-	POLLING_INPUTS,
-	MAX_CONFIG_STATUS
+enum ACTION_ASK{ASK_CARGAR, ASK_GUARDAR, ASK_ELIMINAR, MAX_ASK};
+static const char *ACTION_ASK_STR[] = {"Cargar", "Guardar", "Eliminar"};
+
+enum CONFIG_STATUS{NORMAL,POLLING_INPUTS,ASK_SAVESTATES,MAX_CONFIG_STATUS};
+
+struct t_option_action{
+	int option;
+	int action;
+	void *elem;
+	int indexSelected;
+	std::string message;
+	
+	t_option_action(){
+		option = 0;
+		action = 0;
+		elem = NULL;
+		indexSelected = 0;
+	}
 };
 
-struct Menu; // Declaración anticipada
 
-//Interfaz para ejecutar funciones
-//typedef std::string (*ExecFunc)(Joystick* joy);
+struct Menu; // Declaración anticipada
+class OpcionSavestate;
+class OpcionBool;
 
 // Clase Base para las opciones del menú
 class Opcion {
@@ -38,6 +50,41 @@ public:
 	virtual std::string ejecutar() = 0; // Método virtual puro
     virtual ~Opcion() {}
 };
+
+//Esta clase no permite modificar ningún valor, sólo muestra texto
+class OpcionTxt : public Opcion {
+public:
+    OpcionTxt(std::string t) : Opcion(t, OPC_SHOW_TXT) {}
+	std::string ejecutar() override {
+        return "";
+    }
+};
+
+//Esta clase no permite modificar ningún valor, sólo muestra texto y un valor
+class OpcionTxtAndValue : public Opcion {
+public:
+	std::string valor;
+    OpcionTxtAndValue(std::string t, std::string v) : Opcion(t, OPC_SHOW_TXT_VAL), valor(v) {}
+	std::string ejecutar() override {
+        return "";
+    }
+};
+
+class OpcionSavestate : public Opcion {
+public:
+	FileProps file;
+	CONFIG_STATUS *status;
+	OpcionSavestate(std::string t) : Opcion(t, OPC_SAVESTATE), status(NULL) {}
+
+	std::string ejecutar() override {
+		LOG_DEBUG("Selecting %s", file.filename.c_str());
+		if (status){
+			*status = ASK_SAVESTATES;
+		}
+	    return "";
+    }
+};
+
 
 class OpcionBool : public Opcion {
 public:
@@ -53,6 +100,28 @@ public:
     int* valor;
 	std::string description;
     OpcionInt(std::string t, int* v, std::string desc) : Opcion(t, OPC_INT), valor(v), description(desc) {}
+	std::string ejecutar() override {
+        return "";
+    }
+};
+
+class OpcionLista : public Opcion {
+public:
+    std::vector<std::string> items;
+    int* indice;
+
+    OpcionLista(std::string t, std::vector<std::string> it, int* idx) 
+        : Opcion(t, OPC_LISTA), items(it), indice(idx)  {}
+	
+	std::string ejecutar() override {
+        return "";
+    }
+};
+
+class OpcionSubMenu : public Opcion {
+public:
+    Menu* destino;
+    OpcionSubMenu(std::string t, Menu* d) : Opcion(t, OPC_SUBMENU), destino(d) {}
 	std::string ejecutar() override {
         return "";
     }
@@ -120,28 +189,6 @@ public:
     }
 };
 
-class OpcionLista : public Opcion {
-public:
-    std::vector<std::string> items;
-    int* indice;
-
-    OpcionLista(std::string t, std::vector<std::string> it, int* idx) 
-        : Opcion(t, OPC_LISTA), items(it), indice(idx)  {}
-	
-	std::string ejecutar() override {
-        return "";
-    }
-};
-
-class OpcionSubMenu : public Opcion {
-public:
-    Menu* destino;
-    OpcionSubMenu(std::string t, Menu* d) : Opcion(t, OPC_SUBMENU), destino(d) {}
-	std::string ejecutar() override {
-        return "";
-    }
-};
-
 // Estructura del Menú
 struct Menu{
     std::string titulo;
@@ -167,6 +214,9 @@ private:
     // Lista de todos los menús para liberar memoria al final
     std::vector<Menu*> todosLosMenus;
 	Menu* menuCoreOptions;
+	Menu* menuSavestates;
+	Menu* menuAskSavestates;
+	int askNumOptions;
 
 	CONFIG_STATUS status;
 
@@ -193,6 +243,10 @@ private:
 	void addControlerButtons(Menu*&, int);
 	int findAxisPos(int retroDirection);
 	void resetKeyElement(int, TipoKey);
+	
+	void drawSavestateWithImage(int, OpcionSavestate *, SDL_Surface *);
+	void drawBooleanSwitch(int, OpcionBool *, SDL_Surface *);
+	void drawAskMenu(SDL_Surface *video_page);
 
 public:
     GestorMenus(int screenw, int screenh);
@@ -204,7 +258,7 @@ public:
     // Lógica para cambiar valores (Izquierda / Derecha)
     void cambiarValor(int dir);
     // Lógica para confirmar (Botón A)
-    std::string confirmar();
+    std::string confirmar(t_option_action *);
     // Lógica para volver (Botón B)
     void volver();
     // Método simple para obtener qué dibujar
@@ -216,12 +270,23 @@ public:
 
 	void poblarCoreOptions(CfgLoader *);
 	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);
+	void poblarPartidasGuardadas(CfgLoader *, std::string);
 
 	bool isCoreOptions(){
 		return obtenerMenuActual() == menuCoreOptions;
 	}
 
-	CONFIG_STATUS getStatus(){ return status;}
+	CONFIG_STATUS getStatus(){ 
+		return status;
+	}
+	
+	void resetStatus(){
+		status = NORMAL;
+		OpcionLista* l = (OpcionLista*)menuAskSavestates->opciones[0];
+		*l->indice = 0;
+	}
+
+	Image imageMenu;
 
 	void nextPos();
     void prevPos();

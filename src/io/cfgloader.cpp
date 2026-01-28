@@ -11,10 +11,15 @@
 #include <iostream>
 
 
+extern "C"{
+	void retro_get_system_info(struct retro_system_info *info);
+}
+
 CfgLoader::CfgLoader(){
 	emuCfgPos = 0;
 	initMainConfig();
 	loadMainConfig();
+	loadCoreParams();
 }
 
 CfgLoader::~CfgLoader(){
@@ -38,10 +43,15 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::libretro_save] = cfg::t_cfg_props("libretro_save", ".\\data\\saves");
 	configMain[cfg::libretro_state] = cfg::t_cfg_props("libretro_state", ".\\data\\states");
 	configMain[cfg::libretro_lang] = cfg::t_cfg_props("libretro_lang", (int)RETRO_LANGUAGE_SPANISH);
-	configMain[cfg::libretro_core] = cfg::t_cfg_props("libretro_core", (std::string)"");
 	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
 	configMain[cfg::forceFS] = cfg::t_cfg_props("forceFS", true);
-	
+
+	struct retro_system_info info;
+	memset(&info, 0, sizeof(info));
+	retro_get_system_info(&info);
+	configMain[cfg::libretro_core].setPropValue(std::string(info.library_name));
+	configMain[cfg::libretro_core_version].setPropValue(std::string(info.library_version));
+	configMain[cfg::libretro_core_extensions].setPropValue(std::string(info.valid_extensions));
 }
 
 /**
@@ -269,6 +279,37 @@ ConfigEmu* CfgLoader::getCfgEmu(){
 std::map<std::string, std::unique_ptr<cfg::t_emu_props>>& CfgLoader::getLibretroParams() {
     // Retorna la referencia al mapa dentro del vector
     return startupLibretroParams;
+}
+
+std::string CfgLoader::saveMainParams(){
+	std::vector<std::string> fileMainCfg;
+	std::string line;
+	for (int i=0; i < cfg::MAIN_CFG_MAX; i++){
+		if (configMain[i].name.empty()) continue;
+
+		line = configMain[i].name + "=";
+
+		switch (configMain[i].type){
+			case cfg::CFG_TYPE_INT:
+				line += Constant::TipoToStr<int>(configMain[i].valueInt);
+				break;
+			case cfg::CFG_TYPE_FLOAT:
+				line += Constant::TipoToStr<float>(configMain[i].valueFloat);
+				break;
+			case cfg::CFG_TYPE_BOOL:
+				line += configMain[i].valueBool ? "yes" : "no";
+				break;
+			case cfg::CFG_TYPE_STR:
+				line += configMain[i].valueStr;
+				break;
+		}
+
+		fileMainCfg.push_back(line);
+	}
+
+	std::string mainPath = Constant::getAppDir() + Constant::getFileSep() + CONFIGFILE;
+	FileList::guardarVector(mainPath, fileMainCfg);
+	return "Opciones guardadas en: " + mainPath;
 }
 
 std::string CfgLoader::saveCoreParams(){

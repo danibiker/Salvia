@@ -54,6 +54,7 @@ class dirutil{
         string getExtension(string file);
         bool setFileProperties(FileProps *propFile, string ruta);
         unsigned int listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtro, bool order, bool properties);
+		unsigned int listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool order, bool properties);
         string getFileNameNoExt(string file);
         string getFolder(string file);
         string getFileName(string file);
@@ -66,5 +67,7 @@ class dirutil{
         char rutaActual[PATH_MAX]; //Ruta actual que se esta navegando
         char* formatdate(char* str, time_t val);
         int findIcon(const char *filename);
+		bool foundFilter(std::string filtroExt, std::string filtroName, std::string extension, std::string name);
+
 };
 

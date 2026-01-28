@@ -165,7 +165,6 @@ Global
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Snes9x_latest|Win32.ActiveCfg = Release_Snes9x_latest|Win32
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Snes9x_latest|Xbox 360.ActiveCfg = Release_Snes9x_latest|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Snes9x|Win32.ActiveCfg = Release_Snes9x|Win32
-		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Snes9x|Win32.Build.0 = Release_Snes9x|Win32
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Snes9x|Xbox 360.ActiveCfg = Release_Snes9x|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_vbanext|Win32.ActiveCfg = Release_vbanext|Win32
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_vbanext|Win32.Build.0 = Release_vbanext|Win32
@@ -215,7 +214,6 @@ Global
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Snes9x_latest|Win32.ActiveCfg = Release_Snes9x_latest|Win32
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Snes9x_latest|Xbox 360.ActiveCfg = Release_Snes9x_latest|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Snes9x|Win32.ActiveCfg = Release_Snes9x|Win32
-		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Snes9x|Win32.Build.0 = Release_Snes9x|Win32
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Snes9x|Xbox 360.ActiveCfg = Release_Snes9x|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_vbanext|Win32.ActiveCfg = Release_vbanext|Win32
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_vbanext|Win32.Build.0 = Release_vbanext|Win32

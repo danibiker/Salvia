@@ -27,6 +27,9 @@
     <Filter Include="Source Files\frontend\ui">
       <UniqueIdentifier>{13999ce8-f32a-4140-ab1d-fcd1e918e415}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\image">
+      <UniqueIdentifier>{67ef5d98-0f16-4b00-8b44-5e24922f8acf}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\const\constant.cpp">
@@ -36,15 +39,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\audio\audiobuffer.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\gfx\SDL_gfxPrimitives.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\gfx\SDL_rotozoom.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\gfx\SDL_gfxBlitFunc.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\font\fonts.cpp">
@@ -166,6 +160,18 @@
     </ClCompile>
     <ClCompile Include="src\utils\logger.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gfx\SDL_gfxBlitFunc.c">
+      <Filter>Source Files\image</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gfx\SDL_gfxPrimitives.c">
+      <Filter>Source Files\image</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gfx\SDL_rotozoom.c">
+      <Filter>Source Files\image</Filter>
+    </ClCompile>
+    <ClCompile Include="src\image\lodepng.cpp">
+      <Filter>Source Files\image</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -291,6 +297,9 @@
     </ClInclude>
     <ClInclude Include="src\io\video_direct.h">
       <Filter>Source Files\filters</Filter>
+    </ClInclude>
+    <ClInclude Include="src\image\lodepng.h">
+      <Filter>Source Files\image</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

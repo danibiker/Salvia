@@ -29,6 +29,7 @@
 
 GameMenu *gameMenu;
 Logger *logger;
+dirutil dir;
 
 // 1. Usa un buffer persistente para evitar allocs constantes al convertir desde ARGB8888
 enum retro_pixel_format fmt;
@@ -37,11 +38,20 @@ int launchGame(std::string);
 //la implementacion de vfs
 const int MAX_FILE_LOAD_MEMORY = 1024 * 2014 * 30; 
 const int maxJoyTargets = RETRO_DEVICE_ID_JOYPAD_R3 + 1;
+const std::string Constant::MAME_SYS_ID = "75";
+const std::string Constant::WHITESPACE = " \n\r\t";
+volatile uint32_t Constant::totalTicks = 0;
+int Constant::EXEC_METHOD = launch_batch;
+const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
+
 static uint16_t* conversion_buffer = NULL;
 static std::size_t buffer_size = 0;
-
 int audio_opened = 0;
-dirutil dir;
+
+struct retro_core_variable {
+   const char *key;    // Nombre técnico: "nestopia_region"
+   const char *value;  // Nombre visual y opciones: "Region; Auto|NTSC|PAL"
+};
 
 // Ya no declaramos punteros a función, sino que usamos las funciones 
 // que vendrán dentro del .lib (se resuelven al linkar)
@@ -62,18 +72,6 @@ extern "C" {
 	void retro_set_controller_port_device(unsigned port, unsigned device);
 	retro_audio_buffer_status_callback_t audio_status_cb;
 }
-
-struct retro_core_variable {
-   const char *key;    // Nombre técnico: "nestopia_region"
-   const char *value;  // Nombre visual y opciones: "Region; Auto|NTSC|PAL"
-};
-
-const std::string Constant::MAME_SYS_ID = "75";
-const std::string Constant::WHITESPACE = " \n\r\t";
-
-volatile uint32_t Constant::totalTicks = 0;
-int Constant::EXEC_METHOD = launch_batch;
-const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
 
 void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
     //va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
@@ -237,11 +235,10 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return true;
 		}
 		case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: {
-			static std::string dir;
-			gameMenu->getCfgLoader()->configMain[cfg::libretro_save].getPropValue(dir);
-			*(const char**)data = dir.c_str();
+			*(const char**)data = gameMenu->getRomPaths()->saves.c_str();
 			return true;
 		}
+
 		case RETRO_ENVIRONMENT_GET_LANGUAGE:{
 			// El núcleo nos pregunta: "¿En qué idioma quieres las descripciones?"
             unsigned *lang = (unsigned*)data;
@@ -402,6 +399,35 @@ static bool retro_environment(unsigned cmd, void *data) {
     return false; // Por defecto devolver false para comandos desconocidos
 }
 
+static inline void take_screenshot(void* final_src, unsigned width, unsigned height, std::size_t pitch){
+	// 1. Liberar memoria previa correctamente (si es array usa delete[])
+	if (action_postponed.screenshot) delete[] action_postponed.screenshot;
+
+	// 2. Calcular tamaño real
+	std::size_t num_pixels = width * height;
+	action_postponed.screenshot = new uint16_t[num_pixels];
+	action_postponed.width = width;
+	action_postponed.height = height;
+
+	// 3. Copia segura considerando el pitch
+	if (pitch == width * sizeof(uint16_t)) {
+		// Pitch lineal, copia rápida
+		memcpy(action_postponed.screenshot, final_src, num_pixels * sizeof(uint16_t));
+	} else {
+		// Pitch con padding, copiar fila por fila
+		uint8_t* src_ptr = (uint8_t*)final_src;
+		uint8_t* dst_ptr = (uint8_t*)action_postponed.screenshot;
+		std::size_t row_size = width * sizeof(uint16_t);
+        
+		for (unsigned y = 0; y < height; y++) {
+			memcpy(dst_ptr, src_ptr, row_size);
+			src_ptr += pitch;
+			dst_ptr += row_size;
+		}
+	}
+	action_postponed.cycles = 0;
+}
+
 static void retro_video_refresh(const void *data, unsigned width, unsigned height, std::size_t pitch) {
     if (!data || width == 0 || height == 0) 
 		return;	
@@ -423,6 +449,9 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 		pitch = width * 2;
 	}
 
+	if (action_postponed.cycles == 1 && action_postponed.action == HK_SAVESTATE){
+		take_screenshot(final_src, width, height, pitch);
+	}
 	
     SDL_Surface* screen = gameMenu->screen;
 	
@@ -607,8 +636,6 @@ void init_sdl_audio(double sample_rate) {
     // 2048 = ~46ms (Recomendado para estabilidad en emulación)
     // 4096 = ~92ms (Seguro, pero con lag perceptible)
 	wanted.samples = AudioBuffer::AUDIO_BUFFER_SIZE / 4; // Tamaño del bloque (latencia)
-
-	//wanted.samples = 1024;
     wanted.callback = sdl_audio_callback;
 
     if (SDL_OpenAudio(&wanted, NULL) < 0) {
@@ -697,7 +724,6 @@ void closeGame(){
 		retro_unload_game();
 		retro_deinit();
 		gameMenu->romLoaded = false;
-		
 	}
 }
 
@@ -860,11 +886,23 @@ inline void updateGame() {
 }
 
 void processFrontendEvents(){
-	const HOTKEYS_LIST hotkey = gameMenu->joystick->findHotkey();
+	HOTKEYS_LIST hotkey = gameMenu->joystick->findHotkey();
+
+	if (action_postponed.action == HK_SAVESTATE && hotkey != HK_SAVESTATE && action_postponed.cycles == 0){
+		hotkey = HK_SAVESTATE;
+	}
 
 	switch (hotkey) {
 		case HK_SAVESTATE:
-			saveState();
+			//saveState();
+			if (action_postponed.cycles == 0){
+				saveState();
+				action_postponed.action = -1;
+				action_postponed.cycles = -1;
+			} else {
+				action_postponed.cycles = 1;
+				action_postponed.action = HK_SAVESTATE;
+			}
 			break;
 
 		case HK_LOADSTATE:
@@ -877,12 +915,12 @@ void processFrontendEvents(){
 			break;
 
 		case HK_SLOT_UP:
-			g_currentSlot = (g_currentSlot + 1) % MAX_SLOTS;
+			g_currentSlot = (g_currentSlot + 1) % MAX_SAVESTATES;
 			gameMenu->showSystemMessage("Slot seleccionado: " + Constant::intToString(g_currentSlot), 2000);
 			break;
 
 		case HK_SLOT_DOWN:
-			g_currentSlot = (g_currentSlot - 1 < 0) ? MAX_SLOTS - 1 : g_currentSlot - 1;
+			g_currentSlot = (g_currentSlot - 1 < 0) ? MAX_SAVESTATES - 1 : g_currentSlot - 1;
 			gameMenu->showSystemMessage("Slot seleccionado: " + Constant::intToString(g_currentSlot), 2000);
 			break;
 
@@ -902,13 +940,6 @@ int main(int argc, char *argv[]) {
 	if (cfgLoader.isDebug()){
         logger->errorLevel = L_DEBUG;
     }
-
-	struct retro_system_info info;
-	memset(&info, 0, sizeof(info));
-	retro_get_system_info(&info);
-	cfgLoader.configMain[cfg::libretro_core].setPropValue(std::string(info.library_name));
-	cfgLoader.loadCoreParams();
-
 
 	LOG_DEBUG("appdir: %s\n", Constant::getAppDir().c_str());
 	LOG_DEBUG("appexe: %s\n", Constant::getAppExecutable().c_str());
@@ -959,7 +990,6 @@ int main(int argc, char *argv[]) {
 	//retro_set_controller_port_device(puerto, id_guardado);
 	//retro_set_controller_port_device(0, 1);
 
-	// En lugar de esperar a que él pregunte, tú le informas
 	double nextFrameTime = (double)SDL_GetTicks();
     while (gameMenu->running) {
 		// Procesamos eventos como pulsaciones de hotkeys
@@ -972,6 +1002,9 @@ int main(int argc, char *argv[]) {
 			case EMU_MENU:
 				updateMenuScreen(tileMap, *gameMenu, listMenu, false);
 				break;
+			case EMU_MENU_OVERLAY:
+				updateMenuOverlay(*gameMenu, listMenu);
+				break;
 		}
 
 		// DIBUJO DE INTERFAZ (OSD, FPS, Mensajes)
@@ -980,9 +1013,8 @@ int main(int argc, char *argv[]) {
 		// Actualizamos la pantalla
 		SDL_Flip(gameMenu->screen);
 
-		const int mode = *gameMenu->current_sync;
 		// Limitamos los frames si tenemos que sincronizar con el video
-		if (mode == SYNC_TO_VIDEO){
+		if (*gameMenu->current_sync == SYNC_TO_VIDEO){
 			gameMenu->sync->limit_fps(nextFrameTime);
 			// El tiempo en el que DEBERÍA empezar el siguiente frame
 			nextFrameTime += gameMenu->sync->frameDelay;

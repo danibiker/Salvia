@@ -13,41 +13,33 @@ std::size_t AudioBuffer::get_free_space() const {
 }
 
 void AudioBuffer::Write(const int16_t* samples, std::size_t count) {
-    // SDL_LockAudio no es necesario si head/tail son atómicos, 
-    // pero protege contra condiciones de carrera en arquitecturas antiguas.
-    for (std::size_t i = 0; i < count; i++) {
-        buffer[head] = samples[i];
-        head = (head + 1) % capacity;
+    std::size_t space_to_end = capacity - head;
+    
+    if (count <= space_to_end) {
+        memcpy(&buffer[head], samples, count * sizeof(int16_t));
+    } else {
+        // La copia se divide en dos partes (final y principio del buffer circular)
+        memcpy(&buffer[head], samples, space_to_end * sizeof(int16_t));
+        memcpy(&buffer[0], &samples[space_to_end], (count - space_to_end) * sizeof(int16_t));
     }
+    
+    head = (head + count) % capacity;
 }
 
-/*void AudioBuffer::WriteBlocking(const int16_t* samples, std::size_t count) {
-    // Espera activa con cesión de tiempo (Yield)
-    while (GetFreeSpace() < count) {
-        // SDL_Delay(0) cede el resto del quantum de tiempo del hilo sin 
-        // forzar una espera de 1ms o más, mucho más preciso que SDL_Delay(1).
-        SDL_Delay(0); 
-    }
-    Write(samples, count);
-}*/
-
 void AudioBuffer::WriteBlocking(const int16_t* samples, std::size_t count) {
-    const uint32_t MAX_WAIT_MS = 100; // Máximo tiempo de espera (100ms)
-    uint32_t startTick = SDL_GetTicks();
-    
-    // Bucle de espera con seguridad
-    while (get_free_space() < count) {
-        // Si el audio no ha avanzado en 100ms, algo va mal
-        if (SDL_GetTicks() - startTick > MAX_WAIT_MS) {
-            // OPCIONAL: Registrar error o resetear buffer
-            // head = tail; // Podrías vaciar el buffer para intentar recuperarlo
-            return; // Salimos para no congelar el emulador
-        }
+    // 1. Si el buffer es de 8192, no esperes a que queden 512 libres.
+    // Espera a que haya un margen extra para evitar el bloqueo inmediato en el siguiente frame.
+    const std::size_t safety_margin = count * 2; 
 
-        SDL_Delay(0); // Cedemos tiempo al sistema
+    while (get_free_space() < (count + safety_margin)) {
+        // 2. En lugar de SDL_Delay(0), usa 1ms. 
+        // 0ms puede hacer que el CPU consuma el 100% en el bucle sin dejar que el hilo de audio trabaje.
+        SDL_Delay(1); 
+        // 3. Si el audio de SDL se detiene por alguna razón, evita el bloqueo infinito
+        // (Time-out de seguridad)
     }
 
-    // Si salimos del bucle a tiempo, escribimos normalmente
+    // 4. Copia masiva (memcpy) es vital aquí para no perder tiempo en el hilo de video
     Write(samples, count);
 }
 

@@ -19,11 +19,11 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	this->initEngine(cfgLoader);
 	int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
 	int pixelDato = 0;
-	TTF_SizeText(Fonts::getFont(Fonts::FONTSMALL), "888.8", &pixelDato, NULL);
+	TTF_SizeText(Fonts::getFont(Fonts::FONTSMALL), "FPS: 888.8", &pixelDato, NULL);
 
 	rectFps.x = this->screen->w - pixelDato - 3;
 	rectFps.y = 0;
-	rectFps.w = pixelDato;
+	rectFps.w = this->screen->w - rectFps.x;
 	rectFps.h = face_h;
 	bkgTextFps = SDL_MapRGB(this->screen->format, 0, 0, 0);
 	uBkgColor = SDL_MapRGB(this->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
@@ -41,17 +41,24 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	this->current_ratio = &getCfgLoader()->configMain[cfg::aspectRatio].getIntRef();
 	this->current_sync = &getCfgLoader()->configMain[cfg::syncMode].getIntRef();
 	this->current_force_fs = &getCfgLoader()->configMain[cfg::forceFS].getBoolRef();
+	this->mustUpdateFps = &getCfgLoader()->configMain[cfg::showFps].getBoolRef();
+	processConfigChanges();
 
 	fpsSurface = NULL; 
+	cpuSurface = NULL;
+	bg_screenshot = NULL;
 	lastFpsUpdate = 0;
 	//initHqxFilter();
+	setSavePath();
 };
 
 GameMenu::~GameMenu(){
 	LOG_DEBUG("Deleting GameMenu...");
 	delete configMenus;
 	if (fpsSurface) SDL_FreeSurface(fpsSurface);
+	if (cpuSurface) SDL_FreeSurface(cpuSurface);
 	if (message.cache) SDL_FreeSurface(message.cache);
+	if (bg_screenshot) SDL_FreeSurface(bg_screenshot);
 
 	#ifndef _XBOX
 		if (srf_32_convert.src32) SDL_FreeSurface(srf_32_convert.src32);
@@ -767,35 +774,34 @@ int GameMenu::recoverGameMenuPos(ListMenu &menuData, struct ListStatus &read_str
 }
 
 void GameMenu::updateFps(){
-	bool fps;
-	getCfgLoader()->configMain[cfg::showFps].getPropValue(fps);
-
-    if (fps) {
+    if (*this->mustUpdateFps) {
         uint32_t currentTick = SDL_GetTicks();
+		const bool shouldUpdateSurface = currentTick - lastFpsUpdate > 500 || fpsSurface == NULL;
 
         // 1. Calculamos la media (esto es rápido, solo matemáticas)
-        this->sync->update_fps_counter();
+		this->sync->update_fps_counter(shouldUpdateSurface);
 
         // 2. ¿Ha pasado tiempo suficiente para actualizar el NÚMERO? (ej. cada 500ms)
-        if (currentTick - lastFpsUpdate > 500 || fpsSurface == NULL) {
+        if (shouldUpdateSurface) {
             // Liberamos la superficie anterior
             if (fpsSurface) SDL_FreeSurface(fpsSurface);
-            
+			if (cpuSurface) SDL_FreeSurface(cpuSurface);
+			
             // Creamos la nueva superficie con el texto actualizado
             // Asumimos que esta función devuelve una SDL_Surface* nueva
-            fpsSurface = TTF_RenderText_Blended(Fonts::getFont(Fonts::FONTSMALL), 
-                                                this->sync->fpsText, white);
+			fpsSurface = TTF_RenderText(Fonts::getFont(Fonts::FONTSMALL), this->sync->fpsText, white, black);
+			cpuSurface = TTF_RenderText(Fonts::getFont(Fonts::FONTSMALL), this->sync->cpuText, white, black);
             lastFpsUpdate = currentTick;
         }
 
         // 3. DIBUJO (Esto se hace EN CADA FRAME y es muy rápido)
-        if (fpsSurface) {
+        if (fpsSurface && cpuSurface) {
             // Borramos el fondo del OSD
             SDL_FillRect(this->screen, &rectFps, bkgTextFps);
-            
-            // Copiamos la superficie ya renderizada a la pantalla
-            SDL_Rect dstRect = { rectFps.x, rectFps.y, 0, 0 };
-            SDL_BlitSurface(fpsSurface, NULL, this->screen, &dstRect);
+            SDL_BlitSurface(fpsSurface, NULL, this->screen, &rectFps);
+			SDL_Rect rectCpu = {rectFps.x, rectFps.y + fpsSurface->h, this->screen->w - rectFps.x, fpsSurface->h};
+			SDL_FillRect(this->screen, &rectCpu, bkgTextFps);
+			SDL_BlitSurface(cpuSurface, NULL, this->screen, &rectCpu);
         }
     }
 }
@@ -874,14 +880,71 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 			showSystemMessage("changing filter", 3000);
 			break;
 		case HK_EXIT_GAME:
-		case HK_VIEW_MENU:
-			//Por ahora los dos hacen lo mismo
 			setEmuStatus(EMU_MENU);
 			break;
+		case HK_VIEW_MENU:
+			if (getEmuStatus() == EMU_MENU) break;
+
+			setEmuStatus(getEmuStatus() == EMU_MENU_OVERLAY ? getLastStatus() : EMU_MENU_OVERLAY);
+			if (bg_screenshot){
+				SDL_FreeSurface(bg_screenshot);
+				bg_screenshot = NULL;
+			}
+
+			if (getEmuStatus() == EMU_MENU_OVERLAY && screen){
+				bg_screenshot = clonarPantalla(screen, 180);
+				configMenus->poblarPartidasGuardadas(getCfgLoader(), getRomPaths()->rompath);
+			}
+			break;
+	}
+	joystick->resetButtonsCore();
+}
+
+/**
+*
+*/
+SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
+    if (!src) return NULL;
+
+    // Bloqueamos la superficie si es necesario (común en buffers de video directos)
+    if (SDL_MUSTLOCK(src)) {
+        if (SDL_LockSurface(src) < 0) return NULL;
+    }
+
+	
+    // Creamos la copia con el mismo formato exacto
+    SDL_Surface* copia = SDL_ConvertSurface(src, src->format, src->flags);
+
+	if (transparency > 0){
+		// 1. Crear una superficie temporal del mismo tamaño que la original
+		// Usamos las mismas máscaras de bits para compatibilidad
+		SDL_Surface* overlay = SDL_CreateRGBSurface(SDL_SWSURFACE, 
+										copia->w, 
+										copia->h, 
+										copia->format->BitsPerPixel,
+										copia->format->Rmask, 
+										copia->format->Gmask, 
+										copia->format->Bmask, 
+										copia->format->Amask);
+
+		if (overlay) {
+			// 2. Pintar la superficie de negro
+			SDL_FillRect(overlay, NULL, SDL_MapRGB(overlay->format, 0, 0, 0));
+			// 3. Configurar el nivel de transparencia (0 = invisible, 255 = opaco)
+			// SDL_SRCALPHA activa el blending por pixel o por superficie
+			SDL_SetAlpha(overlay, SDL_SRCALPHA, transparency);
+			// 4. Dibujar el rectángulo negro sobre la superficie original
+			SDL_BlitSurface(overlay, NULL, copia, NULL);
+			// 5. Liberar la memoria de la superficie temporal
+			SDL_FreeSurface(overlay);
+		}
 	}
 
-	joystick->resetButtonsCore();
-	
+    if (SDL_MUSTLOCK(src)) {
+        SDL_UnlockSurface(src);
+    }
+
+    return copia;
 }
 
 void GameMenu::selectScalerMode(int mode){
@@ -1043,17 +1106,17 @@ void GameMenu::setRomPaths(std::string rp){
 	getRomPaths()->rompath = rp;
 
 	std::string statesDir = getCfgLoader()->configMain[cfg::libretro_state].valueStr + Constant::getFileSep() +
-		cfgLoader->getCfgEmu()->internalName;
+		getCfgLoader()->configMain[cfg::libretro_core].valueStr;
 			
 	if (!dir.dirExists(statesDir.c_str())){
 		dir.createDirRecursive(statesDir.c_str());
 	}
 
 	getRomPaths()->savestate = statesDir + Constant::getFileSep() + 
-		dir.getFileNameNoExt(rp) + ".state";
+		dir.getFileNameNoExt(rp) + STATE_EXT;
 
 	std::string sramDir = getCfgLoader()->configMain[cfg::libretro_save].valueStr + Constant::getFileSep() +
-		cfgLoader->getCfgEmu()->internalName;
+		getCfgLoader()->configMain[cfg::libretro_core].valueStr;
 			
 	if (!dir.dirExists(sramDir.c_str())){
 		dir.createDirRecursive(sramDir.c_str());
@@ -1061,6 +1124,17 @@ void GameMenu::setRomPaths(std::string rp){
 
 	getRomPaths()->sram = sramDir + Constant::getFileSep() + 
 		dir.getFileNameNoExt(rp) + ".srm";
+}
 
+void GameMenu::setSavePath(){
+	dirutil dir;
 
+	std::string savesDir = getCfgLoader()->configMain[cfg::libretro_save].valueStr + Constant::getFileSep() +
+		getCfgLoader()->configMain[cfg::libretro_core].valueStr;
+			
+	if (!dir.dirExists(savesDir.c_str())){
+		dir.createDirRecursive(savesDir.c_str());
+	}
+
+	getRomPaths()->saves = savesDir;
 }

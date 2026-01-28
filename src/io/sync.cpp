@@ -4,11 +4,15 @@
 Sync::Sync(int syncMode){
 	g_frameTimeIndex = 0;
 	g_lastFrameTick = 0;
-	g_actualFps = 0.0f;
-	sprintf(fpsText, "%.1f", g_actualFps);
-	g_sync_last = syncMode;
+	g_actualFps = FPS_DESIRED;
 	fps = FPS_DESIRED;
+	utilization = 0.0;
+	memset(fpsText, '\0', 50 * sizeof(char));
+	sprintf(fpsText, FPS_FORMAT, g_actualFps);
+	sprintf(cpuText, CPU_FORMAT, utilization);
+	g_sync_last = syncMode;
 	frameDelay = 1000.0 / (double)fps; // Aprox 16ms
+	utilization = 0.0;
 }
 
 void Sync::initAverages(uint32_t avg){
@@ -32,7 +36,7 @@ void Sync::init_fps_counter(double gameFps){
     }
 }
 
-void Sync::update_fps_counter() {
+void Sync::update_fps_counter(bool updateFpsOverlay) {
 	uint32_t currentTick = SDL_GetTicks();
     if (g_lastFrameTick == 0) g_lastFrameTick = currentTick; // Inicialización en el primer uso
     
@@ -43,29 +47,45 @@ void Sync::update_fps_counter() {
 	// Guardamos el tiempo de este frame en el buffer circular
 	g_frameTimes[g_frameTimeIndex] = frameTime;
 	g_frameTimeIndex = (g_frameTimeIndex + 1) % FPS_AVG_COUNT;
+	
+	if (updateFpsOverlay){
+		// Sumamos todos los tiempos almacenados
+		uint32_t totalTime = 0;
+		for (int i = 0; i < FPS_AVG_COUNT; i++) {
+			totalTime += g_frameTimes[i];
+		}
 
-	// Sumamos todos los tiempos almacenados
-	uint32_t totalTime = 0;
-	for (int i = 0; i < FPS_AVG_COUNT; i++) {
-		totalTime += g_frameTimes[i];
-	}
-
-	// Calculamos la media (evitando división por cero)
-	if (totalTime > 0) {
-		// FPS = 1000ms / promedio_de_frame_en_ms
-		// Es lo mismo que: (1000 * cantidad_de_frames) / tiempo_total
-		g_actualFps = (1000.0f * (double)FPS_AVG_COUNT) / (double)totalTime;
-		_snprintf(fpsText, sizeof(fpsText), "%.1f", g_actualFps);
+		// Calculamos la media (evitando división por cero)
+		if (totalTime > 0) {
+			// FPS = 1000ms / promedio_de_frame_en_ms
+			// Es lo mismo que: (1000 * cantidad_de_frames) / tiempo_total
+			g_actualFps = (1000.0f * (double)FPS_AVG_COUNT) / (double)totalTime;
+			_snprintf(fpsText, sizeof(fpsText), FPS_FORMAT, g_actualFps);
+			_snprintf(cpuText, sizeof(cpuText), CPU_FORMAT, utilization);
+			
+		}
 	}
 }
 
 void Sync::limit_fps(double& nextFrameTime){
 	// 2. LIMITADOR DE ALTA PRECISIÓN (Time-Stretching prevention)
 	double currentTime = (double)SDL_GetTicks();
+	const double diffTime = nextFrameTime - currentTime;
+	
+	// 1. Calculamos la utilización de ESTE frame
+    // Si diffTime es positivo, usamos (frameDelay - diffTime) / frameDelay
+    // Si diffTime es negativo, significa que el trabajo tomó (frameDelay + abs(diffTime))
+    const double currentUtilization = ((this->frameDelay - diffTime) / this->frameDelay) * 100.0;
+
+    // 2. Aplicamos un "filtro de paso bajo" para suavizar el número (Smoothing)
+    // Esto hace que el valor mostrado sea un promedio ponderado (90% anterior, 10% nuevo)
+    // Así el número en pantalla es estable pero reacciona a cambios.
+    this->utilization = (this->utilization * 0.9) + (currentUtilization * 0.1);
+
 	if (currentTime < nextFrameTime) {
 		// Si falta mucho tiempo, soltamos el CPU un poco
-		if (nextFrameTime - currentTime > 2.0) {
-			SDL_Delay((uint32_t)(nextFrameTime - currentTime - 2.0));
+		if (diffTime > 2.0) {
+			SDL_Delay((uint32_t)(diffTime - 2.0));
 		}
 
 		// ESPERA ACTIVA (Busy Wait) para la precisión final

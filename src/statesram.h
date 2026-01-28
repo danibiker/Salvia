@@ -1,9 +1,13 @@
 #pragma once
 
 #include <SDL.h>
+#include <SDL_image.h>
 #include <SDL_thread.h>
 
-const int MAX_SLOTS = 10;
+#include "image/lodepng.h"
+#include <vector>
+#include <string>
+
 const Uint32 INTERVAL_SRAM_SAVE = 60000;
 
 Uint32 lastSramSaved = 0;
@@ -15,6 +19,22 @@ typedef enum {SAVE_STATE, SAVE_SRAM} ThreadAction;
 
 extern GameMenu *gameMenu;
 
+struct delayed_action{
+	int cycles;
+	int action;
+	uint16_t* screenshot;
+	unsigned width;
+	unsigned height;
+
+	delayed_action(){
+		cycles = -1;
+		action = -1;
+		screenshot = NULL;
+		width = 0;
+		height = 0;
+	}
+} action_postponed;
+
 // Estructura para compartir datos con el hilo de guardados
 struct SaveData {
     SDL_Thread* thread;
@@ -24,6 +44,10 @@ struct SaveData {
 	ThreadAction action;
 	std::string targetPath;
 	void *buffer;
+	void *screenshot;
+	unsigned width;
+	unsigned height;
+	int slot;
 	std::size_t bufferSize;
 } g_saveQueue;
 
@@ -102,30 +126,43 @@ void saveSram(const char* sram_path) {
 }
 
 void saveState(){
-    // Verificamos si hay un guardado ya en curso para evitar memory leaks
     SDL_mutexP(g_saveQueue.saveMutex);
     if (g_saveQueue.buffer != NULL) {
         SDL_mutexV(g_saveQueue.saveMutex);
-        LOG_DEBUG("Guardado en curso... ignorando petición.");
         return;
     }
-    SDL_mutexV(g_saveQueue.saveMutex);
+    // El mutex debe proteger la lectura de action_postponed si este se modifica en otro hilo
+    // Pero lo más importante es resetear el puntero original.
 
     std::size_t state_size = retro_serialize_size();
     if (state_size > 0) {
         void *buffer = malloc(state_size);
         if (retro_serialize(buffer, state_size)) {
-            SDL_mutexP(g_saveQueue.saveMutex);
+            
             g_saveQueue.buffer = buffer;
             g_saveQueue.bufferSize = state_size;
+            
+            // TRANSFERENCIA SEGURA:
+            g_saveQueue.screenshot = action_postponed.screenshot;
+            g_saveQueue.width = action_postponed.width;
+            g_saveQueue.height = action_postponed.height;
+            
+            // IMPORTANTE: Dejamos el puntero original a NULL para que 
+            // take_screenshot no haga 'delete[]' de una memoria que ahora pertenece a la cola.
+            action_postponed.screenshot = NULL; 
+
             g_saveQueue.targetPath = getSlotPath(gameMenu->getRomPaths()->savestate, g_currentSlot);
             g_saveQueue.action = SAVE_STATE;
-            SDL_mutexV(g_saveQueue.saveMutex);
+			g_saveQueue.slot = g_currentSlot;
             
+            SDL_mutexV(g_saveQueue.saveMutex);
             SDL_SemPost(g_saveQueue.semaphore);
         } else {
             free(buffer);
+            SDL_mutexV(g_saveQueue.saveMutex);
         }
+    } else {
+        SDL_mutexV(g_saveQueue.saveMutex);
     }
 }
 
@@ -161,6 +198,7 @@ void loadState(){
 		// 5. Inyectar los datos en el núcleo
 		// IMPORTANTE: Esto debe ocurrir en el hilo principal (emulación)
 		success = retro_unserialize(buffer, state_size);
+		gameMenu->showSystemMessage("Estado cargado de slot " + Constant::TipoToStr(g_currentSlot), 3000);
 	}
 
 	free(buffer);
@@ -190,6 +228,40 @@ bool guardar_archivo_raw(const char* path, void* buffer, std::size_t size) {
     }
 }
 
+bool GuardarCapturaPNG(const std::string& ruta, uint16_t* buffer, int w, int h) {
+    if (!buffer) return false;
+
+    // 1. Crear un vector para los datos RGB (3 bytes por píxel)
+    std::vector<unsigned char> rgb_buffer;
+    rgb_buffer.resize(w * h * 3);
+
+    // 2. Convertir de RGB565 a RGB888
+    for (int i = 0; i < w * h; ++i) {
+        uint16_t pixel = buffer[i];
+        
+        // Extraer componentes y expandir de 5/6 bits a 8 bits
+        // Usamos desplazamiento y bitwise OR para mantener el brillo correcto
+        uint8_t r = ((pixel >> 11) & 0x1F);
+        uint8_t g = ((pixel >> 5) & 0x3F);
+        uint8_t b = (pixel & 0x1F);
+
+        rgb_buffer[i * 3 + 0] = (r << 3) | (r >> 2);
+        rgb_buffer[i * 3 + 1] = (g << 2) | (g >> 4);
+        rgb_buffer[i * 3 + 2] = (b << 3) | (b >> 2);
+    }
+
+    // 3. Codificar y guardar el archivo en el HDD/USB de la Xbox
+    // lodepng::encode devuelve 0 si tiene éxito
+    unsigned error = lodepng::encode(ruta, rgb_buffer, w, h, LCT_RGB, 8);
+
+    if (error) {
+        // En caso de error, puedes depurar con: lodepng_error_text(error)
+        return false;
+    }
+
+    return true;
+}
+
 // Función que ejecutará el hilo
 int SaveThreadFunc(void* data) {
     SaveData* sd = (SaveData*)data;
@@ -203,6 +275,10 @@ int SaveThreadFunc(void* data) {
         std::string localPath = sd->targetPath; // Copia local segura
         void* localBuffer = sd->buffer;
         std::size_t localSize = sd->bufferSize;
+		void* localScreenshot = sd->screenshot;
+		unsigned width = sd->width;
+		unsigned height = sd->height;
+		int localSlot = sd->slot;
         SDL_mutexV(sd->saveMutex);
 
         switch (actionActual) {
@@ -222,17 +298,23 @@ int SaveThreadFunc(void* data) {
 				break;
 			case SAVE_STATE:
 				if (localBuffer) {
-					bool ret = guardar_comprimido_zlib(localPath.c_str(), localBuffer, localSize);
-					if (ret)
-						gameMenu->showSystemMessage("Estado guardado: " + localPath, 3000);
-					else 
-						gameMenu->showSystemMessage("Error al guardar estado: " + localPath, 3000);
+					guardar_comprimido_zlib(localPath.c_str(), localBuffer, localSize);
+        
+					if (localScreenshot) {
+						// Guardamos el PNG
+						GuardarCapturaPNG(localPath + STATE_IMG_EXT, (uint16_t*)localScreenshot, width, height);
+            
+						// LIBERACIÓN OBLIGATORIA
+						delete[] (uint16_t*)localScreenshot;
+					}
 
-					free(localBuffer); // Ahora es seguro porque es una copia dedicada
+					free(localBuffer);
 
+					// Limpiar la cola para permitir el siguiente guardado
 					SDL_mutexP(sd->saveMutex);
 					sd->buffer = NULL;
-					sd->bufferSize = 0;
+					sd->screenshot = NULL; // Indicamos que ya terminamos con el buffer de imagen
+					gameMenu->showSystemMessage("Estado guardado en slot " + Constant::TipoToStr(localSlot), 3000);
 					SDL_mutexV(sd->saveMutex);
 				}
 				break;

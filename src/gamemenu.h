@@ -47,7 +47,8 @@ enum status_emu
 	//The emulation has ben started and it's running
 	EMU_STARTED = 0, 
 	//The menu is showing so, the emulation is paused
-	EMU_MENU
+	EMU_MENU, 
+	EMU_MENU_OVERLAY
 };
 
 class GameMenu : public Engine{
@@ -56,6 +57,7 @@ class GameMenu : public Engine{
         ~GameMenu();
         
 		SDL_Surface *video_page;
+		SDL_Surface *bg_screenshot;
 		GameTicks gameTicks;
 		GestorMenus *configMenus;
 
@@ -97,10 +99,12 @@ class GameMenu : public Engine{
 			std::string rompath;
 			std::string savestate;
 			std::string sram;
+			std::string saves;
 		};
 
 		t_rom_paths* getRomPaths(){return &romPaths;}
 		void setRomPaths(std::string rp);
+		void setSavePath();
 
 		void showSystemMessage(std::string, uint32_t);
 		
@@ -117,6 +121,7 @@ class GameMenu : public Engine{
 
     private:
 		std::string configButtonsJOY();
+		SDL_Surface* clonarPantalla(SDL_Surface*, int);
 		void selectScalerMode(int);
 		bool dblBufferEnabled;
 		std::string getPathPrefix(std::string);
@@ -130,8 +135,10 @@ class GameMenu : public Engine{
 		SDL_Rect rectFps;
 		Uint32 bkgTextFps;
 		SDL_Surface* fpsSurface;
+		SDL_Surface* cpuSurface;
 		uint32_t lastFpsUpdate;
 		void addControlerButtons(Menu*& menuControlesPuerto, int numPlayer);
 		Message message;
 		t_rom_paths romPaths;
+		bool *mustUpdateFps;
 };

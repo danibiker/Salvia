@@ -34,6 +34,11 @@ static const SDL_Color textColor = white;
 static const SDL_Color menuBars = { 128, 128, 128, 255};
 static const SDL_Color bkgMenu = {247, 221, 114};
 
+static const SDL_Color askClTitle = {59,59,59};
+static const SDL_Color askClBg = {69,69,69};
+static const SDL_Color askClLine = {91,91,91};
+static const SDL_Color askClText = {190,190,190};
+
 static const int bkgSpeedPixPerS = 15;
 static const double bkgFrameTimeTick = 1000.0 / bkgSpeedPixPerS;
 
@@ -48,6 +53,9 @@ static const unsigned long KEYDOWNSPEED = 50;
 static const unsigned long MOUSEVISIBLE = 8000;
 static const int CURSORVISIBLE = 1;
 static const int LONGKEYTIMEOUT = 2000;
+static const int MAX_SAVESTATES = 10;
+static const char *STATE_IMG_EXT = ".png";
+static const char *STATE_EXT = ".state";
 
 typedef enum {
     cursor_hidden,

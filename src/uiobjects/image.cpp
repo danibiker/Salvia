@@ -11,6 +11,11 @@ Image::~Image(){
 		SDL_FreeSurface(img);
         img = NULL;
     }
+	
+	if (cachedSurface != NULL){
+		SDL_FreeSurface(cachedSurface);
+        cachedSurface = NULL;
+    }
 }
 
 Image::Image(int x, int y, int w, int h){
@@ -28,6 +33,7 @@ void Image::init(){
     vAlign = ALIGN_MIDDLE;
     setObjectType(GUIPICTURE);
     img = NULL;
+	cachedSurface = NULL;
 }
 
 bool Image::loadImageFromGame(string baseDir, GameFile game, string ext){
@@ -46,6 +52,11 @@ bool Image::loadImage(string filepathToOpen){
 			SDL_FreeSurface(img);
             img = NULL;
         }
+
+		if (cachedSurface != NULL){
+			SDL_FreeSurface(cachedSurface);
+			cachedSurface = NULL;
+		}
         
 		if ((img = IMG_Load(filepathToOpen.c_str())) != NULL){   
 			filepath = filepathToOpen;
@@ -98,42 +109,33 @@ void Image::printImage(SDL_Surface *video_page){
     }
 }
 
-Dimension Image::relacion(Dimension &src, Dimension &dst ) {
-    Dimension dim = {0,0};
-    int maxHeight = dst.h;
-    int maxWidth = dst.w;
-            
-    if (tamAuto) {
-        int priorHeight = src.h; 
-        int priorWidth = src.w;
+Dimension Image::relacion(const Dimension &src, const Dimension &dst) {
+    if (!tamAuto) return src;
 
-        // Calculate the correct new height and width
-        if((float)priorHeight/(float)priorWidth > (float)maxHeight/(float)maxWidth){
-            dim.h = maxHeight;
-            dim.w = (int)(((float)priorWidth/(float)priorHeight)*dim.h);
-        } else {
-            dim.w = maxWidth;
-            dim.h = (int)(((float)priorHeight/(float)priorWidth)*dim.w);
-        }
+    Dimension dim;
+    // Comparamos proporciones usando multiplicaciones: 
+    // (src.h / src.w > dst.h / dst.w) es igual a (src.h * dst.w > dst.h * src.w)
+    if ((long)src.h * dst.w > (long)dst.h * src.w) {
+        dim.h = dst.h;
+        dim.w = (src.w * dst.h) / src.h;
     } else {
-        dim.h = src.h;
-        dim.w = src.w;
+        dim.w = dst.w;
+        dim.h = (src.h * dst.w) / src.w;
     }
-
     return dim;
 }
 
-Dimension Image::centrado(Dimension &src, Dimension &dst) {
+Dimension Image::centrado(const Dimension &src, const Dimension &dst) {
     Dimension offset;
-    offset.h = (dst.h - src.h) / 2;
-    offset.w = (dst.w - src.w) / 2;
+    offset.h = (dst.h - src.h) >> 1; // El desplazamiento de bits (>> 1) es igual a / 2
+    offset.w = (dst.w - src.w) >> 1;
     return offset;
 }
 
 /**
  * Equivalente a stretch_blit(src, dest, src_x, src_y, src_w, src_h, dst_x, dst_y, dst_w, dst_h) de Allegro
  */
-void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest, 
+/*void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest, 
                       int src_x, int src_y, int src_w, int src_h, 
                       int dst_x, int dst_y, int dst_w, int dst_h) {
     
@@ -146,4 +148,52 @@ void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest,
     // Realizar el blit. SDL 1.2 escala automáticamente si srcRect y dstRect 
     // tienen dimensiones diferentes.
     SDL_BlitSurface(src, &srcRect, dest, &dstRect);
+}*/
+
+#include <gfx/SDL_rotozoom.h>
+
+void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest, 
+                      int src_x, int src_y, int src_w, int src_h, 
+                      int dst_x, int dst_y, int dst_w, int dst_h) {
+
+    if (!cachedSurface || lastW != dst_w || lastH != dst_h) {
+        if (cachedSurface) SDL_FreeSurface(cachedSurface);
+
+        // 1. Crear el recorte (sub-sección)
+        //SDL_Rect srcRect = {src_x, src_y, src_w, src_h};
+        
+        // 2. Normalizar: Convertir la fuente al formato de la pantalla/destino
+        // Esto corrige automáticamente los errores de color (swapping de canales)
+        /*SDL_Surface* normalizedSrc = SDL_ConvertSurface(src, dest->format, SDL_SWSURFACE | SDL_SRCALPHA);
+        
+        // 3. Crear superficie para el recorte
+        SDL_Surface* subSrc = SDL_CreateRGBSurface(SDL_HWSURFACE, src_w, src_h, 
+                                 dest->format->BitsPerPixel, 
+                                 dest->format->Rmask, dest->format->Gmask, 
+                                 dest->format->Bmask, dest->format->Amask);
+								 */
+        // Copiar sección sin mezclar (copia pura de píxeles)
+        //SDL_SetAlpha(normalizedSrc, 0, 0);
+        //SDL_BlitSurface(normalizedSrc, &srcRect, subSrc, NULL);
+
+        // 4. Escalar
+        double zoomX = (double)dst_w / src_w;
+        double zoomY = (double)dst_h / src_h;
+        
+        // rotozoomSurfaceXY es más preciso para escalas no uniformes
+        cachedSurface = rotozoomSurfaceXY(src, 0, zoomX, zoomY, SMOOTHING_ON);
+
+        // 5. Limpieza de temporales
+        //SDL_FreeSurface(normalizedSrc);
+        //SDL_FreeSurface(subSrc);
+
+		//cachedSurface = SDL_DisplayFormat(ampliada);
+		//SDL_FreeSurface(ampliada);
+        
+        lastW = dst_w; lastH = dst_h;
+    }
+
+    // 6. Dibujo final
+    SDL_Rect dstRect = {dst_x, dst_y, dst_w, dst_h};
+    SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
 }

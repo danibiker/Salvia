@@ -18,6 +18,8 @@ public:
 	cfg::t_controller_port g_ports[MAX_PLAYERS];
 	std::string saveCoreParams();
 	void loadCoreParams();
+
+	std::string saveMainParams();
 	
 	int getWidth();
 	int getHeight();

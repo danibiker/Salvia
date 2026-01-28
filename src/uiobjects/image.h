@@ -19,11 +19,14 @@ class Image : public Object{
         bool loadImageFromGame(string baseDir, GameFile game, string ext);
         bool loadImage(string filepathToOpen);
 		void printImage(SDL_Surface *video_page);
-        Dimension relacion(Dimension &src, Dimension &dst );
-        Dimension centrado(Dimension &src, Dimension &dst);
+        Dimension relacion(const Dimension &src, const Dimension &dst );
+        Dimension centrado(const Dimension &src, const Dimension &dst);
     private:
         string filepath;
         SDL_Surface* img;
+
+		SDL_Surface* cachedSurface; // Almacena la imagen ya escalada
+		int lastW, lastH;           // Para detectar si el tamaño cambió
 
 		void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest, 
                       int src_x, int src_y, int src_w, int src_h, 

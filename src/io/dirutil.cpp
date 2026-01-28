@@ -206,6 +206,12 @@ int dirutil::findIcon(const char *filename){
  */
 unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtro, bool order, bool properties){
     unsigned int totalFiles = 0;
+	return listarFilesSuperFast(strdir, filelist, filtro, "", order, properties);
+}
+
+
+unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool order, bool properties){
+    unsigned int totalFiles = 0;
 
 #ifdef _XBOX
 	WIN32_FIND_DATA findData;
@@ -242,7 +248,7 @@ unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr
 
 		string concatDir = parentDir + findData.cFileName;
 		extension = getExtension(findData.cFileName);
-        if (filtro.empty() || (filtro.find(extension) != string::npos && extension.length() > 1)){
+        if (foundFilter(filtroExt, filtroName, extension, findData.cFileName)){
             FileProps propFile(strdir, findData.cFileName, findIcon(findData.cFileName), TIPOFICHERO);
             if (properties){
                 setFileProperties(&propFile, concatDir);
@@ -279,7 +285,7 @@ unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr
                 string concatDir = parentDir + string(dirp->d_name);
                 //if (!isDir(concatDir)){
                     extension = getExtension(dirp->d_name);
-                    if (filtro.empty() || (filtro.find(extension) != string::npos && extension.length() > 1)){
+                    if (foundFilter(filtroExt, filtroName, extension, dirp->d_name)){
                         FileProps propFile(strdir, dirp->d_name, findIcon(dirp->d_name), TIPOFICHERO);
                         if (properties){
                             setFileProperties(&propFile, concatDir);
@@ -302,6 +308,11 @@ unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr
     return totalFiles;
 }
 
+bool dirutil::foundFilter(std::string filtroExt, std::string filtroName, std::string extension, std::string name){
+	return (filtroExt.empty() && filtroName.empty()) ||
+						 (!filtroExt.empty() && extension.length() > 1 && filtroExt.find(extension) != string::npos) ||
+						 (!filtroName.empty() && name.find(filtroName) != string::npos);
+}
 
 string dirutil::getFileNameNoExt(string file){
     if(isDir(file.c_str())){
