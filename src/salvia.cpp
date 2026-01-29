@@ -564,15 +564,20 @@ std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_
 	AudioBuffer& audio = gameMenu->g_audioBuffer;
     const int mode = *gameMenu->current_sync;
 
-	if (mode == SYNC_FAST_FORWARD) return 0;
-	
-	// frames es el número de pares (izq, der), multiplicamos por 2 para el total
-	// Al usar WriteBlocking, retro_run() no terminará hasta que haya
-    // sitio en el buffer, sincronizando así la ejecución al audio real.
-	if (mode == SYNC_TO_AUDIO){
-		audio.WriteBlocking(data, frames * 2);
-	} else {
-		audio.Write(data, frames * 2);
+	switch(mode){
+		SYNC_TO_AUDIO: {
+			// frames es el número de pares (izq, der), multiplicamos por 2 para el total
+			// Al usar WriteBlocking, retro_run() no terminará hasta que haya
+			// sitio en el buffer, sincronizando así la ejecución al audio real.
+			audio.WriteBlocking(data, frames * 2);
+			break;
+		}
+		SYNC_FAST_FORWARD:
+			return 0;
+		default:{
+			audio.Write(data, frames * 2);
+			break;
+		}
 	}
     return frames;
 }
@@ -635,7 +640,7 @@ void init_sdl_audio(double sample_rate) {
     // 1024 = ~23ms (Riesgo de cortes en 360)
     // 2048 = ~46ms (Recomendado para estabilidad en emulación)
     // 4096 = ~92ms (Seguro, pero con lag perceptible)
-	wanted.samples = AudioBuffer::AUDIO_BUFFER_SIZE / 4; // Tamaño del bloque (latencia)
+	wanted.samples = AudioBuffer::AUDIO_BUFFER_SIZE / 8; // Tamaño del bloque (latencia)
     wanted.callback = sdl_audio_callback;
 
     if (SDL_OpenAudio(&wanted, NULL) < 0) {
@@ -994,7 +999,7 @@ int main(int argc, char *argv[]) {
 	//retro_set_controller_port_device(puerto, id_guardado);
 	//retro_set_controller_port_device(0, 1);
 
-	double nextFrameTime = SDL_GetTicks();
+	double nextFrameTime = Constant::getTicks();
 	while (gameMenu->running) {
 		// Procesamos eventos como pulsaciones de hotkeys
 		processFrontendEvents();
@@ -1021,7 +1026,6 @@ int main(int argc, char *argv[]) {
 		// Limitamos los frames si tenemos que sincronizar con el video
 		if (*gameMenu->current_sync == SYNC_TO_VIDEO){
 			gameMenu->sync->limit_fps(nextFrameTime);
-			
 		}
 	}
 	closeResources();

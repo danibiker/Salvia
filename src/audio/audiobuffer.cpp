@@ -44,13 +44,27 @@ void AudioBuffer::WriteBlocking(const int16_t* samples, std::size_t count) {
 }
 
 void AudioBuffer::Read(int16_t* stream, std::size_t count) {
-    for (std::size_t i = 0; i < count; i++) {
-        if (head != tail) {
-            stream[i] = buffer[tail];
-            tail = (tail + 1) % capacity;
-        } else {
-            stream[i] = 0; // Silencio (Underrun)
+    std::size_t available = (head >= tail) ? (head - tail) : (capacity - tail + head);
+    std::size_t to_read = std::min(count, available);
+
+    if (to_read > 0) {
+        // Bloque 1: De 'tail' hasta el final físico del buffer o 'head'
+        std::size_t first_part = std::min(to_read, capacity - tail);
+        std::memcpy(stream, &buffer[tail], first_part * sizeof(int16_t));
+
+        // Bloque 2: Si hubo wrap-around, lee desde el principio del buffer
+        if (first_part < to_read) {
+            std::size_t second_part = to_read - first_part;
+            std::memcpy(stream + first_part, &buffer[0], second_part * sizeof(int16_t));
         }
+        
+        // Actualizar tail de forma eficiente
+        tail = (tail + to_read) % capacity;
+    }
+
+    // Rellenar el resto con silencio si hay underrun
+    if (to_read < count) {
+        std::memset(stream + to_read, 0, (count - to_read) * sizeof(int16_t));
     }
 }
 

@@ -18,6 +18,7 @@ static const int video_bpp = 16;
 	static int video_width = 1280;
 	static int video_height = 720;
 	static const char *LOG_PATH = "game:\\salvia.log";
+	#include <xtl.h>
 #elif defined(WIN)
 	static Uint32 video_flags = SDL_SWSURFACE; //SDL_SWSURFACE; //SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN;
 	static int video_width = 1280;
@@ -446,6 +447,26 @@ class Constant{
 			}
 			return a.length() < b.length();
 		}
+
+		static double getTicks() {
+			#if defined(_WIN32) || defined(_WIN64) || defined(_XBOX)
+				// Cacheamos la frecuencia por rendimiento (Win32 API)
+				static LARGE_INTEGER freq;
+				static bool freqInitialized = false;
+				if (!freqInitialized) {
+					QueryPerformanceFrequency(&freq);
+					freqInitialized = true;
+				}
+				LARGE_INTEGER counter;
+				QueryPerformanceCounter(&counter);
+				// Retorna milisegundos con alta precisión decimal
+				return (double)counter.QuadPart * 1000.0 / (double)freq.QuadPart;
+			#else
+				// Para otras plataformas, usamos la versión de 64 bits si es posible
+				// o el performance counter de SDL si usas SDL 2.0+
+				return (double)SDL_GetTicks(); 
+			#endif
+			}
 
         static void setExecMethod(int var){EXEC_METHOD = var;}
         static int getExecMethod(){return EXEC_METHOD;}

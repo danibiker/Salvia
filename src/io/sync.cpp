@@ -1,6 +1,10 @@
 #include "sync.h"
 #include <SDL.h>
 
+#ifdef WIN
+#include <xmmintrin.h>
+#endif
+
 Sync::Sync(int syncMode){
 	g_frameTimeIndex = 0;
 	g_lastFrameTick = 0;
@@ -67,39 +71,33 @@ void Sync::update_fps_counter(bool updateFpsOverlay) {
 	}
 }
 
-void Sync::limit_fps(double& nextFrameTime){
-	// 2. LIMITADOR DE ALTA PRECISIÓN (Time-Stretching prevention)
-	double currentTime = (double)SDL_GetTicks();
-	const double diffTime = nextFrameTime - currentTime;
-	
-	// 1. Calculamos la utilización de ESTE frame
-    // Si diffTime es positivo, usamos (frameDelay - diffTime) / frameDelay
-    // Si diffTime es negativo, significa que el trabajo tomó (frameDelay + abs(diffTime))
-    const double currentUtilization = ((this->frameDelay - diffTime) / this->frameDelay) * 100.0;
+void Sync::limit_fps(double& nextFrameTime) {
+    double currentTime = Constant::getTicks();
+    double diffTime = nextFrameTime - currentTime;
 
-    // 2. Aplicamos un "filtro de paso bajo" para suavizar el número (Smoothing)
-    // Esto hace que el valor mostrado sea un promedio ponderado (90% anterior, 10% nuevo)
-    // Así el número en pantalla es estable pero reacciona a cambios.
+    // Métricas de utilización (Suavizado EMA)
+    const double currentUtilization = ((this->frameDelay - diffTime) / this->frameDelay) * 100.0;
     this->utilization = (this->utilization * 0.9) + (currentUtilization * 0.1);
 
-	if (currentTime < nextFrameTime) {
-		// Si falta mucho tiempo, soltamos el CPU un poco
-		if (diffTime > 2.0) {
-			SDL_Delay((uint32_t)(diffTime - 2.0));
-		}
+    if (diffTime > 0) {
+        // Dormir el hilo si sobra tiempo suficiente (ahorro de CPU)
+        // SDL_Delay es seguro aquí porque el Busy Wait corregirá su imprecisión
+        if (diffTime > 4.0) {
+            SDL_Delay((uint32_t)(diffTime - 2.0));
+        }
 
-		// ESPERA ACTIVA (Busy Wait) para la precisión final
-		// Esto garantiza que salimos del bucle en el microsegundo exacto
-		while ((double)SDL_GetTicks() < nextFrameTime) {
-			// Espera pura
-		}
-	} else {
-		// Si el frame ha tardado más de la cuenta (caída de FPS), 
-		// reseteamos el tiempo objetivo para no intentar "recuperar" frames
-		// y evitar que el emulador se acelere de golpe.
-		nextFrameTime = (double)SDL_GetTicks();
-	}
+        // ESPERA ACTIVA: Clava el microsegundo exacto
+        while (Constant::getTicks() < nextFrameTime) {
+            // _mm_pause() para optimizar el consumo
+			#if defined(WIN)
+				_mm_pause(); // Optimiza el bucle de espera en CPUs x86/x64
+			#endif
+        }
+    } else if (diffTime < -100.0) {
+        // Si hay un lag masivo, reseteamos para evitar el efecto "cámara rápida"
+        nextFrameTime = currentTime;
+    }
 
-	// El tiempo en el que DEBERÍA empezar el siguiente frame
-	nextFrameTime += frameDelay;
+    // El siguiente frame se calcula sobre el objetivo ideal
+    nextFrameTime += frameDelay;
 }
