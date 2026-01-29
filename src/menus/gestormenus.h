@@ -234,6 +234,8 @@ private:
     int lastSel;
     float pixelShift;
     static SDL_Surface* imgText;
+	std::string lastImagePath;
+	Image imageMenu;
 
 	int getScreenNumLines();
 	void resetIndexPos();
@@ -286,7 +288,7 @@ public:
 		*l->indice = 0;
 	}
 
-	Image imageMenu;
+	
 
 	void nextPos();
     void prevPos();

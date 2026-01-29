@@ -21,6 +21,7 @@ class Image : public Object{
 		void printImage(SDL_Surface *video_page);
         Dimension relacion(const Dimension &src, const Dimension &dst );
         Dimension centrado(const Dimension &src, const Dimension &dst);
+		bool closeImage();
     private:
         string filepath;
         SDL_Surface* img;

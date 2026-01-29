@@ -5,6 +5,7 @@
 void update_input() {
     SDL_Event event;
 	bool *joyFrontendStates = gameMenu->joystick->g_joy_frontend_state[0];
+	const int modifier = gameMenu->joystick->hotkeys.g_modifierButton;
 
 	while (SDL_PollEvent(&event)) {
 		switch (event.type) {
@@ -13,37 +14,42 @@ void update_input() {
                 break;
 			
             case SDL_JOYBUTTONDOWN:
-            case SDL_JOYBUTTONUP: {
-                const int p = event.jbutton.which;
-                if (p < MAX_PLAYERS) {
-                    const bool pressed = (event.type == SDL_JOYBUTTONDOWN);
-					if (event.jbutton.button >= Joystick::buttonsMapperLibretro[p].nButtons)
-						break;
+			case SDL_JOYBUTTONUP: {
+				const int p = event.jbutton.which;
+				const int btn = event.jbutton.button;
 
-					//const int joyFrontendId = Joystick::buttonsMapperFrontend.buttons[event.jbutton.button];
-					const int joyFrontendId = event.jbutton.button;
-					if (joyFrontendId > -1){
-						joyFrontendStates[joyFrontendId] = pressed;
+				if (p < MAX_PLAYERS) {
+					const bool pressed = (event.type == SDL_JOYBUTTONDOWN);
+					const int nButtons = Joystick::buttonsMapperLibretro[p].nButtons;
+					const int modifier = gameMenu->joystick->hotkeys.g_modifierButton;
+
+					// 1. Validación de límites rápida
+					if (btn < 0 || btn >= nButtons || btn >= MAXJOYBUTTONS) break;
+
+					// 2. Gestión de Hotkeys
+					joyFrontendStates[btn] = pressed;
+					if (joyFrontendStates[modifier] && btn != modifier) {
+						// Si el modificador está pulsado, "secuestramos" el botón para que no llegue al juego
+						break; 
 					}
 
-					 const int8_t joyId = Joystick::buttonsMapperLibretro[p].getButton(event.jbutton.button);
-					// Solo aplicamos el "latch" al botón START, en la xbox360 el boton start no se detecta, 
-					// hasta que se suelta XD
+					// 3. Mapeo y persistencia (Latch)
+					const int8_t joyId = Joystick::buttonsMapperLibretro[p].getButton(btn);
+					if (joyId < 0) break;
+
 					if (joyId == RETRO_DEVICE_ID_JOYPAD_START) {
 						if (pressed) {
 							gameMenu->joystick->g_joy_state[p][joyId] = true;
-							gameMenu->joystick->startHoldFrames[p] = 0; // Reset por si acaso
+							gameMenu->joystick->startHoldFrames[p] = 0;
 						} else {
-							// Al soltar, activamos el contador de persistencia
-							gameMenu->joystick->startHoldFrames[p] = 3; 
+							gameMenu->joystick->startHoldFrames[p] = 3; // Mantiene el pulso 3 frames
 						}
-					} else if (joyId >= 0) {
-						//LOG_DEBUG("Enviando boton %d para el sdlbtn %d", joyId, event.jbutton.button);
+					} else {
 						gameMenu->joystick->g_joy_state[p][joyId] = pressed;
 					}
-                }
-                break;
-            }
+				}
+				break;
+			}
 			
 			case SDL_JOYHATMOTION: {
 				const int player = event.jhat.which;
@@ -113,7 +119,7 @@ void update_input() {
 			case SDL_KEYDOWN: {
 				if (event.key.keysym.sym == SDLK_BACKSPACE){
 					gameMenu->sync->g_sync_last = *gameMenu->current_sync;
-					*gameMenu->current_sync = SYNC_NONE;
+					*gameMenu->current_sync = SYNC_FAST_FORWARD;
 					SDL_PauseAudio(1);
 				}
 				break;

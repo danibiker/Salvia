@@ -243,6 +243,9 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
 *
 */
 void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string rompath){
+	this->lastImagePath = "";
+	imageMenu.closeImage();
+
 	dirutil dir;
 	const std::string statesDir = refConfig->configMain[cfg::libretro_state].valueStr + Constant::getFileSep() +
 		refConfig->configMain[cfg::libretro_core].valueStr;
@@ -778,7 +781,6 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
     SDL_Color lineTextColor = i == this->curPos ? black : white;
 	const std::string line = opcion->titulo;
 	
-	static std::string lastImagePath;
 	std::string rutaSelected;
 	auto option = this->menuActual->opciones.at(i);
 

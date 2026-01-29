@@ -552,7 +552,7 @@ void retro_audio_sample(int16_t left, int16_t right) {
     AudioBuffer& audio = gameMenu->g_audioBuffer;
     const int mode = *gameMenu->current_sync;
 
-    if (mode == SYNC_NONE) return;
+    if (mode == SYNC_FAST_FORWARD) return;
 
     int16_t samples[2] = { left, right };
     audio.Write(samples, 2);
@@ -564,7 +564,7 @@ std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_
 	AudioBuffer& audio = gameMenu->g_audioBuffer;
     const int mode = *gameMenu->current_sync;
 
-	if (mode == SYNC_NONE) return 0;
+	if (mode == SYNC_FAST_FORWARD) return 0;
 	
 	// frames es el número de pares (izq, der), multiplicamos por 2 para el total
 	// Al usar WriteBlocking, retro_run() no terminará hasta que haya
@@ -651,7 +651,7 @@ void init_sdl_audio(double sample_rate) {
 *
 */
 std::string initPathAndLog(char** argv){
-	logger = new Logger("salviajournal.log");
+	logger = new Logger(LOG_PATH);
 
 	#if defined(WIN) || defined(DOS) || defined(_XBOX)
 		Constant::tempFileSep[0] = '\\';
@@ -925,6 +925,7 @@ void processFrontendEvents(){
 			break;
 
 		default:
+			LOG_DEBUG("Sending Hotkey %d\n", hotkey);
 			// Cualquier otro hotkey (ej. volumen, reset, menú) se delega al frontend
 			gameMenu->processFrontendEvents(hotkey);
 			break;
@@ -938,6 +939,9 @@ int main(int argc, char *argv[]) {
 	initPathAndLog(argv);
 	CfgLoader cfgLoader;
 	if (cfgLoader.isDebug()){
+		#ifndef DEBUG_LOG
+		#define DEBUG_LOG
+		#endif
         logger->errorLevel = L_DEBUG;
     }
 
@@ -990,8 +994,8 @@ int main(int argc, char *argv[]) {
 	//retro_set_controller_port_device(puerto, id_guardado);
 	//retro_set_controller_port_device(0, 1);
 
-	double nextFrameTime = (double)SDL_GetTicks();
-    while (gameMenu->running) {
+	double nextFrameTime = SDL_GetTicks();
+	while (gameMenu->running) {
 		// Procesamos eventos como pulsaciones de hotkeys
 		processFrontendEvents();
 
@@ -1008,18 +1012,18 @@ int main(int argc, char *argv[]) {
 		}
 
 		// DIBUJO DE INTERFAZ (OSD, FPS, Mensajes)
-        gameMenu->processFrontendEventsAfter();
+		gameMenu->processFrontendEventsAfter();
 
 		// Actualizamos la pantalla
 		SDL_Flip(gameMenu->screen);
+		//SDL_UpdateRect(gameMenu->screen);
 
 		// Limitamos los frames si tenemos que sincronizar con el video
 		if (*gameMenu->current_sync == SYNC_TO_VIDEO){
 			gameMenu->sync->limit_fps(nextFrameTime);
-			// El tiempo en el que DEBERÍA empezar el siguiente frame
-			nextFrameTime += gameMenu->sync->frameDelay;
+			
 		}
-    }
+	}
 	closeResources();
     return 0;
 }

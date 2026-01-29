@@ -39,28 +39,33 @@ int Hotkeys::getTriggerForAction(HOTKEYS_LIST hk){
 }
 
 HOTKEYS_LIST Hotkeys::ProcesarHotkeys(bool keypresses[MAXJOYBUTTONS + 1]) {
-    bool* state = keypresses;
-	static Uint32 lastHotKey = 0;
-	const Uint32 now = SDL_GetTicks();
+    const Uint32 now = SDL_GetTicks();
+    static Uint32 lastHotKey = 0;
+    HOTKEYS_LIST result = HK_MAX;
 
-	if (now - lastHotKey > 300){
-		// 1. Verificamos si el modificador (BACK) está pulsado
-		if (state[g_modifierButton]) {
-        
-			// 2. Recorremos nuestras hotkeys configuradas
-			for (size_t i = 0; i < g_hotkeys.size(); ++i) {
-				int btn = g_hotkeys[i].triggerButton;
+    if (keypresses[g_modifierButton]) {
+        for (size_t i = 0; i < g_hotkeys.size(); ++i) {
+            int btn = g_hotkeys[i].triggerButton;
             
-				// 3. Detectar el flanco de subida (pulsación inicial)
-				// Necesitas un array 'prev_state' para no disparar 60 veces por segundo
-				if (state[btn] && !prev_state[btn]) {
-					lastHotKey = now;
-					return g_hotkeys[i].action;
-				}
-			}
-		}
-		// Actualizar estado previo para el próximo frame
-		memcpy(prev_state, state, sizeof(bool) * (MAXJOYBUTTONS + 1));
-	}
-	return HK_MAX;
+            // Detectamos pulsación inicial y respetamos el cooldown
+            if (keypresses[btn] && !prev_state[btn]) {
+                if (now - lastHotKey > 300) {
+                    lastHotKey = now;
+                    result = g_hotkeys[i].action;
+                    // RESET: Limpiamos el array para que nadie más procese estos botones
+                    memset(keypresses, 0, sizeof(bool) * (MAXJOYBUTTONS + 1));
+					//Pero no soltamos el boton de seleccion de hotkeys
+                    keypresses[g_modifierButton] = true;
+                    // Salimos del bucle para no procesar múltiples hotkeys a la vez
+                    break; 
+                }
+            }
+        }
+    }
+
+    // Actualizamos el estado previo con lo que quede en keypresses 
+    // (Si hubo reset, prev_state guardará todo en 'false')
+    memcpy(prev_state, keypresses, sizeof(bool) * (MAXJOYBUTTONS + 1));
+    
+    return result;
 }

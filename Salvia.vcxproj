@@ -1731,6 +1731,8 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_vbanext|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\crc32.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1773,6 +1775,8 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_vbanext|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\gzclose.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1784,6 +1788,8 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_vbanext|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\gzlib.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1795,6 +1801,8 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_vbanext|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\gzread.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1806,6 +1814,8 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_vbanext|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\gzwrite.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1817,6 +1827,8 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_vbanext|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\infback.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1828,6 +1840,8 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_vbanext|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\inffast.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1932,6 +1946,8 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_vbanext|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\uncompr.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1943,6 +1959,8 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_vbanext|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\zutil.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>

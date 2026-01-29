@@ -1,5 +1,6 @@
-#include <SDL_image.h>
 #include <uiobjects/image.h>
+
+#include <SDL_image.h>
 #include <io/dirutil.h>
 
 Image::Image(){
@@ -24,6 +25,20 @@ Image::Image(int x, int y, int w, int h){
     this->setW(w);
     this->setH(h);
     init();
+}
+
+bool Image::closeImage(){
+   if (img != NULL){
+		SDL_FreeSurface(img);
+        img = NULL;
+    }
+	
+	if (cachedSurface != NULL){
+		SDL_FreeSurface(cachedSurface);
+        cachedSurface = NULL;
+    }
+	filepath = "";
+	return true;
 }
 
 void Image::init(){

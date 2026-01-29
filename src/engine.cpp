@@ -5,7 +5,8 @@
 	#include <xtl.h>
 #elif defined(WIN)
 	#include <windows.h>
-	#include <mmsystem.h> // Necesario para timeBeginPeriod
+	//#include <mmsystem.h> // Necesario para timeBeginPeriod
+	//#pragma comment(lib, "winmm.lib") // Necesario para timeBeginPeriod
 #endif
 
 Engine::Engine(){

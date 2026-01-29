@@ -701,6 +701,7 @@ tEvento Joystick::WaitForKey(SDL_Surface* screen){
 
 		//printf("now %d vs %d\n", now, lastKeyDown + KEYDOWNSPEED + retrasoTecla);
         if (now > lastKeyDown + KEYDOWNSPEED + retrasoTecla){
+			LOG_DEBUG("Repeating key %d\n", lastEvento.joy);
             lastKeyDown = SDL_GetTicks();
             evento = lastEvento;
             retrasoTecla = 0;

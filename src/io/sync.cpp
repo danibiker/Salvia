@@ -99,4 +99,7 @@ void Sync::limit_fps(double& nextFrameTime){
 		// y evitar que el emulador se acelere de golpe.
 		nextFrameTime = (double)SDL_GetTicks();
 	}
+
+	// El tiempo en el que DEBERÍA empezar el siguiente frame
+	nextFrameTime += frameDelay;
 }

@@ -18,11 +18,12 @@ static const int video_bpp = 16;
 	static int video_width = 1280;
 	static int video_height = 720;
 	static const char *LOG_PATH = "game:\\salvia.log";
-#elif  defined(WIN)
-	static Uint32 video_flags = SDL_SWSURFACE; //SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN;
+#elif defined(WIN)
+	static Uint32 video_flags = SDL_SWSURFACE; //SDL_SWSURFACE; //SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN;
 	static int video_width = 1280;
 	static int video_height = 720;
 	static const char *LOG_PATH = "salvia.log";
+	#include <windows.h>
 #endif
 
 static const SDL_Color white = { 255,255,255 };
@@ -183,7 +184,8 @@ typedef enum {
 enum {
 	SYNC_TO_AUDIO = 0,
 	SYNC_TO_VIDEO,
-	SYNC_NONE
+	SYNC_NONE,
+	SYNC_FAST_FORWARD
 };
 
 

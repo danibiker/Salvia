@@ -779,6 +779,7 @@ void GameMenu::updateFps(){
 		const bool shouldUpdateSurface = currentTick - lastFpsUpdate > 500 || fpsSurface == NULL;
 
         // 1. Calculamos la media (esto es rápido, solo matemáticas)
+		//this->sync->update_fps_counter(shouldUpdateSurface);
 		this->sync->update_fps_counter(shouldUpdateSurface);
 
         // 2. ¿Ha pasado tiempo suficiente para actualizar el NÚMERO? (ej. cada 500ms)
@@ -861,6 +862,9 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 					modeOk = true;
 				}
 			} while(!modeOk && *current_scaler_mode != startingMode);
+
+			LOG_INFO("Escaler %d - %s\n", *current_scaler_mode, videoScaleStrings[*current_scaler_mode]);
+
 			selectScalerMode(*current_scaler_mode);
 			SDL_FillRect(this->video_page, NULL, this->uBkgColor);
 			showSystemMessage(videoScaleStrings[*current_scaler_mode], 3000);
@@ -897,7 +901,7 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 			}
 			break;
 	}
-	joystick->resetButtonsCore();
+	//joystick->resetButtonsCore();
 }
 
 /**
