@@ -19,7 +19,7 @@ static const char *TipoKeyStr[] = {"Btn: ", "Hat: ", "Axis: "};
 enum ACTION_ASK{ASK_CARGAR, ASK_GUARDAR, ASK_ELIMINAR, MAX_ASK};
 static const char *ACTION_ASK_STR[] = {"Cargar", "Guardar", "Eliminar"};
 
-enum CONFIG_STATUS{NORMAL,POLLING_INPUTS,ASK_SAVESTATES,MAX_CONFIG_STATUS};
+enum CONFIG_STATUS{NORMAL,POLLING_INPUTS,ASK_SAVESTATES, EXIT_CONFIG, MAX_CONFIG_STATUS};
 
 struct t_option_action{
 	int option;

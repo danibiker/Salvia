@@ -325,15 +325,18 @@ static bool retro_environment(unsigned cmd, void *data) {
 			auto it = params.find(var->key);
 
 			if (it != params.end()) {
-				// Obtenemos el puntero crudo del unique_ptr
-				// 'it->second' es el unique_ptr<cfg::t_emu_props>
 				cfg::t_emu_props* param = it->second.get();
-				var->value = param->values.at(param->selected).c_str();
-				LOG_INFO("Asignando %s a %s", var->key, var->value);
-				return true; // Retornar true indica que encontramos la variable
-			} else {
-				LOG_DEBUG("Preguntando por: %s sin valor", var->key);
-				var->value = NULL;
+    
+				// VALIDACIÓN CRUCIAL:
+				if (param && !param->values.empty() && param->selected < param->values.size()) {
+					var->value = param->values.at(param->selected).c_str();
+					LOG_INFO("Asignando %s a %s", var->key, var->value);
+					return true;
+				} else {
+					LOG_ERROR("Error: Indice %d fuera de rango para %s", (int)param->selected, var->key);
+					var->value = NULL;
+					return false;
+				}
 			}
 			return false;
 		}

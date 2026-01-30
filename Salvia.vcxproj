@@ -516,7 +516,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>true</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>DEBUG;_XBOX;EMU_LIB_NAME="$(EMU_LIB_NAME)";LIBRETRO</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;DEBUG_LOG;_XBOX;EMU_LIB_NAME="$(EMU_LIB_NAME)";LIBRETRO</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(SolutionDir)libs\libSDLx360\SDL\include;libs\SDL_ttf360;$(ProjectDir)\src;$(ProjectDir)libs\SDL_image-1.2.12;$(ProjectDir)\src\unzip;$(ProjectDir)\src\unzip\minizip-1.2.5</AdditionalIncludeDirectories>
       <WholeProgramOptimization>false</WholeProgramOptimization>
@@ -1733,6 +1733,12 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_vbanext|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\crc32.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1777,6 +1783,12 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_vbanext|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\gzclose.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1790,6 +1802,12 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_vbanext|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\gzlib.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1803,6 +1821,12 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_vbanext|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\gzread.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1816,6 +1840,12 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_vbanext|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\gzwrite.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1829,6 +1859,12 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_vbanext|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\infback.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1842,6 +1878,12 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_vbanext|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\inffast.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1948,6 +1990,12 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_vbanext|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\uncompr.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
@@ -1961,6 +2009,12 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_vbanext|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\zutil.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>

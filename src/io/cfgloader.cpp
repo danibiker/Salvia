@@ -26,12 +26,13 @@ CfgLoader::~CfgLoader(){
 }
 
 void CfgLoader::initMainConfig(){
+	dirutil dir;
 	//Cargamos valores por defecto
 	configMain[cfg::emulators] = cfg::t_cfg_props("emulators", "");
 	configMain[cfg::debug] = cfg::t_cfg_props("debug", false);
 	configMain[cfg::resolution_width] = cfg::t_cfg_props("resolution_width", 1280);
 	configMain[cfg::resolution_height] = cfg::t_cfg_props("resolution_height", 720);
-	configMain[cfg::path_prefix] = cfg::t_cfg_props("path_prefix", ".\\");
+	configMain[cfg::path_prefix] = cfg::t_cfg_props("path_prefix", dir.getDirActual() + Constant::getFileSep());
 	configMain[cfg::alsaReset] = cfg::t_cfg_props("alsaReset", false);
 	configMain[cfg::background_music] = cfg::t_cfg_props("background_music", false);
 	configMain[cfg::mp3_file] = cfg::t_cfg_props("mp3_file", "");
@@ -39,9 +40,9 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::scaleMode] = cfg::t_cfg_props("scaleMode", (int)FULLSCREEN);
 	configMain[cfg::syncMode] = cfg::t_cfg_props("syncMode", (int)OPT_SYNC_VIDEO);
 	configMain[cfg::soundMode] = cfg::t_cfg_props("soundMode", true);
-	configMain[cfg::libretrosystem] = cfg::t_cfg_props("libretrosystem", ".\\system");
-	configMain[cfg::libretro_save] = cfg::t_cfg_props("libretro_save", ".\\data\\saves");
-	configMain[cfg::libretro_state] = cfg::t_cfg_props("libretro_state", ".\\data\\states");
+	configMain[cfg::libretrosystem] = cfg::t_cfg_props("libretrosystem", dir.getDirActual() + Constant::getFileSep() + "system");
+	configMain[cfg::libretro_save] = cfg::t_cfg_props("libretro_save", dir.getDirActual() + Constant::getFileSep() + "data" + Constant::getFileSep() + "saves");
+	configMain[cfg::libretro_state] = cfg::t_cfg_props("libretro_state", dir.getDirActual() + Constant::getFileSep() + "data" + Constant::getFileSep() + "states");
 	configMain[cfg::libretro_lang] = cfg::t_cfg_props("libretro_lang", (int)RETRO_LANGUAGE_SPANISH);
 	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
 	configMain[cfg::forceFS] = cfg::t_cfg_props("forceFS", true);

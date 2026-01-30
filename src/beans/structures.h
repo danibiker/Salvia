@@ -53,6 +53,7 @@ struct tEvento{
     int keyMod;
     int unicode;
     int joy;
+	int sdljoybtn;
     int mouse;
     int mouse_x;
     int mouse_y;

@@ -59,6 +59,11 @@ std::string guardarMainConfig(CfgLoader *refConfig){
 	return refConfig->saveMainParams();
 }
 
+std::string volverEmulacion(CONFIG_STATUS *st){
+	*st = EXIT_CONFIG;
+	return std::string("");
+}
+
 void GestorMenus::setLayout(int layout, int screenw, int screenh){
 	this->marginY = (int) (screenh / SCREENHDIV * 1.5);
     clearSelectedText();
@@ -154,6 +159,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuRaiz->opciones.push_back(new OpcionSubMenu("Opciones del core", menuCoreOptions));
 	menuRaiz->opciones.push_back(new OpcionSubMenu("Partidas guardadas", menuSavestates));
 	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>("Guardar opciones", guardarMainConfig, refConfig));
+	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>("Volver", volverEmulacion, &status));
 
     // Establecer estado inicial
     menuActual = menuRaiz;
@@ -272,8 +278,11 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 		if (pos == std::string::npos) continue;
 
 		// Extraer índice de la ranura
-		std::string posSlot = files[i]->filename.substr(pos + keyToFind.length());
-		int iPosSlot = Constant::strToTipo<int>(posSlot);
+		int iPosSlot = 0;
+		if (pos + keyToFind.length() < files[i]->filename.length()){
+			std::string posSlot = files[i]->filename.substr(pos + keyToFind.length());
+			iPosSlot = Constant::strToTipo<int>(posSlot);
+		}
 
 		if (iPosSlot >= 0 && iPosSlot < (int)menuSavestates->opciones.size()) {
 			// Usar un puntero temporal para legibilidad y evitar múltiples casteos

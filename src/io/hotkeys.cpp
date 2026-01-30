@@ -11,7 +11,7 @@ Hotkeys::Hotkeys(){
         
         switch(i){
             case HK_VIEW_MENU:  configMenu.triggerButton = JOY_BUTTON_Y; break;
-            case HK_EXIT_GAME:  configMenu.triggerButton = JOY_BUTTON_START; break;
+            case HK_EXIT_GAME:  configMenu.triggerButton = JOY_BUTTON_R3; break;
             case HK_SAVESTATE:  configMenu.triggerButton = JOY_BUTTON_L; break;
             case HK_LOADSTATE:  configMenu.triggerButton = JOY_BUTTON_R; break;
             case HK_SCALE:      configMenu.triggerButton = JOY_BUTTON_X; break;
@@ -21,6 +21,7 @@ Hotkeys::Hotkeys(){
             case HK_SLOT_DOWN:  configMenu.triggerButton = JOY_BUTTON_DOWN; break;
             default:            configMenu.triggerButton = MAXJOYBUTTONS; break; 
         }
+
 		if (configMenu.triggerButton != MAXJOYBUTTONS){
 			g_hotkeys.push_back(configMenu); // El vector guarda una copia
 		}

@@ -212,6 +212,9 @@ bool processActions(GameMenu &gameMenu, t_option_action &optionAction){
 					break;
 			}
 		}
+	} else if(gameMenu.configMenus->getStatus() == EXIT_CONFIG) {
+		gameMenu.configMenus->resetStatus();
+		gameMenu.setEmuStatus(EMU_STARTED);
 	}
 
 	gameMenu.joystick->resetAllValues();
@@ -282,7 +285,7 @@ void processEvents(GameMenu &gameMenu, ListMenu &listMenu, tEvento &askEvento){
 
 	//To detect hotkeys
 	if (askEvento.joy > -1){
-		joyFrontendStates[askEvento.joy] = askEvento.keyjoydown;
+		joyFrontendStates[askEvento.sdljoybtn] = askEvento.keyjoydown;
 		const int keyMenu = gameMenu.joystick->hotkeys.getTriggerForAction(HK_VIEW_MENU);
 		if (keyMenu > -1){
 			if (joyFrontendStates[keyMenu] && joyFrontendStates[gameMenu.joystick->hotkeys.g_modifierButton] && gameMenu.getLastStatus() == EMU_STARTED){

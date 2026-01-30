@@ -546,6 +546,7 @@ tEvento Joystick::WaitForKey(SDL_Surface* screen){
             case SDL_JOYBUTTONDOWN: // JOYSTICK/GP2X buttons
                 if (event.jbutton.button >= 0 && event.jbutton.button < MAXJOYBUTTONS){
 					evento.joy = buttonsMapperFrontend.buttons[event.jbutton.button];
+					evento.sdljoybtn = event.jbutton.button;
                     evento.isJoy = true;
                     evento.keyjoydown = true;
                     lastEvento = evento;    //Guardamos el ultimo evento que hemos lanzado desde el teclado
@@ -556,6 +557,7 @@ tEvento Joystick::WaitForKey(SDL_Surface* screen){
             case SDL_JOYBUTTONUP:
                 lastEvento = evento;
                 evento.joy = buttonsMapperFrontend.buttons[event.jbutton.button];
+				evento.sdljoybtn = event.jbutton.button;
 				evento.isJoy = true;
 				evento.keyjoydown = false;
 				longKeyDown = 0;

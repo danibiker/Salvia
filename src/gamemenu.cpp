@@ -818,12 +818,16 @@ void GameMenu::processFrontendEventsAfter(){
 	processMessages();
 }
 
+/**
+* Procesamos las hotkeys mientras el juego esta corriendo
+*/
 void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
-	static int actualFilter = 0;
-	//this->joystick->lastSelectPress = SDL_GetTicks();
+	if (getEmuStatus() != EMU_STARTED) return;
 
+	static int actualFilter = 0;
 	int modeOk = true;
 	int startingMode = *this->current_scaler_mode;
+
 	struct retro_system_av_info av_info;
 	retro_get_system_av_info(&av_info);
 	const unsigned ancho_base = av_info.geometry.base_width;
@@ -887,8 +891,6 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 			setEmuStatus(EMU_MENU);
 			break;
 		case HK_VIEW_MENU:
-			if (getEmuStatus() == EMU_MENU) break;
-
 			setEmuStatus(getEmuStatus() == EMU_MENU_OVERLAY ? getLastStatus() : EMU_MENU_OVERLAY);
 			if (bg_screenshot){
 				SDL_FreeSurface(bg_screenshot);
