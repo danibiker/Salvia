@@ -13,7 +13,6 @@
 #include <zlib.h>
 
 #include "gameMenu.h"
-#include "io/joymapper.h"
 #include "io/cfgloader.h"
 #include "io/dirutil.h"
 #include "uiobjects/listmenu.h"
@@ -486,31 +485,43 @@ void retro_input_poll(void) {
 }
 
 int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsigned id) {
-
 	if (port >= MAX_PLAYERS) 
         return 0;
+	
+	t_joy_state *inputs = &gameMenu->joystick->inputs;
 
 	if (device == RETRO_DEVICE_JOYPAD) {
+		const int sdlModifier = inputs->mapperHotkeys.getSdlBtn(port, HK_MODIFIER);
+		const bool modifierPressed = inputs->getSdlBtn(port, sdlModifier);
+
 		// 1. Gestión del Latch de Start
+		#ifdef _XBOX
 		if (gameMenu->joystick->startHoldFrames[port] > 0) {
 			gameMenu->joystick->startHoldFrames[port]--;
-			gameMenu->joystick->g_joy_state[port][RETRO_DEVICE_ID_JOYPAD_START] = true; // Forzamos true en el array
+			// Forzamos true en el array
+			int sdlBtn = inputs->mapperCore.getSdlBtn(port, RETRO_DEVICE_ID_JOYPAD_START);
+			if (sdlBtn > -1 && sdlBtn < MAX_BUTTONS){
+				inputs->btn_state[port][sdlBtn] = true;
+			}
 
-			if (gameMenu->joystick->startHoldFrames[port] == 0) {
-				gameMenu->joystick->g_joy_state[port][RETRO_DEVICE_ID_JOYPAD_START] = false;
+			if (sdlBtn > -1 && gameMenu->joystick->startHoldFrames[port] == 0) {
+				inputs->btn_state[port][sdlBtn] = false;
 			}
 		}
+		#endif
 
 		// 2. Respuesta al Core
 		if (id == RETRO_DEVICE_ID_JOYPAD_MASK) {
 			int16_t mask = 0;
-			const bool* portState = gameMenu->joystick->g_joy_state[port];
-			const bool* axisState = gameMenu->joystick->g_axis_state[port];
-
 			for (int i = 0; i < maxJoyTargets; i++) {
-				if (portState[i] || axisState[i]) mask |= (1 << i);
-			}
+				//Evitamos que el core vea las pulsaciones si el modificador de hotkeys esta pulsado
+				if (modifierPressed && inputs->mapperCore.getSdlBtn(port, i) != sdlModifier)
+					continue;
 
+				if (inputs->getCoreAny(port, i)) {
+					mask |= (int16_t)(1 << i);
+				}
+			}
 			/*if (port == 0){
 				char bitStr[17]; // 16 bits + fin de cadena
 				bitStr[16] = '\0';
@@ -519,15 +530,16 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 				}
 				LOG_DEBUG("Joypad Mask: %s (Value: %d)", bitStr, mask);
 			}*/
-			
 			return mask;
 		} else {
 			if (id < maxJoyTargets) {
-				return gameMenu->joystick->g_joy_state[port][id] || gameMenu->joystick->g_axis_state[port][id] ? 1 : 0;
+				return  !(modifierPressed && inputs->mapperCore.getSdlBtn(port, id) != sdlModifier) ||
+						inputs->getCoreAny(port, id) ? 1 : 0;
 			}
 			return 0;
 		}
-	} else if (device == RETRO_DEVICE_ANALOG) {
+	} 
+	/*else if (device == RETRO_DEVICE_ANALOG) {
 		int sdl_axis = -1;
         if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT) {
             sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 0 : 1;
@@ -542,8 +554,7 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
             if (abs(val) < DEADZONE) return 0;
             return val;
 		}
-	}
-    
+	}*/
 	return 0;
 }
 
@@ -563,25 +574,24 @@ void retro_audio_sample(int16_t left, int16_t right) {
 
 // Callback para ráfagas de muestras (el que usan casi todos los cores)
 std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_t frames) {
-	
-	AudioBuffer& audio = gameMenu->g_audioBuffer;
+    AudioBuffer& audio = gameMenu->g_audioBuffer;
     const int mode = *gameMenu->current_sync;
+    std::size_t total_samples = frames * 2;
 
-	switch(mode){
-		SYNC_TO_AUDIO: {
-			// frames es el número de pares (izq, der), multiplicamos por 2 para el total
-			// Al usar WriteBlocking, retro_run() no terminará hasta que haya
-			// sitio en el buffer, sincronizando así la ejecución al audio real.
-			audio.WriteBlocking(data, frames * 2);
-			break;
-		}
-		SYNC_FAST_FORWARD:
-			return 0;
-		default:{
-			audio.Write(data, frames * 2);
-			break;
-		}
-	}
+    switch(mode) {
+        case SYNC_TO_AUDIO: 
+            audio.WriteBlocking(data, total_samples);
+            break;
+        case SYNC_FAST_FORWARD:
+            // En avance rápido no bloqueamos ni escribimos para no saturar
+            return frames;
+        default:
+            // Para otros modos, si no hay sitio, descartamos para no acumular lag
+            if (audio.get_free_space() >= total_samples) {
+                audio.Write(data, total_samples);
+            }
+            break;
+    }
     return frames;
 }
 
@@ -643,7 +653,7 @@ void init_sdl_audio(double sample_rate) {
     // 1024 = ~23ms (Riesgo de cortes en 360)
     // 2048 = ~46ms (Recomendado para estabilidad en emulación)
     // 4096 = ~92ms (Seguro, pero con lag perceptible)
-	wanted.samples = AudioBuffer::AUDIO_BUFFER_SIZE / 8; // Tamaño del bloque (latencia)
+	wanted.samples = 1024; // Tamaño del bloque (latencia)
     wanted.callback = sdl_audio_callback;
 
     if (SDL_OpenAudio(&wanted, NULL) < 0) {
@@ -838,8 +848,6 @@ bool loadGameAtStart(int argc, char *argv[]){
 
 	if (ret){
 		gameMenu->setEmuStatus(EMU_STARTED);
-		gameMenu->joystick->resetAllValues();
-		//gameMenu->joystick->lastSelectPress = 0;
 	}
 	
 	return ret;
@@ -989,7 +997,7 @@ int main(int argc, char *argv[]) {
 	if (!loadGameAtStart(argc, argv)){
 		//Workaround para mostrar una primera imagen del menu con las imagenes cargadas
 		listMenu.keyUp = true;
-		updateMenuScreen(tileMap, *gameMenu, listMenu, false);
+		updateMenuScreen(tileMap, *gameMenu, listMenu);
 		SDL_Flip(gameMenu->screen);
 		listMenu.keyUp = false;
 	}
@@ -1012,7 +1020,7 @@ int main(int argc, char *argv[]) {
 				updateGame();
 				break;
 			case EMU_MENU:
-				updateMenuScreen(tileMap, *gameMenu, listMenu, false);
+				updateMenuScreen(tileMap, *gameMenu, listMenu);
 				break;
 			case EMU_MENU_OVERLAY:
 				updateMenuOverlay(*gameMenu, listMenu);
@@ -1024,7 +1032,6 @@ int main(int argc, char *argv[]) {
 
 		// Actualizamos la pantalla
 		SDL_Flip(gameMenu->screen);
-		//SDL_UpdateRect(gameMenu->screen);
 
 		// Limitamos los frames si tenemos que sincronizar con el video
 		if (*gameMenu->current_sync == SYNC_TO_VIDEO){

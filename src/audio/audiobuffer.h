@@ -8,8 +8,8 @@ class AudioBuffer {
 private:
     std::vector<int16_t> buffer;
     // volatile evita que el compilador de VS2010 optimice estas variables en registros
-    volatile std::size_t head; 
-    volatile std::size_t tail; 
+    volatile long head; 
+    volatile long tail; 
     std::size_t capacity;
 
 public:

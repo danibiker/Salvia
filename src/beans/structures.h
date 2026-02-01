@@ -41,39 +41,6 @@ class Executable{
         bool filenameinparms;
 };
 
-struct t_region{
-    int selX;
-    int selY;
-    int selW;
-    int selH;
-};
-
-struct tEvento{
-    int key;
-    int keyMod;
-    int unicode;
-    int joy;
-	int sdljoybtn;
-    int mouse;
-    int mouse_x;
-    int mouse_y;
-    int mouse_state;
-    t_region region;
-    bool isMousedblClick;
-    bool resize;
-    bool isJoy;
-    bool isKey;
-    bool isMouse;
-    bool isMouseMove;
-    bool isRegionSelected;
-    bool quit;
-    bool keyjoydown;
-    int width;
-    int height;
-	//Uint32 lastPressTime[MAXJOYBUTTONS];
-	bool longKeyPress[MAXJOYBUTTONS];
-};
-
 struct GameTicks{
     uint16_t ticks;
 };
@@ -199,113 +166,322 @@ struct t_retro_input{
 	}
 };
 
-#define MAX_BUTTONS 20
-#define MAX_AXIS 20
-#define MAX_HATS 10
+#define MAX_BUTTONS MAXJOYBUTTONS
+#define MAX_AXIS MAXJOYBUTTONS
+#define MAX_HATS MAXJOYBUTTONS
+#define MAX_ANALOG_AXIS 16
 
-struct t_joy_retro_inputs {
-	//Cada posicion de los siguientes array corresponde a un boton del joystick
-	int8_t buttons[MAX_BUTTONS];
-    int8_t axis[MAX_AXIS];
-    int8_t hats[MAX_HATS];
-    
-    std::string joyName;
-    uint8_t nButtons;
-    uint8_t nAxis;
-    uint8_t nHats;
-    bool axisAsPad;
 
-	t_joy_retro_inputs(){
-		nButtons = MAX_BUTTONS;
-		nAxis = MAX_AXIS;
-		nHats = MAX_HATS;
-		axisAsPad = false;
-		std::fill(buttons, buttons + MAX_BUTTONS, -1);
-		std::fill(axis, axis + MAX_AXIS, -1);
-		std::fill(hats, hats + MAX_HATS, -1);
+struct t_joy_mapper{
+	int sdlToHat[MAX_PLAYERS][MAX_HATS];
+	int sdlToAxis[MAX_PLAYERS][MAX_AXIS];
+	int sdlToBtn[MAX_PLAYERS][MAX_BUTTONS];
+
+	int hatToSdl[MAX_PLAYERS][MAX_HATS];
+	int axisToSdl[MAX_PLAYERS][MAX_AXIS];
+	int btnToSdl[MAX_PLAYERS][MAX_BUTTONS];
+
+	t_joy_mapper(){
+		clear(sdlToHat, -1);
+		clear(sdlToAxis, -1);
+		clear(sdlToBtn, -1);
+
+		clear(hatToSdl, -1);
+		clear(axisToSdl, -1);
+		clear(btnToSdl, -1);
 	}
 
-	template <size_t N>
-	uint8_t findButtonIdx(int8_t btn, int8_t (&arr)[N]) {
-		for (uint8_t i = 0; i < N; i++) {
-			if (arr[i] == btn) return i;
+	template<size_t N, size_t M>
+	void clear(int (&arr)[N][M], int value){
+		for (int p=0; p < N; p++){
+			for (int i=0; i < M; i++){
+				arr[p][i] = value;
+			}
+		}
+	}
+
+	bool isSameConfig(int p1, int p2) {
+		// Comparamos los arrays de hats, ejes y botones para ambos jugadores
+		bool hats_iguales = memcmp(sdlToHat[p1], sdlToHat[p2], sizeof(int) * MAX_HATS) == 0;
+		bool axis_iguales = memcmp(sdlToAxis[p1], sdlToAxis[p2], sizeof(int) * MAX_AXIS) == 0;
+		bool btns_iguales = memcmp(sdlToBtn[p1], sdlToBtn[p2], sizeof(int) * MAX_BUTTONS) == 0;
+
+		return hats_iguales && axis_iguales && btns_iguales;
+	}
+
+	void setBtnFromSdl(int player, int sdlBtn, int btn){
+		assignValue(sdlToBtn, btnToSdl, player, sdlBtn, btn);
+	}
+
+	void setHatFromSdl(int player, int sdlBtn, int btn){
+		assignValue(sdlToHat, hatToSdl, player, sdlBtn, btn);
+	}
+
+	void setAxisFromSdl(int player, int sdlBtn, int btn){
+		assignValue(sdlToAxis, axisToSdl, player, sdlBtn, btn);
+	}
+
+	int getSdlHat(unsigned int player, unsigned int btn){
+		if (player < MAX_PLAYERS && btn < MAX_HATS){
+			return hatToSdl[player][btn];
 		}
 		return -1;
 	}
 
-	bool equals(const t_joy_retro_inputs& p) const {
-        if (nButtons != p.nButtons || nAxis != p.nAxis || nHats != p.nHats || axisAsPad != p.axisAsPad) return false;
-        if (nButtons > 0 && buttons && p.buttons)
-            for (int i = 0; i < nButtons; i++) if (buttons[i] != p.buttons[i]) return false;
-        if (nAxis > 0 && axis && p.axis)
-            for (int i = 0; i < nAxis; i++) if (axis[i] != p.axis[i]) return false;
-        if (nHats > 0 && hats && p.hats)
-            for (int i = 0; i < nHats; i++) if (hats[i] != p.hats[i]) return false;
-        return true;
+	int getSdlBtn(unsigned int player, unsigned int btn){
+		if (player < MAX_PLAYERS && btn < MAX_BUTTONS){
+			return btnToSdl[player][btn];
+		}
+		return -1;
+	}
+
+	int getSdlAxis(unsigned int player, unsigned int btn){
+		if (player < MAX_PLAYERS && btn < MAX_AXIS){
+			return axisToSdl[player][btn];
+		}
+		return -1;
+	}
+
+	// Cambiamos M por M1 y M2 para permitir tamaños distintos
+	template<size_t N, size_t M1, size_t M2>
+	void assignValue(int (&arrSdl)[N][M1], int (&arrBtn)[N][M2], int player, int sdlIdx, int coreIdx) {
+		if (player < 0 || player >= (int)N) return;
+
+		// 1. Limpiamos donde estuviera asignado el ID del core antes
+		clearPrevious(arrSdl[player], coreIdx);
+    
+		// 2. Asignamos en la tabla SDL -> Core
+		if (sdlIdx >= 0 && sdlIdx < (int)M1) {
+			arrSdl[player][sdlIdx] = coreIdx;
+		}
+
+		// 3. Limpiamos donde estuviera asignado el ID de SDL antes
+		clearPrevious(arrBtn[player], sdlIdx);
+    
+		// 4. Asignamos en la tabla Core -> SDL
+		if (coreIdx >= 0 && coreIdx < (int)M2) {
+			arrBtn[player][coreIdx] = sdlIdx;
+		}
+	}
+
+    // Usamos una plantilla para detectar el tamaño de la fila automáticamente
+    template<size_t Size>
+    void clearPrevious(int (&arr)[Size], int valueToClear) {
+        // En VS2010, sizeof(arr) / sizeof(arr[0]) aquí SÍ funciona 
+        // porque 'arr' es una referencia al array con su tamaño real.
+        for (size_t i = 0; i < Size; i++) {
+            if (arr[i] == valueToClear) {
+                arr[i] = -1;
+            }
+        }
+    }
+};
+
+struct t_repeat_handler {
+    Uint32 last_tick;
+    bool repeat_mode;
+
+    t_repeat_handler() : last_tick(0), repeat_mode(false) {}
+
+    bool process(bool isPressed) {
+        if (!isPressed) {
+            last_tick = 0;
+            repeat_mode = false;
+            return false;
+        }
+
+        Uint32 now = SDL_GetTicks();
+        if (last_tick == 0) { // Primera pulsación
+            last_tick = now;
+            return true;
+        }
+
+        Uint32 elapsed = now - last_tick;
+        Uint32 delay = repeat_mode ? 100 : 500; // 100ms ráfaga, 500ms pausa inicial
+
+        if (elapsed > delay) {
+            last_tick = now;
+            repeat_mode = true;
+            return true;
+        }
+        return false;
+    }
+};
+
+struct t_joy_state {
+	//This two arrays are used mainly to know the state of the buttons while the core is running
+	//They will be sent to the core
+	bool btn_state[MAX_PLAYERS][MAX_BUTTONS];
+	// Sticks analógicos como botones digitales
+	bool axis_state[MAX_PLAYERS][MAX_AXIS];    
+	// hats status
+	bool hats_state[MAX_PLAYERS][MAX_HATS];    
+	//To store the positions of the analog axis, but is not used by any core actually
+	int16_t g_analog_state[MAX_PLAYERS][MAX_ANALOG_AXIS];
+
+	// Manejadores de repetición
+    t_repeat_handler btn_repeat[MAX_PLAYERS][MAX_BUTTONS];
+    t_repeat_handler hat_repeat[MAX_PLAYERS][MAX_HATS];
+	t_repeat_handler axis_repeat[MAX_PLAYERS][MAX_AXIS];
+
+	t_joy_mapper mapperFrontend;
+	t_joy_mapper mapperCore;
+	t_joy_mapper mapperHotkeys;
+
+	std::string names[MAX_PLAYERS];
+	bool axisAsPad[MAX_PLAYERS];
+
+	t_joy_state(){
+		clear(btn_state);
+		clear(axis_state);
+		clear(hats_state);
+		clear(g_analog_state, 0);
+	}
+
+	void clearAll(){
+		clear(btn_state);
+		clear(axis_state);
+		clear(hats_state);
+		clear(g_analog_state, 0);
+	}
+	
+	bool getCoreBtn(unsigned int player, unsigned int btn){
+		int sdlBtn = mapperCore.getSdlBtn(player, btn);
+		if (player < MAX_PLAYERS && btn < MAX_BUTTONS && sdlBtn > -1){
+			return btn_state[player][sdlBtn];
+		}
+		return false;
+	}
+
+	bool getCoreHat(unsigned int player, unsigned int btn){
+		int sdlBtn = mapperCore.getSdlHat(player, btn);
+		if (player < MAX_PLAYERS && btn < MAX_HATS && sdlBtn > -1){
+			return hats_state[player][sdlBtn];
+		}
+		return false;
+	}
+
+	bool getCoreAxis(unsigned int player, unsigned int btn){
+		int sdlBtn = mapperCore.getSdlAxis(player, btn);
+		if (player < MAX_PLAYERS && btn < MAX_AXIS && sdlBtn > -1){
+			return axis_state[player][sdlBtn];
+		}
+		return false;
+	}
+
+	bool getCoreAny(unsigned int player, unsigned int btn){
+		return getCoreBtn(player, btn) || getCoreHat(player, btn) || getCoreAxis(player, btn);
+	}
+
+	bool getBtn(unsigned int player, unsigned int btn){
+		int sdlBtn = mapperFrontend.getSdlBtn(player, btn);
+		if (player < MAX_PLAYERS && btn < MAX_BUTTONS  && sdlBtn > -1){
+			return btn_state[player][sdlBtn];
+		}
+		return false;
+	}
+
+	bool getSdlBtn(unsigned int player, unsigned int btn){
+		if (player < MAX_PLAYERS && btn < MAX_BUTTONS){
+			return btn_state[player][btn];
+		}
+		return false;
+	}
+
+	bool getHat(unsigned int player, unsigned int btn){
+		int sdlBtn = mapperFrontend.getSdlHat(player, btn);
+		if (player < MAX_PLAYERS && btn < MAX_HATS && sdlBtn > -1){
+			return hats_state[player][sdlBtn];
+		}
+		return false;
+	}
+
+	bool getSdlHat(unsigned int player, unsigned int btn){
+		if (player < MAX_PLAYERS && btn < MAX_HATS){
+			return hats_state[player][btn];
+		}
+		return false;
+	}
+
+	bool getBtnTap(unsigned int p, unsigned int b) { 
+		int sdlIndex = mapperFrontend.getSdlBtn(p, b);
+		return getTap(btn_state, btn_repeat, p, sdlIndex); 
+	}
+    
+	bool getHatTap(unsigned int p, unsigned int h) { 
+		int sdlIndex = mapperFrontend.getSdlHat(p, h);
+		return getTap(hats_state, hat_repeat, p, sdlIndex); 
+	}
+
+	bool getAxisTap(unsigned int p, unsigned int h) { 
+		int sdlIndex = mapperFrontend.getSdlAxis(p, h);
+		return getTap(axis_state, axis_repeat, p, sdlIndex); 
+	}
+
+	bool getAnyTap(unsigned int p, unsigned int b) { 
+		return getBtnTap(p,b) || getHatTap(p,b) || getAxisTap(p,b);
+	}	
+
+	// Método genérico para detectar el "Tap" con auto-repeat
+    template<size_t N, size_t M>
+    bool getTap(bool (&stateArray)[N][M], t_repeat_handler (&repeatArray)[N][M], int player, int index) {
+        if (player < 0 || player >= (int)N || index < 0 || index >= (int)M) 
+            return false;
+	    return repeatArray[player][index].process(stateArray[player][index]);
     }
 
-	/**
-	* idx: Representa el numero de boton pulsado, ya sea obtenido mediante SDL, allegro...
-	* btn: Representa el boton de libretro RETRO_DEVICE_ID_JOYPAD_B, RETRO_DEVICE_ID_JOYPAD_A, ...
-	*/
-	void setButton(uint8_t idx, int8_t btn){
-		if (idx < nButtons){
-			buttons[idx] = btn;
+	template<size_t N, size_t M>
+	void clear(bool (&arr)[N][M]){
+		for (int p=0; p < N; p++){
+			for (int i=0; i < M; i++){
+				arr[p][i] = false;
+			}
 		}
 	}
 
-	/**
-	* idx: Representa el numero de boton pulsado, ya sea obtenido mediante SDL, allegro...
-	*/
-	int8_t getButton(uint8_t idx){
-		if (idx < nButtons){
-			return buttons[idx];
-		} else {
-			return -1;
+	template<size_t N, size_t M>
+	void clear(int16_t (&arr)[N][M], int16_t value){
+		for (int p=0; p < N; p++){
+			for (int i=0; i < M; i++){
+				arr[p][i] = value;
+			}
 		}
 	}
+};
 
-	/**
-	* idx: Representa el numero de boton pulsado, ya sea obtenido mediante SDL, allegro...
-	* btn: Representa el boton de libretro RETRO_DEVICE_ID_JOYPAD_B, RETRO_DEVICE_ID_JOYPAD_A, ...
-	*/
-	void setAxis(uint8_t idx, int8_t btn){
-		if (idx < nAxis){
-			axis[idx] = btn;
-		}
-	}
+struct t_region{
+	int selX;
+	int selY;
+	int selW;
+	int selH;
+	t_region() : selX(0), selY(0), selW(0), selH(0) {}
+};
 
-	/**
-	* idx: Representa el numero de boton pulsado, ya sea obtenido mediante SDL, allegro...
-	*/
-	int8_t getAxis(uint8_t idx){
-		if (idx < nAxis){
-			return axis[idx];
-		} else {
-			return -1;
-		}
-	}
-
-	/**
-	* idx: Representa el numero de boton pulsado, ya sea obtenido mediante SDL, allegro...
-	* btn: Representa el boton de libretro RETRO_DEVICE_ID_JOYPAD_B, RETRO_DEVICE_ID_JOYPAD_A, ...
-	*/
-	void setHat(uint8_t idx, int8_t btn){
-		if (idx < nHats){
-			hats[idx] = btn;
-		}
-	}
-
-	/**
-	* idx: Representa el numero de boton pulsado, ya sea obtenido mediante SDL, allegro...
-	*/
-	int8_t getHat(uint8_t idx){
-		if (idx < nHats){
-			return hats[idx];
-		} else {
-			return -1;
-		}
-	}
+struct tEvento{
+	int key;
+	int keyMod;
+	int unicode;
+	int mouse;
+	int mouse_x;
+	int mouse_y;
+	int mouse_state;
+	t_region region;
+	bool isMousedblClick;
+	bool resize;
+	bool isKey;
+	bool isMouse;
+	bool isMouseMove;
+	bool isRegionSelected;
+	bool quit;
+	int width;
+	int height;
+		
+	tEvento() 
+		: key(0), keyMod(0), unicode(0), mouse(0), 
+			mouse_x(0), mouse_y(0), mouse_state(0),
+			isMousedblClick(false), resize(false), isKey(false), 
+			isMouse(false), isMouseMove(false), isRegionSelected(false), 
+			quit(false), width(0), height(0) {}
 };
 
 class ConfigEmu{

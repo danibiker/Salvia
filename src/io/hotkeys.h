@@ -1,8 +1,11 @@
 #pragma once
 
-#include <const\constant.h>
+#include <const/constant.h>
+#include <beans/structures.h>
 
-typedef enum{ HK_SAVESTATE = 0, 
+typedef enum{ 
+	HK_MODIFIER = 0,
+    HK_SAVESTATE, 
 	HK_LOADSTATE, 
 	HK_SCALE, 
 	HK_RATIO, 
@@ -14,7 +17,9 @@ typedef enum{ HK_SAVESTATE = 0,
 	HK_MAX 
 } HOTKEYS_LIST;
 
-const static char *HOTKEYS_STR[] = {"Guardar estado", 
+const static char *HOTKEYS_STR[] = {
+	"Tecla para activar teclas rápidas",
+	"Guardar estado", 
 	"Cargar estado", 
 	"Cambiar escalador de video", 
 	"Cambiar ratio de video", 
@@ -35,13 +40,11 @@ struct HotkeyConfig {
 
 class Hotkeys{
 	public:
-		Hotkeys();
+		Hotkeys(t_joy_state *inputs);
 		~Hotkeys();
-		HOTKEYS_LIST ProcesarHotkeys(bool keypresses[MAXJOYBUTTONS + 1]);
-		// Mapa de configuración (puedes cargarlo desde un .cfg)
-		std::vector<HotkeyConfig> g_hotkeys;
-		int g_modifierButton; // Por ejemplo, el botón BACK (Select)
-		int getTriggerForAction(HOTKEYS_LIST);
+		HOTKEYS_LIST procesarHotkeys(t_joy_state *inputs);
+		//std::vector<HotkeyConfig> g_hotkeys;
+		//int g_modifierButton; // Por ejemplo, el botón BACK (Select)
+		//int getTriggerForAction(HOTKEYS_LIST);
 	private:
-		bool prev_state[MAXJOYBUTTONS + 1];
 };

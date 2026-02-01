@@ -3,7 +3,11 @@
 #include <SDL.h>
 
 void update_input() {
-    SDL_Event event;
+	gameMenu->joystick->pollKeys(gameMenu->screen);
+	gameMenu->running = !gameMenu->joystick->evento.quit;
+
+	/*
+	SDL_Event event;
 	bool *joyFrontendStates = gameMenu->joystick->g_joy_frontend_state[0];
 	const int modifier = gameMenu->joystick->hotkeys.g_modifierButton;
 
@@ -126,6 +130,7 @@ void update_input() {
 			}
 		}
 	}
+	*/
 
 	//const Uint32 now = SDL_GetTicks();
 	//LOG_DEBUG("ticks are: %d\n", SDL_GetTicks() - gameMenu->joystick->lastSelectPress);

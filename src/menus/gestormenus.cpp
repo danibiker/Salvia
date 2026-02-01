@@ -40,8 +40,12 @@ GestorMenus::GestorMenus(int screenw, int screenh){
 }
 
 GestorMenus::~GestorMenus() {
-    for(std::size_t i = 0; i < todosLosMenus.size(); i++) 
-		delete todosLosMenus[i];
+    for(std::size_t i = 0; i < todosLosMenus.size(); i++) {
+		if (todosLosMenus[i])
+			delete todosLosMenus[i];
+		todosLosMenus[i] = NULL;
+	}
+		
 }
 
 std::string guardarJoysticks(Joystick* joy){
@@ -122,28 +126,33 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuVideo->opciones.push_back(new OpcionLista("Escalado", filtros, &refConfig->configMain[cfg::scaleMode].getIntRef()));
 	menuVideo->opciones.push_back(new OpcionBool("Forzar pantalla completa", &refConfig->configMain[cfg::forceFS].getBoolRef()));
 
-	Menu* menuAsignaciones = new Menu("Asignaciones de Retropad", menuEntrada);
+	Menu* menuAssignRetro = new Menu("Asignaciones de Retropad", menuEntrada);
+	Menu* menuAssignFrontend = new Menu("Asignaciones de Frontend", menuEntrada);
 	Menu* menuHotkeys = new Menu("Teclas rápidas", menuEntrada);
-	todosLosMenus.push_back(menuAsignaciones);
+	todosLosMenus.push_back(menuAssignRetro);
+	todosLosMenus.push_back(menuAssignFrontend);
 	todosLosMenus.push_back(menuHotkeys);
 
-	menuEntrada->opciones.push_back(new OpcionSubMenu("Asignaciones de Retropad", menuAsignaciones));
+	menuEntrada->opciones.push_back(new OpcionSubMenu("Asignaciones de Retropad", menuAssignRetro));
+	menuEntrada->opciones.push_back(new OpcionSubMenu("Asignaciones de Frontend", menuAssignFrontend));
 	menuEntrada->opciones.push_back(new OpcionSubMenu("Teclas rápidas", menuHotkeys));
 	menuEntrada->opciones.push_back(new OpcionExec<Joystick>("Guardar asignaciones", guardarJoysticks, joystick));
 
 
 	for (int controlId = 0; controlId < MAX_PLAYERS; controlId++){
 		std::string controlStr = "Controles del puerto " + Constant::TipoToStr(controlId + 1) + " " +
-			joystick->buttonsMapperLibretro[controlId].joyName;
-		Menu* menuControlesPuerto = new Menu(controlStr , menuAsignaciones);
+			joystick->inputs.names[controlId];
+
+		Menu* menuControlesPuerto = new Menu(controlStr , menuAssignRetro);
 		addControlerOptions(menuControlesPuerto, controlId, joystick, refConfig);
-		addControlerButtons(menuControlesPuerto, controlId);
-		menuAsignaciones->opciones.push_back(new OpcionSubMenu(controlStr, menuControlesPuerto));
+		addControlerButtons(menuControlesPuerto, controlId, joystick);
+		menuAssignRetro->opciones.push_back(new OpcionSubMenu(controlStr, menuControlesPuerto));
 		todosLosMenus.push_back(menuControlesPuerto);
 	}
 	
 	//Poblar menu hotkeys
 	poblarMenuHotkeys(menuHotkeys, joystick);
+	poblarMenuAssignFrontend(menuAssignFrontend, joystick);
 
 	//Poblar menu ask
 	std::vector<std::string> askOptions;
@@ -166,25 +175,6 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	resetIndexPos();
 }
 
-void GestorMenus::poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick){
-	TipoKey type = KEY_JOY_BTN;
-
-	menuHotkeys->opciones.push_back(new OpcionKey("Tecla para activar teclas rápidas", &joystick->hotkeys.g_modifierButton, type, TipoKeyStr[type]));
-
-	for (int i=0; i < joystick->hotkeys.g_hotkeys.size(); i++){
-		HotkeyConfig *hkCfg = &joystick->hotkeys.g_hotkeys[i];
-		if (hkCfg->action < HK_MAX){
-			if (hkCfg->triggerButton == JOY_BUTTON_DOWN || hkCfg->triggerButton == JOY_BUTTON_UP 
-				|| hkCfg->triggerButton == JOY_BUTTON_LEFT || hkCfg->triggerButton == JOY_BUTTON_RIGHT){
-					type = KEY_JOY_HAT;
-			} else {
-				type = KEY_JOY_BTN;
-			}
-			menuHotkeys->opciones.push_back(new OpcionKey(HOTKEYS_STR[hkCfg->action], &hkCfg->triggerButton, type, TipoKeyStr[type]));
-		}
-	}
-}
-
 void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joystick, CfgLoader *refConfig){
 	menu->opciones.clear();
 	if (controlId < MAX_PLAYERS){
@@ -202,7 +192,7 @@ void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joys
 			menuCoreOptions->opciones.push_back(new OpcionLista(controllerPad.current_desc, gamepads, &controllerPad.current_device_id));
 		}
 	}
-	menu->opciones.push_back(new OpcionBool("Eje analógico como pad", &joystick->buttonsMapperLibretro[controlId].axisAsPad));
+	menu->opciones.push_back(new OpcionBool("Eje analógico como pad", &joystick->inputs.axisAsPad[controlId]));
 }
 
 void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
@@ -267,7 +257,11 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 
 	// 1. Inicializar con objetos vacíos (opcional, dependiendo de tu lógica de UI)
 	for (int i = 0; i < MAX_SAVESTATES; ++i) {
-		menuSavestates->opciones.push_back(new OpcionSavestate("- Vacío -"));
+		OpcionSavestate *savestate = new OpcionSavestate("- Vacío -");
+		savestate->file.filename = filterName + Constant::intToString(i);
+		savestate->file.dir = statesDir;
+		savestate->status = &this->status;
+		menuSavestates->opciones.push_back(savestate);
 	}
 
 	for (std::size_t i = 0; i < files.size(); ++i) {
@@ -280,7 +274,7 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 		// Extraer índice de la ranura
 		int iPosSlot = 0;
 		if (pos + keyToFind.length() < files[i]->filename.length()){
-			std::string posSlot = files[i]->filename.substr(pos + keyToFind.length());
+			posSlot = files[i]->filename.substr(pos + keyToFind.length());
 			iPosSlot = Constant::strToTipo<int>(posSlot);
 		}
 
@@ -297,32 +291,53 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 	}
 }
 
-void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
+void GestorMenus::poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick){
+	TipoKey type = KEY_JOY_BTN;
+	t_joy_state *input = &joystick->inputs;
+
+	for (int i=0; i < HK_MAX; i++){
+		if (input->mapperHotkeys.getSdlHat(0, i) > -1){
+			type = KEY_JOY_HAT;
+		} else {
+			type = KEY_JOY_BTN;
+		}
+		menuHotkeys->opciones.push_back(new OpcionKey(HOTKEYS_STR[i], input, &input->mapperHotkeys, 0, i, type, TipoKeyStr[type]));	
+	}
+}
+
+void GestorMenus::poblarMenuAssignFrontend(Menu* menuAssign, Joystick *joystick){
+	int num_port_buttons = sizeof(FRONTEND_BTN_VAL) / sizeof(FRONTEND_BTN_VAL[0]);
+	TipoKey type = KEY_JOY_BTN;
+	t_joy_state *input = &joystick->inputs;
+
+	for (int i=0; i < num_port_buttons; i++){
+		const std::string text = FRONTEND_BTN_TXT[i];
+		const int fVal = FRONTEND_BTN_VAL[i];
+
+		if (input->mapperFrontend.getSdlHat(0, fVal) > -1){
+			type = KEY_JOY_HAT;
+		} else {
+			type = KEY_JOY_BTN;
+		}
+
+		menuAssign->opciones.push_back(new OpcionKey(text, input, &input->mapperFrontend, 0, fVal, type, TipoKeyStr[type]));	
+	}
+}
+
+void GestorMenus::addControlerButtons(Menu*& menu, int controlId, Joystick *joystick){
 	int num_port_buttons = sizeof(configurablePortButtons) / sizeof(configurablePortButtons[0]);
 	int num_port_hats = sizeof(configurablePortHats) / sizeof(configurablePortHats[0]);
-
-	static int notfound = -1;
-	std::string text;
-
-	const int nBtns = Joystick::buttonsMapperLibretro[controlId].nButtons;
-	const int nHats = Joystick::buttonsMapperLibretro[controlId].nHats;
-	const int nAxis = Joystick::buttonsMapperLibretro[controlId].nAxis;
-
-	int retroAxisValue = 0;
-	int axisPos = 0;
-
-	t_joy_retro_inputs *input = &Joystick::buttonsMapperLibretro[controlId];
+	
+	t_joy_state *input = &joystick->inputs;
 	//Adding the axis or pad elements
 	for (int retroBtnIdx=0; retroBtnIdx < num_port_hats; retroBtnIdx++){
 		const std::string text = configurablePortHatsStr[retroBtnIdx];
 		const int retroBtnValue = configurablePortHats[retroBtnIdx];
 
 		if (input->axisAsPad){
-			int8_t axisIdx = input->findButtonIdx(retroBtnValue, input->axis);
-			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, axisIdx, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS]));
+			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS]));
 		} else {
-			int8_t hatIdx = input->findButtonIdx(retroBtnValue, input->hats);
-			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, hatIdx, retroBtnValue, KEY_JOY_HAT, TipoKeyStr[KEY_JOY_HAT]));
+			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_HAT, TipoKeyStr[KEY_JOY_HAT]));
 		}
 	}
 
@@ -331,13 +346,13 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId){
 		std::string text = configurablePortButtonsStr[sdlBtnIdx];
 		const int retroBtnValue = configurablePortButtons[sdlBtnIdx];
 		
-		int8_t btnIdx = input->findButtonIdx(retroBtnValue, input->buttons);
-		int8_t axisIdx = input->findButtonIdx(retroBtnValue, input->axis);
+		const int btnIdx = joystick->inputs.mapperCore.getSdlBtn(controlId, retroBtnValue);
+		const int axisIdx = joystick->inputs.mapperCore.getSdlAxis(controlId, retroBtnValue);
 
 		if (btnIdx > -1 || axisIdx == -1){
-			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, btnIdx, retroBtnValue, KEY_JOY_BTN, TipoKeyStr[KEY_JOY_BTN]));	
+			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_BTN, TipoKeyStr[KEY_JOY_BTN]));	
 		} else if (axisIdx > -1){
-			menu->opciones.push_back(new OpcionKey(text, Joystick::buttonsMapperLibretro, controlId, axisIdx, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS]));
+			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS]));	
 		} 		
 	}
 }
@@ -385,6 +400,17 @@ void GestorMenus::cambiarValor(int dir) {
 	} 
 }
 
+void GestorMenus::resetAskPosition(){
+	Opcion* e = menuAskSavestates->opciones[0];
+	if (e->tipo == OPC_LISTA) {
+		OpcionLista* l = (OpcionLista*)e;
+		Opcion* opcionDelPadre = menuAskSavestates->padre->opciones[menuAskSavestates->padre->seleccionado];
+		if (opcionDelPadre->tipo == OPC_SAVESTATE){
+			*l->indice = 0;
+		}
+	}
+}
+
 // Lógica para confirmar (Botón A)
 std::string GestorMenus::confirmar(t_option_action *result) {
 	if (status == POLLING_INPUTS || menuActual->opciones.size() == 0) return "";
@@ -406,6 +432,8 @@ std::string GestorMenus::confirmar(t_option_action *result) {
 				} else {
 					result->elem = NULL;
 				}
+				//Reseteamos la posicion del boton seleccionado
+				*l->indice = 0;
 			}
 		}
 		return e->ejecutar();
@@ -438,10 +466,11 @@ void GestorMenus::volver() {
 	if (status == POLLING_INPUTS) return;
 
 	if (status == ASK_SAVESTATES){
+		resetAskPosition();
 		LOG_DEBUG("Volviendo al menu de savestates");
 		menuActual = menuAskSavestates->padre;
 		status = NORMAL;
-		resetIndexPos();
+		//resetIndexPos();
 		return;
 	}
 
@@ -453,7 +482,7 @@ void GestorMenus::volver() {
 
 void GestorMenus::resetKeyElement(int sdlbtn, TipoKey tipoKey){
 	//Buscamos en todos los elementos de menu y si hay alguna opcion con el mismo indice, lo ponemos a -1
-	std::vector<Opcion*> optButtons = menuActual->opciones;
+	/*std::vector<Opcion*> optButtons = menuActual->opciones;
 	for (int i=0; i < optButtons.size(); i++){
 		if (optButtons[i]->tipo == OPC_KEY){
 			OpcionKey* keyToReset = static_cast<OpcionKey*>(optButtons[i]);
@@ -461,7 +490,7 @@ void GestorMenus::resetKeyElement(int sdlbtn, TipoKey tipoKey){
 				keyToReset->idx = -1;
 			}
 		}
-	}
+	}*/
 }
 
 /**
@@ -482,11 +511,13 @@ void GestorMenus::updateAxis(int sdlAxisValue, int sdlAxis){
 				k->tipoKey = KEY_JOY_AXIS;
 				k->description = TipoKeyStr[k->tipoKey];
 				resetKeyElement(buttonIdx, k->tipoKey);
-				k->joyInputs->setAxis(buttonIdx, k->btn);
-				k->idx = buttonIdx;
+				//k->joyInputs->setAxis(buttonIdx, k->btn);
+				k->joyMapper->setAxisFromSdl(k->gamepadId, buttonIdx, k->btn);
+				//k->idx = buttonIdx;
 				k->changeAsked = false;
 				k->lastTimeAsked = 0;
 				status = NORMAL;
+				k->joyInputs->clearAll();
 				//La posicion de la opcion 0 es el elemento que anyadimos en addControlerOptions
 				//en el orden de las inserciones en el vector.
 				if (menuActual->opciones.size() > 0 && menuActual->opciones[0]->tipo == OPC_BOOLEANA) {	
@@ -511,39 +542,24 @@ void GestorMenus::updateButton(int sdlbtn, TipoKey tipoKey){
 	if (opt->tipo == OPC_KEY) {
 		OpcionKey* k = static_cast<OpcionKey*>(opt);
 		if (k && k->joyInputs) {
+			k->description = TipoKeyStr[tipoKey];
+			k->tipoKey = tipoKey;
+
 			if (k->tipoKey == KEY_JOY_BTN){
-				//Actualizamos el elemento anterior a -1, tanto en el array
-				k->joyInputs->setButton(k->idx, -1);
-				//como en la propia tecla de la opcion del menu
-				if (k->idx != sdlbtn)
-					resetKeyElement(sdlbtn, k->tipoKey);
-				//Asignamos el boton del joystick pulsado con su funcion de libretro
-				k->joyInputs->setButton(sdlbtn, k->btn);
-				//Actualizamos el indice seleccionado para esta tecla
-				k->idx = sdlbtn;
+				k->joyMapper->setBtnFromSdl(k->gamepadId, sdlbtn, k->btn);
 			} else if (k->tipoKey == KEY_JOY_HAT || k->tipoKey == KEY_JOY_AXIS){
 				// Extraemos la dirección activa del Hat (limpiamos otros bits si fuera necesario)
 				Uint8 sdlHatDir = (Uint8)(sdlbtn & (SDL_HAT_UP | SDL_HAT_DOWN | SDL_HAT_LEFT | SDL_HAT_RIGHT));
-				//En cualquier caso, indicamos que este boton se comporta como un hat
-				k->tipoKey = KEY_JOY_HAT;
-				k->description = TipoKeyStr[k->tipoKey];
-				//Actualizamos el elemento anterior a -1, tanto en el array
-				k->joyInputs->setHat(k->idx, -1);
-				//como en la propia tecla de la opcion del menu
-				if (k->idx != sdlHatDir)
-					resetKeyElement(sdlHatDir, k->tipoKey);
-				//Asignamos el boton del joystick pulsado con su funcion de libretro
-				k->joyInputs->setHat(sdlHatDir, k->btn);
-				//Actualizamos el indice seleccionado para esta tecla
-				k->idx = sdlHatDir;
+				k->joyMapper->setHatFromSdl(k->gamepadId, sdlbtn, k->btn);
 			}
+			
 			//Reseteamos el estado
+			k->joyInputs->clearAll();
 			k->changeAsked = false;
 			k->lastTimeAsked = 0;
 			status = NORMAL;
 		} else if (k && k->intRef) {
 			int btnToSend = sdlbtn;
-			k->description = TipoKeyStr[tipoKey];
 			if (tipoKey == KEY_JOY_HAT && (sdlbtn == SDL_HAT_DOWN || sdlbtn == SDL_HAT_UP || sdlbtn == SDL_HAT_LEFT || sdlbtn == SDL_HAT_RIGHT)){
 				k->tipoKey == KEY_JOY_HAT;
 				switch (sdlbtn){
@@ -563,9 +579,10 @@ void GestorMenus::updateButton(int sdlbtn, TipoKey tipoKey){
 			} else {
 				k->tipoKey == KEY_JOY_BTN;
 			}
-
-			k->idx = btnToSend;
+			
+			k->joyInputs->clearAll();
 			*k->intRef = btnToSend;
+			k->description = TipoKeyStr[k->tipoKey];
 			k->changeAsked = false;
 			k->lastTimeAsked = 0;
 			status = NORMAL;
@@ -581,8 +598,6 @@ void GestorMenus::draw(SDL_Surface *video_page){
 	static const int bkg = SDL_MapRGB(video_page->format, bkgMenu.r, bkgMenu.g, bkgMenu.b);
 	static const int iwhite = SDL_MapRGB(video_page->format, white.r, white.g, white.b);
 	static const int iblack = SDL_MapRGB(video_page->format, black.r, black.g, black.b);
-	static const int iswitchenabled = SDL_MapRGB(video_page->format, 200, 200, 200);
-	static const int iswitchdisabled = SDL_MapRGB(video_page->format, 77, 77, 77);
 
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 	int face_h = TTF_FontLineSkip(fontMenu);
@@ -643,55 +658,9 @@ void GestorMenus::draw(SDL_Surface *video_page){
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
 
 		if (option->tipo == OPC_KEY && !((OpcionKey *)option)->description.empty()){
-			std::string str = "";
-			OpcionKey *opt = ((OpcionKey *)option);
-			
-			if (opt->changeAsked && SDL_GetTicks() - opt->lastTimeAsked < 4000){
-				str = "Esperando pulsación de tecla en " + Constant::intToString( (5000 - (SDL_GetTicks() - opt->lastTimeAsked)) / 1000 ) + " s";
-			} else if (opt->idx > -1){
-				str = opt->description + Constant::intToString(opt->idx);
-				if (opt->changeAsked) {
-					opt->changeAsked = false;
-					opt->lastTimeAsked = 0;
-					status = NORMAL;
-				} 				
-			} else {
-				str = "-";
-			}
-
-			int pixelDato;
-			TTF_SizeText(fontMenu, str.c_str(), &pixelDato, NULL);
-			Constant::drawTextTransparent(video_page, fontMenu, str.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 
-                    this->getY() + fontHeightRect, lineTextColor, lineBackground);
-
-		} if (option->tipo == OPC_BOOLEANA){
-			// 1. Extraer el valor y definir dimensiones base
-			bool enabled = *((OpcionBool*)option)->valor;
-			const int sw_h = face_h - 5;
-			const int sw_w = 50;
-			const int sw_x = getX() + getW() - marginX - sw_w;
-			const int sw_y = getY() + fontHeightRect + 2;
-
-			// 2. Dibujar el fondo del switch
-			SDL_Rect baseRect = { sw_x, sw_y, sw_w, sw_h };
-			SDL_FillRect(video_page, &baseRect, enabled ? iswitchenabled : iswitchdisabled);
-
-			// 3. Calcular el thumb (botón interno) de forma relativa
-			const int spacing = 4;
-			const int size = sw_h - (spacing * 2);
-			int thumbX = sw_x + (enabled ? (sw_w - size - spacing) : spacing);
-
-			SDL_Rect thumbRect = { thumbX, sw_y + spacing, size, size };
-
-			// 4. Dibujar el thumb según el estado
-			if (enabled) {
-				SDL_FillRect(video_page, &thumbRect, iblack);
-			} else {
-				// Usando los campos de thumbRect directamente para evitar sumas manuales
-				rect(video_page, thumbRect.x, thumbRect.y, thumbRect.x + size, thumbRect.y + size, black);
-				rect(video_page, thumbRect.x + 1, thumbRect.y + 1, thumbRect.x + size - 1, thumbRect.y + size - 1, black);
-			}
-			
+			drawKeys(i, (OpcionKey *)option, video_page);
+		} else if (option->tipo == OPC_BOOLEANA){
+			drawBooleanSwitch(i, (OpcionBool *)option, video_page);			
 		} else if (!value.empty()){
 			int pixelDato;
 			TTF_SizeText(fontMenu, value.c_str(), &pixelDato, NULL);
@@ -703,77 +672,147 @@ void GestorMenus::draw(SDL_Surface *video_page){
 	drawAskMenu(video_page);
 }
 
-void GestorMenus::drawBooleanSwitch(int i, OpcionBool *opcion, SDL_Surface *video_page){
-
-}
-
-void GestorMenus::drawAskMenu(SDL_Surface *video_page){
-	static const int iaskClBg = SDL_MapRGB(video_page->format, askClBg.r, askClBg.g, askClBg.b);
-	static const int iaskClLine = SDL_MapRGB(video_page->format, askClLine.r, askClLine.g, askClLine.b);
-	static const int iaskClTitle = SDL_MapRGB(video_page->format, askClTitle.r, askClTitle.g, askClTitle.b);
-	static const int iaskClText = SDL_MapRGB(video_page->format, askClText.r, askClText.g, askClText.b);
+void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
+	std::string str = "";
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+	const int face_h = TTF_FontLineSkip(fontMenu);
+	const int screenPos = i - this->iniPos;
+    const int fontHeightRect = screenPos * face_h;
+	SDL_Color lineTextColor = i == this->curPos ? black : white;
 
-	if (status == ASK_SAVESTATES){
-		const int ask_w = 520;
-		const int ask_h = 200;
-		const int btn_h = 30;
-		const int btn_w = 150;
-		const int marginTitle = 10;
+	// 1. Manejo del temporizador (Early exit)
+	Uint32 elapsed = SDL_GetTicks() - opt->lastTimeAsked;
+	if (opt->changeAsked && elapsed < 4000) {
+		str = "Esperando pulsación de tecla en " + Constant::intToString((5000 - elapsed) / 1000) + " s";
+	} else {
+		// 2. Obtener el ID de SDL según el tipo de entrada
+		int sdlId = -1;
+		if (opt->tipoKey == KEY_JOY_BTN)       sdlId = opt->joyMapper->getSdlBtn(opt->gamepadId, opt->btn);
+		else if (opt->tipoKey == KEY_JOY_HAT)  sdlId = opt->joyMapper->getSdlHat(opt->gamepadId, opt->btn);
+		else if (opt->tipoKey == KEY_JOY_AXIS) sdlId = opt->joyMapper->getSdlAxis(opt->gamepadId, opt->btn);
 
-		SDL_Rect thumbRect = { this->w / 2 - ask_w / 2, this->h / 2 - ask_h / 2, ask_w, ask_h };
-		SDL_Rect titleRect = { thumbRect.x, thumbRect.y, thumbRect.w, 40 };
-
-		//Draw the popoup rectangle 
-		SDL_FillRect(video_page, &thumbRect, iaskClBg);
-		SDL_FillRect(video_page, &titleRect, iaskClTitle);
-		rect(video_page, thumbRect.x, thumbRect.y, thumbRect.x + thumbRect.w, thumbRect.y + thumbRect.h, askClLine);
-		rect(video_page, thumbRect.x-1, thumbRect.y-1, thumbRect.x + thumbRect.w +1, thumbRect.y + thumbRect.h +1, askClLine);
-
-		Opcion* opt = menuAskSavestates->opciones[0];
-		int face_h = TTF_FontLineSkip(fontMenu);
-		//Draw the title
-		Constant::drawTextTransparent(video_page, fontMenu, opt->titulo.c_str(), titleRect.x + marginTitle, 
-                    titleRect.y + (titleRect.h - face_h) / 2, askClText, 0);
-
-		if (opt->tipo == OPC_LISTA) {
-			OpcionLista* l = (OpcionLista*)opt;
-			if (l->items.size() <= 1){
-				return;
+		// 3. Procesar el resultado una sola vez
+		if (sdlId > -1) {
+			str = opt->description + Constant::intToString(sdlId);
+        
+			// Resetear estado de edición si estaba activo
+			if (opt->changeAsked) {
+				opt->changeAsked = false;
+				opt->lastTimeAsked = 0;
+				status = NORMAL;
 			}
-
-			int num = (int)l->items.size();
-			const int freeSpace = (thumbRect.w - (l->items.size() * btn_w) - 2 * marginTitle) / (l->items.size() - 1);
-			int pixelDato;
-			SDL_Color clBtnSel = askClText;
-			int iclBtnBgSel = iaskClLine;
-
-			//Dibujamos los botones
-			for (int i=0; i < l->items.size(); i++){
-				SDL_Rect btnMidRect = { titleRect.x + 10 + ((btn_w  + freeSpace) * i), 
-					thumbRect.y + titleRect.h + (thumbRect.h - titleRect.h) / 2, 
-					btn_w, btn_h };
-
-				TTF_SizeText(fontMenu, l->items[i].c_str(), &pixelDato, NULL);
-
-				if (i == *(l->indice)){
-					clBtnSel = askClTitle;
-					iclBtnBgSel = iaskClText;
-				} else {
-					clBtnSel = askClText;
-					iclBtnBgSel = iaskClLine;
-				}
-
-				SDL_Rect btnRect = { btnMidRect.x, btnMidRect.y - btn_h / 2, btn_w, btn_h};
-				SDL_FillRect(video_page, &btnRect, iclBtnBgSel);
-				rect(video_page, btnRect.x, btnRect.y, btnRect.x + btnRect.w, btnRect.y + btnRect.h, clBtnSel);
-
-				Constant::drawTextTransparent(video_page, fontMenu, l->items[i].c_str(), 
-					btnMidRect.x + (btn_w - pixelDato) / 2, 
-					btnMidRect.y - face_h / 2, clBtnSel, 0);
-			}
+		} else {
+			str = "-";
 		}
 	}
+
+	int pixelDato;
+	TTF_SizeText(fontMenu, str.c_str(), &pixelDato, NULL);
+	Constant::drawTextTransparent(video_page, fontMenu, str.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 
+            this->getY() + fontHeightRect, lineTextColor, 0);
+}
+
+void GestorMenus::drawBooleanSwitch(int i, OpcionBool *opcion, SDL_Surface *video_page){
+	// 1. Extraer el valor y definir dimensiones base
+	bool enabled = *opcion->valor;
+	const int iblack = SDL_MapRGB(video_page->format, black.r, black.g, black.b);
+	const int iswitchenabled = SDL_MapRGB(video_page->format, 200, 200, 200);
+	const int iswitchdisabled = SDL_MapRGB(video_page->format, 77, 77, 77);
+	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+	const int face_h = TTF_FontLineSkip(fontMenu);
+	const int screenPos = i - this->iniPos;
+    const int fontHeightRect = screenPos * face_h;
+	const int sw_h = face_h - 5;
+	const int sw_w = 50;
+	const int sw_x = getX() + getW() - marginX - sw_w;
+	const int sw_y = getY() + fontHeightRect + 2;
+
+	// 2. Dibujar el fondo del switch
+	SDL_Rect baseRect = { sw_x, sw_y, sw_w, sw_h };
+	SDL_FillRect(video_page, &baseRect, enabled ? iswitchenabled : iswitchdisabled);
+
+	// 3. Calcular el thumb (botón interno) de forma relativa
+	const int spacing = 4;
+	const int size = sw_h - (spacing * 2);
+	int thumbX = sw_x + (enabled ? (sw_w - size - spacing) : spacing);
+
+	SDL_Rect thumbRect = { thumbX, sw_y + spacing, size, size };
+
+	// 4. Dibujar el thumb según el estado
+	if (enabled) {
+		SDL_FillRect(video_page, &thumbRect, iblack);
+	} else {
+		// Usando los campos de thumbRect directamente para evitar sumas manuales
+		rect(video_page, thumbRect.x, thumbRect.y, thumbRect.x + size, thumbRect.y + size, black);
+		rect(video_page, thumbRect.x + 1, thumbRect.y + 1, thumbRect.x + size - 1, thumbRect.y + size - 1, black);
+	}
+}
+
+void GestorMenus::drawAskMenu(SDL_Surface *video_page) {
+    // 1. Colores estáticos (usamos SDL_Color y el int mapeado según necesidad)
+    static const int iaskClBg = SDL_MapRGB(video_page->format, askClBg.r, askClBg.g, askClBg.b);
+    static const int iaskClLine = SDL_MapRGB(video_page->format, askClLine.r, askClLine.g, askClLine.b);
+    static const int iaskClTitle = SDL_MapRGB(video_page->format, askClTitle.r, askClTitle.g, askClTitle.b);
+    static const int iaskClText = SDL_MapRGB(video_page->format, askClText.r, askClText.g, askClText.b);
+    
+    if (status != ASK_SAVESTATES) return;
+
+    TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+    const int ask_w = 520, ask_h = 200, btn_h = 30, btn_w = 150, marginTitle = 10;
+    int face_h = TTF_FontLineSkip(fontMenu);
+
+    SDL_Rect thumbRect = { (this->w - ask_w) / 2, (this->h - ask_h) / 2, ask_w, ask_h };
+    SDL_Rect titleRect = { thumbRect.x, thumbRect.y, thumbRect.w, 40 };
+
+    // Dibujado de fondo y bordes (agrupado)
+    SDL_FillRect(video_page, &thumbRect, iaskClBg);
+    SDL_FillRect(video_page, &titleRect, iaskClTitle);
+    rect(video_page, thumbRect.x, thumbRect.y, thumbRect.x + thumbRect.w, thumbRect.y + thumbRect.h, askClLine);
+    rect(video_page, thumbRect.x - 1, thumbRect.y - 1, thumbRect.x + thumbRect.w + 1, thumbRect.y + thumbRect.h + 1, askClLine);
+
+    Opcion* opt = menuAskSavestates->opciones[0];
+    Constant::drawTextTransparent(video_page, fontMenu, opt->titulo.c_str(), 
+                                 titleRect.x + marginTitle, titleRect.y + (titleRect.h - face_h) / 2, askClText, 0);
+
+    if (opt->tipo == OPC_LISTA) {
+        OpcionLista* l = static_cast<OpcionLista*>(opt);
+        if (l->items.size() <= 1) return;
+
+        // Determinar si solo se permite guardar
+        bool onlySave = false;
+        Opcion* padre = menuAskSavestates->padre->opciones[menuAskSavestates->padre->seleccionado];
+        if (padre->tipo == OPC_SAVESTATE) {
+            onlySave = static_cast<OpcionSavestate*>(padre)->file.modificationTime.empty();
+            if (onlySave) *(l->indice) = ASK_GUARDAR;
+        }
+
+        const int numItems = (int)l->items.size();
+        const int freeSpace = (thumbRect.w - (numItems * btn_w) - 2 * marginTitle) / (numItems - 1);
+        const int btnY = thumbRect.y + titleRect.h + (thumbRect.h - titleRect.h) / 2 - (btn_h / 2);
+
+        for (int i = 0; i < numItems; i++) {
+            // Simplificación lógica: Si es onlySave, saltar índices que no sean ASK_GUARDAR
+            if (onlySave && i != ASK_GUARDAR) continue;
+
+            bool isSelected = (i == *(l->indice));
+            
+            // Colores según selección
+            SDL_Color clText = isSelected ? askClTitle : askClText;
+            int clBg = isSelected ? iaskClText : iaskClLine;
+
+            SDL_Rect btnRect = { titleRect.x + 10 + ((btn_w + freeSpace) * i), btnY, btn_w, btn_h };
+
+            // Dibujar botón
+            SDL_FillRect(video_page, &btnRect, clBg);
+            rect(video_page, btnRect.x, btnRect.y, btnRect.x + btnRect.w, btnRect.y + btnRect.h, clText);
+
+            // Centrar texto en el botón
+            int textW;
+            TTF_SizeText(fontMenu, l->items[i].c_str(), &textW, NULL);
+            Constant::drawTextTransparent(video_page, fontMenu, l->items[i].c_str(), 
+                                         btnRect.x + (btn_w - textW) / 2, btnRect.y + (btn_h - face_h) / 2, clText, 0);
+        }
+    }
 }
 
 /**
@@ -813,7 +852,7 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
                 imageMenu.getY() + imageMenu.getH() + 2, white, 0);
 		}
     } else {
-		if (opcion->file.filename.empty()){
+		if (opcion->file.modificationTime.empty()){
 			lineTextColor = menuBars;
 		}
 	}
@@ -822,17 +861,19 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
     Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX(), 
                 this->getY() + fontHeightRect, lineTextColor, lineBackground);
 	
-	//Drawing the date besides the text
-	Constant::drawTextTransparent(video_page, fontSmall, opcion->file.modificationTime.c_str(), this->getX() + 120, 
-                this->getY() + fontHeightRect + face_h_small / 3, lineTextColor, lineBackground);
-
 	//Drawing the image
 	if (!rutaSelected.empty() && lastImagePath != rutaSelected){
 		imageMenu.loadImage(opcion->file.dir + Constant::getFileSep() + opcion->file.filename + STATE_IMG_EXT);
 		lastImagePath = opcion->file.filename;
 	}
 
-	if (!rutaSelected.empty()){
+	//Drawing the date besides the text
+	if (!opcion->file.modificationTime.empty()){
+		Constant::drawTextTransparent(video_page, fontSmall, opcion->file.modificationTime.c_str(), this->getX() + 120, 
+                this->getY() + fontHeightRect + face_h_small / 3, lineTextColor, lineBackground);
+	}
+	
+	if (!rutaSelected.empty() && !opcion->file.modificationTime.empty()){
 		imageMenu.printImage(video_page);
 	}
 	//rect(video_page, imageMenu.getX(), imageMenu.getY(), imageMenu.getX() + imageMenu.getW(), imageMenu.getY() + imageMenu.getH(), white);

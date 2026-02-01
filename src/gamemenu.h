@@ -88,7 +88,7 @@ class GameMenu : public Engine{
 			status = tmpStat;
 			//Siempre que cambiemos de estado de emulacion,
 			//reseteamos los botones del joystick
-			joystick->resetButtonsFrontend();
+			joystick->inputs.clearAll();
 		}
 
 		int getEmuStatus(){return status;}

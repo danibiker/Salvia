@@ -50,9 +50,6 @@
     <ClCompile Include="src\io\joystick.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\io\JoyMapper.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\io\filelist.h">
       <Filter>Header Files</Filter>
     </ClCompile>
@@ -248,9 +245,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\font\Arimo_Regular.ttf.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\io\joymapper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\io\cursorgestor.h">

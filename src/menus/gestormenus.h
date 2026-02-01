@@ -147,11 +147,12 @@ public:
 
 class OpcionKey : public Opcion {
 public:
-    t_joy_retro_inputs* joyInputs;
+    t_joy_state* joyInputs;
+	t_joy_mapper * joyMapper;
 	int *intRef; 
 
 	//En idx tenemos el indice del array en el que se guardo el boton
-	int idx;
+	//int idx;
 	//En btn tenemos el boton de libretro asignado: RETRO_DEVICE_ID_JOYPAD_A, RETRO_DEVICE_ID_JOYPAD_B, ...
 	int btn;
 	int gamepadId;
@@ -161,28 +162,30 @@ public:
 	Uint32 lastTimeAsked;
 	TipoKey tipoKey;
 
-	OpcionKey(std::string t, t_joy_retro_inputs (&listaMapeos)[MAX_PLAYERS], int pgamepadId, int pIdx, int pBtn, TipoKey ptipoKey, std::string desc): Opcion(t, OPC_KEY){
-		idx = pIdx;
+	OpcionKey(std::string t, t_joy_state *pjoyInputs, t_joy_mapper * pjoyMapper, int pgamepadId, int pBtn, TipoKey ptipoKey, std::string desc): Opcion(t, OPC_KEY){
+		//idx = pIdx;
 		btn = pBtn;
 		gamepadId = pgamepadId;
 		tipoKey = ptipoKey;
 		description = desc;
 		lastTimeAsked = 0;
 		changeAsked = false;
-		joyInputs = &listaMapeos[pgamepadId];
+		joyInputs = pjoyInputs;
+		joyMapper = pjoyMapper;
 		intRef = NULL;
 	}
 	
 	//En este caso no se necesita conversion
-	OpcionKey(std::string t, int* pintRef, TipoKey ptipoKey, std::string desc): Opcion(t, OPC_KEY){
+	/*OpcionKey(std::string t, int* pintRef, TipoKey ptipoKey, std::string desc): Opcion(t, OPC_KEY){
 		joyInputs = NULL;
 		tipoKey = ptipoKey;
 		description = desc;
 		lastTimeAsked = 0;
 		changeAsked = false;
 		intRef = pintRef;
-		idx = *pintRef;
-	}
+		btn = *pintRef;
+		gamepadId = 0;
+	}*/
 
 	std::string ejecutar() override {
         return "";
@@ -242,13 +245,16 @@ private:
 	void clearSelectedText();
 	void setLayout(int layout, int screenw, int screenh);
 	void addControlerOptions(Menu*&, int, Joystick *, CfgLoader *);
-	void addControlerButtons(Menu*&, int);
+	void addControlerButtons(Menu*&, int, Joystick *);
 	int findAxisPos(int retroDirection);
 	void resetKeyElement(int, TipoKey);
 	
 	void drawSavestateWithImage(int, OpcionSavestate *, SDL_Surface *);
 	void drawBooleanSwitch(int, OpcionBool *, SDL_Surface *);
 	void drawAskMenu(SDL_Surface *video_page);
+	void drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page);
+
+	void resetAskPosition();
 
 public:
     GestorMenus(int screenw, int screenh);
@@ -272,7 +278,9 @@ public:
 
 	void poblarCoreOptions(CfgLoader *);
 	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);
+	void poblarMenuAssignFrontend(Menu* menuHotkeys, Joystick *joystick);
 	void poblarPartidasGuardadas(CfgLoader *, std::string);
+
 
 	bool isCoreOptions(){
 		return obtenerMenuActual() == menuCoreOptions;
@@ -287,8 +295,6 @@ public:
 		OpcionLista* l = (OpcionLista*)menuAskSavestates->opciones[0];
 		*l->indice = 0;
 	}
-
-	
 
 	void nextPos();
     void prevPos();

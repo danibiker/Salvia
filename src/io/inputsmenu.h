@@ -1,179 +1,9 @@
 #pragma once
 
 #include <SDL.h>
+#include <SDL_joystick.h>
 
 int launchGame(std::string);
-
-/**
- * 
- */
-void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu, bool keypress){
-	static Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
-	if (gameMenu.configMenus->getStatus() == POLLING_INPUTS){
-		SDL_Event event;
-		while (SDL_PollEvent(&event)) {
-			switch (event.type) {
-				case SDL_QUIT:
-					gameMenu.running = false;
-					break;
-				case SDL_JOYBUTTONDOWN:
-					gameMenu.configMenus->updateButton(event.jbutton.button, KEY_JOY_BTN);
-					break;
-				case SDL_JOYHATMOTION:
-					if (event.jhat.value != 0){ //Solo en el momento del joydown
-						gameMenu.configMenus->updateButton(event.jhat.value, KEY_JOY_HAT);
-                    }
-                    break;
-				case SDL_JOYAXISMOTION:
-					gameMenu.configMenus->updateAxis(event.jaxis.value, event.jaxis.axis);
-					break;
-				default:
-					break;
-			}
-		}
-		gameMenu.joystick->resetAllValues();
-		//gameMenu.joystick->lastSelectPress = 0;
-	} else {
-		tEvento askEvento;
-		//Procesamos los controles de la aplicacion
-		askEvento = gameMenu.WaitForKey();
-		bool *joyFrontendStates = gameMenu.joystick->g_joy_frontend_state[0];
-
-		if (askEvento.isJoy && askEvento.keyjoydown){
-			ConfigEmu *emu = gameMenu.getCfgLoader()->getCfgEmu();
-
-			if (listMenu.getNumGames() == 0 && emu->generalConfig){
-				switch(askEvento.joy){
-					case JOY_BUTTON_UP:{
-						gameMenu.configMenus->prevPos();
-						break;
-					}
-					case JOY_BUTTON_DOWN:{
-						gameMenu.configMenus->nextPos();
-						break;
-					}
-					case JOY_BUTTON_LEFT:{
-						gameMenu.configMenus->cambiarValor(-1);
-						if (gameMenu.configMenus->isCoreOptions()){
-							gameMenu.configMenus->options_changed_flag = true;
-							/*Esta es la técnica que usan los frontends como RetroArch para previsualizar cambios en menús pausados:
-							Realiza un retro_serialize() para guardar el estado actual en memoria.
-							Aplica el cambio de variable.
-							Llama a retro_run() una vez para que el core procese el cambio y genere el nuevo frame.
-							Inmediatamente después, llama a retro_unserialize() para volver al estado anterior. 
-							Resultado: El usuario ve el frame actualizado con la nueva configuración, pero lógicamente el juego sigue en el mismo punto exacto.*/
-						}
-						break;
-					}
-					case JOY_BUTTON_RIGHT:{
-						if (gameMenu.configMenus->isCoreOptions()){
-							gameMenu.configMenus->options_changed_flag = true;
-						}
-						gameMenu.configMenus->cambiarValor(1);
-						break;
-					}
-					case JOY_BUTTON_A:{
-						if (!askEvento.keyjoydown) break;
-						t_option_action optionAction;
-
-						std::string message = gameMenu.configMenus->confirmar(&optionAction);
-						if (!message.empty()){
-							gameMenu.showSystemMessage(message, 3000);
-						}
-						break;
-					}
-					case JOY_BUTTON_B:{
-						if (!askEvento.keyjoydown) break;
-						gameMenu.configMenus->volver();
-						break;
-					}
-					default:
-						break;
-				}
-
-				if (askEvento.joy == JOY_BUTTON_A || askEvento.joy == JOY_BUTTON_LEFT
-					|| askEvento.joy == JOY_BUTTON_RIGHT){
-					gameMenu.processConfigChanges();
-				}
-
-			} else {
-				//Opciones para seleccionar una rom para el emulador
-				if (askEvento.joy == JOY_BUTTON_UP){
-					listMenu.prevPos();
-				} else if (askEvento.joy == JOY_BUTTON_DOWN){
-					listMenu.nextPos();
-				} else if (askEvento.joy == JOY_BUTTON_LEFT){
-					listMenu.prevPage();
-				} else if (askEvento.joy == JOY_BUTTON_RIGHT){
-					listMenu.nextPage();
-				} 
-
-				if (askEvento.joy == JOY_BUTTON_A){
-					vector<string> launchCommand = gameMenu.launchProgram(listMenu);
-					
-					if (launchCommand.size() > 1){
-						std::string romToLaunch = launchCommand.at(1);
-						LOG_DEBUG("Launching rom %s", romToLaunch.c_str());
-
-						SDL_FillRect(gameMenu.screen, NULL, bkgText);
-						if (launchGame(romToLaunch)){
-							gameMenu.configMenus->poblarPartidasGuardadas(gameMenu.getCfgLoader(), romToLaunch);
-							gameMenu.setEmuStatus(EMU_STARTED);
-						}
-						gameMenu.joystick->resetAllValues();
-						//gameMenu.joystick->lastSelectPress = 0;
-						return;
-					}
-				} 
-			}
-
-			if (askEvento.joy == JOY_BUTTON_R){
-				//Change to prev emulator
-				//sound.play(SBTNCLICK);
-				//gameMenu.showMessage("Refreshing gamelist...");
-				gameMenu.getCfgLoader()->getNextCfgEmu();
-				gameMenu.loadEmuCfg(listMenu);
-			}
-			if (askEvento.joy == JOY_BUTTON_L){
-				//Change to next emulator
-				//sound.play(SBTNCLICK);
-				//gameMenu.showMessage("Refreshing gamelist...");
-				gameMenu.getCfgLoader()->getPrevCfgEmu();
-				gameMenu.loadEmuCfg(listMenu);
-			} 
-		}
-
-		//To detect hotkeys
-		if (askEvento.joy > -1){
-			joyFrontendStates[askEvento.joy] = askEvento.keyjoydown;
-			const int keyMenu = gameMenu.joystick->hotkeys.getTriggerForAction(HK_VIEW_MENU);
-			if (keyMenu > -1){
-				if (joyFrontendStates[keyMenu] && joyFrontendStates[gameMenu.joystick->hotkeys.g_modifierButton] && gameMenu.getLastStatus() == EMU_STARTED){
-					SDL_FillRect(gameMenu.video_page, NULL, gameMenu.uBkgColor);
-					gameMenu.setEmuStatus(EMU_STARTED);
-					gameMenu.joystick->resetButtonsFrontend();
-					return;
-				}
-			}
-		}
-
-		if (askEvento.quit){
-			gameMenu.running = false; // Marcamos para salir
-		}
-	}
-
-    if (listMenu.animateBkg) 
-		tileMap.draw(gameMenu.video_page);
-    else 
-		SDL_FillRect(gameMenu.video_page, NULL, bkgText);
-
-    gameMenu.refreshScreen(listMenu);
-
-    static uint32_t lastTime = SDL_GetTicks();
-    if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
-        tileMap.speed++;
-    }
-}
 
 /**
 *
@@ -214,10 +44,11 @@ bool processActions(GameMenu &gameMenu, t_option_action &optionAction){
 		}
 	} else if(gameMenu.configMenus->getStatus() == EXIT_CONFIG) {
 		gameMenu.configMenus->resetStatus();
-		gameMenu.setEmuStatus(EMU_STARTED);
+		SDL_FillRect(gameMenu.video_page, NULL, gameMenu.uBkgColor);
+		gameMenu.setEmuStatus(gameMenu.getLastStatus());
 	}
 
-	gameMenu.joystick->resetAllValues();
+	gameMenu.joystick->inputs.clearAll();
 	if (optionAction.elem) {
 		free(optionAction.elem);
 		optionAction.elem = NULL;
@@ -225,121 +56,160 @@ bool processActions(GameMenu &gameMenu, t_option_action &optionAction){
 	return ret;
 }
 
-void processEvents(GameMenu &gameMenu, ListMenu &listMenu, tEvento &askEvento){
-	bool *joyFrontendStates = gameMenu.joystick->g_joy_frontend_state[0];
+int processInputs(GameMenu &gameMenu, ListMenu &listMenu, bool generalConfig){
+	static Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	int res = 1;
 
-	switch(askEvento.joy){
-		case JOY_BUTTON_UP:{
-			gameMenu.configMenus->prevPos();
-			break;
-		}
-		case JOY_BUTTON_DOWN:{
-			gameMenu.configMenus->nextPos();
-			break;
-		}
-		case JOY_BUTTON_LEFT:{
-			gameMenu.configMenus->cambiarValor(-1);
-			if (gameMenu.configMenus->isCoreOptions()){
-				gameMenu.configMenus->options_changed_flag = true;
-				/*Esta es la técnica que usan los frontends como RetroArch para previsualizar cambios en menús pausados:
-				Realiza un retro_serialize() para guardar el estado actual en memoria.
-				Aplica el cambio de variable.
-				Llama a retro_run() una vez para que el core procese el cambio y genere el nuevo frame.
-				Inmediatamente después, llama a retro_unserialize() para volver al estado anterior. 
-				Resultado: El usuario ve el frame actualizado con la nueva configuración, pero lógicamente el juego sigue en el mismo punto exacto.*/
+	if (gameMenu.configMenus->getStatus() == POLLING_INPUTS){
+		SDL_Event event;
+		while (SDL_PollEvent(&event)) {
+			switch (event.type) {
+				
+				case SDL_QUIT:
+					gameMenu.running = false;
+					break;
+				case SDL_JOYBUTTONDOWN:
+					LOG_INFO("Boton detectado: ID %d", (int)event.jbutton.button);
+					gameMenu.configMenus->updateButton(event.jbutton.button, KEY_JOY_BTN);
+					break;
+				case SDL_JOYHATMOTION:
+					LOG_INFO("hat detectado: ID %d", (int)event.jhat.value);
+					if (event.jhat.value != 0){ //Solo en el momento del joydown
+						gameMenu.configMenus->updateButton(event.jhat.value, KEY_JOY_HAT);
+                    }
+                    break;
+				case SDL_JOYAXISMOTION:
+					LOG_INFO("axis detectado: value %d axis: %d", (int)event.jaxis.value, (int)event.jaxis.axis);
+					gameMenu.configMenus->updateAxis(event.jaxis.value, event.jaxis.axis);
+					break;
+				default:
+					break;
 			}
-			break;
 		}
-		case JOY_BUTTON_RIGHT:{
-			if (gameMenu.configMenus->isCoreOptions()){
-				gameMenu.configMenus->options_changed_flag = true;
-			}
-			gameMenu.configMenus->cambiarValor(1);
-			break;
-		}
-		case JOY_BUTTON_A:{
-			if (!askEvento.keyjoydown) break;
-			t_option_action optionAction;
-			std::string message = gameMenu.configMenus->confirmar(&optionAction);
-			if (processActions(gameMenu, optionAction)){
-				return;
-			}
-			if (!message.empty()){
-				gameMenu.showSystemMessage(message, 3000);
-			}		
-			break;
-		}
-		case JOY_BUTTON_B:{
-			if (!askEvento.keyjoydown) break;
-			gameMenu.configMenus->volver();
-			break;
-		}
-		default:
-			break;
-	}
+		//gameMenu.joystick->resetAllValues();
+	} else {
+		gameMenu.joystick->pollKeys(gameMenu.screen);
 
-	if (askEvento.joy == JOY_BUTTON_A || askEvento.joy == JOY_BUTTON_LEFT
-		|| askEvento.joy == JOY_BUTTON_RIGHT){
-		gameMenu.processConfigChanges();
-	}
+		if (generalConfig){
+			if (gameMenu.joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
+				gameMenu.configMenus->prevPos();
+			} else if (gameMenu.joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
+				gameMenu.configMenus->nextPos();
+			}
+			
+			bool changeInConf = false;
 
-	//To detect hotkeys
-	if (askEvento.joy > -1){
-		joyFrontendStates[askEvento.sdljoybtn] = askEvento.keyjoydown;
-		const int keyMenu = gameMenu.joystick->hotkeys.getTriggerForAction(HK_VIEW_MENU);
-		if (keyMenu > -1){
-			if (joyFrontendStates[keyMenu] && joyFrontendStates[gameMenu.joystick->hotkeys.g_modifierButton] && gameMenu.getLastStatus() == EMU_STARTED){
-				gameMenu.setEmuStatus(EMU_STARTED);
-				gameMenu.joystick->resetButtonsFrontend();
-				if (gameMenu.bg_screenshot){
-					SDL_FreeSurface(gameMenu.bg_screenshot);
-					gameMenu.bg_screenshot = NULL;
+			if (gameMenu.joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
+				gameMenu.configMenus->cambiarValor(-1);
+				changeInConf = true;
+				if (gameMenu.configMenus->isCoreOptions()){
+					gameMenu.configMenus->options_changed_flag = true;
 				}
-				return;
+			} else if (gameMenu.joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
+				changeInConf = true;
+				if (gameMenu.configMenus->isCoreOptions()){
+					gameMenu.configMenus->options_changed_flag = true;
+				}
+				gameMenu.configMenus->cambiarValor(1);
+			}
+
+			if (gameMenu.joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
+				t_option_action optionAction;
+				std::string message = gameMenu.configMenus->confirmar(&optionAction);
+				if (processActions(gameMenu, optionAction)){
+					return 1;
+				}
+				if (!message.empty()){
+					gameMenu.showSystemMessage(message, 3000);
+				}
+				changeInConf = true;
+			} else if (gameMenu.joystick->inputs.getBtnTap(0, JOY_BUTTON_B)){
+				gameMenu.configMenus->volver();
+			}
+
+			if (changeInConf || gameMenu.configMenus->options_changed_flag){
+				gameMenu.processConfigChanges();
+			}
+
+		} else {
+			if (gameMenu.joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
+				listMenu.prevPos();
+			} else if (gameMenu.joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
+				listMenu.nextPos();
+			} 
+			
+			if (gameMenu.joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
+				listMenu.prevPage();
+			} else if (gameMenu.joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
+				listMenu.nextPage();
+			} 
+
+			if (gameMenu.joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
+				vector<string> launchCommand = gameMenu.launchProgram(listMenu);	
+				if (launchCommand.size() > 1){
+					std::string romToLaunch = launchCommand.at(1);
+					LOG_DEBUG("Launching rom %s", romToLaunch.c_str());
+					SDL_FillRect(gameMenu.screen, NULL, bkgText);
+					if (launchGame(romToLaunch)){
+						gameMenu.configMenus->poblarPartidasGuardadas(gameMenu.getCfgLoader(), romToLaunch);
+						gameMenu.setEmuStatus(EMU_STARTED);
+					}
+					return 0;
+				}
 			}
 		}
+
+		if (gameMenu.joystick->inputs.getAnyTap(0, JOY_BUTTON_R)){
+			gameMenu.getCfgLoader()->getNextCfgEmu();
+			gameMenu.loadEmuCfg(listMenu);
+		}
+		if (gameMenu.joystick->inputs.getAnyTap(0, JOY_BUTTON_L)){
+			gameMenu.getCfgLoader()->getPrevCfgEmu();
+			gameMenu.loadEmuCfg(listMenu);
+		}
+
+		if (HK_VIEW_MENU == gameMenu.joystick->hotkeys->procesarHotkeys(&gameMenu.joystick->inputs)){
+			if (gameMenu.getLastStatus() == EMU_STARTED){
+				SDL_FillRect(gameMenu.video_page, NULL, gameMenu.uBkgColor);
+			}
+			gameMenu.setEmuStatus(gameMenu.getLastStatus());
+			if (gameMenu.bg_screenshot){
+				SDL_FreeSurface(gameMenu.bg_screenshot);
+				gameMenu.bg_screenshot = NULL;
+			}
+			return 0;
+		}
+
+		gameMenu.running = !gameMenu.joystick->evento.quit;
 	}
 
-	if (askEvento.quit){
-		gameMenu.running = false; // Marcamos para salir
-	}
+	return res;
 }
 
-void pollInputs(GameMenu &gameMenu, ListMenu &listMenu){
-	SDL_Event event;
-	while (SDL_PollEvent(&event)) {
-		switch (event.type) {
-			case SDL_QUIT:
-				gameMenu.running = false;
-				break;
-			case SDL_JOYBUTTONDOWN:
-				gameMenu.configMenus->updateButton(event.jbutton.button, KEY_JOY_BTN);
-				break;
-			case SDL_JOYHATMOTION:
-				if (event.jhat.value != 0){ //Solo en el momento del joydown
-					gameMenu.configMenus->updateButton(event.jhat.value, KEY_JOY_HAT);
-                }
-                break;
-			case SDL_JOYAXISMOTION:
-				gameMenu.configMenus->updateAxis(event.jaxis.value, event.jaxis.axis);
-				break;
-			default:
-				break;
-		}
+/**
+ * 
+ */
+void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu){
+	static Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	ConfigEmu *emu = gameMenu.getCfgLoader()->getCfgEmu();
+
+	if (processInputs(gameMenu, listMenu, emu->generalConfig) == 1){
+		if (listMenu.animateBkg) 
+			tileMap.draw(gameMenu.video_page);
+		else 
+			SDL_FillRect(gameMenu.video_page, NULL, bkgText);
+		
+		gameMenu.refreshScreen(listMenu);
 	}
-	gameMenu.joystick->resetAllValues();
+    static uint32_t lastTime = SDL_GetTicks();
+    if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
+        tileMap.speed++;
+    }
 }
 
 void updateMenuOverlay(GameMenu &gameMenu, ListMenu &listMenu){
 	static Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
-
-	if (gameMenu.configMenus->getStatus() == POLLING_INPUTS){
-		pollInputs(gameMenu, listMenu);
-	} else {	
-		//Procesamos los controles de la aplicacion
-		tEvento askEvento = gameMenu.WaitForKey();
-		processEvents(gameMenu, listMenu, askEvento);
-	}
+	processInputs(gameMenu, listMenu, true);
 
 	if (gameMenu.bg_screenshot){
 		SDL_BlitSurface(gameMenu.bg_screenshot, NULL, gameMenu.video_page, NULL);

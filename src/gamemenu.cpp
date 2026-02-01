@@ -4,7 +4,6 @@
 #include <gfx/gfx_utils.h>
 #include <io/dirutil.h>
 #include <beans/structures.h>
-#include <io/joymapper.h>
 #include <so/launcher.h>
 #include <libretro/libretro.h>
 
@@ -28,7 +27,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	bkgTextFps = SDL_MapRGB(this->screen->format, 0, 0, 0);
 	uBkgColor = SDL_MapRGB(this->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 
-	if (joystick->init_all_joysticks()){
+	if (!joystick->init_all_joysticks()){
 		configButtonsJOY();
 	}
 
@@ -80,14 +79,8 @@ std::string GameMenu::configButtonsJOY(){
     mPrevHatValues = new std::map<int, int>[mNumJoysticks];
 
 	int buttons = SDL_JoystickNumButtons(joystick->g_joysticks[0]);
-
-
     long delay = 0;
     unsigned long before = 0;
-    const char* JoystickButtonsMSG[] = {"Arriba","Abajo","Izquierda","Derecha","Aceptar","Cancelar", "X", "Y", 
-		"Pagina anterior", "Pagina siguiente", "Select", "Buscar elemento", "Click Stick Izquierdo", "Click Stick Derecho"};
-	int JoyButtonsVal[] = {JOY_BUTTON_UP, JOY_BUTTON_DOWN, JOY_BUTTON_LEFT, JOY_BUTTON_RIGHT, JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y
-		, JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_SELECT, JOY_BUTTON_START, JOY_BUTTON_L3, JOY_BUTTON_R3};
     //Posiciones de los botones calculadas en porcentaje respecto al alto y ancho de la imagen
     //t_posicion_precise imgButtonsRelScreen[] = {{0.3512,0.682,0,0},{0.3512,0.84,0,0},{0.295,0.76,0,0},{0.4075,0.76,0,0},
     //        {0.79375,0.616,0,0},{0.87625,0.496,0,0},{0.2225,0.194,0,0},{0.7775,0.194,0,0},{0.39375,0.512,0,0},{0.60875,0.512,0,0}};
@@ -139,9 +132,9 @@ std::string GameMenu::configButtonsJOY(){
         }*/
 		
 		SDL_FillRect(this->screen, NULL, bkgText);
-		Constant::drawTextCent(this->screen, Fonts::getFont(Fonts::FONTSMALL), JoystickButtonsMSG[i], 0, 20, true, false, textColor, 0);
+		Constant::drawTextCent(this->screen, Fonts::getFont(Fonts::FONTSMALL), FRONTEND_BTN_TXT[i], 0, 20, true, false, textColor, 0);
         SDL_Flip(this->screen);
-
+		/*
         while( SDL_PollEvent( &event ) ){
              switch( event.type ){
                 case SDL_QUIT:
@@ -189,7 +182,7 @@ std::string GameMenu::configButtonsJOY(){
                     mPrevAxisValues[event.jaxis.which][event.jaxis.axis] = event.jaxis.value;
                     break;
              }
-        }
+        }*/
 
 		//buttons + 4 -> sumando las 4 crucetas
         if (i == tam || i >= buttons + 4){
@@ -200,7 +193,7 @@ std::string GameMenu::configButtonsJOY(){
         if(delay > 0) SDL_Delay(delay);
     } while (!salir);
 
-    joystick->saveButtonsFrontend(Constant::getAppDir() + Constant::getFileSep() + "joystick.ini");
+    //joystick->saveButtonsFrontend(Constant::getAppDir() + Constant::getFileSep() + "joystick.ini");
     return salida;
 }
 
@@ -1100,8 +1093,6 @@ void GameMenu::processMessages(){
         SDL_FillRect(this->video_page, &message.rect, this->uBkgColor);
     }
 }
-
-
 
 void GameMenu::processConfigChanges(){
 	selectScalerMode(*this->current_scaler_mode);

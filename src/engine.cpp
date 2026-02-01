@@ -76,8 +76,3 @@ int Engine::initFont(){
 	return 0;
 }
 
-tEvento Engine::WaitForKey(){
-	return joystick->WaitForKey(screen);
-}
-
-

@@ -35,6 +35,9 @@ static char rcsid =
 #include "SDL_joystick.h"
 #include "SDL_sysjoystick.h"
 #include "SDL_joystick_c.h"
+#ifdef _XBOX
+#include "SDL_events.h"
+#endif
 
 /* Function to scan the system for joysticks.
  * This function should set SDL_numjoysticks to the number of available
@@ -46,12 +49,10 @@ static char rcsid =
 #define AXIS_MIN	-32768  /* minimum value for axis coordinate */
 #define AXIS_MAX	32767   /* maximum value for axis coordinate */
 #define MAX_AXES	4		/* each joystick can have up to 6 axes */
-#define MAX_BUTTONS	12		/* and 12 buttons                      */
+#define MAX_BUTTONS	12		/* and 14 buttons                      */
 #define	MAX_HATS	2
 
-
-extern BOOL                     g_bDevicesInitialized;
-
+ 
 #ifndef _XBOX_DONT_USE_DEVICES
 
 typedef struct GAMEPAD
@@ -105,7 +106,7 @@ XINPUT_STATE g_InputStates[4];
 // Global instance of custom gamepad devices
 XBGAMEPAD g_Gamepads[4];
 
-float (xfabsf)(float x)
+__inline float (xfabsf)(float x)
 {
 	if (x == 0)
 		return x;
@@ -170,15 +171,13 @@ int SDL_SYS_JoystickOpen(SDL_Joystick *joystick)
 	BOOL bWasConnected;
 	BOOL bPressed;
 	DWORD b = 0;
-
-	g_bDevicesInitialized = TRUE;
-
-	joystick->hwdata = (struct joystick_hwdata *) malloc(sizeof(*joystick->hwdata));
+ 
+	joystick->hwdata = XPhysicalAlloc(sizeof(*joystick->hwdata), MAXULONG_PTR ,0, PAGE_READWRITE | MEM_LARGE_PAGES );
 
 	joystick->nbuttons = MAX_BUTTONS;
 	joystick->naxes = MAX_AXES;
 	joystick->nhats = MAX_HATS;
-	joystick->name = "Xbox SDL Gamepad V0.02";
+	joystick->name = "Xbox SDL Gamepad V0.04";
 	
  
     ZeroMemory( &g_InputStates[joystick->index], sizeof(XINPUT_STATE) );
@@ -196,8 +195,7 @@ int SDL_SYS_JoystickOpen(SDL_Joystick *joystick)
 
 	// Store the capabilities of the device
 	if( TRUE == joystick->hwdata->pGamepads.bInserted )
-	{
-		ZeroMemory( &joystick->hwdata->pGamepads, sizeof(joystick->hwdata->pGamepads) );
+	{		 
 		joystick->hwdata->pGamepads.bConnected = TRUE;
 		joystick->hwdata->pGamepads.bInserted  = TRUE;
 		XInputGetCapabilities( joystick->index, XINPUT_FLAG_GAMEPAD, &joystick->hwdata->pGamepads.caps );
@@ -262,12 +260,9 @@ void SDL_SYS_JoystickUpdate(SDL_Joystick *joystick)
  
 	int hat=0, changed=0;
 
-  
-    // If we have a valid device, poll it's state and track button changes
-    if( joystick->hwdata->pGamepads.bConnected )
-    {
-        // Read the input state
-        XInputGetState( joystick->hwdata->pGamepads.dwUserIndex, &g_InputStates[joystick->index] );
+    // Read the input state
+    if (XInputGetState( joystick->hwdata->pGamepads.dwUserIndex, &g_InputStates[joystick->index] ) == ERROR_SUCCESS)
+	{
 
         // Copy gamepad to local structure
         memcpy( &joystick->hwdata->pGamepads, &g_InputStates[joystick->index].Gamepad, sizeof(XINPUT_GAMEPAD) );
@@ -386,8 +381,8 @@ void SDL_SYS_JoystickUpdate(SDL_Joystick *joystick)
 			if (joystick->buttons[9])
 				SDL_PrivateJoystickButton(joystick, (Uint8)9, SDL_RELEASED);
 		}
-
-		if (joystick->hwdata->pGamepads.wButtons & XINPUT_GAMEPAD_LEFT_THUMB)
+ 
+	    if (joystick->hwdata->pGamepads.bLeftTrigger > 200)
 		{
 			if (!joystick->buttons[10])
 				SDL_PrivateJoystickButton(joystick, (Uint8)10, SDL_PRESSED);
@@ -398,7 +393,7 @@ void SDL_SYS_JoystickUpdate(SDL_Joystick *joystick)
 				SDL_PrivateJoystickButton(joystick, (Uint8)10, SDL_RELEASED);
 		}
 
-		if (joystick->hwdata->pGamepads.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB)
+		if (joystick->hwdata->pGamepads.bRightTrigger > 200)
 		{
 			if (!joystick->buttons[11])
 				SDL_PrivateJoystickButton(joystick, (Uint8)11, SDL_PRESSED);
@@ -408,11 +403,6 @@ void SDL_SYS_JoystickUpdate(SDL_Joystick *joystick)
 			if (joystick->buttons[11])
 				SDL_PrivateJoystickButton(joystick, (Uint8)11, SDL_RELEASED);
 		}
-
-			
-
-       
-
 
         
     }
@@ -507,7 +497,8 @@ void SDL_SYS_JoystickClose(SDL_Joystick *joystick)
 {
 	if (joystick->hwdata != NULL) {
 		/* free system specific hardware data */
-		free(joystick->hwdata);
+		XPhysicalFree(joystick->hwdata);
+		joystick->hwdata=NULL;
 	}
 
 	return;

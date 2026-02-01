@@ -29,7 +29,6 @@ class Engine{
 		bool running;
 		int initEngine(CfgLoader* cfgLoader);
         void stopEngine();
-		tEvento WaitForKey();
     protected:
 		int initFont();
 		Fileio fileio;

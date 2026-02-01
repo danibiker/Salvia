@@ -163,6 +163,12 @@ static char *JOY_DESCRIPTIONS[] = {"JOY_BUTTON_A",
             "JOY_AXIS_R2",
             "MAXJOYBUTTONS"};
 
+static const char* FRONTEND_BTN_TXT[] = {"Arriba","Abajo","Izquierda","Derecha","Aceptar","Cancelar", "X", "Y", 
+		"Pagina anterior", "Pagina siguiente", "Select", "Start", "Click Stick Izquierdo", "Click Stick Derecho"};
+
+static int FRONTEND_BTN_VAL[] = {JOY_BUTTON_UP, JOY_BUTTON_DOWN, JOY_BUTTON_LEFT, JOY_BUTTON_RIGHT, JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y
+		, JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_SELECT, JOY_BUTTON_START, JOY_BUTTON_L3, JOY_BUTTON_R3};
+
 #define MAX_PLAYERS 4
 
 typedef enum {
@@ -379,6 +385,21 @@ class Constant{
             std::vector<std::string> elems;
             return splitChar(s, delim, elems);
         }
+
+		static std::vector<int> Constant::splitInt(const std::string& s, char delimiter) {
+			std::vector<int> tokens;
+			std::string token;
+			std::istringstream tokenStream(s);
+
+			while (std::getline(tokenStream, token, delimiter)) {
+				// Trim opcional por si hay espacios entre la coma y el número
+				std::string trimmed = Constant::Trim(token); 
+				if (!trimmed.empty()) {
+					tokens.push_back(std::atoi(trimmed.c_str()));
+				}
+			}
+			return tokens;
+		}
 
         /**
         *
