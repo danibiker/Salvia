@@ -22,6 +22,11 @@ class Image : public Object{
         Dimension relacion(const Dimension &src, const Dimension &dst );
         Dimension centrado(const Dimension &src, const Dimension &dst);
 		bool closeImage();
+
+		void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest, 
+                      int src_x, int src_y, int src_w, int src_h, 
+                      int dst_x, int dst_y, int dst_w, int dst_h);
+
     private:
         string filepath;
         SDL_Surface* img;
@@ -29,7 +34,5 @@ class Image : public Object{
 		SDL_Surface* cachedSurface; // Almacena la imagen ya escalada
 		int lastW, lastH;           // Para detectar si el tamaño cambió
 
-		void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest, 
-                      int src_x, int src_y, int src_w, int src_h, 
-                      int dst_x, int dst_y, int dst_w, int dst_h);
+		
 };

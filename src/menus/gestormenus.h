@@ -46,7 +46,9 @@ class Opcion {
 public:
     std::string titulo;
     TipoOpcion tipo;
-    Opcion(std::string t, TipoOpcion tp) : titulo(t), tipo(tp) {}
+	int icon;
+    Opcion(std::string t, TipoOpcion tp) : titulo(t), tipo(tp), icon(-1) {}
+	Opcion(std::string t, TipoOpcion tp, int ico) : titulo(t), tipo(tp), icon(ico) {}
 	virtual std::string ejecutar() = 0; // Método virtual puro
     virtual ~Opcion() {}
 };
@@ -122,6 +124,7 @@ class OpcionSubMenu : public Opcion {
 public:
     Menu* destino;
     OpcionSubMenu(std::string t, Menu* d) : Opcion(t, OPC_SUBMENU), destino(d) {}
+	OpcionSubMenu(std::string t, Menu* d, int ico) : Opcion(t, OPC_SUBMENU, ico), destino(d) {}
 	std::string ejecutar() override {
         return "";
     }
@@ -138,6 +141,9 @@ public:
 
     OpcionExec(std::string t, FuncType v, T* p) 
         : Opcion(t, OPC_EXEC), execfunc(v), data(p) {}
+
+	OpcionExec(std::string t, FuncType v, T* p, int ico) 
+        : Opcion(t, OPC_EXEC, ico), execfunc(v), data(p) {}
 
     // Implementación del método virtual
     std::string ejecutar() override {

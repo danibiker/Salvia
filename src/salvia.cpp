@@ -19,12 +19,11 @@
 #include "uiobjects/tilemap.h"
 #include "unzip/unziptool.h"
 #include "const/menuconst.h"
-#include "libretro/libretro.h"
-#include "libretro/vfs.h"
 #include "statesram.h"
 #include "io/inputsmenu.h"
 #include "io/inputscore.h"
-
+#include "http/scrapper.h"
+#include "image/icons.h"
 
 GameMenu *gameMenu;
 Logger *logger;
@@ -42,6 +41,8 @@ const std::string Constant::WHITESPACE = " \n\r\t";
 volatile uint32_t Constant::totalTicks = 0;
 int Constant::EXEC_METHOD = launch_batch;
 const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
+vector<SDL_Surface *> Icons::icons;
+vector<SDL_Surface *> Icons::icons_carts;
 
 static uint16_t* conversion_buffer = NULL;
 static std::size_t buffer_size = 0;
@@ -54,7 +55,12 @@ struct retro_core_variable {
 
 // Ya no declaramos punteros a función, sino que usamos las funciones 
 // que vendrán dentro del .lib (se resuelven al linkar)
-extern "C" {	
+#ifdef __cplusplus
+extern "C" {
+#endif
+	#include "libretro/libretro.h"
+	#include "libretro/vfs.h"
+
     void retro_init(void);
     void retro_deinit(void);
     void retro_run(void);
@@ -70,7 +76,9 @@ extern "C" {
 	void retro_unload_game(void);
 	void retro_set_controller_port_device(unsigned port, unsigned device);
 	retro_audio_buffer_status_callback_t audio_status_cb;
+#ifdef __cplusplus
 }
+#endif
 
 void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
     //va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
@@ -167,9 +175,11 @@ static bool retro_environment(unsigned cmd, void *data) {
 			fmt = *fmtAsked;
 
 			if (*fmtAsked == RETRO_PIXEL_FORMAT_XRGB8888){
+				LOG_INFO("Core solicita XRGB8888 (32 bits)");
 				// Forzamos a que sea RGB565 (16 bits)
 				// Esto le dice a Nestopia: "Solo acepto 16 bits, configúrate así"
-				*fmtAsked = RETRO_PIXEL_FORMAT_RGB565;
+				//*fmtAsked = RETRO_PIXEL_FORMAT_RGB565;
+				//return true;
 			} else if (*fmtAsked != RETRO_PIXEL_FORMAT_RGB565){
 				return false;
 			}
@@ -359,9 +369,16 @@ static bool retro_environment(unsigned cmd, void *data) {
             // Aquí el Core te está diciendo qué dispositivos soporta.
             for (unsigned i = 0; info[i].types && i < MAX_PLAYERS; ++i) {
 				//gameMenu->getCfgLoader()->g_ports[i].available_types.clear();
-				for (unsigned j = 0; j < info[i].num_types; ++j) {
+				for (unsigned j = 0; j < info[i].num_types; j++) {
 					unsigned id = info[i].types[j].id;
 					const char* desc = info[i].types[j].desc;
+
+					// VALIDACIÓN CRÍTICA
+					if (desc == NULL) {
+						LOG_DEBUG("Puerto %d: Se recibió un descriptor NULL para el ID %u. Saltando...", i, id);
+						continue; 
+					}
+
 					LOG_DEBUG("Puerto %d soporta: %s (ID: %u)", i, desc, id);
 					gameMenu->getCfgLoader()->g_ports[i].available_types.push_back(std::make_pair(id, desc));
 				}
@@ -390,7 +407,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return true;
 		}
 		default: {
-			if (cmd < 65583){
+			if (cmd < 65572){
 				LOG_DEBUG("Comando no tratado: %s", Constant::TipoToStr(cmd).c_str());
 			}
 			// Para comandos desconocidos como 52 o 65587
@@ -438,7 +455,7 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 
 	//Hacemos la comprobacion del pitch >= width * 4, por si hemos solicitado el RETRO_PIXEL_FORMAT_RGB565
 	//pero el core no lo acepta
-	if (fmt == RETRO_PIXEL_FORMAT_XRGB8888) {
+	if (fmt == RETRO_PIXEL_FORMAT_XRGB8888 && *gameMenu->current_scaler_mode != NO_VIDEO) {
 		// 2. Gestionar buffer de conversión de forma eficiente
         std::size_t needed = width * height * sizeof(uint16_t);
         if (!conversion_buffer || buffer_size < needed) {
@@ -881,6 +898,9 @@ void closeResources() {
         g_sram_data_last = NULL;
     }
 
+	CurlClient curlClient;
+	curlClient.close();
+
 	delete logger;
 	delete gameMenu;
 }
@@ -963,6 +983,13 @@ int main(int argc, char *argv[]) {
 
 	LOG_DEBUG("appdir: %s\n", Constant::getAppDir().c_str());
 	LOG_DEBUG("appexe: %s\n", Constant::getAppExecutable().c_str());
+	
+	Scrapper *scrapper = new Scrapper();
+	ScrapperConfig config;
+	config.downloadNoSS = true;
+	config.lenguaPreferida = "es";
+	config.regionPreferida = "eu";
+	
 
 	gameMenu = new GameMenu(&cfgLoader);
 
@@ -997,18 +1024,29 @@ int main(int argc, char *argv[]) {
 	if (!loadGameAtStart(argc, argv)){
 		//Workaround para mostrar una primera imagen del menu con las imagenes cargadas
 		listMenu.keyUp = true;
-		updateMenuScreen(tileMap, *gameMenu, listMenu);
+		//if (listMenu.animateBkg) 
+			tileMap.draw(gameMenu->video_page);
+		//else 
+		//	SDL_FillRect(gameMenu->video_page, NULL, bkgText);
+		gameMenu->refreshScreen(listMenu);
 		SDL_Flip(gameMenu->screen);
 		listMenu.keyUp = false;
 	}
 
 	InitSaveSystem();
 
+	Icons icons;
+	icons.loadIcons();
+
 	//Poblamos las opciones del core. Lo tenemos que hacer aquí porque ya se deberian 
 	//haber obtenido.
 	gameMenu->configMenus->poblarCoreOptions(&cfgLoader);
 	//retro_set_controller_port_device(puerto, id_guardado);
 	//retro_set_controller_port_device(0, 1);
+	
+	CurlClient curlClient;
+	curlClient.init();
+	//scrapper->scrapSystem(*cfgLoader.getCfgEmu(), config);
 
 	double nextFrameTime = Constant::getTicks();
 	while (gameMenu->running) {

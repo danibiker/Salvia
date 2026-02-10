@@ -809,6 +809,13 @@ void GameMenu::processFrontendEventsAfter(){
 	updateFps();
 	//Mostramos mensajes
 	processMessages();
+	//Actualizamos para detectar cuando soltamos un boton
+	processKeyUp();
+}
+
+void GameMenu::processKeyUp(){
+	if (getEmuStatus() == EMU_STARTED) return;
+	joystick->inputs.updateLastState();
 }
 
 /**

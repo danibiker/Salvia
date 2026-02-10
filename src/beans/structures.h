@@ -94,6 +94,7 @@ class GameFile{
     std::string longFileName;
     std::string gameTitle;
     std::size_t cutTitleIdx;
+	int systemid;
     //std::string gameImage;
 };
 
@@ -319,6 +320,11 @@ struct t_joy_state {
 	//To store the positions of the analog axis, but is not used by any core actually
 	int16_t g_analog_state[MAX_PLAYERS][MAX_ANALOG_AXIS];
 
+	// NUEVO: Estados del frame anterior
+    bool btn_last_state[MAX_PLAYERS][MAX_BUTTONS];
+    bool axis_last_state[MAX_PLAYERS][MAX_AXIS];
+    bool hats_last_state[MAX_PLAYERS][MAX_HATS];
+
 	// Manejadores de repetición
     t_repeat_handler btn_repeat[MAX_PLAYERS][MAX_BUTTONS];
     t_repeat_handler hat_repeat[MAX_PLAYERS][MAX_HATS];
@@ -344,6 +350,13 @@ struct t_joy_state {
 		clear(hats_state);
 		clear(g_analog_state, 0);
 	}
+	
+	// llamar a esto AL FINAL de cada frame del bucle principal
+    void updateLastState() {
+        memcpy(btn_last_state, btn_state, sizeof(btn_state));
+        memcpy(axis_last_state, axis_state, sizeof(axis_state));
+        memcpy(hats_last_state, hats_state, sizeof(hats_state));
+    }
 	
 	bool getCoreBtn(unsigned int player, unsigned int btn){
 		int sdlBtn = mapperCore.getSdlBtn(player, btn);
@@ -422,6 +435,26 @@ struct t_joy_state {
 		return getBtnTap(p,b) || getHatTap(p,b) || getAxisTap(p,b);
 	}	
 
+	// Helpers para tu mapper de Frontend
+	bool getBtnReleased(unsigned int p, unsigned int b) { 
+		int sdlIndex = mapperFrontend.getSdlBtn(p, b);
+		return getReleased(btn_state, btn_last_state, p, sdlIndex); 
+	}
+
+	bool getHatReleased(unsigned int p, unsigned int h) { 
+		int sdlIndex = mapperFrontend.getSdlHat(p, h);
+		return getReleased(hats_state, hats_last_state, p, sdlIndex); 
+	}
+
+	bool getAxisReleased(unsigned int p, unsigned int a) { 
+        int sdlIndex = mapperFrontend.getSdlAxis(p, a);
+        return getReleased(axis_state, axis_last_state, p, sdlIndex); 
+    }
+
+    bool getAnyReleased(unsigned int p, unsigned int i) {
+        return getBtnReleased(p, i) || getHatReleased(p, i) || getAxisReleased(p, i);
+    }
+
 	// Método genérico para detectar el "Tap" con auto-repeat
     template<size_t N, size_t M>
     bool getTap(bool (&stateArray)[N][M], t_repeat_handler (&repeatArray)[N][M], int player, int index) {
@@ -447,6 +480,18 @@ struct t_joy_state {
 			}
 		}
 	}
+
+	// Método genérico para detectar cuando se suelta
+	template<size_t N, size_t M>
+	bool getReleased(bool (&curState)[N][M], bool (&lastState)[N][M], int player, int index) {
+		if (player < 0 || player >= (int)N || index < 0 || index >= (int)M) 
+			return false;
+    
+		// Si antes era true y ahora es false, es que se acaba de soltar
+		return (lastState[player][index] == true && curState[player][index] == false);
+	}
+
+	
 };
 
 struct t_region{

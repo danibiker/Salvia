@@ -184,7 +184,7 @@ void TextArea::draw(SDL_Surface *video_page, GameTicks gameTicks){
         //textout_justify_ex(video_page, font, line.c_str(), this->getX(), this->getX() + this->getW() -1,
         //    nextLineY - pixelDesp, this->getW() / 3, Constant::textColor, -1);
         //alfont_textout_ex(video_page, fontSmall, line.c_str(), this->getX() + this->marginX, nextLineY - pixelDesp, Constant::textColor, -1);
-		Constant::drawText(video_page, fontSmall, line.c_str(), this->getX() + this->marginX, (int) (nextLineY - pixelDesp), white, 0);
+		Constant::drawTextTransparent(video_page, fontSmall, line.c_str(), this->getX() + this->marginX, (int) (nextLineY - pixelDesp), white, 0);
 
         nextLineY = this->getY() + marginTop + (++i) * (face_h + lineSpace);
     } while ((size_t) (i + this->lastScroll) < lines.size() && nextLineY < this->getY() + this->getH() - face_h);

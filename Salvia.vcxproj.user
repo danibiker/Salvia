@@ -122,4 +122,42 @@
     <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_beetle_psx|Win32'">
+    <LocalDebuggerCommand>$(ProjectDir)DistroWin\$(TargetName)$(TargetExt)</LocalDebuggerCommand>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)DistroWin</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_beetle_psx|Win32'">
+    <LocalDebuggerCommand>$(ProjectDir)DistroWin\$(TargetName)$(TargetExt)</LocalDebuggerCommand>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_beetle_psx|Win32'">
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)DistroWin</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_pcsx|Win32'">
+    <LocalDebuggerCommand>$(ProjectDir)DistroWin\$(TargetName)$(TargetExt)</LocalDebuggerCommand>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_pcsx|Win32'">
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)DistroWin</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_pcsx|Win32'">
+    <LocalDebuggerCommand>$(ProjectDir)DistroWin\$(TargetName)$(TargetExt)</LocalDebuggerCommand>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_pcsx|Win32'">
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)DistroWin</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_picodrive|Win32'">
+    <LocalDebuggerCommand>$(ProjectDir)DistroWin\$(TargetName)$(TargetExt)</LocalDebuggerCommand>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_picodrive|Win32'">
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)DistroWin\</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerEnvironment>Path=$(Path);$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86</LocalDebuggerEnvironment>
+  </PropertyGroup>
 </Project>

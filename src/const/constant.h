@@ -130,42 +130,6 @@ typedef enum {JOY_BUTTON_A = 0,
             JOY_AXIS_R2,
             MAXJOYBUTTONS} joystickButtons;
 
-static char *JOY_DESCRIPTIONS[] = {"JOY_BUTTON_A",
-            "JOY_BUTTON_B",
-            "JOY_BUTTON_X",
-            "JOY_BUTTON_Y",
-            "JOY_BUTTON_L",
-            "JOY_BUTTON_R",
-            "JOY_BUTTON_SELECT",
-            "JOY_BUTTON_START",
-            "JOY_BUTTON_L3",
-            "JOY_BUTTON_R3",
-            "JOY_BUTTON_UP",
-            "JOY_BUTTON_UPLEFT",
-            "JOY_BUTTON_LEFT",
-            "JOY_BUTTON_DOWNLEFT",
-            "JOY_BUTTON_DOWN",
-            "JOY_BUTTON_DOWNRIGHT",
-            "JOY_BUTTON_RIGHT",
-            "JOY_BUTTON_UPRIGHT",
-            "JOY_BUTTON_VOLUP",
-            "JOY_BUTTON_VOLDOWN",
-            "JOY_BUTTON_CLICK",
-            "JOY_AXIS1_RIGHT",
-            "JOY_AXIS1_LEFT",
-            "JOY_AXIS1_UP",
-            "JOY_AXIS1_DOWN",
-            "JOY_AXIS2_RIGHT",
-            "JOY_AXIS2_LEFT",
-            "JOY_AXIS2_UP",
-            "JOY_AXIS2_DOWN",
-            "JOY_AXIS_L2",
-            "JOY_AXIS_R2",
-            "MAXJOYBUTTONS"};
-
-static const char* FRONTEND_BTN_TXT[] = {"Arriba","Abajo","Izquierda","Derecha","Aceptar","Cancelar", "X", "Y", 
-		"Pagina anterior", "Pagina siguiente", "Select", "Start", "Click Stick Izquierdo", "Click Stick Derecho"};
-
 static int FRONTEND_BTN_VAL[] = {JOY_BUTTON_UP, JOY_BUTTON_DOWN, JOY_BUTTON_LEFT, JOY_BUTTON_RIGHT, JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y
 		, JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_SELECT, JOY_BUTTON_START, JOY_BUTTON_L3, JOY_BUTTON_R3};
 
@@ -178,8 +142,35 @@ typedef enum {
         page_white_gear,
         page_white_compressed,
         page_white_picture,
-        page_white_zip
+        page_white_zip,
+		cfg_video,
+		cfg_settings,
+		cfg_settings_core,
+		cfg_subsettings,
+		cfg_remap,
+		cfg_savestates,
+		cfg_saving,
+		cfg_return,
+		max_icons
 }enumIco;
+
+typedef enum {cart_gba,
+			  cart_gb,
+			  cart_sms,
+			  cart_genesis,
+			  cart_snes,
+			  cart_32x,
+			  cart_gg,
+			  cart_mcd,
+			  cart_nes,
+			  cart_pce,
+			  cart_psx,
+			  max_carts};
+
+extern const char *JOY_DESCRIPTIONS[];
+extern const char *FRONTEND_BTN_TXT[];
+extern const char *ICONS_PATH[];
+extern const char *ICONS_CARTS_PATH[];
 
 typedef enum {
     launch_system,          //0
@@ -237,8 +228,6 @@ class Constant{
         static void setAppExecutable(std::string var){
             appExecutable = var;
         }
-
-
 
 		// Función auxiliar para convertir int a std::string (VS2008 no tiene std::to_string)
 		static std::string intToString(int value) {
@@ -491,7 +480,6 @@ class Constant{
 
         static void setExecMethod(int var){EXEC_METHOD = var;}
         static int getExecMethod(){return EXEC_METHOD;}
-		
 	private:
 		static std::string appDir;
 		static std::string appExecutable;

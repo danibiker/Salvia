@@ -8,6 +8,8 @@
 #include <gfx/SDL_gfxPrimitives.h>
 #include <font/fonts.h>
 #include <io/joystick.h>
+#include <image/icons.h>
+
 
 SDL_Surface* GestorMenus::imgText;
 
@@ -162,13 +164,13 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuAskSavestates->opciones.push_back(new OpcionLista("Seleccionar acción", askOptions, &askNumOptions));
 
     // 3. Poblar Menú Principal
-    menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración vídeo", menuVideo));
-	menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración emulación", menuEmulation));
-	menuRaiz->opciones.push_back(new OpcionSubMenu("Entrada", menuEntrada));
-	menuRaiz->opciones.push_back(new OpcionSubMenu("Opciones del core", menuCoreOptions));
-	menuRaiz->opciones.push_back(new OpcionSubMenu("Partidas guardadas", menuSavestates));
-	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>("Guardar opciones", guardarMainConfig, refConfig));
-	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>("Volver", volverEmulacion, &status));
+    menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración vídeo", menuVideo, cfg_video));
+	menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración emulación", menuEmulation, cfg_settings));
+	menuRaiz->opciones.push_back(new OpcionSubMenu("Entrada", menuEntrada, cfg_remap));
+	menuRaiz->opciones.push_back(new OpcionSubMenu("Opciones del core", menuCoreOptions, cfg_settings_core));
+	menuRaiz->opciones.push_back(new OpcionSubMenu("Partidas guardadas", menuSavestates, cfg_savestates));
+	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>("Guardar opciones", guardarMainConfig, refConfig, cfg_saving));
+	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>("Volver", volverEmulacion, &status, cfg_return));
 
     // Establecer estado inicial
     menuActual = menuRaiz;
@@ -561,7 +563,7 @@ void GestorMenus::updateButton(int sdlbtn, TipoKey tipoKey){
 		} else if (k && k->intRef) {
 			int btnToSend = sdlbtn;
 			if (tipoKey == KEY_JOY_HAT && (sdlbtn == SDL_HAT_DOWN || sdlbtn == SDL_HAT_UP || sdlbtn == SDL_HAT_LEFT || sdlbtn == SDL_HAT_RIGHT)){
-				k->tipoKey == KEY_JOY_HAT;
+				k->tipoKey = KEY_JOY_HAT;
 				switch (sdlbtn){
 					case SDL_HAT_DOWN:
 						btnToSend = JOY_BUTTON_DOWN;
@@ -577,7 +579,7 @@ void GestorMenus::updateButton(int sdlbtn, TipoKey tipoKey){
 						break;
 				}
 			} else {
-				k->tipoKey == KEY_JOY_BTN;
+				k->tipoKey = KEY_JOY_BTN;
 			}
 			
 			k->joyInputs->clearAll();
@@ -598,6 +600,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 	static const int bkg = SDL_MapRGB(video_page->format, bkgMenu.r, bkgMenu.g, bkgMenu.b);
 	static const int iwhite = SDL_MapRGB(video_page->format, white.r, white.g, white.b);
 	static const int iblack = SDL_MapRGB(video_page->format, black.r, black.g, black.b);
+	Icons icons;
 
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 	int face_h = TTF_FontLineSkip(fontMenu);
@@ -653,8 +656,16 @@ void GestorMenus::draw(SDL_Surface *video_page){
             }
 			rect(video_page, rectElem.x - 1, rectElem.y - 1, rectElem.x + rectElem.w, rectElem.y + rectElem.h, bkgMenu);
         }
-                
-        Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX(), 
+        
+		int marginIco = 0;
+
+		if (option->icon > -1 && option->icon < max_icons){
+			marginIco = icons.icon_w_add * 2 + 5;
+			SDL_Rect dstRect = {this->getX() - icons.icon_w_add + 2, this->getY() + fontHeightRect - icons.icon_w_add / 2, 0, 0};
+			SDL_BlitSurface(icons.icons[option->icon], NULL, video_page, &dstRect);
+		}
+
+        Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX() + marginIco, 
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
 
 		if (option->tipo == OPC_KEY && !((OpcionKey *)option)->description.empty()){

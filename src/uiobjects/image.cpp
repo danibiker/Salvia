@@ -1,6 +1,7 @@
 #include <uiobjects/image.h>
 
 #include <SDL_image.h>
+#include <gfx/SDL_rotozoom.h>
 #include <io/dirutil.h>
 
 Image::Image(){
@@ -75,6 +76,7 @@ bool Image::loadImage(string filepathToOpen){
         
 		if ((img = IMG_Load(filepathToOpen.c_str())) != NULL){   
 			filepath = filepathToOpen;
+			ret = true;
 		} else {
             filepath = "";
         }
@@ -164,8 +166,6 @@ Dimension Image::centrado(const Dimension &src, const Dimension &dst) {
     // tienen dimensiones diferentes.
     SDL_BlitSurface(src, &srcRect, dest, &dstRect);
 }*/
-
-#include <gfx/SDL_rotozoom.h>
 
 void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest, 
                       int src_x, int src_y, int src_w, int src_h, 

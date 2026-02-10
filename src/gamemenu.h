@@ -123,6 +123,7 @@ class GameMenu : public Engine{
 		std::string configButtonsJOY();
 		SDL_Surface* clonarPantalla(SDL_Surface*, int);
 		void selectScalerMode(int);
+		void processKeyUp();
 		bool dblBufferEnabled;
 		std::string getPathPrefix(std::string);
         std::string encloseWithCharIfSpaces(std::string, std::string);

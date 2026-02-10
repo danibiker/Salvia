@@ -6,6 +6,7 @@
 #include <font/fonts.h>
 #include <gfx/SDL_gfxPrimitives.h>
 #include <gfx/gfx_utils.h>
+#include <image/icons.h>
 
 SDL_Surface* ListMenu::imgText;
 
@@ -82,6 +83,8 @@ void ListMenu::setLayout(int layout, int screenw, int screenh){
     }
 }
 
+
+
 /**
     * 
     */
@@ -93,6 +96,9 @@ void ListMenu::draw(SDL_Surface *video_page){
     //To scroll one letter in one second. We use the face_h because the width of 
     //a letter is not fixed.
     const float pixelsScrollFps = max(ceil(face_h / (float)textFps), 1.0f);
+
+	Icons icons;
+	const int marginTextIcon = icons.icon_w_add + 14;
 
     for (int i=this->iniPos; i < this->endPos; i++){
         auto game = this->listGames.at(i).get();
@@ -132,25 +138,7 @@ void ListMenu::draw(SDL_Surface *video_page){
 				const int txtMaxWidth = Fonts::getSize(Fonts::FONTBIG, line.substr(0, game->cutTitleIdx).c_str());
                 const int txtTotalWidth = Fonts::getSize(Fonts::FONTBIG, line.c_str());
                 txtDifWidth = txtTotalWidth - txtMaxWidth;
-                //imgText = create_bitmap(txtTotalWidth, fontMenu->face_h);
-				//clear_to_color(imgText, transpink);
-                //alfont_textout_ex(imgText, fontMenu, line.c_str(), 0, 0, lineTextColor, colorTrans);
-
-				/*imgText = SDL_CreateRGBSurface(
-					video_page->flags,          // Mismos flags (SWSURFACE/HWSURFACE)
-					txtTotalWidth,              // Mismo ancho
-					face_h,              // Mismo alto
-					video_page->format->BitsPerPixel, // Misma profundidad de color
-					video_page->format->Rmask,  // Máscara Roja
-					video_page->format->Gmask,  // Máscara Verde
-					video_page->format->Bmask,  // Máscara Azul
-					video_page->format->Amask   // Máscara Alfa
-				);*/
-
-				// 2. Crear la superficie con texto y fondo transparente
-				// "fuente" debe ser un TTF_Font* previamente cargado
 				imgText = TTF_RenderText_Blended(fontMenu, line.c_str(), lineTextColor);
-				//Constant::drawText(imgText, fontMenu, line.c_str(), 0, 0, lineTextColor, bkg);
                 lastSel = this->curPos;
             }
                     
@@ -177,35 +165,65 @@ void ListMenu::draw(SDL_Surface *video_page){
             //    this->getY() + fontHeightRect, lineTextColor, lineBackground);
 			Constant::drawTextCent(video_page, fontMenu, line.c_str(), 0, this->getY() + fontHeightRect, true, false, lineTextColor, lineBackground);
         } else {
+			SDL_Rect dstRect;
+			dstRect.x = this->getX() + marginX;
+			dstRect.y = this->getY() + fontHeightRect;
+
             if (layout == LAYBOXES && i == this->curPos && imgText != NULL){
-                //masked_blit for transparent surfaces with pink background
-                //masked_blit(imgText, video_page, pixelShift, 0, 
-                    //this->getX() + marginX, this->getY() + fontHeightRect, 
-                    //this->getW() - 2*this->marginX, fontMenu->face_h);
-						
-				// 1. Definir los rectángulos de origen (source) y destino (destination)
 				SDL_Rect srcRect;
 				srcRect.x = (Sint16)pixelShift;
 				srcRect.y = 0;
 				srcRect.w = this->getW() - 2 * this->marginX;
 				srcRect.h = face_h; // Usando la equivalencia de face_h
 
-				SDL_Rect dstRect;
-				dstRect.x = this->getX() + marginX;
-				dstRect.y = this->getY() + fontHeightRect;
-				// En SDL, w y h en el dstRect son ignorados por el Blit (no escala), 
-				// pero es buena práctica ponerlos o dejarlos a 0.
-
-				// 2. Ejecutar el blit
-				// video_page es tu superficie de destino (normalmente 'screen' o un buffer)
+				SDL_Rect dstRectWithMargin = dstRect;
+				dstRectWithMargin.x += marginTextIcon;
 				// imgText es la superficie con el texto
-				SDL_BlitSurface(imgText, &srcRect, video_page, &dstRect);
-            } else {
-                Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX() + marginX, 
+				SDL_BlitSurface(imgText, &srcRect, video_page, &dstRectWithMargin);
+
+			} else {
+                Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX() + marginX + marginTextIcon, 
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
             }
+
+			if (icons.icons.size() > page_white){
+				//dstRect.y = icons.icon_w_add / 2;
+				dstRect.y += 2;
+				//dstRect.x = 4;
+				//SDL_BlitSurface(icons.icons[page_white], NULL, video_page, &dstRect);
+				SDL_BlitSurface(icons.icons_carts[getCartForSystem(game->systemid)], NULL, video_page, &dstRect);
+			}
         }
     }
+}
+
+int ListMenu::getCartForSystem(int systemid){
+	switch(systemid){
+		case 1:
+			return cart_genesis;
+		case 2: 
+			return cart_sms;
+		case 3:
+			return cart_nes;
+		case 4:
+			return cart_snes;
+		case 9:
+			return cart_gb;
+		case 12:
+			return cart_gba;
+		case 19:
+			return cart_32x;
+		case 20:
+			return cart_mcd;
+		case 21:
+			return cart_gg;
+		case 31:
+			return cart_pce;
+		case 57:
+			return cart_psx;
+		default:
+			return cart_nes;
+	}
 }
 
 /**
@@ -260,9 +278,17 @@ bool ListMenu::compareUniquePtrs(const std::unique_ptr<GameFile>& a,
 void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) {
     this->clear();
     dirutil dir;
+
+	vector<string> v = Constant::splitChar(emu.system, '_');
+	int system = 0;
+	if (v.size() > 0){
+		system = Constant::strToTipo<int>(v.at(0));
+	}
+
     //string filelong;
     for (size_t i=0; i < files.size(); i++){
         GameFile gameFile;
+		gameFile.systemid = system;
         auto file = files.at(i).get();
         //filelong = emu.use_extension ? file->filename : dir.getFileNameNoExt(file->filename);
         gameFile.shortFileName = file->filename;

@@ -144,6 +144,11 @@ int processInputs(GameMenu &gameMenu, ListMenu &listMenu, bool generalConfig){
 				listMenu.nextPage();
 			} 
 
+			listMenu.keyUp = gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_UP) ||
+				gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_DOWN) ||
+				gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_LEFT) ||
+				gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_RIGHT);
+
 			if (gameMenu.joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
 				vector<string> launchCommand = gameMenu.launchProgram(listMenu);	
 				if (launchCommand.size() > 1){

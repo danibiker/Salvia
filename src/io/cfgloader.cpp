@@ -361,7 +361,7 @@ std::string CfgLoader::getCoreCfgPath(){
 	int last = configMain[cfg::path_prefix].valueStr.length() - 1;
 	bool lastFileSep = true;
 	if (last < configMain[cfg::path_prefix].valueStr.length()){
-		configMain[cfg::path_prefix].valueStr[last] == Constant::getFileSep()[0];
+		configMain[cfg::path_prefix].valueStr[last] = Constant::getFileSep()[0];
 	}
 
 	return configMain[cfg::path_prefix].valueStr + (lastFileSep ? "" : Constant::getFileSep()) + 

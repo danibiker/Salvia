@@ -47,6 +47,7 @@ class ListMenu : public Object{
         void mapFileToList(string filepath);
         static bool compareUniquePtrs(const std::unique_ptr<GameFile>& a,
                                 const std::unique_ptr<GameFile>& b);
+		int getCartForSystem(int systemid);
 
         void filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu);
         void resetIndexPos();
