@@ -1410,7 +1410,7 @@
     <ClCompile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN;DEBUG;DEBUG_LOG;__x86_64__;_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN;DEBUG_LOG;__x86_64__;_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <CompileAs>CompileAsCpp</CompileAs>
       <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)..\curl-7.50.1\include</AdditionalIncludeDirectories>
@@ -3042,6 +3042,7 @@
     <ClInclude Include="src\gfx\SDL_gfxPrimitives.h" />
     <ClInclude Include="src\gfx\SDL_gfxPrimitives_font.h" />
     <ClInclude Include="src\gfx\SDL_rotozoom.h" />
+    <ClInclude Include="src\http\safedownloadqueue.h" />
     <ClInclude Include="src\http\scrapper.h" />
     <ClInclude Include="src\image\icons.h" />
     <ClInclude Include="src\image\lodepng.h" />

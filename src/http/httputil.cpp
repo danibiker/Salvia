@@ -133,8 +133,11 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L); // 15 segundos
 
 	// callback para llamar fuera a internet
+	#ifdef XBOX
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, curl_sockopt_callback);
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, NULL); // Se podria pasar this
+	#endif
+
 
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
@@ -184,8 +187,10 @@ bool CurlClient::fetchFile(const std::string& url, const std::string& localPath,
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L); // 15 segundos
 
 	// callback para llamar fuera a internet
+	#ifdef XBOX
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, curl_sockopt_callback);
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, NULL); // Podrías pasar 'this' si es una clase
+	#endif
 
 	CURLcode res = curl_easy_perform(curl);
 
@@ -249,7 +254,6 @@ int CurlClient::curl_sockopt_callback(void *clientp, curl_socket_t curlfd, curls
 	if (setsockopt(curlfd, SOL_SOCKET, 0x5801, (char*)&bypass, sizeof(bypass)) != 0) {
 		OutputDebugStringA("Error aplicando bypass en socket de cURL\n");
 	}
-    
 	return CURL_SOCKOPT_OK;
 }
 

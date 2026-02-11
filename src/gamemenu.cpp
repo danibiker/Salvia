@@ -49,7 +49,6 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	lastFpsUpdate = 0;
 	//initHqxFilter();
 	setSavePath();
-	scrapper = new Scrapper();
 };
 
 GameMenu::~GameMenu(){
@@ -65,7 +64,6 @@ GameMenu::~GameMenu(){
 		if (srf_32_convert.dst32) SDL_FreeSurface(srf_32_convert.dst32);
 		hqxClose();
 	#endif
-	delete scrapper;
 }
 
 std::string GameMenu::configButtonsJOY(){
@@ -320,7 +318,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
             if (listMenu.layout == LAYBOXES) {
 				Constant::drawTextCentTransparent(video_page, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 					true, false, textColor, 0);
-                
+				showScrapProcess(listMenu);
 				fastline(this->video_page, listMenu.marginX, listMenu.marginY - 1 , screen->w - listMenu.marginX, listMenu.marginY - 1, menuBars);
                 fastline(this->video_page, sepVertX, listMenu.marginY , sepVertX, listMenu.getH() + listMenu.marginY - 1, menuBars);
                 listMenu.draw(this->video_page);
@@ -393,6 +391,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
         }
 	} else if (listMenu.getNumGames() == 0 && emu.generalConfig){
 		configMenus->draw(video_page);
+		showScrapProcess(listMenu);
     } else if (listMenu.getNumGames() == 0){
 		//Constant::drawTextCent(video_page, fontBig, emu.name.c_str(), 
 		//			cfgLoader->getWidth(), face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
@@ -413,6 +412,20 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 		Constant::drawTextCent(video_page, fontsmall, "Press TAB to select the next entry or", 0, face_h_small + 3, true, true, textColor, 0);
 		Constant::drawTextCent(video_page, fontsmall, "Press ESC to exit", 0, (face_h_small + 3) * 2, true, true, textColor, 0);
     }
+}
+
+void GameMenu::showScrapProcess(ListMenu &listMenu){
+	TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
+    const int halfWidth = screen->w / 2;
+	int face_h_small = TTF_FontLineSkip(fontsmall);
+
+	if (Scrapper::isScrapping()){
+		Scrapper::g_status.procesados;
+		std::string str = "Scrapping: " + Constant::TipoToStr(Scrapper::g_status.procesados) + "/" + Constant::TipoToStr(Scrapper::g_status.total); 
+		std::string str2 = std::string(Scrapper::g_status.emuActual) + " - " + std::string(Scrapper::g_status.juegoActual);
+		Constant::drawTextTransparent(video_page, fontsmall, str.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 - face_h_small / 2 : 0 , textColor, 0);
+		Constant::drawTextTransparent(video_page, fontsmall, str2.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 + face_h_small / 2: 0 , textColor, 0);
+	}
 }
 
 /**
@@ -1148,6 +1161,11 @@ void GameMenu::setSavePath(){
 void GameMenu::startScrapping(){
 	LOG_DEBUG("Starting the scrap process");
 
+	if (Scrapper::isScrapping()){
+		showSystemMessage("Ya hay un proceso de scrapping en marcha. Espere a que termine", 3000);
+		return;
+	}
+
 	ScrapperConfig config;
 
 	switch (this->configMenus->getScrapGamesSelection()){
@@ -1172,14 +1190,24 @@ void GameMenu::startScrapping(){
 	config.lenguaPreferida = this->configMenus->getLangCode(langIndex);
 	config.regionPreferida = this->configMenus->getRegionCode(regIndex);
 	LOG_DEBUG("Seleccionando lengua %s y region %s", config.lenguaPreferida.c_str(), config.regionPreferida.c_str());
+	
+	Scrapper scrapper;
+	SafeDownloadQueue dwQueue;
+	int totalGames = 0;
 
 	for (int i=0; i < cfgLoader->emulators.size() - 1; i++){
 		if (this->configMenus->scrapSelection[i].selected){
 			int idxEmu = this->configMenus->scrapSelection[i].index;
 			if (idxEmu >= 0 && idxEmu < cfgLoader->emulators.size() - 1){
-				LOG_DEBUG("Scrapping %s", this->configMenus->scrapSelection[idxEmu].name.c_str());
-				scrapper->scrapSystem(cfgLoader->emulators[idxEmu].get()->config, config);
+				LOG_DEBUG("Scrapping system list %s", this->configMenus->scrapSelection[idxEmu].name.c_str());
+				emuThreadedScrapper.push_back(cfgLoader->emulators[idxEmu].get()->config);
+				totalGames += scrapper.scrapSystem(cfgLoader->emulators[idxEmu].get()->config, config, dwQueue, true);
 			}
 		}
+	}
+	Scrapper::g_status.total = totalGames;
+	LOG_DEBUG("Total of games to scrap: %d", totalGames);
+	if (emuThreadedScrapper.size() > 0){
+		Scrapper::StartScrappingAsync(emuThreadedScrapper, config);
 	}
 }

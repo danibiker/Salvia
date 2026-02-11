@@ -1,9 +1,11 @@
 #pragma once
 
-#include <http/httputil.h>
-#include <http/pugixml.hpp>
 #include <iostream>
 #include <map>
+
+#include <http/httputil.h>
+#include <http/pugixml.hpp>
+#include <http/safedownloadqueue.h>
 #include <const/constant.h>
 #include <io/cfgloader.h>
 #include <io/dirutil.h>
@@ -62,19 +64,50 @@ struct ScraperAsk {
 	}
 };
 
+// Estructura para pasar parámetros al hilo principal de scrap
+struct ScrapParams {
+    std::vector<ConfigEmu> emu;
+    ScrapperConfig cfg;
+};
+
+struct ScrapStatus {
+    CRITICAL_SECTION cs;
+    int procesados;
+    int total;
+    char emuActual[64];
+    char juegoActual[128];
+
+    ScrapStatus() : procesados(0), total(0) {
+        InitializeCriticalSection(&cs);
+        emuActual[0] = '\0';
+        juegoActual[0] = '\0';
+    }
+};
+
 class Scrapper{
 
 public:
-	Scrapper(){}
+	Scrapper(){
+		scrapping = false;
+	}
+
 	~Scrapper(){}
 
-	bool scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig) {
+	// Instancia global o pasada por puntero
+	static ScrapStatus g_status;
+	static bool isScrapping(){
+		return scrapping;
+	}
+
+	int scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig, SafeDownloadQueue& dwQueue, bool onlyCount = false) {
 		std::string romsdir = Constant::getAppDir() + Constant::getFileSep() + emulatorCfg.rom_directory;
 		std::string assetsdir = Constant::getAppDir() + Constant::getFileSep() + emulatorCfg.assets + Constant::getFileSep();
 		CurlClient downloader;
 		int sistema = 0;
 		dirutil dir;
-		std::vector<unique_ptr<FileProps> > files; // Nota: Espacio entre > > para C++98
+		std::vector<unique_ptr<FileProps> > files;
+		
+		int counterFiles = 0;
 
 		// Filtro de extensiones
 		std::string extFilter = " " + emulatorCfg.rom_extension;
@@ -85,7 +118,7 @@ public:
 		if (sistemaSplit.size() > 0) {
 			sistema = Constant::strToTipo<int>(sistemaSplit[0]);
 		} else {
-			return false;
+			return counterFiles;
 		}
 
 		// Configuración de rutas
@@ -108,8 +141,7 @@ public:
 		urlBase += "&systemeid=" + Constant::TipoToStr(sistema);
 
 		for (std::size_t i = 0; i < files.size(); i++) {
-		//for (std::size_t i = 0; i < 1; i++) {
-			FileProps* file = files.at(i).get(); // Tipo explícito
+			FileProps* file = files.at(i).get();
 			std::string filenameNoExt = dir.getFileNameNoExt(file->filename);
 			
 			//Si ya existen los elementos, no es necesario hacer peticiones a screenscrapper
@@ -121,6 +153,13 @@ public:
 				continue;
 			if (scrapperConfig.downloadNoMetadata && dir.fileExists(std::string(sinopsisdir + Constant::getFileSep() + filenameNoExt + ".txt").c_str())) 
 				continue;
+
+			counterFiles++;
+			if (onlyCount){
+				continue;
+			}			
+
+			actualizarProgreso(emulatorCfg.name.c_str(), filenameNoExt.c_str());
 
 			std::string response;
 			float downloadProgress = 0.0f;
@@ -160,15 +199,34 @@ public:
                 
 					if (!dir.fileExists(rutaImg.c_str()) && !it->second.url.empty()) {
 						LOG_DEBUG("Descargando imagen: %s", rutaImg.c_str());
-						downloader.fetchFile(it->second.url, rutaImg, &downloadProgress);
+						//downloader.fetchFile(it->second.url, rutaImg, &downloadProgress);
+						DownloadTask task;
+						task.url = it->second.url;
+						task.destPath = rutaImg;
+						task.downloadProgress = 0.0f;
+                
+						dwQueue.push(task); // Encolamos para el otro hilo
 					}
 				}
 			}
 		}
-		return true;
+		return counterFiles;
+	}
+
+	// Llamada desde tu menú/emulador:
+	static void StartScrappingAsync(std::vector<ConfigEmu> emu, ScrapperConfig cfg) {
+		if (!scrapping){
+			ScrapParams* params = new ScrapParams();
+			params->emu = emu;
+			params->cfg = cfg;
+    
+			HANDLE hThread = CreateThread(NULL, 0, mainScrapThread, params, 0, NULL);
+			if (hThread) CloseHandle(hThread); // No necesitamos el handle, que corra libre
+		}
 	}
 
 private:
+	static bool scrapping;
 
 	void procesarRespuestaScreenscraper(std::string& xmlData, ScraperAsk& peticion, ScraperResult& resultado) {
 		pugi::xml_document doc;
@@ -251,7 +309,6 @@ private:
 						tMedia.region = reg;
 						tMedia.type = static_cast<MEDIA_TYPES>(i);
 						tMedia.url = it->child_value();
-                
 						LOG_DEBUG("Mejor imagen encontrada: %s (%s)", MEDIAS_TO_FIND[i], reg);
 					}
 					break; 
@@ -264,6 +321,51 @@ private:
 		if (resultado.medias.count("box-2D")) {
 			LOG_DEBUG("URL Box (%d): %s",resultado.medias.count("box-2D"), resultado.medias["box-2D"].url.c_str());
 		}
+	}
+
+	static DWORD WINAPI imageDownloaderThread(LPVOID lpParam) {
+		SafeDownloadQueue* queue = (SafeDownloadQueue*)lpParam;
+		CurlClient downloader;
+		DownloadTask task;
+
+		while (queue->pop(task)) {
+			LOG_DEBUG("Hilo Secundario: Descargando %s", task.destPath.c_str());
+			downloader.fetchFile(task.url, task.destPath, &task.downloadProgress);
+		}
+		return 0;
+	}
+
+	// Dentro de mainScrapThread o scrapSystem
+	void actualizarProgreso(const char* emu, const char* juego) {
+		EnterCriticalSection(&g_status.cs);
+		g_status.procesados++;
+		strncpy(g_status.emuActual, emu, 63);
+		strncpy(g_status.juegoActual, juego, 127);
+		LeaveCriticalSection(&g_status.cs);
+	}
+
+	static DWORD WINAPI mainScrapThread(LPVOID lpParam) {
+		ScrapParams* params = (ScrapParams*)lpParam;
+		Scrapper scrapper;
+		SafeDownloadQueue dwQueue;
+		scrapping = true;
+		g_status.procesados = 0;
+		// Lanzamos el consumidor de imágenes
+		HANDLE hImgThread = CreateThread(NULL, 0, imageDownloaderThread, &dwQueue, 0, NULL);
+    
+		// Ejecutamos el scrapper (Productor)
+		for (int i=0; i < params->emu.size(); i++){
+			LOG_DEBUG("Hilo Principal: Descargando para el sistema %s", params->emu[i].name.c_str());
+			scrapper.scrapSystem(params->emu[i], params->cfg, dwQueue);
+		}
+
+		// Finalización
+		dwQueue.setFinished();
+		WaitForSingleObject(hImgThread, INFINITE);
+		CloseHandle(hImgThread);
+		delete params;
+		scrapping = false;
+		return 0;
 	}
 
 	std::string leerArchivoTexto(const std::string& ruta) {

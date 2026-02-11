@@ -42,6 +42,8 @@ int Constant::EXEC_METHOD = launch_batch;
 const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
 vector<SDL_Surface *> Icons::icons;
 vector<SDL_Surface *> Icons::icons_carts;
+bool Scrapper::scrapping = false;
+ScrapStatus Scrapper::g_status;
 
 static uint16_t* conversion_buffer = NULL;
 static std::size_t buffer_size = 0;

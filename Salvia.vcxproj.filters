@@ -310,5 +310,8 @@
     <ClInclude Include="src\image\icons.h">
       <Filter>Source Files\image</Filter>
     </ClInclude>
+    <ClInclude Include="src\http\safedownloadqueue.h">
+      <Filter>Source Files\http</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
