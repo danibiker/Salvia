@@ -130,7 +130,7 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
 
     // Opciones adicionales
     curl_easy_setopt(curl, CURLOPT_USERAGENT, USERAGENT);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 8L); // 8 segundos
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L); // 15 segundos
 
 	// callback para llamar fuera a internet
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, curl_sockopt_callback);

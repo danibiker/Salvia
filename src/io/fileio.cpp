@@ -1,4 +1,5 @@
 #include "fileio.h"
+#include <sstream>
 
 Fileio::Fileio(){
     memblock = NULL;
@@ -27,6 +28,24 @@ bool Fileio::clearFile(){
         return true;
     }
     return false;
+}
+
+std::string Fileio::cargarFichero(const std::string& ruta) {
+    // Abrimos el flujo de entrada (ifstream)
+    std::ifstream archivo(ruta.c_str()); 
+    
+    // Verificación de apertura (estándar en VS2010)
+    if (!archivo.is_open()) {
+        return ""; 
+    }
+
+    // Usamos stringstream como buffer intermedio
+    std::stringstream buffer;
+    buffer << archivo.rdbuf(); // Vuelca todo el contenido del fichero al buffer
+
+    // Cerramos el archivo y devolvemos la cadena
+    archivo.close();
+    return buffer.str();
 }
 
 /**

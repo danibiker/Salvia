@@ -22,7 +22,6 @@
 #include "statesram.h"
 #include "io/inputsmenu.h"
 #include "io/inputscore.h"
-#include "http/scrapper.h"
 #include "image/icons.h"
 
 GameMenu *gameMenu;
@@ -974,6 +973,7 @@ void processFrontendEvents(){
 int main(int argc, char *argv[]) {
 	initPathAndLog(argv);
 	CfgLoader cfgLoader;
+
 	if (cfgLoader.isDebug()){
 		#ifndef DEBUG_LOG
 		#define DEBUG_LOG
@@ -983,13 +983,6 @@ int main(int argc, char *argv[]) {
 
 	LOG_DEBUG("appdir: %s\n", Constant::getAppDir().c_str());
 	LOG_DEBUG("appexe: %s\n", Constant::getAppExecutable().c_str());
-	
-	Scrapper *scrapper = new Scrapper();
-	ScrapperConfig config;
-	config.downloadNoSS = true;
-	config.lenguaPreferida = "es";
-	config.regionPreferida = "eu";
-	
 
 	gameMenu = new GameMenu(&cfgLoader);
 

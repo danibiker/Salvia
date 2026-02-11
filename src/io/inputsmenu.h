@@ -46,6 +46,10 @@ bool processActions(GameMenu &gameMenu, t_option_action &optionAction){
 		gameMenu.configMenus->resetStatus();
 		SDL_FillRect(gameMenu.video_page, NULL, gameMenu.uBkgColor);
 		gameMenu.setEmuStatus(gameMenu.getLastStatus());
+	} else if(gameMenu.configMenus->getStatus() == START_SCRAPPING) {
+		gameMenu.configMenus->volverMenuInicial();
+		SDL_FillRect(gameMenu.video_page, NULL, gameMenu.uBkgColor);
+		gameMenu.startScrapping();
 	}
 
 	gameMenu.joystick->inputs.clearAll();
@@ -144,10 +148,7 @@ int processInputs(GameMenu &gameMenu, ListMenu &listMenu, bool generalConfig){
 				listMenu.nextPage();
 			} 
 
-			listMenu.keyUp = gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_UP) ||
-				gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_DOWN) ||
-				gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_LEFT) ||
-				gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_RIGHT);
+			
 
 			if (gameMenu.joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
 				vector<string> launchCommand = gameMenu.launchProgram(listMenu);	
@@ -172,6 +173,13 @@ int processInputs(GameMenu &gameMenu, ListMenu &listMenu, bool generalConfig){
 			gameMenu.getCfgLoader()->getPrevCfgEmu();
 			gameMenu.loadEmuCfg(listMenu);
 		}
+
+		listMenu.keyUp = gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_UP) ||
+				gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_DOWN) ||
+				gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_LEFT) ||
+				gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_RIGHT)||
+				gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_L)||
+				gameMenu.joystick->inputs.getAnyReleased(0, JOY_BUTTON_R);
 
 		if (HK_VIEW_MENU == gameMenu.joystick->hotkeys->procesarHotkeys(&gameMenu.joystick->inputs)){
 			if (gameMenu.getLastStatus() == EMU_STARTED){

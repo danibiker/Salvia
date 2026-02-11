@@ -14,6 +14,7 @@
 #include <io/cfgloader.h>
 #include <engine.h>
 #include <io/dirutil.h>
+#include <http/scrapper.h>
 
 #ifdef _XBOX
 	#include <io/video_direct.h>
@@ -117,6 +118,7 @@ class GameMenu : public Engine{
 		int *current_sync;
 		bool *current_force_fs;
 		bool romLoaded;
+		void startScrapping();
 		
 
     private:
@@ -142,4 +144,5 @@ class GameMenu : public Engine{
 		Message message;
 		t_rom_paths romPaths;
 		bool *mustUpdateFps;
+		Scrapper *scrapper;
 };

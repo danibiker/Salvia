@@ -151,6 +151,7 @@ typedef enum {
 		cfg_savestates,
 		cfg_saving,
 		cfg_return,
+		cfg_scrapper,
 		max_icons
 }enumIco;
 
@@ -238,7 +239,7 @@ class Constant{
 
 		static void drawText(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg){
 			if (font) {
-				SDL_Surface* textSurf = TTF_RenderText_Solid(font, s, color);
+				SDL_Surface* textSurf = TTF_RenderUTF8_Solid(font, s, color);
 				if (textSurf) {
 					SDL_Rect dest = { x, y, 0, 0 };
 					SDL_BlitSurface(textSurf, NULL, surface, &dest);
@@ -249,13 +250,34 @@ class Constant{
 
 		static void drawTextTransparent(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg){
 			if (font) {
-				SDL_Surface* textSurf = TTF_RenderText_Blended(font, s, color);
+				SDL_Surface* textSurf = TTF_RenderUTF8_Blended(font, s, color);
 				if (textSurf) {
 					SDL_Rect dest = { x, y, 0, 0 };
 					SDL_BlitSurface(textSurf, NULL, surface, &dest);
 					SDL_FreeSurface(textSurf); // ¡Vital!
 				}
 			}
+		}
+
+		static std::string ANSItoUTF8(const std::string& ansiStr) {
+			if (ansiStr.empty()) return "";
+    
+			// 1. Pedir tamaño necesario para UTF-16 (WideChar)
+			int wlen = MultiByteToWideChar(CP_ACP, 0, ansiStr.c_str(), -1, NULL, 0);
+			std::wstring wstr(wlen, 0);
+			MultiByteToWideChar(CP_ACP, 0, ansiStr.c_str(), -1, &wstr[0], wlen);
+
+			// 2. Pedir tamaño necesario para UTF-8
+			int u8len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, NULL, 0, NULL, NULL);
+			std::string utf8str(u8len, 0);
+			WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &utf8str[0], u8len, NULL, NULL);
+
+			// Eliminar el terminador nulo extra que añade std::string al redimensionar
+			if (!utf8str.empty() && utf8str[utf8str.length()-1] == '\0') {
+				utf8str.erase(utf8str.length()-1);
+			}
+
+			return utf8str;
 		}
 
 		static void drawTextCent(SDL_Surface* surface, TTF_Font* font, const char* dato, int x, int y, bool centx, bool centy, SDL_Color color, int bg){

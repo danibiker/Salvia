@@ -19,7 +19,7 @@ static const char *TipoKeyStr[] = {"Btn: ", "Hat: ", "Axis: "};
 enum ACTION_ASK{ASK_CARGAR, ASK_GUARDAR, ASK_ELIMINAR, MAX_ASK};
 static const char *ACTION_ASK_STR[] = {"Cargar", "Guardar", "Eliminar"};
 
-enum CONFIG_STATUS{NORMAL,POLLING_INPUTS,ASK_SAVESTATES, EXIT_CONFIG, MAX_CONFIG_STATUS};
+enum CONFIG_STATUS{NORMAL,POLLING_INPUTS,ASK_SAVESTATES, EXIT_CONFIG, START_SCRAPPING, MAX_CONFIG_STATUS};
 
 struct t_option_action{
 	int option;
@@ -34,6 +34,17 @@ struct t_option_action{
 		elem = NULL;
 		indexSelected = 0;
 	}
+};
+
+struct t_scrap{
+	bool selected;
+	int index;
+	string name;
+
+	t_scrap(){
+		selected = false;
+		index = 0;
+	}	
 };
 
 
@@ -130,26 +141,7 @@ public:
     }
 };
 
-template <typename T>
-class OpcionExec : public Opcion {
-public:
-    // Definimos el puntero a función que acepta el tipo específico T
-    typedef std::string (*FuncType)(T*);
-    
-    FuncType execfunc;
-    T* data;
 
-    OpcionExec(std::string t, FuncType v, T* p) 
-        : Opcion(t, OPC_EXEC), execfunc(v), data(p) {}
-
-	OpcionExec(std::string t, FuncType v, T* p, int ico) 
-        : Opcion(t, OPC_EXEC, ico), execfunc(v), data(p) {}
-
-    // Implementación del método virtual
-    std::string ejecutar() override {
-        return execfunc(data);
-    }
-};
 
 class OpcionKey : public Opcion {
 public:
@@ -245,6 +237,12 @@ private:
     static SDL_Surface* imgText;
 	std::string lastImagePath;
 	Image imageMenu;
+	
+	std::vector<std::string> regionDesc;
+	std::vector<std::string> idiomaDesc;
+	std::vector<std::string> regionCode;
+	std::vector<std::string> idiomaCode;
+	int scrapGamesSelection;
 
 	int getScreenNumLines();
 	void resetIndexPos();
@@ -261,6 +259,18 @@ private:
 	void drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page);
 
 	void resetAskPosition();
+	void parsearIdiomas(const char* xmlData, const std::string& isoCode, 
+                    std::vector<std::string>& idiomaCode, std::vector<std::string>& idiomaDesc);
+	void parsearRegiones(const char* xmlData, const std::string& isoCode, 
+                    std::vector<std::string>& idiomaCode, std::vector<std::string>& idiomaDesc);
+	void poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper);
+	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);
+	void poblarMenuAssignFrontend(Menu* menuHotkeys, Joystick *joystick);
+	std::string guardarJoysticks(Joystick* joy);
+	std::string guardarCoreConfig(CfgLoader *refConfig);
+	std::string guardarMainConfig(CfgLoader *refConfig);
+	std::string volverEmulacion(CONFIG_STATUS *st);
+	std::string startScrapping(CONFIG_STATUS *st);
 
 public:
     GestorMenus(int screenw, int screenh);
@@ -283,10 +293,7 @@ public:
 	bool options_changed_flag;
 
 	void poblarCoreOptions(CfgLoader *);
-	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);
-	void poblarMenuAssignFrontend(Menu* menuHotkeys, Joystick *joystick);
 	void poblarPartidasGuardadas(CfgLoader *, std::string);
-
 
 	bool isCoreOptions(){
 		return obtenerMenuActual() == menuCoreOptions;
@@ -304,4 +311,48 @@ public:
 
 	void nextPos();
     void prevPos();
+	void volverMenuInicial();
+	std::vector<t_scrap> scrapSelection;
+
+	int getScrapGamesSelection(){return scrapGamesSelection;}
+	std::string getRegionCode(int idx){
+		if (idx >= 0 && idx < regionCode.size()){
+			return regionCode[idx];
+		} else {
+			return 0;
+		}
+	}
+
+	std::string getLangCode(int idx){
+		if (idx >= 0 && idx < idiomaCode.size()){
+			return idiomaCode[idx];
+		} else {
+			return 0;
+		}
+	}
+};
+
+template <typename T>
+class OpcionExec : public Opcion {
+public:
+    // Definimos el puntero a un método de GestorMenus
+    // Sintaxis: Tipo_Retorno (Nombre_Clase::*Nombre_Puntero)(Argumentos)
+    typedef std::string (GestorMenus::*FuncType)(T*);
+    
+    FuncType execfunc;
+    T* data;
+    GestorMenus* instanciaGestor; // Necesitamos la instancia para llamar al método
+
+    OpcionExec(std::string t, FuncType v, T* p, GestorMenus* gestor) 
+        : Opcion(t, OPC_EXEC), execfunc(v), data(p), instanciaGestor(gestor) {}
+
+	OpcionExec(std::string t, FuncType v, T* p, int ico, GestorMenus* gestor) 
+        : Opcion(t, OPC_EXEC, ico), execfunc(v), data(p), instanciaGestor(gestor) {}
+
+    // Implementación del método virtual
+    std::string ejecutar() {
+        // En C++, para llamar a un puntero a función miembro:
+        // (instancia.*puntero)(argumentos)
+        return (instanciaGestor->*execfunc)(data);
+    }
 };

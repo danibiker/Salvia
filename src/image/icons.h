@@ -31,7 +31,7 @@ public:
 		for (int i=0; i < max_icons; i++){
 			SDL_Surface *img;
 			//std::string str = Constant::getAppDir() + "\\assets\\xmb\\flatui\\png\\" + std::string(ICONS_PATH[i]);
-			std::string str = Constant::getAppDir() + "\\assets\\xmb\\flatui\\png\\" + std::string(ICONS_PATH[i]);
+			std::string str = Constant::getAppDir() + "\\assets\\xmb\\retrosystem\\png\\" + std::string(ICONS_PATH[i]);
 			if ((img = IMG_Load(str.c_str())) != NULL){   
 				double zoomX = (double)face_h / img->w;
 				double zoomY = (double)face_h / img->h;
@@ -39,6 +39,8 @@ public:
 				SDL_Surface *resizeImage = rotozoomSurfaceXY(img, 0, zoomX, zoomY, true);
 				icons.push_back(resizeImage);
 				SDL_FreeSurface(img);
+			} else {
+				icons.push_back(NULL);
 			}
 		}
 
@@ -46,7 +48,7 @@ public:
 
 		for (int i=0; i < max_carts; i++){
 			SDL_Surface *img;
-			std::string str = Constant::getAppDir() + "\\assets\\xmb\\flatui\\png\\" + std::string(ICONS_CARTS_PATH[i]);
+			std::string str = Constant::getAppDir() + "\\assets\\xmb\\retrosystem\\png\\" + std::string(ICONS_CARTS_PATH[i]);
 			if ((img = IMG_Load(str.c_str())) != NULL){   
 				double zoomX = (double)face_h / img->w;
 				double zoomY = (double)face_h / img->h;
@@ -54,6 +56,8 @@ public:
 				SDL_Surface *resizeImage = rotozoomSurfaceXY(img, 0, zoomX, zoomY, true);
 				icons_carts.push_back(resizeImage);
 				SDL_FreeSurface(img);
+			} else {
+				icons_carts.push_back(NULL);
 			}
 		}
 	}

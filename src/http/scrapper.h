@@ -24,14 +24,19 @@ struct ScrapperConfig{
 	bool downloadNoSS;
 	bool downloadNoBox;
 	bool downloadNoTitle;
+	bool downloadNoMetadata;
 
 	std::string regionPreferida;
 	std::string lenguaPreferida;
 
 	ScrapperConfig(){
+		clear();
+	}
+	void clear(){	
 		downloadNoSS = false;
 		downloadNoBox = false;
 		downloadNoTitle = false;
+		downloadNoMetadata = false;
 
 		regionPreferida = "eu";
 		lenguaPreferida = "en";
@@ -60,42 +65,8 @@ struct ScraperAsk {
 class Scrapper{
 
 public:
-	Scrapper(){
-	}
-
-	~Scrapper(){
-	}
-
-	void testCurl(){
-		CurlClient downloader;
-		std::string response;
-		float downloadProgress = 0.0f;
-
-		ScraperAsk peticion;
-		peticion.regionPreferida = "eu";
-		peticion.lenguaPreferida = "es";
-		peticion.sistema = 2;
-		// El nombre de la ROM suele tener espacios o caracteres especiales
-		peticion.romname = downloader.escape("alex kidd in miracle world");
-		
-		//std::string urlInfo = "https://api.screenscraper.fr/api2/jeuInfos.php";
-		std::string urlInfo = "https://141.94.139.59/api2/jeuInfos.php";
-		urlInfo += "?devid=jelos&devpassword=jelos&softname=scrapdos1&output=xml&ssid=test&sspassword=test";
-		urlInfo += "&systemeid=" + Constant::TipoToStr(peticion.sistema);
-		urlInfo	+= "&romtype=rom&romnom=" + peticion.romname;
-
-		printf("Iniciando descarga...\n");
-
-		//if (downloader.fetchUrl(urlInfo, response, &downloadProgress)) {
-		response = leerArchivoTexto("D:\\develop\\Github\\xbox360\\project\\Salvia\\test\\screenscrapper.xml");
-			LOG_DEBUG("\rProgreso: 100%% | Descarga completada. Tamaño: %d bytes\n", response.size());
-			ScraperResult resultado;
-			procesarRespuestaScreenscraper(response, peticion, resultado);
-			LOG_DEBUG("Informacion descargada");
-		//} else {
-		//    printf("\nError en la descarga.\n");
-		//}
-	}
+	Scrapper(){}
+	~Scrapper(){}
 
 	bool scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig) {
 		std::string romsdir = Constant::getAppDir() + Constant::getFileSep() + emulatorCfg.rom_directory;
@@ -147,6 +118,8 @@ public:
 			if (scrapperConfig.downloadNoBox && dir.fileExists(std::string(boxdir + Constant::getFileSep() + filenameNoExt + ".png").c_str())) 
 				continue;
 			if (scrapperConfig.downloadNoTitle && dir.fileExists(std::string(titledir + Constant::getFileSep() + filenameNoExt + ".png").c_str())) 
+				continue;
+			if (scrapperConfig.downloadNoMetadata && dir.fileExists(std::string(sinopsisdir + Constant::getFileSep() + filenameNoExt + ".txt").c_str())) 
 				continue;
 
 			std::string response;
@@ -247,9 +220,7 @@ private:
 				resultado.sinopsis = it->child_value();
 			}
 		}
-		resultado.sinopsis = cleanUTF8(resultado.sinopsis);
-
-
+		//resultado.sinopsis = cleanUTF8(resultado.sinopsis);
 		// --- SECCIÓN MEDIAS CON PRIORIDAD ---
 		pugi::xml_node medias_root = juego.child("medias");
 
@@ -359,5 +330,37 @@ private:
 		}
 		return out;
 	}
+
+	/*void testCurl(){
+		CurlClient downloader;
+		std::string response;
+		float downloadProgress = 0.0f;
+
+		ScraperAsk peticion;
+		peticion.regionPreferida = "eu";
+		peticion.lenguaPreferida = "es";
+		peticion.sistema = 2;
+		// El nombre de la ROM suele tener espacios o caracteres especiales
+		peticion.romname = downloader.escape("alex kidd in miracle world");
+		
+		//std::string urlInfo = "https://api.screenscraper.fr/api2/jeuInfos.php";
+		std::string urlInfo = "https://141.94.139.59/api2/jeuInfos.php";
+		urlInfo += "?devid=jelos&devpassword=jelos&softname=scrapdos1&output=xml&ssid=test&sspassword=test";
+		urlInfo += "&systemeid=" + Constant::TipoToStr(peticion.sistema);
+		urlInfo	+= "&romtype=rom&romnom=" + peticion.romname;
+
+		printf("Iniciando descarga...\n");
+
+		//if (downloader.fetchUrl(urlInfo, response, &downloadProgress)) {
+		response = leerArchivoTexto("D:\\develop\\Github\\xbox360\\project\\Salvia\\test\\screenscrapper.xml");
+			LOG_DEBUG("\rProgreso: 100%% | Descarga completada. Tamaño: %d bytes\n", response.size());
+			ScraperResult resultado;
+			procesarRespuestaScreenscraper(response, peticion, resultado);
+			LOG_DEBUG("Informacion descargada");
+		//} else {
+		//    printf("\nError en la descarga.\n");
+		//}
+	}*/
+
 };
 

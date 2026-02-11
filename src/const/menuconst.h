@@ -13,7 +13,7 @@ static const char* videoScaleStrings[] = { "Pantalla Completa", "Scale 1X", "Sca
 	"Scale HQ2X",
 	"Xbrz 2X", "Xbrz 2X Multihilo",  "Scale 3X", "Scale 3X Avanzado",
 	"Scale HQ3X",
-	"Xbrz 3X", "Xbrz 3X Multihilo", "Scale 4X", "Scale 4X Avanzado", "Xbrz 4X", "Sin vídeo", "No implementado"};
+	"Xbrz 3X", "Xbrz 3X Multihilo", "Scale 4X", "Scale 4X Avanzado", "Xbrz 4X", "Sin video", "No implementado"};
 
 /*
 Ratios Estándar (Los más importantes)
@@ -28,9 +28,12 @@ Ratios de Consolas Portátiles
 
 static const enum aspectRatio { RATIO_CORE=0, RATIO_4_3, RATIO_3_2, RATIO_8_7, RATIO_10_9, RATIO_1_1, RATIO_5_4, RATIO_16_9, RATIO_16_10, RATIO_FILL_AVAILABLE, TOTAL_VIDEO_RATIO};
 static float aspectRatioValues [] = {4/3.0f, 4/3.0f, 3/2.0f, 8/7.0f, 10/9.0f, 1, 5/4.0f, 16/9.0f, 16/10.0f, 0, -1};
-static const char* aspectRatioStrings[] = { "Proporcionado por el núcleo", "4:3 (Nes, N64, Psx)", "3:2 (Gba)", "8:7 (Snes)", "10:9 (Gb, Gg, Ngp, Ws)", "1:1 (Alt: Gb, Gg, Ngp, Ws)", "5:4 (Pc, X68000)", "16:9",
+static const char* aspectRatioStrings[] = { "Proporcionado por el nucleo", "4:3 (Nes, N64, Psx)", "3:2 (Gba)", "8:7 (Snes)", "10:9 (Gb, Gg, Ngp, Ws)", "1:1 (Alt: Gb, Gg, Ngp, Ws)", "5:4 (Pc, X68000)", "16:9",
 	"16:10", "Rellenar todo", "No implementado"};
 
 
 static const enum syncOptions {OPT_SYNC_AUDIO = SYNC_TO_AUDIO, OPT_SYNC_VIDEO = SYNC_TO_VIDEO, OPT_SYNC_NONE = SYNC_NONE, TOTAL_VIDEO_SYNC};
-static const char* syncOptionsStrings[] = { "Sincronizacion de audio", "Sincronizacion de vídeo", "Sin sincronización", "No implementado"};
+static const char* syncOptionsStrings[] = { "Sincronizacion de audio", "Sincronizacion de video", "Sin sincronizacion", "No implementado"};
+
+static const enum scrapGames {SCRAP_ALL = 0, SCRAP_NO_METADATA, SCRAP_NO_SCREENSHOT, SCRAP_NO_TITLE, SCRAP_NO_BOX, TOTAL_SCRAP_GAMES};
+static const char* scrapGamesStrings[] = { "Todos los juegos", "Sin metadatos", "Sin imagen del juego", "Sin caratula", "No implementado"};

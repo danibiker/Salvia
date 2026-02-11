@@ -9,6 +9,7 @@
 #include <font/fonts.h>
 #include <io/joystick.h>
 #include <image/icons.h>
+#include <http/pugixml.hpp>
 
 
 SDL_Surface* GestorMenus::imgText;
@@ -39,6 +40,7 @@ GestorMenus::GestorMenus(int screenw, int screenh){
     imageMenu.setW(box2dW);
 	imageMenu.setH(box2dH);
 	askNumOptions = 0;
+	scrapGamesSelection = 1;
 }
 
 GestorMenus::~GestorMenus() {
@@ -47,27 +49,42 @@ GestorMenus::~GestorMenus() {
 			delete todosLosMenus[i];
 		todosLosMenus[i] = NULL;
 	}
-		
 }
 
-std::string guardarJoysticks(Joystick* joy){
+std::string GestorMenus::guardarJoysticks(Joystick* joy){
 	LOG_DEBUG("Guardando valores del joystick");
 	return "Fichero guardado en: " + joy->saveButtonsRetro();
 }
 
-std::string guardarCoreConfig(CfgLoader *refConfig){
+std::string GestorMenus::guardarCoreConfig(CfgLoader *refConfig){
 	LOG_DEBUG("Guardando valores del core actual");
 	return refConfig->saveCoreParams();
 }
 
-std::string guardarMainConfig(CfgLoader *refConfig){
+std::string GestorMenus::guardarMainConfig(CfgLoader *refConfig){
 	LOG_DEBUG("Guardando valores principales de configuracion");
 	return refConfig->saveMainParams();
 }
 
-std::string volverEmulacion(CONFIG_STATUS *st){
+std::string GestorMenus::volverEmulacion(CONFIG_STATUS *st){
 	*st = EXIT_CONFIG;
 	return std::string("");
+}
+
+std::string GestorMenus::startScrapping(CONFIG_STATUS *st){
+
+	bool someSelected = false;
+	for (int i=0; i < scrapSelection.size() && !someSelected; i++){
+		someSelected = scrapSelection[i].selected;
+	}
+
+	if (someSelected){
+		*st = START_SCRAPPING;
+		return std::string("");
+	} else {
+		LOG_DEBUG("Seleccione al menos un sistema que escrapear");
+		return "Seleccione al menos un sistema que escrapear";
+	}
 }
 
 void GestorMenus::setLayout(int layout, int screenw, int screenh){
@@ -86,11 +103,12 @@ void GestorMenus::setLayout(int layout, int screenw, int screenh){
 void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
     // 1. Crear contenedores de menús
     menuRaiz = new Menu("Opciones");
-    Menu* menuVideo = new Menu("Vídeo", menuRaiz);
-	Menu* menuEmulation = new Menu("Emulación", menuRaiz);
+    Menu* menuVideo = new Menu(Constant::ANSItoUTF8("Vídeo"), menuRaiz);
+	Menu* menuEmulation = new Menu(Constant::ANSItoUTF8("Emulación"), menuRaiz);
 	Menu* menuEntrada = new Menu("Entrada", menuRaiz);
 	menuCoreOptions = new Menu("Opciones del core", menuRaiz);
 	menuSavestates = new Menu("Partidas guardadas", menuRaiz);
+	Menu* menuScrapper = new Menu("Scrapear", menuRaiz);
 
 	//Este menu no cuelga de ningun lado, pero ponemos partidas guardadas como padre
 	menuAskSavestates = new Menu("Gestionar Partidas guardadas", menuSavestates);
@@ -102,6 +120,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	todosLosMenus.push_back(menuCoreOptions);
 	todosLosMenus.push_back(menuSavestates);
 	todosLosMenus.push_back(menuAskSavestates);
+	todosLosMenus.push_back(menuScrapper);
 
 	//Poblar menu emulacion
 	//Escalado de video
@@ -109,7 +128,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	for (int i=0; i < TOTAL_VIDEO_SYNC; i++){
 		syncvals.push_back(syncOptionsStrings[i]);
 	}
-	menuEmulation->opciones.push_back(new OpcionLista("Sincronización", syncvals, &refConfig->configMain[cfg::syncMode].getIntRef()));
+	menuEmulation->opciones.push_back(new OpcionLista(Constant::ANSItoUTF8("Sincronización"), syncvals, &refConfig->configMain[cfg::syncMode].getIntRef()));
 	menuEmulation->opciones.push_back(new OpcionBool("Mostrar fps", &refConfig->configMain[cfg::showFps].getBoolRef()));
 
     //Poblar Menú Video
@@ -118,7 +137,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	for (int i=0; i < TOTAL_VIDEO_RATIO; i++){
 		aspectRates.push_back(aspectRatioStrings[i]);
 	}
-	menuVideo->opciones.push_back(new OpcionLista("Relación de aspecto", aspectRates, &refConfig->configMain[cfg::aspectRatio].getIntRef()));
+	menuVideo->opciones.push_back(new OpcionLista(Constant::ANSItoUTF8("Relación de aspecto"), aspectRates, &refConfig->configMain[cfg::aspectRatio].getIntRef()));
 
 	//Escalado de video
     std::vector<std::string> filtros;
@@ -130,15 +149,15 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 
 	Menu* menuAssignRetro = new Menu("Asignaciones de Retropad", menuEntrada);
 	Menu* menuAssignFrontend = new Menu("Asignaciones de Frontend", menuEntrada);
-	Menu* menuHotkeys = new Menu("Teclas rápidas", menuEntrada);
+	Menu* menuHotkeys = new Menu(Constant::ANSItoUTF8("Teclas rápidas"), menuEntrada);
 	todosLosMenus.push_back(menuAssignRetro);
 	todosLosMenus.push_back(menuAssignFrontend);
 	todosLosMenus.push_back(menuHotkeys);
 
 	menuEntrada->opciones.push_back(new OpcionSubMenu("Asignaciones de Retropad", menuAssignRetro));
 	menuEntrada->opciones.push_back(new OpcionSubMenu("Asignaciones de Frontend", menuAssignFrontend));
-	menuEntrada->opciones.push_back(new OpcionSubMenu("Teclas rápidas", menuHotkeys));
-	menuEntrada->opciones.push_back(new OpcionExec<Joystick>("Guardar asignaciones", guardarJoysticks, joystick));
+	menuEntrada->opciones.push_back(new OpcionSubMenu(Constant::ANSItoUTF8("Teclas rápidas"), menuHotkeys));
+	menuEntrada->opciones.push_back(new OpcionExec<Joystick>("Guardar asignaciones", &GestorMenus::guardarJoysticks, joystick, this));
 
 
 	for (int controlId = 0; controlId < MAX_PLAYERS; controlId++){
@@ -154,27 +173,122 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	
 	//Poblar menu hotkeys
 	poblarMenuHotkeys(menuHotkeys, joystick);
+	//Menu de teclas para el frontend
 	poblarMenuAssignFrontend(menuAssignFrontend, joystick);
+	//Menu del scrapper que rellena los idiomas y lenguas
+	poblarMenuSrapper(refConfig, menuScrapper);
 
 	//Poblar menu ask
 	std::vector<std::string> askOptions;
 	for (int i=0; i < MAX_ASK; i++){
 		askOptions.push_back(ACTION_ASK_STR[i]);
 	}
-	menuAskSavestates->opciones.push_back(new OpcionLista("Seleccionar acción", askOptions, &askNumOptions));
+	menuAskSavestates->opciones.push_back(new OpcionLista(Constant::ANSItoUTF8("Seleccionar acción"), askOptions, &askNumOptions));
 
     // 3. Poblar Menú Principal
-    menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración vídeo", menuVideo, cfg_video));
-	menuRaiz->opciones.push_back(new OpcionSubMenu("Configuración emulación", menuEmulation, cfg_settings));
+    menuRaiz->opciones.push_back(new OpcionSubMenu(Constant::ANSItoUTF8("Configuración vídeo"), menuVideo, cfg_video));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(Constant::ANSItoUTF8("Configuración emulación"), menuEmulation, cfg_settings));
 	menuRaiz->opciones.push_back(new OpcionSubMenu("Entrada", menuEntrada, cfg_remap));
 	menuRaiz->opciones.push_back(new OpcionSubMenu("Opciones del core", menuCoreOptions, cfg_settings_core));
 	menuRaiz->opciones.push_back(new OpcionSubMenu("Partidas guardadas", menuSavestates, cfg_savestates));
-	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>("Guardar opciones", guardarMainConfig, refConfig, cfg_saving));
-	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>("Volver", volverEmulacion, &status, cfg_return));
+	menuRaiz->opciones.push_back(new OpcionSubMenu("Scrapear", menuScrapper, cfg_scrapper));
+	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>("Guardar opciones", &GestorMenus::guardarMainConfig, refConfig, cfg_saving, this));
+	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>("Volver", &GestorMenus::volverEmulacion, &status, cfg_return, this));
 
     // Establecer estado inicial
     menuActual = menuRaiz;
 	resetIndexPos();
+}
+
+void GestorMenus::poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper){
+	Menu* menuSistems = new Menu("Escrapear estos sistemas", menuScrapper);
+	scrapSelection.resize(refConfig->emulators.size() - 1);
+
+	Fileio fileio;
+	std::string mainLang;
+	std::vector<std::string> scrapGames;
+	refConfig->configMain[cfg::mainLang].getPropValue(mainLang);
+
+	for (int i=0; i < refConfig->emulators.size() - 1; i++){
+		scrapSelection[i].index = i;
+		scrapSelection[i].name = refConfig->emulators[i]->config.name;
+		scrapSelection[i].selected = false;
+		menuSistems->opciones.push_back(new OpcionBool(scrapSelection[i].name, &scrapSelection[i].selected));
+	}
+	menuScrapper->opciones.push_back(new OpcionSubMenu("Escrapear estos sistemas", menuSistems));
+
+	for (int i=0; i < TOTAL_SCRAP_GAMES - 1; i++){
+		scrapGames.push_back(scrapGamesStrings[i]);
+	}
+	menuScrapper->opciones.push_back(new OpcionLista("Escrapear estos juegos", scrapGames, &scrapGamesSelection));
+
+	Menu* menuScrapOptions = new Menu("Otras configuraciones", menuScrapper);
+	std::string xmlRegion = fileio.cargarFichero(Constant::getAppDir() + "\\assets\\i18n\\regionsListe.xml");
+	parsearRegiones(xmlRegion.c_str(), mainLang, regionCode, regionDesc);
+	xmlRegion.clear();
+	std::string xmlLang = fileio.cargarFichero(Constant::getAppDir() + "\\assets\\i18n\\languesListe.xml");
+	parsearIdiomas(xmlLang.c_str(), mainLang, idiomaCode, idiomaDesc);
+	xmlLang.clear();
+
+	if (regionDesc.size() > 0)
+		menuScrapOptions->opciones.push_back(new OpcionLista(Constant::ANSItoUTF8("Región"), regionDesc, &refConfig->configMain[cfg::scrapRegion].getIntRef()));
+	if (idiomaDesc.size() > 0)
+		menuScrapOptions->opciones.push_back(new OpcionLista("Idioma", idiomaDesc, &refConfig->configMain[cfg::scrapLang].getIntRef()));
+
+	menuScrapper->opciones.push_back(new OpcionSubMenu("Otras configuraciones", menuScrapOptions));
+	menuScrapper->opciones.push_back(new OpcionExec<CONFIG_STATUS>("Empezar", &GestorMenus::startScrapping, &status, this));
+}
+
+void GestorMenus::parsearIdiomas(const char* xmlData, const std::string& isoCode, 
+                    std::vector<std::string>& idiomaCode, std::vector<std::string>& idiomaDesc) 
+{
+    pugi::xml_document doc;
+    pugi::xml_parse_result result = doc.load_string(xmlData);
+
+    if (result.status != pugi::status_ok) return;
+
+    // VS2010: Construcción manual del nombre del nodo
+    std::string nombreNodo = "nom_" + isoCode;
+
+    // Acceso al nodo raíz
+    pugi::xml_node langues = doc.child("Data").child("langues");
+
+    // Iteración compatible con C++03 (Visual Studio 2010)
+    for (pugi::xml_node langue = langues.child("langue"); langue; langue = langue.next_sibling("langue")) 
+    {
+        // Obtenemos los valores. child_value() devuelve "" si no lo encuentra.
+        const char* nomcourt = langue.child_value("nomcourt");
+        const char* desc = langue.child_value(nombreNodo.c_str());
+
+        idiomaCode.push_back(nomcourt);
+        idiomaDesc.push_back(desc);
+    }
+}
+
+void GestorMenus::parsearRegiones(const char* xmlData, const std::string& isoCode, 
+                    std::vector<std::string>& idiomaCode, std::vector<std::string>& idiomaDesc) 
+{
+    pugi::xml_document doc;
+    pugi::xml_parse_result result = doc.load_string(xmlData);
+
+    if (result.status != pugi::status_ok) return;
+
+    // VS2010: Construcción manual del nombre del nodo
+    std::string nombreNodo = "nom_" + isoCode;
+
+    // Acceso al nodo raíz
+    pugi::xml_node langues = doc.child("Data").child("regions");
+
+    // Iteración compatible con C++03 (Visual Studio 2010)
+    for (pugi::xml_node langue = langues.child("region"); langue; langue = langue.next_sibling("region")) 
+    {
+        // Obtenemos los valores. child_value() devuelve "" si no lo encuentra.
+        const char* nomcourt = langue.child_value("nomcourt");
+        const char* desc = langue.child_value(nombreNodo.c_str());
+
+        idiomaCode.push_back(nomcourt);
+        idiomaDesc.push_back(desc);
+    }
 }
 
 void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joystick, CfgLoader *refConfig){
@@ -194,7 +308,7 @@ void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joys
 			menuCoreOptions->opciones.push_back(new OpcionLista(controllerPad.current_desc, gamepads, &controllerPad.current_device_id));
 		}
 	}
-	menu->opciones.push_back(new OpcionBool("Eje analógico como pad", &joystick->inputs.axisAsPad[controlId]));
+	menu->opciones.push_back(new OpcionBool(Constant::ANSItoUTF8("Eje analógico como pad"), &joystick->inputs.axisAsPad[controlId]));
 }
 
 void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
@@ -218,9 +332,9 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
         return Constant::compareNoCase(a.desc, b.desc);
     });
 
-	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>("Guardar opciones", guardarCoreConfig, refConfig));
+	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>("Guardar opciones", &GestorMenus::guardarCoreConfig, refConfig, this));
 
-	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue("Versión del core", refConfig->configMain[cfg::libretro_core].valueStr + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
+	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(Constant::ANSItoUTF8("Versión del core"), refConfig->configMain[cfg::libretro_core].valueStr + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue("Extensiones admitidas", refConfig->configMain[cfg::libretro_core_extensions].valueStr));
 
     // 3. Ahora recorremos el vector ordenado y buscamos en el mapa original por KEY
@@ -259,7 +373,7 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 
 	// 1. Inicializar con objetos vacíos (opcional, dependiendo de tu lógica de UI)
 	for (int i = 0; i < MAX_SAVESTATES; ++i) {
-		OpcionSavestate *savestate = new OpcionSavestate("- Vacío -");
+		OpcionSavestate *savestate = new OpcionSavestate(Constant::ANSItoUTF8("- Vacío -"));
 		savestate->file.filename = filterName + Constant::intToString(i);
 		savestate->file.dir = statesDir;
 		savestate->status = &this->status;
@@ -674,7 +788,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 			drawBooleanSwitch(i, (OpcionBool *)option, video_page);			
 		} else if (!value.empty()){
 			int pixelDato;
-			TTF_SizeText(fontMenu, value.c_str(), &pixelDato, NULL);
+			TTF_SizeUTF8(fontMenu, value.c_str(), &pixelDato, NULL);
 			Constant::drawTextTransparent(video_page, fontMenu, value.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
 		}
@@ -694,7 +808,7 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 	// 1. Manejo del temporizador (Early exit)
 	Uint32 elapsed = SDL_GetTicks() - opt->lastTimeAsked;
 	if (opt->changeAsked && elapsed < 4000) {
-		str = "Esperando pulsación de tecla en " + Constant::intToString((5000 - elapsed) / 1000) + " s";
+		str = Constant::ANSItoUTF8("Esperando pulsación de tecla en ") + Constant::intToString((5000 - elapsed) / 1000) + " s";
 	} else {
 		// 2. Obtener el ID de SDL según el tipo de entrada
 		int sdlId = -1;
@@ -859,7 +973,7 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 		//Drawing the modification date
 		if (!opcion->file.modificationTime.empty()){
 			//Drawing below the image
-			Constant::drawTextTransparent(video_page, fontSmall, std::string("Último guardado: " + opcion->file.modificationTime).c_str(), imageMenu.getX(), 
+			Constant::drawTextTransparent(video_page, fontSmall, std::string(Constant::ANSItoUTF8("Último guardado: ") + opcion->file.modificationTime).c_str(), imageMenu.getX(), 
                 imageMenu.getY() + imageMenu.getH() + 2, white, 0);
 		}
     } else {
@@ -975,6 +1089,12 @@ void GestorMenus::nextPos(){
 
 void GestorMenus::prevPos(){
     navegar(-1);
+}
+
+void GestorMenus::volverMenuInicial(){
+	status = NORMAL;
+	menuActual = menuRaiz;
+	resetIndexPos();
 }
 
 

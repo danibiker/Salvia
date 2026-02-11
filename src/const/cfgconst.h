@@ -9,7 +9,7 @@ namespace cfg {
 	typedef enum {emulators = 0, debug, resolution_width, resolution_height, path_prefix, alsaReset, background_music, mp3_file, aspectRatio, 
 			scaleMode, syncMode, soundMode, libretrosystem, libretro_lang, libretro_save, libretro_state, libretro_core, libretro_core_version, 
 			libretro_core_extensions,
-			showFps, forceFS,			
+			showFps, forceFS, mainLang, scrapRegion, scrapLang,			
 			MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
 
 	typedef enum{generalConfig = 0, name,

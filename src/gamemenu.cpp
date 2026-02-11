@@ -49,6 +49,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	lastFpsUpdate = 0;
 	//initHqxFilter();
 	setSavePath();
+	scrapper = new Scrapper();
 };
 
 GameMenu::~GameMenu(){
@@ -64,6 +65,7 @@ GameMenu::~GameMenu(){
 		if (srf_32_convert.dst32) SDL_FreeSurface(srf_32_convert.dst32);
 		hqxClose();
 	#endif
+	delete scrapper;
 }
 
 std::string GameMenu::configButtonsJOY(){
@@ -1141,4 +1143,43 @@ void GameMenu::setSavePath(){
 	}
 
 	getRomPaths()->saves = savesDir;
+}
+
+void GameMenu::startScrapping(){
+	LOG_DEBUG("Starting the scrap process");
+
+	ScrapperConfig config;
+
+	switch (this->configMenus->getScrapGamesSelection()){
+		case SCRAP_NO_METADATA:
+			config.downloadNoMetadata = true;
+			break;
+		case SCRAP_NO_SCREENSHOT:
+			config.downloadNoSS = true;
+			break;
+		case SCRAP_NO_BOX:
+			config.downloadNoBox = true;
+			break;
+		case SCRAP_NO_TITLE:
+			config.downloadNoTitle = true;
+			break;
+	}
+	int regIndex;
+	int langIndex;
+	cfgLoader->configMain[cfg::scrapRegion].getPropValue(regIndex);
+	cfgLoader->configMain[cfg::scrapLang].getPropValue(langIndex);
+
+	config.lenguaPreferida = this->configMenus->getLangCode(langIndex);
+	config.regionPreferida = this->configMenus->getRegionCode(regIndex);
+	LOG_DEBUG("Seleccionando lengua %s y region %s", config.lenguaPreferida.c_str(), config.regionPreferida.c_str());
+
+	for (int i=0; i < cfgLoader->emulators.size() - 1; i++){
+		if (this->configMenus->scrapSelection[i].selected){
+			int idxEmu = this->configMenus->scrapSelection[i].index;
+			if (idxEmu >= 0 && idxEmu < cfgLoader->emulators.size() - 1){
+				LOG_DEBUG("Scrapping %s", this->configMenus->scrapSelection[idxEmu].name.c_str());
+				scrapper->scrapSystem(cfgLoader->emulators[idxEmu].get()->config, config);
+			}
+		}
+	}
 }

@@ -22,7 +22,8 @@ const char *ICONS_PATH[] = {"menu_log.png",
 	"core-input-remapping-options.png",
 	"loadstate.png",
 	"menu_saving.png",
-	"resume.png"
+	"resume.png",
+	"screenshot.png"
 };
 
 const char *JOY_DESCRIPTIONS[] = {"JOY_BUTTON_A",
