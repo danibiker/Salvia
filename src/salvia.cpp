@@ -42,8 +42,7 @@ int Constant::EXEC_METHOD = launch_batch;
 const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
 vector<SDL_Surface *> Icons::icons;
 vector<SDL_Surface *> Icons::icons_carts;
-bool Scrapper::scrapping = false;
-ScrapStatus Scrapper::g_status;
+
 
 static uint16_t* conversion_buffer = NULL;
 static std::size_t buffer_size = 0;
@@ -245,7 +244,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return true;
 		}
 		case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: {
-			*(const char**)data = gameMenu->getRomPaths()->saves.c_str();
+			*(const char**)data = gameMenu->getRomPaths()->sram.c_str();
 			return true;
 		}
 
@@ -420,32 +419,26 @@ static bool retro_environment(unsigned cmd, void *data) {
 }
 
 static inline void take_screenshot(void* final_src, unsigned width, unsigned height, std::size_t pitch){
-	// 1. Liberar memoria previa correctamente (si es array usa delete[])
-	if (action_postponed.screenshot) delete[] action_postponed.screenshot;
+    if (action_postponed.screenshot) {
+        delete[] action_postponed.screenshot;
+        action_postponed.screenshot = NULL;
+    }
 
-	// 2. Calcular tamaño real
-	std::size_t num_pixels = width * height;
-	action_postponed.screenshot = new uint16_t[num_pixels];
-	action_postponed.width = width;
-	action_postponed.height = height;
+    std::size_t num_pixels = width * height;
+    action_postponed.screenshot = new uint16_t[num_pixels];
+    action_postponed.width = width;
+    action_postponed.height = height;
 
-	// 3. Copia segura considerando el pitch
-	if (pitch == width * sizeof(uint16_t)) {
-		// Pitch lineal, copia rápida
-		memcpy(action_postponed.screenshot, final_src, num_pixels * sizeof(uint16_t));
-	} else {
-		// Pitch con padding, copiar fila por fila
-		uint8_t* src_ptr = (uint8_t*)final_src;
-		uint8_t* dst_ptr = (uint8_t*)action_postponed.screenshot;
-		std::size_t row_size = width * sizeof(uint16_t);
-        
-		for (unsigned y = 0; y < height; y++) {
-			memcpy(dst_ptr, src_ptr, row_size);
-			src_ptr += pitch;
-			dst_ptr += row_size;
-		}
-	}
-	action_postponed.cycles = 0;
+    uint8_t* src_ptr = (uint8_t*)final_src;
+    uint8_t* dst_ptr = (uint8_t*)action_postponed.screenshot;
+    std::size_t row_size = width * sizeof(uint16_t);
+    for (unsigned y = 0; y < height; y++) {
+        memcpy(dst_ptr, src_ptr, row_size);
+        src_ptr += pitch;
+        dst_ptr += row_size;
+    }
+
+    action_postponed.cycles = 0;
 }
 
 static void retro_video_refresh(const void *data, unsigned width, unsigned height, std::size_t pitch) {
@@ -469,7 +462,7 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 		pitch = width * 2;
 	}
 
-	if (action_postponed.cycles == 1 && action_postponed.action == HK_SAVESTATE){
+	if (action_postponed.cycles == 1 && action_postponed.action == SAVE_STATE){
 		take_screenshot(final_src, width, height, pitch);
 	}
 	
@@ -605,9 +598,7 @@ std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_
             return frames;
         default:
             // Para otros modos, si no hay sitio, descartamos para no acumular lag
-            if (audio.get_free_space() >= total_samples) {
-                audio.Write(data, total_samples);
-            }
+            audio.Write(data, total_samples);
             break;
     }
     return frames;
@@ -671,7 +662,7 @@ void init_sdl_audio(double sample_rate) {
     // 1024 = ~23ms (Riesgo de cortes en 360)
     // 2048 = ~46ms (Recomendado para estabilidad en emulación)
     // 4096 = ~92ms (Seguro, pero con lag perceptible)
-	wanted.samples = 1024; // Tamaño del bloque (latencia)
+	wanted.samples = 2048; // Tamaño del bloque (latencia)
     wanted.callback = sdl_audio_callback;
 
     if (SDL_OpenAudio(&wanted, NULL) < 0) {
@@ -874,30 +865,14 @@ bool loadGameAtStart(int argc, char *argv[]){
 // En tu función de salida o desinicialización
 void closeResources() {
 	closeGame();
+	Scrapper::ShutdownScrapper();
     if (conversion_buffer != NULL) {
         free(conversion_buffer);
         conversion_buffer = NULL; // Importante ponerlo a NULL tras liberar
         buffer_size = 0;
     }
 
-    g_saveQueue.running = false;
-    
-    // 1. Despertamos al hilo una última vez para que vea que 'running' es false
-    SDL_SemPost(g_saveQueue.semaphore);
-    
-    // 2. Esperamos a que el hilo termine (opcional pero recomendado)
-    // En SDL 1.2 no hay SDL_WaitThread, pero puedes usar un pequeño delay
-    SDL_Delay(100); 
-
-    // 3. Liberamos los recursos de SDL
-    if (g_saveQueue.semaphore) SDL_DestroySemaphore(g_saveQueue.semaphore);
-    if (g_saveQueue.saveMutex) SDL_DestroyMutex(g_saveQueue.saveMutex);
-    
-    // 4. Liberamos la memoria del buffer de SRAM
-    if (g_sram_data_last) {
-        free(g_sram_data_last);
-        g_sram_data_last = NULL;
-    }
+	deinitSaveSystem();
 
 	CurlClient curlClient;
 	curlClient.close();
@@ -925,21 +900,16 @@ inline void updateGame() {
 void processFrontendEvents(){
 	HOTKEYS_LIST hotkey = gameMenu->joystick->findHotkey();
 
-	if (action_postponed.action == HK_SAVESTATE && hotkey != HK_SAVESTATE && action_postponed.cycles == 0){
-		hotkey = HK_SAVESTATE;
+	if (action_postponed.cycles == 0){
+		saveState();
+		action_postponed.action = SAVE_NONE;
+		action_postponed.cycles = -1;
 	}
 
 	switch (hotkey) {
 		case HK_SAVESTATE:
-			//saveState();
-			if (action_postponed.cycles == 0){
-				saveState();
-				action_postponed.action = -1;
-				action_postponed.cycles = -1;
-			} else {
-				action_postponed.cycles = 1;
-				action_postponed.action = HK_SAVESTATE;
-			}
+			action_postponed.cycles = 1;
+			action_postponed.action = SAVE_STATE;
 			break;
 
 		case HK_LOADSTATE:
@@ -1028,7 +998,7 @@ int main(int argc, char *argv[]) {
 		listMenu.keyUp = false;
 	}
 
-	InitSaveSystem();
+	initSaveSystem();
 
 	Icons icons;
 	icons.loadIcons();

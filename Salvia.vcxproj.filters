@@ -179,6 +179,9 @@
     <ClCompile Include="src\http\httputil.cpp">
       <Filter>Source Files\http</Filter>
     </ClCompile>
+    <ClCompile Include="src\http\scrapper.cpp">
+      <Filter>Source Files\http</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\const\constant.h">

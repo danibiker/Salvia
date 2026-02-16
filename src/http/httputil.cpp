@@ -1,4 +1,5 @@
 #include <http/httputil.h>
+#include <const/constant.h>
 
 #define DEBUG_NET(msg, ...) { \
     char buffer[256]; \
@@ -13,6 +14,8 @@ static const char* USERAGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.
 mbedtls_entropy_context CurlClient::entropy;
 mbedtls_ctr_drbg_context CurlClient::ctr_drbg;
 #endif
+
+volatile long CurlClient::g_abortScrapping;
 
 CurlClient::CurlClient(){
 }
@@ -37,7 +40,7 @@ void CurlClient::init(){
 		do {
 			dwStatus = XNetGetTitleXnAddr(&xnAddr);
 			OutputDebugStringA("Esperando configuración de red...\n");
-			Sleep(500);
+			Sleep(200);
 		} while (dwStatus == XNET_GET_XNADDR_PENDING || dwStatus == XNET_GET_XNADDR_NONE);
 	#endif
 
@@ -133,7 +136,7 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L); // 15 segundos
 
 	// callback para llamar fuera a internet
-	#ifdef XBOX
+	#ifdef _XBOX
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, curl_sockopt_callback);
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, NULL); // Se podria pasar this
 	#endif
@@ -143,8 +146,8 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
     curl_easy_cleanup(curl);
 
 	if(res != CURLE_OK) {
-		char errbuf[CURL_ERROR_SIZE]; // Asegúrate de configurar CURLOPT_ERRORBUFFER
-		sprintf(errbuf, "Error Crítico: %s\n", curl_easy_strerror(res));
+		char errbuf[CURL_ERROR_SIZE];
+		sprintf(errbuf, "Error curl: %s\n", curl_easy_strerror(res));
 		OutputDebugStringA(errbuf);
 	}
 
@@ -187,7 +190,7 @@ bool CurlClient::fetchFile(const std::string& url, const std::string& localPath,
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L); // 15 segundos
 
 	// callback para llamar fuera a internet
-	#ifdef XBOX
+	#ifdef _XBOX
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, curl_sockopt_callback);
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, NULL); // Podrías pasar 'this' si es una clase
 	#endif
@@ -240,7 +243,12 @@ std::size_t CurlClient::WriteCallback(void *contents, std::size_t size, std::siz
 
 // Callback estático para el progreso
 int CurlClient::ProgressCallback(void* clientp, double dltotal, double dlnow, double ultotal, double ulnow) {
-    ProgressData* p = (ProgressData*)clientp;
+	// En VS2010 leemos el flag con Interlocked
+    if (InterlockedExchangeAdd(&g_abortScrapping, 0) == 1) {
+        return 1; // Esto fuerza a CURLcode a ser CURLE_ABORTED_BY_CALLBACK
+    }
+	
+	ProgressData* p = (ProgressData*)clientp;
     if (p && p->progressVar && dltotal > 0) {
         *(p->progressVar) = (float)(dlnow / dltotal);
     }

@@ -1,0 +1,7 @@
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release /p:Platform="Xbox 360"
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release_beetlepcefast /p:Platform="Xbox 360"
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release_Gambatte /p:Platform="Xbox 360"
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release_Nestopia /p:Platform="Xbox 360"
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release_Snes9x /p:Platform="Xbox 360"
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release_vbanext /p:Platform="Xbox 360"
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release_picodrive /p:Platform="Xbox 360"

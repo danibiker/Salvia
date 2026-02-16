@@ -12,7 +12,6 @@
 
 static const int video_bpp = 16;
 
-
 #ifdef _XBOX
 	static Uint32 video_flags = SDL_SWSURFACE;
 	static int video_width = 1280;
@@ -216,7 +215,7 @@ class Constant{
         static char tempFileSep[2];
         static volatile uint32_t totalTicks;
 
-        static std::string getAppDir(){ 
+		static std::string getAppDir(){ 
             return appDir; 
         }
         static void setAppDir(std::string var){
@@ -499,6 +498,57 @@ class Constant{
 				return (double)SDL_GetTicks(); 
 			#endif
 			}
+
+		static std::string sanitizePathForXbox(const std::string& fullPath) {
+			// 1. Separar ruta y nombre
+			std::size_t lastSlash = fullPath.find_last_of("\\/");
+			std::string directory = (lastSlash == std::string::npos) ? "" : fullPath.substr(0, lastSlash + 1);
+			std::string filename = (lastSlash == std::string::npos) ? fullPath : fullPath.substr(lastSlash + 1);
+
+			// 2. Caracteres prohibidos (FATX es estricto con estos)
+			const char* forbiddenChars = "<>:\"/\\|?*&[]!,;=+";
+			for (std::size_t i = 0; i < filename.length(); ++i) {
+				if (strchr(forbiddenChars, filename[i])) {
+					filename[i] = '_';
+				}
+			}
+
+			// 3. Gestión de longitud máxima (42 caracteres)
+			if (filename.length() > 42) {
+				// Buscamos el PRIMER punto para identificar dónde empiezan las extensiones
+				// Ejemplo: "Sonic.Knuckles.bin" -> queremos conservar ".Knuckles.bin"
+				std::size_t firstDot = filename.find_first_of('.');
+        
+				if (firstDot != std::string::npos) {
+					std::string allExtensions = filename.substr(firstDot); // ".bin.state"
+            
+					// Si las extensiones son absurdamente largas (más de 30 chars), recortamos a lo bruto
+					if (allExtensions.length() > 30) {
+						filename = filename.substr(0, 42);
+					} else {
+						// Recortamos el nombre base para que quepan las extensiones
+						std::size_t maxBaseLen = 42 - allExtensions.length();
+						filename = filename.substr(0, maxBaseLen) + allExtensions;
+					}
+				} else {
+					// Sin puntos, recorte directo
+					filename = filename.substr(0, 42);
+				}
+			}
+
+			return directory + filename;
+		}
+
+		static std::string checkPath(std::string path){
+			std::string prefix = path.substr(0, 6);
+			std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::tolower);
+
+			if (prefix == "game:\\") {
+				return sanitizePathForXbox(path);
+			} else {
+				return path;
+			}
+		}
 
         static void setExecMethod(int var){EXEC_METHOD = var;}
         static int getExecMethod(){return EXEC_METHOD;}

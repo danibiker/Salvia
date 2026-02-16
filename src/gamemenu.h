@@ -100,12 +100,10 @@ class GameMenu : public Engine{
 			std::string rompath;
 			std::string savestate;
 			std::string sram;
-			std::string saves;
 		};
 
 		t_rom_paths* getRomPaths(){return &romPaths;}
 		void setRomPaths(std::string rp);
-		void setSavePath();
 
 		void showSystemMessage(std::string, uint32_t);
 		

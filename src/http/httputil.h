@@ -25,10 +25,13 @@ class CurlClient {
 		void init();
 		void close();
 
+		static volatile long g_abortScrapping; 
+
 		// Función principal de descarga
 		bool fetchUrl(const std::string& url, std::string& outResponse, float* progressPtr);
 		bool fetchFile(const std::string& url, const std::string& localPath, float* progressPtr);
 		std::string escape(const std::string& text);
+
 	private:
 	#ifdef _XBOX
 		static mbedtls_entropy_context entropy;

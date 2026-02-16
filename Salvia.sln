@@ -43,6 +43,8 @@ Global
 		Release_Nestopia|Xbox 360 = Release_Nestopia|Xbox 360
 		Release_pcsx|Win32 = Release_pcsx|Win32
 		Release_pcsx|Xbox 360 = Release_pcsx|Xbox 360
+		Release_picodrive|Win32 = Release_picodrive|Win32
+		Release_picodrive|Xbox 360 = Release_picodrive|Xbox 360
 		Release_Snes9x_latest|Win32 = Release_Snes9x_latest|Win32
 		Release_Snes9x_latest|Xbox 360 = Release_Snes9x_latest|Xbox 360
 		Release_Snes9x|Win32 = Release_Snes9x|Win32
@@ -138,6 +140,11 @@ Global
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_pcsx|Xbox 360.ActiveCfg = Release_pcsx|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_pcsx|Xbox 360.Build.0 = Release_pcsx|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_pcsx|Xbox 360.Deploy.0 = Release_pcsx|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_picodrive|Win32.ActiveCfg = Release_picodrive|Win32
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_picodrive|Win32.Build.0 = Release_picodrive|Win32
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_picodrive|Xbox 360.ActiveCfg = Release_picodrive|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_picodrive|Xbox 360.Build.0 = Release_picodrive|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_picodrive|Xbox 360.Deploy.0 = Release_picodrive|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_Snes9x_latest|Win32.ActiveCfg = Release_Snes9x_latest|Win32
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_Snes9x_latest|Win32.Build.0 = Release_Snes9x_latest|Win32
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_Snes9x_latest|Xbox 360.ActiveCfg = Release_Snes9x_latest|Xbox 360
@@ -211,6 +218,9 @@ Global
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_pcsx|Win32.ActiveCfg = Release_pcsx|Win32
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_pcsx|Xbox 360.ActiveCfg = Release_pcsx|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_pcsx|Xbox 360.Deploy.0 = Release_pcsx|Xbox 360
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_picodrive|Win32.ActiveCfg = Release_picodrive|Win32
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_picodrive|Xbox 360.ActiveCfg = Release_picodrive|Xbox 360
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_picodrive|Xbox 360.Deploy.0 = Release_picodrive|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Snes9x_latest|Win32.ActiveCfg = Release_Snes9x_latest|Win32
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Snes9x_latest|Xbox 360.ActiveCfg = Release_Snes9x_latest|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_Snes9x|Win32.ActiveCfg = Release_Snes9x|Win32
@@ -274,6 +284,9 @@ Global
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_pcsx|Win32.ActiveCfg = Release_pcsx|Win32
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_pcsx|Xbox 360.ActiveCfg = Release_pcsx|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_pcsx|Xbox 360.Deploy.0 = Release_pcsx|Xbox 360
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_picodrive|Win32.ActiveCfg = Release_picodrive|Win32
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_picodrive|Xbox 360.ActiveCfg = Release_picodrive|Xbox 360
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_picodrive|Xbox 360.Deploy.0 = Release_picodrive|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Snes9x_latest|Win32.ActiveCfg = Release_Snes9x_latest|Win32
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Snes9x_latest|Xbox 360.ActiveCfg = Release_Snes9x_latest|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_Snes9x|Win32.ActiveCfg = Release_Snes9x|Win32

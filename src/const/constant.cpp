@@ -4,6 +4,7 @@ std::string Constant::appDir;
 std::string Constant::appExecutable;
 char Constant::tempFileSep[2];
 
+
 const char *MEDIAS_TO_FIND[] = {"sstitle", "ss", "box-2D"};
 const char *ASSETS_DIR[] = {"snaptit", "snap", "box2d", "synopsis"};
 

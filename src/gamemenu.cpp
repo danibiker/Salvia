@@ -48,7 +48,6 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	bg_screenshot = NULL;
 	lastFpsUpdate = 0;
 	//initHqxFilter();
-	setSavePath();
 };
 
 GameMenu::~GameMenu(){
@@ -1130,7 +1129,6 @@ void GameMenu::setRomPaths(std::string rp){
 	if (!dir.dirExists(statesDir.c_str())){
 		dir.createDirRecursive(statesDir.c_str());
 	}
-
 	getRomPaths()->savestate = statesDir + Constant::getFileSep() + 
 		dir.getFileNameNoExt(rp) + STATE_EXT;
 
@@ -1143,19 +1141,6 @@ void GameMenu::setRomPaths(std::string rp){
 
 	getRomPaths()->sram = sramDir + Constant::getFileSep() + 
 		dir.getFileNameNoExt(rp) + ".srm";
-}
-
-void GameMenu::setSavePath(){
-	dirutil dir;
-
-	std::string savesDir = getCfgLoader()->configMain[cfg::libretro_save].valueStr + Constant::getFileSep() +
-		getCfgLoader()->configMain[cfg::libretro_core].valueStr;
-			
-	if (!dir.dirExists(savesDir.c_str())){
-		dir.createDirRecursive(savesDir.c_str());
-	}
-
-	getRomPaths()->saves = savesDir;
 }
 
 void GameMenu::startScrapping(){

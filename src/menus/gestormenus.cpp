@@ -362,7 +362,13 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 	const std::string statesDir = refConfig->configMain[cfg::libretro_state].valueStr + Constant::getFileSep() +
 		refConfig->configMain[cfg::libretro_core].valueStr;
 	const std::string keyToFind = STATE_EXT;
-	const std::string filterName = dir.getFileNameNoExt(rompath) + keyToFind;
+	std::string filterName = dir.getFileNameNoExt(rompath) + keyToFind;
+
+	#ifdef _XBOX
+	//Filtramos nombres largos o caracteres extraños. sumamos un - para contemplar el tamanyo anyadido de los estados numerados
+	filterName = dir.getFileNameNoExt(Constant::checkPath(statesDir + Constant::getFileSep() + filterName + "-"));
+	#endif
+
 	std::size_t pos = 0;
 	std::string posSlot = "0";
 	int found = -1;
@@ -371,7 +377,6 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 	dir.listarFilesSuperFast(statesDir.c_str(), files, "", filterName, true, true);
 	menuSavestates->opciones.clear();
 
-	// 1. Inicializar con objetos vacíos (opcional, dependiendo de tu lógica de UI)
 	for (int i = 0; i < MAX_SAVESTATES; ++i) {
 		OpcionSavestate *savestate = new OpcionSavestate(Constant::ANSItoUTF8("- Vacío -"));
 		savestate->file.filename = filterName + Constant::intToString(i);
@@ -387,11 +392,15 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 		std::size_t pos = files[i]->filename.find(keyToFind);
 		if (pos == std::string::npos) continue;
 
+		LOG_DEBUG("File: %s", files[i]->filename.c_str());
+
 		// Extraer índice de la ranura
 		int iPosSlot = 0;
 		if (pos + keyToFind.length() < files[i]->filename.length()){
 			posSlot = files[i]->filename.substr(pos + keyToFind.length());
 			iPosSlot = Constant::strToTipo<int>(posSlot);
+		} else {
+			posSlot = "0";
 		}
 
 		if (iPosSlot >= 0 && iPosSlot < (int)menuSavestates->opciones.size()) {
@@ -988,7 +997,13 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 	
 	//Drawing the image
 	if (!rutaSelected.empty() && lastImagePath != rutaSelected){
-		imageMenu.loadImage(opcion->file.dir + Constant::getFileSep() + opcion->file.filename + STATE_IMG_EXT);
+
+		std::string rutaImg = opcion->file.dir + Constant::getFileSep() + opcion->file.filename + STATE_IMG_EXT;
+		#ifdef _XBOX
+		//Filtramos nombres largos o caracteres extraños
+		rutaImg = Constant::checkPath(rutaImg);
+		#endif
+		imageMenu.loadImage(rutaImg);
 		lastImagePath = opcion->file.filename;
 	}
 

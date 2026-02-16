@@ -196,14 +196,14 @@ void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest,
         double zoomY = (double)dst_h / src_h;
         
         // rotozoomSurfaceXY es más preciso para escalas no uniformes
-        cachedSurface = rotozoomSurfaceXY(src, 0, zoomX, zoomY, SMOOTHING_ON);
+		SDL_Surface* zoomedSurface = rotozoomSurfaceXY(src, 0, zoomX, zoomY, SMOOTHING_ON);
 
         // 5. Limpieza de temporales
         //SDL_FreeSurface(normalizedSrc);
         //SDL_FreeSurface(subSrc);
 
-		//cachedSurface = SDL_DisplayFormat(ampliada);
-		//SDL_FreeSurface(ampliada);
+		cachedSurface = SDL_DisplayFormat(zoomedSurface);
+		SDL_FreeSurface(zoomedSurface);
         
         lastW = dst_w; lastH = dst_h;
     }

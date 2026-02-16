@@ -37,8 +37,10 @@ public:
 				double zoomY = (double)face_h / img->h;
 				// rotozoomSurfaceXY es más preciso para escalas no uniformes
 				SDL_Surface *resizeImage = rotozoomSurfaceXY(img, 0, zoomX, zoomY, true);
-				icons.push_back(resizeImage);
+				SDL_Surface *formattedImg = SDL_DisplayFormatAlpha(resizeImage);
+				SDL_FreeSurface(resizeImage);
 				SDL_FreeSurface(img);
+				icons.push_back(formattedImg);
 			} else {
 				icons.push_back(NULL);
 			}
@@ -54,15 +56,16 @@ public:
 				double zoomY = (double)face_h / img->h;
 				// rotozoomSurfaceXY es más preciso para escalas no uniformes
 				SDL_Surface *resizeImage = rotozoomSurfaceXY(img, 0, zoomX, zoomY, true);
-				icons_carts.push_back(resizeImage);
 				SDL_FreeSurface(img);
+				SDL_Surface *formattedImg = SDL_DisplayFormatAlpha(resizeImage);
+				SDL_FreeSurface(resizeImage);
+				icons_carts.push_back(formattedImg);
+				
 			} else {
 				icons_carts.push_back(NULL);
 			}
 		}
 	}
-
-	
 
 	static vector<SDL_Surface*> icons;
 	static vector<SDL_Surface*> icons_carts;

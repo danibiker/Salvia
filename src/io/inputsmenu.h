@@ -29,7 +29,7 @@ bool processActions(GameMenu &gameMenu, t_option_action &optionAction){
 					LOG_DEBUG("Peticion guardar Partida: %s", filepath);
 					g_currentSlot = iPosSlot;
 					action_postponed.cycles = 1;
-					action_postponed.action = HK_SAVESTATE;
+					action_postponed.action = SAVE_STATE;
 					gameMenu.setEmuStatus(EMU_STARTED);
 					gameMenu.configMenus->resetStatus();
 					break;

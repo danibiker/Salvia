@@ -483,7 +483,6 @@ int dirutil::createDirRecursive(const char* path) {
 	#else
 		return mkdir(path, 0777);
 	#endif
-
 }
 
 void dirutil::borrarDir(string path)
