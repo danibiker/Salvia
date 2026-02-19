@@ -881,7 +881,7 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 				}
 			} while(!modeOk && *current_scaler_mode != startingMode);
 
-			LOG_INFO("Escaler %d - %s\n", *current_scaler_mode, videoScaleStrings[*current_scaler_mode]);
+			LOG_INFO("scaler %d - %s\n", *current_scaler_mode, videoScaleStrings[*current_scaler_mode].c_str());
 
 			selectScalerMode(*current_scaler_mode);
 			SDL_FillRect(this->video_page, NULL, this->uBkgColor);
@@ -899,7 +899,7 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 				//Some tinkering with shaders
 				XBOX_SelectEffect((++actualFilter) % 3);
 			#endif
-			showSystemMessage("changing filter", 3000);
+			showLangSystemMessage("msg.filter", 3000);
 			break;
 		case HK_EXIT_GAME:
 			setEmuStatus(EMU_MENU);
@@ -1073,6 +1073,10 @@ void GameMenu::selectScalerMode(int mode){
 	}
 }
 
+void GameMenu::showLangSystemMessage(std::string text, uint32_t duration) {
+	showSystemMessage(LanguageManager::instance()->get(text), duration);
+}
+
 void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
 	if (message.cache) SDL_FreeSurface(message.cache);
     
@@ -1147,7 +1151,7 @@ void GameMenu::startScrapping(){
 	LOG_DEBUG("Starting the scrap process");
 
 	if (Scrapper::isScrapping()){
-		showSystemMessage("Ya hay un proceso de scrapping en marcha. Espere a que termine", 3000);
+		showLangSystemMessage("msg.scrapinprogress", 3000);
 		return;
 	}
 

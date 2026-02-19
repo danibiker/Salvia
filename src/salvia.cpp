@@ -23,6 +23,7 @@
 #include "io/inputsmenu.h"
 #include "io/inputscore.h"
 #include "image/icons.h"
+#include "utils/langmanager.h"
 
 GameMenu *gameMenu;
 Logger *logger;
@@ -662,7 +663,11 @@ void init_sdl_audio(double sample_rate) {
     // 1024 = ~23ms (Riesgo de cortes en 360)
     // 2048 = ~46ms (Recomendado para estabilidad en emulación)
     // 4096 = ~92ms (Seguro, pero con lag perceptible)
+	#ifdef WIN
+	wanted.samples = 1024; // Tamaño del bloque (latencia)
+	#elif defined(_XBOX)
 	wanted.samples = 2048; // Tamaño del bloque (latencia)
+	#endif
     wanted.callback = sdl_audio_callback;
 
     if (SDL_OpenAudio(&wanted, NULL) < 0) {
@@ -773,7 +778,7 @@ int launchGame(std::string rompath){
 
 	if (!dir.dirExists(tempDir.c_str()) && dir.createDir(tempDir) < 0){
 		LOG_ERROR("No se ha podido crear el directorio %s\n", tempDir.c_str());
-		gameMenu->showSystemMessage("No se ha podido crear el directorio " + tempDir, 3000);
+		gameMenu->showLangSystemMessage("msg.direrror" + tempDir, 3000);
 		return 0;
 	}
 
@@ -782,7 +787,7 @@ int launchGame(std::string rompath){
 
 	if (unzipped.errorCode != 0){
 		LOG_ERROR("No se ha podido abrir el fichero o no se puede descomprimir: %s\n", rompath.c_str());
-		gameMenu->showSystemMessage("No se ha podido abrir el fichero o no se puede descomprimir " + rompath, 3000);
+		gameMenu->showLangSystemMessage("msg.openfileerror" + rompath, 3000);
 		return 0;
 	}
 	
@@ -805,7 +810,7 @@ int launchGame(std::string rompath){
 	// Es importante cargar la ROM antes de retro_run
 	if(!success) {
 		LOG_ERROR("Error cargando la ROM\n");
-		gameMenu->showSystemMessage("Error cargando la rom", 3000);
+		gameMenu->showLangSystemMessage("msg.romopenerror", 3000);
 		return 0;
 	}
 
@@ -923,12 +928,12 @@ void processFrontendEvents(){
 
 		case HK_SLOT_UP:
 			g_currentSlot = (g_currentSlot + 1) % MAX_SAVESTATES;
-			gameMenu->showSystemMessage("Slot seleccionado: " + Constant::intToString(g_currentSlot), 2000);
+			gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.selectslot") + Constant::intToString(g_currentSlot), 2000);
 			break;
 
 		case HK_SLOT_DOWN:
 			g_currentSlot = (g_currentSlot - 1 < 0) ? MAX_SAVESTATES - 1 : g_currentSlot - 1;
-			gameMenu->showSystemMessage("Slot seleccionado: " + Constant::intToString(g_currentSlot), 2000);
+			gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.selectslot") + Constant::intToString(g_currentSlot), 2000);
 			break;
 
 		default:
@@ -956,6 +961,9 @@ int main(int argc, char *argv[]) {
 	LOG_DEBUG("appdir: %s\n", Constant::getAppDir().c_str());
 	LOG_DEBUG("appexe: %s\n", Constant::getAppExecutable().c_str());
 
+	// Se cargan los textos
+	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + cfgLoader.configMain[cfg::mainLang].valueStr + ".ini");
+
 	gameMenu = new GameMenu(&cfgLoader);
 
 	ListMenu listMenu(gameMenu->screen->w, gameMenu->screen->h);
@@ -963,7 +971,7 @@ int main(int argc, char *argv[]) {
 	
 	if (!gameMenu->initDblBuffer(cfgLoader.getWidth(), cfgLoader.getHeight())){
 		LOG_ERROR("No se pudo crear el buffer doble");
-		gameMenu->showSystemMessage("No se pudo crear el buffer doble", 3000);
+		gameMenu->showLangSystemMessage("msg.error.dblbuffer", 3000);
         return 1;
     }
 

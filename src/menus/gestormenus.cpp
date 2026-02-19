@@ -10,9 +10,16 @@
 #include <io/joystick.h>
 #include <image/icons.h>
 #include <http/pugixml.hpp>
-
+#include <utils/langmanager.h>
 
 SDL_Surface* GestorMenus::imgText;
+
+std::string scrapGamesStrings[TOTAL_SCRAP_GAMES];
+std::string syncOptionsStrings[TOTAL_VIDEO_SYNC];
+std::string aspectRatioStrings[TOTAL_VIDEO_RATIO];
+std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
+string ACTION_ASK_STR[MAX_ASK];
+string TipoKeyStr[KEY_JOY_MAX];
 
 GestorMenus::GestorMenus(int screenw, int screenh){
 	menuRaiz = NULL;
@@ -53,7 +60,7 @@ GestorMenus::~GestorMenus() {
 
 std::string GestorMenus::guardarJoysticks(Joystick* joy){
 	LOG_DEBUG("Guardando valores del joystick");
-	return "Fichero guardado en: " + joy->saveButtonsRetro();
+	return LanguageManager::instance()->get("msg.filesave") + joy->saveButtonsRetro();
 }
 
 std::string GestorMenus::guardarCoreConfig(CfgLoader *refConfig){
@@ -83,7 +90,7 @@ std::string GestorMenus::startScrapping(CONFIG_STATUS *st){
 		return std::string("");
 	} else {
 		LOG_DEBUG("Seleccione al menos un sistema que escrapear");
-		return "Seleccione al menos un sistema que escrapear";
+		return LanguageManager::instance()->get("msg.atleast1scrap");
 	}
 }
 
@@ -102,16 +109,16 @@ void GestorMenus::setLayout(int layout, int screenw, int screenh){
 // Inicializa la estructura de menús
 void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
     // 1. Crear contenedores de menús
-    menuRaiz = new Menu("Opciones");
-    Menu* menuVideo = new Menu(Constant::ANSItoUTF8("Vídeo"), menuRaiz);
-	Menu* menuEmulation = new Menu(Constant::ANSItoUTF8("Emulación"), menuRaiz);
-	Menu* menuEntrada = new Menu("Entrada", menuRaiz);
-	menuCoreOptions = new Menu("Opciones del core", menuRaiz);
-	menuSavestates = new Menu("Partidas guardadas", menuRaiz);
-	Menu* menuScrapper = new Menu("Scrapear", menuRaiz);
+    menuRaiz = new Menu(LanguageManager::instance()->get("menu.main.options"));
+    Menu* menuVideo = new Menu(LanguageManager::instance()->get("menu.main.video"), menuRaiz);
+	Menu* menuEmulation = new Menu(LanguageManager::instance()->get("menu.main.emulation"), menuRaiz);
+	Menu* menuEntrada = new Menu(LanguageManager::instance()->get("menu.main.input"), menuRaiz);
+	menuCoreOptions = new Menu(LanguageManager::instance()->get("menu.main.core.options"), menuRaiz);
+	menuSavestates = new Menu(LanguageManager::instance()->get("menu.main.saves"), menuRaiz);
+	Menu* menuScrapper = new Menu(LanguageManager::instance()->get("menu.main.scrapper"), menuRaiz);
 
 	//Este menu no cuelga de ningun lado, pero ponemos partidas guardadas como padre
-	menuAskSavestates = new Menu("Gestionar Partidas guardadas", menuSavestates);
+	menuAskSavestates = new Menu(LanguageManager::instance()->get("menu.savestates.title"), menuSavestates);
         
     todosLosMenus.push_back(menuRaiz);
     todosLosMenus.push_back(menuVideo);
@@ -126,42 +133,50 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	//Escalado de video
     std::vector<std::string> syncvals;
 	for (int i=0; i < TOTAL_VIDEO_SYNC; i++){
+		syncOptionsStrings[i] = LanguageManager::instance()->get("menu.sync.sync" + Constant::TipoToStr(i));
 		syncvals.push_back(syncOptionsStrings[i]);
 	}
-	menuEmulation->opciones.push_back(new OpcionLista(Constant::ANSItoUTF8("Sincronización"), syncvals, &refConfig->configMain[cfg::syncMode].getIntRef()));
-	menuEmulation->opciones.push_back(new OpcionBool("Mostrar fps", &refConfig->configMain[cfg::showFps].getBoolRef()));
+	menuEmulation->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.sync"), syncvals, &refConfig->configMain[cfg::syncMode].getIntRef()));
+	menuEmulation->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.fps"), &refConfig->configMain[cfg::showFps].getBoolRef()));
 
     //Poblar Menú Video
 	//Relacion de aspecto
+
 	std::vector<std::string> aspectRates;
 	for (int i=0; i < TOTAL_VIDEO_RATIO; i++){
+		aspectRatioStrings[i] = LanguageManager::instance()->get("menu.aspect.aspect" + Constant::TipoToStr(i));
 		aspectRates.push_back(aspectRatioStrings[i]);
 	}
-	menuVideo->opciones.push_back(new OpcionLista(Constant::ANSItoUTF8("Relación de aspecto"), aspectRates, &refConfig->configMain[cfg::aspectRatio].getIntRef()));
+	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.aspect"), aspectRates, &refConfig->configMain[cfg::aspectRatio].getIntRef()));
 
 	//Escalado de video
     std::vector<std::string> filtros;
 	for (int i=0; i < TOTAL_VIDEO_SCALE; i++){
+		videoScaleStrings[i] = LanguageManager::instance()->get("menu.scale.scale" + Constant::TipoToStr(i));
 		filtros.push_back(videoScaleStrings[i]);
 	}
-	menuVideo->opciones.push_back(new OpcionLista("Escalado", filtros, &refConfig->configMain[cfg::scaleMode].getIntRef()));
-	menuVideo->opciones.push_back(new OpcionBool("Forzar pantalla completa", &refConfig->configMain[cfg::forceFS].getBoolRef()));
+	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.scale"), filtros, &refConfig->configMain[cfg::scaleMode].getIntRef()));
+	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.forcefs"), &refConfig->configMain[cfg::forceFS].getBoolRef()));
 
-	Menu* menuAssignRetro = new Menu("Asignaciones de Retropad", menuEntrada);
-	Menu* menuAssignFrontend = new Menu("Asignaciones de Frontend", menuEntrada);
-	Menu* menuHotkeys = new Menu(Constant::ANSItoUTF8("Teclas rápidas"), menuEntrada);
+	Menu* menuAssignRetro = new Menu(LanguageManager::instance()->get("menu.options.paddassign"), menuEntrada);
+	Menu* menuAssignFrontend = new Menu(LanguageManager::instance()->get("menu.options.frontassign"), menuEntrada);
+	Menu* menuHotkeys = new Menu(LanguageManager::instance()->get("menu.options.hotkeys"), menuEntrada);
 	todosLosMenus.push_back(menuAssignRetro);
 	todosLosMenus.push_back(menuAssignFrontend);
 	todosLosMenus.push_back(menuHotkeys);
 
-	menuEntrada->opciones.push_back(new OpcionSubMenu("Asignaciones de Retropad", menuAssignRetro));
-	menuEntrada->opciones.push_back(new OpcionSubMenu("Asignaciones de Frontend", menuAssignFrontend));
-	menuEntrada->opciones.push_back(new OpcionSubMenu(Constant::ANSItoUTF8("Teclas rápidas"), menuHotkeys));
-	menuEntrada->opciones.push_back(new OpcionExec<Joystick>("Guardar asignaciones", &GestorMenus::guardarJoysticks, joystick, this));
+	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.paddassign"), menuAssignRetro));
+	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.frontassign"), menuAssignFrontend));
+	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.hotkeys"), menuHotkeys));
+	menuEntrada->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.saveassign"), &GestorMenus::guardarJoysticks, joystick, this));
 
+	for (int i=0; i < KEY_JOY_MAX; i++){
+		TipoKeyStr[i] = LanguageManager::instance()->get("menu.inputs.key" + Constant::TipoToStr(i));
+	}
 
 	for (int controlId = 0; controlId < MAX_PLAYERS; controlId++){
-		std::string controlStr = "Controles del puerto " + Constant::TipoToStr(controlId + 1) + " " +
+		std::string controlStr = LanguageManager::instance()->get("menu.options.portcontrols") 
+			+ std::string(" ") + Constant::TipoToStr(controlId + 1) + " " +
 			joystick->inputs.names[controlId];
 
 		Menu* menuControlesPuerto = new Menu(controlStr , menuAssignRetro);
@@ -181,19 +196,21 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	//Poblar menu ask
 	std::vector<std::string> askOptions;
 	for (int i=0; i < MAX_ASK; i++){
+		ACTION_ASK_STR[i] = LanguageManager::instance()->get("menu.ask.action" + Constant::TipoToStr(i));
 		askOptions.push_back(ACTION_ASK_STR[i]);
 	}
-	menuAskSavestates->opciones.push_back(new OpcionLista(Constant::ANSItoUTF8("Seleccionar acción"), askOptions, &askNumOptions));
+	menuAskSavestates->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.askTitle"), askOptions, &askNumOptions));
 
-    // 3. Poblar Menú Principal
-    menuRaiz->opciones.push_back(new OpcionSubMenu(Constant::ANSItoUTF8("Configuración vídeo"), menuVideo, cfg_video));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(Constant::ANSItoUTF8("Configuración emulación"), menuEmulation, cfg_settings));
-	menuRaiz->opciones.push_back(new OpcionSubMenu("Entrada", menuEntrada, cfg_remap));
-	menuRaiz->opciones.push_back(new OpcionSubMenu("Opciones del core", menuCoreOptions, cfg_settings_core));
-	menuRaiz->opciones.push_back(new OpcionSubMenu("Partidas guardadas", menuSavestates, cfg_savestates));
-	menuRaiz->opciones.push_back(new OpcionSubMenu("Scrapear", menuScrapper, cfg_scrapper));
-	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>("Guardar opciones", &GestorMenus::guardarMainConfig, refConfig, cfg_saving, this));
-	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>("Volver", &GestorMenus::volverEmulacion, &status, cfg_return, this));
+	
+	// 3. Poblar Menú Principal
+    menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.video"), menuVideo, cfg_video));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.emulation"), menuEmulation, cfg_settings));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.input"), menuEntrada, cfg_remap));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.core.options"), menuCoreOptions, cfg_settings_core));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.saves"), menuSavestates, cfg_savestates));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.scrapper"), menuScrapper, cfg_scrapper));
+	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, cfg_saving, this));
+	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, cfg_return, this));
 
     // Establecer estado inicial
     menuActual = menuRaiz;
@@ -201,7 +218,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 }
 
 void GestorMenus::poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper){
-	Menu* menuSistems = new Menu("Escrapear estos sistemas", menuScrapper);
+	Menu* menuSistems = new Menu(LanguageManager::instance()->get("menu.scrap.systems"), menuScrapper);
 	scrapSelection.resize(refConfig->emulators.size() - 1);
 
 	Fileio fileio;
@@ -215,32 +232,52 @@ void GestorMenus::poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper){
 		scrapSelection[i].selected = false;
 		menuSistems->opciones.push_back(new OpcionBool(scrapSelection[i].name, &scrapSelection[i].selected));
 	}
-	menuScrapper->opciones.push_back(new OpcionSubMenu("Escrapear estos sistemas", menuSistems));
+	menuScrapper->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.scrap.systems"), menuSistems));
 
+	scrapGamesStrings[0] = LanguageManager::instance()->get("menu.scrap.games0");
+    scrapGamesStrings[1] = LanguageManager::instance()->get("menu.scrap.games1");
+    scrapGamesStrings[2] = LanguageManager::instance()->get("menu.scrap.games2");
+    scrapGamesStrings[3] = LanguageManager::instance()->get("menu.scrap.games3");
+    scrapGamesStrings[4] = "Not implemented";
 	for (int i=0; i < TOTAL_SCRAP_GAMES - 1; i++){
 		scrapGames.push_back(scrapGamesStrings[i]);
 	}
-	menuScrapper->opciones.push_back(new OpcionLista("Escrapear estos juegos", scrapGames, &scrapGamesSelection));
-
-	Menu* menuScrapOptions = new Menu("Otras configuraciones", menuScrapper);
+	menuScrapper->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.scrap.games"), scrapGames, &scrapGamesSelection));
+	Menu* menuScrapOptions = new Menu(LanguageManager::instance()->get("menu.scrap.other"), menuScrapper);
+	
 	std::string xmlRegion = fileio.cargarFichero(Constant::getAppDir() + "\\assets\\i18n\\regionsListe.xml");
-	parsearRegiones(xmlRegion.c_str(), mainLang, regionCode, regionDesc);
+	parsearRegiones(xmlRegion.c_str(), mainLang, region);
 	xmlRegion.clear();
+	
 	std::string xmlLang = fileio.cargarFichero(Constant::getAppDir() + "\\assets\\i18n\\languesListe.xml");
-	parsearIdiomas(xmlLang.c_str(), mainLang, idiomaCode, idiomaDesc);
+	parsearIdiomas(xmlLang.c_str(), mainLang, idioma);
 	xmlLang.clear();
 
-	if (regionDesc.size() > 0)
-		menuScrapOptions->opciones.push_back(new OpcionLista(Constant::ANSItoUTF8("Región"), regionDesc, &refConfig->configMain[cfg::scrapRegion].getIntRef()));
-	if (idiomaDesc.size() > 0)
-		menuScrapOptions->opciones.push_back(new OpcionLista("Idioma", idiomaDesc, &refConfig->configMain[cfg::scrapLang].getIntRef()));
+	if (region.size() > 0){
+		std::vector<std::string> regionDesc;
+		for (int i=0; i < region.size(); i++){
+			regionDesc.push_back(region[i].desc);
+		}
+		menuScrapOptions->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.scrap.region"), regionDesc, &refConfig->configMain[cfg::scrapRegion].getIntRef()));
+	}
+		
+	if (idioma.size() > 0){
+		std::vector<std::string> idiomaDesc;
+		for (int i=0; i < idioma.size(); i++){
+			idiomaDesc.push_back(idioma[i].desc);
+		}
+		menuScrapOptions->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.scrap.lang"), idiomaDesc, &refConfig->configMain[cfg::scrapLang].getIntRef()));
+	}
 
-	menuScrapper->opciones.push_back(new OpcionSubMenu("Otras configuraciones", menuScrapOptions));
-	menuScrapper->opciones.push_back(new OpcionExec<CONFIG_STATUS>("Empezar", &GestorMenus::startScrapping, &status, this));
+	menuScrapper->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.scrap.other"), menuScrapOptions));
+	menuScrapper->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.scrap.start"), &GestorMenus::startScrapping, &status, this));
 }
 
+/**
+*
+*/
 void GestorMenus::parsearIdiomas(const char* xmlData, const std::string& isoCode, 
-                    std::vector<std::string>& idiomaCode, std::vector<std::string>& idiomaDesc) 
+                    std::vector<FieldIdDesc>& idioma) 
 {
     pugi::xml_document doc;
     pugi::xml_parse_result result = doc.load_string(xmlData);
@@ -259,14 +296,21 @@ void GestorMenus::parsearIdiomas(const char* xmlData, const std::string& isoCode
         // Obtenemos los valores. child_value() devuelve "" si no lo encuentra.
         const char* nomcourt = langue.child_value("nomcourt");
         const char* desc = langue.child_value(nombreNodo.c_str());
+		const int id = Constant::strToTipo<int>(langue.child_value("id"));
 
-        idiomaCode.push_back(nomcourt);
-        idiomaDesc.push_back(desc);
+        idioma.push_back(FieldIdDesc(id, nomcourt, desc));
     }
+
+	std::sort(idioma.begin(), idioma.end(), [](const FieldIdDesc& a, const FieldIdDesc& b) {
+		return a.desc < b.desc; // Orden ascendente por el campo 'desc'
+	});
 }
 
+/**
+*
+*/
 void GestorMenus::parsearRegiones(const char* xmlData, const std::string& isoCode, 
-                    std::vector<std::string>& idiomaCode, std::vector<std::string>& idiomaDesc) 
+                    std::vector<FieldIdDesc>& region) 
 {
     pugi::xml_document doc;
     pugi::xml_parse_result result = doc.load_string(xmlData);
@@ -285,12 +329,19 @@ void GestorMenus::parsearRegiones(const char* xmlData, const std::string& isoCod
         // Obtenemos los valores. child_value() devuelve "" si no lo encuentra.
         const char* nomcourt = langue.child_value("nomcourt");
         const char* desc = langue.child_value(nombreNodo.c_str());
+		const int id = Constant::strToTipo<int>(langue.child_value("id"));
 
-        idiomaCode.push_back(nomcourt);
-        idiomaDesc.push_back(desc);
+        region.push_back(FieldIdDesc(id, nomcourt, desc));
     }
+
+	std::sort(region.begin(), region.end(), [](const FieldIdDesc& a, const FieldIdDesc& b) {
+		return a.desc < b.desc; // Orden ascendente por el campo 'desc'
+	});
 }
 
+/**
+*
+*/
 void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joystick, CfgLoader *refConfig){
 	menu->opciones.clear();
 	if (controlId < MAX_PLAYERS){
@@ -308,9 +359,12 @@ void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joys
 			menuCoreOptions->opciones.push_back(new OpcionLista(controllerPad.current_desc, gamepads, &controllerPad.current_device_id));
 		}
 	}
-	menu->opciones.push_back(new OpcionBool(Constant::ANSItoUTF8("Eje analógico como pad"), &joystick->inputs.axisAsPad[controlId]));
+	menu->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.controller.analogpad"), &joystick->inputs.axisAsPad[controlId]));
 }
 
+/**
+*
+*/
 void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
     auto& params = refConfig->startupLibretroParams;
     
@@ -332,10 +386,10 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
         return Constant::compareNoCase(a.desc, b.desc);
     });
 
-	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>("Guardar opciones", &GestorMenus::guardarCoreConfig, refConfig, this));
+	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.save"), &GestorMenus::guardarCoreConfig, refConfig, this));
 
-	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(Constant::ANSItoUTF8("Versión del core"), refConfig->configMain[cfg::libretro_core].valueStr + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
-	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue("Extensiones admitidas", refConfig->configMain[cfg::libretro_core_extensions].valueStr));
+	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.version"), refConfig->configMain[cfg::libretro_core].valueStr + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
+	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.extensions"), refConfig->configMain[cfg::libretro_core_extensions].valueStr));
 
     // 3. Ahora recorremos el vector ordenado y buscamos en el mapa original por KEY
     for (auto it = sorter.begin(); it != sorter.end(); ++it) {
@@ -378,7 +432,7 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 	menuSavestates->opciones.clear();
 
 	for (int i = 0; i < MAX_SAVESTATES; ++i) {
-		OpcionSavestate *savestate = new OpcionSavestate(Constant::ANSItoUTF8("- Vacío -"));
+		OpcionSavestate *savestate = new OpcionSavestate(LanguageManager::instance()->get("menu.savestate.empty"));
 		savestate->file.filename = filterName + Constant::intToString(i);
 		savestate->file.dir = statesDir;
 		savestate->status = &this->status;
@@ -411,7 +465,7 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 			// Para poder modificar el status si se pulsa este elemento y poder mostrar la emergente
 			opt->status = &this->status; 
 			// Titulo del elemento
-			opt->titulo = "Ranura " + (posSlot.empty() ? "0" : posSlot);
+			opt->titulo = LanguageManager::instance()->get("menu.savestate.slot") + " " + (posSlot.empty() ? "0" : posSlot);
 		}
 	}
 }
@@ -817,7 +871,7 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 	// 1. Manejo del temporizador (Early exit)
 	Uint32 elapsed = SDL_GetTicks() - opt->lastTimeAsked;
 	if (opt->changeAsked && elapsed < 4000) {
-		str = Constant::ANSItoUTF8("Esperando pulsación de tecla en ") + Constant::intToString((5000 - elapsed) / 1000) + " s";
+		str = LanguageManager::instance()->get("menu.inputs.waitkeypress") + Constant::intToString((5000 - elapsed) / 1000) + " s";
 	} else {
 		// 2. Obtener el ID de SDL según el tipo de entrada
 		int sdlId = -1;
@@ -982,7 +1036,8 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 		//Drawing the modification date
 		if (!opcion->file.modificationTime.empty()){
 			//Drawing below the image
-			Constant::drawTextTransparent(video_page, fontSmall, std::string(Constant::ANSItoUTF8("Último guardado: ") + opcion->file.modificationTime).c_str(), imageMenu.getX(), 
+			Constant::drawTextTransparent(video_page, fontSmall, std::string(LanguageManager::instance()->get("menu.savestate.latestsave") 
+				+ opcion->file.modificationTime).c_str(), imageMenu.getX(), 
                 imageMenu.getY() + imageMenu.getH() + 2, white, 0);
 		}
     } else {

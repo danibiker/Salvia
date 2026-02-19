@@ -1,0 +1,7 @@
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release /p:Platform="Win32"
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release_beetlepcefast /p:Platform="Win32"
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release_Gambatte /p:Platform="Win32"
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release_Nestopia /p:Platform="Win32"
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release_Snes9x /p:Platform="Win32"
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release_vbanext /p:Platform="Win32"
+msbuild "Salvia.vcxproj" /t:Rebuild /p:Configuration=Release_picodrive /p:Platform="Win32"

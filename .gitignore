@@ -52,16 +52,7 @@ libs/SDL_image-1.2.12/VisualC/**/Release/**
 *.zip
 *.gen
 
-Debug_gambatte/**
-Release_gambatte/**
-Debug_Nestopia/**
-Release_Nestopia/**
-Debug_Snes9x/**
-Release_Snes9x/**
-Debug_vbanext/**
-Release_vbanext/**
+build/**
 DistroWin/**
 Distro360/**
-Release**/**
-Debug**/**
 *.log

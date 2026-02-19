@@ -313,7 +313,7 @@ std::string CfgLoader::saveMainParams(){
 
 	std::string mainPath = Constant::getAppDir() + Constant::getFileSep() + CONFIGFILE;
 	FileList::guardarVector(mainPath, fileMainCfg);
-	return "Opciones guardadas en: " + mainPath;
+	return LanguageManager::instance()->get("msg.cfg.savelocation") + mainPath;
 }
 
 std::string CfgLoader::saveCoreParams(){
@@ -332,7 +332,7 @@ std::string CfgLoader::saveCoreParams(){
 
 	std::string corepath = getCoreCfgPath();
 	FileList::guardarVector(corepath, fileCoreCfg);
-	return "Opciones guardadas en: " + corepath;
+	return LanguageManager::instance()->get("msg.cfg.savelocation") + corepath;
 }
 
 void CfgLoader::loadCoreParams(){

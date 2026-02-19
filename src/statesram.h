@@ -230,7 +230,7 @@ void loadState(){
 	gzFile file = gzopen(state_path.c_str(), "rb");
 	if (!file) {
 		LOG_ERROR("No se pudo abrir el archivo: %s", state_path.c_str());
-		gameMenu->showSystemMessage("No se pudo abrir el archivo: " + std::string(state_path), 3000);
+		gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.error.fileopen") + std::string(state_path), 3000);
 		return;
 	}
 
@@ -251,7 +251,7 @@ void loadState(){
 		// 5. Inyectar los datos en el núcleo
 		// IMPORTANTE: Esto debe ocurrir en el hilo principal (emulación)
 		success = retro_unserialize(buffer, state_size);
-		gameMenu->showSystemMessage("Estado cargado de slot " + Constant::TipoToStr(g_currentSlot), 3000);
+		gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.state.load") + Constant::TipoToStr(g_currentSlot), 3000);
 	}
 
 	free(buffer);
@@ -293,7 +293,7 @@ int SaveThreadFunc(void* data) {
 				if (localBuffer) {
 					bool ret = guardar_archivo_raw(Constant::checkPath(localPath).c_str(), localBuffer, localSize);
 					if (!ret)
-						gameMenu->showSystemMessage("Error al guardar SRAM: " + localPath, 3000);
+						gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.error.sram") + localPath, 3000);
 
 					free(localBuffer); // Ahora es seguro porque es una copia dedicada
 
@@ -312,12 +312,12 @@ int SaveThreadFunc(void* data) {
 						if (localScreenshot != NULL) {
 							std::string imgPath = Constant::checkPath(localPath + STATE_IMG_EXT);
 							GuardarCapturaPNG(imgPath, (uint16_t*)localScreenshot, width,  height);
-							gameMenu->showSystemMessage("Estado guardado: Slot " + Constant::TipoToStr(localSlot), 3000);
+							gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.state.save") + Constant::TipoToStr(localSlot), 3000);
 						} else {
-							gameMenu->showSystemMessage("Error guardando captura del savestate " + localPath + STATE_IMG_EXT, 3000);
+							gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.error.savestate.image") + localPath + STATE_IMG_EXT, 3000);
 						}
 					} else {
-						gameMenu->showSystemMessage("Error guardando savestate: " + std::string(strerror(errno)) + "; " + localPath, 3000);
+						gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.error.savestate") + std::string(strerror(errno)) + "; " + localPath, 3000);
 					}
 
 					free(localBuffer); // Ahora es seguro porque es una copia dedicada

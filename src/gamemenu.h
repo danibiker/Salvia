@@ -43,6 +43,9 @@ static const string MENUTMP = "menu.tmp";
 
 int initHqxFilter();
 
+extern std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
+extern std::string aspectRatioStrings[TOTAL_VIDEO_RATIO];
+
 enum status_emu
 {
 	//The emulation has ben started and it's running
@@ -106,6 +109,7 @@ class GameMenu : public Engine{
 		void setRomPaths(std::string rp);
 
 		void showSystemMessage(std::string, uint32_t);
+		void showLangSystemMessage(std::string, uint32_t);
 		
 		// En la clase Config o GameMenu
 		ScalerFunc current_scaler;
