@@ -9,7 +9,6 @@
 #include <font/fonts.h>
 #include <io/joystick.h>
 #include <image/icons.h>
-#include <http/pugixml.hpp>
 #include <utils/langmanager.h>
 
 SDL_Surface* GestorMenus::imgText;
@@ -18,8 +17,14 @@ std::string scrapGamesStrings[TOTAL_SCRAP_GAMES];
 std::string syncOptionsStrings[TOTAL_VIDEO_SYNC];
 std::string aspectRatioStrings[TOTAL_VIDEO_RATIO];
 std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
-string ACTION_ASK_STR[MAX_ASK];
-string TipoKeyStr[KEY_JOY_MAX];
+std::string ACTION_ASK_STR[MAX_ASK];
+std::string TipoKeyStr[KEY_JOY_MAX];
+std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
+std::string configurablePortButtonsStr[MAXJOYBUTTONS];
+std::string configurablePortHatsStr[MAXJOYBUTTONS];
+std::string HOTKEYS_STR[HK_MAX];
+
+const char *scrapOrigins[] = {"SCREENSCRAPER", "THEGAMESDB", "EMPTY"};
 
 GestorMenus::GestorMenus(int screenw, int screenh){
 	menuRaiz = NULL;
@@ -48,6 +53,7 @@ GestorMenus::GestorMenus(int screenw, int screenh){
 	imageMenu.setH(box2dH);
 	askNumOptions = 0;
 	scrapGamesSelection = 1;
+
 }
 
 GestorMenus::~GestorMenus() {
@@ -170,6 +176,25 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.hotkeys"), menuHotkeys));
 	menuEntrada->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.saveassign"), &GestorMenus::guardarJoysticks, joystick, this));
 
+	//Traducciones para las teclas
+	std::size_t num_elementos = sizeof(FRONTEND_BTN_VAL) / sizeof(FRONTEND_BTN_VAL[0]);
+	for (int i=0; i < num_elementos; i++){
+		FRONTEND_BTN_TXT[i] = LanguageManager::instance()->get("menu.controls.frontkey" + Constant::TipoToStr(i));
+	}
+	for (int i=0; i < HK_MAX; i++){
+		HOTKEYS_STR[i] = LanguageManager::instance()->get("menu.controls.hotkey" + Constant::TipoToStr(i));
+	}
+
+	num_elementos = sizeof(configurablePortButtons) / sizeof(configurablePortButtons[0]);
+	for (int i=0; i < num_elementos; i++){
+		configurablePortButtonsStr[i] = LanguageManager::instance()->get("menu.controls.retrobtn" + Constant::TipoToStr(i));
+	}
+
+	num_elementos = sizeof(configurablePortHats) / sizeof(configurablePortHats[0]);
+	for (int i=0; i < num_elementos; i++){
+		configurablePortHatsStr[i] = LanguageManager::instance()->get("menu.controls.retropad" + Constant::TipoToStr(i));
+	}
+
 	for (int i=0; i < KEY_JOY_MAX; i++){
 		TipoKeyStr[i] = LanguageManager::instance()->get("menu.inputs.key" + Constant::TipoToStr(i));
 	}
@@ -185,7 +210,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 		menuAssignRetro->opciones.push_back(new OpcionSubMenu(controlStr, menuControlesPuerto));
 		todosLosMenus.push_back(menuControlesPuerto);
 	}
-	
+
 	//Poblar menu hotkeys
 	poblarMenuHotkeys(menuHotkeys, joystick);
 	//Menu de teclas para el frontend
@@ -200,7 +225,6 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 		askOptions.push_back(ACTION_ASK_STR[i]);
 	}
 	menuAskSavestates->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.askTitle"), askOptions, &askNumOptions));
-
 	
 	// 3. Poblar Menú Principal
     menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.video"), menuVideo, cfg_video));
@@ -212,6 +236,8 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, cfg_saving, this));
 	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, cfg_return, this));
 
+
+
     // Establecer estado inicial
     menuActual = menuRaiz;
 	resetIndexPos();
@@ -220,12 +246,16 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 void GestorMenus::poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper){
 	Menu* menuSistems = new Menu(LanguageManager::instance()->get("menu.scrap.systems"), menuScrapper);
 	scrapSelection.resize(refConfig->emulators.size() - 1);
-
-	Fileio fileio;
-	std::string mainLang;
 	std::vector<std::string> scrapGames;
-	refConfig->configMain[cfg::mainLang].getPropValue(mainLang);
 
+	//Selection of the origin
+	std::vector<std::string> scrapOrigin;
+	for (int i=0; i < SC_MAX; i++){
+		scrapOrigin.push_back(scrapOrigins[i]);
+	}
+	menuScrapper->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.scrap.from"), scrapOrigin, &refConfig->configMain[cfg::scrapOrigin].getIntRef()));
+
+	//Selection of the systems to scan
 	for (int i=0; i < refConfig->emulators.size() - 1; i++){
 		scrapSelection[i].index = i;
 		scrapSelection[i].name = refConfig->emulators[i]->config.name;
@@ -234,6 +264,7 @@ void GestorMenus::poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper){
 	}
 	menuScrapper->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.scrap.systems"), menuSistems));
 
+	//Selection of the artwork to download
 	scrapGamesStrings[0] = LanguageManager::instance()->get("menu.scrap.games0");
     scrapGamesStrings[1] = LanguageManager::instance()->get("menu.scrap.games1");
     scrapGamesStrings[2] = LanguageManager::instance()->get("menu.scrap.games2");
@@ -243,101 +274,38 @@ void GestorMenus::poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper){
 		scrapGames.push_back(scrapGamesStrings[i]);
 	}
 	menuScrapper->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.scrap.games"), scrapGames, &scrapGamesSelection));
-	Menu* menuScrapOptions = new Menu(LanguageManager::instance()->get("menu.scrap.other"), menuScrapper);
-	
-	std::string xmlRegion = fileio.cargarFichero(Constant::getAppDir() + "\\assets\\i18n\\regionsListe.xml");
-	parsearRegiones(xmlRegion.c_str(), mainLang, region);
-	xmlRegion.clear();
-	
-	std::string xmlLang = fileio.cargarFichero(Constant::getAppDir() + "\\assets\\i18n\\languesListe.xml");
-	parsearIdiomas(xmlLang.c_str(), mainLang, idioma);
-	xmlLang.clear();
 
-	if (region.size() > 0){
+	//Selection of other configuration
+	Menu* menuScrapOptions = new Menu(LanguageManager::instance()->get("menu.scrap.other"), menuScrapper);
+	if (refConfig->region.size() > 0){
 		std::vector<std::string> regionDesc;
-		for (int i=0; i < region.size(); i++){
-			regionDesc.push_back(region[i].desc);
+		std::string regCodeStr = refConfig->configMain[cfg::scrapRegion].valueStr;
+		for (int i=0; i < refConfig->region.size(); i++){
+			regionDesc.push_back(refConfig->region[i].desc);
+			if (regCodeStr == refConfig->region[i].shortName){
+				refConfig->idxRegion = i;
+			}
 		}
-		menuScrapOptions->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.scrap.region"), regionDesc, &refConfig->configMain[cfg::scrapRegion].getIntRef()));
+		menuScrapOptions->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.scrap.region"), regionDesc, &refConfig->idxRegion));
 	}
 		
-	if (idioma.size() > 0){
+	if (refConfig->idioma.size() > 0){
 		std::vector<std::string> idiomaDesc;
-		for (int i=0; i < idioma.size(); i++){
-			idiomaDesc.push_back(idioma[i].desc);
+		std::string idiomaCodeStr = refConfig->configMain[cfg::scrapLang].valueStr;
+		for (int i=0; i < refConfig->idioma.size(); i++){
+			idiomaDesc.push_back(refConfig->idioma[i].desc);
+			if (idiomaCodeStr == refConfig->idioma[i].shortName){
+				refConfig->idxIdioma = i;
+			}
 		}
-		menuScrapOptions->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.scrap.lang"), idiomaDesc, &refConfig->configMain[cfg::scrapLang].getIntRef()));
+		menuScrapOptions->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.scrap.lang"), idiomaDesc, &refConfig->idxIdioma));
 	}
 
 	menuScrapper->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.scrap.other"), menuScrapOptions));
 	menuScrapper->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.scrap.start"), &GestorMenus::startScrapping, &status, this));
 }
 
-/**
-*
-*/
-void GestorMenus::parsearIdiomas(const char* xmlData, const std::string& isoCode, 
-                    std::vector<FieldIdDesc>& idioma) 
-{
-    pugi::xml_document doc;
-    pugi::xml_parse_result result = doc.load_string(xmlData);
 
-    if (result.status != pugi::status_ok) return;
-
-    // VS2010: Construcción manual del nombre del nodo
-    std::string nombreNodo = "nom_" + isoCode;
-
-    // Acceso al nodo raíz
-    pugi::xml_node langues = doc.child("Data").child("langues");
-
-    // Iteración compatible con C++03 (Visual Studio 2010)
-    for (pugi::xml_node langue = langues.child("langue"); langue; langue = langue.next_sibling("langue")) 
-    {
-        // Obtenemos los valores. child_value() devuelve "" si no lo encuentra.
-        const char* nomcourt = langue.child_value("nomcourt");
-        const char* desc = langue.child_value(nombreNodo.c_str());
-		const int id = Constant::strToTipo<int>(langue.child_value("id"));
-
-        idioma.push_back(FieldIdDesc(id, nomcourt, desc));
-    }
-
-	std::sort(idioma.begin(), idioma.end(), [](const FieldIdDesc& a, const FieldIdDesc& b) {
-		return a.desc < b.desc; // Orden ascendente por el campo 'desc'
-	});
-}
-
-/**
-*
-*/
-void GestorMenus::parsearRegiones(const char* xmlData, const std::string& isoCode, 
-                    std::vector<FieldIdDesc>& region) 
-{
-    pugi::xml_document doc;
-    pugi::xml_parse_result result = doc.load_string(xmlData);
-
-    if (result.status != pugi::status_ok) return;
-
-    // VS2010: Construcción manual del nombre del nodo
-    std::string nombreNodo = "nom_" + isoCode;
-
-    // Acceso al nodo raíz
-    pugi::xml_node langues = doc.child("Data").child("regions");
-
-    // Iteración compatible con C++03 (Visual Studio 2010)
-    for (pugi::xml_node langue = langues.child("region"); langue; langue = langue.next_sibling("region")) 
-    {
-        // Obtenemos los valores. child_value() devuelve "" si no lo encuentra.
-        const char* nomcourt = langue.child_value("nomcourt");
-        const char* desc = langue.child_value(nombreNodo.c_str());
-		const int id = Constant::strToTipo<int>(langue.child_value("id"));
-
-        region.push_back(FieldIdDesc(id, nomcourt, desc));
-    }
-
-	std::sort(region.begin(), region.end(), [](const FieldIdDesc& a, const FieldIdDesc& b) {
-		return a.desc < b.desc; // Orden ascendente por el campo 'desc'
-	});
-}
 
 /**
 *

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <const/constant.h>
-#include <utils/langmanager.h>
 
 static const enum videoScale { FULLSCREEN=0, SCALE1X, SCALE2X, SCALE2X_ADV,
 	SCALE_HQ2X_ALT, 
@@ -18,3 +17,5 @@ static const enum aspectRatio { RATIO_CORE=0, RATIO_4_3, RATIO_3_2, RATIO_8_7, R
 static float aspectRatioValues [] = {4/3.0f, 4/3.0f, 3/2.0f, 8/7.0f, 10/9.0f, 1, 5/4.0f, 16/9.0f, 16/10.0f, 0, -1};
 static const enum syncOptions {OPT_SYNC_AUDIO = SYNC_TO_AUDIO, OPT_SYNC_VIDEO = SYNC_TO_VIDEO, OPT_SYNC_NONE = SYNC_NONE, TOTAL_VIDEO_SYNC};
 static const enum scrapGames {SCRAP_ALL = 0, SCRAP_NO_METADATA, SCRAP_NO_SCREENSHOT, SCRAP_NO_TITLE, SCRAP_NO_BOX, TOTAL_SCRAP_GAMES};
+
+enum SCRAP_FROM{SC_SCREENCSRAPER, SC_THEGAMESDB, SC_MAX};

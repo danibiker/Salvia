@@ -168,7 +168,6 @@ typedef enum {cart_gba,
 			  max_carts};
 
 extern const char *JOY_DESCRIPTIONS[];
-extern const char *FRONTEND_BTN_TXT[];
 extern const char *ICONS_PATH[];
 extern const char *ICONS_CARTS_PATH[];
 

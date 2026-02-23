@@ -45,6 +45,7 @@ int initHqxFilter();
 
 extern std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
 extern std::string aspectRatioStrings[TOTAL_VIDEO_RATIO];
+extern std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
 
 enum status_emu
 {

@@ -60,9 +60,6 @@ const char *JOY_DESCRIPTIONS[] = {"JOY_BUTTON_A",
             "JOY_AXIS_R2",
             "MAXJOYBUTTONS"};
 
-const char* FRONTEND_BTN_TXT[] = {"Arriba","Abajo","Izquierda","Derecha","Aceptar","Cancelar", "X", "Y", 
-		"Pagina anterior", "Pagina siguiente", "Select", "Start", "Click Stick Izquierdo", "Click Stick Derecho"};
-
 const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",
 	"Nintendo - Game Boy-content.png",
 	"Sega - Master System - Mark III-content.png",

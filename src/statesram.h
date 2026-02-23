@@ -1,12 +1,12 @@
 #pragma once
 
+#include <vector>
+#include <string>
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_thread.h>
-
 #include "image/lodepng.h"
-#include <vector>
-#include <string>
+#include <utils/langmanager.h>
 
 const Uint32 INTERVAL_SRAM_SAVE = 60000;
 

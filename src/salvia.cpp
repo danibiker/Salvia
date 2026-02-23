@@ -962,7 +962,8 @@ int main(int argc, char *argv[]) {
 	LOG_DEBUG("appexe: %s\n", Constant::getAppExecutable().c_str());
 
 	// Se cargan los textos
-	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + cfgLoader.configMain[cfg::mainLang].valueStr + ".ini");
+	const std::string mainLang = cfgLoader.configMain[cfg::mainLang].valueStr;
+	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
 
 	gameMenu = new GameMenu(&cfgLoader);
 

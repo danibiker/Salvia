@@ -16,6 +16,7 @@ enum TipoKey{KEY_JOY_BTN,KEY_JOY_HAT,KEY_JOY_AXIS, KEY_JOY_MAX};
 enum ACTION_ASK{ASK_CARGAR, ASK_GUARDAR, ASK_ELIMINAR, MAX_ASK};
 enum CONFIG_STATUS{NORMAL,POLLING_INPUTS,ASK_SAVESTATES, EXIT_CONFIG, START_SCRAPPING, MAX_CONFIG_STATUS};
 
+
 struct t_option_action{
 	int option;
 	int action;
@@ -198,17 +199,7 @@ struct Menu{
     }
 };
 
-struct FieldIdDesc{
-	int id;
-	std::string shortName;
-	std::string desc;
 
-	FieldIdDesc(int pid, std::string pshortName, std::string pdesc){
-		id = pid;
-		desc = pdesc;
-		shortName = pshortName;
-	}
-};
 
 // --- Clase Principal de Gestión de Menús ---
 class GestorMenus : public Object{
@@ -244,15 +235,6 @@ private:
     static SDL_Surface* imgText;
 	std::string lastImagePath;
 	Image imageMenu;
-	
-/*	std::vector<std::string> regionDesc;
-	std::vector<std::string> regionCode;
-	std::vector<std::string> idiomaDesc;
-	std::vector<std::string> idiomaCode;
-*/
-	std::vector<FieldIdDesc> region;
-	std::vector<FieldIdDesc> idioma;
-
 
 	int scrapGamesSelection;
 
@@ -271,8 +253,6 @@ private:
 	void drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page);
 
 	void resetAskPosition();
-	void parsearIdiomas(const char*, const std::string&, std::vector<FieldIdDesc>&);
-	void parsearRegiones(const char*, const std::string&, std::vector<FieldIdDesc>&);
 
 	void poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper);
 	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);
@@ -326,22 +306,6 @@ public:
 	std::vector<t_scrap> scrapSelection;
 
 	int getScrapGamesSelection(){return scrapGamesSelection;}
-
-	std::string getRegionCode(int idx){
-		if (idx >= 0 && idx < region.size()){
-			return region[idx].shortName;
-		} else {
-			return "";
-		}
-	}
-
-	std::string getLangCode(int idx){
-		if (idx >= 0 && idx < idioma.size()){
-			return idioma[idx].shortName;
-		} else {
-			return "";
-		}
-	}
 };
 
 template <typename T>

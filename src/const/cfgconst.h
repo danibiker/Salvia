@@ -9,7 +9,7 @@ namespace cfg {
 	typedef enum {emulators = 0, debug, resolution_width, resolution_height, path_prefix, alsaReset, background_music, mp3_file, aspectRatio, 
 			scaleMode, syncMode, soundMode, libretrosystem, libretro_lang, libretro_save, libretro_state, libretro_core, libretro_core_version, 
 			libretro_core_extensions,
-			showFps, forceFS, mainLang, scrapRegion, scrapLang,			
+			showFps, forceFS, mainLang, scrapRegion, scrapLang, scrapOrigin,apikeytgdb,			
 			MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
 
 	typedef enum{generalConfig = 0, name,
@@ -52,7 +52,7 @@ namespace cfg {
 		std::string desc;    // Objeto complejo
 		std::string valueStr;// Objeto complejo
 		
-		t_cfg_props() : type(CFG_TYPE_INT), valueInt(0), valueFloat(0.f), valueBool(false) {}
+		t_cfg_props() : type(CFG_TYPE_INT), valueInt(0), valueFloat(0.f), valueBool(false), name(""), desc(""), valueStr("") {}
 
 
 		t_cfg_props(std::string pstr, int val) : name(pstr), type(CFG_TYPE_INT), valueInt(val), valueFloat(0.f), valueBool(false), valueStr("") {};

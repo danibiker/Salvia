@@ -29,21 +29,6 @@ static const int configurablePortButtons[] = {
 	RETRO_DEVICE_ID_JOYPAD_R2
 };
 
-static const char * configurablePortButtonsStr[] = {
-	"RETRO_DEVICE_ID_JOYPAD_A",
-	"RETRO_DEVICE_ID_JOYPAD_B",
-	"RETRO_DEVICE_ID_JOYPAD_X",
-	"RETRO_DEVICE_ID_JOYPAD_Y",
-	"RETRO_DEVICE_ID_JOYPAD_L",
-	"RETRO_DEVICE_ID_JOYPAD_R",
-	"RETRO_DEVICE_ID_JOYPAD_SELECT",
-	"RETRO_DEVICE_ID_JOYPAD_START",
-	"RETRO_DEVICE_ID_JOYPAD_L3",
-	"RETRO_DEVICE_ID_JOYPAD_R3",
-	"RETRO_DEVICE_ID_JOYPAD_L2",
-	"RETRO_DEVICE_ID_JOYPAD_R2"
-};
-
 static const int configurablePortHats[] = {
 	RETRO_DEVICE_ID_JOYPAD_UP,
 	RETRO_DEVICE_ID_JOYPAD_DOWN,
@@ -51,12 +36,6 @@ static const int configurablePortHats[] = {
 	RETRO_DEVICE_ID_JOYPAD_RIGHT
 };
 
-static const char * configurablePortHatsStr[] = {
-	"RETRO_DEVICE_ID_JOYPAD_UP",
-	"RETRO_DEVICE_ID_JOYPAD_DOWN",
-	"RETRO_DEVICE_ID_JOYPAD_LEFT",
-	"RETRO_DEVICE_ID_JOYPAD_RIGHT"
-};
 
 static const int configurableSdlHats[] = {
 	RETRO_DEVICE_ID_JOYPAD_UP,    // --> SDL_HAT_UP    = 0x01

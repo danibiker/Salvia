@@ -6,6 +6,7 @@
 #include <beans/structures.h>
 #include <so/launcher.h>
 #include <libretro/libretro.h>
+#include <utils/langmanager.h>
 
 GameMenu::GameMenu(CfgLoader *cfgLoader){
     status = EMU_MENU;
@@ -131,7 +132,7 @@ std::string GameMenu::configButtonsJOY(){
         }*/
 		
 		SDL_FillRect(this->screen, NULL, bkgText);
-		Constant::drawTextCent(this->screen, Fonts::getFont(Fonts::FONTSMALL), FRONTEND_BTN_TXT[i], 0, 20, true, false, textColor, 0);
+		Constant::drawTextCent(this->screen, Fonts::getFont(Fonts::FONTSMALL), FRONTEND_BTN_TXT[i].c_str(), 0, 20, true, false, textColor, 0);
         SDL_Flip(this->screen);
 		/*
         while( SDL_PollEvent( &event ) ){
@@ -1149,12 +1150,10 @@ void GameMenu::setRomPaths(std::string rp){
 
 void GameMenu::startScrapping(){
 	LOG_DEBUG("Starting the scrap process");
-
 	if (Scrapper::isScrapping()){
 		showLangSystemMessage("msg.scrapinprogress", 3000);
 		return;
 	}
-
 	ScrapperConfig config;
 
 	switch (this->configMenus->getScrapGamesSelection()){
@@ -1171,15 +1170,13 @@ void GameMenu::startScrapping(){
 			config.downloadNoTitle = true;
 			break;
 	}
-	int regIndex;
-	int langIndex;
-	cfgLoader->configMain[cfg::scrapRegion].getPropValue(regIndex);
-	cfgLoader->configMain[cfg::scrapLang].getPropValue(langIndex);
 
-	config.lenguaPreferida = this->configMenus->getLangCode(langIndex);
-	config.regionPreferida = this->configMenus->getRegionCode(regIndex);
+	config.lenguaPreferida = cfgLoader->configMain[cfg::scrapLang].valueStr;
+	config.regionPreferida = cfgLoader->configMain[cfg::scrapRegion].valueStr;
+	config.origin = static_cast<SCRAP_FROM>(cfgLoader->configMain[cfg::scrapOrigin].valueInt);
+	config.apiKeyTGDB = cfgLoader->configMain[cfg::apikeytgdb].valueStr;
+
 	LOG_DEBUG("Seleccionando lengua %s y region %s", config.lenguaPreferida.c_str(), config.regionPreferida.c_str());
-	
 	Scrapper scrapper;
 	SafeDownloadQueue dwQueue;
 	int totalGames = 0;

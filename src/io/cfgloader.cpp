@@ -3,13 +3,14 @@
 #include "io/dirutil.h"
 #include <io/filelist.h>
 #include "const/cfgconst.h"
-
+#include <io/fileio.h>
 #include <libretro/libretro.h>
+#include <http/pugixml.hpp>
+#include <utils/langmanager.h>
 
 #include <sstream>
 #include <fstream>
 #include <iostream>
-
 
 extern "C"{
 	void retro_get_system_info(struct retro_system_info *info);
@@ -17,6 +18,8 @@ extern "C"{
 
 CfgLoader::CfgLoader(){
 	emuCfgPos = 0;
+	idxRegion = 0;
+	idxIdioma = 0;
 	initMainConfig();
 	loadMainConfig();
 	loadCoreParams();
@@ -46,9 +49,11 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::libretro_lang] = cfg::t_cfg_props("libretro_lang", (int)RETRO_LANGUAGE_SPANISH);
 	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
 	configMain[cfg::forceFS] = cfg::t_cfg_props("forceFS", true);
-	configMain[cfg::mainLang] = cfg::t_cfg_props("mainLang", "es");
-	configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", (int)17);
-	configMain[cfg::scrapLang] = cfg::t_cfg_props("scrapLang", (int)5);
+	configMain[cfg::apikeytgdb] = cfg::t_cfg_props("apikey.tgdb", "");
+	configMain[cfg::mainLang] = cfg::t_cfg_props("mainLang", "");
+	configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", "");
+	configMain[cfg::scrapLang] = cfg::t_cfg_props("scrapLang", "");
+	configMain[cfg::scrapOrigin] = cfg::t_cfg_props("scrapOrigin", (int)1);
 
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));
@@ -115,6 +120,8 @@ void CfgLoader::loadMainConfig(){
 	}
 	filecfg.close();
 
+	checkSystemLang();
+
 	if (fileopened){
 		if (isDebug()) LOG_DEBUG("Loading emulators", "");
 		std::string emulist;
@@ -133,6 +140,124 @@ void CfgLoader::loadMainConfig(){
 	salviaConfig->config.generalConfig = true;
 	salviaConfig->config.name = "Options";
 	emulators.push_back(std::move(salviaConfig));
+}
+
+void CfgLoader::checkSystemLang(){
+	Fileio fileio;
+	std::string mainLang = configMain[cfg::mainLang].valueStr;
+	std::string xmlRegion, xmlLang;
+	
+	if (configMain[cfg::mainLang].valueStr.empty()){
+		//Try to guess the language
+#ifdef _XBOX
+		// Obtener el ID del idioma del sistema
+		DWORD dwLanguage = XGetLanguage();
+
+		std::string langXbox;
+		switch (dwLanguage) {
+			case XC_LANGUAGE_SPANISH:
+				langXbox = "es";
+				break;
+			case XC_LANGUAGE_ENGLISH:
+				langXbox = "en";
+				break;
+			case XC_LANGUAGE_FRENCH:
+				langXbox = "fr";
+				break;
+			case XC_LANGUAGE_GERMAN:
+				langXbox = "de";
+				break;
+			case XC_LANGUAGE_ITALIAN:
+				langXbox = "it";
+				break;
+			default:
+				// Idioma por defecto si no coincide
+				langXbox = "en";
+				break;
+		}
+
+		configMain[cfg::mainLang].setPropValue(langXbox);
+#else
+		configMain[cfg::mainLang].setPropValue(std::string("en"));
+#endif
+		configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", std::string("eu"));
+		configMain[cfg::scrapLang] = cfg::t_cfg_props("scrapLang", configMain[cfg::mainLang].valueStr);
+	}
+
+	configMain[cfg::mainLang].getPropValue(mainLang);
+	xmlRegion = fileio.cargarFichero(Constant::getAppDir() + "\\assets\\i18n\\regionsListe.xml");
+	parsearRegiones(xmlRegion.c_str(), mainLang, region);
+	xmlRegion.clear();
+	
+	xmlLang = fileio.cargarFichero(Constant::getAppDir() + "\\assets\\i18n\\languesListe.xml");
+	parsearIdiomas(xmlLang.c_str(), mainLang, idioma);
+	xmlLang.clear();
+}
+
+/**
+*
+*/
+void CfgLoader::parsearIdiomas(const char* xmlData, const std::string& isoCode, 
+                    std::vector<FieldIdDesc>& idioma) 
+{
+    pugi::xml_document doc;
+    pugi::xml_parse_result result = doc.load_string(xmlData);
+
+    if (result.status != pugi::status_ok) return;
+
+    // VS2010: Construcción manual del nombre del nodo
+    std::string nombreNodo = "nom_" + isoCode;
+
+    // Acceso al nodo raíz
+    pugi::xml_node langues = doc.child("Data").child("langues");
+
+    // Iteración compatible con C++03 (Visual Studio 2010)
+    for (pugi::xml_node langue = langues.child("langue"); langue; langue = langue.next_sibling("langue")) 
+    {
+        // Obtenemos los valores. child_value() devuelve "" si no lo encuentra.
+        const char* nomcourt = langue.child_value("nomcourt");
+        const char* desc = langue.child_value(nombreNodo.c_str());
+		const int id = Constant::strToTipo<int>(langue.child_value("id"));
+
+        idioma.push_back(FieldIdDesc(id, nomcourt, desc));
+    }
+
+	std::sort(idioma.begin(), idioma.end(), [](const FieldIdDesc& a, const FieldIdDesc& b) {
+		return a.desc < b.desc; // Orden ascendente por el campo 'desc'
+	});
+}
+
+/**
+*
+*/
+void CfgLoader::parsearRegiones(const char* xmlData, const std::string& isoCode, 
+                    std::vector<FieldIdDesc>& region) 
+{
+    pugi::xml_document doc;
+    pugi::xml_parse_result result = doc.load_string(xmlData);
+
+    if (result.status != pugi::status_ok) return;
+
+    // VS2010: Construcción manual del nombre del nodo
+    std::string nombreNodo = "nom_" + isoCode;
+
+    // Acceso al nodo raíz
+    pugi::xml_node langues = doc.child("Data").child("regions");
+
+    // Iteración compatible con C++03 (Visual Studio 2010)
+    for (pugi::xml_node langue = langues.child("region"); langue; langue = langue.next_sibling("region")) 
+    {
+        // Obtenemos los valores. child_value() devuelve "" si no lo encuentra.
+        const char* nomcourt = langue.child_value("nomcourt");
+        const char* desc = langue.child_value(nombreNodo.c_str());
+		const int id = Constant::strToTipo<int>(langue.child_value("id"));
+
+        region.push_back(FieldIdDesc(id, nomcourt, desc));
+    }
+
+	std::sort(region.begin(), region.end(), [](const FieldIdDesc& a, const FieldIdDesc& b) {
+		return a.desc < b.desc; // Orden ascendente por el campo 'desc'
+	});
 }
 
 /**
@@ -288,6 +413,11 @@ std::map<std::string, std::unique_ptr<cfg::t_emu_props>>& CfgLoader::getLibretro
 std::string CfgLoader::saveMainParams(){
 	std::vector<std::string> fileMainCfg;
 	std::string line;
+
+	//actualizamos algunos parametros que dependen de un indice externo
+	configMain[cfg::scrapRegion].setPropValue(region[idxRegion].shortName);
+	configMain[cfg::scrapLang].setPropValue(idioma[idxIdioma].shortName);
+
 	for (int i=0; i < cfg::MAIN_CFG_MAX; i++){
 		if (configMain[i].name.empty()) continue;
 

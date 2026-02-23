@@ -17,19 +17,6 @@ typedef enum{
 	HK_MAX 
 } HOTKEYS_LIST;
 
-const static char *HOTKEYS_STR[] = {
-	"Tecla para activar teclas rapidas",
-	"Guardar estado", 
-	"Cargar estado", 
-	"Cambiar escalador de video", 
-	"Cambiar ratio de video", 
-	"Cambiar shader", 
-	"Aumentar slot de estado", 
-	"Disminuir slot de estado", 
-	"Salir del juego",
-	"Mostrar Menu",
-	"No implementado"};
-
 const static int MAX_COMBINATIONS = 3;
 
 struct HotkeyConfig {
