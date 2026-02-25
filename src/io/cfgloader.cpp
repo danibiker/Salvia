@@ -53,7 +53,7 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::mainLang] = cfg::t_cfg_props("mainLang", "");
 	configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", "");
 	configMain[cfg::scrapLang] = cfg::t_cfg_props("scrapLang", "");
-	configMain[cfg::scrapOrigin] = cfg::t_cfg_props("scrapOrigin", (int)1);
+	configMain[cfg::scrapOrigin] = cfg::t_cfg_props("scrapOrigin", (int)SC_SCREENCSRAPER);
 
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));
@@ -453,7 +453,7 @@ std::string CfgLoader::saveCoreParams(){
 	for (auto it = startupLibretroParams.begin(); it != startupLibretroParams.end(); ++it) {
         //TempElem e = { it->first, it->second->description };
 		optionValues = "";
-		for (int i=0; i < it->second->values.size(); i++){
+		for (std::size_t i=0; i < it->second->values.size(); i++){
 			optionValues += it->second->values[i] + (i<it->second->values.size() - 1 ? " | " : "");
 		}
 		fileCoreCfg.push_back("#" + optionValues);
@@ -491,7 +491,7 @@ void CfgLoader::loadCoreParams(){
 }
 
 std::string CfgLoader::getCoreCfgPath(){
-	int last = configMain[cfg::path_prefix].valueStr.length() - 1;
+	std::size_t last = configMain[cfg::path_prefix].valueStr.length() <= 0 ? 0 : configMain[cfg::path_prefix].valueStr.length() - 1;
 	bool lastFileSep = true;
 	if (last < configMain[cfg::path_prefix].valueStr.length()){
 		configMain[cfg::path_prefix].valueStr[last] = Constant::getFileSep()[0];

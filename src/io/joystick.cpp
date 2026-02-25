@@ -271,9 +271,9 @@ bool Joystick::loadButtonsRetro() {
                 
                 if (p < MAX_PLAYERS && profiles.count(profileName)) {
                     PadProfile& pf = profiles[profileName];
-                    for (int j = 0; j < MAX_BUTTONS && j < pf.btns.size(); j++) inputs.mapperCore.setBtnFromSdl(p, j, pf.btns[j]);
-                    for (int j = 0; j < MAX_HATS && j < pf.hats.size(); j++)    inputs.mapperCore.setHatFromSdl(p, j, pf.hats[j]);
-                    for (int j = 0; j < MAX_AXIS && j < pf.axis.size(); j++)    inputs.mapperCore.setAxisFromSdl(p, j, pf.axis[j]);
+                    for (std::size_t j = 0; j < MAX_BUTTONS && j < pf.btns.size(); j++) inputs.mapperCore.setBtnFromSdl(p, j, pf.btns[j]);
+                    for (std::size_t j = 0; j < MAX_HATS && j < pf.hats.size(); j++)    inputs.mapperCore.setHatFromSdl(p, j, pf.hats[j]);
+                    for (std::size_t j = 0; j < MAX_AXIS && j < pf.axis.size(); j++)    inputs.mapperCore.setAxisFromSdl(p, j, pf.axis[j]);
                     inputs.axisAsPad[p] = pf.anal;
 					inputs.names[p] = profileName;
                 }
@@ -283,13 +283,13 @@ bool Joystick::loadButtonsRetro() {
             auto& targetMapper = (currentSection == "[HOTKEYS]") ? inputs.mapperHotkeys : inputs.mapperFrontend;
             if (line.find("btns=") == 0) {
                 std::vector<int> v = Constant::splitInt(line.substr(5), ',');
-                for (int j = 0; j < MAX_BUTTONS && j < v.size(); j++) targetMapper.setBtnFromSdl(0, j, v[j]);
+                for (std::size_t j = 0; j < MAX_BUTTONS && j < v.size(); j++) targetMapper.setBtnFromSdl(0, j, v[j]);
             } else if (line.find("hats=") == 0) {
                 std::vector<int> v = Constant::splitInt(line.substr(5), ',');
-                for (int j = 0; j < MAX_HATS && j < v.size(); j++) targetMapper.setHatFromSdl(0, j, v[j]);
+                for (std::size_t j = 0; j < MAX_HATS && j < v.size(); j++) targetMapper.setHatFromSdl(0, j, v[j]);
             } else if (line.find("axis=") == 0) {
                 std::vector<int> v = Constant::splitInt(line.substr(5), ',');
-                for (int j = 0; j < MAX_AXIS && j < v.size(); j++) targetMapper.setAxisFromSdl(0, j, v[j]);
+                for (std::size_t j = 0; j < MAX_AXIS && j < v.size(); j++) targetMapper.setAxisFromSdl(0, j, v[j]);
             }
         }
     }

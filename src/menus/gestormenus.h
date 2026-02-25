@@ -215,6 +215,7 @@ private:
 	Menu* menuCoreOptions;
 	Menu* menuSavestates;
 	Menu* menuAskSavestates;
+	Menu* menuScrapper;
 	int askNumOptions;
 
 	CONFIG_STATUS status;
@@ -254,7 +255,7 @@ private:
 
 	void resetAskPosition();
 
-	void poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper);
+	void poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper);
 	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);
 	void poblarMenuAssignFrontend(Menu* menuHotkeys, Joystick *joystick);
 	std::string guardarJoysticks(Joystick* joy);
@@ -262,6 +263,7 @@ private:
 	std::string guardarMainConfig(CfgLoader *refConfig);
 	std::string volverEmulacion(CONFIG_STATUS *st);
 	std::string startScrapping(CONFIG_STATUS *st);
+	
 
 public:
     GestorMenus(int screenw, int screenh);
@@ -285,6 +287,7 @@ public:
 
 	void poblarCoreOptions(CfgLoader *);
 	void poblarPartidasGuardadas(CfgLoader *, std::string);
+	std::string stopScrapping(CONFIG_STATUS *st);
 
 	bool isCoreOptions(){
 		return obtenerMenuActual() == menuCoreOptions;

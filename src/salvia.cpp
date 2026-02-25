@@ -338,7 +338,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 				cfg::t_emu_props* param = it->second.get();
     
 				// VALIDACIÓN CRUCIAL:
-				if (param && !param->values.empty() && param->selected < param->values.size()) {
+				if (param && !param->values.empty() && (std::size_t)param->selected < param->values.size()) {
 					var->value = param->values.at(param->selected).c_str();
 					LOG_INFO("Asignando %s a %s", var->key, var->value);
 					return true;
@@ -729,8 +729,11 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
     }
 
     gameMenu.loadEmuCfg(menuData);
-    if (retMenu == 0 && menuData.maxLines == menuBeforeExit.maxLines){
-        menuData.iniPos = menuBeforeExit.iniPos;
+    if (retMenu == 0 && menuData.maxLines == menuBeforeExit.maxLines 
+		&& menuBeforeExit.iniPos > 0 && menuBeforeExit.iniPos < menuData.listSize
+		&& menuBeforeExit.endPos > 0 && menuBeforeExit.endPos < menuData.listSize
+		&& menuBeforeExit.curPos > 0 && menuBeforeExit.curPos < menuData.listSize){
+		menuData.iniPos = menuBeforeExit.iniPos;
         menuData.endPos = menuBeforeExit.endPos;
         menuData.curPos = menuBeforeExit.curPos;
     } else {
@@ -856,7 +859,7 @@ bool loadGameAtStart(int argc, char *argv[]){
 	#else 
 		if (argc > 1){
 			LOG_DEBUG("argv[1]: %s\n", argv[1]);
-			ret = launchGame(argv[1]);
+			ret = launchGame(argv[1]) == 1;
 		}
 	#endif	
 

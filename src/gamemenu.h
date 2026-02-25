@@ -147,6 +147,5 @@ class GameMenu : public Engine{
 		Message message;
 		t_rom_paths romPaths;
 		bool *mustUpdateFps;
-		std::vector<ConfigEmu> emuThreadedScrapper;
 		void showScrapProcess(ListMenu &listMenu);
 };

@@ -189,15 +189,18 @@ void render(uint16_t* output, unsigned outPitch,
     pitch    >>= 1;
     outPitch >>= 1;
 
+	// Forzamos a que el índice sea tratado como un entero con signo
+    int s_pitch = static_cast<int>(pitch); 
+
     for (unsigned y = 1; y < height - 1; y++) {
         const uint16_t* in = input + y * pitch;
         uint16_t* out0 = output + (y * 2) * outPitch;
         uint16_t* out1 = out0 + outPitch;
 
         for (unsigned x = 1; x < width - 1; x++) {
-            uint16_t A = in[-pitch - 1];
-            uint16_t B = in[-pitch];
-            uint16_t C = in[-pitch + 1];
+            uint16_t A = in[-s_pitch - 1];
+            uint16_t B = in[-s_pitch];
+            uint16_t C = in[-s_pitch + 1];
             uint16_t D = in[-1];
             uint16_t E = in[0];
             uint16_t F = in[1];

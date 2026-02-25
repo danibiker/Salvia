@@ -10,10 +10,10 @@
 #include <io/joystick.h>
 #include <image/icons.h>
 #include <utils/langmanager.h>
+#include <http/httputil.h>
 
 SDL_Surface* GestorMenus::imgText;
 
-std::string scrapGamesStrings[TOTAL_SCRAP_GAMES];
 std::string syncOptionsStrings[TOTAL_VIDEO_SYNC];
 std::string aspectRatioStrings[TOTAL_VIDEO_RATIO];
 std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
@@ -85,20 +85,46 @@ std::string GestorMenus::volverEmulacion(CONFIG_STATUS *st){
 }
 
 std::string GestorMenus::startScrapping(CONFIG_STATUS *st){
-
 	bool someSelected = false;
-	for (int i=0; i < scrapSelection.size() && !someSelected; i++){
+	for (std::size_t i=0; i < scrapSelection.size() && !someSelected; i++){
 		someSelected = scrapSelection[i].selected;
 	}
 
 	if (someSelected){
 		*st = START_SCRAPPING;
+		if (menuScrapper->opciones.size() > 0) {
+			// Obtener el último elemento
+			auto* baseOpt = menuScrapper->opciones.back();
+			OpcionExec<CONFIG_STATUS>* opcion = static_cast<OpcionExec<CONFIG_STATUS>*>(baseOpt);
+			if (opcion != nullptr) {
+				opcion->titulo = LanguageManager::instance()->get("menu.scrap.stop");
+				opcion->execfunc = &GestorMenus::stopScrapping;
+			}
+		}
 		return std::string("");
 	} else {
 		LOG_DEBUG("Seleccione al menos un sistema que escrapear");
 		return LanguageManager::instance()->get("msg.atleast1scrap");
 	}
 }
+
+std::string GestorMenus::stopScrapping(CONFIG_STATUS *st){
+	if (st != NULL){
+		*st = NORMAL;
+	}
+	if (menuScrapper->opciones.size() > 0) {
+		// Obtener el último elemento
+		auto* baseOpt = menuScrapper->opciones.back();
+		OpcionExec<CONFIG_STATUS>* opcion = static_cast<OpcionExec<CONFIG_STATUS>*>(baseOpt);
+		if (opcion != nullptr) {
+			InterlockedExchange(&CurlClient::g_abortScrapping, 1);
+			opcion->titulo = LanguageManager::instance()->get("menu.scrap.start");
+			opcion->execfunc = &GestorMenus::startScrapping;
+		}
+	}
+	return std::string("");
+}
+
 
 void GestorMenus::setLayout(int layout, int screenw, int screenh){
 	this->marginY = (int) (screenh / SCREENHDIV * 1.5);
@@ -121,7 +147,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	Menu* menuEntrada = new Menu(LanguageManager::instance()->get("menu.main.input"), menuRaiz);
 	menuCoreOptions = new Menu(LanguageManager::instance()->get("menu.main.core.options"), menuRaiz);
 	menuSavestates = new Menu(LanguageManager::instance()->get("menu.main.saves"), menuRaiz);
-	Menu* menuScrapper = new Menu(LanguageManager::instance()->get("menu.main.scrapper"), menuRaiz);
+	menuScrapper = new Menu(LanguageManager::instance()->get("menu.main.scrapper"), menuRaiz);
 
 	//Este menu no cuelga de ningun lado, pero ponemos partidas guardadas como padre
 	menuAskSavestates = new Menu(LanguageManager::instance()->get("menu.savestates.title"), menuSavestates);
@@ -178,7 +204,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 
 	//Traducciones para las teclas
 	std::size_t num_elementos = sizeof(FRONTEND_BTN_VAL) / sizeof(FRONTEND_BTN_VAL[0]);
-	for (int i=0; i < num_elementos; i++){
+	for (std::size_t i=0; i < num_elementos; i++){
 		FRONTEND_BTN_TXT[i] = LanguageManager::instance()->get("menu.controls.frontkey" + Constant::TipoToStr(i));
 	}
 	for (int i=0; i < HK_MAX; i++){
@@ -186,12 +212,12 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	}
 
 	num_elementos = sizeof(configurablePortButtons) / sizeof(configurablePortButtons[0]);
-	for (int i=0; i < num_elementos; i++){
+	for (std::size_t i=0; i < num_elementos; i++){
 		configurablePortButtonsStr[i] = LanguageManager::instance()->get("menu.controls.retrobtn" + Constant::TipoToStr(i));
 	}
 
 	num_elementos = sizeof(configurablePortHats) / sizeof(configurablePortHats[0]);
-	for (int i=0; i < num_elementos; i++){
+	for (std::size_t i=0; i < num_elementos; i++){
 		configurablePortHatsStr[i] = LanguageManager::instance()->get("menu.controls.retropad" + Constant::TipoToStr(i));
 	}
 
@@ -216,7 +242,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	//Menu de teclas para el frontend
 	poblarMenuAssignFrontend(menuAssignFrontend, joystick);
 	//Menu del scrapper que rellena los idiomas y lenguas
-	poblarMenuSrapper(refConfig, menuScrapper);
+	poblarMenuScrapper(refConfig, menuScrapper);
 
 	//Poblar menu ask
 	std::vector<std::string> askOptions;
@@ -236,14 +262,12 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, cfg_saving, this));
 	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, cfg_return, this));
 
-
-
     // Establecer estado inicial
     menuActual = menuRaiz;
 	resetIndexPos();
 }
 
-void GestorMenus::poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper){
+void GestorMenus::poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper){
 	Menu* menuSistems = new Menu(LanguageManager::instance()->get("menu.scrap.systems"), menuScrapper);
 	scrapSelection.resize(refConfig->emulators.size() - 1);
 	std::vector<std::string> scrapGames;
@@ -256,7 +280,7 @@ void GestorMenus::poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper){
 	menuScrapper->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.scrap.from"), scrapOrigin, &refConfig->configMain[cfg::scrapOrigin].getIntRef()));
 
 	//Selection of the systems to scan
-	for (int i=0; i < refConfig->emulators.size() - 1; i++){
+	for (std::size_t i=0; i < refConfig->emulators.size() - 1; i++){
 		scrapSelection[i].index = i;
 		scrapSelection[i].name = refConfig->emulators[i]->config.name;
 		scrapSelection[i].selected = false;
@@ -265,13 +289,8 @@ void GestorMenus::poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper){
 	menuScrapper->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.scrap.systems"), menuSistems));
 
 	//Selection of the artwork to download
-	scrapGamesStrings[0] = LanguageManager::instance()->get("menu.scrap.games0");
-    scrapGamesStrings[1] = LanguageManager::instance()->get("menu.scrap.games1");
-    scrapGamesStrings[2] = LanguageManager::instance()->get("menu.scrap.games2");
-    scrapGamesStrings[3] = LanguageManager::instance()->get("menu.scrap.games3");
-    scrapGamesStrings[4] = "Not implemented";
-	for (int i=0; i < TOTAL_SCRAP_GAMES - 1; i++){
-		scrapGames.push_back(scrapGamesStrings[i]);
+	for (int i=0; i < TOTAL_SCRAP_GAMES; i++){
+		scrapGames.push_back(LanguageManager::instance()->get("menu.scrap.games" + Constant::TipoToStr(i)));
 	}
 	menuScrapper->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.scrap.games"), scrapGames, &scrapGamesSelection));
 
@@ -280,7 +299,7 @@ void GestorMenus::poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper){
 	if (refConfig->region.size() > 0){
 		std::vector<std::string> regionDesc;
 		std::string regCodeStr = refConfig->configMain[cfg::scrapRegion].valueStr;
-		for (int i=0; i < refConfig->region.size(); i++){
+		for (std::size_t i=0; i < refConfig->region.size(); i++){
 			regionDesc.push_back(refConfig->region[i].desc);
 			if (regCodeStr == refConfig->region[i].shortName){
 				refConfig->idxRegion = i;
@@ -292,7 +311,7 @@ void GestorMenus::poblarMenuSrapper(CfgLoader *refConfig, Menu* menuScrapper){
 	if (refConfig->idioma.size() > 0){
 		std::vector<std::string> idiomaDesc;
 		std::string idiomaCodeStr = refConfig->configMain[cfg::scrapLang].valueStr;
-		for (int i=0; i < refConfig->idioma.size(); i++){
+		for (std::size_t i=0; i < refConfig->idioma.size(); i++){
 			idiomaDesc.push_back(refConfig->idioma[i].desc);
 			if (idiomaCodeStr == refConfig->idioma[i].shortName){
 				refConfig->idxIdioma = i;
@@ -316,7 +335,7 @@ void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joys
 		auto& controllerPad = refConfig->g_ports[controlId];
 		std::vector<std::string> gamepads;
 
-		for (int i=0; i < controllerPad.available_types.size(); i++){
+		for (std::size_t i=0; i < controllerPad.available_types.size(); i++){
 			if (i == 0 && controllerPad.current_device_id < 0){
 				controllerPad.current_device_id = controllerPad.available_types.at(i).first;
 				controllerPad.current_desc = controllerPad.available_types.at(i).second;

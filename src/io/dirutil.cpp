@@ -1,11 +1,13 @@
 #include "dirutil.h"
 
-dirutil::dirutil(){
+#ifdef _MSC_VER
+#pragma warning(disable: 4996)
+#endif
 
+dirutil::dirutil(){
 }
 
 dirutil::~dirutil(){
-    //cout << "deleting dirutil" << endl;
 }
 
 /**

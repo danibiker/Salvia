@@ -5,6 +5,10 @@
 
 #include "gzguts.h"
 
+#ifdef _MSC_VER
+#pragma warning(disable: 4996)
+#endif
+
 #if defined(_WIN32) && !defined(__BORLANDC__) && !defined(__MINGW32__)
 #  define LSEEK _lseeki64
 #else

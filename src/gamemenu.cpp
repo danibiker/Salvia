@@ -100,7 +100,7 @@ std::string GameMenu::configButtonsJOY(){
     obj.getImgGestor()->setResize(true);*/
 
     do{
-        SDL_Event event;
+        //SDL_Event event;
         before = SDL_GetTicks();
 
         /*if (!obj.getImgDrawed()){
@@ -425,6 +425,14 @@ void GameMenu::showScrapProcess(ListMenu &listMenu){
 		std::string str2 = std::string(Scrapper::g_status.emuActual) + " - " + std::string(Scrapper::g_status.juegoActual);
 		Constant::drawTextTransparent(video_page, fontsmall, str.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 - face_h_small / 2 : 0 , textColor, 0);
 		Constant::drawTextTransparent(video_page, fontsmall, str2.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 + face_h_small / 2: 0 , textColor, 0);
+	}
+
+	if (Scrapper::g_status.abortType == ABORT_LIMIT_CUOTA){
+		showSystemMessage(LanguageManager::instance()->get("msg.scrap.abort.cuota"), 3000);
+		Scrapper::g_status.abortType = ABORT_NONE;
+	} else if (Scrapper::g_status.abortType == ABORT_SCRAP_END){
+		configMenus->stopScrapping(NULL);
+		Scrapper::g_status.abortType = ABORT_NONE;
 	}
 }
 
@@ -1155,36 +1163,23 @@ void GameMenu::startScrapping(){
 		return;
 	}
 	ScrapperConfig config;
-
-	switch (this->configMenus->getScrapGamesSelection()){
-		case SCRAP_NO_METADATA:
-			config.downloadNoMetadata = true;
-			break;
-		case SCRAP_NO_SCREENSHOT:
-			config.downloadNoSS = true;
-			break;
-		case SCRAP_NO_BOX:
-			config.downloadNoBox = true;
-			break;
-		case SCRAP_NO_TITLE:
-			config.downloadNoTitle = true;
-			break;
-	}
-
+	
 	config.lenguaPreferida = cfgLoader->configMain[cfg::scrapLang].valueStr;
 	config.regionPreferida = cfgLoader->configMain[cfg::scrapRegion].valueStr;
 	config.origin = static_cast<SCRAP_FROM>(cfgLoader->configMain[cfg::scrapOrigin].valueInt);
+	config.scrapArtType = static_cast<SCRAP_GAMES>(this->configMenus->getScrapGamesSelection());
 	config.apiKeyTGDB = cfgLoader->configMain[cfg::apikeytgdb].valueStr;
 
 	LOG_DEBUG("Seleccionando lengua %s y region %s", config.lenguaPreferida.c_str(), config.regionPreferida.c_str());
 	Scrapper scrapper;
 	SafeDownloadQueue dwQueue;
 	int totalGames = 0;
+	std::vector<ConfigEmu> emuThreadedScrapper;
 
-	for (int i=0; i < cfgLoader->emulators.size() - 1; i++){
+	for (std::size_t i=0; i < cfgLoader->emulators.size() - 1; i++){
 		if (this->configMenus->scrapSelection[i].selected){
 			int idxEmu = this->configMenus->scrapSelection[i].index;
-			if (idxEmu >= 0 && idxEmu < cfgLoader->emulators.size() - 1){
+			if (idxEmu >= 0 && (std::size_t)idxEmu < cfgLoader->emulators.size() - 1){
 				LOG_DEBUG("Scrapping system list %s", this->configMenus->scrapSelection[idxEmu].name.c_str());
 				emuThreadedScrapper.push_back(cfgLoader->emulators[idxEmu].get()->config);
 				totalGames += scrapper.scrapSystem(cfgLoader->emulators[idxEmu].get()->config, config, dwQueue, true);
