@@ -34,7 +34,6 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 
 	configMenus = new GestorMenus(screen->w, screen->h);
 	configMenus->inicializar(cfgLoader, joystick);
-	message.ticks = 0;
 	// En la clase Config o GameMenu
 	selectScalerMode(FULLSCREEN);
 	this->current_scaler_mode = &getCfgLoader()->configMain[cfg::scaleMode].getIntRef();
@@ -56,7 +55,10 @@ GameMenu::~GameMenu(){
 	delete configMenus;
 	if (fpsSurface) SDL_FreeSurface(fpsSurface);
 	if (cpuSurface) SDL_FreeSurface(cpuSurface);
-	if (message.cache) SDL_FreeSurface(message.cache);
+	for (unsigned int i=0; i < messages.size(); i++) {
+		SDL_FreeSurface(messages[i].cache);
+	}
+		
 	if (bg_screenshot) SDL_FreeSurface(bg_screenshot);
 
 	#ifndef _XBOX
@@ -1087,45 +1089,79 @@ void GameMenu::showLangSystemMessage(std::string text, uint32_t duration) {
 }
 
 void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
-	if (message.cache) SDL_FreeSurface(message.cache);
+    Message msg;
+    msg.content = text;
+    msg.timeout = duration;
+    msg.ticks = SDL_GetTicks();
     
-    message.content = text;
-    message.timeout = duration;
-    message.ticks = SDL_GetTicks();
-	
-	std::string newText = Fonts::recortarAlTamanyo(text, this->screen->w);
-	// Renderizamos el mensaje una sola vez
-    message.cache = TTF_RenderText_Blended(Fonts::getFont(Fonts::FONTBIG), newText.c_str(), white);
+    std::string newText = Fonts::recortarAlTamanyo(text, this->screen->w);
+    msg.cache = TTF_RenderText_Blended(Fonts::getFont(Fonts::FONTBIG), newText.c_str(), white);
     
-    if (message.cache) {
+    if (msg.cache) {
         int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
-        message.rect.x = 0;
-        message.rect.y = this->video_page->h - face_h - 4;
-        message.rect.w = message.cache->w + 2;
-        message.rect.h = face_h + 4;
+        msg.rect.x = 0;
+        // La posición Y se calculará dinámicamente al dibujar para que se apilen
+        msg.rect.w = msg.cache->w + 2;
+        msg.rect.h = face_h + 4;
+        
+        messages.push_back(msg);
     }
 }
 
 void GameMenu::processMessages(){
-	if (message.ticks == 0 || !message.cache) return;
-
-    const Uint32 now = SDL_GetTicks();
-
-    if (now - message.ticks < message.timeout) {
-        // 1. Dibujar el fondo del mensaje
-        SDL_FillRect(this->video_page, &message.rect, this->uBkgColor);
-        
-        // 2. Copiar el texto ya renderizado (Operación ultra rápida)
-        SDL_Rect dstText = { message.rect.x + 1, message.rect.y + 2, 0, 0 };
-        SDL_BlitSurface(message.cache, NULL, this->video_page, &dstText);
-    } else {
-        // El mensaje ha expirado
-        SDL_FreeSurface(message.cache);
-        message.cache = NULL;
-        message.ticks = 0;
-		// 1. Dibujar el fondo del mensaje
-        SDL_FillRect(this->video_page, &message.rect, this->uBkgColor);
+	static SDL_Rect lastMessagesArea = {0, 0, 0, 0};
+	// 1. LIMPIEZA: Borrar área del frame anterior
+    if (lastMessagesArea.h > 0) {
+        SDL_FillRect(this->video_page, &lastMessagesArea, this->uBkgColor);
     }
+
+    uint32_t currentTicks = SDL_GetTicks();
+    int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
+    int line_height = face_h + 4;
+    
+    // 2. GESTIÓN DE EXPIRACIÓN (Bucle clásico con iterador)
+    std::vector<Message>::iterator it = messages.begin();
+    while (it != messages.end()) {
+        if (currentTicks - it->ticks > it->timeout) {
+            if (it->cache) SDL_FreeSurface(it->cache);
+            it = messages.erase(it); // erase devuelve el siguiente iterador válido
+        } else {
+            ++it;
+        }
+    }
+
+    if (messages.empty()) {
+        lastMessagesArea.x = 0; lastMessagesArea.y = 0;
+        lastMessagesArea.w = 0; lastMessagesArea.h = 0;
+        return;
+    }
+
+    // 3. DIBUJO Y CÁLCULO DE ÁREA TOTAL
+    int currentY = this->video_page->h - line_height;
+    int maxWidth = 0;
+    int totalHeight = 0;
+
+    // Dibujamos de los más nuevos a los más viejos (hacia arriba)
+    // Usamos índice inverso para recorrer el vector
+    for (int i = (int)messages.size() - 1; i >= 0; --i) {
+        Message &m = messages[i];
+        m.rect.y = (Sint16)currentY;
+        m.rect.x = 0;
+
+        if (m.cache) {
+            SDL_BlitSurface(m.cache, NULL, this->video_page, &m.rect);
+            if (m.rect.w > maxWidth) maxWidth = m.rect.w;
+        }
+
+        currentY -= line_height;
+        totalHeight += line_height;
+    }
+
+    // 4. ACTUALIZAR RECTÁNGULO PARA EL PRÓXIMO FRAME
+    lastMessagesArea.x = 0;
+    lastMessagesArea.y = (Sint16)(this->video_page->h - totalHeight);
+    lastMessagesArea.w = (Uint16)maxWidth;
+    lastMessagesArea.h = (Uint16)totalHeight;
 }
 
 void GameMenu::processConfigChanges(){

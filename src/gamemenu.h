@@ -125,6 +125,7 @@ class GameMenu : public Engine{
 		
 
     private:
+		std::vector<Message> messages;
 		std::string configButtonsJOY();
 		SDL_Surface* clonarPantalla(SDL_Surface*, int);
 		void selectScalerMode(int);
@@ -144,7 +145,6 @@ class GameMenu : public Engine{
 		SDL_Surface* cpuSurface;
 		uint32_t lastFpsUpdate;
 		void addControlerButtons(Menu*& menuControlesPuerto, int numPlayer);
-		Message message;
 		t_rom_paths romPaths;
 		bool *mustUpdateFps;
 		void showScrapProcess(ListMenu &listMenu);

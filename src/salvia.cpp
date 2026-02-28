@@ -123,7 +123,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 			// 1. Convertir el puntero 'data' a la estructura de mensaje
 			const struct retro_message *msg = (const struct retro_message*)data;
 			if (msg && msg->msg){
-				LOG_DEBUG("NOTIFICACIÓN DEL CORE: %s (Duración: %u frames)", msg->msg, msg->frames);
+				LOG_DEBUG("NOTIFICACION DEL CORE: %s (Duracion: %u frames)", msg->msg, msg->frames);
 				gameMenu->showSystemMessage(msg->msg, (unsigned)((msg->frames * 1000) / 60));
 			}
 			return true;
@@ -731,7 +731,7 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
     gameMenu.loadEmuCfg(menuData);
     if (retMenu == 0 && menuData.maxLines == menuBeforeExit.maxLines 
 		&& menuBeforeExit.iniPos > 0 && menuBeforeExit.iniPos < menuData.listSize
-		&& menuBeforeExit.endPos > 0 && menuBeforeExit.endPos < menuData.listSize
+		&& menuBeforeExit.endPos > 0 && menuBeforeExit.endPos <= menuData.listSize
 		&& menuBeforeExit.curPos > 0 && menuBeforeExit.curPos < menuData.listSize){
 		menuData.iniPos = menuBeforeExit.iniPos;
         menuData.endPos = menuBeforeExit.endPos;
