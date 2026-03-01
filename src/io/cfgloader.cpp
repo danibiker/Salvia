@@ -54,6 +54,9 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", "");
 	configMain[cfg::scrapLang] = cfg::t_cfg_props("scrapLang", "");
 	configMain[cfg::scrapOrigin] = cfg::t_cfg_props("scrapOrigin", (int)SC_SCREENCSRAPER);
+	configMain[cfg::raUser] = cfg::t_cfg_props("raUser", "");
+	configMain[cfg::raPass] = cfg::t_cfg_props("raPass", "");
+
 
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <iostream>
 #include <vector>
 #include <string>
@@ -7,18 +9,7 @@
 #include <cstring>
 #include <unzip/minizip-1.2.5/unzip.h>
 #include <unzip/zlib.h>
-
-// Estructura de salida
-struct unzippedFileInfo {
-    int errorCode;
-    std::string originalPath;      // El .zip original
-    std::string extractedPath;     // Ruta en disco si se extrajo
-    std::string fileNameInsideZip; // Nombre del fichero real (ej: "Sonic.bin")
-    std::size_t romsize;
-    void* memoryBuffer;
-
-    unzippedFileInfo() : errorCode(-1), romsize(0), memoryBuffer(nullptr) {}
-};
+#include "unziptool_common.h"
 
 // Función auxiliar para separar las extensiones y normalizarlas
 std::vector<std::string> splitExtensions(const std::string& extensions) {

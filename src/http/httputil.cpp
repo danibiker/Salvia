@@ -8,7 +8,8 @@
     OutputDebugStringA(buffer); \
 }
 
-static const char* USERAGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0";
+//static const char* USERAGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0";
+static const char* USERAGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:45.0) Gecko/20100101 Firefox/45.0";
 
 #ifdef _XBOX
 mbedtls_entropy_context CurlClient::entropy;
@@ -150,6 +151,74 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
 		sprintf(errbuf, "Error curl: %s\n", curl_easy_strerror(res));
 		OutputDebugStringA(errbuf);
 	}
+
+    return (res == CURLE_OK);
+}
+
+// Función principal de descarga
+bool CurlClient::postUrl(const std::string& url, const std::string& postData, std::string& outResponse, float* progressPtr) {
+    CURL *curl = curl_easy_init();
+    if (!curl) return false;
+
+    ProgressData pData;
+    pData.progressVar = progressPtr;
+    if (progressPtr) *progressPtr = 0.0f;
+
+    outResponse.clear();
+
+	struct curl_slist *headers = NULL;
+	headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
+	headers = curl_slist_append(headers, "Accept: */*");
+	headers = curl_slist_append(headers, "Accept-Language: en-US,en;q=0.5");
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+	//curl_easy_setopt(curl, CURLOPT_REFERER, "https://retroachievements.org");
+
+	#ifdef DEBUG
+	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CurlClient::debug_callback);
+	#endif
+
+    // Configuración básica
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+
+	curl_easy_setopt(curl, CURLOPT_POST, 1);
+	if (!postData.empty()) {
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
+    }
+
+    // SSL: Ignorar para evitar problemas con certificados en Xbox
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+
+    // Callback para los datos
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &outResponse);
+
+    // Callback para el progreso
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, ProgressCallback);
+    curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, &pData);
+
+    // Opciones adicionales
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Salvia/1.0");
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L); // 15 segundos
+
+	// callback para llamar fuera a internet
+	#ifdef _XBOX
+	curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, curl_sockopt_callback);
+	curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, NULL); // Se podria pasar this
+	#endif
+
+    CURLcode res = curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
+
+	if(res != CURLE_OK) {
+		char errbuf[CURL_ERROR_SIZE];
+		sprintf(errbuf, "Error curl: %s\n", curl_easy_strerror(res));
+		OutputDebugStringA(errbuf);
+	}
+	
+	if (headers) curl_slist_free_all(headers);
 
     return (res == CURLE_OK);
 }

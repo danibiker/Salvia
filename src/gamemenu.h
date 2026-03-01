@@ -15,6 +15,8 @@
 #include <engine.h>
 #include <io/dirutil.h>
 #include <http/scrapper.h>
+#include <http/achievements.h>
+#include <unzip/unziptool_common.h>
 
 #ifdef _XBOX
 	#include <io/video_direct.h>
@@ -60,12 +62,24 @@ class GameMenu : public Engine{
     public:
         GameMenu(CfgLoader *cfgLoader);
         ~GameMenu();
-        
+		struct t_rom_paths{
+			std::string rompath;
+			std::string savestate;
+			std::string sram;
+		};
+		
 		SDL_Surface *video_page;
 		SDL_Surface *bg_screenshot;
 		GameTicks gameTicks;
 		GestorMenus *configMenus;
-
+		ScalerFunc current_scaler;
+		int current_scaler_scale;
+		void processConfigChanges();
+		int *current_scaler_mode;
+		int *current_ratio;
+		int *current_sync;
+		bool *current_force_fs;
+		bool romLoaded;
 		Uint32 uBkgColor;
 
 		void createMenuImages(ListMenu &);
@@ -73,16 +87,12 @@ class GameMenu : public Engine{
         void refreshScreen(ListMenu &);
 		void processFrontendEvents(HOTKEYS_LIST);
 		void processFrontendEventsAfter();
-		void processMessages();
 		void processHotkeys(HOTKEYS_LIST);
-
         vector<string> launchProgram(ListMenu &);
         bool initDblBuffer(int w, int h);
         int saveGameMenuPos(ListMenu &);
         int recoverGameMenuPos(ListMenu &, struct ListStatus &);
         void showMessage(string);
-        
-		
 		void updateFps();
 		CfgLoader * getCfgLoader();
         void setCfgLoader(CfgLoader *cfgLoader);
@@ -94,49 +104,28 @@ class GameMenu : public Engine{
 			//Siempre que cambiemos de estado de emulacion,
 			//reseteamos los botones del joystick
 			joystick->inputs.clearAll();
+
+			if (status == EMU_STARTED && lastStatus != EMU_STARTED){
+				BadgeDownloader::instance().stop();
+			}
 		}
 
 		int getEmuStatus(){return status;}
 		int getLastStatus(){return lastStatus;}
-		
-		
-		struct t_rom_paths{
-			std::string rompath;
-			std::string savestate;
-			std::string sram;
-		};
-
 		t_rom_paths* getRomPaths(){return &romPaths;}
 		void setRomPaths(std::string rp);
-
 		void showSystemMessage(std::string, uint32_t);
 		void showLangSystemMessage(std::string, uint32_t);
-		
-		// En la clase Config o GameMenu
-		ScalerFunc current_scaler;
-		int current_scaler_scale;
-		void processConfigChanges();
-		int *current_scaler_mode;
-		int *current_ratio;
-		int *current_sync;
-		bool *current_force_fs;
-		bool romLoaded;
+		void showAchievementMessage(std::string, std::string, std::string, SDL_Surface *,SDL_Rect&);
 		void startScrapping();
-		
+		void loadGameAchievements(unzippedFileInfo& unzipped);
 
     private:
 		std::vector<Message> messages;
+		std::vector<AchievementMsg> messagesAchievement;
+
 		std::string configButtonsJOY();
-		SDL_Surface* clonarPantalla(SDL_Surface*, int);
-		void selectScalerMode(int);
-		void processKeyUp();
-		bool dblBufferEnabled;
-		std::string getPathPrefix(std::string);
-        std::string encloseWithCharIfSpaces(std::string, std::string);
-        CfgLoader *cfgLoader;
-        std::map<std::string, Image> menuImages;
-        std::map<std::string, TextArea> menuTextAreas;
-		void blit(SDL_Surface *, SDL_Surface *, int, int, int, int, int, int);
+		CfgLoader *cfgLoader;
 		int status;
 		int lastStatus;
 		SDL_Rect rectFps;
@@ -144,8 +133,21 @@ class GameMenu : public Engine{
 		SDL_Surface* fpsSurface;
 		SDL_Surface* cpuSurface;
 		uint32_t lastFpsUpdate;
-		void addControlerButtons(Menu*& menuControlesPuerto, int numPlayer);
 		t_rom_paths romPaths;
 		bool *mustUpdateFps;
+        std::map<std::string, Image> menuImages;
+        std::map<std::string, TextArea> menuTextAreas;
+
+		SDL_Surface* clonarPantalla(SDL_Surface*, int);
+		void processMessages();
+		void processMessagesAchievements();
+		void selectScalerMode(int);
+		void processKeyUp();
+		bool dblBufferEnabled;
+		void blit(SDL_Surface *, SDL_Surface *, int, int, int, int, int, int);
+		void addControlerButtons(Menu*& menuControlesPuerto, int numPlayer);
 		void showScrapProcess(ListMenu &listMenu);
+		void initAchievements();
+		std::string getPathPrefix(std::string);
+        std::string encloseWithCharIfSpaces(std::string, std::string);
 };

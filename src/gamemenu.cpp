@@ -1,7 +1,9 @@
 #include "gamemenu.h"
 
 #include <gfx/SDL_gfxPrimitives.h>
+#include <gfx/SDL_rotozoom.h>
 #include <gfx/gfx_utils.h>
+#include <SDL_Image.h>
 #include <io/dirutil.h>
 #include <beans/structures.h>
 #include <so/launcher.h>
@@ -48,6 +50,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	bg_screenshot = NULL;
 	lastFpsUpdate = 0;
 	//initHqxFilter();
+	initAchievements();
 };
 
 GameMenu::~GameMenu(){
@@ -66,6 +69,51 @@ GameMenu::~GameMenu(){
 		if (srf_32_convert.dst32) SDL_FreeSurface(srf_32_convert.dst32);
 		hqxClose();
 	#endif
+
+	Achievements::instance()->shutdown();
+}
+
+void GameMenu::initAchievements(){
+	Achievements::instance()->initialize();
+	const std::string user = getCfgLoader()->configMain[cfg::raUser].valueStr;
+	const std::string pass = getCfgLoader()->configMain[cfg::raPass].valueStr;
+	Achievements::instance()->login(user.c_str(), pass.c_str());
+}
+
+/**
+*
+*/
+void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
+	//Cargamos la memoria para los achievements
+	// Obtener WRAM
+	uint8_t* w_data = (uint8_t*)retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM);
+	std::size_t w_size = retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM);
+
+	// Obtener SRAM (Donde Yoshi's Island guarda los datos del chip FX)
+	uint8_t* s_data = (uint8_t*)retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+	std::size_t s_size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+
+	Achievements::instance()->set_memory_sources(w_data, w_size, s_data, s_size);
+	//Hacemos el reset si habia algo cargado
+	Achievements::instance()->doReset();
+	//Ahora cargamos el juego
+	Achievements::instance()->load_game((uint8_t *)unzipped.memoryBuffer, unzipped.romsize);
+	AchievementMsg msg;
+	msg.title = Achievements::instance()->getGameTitle();
+	msg.scoreUnlocked = Achievements::instance()->getSummary().points_unlocked;
+	msg.scoreTotal = Achievements::instance()->getSummary().points_core;
+	msg.achvUnlocked = Achievements::instance()->getSummary().num_unlocked_achievements;
+	msg.achvTotal = Achievements::instance()->getSummary().num_core_achievements;
+	msg.img = Achievements::instance()->getGameBadgeUrl();
+	msg.timeout = 5000;
+	msg.ticks = SDL_GetTicks();
+
+	configMenus->loadAchievements();
+
+	int line_height, badgeW, badgeH, badgePad;
+	Achievements::instance()->getBadgeSize(badgeW, badgeH, badgePad, line_height);
+	Achievements::instance()->download_and_cache_image(msg.img, msg.badge, badgeW, badgeH);
+	messagesAchievement.push_back(msg);
 }
 
 std::string GameMenu::configButtonsJOY(){
@@ -223,8 +271,6 @@ bool GameMenu::initDblBuffer(int w, int h){
 #endif
     return video_page != NULL;
 }
-
-
 
 bool GameMenu::isDebug(){
 	bool debug;
@@ -726,7 +772,6 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
         this->initSound();
     }
 	*/
-
 	return commands;
 }
 
@@ -834,6 +879,8 @@ void GameMenu::processFrontendEventsAfter(){
 	updateFps();
 	//Mostramos mensajes
 	processMessages();
+	//Mostramos mensajes de los logros
+	processMessagesAchievements();
 	//Actualizamos para detectar cuando soltamos un boton
 	processKeyUp();
 }
@@ -924,7 +971,17 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 
 			if (getEmuStatus() == EMU_MENU_OVERLAY && screen){
 				bg_screenshot = clonarPantalla(screen, 180);
-				configMenus->poblarPartidasGuardadas(getCfgLoader(), getRomPaths()->rompath);
+				if (!configMenus->obtenerMenuActual()->opciones.empty()){
+					auto option = configMenus->obtenerMenuActual()->opciones.front();;
+					if (option->tipo == OPC_ACHIEVEMENT){
+						if (Achievements::instance()->refresh_achievements_menu()){
+							configMenus->loadAchievements();
+						}
+						BadgeDownloader::instance().start();
+					} else if (option->tipo == OPC_SAVESTATE){
+						configMenus->poblarPartidasGuardadas(getCfgLoader(), getRomPaths()->rompath);
+					}
+				}
 			}
 			break;
 	}
@@ -1108,6 +1165,140 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
     }
 }
 
+void GameMenu::processMessagesAchievements(){
+	uint32_t currentTicks = SDL_GetTicks();
+	static SDL_Rect lastMessagesArea = {0, 0, 0, 0};
+
+	if (getEmuStatus() == EMU_STARTED){
+		Achievements::instance()->doFrame();
+		// Revisar si hay mensajes de logros pendientes
+		while (Achievements::instance()->has_pending_messages()) {
+			AchievementState state = Achievements::instance()->pop_message();
+			AchievementMsg msg;
+			msg.type = ACH_UNLOCKED;
+			msg.timeout = 10000;
+			msg.title = state.title;
+			msg.description = state.description;
+			msg.img = state.badgeUrl;
+			msg.badge = state.badge;
+			messagesAchievement.push_back(msg);
+		}
+	} else {
+		static uint32_t lastIdleTick = SDL_GetTicks();
+		if (currentTicks - lastIdleTick > 1000){
+			Achievements::instance()->doIdle();
+			lastIdleTick = currentTicks;
+		}
+	}
+
+	//Solo procesamos uno a la vez
+	if (!messagesAchievement.empty()) {
+		// 1. Accedemos al primer elemento por referencia
+		AchievementMsg &ach = messagesAchievement.front();
+    
+		// 2. Inicializamos el tiempo de inicio si es la primera vez que se muestra
+		if (ach.ticks == 0) {
+			ach.ticks = currentTicks;
+			//Comprobamos si es necesario descargar una imagen
+			if (ach.badge == NULL && !ach.isDownloading && !ach.img.empty()){
+				ach.isDownloading = true;
+				int line_height, badgeW, badgeH, badgePad;
+				Achievements::instance()->getBadgeSize(badgeW, badgeH, badgePad, line_height);
+				BadgeDownloader::instance().start();
+				// 2. Mandamos la petición de descarga al hilo worker que ya tenemos
+				// Pasamos el puntero al badge del ULTIMO elemento del vector
+				BadgeDownloader::instance().add_to_queue(
+					ach.img, 
+					&ach.badge,
+					badgeW, badgeH
+				);
+			}
+		} 
+		// 3. Comprobamos si ha expirado el mensaje
+		else if (currentTicks - ach.ticks > ach.timeout) {
+			// Liberar la superficie de la imagen (Badge)
+			if (ach.badge != NULL) {
+				SDL_FreeSurface(ach.badge);
+				ach.badge = NULL;
+			}
+			// BORRADO SEGURO: Usamos el iterador al inicio
+			messagesAchievement.erase(messagesAchievement.begin());
+		}
+	}
+
+	// LIMPIEZA: Borrar área del frame anterior
+    if (lastMessagesArea.h > 0) {
+        SDL_FillRect(this->video_page, &lastMessagesArea, this->uBkgColor);
+    }
+
+	if (messagesAchievement.empty()) {
+		lastMessagesArea.x = 0; lastMessagesArea.y = 0;
+        lastMessagesArea.w = 0; lastMessagesArea.h = 0;
+		//No puede haber nada mas que descargar, paramos el hilo de descarga si lo hubiese
+		if (getEmuStatus() == EMU_STARTED){
+			BadgeDownloader::instance().stop();
+		}
+		return;
+	}
+
+	//Solo dibujamos un logro cada vez
+	AchievementMsg& logro = messagesAchievement.front();
+	if (logro.type == ACH_LOAD_GAME){
+		std::string line1Str = "Loaded " + logro.title;
+		std::string line2Str = Constant::TipoToStr(logro.achvTotal) + " achievements, " + Constant::TipoToStr(logro.scoreTotal) + " points";
+		std::string line3Str = "You have earned " + Constant::TipoToStr(logro.achvUnlocked) + " achievements";
+		showAchievementMessage(line1Str, line2Str, line3Str, logro.badge, lastMessagesArea);
+	} else if (logro.type == ACH_UNLOCKED){
+		showAchievementMessage("Achievement unlocked", logro.title, logro.description, logro.badge, lastMessagesArea);
+	}
+}
+
+void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str, std::string line3Str, SDL_Surface *badge, SDL_Rect& lastMessagesArea){
+	SDL_Surface *line1 = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), line1Str.c_str(), white);
+	SDL_Surface *line2 = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), line2Str.c_str(), yellow);
+	SDL_Surface *line3 = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), line3Str.c_str(), blue);
+
+	int maxW = line1->w > line2->w ? line1->w : line2->w;
+	maxW = maxW > line3->w ? maxW : line3->w; 
+	const int paddingBottom = 10;
+	int line_height, badgeW, badgeH, badgePad;
+
+	Achievements& self = *Achievements::instance();
+
+	self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
+	const int maxH = this->video_page->h -paddingBottom -line_height * 3;
+
+	SDL_Rect rect = {10 + badgeW, 0, 0, line_height};
+	lastMessagesArea.x = rect.x - badgeW;
+	lastMessagesArea.y = maxH;
+	lastMessagesArea.w = maxW + badgeW + badgePad * 3;
+	lastMessagesArea.h = this->video_page->h - maxH - paddingBottom;
+
+	const Uint32 uPaleblue = SDL_MapRGB(this->screen->format, paleblue.r, paleblue.g, paleblue.b);
+	SDL_FillRect(this->video_page, &lastMessagesArea, uPaleblue);
+
+	SDL_Rect txtRect = {rect.x + badgePad * 2, maxH, 0, line1->w};
+	SDL_BlitSurface(line1, NULL, this->video_page, &txtRect);
+
+	txtRect.y = this->video_page->h -paddingBottom -line_height * 2;
+	txtRect.w = line2->w;
+	SDL_BlitSurface(line2, NULL, this->video_page, &txtRect);
+
+	txtRect.y = this->video_page->h -paddingBottom -line_height;
+	txtRect.w = line3->w;
+	SDL_BlitSurface(line3, NULL, this->video_page, &txtRect);
+	
+	SDL_FreeSurface(line1);
+	SDL_FreeSurface(line2);
+	SDL_FreeSurface(line3);
+
+	SDL_Rect rectBadge = {rect.x - badgeW + badgePad, this->video_page->h -paddingBottom -line_height * 3 + badgePad, 0, line_height};
+	SDL_BlitSurface(badge, NULL, this->video_page, &rectBadge);
+}
+
+/**
+*
+*/
 void GameMenu::processMessages(){
 	static SDL_Rect lastMessagesArea = {0, 0, 0, 0};
 	// 1. LIMPIEZA: Borrar área del frame anterior

@@ -5,13 +5,15 @@
 #include <io/dirutil.h>
 #include <uiobjects/image.h>
 #include <beans/structures.h>
+#include <font/fonts.h>
+#include <http/badgedownloader.h>
 
 #include <iostream>
 #include <vector>
 #include <string>
 
 // --- Definición de tipos de opciones ---
-enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SAVESTATE};
+enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SAVESTATE, OPC_ACHIEVEMENT};
 enum TipoKey{KEY_JOY_BTN,KEY_JOY_HAT,KEY_JOY_AXIS, KEY_JOY_MAX};
 enum ACTION_ASK{ASK_CARGAR, ASK_GUARDAR, ASK_ELIMINAR, MAX_ASK};
 enum CONFIG_STATUS{NORMAL,POLLING_INPUTS,ASK_SAVESTATES, EXIT_CONFIG, START_SCRAPPING, MAX_CONFIG_STATUS};
@@ -79,6 +81,30 @@ public:
     }
 };
 
+class OpcionAchievement : public Opcion {
+public:
+	AchievementState achievement;
+
+	OpcionAchievement(AchievementState ach) : Opcion(ach.title, OPC_ACHIEVEMENT) {
+		achievement.locked = ach.locked;
+		achievement.badgeUrl = ach.badgeUrl;
+		achievement.title = ach.title;
+		achievement.description = ach.description;
+		achievement.progress = ach.progress;
+		achievement.isSection = ach.isSection;
+		achievement.isDownloading = ach.isDownloading;
+		achievement.points = ach.points;
+	}
+
+	~OpcionAchievement(){
+		achievement.clear();
+	}
+
+	std::string ejecutar() override {
+        return "";
+    }
+};
+
 class OpcionSavestate : public Opcion {
 public:
 	FileProps file;
@@ -127,37 +153,39 @@ public:
     }
 };
 
+// Definimos un tipo de función que devuelve string y no recibe nada
+typedef std::string (*GestorCallback)(void* instance);
+
 class OpcionSubMenu : public Opcion {
 public:
     Menu* destino;
-    OpcionSubMenu(std::string t, Menu* d) : Opcion(t, OPC_SUBMENU), destino(d) {}
-	OpcionSubMenu(std::string t, Menu* d, int ico) : Opcion(t, OPC_SUBMENU, ico), destino(d) {}
+	GestorCallback callback; // Función estática
+    void* context;           // El "this" de GestorMenus
+
+    OpcionSubMenu(std::string t, Menu* d) : Opcion(t, OPC_SUBMENU), destino(d), callback(NULL), context(NULL){}
+	OpcionSubMenu(std::string t, Menu* d, int ico) : Opcion(t, OPC_SUBMENU, ico), destino(d), callback(NULL), context(NULL) {}
+	
 	std::string ejecutar() override {
+        if (callback != NULL && context != NULL) {
+            return callback(context); 
+        }
         return "";
     }
 };
-
-
 
 class OpcionKey : public Opcion {
 public:
     t_joy_state* joyInputs;
 	t_joy_mapper * joyMapper;
 	int *intRef; 
-
-	//En idx tenemos el indice del array en el que se guardo el boton
-	//int idx;
-	//En btn tenemos el boton de libretro asignado: RETRO_DEVICE_ID_JOYPAD_A, RETRO_DEVICE_ID_JOYPAD_B, ...
 	int btn;
 	int gamepadId;
-
 	std::string description;
 	bool changeAsked; 
 	Uint32 lastTimeAsked;
 	TipoKey tipoKey;
 
 	OpcionKey(std::string t, t_joy_state *pjoyInputs, t_joy_mapper * pjoyMapper, int pgamepadId, int pBtn, TipoKey ptipoKey, std::string desc): Opcion(t, OPC_KEY){
-		//idx = pIdx;
 		btn = pBtn;
 		gamepadId = pgamepadId;
 		tipoKey = ptipoKey;
@@ -169,18 +197,6 @@ public:
 		intRef = NULL;
 	}
 	
-	//En este caso no se necesita conversion
-	/*OpcionKey(std::string t, int* pintRef, TipoKey ptipoKey, std::string desc): Opcion(t, OPC_KEY){
-		joyInputs = NULL;
-		tipoKey = ptipoKey;
-		description = desc;
-		lastTimeAsked = 0;
-		changeAsked = false;
-		intRef = pintRef;
-		btn = *pintRef;
-		gamepadId = 0;
-	}*/
-
 	std::string ejecutar() override {
         return "";
     }
@@ -192,13 +208,23 @@ struct Menu{
     std::vector<Opcion*> opciones;
     int seleccionado;
     Menu* padre;
+	int rowHeight;
+	int menuWidth;
 
-    Menu(std::string t, Menu* p = NULL) : titulo(t), seleccionado(0), padre(p) {}
+    Menu(std::string t, Menu* p = NULL) : titulo(t), seleccionado(0), padre(p) {
+		TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+		rowHeight = TTF_FontLineSkip(fontMenu);
+	}
+	
+	Menu(std::string t, int rh, int mw, Menu* p = NULL) : titulo(t), seleccionado(0), padre(p) {
+		rowHeight = rh;
+		menuWidth = mw;
+	}
+
     ~Menu() {
         for(std::size_t i = 0; i < opciones.size(); i++) delete opciones[i];
     }
 };
-
 
 
 // --- Clase Principal de Gestión de Menús ---
@@ -216,7 +242,10 @@ private:
 	Menu* menuSavestates;
 	Menu* menuAskSavestates;
 	Menu* menuScrapper;
+	Menu* menuAchievements;
+
 	int askNumOptions;
+	int selAchievement;
 
 	CONFIG_STATUS status;
 
@@ -236,7 +265,6 @@ private:
     static SDL_Surface* imgText;
 	std::string lastImagePath;
 	Image imageMenu;
-
 	int scrapGamesSelection;
 
 	int getScreenNumLines();
@@ -247,14 +275,13 @@ private:
 	void addControlerButtons(Menu*&, int, Joystick *);
 	int findAxisPos(int retroDirection);
 	void resetKeyElement(int, TipoKey);
-	
+	void drawSelectionBox(int i, SDL_Surface *video_page, SDL_Color& lineTextColor);
 	void drawSavestateWithImage(int, OpcionSavestate *, SDL_Surface *);
 	void drawBooleanSwitch(int, OpcionBool *, SDL_Surface *);
 	void drawAskMenu(SDL_Surface *video_page);
 	void drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page);
-
+	void drawAchievement(int, OpcionAchievement *, SDL_Surface *);
 	void resetAskPosition();
-
 	void poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper);
 	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);
 	void poblarMenuAssignFrontend(Menu* menuHotkeys, Joystick *joystick);
@@ -288,6 +315,7 @@ public:
 	void poblarCoreOptions(CfgLoader *);
 	void poblarPartidasGuardadas(CfgLoader *, std::string);
 	std::string stopScrapping(CONFIG_STATUS *st);
+	void loadAchievements();
 
 	bool isCoreOptions(){
 		return obtenerMenuActual() == menuCoreOptions;
@@ -307,8 +335,18 @@ public:
     void prevPos();
 	void volverMenuInicial();
 	std::vector<t_scrap> scrapSelection;
-
 	int getScrapGamesSelection(){return scrapGamesSelection;}
+
+	// 1. La lógica real (método normal)
+    std::string descargarIconosLogro() { 
+		BadgeDownloader::instance().start();
+		return ""; 
+	}
+
+    // 2. El "Puente" (estático)
+    static std::string sDescargarIconosLogros(void* inst) {
+        return ((GestorMenus*)inst)->descargarIconosLogro();
+    }
 };
 
 template <typename T>

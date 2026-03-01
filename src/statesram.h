@@ -163,98 +163,146 @@ void saveSram(const char* sram_path) {
 }
 
 void saveState() {
-    std::size_t state_size = retro_serialize_size();
-    void *buffer = malloc(state_size);
-	dirutil dir;
+    // 1. Obtener tamaños de ambos estados
+    std::size_t core_state_size = retro_serialize_size();
+    std::size_t ra_state_size = 0;
+    
+    rc_client_t* ra_client = Achievements::instance()->getClient();
+    if (ra_client) {
+        ra_state_size = rc_client_progress_size(ra_client);
+    }
 
-    if (retro_serialize(buffer, state_size)) {
+    // 2. Calcular tamaño total del buffer: Core + Marcador(4) + TamañoRA(4) + DatosRA
+    // Reservamos espacio extra para una cabecera de seguridad de RA
+    std::size_t total_buffer_size = core_state_size + 8 + ra_state_size;
+    void *buffer = malloc(total_buffer_size);
+    
+    if (!buffer) return;
+
+    // 3. Serializar el Core de Libretro al principio del buffer
+    if (retro_serialize(buffer, core_state_size)) {
+        
+        // 4. Serializar datos de RetroAchievements a continuación
+        uint8_t* ra_ptr = (uint8_t*)buffer + core_state_size;
+        
+        // Escribimos un marcador "RCHV" y el tamaño para poder leerlo luego de forma segura
+        std::memcpy(ra_ptr, "RCHV", 4);
+        std::memcpy(ra_ptr + 4, &ra_state_size, 4);
+        
+        if (ra_state_size > 0 && ra_client) {
+            rc_client_serialize_progress(ra_client, ra_ptr + 8);
+        }
+
+        // 5. Preparar la transferencia a la cola del hilo de guardado (I/O thread)
         std::string targetPath = getSlotPath(gameMenu->getRomPaths()->savestate, g_currentSlot);
+        void* hiloBuffer = malloc(total_buffer_size);
+        
+        if (hiloBuffer) {
+            std::memcpy(hiloBuffer, buffer, total_buffer_size);
 
-		void* hiloBuffer = malloc(state_size);
-		if (hiloBuffer) {
-            std::memcpy(hiloBuffer, buffer, state_size);
-		}
+            SDL_mutexP(g_saveQueue.saveMutex);
+            
+            if (g_saveQueue.buffer) {
+                free(g_saveQueue.buffer);
+            }
+            
+            g_saveQueue.buffer = hiloBuffer;
+            g_saveQueue.bufferSize = total_buffer_size;
+            g_saveQueue.targetPath = targetPath;
+            g_saveQueue.slot = g_currentSlot;
 
-		if (g_saveQueue.buffer){
-			free(g_saveQueue.buffer);
-		}
-		
-		SDL_mutexP(g_saveQueue.saveMutex);
-		g_saveQueue.buffer = hiloBuffer;
-		g_saveQueue.bufferSize = state_size;
-		g_saveQueue.targetPath = targetPath;
-		g_saveQueue.slot = g_currentSlot;
+            // Gestión de la captura de pantalla para el Slot
+            g_saveQueue.width = action_postponed.width;
+            g_saveQueue.height = action_postponed.height;
+            const std::size_t total_pixels = g_saveQueue.width * g_saveQueue.height;
 
-		g_saveQueue.width = action_postponed.width;
-		g_saveQueue.height = action_postponed.height;
-		// Calculamos el tamaño total en bytes
-		const std::size_t total_pixels = g_saveQueue.width * g_saveQueue.height;
+            if (total_pixels > 0 && action_postponed.screenshot != NULL) {
+                g_saveQueue.screenshot = new uint16_t[total_pixels];
+                std::memcpy(g_saveQueue.screenshot, action_postponed.screenshot, total_pixels * sizeof(uint16_t));
+            }
+            
+            g_saveQueue.action = SAVE_STATE;
 
-		if (total_pixels > 0 && action_postponed.screenshot != NULL){
-			g_saveQueue.screenshot = new uint16_t[total_pixels];
-			std::memcpy(g_saveQueue.screenshot, action_postponed.screenshot, total_pixels * sizeof(uint16_t));
-		}
-		g_saveQueue.action = SAVE_STATE;
-
-		SDL_mutexV(g_saveQueue.saveMutex);
-        SDL_SemPost(g_saveQueue.semaphore);
-
-		//if (guardar_comprimido_zlib(targetPath.c_str(), buffer, state_size)){
-		//	if (action_postponed.screenshot != NULL) {
-		//		GuardarCapturaPNG(targetPath + STATE_IMG_EXT, (uint16_t*)action_postponed.screenshot, action_postponed.width,  action_postponed.height);
-		//		delete[] (uint16_t*)action_postponed.screenshot; // Liberar memoria de imagen
-		//		gameMenu->showSystemMessage("Estado guardado: Slot " + Constant::TipoToStr(g_currentSlot), 3000);
-		//	} else {
-		//		gameMenu->showSystemMessage("Error guardando captura del savestate " + targetPath + STATE_IMG_EXT, 3000);
-		//	}
-		//} else {
-		//	gameMenu->showSystemMessage("Error guardando savestate " + targetPath, 3000);
-		//}
+            SDL_mutexV(g_saveQueue.saveMutex);
+            SDL_SemPost(g_saveQueue.semaphore);
+        }
     } 
 
+    // Limpieza de memoria temporal del hilo principal
     free(buffer);
-	if (action_postponed.screenshot){
-		delete[] action_postponed.screenshot;
-		action_postponed.screenshot = NULL;
-	}
+    
+    if (action_postponed.screenshot) {
+        delete[] action_postponed.screenshot;
+        action_postponed.screenshot = NULL;
+    }
 }
 
 void loadState(){
-	const std::string state_path = Constant::checkPath(getSlotPath(gameMenu->getRomPaths()->savestate, g_currentSlot));
+    const std::string state_path = Constant::checkPath(getSlotPath(gameMenu->getRomPaths()->savestate, g_currentSlot));
 
-	// 1. Obtener el tamaño que espera el core
-	std::size_t state_size = retro_serialize_size();
-	if (state_size == 0) return;
+    // 1. Obtener el tamaño que espera el núcleo (Core)
+    std::size_t core_state_size = retro_serialize_size();
+    if (core_state_size == 0) return;
 
-	// 2. Abrir el archivo con zlib
-	gzFile file = gzopen(state_path.c_str(), "rb");
-	if (!file) {
-		LOG_ERROR("No se pudo abrir el archivo: %s", state_path.c_str());
-		gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.error.fileopen") + std::string(state_path), 3000);
-		return;
-	}
+    // 2. Abrir el archivo comprimido con zlib
+    gzFile file = gzopen(state_path.c_str(), "rb");
+    if (!file) {
+        LOG_ERROR("No se pudo abrir el archivo: %s", state_path.c_str());
+        gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.error.fileopen") + std::string(state_path), 3000);
+        return;
+    }
 
-	// 3. Reservar memoria para los datos descomprimidos
-	void* buffer = malloc(state_size);
-	if (!buffer) {
-		gzclose(file);
-		return;
-	}
+    // 3. Cargar el estado del Núcleo (Core)
+    void* core_buffer = malloc(core_state_size);
+    if (!core_buffer) {
+        gzclose(file);
+        return;
+    }
 
-	// 4. Leer y descomprimir directamente al buffer
-	// gzread devuelve el número de bytes descomprimidos
-	int bytesRead = gzread(file, buffer, (unsigned)state_size);
-	gzclose(file);
+    // Leemos exactamente el tamaño que el core espera
+    int bytesRead = gzread(file, core_buffer, (unsigned)core_state_size);
+    
+    if (bytesRead == (int)core_state_size) {
+        // Inyectamos los datos en el núcleo de emulación
+        retro_unserialize(core_buffer, core_state_size);
+        
+        // 4. Intentar cargar el bloque de RetroAchievements (Cabecera de 8 bytes)
+        char ra_marker[4];
+        uint32_t ra_data_size = 0;
+        
+        // Intentamos leer el marcador "RCHV" y el tamaño de los datos
+        if (gzread(file, ra_marker, 4) == 4 && memcmp(ra_marker, "RCHV", 4) == 0) {
+            if (gzread(file, &ra_data_size, 4) == 4 && ra_data_size > 0) {
+                
+                void* ra_buffer = malloc(ra_data_size);
+                if (ra_buffer) {
+                    if (gzread(file, ra_buffer, (unsigned)ra_data_size) == (int)ra_data_size) {
+                        // Restauramos el progreso en el cliente de logros
+                        rc_client_t* ra_client = Achievements::instance()->getClient();
+                        if (ra_client) {
+                            rc_client_deserialize_progress(ra_client, (const uint8_t*)ra_buffer);
+                        }
+                    }
+                    free(ra_buffer);
+                }
+            }
+        } else {
+            // Si el archivo no tiene datos de logros (savestate antiguo), reseteamos los triggers
+            // para evitar que salten logros por el cambio repentino de memoria RAM.
+            rc_client_t* ra_client = Achievements::instance()->getClient();
+            if (ra_client) {
+                rc_client_reset(ra_client);
+            }
+        }
+		Achievements::instance()->doReset();
+        gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.state.load") + Constant::TipoToStr(g_currentSlot), 3000);
+    } else {
+        LOG_ERROR("Error de lectura: El archivo es más pequeño de lo esperado.");
+    }
 
-	bool success = false;
-	if (bytesRead > 0) {
-		// 5. Inyectar los datos en el núcleo
-		// IMPORTANTE: Esto debe ocurrir en el hilo principal (emulación)
-		success = retro_unserialize(buffer, state_size);
-		gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.state.load") + Constant::TipoToStr(g_currentSlot), 3000);
-	}
-
-	free(buffer);
+    // Limpieza final
+    free(core_buffer);
+    gzclose(file);
 }
 
 bool guardar_archivo_raw(const char* path, void* buffer, std::size_t size) {

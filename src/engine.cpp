@@ -1,5 +1,6 @@
 #include <engine.h>
 #include <io/joystick.h>
+#include <http/badgedownloader.h>
 
 #ifdef _XBOX
 	#include <xtl.h>
@@ -55,7 +56,6 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 	int syncMode;
 	cfgLoader->configMain[cfg::syncMode].getPropValue(syncMode);
 	sync = new Sync(syncMode);
-
 	return 0;
 }
 
@@ -67,6 +67,7 @@ void Engine::stopEngine(){
 		timeEndPeriod(1);
 	#endif
 	SDL_FreeSurface(screen);
+	BadgeDownloader::instance().stop();
     SDL_Quit();
 }
 

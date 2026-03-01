@@ -28,9 +28,10 @@ class CurlClient {
 		static volatile long g_abortScrapping; 
 
 		// Función principal de descarga
-		bool fetchUrl(const std::string& url, std::string& outResponse, float* progressPtr);
-		bool fetchFile(const std::string& url, const std::string& localPath, float* progressPtr);
-		std::string escape(const std::string& text);
+		bool fetchUrl(const std::string&, std::string&, float*);
+		bool postUrl(const std::string&, const std::string&, std::string&, float*);
+		bool fetchFile(const std::string&, const std::string&, float*);
+		std::string escape(const std::string&);
 
 	private:
 	#ifdef _XBOX

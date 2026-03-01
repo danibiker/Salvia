@@ -739,7 +739,6 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
     } else {
 		menuData.resetIndexPos();
 	}
-    
     gameMenu.createMenuImages(menuData);
 }
 
@@ -798,18 +797,21 @@ int launchGame(std::string rompath){
 	retro_init();	
 	bool success = retro_load_game(&game);
 
+	gameMenu->loadGameAchievements(unzipped);
+
 	//Para el jugador 1
 	//retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
 	// Para el jugador 2
 	//retro_set_controller_port_device(1, RETRO_DEVICE_JOYPAD);
 
+	
 	//Liberar la memoria tras la carga exitosa
 	// La mayoría de los cores de Libretro ya han copiado los datos a su propia RAM interna
 	if (unzipped.memoryBuffer){
 		free(unzipped.memoryBuffer);
 		unzipped.memoryBuffer = NULL;
-	} 
-
+	}
+	
 	// Es importante cargar la ROM antes de retro_run
 	if(!success) {
 		LOG_ERROR("Error cargando la ROM\n");

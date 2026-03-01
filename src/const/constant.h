@@ -27,8 +27,11 @@ static const int video_bpp = 16;
 #endif
 
 static const SDL_Color white = { 255,255,255 };
+static const SDL_Color yellow = { 241,222,19 };
+static const SDL_Color blue = { 76,194,255 };
 static const SDL_Color black = { 0,0,0 };
 static const SDL_Color lightgray = {222, 224, 219, 255};
+static const SDL_Color paleblue = {57, 72, 93, 255};
 
 static const SDL_Color backgroundColor = black;
 static const SDL_Color textColor = white;
@@ -80,6 +83,70 @@ struct Message {
 		timeout = 0;
 		content = "";
 	}
+};
+
+enum ACH_TYPE{ACH_LOAD_GAME, ACH_UNLOCKED};
+
+struct AchievementMsg {
+	bool isDownloading;
+    Uint32 ticks;
+    Uint32 timeout;
+	uint32_t achvTotal;
+	uint32_t achvUnlocked;
+	uint32_t scoreTotal;
+	uint32_t scoreUnlocked;
+	std::string title;
+	std::string description;
+	std::string img;
+	SDL_Surface *badge;
+	ACH_TYPE type;
+	
+	AchievementMsg(){
+		ticks = 0;
+		timeout = 0;
+		badge = NULL;
+		type = ACH_LOAD_GAME;
+		isDownloading = false;
+	}
+};
+
+struct AchievementState{
+	bool locked;
+	bool isDownloading;
+	bool isSection;
+	uint32_t points;
+
+	std::string badgeUrl;
+	std::string title;
+	std::string description;
+	std::string progress;
+	SDL_Surface *badge;
+	
+	void inicializar(){
+		badge = NULL;
+		locked = false;
+		isDownloading = false;
+		isSection = false;
+		points = 0;
+	}
+
+	AchievementState(){
+		inicializar();
+	}
+
+	AchievementState(std::string pTitle, bool bSection){
+		inicializar();		
+		title = pTitle;
+		isSection = bSection;
+	}
+	
+	// Metodo para limpiar manualmente
+    void clear() {
+        if (badge != NULL) {
+            SDL_FreeSurface(badge);
+            badge = NULL;
+        }
+    }
 };
 
 #define MOUSE_BUTTON_LEFT		1
@@ -142,15 +209,16 @@ typedef enum {
         page_white_compressed,
         page_white_picture,
         page_white_zip,
-		cfg_video,
-		cfg_settings,
-		cfg_settings_core,
-		cfg_subsettings,
-		cfg_remap,
-		cfg_savestates,
-		cfg_saving,
-		cfg_return,
-		cfg_scrapper,
+		ico_video,
+		ico_settings,
+		ico_settings_core,
+		ico_subsettings,
+		ico_remap,
+		ico_savestates,
+		ico_saving,
+		ico_return,
+		ico_scrapper,
+		ico_achievements,
 		max_icons
 }enumIco;
 
@@ -246,7 +314,7 @@ class Constant{
 			}
 		}
 
-		static void drawTextTransparent(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg){
+		static void drawTextTransparent(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg = -1){
 			if (font) {
 				SDL_Surface* textSurf = TTF_RenderUTF8_Blended(font, s, color);
 				if (textSurf) {

@@ -6,11 +6,12 @@
 #include <const/menuconst.h>
 #include <gfx/gfx_utils.h>
 #include <gfx/SDL_gfxPrimitives.h>
-#include <font/fonts.h>
 #include <io/joystick.h>
 #include <image/icons.h>
 #include <utils/langmanager.h>
 #include <http/httputil.h>
+#include <http/achievements.h>
+
 
 SDL_Surface* GestorMenus::imgText;
 
@@ -53,7 +54,6 @@ GestorMenus::GestorMenus(int screenw, int screenh){
 	imageMenu.setH(box2dH);
 	askNumOptions = 0;
 	scrapGamesSelection = 1;
-
 }
 
 GestorMenus::~GestorMenus() {
@@ -140,14 +140,20 @@ void GestorMenus::setLayout(int layout, int screenw, int screenh){
 
 // Inicializa la estructura de menús
 void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
-    // 1. Crear contenedores de menús
+    TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+
+	// 1. Crear contenedores de menús
     menuRaiz = new Menu(LanguageManager::instance()->get("menu.main.options"));
     Menu* menuVideo = new Menu(LanguageManager::instance()->get("menu.main.video"), menuRaiz);
 	Menu* menuEmulation = new Menu(LanguageManager::instance()->get("menu.main.emulation"), menuRaiz);
 	Menu* menuEntrada = new Menu(LanguageManager::instance()->get("menu.main.input"), menuRaiz);
 	menuCoreOptions = new Menu(LanguageManager::instance()->get("menu.main.core.options"), menuRaiz);
-	menuSavestates = new Menu(LanguageManager::instance()->get("menu.main.saves"), menuRaiz);
+	menuSavestates = new Menu(LanguageManager::instance()->get("menu.main.saves"), TTF_FontLineSkip(fontMenu), this->getW() / 2 - 2 * marginX, menuRaiz);
 	menuScrapper = new Menu(LanguageManager::instance()->get("menu.main.scrapper"), menuRaiz);
+	
+	const int rowAchHeight = TTF_FontLineSkip(fontMenu) * 2;
+	const int menuAchWidth = this->getW() - marginX;
+	menuAchievements = new Menu("Achievements", rowAchHeight, menuAchWidth, menuRaiz);
 
 	//Este menu no cuelga de ningun lado, pero ponemos partidas guardadas como padre
 	menuAskSavestates = new Menu(LanguageManager::instance()->get("menu.savestates.title"), menuSavestates);
@@ -160,6 +166,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	todosLosMenus.push_back(menuSavestates);
 	todosLosMenus.push_back(menuAskSavestates);
 	todosLosMenus.push_back(menuScrapper);
+	todosLosMenus.push_back(menuAchievements);
 
 	//Poblar menu emulacion
 	//Escalado de video
@@ -251,20 +258,42 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 		askOptions.push_back(ACTION_ASK_STR[i]);
 	}
 	menuAskSavestates->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.askTitle"), askOptions, &askNumOptions));
-	
-	// 3. Poblar Menú Principal
-    menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.video"), menuVideo, cfg_video));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.emulation"), menuEmulation, cfg_settings));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.input"), menuEntrada, cfg_remap));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.core.options"), menuCoreOptions, cfg_settings_core));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.saves"), menuSavestates, cfg_savestates));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.scrapper"), menuScrapper, cfg_scrapper));
-	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, cfg_saving, this));
-	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, cfg_return, this));
 
-    // Establecer estado inicial
+	//Creando el menu de logros y asignandole un callback
+	OpcionSubMenu *opcionAchievement = new OpcionSubMenu("Achievements", menuAchievements, ico_achievements);
+	opcionAchievement->callback = &GestorMenus::sDescargarIconosLogros;
+    opcionAchievement->context = this;
+
+	// Poblar Menú Principal
+    menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.video"), menuVideo, ico_video));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.emulation"), menuEmulation, ico_settings));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.input"), menuEntrada, ico_remap));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.core.options"), menuCoreOptions, ico_settings_core));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.saves"), menuSavestates, ico_savestates));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.scrapper"), menuScrapper, ico_scrapper));
+	menuRaiz->opciones.push_back(opcionAchievement);
+	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, ico_saving, this));
+	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, ico_return, this));
+
+	// Establecer estado inicial
     menuActual = menuRaiz;
 	resetIndexPos();
+}
+
+void GestorMenus::loadAchievements(){
+	vector<AchievementState> ach = Achievements::instance()->getAchievements();
+	std::vector<std::string> listAch;
+
+	for (int i=0; i < menuAchievements->opciones.size(); i++){
+		if (menuAchievements->opciones[i]->tipo == OPC_ACHIEVEMENT){
+			delete ((OpcionAchievement *)menuAchievements->opciones[i]);
+		}
+	}
+	menuAchievements->opciones.clear();
+	
+	for (int i=0; i < ach.size(); i++){
+		menuAchievements->opciones.push_back(new OpcionAchievement(ach.at(i)));
+	}
 }
 
 void GestorMenus::poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper){
@@ -609,6 +638,8 @@ std::string GestorMenus::confirmar(t_option_action *result) {
     if (opt->tipo == OPC_SUBMENU) {
         menuActual = ((OpcionSubMenu*)opt)->destino;
 		resetIndexPos();
+		Opcion* e = (Opcion*)opt;
+		return e->ejecutar();
     } else if (opt->tipo == OPC_BOOLEANA) {
         cambiarValor(1);
 	} else if (opt->tipo == OPC_KEY) {
@@ -767,7 +798,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 	Icons icons;
 
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-	int face_h = TTF_FontLineSkip(fontMenu);
+	int face_h = menuActual->rowHeight;
 
 	Constant::drawTextCentTransparent(video_page, fontMenu, this->menuActual->titulo.c_str(), 0, face_h < marginY ? (marginY - face_h) / 2 : 0 , 
 				true, false, textColor, 0);
@@ -785,6 +816,9 @@ void GestorMenus::draw(SDL_Surface *video_page){
 
 		if (option->tipo == OPC_SAVESTATE){
 			drawSavestateWithImage(i, (OpcionSavestate *) option, video_page);
+			continue;
+		} else if (option->tipo == OPC_ACHIEVEMENT){
+			drawAchievement(i, (OpcionAchievement *) option, video_page);
 			continue;
 		} else if (option->tipo == OPC_BOOLEANA){
 			line = option->titulo;// + " " + std::string(*((OpcionBool *)option)->valor ? "Y" : "N");
@@ -993,6 +1027,84 @@ void GestorMenus::drawAskMenu(SDL_Surface *video_page) {
 /**
 *
 */
+void GestorMenus::drawSelectionBox(int i, SDL_Surface *video_page, SDL_Color& lineTextColor){
+	int face_h = menuActual->rowHeight;
+	const int screenPos = i - this->iniPos;
+    const int fontHeightRect = screenPos * face_h;
+	lineTextColor = i == this->curPos ? black : white;
+
+	std::string rutaSelected;
+	if (i == this->curPos){
+        int y = this->getY() + fontHeightRect;
+        //Gaining some extra fps when the screen resolution is low
+		SDL_Rect rectElem = {this->getX(), y, menuActual->menuWidth, face_h};
+        if (video_page->h >= 480){
+			DrawRectAlpha(video_page, rectElem, bkgMenu, 190);
+        } else {
+            lineTextColor = white;
+        }
+		//Drawing the selection menu
+		rect(video_page, rectElem.x - 1, rectElem.y - 1, rectElem.x + rectElem.w, rectElem.y + rectElem.h, bkgMenu);
+    } 
+}
+
+/**
+*
+*/
+void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface *video_page){
+	SDL_Color lineTextColor = i == this->curPos ? black : white;
+	drawSelectionBox(i, video_page, lineTextColor);
+
+	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+	TTF_Font *fontSmall = Fonts::getFont(Fonts::FONTSMALL);
+	const int face_h = TTF_FontLineSkip(fontMenu);
+	const int screenPos = i - this->iniPos;
+	const int fontHeightRect = screenPos * menuActual->rowHeight;
+	const int marginImg = 2;
+	const int imgH = menuActual->rowHeight - 2*marginImg;
+
+	const int position = this->getY() + fontHeightRect;
+	if (opcion->achievement.isSection){
+		const std::string s = "----- " + opcion->achievement.title + " -----";
+		Constant::drawTextTransparent(video_page, fontMenu, s.c_str(), 
+			this->getX() + imgH + marginImg * 3, 
+			position + menuActual->rowHeight / 2 - face_h / 2, 
+			i == this->curPos ? black : blue);
+	} else {
+		std::string firstLine = opcion->achievement.title;
+		if (opcion->achievement.points > 0){
+			firstLine += " (" + Constant::TipoToStr(opcion->achievement.points) + " point" + (opcion->achievement.points > 1 ? "s" : "") + ")";
+		}
+		//Drawing the first line of text on big font
+		Constant::drawTextTransparent(video_page, fontMenu, firstLine.c_str(), this->getX() + imgH + marginImg * 3, position, lineTextColor);
+		//Drawing the second line of text on a smaller font
+		Constant::drawTextTransparent(video_page, fontSmall, opcion->achievement.description.c_str(), this->getX() + imgH + marginImg * 3, position + face_h, lineTextColor);
+	}
+
+    // Solo intentamos añadir a la cola si NO tiene imagen Y NO se está descargando ya
+    if (opcion->achievement.badge == NULL && 
+        !opcion->achievement.isDownloading && 
+        !opcion->achievement.badgeUrl.empty()) {
+        opcion->achievement.isDownloading = true; // Marcamos como "en proceso"
+        BadgeDownloader::instance().add_to_queue(
+            opcion->achievement.badgeUrl, 
+            &opcion->achievement.badge,
+			imgH, imgH
+        );
+    }
+
+	// Dibujar el badge si ya está descargado
+    if (opcion->achievement.badge != NULL) {
+        SDL_Rect dest;
+        dest.x = this->getX() + marginImg; // Ajusta según tu layout
+        dest.y = position + marginImg;
+        SDL_BlitSurface(opcion->achievement.badge, NULL, video_page, &dest);
+    }
+}
+
+/**
+*
+*/
 void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Surface *video_page){
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 	TTF_Font *fontSmall = Fonts::getFont(Fonts::FONTSMALL);
@@ -1003,23 +1115,12 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
     const int lineBackground = -1;
     SDL_Color lineTextColor = i == this->curPos ? black : white;
 	const std::string line = opcion->titulo;
-	
 	std::string rutaSelected;
-	auto option = this->menuActual->opciones.at(i);
+
+	drawSelectionBox(i, video_page, lineTextColor);
 
 	if (i == this->curPos){
 		rutaSelected = opcion->file.filename;
-        int y = this->getY() + fontHeightRect;
-        //Gaining some extra fps when the screen resolution is low
-		SDL_Rect rectElem = {this->getX(), y, this->getW() / 2 - 2 * marginX, face_h};
-        if (video_page->h >= 480){
-			DrawRectAlpha(video_page, rectElem, bkgMenu, 190);
-        } else {
-            lineTextColor = white;
-        }
-		//Drawing the selection menu
-		rect(video_page, rectElem.x - 1, rectElem.y - 1, rectElem.x + rectElem.w, rectElem.y + rectElem.h, bkgMenu);
-		
 		//Drawing the modification date
 		if (!opcion->file.modificationTime.empty()){
 			//Drawing below the image
@@ -1065,9 +1166,10 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 *
 */
 int GestorMenus::getScreenNumLines(){
-	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-	int face_h = TTF_FontLineSkip(fontMenu);
-    return face_h != 0 ? (int)std::floor((double)getH() / face_h) : 0;
+	if (this->menuActual != NULL){
+		const int face_h = this->menuActual->rowHeight;
+		return face_h != 0 ? (int)std::floor((double)getH() / face_h) : 0;
+	}
 }
 
 /**

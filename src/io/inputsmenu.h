@@ -148,8 +148,6 @@ int processInputs(GameMenu &gameMenu, ListMenu &listMenu, bool generalConfig){
 				listMenu.nextPage();
 			} 
 
-			
-
 			if (gameMenu.joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
 				vector<string> launchCommand = gameMenu.launchProgram(listMenu);	
 				if (launchCommand.size() > 1){
@@ -192,7 +190,6 @@ int processInputs(GameMenu &gameMenu, ListMenu &listMenu, bool generalConfig){
 			}
 			return 0;
 		}
-
 		gameMenu.running = !gameMenu.joystick->evento.quit;
 	}
 
