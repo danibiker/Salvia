@@ -780,46 +780,47 @@ int launchGame(std::string rompath){
 
 	if (!dir.dirExists(tempDir.c_str()) && dir.createDir(tempDir) < 0){
 		LOG_ERROR("No se ha podido crear el directorio %s\n", tempDir.c_str());
-		gameMenu->showLangSystemMessage("msg.direrror" + tempDir, 3000);
+		gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.direrror") + tempDir, 3000);
 		return 0;
 	}
 
+	const bool loadAchievement = gameMenu->getCfgLoader()->configMain[cfg::enableAchievements].valueBool;
 	LOG_DEBUG("Unzipping rom %s", rompath.c_str());
 	unzippedFileInfo unzipped = unzipOrLoad(rompath, allowedExtensions, !info.need_fullpath, tempDir);
 
 	if (unzipped.errorCode != 0){
 		LOG_ERROR("No se ha podido abrir el fichero o no se puede descomprimir: %s\n", rompath.c_str());
-		gameMenu->showLangSystemMessage("msg.openfileerror" + rompath, 3000);
+		gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.openfileerror") + rompath, 3000);
 		return 0;
 	}
 	
 	struct retro_game_info game = { unzipped.extractedPath.c_str(), unzipped.memoryBuffer, unzipped.romsize, NULL };
 	retro_init();	
 	bool success = retro_load_game(&game);
-
-	gameMenu->loadGameAchievements(unzipped);
-
 	//Para el jugador 1
 	//retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
 	// Para el jugador 2
 	//retro_set_controller_port_device(1, RETRO_DEVICE_JOYPAD);
 
-	
+	if (success && loadAchievement){
+		//After the loading of the game, we load the achievements
+		gameMenu->loadGameAchievements(unzipped);
+	}
+
 	//Liberar la memoria tras la carga exitosa
-	// La mayoría de los cores de Libretro ya han copiado los datos a su propia RAM interna
-	if (unzipped.memoryBuffer){
+	//La mayoría de los cores de Libretro ya han copiado los datos a su propia RAM interna
+	//Si hay logros habilitados, ya se encarga de liberarse posteriormente
+	if (unzipped.memoryBuffer && !loadAchievement){
 		free(unzipped.memoryBuffer);
 		unzipped.memoryBuffer = NULL;
 	}
 	
-	// Es importante cargar la ROM antes de retro_run
 	if(!success) {
 		LOG_ERROR("Error cargando la ROM\n");
 		gameMenu->showLangSystemMessage("msg.romopenerror", 3000);
 		return 0;
 	}
 
-	
 	string romname = (gameMenu->getCfgLoader()->getCfgEmu() != NULL ? gameMenu->getCfgLoader()->getCfgEmu()->name + " - " : "") + dir.getFileNameNoExt(unzipped.originalPath);
 	SDL_WM_SetCaption(romname.c_str(), NULL);
 

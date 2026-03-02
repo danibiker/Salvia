@@ -377,7 +377,6 @@ int SaveThreadFunc(void* data) {
 					sd->action = SAVE_NONE; // IMPORTANTE: Resetea la acción
 					SDL_mutexV(sd->saveMutex);
 				}
-
 				break;
         }
     }

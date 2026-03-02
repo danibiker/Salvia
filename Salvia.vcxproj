@@ -1474,7 +1474,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN;DEBUG_LOG;DEBUG;__x86_64__;_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB;RC_CLIENT_SUPPORTS_HASH</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN;DEBUG_LOG;DEBUG;__x86_64__;_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB;RC_CLIENT_SUPPORTS_HASH;HAVE_CHD</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <CompileAs>CompileAsCpp</CompileAs>
       <EnablePREfast>false</EnablePREfast>
@@ -1483,7 +1483,7 @@
       <SmallerTypeCheck>false</SmallerTypeCheck>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <FloatingPointModel>Fast</FloatingPointModel>
-      <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)\src\retroachievements\src\rhash;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)\src\retroachievements\src\rhash;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\Genesis-Plus-GX\Debug\Win32;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
@@ -2454,6 +2454,8 @@
     </ClCompile>
     <ClCompile Include="src\io\xbrz\xbrz.cpp" />
     <ClCompile Include="src\menus\gestormenus.cpp" />
+    <ClCompile Include="src\retroachievements\CHDHashed.cpp" />
+    <ClCompile Include="src\retroachievements\HashCHD.cpp" />
     <ClCompile Include="src\retroachievements\src\rapi\rc_api_common.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_beetlepcefast|Win32'">CompileAsC</CompileAs>

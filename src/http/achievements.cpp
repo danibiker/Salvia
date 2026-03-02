@@ -3,12 +3,92 @@
 #include <cstdio>
 #include <string.h>
 
-#include <http/httputil.h> // Tu clase de CURL
+#include <http/httputil.h>
 #include <http/badgedownloader.h>
-#include <utils/Logger.h>    // Tu sistema de log
+#include <utils/Logger.h>
 #include <gfx/SDL_rotozoom.h>
 #include <SDL_image.h>
-#include <rc_consoles.h>
+#include <rc_hash.h>
+#include <retroachievements/CHDHashed.h>
+
+// --- Threaded methods ---
+DWORD WINAPI ServerThreadFunction(LPVOID lpParam) {
+    ServerCallData* data = (ServerCallData*)lpParam;
+
+    CurlClient curlClient;
+    std::string response;
+    float progress = 0;
+    
+    // Ejecutamos la petición
+    bool success = false;
+    if (!data->post_data.empty()) {
+        success = curlClient.postUrl(data->url.c_str(), data->post_data.c_str(), response, &progress);
+    } else {
+        success = curlClient.fetchUrl(data->url.c_str(), response, &progress);
+    }
+
+    // Preparamos la respuesta para la librería
+    rc_api_server_response_t server_response;
+    memset(&server_response, 0, sizeof(server_response));
+    server_response.body = response.c_str();
+    server_response.body_length = response.length();
+    server_response.http_status_code = success ? 200 : 500;
+
+    // Ejecutamos el callback
+    data->callback(&server_response, data->callback_data);
+
+    // Limpiamos la memoria de la estructura y cerramos
+    delete data;
+    return 0;
+}
+
+DWORD WINAPI AchievementTriggeredThread(LPVOID lpParam) {
+    AchievementEventData* data = (AchievementEventData*)lpParam;
+    
+    if (data && data->instance) {
+        AchievementState msg;
+        msg.title = data->title;
+        msg.description = data->description;
+        msg.badgeUrl = data->badgeUrl;
+        data->instance->setShouldRefresh(true);
+		int line_height, badgeW, badgeH, badgePad;
+		data->instance->getBadgeSize(badgeW, badgeH, badgePad, line_height);
+		data->instance->download_and_cache_image(data->badgeUrl, msg.badge, badgeW, badgeH);
+        // Bloqueamos el mutex de SDL para añadir a la cola de forma segura
+        SDL_mutexP(data->instance->messagesMutex);
+        data->instance->pending_messages.push_back(msg);
+        SDL_mutexV(data->instance->messagesMutex);
+    }
+
+    delete data;
+    return 0;
+}
+
+DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
+    LoadGameThreadData* data = (LoadGameThreadData*)lpParam;
+	LoadContext* ctx = static_cast<LoadContext*>(data->userdata);
+	
+	if (ctx->romBuffer) {
+		free(ctx->romBuffer); // LIBERACIÓN SEGURA: La identificación ya terminó
+		ctx->romBuffer = NULL;
+	}
+
+    if (data->result == RC_OK) {
+        // Llamamos a los métodos de la clase a través de la instancia
+        data->instance->show_game_placard(data->client);
+        data->instance->show_achievements_menu(data->client);
+        if (ctx->messages) {
+            data->instance->send_message(ctx->messages);
+        }
+		
+    } else {
+		std::string errorMsg = rc_error_str(data->result);
+		LOG_DEBUG("Error al cargar logros del juego: %s", errorMsg.c_str());
+    }
+	delete ctx; // Liberamos nuestra estructura intermedia
+    delete data;
+    return 0;
+}
 
 
 void Achievements::initialize() {
@@ -33,6 +113,7 @@ void Achievements::shutdown() {
 	if (g_client) {
 		rc_client_destroy(g_client);
 		g_client = NULL;
+		reset_menu();
 		LOG_DEBUG("RetroAchievements: Cliente destruido.");
 	}
 }
@@ -42,6 +123,46 @@ void Achievements::login(const char* username, const char* password) {
 
 	LOG_DEBUG("RetroAchievements: Intentando login para %s...", username);
 	rc_client_begin_login_with_password(g_client, username, password, login_callback, this);
+}
+
+void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string path, uint32_t console_id, std::vector<AchievementMsg>& messagesAchievement) {
+    LoadContext* ctx = new LoadContext();
+    ctx->messages = &messagesAchievement;
+    ctx->romBuffer = (void*)rom; 
+
+	char romHash[33] = {0};
+	std::string hashStr;
+	std::string lowPath = path;
+	Constant::lowerCase(&lowPath);
+	shouldRefresh = true;
+
+	if (lowPath.find(".chd") != std::string::npos) {
+        CHDHashed chdhashed;
+        hashStr = chdhashed.GetHash(path, console_id);
+
+        if (!hashStr.empty()) {
+            // Copiamos el string al array char[33]
+            // strncpy asegura que no nos pasemos del tamaño del buffer
+            strncpy(romHash, hashStr.c_str(), sizeof(romHash) - 1);
+            romHash[32] = '\0'; // Aseguramos el terminador nulo
+
+            // IMPORTANTE: Ahora inicias la carga con el hash generado del CHD
+            rc_client_begin_load_game(g_client, romHash, load_game_callback, (void*)ctx);
+        } else {
+            // Manejar error: No se pudo generar hash del CHD
+            delete ctx;
+        }
+    } 
+	// CASO NORMAL: ROM en memoria
+	else if (rom != NULL && rom_size > 0) {
+        rc_client_begin_identify_and_load_game(g_client, console_id, NULL, rom, rom_size, load_game_callback, (void*)ctx);
+    } 
+    // CASO: Archivo plano
+    else if (!path.empty()) {
+        if (rc_hash_generate_from_file(romHash, console_id, path.c_str())) {
+            rc_client_begin_load_game(g_client, romHash, load_game_callback, (void*)ctx);
+        }
+    }
 }
 
 // --- CALLBACKS ---
@@ -64,32 +185,25 @@ void Achievements::login_callback(int result, const char* error_message, rc_clie
 	}
 }
 
-void Achievements::server_call(const rc_api_request_t* request,
-	rc_client_server_callback_t callback, void* callback_data, rc_client_t* client) {
+void Achievements::load_game_callback(int result, const char* error_message, rc_client_t* client, void* userdata)
+{
+    // Creamos el paquete de datos
+    LoadGameThreadData* data = new LoadGameThreadData();
+    data->result = result;
+    data->error_message = error_message ? error_message : "";
+    data->client = client;
+    data->userdata = userdata;
 
-		CurlClient curlClient;
-		std::string response;
-		float progress = 0;
-		bool success = false;
-
-		// Ejecutamos la petición (POST o GET según indique rcheevos)
-		if (request->post_data) {
-			success = curlClient.postUrl(request->url, request->post_data, response, &progress);
-		} else {
-			success = curlClient.fetchUrl(request->url, response, &progress);
-		}
-
-		// Preparamos la respuesta para la librería
-		rc_api_server_response_t server_response;
-		memset(&server_response, 0, sizeof(server_response));
-		server_response.body = response.c_str();
-		server_response.body_length = response.length();
-
-		// Si curl devolvió false, informamos un error de red (0 o 500)
-		server_response.http_status_code = success ? 200 : RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
-
-		// Enviamos la respuesta de vuelta a rc_client
-		callback(&server_response, callback_data);
+    // Lanzamos el hilo
+    HANDLE hThread = CreateThread(NULL, 0, LoadGameThreadFunction, (LPVOID)data, 0, NULL);
+    
+    if (hThread) {
+        // En Xbox 360 es buena práctica asignar el hilo a un hardware thread específico
+        //XSetThreadProcessor(hThread, 4); 
+        CloseHandle(hThread);
+    } else {
+        delete data; // Limpieza en caso de error
+    }
 }
 
 uint32_t Achievements::read_memory(uint32_t address, uint8_t* buffer, uint32_t num_bytes, rc_client_t* client) {
@@ -111,7 +225,6 @@ uint32_t Achievements::read_memory(uint32_t address, uint8_t* buffer, uint32_t n
             return num_bytes;
         }
     }
-
     return 0; 
 }
 
@@ -120,64 +233,52 @@ void Achievements::log_message(const char* message, const rc_client_t* client) {
 }
 
 void Achievements::event_handler(const rc_client_event_t* event, rc_client_t* client) {
-    Achievements& self = *Achievements::instance();
+    Achievements* self = Achievements::instance();
 
     if (event->type == RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED) {
-		self.shouldRefresh = true;
-		AchievementState msg;
-		msg.title = event->achievement->title;
-		msg.description = event->achievement->description;   
-		msg.badgeUrl = event->achievement->badge_url;
-		// 1. Añadimos el mensaje a la cola de la UI (con Mutex)
-        SDL_mutexP(self.messagesMutex);
-        // Guardamos el mensaje en nuestra lista interna
-        self.pending_messages.push_back(msg);
-		SDL_mutexV(self.messagesMutex);
-    }
-    else if (event->type == RC_CLIENT_EVENT_SERVER_ERROR) {
-		std::string error_message = "Error RA: " + std::string(event->server_error->error_message);
-		LOG_DEBUG("RetroAchievements game load failed: %s", error_message.c_str());
-    }
-}
+		// Creamos y rellenamos la estructura con copias de los strings
+        AchievementEventData* data = new AchievementEventData();
+        data->instance = self;
+        data->title = event->achievement->title ? event->achievement->title : "";
+        data->description = event->achievement->description ? event->achievement->description : "";
+        data->badgeUrl = event->achievement->badge_url ? event->achievement->badge_url : "";
 
-void Achievements::getBadgeSize(int &w, int &h, int &badgePad, int &line_height){
-	const int face_h_small = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
-	badgePad = 2;
-	line_height = face_h_small + 4;
-	w = line_height * 3 - badgePad * 2;
-	h = line_height * 3 - badgePad * 2;
+        // Lanzamos el hilo
+        HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, 0, NULL);
+        if (hThread) {
+            CloseHandle(hThread);
+        } else {
+            delete data;
+        }
+    } else if (event->type == RC_CLIENT_EVENT_SERVER_ERROR) {
+		std::string error_message = "Error RA: " + std::string(event->server_error->error_message);
+		LOG_DEBUG("RetroAchievements game event failed: %s", error_message.c_str());
+    }
 }
 
 AchievementState Achievements::pop_message() {
     if (pending_messages.empty()) return AchievementState(); // Devuelve un objeto con valores por defecto (badge=NULL, etc.)
-    
     // Obtenemos el primero, lo borramos y lo devolvemos
     AchievementState msg = pending_messages.front();
     pending_messages.erase(pending_messages.begin());
     return msg;
 }
 
-void Achievements::load_game(const uint8_t* rom, size_t rom_size)
-{
-	// this example is hard-coded to identify a Super Nintendo game already loaded in memory.
-	// it will use the rhash library to generate a hash, then make a server call to resolve
-	// the hash to a game_id. If found, it will then fetch the game data and start a session
-	// for the user. By the time load_game_callback is called, the achievements for the game are
-	// ready to be processed (unless an error occurs, like not being able to identify the game).
-	rc_client_begin_identify_and_load_game(g_client, RC_CONSOLE_SUPER_NINTENDO, NULL, rom, rom_size, load_game_callback, NULL);
-}
+void Achievements::send_message(std::vector<AchievementMsg>* messages){
+	AchievementMsg msg;
+	msg.title = Achievements::instance()->getGameTitle();
+	msg.scoreUnlocked = Achievements::instance()->getSummary().points_unlocked;
+	msg.scoreTotal = Achievements::instance()->getSummary().points_core;
+	msg.achvUnlocked = Achievements::instance()->getSummary().num_unlocked_achievements;
+	msg.achvTotal = Achievements::instance()->getSummary().num_core_achievements;
+	msg.img = Achievements::instance()->getGameBadgeUrl();
+	msg.timeout = 5000;
+	msg.ticks = SDL_GetTicks();
 
-void Achievements::load_game_callback(int result, const char* error_message, rc_client_t* client, void* userdata)
-{
-	if (result != RC_OK){
-		LOG_DEBUG("RetroAchievements game load failed: %s", error_message);
-		return;
-	}
-
-	// announce that the game is ready
-	show_game_placard(client);
-	//Retrieve the achievements
-	show_achievements_menu(client);
+	int line_height, badgeW, badgeH, badgePad;
+	Achievements::instance()->getBadgeSize(badgeW, badgeH, badgePad, line_height);
+	Achievements::instance()->download_and_cache_image(msg.img, msg.badge, badgeW, badgeH);
+	messages->push_back(msg);
 }
 
 void Achievements::show_game_placard(rc_client_t* client)
@@ -211,7 +312,7 @@ void Achievements::show_game_placard(rc_client_t* client)
 
 void Achievements::reset_menu(){
 	Achievements& self = *Achievements::instance();
-	for (int i=0; i < self.getAchievements().size(); i++){
+	for (unsigned int i=0; i < self.getAchievements().size(); i++){
 		self.getAchievements().at(i).clear();
 	}
 	self.getAchievements().clear();
@@ -240,15 +341,15 @@ void Achievements::show_achievements_menu(rc_client_t* client)
 	// Clear any previously loaded menu items
 	self.reset_menu();
 
-	for (int i = 0; i < list->num_buckets; i++){
+	for (unsigned int i = 0; i < list->num_buckets; i++){
 		// Create a header item for the achievement category
 		self.achievements.push_back(AchievementState(list->buckets[i].label, true));
 		LOG_DEBUG("buckets[i]: %s", list->buckets[i].label, true);
 
-		for (int j = 0; j < list->buckets[i].num_achievements; j++){
+		for (unsigned int j = 0; j < list->buckets[i].num_achievements; j++){
 			const rc_client_achievement_t* achievement = list->buckets[i].achievements[j];
 			//async_image_data* image_data = NULL;
-			char achievement_badge[64];
+			//char achievement_badge[64];
 			AchievementState achState;
 			// Generate a local filename to store the downloaded image.
 			//snprintf(achievement_badge, sizeof(achievement_badge), "ach_%s%s.png", achievement->badge_name, 
@@ -275,6 +376,28 @@ void Achievements::show_achievements_menu(rc_client_t* client)
 	rc_client_destroy_achievement_list(list);
 }
 
+void Achievements::server_call(const rc_api_request_t* request,
+    rc_client_server_callback_t callback, void* callback_data, rc_client_t* client) {
+
+    // Reservamos memoria para los datos que usará el hilo
+    ServerCallData* data = new ServerCallData();
+    data->url = request->url ? request->url : "";
+    data->post_data = request->post_data ? request->post_data : "";
+    data->callback = callback;
+    data->callback_data = callback_data;
+
+    // Creamos el hilo
+    HANDLE hThread = CreateThread(NULL, 0, ServerThreadFunction, (LPVOID)data, 0, NULL);
+    
+    if (hThread == NULL) {
+        // Si falla la creación, limpiar y llamar al callback con error
+        delete data;
+    } else {
+        // Cerramos el handle porque no necesitamos esperar por él (el hilo se limpia solo)
+        CloseHandle(hThread);
+    }
+}
+
 /**
 *
 */
@@ -298,7 +421,6 @@ void Achievements::download_and_cache_image(std::string url, SDL_Surface*& image
 				image = SDL_DisplayFormat(rawImg);
 				SDL_FreeSurface(rawImg);
 			} else {
-				int line_height, badgePad;
 				// Escalar
 				double zoomX = (double)badgeW / rawImg->w;
 				double zoomY = (double)badgeH / rawImg->h;
@@ -309,4 +431,12 @@ void Achievements::download_and_cache_image(std::string url, SDL_Surface*& image
 			}
 		}
 	}
+}
+
+void Achievements::getBadgeSize(int &w, int &h, int &badgePad, int &line_height){
+	const int face_h_small = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
+	badgePad = 2;
+	line_height = face_h_small + 4;
+	w = line_height * 3 - badgePad * 2;
+	h = line_height * 3 - badgePad * 2;
 }

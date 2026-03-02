@@ -50,7 +50,9 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	bg_screenshot = NULL;
 	lastFpsUpdate = 0;
 	//initHqxFilter();
+	cargarSystemAchievementTranslation(Constant::getAppDir() + "\\config\\achievement_translations.cfg");
 	initAchievements();
+	
 };
 
 GameMenu::~GameMenu(){
@@ -81,6 +83,68 @@ void GameMenu::initAchievements(){
 }
 
 /**
+* se traduce el id del sistema, que debe corresponder a la lista de consolas definidas en #include <rc_consoles.h>
+*/
+int GameMenu::translateSystemAchievement(){
+	vector<string> v = Constant::splitChar(getCfgLoader()->getCfgEmu()->system, '_');
+	int system = 0;
+	if (v.size() > 0){
+		system = Constant::strToTipo<int>(v.at(0));
+		return gsTogdGameid[system];
+	}
+	return 0;
+}
+
+/**
+* se obtienen los id's de las traducciones del sistema de logros, que debe corresponder a la 
+* lista de consolas definidas en #include <rc_consoles.h>
+*/
+bool GameMenu::cargarSystemAchievementTranslation(const std::string& nombreArchivo) {
+    std::ifstream file(nombreArchivo.c_str());
+    std::string line;
+    bool seccionEncontrada = false;
+
+    if (!file.is_open()) return false;
+
+    while (std::getline(file, line)) {
+        // Eliminar espacios en blanco al inicio/final si fuera necesario (opcional)
+            
+        // 1. Buscamos el inicio de la sección
+        if (line == "[SALVIA_TO_ACHIEVEMENTS]") {
+            seccionEncontrada = true;
+            continue; // Pasamos a la siguiente línea
+        }
+
+        // 2. Si ya estamos en la sección correcta, procesamos los datos
+        if (seccionEncontrada) {
+            // Si encontramos otra sección (empieza por [), dejamos de leer
+            if (!line.empty() && line[0] == '[') {
+                break; 
+            }
+
+            // Ignorar comentarios o líneas vacías
+            if (line.empty() || line[0] == '#') {
+                continue;
+            }
+
+            // 3. Extraer clave=valor
+            std::size_t pos = line.find('=');
+            if (pos != std::string::npos) {
+                std::string keyStr = line.substr(0, pos);
+                std::string valueStr = line.substr(pos + 1);
+
+                int key = atoi(keyStr.c_str());
+                int value = atoi(valueStr.c_str());
+
+                gsTogdGameid[key] = value;
+            }
+        }
+    }
+    file.close();
+    return seccionEncontrada;
+}
+
+/**
 *
 */
 void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
@@ -95,25 +159,10 @@ void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
 
 	Achievements::instance()->set_memory_sources(w_data, w_size, s_data, s_size);
 	//Hacemos el reset si habia algo cargado
-	Achievements::instance()->doReset();
+	Achievements::instance()->doUnload();
 	//Ahora cargamos el juego
-	Achievements::instance()->load_game((uint8_t *)unzipped.memoryBuffer, unzipped.romsize);
-	AchievementMsg msg;
-	msg.title = Achievements::instance()->getGameTitle();
-	msg.scoreUnlocked = Achievements::instance()->getSummary().points_unlocked;
-	msg.scoreTotal = Achievements::instance()->getSummary().points_core;
-	msg.achvUnlocked = Achievements::instance()->getSummary().num_unlocked_achievements;
-	msg.achvTotal = Achievements::instance()->getSummary().num_core_achievements;
-	msg.img = Achievements::instance()->getGameBadgeUrl();
-	msg.timeout = 5000;
-	msg.ticks = SDL_GetTicks();
-
-	configMenus->loadAchievements();
-
-	int line_height, badgeW, badgeH, badgePad;
-	Achievements::instance()->getBadgeSize(badgeW, badgeH, badgePad, line_height);
-	Achievements::instance()->download_and_cache_image(msg.img, msg.badge, badgeW, badgeH);
-	messagesAchievement.push_back(msg);
+	int system = translateSystemAchievement();
+	Achievements::instance()->load_game((uint8_t *)unzipped.memoryBuffer, unzipped.romsize, unzipped.originalPath, system, messagesAchievement);
 }
 
 std::string GameMenu::configButtonsJOY(){
@@ -462,6 +511,9 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
     }
 }
 
+/**
+*
+*/
 void GameMenu::showScrapProcess(ListMenu &listMenu){
 	TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
     const int halfWidth = screen->w / 2;
@@ -700,11 +752,7 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
 				commands.emplace_back(romdir + rom);
 				return commands;
 			} else {
-				#ifdef _XBOX
-					commands.emplace_back(romdir + rom);
-				#else
-					commands.emplace_back(encloseWithCharIfSpaces(romdir + rom, "\"")); 
-				#endif
+				commands.emplace_back(romdir + rom);
 			}
 		#else
 			commands.emplace_back(encloseWithCharIfSpaces(romdir + rom, "\"")); 
@@ -972,7 +1020,7 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 			if (getEmuStatus() == EMU_MENU_OVERLAY && screen){
 				bg_screenshot = clonarPantalla(screen, 180);
 				if (!configMenus->obtenerMenuActual()->opciones.empty()){
-					auto option = configMenus->obtenerMenuActual()->opciones.front();;
+					auto option = configMenus->obtenerMenuActual()->opciones.front();
 					if (option->tipo == OPC_ACHIEVEMENT){
 						if (Achievements::instance()->refresh_achievements_menu()){
 							configMenus->loadAchievements();
@@ -1199,20 +1247,6 @@ void GameMenu::processMessagesAchievements(){
 		// 2. Inicializamos el tiempo de inicio si es la primera vez que se muestra
 		if (ach.ticks == 0) {
 			ach.ticks = currentTicks;
-			//Comprobamos si es necesario descargar una imagen
-			if (ach.badge == NULL && !ach.isDownloading && !ach.img.empty()){
-				ach.isDownloading = true;
-				int line_height, badgeW, badgeH, badgePad;
-				Achievements::instance()->getBadgeSize(badgeW, badgeH, badgePad, line_height);
-				BadgeDownloader::instance().start();
-				// 2. Mandamos la petición de descarga al hilo worker que ya tenemos
-				// Pasamos el puntero al badge del ULTIMO elemento del vector
-				BadgeDownloader::instance().add_to_queue(
-					ach.img, 
-					&ach.badge,
-					badgeW, badgeH
-				);
-			}
 		} 
 		// 3. Comprobamos si ha expirado el mensaje
 		else if (currentTicks - ach.ticks > ach.timeout) {
@@ -1234,10 +1268,6 @@ void GameMenu::processMessagesAchievements(){
 	if (messagesAchievement.empty()) {
 		lastMessagesArea.x = 0; lastMessagesArea.y = 0;
         lastMessagesArea.w = 0; lastMessagesArea.h = 0;
-		//No puede haber nada mas que descargar, paramos el hilo de descarga si lo hubiese
-		if (getEmuStatus() == EMU_STARTED){
-			BadgeDownloader::instance().stop();
-		}
 		return;
 	}
 

@@ -339,7 +339,13 @@ public:
 
 	// 1. La lógica real (método normal)
     std::string descargarIconosLogro() { 
-		BadgeDownloader::instance().start();
+		if (menuAchievements->opciones.size() == 0){
+			loadAchievements();
+		}
+
+		if (menuAchievements->opciones.size() > 0){
+			BadgeDownloader::instance().start();
+		}
 		return ""; 
 	}
 

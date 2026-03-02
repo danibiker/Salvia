@@ -171,7 +171,6 @@ bool CurlClient::postUrl(const std::string& url, const std::string& postData, st
 	headers = curl_slist_append(headers, "Accept: */*");
 	headers = curl_slist_append(headers, "Accept-Language: en-US,en;q=0.5");
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-	//curl_easy_setopt(curl, CURLOPT_REFERER, "https://retroachievements.org");
 
 	#ifdef DEBUG
 	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);

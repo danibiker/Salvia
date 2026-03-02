@@ -119,10 +119,14 @@ class GameMenu : public Engine{
 		void showAchievementMessage(std::string, std::string, std::string, SDL_Surface *,SDL_Rect&);
 		void startScrapping();
 		void loadGameAchievements(unzippedFileInfo& unzipped);
+		
 
     private:
 		std::vector<Message> messages;
 		std::vector<AchievementMsg> messagesAchievement;
+		map<int,int> gsTogdGameid;
+		bool cargarSystemAchievementTranslation(const std::string& nombreArchivo);
+		int translateSystemAchievement();
 
 		std::string configButtonsJOY();
 		CfgLoader *cfgLoader;

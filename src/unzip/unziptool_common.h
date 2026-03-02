@@ -8,5 +8,5 @@ struct unzippedFileInfo {
     std::size_t romsize;
     void* memoryBuffer;
 
-    unzippedFileInfo() : errorCode(-1), romsize(0), memoryBuffer(nullptr) {}
+    unzippedFileInfo() : errorCode(-1), romsize(0), memoryBuffer(NULL) {}
 };

@@ -151,9 +151,17 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuSavestates = new Menu(LanguageManager::instance()->get("menu.main.saves"), TTF_FontLineSkip(fontMenu), this->getW() / 2 - 2 * marginX, menuRaiz);
 	menuScrapper = new Menu(LanguageManager::instance()->get("menu.main.scrapper"), menuRaiz);
 	
+	Menu* parentAchievements = new Menu("Logros", menuRaiz);
+	//Incluimos un indicador para habilitar logros
+	parentAchievements->opciones.push_back(new OpcionBool("Habilitar logros", &refConfig->configMain[cfg::enableAchievements].getBoolRef()));
+	//Creamos el submenu que contiene la lista de logros
 	const int rowAchHeight = TTF_FontLineSkip(fontMenu) * 2;
 	const int menuAchWidth = this->getW() - marginX;
-	menuAchievements = new Menu("Achievements", rowAchHeight, menuAchWidth, menuRaiz);
+	menuAchievements = new Menu("Lista de logros", rowAchHeight, menuAchWidth, parentAchievements);
+	OpcionSubMenu *listaLogros = new OpcionSubMenu("Lista de logros", menuAchievements);
+	listaLogros->callback = &GestorMenus::sDescargarIconosLogros;
+    listaLogros->context = this;
+	parentAchievements->opciones.push_back(listaLogros);
 
 	//Este menu no cuelga de ningun lado, pero ponemos partidas guardadas como padre
 	menuAskSavestates = new Menu(LanguageManager::instance()->get("menu.savestates.title"), menuSavestates);
@@ -166,7 +174,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	todosLosMenus.push_back(menuSavestates);
 	todosLosMenus.push_back(menuAskSavestates);
 	todosLosMenus.push_back(menuScrapper);
-	todosLosMenus.push_back(menuAchievements);
+	todosLosMenus.push_back(parentAchievements);
 
 	//Poblar menu emulacion
 	//Escalado de video
@@ -259,11 +267,6 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	}
 	menuAskSavestates->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.askTitle"), askOptions, &askNumOptions));
 
-	//Creando el menu de logros y asignandole un callback
-	OpcionSubMenu *opcionAchievement = new OpcionSubMenu("Achievements", menuAchievements, ico_achievements);
-	opcionAchievement->callback = &GestorMenus::sDescargarIconosLogros;
-    opcionAchievement->context = this;
-
 	// Poblar Menú Principal
     menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.video"), menuVideo, ico_video));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.emulation"), menuEmulation, ico_settings));
@@ -271,7 +274,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.core.options"), menuCoreOptions, ico_settings_core));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.saves"), menuSavestates, ico_savestates));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.scrapper"), menuScrapper, ico_scrapper));
-	menuRaiz->opciones.push_back(opcionAchievement);
+	menuRaiz->opciones.push_back(new OpcionSubMenu("Achievements", parentAchievements, ico_achievements));
 	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, ico_saving, this));
 	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, ico_return, this));
 
@@ -283,17 +286,16 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 void GestorMenus::loadAchievements(){
 	vector<AchievementState> ach = Achievements::instance()->getAchievements();
 	std::vector<std::string> listAch;
-
-	for (int i=0; i < menuAchievements->opciones.size(); i++){
+	for (unsigned int i=0; i < menuAchievements->opciones.size(); i++){
 		if (menuAchievements->opciones[i]->tipo == OPC_ACHIEVEMENT){
 			delete ((OpcionAchievement *)menuAchievements->opciones[i]);
 		}
 	}
 	menuAchievements->opciones.clear();
-	
-	for (int i=0; i < ach.size(); i++){
+	for (unsigned int i=0; i < ach.size(); i++){
 		menuAchievements->opciones.push_back(new OpcionAchievement(ach.at(i)));
 	}
+	resetIndexPos();
 }
 
 void GestorMenus::poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper){
@@ -1170,6 +1172,7 @@ int GestorMenus::getScreenNumLines(){
 		const int face_h = this->menuActual->rowHeight;
 		return face_h != 0 ? (int)std::floor((double)getH() / face_h) : 0;
 	}
+	return 0;
 }
 
 /**
