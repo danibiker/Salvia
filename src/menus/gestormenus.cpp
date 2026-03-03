@@ -151,14 +151,14 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuSavestates = new Menu(LanguageManager::instance()->get("menu.main.saves"), TTF_FontLineSkip(fontMenu), this->getW() / 2 - 2 * marginX, menuRaiz);
 	menuScrapper = new Menu(LanguageManager::instance()->get("menu.main.scrapper"), menuRaiz);
 	
-	Menu* parentAchievements = new Menu("Logros", menuRaiz);
+	Menu* parentAchievements = new Menu(LanguageManager::instance()->get("menu.achievement.title"), menuRaiz);
 	//Incluimos un indicador para habilitar logros
-	parentAchievements->opciones.push_back(new OpcionBool("Habilitar logros", &refConfig->configMain[cfg::enableAchievements].getBoolRef()));
+	parentAchievements->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.achievement.enable"), &refConfig->configMain[cfg::enableAchievements].getBoolRef()));
 	//Creamos el submenu que contiene la lista de logros
 	const int rowAchHeight = TTF_FontLineSkip(fontMenu) * 2;
 	const int menuAchWidth = this->getW() - marginX;
-	menuAchievements = new Menu("Lista de logros", rowAchHeight, menuAchWidth, parentAchievements);
-	OpcionSubMenu *listaLogros = new OpcionSubMenu("Lista de logros", menuAchievements);
+	menuAchievements = new Menu(LanguageManager::instance()->get("menu.achievement.list.title"), rowAchHeight, menuAchWidth, parentAchievements);
+	OpcionSubMenu *listaLogros = new OpcionSubMenu(LanguageManager::instance()->get("menu.achievement.list.title"), menuAchievements);
 	listaLogros->callback = &GestorMenus::sDescargarIconosLogros;
     listaLogros->context = this;
 	parentAchievements->opciones.push_back(listaLogros);
@@ -274,7 +274,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.core.options"), menuCoreOptions, ico_settings_core));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.saves"), menuSavestates, ico_savestates));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.scrapper"), menuScrapper, ico_scrapper));
-	menuRaiz->opciones.push_back(new OpcionSubMenu("Achievements", parentAchievements, ico_achievements));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.achievement.title"), parentAchievements, ico_achievements));
 	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, ico_saving, this));
 	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, ico_return, this));
 

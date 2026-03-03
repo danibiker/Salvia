@@ -7,6 +7,8 @@
 #include <cctype> // Para isdigit
 #include <algorithm>
 #include <stdint.h>
+#include <vector>
+#include <stdarg.h>
 
 #include <utils/logger.h>
 
@@ -114,6 +116,7 @@ struct AchievementState{
 	bool locked;
 	bool isDownloading;
 	bool isSection;
+	uint8_t sectionType;
 	uint32_t points;
 
 	std::string badgeUrl;
@@ -128,16 +131,18 @@ struct AchievementState{
 		isDownloading = false;
 		isSection = false;
 		points = 0;
+		sectionType = 0;
 	}
 
 	AchievementState(){
 		inicializar();
 	}
 
-	AchievementState(std::string pTitle, bool bSection){
+	AchievementState(std::string pTitle, uint8_t st){
 		inicializar();		
 		title = pTitle;
-		isSection = bSection;
+		isSection = true;
+		sectionType = st;
 	}
 	
 	// Metodo para limpiar manualmente
@@ -614,6 +619,25 @@ class Constant{
 				return sanitizePathForXbox(path);
 			} else {
 				return path;
+			}
+		}
+
+		 static std::string string_format(const std::string fmt, ...) {
+			int size = 256; // Tamaño inicial sugerido
+			std::string str;
+			va_list ap;
+			while (1) {
+				str.resize(size);
+				va_start(ap, fmt);
+				// _vsnprintf es la versión segura para Visual Studio 2010
+				int n = _vsnprintf((char *)str.c_str(), size, fmt.c_str(), ap);
+				va_end(ap);
+				if (n > -1 && n < size) {
+					str.resize(n);
+					return str;
+				}
+				if (n > -1) size = n + 1; // Tamaño exacto necesario
+				else size *= 2; // Doblar y reintentar (específico de implementaciones antiguas)
 			}
 		}
 

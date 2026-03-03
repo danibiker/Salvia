@@ -12,15 +12,18 @@ CHDHashed::~CHDHashed() {
 }
 
 void CHDHashed::InitSystems() {
+	#ifdef HAVE_CHD
     if (!m_initialized) {
         // Inicializamos el lector de CHD que definimos antes
         rc_hash_init_chd_cdreader();
         m_initialized = true;
     }
+	#endif
 }
 
 std::string CHDHashed::GetHash(const std::string& filePath, int consoleId) {
-    InitSystems();
+    #ifdef HAVE_CHD
+	InitSystems();
 
     char hashBuffer[33]; // MD5 son 32 chars + null
     memset(hashBuffer, 0, sizeof(hashBuffer));
@@ -30,6 +33,6 @@ std::string CHDHashed::GetHash(const std::string& filePath, int consoleId) {
     if (rc_hash_generate_from_file(hashBuffer, consoleId, filePath.c_str())) {
         return std::string(hashBuffer);
     }
-
+	#endif
     return "";
 }

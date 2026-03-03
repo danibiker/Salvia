@@ -10,6 +10,34 @@
 #include <SDL_image.h>
 #include <rc_hash.h>
 #include <retroachievements/CHDHashed.h>
+#include <utils/langmanager.h>
+
+void Achievements::initialize() {
+	if (g_client) return;
+
+	// Creamos el cliente pasando la función de lectura de memoria y de red
+	g_client = rc_client_create(read_memory, server_call);
+
+	// Habilitar logs detallados para debug
+	rc_client_enable_logging(g_client, RC_CLIENT_LOG_LEVEL_VERBOSE, log_message);
+
+	// Provide an event handler
+	rc_client_set_event_handler(g_client, event_handler);
+
+	// Hardcore 0 para evitar baneos accidentales durante el desarrollo
+	rc_client_set_hardcore_enabled(g_client, 0);
+
+	LOG_DEBUG("RetroAchievements: Cliente inicializado.");
+}
+
+void Achievements::shutdown() {
+	if (g_client) {
+		rc_client_destroy(g_client);
+		g_client = NULL;
+		reset_menu();
+		LOG_DEBUG("RetroAchievements: Cliente destruido.");
+	}
+}
 
 // --- Threaded methods ---
 DWORD WINAPI ServerThreadFunction(LPVOID lpParam) {
@@ -50,10 +78,10 @@ DWORD WINAPI AchievementTriggeredThread(LPVOID lpParam) {
         msg.title = data->title;
         msg.description = data->description;
         msg.badgeUrl = data->badgeUrl;
-        data->instance->setShouldRefresh(true);
 		int line_height, badgeW, badgeH, badgePad;
 		data->instance->getBadgeSize(badgeW, badgeH, badgePad, line_height);
 		data->instance->download_and_cache_image(data->badgeUrl, msg.badge, badgeW, badgeH);
+		data->instance->setShouldRefresh(true);
         // Bloqueamos el mutex de SDL para añadir a la cola de forma segura
         SDL_mutexP(data->instance->messagesMutex);
         data->instance->pending_messages.push_back(msg);
@@ -76,11 +104,10 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
     if (data->result == RC_OK) {
         // Llamamos a los métodos de la clase a través de la instancia
         data->instance->show_game_placard(data->client);
-        data->instance->show_achievements_menu(data->client);
+        data->instance->updateAchievements(data->client);
         if (ctx->messages) {
             data->instance->send_message(ctx->messages);
         }
-		
     } else {
 		std::string errorMsg = rc_error_str(data->result);
 		LOG_DEBUG("Error al cargar logros del juego: %s", errorMsg.c_str());
@@ -90,37 +117,8 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
     return 0;
 }
 
-
-void Achievements::initialize() {
-	if (g_client) return;
-
-	// Creamos el cliente pasando la función de lectura de memoria y de red
-	g_client = rc_client_create(read_memory, server_call);
-
-	// Habilitar logs detallados para debug
-	rc_client_enable_logging(g_client, RC_CLIENT_LOG_LEVEL_VERBOSE, log_message);
-
-	// Provide an event handler
-	rc_client_set_event_handler(g_client, event_handler);
-
-	// Hardcore 0 para evitar baneos accidentales durante el desarrollo
-	rc_client_set_hardcore_enabled(g_client, 0);
-
-	LOG_DEBUG("RetroAchievements: Cliente inicializado.");
-}
-
-void Achievements::shutdown() {
-	if (g_client) {
-		rc_client_destroy(g_client);
-		g_client = NULL;
-		reset_menu();
-		LOG_DEBUG("RetroAchievements: Cliente destruido.");
-	}
-}
-
 void Achievements::login(const char* username, const char* password) {
 	if (!g_client) initialize();
-
 	LOG_DEBUG("RetroAchievements: Intentando login para %s...", username);
 	rc_client_begin_login_with_password(g_client, username, password, login_callback, this);
 }
@@ -129,12 +127,13 @@ void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string pa
     LoadContext* ctx = new LoadContext();
     ctx->messages = &messagesAchievement;
     ctx->romBuffer = (void*)rom; 
-
 	char romHash[33] = {0};
+	shouldRefresh = true;
+
+#ifdef HAVE_CHD
 	std::string hashStr;
 	std::string lowPath = path;
 	Constant::lowerCase(&lowPath);
-	shouldRefresh = true;
 
 	if (lowPath.find(".chd") != std::string::npos) {
         CHDHashed chdhashed;
@@ -152,9 +151,10 @@ void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string pa
             // Manejar error: No se pudo generar hash del CHD
             delete ctx;
         }
-    } 
+    } else 
+#endif		
 	// CASO NORMAL: ROM en memoria
-	else if (rom != NULL && rom_size > 0) {
+	if (rom != NULL && rom_size > 0) {
         rc_client_begin_identify_and_load_game(g_client, console_id, NULL, rom, rom_size, load_game_callback, (void*)ctx);
     } 
     // CASO: Archivo plano
@@ -320,14 +320,14 @@ void Achievements::reset_menu(){
 
 bool Achievements::refresh_achievements_menu(){
 	if (shouldRefresh){
-		show_achievements_menu(g_client);
+		updateAchievements(g_client);
 		shouldRefresh = false;
 		return true;
 	}
 	return false;
 }
 
-void Achievements::show_achievements_menu(rc_client_t* client)
+void Achievements::updateAchievements(rc_client_t* client)
 {
 	// This will return a list of lists. Each top-level item is an achievement category
 	// (Active Challenge, Unlocked, etc). Empty categories are not returned, so we can
@@ -343,8 +343,9 @@ void Achievements::show_achievements_menu(rc_client_t* client)
 
 	for (unsigned int i = 0; i < list->num_buckets; i++){
 		// Create a header item for the achievement category
-		self.achievements.push_back(AchievementState(list->buckets[i].label, true));
-		LOG_DEBUG("buckets[i]: %s", list->buckets[i].label, true);
+		//std::string bucketTypeLabel = LanguageManager::instance()->get("msg.achievement.bucket.type" + Constant::TipoToStr<int>(list->buckets[i].bucket_type));
+		//self.achievements.push_back(AchievementState(bucketTypeLabel, list->buckets[i].bucket_type));
+		//LOG_DEBUG("buckets[i]: %s", list->buckets[i].label);
 
 		for (unsigned int j = 0; j < list->buckets[i].num_achievements; j++){
 			const rc_client_achievement_t* achievement = list->buckets[i].achievements[j];
@@ -359,21 +360,76 @@ void Achievements::show_achievements_menu(rc_client_t* client)
 			// Determine the "progress" of the achievement. This can also be used to show
 			// locked/unlocked icons and progress bars.
 			if (list->buckets[i].bucket_type == RC_CLIENT_ACHIEVEMENT_BUCKET_UNSUPPORTED)
-				achState.progress = "Unsupported";
+				achState.progress = LanguageManager::instance()->get("msg.achievement.unsopported");
 			else if (achievement->unlocked)
-				achState.progress = "Unlocked";
+				achState.progress = LanguageManager::instance()->get("msg.achievement.unlocked");
 			else if (achievement->measured_percent)
 				achState.progress = achievement->measured_progress;
 			else
-				achState.progress = "Locked";
+				achState.progress = LanguageManager::instance()->get("msg.achievement.locked");
 
 			achState.description = achievement->description;
 			achState.title = achievement->title;
 			achState.points = achievement->points;
+			achState.locked = !achievement->unlocked;
+			achState.sectionType = list->buckets[i].bucket_type;
 			self.achievements.push_back(achState);
 		}
 	}
 	rc_client_destroy_achievement_list(list);
+	self.sortAchievements();
+	self.addSections();
+}
+
+// Función de apoyo para definir el peso de cada sección
+int Achievements::getSectionPriority(uint8_t sectionType) {
+    switch (sectionType) {
+        case 5:  return 0; // Máxima prioridad
+        case 2:  return 1; 
+        case 1:  return 2;
+        default: return 3; // El resto de tipos van al final
+    }
+}
+
+void Achievements::sortAchievements() {
+    // Usamos el objeto comparador en lugar de la lambda
+    std::sort(achievements.begin(), achievements.end(), AchievementComparer());
+}
+
+void Achievements::addSections(){
+	if (achievements.empty()) return;
+
+    // Empezamos desde el final hacia el principio
+    uint8_t currentSection = achievements.back().sectionType;
+
+    for (int i = (int)achievements.size() - 1; i >= 0; i--) {
+        // Si detectamos un cambio de sección o es el primer elemento del vector
+        if (achievements[i].sectionType != currentSection) {
+            // Insertamos la cabecera para la sección que acabamos de terminar de recorrer
+            insertSectionHeader(i + 1, currentSection);
+            
+            // Actualizamos la sección actual
+            currentSection = achievements[i].sectionType;
+        }
+
+        // Caso especial: Si llegamos al índice 0, siempre hay que poner la cabecera de la primera sección
+        if (i == 0) {
+            insertSectionHeader(0, currentSection);
+        }
+    }
+}
+
+// Método auxiliar para no repetir código de inserción
+void Achievements::insertSectionHeader(int index, uint8_t type) {
+    std::string label = LanguageManager::instance()->get("msg.achievement.bucket.type" + Constant::TipoToStr<int>(type));
+    
+    // Creamos un objeto que represente la cabecera (isSection = true)
+    AchievementState header;
+    header.isSection = true;
+    header.title = label;
+    header.sectionType = type;
+    
+    achievements.insert(achievements.begin() + index, header);
 }
 
 void Achievements::server_call(const rc_api_request_t* request,

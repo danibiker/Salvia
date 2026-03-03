@@ -162,7 +162,9 @@ void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
 	Achievements::instance()->doUnload();
 	//Ahora cargamos el juego
 	int system = translateSystemAchievement();
-	Achievements::instance()->load_game((uint8_t *)unzipped.memoryBuffer, unzipped.romsize, unzipped.originalPath, system, messagesAchievement);
+
+	std::string pathToRom = unzipped.extractedPath.empty() ? unzipped.originalPath : unzipped.extractedPath;
+	Achievements::instance()->load_game((uint8_t *)unzipped.memoryBuffer, unzipped.romsize, pathToRom, system, messagesAchievement);
 }
 
 std::string GameMenu::configButtonsJOY(){
@@ -715,34 +717,6 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
     } else {
         string romdir = emu.use_rom_directory ? getPathPrefix(emu.rom_directory) + string(Constant::tempFileSep) : "";
         string romFile = game->longFileName;
-
-        #ifdef DOS
-            //Maybe the long filename support is activated on msdos,
-            //Otherwise just pick up the shortfilename
-            string fileabslongname = encloseWithCharIfSpaces(romdir + game->longFileName, "\"");
-            string msg = "romdir: " + romdir;
-            string msg1;
-            string msg2;
-
-            if (!dir.fileExists( fileabslongname.c_str()  )){
-                romFile = game->shortFileName;
-                msg1 = "file " + game->longFileName + "doesn't exists.";
-                msg2 = "launching " + romFile;
-            } else {
-                msg1 = "launching " + romFile;
-            }
-
-            if (cfgLoader->configMain.debug){
-                clear(screen);
-                TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
-                Constant::drawTextCentre(screen, fontsmall, msg.c_str(), screen->w / 2, screen->h / 2, textColor, -1);
-                Constant::drawTextCentre(screen, fontsmall, msg1.c_str(), screen->w / 2, screen->h / 2 + (fontsmall->face_h + 3) * 2, textColor, -1);
-                Constant::drawTextCentre(screen, fontsmall, msg2.c_str(), screen->w / 2, screen->h / 2 + (fontsmall->face_h + 3) * 3, textColor, -1);
-                Constant::drawTextCentre(screen, fontsmall, "Press a key to continue", screen->w / 2, screen->h / 2 + (fontsmall->face_h + 3) * 4, textColor, -1);
-                readkey();
-            }
-        #endif
-
         string rom = emu.use_extension ? romFile : dir.getFileNameNoExt(romFile);
 
 		#ifdef LIBRETRO
@@ -752,74 +726,28 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
 				commands.emplace_back(romdir + rom);
 				return commands;
 			} else {
-				commands.emplace_back(romdir + rom);
+				#ifdef _XBOX
+					commands.emplace_back(romdir + rom);
+				#else
+					commands.emplace_back(encloseWithCharIfSpaces(romdir + rom, "\"")); 
+				#endif
 			}
 		#else
 			commands.emplace_back(encloseWithCharIfSpaces(romdir + rom, "\"")); 
 		#endif	
     }
 
-    //string romToLaunch = romdir + rom;
-    //if (!dir.fileExists(romToLaunch.c_str())){
-    //    clear_to_color(screen, backgroundColor);
-    //    string msg = "roms doesn't exist: " + romToLaunch; 
-    //    textout_centre_ex(screen, font, msg.c_str(), screen->w / 2, screen->h / 2, textColor, -1);
-    //    textout_centre_ex(screen, font, "Press a key to continue", screen->w / 2, screen->h / 2 + (font->height + 3) * 2, textColor, -1);
-    //    readkey();
-    //    return; // or handle the error as needed
-    //}
-
     if (!emu.options_before_rom){
         commands.emplace_back(emu.global_options);
-        //vector<string> v = Constant::splitChar(emu.global_options, ' ');
-        //for (auto s : v){
-        //    commands.emplace_back(s);
-        //}
     }
 
-    saveGameMenuPos(menuData);
-
-    //For some reason, with Alsa, when launching retroarch, the sound must be deactivated. Otherwise, it freezes
-    bool resetAudio = false;
-    #ifdef UNIX
-        resetAudio = true;
-    #endif
-
+	saveGameMenuPos(menuData);
 	LOG_DEBUG("Launching %s\n", commands.at(0).c_str());
-
 	#ifdef LIBRETRO
 		Launcher launcher;
 		this->running = !launcher.launch(commands, isDebug());
 	#endif
 
-    /**TODO: IMPLEMENT
-	if (cfgLoader->configMain.alsaReset && resetAudio && Constant::getExecMethod() != launch_batch ){
-        remove_sound();
-    }
-
-    //if we are in fullscreen, switch to windowed, because the launched app maybe not 
-    //be showed in the first plane
-    bool isFullscreen = !is_windowed_mode();
-    #ifdef DOS
-        //In MSDOS we don't need to do the fullscreen switch
-        isFullscreen = false;
-    #endif
-
-    if (isFullscreen)
-        swithScreenFullWindow(*this->cfgLoader);
-
-    launcher.launch(commands, cfgLoader->configMain.debug);
-
-    //if we were in fullscreen, switch back to fullscreen
-    if (isFullscreen)
-        swithScreenFullWindow(*this->cfgLoader);
-    
-    //Try to reactivate sound, although it's pointless in my tests. I couldn't make it to work with Alsa.
-    //Install pipewire instead
-    if (cfgLoader->configMain.alsaReset && resetAudio && Constant::getExecMethod() != launch_batch ){
-        this->initSound();
-    }
-	*/
 	return commands;
 }
 
@@ -1214,73 +1142,97 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
 }
 
 void GameMenu::processMessagesAchievements(){
+	const bool achievementEnabled = getCfgLoader()->configMain[cfg::enableAchievements].valueBool;
+	if (!achievementEnabled)
+		return;
+
 	uint32_t currentTicks = SDL_GetTicks();
-	static SDL_Rect lastMessagesArea = {0, 0, 0, 0};
+    // 1. Limpieza visual obligatoria (Borrar rastro del frame anterior)
+    clearLastAchievementArea();
+    // 2. Actualizar estado interno de los logros
+    updateAchievementsState(currentTicks);
+    // 3. Gestión de la cola de mensajes (Expiración y carga)
+    handleMessageQueue(currentTicks);
+    // 4. Renderizado (Si hay mensajes)
+    renderCurrentAchievement();
+}
 
-	if (getEmuStatus() == EMU_STARTED){
-		Achievements::instance()->doFrame();
-		// Revisar si hay mensajes de logros pendientes
-		while (Achievements::instance()->has_pending_messages()) {
-			AchievementState state = Achievements::instance()->pop_message();
-			AchievementMsg msg;
-			msg.type = ACH_UNLOCKED;
-			msg.timeout = 10000;
-			msg.title = state.title;
-			msg.description = state.description;
-			msg.img = state.badgeUrl;
-			msg.badge = state.badge;
-			messagesAchievement.push_back(msg);
-		}
-	} else {
-		static uint32_t lastIdleTick = SDL_GetTicks();
-		if (currentTicks - lastIdleTick > 1000){
-			Achievements::instance()->doIdle();
-			lastIdleTick = currentTicks;
-		}
-	}
-
-	//Solo procesamos uno a la vez
-	if (!messagesAchievement.empty()) {
-		// 1. Accedemos al primer elemento por referencia
-		AchievementMsg &ach = messagesAchievement.front();
-    
-		// 2. Inicializamos el tiempo de inicio si es la primera vez que se muestra
-		if (ach.ticks == 0) {
-			ach.ticks = currentTicks;
-		} 
-		// 3. Comprobamos si ha expirado el mensaje
-		else if (currentTicks - ach.ticks > ach.timeout) {
-			// Liberar la superficie de la imagen (Badge)
-			if (ach.badge != NULL) {
-				SDL_FreeSurface(ach.badge);
-				ach.badge = NULL;
-			}
-			// BORRADO SEGURO: Usamos el iterador al inicio
-			messagesAchievement.erase(messagesAchievement.begin());
-		}
-	}
-
-	// LIMPIEZA: Borrar área del frame anterior
-    if (lastMessagesArea.h > 0) {
+void GameMenu::clearLastAchievementArea() {
+    // Solo limpiamos si el área tiene dimensiones válidas
+    if (lastMessagesArea.w > 0 && lastMessagesArea.h > 0) {
+        // Pintamos un rectángulo del color de fondo (uBkgColor) 
+        // sobre el área que ocupaba el último logro
         SDL_FillRect(this->video_page, &lastMessagesArea, this->uBkgColor);
     }
+}
 
-	if (messagesAchievement.empty()) {
-		lastMessagesArea.x = 0; lastMessagesArea.y = 0;
-        lastMessagesArea.w = 0; lastMessagesArea.h = 0;
-		return;
-	}
+void GameMenu::updateAchievementsState(uint32_t currentTicks) {
+    if (getEmuStatus() == EMU_STARTED) {
+        Achievements::instance()->doFrame();
+        // Load new messages to the list
+        while (Achievements::instance()->has_pending_messages()) {
+            messagesAchievement.push_back(createAchievementMsg(Achievements::instance()->pop_message()));
+        }
+    } else {
+        // 1second logic when we are on the emulator's menu
+        static uint32_t lastIdleTick = 0;
+        if (currentTicks - lastIdleTick > 1000) {
+            Achievements::instance()->doIdle();
+            lastIdleTick = currentTicks;
+        }
+    }
+}
 
-	//Solo dibujamos un logro cada vez
-	AchievementMsg& logro = messagesAchievement.front();
-	if (logro.type == ACH_LOAD_GAME){
-		std::string line1Str = "Loaded " + logro.title;
-		std::string line2Str = Constant::TipoToStr(logro.achvTotal) + " achievements, " + Constant::TipoToStr(logro.scoreTotal) + " points";
-		std::string line3Str = "You have earned " + Constant::TipoToStr(logro.achvUnlocked) + " achievements";
-		showAchievementMessage(line1Str, line2Str, line3Str, logro.badge, lastMessagesArea);
-	} else if (logro.type == ACH_UNLOCKED){
-		showAchievementMessage("Achievement unlocked", logro.title, logro.description, logro.badge, lastMessagesArea);
-	}
+AchievementMsg GameMenu::createAchievementMsg(const AchievementState& state) {
+    AchievementMsg msg;
+    
+    msg.type        = ACH_UNLOCKED;
+    msg.timeout     = 10000;         // 10 segundos por defecto
+    msg.ticks       = 0;             // Importante: 0 para indicar que aún no empezó el timer
+    msg.title       = state.title;
+    msg.description = state.description;
+    msg.img         = state.badgeUrl;
+    msg.badge       = state.badge;   // Pasamos el puntero de la superficie SDL
+    
+    msg.achvTotal    = 0; 
+    msg.scoreTotal   = 0;
+    msg.achvUnlocked = 0;
+
+    return msg;
+}
+
+void GameMenu::handleMessageQueue(uint32_t currentTicks) {
+    if (messagesAchievement.empty()) return;
+
+    AchievementMsg &ach = messagesAchievement.front();
+    
+    if (ach.ticks == 0) {
+        ach.ticks = currentTicks; // Iniciar temporizador
+    } else if (currentTicks - ach.ticks > ach.timeout) {
+        // Limpiar y eliminar el mensaje expirado
+        if (ach.badge) SDL_FreeSurface(ach.badge);
+        messagesAchievement.erase(messagesAchievement.begin());
+    }
+}
+
+void GameMenu::renderCurrentAchievement() {
+    if (messagesAchievement.empty()) {
+		lastMessagesArea.x = 0;
+		lastMessagesArea.y = 0;
+		lastMessagesArea.w = 0;
+		lastMessagesArea.h = 0;
+        return;
+    }
+
+    AchievementMsg& msg = messagesAchievement.front();
+    if (msg.type == ACH_LOAD_GAME) {
+        showAchievementMessage(Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.title"), msg.title.c_str()), 
+							   Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.points"), msg.achvTotal, msg.scoreTotal), 
+							   Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.unlocked"), msg.achvUnlocked), 
+                               msg.badge, lastMessagesArea);
+    } else if (msg.type == ACH_UNLOCKED){
+        showAchievementMessage(LanguageManager::instance()->get("msg.achievement.unlocked.title"), msg.title, msg.description, msg.badge, lastMessagesArea);
+    }
 }
 
 void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str, std::string line3Str, SDL_Surface *badge, SDL_Rect& lastMessagesArea){

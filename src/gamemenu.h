@@ -116,10 +116,9 @@ class GameMenu : public Engine{
 		void setRomPaths(std::string rp);
 		void showSystemMessage(std::string, uint32_t);
 		void showLangSystemMessage(std::string, uint32_t);
-		void showAchievementMessage(std::string, std::string, std::string, SDL_Surface *,SDL_Rect&);
 		void startScrapping();
 		void loadGameAchievements(unzippedFileInfo& unzipped);
-		
+		void showAchievementMessage(std::string line1Str, std::string line2Str, std::string line3Str, SDL_Surface *badge, SDL_Rect& lastMessagesArea);
 
     private:
 		std::vector<Message> messages;
@@ -141,6 +140,7 @@ class GameMenu : public Engine{
 		bool *mustUpdateFps;
         std::map<std::string, Image> menuImages;
         std::map<std::string, TextArea> menuTextAreas;
+		SDL_Rect lastMessagesArea;
 
 		SDL_Surface* clonarPantalla(SDL_Surface*, int);
 		void processMessages();
@@ -154,4 +154,11 @@ class GameMenu : public Engine{
 		void initAchievements();
 		std::string getPathPrefix(std::string);
         std::string encloseWithCharIfSpaces(std::string, std::string);
+		void updateAchievementsState(uint32_t currentTicks);
+		void handleMessageQueue(uint32_t currentTicks);
+		void renderCurrentAchievement();
+		void clearLastAchievementArea();
+		AchievementMsg createAchievementMsg(const AchievementState& state);
+
+		
 };

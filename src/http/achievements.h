@@ -26,8 +26,9 @@ public:
 	bool refresh_achievements_menu();
 	AchievementState pop_message(); 
 	static void show_game_placard(rc_client_t* client);
-	static void show_achievements_menu(rc_client_t* client);
+	static void updateAchievements(rc_client_t* client);
 	static void send_message(std::vector<AchievementMsg>* messages);	
+	static int getSectionPriority(uint8_t sectionType);
 
 	void doUnload(){
 		rc_client_unload_game(g_client);
@@ -88,6 +89,10 @@ private:
     static void login_callback(int result, const char* error_message, rc_client_t* client, void* userdata);
     static void load_game_callback(int result, const char* error_message, rc_client_t* client, void* userdata);
 	static void event_handler(const rc_client_event_t* event, rc_client_t* client);
+	
+	void sortAchievements();
+	void addSections();
+	void insertSectionHeader(int index, uint8_t type);
 };
 
 struct ServerCallData {
@@ -115,4 +120,22 @@ struct AchievementEventData {
     std::string title;
     std::string description;
     std::string badgeUrl;
+};
+
+// Estructura para comparar (Functor)
+struct AchievementComparer {
+    bool operator()(const AchievementState& a, const AchievementState& b) const {
+        // Llamamos al método estático de la clase
+        int prioA = Achievements::getSectionPriority(a.sectionType);
+        int prioB = Achievements::getSectionPriority(b.sectionType);
+
+        if (prioA != prioB) {
+            return prioA < prioB;
+        }
+
+        if (a.locked != b.locked) {
+            return a.locked < b.locked; // Desbloqueados (false) primero
+        }
+        return false;
+    }
 };
