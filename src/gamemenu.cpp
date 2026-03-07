@@ -79,7 +79,6 @@ void GameMenu::initAchievements(){
 	Achievements::instance()->setHardcoreMode(getCfgLoader()->configMain[cfg::hardcoreRA].valueBool);
 	const std::string user = getCfgLoader()->configMain[cfg::raUser].valueStr;
 	const std::string pass = getCfgLoader()->configMain[cfg::raPass].valueStr;
-	Achievements::instance()->initialize();
 	Achievements::instance()->login(user.c_str(), pass.c_str());
 }
 
@@ -955,9 +954,22 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 
 			if (getEmuStatus() == EMU_MENU_OVERLAY && screen){
 				bg_screenshot = clonarPantalla(screen, 180);
+
+				bool forceDownloadAchievements = false;
+				//Si hay mensajes de logros en curso, mostramos el menu de logros
+				if (!messagesAchievement.empty() && messagesAchievement.front().type == ACH_UNLOCKED){
+					Achievements::instance()->setShouldRefresh(true);
+					Achievements::instance()->refresh_achievements_menu();
+					configMenus->setAchievementsAsSelected();
+					configMenus->loadAchievements();
+					configMenus->resetIndexPos();
+					GestorMenus::sDescargarIconosLogros(Achievements::instance());
+					forceDownloadAchievements = true;
+				}
+
 				if (!configMenus->obtenerMenuActual()->opciones.empty()){
 					auto option = configMenus->obtenerMenuActual()->opciones.front();
-					if (option->tipo == OPC_ACHIEVEMENT){
+					if (option->tipo == OPC_ACHIEVEMENT && !forceDownloadAchievements){
 						if (Achievements::instance()->refresh_achievements_menu()){
 							configMenus->loadAchievements();
 						}
@@ -1150,64 +1162,75 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
 }
 
 void GameMenu::renderTrackers() {
+	Achievements* ach = Achievements::instance();
+	SDL_mutexP(ach->trackerMutex); // BLOQUEAR AL INICIO
+
+	std::map<uint32_t, tracker_data>& active_trackers = ach->active_trackers;
+    if (active_trackers.empty()) {
+        SDL_mutexV(ach->trackerMutex);
+        return;
+    }
+
     int yOffset = 10; // Esquina superior derecha es lo estándar
     //this->video_page
-	std::map<uint32_t, tracker_data>& active_trackers = Achievements::instance()->active_trackers;
     std::map<uint32_t, tracker_data>::iterator it;
 	int line_height, badgeW, badgeH, badgePad;
 	Achievements::instance()->getBadgeSize(badgeW, badgeH, badgePad, line_height);
 	const Uint32 uPaleblue = SDL_MapRGB(this->screen->format, paleblue.r, paleblue.g, paleblue.b);
 	
-    for (it = active_trackers.begin(); it != active_trackers.end(); ++it) {
-        // Dibuja el texto it->second.value en pantalla
-        // Ejemplo (pseudocódigo):
-        //drawText(screen, screen->w - 150, yOffset, it->second.value, FONT_WHITE);
-		SDL_Surface *txt = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), it->second.value, white);
-		SDL_Rect txtRect = {screen->w - 150, yOffset, txt->w, line_height};
-		SDL_FillRect(this->video_page, &txtRect, uPaleblue);
-		SDL_BlitSurface(txt, NULL, this->video_page, &txtRect);
-		SDL_FreeSurface(txt);
-        yOffset += 20;
+   for (it = active_trackers.begin(); it != active_trackers.end(); ++it) {
+        // Ahora es seguro recorrer el mapa
+        SDL_Surface *txt = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), it->second.value.c_str(), white);
+        if (txt) {
+            SDL_Rect txtRect = { (Sint16)(screen->w - 150), (Sint16)yOffset, (Uint16)txt->w, (Uint16)txt->h };
+            SDL_BlitSurface(txt, NULL, this->video_page, &txtRect);
+            SDL_FreeSurface(txt);
+            yOffset += 20;
+        }
     }
+    SDL_mutexV(ach->trackerMutex); // LIBERAR AL FINAL
 }
 
 
 void GameMenu::renderChallenges() {
     Achievements* ach = Achievements::instance();
-    std::map<uint32_t, challenge_data>& challenges = ach->active_challenges;
-    if (challenges.empty()) return;
+	// 1. BLOQUEAR SIEMPRE AL PRINCIPIO
+	SDL_mutexP(ach->challengeMutex);
 
+    std::map<uint32_t, challenge_data>& challenges = ach->active_challenges;
+    if (challenges.empty()) {
+		SDL_mutexV(ach->challengeMutex); // LIBERAR ANTES DE SALIR
+		return;
+	}
+
+	
     int badgeW, badgeH, badgePad, line_height;
     ach->getBadgeSize(badgeW, badgeH, badgePad, line_height);
 
-    // 1. Calcular ancho ANTES de borrar (para saber qué área limpiar)
+    // 2. Calcular ancho viejo
     int oldTotalWidth = 0;
     std::map<uint32_t, challenge_data>::iterator it;
     for (it = challenges.begin(); it != challenges.end(); ++it) {
         if (it->second.badge != NULL) oldTotalWidth += badgeW + badgePad;
     }
 
-    // 2. ELIMINACIÓN SEGURA
+    // 3. ELIMINACIÓN (Ahora es automática gracias al destructor del struct)
     it = challenges.begin();
     while (it != challenges.end()) {
         if (!it->second.active) {
-            if (it->second.badge){
-				SDL_FreeSurface(it->second.badge);
-				it->second.badge = NULL;
-			}
             challenges.erase(it++); // Incremento post-fijado para no invalidar
         } else {
             ++it;
         }
     }
 
-    // 3. Calcular NUEVO ancho tras borrar
+    // 4. Calcular NUEVO ancho tras borrar
     int newTotalWidth = 0;
     for (it = challenges.begin(); it != challenges.end(); ++it) {
         if (it->second.badge != NULL) newTotalWidth += badgeW + badgePad;
     }
 
-    // 4. LIMPIEZA: Solo si el área se ha reducido
+    // 5. LIMPIEZA: Solo si el área se ha reducido
     if (newTotalWidth < oldTotalWidth) {
         SDL_Rect cleanRect;
         // El área a limpiar empieza donde termina el nuevo bloque y llega hasta donde terminaba el viejo
@@ -1219,65 +1242,84 @@ void GameMenu::renderChallenges() {
         SDL_FillRect(screen, &cleanRect, this->uBkgColor);
     }
 
-    // 5. RENDERIZADO FINAL (Alineado a la derecha)
+    // 6. RENDERIZADO FINAL (Alineado a la derecha)
     int xPos = screen->w - newTotalWidth - 20;
     int yPos = screen->h - badgeH - 20;
 
     for (it = challenges.begin(); it != challenges.end(); ++it) {
         if (it->second.badge != NULL) {
-            SDL_Rect dest;
-            dest.x = (Sint16)xPos;
-            dest.y = (Sint16)yPos;
-            dest.w = (Uint16)badgeW;
-            dest.h = (Uint16)badgeH;
-
+            SDL_Rect dest = {(Sint16)xPos, (Sint16)yPos, (Uint16)badgeW, (Uint16)badgeH};
             SDL_BlitSurface(it->second.badge, NULL, screen, &dest);
             xPos += badgeW + badgePad;
         }
     }
+
+	SDL_mutexV(ach->challengeMutex);
 }
 
 void GameMenu::renderProgress() {
-	static SDL_Rect bgRect = {0, 0, 0, 0};
-	const int bordeBg = 2;
-	const int txtSep = 3;
-	int badgeW, badgeH, badgePad, line_height;
-	SDL_Surface *txt;
-
+    static SDL_Rect bgRect = {0, 0, 0, 0};
+    const int bordeBg = 2;
+    const int txtSep = 3;
+    int badgeW, badgeH, badgePad, line_height;
+    
     Achievements* ach = Achievements::instance();
-	progress_data& progress = ach->active_progress;
+    SDL_mutexP(ach->progressMutex);
+    
+    progress_data& progress = ach->active_progress;
 
-	if (!progress.active) {
-		if (bgRect.x != 0 && bgRect.y != 0){
-			SDL_FillRect(screen, &bgRect, this->uBkgColor);
-			bgRect.x = 0;
-			bgRect.y = 0;
-		}
-		if (progress.badge != NULL){
-			SDL_FreeSurface(progress.badge);
-			progress.badge = NULL;
-		}
-		return;
-	}
+    if (!progress.active) {
+        // Limpiamos el rastro del último frame dibujado
+        if (bgRect.w != 0) {
+            SDL_FillRect(screen, &bgRect, this->uBkgColor);
+            bgRect.w = 0; // Marcamos como limpio
+        }
+        // El destructor de progress_data se encargará del badge 
+        // cuando el objeto sea modificado o destruido, pero si quieres 
+        // forzar la limpieza ahora:
+        if (progress.badge != NULL) {
+            SDL_FreeSurface(progress.badge);
+            progress.badge = NULL;
+        }
+        SDL_mutexV(ach->progressMutex);
+        return;
+    }
+
     ach->getBadgeSize(badgeW, badgeH, badgePad, line_height);
-	txt = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), progress.measured_progress.c_str(), white);
-	SDL_Rect rect = {0, 0, 0, 0};
-	rect.x = screen->w - txt->w - txtSep - badgeW - 20;
-	rect.y = screen->h - 2 * (badgeH + 25);
-	rect.w = badgeW; 
-	rect.h = badgeH;
+    
+    // Render de texto (Ojo: esto consume CPU cada frame, considera cachearlo)
+    SDL_Surface* txt = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), progress.measured_progress.c_str(), white);
+    if (!txt) {
+        SDL_mutexV(ach->progressMutex);
+        return;
+    }
 
-	bgRect.x = rect.x - bordeBg;
-	bgRect.y = rect.y - bordeBg;
-	bgRect.w = txt->w + rect.w + txtSep + bordeBg * 2;
-	bgRect.h = rect.h + bordeBg * 2;
+    SDL_Rect rect;
+    rect.x = screen->w - txt->w - txtSep - badgeW - 20;
+    rect.y = screen->h - 2 * badgeH - 25;
+    rect.w = badgeW; 
+    rect.h = badgeH;
 
-	DrawRectAlpha(video_page, bgRect, backgroundColor, 190);
-	SDL_BlitSurface(progress.badge, NULL, screen, &rect);
-	SDL_Rect rectTxt = {rect.x + rect.w + txtSep, rect.y + rect.h / 2 - line_height / 2, txt->w, txt->h};
-	rect.w += rectTxt.w + txtSep;
-	SDL_BlitSurface(txt, NULL, screen, &rectTxt);
-	SDL_FreeSurface(txt);
+    // Actualizamos el rectángulo de fondo para el próximo frame
+    bgRect.x = rect.x - bordeBg;
+    bgRect.y = rect.y - bordeBg;
+    bgRect.w = txt->w + rect.w + txtSep + bordeBg * 2;
+    bgRect.h = rect.h + bordeBg * 2;
+
+    DrawRectAlpha(video_page, bgRect, backgroundColor, 190);
+    
+    if (progress.badge) {
+        SDL_BlitSurface(progress.badge, NULL, screen, &rect);
+    }
+
+    SDL_Rect rectTxt = { (Sint16)(rect.x + rect.w + txtSep), 
+                         (Sint16)(rect.y + rect.h / 2 - line_height / 2), 
+                         (Uint16)txt->w, (Uint16)txt->h };
+    
+    SDL_BlitSurface(txt, NULL, screen, &rectTxt);
+    SDL_FreeSurface(txt);
+
+    SDL_mutexV(ach->progressMutex);
 }
 
 void GameMenu::processMessagesAchievements(){
@@ -1287,8 +1329,6 @@ void GameMenu::processMessagesAchievements(){
 	const uint32_t currentTicks = SDL_GetTicks();
     // Actualizar estado interno de los logros
     updateAchievementsState(currentTicks);
-    // Limpieza visual obligatoria (Borrar rastro del frame anterior)
-    clearLastAchievementArea();
     // Gestión de la cola de mensajes (Expiración y carga)
     handleMessageQueue(currentTicks);
     // Renderizado (Si hay mensajes)
@@ -1312,11 +1352,16 @@ void GameMenu::clearLastAchievementArea() {
 
 void GameMenu::updateAchievementsState(uint32_t currentTicks) {
     if (getEmuStatus() == EMU_STARTED) {
-        Achievements::instance()->doFrame();
+		Achievements* ach = Achievements::instance();
+        ach->doFrame();
+		
         // Load new messages to the list
-        while (Achievements::instance()->has_pending_messages()) {
-            messagesAchievement.push_back(createAchievementMsg(Achievements::instance()->pop_message()));
-        }
+		SDL_mutexP(ach->messagesMutex);
+        while (ach->has_pending_messages()) {
+			// createAchievementMsg devuelve un objeto que se "mueve" o copia a la lista
+			messagesAchievement.push_back(createAchievementMsg(ach->pop_message()));
+		}
+		SDL_mutexV(ach->messagesMutex);
     } else {
         // 1second logic when we are on the emulator's menu
         static uint32_t lastIdleTick = 0;
@@ -1327,40 +1372,40 @@ void GameMenu::updateAchievementsState(uint32_t currentTicks) {
     }
 }
 
-AchievementMsg GameMenu::createAchievementMsg(const AchievementState& state) {
+AchievementMsg GameMenu::createAchievementMsg(AchievementState& state) {
     AchievementMsg msg;
-    
-    msg.type        = ACH_UNLOCKED;
+    msg.type        = state.type;
     msg.timeout     = 10000;         // 10 segundos por defecto
     msg.ticks       = 0;             // Importante: 0 para indicar que aún no empezó el timer
     msg.title       = state.title;
     msg.description = state.description;
     msg.img         = state.badgeUrl;
     msg.badge       = state.badge;   // Pasamos el puntero de la superficie SDL
-    
+	state.badge = NULL;				 // El mensaje ahora es el dueño legal de la superficie
     msg.achvTotal    = 0; 
     msg.scoreTotal   = 0;
     msg.achvUnlocked = 0;
-
     return msg;
 }
 
 void GameMenu::handleMessageQueue(uint32_t currentTicks) {
     if (messagesAchievement.empty()) return;
 
+    // Obtenemos referencia al primer mensaje
     AchievementMsg &ach = messagesAchievement.front();
     
     if (ach.ticks == 0) {
         ach.ticks = currentTicks; // Iniciar temporizador
     } else if (currentTicks - ach.ticks > ach.timeout) {
-        // Limpiar y eliminar el mensaje expirado
-        if (ach.badge) SDL_FreeSurface(ach.badge);
-        messagesAchievement.erase(messagesAchievement.begin());
+        // Al hacer pop_front, se llama al DESTRUCTOR de AchievementMsg
+        // y se libera el SDL_Surface automáticamente.
+        messagesAchievement.pop_front();
     }
 }
 
 void GameMenu::renderCurrentAchievement() {
     if (messagesAchievement.empty()) {
+		SDL_FillRect(this->video_page, &lastMessagesArea, this->uBkgColor);
 		lastMessagesArea.x = 0;
 		lastMessagesArea.y = 0;
 		lastMessagesArea.w = 0;
@@ -1375,8 +1420,12 @@ void GameMenu::renderCurrentAchievement() {
 							   Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.unlocked"), msg.achvUnlocked), 
                                msg.badge, lastMessagesArea);
     } else if (msg.type == ACH_UNLOCKED){
+		Achievements::instance()->setShouldRefresh(true);
         showAchievementMessage(LanguageManager::instance()->get("msg.achievement.unlocked.title"), msg.title, msg.description, msg.badge, lastMessagesArea);
+    } else if (msg.type == ACH_WARNING){
+        showAchievementMessage(LanguageManager::instance()->get("msg.achievement.warning.title"), msg.title, msg.description, msg.badge, lastMessagesArea);
     }
+
 }
 
 void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str, std::string line3Str, SDL_Surface *badge, SDL_Rect& lastMessagesArea){
@@ -1400,8 +1449,9 @@ void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str
 	lastMessagesArea.w = maxW + badgeW + badgePad * 3;
 	lastMessagesArea.h = this->video_page->h - maxH - paddingBottom;
 
-	const Uint32 uPaleblue = SDL_MapRGB(this->screen->format, paleblue.r, paleblue.g, paleblue.b);
-	SDL_FillRect(this->video_page, &lastMessagesArea, uPaleblue);
+	//const Uint32 uPaleblue = SDL_MapRGB(this->screen->format, paleblue.r, paleblue.g, paleblue.b);
+	//SDL_FillRect(this->video_page, &lastMessagesArea, uPaleblue);
+	DrawRectAlpha(video_page, lastMessagesArea, black, 230);
 
 	SDL_Rect txtRect = {rect.x + badgePad * 2, maxH, 0, line1->w};
 	SDL_BlitSurface(line1, NULL, this->video_page, &txtRect);

@@ -50,6 +50,10 @@ struct Menu; // Declaración anticipada
 class OpcionSavestate;
 class OpcionBool;
 
+// Definimos un tipo de función que devuelve string y no recibe nada
+typedef std::string (*GestorCallback)(void* instance);
+typedef std::string (*CallbackValue)(void* instance, void* value);
+
 // Clase Base para las opciones del menú
 class Opcion {
 public:
@@ -86,15 +90,7 @@ public:
 	AchievementState achievement;
 
 	OpcionAchievement(AchievementState ach) : Opcion(ach.title, OPC_ACHIEVEMENT) {
-		achievement.locked = ach.locked;
-		achievement.badgeUrl = ach.badgeUrl;
-		achievement.title = ach.title;
-		achievement.description = ach.description;
-		achievement.progress = ach.progress;
-		achievement.isSection = ach.isSection;
-		achievement.isDownloading = ach.isDownloading;
-		achievement.points = ach.points;
-		achievement.badgeName = ach.badgeName;
+		achievement = ach;
 	}
 
 	~OpcionAchievement(){
@@ -125,8 +121,15 @@ public:
 class OpcionBool : public Opcion {
 public:
     bool* valor;
-    OpcionBool(std::string t, bool* v) : Opcion(t, OPC_BOOLEANA), valor(v) {}
+	CallbackValue callback; // Función estática
+    void* context;          // El "this" de GestorMenus
+
+    OpcionBool(std::string t, bool* v) : Opcion(t, OPC_BOOLEANA), valor(v), callback(NULL), context(NULL) {}
+
 	std::string ejecutar() override {
+		if (callback != NULL && valor != NULL) {
+            return callback(context, (void *)valor); 
+        }
         return "";
     }
 };
@@ -153,9 +156,6 @@ public:
         return "";
     }
 };
-
-// Definimos un tipo de función que devuelve string y no recibe nada
-typedef std::string (*GestorCallback)(void* instance);
 
 class OpcionSubMenu : public Opcion {
 public:
@@ -244,12 +244,9 @@ private:
 	Menu* menuAskSavestates;
 	Menu* menuScrapper;
 	Menu* menuAchievements;
-
 	int askNumOptions;
-	int selAchievement;
 
 	CONFIG_STATUS status;
-
 	int marginX;
     int marginY;
     int iniPos;
@@ -269,7 +266,6 @@ private:
 	int scrapGamesSelection;
 
 	int getScreenNumLines();
-	void resetIndexPos();
 	void clearSelectedText();
 	void setLayout(int layout, int screenw, int screenh);
 	void addControlerOptions(Menu*&, int, Joystick *, CfgLoader *);
@@ -306,8 +302,10 @@ public:
     std::string confirmar(t_option_action *);
     // Lógica para volver (Botón B)
     void volver();
+	void resetIndexPos();
     // Método simple para obtener qué dibujar
     Menu* obtenerMenuActual();
+	void setAchievementsAsSelected(){menuActual = menuAchievements;}
 	void draw(SDL_Surface *video_page);
 	void updateButton(int, TipoKey);
 	void updateAxis(int, int);
@@ -354,6 +352,12 @@ public:
     static std::string sDescargarIconosLogros(void* inst) {
         return ((GestorMenus*)inst)->descargarIconosLogro();
     }
+
+	static std::string changeHardcoreMode(void* inst, void *value) {
+		bool sendValue = *((bool *)(value));
+		Achievements::instance()->setHardcoreMode(sendValue);
+		return "";
+	}
 };
 
 template <typename T>

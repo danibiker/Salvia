@@ -50,11 +50,7 @@ int BadgeDownloader::thread_func(void* data) {
         if (hasTask) {
             // Llamamos a la función existente de descarga y escalado
             // Pasamos *targetBadge por referencia para que actualice el puntero original
-            Achievements::instance()->download_and_cache_image(
-				currentTask.achievement->badgeUrl, currentTask.achievement->badgeName, currentTask.achievement->badge, 
-				currentTask.w, currentTask.h
-            );
-			currentTask.achievement->isDownloading = false;
+            Achievements::instance()->download_and_cache_image(currentTask.achievement, currentTask.w, currentTask.h);
         } else {
             SDL_Delay(100); // Descansar si no hay tareas
         }

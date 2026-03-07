@@ -212,3 +212,28 @@ void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest,
     SDL_Rect dstRect = {dst_x, dst_y, dst_w, dst_h};
     SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
 }
+
+void Image::convertirGrises16Bits(SDL_Surface* surface) {
+    if (!surface) return;
+    
+    // Bloquear si es necesario
+    if (SDL_MUSTLOCK(surface)) SDL_LockSurface(surface);
+
+    Uint16* pixels = (Uint16*)surface->pixels;
+    int pixelCount = surface->w * surface->h;
+
+    for (int i = 0; i < pixelCount; i++) {
+        Uint8 r, g, b, a;
+        
+        // SDL_GetRGBA funciona correctamente con 16 bits detectando el formato
+        SDL_GetRGBA(pixels[i], surface->format, &r, &g, &b, &a);
+
+        // Cálculo de luminosidad (Gris)
+        Uint8 v = (Uint8)(0.299f * r + 0.587f * g + 0.114f * b);
+
+        // Volvemos a empaquetar en el formato original de 16 bits
+        pixels[i] = (Uint16)SDL_MapRGBA(surface->format, v, v, v, a);
+    }
+
+    if (SDL_MUSTLOCK(surface)) SDL_UnlockSurface(surface);
+}

@@ -163,7 +163,9 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	//Incluimos un indicador para habilitar logros
 	parentAchievements->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.achievement.enable"), &refConfig->configMain[cfg::enableAchievements].getBoolRef()));
 	//Incluimos un indicador para habilitar el modo hardcore
-	parentAchievements->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.achievement.hardcore"), &refConfig->configMain[cfg::hardcoreRA].getBoolRef()));
+	OpcionBool *opcionHardcore = new OpcionBool(LanguageManager::instance()->get("menu.achievement.hardcore"), &refConfig->configMain[cfg::hardcoreRA].getBoolRef());
+	opcionHardcore->callback = &GestorMenus::changeHardcoreMode;
+	parentAchievements->opciones.push_back(opcionHardcore);
 
 	//Este menu no cuelga de ningun lado, pero ponemos partidas guardadas como padre
 	menuAskSavestates = new Menu(LanguageManager::instance()->get("menu.savestates.title"), menuSavestates);
@@ -599,9 +601,18 @@ void GestorMenus::cambiarValor(int dir) {
 		LOG_DEBUG("cambiando de %s\n", *(b->valor) ? "S" : "N");
         *(b->valor) = !(*(b->valor));
 		LOG_DEBUG("a %s\n",  *(b->valor) ? "S" : "N");
+		b->ejecutar();
     } else if (opt->tipo == OPC_INT) {
 		OpcionInt* i = (OpcionInt*)opt;
-	} 
+	} else if (opt->tipo == OPC_ACHIEVEMENT){
+		for (int i=0; i < this->maxLines -1; i++){
+			if (dir > 0){
+				nextPos();
+			} else {
+				prevPos();
+			}
+		}
+	}
 }
 
 void GestorMenus::resetAskPosition(){
@@ -1095,13 +1106,7 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
         !opcion->achievement.isDownloading && 
         !opcion->achievement.badgeUrl.empty()) {
         opcion->achievement.isDownloading = true; // Marcamos como "en proceso"
-        /*BadgeDownloader::instance().add_to_queue(
-			opcion->achievement.badgeUrl, opcion->achievement.badgeName,
-            &opcion->achievement.badge,
-			imgH, imgH
-        );*/
 		BadgeDownloader::instance().add_to_queue(opcion->achievement, imgH, imgH);
-
     }
 
 	// Dibujar el badge si ya está descargado
@@ -1109,7 +1114,19 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
         SDL_Rect dest;
         dest.x = this->getX() + marginImg; // Ajusta según tu layout
         dest.y = position + marginImg;
-        SDL_BlitSurface(opcion->achievement.badge, NULL, video_page, &dest);
+
+		if (opcion->achievement.badgeLocked == NULL) {
+			opcion->achievement.badgeLocked = SDL_DisplayFormat(opcion->achievement.badge);
+			Image::convertirGrises16Bits(opcion->achievement.badgeLocked);
+		}
+
+		// Elegimos el puntero pre-calculado
+		SDL_Surface *surfaceToDraw = (opcion->achievement.locked) ? 
+                                  opcion->achievement.badgeLocked : 
+                                  opcion->achievement.badge;
+		if (surfaceToDraw) {
+			SDL_BlitSurface(surfaceToDraw, NULL, video_page, &dest);
+		}
     }
 }
 

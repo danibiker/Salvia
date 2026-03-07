@@ -27,6 +27,7 @@ class Image : public Object{
                       int src_x, int src_y, int src_w, int src_h, 
                       int dst_x, int dst_y, int dst_w, int dst_h);
 
+		static void convertirGrises16Bits(SDL_Surface*);
     private:
         string filepath;
         SDL_Surface* img;

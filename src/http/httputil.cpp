@@ -111,7 +111,7 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
 
     outResponse.clear();
 
-	#ifdef DEBUG
+	#ifdef NET_DEBUG
 	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CurlClient::debug_callback);
 	#endif
@@ -172,7 +172,7 @@ bool CurlClient::postUrl(const std::string& url, const std::string& postData, st
 	headers = curl_slist_append(headers, "Accept-Language: en-US,en;q=0.5");
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-	#ifdef DEBUG
+	#ifdef NET_DEBUG
 	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CurlClient::debug_callback);
 	#endif

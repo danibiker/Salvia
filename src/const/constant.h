@@ -90,29 +90,82 @@ struct Message {
 	}
 };
 
-enum ACH_TYPE{ACH_LOAD_GAME, ACH_UNLOCKED};
+enum ACH_TYPE{ACH_LOAD_GAME, ACH_UNLOCKED, ACH_WARNING};
 
 struct AchievementMsg {
-	bool isDownloading;
+    bool isDownloading;
     Uint32 ticks;
     Uint32 timeout;
-	uint32_t achvTotal;
-	uint32_t achvUnlocked;
-	uint32_t scoreTotal;
-	uint32_t scoreUnlocked;
-	std::string title;
-	std::string description;
-	std::string img;
-	SDL_Surface *badge;
-	ACH_TYPE type;
-	
-	AchievementMsg(){
-		ticks = 0;
-		timeout = 0;
-		badge = NULL;
-		type = ACH_LOAD_GAME;
-		isDownloading = false;
-	}
+    uint32_t achvTotal;
+    uint32_t achvUnlocked;
+    uint32_t scoreTotal;
+    uint32_t scoreUnlocked;
+    std::string title;
+    std::string description;
+    std::string img;
+    SDL_Surface *badge;
+    ACH_TYPE type;
+    
+    // Constructor por defecto
+    AchievementMsg() {
+        ticks = 0;
+        timeout = 0;
+        achvTotal = 0;
+        achvUnlocked = 0;
+        scoreTotal = 0;
+        scoreUnlocked = 0;
+        badge = NULL;
+        type = ACH_LOAD_GAME;
+        isDownloading = false;
+    }
+
+    // 1. Destructor: Libera la superficie automáticamente
+    ~AchievementMsg() {
+        liberar();
+    }
+
+    // 2. Constructor de copia: Realiza copia profunda (clona el badge)
+    AchievementMsg(const AchievementMsg& other) {
+        copiarDesde(other);
+    }
+
+    // 3. Operador de asignación: Evita fugas al sobreescribir objetos
+    AchievementMsg& operator=(const AchievementMsg& other) {
+        if (this != &other) {
+            liberar(); // Liberamos lo que teníamos antes
+            copiarDesde(other);
+        }
+        return *this;
+    }
+
+private:
+    void liberar() {
+        if (badge != NULL) {
+            SDL_FreeSurface(badge);
+            badge = NULL;
+        }
+    }
+
+    void copiarDesde(const AchievementMsg& other) {
+        isDownloading = other.isDownloading;
+        ticks = other.ticks;
+        timeout = other.timeout;
+        achvTotal = other.achvTotal;
+        achvUnlocked = other.achvUnlocked;
+        scoreTotal = other.scoreTotal;
+        scoreUnlocked = other.scoreUnlocked;
+        title = other.title;
+        description = other.description;
+        img = other.img;
+        type = other.type;
+
+        // Clonamos la superficie para que cada mensaje sea dueño de su propia memoria
+        if (other.badge != NULL) {
+            badge = SDL_DisplayFormat(other.badge);
+        } else {
+            badge = NULL;
+        }
+    }
 };
 
 struct AchievementState{
@@ -121,25 +174,37 @@ struct AchievementState{
 	bool isSection;
 	uint8_t sectionType;
 	uint32_t points;
+	ACH_TYPE type;
 
 	std::string badgeUrl;
 	std::string badgeName;
 	std::string title;
 	std::string description;
 	std::string progress;
-	SDL_Surface *badge;
-	
+	SDL_Surface *badge;       // Original a color
+	SDL_Surface *badgeLocked; // Versión en gris (caché)
+	uint32_t id;
+	uint32_t gameId;
+
+	AchievementState(){
+		inicializar();
+	}
+
+	~AchievementState() {
+		clear(); // Esto libera las superficies automáticamente al destruir el objeto
+	}
+
 	void inicializar(){
 		badge = NULL;
+		badgeLocked = NULL;
 		locked = false;
 		isDownloading = false;
 		isSection = false;
 		points = 0;
 		sectionType = 0;
-	}
-
-	AchievementState(){
-		inicializar();
+		type = ACH_UNLOCKED;
+		id = 0;
+		gameId = 0;
 	}
 
 	AchievementState(std::string pTitle, uint8_t st){
@@ -148,12 +213,65 @@ struct AchievementState{
 		isSection = true;
 		sectionType = st;
 	}
-	
 	// Metodo para limpiar manualmente
     void clear() {
         if (badge != NULL) {
             SDL_FreeSurface(badge);
             badge = NULL;
+        }
+		if (badgeLocked != NULL) {
+            SDL_FreeSurface(badgeLocked);
+            badgeLocked = NULL;
+        }
+    }
+
+	// 1. Constructor de copia (necesario para pasar por valor)
+    AchievementState(const AchievementState& other) {
+        inicializar();
+        copiarDesde(other);
+    }
+
+    // 2. Operador de asignación (operador =)
+    AchievementState& operator=(const AchievementState& other) {
+        if (this != &other) { // Evitar auto-asignación
+            clear();          // Liberar lo que teníamos antes
+            copiarDesde(other);
+        }
+        return *this;
+    }
+
+	private:
+    // Función auxiliar para centralizar la lógica de copia
+    void copiarDesde(const AchievementState& other) {
+        locked = other.locked;
+        isDownloading = other.isDownloading;
+        isSection = other.isSection;
+        sectionType = other.sectionType;
+        points = other.points;
+        type = other.type;
+        id = other.id;
+        badgeUrl = other.badgeUrl;
+        badgeName = other.badgeName;
+        title = other.title;
+        description = other.description;
+        progress = other.progress;
+		gameId = other.gameId;
+
+		//Pasamos el puntero de las superficies sin hacer copia profunda
+		//badge = other.badge;
+		//badgeLocked = other.badgeLocked;
+
+        // Copia profunda de las superficies SDL
+        if (other.badge != NULL) {
+            badge = SDL_DisplayFormat(other.badge);
+        } else {
+            badge = NULL;
+        }
+
+        if (other.badgeLocked != NULL) {
+            badgeLocked = SDL_DisplayFormat(other.badgeLocked);
+        } else {
+            badgeLocked = NULL;
         }
     }
 };

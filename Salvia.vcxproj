@@ -1482,7 +1482,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN;__x86_64__;HAVE_CHD;$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN;__x86_64__;HAVE_CHD;SQLITE_DEBUG;$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <CompileAs>CompileAsCpp</CompileAs>
       <EnablePREfast>false</EnablePREfast>
@@ -2220,6 +2220,9 @@
   <ItemGroup>
     <ClCompile Include="src\audio\audiobuffer.cpp" />
     <ClCompile Include="src\const\constant.cpp" />
+    <ClCompile Include="src\db\sqlite3.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
+    </ClCompile>
     <ClCompile Include="src\engine.cpp" />
     <ClCompile Include="src\font\fonts.cpp" />
     <ClCompile Include="src\gamemenu.cpp" />
@@ -2430,6 +2433,8 @@
     <ClInclude Include="src\const\cfgconst.h" />
     <ClInclude Include="src\const\constant.h" />
     <ClInclude Include="src\const\menuconst.h" />
+    <ClInclude Include="src\db\sqlite3.h" />
+    <ClInclude Include="src\db\sqlite3ext.h" />
     <ClInclude Include="src\engine.h" />
     <ClInclude Include="src\font\Arimo_Regular.ttf.h" />
     <ClInclude Include="src\font\fonts.h" />
@@ -2459,6 +2464,7 @@
     <ClInclude Include="src\io\video_direct.h" />
     <ClInclude Include="src\libretro\vfs.h" />
     <ClInclude Include="src\menus\gestormenus.h" />
+    <ClInclude Include="src\retroachievements\achievementdb.h" />
     <ClInclude Include="src\so\launcher.h" />
     <ClInclude Include="src\statesram.h" />
     <ClInclude Include="src\uiobjects\image.h" />
