@@ -2,10 +2,10 @@
 #include <string>
 #include <SDL_thread.h>
 #include <SDL.h>
+#include "achievements.h"
 
 struct BadgeDownloadTask {
-    std::string url;
-    SDL_Surface** targetBadge; // Puntero al badge de AchievementState
+	AchievementState *achievement;
 	int w,h;
 };
 
@@ -18,7 +18,7 @@ public:
 
     void start();
     void stop();
-    void add_to_queue(const std::string& url, SDL_Surface** target, int w, int h);
+    void add_to_queue(AchievementState &achievement, int w, int h);
 
 private:
     BadgeDownloader() : thread(NULL), running(false) {

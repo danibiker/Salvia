@@ -238,8 +238,14 @@ void saveState() {
 }
 
 void loadState(){
-    const std::string state_path = Constant::checkPath(getSlotPath(gameMenu->getRomPaths()->savestate, g_currentSlot));
+	cfg::t_cfg_props* cfg = gameMenu->getCfgLoader()->configMain;
 
+	if (cfg[cfg::enableAchievements].valueBool && cfg[cfg::hardcoreRA].valueBool){
+		gameMenu->showLangSystemMessage("msg.error.hardcore.loadstate", 3000);
+		return;
+	}
+
+    const std::string state_path = Constant::checkPath(getSlotPath(gameMenu->getRomPaths()->savestate, g_currentSlot));
     // 1. Obtener el tamaño que espera el núcleo (Core)
     std::size_t core_state_size = retro_serialize_size();
     if (core_state_size == 0) return;
@@ -270,31 +276,28 @@ void loadState(){
         char ra_marker[4];
         uint32_t ra_data_size = 0;
         
+		uint8_t* ra_buffer = NULL;
         // Intentamos leer el marcador "RCHV" y el tamaño de los datos
         if (gzread(file, ra_marker, 4) == 4 && memcmp(ra_marker, "RCHV", 4) == 0) {
             if (gzread(file, &ra_data_size, 4) == 4 && ra_data_size > 0) {
-                
-                void* ra_buffer = malloc(ra_data_size);
-                if (ra_buffer) {
-                    if (gzread(file, ra_buffer, (unsigned)ra_data_size) == (int)ra_data_size) {
-                        // Restauramos el progreso en el cliente de logros
-                        rc_client_t* ra_client = Achievements::instance()->getClient();
-                        if (ra_client) {
-                            rc_client_deserialize_progress(ra_client, (const uint8_t*)ra_buffer);
-                        }
-                    }
-                    free(ra_buffer);
+                ra_buffer = (uint8_t*)malloc(ra_data_size);
+                if (ra_buffer && gzread(file, ra_buffer, (unsigned)ra_data_size) != (int)ra_data_size) {
+					free(ra_buffer);
+                    ra_buffer = NULL;
                 }
             }
-        } else {
-            // Si el archivo no tiene datos de logros (savestate antiguo), reseteamos los triggers
-            // para evitar que salten logros por el cambio repentino de memoria RAM.
-            rc_client_t* ra_client = Achievements::instance()->getClient();
-            if (ra_client) {
-                rc_client_reset(ra_client);
-            }
+        } 
+
+		rc_client_t* ra_client = Achievements::instance()->getClient();
+        if (ra_client) {
+			//When loading a save state that does not have runtime state information, 
+			//rc_client_deserialize_progress should be called with NULL to reset the runtime state.
+            rc_client_deserialize_progress(ra_client, ra_buffer);
         }
-		Achievements::instance()->doReset();
+
+		if (ra_buffer)
+			free(ra_buffer);
+
         gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.state.load") + Constant::TipoToStr(g_currentSlot), 3000);
     } else {
         LOG_ERROR("Error de lectura: El archivo es más pequeño de lo esperado.");

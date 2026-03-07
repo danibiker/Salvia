@@ -152,8 +152,6 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuScrapper = new Menu(LanguageManager::instance()->get("menu.main.scrapper"), menuRaiz);
 	
 	Menu* parentAchievements = new Menu(LanguageManager::instance()->get("menu.achievement.title"), menuRaiz);
-	//Incluimos un indicador para habilitar logros
-	parentAchievements->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.achievement.enable"), &refConfig->configMain[cfg::enableAchievements].getBoolRef()));
 	//Creamos el submenu que contiene la lista de logros
 	const int rowAchHeight = TTF_FontLineSkip(fontMenu) * 2;
 	const int menuAchWidth = this->getW() - marginX;
@@ -162,6 +160,10 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	listaLogros->callback = &GestorMenus::sDescargarIconosLogros;
     listaLogros->context = this;
 	parentAchievements->opciones.push_back(listaLogros);
+	//Incluimos un indicador para habilitar logros
+	parentAchievements->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.achievement.enable"), &refConfig->configMain[cfg::enableAchievements].getBoolRef()));
+	//Incluimos un indicador para habilitar el modo hardcore
+	parentAchievements->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.achievement.hardcore"), &refConfig->configMain[cfg::hardcoreRA].getBoolRef()));
 
 	//Este menu no cuelga de ningun lado, pero ponemos partidas guardadas como padre
 	menuAskSavestates = new Menu(LanguageManager::instance()->get("menu.savestates.title"), menuSavestates);
@@ -188,7 +190,6 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 
     //Poblar Menú Video
 	//Relacion de aspecto
-
 	std::vector<std::string> aspectRates;
 	for (int i=0; i < TOTAL_VIDEO_RATIO; i++){
 		aspectRatioStrings[i] = LanguageManager::instance()->get("menu.aspect.aspect" + Constant::TipoToStr(i));
@@ -205,6 +206,13 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.scale"), filtros, &refConfig->configMain[cfg::scaleMode].getIntRef()));
 	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.forcefs"), &refConfig->configMain[cfg::forceFS].getBoolRef()));
 
+	//Animacion del fondo de pantalla del menu
+	std::vector<std::string> bgMenu;
+	for (int i=0; i < BG_MAX; i++){
+		bgMenu.push_back(LanguageManager::instance()->get("menu.background.anim" + Constant::TipoToStr(i)));
+	}
+	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef()));
+	
 	Menu* menuAssignRetro = new Menu(LanguageManager::instance()->get("menu.options.paddassign"), menuEntrada);
 	Menu* menuAssignFrontend = new Menu(LanguageManager::instance()->get("menu.options.frontassign"), menuEntrada);
 	Menu* menuHotkeys = new Menu(LanguageManager::instance()->get("menu.options.hotkeys"), menuEntrada);
@@ -405,7 +413,6 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
     });
 
 	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.save"), &GestorMenus::guardarCoreConfig, refConfig, this));
-
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.version"), refConfig->configMain[cfg::libretro_core].valueStr + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.extensions"), refConfig->configMain[cfg::libretro_core_extensions].valueStr));
 
@@ -1088,11 +1095,13 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
         !opcion->achievement.isDownloading && 
         !opcion->achievement.badgeUrl.empty()) {
         opcion->achievement.isDownloading = true; // Marcamos como "en proceso"
-        BadgeDownloader::instance().add_to_queue(
-            opcion->achievement.badgeUrl, 
+        /*BadgeDownloader::instance().add_to_queue(
+			opcion->achievement.badgeUrl, opcion->achievement.badgeName,
             &opcion->achievement.badge,
 			imgH, imgH
-        );
+        );*/
+		BadgeDownloader::instance().add_to_queue(opcion->achievement, imgH, imgH);
+
     }
 
 	// Dibujar el badge si ya está descargado

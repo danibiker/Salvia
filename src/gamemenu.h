@@ -145,6 +145,9 @@ class GameMenu : public Engine{
 		SDL_Surface* clonarPantalla(SDL_Surface*, int);
 		void processMessages();
 		void processMessagesAchievements();
+		void renderTrackers();
+		void renderChallenges();
+		void renderProgress();
 		void selectScalerMode(int);
 		void processKeyUp();
 		bool dblBufferEnabled;

@@ -26,9 +26,6 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		// 1. Activar la precisión de 1ms en el reloj de Windows
 		timeBeginPeriod(1);
 		SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
-		// Pantalla completa sin borde. Parece que pantalla completa sin borde es la forma de ejecucion mas rapida
-		//SDL_putenv("SDL_VIDEO_WINDOW_POS=0,0");
-		//video_flags = video_flags | SDL_NOFRAME;
 	#endif
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
@@ -36,6 +33,18 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		LOG_ERROR("Error SDL_Init: %s\n", SDL_GetError());
 		return 1;
     }
+
+
+	#ifdef WIN
+		if (video_fullscreen){
+			const SDL_VideoInfo* info = SDL_GetVideoInfo();
+			video_width = info->current_w;
+			video_height = info->current_h;
+			// Pantalla completa sin borde. Parece que pantalla completa sin borde es la forma de ejecucion mas rapida
+			SDL_putenv("SDL_VIDEO_WINDOW_POS=0,0");
+			video_flags = video_flags | SDL_NOFRAME;
+		}
+	#endif
 
 	screen = SDL_SetVideoMode(video_width, video_height, video_bpp, video_flags);
 

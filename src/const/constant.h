@@ -19,11 +19,14 @@ static const int video_bpp = 16;
 	static int video_width = 1280;
 	static int video_height = 720;
 	static const char *LOG_PATH = "game:\\salvia.log";
+	static bool video_fullscreen = false;
 	#include <xtl.h>
 #elif defined(WIN)
-	static Uint32 video_flags = SDL_SWSURFACE; //SDL_SWSURFACE; //SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN;
+	//static Uint32 video_flags = SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN; //SDL_SWSURFACE; //SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN;
+	static Uint32 video_flags = SDL_SWSURFACE;
 	static int video_width = 1280;
 	static int video_height = 720;
+	static bool video_fullscreen = false;
 	static const char *LOG_PATH = "salvia.log";
 	#include <windows.h>
 #endif
@@ -120,6 +123,7 @@ struct AchievementState{
 	uint32_t points;
 
 	std::string badgeUrl;
+	std::string badgeName;
 	std::string title;
 	std::string description;
 	std::string progress;

@@ -39,6 +39,9 @@
     <Filter Include="Source Files\retroachievements\chdhelper">
       <UniqueIdentifier>{80bc626a-7042-4714-8907-8199420a1edb}</UniqueIdentifier>
     </Filter>
+    <Filter Include="i18n">
+      <UniqueIdentifier>{90a15aba-848c-4278-a6b7-9e67c7c7b953}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\const\constant.cpp">
@@ -442,5 +445,13 @@
     <ClInclude Include="src\http\achievements.h">
       <Filter>Source Files\http</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="DistroWin\assets\i18n\en.ini">
+      <Filter>i18n</Filter>
+    </None>
+    <None Include="DistroWin\assets\i18n\es.ini">
+      <Filter>i18n</Filter>
+    </None>
   </ItemGroup>
 </Project>

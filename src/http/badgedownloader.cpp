@@ -1,5 +1,5 @@
 #include "badgedownloader.h"
-#include "achievements.h" // Para usar tu función download_and_cache_image
+
 
 void BadgeDownloader::start() {
     if (!running) {
@@ -16,17 +16,16 @@ void BadgeDownloader::stop() {
     }
 }
 
-void BadgeDownloader::add_to_queue(const std::string& url, SDL_Surface** target, int w, int h) {
+void BadgeDownloader::add_to_queue(AchievementState &achievement, int w, int h) {
     SDL_LockMutex(queue_mutex);
     
-    // Evitar duplicados: Si ya está en cola o ya tiene imagen, no añadir
-    if (*target != NULL) { 
+	// Evitar duplicados: Si ya está en cola o ya tiene imagen, no añadir
+	if (achievement.badge != NULL) { 
         SDL_UnlockMutex(queue_mutex);
         return; 
     }
     BadgeDownloadTask task;
-    task.url = url;
-    task.targetBadge = target;
+	task.achievement = &achievement;
 	task.w = w;
 	task.h = h;
     queue.push_back(task);
@@ -49,11 +48,13 @@ int BadgeDownloader::thread_func(void* data) {
         SDL_UnlockMutex(self->queue_mutex);
 
         if (hasTask) {
-            // Llamamos a tu función existente de descarga y escalado
+            // Llamamos a la función existente de descarga y escalado
             // Pasamos *targetBadge por referencia para que actualice el puntero original
             Achievements::instance()->download_and_cache_image(
-                currentTask.url, *(currentTask.targetBadge), currentTask.w, currentTask.h
+				currentTask.achievement->badgeUrl, currentTask.achievement->badgeName, currentTask.achievement->badge, 
+				currentTask.w, currentTask.h
             );
+			currentTask.achievement->isDownloading = false;
         } else {
             SDL_Delay(100); // Descansar si no hay tareas
         }

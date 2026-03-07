@@ -15,6 +15,8 @@
 void Achievements::initialize() {
 	if (g_client) return;
 
+	active_progress.badge = NULL;
+
 	// Creamos el cliente pasando la función de lectura de memoria y de red
 	g_client = rc_client_create(read_memory, server_call);
 
@@ -25,7 +27,7 @@ void Achievements::initialize() {
 	rc_client_set_event_handler(g_client, event_handler);
 
 	// Hardcore 0 para evitar baneos accidentales durante el desarrollo
-	rc_client_set_hardcore_enabled(g_client, 0);
+	rc_client_set_hardcore_enabled(g_client, hardcoreMode ? 1 : 0);
 
 	LOG_DEBUG("RetroAchievements: Cliente inicializado.");
 }
@@ -41,79 +43,155 @@ void Achievements::shutdown() {
 
 // --- Threaded methods ---
 DWORD WINAPI ServerThreadFunction(LPVOID lpParam) {
-    ServerCallData* data = (ServerCallData*)lpParam;
+	ServerCallData* data = (ServerCallData*)lpParam;
 
-    CurlClient curlClient;
-    std::string response;
-    float progress = 0;
-    
-    // Ejecutamos la petición
-    bool success = false;
-    if (!data->post_data.empty()) {
-        success = curlClient.postUrl(data->url.c_str(), data->post_data.c_str(), response, &progress);
-    } else {
-        success = curlClient.fetchUrl(data->url.c_str(), response, &progress);
-    }
+	CurlClient curlClient;
+	std::string response;
+	float progress = 0;
 
-    // Preparamos la respuesta para la librería
-    rc_api_server_response_t server_response;
-    memset(&server_response, 0, sizeof(server_response));
-    server_response.body = response.c_str();
-    server_response.body_length = response.length();
-    server_response.http_status_code = success ? 200 : 500;
+	// Ejecutamos la petición
+	bool success = false;
+	if (!data->post_data.empty()) {
+		success = curlClient.postUrl(data->url.c_str(), data->post_data.c_str(), response, &progress);
+	} else {
+		success = curlClient.fetchUrl(data->url.c_str(), response, &progress);
+	}
 
-    // Ejecutamos el callback
-    data->callback(&server_response, data->callback_data);
+	// Preparamos la respuesta para la librería
+	rc_api_server_response_t server_response;
+	memset(&server_response, 0, sizeof(server_response));
+	server_response.body = response.c_str();
+	server_response.body_length = response.length();
+	server_response.http_status_code = success ? 200 : 500;
 
-    // Limpiamos la memoria de la estructura y cerramos
-    delete data;
-    return 0;
+	// Ejecutamos el callback
+	data->callback(&server_response, data->callback_data);
+
+	// Limpiamos la memoria de la estructura y cerramos
+	delete data;
+	return 0;
 }
 
 DWORD WINAPI AchievementTriggeredThread(LPVOID lpParam) {
-    AchievementEventData* data = (AchievementEventData*)lpParam;
-    
-    if (data && data->instance) {
-        AchievementState msg;
-        msg.title = data->title;
-        msg.description = data->description;
-        msg.badgeUrl = data->badgeUrl;
+	AchievementEventData* data = (AchievementEventData*)lpParam;
+	Achievements& self = *Achievements::instance();
+
+	if (data) {
+		AchievementState msg;
+		msg.title = data->title;
+		msg.description = data->description;
+		msg.badgeUrl = data->badgeUrl;
+
 		int line_height, badgeW, badgeH, badgePad;
-		data->instance->getBadgeSize(badgeW, badgeH, badgePad, line_height);
-		data->instance->download_and_cache_image(data->badgeUrl, msg.badge, badgeW, badgeH);
-		data->instance->setShouldRefresh(true);
-        // Bloqueamos el mutex de SDL para añadir a la cola de forma segura
-        SDL_mutexP(data->instance->messagesMutex);
-        data->instance->pending_messages.push_back(msg);
-        SDL_mutexV(data->instance->messagesMutex);
+		self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
+		self.download_and_cache_image(data->badgeUrl, data->badgeName, msg.badge, badgeW, badgeH);
+		self.setShouldRefresh(true);
+		// Bloqueamos el mutex de SDL para añadir a la cola de forma segura
+		SDL_mutexP(self.messagesMutex);
+		self.pending_messages.push_back(msg);
+		SDL_mutexV(self.messagesMutex);
+	}
+
+	delete data;
+	return 0;
+}
+
+void clearBadgeCache(){
+	// 1. Obtener la instancia del Singleton
+	Achievements& self = *Achievements::instance();
+	// Definimos el iterador para el mapa
+    std::map<std::string, SDL_Surface*>::iterator it;
+	LOG_DEBUG("Limpiando cache de badges de tam: %u", self.getBadgeCache().size());
+
+    // Recorremos desde el inicio hasta el final
+    for (it = self.getBadgeCache().begin(); it != self.getBadgeCache().end(); ++it) {
+        // it->first es la clave (string)
+        // it->second es el valor (SDL_Surface*)
+        if (it->second != NULL) {
+            SDL_FreeSurface(it->second);
+			it->second = NULL;
+        }
     }
 
-    delete data;
-    return 0;
+    // ¡Muy importante! Vaciar el mapa después de liberar las superficies
+    self.getBadgeCache().clear();
 }
 
 DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
-    LoadGameThreadData* data = (LoadGameThreadData*)lpParam;
+	LoadGameThreadData* data = (LoadGameThreadData*)lpParam;
 	LoadContext* ctx = static_cast<LoadContext*>(data->userdata);
-	
+	Achievements& self = *Achievements::instance();
+
 	if (ctx->romBuffer) {
 		free(ctx->romBuffer); // LIBERACIÓN SEGURA: La identificación ya terminó
 		ctx->romBuffer = NULL;
 	}
 
-    if (data->result == RC_OK) {
-        // Llamamos a los métodos de la clase a través de la instancia
-        data->instance->show_game_placard(data->client);
-        data->instance->updateAchievements(data->client);
-        if (ctx->messages) {
-            data->instance->send_message(ctx->messages);
-        }
-    } else {
+	int procReq = rc_client_is_processing_required(data->client);
+	if (procReq <= 0 && self.isHardcoreMode()){
+		self.setHardcoreMode(false);
+	}
+
+	if (data->result == RC_OK) {
+		clearBadgeCache();
+		// Llamamos a los métodos de la clase a través de la instancia
+		self.show_game_placard(data->client);
+		self.updateAchievements(data->client);
+		if (ctx->messages) {
+			self.send_message(ctx->messages);
+		}
+	} else {
 		std::string errorMsg = rc_error_str(data->result);
 		LOG_DEBUG("Error al cargar logros del juego: %s", errorMsg.c_str());
-    }
+	}
 	delete ctx; // Liberamos nuestra estructura intermedia
-    delete data;
+	delete data;
+	return 0;
+}
+
+
+
+DWORD WINAPI ChallengeIndicatorThread(LPVOID lpParam) {
+    ChallengeThreadData* data = (ChallengeThreadData*)lpParam;
+    Achievements& self = *Achievements::instance();
+
+    int badgeW, badgeH, badgePad, line_height;
+    self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
+
+    challenge_data c_data;
+    c_data.id = data->id;
+    c_data.active = true;
+    c_data.badge = NULL; // Inicializar por seguridad
+
+    // Operación pesada de red/disco
+    self.download_and_cache_image(data->badgeUrl, data->badgeName, c_data.badge, badgeW, badgeH);
+
+    // Guardar en el mapa (Ojo: si tu mapa no es thread-safe, considera usar un Mutex aquí)
+    self.active_challenges[data->id] = c_data;
+
+    delete data; // Limpiar memoria
+    return 0;
+}
+
+DWORD WINAPI ProgressIndicatorThread(LPVOID lpParam) {
+    ProgressThreadData* data = (ProgressThreadData*)lpParam;
+	Achievements& self = *Achievements::instance();
+    
+    int badgeW, badgeH, badgePad, line_height;
+    self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
+
+    self.active_progress.id = data->id;
+	self.active_progress.measured_progress = data->measured_progress;
+	if (self.active_progress.badge != NULL){
+		SDL_FreeSurface(self.active_progress.badge);
+		self.active_progress.badge = NULL; // Inicializar por seguridad
+	}
+
+    // Operación pesada de red/disco
+    self.download_and_cache_image(data->badgeUrl, data->badgeName, self.active_progress.badge, badgeW, badgeH);
+	self.active_progress.active = true;
+
+    delete data; // Limpiar memoria
     return 0;
 }
 
@@ -124,9 +202,9 @@ void Achievements::login(const char* username, const char* password) {
 }
 
 void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string path, uint32_t console_id, std::vector<AchievementMsg>& messagesAchievement) {
-    LoadContext* ctx = new LoadContext();
-    ctx->messages = &messagesAchievement;
-    ctx->romBuffer = (void*)rom; 
+	LoadContext* ctx = new LoadContext();
+	ctx->messages = &messagesAchievement;
+	ctx->romBuffer = (void*)rom; 
 	char romHash[33] = {0};
 	shouldRefresh = true;
 
@@ -136,33 +214,33 @@ void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string pa
 	Constant::lowerCase(&lowPath);
 
 	if (lowPath.find(".chd") != std::string::npos) {
-        CHDHashed chdhashed;
-        hashStr = chdhashed.GetHash(path, console_id);
+		CHDHashed chdhashed;
+		hashStr = chdhashed.GetHash(path, console_id);
 
-        if (!hashStr.empty()) {
-            // Copiamos el string al array char[33]
-            // strncpy asegura que no nos pasemos del tamaño del buffer
-            strncpy(romHash, hashStr.c_str(), sizeof(romHash) - 1);
-            romHash[32] = '\0'; // Aseguramos el terminador nulo
+		if (!hashStr.empty()) {
+			// Copiamos el string al array char[33]
+			// strncpy asegura que no nos pasemos del tamaño del buffer
+			strncpy(romHash, hashStr.c_str(), sizeof(romHash) - 1);
+			romHash[32] = '\0'; // Aseguramos el terminador nulo
 
-            // IMPORTANTE: Ahora inicias la carga con el hash generado del CHD
-            rc_client_begin_load_game(g_client, romHash, load_game_callback, (void*)ctx);
-        } else {
-            // Manejar error: No se pudo generar hash del CHD
-            delete ctx;
-        }
-    } else 
+			// IMPORTANTE: Ahora inicias la carga con el hash generado del CHD
+			rc_client_begin_load_game(g_client, romHash, load_game_callback, (void*)ctx);
+		} else {
+			// Manejar error: No se pudo generar hash del CHD
+			delete ctx;
+		}
+	} else 
 #endif		
-	// CASO NORMAL: ROM en memoria
-	if (rom != NULL && rom_size > 0) {
-        rc_client_begin_identify_and_load_game(g_client, console_id, NULL, rom, rom_size, load_game_callback, (void*)ctx);
-    } 
-    // CASO: Archivo plano
-    else if (!path.empty()) {
-        if (rc_hash_generate_from_file(romHash, console_id, path.c_str())) {
-            rc_client_begin_load_game(g_client, romHash, load_game_callback, (void*)ctx);
-        }
-    }
+		// CASO NORMAL: ROM en memoria
+		if (rom != NULL && rom_size > 0) {
+			rc_client_begin_identify_and_load_game(g_client, console_id, NULL, rom, rom_size, load_game_callback, (void*)ctx);
+		} 
+		// CASO: Archivo plano
+		else if (!path.empty()) {
+			if (rc_hash_generate_from_file(romHash, console_id, path.c_str())) {
+				rc_client_begin_load_game(g_client, romHash, load_game_callback, (void*)ctx);
+			}
+		}
 }
 
 // --- CALLBACKS ---
@@ -187,81 +265,356 @@ void Achievements::login_callback(int result, const char* error_message, rc_clie
 
 void Achievements::load_game_callback(int result, const char* error_message, rc_client_t* client, void* userdata)
 {
-    // Creamos el paquete de datos
-    LoadGameThreadData* data = new LoadGameThreadData();
-    data->result = result;
-    data->error_message = error_message ? error_message : "";
-    data->client = client;
-    data->userdata = userdata;
+	// Creamos el paquete de datos
+	LoadGameThreadData* data = new LoadGameThreadData();
+	data->result = result;
+	data->error_message = error_message ? error_message : "";
+	data->client = client;
+	data->userdata = userdata;
 
-    // Lanzamos el hilo
-    HANDLE hThread = CreateThread(NULL, 0, LoadGameThreadFunction, (LPVOID)data, 0, NULL);
-    
-    if (hThread) {
-        // En Xbox 360 es buena práctica asignar el hilo a un hardware thread específico
-        //XSetThreadProcessor(hThread, 4); 
-        CloseHandle(hThread);
-    } else {
-        delete data; // Limpieza en caso de error
-    }
+	// Lanzamos el hilo
+	HANDLE hThread = CreateThread(NULL, 0, LoadGameThreadFunction, (LPVOID)data, 0, NULL);
+
+	if (hThread) {
+		// En Xbox 360 es buena práctica asignar el hilo a un hardware thread específico
+		//XSetThreadProcessor(hThread, 4); 
+		CloseHandle(hThread);
+	} else {
+		delete data; // Limpieza en caso de error
+	}
 }
 
 uint32_t Achievements::read_memory(uint32_t address, uint8_t* buffer, uint32_t num_bytes, rc_client_t* client) {
-    Achievements& self = *Achievements::instance();
+	Achievements& self = *Achievements::instance();
 
-    // 1. Rango WRAM (0x000000 - 0x01FFFF)
-    if (address < 0x020000) {
-        if (self.wram_ptr && (address + num_bytes) <= self.wram_size) {
-            memcpy(buffer, self.wram_ptr + address, num_bytes);
-            return num_bytes;
-        }
-    }
-    // 2. Rango SRAM / Chips especiales (0x020000 en adelante)
-    // RA mapea la SRAM justo después de la WRAM en SNES
-    else if (address >= 0x020000) {
-        uint32_t sram_address = address - 0x020000;
-        if (self.sram_ptr && (sram_address + num_bytes) <= self.sram_size) {
-            memcpy(buffer, self.sram_ptr + sram_address, num_bytes);
-            return num_bytes;
-        }
-    }
-    return 0; 
+	// 1. Rango WRAM (0x000000 - 0x01FFFF)
+	if (address < 0x020000) {
+		if (self.wram_ptr && (address + num_bytes) <= self.wram_size) {
+			memcpy(buffer, self.wram_ptr + address, num_bytes);
+			return num_bytes;
+		}
+	}
+	// 2. Rango SRAM / Chips especiales (0x020000 en adelante)
+	// RA mapea la SRAM justo después de la WRAM en SNES
+	else if (address >= 0x020000) {
+		uint32_t sram_address = address - 0x020000;
+		if (self.sram_ptr && (sram_address + num_bytes) <= self.sram_size) {
+			memcpy(buffer, self.sram_ptr + sram_address, num_bytes);
+			return num_bytes;
+		}
+	}
+	return 0; 
 }
 
 void Achievements::log_message(const char* message, const rc_client_t* client) {
 	LOG_DEBUG("[rcheevos] %s", message);
 }
 
-void Achievements::event_handler(const rc_client_event_t* event, rc_client_t* client) {
-    Achievements* self = Achievements::instance();
+void Achievements::leaderboard_started(const rc_client_leaderboard_t* leaderboard)
+{
+	LOG_DEBUG("Leaderboard attempt started: %s - %s", leaderboard->title, leaderboard->description);
+}
 
-    if (event->type == RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED) {
-		// Creamos y rellenamos la estructura con copias de los strings
-        AchievementEventData* data = new AchievementEventData();
-        data->instance = self;
-        data->title = event->achievement->title ? event->achievement->title : "";
-        data->description = event->achievement->description ? event->achievement->description : "";
-        data->badgeUrl = event->achievement->badge_url ? event->achievement->badge_url : "";
+void Achievements::leaderboard_failed(const rc_client_leaderboard_t* leaderboard)
+{
+	LOG_DEBUG("Leaderboard attempt failed: %s", leaderboard->title);
+}
 
-        // Lanzamos el hilo
-        HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, 0, NULL);
-        if (hThread) {
-            CloseHandle(hThread);
-        } else {
-            delete data;
-        }
-    } else if (event->type == RC_CLIENT_EVENT_SERVER_ERROR) {
-		std::string error_message = "Error RA: " + std::string(event->server_error->error_message);
-		LOG_DEBUG("RetroAchievements game event failed: %s", error_message.c_str());
+void Achievements::leaderboard_submitted(const rc_client_leaderboard_t* leaderboard)
+{
+	LOG_DEBUG("Submitted %s for %s", leaderboard->tracker_value, leaderboard->title);
+	Achievements& self = *Achievements::instance();
+	AchievementState msg;
+	msg.title = leaderboard->title;
+	msg.description = leaderboard->tracker_value;
+	// Bloqueamos el mutex de SDL para añadir a la cola de forma segura
+	SDL_mutexP(self.messagesMutex);
+	self.pending_messages.push_back(msg);
+	SDL_mutexV(self.messagesMutex);
+}
+
+void Achievements::leaderboard_tracker_update(const rc_client_leaderboard_tracker_t* tracker)
+{
+	Achievements& self = *Achievements::instance();
+	// Find the currently visible tracker by ID and update what's being displayed.
+	tracker_data* data = self.find_tracker(tracker->id);
+	if (data){
+		// The display text buffer is guaranteed to live for as long as the game is loaded,
+		// but it may be updated in a non-thread safe manner within rc_client_do_frame, so
+		// we create a copy for the rendering code to read.
+		strcpy(data->value, tracker->display);
+	}
+}
+
+void Achievements::leaderboard_tracker_show(const rc_client_leaderboard_tracker_t* tracker)
+{
+	Achievements& self = *Achievements::instance();
+	// The actual implementation of converting an rc_client_leaderboard_tracker_t to
+	// an on-screen widget is going to be client-specific. The provided tracker object
+	// has a unique identifier for the tracker and a string to be displayed on-screen.
+	// The string should be displayed using a fixed-width font to eliminate jittering
+	// when timers are updated several times a second.
+	self.create_tracker(tracker->id, tracker->display);
+}
+
+void Achievements::leaderboard_tracker_hide(const rc_client_leaderboard_tracker_t* tracker)
+{
+	Achievements& self = *Achievements::instance();
+	// This tracker is no longer needed
+	self.destroy_tracker(tracker->id);
+}
+
+void Achievements::create_tracker(uint32_t id, const char* display) {
+	tracker_data data;
+	data.id = id;
+	strncpy(data.value, display, 63);
+	data.active = true;
+	active_trackers[id] = data;
+	LOG_DEBUG("Tracker creado: %d - %s", id, display);
+}
+
+void Achievements::destroy_tracker(uint32_t id) {
+	active_trackers.erase(id);
+	LOG_DEBUG("Tracker eliminado: %d", id);
+}
+
+tracker_data* Achievements::find_tracker(uint32_t id) {
+	if (active_trackers.count(id))
+		return &active_trackers[id];
+	return NULL;
+}
+
+void Achievements::challenge_indicator_show(const rc_client_achievement_t* achievement)
+{
+	if (!achievement) return;
+
+	Achievements& self = *Achievements::instance();
+	LOG_DEBUG("Showing challenge: %d - %s", achievement->id, achievement->title);
+    // Reservamos memoria para los datos que usará el hilo
+    ChallengeThreadData* data = new ChallengeThreadData();
+    data->id = achievement->id;
+	data->badgeName = achievement->badge_name; 
+    data->badgeUrl = achievement->badge_url;
+
+    // Lanzamos el hilo de Windows
+    HANDLE hThread = CreateThread(NULL, 0, ChallengeIndicatorThread, (LPVOID)data, 0, NULL);
+    
+    if (hThread) {
+        CloseHandle(hThread); // No necesitamos trackearlo, se cerrará al terminar
+    } else {
+        delete data; // Si falla el hilo, limpiamos para evitar leak
     }
 }
 
+void Achievements::challenge_indicator_hide(const rc_client_achievement_t* achievement)
+{
+  // This indicator is no longer needed
+	Achievements* self = Achievements::instance();
+	self->active_challenges[achievement->id].active = false;
+}
+
+void Achievements::progress_indicator_update(const rc_client_achievement_t* achievement)
+{
+	if (!achievement) return;
+
+	LOG_DEBUG("Updating progress: %d - %s", achievement->id, achievement->title);
+    // Reservamos memoria para los datos que usará el hilo
+    ProgressThreadData* data = new ProgressThreadData();
+    data->id = achievement->id;
+	data->measured_progress = achievement->measured_progress;
+	data->badgeName = achievement->badge_name;
+	data->badgeUrl = achievement->badge_url;
+
+    // Lanzamos el hilo de Windows
+    HANDLE hThread = CreateThread(NULL, 0, ProgressIndicatorThread, (LPVOID)data, 0, NULL);
+    
+    if (hThread) {
+        CloseHandle(hThread); // No necesitamos trackearlo, se cerrará al terminar
+    } else {
+        delete data; // Si falla el hilo, limpiamos para evitar leak
+    }
+}
+
+void Achievements::progress_indicator_show(const rc_client_achievement_t* achievement)
+{
+  // The SHOW event tells us the indicator was not visible, but should be now.
+  // To reduce duplicate code, we just update the non-visible indicator, then show it.
+  progress_indicator_update(achievement);
+}
+
+void Achievements::progress_indicator_hide(void)
+{
+	Achievements* self = Achievements::instance();
+	self->active_progress.active = false;
+}
+
+std::string Achievements::format_total_playtime(){
+	//Not yet implemented
+	return "";
+}
+
+void Achievements::game_mastered(void)
+{
+	char message[128], submessage[128];
+	Achievements* self = Achievements::instance();
+	const rc_client_game_t* game = rc_client_get_game_info(self->g_client);
+
+	snprintf(message, sizeof(message), "%s %s", 
+      rc_client_get_hardcore_enabled(self->g_client) ? LanguageManager::instance()->get("menu.achievement.mastered") : LanguageManager::instance()->get("menu.achievement.completed"),
+      game->title);
+
+	/*snprintf(submessage, sizeof(submessage), "%s (%s)",
+      rc_client_get_user_info(self->g_client)->display_name,
+      format_total_playtime().c_str());
+	  */
+	snprintf(submessage, sizeof(submessage), "%s",
+      rc_client_get_user_info(self->g_client)->display_name);
+  
+    // Creamos y rellenamos la estructura con copias de los strings
+	AchievementEventData* data = new AchievementEventData();
+	data->title = message;
+	data->description = submessage;
+	data->badgeUrl = game->badge_url;
+	data->badgeName = game->badge_name;
+
+	// Lanzamos el hilo
+	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, 0, NULL);
+	if (hThread) {
+		CloseHandle(hThread);
+	} else {
+		delete data;
+	}
+}
+
+void Achievements::subset_completed(const rc_client_subset_t* subset)
+{
+	char message[128], submessage[128];
+	Achievements* self = Achievements::instance();
+
+	snprintf(message, sizeof(message), "%s %s", 
+      rc_client_get_hardcore_enabled(self->g_client) ? LanguageManager::instance()->get("menu.achievement.mastered") : LanguageManager::instance()->get("menu.achievement.completed"),
+      subset->title);
+
+	/*snprintf(submessage, sizeof(submessage), "%s (%s)",
+      rc_client_get_user_info(self->g_client)->display_name,
+      format_total_playtime().c_str());
+	  */
+	snprintf(submessage, sizeof(submessage), "%s",
+      rc_client_get_user_info(self->g_client)->display_name);
+  
+    // Creamos y rellenamos la estructura con copias de los strings
+	AchievementEventData* data = new AchievementEventData();
+	data->title = message;
+	data->description = submessage;
+	data->badgeUrl = subset->badge_url;
+	data->badgeName = subset->badge_name;
+
+	// Lanzamos el hilo
+	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, 0, NULL);
+	if (hThread) {
+		CloseHandle(hThread);
+	} else {
+		delete data;
+	}
+}
+
+void Achievements::server_error(const rc_client_server_error_t* error)
+{
+	char buffer[256];
+	Achievements* self = Achievements::instance();
+
+	snprintf(buffer, sizeof(buffer), "%s: %s", error->api, error->error_message);
+	LOG_DEBUG("RetroAchievements game event failed: %s", buffer);
+  
+	AchievementState msg;
+	msg.title = error->api;
+	msg.description = error->error_message;
+	// Bloqueamos el mutex de SDL para añadir a la cola de forma segura
+	SDL_mutexP(self->messagesMutex);
+	self->pending_messages.push_back(msg);
+	SDL_mutexV(self->messagesMutex);
+
+}
+
+
+void Achievements::event_handler(const rc_client_event_t* event, rc_client_t* client) {
+	Achievements* self = Achievements::instance();
+
+	switch (event->type){
+		case RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED:{
+			// Creamos y rellenamos la estructura con copias de los strings
+			AchievementEventData* data = new AchievementEventData();
+			data->title = event->achievement->title ? event->achievement->title : "";
+			data->description = event->achievement->description ? event->achievement->description : "";
+			data->badgeUrl = event->achievement->badge_url ? event->achievement->badge_url : "";
+			data->badgeName = event->achievement->badge_name ? event->achievement->badge_name : "";
+
+			// Lanzamos el hilo
+			HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, 0, NULL);
+			if (hThread) {
+				CloseHandle(hThread);
+			} else {
+				delete data;
+			}
+			break;								 
+		}
+		case RC_CLIENT_EVENT_LEADERBOARD_STARTED:
+			Achievements::leaderboard_started(event->leaderboard);
+			break;
+		case RC_CLIENT_EVENT_LEADERBOARD_FAILED:
+			Achievements::leaderboard_failed(event->leaderboard);
+			break;
+		case RC_CLIENT_EVENT_LEADERBOARD_SUBMITTED:
+			Achievements::leaderboard_submitted(event->leaderboard);
+			break;
+		case RC_CLIENT_EVENT_LEADERBOARD_TRACKER_UPDATE:
+			leaderboard_tracker_update(event->leaderboard_tracker);
+			break;
+		case RC_CLIENT_EVENT_LEADERBOARD_TRACKER_SHOW:
+			leaderboard_tracker_show(event->leaderboard_tracker);
+			break;
+		case RC_CLIENT_EVENT_LEADERBOARD_TRACKER_HIDE:
+			leaderboard_tracker_hide(event->leaderboard_tracker);
+			break;
+		case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_SHOW:
+			challenge_indicator_show(event->achievement);
+			break;
+		case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_HIDE:
+			challenge_indicator_hide(event->achievement);
+			break;
+		case RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_SHOW:
+			progress_indicator_show(event->achievement);
+			break;
+		case RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_UPDATE:
+			progress_indicator_update(event->achievement);
+			break;
+		case RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_HIDE:
+			progress_indicator_hide();
+			break;
+		case RC_CLIENT_EVENT_GAME_COMPLETED:
+			game_mastered();
+			break;
+		case RC_CLIENT_EVENT_SUBSET_COMPLETED:
+			subset_completed(event->subset);
+			break;
+		case RC_CLIENT_EVENT_RESET:
+			self->doReset();
+			break;
+		case RC_CLIENT_EVENT_SERVER_ERROR:
+			server_error(event->server_error);
+			break;
+		default:
+			LOG_DEBUG("achievement event not processed: %d", event->type);
+			break;
+	}
+}
+
 AchievementState Achievements::pop_message() {
-    if (pending_messages.empty()) return AchievementState(); // Devuelve un objeto con valores por defecto (badge=NULL, etc.)
-    // Obtenemos el primero, lo borramos y lo devolvemos
-    AchievementState msg = pending_messages.front();
-    pending_messages.erase(pending_messages.begin());
-    return msg;
+	if (pending_messages.empty()) return AchievementState(); // Devuelve un objeto con valores por defecto (badge=NULL, etc.)
+	// Obtenemos el primero, lo borramos y lo devolvemos
+	AchievementState msg = pending_messages.front();
+	pending_messages.erase(pending_messages.begin());
+	return msg;
 }
 
 void Achievements::send_message(std::vector<AchievementMsg>* messages){
@@ -277,7 +630,7 @@ void Achievements::send_message(std::vector<AchievementMsg>* messages){
 
 	int line_height, badgeW, badgeH, badgePad;
 	Achievements::instance()->getBadgeSize(badgeW, badgeH, badgePad, line_height);
-	Achievements::instance()->download_and_cache_image(msg.img, msg.badge, badgeW, badgeH);
+	Achievements::instance()->download_and_cache_image(msg.img, Achievements::instance()->getGameBadge(), msg.badge, badgeW, badgeH);
 	messages->push_back(msg);
 }
 
@@ -356,7 +709,8 @@ void Achievements::updateAchievements(rc_client_t* client)
 			//snprintf(achievement_badge, sizeof(achievement_badge), "ach_%s%s.png", achievement->badge_name, 
 			//         (state == RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED) ? "" : "_lock");
 
-			achState.badgeUrl = (achievement->state == RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED) ? achievement->badge_url : achievement->badge_locked_url;
+			//achState.badgeUrl = (achievement->state == RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED) ? achievement->badge_url : achievement->badge_locked_url;
+			achState.badgeUrl = achievement->badge_url;
 			// Determine the "progress" of the achievement. This can also be used to show
 			// locked/unlocked icons and progress bars.
 			if (list->buckets[i].bucket_type == RC_CLIENT_ACHIEVEMENT_BUCKET_UNSUPPORTED)
@@ -370,10 +724,19 @@ void Achievements::updateAchievements(rc_client_t* client)
 
 			achState.description = achievement->description;
 			achState.title = achievement->title;
+			achState.badgeName = achievement->badge_name;
 			achState.points = achievement->points;
 			achState.locked = !achievement->unlocked;
 			achState.sectionType = list->buckets[i].bucket_type;
 			self.achievements.push_back(achState);
+
+			/**
+				//For debug purposes
+				if (j==1){
+				rc_client_achievement_t achievementTmp = *(rc_client_achievement_t*) achievement;
+				strcpy(achievementTmp.measured_progress, "2/5");
+				progress_indicator_show(&achievementTmp);
+			}*/
 		}
 	}
 	rc_client_destroy_achievement_list(list);
@@ -383,110 +746,138 @@ void Achievements::updateAchievements(rc_client_t* client)
 
 // Función de apoyo para definir el peso de cada sección
 int Achievements::getSectionPriority(uint8_t sectionType) {
-    switch (sectionType) {
-        case 5:  return 0; // Máxima prioridad
-        case 2:  return 1; 
-        case 1:  return 2;
-        default: return 3; // El resto de tipos van al final
-    }
+	switch (sectionType) {
+	case 5:  return 0; // Máxima prioridad
+	case 2:  return 1; 
+	case 1:  return 2;
+	default: return 3; // El resto de tipos van al final
+	}
 }
 
 void Achievements::sortAchievements() {
-    // Usamos el objeto comparador en lugar de la lambda
-    std::sort(achievements.begin(), achievements.end(), AchievementComparer());
+	// Usamos el objeto comparador en lugar de la lambda
+	std::sort(achievements.begin(), achievements.end(), AchievementComparer());
 }
 
 void Achievements::addSections(){
 	if (achievements.empty()) return;
 
-    // Empezamos desde el final hacia el principio
-    uint8_t currentSection = achievements.back().sectionType;
+	// Empezamos desde el final hacia el principio
+	uint8_t currentSection = achievements.back().sectionType;
 
-    for (int i = (int)achievements.size() - 1; i >= 0; i--) {
-        // Si detectamos un cambio de sección o es el primer elemento del vector
-        if (achievements[i].sectionType != currentSection) {
-            // Insertamos la cabecera para la sección que acabamos de terminar de recorrer
-            insertSectionHeader(i + 1, currentSection);
-            
-            // Actualizamos la sección actual
-            currentSection = achievements[i].sectionType;
-        }
+	for (int i = (int)achievements.size() - 1; i >= 0; i--) {
+		// Si detectamos un cambio de sección o es el primer elemento del vector
+		if (achievements[i].sectionType != currentSection) {
+			// Insertamos la cabecera para la sección que acabamos de terminar de recorrer
+			insertSectionHeader(i + 1, currentSection);
 
-        // Caso especial: Si llegamos al índice 0, siempre hay que poner la cabecera de la primera sección
-        if (i == 0) {
-            insertSectionHeader(0, currentSection);
-        }
-    }
+			// Actualizamos la sección actual
+			currentSection = achievements[i].sectionType;
+		}
+
+		// Caso especial: Si llegamos al índice 0, siempre hay que poner la cabecera de la primera sección
+		if (i == 0) {
+			insertSectionHeader(0, currentSection);
+		}
+	}
 }
 
 // Método auxiliar para no repetir código de inserción
 void Achievements::insertSectionHeader(int index, uint8_t type) {
-    std::string label = LanguageManager::instance()->get("msg.achievement.bucket.type" + Constant::TipoToStr<int>(type));
-    
-    // Creamos un objeto que represente la cabecera (isSection = true)
-    AchievementState header;
-    header.isSection = true;
-    header.title = label;
-    header.sectionType = type;
-    
-    achievements.insert(achievements.begin() + index, header);
+	std::string label = LanguageManager::instance()->get("msg.achievement.bucket.type" + Constant::TipoToStr<int>(type));
+
+	// Creamos un objeto que represente la cabecera (isSection = true)
+	AchievementState header;
+	header.isSection = true;
+	header.title = label;
+	header.sectionType = type;
+
+	achievements.insert(achievements.begin() + index, header);
 }
 
 void Achievements::server_call(const rc_api_request_t* request,
-    rc_client_server_callback_t callback, void* callback_data, rc_client_t* client) {
+	rc_client_server_callback_t callback, void* callback_data, rc_client_t* client) {
 
-    // Reservamos memoria para los datos que usará el hilo
-    ServerCallData* data = new ServerCallData();
-    data->url = request->url ? request->url : "";
-    data->post_data = request->post_data ? request->post_data : "";
-    data->callback = callback;
-    data->callback_data = callback_data;
+		// Reservamos memoria para los datos que usará el hilo
+		ServerCallData* data = new ServerCallData();
+		data->url = request->url ? request->url : "";
+		data->post_data = request->post_data ? request->post_data : "";
+		data->callback = callback;
+		data->callback_data = callback_data;
 
-    // Creamos el hilo
-    HANDLE hThread = CreateThread(NULL, 0, ServerThreadFunction, (LPVOID)data, 0, NULL);
-    
-    if (hThread == NULL) {
-        // Si falla la creación, limpiar y llamar al callback con error
-        delete data;
-    } else {
-        // Cerramos el handle porque no necesitamos esperar por él (el hilo se limpia solo)
-        CloseHandle(hThread);
-    }
+		// Creamos el hilo
+		HANDLE hThread = CreateThread(NULL, 0, ServerThreadFunction, (LPVOID)data, 0, NULL);
+
+		if (hThread == NULL) {
+			// Si falla la creación, limpiar y llamar al callback con error
+			delete data;
+		} else {
+			// Cerramos el handle porque no necesitamos esperar por él (el hilo se limpia solo)
+			CloseHandle(hThread);
+		}
 }
 
 /**
 *
 */
-void Achievements::download_and_cache_image(std::string url, SDL_Surface*& image, int badgeW, int badgeH){
-	CurlClient curlClient;
-	std::string response;
-	float progress = 0;
+void Achievements::download_and_cache_image(std::string url, std::string name, SDL_Surface*& image, int badgeW, int badgeH) {
+    // 1. Verificar si el nombre es válido
+    if (name.empty()) 
+		return;
 
-	if (curlClient.fetchUrl(url, response, &progress)){
-		// Creamos un SDL_RWops que apunte a la memoria del string
-		SDL_RWops* rw = SDL_RWFromMem((void*)response.data(), (int)response.size());
-		if (rw) {
+    // 2. Buscar en caché
+    std::map<std::string, SDL_Surface*>::iterator it = badgeCache.find(name);
+    if (it != badgeCache.end()) {
+		if (image != NULL){
+			SDL_FreeSurface(image);
+		}
+        image = SDL_DisplayFormat(it->second);
+        return;
+    }
+
+    // 3. Si no está en caché, descargar
+    CurlClient curlClient;
+    std::string response;
+    float progress = 0;
+
+    if (curlClient.fetchUrl(url, response, &progress)) {
+        SDL_RWops* rw = SDL_RWFromMem((void*)response.data(), (int)response.size());
+        if (!rw) return;
+
+        // IMG_Load_RW con 1 cierra el rw automáticamente
+        SDL_Surface *rawImg = IMG_Load_RW(rw, 1); 
+        if (!rawImg) return;
+
+        SDL_Surface* finalSurface = NULL;
+
+        // 4. Procesar: Escalar o convertir formato
+        if (badgeW == 0 || badgeH == 0) {
+            finalSurface = SDL_DisplayFormat(rawImg);
+        } else {
+            double zoomX = (double)badgeW / rawImg->w;
+            double zoomY = (double)badgeH / rawImg->h;
+            SDL_Surface* zoomed = rotozoomSurfaceXY(rawImg, 0, zoomX, zoomY, SMOOTHING_ON);
+            if (zoomed) {
+                finalSurface = SDL_DisplayFormat(zoomed);
+                SDL_FreeSurface(zoomed);
+            }
+        }
+
+        // 5. Limpieza de la imagen original
+        SDL_FreeSurface(rawImg);
+
+        // 6. GUARDADO CRÍTICO EN CACHÉ
+        if (finalSurface != NULL) {
+            // Guardamos en el mapa para futuras llamadas
+            badgeCache.insert(std::make_pair(name, finalSurface));
+            
 			if (image != NULL){
 				SDL_FreeSurface(image);
-				image = NULL;
 			}
-			// Cargamos la superficie (esto detecta si es PNG o JPG automáticamente)
-			SDL_Surface *rawImg = IMG_Load_RW(rw, 0); // 1 = cierra el rw automáticamente
-
-			if (badgeW == 0 || badgeH == 0){
-				image = SDL_DisplayFormat(rawImg);
-				SDL_FreeSurface(rawImg);
-			} else {
-				// Escalar
-				double zoomX = (double)badgeW / rawImg->w;
-				double zoomY = (double)badgeH / rawImg->h;
-				SDL_Surface* zoomedSurface = rotozoomSurfaceXY(rawImg, 0, zoomX, zoomY, SMOOTHING_ON);
-				SDL_FreeSurface(rawImg);
-				image = SDL_DisplayFormat(zoomedSurface);
-				SDL_FreeSurface(zoomedSurface);
-			}
-		}
-	}
+            // Actualizamos el puntero de salida
+            image = SDL_DisplayFormat(finalSurface);
+        }
+    }
 }
 
 void Achievements::getBadgeSize(int &w, int &h, int &badgePad, int &line_height){

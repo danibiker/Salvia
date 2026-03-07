@@ -1,9 +1,33 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <map>
 #include <rc_client.h>
 #include <const/constant.h>
 #include <font/fonts.h>
+
+#if defined(_MSC_VER) && _MSC_VER < 1900
+#define snprintf _snprintf
+#endif
+
+struct tracker_data {
+    uint32_t id;
+    char value[64];
+    bool active;
+};
+
+struct challenge_data {
+    uint32_t id;
+    SDL_Surface* badge; // La imagen ya cargada
+    bool active;
+};
+
+struct progress_data {
+    uint32_t id;
+    SDL_Surface* badge; // La imagen ya cargada
+	std::string measured_progress;
+    bool active;
+};
 
 class Achievements {
 public:
@@ -14,6 +38,9 @@ public:
     }
 
 	std::vector<AchievementState> pending_messages;
+	std::map<uint32_t, tracker_data> active_trackers;
+	std::map<uint32_t, challenge_data> active_challenges;
+	progress_data active_progress;
 	SDL_mutex* messagesMutex;
 
     void initialize();
@@ -21,7 +48,7 @@ public:
     void login(const char* username, const char* password);
 	void load_game(const uint8_t* rom, std::size_t rom_size, std::string path, uint32_t console_id, std::vector<AchievementMsg>& messagesAchievement);
 	void reset_menu();
-	void download_and_cache_image(std::string url, SDL_Surface*& image, int badgeW, int badgeH);
+	void download_and_cache_image(std::string url, std::string name, SDL_Surface*& image, int badgeW, int badgeH);
 	void getBadgeSize(int &w, int &h, int &badgePad, int &line_height);
 	bool refresh_achievements_menu();
 	AchievementState pop_message(); 
@@ -46,6 +73,10 @@ public:
 		rc_client_reset(g_client);
 	}
 
+	bool canPause(){
+		return rc_client_can_pause(g_client, NULL) > 0;
+	}
+
 	void set_memory_sources(uint8_t* wram, std::size_t w_size, uint8_t* sram, std::size_t s_size) {
         wram_ptr = wram; wram_size = w_size;
         sram_ptr = sram; sram_size = s_size;
@@ -58,12 +89,25 @@ public:
 	const std::string& getGameTitle() const { return game_title; }
 	const std::string& getGameBadgeUrl() const { return game_badge_url; }
 	rc_client_user_game_summary_t& getSummary(){return game_summary;}
+	const std::string& getGameBadge() const{ return game_badge;}
+
 	std::vector<AchievementState>& getAchievements(){return achievements;}
+	std::map<std::string, SDL_Surface *>& getBadgeCache(){return badgeCache;}
 	void setShouldRefresh(bool ind){shouldRefresh = ind;}    
 	bool has_pending_messages() const { return !pending_messages.empty(); }
+	void setHardcoreMode(bool mode){
+		hardcoreMode = mode;
+		if (g_client != NULL){
+			rc_client_set_hardcore_enabled(g_client, hardcoreMode ? 1 : 0);
+		}
+	}
+
+	bool isHardcoreMode(){
+		return hardcoreMode;
+	}
 
 private:
-    Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false) {} // Constructor privado
+    Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false), hardcoreMode(true) {} // Constructor privado
     
     rc_client_t* g_client;
     std::string ra_user;
@@ -76,11 +120,14 @@ private:
 	std::string game_badge_url;
 	uint32_t game_id;
 	std::vector<AchievementState> achievements;
+	std::map<std::string, SDL_Surface *> badgeCache;
 	uint8_t* wram_ptr;     // System RAM (128KB)
     std::size_t wram_size;
     uint8_t* sram_ptr;     // Save RAM / SuperFX RAM
     std::size_t sram_size;
 	bool shouldRefresh;
+	bool hardcoreMode;
+	
 
     // Callbacks estáticos obligatorios para la librería C
     static uint32_t read_memory(uint32_t address, uint8_t* buffer, uint32_t num_bytes, rc_client_t* client);
@@ -89,11 +136,34 @@ private:
     static void login_callback(int result, const char* error_message, rc_client_t* client, void* userdata);
     static void load_game_callback(int result, const char* error_message, rc_client_t* client, void* userdata);
 	static void event_handler(const rc_client_event_t* event, rc_client_t* client);
+
+	static void leaderboard_started(const rc_client_leaderboard_t* leaderboard);
+	static void leaderboard_failed(const rc_client_leaderboard_t* leaderboard);
+	static void leaderboard_submitted(const rc_client_leaderboard_t* leaderboard);
+	static void leaderboard_tracker_update(const rc_client_leaderboard_tracker_t* tracker);
+	static void leaderboard_tracker_show(const rc_client_leaderboard_tracker_t* tracker);
+	static void leaderboard_tracker_hide(const rc_client_leaderboard_tracker_t* tracker);
+	static void challenge_indicator_hide(const rc_client_achievement_t* achievement);
+	static void challenge_indicator_show(const rc_client_achievement_t* achievement);
+	static void progress_indicator_update(const rc_client_achievement_t* achievement);
+	static void progress_indicator_show(const rc_client_achievement_t* achievement);
+	static void progress_indicator_hide(void);
+	static void game_mastered(void);
+	static void subset_completed(const rc_client_subset_t* subset);
+	static void server_error(const rc_client_server_error_t* error);
+
+	static std::string format_total_playtime();
 	
 	void sortAchievements();
 	void addSections();
 	void insertSectionHeader(int index, uint8_t type);
+	void create_tracker(uint32_t id, const char* display);
+	void destroy_tracker(uint32_t id);
+	
+	tracker_data* find_tracker(uint32_t id) ;
 };
+
+
 
 struct ServerCallData {
     std::string url;
@@ -103,7 +173,6 @@ struct ServerCallData {
 };
 
 struct LoadGameThreadData {
-    Achievements* instance; // Guardamos el puntero 'this'
     int result;
     std::string error_message;
     rc_client_t* client;
@@ -116,10 +185,23 @@ struct LoadContext {
 };
 
 struct AchievementEventData {
-    Achievements* instance;
     std::string title;
     std::string description;
     std::string badgeUrl;
+	std::string badgeName;
+};
+
+struct ChallengeThreadData {
+    uint32_t id;
+    std::string badgeUrl;
+	std::string badgeName;
+};
+
+struct ProgressThreadData {
+    uint32_t id;
+    std::string badgeUrl;
+	std::string badgeName;
+	std::string measured_progress;
 };
 
 // Estructura para comparar (Functor)

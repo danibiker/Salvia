@@ -94,6 +94,7 @@ public:
 		achievement.isSection = ach.isSection;
 		achievement.isDownloading = ach.isDownloading;
 		achievement.points = ach.points;
+		achievement.badgeName = ach.badgeName;
 	}
 
 	~OpcionAchievement(){

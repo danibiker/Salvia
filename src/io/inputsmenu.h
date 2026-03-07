@@ -201,34 +201,38 @@ int processInputs(GameMenu &gameMenu, ListMenu &listMenu, bool generalConfig){
  */
 void updateMenuScreen(TileMap &tileMap, GameMenu &gameMenu, ListMenu &listMenu){
 	static Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
-	ConfigEmu *emu = gameMenu.getCfgLoader()->getCfgEmu();
+	static uint32_t lastTime = SDL_GetTicks();
 
+	ConfigEmu *emu = gameMenu.getCfgLoader()->getCfgEmu();
 	if (processInputs(gameMenu, listMenu, emu->generalConfig) == 1){
-		if (listMenu.animateBkg) 
+		if (listMenu.animateBkg && gameMenu.getCfgLoader()->configMain[cfg::animBG].valueInt == BG_WAVES){
+			tileMap.drawWaves(gameMenu.video_page);
+		} else if (listMenu.animateBkg && gameMenu.getCfgLoader()->configMain[cfg::animBG].valueInt == BG_TILES){
 			tileMap.draw(gameMenu.video_page);
-		else 
+			if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
+				tileMap.incSpeed();
+			}
+		} else {
 			SDL_FillRect(gameMenu.video_page, NULL, bkgText);
-		
+		}
 		gameMenu.refreshScreen(listMenu);
 	}
-    static uint32_t lastTime = SDL_GetTicks();
-    if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
-        tileMap.speed++;
-    }
 }
 
 void updateMenuOverlay(GameMenu &gameMenu, ListMenu &listMenu){
 	static Uint32 bkgText = SDL_MapRGB(gameMenu.screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	processInputs(gameMenu, listMenu, true);
 
-	if (gameMenu.bg_screenshot){
-		SDL_BlitSurface(gameMenu.bg_screenshot, NULL, gameMenu.video_page, NULL);
-	} else {
+	cfg::t_cfg_props *cfg = gameMenu.getCfgLoader()->configMain;
+
+	//Si el modo hardcore esta activado, o no hay captura de pantalla, mostramos el menu en negro
+	if ((cfg[cfg::enableAchievements].valueBool && cfg[cfg::hardcoreRA].valueBool) || !gameMenu.bg_screenshot){
 		SDL_FillRect(gameMenu.video_page, NULL, bkgText);
-	}
+	} else if (gameMenu.bg_screenshot){
+		SDL_BlitSurface(gameMenu.bg_screenshot, NULL, gameMenu.video_page, NULL);
+	} 
 	
 	if (gameMenu.getEmuStatus() == EMU_MENU_OVERLAY){
-		//Dibujamos el menu
 		gameMenu.configMenus->draw(gameMenu.video_page);
 	}
 }	

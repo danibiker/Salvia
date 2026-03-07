@@ -415,13 +415,13 @@
     <EMU_LIB_PICODRIVE>picodrive</EMU_LIB_PICODRIVE>
     <BUILD_DIR>$(ProjectDir)build\$(Configuration)\$(Platform)\</BUILD_DIR>
     <COMMON_PREPROCESSOR>_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB;RC_CLIENT_SUPPORTS_HASH</COMMON_PREPROCESSOR>
-	<COMMON_PREPROCESSOR_DEBUG>DEBUG;DEBUG_LOG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_DEBUG>
-	<COMMON_PREPROCESSOR_RELEASE>NDEBUG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_RELEASE>
-	<COMMON_LIBS_XBOX_D>xnetd.lib;xapilibd.lib;xboxkrnl.lib;d3d9d.lib;d3dx9.lib;xgraphicsd.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;mbedTLS.lib</COMMON_LIBS_XBOX_D>
-	<COMMON_LIBS_XBOX_R>xnet.lib;xapilib.lib;xboxkrnl.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;mbedTLS.lib</COMMON_LIBS_XBOX_R>
-	<COMMON_LIBS_XBOX_DEBUG>$(COMMON_LIBS_XBOX_D);libcurl_a_debug.lib</COMMON_LIBS_XBOX_DEBUG>
-	<COMMON_LIBS_XBOX_RELEASE>$(COMMON_LIBS_XBOX_R);libcurl_a.lib</COMMON_LIBS_XBOX_RELEASE>
-	<COMMON_LIBS_WIN>SDLmain.lib;SDL.lib;SDL_ttf.lib;SDL_image.lib;libcurl_a.lib;Shell32.lib;winmm.lib</COMMON_LIBS_WIN>
+    <COMMON_PREPROCESSOR_DEBUG>DEBUG;DEBUG_LOG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_DEBUG>
+    <COMMON_PREPROCESSOR_RELEASE>NDEBUG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_RELEASE>
+    <COMMON_LIBS_XBOX_D>xnetd.lib;xapilibd.lib;xboxkrnl.lib;d3d9d.lib;d3dx9.lib;xgraphicsd.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;mbedTLS.lib</COMMON_LIBS_XBOX_D>
+    <COMMON_LIBS_XBOX_R>xnet.lib;xapilib.lib;xboxkrnl.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;mbedTLS.lib</COMMON_LIBS_XBOX_R>
+    <COMMON_LIBS_XBOX_DEBUG>$(COMMON_LIBS_XBOX_D);libcurl_a_debug.lib</COMMON_LIBS_XBOX_DEBUG>
+    <COMMON_LIBS_XBOX_RELEASE>$(COMMON_LIBS_XBOX_R);libcurl_a.lib</COMMON_LIBS_XBOX_RELEASE>
+    <COMMON_LIBS_WIN>SDLmain.lib;SDL.lib;SDL_ttf.lib;SDL_image.lib;libcurl_a.lib;Shell32.lib;winmm.lib</COMMON_LIBS_WIN>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -1436,7 +1436,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);pcsx_rearmed.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;../../project/pcsx_rearmed/Release/Xbox 360;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;../../project/pcsx_rearmed/Release/Xbox 360;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
     </Link>
@@ -2246,7 +2246,7 @@
     <ClCompile Include="src\io\hotkeys.cpp" />
     <ClCompile Include="src\io\hq2xbox\hq2xx.cpp" />
     <ClCompile Include="src\io\hqx_2\hq2x.c">
-	  <CompileAs>CompileAsCpp</CompileAs>
+      <CompileAs>CompileAsCpp</CompileAs>
     </ClCompile>
     <ClCompile Include="src\io\hqx_2\hq3x.c">
       <CompileAs>CompileAsCpp</CompileAs>
@@ -2391,7 +2391,7 @@
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\gzlib.c">
-     <CompileAs>CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\gzread.c">
       <CompileAs>CompileAsC</CompileAs>
@@ -2412,10 +2412,10 @@
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\trees.c">
-     <CompileAs>CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\uncompr.c">
-     <CompileAs>CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\unzip\zlib-1.2.11\zutil.c">
       <CompileAs>CompileAsC</CompileAs>
@@ -2469,6 +2469,10 @@
     <ClInclude Include="src\unzip\GZipHelper.h" />
     <ClInclude Include="src\unzip\unziptool.h" />
     <ClInclude Include="src\utils\logger.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="DistroWin\assets\i18n\en.ini" />
+    <None Include="DistroWin\assets\i18n\es.ini" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

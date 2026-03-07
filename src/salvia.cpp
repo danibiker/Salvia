@@ -730,7 +730,7 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
 
     gameMenu.loadEmuCfg(menuData);
     if (retMenu == 0 && menuData.maxLines == menuBeforeExit.maxLines 
-		&& menuBeforeExit.iniPos > 0 && menuBeforeExit.iniPos < menuData.listSize
+		&& menuBeforeExit.iniPos >= 0 && menuBeforeExit.iniPos < menuData.listSize
 		&& menuBeforeExit.endPos > 0 && menuBeforeExit.endPos <= menuData.listSize
 		&& menuBeforeExit.curPos > 0 && menuBeforeExit.curPos < menuData.listSize){
 		menuData.iniPos = menuBeforeExit.iniPos;
@@ -1004,17 +1004,11 @@ int main(int argc, char *argv[]) {
 	if (!loadGameAtStart(argc, argv)){
 		//Workaround para mostrar una primera imagen del menu con las imagenes cargadas
 		listMenu.keyUp = true;
-		//if (listMenu.animateBkg) 
-			tileMap.draw(gameMenu->video_page);
-		//else 
-		//	SDL_FillRect(gameMenu->video_page, NULL, bkgText);
 		gameMenu->refreshScreen(listMenu);
-		SDL_Flip(gameMenu->screen);
 		listMenu.keyUp = false;
 	}
 
 	initSaveSystem();
-
 	Icons icons;
 	icons.loadIcons();
 
