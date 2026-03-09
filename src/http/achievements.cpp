@@ -117,10 +117,6 @@ DWORD WINAPI AchievementTriggeredThread(LPVOID lpParam) {
 		// Bloqueamos el mutex de SDL para añadir a la cola de forma segura
 		SDL_mutexP(self.messagesMutex);
 		self.pending_messages.push_back(msg);
-		// IMPORTANTE: Evitamos que el destructor de 'msg' borre la imagen
-		// porque ahora la "propiedad" es del vector pending_messages
-		msg.badge = NULL; 
-		msg.badgeLocked = NULL;
 		SDL_mutexV(self.messagesMutex);
 	}
 
@@ -171,7 +167,7 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
 		self.show_game_placard(data->client);
 		self.updateAchievements(data->client);
 		if (ctx->messages) {
-			self.send_message(ctx->messages);
+			self.send_message_game_loaded(ctx->messages);
 		}
 	} else {
 		std::string errorMsg = rc_error_str(data->result);
@@ -202,9 +198,6 @@ DWORD WINAPI ChallengeIndicatorThread(LPVOID lpParam) {
 	SDL_mutexP(self.challengeMutex);
     // Guardar en el mapa (Ojo: si tu mapa no es thread-safe, considera usar un Mutex aquí)
     self.active_challenges[data->id] = c_data;
-	// Ponemos a NULL el original para que el destructor de c_data 
-    // (que se ejecuta al salir de esta función) no borre la imagen del mapa.
-    c_data.badge = NULL; 
 	SDL_mutexV(self.challengeMutex);
     delete data; // Limpiar memoria
     return 0;
@@ -247,7 +240,7 @@ void Achievements::login(const char* username, const char* password) {
 	rc_client_begin_login_with_password(g_client, username, password, login_callback, this);
 }
 
-void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string path, uint32_t console_id, std::list<AchievementMsg>& messagesAchievement) {
+void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string path, uint32_t console_id, std::list<AchievementState>& messagesAchievement) {
 	LoadContext* ctx = new LoadContext();
 	ctx->messages = &messagesAchievement;
 	ctx->romBuffer = (void*)rom; 
@@ -694,23 +687,27 @@ AchievementState Achievements::pop_message() {
     return msg; // Retornamos 'msg', que ahora es el único dueño del badge
 }
 
-void Achievements::send_message(std::list<AchievementMsg>* messages){
-	AchievementMsg msg;
-	msg.title = Achievements::instance()->getGameTitle();
-	msg.scoreUnlocked = Achievements::instance()->getSummary().points_unlocked;
-	msg.scoreTotal = Achievements::instance()->getSummary().points_core;
-	msg.achvUnlocked = Achievements::instance()->getSummary().num_unlocked_achievements;
-	msg.achvTotal = Achievements::instance()->getSummary().num_core_achievements;
-	msg.img = Achievements::instance()->getGameBadgeUrl();
+void Achievements::send_message_game_loaded(std::list<AchievementState>* messages){
+	int line_height, badgeW, badgeH, badgePad;
+	Achievements& self = *Achievements::instance();
+	self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
+
+	AchievementState msg;
+	msg.type = ACH_LOAD_GAME;
+	msg.gameId = self.getGameId();
+	msg.title = self.getGameTitle();
+	msg.scoreUnlocked = self.getSummary().points_unlocked;
+	msg.scoreTotal = self.getSummary().points_core;
+	msg.achvUnlocked = self.getSummary().num_unlocked_achievements;
+	msg.achvTotal = self.getSummary().num_core_achievements;
+	msg.badgeName = self.getGameBadge();
+	msg.badgeUrl = self.getGameBadgeUrl();
 	msg.timeout = 5000;
 	msg.ticks = SDL_GetTicks();
 
-	LOG_DEBUG("Sending message: %s", msg.title.c_str());
-
-	int line_height, badgeW, badgeH, badgePad;
-	Achievements::instance()->getBadgeSize(badgeW, badgeH, badgePad, line_height);
-	Achievements::instance()->download_and_cache_image(msg.img, Achievements::instance()->getGameBadge(), msg.badge, badgeW, badgeH);
+	self.download_and_cache_image(&msg, badgeW, badgeH);
 	messages->push_back(msg);
+	LOG_DEBUG("Sending message: %s", msg.title.c_str());
 }
 
 void Achievements::show_game_placard(rc_client_t* client)
@@ -780,13 +777,10 @@ void Achievements::updateAchievements(rc_client_t* client)
 
 		for (unsigned int j = 0; j < list->buckets[i].num_achievements; j++){
 			const rc_client_achievement_t* achievement = list->buckets[i].achievements[j];
-			//async_image_data* image_data = NULL;
-			//char achievement_badge[64];
 			AchievementState achState;
 			// Generate a local filename to store the downloaded image.
 			//snprintf(achievement_badge, sizeof(achievement_badge), "ach_%s%s.png", achievement->badge_name, 
 			//         (state == RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED) ? "" : "_lock");
-
 			//achState.badgeUrl = (achievement->state == RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED) ? achievement->badge_url : achievement->badge_locked_url;
 			achState.badgeUrl = achievement->badge_url;
 			// Determine the "progress" of the achievement. This can also be used to show
@@ -808,13 +802,10 @@ void Achievements::updateAchievements(rc_client_t* client)
 			achState.points = achievement->points;
 			achState.locked = !achievement->unlocked;
 			achState.sectionType = list->buckets[i].bucket_type;
-
 			self.achievements.push_back(achState);
-
 			//Actializamos la base de datos
 			//self.achievementDb->updateStatus(achState.id, achState.locked, achState.sectionType);
 			LOG_DEBUG("updateAchievements: id = %d", achState.id);
-
 			/**
 				//For debug purposes
 				if (j==1){
@@ -908,23 +899,16 @@ void Achievements::download_and_cache_image(AchievementState* achievement, int b
     if (achievement->badgeName.empty()) return;
 
     AchievementState* fromDb = NULL;
-    //std::map<std::string, SDL_Surface*>::iterator it = badgeCache.find(achievement->badgeName);
+	//Buscamos en base de datos
+    fromDb = achievementDb->getAchievement(achievement->id);
+    if (fromDb && fromDb->badge && achievement->type != ACH_LOAD_GAME) {
+        achievement->badge = SDL_DisplayFormat(fromDb->badge);
+    } else {
+        // Descarga real si no existe en ningún lado
+        download_and_cache_image(achievement->badgeUrl, achievement->badgeName, achievement->badge, badgeW, badgeH);
+    }
 
-    // 1. INTENTAR CARGAR (Prioridad: Cache -> DB -> Descarga)
-    //if (it != badgeCache.end()) {
-    //    achievement->badge = it->second; 
-    //} else {
-        fromDb = achievementDb->getAchievement(achievement->id);
-        if (fromDb && fromDb->badge) {
-            achievement->badge = SDL_DisplayFormat(fromDb->badge);
-            //badgeCache[achievement->badgeName] = achievement->badge;
-        } else {
-            // Descarga real si no existe en ningún lado
-            download_and_cache_image(achievement->badgeUrl, achievement->badgeName, achievement->badge, badgeW, badgeH);
-        }
-    //}
-
-    // 2. REDIMENSIONAR (Crucial hacerlo ANTES de guardar en DB para que el BLOB sea correcto)
+    // REDIMENSIONAR (Crucial hacerlo ANTES de guardar en DB para que el BLOB sea correcto)
     if (achievement->badge != NULL && (achievement->badge->w != badgeW || achievement->badge->h != badgeH)) {
         double zoomX = (double)badgeW / achievement->badge->w;
         double zoomY = (double)badgeH / achievement->badge->h;
@@ -932,13 +916,11 @@ void Achievements::download_and_cache_image(AchievementState* achievement, int b
         if (zoomed) {
             SDL_FreeSurface(achievement->badge);
             achievement->badge = zoomed; // No uses DisplayFormat aquí, rotozoom ya optimiza
-            // Actualizamos la cache con la versión de tamaño correcto
-            //badgeCache[achievement->badgeName] = achievement->badge;
         }
     }
 
-    // 3. GUARDAR EN DB (Solo si no venía de allí y tenemos imagen válida)
-    if (fromDb == NULL && achievement->badge != NULL) {
+    //GUARDAR EN DB (Solo si no venía de allí y tenemos imagen válida)
+    if (fromDb == NULL && achievement->badge != NULL && achievement->type != ACH_LOAD_GAME) {
         LOG_DEBUG("Guardando logro completo en DB: %s", achievement->badgeName.c_str());
         achievementDb->saveAchievement(*achievement);
     }

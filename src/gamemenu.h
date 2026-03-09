@@ -123,7 +123,7 @@ class GameMenu : public Engine{
 
     private:
 		std::vector<Message> messages;
-		std::list<AchievementMsg> messagesAchievement;
+		std::list<AchievementState> messagesAchievement;
 		map<int,int> gsTogdGameid;
 		bool cargarSystemAchievementTranslation(const std::string& nombreArchivo);
 		int translateSystemAchievement();
@@ -162,7 +162,4 @@ class GameMenu : public Engine{
 		void handleMessageQueue(uint32_t currentTicks);
 		void renderCurrentAchievement();
 		void clearLastAchievementArea();
-		AchievementMsg createAchievementMsg(AchievementState& state);
-
-		
 };

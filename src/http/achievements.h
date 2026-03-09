@@ -142,7 +142,7 @@ public:
     void shutdown();
 	void clearAllData();
     void login(const char* username, const char* password);
-	void load_game(const uint8_t* rom, std::size_t rom_size, std::string path, uint32_t console_id, std::list<AchievementMsg>& messagesAchievement);
+	void load_game(const uint8_t* rom, std::size_t rom_size, std::string path, uint32_t console_id, std::list<AchievementState>& messagesAchievement);
 	void reset_menu();
 	bool download_and_cache_image(std::string url, std::string name, SDL_Surface*& image, int badgeW, int badgeH);
 	void download_and_cache_image(AchievementState* achievement, int badgeW, int badgeH);
@@ -152,7 +152,7 @@ public:
 	AchievementState pop_message(); 
 	static void show_game_placard(rc_client_t* client);
 	static void updateAchievements(rc_client_t* client);
-	static void send_message(std::list<AchievementMsg>* messages);	
+	static void send_message_game_loaded(std::list<AchievementState>* messages);	
 	static int getSectionPriority(uint8_t sectionType);
 
 	void doUnload(){
@@ -188,6 +188,8 @@ public:
 	const std::string& getGameBadgeUrl() const { return game_badge_url; }
 	rc_client_user_game_summary_t& getSummary(){return game_summary;}
 	const std::string& getGameBadge() const{ return game_badge;}
+	uint32_t getGameId(){return game_id;}
+
 
 	std::vector<AchievementState>& getAchievements(){return achievements;}
 //	std::map<std::string, SDL_Surface *>& getBadgeCache(){return badgeCache;}
@@ -281,7 +283,7 @@ struct LoadGameThreadData {
 };
 
 struct LoadContext {
-    std::list<AchievementMsg>* messages;
+    std::list<AchievementState>* messages;
     void* romBuffer;
 };
 

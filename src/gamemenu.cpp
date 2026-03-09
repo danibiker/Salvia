@@ -1354,12 +1354,10 @@ void GameMenu::updateAchievementsState(uint32_t currentTicks) {
     if (getEmuStatus() == EMU_STARTED) {
 		Achievements* ach = Achievements::instance();
         ach->doFrame();
-		
         // Load new messages to the list
 		SDL_mutexP(ach->messagesMutex);
         while (ach->has_pending_messages()) {
-			// createAchievementMsg devuelve un objeto que se "mueve" o copia a la lista
-			messagesAchievement.push_back(createAchievementMsg(ach->pop_message()));
+			messagesAchievement.push_back(ach->pop_message());
 		}
 		SDL_mutexV(ach->messagesMutex);
     } else {
@@ -1372,27 +1370,11 @@ void GameMenu::updateAchievementsState(uint32_t currentTicks) {
     }
 }
 
-AchievementMsg GameMenu::createAchievementMsg(AchievementState& state) {
-    AchievementMsg msg;
-    msg.type        = state.type;
-    msg.timeout     = 10000;         // 10 segundos por defecto
-    msg.ticks       = 0;             // Importante: 0 para indicar que aún no empezó el timer
-    msg.title       = state.title;
-    msg.description = state.description;
-    msg.img         = state.badgeUrl;
-    msg.badge       = state.badge;   // Pasamos el puntero de la superficie SDL
-	state.badge = NULL;				 // El mensaje ahora es el dueño legal de la superficie
-    msg.achvTotal    = 0; 
-    msg.scoreTotal   = 0;
-    msg.achvUnlocked = 0;
-    return msg;
-}
-
 void GameMenu::handleMessageQueue(uint32_t currentTicks) {
     if (messagesAchievement.empty()) return;
 
     // Obtenemos referencia al primer mensaje
-    AchievementMsg &ach = messagesAchievement.front();
+    AchievementState &ach = messagesAchievement.front();
     
     if (ach.ticks == 0) {
         ach.ticks = currentTicks; // Iniciar temporizador
@@ -1413,7 +1395,7 @@ void GameMenu::renderCurrentAchievement() {
         return;
     }
 
-    AchievementMsg& msg = messagesAchievement.front();
+    AchievementState& msg = messagesAchievement.front();
     if (msg.type == ACH_LOAD_GAME) {
         showAchievementMessage(Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.title"), msg.title.c_str()), 
 							   Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.points"), msg.achvTotal, msg.scoreTotal), 

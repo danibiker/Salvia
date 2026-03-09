@@ -1110,7 +1110,7 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
     }
 
 	// Dibujar el badge si ya está descargado
-    if (opcion->achievement.badge != NULL) {
+    if (opcion->achievement.badge != NULL && !opcion->achievement.isDownloading) {
         SDL_Rect dest;
         dest.x = this->getX() + marginImg; // Ajusta según tu layout
         dest.y = position + marginImg;
