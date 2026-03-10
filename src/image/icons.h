@@ -1,4 +1,4 @@
-#pragma 
+#pragma once
 
 #include <vector>
 #include <SDL_image.h>
@@ -11,20 +11,30 @@ class Icons{
 
 public:
 	Icons(){
-		
 	}
 
 	~Icons(){
-		
 	}
 
-	void freeIcons(){
-		for (int i=0; i < max_icons; i++){
-			SDL_FreeSurface(icons[i]);
+	static void freeIcons(){
+		for (std::size_t i=0; i < icons.size(); i++){
+			if (icons[i] != NULL){
+				SDL_FreeSurface(icons[i]);
+				icons[i] = NULL;
+			}
 		}
+		icons.clear();
+		
+		for (std::size_t i=0; i < icons_carts.size(); i++){
+			if (icons_carts[i] != NULL){
+				SDL_FreeSurface(icons_carts[i]);
+				icons_carts[i] = NULL;
+			}
+		}
+		icons_carts.clear();
 	}
 
-	void loadIcons(){
+	static void loadIcons(){
 		TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 		int face_h = TTF_FontLineSkip(fontMenu) + icon_w_add;
 

@@ -30,6 +30,7 @@ class CurlClient {
 		// Función principal de descarga
 		bool fetchUrl(const std::string&, std::string&, float*);
 		bool postUrl(const std::string&, const std::string&, std::string&, float*);
+		bool postUrl(const std::string&, const std::string&, const std::string&, std::string&, float*);
 		bool fetchFile(const std::string&, const std::string&, float*);
 		std::string escape(const std::string&);
 

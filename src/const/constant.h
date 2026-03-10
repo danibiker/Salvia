@@ -710,6 +710,16 @@ class Constant{
 			}
 		}
 
+		static std::string formatPlayTime(uint32_t totalSeconds) {
+			uint32_t hours = totalSeconds / 3600;
+			uint32_t minutes = (totalSeconds % 3600) / 60;
+    
+			char buffer[32];
+			sprintf(buffer, "%dh %dm", hours, minutes);
+			return std::string(buffer);
+		}
+
+
         static void setExecMethod(int var){EXEC_METHOD = var;}
         static int getExecMethod(){return EXEC_METHOD;}
 	private:

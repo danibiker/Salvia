@@ -6,7 +6,7 @@
 #include <font/fonts.h>
 #include <gfx/SDL_gfxPrimitives.h>
 #include <gfx/gfx_utils.h>
-#include <image/icons.h>
+
 
 SDL_Surface* ListMenu::imgText;
 
@@ -32,11 +32,14 @@ ListMenu::ListMenu(int screenw, int screenh){
     setObjectType(GUILISTBOX);
     setLayout(LAYSIMPLE, screenw, screenh);
     //set_trans_blender(255, 255, 255, 190);
+	icons = new Icons();
+	icons->loadIcons();
 }
 
 ListMenu::~ListMenu(){
 	LOG_DEBUG("Deleting ListMenu...");
     clear();
+	delete icons;
 }
 
 void ListMenu::clear(){
@@ -96,9 +99,7 @@ void ListMenu::draw(SDL_Surface *video_page){
     //To scroll one letter in one second. We use the face_h because the width of 
     //a letter is not fixed.
     const float pixelsScrollFps = max(ceil(face_h / (float)textFps), 1.0f);
-
-	Icons icons;
-	const int marginTextIcon = icons.icon_w_add + 14;
+	const int marginTextIcon = icons->icon_w_add + 14;
 
     for (int i=this->iniPos; i < this->endPos; i++){
         auto game = this->listGames.at(i).get();
@@ -186,12 +187,12 @@ void ListMenu::draw(SDL_Surface *video_page){
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
             }
 
-			if (icons.icons.size() > page_white){
+			if (icons->icons.size() > page_white){
 				//dstRect.y = icons.icon_w_add / 2;
 				dstRect.y += 2;
 				//dstRect.x = 4;
 				//SDL_BlitSurface(icons.icons[page_white], NULL, video_page, &dstRect);
-				SDL_BlitSurface(icons.icons_carts[getCartForSystem(game->systemid)], NULL, video_page, &dstRect);
+				SDL_BlitSurface(icons->icons_carts[getCartForSystem(game->systemid)], NULL, video_page, &dstRect);
 			}
         }
     }

@@ -155,9 +155,8 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
     return (res == CURLE_OK);
 }
 
-// Función principal de descarga
-bool CurlClient::postUrl(const std::string& url, const std::string& postData, std::string& outResponse, float* progressPtr) {
-    CURL *curl = curl_easy_init();
+bool CurlClient::postUrl(const std::string& url, const std::string& postData,const std::string& user_agent, std::string& outResponse, float* progressPtr) {
+	 CURL *curl = curl_easy_init();
     if (!curl) return false;
 
     ProgressData pData;
@@ -199,7 +198,7 @@ bool CurlClient::postUrl(const std::string& url, const std::string& postData, st
     curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, &pData);
 
     // Opciones adicionales
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Salvia/1.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L); // 15 segundos
 
 	// callback para llamar fuera a internet
@@ -220,6 +219,11 @@ bool CurlClient::postUrl(const std::string& url, const std::string& postData, st
 	if (headers) curl_slist_free_all(headers);
 
     return (res == CURLE_OK);
+}
+
+// Función principal de descarga
+bool CurlClient::postUrl(const std::string& url, const std::string& postData, std::string& outResponse, float* progressPtr) {
+	return postUrl(url, postData, USERAGENT, outResponse, progressPtr);
 }
 
 // Añade esto a los métodos públicos de tu clase

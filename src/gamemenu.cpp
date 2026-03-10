@@ -10,6 +10,9 @@
 #include <libretro/libretro.h>
 #include <utils/langmanager.h>
 
+vector<SDL_Surface *> Icons::icons;
+vector<SDL_Surface *> Icons::icons_carts;
+
 GameMenu::GameMenu(CfgLoader *cfgLoader){
     status = EMU_MENU;
 	lastStatus = EMU_MENU;
@@ -52,12 +55,14 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	//initHqxFilter();
 	cargarSystemAchievementTranslation(Constant::getAppDir() + "\\config\\achievement_translations.cfg");
 	initAchievements();
-	
+	Icons::loadIcons();
 };
 
 GameMenu::~GameMenu(){
 	LOG_DEBUG("Deleting GameMenu...");
 	delete configMenus;
+	Icons::freeIcons();
+
 	if (fpsSurface) SDL_FreeSurface(fpsSurface);
 	if (cpuSurface) SDL_FreeSurface(cpuSurface);
 	for (unsigned int i=0; i < messages.size(); i++) {

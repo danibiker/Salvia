@@ -7,6 +7,7 @@
 
 #include <uiobjects/object.h>
 #include <io/fileprops.h>
+#include <image/icons.h>
 
 using namespace std;
 
@@ -17,6 +18,7 @@ class ListMenu : public Object{
 		static const int waitTitleMove = 2000;
 		static const int textFps = 20;
 		static const int frameTimeText = (int)(1000 / textFps);
+		Icons *icons;
 
     public:
         ListMenu(int screenw, int screenh);

@@ -138,6 +138,11 @@ public:
 	SDL_mutex* challengeMutex;
 	SDL_mutex* progressMutex;
 
+	GameState *gameState;
+	uint32_t lastGameTick;
+	AchievementDB *achievementDb;
+
+
     void initialize();
     void shutdown();
 	void clearAllData();
@@ -146,11 +151,13 @@ public:
 	void reset_menu();
 	bool download_and_cache_image(std::string url, std::string name, SDL_Surface*& image, int badgeW, int badgeH);
 	void download_and_cache_image(AchievementState* achievement, int badgeW, int badgeH);
+	uint32_t updatePlayTime(uint32_t game_id);
 
 	void getBadgeSize(int &w, int &h, int &badgePad, int &line_height);
 	bool refresh_achievements_menu();
 	AchievementState pop_message(); 
 	static void show_game_placard(rc_client_t* client);
+	static int countUserUnlocked(rc_client_t* client);
 	static void updateAchievements(rc_client_t* client);
 	static void send_message_game_loaded(std::list<AchievementState>* messages);	
 	static int getSectionPriority(uint8_t sectionType);
@@ -207,7 +214,7 @@ public:
 	}
 
 private:
-    Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false), hardcoreMode(true) {} // Constructor privado
+    Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false), hardcoreMode(true), gameState(NULL), lastGameTick(0) {} // Constructor privado
     
     rc_client_t* g_client;
     std::string ra_user;
@@ -225,7 +232,7 @@ private:
     std::size_t sram_size;
 	bool shouldRefresh;
 	bool hardcoreMode;
-	AchievementDB *achievementDb;
+	
 	
 	std::vector<AchievementState> achievements;
 
@@ -271,6 +278,7 @@ private:
 struct ServerCallData {
     std::string url;
     std::string post_data;
+	std::string response;
     rc_client_server_callback_t callback;
     void* callback_data;
 };

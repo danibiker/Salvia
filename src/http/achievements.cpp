@@ -14,6 +14,7 @@
 #include <utils/langmanager.h>
 
 void clearBadgeCache();
+static const std::string SALVIA_USER_AGENT = "Salvia/1.0";
 
 void Achievements::initialize() {
 	if (g_client) return;
@@ -39,6 +40,13 @@ void Achievements::initialize() {
 
 void Achievements::shutdown() {
 	if (g_client) {
+
+		if (gameState != NULL){
+			updatePlayTime(gameState->id);
+			delete gameState;
+			gameState = NULL;
+		}
+
 		rc_client_destroy(g_client);
 		g_client = NULL;
 		delete achievementDb;
@@ -71,22 +79,21 @@ DWORD WINAPI ServerThreadFunction(LPVOID lpParam) {
 	ServerCallData* data = (ServerCallData*)lpParam;
 
 	CurlClient curlClient;
-	std::string response;
 	float progress = 0;
 
 	// Ejecutamos la petición
 	bool success = false;
 	if (!data->post_data.empty()) {
-		success = curlClient.postUrl(data->url.c_str(), data->post_data.c_str(), response, &progress);
+		success = curlClient.postUrl(data->url, data->post_data, SALVIA_USER_AGENT, data->response, &progress);
 	} else {
-		success = curlClient.fetchUrl(data->url.c_str(), response, &progress);
+		success = curlClient.fetchUrl(data->url, data->response, &progress);
 	}
 
 	// Preparamos la respuesta para la librería
 	rc_api_server_response_t server_response;
 	memset(&server_response, 0, sizeof(server_response));
-	server_response.body = response.c_str();
-	server_response.body_length = response.length();
+	server_response.body = data->response.c_str();
+	server_response.body_length = data->response.length();
 	server_response.http_status_code = success ? 200 : 500;
 
 	// Ejecutamos el callback
@@ -130,20 +137,6 @@ void clearBadgeCache(){
 	// Definimos el iterador para el mapa
     std::map<std::string, SDL_Surface*>::iterator it;
 	LOG_DEBUG("Limpiando cache de badges");
-
-    // Recorremos desde el inicio hasta el final
-/*    for (it = self.getBadgeCache().begin(); it != self.getBadgeCache().end(); ++it) {
-        // it->first es la clave (string)
-        // it->second es el valor (SDL_Surface*)
-        if (it->second != NULL) {
-            SDL_FreeSurface(it->second);
-			it->second = NULL;
-        }
-    }
-
-    // ¡Muy importante! Vaciar el mapa después de liberar las superficies
-    self.getBadgeCache().clear();
-*/
 }
 
 DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
@@ -163,12 +156,24 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
 
 	if (data->result == RC_OK) {
 		self.clearAllData();
+
+		bool prevGameLoaded = self.gameState != NULL;
+		if (prevGameLoaded){
+			//Si ya habíamos cargado un juego, actualizamos el tiempo de juego 
+			//del anterior antes de cargar el nuevo
+			self.updatePlayTime(self.getGameId());
+			//Borramos la memoria
+			delete self.gameState;
+			self.gameState = NULL;
+		}
+
 		// Llamamos a los métodos de la clase a través de la instancia
 		self.show_game_placard(data->client);
 		self.updateAchievements(data->client);
 		if (ctx->messages) {
 			self.send_message_game_loaded(ctx->messages);
 		}
+
 	} else {
 		std::string errorMsg = rc_error_str(data->result);
 		LOG_DEBUG("Error al cargar logros del juego: %s", errorMsg.c_str());
@@ -516,12 +521,9 @@ void Achievements::game_mastered(void)
       rc_client_get_hardcore_enabled(self->g_client) ? LanguageManager::instance()->get("menu.achievement.mastered") : LanguageManager::instance()->get("menu.achievement.completed"),
       game->title);
 
-	/*snprintf(submessage, sizeof(submessage), "%s (%s)",
+	snprintf(submessage, sizeof(submessage), "%s (%s)",
       rc_client_get_user_info(self->g_client)->display_name,
-      format_total_playtime().c_str());
-	  */
-	snprintf(submessage, sizeof(submessage), "%s",
-      rc_client_get_user_info(self->g_client)->display_name);
+	  Constant::formatPlayTime(self->updatePlayTime(self->game_id)).c_str());
   
     // Creamos y rellenamos la estructura con copias de los strings
 	AchievementEventData* data = new AchievementEventData();
@@ -549,12 +551,9 @@ void Achievements::subset_completed(const rc_client_subset_t* subset)
       rc_client_get_hardcore_enabled(self->g_client) ? LanguageManager::instance()->get("menu.achievement.mastered") : LanguageManager::instance()->get("menu.achievement.completed"),
       subset->title);
 
-	/*snprintf(submessage, sizeof(submessage), "%s (%s)",
+	snprintf(submessage, sizeof(submessage), "%s (%s)",
       rc_client_get_user_info(self->g_client)->display_name,
-      format_total_playtime().c_str());
-	  */
-	snprintf(submessage, sizeof(submessage), "%s",
-      rc_client_get_user_info(self->g_client)->display_name);
+	  Constant::formatPlayTime(self->updatePlayTime(self->game_id)).c_str());
   
     // Creamos y rellenamos la estructura con copias de los strings
 	AchievementEventData* data = new AchievementEventData();
@@ -704,10 +703,35 @@ void Achievements::send_message_game_loaded(std::list<AchievementState>* message
 	msg.badgeUrl = self.getGameBadgeUrl();
 	msg.timeout = 5000;
 	msg.ticks = SDL_GetTicks();
-
 	self.download_and_cache_image(&msg, badgeW, badgeH);
+
+	//Si encontramos el juego ya en bdd, actualizamos la variable
+	GameState* gameStateDb = self.achievementDb->getGameInfo(self.getGameId());
+	if (self.gameState == NULL){
+		if (gameStateDb != NULL){
+			self.gameState = gameStateDb;
+		//Si no se encontro el juego, lo guardamos en bdd y actualizamos la variable
+		} else if (self.achievementDb->saveGameInfo(self.getGameId(), self.getGameTitle(), self.getGameBadge(), msg.badge)){
+			self.gameState = self.achievementDb->getGameInfo(self.getGameId());
+		}
+	} 
+	//actualizamos contador de ticks
+	self.lastGameTick = SDL_GetTicks();
+
 	messages->push_back(msg);
 	LOG_DEBUG("Sending message: %s", msg.title.c_str());
+}
+
+uint32_t Achievements::updatePlayTime(uint32_t game_id){
+	uint32_t elapsed_game_time = 0;
+	if (gameState != NULL){
+		elapsed_game_time = (SDL_GetTicks() - lastGameTick) / 1000 + gameState->playTime;
+		achievementDb->updatePlayTime(game_id, elapsed_game_time);
+		lastGameTick = SDL_GetTicks();
+	} else {
+		elapsed_game_time = (SDL_GetTicks() - lastGameTick) / 1000;
+	}
+	return elapsed_game_time;
 }
 
 void Achievements::show_game_placard(rc_client_t* client)
@@ -734,11 +758,38 @@ void Achievements::show_game_placard(rc_client_t* client)
 	if (self.game_summary.num_core_achievements == 0){
 		LOG_DEBUG("This game has no achievements.");
 	} else {
+		const int numUnlockedAch = countUserUnlocked(client);
+		if (numUnlockedAch == 0 && game){
+			LOG_DEBUG("El usuario no ha desbloqueado logros. Reseteamos contadores");
+			self.achievementDb->updatePlayTime(game->id, 0);
+			self.lastGameTick = SDL_GetTicks();
+		}
+
 		LOG_DEBUG("RA: %s - %u/%u desbloqueados.", 
 			self.game_title.c_str(),
-			self.game_summary.num_unlocked_achievements, 
+			numUnlockedAch, 
 			self.game_summary.num_core_achievements);
 	}
+}
+
+int Achievements::countUserUnlocked(rc_client_t* client) {
+    int realCount = 0;
+    rc_client_achievement_list_t* list = rc_client_create_achievement_list(client, RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE, RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_PROGRESS);
+    
+    if (list) {
+        for (unsigned int i = 0; i < list->num_buckets; i++){
+			for (unsigned int j = 0; j < list->buckets[i].num_achievements; j++){
+				const rc_client_achievement_t* achievement = list->buckets[i].achievements[j];
+				// Ignoramos el ID de aviso 101000001 y superiores de sistema
+				if (achievement->id < 101000000 && 
+					achievement->state == RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED) {
+					realCount++;
+				}
+			}
+        }
+        rc_client_destroy_achievement_list(list);
+    }
+    return realCount;
 }
 
 void Achievements::reset_menu(){

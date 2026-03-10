@@ -1107,6 +1107,7 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
         !opcion->achievement.badgeUrl.empty()) {
         opcion->achievement.isDownloading = true; // Marcamos como "en proceso"
 		BadgeDownloader::instance().add_to_queue(opcion->achievement, imgH, imgH);
+		return;
     }
 
 	// Dibujar el badge si ya está descargado

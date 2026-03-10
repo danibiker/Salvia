@@ -4,6 +4,22 @@
 #include <vector>
 #include <iostream>
 
+// Estructura auxiliar para los datos del juego
+struct GameState {
+    uint32_t id;
+    std::string title;
+    std::string badgeName;
+    SDL_Surface* badge;
+    uint32_t playTime;
+
+    GameState() : id(0), badge(NULL), playTime(0) {}
+    ~GameState() { 
+		if (badge) 
+			SDL_FreeSurface(badge); 
+			badge = NULL;
+	}
+};
+
 class AchievementDB {
 private:
     sqlite3* db;
@@ -28,6 +44,16 @@ public:
                           "pixels BLOB); "
 						  "CREATE INDEX IF NOT EXISTS idx_game ON achievements(gameID);";
         sqlite3_exec(db, sql, NULL, NULL, NULL);
+
+		const char* sqlGames = "CREATE TABLE IF NOT EXISTS games ("
+			"id INTEGER PRIMARY KEY, "
+			"badgeName TEXT, "
+			"title TEXT, "
+			"badgeData BLOB, "
+			"width INTEGER, "
+			"height INTEGER, "
+			"playTime INTEGER DEFAULT 0);";
+		sqlite3_exec(db, sqlGames, NULL, NULL, NULL);
     }
 
     bool saveAchievement(const AchievementState& ach) {
@@ -223,5 +249,76 @@ public:
 
 		sqlite3_finalize(stmt);
 		return found;
+	}
+
+	bool saveGameInfo(uint32_t gameID, const std::string& title, const std::string& badgeName, SDL_Surface* badge) {
+		const char* sql = "INSERT OR REPLACE INTO games (id, title, badgeName, badgeData, width, height, playTime) VALUES (?, ?, ?, ?, ?, ?, ?);";
+		sqlite3_stmt* stmt;
+		if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) return false;
+
+		sqlite3_bind_int(stmt, 1, gameID);
+		sqlite3_bind_text(stmt, 2, title.c_str(), -1, SQLITE_TRANSIENT);
+		sqlite3_bind_text(stmt, 3, badgeName.c_str(), -1, SQLITE_TRANSIENT);
+
+		if (badge) {
+			sqlite3_bind_blob(stmt, 4, badge->pixels, badge->h * badge->pitch, SQLITE_TRANSIENT);
+			sqlite3_bind_int(stmt, 5, badge->w);
+			sqlite3_bind_int(stmt, 6, badge->h);
+			sqlite3_bind_int(stmt, 7, 0);
+		}
+
+		int res = sqlite3_step(stmt);
+		sqlite3_finalize(stmt);
+		return res == SQLITE_DONE;
+	}
+
+	GameState* AchievementDB::getGameInfo(uint32_t gameID) {
+		const char* sql = "SELECT title, badgeName, badgeData, width, height, playTime "
+						  "FROM games WHERE id = ? LIMIT 1;";
+		sqlite3_stmt* stmt;
+		GameState* game = NULL;
+
+		if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
+			sqlite3_bind_int(stmt, 1, gameID);
+
+			if (sqlite3_step(stmt) == SQLITE_ROW) {
+				game = new GameState();
+				game->id = gameID;
+				game->title = (const char*)sqlite3_column_text(stmt, 0);
+				game->badgeName = (const char*)sqlite3_column_text(stmt, 1);
+				game->playTime = sqlite3_column_int(stmt, 5);
+
+				// Reconstruir la superficie de 16 bits desde el BLOB
+				if (sqlite3_column_type(stmt, 2) != SQLITE_NULL) {
+					const void* blob = sqlite3_column_blob(stmt, 2);
+					int bytes = sqlite3_column_bytes(stmt, 2);
+					int w = sqlite3_column_int(stmt, 3);
+					int h = sqlite3_column_int(stmt, 4);
+
+					// Creamos la superficie con las máscaras de 16 bits (RGB565)
+					game->badge = SDL_CreateRGBSurface(SDL_SWSURFACE, w, h, 16, 0xF800, 0x07E0, 0x001F, 0);
+					if (game->badge) {
+						memcpy(game->badge->pixels, blob, bytes);
+					}
+				}
+			}
+		}
+		sqlite3_finalize(stmt);
+		return game;
+	}
+
+	bool updatePlayTime(uint32_t gameID, uint32_t secondsToSet) {
+		// Usamos COALESCE para manejar casos donde el tiempo sea NULL inicialmente
+		const char* sql = "UPDATE games SET playTime = ? WHERE id = ?;";
+		sqlite3_stmt* stmt;
+    
+		if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) return false;
+
+		sqlite3_bind_int(stmt, 1, secondsToSet);
+		sqlite3_bind_int(stmt, 2, gameID);
+
+		int res = sqlite3_step(stmt);
+		sqlite3_finalize(stmt);
+		return res == SQLITE_DONE;
 	}
 };

@@ -2221,7 +2221,7 @@
     <ClCompile Include="src\audio\audiobuffer.cpp" />
     <ClCompile Include="src\const\constant.cpp" />
     <ClCompile Include="src\db\sqlite3.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\engine.cpp" />
     <ClCompile Include="src\font\fonts.cpp" />

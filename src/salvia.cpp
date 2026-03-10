@@ -41,10 +41,6 @@ const std::string Constant::WHITESPACE = " \n\r\t";
 volatile uint32_t Constant::totalTicks = 0;
 int Constant::EXEC_METHOD = launch_batch;
 const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
-vector<SDL_Surface *> Icons::icons;
-vector<SDL_Surface *> Icons::icons_carts;
-
-
 static uint16_t* conversion_buffer = NULL;
 static std::size_t buffer_size = 0;
 int audio_opened = 0;
@@ -972,7 +968,6 @@ int main(int argc, char *argv[]) {
 	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
 
 	gameMenu = new GameMenu(&cfgLoader);
-
 	ListMenu listMenu(gameMenu->screen->w, gameMenu->screen->h);
 	listMenu.setLayout(LAYBOXES, gameMenu->screen->w, gameMenu->screen->h);
 	
@@ -1009,8 +1004,6 @@ int main(int argc, char *argv[]) {
 	}
 
 	initSaveSystem();
-	Icons icons;
-	icons.loadIcons();
 
 	//Poblamos las opciones del core. Lo tenemos que hacer aquí porque ya se deberian 
 	//haber obtenido.
