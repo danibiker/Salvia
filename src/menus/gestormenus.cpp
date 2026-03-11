@@ -84,6 +84,11 @@ std::string GestorMenus::volverEmulacion(CONFIG_STATUS *st){
 	return std::string("");
 }
 
+std::string GestorMenus::salirEmulacion(CONFIG_STATUS *st){
+	*st = EXIT_EMULATION;
+	return std::string("");
+}
+
 std::string GestorMenus::startScrapping(CONFIG_STATUS *st){
 	bool someSelected = false;
 	for (std::size_t i=0; i < scrapSelection.size() && !someSelected; i++){
@@ -287,6 +292,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.achievement.title"), parentAchievements, ico_achievements));
 	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, ico_saving, this));
 	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, ico_return, this));
+	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.exit"), &GestorMenus::salirEmulacion, &status, ico_shutdown, this));
 
 	// Establecer estado inicial
     menuActual = menuRaiz;
@@ -294,7 +300,6 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 }
 
 void GestorMenus::loadAchievements(){
-	vector<AchievementState> ach = Achievements::instance()->getAchievements();
 	std::vector<std::string> listAch;
 	for (unsigned int i=0; i < menuAchievements->opciones.size(); i++){
 		if (menuAchievements->opciones[i]->tipo == OPC_ACHIEVEMENT){
@@ -302,9 +307,15 @@ void GestorMenus::loadAchievements(){
 		}
 	}
 	menuAchievements->opciones.clear();
+
+	Achievements& achievements = *Achievements::instance();
+	vector<AchievementState> ach = achievements.getAchievements();
+	
+	SDL_mutexP(achievements.achievementMutex);
 	for (unsigned int i=0; i < ach.size(); i++){
 		menuAchievements->opciones.push_back(new OpcionAchievement(ach.at(i)));
 	}
+	SDL_mutexV(achievements.achievementMutex);
 	resetIndexPos();
 }
 

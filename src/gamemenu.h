@@ -115,6 +115,7 @@ class GameMenu : public Engine{
 		int getLastStatus(){return lastStatus;}
 		t_rom_paths* getRomPaths(){return &romPaths;}
 		void setRomPaths(std::string rp);
+		std::string getSramPath();
 		void showSystemMessage(std::string, uint32_t);
 		void showLangSystemMessage(std::string, uint32_t);
 		void startScrapping();

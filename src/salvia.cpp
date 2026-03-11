@@ -217,31 +217,10 @@ static bool retro_environment(unsigned cmd, void *data) {
 
 		case RETRO_ENVIRONMENT_SET_GEOMETRY:{
 			const struct retro_game_geometry *geom = (const struct retro_game_geometry*)data;
-			/*
-			// 1. Calcular el nuevo tamaño necesario (asumiendo conversión a 16 bits)
-			std::size_t needed = geom->max_width * geom->max_height * sizeof(uint16_t);
-
-			// 2. Solo redimensionar si el buffer actual es pequeño o no existe
-			if (!conversion_buffer || buffer_size < needed) {
-				//Solo estamos en este caso, si tenemos que hacer conversion, asi que actualizamos el campo
-				fmt = RETRO_PIXEL_FORMAT_XRGB8888;
-				// En Xbox 360, es preferible liberar y asignar para asegurar alineación
-				if (conversion_buffer) 
-					free(conversion_buffer);
-        
-				conversion_buffer = (uint16_t*)malloc(needed);
-				buffer_size = needed;
-
-				
-
-				// Limpiar el buffer una vez para evitar basura visual
-				if (conversion_buffer) memset(conversion_buffer, 0, needed);
-				LOG_DEBUG("Buffer de conversión redimensionado en SET_GEOMETRY\n");
-			}*/
 			return true;
 		}
 		case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: {
-			*(const char**)data = gameMenu->getRomPaths()->sram.c_str();
+			*(const char**)data = gameMenu->getSramPath().c_str();
 			return true;
 		}
 
@@ -1025,10 +1004,10 @@ int main(int argc, char *argv[]) {
 				updateGame();
 				break;
 			case EMU_MENU:
-				updateMenuScreen(tileMap, *gameMenu, listMenu);
+				updateMenuScreen(tileMap, gameMenu, listMenu);
 				break;
 			case EMU_MENU_OVERLAY:
-				updateMenuOverlay(*gameMenu, listMenu);
+				updateMenuOverlay(gameMenu, listMenu);
 				break;
 		}
 

@@ -855,24 +855,24 @@ HRESULT CreateShader(const char* source, IDirect3DPixelShader9** target) {
 }
 
 void initShaders() {
-    // Reservamos espacio para 3 PUNTEROS
-    pixelShaders = (IDirect3DPixelShader9**) malloc(3 * sizeof(IDirect3DPixelShader9*));
+    // Usar calloc para que todos los punteros empiecen en NULL
+    pixelShaders = (IDirect3DPixelShader9**) calloc(3, sizeof(IDirect3DPixelShader9*));
 
-    // Compilar efectos
     CreateShader(g_strShaderNormalSource, &pixelShaders[0]);
     CreateShader(g_strShaderGraySource,   &pixelShaders[1]);
     CreateShader(g_strShaderSepiaSource,  &pixelShaders[2]);
 }
 
 void destroyShaders() {
-	int i;
+    int i;
     if (pixelShaders == NULL) return;
+
     for (i = 0; i < 3; i++) {
         if (pixelShaders[i] != NULL) {
-            // Opción A: Casting a IUnknown (La más robusta en el SDK de Xbox)
-            ((IUnknown*)pixelShaders[i])->lpVtbl->Release((IUnknown*)pixelShaders[i]);
+            // En el XDK, si es un archivo .c, usa esta línea:
+            IDirect3DPixelShader9_Release(pixelShaders[i]);
             
-            // Opción B: Si estás en C++, simplemente:
+            // Si es un archivo .cpp, usa esta:
             // pixelShaders[i]->Release();
             
             pixelShaders[i] = NULL;

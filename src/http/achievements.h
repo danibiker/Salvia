@@ -1,12 +1,17 @@
 #pragma once
+
+#define NO_DATABASE
+
 #include <string>
 #include <vector>
 #include <list>
 #include <map>
-#include <rc_client.h>
 #include <const/constant.h>
 #include <font/fonts.h>
 #include <retroachievements/achievementdb.h>
+#include <rc_client.h>
+#include <rc_hash.h>
+#include <rc_client_internal.h>
 
 #if defined(_MSC_VER) && _MSC_VER < 1900
 #define snprintf _snprintf
@@ -137,6 +142,7 @@ public:
 	SDL_mutex* trackerMutex;
 	SDL_mutex* challengeMutex;
 	SDL_mutex* progressMutex;
+	SDL_mutex* achievementMutex;
 
 	GameState *gameState;
 	uint32_t lastGameTick;
@@ -199,7 +205,7 @@ public:
 
 
 	std::vector<AchievementState>& getAchievements(){return achievements;}
-//	std::map<std::string, SDL_Surface *>& getBadgeCache(){return badgeCache;}
+	std::map<std::string, SDL_Surface *>& getBadgeCache(){return badgeCache;}
 	void setShouldRefresh(bool ind){shouldRefresh = ind;}    
 	bool has_pending_messages() const { return !pending_messages.empty(); }
 	void setHardcoreMode(bool mode){
@@ -236,11 +242,13 @@ private:
 	
 	std::vector<AchievementState> achievements;
 
-	//std::map<std::string, SDL_Surface *> badgeCache;
+	std::map<std::string, SDL_Surface *> badgeCache;
     // Callbacks estáticos obligatorios para la librería C
     static uint32_t read_memory(uint32_t address, uint8_t* buffer, uint32_t num_bytes, rc_client_t* client);
     static void server_call(const rc_api_request_t* request, rc_client_server_callback_t callback, void* callback_data, rc_client_t* client);
     static void log_message(const char* message, const rc_client_t* client);
+	// 1. La función que rcheevos llamará para saber la hora
+	static uint64_t get_xbox_clock_millis(const rc_client_t* client);
     static void login_callback(int result, const char* error_message, rc_client_t* client, void* userdata);
     static void load_game_callback(int result, const char* error_message, rc_client_t* client, void* userdata);
 	static void event_handler(const rc_client_event_t* event, rc_client_t* client);
@@ -270,6 +278,9 @@ private:
 	void destroy_tracker(uint32_t id);
 	void createDbAchievements();
 	
+	
+
+
 	tracker_data* find_tracker(uint32_t id) ;
 };
 

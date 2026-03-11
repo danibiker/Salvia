@@ -1,13 +1,6 @@
 #include <http/httputil.h>
 #include <const/constant.h>
 
-#define DEBUG_NET(msg, ...) { \
-    char buffer[256]; \
-    int err = WSAGetLastError(); \
-    sprintf(buffer, "NET_DEBUG: " msg " | LastError: %d\n", ##__VA_ARGS__, err); \
-    OutputDebugStringA(buffer); \
-}
-
 //static const char* USERAGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0";
 static const char* USERAGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:45.0) Gecko/20100101 Firefox/45.0";
 
@@ -142,13 +135,16 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, NULL); // Se podria pasar this
 	#endif
 
-
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
 
 	if(res != CURLE_OK) {
 		char errbuf[CURL_ERROR_SIZE];
-		sprintf(errbuf, "Error curl: %s\n", curl_easy_strerror(res));
+		_snprintf(errbuf, sizeof(errbuf), "get_KO: %s\n", curl_easy_strerror(res));
+		OutputDebugStringA(errbuf);
+	} else {
+		char errbuf[CURL_ERROR_SIZE];
+		_snprintf(errbuf, sizeof(errbuf), "get_ok curl: %s\n", url.c_str());
 		OutputDebugStringA(errbuf);
 	}
 
@@ -212,7 +208,11 @@ bool CurlClient::postUrl(const std::string& url, const std::string& postData,con
 
 	if(res != CURLE_OK) {
 		char errbuf[CURL_ERROR_SIZE];
-		sprintf(errbuf, "Error curl: %s\n", curl_easy_strerror(res));
+		_snprintf(errbuf, sizeof(errbuf), "post_KO curl: %s\n", curl_easy_strerror(res));
+		OutputDebugStringA(errbuf);
+	} else {
+		char errbuf[CURL_ERROR_SIZE];
+		_snprintf(errbuf, sizeof(errbuf), "post_ok curl: %s\n", url.c_str());
 		OutputDebugStringA(errbuf);
 	}
 	
@@ -341,16 +341,20 @@ int CurlClient::debug_callback(CURL *handle, curl_infotype type,
                           char *data, size_t size, void *userptr) {
     (void)handle; (void)userptr;
     
-    // Solo nos interesan los textos informativos y cabeceras
     if(type == CURLINFO_TEXT || type == CURLINFO_HEADER_IN || type == CURLINFO_HEADER_OUT) {
-        char buffer[1024];
-        if(size > 1023) size = 1023;
-        memcpy(buffer, data, size);
-        buffer[size] = '\0';
+        // En Xbox 360, mejor imprimir trozos pequeños para no saturar el bus de debug
+        char buffer[256]; 
+        size_t copySize = (size > 255) ? 255 : size;
         
-        // Enviarlo al panel de salida de Visual Studio
-        OutputDebugStringA("CURL-DEBUG: ");
-        OutputDebugStringA(buffer);
+        memcpy(buffer, data, copySize);
+        buffer[copySize] = '\0';
+        
+        // Solo imprimir si hay contenido real para no saturar el canal de comunicación XDK
+        if (copySize > 0) {
+            OutputDebugStringA("CURL: ");
+            OutputDebugStringA(buffer);
+            // Las cabeceras ya suelen traer \n, si no, añádelo con cuidado
+        }
     }
     return 0;
 }

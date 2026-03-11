@@ -463,6 +463,9 @@
     <ClInclude Include="src\db\sqlite3ext.h">
       <Filter>Source Files\db</Filter>
     </ClInclude>
+    <ClInclude Include="src\db\sqlite_xbox_fix.h">
+      <Filter>Source Files\db</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="DistroWin\assets\i18n\en.ini">

@@ -54,12 +54,12 @@ void Logger::write(int level, const char* fmt, ...) {
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", timeinfo);
 
     // 3. Archivo
-    if (logFile.is_open()){
+    /*if (logFile.is_open()){
         logFile << "[" << timestamp << "] [" << ERRLEVELSTXT[level] << "] " << messageBuffer << "\n";
         if (errorLevel == L_DEBUG || ++numLogs % NUM_LOGS_TO_FLUSH == 0) {
             logFile.flush();
         }
-    }
+    }*/
 
     // 4. Debug Output (Imprescindible para desarrollo en Xbox 360)
     char debugOut[2100];

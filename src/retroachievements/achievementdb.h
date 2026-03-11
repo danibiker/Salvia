@@ -27,23 +27,46 @@ private:
 public:
     AchievementDB(const char* dbPath) {
         if (sqlite3_open(dbPath, &db) != SQLITE_OK) {
-            std::cerr << "Error abriendo BDD: " << sqlite3_errmsg(db) << std::endl;
-        }
-        createTable();
+			LOG_DEBUG("Error abriendo BDD: %s", sqlite3_errmsg(db));
+        } else {
+			createTable();
+		}
     }
 
     ~AchievementDB() {
+		LOG_DEBUG("Cerrando base de datos sqlite");
         sqlite3_close(db);
     }
 
+	void printError(int rc, char *zErrMsg){
+		if( rc != SQLITE_OK ){
+			// Imprime el error en la consola de salida de Visual Studio (Output)
+			// En Xbox 360/XDK se usa habitualmente esta función para loguear:
+			LOG_DEBUG("SQLITE ERROR: %s", zErrMsg);
+			//liberar la memoria del error con sqlite3_free
+			sqlite3_free(zErrMsg);
+		} else {
+			OutputDebugStringA("Operacion exitosa\n");
+		}
+	}
+
     void createTable() {
+		int rc;
+		char *zErrMsg = 0;
+		
+		#ifdef _XBOX
+		sqlite3_exec(db, "PRAGMA journal_mode = MEMORY;", 0, 0, 0);
+		sqlite3_exec(db, "PRAGMA synchronous = NORMAL;", 0, 0, 0); // Mucho más rápido en el HDD de la 360
+		#endif
+
         const char* sql = "CREATE TABLE IF NOT EXISTS achievements ("
                           "id INTEGER PRIMARY KEY, gameID INTEGER, badgeName TEXT, locked INTEGER, sectionType INTEGER, "
                           "points INTEGER, type INTEGER, badgeUrl TEXT, title TEXT, "
                           "description TEXT, progress TEXT, width INTEGER, height INTEGER, "
                           "pixels BLOB); "
 						  "CREATE INDEX IF NOT EXISTS idx_game ON achievements(gameID);";
-        sqlite3_exec(db, sql, NULL, NULL, NULL);
+        rc = sqlite3_exec(db, sql, NULL, 0, &zErrMsg);
+		printError(rc, zErrMsg);
 
 		const char* sqlGames = "CREATE TABLE IF NOT EXISTS games ("
 			"id INTEGER PRIMARY KEY, "
@@ -53,10 +76,15 @@ public:
 			"width INTEGER, "
 			"height INTEGER, "
 			"playTime INTEGER DEFAULT 0);";
-		sqlite3_exec(db, sqlGames, NULL, NULL, NULL);
+
+		rc = sqlite3_exec(db, sqlGames, NULL, 0, &zErrMsg);
+		printError(rc, zErrMsg);
     }
 
+	
+
     bool saveAchievement(const AchievementState& ach) {
+		sqlite3_exec(db, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
         const char* sql = "INSERT OR REPLACE INTO achievements VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
         sqlite3_stmt* stmt;
         
@@ -83,12 +111,21 @@ public:
             for(int i=12; i<=14; i++) sqlite3_bind_null(stmt, i);
         }
 
-        bool success = (sqlite3_step(stmt) == SQLITE_DONE);
+        int res = sqlite3_step(stmt);
         sqlite3_finalize(stmt);
-        return success;
+        
+		// 2. Finalizar transacción: AQUÍ es donde se escribe al disco
+		if (res == SQLITE_DONE) {
+			sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
+			return true;
+		} else {
+			sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+			return false;
+		}
     }
 
 	bool updateStatus(uint32_t id, bool locked, uint8_t sectionType) {
+		sqlite3_exec(db, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
 		// Usamos UPDATE para modificar solo las columnas necesarias sin tocar el BLOB
 		const char* sql = "UPDATE achievements SET locked = ?, sectionType = ? WHERE id = ?;";
 		sqlite3_stmt* stmt;
@@ -104,19 +141,29 @@ public:
 		int res = sqlite3_step(stmt);
 		sqlite3_finalize(stmt);
 
-		return (res == SQLITE_DONE);
+		// 2. Finalizar transacción: AQUÍ es donde se escribe al disco
+		if (res == SQLITE_DONE) {
+			sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
+			return true;
+		} else {
+			sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+			return false;
+		}
 	}
 
 	bool updateAchievementsStatus(const std::vector<AchievementState>& achievements) {
-		sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+		// 1. Iniciamos la transacción
+		if (sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL) != SQLITE_OK) return false;
 
 		const char* sql = "UPDATE achievements SET locked = ?, sectionType = ? WHERE id = ?;";
 		sqlite3_stmt* stmt;
 
-		if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) return false;
+		if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+			sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL); // Cancelamos si falla el prepare
+			return false;
+		}
 
 		for (size_t i = 0; i < achievements.size(); ++i) {
-			// Acceso directo por objeto (usando el punto '.' en lugar de '->')
 			const AchievementState& ach = achievements[i];
         
 			sqlite3_bind_int(stmt, 1, ach.locked ? 1 : 0);
@@ -124,11 +171,19 @@ public:
 			sqlite3_bind_int(stmt, 3, ach.id);
 
 			sqlite3_step(stmt);
-			sqlite3_reset(stmt);
+			sqlite3_reset(stmt); // Preparamos para el siguiente ciclo del bucle
 		}
 
 		sqlite3_finalize(stmt);
-		sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
+
+		// 2. EL PASO CRUCIAL: COMMIT para persistir en la consola
+		int rc = sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
+    
+		if (rc != SQLITE_OK) {
+			sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+			return false;
+		}
+
 		return true;
 	}
 
@@ -252,6 +307,7 @@ public:
 	}
 
 	bool saveGameInfo(uint32_t gameID, const std::string& title, const std::string& badgeName, SDL_Surface* badge) {
+		sqlite3_exec(db, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
 		const char* sql = "INSERT OR REPLACE INTO games (id, title, badgeName, badgeData, width, height, playTime) VALUES (?, ?, ?, ?, ?, ?, ?);";
 		sqlite3_stmt* stmt;
 		if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) return false;
@@ -269,7 +325,14 @@ public:
 
 		int res = sqlite3_step(stmt);
 		sqlite3_finalize(stmt);
-		return res == SQLITE_DONE;
+		// 2. Finalizar transacción: AQUÍ es donde se escribe al disco
+		if (res == SQLITE_DONE) {
+			sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
+			return true;
+		} else {
+			sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+			return false;
+		}
 	}
 
 	GameState* AchievementDB::getGameInfo(uint32_t gameID) {
@@ -308,7 +371,7 @@ public:
 	}
 
 	bool updatePlayTime(uint32_t gameID, uint32_t secondsToSet) {
-		// Usamos COALESCE para manejar casos donde el tiempo sea NULL inicialmente
+		sqlite3_exec(db, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
 		const char* sql = "UPDATE games SET playTime = ? WHERE id = ?;";
 		sqlite3_stmt* stmt;
     
@@ -319,6 +382,13 @@ public:
 
 		int res = sqlite3_step(stmt);
 		sqlite3_finalize(stmt);
-		return res == SQLITE_DONE;
+		// 2. Finalizar transacción: AQUÍ es donde se escribe al disco
+		if (res == SQLITE_DONE) {
+			sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
+			return true;
+		} else {
+			sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+			return false;
+		}
 	}
 };

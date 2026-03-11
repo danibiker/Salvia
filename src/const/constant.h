@@ -293,6 +293,7 @@ typedef enum {
 		ico_return,
 		ico_scrapper,
 		ico_achievements,
+		ico_shutdown,
 		max_icons
 }enumIco;
 

@@ -153,23 +153,25 @@ bool GameMenu::cargarSystemAchievementTranslation(const std::string& nombreArchi
 *
 */
 void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
-	//Cargamos la memoria para los achievements
-	// Obtener WRAM
-	uint8_t* w_data = (uint8_t*)retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM);
-	std::size_t w_size = retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM);
+    // 1. Limpiar SIEMPRE antes de configurar nada nuevo
+    Achievements::instance()->doUnload();
 
-	// Obtener SRAM (Donde Yoshi's Island guarda los datos del chip FX)
-	uint8_t* s_data = (uint8_t*)retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
-	std::size_t s_size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    // 2. Configurar el modo (Hardcore/Softcore)
+    Achievements::instance()->setHardcoreMode(getCfgLoader()->configMain[cfg::hardcoreRA].valueBool);
 
-	Achievements::instance()->set_memory_sources(w_data, w_size, s_data, s_size);
-	//Hacemos el reset si habia algo cargado
-	Achievements::instance()->doUnload();
-	Achievements::instance()->setHardcoreMode(getCfgLoader()->configMain[cfg::hardcoreRA].valueBool);
-	//Ahora cargamos el juego
-	int system = translateSystemAchievement();
-	std::string pathToRom = unzipped.extractedPath.empty() ? unzipped.originalPath : unzipped.extractedPath;
-	Achievements::instance()->load_game((uint8_t *)unzipped.memoryBuffer, unzipped.romsize, pathToRom, system, messagesAchievement);
+    // 3. Obtener punteros de memoria (Asegúrate de que el Core ya está cargado)
+    uint8_t* w_data = (uint8_t*)retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM);
+    std::size_t w_size = retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM);
+    uint8_t* s_data = (uint8_t*)retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    std::size_t s_size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+
+    // 4. Pasar a la clase de logros
+    Achievements::instance()->set_memory_sources(w_data, w_size, s_data, s_size);
+
+    // 5. Cargar lógica del juego
+    int system = translateSystemAchievement();
+    std::string pathToRom = unzipped.extractedPath.empty() ? unzipped.originalPath : unzipped.extractedPath;
+    Achievements::instance()->load_game((uint8_t *)unzipped.memoryBuffer, unzipped.romsize, pathToRom, system, messagesAchievement);
 }
 
 std::string GameMenu::configButtonsJOY(){
@@ -1207,7 +1209,6 @@ void GameMenu::renderChallenges() {
 		SDL_mutexV(ach->challengeMutex); // LIBERAR ANTES DE SALIR
 		return;
 	}
-
 	
     int badgeW, badgeH, badgePad, line_height;
     ach->getBadgeSize(badgeW, badgeH, badgePad, line_height);
@@ -1535,15 +1536,20 @@ void GameMenu::setRomPaths(std::string rp){
 	getRomPaths()->savestate = statesDir + Constant::getFileSep() + 
 		dir.getFileNameNoExt(rp) + STATE_EXT;
 
+	std::string sramDir = getSramPath();
+	getRomPaths()->sram = sramDir + Constant::getFileSep() + 
+		dir.getFileNameNoExt(rp) + ".srm";
+}
+
+std::string GameMenu::getSramPath(){
+	dirutil dir;
 	std::string sramDir = getCfgLoader()->configMain[cfg::libretro_save].valueStr + Constant::getFileSep() +
 		getCfgLoader()->configMain[cfg::libretro_core].valueStr;
 			
 	if (!dir.dirExists(sramDir.c_str())){
 		dir.createDirRecursive(sramDir.c_str());
 	}
-
-	getRomPaths()->sram = sramDir + Constant::getFileSep() + 
-		dir.getFileNameNoExt(rp) + ".srm";
+	return sramDir;
 }
 
 void GameMenu::startScrapping(){
