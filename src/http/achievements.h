@@ -11,7 +11,6 @@
 #include <retroachievements/achievementdb.h>
 #include <rc_client.h>
 #include <rc_hash.h>
-#include <rc_client_internal.h>
 
 #if defined(_MSC_VER) && _MSC_VER < 1900
 #define snprintf _snprintf
@@ -181,7 +180,7 @@ public:
 	}
 
 	void doReset(){
-		rc_client_reset(g_client);
+		//rc_client_reset(g_client);
 	}
 
 	bool canPause(){
@@ -191,6 +190,15 @@ public:
 	void set_memory_sources(uint8_t* wram, std::size_t w_size, uint8_t* sram, std::size_t s_size) {
         wram_ptr = wram; wram_size = w_size;
         sram_ptr = sram; sram_size = s_size;
+        LOG_DEBUG("[DIAG] set_memory_sources: wram=%p size=%u  sram=%p size=%u",
+                  (void*)wram, (unsigned)w_size, (void*)sram, (unsigned)s_size);
+        /* Volcamos los primeros bytes de wram para comprobar si est viva */
+        if (wram && w_size > 16) {
+            LOG_DEBUG("[DIAG] wram first 16 bytes: %02X %02X %02X %02X %02X %02X %02X %02X "
+                      "%02X %02X %02X %02X %02X %02X %02X %02X",
+                      wram[0],wram[1],wram[2],wram[3],wram[4],wram[5],wram[6],wram[7],
+                      wram[8],wram[9],wram[10],wram[11],wram[12],wram[13],wram[14],wram[15]);
+        }
     }
 
     // Getters
@@ -220,7 +228,7 @@ public:
 	}
 
 private:
-    Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false), hardcoreMode(true), gameState(NULL), lastGameTick(0) {} // Constructor privado
+    Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false), hardcoreMode(true), gameState(NULL), lastGameTick(0), byte_swap_memory(false) {} // Constructor privado
     
     rc_client_t* g_client;
     std::string ra_user;
@@ -238,6 +246,8 @@ private:
     std::size_t sram_size;
 	bool shouldRefresh;
 	bool hardcoreMode;
+	bool byte_swap_memory;  // true cuando el core emula una CPU big-endian de 16 bits
+	                        // (68000) en un host big-endian y necesita XOR de direcciones
 	
 	
 	std::vector<AchievementState> achievements;

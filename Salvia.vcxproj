@@ -417,7 +417,6 @@
     <COMMON_PREPROCESSOR>_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB;RC_NO_THREADS;RC_CLIENT_SUPPORTS_HASH</COMMON_PREPROCESSOR>
     <COMMON_PREPROCESSOR_DEBUG>DEBUG;DEBUG_LOG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_DEBUG>
     <COMMON_PREPROCESSOR_RELEASE>NDEBUG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_RELEASE>
-    <PREPROCESSOR_XBOX>ARCH_IS_BIG_ENDIAN</PREPROCESSOR_XBOX>
     <COMMON_LIBS_XBOX_D>xnetd.lib;xapilibd.lib;xboxkrnl.lib;d3d9d.lib;d3dx9.lib;xgraphicsd.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;mbedTLS.lib</COMMON_LIBS_XBOX_D>
     <COMMON_LIBS_XBOX_R>xnet.lib;xapilib.lib;xboxkrnl.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;mbedTLS.lib</COMMON_LIBS_XBOX_R>
     <COMMON_LIBS_XBOX_DEBUG>$(COMMON_LIBS_XBOX_D);libcurl_a_debug.lib</COMMON_LIBS_XBOX_DEBUG>
@@ -769,7 +768,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>true</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;HAVE_CHD;DEBUG;SQLITE_DEBUG;EMU_LIB_NAME="$(EMU_LIB_NAME)";$(COMMON_PREPROCESSOR_DEBUG);$(PREPROCESSOR_XBOX)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;HAVE_CHD;DEBUG;SQLITE_DEBUG;EMU_LIB_NAME="$(EMU_LIB_NAME)";$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src\rhash;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
       <WholeProgramOptimization>false</WholeProgramOptimization>
@@ -1154,6 +1153,9 @@
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -1260,6 +1262,8 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -1317,9 +1321,9 @@
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <Optimization>Full</Optimization>
-      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExceptionHandling>false</ExceptionHandling>
       <MinimalRebuild>false</MinimalRebuild>
-      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_GAMBATTE)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
@@ -1328,6 +1332,10 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -1348,24 +1356,24 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <Optimization>Disabled</Optimization>
+      <Optimization>Full</Optimization>
       <ExceptionHandling>false</ExceptionHandling>
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;HAVE_CHD;DEBUG_LOG;EMU_LIB_NAME="$(EMU_LIB_NAME)";$(COMMON_PREPROCESSOR_RELEASE);$(PREPROCESSOR_XBOX)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;HAVE_CHD;EMU_LIB_NAME="$(EMU_LIB_NAME)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src\rhash;$(ProjectDir)\src\retroachievements\include;$(ProjectDir)\src\retroachievements\src</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
-      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
-      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
-      <IntrinsicFunctions>false</IntrinsicFunctions>
-      <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
-      <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
-      <PreschedulingOptimization>false</PreschedulingOptimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -2164,6 +2172,8 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release;..\..\project\vba-next\Release\Xbox 360;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360</AdditionalLibraryDirectories>
@@ -2185,6 +2195,8 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release;..\..\project\beetle-pce-fast-libretro\Release\Xbox 360;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360</AdditionalLibraryDirectories>
@@ -2335,6 +2347,9 @@
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\retroachievements\src\rc_compat.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="src\retroachievements\src\rc_endian.c">
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="src\retroachievements\src\rc_libretro.c">

@@ -11,27 +11,65 @@
 #include <SDL_image.h>
 #include <retroachievements/CHDHashed.h>
 #include <utils/langmanager.h>
-#ifdef _XBOX
-#include <ppcintrinsics.h>
+#include <rc_consoles.h>
+
+/* ---------- Deteccion de endianness del host en tiempo de compilacion ----------
+ * Se usa para decidir si el core necesita byte-swap en read_memory().
+ * En hosts little-endian (PC), los cores con CPU 68000 (Genesis, Sega CD, 32X)
+ * ya hacen byte-swap de cada word de 16 bits en work_ram por rendimiento, y ese
+ * es el layout contra el que RetroAchievements escribe sus condiciones.
+ * En hosts big-endian (Xbox 360 PowerPC), el core almacena work_ram en orden
+ * nativo 68000 (BE), por lo que debemos hacer XOR de cada direccion con 1 para
+ * replicar el layout LE que esperan los logros. */
+#if defined(_XBOX) 
+#define SALVIA_HOST_IS_BIG_ENDIAN 1
+#else
+#define SALVIA_HOST_IS_BIG_ENDIAN 0
 #endif
+
+/* ---------- Debug trace for rcheevos conditions ----------
+ * These variables live in rc_client.c.  Set g_rc_debug_achievement_id
+ * to the numeric achievement ID you want to trace (0 = disabled).
+ * g_rc_debug_frame_interval controls how often the trace fires
+ * (1 = every frame, 60 = ~once/sec at 60 fps).  Traces also fire
+ * immediately on any state change or measured-value change. */
+extern "C" {
+  extern uint32_t g_rc_debug_achievement_id;
+  extern uint32_t g_rc_debug_frame_interval;
+}
 
 void clearBadgeCache();
 static const std::string SALVIA_USER_AGENT = "Salvia/1.0";
 
 void Achievements::initialize() {
 	if (g_client) return;
+
+	messagesMutex = SDL_CreateMutex();
+	trackerMutex = SDL_CreateMutex();
+	challengeMutex = SDL_CreateMutex();
+	progressMutex = SDL_CreateMutex();
+	achievementMutex = SDL_CreateMutex();
+
 	createDbAchievements();
 	active_progress.badge = NULL;
-	// Creamos el cliente pasando la función de lectura de memoria
+	// Creamos el cliente pasando la funcion de lectura de memoria
 	g_client = rc_client_create(read_memory, server_call);
 	// Habilitar logs detallados para debug
 	rc_client_enable_logging(g_client, RC_CLIENT_LOG_LEVEL_VERBOSE, log_message);
+
+	/* -------- TRAZA DE CONDICIONES DE UN LOGRO --------
+	 * Cambia el ID para trazar otro logro. Pon 0 para desactivar.
+	 * g_rc_debug_frame_interval controla cada cuantos frames se imprime
+	 * (siempre se imprime inmediatamente ante cambios de estado o progreso). */
+	g_rc_debug_achievement_id  = 0;   /* <-- PON AQUI EL ID DEL LOGRO (ej. 260) */
+	g_rc_debug_frame_interval  = 60;  /* 60 = ~1 vez/seg a 60fps, 1 = cada frame */
+
 	#ifdef _XBOX
-	// REGISTRA LA FUNCIÓN DE TIEMPO (Crucial para Triggers/Challenges)
-//    rc_client_set_get_time_millisecs_function(g_client, get_xbox_clock_millis);
-	// Forzamos el modo de lectura Little Endian para evitar que la librería
-	// reconstruya los bytes al revés en la arquitectura Big-Endian de la Xbox.
-	rc_client_set_legacy_peek(g_client, RC_CLIENT_LEGACY_PEEK_LITTLE_ENDIAN_READS);
+	// REGISTRA LA FUNCION DE TIEMPO (Crucial para Triggers/Challenges)
+    rc_client_set_get_time_millisecs_function(g_client, get_xbox_clock_millis);
+	// Forzamos el modo de lectura Little Endian para evitar que la libreria
+	// reconstruya los bytes al reves en la arquitectura Big-Endian de la Xbox.
+	//rc_client_set_legacy_peek(g_client, RC_CLIENT_LEGACY_PEEK_LITTLE_ENDIAN_READS);
 	//rc_client_set_legacy_peek(g_client, RC_CLIENT_LEGACY_PEEK_CONSTRUCTED);
 	#endif
 	// Provide an event handler
@@ -90,7 +128,7 @@ DWORD WINAPI ServerThreadFunction(LPVOID lpParam) {
 	CurlClient curlClient;
 	float progress = 0;
 
-	// Ejecutamos la petición
+	// Ejecutamos la peticion
 	bool success = false;
 	if (!data->post_data.empty()) {
 		success = curlClient.postUrl(data->url, data->post_data, SALVIA_USER_AGENT, data->response, &progress);
@@ -98,7 +136,7 @@ DWORD WINAPI ServerThreadFunction(LPVOID lpParam) {
 		success = curlClient.fetchUrl(data->url, data->response, &progress);
 	}
 
-	// Preparamos la respuesta para la librería
+	// Preparamos la respuesta para la libreria
 	rc_api_server_response_t server_response;
 	memset(&server_response, 0, sizeof(server_response));
 	server_response.body = data->response.c_str();
@@ -130,7 +168,7 @@ DWORD WINAPI AchievementTriggeredThread(LPVOID lpParam) {
 		self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
 		self.download_and_cache_image(&msg, badgeW, badgeH);
 		self.setShouldRefresh(true);
-		// Bloqueamos el mutex de SDL para añadir a la cola de forma segura
+		// Bloqueamos el mutex de SDL para anyadir a la cola de forma segura
 		SDL_mutexP(self.messagesMutex);
 		self.pending_messages.push_back(msg);
 		SDL_mutexV(self.messagesMutex);
@@ -152,7 +190,7 @@ void clearBadgeCache(){
             SDL_FreeSurface(it->second); // Libera la superficie de la memoria
         }
     }
-    // 2. Limpiar el mapa (elimina los IDs y punteros ahora inválidos)
+    // 2. Limpiar el mapa (elimina los IDs y punteros ahora invalidos)
     self.getBadgeCache().clear();
 }
 
@@ -162,7 +200,7 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
 	Achievements& self = *Achievements::instance();
 
 	if (ctx->romBuffer) {
-		free(ctx->romBuffer); // LIBERACIÓN SEGURA: La identificación ya terminó
+		free(ctx->romBuffer); // LIBERACION SEGURA: La identificacion ya termino
 		ctx->romBuffer = NULL;
 	}
 
@@ -176,7 +214,7 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
 
 		bool prevGameLoaded = self.gameState != NULL;
 		if (prevGameLoaded){
-			//Si ya habíamos cargado un juego, actualizamos el tiempo de juego 
+			//Si ya habiamos cargado un juego, actualizamos el tiempo de juego 
 			//del anterior antes de cargar el nuevo
 			self.updatePlayTime(self.getGameId());
 			//Borramos la memoria
@@ -184,7 +222,7 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
 			self.gameState = NULL;
 		}
 
-		// Llamamos a los métodos de la clase a través de la instancia
+		// Llamamos a los metodos de la clase a traves de la instancia
 		self.show_game_placard(data->client);
 		self.updateAchievements(data->client);
 		if (ctx->messages) {
@@ -215,11 +253,11 @@ DWORD WINAPI ChallengeIndicatorThread(LPVOID lpParam) {
     c_data.active = true;
     c_data.badge = NULL; // Inicializar por seguridad
 
-    // Operación pesada de red/disco
+    // Operacion pesada de red/disco
     self.download_and_cache_image(data->badgeUrl, data->badgeName, c_data.badge, badgeW, badgeH);
 
 	SDL_mutexP(self.challengeMutex);
-    // Guardar en el mapa (Ojo: si tu mapa no es thread-safe, considera usar un Mutex aquí)
+    // Guardar en el mapa (Ojo: si tu mapa no es thread-safe, considera usar un Mutex aqui)
     self.active_challenges[data->id] = c_data;
 	SDL_mutexV(self.challengeMutex);
     delete data; // Limpiar memoria
@@ -237,17 +275,15 @@ DWORD WINAPI ProgressIndicatorThread(LPVOID lpParam) {
     // 1. DESCARGA FUERA DEL MUTEX
     SDL_Surface* tempBadge = NULL;
     self.download_and_cache_image(data->badgeUrl, data->badgeName, tempBadge, badgeW, badgeH);
-
-    // 2. SECCIÓN CRÍTICA RÁPIDA
     SDL_mutexP(self.progressMutex);
 
 	// IMPORTANTE: Como el struct gestiona su propia memoria, 
-    // simplemente asignamos los valores. Si ya había un badge, 
-    // nuestro operador de asignación se encargará de liberarlo.
+    // simplemente asignamos los valores. Si ya habia un badge, 
+    // nuestro operador de asignacion se encargara de liberarlo.
     self.active_progress.id = data->id;
     self.active_progress.measured_progress = data->measured_progress;
     
-    // Si NO quieres copia profunda aquí (porque tempBadge ya es nuevo):
+    // Si NO quieres copia profunda aqui (porque tempBadge ya es nuevo):
     if (self.active_progress.badge != NULL) SDL_FreeSurface(self.active_progress.badge);
     self.active_progress.badge = tempBadge; 
     self.active_progress.active = true;
@@ -266,9 +302,33 @@ void Achievements::login(const char* username, const char* password) {
 void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string path, uint32_t console_id, std::list<AchievementState>& messagesAchievement) {
 	LoadContext* ctx = new LoadContext();
 	ctx->messages = &messagesAchievement;
-	ctx->romBuffer = (void*)rom; 
+	ctx->romBuffer = (void*)rom;
 	char romHash[33] = {0};
 	shouldRefresh = true;
+
+	/* --- Deteccion automatica de byte-swap ---
+	 * Cores que emulan CPUs big-endian de 16 bits (Motorola 68000) almacenan
+	 * work_ram en orden nativo cuando el host tambien es BE.  Los logros de
+	 * RetroAchievements estan escritos contra el layout LE (byte-swapped) que
+	 * se usa en PC, asi que en hosts BE necesitamos XOR cada direccion con 1
+	 * para intercambiar bytes dentro de cada word de 16 bits.
+	 * En hosts LE esto NO es necesario porque el core ya hace el swap. */
+#if SALVIA_HOST_IS_BIG_ENDIAN
+	switch (console_id) {
+		case RC_CONSOLE_MEGA_DRIVE:  /* Genesis / Mega Drive (68000) */
+		case RC_CONSOLE_SEGA_CD:     /* Sega CD / Mega CD (68000) */
+		case RC_CONSOLE_SEGA_32X:    /* 32X (68000 + SH-2) */
+			byte_swap_memory = true;
+			break;
+		default:
+			byte_swap_memory = false;
+			break;
+	}
+	LOG_DEBUG("RetroAchievements: console_id=%u, byte_swap_memory=%s",
+	          console_id, byte_swap_memory ? "YES" : "NO");
+#else
+	byte_swap_memory = false;
+#endif
 
 #ifdef HAVE_CHD
 	std::string hashStr;
@@ -281,7 +341,7 @@ void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string pa
 
 		if (!hashStr.empty()) {
 			// Copiamos el string al array char[33]
-			// strncpy asegura que no nos pasemos del tamaño del buffer
+			// strncpy asegura que no nos pasemos del tamao del buffer
 			strncpy(romHash, hashStr.c_str(), sizeof(romHash) - 1);
 			romHash[32] = '\0'; // Aseguramos el terminador nulo
 
@@ -320,11 +380,6 @@ void Achievements::login_callback(int result, const char* error_message, rc_clie
 		self->ra_user = user->username;
 		self->ra_token = user->token;
 		self->ra_score = user->score;
-		self->messagesMutex = SDL_CreateMutex();
-		self->trackerMutex = SDL_CreateMutex();
-		self->challengeMutex = SDL_CreateMutex();
-		self->progressMutex = SDL_CreateMutex();
-		self->achievementMutex = SDL_CreateMutex();
 		LOG_DEBUG("RetroAchievements: Login exitoso. Usuario: %s | Puntos: %u", user->display_name, user->score);
 	}
 }
@@ -343,7 +398,7 @@ void Achievements::load_game_callback(int result, const char* error_message, rc_
 
 	if (hThread) {
 		#ifdef _XBOX
-		// En Xbox 360 es buena práctica asignar el hilo a un hardware thread específico
+		// En Xbox 360 es buena practica asignar el hilo a un hardware thread especifico
 		XSetThreadProcessor(hThread, 4); 
 		#endif
 		CloseHandle(hThread);
@@ -354,43 +409,37 @@ void Achievements::load_game_callback(int result, const char* error_message, rc_
 
 uint32_t Achievements::read_memory(uint32_t address, uint8_t* buffer, uint32_t num_bytes, rc_client_t* client) {
     Achievements& self = *Achievements::instance();
-    uint8_t* source_ptr = NULL;
+    uint8_t* base_ptr = NULL;
+    uint32_t local_addr = 0;
 
-    // 1. Determinar el puntero de origen (Lógica de mapeo igual)
     if (address < 0x020000) {
-        if (self.wram_ptr && (address + num_bytes) <= self.wram_size)
-            source_ptr = self.wram_ptr + address;
+        if (self.wram_ptr && (address + num_bytes) <= self.wram_size) {
+            base_ptr = self.wram_ptr;
+            local_addr = address;
+        }
     } else {
         uint32_t sram_address = address - 0x020000;
-        if (self.sram_ptr && (sram_address + num_bytes) <= self.sram_size)
-            source_ptr = self.sram_ptr + sram_address;
+        if (self.sram_ptr && (sram_address + num_bytes) <= self.sram_size) {
+            base_ptr = self.sram_ptr;
+            local_addr = sram_address;
+        }
     }
 
-    if (!source_ptr) return 0;
+    if (!base_ptr) return 0;
 
-    // 2. Copia de memoria con Swap condicional para XBox 360
-/*#ifdef _XBOX
-    if (num_bytes == 1) {
-        *buffer = *source_ptr;
-    } 
-    else if (num_bytes == 2) {
-         // Lee Big-Endian de la RAM y devuelve Little-Endian al registro
-        *(unsigned short*)buffer = __loadshortbytereverse(0, source_ptr);
-    } 
-    else if (num_bytes == 4) {
-         // Lee Big-Endian de la RAM y devuelve Little-Endian al registro
-        *(unsigned long*)buffer = __loadwordbytereverse(0, source_ptr);
-    } 
-    else {
-		LOG_DEBUG("WARNING! byteswap of %d bytes", num_bytes);
-        // Para bloques de memoria (ej. cadenas de texto o arrays), 
-        // rcheevos suele manejar el orden internamente.
-        memcpy(buffer, source_ptr, num_bytes);
+    if (self.byte_swap_memory) {
+        /* El core emula una CPU big-endian de 16 bits (68000) y el host
+         * tambien es big-endian, asi que work_ram esta en orden nativo BE.
+         * Los logros esperan el layout LE (byte-swapped) de PC.
+         * XOR con 1 intercambia bytes dentro de cada word de 16 bits:
+         *   addr_even -> lee addr+1  (LSB en vez de MSB)
+         *   addr_odd  -> lee addr-1  (MSB en vez de LSB) */
+        uint32_t i;
+        for (i = 0; i < num_bytes; i++)
+            buffer[i] = base_ptr[(local_addr + i) ^ 1];
+    } else {
+        memcpy(buffer, base_ptr + local_addr, num_bytes);
     }
-#else*/
-    // Comportamiento normal para PC (Little-Endian)
-    memcpy(buffer, source_ptr, num_bytes);
-//#endif
 
     return num_bytes;
 }
@@ -420,7 +469,7 @@ void Achievements::leaderboard_submitted(const rc_client_leaderboard_t* leaderbo
 	AchievementState msg;
 	msg.title = leaderboard->title;
 	msg.description = leaderboard->tracker_value;
-	// Bloqueamos el mutex de SDL para añadir a la cola de forma segura
+	// Bloqueamos el mutex de SDL para anyadir a la cola de forma segura
 	SDL_mutexP(self.messagesMutex);
 	self.pending_messages.push_back(msg);
 	msg.clear();
@@ -481,7 +530,7 @@ void Achievements::destroy_tracker(uint32_t id) {
 }
 
 tracker_data* Achievements::find_tracker(uint32_t id) {
-    // NOTA: Esta función debe llamarse siempre desde dentro de un bloque bloqueado por trackerMutex
+    // NOTA: Esta funcion debe llamarse siempre desde dentro de un bloque bloqueado por trackerMutex
     // o bloquear ella misma si devuelve una COPIA del objeto, no un puntero.
     std::map<uint32_t, tracker_data>::iterator it = active_trackers.find(id);
     if (it != active_trackers.end())
@@ -495,7 +544,7 @@ void Achievements::challenge_indicator_show(const rc_client_achievement_t* achie
 	if (!achievement) return;
 
 	Achievements& self = *Achievements::instance();
-    // Reservamos memoria para los datos que usará el hilo
+    // Reservamos memoria para los datos que usara el hilo
     ChallengeThreadData* data = new ChallengeThreadData();
     data->id = achievement->id;
 	data->badgeName = achievement->badge_name; 
@@ -506,10 +555,10 @@ void Achievements::challenge_indicator_show(const rc_client_achievement_t* achie
     
     if (hThread) {
 		#ifdef _XBOX
-		// En Xbox 360 es buena práctica asignar el hilo a un hardware thread específico
+		// En Xbox 360 es buena practica asignar el hilo a un hardware thread especifico
 		XSetThreadProcessor(hThread, 4); 
 		#endif
-        CloseHandle(hThread); // No necesitamos trackearlo, se cerrará al terminar
+        CloseHandle(hThread); // No necesitamos trackearlo, se cerrara al terminar
     } else {
         delete data; // Si falla el hilo, limpiamos para evitar leak
     }
@@ -527,7 +576,7 @@ void Achievements::progress_indicator_update(const rc_client_achievement_t* achi
 {
 	LOG_DEBUG("Updating progress: %d - %s", achievement->id, achievement->title);
 	if (!achievement) return;
-	// Reservamos memoria para los datos que usará el hilo
+	// Reservamos memoria para los datos que usara el hilo
     ProgressThreadData* data = new ProgressThreadData();
     data->id = achievement->id;
 	data->measured_progress = achievement->measured_progress;
@@ -539,10 +588,10 @@ void Achievements::progress_indicator_update(const rc_client_achievement_t* achi
     
     if (hThread) {
 		#ifdef _XBOX
-		// En Xbox 360 es buena práctica asignar el hilo a un hardware thread específico
+		// En Xbox 360 es buena practica asignar el hilo a un hardware thread especifico
 		XSetThreadProcessor(hThread, 4); 
 		#endif
-        CloseHandle(hThread); // No necesitamos trackearlo, se cerrará al terminar
+        CloseHandle(hThread); // No necesitamos trackearlo, se cerrara al terminar
     } else {
         delete data; // Si falla el hilo, limpiamos para evitar leak
     }
@@ -593,7 +642,7 @@ void Achievements::game_mastered(void)
 	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, 0, NULL);
 	if (hThread) {
 		#ifdef _XBOX
-		// En Xbox 360 es buena práctica asignar el hilo a un hardware thread específico
+		// En Xbox 360 es buena practica asignar el hilo a un hardware thread especifico
 		XSetThreadProcessor(hThread, 4); 
 		#endif
 		CloseHandle(hThread);
@@ -627,7 +676,7 @@ void Achievements::subset_completed(const rc_client_subset_t* subset)
 	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, 0, NULL);
 	if (hThread) {
 		#ifdef _XBOX
-		// En Xbox 360 es buena práctica asignar el hilo a un hardware thread específico
+		// En Xbox 360 es buena practica asignar el hilo a un hardware thread especifico
 		XSetThreadProcessor(hThread, 4); 
 		#endif
 		CloseHandle(hThread);
@@ -647,7 +696,7 @@ void Achievements::server_error(const rc_client_server_error_t* error)
 	AchievementState msg;
 	msg.title = error->api;
 	msg.description = error->error_message;
-	// Bloqueamos el mutex de SDL para añadir a la cola de forma segura
+	// Bloqueamos el mutex de SDL para anyadir a la cola de forma segura
 	SDL_mutexP(self->messagesMutex);
 	self->pending_messages.push_back(msg);
 	msg.clear();
@@ -670,7 +719,7 @@ void Achievements::achievement_update(rc_client_achievement_t* achievement){
 	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, 0, NULL);
 	if (hThread) {
 		#ifdef _XBOX
-		// En Xbox 360 es buena práctica asignar el hilo a un hardware thread específico
+		// En Xbox 360 es buena practica asignar el hilo a un hardware thread especifico
 		XSetThreadProcessor(hThread, 4); 
 		#endif
 		CloseHandle(hThread);
@@ -744,7 +793,7 @@ AchievementState Achievements::pop_message() {
         // 1. Obtenemos el primero
         msg = pending_messages.front(); 
         
-        // 2. ¡CRUCIAL!: "Vaciamos" el objeto que sigue en el vector
+        // 2. CRUCIAL!: "Vaciamos" el objeto que sigue en el vector
         // para que cuando hagamos .erase(), su destructor NO borre el badge.
         pending_messages.front().badge = NULL;
         pending_messages.front().badgeLocked = NULL;
@@ -752,7 +801,7 @@ AchievementState Achievements::pop_message() {
         // 3. Lo sacamos del vector
         pending_messages.erase(pending_messages.begin());
     }
-    return msg; // Retornamos 'msg', que ahora es el único dueño del badge
+    return msg; // Retornamos 'msg', que ahora es el unico duenyo del badge
 }
 
 void Achievements::send_message_game_loaded(std::list<AchievementState>* messages){
@@ -812,7 +861,7 @@ void Achievements::show_game_placard(rc_client_t* client)
 	// 1. Obtener la instancia del Singleton
 	Achievements& self = *Achievements::instance();
 
-	// 2. Obtener info de la librería
+	// 2. Obtener info de la libreria
 	const rc_client_game_t* game = rc_client_get_game_info(client);
 
 	// 3. Guardar en los miembros de la clase
@@ -827,7 +876,7 @@ void Achievements::show_game_placard(rc_client_t* client)
 
 	LOG_DEBUG("show_game_placard: %s", game->title);
 
-	// 4. Lógica de logs
+	// 4. Lgica de logs
 	if (self.game_summary.num_core_achievements == 0){
 		LOG_DEBUG("This game has no achievements.");
 	} else {
@@ -930,7 +979,7 @@ void Achievements::updateAchievements(rc_client_t* client)
 			achState.locked = !achievement->unlocked;
 			achState.sectionType = list->buckets[i].bucket_type;
 			self.achievements.push_back(achState);
-			LOG_DEBUG("updateAchievements: id = %d", achState.id);
+			LOG_DEBUG("updateAchievements: id = %d, name = %s", achState.id, achievement->title);
 			/**
 				//For debug purposes
 				if (j==1){
@@ -949,10 +998,10 @@ void Achievements::updateAchievements(rc_client_t* client)
 	SDL_mutexV(self.achievementMutex);
 }
 
-// Función de apoyo para definir el peso de cada sección
+// Funcin de apoyo para definir el peso de cada seccin
 int Achievements::getSectionPriority(uint8_t sectionType) {
 	switch (sectionType) {
-	case 5:  return 0; // Máxima prioridad
+	case 5:  return 0; // Mxima prioridad
 	case 2:  return 1; 
 	case 1:  return 2;
 	default: return 3; // El resto de tipos van al final
@@ -971,23 +1020,23 @@ void Achievements::addSections(){
 	uint8_t currentSection = achievements.back().sectionType;
 
 	for (int i = (int)achievements.size() - 1; i >= 0; i--) {
-		// Si detectamos un cambio de sección o es el primer elemento del vector
+		// Si detectamos un cambio de seccin o es el primer elemento del vector
 		if (achievements[i].sectionType != currentSection) {
-			// Insertamos la cabecera para la sección que acabamos de terminar de recorrer
+			// Insertamos la cabecera para la seccin que acabamos de terminar de recorrer
 			insertSectionHeader(i + 1, currentSection);
 
-			// Actualizamos la sección actual
+			// Actualizamos la seccin actual
 			currentSection = achievements[i].sectionType;
 		}
 
-		// Caso especial: Si llegamos al índice 0, siempre hay que poner la cabecera de la primera sección
+		// Caso especial: Si llegamos al ndice 0, siempre hay que poner la cabecera de la primera seccin
 		if (i == 0) {
 			insertSectionHeader(0, currentSection);
 		}
 	}
 }
 
-// Método auxiliar para no repetir código de inserción
+// Mtodo auxiliar para no repetir cdigo de insercin
 void Achievements::insertSectionHeader(int index, uint8_t type) {
 	std::string label = LanguageManager::instance()->get("msg.achievement.bucket.type" + Constant::TipoToStr<int>(type));
 
@@ -1003,7 +1052,7 @@ void Achievements::insertSectionHeader(int index, uint8_t type) {
 void Achievements::server_call(const rc_api_request_t* request,
 	rc_client_server_callback_t callback, void* callback_data, rc_client_t* client) {
 
-		// Reservamos memoria para los datos que usará el hilo
+		// Reservamos memoria para los datos que usar el hilo
 		ServerCallData* data = new ServerCallData();
 		data->url = request->url ? request->url : "";
 		data->post_data = request->post_data ? request->post_data : "";
@@ -1014,14 +1063,14 @@ void Achievements::server_call(const rc_api_request_t* request,
 		HANDLE hThread = CreateThread(NULL, 0, ServerThreadFunction, (LPVOID)data, 0, NULL);
 
 		if (hThread == NULL) {
-			// Si falla la creación, limpiar y llamar al callback con error
+			// Si falla la creacin, limpiar y llamar al callback con error
 			delete data;
 		} else {
 			#ifdef _XBOX
-			// En Xbox 360 es buena práctica asignar el hilo a un hardware thread específico
+			// En Xbox 360 es buena prctica asignar el hilo a un hardware thread especfico
 			XSetThreadProcessor(hThread, 4); 
 			#endif
-			// Cerramos el handle porque no necesitamos esperar por él (el hilo se limpia solo)
+			// Cerramos el handle porque no necesitamos esperar por l (el hilo se limpia solo)
 			CloseHandle(hThread);
 		}
 }
@@ -1039,7 +1088,7 @@ void Achievements::download_and_cache_image(AchievementState* achievement, int b
         achievement->badge = SDL_DisplayFormat(fromDb->badge);
     } else {
 		LOG_DEBUG("Achievement %d NOT found in cache", achievement->id);
-        // Descarga real si no existe en ningún lado
+        // Descarga real si no existe en ningn lado
         download_and_cache_image(achievement->badgeUrl, achievement->badgeName, achievement->badge, badgeW, badgeH);
     }
 	#else 
@@ -1053,12 +1102,12 @@ void Achievements::download_and_cache_image(AchievementState* achievement, int b
         SDL_Surface* zoomed = rotozoomSurfaceXY(achievement->badge, 0, zoomX, zoomY, SMOOTHING_ON);
         if (zoomed) {
             SDL_FreeSurface(achievement->badge);
-            achievement->badge = zoomed; // No uses DisplayFormat aquí, rotozoom ya optimiza
+            achievement->badge = zoomed; // No uses DisplayFormat aqu, rotozoom ya optimiza
         }
     }
 
 	#ifndef NO_DATABASE
-    //GUARDAR EN DB (Solo si no venía de allí y tenemos imagen válida)
+    //GUARDAR EN DB (Solo si no vena de all y tenemos imagen vlida)
     if (fromDb == NULL && achievement->badge != NULL && achievement->type != ACH_LOAD_GAME) {
         LOG_DEBUG("Guardando logro completo en DB: %s", achievement->badgeName.c_str());
         achievementDb->saveAchievement(*achievement);
@@ -1077,7 +1126,7 @@ void Achievements::download_and_cache_image(AchievementState* achievement, int b
 *
 */
 bool Achievements::download_and_cache_image(std::string url, std::string name, SDL_Surface*& image, int badgeW, int badgeH) {
-    // 1. Verificar si el nombre es válido
+    // 1. Verificar si el nombre es vlido
     if (name.empty()) {
 		LOG_DEBUG("download_and_cache_image. Name not valid: %s", name.c_str());
 		return false;
@@ -1089,7 +1138,7 @@ bool Achievements::download_and_cache_image(std::string url, std::string name, S
 		return true;
 	} 
 
-    // 3. Si no está en caché, descargar
+    // 3. Si no est en cach, descargar
     CurlClient curlClient;
     std::string response;
     float progress = 0;
@@ -1101,7 +1150,7 @@ bool Achievements::download_and_cache_image(std::string url, std::string name, S
 			return false;
 		}
 
-        // IMG_Load_RW con 1 cierra el rw automáticamente
+        // IMG_Load_RW con 1 cierra el rw automticamente
         SDL_Surface *rawImg = IMG_Load_RW(rw, 1); 
         if (!rawImg){
 			LOG_DEBUG("download_and_cache_image. Couldn't load RW image from mem: %s", url.c_str());
@@ -1126,7 +1175,7 @@ bool Achievements::download_and_cache_image(std::string url, std::string name, S
         // 5. Limpieza de la imagen original
         SDL_FreeSurface(rawImg);
 
-        // 6. GUARDADO CRÍTICO EN CACHÉ
+        // 6. GUARDADO CRTICO EN CACH
         if (finalSurface != NULL) {
             // Guardamos en el mapa para futuras llamadas
             badgeCache.insert(std::make_pair(name, finalSurface));

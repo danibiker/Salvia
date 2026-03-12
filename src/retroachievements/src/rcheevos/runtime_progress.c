@@ -2,6 +2,7 @@
 #include "rc_internal.h"
 
 #include "rc_util.h"
+#include "rc_endian.h"  /* host endianness — progress I/O is already byte-neutral */
 #include "../rhash/md5.h"
 
 #include <assert.h>
