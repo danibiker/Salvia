@@ -227,9 +227,6 @@
     <ClCompile Include="src\retroachievements\src\rc_compat.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rc_endian.c">
-      <Filter>Source Files\retroachievements</Filter>
-    </ClCompile>
     <ClCompile Include="src\retroachievements\src\rc_libretro.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>

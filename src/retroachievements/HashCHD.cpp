@@ -20,7 +20,7 @@ along with RALibretro.  If not, see <http://www.gnu.org/licenses/>.
 #ifdef HAVE_CHD
 
 #include <rc_hash.h>
-#include <rc_hash_internal.h>
+#include <rhash/rc_hash_internal.h>
 
 #include <libchdr/include/libchdr/chd.h>
 
