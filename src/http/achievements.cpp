@@ -12,6 +12,7 @@
 #include <retroachievements/CHDHashed.h>
 #include <utils/langmanager.h>
 #include <rc_consoles.h>
+#include <libretro/libretro.h>
 
 /* ---------- Deteccion de endianness del host en tiempo de compilacion ----------
  * Se usa para decidir si el core necesita byte-swap en read_memory().
@@ -66,11 +67,7 @@ void Achievements::initialize() {
 
 	#ifdef _XBOX
 	// REGISTRA LA FUNCION DE TIEMPO (Crucial para Triggers/Challenges)
-    rc_client_set_get_time_millisecs_function(g_client, get_xbox_clock_millis);
-	// Forzamos el modo de lectura Little Endian para evitar que la libreria
-	// reconstruya los bytes al reves en la arquitectura Big-Endian de la Xbox.
-	//rc_client_set_legacy_peek(g_client, RC_CLIENT_LEGACY_PEEK_LITTLE_ENDIAN_READS);
-	//rc_client_set_legacy_peek(g_client, RC_CLIENT_LEGACY_PEEK_CONSTRUCTED);
+    //rc_client_set_get_time_millisecs_function(g_client, get_xbox_clock_millis);
 	#endif
 	// Provide an event handler
 	rc_client_set_event_handler(g_client, event_handler);
@@ -98,7 +95,6 @@ void Achievements::shutdown() {
 		LOG_DEBUG("RetroAchievements: Cliente destruido.");
 	}
 }
-
 void Achievements::createDbAchievements() {
 	#ifndef NO_DATABASE
 	dirutil dir;
@@ -306,6 +302,8 @@ void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string pa
 	char romHash[33] = {0};
 	shouldRefresh = true;
 
+	current_console_id = console_id;
+
 	/* --- Deteccion automatica de byte-swap ---
 	 * Cores que emulan CPUs big-endian de 16 bits (Motorola 68000) almacenan
 	 * work_ram en orden nativo cuando el host tambien es BE.  Los logros de
@@ -329,6 +327,9 @@ void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string pa
 #else
 	byte_swap_memory = false;
 #endif
+
+	/* Construir mapa de memoria basado en las regiones de la consola */
+	build_memory_map(console_id);
 
 #ifdef HAVE_CHD
 	std::string hashStr;
@@ -407,41 +408,178 @@ void Achievements::load_game_callback(int result, const char* error_message, rc_
 	}
 }
 
+/* ---------- build_memory_map ----------
+ * Construye el mapa de traduccion de direcciones usando las definiciones
+ * de regiones de rcheevos (rc_console_memory_regions).  Cada region de
+ * tipo SYSTEM_RAM se mapea secuencialmente al buffer wram_ptr, y cada
+ * region SAVE_RAM al buffer sram_ptr.
+ *
+ * Esto hace que read_memory funcione automaticamente para TODAS las
+ * consolas: Game Boy (WRAM en 0xC000, HRAM en 0xFF80), NES (WRAM en
+ * 0x0000, SRAM en 0x6000), Genesis (flat), SNES, GBA, etc. */
+void Achievements::build_memory_map(uint32_t console_id) {
+    memory_map_count = 0;
+    memset(memory_map, 0, sizeof(memory_map));
+
+    const rc_memory_regions_t* regions = rc_console_memory_regions(console_id);
+    if (!regions || regions->num_regions == 0) {
+        LOG_DEBUG("RetroAchievements: No memory regions for console %u", console_id);
+        return;
+    }
+
+    uint32_t system_ram_used = 0;  /* bytes acumulados de SYSTEM_RAM */
+    uint32_t save_ram_used = 0;    /* bytes acumulados de SAVE_RAM */
+    uint32_t i;
+
+    for (i = 0; i < regions->num_regions && memory_map_count < MAX_MEMORY_MAPPINGS; i++) {
+        const rc_memory_region_t* rgn = &regions->region[i];
+        uint32_t region_size = rgn->end_address - rgn->start_address + 1;
+
+        if (rgn->type == RC_MEMORY_TYPE_SYSTEM_RAM) {
+            if (wram_ptr && (system_ram_used + region_size) <= wram_size) {
+                memory_map[memory_map_count].start  = rgn->start_address;
+                memory_map[memory_map_count].end    = rgn->end_address;
+                memory_map[memory_map_count].buffer = wram_ptr;
+                memory_map[memory_map_count].offset = system_ram_used;
+                memory_map_count++;
+                LOG_DEBUG("  MEM MAP[%u]: 0x%05X-0x%05X -> WRAM+0x%X (%s)",
+                          memory_map_count - 1, rgn->start_address,
+                          rgn->end_address, system_ram_used, rgn->description);
+            } else {
+                /* FALLBACK: buscar en los descriptores del core (SET_MEMORY_MAPS)
+                 * un descriptor cuyo rango contenga esta region.
+                 * Esto resuelve regiones como HRAM en Game Boy que no caben en
+                 * el buffer de retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM). */
+                bool found = false;
+                if (core_descriptors && core_descriptor_count > 0) {
+                    for (unsigned d = 0; d < core_descriptor_count; d++) {
+                        const struct retro_memory_descriptor* desc = &core_descriptors[d];
+                        if (!desc->ptr) continue;
+                        /* Comprobar si el descriptor cubre la direccion de inicio
+                         * de esta region.  Para descriptores simples (select=0),
+                         * start+len define el rango.  Para descriptores con select,
+                         * se compara con mascara. */
+                        if (desc->select == 0) {
+                            /* Descriptor simple: start..start+len */
+                            if (desc->len > 0 &&
+                                rgn->start_address >= desc->start &&
+                                rgn->end_address < desc->start + desc->len) {
+                                uint32_t desc_offset = (uint32_t)(desc->offset +
+                                    (rgn->start_address - desc->start));
+                                memory_map[memory_map_count].start  = rgn->start_address;
+                                memory_map[memory_map_count].end    = rgn->end_address;
+                                memory_map[memory_map_count].buffer = (uint8_t*)desc->ptr;
+                                memory_map[memory_map_count].offset = desc_offset;
+                                memory_map_count++;
+                                found = true;
+                                LOG_DEBUG("  MEM MAP[%u]: 0x%05X-0x%05X -> CORE_DESC[%u] ptr=%p+0x%X (%s)",
+                                          memory_map_count - 1, rgn->start_address,
+                                          rgn->end_address, d, desc->ptr, desc_offset,
+                                          rgn->description);
+                                break;
+                            }
+                        } else {
+                            /* Descriptor con select: la direccion coincide si
+                             * (addr & select) == (desc->start & select) */
+                            if ((rgn->start_address & desc->select) ==
+                                (desc->start & desc->select)) {
+                                uint32_t desc_offset = (uint32_t)(desc->offset +
+                                    (rgn->start_address - desc->start));
+                                memory_map[memory_map_count].start  = rgn->start_address;
+                                memory_map[memory_map_count].end    = rgn->end_address;
+                                memory_map[memory_map_count].buffer = (uint8_t*)desc->ptr;
+                                memory_map[memory_map_count].offset = desc_offset;
+                                memory_map_count++;
+                                found = true;
+                                LOG_DEBUG("  MEM MAP[%u]: 0x%05X-0x%05X -> CORE_DESC[%u] ptr=%p+0x%X (select) (%s)",
+                                          memory_map_count - 1, rgn->start_address,
+                                          rgn->end_address, d, desc->ptr, desc_offset,
+                                          rgn->description);
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (!found) {
+                    LOG_DEBUG("  MEM MAP: SKIP 0x%05X-0x%05X (WRAM buffer too small: need %u, have %u, no core descriptor found) (%s)",
+                              rgn->start_address, rgn->end_address,
+                              system_ram_used + region_size, (uint32_t)wram_size, rgn->description);
+                }
+            }
+            system_ram_used += region_size;
+
+        } else if (rgn->type == RC_MEMORY_TYPE_SAVE_RAM) {
+            if (sram_ptr && (save_ram_used + region_size) <= sram_size) {
+                memory_map[memory_map_count].start  = rgn->start_address;
+                memory_map[memory_map_count].end    = rgn->end_address;
+                memory_map[memory_map_count].buffer = sram_ptr;
+                memory_map[memory_map_count].offset = save_ram_used;
+                memory_map_count++;
+                LOG_DEBUG("  MEM MAP[%u]: 0x%05X-0x%05X -> SRAM+0x%X (%s)",
+                          memory_map_count - 1, rgn->start_address,
+                          rgn->end_address, save_ram_used, rgn->description);
+            } else {
+                LOG_DEBUG("  MEM MAP: SKIP 0x%05X-0x%05X (SRAM buffer too small or null) (%s)",
+                          rgn->start_address, rgn->end_address, rgn->description);
+            }
+            save_ram_used += region_size;
+
+        } else if (rgn->type == RC_MEMORY_TYPE_VIRTUAL_RAM) {
+            /* Echo RAM: real_address indica a que direccion real apunta.
+             * Buscamos la region ya mapeada que contiene real_address. */
+            uint32_t j;
+            for (j = 0; j < memory_map_count; j++) {
+                if (memory_map[j].start <= rgn->real_address &&
+                    rgn->real_address <= memory_map[j].end) {
+                    memory_map[memory_map_count].start  = rgn->start_address;
+                    memory_map[memory_map_count].end    = rgn->end_address;
+                    memory_map[memory_map_count].buffer = memory_map[j].buffer;
+                    memory_map[memory_map_count].offset = memory_map[j].offset +
+                        (rgn->real_address - memory_map[j].start);
+                    memory_map_count++;
+                    LOG_DEBUG("  MEM MAP[%u]: 0x%05X-0x%05X -> ECHO of 0x%05X (%s)",
+                              memory_map_count - 1, rgn->start_address,
+                              rgn->end_address, rgn->real_address, rgn->description);
+                    break;
+                }
+            }
+        }
+        /* Ignoramos RC_MEMORY_TYPE_READONLY, HARDWARE_CONTROLLER, VIDEO_RAM, UNUSED */
+    }
+
+    LOG_DEBUG("RetroAchievements: Memory map built for console %u: %u regions mapped", console_id, memory_map_count);
+}
+
 uint32_t Achievements::read_memory(uint32_t address, uint8_t* buffer, uint32_t num_bytes, rc_client_t* client) {
     Achievements& self = *Achievements::instance();
-    uint8_t* base_ptr = NULL;
-    uint32_t local_addr = 0;
+    uint32_t i;
 
-    if (address < 0x020000) {
-        if (self.wram_ptr && (address + num_bytes) <= self.wram_size) {
-            base_ptr = self.wram_ptr;
-            local_addr = address;
-        }
-    } else {
-        uint32_t sram_address = address - 0x020000;
-        if (self.sram_ptr && (sram_address + num_bytes) <= self.sram_size) {
-            base_ptr = self.sram_ptr;
-            local_addr = sram_address;
+    /* Buscar la region que contiene esta direccion */
+    for (i = 0; i < self.memory_map_count; i++) {
+        if (address >= self.memory_map[i].start && address <= self.memory_map[i].end) {
+            uint32_t local_addr = self.memory_map[i].offset + (address - self.memory_map[i].start);
+
+            /* Verificar que no leemos mas alla del final de la region */
+            if (address + num_bytes - 1 > self.memory_map[i].end)
+                return 0;
+
+            uint8_t* base_ptr = self.memory_map[i].buffer;
+
+            if (self.byte_swap_memory) {
+                /* XOR con 1 para intercambiar bytes dentro de cada word
+                 * de 16 bits (cores 68000 en hosts big-endian) */
+                uint32_t j;
+                for (j = 0; j < num_bytes; j++)
+                    buffer[j] = base_ptr[(local_addr + j) ^ 1];
+            } else {
+                memcpy(buffer, base_ptr + local_addr, num_bytes);
+            }
+
+            return num_bytes;
         }
     }
 
-    if (!base_ptr) return 0;
-
-    if (self.byte_swap_memory) {
-        /* El core emula una CPU big-endian de 16 bits (68000) y el host
-         * tambien es big-endian, asi que work_ram esta en orden nativo BE.
-         * Los logros esperan el layout LE (byte-swapped) de PC.
-         * XOR con 1 intercambia bytes dentro de cada word de 16 bits:
-         *   addr_even -> lee addr+1  (LSB en vez de MSB)
-         *   addr_odd  -> lee addr-1  (MSB en vez de LSB) */
-        uint32_t i;
-        for (i = 0; i < num_bytes; i++)
-            buffer[i] = base_ptr[(local_addr + i) ^ 1];
-    } else {
-        memcpy(buffer, base_ptr + local_addr, num_bytes);
-    }
-
-    return num_bytes;
+    return 0;
 }
 
 void Achievements::log_message(const char* message, const rc_client_t* client) {

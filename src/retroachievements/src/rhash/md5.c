@@ -55,19 +55,6 @@
 #include <stddef.h>
 #include <string.h>
 
-/* Bridge rcheevos endianness detection to the md5 implementation.
- * rc_endian.h (included transitively via rc_compat.h → md5.h or directly)
- * defines RC_HOST_BIG_ENDIAN=1 on big-endian hosts.  The md5 code uses
- * ARCH_IS_BIG_ENDIAN to choose between byte-order-aware and byte-swap paths. */
-#if !defined(ARCH_IS_BIG_ENDIAN)
-  #include "rc_endian.h"
-  #if RC_HOST_BIG_ENDIAN
-    #define ARCH_IS_BIG_ENDIAN 1
-  #else
-    #define ARCH_IS_BIG_ENDIAN 0
-  #endif
-#endif
-
 #undef BYTE_ORDER	/* 1 = big-endian, -1 = little-endian, 0 = unknown */
 #ifdef ARCH_IS_BIG_ENDIAN
 #  define BYTE_ORDER (ARCH_IS_BIG_ENDIAN ? 1 : -1)

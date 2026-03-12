@@ -1,5 +1,4 @@
 #include "rc_internal.h"
-#include "rc_endian.h"
 
 #include <stdlib.h> /* malloc/realloc */
 #include <string.h> /* memcpy */
@@ -345,7 +344,7 @@ static float rc_build_float(uint32_t mantissa_bits, int32_t exponent, int sign) 
 #ifdef NAN
       dbl = NAN;
 #else
-      dbl = -sqrt(-1.0);
+      dbl = -sqrt(-1);
 #endif
     }
   }
@@ -392,8 +391,7 @@ static void rc_transform_memref_float(rc_typed_value_t* value) {
 }
 
 static void rc_transform_memref_float_be(rc_typed_value_t* value) {
-  /* The peek function always assembles bytes in LE order, so on all hosts
-   * we must decode the LE-assembled value as a big-endian IEEE 754 float. */
+  /* decodes an IEEE 754 float in big endian format */
   const uint32_t mantissa = ((value->value.u32 & 0xFF000000) >> 24) |
                             ((value->value.u32 & 0x00FF0000) >> 8) |
                             ((value->value.u32 & 0x00007F00) << 8);
@@ -416,8 +414,7 @@ static void rc_transform_memref_double32(rc_typed_value_t* value)
 
 static void rc_transform_memref_double32_be(rc_typed_value_t* value)
 {
-  /* The peek function always assembles bytes in LE order, so on all hosts
-   * we must decode the LE-assembled value as a big-endian IEEE 754 double32. */
+  /* decodes the four most significant bytes of an IEEE 754 double in big endian format into a float */
   const uint32_t mantissa = (((value->value.u32 & 0xFF000000) >> 24) |
     ((value->value.u32 & 0x00FF0000) >> 8) |
     ((value->value.u32 & 0x00000F00) << 8)) << 3;
@@ -527,10 +524,6 @@ void rc_transform_memref_value(rc_typed_value_t* value, uint8_t size) {
       break;
 
     case RC_MEMSIZE_16_BITS_BE:
-      /* The peek function (rc_client_peek) always assembles the raw bytes
-       * in little-endian order: buffer[0] | (buffer[1] << 8).
-       * For a _BE read the memory is big-endian, so we must always byte-swap
-       * to recover the correct value — regardless of host endianness. */
       value->value.u32 = ((value->value.u32 & 0xFF00) >> 8) |
                          ((value->value.u32 & 0x00FF) << 8);
       break;
@@ -662,19 +655,10 @@ uint32_t rc_peek_value(uint32_t address, uint8_t size, rc_peek_t peek, void* ud)
       return peek(address, 1, ud);
 
     case RC_MEMSIZE_16_BITS:
-    {
-      /* On a BE host, if the client peek does a native 2-byte read it will
-       * return the bytes in BE order. We need LE order (lo byte first).
-       * RC_LE16 swaps on BE hosts and is a no-op on LE hosts. */
-      const uint32_t value = peek(address, 2, ud);
-      return value;
-    }
+      return peek(address, 2, ud);
 
     case RC_MEMSIZE_32_BITS:
-    {
-      const uint32_t value = peek(address, 4, ud);
-      return value;
-    }
+      return peek(address, 4, ud);
 
     default:
     {

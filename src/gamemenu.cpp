@@ -10,6 +10,10 @@
 #include <libretro/libretro.h>
 #include <utils/langmanager.h>
 
+/* Definida en salvia.cpp — devuelve los descriptores de memoria que el core
+ * envio via RETRO_ENVIRONMENT_SET_MEMORY_MAPS (ej. HRAM en Game Boy). */
+extern const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_count);
+
 vector<SDL_Surface *> Icons::icons;
 vector<SDL_Surface *> Icons::icons_carts;
 
@@ -168,7 +172,16 @@ void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
     // 4. Pasar a la clase de logros
     Achievements::instance()->set_memory_sources(w_data, w_size, s_data, s_size);
 
-    // 5. Cargar lógica del juego
+	// 4b. Pasar los descriptores de memoria del core (si los envio via SET_MEMORY_MAPS)
+	{
+		unsigned desc_count = 0;
+		const struct retro_memory_descriptor* descs = get_core_memory_descriptors(&desc_count);
+		if (descs && desc_count > 0) {
+			Achievements::instance()->set_core_descriptors(descs, desc_count);
+		}
+	}
+
+    // 5. Cargar logica del juego
     int system = translateSystemAchievement();
     std::string pathToRom = unzipped.extractedPath.empty() ? unzipped.originalPath : unzipped.extractedPath;
     Achievements::instance()->load_game((uint8_t *)unzipped.memoryBuffer, unzipped.romsize, pathToRom, system, messagesAchievement);

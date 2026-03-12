@@ -2,14 +2,15 @@
 
 #include "rc_hash_internal.h"
 
-#include "rc_compat.h"
+#include "../rc_compat.h"
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #ifdef _XBOX
 #include <xtl.h>
-#else
- #include <windows.h>
+#else 
+	#include <windows.h>
+	//#include <profileapi.h>
 #endif
 #include <share.h>
 #endif
@@ -362,23 +363,6 @@ int rc_path_compare_extension(const char* path, const char* ext)
 
 void rc_hash_byteswap16(uint8_t* buffer, const uint8_t* stop)
 {
-  /* These swaps work on ROM data already loaded into a byte buffer.
-   * The operation is purely byte-level (reading individual bytes and
-   * writing them back), so endianness of the host doesn't affect the
-   * result — we always read the correct bytes via uint8_t accesses.
-   * However, the loop here reads a uint32_t* to process two 16-bit
-   * words at once for performance. On a BE host that native read would
-   * flip the bytes BEFORE we apply our mask-based swap, giving a
-   * doubly-swapped (i.e., wrong) result. We therefore fall back to a
-   * portable byte-by-byte implementation on BE hosts. */
-#if RC_HOST_BIG_ENDIAN
-  while (buffer < stop - 1) {
-    uint8_t tmp = buffer[0];
-    buffer[0] = buffer[1];
-    buffer[1] = tmp;
-    buffer += 2;
-  }
-#else
   uint32_t* ptr = (uint32_t*)buffer;
   const uint32_t* stop32 = (const uint32_t*)stop;
   while (ptr < stop32) {
@@ -387,22 +371,10 @@ void rc_hash_byteswap16(uint8_t* buffer, const uint8_t* stop)
            (temp & 0x00FF00FF) << 8;
     *ptr++ = temp;
   }
-#endif
 }
 
 void rc_hash_byteswap32(uint8_t* buffer, const uint8_t* stop)
 {
-  /* Same portability concern as rc_hash_byteswap16 above. */
-#if RC_HOST_BIG_ENDIAN
-  while (buffer < stop - 3) {
-    uint8_t b0 = buffer[0], b1 = buffer[1], b2 = buffer[2], b3 = buffer[3];
-    buffer[0] = b3;
-    buffer[1] = b2;
-    buffer[2] = b1;
-    buffer[3] = b0;
-    buffer += 4;
-  }
-#else
   uint32_t* ptr = (uint32_t*)buffer;
   const uint32_t* stop32 = (const uint32_t*)stop;
   while (ptr < stop32) {
@@ -413,7 +385,6 @@ void rc_hash_byteswap32(uint8_t* buffer, const uint8_t* stop)
            (temp & 0x000000FF) << 24;
     *ptr++ = temp;
   }
-#endif
 }
 
 int rc_hash_finalize(const rc_hash_iterator_t* iterator, md5_state_t* md5, char hash[33])

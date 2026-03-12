@@ -11,6 +11,21 @@
 #include <retroachievements/achievementdb.h>
 #include <rc_client.h>
 #include <rc_hash.h>
+#include <rc_client_internal.h>
+#include <rc_consoles.h>
+
+/* Forward declaration — definido en libretro.h */
+struct retro_memory_descriptor;
+
+/* Entrada del mapa de memoria: traduce una direccion RA (address space
+ * de la consola) al buffer correcto (WRAM o SRAM) + offset. */
+#define MAX_MEMORY_MAPPINGS 16
+struct MemoryMapping {
+    uint32_t start;     // Direccion RA de inicio (inclusive)
+    uint32_t end;       // Direccion RA de fin (inclusive)
+    uint8_t* buffer;    // Puntero al buffer de memoria
+    uint32_t offset;    // Offset dentro del buffer para 'start'
+};
 
 #if defined(_MSC_VER) && _MSC_VER < 1900
 #define snprintf _snprintf
@@ -190,6 +205,7 @@ public:
 	void set_memory_sources(uint8_t* wram, std::size_t w_size, uint8_t* sram, std::size_t s_size) {
         wram_ptr = wram; wram_size = w_size;
         sram_ptr = sram; sram_size = s_size;
+
         LOG_DEBUG("[DIAG] set_memory_sources: wram=%p size=%u  sram=%p size=%u",
                   (void*)wram, (unsigned)w_size, (void*)sram, (unsigned)s_size);
         /* Volcamos los primeros bytes de wram para comprobar si est viva */
@@ -200,6 +216,14 @@ public:
                       wram[8],wram[9],wram[10],wram[11],wram[12],wram[13],wram[14],wram[15]);
         }
     }
+
+	/* Recibe los descriptores de memoria del core (de SET_MEMORY_MAPS).
+	 * Se usan como fallback en build_memory_map para regiones no cubiertas
+	 * por wram_ptr/sram_ptr (ej. HRAM en Game Boy). */
+	void set_core_descriptors(const struct retro_memory_descriptor* descs, unsigned count) {
+		core_descriptors = descs;
+		core_descriptor_count = count;
+	}
 
     // Getters
     const std::string& getUser() const { return ra_user; }
@@ -228,7 +252,9 @@ public:
 	}
 
 private:
-    Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false), hardcoreMode(true), gameState(NULL), lastGameTick(0), byte_swap_memory(false) {} // Constructor privado
+    Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false), hardcoreMode(true), gameState(NULL), lastGameTick(0), byte_swap_memory(false), current_console_id(0), memory_map_count(0), core_descriptors(NULL), core_descriptor_count(0) {
+		memset(memory_map, 0, sizeof(memory_map));
+	}
     
     rc_client_t* g_client;
     std::string ra_user;
@@ -248,6 +274,11 @@ private:
 	bool hardcoreMode;
 	bool byte_swap_memory;  // true cuando el core emula una CPU big-endian de 16 bits
 	                        // (68000) en un host big-endian y necesita XOR de direcciones
+	uint32_t current_console_id;
+	MemoryMapping memory_map[MAX_MEMORY_MAPPINGS];
+	uint32_t memory_map_count;
+	const struct retro_memory_descriptor* core_descriptors;
+	unsigned core_descriptor_count;
 	
 	
 	std::vector<AchievementState> achievements;
@@ -292,6 +323,7 @@ private:
 
 
 	tracker_data* find_tracker(uint32_t id) ;
+	void build_memory_map(uint32_t console_id);
 };
 
 

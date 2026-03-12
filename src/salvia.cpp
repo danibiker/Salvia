@@ -29,6 +29,20 @@ GameMenu *gameMenu;
 Logger *logger;
 dirutil dir;
 
+/* ---------- Memory map descriptors from the core ----------
+ * Capturados cuando el core llama RETRO_ENVIRONMENT_SET_MEMORY_MAPS.
+ * Se usan para obtener punteros a regiones de memoria que no estan
+ * disponibles via retro_get_memory_data (ej. HRAM en Game Boy). */
+#define MAX_LIBRETRO_MEM_DESCRIPTORS 32
+static struct retro_memory_descriptor g_mem_descriptors[MAX_LIBRETRO_MEM_DESCRIPTORS];
+static unsigned g_num_mem_descriptors = 0;
+
+/* Funciones de acceso para que otros modulos puedan consultar los descriptores */
+const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_count) {
+    if (out_count) *out_count = g_num_mem_descriptors;
+    return g_mem_descriptors;
+}
+
 // 1. Usa un buffer persistente para evitar allocs constantes al convertir desde ARGB8888
 enum retro_pixel_format fmt;
 int launchGame(std::string);
@@ -382,12 +396,37 @@ static bool retro_environment(unsigned cmd, void *data) {
 			}
 			return true;
 		}
+		case RETRO_ENVIRONMENT_SET_MEMORY_MAPS: {
+			/* El core envia su mapa de memoria completo.  Copiamos los
+			 * descriptores para poder acceder a regiones como HRAM en
+			 * Game Boy que no estan disponibles via retro_get_memory_data. */
+			const struct retro_memory_map *map = (const struct retro_memory_map*)data;
+			if (map && map->descriptors) {
+				g_num_mem_descriptors = map->num_descriptors;
+				if (g_num_mem_descriptors > MAX_LIBRETRO_MEM_DESCRIPTORS)
+					g_num_mem_descriptors = MAX_LIBRETRO_MEM_DESCRIPTORS;
+				memcpy(g_mem_descriptors, map->descriptors,
+				       g_num_mem_descriptors * sizeof(struct retro_memory_descriptor));
+				LOG_DEBUG("SET_MEMORY_MAPS: captured %u descriptors from core", g_num_mem_descriptors);
+				for (unsigned i = 0; i < g_num_mem_descriptors; i++) {
+					LOG_DEBUG("  desc[%u]: ptr=%p start=0x%05X len=0x%X select=0x%X offset=0x%X flags=0x%X",
+					          i, g_mem_descriptors[i].ptr,
+					          (unsigned)g_mem_descriptors[i].start,
+					          (unsigned)g_mem_descriptors[i].len,
+					          (unsigned)g_mem_descriptors[i].select,
+					          (unsigned)g_mem_descriptors[i].offset,
+					          (unsigned)g_mem_descriptors[i].flags);
+				}
+			}
+			return true;
+		}
+
 		default: {
 			if (cmd < 65572){
 				LOG_DEBUG("Comando no tratado: %s", Constant::TipoToStr(cmd).c_str());
 			}
 			// Para comandos desconocidos como 52 o 65587
-			return false; 
+			return false;
 		}
 		    
     }
