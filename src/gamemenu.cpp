@@ -761,7 +761,6 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
         commands.emplace_back(emu.global_options);
     }
 
-	saveGameMenuPos(menuData);
 	LOG_DEBUG("Launching %s\n", commands.at(0).c_str());
 	#ifdef LIBRETRO
 		Launcher launcher;
@@ -975,25 +974,14 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 			if (getEmuStatus() == EMU_MENU_OVERLAY && screen){
 				bg_screenshot = clonarPantalla(screen, 180);
 
-				bool forceDownloadAchievements = false;
 				//Si hay mensajes de logros en curso, mostramos el menu de logros
 				if (!messagesAchievement.empty() && messagesAchievement.front().type == ACH_UNLOCKED){
-					Achievements::instance()->setShouldRefresh(true);
-					Achievements::instance()->refresh_achievements_menu();
 					configMenus->setAchievementsAsSelected();
-					configMenus->loadAchievements();
-					configMenus->resetIndexPos();
-					GestorMenus::sDescargarIconosLogros(Achievements::instance());
-					forceDownloadAchievements = true;
-				}
-
-				if (!configMenus->obtenerMenuActual()->opciones.empty()){
+					configMenus->descargarLogros();
+				} else if (!configMenus->obtenerMenuActual()->opciones.empty()){
 					auto option = configMenus->obtenerMenuActual()->opciones.front();
-					if (option->tipo == OPC_ACHIEVEMENT && !forceDownloadAchievements){
-						if (Achievements::instance()->refresh_achievements_menu()){
-							configMenus->loadAchievements();
-						}
-						BadgeDownloader::instance().start();
+					if (option->tipo == OPC_ACHIEVEMENT){
+						configMenus->descargarLogros();
 					} else if (option->tipo == OPC_SAVESTATE){
 						configMenus->poblarPartidasGuardadas(getCfgLoader(), getRomPaths()->rompath);
 					}

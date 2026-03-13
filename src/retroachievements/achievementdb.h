@@ -41,7 +41,7 @@ public:
 	void printError(int rc, char *zErrMsg){
 		if( rc != SQLITE_OK ){
 			// Imprime el error en la consola de salida de Visual Studio (Output)
-			// En Xbox 360/XDK se usa habitualmente esta función para loguear:
+			// En Xbox 360/XDK se usa habitualmente esta funciï¿½n para loguear:
 			LOG_DEBUG("SQLITE ERROR: %s", zErrMsg);
 			//liberar la memoria del error con sqlite3_free
 			sqlite3_free(zErrMsg);
@@ -56,7 +56,7 @@ public:
 		
 		#ifdef _XBOX
 		sqlite3_exec(db, "PRAGMA journal_mode = MEMORY;", 0, 0, 0);
-		sqlite3_exec(db, "PRAGMA synchronous = NORMAL;", 0, 0, 0); // Mucho más rápido en el HDD de la 360
+		sqlite3_exec(db, "PRAGMA synchronous = NORMAL;", 0, 0, 0); // Mucho mï¿½s rï¿½pido en el HDD de la 360
 		#endif
 
         const char* sql = "CREATE TABLE IF NOT EXISTS achievements ("
@@ -114,7 +114,7 @@ public:
         int res = sqlite3_step(stmt);
         sqlite3_finalize(stmt);
         
-		// 2. Finalizar transacción: AQUÍ es donde se escribe al disco
+		// 2. Finalizar transacciï¿½n: AQUï¿½ es donde se escribe al disco
 		if (res == SQLITE_DONE) {
 			sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
 			return true;
@@ -141,7 +141,7 @@ public:
 		int res = sqlite3_step(stmt);
 		sqlite3_finalize(stmt);
 
-		// 2. Finalizar transacción: AQUÍ es donde se escribe al disco
+		// 2. Finalizar transacciï¿½n: AQUï¿½ es donde se escribe al disco
 		if (res == SQLITE_DONE) {
 			sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
 			return true;
@@ -152,7 +152,7 @@ public:
 	}
 
 	bool updateAchievementsStatus(const std::vector<AchievementState>& achievements) {
-		// 1. Iniciamos la transacción
+		// 1. Iniciamos la transacciï¿½n
 		if (sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL) != SQLITE_OK) return false;
 
 		const char* sql = "UPDATE achievements SET locked = ?, sectionType = ? WHERE id = ?;";
@@ -199,7 +199,7 @@ public:
 			sqlite3_bind_int(stmt, 1, gameID);
 
 			while (sqlite3_step(stmt) == SQLITE_ROW) {
-				AchievementState ach; // Creamos el objeto (se usará el operador de copia al hacer push_back)
+				AchievementState ach; // Creamos el objeto (se usarï¿½ el operador de copia al hacer push_back)
 				ach.id          = sqlite3_column_int(stmt, 0);
 				ach.badgeName   = (const char*)sqlite3_column_text(stmt, 1);
 				ach.locked      = sqlite3_column_int(stmt, 2) != 0;
@@ -220,13 +220,16 @@ public:
 
 					ach.badge = SDL_CreateRGBSurface(SDL_SWSURFACE, w, h, 16, 0xF800, 0x07E0, 0x001F, 0);
 					if (ach.badge) {
-						memcpy(ach.badge->pixels, blob, bytes);
-						// Generamos la caché de gris inmediatamente
-						//ach.badgeLocked = SDL_DisplayFormat(ach.badge);
-						//if (ach.badgeLocked) Image::convertirGrises16Bits(ach.badgeLocked);
+						int expected = ach.badge->h * ach.badge->pitch;
+						if (bytes <= expected) {
+							memcpy(ach.badge->pixels, blob, bytes);
+						} else {
+							SDL_FreeSurface(ach.badge);
+							ach.badge = NULL;
+						}
 					}
 				}
-				list.push_back(ach); // Aquí se usa el constructor de copia que definimos antes
+				list.push_back(ach); // Aquï¿½ se usa el constructor de copia que definimos antes
 			}
 		}
 		sqlite3_finalize(stmt);
@@ -247,7 +250,7 @@ public:
 				ach = new AchievementState();
 				ach->id = id;
 
-				// Mapeo de columnas (empezando desde 0 según el SELECT)
+				// Mapeo de columnas (empezando desde 0 segï¿½n el SELECT)
 				ach->badgeName    = (const char*)sqlite3_column_text(stmt, 0);
 				ach->gameId       = sqlite3_column_int(stmt, 1) != 0;
 				ach->locked       = sqlite3_column_int(stmt, 2) != 0;
@@ -259,7 +262,7 @@ public:
 				ach->description  = (const char*)sqlite3_column_text(stmt, 8);
 				ach->progress     = (const char*)sqlite3_column_text(stmt, 9);
 
-				// Reconstrucción de la imagen (BLOB)
+				// Reconstrucciï¿½n de la imagen (BLOB)
 				if (sqlite3_column_type(stmt, 12) != SQLITE_NULL) {
 					int w = sqlite3_column_int(stmt, 10);
 					int h = sqlite3_column_int(stmt, 11);
@@ -269,15 +272,21 @@ public:
 					// Crear superficie 16 bits (RGB565)
 					ach->badge = SDL_CreateRGBSurface(SDL_SWSURFACE, w, h, 16, 0xF800, 0x07E0, 0x001F, 0);
 					if (ach->badge) {
-						memcpy(ach->badge->pixels, blob, bytes);
-						// Generar la versión bloqueada para la caché de renderizado
+						int expected = ach->badge->h * ach->badge->pitch;
+						if (bytes <= expected) {
+							memcpy(ach->badge->pixels, blob, bytes);
+						} else {
+							SDL_FreeSurface(ach->badge);
+							ach->badge = NULL;
+						}
+						// Generar la versiï¿½n bloqueada para la cachï¿½ de renderizado
 						//ach->badgeLocked = SDL_DisplayFormat(ach->badge);
 						//if (ach->badgeLocked) {
 						//	Image::convertirGrises16Bits(ach->badgeLocked);
 						//}
 					}
 				}
-				// Inicializar estados que no están en BDD
+				// Inicializar estados que no estï¿½n en BDD
 				ach->isDownloading = false;
 				ach->isSection = (ach->sectionType != 0); 
 			}
@@ -293,7 +302,7 @@ public:
 		bool found = false;
 
 		if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
-			// Enlazar los parámetros de búsqueda
+			// Enlazar los parï¿½metros de bï¿½squeda
 			sqlite3_bind_int(stmt, 1, id);
 
 			// Si sqlite3_step devuelve SQLITE_ROW, es que existe al menos una fila
@@ -325,7 +334,7 @@ public:
 
 		int res = sqlite3_step(stmt);
 		sqlite3_finalize(stmt);
-		// 2. Finalizar transacción: AQUÍ es donde se escribe al disco
+		// 2. Finalizar transacciï¿½n: AQUï¿½ es donde se escribe al disco
 		if (res == SQLITE_DONE) {
 			sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
 			return true;
@@ -358,10 +367,16 @@ public:
 					int w = sqlite3_column_int(stmt, 3);
 					int h = sqlite3_column_int(stmt, 4);
 
-					// Creamos la superficie con las máscaras de 16 bits (RGB565)
+					// Creamos la superficie con las mï¿½scaras de 16 bits (RGB565)
 					game->badge = SDL_CreateRGBSurface(SDL_SWSURFACE, w, h, 16, 0xF800, 0x07E0, 0x001F, 0);
 					if (game->badge) {
-						memcpy(game->badge->pixels, blob, bytes);
+						int expected = game->badge->h * game->badge->pitch;
+						if (bytes <= expected) {
+							memcpy(game->badge->pixels, blob, bytes);
+						} else {
+							SDL_FreeSurface(game->badge);
+							game->badge = NULL;
+						}
 					}
 				}
 			}
@@ -382,7 +397,7 @@ public:
 
 		int res = sqlite3_step(stmt);
 		sqlite3_finalize(stmt);
-		// 2. Finalizar transacción: AQUÍ es donde se escribe al disco
+		// 2. Finalizar transacciï¿½n: AQUï¿½ es donde se escribe al disco
 		if (res == SQLITE_DONE) {
 			sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
 			return true;

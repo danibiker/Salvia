@@ -192,7 +192,9 @@ void ListMenu::draw(SDL_Surface *video_page){
 				dstRect.y += 2;
 				//dstRect.x = 4;
 				//SDL_BlitSurface(icons.icons[page_white], NULL, video_page, &dstRect);
-				SDL_BlitSurface(icons->icons_carts[getCartForSystem(game->systemid)], NULL, video_page, &dstRect);
+				SDL_Surface *cartIcon = icons->icons_carts[getCartForSystem(game->systemid)];
+				if (cartIcon != NULL)
+					SDL_BlitSurface(icons->icons_carts[getCartForSystem(game->systemid)], NULL, video_page, &dstRect);
 			}
         }
     }

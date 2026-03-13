@@ -3,7 +3,7 @@
 #include <io/hotkeys.h>
 #include <io/filelist.h>
 #include <const/constant.h>
-#include <cmath> // Librería necesaria para pow
+#include <cmath> // Librerï¿½a necesaria para pow
 
 Joystick::Joystick(){
 	ignoreButtonRepeats = false;
@@ -97,7 +97,7 @@ std::string Joystick::saveButtonsRetro() {
 
     // Vector para guardar el nombre del perfil asignado a cada jugador
     std::vector<std::string> playerProfileNames(MAX_PLAYERS, "");
-    // Para rastrear firmas de configuración ya escritas y evitar duplicados
+    // Para rastrear firmas de configuraciï¿½n ya escritas y evitar duplicados
     std::vector<std::string> savedSignatures;
 
     for (int p = 0; p < MAX_PLAYERS; p++) {
@@ -106,7 +106,7 @@ std::string Joystick::saveButtonsRetro() {
             continue;
         }
 
-        // 1. Generar una "firma" única del mapeo de este jugador
+        // 1. Generar una "firma" ï¿½nica del mapeo de este jugador
         std::string signature = "";
         for (int i = 0; i < MAX_BUTTONS; i++) signature += Constant::intToString(inputs.mapperCore.sdlToBtn[p][i]) + ",";
         signature += "|";
@@ -115,14 +115,14 @@ std::string Joystick::saveButtonsRetro() {
         for (int i = 0; i < MAX_AXIS; i++)    signature += Constant::intToString(inputs.mapperCore.sdlToAxis[p][i]) + ",";
         signature += (inputs.axisAsPad[p] ? "1" : "0");
 
-        // 2. Verificar si esta configuración exacta ya fue guardada
+        // 2. Verificar si esta configuraciï¿½n exacta ya fue guardada
         bool yaEscrito = false;
         for (std::size_t s = 0; s < savedSignatures.size(); s++) {
             if (savedSignatures[s] == signature) {
-                // Buscamos qué nombre le pusimos a esa firma anteriormente
+                // Buscamos quï¿½ nombre le pusimos a esa firma anteriormente
                 for (int prev = 0; prev < p; prev++) {
                     // Si encontramos al jugador previo con la misma firma, copiamos su nombre de perfil
-                    // Aquí podrías implementar una lógica más compleja si quieres nombres distintos
+                    // Aquï¿½ podrï¿½as implementar una lï¿½gica mï¿½s compleja si quieres nombres distintos
                     playerProfileNames[p] = playerProfileNames[prev];
                     yaEscrito = true;
                     break;
@@ -131,12 +131,12 @@ std::string Joystick::saveButtonsRetro() {
             }
         }
 
-        // 3. Si es una configuración nueva o el nombre base ya existe, generar perfil
+        // 3. Si es una configuraciï¿½n nueva o el nombre base ya existe, generar perfil
         if (!yaEscrito) {
             std::string baseName = Constant::Trim(inputs.names[p]);
             std::string finalMapperName = baseName;
             
-            // Evitar colisión de nombres de perfiles en el INI
+            // Evitar colisiï¿½n de nombres de perfiles en el INI
             int count = 0;
             for (int i = 0; i < p; i++) {
                 if (playerProfileNames[i] == finalMapperName) {
@@ -149,7 +149,7 @@ std::string Joystick::saveButtonsRetro() {
             playerProfileNames[p] = finalMapperName;
             savedSignatures.push_back(signature);
 
-            // Escribir bloque de configuración
+            // Escribir bloque de configuraciï¿½n
             fileConfigJoystick.push_back("name=" + finalMapperName);
             
             std::string btns = "btns=";
@@ -168,17 +168,17 @@ std::string Joystick::saveButtonsRetro() {
             fileConfigJoystick.push_back(axis);
 
             fileConfigJoystick.push_back("anal=" + std::string(inputs.axisAsPad[p] ? "1" : "0"));
-            fileConfigJoystick.push_back(""); // Línea en blanco
+            fileConfigJoystick.push_back(""); // Lï¿½nea en blanco
         }
     }
 
-    // 4. Sección de asignación por jugador
+    // 4. Secciï¿½n de asignaciï¿½n por jugador
     fileConfigJoystick.push_back("[RETROPAD]");
     for (int p = 0; p < MAX_PLAYERS; p++) {
         fileConfigJoystick.push_back("player" + Constant::intToString(p) + "_name=" + playerProfileNames[p]);
     }
 
-	fileConfigJoystick.push_back(""); // Línea en blanco
+	fileConfigJoystick.push_back(""); // Lï¿½nea en blanco
 	fileConfigJoystick.push_back("[HOTKEYS]");
 	std::string btns = "btns=";
     for (int i = 0; i < MAX_BUTTONS; i++) 
@@ -195,7 +195,7 @@ std::string Joystick::saveButtonsRetro() {
         axis += Constant::intToString(inputs.mapperHotkeys.sdlToAxis[0][i]) + (i < MAX_AXIS - 1 ? "," : "");
     fileConfigJoystick.push_back(axis);
 
-	fileConfigJoystick.push_back(""); // Línea en blanco
+	fileConfigJoystick.push_back(""); // Lï¿½nea en blanco
 	fileConfigJoystick.push_back("[FRONTEND]");
 	btns = "btns=";
     for (int i = 0; i < MAX_BUTTONS; i++) 
@@ -238,7 +238,7 @@ bool Joystick::loadButtonsRetro() {
         std::string line = Constant::Trim(lineas[i]);
         if (line.empty()) continue;
 
-        // Cambio de sección
+        // Cambio de secciï¿½n
         if (line[0] == '[' && line[line.size() - 1] == ']') {
             currentSection = line;
             continue;
@@ -266,7 +266,7 @@ bool Joystick::loadButtonsRetro() {
                 std::string key = line.substr(0, eqPos);
                 std::string profileName = line.substr(eqPos + 1);
                 
-                // Extraer el número de jugador de "playerX_name"
+                // Extraer el nï¿½mero de jugador de "playerX_name"
 				int p = Constant::strToTipo<int>(key.substr(6, key.find('_') - 6));
                 
                 if (p < MAX_PLAYERS && profiles.count(profileName)) {
@@ -317,7 +317,7 @@ bool Joystick::pollKeys(SDL_Surface* screen){
 				break;
 			case SDL_JOYBUTTONUP:
 			case SDL_JOYBUTTONDOWN:
-				if (player < MAX_PLAYERS) {
+				if (player < MAX_PLAYERS && event.jbutton.button < MAX_BUTTONS) {
 					inputs.btn_state[player][event.jbutton.button] = (event.type == SDL_JOYBUTTONDOWN);
 					
 					#ifdef _XBOX
@@ -350,6 +350,8 @@ bool Joystick::pollKeys(SDL_Surface* screen){
 					bool* axisState = inputs.axis_state[p];
 					int8_t targetNeg = event.jaxis.axis * 2;
 					int8_t targetPos = (event.jaxis.axis * 2) + 1;
+
+					if (targetPos >= MAX_AXIS || targetNeg >= MAX_AXIS) break;
 
 					if (event.jaxis.value > DEADZONE) {
 						if (targetPos >= 0) axisState[targetPos] = true;

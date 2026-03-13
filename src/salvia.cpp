@@ -234,7 +234,9 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return true;
 		}
 		case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: {
-			*(const char**)data = gameMenu->getSramPath().c_str();
+			static std::string saveDir; 
+			saveDir = gameMenu->getSramPath();
+			*(const char**)data = saveDir.c_str();
 			return true;
 		}
 
@@ -468,7 +470,9 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 		// 2. Gestionar buffer de conversión de forma eficiente
         std::size_t needed = width * height * sizeof(uint16_t);
         if (!conversion_buffer || buffer_size < needed) {
-            conversion_buffer = (uint16_t*)realloc(conversion_buffer, needed);
+            uint16_t* temp = (uint16_t*)realloc(conversion_buffer, needed);
+            if (!temp) return;
+            conversion_buffer = temp;
             buffer_size = needed;
         }
 		

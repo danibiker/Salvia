@@ -5,38 +5,83 @@ AudioBuffer::AudioBuffer(std::size_t size) : capacity(size) {
     buffer.resize(size);
 	head = 0;
 	tail = 0;
+	last_sample_L = 0;
+	last_sample_R = 0;
+	fade_pos = 0;
 }
 
 void AudioBuffer::Write(const int16_t* samples, std::size_t count) {
-    // 1. Calculamos el nuevo 韓dice localmente
-    std::size_t next_head = head; 
+    std::size_t next_head = head;
+    // Snapshot at贸mico de tail para evitar leer un valor cambiante durante el loop
+    long t = getTail();
 
     for (std::size_t i = 0; i < count; i++) {
         buffer[next_head] = samples[i];
         next_head = (next_head + 1) % capacity;
-        
-        // 2. IMPORTANTE: Evitar que el Write sobrepase al Tail (overflow)
-        // Si el buffer se llena en modo no-bloqueante, dejamos de escribir.
-        if (next_head == tail) break; 
+
+        // Si el buffer se llena en modo no-bloqueante, dejamos de escribir
+        if (next_head == (std::size_t)t) break;
     }
 
-    // 3. AT覯ICO: Actualizamos el head real de una sola vez.
-    // InterlockedExchange asegura que el hilo de SDL vea el nuevo valor inmediatamente.
+    // Publicamos el head at贸micamente para que SDL lo vea de una sola vez
     InterlockedExchange((long*)&head, (long)next_head);
 }
 
 void AudioBuffer::Read(int16_t* stream, std::size_t count) {
-    for (std::size_t i = 0; i < count; i++) {
-        long h = getHead();
-        if (h != tail) {
-            stream[i] = buffer[tail];
-            tail = (tail + 1) % capacity;
+    // Snapshot at贸mico de head una sola vez (no por cada muestra)
+    long h = getHead();
+    std::size_t local_tail = (std::size_t)tail;
+    std::size_t available = (h >= (long)local_tail)
+        ? (h - local_tail)
+        : (capacity - (local_tail - h));
+
+    // Copiar en bloque las muestras disponibles con memcpy
+    std::size_t to_copy = (available < count) ? available : count;
+
+    if (to_copy > 0) {
+        std::size_t first_chunk = capacity - local_tail;
+        if (first_chunk >= to_copy) {
+            // No hay wrap-around, una sola copia
+            memcpy(stream, &buffer[local_tail], to_copy * sizeof(int16_t));
         } else {
-            // Si el buffer se vac韆 (underrun), aplicamos un peque駉 fundido 
-            // a cero o simplemente silencio para evitar el "pop" electr髇ico
-            stream[i] = 0; 
+            // Wrap-around: copiar en dos bloques
+            memcpy(stream, &buffer[local_tail], first_chunk * sizeof(int16_t));
+            memcpy(stream + first_chunk, &buffer[0], (to_copy - first_chunk) * sizeof(int16_t));
+        }
+
+        local_tail = (local_tail + to_copy) % capacity;
+
+        // Guardar las 煤ltimas muestras para posible fade-out (est茅reo: L, R)
+        if (to_copy >= 2) {
+            last_sample_L = stream[to_copy - 2];
+            last_sample_R = stream[to_copy - 1];
+        }
+        fade_pos = 0; // Reset fade: tenemos datos reales
+    }
+
+    // Si hay underrun, hacer fade-out suave en lugar de cortar a silencio
+    if (to_copy < count) {
+        std::size_t remaining = count - to_copy;
+        // Asegurar que remaining es par (est茅reo: siempre pares de muestras)
+        remaining &= ~(std::size_t)1;
+        int16_t* dest = stream + to_copy;
+
+        for (std::size_t i = 0; i + 1 < remaining; i += 2) {
+            if (fade_pos < FADE_SAMPLES) {
+                // Rampa lineal de la 煤ltima muestra real a cero
+                int factor = FADE_SAMPLES - fade_pos;
+                dest[i]     = (int16_t)((last_sample_L * factor) / FADE_SAMPLES);
+                dest[i + 1] = (int16_t)((last_sample_R * factor) / FADE_SAMPLES);
+                fade_pos++;
+            } else {
+                dest[i]     = 0;
+                dest[i + 1] = 0;
+            }
         }
     }
+
+    // Publicar tail at贸micamente para que el hilo escritor lo vea
+    InterlockedExchange((long*)&tail, (long)local_tail);
 }
 
 void AudioBuffer::WriteBlocking(const int16_t* samples, std::size_t count) {
@@ -48,17 +93,28 @@ void AudioBuffer::WriteBlocking(const int16_t* samples, std::size_t count) {
 
         if (free_space >= count) break;
 
-        // En lugar de 1ms, cedemos el paso muy brevemente
+        // Cedemos el paso brevemente
         #if defined(WIN)
-            _mm_pause(); 
-            Sleep(0); // Cede el turno a otros hilos sin dormir 1ms completo
+            _mm_pause();
+            Sleep(0);
         #else
             SDL_Delay(0);
         #endif
     }
 
-    for (std::size_t i = 0; i < count; i++) {
-        buffer[head] = samples[i];
-        head = (head + 1) % capacity;
+    // Escribir en bloque con memcpy
+    std::size_t local_head = (std::size_t)head;
+    std::size_t first_chunk = capacity - local_head;
+
+    if (first_chunk >= count) {
+        memcpy(&buffer[local_head], samples, count * sizeof(int16_t));
+    } else {
+        memcpy(&buffer[local_head], samples, first_chunk * sizeof(int16_t));
+        memcpy(&buffer[0], samples + first_chunk, (count - first_chunk) * sizeof(int16_t));
     }
+
+    local_head = (local_head + count) % capacity;
+
+    // Publicar head at贸micamente
+    InterlockedExchange((long*)&head, (long)local_head);
 }

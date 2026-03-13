@@ -13,21 +13,34 @@ void BadgeDownloader::stop() {
     if (thread != NULL) {
         SDL_WaitThread(thread, NULL); // Esperamos a que termine la descarga actual
         thread = NULL;
+		SDL_LockMutex(queue_mutex);
+		queue.clear();
+		SDL_UnlockMutex(queue_mutex);
     }
 }
 
 void BadgeDownloader::add_to_queue(AchievementState &achievement, int w, int h) {
     SDL_LockMutex(queue_mutex);
     
-	// Evitar duplicados: Si ya está en cola o ya tiene imagen, no añadir
-	if (achievement.badge != NULL) { 
+    // Verificación rápida: si ya tiene imagen, no hacemos nada
+    if (achievement.badge != NULL) { 
         SDL_UnlockMutex(queue_mutex);
         return; 
     }
+
+    // Importante: Verifica si ya está en la cola para no duplicar descargas
+    for(size_t i = 0; i < queue.size(); ++i) {
+        if(queue[i].achievement == &achievement) {
+            SDL_UnlockMutex(queue_mutex);
+            return;
+        }
+    }
+
     BadgeDownloadTask task;
-	task.achievement = &achievement;
-	task.w = w;
-	task.h = h;
+    task.achievement = &achievement;
+    task.w = w;
+    task.h = h;
+    
     queue.push_back(task);
     SDL_UnlockMutex(queue_mutex);
 }

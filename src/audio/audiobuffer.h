@@ -2,21 +2,30 @@
 
 #include <vector>
 #include <stdint.h>
+#include <string.h> // memcpy
 
-#ifdef WIN
-#define BUFF_SIZE 8192
-#include <windows.h>
+
+#ifdef _XBOX
+#define BUFF_SIZE 16384
+#include <xtl.h>
 #else
 #define BUFF_SIZE 8192
-#include <xtl.h>
+#include <windows.h>
 #endif
+
+#define FADE_SAMPLES 32
 
 class AudioBuffer {
 private:
     std::vector<int16_t> buffer;
-    volatile long head; 
+    volatile long head;
     volatile long tail;
     std::size_t capacity;
+
+    // Últimas muestras L/R para fade-out suave en underrun
+    int16_t last_sample_L;
+    int16_t last_sample_R;
+    int fade_pos; // Posición actual en el fade (0 = no fading, >0 = en progreso)
 
 public:
 

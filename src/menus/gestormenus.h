@@ -338,10 +338,13 @@ public:
 	int getScrapGamesSelection(){return scrapGamesSelection;}
 
 	// 1. La lógica real (método normal)
-    std::string descargarIconosLogro() { 
-		if (menuAchievements->opciones.size() == 0){
+    std::string descargarLogros() { 
+		//if (menuAchievements->opciones.size() == 0){
+			Achievements::instance()->setShouldRefresh(true);
+			Achievements::instance()->refresh_achievements_menu();
 			loadAchievements();
-		}
+			resetIndexPos();
+		//}
 
 		if (menuAchievements->opciones.size() > 0){
 			BadgeDownloader::instance().start();
@@ -350,8 +353,8 @@ public:
 	}
 
     // 2. El "Puente" (estático)
-    static std::string sDescargarIconosLogros(void* inst) {
-        return ((GestorMenus*)inst)->descargarIconosLogro();
+    static std::string sDescargarLogros(void* inst) {
+        return ((GestorMenus*)inst)->descargarLogros();
     }
 
 	static std::string changeHardcoreMode(void* inst, void *value) {

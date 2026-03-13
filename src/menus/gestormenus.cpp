@@ -162,7 +162,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	const int menuAchWidth = this->getW() - marginX;
 	menuAchievements = new Menu(LanguageManager::instance()->get("menu.achievement.list.title"), rowAchHeight, menuAchWidth, parentAchievements);
 	OpcionSubMenu *listaLogros = new OpcionSubMenu(LanguageManager::instance()->get("menu.achievement.list.title"), menuAchievements);
-	listaLogros->callback = &GestorMenus::sDescargarIconosLogros;
+	listaLogros->callback = &GestorMenus::sDescargarLogros;
     listaLogros->context = this;
 	parentAchievements->opciones.push_back(listaLogros);
 	//Incluimos un indicador para habilitar logros

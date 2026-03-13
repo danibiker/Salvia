@@ -14,7 +14,7 @@
 #include <rc_client_internal.h>
 #include <rc_consoles.h>
 
-/* Forward declaration — definido en libretro.h */
+/* Forward declaration ï¿½ definido en libretro.h */
 struct retro_memory_descriptor;
 
 /* Entrada del mapa de memoria: traduce una direccion RA (address space
@@ -70,7 +70,7 @@ struct challenge_data {
 		badge = (other.badge != NULL) ? SDL_DisplayFormat(other.badge) : NULL;
 	}
 
-	// Operador de asignación
+	// Operador de asignaciï¿½n
 	challenge_data& operator=(const challenge_data& other) {
 		if (this != &other) {
 			if (badge != NULL) SDL_FreeSurface(badge); // Limpiar lo actual
@@ -101,9 +101,9 @@ struct progress_data {
         copiarDesde(other);
     }
 
-    // 2. OPERADOR DE ASIGNACIÓN (Ej: al hacer data1 = data2)
+    // 2. OPERADOR DE ASIGNACIï¿½N (Ej: al hacer data1 = data2)
     progress_data& operator=(const progress_data& other) {
-        if (this != &other) { // Evitar auto-asignación
+        if (this != &other) { // Evitar auto-asignaciï¿½n
             liberar();        // Limpiar la superficie actual antes de copiar la nueva
             copiarDesde(other);
         }
@@ -116,7 +116,7 @@ struct progress_data {
     }
 
 private:
-    // Función auxiliar para liberar memoria
+    // Funciï¿½n auxiliar para liberar memoria
     void liberar() {
         if (badge != NULL) {
             SDL_FreeSurface(badge);
@@ -124,13 +124,13 @@ private:
         }
     }
 
-    // Función auxiliar para realizar la clonación de datos
+    // Funciï¿½n auxiliar para realizar la clonaciï¿½n de datos
     void copiarDesde(const progress_data& other) {
         id = other.id;
         active = other.active;
         measured_progress = other.measured_progress;
 
-        // CLONACIÓN DE LA SUPERFICIE (Copia profunda)
+        // CLONACIï¿½N DE LA SUPERFICIE (Copia profunda)
         if (other.badge != NULL) {
             // SDL_DisplayFormat crea una copia exacta optimizada para la pantalla
             badge = SDL_DisplayFormat(other.badge);
@@ -142,7 +142,7 @@ private:
 
 class Achievements {
 public:
-    // Acceso único a la instancia (Singleton)
+    // Acceso ï¿½nico a la instancia (Singleton)
     static Achievements* instance() {
         static Achievements _instance;
         return &_instance;
@@ -157,6 +157,7 @@ public:
 	SDL_mutex* challengeMutex;
 	SDL_mutex* progressMutex;
 	SDL_mutex* achievementMutex;
+	SDL_mutex* badgeCacheMutex;
 
 	GameState *gameState;
 	uint32_t lastGameTick;
@@ -238,7 +239,9 @@ public:
 
 	std::vector<AchievementState>& getAchievements(){return achievements;}
 	std::map<std::string, SDL_Surface *>& getBadgeCache(){return badgeCache;}
-	void setShouldRefresh(bool ind){shouldRefresh = ind;}    
+	void setShouldRefresh(bool ind){
+		shouldRefresh = ind;
+	}    
 	bool has_pending_messages() const { return !pending_messages.empty(); }
 	void setHardcoreMode(bool mode){
 		hardcoreMode = mode;
@@ -284,11 +287,11 @@ private:
 	std::vector<AchievementState> achievements;
 
 	std::map<std::string, SDL_Surface *> badgeCache;
-    // Callbacks estáticos obligatorios para la librería C
+    // Callbacks estï¿½ticos obligatorios para la librerï¿½a C
     static uint32_t read_memory(uint32_t address, uint8_t* buffer, uint32_t num_bytes, rc_client_t* client);
     static void server_call(const rc_api_request_t* request, rc_client_server_callback_t callback, void* callback_data, rc_client_t* client);
     static void log_message(const char* message, const rc_client_t* client);
-	// 1. La función que rcheevos llamará para saber la hora
+	// 1. La funciï¿½n que rcheevos llamarï¿½ para saber la hora
 	static uint64_t get_xbox_clock_millis(const rc_client_t* client);
     static void login_callback(int result, const char* error_message, rc_client_t* client, void* userdata);
     static void load_game_callback(int result, const char* error_message, rc_client_t* client, void* userdata);
@@ -373,7 +376,7 @@ struct ProgressThreadData {
 // Estructura para comparar (Functor)
 struct AchievementComparer {
     bool operator()(const AchievementState& a, const AchievementState& b) const {
-        // Llamamos al método estático de la clase
+        // Llamamos al mï¿½todo estï¿½tico de la clase
         int prioA = Achievements::getSectionPriority(a.sectionType);
         int prioB = Achievements::getSectionPriority(b.sectionType);
 

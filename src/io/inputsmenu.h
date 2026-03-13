@@ -151,7 +151,10 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 			} 
 
 			if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
-				vector<string> launchCommand = gameMenu->launchProgram(listMenu);	
+				vector<string> launchCommand = gameMenu->launchProgram(listMenu);
+				//Always saving the position
+				gameMenu->saveGameMenuPos(listMenu);
+
 				if (launchCommand.size() > 1){
 					std::string romToLaunch = launchCommand.at(1);
 					LOG_DEBUG("Launching rom %s", romToLaunch.c_str());

@@ -23,7 +23,7 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 	LOG_DEBUG("Initiating engine\n");
 
 	#ifdef WIN
-		// 1. Activar la precisión de 1ms en el reloj de Windows
+		// 1. Activar la precisiï¿½n de 1ms en el reloj de Windows
 		timeBeginPeriod(1);
 		SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 	#endif
@@ -71,6 +71,7 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 void Engine::stopEngine(){
 	delete joystick;
 	delete fonts;
+	delete sync;
 	// 3. Limpieza: Devolver el reloj del sistema a su estado normal
 	#ifdef WIN
 		timeEndPeriod(1);

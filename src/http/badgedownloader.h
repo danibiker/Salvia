@@ -7,6 +7,8 @@
 struct BadgeDownloadTask {
 	AchievementState *achievement;
 	int w,h;
+
+	BadgeDownloadTask() : achievement(NULL), w(0), h(0) {}
 };
 
 class BadgeDownloader {

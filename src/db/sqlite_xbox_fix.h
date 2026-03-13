@@ -469,4 +469,5 @@ DWORD WINAPI FormatMessageXBoxA(
 	}
 	#endif
 #endif
+
 #endif

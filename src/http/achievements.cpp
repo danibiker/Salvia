@@ -50,9 +50,11 @@ void Achievements::initialize() {
 	challengeMutex = SDL_CreateMutex();
 	progressMutex = SDL_CreateMutex();
 	achievementMutex = SDL_CreateMutex();
+	badgeCacheMutex = SDL_CreateMutex();
 
 	createDbAchievements();
 	active_progress.badge = NULL;
+
 	// Creamos el cliente pasando la funcion de lectura de memoria
 	g_client = rc_client_create(read_memory, server_call);
 	// Habilitar logs detallados para debug
@@ -178,6 +180,8 @@ void clearBadgeCache(){
 	LOG_DEBUG("Limpiando cache de badges");
 	// 1. Obtener la instancia del Singleton
 	Achievements& self = *Achievements::instance();
+
+	SDL_mutexP(self.badgeCacheMutex);
 	// Definimos el iterador para el mapa
     std::map<std::string, SDL_Surface*>::iterator it;
 
@@ -188,6 +192,7 @@ void clearBadgeCache(){
     }
     // 2. Limpiar el mapa (elimina los IDs y punteros ahora invalidos)
     self.getBadgeCache().clear();
+	SDL_mutexV(self.badgeCacheMutex);
 }
 
 DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
@@ -560,7 +565,7 @@ uint32_t Achievements::read_memory(uint32_t address, uint8_t* buffer, uint32_t n
             uint32_t local_addr = self.memory_map[i].offset + (address - self.memory_map[i].start);
 
             /* Verificar que no leemos mas alla del final de la region */
-            if (address + num_bytes - 1 > self.memory_map[i].end)
+            if (num_bytes == 0 || num_bytes > self.memory_map[i].end - address + 1)
                 return 0;
 
             uint8_t* base_ptr = self.memory_map[i].buffer;
@@ -927,18 +932,20 @@ void Achievements::event_handler(const rc_client_event_t* event, rc_client_t* cl
 
 AchievementState Achievements::pop_message() {
     AchievementState msg;
+    SDL_mutexP(messagesMutex);
     if (!pending_messages.empty()) {
         // 1. Obtenemos el primero
-        msg = pending_messages.front(); 
-        
+        msg = pending_messages.front();
+
         // 2. CRUCIAL!: "Vaciamos" el objeto que sigue en el vector
         // para que cuando hagamos .erase(), su destructor NO borre el badge.
         pending_messages.front().badge = NULL;
         pending_messages.front().badgeLocked = NULL;
-        
+
         // 3. Lo sacamos del vector
         pending_messages.erase(pending_messages.begin());
     }
+    SDL_mutexV(messagesMutex);
     return msg; // Retornamos 'msg', que ahora es el unico duenyo del badge
 }
 
@@ -1056,6 +1063,7 @@ int Achievements::countUserUnlocked(rc_client_t* client) {
 
 void Achievements::reset_menu(){
 	Achievements& self = *Achievements::instance();
+	BadgeDownloader::instance().stop();
 	self.getAchievements().clear();
 }
 
@@ -1270,13 +1278,17 @@ bool Achievements::download_and_cache_image(std::string url, std::string name, S
 		return false;
 	}
 
+	// Consulta al cache protegida por mutex
+	SDL_mutexP(badgeCacheMutex);
 	if (badgeCache.find(name) != badgeCache.end()){
 		LOG_DEBUG("Achievement %s found in cache", name.c_str());
 		image = SDL_DisplayFormat(badgeCache[name]);
+		SDL_mutexV(badgeCacheMutex);
 		return true;
-	} 
+	}
+	SDL_mutexV(badgeCacheMutex);
 
-    // 3. Si no est en cach, descargar
+    // 3. Si no est en cach, descargar (fuera del mutex para no bloquear)
     CurlClient curlClient;
     std::string response;
     float progress = 0;
@@ -1289,7 +1301,7 @@ bool Achievements::download_and_cache_image(std::string url, std::string name, S
 		}
 
         // IMG_Load_RW con 1 cierra el rw automticamente
-        SDL_Surface *rawImg = IMG_Load_RW(rw, 1); 
+        SDL_Surface *rawImg = IMG_Load_RW(rw, 1);
         if (!rawImg){
 			LOG_DEBUG("download_and_cache_image. Couldn't load RW image from mem: %s", url.c_str());
 			return false;
@@ -1313,17 +1325,24 @@ bool Achievements::download_and_cache_image(std::string url, std::string name, S
         // 5. Limpieza de la imagen original
         SDL_FreeSurface(rawImg);
 
-        // 6. GUARDADO CRTICO EN CACH
+        // 6. GUARDADO CRTICO EN CACH (protegido por mutex)
         if (finalSurface != NULL) {
-            // Guardamos en el mapa para futuras llamadas
-            badgeCache.insert(std::make_pair(name, finalSurface));
-            LOG_DEBUG("download_and_cache_image. Inserting image in cache: %s", name.c_str());
+            SDL_mutexP(badgeCacheMutex);
+            // Re-check: otro hilo pudo insertar mientras descargabamos
+            if (badgeCache.find(name) != badgeCache.end()) {
+                // Ya existe, descartamos nuestra copia
+                SDL_FreeSurface(finalSurface);
+                finalSurface = badgeCache[name];
+            } else {
+                badgeCache.insert(std::make_pair(name, finalSurface));
+                LOG_DEBUG("download_and_cache_image. Inserting image in cache: %s", name.c_str());
+            }
 			if (image != NULL){
 				SDL_FreeSurface(image);
 				image = NULL;
 			}
-            // Actualizamos el puntero de salida
             image = SDL_DisplayFormat(finalSurface);
+            SDL_mutexV(badgeCacheMutex);
         } else {
 			LOG_DEBUG("download_and_cache_image. Surface error: %s", name.c_str());
 		}
