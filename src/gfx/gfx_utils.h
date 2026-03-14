@@ -38,3 +38,24 @@ inline void DrawRectAlpha(SDL_Surface* dest, SDL_Rect rect, SDL_Color color, Uin
     SDL_FreeSurface(temp);
 }
 
+/*inline void DrawRectAlpha(SDL_Surface* dest, SDL_Rect rect, SDL_Color color, Uint8 alpha) {
+    static SDL_Surface* alphaPixel = NULL;
+    
+    // 1. Crear el píxel base una sola vez
+    if (alphaPixel == NULL) {
+        alphaPixel = SDL_CreateRGBSurface(SDL_SWSURFACE, 1, 1, 32, 
+                                          0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF);
+    }
+
+    // 2. Cambiar el color y el alpha del píxel (Operaciones instantáneas)
+    Uint32 colorMapped = SDL_MapRGB(alphaPixel->format, color.r, color.g, color.b);
+    SDL_FillRect(alphaPixel, NULL, colorMapped);
+    SDL_SetAlpha(alphaPixel, SDL_SRCALPHA, alpha);
+
+    // 3. Estirar el píxel al tamaño del rectángulo (Stretch Blit)
+    // SDL_SoftStretch es mucho más rápido que crear una superficie entera
+    SDL_Rect srcRect = { 0, 0, 1, 1 };
+    SDL_Rect dstRect = { rect.x, rect.y, rect.w, rect.h };
+    SDL_SoftStretch(alphaPixel, &srcRect, dest, &dstRect);
+}*/
+

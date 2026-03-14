@@ -176,23 +176,31 @@ DWORD WINAPI AchievementTriggeredThread(LPVOID lpParam) {
 	return 0;
 }
 
-void clearBadgeCache(){
-	LOG_DEBUG("Limpiando cache de badges");
-	// 1. Obtener la instancia del Singleton
-	Achievements& self = *Achievements::instance();
+void clearBadgeCache() {
+	LOG_DEBUG("Limpiando badges");
+    Achievements* ach = Achievements::instance();
+    if (!ach) return;
 
-	SDL_mutexP(self.badgeCacheMutex);
-	// Definimos el iterador para el mapa
-    std::map<std::string, SDL_Surface*>::iterator it;
+    SDL_mutexP(ach->badgeCacheMutex);
+    
+    std::map<std::string, SDL_Surface*>& cache = ach->getBadgeCache();
+    std::map<std::string, SDL_Surface*>::iterator it = cache.begin();
 
-	for (it = self.getBadgeCache().begin(); it != self.getBadgeCache().end(); ++it) {
+    while (it != cache.end()) {
         if (it->second != NULL) {
-            SDL_FreeSurface(it->second); // Libera la superficie de la memoria
+            // Verificación extra: ¿Sigue vivo el subsistema de video?
+            // En Xbox 360, si SDL_WasInit(SDL_INIT_VIDEO) es 0, no llames a FreeSurface
+            if (SDL_WasInit(SDL_INIT_VIDEO)) {
+                SDL_FreeSurface(it->second);
+            }
+            it->second = NULL; // Evita que otros hilos intenten acceder
         }
+        ++it;
     }
-    // 2. Limpiar el mapa (elimina los IDs y punteros ahora invalidos)
-    self.getBadgeCache().clear();
-	SDL_mutexV(self.badgeCacheMutex);
+    cache.clear();
+    
+    SDL_mutexV(ach->badgeCacheMutex);
+    LOG_DEBUG("Cache de badges limpiada con éxito");
 }
 
 DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
@@ -239,8 +247,6 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
 	return 0;
 }
 
-
-
 DWORD WINAPI ChallengeIndicatorThread(LPVOID lpParam) {
 	LOG_DEBUG("Downloading challenge");
     ChallengeThreadData* data = (ChallengeThreadData*)lpParam;
@@ -273,24 +279,35 @@ DWORD WINAPI ProgressIndicatorThread(LPVOID lpParam) {
     int badgeW, badgeH, badgePad, line_height;
     self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
 
-    // 1. DESCARGA FUERA DEL MUTEX
+    // 1. DESCARGA FUERA DEL MUTEX (Paso crítico para no congelar el render)
     SDL_Surface* tempBadge = NULL;
+    // Esta función debe devolver una superficie ya optimizada para la Xbox (DisplayFormat interno)
     self.download_and_cache_image(data->badgeUrl, data->badgeName, tempBadge, badgeW, badgeH);
+
+    // 2. BLOQUEO CORTO Y DIRECTO
     SDL_mutexP(self.progressMutex);
 
-	// IMPORTANTE: Como el struct gestiona su propia memoria, 
-    // simplemente asignamos los valores. Si ya habia un badge, 
-    // nuestro operador de asignacion se encargara de liberarlo.
+    // Actualizamos los campos individualmente para evitar el operador de asignación pesado
     self.active_progress.id = data->id;
     self.active_progress.measured_progress = data->measured_progress;
     
-    // Si NO quieres copia profunda aqui (porque tempBadge ya es nuevo):
-    if (self.active_progress.badge != NULL) SDL_FreeSurface(self.active_progress.badge);
-    self.active_progress.badge = tempBadge; 
+    // Gestión manual del badge para evitar la "copia profunda" de tu struct original
+    //if (self.active_progress.badge != NULL) {
+    //    SDL_FreeSurface(self.active_progress.badge);
+    //}
+    self.active_progress.badge = tempBadge; // Transferencia de propiedad del puntero
+    
+    // 3. ACTIVACIÓN Y FLAG DE "SUCIO"
+    // Esto es vital para que GameMenu::renderProgress() sepa que debe re-renderizar el texto
     self.active_progress.active = true;
+    self.active_progress.dirty = true; 
+
     SDL_mutexV(self.progressMutex);
+
+    // 4. LIMPIEZA DE DATOS DEL HILO
     delete data;
-	LOG_DEBUG("Progress downloaded");
+    LOG_DEBUG("Progress downloaded and active");
+    
     return 0;
 }
 
@@ -654,15 +671,28 @@ void Achievements::leaderboard_tracker_hide(const rc_client_leaderboard_tracker_
 }
 
 void Achievements::create_tracker(uint32_t id, const char* display) {
-	LOG_DEBUG("Creando tracker: %d - %s", id, display);
-	tracker_data data;
-	data.id = id;
-	data.value = display;
-	data.active = true;
-	SDL_mutexP(trackerMutex);
-	active_trackers[id] = data;
-	SDL_mutexV(trackerMutex);
-	LOG_DEBUG("Tracker creado: %d - %s", id, display);
+    LOG_DEBUG("Creando tracker: %d - %s", id, display);
+    
+    SDL_mutexP(trackerMutex);
+    
+    // Accedemos directamente a la referencia en el mapa. 
+    // Si no existe, std::map la crea automáticamente.
+    tracker_data& data = active_trackers[id]; 
+    
+    // Si ya existía una caché (por ejemplo, si re-crean el tracker), la liberamos
+    if (data.cache) {
+        SDL_FreeSurface(data.cache);
+        data.cache = NULL;
+    }
+
+    data.id = id;
+    data.value = display; // Copia el string una sola vez
+    data.active = true;
+    data.dirty = true;    // Marcamos para que el renderizador lo genere
+    
+    SDL_mutexV(trackerMutex);
+    
+    LOG_DEBUG("Tracker creado: %d - %s", id, display);
 }
 
 void Achievements::destroy_tracker(uint32_t id) {
@@ -1272,47 +1302,37 @@ void Achievements::download_and_cache_image(AchievementState* achievement, int b
 *
 */
 bool Achievements::download_and_cache_image(std::string url, std::string name, SDL_Surface*& image, int badgeW, int badgeH) {
-    // 1. Verificar si el nombre es vlido
-    if (name.empty()) {
-		LOG_DEBUG("download_and_cache_image. Name not valid: %s", name.c_str());
-		return false;
-	}
+    if (name.empty()) return false;
 
-	// Consulta al cache protegida por mutex
-	SDL_mutexP(badgeCacheMutex);
-	if (badgeCache.find(name) != badgeCache.end()){
-		LOG_DEBUG("Achievement %s found in cache", name.c_str());
-		image = SDL_DisplayFormat(badgeCache[name]);
-		SDL_mutexV(badgeCacheMutex);
-		return true;
-	}
-	SDL_mutexV(badgeCacheMutex);
+    // 1. CONSULTA CACHÉ (Retornamos una referencia, no una copia nueva)
+    SDL_mutexP(badgeCacheMutex);
+    std::map<std::string, SDL_Surface*>::iterator it = badgeCache.find(name);
+    if (it != badgeCache.end()){
+        // IMPORTANTE: No hagas DisplayFormat aquí. Devuelve el puntero existente.
+        // El renderizador ya sabe dibujar superficies.
+        image = it->second; 
+        SDL_mutexV(badgeCacheMutex);
+        return true;
+    }
+    SDL_mutexV(badgeCacheMutex);
 
-    // 3. Si no est en cach, descargar (fuera del mutex para no bloquear)
+    // 2. DESCARGA (Curl)
     CurlClient curlClient;
     std::string response;
     float progress = 0;
 
     if (curlClient.fetchUrl(url, response, &progress)) {
         SDL_RWops* rw = SDL_RWFromMem((void*)response.data(), (int)response.size());
-        if (!rw) {
-			LOG_DEBUG("download_and_cache_image. Couldn't load image from mem: %s", url.c_str());
-			return false;
-		}
-
-        // IMG_Load_RW con 1 cierra el rw automticamente
         SDL_Surface *rawImg = IMG_Load_RW(rw, 1);
-        if (!rawImg){
-			LOG_DEBUG("download_and_cache_image. Couldn't load RW image from mem: %s", url.c_str());
-			return false;
-		}
+        if (!rawImg) return false;
 
         SDL_Surface* finalSurface = NULL;
 
-        // 4. Procesar: Escalar o convertir formato
-        if (badgeW == 0 || badgeH == 0) {
+        // 3. ESCALADO OPTIMIZADO
+        if (rawImg->w == badgeW && rawImg->h == badgeH) {
             finalSurface = SDL_DisplayFormat(rawImg);
         } else {
+            // Solo usamos rotozoom si el tamaño difiere
             double zoomX = (double)badgeW / rawImg->w;
             double zoomY = (double)badgeH / rawImg->h;
             SDL_Surface* zoomed = rotozoomSurfaceXY(rawImg, 0, zoomX, zoomY, SMOOTHING_ON);
@@ -1321,33 +1341,24 @@ bool Achievements::download_and_cache_image(std::string url, std::string name, S
                 SDL_FreeSurface(zoomed);
             }
         }
-
-        // 5. Limpieza de la imagen original
         SDL_FreeSurface(rawImg);
 
-        // 6. GUARDADO CRTICO EN CACH (protegido por mutex)
+        // 4. GUARDADO EN CACHÉ
         if (finalSurface != NULL) {
             SDL_mutexP(badgeCacheMutex);
-            // Re-check: otro hilo pudo insertar mientras descargabamos
             if (badgeCache.find(name) != badgeCache.end()) {
-                // Ya existe, descartamos nuestra copia
                 SDL_FreeSurface(finalSurface);
-                finalSurface = badgeCache[name];
+                image = badgeCache[name];
             } else {
-                badgeCache.insert(std::make_pair(name, finalSurface));
-                LOG_DEBUG("download_and_cache_image. Inserting image in cache: %s", name.c_str());
+                badgeCache[name] = finalSurface;
+                image = finalSurface;
+                LOG_DEBUG("Image cached: %s", name.c_str());
             }
-			if (image != NULL){
-				SDL_FreeSurface(image);
-				image = NULL;
-			}
-            image = SDL_DisplayFormat(finalSurface);
             SDL_mutexV(badgeCacheMutex);
-        } else {
-			LOG_DEBUG("download_and_cache_image. Surface error: %s", name.c_str());
-		}
+            return true;
+        }
     }
-	return true;
+    return false;
 }
 
 void Achievements::getBadgeSize(int &w, int &h, int &badgePad, int &line_height){

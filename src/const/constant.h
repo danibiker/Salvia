@@ -156,10 +156,10 @@ struct AchievementState{
 
 	// Metodo para limpiar manualmente
     void clear() {
-        if (badge != NULL) {
+        /*if (badge != NULL) {
             SDL_FreeSurface(badge);
             badge = NULL;
-        }
+        }*/
 		if (badgeLocked != NULL) {
             SDL_FreeSurface(badgeLocked);
             badgeLocked = NULL;
@@ -210,13 +210,15 @@ struct AchievementState{
 
         // Copia profunda de las superficies SDL
         if (other.badge != NULL) {
-            badge = SDL_DisplayFormat(other.badge);
+            //badge = SDL_DisplayFormat(other.badge);
+			badge = other.badge;
         } else {
             badge = NULL;
         }
 
         if (other.badgeLocked != NULL) {
             badgeLocked = SDL_DisplayFormat(other.badgeLocked);
+			//badgeLocked = other.badgeLocked;
         } else {
             badgeLocked = NULL;
         }

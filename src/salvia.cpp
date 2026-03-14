@@ -961,7 +961,7 @@ void processFrontendEvents(){
 			break;
 
 		default:
-			LOG_DEBUG("Sending Hotkey %d\n", hotkey);
+			//LOG_DEBUG("Sending Hotkey %d\n", hotkey);
 			// Cualquier otro hotkey (ej. volumen, reset, menú) se delega al frontend
 			gameMenu->processFrontendEvents(hotkey);
 			break;

@@ -35,19 +35,28 @@ struct tracker_data {
     uint32_t id;
     string value;
     bool active;
+	SDL_Surface* cache; // Puntero para la superficie renderizada
+    bool dirty;         // Flag para saber si el texto cambió
 
 	tracker_data(){
 		id = 0;
 		active = false;
+		cache = NULL;
+		dirty = true;
 	}
 
 	~tracker_data(){
+		if (cache) {
+            SDL_FreeSurface(cache);
+            cache = NULL;
+        }
 	}
 };
 
 struct challenge_data {
     uint32_t id;
-    SDL_Surface* badge; // La imagen ya cargada
+    SDL_Surface* badge; // La imagen ya cargada. La tenemos guardada en la cache de badges, 
+						// por lo que no hace falta liberarla en el destructor
     bool active;
 
 	challenge_data(){
@@ -57,10 +66,10 @@ struct challenge_data {
 	}
 
 	~challenge_data(){
-		if (badge != NULL){
+		/*if (badge != NULL){
 			SDL_FreeSurface(badge);
 			badge = NULL; // Inicializar por seguridad
-		}
+		}*/
 	}
 
 	// Constructor de copia
@@ -73,10 +82,11 @@ struct challenge_data {
 	// Operador de asignaci�n
 	challenge_data& operator=(const challenge_data& other) {
 		if (this != &other) {
-			if (badge != NULL) SDL_FreeSurface(badge); // Limpiar lo actual
+			//if (badge != NULL) SDL_FreeSurface(badge); // Limpiar lo actual
 			id = other.id;
 			active = other.active;
-			badge = (other.badge != NULL) ? SDL_DisplayFormat(other.badge) : NULL;
+			//badge = (other.badge != NULL) ? SDL_DisplayFormat(other.badge) : NULL;
+			badge = other.badge;
 		}
 		return *this;
 	}
@@ -84,59 +94,55 @@ struct challenge_data {
 
 struct progress_data {
     uint32_t id;
-    SDL_Surface* badge; 
+    SDL_Surface* badge;      // Icono (Referencia, no copia profunda)
+    SDL_Surface* textCache;  // Caché del texto renderizado
     std::string measured_progress;
     bool active;
-    
-    // Constructor por defecto
-    progress_data() {
-        id = 0;
-        badge = NULL;
-        active = false;
-        measured_progress = "";
-    }
+    bool dirty;              // Flag para refrescar el texto
 
-    // 1. CONSTRUCTOR DE COPIA (Ej: al hacer push_back en un vector)
+    progress_data() : id(0), badge(NULL), textCache(NULL), active(false), dirty(true) {}
+
+    // 1. CONSTRUCTOR DE COPIA (Optimizado: No duplica píxeles innecesariamente)
     progress_data(const progress_data& other) {
         copiarDesde(other);
     }
 
-    // 2. OPERADOR DE ASIGNACI�N (Ej: al hacer data1 = data2)
+    // 2. OPERADOR DE ASIGNACIÓN
     progress_data& operator=(const progress_data& other) {
-        if (this != &other) { // Evitar auto-asignaci�n
-            liberar();        // Limpiar la superficie actual antes de copiar la nueva
+        if (this != &other) {
+            liberar(); 
             copiarDesde(other);
         }
         return *this;
     }
 
-    // Destructor
     ~progress_data() {
         liberar();
     }
 
 private:
-    // Funci�n auxiliar para liberar memoria
     void liberar() {
-        if (badge != NULL) {
-            SDL_FreeSurface(badge);
-            badge = NULL;
+        // IMPORTANTE: Solo liberamos lo que este objeto "posee" de forma única
+        if (textCache) {
+            SDL_FreeSurface(textCache);
+            textCache = NULL;
         }
+        // Si el 'badge' es compartido (viene de un pool), NO lo liberes aquí.
+        // Si es único por cada progreso, descomenta la siguiente línea:
+        // if (badge) { SDL_FreeSurface(badge); badge = NULL; }
     }
 
-    // Funci�n auxiliar para realizar la clonaci�n de datos
     void copiarDesde(const progress_data& other) {
         id = other.id;
         active = other.active;
         measured_progress = other.measured_progress;
-
-        // CLONACI�N DE LA SUPERFICIE (Copia profunda)
-        if (other.badge != NULL) {
-            // SDL_DisplayFormat crea una copia exacta optimizada para la pantalla
-            badge = SDL_DisplayFormat(other.badge);
-        } else {
-            badge = NULL;
-        }
+        dirty = true; // Forzamos regenerar la caché de texto tras una copia
+        
+        // NO usamos SDL_DisplayFormat aquí. 
+        // En Xbox 360 es mejor copiar el puntero del badge 
+        // y gestionar su vida útil en un Singleton de Logros (Texture Pool).
+        badge = other.badge; 
+        textCache = NULL; // La caché de texto se regenerará en el render
     }
 };
 

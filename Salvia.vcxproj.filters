@@ -474,5 +474,6 @@
     <None Include="DistroWin\assets\i18n\es.ini">
       <Filter>i18n</Filter>
     </None>
+    <None Include="ClassDiagram1.cd" />
   </ItemGroup>
 </Project>

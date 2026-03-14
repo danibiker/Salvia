@@ -159,8 +159,8 @@ class GameMenu : public Engine{
 		void initAchievements();
 		std::string getPathPrefix(std::string);
         std::string encloseWithCharIfSpaces(std::string, std::string);
-		void updateAchievementsState(uint32_t currentTicks);
-		void handleMessageQueue(uint32_t currentTicks);
+		inline void updateAchievementsState(uint32_t currentTicks);
+		inline void handleMessageQueue(uint32_t currentTicks);
 		void renderCurrentAchievement();
 		void clearLastAchievementArea();
 };

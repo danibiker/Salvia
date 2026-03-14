@@ -1170,161 +1170,178 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
 }
 
 void GameMenu::renderTrackers() {
-	Achievements* ach = Achievements::instance();
-	SDL_mutexP(ach->trackerMutex); // BLOQUEAR AL INICIO
+    Achievements* ach = Achievements::instance();
+    
+    // 1. EARLY EXIT SIN BLOQUEAR EL MUTEX
+    // Comprobar el tamaño atómicamente si es posible, o una copia rápida
+    if (ach->active_trackers.empty()) return;
 
-	std::map<uint32_t, tracker_data>& active_trackers = ach->active_trackers;
-    if (active_trackers.empty()) {
-        SDL_mutexV(ach->trackerMutex);
-        return;
-    }
+    SDL_mutexP(ach->trackerMutex); 
 
-    int yOffset = 10; // Esquina superior derecha es lo estándar
-    //this->video_page
+    int yOffset = 10;
+    int screenW = screen->w;
+    TTF_Font* font = Fonts::getFont(Fonts::FONTSMALL);
+    
+    // 2. CACHEO DE VALORES FUERA DEL BUCLE
+    // No llames a funciones de instancia o MapRGB dentro de un bucle de renderizado
+    const SDL_PixelFormat* fmt = this->screen->format;
+    // (Asegúrate de que 'white' esté pre-calculado)
+
     std::map<uint32_t, tracker_data>::iterator it;
-	int line_height, badgeW, badgeH, badgePad;
-	Achievements::instance()->getBadgeSize(badgeW, badgeH, badgePad, line_height);
-	const Uint32 uPaleblue = SDL_MapRGB(this->screen->format, paleblue.r, paleblue.g, paleblue.b);
-	
-   for (it = active_trackers.begin(); it != active_trackers.end(); ++it) {
-        // Ahora es seguro recorrer el mapa
-        SDL_Surface *txt = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), it->second.value.c_str(), white);
-        if (txt) {
-            SDL_Rect txtRect = { (Sint16)(screen->w - 150), (Sint16)yOffset, (Uint16)txt->w, (Uint16)txt->h };
-            SDL_BlitSurface(txt, NULL, this->video_page, &txtRect);
-            SDL_FreeSurface(txt);
-            yOffset += 20;
+    for (it = ach->active_trackers.begin(); it != ach->active_trackers.end(); ++it) {
+        tracker_data& data = it->second;
+
+        // 3. LA GRAN OPTIMIZACIÓN: CACHÉ DE TEXTO
+        // TTF_RenderUTF8_Blended es extremadamente lento en PowerPC. 
+        // Solo renderiza si el valor del tracker ha cambiado.
+        if (data.dirty || !data.cache) {
+            if (data.cache) SDL_FreeSurface(data.cache);
+            data.cache = TTF_RenderUTF8_Blended(font, data.value.c_str(), white);
+            data.dirty = false; // Resetear flag
+        }
+
+        if (data.cache) {
+            SDL_Rect txtRect = { (Sint16)(screenW - 150), (Sint16)yOffset, (Uint16)data.cache->w, (Uint16)data.cache->h };
+            SDL_BlitSurface(data.cache, NULL, this->video_page, &txtRect);
+            yOffset += 20; 
         }
     }
-    SDL_mutexV(ach->trackerMutex); // LIBERAR AL FINAL
+    SDL_mutexV(ach->trackerMutex);
 }
 
 
 void GameMenu::renderChallenges() {
     Achievements* ach = Achievements::instance();
-	// 1. BLOQUEAR SIEMPRE AL PRINCIPIO
-	SDL_mutexP(ach->challengeMutex);
+    SDL_mutexP(ach->challengeMutex);
 
     std::map<uint32_t, challenge_data>& challenges = ach->active_challenges;
     if (challenges.empty()) {
-		SDL_mutexV(ach->challengeMutex); // LIBERAR ANTES DE SALIR
-		return;
-	}
-	
-    int badgeW, badgeH, badgePad, line_height;
-    ach->getBadgeSize(badgeW, badgeH, badgePad, line_height);
-
-    // 2. Calcular ancho viejo
-    int oldTotalWidth = 0;
-    std::map<uint32_t, challenge_data>::iterator it;
-    for (it = challenges.begin(); it != challenges.end(); ++it) {
-        if (it->second.badge != NULL) oldTotalWidth += badgeW + badgePad;
+        SDL_mutexV(ach->challengeMutex);
+        return;
     }
 
-    // 3. ELIMINACIÓN (Ahora es automática gracias al destructor del struct)
-    it = challenges.begin();
+    // 1. CACHEO DE CONSTANTES (Fuera de los bucles)
+    int badgeW, badgeH, badgePad, line_height;
+    ach->getBadgeSize(badgeW, badgeH, badgePad, line_height);
+    
+    int oldTotalWidth = 0;
+    int newTotalWidth = 0;
+    bool needsCleanup = false;
+
+    // 2. UN SOLO BUCLE PARA LIMPIAR, BORRAR Y CALCULAR
+    std::map<uint32_t, challenge_data>::iterator it = challenges.begin();
     while (it != challenges.end()) {
-        if (!it->second.active) {
-            challenges.erase(it++); // Incremento post-fijado para no invalidar
+        challenge_data& data = it->second;
+        bool hasBadge = (data.badge != NULL);
+
+        if (hasBadge) oldTotalWidth += (badgeW + badgePad);
+
+        if (!data.active) {
+            needsCleanup = true;
+            challenges.erase(it++); // El destructor del struct libera el badge
         } else {
+            if (hasBadge) newTotalWidth += (badgeW + badgePad);
             ++it;
         }
     }
 
-    // 4. Calcular NUEVO ancho tras borrar
-    int newTotalWidth = 0;
-    for (it = challenges.begin(); it != challenges.end(); ++it) {
-        if (it->second.badge != NULL) newTotalWidth += badgeW + badgePad;
-    }
-
-    // 5. LIMPIEZA: Solo si el área se ha reducido
-    if (newTotalWidth < oldTotalWidth) {
+    // 3. LIMPIEZA INTELIGENTE
+    // Solo si algo se borró, limpiamos el área que ocupaba el bloque de iconos
+    if (needsCleanup || newTotalWidth < oldTotalWidth) {
         SDL_Rect cleanRect;
-        // El área a limpiar empieza donde termina el nuevo bloque y llega hasta donde terminaba el viejo
-        cleanRect.x = (Sint16)(screen->w - oldTotalWidth - 20);
+        cleanRect.x = (Sint16)(screen->w - oldTotalWidth - 25); 
         cleanRect.y = (Sint16)(screen->h - badgeH - 25);
-        cleanRect.w = (Uint16)(oldTotalWidth - newTotalWidth + badgePad);
+        cleanRect.w = (Uint16)(oldTotalWidth + badgePad + 10); // Limpiamos todo el bloque viejo de una vez
         cleanRect.h = (Uint16)(badgeH + 30);
-
         SDL_FillRect(screen, &cleanRect, this->uBkgColor);
     }
 
-    // 6. RENDERIZADO FINAL (Alineado a la derecha)
-    int xPos = screen->w - newTotalWidth - 20;
-    int yPos = screen->h - badgeH - 20;
+    // 4. RENDERIZADO (Solo si quedan retos)
+    if (newTotalWidth > 0) {
+        int xPos = screen->w - newTotalWidth - 20;
+        int yPos = screen->h - badgeH - 20;
 
-    for (it = challenges.begin(); it != challenges.end(); ++it) {
-        if (it->second.badge != NULL) {
-            SDL_Rect dest = {(Sint16)xPos, (Sint16)yPos, (Uint16)badgeW, (Uint16)badgeH};
-            SDL_BlitSurface(it->second.badge, NULL, screen, &dest);
-            xPos += badgeW + badgePad;
+        for (it = challenges.begin(); it != challenges.end(); ++it) {
+            if (it->second.badge) {
+                SDL_Rect dest = {(Sint16)xPos, (Sint16)yPos, (Uint16)badgeW, (Uint16)badgeH};
+                SDL_BlitSurface(it->second.badge, NULL, screen, &dest);
+                xPos += (badgeW + badgePad);
+            }
         }
     }
 
-	SDL_mutexV(ach->challengeMutex);
+    SDL_mutexV(ach->challengeMutex);
 }
 
 void GameMenu::renderProgress() {
-    static SDL_Rect bgRect = {0, 0, 0, 0};
+    static SDL_Rect lastBgRect = {0, 0, 0, 0};
     const int bordeBg = 2;
     const int txtSep = 3;
-    int badgeW, badgeH, badgePad, line_height;
     
     Achievements* ach = Achievements::instance();
     SDL_mutexP(ach->progressMutex);
-    
     progress_data& progress = ach->active_progress;
 
+    // 1. EARLY EXIT Y LIMPIEZA
     if (!progress.active) {
-        // Limpiamos el rastro del último frame dibujado
-        if (bgRect.w != 0) {
-            SDL_FillRect(screen, &bgRect, this->uBkgColor);
-            bgRect.w = 0; // Marcamos como limpio
-        }
-        // El destructor de progress_data se encargará del badge 
-        // cuando el objeto sea modificado o destruido, pero si quieres 
-        // forzar la limpieza ahora:
-        if (progress.badge != NULL) {
-            SDL_FreeSurface(progress.badge);
-            progress.badge = NULL;
+        if (lastBgRect.w > 0) {
+            SDL_FillRect(this->video_page, &lastBgRect, this->uBkgColor);
+            lastBgRect.w = 0;
         }
         SDL_mutexV(ach->progressMutex);
         return;
     }
 
+    // 2. CACHEO DE TEXTO (Solo renderiza si el valor cambió)
+    if (progress.dirty || progress.textCache == NULL) {
+        if (progress.textCache) SDL_FreeSurface(progress.textCache);
+        progress.textCache = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), progress.measured_progress.c_str(), white);
+        progress.dirty = false;
+    }
+
+    if (!progress.textCache) {
+        SDL_mutexV(ach->progressMutex);
+        return;
+    }
+
+    // 3. CÁLCULO DE POSICIONES
+    int badgeW, badgeH, badgePad, line_height;
     ach->getBadgeSize(badgeW, badgeH, badgePad, line_height);
-    
-    // Render de texto (Ojo: esto consume CPU cada frame, considera cachearlo)
-    SDL_Surface* txt = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), progress.measured_progress.c_str(), white);
-    if (!txt) {
-        SDL_mutexV(ach->progressMutex);
-        return;
+
+    SDL_Rect rectIcon;
+    rectIcon.x = screen->w - progress.textCache->w - txtSep - badgeW - 20;
+    rectIcon.y = screen->h - 2 * badgeH - 25;
+    rectIcon.w = badgeW; 
+    rectIcon.h = badgeH;
+
+    SDL_Rect newBgRect;
+    newBgRect.x = rectIcon.x - bordeBg;
+    newBgRect.y = rectIcon.y - bordeBg;
+    newBgRect.w = progress.textCache->w + badgeW + txtSep + (bordeBg * 2);
+    newBgRect.h = badgeH + (bordeBg * 2);
+
+    // 4. LIMPIEZA DEL FRAME ANTERIOR (Solo si el área cambió o se movió)
+    if (lastBgRect.w > 0 && (lastBgRect.x != newBgRect.x || lastBgRect.w != newBgRect.w)) {
+        SDL_FillRect(this->video_page, &lastBgRect, this->uBkgColor);
     }
+    lastBgRect = newBgRect;
 
-    SDL_Rect rect;
-    rect.x = screen->w - txt->w - txtSep - badgeW - 20;
-    rect.y = screen->h - 2 * badgeH - 25;
-    rect.w = badgeW; 
-    rect.h = badgeH;
-
-    // Actualizamos el rectángulo de fondo para el próximo frame
-    bgRect.x = rect.x - bordeBg;
-    bgRect.y = rect.y - bordeBg;
-    bgRect.w = txt->w + rect.w + txtSep + bordeBg * 2;
-    bgRect.h = rect.h + bordeBg * 2;
-
-    DrawRectAlpha(video_page, bgRect, backgroundColor, 190);
+    // 5. DIBUJO (Alpha y Blits)
+    // Nota: DrawRectAlpha es lento en 360. Si el fondo es siempre el mismo, 
+    // considera usar una superficie pre-renderizada.
+    DrawRectAlpha(this->video_page, newBgRect, backgroundColor, 190);
     
     if (progress.badge) {
-        SDL_BlitSurface(progress.badge, NULL, screen, &rect);
+        SDL_BlitSurface(progress.badge, NULL, this->video_page, &rectIcon);
     }
 
-    SDL_Rect rectTxt = { (Sint16)(rect.x + rect.w + txtSep), 
-                         (Sint16)(rect.y + rect.h / 2 - line_height / 2), 
-                         (Uint16)txt->w, (Uint16)txt->h };
+    SDL_Rect rectTxt = { 
+        (Sint16)(rectIcon.x + badgeW + txtSep), 
+        (Sint16)(rectIcon.y + (badgeH / 2) - (progress.textCache->h / 2)), 
+        (Uint16)progress.textCache->w, (Uint16)progress.textCache->h 
+    };
     
-    SDL_BlitSurface(txt, NULL, screen, &rectTxt);
-    SDL_FreeSurface(txt);
+    SDL_BlitSurface(progress.textCache, NULL, this->video_page, &rectTxt);
 
     SDL_mutexV(ach->progressMutex);
 }
@@ -1334,12 +1351,33 @@ void GameMenu::processMessagesAchievements(){
 		return;
 
 	const uint32_t currentTicks = SDL_GetTicks();
-    // Actualizar estado interno de los logros
-    updateAchievementsState(currentTicks);
-    // Gestión de la cola de mensajes (Expiración y carga)
-    handleMessageQueue(currentTicks);
-    // Renderizado (Si hay mensajes)
-    renderCurrentAchievement();
+
+	// 2. Solo procesar si realmente ha pasado tiempo (Throttle)
+    // No necesitas actualizar la lógica de logros cada 16ms (60fps). 
+    // Hacerlo cada 33ms o 100ms libera muchísima CPU.
+    static uint32_t lastUpdate = 0;
+    if (currentTicks - lastUpdate > 33) { 
+		// Actualizar estado interno de los logros
+		updateAchievementsState(currentTicks);
+		// Gestión de la cola de mensajes (Expiración y carga)
+		handleMessageQueue(currentTicks);
+		lastUpdate = currentTicks;
+	}
+    
+	// 3. Renderizado condicional: Solo entra si hay algo que dibujar
+	// Renderizado (Si hay mensajes)
+	if (messagesAchievement.empty()) {
+		if (lastMessagesArea.h > 0) {
+			SDL_FillRect(this->video_page, &lastMessagesArea, this->uBkgColor);
+			lastMessagesArea.x = 0;
+			lastMessagesArea.y = 0;
+			lastMessagesArea.w = 0;
+			lastMessagesArea.h = 0;
+		}
+    } else {
+		renderCurrentAchievement();
+	}
+    
 	// Renderizado de trackers
 	renderTrackers();
 	// Renderizado de challenges
@@ -1357,7 +1395,7 @@ void GameMenu::clearLastAchievementArea() {
     }
 }
 
-void GameMenu::updateAchievementsState(uint32_t currentTicks) {
+inline void GameMenu::updateAchievementsState(uint32_t currentTicks) {
     if (getEmuStatus() == EMU_STARTED) {
 		Achievements* ach = Achievements::instance();
         ach->doFrame();
@@ -1377,7 +1415,7 @@ void GameMenu::updateAchievementsState(uint32_t currentTicks) {
     }
 }
 
-void GameMenu::handleMessageQueue(uint32_t currentTicks) {
+inline void GameMenu::handleMessageQueue(uint32_t currentTicks) {
     if (messagesAchievement.empty()) return;
 
     // Obtenemos referencia al primer mensaje
@@ -1393,15 +1431,6 @@ void GameMenu::handleMessageQueue(uint32_t currentTicks) {
 }
 
 void GameMenu::renderCurrentAchievement() {
-    if (messagesAchievement.empty()) {
-		SDL_FillRect(this->video_page, &lastMessagesArea, this->uBkgColor);
-		lastMessagesArea.x = 0;
-		lastMessagesArea.y = 0;
-		lastMessagesArea.w = 0;
-		lastMessagesArea.h = 0;
-        return;
-    }
-
     AchievementState& msg = messagesAchievement.front();
     if (msg.type == ACH_LOAD_GAME) {
         showAchievementMessage(Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.title"), msg.title.c_str()), 
@@ -1464,43 +1493,61 @@ void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str
 /**
 *
 */
-void GameMenu::processMessages(){
-	static SDL_Rect lastMessagesArea = {0, 0, 0, 0};
-	// 1. LIMPIEZA: Borrar área del frame anterior
+void GameMenu::processMessages() {
+    static SDL_Rect lastMessagesArea = {0, 0, 0, 0};
+    
+    // 1. LIMPIEZA EFICIENTE
     if (lastMessagesArea.h > 0) {
         SDL_FillRect(this->video_page, &lastMessagesArea, this->uBkgColor);
     }
 
-    uint32_t currentTicks = SDL_GetTicks();
-    int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
-    int line_height = face_h + 4;
-    
-    // 2. GESTIÓN DE EXPIRACIÓN (Bucle clásico con iterador)
-    std::vector<Message>::iterator it = messages.begin();
-    while (it != messages.end()) {
-        if (currentTicks - it->ticks > it->timeout) {
-            if (it->cache) SDL_FreeSurface(it->cache);
-            it = messages.erase(it); // erase devuelve el siguiente iterador válido
-        } else {
-            ++it;
-        }
-    }
-
     if (messages.empty()) {
-        lastMessagesArea.x = 0; lastMessagesArea.y = 0;
-        lastMessagesArea.w = 0; lastMessagesArea.h = 0;
+        lastMessagesArea.h = 0;
         return;
     }
 
-    // 3. DIBUJO Y CÁLCULO DE ÁREA TOTAL
-    int currentY = this->video_page->h - line_height;
-    int maxWidth = 0;
-    int totalHeight = 0;
+    uint32_t currentTicks = SDL_GetTicks();
+    
+    // 2. OPTIMIZACIÓN DE VECTOR: "Remove-erase idiom" manual
+    // En Xbox 360, borrar elementos uno a uno en un vector desplaza la memoria repetidamente.
+    // Es mejor mover los elementos válidos al principio y borrar al final una sola vez.
+    std::size_t writeIdx = 0;
+    for (std::size_t i = 0; i < messages.size(); ++i) {
+        if (currentTicks - messages[i].ticks <= messages[i].timeout) {
+            if (writeIdx != i) {
+                messages[writeIdx] = messages[i];
+            }
+            writeIdx++;
+        } else {
+            if (messages[i].cache) SDL_FreeSurface(messages[i].cache);
+        }
+    }
+    if (writeIdx != messages.size()) {
+        messages.resize(writeIdx);
+    }
 
-    // Dibujamos de los más nuevos a los más viejos (hacia arriba)
-    // Usamos índice inverso para recorrer el vector
-    for (int i = (int)messages.size() - 1; i >= 0; --i) {
-        Message &m = messages[i];
+    if (messages.empty()) {
+        lastMessagesArea.h = 0;
+        return;
+    }
+
+    // 3. CACHEO DE VALORES CONSTANTES
+    static int line_height = 0;
+    if (line_height == 0) { // Solo calculamos una vez
+        line_height = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG)) + 4;
+    }
+
+    // 4. DIBUJO Y CÁLCULO DE ÁREA (Sin iteradores, acceso directo por puntero)
+    int video_h = this->video_page->h;
+    int currentY = video_h - line_height;
+    int maxWidth = 0;
+    
+    // Acceso por puntero para evitar overhead de comprobación de límites del vector en Debug
+    Message* mData = &messages[0];
+    int msgCount = (int)messages.size();
+
+    for (int i = msgCount - 1; i >= 0; --i) {
+        Message &m = mData[i];
         m.rect.y = (Sint16)currentY;
         m.rect.x = 0;
 
@@ -1508,16 +1555,14 @@ void GameMenu::processMessages(){
             SDL_BlitSurface(m.cache, NULL, this->video_page, &m.rect);
             if (m.rect.w > maxWidth) maxWidth = m.rect.w;
         }
-
         currentY -= line_height;
-        totalHeight += line_height;
     }
 
-    // 4. ACTUALIZAR RECTÁNGULO PARA EL PRÓXIMO FRAME
-    lastMessagesArea.x = 0;
-    lastMessagesArea.y = (Sint16)(this->video_page->h - totalHeight);
+    // 5. ACTUALIZAR ÁREA PARA EL PRÓXIMO FRAME
+    int totalHeight = msgCount * line_height;
     lastMessagesArea.w = (Uint16)maxWidth;
     lastMessagesArea.h = (Uint16)totalHeight;
+    lastMessagesArea.y = (Sint16)(video_h - totalHeight);
 }
 
 void GameMenu::processConfigChanges(){
