@@ -1,7 +1,9 @@
 #include "sync.h"
 #include <SDL.h>
 
-#ifdef WIN
+#ifdef _XBOX
+#include <xtl.h>
+#elif defined(WIN)
 #include <xmmintrin.h>
 #endif
 
@@ -11,12 +13,12 @@ Sync::Sync(int syncMode){
 	g_actualFps = FPS_DESIRED;
 	fps = FPS_DESIRED;
 	utilization = 0.0;
+	lastWorkEnd = 0.0;
 	memset(fpsText, '\0', 50 * sizeof(char));
 	sprintf(fpsText, FPS_FORMAT, g_actualFps);
 	sprintf(cpuText, CPU_FORMAT, utilization);
 	g_sync_last = syncMode;
 	frameDelay = 1000.0 / (double)fps; // Aprox 16ms
-	utilization = 0.0;
 }
 
 void Sync::initAverages(uint32_t avg){
@@ -29,22 +31,22 @@ void Sync::initAverages(uint32_t avg){
 void Sync::init_fps_counter(double gameFps){
 	if (gameFps > 0){
         this->fps = gameFps;
-        // Mantenemos el frameDelay como double para el limitador de alta precisión
+        // Mantenemos el frameDelay como double para el limitador de alta precisiÃ³n
         this->frameDelay = 1000.0 / gameFps; 
         
-        // Para los promedios (que parecen usar enteros), usamos el redondeo más cercano
+        // Para los promedios (que parecen usar enteros), usamos el redondeo mÃ¡s cercano
         initAverages((uint32_t)(frameDelay + 0.5));
     } else {
-        // Fallback por si gameFps es inválido
+        // Fallback por si gameFps es invÃ¡lido
         initAverages((uint32_t)frameDelay);
     }
 }
 
 void Sync::update_fps_counter(bool updateFpsOverlay) {
 	uint32_t currentTick = SDL_GetTicks();
-    if (g_lastFrameTick == 0) g_lastFrameTick = currentTick; // Inicialización en el primer uso
+    if (g_lastFrameTick == 0) g_lastFrameTick = currentTick; // InicializaciÃ³n en el primer uso
     
-	// Calculamos cuánto tiempo ha pasado realmente desde el frame anterior
+	// Calculamos cuÃ¡nto tiempo ha pasado realmente desde el frame anterior
 	uint32_t frameTime = currentTick - g_lastFrameTick;
 	g_lastFrameTick = currentTick;
 
@@ -59,7 +61,7 @@ void Sync::update_fps_counter(bool updateFpsOverlay) {
 			totalTime += g_frameTimes[i];
 		}
 
-		// Calculamos la media (evitando división por cero)
+		// Calculamos la media (evitando divisiÃ³n por cero)
 		if (totalTime > 0) {
 			// FPS = 1000ms / promedio_de_frame_en_ms
 			// Es lo mismo que: (1000 * cantidad_de_frames) / tiempo_total
@@ -75,9 +77,20 @@ void Sync::limit_fps(double& nextFrameTime) {
     double currentTime = Constant::getTicks();
     double diffTime = nextFrameTime - currentTime;
 
-    // Métricas de utilización (Suavizado EMA)
-    const double currentUtilization = ((this->frameDelay - diffTime) / this->frameDelay) * 100.0;
-    this->utilization = (this->utilization * 0.9) + (currentUtilization * 0.1);
+    // --- Métricas de utilización basadas en tiempo real de trabajo ---
+    // workTime = tiempo que la CPU estuvo ocupada procesando el frame
+    //          = desde que terminó el sleep del frame anterior hasta ahora
+    if (lastWorkEnd > 0.0) {
+        double workTime = currentTime - lastWorkEnd;
+        double currentUtilization = (workTime / this->frameDelay) * 100.0;
+
+        // Clamp: 0% = idle total, 100% = justo al límite, >100% = no llega a tiempo
+        if (currentUtilization < 0.0) currentUtilization = 0.0;
+        if (currentUtilization > 200.0) currentUtilization = 200.0;
+
+        // Suavizado EMA (alpha=0.1 para ~10 frames de convergencia)
+        this->utilization = (this->utilization * 0.9) + (currentUtilization * 0.1);
+    }
 
     if (diffTime > 0) {
         // Dormir el hilo si sobra tiempo suficiente (ahorro de CPU)
@@ -89,14 +102,19 @@ void Sync::limit_fps(double& nextFrameTime) {
         // ESPERA ACTIVA: Clava el microsegundo exacto
         while (Constant::getTicks() < nextFrameTime) {
             // _mm_pause() para optimizar el consumo
-			#if defined(WIN)
+			#ifdef _XBOX
+				YieldProcessor();
+			#elif defined(WIN)
 				_mm_pause(); // Optimiza el bucle de espera en CPUs x86/x64
 			#endif
         }
     } else if (diffTime < -100.0) {
-        // Si hay un lag masivo, reseteamos para evitar el efecto "cámara rápida"
+        // Si hay un lag masivo, reseteamos para evitar el efecto "cÃ¡mara rÃ¡pida"
         nextFrameTime = currentTime;
     }
+
+    // Registramos el instante en que terminamos de esperar (= inicio del trabajo del prï¿½ximo frame)
+    lastWorkEnd = Constant::getTicks();
 
     // El siguiente frame se calcula sobre el objetivo ideal
     nextFrameTime += frameDelay;

@@ -487,7 +487,7 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 	
     SDL_Surface* screen = gameMenu->screen;
 	
-	t_scale_props scaleProps = {0}; // Limpia todo el struct a cero antes de asignar
+	t_scale_props scaleProps;
 	// 4. Pasar el buffer correcto (ya sea el original de 16 o el convertido)
 	scaleProps.src = (uint16_t*)final_src;
 	scaleProps.sw = (int)width;
@@ -543,28 +543,31 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 		// 2. Respuesta al Core
 		if (id == RETRO_DEVICE_ID_JOYPAD_MASK) {
 			int16_t mask = 0;
-			for (int i = 0; i < maxJoyTargets; i++) {
-				//Evitamos que el core vea las pulsaciones si el modificador de hotkeys esta pulsado
-				if (modifierPressed && inputs->mapperCore.getSdlBtn(port, i) != sdlModifier)
-					continue;
-
-				if (inputs->getCoreAny(port, i)) {
-					mask |= (int16_t)(1 << i);
+			if (!modifierPressed) {
+				// Fast path: sin modifier, lectura directa sin getSdlBtn por iteraci�n
+				for (int i = 0; i < maxJoyTargets; i++) {
+					if (inputs->getCoreAny(port, i)) {
+						mask |= (int16_t)(1 << i);
+					}
+				}
+			} else {
+				// Slow path: con modifier activo, filtramos botones
+				for (int i = 0; i < maxJoyTargets; i++) {
+					if (inputs->mapperCore.getSdlBtn(port, i) != sdlModifier)
+						continue;
+					if (inputs->getCoreAny(port, i)) {
+						mask |= (int16_t)(1 << i);
+					}
 				}
 			}
-			/*if (port == 0){
-				char bitStr[17]; // 16 bits + fin de cadena
-				bitStr[16] = '\0';
-				for (int i = 0; i < 16; i++) {
-					bitStr[15 - i] = (mask & (1 << i)) ? '1' : '0';
-				}
-				LOG_DEBUG("Joypad Mask: %s (Value: %d)", bitStr, mask);
-			}*/
 			return mask;
 		} else {
 			if (id < maxJoyTargets) {
-				return  !(modifierPressed && inputs->mapperCore.getSdlBtn(port, id) != sdlModifier) ||
-						inputs->getCoreAny(port, id) ? 1 : 0;
+				if (!modifierPressed) {
+					return inputs->getCoreAny(port, id) ? 1 : 0;
+				}
+				return (inputs->mapperCore.getSdlBtn(port, id) == sdlModifier ||
+						inputs->getCoreAny(port, id)) ? 1 : 0;
 			}
 			return 0;
 		}
@@ -855,6 +858,7 @@ int launchGame(std::string rompath){
 	gameMenu->sync->init_fps_counter(av_info.timing.fps);
 	gameMenu->romLoaded = true;
 	gameMenu->setRomPaths(rompath);
+	gameMenu->configMenus->poblarPartidasGuardadas(gameMenu->getCfgLoader(), rompath);
 	loadSram(gameMenu->getRomPaths()->sram.c_str());
 	gameMenu->setEmuStatus(EMU_STARTED);
 	return 1;

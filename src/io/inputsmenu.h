@@ -160,7 +160,6 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 					LOG_DEBUG("Launching rom %s", romToLaunch.c_str());
 					SDL_FillRect(gameMenu->screen, NULL, bkgText);
 					if (launchGame(romToLaunch)){
-						gameMenu->configMenus->poblarPartidasGuardadas(gameMenu->getCfgLoader(), romToLaunch);
 						gameMenu->setEmuStatus(EMU_STARTED);
 					}
 					return 0;

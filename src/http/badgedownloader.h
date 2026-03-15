@@ -1,14 +1,17 @@
 #include <vector>
 #include <string>
-#include <SDL_thread.h>
-#include <SDL.h>
+#ifdef _XBOX
+	#include <xtl.h> // API de Xbox 360 (incluye funciones de Windows)
+#else 
+	#include <windows.h>
+#endif
+
 #include "achievements.h"
 
 struct BadgeDownloadTask {
-	AchievementState *achievement;
-	int w,h;
-
-	BadgeDownloadTask() : achievement(NULL), w(0), h(0) {}
+    AchievementState *achievement;
+    int w, h;
+    BadgeDownloadTask() : achievement(NULL), w(0), h(0) {}
 };
 
 class BadgeDownloader {
@@ -23,25 +26,20 @@ public:
     void add_to_queue(AchievementState &achievement, int w, int h);
 
 private:
-    BadgeDownloader() : thread(NULL), running(false) {
-        queue_mutex = SDL_CreateMutex();
+    BadgeDownloader() : hThread(NULL), running(false) {
+        InitializeCriticalSection(&queue_mutex);
     }
 
-	BadgeDownloader::~BadgeDownloader() {
-		// 1. Asegurarnos de que el hilo se detuvo
-		stop(); 
-
-		// 2. Destruir el mutex
-		if (this->queue_mutex != NULL) {
-			SDL_DestroyMutex(this->queue_mutex);
-			this->queue_mutex = NULL;
-		}
-	}
+    ~BadgeDownloader() {
+        stop();
+        DeleteCriticalSection(&queue_mutex);
+    }
     
-    static int thread_func(void* data);
+    // El prototipo de función para CreateThread debe ser DWORD WINAPI
+    static DWORD WINAPI thread_func(LPVOID data);
     
-    SDL_Thread* thread;
-    SDL_mutex* queue_mutex;
+    HANDLE hThread;
+    CRITICAL_SECTION queue_mutex;
     std::vector<BadgeDownloadTask> queue;
     bool running;
 };

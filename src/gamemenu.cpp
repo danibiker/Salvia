@@ -45,6 +45,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	configMenus->inicializar(cfgLoader, joystick);
 	// En la clase Config o GameMenu
 	selectScalerMode(FULLSCREEN);
+
 	this->current_scaler_mode = &getCfgLoader()->configMain[cfg::scaleMode].getIntRef();
 	this->current_ratio = &getCfgLoader()->configMain[cfg::aspectRatio].getIntRef();
 	this->current_sync = &getCfgLoader()->configMain[cfg::syncMode].getIntRef();
@@ -882,7 +883,6 @@ void GameMenu::processKeyUp(){
 	joystick->inputs.updateLastState();
 }
 
-
 /**
 * Procesamos las hotkeys mientras el juego esta corriendo
 */
@@ -1056,7 +1056,6 @@ void GameMenu::selectScalerMode(int mode){
 					//current_scaler = scale_software_fixed_point_noif_x86;	    //360fps
 					//current_scaler = scale_software_float;				    //265fps
 				#elif defined(_XBOX)
-					//current_scaler = scale_software_fixed_point_ppc;		//110fps
 					current_scaler = scale_software_fixed_point_xbox_final; //112fps
 				#else
 					current_scaler = scale_software_fixed_point_safe2;		//106fps
@@ -1212,65 +1211,60 @@ void GameMenu::renderTrackers() {
 
 void GameMenu::renderChallenges() {
     Achievements* ach = Achievements::instance();
-    SDL_mutexP(ach->challengeMutex);
+    
+    // 1. EARLY EXIT SIN BLOQUEAR: Si el mapa está vacío, no pierdas ciclos con el mutex.
+    if (ach->active_challenges.empty()) return;
 
+    SDL_LockMutex(ach->challengeMutex);
     std::map<uint32_t, challenge_data>& challenges = ach->active_challenges;
-    if (challenges.empty()) {
-        SDL_mutexV(ach->challengeMutex);
-        return;
-    }
 
-    // 1. CACHEO DE CONSTANTES (Fuera de los bucles)
+    // 2. CACHEO DE VALORES DEL SINGLETON
+    // Llamar a funciones de instancia dentro de bucles rompe el pipeline de la CPU Xenon.
     int badgeW, badgeH, badgePad, line_height;
     ach->getBadgeSize(badgeW, badgeH, badgePad, line_height);
     
-    int oldTotalWidth = 0;
-    int newTotalWidth = 0;
-    bool needsCleanup = false;
+    const int screenW = screen->w;
+    const int screenH = screen->h;
+    const uint32_t bgColor = this->uBkgColor;
+    SDL_Surface* vPage = this->video_page;
 
-    // 2. UN SOLO BUCLE PARA LIMPIAR, BORRAR Y CALCULAR
-    std::map<uint32_t, challenge_data>::iterator it = challenges.begin();
+    // 3. PASADA ÚNICA DE BORRADO (Eficiencia de Cache L2)
+    // Recorremos el mapa una vez para limpiar lo viejo. 
+    // Usamos una referencia local para evitar saltos de puntero repetitivos.
+    std::map<uint32_t, challenge_data>::iterator it;
+    for (it = challenges.begin(); it != challenges.end(); ++it) {
+        challenge_data& cd = it->second;
+        if (cd.lastRect.h > 0) {
+            SDL_FillRect(vPage, &cd.lastRect, bgColor);
+        }
+    }
+
+    // 4. PASADA DE GESTIÓN Y DIBUJO (Compactación de Memoria)
+    it = challenges.begin();
+    int i = 0;
     while (it != challenges.end()) {
-        challenge_data& data = it->second;
-        bool hasBadge = (data.badge != NULL);
+        challenge_data& cd = it->second;
 
-        if (hasBadge) oldTotalWidth += (badgeW + badgePad);
-
-        if (!data.active) {
-            needsCleanup = true;
-            challenges.erase(it++); // El destructor del struct libera el badge
+        if (!cd.active) {
+            // No necesitamos borrar pantalla aquí, ya lo hicimos en la pasada 1.
+            challenges.erase(it++); 
         } else {
-            if (hasBadge) newTotalWidth += (badgeW + badgePad);
-            ++it;
-        }
-    }
-
-    // 3. LIMPIEZA INTELIGENTE
-    // Solo si algo se borró, limpiamos el área que ocupaba el bloque de iconos
-    if (needsCleanup || newTotalWidth < oldTotalWidth) {
-        SDL_Rect cleanRect;
-        cleanRect.x = (Sint16)(screen->w - oldTotalWidth - 25); 
-        cleanRect.y = (Sint16)(screen->h - badgeH - 25);
-        cleanRect.w = (Uint16)(oldTotalWidth + badgePad + 10); // Limpiamos todo el bloque viejo de una vez
-        cleanRect.h = (Uint16)(badgeH + 30);
-        SDL_FillRect(screen, &cleanRect, this->uBkgColor);
-    }
-
-    // 4. RENDERIZADO (Solo si quedan retos)
-    if (newTotalWidth > 0) {
-        int xPos = screen->w - newTotalWidth - 20;
-        int yPos = screen->h - badgeH - 20;
-
-        for (it = challenges.begin(); it != challenges.end(); ++it) {
-            if (it->second.badge) {
-                SDL_Rect dest = {(Sint16)xPos, (Sint16)yPos, (Uint16)badgeW, (Uint16)badgeH};
-                SDL_BlitSurface(it->second.badge, NULL, screen, &dest);
-                xPos += (badgeW + badgePad);
+            // Cálculo de posición nueva
+            cd.lastRect.x = (Sint16)((screenW - badgeW - 20) - i * (badgeW + badgePad)); 
+            cd.lastRect.y = (Sint16)(screenH - badgeH - 20); 
+            cd.lastRect.w = (Uint16)badgeW;
+            cd.lastRect.h = (Uint16)badgeH;
+            
+            if (cd.badge) {
+                SDL_BlitSurface(cd.badge, NULL, vPage, &cd.lastRect);
             }
+            
+            ++it;
+            i++;
         }
     }
 
-    SDL_mutexV(ach->challengeMutex);
+    SDL_UnlockMutex(ach->challengeMutex);
 }
 
 void GameMenu::renderProgress() {

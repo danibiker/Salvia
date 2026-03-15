@@ -58,14 +58,19 @@ struct challenge_data {
     SDL_Surface* badge; // La imagen ya cargada. La tenemos guardada en la cache de badges, 
 						// por lo que no hace falta liberarla en el destructor
     bool active;
+	SDL_Rect lastRect;
+	bool pending_hide;
 
 	challenge_data(){
 		id = 0;
 		badge = NULL;
 		active = false;
+		lastRect.x = lastRect.y = lastRect.w = lastRect.h = 0;
+		pending_hide = false;
 	}
 
 	~challenge_data(){
+		//No necesitamos borrar, todo queda en memoria. El badge es solo un puntero a una posicion del array badgeCache
 		/*if (badge != NULL){
 			SDL_FreeSurface(badge);
 			badge = NULL; // Inicializar por seguridad
@@ -79,7 +84,7 @@ struct challenge_data {
 		badge = (other.badge != NULL) ? SDL_DisplayFormat(other.badge) : NULL;
 	}
 
-	// Operador de asignaci�n
+	// Operador de asignacion
 	challenge_data& operator=(const challenge_data& other) {
 		if (this != &other) {
 			//if (badge != NULL) SDL_FreeSurface(badge); // Limpiar lo actual
@@ -87,6 +92,8 @@ struct challenge_data {
 			active = other.active;
 			//badge = (other.badge != NULL) ? SDL_DisplayFormat(other.badge) : NULL;
 			badge = other.badge;
+			pending_hide = other.pending_hide;
+			lastRect = other.lastRect;
 		}
 		return *this;
 	}
@@ -177,7 +184,7 @@ public:
 	void load_game(const uint8_t* rom, std::size_t rom_size, std::string path, uint32_t console_id, std::list<AchievementState>& messagesAchievement);
 	void reset_menu();
 	bool download_and_cache_image(std::string url, std::string name, SDL_Surface*& image, int badgeW, int badgeH);
-	void download_and_cache_image(AchievementState* achievement, int badgeW, int badgeH);
+	void download_and_cache_image(AchievementState* achievement, int badgeW, int badgeH, bool createNew = false);
 	uint32_t updatePlayTime(uint32_t game_id);
 
 	void getBadgeSize(int &w, int &h, int &badgePad, int &line_height);

@@ -11,20 +11,30 @@ AudioBuffer::AudioBuffer(std::size_t size) : capacity(size) {
 }
 
 void AudioBuffer::Write(const int16_t* samples, std::size_t count) {
-    std::size_t next_head = head;
-    // Snapshot atómico de tail para evitar leer un valor cambiante durante el loop
+    long h = getHead();
     long t = getTail();
+    std::size_t occupied = (h >= t) ? (h - t) : (capacity - (t - h));
+    std::size_t free_space = capacity - occupied - 1;
 
-    for (std::size_t i = 0; i < count; i++) {
-        buffer[next_head] = samples[i];
-        next_head = (next_head + 1) % capacity;
+    // Truncar si no cabe (modo no-bloqueante)
+    if (count > free_space) count = free_space;
+    if (count == 0) return;
 
-        // Si el buffer se llena en modo no-bloqueante, dejamos de escribir
-        if (next_head == (std::size_t)t) break;
+    // Escribir en bloque con memcpy (evita % por cada muestra)
+    std::size_t local_head = (std::size_t)h;
+    std::size_t first_chunk = capacity - local_head;
+
+    if (first_chunk >= count) {
+        memcpy(&buffer[local_head], samples, count * sizeof(int16_t));
+    } else {
+        memcpy(&buffer[local_head], samples, first_chunk * sizeof(int16_t));
+        memcpy(&buffer[0], samples + first_chunk, (count - first_chunk) * sizeof(int16_t));
     }
 
+    local_head = (local_head + count) % capacity;
+
     // Publicamos el head atómicamente para que SDL lo vea de una sola vez
-    InterlockedExchange((long*)&head, (long)next_head);
+    InterlockedExchange((long*)&head, (long)local_head);
 }
 
 void AudioBuffer::Read(int16_t* stream, std::size_t count) {
@@ -94,7 +104,10 @@ void AudioBuffer::WriteBlocking(const int16_t* samples, std::size_t count) {
         if (free_space >= count) break;
 
         // Cedemos el paso brevemente
-        #if defined(WIN)
+        #if defined(_XBOX)
+            // PPC yield hint: mas ligero que SDL_Delay, ~10ns vs ~1ms
+            YieldProcessor();
+        #elif defined(WIN)
             _mm_pause();
             Sleep(0);
         #else

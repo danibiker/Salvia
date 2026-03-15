@@ -303,6 +303,12 @@ void GestorMenus::loadAchievements(){
 	std::vector<std::string> listAch;
 	for (unsigned int i=0; i < menuAchievements->opciones.size(); i++){
 		if (menuAchievements->opciones[i]->tipo == OPC_ACHIEVEMENT){
+			SDL_Surface*& badge = ((OpcionAchievement *)menuAchievements->opciones[i])->achievement.badge;
+			if (badge){
+				//Liberamos la memoria
+				SDL_FreeSurface(badge);
+				badge = NULL;
+			}
 			delete ((OpcionAchievement *)menuAchievements->opciones[i]);
 		}
 	}

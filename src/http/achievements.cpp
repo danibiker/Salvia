@@ -114,7 +114,20 @@ void Achievements::createDbAchievements() {
 void Achievements::clearAllData(){
 	reset_menu();
 	pending_messages.clear();
-	active_challenges.clear();
+
+	if (!active_challenges.empty()){
+		//No borramos los challenges directamente, para permitir que se actualice la imagen en en hilo de dibujado
+		//active_challenges.clear();
+		SDL_LockMutex(challengeMutex);
+		std::map<uint32_t, challenge_data>::iterator it = active_challenges.begin();
+		int i = 0;
+		while (it != active_challenges.end()) {
+			it->second.active = false;
+			it++;
+		}
+		SDL_UnlockMutex(challengeMutex);
+	}
+
 	active_trackers.clear();
 	clearBadgeCache();
 }
@@ -252,23 +265,33 @@ DWORD WINAPI ChallengeIndicatorThread(LPVOID lpParam) {
     ChallengeThreadData* data = (ChallengeThreadData*)lpParam;
     Achievements& self = *Achievements::instance();
 
-    int badgeW, badgeH, badgePad, line_height;
+	SDL_Surface* temp_badge = NULL;
+	int badgeW, badgeH, badgePad, line_height;
     self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
+	//Descargamos la imagen
+	self.download_and_cache_image(data->badgeUrl, data->badgeName, temp_badge, badgeW, badgeH);
+	
+	SDL_LockMutex(self.challengeMutex);
+    
+    // 2. Comprobar si mientras descargábamos, alguien llamó a hide()
+    if (self.active_challenges.count(data->id) && self.active_challenges[data->id].pending_hide) {
+        // Se canceló durante la descarga. Guardamos la textura pero lo dejamos inactivo.
+        self.active_challenges[data->id].badge = temp_badge;
+        self.active_challenges[data->id].active = false;
+        self.active_challenges[data->id].pending_hide = false;
+    } else {
+        // Todo normal, el desafío sigue queriendo mostrarse
+        challenge_data c_data;
+        c_data.id = data->id;
+        c_data.active = true;
+        c_data.pending_hide = false;
+        c_data.badge = temp_badge;
+        self.active_challenges[data->id] = c_data;
+    }
 
-    challenge_data c_data;
-    c_data.id = data->id;
-    c_data.active = true;
-    c_data.badge = NULL; // Inicializar por seguridad
-
-    // Operacion pesada de red/disco
-    self.download_and_cache_image(data->badgeUrl, data->badgeName, c_data.badge, badgeW, badgeH);
-
-	SDL_mutexP(self.challengeMutex);
-    // Guardar en el mapa (Ojo: si tu mapa no es thread-safe, considera usar un Mutex aqui)
-    self.active_challenges[data->id] = c_data;
-	SDL_mutexV(self.challengeMutex);
-    delete data; // Limpiar memoria
-	LOG_DEBUG("challenge downloaded");
+    SDL_UnlockMutex(self.challengeMutex);
+	LOG_DEBUG("Challenge downloaded");
+    delete data;
     return 0;
 }
 
@@ -740,9 +763,27 @@ void Achievements::challenge_indicator_show(const rc_client_achievement_t* achie
 void Achievements::challenge_indicator_hide(const rc_client_achievement_t* achievement)
 {
 	LOG_DEBUG("challenge_indicator_hide");
-  // This indicator is no longer needed
 	Achievements* self = Achievements::instance();
-	self->active_challenges[achievement->id].active = false;
+
+	if (!achievement) return;
+    
+    SDL_LockMutex(self->challengeMutex);
+    
+    if (self->active_challenges.count(achievement->id)) {
+        // Ya existe, simplemente lo desactivamos
+        self->active_challenges[achievement->id].active = false;
+    } else {
+        // Aún no existe (el hilo de descarga sigue trabajando)
+        // Creamos una entrada preventiva para que el hilo sepa que no debe mostrarlo
+        challenge_data c_data;
+        c_data.id = achievement->id;
+        c_data.active = false;
+        c_data.pending_hide = true; 
+        c_data.badge = NULL;
+        self->active_challenges[achievement->id] = c_data;
+    }
+    
+    SDL_UnlockMutex(self->challengeMutex);
 }
 
 void Achievements::progress_indicator_update(const rc_client_achievement_t* achievement)
@@ -1251,34 +1292,54 @@ void Achievements::server_call(const rc_api_request_t* request,
 		}
 }
 
-void Achievements::download_and_cache_image(AchievementState* achievement, int badgeW, int badgeH) {
+void Achievements::download_and_cache_image(AchievementState* achievement, int badgeW, int badgeH, bool createNew) {
     if (achievement->badgeName.empty()) return;
 
     AchievementState* fromDb = NULL;
-
+	SDL_Surface *imageObtained = NULL;
+	bool needResize = false;
 	//Buscamos en base de datos
 	#ifndef NO_DATABASE
-    fromDb = achievementDb->getAchievement(achievement->id);
-    if (fromDb && fromDb->badge && achievement->type != ACH_LOAD_GAME) {
-		LOG_DEBUG("Achievement %d found in cache", achievement->id);
-        achievement->badge = SDL_DisplayFormat(fromDb->badge);
-    } else {
-		LOG_DEBUG("Achievement %d NOT found in cache", achievement->id);
-        // Descarga real si no existe en ningn lado
-        download_and_cache_image(achievement->badgeUrl, achievement->badgeName, achievement->badge, badgeW, badgeH);
-    }
+		fromDb = achievementDb->getAchievement(achievement->id);
+		if (fromDb && fromDb->badge && achievement->type != ACH_LOAD_GAME) {
+			LOG_DEBUG("Achievement %d found in cache", achievement->id);
+			achievement->badge = SDL_DisplayFormat(fromDb->badge);
+		} else {
+			LOG_DEBUG("Achievement %d NOT found in cache", achievement->id);
+			// Descarga real si no existe en ningn lado
+			download_and_cache_image(achievement->badgeUrl, achievement->badgeName, achievement->badge, badgeW, badgeH);
+		}
+		needResize = achievement->badge->w != badgeW || achievement->badge->h != badgeH;
 	#else 
-		download_and_cache_image(achievement->badgeUrl, achievement->badgeName, achievement->badge, badgeW, badgeH);
+		if (!download_and_cache_image(achievement->badgeUrl, achievement->badgeName, imageObtained, badgeW, badgeH)){
+			LOG_DEBUG("Error downloading image %s", achievement->badgeUrl.c_str());
+			return;
+		}
+		needResize = imageObtained->w != badgeW || imageObtained->h != badgeH;
+		if (createNew){
+			//if (achievement->badge){
+			//	SDL_FreeSurface(achievement->badge);
+			//}
+			//if (!needResize){
+				achievement->badge = SDL_DisplayFormat(imageObtained);
+			//}
+		} else {
+			//Pasamos la imagen por referencia. Ahora apunta a la cache. Cuidado de no liberar con SDL_FreeSurface
+			achievement->badge = imageObtained;
+		}
 	#endif
 
     // REDIMENSIONAR
-    if (achievement->badge != NULL && (achievement->badge->w != badgeW || achievement->badge->h != badgeH)) {
+    if (achievement->badge != NULL && needResize) {
         double zoomX = (double)badgeW / achievement->badge->w;
         double zoomY = (double)badgeH / achievement->badge->h;
-        SDL_Surface* zoomed = rotozoomSurfaceXY(achievement->badge, 0, zoomX, zoomY, SMOOTHING_ON);
+        SDL_Surface* zoomed = rotozoomSurfaceXY(imageObtained, 0, zoomX, zoomY, SMOOTHING_ON);
         if (zoomed) {
-            SDL_FreeSurface(achievement->badge);
-            achievement->badge = zoomed; // No uses DisplayFormat aqu, rotozoom ya optimiza
+			//No liberamos la superficie si createNew es false porque sino, nos cargamos la cache
+			if (createNew && achievement->badge){
+				SDL_FreeSurface(achievement->badge);
+			}
+			achievement->badge = zoomed;
         }
     }
 

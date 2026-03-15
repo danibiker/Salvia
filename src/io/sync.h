@@ -31,4 +31,5 @@ class Sync {
 		uint32_t g_lastFrameTick;
 		double g_actualFps;
 		uint32_t g_frameTimes[FPS_AVG_COUNT];
+		double lastWorkEnd; // Instante en que limit_fps terminó de esperar (fin del sleep/busy-wait)
 };
