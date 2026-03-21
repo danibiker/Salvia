@@ -14,7 +14,7 @@
 #include <rc_client_internal.h>
 #include <rc_consoles.h>
 
-/* Forward declaration � definido en libretro.h */
+/* Forward declaration definido en libretro.h */
 struct retro_memory_descriptor;
 
 /* Entrada del mapa de memoria: traduce una direccion RA (address space

@@ -106,8 +106,9 @@ struct ScrapStatus {
     int total;
     char emuActual[64];
     char juegoActual[128];
+	int remainingMedia;
 
-    ScrapStatus() : procesados(0), total(0) {
+    ScrapStatus() : procesados(0), total(0),remainingMedia(0) {
         InitializeCriticalSection(&cs);
         emuActual[0] = '\0';
         juegoActual[0] = '\0';

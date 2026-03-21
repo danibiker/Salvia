@@ -8,12 +8,15 @@
 #include <vector>
 
 #define NUM_LOGS_TO_FLUSH 20
+#define MAX_MSG_BUFFER_LEN 128
 
 enum {
     L_DEBUG = 0,
     L_INFO,
+    L_WARN,
     L_ERROR,
-    L_MAX // Auxiliar para control de rangos
+	L_RETRO,
+    L_MAX
 };
 
 class Logger {
@@ -21,8 +24,7 @@ private:
     static std::ofstream logFile;
     static unsigned int numLogs;
     static const char* ERRLEVELSTXT[L_MAX];
-	// Buffer estático para no saturar la pila de la Xbox 360
-    static char messageBuffer[2048]; 
+    static char messageBuffer[MAX_MSG_BUFFER_LEN]; 
 public:
     Logger(const char* filename);
 
@@ -44,13 +46,14 @@ public:
 };
 
 // Macros para simplificar la llamada a los logs
-#ifdef DEBUG_LOG
-	#define LOG_DEBUG(fmt, ...) Logger::write(L_DEBUG, "[%s:%d] " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
-	#define LOG_INFO(fmt, ...)  Logger::write(L_INFO,  fmt, ##__VA_ARGS__)
-	#define LOG_ERROR(fmt, ...) Logger::write(L_ERROR, "[%s:%d] ERROR: " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
-#else
-	#define LOG_DEBUG(fmt, ...) do { } while (0)
-    #define LOG_INFO(fmt, ...)  do { } while (0)
-    #define LOG_ERROR(fmt, ...) do { } while (0)
-#endif
+#define LOG_INFO(fmt, ...)  Logger::write(L_INFO,  fmt, ##__VA_ARGS__)
+#define LOG_DEBUG(fmt, ...) Logger::write(L_DEBUG, fmt, ##__VA_ARGS__)
+#define LOG_WARN(fmt, ...)  Logger::write(L_WARN,  fmt, ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...) Logger::write(L_ERROR, "ERROR: " fmt, ##__VA_ARGS__)
 
+//Estos loggers permiten mostrar el fichero y el numero de linea
+/*
+#define LOG_DEBUG(fmt, ...) Logger::write(L_DEBUG, "[%s:%d] " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define LOG_WARN(fmt, ...)  Logger::write(L_WARN,  "[%s:%d] WARNING: " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...) Logger::write(L_ERROR, "[%s:%d] ERROR: " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+*/

@@ -12,11 +12,11 @@ HANDLE Scrapper::hMainThread = NULL;
 const char SYMBOLS_TO_SPACE[] = ":-._/\\|,;"; 
 
 // Caracteres que queremos eliminar por completo (ruido)
-const char SYMBOLS_TO_REMOVE[] = "\"\'!?*#��";
+const char SYMBOLS_TO_REMOVE[] = "\"\'!?*#¿¡";
 
 Scrapper::Scrapper(){
 	scrapping = false;
-	cargarEquivalencias(Constant::getAppDir() + "\\config\\scrap_translations.cfg");
+	cargarEquivalencias(Constant::getAppDir() + ROUTE_SCRAP_TRANSLATIONS);
 }
 
 Scrapper::~Scrapper(){
@@ -27,7 +27,7 @@ bool Scrapper::isScrapping(){
 }
 
 /*
-* Llamada desde el men�
+* Llamada desde el menu
 */
 void Scrapper::StartScrappingAsync(std::vector<ConfigEmu>& emu, ScrapperConfig cfg) {
 	if (!scrapping){
@@ -36,7 +36,10 @@ void Scrapper::StartScrappingAsync(std::vector<ConfigEmu>& emu, ScrapperConfig c
 		ScrapParams* params = new ScrapParams();
 		params->emu = emu;
 		params->cfg = cfg;
-		hMainThread  = CreateThread(NULL, 0, mainScrapThread, params, 0, NULL);
+		hMainThread  = CreateThread(NULL, 0, mainScrapThread, params, CREATE_SUSPENDED, NULL);
+		if (hMainThread) {
+			Constant::setup_and_run_thread(hMainThread, CPU_THREAD);
+		}
 	}
 }
 
@@ -63,14 +66,14 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 		return counterFiles;
 	}
 
-	// Configuraci�n de rutas
+	// Configuracion de rutas
 	ScraperResult resultado;
 	resultado.snapdir = assetsdir + ASSETS_DIR[ASSETS_SS];
 	resultado.titledir = assetsdir + ASSETS_DIR[ASSETS_TITLE];
 	resultado.boxdir = assetsdir + ASSETS_DIR[ASSETS_BOX];
 	resultado.sinopsisdir = assetsdir + ASSETS_DIR[ASSETS_SINOPSIS];
 
-	// Creaci�n de directorios
+	// Creacion de directorios
 	if (!onlyCount && !dir.dirExists(resultado.snapdir.c_str())) dir.createDirRecursive(resultado.snapdir.c_str());
 	if (!onlyCount && !dir.dirExists(resultado.titledir.c_str())) dir.createDirRecursive(resultado.titledir.c_str());
 	if (!onlyCount && !dir.dirExists(resultado.boxdir.c_str())) dir.createDirRecursive(resultado.boxdir.c_str());
@@ -157,7 +160,7 @@ void Scrapper::procesarRespuestaScreenscraper(std::string& xmlData, ScraperAsk& 
 
 	pugi::xml_node juego = doc.child("Data").child("jeu");
 
-	// --- SECCI�N NOMBRE ---
+	// --- SECCION NOMBRE ---
 	pugi::xml_node noms = juego.child("noms");
 	for (pugi::xml_node_iterator it = noms.begin(); it != noms.end(); ++it) {
 		const char* reg = it->attribute("region").value();
@@ -168,18 +171,18 @@ void Scrapper::procesarRespuestaScreenscraper(std::string& xmlData, ScraperAsk& 
 			break; 
 		} 
 		else if (strcmp(reg, "eu") == 0) {
-			// Es ingl�s, lo guardamos como backup pero seguimos buscando por si aparece el preferido
+			// Es ingles, lo guardamos como backup pero seguimos buscando por si aparece el preferido
 			resultado.nombre = it->child_value();
 		}
 		else if (resultado.nombre.empty()) {
-			// Si no hay nada a�n, cogemos cualquier idioma que venga (primer backup)
+			// Si no hay nada aun, cogemos cualquier idioma que venga (primer backup)
 			resultado.nombre = it->child_value();
 		}
 	}
 
 	resultado.nombre = cleanUTF8(resultado.nombre);
 
-	// --- SECCI�N SYNOPSIS CON IDIOMA PREFERENTE ---
+	// --- SECCION SYNOPSIS CON IDIOMA PREFERENTE ---
 	pugi::xml_node synopsis_root = juego.child("synopsis");
 	for (pugi::xml_node_iterator it = synopsis_root.begin(); it != synopsis_root.end(); ++it) {
 		const char* lang = it->attribute("langue").value();
@@ -190,16 +193,16 @@ void Scrapper::procesarRespuestaScreenscraper(std::string& xmlData, ScraperAsk& 
 			break; 
 		} 
 		else if (strcmp(lang, "en") == 0) {
-			// Es ingl�s, lo guardamos como backup pero seguimos buscando por si aparece el preferido
+			// Es ingles, lo guardamos como backup pero seguimos buscando por si aparece el preferido
 			resultado.sinopsis = it->child_value();
 		}
 		else if (resultado.sinopsis.empty()) {
-			// Si no hay nada a�n, cogemos cualquier idioma que venga (primer backup)
+			// Si no hay nada aun, cogemos cualquier idioma que venga (primer backup)
 			resultado.sinopsis = it->child_value();
 		}
 	}
 	//resultado.sinopsis = cleanUTF8(resultado.sinopsis);
-	// --- SECCI�N MEDIAS CON PRIORIDAD ---
+	// --- SECCION MEDIAS CON PRIORIDAD ---
 	pugi::xml_node medias_root = juego.child("medias");
 
 	for (pugi::xml_node_iterator it = medias_root.begin(); it != medias_root.end(); ++it) {
@@ -216,7 +219,7 @@ void Scrapper::procesarRespuestaScreenscraper(std::string& xmlData, ScraperAsk& 
 				if (strcmp(reg, peticion.regionPreferida.c_str()) == 0) puntuacionNueva = 3;
 				else if (strcmp(reg, "eu") == 0) puntuacionNueva = 2;
 
-				// Calculamos la "calidad" de lo que ya ten�amos guardado
+				// Calculamos la "calidad" de lo que ya teniamos guardado
 				int puntuacionActual = 0;
 				if (!tMedia.url.empty()) {
 					if (strcmp(tMedia.region.c_str(), peticion.regionPreferida.c_str()) == 0) puntuacionActual = 3;
@@ -224,7 +227,7 @@ void Scrapper::procesarRespuestaScreenscraper(std::string& xmlData, ScraperAsk& 
 					else puntuacionActual = 1;
 				}
 
-				// Solo sobrescribimos si la nueva regi�n es mejor que la actual
+				// Solo sobrescribimos si la nueva region es mejor que la actual
 				if (puntuacionNueva > puntuacionActual) {
 					tMedia.region = reg;
 					tMedia.type = static_cast<MEDIA_TYPES>(i);
@@ -253,12 +256,12 @@ void Scrapper::procesarGamesDbConReintentos(std::string& urlBase, float &downloa
 	CurlClient downloader;
 	std::string fullUrl;
 
-	// --- INTENTO 1: Nombre completo limpio de s�mbolos ---
+	// --- INTENTO 1: Nombre completo limpio de simbolos ---
 	if (!procesarRespuestaGamesDb(response, peticion, resultado)){
 		LOG_DEBUG("No encontrado con nombre completo. Intentando quitar articulos...");
     
 		// --- INTENTO 2: Quitar "Stop Words" (The, Of, And, etc.) ---
-		// Solo lo hacemos si tiene m�s de 2 palabras para no quedarnos con un string vac�o
+		// Solo lo hacemos si tiene mas de 2 palabras para no quedarnos con un string vacio
 		if (numWords > 2) {
 			cutRomName = quitarArticulos(peticion.romnameUnscaped);
 		} else {
@@ -273,8 +276,8 @@ void Scrapper::procesarGamesDbConReintentos(std::string& urlBase, float &downloa
 			}
 		}
 
-		// --- INTENTO 3: Recorte dr�stico (Si sigue sin aparecer) ---
-		// Si despu�s de quitar art�culos a�n no tenemos gameid, probamos con las 2 primeras palabras
+		// --- INTENTO 3: Recorte drastico (Si sigue sin aparecer) ---
+		// Si despues de quitar articulos aun no tenemos gameid, probamos con las 2 primeras palabras
 		if (peticion.gameid == -1) {
 			LOG_DEBUG("Sigue sin aparecer. Recortando a las 2 primeras palabras...");
 			cutRomName = getFirstWords(peticion.romnameUnscaped, 2);
@@ -304,7 +307,7 @@ bool Scrapper::procesarRespuestaGamesDb(std::string& jsonStr, ScraperAsk& petici
     // Variables para el seguimiento del mejor candidato
     int mejorPuntuacion = -1;
     int idSeleccionado = -1;
-    string mejorOverview = "Sin descripci�n.";
+    string mejorOverview = "Sin descripcion.";
 
     picojson::object& root = v.get<picojson::object>();
 
@@ -328,13 +331,13 @@ bool Scrapper::procesarRespuestaGamesDb(std::string& jsonStr, ScraperAsk& petici
                 string currentOverview = g.count("overview") ? g["overview"].get<string>() : "";
                 int currentRegion = g.count("region_id") ? (int)g["region_id"].get<double>() : -1;
 
-                // --- CALCULAR PUNTUACI�N ---
+                // --- CALCULAR PUNTUACION ---
                 int puntosActuales = 0;
 
                 // 1. Prioridad: Coincidencia de palabras (Peso alto: 10 pts por palabra)
                 puntosActuales += (countWordsContained(peticion.romnameUnscaped, currentTitle) * 10);
 
-                // 2. Prioridad: Regi�n (Peso bajo: Desempata si los t�tulos son iguales)
+                // 2. Prioridad: Region (Peso bajo: Desempata si los titulos son iguales)
                 if (currentRegion == regionPreferencia) {
                     puntosActuales += 5;
                 } else if (currentRegion == 2) { // Europa
@@ -345,7 +348,7 @@ bool Scrapper::procesarRespuestaGamesDb(std::string& jsonStr, ScraperAsk& petici
                 if (puntosActuales > mejorPuntuacion) {
                     mejorPuntuacion = puntosActuales;
                     idSeleccionado = currentId;
-                    mejorOverview = currentOverview.empty() ? "Sin descripci�n." : currentOverview;
+                    mejorOverview = currentOverview.empty() ? "Sin descripcion." : currentOverview;
                 }
             }
 
@@ -354,7 +357,7 @@ bool Scrapper::procesarRespuestaGamesDb(std::string& jsonStr, ScraperAsk& petici
                 resultado.sinopsis = mejorOverview;
                 peticion.gameid = idSeleccionado;
                 
-                // Llamada para bajar las im�genes del ID ganador
+                // Llamada para bajar las imagenes del ID ganador
                 obtenerImagenesTGDB(peticion, resultado);
             }
         }
@@ -399,7 +402,7 @@ void Scrapper::obtenerImagenesTGDB(ScraperAsk& peticion, ScraperResult& resultad
 					baseUrl = dataObj["base_url"].get<picojson::object>()["thumb"].get<string>();
 				}
 
-				// 2. Acceder al diccionario de im�genes
+				// 2. Acceder al diccionario de imagenes
 				if (dataObj.count("images") && dataObj["images"].is<picojson::object>()) {
 					picojson::object& imagesDict = dataObj["images"].get<picojson::object>();
             
@@ -410,7 +413,7 @@ void Scrapper::obtenerImagenesTGDB(ScraperAsk& peticion, ScraperResult& resultad
 					if (imagesDict.count(idStr) && imagesDict[idStr].is<picojson::array>()) {
 						picojson::array& imgList = imagesDict[idStr].get<picojson::array>();
 
-						// 3. Iterar por la lista de im�genes para encontrar los tipos
+						// 3. Iterar por la lista de imagenes para encontrar los tipos
 						for (size_t i = 0; i < imgList.size(); ++i) {
 							picojson::object& img = imgList[i].get<picojson::object>();
 							string type = img["type"].get<string>();
@@ -425,7 +428,7 @@ void Scrapper::obtenerImagenesTGDB(ScraperAsk& peticion, ScraperResult& resultad
 							else if (type == "screenshot" && urlScreenshot.empty()) {
 								urlScreenshot = baseUrl + img["filename"].get<string>();
 							}
-							// Titlescreen (titleshot en el c�digo anterior, aqu� es titlescreen)
+							// Titlescreen (titleshot en el codigo anterior, aqui es titlescreen)
 							else if (type == "titlescreen" && urlTitlescreen.empty()) {
 								urlTitlescreen = baseUrl + img["filename"].get<string>();
 							}
@@ -488,7 +491,7 @@ void Scrapper::guardarRecursos(SafeDownloadQueue& dwQueue, ScraperResult &result
 		guardarArchivoTexto(rutaTxt, resultado.sinopsis);
 	}
 
-	// 2. Guardar Im�genes
+	// 2. Guardar Imagenes
 	std::map<std::string, t_media>::iterator it;
 	for (it = resultado.medias.begin(); it != resultado.medias.end(); ++it) {
 		std::string destDir = "";
@@ -548,8 +551,14 @@ DWORD WINAPI Scrapper::imageDownloaderThread(LPVOID lpParam) {
 		if (InterlockedExchangeAdd(&CurlClient::g_abortScrapping, 0) == 1) {
 			break;
 		}
+		EnterCriticalSection(&g_status.cs);
+		g_status.remainingMedia = queue->size() + 1;
+		LeaveCriticalSection(&g_status.cs);
+
 		LOG_DEBUG("Hilo Secundario: Descargando %s", task.destPath.c_str());
 		downloader.fetchFile(task.url, task.destPath, &task.downloadProgress);
+
+		g_status.remainingMedia--;
 	}
 	return 0;
 }
@@ -570,9 +579,13 @@ DWORD WINAPI Scrapper::mainScrapThread(LPVOID lpParam) {
 	SafeDownloadQueue dwQueue;
 	scrapping = true;
 	g_status.procesados = 0;
-	// Lanzamos el consumidor de im�genes
-	HANDLE hImgThread = CreateThread(NULL, 0, imageDownloaderThread, &dwQueue, 0, NULL);
-    
+	// Lanzamos el consumidor de imagenes
+	HANDLE hImgThread = CreateThread(NULL, 0, imageDownloaderThread, &dwQueue, CREATE_SUSPENDED, NULL);
+    if (!hImgThread) {
+		return 1;
+	}
+	Constant::setup_and_run_thread(hImgThread, CPU_THREAD);
+
 	// Ejecutamos el scrapper (Productor)
 	for (std::size_t i=0; i < params->emu.size(); i++){
 		//Si hay que abortar, salimos inmediatamente
@@ -583,7 +596,7 @@ DWORD WINAPI Scrapper::mainScrapThread(LPVOID lpParam) {
 		scrapper.scrapSystem(params->emu[i], params->cfg, dwQueue);
 	}
 
-	// Finalizaci�n
+	// Finalizacion
 	dwQueue.setFinished();
 	WaitForSingleObject(hImgThread, INFINITE);
 	CloseHandle(hImgThread);
@@ -598,14 +611,14 @@ std::string Scrapper::leerArchivoTexto(const std::string& ruta) {
 	std::ifstream archivo(ruta.c_str(), std::ios::in | std::ios::binary);
     
 	if (!archivo.is_open()) {
-		return ""; // O manejar el error seg�n necesites
+		return ""; // O manejar el error segun necesites
 	}
 
-	// 2. Buscamos el final del archivo para saber su tama�o
+	// 2. Buscamos el final del archivo para saber su tamanyo
 	archivo.seekg(0, std::ios::end);
 	std::size_t tamano = (std::size_t)archivo.tellg();
     
-	// 3. Preparamos el string con el tama�o exacto (evita reasignaciones)
+	// 3. Preparamos el string con el tamanyo exacto (evita reasignaciones)
 	std::string contenido;
 	contenido.reserve(tamano);
     
@@ -623,7 +636,7 @@ bool Scrapper::guardarArchivoTexto(const std::string& ruta, const std::string& c
 	std::ofstream archivo(ruta.c_str(), std::ios::out | std::ios::binary);
 
 	if (!archivo.is_open()) {
-		// En Xbox 360, esto suele fallar si la ruta no existe o el dispositivo no est� montado
+		// En Xbox 360, esto suele fallar si la ruta no existe o el dispositivo no esta montado
 		return false; 
 	}
 
@@ -632,26 +645,26 @@ bool Scrapper::guardarArchivoTexto(const std::string& ruta, const std::string& c
 
 	archivo.close();
 
-	// Verificamos si hubo alg�n error durante la escritura (ej: disco lleno)
+	// Verificamos si hubo algun error durante la escritura (ej: disco lleno)
 	return !archivo.fail();
 }
 
-// Una versi�n ultra-simple para limpiar caracteres UTF-8 comunes en nombres de juegos
+// Una version ultra-simple para limpiar caracteres UTF-8 comunes en nombres de juegos
 std::string Scrapper::cleanUTF8(const std::string& str) {
 	std::string out;
 	for (std::size_t i = 0; i < str.length(); ++i) {
 		unsigned char c = (unsigned char)str[i];
-		if (c < 0x80) out += str[i]; // ASCII est�ndar
+		if (c < 0x80) out += str[i]; // ASCII estandar
 		else if (c == 0xC3) { // Caracteres extendidos comunes (acentos)
 			i++;
 			if (i < str.length()) {
 				unsigned char c2 = (unsigned char)str[i];
-				if (c2 == 0xA1) out += 'a'; // � -> a
-				else if (c2 == 0xA9) out += 'e'; // � -> e
-				else if (c2 == 0xAD) out += 'i'; // � -> i
-				else if (c2 == 0xB3) out += 'o'; // � -> o
-				else if (c2 == 0xBA) out += 'u'; // � -> u
-				else if (c2 == 0xB1) out += 'n'; // � -> n
+				if (c2 == 0xA1) out += 'a'; 
+				else if (c2 == 0xA9) out += 'e'; 
+				else if (c2 == 0xAD) out += 'i'; 
+				else if (c2 == 0xB3) out += 'o'; 
+				else if (c2 == 0xBA) out += 'u'; 
+				else if (c2 == 0xB1) out += 'n'; 
 			}
 		}
 	}
@@ -671,20 +684,20 @@ bool Scrapper::cargarEquivalencias(const std::string& nombreArchivo) {
     while (std::getline(file, line)) {
         // Eliminar espacios en blanco al inicio/final si fuera necesario (opcional)
             
-        // 1. Buscamos el inicio de la secci�n
+        // 1. Buscamos el inicio de la seccion
         if (line == "[SCREENSCRAPPER_TO_GAMESDB]") {
             seccionEncontrada = true;
-            continue; // Pasamos a la siguiente l�nea
+            continue; // Pasamos a la siguiente linea
         }
 
-        // 2. Si ya estamos en la secci�n correcta, procesamos los datos
+        // 2. Si ya estamos en la seccion correcta, procesamos los datos
         if (seccionEncontrada) {
-            // Si encontramos otra secci�n (empieza por [), dejamos de leer
+            // Si encontramos otra seccion (empieza por [), dejamos de leer
             if (!line.empty() && line[0] == '[') {
                 break; 
             }
 
-            // Ignorar comentarios o l�neas vac�as
+            // Ignorar comentarios o lineas vacias
             if (line.empty() || line[0] == '#') {
                 continue;
             }
@@ -713,27 +726,27 @@ std::string Scrapper::limpiarNombreJuego(std::string nombre) {
     for (size_t i = 0; i < nombre.length(); ++i) {
         char c = nombre[i];
 
-        // 1. Gesti�n de par�ntesis/corchetes
+        // 1. Gestion de parentesis/corchetes
         if (c == '(' || c == '[') { nivelParentesis++; continue; }
         if (c == ')' || c == ']') { if (nivelParentesis > 0) nivelParentesis--; continue; }
 
         if (nivelParentesis == 0) {
-            // 2. �Es un car�cter para sustituir por espacio?
+            // 2. Es un caracter para sustituir por espacio?
             if (strchr(SYMBOLS_TO_SPACE, c)) {
                 temporal += ' ';
             }
-            // 3. �Es un car�cter para eliminar?
+            // 3. Es un caracter para eliminar?
             else if (strchr(SYMBOLS_TO_REMOVE, c)) {
                 continue;
             }
-            // 4. Car�cter normal
+            // 4. Caracter normal
             else {
                 temporal += c;
             }
         }
     }
 
-    // 5. Colapsar espacios m�ltiples y Trim (Limpieza final)
+    // 5. Colapsar espacios multiples y Trim (Limpieza final)
     std::string resultado = "";
     bool ultimoFueEspacio = true; // Empezamos en true para evitar espacio al inicio
 
@@ -758,7 +771,7 @@ std::string Scrapper::limpiarNombreJuego(std::string nombre) {
 }
 
 std::string Scrapper::quitarArticulos(std::string texto) {
-    // Lista de "Stop Words" en ingl�s y espa�ol
+    // Lista de "Stop Words" en ingles y espanyol
     const char* stopWords[] = { "the", "a", "an", "of", "and", "for", "with", "in", "on", "at", "to", "el", "la", "los", "las", "de", "y" };
     const int numStopWords = sizeof(stopWords) / sizeof(stopWords[0]);
 
@@ -794,10 +807,10 @@ std::string Scrapper::getFirstWords(std::string text, int n) {
     std::string resultado = "";
     int contador = 0;
 
-    // Extraemos palabras una a una hasta llegar al l�mite 'n'
+    // Extraemos palabras una a una hasta llegar al limite 'n'
     while (ss >> palabra && contador < n) {
         if (contador > 0) {
-            resultado += " "; // A�adimos espacio entre palabras
+            resultado += " "; // Anyadimos espacio entre palabras
         }
         resultado += palabra;
         contador++;
@@ -808,13 +821,13 @@ std::string Scrapper::getFirstWords(std::string text, int n) {
 
 std::string Scrapper::removeLastWord(std::string text) {
     // 1. Eliminamos espacios en blanco al final (trim right) 
-    // para asegurar que el �ltimo car�cter no sea un espacio.
+    // para asegurar que el ultimo caracter no sea un espacio.
     size_t last = text.find_last_not_of(" \t\n\r");
     if (last == std::string::npos) return ""; // El string solo tiene espacios
     
     std::string str = text.substr(0, last + 1);
 
-    // 2. Buscamos el �ltimo espacio que separa la �ltima palabra
+    // 2. Buscamos el ultimo espacio que separa la ultima palabra
     size_t pos = str.find_last_of(" \t\n\r");
 
     // 3. Si no hay espacios, significa que solo hay una palabra
@@ -822,7 +835,7 @@ std::string Scrapper::removeLastWord(std::string text) {
         return ""; 
     }
 
-    // 4. Devolvemos el string hasta la posici�n del espacio
+    // 4. Devolvemos el string hasta la posicion del espacio
     return str.substr(0, pos);
 }
 
@@ -831,12 +844,12 @@ int Scrapper::countWords(std::string text) {
     bool inWord = false;
 
     for (size_t i = 0; i < text.length(); ++i) {
-        // Consideramos espacio, tabulador o saltos de l�nea como separadores
+        // Consideramos espacio, tabulador o saltos de linea como separadores
         if (isspace(text[i])) {
             inWord = false;
         } 
         else if (!inWord) {
-            // Si no est�bamos en una palabra y encontramos un car�cter, empieza una nueva
+            // Si no estabamos en una palabra y encontramos un caracter, empieza una nueva
             inWord = true;
             count++;
         }
@@ -844,7 +857,7 @@ int Scrapper::countWords(std::string text) {
     return count;
 }
 
-// Funci�n auxiliar para convertir a min�sculas (VS2010 compatible)
+// Funcion auxiliar para convertir a minusculas (VS2010 compatible)
 std::string Scrapper::toLower(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), ::tolower);
     return s;
@@ -853,7 +866,7 @@ std::string Scrapper::toLower(std::string s) {
 int Scrapper::countWordsContained(std::string text1, std::string text2) {
     if (text1.empty() || text2.empty()) return 0;
 
-    // Convertimos ambos a min�sculas para una comparaci�n justa
+    // Convertimos ambos a minusculas para una comparacion justa
     std::string s1 = toLower(text1);
     std::string s2 = toLower(text2);
 

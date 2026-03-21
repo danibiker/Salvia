@@ -7,7 +7,11 @@ char Constant::tempFileSep[2];
 
 const char *MEDIAS_TO_FIND[] = {"sstitle", "ss", "box-2D"};
 const char *ASSETS_DIR[] = {"snaptit", "snap", "box2d", "synopsis"};
-
+const std::string CFG_EXT = ".cfg";
+const std::string RETROPAD_INI = "retropad.ini";
+const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS = "\\assets\\achievement_translations.cfg";
+const std::string ROUTE_SCRAP_TRANSLATIONS = "\\assets\\scrap_translations.cfg";
+const std::string PREFIX_DEFAULTS = "defaults_";
 
 const char *ICONS_PATH[] = {"menu_log.png",
 	"folder.png",
@@ -28,6 +32,16 @@ const char *ICONS_PATH[] = {"menu_log.png",
 	"achievement-list.png",
 	"menu_shutdown.png"
 };
+
+#ifdef _XBOX
+	const char *SDL_BTN_TO_XBOX[12] = {"A", "B", "X", "Y", "L", "R", "L3", "R3", "Start", "Select", "L2", "R2"};
+#else
+	const char *SDL_BTN_TO_XBOX[12] = {"A", "B", "X", "Y", "L", "R", "Select", "Start", "L3", "R3", "", ""};
+#endif
+//Translated later on the first lines of GestorMenus::inicializar
+std::string SDL_JOY_TO_XBOX[6] = {"Left", "Right", "Up", "Down", "R2", "L2"};
+std::string SDL_HAT_TO_XBOX[9] = {"","Up","Right", "", "Down", "","","", "Left"};
+
 
 const char *JOY_DESCRIPTIONS[] = {"JOY_BUTTON_A",
             "JOY_BUTTON_B",

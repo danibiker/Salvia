@@ -1,12 +1,13 @@
 #include "cfgloader.h"
-#include "const/constant.h"
-#include "io/dirutil.h"
-#include <io/filelist.h>
-#include "const/cfgconst.h"
-#include <io/fileio.h>
-#include <libretro/libretro.h>
-#include <http/pugixml.hpp>
 #include <utils/langmanager.h>
+#include <const/constant.h>
+#include <const/cfgconst.h>
+#include <http/pugixml.hpp>
+#include <io/filelist.h>
+#include <io/dirutil.h>
+#include <io/fileio.h>
+
+#include <libretro/libretro.h>
 
 #include <sstream>
 #include <fstream>
@@ -15,6 +16,9 @@
 extern "C"{
 	void retro_get_system_info(struct retro_system_info *info);
 }
+
+const std::string CfgLoader::coreDefault = "core.default.";
+cfg::t_cfg_props CfgLoader::configMain [cfg::MAIN_CFG_MAX];
 
 CfgLoader::CfgLoader(){
 	emuCfgPos = 0;
@@ -59,7 +63,10 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::hardcoreRA] = cfg::t_cfg_props("hardcoreRA", true);
 	configMain[cfg::raUser] = cfg::t_cfg_props("raUser", "");
 	configMain[cfg::raPass] = cfg::t_cfg_props("raPass", "");
-
+	configMain[cfg::coreGenesis] = cfg::t_cfg_props(coreDefault + "genesis", (int)0);
+	configMain[cfg::coreSnes] = cfg::t_cfg_props(coreDefault + "snes", (int)0);
+	configMain[cfg::corePce] = cfg::t_cfg_props(coreDefault + "pce", (int)0);
+	configMain[cfg::corePceCd] = cfg::t_cfg_props(coreDefault + "pcecd", (int)0);
 
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));
@@ -328,7 +335,7 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 					} else if (key.compare("directory") == 0){
 						cfgEmu->config.directory = value;
 					} else if (key.compare("executable") == 0){
-						cfgEmu->config.executable = value;
+						getExecutables(value, cfgEmu.get());
 					} else if (key.compare("global_options") == 0){
 						cfgEmu->config.global_options = value;
 					} else if (key.compare("map_file") == 0){
@@ -349,6 +356,8 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 						cfgEmu->config.use_extension = value.compare("yes") == 0 ? true : false;
 					} else if (key.compare("use_rom_directory") == 0){
 						cfgEmu->config.use_rom_directory = value.compare("yes") == 0 ? true : false;
+					} else if (key.compare("no_uncompress") == 0){
+						cfgEmu->config.no_uncompress = value.compare("yes") == 0 ? true : false;
 					}
 				}
 			}             
@@ -366,6 +375,30 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 	}
 }
 
+unsigned int CfgLoader::findConfigIndex(std::string propName){
+	unsigned int selectedIndex = 0;
+	for (int i=cfg::coreGenesis; i < cfg::MAIN_CFG_MAX; i++){
+		if (configMain[i].name == propName){
+			selectedIndex = i;
+			break;
+		}
+	}
+	return selectedIndex;
+}
+
+void CfgLoader::getExecutables(std::string str, cfg::t_cfg_emu* emu){
+	Constant::splitChar(str, ';', emu->config.cores);
+	std::string emuInternalName = Constant::Trim(emu->config.internalName);
+	unsigned int selectedIndex = findConfigIndex(coreDefault + emuInternalName);
+	//Si tiene configurado un emulador por defecto, lo obtenemos
+	unsigned int selectedValue = 0;
+	if (selectedIndex < cfg::MAIN_CFG_MAX && selectedIndex > 0){
+		selectedValue = configMain[selectedIndex].valueInt;		
+	} 
+	if (selectedValue < emu->config.cores.size()){
+		emu->config.executable = emu->config.cores[selectedValue];
+	}
+}
 
 int CfgLoader::getWidth(){
 	int val;

@@ -66,7 +66,23 @@ GestorMenus::~GestorMenus() {
 
 std::string GestorMenus::guardarJoysticks(Joystick* joy){
 	LOG_DEBUG("Guardando valores del joystick");
-	return LanguageManager::instance()->get("msg.filesave") + joy->saveButtonsRetro();
+	return LanguageManager::instance()->get("msg.filesave") + joy->saveButtonsRetroCore();
+}
+
+std::string GestorMenus::guardarGameJoysticks(Joystick* joy){
+	LOG_DEBUG("Guardando valores del joystick para el juego");
+	std::string msg = joy->saveButtonsRetroGame();
+	if (msg.empty()){
+		return LanguageManager::instance()->get("msg.key.cfg.load");
+	} else {
+		return LanguageManager::instance()->get("msg.filesave") + msg;
+	}
+}
+
+std::string GestorMenus::guardarCoreJoysticks(Joystick* joy){
+	LOG_DEBUG("Guardando valores del joystick para el core");
+	std::string msg = joy->saveButtonsDefaultsCore();
+	return LanguageManager::instance()->get("msg.filesave") + msg;
 }
 
 std::string GestorMenus::guardarCoreConfig(CfgLoader *refConfig){
@@ -147,6 +163,16 @@ void GestorMenus::setLayout(int layout, int screenw, int screenh){
 void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
     TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 
+	SDL_JOY_TO_XBOX[0] = LanguageManager::instance()->get("menu.controls.left");
+	SDL_JOY_TO_XBOX[1] = LanguageManager::instance()->get("menu.controls.right");
+	SDL_JOY_TO_XBOX[2] = LanguageManager::instance()->get("menu.controls.up");
+	SDL_JOY_TO_XBOX[3] = LanguageManager::instance()->get("menu.controls.down");
+
+	SDL_HAT_TO_XBOX[1] = LanguageManager::instance()->get("menu.controls.up");
+	SDL_HAT_TO_XBOX[2] = LanguageManager::instance()->get("menu.controls.right");
+	SDL_HAT_TO_XBOX[4] = LanguageManager::instance()->get("menu.controls.down");
+	SDL_HAT_TO_XBOX[8] = LanguageManager::instance()->get("menu.controls.left");
+
 	// 1. Crear contenedores de menús
     menuRaiz = new Menu(LanguageManager::instance()->get("menu.main.options"));
     Menu* menuVideo = new Menu(LanguageManager::instance()->get("menu.main.video"), menuRaiz);
@@ -195,6 +221,27 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuEmulation->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.sync"), syncvals, &refConfig->configMain[cfg::syncMode].getIntRef()));
 	menuEmulation->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.fps"), &refConfig->configMain[cfg::showFps].getBoolRef()));
 
+	Menu* menuCores = new Menu(LanguageManager::instance()->get("menu.core.assign"), menuEmulation);
+	dirutil dir;
+
+	for (unsigned int i=0; i < refConfig->emulators.size(); i++){
+		const int nCores = refConfig->emulators[i]->config.cores.size();
+		const std::string coreName = refConfig->emulators[i]->config.name;
+		const unsigned int cfgIndex = refConfig->findConfigIndex(CfgLoader::coreDefault + refConfig->emulators[i]->config.internalName);
+
+		if (nCores > 1 && cfgIndex > 0){
+			std::vector<std::string> coreNames;
+			for (int core=0; core < nCores; core++){
+				coreNames.push_back(dir.getFileNameNoExt(refConfig->emulators[i]->config.cores[core]));
+			}
+			OpcionLista *listaCores = new OpcionLista(coreName, coreNames, &refConfig->configMain[cfgIndex].getIntRef());
+			listaCores->callback = &GestorMenus::setDefaultEmu;
+			listaCores->context = refConfig->emulators[i].get();
+			menuCores->opciones.push_back(listaCores);
+		}
+	}
+	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.core.assign"), menuCores));
+
     //Poblar Menú Video
 	//Relacion de aspecto
 	std::vector<std::string> aspectRates;
@@ -231,6 +278,8 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.frontassign"), menuAssignFrontend));
 	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.hotkeys"), menuHotkeys));
 	menuEntrada->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.saveassign"), &GestorMenus::guardarJoysticks, joystick, this));
+	menuEntrada->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savecoreassign"), &GestorMenus::guardarCoreJoysticks, joystick, this));
+	menuEntrada->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savegameassign"), &GestorMenus::guardarGameJoysticks, joystick, this));
 
 	//Traducciones para las teclas
 	std::size_t num_elementos = sizeof(FRONTEND_BTN_VAL) / sizeof(FRONTEND_BTN_VAL[0]);
@@ -323,6 +372,47 @@ void GestorMenus::loadAchievements(){
 	}
 	SDL_mutexV(achievements.achievementMutex);
 	resetIndexPos();
+}
+
+std::string GestorMenus::setDefaultEmu(void* inst, void *index, void *values) {
+	if (!inst || !index || !values) return "";
+
+	unsigned int sendIndex = *static_cast<int*>(index);
+    std::vector<std::string>* sendValues = static_cast<std::vector<std::string>*>(values);
+    ConfigEmu* cfgEmu = static_cast<ConfigEmu*>(inst);
+
+	if (sendValues && sendIndex < sendValues->size()) {
+		cfgEmu->executable = sendValues->at(sendIndex);
+		#ifdef _XBOX
+			cfgEmu->executable += ".xex";
+		#else
+			cfgEmu->executable += ".exe";
+		#endif
+		LOG_DEBUG("Seleccionando el emulador %s", cfgEmu->executable.c_str());
+	}
+	return "";
+}
+
+std::string GestorMenus::descargarLogros() { 
+	Achievements::instance()->setShouldRefresh(true);
+	Achievements::instance()->refresh_achievements_menu();
+	loadAchievements();
+	resetIndexPos();
+
+	if (menuAchievements->opciones.size() > 0){
+		BadgeDownloader::instance().start();
+	}
+	return ""; 
+}
+
+std::string GestorMenus::sDescargarLogros(void* inst) {
+    return ((GestorMenus*)inst)->descargarLogros();
+}
+
+std::string GestorMenus::changeHardcoreMode(void* inst, void *value) {
+	bool sendValue = *((bool *)(value));
+	Achievements::instance()->setHardcoreMode(sendValue);
+	return "";
 }
 
 void GestorMenus::poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper){
@@ -613,6 +703,7 @@ void GestorMenus::cambiarValor(int dir) {
 		if (num > 0){
 			*(l->indice) = (*(l->indice) + dir + num) % num;
 		}
+		l->ejecutar();
     } else if (opt->tipo == OPC_BOOLEANA) {
         OpcionBool* b = (OpcionBool*)opt;
 		LOG_DEBUG("cambiando de %s\n", *(b->valor) ? "S" : "N");
@@ -926,28 +1017,49 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
     const int fontHeightRect = screenPos * face_h;
 	SDL_Color lineTextColor = i == this->curPos ? black : white;
 
+	std::string titulo = this->menuActual->titulo;
+	Constant::lowerCase(&titulo);
+	bool isGamepadXbox = titulo.find("xbox") != std::string::npos;
+
 	// 1. Manejo del temporizador (Early exit)
 	Uint32 elapsed = SDL_GetTicks() - opt->lastTimeAsked;
 	if (opt->changeAsked && elapsed < 4000) {
 		str = LanguageManager::instance()->get("menu.inputs.waitkeypress") + Constant::intToString((5000 - elapsed) / 1000) + " s";
 	} else {
 		// 2. Obtener el ID de SDL según el tipo de entrada
-		int sdlId = -1;
-		if (opt->tipoKey == KEY_JOY_BTN)       sdlId = opt->joyMapper->getSdlBtn(opt->gamepadId, opt->btn);
-		else if (opt->tipoKey == KEY_JOY_HAT)  sdlId = opt->joyMapper->getSdlHat(opt->gamepadId, opt->btn);
-		else if (opt->tipoKey == KEY_JOY_AXIS) sdlId = opt->joyMapper->getSdlAxis(opt->gamepadId, opt->btn);
+		int sdlIdBtn = -1;
+		int sdlIdAxis = -1;
+
+		if (opt->tipoKey == KEY_JOY_BTN){
+			sdlIdBtn = opt->joyMapper->getSdlBtn(opt->gamepadId, opt->btn);
+		} else if (opt->tipoKey == KEY_JOY_HAT || opt->tipoKey == KEY_JOY_AXIS){
+			sdlIdBtn = opt->joyMapper->getSdlHat(opt->gamepadId, opt->btn);
+			sdlIdAxis = opt->joyMapper->getSdlAxis(opt->gamepadId, opt->btn);
+		}
 
 		// 3. Procesar el resultado una sola vez
-		if (sdlId > -1) {
-			str = opt->description + Constant::intToString(sdlId);
-        
-			// Resetear estado de edición si estaba activo
-			if (opt->changeAsked) {
-				opt->changeAsked = false;
-				opt->lastTimeAsked = 0;
-				status = NORMAL;
-			}
-		} else {
+		if (sdlIdBtn > -1) {
+			std::string keyStr = Constant::intToString(sdlIdBtn);
+			if (opt->tipoKey == KEY_JOY_BTN && isGamepadXbox)
+				keyStr = std::string(SDL_BTN_TO_XBOX[sdlIdBtn]);
+			else if (isGamepadXbox)
+				keyStr = std::string(SDL_HAT_TO_XBOX[sdlIdBtn]);
+			str = (opt->tipoKey == KEY_JOY_BTN ? opt->description : TipoKeyStr[KEY_JOY_HAT]) + keyStr;
+		} 
+
+		if (sdlIdAxis > -1) {
+			std::string axisStr = isGamepadXbox ? SDL_JOY_TO_XBOX[sdlIdAxis] : Constant::intToString(sdlIdAxis);
+			str += (str.empty() ? "" : ", ") + TipoKeyStr[KEY_JOY_AXIS] + axisStr;
+		} 
+
+		// Resetear estado de edición si estaba activo
+		if (opt->changeAsked && (sdlIdBtn > -1 || sdlIdAxis > -1)) {
+			opt->changeAsked = false;
+			opt->lastTimeAsked = 0;
+			status = NORMAL;
+		}
+		
+		if (sdlIdBtn < 0 && sdlIdAxis < 0){
 			str = "-";
 		}
 	}

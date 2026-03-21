@@ -116,8 +116,8 @@ static SDL_AudioDevice *Audio_CreateDevice(int devindex)
 
 	this->free = Audio_DeleteDevice;
 
-	/* Open the audio device */
-	result = XAudio2Create(&sound, 0, XAUDIO2_DEFAULT_PROCESSOR );
+	// XAudio2 mezcla en el core 5 (recomendación XDK, deja que el sistema lo gestione)
+	result = XAudio2Create(&sound, 0, XboxThread5 );
 	if ( result != S_OK ) {
 		return(0);
 	}
@@ -162,9 +162,12 @@ void XboxDX_SoundFocus(int nHwnd)
 	mainwin = (HWND)nHwnd;
 }
 
+// Tu hilo de callback SDL en el core 4 (mismo procesador físico, 
+// pero hardware thread distinto, sin competencia directa)
+// O mejor aún, en el core 2 ó 3, lejos del sistema
 static void XboxDX_ThreadInit(_THIS)
 {
-	XSetThreadProcessor(GetCurrentThread(), 5);
+	XSetThreadProcessor(GetCurrentThread(), 3);
 }
 
 static void XboxDX_WaitAudio_BusyWait(_THIS)
@@ -212,7 +215,7 @@ static void XboxDX_PlayAudio(_THIS)
 		
 	while (1) {
 				
-		IXAudio2SourceVoice_GetState(mixbuf, &state, 0);
+		IXAudio2SourceVoice_GetState(mixbuf, &state, 1); //Wolf3s: "vs2010 Warning: Not actual parameter").
 		xa2buffer.Flags = XAUDIO2_END_OF_STREAM;
          if (state.BuffersQueued < NUM_BUFFERS - 1) {
             if (state.BuffersQueued == 0) {
@@ -268,7 +271,28 @@ static void XboxDX_WaitDone(_THIS)
 
 static void XboxDX_CloseAudio(_THIS)
 {
-	 
+	if (mixbuf) {
+        IXAudio2SourceVoice_Stop(mixbuf, 0, XAUDIO2_COMMIT_NOW);
+        IXAudio2SourceVoice_DestroyVoice(mixbuf);
+        mixbuf = NULL;
+    }
+    if (masterVoice) {
+        IXAudio2MasteringVoice_DestroyVoice(masterVoice);
+        masterVoice = NULL;
+    }
+    if (sound) {
+        IXAudio2_Release(sound);
+        sound = NULL;
+        g_sound = NULL;
+    }
+    if (pAudioBuffers) {
+        free(pAudioBuffers);
+        pAudioBuffers = NULL;
+    }
+    if (locked_buf) {
+        free(locked_buf);
+        locked_buf = NULL;
+    }
 }
 
 #ifdef USE_PRIMARY_BUFFER
@@ -419,6 +443,7 @@ static int XboxDX_OpenAudio(_THIS, SDL_AudioSpec *spec)
 	int nAudSegCount = 6;
     int nAudAllocSegLen = nAudSegLen << 2;
     int cbLoopLen = (nAudSegLen * nAudSegCount) << 2;
+	HRESULT hr;
 
 	WAVEFORMATEX waveformat;
 	
@@ -474,8 +499,15 @@ static int XboxDX_OpenAudio(_THIS, SDL_AudioSpec *spec)
 	pAudioBuffers = (BYTE *)malloc(spec->size*NUM_BUFFERS);
 
 
-	IXAudio2_CreateSourceVoice(sound, &mixbuf, &waveformat, XAUDIO2_VOICE_USEFILTER , 
-								XAUDIO2_DEFAULT_FREQ_RATIO, NULL, NULL, NULL );
+	hr = IXAudio2_CreateSourceVoice(sound, &mixbuf, &waveformat,
+                                         XAUDIO2_VOICE_USEFILTER,
+                                         XAUDIO2_DEFAULT_FREQ_RATIO,
+                                         NULL, NULL, NULL);
+
+	if (FAILED(hr) || mixbuf == NULL) {
+		SDL_SetError("XboxDX: IXAudio2_CreateSourceVoice failed: 0x%08X", hr);
+		return -1;
+	}
 
 	IXAudio2SourceVoice_Start(mixbuf, 0, 0);
 

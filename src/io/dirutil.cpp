@@ -108,21 +108,29 @@ char * dirutil::getDirActual(){
 
 
 /**
-* Obtiene la extension del fichero
+* Obtiene la extensión del fichero (incluyendo el punto)
 */
-string dirutil::getExtension(string file){
-    string ext = "";
-    //if (!file.empty() && !isDir(file.c_str())){
-    /**TODO: isDir is giving errors not detecting files */
-    if (!file.empty()){
-        size_t found = file.find_last_of(".");
-        if (found > 0 && found < file.length()){
-            ext = file.substr(found);
-            Constant::lowerCase(&ext);
-        }
+string dirutil::getExtension(string file) {
+    if (file.empty()) return "";
+
+    // 1. Buscamos el último separador de carpeta para aislar el nombre
+    size_t lastSep = file.find_last_of("/\\");
+    size_t startSearch = (lastSep == string::npos) ? 0 : lastSep + 1;
+
+    // 2. Buscamos el punto solo a partir del nombre del archivo
+    size_t lastDot = file.find_last_of(".");
+
+    // 3. Verificamos que el punto esté después del separador y no sea el primer carácter del nombre
+    // (Esto evita archivos ocultos sin extensión como ".bashrc")
+    if (lastDot != string::npos && lastDot >= startSearch && lastDot > 0) {
+        string ext = file.substr(lastDot);
+        Constant::lowerCase(&ext);
+        return ext;
     }
-    return ext;
+
+    return "";
 }
+
 
 /**
  *
@@ -316,86 +324,64 @@ bool dirutil::foundFilter(std::string filtroExt, std::string filtroName, std::st
 						 (!filtroName.empty() && name.find(filtroName) != string::npos);
 }
 
-string dirutil::getFileNameNoExt(string file){
-    if(isDir(file.c_str())){
-        return file;
-    } else {
-        size_t found, foundExt;
-        
-		string sep = Constant::getFileSep();
-        if (file.find(sep) == string::npos && file.find(FILE_SEPARATOR_UNIX) != string::npos){
-            sep = FILE_SEPARATOR_UNIX;
-        } else if (file.find(sep) == string::npos && file.find(0x5C) != string::npos){
-            sep = 0x5C;
-        }
-        
-        found = file.rfind(sep);
-        foundExt = file.rfind(".");
+string dirutil::getFileNameNoExt(string file) {
+    if(isDir(file.c_str())) return file;
 
-        if (found == string::npos){
-            found = 0;
-        }
-
-        if (found > 0 && foundExt > found){
-            string name = file.substr(found  + 1, foundExt - found - 1);
-            return name;
-        } else if (foundExt > found){
-            string name = file.substr(0, foundExt);
-            return name;
-        } else {
-            return file;
-        }
+    // 1. Encontrar el último separador de carpeta (cualquiera de los dos)
+    size_t lastSep = file.find_last_of("/\\");
+    
+    // 2. Extraer solo el nombre del archivo (con extensión)
+    string fileName = (lastSep == string::npos) ? file : file.substr(lastSep + 1);
+    
+    // 3. Buscar el último punto solo en el nombre del archivo
+    size_t lastDot = fileName.find_last_of(".");
+    
+    // 4. Si hay punto y no es el primer carácter (evita archivos ocultos tipo .bashrc)
+    if (lastDot != string::npos && lastDot > 0) {
+        return fileName.substr(0, lastDot);
     }
+    
+    return fileName;
+}
+
+string dirutil::getFolder(string file) {
+    if (isDir(file.c_str())) {
+        return file;
+    }
+
+    // Buscamos el último separador de cualquier tipo (\ o /)
+    size_t found = file.find_last_of("/\\");
+
+    if (found != string::npos) {
+        // Si el separador está al inicio (ej. "/file"), devolvemos "/"
+        if (found == 0) return file.substr(0, 1);
+        
+        // Devolvemos la ruta hasta el último separador (sin incluirlo)
+        return file.substr(0, found);
+    }
+
+    // Si no hay separadores, es un archivo en el directorio actual
+    return "."; // O return "" según prefieras representar el directorio local
 }
 
 /**
-* Obtiene el directorio de un fichero
-*/
-string dirutil::getFolder(string file){
-    if(isDir(file.c_str())){
+ * Obtiene el nombre del fichero (con extensión) de una ruta completa
+ */
+string dirutil::getFileName(string file) {
+    if (isDir(file.c_str())) {
         return file;
-    } else {
-        size_t found;
-
-		std::string sep = Constant::getFileSep();
-        if (file.find(sep) == string::npos && file.find(FILE_SEPARATOR_UNIX) != string::npos){
-            sep = FILE_SEPARATOR_UNIX;
-        } else if (file.find(sep) == string::npos && file.find(0x5C) != string::npos){
-            sep = 0x5C;
-        }
-
-        found = file.rfind(sep);
-        if (found != string::npos){
-            return file.substr(0,found);
-        } else {
-            return file;
-        }
     }
-}
 
-/**
-* Obtiene el directorio de un fichero
-*/
-string dirutil::getFileName(string file){
-    if(isDir(file.c_str())){
-        return file;
-    } else {
-        size_t found;
+    // Buscamos la última aparición de CUALQUIER separador de carpeta
+    size_t found = file.find_last_of("/\\");
 
-        std::string sep = Constant::getFileSep();
-        if (file.find(sep) == string::npos && file.find(FILE_SEPARATOR_UNIX) != string::npos){
-            sep = FILE_SEPARATOR_UNIX;
-        } else if (file.find(sep) == string::npos && file.find(0x5C) != string::npos){
-            sep = 0x5C;
-        }
-
-        found = file.find_last_of(sep);
-        if (found != string::npos){
-            return file.substr(found  + 1, file.length() - found - 1);
-        } else {
-            return file;
-        }
+    if (found != string::npos) {
+        // Extraemos todo lo que hay después del último separador
+        return file.substr(found + 1);
     }
+
+    // Si no hay separadores, el string ya es el nombre del archivo
+    return file;
 }
 
 /**
@@ -432,28 +418,46 @@ bool dirutil::borrarArchivo(string ruta){
 /**
 *
 */
-int dirutil::createDir(std::string dir){
-	if (!dirExists(dir.c_str())) {
-		#ifdef _XBOX
-			if (CreateDirectory(dir.c_str(), NULL)) {
-				// Directorio creado con éxito
-				return true;
-			} else {
-				if (GetLastError() == ERROR_ALREADY_EXISTS) {
-					// El directorio ya existía
-					return 1;
-				}
-				// Error al crear (ruta no válida, dispositivo no montado, etc.)
-				return 0;
-			}
-        #elif defined(WIN)
-            return mkdir(dir.c_str());
-        #else
-            return mkdir(dir.c_str(), 0777);
-        #endif
-    } else {
-        return 0;
+int dirutil::createDir(std::string dir) {
+    if (dir.empty()) return 0;
+
+    // 1. Normalizar barras para la plataforma (XDK es estricto con \)
+    #if defined(_XBOX) || defined(_WIN32)
+        char sep = '\\';
+        for (size_t i = 0; i < dir.length(); ++i) if (dir[i] == '/') dir[i] = sep;
+    #else
+        char sep = '/';
+        for (size_t i = 0; i < dir.length(); ++i) if (dir[i] == '\\') dir[i] = sep;
+    #endif
+
+    // 2. Creación recursiva (asegura que existan los padres)
+    for (size_t i = 0; i < dir.length(); ++i) {
+        if (dir[i] == sep && i > 0) {
+            std::string sub = dir.substr(0, i);
+            // Ignorar si es la letra de unidad (ej: "Hdd:")
+            if (sub.find(':') == sub.length() - 1) continue; 
+            
+            #ifdef _XBOX
+                CreateDirectoryA(sub.c_str(), NULL);
+            #elif defined(_WIN32)
+                _mkdir(sub.c_str());
+            #else
+                mkdir(sub.c_str(), 0777);
+            #endif
+        }
     }
+
+    // 3. Crear el directorio final
+    #ifdef _XBOX
+        if (CreateDirectoryA(dir.c_str(), NULL) || GetLastError() == ERROR_ALREADY_EXISTS) {
+            return 1; // Éxito o ya existía
+        }
+        return 0; // Error real (ej: disco lleno o protegido)
+    #elif defined(_WIN32)
+        return (_mkdir(dir.c_str()) == 0 || errno == EEXIST) ? 1 : 0;
+    #else
+        return (mkdir(dir.c_str(), 0777) == 0 || errno == EEXIST) ? 1 : 0;
+    #endif
 }
 
 int dirutil::createDirRecursive(const char* path) {
@@ -522,46 +526,44 @@ void dirutil::borrarDir(string path)
 	// En Xbox 360, las rutas deben terminar en \* para buscar contenido
 
 	std::string searchPath = path;
-	if (path.length() > 0 && path.at(path.length() -1) != '\\'){
-		searchPath = searchPath + "\\";
-	}
-	searchPath = searchPath + "*";
+    if (!searchPath.empty() && searchPath.at(searchPath.length() - 1) != '\\') {
+        searchPath += "\\";
+    }
+    std::string baseWithSlash = searchPath; // Guardamos para concatenar rápido
+    searchPath += "*";
 
     WIN32_FIND_DATA findData;
     HANDLE hFind = FindFirstFile(searchPath.c_str(), &findData);
 
     if (hFind == INVALID_HANDLE_VALUE) {
-        // Si no se puede abrir como directorio, intentamos borrarlo como archivo
-        remove(path.c_str());
+        // En Xbox, remove() es más lento que DeleteFileA
+        DeleteFileA(path.c_str());
         return;
     }
 
     do {
-		const std::string name = findData.cFileName;
+        const char* name = findData.cFileName;
 
-        // Ignorar los directorios relativos . y ..
-        if (name == "." || name == "..") {
+        if (name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'))) {
             continue;
         }
 
-        std::string fullPath = path + "\\" + name;
+        std::string fullPath = baseWithSlash + name;
 
         if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            // Es un directorio: Llamada recursiva
             borrarDir(fullPath);
         } else {
-            // Es un archivo: Quitar atributos de solo lectura si existen y borrar
-            SetFileAttributes(fullPath.c_str(), FILE_ATTRIBUTE_NORMAL);
-            if (!DeleteFile(fullPath.c_str())) {
-                // Opcional: manejar error de borrado
+            // CRÍTICO: La Xbox 360 a veces marca archivos como READONLY si vienen de un DVD/ISO
+            if (findData.dwFileAttributes & FILE_ATTRIBUTE_READONLY) {
+                SetFileAttributesA(fullPath.c_str(), FILE_ATTRIBUTE_NORMAL);
             }
+            DeleteFileA(fullPath.c_str());
         }
-
     } while (FindNextFile(hFind, &findData));
 
     FindClose(hFind);
-
-    // Finalmente borrar la carpeta actual (debe estar vacía)
-    RemoveDirectory(path.c_str());
+    
+    // Al eliminar el directorio, el sistema ya garantiza la consistencia
+    RemoveDirectoryA(path.c_str());
 #endif
 }

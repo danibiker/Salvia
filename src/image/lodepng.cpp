@@ -30,6 +30,11 @@ Rename this file to lodepng.cpp to use it for C++, or to lodepng.c to use it for
 
 #include "lodepng.h"
 
+#if defined(_XBOX) || defined(_XBOX360)
+    #include <xtl.h>
+    #include <io.h>
+#endif
+
 #ifdef LODEPNG_COMPILE_DISK
 #include <limits.h> /* LONG_MAX */
 #include <stdio.h> /* file handling */
@@ -375,6 +380,10 @@ unsigned lodepng_save_file(const unsigned char* buffer, size_t buffersize, const
   FILE* file = fopen(filename, "wb" );
   if(!file) return 79;
   fwrite(buffer, 1, buffersize, file);
+  fflush(file);
+  #ifdef _XBOX
+	_commit(_fileno(file)); 
+  #endif
   fclose(file);
   return 0;
 }

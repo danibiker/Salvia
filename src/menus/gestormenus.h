@@ -52,7 +52,8 @@ class OpcionBool;
 
 // Definimos un tipo de función que devuelve string y no recibe nada
 typedef std::string (*GestorCallback)(void* instance);
-typedef std::string (*CallbackValue)(void* instance, void* value);
+typedef std::string (*CallbackValue) (void* instance, void* value);
+typedef std::string (*CallbackValues)(void* instance, void* index, void* values);
 
 // Clase Base para las opciones del menú
 class Opcion {
@@ -148,11 +149,16 @@ class OpcionLista : public Opcion {
 public:
     std::vector<std::string> items;
     int* indice;
+	CallbackValues callback; // Función estática
+    void* context;
 
     OpcionLista(std::string t, std::vector<std::string> it, int* idx) 
-        : Opcion(t, OPC_LISTA), items(it), indice(idx)  {}
+        : Opcion(t, OPC_LISTA), items(it), indice(idx), callback(NULL), context(NULL) {}
 	
 	std::string ejecutar() override {
+        if (callback != NULL && indice != NULL) {
+            return callback(context, (void *)indice, (void*)&items); 
+        }
         return "";
     }
 };
@@ -283,6 +289,8 @@ private:
 	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);
 	void poblarMenuAssignFrontend(Menu* menuHotkeys, Joystick *joystick);
 	std::string guardarJoysticks(Joystick* joy);
+	std::string guardarGameJoysticks(Joystick* joy);
+	std::string guardarCoreJoysticks(Joystick* joy);
 	std::string guardarCoreConfig(CfgLoader *refConfig);
 	std::string guardarMainConfig(CfgLoader *refConfig);
 	std::string volverEmulacion(CONFIG_STATUS *st);
@@ -311,7 +319,7 @@ public:
 	void updateButton(int, TipoKey);
 	void updateAxis(int, int);
 	bool options_changed_flag;
-
+	std::vector<t_scrap> scrapSelection;
 	void poblarCoreOptions(CfgLoader *);
 	void poblarPartidasGuardadas(CfgLoader *, std::string);
 	std::string stopScrapping(CONFIG_STATUS *st);
@@ -321,9 +329,8 @@ public:
 		return obtenerMenuActual() == menuCoreOptions;
 	}
 
-	CONFIG_STATUS getStatus(){ 
-		return status;
-	}
+	CONFIG_STATUS getStatus(){ return status;}
+	int getScrapGamesSelection(){return scrapGamesSelection;}
 	
 	void resetStatus(){
 		status = NORMAL;
@@ -334,34 +341,11 @@ public:
 	void nextPos();
     void prevPos();
 	void volverMenuInicial();
-	std::vector<t_scrap> scrapSelection;
-	int getScrapGamesSelection(){return scrapGamesSelection;}
-
-	// 1. La lógica real (método normal)
-    std::string descargarLogros() { 
-		//if (menuAchievements->opciones.size() == 0){
-			Achievements::instance()->setShouldRefresh(true);
-			Achievements::instance()->refresh_achievements_menu();
-			loadAchievements();
-			resetIndexPos();
-		//}
-
-		if (menuAchievements->opciones.size() > 0){
-			BadgeDownloader::instance().start();
-		}
-		return ""; 
-	}
-
-    // 2. El "Puente" (estático)
-    static std::string sDescargarLogros(void* inst) {
-        return ((GestorMenus*)inst)->descargarLogros();
-    }
-
-	static std::string changeHardcoreMode(void* inst, void *value) {
-		bool sendValue = *((bool *)(value));
-		Achievements::instance()->setHardcoreMode(sendValue);
-		return "";
-	}
+	
+    std::string descargarLogros();
+    static std::string sDescargarLogros(void* inst);
+	static std::string changeHardcoreMode(void* inst, void *value);
+	static std::string setDefaultEmu(void* inst, void *index, void *values);
 };
 
 template <typename T>

@@ -13,7 +13,6 @@
 //independientemente de cómo sea físicamente el dispositivo.
 #define MAX_HAT_POSITIONS 9
 
-
 static const int configurablePortButtons[] = {
 	RETRO_DEVICE_ID_JOYPAD_A,
 	RETRO_DEVICE_ID_JOYPAD_B,
@@ -73,6 +72,7 @@ static const int configurableSdlFrontAxis[] = {
 	JOY_AXIS_L2
 };
 
+extern t_rom_paths romPaths;
 
 class Joystick{
     public:
@@ -84,8 +84,11 @@ class Joystick{
 		void close_joysticks();
 		int getNumJoysticks(){return mNumJoysticks;}
 		
-		std::string saveButtonsRetro();
-		bool loadButtonsRetro();
+		std::string saveButtonsRetroCore();
+		std::string saveButtonsRetroGame();
+		std::string saveButtonsDefaultsCore();
+		std::string saveButtonsConfig(std::string, bool=true);
+		bool loadButtonsRetro(std::string);
 
 		HOTKEYS_LIST findHotkey();
 

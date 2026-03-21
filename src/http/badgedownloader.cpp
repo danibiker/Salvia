@@ -3,10 +3,10 @@
 void BadgeDownloader::start() {
     if (!running) {
         running = true;
-        hThread = CreateThread(NULL, 0, thread_func, this, 0, NULL);
-        
-        // Opcional: En Xbox 360 puedes asignar el hilo a un núcleo específico
-        // XSetThreadProcessor(hThread, 4); // Por ejemplo, el núcleo 4 (hardware thread)
+        hThread = CreateThread(NULL, 0, thread_func, this, CREATE_SUSPENDED, NULL);
+        if (hThread) {
+			Constant::setup_and_run_thread(hThread, CPU_THREAD);
+		}
     }
 }
 

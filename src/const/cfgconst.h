@@ -10,7 +10,8 @@ namespace cfg {
 			scaleMode, syncMode, soundMode, libretrosystem, libretro_lang, libretro_save, libretro_state, libretro_core, libretro_core_version, 
 			libretro_core_extensions,
 			showFps, forceFS, animBG,
-			mainLang, scrapRegion, scrapLang, scrapOrigin, apikeytgdb, raUser, raPass, enableAchievements, hardcoreRA,			
+			mainLang, scrapRegion, scrapLang, scrapOrigin, apikeytgdb, raUser, raPass, enableAchievements, hardcoreRA,
+			coreGenesis, coreSnes, corePce, corePceCd,
 			MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
 
 	typedef enum{generalConfig = 0, name,

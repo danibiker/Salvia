@@ -1,6 +1,11 @@
 #include "fileio.h"
 #include <sstream>
 
+#if defined(_XBOX) || defined(_XBOX360)
+    #include <xtl.h>
+    #include <io.h>
+#endif
+
 Fileio::Fileio(){
     memblock = NULL;
     size = 0;
@@ -70,6 +75,12 @@ int Fileio::writeToFile(const char *uri, char * memblocktowrite, size_t tam, int
             fseek(file, 0, SEEK_END);
         }
         fwrite(memblocktowrite, 1, tam, file);
+
+		fflush(file);
+        #ifdef _XBOX
+            _commit(_fileno(file)); 
+        #endif
+
         fclose(file);
         ret = 1;
         printf("writeToFile: downloaded file in: %s\n", uri);

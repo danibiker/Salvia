@@ -317,6 +317,9 @@
     <ClCompile Include="src\retroachievements\src\rapi\rc_api_user.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
+    <ClCompile Include="src\so\launcher.cpp">
+      <Filter>Source Files\frontend</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\const\constant.h">

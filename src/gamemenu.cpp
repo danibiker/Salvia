@@ -26,6 +26,16 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	dblBufferEnabled = true;
 	this->cfgLoader = cfgLoader;
 	this->initEngine(cfgLoader);
+
+	if (!initDblBuffer(getCfgLoader()->getWidth(), getCfgLoader()->getHeight())){
+		LOG_ERROR("No se pudo crear el buffer doble");
+		showLangSystemMessage("msg.error.dblbuffer", 3000);
+    }
+
+	std::string initMsg = "Loading " + Constant::getAppExecutable() + "...";
+	Constant::drawTextCentTransparent(screen, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0,0, true, true, textColor, 0);
+	SDL_Flip(screen);
+
 	int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
 	int pixelDato = 0;
 	TTF_SizeText(Fonts::getFont(Fonts::FONTSMALL), "FPS: 888.8", &pixelDato, NULL);
@@ -57,10 +67,10 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	cpuSurface = NULL;
 	bg_screenshot = NULL;
 	lastFpsUpdate = 0;
-	//initHqxFilter();
-	cargarSystemAchievementTranslation(Constant::getAppDir() + "\\config\\achievement_translations.cfg");
+	cargarSystemAchievementTranslation(Constant::getAppDir() + ROUTE_ACHIEVEMENT_TRANSLATIONS);
 	initAchievements();
 	Icons::loadIcons();
+	Launcher::initDrives();
 };
 
 GameMenu::~GameMenu(){
@@ -143,8 +153,8 @@ bool GameMenu::cargarSystemAchievementTranslation(const std::string& nombreArchi
                 std::string keyStr = line.substr(0, pos);
                 std::string valueStr = line.substr(pos + 1);
 
-                int key = atoi(keyStr.c_str());
-                int value = atoi(valueStr.c_str());
+				int key = Constant::strToTipo<int>(keyStr);
+                int value = Constant::strToTipo<int>(valueStr);
 
                 gsTogdGameid[key] = value;
             }
@@ -545,6 +555,9 @@ void GameMenu::showScrapProcess(ListMenu &listMenu){
 	if (Scrapper::isScrapping()){
 		Scrapper::g_status.procesados;
 		std::string str = "Scrapping: " + Constant::TipoToStr(Scrapper::g_status.procesados) + "/" + Constant::TipoToStr(Scrapper::g_status.total); 
+		if (Scrapper::g_status.remainingMedia > 0){
+			str += " - " + LanguageManager::instance()->get("msg.download.media") + " " + Constant::TipoToStr(Scrapper::g_status.remainingMedia);
+		}
 		std::string str2 = std::string(Scrapper::g_status.emuActual) + " - " + std::string(Scrapper::g_status.juegoActual);
 		Constant::drawTextTransparent(video_page, fontsmall, str.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 - face_h_small / 2 : 0 , textColor, 0);
 		Constant::drawTextTransparent(video_page, fontsmall, str2.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 + face_h_small / 2: 0 , textColor, 0);
@@ -665,28 +678,45 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
     }
 }
 
-/**
- * 
- */
-string GameMenu::getPathPrefix(string filepath){
-	ConfigEmu emu = *cfgLoader->getCfgEmu();
-	string finalpath;
-	cfgLoader->configMain[cfg::path_prefix].getPropValue(finalpath);
+std::string GameMenu::getPathPrefix(std::string filepath) {
+	string BASE_PATH;
+	cfgLoader->configMain[cfg::path_prefix].getPropValue(BASE_PATH);
 
-	if (finalpath.at(finalpath.length()-1) != Constant::getFileSep()[0] && filepath.at(0) != Constant::getFileSep()[0]){
-		finalpath += Constant::getFileSep();
+	if (filepath.empty()){
+		LOG_DEBUG("filepath empty. Returning: %s", BASE_PATH.c_str());
+		return BASE_PATH;
 	}
-    finalpath += filepath;
 
-    string drivestr = string(":") + string(Constant::tempFileSep);
-    //Checking if the path to the roms is absolute
-    if (!filepath.empty() && (filepath.at(0) == Constant::getFileSep()[0] || filepath.find(drivestr) != string::npos)){
-        finalpath = filepath;
+    // 2. Normalizar: Convertir todas las barras al estilo de la plataforma
+    // (Muy importante porque los Cores de Libretro suelen usar '/')
+    for (size_t i = 0; i < filepath.length(); ++i) {
+        if (filepath[i] == '/' || filepath[i] == '\\') {
+            filepath[i] = Constant::tempFileSep[0];
+        }
     }
-    #if defined(WIN) || defined(DOS)
-        finalpath = Constant::replaceAll(finalpath, "/", "\\");
-    #endif
-    return finalpath;
+
+    // 3. Detectar si es ruta absoluta (contiene ':' o empieza por SEP)
+    bool isAbsolute = (filepath.find(':') != std::string::npos || filepath[0] == Constant::tempFileSep[0]);
+
+    if (isAbsolute) {
+		LOG_DEBUG("filepath absolute. Returning: %s", filepath.c_str());
+        return filepath;
+    }
+
+    // 4. Concatenación inteligente (evitar game:\\roms o game:roms)
+    std::string result = BASE_PATH;
+    
+    // Si la base no termina en SEP y el filepath no empieza con SEP, añadirlo
+    if (result.at(result.length() - 1) != Constant::tempFileSep[0] && filepath[0] != Constant::tempFileSep[0]) {
+        result += Constant::tempFileSep[0];
+    } 
+    // Si ambos tienen SEP, quitar uno (opcional, pero limpia la ruta)
+    else if (result.at(result.length() - 1) == Constant::tempFileSep[0] && filepath[0] == Constant::tempFileSep[0]) {
+        filepath.erase(0, 1);
+    }
+
+	LOG_DEBUG("filepath relative. Returning: %s", (result + filepath).c_str());
+    return result + filepath;
 }
 
 /**
@@ -762,7 +792,8 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
         commands.emplace_back(emu.global_options);
     }
 
-	LOG_DEBUG("Launching %s\n", commands.at(0).c_str());
+	std::string firstCommand = commands.at(0);
+	LOG_DEBUG("Launching %s\n", firstCommand.c_str());
 	#ifdef LIBRETRO
 		Launcher launcher;
 		this->running = !launcher.launch(commands, isDebug());
@@ -983,7 +1014,7 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 					if (option->tipo == OPC_ACHIEVEMENT){
 						configMenus->descargarLogros();
 					} else if (option->tipo == OPC_SAVESTATE){
-						configMenus->poblarPartidasGuardadas(getCfgLoader(), getRomPaths()->rompath);
+						configMenus->poblarPartidasGuardadas(getCfgLoader(), romPaths.rompath);
 					}
 				}
 			}
@@ -1095,9 +1126,8 @@ void GameMenu::selectScalerMode(int mode){
 			break;
 
 		case SCALE_HQ2X_ALT:
-			//current_scaler = scale_hqnx_alt;
 			#ifdef _XBOX
-			current_scaler = scale_hq2x_xbox;
+			current_scaler = scale_hqnx_alt;
 			#else
 			current_scaler = scale_hq2x_xbox;
 			#endif
@@ -1155,7 +1185,7 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
     msg.ticks = SDL_GetTicks();
     
     std::string newText = Fonts::recortarAlTamanyo(text, this->screen->w);
-    msg.cache = TTF_RenderText_Blended(Fonts::getFont(Fonts::FONTBIG), newText.c_str(), white);
+	msg.cache = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTBIG), newText.c_str(), white);
     
     if (msg.cache) {
         int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
@@ -1565,20 +1595,35 @@ void GameMenu::processConfigChanges(){
 
 void GameMenu::setRomPaths(std::string rp){
 	dirutil dir;
-	getRomPaths()->rompath = rp;
+	romPaths.rompath = rp;
+	const std::string coreName = getCfgLoader()->configMain[cfg::libretro_core].valueStr;
 
-	std::string statesDir = getCfgLoader()->configMain[cfg::libretro_state].valueStr + Constant::getFileSep() +
-		getCfgLoader()->configMain[cfg::libretro_core].valueStr;
+	std::string statesDir = getCfgLoader()->configMain[cfg::libretro_state].valueStr + Constant::getFileSep() + coreName;
 			
 	if (!dir.dirExists(statesDir.c_str())){
 		dir.createDirRecursive(statesDir.c_str());
 	}
-	getRomPaths()->savestate = statesDir + Constant::getFileSep() + 
+	romPaths.savestate = statesDir + Constant::getFileSep() + 
 		dir.getFileNameNoExt(rp) + STATE_EXT;
 
 	std::string sramDir = getSramPath();
-	getRomPaths()->sram = sramDir + Constant::getFileSep() + 
+	romPaths.sram = sramDir + Constant::getFileSep() + 
 		dir.getFileNameNoExt(rp) + ".srm";
+
+	//Loading the joystick configuration if exists
+	std::string ruta = dir.getFolder(rp) + Constant::getFileSep() + dir.getFileNameNoExt(rp) + CFG_EXT;
+
+	std::string coreDefaultsPath = Constant::getAppDir() + std::string(Constant::tempFileSep) + "config"
+		+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + coreName + CFG_EXT;
+
+	if (dir.fileExists(ruta.c_str())){
+		joystick->loadButtonsRetro(ruta);
+	} else if (dir.fileExists(coreDefaultsPath.c_str())){
+		joystick->loadButtonsRetro(coreDefaultsPath);
+	} else {
+		std::string rutaIni = Constant::getAppDir() + Constant::getFileSep() + RETROPAD_INI;
+		joystick->loadButtonsRetro(rutaIni);
+	}
 }
 
 std::string GameMenu::getSramPath(){

@@ -24,14 +24,16 @@ public:
 	CfgLoader();
 	~CfgLoader();
 
-	cfg::t_cfg_props configMain [cfg::MAIN_CFG_MAX];
+	const static std::string coreDefault;
+	static cfg::t_cfg_props configMain [cfg::MAIN_CFG_MAX];
+
 	std::vector<std::unique_ptr<cfg::t_cfg_emu>> emulators;
 	std::map<std::string, std::unique_ptr<cfg::t_emu_props>> startupLibretroParams;
 	cfg::t_controller_port g_ports[MAX_PLAYERS];
 	std::string saveCoreParams();
 	void loadCoreParams();
-
 	std::string saveMainParams();
+	unsigned int findConfigIndex(std::string);
 	
 	int getWidth();
 	int getHeight();
@@ -60,7 +62,8 @@ private:
 	std::string getCoreCfgPath();
 	void parsearIdiomas(const char*, const std::string&, std::vector<FieldIdDesc>&);
 	void parsearRegiones(const char*, const std::string&, std::vector<FieldIdDesc>&);
-
+	void getExecutables(std::string, cfg::t_cfg_emu*);
+	
 };
 
 

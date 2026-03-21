@@ -11,6 +11,11 @@
 #include <unzip/zlib.h>
 #include "unziptool_common.h"
 
+#if defined(_XBOX) || defined(_XBOX360)
+    #include <xtl.h>
+    #include <io.h> // Para _commit y _fileno
+#endif
+
 // Función auxiliar para separar las extensiones y normalizarlas
 std::vector<std::string> splitExtensions(const std::string& extensions) {
     std::vector<std::string> list;
@@ -28,24 +33,30 @@ std::vector<std::string> splitExtensions(const std::string& extensions) {
 unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& extensions, bool toMemory, const std::string& tempDir) {
     unzippedFileInfo ret;
     ret.originalPath = rompath;
-    std::vector<std::string> allowedExts = splitExtensions(extensions);
-	// Límite de 50 MB (50 * 1024 * 1024 bytes)
-    const std::size_t MAX_MEM_SIZE = 52428800;
+    ret.errorCode = -1; // Por defecto error
+    ret.memoryBuffer = NULL;
+    ret.romsize = 0;
 
-    // 1. Detección de ZIP por Magic Number
+    std::vector<std::string> allowedExts = splitExtensions(extensions);
+    const std::size_t MAX_MEM_SIZE = 52428800; // 50 MB
+
+    // 1. Detección de ZIP por Magic Number (Endian-Safe)
     FILE* fTest = fopen(rompath.c_str(), "rb");
-    if (!fTest) return ret;
+    if (!fTest) {
+        LOG_DEBUG("Unable to open file: %s\n", rompath.c_str());
+        return ret;
+    }
     uint32_t magic = 0;
     fread(&magic, 4, 1, fTest);
     fclose(fTest);
 
-	#ifdef _XBOX
-    // Función nativa del SDK de Xbox para invertir bytes de 32 bits
-    magic = _byteswap_ulong(magic); 
-	#endif
+    // En Xbox (Big Endian), el magic de PKZip (0x50 0x4B 0x03 0x04) 
+    // se lee de forma distinta. Normalizamos para la comparación.
+    #ifdef _XBOX
+        magic = _byteswap_ulong(magic); 
+    #endif
 
-    // Si NO es un ZIP (PK\003\004)
-    // --- CASO: NO ES UN ZIP ---
+    // --- CASO 1: NO ES UN ZIP (Carga directa) ---
     if (magic != 0x04034b50) {
         FILE* f = fopen(rompath.c_str(), "rb");
         if (f) {
@@ -54,10 +65,10 @@ unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& exte
             fseek(f, 0, SEEK_SET);
 
             if (toMemory) {
-                // Validación de tamaño para archivos normales
                 if (ret.romsize > MAX_MEM_SIZE) {
                     fclose(f);
-                    ret.errorCode = -2; // Código para "Archivo demasiado grande para RAM"
+                    ret.errorCode = -2; 
+                    LOG_DEBUG("File too big for RAM: %Iu\n", ret.romsize);
                     return ret;
                 }
                 ret.memoryBuffer = malloc(ret.romsize);
@@ -66,11 +77,13 @@ unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& exte
             ret.extractedPath = rompath;
             ret.errorCode = 0;
             fclose(f);
+            LOG_DEBUG("Normal file loaded. Size: %Iu\n", ret.romsize);
         }
         return ret;
     }
 
-    // 2. Es un ZIP, abrir con Minizip
+    // --- CASO 2: ES UN ZIP (Extracción con Minizip) ---
+    LOG_DEBUG("Zip detected. Searching for compatible extension...\n");
     unzFile uf = unzOpen(rompath.c_str());
     if (!uf) return ret;
 
@@ -89,14 +102,14 @@ unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& exte
             std::transform(currentExt.begin(), currentExt.end(), currentExt.begin(), ::tolower);
         }
 
-        // Comprobar si la extensión del fichero actual está en nuestra lista
+        // Comprobación de extensión
         bool match = false;
-		for (std::size_t i = 0; i < allowedExts.size(); ++i) {
-			if (currentExt == allowedExts[i]) {
-				match = true;
-				break;
-			}
-		}
+        for (std::size_t i = 0; i < allowedExts.size(); ++i) {
+            if (currentExt == allowedExts[i]) {
+                match = true;
+                break;
+            }
+        }
 
         if (match) {
             if (unzOpenCurrentFile(uf) == UNZ_OK) {
@@ -104,42 +117,49 @@ unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& exte
                 ret.fileNameInsideZip = currentFile;
 
                 if (toMemory) {
-					// VALIDACIÓN CRÍTICA: No cargar si supera 50MB
-					if (ret.romsize > MAX_MEM_SIZE) {
-						unzClose(uf);
-						ret.errorCode = -2; 
-						return ret;
-					}
-
-					if (unzOpenCurrentFile(uf) == UNZ_OK) {
-						ret.memoryBuffer = malloc(ret.romsize);
-						if (ret.memoryBuffer) {
-							unzReadCurrentFile(uf, ret.memoryBuffer, (unsigned int)ret.romsize);
-							found = true;
-						}
-						unzCloseCurrentFile(uf);
-					}
-				} else {
-					ret.extractedPath = tempDir + Constant::getFileSep() + "extractedRom" + currentExt;
+                    if (ret.romsize > MAX_MEM_SIZE) {
+                        ret.errorCode = -2;
+                    } else {
+                        ret.memoryBuffer = malloc(ret.romsize);
+                        if (ret.memoryBuffer) {
+                            unzReadCurrentFile(uf, ret.memoryBuffer, (unsigned int)ret.romsize);
+                            found = true;
+                        }
+                    }
+                } else {
+                    // Extracción a disco (Temp)
+                    ret.extractedPath = tempDir + Constant::getFileSep() + "extractedRom" + currentExt;
                     FILE* fout = fopen(ret.extractedPath.c_str(), "wb");
                     if (fout) {
-                        std::vector<char> buffer(16384);
-                        int read;
-                        while ((read = unzReadCurrentFile(uf, buffer.data(), (unsigned int)buffer.size())) > 0) {
-                            fwrite(buffer.data(), 1, read, fout);
+                        // Buffer de 64KB: Óptimo para el DMA del HDD de Xbox 360
+                        std::vector<char> writeBuf(65536); 
+                        int bytesRead;
+                        while ((bytesRead = unzReadCurrentFile(uf, writeBuf.data(), (unsigned int)writeBuf.size())) > 0) {
+                            fwrite(writeBuf.data(), 1, bytesRead, fout);
                         }
+                        
+                        // SYNC CRÍTICO: Asegurar que el Core vea el archivo completo
+                        fflush(fout);
+                        #ifdef _XBOX
+                            _commit(_fileno(fout)); 
+                        #endif
                         fclose(fout);
                         found = true;
-                    }
+                    } else {
+						LOG_DEBUG("Error extracting to file\n");
+					}
                 }
-                unzCloseCurrentFile(uf);
-                if (found) break;
+                unzCloseCurrentFile(uf); 
+                if (found || ret.errorCode == -2) break;
             }
         }
         res = unzGoToNextFile(uf);
     }
 
     unzClose(uf);
-    if (found) ret.errorCode = 0;
+    if (found) {
+        ret.errorCode = 0;
+        LOG_DEBUG("Extraction successful: %s\n", toMemory ? "RAM" : "DISK");
+    }
     return ret;
 }

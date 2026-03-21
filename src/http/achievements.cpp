@@ -440,14 +440,10 @@ void Achievements::load_game_callback(int result, const char* error_message, rc_
 	data->userdata = userdata;
 
 	// Lanzamos el hilo
-	HANDLE hThread = CreateThread(NULL, 0, LoadGameThreadFunction, (LPVOID)data, 0, NULL);
+	HANDLE hThread = CreateThread(NULL, 0, LoadGameThreadFunction, (LPVOID)data, CREATE_SUSPENDED, NULL);
 
 	if (hThread) {
-		#ifdef _XBOX
-		// En Xbox 360 es buena practica asignar el hilo a un hardware thread especifico
-		XSetThreadProcessor(hThread, 4); 
-		#endif
-		CloseHandle(hThread);
+		Constant::setup_and_run_thread(hThread, CPU_THREAD);
 	} else {
 		delete data; // Limpieza en caso de error
 	}
@@ -747,14 +743,10 @@ void Achievements::challenge_indicator_show(const rc_client_achievement_t* achie
     data->badgeUrl = achievement->badge_url;
 
     // Lanzamos el hilo de Windows
-    HANDLE hThread = CreateThread(NULL, 0, ChallengeIndicatorThread, (LPVOID)data, 0, NULL);
+    HANDLE hThread = CreateThread(NULL, 0, ChallengeIndicatorThread, (LPVOID)data, CREATE_SUSPENDED, NULL);
     
     if (hThread) {
-		#ifdef _XBOX
-		// En Xbox 360 es buena practica asignar el hilo a un hardware thread especifico
-		XSetThreadProcessor(hThread, 4); 
-		#endif
-        CloseHandle(hThread); // No necesitamos trackearlo, se cerrara al terminar
+		Constant::setup_and_run_thread(hThread, CPU_THREAD);
     } else {
         delete data; // Si falla el hilo, limpiamos para evitar leak
     }
@@ -798,14 +790,10 @@ void Achievements::progress_indicator_update(const rc_client_achievement_t* achi
 	data->badgeUrl = achievement->badge_url;
 
     // Lanzamos el hilo de Windows
-    HANDLE hThread = CreateThread(NULL, 0, ProgressIndicatorThread, (LPVOID)data, 0, NULL);
+    HANDLE hThread = CreateThread(NULL, 0, ProgressIndicatorThread, (LPVOID)data, CREATE_SUSPENDED, NULL);
     
     if (hThread) {
-		#ifdef _XBOX
-		// En Xbox 360 es buena practica asignar el hilo a un hardware thread especifico
-		XSetThreadProcessor(hThread, 4); 
-		#endif
-        CloseHandle(hThread); // No necesitamos trackearlo, se cerrara al terminar
+		Constant::setup_and_run_thread(hThread, CPU_THREAD);
     } else {
         delete data; // Si falla el hilo, limpiamos para evitar leak
     }
@@ -853,13 +841,9 @@ void Achievements::game_mastered(void)
 	data->id = game->id;
 
 	// Lanzamos el hilo
-	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, 0, NULL);
+	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, CREATE_SUSPENDED, NULL);
 	if (hThread) {
-		#ifdef _XBOX
-		// En Xbox 360 es buena practica asignar el hilo a un hardware thread especifico
-		XSetThreadProcessor(hThread, 4); 
-		#endif
-		CloseHandle(hThread);
+		Constant::setup_and_run_thread(hThread, CPU_THREAD);
 	} else {
 		delete data;
 	}
@@ -887,13 +871,9 @@ void Achievements::subset_completed(const rc_client_subset_t* subset)
 	data->id = subset->id;
 
 	// Lanzamos el hilo
-	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, 0, NULL);
+	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, CREATE_SUSPENDED, NULL);
 	if (hThread) {
-		#ifdef _XBOX
-		// En Xbox 360 es buena practica asignar el hilo a un hardware thread especifico
-		XSetThreadProcessor(hThread, 4); 
-		#endif
-		CloseHandle(hThread);
+		Constant::setup_and_run_thread(hThread, CPU_THREAD);
 	} else {
 		delete data;
 	}
@@ -930,13 +910,9 @@ void Achievements::achievement_update(rc_client_achievement_t* achievement){
 
 	LOG_DEBUG("Trigering achievement %s", data->title.c_str());
 	// Lanzamos el hilo
-	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, 0, NULL);
+	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, CREATE_SUSPENDED, NULL);
 	if (hThread) {
-		#ifdef _XBOX
-		// En Xbox 360 es buena practica asignar el hilo a un hardware thread especifico
-		XSetThreadProcessor(hThread, 4); 
-		#endif
-		CloseHandle(hThread);
+		Constant::setup_and_run_thread(hThread, CPU_THREAD);
 	} else {
 		delete data;
 	}
@@ -1277,18 +1253,12 @@ void Achievements::server_call(const rc_api_request_t* request,
 		data->callback_data = callback_data;
 
 		// Creamos el hilo
-		HANDLE hThread = CreateThread(NULL, 0, ServerThreadFunction, (LPVOID)data, 0, NULL);
+		HANDLE hThread = CreateThread(NULL, 0, ServerThreadFunction, (LPVOID)data, CREATE_SUSPENDED, NULL);
 
-		if (hThread == NULL) {
-			// Si falla la creacin, limpiar y llamar al callback con error
-			delete data;
+		if (hThread) {
+			Constant::setup_and_run_thread(hThread, CPU_THREAD);
 		} else {
-			#ifdef _XBOX
-			// En Xbox 360 es buena prctica asignar el hilo a un hardware thread especfico
-			XSetThreadProcessor(hThread, 4); 
-			#endif
-			// Cerramos el handle porque no necesitamos esperar por l (el hilo se limpia solo)
-			CloseHandle(hThread);
+			delete data;
 		}
 }
 

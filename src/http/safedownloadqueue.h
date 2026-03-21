@@ -33,6 +33,10 @@ public:
         CloseHandle(hEvent);
     }
 
+	int size(){
+		return tasks.size();
+	}
+
     void push(DownloadTask task) {
         EnterCriticalSection(&cs);
         tasks.push(task);

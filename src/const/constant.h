@@ -13,6 +13,7 @@
 #include <utils/logger.h>
 
 static const int video_bpp = 16;
+#define CPU_THREAD 4
 
 #ifdef _XBOX
 	static Uint32 video_flags = SDL_SWSURFACE;
@@ -315,6 +316,14 @@ typedef enum {cart_gba,
 extern const char *JOY_DESCRIPTIONS[];
 extern const char *ICONS_PATH[];
 extern const char *ICONS_CARTS_PATH[];
+extern const std::string CFG_EXT;
+extern const std::string RETROPAD_INI;
+extern const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS;
+extern const std::string ROUTE_SCRAP_TRANSLATIONS;
+extern const std::string PREFIX_DEFAULTS;
+extern const char *SDL_BTN_TO_XBOX[12];
+extern std::string SDL_JOY_TO_XBOX[6];
+extern std::string SDL_HAT_TO_XBOX[9];
 
 typedef enum {
     launch_system,          //0
@@ -473,8 +482,8 @@ class Constant{
         }
 
         static std::string replaceAll(std::string str, std::string tofind, std::string toreplace){
-            size_t position = 0;
-            size_t lastPosition = 0;
+            std::size_t position = 0;
+            std::size_t lastPosition = 0;
             std::string replaced = "";
 
             if (!str.empty()){
@@ -492,13 +501,13 @@ class Constant{
 
         static std::string TrimLeft(const std::string& s)
         {
-            size_t startpos = s.find_first_not_of(WHITESPACE);
+            std::size_t startpos = s.find_first_not_of(WHITESPACE);
             return (startpos == std::string::npos) ? "" : s.substr(startpos);
         }
 
         static std::string TrimRight(const std::string& s)
         {
-            size_t endpos = s.find_last_not_of(WHITESPACE);
+            std::size_t endpos = s.find_last_not_of(WHITESPACE);
             return (endpos == std::string::npos) ? "" : s.substr(0, endpos+1);
         }
 
@@ -720,6 +729,22 @@ class Constant{
 			char buffer[32];
 			sprintf(buffer, "%dh %dm", hours, minutes);
 			return std::string(buffer);
+		}
+
+		static void setup_and_run_thread(HANDLE hThread, int core) {
+			#ifdef _XBOX
+			// Forzar la ejecución en el núcleo especificado
+			XSetThreadProcessor(hThread, core); 
+			#endif
+
+			// Bajar prioridad para no afectar el rendimiento del juego/emulador
+			SetThreadPriority(hThread, THREAD_PRIORITY_BELOW_NORMAL);
+
+			// Arrancar el hilo que estaba suspendido
+			ResumeThread(hThread);
+
+			// Liberar el handle (el hilo continúa su ejecución de forma independiente)
+			CloseHandle(hThread);
 		}
 
 

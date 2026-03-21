@@ -6,7 +6,7 @@
 //#include "io/sound.h"
 //#include "utils/so/launcher.h"
 
-
+#include <beans/structures.h>
 #include <uiobjects/image.h>
 #include <uiobjects/textarea.h>
 #include <uiobjects/listmenu.h>
@@ -44,11 +44,10 @@ static const string SNAPFS = "snapFs";
 static const string SYNOPSIS = "synopsis";
 static const string MENUTMP = "menu.tmp";
 
-int initHqxFilter();
-
 extern std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
 extern std::string aspectRatioStrings[TOTAL_VIDEO_RATIO];
 extern std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
+extern t_rom_paths romPaths;
 
 enum status_emu
 {
@@ -63,12 +62,6 @@ class GameMenu : public Engine{
     public:
         GameMenu(CfgLoader *cfgLoader);
         ~GameMenu();
-		struct t_rom_paths{
-			std::string rompath;
-			std::string savestate;
-			std::string sram;
-		};
-		
 		SDL_Surface *video_page;
 		SDL_Surface *bg_screenshot;
 		GameTicks gameTicks;
@@ -113,7 +106,6 @@ class GameMenu : public Engine{
 
 		int getEmuStatus(){return status;}
 		int getLastStatus(){return lastStatus;}
-		t_rom_paths* getRomPaths(){return &romPaths;}
 		void setRomPaths(std::string rp);
 		std::string getSramPath();
 		void showSystemMessage(std::string, uint32_t);
@@ -138,7 +130,6 @@ class GameMenu : public Engine{
 		SDL_Surface* fpsSurface;
 		SDL_Surface* cpuSurface;
 		uint32_t lastFpsUpdate;
-		t_rom_paths romPaths;
 		bool *mustUpdateFps;
         std::map<std::string, Image> menuImages;
         std::map<std::string, TextArea> menuTextAreas;

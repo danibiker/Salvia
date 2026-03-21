@@ -24,6 +24,7 @@
 #include "io/inputscore.h"
 #include "image/icons.h"
 #include "utils/langmanager.h"
+#include "so/launcher.h"
 
 GameMenu *gameMenu;
 Logger *logger;
@@ -58,6 +59,9 @@ const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
 static uint16_t* conversion_buffer = NULL;
 static std::size_t buffer_size = 0;
 int audio_opened = 0;
+// En tu clase/global:
+volatile bool audio_closing = false;
+t_rom_paths romPaths;
 
 struct retro_core_variable {
    const char *key;    // Nombre técnico: "nestopia_region"
@@ -92,8 +96,6 @@ extern "C" {
 #endif
 
 void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
-    //va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
-	
 	if (!logger) {
 		va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
 		return;
@@ -109,19 +111,27 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
     }
 
     // 2. Procesar los argumentos variables (va_list) que envía el Core
-    char buffer[1024];
+    char buffer[128];
     va_list args;
     va_start(args, fmt);
     vsnprintf(buffer, sizeof(buffer), fmt, args);
     va_end(args);
+	buffer[sizeof(buffer) - 1] = '\0';
 
-    // 3. Llamar directamente al método write
-    // Nota: Como no podemos obtener el archivo/línea real del Core, 
-    // indicamos que el origen es "LIBRETRO_CORE"
-    logger->write(myLevel, "[CORE] %s", buffer);
+	OutputDebugStringA("[CORE]");
+	OutputDebugStringA(buffer);
+	
+	char* ptr = strchr(buffer, '\n');
+	if (ptr == nullptr) {
+		OutputDebugStringA("\n");
+	}
 }
 
+
 static bool retro_environment(unsigned cmd, void *data) {
+	static string dirSystem;
+	static string saveDir; 
+
     switch (cmd) {
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
 			struct retro_log_callback *log = (struct retro_log_callback*)data;
@@ -133,7 +143,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 			// 1. Convertir el puntero 'data' a la estructura de mensaje
 			const struct retro_message *msg = (const struct retro_message*)data;
 			if (msg && msg->msg){
-				LOG_DEBUG("NOTIFICACION DEL CORE: %s (Duracion: %u frames)", msg->msg, msg->frames);
+				//LOG_DEBUG("NOTIFICACION DEL CORE: %s (Duracion: %u frames)", msg->msg, msg->frames);
 				gameMenu->showSystemMessage(msg->msg, (unsigned)((msg->frames * 1000) / 60));
 			}
 			return true;
@@ -214,12 +224,9 @@ static bool retro_environment(unsigned cmd, void *data) {
 
 		case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:{
 			//static const char *dir = "."; // Punto (.) indica el directorio actual del ejecutable
-
-			static string dir;
-			gameMenu->getCfgLoader()->configMain[cfg::libretrosystem].getPropValue(dir);
-
+			dirSystem = gameMenu->getCfgLoader()->configMain[cfg::libretrosystem].valueStr;
 			// O se puede usar una ruta específica de la Xbox 360 si la tienes definida, ej: "game:\\system"
-			*(const char**)data = dir.c_str();
+			*(const char**)data = dirSystem.c_str();
 			return true;
 		}
 
@@ -234,7 +241,6 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return true;
 		}
 		case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: {
-			static std::string saveDir; 
 			saveDir = gameMenu->getSramPath();
 			*(const char**)data = saveDir.c_str();
 			return true;
@@ -243,8 +249,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 		case RETRO_ENVIRONMENT_GET_LANGUAGE:{
 			// El núcleo nos pregunta: "¿En qué idioma quieres las descripciones?"
             unsigned *lang = (unsigned*)data;
-			static int g_current_language;
-			gameMenu->getCfgLoader()->configMain[cfg::libretro_save].getPropValue(g_current_language);
+			static int g_current_language = gameMenu->getCfgLoader()->configMain[cfg::libretro_save].valueInt;
 			*lang = g_current_language;
             LOG_INFO("Core solicitó idioma: Enviando (%d)", g_current_language);
             return true;
@@ -526,16 +531,15 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 
 		// 1. Gestión del Latch de Start
 		#ifdef _XBOX
-		if (gameMenu->joystick->startHoldFrames[port] > 0) {
-			gameMenu->joystick->startHoldFrames[port]--;
-			// Forzamos true en el array
+		// 1. Cachear el valor para evitar múltiples accesos al array
+		const int holdFrames = gameMenu->joystick->startHoldFrames[port];
+		if (holdFrames > 0) {
+			// 2. Obtener el índice del botón una sola vez
 			int sdlBtn = inputs->mapperCore.getSdlBtn(port, RETRO_DEVICE_ID_JOYPAD_START);
-			if (sdlBtn > -1 && sdlBtn < MAX_BUTTONS){
+			// 3. Validación de rango rápida
+			if ((unsigned int)sdlBtn < MAX_BUTTONS) { 
+				// Forzamos el estado true mientras haya frames de retención
 				inputs->btn_state[port][sdlBtn] = true;
-			}
-
-			if (sdlBtn > -1 && gameMenu->joystick->startHoldFrames[port] == 0) {
-				inputs->btn_state[port][sdlBtn] = false;
 			}
 		}
 		#endif
@@ -627,7 +631,12 @@ std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_
 }
 
 void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
-    // 1. Limpiar el buffer de salida de SDL (Opcional pero recomendado en SDL 1.2)
+    if (audio_closing) {
+        memset(stream, 0, len);
+        return;   // salir limpio sin tocar el estado del core
+    }
+	
+	// 1. Limpiar el buffer de salida de SDL (Opcional pero recomendado en SDL 1.2)
     // Esto garantiza que si el emulador se pausa o va lento, haya silencio en lugar de ruido.
     //memset(stream, 0, len);
     // 2. Convertir a puntero de 16 bits para trabajar con muestras
@@ -640,23 +649,6 @@ void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
     // 3. Leer de tu buffer circular
     gameMenu->g_audioBuffer.Read(samples, count);
 }
-
-/*void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
-    memset(stream, 0, len); // Silencio por defecto
-    int16_t* samples = (int16_t*)stream;
-    std::size_t count = len / sizeof(int16_t);
-
-    // Comprobamos cuánto hay realmente
-    std::size_t disponible = gameMenu->g_audioBuffer.get_readable_samples();
-    
-    if (disponible >= count) {
-        gameMenu->g_audioBuffer.Read(samples, count);
-    } else {
-        // LOG: "Audio Underflow: %d de %d", disponible, count
-        // Si entra aquí mucho, el emulador es LENTO o el buffer es muy pequeño
-        gameMenu->g_audioBuffer.Read(samples, disponible);
-    }
-}*/
 
 /**
 *
@@ -767,13 +759,15 @@ void closeGame(){
 	if (gameMenu->romLoaded){
 		// 2. Cerrar el dispositivo y liberar el hardware
 		if (audio_opened) {
+			audio_closing = true;
 			// 1. Pausar el procesamiento de audio para detener el hilo de callback
 			SDL_PauseAudio(1);
+			SDL_Delay(50);
 			SDL_CloseAudio();
 			audio_opened = 0;
-			SDL_Delay(10);
+			audio_closing = false;
 		}
-		saveSram(gameMenu->getRomPaths()->sram.c_str());
+		saveSram(romPaths.sram.c_str());
 		//Liberar recursos de libretro
 		 // 1. Limpieza total del juego anterior
 		retro_unload_game();
@@ -786,31 +780,43 @@ void closeGame(){
 *
 */
 int launchGame(std::string rompath){
+	const bool loadAchievement = gameMenu->getCfgLoader()->configMain[cfg::enableAchievements].valueBool;
 	std::string tempDir = Constant::getAppDir() + Constant::getFileSep() + "tmp";
-	closeGame();
-
+	unzippedFileInfo unzipped;
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));
+
+	std::string initMsg = "Loading " + dir.getFileName(rompath) + "...";
+	Constant::drawTextCentTransparent(gameMenu->screen, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0,0, true, true, textColor, 0);
+	SDL_Flip(gameMenu->screen);
+
+	romPaths.rompath.clear();
+	closeGame();
 	retro_get_system_info(&info);
 	std::string allowedExtensions = Constant::replaceAll(info.valid_extensions, "|", " ");
 	LOG_DEBUG("Extensiones: %s\n", info.valid_extensions);
 
-	if (dir.dirExists(tempDir.c_str())){
-		dir.borrarDir(tempDir);
+	
+	if (gameMenu->getCfgLoader()->getCfgEmu()->no_uncompress){
+		LOG_DEBUG("Loading rom directly %s", rompath.c_str());
+		unzipped.errorCode = 0;
+		unzipped.extractedPath = rompath;
+		unzipped.originalPath  = rompath;
+	} else {
+		if (dir.dirExists(tempDir.c_str())){
+			dir.borrarDir(tempDir);
+		}
+		if (dir.createDir(tempDir) <= 0){
+			LOG_ERROR("Error creating the temporary directory %s\n", tempDir.c_str());
+			gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.direrror") + tempDir, 3000);
+			return 0;
+		}
+		LOG_DEBUG("Unzipping or loading rom %s", rompath.c_str());
+		unzipped = unzipOrLoad(rompath, allowedExtensions, !info.need_fullpath, tempDir);
 	}
-
-	if (!dir.dirExists(tempDir.c_str()) && dir.createDir(tempDir) < 0){
-		LOG_ERROR("No se ha podido crear el directorio %s\n", tempDir.c_str());
-		gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.direrror") + tempDir, 3000);
-		return 0;
-	}
-
-	const bool loadAchievement = gameMenu->getCfgLoader()->configMain[cfg::enableAchievements].valueBool;
-	LOG_DEBUG("Unzipping rom %s", rompath.c_str());
-	unzippedFileInfo unzipped = unzipOrLoad(rompath, allowedExtensions, !info.need_fullpath, tempDir);
 
 	if (unzipped.errorCode != 0){
-		LOG_ERROR("No se ha podido abrir el fichero o no se puede descomprimir: %s\n", rompath.c_str());
+		LOG_ERROR("No se ha podido abrir el fichero o no se puede descomprimir: %s", rompath.c_str());
 		gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.openfileerror") + rompath, 3000);
 		return 0;
 	}
@@ -818,10 +824,10 @@ int launchGame(std::string rompath){
 	struct retro_game_info game = { unzipped.extractedPath.c_str(), unzipped.memoryBuffer, unzipped.romsize, NULL };
 	retro_init();	
 	bool success = retro_load_game(&game);
-	//Para el jugador 1
-	//retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
-	// Para el jugador 2
-	//retro_set_controller_port_device(1, RETRO_DEVICE_JOYPAD);
+	
+	for (int i=0; i < MAX_PLAYERS; i++){
+		retro_set_controller_port_device(i, RETRO_DEVICE_JOYPAD);
+	}
 
 	if (success && loadAchievement){
 		//After the loading of the game, we load the achievements
@@ -853,13 +859,15 @@ int launchGame(std::string rompath){
 	aspectRatioValues[RATIO_CORE] = av_info.geometry.aspect_ratio;
 
 	// Inicializar SDL Audio con la frecuencia del core
-	init_sdl_audio(av_info.timing.sample_rate);
+	//if (!audio_opened){
+		init_sdl_audio(av_info.timing.sample_rate);
+	//}
 	//Iniciando el contador de fps
 	gameMenu->sync->init_fps_counter(av_info.timing.fps);
 	gameMenu->romLoaded = true;
 	gameMenu->setRomPaths(rompath);
 	gameMenu->configMenus->poblarPartidasGuardadas(gameMenu->getCfgLoader(), rompath);
-	loadSram(gameMenu->getRomPaths()->sram.c_str());
+	loadSram(romPaths.sram.c_str());
 	gameMenu->setEmuStatus(EMU_STARTED);
 	return 1;
 }
@@ -906,7 +914,7 @@ void closeResources() {
     }
 
 	deinitSaveSystem();
-
+	Launcher::unmountAll();
 	CurlClient curlClient;
 	curlClient.close();
 
@@ -918,7 +926,7 @@ inline void updateGame() {
     const Uint32 currentTime = SDL_GetTicks();
     // Verificamos si ha pasado el intervalo desde el último guardado
     if (currentTime - lastSramSaved >= INTERVAL_SRAM_SAVE) {
-        saveSram(gameMenu->getRomPaths()->sram.c_str());
+        saveSram(romPaths.sram.c_str());
         lastSramSaved = currentTime;
     }
 
@@ -938,6 +946,24 @@ void processFrontendEvents(){
 		action_postponed.action = SAVE_NONE;
 		action_postponed.cycles = -1;
 	}
+
+	//Decrementamos la pulsacion artificial del boton start. Caso especial para xbox 360
+	#ifdef _XBOX
+		int8_t* f = gameMenu->joystick->startHoldFrames;
+		t_joy_state *inputs = &gameMenu->joystick->inputs;
+		for (int i = 0; i < MAX_PLAYERS; i++) {
+			if (f[i] > 0) {
+				f[i]--;
+				// Si después de decrementar llegamos a 0, liberamos el botón
+				if (f[i] == 0) {
+					int sdlBtn = inputs->mapperCore.getSdlBtn(i, RETRO_DEVICE_ID_JOYPAD_START);
+					if ((unsigned int)sdlBtn < MAX_BUTTONS) {
+						inputs->btn_state[i][sdlBtn] = false;
+					}
+				}
+			}
+		}
+	#endif
 
 	switch (hotkey) {
 		case HK_SAVESTATE:
@@ -992,20 +1018,9 @@ int main(int argc, char *argv[]) {
 	// Se cargan los textos
 	const std::string mainLang = cfgLoader.configMain[cfg::mainLang].valueStr;
 	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
-
 	gameMenu = new GameMenu(&cfgLoader);
 	ListMenu listMenu(gameMenu->screen->w, gameMenu->screen->h);
 	listMenu.setLayout(LAYBOXES, gameMenu->screen->w, gameMenu->screen->h);
-	
-	if (!gameMenu->initDblBuffer(cfgLoader.getWidth(), cfgLoader.getHeight())){
-		LOG_ERROR("No se pudo crear el buffer doble");
-		gameMenu->showLangSystemMessage("msg.error.dblbuffer", 3000);
-        return 1;
-    }
-
-	std::string initMsg = "Loading " + Constant::getAppExecutable() + "...";
-	Constant::drawTextCent(gameMenu->screen, Fonts::getFont(Fonts::FONTSMALL), initMsg.c_str(), 0,0, true, true, textColor, 0);
-	SDL_Flip(gameMenu->screen);
 
 	TileMap tileMap(9, 0, 16, 16);
     tileMap.load(Constant::getAppDir() + Constant::getFileSep() + "assets" + Constant::getFileSep() + "art" + Constant::getFileSep() + "bricks2.png");

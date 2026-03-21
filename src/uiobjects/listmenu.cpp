@@ -9,6 +9,7 @@
 
 
 SDL_Surface* ListMenu::imgText;
+const int marginTextIcon = Icons::icon_w_add + 14;
 
 void ListMenu::clearSelectedText(){
     if (imgText != NULL){
@@ -99,7 +100,6 @@ void ListMenu::draw(SDL_Surface *video_page){
     //To scroll one letter in one second. We use the face_h because the width of 
     //a letter is not fixed.
     const float pixelsScrollFps = max(ceil(face_h / (float)textFps), 1.0f);
-	const int marginTextIcon = icons->icon_w_add + 14;
 
     for (int i=this->iniPos; i < this->endPos; i++){
         auto game = this->listGames.at(i).get();
@@ -115,13 +115,6 @@ void ListMenu::draw(SDL_Surface *video_page){
             //Gaining some extra fps when the screen resolution is low
 			SDL_Rect rectElem = {this->getX() + marginX, y, this->getW() - 2 * marginX, face_h};
             if (video_page->h >= 480){
-                //Weird things happen if this line is not used here
-                //when using antialiased text
-                //set_trans_blender(255, 255, 255, 190);
-                //drawing_mode(DRAW_MODE_TRANS, video_page, this->getX(), this->getY());
-                //rectfill(video_page, this->getX() + marginX, y, this->getW() - marginX, y + fontMenu->face_h, colorTrans);
-                //drawing_mode(DRAW_MODE_SOLID, video_page, this->getX(), this->getY());
-				//SDL_FillRect(video_page, &rectElem, bkg);
 				DrawRectAlpha(video_page, rectElem, bkgMenu, 190);
             } else {
                 lineTextColor = white;
@@ -174,7 +167,7 @@ void ListMenu::draw(SDL_Surface *video_page){
 				SDL_Rect srcRect;
 				srcRect.x = (Sint16)pixelShift;
 				srcRect.y = 0;
-				srcRect.w = this->getW() - 2 * this->marginX;
+				srcRect.w = this->getW() - 2 * this->marginX - marginTextIcon;
 				srcRect.h = face_h; // Usando la equivalencia de face_h
 
 				SDL_Rect dstRectWithMargin = dstRect;
@@ -253,7 +246,7 @@ void ListMenu::mapFileToList(string filepath) {
                         filelong = Constant::Trim(Constant::replaceAll(uri.substr(found + 1), "\"", ""));
                         //gameFile.gameTitle = Constant::cutToLength(filelong, this->getW());
                         gameFile.gameTitle = filelong;
-                        gameFile.cutTitleIdx = Fonts::idxToCutTTF(filelong, this->getW() - 2*this->marginX, Fonts::FONTBIG);
+                        gameFile.cutTitleIdx = Fonts::idxToCutTTF(filelong, this->getW() - 2*this->marginX - marginTextIcon, Fonts::FONTBIG);
                     }
 					listGames.push_back(std::unique_ptr<GameFile>(new GameFile(gameFile)));
                 }
@@ -298,7 +291,7 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
         gameFile.longFileName = file->filename;
         //gameFile.gameTitle = Constant::cutToLength(dir.getFileNameNoExt(file->filename), this->getW());
         gameFile.gameTitle = dir.getFileNameNoExt(file->filename);
-        gameFile.cutTitleIdx = Fonts::idxToCutTTF(gameFile.gameTitle, this->getW() - 2*this->marginX, Fonts::FONTBIG);
+        gameFile.cutTitleIdx = Fonts::idxToCutTTF(gameFile.gameTitle, this->getW() - 2*this->marginX - marginTextIcon, Fonts::FONTBIG);
 		listGames.push_back(std::unique_ptr<GameFile>(new GameFile(gameFile)));
     }
             

@@ -537,6 +537,7 @@ class ConfigEmu{
         use_extension = true;
         use_rom_directory = true;
 		generalConfig = false;
+		no_uncompress = false;
     }
     ~ConfigEmu(){
 
@@ -552,6 +553,7 @@ class ConfigEmu{
     std::string directory;
     //Name of emulator executable, i.e. mame.exe
     std::string executable;
+	std::vector<std::string> cores;
     //Global options passed to emulator, i.e. -sound 1
     std::string global_options;
     std::string map_file;
@@ -581,5 +583,12 @@ class ConfigEmu{
     // i.e. yes: "emulator.exe c:\full\path\rom"
     //       no: "emulator.exe rom"
     bool use_rom_directory;
+	//Avoids to uncompress the zip file
+	bool no_uncompress;
 };
 
+struct t_rom_paths{
+	std::string rompath;
+	std::string savestate;
+	std::string sram;
+};

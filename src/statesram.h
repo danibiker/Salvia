@@ -8,6 +8,11 @@
 #include "image/lodepng.h"
 #include <utils/langmanager.h>
 
+#if defined(_XBOX) || defined(_XBOX360)
+    #include <xtl.h>
+    #include <io.h>
+#endif
+
 const Uint32 INTERVAL_SRAM_SAVE = 60000;
 
 Uint32 lastSramSaved = 0;
@@ -18,6 +23,7 @@ int g_currentSlot = 0;
 typedef enum {SAVE_STATE, SAVE_SRAM, SAVE_NONE} ThreadAction;
 
 extern GameMenu *gameMenu;
+extern t_rom_paths romPaths;
 
 struct delayed_action{
 	int cycles;
@@ -85,19 +91,38 @@ bool GuardarCapturaPNG(const std::string& ruta, uint16_t* buffer, int w, int h) 
     return true;
 }
 
-bool guardar_comprimido_zlib(const char* path, void *buffer, std::size_t buffer_size){
-	// Aquí puedes escribir 'buffer' en un archivo usando fwrite
-	gzFile file = gzopen(path, "wb9"); // "9" es el nivel máximo de compresión
+bool guardar_comprimido_zlib(const char* path, void *buffer, std::size_t buffer_size) {
+    if (!path || !buffer || buffer_size == 0) return false;
 
-	if (file) {
-		LOG_DEBUG("gzwrite: %s bytes; %d\n", path, buffer_size);
-		gzwrite(file, buffer, (unsigned)buffer_size);
-		gzclose(file);
-		return true;
-	} else {
-		LOG_DEBUG("gzwrite error al escribir: %s bytes; %d; causa: %s\n", path, buffer_size, strerror(errno));
-		return false;
-	}
+    // "wb9" es compresión máxima. En la 360, "wb6" suele ser el equilibrio 
+    // ideal entre velocidad de CPU y ahorro de espacio en HDD/USB.
+    gzFile file = gzopen(path, "wb6"); 
+
+    if (file) {
+        // En zlib, gzwrite devuelve el número de bytes descomprimidos escritos (o 0 en error)
+        int written = gzwrite(file, buffer, (unsigned int)buffer_size);
+        
+        if (written <= 0) {
+            LOG_ERROR("Error en gzwrite: %s\n", path);
+            gzclose(file);
+            return false;
+        }
+
+        // 1. IMPORTANTE: gzflush asegura que zlib pase los datos al buffer del SO
+        gzflush(file, Z_FINISH);
+
+        // 2. CRÍTICO XBOX: Para asegurar que el archivo se escriba físicamente 
+        // antes de que el Core continúe, extraemos el FILE* interno si es posible 
+        // o confiamos en el cierre limpio. 
+        gzclose(file);
+
+        LOG_DEBUG("Archivo comprimido guardado: %s (%Iu bytes)\n", path, buffer_size);
+        return true;
+    } else {
+        // En el XDK, errno no siempre es fiable. GetLastError() da más info.
+        LOG_ERROR("No se pudo abrir para comprimir: %s (Causa: %s)\n", path, strerror(errno));
+        return false;
+    }
 }
 
 std::string getSlotPath(const std::string& baseStatePath, int slot) {
@@ -194,7 +219,7 @@ void saveState() {
         }
 
         // 5. Preparar la transferencia a la cola del hilo de guardado (I/O thread)
-        std::string targetPath = getSlotPath(gameMenu->getRomPaths()->savestate, g_currentSlot);
+        std::string targetPath = getSlotPath(romPaths.savestate, g_currentSlot);
         void* hiloBuffer = malloc(total_buffer_size);
         
         if (hiloBuffer) {
@@ -245,7 +270,7 @@ void loadState(){
 		return;
 	}
 
-    const std::string state_path = Constant::checkPath(getSlotPath(gameMenu->getRomPaths()->savestate, g_currentSlot));
+    const std::string state_path = Constant::checkPath(getSlotPath(romPaths.savestate, g_currentSlot));
     // 1. Obtener el tamaño que espera el núcleo (Core)
     std::size_t core_state_size = retro_serialize_size();
     if (core_state_size == 0) return;
@@ -312,6 +337,10 @@ bool guardar_archivo_raw(const char* path, void* buffer, std::size_t size) {
     FILE* fp = fopen(path, "wb");
     if (fp) {
         fwrite(buffer, 1, size, fp);
+		fflush(fp);
+        #ifdef _XBOX
+            _commit(_fileno(fp)); 
+        #endif
         fclose(fp);
         return true;
     } else {
@@ -363,6 +392,7 @@ int SaveThreadFunc(void* data) {
 						if (localScreenshot != NULL) {
 							std::string imgPath = Constant::checkPath(localPath + STATE_IMG_EXT);
 							GuardarCapturaPNG(imgPath, (uint16_t*)localScreenshot, width,  height);
+							gameMenu->configMenus->poblarPartidasGuardadas(gameMenu->getCfgLoader(), romPaths.rompath);
 							gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.state.save") + Constant::TipoToStr(localSlot), 3000);
 						} else {
 							gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.error.savestate.image") + localPath + STATE_IMG_EXT, 3000);

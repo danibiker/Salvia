@@ -4,6 +4,7 @@
 #include <SDL_joystick.h>
 
 int launchGame(std::string);
+extern t_rom_paths romPaths;
 
 /**
 *
@@ -38,7 +39,7 @@ bool processActions(GameMenu*& gameMenu, t_option_action &optionAction){
 					dir.borrarArchivo(filepath);
 					dir.borrarArchivo(std::string(filepath) + ".png");
 					gameMenu->configMenus->resetStatus();
-					gameMenu->configMenus->poblarPartidasGuardadas(gameMenu->getCfgLoader(), gameMenu->getRomPaths()->rompath);
+					gameMenu->configMenus->poblarPartidasGuardadas(gameMenu->getCfgLoader(), romPaths.rompath);
 					break;
 			}
 		}

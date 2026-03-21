@@ -2,8 +2,10 @@
 #include <io/joystick.h>
 #include <io/hotkeys.h>
 #include <io/filelist.h>
+#include <io/dirutil.h>
 #include <const/constant.h>
-#include <cmath> // Librer�a necesaria para pow
+#include <io/cfgloader.h>
+#include <cmath>
 
 Joystick::Joystick(){
 	ignoreButtonRepeats = false;
@@ -12,6 +14,7 @@ Joystick::Joystick(){
     gestorCursor = new CursorGestor();
 	setCursor(cursor_hidden);
 	hotkeys = new Hotkeys(&this->inputs);
+	memset(startHoldFrames, 0, sizeof(startHoldFrames));
 }
 
 Joystick::~Joystick(){
@@ -19,6 +22,9 @@ Joystick::~Joystick(){
 	delete hotkeys;
 }
 
+/**
+*
+*/
 bool Joystick::init_all_joysticks() {
     SDL_InitSubSystem(SDL_INIT_JOYSTICK);
     mNumJoysticks = SDL_NumJoysticks();
@@ -36,10 +42,14 @@ bool Joystick::init_all_joysticks() {
 			configMapperRetro(inputs.mapperCore, joyId);
 		}
 	}
-	loadButtonsRetro();
+	std::string ruta = Constant::getAppDir() + Constant::getFileSep() + "retropad.ini";
+	loadButtonsRetro(ruta);
 	return true;
 }
 
+/**
+*
+*/
 void Joystick::configMapperFrontend(t_joy_mapper& mapper, int joyId){
 	int hatsDirections = sizeof(configurableSdlHats) / sizeof(configurableSdlHats[0]);
 	int arrNButtons = sizeof(configurableFrontButtons) / sizeof(configurableFrontButtons[0]);
@@ -91,13 +101,49 @@ void Joystick::configMapperRetro(t_joy_mapper& mapper, int joyId){
 	}
 }
 
-std::string Joystick::saveButtonsRetro() {
+/**
+*
+*/
+std::string Joystick::saveButtonsRetroGame() {
+	if (!romPaths.rompath.empty()){
+		dirutil dir;
+		std::string rutaGuardado = dir.getFolder(romPaths.rompath) + Constant::getFileSep() + dir.getFileNameNoExt(romPaths.rompath) + CFG_EXT;
+		saveButtonsConfig(rutaGuardado, false);
+		return rutaGuardado;
+	} else {
+		return "";
+	}
+}
+
+std::string Joystick::saveButtonsDefaultsCore() {
+	if (!CfgLoader::coreDefault.empty()){
+		std::string coreDefaultsPath = Constant::getAppDir() + std::string(Constant::tempFileSep) + "config"
+			+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + CfgLoader::configMain[cfg::libretro_core].valueStr + CFG_EXT;
+
+		saveButtonsConfig(coreDefaultsPath, false);
+		return coreDefaultsPath;
+	} else {
+		return "";
+	}
+}
+/**
+*
+*/
+std::string Joystick::saveButtonsRetroCore() {
+	std::string rutaGuardado = Constant::getAppDir() + Constant::getFileSep() + RETROPAD_INI;
+	return saveButtonsConfig(rutaGuardado);
+}
+
+/**
+*
+*/
+std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFrontend) {
     std::vector<std::string> fileConfigJoystick;
     fileConfigJoystick.push_back("[RETROPAD_LIST]");
 
     // Vector para guardar el nombre del perfil asignado a cada jugador
     std::vector<std::string> playerProfileNames(MAX_PLAYERS, "");
-    // Para rastrear firmas de configuraci�n ya escritas y evitar duplicados
+    // Para rastrear firmas de configuración ya escritas y evitar duplicados
     std::vector<std::string> savedSignatures;
 
     for (int p = 0; p < MAX_PLAYERS; p++) {
@@ -106,7 +152,7 @@ std::string Joystick::saveButtonsRetro() {
             continue;
         }
 
-        // 1. Generar una "firma" �nica del mapeo de este jugador
+        // 1. Generar una "firma" única del mapeo de este jugador
         std::string signature = "";
         for (int i = 0; i < MAX_BUTTONS; i++) signature += Constant::intToString(inputs.mapperCore.sdlToBtn[p][i]) + ",";
         signature += "|";
@@ -115,28 +161,28 @@ std::string Joystick::saveButtonsRetro() {
         for (int i = 0; i < MAX_AXIS; i++)    signature += Constant::intToString(inputs.mapperCore.sdlToAxis[p][i]) + ",";
         signature += (inputs.axisAsPad[p] ? "1" : "0");
 
-        // 2. Verificar si esta configuraci�n exacta ya fue guardada
+        // 2. Verificar si esta configuración exacta ya fue guardada
         bool yaEscrito = false;
         for (std::size_t s = 0; s < savedSignatures.size(); s++) {
             if (savedSignatures[s] == signature) {
-                // Buscamos qu� nombre le pusimos a esa firma anteriormente
+                // Buscamos que nombre le pusimos a esa firma anteriormente
                 for (int prev = 0; prev < p; prev++) {
                     // Si encontramos al jugador previo con la misma firma, copiamos su nombre de perfil
-                    // Aqu� podr�as implementar una l�gica m�s compleja si quieres nombres distintos
                     playerProfileNames[p] = playerProfileNames[prev];
                     yaEscrito = true;
                     break;
                 }
                 break;
-            }
+
+			}
         }
 
-        // 3. Si es una configuraci�n nueva o el nombre base ya existe, generar perfil
+        // 3. Si es una configuracion nueva o el nombre base ya existe, generar perfil
         if (!yaEscrito) {
             std::string baseName = Constant::Trim(inputs.names[p]);
             std::string finalMapperName = baseName;
             
-            // Evitar colisi�n de nombres de perfiles en el INI
+            // Evitar colision de nombres de perfiles en el INI
             int count = 0;
             for (int i = 0; i < p; i++) {
                 if (playerProfileNames[i] == finalMapperName) {
@@ -149,7 +195,7 @@ std::string Joystick::saveButtonsRetro() {
             playerProfileNames[p] = finalMapperName;
             savedSignatures.push_back(signature);
 
-            // Escribir bloque de configuraci�n
+            // Escribir bloque de configuracion
             fileConfigJoystick.push_back("name=" + finalMapperName);
             
             std::string btns = "btns=";
@@ -168,59 +214,60 @@ std::string Joystick::saveButtonsRetro() {
             fileConfigJoystick.push_back(axis);
 
             fileConfigJoystick.push_back("anal=" + std::string(inputs.axisAsPad[p] ? "1" : "0"));
-            fileConfigJoystick.push_back(""); // L�nea en blanco
+            fileConfigJoystick.push_back(""); // Linea en blanco
         }
     }
 
-    // 4. Secci�n de asignaci�n por jugador
+    // 4. Seccion de asignacion por jugador
     fileConfigJoystick.push_back("[RETROPAD]");
     for (int p = 0; p < MAX_PLAYERS; p++) {
         fileConfigJoystick.push_back("player" + Constant::intToString(p) + "_name=" + playerProfileNames[p]);
     }
 
-	fileConfigJoystick.push_back(""); // L�nea en blanco
-	fileConfigJoystick.push_back("[HOTKEYS]");
-	std::string btns = "btns=";
-    for (int i = 0; i < MAX_BUTTONS; i++) 
-		btns += Constant::intToString(inputs.mapperHotkeys.sdlToBtn[0][i]) + (i < MAX_BUTTONS - 1 ? "," : "");
-    fileConfigJoystick.push_back(btns);
+	if (hotkeysAndFrontend){
+		fileConfigJoystick.push_back(""); // Linea en blanco
+		fileConfigJoystick.push_back("[HOTKEYS]");
+		std::string btns = "btns=";
+		for (int i = 0; i < MAX_BUTTONS; i++) 
+			btns += Constant::intToString(inputs.mapperHotkeys.sdlToBtn[0][i]) + (i < MAX_BUTTONS - 1 ? "," : "");
+		fileConfigJoystick.push_back(btns);
 
-    std::string hats = "hats=";
-    for (int i = 0; i < MAX_HATS; i++) 
-        hats += Constant::intToString(inputs.mapperHotkeys.sdlToHat[0][i]) + (i < MAX_HATS - 1 ? "," : "");
-    fileConfigJoystick.push_back(hats);
+		std::string hats = "hats=";
+		for (int i = 0; i < MAX_HATS; i++) 
+			hats += Constant::intToString(inputs.mapperHotkeys.sdlToHat[0][i]) + (i < MAX_HATS - 1 ? "," : "");
+		fileConfigJoystick.push_back(hats);
 
-    std::string axis = "axis=";
-    for (int i = 0; i < MAX_AXIS; i++) 
-        axis += Constant::intToString(inputs.mapperHotkeys.sdlToAxis[0][i]) + (i < MAX_AXIS - 1 ? "," : "");
-    fileConfigJoystick.push_back(axis);
+		std::string axis = "axis=";
+		for (int i = 0; i < MAX_AXIS; i++) 
+			axis += Constant::intToString(inputs.mapperHotkeys.sdlToAxis[0][i]) + (i < MAX_AXIS - 1 ? "," : "");
+		fileConfigJoystick.push_back(axis);
 
-	fileConfigJoystick.push_back(""); // L�nea en blanco
-	fileConfigJoystick.push_back("[FRONTEND]");
-	btns = "btns=";
-    for (int i = 0; i < MAX_BUTTONS; i++) 
-		btns += Constant::intToString(inputs.mapperFrontend.sdlToBtn[0][i]) + (i < MAX_BUTTONS - 1 ? "," : "");
-    fileConfigJoystick.push_back(btns);
+		fileConfigJoystick.push_back(""); // Linea en blanco
+		fileConfigJoystick.push_back("[FRONTEND]");
+		btns = "btns=";
+		for (int i = 0; i < MAX_BUTTONS; i++) 
+			btns += Constant::intToString(inputs.mapperFrontend.sdlToBtn[0][i]) + (i < MAX_BUTTONS - 1 ? "," : "");
+		fileConfigJoystick.push_back(btns);
 
-    hats = "hats=";
-    for (int i = 0; i < MAX_HATS; i++) 
-        hats += Constant::intToString(inputs.mapperFrontend.sdlToHat[0][i]) + (i < MAX_HATS - 1 ? "," : "");
-    fileConfigJoystick.push_back(hats);
+		hats = "hats=";
+		for (int i = 0; i < MAX_HATS; i++) 
+			hats += Constant::intToString(inputs.mapperFrontend.sdlToHat[0][i]) + (i < MAX_HATS - 1 ? "," : "");
+		fileConfigJoystick.push_back(hats);
 
-    axis = "axis=";
-    for (int i = 0; i < MAX_AXIS; i++) 
-        axis += Constant::intToString(inputs.mapperFrontend.sdlToAxis[0][i]) + (i < MAX_AXIS - 1 ? "," : "");
-    fileConfigJoystick.push_back(axis);
-
-
-    std::string rutaGuardado = Constant::getAppDir() + Constant::getFileSep() + "retropad.ini";
-    FileList::guardarVector(rutaGuardado, fileConfigJoystick);
-    
-    return rutaGuardado;
+		axis = "axis=";
+		for (int i = 0; i < MAX_AXIS; i++) 
+			axis += Constant::intToString(inputs.mapperFrontend.sdlToAxis[0][i]) + (i < MAX_AXIS - 1 ? "," : "");
+		fileConfigJoystick.push_back(axis);
+	}
+    FileList::guardarVector(ruta, fileConfigJoystick);
+    return ruta;
 }
 
-bool Joystick::loadButtonsRetro() {
-    std::string ruta = Constant::getAppDir() + Constant::getFileSep() + "retropad.ini";
+/**
+*
+*/
+bool Joystick::loadButtonsRetro(std::string ruta) {
+    
     std::vector<std::string> lineas;
 	FileList::cargarVector(ruta, lineas);
     if (lineas.empty()) return false;
@@ -266,7 +313,7 @@ bool Joystick::loadButtonsRetro() {
                 std::string key = line.substr(0, eqPos);
                 std::string profileName = line.substr(eqPos + 1);
                 
-                // Extraer el n�mero de jugador de "playerX_name"
+                // Extraer el numero de jugador de "playerX_name"
 				int p = Constant::strToTipo<int>(key.substr(6, key.find('_') - 6));
                 
                 if (p < MAX_PLAYERS && profiles.count(profileName)) {
@@ -296,6 +343,9 @@ bool Joystick::loadButtonsRetro() {
     return true;
 }
 
+/**
+*
+*/
 void Joystick::close_joysticks() {
 	for (int i = 0; i < MAX_PLAYERS; i++) {
 		if (g_joysticks[i]) {
@@ -305,12 +355,13 @@ void Joystick::close_joysticks() {
 	}
 }
 
+/**
+*
+*/
 bool Joystick::pollKeys(SDL_Surface* screen){
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 		const int player = event.jhat.which;
-		
-
 		switch (event.type) {
 			case SDL_QUIT:
 				evento.quit = true;
@@ -326,7 +377,7 @@ bool Joystick::pollKeys(SDL_Surface* screen){
 					if (inputs.getCoreBtn(player, RETRO_DEVICE_ID_JOYPAD_START)){
 						int sdlBtn = inputs.mapperCore.getSdlBtn(player, RETRO_DEVICE_ID_JOYPAD_START);
 						if (sdlBtn > -1 && sdlBtn < MAX_BUTTONS){
-							startHoldFrames[player] = 3; // Mantiene el pulso 3 frames
+							startHoldFrames[player] = 1; // Mantiene el pulso 1 frames
 						} 
 					}
 					#endif
@@ -372,6 +423,9 @@ bool Joystick::pollKeys(SDL_Surface* screen){
 	return true;
 }
 
+/**
+*
+*/
 HOTKEYS_LIST Joystick::findHotkey(){
 	return hotkeys->procesarHotkeys(&inputs);
 	return HK_MAX;
