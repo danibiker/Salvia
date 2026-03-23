@@ -1266,14 +1266,15 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>true</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;SQLITE_DEBUG;EMU_LIB_NAME="$(EMU_LIB_SNES9X)";$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;SQLITE_DEBUG;DEBUG_LOG;EMU_LIB_NAME="$(EMU_LIB_SNES9X)";$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <IntrinsicFunctions>false</IntrinsicFunctions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointModel>Fast</FloatingPointModel>
-      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -1398,8 +1399,8 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <Optimization>Full</Optimization>
-      <ExceptionHandling>false</ExceptionHandling>
+      <Optimization>MaxSpeed</Optimization>
+      <ExceptionHandling>Sync</ExceptionHandling>
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -1415,6 +1416,7 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
       <PreschedulingOptimization>true</PreschedulingOptimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -1557,12 +1559,13 @@
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);gambatte-libretro.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;..\..\project\gambatte-libretro\Debug\Xbox 360;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Debug\Xbox 360;..\..\project\gambatte-libretro\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1579,25 +1582,28 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <Optimization>Full</Optimization>
-      <ExceptionHandling>false</ExceptionHandling>
+      <Optimization>Disabled</Optimization>
+      <ExceptionHandling>Sync</ExceptionHandling>
       <MinimalRebuild>false</MinimalRebuild>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_GAMBATTE)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
       <WholeProgramOptimization>true</WholeProgramOptimization>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
-      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
-      <PreschedulingOptimization>true</PreschedulingOptimization>
-      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>false</PreschedulingOptimization>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
     </ClCompile>
     <Link>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);gambatte-libretro.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;..\..\project\gambatte-libretro\Release\Xbox 360;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360</AdditionalLibraryDirectories>
@@ -1638,7 +1644,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);Genesis-Plus-GX.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;../../project/Genesis-Plus-GX/Release/Xbox 360;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360;../../project/Genesis-Plus-GX/Release/Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
     </Link>
@@ -2938,14 +2944,7 @@
     </Deploy>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\audio\audiobuffer.cpp" />
     <ClCompile Include="src\const\constant.cpp" />
-    <ClCompile Include="src\db\sqlite3.c">
-      <CompileAs>CompileAsC</CompileAs>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug_mame|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug2_mame|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_mame|Win32'">true</ExcludedFromBuild>
-    </ClCompile>
     <ClCompile Include="src\engine.cpp" />
     <ClCompile Include="src\font\fonts.cpp" />
     <ClCompile Include="src\gamemenu.cpp" />
@@ -3157,12 +3156,6 @@
     <ClInclude Include="src\const\cfgconst.h" />
     <ClInclude Include="src\const\constant.h" />
     <ClInclude Include="src\const\menuconst.h" />
-    <ClInclude Include="src\db\sqlite3.h">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug_mame|Win32'">true</ExcludedFromBuild>
-    </ClInclude>
-    <ClInclude Include="src\db\sqlite3ext.h">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug_mame|Win32'">true</ExcludedFromBuild>
-    </ClInclude>
     <ClInclude Include="src\db\sqlite_xbox_fix.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug_mame|Win32'">true</ExcludedFromBuild>
     </ClInclude>

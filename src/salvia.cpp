@@ -101,6 +101,12 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
 		return;
 	}
 
+	#ifndef DEBUG_LOG
+		if (level != RETRO_LOG_ERROR){
+			return;
+		}
+	#endif
+
     // 1. Mapear el nivel de Libretro a tus niveles internos
     int myLevel;
     switch (level) {
@@ -780,6 +786,7 @@ void closeGame(){
 *
 */
 int launchGame(std::string rompath){
+	static Uint32 bkgText = SDL_MapRGB(gameMenu->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	const bool loadAchievement = gameMenu->getCfgLoader()->configMain[cfg::enableAchievements].valueBool;
 	std::string tempDir = Constant::getAppDir() + Constant::getFileSep() + "tmp";
 	unzippedFileInfo unzipped;
@@ -859,9 +866,9 @@ int launchGame(std::string rompath){
 	aspectRatioValues[RATIO_CORE] = av_info.geometry.aspect_ratio;
 
 	// Inicializar SDL Audio con la frecuencia del core
-	//if (!audio_opened){
+	if (!audio_opened){
 		init_sdl_audio(av_info.timing.sample_rate);
-	//}
+	}
 	//Iniciando el contador de fps
 	gameMenu->sync->init_fps_counter(av_info.timing.fps);
 	gameMenu->romLoaded = true;
@@ -869,6 +876,7 @@ int launchGame(std::string rompath){
 	gameMenu->configMenus->poblarPartidasGuardadas(gameMenu->getCfgLoader(), rompath);
 	loadSram(romPaths.sram.c_str());
 	gameMenu->setEmuStatus(EMU_STARTED);
+	SDL_FillRect(gameMenu->screen, NULL, bkgText);
 	return 1;
 }
 

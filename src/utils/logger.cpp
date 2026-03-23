@@ -36,7 +36,6 @@ Logger::Logger(const char* filename) {
 }
 
 void Logger::write(int level, const char* fmt, ...) {
-	return;
 #ifndef DEBUG_LOG
 	return;
 #endif

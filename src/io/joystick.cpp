@@ -377,7 +377,7 @@ bool Joystick::pollKeys(SDL_Surface* screen){
 					if (inputs.getCoreBtn(player, RETRO_DEVICE_ID_JOYPAD_START)){
 						int sdlBtn = inputs.mapperCore.getSdlBtn(player, RETRO_DEVICE_ID_JOYPAD_START);
 						if (sdlBtn > -1 && sdlBtn < MAX_BUTTONS){
-							startHoldFrames[player] = 1; // Mantiene el pulso 1 frames
+							startHoldFrames[player] = 3; // Mantiene el pulso 3 frames
 						} 
 					}
 					#endif

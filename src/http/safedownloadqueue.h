@@ -34,7 +34,9 @@ public:
     }
 
 	int size(){
+		EnterCriticalSection(&cs);
 		return tasks.size();
+		LeaveCriticalSection(&cs);
 	}
 
     void push(DownloadTask task) {

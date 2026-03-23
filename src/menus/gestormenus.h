@@ -95,7 +95,15 @@ public:
 	}
 
 	~OpcionAchievement(){
-		achievement.clear();
+		//Liberamos las dos memorias
+		if (achievement.badgeLocked != NULL){
+			SDL_FreeSurface(achievement.badgeLocked);
+			achievement.badgeLocked = NULL;
+		}
+		if (achievement.badge != NULL){
+			SDL_FreeSurface(achievement.badge);
+			achievement.badge = NULL;
+		}
 	}
 
 	std::string ejecutar() override {

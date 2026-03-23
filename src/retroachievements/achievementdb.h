@@ -46,7 +46,7 @@ public:
 			//liberar la memoria del error con sqlite3_free
 			sqlite3_free(zErrMsg);
 		} else {
-			OutputDebugStringA("Operacion exitosa\n");
+			LOG_DEBUG("Operacion exitosa\n");
 		}
 	}
 

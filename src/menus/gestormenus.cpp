@@ -348,30 +348,26 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	resetIndexPos();
 }
 
-void GestorMenus::loadAchievements(){
-	std::vector<std::string> listAch;
-	for (unsigned int i=0; i < menuAchievements->opciones.size(); i++){
-		if (menuAchievements->opciones[i]->tipo == OPC_ACHIEVEMENT){
-			SDL_Surface*& badge = ((OpcionAchievement *)menuAchievements->opciones[i])->achievement.badge;
-			if (badge){
-				//Liberamos la memoria
-				SDL_FreeSurface(badge);
-				badge = NULL;
-			}
-			delete ((OpcionAchievement *)menuAchievements->opciones[i]);
-		}
-	}
-	menuAchievements->opciones.clear();
+void GestorMenus::loadAchievements() {
+    // 1. Limpieza de opciones antiguas
+    for (unsigned int i = 0; i < menuAchievements->opciones.size(); i++) {
+        if (menuAchievements->opciones[i]->tipo == OPC_ACHIEVEMENT) {
+            OpcionAchievement* opt = (OpcionAchievement*)menuAchievements->opciones[i];
+            delete opt;
+        }
+    }
+    menuAchievements->opciones.clear();
 
-	Achievements& achievements = *Achievements::instance();
-	vector<AchievementState> ach = achievements.getAchievements();
-	
-	SDL_mutexP(achievements.achievementMutex);
-	for (unsigned int i=0; i < ach.size(); i++){
-		menuAchievements->opciones.push_back(new OpcionAchievement(ach.at(i)));
-	}
-	SDL_mutexV(achievements.achievementMutex);
-	resetIndexPos();
+    // 2. Carga desde la cola thread-safe
+    Achievements& inst = *Achievements::instance();
+    
+    for (std::size_t i = 0; i < inst.achievements.size(); i++) {
+        // Obtenemos una copia del logro sin hacer 'pop' (no se borra de la cola)
+        AchievementState currentAch = inst.achievements.get_at(i);
+        // Creamos la opción para el menú
+        menuAchievements->opciones.push_back(new OpcionAchievement(currentAch));
+    }
+    resetIndexPos();
 }
 
 std::string GestorMenus::setDefaultEmu(void* inst, void *index, void *values) {
@@ -1235,25 +1231,20 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
         !opcion->achievement.isDownloading && 
         !opcion->achievement.badgeUrl.empty()) {
         opcion->achievement.isDownloading = true; // Marcamos como "en proceso"
-		BadgeDownloader::instance().add_to_queue(opcion->achievement, imgH, imgH);
+		BadgeDownloader::instance().add_to_deque(opcion->achievement, imgH, imgH);
 		return;
     }
 
+	// Elegimos el puntero pre-calculado
+	SDL_Surface *surfaceToDraw = (opcion->achievement.locked) ? 
+                                opcion->achievement.badgeLocked : 
+                                opcion->achievement.badge;
+
 	// Dibujar el badge si ya está descargado
-    if (opcion->achievement.badge != NULL && !opcion->achievement.isDownloading) {
+    if (surfaceToDraw != NULL && !opcion->achievement.isDownloading) {
         SDL_Rect dest;
-        dest.x = this->getX() + marginImg; // Ajusta según tu layout
+        dest.x = this->getX() + marginImg;
         dest.y = position + marginImg;
-
-		if (opcion->achievement.badgeLocked == NULL) {
-			opcion->achievement.badgeLocked = SDL_DisplayFormat(opcion->achievement.badge);
-			Image::convertirGrises16Bits(opcion->achievement.badgeLocked);
-		}
-
-		// Elegimos el puntero pre-calculado
-		SDL_Surface *surfaceToDraw = (opcion->achievement.locked) ? 
-                                  opcion->achievement.badgeLocked : 
-                                  opcion->achievement.badge;
 		if (surfaceToDraw) {
 			SDL_BlitSurface(surfaceToDraw, NULL, video_page, &dest);
 		}

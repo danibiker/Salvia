@@ -126,7 +126,7 @@ class Scrapper{
 		static void StartScrappingAsync(std::vector<ConfigEmu>& emu, ScrapperConfig cfg);
 		static void ShutdownScrapper();
 	private:
-		static bool scrapping;
+		static volatile bool scrapping;
 		static HANDLE hMainThread;
 	
 		static DWORD WINAPI imageDownloaderThread(LPVOID lpParam);

@@ -11,6 +11,8 @@
 #include <unzip/zlib.h>
 #include "unziptool_common.h"
 
+const int WRITE_BUFFER_SIZE = 65536;
+
 #if defined(_XBOX) || defined(_XBOX360)
     #include <xtl.h>
     #include <io.h> // Para _commit y _fileno
@@ -28,6 +30,27 @@ std::vector<std::string> splitExtensions(const std::string& extensions) {
         list.push_back(ext);
     }
     return list;
+}
+
+int checkExtractionErrors(int result, std::size_t romsize){
+	if (result < 0) {
+		// Error detectado
+		const char* errorMsg;
+		switch (result) {
+			case UNZ_CRCERROR:      errorMsg = "Error de CRC (archivo corrupto)"; break;
+			case UNZ_BADZIPFILE:    errorMsg = "Archivo ZIP dañado"; break;
+			case UNZ_PARAMERROR:    errorMsg = "Error en los parámetros"; break;
+			default:                errorMsg = "Error desconocido en la extracción"; break;
+		}
+		LOG_DEBUG("Error al extraer (%d): %s\n", result, errorMsg);
+		return 1;
+	} else if ((unsigned int)result != romsize) {
+		LOG_DEBUG("Error: Se leyeron %d bytes, pero se esperaban %lu\n", result, (unsigned long)romsize);
+		return 2;
+	} else {
+		LOG_DEBUG("Extracción completada con éxito.\n");
+		return 0;
+	}
 }
 
 unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& extensions, bool toMemory, const std::string& tempDir) {
@@ -115,15 +138,14 @@ unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& exte
             if (unzOpenCurrentFile(uf) == UNZ_OK) {
                 ret.romsize = fileInfo.uncompressed_size;
                 ret.fileNameInsideZip = currentFile;
-
                 if (toMemory) {
                     if (ret.romsize > MAX_MEM_SIZE) {
                         ret.errorCode = -2;
                     } else {
                         ret.memoryBuffer = malloc(ret.romsize);
                         if (ret.memoryBuffer) {
-                            unzReadCurrentFile(uf, ret.memoryBuffer, (unsigned int)ret.romsize);
-                            found = true;
+                            int result = unzReadCurrentFile(uf, ret.memoryBuffer, (unsigned int)ret.romsize);
+                            found = checkExtractionErrors(result, ret.romsize) == 0;
                         }
                     }
                 } else {
@@ -132,19 +154,26 @@ unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& exte
                     FILE* fout = fopen(ret.extractedPath.c_str(), "wb");
                     if (fout) {
                         // Buffer de 64KB: Óptimo para el DMA del HDD de Xbox 360
-                        std::vector<char> writeBuf(65536); 
+                        char writeBuf[WRITE_BUFFER_SIZE]; 
                         int bytesRead;
-                        while ((bytesRead = unzReadCurrentFile(uf, writeBuf.data(), (unsigned int)writeBuf.size())) > 0) {
-                            fwrite(writeBuf.data(), 1, bytesRead, fout);
-                        }
-                        
+                        while ((bytesRead = unzReadCurrentFile(uf, writeBuf, WRITE_BUFFER_SIZE)) > 0) {
+							if (fwrite(writeBuf, 1, bytesRead, fout) != (size_t)bytesRead) {
+								LOG_DEBUG("Error de escritura en disco (disco lleno?)\n");
+								break;
+							}
+						}
+						if (bytesRead < 0) {
+							LOG_DEBUG("Error en la descompresión: %d\n", bytesRead);
+							found = false;
+						} else {
+							found = true;
+						}
                         // SYNC CRÍTICO: Asegurar que el Core vea el archivo completo
                         fflush(fout);
                         #ifdef _XBOX
                             _commit(_fileno(fout)); 
                         #endif
                         fclose(fout);
-                        found = true;
                     } else {
 						LOG_DEBUG("Error extracting to file\n");
 					}
@@ -163,3 +192,4 @@ unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& exte
     }
     return ret;
 }
+

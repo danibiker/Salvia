@@ -116,7 +116,9 @@ class GameMenu : public Engine{
 
     private:
 		std::vector<Message> messages;
-		std::list<AchievementState> messagesAchievement;
+		th_messages messagesAchievement;
+
+
 		map<int,int> gsTogdGameid;
 		bool cargarSystemAchievementTranslation(const std::string& nombreArchivo);
 		int translateSystemAchievement();

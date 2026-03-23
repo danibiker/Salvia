@@ -130,3 +130,11 @@ std::string Fonts::recortarAlTamanyo(std::string text, int maxWidth){
 
 	return newText;
 }
+
+void Fonts::getBadgeSize(int &w, int &h, int &badgePad, int &line_height){
+	const int face_h_small = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
+	badgePad = 2;
+	line_height = face_h_small + 4;
+	w = line_height * 3 - badgePad * 2;
+	h = line_height * 3 - badgePad * 2;
+}

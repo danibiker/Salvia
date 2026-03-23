@@ -3,14 +3,12 @@
 #include <cstdio>
 #include <string.h>
 
-#include <http/httputil.h>
 #include <http/badgedownloader.h>
 #include <utils/Logger.h>
 #include <io/dirutil.h>
 #include <gfx/SDL_rotozoom.h>
 #include <SDL_image.h>
 #include <retroachievements/CHDHashed.h>
-#include <utils/langmanager.h>
 #include <rc_consoles.h>
 #include <libretro/libretro.h>
 
@@ -44,16 +42,8 @@ static const std::string SALVIA_USER_AGENT = "Salvia/1.0";
 
 void Achievements::initialize() {
 	if (g_client) return;
-
-	messagesMutex = SDL_CreateMutex();
-	trackerMutex = SDL_CreateMutex();
-	challengeMutex = SDL_CreateMutex();
-	progressMutex = SDL_CreateMutex();
-	achievementMutex = SDL_CreateMutex();
-	badgeCacheMutex = SDL_CreateMutex();
-
 	createDbAchievements();
-	active_progress.badge = NULL;
+	progressMutex = SDL_CreateMutex();
 
 	// Creamos el cliente pasando la funcion de lectura de memoria
 	g_client = rc_client_create(read_memory, server_call);
@@ -94,6 +84,7 @@ void Achievements::shutdown() {
 		delete achievementDb;
 		#endif
 		clearAllData();
+		SDL_DestroyMutex(progressMutex);
 		LOG_DEBUG("RetroAchievements: Cliente destruido.");
 	}
 }
@@ -113,22 +104,8 @@ void Achievements::createDbAchievements() {
 
 void Achievements::clearAllData(){
 	reset_menu();
-	pending_messages.clear();
-
-	if (!active_challenges.empty()){
-		//No borramos los challenges directamente, para permitir que se actualice la imagen en en hilo de dibujado
-		//active_challenges.clear();
-		SDL_LockMutex(challengeMutex);
-		std::map<uint32_t, challenge_data>::iterator it = active_challenges.begin();
-		int i = 0;
-		while (it != active_challenges.end()) {
-			it->second.active = false;
-			it++;
-		}
-		SDL_UnlockMutex(challengeMutex);
-	}
-
-	active_trackers.clear();
+	challenges.clear();
+	trackers.clear();
 	clearBadgeCache();
 }
 
@@ -176,13 +153,14 @@ DWORD WINAPI AchievementTriggeredThread(LPVOID lpParam) {
 		msg.id = data->id;
 		LOG_DEBUG("AchievementTriggeredThread: %s - %s", msg.title.c_str(), msg.description.c_str());
 		int line_height, badgeW, badgeH, badgePad;
-		self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
+		Fonts::getBadgeSize(badgeW, badgeH, badgePad, line_height);
 		self.download_and_cache_image(&msg, badgeW, badgeH);
 		self.setShouldRefresh(true);
-		// Bloqueamos el mutex de SDL para anyadir a la cola de forma segura
-		SDL_mutexP(self.messagesMutex);
-		self.pending_messages.push_back(msg);
-		SDL_mutexV(self.messagesMutex);
+		self.messages.add(msg); // Anyadimos a la cola de forma "thread safe" con el add
+		//Aunque el destructor de AchievementState, ahora mismo, no libera memoria, para curarnos 
+		//en salud por si en un futuro esto cambia, ponemos a null los campos de la variable local msg
+		msg.badge = NULL;       // Crucial para evitar que el destructor local
+		msg.badgeLocked = NULL; // de 'msg' toque la memoria que ahora es del vector.
 	}
 	delete data;
 	LOG_DEBUG("AchievementTriggeredThread");
@@ -193,26 +171,7 @@ void clearBadgeCache() {
 	LOG_DEBUG("Limpiando badges");
     Achievements* ach = Achievements::instance();
     if (!ach) return;
-
-    SDL_mutexP(ach->badgeCacheMutex);
-    
-    std::map<std::string, SDL_Surface*>& cache = ach->getBadgeCache();
-    std::map<std::string, SDL_Surface*>::iterator it = cache.begin();
-
-    while (it != cache.end()) {
-        if (it->second != NULL) {
-            // Verificación extra: ¿Sigue vivo el subsistema de video?
-            // En Xbox 360, si SDL_WasInit(SDL_INIT_VIDEO) es 0, no llames a FreeSurface
-            if (SDL_WasInit(SDL_INIT_VIDEO)) {
-                SDL_FreeSurface(it->second);
-            }
-            it->second = NULL; // Evita que otros hilos intenten acceder
-        }
-        ++it;
-    }
-    cache.clear();
-    
-    SDL_mutexV(ach->badgeCacheMutex);
+	ach->badgeCache.clear();
     LOG_DEBUG("Cache de badges limpiada con éxito");
 }
 
@@ -221,6 +180,7 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
 	LoadContext* ctx = static_cast<LoadContext*>(data->userdata);
 	Achievements& self = *Achievements::instance();
 
+	LOG_DEBUG("Start of LoadGameThreadFunction");
 	if (ctx->romBuffer) {
 		free(ctx->romBuffer); // LIBERACION SEGURA: La identificacion ya termino
 		ctx->romBuffer = NULL;
@@ -232,6 +192,7 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
 	}
 
 	if (data->result == RC_OK) {
+		//Se liberan todas las superficies
 		self.clearAllData();
 
 		bool prevGameLoaded = self.gameState != NULL;
@@ -248,7 +209,7 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
 		self.show_game_placard(data->client);
 		self.updateAchievements(data->client);
 		if (ctx->messages) {
-			self.send_message_game_loaded(ctx->messages);
+			self.send_message_game_loaded();
 		}
 
 	} else {
@@ -261,36 +222,42 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
 }
 
 DWORD WINAPI ChallengeIndicatorThread(LPVOID lpParam) {
-	LOG_DEBUG("Downloading challenge");
     ChallengeThreadData* data = (ChallengeThreadData*)lpParam;
     Achievements& self = *Achievements::instance();
 
-	SDL_Surface* temp_badge = NULL;
-	int badgeW, badgeH, badgePad, line_height;
-    self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
-	//Descargamos la imagen
-	self.download_and_cache_image(data->badgeUrl, data->badgeName, temp_badge, badgeW, badgeH);
-	
-	SDL_LockMutex(self.challengeMutex);
+    LOG_DEBUG("Downloading challenge: %d", data->id);
+
+    // 1. Descarga de la imagen (fuera del mutex para no bloquear el juego)
+    SDL_Surface* temp_badge = NULL;
+    int badgeW, badgeH, badgePad, line_height;
+    Fonts::getBadgeSize(badgeW, badgeH, badgePad, line_height);
     
-    // 2. Comprobar si mientras descargábamos, alguien llamó a hide()
-    if (self.active_challenges.count(data->id) && self.active_challenges[data->id].pending_hide) {
-        // Se canceló durante la descarga. Guardamos la textura pero lo dejamos inactivo.
-        self.active_challenges[data->id].badge = temp_badge;
-        self.active_challenges[data->id].active = false;
-        self.active_challenges[data->id].pending_hide = false;
+    // Asumimos que esta función devuelve la superficie ya procesada
+    self.download_and_cache_image(data->badgeUrl, data->id, temp_badge, badgeW, badgeH);
+
+    // 2. Integración en la estructura th_challenge (Thread-Safe)
+    challenge_data existing;
+    if (self.challenges.find(data->id, existing)) {
+        // Si ya existía (porque alguien llamó a hide() antes de que terminara la descarga)
+        if (existing.pending_hide) {
+            existing.active = false;
+            existing.pending_hide = false; // Ya hemos procesado la cancelación
+        } else {
+            existing.active = true;
+        }
+        existing.badge = temp_badge;
+        self.challenges.add(data->id, existing);
     } else {
-        // Todo normal, el desafío sigue queriendo mostrarse
+        // Es un reto nuevo y no se ha cancelado durante la descarga
         challenge_data c_data;
         c_data.id = data->id;
         c_data.active = true;
-        c_data.pending_hide = false;
         c_data.badge = temp_badge;
-        self.active_challenges[data->id] = c_data;
+        c_data.pending_hide = false;
+        self.challenges.add(data->id, c_data);
     }
 
-    SDL_UnlockMutex(self.challengeMutex);
-	LOG_DEBUG("Challenge downloaded");
+    LOG_DEBUG("Challenge ready: %d", data->id);
     delete data;
     return 0;
 }
@@ -299,38 +266,19 @@ DWORD WINAPI ProgressIndicatorThread(LPVOID lpParam) {
     ProgressThreadData* data = (ProgressThreadData*)lpParam;
     Achievements& self = *Achievements::instance();
     
-    int badgeW, badgeH, badgePad, line_height;
-    self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
-
-    // 1. DESCARGA FUERA DEL MUTEX (Paso crítico para no congelar el render)
     SDL_Surface* tempBadge = NULL;
-    // Esta función debe devolver una superficie ya optimizada para la Xbox (DisplayFormat interno)
-    self.download_and_cache_image(data->badgeUrl, data->badgeName, tempBadge, badgeW, badgeH);
+    int badgeW, badgeH, badgePad, lh;
+    Fonts::getBadgeSize(badgeW, badgeH, badgePad, lh);
 
-    // 2. BLOQUEO CORTO Y DIRECTO
-    SDL_mutexP(self.progressMutex);
+    // 1. DESCARGA (Fuera del mutex para no bloquear el renderizado)
+    self.download_and_cache_image(data->badgeUrl, data->id, tempBadge, badgeW, badgeH);
 
-    // Actualizamos los campos individualmente para evitar el operador de asignación pesado
-    self.active_progress.id = data->id;
-    self.active_progress.measured_progress = data->measured_progress;
-    
-    // Gestión manual del badge para evitar la "copia profunda" de tu struct original
-    //if (self.active_progress.badge != NULL) {
-    //    SDL_FreeSurface(self.active_progress.badge);
-    //}
-    self.active_progress.badge = tempBadge; // Transferencia de propiedad del puntero
-    
-    // 3. ACTIVACIÓN Y FLAG DE "SUCIO"
-    // Esto es vital para que GameMenu::renderProgress() sepa que debe re-renderizar el texto
-    self.active_progress.active = true;
-    self.active_progress.dirty = true; 
+    // 2. ACTUALIZACIÓN ATÓMICA
+    // El método update se encarga del ScopedLock internamente
+    self.progress.update(data->id, data->measured_progress, tempBadge);
 
-    SDL_mutexV(self.progressMutex);
-
-    // 4. LIMPIEZA DE DATOS DEL HILO
     delete data;
-    LOG_DEBUG("Progress downloaded and active");
-    
+    LOG_DEBUG("Progress indicator updated thread-safely");
     return 0;
 }
 
@@ -340,7 +288,7 @@ void Achievements::login(const char* username, const char* password) {
 	rc_client_begin_login_with_password(g_client, username, password, login_callback, this);
 }
 
-void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string path, uint32_t console_id, std::list<AchievementState>& messagesAchievement) {
+void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string path, uint32_t console_id, th_messages& messagesAchievement) {
 	LoadContext* ctx = new LoadContext();
 	ctx->messages = &messagesAchievement;
 	ctx->romBuffer = (void*)rom;
@@ -432,6 +380,7 @@ void Achievements::login_callback(int result, const char* error_message, rc_clie
 
 void Achievements::load_game_callback(int result, const char* error_message, rc_client_t* client, void* userdata)
 {
+	LOG_DEBUG("load_game_callback");
 	// Creamos el paquete de datos
 	LoadGameThreadData* data = new LoadGameThreadData();
 	data->result = result;
@@ -649,25 +598,18 @@ void Achievements::leaderboard_submitted(const rc_client_leaderboard_t* leaderbo
 	msg.title = leaderboard->title;
 	msg.description = leaderboard->tracker_value;
 	// Bloqueamos el mutex de SDL para anyadir a la cola de forma segura
-	SDL_mutexP(self.messagesMutex);
-	self.pending_messages.push_back(msg);
-	msg.clear();
-	SDL_mutexV(self.messagesMutex);
+	self.messages.add(msg); // Anyadimos a la cola de forma "thread safe" con el add
+	//Aunque el destructor de AchievementState, ahora mismo, no libera memoria, para curarnos 
+	//en salud por si en un futuro esto cambia, ponemos a null los campos de la variable local msg
+	msg.badge = NULL;       // Crucial para evitar que el destructor local
+	msg.badgeLocked = NULL; // de 'msg' toque la memoria que ahora es del vector.
 }
 
 void Achievements::leaderboard_tracker_update(const rc_client_leaderboard_tracker_t* tracker)
 {
 	Achievements& self = *Achievements::instance();
-	SDL_mutexP(self.trackerMutex);
 	// Find the currently visible tracker by ID and update what's being displayed.
-	tracker_data* data = self.find_tracker(tracker->id);
-	if (data){
-		// The display text buffer is guaranteed to live for as long as the game is loaded,
-		// but it may be updated in a non-thread safe manner within rc_client_do_frame, so
-		// we create a copy for the rendering code to read.
-		data->value = tracker->display;
-	}
-	SDL_mutexV(self.trackerMutex);
+	self.trackers.update_value(tracker->id, tracker->display);
 }
 
 void Achievements::leaderboard_tracker_show(const rc_client_leaderboard_tracker_t* tracker)
@@ -691,43 +633,16 @@ void Achievements::leaderboard_tracker_hide(const rc_client_leaderboard_tracker_
 
 void Achievements::create_tracker(uint32_t id, const char* display) {
     LOG_DEBUG("Creando tracker: %d - %s", id, display);
-    
-    SDL_mutexP(trackerMutex);
-    
     // Accedemos directamente a la referencia en el mapa. 
     // Si no existe, std::map la crea automáticamente.
-    tracker_data& data = active_trackers[id]; 
-    
-    // Si ya existía una caché (por ejemplo, si re-crean el tracker), la liberamos
-    if (data.cache) {
-        SDL_FreeSurface(data.cache);
-        data.cache = NULL;
-    }
-
-    data.id = id;
-    data.value = display; // Copia el string una sola vez
-    data.active = true;
-    data.dirty = true;    // Marcamos para que el renderizador lo genere
-    
-    SDL_mutexV(trackerMutex);
-    
+    tracker_data data(id, display);
+	trackers.add(id, data);
     LOG_DEBUG("Tracker creado: %d - %s", id, display);
 }
 
 void Achievements::destroy_tracker(uint32_t id) {
-	SDL_mutexP(trackerMutex);
-	active_trackers.erase(id);
-	SDL_mutexV(trackerMutex);
+	trackers.erase(id);
 	LOG_DEBUG("Tracker eliminado: %d", id);
-}
-
-tracker_data* Achievements::find_tracker(uint32_t id) {
-    // NOTA: Esta funcion debe llamarse siempre desde dentro de un bloque bloqueado por trackerMutex
-    // o bloquear ella misma si devuelve una COPIA del objeto, no un puntero.
-    std::map<uint32_t, tracker_data>::iterator it = active_trackers.find(id);
-    if (it != active_trackers.end())
-        return &(it->second);
-    return NULL;
 }
 
 void Achievements::challenge_indicator_show(const rc_client_achievement_t* achievement)
@@ -754,48 +669,20 @@ void Achievements::challenge_indicator_show(const rc_client_achievement_t* achie
 
 void Achievements::challenge_indicator_hide(const rc_client_achievement_t* achievement)
 {
-	LOG_DEBUG("challenge_indicator_hide");
-	Achievements* self = Achievements::instance();
-
-	if (!achievement) return;
+    if (!achievement) return;
+    LOG_DEBUG("challenge_indicator_hide: %u", achievement->id);
     
-    SDL_LockMutex(self->challengeMutex);
+    Achievements* self = Achievements::instance();
     
-    if (self->active_challenges.count(achievement->id)) {
-        // Ya existe, simplemente lo desactivamos
-        self->active_challenges[achievement->id].active = false;
-    } else {
-        // Aún no existe (el hilo de descarga sigue trabajando)
-        // Creamos una entrada preventiva para que el hilo sepa que no debe mostrarlo
+    // Intentamos marcar el reto para ocultar y limpiar
+    if (!self->challenges.set_pending_hide(achievement->id)) {
+        // Si no existía (estaba descargando), creamos la entrada preventiva
         challenge_data c_data;
         c_data.id = achievement->id;
         c_data.active = false;
-        c_data.pending_hide = true; 
+        c_data.pending_hide = true; // El hilo de descarga verá esto y no lo activará
         c_data.badge = NULL;
-        self->active_challenges[achievement->id] = c_data;
-    }
-    
-    SDL_UnlockMutex(self->challengeMutex);
-}
-
-void Achievements::progress_indicator_update(const rc_client_achievement_t* achievement)
-{
-	LOG_DEBUG("Updating progress: %d - %s", achievement->id, achievement->title);
-	if (!achievement) return;
-	// Reservamos memoria para los datos que usara el hilo
-    ProgressThreadData* data = new ProgressThreadData();
-    data->id = achievement->id;
-	data->measured_progress = achievement->measured_progress;
-	data->badgeName = achievement->badge_name;
-	data->badgeUrl = achievement->badge_url;
-
-    // Lanzamos el hilo de Windows
-    HANDLE hThread = CreateThread(NULL, 0, ProgressIndicatorThread, (LPVOID)data, CREATE_SUSPENDED, NULL);
-    
-    if (hThread) {
-		Constant::setup_and_run_thread(hThread, CPU_THREAD);
-    } else {
-        delete data; // Si falla el hilo, limpiamos para evitar leak
+        self->challenges.add(achievement->id, c_data);
     }
 }
 
@@ -810,7 +697,38 @@ void Achievements::progress_indicator_hide(void)
 {
 	LOG_DEBUG("progress_indicator_hide");
 	Achievements* self = Achievements::instance();
-	self->active_progress.active = false;
+	self->progress.set_active(false);
+}
+
+void Achievements::progress_indicator_update(const rc_client_achievement_t* achievement) {
+    if (!achievement) return;
+    Achievements* self = Achievements::instance();
+
+    // 1. COMPROBACIÓN RÁPIDA: ¿Ya tenemos la imagen en la caché global?
+    SDL_Surface* cachedBadge = NULL;
+    // Asumo que tienes un método que busca en tu th_cache_image por nombre o ID
+	if (self->badgeCache.find(achievement->id, cachedBadge)) {
+        LOG_DEBUG("Progress update (Cache): %s", achievement->measured_progress);
+        
+        // Si la imagen ya está, actualizamos directamente sin hilos
+        self->progress.update(achievement->id, achievement->measured_progress, cachedBadge);
+        return; 
+    }
+
+    // 2. Si no está en caché, lanzamos el hilo (solo la primera vez o si falló antes)
+    LOG_DEBUG("Progress update (Thread needed): %s", achievement->badge_url);
+    ProgressThreadData* data = new ProgressThreadData();
+    data->id = achievement->id;
+    data->measured_progress = achievement->measured_progress;
+    data->badgeName = achievement->badge_name;
+    data->badgeUrl = achievement->badge_url;
+
+    HANDLE hThread = CreateThread(NULL, 0, ProgressIndicatorThread, (LPVOID)data, CREATE_SUSPENDED, NULL);
+    if (hThread) {
+        Constant::setup_and_run_thread(hThread, CPU_THREAD);
+    } else {
+        delete data;
+    }
 }
 
 std::string Achievements::format_total_playtime(){
@@ -881,20 +799,20 @@ void Achievements::subset_completed(const rc_client_subset_t* subset)
 
 void Achievements::server_error(const rc_client_server_error_t* error)
 {
-	char buffer[256];
 	Achievements* self = Achievements::instance();
-
-	snprintf(buffer, sizeof(buffer), "%s: %s", error->api, error->error_message);
-	LOG_DEBUG("RetroAchievements game event failed: %s", buffer);
+	char buffer[128];
+	// _TRUNCATE garantiza el terminador nulo \0 si el texto es muy largo
+	_snprintf_s(buffer, sizeof(buffer), _TRUNCATE, "%s: %s", error->api, error->error_message);
+	LOG_DEBUG(buffer);
   
 	AchievementState msg;
 	msg.title = error->api;
 	msg.description = error->error_message;
-	// Bloqueamos el mutex de SDL para anyadir a la cola de forma segura
-	SDL_mutexP(self->messagesMutex);
-	self->pending_messages.push_back(msg);
-	msg.clear();
-	SDL_mutexV(self->messagesMutex);
+	self->messages.add(msg); // Anyadimos a la cola de forma "thread safe" con el add
+	//Aunque el destructor de AchievementState, ahora mismo, no libera memoria, para curarnos 
+	//en salud por si en un futuro esto cambia, ponemos a null los campos de la variable local msg
+	msg.badge = NULL;       // Crucial para evitar que el destructor local
+	msg.badgeLocked = NULL; // de 'msg' toque la memoria que ahora es del vector.
 
 }
 
@@ -977,29 +895,10 @@ void Achievements::event_handler(const rc_client_event_t* event, rc_client_t* cl
 	}
 }
 
-AchievementState Achievements::pop_message() {
-    AchievementState msg;
-    SDL_mutexP(messagesMutex);
-    if (!pending_messages.empty()) {
-        // 1. Obtenemos el primero
-        msg = pending_messages.front();
-
-        // 2. CRUCIAL!: "Vaciamos" el objeto que sigue en el vector
-        // para que cuando hagamos .erase(), su destructor NO borre el badge.
-        pending_messages.front().badge = NULL;
-        pending_messages.front().badgeLocked = NULL;
-
-        // 3. Lo sacamos del vector
-        pending_messages.erase(pending_messages.begin());
-    }
-    SDL_mutexV(messagesMutex);
-    return msg; // Retornamos 'msg', que ahora es el unico duenyo del badge
-}
-
-void Achievements::send_message_game_loaded(std::list<AchievementState>* messages){
+void Achievements::send_message_game_loaded(){
 	int line_height, badgeW, badgeH, badgePad;
 	Achievements& self = *Achievements::instance();
-	self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
+	Fonts::getBadgeSize(badgeW, badgeH, badgePad, line_height);
 
 	AchievementState msg;
 	msg.type = ACH_LOAD_GAME;
@@ -1030,7 +929,9 @@ void Achievements::send_message_game_loaded(std::list<AchievementState>* message
 	self.lastGameTick = SDL_GetTicks();
 	#endif
 
-	messages->push_back(msg);
+	self.messages.add(msg);
+	msg.badge = NULL;       // Crucial para evitar que el destructor local
+	msg.badgeLocked = NULL; // de 'msg' toque la memoria que ahora es del vector.
 	LOG_DEBUG("send_message_game_loaded: %s", msg.title.c_str());
 }
 
@@ -1111,7 +1012,8 @@ int Achievements::countUserUnlocked(rc_client_t* client) {
 void Achievements::reset_menu(){
 	Achievements& self = *Achievements::instance();
 	BadgeDownloader::instance().stop();
-	self.getAchievements().clear();
+	//La lista de logros debe limpiarse siempre, puesto que crean nuevas superficies
+	self.achievements.clear();
 }
 
 bool Achievements::refresh_achievements_menu(){
@@ -1137,7 +1039,6 @@ void Achievements::updateAchievements(rc_client_t* client)
 	// Clear any previously loaded menu items
 	self.reset_menu();
 
-	SDL_mutexP(self.achievementMutex);
 	for (unsigned int i = 0; i < list->num_buckets; i++){
 		// Create a header item for the achievement category
 		//std::string bucketTypeLabel = LanguageManager::instance()->get("msg.achievement.bucket.type" + Constant::TipoToStr<int>(list->buckets[i].bucket_type));
@@ -1171,7 +1072,9 @@ void Achievements::updateAchievements(rc_client_t* client)
 			achState.points = achievement->points;
 			achState.locked = !achievement->unlocked;
 			achState.sectionType = list->buckets[i].bucket_type;
-			self.achievements.push_back(achState);
+			self.achievements.add(achState);
+			achState.badge = NULL;       // Crucial para evitar que el destructor local
+			achState.badgeLocked = NULL; // de 'msg' toque la memoria que ahora es del vector.
 			LOG_DEBUG("updateAchievements: id = %d, name = %s", achState.id, achievement->title);
 			/**
 				//For debug purposes
@@ -1186,60 +1089,7 @@ void Achievements::updateAchievements(rc_client_t* client)
 	self.achievementDb->updateAchievementsStatus(self.achievements);
 	#endif
 	rc_client_destroy_achievement_list(list);
-	self.sortAchievements();
-	self.addSections();
-	SDL_mutexV(self.achievementMutex);
-}
-
-// Funcin de apoyo para definir el peso de cada seccin
-int Achievements::getSectionPriority(uint8_t sectionType) {
-	switch (sectionType) {
-	case 5:  return 0; // Mxima prioridad
-	case 2:  return 1; 
-	case 1:  return 2;
-	default: return 3; // El resto de tipos van al final
-	}
-}
-
-void Achievements::sortAchievements() {
-	// Usamos el objeto comparador en lugar de la lambda
-	std::sort(achievements.begin(), achievements.end(), AchievementComparer());
-}
-
-void Achievements::addSections(){
-	if (achievements.empty()) return;
-
-	// Empezamos desde el final hacia el principio
-	uint8_t currentSection = achievements.back().sectionType;
-
-	for (int i = (int)achievements.size() - 1; i >= 0; i--) {
-		// Si detectamos un cambio de seccin o es el primer elemento del vector
-		if (achievements[i].sectionType != currentSection) {
-			// Insertamos la cabecera para la seccin que acabamos de terminar de recorrer
-			insertSectionHeader(i + 1, currentSection);
-
-			// Actualizamos la seccin actual
-			currentSection = achievements[i].sectionType;
-		}
-
-		// Caso especial: Si llegamos al ndice 0, siempre hay que poner la cabecera de la primera seccin
-		if (i == 0) {
-			insertSectionHeader(0, currentSection);
-		}
-	}
-}
-
-// Mtodo auxiliar para no repetir cdigo de insercin
-void Achievements::insertSectionHeader(int index, uint8_t type) {
-	std::string label = LanguageManager::instance()->get("msg.achievement.bucket.type" + Constant::TipoToStr<int>(type));
-
-	// Creamos un objeto que represente la cabecera (isSection = true)
-	AchievementState header;
-	header.isSection = true;
-	header.title = label;
-	header.sectionType = type;
-
-	achievements.insert(achievements.begin() + index, header);
+	self.achievements.sortAchievements();
 }
 
 void Achievements::server_call(const rc_api_request_t* request,
@@ -1263,139 +1113,114 @@ void Achievements::server_call(const rc_api_request_t* request,
 }
 
 void Achievements::download_and_cache_image(AchievementState* achievement, int badgeW, int badgeH, bool createNew) {
-    if (achievement->badgeName.empty()) return;
+    if (achievement->badgeName.empty() || achievement->badge != NULL) {
+		achievement->isDownloading = false;
+		return;
+	}
 
     AchievementState* fromDb = NULL;
 	SDL_Surface *imageObtained = NULL;
+	SDL_Surface* tmpSurface = NULL;
 	bool needResize = false;
-	//Buscamos en base de datos
-	#ifndef NO_DATABASE
-		fromDb = achievementDb->getAchievement(achievement->id);
-		if (fromDb && fromDb->badge && achievement->type != ACH_LOAD_GAME) {
-			LOG_DEBUG("Achievement %d found in cache", achievement->id);
-			achievement->badge = SDL_DisplayFormat(fromDb->badge);
-		} else {
-			LOG_DEBUG("Achievement %d NOT found in cache", achievement->id);
-			// Descarga real si no existe en ningn lado
-			download_and_cache_image(achievement->badgeUrl, achievement->badgeName, achievement->badge, badgeW, badgeH);
-		}
-		needResize = achievement->badge->w != badgeW || achievement->badge->h != badgeH;
-	#else 
-		if (!download_and_cache_image(achievement->badgeUrl, achievement->badgeName, imageObtained, badgeW, badgeH)){
-			LOG_DEBUG("Error downloading image %s", achievement->badgeUrl.c_str());
-			return;
-		}
+	// Obtenemos el formato de la pantalla (asumiendo que es 16 bits)
+	SDL_PixelFormat* targetFormat = SDL_GetVideoSurface()->format;
+
+	if (!download_and_cache_image(achievement->badgeUrl, achievement->id, imageObtained, badgeW, badgeH)){
+		LOG_ERROR("Error downloading image %s", achievement->badgeUrl.c_str());
+		return;
+	}
+
+	if (createNew){
+		SDL_Surface* surfaceToResize = SDL_ConvertSurface(imageObtained, targetFormat, SDL_SWSURFACE);
+		//Si creamos una nueva superficie, comprobamos si necesita redimensionado
 		needResize = imageObtained->w != badgeW || imageObtained->h != badgeH;
-		if (createNew){
-			//if (achievement->badge){
-			//	SDL_FreeSurface(achievement->badge);
-			//}
-			//if (!needResize){
-				achievement->badge = SDL_DisplayFormat(imageObtained);
-			//}
+		if (needResize && surfaceToResize && imageObtained->w > 0 && imageObtained->h > 0){
+			//Si necesita redimensionado
+			double zoomX = (double)badgeW / imageObtained->w;
+			double zoomY = (double)badgeH / imageObtained->h;
+			tmpSurface = rotozoomSurfaceXY(surfaceToResize, 0, zoomX, zoomY, SMOOTHING_ON);
+			SDL_FreeSurface(surfaceToResize);
+		} else if (surfaceToResize){
+			//No hizo falta redimensionarla, pero devolvemos la nueva que hemos creado
+			tmpSurface = surfaceToResize;
 		} else {
-			//Pasamos la imagen por referencia. Ahora apunta a la cache. Cuidado de no liberar con SDL_FreeSurface
-			achievement->badge = imageObtained;
+			LOG_ERROR("Error resizing image %s", achievement->badgeUrl.c_str());
 		}
-	#endif
+	} else {
+		//Si no la creamos nueva, solo asignamos su referencia
+		tmpSurface = imageObtained;
+	}
 
-    // REDIMENSIONAR
-    if (achievement->badge != NULL && needResize) {
-        double zoomX = (double)badgeW / achievement->badge->w;
-        double zoomY = (double)badgeH / achievement->badge->h;
-        SDL_Surface* zoomed = rotozoomSurfaceXY(imageObtained, 0, zoomX, zoomY, SMOOTHING_ON);
-        if (zoomed) {
-			//No liberamos la superficie si createNew es false porque sino, nos cargamos la cache
-			if (createNew && achievement->badge){
-				SDL_FreeSurface(achievement->badge);
-			}
-			achievement->badge = zoomed;
-        }
-    }
-
-	#ifndef NO_DATABASE
-    //GUARDAR EN DB (Solo si no vena de all y tenemos imagen vlida)
-    if (fromDb == NULL && achievement->badge != NULL && achievement->type != ACH_LOAD_GAME) {
-        LOG_DEBUG("Guardando logro completo en DB: %s", achievement->badgeName.c_str());
-        achievementDb->saveAchievement(*achievement);
-    }
-
-    // Limpieza
-    if (fromDb) {
-        fromDb->clear();
-        delete fromDb;
-    }
-	#endif
+	if (achievement->badgeLocked == NULL && achievement->locked && tmpSurface) {
+		achievement->badgeLocked = SDL_ConvertSurface(tmpSurface, targetFormat, SDL_SWSURFACE);
+		if (achievement->badgeLocked){
+			Image::convertirGrises16Bits(achievement->badgeLocked);
+		}
+	}
+	//Finalmente, asignamos la imagen definitiva, despues de hacer la conversion a niveles de grises
+	achievement->badge = tmpSurface;
     achievement->isDownloading = false;
 }
 
 /**
 *
 */
-bool Achievements::download_and_cache_image(std::string url, std::string name, SDL_Surface*& image, int badgeW, int badgeH) {
-    if (name.empty()) return false;
-
-    // 1. CONSULTA CACHÉ (Retornamos una referencia, no una copia nueva)
-    SDL_mutexP(badgeCacheMutex);
-    std::map<std::string, SDL_Surface*>::iterator it = badgeCache.find(name);
-    if (it != badgeCache.end()){
-        // IMPORTANTE: No hagas DisplayFormat aquí. Devuelve el puntero existente.
-        // El renderizador ya sabe dibujar superficies.
-        image = it->second; 
-        SDL_mutexV(badgeCacheMutex);
-        return true;
-    }
-    SDL_mutexV(badgeCacheMutex);
-
-    // 2. DESCARGA (Curl)
-    CurlClient curlClient;
+bool Achievements::download_and_cache_image(std::string url, uint32_t idImage, SDL_Surface*& image, int badgeW, int badgeH) {
     std::string response;
     float progress = 0;
+	const char *c_url = url.c_str();
+
+	// 1. CONSULTA CACHÉ (Retornamos una referencia, no una copia nueva)
+	if (badgeCache.find(idImage, image)){
+		return true;
+	}
 
     if (curlClient.fetchUrl(url, response, &progress)) {
         SDL_RWops* rw = SDL_RWFromMem((void*)response.data(), (int)response.size());
         SDL_Surface *rawImg = IMG_Load_RW(rw, 1);
-        if (!rawImg) return false;
 
+        if (!rawImg) {
+			LOG_ERROR("Error reading image from mem: %s", c_url);
+			return false;
+		}
         SDL_Surface* finalSurface = NULL;
+		SDL_PixelFormat* targetFormat = SDL_GetVideoSurface()->format;
 
         // 3. ESCALADO OPTIMIZADO
         if (rawImg->w == badgeW && rawImg->h == badgeH) {
-            finalSurface = SDL_DisplayFormat(rawImg);
-        } else {
+			// En lugar de DisplayFormat, usamos ConvertSurface (Seguro en hilos)
+			finalSurface = SDL_ConvertSurface(rawImg, targetFormat, SDL_SWSURFACE);
+        } else if (rawImg->w > 0 && rawImg->h > 0){
             // Solo usamos rotozoom si el tamaño difiere
             double zoomX = (double)badgeW / rawImg->w;
             double zoomY = (double)badgeH / rawImg->h;
             SDL_Surface* zoomed = rotozoomSurfaceXY(rawImg, 0, zoomX, zoomY, SMOOTHING_ON);
             if (zoomed) {
-                finalSurface = SDL_DisplayFormat(zoomed);
+                //finalSurface = SDL_DisplayFormat(zoomed);
+				finalSurface = SDL_ConvertSurface(zoomed, targetFormat, SDL_SWSURFACE);
                 SDL_FreeSurface(zoomed);
             }
+			/*SDL_Surface* zoomed = SDL_CreateRGBSurface(SDL_SWSURFACE, badgeW, badgeH, 
+                         rawImg->format->BitsPerPixel,
+                         rawImg->format->Rmask, rawImg->format->Gmask, 
+                         rawImg->format->Bmask, rawImg->format->Amask);
+			if (zoomed) {
+				SDL_Rect destRect = {0, 0, badgeW, badgeH};
+				// Esta función es órdenes de magnitud más rápida que rotozoom
+				SDL_SoftStretch(rawImg, NULL, zoomed, &destRect);
+				finalSurface = SDL_DisplayFormat(zoomed);
+				SDL_FreeSurface(zoomed);
+			}*/
         }
         SDL_FreeSurface(rawImg);
 
         // 4. GUARDADO EN CACHÉ
         if (finalSurface != NULL) {
-            SDL_mutexP(badgeCacheMutex);
-            if (badgeCache.find(name) != badgeCache.end()) {
-                SDL_FreeSurface(finalSurface);
-                image = badgeCache[name];
-            } else {
-                badgeCache[name] = finalSurface;
-                image = finalSurface;
-                LOG_DEBUG("Image cached: %s", name.c_str());
-            }
-            SDL_mutexV(badgeCacheMutex);
+			badgeCache.add(idImage, finalSurface);
+            image = finalSurface;
+            LOG_DEBUG("Image id: %u cached: %s", idImage, c_url);
             return true;
         }
     }
     return false;
-}
-
-void Achievements::getBadgeSize(int &w, int &h, int &badgePad, int &line_height){
-	const int face_h_small = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
-	badgePad = 2;
-	line_height = face_h_small + 4;
-	w = line_height * 3 - badgePad * 2;
-	h = line_height * 3 - badgePad * 2;
 }

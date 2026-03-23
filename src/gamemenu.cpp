@@ -168,21 +168,26 @@ bool GameMenu::cargarSystemAchievementTranslation(const std::string& nombreArchi
 *
 */
 void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
+	LOG_DEBUG("Unload achievements");
     // 1. Limpiar SIEMPRE antes de configurar nada nuevo
     Achievements::instance()->doUnload();
 
+	LOG_DEBUG("Checking hardcore mode");
     // 2. Configurar el modo (Hardcore/Softcore)
     Achievements::instance()->setHardcoreMode(getCfgLoader()->configMain[cfg::hardcoreRA].valueBool);
 
+	LOG_DEBUG("Getting libretro memory");
     // 3. Obtener punteros de memoria (Asegúrate de que el Core ya está cargado)
     uint8_t* w_data = (uint8_t*)retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM);
     std::size_t w_size = retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM);
     uint8_t* s_data = (uint8_t*)retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
     std::size_t s_size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
 
+	LOG_DEBUG("Setting memory sources");
     // 4. Pasar a la clase de logros
     Achievements::instance()->set_memory_sources(w_data, w_size, s_data, s_size);
 
+	LOG_DEBUG("getting memory descriptors");
 	// 4b. Pasar los descriptores de memoria del core (si los envio via SET_MEMORY_MAPS)
 	{
 		unsigned desc_count = 0;
@@ -192,10 +197,13 @@ void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
 		}
 	}
 
+	LOG_DEBUG("Translating achievements");
     // 5. Cargar logica del juego
     int system = translateSystemAchievement();
     std::string pathToRom = unzipped.extractedPath.empty() ? unzipped.originalPath : unzipped.extractedPath;
+	LOG_DEBUG("Loading achievements from game");
     Achievements::instance()->load_game((uint8_t *)unzipped.memoryBuffer, unzipped.romsize, pathToRom, system, messagesAchievement);
+	
 }
 
 std::string GameMenu::configButtonsJOY(){
@@ -1006,7 +1014,7 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 				bg_screenshot = clonarPantalla(screen, 180);
 
 				//Si hay mensajes de logros en curso, mostramos el menu de logros
-				if (!messagesAchievement.empty() && messagesAchievement.front().type == ACH_UNLOCKED){
+				if (!messagesAchievement.empty() && messagesAchievement.get_at(0).type == ACH_UNLOCKED){
 					configMenus->setAchievementsAsSelected();
 					configMenus->descargarLogros();
 				} else if (!configMenus->obtenerMenuActual()->opciones.empty()){
@@ -1200,174 +1208,27 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
 
 void GameMenu::renderTrackers() {
     Achievements* ach = Achievements::instance();
-    
-    // 1. EARLY EXIT SIN BLOQUEAR EL MUTEX
-    // Comprobar el tamaño atómicamente si es posible, o una copia rápida
-    if (ach->active_trackers.empty()) return;
+    if (ach->trackers.empty()) return;
 
-    SDL_mutexP(ach->trackerMutex); 
-
-    int yOffset = 10;
-    int screenW = screen->w;
+    // No necesitamos bloquear aquí porque el método .render() interno ya lo hace
     TTF_Font* font = Fonts::getFont(Fonts::FONTSMALL);
-    
-    // 2. CACHEO DE VALORES FUERA DEL BUCLE
-    // No llames a funciones de instancia o MapRGB dentro de un bucle de renderizado
-    const SDL_PixelFormat* fmt = this->screen->format;
-    // (Asegúrate de que 'white' esté pre-calculado)
+    int margin = 20;
+    int posX = screen->w - margin; // Punto de anclaje derecho
+    int posY = margin;
 
-    std::map<uint32_t, tracker_data>::iterator it;
-    for (it = ach->active_trackers.begin(); it != ach->active_trackers.end(); ++it) {
-        tracker_data& data = it->second;
-
-        // 3. LA GRAN OPTIMIZACIÓN: CACHÉ DE TEXTO
-        // TTF_RenderUTF8_Blended es extremadamente lento en PowerPC. 
-        // Solo renderiza si el valor del tracker ha cambiado.
-        if (data.dirty || !data.cache) {
-            if (data.cache) SDL_FreeSurface(data.cache);
-            data.cache = TTF_RenderUTF8_Blended(font, data.value.c_str(), white);
-            data.dirty = false; // Resetear flag
-        }
-
-        if (data.cache) {
-            SDL_Rect txtRect = { (Sint16)(screenW - 150), (Sint16)yOffset, (Uint16)data.cache->w, (Uint16)data.cache->h };
-            SDL_BlitSurface(data.cache, NULL, this->video_page, &txtRect);
-            yOffset += 20; 
-        }
-    }
-    SDL_mutexV(ach->trackerMutex);
+    // Llamamos al proceso seguro
+    ach->trackers.render(this->video_page, font, posX, posY);
 }
 
 
 void GameMenu::renderChallenges() {
     Achievements* ach = Achievements::instance();
-    
-    // 1. EARLY EXIT SIN BLOQUEAR: Si el mapa está vacío, no pierdas ciclos con el mutex.
-    if (ach->active_challenges.empty()) return;
-
-    SDL_LockMutex(ach->challengeMutex);
-    std::map<uint32_t, challenge_data>& challenges = ach->active_challenges;
-
-    // 2. CACHEO DE VALORES DEL SINGLETON
-    // Llamar a funciones de instancia dentro de bucles rompe el pipeline de la CPU Xenon.
-    int badgeW, badgeH, badgePad, line_height;
-    ach->getBadgeSize(badgeW, badgeH, badgePad, line_height);
-    
-    const int screenW = screen->w;
-    const int screenH = screen->h;
-    const uint32_t bgColor = this->uBkgColor;
-    SDL_Surface* vPage = this->video_page;
-
-    // 3. PASADA ÚNICA DE BORRADO (Eficiencia de Cache L2)
-    // Recorremos el mapa una vez para limpiar lo viejo. 
-    // Usamos una referencia local para evitar saltos de puntero repetitivos.
-    std::map<uint32_t, challenge_data>::iterator it;
-    for (it = challenges.begin(); it != challenges.end(); ++it) {
-        challenge_data& cd = it->second;
-        if (cd.lastRect.h > 0) {
-            SDL_FillRect(vPage, &cd.lastRect, bgColor);
-        }
-    }
-
-    // 4. PASADA DE GESTIÓN Y DIBUJO (Compactación de Memoria)
-    it = challenges.begin();
-    int i = 0;
-    while (it != challenges.end()) {
-        challenge_data& cd = it->second;
-
-        if (!cd.active) {
-            // No necesitamos borrar pantalla aquí, ya lo hicimos en la pasada 1.
-            challenges.erase(it++); 
-        } else {
-            // Cálculo de posición nueva
-            cd.lastRect.x = (Sint16)((screenW - badgeW - 20) - i * (badgeW + badgePad)); 
-            cd.lastRect.y = (Sint16)(screenH - badgeH - 20); 
-            cd.lastRect.w = (Uint16)badgeW;
-            cd.lastRect.h = (Uint16)badgeH;
-            
-            if (cd.badge) {
-                SDL_BlitSurface(cd.badge, NULL, vPage, &cd.lastRect);
-            }
-            
-            ++it;
-            i++;
-        }
-    }
-
-    SDL_UnlockMutex(ach->challengeMutex);
+    if (ach->challenges.empty()) return;
+	ach->challenges.render(this->video_page, this->uBkgColor);
 }
 
 void GameMenu::renderProgress() {
-    static SDL_Rect lastBgRect = {0, 0, 0, 0};
-    const int bordeBg = 2;
-    const int txtSep = 3;
-    
-    Achievements* ach = Achievements::instance();
-    SDL_mutexP(ach->progressMutex);
-    progress_data& progress = ach->active_progress;
-
-    // 1. EARLY EXIT Y LIMPIEZA
-    if (!progress.active) {
-        if (lastBgRect.w > 0) {
-            SDL_FillRect(this->video_page, &lastBgRect, this->uBkgColor);
-            lastBgRect.w = 0;
-        }
-        SDL_mutexV(ach->progressMutex);
-        return;
-    }
-
-    // 2. CACHEO DE TEXTO (Solo renderiza si el valor cambió)
-    if (progress.dirty || progress.textCache == NULL) {
-        if (progress.textCache) SDL_FreeSurface(progress.textCache);
-        progress.textCache = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), progress.measured_progress.c_str(), white);
-        progress.dirty = false;
-    }
-
-    if (!progress.textCache) {
-        SDL_mutexV(ach->progressMutex);
-        return;
-    }
-
-    // 3. CÁLCULO DE POSICIONES
-    int badgeW, badgeH, badgePad, line_height;
-    ach->getBadgeSize(badgeW, badgeH, badgePad, line_height);
-
-    SDL_Rect rectIcon;
-    rectIcon.x = screen->w - progress.textCache->w - txtSep - badgeW - 20;
-    rectIcon.y = screen->h - 2 * badgeH - 25;
-    rectIcon.w = badgeW; 
-    rectIcon.h = badgeH;
-
-    SDL_Rect newBgRect;
-    newBgRect.x = rectIcon.x - bordeBg;
-    newBgRect.y = rectIcon.y - bordeBg;
-    newBgRect.w = progress.textCache->w + badgeW + txtSep + (bordeBg * 2);
-    newBgRect.h = badgeH + (bordeBg * 2);
-
-    // 4. LIMPIEZA DEL FRAME ANTERIOR (Solo si el área cambió o se movió)
-    if (lastBgRect.w > 0 && (lastBgRect.x != newBgRect.x || lastBgRect.w != newBgRect.w)) {
-        SDL_FillRect(this->video_page, &lastBgRect, this->uBkgColor);
-    }
-    lastBgRect = newBgRect;
-
-    // 5. DIBUJO (Alpha y Blits)
-    // Nota: DrawRectAlpha es lento en 360. Si el fondo es siempre el mismo, 
-    // considera usar una superficie pre-renderizada.
-    DrawRectAlpha(this->video_page, newBgRect, backgroundColor, 190);
-    
-    if (progress.badge) {
-        SDL_BlitSurface(progress.badge, NULL, this->video_page, &rectIcon);
-    }
-
-    SDL_Rect rectTxt = { 
-        (Sint16)(rectIcon.x + badgeW + txtSep), 
-        (Sint16)(rectIcon.y + (badgeH / 2) - (progress.textCache->h / 2)), 
-        (Uint16)progress.textCache->w, (Uint16)progress.textCache->h 
-    };
-    
-    SDL_BlitSurface(progress.textCache, NULL, this->video_page, &rectTxt);
-
-    SDL_mutexV(ach->progressMutex);
+	Achievements::instance()->progress.render(video_page, uBkgColor, backgroundColor);
 }
 
 void GameMenu::processMessagesAchievements(){
@@ -1424,11 +1285,15 @@ inline void GameMenu::updateAchievementsState(uint32_t currentTicks) {
 		Achievements* ach = Achievements::instance();
         ach->doFrame();
         // Load new messages to the list
-		SDL_mutexP(ach->messagesMutex);
-        while (ach->has_pending_messages()) {
-			messagesAchievement.push_back(ach->pop_message());
+		while (!ach->messages.empty()) {
+			AchievementState msg;
+			if (ach->messages.pop_with_new_surfaces(msg)){
+				messagesAchievement.add(msg);
+			}
+			//Liberamos para que no se haga un doble free por si acaso
+			msg.badge = NULL;
+			msg.badgeLocked = NULL;
 		}
-		SDL_mutexV(ach->messagesMutex);
     } else {
         // 1second logic when we are on the emulator's menu
         static uint32_t lastIdleTick = 0;
@@ -1443,20 +1308,25 @@ inline void GameMenu::handleMessageQueue(uint32_t currentTicks) {
     if (messagesAchievement.empty()) return;
 
     // Obtenemos referencia al primer mensaje
-    AchievementState &ach = messagesAchievement.front();
+	AchievementState ach = messagesAchievement.get_at(0);
     
     if (ach.ticks == 0) {
         ach.ticks = currentTicks; // Iniciar temporizador
     } else if (currentTicks - ach.ticks > ach.timeout) {
-        // Al hacer pop_front, se llama al DESTRUCTOR de AchievementMsg
-        // y se libera el SDL_Surface automáticamente.
-        messagesAchievement.pop_front();
+		//Limpiamos el ultimo mensaje
+		ach.clearSurfaces();
+		AchievementState msg;
+        messagesAchievement.pop(msg);
     }
 }
 
 void GameMenu::renderCurrentAchievement() {
-    AchievementState& msg = messagesAchievement.front();
-    if (msg.type == ACH_LOAD_GAME) {
+	if (messagesAchievement.empty()) 
+		return;
+
+    AchievementState msg = messagesAchievement.get_at(0);
+
+	if (msg.type == ACH_LOAD_GAME) {
         showAchievementMessage(Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.title"), msg.title.c_str()), 
 							   Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.points"), msg.achvTotal, msg.scoreTotal), 
 							   Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.unlocked"), msg.achvUnlocked), 
@@ -1482,7 +1352,7 @@ void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str
 
 	Achievements& self = *Achievements::instance();
 
-	self.getBadgeSize(badgeW, badgeH, badgePad, line_height);
+	Fonts::getBadgeSize(badgeW, badgeH, badgePad, line_height);
 	const int maxH = this->video_page->h -paddingBottom -line_height * 3;
 
 	SDL_Rect rect = {10 + badgeW, 0, 0, line_height};
@@ -1510,8 +1380,10 @@ void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str
 	SDL_FreeSurface(line2);
 	SDL_FreeSurface(line3);
 
-	SDL_Rect rectBadge = {rect.x - badgeW + badgePad, this->video_page->h -paddingBottom -line_height * 3 + badgePad, 0, line_height};
-	SDL_BlitSurface(badge, NULL, this->video_page, &rectBadge);
+	if (badge != NULL){
+		SDL_Rect rectBadge = {rect.x - badgeW + badgePad, this->video_page->h -paddingBottom -line_height * 3 + badgePad, 0, line_height};
+		SDL_BlitSurface(badge, NULL, this->video_page, &rectBadge);
+	}
 }
 
 /**

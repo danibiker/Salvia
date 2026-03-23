@@ -95,8 +95,8 @@ enum ACH_TYPE{ACH_LOAD_GAME, ACH_UNLOCKED, ACH_WARNING};
 
 
 struct AchievementState{
+	volatile bool isDownloading;		// Especifica si se esta descargando el logro
 	bool locked;			// Especifica si el logro esta bloqueado
-	bool isDownloading;		// Especifica si se esta descargando el logro
 	bool isSection;			// Seccion del logro
 	uint8_t sectionType;	// Tipo de seccion
 	uint32_t points;		// Puntos del logro
@@ -121,12 +121,14 @@ struct AchievementState{
 	uint32_t scoreUnlocked;
     uint32_t achvUnlocked;    // Numer de logros conseguidos
 
+	int reqWidth;
+	int reqHeight;
+
 	AchievementState(){
 		inicializar();
 	}
 
 	~AchievementState() {
-		clear(); // Esto libera las superficies automáticamente al destruir el objeto
 	}
 
 	void inicializar(){
@@ -146,6 +148,8 @@ struct AchievementState{
         scoreTotal = 0;
         achvUnlocked = 0;
 		scoreUnlocked = 0;
+		reqWidth = 0;
+		reqHeight = 0;
 	}
 
 	AchievementState(std::string pTitle, uint8_t st){
@@ -154,18 +158,6 @@ struct AchievementState{
 		isSection = true;
 		sectionType = st;
 	}
-
-	// Metodo para limpiar manualmente
-    void clear() {
-        /*if (badge != NULL) {
-            SDL_FreeSurface(badge);
-            badge = NULL;
-        }*/
-		if (badgeLocked != NULL) {
-            SDL_FreeSurface(badgeLocked);
-            badgeLocked = NULL;
-        }
-    }
 
 	// 1. Constructor de copia (necesario para pasar por valor)
     AchievementState(const AchievementState& other) {
@@ -176,11 +168,21 @@ struct AchievementState{
     // 2. Operador de asignación (operador =)
     AchievementState& operator=(const AchievementState& other) {
         if (this != &other) { // Evitar auto-asignación
-            clear();          // Liberar lo que teníamos antes
             copiarDesde(other);
         }
         return *this;
     }
+
+	void clearSurfaces(){
+		if (badge != NULL) {
+			SDL_FreeSurface(badge);
+			badge = NULL;
+		}
+		if (badgeLocked != NULL) {
+			SDL_FreeSurface(badgeLocked);
+			badgeLocked = NULL;
+		}
+	}
 
 	private:
     // Función auxiliar para centralizar la lógica de copia
@@ -204,25 +206,12 @@ struct AchievementState{
 		scoreTotal = other.scoreTotal;
 		achvUnlocked = other.achvUnlocked;
 		scoreUnlocked = other.scoreUnlocked;
-
-		//Pasamos el puntero de las superficies sin hacer copia profunda
-		//badge = other.badge;
-		//badgeLocked = other.badgeLocked;
-
-        // Copia profunda de las superficies SDL
-        if (other.badge != NULL) {
-            //badge = SDL_DisplayFormat(other.badge);
-			badge = other.badge;
-        } else {
-            badge = NULL;
-        }
-
-        if (other.badgeLocked != NULL) {
-            badgeLocked = SDL_DisplayFormat(other.badgeLocked);
-			//badgeLocked = other.badgeLocked;
-        } else {
-            badgeLocked = NULL;
-        }
+		reqWidth = other.reqWidth;
+		reqHeight = other.reqHeight;
+        // COPIA SUPERFICIAL: Solo copiamos la dirección de memoria.
+		// No usamos SDL_DisplayFormat aquí para evitar fugas de memoria.
+		this->badge = other.badge;
+		this->badgeLocked = other.badgeLocked;
     }
 };
 
@@ -746,7 +735,6 @@ class Constant{
 			// Liberar el handle (el hilo continúa su ejecución de forma independiente)
 			CloseHandle(hThread);
 		}
-
 
         static void setExecMethod(int var){EXEC_METHOD = var;}
         static int getExecMethod(){return EXEC_METHOD;}

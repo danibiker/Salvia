@@ -4,7 +4,7 @@
 #define PICOJSON_USE_RVALUE_REFERENCE 0
 #include <http/picojson.h>
 
-bool Scrapper::scrapping = false;
+volatile bool Scrapper::scrapping = false;
 ScrapStatus Scrapper::g_status;
 HANDLE Scrapper::hMainThread = NULL;
 

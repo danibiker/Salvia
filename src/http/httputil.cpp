@@ -33,7 +33,7 @@ void CurlClient::init(){
 		DWORD dwStatus;
 		do {
 			dwStatus = XNetGetTitleXnAddr(&xnAddr);
-			OutputDebugStringA("Esperando configuración de red...\n");
+			LOG_DEBUG("Esperando configuración de red...\n");
 			Sleep(200);
 		} while (dwStatus == XNET_GET_XNADDR_PENDING || dwStatus == XNET_GET_XNADDR_NONE);
 	#endif
@@ -58,7 +58,7 @@ void CurlClient::init(){
 		sprintf(ipStr, "IP de mi Xbox: %d.%d.%d.%d\n", 
 				xnAddr.ina.S_un.S_un_b.s_b1, xnAddr.ina.S_un.S_un_b.s_b2, 
 				xnAddr.ina.S_un.S_un_b.s_b3, xnAddr.ina.S_un.S_un_b.s_b4);
-		OutputDebugStringA(ipStr);
+		LOG_DEBUG(ipStr);
 
 		mbedtls_entropy_init(&entropy);
 
@@ -135,17 +135,15 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, NULL); // Se podria pasar this
 	#endif
 
+	LOG_DEBUG("Downloading url: %s", url.c_str());
+
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
 
 	if(res != CURLE_OK) {
-		char errbuf[CURL_ERROR_SIZE];
-		_snprintf(errbuf, sizeof(errbuf), "get_KO: %s\n", curl_easy_strerror(res));
-		OutputDebugStringA(errbuf);
+		LOG_DEBUG("get_KO: %s\n", curl_easy_strerror(res));
 	} else {
-		char errbuf[CURL_ERROR_SIZE];
-		_snprintf(errbuf, sizeof(errbuf), "get_ok curl: %s\n", url.c_str());
-		OutputDebugStringA(errbuf);
+		LOG_DEBUG("get_ok curl: %s\n", url.c_str());
 	}
 
     return (res == CURLE_OK);
@@ -207,13 +205,9 @@ bool CurlClient::postUrl(const std::string& url, const std::string& postData,con
     curl_easy_cleanup(curl);
 
 	if(res != CURLE_OK) {
-		char errbuf[CURL_ERROR_SIZE];
-		_snprintf(errbuf, sizeof(errbuf), "post_KO curl: %s\n", curl_easy_strerror(res));
-		OutputDebugStringA(errbuf);
+		LOG_DEBUG("post_KO curl: %s\n", curl_easy_strerror(res));
 	} else {
-		char errbuf[CURL_ERROR_SIZE];
-		_snprintf(errbuf, sizeof(errbuf), "post_ok curl: %s\n", url.c_str());
-		OutputDebugStringA(errbuf);
+		LOG_DEBUG("post_ok curl: %s\n", url.c_str());
 	}
 	
 	if (headers) curl_slist_free_all(headers);
@@ -332,7 +326,7 @@ int CurlClient::curl_sockopt_callback(void *clientp, curl_socket_t curlfd, curls
 	DWORD bypass = 1;
 	// Aplicamos el parche mágico de Xbox 360
 	if (setsockopt(curlfd, SOL_SOCKET, 0x5801, (char*)&bypass, sizeof(bypass)) != 0) {
-		OutputDebugStringA("Error aplicando bypass en socket de cURL\n");
+		LOG_DEBUG("Error aplicando bypass en socket de cURL\n");
 	}
 	return CURL_SOCKOPT_OK;
 }
@@ -343,17 +337,15 @@ int CurlClient::debug_callback(CURL *handle, curl_infotype type,
     
     if(type == CURLINFO_TEXT || type == CURLINFO_HEADER_IN || type == CURLINFO_HEADER_OUT) {
         // En Xbox 360, mejor imprimir trozos pequeños para no saturar el bus de debug
-        char buffer[256]; 
-        size_t copySize = (size > 255) ? 255 : size;
+        char buffer[128]; 
+        size_t copySize = (size > 128) ? 128 : size;
         
         memcpy(buffer, data, copySize);
-        buffer[copySize] = '\0';
+        buffer[copySize - 1] = '\0';
         
         // Solo imprimir si hay contenido real para no saturar el canal de comunicación XDK
         if (copySize > 0) {
-            OutputDebugStringA("CURL: ");
-            OutputDebugStringA(buffer);
-            // Las cabeceras ya suelen traer \n, si no, añádelo con cuidado
+			LOG_DEBUG("CURL: %s", buffer);
         }
     }
     return 0;

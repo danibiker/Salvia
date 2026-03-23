@@ -21,6 +21,7 @@ class Fonts{
 		static std::size_t idxToCutTTF(std::string text, int maxW, int fontId);
 		static int getSize(int, std::string);
 		static std::string recortarAlTamanyo(std::string text, int maxWidth);
+		static void getBadgeSize(int &w, int &h, int &badgePad, int &line_height);
 
     private:
         
