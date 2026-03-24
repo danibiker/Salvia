@@ -63,6 +63,7 @@ class dirutil{
 		void borrarDir(string path);
 		int createDir(std::string dir);
 		int createDirRecursive(const char* path);
+		std::string getPathPrefix(std::string filepath);
     private:
         char rutaActual[PATH_MAX]; //Ruta actual que se esta navegando
         char* formatdate(char* str, time_t val);

@@ -720,7 +720,7 @@ class Constant{
 			return std::string(buffer);
 		}
 
-		static void setup_and_run_thread(HANDLE hThread, int core) {
+		static void setup_and_run_thread(HANDLE hThread, int core, bool autoClose = true) {
 			#ifdef _XBOX
 			// Forzar la ejecución en el núcleo especificado
 			XSetThreadProcessor(hThread, core); 
@@ -732,8 +732,10 @@ class Constant{
 			// Arrancar el hilo que estaba suspendido
 			ResumeThread(hThread);
 
-			// Liberar el handle (el hilo continúa su ejecución de forma independiente)
-			CloseHandle(hThread);
+			if (autoClose){
+				// Liberar el handle (el hilo continúa su ejecución de forma independiente)
+				CloseHandle(hThread);
+			}
 		}
 
         static void setExecMethod(int var){EXEC_METHOD = var;}

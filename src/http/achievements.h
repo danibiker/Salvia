@@ -24,6 +24,7 @@ struct retro_memory_descriptor;
 /* Entrada del mapa de memoria: traduce una direccion RA (address space
  * de la consola) al buffer correcto (WRAM o SRAM) + offset. */
 #define MAX_MEMORY_MAPPINGS 16
+
 struct MemoryMapping {
     uint32_t start;     // Direccion RA de inicio (inclusive)
     uint32_t end;       // Direccion RA de fin (inclusive)
@@ -198,6 +199,11 @@ public:
 			return AchievementState(); // O manejar error
 		}
 		return data[index]; 
+	}
+
+	void update_ticks(uint32_t ticks){
+		ScopedLock lock(mutex);
+		data.front().ticks = ticks;
 	}
 
 	void clear() {

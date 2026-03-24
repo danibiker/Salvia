@@ -127,7 +127,7 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
 
     // Opciones adicionales
     curl_easy_setopt(curl, CURLOPT_USERAGENT, USERAGENT);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L); // 15 segundos
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L); // 10 segundos
 
 	// callback para llamar fuera a internet
 	#ifdef _XBOX

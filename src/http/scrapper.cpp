@@ -4,7 +4,7 @@
 #define PICOJSON_USE_RVALUE_REFERENCE 0
 #include <http/picojson.h>
 
-volatile bool Scrapper::scrapping = false;
+volatile LONG Scrapper::scrapping = 0;
 ScrapStatus Scrapper::g_status;
 HANDLE Scrapper::hMainThread = NULL;
 
@@ -15,7 +15,7 @@ const char SYMBOLS_TO_SPACE[] = ":-._/\\|,;";
 const char SYMBOLS_TO_REMOVE[] = "\"\'!?*#¿¡";
 
 Scrapper::Scrapper(){
-	scrapping = false;
+	InterlockedExchange(&scrapping, 0);
 	cargarEquivalencias(Constant::getAppDir() + ROUTE_SCRAP_TRANSLATIONS);
 }
 
@@ -23,35 +23,72 @@ Scrapper::~Scrapper(){
 }
 
 bool Scrapper::isScrapping(){
-	return scrapping;
+	return InterlockedExchangeAdd(&scrapping, 0) == 1;
 }
 
 /*
 * Llamada desde el menu
 */
 void Scrapper::StartScrappingAsync(std::vector<ConfigEmu>& emu, ScrapperConfig cfg) {
-	if (!scrapping){
+	if (InterlockedCompareExchange((LONG*)&scrapping, 1, 0) == 0){
 		InterlockedExchange(&CurlClient::g_abortScrapping, 0);
-		scrapping = true;
 		ScrapParams* params = new ScrapParams();
 		params->emu = emu;
 		params->cfg = cfg;
 		hMainThread  = CreateThread(NULL, 0, mainScrapThread, params, CREATE_SUSPENDED, NULL);
 		if (hMainThread) {
-			Constant::setup_and_run_thread(hMainThread, CPU_THREAD);
+			Constant::setup_and_run_thread(hMainThread, CPU_THREAD, false);
 		}
 	}
+}
+
+DWORD WINAPI Scrapper::mainScrapThread(LPVOID lpParam) {
+	ScrapParams* params = (ScrapParams*)lpParam;
+	Scrapper scrapper;
+	SafeDownloadQueue dwQueue;
+	InterlockedExchange(&scrapping, 1);
+	g_status.procesados = 0;
+	// Lanzamos el consumidor de imagenes
+	HANDLE hImgThread = CreateThread(NULL, 0, imageDownloaderThread, &dwQueue, CREATE_SUSPENDED, NULL);
+    if (!hImgThread) {
+		return 1;
+	}
+	Constant::setup_and_run_thread(hImgThread, CPU_THREAD, false);
+
+	// Ejecutamos el scrapper (Productor)
+	for (std::size_t i=0; i < params->emu.size(); i++){
+		//Si hay que abortar, salimos inmediatamente
+		if (InterlockedExchangeAdd(&CurlClient::g_abortScrapping, 0) == 1) {
+			break;
+		}
+		LOG_DEBUG("Hilo Principal: Descargando para el sistema %s", params->emu[i].name.c_str());
+		scrapper.scrapSystem(params->emu[i], params->cfg, dwQueue);
+	}
+
+	// Finalizacion
+	dwQueue.setFinished();
+	WaitForSingleObject(hImgThread, INFINITE);
+	CloseHandle(hImgThread);
+	delete params;
+	InterlockedExchange(&scrapping, 0);
+	g_status.abortType = ABORT_SCRAP_END;
+	return 0;
 }
 
 /**
 *
 */
 int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig, SafeDownloadQueue& dwQueue, bool onlyCount) {
-	std::string romsdir = Constant::getAppDir() + Constant::getFileSep() + emulatorCfg.rom_directory;
-	std::string assetsdir = Constant::getAppDir() + Constant::getFileSep() + emulatorCfg.assets + Constant::getFileSep();
+	dirutil dir;
+	std::string romsdir = dir.getPathPrefix(emulatorCfg.rom_directory);
+	std::string assetsdir = dir.getPathPrefix(emulatorCfg.assets);
+
+	if (assetsdir.at(assetsdir.length() - 1) != Constant::tempFileSep[0]) {
+        assetsdir += Constant::tempFileSep[0];
+    } 
+
 	CurlClient downloader;
 	int sistema = 0;
-	dirutil dir;
 	std::vector<unique_ptr<FileProps> > files;
 	int counterFiles = 0;
 	// Filtro de extensiones
@@ -84,6 +121,7 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 
 	for (std::size_t i = 0; i < files.size(); i++) {
 		FileProps* file = files.at(i).get();
+		LOG_DEBUG("Obteniendo file %s", dir.getFileName(file->filename).c_str());
 		resultado.clear();
 		resultado.filenameNoExt = dir.getFileNameNoExt(file->filename);
 			
@@ -146,6 +184,35 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 		}
 	}
 	return counterFiles;
+}
+
+DWORD WINAPI Scrapper::imageDownloaderThread(LPVOID lpParam) {
+    SafeDownloadQueue* queue = (SafeDownloadQueue*)lpParam;
+    CurlClient downloader;
+    DownloadTask task;
+
+    // pop() bloqueará aquí hasta que haya una tarea o se llame a setFinished()
+    while (queue->pop(task)) {
+		// Comprobación de abortar (Windows Atomic)
+        if (InterlockedExchangeAdd(&CurlClient::g_abortScrapping, 0) == 1) {
+            break;
+        }
+
+        // Actualizar estado global
+        EnterCriticalSection(&g_status.cs);
+        g_status.remainingMedia = queue->size() + 1;
+        LeaveCriticalSection(&g_status.cs);
+
+        LOG_DEBUG("Descargando: %s", task.destPath.c_str());
+        downloader.fetchFile(task.url, task.destPath, &task.downloadProgress);
+
+        EnterCriticalSection(&g_status.cs);
+        g_status.remainingMedia--;
+        LeaveCriticalSection(&g_status.cs);
+    }
+
+    LOG_DEBUG("Hilo de descarga finalizado.");
+    return 0;
 }
 
 /**
@@ -508,8 +575,9 @@ void Scrapper::guardarRecursos(SafeDownloadQueue& dwQueue, ScraperResult &result
 			task.url = it->second.url;
 			task.destPath = rutaImg;
 			task.downloadProgress = 0.0f;
-			LOG_DEBUG("Descargando imagen: %s con url: %s", rutaImg.c_str(), task.url.c_str());
+			LOG_DEBUG("Descargando imagen: %s con url: %s", dir.getFileName(rutaImg).c_str(), task.url.c_str());
 			dwQueue.push(task); // Encolamos para el otro hilo
+			LOG_DEBUG("Imagen encolada");
 		}
 	}
 }
@@ -540,29 +608,6 @@ int Scrapper::obtenerRegionPreferenciaTGDB(ScraperAsk& peticion){
 	}
 }
 
-
-DWORD WINAPI Scrapper::imageDownloaderThread(LPVOID lpParam) {
-	SafeDownloadQueue* queue = (SafeDownloadQueue*)lpParam;
-	CurlClient downloader;
-	DownloadTask task;
-
-	while (queue->pop(task)) {
-		//Si hay que abortar, salimos inmediatamente
-		if (InterlockedExchangeAdd(&CurlClient::g_abortScrapping, 0) == 1) {
-			break;
-		}
-		EnterCriticalSection(&g_status.cs);
-		g_status.remainingMedia = queue->size() + 1;
-		LeaveCriticalSection(&g_status.cs);
-
-		LOG_DEBUG("Hilo Secundario: Descargando %s", task.destPath.c_str());
-		downloader.fetchFile(task.url, task.destPath, &task.downloadProgress);
-
-		g_status.remainingMedia--;
-	}
-	return 0;
-}
-
 void Scrapper::actualizarProgreso(const char* emu, const char* juego) {
 	EnterCriticalSection(&g_status.cs);
 	g_status.procesados++;
@@ -571,39 +616,6 @@ void Scrapper::actualizarProgreso(const char* emu, const char* juego) {
 	strncpy(g_status.juegoActual, juego, 127);
 	g_status.juegoActual[127] = '\0';
 	LeaveCriticalSection(&g_status.cs);
-}
-
-DWORD WINAPI Scrapper::mainScrapThread(LPVOID lpParam) {
-	ScrapParams* params = (ScrapParams*)lpParam;
-	Scrapper scrapper;
-	SafeDownloadQueue dwQueue;
-	scrapping = true;
-	g_status.procesados = 0;
-	// Lanzamos el consumidor de imagenes
-	HANDLE hImgThread = CreateThread(NULL, 0, imageDownloaderThread, &dwQueue, CREATE_SUSPENDED, NULL);
-    if (!hImgThread) {
-		return 1;
-	}
-	Constant::setup_and_run_thread(hImgThread, CPU_THREAD);
-
-	// Ejecutamos el scrapper (Productor)
-	for (std::size_t i=0; i < params->emu.size(); i++){
-		//Si hay que abortar, salimos inmediatamente
-		if (InterlockedExchangeAdd(&CurlClient::g_abortScrapping, 0) == 1) {
-			break;
-		}
-		LOG_DEBUG("Hilo Principal: Descargando para el sistema %s", params->emu[i].name.c_str());
-		scrapper.scrapSystem(params->emu[i], params->cfg, dwQueue);
-	}
-
-	// Finalizacion
-	dwQueue.setFinished();
-	WaitForSingleObject(hImgThread, INFINITE);
-	CloseHandle(hImgThread);
-	delete params;
-	scrapping = false;
-	g_status.abortType = ABORT_SCRAP_END;
-	return 0;
 }
 
 std::string Scrapper::leerArchivoTexto(const std::string& ruta) {

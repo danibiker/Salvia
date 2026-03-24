@@ -1311,7 +1311,7 @@ inline void GameMenu::handleMessageQueue(uint32_t currentTicks) {
 	AchievementState ach = messagesAchievement.get_at(0);
     
     if (ach.ticks == 0) {
-        ach.ticks = currentTicks; // Iniciar temporizador
+        messagesAchievement.update_ticks(currentTicks); // Iniciar temporizador
     } else if (currentTicks - ach.ticks > ach.timeout) {
 		//Limpiamos el ultimo mensaje
 		ach.clearSurfaces();
@@ -1524,7 +1524,6 @@ void GameMenu::startScrapping(){
 	config.apiKeyTGDB = cfgLoader->configMain[cfg::apikeytgdb].valueStr;
 
 	LOG_DEBUG("Seleccionando lengua %s y region %s", config.lenguaPreferida.c_str(), config.regionPreferida.c_str());
-	Scrapper scrapper;
 	SafeDownloadQueue dwQueue;
 	int totalGames = 0;
 	std::vector<ConfigEmu> emuThreadedScrapper;

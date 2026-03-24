@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include <iostream>
 #include <map>
@@ -13,7 +13,7 @@
 enum MEDIA_TYPES { MEDIA_TITLE = 0, MEDIA_SS, MEDIA_BOX, MEDIA_MAX };
 enum ASSETS_TYPES { ASSETS_TITLE = 0, ASSETS_SS, ASSETS_BOX, ASSETS_SINOPSIS, ASSETS_MAX};
 enum ABORT_TYPE {ABORT_NONE, ABORT_LIMIT_CUOTA, ABORT_SCRAP_END, ABORT_MAX};
-// Solo anunciamos que el array existe en algún lugar
+// Solo anunciamos que el array existe en algï¿½n lugar
 extern const char *MEDIAS_TO_FIND[];
 extern const char *ASSETS_DIR[];
 
@@ -93,7 +93,7 @@ struct ScraperAsk {
 	}
 };
 
-// Estructura para pasar parámetros al hilo principal de scrap
+// Estructura para pasar parametros al hilo principal de scrap
 struct ScrapParams {
     std::vector<ConfigEmu> emu;
     ScrapperConfig cfg;
@@ -126,7 +126,7 @@ class Scrapper{
 		static void StartScrappingAsync(std::vector<ConfigEmu>& emu, ScrapperConfig cfg);
 		static void ShutdownScrapper();
 	private:
-		static volatile bool scrapping;
+		static volatile LONG scrapping;
 		static HANDLE hMainThread;
 	
 		static DWORD WINAPI imageDownloaderThread(LPVOID lpParam);
@@ -139,7 +139,7 @@ class Scrapper{
 		void actualizarProgreso(const char* emu, const char* juego);
 		std::string leerArchivoTexto(const std::string& ruta);
 		bool guardarArchivoTexto(const std::string& ruta, const std::string& contenido);
-		// Una versión ultra-simple para limpiar caracteres UTF-8 comunes en nombres de juegos
+		// Una version ultra-simple para limpiar caracteres UTF-8 comunes en nombres de juegos
 		std::string cleanUTF8(const std::string& str);
 		void guardarRecursos();
 		int GSIdToGD(int);

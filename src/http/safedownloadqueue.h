@@ -15,59 +15,81 @@ struct DownloadTask {
     float downloadProgress; // Usamos valor por copia para evitar punteros volátiles
 };
 
+namespace safequeue{
+	class ScopedLock {
+		SDL_mutex* m;
+	public:
+		// Al crear el objeto en el stack, bloqueamos
+		explicit ScopedLock(SDL_mutex* mutex) : m(mutex) {
+			if(m) SDL_mutexP(m);
+		}
+		// Al salir del scope (llave de cierre), desbloqueamos
+		~ScopedLock() {
+			if(m) SDL_mutexV(m);
+		}
+	private:
+		// Prohibimos copiar el lock para evitar errores lógicos
+		ScopedLock(const ScopedLock&);
+		ScopedLock& operator=(const ScopedLock&);
+	};
+};
+
 class SafeDownloadQueue {
 private:
     std::queue<DownloadTask> tasks;
-    CRITICAL_SECTION cs;
-    HANDLE hEvent;
     bool finished;
+    SDL_mutex* mutex;
+    SDL_cond* cond; // Variable de condición para notificar cambios
 
 public:
     SafeDownloadQueue() : finished(false) {
-        InitializeCriticalSection(&cs);
-        hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+        mutex = SDL_CreateMutex();
+        cond = SDL_CreateCond();
     }
 
     ~SafeDownloadQueue() {
-        DeleteCriticalSection(&cs);
-        CloseHandle(hEvent);
+        SDL_DestroyCond(cond);
+        SDL_DestroyMutex(mutex);
     }
-
-	int size(){
-		EnterCriticalSection(&cs);
-		return tasks.size();
-		LeaveCriticalSection(&cs);
-	}
 
     void push(DownloadTask task) {
-        EnterCriticalSection(&cs);
-        tasks.push(task);
-        LeaveCriticalSection(&cs);
-        SetEvent(hEvent); // Despierta al hilo de descarga
+        {
+            safequeue::ScopedLock lock(mutex);
+            tasks.push(task);
+        }
+        SDL_CondSignal(cond); // Despierta a un hilo que esté esperando en pop()
     }
 
+    // Devuelve false solo si la cola está vacía Y setFinished() fue llamado
     bool pop(DownloadTask& task) {
-        while (true) {
-            EnterCriticalSection(&cs);
-            if (!tasks.empty()) {
-                task = tasks.front();
-                tasks.pop();
-                LeaveCriticalSection(&cs);
-                return true;
-            }
-            if (finished) {
-                LeaveCriticalSection(&cs);
-                return false;
-            }
-            LeaveCriticalSection(&cs);
-            WaitForSingleObject(hEvent, INFINITE);
+        SDL_LockMutex(mutex);
+        
+        // Mientras la cola esté vacía y NO hayamos terminado, esperamos
+        while (tasks.empty() && !finished) {
+            SDL_CondWait(cond, mutex); // Libera el mutex y duerme el hilo
         }
+
+        if (!tasks.empty()) {
+            task = tasks.front();
+            tasks.pop();
+            SDL_UnlockMutex(mutex);
+            return true;
+        }
+
+        SDL_UnlockMutex(mutex);
+        return false; // Cola vacía y finished == true
     }
 
     void setFinished() {
-        EnterCriticalSection(&cs);
-        finished = true;
-        LeaveCriticalSection(&cs);
-        SetEvent(hEvent); // Despierta para terminar
+        {
+            safequeue::ScopedLock lock(mutex);
+            finished = true;
+        }
+        SDL_CondBroadcast(cond); // Despierta a todos los hilos para que mueran
+    }
+
+    int size() {
+        safequeue::ScopedLock lock(mutex);
+        return (int)tasks.size();
     }
 };

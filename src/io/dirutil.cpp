@@ -567,3 +567,43 @@ void dirutil::borrarDir(string path)
     RemoveDirectoryA(path.c_str());
 #endif
 }
+
+std::string dirutil::getPathPrefix(std::string filepath) {
+	string BASE_PATH = Constant::getAppDir() + Constant::getFileSep();
+
+	if (filepath.empty()){
+		LOG_DEBUG("filepath empty. Returning: %s", BASE_PATH.c_str());
+		return BASE_PATH;
+	}
+
+    // 2. Normalizar: Convertir todas las barras al estilo de la plataforma
+    // (Muy importante porque los Cores de Libretro suelen usar '/')
+    for (size_t i = 0; i < filepath.length(); ++i) {
+        if (filepath[i] == '/' || filepath[i] == '\\') {
+            filepath[i] = Constant::tempFileSep[0];
+        }
+    }
+
+    // 3. Detectar si es ruta absoluta (contiene ':' o empieza por SEP)
+    bool isAbsolute = (filepath.find(':') != std::string::npos || filepath[0] == Constant::tempFileSep[0]);
+
+    if (isAbsolute) {
+		LOG_DEBUG("filepath absolute. Returning: %s", filepath.c_str());
+        return filepath;
+    }
+
+    // 4. Concatenación inteligente (evitar game:\\roms o game:roms)
+    std::string result = BASE_PATH;
+    
+    // Si la base no termina en SEP y el filepath no empieza con SEP, añadirlo
+    if (result.at(result.length() - 1) != Constant::tempFileSep[0] && filepath[0] != Constant::tempFileSep[0]) {
+        result += Constant::tempFileSep[0];
+    } 
+    // Si ambos tienen SEP, quitar uno (opcional, pero limpia la ruta)
+    else if (result.at(result.length() - 1) == Constant::tempFileSep[0] && filepath[0] == Constant::tempFileSep[0]) {
+        filepath.erase(0, 1);
+    }
+
+	LOG_DEBUG("filepath relative. Returning: %s", (result + filepath).c_str());
+    return result + filepath;
+}
