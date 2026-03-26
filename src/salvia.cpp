@@ -9,7 +9,7 @@
 
 #include <string>
 #include <map>
-
+#include <algorithm>
 #include <zlib.h>
 
 #include "gameMenu.h"
@@ -45,7 +45,7 @@ const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_
 }
 
 // 1. Usa un buffer persistente para evitar allocs constantes al convertir desde ARGB8888
-enum retro_pixel_format fmt;
+enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
 int launchGame(std::string);
 //Maximo de 30 MB. Los CHD que son grandes no debemos cargarlos en memoria. Ya se encarga
 //la implementacion de vfs
@@ -67,6 +67,24 @@ struct retro_core_variable {
    const char *key;    // Nombre técnico: "nestopia_region"
    const char *value;  // Nombre visual y opciones: "Region; Auto|NTSC|PAL"
 };
+
+void drawLoadingProgressBar(SDL_Surface* screen, float progress);
+struct t_progress_load{
+	float loading_progress;
+	int total_rom_files;
+	int current_rom_file;
+
+	t_progress_load(){
+		reset();
+	}
+
+	void reset(){
+		loading_progress = 0.0f;
+		total_rom_files = 10; // Valor estimado o calculado abriendo el zip
+		current_rom_file = 0;
+	}
+
+} progress_loader;
 
 // Ya no declaramos punteros a función, sino que usamos las funciones 
 // que vendrán dentro del .lib (se resuelven al linkar)
@@ -101,11 +119,28 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
 		return;
 	}
 
-	#ifndef DEBUG_LOG
+	// 2. Procesar los argumentos variables (va_list) que envía el Core
+    char buffer[128];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+	buffer[sizeof(buffer) - 1] = '\0';
+	
+	// Interceptamos los mensajes de MAME
+    if (progress_loader.total_rom_files > 0 && strstr(buffer, "Opening ROM file:")) {
+        progress_loader.current_rom_file++;
+        // Calculamos el porcentaje (máximo 95% para dejar margen al inicio del core)
+        progress_loader.loading_progress = (float)progress_loader.current_rom_file / (float)progress_loader.total_rom_files;
+        // LLAMADA A LA BARRA
+        drawLoadingProgressBar(gameMenu->screen, std::min(progress_loader.loading_progress, 100.0f));
+    }
+
+	//#ifndef DEBUG_LOG
 		if (level != RETRO_LOG_ERROR){
 			return;
 		}
-	#endif
+	//#endif
 
     // 1. Mapear el nivel de Libretro a tus niveles internos
     int myLevel;
@@ -115,14 +150,6 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
         case RETRO_LOG_ERROR: myLevel = L_ERROR; break;
         default:              myLevel = L_DEBUG;  break;
     }
-
-    // 2. Procesar los argumentos variables (va_list) que envía el Core
-    char buffer[128];
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(buffer, sizeof(buffer), fmt, args);
-    va_end(args);
-	buffer[sizeof(buffer) - 1] = '\0';
 
 	OutputDebugStringA("[CORE]");
 	OutputDebugStringA(buffer);
@@ -195,23 +222,19 @@ static bool retro_environment(unsigned cmd, void *data) {
 
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             // El core envía un puntero al formato que desea usar
-            enum retro_pixel_format *fmtAsked = (enum retro_pixel_format*)data;
-			std::string msgformat = "Solicitando pixelformat: " + Constant::intToString(*fmtAsked) + "\n";
-			LOG_DEBUG("Solicitando pixelformat %d", *fmtAsked);
-			
-			fmt = *fmtAsked;
-
-			if (*fmtAsked == RETRO_PIXEL_FORMAT_XRGB8888){
-				LOG_INFO("Core solicita XRGB8888 (32 bits)");
-				// Forzamos a que sea RGB565 (16 bits)
-				// Esto le dice a Nestopia: "Solo acepto 16 bits, configúrate así"
-				//*fmtAsked = RETRO_PIXEL_FORMAT_RGB565;
-				//return true;
-			} else if (*fmtAsked != RETRO_PIXEL_FORMAT_RGB565){
-				return false;
+            enum retro_pixel_format requested = *(enum retro_pixel_format*)data;
+			LOG_DEBUG("Solicitando pixelformat %d", (int)requested);
+			fmt = requested; // Guarda esto en tu 
+			// MAME suele requerir 0RGB1555 o XRGB8888. 
+			// Aceptamos lo que pida
+			if (requested == RETRO_PIXEL_FORMAT_0RGB1555 || 
+				requested == RETRO_PIXEL_FORMAT_RGB565   || 
+				requested == RETRO_PIXEL_FORMAT_XRGB8888) {
+				LOG_INFO("Formato de pixel aceptado: %d", requested);
+				return true; 
 			}
-            // Retornamos true para confirmar que aceptamos el formato
-            return true;
+			LOG_ERROR("Core solicita un formato totalmente incompatible");
+			return false;
         }
 
 		case RETRO_ENVIRONMENT_GET_CAN_DUPE: {
@@ -306,10 +329,14 @@ static bool retro_environment(unsigned cmd, void *data) {
 					// 3. Sincronizar con startupLibretroParams (Copia de CONTENIDO)
 					// IMPORTANTE: Creamos un objeto nuevo copiando los datos del original
 					cfg::t_emu_props* copyPtr = new cfg::t_emu_props(*ptr); 
-					gameMenu->getCfgLoader()->startupLibretroParams[keyStr] = std::unique_ptr<cfg::t_emu_props>(copyPtr);
+					params[keyStr] = std::unique_ptr<cfg::t_emu_props>(copyPtr);
 				}
 				vars++;
 			}
+
+			//Poblamos las opciones del core. Lo tenemos que hacer aquí porque ya se deberian 
+			//haber obtenido.
+			gameMenu->configMenus->poblarCoreOptions(gameMenu->getCfgLoader());
 			return true;
 		}
 
@@ -477,19 +504,29 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 
 	//Hacemos la comprobacion del pitch >= width * 4, por si hemos solicitado el RETRO_PIXEL_FORMAT_RGB565
 	//pero el core no lo acepta
-	if (fmt == RETRO_PIXEL_FORMAT_XRGB8888 && *gameMenu->current_scaler_mode != NO_VIDEO) {
+	if (*gameMenu->current_scaler_mode != NO_VIDEO && fmt != RETRO_PIXEL_FORMAT_RGB565){
 		// 2. Gestionar buffer de conversión de forma eficiente
-        std::size_t needed = width * height * sizeof(uint16_t);
-        if (!conversion_buffer || buffer_size < needed) {
-            uint16_t* temp = (uint16_t*)realloc(conversion_buffer, needed);
-            if (!temp) return;
-            conversion_buffer = temp;
-            buffer_size = needed;
-        }
-		
-		convertARGB8888ToRGB565((uint32_t*)data, width, height, pitch, conversion_buffer, width * 2);
-		final_src = (void*)conversion_buffer;
+		std::size_t needed = width * height * sizeof(uint16_t);
+		if (!conversion_buffer || buffer_size < needed) {
+			uint16_t* temp = (uint16_t*)realloc(conversion_buffer, needed);
+			if (!temp) return;
+			conversion_buffer = temp;
+			buffer_size = needed;
+		}
+
+		switch (fmt){
+			case RETRO_PIXEL_FORMAT_XRGB8888: { 
+				convertARGB8888ToRGB565_Fast((uint32_t*)data, width, height, pitch, conversion_buffer, width * 2);
+				break;
+			}
+			case RETRO_PIXEL_FORMAT_0RGB1555: {
+				convert0RGB1555ToRGB565_Fast2((uint16_t*)data, width, height, pitch, conversion_buffer);
+				break;
+			}
+		}
 		pitch = width * 2;
+		final_src = (void*)conversion_buffer;
+		final_src = (void*)conversion_buffer;
 	}
 
 	if (action_postponed.cycles == 1 && action_postponed.action == SAVE_STATE){
@@ -510,14 +547,10 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 	scaleProps.scale = gameMenu->current_scaler_scale;
 	scaleProps.ratio = aspectRatioValues[*gameMenu->current_ratio];
 	scaleProps.force_fs = *gameMenu->current_force_fs;
-    
+	scaleProps.dst = (uint16_t*)screen->pixels;
 
-	//if (SDL_LockSurface(screen) == 0) { // SDL_LockSurface devuelve 0 si tiene éxito
-		scaleProps.dst = (uint16_t*)screen->pixels;
-		//Escalamos la imagen con el escalador que hay almacenado en el puntero a funcion
-		gameMenu->current_scaler(scaleProps);
-		//SDL_UnlockSurface(screen);
-	//}
+	//Escalamos la imagen con el escalador que hay almacenado en el puntero a funcion
+	gameMenu->current_scaler(scaleProps);
 }
 
 // Se llama antes de pedir el estado de los inputs
@@ -782,6 +815,39 @@ void closeGame(){
 	}
 }
 
+void drawLoadingProgressBar(SDL_Surface* screen, float progress) {
+    if (!screen) return;
+
+    // Configuración de dimensiones
+    int barW = screen->w / 2;
+    int barH = 20;
+    int barX = (screen->w - barW) / 2;
+    int barY = (screen->h / 2) + 40; // Debajo del texto de "Loading..."
+
+    // Colores (Ajusta según tu paleta)
+    Uint32 colorBorder = SDL_MapRGB(screen->format, 200, 200, 200);
+    Uint32 colorFill   = SDL_MapRGB(screen->format, 0, 255, 0); // Verde
+    Uint32 colorBG     = SDL_MapRGB(screen->format, 40, 40, 40);
+
+    // 1. Dibujar fondo de la barra
+    SDL_Rect bgRect = { (Sint16)barX, (Sint16)barY, (Uint16)barW, (Uint16)barH };
+    SDL_FillRect(screen, &bgRect, colorBG);
+
+    // 2. Dibujar el progreso real
+    if (progress > 1.0f) progress = 1.0f;
+    int fillW = (int)(barW * progress);
+    if (fillW > 0) {
+        SDL_Rect fillRect = { (Sint16)barX, (Sint16)barY, (Uint16)fillW, (Uint16)barH };
+        SDL_FillRect(screen, &fillRect, colorFill);
+    }
+
+    // 3. Dibujar borde (opcional, 1px)
+    // SDL_FillRect no tiene "drawRect" vacío, así que usamos 4 líneas si quieres borde fino
+    
+    // Actualizar solo la región de la barra para ganar rendimiento
+    SDL_UpdateRect(screen, barX, barY, barW, barH);
+}
+
 /**
 *
 */
@@ -794,7 +860,8 @@ int launchGame(std::string rompath){
 	memset(&info, 0, sizeof(info));
 
 	std::string initMsg = "Loading " + dir.getFileName(rompath) + "...";
-	Constant::drawTextCentTransparent(gameMenu->screen, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0,0, true, true, textColor, 0);
+	const int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
+	Constant::drawTextCentTransparent(gameMenu->screen, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, face_h_big / 2, true, true, textColor, 0);
 	SDL_Flip(gameMenu->screen);
 
 	romPaths.rompath.clear();
@@ -802,10 +869,14 @@ int launchGame(std::string rompath){
 	retro_get_system_info(&info);
 	std::string allowedExtensions = Constant::replaceAll(info.valid_extensions, "|", " ");
 	LOG_DEBUG("Extensiones: %s\n", info.valid_extensions);
-
 	
-	if (gameMenu->getCfgLoader()->getCfgEmu()->no_uncompress){
+	const bool noUncompress = gameMenu->getCfgLoader()->getCfgEmu()->no_uncompress;
+	if (noUncompress){
 		LOG_DEBUG("Loading rom directly %s", rompath.c_str());
+		progress_loader.reset();
+		progress_loader.total_rom_files = getZipFileCountFiltered(rompath);
+		// Dibujamos la barra inicial al 0%
+		drawLoadingProgressBar(gameMenu->screen, 0.0f);
 		unzipped.errorCode = 0;
 		unzipped.extractedPath = rompath;
 		unzipped.originalPath  = rompath;
@@ -827,7 +898,7 @@ int launchGame(std::string rompath){
 		gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.openfileerror") + rompath, 3000);
 		return 0;
 	}
-	
+
 	struct retro_game_info game = { unzipped.extractedPath.c_str(), unzipped.memoryBuffer, unzipped.romsize, NULL };
 	retro_init();	
 	bool success = retro_load_game(&game);
@@ -836,7 +907,7 @@ int launchGame(std::string rompath){
 		retro_set_controller_port_device(i, RETRO_DEVICE_JOYPAD);
 	}
 
-	if (success && loadAchievement){
+	if (success && loadAchievement && !noUncompress){
 		//After the loading of the game, we load the achievements
 		gameMenu->loadGameAchievements(unzipped);
 	}
@@ -1044,6 +1115,7 @@ int main(int argc, char *argv[]) {
 	// Registrar los callbacks de audio
 	retro_set_audio_sample(retro_audio_sample);
 	retro_set_audio_sample_batch(retro_audio_sample_batch);
+	
 
 	if (!loadGameAtStart(argc, argv)){
 		//Workaround para mostrar una primera imagen del menu con las imagenes cargadas
@@ -1053,10 +1125,6 @@ int main(int argc, char *argv[]) {
 	}
 
 	initSaveSystem();
-
-	//Poblamos las opciones del core. Lo tenemos que hacer aquí porque ya se deberian 
-	//haber obtenido.
-	gameMenu->configMenus->poblarCoreOptions(&cfgLoader);
 	//retro_set_controller_port_device(puerto, id_guardado);
 	//retro_set_controller_port_device(0, 1);
 	

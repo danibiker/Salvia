@@ -17,6 +17,7 @@
 #include <http/scrapper.h>
 #include <http/achievements.h>
 #include <unzip/unziptool_common.h>
+#include <io/video_common.h>
 
 #ifdef _XBOX
 	#include <io/video_direct.h>
@@ -131,7 +132,9 @@ class GameMenu : public Engine{
 		Uint32 bkgTextFps;
 		SDL_Surface* fpsSurface;
 		SDL_Surface* cpuSurface;
+		SDL_Surface* memSurface;
 		uint32_t lastFpsUpdate;
+		uint32_t lastMemUpdate;
 		bool *mustUpdateFps;
         std::map<std::string, Image> menuImages;
         std::map<std::string, TextArea> menuTextAreas;
@@ -150,7 +153,6 @@ class GameMenu : public Engine{
 		void addControlerButtons(Menu*& menuControlesPuerto, int numPlayer);
 		void showScrapProcess(ListMenu &listMenu);
 		void initAchievements();
-		std::string getPathPrefix(std::string);
         std::string encloseWithCharIfSpaces(std::string, std::string);
 		inline void updateAchievementsState(uint32_t currentTicks);
 		inline void handleMessageQueue(uint32_t currentTicks);

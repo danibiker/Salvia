@@ -83,19 +83,31 @@ struct t_scale_props{
 // 2048 * 1152 permite hasta Scale4x de una imagen de 512x256 o xBRZ alto
 static uint16_t temp_buffer[2048 * 1152]; // Ocupa aprox 4.5 MB
 
+struct GameData {
+    std::string description;
+    std::string year;
+    std::string manufacturer;
+    std::string cloneof;  // Si está vacío, es un "parent" (original)
+    std::string romof;
+    std::string driverStatus;
+    // Útil para saber si es clon rápidamente
+    bool isClone() const { return !cloneof.empty(); }
+};
 
 class GameFile{
     public:
-    GameFile(){
+    GameFile() : gameData(NULL), systemid(0){
     }
     ~GameFile(){
     }
+
+	const GameData *gameData;
     std::string shortFileName;
     std::string longFileName;
     std::string gameTitle;
     std::size_t cutTitleIdx;
+	std::string sortKey; // Nombre en minúsculas pre-calculado
 	int systemid;
-    //std::string gameImage;
 };
 
 class FileName8_3 {
@@ -585,6 +597,8 @@ class ConfigEmu{
     bool use_rom_directory;
 	//Avoids to uncompress the zip file
 	bool no_uncompress;
+	//Set the xml to obtain mame game names
+	std::string mame_roms_xml;
 };
 
 struct t_rom_paths{

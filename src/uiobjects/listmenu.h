@@ -8,6 +8,7 @@
 #include <uiobjects/object.h>
 #include <io/fileprops.h>
 #include <image/icons.h>
+#include <menus/mameparser.h>
 
 using namespace std;
 
@@ -19,6 +20,8 @@ class ListMenu : public Object{
 		static const int textFps = 20;
 		static const int frameTimeText = (int)(1000 / textFps);
 		Icons *icons;
+		// El diccionario principal para mame: <nombre_zip, datos>
+		std::map<std::string, GameData> mameDatabase;
 
     public:
         ListMenu(int screenw, int screenh);
@@ -49,6 +52,9 @@ class ListMenu : public Object{
         void mapFileToList(string filepath);
         static bool compareUniquePtrs(const std::unique_ptr<GameFile>& a,
                                 const std::unique_ptr<GameFile>& b);
+		static bool compareUniquePtrsFast(const std::unique_ptr<GameFile>&,
+                                 const std::unique_ptr<GameFile>&);
+
 		int getCartForSystem(int systemid);
 
         void filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu);

@@ -46,9 +46,6 @@ class dirutil{
     public :
         dirutil();
         ~dirutil();
-        bool isDir(const char* ruta);
-        bool fileExists(const char* file);
-        bool dirExists(const char* ruta);
         char * getDir(char *buffer);
         char * getDirActual();
         string getExtension(string file);
@@ -63,7 +60,10 @@ class dirutil{
 		void borrarDir(string path);
 		int createDir(std::string dir);
 		int createDirRecursive(const char* path);
-		std::string getPathPrefix(std::string filepath);
+		static std::string getPathPrefix(std::string filepath, std::string basePath = "");
+		static bool fileExists(const char* file);
+		static bool dirExists(const char* ruta);
+		static bool isDir(const char* ruta);
     private:
         char rutaActual[PATH_MAX]; //Ruta actual que se esta navegando
         char* formatdate(char* str, time_t val);

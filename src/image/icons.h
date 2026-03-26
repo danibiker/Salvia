@@ -6,6 +6,7 @@
 #include <const/constant.h>
 #include <uiobjects/image.h>
 #include <font/fonts.h>
+#include <io/dirutil.h>
 
 class Icons{
 
@@ -37,15 +38,15 @@ public:
 	static void loadIcons(){
 		TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 		int face_h = TTF_FontLineSkip(fontMenu) + icon_w_add;
+		const string assetsDir = "\\assets\\xmb\\retrosystem\\png\\";
+
 
 		for (int i=0; i < max_icons; i++){
 			SDL_Surface *img;
-			//std::string str = Constant::getAppDir() + "\\assets\\xmb\\flatui\\png\\" + std::string(ICONS_PATH[i]);
-			std::string str = Constant::getAppDir() + "\\assets\\xmb\\retrosystem\\png\\" + std::string(ICONS_PATH[i]);
-			if ((img = IMG_Load(str.c_str())) != NULL){   
+			std::string str = Constant::getAppDir() + assetsDir + std::string(ICONS_PATH[i]);
+			if (dirutil::fileExists(str.c_str()) && (img = IMG_Load(str.c_str())) != NULL){   
 				double zoomX = (double)face_h / img->w;
 				double zoomY = (double)face_h / img->h;
-				// rotozoomSurfaceXY es más preciso para escalas no uniformes
 				SDL_Surface *resizeImage = rotozoomSurfaceXY(img, 0, zoomX, zoomY, true);
 				SDL_Surface *formattedImg = SDL_DisplayFormatAlpha(resizeImage);
 				SDL_FreeSurface(resizeImage);
@@ -60,11 +61,10 @@ public:
 
 		for (int i=0; i < max_carts; i++){
 			SDL_Surface *img;
-			std::string str = Constant::getAppDir() + "\\assets\\xmb\\retrosystem\\png\\" + std::string(ICONS_CARTS_PATH[i]);
-			if ((img = IMG_Load(str.c_str())) != NULL){   
+			std::string str = Constant::getAppDir() + assetsDir + std::string(ICONS_CARTS_PATH[i]);
+			if (dirutil::fileExists(str.c_str()) && (img = IMG_Load(str.c_str())) != NULL){   
 				double zoomX = (double)face_h / img->w;
 				double zoomY = (double)face_h / img->h;
-				// rotozoomSurfaceXY es más preciso para escalas no uniformes
 				SDL_Surface *resizeImage = rotozoomSurfaceXY(img, 0, zoomX, zoomY, true);
 				SDL_FreeSurface(img);
 				SDL_Surface *formattedImg = SDL_DisplayFormatAlpha(resizeImage);

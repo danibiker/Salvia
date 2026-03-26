@@ -169,10 +169,12 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 		}
 
 		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_R)){
+			LOG_DEBUG("Next page");
 			gameMenu->getCfgLoader()->getNextCfgEmu();
 			gameMenu->loadEmuCfg(listMenu);
 		}
 		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_L)){
+			LOG_DEBUG("Prev page");
 			gameMenu->getCfgLoader()->getPrevCfgEmu();
 			gameMenu->loadEmuCfg(listMenu);
 		}

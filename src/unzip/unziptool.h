@@ -53,6 +53,94 @@ int checkExtractionErrors(int result, std::size_t romsize){
 	}
 }
 
+int getZipFileCount(const std::string& rompath) {
+    unzFile uf = unzOpen(rompath.c_str());
+    if (!uf) return 0;
+    unz_global_info global_info;
+    int res = unzGetGlobalInfo(uf, &global_info);
+    unzClose(uf);
+    if (res != UNZ_OK) return 0;
+    // number_entry es el total de ficheros/directorios dentro del ZIP
+    return (int)global_info.number_entry;
+}
+
+
+
+/**
+ * Detecta si un archivo es una BIOS o firmware interno de MAME.
+ * Optimizada para no consumir ciclos excesivos en el PowerPC de la Xbox 360.
+ */
+inline bool isBiosFile(const std::string& filename) {
+    // 1. Convertir a minúsculas una sola vez
+    std::string name = filename;
+    std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+
+    // 2. Filtros rápidos (Palabras clave universales)
+    if (name.find("bios") != std::string::npos) return true;
+    if (name.find("boot") != std::string::npos) return true;
+
+    // 3. Patrones específicos de drivers de MAME 2003+
+    static const char* patterns[] = {
+        // Neo-Geo (Sistemas arcade más comunes)
+        "neo-", "uni-b", "neodebug", "sp-", "usa_2slt", "asia-s3", "vs-bios",
+        // Capcom / Sony PSX (Sistemas ZN1, ZN2, CPS3)
+        "scph", "psx", "zn1", "zn2", "cpzn", "acpsx", "nocash",
+        // Sega (ST-V, Naomi, MegaPlay)
+        "stvbios", "segabill", "epr-", "317-", "gbi-", "mpr-",
+        // Konami (GV, GX, Viper, NW573)
+        "konamigv", "konamigx", "kviper", "sys573", "gq711",
+        // Namco (System 246, 256 y C352)
+        "sys246", "sys256", "namco", "c352",
+        // Otros (PGM, Kaneko, Gaelco)
+        "pgm", "3do", "cdi", "decocass", "alg_bios", "skns"
+    };
+
+    // 4. Bucle de búsqueda (Sencillo para el compilador de VS2010)
+    const int numPatterns = sizeof(patterns) / sizeof(patterns[0]);
+    for (int i = 0; i < numPatterns; ++i) {
+        if (name.find(patterns[i]) != std::string::npos) {
+            return true;
+        }
+    }
+
+    // 5. Filtro por extensión de firmware común en MAME
+    // Algunos firmwares no tienen nombre descriptivo pero sí estas extensiones
+    if (name.size() > 4) {
+        std::string ext = name.substr(name.size() - 4);
+        if (ext == ".sp1" || ext == ".key" || ext == ".dat") {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+int getZipFileCountFiltered(const std::string& rompath) {
+    unzFile uf = unzOpen(rompath.c_str());
+    if (!uf) return 0;
+
+    int realCount = 0;
+    int res = unzGoToFirstFile(uf);
+    while (res == UNZ_OK) {
+        char filename[256];
+        unz_file_info info;
+        unzGetCurrentFileInfo(uf, &info, filename, sizeof(filename), NULL, 0, NULL, 0);
+        
+        std::string name = filename;
+        // Convertimos a minúsculas para comparar
+        std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+
+        // FILTRO: Si NO contiene palabras clave de BIOS, lo contamos
+        if (!isBiosFile(name)) {
+            realCount++;
+        }
+
+        res = unzGoToNextFile(uf);
+    }
+    unzClose(uf);
+    return realCount;
+}
+
 unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& extensions, bool toMemory, const std::string& tempDir) {
     unzippedFileInfo ret;
     ret.originalPath = rompath;

@@ -68,40 +68,18 @@ bool Image::loadImage(string filepathToOpen){
 			SDL_FreeSurface(img);
             img = NULL;
         }
-
 		if (cachedSurface != NULL){
 			SDL_FreeSurface(cachedSurface);
 			cachedSurface = NULL;
 		}
-        
-		if ((img = IMG_Load(filepathToOpen.c_str())) != NULL){   
+
+		const char *cFilePathToOpen = filepathToOpen.c_str();
+		if (dirutil::fileExists(cFilePathToOpen) && (img = IMG_Load(cFilePathToOpen)) != NULL){   
 			filepath = filepathToOpen;
 			ret = true;
 		} else {
             filepath = "";
         }
-
-        /*if ((img = load_png(filepathToOpen.c_str(), pal)) != NULL){   
-            if (bitmap_color_depth(img) == 8)
-                set_palette(pal);
-                    
-            if (this->drawfaded){
-                //Setting translucency effect
-                if (get_color_depth() == 8)
-                    color_map = &Constant::global_trans_table;
-                else
-                    set_trans_blender(128, 128, 128, 160);
-
-                BITMAP *tmp_bm = create_bitmap(img->w, img->h);
-                rectfill(tmp_bm, 0, 0, img->w, img->h, makecol(0,0,0));
-                draw_trans_sprite(img, tmp_bm, 0, 0);
-                destroy_bitmap(tmp_bm);
-            }
-            filepath = filepathToOpen;
-            ret = true;
-        } else {
-            filepath = "";
-        }*/
     } else if (!filepath.empty() && filepath.compare(filepathToOpen) == 0){
         ret = true;
     }
@@ -148,24 +126,6 @@ Dimension Image::centrado(const Dimension &src, const Dimension &dst) {
     offset.w = (dst.w - src.w) >> 1;
     return offset;
 }
-
-/**
- * Equivalente a stretch_blit(src, dest, src_x, src_y, src_w, src_h, dst_x, dst_y, dst_w, dst_h) de Allegro
- */
-/*void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest, 
-                      int src_x, int src_y, int src_w, int src_h, 
-                      int dst_x, int dst_y, int dst_w, int dst_h) {
-    
-    // Configurar el rectángulo de origen (Recorte de la imagen original)
-	SDL_Rect srcRect = {src_x, src_y, src_w, src_h};
-
-    // Configurar el rectángulo de destino (Posición y nuevo tamaño en pantalla)
-    SDL_Rect dstRect = {dst_x, dst_y, dst_w, dst_h};
-
-    // Realizar el blit. SDL 1.2 escala automáticamente si srcRect y dstRect 
-    // tienen dimensiones diferentes.
-    SDL_BlitSurface(src, &srcRect, dest, &dstRect);
-}*/
 
 void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest, 
                       int src_x, int src_y, int src_w, int src_h, 

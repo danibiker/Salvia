@@ -358,6 +358,8 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 						cfgEmu->config.use_rom_directory = value.compare("yes") == 0 ? true : false;
 					} else if (key.compare("no_uncompress") == 0){
 						cfgEmu->config.no_uncompress = value.compare("yes") == 0 ? true : false;
+					} else if (key.compare("mame_roms_xml") == 0){
+						cfgEmu->config.mame_roms_xml = value;
 					}
 				}
 			}             

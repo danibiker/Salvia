@@ -268,6 +268,12 @@ bool ListMenu::compareUniquePtrs(const std::unique_ptr<GameFile>& a,
     return sA.compare(sB) < 0;
 }
 
+bool ListMenu::compareUniquePtrsFast(const std::unique_ptr<GameFile>& a,
+                                 const std::unique_ptr<GameFile>& b) {
+    // Comparación directa de strings ya procesados
+    return a->sortKey < b->sortKey;
+}
+
 /**
     * 
     */
@@ -275,40 +281,61 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
     this->clear();
     dirutil dir;
 
-	vector<string> v = Constant::splitChar(emu.system, '_');
-	int system = 0;
-	if (v.size() > 0){
-		system = Constant::strToTipo<int>(v.at(0));
-	}
+    // 1. Determinar el sistema
+    vector<string> v = Constant::splitChar(emu.system, '_');
+    int system = (v.size() > 0) ? Constant::strToTipo<int>(v.at(0)) : 0;
 
-    //string filelong;
-    for (size_t i=0; i < files.size(); i++){
-        GameFile gameFile;
-		gameFile.systemid = system;
-        auto file = files.at(i).get();
-        //filelong = emu.use_extension ? file->filename : dir.getFileNameNoExt(file->filename);
-        gameFile.shortFileName = file->filename;
-        gameFile.longFileName = file->filename;
-        //gameFile.gameTitle = Constant::cutToLength(dir.getFileNameNoExt(file->filename), this->getW());
-        gameFile.gameTitle = dir.getFileNameNoExt(file->filename);
-        gameFile.cutTitleIdx = Fonts::idxToCutTTF(gameFile.gameTitle, this->getW() - 2*this->marginX - marginTextIcon, Fonts::FONTBIG);
-		listGames.push_back(std::unique_ptr<GameFile>(new GameFile(gameFile)));
+    // 2. Carga/Verificación de la base de datos
+    if (mameDatabase.empty() && !emu.mame_roms_xml.empty()) {
+		LOG_DEBUG("Cargando xml %s\n", emu.mame_roms_xml.c_str());
+        parse_mame_xml(dirutil::getPathPrefix(emu.mame_roms_xml), mameDatabase);
+		LOG_DEBUG("Xml cargado\n");
     }
-            
-    /*#ifndef DOS
-        //This is to be able of showing the images or the synopsis
-        //if the download was in dos and we want to use another Operating System
-        //but not having to download all again
-        vector<string> v = Constant::splitChar(emu.system, '_');
-        if (v.size() > 0 && Constant::MAME_SYS_ID.compare(v.at(0)) != 0){
-            //For mame there is no need, because names are already short
-            DosNames dosnames;
-            dosnames.convertirNombresCortos(this->listGames);
-        }
-    #endif*/
+    
+    // Ahora comprobamos si el mapa tiene datos, independientemente de cuándo se cargó
+    bool hasMameData = !mameDatabase.empty();
+	bool foundInMame = false;
+    listGames.reserve(files.size());
 
-    // Sort the vector
-    std::sort(this->listGames.begin(), this->listGames.end(), ListMenu::compareUniquePtrs);
+    for (size_t i = 0; i < files.size(); i++) {
+        foundInMame = false;
+		GameFile* gFile = new GameFile();
+        auto* file = files.at(i).get();
+
+        gFile->systemid = system;
+        gFile->shortFileName = file->filename;
+        gFile->longFileName = file->filename;
+
+        const string fileNameNoExt = dir.getFileNameNoExt(file->filename);
+        
+        if (hasMameData) {
+            // Buscamos en el mapa persistente
+            std::map<std::string, GameData>::iterator it = mameDatabase.find(fileNameNoExt); 
+            if (it != mameDatabase.end()) {
+                gFile->gameData = &it->second; // Apuntamos a la memoria del mapa
+                gFile->gameTitle = it->second.description;
+                foundInMame = true;
+            } 
+        }
+
+		if (!foundInMame) {
+            gFile->gameTitle = fileNameNoExt;
+        }
+		// precalculo de clave para ordenar
+		gFile->sortKey = gFile->gameTitle;
+		Constant::lowerCase(&gFile->sortKey); 
+
+        // UI y guardado
+        gFile->cutTitleIdx = Fonts::idxToCutTTF(gFile->gameTitle, 
+                             this->getW() - 2*this->marginX - marginTextIcon, 
+                             Fonts::FONTBIG);
+
+        listGames.push_back(std::unique_ptr<GameFile>(gFile));
+    }
+
+	LOG_DEBUG("Files added");
+    std::sort(this->listGames.begin(), this->listGames.end(), ListMenu::compareUniquePtrsFast);
+	LOG_DEBUG("Files sorted");
     resetIndexPos();
 }
 

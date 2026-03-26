@@ -16,15 +16,6 @@ dirutil::~dirutil(){
  * @return 
  */
 bool dirutil::isDir(const char* ruta){
-    //struct stat info;
-    //stat(ruta, &info);
-    //
-    //if(S_ISDIR(info.st_mode)){
-    //    return true;
-    //} else{
-    //    return false;
-    //}
-
     #ifdef DOS
         //Much faster for dos
         DIR* dir = opendir(ruta);
@@ -568,8 +559,14 @@ void dirutil::borrarDir(string path)
 #endif
 }
 
-std::string dirutil::getPathPrefix(std::string filepath) {
-	string BASE_PATH = Constant::getAppDir() + Constant::getFileSep();
+std::string dirutil::getPathPrefix(std::string filepath, std::string basePath) {
+	std::string BASE_PATH;
+
+	if (basePath.empty()){
+		BASE_PATH = Constant::getAppDir() + Constant::getFileSep();
+	} else {
+		BASE_PATH = basePath;
+	}
 
 	if (filepath.empty()){
 		LOG_DEBUG("filepath empty. Returning: %s", BASE_PATH.c_str());
@@ -588,7 +585,7 @@ std::string dirutil::getPathPrefix(std::string filepath) {
     bool isAbsolute = (filepath.find(':') != std::string::npos || filepath[0] == Constant::tempFileSep[0]);
 
     if (isAbsolute) {
-		LOG_DEBUG("filepath absolute. Returning: %s", filepath.c_str());
+		//LOG_DEBUG("filepath absolute. Returning: %s", filepath.c_str());
         return filepath;
     }
 
@@ -604,6 +601,6 @@ std::string dirutil::getPathPrefix(std::string filepath) {
         filepath.erase(0, 1);
     }
 
-	LOG_DEBUG("filepath relative. Returning: %s", (result + filepath).c_str());
+	//LOG_DEBUG("filepath relative. Returning: %s", (result + filepath).c_str());
     return result + filepath;
 }

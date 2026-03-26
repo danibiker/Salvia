@@ -9,6 +9,7 @@
 #include <so/launcher.h>
 #include <libretro/libretro.h>
 #include <utils/langmanager.h>
+#include <menus/mameparser.h>
 
 /* Definida en salvia.cpp — devuelve los descriptores de memoria que el core
  * envio via RETRO_ENVIRONMENT_SET_MEMORY_MAPS (ej. HRAM en Game Boy). */
@@ -32,8 +33,9 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 		showLangSystemMessage("msg.error.dblbuffer", 3000);
     }
 
+	int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
 	std::string initMsg = "Loading " + Constant::getAppExecutable() + "...";
-	Constant::drawTextCentTransparent(screen, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0,0, true, true, textColor, 0);
+	Constant::drawTextCentTransparent(screen, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, textColor, 0);
 	SDL_Flip(screen);
 
 	int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
@@ -41,7 +43,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	TTF_SizeText(Fonts::getFont(Fonts::FONTSMALL), "FPS: 888.8", &pixelDato, NULL);
 
 	rectFps.x = this->screen->w - pixelDato - 3;
-	rectFps.y = 0;
+	rectFps.y = 2*face_h;
 	rectFps.w = this->screen->w - rectFps.x;
 	rectFps.h = face_h;
 	bkgTextFps = SDL_MapRGB(this->screen->format, 0, 0, 0);
@@ -65,8 +67,10 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 
 	fpsSurface = NULL; 
 	cpuSurface = NULL;
+	memSurface = NULL;
 	bg_screenshot = NULL;
 	lastFpsUpdate = 0;
+	lastMemUpdate = 0;
 	cargarSystemAchievementTranslation(Constant::getAppDir() + ROUTE_ACHIEVEMENT_TRANSLATIONS);
 	initAchievements();
 	Icons::loadIcons();
@@ -80,6 +84,7 @@ GameMenu::~GameMenu(){
 
 	if (fpsSurface) SDL_FreeSurface(fpsSurface);
 	if (cpuSurface) SDL_FreeSurface(cpuSurface);
+	if (memSurface) SDL_FreeSurface(memSurface);
 	for (unsigned int i=0; i < messages.size(); i++) {
 		SDL_FreeSurface(messages[i].cache);
 	}
@@ -470,7 +475,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 
                 //Draw and update the screen because the loading of images can take a long time
                 if (listMenu.keyUp){
-                    string assetsDir = getPathPrefix(emu.assets) + string(Constant::tempFileSep);
+                    string assetsDir = dirutil::getPathPrefix(emu.assets) + string(Constant::tempFileSep);
                     //Drawing the rom's synopsis text
                     menuTextAreas[SYNOPSIS].loadTextFileFromGame(assetsDir + "synopsis" + string(Constant::tempFileSep), *game, ".txt");
                     menuTextAreas[SYNOPSIS].resetTicks(this->gameTicks);
@@ -505,7 +510,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
             } else if (listMenu.layout == LAYSIMPLE) {
                 if (listMenu.keyUp){
                     //Snapshot picture
-                    menuImages[SNAPFS].loadImageFromGame(getPathPrefix(emu.assets) + string(Constant::tempFileSep)
+                    menuImages[SNAPFS].loadImageFromGame(dirutil::getPathPrefix(emu.assets) + string(Constant::tempFileSep)
                         + "snap" + string(Constant::tempFileSep), *game, ".png");
                 }
                 menuImages[SNAPFS].printImage(this->video_page);
@@ -654,7 +659,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
     if (emu->use_rom_file && !emu->map_file.empty() && dir.fileExists(mapfilepath.c_str())){
         menuData.mapFileToList(mapfilepath);
     } else {
-        mapfilepath = getPathPrefix(emu->rom_directory);
+        mapfilepath = dirutil::getPathPrefix(emu->rom_directory);
         vector<unique_ptr<FileProps>> files;
 		
 		string extFilter = " " + emu->rom_extension;
@@ -669,7 +674,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
         dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, true, false);
 
 		ConfigEmu emu = *cfgLoader->getCfgEmu();
-        string mapfilepath = getPathPrefix(emu.rom_directory);
+        string mapfilepath = dirutil::getPathPrefix(emu.rom_directory);
 
         if (isDebug()){
             SDL_FillRect(screen, NULL, cblack);
@@ -684,47 +689,6 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
         menuData.filesToList(files, emu);
         files.clear();
     }
-}
-
-std::string GameMenu::getPathPrefix(std::string filepath) {
-	string BASE_PATH;
-	cfgLoader->configMain[cfg::path_prefix].getPropValue(BASE_PATH);
-
-	if (filepath.empty()){
-		LOG_DEBUG("filepath empty. Returning: %s", BASE_PATH.c_str());
-		return BASE_PATH;
-	}
-
-    // 2. Normalizar: Convertir todas las barras al estilo de la plataforma
-    // (Muy importante porque los Cores de Libretro suelen usar '/')
-    for (size_t i = 0; i < filepath.length(); ++i) {
-        if (filepath[i] == '/' || filepath[i] == '\\') {
-            filepath[i] = Constant::tempFileSep[0];
-        }
-    }
-
-    // 3. Detectar si es ruta absoluta (contiene ':' o empieza por SEP)
-    bool isAbsolute = (filepath.find(':') != std::string::npos || filepath[0] == Constant::tempFileSep[0]);
-
-    if (isAbsolute) {
-		LOG_DEBUG("filepath absolute. Returning: %s", filepath.c_str());
-        return filepath;
-    }
-
-    // 4. Concatenación inteligente (evitar game:\\roms o game:roms)
-    std::string result = BASE_PATH;
-    
-    // Si la base no termina en SEP y el filepath no empieza con SEP, añadirlo
-    if (result.at(result.length() - 1) != Constant::tempFileSep[0] && filepath[0] != Constant::tempFileSep[0]) {
-        result += Constant::tempFileSep[0];
-    } 
-    // Si ambos tienen SEP, quitar uno (opcional, pero limpia la ruta)
-    else if (result.at(result.length() - 1) == Constant::tempFileSep[0] && filepath[0] == Constant::tempFileSep[0]) {
-        filepath.erase(0, 1);
-    }
-
-	LOG_DEBUG("filepath relative. Returning: %s", (result + filepath).c_str());
-    return result + filepath;
 }
 
 /**
@@ -747,7 +711,7 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
         return commands;
 
 	ConfigEmu emu = *cfgLoader->getCfgEmu();
-	string pathPrefix = getPathPrefix(emu.directory);
+	string pathPrefix = dirutil::getPathPrefix(emu.directory);
 	
 	if (pathPrefix.at(pathPrefix.length()-1) != Constant::tempFileSep[0]){
 		pathPrefix += string(Constant::tempFileSep);
@@ -774,7 +738,7 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
     if (emu.use_rom_file){
         commands.emplace_back(encloseWithCharIfSpaces(game->shortFileName, "\"")); 
     } else {
-        string romdir = emu.use_rom_directory ? getPathPrefix(emu.rom_directory) + string(Constant::tempFileSep) : "";
+        string romdir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory) + string(Constant::tempFileSep) : "";
         string romFile = game->longFileName;
         string rom = emu.use_extension ? romFile : dir.getFileNameNoExt(romFile);
 
@@ -820,7 +784,7 @@ int GameMenu::saveGameMenuPos(ListMenu &menuData){
     // open file for writing
     outfile = fopen(filepath.c_str(), "wb");
     if (outfile == NULL) {
-        cerr << "Error openning file: " << filepath << endl;
+        LOG_ERROR("Error Writing to File: %s", filepath.c_str());
         return 1;
     }
 
@@ -831,9 +795,9 @@ int GameMenu::saveGameMenuPos(ListMenu &menuData){
     flag = fwrite(&input1, sizeof(struct ListStatus), 1, outfile);
 
     if (flag) {
-        cout << "Contents of the structure written successfully" << endl;
+        LOG_DEBUG("Contents of the structure written successfully");
     } else {
-        cerr << "Error Writing to File: " << filepath << endl;
+        LOG_ERROR("Error Writing to File: %s", filepath.c_str());
         ret = 1;
     }
     fclose(outfile);
@@ -871,33 +835,84 @@ int GameMenu::recoverGameMenuPos(ListMenu &menuData, struct ListStatus &read_str
 void GameMenu::updateFps(){
     if (*this->mustUpdateFps) {
         uint32_t currentTick = SDL_GetTicks();
-		const bool shouldUpdateSurface = currentTick - lastFpsUpdate > 500 || fpsSurface == NULL;
+        
+        // Temporizadores independientes
+        const bool shouldUpdateFps = (currentTick - lastFpsUpdate > 500) || fpsSurface == NULL;
+        const bool shouldUpdateMem = (currentTick - lastMemUpdate > 5000) || memSurface == NULL;
+		int lastCpuW = 0;
 
-        // 1. Calculamos la media (esto es rápido, solo matemáticas)
-		//this->sync->update_fps_counter(shouldUpdateSurface);
-		this->sync->update_fps_counter(shouldUpdateSurface);
+        // 1. Actualización de contadores internos
+        this->sync->update_fps_counter(shouldUpdateFps);
 
-        // 2. ¿Ha pasado tiempo suficiente para actualizar el NÚMERO? (ej. cada 500ms)
-        if (shouldUpdateSurface) {
-            // Liberamos la superficie anterior
-            if (fpsSurface) SDL_FreeSurface(fpsSurface);
-			if (cpuSurface) SDL_FreeSurface(cpuSurface);
-			
-            // Creamos la nueva superficie con el texto actualizado
-            // Asumimos que esta función devuelve una SDL_Surface* nueva
-			fpsSurface = TTF_RenderText(Fonts::getFont(Fonts::FONTSMALL), this->sync->fpsText, white, black);
-			cpuSurface = TTF_RenderText(Fonts::getFont(Fonts::FONTSMALL), this->sync->cpuText, white, black);
+        // 2. Lógica para FPS y CPU (cada 500ms)
+        if (shouldUpdateFps) {
+            if (fpsSurface) {
+				SDL_FreeSurface(fpsSurface);
+			}
+            if (cpuSurface) {
+				lastCpuW = cpuSurface->w;
+				SDL_FreeSurface(cpuSurface);
+			}
+            
+            fpsSurface = TTF_RenderText(Fonts::getFont(Fonts::FONTSMALL), this->sync->fpsText, white, black);
+            cpuSurface = TTF_RenderText(Fonts::getFont(Fonts::FONTSMALL), this->sync->cpuText, white, black);
+            
             lastFpsUpdate = currentTick;
         }
 
-        // 3. DIBUJO (Esto se hace EN CADA FRAME y es muy rápido)
-        if (fpsSurface && cpuSurface) {
-            // Borramos el fondo del OSD
+        // 3. Lógica para MEMORIA (cada 5000ms / 5 segundos)
+		if (shouldUpdateMem) {
+			if (memSurface) SDL_FreeSurface(memSurface);
+			
+			double availMB = 0;
+			double totalPercent = 0;
+#ifdef _XBOX
+			MEMORYSTATUS ms;
+			ms.dwLength = sizeof(ms);
+			GlobalMemoryStatus(&ms);
+			availMB = (double)ms.dwAvailPhys / (1024.0 * 1024.0);
+			// Cálculo manual del porcentaje: (Usado / Total) * 100
+			double totalPhys = (double)ms.dwTotalPhys;
+			if (totalPhys > 0) {
+				totalPercent = ((totalPhys - (double)ms.dwAvailPhys) / totalPhys) * 100.0;
+			} else {
+				totalPercent = 0.0;
+			}
+#else 
+			MEMORYSTATUSEX ms;
+			ms.dwLength = sizeof(ms); // <--- OBLIGATORIO para GlobalMemoryStatusEx
+			GlobalMemoryStatusEx(&ms);
+			availMB = (double)ms.ullAvailPhys / (1024.0 * 1024.0);
+			totalPercent = ms.dwMemoryLoad;
+#endif
+			char memText[64];
+			// Usamos double para mayor precisión en los cálculos de GB
+			if (availMB >= 1024.0) {
+				sprintf(memText, "MEM: %.0f%% (%.2fGB Free)", totalPercent, availMB / 1024.0);
+			} else {
+				sprintf(memText, "MEM: %.0f%% (%.0fMB Free)", totalPercent, availMB);
+			}
+
+			memSurface = TTF_RenderText(Fonts::getFont(Fonts::FONTSMALL), memText, white, black);
+			lastMemUpdate = currentTick;
+		}
+
+        // 4. DIBUJO (En cada frame, usando las superficies actuales)
+        if (fpsSurface && cpuSurface && memSurface) {
+            // Dibujar MEM (Posición relativa a CPU)
+            SDL_Rect rectMem = {this->screen->w - memSurface->w -3, 1, memSurface->w, memSurface->h};
+            SDL_FillRect(this->screen, &rectMem, bkgTextFps);
+            SDL_BlitSurface(memSurface, NULL, this->screen, &rectMem);
+
+            // Dibujar CPU (Posición relativa a FPS)
+            SDL_Rect rectCpu = {rectFps.x, rectFps.y - fpsSurface->h, lastCpuW != cpuSurface->w ? lastCpuW : cpuSurface->w, cpuSurface->h};
+            SDL_FillRect(this->screen, &rectCpu, bkgTextFps);
+            SDL_BlitSurface(cpuSurface, NULL, this->screen, &rectCpu);
+			lastCpuW = cpuSurface->w;
+
+			// Dibujar FPS
             SDL_FillRect(this->screen, &rectFps, bkgTextFps);
             SDL_BlitSurface(fpsSurface, NULL, this->screen, &rectFps);
-			SDL_Rect rectCpu = {rectFps.x, rectFps.y + fpsSurface->h, this->screen->w - rectFps.x, fpsSurface->h};
-			SDL_FillRect(this->screen, &rectCpu, bkgTextFps);
-			SDL_BlitSurface(cpuSurface, NULL, this->screen, &rectCpu);
         }
     }
 }

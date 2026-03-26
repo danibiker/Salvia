@@ -34,19 +34,19 @@ void Sync::init_fps_counter(double gameFps){
         // Mantenemos el frameDelay como double para el limitador de alta precisión
         this->frameDelay = 1000.0 / gameFps; 
         
-        // Para los promedios (que parecen usar enteros), usamos el redondeo más cercano
+        // Para los promedios (que parecen usar enteros), usamos el redondeo mas cercano
         initAverages((uint32_t)(frameDelay + 0.5));
     } else {
-        // Fallback por si gameFps es inválido
+        // Fallback por si gameFps es invalido
         initAverages((uint32_t)frameDelay);
     }
 }
 
 void Sync::update_fps_counter(bool updateFpsOverlay) {
 	uint32_t currentTick = SDL_GetTicks();
-    if (g_lastFrameTick == 0) g_lastFrameTick = currentTick; // Inicialización en el primer uso
+    if (g_lastFrameTick == 0) g_lastFrameTick = currentTick; // Inicializacion en el primer uso
     
-	// Calculamos cuánto tiempo ha pasado realmente desde el frame anterior
+	// Calculamos cuanto tiempo ha pasado realmente desde el frame anterior
 	uint32_t frameTime = currentTick - g_lastFrameTick;
 	g_lastFrameTick = currentTick;
 
@@ -61,7 +61,7 @@ void Sync::update_fps_counter(bool updateFpsOverlay) {
 			totalTime += g_frameTimes[i];
 		}
 
-		// Calculamos la media (evitando división por cero)
+		// Calculamos la media (evitando division por cero)
 		if (totalTime > 0) {
 			// FPS = 1000ms / promedio_de_frame_en_ms
 			// Es lo mismo que: (1000 * cantidad_de_frames) / tiempo_total
@@ -89,7 +89,8 @@ void Sync::limit_fps(double& nextFrameTime) {
         if (currentUtilization > 200.0) currentUtilization = 200.0;
 
         // Suavizado EMA (alpha=0.1 para ~10 frames de convergencia)
-        this->utilization = (this->utilization * 0.9) + (currentUtilization * 0.1);
+        //this->utilization = (this->utilization * 0.9) + (currentUtilization * 0.1);
+		this->utilization = currentUtilization;
     }
 
     if (diffTime > 0) {
@@ -101,7 +102,6 @@ void Sync::limit_fps(double& nextFrameTime) {
 
         // ESPERA ACTIVA: Clava el microsegundo exacto
         while (Constant::getTicks() < nextFrameTime) {
-            // _mm_pause() para optimizar el consumo
 			#ifdef _XBOX
 				YieldProcessor();
 			#elif defined(WIN)
@@ -109,11 +109,11 @@ void Sync::limit_fps(double& nextFrameTime) {
 			#endif
         }
     } else if (diffTime < -100.0) {
-        // Si hay un lag masivo, reseteamos para evitar el efecto "cámara rápida"
+        // Si hay un lag masivo, reseteamos para evitar el efecto "camara rapida"
         nextFrameTime = currentTime;
     }
 
-    // Registramos el instante en que terminamos de esperar (= inicio del trabajo del pr�ximo frame)
+    // Registramos el instante en que terminamos de esperar (= inicio del trabajo del proximo frame)
     lastWorkEnd = Constant::getTicks();
 
     // El siguiente frame se calcula sobre el objetivo ideal
