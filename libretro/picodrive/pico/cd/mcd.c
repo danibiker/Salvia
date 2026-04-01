@@ -167,14 +167,16 @@ unsigned int pcd_cycles_m68k_to_s68k(unsigned int c)
 static void pcd_cdc_event(unsigned int now)
 {
   int audio = Pico_mcd->s68k_regs[0x36] & 0x1;
+  int cycles;
+  int samples;
 
   // 75Hz CDC update
   cdd_update();
 
   // main 68k cycles since frame start
-  int cycles = 1LL*(now-mcd_s68k_cycle_base) * mcd_s68k_cycle_mult >> 16;
+  cycles = 1LL*(now-mcd_s68k_cycle_base) * mcd_s68k_cycle_mult >> 16;
   // samples@rate since frame start
-  int samples = 1LL * cycles_68k_to_z80(cycles) * Pico.snd.clkz_mult >> 20;
+  samples = 1LL * cycles_68k_to_z80(cycles) * Pico.snd.clkz_mult >> 20;
   // samples@44100Hz since frame start
   samples = samples * Pico.snd.cdda_mult >> 16;
   if (samples < 2352/4) // save offset to 1st used sample for state saving

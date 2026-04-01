@@ -179,76 +179,90 @@ static u8 vdp_hcounter(int cycles)
 static unsigned char kbd_matrix[12];
 
 // row | col
-static unsigned char kbd_map[] = {
-  [PEVB_KBD_1]         = 0x00,
-  [PEVB_KBD_2]         = 0x01,
-  [PEVB_KBD_3]         = 0x02,
-  [PEVB_KBD_4]         = 0x03,
-  [PEVB_KBD_5]         = 0x04,
-  [PEVB_KBD_6]         = 0x05,
-  [PEVB_KBD_7]         = 0x06,
-  [PEVB_KBD_8]         = 0x80,
-  [PEVB_KBD_9]         = 0x81,
-  [PEVB_KBD_0]         = 0x82,
-  [PEVB_KBD_MINUS]     = 0x83,
-  [PEVB_KBD_CARET]     = 0x84,
-  [PEVB_KBD_YEN]       = 0x85,
-  [PEVB_KBD_ESCAPE]    = 0x86, // break
+/* 1. Declaración del array (Ajusta el tamaño si tus constantes superan 256) */
+static unsigned char kbd_map[256];
 
-  [PEVB_KBD_q]         = 0x10,
-  [PEVB_KBD_w]         = 0x11,
-  [PEVB_KBD_e]         = 0x12,
-  [PEVB_KBD_r]         = 0x13,
-  [PEVB_KBD_t]         = 0x14,
-  [PEVB_KBD_y]         = 0x15,
-  [PEVB_KBD_u]         = 0x16,
-  [PEVB_KBD_i]         = 0x70,
-  [PEVB_KBD_o]         = 0x71,
-  [PEVB_KBD_p]         = 0x72,
-  [PEVB_KBD_AT]        = 0x73,
-  [PEVB_KBD_LEFTBRACKET] = 0x74,
+/* 2. Función de inicialización compatible con VS2010 */
+void init_kbd_map(void) 
+{
+    /* Limpiamos el array con ceros por si acaso */
+    memset(kbd_map, 0, sizeof(kbd_map));
 
-  [PEVB_KBD_a]         = 0x20,
-  [PEVB_KBD_s]         = 0x21,
-  [PEVB_KBD_d]         = 0x22,
-  [PEVB_KBD_f]         = 0x23,
-  [PEVB_KBD_g]         = 0x24,
-  [PEVB_KBD_h]         = 0x25,
-  [PEVB_KBD_j]         = 0x26,
-  [PEVB_KBD_k]         = 0x60,
-  [PEVB_KBD_l]         = 0x61,
-  [PEVB_KBD_SEMICOLON] = 0x62,
-  [PEVB_KBD_COLON]     = 0x63,
-  [PEVB_KBD_RIGHTBRACKET] = 0x64,
-  [PEVB_KBD_RETURN]    = 0x65,
-  [PEVB_KBD_UP]        = 0x66, // up
+    /* Fila de números */
+    kbd_map[PEVB_KBD_1]         = 0x00;
+    kbd_map[PEVB_KBD_2]         = 0x01;
+    kbd_map[PEVB_KBD_3]         = 0x02;
+    kbd_map[PEVB_KBD_4]         = 0x03;
+    kbd_map[PEVB_KBD_5]         = 0x04;
+    kbd_map[PEVB_KBD_6]         = 0x05;
+    kbd_map[PEVB_KBD_7]         = 0x06;
+    kbd_map[PEVB_KBD_8]         = 0x80;
+    kbd_map[PEVB_KBD_9]         = 0x81;
+    kbd_map[PEVB_KBD_0]         = 0x82;
+    kbd_map[PEVB_KBD_MINUS]     = 0x83;
+    kbd_map[PEVB_KBD_CARET]     = 0x84;
+    kbd_map[PEVB_KBD_YEN]       = 0x85;
+    kbd_map[PEVB_KBD_ESCAPE]    = 0x86;
 
-  [PEVB_KBD_z]         = 0x30,
-  [PEVB_KBD_x]         = 0x31,
-  [PEVB_KBD_c]         = 0x32,
-  [PEVB_KBD_v]         = 0x33,
-  [PEVB_KBD_b]         = 0x34,
-  [PEVB_KBD_n]         = 0x35,
-  [PEVB_KBD_m]         = 0x36,
-  [PEVB_KBD_COMMA]     = 0x50,
-  [PEVB_KBD_PERIOD]    = 0x51,
-  [PEVB_KBD_SLASH]     = 0x52,
-  [PEVB_KBD_RO]        = 0x53, // pi
-  [PEVB_KBD_DOWN]      = 0x54, // down
-  [PEVB_KBD_LEFT]      = 0x55, // left
-  [PEVB_KBD_RIGHT]     = 0x56, // right
+    /* Fila Q-W-E-R-T-Y */
+    kbd_map[PEVB_KBD_q]         = 0x10;
+    kbd_map[PEVB_KBD_w]         = 0x11;
+    kbd_map[PEVB_KBD_e]         = 0x12;
+    kbd_map[PEVB_KBD_r]         = 0x13;
+    kbd_map[PEVB_KBD_t]         = 0x14;
+    kbd_map[PEVB_KBD_y]         = 0x15;
+    kbd_map[PEVB_KBD_u]         = 0x16;
+    kbd_map[PEVB_KBD_i]         = 0x70;
+    kbd_map[PEVB_KBD_o]         = 0x71;
+    kbd_map[PEVB_KBD_p]         = 0x72;
+    kbd_map[PEVB_KBD_AT]        = 0x73;
+    kbd_map[PEVB_KBD_LEFTBRACKET] = 0x74;
 
-  [PEVB_KBD_CJK]       = 0x40, // kana
-  [PEVB_KBD_SPACE]     = 0x41, // space
-  [PEVB_KBD_HOME]      = 0x42, // clear/home
-  [PEVB_KBD_BACKSPACE] = 0x43, // del/ins
+    /* Fila A-S-D-F-G */
+    kbd_map[PEVB_KBD_a]         = 0x20;
+    kbd_map[PEVB_KBD_s]         = 0x21;
+    kbd_map[PEVB_KBD_d]         = 0x22;
+    kbd_map[PEVB_KBD_f]         = 0x23;
+    kbd_map[PEVB_KBD_g]         = 0x24;
+    kbd_map[PEVB_KBD_h]         = 0x25;
+    kbd_map[PEVB_KBD_j]         = 0x26;
+    kbd_map[PEVB_KBD_k]         = 0x60;
+    kbd_map[PEVB_KBD_l]         = 0x61;
+    kbd_map[PEVB_KBD_SEMICOLON] = 0x62;
+    kbd_map[PEVB_KBD_COLON]     = 0x63;
+    kbd_map[PEVB_KBD_RIGHTBRACKET] = 0x64;
+    kbd_map[PEVB_KBD_RETURN]    = 0x65;
+    kbd_map[PEVB_KBD_UP]        = 0x66;
 
-  [PEVB_KBD_SOUND]     = 0x96, // graph
-  [PEVB_KBD_CAPSLOCK]  = 0xa6, // ctrl
-  [PEVB_KBD_FUNC]      = 0xb5, // func
-  [PEVB_KBD_LSHIFT]    = 0xb6, // shift (both keys on the same column)
-  [PEVB_KBD_RSHIFT]    = 0xb6,
-};
+    /* Fila Z-X-C-V-B */
+    kbd_map[PEVB_KBD_z]         = 0x30;
+    kbd_map[PEVB_KBD_x]         = 0x31;
+    kbd_map[PEVB_KBD_c]         = 0x32;
+    kbd_map[PEVB_KBD_v]         = 0x33;
+    kbd_map[PEVB_KBD_b]         = 0x34;
+    kbd_map[PEVB_KBD_n]         = 0x35;
+    kbd_map[PEVB_KBD_m]         = 0x36;
+    kbd_map[PEVB_KBD_COMMA]     = 0x50;
+    kbd_map[PEVB_KBD_PERIOD]    = 0x51;
+    kbd_map[PEVB_KBD_SLASH]     = 0x52;
+    kbd_map[PEVB_KBD_RO]        = 0x53;
+    kbd_map[PEVB_KBD_DOWN]      = 0x54;
+    kbd_map[PEVB_KBD_LEFT]      = 0x55;
+    kbd_map[PEVB_KBD_RIGHT]     = 0x56;
+
+    /* Teclas especiales */
+    kbd_map[PEVB_KBD_CJK]       = 0x40;
+    kbd_map[PEVB_KBD_SPACE]     = 0x41;
+    kbd_map[PEVB_KBD_HOME]      = 0x42;
+    kbd_map[PEVB_KBD_BACKSPACE] = 0x43;
+
+    /* Modificadores */
+    kbd_map[PEVB_KBD_SOUND]     = 0x96;
+    kbd_map[PEVB_KBD_CAPSLOCK]  = 0xa6;
+    kbd_map[PEVB_KBD_FUNC]      = 0xb5;
+    kbd_map[PEVB_KBD_LSHIFT]    = 0xb6;
+    kbd_map[PEVB_KBD_RSHIFT]    = 0xb6;
+}
 
 static void kbd_update(void)
 {
@@ -540,8 +554,9 @@ static unsigned char z80_sms_in(unsigned short a)
 
 static void z80_sms_out(unsigned short a, unsigned char d)
 {
+  static int chr, bit;
   elprintf(EL_IO, "z80 port %04x write %02x", a, d);
-
+  
   a &= 0xff;
   if (a >= 0xf0){
     if (Pico.m.hardware & PMS_HW_FM) {
@@ -618,7 +633,7 @@ static void z80_sms_out(unsigned short a, unsigned char d)
           // Printer data is sent at about 4.7 KBaud, 10 bits per character:
           // start=0, 8 data bits (LSB first), stop=1. data line is inverted.
           // no Baud tracking needed as all bits are sent through here.
-          static int chr, bit;
+          
           if (b == 4) { // tape out
             tape_write(z80_cyclesDone(), d&1);
           } else if (b == 5) { // !data
@@ -895,19 +910,28 @@ static void write_bank_x32k(unsigned short a, unsigned char d)
   z80_map_set(z80_write_map, a, a+0x7fff, PicoMem.vram+0x4000, 0);
 }
 
-char *mappers[] = {
-  [PMS_MAP_SEGA]     = "Sega",
-  [PMS_MAP_CODEM]    = "Codemasters",
-  [PMS_MAP_KOREA]    = "Korea",
-  [PMS_MAP_MSX]      = "Korea MSX",
-  [PMS_MAP_N32K]     = "Korea X-in-1",
-  [PMS_MAP_N16K]     = "Korea 4-Pak",
-  [PMS_MAP_JANGGUN]  = "Korea Janggun",
-  [PMS_MAP_NEMESIS]  = "Korea Nemesis",
-  [PMS_MAP_8KBRAM]   = "Taiwan 8K RAM",
-  [PMS_MAP_XOR]      = "Korea XOR",
-  [PMS_MAP_32KBRAM]  = "Sega 32K RAM",
-};
+/* 1. Declaración del array de punteros */
+/* Ajusta el tamaño (ej. 16 o 32) según el valor máximo de tus constantes PMS_MAP */
+static char *mappers[16]; 
+
+/* 2. Función de inicialización */
+void init_mappers_names(void)
+{
+    /* Limpiamos el array para que los índices no usados sean NULL */
+    memset(mappers, 0, sizeof(mappers));
+
+    mappers[PMS_MAP_SEGA]    = "Sega";
+    mappers[PMS_MAP_CODEM]   = "Codemasters";
+    mappers[PMS_MAP_KOREA]   = "Korea";
+    mappers[PMS_MAP_MSX]     = "Korea MSX";
+    mappers[PMS_MAP_N32K]    = "Korea X-in-1";
+    mappers[PMS_MAP_N16K]    = "Korea 4-Pak";
+    mappers[PMS_MAP_JANGGUN] = "Korea Janggun";
+    mappers[PMS_MAP_NEMESIS] = "Korea Nemesis";
+    mappers[PMS_MAP_8KBRAM]  = "Taiwan 8K RAM";
+    mappers[PMS_MAP_XOR]     = "Korea XOR";
+    mappers[PMS_MAP_32KBRAM] = "Sega 32K RAM";
+}
 
 // TODO auto-selecting is not really reliable.
 // Before adding more mappers this should be revised.

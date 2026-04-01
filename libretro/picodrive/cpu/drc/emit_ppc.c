@@ -4,7 +4,73 @@
  *
  * This work is licensed under the terms of MAME license.
  * See COPYING file in the top-level directory.
+ *
+ * Xbox 360 XDK / Visual Studio 2010 adaptation
  */
+
+/* Xbox 360 / MSVC specific headers */
+#include <ppcintrinsics.h>
+
+/* Type definitions for compatibility */
+#ifndef _EMIT_PPC_TYPES_DEFINED
+#define _EMIT_PPC_TYPES_DEFINED
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef unsigned __int64 u64;
+typedef signed char s8;
+typedef signed short s16;
+typedef signed int s32;
+typedef signed __int64 s64;
+#endif
+
+/* MSVC replacements for GCC builtins */
+#ifdef _MSC_VER
+static __inline int msvc_builtin_ffs(unsigned int x) {
+	unsigned long index;
+	if (_BitScanForward(&index, x))
+		return (int)(index + 1);
+	return 0;
+}
+
+static __inline int msvc_builtin_clz(unsigned int x) {
+	unsigned long index;
+	if (_BitScanReverse(&index, x))
+		return 31 - (int)index;
+	return 32;
+}
+
+static __inline int msvc_builtin_ctz(unsigned int x) {
+	unsigned long index;
+	if (_BitScanForward(&index, x))
+		return (int)index;
+	return 32;
+}
+
+static __inline int msvc_builtin_popcount(unsigned int x) {
+	x = x - ((x >> 1) & 0x55555555);
+	x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
+	x = (x + (x >> 4)) & 0x0F0F0F0F;
+	x = x + (x >> 8);
+	x = x + (x >> 16);
+	return x & 0x0000003F;
+}
+
+static __inline int msvc_builtin_parity(unsigned int x) {
+	x ^= x >> 16;
+	x ^= x >> 8;
+	x ^= x >> 4;
+	x ^= x >> 2;
+	x ^= x >> 1;
+	return x & 1;
+}
+
+#define __builtin_ffs msvc_builtin_ffs
+#define __builtin_clz msvc_builtin_clz
+#define __builtin_ctz msvc_builtin_ctz
+#define __builtin_popcount msvc_builtin_popcount
+#define __builtin_parity msvc_builtin_parity
+#endif
 
 // NB bit numbers are reversed in PPC (MSB is bit 0). The emith_* functions and
 // macros must take this into account.
@@ -42,7 +108,7 @@
 // for OSX PIC code, on function calls r12 must contain the called address
 #define TOC_REG		2
 #define RET_REG		3
-#define PARAM_REGS	{ 3, 4, 5, 6, 7, 8, 9, 10 }
+#define PARAM_REGS	{ 3, 5, 6, 7, 8, 9, 10 }  /* r4 REMOVIDO */
 #define PRESERVED_REGS	{ 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 }
 #define TEMPORARY_REGS	{ 12 }
 
@@ -407,7 +473,7 @@ enum { OPS_STD, OPS_STDU /*,OPS_STQ*/ };
 #define	PPC_MCRCR_REG(crt, crf) \
 	PPC_OP_REG(OP__CR,OPC_MCRF,(crt)<<2,(crf)<<1,_)
 
-#ifdef __powerpc64__
+#if 0 /* Xbox 360 is 32-bit */
 #define PTR_SCALE			3
 #define PPC_LDP_IMM			PPC_LDX_IMM
 #define PPC_LDP_REG			PPC_LDX_REG
@@ -510,8 +576,8 @@ enum { OPS_STD, OPS_STDU /*,OPS_STQ*/ };
 	EMIT_PTR(ptr, PPC_B(val_ & 0x03ffffffc)); \
 }
 
-#define EMITH_JMP_START(cond) \
-{	int cond_m = emith_cond_check(cond); \
+#define EMITH_JMP_START(cond) { \
+	int cond_m = emith_cond_check(cond); \
 	u8 *cond_ptr; \
 	JMP_POS(cond_ptr)
 
@@ -519,8 +585,8 @@ enum { OPS_STD, OPS_STDU /*,OPS_STQ*/ };
 	JMP_EMIT(cond, cond_ptr); \
 }
 
-#define EMITH_JMP3_START(cond) \
-{	int cond_m = emith_cond_check(cond); \
+#define EMITH_JMP3_START(cond) { \
+	int cond_m = emith_cond_check(cond); \
 	u8 *cond_ptr, *else_ptr; \
 	JMP_POS(cond_ptr)
 
@@ -616,9 +682,13 @@ static void emith_set_compare_flags(int ra, int rb, s32 imm)
 
 #define emith_move_r_r_ptr(d, s) \
 	EMIT(PPC_MOV_REG(d, s))
+#define emith_move_r_r_ptr_c(cond, d, s) \
+	emith_move_r_r_ptr(d, s)
 
 #define emith_move_r_r(d, s) \
 	emith_move_r_r_ptr(d, s)
+#define emith_move_r_r_c(cond, d, s) \
+	emith_move_r_r(d, s)
 
 #define emith_mvn_r_r(d, s) \
 	EMIT(PPC_MVN_REG(d, s))
@@ -806,6 +876,8 @@ static void emith_set_compare_flags(int ra, int rb, s32 imm)
 
 #define emith_and_r_r(d, s) \
 	emith_and_r_r_r(d, d, s)
+#define emith_and_r_r_c(cond, d, s) \
+	emith_and_r_r(d, s)
 
 #define emith_or_r_r(d, s) \
 	emith_or_r_r_r(d, d, s)
@@ -855,7 +927,7 @@ static void emith_set_compare_flags(int ra, int rb, s32 imm)
 
 static void emith_move_imm(int r, int ptr, uintptr_t imm)
 {
-#ifdef __powerpc64__
+#if 0 /* Xbox 360 is 32-bit */
 	if (ptr && (s32)imm != imm) {
 		emith_move_imm(r, 0, imm >> 32);
 		if (imm >> 32)
@@ -878,6 +950,8 @@ static void emith_move_imm(int r, int ptr, uintptr_t imm)
 
 #define emith_move_r_imm(r, imm) \
 	emith_move_imm(r, 0, (u32)(imm))
+#define emith_move_r_imm_c(cond, r, imm) \
+	emith_move_r_imm(r, imm)
 
 #define emith_move_r_imm_s8_patchable(r, imm) \
 	EMIT(PPC_ADD_IMM(r, Z0, (s8)(imm)))
@@ -903,12 +977,16 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 
 #define emith_add_r_imm(r, imm) \
 	emith_add_r_r_imm(r, r, imm)
+#define emith_add_r_imm_c(cond, r, imm) \
+	emith_add_r_imm(r, imm)
 
 #define emith_addf_r_imm(r, imm) \
 	emith_addf_r_r_imm(r, imm)
 
 #define emith_sub_r_imm(r, imm) \
 	emith_sub_r_r_imm(r, r, imm)
+#define emith_sub_r_imm_c(cond, r, imm) \
+	emith_sub_r_imm(r, imm)
 
 #define emith_subf_r_imm(r, imm) \
 	emith_subf_r_r_imm(r, r, imm)
@@ -956,6 +1034,8 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 // NB: no SUBI, since ADDI takes a signed imm
 #define emith_sub_r_r_imm(d, s, imm) \
 	emith_add_r_r_imm(d, s, -(imm))
+#define emith_sub_r_r_imm_c(cond, d, s, imm) \
+	emith_sub_r_r_imm(d, s, imm)
 
 #define emith_subf_r_r_imm(d, s, imm) do { \
 	emith_sub_r_r_imm(FNZ, s, imm); \
@@ -979,21 +1059,31 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 
 #define emith_or_r_imm(r, imm) \
 	emith_log_imm(OR, r, r, imm)
+#define emith_or_r_imm_c(cond, r, imm) \
+	emith_or_r_imm(r, imm)
 
 #define emith_eor_r_imm_ptr(r, imm) \
 	emith_log_imm(XOR, r, r, imm)
+#define emith_eor_r_imm_ptr_c(cond, r, imm) \
+	emith_eor_r_imm_ptr(r, imm)
 
 #define emith_eor_r_imm(r, imm) \
 	emith_eor_r_imm_ptr(r, imm)
+#define emith_eor_r_imm_c(cond, r, imm) \
+	emith_eor_r_imm(r, imm)
 
 /* NB: BIC #imm not available; use AND #~imm instead */
 #define emith_bic_r_imm(r, imm) \
 	emith_log_imm(AND, r, r, ~(imm))
+#define emith_bic_r_imm_c(cond, r, imm) \
+	emith_bic_r_imm(r, imm)
 
 #define emith_tst_r_imm(r, imm) do { \
 	emith_log_imm(AND, FNZ, r, imm); \
 	emith_cmp_ra = emith_cmp_rb = -1; \
 } while (0)
+#define emith_tst_r_imm_c(cond, r, imm) \
+	emith_tst_r_imm(r, imm)
 
 #define emith_and_r_r_imm(d, s, imm) \
 	emith_log_imm(AND, d, s, imm)
@@ -1017,6 +1107,8 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 
 #define emith_ror(d, s, cnt) \
 	EMIT(PPC_ROLW_IMM(d, s, 32-(cnt)))
+#define emith_ror_c(cond, d, s, cnt) \
+	emith_ror(d, s, cnt)
 
 #define emith_rol(d, s, cnt) \
 	EMIT(PPC_ROLW_IMM(d, s, cnt)); \
@@ -1113,6 +1205,8 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 #define emith_clear_msb(d, s, count) /* bits to clear */ \
 	EMIT(PPC_BFXW_IMM(d, s, count, 32-(count)))
 
+#define emith_clear_msb_c(cond, d, s, count) \
+	emith_clear_msb(d, s, count)
 
 #define emith_sext(d, s, count) /* bits to keep */ do { \
 	if (count == 8) \
@@ -1138,70 +1232,104 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 
 #define emith_mula_s64(dlo, dhi, s1, s2) \
 	EMIT_PPC_MACLS_REG(dlo, dhi, s1, s2)
+#define emith_mula_s64_c(cond, dlo, dhi, s1, s2) \
+	emith_mula_s64(dlo, dhi, s1, s2)
 
 // load/store. offs has 16 bits signed, which is currently sufficient
 #define emith_read_r_r_offs_ptr(r, ra, offs) \
 	EMIT(PPC_LDP_IMM(r, ra, offs))
+#define emith_read_r_r_offs_ptr_c(cond, r, ra, offs) \
+	emith_read_r_r_offs_ptr(r, ra, offs)
 
 #define emith_read_r_r_offs(r, ra, offs) \
 	EMIT(PPC_LDW_IMM(r, ra, offs))
+#define emith_read_r_r_offs_c(cond, r, ra, offs) \
+	emith_read_r_r_offs(r, ra, offs)
  
 #define emith_read_r_r_r_ptr(r, ra, rm) \
 	EMIT(PPC_LDP_REG(r, ra, rm))
 
 #define emith_read_r_r_r(r, ra, rm) \
 	EMIT(PPC_LDW_REG(r, ra, rm))
+#define emith_read_r_r_r_c(cond, r, ra, rm) \
+	emith_read_r_r_r(r, ra, rm)
 
 #define emith_read8_r_r_offs(r, ra, offs) \
 	EMIT(PPC_LDB_IMM(r, ra, offs))
+#define emith_read8_r_r_offs_c(cond, r, ra, offs) \
+	emith_read8_r_r_offs(r, ra, offs)
 
 #define emith_read8_r_r_r(r, ra, rm) \
 	EMIT(PPC_LDB_REG(r, ra, rm))
+#define emith_read8_r_r_r_c(cond, r, ra, rm) \
+	emith_read8_r_r_r(r, ra, rm)
 
 #define emith_read16_r_r_offs(r, ra, offs) \
 	EMIT(PPC_LDH_IMM(r, ra, offs))
+#define emith_read16_r_r_offs_c(cond, r, ra, offs) \
+	emith_read16_r_r_offs(r, ra, offs)
 
 #define emith_read16_r_r_r(r, ra, rm) \
 	EMIT(PPC_LDH_REG(r, ra, rm))
+#define emith_read16_r_r_r_c(cond, r, ra, rm) \
+	emith_read16_r_r_r(r, ra, rm)
 
 #define emith_read8s_r_r_offs(r, ra, offs) do { \
 	EMIT(PPC_LDB_IMM(r, ra, offs)); \
 	EMIT(PPC_EXTSB_REG(r, r)); \
 } while (0)
+#define emith_read8s_r_r_offs_c(cond, r, ra, offs) \
+	emith_read8s_r_r_offs(r, ra, offs)
 
 #define emith_read8s_r_r_r(r, ra, rm) do { \
 	EMIT(PPC_LDB_REG(r, ra, rm)); \
 	EMIT(PPC_EXTSB_REG(r, r)); \
 } while (0)
+#define emith_read8s_r_r_r_c(cond, r, ra, rm) \
+	emith_read8s_r_r_r(r, ra, rm)
 
 #define emith_read16s_r_r_offs(r, ra, offs) do { \
 	EMIT(PPC_LDH_IMM(r, ra, offs)); \
 	EMIT(PPC_EXTSH_REG(r, r)); \
 } while (0)
+#define emith_read16s_r_r_offs_c(cond, r, ra, offs) \
+	emith_read16s_r_r_offs(r, ra, offs)
 
 #define emith_read16s_r_r_r(r, ra, rm) do { \
 	EMIT(PPC_LDH_REG(r, ra, rm)); \
 	EMIT(PPC_EXTSH_REG(r, r)); \
 } while (0)
+#define emith_read16s_r_r_r_c(cond, r, ra, rm) \
+	emith_read16s_r_r_r(r, ra, rm)
 
 
 #define emith_write_r_r_offs_ptr(r, ra, offs) \
 	EMIT(PPC_STP_IMM(r, ra, offs))
+#define emith_write_r_r_offs_ptr_c(cond, r, ra, offs) \
+	emith_write_r_r_offs_ptr(r, ra, offs)
 
 #define emith_write_r_r_r_ptr(r, ra, rm) \
 	EMIT(PPC_STP_REG(r, ra, rm))
+#define emith_write_r_r_r_ptr_c(cond, r, ra, rm) \
+	emith_write_r_r_r_ptr(r, ra, rm)
 
 #define emith_write_r_r_offs(r, ra, offs) \
 	EMIT(PPC_STW_IMM(r, ra, offs))
+#define emith_write_r_r_offs_c(cond, r, ra, offs) \
+	emith_write_r_r_offs(r, ra, offs)
 
 #define emith_write_r_r_r(r, ra, rm) \
 	EMIT(PPC_STW_REG(r, ra, rm))
+#define emith_write_r_r_r_c(cond, r, ra, rm) \
+	emith_write_r_r_r(r, ra, rm)
 
 #define emith_ctx_read_ptr(r, offs) \
 	emith_read_r_r_offs_ptr(r, CONTEXT_REG, offs)
 
 #define emith_ctx_read(r, offs) \
 	emith_read_r_r_offs(r, CONTEXT_REG, offs)
+#define emith_ctx_read_c(cond, r, offs) \
+	emith_ctx_read(r, offs)
 
 #define emith_ctx_write_ptr(r, offs) \
 	emith_write_r_r_offs_ptr(r, CONTEXT_REG, offs)
@@ -1424,11 +1552,15 @@ static int emith_cond_check(int cond)
 	EMIT(PPC_MTSP_REG(r, CTR)); \
 	EMIT(PPC_BCTRCOND(BXX)); \
 } while(0)
+#define emith_jump_reg_c(cond, r) \
+	emith_jump_reg(r)
 
 #define emith_jump_ctx(offs) do { \
 	emith_ctx_read_ptr(CR, offs); \
 	emith_jump_reg(CR); \
 } while (0)
+#define emith_jump_ctx_c(cond, offs) \
+	emith_jump_ctx(offs)
 
 #define emith_call(target) do { \
 	u32 disp_ = (u8 *)target - (u8 *)tcache_ptr; \
@@ -1447,9 +1579,6 @@ static int emith_cond_check(int cond)
 	emith_abicall_reg(CR); \
 } while (0)
 
-#define emith_abijump(target) \
-	emith_move_r_ptr_imm(CR, target); \
-	emith_abijump_reg(CR);
 #ifdef __PS3__
 #define emith_abijump_reg(r) \
 	emith_read_r_r_offs_ptr(TOC_REG, r, PTR_SIZE); \
@@ -1460,9 +1589,13 @@ static int emith_cond_check(int cond)
 	if ((r) != CR) emith_move_r_r(CR, r); \
 	emith_jump_reg(CR)
 #endif
+#define emith_abijump_reg_c(cond, r) \
+	emith_abijump_reg(r)
 #define emith_abicall(target) \
 	emith_move_r_ptr_imm(CR, target); \
 	emith_abicall_reg(CR);
+#define emith_abicall_cond(cond, target) \
+	emith_abicall(target)
 #ifdef __PS3__
 #define emith_abicall_reg(r) do { \
 	emith_read_r_r_offs_ptr(TOC_REG, r, PTR_SIZE); \
@@ -1480,6 +1613,8 @@ static int emith_cond_check(int cond)
 
 #define emith_ret() \
 	EMIT(PPC_RET())
+#define emith_ret_c(cond) \
+	emith_ret()
 
 #define emith_ret_to_ctx(offs) do { \
 	EMIT(PPC_MFSP_REG(AT, LR)); \
@@ -1511,30 +1646,137 @@ static int emith_cond_check(int cond)
 
 
 // this should normally be in libc clear_cache; however, it sometimes isn't.
+#ifdef _XBOX
+
+/* 
+ * OPCIÓN 1: Usar XMemCpuInvalidate del sistema (RECOMENDADO)
+ * Si obtienes errores de linkeo, descomenta la línea siguiente para usar la opción 2
+ */
+//#define USE_XMEM_INVALIDATE 1
+
+#if USE_XMEM_INVALIDATE
+/* 
+ * Xbox 360 system function for cache invalidation
+ * Requiere que xboxkrnl.lib esté linkeada
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#pragma comment(lib, "xboxkrnl.lib")
+void __stdcall XMemCpuInvalidate(void* address, unsigned int size);
+
+#ifdef __cplusplus
+}
+#endif
+#endif /* USE_XMEM_INVALIDATE */
+
+#endif /* _XBOX */
+
+#if defined(_XBOX) && !USE_XMEM_INVALIDATE
+/*
+ * OPCIÓN 2: Implementación manual de icbi (FALLBACK)
+ * Genera código que ejecuta instrucciones icbi
+ */
+static void manual_icbi_flush(void *base, void *end)
+{
+	char *ptr;
+	char *end_ptr;
+	unsigned int i;
+	static unsigned int icbi_code[16];
+	static int icbi_initialized = 0;
+	typedef void (*icbi_func_t)(void*, void*);
+	icbi_func_t icbi_func;
+	
+	/* Alinear a línea de caché (128 bytes en Xbox 360) */
+	ptr = (char *)((unsigned int)base & ~127u);
+	end_ptr = (char *)end;
+	
+	/* 
+	 * Generar un stub de código que ejecuta icbi en loop.
+	 * 
+	 * Código generado:
+	 * loop:
+	 *   icbi 0, r3      // r3 = dirección actual
+	 *   addi r3, r3, 128
+	 *   cmpw r3, r4     // r4 = dirección final
+	 *   blt loop
+	 *   isync
+	 *   blr
+	 */
+	
+
+	
+	if (!icbi_initialized) {
+		i = 0;
+		icbi_code[i++] = 0x7C001FAC; /* icbi r0, r3 */
+		icbi_code[i++] = 0x38630080; /* addi r3, r3, 128 */
+		icbi_code[i++] = 0x7C032000; /* cmpw cr0, r3, r4 */
+		icbi_code[i++] = 0x4180FFF4; /* blt -12 (loop) */
+		icbi_code[i++] = 0x4C00012C; /* isync */
+		icbi_code[i++] = 0x4E800020; /* blr */
+		
+		/* Flush el código generado */
+		__dcbst(0, icbi_code);
+		__sync();
+		
+		icbi_initialized = 1;
+	}
+	
+	/* Ejecutar el código generado */
+
+	icbi_func = (icbi_func_t)icbi_code;
+	icbi_func(ptr, end_ptr);
+}
+#endif /* _XBOX && !USE_XMEM_INVALIDATE */
+
 static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 {
-	int step = 32, lgstep = 5;
-	char *_base = (char *)((uptr)base & ~(step-1));
-	int count = (((char *)end - _base) >> lgstep) + 1;
+	char *ptr;
+	char *end_ptr;
+	unsigned int size;
+	
+	(void)force;
+	
+#ifdef _XBOX
+	
+#if USE_XMEM_INVALIDATE
+	/* OPCIÓN 1: Usar función del sistema (RECOMENDADO) */
+	size = (unsigned int)((char*)end - (char*)base);
+	XMemCpuInvalidate(base, size);
+	
+#else
+	/* OPCIÓN 2: Implementación manual */
+	
+	/* Alinear a línea de caché */
+	ptr = (char *)((unsigned int)base & ~127u);
+	end_ptr = (char *)end;
+	
+	/* Data cache flush */
+	while (ptr < end_ptr) {
+		__dcbst(0, ptr);
+		ptr += 128;
+	}
+	__sync();
+	
+	/* Instruction cache invalidation */
+	manual_icbi_flush(base, end);
+	
+	__sync();
+#endif /* USE_XMEM_INVALIDATE */
 
-	if (count <= 0) count = 1;	// make sure count is positive
-	base = _base;
-
-	asm volatile(
-	"	mtctr	%1;"
-	"0:	dcbst	0,%0;"
-	"	add	%0, %0, %2;"
-	"	bdnz	0b;"
-	"	sync"
-	: "+r"(_base) : "r"(count), "r"(step) : "ctr");
-
-	asm volatile(
-	"	mtctr	%1;"
-	"0:	icbi	0,%0;"
-	"	add	%0, %0, %2;"
-	"	bdnz	0b;"
-	"	isync"
-	: "+r"(base) : "r"(count), "r"(step) : "ctr");
+#else
+	/* Fallback para plataformas no-Xbox */
+	ptr = (char *)((unsigned int)base & ~31u);
+	end_ptr = (char *)end;
+	
+	while (ptr < end_ptr) {
+		__dcbst(0, ptr);
+		ptr += 32;
+	}
+	__sync();
+	__sync();
+#endif /* _XBOX */
 }
 
 // emitter ABI stuff
@@ -1548,9 +1790,9 @@ static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 // SH2 drc specific
 #define STACK_EXTRA	((8+6)*PTR_SIZE) // Param, ABI (LR,CR,FP etc) save areas
 #define emith_sh2_drc_entry() do { \
-	int _c, _z = PTR_SIZE; u32 _m = 0xffffc000; /* r14-r31 */ \
+	int _c, _z = PTR_SIZE; u32 _m = 0xffffc000; int _s, _o;/* r14-r31 */ \
 	if (__builtin_parity(_m) == 1) _m |= 0x1; /* ABI align for SP is 16 */ \
-	int _s = count_bits(_m) * _z, _o = STACK_EXTRA; \
+	_s = count_bits(_m) * _z, _o = STACK_EXTRA; \
 	EMIT(PPC_STPU_IMM(SP, SP, -_s-STACK_EXTRA)); \
 	EMIT(PPC_MFSP_REG(AT, LR)); \
 	for (_c = 0; _m && _c < HOST_REGS; _m &= ~(1 << _c), _c++) \
@@ -1559,9 +1801,9 @@ static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 	emith_write_r_r_offs_ptr(AT, SP, _o + _z); \
 } while (0)
 #define emith_sh2_drc_exit() do { \
-	int _c, _z = PTR_SIZE; u32 _m = 0xffffc000; \
+	int _c, _z = PTR_SIZE; u32 _m = 0xffffc000; int _s, _o;\
 	if (__builtin_parity(_m) == 1) _m |= 0x1; \
-	int _s = count_bits(_m) * _z, _o = STACK_EXTRA; \
+	_s = count_bits(_m) * _z, _o = STACK_EXTRA; \
 	emith_read_r_r_offs_ptr(AT, SP, _o+_s + _z); \
 	EMIT(PPC_MTSP_REG(AT, LR)); \
 	for (_c = 0; _m && _c < HOST_REGS; _m &= ~(1 << _c), _c++) \
@@ -1609,12 +1851,12 @@ static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 		t3 = rcache_get_reg(reg, RC_GR_RMW, NULL);	\
 		emith_cmp_r_r(t3, t2);				\
 		EMITH_SJMP_START(DCOND_HI);			\
-		emith_sub_r_r_imm(t2, t3, 1);			\
+		emith_sub_r_r_imm_c(DCOND_LS, t2, t3, 1);	\
 		EMITH_SJMP_END(DCOND_HI);			\
 		/* if (reg <= 1) turns = 0 */			\
 		emith_cmp_r_imm(t3, 1);				\
 		EMITH_SJMP_START(DCOND_HI);			\
-		emith_move_r_imm(t2, 0);			\
+		emith_move_r_imm_c(DCOND_LS, t2, 0);		\
 		EMITH_SJMP_END(DCOND_HI);			\
 		/* reg -= turns */				\
 		emith_sub_r_r(t3, t2);				\
@@ -1674,11 +1916,11 @@ static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 	emith_add_r_r_r_lsr(rn, rn, mh, 31); /* sum = (MACH>>31)+(MACH>>15) */ \
 	emith_tst_r_r(rn, rn); /* (need only N and Z flags) */ \
 	EMITH_SJMP_START(DCOND_EQ); /* sum != 0 -> -ovl */ \
-	emith_move_r_imm(ml, 0x00000000);         \
-	emith_move_r_imm(mh, 0x00008000);         \
+	emith_move_r_imm_c(DCOND_NE, ml, 0x00000000); \
+	emith_move_r_imm_c(DCOND_NE, mh, 0x00008000); \
 	EMITH_SJMP_START(DCOND_MI); /* sum > 0 -> +ovl */ \
-	emith_sub_r_imm(ml, 1); /* 0xffffffff */  \
-	emith_sub_r_imm(mh, 1); /* 0x00007fff */  \
+	emith_sub_r_imm_c(DCOND_PL, ml, 1); /* 0xffffffff */ \
+	emith_sub_r_imm_c(DCOND_PL, mh, 1); /* 0x00007fff */ \
 	EMITH_SJMP_END(DCOND_MI);                 \
 	EMITH_SJMP_END(DCOND_EQ);                 \
 	EMITH_SJMP_END(DCOND_EQ);                 \
@@ -1701,10 +1943,10 @@ static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 	emith_tst_r_r(rn, rn); /* (need only N and Z flags) */ \
 	EMITH_SJMP_START(DCOND_EQ); /* sum != 0 -> overflow */ \
 	/* XXX: LSB signalling only in SH1, or in SH2 too? */ \
-	emith_move_r_imm(mh, 0x00000001); /* LSB of MACH */ \
-	emith_move_r_imm(ml, 0x80000000); /* -ovrfl */ \
+	emith_move_r_imm_c(DCOND_NE, mh, 0x00000001); /* LSB of MACH */ \
+	emith_move_r_imm_c(DCOND_NE, ml, 0x80000000); /* -ovrfl */ \
 	EMITH_SJMP_START(DCOND_MI); /* sum > 0 -> +ovrfl */ \
-	emith_sub_r_imm(ml, 1); /* 0x7fffffff */  \
+	emith_sub_r_imm_c(DCOND_PL, ml, 1); /* 0x7fffffff */ \
 	EMITH_SJMP_END(DCOND_MI);                 \
 	EMITH_SJMP_END(DCOND_EQ);                 \
 	EMITH_SJMP_END(DCOND_EQ);                 \

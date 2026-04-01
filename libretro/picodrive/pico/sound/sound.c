@@ -590,6 +590,7 @@ static int PsndRenderMS(int offset, int length)
   int stereo = (PicoIn.opt & 8) >> 3;
   int psglen = ((Pico.snd.psg_pos+0x80000) >> 20);
   int ym2413len = ((Pico.snd.ym2413_pos+0x80000) >> 20);
+  int len;
 
   if (!PicoIn.sndOut)
     return length;
@@ -607,7 +608,7 @@ static int PsndRenderMS(int offset, int length)
   if (length-ym2413len > 0) {
     s16 *ym2413buf = PicoIn.sndOut + (ym2413len << stereo);
     Pico.snd.ym2413_pos += (length-ym2413len) << 20;
-    int len = (length-ym2413len);
+    len = (length-ym2413len);
     if (Pico.m.hardware & PMS_HW_FMUSED) {
       PsndFMUpdate(buf32, len, 0, 0);
       if (stereo)

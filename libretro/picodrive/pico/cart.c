@@ -12,8 +12,8 @@
 #include <cpu/debug.h>
 
 #if defined(USE_LIBCHDR)
-#include "libchdr/chd.h"
-#include "libchdr/cdrom.h"
+#include <libchdr/chd.h>
+#include <libchdr/cdrom.h>
 #endif
 
 #include <unzip/unzip.h>
@@ -382,7 +382,7 @@ static size_t _pm_read_chd(void *ptr, size_t bytes, pm_file *stream, int is_audi
 
       // no need to advance internals if there's no more data to read
       if (bytes) {
-        ptr += len;
+        ptr = (unsigned char *)ptr + len;
         offset = 0;
 
         sector ++;

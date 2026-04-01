@@ -955,6 +955,7 @@ init_jump_table:
 #else
 }
 
+#pragma optimize("", off) // Desactiva TODA optimización a partir de aquí
 static int init_jump_table(void)
 #endif
 {
@@ -4974,6 +4975,7 @@ static int init_jump_table(void)
 	initialised = 1;
 	return 0;
 }
+#pragma optimize("", on) // Reactiva las optimizaciones para el resto del archivo
 
 #ifdef PICODRIVE_HACK
 

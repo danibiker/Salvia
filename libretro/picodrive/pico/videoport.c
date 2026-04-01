@@ -535,6 +535,7 @@ static void DmaSlow(int len, u32 source)
   u16 *r, *base = NULL;
   u32 mask = 0x1ffff;
   int lc = SekCyclesDone()-Pico.t.m68c_line_start;
+  int sl;
 
   elprintf(EL_VDPDMA, "DmaSlow[%i] %06x->%04x len %i inc=%i blank %i [%u] @ %06x",
     pvid->type, source, a, len, inc, (pvid->status&SR_VB)||!(pvid->reg[1]&0x40),
@@ -623,7 +624,7 @@ static void DmaSlow(int len, u32 source)
       if (inc == 0 && !(pvid->reg[1] & 0x40) &&
             (pvid->reg[7] & 0x3f) == ((a/2) & 0x3f)) { // bg color DMA
         PicoVideoSync(1);
-        int sl = VdpFIFO.fifo_hcounts[lc/clkdiv];
+        sl = VdpFIFO.fifo_hcounts[lc/clkdiv];
         if (sl > VdpFIFO.fifo_hcounts[0]-5) // hint delay is 5 slots
           sl = (s8)sl;
         // TODO this is needed to cover timing inaccuracies
@@ -1306,13 +1307,21 @@ void PicoVideoLoad(void *buf, int len)
     SATaddr &= ~0x200, SATmask &= ~0x200; // H40, zero lowest SAT bit
 
   if (len) {
-    int i;
-    if (len >= offsetof(struct VdpFIFO, fifo_slot))
-      memcpy(&VdpFIFO, buf, offsetof(struct VdpFIFO, fifo_slot));
-    for (i = 0; i < 80; i++)
-      memcpy(VdpSATCache+2*i, buf + offsetof(struct VdpFIFO, fifo_slot) + 4*i, sizeof(u32));
-    return;
-  }
+		int i;
+		/* Casteamos buf a unsigned char* para permitir aritmética de punteros */
+		unsigned char *p = (unsigned char *)buf;
+
+		if (len >= offsetof(struct VdpFIFO, fifo_slot))
+		  memcpy(&VdpFIFO, p, offsetof(struct VdpFIFO, fifo_slot));
+
+		for (i = 0; i < 80; i++)
+		{
+		  /* Calculamos el origen usando el puntero ya casteado */
+		  void *src = p + offsetof(struct VdpFIFO, fifo_slot) + 4 * i;
+		  memcpy(VdpSATCache + 2 * i, src, sizeof(u32));
+		}
+		return;
+	}
 
   // convert former dma_xfers (why was this in PicoMisc anyway?)
   if (Pico.m.dma_xfers) {

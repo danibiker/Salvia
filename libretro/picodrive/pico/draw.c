@@ -335,7 +335,7 @@ TileFlipMakerAS(TileFlipSH_AS_and, pix_sh_as_and)
 }
 
 #define DrawStripMaker(funcname,yshift,ymask,hpcode,drawtile,cache)	\
-void funcname(struct TileStrip *ts, int lflags, int cellskip)		\
+static void funcname(struct TileStrip *ts, int lflags, int cellskip) \
 {									\
   unsigned char *pd = Pico.est.HighCol;					\
   u32 *hc = ts->hc;							\
@@ -394,9 +394,9 @@ void funcname(struct TileStrip *ts, int lflags, int cellskip)		\
 }
 
 #ifndef _ASM_DRAW_C
-static DrawStripMaker(DrawStrip, 4, 0x7, code, DrawTile, 1);
+DrawStripMaker(DrawStrip, 4, 0x7, code, DrawTile, 1);
 
-static
+
 #endif
        DrawStripMaker(DrawStripInterlace, 5, 0xf, (code&0xfc00) | ((code&0x3ff)<<1), DrawTile, 1);
 
@@ -596,6 +596,7 @@ static DrawLayerMaker(DrawLayer,DrawStrip,DrawStripInterlace,DrawStripVSRam,Draw
 static void DrawWindow(int tstart, int tend, int prio, int sh,
                        struct PicoEState *est)
 {
+  int *zb;
   unsigned char *pd = est->HighCol;
   struct PicoVideo *pvid = &est->Pico->video;
   int tilex,ty,nametab,code,oldcode=-1,blank=-1; // The tile we know is blank
@@ -661,7 +662,7 @@ static void DrawWindow(int tstart, int tend, int prio, int sh,
       }
 
       // sh and high prio -> clear shadow
-      int *zb = (int *)(est->HighCol+8+(tilex<<3));
+      zb = (int *)(est->HighCol+8+(tilex<<3));
       *zb++ &= 0x7f7f7f7f;
       *zb   &= 0x7f7f7f7f;
 
@@ -1057,11 +1058,12 @@ static void DrawSpritesHiAS(unsigned char *sprited, int sh)
 
 // Forced tile drawing, without any masking and blank handling
 #define DrawTileForced(mask,yshift,ymask,hpcode,cache) {		\
-    if (code!=oldcode) {						\
+      u32 addr; \
+	  if (code!=oldcode) {						\
       oldcode = code;							\
 									\
       /* Get tile address/2: */						\
-      u32 addr = ((code<<yshift)&0x7ff0) + ty;				\
+      addr = ((code<<yshift)&0x7ff0) + ty;				\
       if (code & 0x1000) addr ^= ymask<<1; /* Y-flip */			\
 									\
       pal = ((code>>9)&0x30);						\
@@ -1073,15 +1075,15 @@ static void DrawSpritesHiAS(unsigned char *sprited, int sh)
     else               TileNorm_and(pd + dx, pack, pal);		\
 }
 
-static DrawStripMaker(DrawStripForced, 4, 0x7, 0, DrawTileForced, 0);
+DrawStripMaker(DrawStripForced, 4, 0x7, 0, DrawTileForced, 0);
 
-static DrawStripMaker(DrawStripInterlaceForced, 5, 0xf, 0, DrawTileForced, 0);
+DrawStripMaker(DrawStripInterlaceForced, 5, 0xf, 0, DrawTileForced, 0);
 
-static DrawStripVSRamMaker(DrawStripVSRamForced, 4, 0x7, 0, DrawTileForced, 0);
+DrawStripVSRamMaker(DrawStripVSRamForced, 4, 0x7, 0, DrawTileForced, 0);
 
-static DrawStripVSRamMaker(DrawStripVSRamInterlaceForced, 5, 0xf, 0, DrawTileForced, 0);
+DrawStripVSRamMaker(DrawStripVSRamInterlaceForced, 5, 0xf, 0, DrawTileForced, 0);
 
-static DrawLayerMaker(DrawLayerForced,DrawStripForced,DrawStripInterlaceForced,DrawStripVSRamForced,DrawStripVSRamInterlaceForced);
+DrawLayerMaker(DrawLayerForced,DrawStripForced,DrawStripInterlaceForced,DrawStripVSRamForced,DrawStripVSRamInterlaceForced);
 
 static void DrawSpritesForced(unsigned char *sprited)
 {
@@ -1743,6 +1745,7 @@ PICO_INTERNAL void PicoFrameStart(void)
   int sprep = est->rendstatus & PDRAW_DIRTY_SPRITES;
   int skipped = est->rendstatus & PDRAW_SKIP_FRAME;
   int sync = est->rendstatus & (PDRAW_SYNC_NEEDED | PDRAW_SYNC_NEXT);
+  int rendstatus;
 
   // prepare to do this frame
   est->rendstatus = 0;
@@ -1776,7 +1779,7 @@ PICO_INTERNAL void PicoFrameStart(void)
   if (est->rendstatus != rendstatus_old || lines != rendlines) {
     rendlines = lines;
     // mode_change() might reset rendstatus_old by calling SetOutFormat
-    int rendstatus = est->rendstatus;
+    rendstatus = est->rendstatus;
     emu_video_mode_change(loffs, lines, coffs, columns);
     rendstatus_old = rendstatus;
     // mode_change() might clear buffers, redraw needed

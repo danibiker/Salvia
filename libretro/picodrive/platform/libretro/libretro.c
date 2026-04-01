@@ -19,6 +19,32 @@
 #include <libkern/OSCacheControl.h>
 #endif
 
+#include <compat\msvc.h>
+#ifdef _XBOX
+	#include <xtl.h>
+#endif
+
+#ifdef _XBOX
+	#include <xtl.h>
+	#include <ppcintrinsics.h>
+
+	unsigned char _BitScanReverse(unsigned long* Index, unsigned long Mask) {
+        if (Mask == 0) return 0;
+        // _CountLeadingZeros es el intrínseco oficial del XDK
+        *Index = 31 - _CountLeadingZeros(Mask);
+        return 1;
+    }
+
+    unsigned char _BitScanForward(unsigned long* Index, unsigned long Mask) {
+		unsigned long val;
+        if (Mask == 0) return 0;
+        // Lógica para encontrar el bit menos significativo
+        val = Mask & (unsigned long)(-(long)Mask);
+        *Index = 31 - _CountLeadingZeros(val);
+        return 1;
+    }
+#endif
+
 #include "libretro-common/include/formats/image.h" // really, for IMAGE_PROCESS_NEXT?!?
 #include "libretro-common/include/formats/rpng.h"
 #include "libretro-common/include/file/file_path.h"
@@ -933,6 +959,7 @@ static struct disks_state {
 static void get_disk_label(char *disk_label, const char *disk_path, size_t len)
 {
    const char *base = NULL;
+   char *ext;
 
    if (!disk_path || (*disk_path == '\0'))
       return;
@@ -947,7 +974,7 @@ static void get_disk_label(char *disk_label, const char *disk_path, size_t len)
    strncpy(disk_label, base, len - 1);
    disk_label[len - 1] = '\0';
 
-   char *ext = strrchr(disk_label, '.');
+   ext = strrchr(disk_label, '.');
    if (ext)
       *ext = '\0';
 }
@@ -1155,18 +1182,22 @@ static struct retro_disk_control_callback disk_control = {
    disk_add_image_index,
 };
 
-static struct retro_disk_control_ext_callback disk_control_ext = {
-   .set_eject_state     = disk_set_eject_state,
-   .get_eject_state     = disk_get_eject_state,
-   .get_image_index     = disk_get_image_index,
-   .set_image_index     = disk_set_image_index,
-   .get_num_images      = disk_get_num_images,
-   .replace_image_index = disk_replace_image_index,
-   .add_image_index     = disk_add_image_index,
-   .set_initial_image   = disk_set_initial_image,
-   .get_image_path      = disk_get_image_path,
-   .get_image_label     = disk_get_image_label,
-};
+// 1. La declaras global o estática
+static struct retro_disk_control_ext_callback disk_control_ext;
+
+// 2. En una función de inicialización:
+void init_disk_control() {
+   disk_control_ext.set_eject_state     = disk_set_eject_state;
+   disk_control_ext.get_eject_state     = disk_get_eject_state;
+   disk_control_ext.get_image_index     = disk_get_image_index;
+   disk_control_ext.set_image_index     = disk_set_image_index;
+   disk_control_ext.get_num_images      = disk_get_num_images;
+   disk_control_ext.replace_image_index = disk_replace_image_index;
+   disk_control_ext.add_image_index     = disk_add_image_index;
+   disk_control_ext.set_initial_image   = disk_set_initial_image;
+   disk_control_ext.get_image_path      = disk_get_image_path;
+   disk_control_ext.get_image_label     = disk_get_image_label;
+}
 
 static void disk_tray_open(void)
 {
@@ -1206,6 +1237,8 @@ static void extract_directory(char *buf, const char *path, size_t size)
 static void extract_basename(char *buf, const char *path, size_t size)
 {
    const char *base = strrchr(path, '/');
+   char *ext;
+
    if (!base)
       base = strrchr(path, '\\');
    if (!base)
@@ -1217,7 +1250,7 @@ static void extract_basename(char *buf, const char *path, size_t size)
    strncpy(buf, base, size - 1);
    buf[size - 1] = '\0';
 
-   char *ext = strrchr(buf, '.');
+   ext = strrchr(buf, '.');
    if (ext)
       *ext = '\0';
 }
@@ -1226,6 +1259,10 @@ static bool read_m3u(const char *file)
 {
    char line[1024];
    char name[PATH_MAX];
+   char *carrige_return;
+   char *newline;
+   char disk_label[PATH_MAX];
+
    FILE *f = fopen(file, "r");
    if (!f)
       return false;
@@ -1234,16 +1271,16 @@ static bool read_m3u(const char *file)
    {
       if (line[0] == '#')
          continue;
-      char *carrige_return = strchr(line, '\r');
+      carrige_return = strchr(line, '\r');
       if (carrige_return)
          *carrige_return = '\0';
-      char *newline = strchr(line, '\n');
+      newline = strchr(line, '\n');
       if (newline)
          *newline = '\0';
 
       if (line[0] != '\0')
       {
-         char disk_label[PATH_MAX];
+         
          disk_label[0] = '\0';
 
          snprintf(name, sizeof(name), "%s%c%s", base_dir, SLASH, line);
@@ -1401,21 +1438,10 @@ bool retro_load_game(const struct retro_game_info *info)
    char carthw_path[PATH_MAX];
    enum media_type_e media_type;
    size_t i;
-
-#if defined(_WIN32)
-   char slash      = '\\';
-#else
-   char slash      = '/';
-#endif
-
-   content_path[0] = '\0';
-   content_ext[0]  = '\0';
-   carthw_path[0]  = '\0';
-
    unsigned int cd_index = 0;
    bool is_m3u           = false;
 
-   struct retro_input_descriptor desc[] = {
+      struct retro_input_descriptor desc[] = {
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "D-Pad Up" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
@@ -1508,6 +1534,21 @@ bool retro_load_game(const struct retro_game_info *info)
 
       { 0 },
    };
+      enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
+
+#if defined(_WIN32)
+   char slash      = '\\';
+#else
+   char slash      = '/';
+#endif
+
+   content_path[0] = '\0';
+   content_ext[0]  = '\0';
+   carthw_path[0]  = '\0';
+
+
+
+
 
    /* Attempt to fetch extended game info */
    if (environ_cb(RETRO_ENVIRONMENT_GET_GAME_INFO_EXT, &info_ext))
@@ -1562,7 +1603,7 @@ bool retro_load_game(const struct retro_game_info *info)
       }
    }
 
-   enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
+
    if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt)) {
       if (log_cb)
          log_cb(RETRO_LOG_ERROR, "RGB565 support required, sorry\n");
@@ -1782,18 +1823,18 @@ void retro_reset(void)
 }
 
 static const unsigned short retro_pico_map[] = {
-   [RETRO_DEVICE_ID_JOYPAD_B]      = 1 << GBTN_B,
-   [RETRO_DEVICE_ID_JOYPAD_Y]      = 1 << GBTN_A,
-   [RETRO_DEVICE_ID_JOYPAD_SELECT] = 1 << GBTN_MODE,
-   [RETRO_DEVICE_ID_JOYPAD_START]  = 1 << GBTN_START,
-   [RETRO_DEVICE_ID_JOYPAD_UP]     = 1 << GBTN_UP,
-   [RETRO_DEVICE_ID_JOYPAD_DOWN]   = 1 << GBTN_DOWN,
-   [RETRO_DEVICE_ID_JOYPAD_LEFT]   = 1 << GBTN_LEFT,
-   [RETRO_DEVICE_ID_JOYPAD_RIGHT]  = 1 << GBTN_RIGHT,
-   [RETRO_DEVICE_ID_JOYPAD_A]      = 1 << GBTN_C,
-   [RETRO_DEVICE_ID_JOYPAD_X]      = 1 << GBTN_Y,
-   [RETRO_DEVICE_ID_JOYPAD_L]      = 1 << GBTN_X,
-   [RETRO_DEVICE_ID_JOYPAD_R]      = 1 << GBTN_Z,
+   1 << GBTN_B,     /* 0: RETRO_DEVICE_ID_JOYPAD_B */
+   1 << GBTN_A,     /* 1: RETRO_DEVICE_ID_JOYPAD_Y */
+   1 << GBTN_MODE,  /* 2: RETRO_DEVICE_ID_JOYPAD_SELECT */
+   1 << GBTN_START, /* 3: RETRO_DEVICE_ID_JOYPAD_START */
+   1 << GBTN_UP,    /* 4: RETRO_DEVICE_ID_JOYPAD_UP */
+   1 << GBTN_DOWN,  /* 5: RETRO_DEVICE_ID_JOYPAD_DOWN */
+   1 << GBTN_LEFT,  /* 6: RETRO_DEVICE_ID_JOYPAD_LEFT */
+   1 << GBTN_RIGHT, /* 7: RETRO_DEVICE_ID_JOYPAD_RIGHT */
+   1 << GBTN_C,     /* 8: RETRO_DEVICE_ID_JOYPAD_A */
+   1 << GBTN_Y,     /* 9: RETRO_DEVICE_ID_JOYPAD_X */
+   1 << GBTN_X,     /* 10: RETRO_DEVICE_ID_JOYPAD_L */
+   1 << GBTN_Z      /* 11: RETRO_DEVICE_ID_JOYPAD_R */
 };
 #define RETRO_PICO_MAP_LEN (sizeof(retro_pico_map) / sizeof(retro_pico_map[0]))
 
@@ -2107,6 +2148,7 @@ void emu_status_msg(const char *format, ...)
     va_list vl;
     int ret;
     static char msg[512];
+	static struct retro_message rmsg;
 
     memset (msg, 0, sizeof(msg));
 
@@ -2114,7 +2156,7 @@ void emu_status_msg(const char *format, ...)
     ret = vsnprintf(msg, sizeof(msg), format, vl);
     va_end(vl);
 
-    static struct retro_message rmsg;
+    
     rmsg.msg    = msg;
     rmsg.frames = 600;
     environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &rmsg);
@@ -2353,6 +2395,7 @@ void retro_run(void)
    bool updated = false;
    int pad, i, padcount;
    static void *buff;
+   int16_t input[4] = {0, 0};
 
    if (PicoIn.AHW != libretro_mem_AHW)
       set_memory_maps();
@@ -2372,7 +2415,7 @@ void retro_run(void)
    else
       padcount = has_4_pads ? 4 : 2;
 
-   int16_t input[4] = {0, 0};
+
 
    if (libretro_supports_bitmasks)
    {
@@ -2569,6 +2612,11 @@ void retro_init(void)
    unsigned dci_version = 0;
    struct retro_log_callback log;
    int level;
+   struct retro_variable var = { "picodrive_sound_rate", NULL };
+
+   init_kbd_map();
+   init_mappers_names();
+   init_disk_control();
 
    level = 0;
    environ_cb(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &level);
@@ -2609,7 +2657,7 @@ void retro_init(void)
       PicoIn.opt |= POPT_EN_DRC;
 #endif
 
-   struct retro_variable var = { .key = "picodrive_sound_rate" };
+
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
       PicoIn.sndRate = atoi(var.value);
    else

@@ -39,6 +39,18 @@
 #include "../drc/cmn.h"
 #include "../debug.h"
 
+#ifdef _XBOX
+#ifdef _MSC_VER
+#include <ppcintrinsics.h>
+	static __inline int __builtin_ffs(int x) {
+    if (x == 0) return 0;
+		// _CountLeadingZeros es la intrínseca oficial del XDK
+		// Para FFS (Find First Set) desde la derecha:
+		return 32 - _CountLeadingZeros(x & -x);
+	}
+#endif
+#endif
+
 // features
 #define PROPAGATE_CONSTANTS     1
 #define LINK_BRANCHES           1
@@ -592,8 +604,15 @@ static struct block_entry *dr_get_entry(u32 pc, int is_slave, int *tcache_id)
 // ---------------------------------------------------------------
 
 // ring buffer management
-#define RING_INIT(r,m,n)    *(r) = (struct ring_buffer) { .base = (u8 *)m, \
-                                        .item_sz = sizeof(*(m)), .size = n };
+// Ring buffer management compatible con MSVC / Xbox 360
+#define RING_INIT(r, m, n) {          \
+    (r)->base    = (u8 *)(m);         \
+    (r)->item_sz = (unsigned)sizeof(*(m)); \
+    (r)->size    = (unsigned)(n);     \
+    (r)->first   = 0;                 \
+    (r)->next    = 0;                 \
+    (r)->used    = 0;                 \
+}
 
 static void *ring_alloc(struct ring_buffer *rb, int count)
 {
@@ -667,7 +686,7 @@ static void add_to_block_list(struct block_list **blist, struct block_desc *bloc
     blist_free = added->next;
   } else if (block_list_pool_count >= BLOCK_LIST_MAX_COUNT) {
     printf( "block list overflow\n");
-    exit(1);
+    return;
   } else {
     added = block_list_pool + block_list_pool_count;
     block_list_pool_count ++;
@@ -831,7 +850,7 @@ static void dr_block_link(struct block_entry *be, struct block_link *bl, int emi
       }
     } else {
       printf("unknown BL type %d\n", bl->type);
-      exit(1);
+      return;
     }
     host_instructions_updated(jump, jump + jsz, ((uintptr_t)jump & 0x1f) + jsz-1 > 0x1f);
   }
@@ -867,7 +886,7 @@ static void dr_block_unlink(struct block_link *bl, int emit_jump)
         host_instructions_updated(bl->blx, (char *)bl->blx + emith_jump_at_size(), 1);
       } else {
         printf("unknown BL type %d\n", bl->type);
-        exit(1);
+        return;
       }
       // update cpu caches since the previous jump target doesn't exist anymore
       host_instructions_updated(jump, jump + jsz, 1);
@@ -1321,7 +1340,7 @@ static void dr_flush_tcache(int tcid)
 static void *dr_failure(void)
 {
   printf("recompilation failed\n");
-  exit(1);
+  return;
 }
 
 // ---------------------------------------------------------------
@@ -1470,7 +1489,7 @@ static inline int gconst_alloc(sh2_reg_e r)
     gconsts[n].gregs = (1 << r);
   else {
     printf("all gconst buffers in use, aborting\n");
-    exit(1); // cannot happen - more constants than guest regs?
+    return;
   }
   return n;
 }
@@ -1796,7 +1815,7 @@ static int rcache_allocate(int what, int minprio)
 
 
   if (prio < minprio || oldest == -1)
-    return -1;
+    return;
 
   if (cache_regs[oldest].type == HR_CACHED)
     rcache_evict_vreg(oldest);
@@ -1843,7 +1862,7 @@ static int rcache_map_reg(sh2_reg_e r, int hr)
   if (i < 0) {
     // must not happen
     printf("invalid host register %d\n", hr);
-    exit(1);
+    return;
   }
 
   // remove old mappings of r and i if one exists
@@ -1977,7 +1996,7 @@ static int rcache_get_reg_(sh2_reg_e r, rc_gr_mode mode, int do_locking, int *hr
     // allocate a cache register
     if ((dst = rcache_allocate_vreg(rsp_d & (1 << r))) < 0) {
       printf("no registers to evict, aborting\n");
-      exit(1);
+      return;
     }
   }
   tr = &cache_regs[dst];
@@ -2102,7 +2121,7 @@ static int rcache_get_tmp(void)
   i = rcache_allocate_temp();
   if (i < 0) {
     printf("cannot allocate temp\n");
-    exit(1);
+    return;
   }
 
   cache_regs[i].type = HR_TEMP;
@@ -2118,14 +2137,14 @@ static int rcache_get_vreg_hr(int hr)
   i = reg_map_host[hr];
   if (i < 0 || cache_regs[i].locked) {
     printf("host register %d is locked\n", hr);
-    exit(1);
+    return;
   }
 
   if (cache_regs[i].type == HR_CACHED)
     rcache_evict_vreg(i);
   else if (cache_regs[i].type == HR_TEMP && cache_regs[i].locked) {
     printf("host reg %d already used, aborting\n", hr);
-    exit(1);
+    return;
   }
 
   return i;
@@ -2221,7 +2240,7 @@ static void rcache_free_tmp(int hr)
 
   if (i < 0 || cache_regs[i].type != HR_TEMP) {
     printf("rcache_free_tmp fail: #%i hr %d, type %d\n", i, hr, cache_regs[i].type);
-    exit(1);
+    return;
   }
 
   rcache_unlock_vreg(i);
@@ -2238,7 +2257,7 @@ static int rcache_save_tmp(int hr)
     // if none is available, store in drctmp
     emith_ctx_write(hr, offsetof(SH2, drc_tmp));
     rcache_free_tmp(hr);
-    return -1;
+    return;
   }
 
   cache_regs[i].type = HR_CACHED;
@@ -2260,7 +2279,7 @@ static int rcache_restore_tmp(int x)
   if (x >= 0) {
     if (cache_regs[x].type != HR_CACHED || cache_regs[x].gregs) {
       printf("invalid tmp storage %d\n", x);
-      exit(1);
+      return;
     }
     // found, transform to a TEMP
     cache_regs[x].type = HR_TEMP;
@@ -2520,49 +2539,77 @@ static void rcache_flush(void)
 static void rcache_create(void)
 {
   int x = 0, i;
+  cache_reg_t tmp_reg;
+  guest_reg_t tmp_guest;
 
-  // create cache_regs as host register representation
-  // RET_REG/params should be first TEMPs to avoid allocation conflicts in calls
-  cache_regs[x++] = (cache_reg_t) {.hreg = RET_REG, .htype = HRT_TEMP};
-  for (i = 0; i < ARRAY_SIZE(hregs_param); i++)
-    if (hregs_param[i] != RET_REG)
-      cache_regs[x++] = (cache_reg_t){.hreg = hregs_param[i],.htype = HRT_TEMP};
+	  /* Para el primer registro */
+	tmp_reg.hreg = RET_REG;
+	tmp_reg.htype = HRT_TEMP;
+	cache_regs[x++] = tmp_reg;
 
-  for (i = 0; i < ARRAY_SIZE(hregs_temp); i++)
-    if (hregs_temp[i] != RET_REG)
-      cache_regs[x++] = (cache_reg_t){.hreg = hregs_temp[i], .htype = HRT_TEMP};
+	for (i = 0; i < ARRAY_SIZE(hregs_param); i++) {
+		if (hregs_param[i] != RET_REG) {
+			tmp_reg.hreg = hregs_param[i];
+			tmp_reg.htype = HRT_TEMP;
+			cache_regs[x++] = tmp_reg;
+		}
+	}
 
-  for (i = ARRAY_SIZE(hregs_saved)-1; i >= 0; i--)
-    if (hregs_saved[i] != CONTEXT_REG)
-      cache_regs[x++] = (cache_reg_t){.hreg = hregs_saved[i], .htype = HRT_REG};
+	for (i = 0; i < ARRAY_SIZE(hregs_temp); i++) {
+		if (hregs_temp[i] != RET_REG) {
+			tmp_reg.hreg = hregs_temp[i];
+			tmp_reg.htype = HRT_TEMP;
+			cache_regs[x++] = tmp_reg;
+		}
+	}
+
+	for (i = (int)ARRAY_SIZE(hregs_saved) - 1; i >= 0; i--) {
+		if (hregs_saved[i] != CONTEXT_REG) {
+			tmp_reg.hreg = hregs_saved[i];
+			tmp_reg.htype = HRT_REG;
+			cache_regs[x++] = tmp_reg;
+		}
+	}
 
   if (x != ARRAY_SIZE(cache_regs)) {
     printf("rcache_create failed (conflicting register count)\n");
-    exit(1);
+    return;
   }
 
   // mapping from host_register to cache regs index
   memset(reg_map_host, -1, sizeof(reg_map_host));
-  for (i = 0; i < ARRAY_SIZE(cache_regs); i++) {
+  for (i = 0; i < x; i++) { // Usa 'x' que es el contador real de registros añadidos
+    if (cache_regs[i].hreg == 4) continue; // SEGURIDAD: Nunca mapear r4 al DRC
+
     if (cache_regs[i].htype)
       reg_map_host[cache_regs[i].hreg] = i;
     if (cache_regs[i].htype == HRT_REG)
       rcache_vregs_reg |= (1 << i);
   }
 
-  // create static host register mapping for SH2 regs
-  for (i = 0; i < ARRAY_SIZE(guest_regs); i++) {
-    guest_regs[i] = (guest_reg_t){.sreg = -1};
-  }
-  for (i = 0; i < ARRAY_SIZE(regs_static); i += 2) {
-    for (x = ARRAY_SIZE(cache_regs)-1; x >= 0; x--)
-      if (cache_regs[x].hreg == regs_static[i+1])	break;
-    if (x >= 0) {
-      guest_regs[regs_static[i]] = (guest_reg_t){.flags = GRF_STATIC,.sreg = x};
-      rcache_regs_static |= (1 << regs_static[i]);
-      rcache_vregs_reg &= ~(1 << x);
-    }
-  }
+  /* 2. Primer bucle: Inicialización */
+	for (i = 0; i < (int)ARRAY_SIZE(guest_regs); i++) {
+		guest_regs[i].sreg  = -1;
+		guest_regs[i].flags = 0; /* Es buena práctica inicializar todos los campos en MSVC */
+	}
+
+	/* 3. Segundo bucle: Mapeo estático */
+	for (i = 0; i < (int)ARRAY_SIZE(regs_static); i += 2) {
+		for (x = (int)ARRAY_SIZE(cache_regs) - 1; x >= 0; x--) {
+			if (cache_regs[x].hreg == regs_static[i + 1]) {
+				break;
+			}
+		}
+
+		if (x >= 0) {
+			/* Asignación manual compatible con VS2010 */
+			guest_regs[regs_static[i]].flags = GRF_STATIC;
+			guest_regs[regs_static[i]].sreg  = x;
+
+			rcache_regs_static |= (1 << regs_static[i]);
+			rcache_vregs_reg   &= ~(1 << x);
+		}
+	}
 
   printf("DRC registers created, %ld host regs (%d REG, %d STATIC, 1 CTX)\n",
     CACHE_REGS+1L, count_bits(rcache_vregs_reg),count_bits(rcache_regs_static));
@@ -2627,10 +2674,10 @@ static int emit_get_rbase_and_offs(SH2 *sh2, sh2_reg_e r, int rmode, s32 *offs)
 
   // is r constant and points to a memory region?
   if (! gconst_get(r, &a))
-    return -1;
+    return;
   poffs = dr_ctx_get_mem_ptr(sh2, a + *offs, &mask);
   if (poffs == -1)
-    return -1;
+    return;
 
   if (mask < 0x20000) {
     // data array, BIOS, DRAM, can't safely access directly since host addr may
@@ -3167,7 +3214,7 @@ static inline int find_in_linkage(const struct linkage *array, int size, u32 pc)
     if (pc == array[i].pc)
       return i;
 
-  return -1;
+  return;
 }
 
 static int find_in_sorted_linkage(const struct linkage *array, int size, u32 pc)
@@ -3184,7 +3231,7 @@ static int find_in_sorted_linkage(const struct linkage *array, int size, u32 pc)
     else
       right = middle - 1;
   }
-  return -1;
+  return;
 }
 
 static void emit_branch_linkage_code(SH2 *sh2, struct block_desc *block, int tcache_id,
@@ -3297,6 +3344,14 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
   u32 u, m1, m2, m3, m4;
   int op;
   u16 crc;
+  void *rtsadd, *rtsret;
+  struct op_data *opd_b;
+  struct linkage tmp_link;
+  u32 late;
+  u32 write;
+  u32 soon;
+
+  memset(&drcf, 0, sizeof(drcf));
 
   base_pc = sh2->pc;
 
@@ -3305,7 +3360,7 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
   if (dr_pc_base == (void *)-1) {
     printf("invalid PC, aborting: %08lx\n", (long)base_pc);
     // FIXME: be less destructive
-    exit(1);
+    return;
   }
 
   // initial passes to disassemble and analyze the block
@@ -3339,9 +3394,14 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
     if (op_flags[i] & OF_DELAY_OP)
       op_flags[i] &= ~OF_BTARGET;
     if (op_flags[i] & OF_BTARGET) {
-      if (branch_target_count < ARRAY_SIZE(branch_targets))
-        branch_targets[branch_target_count++] = (struct linkage) { .pc = pc };
-      else {
+      if (branch_target_count < ARRAY_SIZE(branch_targets)){
+        /* 2. Asigna los valores manualmente */
+		tmp_link.pc = pc;
+		/* Si la estructura tiene más campos (como 'addr' o 'target'), 
+		   asegúrate de inicializarlos a 0 para replicar el comportamiento de C99 */
+
+		branch_targets[branch_target_count++] = tmp_link;
+	  } else {
         printf("warning: linkage overflow\n");
         end_pc = pc;
         break;
@@ -3416,8 +3476,9 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
           m3 &= ~rcache_regs_static & ~BITMASK5(SHR_PC, SHR_PR, SHR_SR, SHR_T, SHR_MEM);
           if (m3 && count_bits(m3) < count_bits(rcache_vregs_reg) &&
               pinned_loop_count < ARRAY_SIZE(pinned_loops)-1) {
-            pinned_loops[pinned_loop_count++] =
-                (struct linkage) { .pc = base_pc + 2*v, .mask = m3 };
+            pinned_loops[pinned_loop_count].pc = base_pc + 2 * v;
+			pinned_loops[pinned_loop_count].mask = m3; 
+			pinned_loop_count++;
           } else
             op_flags[v] &= ~OF_BASIC_LOOP;
         }
@@ -3445,7 +3506,7 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
   // clear stale state after compile errors
   rcache_invalidate();
   emith_invalidate_t();
-  drcf = (struct drcf) { 0 };
+  
 #if LOOP_OPTIMIZER
   pinned_loops[pinned_loop_count].pc = -1;
   pinned_loop_count = 0;
@@ -3550,8 +3611,11 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
 
         if (blx_target_count < ARRAY_SIZE(blx_targets)) {
           // exit via stub in blx table (saves some 1-3 insns in the main flow)
-          blx_targets[blx_target_count++] =
-              (struct linkage) { .pc = pc, .ptr = tcache_ptr, .mask = 0x1 };
+          /* Asignación manual compatible con el compilador de Xbox 360 */
+			blx_targets[blx_target_count].pc   = pc;
+			blx_targets[blx_target_count].ptr  = tcache_ptr;
+			blx_targets[blx_target_count].mask = 0x1;
+			blx_target_count++;
           emith_jump_patchable(tcache_ptr);
         } else {
           // blx table full, must inline exit code
@@ -3567,8 +3631,11 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
         if (blx_target_count < ARRAY_SIZE(blx_targets)) {
           // exit via stub in blx table (saves some 1-3 insns in the main flow)
           emith_cmp_r_imm(sr, 0);
-          blx_targets[blx_target_count++] =
-              (struct linkage) { .pc = pc, .ptr = tcache_ptr, .mask = 0x1 };
+          /* Asignación manual compatible con MSVC / Xbox 360 */
+			blx_targets[blx_target_count].pc   = pc;
+			blx_targets[blx_target_count].ptr  = tcache_ptr;
+			blx_targets[blx_target_count].mask = 0x01;
+			blx_target_count++;
           emith_jump_cond_patchable(DCOND_LT, tcache_ptr);
         } else {
           // blx table full, must inline exit code
@@ -3724,9 +3791,9 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
     }
 
     // inform cache about future register usage
-    u32 late = 0;             // regs read by future ops
-    u32 write = 0;            // regs written to (to detect write before read)
-    u32 soon = 0;             // regs read soon
+    late = 0;             // regs read by future ops
+    write = 0;            // regs written to (to detect write before read)
+    soon = 0;             // regs read soon
     for (v = 1; v <= 9; v++) {
       // no sense in looking any further than the next rcache flush
       tmp = ((op_flags[i+v] & OF_BTARGET) || (op_flags[i+v-1] & OF_DELAY_OP) ||
@@ -4917,7 +4984,7 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
       if (!(op_flags[i] & OF_B_IN_DS)) {
         elprintf_sh2(sh2, EL_ANOMALY,
           "drc: illegal op %04x @ %08x", op, pc - 2);
-        exit(1);
+        return;
       }
     }
 
@@ -4973,7 +5040,8 @@ end_op:
 #endif
 
 #if CALL_STACK
-      void *rtsadd = NULL, *rtsret = NULL;
+      rtsadd = NULL;
+	  rtsret = NULL;
       if ((opd_b->dest & BITMASK1(SHR_PR)) && pc+2 < end_pc) {
         // BSR - save rts data
         tmp = rcache_get_tmp_arg(1);
@@ -5042,8 +5110,10 @@ end_op:
         } else if (blx_target_count < MAX_LOCAL_BRANCHES) {
           // local forward jump
           target = tcache_ptr;
-          blx_targets[blx_target_count++] =
-              (struct linkage) { .pc = target_pc, .ptr = target, .mask = 0x2 };
+          blx_targets[blx_target_count].pc   = target_pc;
+			blx_targets[blx_target_count].ptr  = target;
+			blx_targets[blx_target_count].mask = 0x02;
+			blx_target_count++;
           if (cond != -1)
             emith_jump_cond_patchable(cond, target);
           else {
@@ -5065,8 +5135,10 @@ end_op:
             // conditional jumps get a blx stub for the far jump
             bl->type = BL_JCCBLX;
             target = tcache_ptr;
-            blx_targets[blx_target_count++] =
-                (struct linkage) { .pc = target_pc, .ptr = target, .bl = bl };
+            blx_targets[blx_target_count].pc   = target_pc;
+			blx_targets[blx_target_count].ptr  = target;
+			blx_targets[blx_target_count].bl   = bl;
+			blx_target_count++;
             emith_jump_cond_patchable(cond, target);
           } else {
             // not linkable, or blx table full; inline jump @dispatcher
@@ -5138,8 +5210,9 @@ end_op:
       tmp = rcache_get_reg_arg(0, SHR_PC, NULL);
 
 #if CALL_STACK
-      struct op_data *opd_b = (op_flags[i] & OF_DELAY_OP) ? opd-1 : opd;
-      void *rtsadd = NULL, *rtsret = NULL;
+      opd_b = (op_flags[i] & OF_DELAY_OP) ? opd-1 : opd;
+      rtsadd = NULL;
+	  rtsret = NULL;
 
       if ((opd_b->dest & BITMASK1(SHR_PR)) && pc+2 < end_pc) {
         // JSR, BSRF - save rts data
@@ -6002,7 +6075,7 @@ int sh2_drc_init(SH2 *sh2)
 
 fail:
   sh2_drc_finish(sh2);
-  return -1;
+  return;
 }
 
 void sh2_drc_finish(SH2 *sh2)
@@ -6223,7 +6296,9 @@ u16 scan_block(u32 base_pc, int is_slave, u8 *op_flags, u32 *end_pc_out,
           opd->op = OP_DIV0;
           opd->source = BITMASK1(SHR_SR);
           opd->dest = BITMASK2(SHR_SR, SHR_T);
-          div(opd) = (struct div){ .rn=SHR_MEM, .rm=SHR_MEM, .ro=SHR_MEM };
+         div(opd).rn = SHR_MEM;
+		div(opd).rm = SHR_MEM;
+		div(opd).ro = SHR_MEM;
           i_div = i;
           is_divop = 1;
           break;
@@ -6329,7 +6404,13 @@ u16 scan_block(u32 base_pc, int is_slave, u8 *op_flags, u32 *end_pc_out,
         opd->op = OP_DIV0;
         opd->source = BITMASK3(SHR_SR, GET_Rm(), GET_Rn());
         opd->dest = BITMASK2(SHR_SR, SHR_T);
-        div(opd) = (struct div){ .rn=GET_Rn(), .rm=GET_Rm(), .ro=SHR_MEM };
+        {
+			/* Usamos un puntero para asignar los campos uno a uno de forma limpia */
+			struct div *d = &div(opd);
+			d->rn = GET_Rn();
+			d->rm = GET_Rm();
+			d->ro = SHR_MEM;
+		}
         i_div = i;
         is_divop = 1;
         break;

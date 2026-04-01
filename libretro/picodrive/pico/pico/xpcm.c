@@ -88,6 +88,9 @@ static struct iir2 *filter; // currently selected filter
 
 static void PicoPicoFilterCoeff(struct iir2 *iir, int cutoff, int rate)
 {
+	  double a;
+  double axa;
+  double gain;
   // no filter if the cutoff is above the Nyquist frequency
   if (cutoff >= rate/2) {
     memset(iir, 0, sizeof(*iir));
@@ -95,9 +98,9 @@ static void PicoPicoFilterCoeff(struct iir2 *iir, int cutoff, int rate)
   }
 
   // compute 2nd order butterworth filter coefficients
-  double a = 1 / tan(M_PI * cutoff / rate);
-  double axa = a*a;
-  double gain = 1/(1 + M_SQRT2*a + axa);
+  a = 1 / tan(M_PI * cutoff / rate);
+  axa = a*a;
+  gain = 1/(1 + M_SQRT2*a + axa);
   iir->gain = FP(gain);
   iir->a[0] = FP(2 * (axa-1) * gain);
   iir->a[1] = FP(-(1 - M_SQRT2*a + axa) * gain);

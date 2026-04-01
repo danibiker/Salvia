@@ -120,6 +120,16 @@
 
 #ifndef EXTERNAL_YM2612
 #include <stdlib.h>
+
+#if defined(_MSC_VER) && _MSC_VER < 1800
+#include <math.h>
+
+/* Implementación manual de round para MSVC 2010 */
+static __inline double round(double x) {
+    return (x >= 0.0) ? floor(x + 0.5) : ceil(x - 0.5);
+}
+#endif
+
 // let it be 1 global to simplify things
 YM2612 ym2612;
 
