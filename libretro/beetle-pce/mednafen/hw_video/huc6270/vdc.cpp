@@ -38,16 +38,24 @@ void VDC::FixTileCache(uint16 A)
 	uint8 *tc = bg_tile_cache[charname][y];
 
 	uint32 bitplane01 = VRAM[y + charname * 16];
-	uint32 bitplane23 = VRAM[y+ 8 + charname * 16];
+	uint32 bitplane23 = VRAM[y + 8 + charname * 16];
 
-	for(int x = 0; x < 8; x++)
-	{
-		uint32 raw_pixel = ((bitplane01 >> x) & 1);
-		raw_pixel |= ((bitplane01 >> (x + 8)) & 1) << 1;
-		raw_pixel |= ((bitplane23 >> x) & 1) << 2;
-		raw_pixel |= ((bitplane23 >> (x + 8)) & 1) << 3;
-		tc[7 - x] = raw_pixel;
-	}
+	// Extract all 8 pixels using bitwise operations instead of per-bit loop.
+	// Each pixel is 4 bits: bit0 from bp01 low byte, bit1 from bp01 high byte,
+	// bit2 from bp23 low byte, bit3 from bp23 high byte.
+	uint32 bp0 = bitplane01 & 0xFF;        // bitplane 0 (bits 0-7)
+	uint32 bp1 = (bitplane01 >> 8) & 0xFF; // bitplane 1 (bits 8-15)
+	uint32 bp2 = bitplane23 & 0xFF;        // bitplane 2 (bits 0-7)
+	uint32 bp3 = (bitplane23 >> 8) & 0xFF; // bitplane 3 (bits 8-15)
+
+	tc[7] = (bp0 & 1) | ((bp1 & 1) << 1) | ((bp2 & 1) << 2) | ((bp3 & 1) << 3);
+	tc[6] = ((bp0 >> 1) & 1) | (((bp1 >> 1) & 1) << 1) | (((bp2 >> 1) & 1) << 2) | (((bp3 >> 1) & 1) << 3);
+	tc[5] = ((bp0 >> 2) & 1) | (((bp1 >> 2) & 1) << 1) | (((bp2 >> 2) & 1) << 2) | (((bp3 >> 2) & 1) << 3);
+	tc[4] = ((bp0 >> 3) & 1) | (((bp1 >> 3) & 1) << 1) | (((bp2 >> 3) & 1) << 2) | (((bp3 >> 3) & 1) << 3);
+	tc[3] = ((bp0 >> 4) & 1) | (((bp1 >> 4) & 1) << 1) | (((bp2 >> 4) & 1) << 2) | (((bp3 >> 4) & 1) << 3);
+	tc[2] = ((bp0 >> 5) & 1) | (((bp1 >> 5) & 1) << 1) | (((bp2 >> 5) & 1) << 2) | (((bp3 >> 5) & 1) << 3);
+	tc[1] = ((bp0 >> 6) & 1) | (((bp1 >> 6) & 1) << 1) | (((bp2 >> 6) & 1) << 2) | (((bp3 >> 6) & 1) << 3);
+	tc[0] = ((bp0 >> 7) & 1) | (((bp1 >> 7) & 1) << 1) | (((bp2 >> 7) & 1) << 2) | (((bp3 >> 7) & 1) << 3);
 }
 
 // Some virtual vdc macros to make code simpler to read

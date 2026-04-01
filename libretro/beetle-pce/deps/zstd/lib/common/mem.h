@@ -29,7 +29,11 @@ extern "C" {
 ******************************************/
 #if defined(_MSC_VER)   /* Visual Studio */
 #   include <stdlib.h>  /* _byteswap_ulong */
-#   include <intrin.h>  /* _byteswap_* */
+#ifdef _XBOX
+#include <ppcintrinsics.h>
+#else
+#  include <intrin.h>                    /* For Visual 2005 */
+#endif
 #endif
 #if defined(__GNUC__)
 #  define MEM_STATIC static __inline __attribute__((unused))

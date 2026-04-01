@@ -12,263 +12,186 @@
 
 static INLINE void DoMAC_AVX_32X(float* wave, float* coeffs, int32 count, int32* accum_output)
 {
- // Multiplies 32 coefficients at a time.
- int dummy;
- int32 tmp;
+    // Inicializar registros a cero (vxorps)
+    __m256 ymm3 = _mm256_setzero_ps();
+    __m256 ymm4 = _mm256_setzero_ps();
+    __m256 ymm5 = _mm256_setzero_ps();
+    __m256 ymm6 = _mm256_setzero_ps();
+    __m256 ymm7 = _mm256_setzero_ps();
 
-/*
-	?di = wave pointer
-	?si = coeffs pointer
-	ecx = count / 16
-	edx = 32-bit int output pointer
+    int loop_count = count >> 5; // count / 32
+    float* di = wave;
+    float* si = coeffs;
 
-	
-*/
- // Will read 32 bytes of input waveform past end.
- asm volatile(
-//".arch bdver1\n\t"
-"vxorps %%ymm3, %%ymm3, %%ymm3\n\t"	// For a loop optimization
+    for (int i = 0; i < loop_count; i++)
+    {
+        // Carga de datos (vmovups)
+        __m256 ymm0 = _mm256_loadu_ps(di);
+        __m256 ymm1 = _mm256_loadu_ps(di + 8);  // 32 bytes = 8 floats
+        
+        // Multiplicación y acumulación 1
+        ymm0 = _mm256_mul_ps(ymm0, _mm256_loadu_ps(si));
+        ymm7 = _mm256_add_ps(ymm7, ymm3);
 
-"vxorps %%ymm4, %%ymm4, %%ymm4\n\t"
-"vxorps %%ymm5, %%ymm5, %%ymm5\n\t"
-"vxorps %%ymm6, %%ymm6, %%ymm6\n\t"
-"vxorps %%ymm7, %%ymm7, %%ymm7\n\t"
+        __m256 ymm2 = _mm256_loadu_ps(di + 16);
+        ymm1 = _mm256_mul_ps(ymm1, _mm256_loadu_ps(si + 8));
+        ymm4 = _mm256_add_ps(ymm4, ymm0);
 
-"vmovups  0(%%" X86_REGC "di), %%ymm0\n\t"
-"1:\n\t"
+        ymm3 = _mm256_loadu_ps(di + 24);
+        ymm2 = _mm256_mul_ps(ymm2, _mm256_loadu_ps(si + 16));
+        ymm5 = _mm256_add_ps(ymm5, ymm1);
 
-"vmovups 32(%%" X86_REGC "di), %%ymm1\n\t"
-"vmulps   0(%%" X86_REGC "si), %%ymm0, %%ymm0\n\t"
-"vaddps  %%ymm3, %%ymm7, %%ymm7\n\t"
+        // Preparar ymm0 para la siguiente iteración
+        ymm3 = _mm256_mul_ps(ymm3, _mm256_loadu_ps(si + 24));
+        ymm6 = _mm256_add_ps(ymm6, ymm2);
 
-"vmovups 64(%%" X86_REGC "di), %%ymm2\n\t"
-"vmulps  32(%%" X86_REGC "si), %%ymm1, %%ymm1\n\t"
-"vaddps  %%ymm0, %%ymm4, %%ymm4\n\t"
+        di += 32;
+        si += 32;
+    }
 
-"vmovups 96(%%" X86_REGC "di), %%ymm3\n\t"
-"vmulps  64(%%" X86_REGC "si), %%ymm2, %%ymm2\n\t"
-"vaddps  %%ymm1, %%ymm5, %%ymm5\n\t"
+    ymm7 = _mm256_add_ps(ymm7, ymm3);
 
-"vmovups 128(%%" X86_REGC "di), %%ymm0\n\t"
-"vmulps  96(%%" X86_REGC "si), %%ymm3, %%ymm3\n\t"
-"vaddps  %%ymm2, %%ymm6, %%ymm6\n\t"
+    // Sumar los registros acumuladores
+    ymm5 = _mm256_add_ps(ymm4, ymm5);
+    ymm7 = _mm256_add_ps(ymm6, ymm7);
+    ymm7 = _mm256_add_ps(ymm5, ymm7);
 
-"add" X86_REGAT " $128, %%" X86_REGC "si\n\t"
-"add" X86_REGAT " $128, %%" X86_REGC "di\n\t"
-"subl $1, %%ecx\n\t"
-"jnz 1b\n\t"
+    // Suma horizontal (vhaddps)
+    ymm7 = _mm256_hadd_ps(ymm7, ymm7);
+    ymm7 = _mm256_hadd_ps(ymm7, ymm7);
 
-"vaddps  %%ymm3, %%ymm7, %%ymm7\n\t"	// For a loop optimization
+    // Extraer la parte alta (vextractf128) y sumar
+    __m128 xmm7_low  = _mm256_castps256_ps128(ymm7);
+    __m128 xmm7_high = _mm256_extractf128_ps(ymm7, 1);
+    __m128 xmm_res   = _mm_add_ss(xmm7_low, xmm7_high);
 
-//
-// Add the four summation ymm regs together into one ymm register, ymm7
-//
-"vaddps  %%ymm4, %%ymm5, %%ymm5\n\t"
-"vaddps  %%ymm6, %%ymm7, %%ymm7\n\t"
-"vaddps  %%ymm5, %%ymm7, %%ymm7\n\t"
-
-//
-// Horizontal addition.
-//
-// A,B,C,D, E,F,G,H
-"vhaddps %%ymm7, %%ymm7, %%ymm7\n\t"
-// A+B, C+D, A+B, C+D, E+F, G+H, E+F, G+H,
-"vhaddps %%ymm7, %%ymm7, %%ymm7\n\t"
-"vextractf128 $1, %%ymm7, %%xmm6\n\t"
-"vaddss %%xmm7, %%xmm6, %%xmm6\n\t"
-// A+B+C+D, A+B+C+D, A+B+C+D, A+B+C+D, E+F+G+H, E+F+G+H, E+F+G+H, E+F+G+H,
-//"vhaddps %%ymm5, %%ymm5, %%ymm5\n\t"
-// A+B+C+D+E+F+G+H
-
-"vcvtss2si %%xmm6, %%ecx\n\t"
- : "=D" (dummy), "=S" (dummy), "=c" (tmp)
- : "D" (wave), "S" (coeffs), "c" (count >> 5)
-#ifdef __AVX__
- : "ymm0", "ymm1", "ymm2", "ymm3", "ymm4", "ymm5", "ymm6", "ymm7", "cc", "memory"
-#elif defined(__SSE__)
- : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7", "cc", "memory"
-#else
- : "cc", "memory"
-#endif
-);
-
- *accum_output = tmp;
+    // Convertir a entero (vcvtss2si) y devolver
+    *accum_output = _mm_cvtss_si32(xmm_res);
 }
-
 static INLINE void DoMAC_AVX_32X_P16(float* wave, float* coeffs, int32 count, int32* accum_output)
 {
- // Multiplies 32 coefficients at a time.
- int dummy;
- int32 tmp;
+    // vxorps - Inicialización a cero
+    __m256 ymm3 = _mm256_setzero_ps();
+    __m256 ymm4 = _mm256_setzero_ps();
+    __m256 ymm5 = _mm256_setzero_ps();
+    __m256 ymm6 = _mm256_setzero_ps();
+    __m256 ymm7 = _mm256_setzero_ps();
 
-/*
-	?di = wave pointer
-	?si = coeffs pointer
-	ecx = count / 16
-	edx = 32-bit int output pointer
+    int loop_count = count >> 5; // count / 32
+    float* di = wave;
+    float* si = coeffs;
 
-	
-*/
+    // Primer elemento fuera del bucle para replicar "vmovups 0(di), ymm0"
+    __m256 ymm0 = _mm256_loadu_ps(di);
 
- asm volatile(
-"vxorps %%ymm3, %%ymm3, %%ymm3\n\t"	// For a loop optimization
+    // Bucle principal (1b)
+    for (int i = 0; i < loop_count; i++)
+    {
+        __m256 ymm1 = _mm256_loadu_ps(di + 8);
+        ymm0 = _mm256_mul_ps(ymm0, _mm256_loadu_ps(si));
+        ymm7 = _mm256_add_ps(ymm7, ymm3);
 
-"vxorps %%ymm4, %%ymm4, %%ymm4\n\t"
-"vxorps %%ymm5, %%ymm5, %%ymm5\n\t"
-"vxorps %%ymm6, %%ymm6, %%ymm6\n\t"
-"vxorps %%ymm7, %%ymm7, %%ymm7\n\t"
+        __m256 ymm2 = _mm256_loadu_ps(di + 16);
+        ymm1 = _mm256_mul_ps(ymm1, _mm256_loadu_ps(si + 8));
+        ymm4 = _mm256_add_ps(ymm4, ymm0);
 
-"vmovups  0(%%" X86_REGC "di), %%ymm0\n\t"
-"1:\n\t"
+        ymm3 = _mm256_loadu_ps(di + 24);
+        ymm2 = _mm256_mul_ps(ymm2, _mm256_loadu_ps(si + 16));
+        ymm5 = _mm256_add_ps(ymm5, ymm1);
 
-"vmovups 32(%%" X86_REGC "di), %%ymm1\n\t"
-"vmulps   0(%%" X86_REGC "si), %%ymm0, %%ymm0\n\t"
-"vaddps  %%ymm3, %%ymm7, %%ymm7\n\t"
+        ymm0 = _mm256_loadu_ps(di + 32); // vmovups 128(di)
+        ymm3 = _mm256_mul_ps(ymm3, _mm256_loadu_ps(si + 24));
+        ymm6 = _mm256_add_ps(ymm6, ymm2);
 
-"vmovups 64(%%" X86_REGC "di), %%ymm2\n\t"
-"vmulps  32(%%" X86_REGC "si), %%ymm1, %%ymm1\n\t"
-"vaddps  %%ymm0, %%ymm4, %%ymm4\n\t"
+        di += 32; // add 128 (4 bytes * 32)
+        si += 32;
+    }
 
-"vmovups 96(%%" X86_REGC "di), %%ymm3\n\t"
-"vmulps  64(%%" X86_REGC "si), %%ymm2, %%ymm2\n\t"
-"vaddps  %%ymm1, %%ymm5, %%ymm5\n\t"
+    // --- BLOQUE P16 (El código extra tras el jnz) ---
+    __m256 ymm1_p16 = _mm256_loadu_ps(di + 8); 
+    ymm0 = _mm256_mul_ps(ymm0, _mm256_loadu_ps(si));
+    ymm7 = _mm256_add_ps(ymm7, ymm3);
+    ymm1_p16 = _mm256_mul_ps(ymm1_p16, _mm256_loadu_ps(si + 8));
+    ymm4 = _mm256_add_ps(ymm4, ymm0);
+    ymm5 = _mm256_add_ps(ymm1_p16, ymm5);
 
-"vmovups 128(%%" X86_REGC "di), %%ymm0\n\t"
-"vmulps  96(%%" X86_REGC "si), %%ymm3, %%ymm3\n\t"
-"vaddps  %%ymm2, %%ymm6, %%ymm6\n\t"
+    // --- Reducción de registros ---
+    ymm5 = _mm256_add_ps(ymm4, ymm5);
+    ymm7 = _mm256_add_ps(ymm6, ymm7);
+    ymm7 = _mm256_add_ps(ymm5, ymm7);
 
-"add" X86_REGAT " $128, %%" X86_REGC "si\n\t"
-"add" X86_REGAT " $128, %%" X86_REGC "di\n\t"
-"subl $1, %%ecx\n\t"
-"jnz 1b\n\t"
+    // Sumas horizontales (vhaddps)
+    ymm7 = _mm256_hadd_ps(ymm7, ymm7);
+    ymm7 = _mm256_hadd_ps(ymm7, ymm7);
 
-/////
-"vmovups 32(%%" X86_REGC "di), %%ymm1\n\t"
-"vmulps   0(%%" X86_REGC "si), %%ymm0, %%ymm0\n\t"
-"vaddps  %%ymm3, %%ymm7, %%ymm7\n\t"
-"vmulps  32(%%" X86_REGC "si), %%ymm1, %%ymm1\n\t"
-"vaddps  %%ymm0, %%ymm4, %%ymm4\n\t"
-/////
-"vaddps  %%ymm1, %%ymm5, %%ymm5\n\t"	// For a loop optimization
+    // Extracción de 128 bits y suma final (vextractf128 + vaddss)
+    __m128 xmm7_low  = _mm256_castps256_ps128(ymm7);
+    __m128 xmm6_high = _mm256_extractf128_ps(ymm7, 1);
+    __m128 xmm_final = _mm_add_ss(xmm7_low, xmm6_high);
 
-//
-// Add the four summation ymm regs together into one ymm register, ymm7
-//
-"vaddps  %%ymm4, %%ymm5, %%ymm5\n\t"
-"vaddps  %%ymm6, %%ymm7, %%ymm7\n\t"
-"vaddps  %%ymm5, %%ymm7, %%ymm7\n\t"
-
-//
-// Horizontal addition.
-//
-// A,B,C,D, E,F,G,H
-"vhaddps %%ymm7, %%ymm7, %%ymm7\n\t"
-// A+B, C+D, A+B, C+D, E+F, G+H, E+F, G+H,
-"vhaddps %%ymm7, %%ymm7, %%ymm7\n\t"
-"vextractf128 $1, %%ymm7, %%xmm6\n\t"
-"vaddss %%xmm7, %%xmm6, %%xmm6\n\t"
-// A+B+C+D, A+B+C+D, A+B+C+D, A+B+C+D, E+F+G+H, E+F+G+H, E+F+G+H, E+F+G+H,
-//"vhaddps %%ymm5, %%ymm5, %%ymm5\n\t"
-// A+B+C+D+E+F+G+H
-
-"vcvtss2si %%xmm6, %%ecx\n\t"
- : "=D" (dummy), "=S" (dummy), "=c" (tmp)
- : "D" (wave), "S" (coeffs), "c" (count >> 5)
-#ifdef __AVX__
- : "ymm0", "ymm1", "ymm2", "ymm3", "ymm4", "ymm5", "ymm6", "ymm7", "cc", "memory"
-#elif defined(__SSE__)
- : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7", "cc", "memory"
-#else
- : "cc", "memory"
-#endif
-);
-
- *accum_output = tmp;
+    // vcvtss2si
+    *accum_output = _mm_cvtss_si32(xmm_final);
 }
 
 
 
 static INLINE void DoMAC_SSE_16X(float *wave, float *coeffs, int32 count, int32 *accum_output)
 {
- // Multiplies 16 coefficients at a time.
- int dummy;
+    // Inicialización de registros (xorps)
+    __m128 xmm3 = _mm_setzero_ps();
+    __m128 xmm4 = _mm_setzero_ps();
+    __m128 xmm5 = _mm_setzero_ps();
+    __m128 xmm6 = _mm_setzero_ps();
+    __m128 xmm7 = _mm_setzero_ps();
 
-/*
-	?di = wave pointer
-	?si = coeffs pointer
-	ecx = count / 16
-	edx = 32-bit int output pointer
+    int loop_count = count >> 4;
+    float* di = wave;   // Equivalente a EDI/RDI
+    float* si = coeffs; // Equivalente a ESI/RSI
 
-	
-*/
- // Will read 16 bytes of input waveform past end.
- asm volatile(
-"xorps %%xmm3, %%xmm3\n\t"	// For a loop optimization
+    // Bucle principal (16 coeficientes por iteración)
+    for (int i = 0; i < loop_count; i++)
+    {
+        // Carga y procesamiento similar al bloque asm
+        __m128 xmm0 = _mm_loadu_ps(di);      // movups 0(di)
+        __m128 xmm1 = _mm_loadu_ps(di + 4);  // movups 16(di)
+        
+        xmm0 = _mm_mul_ps(xmm0, _mm_loadu_ps(si)); // mulps 0(si)
+        xmm7 = _mm_add_ps(xmm7, xmm3);             // addps xmm3, xmm7
 
-"xorps %%xmm4, %%xmm4\n\t"
-"xorps %%xmm5, %%xmm5\n\t"
-"xorps %%xmm6, %%xmm6\n\t"
-"xorps %%xmm7, %%xmm7\n\t"
+        __m128 xmm2 = _mm_loadu_ps(di + 8);  // movups 32(di)
+        xmm1 = _mm_mul_ps(xmm1, _mm_loadu_ps(si + 4)); // mulps 16(si)
+        xmm4 = _mm_add_ps(xmm4, xmm0);             // addps xmm0, xmm4
 
-"movups  0(%%" X86_REGC "di), %%xmm0\n\t"
-"1:\n\t"
+        xmm3 = _mm_loadu_ps(di + 12);        // movups 48(di)
+        xmm2 = _mm_mul_ps(xmm2, _mm_loadu_ps(si + 8)); // mulps 32(si)
+        xmm5 = _mm_add_ps(xmm5, xmm1);             // addps xmm1, xmm5
 
-"movups 16(%%" X86_REGC "di), %%xmm1\n\t"
-"mulps   0(%%" X86_REGC "si), %%xmm0\n\t"
-"addps  %%xmm3, %%xmm7\n\t"
+        // Preparar xmm0 para la siguiente vuelta (pipeline)
+        __m128 xmm0_next = _mm_loadu_ps(di + 16); // movups 64(di)
+        xmm3 = _mm_mul_ps(xmm3, _mm_loadu_ps(si + 12)); // mulps 48(si)
+        xmm6 = _mm_add_ps(xmm6, xmm2);             // addps xmm2, xmm6
 
-"movups 32(%%" X86_REGC "di), %%xmm2\n\t"
-"mulps  16(%%" X86_REGC "si), %%xmm1\n\t"
-"addps  %%xmm0, %%xmm4\n\t"
+        di += 16;
+        si += 16;
+        xmm0 = xmm0_next; // Reasignar para el inicio del bucle
+    }
 
-"movups 48(%%" X86_REGC "di), %%xmm3\n\t"
-"mulps  32(%%" X86_REGC "si), %%xmm2\n\t"
-"addps  %%xmm1, %%xmm5\n\t"
+    xmm7 = _mm_add_ps(xmm7, xmm3);
 
-"movups 64(%%" X86_REGC "di), %%xmm0\n\t"
-"mulps  48(%%" X86_REGC "si), %%xmm3\n\t"
-"addps  %%xmm2, %%xmm6\n\t"
+    // Suma de los cuatro registros acumuladores
+    xmm4 = _mm_add_ps(xmm4, xmm5);
+    xmm7 = _mm_add_ps(xmm7, xmm6);
+    xmm7 = _mm_add_ps(xmm7, xmm4);
 
-"add" X86_REGAT " $64, %%" X86_REGC "si\n\t"
-"add" X86_REGAT " $64, %%" X86_REGC "di\n\t"
-"subl $1, %%ecx\n\t"
-"jnz 1b\n\t"
+    // Suma horizontal (shufps $27...)
+    __m128 xmm4_shuf = _mm_shuffle_ps(xmm7, xmm7, _MM_SHUFFLE(0, 1, 2, 3));
+    xmm7 = _mm_add_ps(xmm7, xmm4_shuf);
 
-"addps  %%xmm3, %%xmm7\n\t"	// For a loop optimization
+    // Suma horizontal final (shufps $1...)
+    xmm4_shuf = _mm_shuffle_ps(xmm7, xmm7, _MM_SHUFFLE(0, 0, 0, 1));
+    xmm7 = _mm_add_ss(xmm7, xmm4_shuf);
 
-//
-// Add the four summation xmm regs together into one xmm register, xmm7
-//
-"addps  %%xmm4, %%xmm5\n\t"
-"addps  %%xmm6, %%xmm7\n\t"
-"addps  %%xmm5, %%xmm7\n\t"
-
-//
-// Now for the "fun" horizontal addition...
-//
-// 
-"movaps %%xmm7, %%xmm4\n\t"
-// (3 * 2^0) + (2 * 2^2) + (1 * 2^4) + (0 * 2^6) = 27
-"shufps $27, %%xmm7, %%xmm4\n\t"
-"addps  %%xmm4, %%xmm7\n\t"
-
-// At this point, xmm7:
-// (3 + 0), (2 + 1), (1 + 2), (0 + 3)
-//
-// (1 * 2^0) + (0 * 2^2) = 1
-"movaps %%xmm7, %%xmm4\n\t"
-"shufps $1, %%xmm7, %%xmm4\n\t"
-"addss %%xmm4, %%xmm7\n\t"	// No sense in doing packed addition here.
-
-"cvtss2si %%xmm7, %%ecx\n\t"
-"movl %%ecx, (%%" X86_REGC "dx)\n\t"
- : "=D" (dummy), "=S" (dummy), "=c" (dummy)
- : "D" (wave), "S" (coeffs), "c" (count >> 4), "d" (accum_output)
-#ifdef __SSE__
- : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7", "cc", "memory"
-#else
- : "cc", "memory"
-#endif
-);
+    // Convertir a entero y guardar (cvtss2si)
+    *accum_output = _mm_cvtss_si32(xmm7);
 }
 

@@ -37,7 +37,7 @@ typedef uint64_t uint64;
   #if _MSC_VER < 1800
     #define roundf(in) (in >= 0.0f ? floorf(in + 0.5f) : ceilf(in - 0.5f))
   #endif
-  #define NO_INLINE
+  #define NO_INLINE __declspec(noinline)
   #define MDFN_LIKELY(n) ((n) != 0)
   #define MDFN_UNLIKELY(n) ((n) != 0)
 

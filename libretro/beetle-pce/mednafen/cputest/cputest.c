@@ -41,7 +41,8 @@ int cputest_get_flags(void)
 #endif
 
 #if ARCH_X86
-    flags = ff_get_cpu_flags_x86();
+    //flags = ff_get_cpu_flags_x86();
+	flags = CPUTEST_FLAG_AVX | CPUTEST_FLAG_SSE;
 #endif
 
     checked = 1;

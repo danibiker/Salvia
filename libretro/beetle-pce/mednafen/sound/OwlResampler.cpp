@@ -27,6 +27,29 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
+#ifdef _XBOX
+#include <xtl.h>
+#include <ppcintrinsics.h>
+
+// El compilador de Xbox 360 usa __vector4 internamente
+#ifndef __vector
+typedef __vector4 __vector;
+// 1. Error __vslwi (Vector Shift Left Word Immediate)
+// En el XDK se suele llamar __vslw o requiere usar __vspltw para rotaciones
+#define __vslwi(v, bits)    __vslw(v, __vspltisw(bits)) 
+
+// 2. Error __vctsfp (Vector Convert To Signed Fixed Point)
+// El nombre correcto en MSVC Xbox 360 es __vctsxs
+#define __vctsfp(v, m)      __vctsxs(v, m)
+
+// 3. Alternativa para la suma horizontal (Sld es m�s com�n en XDK)
+#define vec_sld(a, b, n)    __vsldoi(a, b, n)
+#endif
+
+// Compatibilidad con c�digo antiguo
+#define vector __vector
+#endif
+
 #if defined(ARCH_POWERPC_ALTIVEC) && defined(HAVE_ALTIVEC_H)
  #include <altivec.h>
 #endif
@@ -353,7 +376,11 @@ static INLINE void DoMAC(float *wave, float *coeffs, int32 count, int32 *accum_o
 #endif
 
 #ifdef ARCH_POWERPC_ALTIVEC
- #include "OwlResampler_altivec.inc"
+ #ifdef _XBOX
+  #include "OwlResampler_xbox360.inc"
+ #else
+  #include "OwlResampler_altivec.inc"
+ #endif
 #endif
 
 #ifdef __ARM_NEON__
@@ -467,20 +494,16 @@ NO_INLINE int32 OwlResampler::T_Resample(OwlBuffer* in, const uint32 in_count, i
          InputIndex += PInfos[InputPhase].Step;
         }
 
-#if defined(ARCH_X86) && defined(HAVE_INLINEASM_AVX)
-	if(TA_SIMD_Type == SIMD_AVX_32X || TA_SIMD_Type == SIMD_AVX_32X_P16)
-	{
-	 asm volatile("vzeroupper\n\t" : : :
-	 #if defined(__AVX__)
-	 "ymm0", "ymm1", "ymm2", "ymm3", "ymm4", "ymm5", "ymm6", "ymm7"
-	  #if defined(__x86_64__)
-	  , "ymm8", "ymm9", "ymm10", "ymm11", "ymm12", "ymm13", "ymm14", "ymm15"
-	  #endif
-	 #endif
-	 );
-	}
-#endif
+#if defined(HAVE_INLINEASM_AVX) && (defined(_M_IX86) || defined(_M_X64))
+    #include <immintrin.h> // Necesario para la intr�nseca de AVX
 
+    if(TA_SIMD_Type == SIMD_AVX_32X || TA_SIMD_Type == SIMD_AVX_32X_P16)
+    {
+        // Esta es la forma oficial de MSVC para ejecutar vzeroupper
+        // El compilador se encarga autom�ticamente de gestionar los registros ymm0-ymm15
+        _mm256_zeroupper();
+    }
+#endif
         if(InputIndex > in_count_WLO)
 	{
 	 leftover = 0;

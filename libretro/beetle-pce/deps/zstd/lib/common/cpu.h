@@ -19,7 +19,11 @@
 #include "mem.h"
 
 #ifdef _MSC_VER
-#include <intrin.h>
+#ifdef _XBOX
+#include <ppcintrinsics.h>
+#else
+#  include <intrin.h>                    /* For Visual 2005 */
+#endif
 #endif
 
 typedef struct {

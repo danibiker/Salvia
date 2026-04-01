@@ -13,6 +13,26 @@
 
 #include "mem.h"
 
+/* Compatibilidad para Xbox 360 (PowerPC) */
+#if defined(_XBOX) || defined(_XBOX360)
+	#include <ppcintrinsics.h>
+
+	#ifndef BITSCAN_DECLARED
+	#define BITSCAN_DECLARED
+	static __inline unsigned char _BitScanReverse(unsigned long* index, unsigned long mask) {
+		if (mask == 0) return 0;
+		*index = 31 - _CountLeadingZeros(mask);
+		return 1;
+	}
+
+	static __inline unsigned char _BitScanForward(unsigned long* index, unsigned long mask) {
+		if (mask == 0) return 0;
+		*index = 31 - _CountLeadingZeros(mask & -(long)mask);
+		return 1;
+	}
+	#endif
+#endif
+
 MEM_STATIC unsigned ZSTD_countTrailingZeros32_fallback(U32 val)
 {
     assert(val != 0);
