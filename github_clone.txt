@@ -1,0 +1,2 @@
+git subtree add --prefix=libretro/dosbox-pure https://github.com/libretro/dosbox-pure main --squash
+git subtree add --prefix=libretro/FBNeo https://github.com/libretro/FBNeo master --squash
