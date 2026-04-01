@@ -1,0 +1,208 @@
+SOURCES_CXX :=
+SOURCES_C   :=
+
+DEPS_DIR     	   := $(CORE_DIR)/deps
+LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro-common
+MEDNAFEN_DIR      := $(CORE_DIR)/mednafen
+CORE_EMU_DIR      := $(MEDNAFEN_DIR)/pce
+CDROM_DIR         := $(MEDNAFEN_DIR)/cdrom
+
+INCFLAGS := -I$(CORE_DIR) \
+			-I$(MEDNAFEN_DIR) \
+			-I$(MEDNAFEN_DIR)/include \
+			-I$(MEDNAFEN_DIR)/hw_sound \
+			-I$(MEDNAFEN_DIR)/hw_cpu \
+			-I$(MEDNAFEN_DIR)/hw_misc \
+			-I$(LIBRETRO_COMM_DIR)/include
+
+LIBCHDR_INCFLAGS = \
+	-I$(DEPS_DIR)/lzma-19.00/include \
+	-I$(DEPS_DIR)/libchdr/include \
+	-I$(DEPS_DIR)/zstd/lib
+
+LIBCHDR_SOURCES_C = \
+	$(DEPS_DIR)/lzma-19.00/src/Alloc.c \
+	$(DEPS_DIR)/lzma-19.00/src/Bra86.c \
+	$(DEPS_DIR)/lzma-19.00/src/BraIA64.c \
+	$(DEPS_DIR)/lzma-19.00/src/CpuArch.c \
+	$(DEPS_DIR)/lzma-19.00/src/Delta.c \
+	$(DEPS_DIR)/lzma-19.00/src/LzFind.c \
+	$(DEPS_DIR)/lzma-19.00/src/Lzma86Dec.c \
+	$(DEPS_DIR)/lzma-19.00/src/LzmaDec.c \
+	$(DEPS_DIR)/lzma-19.00/src/LzmaEnc.c \
+	$(DEPS_DIR)/libchdr/src/libchdr_bitstream.c \
+	$(DEPS_DIR)/libchdr/src/libchdr_cdrom.c \
+	$(DEPS_DIR)/libchdr/src/libchdr_chd.c \
+	$(DEPS_DIR)/libchdr/src/libchdr_flac.c \
+	$(DEPS_DIR)/libchdr/src/libchdr_huffman.c \
+	$(DEPS_DIR)/zstd/lib/common/entropy_common.c \
+	$(DEPS_DIR)/zstd/lib/common/error_private.c \
+	$(DEPS_DIR)/zstd/lib/common/fse_decompress.c \
+	$(DEPS_DIR)/zstd/lib/common/zstd_common.c \
+	$(DEPS_DIR)/zstd/lib/common/xxhash.c \
+	$(DEPS_DIR)/zstd/lib/decompress/huf_decompress.c \
+	$(DEPS_DIR)/zstd/lib/decompress/zstd_ddict.c \
+	$(DEPS_DIR)/zstd/lib/decompress/zstd_decompress.c \
+	$(DEPS_DIR)/zstd/lib/decompress/zstd_decompress_block.c
+
+ZLIB_INCFLAGS = -I$(DEPS_DIR)/zlib-1.2.11
+ZLIB_SOURCES_C = \
+	$(DEPS_DIR)/zlib-1.2.11/adler32.c \
+	$(DEPS_DIR)/zlib-1.2.11/crc32.c \
+	$(DEPS_DIR)/zlib-1.2.11/inffast.c \
+	$(DEPS_DIR)/zlib-1.2.11/inflate.c \
+	$(DEPS_DIR)/zlib-1.2.11/inftrees.c \
+	$(DEPS_DIR)/zlib-1.2.11/zutil.c
+
+ifneq (,$(findstring msvc2003,$(platform)))
+	INCFLAGS += -I$(LIBRETRO_COMM_DIR)/include/compat/msvc
+endif
+
+ifeq ($(HAVE_CDROM), 1)
+	SOURCES_C += \
+					$(LIBRETRO_COMM_DIR)/cdrom/cdrom.c \
+					$(LIBRETRO_COMM_DIR)/vfs/vfs_implementation_cdrom.c
+endif
+
+ifneq ($(HAVE_GRIFFIN), 1)
+    SOURCES_CXX += \
+		$(CORE_DIR)/libretro.cpp \
+		$(CORE_EMU_DIR)/huc6280.cpp \
+		$(CORE_EMU_DIR)/huc.cpp \
+		$(CORE_EMU_DIR)/input.cpp \
+		$(CORE_EMU_DIR)/mcgenjin.cpp \
+		$(CORE_EMU_DIR)/pce.cpp \
+		$(CORE_EMU_DIR)/pcecd.cpp \
+		$(CORE_EMU_DIR)/tsushin.cpp \
+		$(CORE_EMU_DIR)/vce.cpp \
+		$(CORE_EMU_DIR)/input/gamepad.cpp \
+		$(CORE_EMU_DIR)/input/mouse.cpp \
+		$(CORE_EMU_DIR)/input/tsushinkb.cpp \
+		$(MEDNAFEN_DIR)/hw_misc/arcade_card/arcade_card.cpp \
+		$(MEDNAFEN_DIR)/hw_sound/pce_psg/pce_psg.cpp \
+		$(MEDNAFEN_DIR)/hw_video/huc6270/vdc.cpp
+endif
+
+ifeq ($(NEED_BLIP), 1)
+	SOURCES_C += $(MEDNAFEN_DIR)/sound/Blip_Buffer.c
+endif
+
+ifeq ($(HAVE_HES), 1)
+	SOURCES_CXX += $(CORE_EMU_DIR)/hes.cpp
+endif
+
+ifeq ($(NEED_DEINTERLACER), 1)
+    FLAGS += -DNEED_DEINTERLACER
+endif
+
+ifeq ($(NEED_BPP), 8)
+	FLAGS += -DWANT_8BPP
+endif
+
+ifeq ($(NEED_BPP), 16)
+	FLAGS += -DWANT_16BPP
+endif
+
+ifeq ($(NEED_BPP), 32)
+	FLAGS += -DWANT_32BPP
+endif
+
+ifeq ($(NO_COMPUTED_GOTO), 1)
+	FLAGS += -DNO_COMPUTED_GOTO
+endif
+
+ifeq ($(NEED_STEREO_SOUND), 1)
+	FLAGS += -DWANT_STEREO_SOUND
+endif
+
+ifeq ($(FRONTEND_SUPPORTS_RGB565), 1)
+	FLAGS += -DFRONTEND_SUPPORTS_RGB565
+endif
+
+ifeq ($(CACHE_CD), 1)
+	FLAGS += -D__LIBRETRO_CACHE_CD__
+endif
+
+ifneq ($(HAVE_GRIFFIN),1)
+	SOURCES_CXX += \
+		$(CDROM_DIR)/CDAccess.cpp \
+		$(CDROM_DIR)/CDAccess_Image.cpp \
+		$(CDROM_DIR)/CDAccess_CCD.cpp \
+		$(CDROM_DIR)/CDAFReader.cpp \
+		$(CDROM_DIR)/CDAFReader_Vorbis.cpp \
+		$(CDROM_DIR)/cdromif.cpp \
+		$(CDROM_DIR)/CDUtility.cpp \
+		$(CDROM_DIR)/lec.cpp \
+		$(CDROM_DIR)/galois.cpp \
+		$(CDROM_DIR)/recover-raw.cpp \
+		$(CDROM_DIR)/l-ec.cpp \
+		$(CDROM_DIR)/edc_crc32.cpp \
+		$(CDROM_DIR)/scsicd.cpp
+endif
+FLAGS += -DNEED_CD
+
+ifeq ($(HAVE_CHD), 1)
+	FLAGS += -DHAVE_CHD -D_7ZIP_ST -DZSTD_DISABLE_ASM
+
+	ifeq ($(SYSTEM_LIBCHDR), 1)
+		INCFLAGS += $(shell pkg-config --cflags libchdr)
+		LIBS += $(shell pkg-config --libs libchdr)
+	else
+		INCFLAGS += $(LIBCHDR_INCFLAGS)
+		SOURCES_C += $(LIBCHDR_SOURCES_C)
+	endif
+
+    ifeq ($(SYSTEM_ZLIB), 1)
+       INCFLAGS += $(shell pkg-config --cflags zlib)
+       LIBS += $(shell pkg-config --libs zlib)
+    else
+       INCFLAGS += $(ZLIB_INCFLAGS)
+       SOURCES_C += $(ZLIB_SOURCES_C)
+    endif
+
+    SOURCES_CXX += $(CDROM_DIR)/CDAccess_CHD.cpp
+endif
+
+ifeq ($(NEED_TREMOR), 1)
+    SOURCES_C += $(sort $(filter-out %ivorbisfile_example.c, $(wildcard $(MEDNAFEN_DIR)/tremor/*.c)))
+    FLAGS += -DNEED_TREMOR
+endif
+
+ifneq ($(HAVE_GRIFFIN), 1)
+	SOURCES_CXX += \
+		$(MEDNAFEN_DIR)/settings.cpp \
+		$(MEDNAFEN_DIR)/general.cpp \
+		$(MEDNAFEN_DIR)/FileStream.cpp \
+		$(MEDNAFEN_DIR)/MemoryStream.cpp \
+		$(MEDNAFEN_DIR)/Stream.cpp \
+		$(MEDNAFEN_DIR)/state.cpp \
+		$(MEDNAFEN_DIR)/mempatcher.cpp \
+		$(MEDNAFEN_DIR)/sound/okiadpcm.cpp \
+		$(MEDNAFEN_DIR)/sound/OwlResampler.cpp
+
+	SOURCES_C += \
+		$(MEDNAFEN_DIR)/file.c \
+		$(MEDNAFEN_DIR)/mednafen-endian.c \
+		$(MEDNAFEN_DIR)/cputest/cputest.c
+endif
+
+ifneq ($(STATIC_LINKING), 1)
+	SOURCES_C += \
+		$(LIBRETRO_COMM_DIR)/streams/file_stream.c \
+		$(LIBRETRO_COMM_DIR)/streams/file_stream_transforms.c \
+		$(LIBRETRO_COMM_DIR)/file/file_path.c \
+		$(LIBRETRO_COMM_DIR)/file/retro_dirent.c \
+		$(LIBRETRO_COMM_DIR)/lists/string_list.c \
+		$(LIBRETRO_COMM_DIR)/lists/dir_list.c \
+		$(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
+		$(LIBRETRO_COMM_DIR)/compat/compat_snprintf.c \
+		$(LIBRETRO_COMM_DIR)/compat/compat_posix_string.c \
+		$(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c \
+		$(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
+		$(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c \
+		$(LIBRETRO_COMM_DIR)/encodings/encoding_crc32.c \
+		$(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c \
+		$(LIBRETRO_COMM_DIR)/memmap/memalign.c \
+		$(LIBRETRO_COMM_DIR)/string/stdstring.c \
+		$(LIBRETRO_COMM_DIR)/time/rtime.c
+endif
