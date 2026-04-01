@@ -1,2 +1,35 @@
+###########################################################################################################
+# Libretro sources
+###########################################################################################################
+
 git subtree add --prefix=libretro/dosbox-pure https://github.com/libretro/dosbox-pure main --squash
 git subtree add --prefix=libretro/FBNeo https://github.com/libretro/FBNeo master --squash
+git subtree add --prefix=libretro/gambatte https://github.com/libretro/gambatte-libretro master --squash
+git subtree add --prefix=libretro/nestopia https://github.com/libretro/nestopia master --squash
+git subtree add --prefix=libretro/genesis-plus-gx https://github.com/libretro/Genesis-Plus-GX master --squash
+git subtree add --prefix=libretro/picodrive https://github.com/libretro/picodrive master --squash
+git subtree add --prefix=libretro/snes9x https://github.com/libretro/snes9x master --squash
+git subtree add --prefix=libretro/snes9x2010 https://github.com/libretro/snes9x2010 master --squash
+git subtree add --prefix=libretro/beetle-pce https://github.com/libretro/beetle-pce-libretro master --squash
+git subtree add --prefix=libretro/beetle-supergrafx https://github.com/libretro/beetle-supergrafx-libretro master --squash
+git subtree add --prefix=libretro/beetle-pce-fast https://github.com/libretro/beetle-pce-fast-libretro master --squash
+git subtree add --prefix=libretro/mame-2003-plus https://github.com/libretro/mame2003-plus-libretro master --squash
+git subtree add --prefix=libretro/vba-next https://github.com/libretro/vba-next master --squash
+
+###########################################################################################################
+# Updating Libretro sources
+###########################################################################################################
+
+git subtree pull --prefix=libretro/dosbox-pure https://github.com/libretro/dosbox-pure main --squash
+git subtree pull --prefix=libretro/FBNeo https://github.com/libretro/FBNeo master --squash
+git subtree pull --prefix=libretro/gambatte https://github.com/libretro/gambatte-libretro master --squash
+git subtree pull --prefix=libretro/nestopia https://github.com/libretro/nestopia master --squash
+git subtree pull --prefix=libretro/genesis-plus-gx https://github.com/libretro/Genesis-Plus-GX master --squash
+git subtree pull --prefix=libretro/picodrive https://github.com/libretro/picodrive master --squash
+git subtree pull --prefix=libretro/snes9x https://github.com/libretro/snes9x master --squash
+git subtree pull --prefix=libretro/snes9x2010 https://github.com/libretro/snes9x2010 master --squash
+git subtree pull --prefix=libretro/beetle-pce https://github.com/libretro/beetle-pce-libretro master --squash
+git subtree pull --prefix=libretro/beetle-supergrafx https://github.com/libretro/beetle-supergrafx-libretro master --squash
+git subtree pull --prefix=libretro/beetle-pce-fast https://github.com/libretro/beetle-pce-fast-libretro master --squash
+git subtree pull --prefix=libretro/mame-2003-plus https://github.com/libretro/mame2003-plus-libretro master --squash
+git subtree pull --prefix=libretro/vba-next https://github.com/libretro/vba-next master --squash

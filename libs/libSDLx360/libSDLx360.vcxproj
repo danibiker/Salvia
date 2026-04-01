@@ -33,6 +33,14 @@
       <Configuration>Debug_DosboxPure</Configuration>
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug_finalburn|Win32">
+      <Configuration>Debug_finalburn</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug_finalburn|Xbox 360">
+      <Configuration>Debug_finalburn</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug_pcsx|Win32">
       <Configuration>Debug_pcsx</Configuration>
       <Platform>Win32</Platform>
