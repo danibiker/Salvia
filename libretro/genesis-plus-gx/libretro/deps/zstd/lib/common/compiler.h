@@ -172,7 +172,7 @@
 #endif
 
 /* disable warnings */
-#ifdef _MSC_VER    /* Visual Studio */
+#if defined(_MSC_VER) && !defined(_XBOX)
 #  include <intrin.h>                    /* For Visual 2005 */
 #  pragma warning(disable : 4100)        /* disable: C4100: unreferenced formal parameter */
 #  pragma warning(disable : 4127)        /* disable: C4127: conditional expression is constant */

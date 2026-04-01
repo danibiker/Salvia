@@ -39,7 +39,7 @@
 ** 12-03-2017 Eke-Eke (Genesis Plus GX):
 **  - fixed Op1 self-feedback regression introduced by previous modifications
 **  - removed one-sample extra delay on Op1 calculated output
-**  - refactored chan_calc() function 
+**  - refactored chan_calc_ym2612() function 
 **
 ** 01-09-2012 Eke-Eke (Genesis Plus GX):
 **  - removed input clock / output samplerate frequency ratio, chip now always run at (original) internal sample frequency
@@ -1433,7 +1433,7 @@ INLINE signed int op_calc1(UINT32 phase, unsigned int env, unsigned int pm, unsi
   return (tl_tab[p] & opmask);
 }
 
-INLINE void chan_calc(FM_CH *CH, int num)
+INLINE void chan_calc_ym2612(FM_CH *CH, int num)
 {
   do
   {
@@ -1444,7 +1444,9 @@ INLINE void chan_calc(FM_CH *CH, int num)
 
     m2 = c1 = c2 = mem = 0;
 
-    *CH->mem_connect = CH->mem_value;  /* restore delayed sample (MEM) value to m2 or c2 */
+    /* restore delayed sample (MEM) value to m2 or c2 */
+    if (CH->mem_connect)                          
+      *CH->mem_connect = CH->mem_value;
 
     if( eg_out < ENV_QUIET )  /* SLOT 1 */
     {
@@ -1906,13 +1908,28 @@ void YM2612Init(void)
 {
   memset(&ym2612,0,sizeof(YM2612));
   init_tables();
+
+  /* Initialize channel connections immediately after zeroing the struct.
+       mem_connect (and connect1/2/3/4) are NULL after the memset; any audio
+       callback that fires before YM2612ResetChip() completes will crash on
+       *CH->mem_connect.  ALGO defaults to 0 after memset, so calling
+       setup_connection() here is equivalent to what ResetChip() does later
+       via OPNWriteReg(0xb0-0xb2, 0). */
+    setup_connection(&ym2612.CH[0], 0);
+    setup_connection(&ym2612.CH[1], 1);
+    setup_connection(&ym2612.CH[2], 2);
+    setup_connection(&ym2612.CH[3], 3);
+    setup_connection(&ym2612.CH[4], 4);
+    setup_connection(&ym2612.CH[5], 5);
 }
 
 /* reset OPN registers */
 void YM2612ResetChip(void)
 {
   int i;
-
+  // Al inicio de la función, antes de reset_channels:
+  log_cb(RETRO_LOG_DEBUG, "connect1[0] antes de reset: %p\n", ym2612.CH[0].connect1);
+  
   ym2612.OPN.eg_timer     = 0;
   ym2612.OPN.eg_cnt       = 0;
 
@@ -1948,6 +1965,9 @@ void YM2612ResetChip(void)
     OPNWriteReg(i      ,0);
     OPNWriteReg(i|0x100,0);
   }
+
+  // Al final, tras los OPNWriteReg:
+  log_cb(RETRO_LOG_DEBUG, "connect1[0] tras reset: %p\n", ym2612.CH[0].connect1);
 }
 
 /* ym2612 write */
@@ -2049,13 +2069,13 @@ void YM2612Update(int *buffer, int length)
     /* calculate FM */
     if (!ym2612.dacen)
     {
-      chan_calc(&ym2612.CH[0],6);
+      chan_calc_ym2612(&ym2612.CH[0],6);
     }
     else
     {
       /* DAC Mode */
       out_fm[5] = ym2612.dacout;
-      chan_calc(&ym2612.CH[0],5);
+      chan_calc_ym2612(&ym2612.CH[0],5);
     }
 
     /* advance LFO */

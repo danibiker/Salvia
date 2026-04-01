@@ -43,6 +43,7 @@
 #if defined(USE_LIBVORBIS)
 #include <vorbis/vorbisfile.h>
 #elif defined(USE_LIBTREMOR)
+#pragma message "USING USE_LIBTREMOR"
 #include "tremor/ivorbisfile.h"
 #endif
 

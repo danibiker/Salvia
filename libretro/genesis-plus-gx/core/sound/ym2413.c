@@ -859,7 +859,7 @@ INLINE signed int op_calc1(UINT32 phase, unsigned int env, signed int pm, unsign
 #define volume_calc(OP) (((OP)-> state != EG_OFF) ? (OP)->TLL + ((UINT32)(OP)->volume) + (LFO_AM & (OP)->AMmask) : ENV_QUIET)
 
 /* calculate output */
-INLINE void chan_calc( YM2413_OPLL_CH *CH, unsigned int chan )
+INLINE void chan_calc_ym2413( YM2413_OPLL_CH *CH, unsigned int chan )
 {
   YM2413_OPLL_SLOT *SLOT;
   unsigned int env;
@@ -1825,18 +1825,18 @@ void YM2413Update(int *buffer, int length)
     advance_lfo();
 
     /* FM part */
-    chan_calc(&ym2413.P_CH[0], 0);
-    chan_calc(&ym2413.P_CH[1], 1);
-    chan_calc(&ym2413.P_CH[2], 2);
-    chan_calc(&ym2413.P_CH[3], 3);
-    chan_calc(&ym2413.P_CH[4], 4);
-    chan_calc(&ym2413.P_CH[5], 5);
+    chan_calc_ym2413(&ym2413.P_CH[0], 0);
+    chan_calc_ym2413(&ym2413.P_CH[1], 1);
+    chan_calc_ym2413(&ym2413.P_CH[2], 2);
+    chan_calc_ym2413(&ym2413.P_CH[3], 3);
+    chan_calc_ym2413(&ym2413.P_CH[4], 4);
+    chan_calc_ym2413(&ym2413.P_CH[5], 5);
 
     if(!(ym2413.rhythm&0x20))
     {
-      chan_calc(&ym2413.P_CH[6], 6);
-      chan_calc(&ym2413.P_CH[7], 7);
-      chan_calc(&ym2413.P_CH[8], 8);
+      chan_calc_ym2413(&ym2413.P_CH[6], 6);
+      chan_calc_ym2413(&ym2413.P_CH[7], 7);
+      chan_calc_ym2413(&ym2413.P_CH[8], 8);
     }
     else    /* Rhythm part */
     {

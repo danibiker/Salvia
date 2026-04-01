@@ -1038,6 +1038,11 @@ int mp3dec_ex_open_cb(mp3dec_ex_t *dec, mp3dec_io_t *io, int flags)
 
 #ifndef MINIMP3_NO_STDIO
 
+#ifdef _XBOX
+#undef _WIN32
+#endif
+
+
 #if defined(__linux__) || defined(__FreeBSD__)
 #include <errno.h>
 #include <sys/mman.h>

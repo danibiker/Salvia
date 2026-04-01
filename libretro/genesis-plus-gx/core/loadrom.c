@@ -394,6 +394,7 @@ void getrominfo(char *romheader)
 int load_bios(int system)
 {
   int size = 0;
+  int i = 0;
 
   switch (system)
   {
@@ -443,7 +444,7 @@ int load_bios(int system)
          
 #ifdef LSB_FIRST
           /* Byteswap ROM to optimize 16-bit access */
-          int i;
+          
           for (i = 0; i < size; i += 2)
           {
             uint8 temp = scd.bootrom[i];

@@ -26,13 +26,13 @@
 #ifndef INLINE
 
 #if defined(_WIN32) || defined(__INTEL_COMPILER)
-#define INLINE __inline
+#define INLINE static __inline
 #elif defined(__STDC_VERSION__) && __STDC_VERSION__>=199901L
-#define INLINE inline
+#define INLINE static inline
 #elif defined(__GNUC__)
-#define INLINE __inline__
+#define INLINE static __inline__
 #else
-#define INLINE
+#define INLINE static
 #endif
 
 #endif

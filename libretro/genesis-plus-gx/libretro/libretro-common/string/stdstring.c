@@ -237,3 +237,71 @@ char *word_wrap(char* buffer, const char *string, int line_width, bool unicode, 
 
    return buffer;
 }
+
+#include <stdarg.h>  // <--- Fundamental para va_list, va_start y va_end
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Implementación de la función de duplicación de strings que busca RetroArch
+char *retro_strdup__(const char *str)
+{
+   size_t len;
+   char *copy;
+
+   if (!str)
+      return NULL;
+
+   len = strlen(str) + 1;
+   copy = (char*)malloc(len);
+
+   if (copy)
+      memcpy(copy, str, len);
+
+   return copy;
+}
+
+// Implementación de strlcpy_retro__
+size_t strlcpy_retro__(char *dest, const char *src, size_t size) {
+    size_t srclen = strlen(src);
+    if (size > 0) {
+        size_t len = (srclen >= size) ? (size - 1) : srclen;
+        memcpy(dest, src, len);
+        dest[len] = '\0';
+    }
+    return srclen;
+}
+
+// Implementación de strlcat_retro__
+size_t strlcat_retro__(char *dest, const char *src, size_t size) {
+    size_t destlen = strlen(dest);
+    size_t srclen = strlen(src);
+    if (destlen < size) {
+        strlcpy_retro__(dest + destlen, src, size - destlen);
+    }
+    return destlen + srclen;
+}
+
+// Implementación de c99_snprintf_retro__
+// El XDK usa _vsnprintf, que es casi idéntico al estándar C99
+int c99_snprintf_retro__(char *s, size_t n, const char *format, ...) {
+    int res;
+    va_list ap;
+    va_start(ap, format);
+    
+    // En Xbox 360 _vsnprintf devuelve -1 si se trunca, 
+    // pero para el Linker esto será suficiente.
+    res = _vsnprintf(s, n, format, ap);
+    
+    if (n > 0) {
+        s[n - 1] = '\0'; // Garantizar terminación nula
+    }
+    
+    va_end(ap);
+    return res;
+}
+
+#ifdef __cplusplus
+}
+#endif

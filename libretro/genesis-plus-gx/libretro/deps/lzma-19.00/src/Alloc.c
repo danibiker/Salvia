@@ -5,8 +5,10 @@
 
 #include <stdio.h>
 
-#ifdef _WIN32
-#include <windows.h>
+#ifdef _XBOX
+  #include <xtl.h>
+#else
+  #include <windows.h>
 #endif
 #include <stdlib.h>
 

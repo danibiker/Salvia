@@ -28,6 +28,7 @@
 #include <stddef.h>
 #include <string.h>
 
+
 #if defined(__GNUC__) && __GNUC__ >= 4
 # define ZSTD_memcpy(d,s,l) __builtin_memcpy((d),(s),(l))
 # define ZSTD_memmove(d,s,l) __builtin_memmove((d),(s),(l))
@@ -39,6 +40,26 @@
 #endif
 
 #endif /* ZSTD_DEPS_COMMON */
+
+/* Compatibilidad para Xbox 360 (PowerPC) */
+#if defined(_XBOX) || defined(_XBOX360)
+	#include <ppcintrinsics.h>
+
+	#ifndef BITSCAN_DECLARED
+	#define BITSCAN_DECLARED
+	static __inline unsigned char _BitScanReverse(unsigned long* index, unsigned long mask) {
+		if (mask == 0) return 0;
+		*index = 31 - _CountLeadingZeros(mask);
+		return 1;
+	}
+
+	static __inline unsigned char _BitScanForward(unsigned long* index, unsigned long mask) {
+		if (mask == 0) return 0;
+		*index = 31 - _CountLeadingZeros(mask & -(long)mask);
+		return 1;
+	}
+	#endif
+#endif
 
 /* Need:
  * ZSTD_malloc()

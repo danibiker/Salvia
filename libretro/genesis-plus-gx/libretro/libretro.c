@@ -1211,9 +1211,9 @@ static void bram_save(void)
 
 static void extract_name(char *buf, const char *path, size_t size)
 {
-   char *base = strrchr(path, '/');
+   char *base = (char*)strrchr(path, '/');
    if (!base)
-      base = strrchr(path, '\\');
+      base = (char*)strrchr(path, '\\');
 
    if (base)
    {
@@ -1294,6 +1294,8 @@ static bool update_geometry(void)
       environ_cb(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &info);
    else
       environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info);
+
+   return true;
 }
 
 static bool update_viewport(void)
@@ -3330,7 +3332,7 @@ bool retro_serialize(void *data, size_t size)
    if (size != STATE_SIZE)
       return FALSE;
 
-   state_save(data);
+   state_save((unsigned char *)data);
    if (fast_savestates) save_sound_buffer();
 
    return TRUE;
@@ -3493,8 +3495,8 @@ bool retro_load_game(const struct retro_game_info *info)
    }
 #endif
 
-   sms_ntsc = calloc(1, sizeof(sms_ntsc_t));
-   md_ntsc  = calloc(1, sizeof(md_ntsc_t));
+   sms_ntsc = (sms_ntsc_t *)calloc(1, sizeof(sms_ntsc_t));
+   md_ntsc  = (md_ntsc_t *)calloc(1, sizeof(md_ntsc_t));
 
    init_bitmap();
    config_default();
@@ -3591,7 +3593,7 @@ bool retro_load_game(const struct retro_game_info *info)
                   }
 
                   /* append file path to disk image file name */
-                  disk_info[disk_count] = malloc(strlen(g_rom_dir) + len + 2);
+                  disk_info[disk_count] = (char *)malloc(strlen(g_rom_dir) + len + 2);
                   if (disk_info[disk_count] != NULL)
                   {
                      /* add file to disk interface */

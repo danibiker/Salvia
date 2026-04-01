@@ -41,19 +41,19 @@ typedef struct chd_core_file {
 	int (*fseek)(struct chd_core_file*, int64_t, int);
 } core_file;
 
-static INLINE int core_fclose(core_file *fp) {
+INLINE int core_fclose(core_file *fp) {
 	return fp->fclose(fp);
 }
 
-static INLINE size_t core_fread(core_file *fp, void *ptr, size_t len) {
+INLINE size_t core_fread(core_file *fp, void *ptr, size_t len) {
 	return fp->fread(ptr, 1, len, fp);
 }
 
-static INLINE int core_fseek(core_file* fp, int64_t offset, int whence) {
+INLINE int core_fseek(core_file* fp, int64_t offset, int whence) {
 	return fp->fseek(fp, offset, whence);
 }
 
-static INLINE uint64_t core_fsize(core_file *fp)
+INLINE uint64_t core_fsize(core_file *fp)
 {
 	return fp->fsize(fp);
 }

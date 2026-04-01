@@ -176,6 +176,14 @@
 #include <vfs/vfs_implementation_cdrom.h>
 #endif
 
+#ifdef _XBOX
+// Pon esto en tu archivo principal para "capturar" las llamadas que fallan
+int fseeko(FILE *stream, long offset, int whence) {
+    if (!stream) return -1;
+    return fseek(stream, offset, whence);
+}
+#endif
+
 #define RFILE_HINT_UNBUFFERED (1 << 8)
 
 int64_t retro_vfs_file_seek_internal(libretro_vfs_implementation_file *stream, int64_t offset, int whence)
