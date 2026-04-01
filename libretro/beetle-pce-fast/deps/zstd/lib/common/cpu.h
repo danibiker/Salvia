@@ -19,7 +19,11 @@
 #include "mem.h"
 
 #ifdef _MSC_VER
-#include <intrin.h>
+#if defined(_XBOX) || defined(_XBOX_VER)
+	#include <ppcintrinsics.h>
+#else
+	#include <intrin.h>  /* _byteswap_* */
+#endif
 #endif
 
 typedef struct {
