@@ -1,0 +1,741 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="core">
+      <UniqueIdentifier>{df0fe89f-e213-4e78-b61e-7a224d2c4de0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\z80">
+      <UniqueIdentifier>{5e36c995-a849-4ce9-a668-3a0a0abc21bb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\sound">
+      <UniqueIdentifier>{eae16720-2758-4093-a6ae-13c949167029}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro">
+      <UniqueIdentifier>{989595b6-5193-4aef-bd94-0b9ebb0d8edf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro\libretro-common">
+      <UniqueIdentifier>{cdaa7fe7-19d5-45e8-bca3-53b55118c59e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro\libretro-common\streams">
+      <UniqueIdentifier>{4f9eb27c-0486-423c-9e5d-be80fa351267}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro\libretro-common\compat">
+      <UniqueIdentifier>{65a7467c-e1f3-4008-83ca-280ee9e52e30}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro\libretro-common\encodings">
+      <UniqueIdentifier>{deef004c-aec6-4993-b5f6-4da6a53b6e6e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libretro\libretro-common\vfs">
+      <UniqueIdentifier>{709a945a-c951-4f3d-8beb-73318cddf8d8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\sound\tremor">
+      <UniqueIdentifier>{d70ba8a3-d68a-4d2d-b068-18b88b2e1fbe}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cart_hw">
+      <UniqueIdentifier>{ec52a1a3-e92b-416d-89b0-f567be4e4807}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cart_hw\svp">
+      <UniqueIdentifier>{697ebb65-2656-4a27-a2b0-6b323eff9cac}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cd_hw">
+      <UniqueIdentifier>{04faa22e-0710-4c23-8aa3-3b9c3c45c0b2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cd_hw\libchdr">
+      <UniqueIdentifier>{c848162f-9be7-4e0a-8f07-434fbcb898df}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cd_hw\libchdr\src">
+      <UniqueIdentifier>{7eed7ffb-f309-4f79-87ca-96de690bd264}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cd_hw\libchdr\deps">
+      <UniqueIdentifier>{d9b1d470-fa8e-44d7-8a86-a17038911505}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\input_hw">
+      <UniqueIdentifier>{15e1fa75-1847-49fd-96d8-93b1ca567c15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\m68k">
+      <UniqueIdentifier>{e1e2aebc-602e-438e-a56d-055720719fff}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\ntsc">
+      <UniqueIdentifier>{08366101-bc7b-4009-8f09-65804bdab6ea}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\debug">
+      <UniqueIdentifier>{674da1b3-d904-4490-bb73-a63eb5ea9ced}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cd_hw\libchdr\include">
+      <UniqueIdentifier>{83c5022a-01fc-4e8f-b0a8-f95712ec3a60}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cd_hw\libchdr\include\libchdr">
+      <UniqueIdentifier>{d67447c4-984b-489a-aba1-efaa861d99fe}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cd_hw\libchdr\include\dr_libs">
+      <UniqueIdentifier>{c39c9461-7807-4204-9f86-1581a7f3fe40}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cd_hw\libchdr\deps\lzma-24.05">
+      <UniqueIdentifier>{15ee5ec3-0fff-4b80-876a-596a2e179bdd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cd_hw\libchdr\deps\zlib-1.3.1">
+      <UniqueIdentifier>{cb0dc1e7-1a25-4547-b53b-0f50d2711d55}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cd_hw\libchdr\deps\zstd-1.5.6">
+      <UniqueIdentifier>{a01f5c24-5348-4a16-b353-1e1ee9ad2ff2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cd_hw\libchdr\deps\zstd-1.5.6\lib">
+      <UniqueIdentifier>{33c5b340-4313-441b-aa19-dca9b8d2582e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\cd_hw\libchdr\deps\zstd-1.5.6\common">
+      <UniqueIdentifier>{c27e2207-7d23-4e9c-ac19-9f563ce708a6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\sound\minimp3">
+      <UniqueIdentifier>{4fc931a3-79a7-4e20-8d92-771334c9b587}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\core\genesis.c">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\io_ctrl.c">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\loadrom.c">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\mem68k.c">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\membnk.c">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\memz80.c">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\state.c">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\system.c">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\vdp_ctrl.c">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\vdp_render.c">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\z80\z80.c">
+      <Filter>core\z80</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\m68k\m68kcpu.c">
+      <Filter>core\m68k</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\m68k\s68kcpu.c">
+      <Filter>core\m68k</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\ntsc\md_ntsc.c">
+      <Filter>core\ntsc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\ntsc\sms_ntsc.c">
+      <Filter>core\ntsc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\blip_buf.c">
+      <Filter>core\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\eq.c">
+      <Filter>core\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\psg.c">
+      <Filter>core\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\sound.c">
+      <Filter>core\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\ym2413.c">
+      <Filter>core\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\ym2612.c">
+      <Filter>core\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\ym3438.c">
+      <Filter>core\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\input_hw\activator.c">
+      <Filter>core\input_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\input_hw\gamepad.c">
+      <Filter>core\input_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\input_hw\graphic_board.c">
+      <Filter>core\input_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\input_hw\input.c">
+      <Filter>core\input_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\input_hw\lightgun.c">
+      <Filter>core\input_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\input_hw\mouse.c">
+      <Filter>core\input_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\input_hw\paddle.c">
+      <Filter>core\input_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\input_hw\sportspad.c">
+      <Filter>core\input_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\input_hw\teamplayer.c">
+      <Filter>core\input_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\input_hw\terebi_oekaki.c">
+      <Filter>core\input_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\input_hw\xe_1ap.c">
+      <Filter>core\input_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\cd_cart.c">
+      <Filter>core\cd_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\cdc.c">
+      <Filter>core\cd_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\cdd.c">
+      <Filter>core\cd_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\gfx.c">
+      <Filter>core\cd_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\pcm.c">
+      <Filter>core\cd_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\scd.c">
+      <Filter>core\cd_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\areplay.c">
+      <Filter>core\cart_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\eeprom_93c.c">
+      <Filter>core\cart_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\eeprom_i2c.c">
+      <Filter>core\cart_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\eeprom_spi.c">
+      <Filter>core\cart_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\flash_cfi.c">
+      <Filter>core\cart_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\ggenie.c">
+      <Filter>core\cart_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\md_cart.c">
+      <Filter>core\cart_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\sms_cart.c">
+      <Filter>core\cart_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\megasd.c">
+      <Filter>core\cart_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\sram.c">
+      <Filter>core\cart_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\yx5200.c">
+      <Filter>core\cart_hw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\svp\ssp16.c">
+      <Filter>core\cart_hw\svp</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cart_hw\svp\svp.c">
+      <Filter>core\cart_hw\svp</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\streams\file_stream.c">
+      <Filter>libretro\libretro-common\streams</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\streams\file_stream_transforms.c">
+      <Filter>libretro\libretro-common\streams</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_strl.c">
+      <Filter>libretro\libretro-common\compat</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\fopen_utf8.c">
+      <Filter>libretro\libretro-common\compat</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\encodings\encoding_utf.c">
+      <Filter>libretro\libretro-common\encodings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\vfs\vfs_implementation.c">
+      <Filter>libretro\libretro-common\vfs</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\bitwise.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\block.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\codebook.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\floor0.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\floor1.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\framing.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\info.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\mapping0.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\mdct.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\registry.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\res012.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\sharedbook.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\synthesis.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\vorbisfile.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\tremor\window.c">
+      <Filter>core\sound\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro.c">
+      <Filter>libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\scrc32.c">
+      <Filter>libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\debug\cpuhook.c">
+      <Filter>core\debug</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\sound\opll.c">
+      <Filter>core\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\src\libchdr_bitstream.c">
+      <Filter>core\cd_hw\libchdr\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\src\libchdr_cdrom.c">
+      <Filter>core\cd_hw\libchdr\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\src\libchdr_chd.c">
+      <Filter>core\cd_hw\libchdr\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\src\libchdr_flac.c">
+      <Filter>core\cd_hw\libchdr\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\src\libchdr_huffman.c">
+      <Filter>core\cd_hw\libchdr\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\src\CpuArch.c">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\src\LzFind.c">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\src\LzmaDec.c">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\src\LzmaEnc.c">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\adler32.c">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\inffast.c">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\inflate.c">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\inftrees.c">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\zutil.c">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\decompress\huf_decompress.c">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\decompress\zstd_ddict.c">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\decompress\zstd_decompress.c">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\decompress\zstd_decompress_block.c">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\common\entropy_common.c">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\common\error_private.c">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\common\fse_decompress.c">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\common\xxhash.c">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\common\zstd_common.c">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\common</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\core\genesis.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\io_ctrl.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\loadrom.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\mem68k.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\membnk.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\memz80.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\state.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\system.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\vdp_ctrl.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\vdp_render.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\z80\z80.h">
+      <Filter>core\z80</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\m68k\m68kcpu.h">
+      <Filter>core\m68k</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\m68k\m68k.h">
+      <Filter>core\m68k</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\m68k\m68kconf.h">
+      <Filter>core\m68k</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\m68k\m68ki_cycles.h">
+      <Filter>core\m68k</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\m68k\m68ki_instruction_jump_table.h">
+      <Filter>core\m68k</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\m68k\m68kops.h">
+      <Filter>core\m68k</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\m68k\s68kconf.h">
+      <Filter>core\m68k</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\m68k\s68ki_cycles.h">
+      <Filter>core\m68k</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\ntsc\md_ntsc.h">
+      <Filter>core\ntsc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\ntsc\md_ntsc_config.h">
+      <Filter>core\ntsc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\ntsc\md_ntsc_impl.h">
+      <Filter>core\ntsc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\ntsc\sms_ntsc.h">
+      <Filter>core\ntsc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\ntsc\sms_ntsc_config.h">
+      <Filter>core\ntsc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\ntsc\sms_ntsc_impl.h">
+      <Filter>core\ntsc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\blip_buf.h">
+      <Filter>core\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\eq.h">
+      <Filter>core\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\psg.h">
+      <Filter>core\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\sound.h">
+      <Filter>core\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\ym2413.h">
+      <Filter>core\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\ym2612.h">
+      <Filter>core\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\ym3438.h">
+      <Filter>core\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\input_hw\activator.h">
+      <Filter>core\input_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\input_hw\gamepad.h">
+      <Filter>core\input_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\input_hw\graphic_board.h">
+      <Filter>core\input_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\input_hw\input.h">
+      <Filter>core\input_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\input_hw\lightgun.h">
+      <Filter>core\input_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\input_hw\mouse.h">
+      <Filter>core\input_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\input_hw\paddle.h">
+      <Filter>core\input_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\input_hw\sportspad.h">
+      <Filter>core\input_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\input_hw\teamplayer.h">
+      <Filter>core\input_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\input_hw\terebi_oekaki.h">
+      <Filter>core\input_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\input_hw\xe_1ap.h">
+      <Filter>core\input_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\cd_cart.h">
+      <Filter>core\cd_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\cdc.h">
+      <Filter>core\cd_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\cdd.h">
+      <Filter>core\cd_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\gfx.h">
+      <Filter>core\cd_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\pcm.h">
+      <Filter>core\cd_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\scd.h">
+      <Filter>core\cd_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\areplay.h">
+      <Filter>core\cart_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\eeprom_93c.h">
+      <Filter>core\cart_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\eeprom_i2c.h">
+      <Filter>core\cart_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\eeprom_spi.h">
+      <Filter>core\cart_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\flash_cfi.h">
+      <Filter>core\cart_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\ggenie.h">
+      <Filter>core\cart_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\md_cart.h">
+      <Filter>core\cart_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\sms_cart.h">
+      <Filter>core\cart_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\megasd.h">
+      <Filter>core\cart_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\sram.h">
+      <Filter>core\cart_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\yx5200.h">
+      <Filter>core\cart_hw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\svp\ssp16.h">
+      <Filter>core\cart_hw\svp</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cart_hw\svp\svp.h">
+      <Filter>core\cart_hw\svp</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\block.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\codebook.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\codec_internal.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\config_types.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\ivorbiscodec.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\ivorbisfile.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\lsp_lookup.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\mdct.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\mdct_lookup.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\misc.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\ogg.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\os.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\os_types.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\registry.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\window.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\tremor\window_lookup.h">
+      <Filter>core\sound\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\minimp3\minimp3.h">
+      <Filter>core\sound\minimp3</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\minimp3\minimp3_ex.h">
+      <Filter>core\sound\minimp3</Filter>
+    </ClInclude>
+    <ClInclude Include="..\osd.h">
+      <Filter>libretro</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scrc32.h">
+      <Filter>libretro</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\shared.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\debug\cpuhook.h">
+      <Filter>core\debug</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\sound\opll.h">
+      <Filter>core\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\include\libchdr\bitstream.h">
+      <Filter>core\cd_hw\libchdr\include\libchdr</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\include\libchdr\cdrom.h">
+      <Filter>core\cd_hw\libchdr\include\libchdr</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\include\libchdr\chd.h">
+      <Filter>core\cd_hw\libchdr\include\libchdr</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\include\libchdr\chdconfig.h">
+      <Filter>core\cd_hw\libchdr\include\libchdr</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\include\libchdr\coretypes.h">
+      <Filter>core\cd_hw\libchdr\include\libchdr</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\include\libchdr\flac.h">
+      <Filter>core\cd_hw\libchdr\include\libchdr</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\include\libchdr\huffman.h">
+      <Filter>core\cd_hw\libchdr\include\libchdr</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\include\dr_libs\dr_flac.h">
+      <Filter>core\cd_hw\libchdr\include\dr_libs</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\include\7zTypes.h">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\include\7zWindows.h">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\include\Compiler.h">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\include\CpuArch.h">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\include\LzFind.h">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\include\LzHash.h">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\include\LzmaDec.h">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\include\LzmaEnc.h">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\lzma-24.05\include\Precomp.h">
+      <Filter>core\cd_hw\libchdr\deps\lzma-24.05</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\gzguts.h">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\inffast.h">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\inffixed.h">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\inflate.h">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\inftrees.h">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\zconf.h">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\zlib.h">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zlib-1.3.1\zutil.h">
+      <Filter>core\cd_hw\libchdr\deps\zlib-1.3.1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\decompress\zstd_ddict.h">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\lib</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\decompress\zstd_decompress_block.h">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\lib</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\decompress\zstd_decompress_internal.h">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\lib</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\common\error_private.h">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6\common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\core\cd_hw\libchdr\deps\zstd-1.5.6\lib\zstd.h">
+      <Filter>core\cd_hw\libchdr\deps\zstd-1.5.6</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
