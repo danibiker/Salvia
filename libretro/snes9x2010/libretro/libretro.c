@@ -1122,15 +1122,11 @@ static void report_buttons(void)
 							ret |= (1 << i);
 				}
 
+				joypad[port] = 0; // Limpiar el estado del joypad antes de aplicar la máscara nueva
 				for (i = RETRO_DEVICE_ID_JOYPAD_B; i <= RETRO_DEVICE_ID_JOYPAD_R; i++)
 				{
-					pressed = ret & (1 << i);
-					button_press = snes_lut[i];
-
-					if (pressed)
-						joypad[port] |= button_press;
-					else
-						joypad[port] &= ~button_press;
+					if (ret & (1 << i))
+						joypad[port] |= snes_lut[i];
 				}
 
 				if (input_vars.turbo_enable == 1)
@@ -1229,7 +1225,7 @@ static void report_buttons(void)
 		}
 	}
 
-   	if (SWITCH_L2 && !input_vars.switch_state)
+   	/*if (SWITCH_L2 && !input_vars.switch_state)
    	{
 		struct retro_message message;
         input_vars.switch_state = true;
@@ -1255,6 +1251,8 @@ static void report_buttons(void)
    	}
    	else if (!SWITCH_L2 && input_vars.switch_state)
 		input_vars.switch_state = false;
+	*/
+	input_vars.turbo_enable = 0;
 }
 #undef SWITCH_L2
 #undef PRESSED_R2
