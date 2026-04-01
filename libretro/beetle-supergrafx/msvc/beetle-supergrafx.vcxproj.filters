@@ -1,0 +1,389 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- ============================================================ -->
+  <!-- Filter declarations                                           -->
+  <!-- ============================================================ -->
+  <ItemGroup>
+    <Filter Include="Source">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c</Extensions>
+    </Filter>
+    <Filter Include="Source\pce_fast">
+      <UniqueIdentifier>{A1B2C3D4-1111-2222-3333-444455556666}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\cdrom">
+      <UniqueIdentifier>{A1B2C3D4-1111-2222-3333-444455557777}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\mednafen">
+      <UniqueIdentifier>{A1B2C3D4-1111-2222-3333-444455558888}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\tremor">
+      <UniqueIdentifier>{A1B2C3D4-1111-2222-3333-444455559999}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\libretro-common">
+      <UniqueIdentifier>{A1B2C3D4-1111-2222-3333-44445555DDDD}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\hw_misc">
+      <UniqueIdentifier>{A1B2C3D4-1111-2222-3333-44445555EEEE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\sound">
+      <UniqueIdentifier>{A1B2C3D4-1111-2222-3333-44445555FF00}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\video">
+      <UniqueIdentifier>{A1B2C3D4-1111-2222-3333-44445555FF11}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Headers">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp</Extensions>
+    </Filter>
+  </ItemGroup>
+  <!-- ============================================================ -->
+  <!-- Source file assignments                                       -->
+  <!-- ============================================================ -->
+  <ItemGroup>
+    <!-- Root -->
+    <ClCompile Include="..\libretro.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <!-- PCE Fast core -->
+    <ClCompile Include="..\mednafen\pce_fast\pce.cpp">
+      <Filter>Source\pce_fast</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\pce_fast\huc.cpp">
+      <Filter>Source\pce_fast</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\pce_fast\huc6280.cpp">
+      <Filter>Source\pce_fast</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\pce_fast\input.cpp">
+      <Filter>Source\pce_fast</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\pce_fast\pcecd.cpp">
+      <Filter>Source\pce_fast</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\pce_fast\pcecd_drive.cpp">
+      <Filter>Source\pce_fast</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\pce_fast\psg.cpp">
+      <Filter>Source\pce_fast</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\pce_fast\vdc.cpp">
+      <Filter>Source\pce_fast</Filter>
+    </ClCompile>
+    <!-- Hardware misc -->
+    <ClCompile Include="..\mednafen\hw_misc\arcade_card\arcade_card.cpp">
+      <Filter>Source\hw_misc</Filter>
+    </ClCompile>
+    <!-- Audio -->
+    <ClCompile Include="..\mednafen\sound\Blip_Buffer.cpp">
+      <Filter>Source\sound</Filter>
+    </ClCompile>
+    <!-- CD-ROM -->
+    <ClCompile Include="..\mednafen\cdrom\CDAccess.cpp">
+      <Filter>Source\cdrom</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\cdrom\CDAccess_Image.cpp">
+      <Filter>Source\cdrom</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\cdrom\CDAccess_CCD.cpp">
+      <Filter>Source\cdrom</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\cdrom\CDAccess_CHD.cpp">
+      <Filter>Source\cdrom</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\cdrom\audioreader.cpp">
+      <Filter>Source\cdrom</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\cdrom\cdromif.cpp">
+      <Filter>Source\cdrom</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\cdrom\CDUtility.c">
+      <Filter>Source\cdrom</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\cdrom\lec.c">
+      <Filter>Source\cdrom</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\cdrom\galois.c">
+      <Filter>Source\cdrom</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\cdrom\recover-raw.c">
+      <Filter>Source\cdrom</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\cdrom\l-ec.c">
+      <Filter>Source\cdrom</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\cdrom\edc_crc32.c">
+      <Filter>Source\cdrom</Filter>
+    </ClCompile>
+    <!-- Mednafen core -->
+    <ClCompile Include="..\mednafen\error.cpp">
+      <Filter>Source\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\settings.cpp">
+      <Filter>Source\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\general.cpp">
+      <Filter>Source\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\FileWrapper.cpp">
+      <Filter>Source\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\FileStream.cpp">
+      <Filter>Source\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\MemoryStream.cpp">
+      <Filter>Source\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\Stream.cpp">
+      <Filter>Source\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\state.cpp">
+      <Filter>Source\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\mempatcher.cpp">
+      <Filter>Source\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\okiadpcm.cpp">
+      <Filter>Source\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\endian.cpp">
+      <Filter>Source\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\file.c">
+      <Filter>Source\mednafen</Filter>
+    </ClCompile>
+    <!-- Video -->
+    <ClCompile Include="..\mednafen\video\surface.cpp">
+      <Filter>Source\video</Filter>
+    </ClCompile>
+    <!-- Tremor -->
+    <ClCompile Include="..\mednafen\tremor\bitwise.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\block.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\codebook.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\floor0.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\floor1.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\framing.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\info.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\mapping0.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\mdct.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\registry.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\res012.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\sharedbook.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\synthesis.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\vorbisfile.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mednafen\tremor\window.c">
+      <Filter>Source\tremor</Filter>
+    </ClCompile>
+    <!-- LZMA -->
+    <!-- libchdr -->
+    <!-- zlib -->
+    <!-- libretro-common (Windows only) -->
+    <ClCompile Include="..\libretro-common\streams\file_stream.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\streams\file_stream_transforms.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\file\file_path.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\file\retro_dirent.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\lists\string_list.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\lists\dir_list.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_strl.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_snprintf.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_posix_string.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\fopen_utf8.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_strcasestr.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\encodings\encoding_utf.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\memmap\memalign.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\string\stdstring.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\time\rtime.c">
+      <Filter>Source\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\Alloc.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\Bra86.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\BraIA64.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\CpuArch.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\Delta.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\LzFind.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\Lzma86Dec.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\LzmaDec.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\LzmaEnc.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libchdr\src\libchdr_bitstream.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libchdr\src\libchdr_cdrom.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libchdr\src\libchdr_chd.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libchdr\src\libchdr_flac.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libchdr\src\libchdr_huffman.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\zlib-1.2.11\adler32.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\zlib-1.2.11\crc32.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\zlib-1.2.11\inffast.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\zlib-1.2.11\inflate.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\zlib-1.2.11\inftrees.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\zlib-1.2.11\zutil.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <!-- ============================================================ -->
+  <!-- Header file assignments                                       -->
+  <!-- ============================================================ -->
+  <ItemGroup>
+    <ClInclude Include="..\libretro-common\include\libretro.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libretro-common\include\retro_endianness.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libretro-common\include\retro_inline.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libretro-common\include\retro_miscellaneous.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\mednafen.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\mednafen-types.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\mednafen-endian.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\msvc_compat.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\pce_fast\pce.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\pce_fast\huc.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\pce_fast\huc6280.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\pce_fast\input.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\pce_fast\pcecd.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\pce_fast\pcecd_drive.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\pce_fast\psg.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\pce_fast\vdc.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\cdrom\CDAccess.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\cdrom\cdromif.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\cdrom\SimpleFIFO.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\hw_misc\arcade_card\arcade_card.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\sound\Blip_Buffer.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mednafen\video\surface.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

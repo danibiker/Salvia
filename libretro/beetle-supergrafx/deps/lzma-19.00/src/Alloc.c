@@ -6,7 +6,11 @@
 #include <stdio.h>
 
 #ifdef _WIN32
+#ifdef _XBOX
+#include <xtl.h>
+#else
 #include <windows.h>
+#endif
 #endif
 #include <stdlib.h>
 

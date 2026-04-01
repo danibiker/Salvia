@@ -1,0 +1,416 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- ============================================================ -->
+  <!-- Configuration matrix: Debug/Release x Win32/x64/Xbox 360     -->
+  <!-- ============================================================ -->
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Xbox 360">
+      <Configuration>Debug</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360">
+      <Configuration>Release</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <!-- ============================================================ -->
+  <!-- Globals                                                       -->
+  <!-- ============================================================ -->
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}</ProjectGuid>
+    <RootNamespace>beetle_supergrafx</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <!-- ============================================================ -->
+  <!-- Platform / Configuration properties                           -->
+  <!-- ============================================================ -->
+  <!-- Windows Win32 -->
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v100</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v100</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <!-- Windows x64 -->
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v100</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v100</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <!-- Xbox 360 -->
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <!-- Property sheets -->
+  <ImportGroup Label="PropertySheets" Condition="'$(Platform)'=='Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Platform)'=='x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <!-- ============================================================ -->
+  <!-- Output directories                                            -->
+  <!-- ============================================================ -->
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)build\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)build\obj\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <!-- Windows target name -->
+  <PropertyGroup Condition="'$(Platform)'!='Xbox 360'">
+    <TargetName>mednafen_supergrafx_libretro</TargetName>
+  </PropertyGroup>
+  <!-- Xbox 360 target name -->
+  <PropertyGroup Condition="'$(Platform)'=='Xbox 360'">
+    <TargetName>mednafen_supergrafx_libretro_xbox360</TargetName>
+  </PropertyGroup>
+  <!-- ============================================================ -->
+  <!-- Common include paths (used by all platforms)                  -->
+  <!-- ============================================================ -->
+  <PropertyGroup>
+    <CommonIncludePaths>$(ProjectDir)..;$(ProjectDir)..\mednafen;$(ProjectDir)..\mednafen\include;$(ProjectDir)..\mednafen\intl;$(ProjectDir)..\mednafen\hw_sound;$(ProjectDir)..\mednafen\hw_cpu;$(ProjectDir)..\mednafen\hw_misc;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\deps\lzma-19.00\include;$(ProjectDir)..\deps\libchdr\include;$(ProjectDir)..\deps\zlib-1.2.11</CommonIncludePaths>
+  </PropertyGroup>
+  <!-- ============================================================ -->
+  <!-- Common preprocessor defines shared by all configurations      -->
+  <!-- ============================================================ -->
+  <PropertyGroup>
+    <CommonDefines>SIZEOF_DOUBLE=8;WANT_STEREO_SOUND;WANT_16BPP;FRONTEND_SUPPORTS_RGB565;NEED_CD;HAVE_CHD;_7ZIP_ST;NEED_TREMOR;NEED_BLIP;PACKAGE="mednafen";MEDNAFEN_VERSION="1.29.0";MEDNAFEN_VERSION_NUMERIC=1290;MPC_FIXED_POINT;__LIBRETRO__;_LOW_ACCURACY_;STDC_HEADERS;__STDC_LIMIT_MACROS;INLINE=__forceinline</CommonDefines>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+  </PropertyGroup>
+  <!-- ============================================================ -->
+  <!--  DEBUG | Win32                                                -->
+  <!-- ============================================================ -->
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>$(CommonIncludePaths);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;LSB_FIRST;ARCH_X86;$(CommonDefines);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MinimalRebuild>false</MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- ============================================================ -->
+  <!--  RELEASE | Win32                                              -->
+  <!-- ============================================================ -->
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <AdditionalIncludeDirectories>$(CommonIncludePaths);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;LSB_FIRST;ARCH_X86;$(CommonDefines);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <StringPooling>true</StringPooling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- ============================================================ -->
+  <!--  DEBUG | x64                                                  -->
+  <!-- ============================================================ -->
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>$(CommonIncludePaths);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;LSB_FIRST;ARCH_X86;$(CommonDefines);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MinimalRebuild>false</MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- ============================================================ -->
+  <!--  RELEASE | x64                                                -->
+  <!-- ============================================================ -->
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <AdditionalIncludeDirectories>$(CommonIncludePaths);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;LSB_FIRST;ARCH_X86;$(CommonDefines);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <StringPooling>true</StringPooling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- ============================================================ -->
+  <!--  DEBUG | Xbox 360                                             -->
+  <!-- ============================================================ -->
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>$(CommonIncludePaths);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_XBOX;_XBOX360;__ppc__;MSB_FIRST;BYTE_ORDER=BIG_ENDIAN;NO_COMPUTED_GOTO;_DEBUG;$(CommonDefines);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MinimalRebuild>false</MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <StringPooling>true</StringPooling>
+      <CompileAs>Default</CompileAs>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <!-- ============================================================ -->
+  <!--  RELEASE | Xbox 360                                           -->
+  <!-- ============================================================ -->
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <Optimization>Full</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <AdditionalIncludeDirectories>$(CommonIncludePaths);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_XBOX;_XBOX360;__ppc__;MSB_FIRST;BYTE_ORDER=BIG_ENDIAN;NO_COMPUTED_GOTO;NDEBUG;$(CommonDefines);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <StringPooling>true</StringPooling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <CompileAs>Default</CompileAs>
+    </ClCompile>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <!-- ============================================================ -->
+  <!-- C++ Source Files (all platforms)                               -->
+  <!-- ============================================================ -->
+  <ItemGroup>
+    <!-- Libretro entry point -->
+    <ClCompile Include="..\libretro.cpp" />
+    <!-- PCE Fast core -->
+    <ClCompile Include="..\mednafen\pce_fast\pce.cpp" />
+    <ClCompile Include="..\mednafen\pce_fast\huc.cpp" />
+    <ClCompile Include="..\mednafen\pce_fast\huc6280.cpp" />
+    <ClCompile Include="..\mednafen\pce_fast\input.cpp" />
+    <ClCompile Include="..\mednafen\pce_fast\pcecd.cpp" />
+    <ClCompile Include="..\mednafen\pce_fast\pcecd_drive.cpp" />
+    <ClCompile Include="..\mednafen\pce_fast\psg.cpp" />
+    <ClCompile Include="..\mednafen\pce_fast\vdc.cpp" />
+    <!-- Hardware -->
+    <ClCompile Include="..\mednafen\hw_misc\arcade_card\arcade_card.cpp" />
+    <!-- Audio -->
+    <ClCompile Include="..\mednafen\sound\Blip_Buffer.cpp" />
+    <!-- CD-ROM subsystem -->
+    <ClCompile Include="..\mednafen\cdrom\CDAccess.cpp" />
+    <ClCompile Include="..\mednafen\cdrom\CDAccess_Image.cpp" />
+    <ClCompile Include="..\mednafen\cdrom\CDAccess_CCD.cpp" />
+    <ClCompile Include="..\mednafen\cdrom\CDAccess_CHD.cpp" />
+    <ClCompile Include="..\mednafen\cdrom\audioreader.cpp" />
+    <ClCompile Include="..\mednafen\cdrom\cdromif.cpp" />
+    <!-- Mednafen core -->
+    <ClCompile Include="..\mednafen\error.cpp" />
+    <ClCompile Include="..\mednafen\settings.cpp" />
+    <ClCompile Include="..\mednafen\general.cpp" />
+    <ClCompile Include="..\mednafen\FileWrapper.cpp" />
+    <ClCompile Include="..\mednafen\FileStream.cpp" />
+    <ClCompile Include="..\mednafen\MemoryStream.cpp" />
+    <ClCompile Include="..\mednafen\Stream.cpp" />
+    <ClCompile Include="..\mednafen\state.cpp" />
+    <ClCompile Include="..\mednafen\mempatcher.cpp" />
+    <ClCompile Include="..\mednafen\okiadpcm.cpp" />
+    <ClCompile Include="..\mednafen\endian.cpp" />
+    <!-- Video -->
+    <ClCompile Include="..\mednafen\video\surface.cpp" />
+  </ItemGroup>
+  <!-- ============================================================ -->
+  <!-- C Source Files (all platforms)                                 -->
+  <!-- ============================================================ -->
+  <ItemGroup>
+    <!-- Mednafen -->
+    <ClCompile Include="..\mednafen\file.c" />
+    <!-- CD-ROM utilities -->
+    <ClCompile Include="..\mednafen\cdrom\CDUtility.c" />
+    <ClCompile Include="..\mednafen\cdrom\lec.c" />
+    <ClCompile Include="..\mednafen\cdrom\galois.c" />
+    <ClCompile Include="..\mednafen\cdrom\recover-raw.c" />
+    <ClCompile Include="..\mednafen\cdrom\l-ec.c" />
+    <ClCompile Include="..\mednafen\cdrom\edc_crc32.c" />
+    <!-- Tremor (Ogg Vorbis fixed-point decoder) -->
+    <ClCompile Include="..\mednafen\tremor\bitwise.c" />
+    <ClCompile Include="..\mednafen\tremor\block.c" />
+    <ClCompile Include="..\mednafen\tremor\codebook.c" />
+    <ClCompile Include="..\mednafen\tremor\floor0.c" />
+    <ClCompile Include="..\mednafen\tremor\floor1.c" />
+    <ClCompile Include="..\mednafen\tremor\framing.c" />
+    <ClCompile Include="..\mednafen\tremor\info.c" />
+    <ClCompile Include="..\mednafen\tremor\mapping0.c" />
+    <ClCompile Include="..\mednafen\tremor\mdct.c" />
+    <ClCompile Include="..\mednafen\tremor\registry.c" />
+    <ClCompile Include="..\mednafen\tremor\res012.c" />
+    <ClCompile Include="..\mednafen\tremor\sharedbook.c" />
+    <ClCompile Include="..\mednafen\tremor\synthesis.c" />
+    <ClCompile Include="..\mednafen\tremor\vorbisfile.c" />
+    <ClCompile Include="..\mednafen\tremor\window.c" />
+    <!-- LZMA (for CHD support) -->
+    <ClCompile Include="..\deps\lzma-19.00\src\Alloc.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\Bra86.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\BraIA64.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\CpuArch.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\Delta.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\LzFind.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\Lzma86Dec.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\LzmaDec.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\LzmaEnc.c" />
+    <!-- libchdr (CHD format) -->
+    <ClCompile Include="..\deps\libchdr\src\libchdr_bitstream.c" />
+    <ClCompile Include="..\deps\libchdr\src\libchdr_cdrom.c" />
+    <ClCompile Include="..\deps\libchdr\src\libchdr_chd.c" />
+    <ClCompile Include="..\deps\libchdr\src\libchdr_flac.c" />
+    <ClCompile Include="..\deps\libchdr\src\libchdr_huffman.c" />
+    <!-- zlib -->
+    <ClCompile Include="..\deps\zlib-1.2.11\adler32.c" />
+    <ClCompile Include="..\deps\zlib-1.2.11\crc32.c" />
+    <ClCompile Include="..\deps\zlib-1.2.11\inffast.c" />
+    <ClCompile Include="..\deps\zlib-1.2.11\inflate.c" />
+    <ClCompile Include="..\deps\zlib-1.2.11\inftrees.c" />
+    <ClCompile Include="..\deps\zlib-1.2.11\zutil.c" />
+  </ItemGroup>
+  <!-- ============================================================ -->
+  <!-- libretro-common C sources (Windows only, excluded on Xbox360) -->
+  <!-- Xbox 360 uses STATIC_LINKING: frontend provides these.       -->
+  <!-- ============================================================ -->
+  <ItemGroup>
+    <ClCompile Include="..\libretro-common\streams\file_stream.c" />
+    <ClCompile Include="..\libretro-common\streams\file_stream_transforms.c" />
+    <ClCompile Include="..\libretro-common\file\file_path.c" />
+    <ClCompile Include="..\libretro-common\file\retro_dirent.c" />
+    <ClCompile Include="..\libretro-common\lists\string_list.c" />
+    <ClCompile Include="..\libretro-common\lists\dir_list.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_strl.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_snprintf.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_posix_string.c" />
+    <ClCompile Include="..\libretro-common\compat\fopen_utf8.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_strcasestr.c" />
+    <ClCompile Include="..\libretro-common\encodings\encoding_utf.c" />
+    <ClCompile Include="..\libretro-common\vfs\vfs_implementation.c" />
+    <ClCompile Include="..\libretro-common\memmap\memalign.c" />
+    <ClCompile Include="..\libretro-common\string\stdstring.c" />
+    <ClCompile Include="..\libretro-common\time\rtime.c" />
+  </ItemGroup>
+  <!-- ============================================================ -->
+  <!-- Header Files                                                  -->
+  <!-- ============================================================ -->
+  <ItemGroup>
+    <ClInclude Include="..\libretro-common\include\libretro.h" />
+    <ClInclude Include="..\libretro-common\include\retro_endianness.h" />
+    <ClInclude Include="..\libretro-common\include\retro_inline.h" />
+    <ClInclude Include="..\libretro-common\include\retro_miscellaneous.h" />
+    <ClInclude Include="..\mednafen\mednafen.h" />
+    <ClInclude Include="..\mednafen\mednafen-types.h" />
+    <ClInclude Include="..\mednafen\mednafen-endian.h" />
+    <ClInclude Include="..\mednafen\msvc_compat.h" />
+    <ClInclude Include="..\mednafen\pce_fast\pce.h" />
+    <ClInclude Include="..\mednafen\pce_fast\huc.h" />
+    <ClInclude Include="..\mednafen\pce_fast\huc6280.h" />
+    <ClInclude Include="..\mednafen\pce_fast\input.h" />
+    <ClInclude Include="..\mednafen\pce_fast\pcecd.h" />
+    <ClInclude Include="..\mednafen\pce_fast\pcecd_drive.h" />
+    <ClInclude Include="..\mednafen\pce_fast\psg.h" />
+    <ClInclude Include="..\mednafen\pce_fast\vdc.h" />
+    <ClInclude Include="..\mednafen\cdrom\CDAccess.h" />
+    <ClInclude Include="..\mednafen\cdrom\cdromif.h" />
+    <ClInclude Include="..\mednafen\cdrom\SimpleFIFO.h" />
+    <ClInclude Include="..\mednafen\hw_misc\arcade_card\arcade_card.h" />
+    <ClInclude Include="..\mednafen\sound\Blip_Buffer.h" />
+    <ClInclude Include="..\mednafen\video\surface.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

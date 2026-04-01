@@ -1,0 +1,32 @@
+
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "beetle-supergrafx", "beetle-supergrafx.vcxproj", "{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Debug|x64 = Debug|x64
+		Debug|Xbox 360 = Debug|Xbox 360
+		Release|Win32 = Release|Win32
+		Release|x64 = Release|x64
+		Release|Xbox 360 = Release|Xbox 360
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}.Debug|Win32.Build.0 = Debug|Win32
+		{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}.Debug|x64.ActiveCfg = Debug|x64
+		{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}.Debug|x64.Build.0 = Debug|x64
+		{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}.Debug|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}.Debug|Xbox 360.Build.0 = Debug|Xbox 360
+		{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}.Release|Win32.ActiveCfg = Release|Win32
+		{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}.Release|Win32.Build.0 = Release|Win32
+		{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}.Release|x64.ActiveCfg = Release|x64
+		{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}.Release|x64.Build.0 = Release|x64
+		{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}.Release|Xbox 360.ActiveCfg = Release|Xbox 360
+		{B1E3D5B7-4E6A-4C89-A1F2-5D8E9C0A3B7F}.Release|Xbox 360.Build.0 = Release|Xbox 360
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

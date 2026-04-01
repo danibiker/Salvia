@@ -271,6 +271,28 @@ static void LoadCommonPre(void)
  MDFNMP_Init(1024, (1 << 21) / 1024);
 
  sbuf = new Blip_Buffer[2];
+
+ // Pre-initialize Blip_Buffers with a safe default so buffer_size_ > 0 before
+ // the PSG ever calls offset_resampled().
+ //
+ // set_sample_rate() is normally invoked from Emulate() only when
+ // SoundFormatChanged == true.  On a second (or later) game load the sample
+ // rate has not changed, so SoundFormatChanged stays false and the freshly
+ // allocated buffers are left with buffer_size_=0 (default-constructor value).
+ // Any PSG write that reaches offset_resampled() then trips the assert:
+ //   assert( (blip_long)(time >> BLIP_BUFFER_ACCURACY) < blip_buf->buffer_size_ )
+ // because 0 < 0 is false even for time=0.
+ //
+ // Using the same parameters as Emulate() (44100 Hz fallback, 50 ms window)
+ // guarantees a valid buffer from the very first PCE_Power() -> psg->Power()
+ // call.  Emulate() will reconfigure with the real sample rate on its first
+ // frame whenever SoundFormatChanged becomes true.
+ for(int y = 0; y < 2; y++)
+ {
+  sbuf[y].set_sample_rate(44100, 50);
+  sbuf[y].clock_rate((long)(PCE_MASTER_CLOCK / 3));
+  sbuf[y].bass_freq(10);
+ }
 }
 
 static void LoadCommon(void)
