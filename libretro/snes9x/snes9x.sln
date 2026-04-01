@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "snes9x", "snes9x\snes9x.vcxproj", "{137C4DDA-0E01-4BF9-8643-930CA2C4B498}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Debug|Xbox 360 = Debug|Xbox 360
+		Release|Win32 = Release|Win32
+		Release|Xbox 360 = Release|Xbox 360
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{137C4DDA-0E01-4BF9-8643-930CA2C4B498}.Debug|Win32.ActiveCfg = Debug|Win32
+		{137C4DDA-0E01-4BF9-8643-930CA2C4B498}.Debug|Win32.Build.0 = Debug|Win32
+		{137C4DDA-0E01-4BF9-8643-930CA2C4B498}.Debug|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{137C4DDA-0E01-4BF9-8643-930CA2C4B498}.Debug|Xbox 360.Build.0 = Debug|Xbox 360
+		{137C4DDA-0E01-4BF9-8643-930CA2C4B498}.Debug|Xbox 360.Deploy.0 = Debug|Xbox 360
+		{137C4DDA-0E01-4BF9-8643-930CA2C4B498}.Release|Win32.ActiveCfg = Release|Win32
+		{137C4DDA-0E01-4BF9-8643-930CA2C4B498}.Release|Win32.Build.0 = Release|Win32
+		{137C4DDA-0E01-4BF9-8643-930CA2C4B498}.Release|Xbox 360.ActiveCfg = Release|Xbox 360
+		{137C4DDA-0E01-4BF9-8643-930CA2C4B498}.Release|Xbox 360.Build.0 = Release|Xbox 360
+		{137C4DDA-0E01-4BF9-8643-930CA2C4B498}.Release|Xbox 360.Deploy.0 = Release|Xbox 360
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

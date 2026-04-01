@@ -12,6 +12,12 @@
 #include "port.h"
 #include "memmap.h"
 
+#ifdef _MSC_VER
+    // Definimos los equivalentes de Microsoft para funciones POSIX
+    #define strcasecmp _stricmp
+    #define strncasecmp _strnicmp
+#endif
+
 using std::string;
 
 bool SplitPath::ext_is(const string &other)
@@ -95,11 +101,23 @@ string makepath(const string &drive, const string &dir, const string &stem, cons
 }
 
 #else
+
+#if _MSC_VER <= 1600 
+// En lugar de: constexpr auto npos = std::string::npos;
+static const std::string::size_type npos = std::string::npos;
+#else 
 constexpr auto npos = std::string::npos;
+#endif
 
 SplitPath splitpath(string path)
 {
-    SplitPath output{};
+    
+	#if _MSC_VER <= 1600 
+		SplitPath output; 
+	#else
+		SplitPath output{};
+	#endif
+
 
 #ifdef _WIN32
     if (path.length() > 2 && path[1] == ':')

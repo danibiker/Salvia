@@ -11,8 +11,14 @@
 
 #include "conffile.h"
 
-#ifdef __WIN32__
-#define snprintf _snprintf // needs ANSI compliant name
+#if _MSC_VER <= 1600
+    // Definimos los equivalentes de Microsoft para funciones POSIX
+    #define strcasecmp _stricmp
+    #define strncasecmp _strnicmp
+#endif
+
+#if _MSC_VER <= 1600  || defined(__WIN32__)
+	#define snprintf _snprintf // needs ANSI compliant name
 #endif
 
 #define SORT_SECTIONS_BY_SIZE // output

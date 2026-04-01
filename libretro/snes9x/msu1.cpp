@@ -13,6 +13,10 @@
 #include <fstream>
 #include <sys/stat.h>
 
+#if _MSC_VER <= 1600 
+	#include <sstream>
+#endif
+
 STREAM dataStream = NULL;
 STREAM audioStream = NULL;
 uint32 audioLoopPos;
@@ -111,7 +115,13 @@ static bool AudioOpen()
 
 	AudioClose();
 
+	#if _MSC_VER <= 1600 
+		std::stringstream ss;
+		ss << "-" << MSU1.MSU1_CURRENT_TRACK << ".pcm";
+		std::string extension = ss.str();
+	#else
 	std::string extension = "-" + std::to_string(MSU1.MSU1_CURRENT_TRACK) + ".pcm";
+	#endif
 
     audioStream = S9xMSU1OpenFile(extension.c_str());
 	if (audioStream)

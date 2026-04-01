@@ -11,7 +11,14 @@
 #include <string>
 #include <vector>
 
-using bool8 = uint8_t;
+#if _MSC_VER <= 1600 
+// En lugar de: using bool8 = uint8_t;
+	typedef uint8_t bool8;
+#else 
+	using bool8 = uint8_t;
+#endif
+
+
 
 struct SCheat
 {

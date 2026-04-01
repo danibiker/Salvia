@@ -14,6 +14,10 @@
 #include "display.h"
 #include <math.h>
 
+#if defined(_MSC_VER) && _MSC_VER < 1900
+#define snprintf _snprintf
+#endif
+
 //#define BSX_DEBUG
 
 #define BIOS_SIZE	0x100000

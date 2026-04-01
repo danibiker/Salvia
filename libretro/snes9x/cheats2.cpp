@@ -10,6 +10,10 @@
 #include "memmap.h"
 #include <cassert>
 
+#ifdef _XBOX
+	#define strcasecmp _stricmp
+#endif
+
 static inline uint8 S9xGetByteFree(uint32 Address)
 {
     int block = (Address & 0xffffff) >> MEMMAP_SHIFT;
@@ -325,24 +329,37 @@ void S9xEnableCheatGroup(uint32 num)
 {
     assert(num < Cheat.group.size());
 
-    for (auto &c : Cheat.group[num].cheat)
-        S9xEnableCheat(c);
+    //for (auto &c : Cheat.group[num].cheat)
+    //    S9xEnableCheat(c);
+
+	// Reemplaza el bucle for (auto &c : ...) por:
+	for (int i=0; i < Cheat.group[num].cheat.size(); i++) 
+	{
+		S9xEnableCheat(Cheat.group[num].cheat[i]);
+	}
 
     Cheat.group[num].enabled = true;
 }
 
 void S9xDisableCheatGroup(uint32 num)
 {
-    for (auto &c : Cheat.group[num].cheat)
-        S9xDisableCheat(c);
+    //for (auto &c : Cheat.group[num].cheat)
+    //    S9xDisableCheat(c);
+
+	for (int i=0; i < Cheat.group[num].cheat.size(); i++) 
+	{
+		S9xDisableCheat(Cheat.group[num].cheat[i]);
+	}
 
     Cheat.group[num].enabled = false;
 }
 
 static bool is_all_hex(const std::string &code)
 {
-    for (const auto &c : code)
+    //for (const auto &c : code)
+	for (int i=0; i < code.length(); i++)
     {
+		const char c = code[i];
         if ((c < '0' || c > '9') &&
             (c < 'a' || c > 'f') &&
             (c < 'A' || c > 'F'))
@@ -381,8 +398,10 @@ bool S9xGameGenieToRaw(const std::string &code, uint32 &address, uint8 &byte)
     static const char *real_hex = "0123456789ABCDEF";
     static const char *genie_hex = "DF4709156BC8A23E";
 
-    for (auto &c : new_code)
+    //for (auto &c : new_code)
+	for (int i=0; i < new_code.length(); i++)
     {
+		char c = new_code[i];
         c = toupper(c);
 
         for (int i = 0; i < 16; i++)
@@ -492,8 +511,10 @@ SCheatGroup S9xCreateCheatGroup(const std::string &name, const std::string &chea
     g.enabled = false;
 
     auto cheats = split_string(cheat, '+');
-    for (const auto &c : cheats)
+    //for (const auto &c : cheats)
+	for (int i=0; i < cheats.size(); i++)
     {
+		std::string c = cheats[i];
         SCheat new_cheat = S9xTextToCheat(c);
         if (new_cheat.address)
             g.cheat.push_back(new_cheat);
@@ -531,7 +552,8 @@ int S9xModifyCheatGroup(uint32 num, const std::string &name, const std::string &
 
 std::string S9xCheatToText(const SCheat &c)
 {
-    char output[256]{};
+    //char output[256]{};
+	char output[256] = {0};
 
     if (c.conditional)
         sprintf(output, "%06x=%02x?%02x", c.address, c.cond_byte, c.byte);
@@ -580,9 +602,17 @@ void S9xUpdateCheatsInMemory(void)
     if (!Cheat.enabled)
         return;
 
-    for (auto &group : Cheat.group)
-        for (auto &cheat : group.cheat)
-            S9xUpdateCheatInMemory(cheat);
+    //for (auto &group : Cheat.group)
+	for (int i=0; i < Cheat.group.size(); i++){
+		SCheatGroup group = Cheat.group[i];
+		//for (auto &cheat : group.cheat){
+		for (int j=0; j < group.cheat.size(); j++){
+			SCheat cheat = group.cheat[j];
+			S9xUpdateCheatInMemory(cheat);
+		}
+            
+	}
+        
 }
 
 static bool S9xCheatIsDuplicate(const std::string &name, const std::string &code)
@@ -604,8 +634,10 @@ static bool S9xCheatIsDuplicate(const std::string &name, const std::string &code
 
 static void S9xLoadCheatsFromBMLNode(bml_node &n)
 {
-    for (auto &c : n.child)
+    //for (auto &c : n.child)
+	for (int i=0; i < n.child.size(); i++)
     {
+		bml_node c = n.child[i];
         if (strcasecmp(c.name.c_str(), "cheat"))
             continue;
 
@@ -651,7 +683,7 @@ static bool8 S9xLoadCheatFileClassic(const std::string &filename)
         c.address = data[2] | (data[3] << 8) | (data[4] << 16);
 
         std::string name((const char *)&data[8], 20);
-        char code[32]{};
+        char code[32] = {0};
         sprintf(code, "%x=%x", c.address, c.byte);
         std::string cheat(code);
         S9xAddCheatGroup(name, cheat);
@@ -775,8 +807,10 @@ int S9xImportCheatsFromDatabase(const std::string &filename)
     }
     sha256_txt[64] = '\0';
 
-    for (auto &c : bml.child)
+    //for (auto &c : bml.child)
+	for (int i=0; i < bml.child.size(); i++)
     {
+		bml_node c = bml.child[i];
         if (!strcasecmp(c.name.c_str(), "cartridge"))
         {
             auto n = c.find_subnode("sha256");

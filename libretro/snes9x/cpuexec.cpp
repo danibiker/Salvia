@@ -12,6 +12,9 @@
 #include "fxemu.h"
 #include "snapshot.h"
 #include "movie.h"
+#ifdef _XBOX
+#include <ppcintrinsics.h>
+#endif
 #ifdef DEBUGGER
 #include "debug.h"
 #include "missing.h"
@@ -143,14 +146,11 @@ void S9xMainLoop (void)
 			Op = CPU.PCBase[Registers.PCw];
 			CPU.Cycles += CPU.MemSpeed;
 			Opcodes = ICPU.S9xOpcodes;
-
-			if (CPU.Cycles > 1000000)
-			{
-				Settings.StopEmulation = true;
-				CPU.Flags |= HALTED_FLAG;
-				S9xMessage(S9X_FATAL_ERROR, 0, "CPU is deadlocked");
-				return;
-			}
+#ifdef _XBOX
+			// Prefetch: siguiente byte de instruccion y entrada de tabla de opcodes
+			__dcbt(0, &CPU.PCBase[Registers.PCw + 1]);
+			__dcbt(0, &Opcodes[Op]);
+#endif
 		}
 		else
 		{
@@ -255,6 +255,15 @@ void S9xDoHEventProcessing (void)
 			break;
 
 		case HC_HCOUNTER_MAX_EVENT:
+			// Deadlock check: movido aqui desde el inner loop para evitar un branch por instruccion
+			if (CPU.Cycles > 1000000)
+			{
+				Settings.StopEmulation = true;
+				CPU.Flags |= HALTED_FLAG;
+				S9xMessage(S9X_FATAL_ERROR, 0, "CPU is deadlocked");
+				return;
+			}
+
 			if (Settings.SuperFX)
 			{
 				if (!SuperFX.oneLineDone)

@@ -58,11 +58,15 @@ struct CMemory
 	int32	HeaderCount;
 
 	uint8	RAM[0x20000];
-	std::vector<uint8_t> ROMStorage;
 	uint8   *ROM;
-	std::vector<uint8_t> SRAMStorage;
+	static const size_t SRAM_SIZE = 0x80000;
+	static const size_t ROM_TOTAL_SIZE = MAX_ROM_SIZE + 0x200 + 0x8000;
+	// Arrays estáticos (se alojan en el segmento BSS, inicializados a 0)
+	static uint8_t ROM_Storage[ROM_TOTAL_SIZE];
+	static uint8_t SRAM_Storage[SRAM_SIZE];
+
 	uint8	*SRAM;
-	const size_t SRAM_SIZE = 0x80000;
+	
 	uint8	VRAM[0x10000];
 	uint8	*FillRAM;
 	uint8	*BWRAM;

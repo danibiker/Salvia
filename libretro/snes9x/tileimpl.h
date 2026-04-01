@@ -10,6 +10,9 @@
 #include "snes9x.h"
 #include "ppu.h"
 #include "tile.h"
+#ifdef _XBOX
+#include <ppcintrinsics.h>
+#endif
 
 extern struct SLineMatrixData	LineMatrixData[240];
 
@@ -96,6 +99,10 @@ namespace TileImpl {
 				TileAddr += BG.NameSelect;
 			TileAddr &= 0xffff;
 			TileNumber = TileAddr >> BG.TileShift;
+#ifdef _XBOX
+			// Prefetch datos de tile en VRAM antes de posible conversion
+			__dcbt(0, &Memory.VRAM[TileAddr]);
+#endif
 			if (Tile & H_FLIP)
 			{
 				pCache = &BG.BufferFlip[TileNumber << 6];
@@ -602,6 +609,14 @@ namespace TileImpl {
 						int	X = ((AA + BB) >> 8) & 0x3ff;
 						int	Y = ((CC + DD) >> 8) & 0x3ff;
 
+#ifdef _XBOX
+						// Prefetch siguiente tile de Mode 7 (acceso semi-aleatorio a VRAM)
+						{
+							int nX = (((AA + aa) + BB) >> 8) & 0x3ff;
+							int nY = (((CC + cc) + DD) >> 8) & 0x3ff;
+							__dcbt(0, &Memory.VRAM[((nY & ~7) << 5) + ((nX >> 2) & ~1)]);
+						}
+#endif
 						uint8	*TileData = VRAM1 + (Memory.VRAM[((Y & ~7) << 5) + ((X >> 2) & ~1)] << 7);
 						uint8	b = *(TileData + ((Y & 7) << 4) + ((X & 7) << 1));
 

@@ -1817,9 +1817,14 @@ void S9xVariableDisplayString(const char* string, int linesFromBottom,	int pixel
 
 	int min_lines = 1;
 	std::string msg(string);
-	for (auto& c : msg)
+	//for (auto& c : msg)
+	for (int i=0; i < msg.length(); i++){
+		char c = msg[i];
 		if (c == '\n')
 			min_lines++;
+	}
+
+
 	if (min_lines > linesFromBottom)
 		linesFromBottom = min_lines;
 

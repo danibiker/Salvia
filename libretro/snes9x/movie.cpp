@@ -8,14 +8,31 @@
 //  (c) Copyright 2004 blip
 
 #ifndef __WIN32__
-#include <unistd.h>
+	#if _MSC_VER <= 1600 
+		#include <io.h>    // Proporciona funciones como access(), read(), write()
+		#include <process.h> 
+		// Define constantes que suelen estar en unistd.h
+		#define F_OK 0
+		#define W_OK 2
+		#define R_OK 4
+	#else
+		#include <unistd.h>
+	#endif
 #endif
+
+#ifdef _XBOX
+	#include <io.h>
+	// En el SDK de Xbox 360, _chsize es la función estándar para esto
+	#define ftruncate(fd, size) _chsize(fd, (long)(size))
+#endif
+
 #include "snes9x.h"
 #include "memmap.h"
 #include "controls.h"
 #include "snapshot.h"
 #include "movie.h"
 #include "language.h"
+#include "port.h"
 #ifdef NETPLAY_SUPPORT
 #include "netplay.h"
 #endif

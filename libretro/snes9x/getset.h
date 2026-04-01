@@ -57,7 +57,7 @@ static inline int32 memory_speed (uint32 address)
 inline uint8 S9xGetByte (uint32 Address)
 {
 	int		block = (Address & 0xffffff) >> MEMMAP_SHIFT;
-	uint8	*GetAddress = Memory.Map[block];
+	uint8	* __restrict GetAddress = Memory.Map[block];
 	int32	speed = memory_speed(Address);
 	uint8	byte;
 
@@ -187,7 +187,7 @@ inline uint16 S9xGetWord (uint32 Address, enum s9xwrap_t w = WRAP_NONE)
 	}
 
 	int		block = (Address & 0xffffff) >> MEMMAP_SHIFT;
-	uint8	*GetAddress = Memory.Map[block];
+	uint8	* __restrict GetAddress = Memory.Map[block];
 	int32	speed = memory_speed(Address);
 
 	if (GetAddress >= (uint8 *) CMemory::MAP_LAST)
@@ -320,7 +320,7 @@ inline uint16 S9xGetWord (uint32 Address, enum s9xwrap_t w = WRAP_NONE)
 inline void S9xSetByte (uint8 Byte, uint32 Address)
 {
 	int		block = (Address & 0xffffff) >> MEMMAP_SHIFT;
-	uint8	*SetAddress = Memory.WriteMap[block];
+	uint8	* __restrict SetAddress = Memory.WriteMap[block];
 	int32	speed = memory_speed(Address);
 
 	if (SetAddress >= (uint8 *) CMemory::MAP_LAST)
@@ -460,7 +460,7 @@ inline void S9xSetWord (uint16 Word, uint32 Address, enum s9xwrap_t w = WRAP_NON
 	}
 
 	int		block = (Address & 0xffffff) >> MEMMAP_SHIFT;
-	uint8	*SetAddress = Memory.WriteMap[block];
+	uint8	* __restrict SetAddress = Memory.WriteMap[block];
 	int32	speed = memory_speed(Address);
 
 	if (SetAddress >= (uint8 *) CMemory::MAP_LAST)

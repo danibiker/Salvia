@@ -24,6 +24,84 @@ namespace {
 			p2 |= pixbit[(i)][pix & 0xf]; \
 		}
 
+#ifdef _XBOX
+	// Xbox 360 (PPC big-endian): usar stores de 64 bits para escribir p1+p2 en una sola instruccion std.
+	// En big-endian, p1 va en la parte alta y p2 en la baja del uint64.
+
+	uint8 ConvertTile2 (uint8 *pCache, uint32 TileAddr, uint32)
+	{
+		uint8	*tp      = &Memory.VRAM[TileAddr];
+		uint64			*p       = (uint64 *) pCache;
+		uint32			non_zero = 0;
+		uint8			line;
+
+		for (line = 8; line != 0; line--, tp += 2)
+		{
+			uint32			p1 = 0;
+			uint32			p2 = 0;
+			uint8	pix;
+
+			DOBIT( 0, 0);
+			DOBIT( 1, 1);
+			*p++ = ((uint64)p1 << 32) | p2;
+			non_zero |= p1 | p2;
+		}
+
+		return (non_zero ? TRUE : BLANK_TILE);
+	}
+
+	uint8 ConvertTile4 (uint8 *pCache, uint32 TileAddr, uint32)
+	{
+		uint8	*tp      = &Memory.VRAM[TileAddr];
+		uint64			*p       = (uint64 *) pCache;
+		uint32			non_zero = 0;
+		uint8			line;
+
+		for (line = 8; line != 0; line--, tp += 2)
+		{
+			uint32			p1 = 0;
+			uint32			p2 = 0;
+			uint8	pix;
+
+			DOBIT( 0, 0);
+			DOBIT( 1, 1);
+			DOBIT(16, 2);
+			DOBIT(17, 3);
+			*p++ = ((uint64)p1 << 32) | p2;
+			non_zero |= p1 | p2;
+		}
+
+		return (non_zero ? TRUE : BLANK_TILE);
+	}
+
+	uint8 ConvertTile8 (uint8 *pCache, uint32 TileAddr, uint32)
+	{
+		uint8	*tp      = &Memory.VRAM[TileAddr];
+		uint64			*p       = (uint64 *) pCache;
+		uint32			non_zero = 0;
+		uint8			line;
+
+		for (line = 8; line != 0; line--, tp += 2)
+		{
+			uint32			p1 = 0;
+			uint32			p2 = 0;
+			uint8	pix;
+
+			DOBIT( 0, 0);
+			DOBIT( 1, 1);
+			DOBIT(16, 2);
+			DOBIT(17, 3);
+			DOBIT(32, 4);
+			DOBIT(33, 5);
+			DOBIT(48, 6);
+			DOBIT(49, 7);
+			*p++ = ((uint64)p1 << 32) | p2;
+			non_zero |= p1 | p2;
+		}
+
+		return (non_zero ? TRUE : BLANK_TILE);
+	}
+#else
 	uint8 ConvertTile2 (uint8 *pCache, uint32 TileAddr, uint32)
 	{
 		uint8	*tp      = &Memory.VRAM[TileAddr];
@@ -100,6 +178,7 @@ namespace {
 
 		return (non_zero ? TRUE : BLANK_TILE);
 	}
+#endif
 
 	#undef DOBIT
 

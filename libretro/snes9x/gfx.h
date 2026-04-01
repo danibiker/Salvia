@@ -12,9 +12,9 @@
 
 struct SGFX
 {
-	const uint32 Pitch = sizeof(uint16) * MAX_SNES_WIDTH;
-	const uint32 RealPPL = MAX_SNES_WIDTH; // true PPL of Screen buffer
-	const uint32 ScreenSize =  MAX_SNES_WIDTH * MAX_SNES_HEIGHT;
+	static const uint32 Pitch = sizeof(uint16) * MAX_SNES_WIDTH;
+	static const uint32 RealPPL = MAX_SNES_WIDTH; // true PPL of Screen buffer
+	static const uint32 ScreenSize =  MAX_SNES_WIDTH * MAX_SNES_HEIGHT;
 	std::vector<uint16> ScreenBuffer;
 	uint16	*Screen;
 	uint16	*SubScreen;
@@ -199,6 +199,112 @@ struct COLOR_SUB
 			(C2 & RGB_REMOVE_LOW_BITS_MASK)) >> 1];
 	}
 };
+
+#ifdef _XBOX
+#include <ppcintrinsics.h>
+
+// Rellenar un rango de pixels uint16 con un valor constante usando stores de 128 bits.
+// dst debe estar alineado a 2 bytes (uint16*), count es numero de pixels.
+static alwaysinline void S9xFillPixels(uint16 * __restrict dst, uint16 color, uint32 count)
+{
+	// Construir un vector de 8 pixels identicos (128 bits = 8 x uint16)
+	uint32 color32 = ((uint32)color << 16) | color;
+	__declspec(align(16)) uint32 fillbuf[4] = { color32, color32, color32, color32 };
+	__vector4 vfill = *(__vector4*)fillbuf;
+
+	// Escribir bloques de 8 pixels (16 bytes) alineados
+	uint32 aligned_start = ((uintptr_t)dst + 15) & ~15;
+	uint32 pre = ((uint16*)aligned_start - dst);
+	if (pre > count) pre = count;
+
+	// Pixels previos no alineados (escalar)
+	for (uint32 i = 0; i < pre; i++)
+		dst[i] = color;
+
+	uint16 * __restrict adst = dst + pre;
+	uint32 remaining = count - pre;
+	uint32 vec_count = remaining >> 3; // bloques de 8 pixels
+	uint32 tail = remaining & 7;
+
+	// Bloques vectoriales de 128 bits
+	__vector4 *vdst = (__vector4 *)adst;
+	for (uint32 i = 0; i < vec_count; i++)
+		__stvx(vfill, &vdst[i], 0);
+
+	// Pixels restantes (escalar)
+	uint16 *tdst = adst + (vec_count << 3);
+	for (uint32 i = 0; i < tail; i++)
+		tdst[i] = color;
+}
+
+// Rellenar un rango de bytes (Z-buffer) con un valor constante usando stores de 128 bits.
+static alwaysinline void S9xFillZBuffer(uint8 * __restrict dst, uint8 depth, uint32 count)
+{
+	uint32 d32 = depth | (depth << 8) | (depth << 16) | (depth << 24);
+	__declspec(align(16)) uint32 fillbuf[4] = { d32, d32, d32, d32 };
+	__vector4 vfill = *(__vector4*)fillbuf;
+
+	uint32 aligned_start = ((uintptr_t)dst + 15) & ~15;
+	uint32 pre = ((uint8*)aligned_start - dst);
+	if (pre > count) pre = count;
+
+	for (uint32 i = 0; i < pre; i++)
+		dst[i] = depth;
+
+	uint8 * __restrict adst = dst + pre;
+	uint32 remaining = count - pre;
+	uint32 vec_count = remaining >> 4; // bloques de 16 bytes
+	uint32 tail = remaining & 15;
+
+	__vector4 *vdst = (__vector4 *)adst;
+	for (uint32 i = 0; i < vec_count; i++)
+		__stvx(vfill, &vdst[i], 0);
+
+	uint8 *tdst = adst + (vec_count << 4);
+	for (uint32 i = 0; i < tail; i++)
+		tdst[i] = depth;
+}
+
+// COLOR_ADD::fn1_2 batch: promedia 8 pixels de golpe (Main + Sub) / 2
+// Usado en el blend mode mas comun (Add Half)
+static alwaysinline void S9xColorAddHalf_Batch8(uint16 * __restrict dst,
+	const uint16 * __restrict c1, const uint16 * __restrict c2)
+{
+	// fn1_2: ((C1 & mask) + (C2 & mask)) >> 1) + (C1 & C2 & low_bits)
+	// Con VMX procesamos 8 halfwords a la vez
+	__vector4 v1 = *(__vector4*)c1;
+	__vector4 v2 = *(__vector4*)c2;
+
+	// Construir mascaras como vectores
+	uint16 rmask = RGB_REMOVE_LOW_BITS_MASK;
+	uint16 lmask = RGB_LOW_BITS_MASK;
+	uint16 amask = ALPHA_BITS_MASK;
+	uint32 rm32 = ((uint32)rmask << 16) | rmask;
+	uint32 lm32 = ((uint32)lmask << 16) | lmask;
+	uint32 am32 = ((uint32)amask << 16) | amask;
+	__declspec(align(16)) uint32 rmbuf[4] = { rm32, rm32, rm32, rm32 };
+	__declspec(align(16)) uint32 lmbuf[4] = { lm32, lm32, lm32, lm32 };
+	__declspec(align(16)) uint32 ambuf[4] = { am32, am32, am32, am32 };
+	__vector4 vrm = *(__vector4*)rmbuf;
+	__vector4 vlm = *(__vector4*)lmbuf;
+	__vector4 vam = *(__vector4*)ambuf;
+
+	// (C1 & remove_low) + (C2 & remove_low)
+	__vector4 masked1 = __vand(v1, vrm);
+	__vector4 masked2 = __vand(v2, vrm);
+	__vector4 sum = __vadduhm(masked1, masked2);
+	// >> 1 via halfword shift right (vector de shifts = 1 por cada halfword)
+	__declspec(align(16)) uint16 one16[8] = { 1,1,1,1,1,1,1,1 };
+	__vector4 vone = *(__vector4*)one16;
+	__vector4 half = __vsrh(sum, vone);
+	// C1 & C2 & low_bits
+	__vector4 low = __vand(__vand(v1, v2), vlm);
+	// resultado = half + low | alpha
+	__vector4 result = __vor(__vadduhm(half, low), vam);
+
+	*(__vector4*)dst = result;
+}
+#endif
 
 void S9xStartScreenRefresh (void);
 void S9xEndScreenRefresh (void);

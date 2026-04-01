@@ -166,6 +166,26 @@ void SetInfoDlgColor(unsigned char, unsigned char, unsigned char);
 #define WRITE_WORD(s, d)	*(uint16 *) (s) = (d)
 #define WRITE_3WORD(s, d)	*(uint16 *) (s) = (uint16) (d), *((uint8 *) (s) + 2) = (uint8) ((d) >> 16)
 #define WRITE_DWORD(s, d)	*(uint32 *) (s) = (d)
+#elif defined(_XBOX)
+#include <ppcintrinsics.h>
+#include <ppcintrinsics.h>
+// Para leer un WORD (16 bits) con bytes invertidos (instrucción lhbrx)
+#define READ_WORD(s)    ((uint16)__loadshortbytereverse(0, (void*)(s)))
+// PARA CORREGIR TU ERROR: El nombre correcto es __loadwordbytereverse (32 bits)
+// En el XDK, un 'word' de PowerPC son 32 bits.
+#define READ_DWORD(s)   ((uint32)__loadwordbytereverse(0, (void*)(s)))
+// Para escribir un WORD (16 bits) con bytes invertidos (instrucción sthbrx)
+#define WRITE_WORD(s,d) __storeshortbytereverse((uint16)(d), 0, (void*)(s))
+// Para escribir un DWORD (32 bits) con bytes invertidos (instrucción stwbrx)
+#define WRITE_DWORD(s,d) __storewordbytereverse((uint32)(d), 0, (void*)(s))
+// Lee 32 bits invertidos y aplica máscara para quedarse con los 24 bits bajos
+#define READ_3WORD(s) (__loadwordbytereverse(0, (void*)(s)) & 0x00FFFFFF)
+
+#define WRITE_3WORD(s, d) { \
+    ((uint8*)(s))[0] = (uint8)(d); \
+    ((uint8*)(s))[1] = (uint8)((d) >> 8); \
+    ((uint8*)(s))[2] = (uint8)((d) >> 16); \
+}
 #else
 #define READ_WORD(s)		(*(uint8 *) (s) | (*((uint8 *) (s) + 1) << 8))
 #define READ_3WORD(s)		(*(uint8 *) (s) | (*((uint8 *) (s) + 1) << 8) | (*((uint8 *) (s) + 2) << 16))

@@ -10,6 +10,10 @@
 #include <numeric>
 #include <assert.h>
 
+#ifdef _XBOX
+#include <xtl.h>
+#endif
+
 #ifdef UNZIP_SUPPORT
 #  ifdef SYSTEM_ZIP
 #    include <minizip/unzip.h>
@@ -38,6 +42,9 @@
 #include "sha256.h"
 #include "snapshot.h"
 
+uint8_t CMemory::ROM_Storage[ROM_TOTAL_SIZE];
+uint8_t CMemory::SRAM_Storage[SRAM_SIZE];
+
 #ifndef SET_UI_COLOR
 #define SET_UI_COLOR(r, g, b) ;
 #endif
@@ -48,6 +55,16 @@
 
 #ifndef min
 #define min(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+
+#if _MSC_VER <= 1600
+    // Definimos los equivalentes de Microsoft para funciones POSIX
+    #define strcasecmp _stricmp
+    #define strncasecmp _strnicmp
+#endif
+
+#if _MSC_VER <= 1600  || defined(__WIN32__)
+	#define snprintf _snprintf // needs ANSI compliant name
 #endif
 
 static bool8	stopMovie = TRUE;
@@ -930,11 +947,21 @@ bool8 CMemory::Init (void)
 		return (FALSE);
     }
 
-	ROMStorage.resize(MAX_ROM_SIZE + 0x200 + 0x8000);
-	std::fill(ROMStorage.begin(), ROMStorage.end(), 0);
-	SRAMStorage.resize(SRAM_SIZE);
-	std::fill(SRAMStorage.begin(), SRAMStorage.end(), 0);
-	SRAM = &SRAMStorage[0];
+	// Usar malloc/new en lugar de vector
+	/*ROM_Storage = NULL;
+	SRAM_Storage = NULL;
+	ROM_Storage  = (uint8_t*)malloc(romTotalSize);
+	SRAM_Storage = (uint8_t*)malloc(SRAM_SIZE);
+
+	if (!ROM_Storage || !SRAM_Storage) {
+		Deinit();
+		return FALSE;
+	}*/
+
+	memset(ROM_Storage, 0, ROM_TOTAL_SIZE);
+	memset(SRAM_Storage, 0, SRAM_SIZE);
+
+	SRAM = SRAM_Storage;
 	memset(RAM, 0,  sizeof(RAM));
 	memset(VRAM, 0, sizeof(VRAM));
 
@@ -957,12 +984,12 @@ bool8 CMemory::Init (void)
 	// FillRAM uses first 32K of ROM image area, otherwise space just
 	// wasted. Might be read by the SuperFX code.
 
-	FillRAM = &ROMStorage[0];
+	FillRAM = ROM_Storage;
 
 	// Add 0x8000 to ROM image pointer to stop SuperFX code accessing
 	// unallocated memory (can cause crash on some ports).
 
-	ROM = &ROMStorage[0x8000];
+	ROM = ROM_Storage + 0x8000;
 
 	C4RAM   = ROM + 0x400000 + 8192 * 8; // C4
 	OBC1RAM = ROM + 0x400000; // OBC1
@@ -998,6 +1025,23 @@ void CMemory::Deinit (void)
 			IPPU.TileCached[t] = NULL;
 		}
 	}
+
+
+	/*if (ROM_Storage){
+		#ifdef _XBOX
+			XPhysicalFree(ROM_Storage); // Limpiar si uno falló
+		#else
+			free(ROM_Storage);
+		#endif
+	}
+	
+	if (SRAM_Storage){
+		#ifdef _XBOX
+			XPhysicalFree(SRAM_Storage); // Limpiar si uno falló
+		#else
+			free(SRAM_Storage);
+		#endif
+	}*/	
 }
 
 // file management and ROM detection

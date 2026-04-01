@@ -198,7 +198,8 @@ std::string S9xGetFilenameInc (std::string e, enum s9x_getdirtype dirtype)
 
     unsigned int i = 0;
     do {
-        std::string new_extension = std::to_string(i);
+        //std::string new_extension = std::to_string(i);
+		std::string new_extension = "";
         while (new_extension.length() < 3)
             new_extension = "0" + new_extension;
         new_extension += e;

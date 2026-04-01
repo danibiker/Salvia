@@ -58,7 +58,12 @@ static double dynamic_rate_multiplier = 1.0;
 namespace msu {
 // Always 16-bit, Stereo; 1.5x dsp buffer to never overflow
 static Resampler resampler;
-static std::vector<int16_t> resampler_buffer;
+	// ANTES:
+    // static std::vector<int16_t> resampler_buffer;
+
+    // DESPUÉS: raw pointer gestionado explícitamente
+    static int16_t *resampler_buffer     = NULL;
+    static int      resampler_buffer_cap = 0;
 } // namespace msu
 
 static void UpdatePlaybackRate(void);
@@ -88,10 +93,14 @@ bool8 S9xMixSamples(uint8 *dest, int sample_count)
 
     if (Settings.MSU1)
     {
-        if ((int)msu::resampler_buffer.size() < sample_count)
-            msu::resampler_buffer.resize(sample_count);
-
-        msu::resampler.read(msu::resampler_buffer.data(), sample_count);
+        // DESPUÉS:
+		if (msu::resampler_buffer_cap < sample_count)
+		{
+			delete[] msu::resampler_buffer;
+			msu::resampler_buffer     = new int16_t[sample_count];
+			msu::resampler_buffer_cap = sample_count;
+		}
+		msu::resampler.read(msu::resampler_buffer, sample_count);
         for (int i = 0; i < sample_count; ++i)
         {
             int32 mixed = (int32)out[i] + msu::resampler_buffer[i];
@@ -99,7 +108,7 @@ bool8 S9xMixSamples(uint8 *dest, int sample_count)
         }
     }
 
-    if (spc::resampler.space_empty() >= 535 * 2 || !Settings.SoundSync ||
+    if (spc::resampler.space_empty() >= 1024 * 2 || !Settings.SoundSync ||
         Settings.TurboMode || Settings.Mute)
         spc::sound_in_sync = true;
     else
@@ -121,7 +130,7 @@ void S9xLandSamples(void)
     if (spc::callback != NULL)
         spc::callback(spc::callback_data);
 
-    if (spc::resampler.space_empty() >= 535 * 2 || !Settings.SoundSync ||
+    if (spc::resampler.space_empty() >= 1024 * 2 || !Settings.SoundSync ||
         Settings.TurboMode || Settings.Mute)
         spc::sound_in_sync = true;
     else
@@ -236,7 +245,11 @@ bool8 S9xInitAPU(void)
 void S9xDeinitAPU(void)
 {
     S9xMSU1DeInit();
-    msu::resampler_buffer.clear();
+    // ANTES: msu::resampler_buffer.clear();
+    // DESPUÉS:
+    delete[] msu::resampler_buffer;
+    msu::resampler_buffer     = NULL;
+    msu::resampler_buffer_cap = 0;
 }
 
 static inline int S9xAPUGetClock(int32 cpucycles)

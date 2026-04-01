@@ -26,6 +26,12 @@
 extern FILE	*trace;
 #endif
 
+#ifdef _MSC_VER
+    // Definimos los equivalentes de Microsoft para funciones POSIX
+    #define strcasecmp _stricmp
+    #define strncasecmp _strnicmp
+#endif
+
 #define S9X_CONF_FILE_NAME	"snes9x.conf"
 
 static char	*rom_filename = NULL;

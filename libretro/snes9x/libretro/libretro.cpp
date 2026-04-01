@@ -28,6 +28,10 @@
 #include <fcntl.h>
 #include "filter/snes_ntsc.h"
 
+#if _MSC_VER <= 1600  || defined(__WIN32__)
+#define snprintf _snprintf // needs ANSI compliant name
+#endif
+
 #define RETRO_DEVICE_JOYPAD_MULTITAP ((1 << 8) | RETRO_DEVICE_JOYPAD)
 #define RETRO_DEVICE_LIGHTGUN_SUPER_SCOPE ((1 << 8) | RETRO_DEVICE_LIGHTGUN)
 #define RETRO_DEVICE_LIGHTGUN_JUSTIFIER ((2 << 8) | RETRO_DEVICE_LIGHTGUN)
@@ -1449,7 +1453,10 @@ void retro_init(void)
 
     CPU.Flags = 0;
 
-    if (!Memory.Init() || !S9xInitAPU())
+	bool initKo = !Memory.Init();
+	initKo = initKo || !S9xInitAPU();
+
+    if (initKo)
     {
         Memory.Deinit();
         S9xDeinitAPU();

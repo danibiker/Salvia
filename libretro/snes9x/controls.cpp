@@ -24,6 +24,17 @@
 #include "netplay.h"
 #endif
 
+#if _MSC_VER <= 1600
+	#include <sstream>
+    // Definimos los equivalentes de Microsoft para funciones POSIX
+    #define strcasecmp _stricmp
+    #define strncasecmp _strnicmp
+#endif
+
+#if _MSC_VER <= 1600  || defined(__WIN32__)
+	#define snprintf _snprintf // needs ANSI compliant name
+#endif
+
 using namespace	std;
 
 #define NONE					(-2)
@@ -2293,7 +2304,14 @@ void S9xApplyCommand (s9xcommand_t cmd, int16 data1, int16 data2)
 					case QuickLoad009:
 					case QuickLoad010:
 					{
-						std::string ext = std::to_string(i - QuickLoad000);
+						#if _MSC_VER <= 1600 
+							std::stringstream ss;
+							ss << (i - QuickLoad000);
+							std::string ext = ss.str();
+						#else
+							std::string ext = std::to_string(i - QuickLoad000);
+						#endif
+
 						while (ext.length() < 3)
 							ext = '0' + ext;
 
@@ -2322,7 +2340,14 @@ void S9xApplyCommand (s9xcommand_t cmd, int16 data1, int16 data2)
 					case QuickSave009:
 					case QuickSave010:
 					{
-						std::string ext = std::to_string(i - QuickSave000);
+						#if _MSC_VER <= 1600 
+							std::stringstream ss;
+							ss << (i - QuickSave000);
+							std::string ext = ss.str();
+						#else
+							std::string ext = std::to_string(i - QuickSave000);
+						#endif
+
 						while (ext.length() < 3)
 							ext = '0' + ext;
 

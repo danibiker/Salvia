@@ -12,6 +12,17 @@
 #include <cstdint>
 #include <cmath>
 
+// Visual Studio 2010 no define trunc, la implementamos manualmente
+#if _MSC_VER <= 1600 
+inline double trunc(double d) {
+    return (double)((long long)d);
+}
+
+inline float trunc(float f) {
+    return (float)((int)f);
+}
+#endif
+
 #ifdef __PS3__
 using namespace std;
 #endif

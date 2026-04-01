@@ -20,15 +20,26 @@
 #include "missing.h"
 #endif
 
+#ifdef _XBOX
+__declspec(align(128)) struct SCPUState		CPU;
+__declspec(align(128)) struct SRegisters		Registers;
+__declspec(align(128)) struct SPPU				PPU;
+__declspec(align(128)) struct SICPU			ICPU;
+__declspec(align(128)) struct InternalPPU		IPPU;
+__declspec(align(128)) struct STimings			Timings;
+__declspec(align(128)) struct SGFX				GFX;
+__declspec(align(128)) struct SBG				BG;
+#else
 struct SCPUState		CPU;
-struct SICPU			ICPU;
 struct SRegisters		Registers;
 struct SPPU				PPU;
+struct SICPU			ICPU;
 struct InternalPPU		IPPU;
-struct SDMA				DMA[8];
 struct STimings			Timings;
 struct SGFX				GFX;
 struct SBG				BG;
+#endif
+struct SDMA				DMA[8];
 struct SLineData		LineData[240];
 struct SLineMatrixData	LineMatrixData[240];
 struct SDSP0			DSP0;
