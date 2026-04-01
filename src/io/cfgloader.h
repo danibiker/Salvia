@@ -28,7 +28,7 @@ public:
 	static cfg::t_cfg_props configMain [cfg::MAIN_CFG_MAX];
 
 	std::vector<std::unique_ptr<cfg::t_cfg_emu>> emulators;
-	std::map<std::string, std::unique_ptr<cfg::t_emu_props>> startupLibretroParams;
+	std::map<std::string, cfg::t_emu_props> startupLibretroParams;
 	cfg::t_controller_port g_ports[MAX_PLAYERS];
 	std::string saveCoreParams();
 	void loadCoreParams();
@@ -44,7 +44,7 @@ public:
 	ConfigEmu *getNextCfgEmu();
     ConfigEmu *getPrevCfgEmu();
 	ConfigEmu *getCfgEmu();
-	std::map<std::string, std::unique_ptr<cfg::t_emu_props>>& getLibretroParams();
+	std::map<std::string, cfg::t_emu_props>& getLibretroParams();
 	int emuCfgPos;
 
 	std::vector<FieldIdDesc> region;

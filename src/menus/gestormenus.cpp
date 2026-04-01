@@ -505,14 +505,13 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
         std::string desc;
     };
     std::vector<TempElem> sorter;
-
-    // 1. Llenamos el vector con la clave y la descripción
+    // 1. Llenamos el vector con la clave y la descripcion
     for (auto it = params.begin(); it != params.end(); ++it) {
-        TempElem e = { it->first, it->second->description };
+        TempElem e = { it->first, it->second.description };
         sorter.push_back(e);
     }
 
-    // 2. Ordenamos por descripción usando una lambda o función estática
+    // 2. Ordenamos por descripcion usando una lambda o funcion estatica
     std::sort(sorter.begin(), sorter.end(), [](const TempElem& a, const TempElem& b) {
         return Constant::compareNoCase(a.desc, b.desc);
     });
@@ -524,14 +523,10 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
 
     // 3. Ahora recorremos el vector ordenado y buscamos en el mapa original por KEY
     for (auto it = sorter.begin(); it != sorter.end(); ++it) {
-        auto elem = params.find(it->key); // Ahora sí buscamos por la clave correcta
-        
-        if (elem != params.end()) { // Validación de seguridad fundamental
-            cfg::t_emu_props* props = elem->second.get();
-            if (props) {
-                LOG_INFO("Key: %s, Selected: %d", elem->first.c_str(), props->selected);
-                menuCoreOptions->opciones.push_back(new OpcionLista(props->description, props->values, &props->selected));
-            }
+        auto elem = params.find(it->key);
+        if (elem != params.end()) {
+            LOG_INFO("Key: %s, Selected: %d", elem->first.c_str(), elem->second.selected);
+            menuCoreOptions->opciones.push_back(new OpcionLista(elem->second.description, elem->second.values, &elem->second.selected));
         }
     }
 }
@@ -950,7 +945,11 @@ void GestorMenus::draw(SDL_Surface *video_page){
 		} else if (option->tipo == OPC_LISTA){
 			int indice = *((OpcionLista *)option)->indice;
 			line = option->titulo;
-			value = "< " + ((OpcionLista *)option)->items.at(indice) + " >";
+			if (indice < ((OpcionLista *)option)->items.size()){
+				value = "< " + ((OpcionLista *)option)->items.at(indice) + " >";
+			} else {
+				value = "";
+			}
 		} else if (option->tipo == OPC_SUBMENU){
 			line = option->titulo + " >";
 		} else if (option->tipo == OPC_INT){
@@ -1016,7 +1015,8 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 
 	std::string titulo = this->menuActual->titulo;
 	Constant::lowerCase(&titulo);
-	bool isGamepadXbox = titulo.find("xbox") != std::string::npos;
+	//bool isGamepadXbox = titulo.find("xbox") != std::string::npos;
+	bool isGamepadXbox = true;
 
 	// 1. Manejo del temporizador (Early exit)
 	Uint32 elapsed = SDL_GetTicks() - opt->lastTimeAsked;

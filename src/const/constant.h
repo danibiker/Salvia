@@ -43,6 +43,7 @@ static const SDL_Color backgroundColor = black;
 static const SDL_Color textColor = white;
 static const SDL_Color menuBars = { 128, 128, 128, 255};
 static const SDL_Color bkgMenu = {247, 221, 114};
+static const SDL_Color bkgMenuLighter = {237, 221, 150};
 
 static const SDL_Color askClTitle = {59,59,59};
 static const SDL_Color askClBg = {69,69,69};
@@ -58,6 +59,7 @@ static const unsigned long KEYRETRASO = 500;
 static const int JOYHATOFFSET = 100;
 static const int JOYAXISOFFSET = 200;
 static const int DEADZONE = 23000;
+static const int DEADZONE_ANAL = 300;
 static const unsigned long DBLCLICKSPEED = 300; //tiempo en ms para poder hacer un doble click
 static const unsigned long KEYDOWNSPEED = 50;
 static const unsigned long MOUSEVISIBLE = 8000;

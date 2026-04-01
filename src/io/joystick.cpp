@@ -359,69 +359,92 @@ void Joystick::close_joysticks() {
 *
 */
 bool Joystick::pollKeys(SDL_Surface* screen){
-	SDL_Event event;
-	while (SDL_PollEvent(&event)) {
-		const int player = event.jhat.which;
-		switch (event.type) {
-			case SDL_QUIT:
-				evento.quit = true;
-				break;
-			case SDL_JOYBUTTONUP:
-			case SDL_JOYBUTTONDOWN:
-				if (player < MAX_PLAYERS && event.jbutton.button < MAX_BUTTONS) {
-					inputs.btn_state[player][event.jbutton.button] = (event.type == SDL_JOYBUTTONDOWN);
-					
-					#ifdef _XBOX
-					//Caso especial porque la xbox 360 solo envia el SDL_JOYBUTTONDOWN y SDL_JOYBUTTONUP en el 
-					//mismo instante para el boton start
-					if (inputs.getCoreBtn(player, RETRO_DEVICE_ID_JOYPAD_START)){
-						int sdlBtn = inputs.mapperCore.getSdlBtn(player, RETRO_DEVICE_ID_JOYPAD_START);
-						if (sdlBtn > -1 && sdlBtn < MAX_BUTTONS){
-							startHoldFrames[player] = 3; // Mantiene el pulso 3 frames
-						} 
-					}
-					#endif
-				}
-				break;
+    SDL_Event event;
 
-			case SDL_JOYHATMOTION:{
-				const Uint8 hatVal = event.jhat.value;
-				if (player < MAX_PLAYERS) {
-					inputs.hats_state[player][SDL_HAT_UP] = (hatVal & SDL_HAT_UP) != 0;
-					inputs.hats_state[player][SDL_HAT_DOWN] = (hatVal & SDL_HAT_DOWN) != 0;
-					inputs.hats_state[player][SDL_HAT_LEFT] = (hatVal & SDL_HAT_LEFT) != 0;
-					inputs.hats_state[player][SDL_HAT_RIGHT] = (hatVal & SDL_HAT_RIGHT) != 0;
-				}
-				break;
-			}
+	#ifdef _XBOX
+    // Optimización: Solo iterar si hay algún frame pendiente de liberar
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (startHoldFrames[i] > 0) {
+            if (--startHoldFrames[i] == 0) {
+                int sdlBtn = inputs.mapperCore.getSdlBtn(i, RETRO_DEVICE_ID_JOYPAD_START);
+                if ((unsigned int)sdlBtn < MAX_BUTTONS) {
+                    inputs.btn_state[i][sdlBtn] = false;
+                }
+            }
+        }
+    }
+    #endif
 
-			case SDL_JOYAXISMOTION: {
-				const int p = event.jaxis.which;
-				if (p < MAX_PLAYERS){ // && buttonsMapperLibretro[p].axisAsPad) {
-					bool* axisState = inputs.axis_state[p];
-					int8_t targetNeg = event.jaxis.axis * 2;
-					int8_t targetPos = (event.jaxis.axis * 2) + 1;
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
+            case SDL_QUIT:
+                evento.quit = true;
+                break;
 
-					if (targetPos >= MAX_AXIS || targetNeg >= MAX_AXIS) break;
+            case SDL_JOYBUTTONUP:
+            case SDL_JOYBUTTONDOWN: {
+				const unsigned int p = (unsigned int)event.jbutton.which;
+				if (p >= MAX_PLAYERS) break;
+                const unsigned int btn = (unsigned int)event.jbutton.button;
+                if (btn < MAX_BUTTONS) {
+                    bool isDown = (event.type == SDL_JOYBUTTONDOWN);
+                    inputs.btn_state[p][btn] = isDown;
+                    
+                    #ifdef _XBOX
+                    // Solo entramos si el botón pulsado es el mapeado como START
+                    if (isDown && btn == (unsigned int)inputs.mapperCore.getSdlBtn(p, RETRO_DEVICE_ID_JOYPAD_START)) {
+                        startHoldFrames[p] = 3;
+                    }
+                    #endif
+                }
+                break;
+            }
 
-					if (event.jaxis.value > DEADZONE) {
-						if (targetPos >= 0) axisState[targetPos] = true;
-						if (targetNeg >= 0) axisState[targetNeg] = false;
-					} else if (event.jaxis.value < -DEADZONE) {
-						if (targetNeg >= 0) axisState[targetNeg] = true;
-						if (targetPos >= 0) axisState[targetPos] = false;
-					} else {
-						if (targetPos >= 0) axisState[targetPos] = false;
-						if (targetNeg >= 0) axisState[targetNeg] = false;
-					}
-				}
-				break;
-			}
-		}
-	}
+            case SDL_JOYHATMOTION: {
+	            const unsigned int p = (unsigned int)event.jhat.which;
+				if (p >= MAX_PLAYERS) break;
+                const Uint8 val = event.jhat.value;
+                // Branchless: convertimos los bits del hat directamente a bool
+                bool* hState = inputs.hats_state[p];
+                hState[SDL_HAT_UP]    = (val & SDL_HAT_UP) != 0;
+                hState[SDL_HAT_DOWN]  = (val & SDL_HAT_DOWN) != 0;
+                hState[SDL_HAT_LEFT]  = (val & SDL_HAT_LEFT) != 0;
+                hState[SDL_HAT_RIGHT] = (val & SDL_HAT_RIGHT) != 0;
+                break;
+            }
 
-	return true;
+            case SDL_JOYAXISMOTION: {
+				// Usamos unsigned para evitar chequeos de < 0 y optimizar comparaciones
+				const unsigned int p = (unsigned int)event.jaxis.which;
+				if (p >= MAX_PLAYERS) break;
+
+                const unsigned int axis = (unsigned int)event.jaxis.axis;
+                if (axis >= MAX_AXIS) break;
+
+                if (inputs.axisAsPad[p]) {
+                    // Pre-calculamos los índices para evitar multiplicar por 2 varias veces
+                    const int idxNeg = axis << 1;      // axis * 2
+                    const int idxPos = idxNeg | 1;     // axis * 2 + 1
+                    const Sint16 val = event.jaxis.value;
+                    bool* axisState = inputs.axis_state[p];
+
+                    // Usamos una lógica más plana para el compilador
+                    axisState[idxPos] = (val >  DEADZONE);
+                    axisState[idxNeg] = (val < -DEADZONE);
+                } else {
+                    int32_t raw = event.jaxis.value;
+                    // Clampeo seguro: evitamos el overflow de 32767
+                    if (raw >  32760) raw =  32760;
+                    if (raw < -32760) raw = -32760;
+                    inputs.g_analog_state[p][axis] = (int16_t)raw;
+                }
+                break;
+            }
+        }
+    }
+    return true;
 }
+
 
 /**
 *

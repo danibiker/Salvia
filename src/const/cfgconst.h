@@ -18,13 +18,44 @@ namespace cfg {
 		EMU_CFG_MAX
 	} EMU_CFG_PROPS_KEYS;
 
-	struct t_emu_props{
+	struct t_emu_props {
 		std::vector<std::string> values;
 		std::string description;
+		std::string cachedValue;
 		int selected;
 
-		t_emu_props(){
-			selected = 0;
+		t_emu_props() : selected(0) {}
+
+		// Constructor de movimiento
+		t_emu_props(t_emu_props&& other) {
+			*this = std::move(other);
+		}
+
+		// Operador de asignación de movimiento
+		t_emu_props& operator=(t_emu_props&& other) {
+			if (this != &other) {
+				values      = std::move(other.values);
+				description = std::move(other.description);
+				cachedValue = std::move(other.cachedValue);
+				selected    = other.selected;
+				other.selected = 0;
+			}
+			return *this;
+		}
+
+		// VS2010 requiere que mantengas los de copia si los vas a usar
+		t_emu_props(const t_emu_props& other) 
+			: values(other.values), description(other.description), 
+			  cachedValue(other.cachedValue), selected(other.selected) {}
+
+		t_emu_props& operator=(const t_emu_props& other) {
+			if (this != &other) {
+				values = other.values;
+				description = other.description;
+				cachedValue = other.cachedValue;
+				selected = other.selected;
+			}
+			return *this;
 		}
 	};
 

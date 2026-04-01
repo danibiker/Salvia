@@ -457,6 +457,12 @@
     <ClInclude Include="src\db\sqlite_xbox_fix.h">
       <Filter>Source Files\db</Filter>
     </ClInclude>
+    <ClInclude Include="src\io\video_common.h">
+      <Filter>Source Files\filters</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\progress_bar.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="DistroWin\assets\i18n\en.ini">

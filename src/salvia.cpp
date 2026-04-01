@@ -15,6 +15,7 @@
 #include "gameMenu.h"
 #include "io/cfgloader.h"
 #include "io/dirutil.h"
+#include <io/progress_bar.h>
 #include "uiobjects/listmenu.h"
 #include "uiobjects/tilemap.h"
 #include "unzip/unziptool.h"
@@ -109,11 +110,21 @@ extern "C" {
 	void retro_unload_game(void);
 	void retro_set_controller_port_device(unsigned port, unsigned device);
 	retro_audio_buffer_status_callback_t audio_status_cb;
+	
 #ifdef __cplusplus
 }
 #endif
 
+//retro_log_printf_t log_cb = nullptr; 
+
 void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
+
+	#ifndef DEBUG_LOG
+		if (level != RETRO_LOG_ERROR && gameMenu->romLoaded){
+			return;
+		}
+	#endif
+
 	if (!logger) {
 		va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
 		return;
@@ -127,20 +138,15 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
     va_end(args);
 	buffer[sizeof(buffer) - 1] = '\0';
 	
-	// Interceptamos los mensajes de MAME
-    if (progress_loader.total_rom_files > 0 && strstr(buffer, "Opening ROM file:")) {
+	// Interceptamos los mensajes carga de MAME y FinalBurn
+    if (!gameMenu->romLoaded && progress_loader.total_rom_files > 0 && strstr(buffer, "Opening ROM file:")) {
         progress_loader.current_rom_file++;
         // Calculamos el porcentaje (máximo 95% para dejar margen al inicio del core)
         progress_loader.loading_progress = (float)progress_loader.current_rom_file / (float)progress_loader.total_rom_files;
         // LLAMADA A LA BARRA
-        drawLoadingProgressBar(gameMenu->screen, std::min(progress_loader.loading_progress, 100.0f));
+        drawLoadingProgressBar(gameMenu->screen, std::min(progress_loader.loading_progress, 1.0f));
+		//ProgressBar_draw(gameMenu->screen, std::min(progress_loader.loading_progress, 1.0f));
     }
-
-	//#ifndef DEBUG_LOG
-		if (level != RETRO_LOG_ERROR){
-			return;
-		}
-	//#endif
 
     // 1. Mapear el nivel de Libretro a tus niveles internos
     int myLevel;
@@ -161,6 +167,63 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
 }
 
 
+// ─────────────────────────────────────────────
+// Helper: split "opt1|opt2|opt3" → vector
+// ─────────────────────────────────────────────
+namespace {
+
+std::vector<std::string> splitOptions(const std::string& raw) {
+    std::vector<std::string> out;
+    std::istringstream ss(raw);
+    std::string token;
+    while (std::getline(ss, token, '|')) {
+        if (!token.empty()) out.push_back(token);
+    }
+    return out;
+}
+
+// Crea o actualiza una entrada preservando `selected` si ya existía.
+void applyEntry(std::map<std::string, cfg::t_emu_props> &data,
+                const std::string& key,
+                std::string description,       // Pasamos por valor para mover
+                std::vector<std::string> values, // Pasamos por valor para mover
+                int defaultIdx = 0)
+{
+    auto it = data.find(key);
+    if (it != data.end()) {
+		if (it->second.description.empty())
+			it->second.description = description;
+
+		if (it->second.values.empty())
+			it->second.values = values;
+        
+		//Si ya estaba en el mapa, no lo tocamos
+        //if (it->second.selected < 0 || it->second.selected >= (int)it->second.values.size())
+        //    it->second.selected = defaultIdx;
+        
+		if (it->second.cachedValue.empty() && !it->second.values.empty())
+            it->second.cachedValue = it->second.values[it->second.selected];
+
+		LOG_DEBUG("[Core Options] SET. Key already defined %s", key.c_str());
+        return;
+    }
+
+    cfg::t_emu_props raw;
+    raw.description = std::move(description);
+    raw.values      = std::move(values);
+    raw.selected    = defaultIdx;
+
+    if (!raw.values.empty())
+        raw.cachedValue = raw.values[defaultIdx];
+
+    LOG_DEBUG("[Core Options] SET %s = %s", key.c_str(), raw.cachedValue.c_str());
+    // Ahora data[key] usará el operator=(t_emu_props&&) que definimos arriba
+    data[key] = std::move(raw); 
+}
+
+} // namespace anónimo
+
+
 static bool retro_environment(unsigned cmd, void *data) {
 	static string dirSystem;
 	static string saveDir; 
@@ -169,6 +232,10 @@ static bool retro_environment(unsigned cmd, void *data) {
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
 			struct retro_log_callback *log = (struct retro_log_callback*)data;
 			log->log = retro_log_printf;
+
+			// 2. IMPORTANTE: Asignamos nuestra función a la variable global 
+            // que Dosbox-Pure espera (la que causa el error de linkado)
+            //log_cb = retro_log_printf; 
             return true;
         }
 
@@ -284,62 +351,6 @@ static bool retro_environment(unsigned cmd, void *data) {
             return true;
 		}
 
-		case RETRO_ENVIRONMENT_SET_VARIABLES:
-		{
-			const struct retro_core_variable *vars = (const struct retro_core_variable*)data;
-			// Asumiendo que getLibretroParams() devuelve std::map<std::string, std::unique_ptr<cfg::t_emu_props>>&
-			auto& params = gameMenu->getCfgLoader()->getLibretroParams();
-
-			while (vars && vars->key) 
-			{
-				std::string rawValue = vars->value ? vars->value : "";
-				std::size_t semiPos = rawValue.find(';');
-
-				if (semiPos != std::string::npos)
-				{
-					std::string keyStr = vars->key;
-					cfg::t_emu_props* ptr = NULL;
-
-					// 1. Buscar si ya existe
-					std::map<std::string, std::unique_ptr<cfg::t_emu_props> >::iterator it = params.find(keyStr);
-            
-					if (it == params.end()) {
-						// Si no existe, crear uno nuevo e insertarlo
-						ptr = new cfg::t_emu_props();
-						ptr->selected = 0;
-						// En VS2010 insertamos usando std::move o pasándolo directamente al constructor del map
-						params.insert(std::make_pair(keyStr, std::unique_ptr<cfg::t_emu_props>(ptr)));
-					} else {
-						// Si existe, usamos el puntero que ya está en el mapa
-						ptr = it->second.get();
-						ptr->values.clear(); // Limpiar opciones anteriores para no duplicar
-					}
-
-					// 2. Parsear descripción y opciones
-					ptr->description = rawValue.substr(0, semiPos);
-					std::string optionsPart = rawValue.substr(semiPos + 1);
-            
-					std::vector<std::string> valuesList = Constant::splitChar(optionsPart, '|');
-					for (std::size_t i = 0; i < valuesList.size(); ++i) {
-						ptr->values.push_back(Constant::Trim(valuesList[i]));
-					}
-
-					LOG_INFO("Opcion: %s = %s", keyStr.c_str(), ptr->values[0].c_str());
-
-					// 3. Sincronizar con startupLibretroParams (Copia de CONTENIDO)
-					// IMPORTANTE: Creamos un objeto nuevo copiando los datos del original
-					cfg::t_emu_props* copyPtr = new cfg::t_emu_props(*ptr); 
-					params[keyStr] = std::unique_ptr<cfg::t_emu_props>(copyPtr);
-				}
-				vars++;
-			}
-
-			//Poblamos las opciones del core. Lo tenemos que hacer aquí porque ya se deberian 
-			//haber obtenido.
-			gameMenu->configMenus->poblarCoreOptions(gameMenu->getCfgLoader());
-			return true;
-		}
-
 		case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
 		{
 			const struct retro_subsystem_info *info = (const struct retro_subsystem_info*)data;
@@ -354,30 +365,147 @@ static bool retro_environment(unsigned cmd, void *data) {
 			}
 			return true;
 		}
-		case RETRO_ENVIRONMENT_GET_VARIABLE: {
-			struct retro_variable *var = (struct retro_variable*)data;
-			if (!var || !var->key) return false;
+		// ── 1. RETRO_ENVIRONMENT_SET_VARIABLES (formato clásico) ──────────────────
+		case RETRO_ENVIRONMENT_SET_VARIABLES:
+		{
+			const auto* vars = static_cast<const retro_variable*>(data);
+			if (!vars) return false;
 
-			// 1. Buscamos el elemento una sola vez usando un iterador
-			//auto& params = gameMenu->getLibretroParams();
-			auto& params = gameMenu->getCfgLoader()->startupLibretroParams;
-			auto it = params.find(var->key);
+			for (int i = 0; vars[i].key != nullptr; ++i) {
+				// 1. Protección contra keys vacias (basura recurrente en algunos cores)
+				if (vars[i].key[0] == '\0') continue;
 
-			if (it != params.end()) {
-				cfg::t_emu_props* param = it->second.get();
-    
-				// VALIDACIÓN CRUCIAL:
-				if (param && !param->values.empty() && (std::size_t)param->selected < param->values.size()) {
-					var->value = param->values.at(param->selected).c_str();
-					LOG_INFO("Asignando %s a %s", var->key, var->value);
-					return true;
+				const std::string key      = vars[i].key;
+				// 2. Protección contra valores nulos o vacíos
+				if (!vars[i].value || vars[i].value[0] == '\0') {
+					LOG_DEBUG("[Core Options] SKIP: Key %s has no value string", key.c_str());
+					continue;
+				}
+
+				const std::string rawValue = vars[i].value;
+				const std::size_t sep = rawValue.find("; ");
+
+				// 3. Protección de Formato: Si no hay "; ", el core está enviando algo fuera de estándar
+				if (sep != std::string::npos && sep > 0) {
+					std::string desc = rawValue.substr(0, sep);
+					std::string optionsPart = rawValue.substr(sep + 2);
+
+					// 4. Validación extra: ¿Hay opciones después del separador?
+					if (!optionsPart.empty()) {
+						std::vector<std::string> values = splitOptions(optionsPart);
+                
+						if (!values.empty()) {
+							LOG_DEBUG("[Core Options] PARSE OK: %s", key.c_str());
+							applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, std::move(values), 0);
+						} else {
+							LOG_DEBUG("[Core Options] ERROR: No split tokens in %s", key.c_str());
+						}
+					}
 				} else {
-					LOG_ERROR("Error: Indice %d fuera de rango para %s", (int)param->selected, var->key);
-					var->value = NULL;
-					return false;
+					// DOSBox Pure a veces envía notificaciones que no son definiciones de opciones
+					LOG_DEBUG("[Core Options] INFO: Key %s format not recognized (Value: %s)", key.c_str(), rawValue.c_str());
 				}
 			}
-			return false;
+
+			gameMenu->configMenus->poblarCoreOptions(gameMenu->getCfgLoader());
+			return true;
+		}
+
+
+		// ── 2. RETRO_ENVIRONMENT_GET_VARIABLE ─────────────────────────────────────
+		case RETRO_ENVIRONMENT_GET_VARIABLE:
+		{
+			retro_variable* var = static_cast<retro_variable*>(data);
+			if (!var || !var->key) return false;
+
+			auto it = gameMenu->getCfgLoader()->startupLibretroParams.find(var->key);
+			if (it == gameMenu->getCfgLoader()->startupLibretroParams.end()) {
+				var->value = nullptr;
+				return false;
+			}
+
+			const int nVals = static_cast<int>(it->second.values.size());
+			const int sel   = it->second.selected;
+
+			if (nVals > 0 && sel >= 0 && sel < nVals)
+				it->second.cachedValue = it->second.values[sel];
+			else if (nVals > 0)
+				it->second.cachedValue = it->second.values[0];
+			else {
+				var->value = nullptr;
+				return false;
+			}
+			var->value = it->second.cachedValue.c_str();
+			LOG_DEBUG("[Core Options] GET %s = %s", var->key, var->value);
+			return true;
+		}
+
+
+		// ── 3. RETRO_ENVIRONMENT_SET_CORE_OPTIONS (V1) ────────────────────────────
+		case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
+		{
+			const auto* defs = static_cast<const retro_core_option_definition*>(data);
+			if (!defs) return false;
+
+			for (int i = 0; defs[i].key != nullptr; ++i) {
+				const std::string key  = defs[i].key;
+				const std::string desc = defs[i].desc   ? defs[i].desc   : "";
+
+				std::vector<std::string> values;
+				for (int j = 0;
+					 j < RETRO_NUM_CORE_OPTION_VALUES_MAX && defs[i].values[j].value != nullptr;
+					 ++j)
+				{
+					values.push_back(defs[i].values[j].value);
+				}
+
+				// Buscar índice del valor por defecto
+				int defaultIdx = 0;
+				if (defs[i].default_value) {
+					const std::string defVal = defs[i].default_value;
+					for (int j = 0; j < static_cast<int>(values.size()); ++j) {
+						if (values[j] == defVal) { defaultIdx = j; break; }
+					}
+				}
+
+				applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, values, defaultIdx);
+			}
+			return true;
+		}
+
+
+		// ── 4. RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2 ──────────────────────────────
+		case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
+		{
+			const auto* v2 = static_cast<const retro_core_options_v2*>(data);
+			if (!v2 || !v2->definitions) return false;
+
+			const retro_core_option_v2_definition* defs = v2->definitions;
+
+			for (int i = 0; defs[i].key != nullptr; ++i) {
+				const std::string key  = defs[i].key;
+				// V2 tiene desc y desc_categorized; usamos desc como descripción principal
+				const std::string desc = defs[i].desc ? defs[i].desc : "";
+
+				std::vector<std::string> values;
+				for (int j = 0;
+					 j < RETRO_NUM_CORE_OPTION_VALUES_MAX && defs[i].values[j].value != nullptr;
+					 ++j)
+				{
+					values.push_back(defs[i].values[j].value);
+				}
+
+				int defaultIdx = 0;
+				if (defs[i].default_value) {
+					const std::string defVal = defs[i].default_value;
+					for (int j = 0; j < static_cast<int>(values.size()); ++j) {
+						if (values[j] == defVal) { defaultIdx = j; break; }
+					}
+				}
+
+				applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, values, defaultIdx);
+			}
+			return true;
 		}
 
 		case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: {
@@ -587,7 +715,7 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 		if (id == RETRO_DEVICE_ID_JOYPAD_MASK) {
 			int16_t mask = 0;
 			if (!modifierPressed) {
-				// Fast path: sin modifier, lectura directa sin getSdlBtn por iteraci�n
+				// Fast path: sin modifier, lectura directa sin getSdlBtn por iteracion
 				for (int i = 0; i < maxJoyTargets; i++) {
 					if (inputs->getCoreAny(port, i)) {
 						mask |= (int16_t)(1 << i);
@@ -615,22 +743,31 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 			return 0;
 		}
 	} 
-	/*else if (device == RETRO_DEVICE_ANALOG) {
+	else if (device == RETRO_DEVICE_ANALOG) {
 		int sdl_axis = -1;
-        if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT) {
-            sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 0 : 1;
-        } else if (index == RETRO_DEVICE_INDEX_ANALOG_RIGHT) {
-            sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 2 : 3;
-        }
+
+		if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT) {
+			sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 0 : 1;
+		} else if (index == RETRO_DEVICE_INDEX_ANALOG_RIGHT) {
+			#ifdef _XBOX
+			sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 2 : 3;
+			#else
+			sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 4 : 3;
+			#endif
+		} else if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON) {
+			// Gatillos: el core pide id = RETRO_DEVICE_ID_JOYPAD_L2 / R2
+			#ifdef _XBOX
+			if (id == RETRO_DEVICE_ID_JOYPAD_L2)
+				sdl_axis = AXIS_LT;
+			else if (id == RETRO_DEVICE_ID_JOYPAD_R2)
+				sdl_axis = AXIS_RT;
+			#endif
+		}
 
 		if (sdl_axis != -1) {
-			int16_t val = gameMenu->joystick->g_analog_state[port][sdl_axis];
-			// LOG_DEBUG("port: %d, Valor: %d -> sdl_axis: %d", port, val, sdl_axis);
-            // Aplicar zona muerta (Deadzone) para evitar "drift"
-            if (abs(val) < DEADZONE) return 0;
-            return val;
+			return gameMenu->joystick->inputs.g_analog_state[port][sdl_axis];
 		}
-	}*/
+	}
 	return 0;
 }
 
@@ -826,7 +963,8 @@ void drawLoadingProgressBar(SDL_Surface* screen, float progress) {
 
     // Colores (Ajusta según tu paleta)
     Uint32 colorBorder = SDL_MapRGB(screen->format, 200, 200, 200);
-    Uint32 colorFill   = SDL_MapRGB(screen->format, 0, 255, 0); // Verde
+    Uint32 colorFill   = SDL_MapRGB(screen->format, bkgMenu.r, bkgMenu.g, bkgMenu.b);
+	Uint32 colorFillLighter   = SDL_MapRGB(screen->format, bkgMenuLighter.r, bkgMenuLighter.g, bkgMenuLighter.b);
     Uint32 colorBG     = SDL_MapRGB(screen->format, 40, 40, 40);
 
     // 1. Dibujar fondo de la barra
@@ -837,15 +975,25 @@ void drawLoadingProgressBar(SDL_Surface* screen, float progress) {
     if (progress > 1.0f) progress = 1.0f;
     int fillW = (int)(barW * progress);
     if (fillW > 0) {
-        SDL_Rect fillRect = { (Sint16)barX, (Sint16)barY, (Uint16)fillW, (Uint16)barH };
+        SDL_Rect fillRect = { (Sint16)barX, (Sint16)barY, (Uint16)fillW, (Uint16)(barH / 2.0) };
+        SDL_FillRect(screen, &fillRect, colorFillLighter);
+		fillRect.y += (Uint16)(barH / 2);
         SDL_FillRect(screen, &fillRect, colorFill);
     }
+
+	const int txtW = 40;
+	SDL_Rect percentRect = { barX + barW / 2 - txtW, barY + barH, 80, barH * 4 };
+	SDL_FillRect(screen, &percentRect, PBUtil::rgb(screen, backgroundColor.r, backgroundColor.g, backgroundColor.b));
+	percentRect.x += txtW;
+	percentRect.y += 15;
+	PB_drawPercent(screen, (int)(progress * 100.0), percentRect.x, percentRect.y, 3, PBUtil::rgb(screen, 100, 210, 255));
 
     // 3. Dibujar borde (opcional, 1px)
     // SDL_FillRect no tiene "drawRect" vacío, así que usamos 4 líneas si quieres borde fino
     
     // Actualizar solo la región de la barra para ganar rendimiento
-    SDL_UpdateRect(screen, barX, barY, barW, barH);
+    //SDL_UpdateRect(screen, barX, barY, barW, 3*barH);
+	SDL_Flip(screen);
 }
 
 /**
@@ -903,15 +1051,6 @@ int launchGame(std::string rompath){
 	retro_init();	
 	bool success = retro_load_game(&game);
 	
-	for (int i=0; i < MAX_PLAYERS; i++){
-		retro_set_controller_port_device(i, RETRO_DEVICE_JOYPAD);
-	}
-
-	if (success && loadAchievement && !noUncompress){
-		//After the loading of the game, we load the achievements
-		gameMenu->loadGameAchievements(unzipped);
-	}
-
 	//Liberar la memoria tras la carga exitosa
 	//La mayoría de los cores de Libretro ya han copiado los datos a su propia RAM interna
 	//Si hay logros habilitados, ya se encarga de liberarse posteriormente
@@ -924,6 +1063,21 @@ int launchGame(std::string rompath){
 		LOG_ERROR("Error cargando la ROM\n");
 		gameMenu->showLangSystemMessage("msg.romopenerror", 3000);
 		return 0;
+	}
+
+	//*******************************************************
+	//Necesario en el caso de dosbox, para obtener el primer 
+	//frame e inicializarse despues del load
+	//retro_run();
+	//*******************************************************
+
+	if (success && loadAchievement && !noUncompress){
+		//After the loading of the game, we load the achievements
+		gameMenu->loadGameAchievements(unzipped);
+	}
+
+	for (int i=0; i < MAX_PLAYERS; i++){
+		retro_set_controller_port_device(i, RETRO_DEVICE_JOYPAD);
 	}
 
 	string romname = (gameMenu->getCfgLoader()->getCfgEmu() != NULL ? gameMenu->getCfgLoader()->getCfgEmu()->name + " - " : "") + dir.getFileNameNoExt(unzipped.originalPath);
@@ -982,7 +1136,6 @@ bool loadGameAtStart(int argc, char *argv[]){
 	return ret;
 }
 
-// En tu función de salida o desinicialización
 void closeResources() {
 	closeGame();
 	Scrapper::ShutdownScrapper();
@@ -1025,24 +1178,6 @@ void processFrontendEvents(){
 		action_postponed.action = SAVE_NONE;
 		action_postponed.cycles = -1;
 	}
-
-	//Decrementamos la pulsacion artificial del boton start. Caso especial para xbox 360
-	#ifdef _XBOX
-		int8_t* f = gameMenu->joystick->startHoldFrames;
-		t_joy_state *inputs = &gameMenu->joystick->inputs;
-		for (int i = 0; i < MAX_PLAYERS; i++) {
-			if (f[i] > 0) {
-				f[i]--;
-				// Si después de decrementar llegamos a 0, liberamos el botón
-				if (f[i] == 0) {
-					int sdlBtn = inputs->mapperCore.getSdlBtn(i, RETRO_DEVICE_ID_JOYPAD_START);
-					if ((unsigned int)sdlBtn < MAX_BUTTONS) {
-						inputs->btn_state[i][sdlBtn] = false;
-					}
-				}
-			}
-		}
-	#endif
 
 	switch (hotkey) {
 		case HK_SAVESTATE:

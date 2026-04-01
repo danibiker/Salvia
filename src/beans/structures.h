@@ -184,6 +184,12 @@ struct t_retro_input{
 #define MAX_HATS MAXJOYBUTTONS
 #define MAX_ANALOG_AXIS 16
 
+#ifdef _XBOX
+static const int XBOX_COMBINED_TRIGGER_AXIS = 2;  // eje que comparten LT y RT
+static const int AXIS_LT                   = 6;   // slot libre en g_analog_state
+static const int AXIS_RT                   = 7;   // slot libre en g_analog_state
+#endif
+
 
 struct t_joy_mapper{
 	int sdlToHat[MAX_PLAYERS][MAX_HATS];
@@ -332,7 +338,7 @@ struct t_joy_state {
 	//To store the positions of the analog axis, but is not used by any core actually
 	int16_t g_analog_state[MAX_PLAYERS][MAX_ANALOG_AXIS];
 
-	// NUEVO: Estados del frame anterior
+	// Estados del frame anterior
     bool btn_last_state[MAX_PLAYERS][MAX_BUTTONS];
     bool axis_last_state[MAX_PLAYERS][MAX_AXIS];
     bool hats_last_state[MAX_PLAYERS][MAX_HATS];
