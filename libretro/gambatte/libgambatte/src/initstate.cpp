@@ -1243,7 +1243,8 @@ void gambatte::setInitState(SaveState &state, bool const cgb, bool const gbaCgbM
 	for (int pos = 0; pos < 80; ++pos)
 		state.ppu.oamReaderBuf.ptr[pos] = state.mem.ioamhram.ptr[(pos * 2 & ~3) | (pos & 1)];
 
-	std::fill_n(state.ppu.oamReaderSzbuf.ptr, 40, false);
+	std::memset(state.ppu.oamReaderSzbuf.ptr, 0, 40 * sizeof(bool));
+
 	std::memset(state.ppu.spAttribList, 0, sizeof state.ppu.spAttribList);
 	std::memset(state.ppu.spByte0List, 0, sizeof state.ppu.spByte0List);
 	std::memset(state.ppu.spByte1List, 0, sizeof state.ppu.spByte1List);

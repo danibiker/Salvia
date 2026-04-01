@@ -19,6 +19,7 @@
 #ifndef GAMBATTE_H
 #define GAMBATTE_H
 
+#include <stdint.h>
 #include "inputgetter.h"
 #ifdef HAVE_NETWORK
 #include "serial_io.h"

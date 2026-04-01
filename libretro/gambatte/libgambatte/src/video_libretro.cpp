@@ -131,7 +131,7 @@ namespace gambatte
 
       while (lines--)
       {
-         std::fill_n(buf, 160, color);
+		 std::fill(buf, buf + 160, (video_pixel_t)color);
          buf += dpitch;
       }
    }
