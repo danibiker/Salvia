@@ -110,9 +110,6 @@ static TCHAR szMemoryCardFile[MAX_PATH];
 static int nMinVersion;
 static bool bMemCardFC1Format;
 
-// UGUI
-static bool gui_show = false;
-
 // FBNEO stubs
 unsigned ArcadeJoystick;
 int bDrvOkay;
@@ -1147,7 +1144,7 @@ static bool open_archive()
 					char *real_rom_name;
 					uint32_t real_rom_crc;
 					int index = find_rom_by_crc(ri.nCrc, list, count, &real_rom_name);
-
+					HandleMessage(RETRO_LOG_DEBUG, "[FBNeo] Opening ROM file: %s\n", real_rom_name);
 					BurnDrvGetRomName(&rom_name, i, 0);
 
 					bool unknown_crc = false;
@@ -1440,7 +1437,7 @@ void retro_run()
 	bool bEmulateAudio = true;
 	bool bPresentAudio = true;
 
-	if (gui_show && nGameWidth > 0 && nGameHeight > 0)
+	/*if (gui_show && nGameWidth > 0 && nGameHeight > 0)
 	{
 		gui_draw();
 		video_cb(gui_get_framebuffer(), nGameWidth, nGameHeight, nGameWidth * sizeof(unsigned));
@@ -1450,7 +1447,7 @@ void retro_run()
 		if (input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK))
 			environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
 		return;
-	}
+	}*/
 
 #ifndef FBNEO_DEBUG
 	// Setting RA's video or audio driver to null will disable video/audio bits,
@@ -1940,12 +1937,18 @@ static unsigned int BurnDrvGetIndexByName(const char* name)
 
 static void SetUguiError(const char* error)
 {
-	gui_set_message(error);
-	gui_show = true;
-	enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
-	environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
-	gui_init(nGameWidth, nGameHeight, sizeof(unsigned));
-	gui_set_window_title("FBNeo Error");
+	//gui_set_message(error);
+	//gui_show = true;
+	//enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+	//environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
+	//gui_init(nGameWidth, nGameHeight, sizeof(unsigned));
+	//gui_set_window_title("FBNeo Error");
+	struct retro_message msg =
+	{
+		error,
+		300
+	};
+	environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
 }
 
 static bool retro_load_game_common()
@@ -2004,7 +2007,7 @@ static bool retro_load_game_common()
 	// Initialize HDD path
 	snprintf_nowarn (szAppHDDPath, sizeof(szAppHDDPath), "%s%c", g_rom_dir, PATH_DEFAULT_SLASH_C());
 
-	gui_show = false;
+	//gui_show = false;
 
 #ifdef FBNEO_DEBUG
 	for (nBurnDrvActive=0; nBurnDrvActive<nBurnDrvCount; nBurnDrvActive++)
@@ -2129,7 +2132,8 @@ static bool retro_load_game_common()
 			const char* s4 = RETRO_ERROR_MESSAGES_07;
 
 			static char uguiText[4096];
-			sprintf(uguiText, "%s%s%s\n\n%s%s", s1, s2, text_missing_files, s3, s4);
+			//sprintf(uguiText, "%s%s%s\n\n%s%s", s1, s2, text_missing_files, s3, s4);
+			sprintf(uguiText, "%s%s%s", s1, s2, text_missing_files);
 			SetUguiError(uguiText);
 
 			goto end;
@@ -2187,7 +2191,7 @@ static bool retro_load_game_common()
 		HandleMessage(RETRO_LOG_INFO, "[FBNeo] Adjusted audio buffer to match driver's refresh rate (%f Hz)\n", (nBurnFPS/100.0));
 
 		// Expose Ram for cheevos/cheats support
-		CheevosInit();
+		//CheevosInit();
 
 		// Loading minimal savestate (handle some machine settings)
 		snprintf_nowarn (g_autofs_path, sizeof(g_autofs_path), "%s%cfbneo%c%s.fs", g_save_dir, PATH_DEFAULT_SLASH_C(), PATH_DEFAULT_SLASH_C(), BurnDrvGetTextA(DRV_NAME));
@@ -2246,7 +2250,7 @@ end:
 	RomDataExit();
 	IpsPatchExit();
 
-	return true;
+	return false;
 }
 
 static int retro_dat_romset_path(const struct retro_game_info* info)
@@ -2421,7 +2425,19 @@ bool retro_load_game(const struct retro_game_info *info)
 		HandleMessage(RETRO_LOG_INFO, "[FBNeo] subsystem chf identified from parent folder\n");
 		if (strncmp(g_driver_name, "chf_", 4) != 0) prefix = "chf_";
 	}
-	if(strcmp(g_rom_parent_dir, "neocd")==0 || strncmp(g_driver_name, "neocd_", 6)==0) {
+
+	// Buscamos el último punto en la ruta del archivo
+	const char* dot = strrchr(szRomsetPath, '.');
+	bool is_neocd_extension = false;
+
+	if (dot) {
+		// Comparamos la extensión (ignorando mayúsculas/minúsculas si es necesario)
+		if (_stricmp(dot, ".cue") == 0 || _stricmp(dot, ".ccd") == 0) {
+			is_neocd_extension = true;
+		}
+	}
+
+	if(is_neocd_extension || strcmp(g_rom_parent_dir, "neocd")==0 || strncmp(g_driver_name, "neocd_", 6)==0) {
 		HandleMessage(RETRO_LOG_INFO, "[FBNeo] subsystem neocd identified from parent folder\n");
 		prefix = "";
 		nGameType = RETRO_GAME_TYPE_NEOCD;

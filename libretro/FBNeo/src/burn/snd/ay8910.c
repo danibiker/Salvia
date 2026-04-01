@@ -87,10 +87,11 @@ static INT32 SyncInternal()
 
 static void UpdateStream(INT32 chip, INT32 samples_len)
 {
+	INT32 nSamplesNeeded;
     if (!ay8910_buffered || !pBurnSoundOut) return;
     if (samples_len > nBurnSoundLen) samples_len = nBurnSoundLen;
 
-	INT32 nSamplesNeeded = samples_len - nPosition[chip];
+	nSamplesNeeded = samples_len - nPosition[chip];
 	if (nSamplesNeeded <= 0) return;
 
 #if defined FBNEO_DEBUG
@@ -105,12 +106,13 @@ static void UpdateStream(INT32 chip, INT32 samples_len)
 
 void AY8910SetBuffered(INT32 (*pCPUCyclesCB)(), INT32 nCpuMHZ)
 {
+	INT32 i;
 #if defined FBNEO_DEBUG
 #ifdef __GNUC__ 
     bprintf(0, _T("*** Using BUFFERED AY8910-mode.\n"));
 #endif
 #endif
-    for (INT32 i = 0; i < num; i++) {
+    for (i = 0; i < num; i++) {
         nPosition[i] = 0;
     }
 
@@ -905,6 +907,8 @@ INT32 AY8910InitCore(INT32 chip, INT32 clock, INT32 sample_rate,
 INT32 AY8910Init(INT32 chip, INT32 clock, INT32 add_signal)
 {
 	INT32 i;
+	extern INT32 nBurnSoundLen, nBurnSoundRate;
+	struct AY8910 *PSG;
 #if defined FBNEO_DEBUG
 #ifdef __GNUC__ 
 	DebugSnd_AY8910Initted = 1;
@@ -923,10 +927,11 @@ INT32 AY8910Init(INT32 chip, INT32 clock, INT32 add_signal)
     }
 
 	AYStreamUpdate = dummy_callback;
-	if (chip == 0) AY8910AddSignal = add_signal;
-	extern INT32 nBurnSoundLen, nBurnSoundRate;
 
-	struct AY8910 *PSG = &AYPSG[chip];
+	if (chip == 0) AY8910AddSignal = add_signal;
+
+
+	PSG = &AYPSG[chip];
 
 	memset(PSG, 0, sizeof(struct AY8910));
 	PSG->SampleRate = nBurnSoundRate;

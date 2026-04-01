@@ -31,8 +31,8 @@ static int cd_pregap;
 
 struct MSF { UINT8 M; UINT8 S; UINT8 F; };
 
-struct cdimgTRACK_DATA { UINT8 Control; UINT8 TrackNumber; UINT8 Address[4]; UINT8 EndAddress[4]; };
-struct cdimgCDROM_TOC { UINT8 FirstTrack; UINT8 LastTrack; UINT8 ImageType; TCHAR Image[MAX_PATH]; cdimgTRACK_DATA TrackData[MAXIMUM_NUMBER_TRACKS]; };
+struct cdimgTRACK_DATA { UINT8 Control; UINT8 TrackNumber; UINT8 Address[4]; UINT8 EndAddress[4]; TCHAR TrackImage[MAX_PATH]; int FileIndexOffset; };
+struct cdimgCDROM_TOC { UINT8 FirstTrack; UINT8 LastTrack; UINT8 ImageType; bool bMultiFile; TCHAR Image[MAX_PATH]; cdimgTRACK_DATA TrackData[MAXIMUM_NUMBER_TRACKS]; };
 
 static cdimgCDROM_TOC* cdimgTOC;
 
@@ -299,41 +299,43 @@ static int cdimgParseSubFile()
 static int cdimgParseCueFile()
 {
 	TCHAR  szLine[1024];
-	TCHAR  szFile[1024];
+	TCHAR  szCurrentFile[MAX_PATH];
 	TCHAR* s;
 	TCHAR* t;
 	FILE*  h;
 	int    track = 1;
 	int    length;
+	int    nFiles = 0; // contador de lineas FILE distintas, para detectar multi-archivo
 
 	cdimgTOC->ImageType  = CD_TYPE_BINCUE;
 	cdimgTOC->FirstTrack = 1;
 	cdimgTOC->LastTrack  = 1;
+	cdimgTOC->bMultiFile = false;
 
 	cdimgTOC->TrackData[0].Address[1] = 0;
 	cdimgTOC->TrackData[0].Address[2] = 2;
 	cdimgTOC->TrackData[0].Address[3] = 0;
 
-	cd_pregap = 150; // default for bin/cue?
+	cd_pregap = 150;
 
-	// derive .bin name from .cue filename (it gets the actual name from the .cue, below)
 	length = _tcslen(CDEmuImage);
 	_tcscpy(cdimgTOC->Image, CDEmuImage);
 	_tcscpy(cdimgTOC->Image + length - 4, _T(".bin"));
-	//bprintf(0, _T("Image file: %s\n"),cdimgTOC->Image);
+
+	szCurrentFile[0] = _T('\0');
 
 	h = fopen(CDEmuImage, _T("rt"));
 	if (h == NULL) {
 		return 1;
 	}
 
+	// --- PASO 1: leer el .cue y guardar TrackImage y FileIndexOffset por pista ---
 	while (1) {
 		if (fgets(szLine, sizeof(szLine), h) == NULL) {
 			break;
 		}
 
 		length = _tcslen(szLine);
-		// get rid of the linefeed at the end
 		while (length && (szLine[length - 1] == _T('\r') || szLine[length - 1] == _T('\n'))) {
 			szLine[length - 1] = 0;
 			length--;
@@ -341,29 +343,20 @@ static int cdimgParseCueFile()
 
 		s = szLine;
 
-		// file info
+		// FILE: guardar en buffer temporal
 		if ((t = LabelCheck(s, _T("FILE"))) != 0) {
 			s = t;
-
 			TCHAR* szQuote;
-
-			// read filename
 			QuoteRead(&szQuote, NULL, s);
-
-			sprintf(szFile, "%s/%s", g_rom_dir, szQuote);
-
-			if (track == 1) {
-				//bprintf(0, _T("Image file (from .CUE): %s\n"), szFile);
-				_tcscpy(cdimgTOC->Image, szFile);
-			}
+			sprintf(szCurrentFile, "%s/%s", g_rom_dir, szQuote);
+			nFiles++;
 			continue;
 		}
 
-		// track info
+		// TRACK: asociar szCurrentFile a este track (tanto data como audio)
 		if ((t = LabelCheck(s, _T("TRACK"))) != 0) {
 			s = t;
 
-			// track number
 			track = _tcstol(s, &t, 10);
 
 			if (track < 1 || track > MAXIMUM_NUMBER_TRACKS) {
@@ -371,27 +364,26 @@ static int cdimgParseCueFile()
 				return 1;
 			}
 
-			if (track < cdimgTOC->FirstTrack) {
-				cdimgTOC->FirstTrack = track;
-			}
-			if (track > cdimgTOC->LastTrack) {
-				cdimgTOC->LastTrack = track;
-			}
+			if (track < cdimgTOC->FirstTrack) cdimgTOC->FirstTrack = track;
+			if (track > cdimgTOC->LastTrack)  cdimgTOC->LastTrack  = track;
 			cdimgTOC->TrackData[track - 1].TrackNumber = tobcd(track);
+
+			// Guardar el fichero de esta pista (sirve para data y para audio)
+			if (szCurrentFile[0] != _T('\0')) {
+				_tcscpy(cdimgTOC->TrackData[track - 1].TrackImage, szCurrentFile);
+			}
 
 			s = t;
 
-			// type of track
-
 			if ((t = LabelCheck(s, _T("MODE1/2352"))) != 0) {
 				cdimgTOC->TrackData[track - 1].Control = 0x41;
-				//bprintf(0, _T(".cue: Track #%d, data.\n"), track);
+				if (szCurrentFile[0] != _T('\0')) {
+					_tcscpy(cdimgTOC->Image, szCurrentFile);
+				}
 				continue;
 			}
 			if ((t = LabelCheck(s, _T("AUDIO"))) != 0) {
 				cdimgTOC->TrackData[track - 1].Control = 0x01;
-				//bprintf(0, _T(".cue: Track #%d, AUDIO.\n"), track);
-
 				continue;
 			}
 
@@ -399,24 +391,25 @@ static int cdimgParseCueFile()
 			return 1;
 		}
 
-		// PREGAP (not handled)
 		if ((t = LabelCheck(s, _T("PREGAP"))) != 0) {
 			continue;
 		}
 
-		// TRACK Index
+		// INDEX 00 se ignora (solo nos interesa INDEX 01)
+		if ((t = LabelCheck(s, _T("INDEX 00"))) != 0) {
+			continue;
+		}
+
+		// INDEX 01: guardar la posicion relativa al fichero en FileIndexOffset
 		if ((t = LabelCheck(s, _T("INDEX 01"))) != 0) {
 			s = t;
 
 			int M, S, F;
 
-			// index M
 			M = _tcstol(s, &t, 10);
 			s = t + 1;
-			// index S
 			S = _tcstol(s, &t, 10);
 			s = t + 1;
-			// index F
 			F = _tcstol(s, &t, 10);
 
 			if (M < 0 || M > 100 || S < 0 || S > 59 || F < 0 || F > 74) {
@@ -425,14 +418,9 @@ static int cdimgParseCueFile()
 				return 1;
 			}
 
-			const UINT8 address[] = { 0, (UINT8)M, (UINT8)S, (UINT8)F };
-			const UINT8* newaddress = cdimgLBAToMSF(dinkMSFToLBA(address) + cd_pregap);
-			//const UINT8* newaddressUNBCD = dinkLBAToMSF(dinkMSFToLBA(address) + cd_pregap);
-			//bprintf(0, _T("Track MSF: %02d:%02d:%02d "), newaddressUNBCD[1], newaddressUNBCD[2], newaddressUNBCD[3]);
-
-			cdimgTOC->TrackData[track - 1].Address[1] = newaddress[1];
-			cdimgTOC->TrackData[track - 1].Address[2] = newaddress[2];
-			cdimgTOC->TrackData[track - 1].Address[3] = newaddress[3];
+			// Guardar el offset dentro del fichero (en fotogramas, no-BCD)
+			cdimgTOC->TrackData[track - 1].FileIndexOffset =
+				M * CD_FRAMES_MINUTE + S * CD_FRAMES_SECOND + F;
 
 			continue;
 		}
@@ -440,10 +428,59 @@ static int cdimgParseCueFile()
 
 	fclose(h);
 
-	cdimgAddLastTrack();
+	// --- PASO 2: detectar si es multi-archivo y calcular las direcciones absolutas de disco ---
+
+	cdimgTOC->bMultiFile = (nFiles > 1);
+
+	if (!cdimgTOC->bMultiFile) {
+		// Fichero unico: los tiempos del .cue son posiciones acumuladas en el disco.
+		// FileIndexOffset + cd_pregap = LBA absoluto en disco.
+		for (int trk = cdimgTOC->FirstTrack - 1; trk < cdimgTOC->LastTrack; trk++) {
+			const UINT8* newaddress = cdimgLBAToMSF(cdimgTOC->TrackData[trk].FileIndexOffset + cd_pregap);
+			cdimgTOC->TrackData[trk].Address[1] = newaddress[1];
+			cdimgTOC->TrackData[trk].Address[2] = newaddress[2];
+			cdimgTOC->TrackData[trk].Address[3] = newaddress[3];
+		}
+		cdimgAddLastTrack();
+	} else {
+		// Multi-archivo: cada pista tiene su propio .bin.
+		// Los tiempos INDEX 01 del .cue son relativos al fichero, no al disco.
+		// Calculamos LBAs absolutas de disco acumulando los tamanhos de cada fichero.
+		bprintf(0, _T("CUE multi-archivo detectado (%d ficheros)\n"), nFiles);
+
+		int current_disc_lba = cd_pregap; // la pista 1 empieza en cd_pregap
+
+		for (int trk = cdimgTOC->FirstTrack - 1; trk < cdimgTOC->LastTrack; trk++) {
+			// LBA absoluta de disco del INDEX 01 de esta pista
+			int disc_index01 = current_disc_lba + cdimgTOC->TrackData[trk].FileIndexOffset;
+			const UINT8* addr = cdimgLBAToMSF(disc_index01);
+			cdimgTOC->TrackData[trk].Address[1] = addr[1];
+			cdimgTOC->TrackData[trk].Address[2] = addr[2];
+			cdimgTOC->TrackData[trk].Address[3] = addr[3];
+
+			// Avanzar la LBA de disco por el tamanho completo del fichero de esta pista
+			FILE* f = fopen(cdimgTOC->TrackData[trk].TrackImage, _T("rb"));
+			if (f) {
+				fseek(f, 0, SEEK_END);
+				int file_frames = (int)((ftell(f) + 2351) / 2352);
+				fclose(f);
+				current_disc_lba += file_frames;
+			} else {
+				bprintf(0, _T("*** No se puede abrir para calcular tamanho: %s\n"),
+					cdimgTOC->TrackData[trk].TrackImage);
+			}
+		}
+
+		// Entrada centinela: LBA total del disco
+		const UINT8* addr = cdimgLBAToMSF(current_disc_lba);
+		cdimgTOC->TrackData[cdimgTOC->LastTrack].Address[1] = addr[1];
+		cdimgTOC->TrackData[cdimgTOC->LastTrack].Address[2] = addr[2];
+		cdimgTOC->TrackData[cdimgTOC->LastTrack].Address[3] = addr[3];
+	}
 
 	return 0;
 }
+
 
 // -----------------------------------------------------------------------------
 
@@ -599,13 +636,30 @@ static int cdimgPlayLBA(int LBA) // audio play start
 
 	bprintf(PRINT_IMPORTANT, _T("    playing track %2i\n"), cdimgTrack + 1);
 
-	cdimgFile = fopen(cdimgTOC->Image, _T("rb"));
-	if (cdimgFile == NULL)
-		return 1;
-
-	// advance if we're not starting at the beginning of a CD
-	if (cdimgLBA > cd_pregap)
-		cdimgSkip(cdimgFile, (cdimgLBA - cd_pregap) * (44100 / CD_FRAMES_SECOND));
+	if (cdimgTOC->bMultiFile) {
+		// Multi-archivo: abrir el fichero .bin especifico de esta pista de audio
+		cdimgFile = fopen(cdimgTOC->TrackData[cdimgTrack].TrackImage, _T("rb"));
+		if (cdimgFile == NULL) {
+			bprintf(0, _T("*** No se puede abrir pista de audio: %s\n"),
+				cdimgTOC->TrackData[cdimgTrack].TrackImage);
+			return 1;
+		}
+		// El seek dentro del fichero es: LBA_disco - LBA_inicio_fichero_en_disco
+		// LBA_inicio_fichero = disc_index01 - FileIndexOffset
+		int disc_index01 = cdimgMSFToLBA(cdimgTOC->TrackData[cdimgTrack].Address);
+		int disc_file_start = disc_index01 - cdimgTOC->TrackData[cdimgTrack].FileIndexOffset;
+		int file_frame = cdimgLBA - disc_file_start;
+		if (file_frame > 0)
+			cdimgSkip(cdimgFile, file_frame * (44100 / CD_FRAMES_SECOND));
+	} else {
+		// Fichero unico: comportamiento original
+		cdimgFile = fopen(cdimgTOC->Image, _T("rb"));
+		if (cdimgFile == NULL)
+			return 1;
+		// advance if we're not starting at the beginning of a CD
+		if (cdimgLBA > cd_pregap)
+			cdimgSkip(cdimgFile, (cdimgLBA - cd_pregap) * (44100 / CD_FRAMES_SECOND));
+	}
 
 	// fill the input buffer
 	if ((cdimgOutputbufferSize = fread(cdimgOutputbuffer, 4, cdimgOUT_SIZE, cdimgFile)) <= 0)

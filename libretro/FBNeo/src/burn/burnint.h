@@ -91,6 +91,7 @@ extern INT32 nInputIntfMouseDivider;
 #ifndef __LIBRETRO__
 INT32 is_netgame_or_recording();
 #else
+extern int kNetGame;
 inline static INT32 is_netgame_or_recording()
 {
 	return kNetGame;

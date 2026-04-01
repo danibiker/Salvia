@@ -126,6 +126,12 @@
     <Filter Include="Source Files\burner\libretro">
       <UniqueIdentifier>{7f4ef354-8a73-47f9-9c04-9924b98358ff}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\intf">
+      <UniqueIdentifier>{030175f0-dd32-44de-b482-a63667b0ebbb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\burner\libretro\chd">
+      <UniqueIdentifier>{a9f0d1e5-963c-4b7f-a142-55e54b49ad9d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\burn\drv\cps3\cps3snd.cpp">
@@ -539,9 +545,6 @@
     <ClCompile Include="..\..\src\burn\drv\pgm\pgm_draw.cpp">
       <Filter>Source Files\burn\drv\pgm</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\pgm\pgm_prot.cpp">
-      <Filter>Source Files\burn\drv\pgm</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pgm\pgm_run.cpp">
       <Filter>Source Files\burn\drv\pgm</Filter>
     </ClCompile>
@@ -608,9 +611,6 @@
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_galaga.cpp">
       <Filter>Source Files\burn\drv\pre90s</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_gauntlet.cpp">
-      <Filter>Source Files\burn\drv\pre90s</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_ginganin.cpp">
       <Filter>Source Files\burn\drv\pre90s</Filter>
     </ClCompile>
@@ -621,9 +621,6 @@
       <Filter>Source Files\burn\drv\pre90s</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_higemaru.cpp">
-      <Filter>Source Files\burn\drv\pre90s</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_ikki.cpp">
       <Filter>Source Files\burn\drv\pre90s</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_jack.cpp">
@@ -639,9 +636,6 @@
       <Filter>Source Files\burn\drv\pre90s</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_lwings.cpp">
-      <Filter>Source Files\burn\drv\pre90s</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_madgear.cpp">
       <Filter>Source Files\burn\drv\pre90s</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_marineb.cpp">
@@ -773,9 +767,6 @@
     <ClCompile Include="..\..\src\burn\drv\psikyo\psikyo_tile.cpp">
       <Filter>Source Files\burn\drv\psikyo</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\pst90s\nmk004.cpp">
-      <Filter>Source Files\burn\drv\pst90s</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pst90s\d_1945kiii.cpp">
       <Filter>Source Files\burn\drv\pst90s</Filter>
     </ClCompile>
@@ -822,9 +813,6 @@
       <Filter>Source Files\burn\drv\pst90s</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pst90s\d_f1gp.cpp">
-      <Filter>Source Files\burn\drv\pst90s</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_fstarfrc.cpp">
       <Filter>Source Files\burn\drv\pst90s</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pst90s\d_funybubl.cpp">
@@ -1130,9 +1118,6 @@
     <ClCompile Include="..\..\src\burn\drv\toaplan\d_bbakraid.cpp">
       <Filter>Source Files\burn\drv\toaplan</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_demonwld.cpp">
-      <Filter>Source Files\burn\drv\toaplan</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\toaplan\d_dogyuun.cpp">
       <Filter>Source Files\burn\drv\toaplan</Filter>
     </ClCompile>
@@ -1140,9 +1125,6 @@
       <Filter>Source Files\burn\drv\toaplan</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\toaplan\d_ghox.cpp">
-      <Filter>Source Files\burn\drv\toaplan</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_hellfire.cpp">
       <Filter>Source Files\burn\drv\toaplan</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\toaplan\d_kbash2.cpp">
@@ -1154,16 +1136,7 @@
     <ClCompile Include="..\..\src\burn\drv\toaplan\d_mahoudai.cpp">
       <Filter>Source Files\burn\drv\toaplan</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_outzone.cpp">
-      <Filter>Source Files\burn\drv\toaplan</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\toaplan\d_pipibibs.cpp">
-      <Filter>Source Files\burn\drv\toaplan</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_rallybik.cpp">
-      <Filter>Source Files\burn\drv\toaplan</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_samesame.cpp">
       <Filter>Source Files\burn\drv\toaplan</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\toaplan\d_shippumd.cpp">
@@ -1175,22 +1148,10 @@
     <ClCompile Include="..\..\src\burn\drv\toaplan\d_tekipaki.cpp">
       <Filter>Source Files\burn\drv\toaplan</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_tigerheli.cpp">
-      <Filter>Source Files\burn\drv\toaplan</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\toaplan\d_truxton2.cpp">
       <Filter>Source Files\burn\drv\toaplan</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_truxton.cpp">
-      <Filter>Source Files\burn\drv\toaplan</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\toaplan\d_vfive.cpp">
-      <Filter>Source Files\burn\drv\toaplan</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_vimana.cpp">
-      <Filter>Source Files\burn\drv\toaplan</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_zerowing.cpp">
       <Filter>Source Files\burn\drv\toaplan</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\toaplan\toa_bcu2.cpp">
@@ -1538,18 +1499,6 @@
     <ClCompile Include="..\..\src\cpu\m68k\m68kops.c">
       <Filter>Source Files\cpu\m68k</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\cpu\m68k\m68kopac.c">
-      <Filter>Source Files\cpu\m68k</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\cpu\m68k\m68kopdm.c">
-      <Filter>Source Files\cpu\m68k</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\cpu\m68k\m68kopnz.c">
-      <Filter>Source Files\cpu\m68k</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burner\libretro\neocdlist.cpp">
-      <Filter>Source Files\burner\libretro</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burner\libretro\libretro.cpp">
       <Filter>Source Files\burner\libretro</Filter>
     </ClCompile>
@@ -1592,5 +1541,121 @@
     <ClCompile Include="..\..\src\burn\devices\8257dma.cpp">
       <Filter>Source Files\burn\devices</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burner\sdl\neocdlist.cpp">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\retro_common.cpp">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\retro_input.cpp">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\retro_memory.cpp">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\retro_string.cpp">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\ips_manager.cpp">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\romdata.cpp">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\file\file_path_io.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\file\retro_dirent.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\encodings\encoding_utf.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\compat_posix_string.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\compat_strcasestr.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\compat_strl.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\compat_strldup.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\fopen_utf8.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\string\stdstring.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\streams\file_stream.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\streams\file_stream_transforms.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\features\features_cpu.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\file\config_file.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\file\config_file_userdata.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\lists\string_list.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\memmap\memalign.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\time\rtime.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\intf\audio\aud_dsp.cpp">
+      <Filter>Source Files\burner</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\file\file_path.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\retro_cdemu.cpp">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\compat_snprintf.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\dat.cpp">
+      <Filter>Source Files\burner</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\nvram.cpp">
+      <Filter>Source Files\burner</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\conc.cpp">
+      <Filter>Source Files\burner</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\joyprocess.cpp">
+      <Filter>Source Files\burn\devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\intf\audio\lowpass2.cpp">
+      <Filter>Source Files\intf</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\z80\z80pio.cpp">
+      <Filter>Source Files\cpu\z80</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\z80\z80ctc.cpp">
+      <Filter>Source Files\cpu\z80</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\resnet.cpp">
+      <Filter>Source Files\burn\devices</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\src\dep\generated\driverlist.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -30,7 +30,7 @@ extern "C"  {
 #endif
 
 /* Pre-MSVC 2015 compilers don't implement snprintf, vsnprintf in a cross-platform manner. */
-#if _MSC_VER < 1900
+#if _MSC_VER <= 1900
    #include <stdio.h>
    #include <stdarg.h>
    #include <stdlib.h>

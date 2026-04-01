@@ -1,6 +1,6 @@
-#include "burner.h"
 #include "retro_common.h"
 #include "retro_dirent.h"
+#include "burner.h"
 
 #include <time.h>
 #include <file/file_path.h>

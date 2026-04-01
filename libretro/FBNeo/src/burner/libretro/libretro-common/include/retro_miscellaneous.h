@@ -60,7 +60,7 @@
  * @param b[in] The second bit array.
  * @param count The length of each bit array, in 32-bit words.
  */
-static INLINE void bits_or_bits(uint32_t *a, uint32_t *b, uint32_t count)
+INLINE void bits_or_bits(uint32_t *a, uint32_t *b, uint32_t count)
 {
    uint32_t i;
    for (i = 0; i < count;i++)
@@ -75,7 +75,7 @@ static INLINE void bits_or_bits(uint32_t *a, uint32_t *b, uint32_t count)
  * @param count The length of each bit array, in 32-bit words
  * (\em not bits or bytes).
  */
-static INLINE void bits_clear_bits(uint32_t *a, uint32_t *b, uint32_t count)
+INLINE void bits_clear_bits(uint32_t *a, uint32_t *b, uint32_t count)
 {
    uint32_t i;
    for (i = 0; i < count;i++)
@@ -91,7 +91,7 @@ static INLINE void bits_clear_bits(uint32_t *a, uint32_t *b, uint32_t count)
  * @return \c true if any bit in \c ptr is set,
  * \c false if all bits are clear (zero).
  */
-static INLINE bool bits_any_set(uint32_t* ptr, uint32_t count)
+INLINE bool bits_any_set(uint32_t* ptr, uint32_t count)
 {
    uint32_t i;
    for (i = 0; i < count; i++)
@@ -112,7 +112,7 @@ static INLINE bool bits_any_set(uint32_t* ptr, uint32_t count)
  * @return \c true if \c and \c differ by at least one bit,
  * \c false if they're both identical.
  */
-static INLINE bool bits_any_different(uint32_t *a, uint32_t *b, uint32_t count)
+INLINE bool bits_any_different(uint32_t *a, uint32_t *b, uint32_t count)
 {
    uint32_t i;
    for (i = 0; i < count; i++)

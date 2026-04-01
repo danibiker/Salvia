@@ -16,7 +16,9 @@
 struct Thread { typedef DWORD RET_t; typedef RET_t (THREAD_CC *FUNC_t)(LPVOID); __inline static void StartDetached(FUNC_t f, void* p = NULL) { 
 	HANDLE h = CreateThread(0,DBP_STACK_SIZE,f,p,CREATE_SUSPENDED,0); 
 	if (h){
+		#ifdef _XBOX
 		XSetThreadProcessor(h, 4);
+		#endif
 		SetThreadPriority(h, THREAD_PRIORITY_HIGHEST);
 		ResumeThread(h);
 		CloseHandle(h); 

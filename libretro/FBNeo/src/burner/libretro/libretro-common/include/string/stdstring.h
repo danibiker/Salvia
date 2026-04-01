@@ -62,35 +62,35 @@ RETRO_BEGIN_DECLS
 /* Deprecated alias, all callers should use string_is_equal_case_insensitive instead */
 #define string_is_equal_noncase string_is_equal_case_insensitive
 
-static INLINE bool string_is_empty(const char *data)
+INLINE bool string_is_empty(const char *data)
 {
    return !data || (*data == '\0');
 }
 
-static INLINE bool string_is_equal(const char *a, const char *b)
+INLINE bool string_is_equal(const char *a, const char *b)
 {
    return (a && b) ? !strcmp(a, b) : false;
 }
 
-static INLINE bool string_starts_with_size(const char *str, const char *prefix,
+INLINE bool string_starts_with_size(const char *str, const char *prefix,
       size_t size)
 {
    return (str && prefix) ? !strncmp(prefix, str, size) : false;
 }
 
-static INLINE bool string_starts_with(const char *str, const char *prefix)
+INLINE bool string_starts_with(const char *str, const char *prefix)
 {
    return (str && prefix) ? !strncmp(prefix, str, strlen(prefix)) : false;
 }
 
-static INLINE bool string_ends_with_size(const char *str, const char *suffix,
+INLINE bool string_ends_with_size(const char *str, const char *suffix,
       size_t str_len, size_t suffix_len)
 {
    return (str_len < suffix_len) ? false :
          !memcmp(suffix, str + (str_len - suffix_len), suffix_len);
 }
 
-static INLINE bool string_ends_with(const char *str, const char *suffix)
+INLINE bool string_ends_with(const char *str, const char *suffix)
 {
    return str && suffix && string_ends_with_size(str, suffix, strlen(str), strlen(suffix));
 }
@@ -106,7 +106,7 @@ static INLINE bool string_ends_with(const char *str, const char *suffix)
  * - If 'str' is not NULL and no '\0' character is found
  *   in the first 'size' characters, returns 'size'
  **/
-static INLINE size_t strlen_size(const char *str, size_t size)
+INLINE size_t strlen_size(const char *str, size_t size)
 {
    size_t i = 0;
    if (str)
@@ -115,7 +115,7 @@ static INLINE size_t strlen_size(const char *str, size_t size)
 }
 
 
-static INLINE bool string_is_equal_case_insensitive(const char *a,
+INLINE bool string_is_equal_case_insensitive(const char *a,
       const char *b)
 {
    int result              = 0;
@@ -134,7 +134,7 @@ static INLINE bool string_is_equal_case_insensitive(const char *a,
    return (result == 0);
 }
 
-static INLINE bool string_starts_with_case_insensitive(const char *str,
+INLINE bool string_starts_with_case_insensitive(const char *str,
       const char *prefix)
 {
    int result              = 0;

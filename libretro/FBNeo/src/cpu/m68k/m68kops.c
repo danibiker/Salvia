@@ -9889,6 +9889,9 @@ static void m68k_op_chk_32_i(void)
 
 static void m68k_op_chk2cmp2_8_pcdi(void)
 {
+	UINT32 ea;
+	INT32 lower_bound;
+	INT32 upper_bound;
 	if(CPU_TYPE_IS_EC020_PLUS(CPU_TYPE))
 	{
 		UINT32 word2 = OPER_I_16();
@@ -9896,9 +9899,9 @@ static void m68k_op_chk2cmp2_8_pcdi(void)
 		if(!BIT_F(word2))
 			compare &= 0xff;
 
-		UINT32 ea = EA_PCDI_8();
-		INT32 lower_bound = m68ki_read_pcrel_8(ea);
-		INT32 upper_bound = m68ki_read_pcrel_8(ea + 1);
+		ea = EA_PCDI_8();
+		lower_bound = m68ki_read_pcrel_8(ea);
+		upper_bound = m68ki_read_pcrel_8(ea + 1);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x80)
@@ -9923,6 +9926,9 @@ static void m68k_op_chk2cmp2_8_pcdi(void)
 
 static void m68k_op_chk2cmp2_8_pcix(void)
 {
+	UINT32 ea;
+	INT32 lower_bound;
+	INT32 upper_bound;
 	if(CPU_TYPE_IS_EC020_PLUS(CPU_TYPE))
 	{
 		UINT32 word2 = OPER_I_16();
@@ -9930,9 +9936,9 @@ static void m68k_op_chk2cmp2_8_pcix(void)
 		if(!BIT_F(word2))
 			compare &= 0xff;
 
-		UINT32 ea = EA_PCIX_8();
-		INT32 lower_bound = m68ki_read_pcrel_8(ea);
-		INT32 upper_bound = m68ki_read_pcrel_8(ea + 1);
+		ea = EA_PCIX_8();
+		lower_bound = m68ki_read_pcrel_8(ea);
+		upper_bound = m68ki_read_pcrel_8(ea + 1);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x80)
@@ -9957,6 +9963,9 @@ static void m68k_op_chk2cmp2_8_pcix(void)
 
 static void m68k_op_chk2cmp2_8_ai(void)
 {
+	UINT32 ea;
+		INT32 lower_bound;
+		INT32 upper_bound;
 	if(CPU_TYPE_IS_EC020_PLUS(CPU_TYPE))
 	{
 		UINT32 word2 = OPER_I_16();
@@ -9964,9 +9973,9 @@ static void m68k_op_chk2cmp2_8_ai(void)
 		if(!BIT_F(word2))
 			compare &= 0xff;
 
-		UINT32 ea = EA_AY_AI_8();
-		INT32 lower_bound = m68ki_read_8(ea);
-		INT32 upper_bound = m68ki_read_8(ea + 1);
+		ea = EA_AY_AI_8();
+		lower_bound = m68ki_read_8(ea);
+		upper_bound = m68ki_read_8(ea + 1);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x80)
@@ -9995,12 +10004,15 @@ static void m68k_op_chk2cmp2_8_di(void)
 	{
 		UINT32 word2 = OPER_I_16();
 		INT32 compare = (INT32)REG_DA[(word2 >> 12) & 15];
+		UINT32 ea;
+		INT32 lower_bound;
+		INT32 upper_bound;
 		if(!BIT_F(word2))
 			compare &= 0xff;
 
-		UINT32 ea = EA_AY_DI_8();
-		INT32 lower_bound = m68ki_read_8(ea);
-		INT32 upper_bound = m68ki_read_8(ea + 1);
+		ea = EA_AY_DI_8();
+		lower_bound = m68ki_read_8(ea);
+		upper_bound = m68ki_read_8(ea + 1);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x80)
@@ -10029,12 +10041,15 @@ static void m68k_op_chk2cmp2_8_ix(void)
 	{
 		UINT32 word2 = OPER_I_16();
 		INT32 compare = (INT32)REG_DA[(word2 >> 12) & 15];
+		UINT32 ea;
+		INT32 lower_bound;
+		INT32 upper_bound;
 		if(!BIT_F(word2))
 			compare &= 0xff;
 
-		UINT32 ea = EA_AY_IX_8();
-		INT32 lower_bound = m68ki_read_8(ea);
-		INT32 upper_bound = m68ki_read_8(ea + 1);
+		ea = EA_AY_IX_8();
+		lower_bound = m68ki_read_8(ea);
+		upper_bound = m68ki_read_8(ea + 1);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x80)
@@ -10063,12 +10078,15 @@ static void m68k_op_chk2cmp2_8_aw(void)
 	{
 		UINT32 word2 = OPER_I_16();
 		INT32 compare = (INT32)REG_DA[(word2 >> 12) & 15];
+		UINT32 ea;
+		INT32 lower_bound;
+		INT32 upper_bound;
 		if(!BIT_F(word2))
 			compare &= 0xff;
 
-		UINT32 ea = EA_AW_8();
-		INT32 lower_bound = m68ki_read_8(ea);
-		INT32 upper_bound = m68ki_read_8(ea + 1);
+		ea = EA_AW_8();
+		lower_bound = m68ki_read_8(ea);
+		upper_bound = m68ki_read_8(ea + 1);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x80)
@@ -10097,12 +10115,15 @@ static void m68k_op_chk2cmp2_8_al(void)
 	{
 		UINT32 word2 = OPER_I_16();
 		INT32 compare = (INT32)REG_DA[(word2 >> 12) & 15];
+		UINT32 ea;
+		INT32 lower_bound;
+		INT32 upper_bound;
 		if(!BIT_F(word2))
 			compare &= 0xff;
 
-		UINT32 ea = EA_AL_8();
-		INT32 lower_bound = m68ki_read_8(ea);
-		INT32 upper_bound = m68ki_read_8(ea + 1);
+		ea = EA_AL_8();
+		lower_bound = m68ki_read_8(ea);
+		upper_bound = m68ki_read_8(ea + 1);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x80)
@@ -10131,12 +10152,15 @@ static void m68k_op_chk2cmp2_16_pcdi(void)
 	{
 		UINT32 word2 = OPER_I_16();
 		INT32 compare = (INT32)REG_DA[(word2 >> 12) & 15];
+		UINT32 ea;
+		INT32 lower_bound;
+		INT32 upper_bound;
 		if(!BIT_F(word2))
 			compare &= 0xffff;
 
-		UINT32 ea = EA_PCDI_16();
-		INT32 lower_bound = m68ki_read_pcrel_16(ea);
-		INT32 upper_bound = m68ki_read_pcrel_16(ea + 2);
+		ea = EA_PCDI_16();
+		lower_bound = m68ki_read_pcrel_16(ea);
+		upper_bound = m68ki_read_pcrel_16(ea + 2);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x8000)
@@ -10165,12 +10189,15 @@ static void m68k_op_chk2cmp2_16_pcix(void)
 	{
 		UINT32 word2 = OPER_I_16();
 		INT32 compare = (INT32)REG_DA[(word2 >> 12) & 15];
+		UINT32 ea;
+		INT32 lower_bound;
+		INT32 upper_bound;
 		if(!BIT_F(word2))
 			compare &= 0xffff;
 
-		UINT32 ea = EA_PCIX_16();
-		INT32 lower_bound = m68ki_read_pcrel_16(ea);
-		INT32 upper_bound = m68ki_read_pcrel_16(ea + 2);
+		ea = EA_PCIX_16();
+		lower_bound = m68ki_read_pcrel_16(ea);
+		upper_bound = m68ki_read_pcrel_16(ea + 2);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x8000)
@@ -10199,12 +10226,15 @@ static void m68k_op_chk2cmp2_16_ai(void)
 	{
 		UINT32 word2 = OPER_I_16();
 		INT32 compare = (INT32)REG_DA[(word2 >> 12) & 15];
+		UINT32 ea;
+		INT32 lower_bound;
+		INT32 upper_bound;
 		if(!BIT_F(word2))
 			compare &= 0xffff;
 
-		UINT32 ea = EA_AY_AI_16();
-		INT32 lower_bound = m68ki_read_16(ea);
-		INT32 upper_bound = m68ki_read_16(ea + 2);
+		ea = EA_AY_AI_16();
+		lower_bound = m68ki_read_16(ea);
+		upper_bound = m68ki_read_16(ea + 2);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x8000)
@@ -10233,12 +10263,15 @@ static void m68k_op_chk2cmp2_16_di(void)
 	{
 		UINT32 word2 = OPER_I_16();
 		INT32 compare = (INT32)REG_DA[(word2 >> 12) & 15];
+		UINT32 ea;
+		INT32 lower_bound;
+		INT32 upper_bound;
 		if(!BIT_F(word2))
 			compare &= 0xffff;
 
-		UINT32 ea = EA_AY_DI_16();
-		INT32 lower_bound = m68ki_read_16(ea);
-		INT32 upper_bound = m68ki_read_16(ea + 2);
+		ea = EA_AY_DI_16();
+		lower_bound = m68ki_read_16(ea);
+		upper_bound = m68ki_read_16(ea + 2);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x8000)
@@ -10267,12 +10300,15 @@ static void m68k_op_chk2cmp2_16_ix(void)
 	{
 		UINT32 word2 = OPER_I_16();
 		INT32 compare = (INT32)REG_DA[(word2 >> 12) & 15];
+		UINT32 ea;
+		INT32 lower_bound;
+		INT32 upper_bound;
 		if(!BIT_F(word2))
 			compare &= 0xffff;
 
-		UINT32 ea = EA_AY_IX_16();
-		INT32 lower_bound = m68ki_read_16(ea);
-		INT32 upper_bound = m68ki_read_16(ea + 2);
+		ea = EA_AY_IX_16();
+		lower_bound = m68ki_read_16(ea);
+		upper_bound = m68ki_read_16(ea + 2);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x8000)
@@ -10301,12 +10337,15 @@ static void m68k_op_chk2cmp2_16_aw(void)
 	{
 		UINT32 word2 = OPER_I_16();
 		INT32 compare = (INT32)REG_DA[(word2 >> 12) & 15];
+		UINT32 ea;
+		INT32 lower_bound;
+		INT32 upper_bound;
 		if(!BIT_F(word2))
 			compare &= 0xffff;
 
-		UINT32 ea = EA_AW_16();
-		INT32 lower_bound = m68ki_read_16(ea);
-		INT32 upper_bound = m68ki_read_16(ea + 2);
+		ea = EA_AW_16();
+		lower_bound = m68ki_read_16(ea);
+		upper_bound = m68ki_read_16(ea + 2);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x8000)
@@ -10335,12 +10374,15 @@ static void m68k_op_chk2cmp2_16_al(void)
 	{
 		UINT32 word2 = OPER_I_16();
 		INT32 compare = (INT32)REG_DA[(word2 >> 12) & 15];
+		UINT32 ea;
+		INT32 lower_bound;
+		INT32 upper_bound;
 		if(!BIT_F(word2))
 			compare &= 0xffff;
 
-		UINT32 ea = EA_AL_16();
-		INT32 lower_bound = m68ki_read_16(ea);
-		INT32 upper_bound = m68ki_read_16(ea + 2);
+		ea = EA_AL_16();
+		lower_bound = m68ki_read_16(ea);
+		upper_bound = m68ki_read_16(ea + 2);
 
 		// for signed compare, the arithmetically smaller value is the lower bound
 		if (lower_bound & 0x8000)
@@ -36688,5 +36730,3 @@ void m68ki_build_opcode_table(void)
 /* ======================================================================== */
 /* ============================== END OF FILE ============================= */
 /* ======================================================================== */
-
-

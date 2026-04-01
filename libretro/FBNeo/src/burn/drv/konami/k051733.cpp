@@ -53,7 +53,7 @@ static UINT16 clock_lfsr()
 
 static UINT32 u32_sqrt(UINT32 op)
 {
-	return (op) ? (UINT32(sqrt(op)) & ~1) : 0;
+	return (op) ? (UINT32(sqrt((double)op)) & ~1) : 0;
 }
 
 void K051733Reset()

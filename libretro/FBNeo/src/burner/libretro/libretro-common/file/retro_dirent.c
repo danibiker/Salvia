@@ -85,14 +85,14 @@ int retro_readdir(struct RDIR *rdir)
 {
    if (dirent_readdir_cb)
       return dirent_readdir_cb((struct retro_vfs_dir_handle *)rdir);
-   return retro_vfs_readdir_impl((struct retro_vfs_dir_handle *)rdir);
+   return retro_vfs_readdir_impl((libretro_vfs_implementation_dir *)rdir);
 }
 
 const char *retro_dirent_get_name(struct RDIR *rdir)
 {
    if (dirent_dirent_get_name_cb)
       return dirent_dirent_get_name_cb((struct retro_vfs_dir_handle *)rdir);
-   return retro_vfs_dirent_get_name_impl((struct retro_vfs_dir_handle *)rdir);
+   return retro_vfs_dirent_get_name_impl((libretro_vfs_implementation_dir *)rdir);
 }
 
 /**
@@ -110,7 +110,7 @@ bool retro_dirent_is_dir(struct RDIR *rdir, const char *unused)
 {
    if (dirent_dirent_is_dir_cb)
       return dirent_dirent_is_dir_cb((struct retro_vfs_dir_handle *)rdir);
-   return retro_vfs_dirent_is_dir_impl((struct retro_vfs_dir_handle *)rdir);
+   return retro_vfs_dirent_is_dir_impl((libretro_vfs_implementation_dir *)rdir);
 }
 
 void retro_closedir(struct RDIR *rdir)
@@ -118,5 +118,5 @@ void retro_closedir(struct RDIR *rdir)
    if (dirent_closedir_cb)
       dirent_closedir_cb((struct retro_vfs_dir_handle *)rdir);
    else
-      retro_vfs_closedir_impl((struct retro_vfs_dir_handle *)rdir);
+      retro_vfs_closedir_impl((libretro_vfs_implementation_dir *)rdir);
 }

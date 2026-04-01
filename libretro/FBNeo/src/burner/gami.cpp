@@ -1,5 +1,6 @@
 // Burner Game Input
 #include "burner.h"
+#include "inp_keys.h"
 
 // Player Default Controls
 INT32 nPlayerDefaultControls[8] = {0, 1, 2, 3, 8, 8, 8, 8};

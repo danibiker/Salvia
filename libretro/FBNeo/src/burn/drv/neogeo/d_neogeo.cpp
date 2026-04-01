@@ -19354,13 +19354,13 @@ struct BurnDriver BurnDrvMslugxcq = {
 };
 
 
-// Metal Slug X - Super Vehicle-001 (Legendary Unlimited Fire v7.5, Hack)
+// Metal Slug X - Super Vehicle-001 (Legendary Unlimited Fire v7.0, Hack)
 // Modified by AKS & Sakura
-// 20250922
+// 20250710
 
 static struct BurnRomInfo mslugxcqiRomDesc[] = {
-	{ "250-p1cqi.p1",	0x100000, 0xd004ed8b, 1 | BRF_ESS | BRF_PRG },
-	{ "250-p2cqi.ep1",	0x800000, 0xf8a2bb8b, 1 | BRF_ESS | BRF_PRG },
+	{ "250-p1cqi.p1",	0x100000, 0xab07db9b, 1 | BRF_ESS | BRF_PRG },
+	{ "250-p2cqi.ep1",	0x800000, 0x307f1787, 1 | BRF_ESS | BRF_PRG },
 
 	{ "250-s1sc.s1",	0x020000, 0x03bce893, 2 | BRF_GRA },
 
@@ -19390,7 +19390,7 @@ static INT32 mslugxcqiInit()
 
 struct BurnDriver BurnDrvMslugxfs = {
 	"mslugxcqi", "mslugx", "neogeo", NULL, "2025",
-	"Metal Slug X - Super Vehicle-001 (Legendary Unlimited Fire v7.5, Hack)\0", NULL, "hack (AKS & Sakura)", "Neo Geo MVS",
+	"Metal Slug X - Super Vehicle-001 (Legendary Unlimited Fire v7.0, Hack)\0", NULL, "AKS & Sakura", "Neo Geo MVS",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_HACK | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_CARTRIDGE | HARDWARE_SNK_NEOGEO, GBF_RUNGUN, FBF_MSLUG,
 	NULL, mslugxcqiRomInfo, mslugxcqiRomName, NULL, NULL, NULL, NULL, neogeoInputInfo, mslugLvxDIPInfo,
@@ -20075,13 +20075,13 @@ struct BurnDriver BurnDrvMslug3cq = {
 };
 
 
-// Metal Slug 3 (Legendary Unlimited Fire v7.5, Hack)
+// Metal Slug 3 (Legendary Unlimited Fire v7.0, Hack)
 // Modified by AKS & Sakura
-// 20251107
+// 20250714
 
 static struct BurnRomInfo mslug3cqiRomDesc[] = {
-	{ "256-p1cqi.p1",	0x100000, 0x8e877210, 1 | BRF_ESS | BRF_PRG },
-	{ "256-p2cqi.sp2",	0x800000, 0x8b06f167, 1 | BRF_ESS | BRF_PRG },
+	{ "256-p1cqi.p1",	0x100000, 0xf4c15b2b, 1 | BRF_ESS | BRF_PRG },
+	{ "256-p2cqi.sp2",	0x800000, 0xb0a9fda3, 1 | BRF_ESS | BRF_PRG },
 
 	MSLUG3_DECRYPTED_SPR1
 	MSLUG3_DECRYPTED_SPR2
@@ -20108,7 +20108,7 @@ static INT32 mslug3cqiInit()
 
 struct BurnDriver BurnDrvMslug3cqi = {
 	"mslug3cqi", "mslug3", "neogeo", NULL, "2025",
-	"Metal Slug 3 (Legendary Unlimited Fire v7.5, Hack)\0", NULL, "hack (AKS & Sakura)", "Neo Geo MVS",
+	"Metal Slug 3 (Legendary Unlimited Fire v7.0, Hack)\0", NULL, "AKS & Sakura", "Neo Geo MVS",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_HACK, 2, HARDWARE_PREFIX_CARTRIDGE | HARDWARE_SNK_NEOGEO, GBF_RUNGUN, FBF_MSLUG,
 	NULL, mslug3cqiRomInfo, mslug3cqiRomName, NULL, NULL, NULL, NULL, neogeoInputInfo, mslugLvxDIPInfo,
@@ -28849,36 +28849,6 @@ struct BurnDriver BurnDrvGalaxianng = {
 	NULL, galaxianngRomInfo, galaxianngRomName, NULL, NULL, NULL, NULL, neogeoInputInfo, neogeoDIPInfo,
 	NeoInit, NeoExit, NeoFrame, NeoRender, NeoScan, &NeoRecalcPalette,
 	0x1000,	224, 304, 3, 4
-};
-
-
-// Halo Zero (HB, Demo)
-// https://earok.itch.io/halo-zero-unofficial-remake
-
-static struct BurnRomInfo halozeroRomDesc[] = {
-	{ "halozero-p1.p1",    0x040000, 0x472205ad, 1 | BRF_ESS | BRF_PRG }, //  0 68K code
-
-	{ "halozero-s1.s1",    0x020000, 0x9c8d137f, 2 | BRF_GRA },           //  1 Text layer tiles
-
-	{ "halozero-c1.c1",    0x080000, 0x4749a9b0, 3 | BRF_GRA },           //  2 Sprite data
-	{ "halozero-c2.c2",    0x080000, 0xaced4adc, 3 | BRF_GRA },           //  3
-
-	{ "halozero-m1.m1",    0x008000, 0x61463826, 4 | BRF_ESS | BRF_PRG }, //  4 Z80 code
-
-	{ "halozero-v1.v1",    0x020000, 0x293cf59b, 5 | BRF_SND },           //  5 Sound data
-};
-
-STDROMPICKEXT(halozero, halozero, neogeo)
-STD_ROM_FN(halozero)
-
-struct BurnDriver BurnDrvHalozero = {
-	"halozero", NULL, "neogeo", NULL, "2025",
-	"Halo Zero (HB, Demo)\0", NULL, "earok - misentropy", "Neo Geo MVS",
-	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_HOMEBREW | BDF_DEMO, 1, HARDWARE_PREFIX_CARTRIDGE | HARDWARE_SNK_NEOGEO, GBF_RUNGUN, 0,
-	NULL, halozeroRomInfo, halozeroRomName, NULL, NULL, NULL, NULL, neogeoInputInfo, neogeoDIPInfo,
-	NeoInit, NeoExit, NeoFrame, NeoRender, NeoScan, &NeoRecalcPalette,
-	0x1000,	320, 224, 4, 3
 };
 
 

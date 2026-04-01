@@ -1,13 +1,29 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="CodeAnalysis|Win32">
+      <Configuration>CodeAnalysis</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="CodeAnalysis|Xbox 360">
       <Configuration>CodeAnalysis</Configuration>
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|Xbox 360">
       <Configuration>Debug</Configuration>
       <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Profile_FastCap|Win32">
+      <Configuration>Profile_FastCap</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Profile|Win32">
+      <Configuration>Profile</Configuration>
+      <Platform>Win32</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="Profile|Xbox 360">
       <Configuration>Profile</Configuration>
@@ -16,6 +32,14 @@
     <ProjectConfiguration Include="Profile_FastCap|Xbox 360">
       <Configuration>Profile_FastCap</Configuration>
       <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_LTCG|Win32">
+      <Configuration>Release_LTCG</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="Release|Xbox 360">
       <Configuration>Release</Configuration>
@@ -27,11 +51,87 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\src\burner\conc.cpp" />
+    <ClCompile Include="..\..\src\burner\dat.cpp" />
     <ClCompile Include="..\..\src\burner\gamc.cpp" />
-    <ClCompile Include="..\..\src\burner\gami.cpp" />
+    <ClCompile Include="..\..\src\burner\gami.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\ips_manager.cpp" />
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\compat_posix_string.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\compat_snprintf.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\compat_strcasestr.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\compat_strl.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\compat_strldup.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\compat\fopen_utf8.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\encodings\encoding_utf.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\features\features_cpu.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\file\config_file.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\file\config_file_userdata.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\file\file_path.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\file\file_path_io.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\file\retro_dirent.c">
+      <CompileAs>CompileAsCpp</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\lists\string_list.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\memmap\memalign.c">
+      <CompileAs>CompileAsCpp</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\streams\file_stream.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\streams\file_stream_transforms.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\string\stdstring.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\time\rtime.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\libretro-common\vfs\vfs_implementation.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
     <ClCompile Include="..\..\src\burner\libretro\libretro.cpp" />
-    <ClCompile Include="..\..\src\burner\libretro\neocdlist.cpp" />
-    <ClCompile Include="..\..\src\burner\state.cpp" />
+    <ClCompile Include="..\..\src\burner\libretro\retro_cdemu.cpp" />
+    <ClCompile Include="..\..\src\burner\libretro\retro_common.cpp" />
+    <ClCompile Include="..\..\src\burner\libretro\retro_input.cpp" />
+    <ClCompile Include="..\..\src\burner\libretro\retro_memory.cpp" />
+    <ClCompile Include="..\..\src\burner\libretro\retro_string.cpp" />
+    <ClCompile Include="..\..\src\burner\libretro\romdata.cpp" />
+    <ClCompile Include="..\..\src\burner\nvram.cpp" />
+    <ClCompile Include="..\..\src\burner\sdl\neocdlist.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burner\state.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\burner\statec.cpp" />
     <ClCompile Include="..\..\src\burner\zipfn.cpp" />
     <ClCompile Include="..\..\src\burn\burn.cpp" />
@@ -42,613 +142,1298 @@
     <ClCompile Include="..\..\src\burn\burn_sound_c.cpp" />
     <ClCompile Include="..\..\src\burn\cheat.cpp" />
     <ClCompile Include="..\..\src\burn\debug_track.cpp" />
-    <ClCompile Include="..\..\src\burn\devices\8255ppi.cpp" />
-    <ClCompile Include="..\..\src\burn\devices\8257dma.cpp" />
-    <ClCompile Include="..\..\src\burn\devices\eeprom.cpp" />
-    <ClCompile Include="..\..\src\burn\devices\pandora.cpp" />
-    <ClCompile Include="..\..\src\burn\devices\seibusnd.cpp" />
-    <ClCompile Include="..\..\src\burn\devices\sknsspr.cpp" />
-    <ClCompile Include="..\..\src\burn\devices\slapstic.cpp" />
-    <ClCompile Include="..\..\src\burn\devices\timekpr.cpp" />
-    <ClCompile Include="..\..\src\burn\devices\v3021.cpp" />
-    <ClCompile Include="..\..\src\burn\devices\vdc.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cps.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cps2_crpt.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cpsr.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cpsrd.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cpst.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cps_config.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cps_draw.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cps_mem.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cps_obj.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cps_pal.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cps_run.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cps_rw.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\cps_scr.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\ctv.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\ctv_make.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    <ClCompile Include="..\..\src\burn\devices\8255ppi.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\capcom\d_cps1.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\d_cps2.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\fcrash_snd.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\kabuki.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\ps.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\ps_m.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\ps_z.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\qs.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\qs_c.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\qs_z.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\capcom\sf2mdt_snd.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\cave.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\cave_palette.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\cave_sprite.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\cave_tile.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_dodonpachi.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_donpachi.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_esprade.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_feversos.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_gaia.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_guwange.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_hotdogst.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_korokoro.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_mazinger.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_metmqstr.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_pwrinst2.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_sailormn.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_tjumpman.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\cave\d_uopoko.cpp" />
+    <ClCompile Include="..\..\src\burn\devices\8257dma.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\eeprom.cpp" />
+    <ClCompile Include="..\..\src\burn\devices\joyprocess.cpp" />
+    <ClCompile Include="..\..\src\burn\devices\pandora.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\resnet.cpp" />
+    <ClCompile Include="..\..\src\burn\devices\seibusnd.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\sknsspr.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\slapstic.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\timekpr.cpp" />
+    <ClCompile Include="..\..\src\burn\devices\v3021.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\vdc.cpp" />
+    <ClCompile Include="..\..\src\burn\drv\capcom\cps.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\cps2_crpt.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\cpsr.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\cpsrd.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\cpst.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\cps_config.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\cps_draw.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\cps_mem.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\cps_obj.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\cps_pal.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\cps_run.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\cps_rw.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\cps_scr.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\ctv.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\ctv_make.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\d_cps1.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\d_cps2.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\fcrash_snd.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\kabuki.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\ps.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\ps_m.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\ps_z.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\qs.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\qs_c.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\qs_z.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\sf2mdt_snd.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\cave.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\cave_palette.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\cave_sprite.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\cave_tile.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_dodonpachi.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_donpachi.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_esprade.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_feversos.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_gaia.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_guwange.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_hotdogst.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_korokoro.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_mazinger.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_metmqstr.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_pwrinst2.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_sailormn.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_tjumpman.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\cave\d_uopoko.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\cps3\cps3run.cpp" />
     <ClCompile Include="..\..\src\burn\drv\cps3\cps3snd.cpp" />
     <ClCompile Include="..\..\src\burn\drv\cps3\d_cps3.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\deco16ic.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_actfancr.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_backfire.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_boogwing.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_cbuster.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_cninja.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_darkseal.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_dassault.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_dec0.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_dec8.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_dietgogo.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_funkyjet.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_karnov.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_lemmings.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_pktgaldx.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_rohga.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_sidepckt.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_simpl156.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_supbtime.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_tumblep.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\dataeast\d_vaportra.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\galaxian\d_galaxian.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\galaxian\gal_gfx.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\galaxian\gal_run.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\galaxian\gal_sound.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\galaxian\gal_stars.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\irem\d_m62.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\irem\d_m63.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\irem\d_m72.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\irem\d_m90.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\irem\d_m92.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\irem\d_vigilant.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\irem\irem_cpu.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_88games.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_ajax.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_aliens.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_blockhl.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_bottom9.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_contra.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_crimfght.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_gberet.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_gbusters.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_gradius3.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_gyruss.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_hcastle.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_hexion.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_kontest.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_mainevt.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_mogura.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_parodius.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_pooyan.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_rollerg.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_scotrsht.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_simpsons.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_spy.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_surpratk.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_thunderx.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_tmnt.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_twin16.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_ultraman.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_vendetta.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\d_xmen.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\k051316.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\k051733.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\k051960.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\k052109.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\k053245.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\k053247.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\k053251.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\k053936.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\k054000.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\konami\konamiic.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\megadrive\d_megadrive.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\megadrive\megadrive.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\neogeo\d_neogeo.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\neogeo\neogeo.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\neogeo\neo_decrypt.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\neogeo\neo_palette.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\neogeo\neo_run.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\neogeo\neo_sprite.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\neogeo\neo_text.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\neogeo\neo_upd4990a.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pce\d_pce.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pce\pce.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pgm\d_pgm.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pgm\pgm_crypt.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pgm\pgm_draw.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pgm\pgm_prot.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pgm\pgm_run.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pgm\pgm_sprite_create.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\deco16ic.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_1942.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_1943.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_4enraya.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_ambush.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_arabian.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_armedf.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_atetris.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_aztarac.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_baraduke.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_bionicc.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_blktiger.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_blockout.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_blueprnt.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_bombjack.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_commando.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_cybertnk.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_ddragon.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_dkong.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_dynduke.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_epos.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_exedexes.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_funkybee.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_galaga.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_gauntlet.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_ginganin.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_gng.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_gunsmoke.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_higemaru.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_ikki.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_jack.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_kangaroo.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_kyugo.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_ladybug.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_lwings.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_madgear.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_marineb.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_markham.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_meijinsn.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_mitchell.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_mole.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_momoko.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_mrdo.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_mrflea.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_mystston.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_pac2650.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_pacland.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_pacman.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_pkunwar.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_prehisle.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_quizo.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_rallyx.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_renegade.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_route16.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_rpunch.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_scregg.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_sf.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_skyfox.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_skykid.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_snk68.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_solomon.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_sonson.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_srumbler.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_tecmo.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_tehkanwc.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_terracre.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_tigeroad.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_toki.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_vulgus.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_wallc.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_wc90.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_wc90b.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_wwfsstar.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\psikyo\d_psikyo.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\psikyo\d_psikyo4.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\psikyo\d_psikyosh.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\psikyo\psikyosh_render.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\psikyo\psikyo_palette.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\psikyo\psikyo_sprite.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\psikyo\psikyo_tile.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_1945kiii.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_aerofgt.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_airbustr.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_aquarium.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_blmbycar.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_bloodbro.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_crospang.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_crshrace.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_dcon.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_ddragon3.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_deniam.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_diverboy.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_drtomy.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_egghunt.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_esd16.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_f1gp.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_fstarfrc.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_funybubl.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_fuukifg3.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_gaelco.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_gaiden.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_galpanic.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_galspnbl.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_gotcha.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_gumbo.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_hyperpac.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_jchan.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_kaneko16.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_lordgun.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_mcatadv.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_midas.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_mugsmash.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_news.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_nmg5.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_nmk16.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_ohmygod.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_pass.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_pirates.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_powerins.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_pushman.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_raiden.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_seta.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_seta2.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_shadfrce.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_silkroad.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_silvmil.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_speedspn.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_suna16.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_suprnova.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_taotaido.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_tecmosys.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_tumbleb.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_unico.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_welltris.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_wwfwfest.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_xorworld.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_yunsun16.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_zerozone.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\pst90s\nmk004.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\d_angelkds.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\d_bankp.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\d_dotrikun.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\d_hangon.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\d_outrun.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\d_suprloco.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\d_sys1.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\d_sys16a.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\d_sys16b.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\d_sys18.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\d_xbrd.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\d_ybrd.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\fd1089.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\fd1094.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\genesis_vid.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\mc8123.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\sys16_fd1094.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\sys16_gfx.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\sega\sys16_run.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\cchip.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_arkanoid.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_ashnojoe.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_asuka.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_bublbobl.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_chaknpop.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_darius2.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_flstory.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_lkage.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_minivdr.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_othunder.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_retofinv.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_slapshot.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_superchs.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_taitob.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_taitof2.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_taitomisc.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_taitox.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_taitoz.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\d_tnzs.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\pc080sn.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\pc090oj.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\taito.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\taito_ic.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\taito_m68705.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\tc0100scn.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\tc0110pcr.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\tc0140syt.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\tc0150rod.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\tc0180vcu.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\tc0220ioc.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\tc0280grd.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\tc0360pri.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\tc0480scp.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\tc0510nio.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\tc0640fio.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\taito\tnzs_prot.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_batrider.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_batsugun.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_battleg.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_bbakraid.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_demonwld.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_dogyuun.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_fixeight.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_ghox.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_hellfire.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_kbash.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_kbash2.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_mahoudai.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_outzone.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_pipibibs.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_rallybik.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_samesame.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_shippumd.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_snowbro2.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_tekipaki.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_tigerheli.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_truxton.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_truxton2.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_vfive.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_vimana.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\d_zerowing.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\toaplan.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\toaplan1.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\toa_bcu2.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\toa_extratext.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\toa_gp9001.cpp" />
-    <ClCompile Include="..\..\src\burn\drv\toaplan\toa_palette.cpp" />
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_actfancr.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_backfire.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_boogwing.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_cbuster.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_cninja.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_darkseal.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_dassault.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_dec0.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_dec8.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_dietgogo.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_funkyjet.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_karnov.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_lemmings.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_pktgaldx.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_rohga.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_sidepckt.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_simpl156.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_supbtime.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_tumblep.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_vaportra.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\galaxian\d_galaxian.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\galaxian\gal_gfx.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\galaxian\gal_run.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\galaxian\gal_sound.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\galaxian\gal_stars.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\irem\d_m62.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\irem\d_m63.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\irem\d_m72.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\irem\d_m90.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\irem\d_m92.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\irem\d_vigilant.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\irem\irem_cpu.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_88games.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_ajax.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_aliens.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_blockhl.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_bottom9.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_contra.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_crimfght.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_gberet.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_gbusters.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_gradius3.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_gyruss.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_hcastle.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_hexion.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_kontest.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_mainevt.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_mogura.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_parodius.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_pooyan.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_rollerg.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_scotrsht.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_simpsons.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_spy.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_surpratk.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_thunderx.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_tmnt.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_twin16.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_ultraman.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_vendetta.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\d_xmen.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\k051316.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\k051733.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\k051960.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\k052109.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\k053245.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\k053247.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\k053251.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\k053936.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\k054000.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\konami\konamiic.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\megadrive\d_megadrive.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\megadrive\megadrive.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\neogeo\d_neogeo.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\neogeo\neogeo.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\neogeo\neo_decrypt.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\neogeo\neo_palette.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\neogeo\neo_run.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\neogeo\neo_sprite.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\neogeo\neo_text.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\neogeo\neo_upd4990a.cpp">
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pce\d_pce.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pce\pce.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pgm\d_pgm.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pgm\pgm_crypt.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pgm\pgm_draw.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pgm\pgm_run.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pgm\pgm_sprite_create.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_1942.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_1943.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_4enraya.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_ambush.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_arabian.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_armedf.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_atetris.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_aztarac.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_baraduke.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_bionicc.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_blktiger.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_blockout.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_blueprnt.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_bombjack.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_commando.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_cybertnk.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_ddragon.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_dkong.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_dynduke.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_epos.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_exedexes.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_funkybee.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_galaga.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_ginganin.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_gng.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_gunsmoke.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_higemaru.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_jack.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_kangaroo.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_kyugo.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_ladybug.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_lwings.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_marineb.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_markham.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_meijinsn.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_mitchell.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_mole.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_momoko.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_mrdo.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_mrflea.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_mystston.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_pac2650.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_pacland.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_pacman.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_pkunwar.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_prehisle.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_quizo.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_rallyx.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_renegade.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_route16.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_rpunch.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_scregg.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_sf.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_skyfox.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_skykid.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_snk68.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_solomon.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_sonson.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_srumbler.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_tecmo.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_tehkanwc.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_terracre.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_tigeroad.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_toki.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_vulgus.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_wallc.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_wc90.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_wc90b.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_wwfsstar.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\psikyo\d_psikyo.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\psikyo\d_psikyo4.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\psikyo\d_psikyosh.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\psikyo\psikyosh_render.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\psikyo\psikyo_palette.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\psikyo\psikyo_sprite.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\psikyo\psikyo_tile.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_1945kiii.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_aerofgt.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_airbustr.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_aquarium.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_blmbycar.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_bloodbro.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_crospang.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_crshrace.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_dcon.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_ddragon3.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_deniam.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_diverboy.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_drtomy.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_egghunt.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_esd16.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_f1gp.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_funybubl.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_fuukifg3.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_gaelco.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_gaiden.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_galpanic.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_galspnbl.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_gotcha.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_gumbo.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_hyperpac.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_jchan.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_kaneko16.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_lordgun.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_mcatadv.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_midas.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_mugsmash.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_news.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_nmg5.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_nmk16.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_ohmygod.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_pass.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_pirates.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_powerins.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_pushman.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_raiden.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_seta.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_seta2.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_shadfrce.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_silkroad.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_silvmil.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_speedspn.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_suna16.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_suprnova.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_taotaido.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_tecmosys.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_tumbleb.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_unico.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_welltris.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_wwfwfest.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_xorworld.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_yunsun16.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_zerozone.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_angelkds.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_bankp.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_dotrikun.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_hangon.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_outrun.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_suprloco.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_sys1.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_sys16a.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_sys16b.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_sys18.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_xbrd.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_ybrd.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\fd1089.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\fd1094.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\genesis_vid.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\mc8123.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\sys16_fd1094.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\sys16_gfx.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\sys16_run.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\cchip.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_arkanoid.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_ashnojoe.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_asuka.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_bublbobl.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_chaknpop.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_darius2.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_flstory.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_lkage.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_minivdr.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_othunder.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_retofinv.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_slapshot.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_superchs.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_taitob.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_taitof2.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_taitomisc.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_taitox.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_taitoz.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_tnzs.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\pc080sn.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\pc090oj.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\taito.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\taito_ic.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\taito_m68705.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\tc0100scn.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\tc0110pcr.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\tc0140syt.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\tc0150rod.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\tc0180vcu.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\tc0220ioc.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\tc0280grd.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\tc0360pri.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\tc0480scp.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\tc0510nio.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\tc0640fio.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\tnzs_prot.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_batrider.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_batsugun.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_battleg.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_bbakraid.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_dogyuun.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_fixeight.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_ghox.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_kbash.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_kbash2.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_mahoudai.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_pipibibs.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_shippumd.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_snowbro2.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_tekipaki.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_truxton2.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\d_vfive.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\toaplan.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\toaplan1.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\toa_bcu2.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\toa_extratext.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\toa_gp9001.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\toaplan\toa_palette.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\hiscore.cpp" />
     <ClCompile Include="..\..\src\burn\load.cpp" />
     <ClCompile Include="..\..\src\burn\snd\ay8910.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\snd\burn_y8950.cpp" />
+    <ClCompile Include="..\..\src\burn\snd\burn_y8950.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\burn_ym2151.cpp" />
     <ClCompile Include="..\..\src\burn\snd\burn_ym2203.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\burn_ym2413.cpp" />
+    <ClCompile Include="..\..\src\burn\snd\burn_ym2413.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\burn_ym2608.cpp" />
     <ClCompile Include="..\..\src\burn\snd\burn_ym2610.cpp" />
     <ClCompile Include="..\..\src\burn\snd\burn_ym2612.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\burn_ym3526.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\burn_ym3812.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\burn_ymf278b.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\c6280.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\dac.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\es5506.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\es8712.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\flt_rc.cpp" />
+    <ClCompile Include="..\..\src\burn\snd\burn_ym3526.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\burn_ym3812.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\burn_ymf278b.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\c6280.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\dac.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\es5506.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\es8712.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\flt_rc.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\fm.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\fmopl.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\snd\ics2115.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\iremga20.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\k007232.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\k051649.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\k053260.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\k054539.cpp" />
+    <ClCompile Include="..\..\src\burn\snd\ics2115.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\iremga20.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\k007232.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\k051649.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\k053260.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\k054539.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\msm5205.cpp" />
     <ClCompile Include="..\..\src\burn\snd\msm6295.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\namco_snd.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\rf5c68.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\saa1099.cpp" />
+    <ClCompile Include="..\..\src\burn\snd\namco_snd.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\rf5c68.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\saa1099.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\samples.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\segapcm.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\sn76496.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\upd7759.cpp" />
-    <ClCompile Include="..\..\src\burn\snd\x1010.cpp" />
+    <ClCompile Include="..\..\src\burn\snd\segapcm.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\sn76496.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\upd7759.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\x1010.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\ym2151.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\ym2413.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\ymdeltat.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\ymf278b.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\snd\ymz280b.cpp" />
+    <ClCompile Include="..\..\src\burn\snd\ymz280b.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\tiles_generic.cpp" />
     <ClCompile Include="..\..\src\burn\timer.cpp" />
     <ClCompile Include="..\..\src\burn\vector.cpp" />
-    <ClCompile Include="..\..\src\cpu\arm7\arm7.cpp" />
+    <ClCompile Include="..\..\src\cpu\arm7\arm7.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\cpu\arm7\arm7core.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\arm7\arm7exec.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\cpu\arm7_intf.cpp" />
-    <ClCompile Include="..\..\src\cpu\arm\arm.cpp" />
-    <ClCompile Include="..\..\src\cpu\arm_intf.cpp" />
-    <ClCompile Include="..\..\src\cpu\h6280\h6280.cpp" />
+    <ClCompile Include="..\..\src\cpu\arm7_intf.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\arm\arm.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\arm_intf.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\h6280\h6280.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\cpu\h6280\tblh6280.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\cpu\h6280_intf.cpp" />
+    <ClCompile Include="..\..\src\cpu\h6280_intf.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\cpu\hd6309\6309ops.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\hd6309\6309tbl.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\cpu\hd6309\hd6309.cpp" />
-    <ClCompile Include="..\..\src\cpu\hd6309_intf.cpp" />
-    <ClCompile Include="..\..\src\cpu\i8039\i8039.cpp" />
-    <ClCompile Include="..\..\src\cpu\konami\konami.cpp" />
+    <ClCompile Include="..\..\src\cpu\hd6309\hd6309.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\hd6309_intf.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\i8039\i8039.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\konami\konami.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\cpu\konami\konamops.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\konami\konamtbl.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\konami_intf.cpp" />
-    <ClCompile Include="..\..\src\cpu\m6502\m6502.cpp" />
+    <ClCompile Include="..\..\src\cpu\m6502\m6502.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\cpu\m6502\t6502.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\m6502\t65c02.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\m6502\t65sc02.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\m6502\tdeco16.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\m6502\tn2a03.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\cpu\m6502_intf.cpp" />
+    <ClCompile Include="..\..\src\cpu\m6502_intf.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\cpu\m68000_intf.cpp" />
     <ClCompile Include="..\..\src\cpu\m6800\6800ops.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\m6800\6800tbl.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\cpu\m6800\m6800.cpp" />
-    <ClCompile Include="..\..\src\cpu\m6800_intf.cpp" />
+    <ClCompile Include="..\..\src\cpu\m6800\m6800.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\m6800_intf.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\cpu\m6805\6805ops.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\cpu\m6805\m6805.cpp" />
-    <ClCompile Include="..\..\src\cpu\m6805_intf.cpp" />
+    <ClCompile Include="..\..\src\cpu\m6805\m6805.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\m6805_intf.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\cpu\m6809\6809ops.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\m6809\6809tbl.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\cpu\m6809\m6809.cpp" />
-    <ClCompile Include="..\..\src\cpu\m6809_intf.cpp" />
+    <ClCompile Include="..\..\src\cpu\m6809\m6809.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\m6809_intf.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\cpu\m68k\m68kcpu.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\m68k\m68kdasm.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\m68k\m68kmake.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="..\..\src\cpu\m68k\m68kopac.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\src\cpu\m68k\m68kopdm.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
-    </ClCompile>
-    <ClCompile Include="..\..\src\cpu\m68k\m68kopnz.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\m68k\m68kops.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\m68k\m68k_in.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\cpu\nec\nec.cpp" />
+    <ClCompile Include="..\..\src\cpu\nec\nec.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\cpu\nec\necinstr.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\cpu\nec\v25.cpp" />
+    <ClCompile Include="..\..\src\cpu\nec\v25.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\cpu\nec\v25instr.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\cpu\nec\v25sfr.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\src\cpu\nec_intf.cpp" />
-    <ClCompile Include="..\..\src\cpu\s2650\s2650.cpp" />
-    <ClCompile Include="..\..\src\cpu\s2650_intf.cpp" />
+    <ClCompile Include="..\..\src\cpu\nec_intf.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\s2650\s2650.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\s2650_intf.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\cpu\sh2\sh2.cpp" />
     <ClCompile Include="..\..\src\cpu\z80\z80.cpp" />
+    <ClCompile Include="..\..\src\cpu\z80\z80ctc.cpp" />
     <ClCompile Include="..\..\src\cpu\z80\z80daisy.cpp" />
+    <ClCompile Include="..\..\src\cpu\z80\z80pio.cpp" />
     <ClCompile Include="..\..\src\cpu\z80_intf.cpp" />
+    <ClCompile Include="..\..\src\intf\audio\aud_dsp.cpp" />
+    <ClCompile Include="..\..\src\intf\audio\lowpass2.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\src\dep\generated\driverlist.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{00AAF92F-A249-4DF2-AE24-0C5427DB319E}</ProjectGuid>
@@ -659,15 +1444,32 @@
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <CLRSupport>false</CLRSupport>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -676,7 +1478,17 @@
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
@@ -687,59 +1499,134 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <OutputFile>$(OutDir)$(Platform)\$(ProjectName).lib</OutputFile>
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">
+    <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Win32'">
     <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">
     <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">
+    <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">
     <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Win32'">
+    <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <OutputFile>$(OutDir)$(Platform)\libretro$(TargetExt)</OutputFile>
+    <IncludePath>$(IncludePath)</IncludePath>
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutputFile>$(OutDir)libretro$(TargetExt)</OutputFile>
+    <IncludePath>$(IncludePath)</IncludePath>
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">
+    <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Win32'">
     <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
       <ExceptionHandling>false</ExceptionHandling>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
-      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <PreprocessorDefinitions>_DEBUG;_XBOX;_XBOX360;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;__fastcall=;MAME_INLINE=_inline static;MSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NO_NEOGEO;_DEBUG;_XBOX;_XBOX360;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;__fastcall=;MAME_INLINE=_inline static;MSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
       <CallAttributedProfiling>Callcap</CallAttributedProfiling>
-      <AdditionalIncludeDirectories>$(SolutionDir)\..\..\src\burn\drv\taito;$(SolutionDir)\..\..\src\dep\generated;$(SolutionDir)\..\..\src\burner\libretro;$(SolutionDir)\..\..\src\burner;$(SolutionDir)\..\..\src\burn;$(SolutionDir)\..\..\src\burn\drv\pgm;$(SolutionDir)\..\..\src\burn\devices;$(SolutionDir)\..\..\src\burn\snd;$(SolutionDir)\..\..\src\cpu\;$(SolutionDir)\..\..\src\cpu\arm;$(SolutionDir)\..\..\src\cpu\arm7;$(SolutionDir)\..\..\src\cpu\h6280;$(SolutionDir)\..\..\src\cpu\hd6309;$(SolutionDir)\..\..\src\cpu\i8039;$(SolutionDir)\..\..\src\cpu\konami;$(SolutionDir)\..\..\src\cpu\m6502;$(SolutionDir)\..\..\src\cpu\m6800;$(SolutionDir)\..\..\src\cpu\m6805;$(SolutionDir)\..\..\src\cpu\m6809;$(SolutionDir)\..\..\src\cpu\m68k;$(SolutionDir)\..\..\src\cpu\nec;$(SolutionDir)\..\..\src\cpu\s2650;$(SolutionDir)\..\..\src\cpu\sh2;$(SolutionDir)\..\..\src\cpu\z80;$(SolutionDir)\..\..\src\intf\input;$(SolutionDir)\..\..\src\intf;$(SolutionDir)\..\..\src\dep\libs\zlib;$(SolutionDir)\..\..\src\intf\cd</AdditionalIncludeDirectories>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)..\..\src\dep\libs\dr_libs;$(SolutionDir)..\..\src\burn\drv\konami;$(SolutionDir)..\..\src\cpu\upd7810;$(SolutionDir)..\..\src\cpu\z180;$(SolutionDir)..\..\src\cpu\upd7810;$(SolutionDir)..\..\src\cpu\i8x41;$(SolutionDir)..\..\src\cpu\i8051;$(SolutionDir)..\..\src\burn\drv\pce;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner\sdl;$(SolutionDir)..\..\src\burner\libretro\libretro-common\include;$(SolutionDir)..\..\src\intf\audio;$(SolutionDir)..\..\src\burn\drv\taito;$(SolutionDir)..\..\src\dep\generated;$(SolutionDir)..\..\src\burner;$(SolutionDir)..\..\src\burn;$(SolutionDir)..\..\src\burn\drv\pgm;$(SolutionDir)..\..\src\burn\devices;$(SolutionDir)..\..\src\burn\snd;$(SolutionDir)..\..\src\cpu\;$(SolutionDir)..\..\src\cpu\arm;$(SolutionDir)..\..\src\cpu\arm7;$(SolutionDir)..\..\src\cpu\h6280;$(SolutionDir)..\..\src\cpu\hd6309;$(SolutionDir)..\..\src\cpu\i8039;$(SolutionDir)..\..\src\cpu\konami;$(SolutionDir)..\..\src\cpu\m6502;$(SolutionDir)..\..\src\cpu\m6800;$(SolutionDir)..\..\src\cpu\m6805;$(SolutionDir)..\..\src\cpu\m6809;$(SolutionDir)..\..\src\cpu\m68k;$(SolutionDir)..\..\src\cpu\nec;$(SolutionDir)..\..\src\cpu\s2650;$(SolutionDir)..\..\src\cpu\sh2;$(SolutionDir)..\..\src\cpu\z80;$(SolutionDir)..\..\src\intf\input;$(SolutionDir)..\..\src\intf;$(SolutionDir)..\..\src\dep\libs\zlib;$(SolutionDir)..\..\src\intf\cd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;HAVE_CHD;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;MAME_INLINE=_inline static;LSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
+      <CallAttributedProfiling>Callcap</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)..\..\src\dep\libs\dr_libs;$(SolutionDir)..\..\src\burn\drv\konami;$(SolutionDir)..\..\src\cpu\upd7810;$(SolutionDir)..\..\src\cpu\z180;$(SolutionDir)..\..\src\cpu\upd7810;$(SolutionDir)..\..\src\cpu\i8x41;$(SolutionDir)..\..\src\cpu\i8051;$(SolutionDir)..\..\src\burn\drv\pce;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner\sdl;$(SolutionDir)..\..\src\burner\libretro\libretro-common\include;$(SolutionDir)..\..\src\intf\audio;$(SolutionDir)..\..\src\burn\drv\taito;$(SolutionDir)..\..\src\dep\generated;$(SolutionDir)..\..\src\burner;$(SolutionDir)..\..\src\burn;$(SolutionDir)..\..\src\burn\drv\pgm;$(SolutionDir)..\..\src\burn\devices;$(SolutionDir)..\..\src\burn\snd;$(SolutionDir)..\..\src\cpu\;$(SolutionDir)..\..\src\cpu\arm;$(SolutionDir)..\..\src\cpu\arm7;$(SolutionDir)..\..\src\cpu\h6280;$(SolutionDir)..\..\src\cpu\hd6309;$(SolutionDir)..\..\src\cpu\i8039;$(SolutionDir)..\..\src\cpu\konami;$(SolutionDir)..\..\src\cpu\m6502;$(SolutionDir)..\..\src\cpu\m6800;$(SolutionDir)..\..\src\cpu\m6805;$(SolutionDir)..\..\src\cpu\m6809;$(SolutionDir)..\..\src\cpu\m68k;$(SolutionDir)..\..\src\cpu\nec;$(SolutionDir)..\..\src\cpu\s2650;$(SolutionDir)..\..\src\cpu\sh2;$(SolutionDir)..\..\src\cpu\z80;$(SolutionDir)..\..\src\intf\input;$(SolutionDir)..\..\src\intf;$(SolutionDir)..\..\src\dep\libs\zlib;$(SolutionDir)..\..\src\intf\cd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <DisableLanguageExtensions>false</DisableLanguageExtensions>
+      <CallingConvention>Cdecl</CallingConvention>
+      <StringPooling>true</StringPooling>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">
     <ClCompile>
@@ -755,7 +1642,28 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <PreprocessorDefinitions>_DEBUG;_XBOX;_XBOX360;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;__fastcall=;MAME_INLINE=_inline static;MSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
       <CallAttributedProfiling>Callcap</CallAttributedProfiling>
-      <AdditionalIncludeDirectories>$(SolutionDir)\..\..\src\burn\drv\taito;$(SolutionDir)\..\..\src\dep\generated;$(SolutionDir)\..\..\src\burner\libretro;$(SolutionDir)\..\..\src\burner;$(SolutionDir)\..\..\src\burn;$(SolutionDir)\..\..\src\burn\drv\pgm;$(SolutionDir)\..\..\src\burn\devices;$(SolutionDir)\..\..\src\burn\snd;$(SolutionDir)\..\..\src\cpu\;$(SolutionDir)\..\..\src\cpu\arm;$(SolutionDir)\..\..\src\cpu\arm7;$(SolutionDir)\..\..\src\cpu\h6280;$(SolutionDir)\..\..\src\cpu\hd6309;$(SolutionDir)\..\..\src\cpu\i8039;$(SolutionDir)\..\..\src\cpu\konami;$(SolutionDir)\..\..\src\cpu\m6502;$(SolutionDir)\..\..\src\cpu\m6800;$(SolutionDir)\..\..\src\cpu\m6805;$(SolutionDir)\..\..\src\cpu\m6809;$(SolutionDir)\..\..\src\cpu\m68k;$(SolutionDir)\..\..\src\cpu\nec;$(SolutionDir)\..\..\src\cpu\s2650;$(SolutionDir)\..\..\src\cpu\sh2;$(SolutionDir)\..\..\src\cpu\z80;$(SolutionDir)\..\..\src\intf\input;$(SolutionDir)\..\..\src\intf;$(SolutionDir)\..\..\src\dep\libs\zlib;$(SolutionDir)\..\..\src\intf\cd</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\develop\Github\xbox360\project\FBNeo\src\burner\libretro;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner\sdl;$(SolutionDir)..\..\src\burner\libretro\libretro-common\include;$(SolutionDir)..\..\src\intf\audio;$(SolutionDir)..\..\src\burn\drv\taito;$(SolutionDir)..\..\src\dep\generated;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner;$(SolutionDir)..\..\src\burn;$(SolutionDir)..\..\src\burn\drv\pgm;$(SolutionDir)..\..\src\burn\devices;$(SolutionDir)..\..\src\burn\snd;$(SolutionDir)..\..\src\cpu\;$(SolutionDir)..\..\src\cpu\arm;$(SolutionDir)..\..\src\cpu\arm7;$(SolutionDir)..\..\src\cpu\h6280;$(SolutionDir)..\..\src\cpu\hd6309;$(SolutionDir)..\..\src\cpu\i8039;$(SolutionDir)..\..\src\cpu\konami;$(SolutionDir)..\..\src\cpu\m6502;$(SolutionDir)..\..\src\cpu\m6800;$(SolutionDir)..\..\src\cpu\m6805;$(SolutionDir)..\..\src\cpu\m6809;$(SolutionDir)..\..\src\cpu\m68k;$(SolutionDir)..\..\src\cpu\nec;$(SolutionDir)..\..\src\cpu\s2650;$(SolutionDir)..\..\src\cpu\sh2;$(SolutionDir)..\..\src\cpu\z80;$(SolutionDir)..\..\src\intf\input;$(SolutionDir)..\..\src\intf;$(SolutionDir)..\..\src\dep\libs\zlib;$(SolutionDir)..\..\src\intf\cd</AdditionalIncludeDirectories>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level4</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>true</MinimalRebuild>
+      <PREfast>AnalyzeOnly</PREfast>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PreprocessorDefinitions>_DEBUG;_XBOX;_XBOX360;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;__fastcall=;MAME_INLINE=_inline static;MSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
+      <CallAttributedProfiling>Callcap</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>D:\develop\Github\xbox360\project\FBNeo\src\burner\libretro;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner\sdl;$(SolutionDir)..\..\src\burner\libretro\libretro-common\include;$(SolutionDir)..\..\src\intf\audio;$(SolutionDir)..\..\src\burn\drv\taito;$(SolutionDir)..\..\src\dep\generated;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner;$(SolutionDir)..\..\src\burn;$(SolutionDir)..\..\src\burn\drv\pgm;$(SolutionDir)..\..\src\burn\devices;$(SolutionDir)..\..\src\burn\snd;$(SolutionDir)..\..\src\cpu\;$(SolutionDir)..\..\src\cpu\arm;$(SolutionDir)..\..\src\cpu\arm7;$(SolutionDir)..\..\src\cpu\h6280;$(SolutionDir)..\..\src\cpu\hd6309;$(SolutionDir)..\..\src\cpu\i8039;$(SolutionDir)..\..\src\cpu\konami;$(SolutionDir)..\..\src\cpu\m6502;$(SolutionDir)..\..\src\cpu\m6800;$(SolutionDir)..\..\src\cpu\m6805;$(SolutionDir)..\..\src\cpu\m6809;$(SolutionDir)..\..\src\cpu\m68k;$(SolutionDir)..\..\src\cpu\nec;$(SolutionDir)..\..\src\cpu\s2650;$(SolutionDir)..\..\src\cpu\sh2;$(SolutionDir)..\..\src\cpu\z80;$(SolutionDir)..\..\src\intf\input;$(SolutionDir)..\..\src\intf;$(SolutionDir)..\..\src\dep\libs\zlib;$(SolutionDir)..\..\src\intf\cd</AdditionalIncludeDirectories>
       <IntrinsicFunctions>true</IntrinsicFunctions>
     </ClCompile>
     <Link>
@@ -777,7 +1685,32 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PreprocessorDefinitions>NDEBUG;_XBOX;_XBOX360;PROFILE;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;__fastcall=;MAME_INLINE=_inline static;MSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
       <CallAttributedProfiling>Callcap</CallAttributedProfiling>
-      <AdditionalIncludeDirectories>$(SolutionDir)\..\..\src\burn\drv\taito;$(SolutionDir)\..\..\src\dep\generated;$(SolutionDir)\..\..\src\burner\libretro;$(SolutionDir)\..\..\src\burner;$(SolutionDir)\..\..\src\burn;$(SolutionDir)\..\..\src\burn\drv\pgm;$(SolutionDir)\..\..\src\burn\devices;$(SolutionDir)\..\..\src\burn\snd;$(SolutionDir)\..\..\src\cpu\;$(SolutionDir)\..\..\src\cpu\arm;$(SolutionDir)\..\..\src\cpu\arm7;$(SolutionDir)\..\..\src\cpu\h6280;$(SolutionDir)\..\..\src\cpu\hd6309;$(SolutionDir)\..\..\src\cpu\i8039;$(SolutionDir)\..\..\src\cpu\konami;$(SolutionDir)\..\..\src\cpu\m6502;$(SolutionDir)\..\..\src\cpu\m6800;$(SolutionDir)\..\..\src\cpu\m6805;$(SolutionDir)\..\..\src\cpu\m6809;$(SolutionDir)\..\..\src\cpu\m68k;$(SolutionDir)\..\..\src\cpu\nec;$(SolutionDir)\..\..\src\cpu\s2650;$(SolutionDir)\..\..\src\cpu\sh2;$(SolutionDir)\..\..\src\cpu\z80;$(SolutionDir)\..\..\src\intf\input;$(SolutionDir)\..\..\src\intf;$(SolutionDir)\..\..\src\dep\libs\zlib;$(SolutionDir)\..\..\src\intf\cd</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\develop\Github\xbox360\project\FBNeo\src\burner\libretro;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner\sdl;$(SolutionDir)..\..\src\burner\libretro\libretro-common\include;$(SolutionDir)..\..\src\intf\audio;$(SolutionDir)..\..\src\burn\drv\taito;$(SolutionDir)..\..\src\dep\generated;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner;$(SolutionDir)..\..\src\burn;$(SolutionDir)..\..\src\burn\drv\pgm;$(SolutionDir)..\..\src\burn\devices;$(SolutionDir)..\..\src\burn\snd;$(SolutionDir)..\..\src\cpu\;$(SolutionDir)..\..\src\cpu\arm;$(SolutionDir)..\..\src\cpu\arm7;$(SolutionDir)..\..\src\cpu\h6280;$(SolutionDir)..\..\src\cpu\hd6309;$(SolutionDir)..\..\src\cpu\i8039;$(SolutionDir)..\..\src\cpu\konami;$(SolutionDir)..\..\src\cpu\m6502;$(SolutionDir)..\..\src\cpu\m6800;$(SolutionDir)..\..\src\cpu\m6805;$(SolutionDir)..\..\src\cpu\m6809;$(SolutionDir)..\..\src\cpu\m68k;$(SolutionDir)..\..\src\cpu\nec;$(SolutionDir)..\..\src\cpu\s2650;$(SolutionDir)..\..\src\cpu\sh2;$(SolutionDir)..\..\src\cpu\z80;$(SolutionDir)..\..\src\intf\input;$(SolutionDir)..\..\src\intf;$(SolutionDir)..\..\src\dep\libs\zlib;$(SolutionDir)..\..\src\intf\cd</AdditionalIncludeDirectories>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>false</EnableCOMDATFolding>
+      <IgnoreSpecificDefaultLibraries>xapilib.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <ExceptionHandling>false</ExceptionHandling>
+      <StringPooling>true</StringPooling>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;_XBOX;_XBOX360;PROFILE;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;__fastcall=;MAME_INLINE=_inline static;MSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
+      <CallAttributedProfiling>Callcap</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>D:\develop\Github\xbox360\project\FBNeo\src\burner\libretro;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner\sdl;$(SolutionDir)..\..\src\burner\libretro\libretro-common\include;$(SolutionDir)..\..\src\intf\audio;$(SolutionDir)..\..\src\burn\drv\taito;$(SolutionDir)..\..\src\dep\generated;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner;$(SolutionDir)..\..\src\burn;$(SolutionDir)..\..\src\burn\drv\pgm;$(SolutionDir)..\..\src\burn\devices;$(SolutionDir)..\..\src\burn\snd;$(SolutionDir)..\..\src\cpu\;$(SolutionDir)..\..\src\cpu\arm;$(SolutionDir)..\..\src\cpu\arm7;$(SolutionDir)..\..\src\cpu\h6280;$(SolutionDir)..\..\src\cpu\hd6309;$(SolutionDir)..\..\src\cpu\i8039;$(SolutionDir)..\..\src\cpu\konami;$(SolutionDir)..\..\src\cpu\m6502;$(SolutionDir)..\..\src\cpu\m6800;$(SolutionDir)..\..\src\cpu\m6805;$(SolutionDir)..\..\src\cpu\m6809;$(SolutionDir)..\..\src\cpu\m68k;$(SolutionDir)..\..\src\cpu\nec;$(SolutionDir)..\..\src\cpu\s2650;$(SolutionDir)..\..\src\cpu\sh2;$(SolutionDir)..\..\src\cpu\z80;$(SolutionDir)..\..\src\intf\input;$(SolutionDir)..\..\src\intf;$(SolutionDir)..\..\src\dep\libs\zlib;$(SolutionDir)..\..\src\intf\cd</AdditionalIncludeDirectories>
       <IntrinsicFunctions>true</IntrinsicFunctions>
     </ClCompile>
     <Link>
@@ -802,7 +1735,31 @@
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PreprocessorDefinitions>NDEBUG;_XBOX;_XBOX360;PROFILE;FASTCAP;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;__fastcall=;MAME_INLINE=_inline static;MSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)\..\..\src\burn\drv\taito;$(SolutionDir)\..\..\src\generated;$(SolutionDir)\..\..\src\burner\libretro;$(SolutionDir)\..\..\src\burner;$(SolutionDir)\..\..\src\burn;$(SolutionDir)\..\..\src\burn\drv\pgm;$(SolutionDir)\..\..\src\burn\devices;$(SolutionDir)\..\..\src\burn\snd;$(SolutionDir)\..\..\src\cpu\;$(SolutionDir)\..\..\src\cpu\arm;$(SolutionDir)\..\..\src\cpu\arm7;$(SolutionDir)\..\..\src\cpu\h6280;$(SolutionDir)\..\..\src\cpu\hd6309;$(SolutionDir)\..\..\src\cpu\i8039;$(SolutionDir)\..\..\src\cpu\konami;$(SolutionDir)\..\..\src\cpu\m6502;$(SolutionDir)\..\..\src\cpu\m6800;$(SolutionDir)\..\..\src\cpu\m6805;$(SolutionDir)\..\..\src\cpu\m6809;$(SolutionDir)\..\..\src\cpu\m68k;$(SolutionDir)\..\..\src\cpu\nec;$(SolutionDir)\..\..\src\cpu\s2650;$(SolutionDir)\..\..\src\cpu\sh2;$(SolutionDir)\..\..\src\cpu\z80;$(SolutionDir)\..\..\src\intf\input;$(SolutionDir)\..\..\src\intf;$(SolutionDir)\..\..\src\dep\libs\zlib;$(SolutionDir)\..\..\src\intf\cd</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\develop\Github\xbox360\project\FBNeo\src\burner\libretro;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner\sdl;$(SolutionDir)..\..\src\burner\libretro\libretro-common\include;$(SolutionDir)..\..\src\intf\audio;$(SolutionDir)..\..\src\burn\drv\taito;$(SolutionDir)..\..\src\generated;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner;$(SolutionDir)..\..\src\burn;$(SolutionDir)..\..\src\burn\drv\pgm;$(SolutionDir)..\..\src\burn\devices;$(SolutionDir)..\..\src\burn\snd;$(SolutionDir)..\..\src\cpu\;$(SolutionDir)..\..\src\cpu\arm;$(SolutionDir)..\..\src\cpu\arm7;$(SolutionDir)..\..\src\cpu\h6280;$(SolutionDir)..\..\src\cpu\hd6309;$(SolutionDir)..\..\src\cpu\i8039;$(SolutionDir)..\..\src\cpu\konami;$(SolutionDir)..\..\src\cpu\m6502;$(SolutionDir)..\..\src\cpu\m6800;$(SolutionDir)..\..\src\cpu\m6805;$(SolutionDir)..\..\src\cpu\m6809;$(SolutionDir)..\..\src\cpu\m68k;$(SolutionDir)..\..\src\cpu\nec;$(SolutionDir)..\..\src\cpu\s2650;$(SolutionDir)..\..\src\cpu\sh2;$(SolutionDir)..\..\src\cpu\z80;$(SolutionDir)..\..\src\intf\input;$(SolutionDir)..\..\src\intf;$(SolutionDir)..\..\src\dep\libs\zlib;$(SolutionDir)..\..\src\intf\cd</AdditionalIncludeDirectories>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>false</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <ExceptionHandling>false</ExceptionHandling>
+      <StringPooling>true</StringPooling>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CallAttributedProfiling>Fastcap</CallAttributedProfiling>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;_XBOX;_XBOX360;PROFILE;FASTCAP;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;__fastcall=;MAME_INLINE=_inline static;MSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>D:\develop\Github\xbox360\project\FBNeo\src\burner\libretro;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner\sdl;$(SolutionDir)..\..\src\burner\libretro\libretro-common\include;$(SolutionDir)..\..\src\intf\audio;$(SolutionDir)..\..\src\burn\drv\taito;$(SolutionDir)..\..\src\generated;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner;$(SolutionDir)..\..\src\burn;$(SolutionDir)..\..\src\burn\drv\pgm;$(SolutionDir)..\..\src\burn\devices;$(SolutionDir)..\..\src\burn\snd;$(SolutionDir)..\..\src\cpu\;$(SolutionDir)..\..\src\cpu\arm;$(SolutionDir)..\..\src\cpu\arm7;$(SolutionDir)..\..\src\cpu\h6280;$(SolutionDir)..\..\src\cpu\hd6309;$(SolutionDir)..\..\src\cpu\i8039;$(SolutionDir)..\..\src\cpu\konami;$(SolutionDir)..\..\src\cpu\m6502;$(SolutionDir)..\..\src\cpu\m6800;$(SolutionDir)..\..\src\cpu\m6805;$(SolutionDir)..\..\src\cpu\m6809;$(SolutionDir)..\..\src\cpu\m68k;$(SolutionDir)..\..\src\cpu\nec;$(SolutionDir)..\..\src\cpu\s2650;$(SolutionDir)..\..\src\cpu\sh2;$(SolutionDir)..\..\src\cpu\z80;$(SolutionDir)..\..\src\intf\input;$(SolutionDir)..\..\src\intf;$(SolutionDir)..\..\src\dep\libs\zlib;$(SolutionDir)..\..\src\intf\cd</AdditionalIncludeDirectories>
       <IntrinsicFunctions>true</IntrinsicFunctions>
     </ClCompile>
     <Link>
@@ -813,21 +1770,48 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;_XBOX;_XBOX360;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;__fastcall=;MAME_INLINE=_inline static;MSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)..\..\src\dep\libs\dr_libs;$(SolutionDir)..\..\src\burn\drv\konami;$(SolutionDir)..\..\src\cpu\upd7810;$(SolutionDir)..\..\src\cpu\z180;$(SolutionDir)..\..\src\cpu\upd7810;$(SolutionDir)..\..\src\cpu\i8x41;$(SolutionDir)..\..\src\cpu\i8051;$(SolutionDir)..\..\src\burn\drv\pce;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner\sdl;$(SolutionDir)..\..\src\burner\libretro\libretro-common\include;$(SolutionDir)..\..\src\intf\audio;$(SolutionDir)..\..\src\burn\drv\taito;$(SolutionDir)..\..\src\dep\generated;$(SolutionDir)..\..\src\burner;$(SolutionDir)..\..\src\burn;$(SolutionDir)..\..\src\burn\drv\pgm;$(SolutionDir)..\..\src\burn\devices;$(SolutionDir)..\..\src\burn\snd;$(SolutionDir)..\..\src\cpu\;$(SolutionDir)..\..\src\cpu\arm;$(SolutionDir)..\..\src\cpu\arm7;$(SolutionDir)..\..\src\cpu\h6280;$(SolutionDir)..\..\src\cpu\hd6309;$(SolutionDir)..\..\src\cpu\i8039;$(SolutionDir)..\..\src\cpu\konami;$(SolutionDir)..\..\src\cpu\m6502;$(SolutionDir)..\..\src\cpu\m6800;$(SolutionDir)..\..\src\cpu\m6805;$(SolutionDir)..\..\src\cpu\m6809;$(SolutionDir)..\..\src\cpu\m68k;$(SolutionDir)..\..\src\cpu\nec;$(SolutionDir)..\..\src\cpu\s2650;$(SolutionDir)..\..\src\cpu\sh2;$(SolutionDir)..\..\src\cpu\z80;$(SolutionDir)..\..\src\intf\input;$(SolutionDir)..\..\src\intf;$(SolutionDir)..\..\src\dep\libs\zlib;$(SolutionDir)..\..\src\intf\cd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <StringPooling>true</StringPooling>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
-      <ExceptionHandling>false</ExceptionHandling>
+      <ExceptionHandling>Sync</ExceptionHandling>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>NDEBUG;_XBOX;_XBOX360;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;__fastcall=;MAME_INLINE=_inline static;MSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)\..\..\src\burn\drv\taito;$(SolutionDir)\..\..\src\dep\generated;$(SolutionDir)\..\..\src\burner\libretro;$(SolutionDir)\..\..\src\burner;$(SolutionDir)\..\..\src\burn;$(SolutionDir)\..\..\src\burn\drv\pgm;$(SolutionDir)\..\..\src\burn\devices;$(SolutionDir)\..\..\src\burn\snd;$(SolutionDir)\..\..\src\cpu\;$(SolutionDir)\..\..\src\cpu\arm;$(SolutionDir)\..\..\src\cpu\arm7;$(SolutionDir)\..\..\src\cpu\h6280;$(SolutionDir)\..\..\src\cpu\hd6309;$(SolutionDir)\..\..\src\cpu\i8039;$(SolutionDir)\..\..\src\cpu\konami;$(SolutionDir)\..\..\src\cpu\m6502;$(SolutionDir)\..\..\src\cpu\m6800;$(SolutionDir)\..\..\src\cpu\m6805;$(SolutionDir)\..\..\src\cpu\m6809;$(SolutionDir)\..\..\src\cpu\m68k;$(SolutionDir)\..\..\src\cpu\nec;$(SolutionDir)\..\..\src\cpu\s2650;$(SolutionDir)\..\..\src\cpu\sh2;$(SolutionDir)\..\..\src\cpu\z80;$(SolutionDir)\..\..\src\intf\input;$(SolutionDir)\..\..\src\intf;$(SolutionDir)\..\..\src\dep\libs\zlib;$(SolutionDir)\..\..\src\intf\cd</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;MAME_INLINE=_inline static;LSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)..\..\src\dep\libs\dr_libs;$(SolutionDir)..\..\src\burn\drv\konami;$(SolutionDir)..\..\src\cpu\upd7810;$(SolutionDir)..\..\src\cpu\z180;$(SolutionDir)..\..\src\cpu\upd7810;$(SolutionDir)..\..\src\cpu\i8x41;$(SolutionDir)..\..\src\cpu\i8051;$(SolutionDir)..\..\src\burn\drv\pce;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner\sdl;$(SolutionDir)..\..\src\burner\libretro\libretro-common\include;$(SolutionDir)..\..\src\intf\audio;$(SolutionDir)..\..\src\burn\drv\taito;$(SolutionDir)..\..\src\dep\generated;$(SolutionDir)..\..\src\burner;$(SolutionDir)..\..\src\burn;$(SolutionDir)..\..\src\burn\drv\pgm;$(SolutionDir)..\..\src\burn\devices;$(SolutionDir)..\..\src\burn\snd;$(SolutionDir)..\..\src\cpu\;$(SolutionDir)..\..\src\cpu\arm;$(SolutionDir)..\..\src\cpu\arm7;$(SolutionDir)..\..\src\cpu\h6280;$(SolutionDir)..\..\src\cpu\hd6309;$(SolutionDir)..\..\src\cpu\i8039;$(SolutionDir)..\..\src\cpu\konami;$(SolutionDir)..\..\src\cpu\m6502;$(SolutionDir)..\..\src\cpu\m6800;$(SolutionDir)..\..\src\cpu\m6805;$(SolutionDir)..\..\src\cpu\m6809;$(SolutionDir)..\..\src\cpu\m68k;$(SolutionDir)..\..\src\cpu\nec;$(SolutionDir)..\..\src\cpu\s2650;$(SolutionDir)..\..\src\cpu\sh2;$(SolutionDir)..\..\src\cpu\z80;$(SolutionDir)..\..\src\intf\input;$(SolutionDir)..\..\src\intf;$(SolutionDir)..\..\src\dep\libs\zlib;$(SolutionDir)..\..\src\intf\cd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreschedulingOptimization>true</PreschedulingOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -849,7 +1833,30 @@
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PreprocessorDefinitions>NDEBUG;_XBOX;_XBOX360;LTCG;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;__fastcall=;MAME_INLINE=_inline static;MSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)\..\..\src\burn\drv\taito;$(SolutionDir)\..\..\src\dep\generated;$(SolutionDir)\..\..\src\burner\libretro;$(SolutionDir)\..\..\src\burner;$(SolutionDir)\..\..\src\burn;$(SolutionDir)\..\..\src\burn\drv\pgm;$(SolutionDir)\..\..\src\burn\devices;$(SolutionDir)\..\..\src\burn\snd;$(SolutionDir)\..\..\src\cpu\;$(SolutionDir)\..\..\src\cpu\arm;$(SolutionDir)\..\..\src\cpu\arm7;$(SolutionDir)\..\..\src\cpu\h6280;$(SolutionDir)\..\..\src\cpu\hd6309;$(SolutionDir)\..\..\src\cpu\i8039;$(SolutionDir)\..\..\src\cpu\konami;$(SolutionDir)\..\..\src\cpu\m6502;$(SolutionDir)\..\..\src\cpu\m6800;$(SolutionDir)\..\..\src\cpu\m6805;$(SolutionDir)\..\..\src\cpu\m6809;$(SolutionDir)\..\..\src\cpu\m68k;$(SolutionDir)\..\..\src\cpu\nec;$(SolutionDir)\..\..\src\cpu\s2650;$(SolutionDir)\..\..\src\cpu\sh2;$(SolutionDir)\..\..\src\cpu\z80;$(SolutionDir)\..\..\src\intf\input;$(SolutionDir)\..\..\src\intf;$(SolutionDir)\..\..\src\dep\libs\zlib;$(SolutionDir)\..\..\src\intf\cd</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\develop\Github\xbox360\project\FBNeo\src\burner\libretro;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner\sdl;$(SolutionDir)..\..\src\burner\libretro\libretro-common\include;$(SolutionDir)..\..\src\intf\audio;$(SolutionDir)..\..\src\burn\drv\taito;$(SolutionDir)..\..\src\dep\generated;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner;$(SolutionDir)..\..\src\burn;$(SolutionDir)..\..\src\burn\drv\pgm;$(SolutionDir)..\..\src\burn\devices;$(SolutionDir)..\..\src\burn\snd;$(SolutionDir)..\..\src\cpu\;$(SolutionDir)..\..\src\cpu\arm;$(SolutionDir)..\..\src\cpu\arm7;$(SolutionDir)..\..\src\cpu\h6280;$(SolutionDir)..\..\src\cpu\hd6309;$(SolutionDir)..\..\src\cpu\i8039;$(SolutionDir)..\..\src\cpu\konami;$(SolutionDir)..\..\src\cpu\m6502;$(SolutionDir)..\..\src\cpu\m6800;$(SolutionDir)..\..\src\cpu\m6805;$(SolutionDir)..\..\src\cpu\m6809;$(SolutionDir)..\..\src\cpu\m68k;$(SolutionDir)..\..\src\cpu\nec;$(SolutionDir)..\..\src\cpu\s2650;$(SolutionDir)..\..\src\cpu\sh2;$(SolutionDir)..\..\src\cpu\z80;$(SolutionDir)..\..\src\intf\input;$(SolutionDir)..\..\src\intf;$(SolutionDir)..\..\src\dep\libs\zlib;$(SolutionDir)..\..\src\intf\cd</AdditionalIncludeDirectories>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;_XBOX;_XBOX360;LTCG;_LIB;%(PreprocessorDefinitions);USE_SPEEDHACKS;__LIBRETRO__;INLINE=__inline static;EXTERNAL_ZLIB;__fastcall=;MAME_INLINE=_inline static;MSB_FIRST;__LIBRETRO_OPTIMIZATIONS__;FRONTEND_SUPPORTS_RGB565</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>D:\develop\Github\xbox360\project\FBNeo\src\burner\libretro;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner\sdl;$(SolutionDir)..\..\src\burner\libretro\libretro-common\include;$(SolutionDir)..\..\src\intf\audio;$(SolutionDir)..\..\src\burn\drv\taito;$(SolutionDir)..\..\src\dep\generated;$(SolutionDir)..\..\src\burner\libretro;$(SolutionDir)..\..\src\burner;$(SolutionDir)..\..\src\burn;$(SolutionDir)..\..\src\burn\drv\pgm;$(SolutionDir)..\..\src\burn\devices;$(SolutionDir)..\..\src\burn\snd;$(SolutionDir)..\..\src\cpu\;$(SolutionDir)..\..\src\cpu\arm;$(SolutionDir)..\..\src\cpu\arm7;$(SolutionDir)..\..\src\cpu\h6280;$(SolutionDir)..\..\src\cpu\hd6309;$(SolutionDir)..\..\src\cpu\i8039;$(SolutionDir)..\..\src\cpu\konami;$(SolutionDir)..\..\src\cpu\m6502;$(SolutionDir)..\..\src\cpu\m6800;$(SolutionDir)..\..\src\cpu\m6805;$(SolutionDir)..\..\src\cpu\m6809;$(SolutionDir)..\..\src\cpu\m68k;$(SolutionDir)..\..\src\cpu\nec;$(SolutionDir)..\..\src\cpu\s2650;$(SolutionDir)..\..\src\cpu\sh2;$(SolutionDir)..\..\src\cpu\z80;$(SolutionDir)..\..\src\intf\input;$(SolutionDir)..\..\src\intf;$(SolutionDir)..\..\src\dep\libs\zlib;$(SolutionDir)..\..\src\intf\cd</AdditionalIncludeDirectories>
       <IntrinsicFunctions>true</IntrinsicFunctions>
     </ClCompile>
     <Link>

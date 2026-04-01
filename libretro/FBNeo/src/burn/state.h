@@ -4,12 +4,12 @@
  extern "C" {
 #endif
 
-#if !defined(__cplusplus) && defined(_XBOX)
-#define C_INLINE _inline
-#else
 #ifndef C_INLINE
-#define C_INLINE inline
-#endif
+  #if defined(_MSC_VER)
+    #define C_INLINE __inline
+  #else
+    #define C_INLINE inline
+  #endif
 #endif
 
 /* Scan driver data */

@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <string/stdstring.h>
-#include <ugui.h>
+#include <ugui_tools.h>
 #include <stdio.h>
 
 #define UGUI_MAX_OBJECTS 2

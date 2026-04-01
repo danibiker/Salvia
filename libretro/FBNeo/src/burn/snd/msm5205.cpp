@@ -22,6 +22,7 @@
 #include "msm5205.h"
 #include "math.h"
 #include "biquad.h"
+#define round(x) ((x) >= 0 ? (int)((x) + 0.5) : (int)((x) - 0.5))
 
 #define MAX_MSM5205	2
 
