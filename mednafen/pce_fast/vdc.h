@@ -1,0 +1,175 @@
+#ifndef _PCE_VDC_H
+#define _PCE_VDC_H
+
+#include "../git.h"
+
+#include "huc6280.h"
+
+#define REGSETP(_reg, _data, _msb) { _reg &= 0xFF << ((_msb) ? 0 : 8); _reg |= (_data) << ((_msb) ? 8 : 0); }
+#define REGGETP(_reg, _msb) ((_reg >> ((_msb) ? 8 : 0)) & 0xFF)
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+static const uint8 vram_inc_tab[4] = { 1, 32, 64, 128 };
+
+typedef struct
+{
+   uint8 priority[2];
+   uint16 winwidths[2];
+   uint8 st_mode;
+} vpc_t;
+
+extern vpc_t vpc;
+
+static const int VRAM_Size = 0x8000;
+static const int VRAM_SizeMask = 0x8000 - 1; //0x7FFF;
+static const int VRAM_BGTileNoMask = (0x8000 - 1) / 16; //0x7FF;
+
+typedef struct
+{
+   uint8 CR;
+
+   bool lc263;    // 263 line count if set, 262 if not
+   bool bw;       // Black and White
+   uint8 dot_clock; // Dot Clock(5, 7, or 10 MHz = 0, 1, 2)
+   uint16 color_table[0x200];
+   uint16 color_table_cache[0x200];
+   uint16 ctaddress;
+} vce_t;
+
+extern vce_t vce;
+
+typedef struct
+{
+   int16 y;
+   uint16 height;
+   uint16 x;
+   uint16 no;
+   uint16 flags;
+   bool cgmode;
+} SAT_Cache_t;
+
+typedef struct
+{
+   uint32 display_counter;
+
+   int32 sat_dma_slcounter;
+
+   uint8 select;
+   uint16 MAWR;    // Memory Address Write Register
+   uint16 MARR;    // Memory Address Read Register
+
+   uint16 CR;      // Control Register
+   uint16 RCR;     // Raster Compare Register
+   uint16 BXR;     // Background X-Scroll Register
+   uint16 BYR;     // Background Y-Scroll Register
+   uint16 MWR;     // Memory Width Register
+
+   uint16 HSR;     // Horizontal Sync Register
+   uint16 HDR;     // Horizontal Display Register
+   uint16 VSR;
+   uint16 VDR;
+
+   uint16 VCR;
+   uint16 DCR;
+   uint16 SOUR;
+   uint16 DESR;
+   uint16 LENR;
+   uint16 SATB;
+
+   uint32 RCRCount;
+
+   uint16 read_buffer;
+   uint8 write_latch;
+   uint8 status;
+
+   uint16 DMAReadBuffer;
+   bool DMAReadWrite;
+   bool DMARunning;
+   bool SATBPending;
+   bool burst_mode;
+
+   uint32 BG_YOffset;
+   uint32 BG_XOffset;
+
+
+
+   int SAT_Cache_Valid;          // 64 through 128, depending on the number of 32-pixel-wide sprites.
+   SAT_Cache_t SAT_Cache[128];     //64];
+
+   uint16 SAT[0x100];
+
+   uint16 VRAM[65536];	//VRAM_Size];
+   uint64 bg_tile_cache[4096 * 8]; 	// Tile, y, x
+   uint8 spr_tile_cache[1024][16][16];	// Tile, y, x
+   uint8 spr_tile_clean[1024];     //VRAM_Size / 64];
+} vdc_t;
+
+extern vdc_t *vdc;
+
+void VDC_SetPixelFormat(const uint8* CustomColorMap, const uint32 CustomColorMapLen);
+void VDC_RunFrame(EmulateSpecStruct *espec, bool IsHES);
+void VDC_SetLayerEnableMask(uint64 mask);
+
+DECLFW(VDC_Write);
+
+DECLFR(VCE_Read);
+
+static INLINE uint8 VDC_Read(unsigned int A)
+{
+   uint8 ret = 0;
+   int msb = A & 1;
+   int chip = 0;
+
+   A &= 0x3;
+
+   switch(A)
+   {
+      case 0x0:
+         ret = vdc->status;
+         vdc->status &= ~0x3F;
+
+         HuC6280_IRQEnd(MDFN_IQIRQ1); // Clear VDC IRQ line
+
+         break;
+
+      case 0x2:
+      case 0x3:
+         ret = REGGETP(vdc->read_buffer, msb);
+         if(vdc->select == 0x2) // VRR - VRAM Read Register
+         {
+            if(msb)
+            {
+               vdc->MARR += vram_inc_tab[(vdc->CR >> 11) & 0x3];
+               vdc->read_buffer = vdc->VRAM[vdc->MARR & VRAM_SizeMask];
+            }
+         }
+         break;
+   }
+
+   if(A == 1)
+   {
+      if(vce.dot_clock > 0)
+         ret = 0x40;
+   }
+   return(ret);
+}
+
+DECLFW(VCE_Write);
+
+void VDC_Init(void) MDFN_COLD;
+void VDC_Close(void) MDFN_COLD;
+void VDC_Reset(void) MDFN_COLD;
+void VDC_Power(void) MDFN_COLD;
+
+int VDC_StateAction(StateMem *sm, int load, int data_only);
+
+void MDFN_FASTCALL VDC_Write_ST(uint32 A, uint8 V);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
