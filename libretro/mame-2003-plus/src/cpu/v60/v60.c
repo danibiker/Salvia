@@ -336,7 +336,10 @@ static UINT32 f2u(float f)
 UINT32 opUNHANDLED(void)
 {
 	log_cb(RETRO_LOG_DEBUG, LOGPRE "Unhandled OpCode found : %02x at %08x\n", OpRead16(PC), PC);
+#ifndef _XBOX
 	abort();
+#endif
+	return 0; 
 }
 
 /* Opcode jump table*/

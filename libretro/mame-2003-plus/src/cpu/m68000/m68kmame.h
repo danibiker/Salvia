@@ -43,8 +43,11 @@
 
 #define M68K_EMULATE_ADDRESS_ERROR  OPT_OFF
 
-#define M68K_USE_64_BIT             OPT_OFF
-
+#ifdef _XBOX
+#define M68K_USE_64_BIT             OPT_ON
+#else 
+#define M68K_USE_64_BIT             OPT_ON
+#endif
 
 #define m68ki_remaining_cycles m68k_ICount
 

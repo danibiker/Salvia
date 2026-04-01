@@ -34,6 +34,10 @@
 #include <stddef.h>
 #include <limits.h>
 
+#ifndef LOGPRE
+#define LOGPRE          "[MAME 2003+] "
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

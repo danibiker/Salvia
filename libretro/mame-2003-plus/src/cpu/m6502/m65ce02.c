@@ -6,7 +6,7 @@
  *	 Copyright (c) 2000 Peter Trauner, all rights reserved
  *   documentation preliminary databook
  *	 documentation by michael steil mist@c64.org
- *	 available at ftp:/*ftp.funet.fi/pub/cbm/c65*/
+ *	 available at ftp:ftp.funet.fi/pub/cbm/c65/
  *
  *	 - This source code is released as freeware for non-commercial purposes.
  *	 - You are free to use and redistribute this code in modified or
@@ -311,7 +311,7 @@ void m65ce02_set_irq_callback(int (*callback)(int))
 {
 	m65ce02.irq_callback = callback;
 }
-
+#if 0
 void m65ce02_state_save(void *file)
 {
 	int cpu = cpu_getactivecpu();
@@ -347,6 +347,7 @@ void m65ce02_state_load(void *file)
 	state_load_UINT8(file,"m65ce02",cpu,"NMI_STATE",&m65ce02.nmi_state,1);
 	state_load_UINT8(file,"m65ce02",cpu,"IRQ_STATE",&m65ce02.irq_state,1);
 }
+#endif
 
 /****************************************************************************
  * Return a formatted string for a register

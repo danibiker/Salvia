@@ -31,7 +31,7 @@
 #ifndef __RARCH_STDINT_H
 #define __RARCH_STDINT_H
 
-#if _MSC_VER && (_MSC_VER < 1600)
+#if _MSC_VER && (_MSC_VER <= 1600)
 /* Pre-MSVC 2010 needs an implementation of stdint.h. */
 
 #if _MSC_VER > 1000

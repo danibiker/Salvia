@@ -895,7 +895,7 @@ static void SCSP_DoMasterSamples(int chip, int nsamples)
 
 static void dma_scsp()
 {
-	static UINT16 tmp_dma[2], *scsp_regs;
+	static UINT16 tmp_dma[3], *scsp_regs;
 
 	scsp_regs = (UINT16 *)SCSP->udata.datab;
 

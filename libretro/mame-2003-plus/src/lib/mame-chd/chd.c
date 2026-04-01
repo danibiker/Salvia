@@ -70,6 +70,41 @@
 #endif
 
 
+const char *chd_error_string(chd_error err)
+{
+	switch (err)
+	{
+		case CHDERR_NONE:						return "no error";
+		case CHDERR_NO_INTERFACE:				return "no drive interface";
+		case CHDERR_OUT_OF_MEMORY:				return "out of memory";
+		case CHDERR_INVALID_FILE:				return "invalid file";
+		case CHDERR_INVALID_PARAMETER:			return "invalid parameter";
+		case CHDERR_INVALID_DATA:				return "invalid data";
+		case CHDERR_FILE_NOT_FOUND:				return "file not found";
+		case CHDERR_REQUIRES_PARENT:			return "requires parent";
+		case CHDERR_FILE_NOT_WRITEABLE:			return "file not writeable";
+		case CHDERR_READ_ERROR:					return "read error";
+		case CHDERR_WRITE_ERROR:				return "write error";
+		case CHDERR_CODEC_ERROR:				return "codec error";
+		case CHDERR_INVALID_PARENT:				return "invalid parent";
+		case CHDERR_HUNK_OUT_OF_RANGE:			return "hunk out of range";
+		case CHDERR_DECOMPRESSION_ERROR:		return "decompression error";
+		case CHDERR_COMPRESSION_ERROR:			return "compression error";
+		case CHDERR_CANT_CREATE_FILE:			return "can't create file";
+		case CHDERR_CANT_VERIFY:				return "can't verify file";
+		case CHDERR_NOT_SUPPORTED:				return "operation not supported";
+		case CHDERR_METADATA_NOT_FOUND:			return "can't find metadata";
+		case CHDERR_INVALID_METADATA_SIZE:		return "invalid metadata size";
+		case CHDERR_UNSUPPORTED_VERSION:		return "unsupported CHD version";
+		/*case CHDERR_VERIFY_INCOMPLETE:			return "incomplete verify";
+		case CHDERR_INVALID_METADATA:			return "invalid metadata";
+		case CHDERR_INVALID_STATE:				return "invalid state";
+		case CHDERR_OPERATION_PENDING:			return "operation pending";
+		case CHDERR_NO_ASYNC_OPERATION:			return "no async operation in progress";
+		case CHDERR_UNSUPPORTED_FORMAT:			return "unsupported format";*/
+		default:								return "undocumented error";
+	}
+}
 
 /*************************************
  *

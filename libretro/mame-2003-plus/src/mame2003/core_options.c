@@ -126,7 +126,7 @@ static struct retro_core_option_v2_definition option_def_skip_disclaimer = {
       { "enabled",  NULL },
       { NULL, NULL },
    },
-   "disabled"
+   "enabled"
 };
 
 static struct retro_core_option_v2_definition option_def_skip_warnings = {

@@ -6,7 +6,7 @@
  *	 Copyright (c) 2000 Peter Trauner, all rights reserved.
  *   documentation preliminary databook
  *	 documentation by michael steil mist@c64.org
- *	 available at ftp:/*ftp.funet.fi/pub/cbm/c65*/
+ *	 available at ftp:ftp.funet.fi/pub/cbm/c65
  *
  *	 - This source code is released as freeware for non-commercial purposes.
  *	 - You are free to use and redistribute this code in modified or
@@ -92,3 +92,4 @@
 				UINT8 op = RDOP();								\
 				(*m65ce02.insn[op])();							\
  } \
+

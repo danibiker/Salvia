@@ -8027,6 +8027,10 @@ static UINT32 cpu1_second_bankaddress;
 void neogeo_set_cpu1_second_bank(UINT32 bankaddress)
 {
 	data8_t *RAM = memory_region(REGION_CPU1);
+	UINT32 rom_size = memory_region_length(REGION_CPU1);
+
+	if (bankaddress >= rom_size)
+		bankaddress = rom_size - 0x100000;
 
 	cpu1_second_bankaddress = bankaddress;
 	cpu_setbank(4,&RAM[bankaddress]);

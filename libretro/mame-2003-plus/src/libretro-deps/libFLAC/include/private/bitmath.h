@@ -40,7 +40,23 @@
 #include "share/compat.h"
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1400)
+#ifdef _XBOX
+#include <ppcintrinsics.h>
+    // En lugar de redefinir _BitScanReverse, creamos macros o funciones con nombres únicos
+    // para que FLAC__clz_uint32 pueda usarlas sin conflicto.
+    #ifndef BITSCAN_XBOX_DEFINED
+    #define BITSCAN_XBOX_DEFINED
+    
+    static __inline unsigned int Xbox_BitScanReverse(unsigned long v) {
+        // _CountLeadingZeros es el intrínseco nativo de PPC (cntlzw)
+        return 31U - _CountLeadingZeros(v);
+    }
+    #endif
+    // Luego, modifica o sobrecarga la función de FLAC para usar esta versión
+    #define _BitScanReverse_XBOX_WORKAROUND(idx, v) (*(idx) = Xbox_BitScanReverse(v), 1)
+#else
 #include <intrin.h> /* for _BitScanReverse* */
+#endif
 #endif
 
 #include <retro_inline.h>
@@ -84,7 +100,11 @@ static INLINE unsigned int FLAC__clz_uint32(FLAC__uint32 v)
     return __builtin_clz(v);
 #elif defined(_MSC_VER) && (_MSC_VER >= 1400)
     unsigned long idx;
+#ifdef _XBOX
+	_BitScanReverse_XBOX_WORKAROUND(&idx, v);
+#else
     _BitScanReverse(&idx, v);
+#endif
     return idx ^ 31U;
 #else
     return FLAC__clz_soft_uint32(v);
@@ -128,7 +148,11 @@ static INLINE unsigned FLAC__bitmath_ilog2(FLAC__uint32 v)
     return _bit_scan_reverse(v);
 #elif defined(_MSC_VER) && (_MSC_VER >= 1400)
     unsigned long idx;
+    #ifdef _XBOX
+	_BitScanReverse_XBOX_WORKAROUND(&idx, v);
+#else
     _BitScanReverse(&idx, v);
+#endif
     return idx;
 #else
     return sizeof(FLAC__uint32) * CHAR_BIT  - 1 - FLAC__clz_uint32(v);

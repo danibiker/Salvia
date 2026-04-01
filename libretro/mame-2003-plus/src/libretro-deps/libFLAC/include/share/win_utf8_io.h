@@ -41,7 +41,12 @@ extern "C" {
 #include <stdio.h>
 #include <sys/stat.h>
 #include <stdarg.h>
+#ifdef _XBOX
+#include <xtl.h>
+#else
 #include <windows.h>
+#endif
+
 
 int get_utf8_argv(int *argc, char ***argv);
 

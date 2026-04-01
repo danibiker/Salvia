@@ -20,6 +20,25 @@
  *
  *****************************************************************************/
 
+#ifndef M6502_NMI_VEC
+#define M6502_NMI_VEC	0xfffa
+#endif
+#ifndef M6502_RST_VEC
+#define M6502_RST_VEC	0xfffc
+#endif
+#ifndef M6502_IRQ_VEC
+#define M6502_IRQ_VEC	0xfffe
+#endif
+#ifndef M65CE02_RST_VEC
+#define M65CE02_RST_VEC 0xfffc
+#endif
+#ifndef M65CE02_IRQ_VEC
+#define M65CE02_IRQ_VEC 0xfffe
+#endif
+#ifndef M65CE02_NMI_VEC
+#define M65CE02_NMI_VEC 0xfffa
+#endif
+
 /* 6502 flags */
 #define F_C 0x01
 #define F_Z 0x02

@@ -1388,6 +1388,21 @@ void decrypt_kf2k5uni(void)
 	kf2k5uni_mx_decrypt();
 }
 
+#ifdef MSB_FIRST
+/* Swap bytes within 16-bit words so byte-level decrypt code
+   (designed for little-endian hosts) sees the same layout. */
+static void byte_swap_16(UINT8 *buf, int size)
+{
+	int i;
+	for (i = 0; i < size; i += 2)
+	{
+		UINT8 tmp = buf[i];
+		buf[i] = buf[i + 1];
+		buf[i + 1] = tmp;
+	}
+}
+#endif
+
 void kof2003_decrypt_68k( void )
 {
 	static const unsigned char xor1[0x20] = { 0x3B, 0x6A, 0xF7, 0xB7, 0xE8, 0xA9, 0x20, 0x99, 0x9F, 0x39, 0x34, 0x0C, 0xC3, 0x9A, 0xA5, 0xC8, 0xB8, 0x18, 0xCE, 0x56, 0x94, 0x44, 0xE3, 0x7A, 0xF7, 0xDD, 0x42, 0xF0, 0x18, 0x60, 0x92, 0x9F };
@@ -1397,6 +1412,10 @@ void kof2003_decrypt_68k( void )
 	int rom_size = 0x900000;
 	UINT8 *rom = memory_region( REGION_CPU1 );
 	UINT8 *buf = malloc( rom_size );
+
+#ifdef MSB_FIRST
+	byte_swap_16(rom, rom_size);
+#endif
 
 	for (i = 0; i < 0x100000; i++)
 	{
@@ -1412,8 +1431,10 @@ void kof2003_decrypt_68k( void )
 	}
 	for( i = 0x100000; i < 0x800000; i += 4)
 	{
-		UINT16 *rom16 = (UINT16*)&rom[i + 1];
-		*rom16 = BITSWAP16( *rom16, 15, 14, 13, 12, 5, 4, 7, 6, 9, 8, 11, 10, 3, 2, 1, 0 );
+		UINT16 val = rom[i + 1] | (rom[i + 2] << 8);
+		val = BITSWAP16( val, 15, 14, 13, 12, 5, 4, 7, 6, 9, 8, 11, 10, 3, 2, 1, 0 );
+		rom[i + 1] = val & 0xff;
+		rom[i + 2] = (val >> 8) & 0xff;
 	}
 	for( i = 0; i < 0x0100000 / 0x10000; i++ )
 	{
@@ -1429,6 +1450,10 @@ void kof2003_decrypt_68k( void )
 	memcpy (&rom[0x100000], &buf[0x800000], 0x100000);
 	memcpy (&rom[0x200000], &buf[0x100000], 0x700000);
 	free( buf );
+
+#ifdef MSB_FIRST
+	byte_swap_16(rom, rom_size);
+#endif
 }
 
 static unsigned short CartRAM[0x1000];
@@ -2208,13 +2233,19 @@ void kof2003_px_decrypt( void )
 
 	rom = memory_region( REGION_CPU1 );
 
+#ifdef MSB_FIRST
+	byte_swap_16(rom, 0x900000);
+#endif
+
 	for( i = 0x100000; i < 0x800000; i++ ){
 		rom[ i ] ^= xor2[ (i % 0x20) ];
 	}
 
 	for( i = 0x100000; i < 0x800000; i += 4 ){
-		UINT16 *rom16 = (UINT16*)&rom[ i + 1 ];
-		*rom16 = BITSWAP16( *rom16, 15, 14, 13, 12, 4, 5, 6, 7, 8, 9, 10, 11, 3, 2, 1, 0 );
+		UINT16 val = rom[ i + 1 ] | (rom[ i + 2 ] << 8);
+		val = BITSWAP16( val, 15, 14, 13, 12, 4, 5, 6, 7, 8, 9, 10, 11, 3, 2, 1, 0 );
+		rom[ i + 1 ] = val & 0xff;
+		rom[ i + 2 ] = (val >> 8) & 0xff;
 	}
 
 	buf = malloc( 0x800000 );
@@ -2242,6 +2273,10 @@ void kof2003_px_decrypt( void )
 	memcpy( &rom[0x200000], &buf[0x100000], 0x700000 );
 
 	free(buf);
+
+#ifdef MSB_FIRST
+	byte_swap_16(rom, 0x900000);
+#endif
 }
 
 void kof2003_sx_decrypt( void )
@@ -2281,6 +2316,10 @@ void kf2k3pcb_decrypt_68k( void )
 	UINT8 *rom = memory_region( REGION_CPU1 );
 	UINT8 *buf = malloc( rom_size );
 
+#ifdef MSB_FIRST
+	byte_swap_16(rom, rom_size);
+#endif
+
 	for (i = 0; i < 0x100000; i++)
 	{
 		rom[ 0x800000 + i ] ^= rom[ 0x100002 | i ];
@@ -2291,8 +2330,10 @@ void kf2k3pcb_decrypt_68k( void )
 	}
 	for( i = 0x100000; i < 0x800000; i += 4 )
 	{
-		UINT16 *rom16 = (UINT16*)&rom[ i + 1 ];
-		*rom16 = BITSWAP16( *rom16, 15, 14, 13, 12, 4, 5, 6, 7, 8, 9, 10, 11, 3, 2, 1, 0 );
+		UINT16 val = rom[ i + 1 ] | (rom[ i + 2 ] << 8);
+		val = BITSWAP16( val, 15, 14, 13, 12, 4, 5, 6, 7, 8, 9, 10, 11, 3, 2, 1, 0 );
+		rom[ i + 1 ] = val & 0xff;
+		rom[ i + 2 ] = (val >> 8) & 0xff;
 	}
 	for( i = 0; i < 0x0100000 / 0x10000; i++ )
 	{
@@ -2308,6 +2349,10 @@ void kf2k3pcb_decrypt_68k( void )
 	memcpy (&rom[0x100000], &buf[0x800000], 0x100000);
 	memcpy (&rom[0x200000], &buf[0x100000], 0x700000);
 	free( buf );
+
+#ifdef MSB_FIRST
+	byte_swap_16(rom, rom_size);
+#endif
 }
 
 void kf2k3pcb_gfx_decrypt( void )
@@ -2325,8 +2370,12 @@ void kf2k3pcb_gfx_decrypt( void )
 	}
 	for ( i = 0; i < rom_size; i+=4 )
 	{
-		UINT32 *rom32 = (UINT32*)&rom[ i ];
-		*rom32 = BITSWAP32( *rom32, 0x09, 0x0d, 0x13, 0x00, 0x17, 0x0f, 0x03, 0x05, 0x04, 0x0c, 0x11, 0x1e, 0x12, 0x15, 0x0b, 0x06, 0x1b, 0x0a, 0x1a, 0x1c, 0x14, 0x02, 0x0e, 0x1d, 0x18, 0x08, 0x01, 0x10, 0x19, 0x1f, 0x07, 0x16 );
+		UINT32 val = rom[ i ] | (rom[ i + 1 ] << 8) | (rom[ i + 2 ] << 16) | (rom[ i + 3 ] << 24);
+		val = BITSWAP32( val, 0x09, 0x0d, 0x13, 0x00, 0x17, 0x0f, 0x03, 0x05, 0x04, 0x0c, 0x11, 0x1e, 0x12, 0x15, 0x0b, 0x06, 0x1b, 0x0a, 0x1a, 0x1c, 0x14, 0x02, 0x0e, 0x1d, 0x18, 0x08, 0x01, 0x10, 0x19, 0x1f, 0x07, 0x16 );
+		rom[ i ] = val & 0xff;
+		rom[ i + 1 ] = (val >> 8) & 0xff;
+		rom[ i + 2 ] = (val >> 16) & 0xff;
+		rom[ i + 3 ] = (val >> 24) & 0xff;
 	}
 	memcpy( buf, rom, rom_size );
 	for ( i = 0; i < rom_size; i+=4 )
@@ -2434,6 +2483,10 @@ void svcchaos_px_decrypt( void )
 
 	rom = memory_region( REGION_CPU1 );
 
+#ifdef MSB_FIRST
+	byte_swap_16(rom, 0x800000);
+#endif
+
 	for( i = 0; i < 0x100000; i++ ){
 		rom[ i ] ^= xor1[ (i % 0x20) ];
 	}
@@ -2443,8 +2496,10 @@ void svcchaos_px_decrypt( void )
 	}
 
 	for( i = 0x100000; i < 0x800000; i += 4 ){
-		UINT16 *rom16 = (UINT16*)&rom[ i + 1 ];
-		*rom16 = BITSWAP16( *rom16, 15, 14, 13, 12, 10, 11, 8, 9, 6, 7, 4, 5, 3, 2, 1, 0 );
+		UINT16 val = rom[ i + 1 ] | (rom[ i + 2 ] << 8);
+		val = BITSWAP16( val, 15, 14, 13, 12, 10, 11, 8, 9, 6, 7, 4, 5, 3, 2, 1, 0 );
+		rom[ i + 1 ] = val & 0xff;
+		rom[ i + 2 ] = (val >> 8) & 0xff;
 	}
 
 	buf = malloc( 0x800000 );
@@ -2470,6 +2525,10 @@ void svcchaos_px_decrypt( void )
 	memcpy( &rom[ 0x100000 ], &buf[ 0x700000 ], 0x100000 );
 	memcpy( &rom[ 0x200000 ], &buf[ 0x100000 ], 0x600000 );
 	free( buf );
+
+#ifdef MSB_FIRST
+	byte_swap_16(rom, 0x800000);
+#endif
 }
 
 void svcchaos_vx_decrypt( void )
@@ -2517,8 +2576,12 @@ void svcpcb_gfx_decrypt( void )
 	}
 	for( i = 0; i < rom_size; i += 4 )
 	{
-		UINT32 *rom32 = (UINT32*)&rom[ i ];
-		*rom32 = BITSWAP32( *rom32, 0x09, 0x0d, 0x13, 0x00, 0x17, 0x0f, 0x03, 0x05, 0x04, 0x0c, 0x11, 0x1e, 0x12, 0x15, 0x0b, 0x06, 0x1b, 0x0a, 0x1a, 0x1c, 0x14, 0x02, 0x0e, 0x1d, 0x18, 0x08, 0x01, 0x10, 0x19, 0x1f, 0x07, 0x16 );
+		UINT32 val = rom[ i ] | (rom[ i + 1 ] << 8) | (rom[ i + 2 ] << 16) | (rom[ i + 3 ] << 24);
+		val = BITSWAP32( val, 0x09, 0x0d, 0x13, 0x00, 0x17, 0x0f, 0x03, 0x05, 0x04, 0x0c, 0x11, 0x1e, 0x12, 0x15, 0x0b, 0x06, 0x1b, 0x0a, 0x1a, 0x1c, 0x14, 0x02, 0x0e, 0x1d, 0x18, 0x08, 0x01, 0x10, 0x19, 0x1f, 0x07, 0x16 );
+		rom[ i ] = val & 0xff;
+		rom[ i + 1 ] = (val >> 8) & 0xff;
+		rom[ i + 2 ] = (val >> 16) & 0xff;
+		rom[ i + 3 ] = (val >> 24) & 0xff;
 	}
 	memcpy( buf, rom, rom_size );
 	for( i = 0; i < rom_size / 4; i++ )

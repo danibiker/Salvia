@@ -103,7 +103,9 @@
 #define HARD_DISK_STANDARD_METADATA	0x47444444
 #define HARD_DISK_METADATA_FORMAT	"CYLS:%d,HEADS:%d,SECS:%d,BPS:%d"
 
-enum
+
+
+enum _chd_error
 {
 	CHDERR_NONE = 0,
 	CHDERR_NO_INTERFACE,
@@ -129,6 +131,10 @@ enum
 	CHDERR_UNSUPPORTED_VERSION
 };
 
+typedef enum _chd_error chd_error;
+
+/* return an error string for the given CHD error */
+const char *chd_error_string(chd_error err);
 
 
 

@@ -6,7 +6,7 @@
  *	 Copyright (c) 2000 Peter Trauner, all rights reserved
  *   documentation preliminary databook
  *	 documentation by michael steil mist@c64.org
- *	 available at ftp:/*ftp.funet.fi/pub/cbm/c65*/
+ *	 available at ftp:ftp.funet.fi/pub/cbm/c65
  *
  *	 - This source code is released as freeware for non-commercial purposes.
  *	 - You are free to use and redistribute this code in modified or
@@ -333,7 +333,7 @@ static INLINE void m4510_take_irq(void)
 		P = (P & ~F_D) | F_I;		/* knock out D and set I flag */
 		PCL = RDMEM(EAD);
 		PCH = RDMEM(EAD+1);
-		log_cb(RETRO_LOG_DEBUG, LOGPRE errorlog,"M4510#%d takes IRQ ($%04x)\n", cpu_getactivecpu(), PCD);
+		log_cb(RETRO_LOG_DEBUG, LOGPRE,"M4510#%d takes IRQ ($%04x)\n", cpu_getactivecpu(), PCD);
 		/* call back the cpuintrf to let it clear the line */
 		if (m4510.irq_callback) (*m4510.irq_callback)(0);
 		CHANGE_PC;
@@ -364,16 +364,16 @@ int m4510_execute(int cycles)
 		/* check if the I flag was just reset (interrupts enabled) */
 		if( m4510.after_cli )
 		{
-			log_cb(RETRO_LOG_DEBUG, LOGPRE errorlog,"M4510#%d after_cli was >0", cpu_getactivecpu());
+			log_cb(RETRO_LOG_DEBUG, LOGPRE,"M4510#%d after_cli was >0", cpu_getactivecpu());
 			m4510.after_cli = 0;
 			if (m4510.irq_state != CLEAR_LINE)
 			{
-				log_cb(RETRO_LOG_DEBUG, LOGPRE errorlog,": irq line is asserted: set pending IRQ\n");
+				log_cb(RETRO_LOG_DEBUG, LOGPRE,": irq line is asserted: set pending IRQ\n");
 				m4510.pending_irq = 1;
 			}
 			else
 			{
-				log_cb(RETRO_LOG_DEBUG, LOGPRE errorlog,": irq line is clear\n");
+				log_cb(RETRO_LOG_DEBUG, LOGPRE,": irq line is clear\n");
 			}
 		}
 		else
@@ -393,7 +393,7 @@ void m4510_set_irq_line(int irqline, int state)
 		m4510.nmi_state = state;
 		if( state != CLEAR_LINE )
 		{
-			log_cb(RETRO_LOG_DEBUG, LOGPRE errorlog, "M4510#%d set_nmi_line(ASSERT)\n", cpu_getactivecpu());
+			log_cb(RETRO_LOG_DEBUG, LOGPRE, "M4510#%d set_nmi_line(ASSERT)\n", cpu_getactivecpu());
 			EAD = M4510_NMI_VEC;
 			m4510_ICount -= 7;
 			PUSH(PCH);
@@ -402,7 +402,7 @@ void m4510_set_irq_line(int irqline, int state)
 			P = (P & ~F_D) | F_I;		/* knock out D and set I flag */
 			PCL = RDMEM(EAD);
 			PCH = RDMEM(EAD+1);
-			log_cb(RETRO_LOG_DEBUG, LOGPRE errorlog,"M4510#%d takes NMI ($%04x)\n", cpu_getactivecpu(), PCD);
+			log_cb(RETRO_LOG_DEBUG, LOGPRE,"M4510#%d takes NMI ($%04x)\n", cpu_getactivecpu(), PCD);
 			CHANGE_PC;
 		}
 	}
@@ -411,7 +411,7 @@ void m4510_set_irq_line(int irqline, int state)
 		m4510.irq_state = state;
 		if( state != CLEAR_LINE )
 		{
-			log_cb(RETRO_LOG_DEBUG, LOGPRE errorlog, "M4510#%d set_irq_line(ASSERT)\n", cpu_getactivecpu());
+			log_cb(RETRO_LOG_DEBUG, LOGPRE, "M4510#%d set_irq_line(ASSERT)\n", cpu_getactivecpu());
 			m4510.pending_irq = 1;
 		}
 	}

@@ -1125,11 +1125,16 @@ READ16_HANDLER(sj_70001b_r)
 
 READ16_HANDLER(sj_70001c_r)
 {
-	int pc = (activecpu_get_pc());
-	
-	usrintf_showmessage( "%s %06x reading from sj_70001c_r\n ", Machine->gamedrv->name, pc);
-	if (strcmp(Machine->gamedrv->name, "songjang" ) ) return 0x31;
-	if (strcmp(Machine->gamedrv->name, "shuifeng" ) ) return 0x02;
+    int pc = (activecpu_get_pc());
+    
+    usrintf_showmessage("%s %06x reading from sj_70001c_r\n", Machine->gamedrv->name, pc);
+
+    // strcmp devuelve 0 si son IGUALES
+    if (strcmp(Machine->gamedrv->name, "songjang") == 0) return 0x31;
+    if (strcmp(Machine->gamedrv->name, "shuifeng") == 0) return 0x02;
+
+    // Valor por defecto para evitar el Warning C4715 y crashes
+    return 0x00; 
 }
 
 WRITE16_HANDLER(MWA16_MAIN_RAMNSHARE_W) { offset &=0x1effff; COMBINE_DATA( &main_ram[offset] ); }

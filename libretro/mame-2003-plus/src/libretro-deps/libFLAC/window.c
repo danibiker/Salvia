@@ -34,6 +34,7 @@
 #  include <config.h>
 #endif
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include "share/compat.h"
 #include "FLAC/assert.h"
