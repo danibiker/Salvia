@@ -40,7 +40,7 @@
 #define GREEN_SHIFT 5
 #define BLUE_SHIFT 0
 #define CONVERT_COLOR(color) ((((color & 0x1f) << 10) | (((color & 0x3e0) >> 5) << 5) | (((color & 0x7c00) >> 10))) & 0x7fff)
-#endif
+#endif                  
 
 #ifdef _MSC_VER
 #include <stdlib.h>

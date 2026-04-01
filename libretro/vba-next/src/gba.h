@@ -72,7 +72,11 @@ typedef union {
 #endif
 	} W;
 #ifdef MSB_FIRST
+	#ifdef _XBOX
+	uint32_t I;
+	#else 
 	volatile uint32_t I;
+	#endif
 #else
 	uint32_t I;
 #endif

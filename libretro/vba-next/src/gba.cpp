@@ -376,10 +376,20 @@ static u32 AlphaClampLUT[64] =
 extern int SWITicks;
 #endif
 static int cpuNextEvent = 0;
-static bool holdState = false;
+static int holdState = 0;
 static uint32_t cpuPrefetch[2];
 static int cpuTotalTicks = 0;
 
+#ifdef _XBOX
+static int memoryWait[16] =
+  { 0, 0, 2, 0, 0, 0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 0 };
+static int memoryWaitSeq[16] =
+  { 0, 0, 2, 0, 0, 0, 0, 0, 2, 2, 4, 4, 8, 8, 4, 0 };
+static int memoryWait32[16] =
+  { 0, 0, 5, 0, 0, 1, 1, 0, 7, 7, 9, 9, 13, 13, 4, 0 };
+static int memoryWaitSeq32[16] =
+  { 0, 0, 5, 0, 0, 1, 1, 0, 5, 5, 9, 9, 17, 17, 4, 0 };
+#else
 static uint8_t memoryWait[16] =
   { 0, 0, 2, 0, 0, 0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 0 };
 static uint8_t memoryWaitSeq[16] =
@@ -388,7 +398,7 @@ static uint8_t memoryWait32[16] =
   { 0, 0, 5, 0, 0, 1, 1, 0, 7, 7, 9, 9, 13, 13, 4, 0 };
 static uint8_t memoryWaitSeq32[16] =
   { 0, 0, 5, 0, 0, 1, 1, 0, 5, 5, 9, 9, 17, 17, 4, 0 };
-
+#endif
 const int table [0x40] =
 {
 		0xFF10,     0,0xFF11,0xFF12,0xFF13,0xFF14,     0,     0,
@@ -410,12 +420,22 @@ static uint8_t biosProtected[4];
 static uint8_t cpuBitsSet[256];
 
 static void CPUSwitchMode(int mode, bool saveState, bool breakLoop);
+#ifdef _XBOX
+static int N_FLAG = 0;
+static int C_FLAG = 0;
+static int Z_FLAG = 0;
+static int V_FLAG = 0;
+static int armState = 1;
+static int armIrqEnable = 1;
+#else
 static bool N_FLAG = 0;
 static bool C_FLAG = 0;
 static bool Z_FLAG = 0;
 static bool V_FLAG = 0;
 static bool armState = true;
 static bool armIrqEnable = true;
+#endif
+
 static int armMode = 0x1f;
 
 typedef enum
