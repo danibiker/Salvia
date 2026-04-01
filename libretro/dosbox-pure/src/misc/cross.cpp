@@ -146,16 +146,28 @@ std::string& Cross::MakePathAbsolute(std::string& str)
 {
 	size_t strsz = str.size();
 	#ifdef WIN32
+    // 1. Detectar si ya es absoluta (incluye el prefijo 'game:\' de Xbox)
 	if (strsz > 2 && (str[1] == ':' || (str[0]=='\\' && str[1]=='\\'))) return str;
+
+    #ifdef _XBOX
+    // 2. En Xbox 360, el "Directorio Actual" es siempre la raíz del juego
+    const char* xbox_prefix = "game:\\";
+    str.insert(0, xbox_prefix);
+    return str;
+    #else
+    // Código original para Windows PC
 	wchar_t buf[512]; UINT cp; int len;
-	GetCurrentDirectoryW(512, buf);
+	if (!GetCurrentDirectoryW(512, buf)) return str; // Añadido check de seguridad
 	if ((len = WideCharToMultiByte(CP_UTF8, 0, buf, -1, NULL, 0, NULL, NULL)) > 0) cp = CP_UTF8;
-	else if ((len = WideCharToMultiByte((cp = CP_ACP), 0, buf, -1, NULL, 0, NULL, NULL)) <= 0) return str; // fall back to ANSI codepage
-	str.insert(0, len, ' '); // len includes \0 terminator
+	else if ((len = WideCharToMultiByte((cp = CP_ACP), 0, buf, -1, NULL, 0, NULL, NULL)) <= 0) return str;
+	str.insert(0, len, ' ');
 	WideCharToMultiByte(cp, 0, buf, -1, &str[0], len, NULL, NULL);
-	if (strsz) str[len - 1] = '\\'; // swap \0 to path separator
-	else str.resize(len - 1); // truncate without \0 terminator
+	if (strsz) str[len - 1] = '\\';
+	else str.resize(len - 1);
+    #endif
+
 	#else
+    // Código para POSIX (Linux/Android/etc)
 	if (strsz > 1 && str[0] == '/' ) return str;
 	char buf[512];
 	if (!getcwd(buf, 510)) return str;

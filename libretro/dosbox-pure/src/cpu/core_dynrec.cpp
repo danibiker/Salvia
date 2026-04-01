@@ -28,7 +28,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-#if defined (WIN32)
+#if defined (WIN32) && !defined(_XBOX)
 #include <windows.h>
 #include <winbase.h>
 #endif

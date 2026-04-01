@@ -705,17 +705,13 @@ static void cache_init(bool enable) {
 		if (cache_code_start_ptr==NULL) {
 			// allocate the code cache memory
 #if defined(_XBOX)
-			// Xbox 360: Use a static buffer for the code cache.
-			// The .bss section is NOT executable by default, so we must call
-			// XPhysicalProtect to grant execute permission after allocation.
+			// Xbox 360: Use a static buffer inside the executable image.
+			// The .xex loader maps code sections with execute permission, so a static
+			// array in the binary is already executable — no XPhysicalAlloc needed.
+			// (Same technique used by PCSX-R 360's dynarec)
 			{
 				static __declspec(align(4096)) Bit8u xbox_dynrec_cache[CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP];
 				cache_code_start_ptr = xbox_dynrec_cache;
-				// Make the code cache executable
-				DWORD protect_size = CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP;
-				XPhysicalProtect(cache_code_start_ptr, protect_size, PAGE_EXECUTE_READWRITE);
-				LOG_MSG("DYNREC: Code cache at %p, size %u, XPhysicalProtect=%s",
-					cache_code_start_ptr, (unsigned)protect_size, "OK");
 			}
 #elif defined (WIN32)
 			cache_code_start_ptr=(Bit8u*)VirtualAlloc(0,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP,

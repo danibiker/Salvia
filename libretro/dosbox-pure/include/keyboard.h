@@ -48,7 +48,7 @@ enum KBD_KEYS {
 };
 
 // DBP: Added for syncing host LEDs (and states) with DOSBox
-enum KBD_LEDS : Bit8u {
+enum KBD_LEDS {
 	KLED_SCROLLLOCK = 0x01,
 	KLED_NUMLOCK = 0x02,
 	KLED_CAPSLOCK = 0x04,

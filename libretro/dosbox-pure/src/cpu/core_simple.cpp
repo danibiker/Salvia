@@ -33,13 +33,15 @@
 
 #include "paging.h"
 #define SegBase(c)	SegPhys(c)
-#define LoadMb(off) mem_readb(off)
-#define LoadMw(off) mem_readw(off)
-#define LoadMd(off) mem_readd(off)
+/* Use inline versions directly to avoid function call overhead in the hot loop.
+   With LTCG this may not matter, but it guarantees inlining regardless of compiler decisions. */
+#define LoadMb(off) mem_readb_inline(off)
+#define LoadMw(off) mem_readw_inline(off)
+#define LoadMd(off) mem_readd_inline(off)
 
-#define SaveMb(off,val)	mem_writeb(off,val)
-#define SaveMw(off,val)	mem_writew(off,val)
-#define SaveMd(off,val)	mem_writed(off,val)
+#define SaveMb(off,val)	mem_writeb_inline(off,val)
+#define SaveMw(off,val)	mem_writew_inline(off,val)
+#define SaveMd(off,val)	mem_writed_inline(off,val)
 
 #if C_MMX
 #include "mmx.h"
@@ -91,11 +93,7 @@ static const Bit32u AddrMaskTable[2]={0x0000ffff,0xffffffff};
 
 static struct {
 	Bitu opcode_index;
-#if defined (_MSC_VER)
-	volatile HostPt cseip;
-#else
 	HostPt cseip;
-#endif
 	PhysPt base_ds,base_ss;
 	SegNames base_val_ds;
 	bool rep_zero;

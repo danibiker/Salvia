@@ -28,7 +28,7 @@
 
 struct DBPArchive
 {
-	enum EMode : Bit8u
+	enum EMode
 	{
 		MODE_LOAD,
 		MODE_SAVE,
@@ -52,7 +52,7 @@ struct DBPArchive
 	template <typename T, typename X1, typename X2> INLINE DBPArchive& SerializeExcept(T& v, X1& x1, X2& x2) { DoExceptionList(&v, sizeof(v), 2, &x1, sizeof(x1), &x2, sizeof(x2)); return *this; }
 	template <typename T, typename X1, typename X2, typename X3> INLINE DBPArchive& SerializeExcept(T& v, X1& x1, X2& x2, X3& x3) { DoExceptionList(&v, sizeof(v), 3, &x1, sizeof(x1), &x2, sizeof(x2), &x3, sizeof(x3)); return *this; }
 
-	enum EError : Bit8u
+	enum EError
 	{
 		ERR_NONE,
 		ERR_LAYOUT,
@@ -63,14 +63,14 @@ struct DBPArchive
 		ERR_WRONGMEMORYCONFIG,
 		ERR_WRONGVGAMEMCONFIG,
 	};
-	enum EWarning : Bit8u
+	enum EWarning
 	{
 		WARN_NONE         = 0,
 		WARN_WRONGDRIVES  = 1<<0,
 		WARN_WRONGDEVICES = 1<<1,
 		WARN_WRONGPROGRAM = 1<<2,
 	};
-	enum EFlag : Bit8u
+	enum EFlag
 	{
 		FLAG_NONE            = 0,
 		FLAG_NORESETINPUT = 1<<0,

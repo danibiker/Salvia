@@ -138,8 +138,7 @@ struct Patch_File : Patch_Entry
 				res.resize((size_t)targsz);
 				Local::Read(xorf, &res[0], (filesize - ofs));
 				Bit8u buf[1024]; Bit16u bufp = 0, bufn = 0;
-				for (Bit8u& r : res)
-				{
+				for (size_t _ri = 0; _ri < res.size(); _ri++) { Bit8u& r = res[_ri];
 					if (bufp == bufn) // read more from base
 						{ bufp = 0; if (!basef->Read(buf, &(bufn = 1024)) || !bufn) { basef->Seek(&(ofs = 0), DOS_SEEK_SET); if (!basef->Read(buf, &(bufn = 1024)) || !bufn) break; } }
 					r ^= buf[bufp++];
@@ -255,29 +254,30 @@ struct Patch_File : Patch_Entry
 
 			// Big tables, allocate on heap not on stack
 			struct VCDInstruction { Bit8u type, size, mode; } codetable[256][2];
+			static VCDInstruction MakeVCDI(Bit8u t, Bit8u s, Bit8u m) { VCDInstruction v; v.type=t; v.size=s; v.mode=m; return v; }
 			struct { Bit32u arrnear[VCD_NEAR_SIZE], arrsame[VCD_SAME_SIZE*256], next_slot; } cache;
 
 			VCDiff()
 			{
 				// Build default instruction code table
 				memset(codetable, 0, sizeof(codetable));
-				codetable[0][0] = { VCD_RUN, 0, 0 };
+				codetable[0][0] = MakeVCDI(VCD_RUN, 0, 0);
 				Bit8u idx = 1;
-				for (; idx != 19; idx++) codetable[idx][0] = { VCD_ADD, (Bit8u)(idx - 1), 0 };
+				for (; idx != 19; idx++) codetable[idx][0] = MakeVCDI(VCD_ADD, (Bit8u)(idx - 1), 0);
 				for (Bit8u mode = 0; mode < 9; mode++)
 				{
-					codetable[idx++][0] = { VCD_COPY, 0, mode };
-					for (Bit8u size = 4; size < 19; size++) codetable[idx++][0] = { VCD_COPY, size, mode };
+					codetable[idx++][0] = MakeVCDI(VCD_COPY, 0, mode);
+					for (Bit8u size = 4; size < 19; size++) codetable[idx++][0] = MakeVCDI(VCD_COPY, size, mode);
 				}
 				for (Bit8u mode = 0; mode < 6; mode++)
 					for (Bit8u add_size = 1; add_size < 5; add_size++)
 						for (Bit8u copy_size = 4; copy_size < 7; copy_size++)
-							codetable[idx][0] = { VCD_ADD, add_size, 0 }, codetable[idx++][1] = { VCD_COPY, copy_size, mode };
+							codetable[idx][0] = MakeVCDI(VCD_ADD, add_size, 0), codetable[idx++][1] = MakeVCDI(VCD_COPY, copy_size, mode);
 				for (Bit8u mode = 6; mode < 9; mode++)
 					for (Bit8u add_size = 1; add_size < 5; add_size++)
-						codetable[idx][0] = { VCD_ADD, add_size, 0 }, codetable[idx++][1] = { VCD_COPY, 4, mode };
+						codetable[idx][0] = MakeVCDI(VCD_ADD, add_size, 0), codetable[idx++][1] = MakeVCDI(VCD_COPY, 4, mode);
 				for (Bit8u mode = 0; mode < 9; mode++)
-					codetable[idx][0] = { VCD_COPY, 4, mode }, codetable[idx++][1] = { VCD_ADD, 1, 0 };
+					codetable[idx][0] = MakeVCDI(VCD_COPY, 4, mode), codetable[idx++][1] = MakeVCDI(VCD_ADD, 1, 0);
 			}
 
 			static bool GetWindow(VCDWindow& w, DOS_File* df)
@@ -491,7 +491,7 @@ struct Patch_Directory: Patch_Entry
 
 	~Patch_Directory()
 	{
-		for (Patch_Entry* e : entries) DeleteEntry(e);
+		for (Bit32u _ei = 0; _ei < entries.Capacity(); _ei++) { Patch_Entry* e = entries.GetAtIndex(_ei); if (!e) continue; DeleteEntry(e); }
 	}
 };
 
@@ -528,9 +528,8 @@ struct patchDriveImpl
 
 	~patchDriveImpl()
 	{
-		for (Patch_Search* s : searches) delete s;
-		for (Patch_Layer& l : layers) 
-		{
+		for (size_t _si = 0; _si < searches.size(); _si++) { Patch_Search* s = searches[_si]; delete s; }
+		for (size_t _li = 0; _li < layers.size(); _li++) { Patch_Layer& l = layers[_li];
 			if (l.patchzip) delete l.patchzip;
 			if (l.autodelete_under) delete &l.under;
 		}
@@ -549,7 +548,7 @@ struct patchDriveImpl
 		if (layers.empty()) { DBP_ASSERT(false); return; }
 		if (!ymlOnly)
 		{
-			for (Patch_Entry* e : root.entries) Patch_Directory::DeleteEntry(e);
+			for (Bit32u _ei = 0; _ei < root.entries.Capacity(); _ei++) { Patch_Entry* e = root.entries.GetAtIndex(_ei); if (!e) continue; Patch_Directory::DeleteEntry(e); }
 			root.entries.Clear();
 			directories.Clear();
 		}
@@ -705,7 +704,7 @@ patchDrive::patchDrive() : impl(new patchDriveImpl()) { }
 
 void patchDrive::AddLayer(DOS_Drive& under, bool autodelete_under, DOS_File* patchzip, bool enable_crc_check, bool is_final)
 {
-	impl->layers.emplace_back(under, autodelete_under, (patchzip ? new zipDrive(patchzip, enable_crc_check) : NULL));
+	impl->layers.push_back(Patch_Layer(under, autodelete_under, (patchzip ? new zipDrive(patchzip, enable_crc_check) : NULL)));
 	if (impl->layers.size() == 1) label.SetLabel(under.GetLabel(), false, true);
 	if (is_final) { patchDrive::dos_yml.clear(); impl->Reload(); }
 }
@@ -986,10 +985,11 @@ std::vector<std::string> patchDrive::VariantConflictFiles(int variant_number, bo
 			}
 			l.Result.push_back(path);
 		}
-		patchDrive* PatchDrive = NULL;
-		memoryDrive* MemoryDrive = NULL;
+		patchDrive* PatchDrive;
+		memoryDrive* MemoryDrive;
 		std::vector<std::string> Result;
 		std::vector<Bit8u> Buf;
+		Local() : PatchDrive(NULL), MemoryDrive(NULL) {}
 	} l;
 
 	if (Drives['C'-'A']) Local::GetDrives(Drives['C'-'A'], l);
@@ -1001,7 +1001,7 @@ std::vector<std::string> patchDrive::VariantConflictFiles(int variant_number, bo
 		ActivateVariant(oldVariantNumber);
 		if (reset_conflicts)
 		{
-			for (const std::string& path : l.Result) l.MemoryDrive->FileUnlink((char*)path.c_str());
+			for (size_t _pi = 0; _pi < l.Result.size(); _pi++) { const std::string& path = l.Result[_pi]; l.MemoryDrive->FileUnlink((char*)path.c_str()); }
 			l.Result.clear();
 		}
 	}

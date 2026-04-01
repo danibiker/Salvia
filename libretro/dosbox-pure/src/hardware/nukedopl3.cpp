@@ -1392,7 +1392,7 @@ void NukedOPL::Handler::Generate(MixerChannel* chan, Bitu samples)
         if (sum_samples > 200000)
         {
             int num_active = 0;
-            for (opl3_slot& s : chip.slot) if (s.active) num_active++;
+            for (size_t _si = 0; _si < sizeof(chip.slot)/sizeof(chip.slot[0]); _si++) { opl3_slot& s = chip.slot[_si]; if (s.active) num_active++; }
             if (++sum_count > 3)
             {
                 avg_ticks += sum_ticks;
@@ -1420,8 +1420,8 @@ void NukedOPL::Handler::Generate(MixerChannel* chan, Bitu samples)
         if (reduce_active)
         {
             active_check %= 128;
-            for (opl3_slot& slot : chip.slot)
-            {
+            for (size_t _sj = 0; _sj < sizeof(chip.slot)/sizeof(chip.slot[0]); _sj++)
+            { opl3_slot& slot = chip.slot[_sj];
                 if (!slot.active) continue;
                 if (slot.eg_gen == envelope_gen_num_release && slot.eg_rout == 0x1ff && slot.eg_out > 510 && slot.out == slot.prout && slot.out >= -1 && slot.out <= 1)
                 {

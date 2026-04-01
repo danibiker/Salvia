@@ -157,7 +157,7 @@ AutoexecObject::~AutoexecObject(){
 	this->CreateAutoexec();
 }
 
-DOS_Shell::DOS_Shell():Program(){
+DOS_Shell::DOS_Shell():Program(), same_tick_lines(0), last_pic_ticks(0){
 	input_handle=STDIN;
 	echo=true;
 	exit=false;

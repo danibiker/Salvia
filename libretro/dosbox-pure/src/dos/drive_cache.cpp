@@ -29,7 +29,11 @@
 
 #if defined (WIN32)   /* Win 32 */
 #define WIN32_LEAN_AND_MEAN        // Exclude rarely-used stuff from 
+#ifdef _XBOX
+#include <xtl.h>
+#else
 #include <windows.h>
+#endif
 #endif
 
 #if defined (OS2)
@@ -136,29 +140,41 @@ void DOS_Drive_Cache::SetBaseDir(const char* baseDir, DOS_Label& label) {
 		char* result = 0;
 		ReadDir(id,result);
 	};
+
 	// Get Volume Label
-#if defined (WIN32) || defined (OS2)
+#if defined(_XBOX)
+	// --- SECCIÓN PARA XBOX 360 ---
+	bool cdrom = false;
+	// Comprobar si la ruta empieza por 'd' (de dvd:\ o cdrom)
+	if (basePath[0] == 'd' || basePath[0] == 'D') cdrom = true;
+	
+	// En Xbox 360 no hay GetVolumeInformation, usamos una etiqueta fija
+	label.SetLabel("XBOX_DRIVE", cdrom, true);
+
+#elif defined (WIN32) || defined (OS2)
+	// --- SECCIÓN PARA WINDOWS PC / OS2 ---
 	bool cdrom = false;
 	char labellocal[256]={ 0 };
 	char drive[4] = "C:\\";
 	drive[0] = basePath[0];
+
 #if defined (WIN32)
 	if (GetVolumeInformation(drive,labellocal,256,NULL,NULL,NULL,NULL,0)) {
-	UINT test = GetDriveType(drive);
-	if(test == DRIVE_CDROM) cdrom = true;
+		UINT test = GetDriveType(drive);
+		if(test == DRIVE_CDROM) cdrom = true;
 #else // OS2
-	//TODO determine wether cdrom or not!
-	FSINFO fsinfo;
-	ULONG drivenumber = drive[0];
-	if (drivenumber > 26) { // drive letter was lowercase
-		drivenumber = drive[0] - 'a' + 1;
-	}
-	APIRET rc = DosQueryFSInfo(drivenumber, FSIL_VOLSER, &fsinfo, sizeof(FSINFO));
-	if (rc == NO_ERROR) {
+		//TODO determine wether cdrom or not!
+		FSINFO fsinfo;
+		ULONG drivenumber = drive[0];
+		if (drivenumber > 26) { // drive letter was lowercase
+			drivenumber = drive[0] - 'a' + 1;
+		}
+		APIRET rc = DosQueryFSInfo(drivenumber, FSIL_VOLSER, &fsinfo, sizeof(FSINFO));
+		if (rc == NO_ERROR) {
 #endif
-		/* Set label and allow being updated */
-		label.SetLabel(labellocal,cdrom,true);
-	}
+			/* Set label and allow being updated */
+			label.SetLabel(labellocal,cdrom,true);
+		}
 #endif
 }
 

@@ -1537,7 +1537,7 @@ public:
 		// find all file parameters, assuming that all option parameters have been removed
 		while(cmd->FindCommand((unsigned int)(paths.size() + 2), temp_line) && temp_line.size()) {
 #if defined(C_DBP_SUPPORT_CDROM_MOUNT_DOSFILE) && defined(C_DBP_SUPPORT_DISK_MOUNT_DOSFILE)
-			paths.emplace_back();
+			paths.push_back(std::string());
 			DOS_File *test = FindAndOpenDosFile(temp_line.c_str(), NULL, NULL, NULL, &paths.back());
 			if (test==NULL) {
 				WriteOut(MSG_Get("PROGRAM_IMGMOUNT_FILE_NOT_FOUND"));

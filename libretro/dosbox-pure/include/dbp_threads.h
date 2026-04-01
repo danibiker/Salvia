@@ -2,12 +2,34 @@
 #define DBP_STACK_SIZE (2*1024*1024) //2 MB
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
+
+#ifdef _XBOX
+#include <xtl.h>
+#include <ppcintrinsics.h>
+#else
 #include <windows.h>
 #include <intrin.h>
+#endif
+
+
 #define THREAD_CC WINAPI
-struct Thread { typedef DWORD RET_t; typedef RET_t (THREAD_CC *FUNC_t)(LPVOID); __inline static void StartDetached(FUNC_t f, void* p = NULL) { HANDLE h = CreateThread(0,DBP_STACK_SIZE,f,p,0,0); CloseHandle(h); } };
+struct Thread { typedef DWORD RET_t; typedef RET_t (THREAD_CC *FUNC_t)(LPVOID); __inline static void StartDetached(FUNC_t f, void* p = NULL) { 
+	HANDLE h = CreateThread(0,DBP_STACK_SIZE,f,p,CREATE_SUSPENDED,0); 
+	if (h){
+		XSetThreadProcessor(h, 4);
+		SetThreadPriority(h, THREAD_PRIORITY_HIGHEST);
+		ResumeThread(h);
+		CloseHandle(h); 
+	}
+} };
+#ifdef _XBOX
+/* Xbox 360 XDK does not have the "A" (ANSI) variants of these functions */
+struct Mutex { __inline Mutex() : h(CreateMutex(0,FALSE,0)) {} __inline ~Mutex() { if (h) CloseHandle(h); } __inline void Lock() { WaitForSingleObject(h,INFINITE); } __inline void Unlock() { ReleaseMutex(h); } private:HANDLE h;Mutex(const Mutex&);Mutex& operator=(const Mutex&);};
+struct Semaphore { __inline Semaphore() : h(CreateSemaphore(0,0,1,0)) {} __inline ~Semaphore() { if (h) CloseHandle(h); } __inline void Post() { ReleaseSemaphore(h, 1, 0); } __inline void Wait() { WaitForSingleObject(h,INFINITE); } private:HANDLE h;Semaphore(const Semaphore&);Semaphore& operator=(const Semaphore&);};
+#else
 struct Mutex { __inline Mutex() : h(CreateMutexA(0,0,0)) {} __inline ~Mutex() { CloseHandle(h); } __inline void Lock() { WaitForSingleObject(h,INFINITE); } __inline void Unlock() { ReleaseMutex(h); } private:HANDLE h;Mutex(const Mutex&);Mutex& operator=(const Mutex&);};
 struct Semaphore { __inline Semaphore() : h(CreateSemaphoreA(0,0,1,0)) {} __inline ~Semaphore() { CloseHandle(h); } __inline void Post() { BOOL r = ReleaseSemaphore(h, 1, 0); DBP_ASSERT(r); } __inline void Wait() { WaitForSingleObject(h,INFINITE); } private:HANDLE h;Semaphore(const Semaphore&);Semaphore& operator=(const Semaphore&);};
+#endif
 #ifdef DBP_STANDALONE
 struct SpinLock { __inline SpinLock() : f(0) {} __inline void Lock() { while (_InterlockedCompareExchange8(&f, 1, 0)) retro_sleep(0); } __inline void Unlock() { _ReadWriteBarrier(); f = false; } private:volatile char f;SpinLock(const SpinLock&);SpinLock& operator=(const SpinLock&);};
 #endif

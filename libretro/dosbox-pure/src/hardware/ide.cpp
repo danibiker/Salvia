@@ -51,7 +51,7 @@ static const unsigned short IDE_default_alts[4] = {
 	0x36E, /* quaternary */
 };
 
-enum IDEDeviceType : uint8_t {
+enum IDEDeviceType {
 	IDE_TYPE_NONE,
 #ifdef C_DBP_ENABLE_IDE_ATA
 	IDE_TYPE_HDD,
@@ -59,7 +59,7 @@ enum IDEDeviceType : uint8_t {
 	IDE_TYPE_CDROM,
 };
 
-enum IDEDeviceState : uint8_t {
+enum IDEDeviceState {
 	IDE_DEV_READY,
 	IDE_DEV_SELECT_WAIT,
 	IDE_DEV_CONFUSED,
@@ -70,7 +70,7 @@ enum IDEDeviceState : uint8_t {
 	IDE_DEV_ATAPI_BUSY,
 };
 
-enum IDEStatus : uint8_t {
+enum IDEStatus {
 	IDE_STATUS_BUSY                = 0x80,
 	IDE_STATUS_DRIVE_READY         = 0x40,
 	IDE_STATUS_DRIVE_SEEK_COMPLETE = 0x10,
@@ -325,7 +325,7 @@ IDEController::~IDEController()
 }
 
 struct IDEATAPICDROMDevice : public IDEDevice {
-	enum LoadingMode : uint8_t {
+	enum LoadingMode {
 		LOAD_NO_DISC,
 		LOAD_EJECTING,
 		LOAD_INSERT_CD,    /* user is "inserting" the CD */
@@ -2975,7 +2975,7 @@ void IDE_SetupControllers(bool alwaysHaveCDROM)
 	if (idecontroller[0]) return; // only setup once
 
 	Bit8u numCDROMDevices = 0;
-	for (DOS_Drive* drv : Drives) { if (drv && dynamic_cast<isoDrive*>(drv)) { numCDROMDevices++; } }
+	for (size_t _di = 0; _di < sizeof(Drives)/sizeof(Drives[0]); _di++) { DOS_Drive* drv = Drives[_di]; if (drv && dynamic_cast<isoDrive*>(drv)) { numCDROMDevices++; } }
 	if (!numCDROMDevices && alwaysHaveCDROM) numCDROMDevices = 1; // Enforce CD-ROM so discs can be mounted afterwards
 
 	for (Bit8u i = 0; i != MAX_IDE_CONTROLLERS; i++)
@@ -2998,8 +2998,8 @@ void IDE_SetupControllers(bool alwaysHaveCDROM)
 
 void IDE_ShutdownControllers(void)
 {
-	for (IDEController*& c : idecontroller)
-		if (c) { delete c; c = NULL; }
+	for (size_t _ci = 0; _ci < sizeof(idecontroller)/sizeof(idecontroller[0]); _ci++) { IDEController*& c = idecontroller[_ci];
+		if (c) { delete c; c = NULL; } }
 }
 
 #include <dbp_serialize.h>

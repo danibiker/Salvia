@@ -663,10 +663,6 @@ static void gen_run_code(void)
 	EXT_OP(HOST_R0, 8, 0, 339, 0); // mflr r0
 
 	IMM_OP(47, HOST_R26, HOST_R1, 128); // stmw r26, 128(sp)
-	// Save r2 (TOC/SDA2 on some ABIs) and r13 (SDA on some ABIs)
-	// Xbox 360 XDK may use these; C functions called from generated code could depend on them
-	IMM_OP(36, HOST_R2, HOST_R1, 120);   // stw r2, 120(sp)
-	IMM_OP(36, HOST_R13, HOST_R1, 124);  // stw r13, 124(sp)
 
 	IMM_OP(15, FC_SEGS_ADDR, 0, ((Bit32u)&Segs)>>16);  // lis FC_SEGS_ADDR, Segs@h
 	IMM_OP(24, FC_SEGS_ADDR, FC_SEGS_ADDR, &Segs);     // ori FC_SEGS_ADDR, FC_SEGS_ADDR, Segs@l
@@ -685,10 +681,7 @@ static void gen_run_code(void)
 	// epilog
 	epilog_addr = cache.pos;
 	IMM_OP(32, HOST_R0, HOST_R1, 256+4); // lwz r0,256+4(sp)
-	// Restore r2 and r13 before restoring r26-r31
-	IMM_OP(32, HOST_R2, HOST_R1, 120);   // lwz r2, 120(sp)
-	IMM_OP(32, HOST_R13, HOST_R1, 124);  // lwz r13, 124(sp)
-	IMM_OP(46, HOST_R26, HOST_R1, 128);  // lmw r26, 128(sp)
+	IMM_OP(46, HOST_R26, HOST_R1, 128);   // lmw r26, 128(sp)
 	EXT_OP(HOST_R0, 8, 0, 467, 0);       // mtlr r0
 	IMM_OP(14, HOST_R1, HOST_R1, 256);   // addi sp, sp, 256
 	IMM_OP(19, 0x14, 0, 16<<1);       // blr

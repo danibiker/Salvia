@@ -1350,8 +1350,8 @@ public:
 		for (Bit16u i=0;i<DOS_DRIVES;i++) delete Drives[i];
 
 		//DBP: Cleanup memory
-		for (DOS_File* f : Files) delete f;
-		for (DOS_Device* d : Devices) delete d;
+		for (size_t _fi = 0; _fi < sizeof(Files)/sizeof(Files[0]); _fi++) { DOS_File* f = Files[_fi]; delete f; }
+		for (size_t _di = 0; _di < sizeof(Devices)/sizeof(Devices[0]); _di++) { DOS_Device* d = Devices[_di]; delete d; }
 		memset(Files, 0, sizeof(Files));
 		memset(Drives, 0, sizeof(Drives));
 		memset(Devices, 0, sizeof(Devices));

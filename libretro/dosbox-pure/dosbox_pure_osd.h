@@ -33,7 +33,7 @@ struct DBP_BufferDrawing : DBP_Buffer
 {
 	enum { CW = 8 }; // char width
 	enum { MWIDTH = 234 + 10*4 + 2*3 };
-	enum EColors : Bit32u
+	enum EColors
 	{
 		BGCOL_SELECTION = 0x117EB7, BGCOL_SCROLL = 0x093F5B, BGCOL_MENU = 0x1A1E20, BGCOL_HEADER = 0x582204, BGCOL_STARTMENU = 0xFF111111,
 		COL_MENUTITLE = 0xFFFBD655, COL_CONTENT = 0xFFFFAB91,
@@ -298,8 +298,8 @@ bool DBP_BufferDrawing::DrawButtonAt(Bit32u blend, int btny, int lh, int padu, i
 
 struct DBP_MenuState
 {
-	enum ItemType : Bit8u { IT_NONE, _IT_CUSTOM, };
-	enum Result : Bit8u { RES_NONE, RES_OK, RES_CANCEL, RES_CLOSESCREENKEYBOARD, RES_CHANGEMOUNTS, RES_REFRESHSYSTEM };
+	enum ItemType { IT_NONE, _IT_CUSTOM, };
+	enum Result { RES_NONE, RES_OK, RES_CANCEL, RES_CLOSESCREENKEYBOARD, RES_CHANGEMOUNTS, RES_REFRESHSYSTEM };
 	int sel, scroll, joyx, joyy, scroll_jump, mouse_sel, click_sel;
 	bool refresh_mousesel, scroll_unlocked, hide_sel, show_popup, toggleosd_down;
 	DBP_Event_Type held_event; KBD_KEYS held_key; Bit32u held_ticks, open_ticks;
@@ -328,9 +328,9 @@ struct DBP_MenuState
 					default: if (val <= KBD_m)
 					{
 						int lckey = (DBP_KBDNAMES[val][0] | 0x20), first = -1;
-						for (const Item& it : list)
-							if ((it.str.c_str()[0] | 0x20) == lckey)
-								{ int i = (int)(&it - &list[0]); if (i > sel) { sel_change = i - sel; break; } else if (first == -1) { first = i; } }
+						for (size_t _xi = 0; _xi < list.size(); _xi++)
+							{ const Item& it = list[_xi]; if ((it.str.c_str()[0] | 0x20) == lckey)
+								{ int i = (int)(&it - &list[0]); if (i > sel) { sel_change = i - sel; break; } else if (first == -1) { first = i; } } }
 						if (!sel_change && first != -1) sel_change = first - sel;
 						type = _DBPET_MAX; // prevent held
 						hide_sel = false; // show immediately
@@ -509,7 +509,7 @@ struct DBP_MenuState
 		{
 			for (lastspace = NULL, p = line, pmax = p + lineLength; *p && p != pmax;) { if (*(++p) <= ' ' && *(lastspace = p) == '\n') break; }
 			if (*line == '\n' && !line[1]) break;
-			list.emplace_back(IT_NONE, info, prefix);
+			list.push_back(Item(IT_NONE, info, prefix));
 			list.back().str.append(line, (size_t)(*line == '\n' ? 0 : (lastspace - line)));
 		}
 	}
@@ -518,7 +518,7 @@ struct DBP_MenuState
 #ifdef DBP_STANDALONE
 struct DBP_SettingsMenuState final : DBP_MenuState
 {
-	enum ItemType : Bit8u { IT_CANCEL = _IT_CUSTOM, IT_CATEGORIES, IT_CATEGORY, IT_OPTION, IT_TOGGLE, IT_VALUE, IT_OVERRIDE };
+	enum ItemType { IT_CANCEL = _IT_CUSTOM, IT_CATEGORIES, IT_CATEGORY, IT_OPTION, IT_TOGGLE, IT_VALUE, IT_OVERRIDE };
 	Bit8u curmenu;
 	DBP_SettingsMenuState() { menu(IT_CATEGORIES); }
 
@@ -531,26 +531,26 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 		list.clear();
 		if (menu_type == IT_CATEGORIES)
 		{
-			for (const retro_core_option_v2_category& oc : option_cats)
-			{
+			for (size_t _xi = 0; _xi < sizeof(option_cats)/sizeof(option_cats[0]); _xi++)
+			{ const retro_core_option_v2_category& oc = option_cats[_xi];
 				if (!oc.key) break;
 				if (curmenu == IT_CATEGORY && topinfo == (Bit16s)(&oc - option_cats)) setsel = (int)list.size();
-				list.emplace_back(IT_CATEGORY, (Bit16s)(&oc - option_cats), oc.desc);
+				list.push_back(Item(IT_CATEGORY, (Bit16s)(&oc - option_cats), oc.desc));
 				AddWrappedText(66, "  ", oc.info);
-				list.emplace_back(IT_NONE);
+				list.push_back(Item(IT_NONE));
 			}
 		}
 		else if (menu_type == IT_CATEGORY)
 		{
 			const retro_core_option_v2_category& oc = option_cats[curmenu == IT_CATEGORIES ? selinfo : topinfo];
-			list.emplace_back(IT_NONE, (curmenu == IT_CATEGORIES ? selinfo : topinfo), oc.desc);
+			list.push_back(Item(IT_NONE, (curmenu == IT_CATEGORIES ? selinfo : topinfo), oc.desc));
 			AddWrappedText(66, "  ", oc.info);
-			for (const retro_core_option_v2_definition& od : option_defs)
-			{
+			for (size_t _xi = 0; _xi < sizeof(option_defs)/sizeof(option_defs[0]); _xi++)
+			{ const retro_core_option_v2_definition& od = option_defs[_xi];
 				if (od.category_key != oc.key || DBP_Option::GetHidden(od)) continue;
 				if ((Bit16s)(&od - option_defs) == (curmenu == IT_CATEGORIES ? 0 : secondinfo)) setsel = (int)(list.size() + 1);
-				list.emplace_back(IT_NONE);
-				list.emplace_back((od.values[2].value ? IT_OPTION : IT_TOGGLE), (Bit16s)(&od - option_defs), (DBPS_IsConfigOverride(od.key) ? "\x6 " : "  "));
+				list.push_back(Item(IT_NONE));
+				list.push_back(Item((od.values[2].value ? IT_OPTION : IT_TOGGLE), (Bit16s)(&od - option_defs), (DBPS_IsConfigOverride(od.key) ? "\x6 " : "  ")));
 				list.back().str.append(od.desc);
 				if (od.info) AddWrappedText(66, "  ", od.info);
 			}
@@ -559,17 +559,17 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 		else if (menu_type == IT_OPTION)
 		{
 			const retro_core_option_v2_definition& od = option_defs[selinfo];
-			list.emplace_back(IT_NONE, topinfo, od.desc);
+			list.push_back(Item(IT_NONE, topinfo, od.desc));
 			if (od.info) AddWrappedText(66, "  ", od.info, selinfo);
-			list.emplace_back(IT_NONE, selinfo);
-			list.emplace_back(IT_OVERRIDE, selinfo, "[ ] Set Setting Override For Loaded Game"); list.back().str[1] = (DBPS_IsConfigOverride(od.key) ? '\x6' : ' ');
-			list.emplace_back(IT_NONE, selinfo);
+			list.push_back(Item(IT_NONE, selinfo));
+			list.push_back(Item(IT_OVERRIDE, selinfo, "[ ] Set Setting Override For Loaded Game")); list.back().str[1] = (DBPS_IsConfigOverride(od.key) ? '\x6' : ' ');
+			list.push_back(Item(IT_NONE, selinfo));
 			const char* var_value = retro_get_variable(od.key, od.default_value);
-			for (const retro_core_option_value& ov : od.values)
-			{
+			for (size_t _xi = 0; _xi < sizeof(od.values)/sizeof(od.values[0]); _xi++)
+			{ const retro_core_option_value& ov = od.values[_xi];
 				if (!ov.value) break;
 				if (!strcmp(var_value, ov.value)) setsel = (int)list.size();
-				list.emplace_back(IT_VALUE, (Bit16s)(&ov - od.values), (setsel != (int)list.size() ? "( ) " : "(\x7) "));
+				list.push_back(Item(IT_VALUE, (Bit16s)(&ov - od.values), (setsel != (int)list.size() ? "( ) " : "(\x7) ")));
 				list.back().str.append(ov.label ? ov.label : ov.value);
 			}
 		}
@@ -587,8 +587,8 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 			if (ok_type == IT_TOGGLE) x_change = 1;
 			const retro_core_option_v2_definition& od = option_defs[list[sel].info];
 			const char* var_value = retro_get_variable(od.key, od.default_value);
-			for (const retro_core_option_value& ov : od.values)
-			{
+			for (size_t _xi = 0; _xi < sizeof(od.values)/sizeof(od.values[0]); _xi++)
+			{ const retro_core_option_value& ov = od.values[_xi];
 				if (ov.value) { if (!strcmp(var_value, ov.value)) { x_change += (int)(&ov - od.values); } continue; }
 				var_value = (x_change < 0 ? (&ov)[-1] : od.values[(od.values + x_change) >= &ov ? 0 : x_change]).value;
 				if (!strcmp(var_value, od.default_value)) var_value = NULL;
@@ -604,9 +604,9 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 			retro_variable var = { od.key, od.values[itsel.info].value };
 			if (!strcmp(var.value, od.default_value)) var.value = NULL;
 			environ_cb(RETRO_ENVIRONMENT_SET_VARIABLE, &var);
-			for (Item& it : list)
-				if (it.type == IT_VALUE)
-					it.str[1] = (it.info == itsel.info ? '\x7' : ' ');
+			for (size_t _xi = 0; _xi < list.size(); _xi++)
+				{ Item& it = list[_xi]; if (it.type == IT_VALUE)
+					it.str[1] = (it.info == itsel.info ? '\x7' : ' '); }
 			if (DBPS_IsConfigOverride(od.key)) SaveConfigOverride();
 		}
 		else if (ok_type == IT_OVERRIDE)
@@ -632,7 +632,7 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 			if (Drives['C'-'A']) Drives['C'-'A']->FileUnlink((char*)"FRONTEND.DBP");
 			return;
 		}
-		DOS_File *frontend = nullptr;
+		DOS_File *frontend = NULL;
 		if (!Drives['C'-'A'] || !Drives['C'-'A']->FileCreate(&frontend, (char*)"FRONTEND.DBP", DOS_ATTR_ARCHIVE))
 		{
 			retro_notify(0, RETRO_LOG_ERROR, "Unable to write config override %c:\\%s", 'C', "PADMAP.DBP");
@@ -654,8 +654,8 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 			Bit16s topinfo = list[0].info;
 			const Item *plist = &list[0], *plistend = plist + list.size();
 			const retro_core_option_v2_category& oc = option_cats[topinfo];
-			for (const retro_core_option_v2_definition& od : option_defs)
-			{
+			for (size_t _xi = 0; _xi < sizeof(option_defs)/sizeof(option_defs[0]); _xi++)
+			{ const retro_core_option_v2_definition& od = option_defs[_xi];
 				if (od.category_key && (od.category_key != oc.key || DBP_Option::GetHidden(od))) continue;
 				while (plist != plistend && (plist->type != IT_OPTION && plist->type != IT_TOGGLE)) plist++;
 				if (od.category_key ? (plist != plistend && plist->info == (Bit16s)(&od - option_defs)) : plist == plistend) { plist++; continue; }
@@ -677,8 +677,8 @@ struct DBP_SettingsMenuState final : DBP_MenuState
 			{
 				const retro_core_option_v2_definition& od = option_defs[list[i].info];
 				const char* var_value = retro_get_variable(od.key, od.default_value);
-				for (const retro_core_option_value& ov : od.values)
-				{
+				for (size_t _xj = 0; _xj < sizeof(od.values)/sizeof(od.values[0]); _xj++)
+				{ const retro_core_option_value& ov = od.values[_xj];
 					if (!ov.value) break;
 					if (strcmp(var_value, ov.value)) continue;
 					buf.Print(lh, l+16 + maxw-130, hdr + (i - scroll)*lh, "\x1D", buf.COL_HEADER, 120);
@@ -700,17 +700,17 @@ static const char* DBP_MapperJoypadNames[] = { "Up", "Down", "Left", "Right", "B
 struct DBP_MapperMenuState final : DBP_MenuState
 {
 	#ifndef DBP_STANDALONE
-	enum ItemType : Bit8u { IT_CANCEL = _IT_CUSTOM, IT_PRESET, IT_SELECT, IT_EDIT, IT_ADD, IT_DEL, IT_DEVICE, IT_DIVIDER };
+	enum ItemType { IT_CANCEL = _IT_CUSTOM, IT_PRESET, IT_SELECT, IT_EDIT, IT_ADD, IT_DEL, IT_DEVICE, IT_DIVIDER };
 	#else
-	enum ItemType : Bit8u { IT_CANCEL = _IT_CUSTOM, IT_PRESET, IT_SELECT, IT_EDIT, IT_ADD, IT_DEL, IT_DEVICE, IT_DIVIDER, IT_BINDJOY };
+	enum ItemType { IT_CANCEL = _IT_CUSTOM, IT_PRESET, IT_SELECT, IT_EDIT, IT_ADD, IT_DEL, IT_DEVICE, IT_DIVIDER, IT_BINDJOY };
 	#endif
-	enum EditMode : Bit8u { NOT_EDITING, EDIT_EXISTING, EDIT_NEW, EDIT_ADDITIONAL };
-	int main_sel = 0;
+	enum EditMode { NOT_EDITING, EDIT_EXISTING, EDIT_NEW, EDIT_ADDITIONAL };
+	int main_sel;
 	Bit16s edit_info;
 	EditMode edit_mode;
-	Bit8u bind_port = 0, bind_dev, changed = 0;
+	Bit8u bind_port, bind_dev, changed;
 
-	DBP_MapperMenuState() { menu_top(); }
+	DBP_MapperMenuState() : main_sel(0), bind_port(0), changed(0) { menu_top(); }
 
 	~DBP_MapperMenuState() { if (changed) DBP_PadMapping::Save(); }
 
@@ -718,8 +718,8 @@ struct DBP_MapperMenuState final : DBP_MenuState
 
 	DBP_InputBind BindFromPadNum(Bit8u i)
 	{
-		if (i < JOYPAD_MAX) return { bind_port, RETRO_DEVICE_JOYPAD, 0, DBP_MapperJoypadNums[i], _DBPET_MAX };
-		else { Bit8u n = i-JOYPAD_MAX; return { bind_port, RETRO_DEVICE_ANALOG, (Bit8u)(n/4), (Bit8u)(1-(n/2)%2), _DBPET_MAX }; }
+		if (i < JOYPAD_MAX) { DBP_InputBind _b; _b.port=bind_port; _b.device=RETRO_DEVICE_JOYPAD; _b.index=0; _b.id=DBP_MapperJoypadNums[i]; _b.evt=_DBPET_MAX; _b.meta=0; return _b; }
+		else { Bit8u n = i-JOYPAD_MAX; DBP_InputBind _b; _b.port=bind_port; _b.device=RETRO_DEVICE_ANALOG; _b.index=(Bit8u)(n/4); _b.id=(Bit8u)(1-(n/2)%2); _b.evt=_DBPET_MAX; _b.meta=0; return _b; }
 	}
 
 	void Add(const DBP_InputBind& b, Bit16s item_info, Bit8u apart = 0, bool* boundActionWheel = NULL)
@@ -729,13 +729,13 @@ struct DBP_MapperMenuState final : DBP_MenuState
 			key = b.meta;
 		else if (b.evt == DBPET_AXISMAPPAIR)
 			key = DBP_MAPPAIR_GET(apart?1:-1, b.meta);
-		else for (const DBP_SpecialMapping& sm : DBP_SpecialMappings)
-			if (sm.evt == b.evt && sm.meta == (b.device == RETRO_DEVICE_ANALOG ? (apart ? 1 : -1) : b.meta))
-				{ key = DBP_SPECIALMAPPINGS_KEY + (int)(&sm - DBP_SpecialMappings); break; }
+		else for (size_t _xi = 0; _xi < sizeof(DBP_SpecialMappings)/sizeof(DBP_SpecialMappings[0]); _xi++)
+			{ const DBP_SpecialMapping& sm = DBP_SpecialMappings[_xi]; if (sm.evt == b.evt && sm.meta == (b.device == RETRO_DEVICE_ANALOG ? (apart ? 1 : -1) : b.meta))
+				{ key = DBP_SPECIALMAPPINGS_KEY + (int)(&sm - DBP_SpecialMappings); break; } }
 		if (key < 0) { DBP_ASSERT(false); return; }
 
 		const char *desc_dev = DBP_GETKEYDEVNAME(key);
-		list.emplace_back(IT_EDIT, item_info, "  [Edit]");
+		list.push_back(Item(IT_EDIT, item_info, "  [Edit]"));
 		(((list.back().str += (desc_dev ? " " : "")) += (desc_dev ? desc_dev : "")) += ' ') += DBP_GETKEYNAME(key);
 
 		if (boundActionWheel && key == DBP_SPECIALMAPPINGS_ACTIONWHEEL) *boundActionWheel = true;
@@ -747,7 +747,7 @@ struct DBP_MapperMenuState final : DBP_MenuState
 		{
 			int maxport = 1;
 			while (maxport != DBP_MAX_PORTS && dbp_port_mode[maxport]) maxport++;
-			for (DBP_InputBind& b : dbp_input_binds) if (b.evt == DBPET_SHIFTPORT && b.meta >= maxport) maxport = b.meta + 1;
+			for (size_t _xi = 0; _xi < dbp_input_binds.size(); _xi++) { DBP_InputBind& b = dbp_input_binds[_xi]; if (b.evt == DBPET_SHIFTPORT && b.meta >= maxport) maxport = b.meta + 1; }
 			bind_port = (bind_port + maxport + x_change) % maxport;
 			main_sel = 0;
 		}
@@ -755,18 +755,18 @@ struct DBP_MapperMenuState final : DBP_MenuState
 		list.clear();
 		if (DBP_PadMapping::CalcPortMode(bind_port) != DBP_PadMapping::MODE_MAPPER)
 		{
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_NONE, 11, "    Gamepad Mapper is disabled");
-			list.emplace_back(IT_NONE, 11, "    for this controller port");
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_NONE, 11, "    Set 'Use Gamepad Mapper'");
-			list.emplace_back(IT_NONE, 11, "    in the Controls menu");
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_NONE, 11, "    Gamepad Mapper is disabled"));
+			list.push_back(Item(IT_NONE, 11, "    for this controller port"));
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_NONE, 11, "    Set 'Use Gamepad Mapper'"));
+			list.push_back(Item(IT_NONE, 11, "    in the Controls menu"));
 		}
 		else
 		{
-			list.emplace_back(IT_NONE, 0, "Preset: ");
-			list.emplace_back(IT_PRESET, 0, "  "); list.back().str += DBP_PadMapping::GetPortPresetName(bind_port);
-			list.emplace_back(IT_NONE, 2);
+			list.push_back(Item(IT_NONE, 0, "Preset: "));
+			list.push_back(Item(IT_PRESET, 0, "  ")); list.back().str += DBP_PadMapping::GetPortPresetName(bind_port);
+			list.push_back(Item(IT_NONE, 2));
 
 			bool boundActionWheel = false, haveWheelOptions = false;
 			for (Bit8u i = 0; i != JOYPAD_MAX + 8; i++)
@@ -774,27 +774,27 @@ struct DBP_MapperMenuState final : DBP_MenuState
 				bool a = (i>=JOYPAD_MAX); Bit8u apart = (a ? (i-JOYPAD_MAX)%2 : 0);
 				const DBP_InputBind pad = BindFromPadNum(i);
 				const Bit32u padpdii = PORT_DEVICE_INDEX_ID(pad);
-				list.emplace_back(IT_NONE);
+				list.push_back(Item(IT_NONE));
 				if (!a) list.back().str = DBP_MapperJoypadNames[i];
 				else  ((list.back().str = DBP_MapperJoypadNames[2+pad.index]) += " Analog ") += DBP_MapperJoypadNames[(i-JOYPAD_MAX)%4];
 
 				size_t numBefore = list.size();
-				for (const DBP_InputBind& b : dbp_input_binds)
-					if (PORT_DEVICE_INDEX_ID(b) == padpdii)
-						Add(b, (Bit16s)(((&b - &dbp_input_binds[0])<<1)|apart), apart, &boundActionWheel);
-				if (list.size() - numBefore == 0) list.emplace_back(IT_ADD, i, "  [Create Binding]");
+				for (size_t _xi = 0; _xi < dbp_input_binds.size(); _xi++)
+					{ const DBP_InputBind& b = dbp_input_binds[_xi]; if (PORT_DEVICE_INDEX_ID(b) == padpdii)
+						Add(b, (Bit16s)(((&b - &dbp_input_binds[0])<<1)|apart), apart, &boundActionWheel); }
+				if (list.size() - numBefore == 0) list.push_back(Item(IT_ADD, i, "  [Create Binding]"));
 
 				if (const char* action = DBP_PadMapping::GetBoundAutoMapButtonLabel(padpdii, a))
 				{
-					list.emplace_back(IT_NONE, 1, "    Function: ");
+					list.push_back(Item(IT_NONE, 1, "    Function: "));
 					list.back().str.append(action);
 				}
 			}
 
-			list.emplace_back(IT_NONE, 2);
-			list.emplace_back(IT_NONE, 0, "Wheel Options: ");
-			for (const DBP_WheelItem& it : dbp_wheelitems)
-			{
+			list.push_back(Item(IT_NONE, 2));
+			list.push_back(Item(IT_NONE, 0, "Wheel Options: "));
+			for (size_t _xi = 0; _xi < dbp_wheelitems.size(); _xi++)
+			{ const DBP_WheelItem& it = dbp_wheelitems[_xi];
 				if (it.port != bind_port) continue;
 				for (int i = 0; i != it.key_count; i++)
 				{
@@ -804,25 +804,25 @@ struct DBP_MapperMenuState final : DBP_MenuState
 				}
 				if (const char* action = DBP_PadMapping::GetWheelAutoMapButtonLabel(it))
 				{
-					list.emplace_back(IT_NONE, 1, "    Function: ");
+					list.push_back(Item(IT_NONE, 1, "    Function: "));
 					list.back().str.append(action);
 				}
-				list.emplace_back(IT_NONE, 0);
+				list.push_back(Item(IT_NONE, 0));
 				haveWheelOptions = true;
 			}
-			list.emplace_back(IT_ADD, -1, "  Add Option");
+			list.push_back(Item(IT_ADD, -1, "  Add Option"));
 			if (haveWheelOptions != boundActionWheel)
 			{
-				list.emplace_back(IT_NONE, 0, "Warning:");
-				list.emplace_back(IT_NONE, -1, "  Wheel is inaccessible because no");
-				list.emplace_back(IT_NONE, -1, (haveWheelOptions ? "  button was bound to Action Wheel" : "  options have been defined here"));
+				list.push_back(Item(IT_NONE, 0, "Warning:"));
+				list.push_back(Item(IT_NONE, -1, "  Wheel is inaccessible because no"));
+				list.push_back(Item(IT_NONE, -1, (haveWheelOptions ? "  button was bound to Action Wheel" : "  options have been defined here")));
 			}
-			list.emplace_back(IT_NONE, 0);
+			list.push_back(Item(IT_NONE, 0));
 		}
 		if (!DBP_FullscreenOSD)
 		{
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_CANCEL, 0, "    Close Mapper");
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_CANCEL, 0, "    Close Mapper"));
 		}
 		if (main_sel >= (int)list.size()) main_sel = (int)list.size()-1;
 		while (main_sel && list[main_sel].type == IT_NONE) main_sel--;
@@ -848,21 +848,21 @@ struct DBP_MapperMenuState final : DBP_MenuState
 			return;
 		}
 		bool have_add = false;
-		for (Item& it : list) { if (it.type == IT_ADD) { have_add = true; break; } }
+		for (size_t _xi = 0; _xi < list.size(); _xi++) { Item& it = list[_xi]; if (it.type == IT_ADD) { have_add = true; break; } }
 		list.clear();
-		list.emplace_back(IT_NONE, 22, "Select Preset");
-		list.emplace_back(IT_NONE);
+		list.push_back(Item(IT_NONE, 22, "Select Preset"));
+		list.push_back(Item(IT_NONE));
 		Bit16s off = (dbp_auto_mapping ? 0 : 1), n = 1 + off;
-		for (const char* p; (p = DBP_PadMapping::GetPresetName((DBP_PadMapping::EPreset)n)) != NULL;) list.emplace_back(IT_PRESET, n++, p);
+		for (const char* p; (p = DBP_PadMapping::GetPresetName((DBP_PadMapping::EPreset)n)) != NULL;) list.push_back(Item(IT_PRESET, n++, p));
 		if (have_add)
 		{
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_PRESET, 9999, "Fill Unbound with Generic Keys");
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_PRESET, 9999, "Fill Unbound with Generic Keys"));
 		}
 		if (DBP_PadMapping::IsCustomized(bind_port))
 		{
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_DEL, 0, "[Reset Mapping]");
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_DEL, 0, "[Reset Mapping]"));
 		}
 		ResetSel(2 + DBP_PadMapping::GetPreset(bind_port) - 1 - off);
 	}
@@ -885,28 +885,28 @@ struct DBP_MapperMenuState final : DBP_MenuState
 			(list[1].str = " >") += "  [Additional Binding]";
 		}
 		list.resize(2);
-		list.emplace_back(IT_NONE);
-		list.emplace_back(IT_DEVICE,   1, "  "); list.back().str += DBPDEV_Keyboard;
-		list.emplace_back(IT_DEVICE,   2, "  "); list.back().str += DBPDEV_Mouse;
-		list.emplace_back(IT_DEVICE,   3, "  "); list.back().str += DBPDEV_Joystick;
-		for (const DBP_SpecialMapping& sm : DBP_SpecialMappings)
-		{
+		list.push_back(Item(IT_NONE));
+		list.push_back(Item(IT_DEVICE,   1, "  ")); list.back().str += DBPDEV_Keyboard;
+		list.push_back(Item(IT_DEVICE,   2, "  ")); list.back().str += DBPDEV_Mouse;
+		list.push_back(Item(IT_DEVICE,   3, "  ")); list.back().str += DBPDEV_Joystick;
+		for (size_t _xi = 0; _xi < sizeof(DBP_SpecialMappings)/sizeof(DBP_SpecialMappings[0]); _xi++)
+		{ const DBP_SpecialMapping& sm = DBP_SpecialMappings[_xi];
 			if (sm.dev || (sm.evt != DBPET_TOGGLEOSD && edit_info < 0)) continue; // no wheel no port shift as wheel options
 			if (sm.evt == DBPET_SHIFTPORT && sm.meta == bind_port) continue;
-			list.emplace_back(IT_SELECT, (Bit16s)(DBP_SPECIALMAPPINGS_KEY + (&sm - DBP_SpecialMappings)), "  ");
+			list.push_back(Item(IT_SELECT, (Bit16s)(DBP_SPECIALMAPPINGS_KEY + (&sm - DBP_SpecialMappings)), "  "));
 			list.back().str += sm.name;
 		}
 		if (edit_mode == EDIT_EXISTING)
 		{
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_DEL, 0, "  [Remove Binding]");
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_DEL, 0, "  [Remove Binding]"));
 			int count = 0;
 			if (edit_info >= 0) // editing bind
 			{
 				const DBP_InputBind& edit = dbp_input_binds[edit_info>>1];
-				for (const DBP_InputBind& b : dbp_input_binds)
-					if (PORT_DEVICE_INDEX_ID(b) == PORT_DEVICE_INDEX_ID(edit))
-						count++;
+				for (size_t _xi = 0; _xi < dbp_input_binds.size(); _xi++)
+					{ const DBP_InputBind& b = dbp_input_binds[_xi]; if (PORT_DEVICE_INDEX_ID(b) == PORT_DEVICE_INDEX_ID(edit))
+						count++; }
 			}
 			else // editing wheel
 			{
@@ -914,18 +914,18 @@ struct DBP_MapperMenuState final : DBP_MenuState
 			}
 			if (count < 4)
 			{
-				list.emplace_back(IT_NONE);
-				list.emplace_back(IT_ADD, 0, "  [Additional Binding]");
+				list.push_back(Item(IT_NONE));
+				list.push_back(Item(IT_ADD, 0, "  [Additional Binding]"));
 			}
 		}
 		#ifdef DBP_STANDALONE
 		if (edit_info >= 0 && edit_mode != EDIT_ADDITIONAL && DBPS_HaveJoy()) // editing bind (not wheel)
 		{
 			DBP_InputBind bnd = (edit_mode == EDIT_NEW ? BindFromPadNum((Bit8u)edit_info) : dbp_input_binds[edit_info>>1]);
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_BINDJOY, 0, "  [ Change Controller Input ]");
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_NONE);
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_BINDJOY, 0, "  [ Change Controller Input ]"));
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_NONE));
 			if (!DBPS_GetJoyBind(bnd.port, bnd.device, bnd.index, bnd.id, (bool)(edit_info&1), list[list.size()-2].str, list[list.size()-1].str, "  "))
 			{
 				list.resize(list.size() - 2);
@@ -933,8 +933,8 @@ struct DBP_MapperMenuState final : DBP_MenuState
 			}
 		}
 		#endif
-		list.emplace_back(IT_NONE);
-		list.emplace_back(IT_CANCEL, 0, "Cancel");
+		list.push_back(Item(IT_NONE));
+		list.push_back(Item(IT_CANCEL, 0, "Cancel"));
 
 		char device = *(list[1].str.c_str() + (sizeof(" >  [Edit] ")-1));
 		ResetSel(device == 'J' ? 5 : (device == 'M' ? 4 : 3));
@@ -946,7 +946,7 @@ struct DBP_MapperMenuState final : DBP_MenuState
 		bind_dev = (Bit8u)list[sel].info;
 		(list[2].str = "   >")  += list[sel].str;
 		list.resize(3);
-		list.emplace_back(IT_NONE);
+		list.push_back(Item(IT_NONE));
 		if (bind_dev == 1) for (Bit8u i = KBD_NONE + 1; i != KBD_LAST; i++)
 		{
 			static Bit8u sortedKeys[KBD_f1] = { KBD_NONE,
@@ -956,32 +956,32 @@ struct DBP_MapperMenuState final : DBP_MenuState
 				KBD_1, KBD_2, KBD_3, KBD_4, KBD_5, KBD_6, KBD_7, KBD_8, KBD_9, KBD_0,
 			};
 			Bit8u key = (i < KBD_f1 ? sortedKeys[i] : i);
-			list.emplace_back(IT_SELECT, key, "  ");
+			list.push_back(Item(IT_SELECT, key, "  "));
 			list.back().str += DBP_KBDNAMES[key];
 
 			if (const char* mapname = DBP_PadMapping::GetKeyAutoMapButtonLabel(key))
 			{
-				list.emplace_back(IT_NONE, 0, "    Function: ");
+				list.push_back(Item(IT_NONE, 0, "    Function: "));
 				list.back().str += mapname;
-				list.emplace_back(IT_NONE, 0);
+				list.push_back(Item(IT_NONE, 0));
 			}
 		}
-		else for (const DBP_SpecialMapping& sm : DBP_SpecialMappings)
-		{
+		else for (size_t _xi = 0; _xi < sizeof(DBP_SpecialMappings)/sizeof(DBP_SpecialMappings[0]); _xi++)
+		{ const DBP_SpecialMapping& sm = DBP_SpecialMappings[_xi];
 			if (sm.dev != (bind_dev == 2 ? DBPDEV_Mouse : DBPDEV_Joystick)) continue;
-			list.emplace_back(IT_SELECT, (Bit16s)(DBP_SPECIALMAPPINGS_KEY + (&sm - DBP_SpecialMappings)), "  ");
+			list.push_back(Item(IT_SELECT, (Bit16s)(DBP_SPECIALMAPPINGS_KEY + (&sm - DBP_SpecialMappings)), "  "));
 			list.back().str += sm.name;
 		}
-		list.emplace_back(IT_NONE);
-		list.emplace_back(IT_CANCEL, 0, "Cancel");
+		list.push_back(Item(IT_NONE));
+		list.push_back(Item(IT_CANCEL, 0, "Cancel"));
 
 		ResetSel(4, true); // skip top IT_NONE entry
 		if (!strncmp(list[1].str.c_str() + (sizeof(" >  [Edit] ")-1), list[2].str.c_str() + (sizeof("   >   ")-1), list[2].str.size() - (sizeof("   >   ")-1)))
 		{
 			const char* keyname = list[1].str.c_str() + (sizeof(" >  [Edit] ")-1) + list[2].str.size() - (sizeof("   >   ")-1) + 1;
-			for (const Item& it : list)
-				if (it.str.size() > 2 && !strcmp(it.str.c_str() + 2, keyname))
-					{ ResetSel((int)(&it - &list[0])); break; }
+			for (size_t _xi = 0; _xi < list.size(); _xi++)
+				{ const Item& it = list[_xi]; if (it.str.size() > 2 && !strcmp(it.str.c_str() + 2, keyname))
+					{ ResetSel((int)(&it - &list[0])); break; } }
 		}
 	}
 
@@ -1008,7 +1008,7 @@ struct DBP_MapperMenuState final : DBP_MenuState
 				DBP_WheelItem* edit = (edit_mode == EDIT_NEW ? NULL : &dbp_wheelitems[edit_info / -4 - 1]);
 				if (ok_type == IT_SELECT && edit_mode == EDIT_NEW) // add new entry
 				{
-					dbp_wheelitems.push_back({ bind_port, 1, { (Bit8u)list[sel].info } });
+					{ DBP_WheelItem _wi; _wi.port = bind_port; _wi.key_count = 1; _wi.k[0] = (Bit8u)list[sel].info; _wi.k[1] = 0; _wi.k[2] = 0; _wi.k[3] = 0; dbp_wheelitems.push_back(_wi); }
 				}
 				else if (ok_type == IT_SELECT && edit_mode == EDIT_ADDITIONAL)
 				{
@@ -1041,11 +1041,11 @@ struct DBP_MapperMenuState final : DBP_MenuState
 			DBP_InputBind bnd = (edit_mode == EDIT_NEW ? BindFromPadNum((Bit8u)edit_info) : dbp_input_binds[edit_info>>1]);
 			DBPS_StartCaptureJoyBind(bnd.port, bnd.device, bnd.index, bnd.id, (bool)(edit_info&1));
 			list.resize(2);
-			list.emplace_back(IT_NONE, 99, "   >  Assign New Input");
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_NONE, 0, "  Press an input on the controller");
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_CANCEL, 0, "Cancel");
+			list.push_back(Item(IT_NONE, 99, "   >  Assign New Input"));
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_NONE, 0, "  Press an input on the controller"));
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_CANCEL, 0, "Cancel"));
 			ResetSel(2);
 		}
 		else if (ok_type == IT_CANCEL && list.size() >= 3 && list[2].info == 99)
@@ -1333,9 +1333,9 @@ struct DBP_OnScreenKeyboardState
 struct DBP_PureMenuState final : DBP_MenuState
 {
 	#ifndef DBP_STANDALONE
-	enum ItemType : Bit8u { IT_RUN = _IT_CUSTOM, IT_MOUNT, IT_BOOTIMG, IT_BOOTIMG_MACHINE, IT_BOOTOSLIST, IT_BOOTOS, IT_INSTALLOSSIZE, IT_INSTALLOS, IT_SHELLLIST, IT_RUNSHELL, _IT_NO_AUTOBOOT, IT_MAINMENU, IT_COMMANDLINE, IT_CLOSEOSD, IT_VARIANTLIST, IT_VARIANTTOGGLE, IT_VARIANTRUN, IT_VARIANTRUN_RESET_CONFLICTS, IT_VARIANTRUN_KEEP_CONFLICTS, IT_SYSTEMREFRESH };
+	enum ItemType { IT_RUN = _IT_CUSTOM, IT_MOUNT, IT_BOOTIMG, IT_BOOTIMG_MACHINE, IT_BOOTOSLIST, IT_BOOTOS, IT_INSTALLOSSIZE, IT_INSTALLOS, IT_SHELLLIST, IT_RUNSHELL, _IT_NO_AUTOBOOT, IT_MAINMENU, IT_COMMANDLINE, IT_CLOSEOSD, IT_VARIANTLIST, IT_VARIANTTOGGLE, IT_VARIANTRUN, IT_VARIANTRUN_RESET_CONFLICTS, IT_VARIANTRUN_KEEP_CONFLICTS, IT_SYSTEMREFRESH };
 	#else
-	enum ItemType : Bit8u { IT_RUN = _IT_CUSTOM, IT_MOUNT, IT_BOOTIMG, IT_BOOTIMG_MACHINE, IT_BOOTOSLIST, IT_BOOTOS, IT_INSTALLOSSIZE, IT_INSTALLOS, IT_SHELLLIST, IT_RUNSHELL, _IT_NO_AUTOBOOT, IT_MAINMENU, IT_COMMANDLINE, IT_CLOSEOSD, IT_VARIANTLIST, IT_VARIANTTOGGLE, IT_VARIANTRUN, IT_VARIANTRUN_RESET_CONFLICTS, IT_VARIANTRUN_KEEP_CONFLICTS, IT_SYSTEMREFRESH, IT_FILEBROWSE, IT_SAVELOAD, IT_EXITDBPS };
+	enum ItemType { IT_RUN = _IT_CUSTOM, IT_MOUNT, IT_BOOTIMG, IT_BOOTIMG_MACHINE, IT_BOOTOSLIST, IT_BOOTOS, IT_INSTALLOSSIZE, IT_INSTALLOS, IT_SHELLLIST, IT_RUNSHELL, _IT_NO_AUTOBOOT, IT_MAINMENU, IT_COMMANDLINE, IT_CLOSEOSD, IT_VARIANTLIST, IT_VARIANTTOGGLE, IT_VARIANTRUN, IT_VARIANTRUN_RESET_CONFLICTS, IT_VARIANTRUN_KEEP_CONFLICTS, IT_SYSTEMREFRESH, IT_FILEBROWSE, IT_SAVELOAD, IT_EXITDBPS };
 	#endif
 	enum { INFO_HEADER = 0x0A, INFO_WARN = 0x0B, INFO_DIM = 0xC };
 
@@ -1465,12 +1465,12 @@ struct DBP_PureMenuState final : DBP_MenuState
 		}
 	}
 
-	bool GoToSubMenu(ItemType mode, ItemType subtype, int find_info = -1, std::string* find_string = nullptr)
+	bool GoToSubMenu(ItemType mode, ItemType subtype, int find_info = -1, std::string* find_string = NULL)
 	{
 		if (mode != listmode) RefreshList(mode);
-		for (const Item& it : list)
-			if (it.type == subtype && (find_string ? (it.str == *find_string) : (it.info == find_info)))
-				{ ResetSel((int)(&it - &list[0])); return true; }
+		for (size_t _xi = 0; _xi < list.size(); _xi++)
+			{ const Item& it = list[_xi]; if (it.type == subtype && (find_string ? (it.str == *find_string) : (it.info == find_info)))
+				{ ResetSel((int)(&it - &list[0])); return true; } }
 		return false;
 	}
 
@@ -1487,8 +1487,8 @@ struct DBP_PureMenuState final : DBP_MenuState
 
 	void AddFSRow(Bit8u type, Bit16s info, const char* str, bool add_spacer = false)
 	{
-		if (add_spacer && fs_rows) { list.emplace_back(IT_NONE); fs_rows++; }
-		list.emplace_back(type, info, str);
+		if (add_spacer && fs_rows) { list.push_back(Item(IT_NONE)); fs_rows++; }
+		list.push_back(Item(type, info, str));
 		fs_rows++;
 	}
 
@@ -1512,22 +1512,22 @@ struct DBP_PureMenuState final : DBP_MenuState
 		if (!DBP_FullscreenOSD && mode != IT_MAINMENU && mode != IT_FILEBROWSE && dbp_images.size())
 		#endif
 		{
-			for (DBP_Image& image : dbp_images) list.emplace_back(IT_MOUNT, (Bit16s)(&image - &dbp_images[0]), DBP_Image_Label(image));
-			list.emplace_back(IT_NONE);
+			for (size_t _xi = 0; _xi < dbp_images.size(); _xi++) { DBP_Image& image = dbp_images[_xi]; list.push_back(Item(IT_MOUNT, (Bit16s)(&image - &dbp_images[0]), DBP_Image_Label(image))); }
+			list.push_back(Item(IT_NONE));
 		}
 		if (!first_shell) // Show menu after DOS crashed
 		{
-			list.emplace_back(IT_NONE, INFO_HEADER, "DOS Crashed");
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_MAINMENU, 0, "Reset");
+			list.push_back(Item(IT_NONE, INFO_HEADER, "DOS Crashed"));
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_MAINMENU, 0, "Reset"));
 		}
 		else if (mode == IT_MAINMENU)
 		{
 			int cd_count = 0, hd_count = 0, boot_rows = 0; bool bootimg = false;
 
 			fs_rows = 0;
-			for (DBP_Image& image : dbp_images)
-			{
+			for (size_t _xi = 0; _xi < dbp_images.size(); _xi++)
+			{ DBP_Image& image = dbp_images[_xi];
 				AddFSRow(IT_MOUNT, (Bit16s)(&image - &dbp_images[0]), DBP_Image_Label(image));
 				(DBP_Image_IsCD(image) ? cd_count : hd_count)++;
 				if (image.image_disk) bootimg = true;
@@ -1552,7 +1552,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 				AddFSRow(IT_VARIANTLIST, 0, "[ Select Game Configuration ]");
 			}
 
-			if (fs_rows) { list.emplace_back(IT_NONE); fs_rows++; }
+			if (fs_rows) { list.push_back(Item(IT_NONE)); fs_rows++; }
 
 			// Scan drive C first, any others after
 			sel = ('C'-'A'); // use sel to have access to it in FileIter
@@ -1564,123 +1564,123 @@ struct DBP_PureMenuState final : DBP_MenuState
 				DriveFileIterator(Drives[sel], FileIter, (Bitu)this);
 				multidrive = true;
 			}
-			if (exe_count) list.emplace_back(IT_NONE);
+			if (exe_count) list.push_back(Item(IT_NONE));
 
 			if (DBP_FullscreenOSD || (cd_count + hd_count) <= 1) setsel = (patchDrive::variants.Len() ? (fs_rows - 2) : (exe_count ? fs_rows : (int)dbp_images.size()));
-			if (!exe_count) { list.emplace_back(IT_NONE, INFO_DIM, "No executable file found"); list.emplace_back(IT_NONE); }
+			if (!exe_count) { list.push_back(Item(IT_NONE, INFO_DIM, "No executable file found")); list.push_back(Item(IT_NONE)); }
 
-			if (!dbp_strict_mode) list.emplace_back(IT_COMMANDLINE, 0, "Go to Command Line");
-			if (!DBP_FullscreenOSD) list.emplace_back(IT_CLOSEOSD, 0, "Close Menu");
+			if (!dbp_strict_mode) list.push_back(Item(IT_COMMANDLINE, 0, "Go to Command Line"));
+			if (!DBP_FullscreenOSD) list.push_back(Item(IT_CLOSEOSD, 0, "Close Menu"));
 			if (list.back().type == IT_NONE) list.pop_back();
 
 			#ifdef DBP_STANDALONE
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_EXITDBPS, 0, "Exit DOSBox Pure");
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_EXITDBPS, 0, "Exit DOSBox Pure"));
 			#endif
 		}
 		else if (mode == IT_BOOTIMG)
 		{
-			list.emplace_back(IT_NONE, INFO_HEADER, "Select Boot System Mode");
-			list.emplace_back(IT_NONE);
-			for (const char* it : DBP_MachineNames) list.emplace_back(IT_BOOTIMG_MACHINE, (Bit16s)(it[0]|0x20), it);
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_MAINMENU, 0, "Cancel");
+			list.push_back(Item(IT_NONE, INFO_HEADER, "Select Boot System Mode"));
+			list.push_back(Item(IT_NONE));
+			for (size_t _xi = 0; _xi < sizeof(DBP_MachineNames)/sizeof(DBP_MachineNames[0]); _xi++) { const char* it = DBP_MachineNames[_xi]; list.push_back(Item(IT_BOOTIMG_MACHINE, (Bit16s)(it[0]|0x20), it)); }
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_MAINMENU, 0, "Cancel"));
 			const std::string& img = (!dbp_images.empty() ? dbp_images[dbp_image_index].path : list[1].str);
 			bool isPCjrCart = (img.size() > 3 && (img[img.size()-3] == 'J' || img[img.size()-2] == 'T'));
 			char wantmchar = (isPCjrCart ? 'p' : *(const char*)control->GetProp("dosbox", "machine")->GetValue());
-			for (const Item& it : list) { if (it.info == wantmchar) { setsel = (int)(&it - &list[0]); break; } }
+			for (size_t _xi = 0; _xi < list.size(); _xi++) { const Item& it = list[_xi]; if (it.info == wantmchar) { setsel = (int)(&it - &list[0]); break; } }
 		}
 		else if (mode == IT_INSTALLOSSIZE)
 		{
 			const char* filename;
 			std::string osimg = DBP_GetSaveFile(SFT_NEWOSIMAGE, &filename);
-			list.emplace_back(IT_NONE, INFO_HEADER, "Hard Disk Size For Install");
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_NONE, INFO_WARN, "Create a new hard disk image in the following location:");
-			if (filename > &osimg[0]) { list.emplace_back(IT_NONE, INFO_WARN); list.back().str.assign(&osimg[0], filename - &osimg[0]); }
-			list.emplace_back(IT_NONE, INFO_WARN, filename);
-			list.emplace_back(IT_NONE);
+			list.push_back(Item(IT_NONE, INFO_HEADER, "Hard Disk Size For Install"));
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_NONE, INFO_WARN, "Create a new hard disk image in the following location:"));
+			if (filename > &osimg[0]) { list.push_back(Item(IT_NONE, INFO_WARN)); list.back().str.assign(&osimg[0], filename - &osimg[0]); }
+			list.push_back(Item(IT_NONE, INFO_WARN, filename));
+			list.push_back(Item(IT_NONE));
 			char buf[128];
 			for (Bit16s sz = 16/8; sz <= 64*1024/8; sz += (sz < 4096/8 ? sz : (sz < 32*1024/8 ? 4096/8 : 8192/8)))
 			{
-				list.emplace_back(IT_INSTALLOS, sz, (sprintf(buf, "%3d %cB Hard Disk", (sz < 1024/8 ? sz*8 : sz*8/1024), (sz < 1024/8 ? 'M' : 'G')),buf));
+				list.push_back(Item(IT_INSTALLOS, sz, (sprintf(buf, "%3d %cB Hard Disk", (sz < 1024/8 ? sz*8 : sz*8/1024), (sz < 1024/8 ? 'M' : 'G')),buf)));
 				if (sz == 2048/8)
 				{
-					list.emplace_back(IT_NONE);
-					list.emplace_back(IT_NONE, INFO_WARN, "Hard disk images over 2GB will be formatted with FAT32");
-					list.emplace_back(IT_NONE, INFO_WARN, "NOTE: FAT32 is only supported in Windows 95C and newer");
-					list.emplace_back(IT_NONE);
+					list.push_back(Item(IT_NONE));
+					list.push_back(Item(IT_NONE, INFO_WARN, "Hard disk images over 2GB will be formatted with FAT32"));
+					list.push_back(Item(IT_NONE, INFO_WARN, "NOTE: FAT32 is only supported in Windows 95C and newer"));
+					list.push_back(Item(IT_NONE));
 				}
 			}
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_INSTALLOS, 0, "[ Boot Only Without Creating Hard Disk Image ]");
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_INSTALLOS, 0, "[ Boot Only Without Creating Hard Disk Image ]"));
 			setsel = (filename > &osimg[0] ? 11 : 10);
 		}
 		else if (mode == IT_BOOTOSLIST)
 		{
-			list.emplace_back(IT_NONE, INFO_HEADER, "Select Operating System Disk Image");
-			list.emplace_back(IT_NONE);
-			for (const std::string& im : dbp_osimages)
-				{ list.emplace_back(IT_BOOTOS, (Bit16s)(&im - &dbp_osimages[0])); list.back().str.assign(im.c_str(), im.size()-4); }
-			if (dbp_system_cached) { list.emplace_back(IT_NONE); list.emplace_back(IT_SYSTEMREFRESH, 0, "[ Refresh List ]"); }
+			list.push_back(Item(IT_NONE, INFO_HEADER, "Select Operating System Disk Image"));
+			list.push_back(Item(IT_NONE));
+			for (size_t _xi = 0; _xi < dbp_osimages.size(); _xi++)
+				{ const std::string& im = dbp_osimages[_xi]; list.push_back(Item(IT_BOOTOS, (Bit16s)(&im - &dbp_osimages[0]))); list.back().str.assign(im.c_str(), im.size()-4); }
+			if (dbp_system_cached) { list.push_back(Item(IT_NONE)); list.push_back(Item(IT_SYSTEMREFRESH, 0, "[ Refresh List ]")); }
 			char ramdisk = DBP_Option::Get(DBP_Option::bootos_ramdisk)[0];
 			if (ramdisk == 't')
 			{
-				list.emplace_back(IT_NONE);
-				list.emplace_back(IT_NONE, INFO_WARN, "Changes made to the C: drive will be discarded");
+				list.push_back(Item(IT_NONE));
+				list.push_back(Item(IT_NONE, INFO_WARN, "Changes made to the C: drive will be discarded"));
 			}
 			else if (ramdisk == 'd')
 			{
 				const char *save_c_name; std::string save_c = DBP_GetSaveFile(SFT_DIFFDISK, &save_c_name);
-				list.emplace_back(IT_NONE);
-				list.emplace_back(IT_NONE, INFO_WARN, "Changes made to the C: drive will be stored in the following location:");
-				if (save_c_name > &save_c[0]) { list.emplace_back(IT_NONE, INFO_WARN); list.back().str.assign(&save_c[0], save_c_name - &save_c[0]); }
-				list.emplace_back(IT_NONE, INFO_WARN, save_c_name);
+				list.push_back(Item(IT_NONE));
+				list.push_back(Item(IT_NONE, INFO_WARN, "Changes made to the C: drive will be stored in the following location:"));
+				if (save_c_name > &save_c[0]) { list.push_back(Item(IT_NONE, INFO_WARN)); list.back().str.assign(&save_c[0], save_c_name - &save_c[0]); }
+				list.push_back(Item(IT_NONE, INFO_WARN, save_c_name));
 			}
-			list.emplace_back(IT_NONE);
+			list.push_back(Item(IT_NONE));
 			const char* dfreespace = DBP_Option::Get(DBP_Option::bootos_dfreespace); // can also be "discard" or "hide"
 			bool mountedHDIMage = false;
-			for (DBP_Image& i : dbp_images) { if (!DBP_Image_IsCD(i)) { mountedHDIMage = true; break; } }
+			for (size_t _xi = 0; _xi < dbp_images.size(); _xi++) { DBP_Image& i = dbp_images[_xi]; if (!DBP_Image_IsCD(i)) { mountedHDIMage = true; break; } }
 			if (mountedHDIMage && (imageDiskList['D'-'A'] || imageDiskList['E'-'A'] || (!DOSBox_Boot && imageDiskList['C'-'A'])))
-				list.emplace_back(IT_NONE, INFO_WARN, "D: will be based on the loaded .IMG file");
+				list.push_back(Item(IT_NONE, INFO_WARN, "D: will be based on the loaded .IMG file"));
 			else if (atoi(dfreespace))
 			{
 				const char *save_d_name; std::string save_d = DBP_GetSaveFile(SFT_VIRTUALDISK, &save_d_name);
-				list.emplace_back(IT_NONE, INFO_WARN, "Changes made to the D: drive will be stored in the following location:");
-				if (save_d_name > &save_d[0]) { list.emplace_back(IT_NONE, INFO_WARN); list.back().str.assign(&save_d[0], save_d_name - &save_d[0]); }
-				list.emplace_back(IT_NONE, INFO_WARN, save_d_name);
+				list.push_back(Item(IT_NONE, INFO_WARN, "Changes made to the D: drive will be stored in the following location:"));
+				if (save_d_name > &save_d[0]) { list.push_back(Item(IT_NONE, INFO_WARN)); list.back().str.assign(&save_d[0], save_d_name - &save_d[0]); }
+				list.push_back(Item(IT_NONE, INFO_WARN, save_d_name));
 			}
 			else if (dfreespace[0] != 'h')
-				list.emplace_back(IT_NONE, INFO_WARN, "Changes made to the D: drive will be discarded");
+				list.push_back(Item(IT_NONE, INFO_WARN, "Changes made to the D: drive will be discarded"));
 			else
-				list.emplace_back(IT_NONE, INFO_WARN, "D: hard drive was disabled, use only mounted CDs");
+				list.push_back(Item(IT_NONE, INFO_WARN, "D: hard drive was disabled, use only mounted CDs"));
 		}
 		else if (mode == IT_SHELLLIST)
 		{
-			list.emplace_back(IT_NONE, INFO_HEADER, "Select System Shell");
-			list.emplace_back(IT_NONE);
-			for (const std::string& im : dbp_shellzips)
-				{ list.emplace_back(IT_RUNSHELL, (Bit16s)(&im - &dbp_shellzips[0])); list.back().str.assign(im.c_str(), im.size()-5); }
-			if (dbp_system_cached) { list.emplace_back(IT_NONE); list.emplace_back(IT_SYSTEMREFRESH, 0, "[ Refresh List ]"); }
+			list.push_back(Item(IT_NONE, INFO_HEADER, "Select System Shell"));
+			list.push_back(Item(IT_NONE));
+			for (size_t _xi = 0; _xi < dbp_shellzips.size(); _xi++)
+				{ const std::string& im = dbp_shellzips[_xi]; list.push_back(Item(IT_RUNSHELL, (Bit16s)(&im - &dbp_shellzips[0]))); list.back().str.assign(im.c_str(), im.size()-5); }
+			if (dbp_system_cached) { list.push_back(Item(IT_NONE)); list.push_back(Item(IT_SYSTEMREFRESH, 0, "[ Refresh List ]")); }
 		}
 		else if (mode == IT_VARIANTLIST)
 		{
 			#ifdef DBP_STANDALONE
-			list.emplace_back(IT_FILEBROWSE, 0, "[ Load Content ]");
-			list.emplace_back(IT_SAVELOAD, 0, "[ Saving & Loading ]");
-			list.emplace_back(IT_NONE);
+			list.push_back(Item(IT_FILEBROWSE, 0, "[ Load Content ]"));
+			list.push_back(Item(IT_SAVELOAD, 0, "[ Saving & Loading ]"));
+			list.push_back(Item(IT_NONE));
 			#endif
 
-			list.emplace_back(IT_NONE, INFO_HEADER, "Select Game Configuration");
-			list.emplace_back(IT_NONE);
+			list.push_back(Item(IT_NONE, INFO_HEADER, "Select Game Configuration"));
+			list.push_back(Item(IT_NONE));
 			const std::vector<std::string>& vars = patchDrive::variants.GetStorage();
 			int list_base = (int)list.size(), max_secs = 1, sec, secbegin, secend, i, enabled_var = DBP_Run::patch.enabled_variant, expect_vars = 1;
 			if (0) { sections_are_imbalanced: max_secs = 0; list.resize((unsigned)list_base); }
 			for (sec = 0, secbegin = secend = (int)list.size();; secbegin = secend, sec++)
 			{
 				int sec_len, total_secs, max_sec_len = 0, have_enabled_toggle = 0;
-				for (const std::string& v : vars)
-				{
+				for (size_t _xi = 0; _xi < vars.size(); _xi++)
+				{ const std::string& v = vars[_xi];
 					const int var_num = patchDrive::variants.GetStorageIndex(&v) + 1;
 					const char* sec_name = GetVariantSection(v, sec, sec_len, total_secs);
 					if (total_secs <= 1 || max_secs == 0)
@@ -1691,7 +1691,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 							int str_len = (int)list[i].str.length(), c = memcmp(list[i].str.c_str(), sec_name, (sec_len < str_len ? sec_len : str_len));
 							if (c > 0 || (!c && str_len > sec_len)) break; // found sorted insert index i
 						}
-						list.emplace(list.begin() + i, IT_VARIANTRUN, (Bit16s)var_num, sec_name);
+						list.insert(list.begin() + i, Item(IT_VARIANTRUN, (Bit16s)var_num, sec_name));
 					}
 					else
 					{
@@ -1703,7 +1703,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 							if (c > 0 || (!c && str_len > sec_len)) break; // found sorted insert index i
 						}
 						if (sec_len > max_sec_len) max_sec_len = sec_len;
-						{ Item& it = *list.emplace(list.begin() + i, IT_VARIANTTOGGLE, (Bit16s)(var_num - 1), "( ) "); it.pad = 1; it.str.append(sec_name, sec_len); }
+						{ std::vector<Item>::iterator _ins = list.insert(list.begin() + i, Item(IT_VARIANTTOGGLE, (Bit16s)(var_num - 1), "( ) ")); Item& it = *_ins; it.pad = 1; it.str.append(sec_name, sec_len); }
 						secend++;
 						skipadd:
 						if (var_num == enabled_var) { list[i].str[1] = '\x7'; have_enabled_toggle = 1; }
@@ -1718,7 +1718,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 					if (!have_enabled_toggle) list[secbegin].str[1] = '\x7';
 					for (i = secbegin; i != secend; i++) { Item& it = list[i]; it.pad = (Bit8u)sec; it.str.append(max_sec_len + 4 - it.str.length(), ' '); }
 					if ((expect_vars *= (secend - secbegin)) != have_vars && sec == max_secs - 1) goto sections_are_imbalanced;
-					list.emplace(list.begin() + secend++, IT_NONE);
+					list.insert(list.begin() + secend++, Item(IT_NONE));
 				}
 				if (sec >= max_secs - 1) break;
 			}
@@ -1727,21 +1727,21 @@ struct DBP_PureMenuState final : DBP_MenuState
 			for (i = list_base; i != list_size; i++) ClearSortOrderPrefix(list[i].str); // Remove N# or NN# fixed sort order prefixes
 			if (sec)
 			{
-				list.emplace(list.begin() + secend, IT_VARIANTRUN, (setsel ? 0 : DBP_Run::patch.enabled_variant), "Run Game");
-				if (secend != list_size) list.emplace(list.begin() + (secend + 1), IT_NONE); // mix of sections and other options, add divider
+				list.insert(list.begin() + secend, Item(IT_VARIANTRUN, (setsel ? 0 : DBP_Run::patch.enabled_variant), "Run Game"));
+				if (secend != list_size) list.insert(list.begin() + (secend + 1), Item(IT_NONE)); // mix of sections and other options, add divider
 				setsel = (setsel ? (setsel + 2) : secend); // fix for added rows
 			}
 			else if (DBP_Run::patch.show_default)
 			{
-				list.emplace(list.begin() + secbegin, IT_VARIANTRUN, 0, "Default"); // no sections, add default start
+				list.insert(list.begin() + secbegin, Item(IT_VARIANTRUN, 0, "Default")); // no sections, add default start
 				setsel = (setsel ? (setsel + 1) : secbegin); // fix for added row
 			}
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_MAINMENU, 0, "Run Other Program");
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_NONE, INFO_DIM, "The configuration can be switched with the On-Screen Menu");
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_MAINMENU, 0, "Run Other Program"));
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_NONE, INFO_DIM, "The configuration can be switched with the On-Screen Menu"));
 			#ifndef DBP_STANDALONE
-			list.emplace_back(IT_NONE, INFO_DIM, "or by holding shift or L2/R2 when restarting the core");
+			list.push_back(Item(IT_NONE, INFO_DIM, "or by holding shift or L2/R2 when restarting the core"));
 			#endif
 		}
 		#ifdef DBP_STANDALONE
@@ -1757,7 +1757,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 				for (unsigned drives = GetLogicalDrives(); *drvpath <= 'Z'; (*drvpath)++)
 				{
 					if (!(drives & (1 << (*drvpath - 'A')))) continue;
-					list.emplace_back(IT_FILEBROWSE, -2); list.back().str.assign(drvpath, 2);
+					list.push_back(Item(IT_FILEBROWSE, -2)); list.back().str.assign(drvpath, 2);
 				}
 			}
 			else
@@ -1785,31 +1785,31 @@ struct DBP_PureMenuState final : DBP_MenuState
 						info = ((setsel == -1 && ext - name == dbp_content_name.size() && !strncasecmp(name, dbp_content_name.c_str(), dbp_content_name.size())) ? 4 : 3);
 					else continue;
 					int insert_index = (int)list.size();
-					for (const Item& it : list) { if (it.info > info || (it.info == info && strcasecmp(it.str.c_str(), name) > 0)) { insert_index = (int)(&it - &list[0]); break; } }
-					list.emplace(list.begin() + insert_index, IT_FILEBROWSE, (info == 4 ? 3 : info), name);
+					for (size_t _xi = 0; _xi < list.size(); _xi++) { const Item& it = list[_xi]; if (it.info > info || (it.info == info && strcasecmp(it.str.c_str(), name) > 0)) { insert_index = (int)(&it - &list[0]); break; } }
+					list.insert(list.begin() + insert_index, Item(IT_FILEBROWSE, (info == 4 ? 3 : info), name));
 					if (info == 4) setsel = insert_index; else if (setsel >= insert_index) setsel++;
 				}
 				if (dir) vfs.iface->closedir(dir);
 				#ifdef WIN32
-				if (!have_up && DBPS_BrowsePath.length() != 1) list.emplace(list.begin(), IT_FILEBROWSE, -1, "[ Go Up ]"); // go to drive selection
+				if (!have_up && DBPS_BrowsePath.length() != 1) list.insert(list.begin(), Item(IT_FILEBROWSE, -1, "[ Go Up ]")); // go to drive selection
 				#endif
 				if (setsel == -1) setsel = 1;
-				list.emplace_back(IT_FILEBROWSE, 4, "[ Load this folder as content ]");
+				list.push_back(Item(IT_FILEBROWSE, 4, "[ Load this folder as content ]"));
 			}
-			if (list.empty()) list.emplace_back(IT_NONE, INFO_HEADER, "No files");
+			if (list.empty()) list.push_back(Item(IT_NONE, INFO_HEADER, "No files"));
 		}
 		else if (mode == IT_SAVELOAD)
 		{
 			bool have = DBPS_HaveSaveSlot();
-			list.emplace_back(IT_NONE, INFO_HEADER, "Saving and Loading");
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_NONE, INFO_DIM, "Save Name: "); list.back().str.append(dbp_content_name);
-			list.emplace_back(IT_SAVELOAD, 2, "Save Slot: "); list.back().str += '0' + DBPS_SaveSlotIndex;
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_SAVELOAD, 3, "Save");
-			list.emplace_back((have ? (Bit8u)IT_SAVELOAD : (Bit8u)IT_NONE), (have ? 4 : INFO_DIM), "Load");
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_MAINMENU, 0, "Back");
+			list.push_back(Item(IT_NONE, INFO_HEADER, "Saving and Loading"));
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_NONE, INFO_DIM, "Save Name: ")); list.back().str.append(dbp_content_name);
+			list.push_back(Item(IT_SAVELOAD, 2, "Save Slot: ")); list.back().str += '0' + DBPS_SaveSlotIndex;
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_SAVELOAD, 3, "Save"));
+			list.push_back(Item((have ? (Bit8u)IT_SAVELOAD : (Bit8u)IT_NONE), (have ? 4 : INFO_DIM), "Load"));
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_MAINMENU, 0, "Back"));
 		}
 		#endif
 		else { DBP_ASSERT(false); }
@@ -1831,7 +1831,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 		(((entry += ('A' + m->sel)) += ':') += '\\') += path;
 
 		// insert into menu list ordered alphabetically
-		Item item = { IT_RUN };
+		Item item(IT_RUN);
 		int insert_index = m->fs_rows;
 		for (; insert_index != (int)m->list.size(); insert_index++)
 			if (m->list[insert_index].str > entry) break;
@@ -1904,11 +1904,11 @@ struct DBP_PureMenuState final : DBP_MenuState
 				{
 					std::string fname; fname.swap(item.str);
 					list.clear();
-					list.emplace_back(IT_NONE);
-					list.emplace_back(IT_NONE, INFO_WARN); fname.swap(list.back().str);
-					list.emplace_back(IT_NONE);
-					list.emplace_back(IT_FILEBROWSE, 5, "[ Mount as CD/DISK Image ]");
-					list.emplace_back(IT_FILEBROWSE, 6, "[ Load as Content ]");
+					list.push_back(Item(IT_NONE));
+					list.push_back(Item(IT_NONE, INFO_WARN)); fname.swap(list.back().str);
+					list.push_back(Item(IT_NONE));
+					list.push_back(Item(IT_FILEBROWSE, 5, "[ Mount as CD/DISK Image ]"));
+					list.push_back(Item(IT_FILEBROWSE, 6, "[ Load as Content ]"));
 					ResetSel(3);
 				}
 				else
@@ -1954,16 +1954,16 @@ struct DBP_PureMenuState final : DBP_MenuState
 		}
 		else if (ok_type == IT_VARIANTTOGGLE)
 		{
-			for (Item& it : list) if (it.pad == item.pad && it.type == IT_VARIANTTOGGLE) it.str[1] = ' ';
+			for (size_t _xi = 0; _xi < list.size(); _xi++) { Item& it = list[_xi]; if (it.pad == item.pad && it.type == IT_VARIANTTOGGLE) it.str[1] = ' '; }
 			item.str[1] = '\x7';
 			DBP_Run::patch.enabled_variant = 0; // default config
-			for (const std::string& v : patchDrive::variants.GetStorage())
-			{
+			{ const std::vector<std::string>& _vs = patchDrive::variants.GetStorage(); for (size_t _xi = 0; _xi < _vs.size(); _xi++)
+			{ const std::string& v = _vs[_xi];
 				const char* sec_name;
 				for (int sec = 0, sec_len, it_len, total_secs; (sec_name = GetVariantSection(v, sec, sec_len, total_secs)) != NULL && total_secs > 1; sec++)
 				{
-					for (Item& it : list)
-					{
+					for (size_t _xj = 0; _xj < list.size(); _xj++)
+					{ Item& it = list[_xj];
 						if (it.type != IT_VARIANTTOGGLE || it.pad != sec || it.str[1] != '\x7') continue;
 						const char* it_name = GetVariantSection(patchDrive::variants.GetStorage()[it.info], sec, it_len, total_secs);
 						if (!it_name || sec_len != it_len || memcmp(it_name, sec_name, sec_len)) goto next_variant;
@@ -1972,9 +1972,9 @@ struct DBP_PureMenuState final : DBP_MenuState
 					if (sec == total_secs - 1) { DBP_Run::patch.enabled_variant = (Bit16s)(patchDrive::variants.GetStorageIndex(&v) + 1); goto matched_variant; }
 				}
 				next_variant:;
-			}
+			} }
 			matched_variant:;
-			for (Item& it : list) { if (it.type == IT_VARIANTRUN) { it.info = DBP_Run::patch.enabled_variant; break; } }
+			for (size_t _xi = 0; _xi < list.size(); _xi++) { Item& it = list[_xi]; if (it.type == IT_VARIANTRUN) { it.info = DBP_Run::patch.enabled_variant; break; } }
 		}
 		else if (ok_type == IT_SYSTEMREFRESH)
 		{
@@ -2002,14 +2002,14 @@ struct DBP_PureMenuState final : DBP_MenuState
 
 			list.clear();
 			AddWrappedText(windowlinelength, "", "The selected configuration can't be applied because the settings in the files below have been customized:", INFO_WARN);
-			list.emplace_back(IT_NONE);
-			for (const std::string& path : conflicts) list.emplace_back(IT_NONE, 0, path.c_str());
-			list.emplace_back(IT_NONE);
+			list.push_back(Item(IT_NONE));
+			for (size_t _xi = 0; _xi < conflicts.size(); _xi++) { const std::string& path = conflicts[_xi]; list.push_back(Item(IT_NONE, 0, path.c_str())); }
+			list.push_back(Item(IT_NONE));
 			AddWrappedText(windowlinelength, "", "To use the configuration as intended the files need to be reset, but any changes made to them by you will be lost.", INFO_DIM);
-			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_VARIANTRUN_RESET_CONFLICTS, variant, "[ Yes, reset these files ]");
-			list.emplace_back(IT_VARIANTRUN_KEEP_CONFLICTS, variant, "[ No, keep my custom files as is ]");
-			list.emplace_back(IT_VARIANTLIST, 0, "[ Cancel ]");
+			list.push_back(Item(IT_NONE));
+			list.push_back(Item(IT_VARIANTRUN_RESET_CONFLICTS, variant, "[ Yes, reset these files ]"));
+			list.push_back(Item(IT_VARIANTRUN_KEEP_CONFLICTS, variant, "[ No, keep my custom files as is ]"));
+			list.push_back(Item(IT_VARIANTLIST, 0, "[ Cancel ]"));
 			ResetSel((int)list.size() - 2);
 		}
 		else if (ok_type)
@@ -2089,8 +2089,8 @@ struct DBP_MenuInterceptor : DBP_Interceptor
 			DBP_MenuInterceptorFirstTime = false;
 
 			// Just query values (without emitting events) when entering intercepted screen
-			for (DBP_InputBind& b : intercept_binds)
-				b.lastval = input_state_cb(b.port, b.device, b.index, b.id);
+			for (size_t _xi = 0; _xi < sizeof(intercept_binds)/sizeof(intercept_binds[0]); _xi++)
+				{ DBP_InputBind& b = intercept_binds[_xi]; b.lastval = input_state_cb(b.port, b.device, b.index, b.id); }
 
 			// Release all keys when switching between key event intercepting
 			DBP_ReleaseKeyEvents(false);
@@ -2132,8 +2132,8 @@ struct DBP_MenuInterceptor : DBP_Interceptor
 	virtual void close() override
 	{
 		// Get latest values (without emitting events) when leaving intercepted screen
-		for (DBP_InputBind& b : dbp_input_binds)
-			b.lastval = input_state_cb(b.port, b.device, b.index, b.id);
+		for (size_t _xi = 0; _xi < dbp_input_binds.size(); _xi++)
+			{ DBP_InputBind& b = dbp_input_binds[_xi]; b.lastval = input_state_cb(b.port, b.device, b.index, b.id); }
 
 		// Release all keys when switching between key event intercepting
 		DBP_ReleaseKeyEvents(false);
@@ -2364,8 +2364,8 @@ static void DBP_WheelShiftOSD(Bit8u _port, bool _on, Bit8u _shift_port = (Bit8u)
 {
 	struct Wheel
 	{
-		enum EFlags : Bit8u { FLAG_OPENWHEEL = 1, FLAG_CLOSEWHEEL = 2, FLAG_SETSHIFT = 4, FLAG_CLEARSHIFT = 8 };
-		enum EState : Bit8u { STATE_CLOSED, STATE_OPEN, STATE_OPEN_PRESSED, STATE_CLOSING_PRESSED, STATE_CLOSING_RELEASED };
+		enum EFlags { FLAG_OPENWHEEL = 1, FLAG_CLOSEWHEEL = 2, FLAG_SETSHIFT = 4, FLAG_CLEARSHIFT = 8 };
+		enum EState { STATE_CLOSED, STATE_OPEN, STATE_OPEN_PRESSED, STATE_CLOSING_PRESSED, STATE_CLOSING_RELEASED };
 		Bit8u State, Flags, Shift;
 		bool ButtonDown, UseMouse;
 		Bit16s PosX, PosY, Result;
@@ -2383,9 +2383,9 @@ static void DBP_WheelShiftOSD(Bit8u _port, bool _on, Bit8u _shift_port = (Bit8u)
 		{
 			Bit8u wheelport = (Shift ? Shift - 1 : port);
 			int n = 0;
-			for (const DBP_WheelItem& wi : dbp_wheelitems)
-				if (wi.port == wheelport)
-					n++;
+			for (size_t _xi = 0; _xi < dbp_wheelitems.size(); _xi++)
+				{ const DBP_WheelItem& wi = dbp_wheelitems[_xi]; if (wi.port == wheelport)
+					n++; }
 			if (!n) return;
 
 			int alpha = 0;
@@ -2401,14 +2401,14 @@ static void DBP_WheelShiftOSD(Bit8u _port, bool _on, Bit8u _shift_port = (Bit8u)
 
 			int wx = PosX/(32400/rad), wy = PosY/(32400/rad);
 			int wdistsq = ((wx*wx) + (wy*wy));
-			float wa = (wdistsq ? (float)atan2(wy, wx) : 0.0f);
+			float wa = (wdistsq ? (float)atan2((float)wy, (float)wx) : 0.0f);
 			if (wdistsq > maxdistsq) { wx = (int)(cos(wa) * maxdist); wy = (int)(sin(wa) * maxdist); }
 
 			float astart = ((n < 8 || (n & 1)) ? -3.14159265358979323846f : -3.0f), a = astart, astep = 6.28318530717958647692f / n, astephalf = astep/2+0.01f;
 			float sela = (wdistsq ? -999.f : -777.f); // large number like 999 works because InAngleRange only fixes -4*PI to +4*PI
 			if (State == STATE_OPEN) Result = -1;
-			for (const DBP_WheelItem& wi : dbp_wheelitems)
-			{
+			for (size_t _xi = 0; _xi < dbp_wheelitems.size(); _xi++)
+			{ const DBP_WheelItem& wi = dbp_wheelitems[_xi];
 				if (wi.port != wheelport) continue;
 				if (sela == -999.f && (State == STATE_OPEN ? InAngleRange(a, wa, astephalf) : Result == (Bit16s)(&wi - &dbp_wheelitems[0]))) sela = a;
 				if (sela == a && wdistsq > seldistsq && State == STATE_OPEN) Result = (Bit16s)(&wi - &dbp_wheelitems[0]);
@@ -2435,7 +2435,7 @@ static void DBP_WheelShiftOSD(Bit8u _port, bool _on, Bit8u _shift_port = (Bit8u)
 					drw.AlphaBlend(video + y*w + x,
 						dsq < (2*2)   ? white80a :
 						dsq < sqrIn   ? white20a :
-						dsq < sqrOut  ? (InAngleRange((float)atan2(dy, dx), sela, astephalf) ? whiteHighlighta : white30a) :
+						dsq < sqrOut  ? (InAngleRange((float)atan2((float)dy, (float)dx), sela, astephalf) ? whiteHighlighta : white30a) :
 						dsq < sqrOut1 ? white50a :
 						dsq < sqrOut3 ? white80a : white50a);
 				}
@@ -2446,8 +2446,8 @@ static void DBP_WheelShiftOSD(Bit8u _port, bool _on, Bit8u _shift_port = (Bit8u)
 
 			a = astart;
 			int selnx = 0, selny = 0, lh = (drw.height >= 400 ? 14 : 8); const char* sellbl = NULL;
-			for (const DBP_WheelItem& wi : dbp_wheelitems)
-			{
+			for (size_t _xi = 0; _xi < dbp_wheelitems.size(); _xi++)
+			{ const DBP_WheelItem& wi = dbp_wheelitems[_xi];
 				if (wi.port != wheelport) continue;
 
 				const char* lbl = DBP_PadMapping::GetWheelAutoMapButtonLabel(wi);
@@ -2565,9 +2565,9 @@ static void DBP_WheelShiftOSD(Bit8u _port, bool _on, Bit8u _shift_port = (Bit8u)
 				DBP_InputBind b = dbp_input_binds[i];
 				if (b.port != shift_port || b.device == RETRO_DEVICE_MOUSE || b.evt == DBPET_SHIFTPORT) continue;
 				b.port = port; // for PORT_DEVICE_INDEX_ID
-				for (DBP_InputBind &b2 : dbp_input_binds)
-					if (PORT_DEVICE_INDEX_ID(b) == PORT_DEVICE_INDEX_ID(b2) && b2.evt == DBPET_SHIFTPORT)
-						goto skip_bind;
+				for (size_t _xj = 0; _xj < dbp_input_binds.size(); _xj++)
+					{ DBP_InputBind &b2 = dbp_input_binds[_xj]; if (PORT_DEVICE_INDEX_ID(b) == PORT_DEVICE_INDEX_ID(b2) && b2.evt == DBPET_SHIFTPORT)
+						goto skip_bind; }
 				b.port = port | DBP_SHIFT_PORT_BIT;
 				b.lastval = 0;
 				dbp_input_binds.push_back(b);
@@ -2614,8 +2614,8 @@ static void DBP_WheelShiftOSD(Bit8u _port, bool _on, Bit8u _shift_port = (Bit8u)
 				if (wheel.Flags & (Wheel::FLAG_SETSHIFT | Wheel::FLAG_CLEARSHIFT)) wheel.ApplyShift(port);
 			}
 
-			for (DBP_InputBind& b : dbp_input_binds)
-			{
+			for (size_t _xi = 0; _xi < dbp_input_binds.size(); _xi++)
+			{ DBP_InputBind& b = dbp_input_binds[_xi];
 				Bit8u port = (b.port & DBP_PORT_MASK);
 				Wheel& wheel = Wheels[port];
 				Bit16s val = 0;

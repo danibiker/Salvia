@@ -90,10 +90,10 @@ private:
 	#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
 	Bit64u current_fpos;
 	#ifdef C_DBP_SUPPORT_DISK_FAT_EMULATOR
-	struct fatFromDOSDrive* ffdd = NULL;
+	struct fatFromDOSDrive* ffdd;
 	#endif
-	struct discardDisk* discard = NULL;
-	struct differencingDisk* differencing = NULL;
+	struct discardDisk* discard;
+	struct differencingDisk* differencing;
 	#else
 	Bit32u current_fpos;
 	#endif

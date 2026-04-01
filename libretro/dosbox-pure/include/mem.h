@@ -82,6 +82,28 @@ static INLINE void host_writed(HostPt off, Bit32u val) {
 	*(Bit32u *)off = __builtin_bswap32(val);
 }
 
+#elif defined(WORDS_BIGENDIAN) && defined(_MSC_VER)
+
+/* Xbox 360 / MSVC PPC: use hardware byte-reverse load/store intrinsics.
+   __loadshortbytereverse  -> lhbrx (1 instruction instead of 2 loads + shift + OR)
+   __loadwordbytereverse   -> lwbrx (1 instruction instead of 4 loads + 3 shifts + 3 ORs)
+   __storeshortbytereverse -> sthbrx
+   __storewordbytereverse  -> stwbrx */
+#include <ppcintrinsics.h>
+
+static INLINE Bit16u host_readw(HostPt off) {
+	return __loadshortbytereverse(0, off);
+}
+static INLINE Bit32u host_readd(HostPt off) {
+	return __loadwordbytereverse(0, off);
+}
+static INLINE void host_writew(HostPt off, Bit16u val) {
+	__storeshortbytereverse(val, 0, off);
+}
+static INLINE void host_writed(HostPt off, Bit32u val) {
+	__storewordbytereverse(val, 0, off);
+}
+
 #elif defined(WORDS_BIGENDIAN) || !defined(C_UNALIGNED_MEMORY)
 
 static INLINE Bit16u host_readw(HostPt off) {

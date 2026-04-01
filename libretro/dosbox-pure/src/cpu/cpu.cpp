@@ -51,9 +51,9 @@ CPUBlock cpu;
 Segments Segs;
 
 Bit32s CPU_Cycles = 0;
-Bit32s CPU_CycleLeft = 3000;
-Bit32s CPU_CycleMax = 3000;
-Bit32s CPU_OldCycleMax = 3000;
+Bit32s CPU_CycleLeft = DEFAULTCYCLES;
+Bit32s CPU_CycleMax = DEFAULTCYCLES;
+Bit32s CPU_OldCycleMax = DEFAULTCYCLES;
 Bit32s CPU_CycleLimit = -1;
 #ifdef C_DBP_ENABLE_MAPPER
 Bit32s CPU_CyclePercUsed = 100;
@@ -2802,7 +2802,7 @@ void DBP_CPU_ModifyCycles(const char* val, const char* params)
 		} else {
 			CPU_AutoDetermineMode |= CPU_AUTODETERMINE_CYCLES;
 			CPU_CycleAutoAdjust = false;
-			CPU_CycleMax = 3000; // default when not overridden by DBP_SetRealModeCycles
+			CPU_CycleMax = DEFAULTCYCLES; // default when not overridden by DBP_SetRealModeCycles
 			void DBP_SetRealModeCycles();
 			DBP_SetRealModeCycles();
 		}
@@ -2810,6 +2810,8 @@ void DBP_CPU_ModifyCycles(const char* val, const char* params)
 		CPU_CycleAutoAdjust = false;
 		CPU_CycleMax = atoi(((val[0] == 'f' && params) ? params : val)); // handle "fixed" keyword
 		if (CPU_CycleMax < CPU_CYCLES_LOWER_LIMIT) CPU_CycleMax = CPU_CYCLES_LOWER_LIMIT;
+		if (CPU_CycleMax > 10000000) 
+			CPU_CycleMax = DEFAULTCYCLES; // safety clamp for corrupt values
 	}
 	CPU_CycleLeft = CPU_Cycles = 0;
 	const char* limit = strstr((params ? params : val), "limit ");
@@ -2920,7 +2922,7 @@ void DBPSerialize_CPU(DBPArchive& ar)
 	{
 		// Reset static variables
 		CPU_Cycles = 0;
-		CPU_CycleLeft = CPU_CycleMax = CPU_OldCycleMax = 3000;
+		CPU_CycleLeft = CPU_CycleMax = CPU_OldCycleMax = DEFAULTCYCLES;
 		CPU_CycleLimit = -1;
 		CPU_IODelayRemoved = 0;
 		CPU_CycleAutoAdjust = CPU_SkipCycleAutoAdjust = false;

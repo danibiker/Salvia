@@ -38,8 +38,8 @@ struct discardDisk
 	
 	~discardDisk()
 	{
-		for (Bit8u* p : tempwrites)
-			delete p;
+		for (size_t _ti = 0; _ti < tempwrites.size(); _ti++) { Bit8u* p = tempwrites[_ti];
+			delete p; }
 	}
 
 	bool Read_AbsoluteSector(Bit32u sectnum, void* data, Bit32u sector_size)
@@ -64,21 +64,22 @@ struct discardDisk
 
 struct differencingDisk
 {
-	enum ddDefs : Bit32u
+	enum ddDefs
 	{
 		BYTESPERSECTOR    = 512,
 		NULL_CURSOR       = (Bit32u)-1,
 	};
 
 	struct ffddBuf { Bit8u data[BYTESPERSECTOR]; };
-	struct ffddSec { Bit32u cursor = NULL_CURSOR; };
+	struct ffddSec { Bit32u cursor; ffddSec() : cursor(NULL_CURSOR) {} };
 	std::vector<ffddBuf>  diffSectorBufs;
 	std::vector<ffddSec>  diffSectors;
 	std::vector<Bit32u>   diffFreeCursors;
 	std::string           savePath;
-	FILE*                 saveFile = NULL;
-	Bit32u                saveEndCursor = 0;
+	FILE*                 saveFile;
+	Bit32u                saveEndCursor;
 
+	differencingDisk() : saveFile(NULL), saveEndCursor(0) {}
 	~differencingDisk()
 	{
 		if (saveFile)
@@ -237,7 +238,7 @@ struct fatFromDOSDrive
 {
 	DOS_Drive* drive;
 
-	enum ffddDefs : Bit32u
+	enum ffddDefs
 	{
 		BYTESPERSECTOR    = 512,
 		HEADCOUNT         = 240, // needs to be >128 to fit 4GB into CHS
@@ -266,15 +267,15 @@ struct fatFromDOSDrive
 	differencingDisk      difference;
 	DOS_File*             openFiles[KEEPOPENCOUNT];
 	Bit32u                openIndex[KEEPOPENCOUNT];
-	Bit32u                openCursor = 0;
+	Bit32u                openCursor;
 
 	~fatFromDOSDrive()
 	{
-		for (DOS_File* df : openFiles)
-			if (df) { df->Close(); delete df; }
+		for (size_t _oi = 0; _oi < sizeof(openFiles)/sizeof(openFiles[0]); _oi++) { DOS_File* df = openFiles[_oi];
+			if (df) { df->Close(); delete df; } }
 	}
 
-	fatFromDOSDrive(DOS_Drive* drv, Bit32u freeSpaceMB = 0, const char* inSavePath = NULL, Bit32u serial = 0, const StringToPointerHashMap<void>* fileFilter = NULL) : drive(drv)
+	fatFromDOSDrive(DOS_Drive* drv, Bit32u freeSpaceMB = 0, const char* inSavePath = NULL, Bit32u serial = 0, const StringToPointerHashMap<void>* fileFilter = NULL) : drive(drv), openCursor(0)
 	{
 		cacheSectorNumber[0] = 1; // must not state that sector 0 is already cached
 		memset(&cacheSectorNumber[1], 0, sizeof(cacheSectorNumber) - sizeof(cacheSectorNumber[0]));
@@ -535,8 +536,9 @@ struct fatFromDOSDrive
 		Bit32u fileCluster = (Bit32u)(2 + dirs.size() / entriesPerCluster);
 		for (Bit32u fileSect = 0, rootOrDir = 0; rootOrDir != 2; rootOrDir++)
 		{
-			for (direntry& e : (rootOrDir ? dirs : root))
-			{
+			{ std::vector<direntry>& _vec = (rootOrDir ? dirs : root);
+			for (size_t _ei = 0; _ei < _vec.size(); _ei++)
+			{ direntry& e = _vec[_ei];
 				if (!e.entrysize || (e.attrib & DOS_ATTR_LONG_NAME_MASK) == DOS_ATTR_LONG_NAME) continue;
 				var_write(&e.hiFirstClust, (Bit16u)(fileCluster >> 16));
 				var_write(&e.loFirstClust, (Bit16u)(fileCluster));
@@ -550,7 +552,7 @@ struct fatFromDOSDrive
 
 				fileCluster += numClusters;
 				fileSect += numClusters * sectorsPerCluster;
-			}
+			} }
 		}
 
 		// Add at least one page after the last file or FAT spec minimume to make ScanDisk happy (even on read-only disks)
@@ -577,8 +579,8 @@ struct fatFromDOSDrive
 		sect_disk_end = SECT_BOOT + partSize;
 		DBP_ASSERT(sect_disk_end >= sect_files_end);
 
-		for (ffddFile& f : files)
-			f.firstSect += sect_files_start;
+		for (size_t _fi = 0; _fi < files.size(); _fi++) { ffddFile& f = files[_fi];
+			f.firstSect += sect_files_start; }
 
 		if (!serial)
 		{
@@ -1058,6 +1060,11 @@ imageDisk::imageDisk(FILE *imgFile, const char *imgName, Bit32u imgSizeK, bool i
 	current_fpos = 0;
 	last_action = NONE;
 	#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE
+	#ifdef C_DBP_SUPPORT_DISK_FAT_EMULATOR
+	ffdd = NULL;
+	#endif
+	discard = NULL;
+	differencing = NULL;
 	DBP_ASSERT(imgFile->refCtr >= 1);
 	dos_file = imgFile;
 	dos_file->Seek64(&current_fpos, DOS_SEEK_SET);
@@ -1100,6 +1107,8 @@ imageDisk::imageDisk(FILE *imgFile, const char *imgName, Bit32u imgSizeK, bool i
 #ifdef C_DBP_SUPPORT_DISK_FAT_EMULATOR
 imageDisk::imageDisk(class DOS_Drive *useDrive, Bit32u freeSpaceMB, const char* savePath, Bit32u driveSerial, const StringToPointerHashMap<void>* fileFilter)
 {
+	discard = NULL;
+	differencing = NULL;
 	ffdd = new fatFromDOSDrive(useDrive, freeSpaceMB, savePath, driveSerial, fileFilter);
 	last_action = NONE;
 	#ifdef C_DBP_SUPPORT_DISK_MOUNT_DOSFILE

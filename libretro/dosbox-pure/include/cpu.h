@@ -53,6 +53,8 @@
 #define CPU_ARCHTYPE_PENTIUM_MMX	0x55
 #endif
 
+const int DEFAULTCYCLES = 7800;
+
 /* CPU Cycle Timing */
 extern Bit32s CPU_Cycles;
 extern Bit32s CPU_CycleLeft;

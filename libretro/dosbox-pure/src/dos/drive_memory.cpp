@@ -174,8 +174,7 @@ struct Memory_Directory: Memory_Entry
 
 	~Memory_Directory()
 	{
-		for (Memory_Entry* e : entries)
-		{
+		for (Bit32u _ei = 0; _ei < entries.Capacity(); _ei++) { Memory_Entry* e = entries.GetAtIndex(_ei); if (!e) continue;
 			if (e->IsDirectory()) delete e->AsDirectory();
 			else delete e->AsFile();
 		}

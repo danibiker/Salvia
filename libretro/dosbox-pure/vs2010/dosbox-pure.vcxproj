@@ -1,0 +1,465 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Xbox 360">
+      <Configuration>Debug</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360">
+      <Configuration>Release</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{ED4909CC-EF8F-44BA-A202-6A1B39A2AF71}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>dosboxpure</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>NDEBUG;__LIBRETRO__;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;DBP_VS2010_COMPAT</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\include</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>vs2010_compat.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <StringPooling>true</StringPooling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <DisableSpecificWarnings>4481;4244;4267;4800;4355;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <Link>
+        <SubSystem>Windows</SubSystem>
+        <GenerateDebugInformation>true</GenerateDebugInformation>
+      </Link>
+      <Lib>
+        <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      </Lib>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <PreprocessorDefinitions>__ppc__;C_UNALIGNED_MEMORY=0;_XBOX;_XBOX360;WORDS_BIGENDIAN=1;NDEBUG;DBP_VS2010_COMPAT;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;__LIBRETRO__;WIN32;_WINDOWS;_MBCS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\include</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>vs2010_compat.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <StringPooling>true</StringPooling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <DisableSpecificWarnings>4481;4244;4267;4800;4355;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <Link>
+        <SubSystem>Windows</SubSystem>
+        <GenerateDebugInformation>true</GenerateDebugInformation>
+      </Link>
+      <Lib>
+        <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      </Lib>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;__LIBRETRO__;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;DBP_VS2010_COMPAT</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\include</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>vs2010_compat.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <StringPooling>true</StringPooling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <StructMemberAlignment>Default</StructMemberAlignment>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <CompileAsManaged>false</CompileAsManaged>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <CreateHotpatchableImage>false</CreateHotpatchableImage>
+      <OpenMPSupport>false</OpenMPSupport>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <UseUnicodeForAssemblerListing>false</UseUnicodeForAssemblerListing>
+      <Link>
+        <SubSystem>Windows</SubSystem>
+        <GenerateDebugInformation>true</GenerateDebugInformation>
+        <EnableCOMDATFolding>true</EnableCOMDATFolding>
+        <OptimizeReferences>true</OptimizeReferences>
+      </Link>
+      <Lib>
+        <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+        <TargetMachine>MachineX86</TargetMachine>
+        <SubSystem>Windows</SubSystem>
+      </Lib>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <WarningLevel>Level2</WarningLevel>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <PreprocessorDefinitions>____DISABLE_DYNAREC;____C_UNALIGNED_MEMORY=0;_HAS_EXCEPTIONS=0;__ppc__;_XBOX;_XBOX360;WORDS_BIGENDIAN=1;NDEBUG;DBP_VS2010_COMPAT;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;__LIBRETRO__;_MBCS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\include</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>vs2010_compat.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <StringPooling>true</StringPooling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <StructMemberAlignment>Default</StructMemberAlignment>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <CompileAsManaged>false</CompileAsManaged>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <CreateHotpatchableImage>false</CreateHotpatchableImage>
+      <OpenMPSupport>false</OpenMPSupport>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <UseUnicodeForAssemblerListing>false</UseUnicodeForAssemblerListing>
+      <PreschedulingOptimization>false</PreschedulingOptimization>
+      <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
+      <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <Link>
+        <GenerateDebugInformation>false</GenerateDebugInformation>
+        <EnableCOMDATFolding>true</EnableCOMDATFolding>
+        <OptimizeReferences>true</OptimizeReferences>
+        <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      </Link>
+      <Lib>
+        <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      </Lib>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\dosbox_pure_libretro.cpp" />
+    <ClCompile Include="..\keyb2joypad.cpp" />
+    <ClCompile Include="..\src\cpu\callback.cpp" />
+    <ClCompile Include="..\src\cpu\core_dynrec.cpp" />
+    <ClCompile Include="..\src\cpu\core_dyn_x86.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\src\cpu\core_full.cpp" />
+    <ClCompile Include="..\src\cpu\core_normal.cpp" />
+    <ClCompile Include="..\src\cpu\core_prefetch.cpp" />
+    <ClCompile Include="..\src\cpu\core_simple.cpp" />
+    <ClCompile Include="..\src\cpu\cpu.cpp" />
+    <ClCompile Include="..\src\cpu\flags.cpp" />
+    <ClCompile Include="..\src\cpu\modrm.cpp" />
+    <ClCompile Include="..\src\cpu\paging.cpp" />
+    <ClCompile Include="..\src\dbp_network.cpp" />
+    <ClCompile Include="..\src\dbp_serialize.cpp" />
+    <ClCompile Include="..\src\dosbox.cpp" />
+    <ClCompile Include="..\src\dos\cdrom.cpp" />
+    <ClCompile Include="..\src\dos\cdrom_image.cpp" />
+    <ClCompile Include="..\src\dos\dos.cpp" />
+    <ClCompile Include="..\src\dos\dos_classes.cpp" />
+    <ClCompile Include="..\src\dos\dos_devices.cpp" />
+    <ClCompile Include="..\src\dos\dos_execute.cpp" />
+    <ClCompile Include="..\src\dos\dos_files.cpp" />
+    <ClCompile Include="..\src\dos\dos_ioctl.cpp" />
+    <ClCompile Include="..\src\dos\dos_keyboard_layout.cpp" />
+    <ClCompile Include="..\src\dos\dos_memory.cpp" />
+    <ClCompile Include="..\src\dos\dos_misc.cpp" />
+    <ClCompile Include="..\src\dos\dos_mscdex.cpp" />
+    <ClCompile Include="..\src\dos\dos_programs.cpp" />
+    <ClCompile Include="..\src\dos\dos_tables.cpp" />
+    <ClCompile Include="..\src\dos\drives.cpp" />
+    <ClCompile Include="..\src\dos\drive_cache.cpp" />
+    <ClCompile Include="..\src\dos\drive_fat.cpp" />
+    <ClCompile Include="..\src\dos\drive_iso.cpp" />
+    <ClCompile Include="..\src\dos\drive_local.cpp" />
+    <ClCompile Include="..\src\dos\drive_memory.cpp" />
+    <ClCompile Include="..\src\dos\drive_overlay.cpp" />
+    <ClCompile Include="..\src\dos\drive_patch.cpp" />
+    <ClCompile Include="..\src\dos\drive_mirror.cpp" />
+    <ClCompile Include="..\src\dos\drive_union.cpp" />
+    <ClCompile Include="..\src\dos\drive_virtual.cpp" />
+    <ClCompile Include="..\src\dos\drive_zip.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Disabled</Optimization>
+    </ClCompile>
+    <ClCompile Include="..\src\fpu\fpu.cpp" />
+    <ClCompile Include="..\src\gui\midi.cpp" />
+    <ClCompile Include="..\src\gui\render.cpp" />
+    <ClCompile Include="..\src\gui\render_scalers.cpp" />
+    <ClCompile Include="..\src\hardware\adlib.cpp" />
+    <ClCompile Include="..\src\hardware\cmos.cpp" />
+    <ClCompile Include="..\src\hardware\dbopl.cpp" />
+    <ClCompile Include="..\src\hardware\disney.cpp" />
+    <ClCompile Include="..\src\hardware\dma.cpp" />
+    <ClCompile Include="..\src\hardware\gameblaster.cpp" />
+    <ClCompile Include="..\src\hardware\gus.cpp" />
+    <ClCompile Include="..\src\hardware\hardware.cpp" />
+    <ClCompile Include="..\src\hardware\ide.cpp" />
+    <ClCompile Include="..\src\hardware\iohandler.cpp" />
+    <ClCompile Include="..\src\hardware\joystick.cpp" />
+    <ClCompile Include="..\src\hardware\keyboard.cpp" />
+    <ClCompile Include="..\src\hardware\mame\saa1099.cpp" />
+    <ClCompile Include="..\src\hardware\mame\sn76496.cpp" />
+    <ClCompile Include="..\src\hardware\memory.cpp" />
+    <ClCompile Include="..\src\hardware\mixer.cpp" />
+    <ClCompile Include="..\src\hardware\mpu401.cpp" />
+    <ClCompile Include="..\src\hardware\nukedopl3.cpp" />
+    <ClCompile Include="..\src\hardware\pci_bus.cpp" />
+    <ClCompile Include="..\src\hardware\pcspeaker.cpp" />
+    <ClCompile Include="..\src\hardware\pic.cpp" />
+    <ClCompile Include="..\src\hardware\sblaster.cpp" />
+    <ClCompile Include="..\src\hardware\serialport\serialdummy.cpp" />
+    <ClCompile Include="..\src\hardware\serialport\serialport.cpp" />
+    <ClCompile Include="..\src\hardware\tandy_sound.cpp" />
+    <ClCompile Include="..\src\hardware\timer.cpp" />
+    <ClCompile Include="..\src\hardware\vga.cpp" />
+    <ClCompile Include="..\src\hardware\vga_attr.cpp" />
+    <ClCompile Include="..\src\hardware\vga_crtc.cpp" />
+    <ClCompile Include="..\src\hardware\vga_dac.cpp" />
+    <ClCompile Include="..\src\hardware\vga_draw.cpp" />
+    <ClCompile Include="..\src\hardware\vga_gfx.cpp" />
+    <ClCompile Include="..\src\hardware\vga_memory.cpp" />
+    <ClCompile Include="..\src\hardware\vga_misc.cpp" />
+    <ClCompile Include="..\src\hardware\vga_other.cpp" />
+    <ClCompile Include="..\src\hardware\vga_paradise.cpp" />
+    <ClCompile Include="..\src\hardware\vga_s3.cpp" />
+    <ClCompile Include="..\src\hardware\vga_seq.cpp" />
+    <ClCompile Include="..\src\hardware\vga_tseng.cpp" />
+    <ClCompile Include="..\src\hardware\vga_xga.cpp" />
+    <ClCompile Include="..\src\hardware\voodoo.cpp" />
+    <ClCompile Include="..\src\ints\bios.cpp" />
+    <ClCompile Include="..\src\ints\bios_disk.cpp" />
+    <ClCompile Include="..\src\ints\bios_keyboard.cpp" />
+    <ClCompile Include="..\src\ints\ems.cpp" />
+    <ClCompile Include="..\src\ints\int10.cpp" />
+    <ClCompile Include="..\src\ints\int10_char.cpp" />
+    <ClCompile Include="..\src\ints\int10_memory.cpp" />
+    <ClCompile Include="..\src\ints\int10_misc.cpp" />
+    <ClCompile Include="..\src\ints\int10_modes.cpp" />
+    <ClCompile Include="..\src\ints\int10_pal.cpp" />
+    <ClCompile Include="..\src\ints\int10_put_pixel.cpp" />
+    <ClCompile Include="..\src\ints\int10_vesa.cpp" />
+    <ClCompile Include="..\src\ints\int10_video_state.cpp" />
+    <ClCompile Include="..\src\ints\int10_vptable.cpp" />
+    <ClCompile Include="..\src\ints\mouse.cpp" />
+    <ClCompile Include="..\src\ints\xms.cpp" />
+    <ClCompile Include="..\src\misc\cross.cpp" />
+    <ClCompile Include="..\src\misc\messages.cpp" />
+    <ClCompile Include="..\src\misc\programs.cpp" />
+    <ClCompile Include="..\src\misc\setup.cpp" />
+    <ClCompile Include="..\src\misc\support.cpp" />
+    <ClCompile Include="..\src\shell\shell.cpp" />
+    <ClCompile Include="..\src\shell\shell_batch.cpp" />
+    <ClCompile Include="..\src\shell\shell_cmds.cpp" />
+    <ClCompile Include="..\src\shell\shell_misc.cpp" />
+  </ItemGroup>
+  <!-- ============================================ -->
+  <!--  Header files                                -->
+  <!-- ============================================ -->
+  <ItemGroup>
+    <ClInclude Include="..\core_options.h" />
+    <ClInclude Include="..\dosbox_pure_osd.h" />
+    <ClInclude Include="..\dosbox_pure_run.h" />
+    <ClInclude Include="..\dosbox_pure_pad.h" />
+    <ClInclude Include="..\libretro-common\include\libretro.h" />
+    <ClInclude Include="..\include\vs2010_compat.h" />
+    <ClInclude Include="..\include\dbp_network.h" />
+    <ClInclude Include="..\include\dbp_opengl.h" />
+    <ClInclude Include="..\include\dbp_serialize.h" />
+    <ClInclude Include="..\include\bios.h" />
+    <ClInclude Include="..\include\bios_disk.h" />
+    <ClInclude Include="..\include\callback.h" />
+    <ClInclude Include="..\include\config.h" />
+    <ClInclude Include="..\include\control.h" />
+    <ClInclude Include="..\include\cpu.h" />
+    <ClInclude Include="..\include\cross.h" />
+    <ClInclude Include="..\include\debug.h" />
+    <ClInclude Include="..\include\dma.h" />
+    <ClInclude Include="..\include\dosbox.h" />
+    <ClInclude Include="..\include\dos_inc.h" />
+    <ClInclude Include="..\include\dos_system.h" />
+    <ClInclude Include="..\include\fpu.h" />
+    <ClInclude Include="..\include\hardware.h" />
+    <ClInclude Include="..\include\inout.h" />
+    <ClInclude Include="..\include\ipx.h" />
+    <ClInclude Include="..\include\ipxserver.h" />
+    <ClInclude Include="..\include\joystick.h" />
+    <ClInclude Include="..\include\keyboard.h" />
+    <ClInclude Include="..\include\logging.h" />
+    <ClInclude Include="..\include\mapper.h" />
+    <ClInclude Include="..\include\mem.h" />
+    <ClInclude Include="..\include\midi.h" />
+    <ClInclude Include="..\include\mixer.h" />
+    <ClInclude Include="..\include\mouse.h" />
+    <ClInclude Include="..\include\paging.h" />
+    <ClInclude Include="..\include\pci_bus.h" />
+    <ClInclude Include="..\include\pic.h" />
+    <ClInclude Include="..\include\programs.h" />
+    <ClInclude Include="..\include\regs.h" />
+    <ClInclude Include="..\include\render.h" />
+    <ClInclude Include="..\include\serialport.h" />
+    <ClInclude Include="..\include\setup.h" />
+    <ClInclude Include="..\include\shell.h" />
+    <ClInclude Include="..\include\support.h" />
+    <ClInclude Include="..\include\timer.h" />
+    <ClInclude Include="..\include\vga.h" />
+    <ClInclude Include="..\include\video.h" />
+    <ClInclude Include="..\src\cpu\core_dyn_x86\decoder.h" />
+    <ClInclude Include="..\src\cpu\core_dyn_x86\dyn_fpu.h" />
+    <ClInclude Include="..\src\cpu\core_dyn_x86\dyn_fpu_dh.h" />
+    <ClInclude Include="..\src\cpu\core_dyn_x86\helpers.h" />
+    <ClInclude Include="..\src\cpu\core_dyn_x86\risc_x64.h" />
+    <ClInclude Include="..\src\cpu\core_dyn_x86\risc_x86.h" />
+    <ClInclude Include="..\src\cpu\core_dyn_x86\string.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\decoder.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\decoder_basic.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\decoder_opcodes.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\dyn_fpu.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\operators.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\risc_armv4le-common.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\risc_armv4le-o3.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\risc_armv4le-thumb-iw.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\risc_armv4le-thumb-niw.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\risc_armv4le-thumb.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\risc_armv4le.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\risc_armv8le.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\risc_mipsel32.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\risc_x64.h" />
+    <ClInclude Include="..\src\cpu\core_dynrec\risc_x86.h" />
+    <ClInclude Include="..\src\cpu\core_full\ea_lookup.h" />
+    <ClInclude Include="..\src\cpu\core_full\load.h" />
+    <ClInclude Include="..\src\cpu\core_full\loadwrite.h" />
+    <ClInclude Include="..\src\cpu\core_full\op.h" />
+    <ClInclude Include="..\src\cpu\core_full\optable.h" />
+    <ClInclude Include="..\src\cpu\core_full\save.h" />
+    <ClInclude Include="..\src\cpu\core_full\string.h" />
+    <ClInclude Include="..\src\cpu\core_full\support.h" />
+    <ClInclude Include="..\src\cpu\core_normal\helpers.h" />
+    <ClInclude Include="..\src\cpu\core_normal\prefix_0f.h" />
+    <ClInclude Include="..\src\cpu\core_normal\prefix_66.h" />
+    <ClInclude Include="..\src\cpu\core_normal\prefix_66_0f.h" />
+    <ClInclude Include="..\src\cpu\core_normal\prefix_none.h" />
+    <ClInclude Include="..\src\cpu\core_normal\string.h" />
+    <ClInclude Include="..\src\cpu\core_normal\support.h" />
+    <ClInclude Include="..\src\cpu\core_normal\table_ea.h" />
+    <ClInclude Include="..\src\cpu\dyn_cache.h" />
+    <ClInclude Include="..\src\cpu\instructions.h" />
+    <ClInclude Include="..\src\cpu\lazyflags.h" />
+    <ClInclude Include="..\src\cpu\modrm.h" />
+    <ClInclude Include="..\src\dos\cdrom.h" />
+    <ClInclude Include="..\src\dos\dev_con.h" />
+    <ClInclude Include="..\src\dos\dos_codepages.h" />
+    <ClInclude Include="..\src\dos\dos_keyboard_layout_data.h" />
+    <ClInclude Include="..\src\dos\drives.h" />
+    <ClInclude Include="..\src\dos\scsidefs.h" />
+    <ClInclude Include="..\src\dos\wnaspi32.h" />
+    <ClInclude Include="..\src\fpu\fpu_instructions.h" />
+    <ClInclude Include="..\src\fpu\fpu_instructions_x86.h" />
+    <ClInclude Include="..\src\gui\midi_mt32.h" />
+    <ClInclude Include="..\src\gui\midi_retro.h" />
+    <ClInclude Include="..\src\gui\midi_tsf.h" />
+    <ClInclude Include="..\src\gui\midi_opl.h" />
+    <ClInclude Include="..\src\gui\render_glsl.h" />
+    <ClInclude Include="..\src\gui\render_loops.h" />
+    <ClInclude Include="..\src\gui\render_scalers.h" />
+    <ClInclude Include="..\src\gui\render_simple.h" />
+    <ClInclude Include="..\src\hardware\adlib.h" />
+    <ClInclude Include="..\src\hardware\dbopl.h" />
+    <ClInclude Include="..\src\hardware\mame\emu.h" />
+    <ClInclude Include="..\src\hardware\mame\saa1099.h" />
+    <ClInclude Include="..\src\hardware\mame\sn76496.h" />
+    <ClInclude Include="..\src\hardware\nukedopl3.h" />
+    <ClInclude Include="..\src\hardware\pci_devices.h" />
+    <ClInclude Include="..\src\hardware\serialport\serialdummy.h" />
+    <ClInclude Include="..\src\ints\int10.h" />
+    <ClInclude Include="..\src\ints\xms.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

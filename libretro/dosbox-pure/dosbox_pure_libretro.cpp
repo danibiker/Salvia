@@ -42,6 +42,9 @@
 #include <string>
 #include <sstream>
 
+#include <math.h>
+extern "C" double _HUGE = 1.7976931348623158e+308; // Valor de HUGE_VAL para VS2010
+
 // RETROARCH AUDIO/VIDEO
 #if defined(GEKKO) || defined(MIYOO) // From RetroArch/config.def.h
 #define DBP_DEFAULT_SAMPLERATE 32000.0
@@ -57,9 +60,10 @@
 static retro_system_av_info av_info;
 
 // DOSBOX STATE
-static enum DBP_State : Bit8u { DBPSTATE_BOOT, DBPSTATE_EXITED, DBPSTATE_SHUTDOWN, DBPSTATE_REBOOT, DBPSTATE_FIRST_FRAME, DBPSTATE_RUNNING } dbp_state;
-static enum DBP_SerializeMode : Bit8u { DBPSERIALIZE_STATES, DBPSERIALIZE_REWIND, DBPSERIALIZE_DISABLED } dbp_serializemode;
-static bool dbp_game_running, dbp_pause_events, dbp_paused_midframe, dbp_frame_pending, dbp_biosreboot, dbp_system_cached, dbp_system_scannable, dbp_refresh_memmaps;
+static volatile enum DBP_State { DBPSTATE_BOOT, DBPSTATE_EXITED, DBPSTATE_SHUTDOWN, DBPSTATE_REBOOT, DBPSTATE_FIRST_FRAME, DBPSTATE_RUNNING } dbp_state;
+static enum DBP_SerializeMode { DBPSERIALIZE_STATES, DBPSERIALIZE_REWIND, DBPSERIALIZE_DISABLED } dbp_serializemode;
+static volatile bool dbp_game_running, dbp_pause_events, dbp_paused_midframe, dbp_frame_pending;
+static bool dbp_biosreboot, dbp_system_cached, dbp_system_scannable, dbp_refresh_memmaps;
 static bool dbp_optionsupdatecallback, dbp_reboot_set64mem, dbp_use_network, dbp_had_game_running, dbp_strict_mode, dbp_legacy_save, dbp_wasloaded, dbp_skip_c_mount;
 static signed char dbp_menu_time, dbp_conf_loading, dbp_reboot_machine;
 static Bit8u dbp_alphablend_base;
@@ -87,7 +91,7 @@ static struct retro_hw_render_callback dbp_hw_render;
 static void (*dbp_opengl_draw)(const DBP_Buffer& buf);
 
 // DOSBOX DISC MANAGEMENT
-struct DBP_Image { std::string path, longpath; bool mounted = false, remount = false, image_disk = false, imgmount = false, imfat = false, imiso = false; char drive; int dirlen, dd; };
+struct DBP_Image { std::string path, longpath; bool mounted, remount, image_disk, imgmount, imfat, imiso; char drive; int dirlen, dd; DBP_Image() : mounted(false), remount(false), image_disk(false), imgmount(false), imfat(false), imiso(false), drive(0), dirlen(0), dd(0) {} };
 static std::vector<DBP_Image> dbp_images;
 static std::vector<std::string> dbp_osimages, dbp_shellzips;
 static StringToPointerHashMap<void> dbp_vdisk_filter;
@@ -127,7 +131,7 @@ static int dbp_joy_analog_deadzone = (int)(0.15f * (float)DBP_JOY_ANALOG_RANGE);
 	((float)((V > dbp_joy_analog_deadzone) ? (V - dbp_joy_analog_deadzone) : (V + dbp_joy_analog_deadzone)) / (float)(DBP_JOY_ANALOG_RANGE - dbp_joy_analog_deadzone)))
 
 // DOSBOX EVENTS
-enum DBP_Event_Type : Bit8u
+enum DBP_Event_Type
 {
 	DBPET_JOY1X, DBPET_JOY1Y, DBPET_JOY2X, DBPET_JOY2Y, DBPET_JOYMX, DBPET_JOYMY, _DBPET_JOY_AXIS_MAX = DBPET_JOYMY,
 
@@ -238,7 +242,7 @@ static retro_input_poll_t         input_poll_cb;
 static retro_input_state_t        input_state_cb;
 
 // PERF OVERLAY
-static enum DBP_Perf : Bit8u { DBP_PERF_NONE, DBP_PERF_SIMPLE, DBP_PERF_DETAILED } dbp_perf;
+static enum DBP_Perf { DBP_PERF_NONE, DBP_PERF_SIMPLE, DBP_PERF_DETAILED } dbp_perf;
 static Bit32u dbp_perf_uniquedraw, dbp_perf_count, dbp_perf_totaltime;
 //#define DBP_ENABLE_WAITSTATS
 #ifdef DBP_ENABLE_WAITSTATS
@@ -358,8 +362,8 @@ static void DBP_QueueEvent(DBP_Event_Type type, Bit8u port, int val = 0, int val
 
 		case DBPET_JOY1X: case DBPET_JOY1Y: case DBPET_JOY2X: case DBPET_JOY2Y: case DBPET_JOYMX: case DBPET_JOYMY:
 			if (val || dbp_intercept) break;
-			for (const DBP_InputBind& b : dbp_input_binds) // check if another bind is currently influencing the same axis
-			{
+			for (size_t _bi = 0; _bi < dbp_input_binds.size(); _bi++) // check if another bind is currently influencing the same axis
+			{ const DBP_InputBind& b = dbp_input_binds[_bi];
 				if (!b.lastval) continue;
 				if (b.evt <= _DBPET_JOY_AXIS_MAX)
 				{
@@ -689,7 +693,7 @@ const char* DBP_Image_Label(const DBP_Image& image)
 
 static unsigned DBP_AppendImage(const char* in_path, bool sorted)
 {
-	for (DBP_Image& i : dbp_images) if (i.path == in_path) return (unsigned)(&i - &dbp_images[0]); // known
+	for (size_t _ii = 0; _ii < dbp_images.size(); _ii++) { DBP_Image& i = dbp_images[_ii]; if (i.path == in_path) return (unsigned)(&i - &dbp_images[0]); } // known
 
 	struct Local { static bool GetDriveDepth(DOS_Drive* drv, const char* p, int& res)
 	{
@@ -704,8 +708,8 @@ static unsigned DBP_AppendImage(const char* in_path, bool sorted)
 	// insert into image list ordered by drive depth and alphabetically
 	unsigned insert_index = (unsigned)dbp_images.size();
 	if (sorted)
-		for (DBP_Image& i : dbp_images)
-			if (dd < i.dd || (dd == i.dd && i.path > in_path)) {insert_index = (unsigned)(&i - &dbp_images[0]); break; }
+		for (size_t _ii = 0; _ii < dbp_images.size(); _ii++)
+			{ DBP_Image& i = dbp_images[_ii]; if (dd < i.dd || (dd == i.dd && i.path > in_path)) {insert_index = (unsigned)(&i - &dbp_images[0]); break; } }
 
 	dbp_images.insert(dbp_images.begin() + insert_index, DBP_Image());
 	DBP_Image& i = dbp_images[insert_index];
@@ -782,8 +786,8 @@ static bool DBP_IsMounted(char drive)
 void DBP_Unmount(char drive)
 {
 	DBP_ASSERT(drive >= 'A' && drive <= 'Z');
-	for (DBP_Image& i : dbp_images)
-	{
+	for (size_t _ii = 0; _ii < dbp_images.size(); _ii++)
+	{ DBP_Image& i = dbp_images[_ii];
 		if (!i.mounted || i.drive != drive) continue;
 		i.mounted = false;
 	}
@@ -857,8 +861,8 @@ static std::string DBP_GetSaveFile(DBP_SaveFileType type, const char** out_filen
 				dbp_vdisk_filter.Put("FRONTEND.DBP", (void*)(size_t)true);
 				dbp_vdisk_filter.Put("DOSBOX~1.CON", (void*)(size_t)true);
 				dbp_vdisk_filter.Put("DOSBOX.CON", (void*)(size_t)true);
-				for (const DBP_Image& i : dbp_images) if (i.path[0] == '$' && i.path[1] == 'C')
-					dbp_vdisk_filter.Put(&i.path[4], (void*)(size_t)true);
+				for (size_t _ii = 0; _ii < dbp_images.size(); _ii++) { const DBP_Image& i = dbp_images[_ii]; if (i.path[0] == '$' && i.path[1] == 'C')
+					dbp_vdisk_filter.Put(&i.path[4], (void*)(size_t)true); }
 			}
 			struct Local { static void FileHash(const char* path, bool, Bit32u size, Bit16u date, Bit16u time, Bit8u attr, Bitu data)
 			{
@@ -926,8 +930,8 @@ static bool DBP_IsDiskCDISO(imageDisk* id)
 {
 	// Check if ISO (based on CDROM_Interface_Image::LoadIsoFile/CDROM_Interface_Image::CanReadPVD)
 	static const Bit32u pvdoffsets[] = { 32768, 32768+8, 37400, 37400+8, 37648, 37656, 37656+8 };
-	for (Bit32u pvdoffset : pvdoffsets)
-	{
+	for (size_t _pi = 0; _pi < sizeof(pvdoffsets)/sizeof(pvdoffsets[0]); _pi++)
+	{ Bit32u pvdoffset = pvdoffsets[_pi];
 		Bit8u pvd[8];
 		if (id->Read_Raw(pvd, pvdoffset, 8) == 8 && (!memcmp(pvd, "\1CD001\1", 7) || !memcmp(pvd, "\1CDROM\1", 7)))
 			return true;
@@ -1173,7 +1177,7 @@ static void DBP_Remount(char drive1, char drive2)
 	if (!DBP_IsMounted(drive1) || DBP_IsMounted(drive2)) return;
 
 	DBP_Image* img = NULL;
-	for (DBP_Image& i : dbp_images) { if (i.mounted && i.drive == drive1) { img = &i; break; } }
+	for (size_t _ii = 0; _ii < dbp_images.size(); _ii++) { DBP_Image& i = dbp_images[_ii]; if (i.mounted && i.drive == drive1) { img = &i; break; } }
 	if (img)
 	{
 		DBP_Unmount(drive1);
@@ -1210,8 +1214,8 @@ static void DBP_Remount(char drive1, char drive2)
 
 	if (DOS_GetDefaultDrive() == drive1-'A') DOS_SetDrive(drive2-'A');
 
-	for (DBP_Image& i : dbp_images)
-	{
+	for (size_t _ii = 0; _ii < dbp_images.size(); _ii++)
+	{ DBP_Image& i = dbp_images[_ii];
 		if (i.path[0] == '$' && i.path[1] == drive1) i.path[1] = drive2;
 		if (i.mounted && i.drive == drive1) i.drive = drive2;
 	}
@@ -1219,8 +1223,8 @@ static void DBP_Remount(char drive1, char drive2)
 
 void DBP_ImgMountLoadDisks(char drive, const std::vector<std::string>& paths, bool fat, bool iso)
 {
-	for (const std::string& path : paths)
-	{
+	for (size_t _pi = 0; _pi < paths.size(); _pi++)
+	{ const std::string& path = paths[_pi];
 		DBP_Image& i = dbp_images[DBP_AppendImage(path.c_str(), false)];
 		i.drive = drive;
 		i.imgmount = true;
@@ -1235,14 +1239,14 @@ void DBPSerialize_Mounts(DBPArchive& ar)
 	const char* fname;
 	Bit32u mounthash[2] = { 0, 0 }; // remember max 2 mounted images (one floppy and cd)
 	if (ar.mode == DBPArchive::MODE_SAVE)
-		for (DBP_Image& i : dbp_images)
-			if (i.mounted && DBP_ExtractPathInfo(i.longpath.c_str(), &fname))
-				mounthash[mounthash[0] ? 1 : 0] = BaseStringToPointerHashMap::Hash(fname);
+		for (size_t _ii = 0; _ii < dbp_images.size(); _ii++)
+			{ DBP_Image& i = dbp_images[_ii]; if (i.mounted && DBP_ExtractPathInfo(i.longpath.c_str(), &fname))
+				mounthash[mounthash[0] ? 1 : 0] = BaseStringToPointerHashMap::Hash(fname); }
 	ar << mounthash[0] << mounthash[1];
 	if (ar.mode == DBPArchive::MODE_LOAD && mounthash[0])
-		for (DBP_Image& i : dbp_images)
-			if (DBP_ExtractPathInfo(i.longpath.c_str(), &fname) && (mounthash[0] == BaseStringToPointerHashMap::Hash(fname) || (mounthash[1] && mounthash[1] == BaseStringToPointerHashMap::Hash(fname))))
-				DBP_Mount((unsigned)(&i - &dbp_images[0]), true);
+		for (size_t _ii = 0; _ii < dbp_images.size(); _ii++)
+			{ DBP_Image& i = dbp_images[_ii]; if (DBP_ExtractPathInfo(i.longpath.c_str(), &fname) && (mounthash[0] == BaseStringToPointerHashMap::Hash(fname) || (mounthash[1] && mounthash[1] == BaseStringToPointerHashMap::Hash(fname))))
+				DBP_Mount((unsigned)(&i - &dbp_images[0]), true); }
 }
 
 static void DBP_Shutdown()
@@ -1285,9 +1289,9 @@ void DBP_Crash(const char* msg)
 {
 	log_cb(RETRO_LOG_WARN, "[DOSBOX] Crash: %s\n", msg);
 	dbp_crash_message = msg;
-	if (!render.src.fps) { render.src = { 640, 0, 480, 32, 0, 0, 4.0/3, 70 }; } // crash before first frame
+	if (!render.src.fps) { render.src.width=640; render.src.start=0; render.src.height=480; render.src.bpp=32; render.src.dblw=false; render.src.dblh=false; render.src.ratio=4.0/3; render.src.fps=70; } // crash before first frame
 	DBP_Buffer& buf = dbp_buffers[buffer_active];
-	if (!buf.video) { buf = { (Bit32u*)calloc(640*480, 4), 640, 480, 640*480*4, 0, 0, 0, 4.0f/3 }; } // crash before first draw
+	if (!buf.video) { buf.video=(Bit32u*)calloc(640*480, 4); buf.width=640; buf.height=480; buf.cap=640*480*4; buf.pad_x=0; buf.pad_y=0; buf.border_color=0; buf.ratio=4.0f/3; } // crash before first draw
 	DBP_DOSBOX_ForceShutdown();
 }
 
@@ -1358,24 +1362,25 @@ static std::vector<std::string>& DBP_ScanSystem(bool force_midi_scan)
 	dbp_shellzips.clear();
 	std::string path, subdir;
 	std::vector<std::string> subdirs;
-	subdirs.emplace_back();
+	subdirs.push_back(std::string());
 	retro_time_t scan_start = time_cb();
 	while (subdirs.size())
 	{
 		subdir.swap(subdirs.back());
 		subdirs.pop_back();
-		struct retro_vfs_dir_handle *dir = vfs.iface->opendir(path.assign(system_dir).append(subdir.length() ? "/" : "").append(subdir).c_str(), false);
+		std::string dirToOpen = path.assign(system_dir).append(subdir.length() ? "/" : "").append(subdir);
+		struct retro_vfs_dir_handle *dir = vfs.iface->opendir(dirToOpen.c_str(), false);
 		if (!dir) continue;
 		while (vfs.iface->readdir(dir))
 		{
 			const char* entry_name = vfs.iface->dirent_get_name(dir);
 			size_t ln = strlen(entry_name);
 			if (vfs.iface->dirent_is_dir(dir) && strcmp(entry_name, ".") && strcmp(entry_name, ".."))
-				subdirs.emplace_back(path.assign(subdir).append(subdir.length() ? "/" : "").append(entry_name));
+				subdirs.push_back(path.assign(subdir).append(subdir.length() ? "/" : "").append(entry_name));
 			else if ((ln > 4 && !strncasecmp(entry_name + ln - 4, ".SF", 3)) || (ln > 12 && !strcasecmp(entry_name + ln - 12, "_CONTROL.ROM")))
 			{
-				dynstr.emplace_back(path.assign(subdir).append(subdir.length() ? "/" : "").append(entry_name));
-				dynstr.emplace_back((entry_name[ln-2]|0x20) == 'f' ? "General MIDI SoundFont" : "Roland MT-32/CM-32L");
+				dynstr.push_back(path.assign(subdir).append(subdir.length() ? "/" : "").append(entry_name));
+				dynstr.push_back((entry_name[ln-2]|0x20) == 'f' ? "General MIDI SoundFont" : "Roland MT-32/CM-32L");
 				dynstr.back().append(": ").append(path, 0, path.size() - ((entry_name[ln-2]|0x20) == 'f' ? 4 : 12));
 			}
 			else if (ln > 4 && (!strcasecmp(entry_name + ln - 4, ".IMG") || !strcasecmp(entry_name + ln - 4, ".IMA") || !strcasecmp(entry_name + ln - 4, ".VHD")))
@@ -1384,11 +1389,11 @@ static std::vector<std::string>& DBP_ScanSystem(bool force_midi_scan)
 				FILE* f = fopen_wrap(path.assign(system_dir).append("/").append(subpath).c_str(), "rb");
 				Bit64u fsize = 0; if (f) { fseek_wrap(f, 0, SEEK_END); fsize = (Bit64u)ftell_wrap(f); fclose(f); }
 				if (fsize < 1024*1024*7 || (fsize % 512)) continue; // min 7MB hard disk image made up of 512 byte sectors
-				dbp_osimages.emplace_back(std::move(subpath));
+				dbp_osimages.push_back(subpath);
 			}
 			else if (ln > 5 && !strcasecmp(entry_name + ln - 5, ".DOSZ"))
 			{
-				dbp_shellzips.emplace_back(path.assign(subdir).append(subdir.length() ? "/" : "").append(entry_name));
+				dbp_shellzips.push_back(path.assign(subdir).append(subdir.length() ? "/" : "").append(entry_name));
 			}
 			else if (ln == 23 && !subdir.length() && !force_midi_scan && !strcasecmp(entry_name, "DOSBoxPureMidiCache.txt"))
 			{
@@ -1402,9 +1407,9 @@ static std::vector<std::string>& DBP_ScanSystem(bool force_midi_scan)
 					if (*p >= ' ') continue;
 					if (p == pLine) { pLine++; continue; }
 					if ((p[-3]|0x21) == 's' || dynstr.size() & 1) // check ROM/rom/SF*/sf* extension, always add description from odd rows
-						dynstr.emplace_back(pLine, p - pLine);
+						dynstr.push_back(std::string(pLine, p - pLine));
 					else
-						((p[-1]|0x20) == 'z' ? dbp_shellzips : dbp_osimages).emplace_back(pLine, p - pLine);
+						((p[-1]|0x20) == 'z' ? dbp_shellzips : dbp_osimages).push_back(std::string(pLine, p - pLine));
 					pLine = p + 1;
 				}
 				if (dynstr.size() & 1) dynstr.pop_back();
@@ -1427,9 +1432,9 @@ static std::vector<std::string>& DBP_ScanSystem(bool force_midi_scan)
 		}
 		else if (FILE* f = fopen_wrap(path.c_str(), "w"))
 		{
-			for (const std::string& s : dynstr) { fwrite(s.c_str(), s.length(), 1, f); fwrite("\n", 1, 1, f); }
-			for (const std::string& s : dbp_osimages) { fwrite(s.c_str(), s.length(), 1, f); fwrite("\n", 1, 1, f); }
-			for (const std::string& s : dbp_shellzips) { fwrite(s.c_str(), s.length(), 1, f); fwrite("\n", 1, 1, f); }
+			for (size_t _si = 0; _si < dynstr.size(); _si++) { const std::string& s = dynstr[_si]; fwrite(s.c_str(), s.length(), 1, f); fwrite("\n", 1, 1, f); }
+			for (size_t _si = 0; _si < dbp_osimages.size(); _si++) { const std::string& s = dbp_osimages[_si]; fwrite(s.c_str(), s.length(), 1, f); fwrite("\n", 1, 1, f); }
+			for (size_t _si = 0; _si < dbp_shellzips.size(); _si++) { const std::string& s = dbp_shellzips[_si]; fwrite(s.c_str(), s.length(), 1, f); fwrite("\n", 1, 1, f); }
 			fclose(f);
 		}
 		if (force_midi_scan) DBP_QueueEvent(DBPET_REFRESHSYSTEM, DBP_NO_PORT);
@@ -1694,7 +1699,7 @@ static bool GFX_AdvanceFrame(bool force_skip, bool force_no_auto_adjust)
 		Bit32u frameTime = (Bit32u)(absFrameTime * dbp_auto_target);
 
 		Bit32u frameThreshold = 0;
-		for (Bit32u f : St.HistoryFrame) frameThreshold += f;
+		for (size_t _fi = 0; _fi < HISTORY_SIZE; _fi++) { Bit32u f = St.HistoryFrame[_fi]; frameThreshold += f; }
 		//float frameMiss = (float)frameThreshold / HISTORY_SIZE - absFrameTime;
 		frameThreshold = (frameThreshold / HISTORY_SIZE) * 3;
 
@@ -1897,10 +1902,10 @@ void GFX_SetTitle(Bit32s cycles, int frameskip, bool paused)
 	dbp_had_game_running |= (dbp_game_running = (strcmp(RunningProgram, "DOSBOX") && strcmp(RunningProgram, "PUREMENU")));
 	log_cb(RETRO_LOG_INFO, "[DOSBOX STATUS] Program: %s - Cycles: %d - Frameskip: %d - Paused: %d\n", RunningProgram, cycles, frameskip, paused);
 	if (was_game_running != dbp_game_running && DOSBox_Boot) dbp_refresh_memmaps = true;
-	if (cpu.pmode && CPU_CycleAutoAdjust && CPU_OldCycleMax == 3000 && CPU_CycleMax == 3000)
+	if (cpu.pmode && CPU_CycleAutoAdjust && CPU_OldCycleMax == DEFAULTCYCLES && CPU_CycleMax == DEFAULTCYCLES)
 	{
 		// Choose a reasonable base rate when switching to protected mode
-		CPU_CycleMax = 30000;
+		CPU_CycleMax = DEFAULTCYCLES;
 	}
 }
 
@@ -2101,19 +2106,19 @@ static void set_variables(bool force_midi_scan = false)
 	size_t i = 0, numfiles = (dynstr.size() > (RETRO_NUM_CORE_OPTION_VALUES_MAX-4)*2 ? (RETRO_NUM_CORE_OPTION_VALUES_MAX-4)*2 : dynstr.size());
 	for (size_t f = 0; f != numfiles; f += 2)
 		if (((&dynstr[f].back())[-1]|0x20) == 'f') // .SF* extension soundfont
-			def.values[i++] = { dynstr[f].c_str(), dynstr[f+1].c_str() };
+			{ def.values[i].value = dynstr[f].c_str(); def.values[i].label = dynstr[f+1].c_str(); i++; }
 	for (size_t f = 0; f != numfiles; f += 2)
 		if (((&dynstr[f].back())[-1]|0x20) != 'f') // .ROM extension munt rom
-			def.values[i++] = { dynstr[f].c_str(), dynstr[f+1].c_str() };
+			{ def.values[i].value = dynstr[f].c_str(); def.values[i].label = dynstr[f+1].c_str(); i++; }
 	#ifndef DBP_STANDALONE
-	def.values[i++] = { "frontend", "Frontend MIDI driver" };
+	def.values[i].value = "frontend"; def.values[i].label = "Frontend MIDI driver"; i++;
 	#else
-	def.values[i++] = { "system", "System MIDI driver" };
+	def.values[i].value = "system"; def.values[i].label = "System MIDI driver"; i++;
 	#endif
-	def.values[i++] = { "disabled", "Disabled" };
+	def.values[i].value = "disabled"; def.values[i].label = "Disabled"; i++;
 	if (dbp_system_cached)
-		def.values[i++] = { "scan", (!strcmp(DBP_Option::Get(DBP_Option::midi), "scan") ? "System directory scan finished" : "Scan System directory for soundfonts (open this menu again after)") };
-	def.values[i] = { 0, 0 };
+		{ def.values[i].value = "scan"; def.values[i].label = (!strcmp(DBP_Option::Get(DBP_Option::midi), "scan") ? "System directory scan finished" : "Scan System directory for soundfonts (open this menu again after)"); i++; }
+	def.values[i].value = 0; def.values[i].label = 0;
 	def.default_value = def.values[0].value;
 
 	unsigned options_ver = 0;
@@ -2128,15 +2133,15 @@ static void set_variables(bool force_midi_scan = false)
 	{
 		// Convert options to V1 format
 		static std::vector<retro_core_option_definition> v1defs;
-		for (const retro_core_option_v2_definition& v2def : option_defs)
-		{
+		for (size_t _oi = 0; _oi < sizeof(option_defs)/sizeof(option_defs[0]); _oi++)
+		{ const retro_core_option_v2_definition& v2def = option_defs[_oi];
 			if (v2def.category_key)
 			{
 				// Build desc string "CATEGORY > V2DESC"
-				dynstr.emplace_back(v2def.category_key);
+				dynstr.push_back(std::string(v2def.category_key));
 				dynstr.back().append(" > ").append(v2def.desc);
 			}
-			v1defs.push_back({ v2def.key, (v2def.category_key ? dynstr.back().c_str() : v2def.desc), v2def.info, {}, v2def.default_value });
+			{ retro_core_option_definition _d; memset(&_d, 0, sizeof(_d)); _d.key = v2def.key; _d.desc = (v2def.category_key ? dynstr.back().c_str() : v2def.desc); _d.info = v2def.info; _d.default_value = v2def.default_value; v1defs.push_back(_d); }
 			memcpy(v1defs.back().values, v2def.values, sizeof(v2def.values));
 		}
 		environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS, (void*)&v1defs[0]);
@@ -2145,17 +2150,18 @@ static void set_variables(bool force_midi_scan = false)
 	{
 		// Convert options to legacy format
 		static std::vector<retro_variable> v0defs;
-		for (const retro_core_option_v2_definition& v2def : option_defs)
-		{
-			if (!v2def.desc) { v0defs.push_back({0,0}); break; }
+		for (size_t _oi = 0; _oi < sizeof(option_defs)/sizeof(option_defs[0]); _oi++)
+		{ const retro_core_option_v2_definition& v2def = option_defs[_oi];
+			if (!v2def.desc) { retro_variable _v; memset(&_v, 0, sizeof(_v)); v0defs.push_back(_v); break; }
 			dynstr.resize(dynstr.size() + 1);
 			if (v2def.category_key)
 				dynstr.back().append(v2def.category_key).append(" > ");
 			dynstr.back().append(v2def.desc).append("; ").append(v2def.default_value);
-			for (const retro_core_option_value& v2val : v2def.values)
-				if (v2val.value && strcmp(v2def.default_value, v2val.value))
-					dynstr.back().append("|").append(v2val.value);
-			v0defs.push_back({ v2def.key, dynstr.back().c_str() });
+			for (size_t _vi = 0; _vi < RETRO_NUM_CORE_OPTION_VALUES_MAX; _vi++)
+				{ const retro_core_option_value& v2val = v2def.values[_vi]; if (!v2val.value) break;
+				if (strcmp(v2def.default_value, v2val.value))
+					dynstr.back().append("|").append(v2val.value); }
+			{ retro_variable _rv; _rv.key = v2def.key; _rv.value = dynstr.back().c_str(); v0defs.push_back(_rv); }
 		}
 		environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)&v0defs[0]);
 	}
@@ -2382,7 +2388,13 @@ static bool check_variables()
 	dbp_auto_target = (1.0f * (cycles_numeric ? 1.0f : (float)atof(DBP_Option::Get(DBP_Option::cycle_limit)))) - 0.0075f; // was - 0.01f
 
 	bool cpu_core_changed = false;
+//#if defined(_XBOX)
+	// Xbox 360: Force simple interpreter until PPC dynarec is fully tested
+	// "simple" is faster than "normal" for most DOS games
+//	const char* cpu_core = "simple";
+//#else
 	const char* cpu_core = ((DOSBox_Boot && DBP_Option::Get(DBP_Option::bootos_forcenormal, &cpu_core_changed)[0] == 't') ? "normal" : DBP_Option::Get(DBP_Option::cpu_core, &cpu_core_changed));
+//#endif
 	DBP_Option::Apply(sec_cpu, "core", cpu_core, false, false, cpu_core_changed);
 	DBP_Option::GetAndApply(sec_cpu, "cputype", DBP_Option::cpu_type, true);
 
@@ -2634,7 +2646,7 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
 		RunningProgram = "DOSBOX";
 		dbp_crash_message.clear();
 		dbp_state = DBPSTATE_BOOT;
-		dbp_throttle = { RETRO_THROTTLE_NONE };
+		dbp_throttle.mode = RETRO_THROTTLE_NONE; dbp_throttle.rate = 0;
 		dbp_game_running = dbp_had_game_running = false;
 		dbp_last_fastforward = false;
 		dbp_serializesize = 0;
@@ -3045,8 +3057,8 @@ bool retro_load_game(const struct retro_game_info *info) //#4
 			static void Reset(void)
 			{
 				bool missRequired = false;
-				for (sglproc& glproc : glprocs)
-				{
+				for (size_t _gi = 0; _gi < sizeof(glprocs)/sizeof(glprocs[0]); _gi++)
+				{ sglproc& glproc = glprocs[_gi];
 					*glproc.ptr = dbp_hw_render.get_proc_address(glproc.name);
 					if (!*glproc.ptr)
 					{
@@ -3395,9 +3407,9 @@ void retro_run(void)
 	{
 		bool fast_forward = false;
 		if (environ_cb(RETRO_ENVIRONMENT_GET_FASTFORWARDING, &fast_forward) && fast_forward)
-			dbp_throttle = { RETRO_THROTTLE_FAST_FORWARD, 0.0f };
+			{ dbp_throttle.mode = RETRO_THROTTLE_FAST_FORWARD; dbp_throttle.rate = 0.0f; }
 		else
-			dbp_throttle = { RETRO_THROTTLE_NONE, (float)av_info.timing.fps };
+			{ dbp_throttle.mode = RETRO_THROTTLE_NONE; dbp_throttle.rate = (float)av_info.timing.fps; }
 	}
 
 	static Bit8u fpsboost_count = 0, last_fpsboost = 1;
@@ -3460,8 +3472,8 @@ void retro_run(void)
 		// query buttons mapped to analog functions
 		if (dbp_analog_buttons)
 		{
-			for (DBP_InputBind& b : dbp_input_binds)
-			{
+			for (size_t _bi = 0; _bi < dbp_input_binds.size(); _bi++)
+			{ DBP_InputBind& b = dbp_input_binds[_bi];
 				if (b.evt > _DBPET_JOY_AXIS_MAX || b.device != RETRO_DEVICE_JOYPAD) continue; // handled below
 				Bit16s val = input_state_cb(b.port, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_BUTTON, b.id);
 				if (!val) val = (input_state_cb(b.port, RETRO_DEVICE_JOYPAD, 0, b.id) ? (Bit16s)32767 : (Bit16s)0); // old frontend fallback
@@ -3470,8 +3482,8 @@ void retro_run(void)
 		}
 
 		// query input states and generate input events
-		for (DBP_InputBind& b : dbp_input_binds)
-		{
+		for (size_t _bi = 0; _bi < dbp_input_binds.size(); _bi++)
+		{ DBP_InputBind& b = dbp_input_binds[_bi];
 			Bit16s val = input_state_cb(b.port, b.device, b.index, b.id);
 			if (val != b.lastval) b.Update(val);
 		}

@@ -709,14 +709,14 @@ void DriveFileIterator(DOS_Drive* drv, void(*func)(const char* path, bool is_dir
 				bool is_dir = !!(dta_attr & DOS_ATTR_DIRECTORY);
 				//if (is_dir) printf("[%s] [%s] %s (size: %u - date: %u - time: %u - attr: %u)\n", (const char*)data, (dta_attr == 8 ? "V" : (is_dir ? "D" : "F")), full_path, dta_size, dta_date, dta_time, dta_attr);
 				if (dta_name[0] == '.' && dta_name[dta_name[1] == '.' ? 2 : 1] == '\0') continue;
-				if (is_dir) dirs.emplace_back(full_path);
+				if (is_dir) dirs.push_back(std::string(full_path));
 				func(full_path, is_dir, dta_size, dta_date, dta_time, dta_attr, data);
 			}
 			dos.dta(save_dta);
 		}
 	};
 	std::vector<std::string> dirs;
-	dirs.emplace_back(root ? root : "");
+	dirs.push_back(std::string(root ? root : ""));
 	std::string dir;
 	while (dirs.size())
 	{

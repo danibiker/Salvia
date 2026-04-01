@@ -212,7 +212,7 @@ struct DBP_Run
 			// Set last_info to this new image to support BIOS rebooting with it
 			startup.mode = RUN_BOOTOS;
 			startup.info = (int)dbp_osimages.size();
-			dbp_osimages.emplace_back(filename);
+			dbp_osimages.push_back(std::string(filename));
 		}
 
 		if (!path.empty())
@@ -296,24 +296,24 @@ struct DBP_Run
 		base_drive->AddUnder(*new zipDrive(new rawFile(zip_file_h, false), false), true);
 
 		const char* exes[] = { "C:\\WINDOWS.BAT", "C:\\AUTOEXEC.BAT", "C:\\WINDOWS\\WIN.COM" };
-		for (const char* exe : exes)
-			if (Drives['C'-'A']->FileExists(exe + 3))
-				{ RunBatchFile(new BatchFileExec(exe)); return; }
+		for (size_t _ei = 0; _ei < sizeof(exes)/sizeof(exes[0]); _ei++)
+			{ const char* exe = exes[_ei]; if (Drives['C'-'A']->FileExists(exe + 3))
+				{ RunBatchFile(new BatchFileExec(exe)); return; } }
 
 		ConsoleClearScreen();
 		Bit16u sz;
 		DOS_WriteFile(STDOUT, (Bit8u*)"To auto run the shell, make sure one of these files exist:\r\n", &(sz = sizeof("To auto run the shell, make sure one of these files exist:\r\n")-1));
-		for (const char* exe : exes) { DOS_WriteFile(STDOUT, (Bit8u*)"\r\n- ", &(sz = 4)); DOS_WriteFile(STDOUT, (Bit8u*)exe, &(sz = (Bit16u)strlen(exe))); }
+		for (size_t _ei = 0; _ei < sizeof(exes)/sizeof(exes[0]); _ei++) { const char* exe = exes[_ei]; DOS_WriteFile(STDOUT, (Bit8u*)"\r\n- ", &(sz = 4)); DOS_WriteFile(STDOUT, (Bit8u*)exe, &(sz = (Bit16u)strlen(exe))); }
 		DOS_WriteFile(STDOUT, (Bit8u*)"\r\n\r\n", &(sz = 4));
 		KEYBOARD_AddKey(KBD_enter, true);
 		KEYBOARD_AddKey(KBD_enter, false);
 	}
 
-	enum EMode : Bit8u { RUN_NONE, RUN_EXEC, RUN_BOOTIMG, RUN_BOOTOS, RUN_INSTALLOS, RUN_SHELL, RUN_VARIANT, RUN_COMMANDLINE };
-	static struct Startup { EMode mode = RUN_NONE; bool reboot = false; int info = 0; std::string exec; } startup;
-	static struct Autoboot { Startup startup; bool have = false, use = false; int skip = 0; Bit32u hash = 0; } autoboot;
-	static struct Autoinput { std::string str; const char* ptr = NULL; Bit32s oldcycles = 0; Bit8u oldchange = 0; Bit16s oldyear = 0; } autoinput;
-	static struct Patch { int enabled_variant = 0; bool show_default = false; } patch;
+	enum EMode { RUN_NONE, RUN_EXEC, RUN_BOOTIMG, RUN_BOOTOS, RUN_INSTALLOS, RUN_SHELL, RUN_VARIANT, RUN_COMMANDLINE };
+	static struct Startup { EMode mode; bool reboot; int info; std::string exec; Startup() : mode(RUN_NONE), reboot(false), info(0) {} } startup;
+	static struct Autoboot { Startup startup; bool have, use; int skip; Bit32u hash; Autoboot() : have(false), use(false), skip(0), hash(0) {} } autoboot;
+	static struct Autoinput { std::string str; const char* ptr; Bit32s oldcycles; Bit8u oldchange; Bit16s oldyear; Autoinput() : ptr(NULL), oldcycles(0), oldchange(0), oldyear(0) {} } autoinput;
+	static struct Patch { int enabled_variant; bool show_default; Patch() : enabled_variant(0), show_default(false) {} } patch;
 
 	static bool Run(EMode mode, int info, std::string& str, bool from_osd = false)
 	{
@@ -389,9 +389,10 @@ struct DBP_Run
 
 	struct DOSYMLLoader
 	{
-		const char *Key, *End, *Next, *KeyX, *Val, *ValX, *first_startup_mode_key = NULL;
-		int cpu_cycles = 0, cpu_hz = 0, cpu_year = 0, cpu_set_max = 0;
-		bool reboot, is_utility = false;
+		const char *Key, *End, *Next, *KeyX, *Val, *ValX, *first_startup_mode_key;
+		int cpu_cycles, cpu_hz, cpu_year, cpu_set_max;
+		bool reboot, is_utility;
+		DOSYMLLoader() : first_startup_mode_key(NULL), cpu_cycles(0), cpu_hz(0), cpu_year(0), cpu_set_max(0), reboot(false), is_utility(false) {}
 		bool Parse(const char *yml_key, const char* db_section, const char* db_key, ...)
 		{
 			if (yml_key && (strncmp(yml_key, Key, (size_t)(KeyX - Key)) || yml_key[KeyX - Key])) return false;
@@ -478,10 +479,10 @@ struct DBP_Run
 				case 'm': // run_mount
 					{
 						int imgidx = -1;
-						for (DBP_Image& i : dbp_images)
-							if ((i.path.size() == (size_t)(4+(ValX - Val)) && i.path[0] == '$' && !strncasecmp(&i.path[4], Val, (ValX - Val)))
+						for (size_t _ii = 0; _ii < dbp_images.size(); _ii++)
+							{ DBP_Image& i = dbp_images[_ii]; if ((i.path.size() == (size_t)(4+(ValX - Val)) && i.path[0] == '$' && !strncasecmp(&i.path[4], Val, (ValX - Val)))
 								|| (i.longpath.size() == (size_t)(ValX - Val) &&  !strncasecmp(&i.longpath[0], Val, (ValX - Val))))
-								{ imgidx = (int)(&i - &dbp_images[0]); break; }
+								{ imgidx = (int)(&i - &dbp_images[0]); break; } }
 						if (imgidx == -1) return false;
 						dbp_images[imgidx].remount = true;
 					}
@@ -665,16 +666,16 @@ struct DBP_Run
 				{
 					const size_t suffix_len              = (linetype == 'O' ?             4:             5);
 					const std::vector<std::string>& strs = (linetype == 'O' ? dbp_osimages : dbp_shellzips);
-					for (const std::string& it : strs)
-						if (it.size() == (p - str) + suffix_len && !memcmp(str, it.c_str(), it.size() - suffix_len))
-							{ autoboot.startup.mode = (linetype == 'O' ? RUN_BOOTOS : RUN_SHELL); autoboot.startup.info = (int)(&it - &strs[0]); break; }
+					for (size_t _si = 0; _si < strs.size(); _si++)
+						{ const std::string& it = strs[_si]; if (it.size() == (p - str) + suffix_len && !memcmp(str, it.c_str(), it.size() - suffix_len))
+							{ autoboot.startup.mode = (linetype == 'O' ? RUN_BOOTOS : RUN_SHELL); autoboot.startup.info = (int)(&it - &strs[0]); break; } }
 				}
 				else if (linetype == 'V' && patchDrive::variants.Len()) { autoboot.startup.mode = RUN_VARIANT; autoboot.skip = 0; line += 2; goto parseVariant; }
 				else if (linetype == 'I')
 				{
-					for (const char* it : DBP_MachineNames)
-						if (!strcmp(it, str))
-							{ autoboot.startup.mode = RUN_BOOTIMG; autoboot.startup.info = (Bit16s)(it[0]|0x20); break; }
+					for (size_t _mi = 0; _mi < sizeof(DBP_MachineNames)/sizeof(DBP_MachineNames[0]); _mi++)
+						{ const char* it = DBP_MachineNames[_mi]; if (!strcmp(it, str))
+							{ autoboot.startup.mode = RUN_BOOTIMG; autoboot.startup.info = (Bit16s)(it[0]|0x20); break; } }
 				}
 			}
 			else if (line_no == 2)
@@ -683,9 +684,9 @@ struct DBP_Run
 			}
 			else if (line_no == 3 && *line)
 			{
-				for (const DBP_Image& i : dbp_images)
-					if (!strcmp(DBP_Image_Label(i), line))
-						{ if (!i.mounted) DBP_Mount((unsigned)(&i - &dbp_images[0])); break; }
+				for (size_t _ii = 0; _ii < dbp_images.size(); _ii++)
+					{ const DBP_Image& i = dbp_images[_ii]; if (!strcmp(DBP_Image_Label(i), line))
+						{ if (!i.mounted) DBP_Mount((unsigned)(&i - &dbp_images[0])); break; } }
 			}
 			else if (line_no == 4)
 			{
@@ -715,7 +716,7 @@ struct DBP_Run
 		autoboot.hash = HashAutoBoot();
 		const char* varname = (patch.enabled_variant ? patchDrive::variants.GetStorage()[patch.enabled_variant - 1].c_str() : NULL), *img = NULL;
 		const char *var = ((varname && mode != RUN_VARIANT) ? varname : NULL), *line1 = (mode != RUN_VARIANT ? str.c_str() : (varname ? varname : ""));
-		for (const DBP_Image& i : dbp_images) { if (i.mounted) { if (&i != &dbp_images[0]) img = DBP_Image_Label(i); break; } }
+		for (size_t _ii = 0; _ii < dbp_images.size(); _ii++) { const DBP_Image& i = dbp_images[_ii]; if (i.mounted) { if (&i != &dbp_images[0]) img = DBP_Image_Label(i); break; } }
 		char buf[DOS_PATHLENGTH + 32 + 256 + 256], *p = buf;
 		if (mode != RUN_EXEC) { *(p++) = (mode == RUN_BOOTOS ? 'O' : mode == RUN_SHELL ? 'S' : mode == RUN_VARIANT ? 'V' : 'I'); *(p++) = '*'; }
 		if (1)                           p += snprintf(p, (&buf[sizeof(buf)] - p), "%s", line1);                // line 1

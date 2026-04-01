@@ -870,8 +870,17 @@ void DBP_MIXER_ScrapAudio()
 
 #include <dbp_serialize.h>
 
-DBPArchiveOptional::DBPArchiveOptional(DBPArchive& ar_outer, MixerChannel* chan) : DBPArchiveOptional(ar_outer, chan, (chan && chan->ever_enabled))
+DBPArchiveOptional::DBPArchiveOptional(DBPArchive& ar_outer, MixerChannel* chan) : DBPArchive((DBPArchive::EMode)ar_outer.mode), outer(&ar_outer)
 {
+	// Replicate logic from 3-arg constructor (VS2010 has no delegating constructors)
+	bool active = (chan && chan->ever_enabled);
+	version = ar_outer.version; had_error = ar_outer.had_error; warnings = ar_outer.warnings;
+	bool state = (chan && active);
+	ar_outer.Serialize(state);
+	if (mode == MODE_MAXSIZE) optionality = OPTIONAL_SERIALIZE;
+	else if (state) optionality = (chan ? OPTIONAL_SERIALIZE : OPTIONAL_DISCARD);
+	else optionality = ((!chan || !active) ? OPTIONAL_SKIP : OPTIONAL_RESET);
+
 	if (IsSkip()) return;
 	DBP_ASSERT(mode != DBPArchive::MODE_ZERO); // when restarting (zeroing) all channels should have been set to NULL
 

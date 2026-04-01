@@ -2912,7 +2912,7 @@ static const char *const voodoo_reg_name[] =
 
 static voodoo_state *v;
 
-enum VoodoPerf : UINT8
+enum VoodoPerf
 {
 	V_PERFFLAG_MULTITHREAD = 0x1,
 	V_PERFFLAG_LOWQUALITY = 0x2,
@@ -2967,7 +2967,7 @@ static const char* ogl_drawdepth_fragment_shader_src = // encode 0.0 to 1.0 with
 		"fragColor = vec4((d - m) * 0.000015318627450980392156862745098039, m * 0.003921568627450980392156862745098, 0.0, 0.0);"
 	"}";
 
-enum ogl_readback_mode : UINT8 { OGL_READBACK_MODE_NONE, OGL_READBACK_MODE_COLOR0, OGL_READBACK_MODE_COLOR1, OGL_READBACK_MODE_COLOR2, OGL_READBACK_MODE_DEPTH };
+enum ogl_readback_mode { OGL_READBACK_MODE_NONE, OGL_READBACK_MODE_COLOR0, OGL_READBACK_MODE_COLOR1, OGL_READBACK_MODE_COLOR2, OGL_READBACK_MODE_DEPTH };
 
 template <typename TVal> struct GrowArray
 {
@@ -3020,7 +3020,7 @@ struct ogl_effective
 
 struct ogl_cmdbase
 {
-	enum EType : UINT8 { TRIANGLE, PIXEL_RAW, PIXEL_BLENDED, _LAST_GEOMETRY, FASTFILL, CLIPPING } type;
+	enum EType { TRIANGLE, PIXEL_RAW, PIXEL_BLENDED, _LAST_GEOMETRY, FASTFILL, CLIPPING } type;
 	UINT8 drawbuffer;
 };
 
@@ -3070,10 +3070,10 @@ struct ogl_cmdbuffer
 {
 	GrowArray<ogl_vertex> vertices;
 	GrowArray<ogl_command> commands;
-	UINT32 flushed_vertices = 0, flushed_commands = 0;
+	UINT32 flushed_vertices, flushed_commands;
 	ogl_geometrycmd last_geometry;
 	ogl_clipping last_clipping, live_clipping;
-	INLINE ogl_cmdbuffer() { last_geometry.drawbuffer = 255; last_clipping.active = live_clipping.active = 0; }
+	INLINE ogl_cmdbuffer() : flushed_vertices(0), flushed_commands(0) { last_geometry.drawbuffer = 255; last_clipping.active = live_clipping.active = 0; }
 
 	INLINE void AddCommand(ogl_command& cmd)
 	{
@@ -3102,7 +3102,8 @@ struct ogl_program
 
 struct ogl_pixels
 {
-	UINT32 width = 0, height = 0, *data = NULL;
+	UINT32 width, height, *data;
+	ogl_pixels() : width(0), height(0), data(NULL) {}
 	void Set(UINT32 w, UINT32 h, UINT32* alloc_data) { width = w; height = h; data = alloc_data; }
 	void Free() { free(data); *this = ogl_pixels(); }
 };
@@ -3175,9 +3176,10 @@ static UINT32* ogl_convertframe(ogl_readback_mode mode, ogl_convertframe_mode co
 
 struct ogl_drawbuffer
 {
-	unsigned fbo = 0, colortex = 0;
-	UINT8 last_scale = 0, new_image = 0, unfinished_depth = 0;
+	unsigned fbo, colortex;
+	UINT8 last_scale, new_image, unfinished_depth;
 	ogl_pixels color;
+	ogl_drawbuffer() : fbo(0), colortex(0), last_scale(0), new_image(0), unfinished_depth(0) {}
 
 	void SetSize(UINT8 bufnum, UINT32 w, UINT32 h, unsigned depthstenciltex)
 	{
@@ -3233,10 +3235,11 @@ struct ogl_drawbuffer
 
 struct ogl_readbackdata
 {
-	unsigned pbo = 0, pbosize = 0, depth_fbo = 0, depth_color = 0, depth_prog = 0, depth_vao = 0, depth_vbo = 0;
+	unsigned pbo, pbosize, depth_fbo, depth_color, depth_prog, depth_vao, depth_vbo;
 	ogl_pixels depth;
-	ogl_readback_mode ready = OGL_READBACK_MODE_NONE;
-	bool depth_was_prepared = false, read_depth_next = false;
+	ogl_readback_mode ready;
+	bool depth_was_prepared, read_depth_next;
+	ogl_readbackdata() : pbo(0), pbosize(0), depth_fbo(0), depth_color(0), depth_prog(0), depth_vao(0), depth_vbo(0), ready(OGL_READBACK_MODE_NONE), depth_was_prepared(false), read_depth_next(false) {}
 	void DisablePBO() { GFX_ShowMsg("[VOGL] Disabling unsupoorted PBO Readback"); DBP_ASSERT(0); if (pbo) { myglDeleteBuffers(1, &pbo); pbo = 0; } }
 	INLINE ogl_pixels* GetReadyPixels(ogl_drawbuffer* dbs) { return (ready == OGL_READBACK_MODE_NONE ? NULL : ready == OGL_READBACK_MODE_DEPTH ? &depth : &dbs[(int)ready-1].color); }
 	INLINE bool SetReady(ogl_drawbuffer* dbs, UINT8 flushed_buffer, unsigned& ready_fbo)
@@ -3325,11 +3328,12 @@ struct voodoo_ogl_state
 	ogl_cmdbuffer cmdbuf;
 	ogl_drawbuffer drawbuffers[3];
 	ogl_readbackdata readback;
-	UINT8 flushed_buffer = 0, display_buffer = 0;
+	UINT8 flushed_buffer, display_buffer;
 	UINT32 renderframe, lastbackframe;
-	UINT64 last_texture_clear_op = 0;
-	unsigned vao = 0, vbo = 0, displayprog = 0, displayprog_clut_exp = 0, displayprog_clut_fac = 0;
-	unsigned depthstenciltex = 0, depthstenciltex_width = 0, depthstenciltex_height = 0;
+	UINT64 last_texture_clear_op;
+	unsigned vao, vbo, displayprog, displayprog_clut_exp, displayprog_clut_fac;
+	unsigned depthstenciltex, depthstenciltex_width, depthstenciltex_height;
+	voodoo_ogl_state() : flushed_buffer(0), display_buffer(0), renderframe(0), lastbackframe(0), last_texture_clear_op(0), vao(0), vbo(0), displayprog(0), displayprog_clut_exp(0), displayprog_clut_fac(0), depthstenciltex(0), depthstenciltex_width(0), depthstenciltex_height(0) {}
 
 	static void Activate()
 	{
@@ -3384,9 +3388,9 @@ struct voodoo_ogl_state
 		myglDeleteVertexArrays(1, &vao);
 		myglDeleteProgram(displayprog);
 		readback.Cleanup();
-		for (ogl_program& p : programs) myglDeleteProgram(p.id);
-		for (ogl_texture& t : textures) if (t.id) myglDeleteTextures(1, &t.id);
-		for (ogl_drawbuffer& db : drawbuffers) db.Cleanup();
+		for (size_t _xi0 = 0; _xi0 < programs.num; _xi0++) { ogl_program& p = programs.data[_xi0]; myglDeleteProgram(p.id); }
+		for (size_t _xi1 = 0; _xi1 < textures.num; _xi1++) { ogl_texture& t = textures.data[_xi1]; if (t.id) myglDeleteTextures(1, &t.id); }
+		for (size_t _xi2 = 0; _xi2 < sizeof(drawbuffers)/sizeof(drawbuffers[0]); _xi2++) { ogl_drawbuffer& db = drawbuffers[_xi2]; db.Cleanup(); }
 		myglDeleteTextures(1, &depthstenciltex);
 		ContextLost();
 	}
@@ -3398,7 +3402,7 @@ struct voodoo_ogl_state
 		program_hashes.Free();
 		textures.Free();
 		free_textures.Free();
-		for (ogl_drawbuffer& db : drawbuffers) db.ContextLost();
+		for (size_t _xi3 = 0; _xi3 < sizeof(drawbuffers)/sizeof(drawbuffers[0]); _xi3++) { ogl_drawbuffer& db = drawbuffers[_xi3]; db.ContextLost(); }
 		readback.ContextLost();
 		depthstenciltex = depthstenciltex_width = depthstenciltex_height = 0;
 		vogl_active = true; // for Deactivate to set to false again
@@ -3418,7 +3422,7 @@ struct voodoo_ogl_state
 				memcpy(vogl->cmdbuf.vertices.data, vogl->cmdbuf.vertices.data + fv, nv * sizeof(*vogl->cmdbuf.vertices.data));
 				vogl->cmdbuf.commands.num = nc;
 				vogl->cmdbuf.vertices.num = nv;
-				for (ogl_command& c : vogl->cmdbuf.commands) { DBP_ASSERT(c.vertex_index >= fv); c.vertex_index -= fv; }
+				for (size_t _xi4 = 0; _xi4 < vogl->cmdbuf.commands.num; _xi4++) { ogl_command& c = vogl->cmdbuf.commands.data[_xi4]; DBP_ASSERT(c.vertex_index >= fv); c.vertex_index -= fv; }
 			}
 		}
 		flushed_buffer = v->fbi.frontbuf;
@@ -3543,7 +3547,7 @@ void voodoo_ogl_initfailed()
 	v_perf = V_PERFFLAG_MULTITHREAD; // fall back
 }
 
-enum Voodoo_OGL_UsedBits : UINT32
+enum Voodoo_OGL_UsedBits
 {
 	VOODOO_OGL_FBZMODE_USEDBITS = 0
 		|FBZMODE_RGB_BUFFER_MASK_BIT
@@ -3635,7 +3639,7 @@ bool voodoo_ogl_mainthread() // called while emulation thread is sleeping
 			return !memcmp(&programs_data[test_idx].eff, &test_eff, sizeof(test_eff));
 		}
 
-		enum Shader_OGL_Usedbits : UINT32
+		enum Shader_OGL_Usedbits
 		{
 			SHADER_FBZMODE_USEDBITS = 0
 				|FBZMODE_ENABLE_CHROMAKEY_BIT
@@ -3993,8 +3997,8 @@ bool voodoo_ogl_mainthread() // called while emulation thread is sleeping
 	// Upload any textures prepared by the emulation
 	if (vogl->texuploads.num)
 	{
-		for (ogl_texupload& tu : vogl->texuploads)
-		{
+		for (size_t _xi5 = 0; _xi5 < vogl->texuploads.num; _xi5++)
+		{ ogl_texupload& tu = vogl->texuploads.data[_xi5];
 			ogl_texture& tex = vogl->textures.data[tu.textureidx];
 			if (!tex.id) { myglGenTextures(1, &tex.id); GLERRORASSERT }
 			//GFX_ShowMsg("[VOGL] Upload texture #%d with id %d and texkey %08x and size %d,%d", tu.textureidx, tex.id, tex.key, tu.smax, tu.tmax);
@@ -4008,7 +4012,7 @@ bool voodoo_ogl_mainthread() // called while emulation thread is sleeping
 
 	#ifndef NDEBUG // validate consistency
 	DBP_ASSERT(vogl->texture_hashes.Len() == (vogl->textures.num - vogl->free_textures.num));
-	for (ogl_texbase& tb : vogl->texbases) { if (tb.textureidx != (UINT32)-1) { DBP_ASSERT(vogl->textures.data[tb.textureidx].key == (tb.data_hash ^ tb.pal_hash)); } }
+	for (size_t _xi6 = 0; _xi6 < vogl->texbases.num; _xi6++) { ogl_texbase& tb = vogl->texbases.data[_xi6]; if (tb.textureidx != (UINT32)-1) { DBP_ASSERT(vogl->textures.data[tb.textureidx].key == (tb.data_hash ^ tb.pal_hash)); } }
 	#endif
 
 	#if defined(VOODOO_RENDERDOC_H) && defined(VOODOO_RENDERDOC_DLL)
@@ -4401,7 +4405,7 @@ bool voodoo_ogl_mainthread() // called while emulation thread is sleeping
 	vogl->cmdbuf.commands.num -= flush_commands;
 	vogl->cmdbuf.flushed_commands = 0;
 	DBP_ASSERT(!vogl->cmdbuf.commands.num || vogl->cmdbuf.commands.data->vertex_index == flush_vertices);
-	for (ogl_command& c : vogl->cmdbuf.commands) { DBP_ASSERT(c.vertex_index >= flush_vertices); c.vertex_index -= flush_vertices; }
+	for (size_t _xi7 = 0; _xi7 < vogl->cmdbuf.commands.num; _xi7++) { ogl_command& c = vogl->cmdbuf.commands.data[_xi7]; DBP_ASSERT(c.vertex_index >= flush_vertices); c.vertex_index -= flush_vertices; }
 	if (UINT32 late_vertices = (vogl->cmdbuf.vertices.num - flush_vertices))
 		memmove(vogl->cmdbuf.vertices.data, vogl->cmdbuf.vertices.data + flush_vertices, late_vertices * sizeof(*vogl->cmdbuf.vertices.data));
 	vogl->cmdbuf.vertices.num -= flush_vertices;
@@ -4419,7 +4423,8 @@ bool voodoo_ogl_mainthread() // called while emulation thread is sleeping
 			if (!checkedPartialFlush)
 			{
 				// Mark all textures used by commands already queued but not yet flushed as having been accessed this frame
-				for (const ogl_command& cmd : vogl->cmdbuf.commands)
+				for (size_t _xi8 = 0; _xi8 < vogl->cmdbuf.commands.num; _xi8++)
+				{ const ogl_command& cmd = vogl->cmdbuf.commands.data[_xi8];
 					if (cmd.base.type == ogl_cmdbase::TRIANGLE)
 						for (int t = 1; t >= 0; t--)
 							if (cmd.geometry.eff.tex_mode[t] != VOODOO_OGL_TEXMODE_DISABLED)
@@ -4427,6 +4432,7 @@ bool voodoo_ogl_mainthread() // called while emulation thread is sleeping
 								DBP_ASSERT(vogl->textures.data[cmd.geometry.textureidx[t]].lastframe != ogl_texture::FREED_LASTFRAME);
 								vogl->textures.data[cmd.geometry.textureidx[t]].lastframe = vogl->renderframe;
 							}
+				}
 				checkedPartialFlush = 1;
 				if (tex.lastframe == vogl->renderframe) continue;
 			}
@@ -4437,8 +4443,8 @@ bool voodoo_ogl_mainthread() // called while emulation thread is sleeping
 			DBP_ASSERT(removed);
 			//GFX_ShowMsg("[VOGL] Marking texture #%d with id %d and texkey %08x as free", idx, tex.id, tex.key);
 	
-			for (ogl_texbase& tb : vogl->texbases)
-			{
+			for (size_t _xi9 = 0; _xi9 < vogl->texbases.num; _xi9++)
+			{ ogl_texbase& tb = vogl->texbases.data[_xi9];
 				if (tb.textureidx != idx) continue;
 				tb.textureidx = (UINT32)-1;
 				//GFX_ShowMsg("       Marking texbase with texkey %08x as unassigned", (tb.data_hash ^ tb.pal_hash));
@@ -4682,16 +4688,18 @@ static void voodoo_ogl_draw_triangle()
 
 			if (is_palette && vogl_palette_changed)
 			{
-				for (ogl_texbase& tb : vogl->texbases)
+				for (size_t _xi10 = 0; _xi10 < vogl->texbases.num; _xi10++) { ogl_texbase& tb = vogl->texbases.data[_xi10];
 					if (tb.valid_format == 5 || tb.valid_format == 14)
 						tb.valid_format = 0xFF;
+				}
 				vogl_palette_changed = false;
 			}
 			if (is_ncc && vogl_ncctexel_changed)
 			{
-				for (ogl_texbase& tb : vogl->texbases)
+				for (size_t _xi11 = 0; _xi11 < vogl->texbases.num; _xi11++) { ogl_texbase& tb = vogl->texbases.data[_xi11];
 					if ((tb.valid_format & 7) == 1)
 						tb.valid_format = 0xFF;
+				}
 				vogl_ncctexel_changed = false;
 			}
 
@@ -4757,7 +4765,10 @@ static void voodoo_ogl_draw_triangle()
 				else
 				{
 					textureidx = vogl->textures.num;
-					vogl->textures.AddOne() = { 0, vogl->renderframe, texturekey };
+					ogl_texture& newtex = vogl->textures.AddOne();
+					newtex.id = 0;
+					newtex.lastframe = vogl->renderframe;
+					newtex.key = texturekey;
 				}
 
 				bool wasaddednew = vogl->texture_hashes.Put(texturekey, textureidx);
@@ -8956,8 +8967,8 @@ void DBPSerialize_Voodoo(DBPArchive& ar)
 		ar.SerializeSparse(v->fbi.ram, v->fbi.mask + 1);
 		ar.SerializeBytes(v->fbi.rgboffs, (Bit8u*)((&v->fbi)+1)-(Bit8u*)v->fbi.rgboffs);
 
-		for (tmu_state& tmu : v->tmu)
-		{
+		for (size_t _xi12 = 0; _xi12 < sizeof(v->tmu)/sizeof(v->tmu[0]); _xi12++)
+		{ tmu_state& tmu = v->tmu[_xi12];
 			if (!tmu.ram) continue;
 
 			// Serialize simple data types in tmu_state
@@ -8969,11 +8980,13 @@ void DBPSerialize_Voodoo(DBPArchive& ar)
 				.Serialize(tmu.wmask).Serialize(tmu.hmask).SerializeArray(tmu.palette).SerializeArray(tmu.palettea);
 
 			// Serialize simple data types in ncc_table
-			for (ncc_table& ncc : tmu.ncc)
+			for (size_t _xi13 = 0; _xi13 < sizeof(tmu.ncc)/sizeof(tmu.ncc[0]); _xi13++)
+			{ ncc_table& ncc = tmu.ncc[_xi13];
 				ar.Serialize(ncc.dirty)
 					.SerializeArray(ncc.ir).SerializeArray(ncc.ig).SerializeArray(ncc.ib)
 					.SerializeArray(ncc.qr).SerializeArray(ncc.qg).SerializeArray(ncc.qb)
 					.SerializeArray(ncc.y).SerializeArray(ncc.texel);
+			}
 
 			// Serialize the TMU RAM
 			ar.SerializeSparse(tmu.ram, tmu.mask + 1);
@@ -9003,7 +9016,7 @@ void DBPSerialize_Voodoo(DBPArchive& ar)
 			bool usevogl = (v->active && (v_perf & V_PERFFLAG_OPENGL));
 			if (vogl_active && !usevogl) voodoo_ogl_state::Deactivate();
 			if (!vogl_active && usevogl) voodoo_ogl_state::Activate();
-			if (vogl) for (ogl_texbase& tb : vogl->texbases) tb.valid_data = false; // force texture re-hash
+			if (vogl) for (size_t _xi14 = 0; _xi14 < vogl->texbases.num; _xi14++) { ogl_texbase& tb = vogl->texbases.data[_xi14]; tb.valid_data = false; } // force texture re-hash
 			#endif
 			v->resolution_dirty = true; // force call to RENDER_SetSize
 			v->clutDirty = v->ogl_clutDirty = true;

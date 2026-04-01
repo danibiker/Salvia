@@ -642,7 +642,7 @@ template <typename TVal> struct StringToObjectHashMap : public StringToPointerHa
 	TVal& Add(const char* str, Bit32u str_limit = 0xFFFF, Bit32u hash_init = (Bit32u)0x811c9dc5)
 	{
 		char* oldPtr = (storage.size() ? (char*)&storage[0] : NULL);
-		storage.emplace_back();
+		storage.push_back(TVal());
 		char* newPtr = (char*)&storage[0];
 		if (oldPtr != newPtr) for (Bit32u i = 0, j = (BaseHashMap<void*>::maxlen ? BaseHashMap<void*>::maxlen + 1 : 0); i != j; i++) if (BaseHashMap<void*>::keys[i]) BaseHashMap<void*>::vals[i] = (TVal*)((char*)BaseHashMap<void*>::vals[i] + (newPtr - oldPtr));
 		TVal& res = storage.back();

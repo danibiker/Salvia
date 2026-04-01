@@ -127,7 +127,12 @@ public:
 #if defined (WIN32)
 
 #define WIN32_LEAN_AND_MEAN        // Exclude rarely-used stuff from 
+
+#ifdef _XBOX
+#include <xtl.h>
+#else
 #include <windows.h>
+#endif
 
 typedef struct dir_struct {
 	HANDLE          handle;

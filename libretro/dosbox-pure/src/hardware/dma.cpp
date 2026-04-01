@@ -435,8 +435,8 @@ void DBPSerialize(DBPArchive& ar, DmaController* self)
 void DBPSerialize_DMA(DBPArchive& ar)
 {
 	ar.Serialize(dma_wrapping).SerializeArray(ems_board_mapping);
-	for (DmaController *c : DmaControllers)
-	{
+	for (size_t _xi = 0; _xi < sizeof(DmaControllers)/sizeof(DmaControllers[0]); _xi++)
+	{ DmaController *c = DmaControllers[_xi];
 		DBPArchiveOptional aro(ar, c);
 		if (!aro.IsSkip()) DBPSerialize(aro, c);
 	}

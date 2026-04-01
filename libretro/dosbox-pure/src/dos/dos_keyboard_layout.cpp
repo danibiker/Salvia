@@ -32,9 +32,12 @@
 #include "dos_codepages.h"
 #include "dos_keyboard_layout_data.h"
 
-#if defined (WIN32)
+#ifdef _XBOX
+#include <xtl.h>
+#else
 #include <windows.h>
 #endif
+
 
 #ifdef C_DBP_NATIVE_KEYBOARDFILES
 static FILE* OpenDosboxFile(const char* name) {

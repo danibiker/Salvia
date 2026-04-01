@@ -184,8 +184,8 @@ struct unionDriveImpl
 			WriteSaveFile((Bitu)this);
 		if (dirty)
 			PIC_RemoveSpecificEvents(WriteSaveFile, (Bitu)this);
-		for (Union_Modification* m : modifications)
-			delete m;
+		for (Bit32u _mi = 0; _mi < modifications.Capacity(); _mi++) { Union_Modification* m = modifications.GetAtIndex(_mi); if (!m) continue;
+			delete m; }
 		if (autodelete_under)
 			delete under;
 		if (autodelete_over)
@@ -318,8 +318,7 @@ struct unionDriveImpl
 		DriveFileIterator(l.zip, Loader::LoadFiles, (Bitu)&l);
 
 		// Forget delete modifications that have been re-added as files/directories to the save ZIP
-		for (Union_Modification* m : modifications)
-		{
+		for (Bit32u _mi = 0; _mi < modifications.Capacity(); _mi++) { Union_Modification* m = modifications.GetAtIndex(_mi); if (!m) continue;
 			Bit16u tmp; if (!m->IsDelete() || !over->GetFileAttr(m->DeleteTarget(), &tmp)) continue;
 			modifications.Remove(m->DeleteTarget());
 			SetModificationTimestamp();
@@ -389,8 +388,7 @@ struct unionDriveImpl
 		Bit32u local_file_offset = 0, save_size = 0;
 		Bit16u file_count = 0;
 		bool failed = false;
-		for (SaveFile& sf : save_files)
-		{
+		for (size_t _sfi = 0; _sfi < save_files.size(); _sfi++) { SaveFile& sf = save_files[_sfi];
 			Bit32u size = sf.size;
 			char* path = sf.path;
 			sbuf.clear();
@@ -398,7 +396,7 @@ struct unionDriveImpl
 			Bit16u pathLen = (Bit16u)(strlen(path) + (sf.is_dir ? 1 : 0));
 			if (size == (Bit32u)-1) // generate file modifications meta file
 			{
-				for (Union_Modification* m : impl->modifications) m->Serialize(sbuf);
+				for (Bit32u _mi2 = 0; _mi2 < impl->modifications.Capacity(); _mi2++) { Union_Modification* m = impl->modifications.GetAtIndex(_mi2); if (!m) continue; m->Serialize(sbuf); }
 				size = (Bit32u)sbuf.size();
 				filedata = (Bit8u*)&sbuf[0];
 			}

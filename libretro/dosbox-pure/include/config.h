@@ -120,6 +120,16 @@ void GFX_ShowMsg(char const* format,...);
 #elif defined(__x86_64__) || _M_AMD64
 #define	C_DYNAMIC_X86 1
 #define C_TARGETCPU X86_64
+#elif defined(__powerpc) || defined(__powerpc__) || defined(__powerpc64__) || defined(__POWERPC__) || defined(__ppc__) || defined(__PPC__) || defined(_ARCH_PPC)
+// DYNREC crashes on WiiU so this is disabled for WiiU
+// Xbox 360 uses XPhysicalAlloc for executable memory and XDK intrinsics for cache flush
+#if defined(_XBOX) || defined(_XBOX360)
+#define C_DYNREC 1
+#define C_TARGETCPU POWERPC
+#elif !defined(WIIU)
+//#define C_DYNREC 1
+//#define C_TARGETCPU POWERPC
+#endif
 #elif defined(__i386__) || _M_IX86
 #define C_DYNAMIC_X86 1
 #define C_TARGETCPU X86
@@ -127,10 +137,7 @@ void GFX_ShowMsg(char const* format,...);
 #define C_DYNREC 1
 #define C_UNALIGNED_MEMORY 1
 #define C_TARGETCPU MIPSEL
-#elif defined(__powerpc) || defined(__powerpc__) || defined(__powerpc64__) || defined(__POWERPC__) || defined(__ppc__) || defined(__PPC__) || defined(_ARCH_PPC)
-// DYNREC crashes on WiiU so this is disabled for now
-//#define C_DYNREC 1
-//#define C_TARGETCPU POWERPC
+
 #endif
 
 // ----- HEADERS: Define if headers exist in build environment
@@ -183,7 +190,11 @@ void GFX_ShowMsg(char const* format,...);
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
-#if defined AC_APPLE_UNIVERSAL_BUILD
+#if defined(_XBOX) || defined(_XBOX360)
+# ifndef WORDS_BIGENDIAN
+#  define WORDS_BIGENDIAN 1
+# endif
+#elif defined AC_APPLE_UNIVERSAL_BUILD
 # if defined __BIG_ENDIAN__
 #  define WORDS_BIGENDIAN 1
 # endif
@@ -235,7 +246,10 @@ void GFX_ShowMsg(char const* format,...);
 #define __STDC_FORMAT_MACROS 1
 #endif
 
+/* VS2010 does not have <inttypes.h>; PRI macros are provided by vs2010_compat.h */
+#if !defined(_MSC_VER) || _MSC_VER >= 1700
 #include <inttypes.h>
+#endif
 typedef double Real64;
 typedef uint8_t Bit8u;
 typedef int8_t Bit8s;
