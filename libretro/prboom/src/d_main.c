@@ -63,6 +63,7 @@
 #include "w_wad.h"
 #include "s_sound.h"
 #include "v_video.h"
+#include "r_patch.h"
 #include "f_finale.h"
 #include "f_wipe.h"
 #include "m_argv.h"
@@ -1444,6 +1445,13 @@ bool D_DoomMainSetup(void)
     else
       D_StartTitle(); // start up intro loop
   }
+
+  /* Ensure the 16-bit palette is built before the first D_Display call.
+   * On a second load cycle the static oldgamestate inside D_Display
+   * retains its value from the previous run, so V_SetPalette(0) may
+   * not be called before D_PageDrawer tries to render. */
+  V_SetPalette(0);
+
   return true;
 
 failed:
@@ -1496,10 +1504,24 @@ void D_DoomDeinit(void)
   U_FreeMapInfo();
   I_ShutdownSound();
   I_ShutdownMusic();
-  //V_FreeScreens();
-  //V_DestroyUnusedTrueColorPalettes();
-  //R_FlushAllPatches();
-  //P_Deinit();
+
+  /* Do NOT call Z_Free-based cleanup here (V_FreeScreens,
+   * R_FlushAllPatches, P_Deinit, V_DestroyUnusedTrueColorPalettes, etc.)
+   *
+   * All zone memory is bulk-freed by Z_Close() in retro_deinit().
+   * Calling Z_Free on individual blocks here is unsafe because W_Exit()
+   * above may have already freed overlapping zone blocks, leaving stale
+   * pointers (0xFEEEFEEE pattern in MSVC debug).
+   *
+   * Just NULL out the pointers so the next load cycle doesn't use
+   * dangling references. */
+  R_FlushPatchesPointers();
+  V_FreeScreensPointers();
+  P_DeinitPointers();
+
+  /* Reset display state for reinit */
+  in_d_wipe = false;
+  wipegamestate = GS_DEMOSCREEN;
 }
 
 //

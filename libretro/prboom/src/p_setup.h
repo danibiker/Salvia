@@ -39,6 +39,7 @@
 void P_SetupLevel(int episode, int map, int playermask, skill_t skill);
 void P_Init(void);               /* Called by startup code. */
 void P_Deinit(void);
+void P_DeinitPointers(void);  /* NULL pointers without Z_Free (for safe reinit) */
 
 extern const uint8_t *rejectmatrix;   /* for fast sight rejection -  cph - const* */
 

@@ -65,6 +65,9 @@ int SCREENHEIGHT = 200;
 //i_video
 static unsigned char *screen_buf = NULL;
 
+static int i_video_firsttime = 1;
+extern dbool   quit_pressed;
+
 /* libretro */
 static char g_wad_dir[1024];
 static char g_basename[1024];
@@ -324,6 +327,7 @@ void retro_init(void)
    unsigned level = 4;
    enum retro_pixel_format rgb565;
    struct retro_log_callback log;
+   quit_pressed = false;
 
    Z_Init(); /* 1/18/98 killough: start up memory stuff first */
 
@@ -561,8 +565,6 @@ void retro_reset(void)
 {
    M_EndGame(0);
 }
-
-extern dbool   quit_pressed;
 
 static void update_variables(bool startup)
 {
@@ -924,6 +926,9 @@ failed:
 void retro_unload_game(void)
 {
    D_DoomDeinit();
+
+   /* Reset video init flag so I_InitGraphics re-runs on next load */
+   i_video_firsttime = 1;
 
    cheats_enabled = false;
    cheats_pending = false;
@@ -1352,7 +1357,7 @@ static void process_gamepad_buttons(int16_t ret, unsigned num_buttons, action_lu
    for (i = 0; i < num_buttons; i++)
    {
       event_t event = {0};
-      new_input[i]  = ret & (1 << i);
+      new_input[i]  = (ret & (1 << i)) != 0;
 
       if(new_input[i] && !old_input[i])
       {
@@ -1527,7 +1532,7 @@ process_input(void)
          }
 			process_gamepad_buttons(ret, gp_modern.num_buttons, gp_modern.action_lut);
 			process_gamepad_left_analog();
-			process_gamepad_right_analog(ret & (1 << RETRO_DEVICE_ID_JOYPAD_Y), ret & (1 << RETRO_DEVICE_ID_JOYPAD_L2));
+			process_gamepad_right_analog((ret & (1 << RETRO_DEVICE_ID_JOYPAD_Y)) != 0, (ret & (1 << RETRO_DEVICE_ID_JOYPAD_L2)) != 0);
 			break;
       case RETRO_DEVICE_KEYBOARD:
          {
@@ -1656,11 +1661,9 @@ void I_SetPalette(int pal) { }
 
 void I_InitGraphics(void)
 {
-   static int firsttime=1;
-
-   if (firsttime)
+   if (i_video_firsttime)
    {
-      firsttime = 0;
+      i_video_firsttime = 0;
 
       /* Set the video mode */
       I_UpdateVideoMode();

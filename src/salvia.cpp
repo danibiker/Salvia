@@ -48,6 +48,7 @@ const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_
 // 1. Usa un buffer persistente para evitar allocs constantes al convertir desde ARGB8888
 enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
 int launchGame(std::string);
+void closeGame();
 //Maximo de 30 MB. Los CHD que son grandes no debemos cargarlos en memoria. Ya se encarga
 //la implementacion de vfs
 const int MAX_FILE_LOAD_MEMORY = 1024 * 2014 * 30; 
@@ -536,19 +537,23 @@ static bool retro_environment(unsigned cmd, void *data) {
             const struct retro_controller_info *info = (const struct retro_controller_info *)data;
             // Aquí el Core te está diciendo qué dispositivos soporta.
             for (unsigned i = 0; info[i].types && i < MAX_PLAYERS; ++i) {
-				//gameMenu->getCfgLoader()->g_ports[i].available_types.clear();
+				cfg::t_controller_port *port = &gameMenu->getCfgLoader()->g_ports[i];
+				port->available_types.clear();
 				for (unsigned j = 0; j < info[i].num_types; j++) {
 					unsigned id = info[i].types[j].id;
 					const char* desc = info[i].types[j].desc;
 
-					// VALIDACIÓN CRÍTICA
 					if (desc == NULL) {
 						LOG_DEBUG("Puerto %d: Se recibió un descriptor NULL para el ID %u. Saltando...", i, id);
 						continue; 
 					}
 
 					LOG_DEBUG("Puerto %d soporta: %s (ID: %u)", i, desc, id);
-					gameMenu->getCfgLoader()->g_ports[i].available_types.push_back(std::make_pair(id, desc));
+					port->available_types.push_back(std::make_pair(id, desc));
+				}
+
+				if (port->available_types.size() > 0){
+					port->current_device_id = port->available_types[0].first;
 				}
 			}
             return true;
@@ -598,7 +603,10 @@ static bool retro_environment(unsigned cmd, void *data) {
 			}
 			return true;
 		}
-
+		case RETRO_ENVIRONMENT_SHUTDOWN : {
+			gameMenu->setEmuStatus(EMU_MENU);
+			return true;
+		}
 		default: {
 			if (cmd < 65572){
 				LOG_DEBUG("Comando no tratado: %s", Constant::TipoToStr(cmd).c_str());
@@ -758,13 +766,16 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 
 		if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT) {
 			sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 0 : 1;
+			//LOG_INFO("Analog Left: %u %u", id, sdl_axis);
 		} else if (index == RETRO_DEVICE_INDEX_ANALOG_RIGHT) {
 			#ifdef _XBOX
 			sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 2 : 3;
 			#else
 			sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 4 : 3;
 			#endif
+			//LOG_INFO("Analog Right: %u %u", id, sdl_axis);
 		} else if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON) {
+			//LOG_INFO("Analog button: %u ", index);
 			// Gatillos: el core pide id = RETRO_DEVICE_ID_JOYPAD_L2 / R2
 			#ifdef _XBOX
 			if (id == RETRO_DEVICE_ID_JOYPAD_L2)
@@ -772,6 +783,8 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 			else if (id == RETRO_DEVICE_ID_JOYPAD_R2)
 				sdl_axis = AXIS_RT;
 			#endif
+		} else {
+			LOG_INFO("Indice analogico: %u", index);
 		}
 
 		if (sdl_axis != -1) {
@@ -1080,8 +1093,9 @@ int launchGame(std::string rompath){
 		gameMenu->loadGameAchievements(unzipped);
 	}
 
+	cfg::t_controller_port *port = gameMenu->getCfgLoader()->g_ports;
 	for (int i=0; i < MAX_PLAYERS; i++){
-		retro_set_controller_port_device(i, RETRO_DEVICE_JOYPAD);
+		retro_set_controller_port_device(i, port[i].current_device_id < 0 ? RETRO_DEVICE_JOYPAD : port[i].current_device_id);
 	}
 
 	string romname = (gameMenu->getCfgLoader()->getCfgEmu() != NULL ? gameMenu->getCfgLoader()->getCfgEmu()->name + " - " : "") + dir.getFileNameNoExt(unzipped.originalPath);

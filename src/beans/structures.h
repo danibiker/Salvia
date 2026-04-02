@@ -188,6 +188,8 @@ struct t_retro_input{
 static const int XBOX_COMBINED_TRIGGER_AXIS = 2;  // eje que comparten LT y RT
 static const int AXIS_LT                   = 6;   // slot libre en g_analog_state
 static const int AXIS_RT                   = 7;   // slot libre en g_analog_state
+#else
+static const int XBOX_COMBINED_TRIGGER_AXIS = 2;  // eje que comparten LT y RT
 #endif
 
 

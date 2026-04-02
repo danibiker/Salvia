@@ -63,8 +63,11 @@ extern int SCREENHEIGHT;
 /* Define to the version of this package. */
 #define PACKAGE_VERSION "2.5.0"
 
-/* Set to the attribute to apply to struct definitions to make them packed */
-#ifdef __MINGW32__
+/* Set to the attribute to apply to struct definitions to make them packed.
+ * MSVC uses #pragma pack instead (see doomdata.h), so PACKEDATTR is empty. */
+#ifdef _MSC_VER
+#define PACKEDATTR
+#elif defined(__MINGW32__)
 /* Use gcc_struct to work around http://gcc.gnu.org/PR52991 */
 #define PACKEDATTR __attribute__((packed, gcc_struct))
 #else
@@ -78,10 +81,12 @@ extern int SCREENHEIGHT;
    illegally freed blocks */
 #define ZONEIDCHECK 1
 
-/* Define to strcasecmp, if we have it */
+/* Define to strcasecmp, if we have it.
+ * On MSVC, compat/msvc.h already maps strcasecmp -> _stricmp,
+ * so these macros are not needed and would conflict. */
+#ifndef _MSC_VER
 #define stricmp strcasecmp
-
-/* Define to strncasecmp, if we have it */
 #define strnicmp strncasecmp
+#endif
 
 #endif

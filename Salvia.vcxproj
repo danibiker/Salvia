@@ -89,6 +89,14 @@
       <Configuration>Debug_picodrive</Configuration>
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug_prboom|Win32">
+      <Configuration>Debug_prboom</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug_prboom|Xbox 360">
+      <Configuration>Debug_prboom</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug_Snes9x_latest|Win32">
       <Configuration>Debug_Snes9x_latest</Configuration>
       <Platform>Win32</Platform>
@@ -231,6 +239,14 @@
     </ProjectConfiguration>
     <ProjectConfiguration Include="Release_picodrive|Xbox 360">
       <Configuration>Release_picodrive</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_prboom|Win32">
+      <Configuration>Release_prboom</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_prboom|Xbox 360">
+      <Configuration>Release_prboom</Configuration>
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="Release_Snes9x_latest_lib360New|Win32">
@@ -378,6 +394,16 @@
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_prboom|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_mame|Xbox 360'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
@@ -469,6 +495,12 @@
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Win32'" Label="Configuration">
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_prboom|Win32'" Label="Configuration">
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_mame|Win32'" Label="Configuration">
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
@@ -551,6 +583,12 @@
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug_prboom|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_mame|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -594,6 +632,7 @@
     <EMU_LIB_MAME2003PLUS>mame-2003-plus</EMU_LIB_MAME2003PLUS>
     <EMU_LIB_FINALBURN>fba-neo</EMU_LIB_FINALBURN>
     <EMU_LIB_DOSBOXPURE>dosbox-pure</EMU_LIB_DOSBOXPURE>
+    <EMU_LIB_PRBOOM>prboom</EMU_LIB_PRBOOM>
     <BUILD_DIR>$(ProjectDir)build\$(Configuration)\$(Platform)\</BUILD_DIR>
     <COMMON_PREPROCESSOR>_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB;RC_NO_THREADS;RC_CLIENT_SUPPORTS_HASH</COMMON_PREPROCESSOR>
     <COMMON_PREPROCESSOR_DEBUG>DEBUG;DEBUG_LOG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_DEBUG>
@@ -745,6 +784,20 @@
     <ImageXexOutput>$(OutDir)$(EMU_LIB_GAMBATTE)$(ImageExt)</ImageXexOutput>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_PRBOOM)$(ImageExt)</ImageXexOutput>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_prboom|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(BUILD_DIR)</OutDir>
     <IntDir>$(BUILD_DIR)</IntDir>
@@ -959,6 +1012,18 @@
     <OutDir>$(BUILD_DIR)</OutDir>
     <IntDir>$(BUILD_DIR)</IntDir>
     <TargetName>$(EMU_LIB_NAME)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <TargetName>$(EMU_LIB_PRBOOM)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_prboom|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <TargetName>$(EMU_LIB_PRBOOM)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_mame|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -1822,6 +1887,82 @@
     </Deploy>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>MaxSpeed</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_XBOX;HAVE_CHD;EMU_LIB_NAME="$(EMU_LIB_NAME)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include;$(ProjectDir)\src\retroachievements\src</AdditionalIncludeDirectories>
+      <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);Genesis-Plus-GX.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\genesis-plus-gx\Release\Xbox 360</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+    </Link>
+    <Deploy>
+      <DeploymentType>CopyToHardDrive</DeploymentType>
+    </Deploy>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>MaxSpeed</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_PRBOOM)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include;$(ProjectDir)\src\retroachievements\src</AdditionalIncludeDirectories>
+      <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);prboom_libretro_xdk360.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\prboom\msvc2010\bin\Xbox360\Release</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+    </Link>
+    <Deploy>
+      <DeploymentType>CopyToHardDrive</DeploymentType>
+    </Deploy>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_prboom|Xbox 360'">
     <ClCompile>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
@@ -2725,7 +2866,7 @@
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN;__x86_64__;$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <CompileAs>CompileAsCpp</CompileAs>
       <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
       <EnablePREfast>false</EnablePREfast>
@@ -2798,6 +2939,74 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Win32'">
+    <ClCompile>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Full</Optimization>
+      <PreprocessorDefinitions>WIN;LOG_DEBUG;$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <StringPooling>true</StringPooling>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\prboom\msvc2010\bin\Win32\Release</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_WIN);prboom_libretro.lib</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_prboom|Win32'">
+    <ClCompile>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN;DEBUG_LOG;$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <OmitFramePointers>false</OmitFramePointers>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <StringPooling>true</StringPooling>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\prboom\msvc2010\bin\Win32\Debug</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_WIN);prboom_libretro.lib</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
     </Link>

@@ -3597,9 +3597,19 @@ static void M_ResetDefaults(void)
 
 static void M_InitDefaults(void)
 {
+  static dbool already_done = false;
   setup_menu_t *const *p, *t;
   default_t *dp;
   int i;
+
+  /* M_InitDefaults converts var.name (string literal) to var.def (pointer).
+   * This is a one-way, destructive operation on the union field.
+   * Both setup_menu_t and defaults[] are static arrays whose addresses
+   * never change, so the mapping remains valid across game reloads.
+   * Running this a second time would read var.def as var.name ? garbage. */
+  if (already_done)
+    return;
+
   for (i = 0; i < ss_max-1; i++)
     for (p = setup_screens[i]; *p; p++)
       for (t = *p; !(t->m_flags & S_END); t++)
@@ -3609,6 +3619,8 @@ static void M_InitDefaults(void)
     else
       (t->var.def = dp)->setup_menu = t;
   }
+
+  already_done = true;
 }
 
 //

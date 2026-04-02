@@ -1952,3 +1952,17 @@ void P_Deinit(void)
    Z_Free(sides);
    numsides = 0;
 }
+
+/* Reset pointers without freeing (Z_Close handles the actual deallocation).
+ * Used during retro_unload_game to avoid double-free when zone memory
+ * has already been partially invalidated. */
+void P_DeinitPointers(void)
+{
+   vertexes = NULL;    numvertexes = 0;
+   segs = NULL;        numsegs = 0;
+   sectors = NULL;     numsectors = 0;
+   subsectors = NULL;  numsubsectors = 0;
+   nodes = NULL;       numnodes = 0;
+   lines = NULL;       numlines = 0;
+   sides = NULL;       numsides = 0;
+}

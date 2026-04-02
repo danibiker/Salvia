@@ -90,6 +90,13 @@ void R_InitPatches(void) {
   }
 }
 
+/* NULL out patch pointers without calling Z_Free.
+ * Used during D_DoomDeinit when Z_Close() will handle bulk deallocation. */
+void R_FlushPatchesPointers(void) {
+  patches = NULL;
+  texture_composites = NULL;
+}
+
 //---------------------------------------------------------------------------
 void R_FlushAllPatches(void) {
   int i;

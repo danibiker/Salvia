@@ -420,8 +420,15 @@ bool Joystick::pollKeys(SDL_Surface* screen){
 
                 const unsigned int axis = (unsigned int)event.jaxis.axis;
                 if (axis >= MAX_AXIS) break;
+				bool combinedAxis = false;
+				#ifndef _XBOX
+				//En xbox los gatillos L2 y R2 no son ejes. Se comportan como botones, al menos en la 
+				//libreria de xbox 360 de Lantus, por lo que no hace falta hacer esto para forzar a 
+				//que los gatillos se comporten como botones siempre
+				combinedAxis = (axis == XBOX_COMBINED_TRIGGER_AXIS); 
+				#endif
 
-                if (inputs.axisAsPad[p]) {
+                if (inputs.axisAsPad[p] || combinedAxis) {
                     // Pre-calculamos los índices para evitar multiplicar por 2 varias veces
                     const int idxNeg = axis << 1;      // axis * 2
                     const int idxPos = idxNeg | 1;     // axis * 2 + 1
@@ -437,6 +444,7 @@ bool Joystick::pollKeys(SDL_Surface* screen){
                     if (raw >  32760) raw =  32760;
                     if (raw < -32760) raw = -32760;
                     inputs.g_analog_state[p][axis] = (int16_t)raw;
+					//LOG_INFO("axis: %d=%d", axis, inputs.g_analog_state[p][axis]);
                 }
                 break;
             }

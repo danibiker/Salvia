@@ -609,6 +609,20 @@ void V_DestroyUnusedTrueColorPalettes(void)
    V_DestroyTrueColorPalette();
 }
 
+/* NULL out screen and palette pointers without calling Z_Free.
+ * Used during D_DoomDeinit when Z_Close() handles bulk deallocation. */
+void V_FreeScreensPointers(void)
+{
+   int i;
+   for (i = 0; i < NUM_SCREENS; i++) {
+      screens[i].data = NULL;
+      screens[i].not_on_heap = FALSE;
+      screens[i].height = 0;
+   }
+   Palettes16 = NULL;
+   V_Palette16 = NULL;
+}
+
 //
 // V_SetPalette
 //

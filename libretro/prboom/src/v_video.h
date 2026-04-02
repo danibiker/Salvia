@@ -172,5 +172,6 @@ void V_AllocScreen(screeninfo_t *scrn);
 void V_AllocScreens();
 void V_FreeScreen(screeninfo_t *scrn);
 void V_FreeScreens();
+void V_FreeScreensPointers();  /* NULL pointers without Z_Free (for safe reinit) */
 
 #endif

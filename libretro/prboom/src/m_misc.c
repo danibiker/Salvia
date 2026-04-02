@@ -936,6 +936,7 @@ void M_LoadDefaultsFile (char *file, dbool   basedefault)
   int   len;
   char  def[80] = {0};
   char  strparm[100] = {0};
+  char  line[256] = {0};
   char* newstring = NULL;   // killough
   int   parm;
   dbool   isstring;
@@ -945,10 +946,14 @@ void M_LoadDefaultsFile (char *file, dbool   basedefault)
       RETRO_VFS_FILE_ACCESS_HINT_NONE);
   if (f)
   {
-    while (!rfeof(f))
+    /* Use line-by-line reading instead of rfscanf to avoid infinite loops.
+     * rfscanf + rfeof can get stuck on lines it can't parse (comments,
+     * blank lines, section headers) because filestream_vscanf seeks back
+     * to the start position when parsing fails. */
+    while (filestream_gets(f, line, sizeof(line)))
     {
       isstring = FALSE;
-      if (rfscanf(f, "%79s %99[^\n]\n", def, strparm) == 2)
+      if (sscanf(line, "%79s %99[^\n]", def, strparm) == 2)
       {
         //jff 3/3/98 skip lines not starting with an alphanum
         if (!isalnum(def[0]))

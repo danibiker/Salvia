@@ -76,17 +76,17 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 					gameMenu->running = false;
 					break;
 				case SDL_JOYBUTTONDOWN:
-					LOG_INFO("Boton detectado: ID %d", (int)event.jbutton.button);
+					//LOG_INFO("Boton detectado: ID %d", (int)event.jbutton.button);
 					gameMenu->configMenus->updateButton(event.jbutton.button, KEY_JOY_BTN);
 					break;
 				case SDL_JOYHATMOTION:
-					LOG_INFO("hat detectado: ID %d", (int)event.jhat.value);
+					//LOG_INFO("hat detectado: ID %d", (int)event.jhat.value);
 					if (event.jhat.value != 0){ //Solo en el momento del joydown
 						gameMenu->configMenus->updateButton(event.jhat.value, KEY_JOY_HAT);
                     }
                     break;
 				case SDL_JOYAXISMOTION:
-					LOG_INFO("axis detectado: value %d axis: %d", (int)event.jaxis.value, (int)event.jaxis.axis);
+					//LOG_INFO("axis detectado: value %d axis: %d", (int)event.jaxis.value, (int)event.jaxis.axis);
 					gameMenu->configMenus->updateAxis(event.jaxis.value, event.jaxis.axis);
 					break;
 				default:
