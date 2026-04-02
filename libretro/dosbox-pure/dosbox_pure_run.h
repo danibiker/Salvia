@@ -554,7 +554,7 @@ struct DBP_Run
 			}
 			return false;
 		}
-		DOSYMLLoader(bool parseRun, bool isPreInit = false) : reboot(isPreInit)
+		DOSYMLLoader(bool parseRun, bool isPreInit = false) : first_startup_mode_key(NULL), cpu_cycles(0), cpu_hz(0), cpu_year(0), cpu_set_max(0), reboot(isPreInit), is_utility(false)
 		{
 			if (parseRun) startup.mode = RUN_NONE;
 			DBP_PadMapping::ResetYML();

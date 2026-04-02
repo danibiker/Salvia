@@ -183,14 +183,14 @@
     <ClCompile>
       <WarningLevel>Level2</WarningLevel>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <Optimization>Full</Optimization>
+      <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>false</IntrinsicFunctions>
-      <PreprocessorDefinitions>____DISABLE_DYNAREC;____C_UNALIGNED_MEMORY=0;_HAS_EXCEPTIONS=0;__ppc__;_XBOX;_XBOX360;WORDS_BIGENDIAN=1;NDEBUG;DBP_VS2010_COMPAT;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;__LIBRETRO__;_MBCS</PreprocessorDefinitions>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>DISABLE_DYNAREC;C_UNALIGNED_MEMORY=0;_HAS_EXCEPTIONS=0;__ppc__;_XBOX;_XBOX360;WORDS_BIGENDIAN=1;NDEBUG;DBP_VS2010_COMPAT;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;__LIBRETRO__;_MBCS</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)..\include</AdditionalIncludeDirectories>
       <ForcedIncludeFiles>vs2010_compat.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <StringPooling>true</StringPooling>
@@ -218,6 +218,7 @@
       <Lib>
         <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       </Lib>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -346,6 +347,7 @@
     <ClInclude Include="..\dosbox_pure_osd.h" />
     <ClInclude Include="..\dosbox_pure_run.h" />
     <ClInclude Include="..\dosbox_pure_pad.h" />
+    <ClInclude Include="..\include\dbp_threads.h" />
     <ClInclude Include="..\libretro-common\include\libretro.h" />
     <ClInclude Include="..\include\vs2010_compat.h" />
     <ClInclude Include="..\include\dbp_network.h" />

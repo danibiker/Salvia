@@ -673,6 +673,9 @@
     <ClInclude Include="..\dosbox_pure_run.h" />
     <ClInclude Include="..\core_options.h" />
     <ClInclude Include="..\libretro-common\include\libretro.h" />
+    <ClInclude Include="..\include\dbp_threads.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="include" />

@@ -183,7 +183,7 @@ std::vector<std::string> splitOptions(const std::string& raw) {
 }
 
 // Crea o actualiza una entrada preservando `selected` si ya existía.
-void applyEntry(std::map<std::string, cfg::t_emu_props> &data,
+void applyEntry(std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &data,
                 const std::string& key,
                 std::string description,       // Pasamos por valor para mover
                 std::vector<std::string> values, // Pasamos por valor para mover
@@ -191,34 +191,34 @@ void applyEntry(std::map<std::string, cfg::t_emu_props> &data,
 {
     auto it = data.find(key);
     if (it != data.end()) {
-		if (it->second.description.empty())
-			it->second.description = description;
+		if (it->second->description.empty())
+			it->second->description = description;
 
-		if (it->second.values.empty())
-			it->second.values = values;
+		if (it->second->values.empty())
+			it->second->values = values;
         
 		//Si ya estaba en el mapa, no lo tocamos
         //if (it->second.selected < 0 || it->second.selected >= (int)it->second.values.size())
         //    it->second.selected = defaultIdx;
         
-		if (it->second.cachedValue.empty() && !it->second.values.empty())
-            it->second.cachedValue = it->second.values[it->second.selected];
+		if (it->second->cachedValue.empty() && !it->second->values.empty())
+            it->second->cachedValue = it->second->values[it->second->selected];
 
 		LOG_DEBUG("[Core Options] SET. Key already defined %s", key.c_str());
         return;
-    }
+    } 
 
-    cfg::t_emu_props raw;
-    raw.description = std::move(description);
-    raw.values      = std::move(values);
-    raw.selected    = defaultIdx;
+    cfg::t_emu_props *raw = new cfg::t_emu_props();
+    raw->description = std::move(description);
+    raw->values      = std::move(values);
+    raw->selected    = defaultIdx;
 
-    if (!raw.values.empty())
-        raw.cachedValue = raw.values[defaultIdx];
+    if (!raw->values.empty())
+        raw->cachedValue = raw->values[defaultIdx];
 
-    LOG_DEBUG("[Core Options] SET %s = %s", key.c_str(), raw.cachedValue.c_str());
+    LOG_DEBUG("[Core Options] SET %s = %s", key.c_str(), raw->cachedValue.c_str());
     // Ahora data[key] usará el operator=(t_emu_props&&) que definimos arriba
-    data[key] = std::move(raw); 
+    data[key] = std::unique_ptr<cfg::t_emu_props>(raw); 
 }
 
 } // namespace anónimo
@@ -424,18 +424,18 @@ static bool retro_environment(unsigned cmd, void *data) {
 				return false;
 			}
 
-			const int nVals = static_cast<int>(it->second.values.size());
-			const int sel   = it->second.selected;
+			const int nVals = static_cast<int>(it->second->values.size());
+			const int sel   = it->second->selected;
 
 			if (nVals > 0 && sel >= 0 && sel < nVals)
-				it->second.cachedValue = it->second.values[sel];
+				it->second->cachedValue = it->second->values[sel];
 			else if (nVals > 0)
-				it->second.cachedValue = it->second.values[0];
+				it->second->cachedValue = it->second->values[0];
 			else {
 				var->value = nullptr;
 				return false;
 			}
-			var->value = it->second.cachedValue.c_str();
+			var->value = it->second->cachedValue.c_str();
 			LOG_DEBUG("[Core Options] GET %s = %s", var->key, var->value);
 			return true;
 		}
@@ -1064,12 +1064,6 @@ int launchGame(std::string rompath){
 		gameMenu->showLangSystemMessage("msg.romopenerror", 3000);
 		return 0;
 	}
-
-	//*******************************************************
-	//Necesario en el caso de dosbox, para obtener el primer 
-	//frame e inicializarse despues del load
-	//retro_run();
-	//*******************************************************
 
 	if (success && loadAchievement && !noUncompress){
 		//After the loading of the game, we load the achievements

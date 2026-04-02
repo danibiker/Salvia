@@ -507,7 +507,7 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
     std::vector<TempElem> sorter;
     // 1. Llenamos el vector con la clave y la descripcion
     for (auto it = params.begin(); it != params.end(); ++it) {
-        TempElem e = { it->first, it->second.description };
+        TempElem e = { it->first, it->second->description };
         sorter.push_back(e);
     }
 
@@ -525,8 +525,8 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
     for (auto it = sorter.begin(); it != sorter.end(); ++it) {
         auto elem = params.find(it->key);
         if (elem != params.end()) {
-            LOG_INFO("Key: %s, Selected: %d", elem->first.c_str(), elem->second.selected);
-            menuCoreOptions->opciones.push_back(new OpcionLista(elem->second.description, elem->second.values, &elem->second.selected));
+            LOG_INFO("Key: %s, Selected: %d", elem->first.c_str(), elem->second->selected);
+            menuCoreOptions->opciones.push_back(new OpcionLista(elem->second->description, elem->second->values, &elem->second->selected));
         }
     }
 }
@@ -945,7 +945,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 		} else if (option->tipo == OPC_LISTA){
 			int indice = *((OpcionLista *)option)->indice;
 			line = option->titulo;
-			if (indice < ((OpcionLista *)option)->items.size()){
+			if ((unsigned int)indice < ((OpcionLista *)option)->items.size()){
 				value = "< " + ((OpcionLista *)option)->items.at(indice) + " >";
 			} else {
 				value = "";

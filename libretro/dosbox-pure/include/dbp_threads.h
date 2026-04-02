@@ -17,7 +17,7 @@ struct Thread { typedef DWORD RET_t; typedef RET_t (THREAD_CC *FUNC_t)(LPVOID); 
 	HANDLE h = CreateThread(0,DBP_STACK_SIZE,f,p,CREATE_SUSPENDED,0); 
 	if (h){
 		#ifdef _XBOX
-		XSetThreadProcessor(h, 4);
+		XSetThreadProcessor(h, 5);
 		#endif
 		SetThreadPriority(h, THREAD_PRIORITY_HIGHEST);
 		ResumeThread(h);

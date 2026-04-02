@@ -446,7 +446,7 @@ ConfigEmu* CfgLoader::getCfgEmu(){
     return &emulators.at(emuCfgPos)->config;
 }
 
-std::map<std::string, cfg::t_emu_props>& CfgLoader::getLibretroParams() {
+std::map<std::string, std::unique_ptr<cfg::t_emu_props> >& CfgLoader::getLibretroParams() {
     // Retorna la referencia al mapa dentro del vector
     return startupLibretroParams;
 }
@@ -493,11 +493,11 @@ std::string CfgLoader::saveCoreParams(){
 
 	for (auto it = startupLibretroParams.begin(); it != startupLibretroParams.end(); ++it) {
 		optionValues = "";
-		for (std::size_t i=0; i < it->second.values.size(); i++){
-			optionValues += it->second.values[i] + (i<it->second.values.size() - 1 ? " | " : "");
+		for (std::size_t i=0; i < it->second->values.size(); i++){
+			optionValues += it->second->values[i] + (i<it->second->values.size() - 1 ? " | " : "");
 		}
 		fileCoreCfg.push_back("#" + optionValues);
-		fileCoreCfg.push_back(it->first + "=" + Constant::TipoToStr(it->second.selected));
+		fileCoreCfg.push_back(it->first + "=" + Constant::TipoToStr(it->second->selected));
     }
 
 	std::string corepath = getCoreCfgPath();
@@ -521,10 +521,10 @@ void CfgLoader::loadCoreParams(){
 			if (linea.empty() || linea[0] == '#') continue;
 
 			if ((pos = linea.find("=")) != std::string::npos){
-				cfg::t_emu_props ptr;
+				cfg::t_emu_props *ptr = new cfg::t_emu_props();
 				std::string value = Constant::Trim(linea.substr(pos + 1));
-				ptr.selected = Constant::strToTipo<int>(value);
-				startupLibretroParams[linea.substr(0, pos)] = ptr;
+				ptr->selected = Constant::strToTipo<int>(value);
+				startupLibretroParams[linea.substr(0, pos)] = std::unique_ptr<cfg::t_emu_props>(ptr);
 			}
 		}
 	}
