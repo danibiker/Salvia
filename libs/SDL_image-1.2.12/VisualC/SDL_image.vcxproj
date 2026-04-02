@@ -603,7 +603,7 @@
       <CompileAs>CompileAsC</CompileAs>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
       <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
       <PreschedulingOptimization>false</PreschedulingOptimization>
       <InlineAssemblyOptimization>false</InlineAssemblyOptimization>

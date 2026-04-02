@@ -827,7 +827,7 @@
       <AdditionalIncludeDirectories>SDL;SDL\include;SDL\src\video;SDL\src\audio;SDL\src\cdrom;SDL\src\endian;SDL\src\events;SDL\src\file;SDL\src\joystick;SDL\src\thread;SDL\src\timer;SDL\src\thread\xbox</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_DEBUG;_XBOX;_LIB;ENABLE_DIRECTX;__powerpc__;NOVSYNC</PreprocessorDefinitions>
       <ExceptionHandling>false</ExceptionHandling>
-      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
@@ -835,6 +835,8 @@
       <CompileAs>CompileAsC</CompileAs>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <StringPooling>true</StringPooling>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_DosboxPure|Xbox 360'">

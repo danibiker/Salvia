@@ -1176,7 +1176,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;DEBUG_LOG;EMU_LIB_NAME="$(EMU_LIB_DOSBOXPURE)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_DOSBOXPURE)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
       <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -1954,10 +1954,11 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_FINALBURN)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;DEBUG_LOG;EMU_LIB_NAME="$(EMU_LIB_FINALBURN)";$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include;$(ProjectDir)\src\retroachievements\src</AdditionalIncludeDirectories>
-      <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
+      <UndefinePreprocessorDefinitions>
+      </UndefinePreprocessorDefinitions>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -3570,6 +3571,7 @@
     <ClInclude Include="src\io\video.h" />
     <ClInclude Include="src\io\video_common.h" />
     <ClInclude Include="src\io\video_direct.h" />
+    <ClInclude Include="src\libretro\libretro.h" />
     <ClInclude Include="src\libretro\vfs.h" />
     <ClInclude Include="src\menus\gestormenus.h" />
     <ClInclude Include="src\retroachievements\achievementdb.h" />

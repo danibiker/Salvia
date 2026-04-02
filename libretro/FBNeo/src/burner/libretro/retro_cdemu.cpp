@@ -1,6 +1,7 @@
 #include "retro_common.h"
 #include "retro_cdemu.h"
 #include "burnint.h"
+#include "file/file_path.h"
 
 #define DPRINTF_BUFFER_SIZE 512
 char dprintf_buf[DPRINTF_BUFFER_SIZE];
@@ -348,7 +349,14 @@ static int cdimgParseCueFile()
 			s = t;
 			TCHAR* szQuote;
 			QuoteRead(&szQuote, NULL, s);
-			sprintf(szCurrentFile, "%s/%s", g_rom_dir, szQuote);
+			size_t len = strlen(g_rom_dir);
+			if (len > 0 && (g_rom_dir[len-1] == '\\' || g_rom_dir[len-1] == '/')) {
+				// Do not add separator if there is one already
+				sprintf(szCurrentFile, "%s%s", g_rom_dir, szQuote);
+			} else {
+				// Add a separator if necessary
+				sprintf(szCurrentFile, "%s%c%s", g_rom_dir, PATH_DEFAULT_SLASH_C(), szQuote);
+			}
 			nFiles++;
 			continue;
 		}

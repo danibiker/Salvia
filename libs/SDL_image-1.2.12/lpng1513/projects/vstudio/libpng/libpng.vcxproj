@@ -350,7 +350,7 @@
       <WarningLevel>Level4</WarningLevel>
       <MinimalRebuild>false</MinimalRebuild>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <PreprocessorDefinitions>_XBOX;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <IntrinsicFunctions>false</IntrinsicFunctions>
       <FunctionLevelLinking>true</FunctionLevelLinking>

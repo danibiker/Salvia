@@ -795,7 +795,7 @@
       <AdditionalIncludeDirectories>include;../libSDLx360/SDL/include</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_DEBUG;_XBOX;_LIB</PreprocessorDefinitions>
       <ExceptionHandling>false</ExceptionHandling>
-      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
