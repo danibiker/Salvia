@@ -225,8 +225,8 @@ void applyEntry(std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &data,
 
 
 static bool retro_environment(unsigned cmd, void *data) {
-	static string dirSystem;
-	static string saveDir; 
+	static char dirSystem[MAX_PATH] = {0};
+	static char savePath[MAX_PATH] = {0};
 
     switch (cmd) {
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
@@ -319,11 +319,15 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return true;
 
 		case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:{
-			//static const char *dir = "."; // Punto (.) indica el directorio actual del ejecutable
-			dirSystem = gameMenu->getCfgLoader()->configMain[cfg::libretrosystem].valueStr;
-			// O se puede usar una ruta específica de la Xbox 360 si la tienes definida, ej: "game:\\system"
-			*(const char**)data = dirSystem.c_str();
-			return true;
+			std::string currentPath = gameMenu->getCfgLoader()->configMain[cfg::libretrosystem].valueStr;
+
+			 // Copiamos el nuevo path al buffer fijo de forma segura
+            strncpy(dirSystem, currentPath.c_str(), sizeof(dirSystem) - 1);
+            savePath[sizeof(dirSystem) - 1] = '\0'; // Aseguramos el cierre nulo
+
+            // Entregamos SIEMPRE la misma dirección de memoria
+            *(const char**)data = dirSystem;
+            return true;
 		}
 
 		case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:{
@@ -337,9 +341,15 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return true;
 		}
 		case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: {
-			saveDir = gameMenu->getSramPath();
-			*(const char**)data = saveDir.c_str();
-			return true;
+			std::string currentPath = gameMenu->getSramPath();
+
+            // Copiamos el nuevo path al buffer fijo de forma segura
+            strncpy(savePath, currentPath.c_str(), sizeof(savePath) - 1);
+            savePath[sizeof(savePath) - 1] = '\0'; // Aseguramos el cierre nulo
+
+            // Entregamos SIEMPRE la misma dirección de memoria
+            *(const char**)data = savePath;
+            return true;
 		}
 
 		case RETRO_ENVIRONMENT_GET_LANGUAGE:{

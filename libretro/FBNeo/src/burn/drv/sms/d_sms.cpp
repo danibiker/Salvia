@@ -22943,7 +22943,7 @@ struct BurnDriver BurnDrvsms_lambo = {
 	256, 192, 4, 3
 };
 
-// Laranja Mecânico (HB, Portuguese)
+// Laranja Mecanico (HB, Portuguese)
 static struct BurnRomInfo sms_laranjamecRomDesc[] = {
 	{ "Laranja Mecanico (2023)(Jaguarete Retro Games).sms",	524288, 0x8126ac1a, BRF_PRG | BRF_ESS },
 };
@@ -23377,7 +23377,7 @@ struct BurnDriver BurnDrvsms_noturno = {
 	256, 192, 4, 3
 };
 
-// Noturno Mini Game (Edição de Halloween) (GlobalHack, Portuguese)
+// Noturno Mini Game (Edicao de Halloween) (GlobalHack, Portuguese)
 static struct BurnRomInfo sms_noturnomgRomDesc[] = {
 	{ "Noturno Mini Game (Edicao de Halloween) (2025)(LMS Retro).sms",	524288, 0x038489c0, BRF_PRG | BRF_ESS },
 };
@@ -26628,7 +26628,7 @@ struct BurnDriver BurnDrvsms_ppersiac = {
 	256, 192, 4, 3
 };
 
-// Psychic World ~ Mundo Psíquico (Hack, Portuguese)
+// Psychic World ~ Mundo Psiquico (Hack, Portuguese)
 // https://romhackers.org/traducoes/console/master-system/psychic-world-po.b.r.e
 static struct BurnRomInfo sms_psychicwptRomDesc[] = {
 	{ "Psychic World - Mundo Psiquico T-Por (2019)(PO.B.R.E.).sms",	262144, 0xb9f22a5e, BRF_PRG | BRF_ESS },
