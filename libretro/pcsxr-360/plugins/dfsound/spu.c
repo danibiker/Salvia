@@ -1233,9 +1233,8 @@ void SetupTimer(void)
    DWORD dw;
    hMainThread=CreateThread(NULL,0,MAINThreadEx,0,CREATE_SUSPENDED,&dw);
 
-   SetThreadPriority(hMainThread,
-                     THREAD_PRIORITY_HIGHEST);
-   XSetThreadProcessor(hMainThread, 4);
+   SetThreadPriority(hMainThread, THREAD_PRIORITY_NORMAL);
+   XSetThreadProcessor(hMainThread, 3);
 
    ResumeThread(hMainThread);
   }
@@ -1269,9 +1268,8 @@ void RemoveTimer(void)
   {
    while(!bThreadEnded) {Sleep(5L);}                   // -> wait till thread has ended
    Sleep(5L);
+   CloseHandle(hMainThread);                           // close thread
   }
-
-   CloseHandle(hMainThread);// close thread
 
 #endif
 #else

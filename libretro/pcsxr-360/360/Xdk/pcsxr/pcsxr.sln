@@ -15,8 +15,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "core", "..\core\core.vcxpro
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zlib", "..\zlib\zlib.vcxproj", "{B732D079-CC61-40DF-85E8-41E698F8154E}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pokopom_input", "..\pokopom_input\pokopom_input.vcxproj", "{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		CodeAnalysis|Xbox 360 = CodeAnalysis|Xbox 360
@@ -141,23 +139,6 @@ Global
 		{B732D079-CC61-40DF-85E8-41E698F8154E}.Release_LTCG|Xbox 360.Build.0 = Release_LTCG|Xbox 360
 		{B732D079-CC61-40DF-85E8-41E698F8154E}.Release|Xbox 360.ActiveCfg = Release|Xbox 360
 		{B732D079-CC61-40DF-85E8-41E698F8154E}.Release|Xbox 360.Build.0 = Release|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.CodeAnalysis|Xbox 360.ActiveCfg = CodeAnalysis|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.CodeAnalysis|Xbox 360.Build.0 = CodeAnalysis|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.debug_cc_optimised|Xbox 360.ActiveCfg = debug_cc_optimised|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.debug_cc_optimised|Xbox 360.Build.0 = debug_cc_optimised|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.debug_cc_optimised|Xbox 360.Deploy.0 = debug_cc_optimised|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.debug_cc|Xbox 360.ActiveCfg = Debug|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.debug_cc|Xbox 360.Build.0 = Debug|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.Debug|Xbox 360.ActiveCfg = Debug|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.Debug|Xbox 360.Build.0 = Debug|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.Profile_FastCap|Xbox 360.ActiveCfg = Profile_FastCap|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.Profile_FastCap|Xbox 360.Build.0 = Profile_FastCap|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.Profile|Xbox 360.ActiveCfg = Profile|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.Profile|Xbox 360.Build.0 = Profile|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.Release_LTCG|Xbox 360.ActiveCfg = Release_LTCG|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.Release_LTCG|Xbox 360.Build.0 = Release_LTCG|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.Release|Xbox 360.ActiveCfg = Release|Xbox 360
-		{F2F22EAA-2F95-4DCF-A62A-E455BD6836C0}.Release|Xbox 360.Build.0 = Release|Xbox 360
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

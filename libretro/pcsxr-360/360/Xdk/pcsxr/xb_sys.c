@@ -106,17 +106,22 @@ static void ShowFPS() {
 	frames++;
 	nowTick = GetTickCount();
 	if (lastTick + 1000 <= nowTick) {
-
-		printf("SysUpdate %d fps\r\n", frames);
-
+		//printf("SysUpdate %d fps\r\n", frames);
 		frames = 0;
 		lastTick = nowTick;
 	}
 }
 
 // Called on VBlank (to update i.e. pads)
+#ifdef LIBRETRO
+extern void libretro_frame_sync(void);
+#endif
+
 void SysUpdate(){
 	ShowFPS();
+#ifdef LIBRETRO
+	libretro_frame_sync();
+#endif
 }
 
 // Returns to the Gui

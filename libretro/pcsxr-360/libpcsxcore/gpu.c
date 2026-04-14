@@ -317,8 +317,8 @@ void gpuDmaThreadInit() {
 
 	// Create gpu thread on cpu 2
 	gpuHandle = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)gpuThread, NULL, CREATE_SUSPENDED, NULL);
-
-	XSetThreadProcessor(gpuHandle, 2);
+	SetThreadPriority(gpuHandle, THREAD_PRIORITY_HIGHEST);
+	XSetThreadProcessor(gpuHandle, 4);
 
 	ResumeThread(gpuHandle);
 

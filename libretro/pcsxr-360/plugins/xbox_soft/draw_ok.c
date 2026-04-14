@@ -49,7 +49,18 @@ PSXPoint_t     ptCursorPoint[8];
 unsigned short usCursorActive = 0;
 
 unsigned char *pBackBuffer = 0;
+
+#ifdef LIBRETRO
+/* Defined in video_stub.cpp (main project) */
+extern unsigned char *pPsxScreen;
+extern unsigned int g_pPitch;
+extern int g_useRGB565;
+#else
 int *pPsxScreen = 0;
+unsigned int g_pPitch;
+int g_useRGB565 = 0;
+#endif
+
 unsigned int g_pPitch;
 
 int finalw,finalh;
@@ -212,7 +223,7 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y)
 	}
 }
 
-/*
+
 void BlitScreen16(unsigned char * surf,long x,long y)
 {
 	
@@ -272,7 +283,7 @@ void BlitScreen16(unsigned char * surf,long x,long y)
    }
   }
  }
- */
+ 
 extern time_t tStart;
 
 void DoBufferSwap(void)
@@ -283,9 +294,16 @@ void DoBufferSwap(void)
 
 	UpdateScrenRes(PSXDisplay.DisplayMode.x,PSXDisplay.DisplayMode.y);
 
-  //A faire dans un thread
-	BlitScreen32((unsigned char *)pPsxScreen, PSXDisplay.DisplayPosition.x, PSXDisplay.DisplayPosition.y);
-//	BlitScreen16((unsigned char *)pPsxScreen, PSXDisplay.DisplayPosition.x, PSXDisplay.DisplayPosition.y);
+	/* When bSkipNextFrame is set (by libretro frameskip or the GPU plugin),
+	 * skip the expensive pixel conversion blit.  The previous frame's
+	 * content remains in pPsxScreen for the frontend to reuse. */
+	if (bSkipNextFrame)
+		return;
+
+	if (g_useRGB565)
+		BlitScreen16((unsigned char *)pPsxScreen, PSXDisplay.DisplayPosition.x, PSXDisplay.DisplayPosition.y);
+	else
+		BlitScreen32((unsigned char *)pPsxScreen, PSXDisplay.DisplayPosition.x, PSXDisplay.DisplayPosition.y);
 
     DisplayUpdate();
 }
