@@ -445,7 +445,14 @@ MDFN_COLD int PCE_LoadCD(std::vector<CDIF *> *CDInterfaces)
 	LoadCommonPre();
 
 	const char *bios_sname = DetectGECD((*CDInterfaces)[0]) ? "pce.gecdbios" : "pce.cdbios";
-	std::string bios_path = MDFN_GetSettingS("filesys.path_firmware") + "/" + MDFN_GetSettingS(bios_sname).c_str();
+
+	#ifdef _WIN32
+	const std::string slash     = "\\";
+	#else
+	const std::string slash     = "/";
+	#endif
+
+	std::string bios_path = MDFN_GetSettingS("filesys.path_firmware") + slash + MDFN_GetSettingS(bios_sname).c_str();
 
 	MDFNFILE *fp = file_open(bios_path.c_str());
 	if (!fp)

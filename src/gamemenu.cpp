@@ -1015,21 +1015,31 @@ SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
 	Dimension resDim = Image::relacion(srcDim, dstDim);
 	Dimension resCen = Image::centrado(resDim, dstDim);
 	SDL_Rect dstRect = {resCen.w , resCen.h, (Uint16)resDim.w, (Uint16)resDim.h};
-	
-	copia = SDL_CreateRGBSurface(SDL_SWSURFACE, overlay->w, overlay->h, 32, 
-		rmask, gmask, bmask, amask);
-	
+
 	if (resDim.w == src->w && resDim.h == src->h){
+		copia = SDL_CreateRGBSurface(SDL_SWSURFACE, overlay->w, overlay->h, 32, 
+		rmask, gmask, bmask, amask);
 		SDL_BlitSurface(src, NULL, copia, NULL);
+		SDL_SetAlpha(copia, SDL_SRCALPHA, 0);
+		boxRGBA(copia, 0, 0, copia->w -1, copia->h -1, colors[clBackground].sdlColor.r, colors[clBackground].sdlColor.g, colors[clBackground].sdlColor.b, transparency);
 	} else {
-		double zoomX = (double)resDim.w / src->w;
-        double zoomY = (double)resDim.h / src->h;
-		SDL_Surface *redim = zoomSurface(src, zoomX, zoomY, 0);
-		SDL_BlitSurface(redim, NULL, copia, &dstRect);
-		SDL_FreeSurface(redim);
+		SDL_Surface *tmp = SDL_CreateRGBSurface(SDL_SWSURFACE, overlay->w, overlay->h, 
+			src->format->BitsPerPixel, src->format->Rmask, src->format->Gmask, 
+			src->format->Bmask, src->format->Amask);
+
+		SDL_SoftStretch(src, NULL, tmp, &dstRect);
+
+		if (transparency < 255) {
+			boxRGBA(tmp, 0, 0, tmp->w - 1, tmp->h - 1, 
+					colors[clBackground].sdlColor.r, 
+					colors[clBackground].sdlColor.g, 
+					colors[clBackground].sdlColor.b, 
+					transparency);
+		}
+		copia = SDL_DisplayFormat(tmp);
+		SDL_FreeSurface(tmp);
 	}
-	SDL_SetAlpha(copia, SDL_SRCALPHA, 0);
-	boxRGBA(copia, 0, 0, copia->w -1, copia->h -1, colors[clBackground].sdlColor.r, colors[clBackground].sdlColor.g, colors[clBackground].sdlColor.b, transparency);
+	
     return copia;
 }
 

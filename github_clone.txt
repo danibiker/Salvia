@@ -15,6 +15,7 @@ git subtree add --prefix=libretro/beetle-supergrafx https://github.com/libretro/
 git subtree add --prefix=libretro/beetle-pce-fast https://github.com/libretro/beetle-pce-fast-libretro master --squash
 git subtree add --prefix=libretro/mame-2003-plus https://github.com/libretro/mame2003-plus-libretro master --squash
 git subtree add --prefix=libretro/vba-next https://github.com/libretro/vba-next master --squash
+git subtree add --prefix=libretro/pcsxr-360 https://github.com/Wolf3s/pcsxr-360 master --squash
 
 ###########################################################################################################
 # Updating Libretro sources
@@ -33,3 +34,4 @@ git subtree pull --prefix=libretro/beetle-supergrafx https://github.com/libretro
 git subtree pull --prefix=libretro/beetle-pce-fast https://github.com/libretro/beetle-pce-fast-libretro master --squash
 git subtree pull --prefix=libretro/mame-2003-plus https://github.com/libretro/mame2003-plus-libretro master --squash
 git subtree pull --prefix=libretro/vba-next https://github.com/libretro/vba-next master --squash
+git subtree pull --prefix=libretro/pcsxr-360 https://github.com/Wolf3s/pcsxr-360 master --squash

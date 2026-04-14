@@ -9,7 +9,8 @@ set MS_OPTS=/t:Rebuild /p:Platform=%PLATFORM% /v:q /nologo /clp:NoSummary
 
 set CORES=Release Release_beetlepce Release_beetlepcefast Release_beetlepce_fx ^
 Release_Gambatte Release_Nestopia Release_Snes9x Release_Snes9x_latest ^
-Release_vbanext Release_picodrive Release_mame Release_finalburn Release_DosboxPure
+Release_vbanext Release_picodrive Release_mame Release_finalburn Release_DosboxPure ^
+Release_prboom Release_pcsxr_360
 
 echo =======================================================
 echo Compilando %PLATFORM% (Modo Silencioso)

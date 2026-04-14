@@ -1619,7 +1619,6 @@
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <AdditionalOptions>/NODEFAULTLIB:XAPILIB  /NODEFAULTLIB:LIBCMT %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <Deploy>
       <DeploymentFiles>$(RemoteRoot)=$(ImagePath)</DeploymentFiles>
