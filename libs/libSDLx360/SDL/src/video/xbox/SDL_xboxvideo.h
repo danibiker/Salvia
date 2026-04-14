@@ -51,7 +51,6 @@ VERTEX triangleStripVertices[4];					//the 4 vertices that make up our display r
 
 struct SDL_PrivateVideoData {
 	LPDIRECT3DTEXTURE9 SDL_primary;
-
 };
 
 LPDIRECT3D9 D3D;
@@ -75,6 +74,24 @@ int XBOX_LockYUVOverlay(_THIS, SDL_Overlay *overlay);
 void XBOX_UnlockYUVOverlay(_THIS, SDL_Overlay *overlay);
 void XBOX_FreeYUVOverlay(_THIS, SDL_Overlay *overlay);
 
+/* Update display quad to maintain the given aspect ratio (width/height).
+   E.g. 4.0f/3.0f for 4:3, 16.0f/9.0f for 16:9.
+   Can be called at any time without recreating the texture or surface. */
+void SDL_XBOX_SetDisplaySize(float aspect_ratio);
+
+/* Set display mode: 1 = scale to fill screen (default), 0 = pixel perfect size.
+   In pixel perfect mode, the quad is tex_size * effect_scale, centered on screen.
+   E.g. 320x240 with Scale2x = 640x480 centered. */
+void SDL_XBOX_SetDisplayFullscreen(int fullscreen);
+
+/* Get the overlay surface (1280x720, 32bpp ARGB).
+   The overlay is drawn on top of the game quad with alpha blending.
+   Write pixels with alpha=0x00 for transparent, alpha=0xFF for opaque.
+   Created lazily on first call. */
+SDL_Surface* SDL_XBOX_GetOverlay(void);
+
+/* Enable (1) or disable (0) overlay rendering. */
+void SDL_XBOX_SetOverlayEnabled(int enabled);
 
 #endif /* _SDL_nullvideo_h */
 

@@ -132,7 +132,7 @@ void ListMenu::draw(SDL_Surface *video_page){
 				const int txtMaxWidth = Fonts::getSize(Fonts::FONTBIG, line.substr(0, game->cutTitleIdx).c_str());
                 const int txtTotalWidth = Fonts::getSize(Fonts::FONTBIG, line.c_str());
                 txtDifWidth = txtTotalWidth - txtMaxWidth;
-				imgText = TTF_RenderText_Blended(fontMenu, line.c_str(), lineTextColor);
+				imgText = TTF_RenderUTF8_Blended(fontMenu, line.c_str(), lineTextColor);
                 lastSel = this->curPos;
             }
                     
@@ -173,6 +173,7 @@ void ListMenu::draw(SDL_Surface *video_page){
 				SDL_Rect dstRectWithMargin = dstRect;
 				dstRectWithMargin.x += marginTextIcon;
 				// imgText es la superficie con el texto
+				//SDL_SetAlpha(imgText, 0, 0);
 				SDL_BlitSurface(imgText, &srcRect, video_page, &dstRectWithMargin);
 
 			} else {

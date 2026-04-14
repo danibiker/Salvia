@@ -63,7 +63,6 @@ class GameMenu : public Engine{
     public:
         GameMenu(CfgLoader *cfgLoader);
         ~GameMenu();
-		SDL_Surface *video_page;
 		SDL_Surface *bg_screenshot;
 		GameTicks gameTicks;
 		GestorMenus *configMenus;
@@ -72,6 +71,7 @@ class GameMenu : public Engine{
 		void processConfigChanges();
 		int *current_scaler_mode;
 		int *current_ratio;
+		int *current_shader;
 		int *current_sync;
 		bool *current_force_fs;
 		bool romLoaded;
@@ -84,11 +84,10 @@ class GameMenu : public Engine{
 		void processFrontendEventsAfter();
 		void processHotkeys(HOTKEYS_LIST);
         vector<string> launchProgram(ListMenu &);
-        bool initDblBuffer(int w, int h);
         int saveGameMenuPos(ListMenu &);
         int recoverGameMenuPos(ListMenu &, struct ListStatus &);
         void showMessage(string);
-		void updateFps();
+		bool updateFps();
 		CfgLoader * getCfgLoader();
         void setCfgLoader(CfgLoader *cfgLoader);
 	    bool isDebug();
@@ -114,7 +113,10 @@ class GameMenu : public Engine{
 		void startScrapping();
 		void loadGameAchievements(unzippedFileInfo& unzipped);
 		void showAchievementMessage(std::string line1Str, std::string line2Str, std::string line3Str, SDL_Surface *badge, SDL_Rect& lastMessagesArea);
-
+		void clearOverlay();
+		void clearOverlayRect(SDL_Rect&);
+		void fillOverlay(int colorIndex);
+		void fillOverlayAlpha(int colorIndex, int alpha);
     private:
 		std::vector<Message> messages;
 		th_messages messagesAchievement;
@@ -148,8 +150,6 @@ class GameMenu : public Engine{
 		void renderProgress();
 		void selectScalerMode(int);
 		void processKeyUp();
-		bool dblBufferEnabled;
-		void blit(SDL_Surface *, SDL_Surface *, int, int, int, int, int, int);
 		void addControlerButtons(Menu*& menuControlesPuerto, int numPlayer);
 		void showScrapProcess(ListMenu &listMenu);
 		void initAchievements();
@@ -158,5 +158,4 @@ class GameMenu : public Engine{
 		inline void handleMessageQueue(uint32_t currentTicks);
 		void renderCurrentAchievement();
 		void clearLastAchievementArea();
-		
 };

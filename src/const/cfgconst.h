@@ -7,7 +7,7 @@ namespace cfg {
 	typedef enum {CFG_TYPE_INT = 0, CFG_TYPE_FLOAT, CFG_TYPE_BOOL, CFG_TYPE_STR} CFG_PROPS_TYPES;
 
 	typedef enum {emulators = 0, debug, resolution_width, resolution_height, path_prefix, alsaReset, background_music, mp3_file, aspectRatio, 
-			scaleMode, syncMode, soundMode, libretrosystem, libretro_lang, libretro_save, libretro_state, libretro_core, libretro_core_version, 
+			scaleMode, syncMode, shaderMode, soundMode, libretrosystem, libretro_lang, libretro_save, libretro_state, libretro_core, libretro_core_version, 
 			libretro_core_extensions,
 			showFps, forceFS, animBG,
 			mainLang, scrapRegion, scrapLang, scrapOrigin, apikeytgdb, raUser, raPass, enableAchievements, hardcoreRA,
@@ -59,21 +59,8 @@ namespace cfg {
 		}
 	};
 
-	struct t_controller_port {
-		int current_device_id;			// ID seleccionado actualmente (ej. RETRO_DEVICE_JOYPAD)
-		std::string current_desc;       // Descripción amigable (ej. "SuperScope")
-		// Lista de opciones que el core nos dio para este puerto
-		std::vector<std::pair<unsigned, std::string>> available_types; 
-		t_controller_port(){
-			current_device_id = -1;
-		}	
-	};
-
 	struct t_cfg_emu{
 		ConfigEmu config;
-		//std::map<std::string, std::unique_ptr<cfg::t_emu_props>> libretroParams;
-		// Un array para los puertos soportados (normalmente 2 a 5)
-		t_controller_port g_ports[MAX_PLAYERS];
 	};
 
 	struct t_cfg_props{

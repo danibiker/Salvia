@@ -258,6 +258,7 @@ private:
 	Menu* menuAskSavestates;
 	Menu* menuScrapper;
 	Menu* menuAchievements;
+	Menu* menuAssignRetro;
 	int askNumOptions;
 
 	CONFIG_STATUS status;
@@ -330,6 +331,8 @@ public:
 	std::vector<t_scrap> scrapSelection;
 	void poblarCoreOptions(CfgLoader *);
 	void poblarPartidasGuardadas(CfgLoader *, std::string);
+	void poblarJoystickTypes(Joystick *joystick);
+
 	std::string stopScrapping(CONFIG_STATUS *st);
 	void loadAchievements();
 
@@ -354,6 +357,7 @@ public:
     static std::string sDescargarLogros(void* inst);
 	static std::string changeHardcoreMode(void* inst, void *value);
 	static std::string setDefaultEmu(void* inst, void *index, void *values);
+	static std::string setControllerType(void* inst, void *index, void *values);
 };
 
 template <typename T>

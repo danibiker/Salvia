@@ -168,20 +168,37 @@ public:
         if (data.empty()) {
             return false; // El lock se libera solo aquí
         }
-        // Copiamos el dato al exterior
-        out_msg = data.front();
 
-		SDL_PixelFormat* targetFormat = SDL_GetVideoSurface()->format;
+		SDL_Surface* videoSurface = SDL_GetVideoSurface();
+        if (!videoSurface) return false;
+		SDL_PixelFormat* targetFormat = videoSurface->format;
+		
+		// Copiamos el dato al exterior
+		AchievementState& front = data.front();
+		out_msg = front; // Shallow copy; out_msg.badge == front.badge == 0x1234
+
 		if (data.front().badge){
-			out_msg.badge = SDL_ConvertSurface(data.front().badge, targetFormat, SDL_SWSURFACE);
+			SDL_Surface* converted = SDL_ConvertSurface(front.badge, targetFormat, SDL_SWSURFACE);
+			if (!converted) {
+				// Conversión fallida: out_msg.badge apunta aún a front.badge
+				// que va a ser liberado abajo -> ponemos a NULL para seguridad
+				out_msg.badge = NULL;
+			} else {
+				out_msg.badge = converted; // out_msg tiene su propia surface
+			}
 		}
 		if (data.front().badgeLocked){
-			out_msg.badgeLocked = SDL_ConvertSurface(data.front().badgeLocked, targetFormat, SDL_SWSURFACE);
+			SDL_Surface* converted = SDL_ConvertSurface(front.badgeLocked, targetFormat, SDL_SWSURFACE);
+			if (!converted) {
+				out_msg.badgeLocked = NULL;
+			} else {
+				out_msg.badgeLocked = converted;
+			}
 		}
 		
         // Limpiamos los punteros del elemento original para evitar doble liberación
-        data.front().badge = NULL;
-        data.front().badgeLocked = NULL;
+        front.badge = NULL;
+        front.badgeLocked = NULL;
         data.pop_front();
         return true; // El lock se libera solo aquí
     }
@@ -192,13 +209,13 @@ public:
 	}
 
 	// Devuelve una copia para que el Gestor de Menús trabaje con sus propios datos
-	AchievementState get_at(std::size_t index) {
+	AchievementState* get_at(std::size_t index) {
 		ScopedLock lock(mutex);
 		if (index >= data.size()) {
 			LOG_ERROR("Requested a non existant element");
-			return AchievementState(); // O manejar error
+			return new AchievementState(); // O manejar error
 		}
-		return data[index]; 
+		return &data[index]; 
 	}
 
 	void update_ticks(uint32_t ticks){
@@ -297,8 +314,6 @@ struct tracker_data {
     tracker_data() : id(0), active(false), cache(NULL), dirty(true) {}
 	tracker_data(uint32_t _id, const char* _val) : id(_id), value(_val), active(true), cache(NULL), dirty(true) {}
 
-    // ¡IMPORTANTE! Quitamos el SDL_FreeSurface del destructor.
-    // En C++98, si el objeto se copia mucho, el destructor borrará la imagen prematuramente.
     ~tracker_data() {}
 
     void free_surface() {
@@ -622,7 +637,7 @@ public:
     }
 
     // EL MÉTODO DE RENDERIZADO DENTRO DE LA CLASE
-    void render(SDL_Surface* dest, uint32_t uBkgColor, const SDL_Color alphaColor) {
+    void render(SDL_Surface* dest, uint32_t uBkgColor, const svColor alphaColor) {
 		ScopedLock lock(mutex);
 
 		// 1. LIMPIEZA SI SE DESACTIVÓ
@@ -660,8 +675,7 @@ public:
 		lastBgRect = newBgRect;
 
 		// 5. DIBUJO DE CAPAS
-		// A. Fondo con transparencia
-		DrawRectAlpha(dest, newBgRect, alphaColor, 180);
+		SDL_FillRect(dest, &newBgRect, alphaColor.color);
 
 		// B. Icono (Badge) - Centrado verticalmente en el contenedor
 		if (badge) {
@@ -677,6 +691,7 @@ public:
 		SDL_Rect rectTxt;
 		rectTxt.x = newBgRect.x + 2 * margin + badgeW;
 		rectTxt.y = newBgRect.y + margin + (badgeH / 2) - (textCache->h / 2);
+		SDL_FillRect(dest, &rectTxt, alphaColor.color);
 		SDL_BlitSurface(textCache, NULL, dest, &rectTxt);
 	}
 };

@@ -96,3 +96,39 @@ inline void convert0RGB1555ToRGB565_Fast2(const uint16_t* __restrict src, unsign
     }
 }
 
+// Conversión de un píxel 0RGB1555 a RGB565
+static inline uint16_t convert_pixel_0RGB1555_to_RGB565(uint16_t c)
+{
+    //  0RGB1555:  0 RRRRR GGGGG BBBBB
+    //  RGB565:    RRRRR GGGGGG BBBBB
+    //
+    //  R: bits 14-10  bits 15-11  (shift left 1)
+    //  G: bits  9- 5  bits 10- 5  (shift left 1, expandir de 5 a 6 bits)
+    //  B: bits  4- 0  bits  4- 0  (sin cambio)
+
+    return ((c & 0x7C00) << 1)   // R: desplaza a posición 15-11
+         | ((c & 0x03E0) << 1)   // G alta: desplaza a posición 10-6
+         | ((c & 0x0200) >> 4)   // G baja: duplica MSB del verde en bit 5 (expansión 5 a 6 bits)
+         | ((c & 0x001F));       // B: sin cambio
+}
+
+// Conversión de un frame completo al buffer de destino
+static void convert_0RGB1555_to_RGB565(
+    const uint16_t* src,
+    uint16_t*       dst,
+    unsigned        width,
+    unsigned        height,
+    std::size_t     src_pitch)   // pitch en BYTES
+{
+    const unsigned src_stride = src_pitch / sizeof(uint16_t); // pitch en píxeles
+
+    for (unsigned y = 0; y < height; ++y)
+    {
+        const uint16_t* src_row = src + y * src_stride;
+        uint16_t*       dst_row = dst + y * width;
+
+        for (unsigned x = 0; x < width; ++x)
+            dst_row[x] = convert_pixel_0RGB1555_to_RGB565(src_row[x]);
+    }
+}
+

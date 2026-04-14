@@ -78,6 +78,23 @@ typedef enum {
     totalCursors
 } enumCursors;
 
+typedef enum {
+    clBackground = 0,
+	clBkgMenu,
+    clTotalColors
+} enumColors;
+
+struct svColor{
+	SDL_Color sdlColor;
+	Uint32 color;
+};
+
+static svColor colors[clTotalColors] = {
+	{{0, 0, 0} , 0},			//clBackground
+	{{247, 221, 114}, 0}		//clBkgMenu
+};
+
+
 struct Message {
     std::string content;
     Uint32 ticks;
@@ -384,9 +401,10 @@ class Constant{
 			if (font) {
 				SDL_Surface* textSurf = TTF_RenderUTF8_Solid(font, s, color);
 				if (textSurf) {
+					SDL_SetAlpha(textSurf, 0, 0);
 					SDL_Rect dest = { x, y, 0, 0 };
 					SDL_BlitSurface(textSurf, NULL, surface, &dest);
-					SDL_FreeSurface(textSurf); // ¡Vital!
+					SDL_FreeSurface(textSurf);
 				}
 			}
 		}
@@ -395,9 +413,10 @@ class Constant{
 			if (font) {
 				SDL_Surface* textSurf = TTF_RenderUTF8_Blended(font, s, color);
 				if (textSurf) {
+					//SDL_SetAlpha(textSurf, 0, 0);
 					SDL_Rect dest = { x, y, 0, 0 };
 					SDL_BlitSurface(textSurf, NULL, surface, &dest);
-					SDL_FreeSurface(textSurf); // ¡Vital!
+					SDL_FreeSurface(textSurf);
 				}
 			}
 		}
@@ -702,7 +721,7 @@ class Constant{
 				str.resize(size);
 				va_start(ap, fmt);
 				// _vsnprintf es la versión segura para Visual Studio 2010
-				int n = _vsnprintf((char *)str.c_str(), size, fmt.c_str(), ap);
+				int n = _vsnprintf_s((char *)str.c_str(), size, _TRUNCATE, fmt.c_str(), ap);
 				va_end(ap);
 				if (n > -1 && n < size) {
 					str.resize(n);

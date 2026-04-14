@@ -91,7 +91,7 @@ void Image::printImage(SDL_Surface *video_page){
         if (tamAuto) {
             Dimension src = {img->w, img->h};
             Dimension dst = {this->getW(), this->getH()};
-            Dimension newDim = relacion(src, dst);
+            Dimension newDim = relacionAuto(src, dst);
             Dimension offset = centrado(newDim, dst);
 
             if (vAlign == ALIGN_TOP){
@@ -104,9 +104,23 @@ void Image::printImage(SDL_Surface *video_page){
     }
 }
 
-Dimension Image::relacion(const Dimension &src, const Dimension &dst) {
+Dimension Image::relacionAuto(const Dimension &src, const Dimension &dst) {
     if (!tamAuto) return src;
 
+    Dimension dim;
+    // Comparamos proporciones usando multiplicaciones: 
+    // (src.h / src.w > dst.h / dst.w) es igual a (src.h * dst.w > dst.h * src.w)
+    if ((long)src.h * dst.w > (long)dst.h * src.w) {
+        dim.h = dst.h;
+        dim.w = (src.w * dst.h) / src.h;
+    } else {
+        dim.w = dst.w;
+        dim.h = (src.h * dst.w) / src.w;
+    }
+    return dim;
+}
+
+Dimension Image::relacion(const Dimension &src, const Dimension &dst) {
     Dimension dim;
     // Comparamos proporciones usando multiplicaciones: 
     // (src.h / src.w > dst.h / dst.w) es igual a (src.h * dst.w > dst.h * src.w)

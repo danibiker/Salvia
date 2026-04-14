@@ -302,7 +302,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_DosboxPure|Xbox 360'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_DosboxPure|Xbox 360'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -637,7 +637,7 @@
     <COMMON_PREPROCESSOR>_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB;RC_NO_THREADS;RC_CLIENT_SUPPORTS_HASH</COMMON_PREPROCESSOR>
     <COMMON_PREPROCESSOR_DEBUG>DEBUG;DEBUG_LOG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_DEBUG>
     <COMMON_PREPROCESSOR_RELEASE>NDEBUG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_RELEASE>
-    <COMMON_LIBS_XBOX_D>xnetd.lib;xapilibd.lib;xboxkrnl.lib;d3d9d.lib;d3dx9.lib;xgraphicsd.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;mbedTLS.lib</COMMON_LIBS_XBOX_D>
+    <COMMON_LIBS_XBOX_D>xnet.lib;xapilib.lib;xboxkrnl.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;mbedTLS.lib</COMMON_LIBS_XBOX_D>
     <COMMON_LIBS_XBOX_R>xnet.lib;xapilib.lib;xboxkrnl.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;mbedTLS.lib</COMMON_LIBS_XBOX_R>
     <COMMON_LIBS_XBOX_DEBUG>$(COMMON_LIBS_XBOX_D);libcurl_a_debug.lib</COMMON_LIBS_XBOX_DEBUG>
     <COMMON_LIBS_XBOX_RELEASE>$(COMMON_LIBS_XBOX_R);libcurl_a.lib</COMMON_LIBS_XBOX_RELEASE>
@@ -655,7 +655,7 @@
     <OutDir>$(BUILD_DIR)</OutDir>
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
-    <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_DOSBOXPURE)$(ImageExt)</ImageXexOutput>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_DosboxPure|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -1145,16 +1145,17 @@
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
-      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExceptionHandling>false</ExceptionHandling>
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>true</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;HAVE_CHD;DEBUG;SQLITE_DEBUG;EMU_LIB_NAME="$(EMU_LIB_NAME)";$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;HAVE_CHD;DEBUG_LOG;EMU_LIB_NAME="$(EMU_LIB_NAME)";$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -1165,7 +1166,6 @@
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <AdditionalOptions>/NODEFAULTLIB:XAPILIB  /NODEFAULTLIB:LIBCMT %(AdditionalOptions)</AdditionalOptions>
       <GenerateMapFile>true</GenerateMapFile>
       <MapExports>true</MapExports>
     </Link>
@@ -1185,27 +1185,30 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <Optimization>MaxSpeed</Optimization>
-      <ExceptionHandling>false</ExceptionHandling>
+      <Optimization>Disabled</Optimization>
+      <ExceptionHandling>Sync</ExceptionHandling>
       <MinimalRebuild>false</MinimalRebuild>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;DEBUG_LOG;EMU_LIB_NAME="$(EMU_LIB_DOSBOXPURE)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_DOSBOXPURE)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
-      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <StringPooling>true</StringPooling>
       <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
       <PreschedulingOptimization>false</PreschedulingOptimization>
       <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
-      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <RegisterReservation>false</RegisterReservation>
       <StructMemberAlignment>Default</StructMemberAlignment>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+      <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
+      <DeduceVariableType>Default</DeduceVariableType>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -1214,11 +1217,11 @@
       <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Debug\Xbox 360;$(ProjectDir)..\mame2003-plus-libretro\build\Xbox 360\Debug;$(ProjectDir)libretro\dosbox-pure\vs2010\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
-      <OptimizeReferences>true</OptimizeReferences>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>false</OptimizeReferences>
+      <EnableCOMDATFolding>false</EnableCOMDATFolding>
       <GenerateMapFile>false</GenerateMapFile>
       <MapExports>false</MapExports>
-      <AdditionalOptions>/NODEFAULTLIB:XAPILIB  /NODEFAULTLIB:LIBCMT  /ALIGN:4096 %(AdditionalOptions)</AdditionalOptions>
+      <StackCommitSize>524288</StackCommitSize>
     </Link>
     <Deploy>
       <DeploymentFiles>$(RemoteRoot)=$(ImagePath)</DeploymentFiles>
@@ -1236,25 +1239,26 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Full</Optimization>
       <ExceptionHandling>false</ExceptionHandling>
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_DOSBOXPURE)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;NDEBUG;EMU_LIB_NAME="$(EMU_LIB_DOSBOXPURE)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <StringPooling>true</StringPooling>
       <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
-      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <PreschedulingOptimization>false</PreschedulingOptimization>
       <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
-      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <StructMemberAlignment>Default</StructMemberAlignment>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -1267,7 +1271,6 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <GenerateMapFile>false</GenerateMapFile>
       <MapExports>false</MapExports>
-      <AdditionalOptions>/ALIGN:4096 %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <Deploy>
       <DeploymentFiles>$(RemoteRoot)=$(ImagePath)</DeploymentFiles>
@@ -1828,7 +1831,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
@@ -1840,7 +1843,6 @@
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <AdditionalOptions>/NODEFAULTLIB:XAPILIB  /NODEFAULTLIB:LIBCMT %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <Deploy>
       <DeploymentFiles>$(RemoteRoot)=$(ImagePath)</DeploymentFiles>
@@ -1866,14 +1868,14 @@
       <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
       <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
       <PreschedulingOptimization>false</PreschedulingOptimization>
-      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <StringPooling>true</StringPooling>
     </ClCompile>
     <Link>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);gambatte-libretro.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\gambatte\Release\Xbox 360</AdditionalLibraryDirectories>
@@ -1891,7 +1893,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Full</Optimization>
       <ExceptionHandling>false</ExceptionHandling>
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
@@ -1904,12 +1906,13 @@
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
-      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
-      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
       <PreschedulingOptimization>true</PreschedulingOptimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -2135,7 +2138,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Disabled</Optimization>
       <ExceptionHandling>Sync</ExceptionHandling>
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>true</BufferSecurityCheck>
@@ -2145,7 +2148,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include;$(ProjectDir)\src\retroachievements\src</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>
       </UndefinePreprocessorDefinitions>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
@@ -2164,7 +2167,6 @@
       <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Debug\Xbox 360;$(ProjectDir)libretro\mame-2003-plus\build\Xbox 360\Debug</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
-      <AdditionalOptions>/NODEFAULTLIB:XAPILIB  /NODEFAULTLIB:LIBCMT %(AdditionalOptions)</AdditionalOptions>
       <GenerateMapFile>true</GenerateMapFile>
       <MapExports>true</MapExports>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2291,25 +2293,35 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_PCSX)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;DEBUG_LOG;EMU_LIB_NAME="$(EMU_LIB_PCSX)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)..\curl-7.50.1\include;$(ProjectDir)..\polarssl-mbedtls-2.6.0\include;$(ProjectDir)src\unzip;$(ProjectDir)libs\libSDLx360\SDL\src\video;$(ProjectDir)libs\libSDLx360;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\src\retroachievements\src;$(ProjectDir)\src\retroachievements\include</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
-      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
       <IntrinsicFunctions>false</IntrinsicFunctions>
-      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>false</PreschedulingOptimization>
+      <StringPooling>true</StringPooling>
+      <AssemblerListingLocation>
+      </AssemblerListingLocation>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
-      <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);pcsx_rearmed.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360;../../project/pcsx_rearmed_ppc/Debug_DRC/Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);pcsxr.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>libs\SDLx360\SDL\Release;libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360;$(ProjectDir)..\pcsxr-360\360\Xdk\pcsxr\Release</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
     </Link>
     <Deploy>
       <DeploymentType>CopyToHardDrive</DeploymentType>
@@ -2853,7 +2865,7 @@
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib; LIBCPMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
     </Link>

@@ -21,28 +21,17 @@ enum {
 
 class Logger {
 private:
-    static std::ofstream logFile;
     static unsigned int numLogs;
     static const char* ERRLEVELSTXT[L_MAX];
     static char messageBuffer[MAX_MSG_BUFFER_LEN]; 
+	char* logFilepath;
 public:
     Logger(const char* filename);
-
     ~Logger() {
-        close();
+		delete [] logFilepath;
     }
-	// Función principal con soporte de formato printf
     static void write(int level, const char* fmt, ...);
-
-	static void close(){
-		if (logFile.is_open()) {
-            logFile.flush();
-            logFile.close();
-        }
-	}
-	
 	static int errorLevel;
-    
 };
 
 // Macros para simplificar la llamada a los logs

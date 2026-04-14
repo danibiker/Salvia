@@ -27,6 +27,7 @@
 #include "utils/langmanager.h"
 #include "so/launcher.h"
 
+CfgLoader *cfgLoader;
 GameMenu *gameMenu;
 Logger *logger;
 dirutil dir;
@@ -64,6 +65,7 @@ int audio_opened = 0;
 // En tu clase/global:
 volatile bool audio_closing = false;
 t_rom_paths romPaths;
+t_scale_props current_video_settings;
 
 struct retro_core_variable {
    const char *key;    // Nombre técnico: "nestopia_region"
@@ -116,57 +118,29 @@ extern "C" {
 }
 #endif
 
-//retro_log_printf_t log_cb = nullptr; 
-
 void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
+    #ifndef DEBUG_LOG
+    if (level != RETRO_LOG_ERROR && gameMenu->romLoaded) {
+        return;
+    }
+    #endif
 
-	#ifndef DEBUG_LOG
-		if (level != RETRO_LOG_ERROR && gameMenu->romLoaded){
-			return;
-		}
-	#endif
-
-	if (!logger) {
-		va_list v; va_start(v, fmt); vfprintf(stdout, fmt, v); va_end(v);
-		return;
-	}
-
-	// 2. Procesar los argumentos variables (va_list) que envía el Core
-    char buffer[128];
+	char buffer[128] = {0}; 
     va_list args;
     va_start(args, fmt);
-    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    int len = _vsnprintf_s(buffer, _countof(buffer), _TRUNCATE, fmt, args);
     va_end(args);
-	buffer[sizeof(buffer) - 1] = '\0';
-	
-	// Interceptamos los mensajes carga de MAME y FinalBurn
-    if (!gameMenu->romLoaded && progress_loader.total_rom_files > 0 && strstr(buffer, "Opening ROM file:")) {
-        progress_loader.current_rom_file++;
-        // Calculamos el porcentaje (máximo 95% para dejar margen al inicio del core)
-        progress_loader.loading_progress = (float)progress_loader.current_rom_file / (float)progress_loader.total_rom_files;
-        // LLAMADA A LA BARRA
-        drawLoadingProgressBar(gameMenu->screen, std::min(progress_loader.loading_progress, 1.0f));
-		//ProgressBar_draw(gameMenu->screen, std::min(progress_loader.loading_progress, 1.0f));
-    }
 
-    // 1. Mapear el nivel de Libretro a tus niveles internos
-    int myLevel;
-    switch (level) {
-        case RETRO_LOG_DEBUG: myLevel = L_DEBUG; break;
-        case RETRO_LOG_INFO:  myLevel = L_INFO;  break;
-        case RETRO_LOG_ERROR: myLevel = L_ERROR; break;
-        default:              myLevel = L_DEBUG;  break;
-    }
+    buffer[_countof(buffer) - 1] = '\0';
 
-	OutputDebugStringA("[CORE]");
-	OutputDebugStringA(buffer);
-	
-	char* ptr = strchr(buffer, '\n');
-	if (ptr == nullptr) {
-		OutputDebugStringA("\n");
-	}
+    if (!gameMenu->romLoaded && progress_loader.total_rom_files > 0) {
+        if (strstr(buffer, "Opening ROM file:")) {
+            progress_loader.current_rom_file++;
+            float progress = (float)progress_loader.current_rom_file / (float)progress_loader.total_rom_files;
+            drawLoadingProgressBar(gameMenu->overlay, (progress > 1.0f) ? 1.0f : progress);
+        }
+    }
 }
-
 
 // ─────────────────────────────────────────────
 // Helper: split "opt1|opt2|opt3" → vector
@@ -233,15 +207,10 @@ static bool retro_environment(unsigned cmd, void *data) {
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: {
 			struct retro_log_callback *log = (struct retro_log_callback*)data;
 			log->log = retro_log_printf;
-
-			// 2. IMPORTANTE: Asignamos nuestra función a la variable global 
-            // que Dosbox-Pure espera (la que causa el error de linkado)
-            //log_cb = retro_log_printf; 
             return true;
         }
 
 		case RETRO_ENVIRONMENT_SET_MESSAGE: {
-			// 1. Convertir el puntero 'data' a la estructura de mensaje
 			const struct retro_message *msg = (const struct retro_message*)data;
 			if (msg && msg->msg){
 				//LOG_DEBUG("NOTIFICACION DEL CORE: %s (Duracion: %u frames)", msg->msg, msg->frames);
@@ -333,7 +302,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 
 		case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:{
 			const struct retro_system_av_info *av_info = (const struct retro_system_av_info *)data;
-			gameMenu->sync->init_fps_counter(av_info->timing.fps);
+			gameMenu->sync->init_fps_counter((float)av_info->timing.fps);
 			return true;
 		}
 
@@ -537,7 +506,7 @@ static bool retro_environment(unsigned cmd, void *data) {
             const struct retro_controller_info *info = (const struct retro_controller_info *)data;
             // Aquí el Core te está diciendo qué dispositivos soporta.
             for (unsigned i = 0; info[i].types && i < MAX_PLAYERS; ++i) {
-				cfg::t_controller_port *port = &gameMenu->getCfgLoader()->g_ports[i];
+				t_controller_port *port = &gameMenu->joystick->g_ports[i];
 				port->available_types.clear();
 				for (unsigned j = 0; j < info[i].num_types; j++) {
 					unsigned id = info[i].types[j].id;
@@ -556,6 +525,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 					port->current_device_id = port->available_types[0].first;
 				}
 			}
+			gameMenu->configMenus->poblarJoystickTypes(gameMenu->joystick);
             return true;
         }
 		
@@ -642,15 +612,15 @@ static inline void take_screenshot(void* final_src, unsigned width, unsigned hei
     action_postponed.cycles = 0;
 }
 
-static void retro_video_refresh(const void *data, unsigned width, unsigned height, std::size_t pitch) {
-    if (!data || width == 0 || height == 0) 
+static inline void sw_refresh(const void *data, unsigned width, unsigned height, std::size_t pitch) {
+    if (!data || width == 0 || height == 0 || *gameMenu->current_scaler_mode == NO_VIDEO) 
 		return;	
 
     void* final_src = (void*)data;
 
 	//Hacemos la comprobacion del pitch >= width * 4, por si hemos solicitado el RETRO_PIXEL_FORMAT_RGB565
 	//pero el core no lo acepta
-	if (*gameMenu->current_scaler_mode != NO_VIDEO && fmt != RETRO_PIXEL_FORMAT_RGB565){
+	if (video_bpp == 16 && fmt != RETRO_PIXEL_FORMAT_RGB565){
 		// 2. Gestionar buffer de conversión de forma eficiente
 		std::size_t needed = width * height * sizeof(uint16_t);
 		if (!conversion_buffer || buffer_size < needed) {
@@ -672,18 +642,17 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 		}
 		pitch = width * 2;
 		final_src = (void*)conversion_buffer;
-		final_src = (void*)conversion_buffer;
 	}
 
 	if (action_postponed.cycles == 1 && action_postponed.action == SAVE_STATE){
 		take_screenshot(final_src, width, height, pitch);
 	}
 	
-    SDL_Surface* screen = gameMenu->screen;
+    SDL_Surface* screen = gameMenu->gameScreen;
 	
 	t_scale_props scaleProps;
-	// 4. Pasar el buffer correcto (ya sea el original de 16 o el convertido)
 	scaleProps.src = (uint16_t*)final_src;
+	scaleProps.dst = (uint16_t*)screen->pixels;
 	scaleProps.sw = (int)width;
 	scaleProps.sh = (int)height;
 	scaleProps.spitch = pitch;
@@ -693,10 +662,108 @@ static void retro_video_refresh(const void *data, unsigned width, unsigned heigh
 	scaleProps.scale = gameMenu->current_scaler_scale;
 	scaleProps.ratio = aspectRatioValues[*gameMenu->current_ratio];
 	scaleProps.force_fs = *gameMenu->current_force_fs;
-	scaleProps.dst = (uint16_t*)screen->pixels;
+
+	// 4. Pasar el buffer correcto (ya sea el original de 16 o el convertido)
+#ifdef _XBOX
+	if (video_bpp == 32){
+		scale_software_32bit_xbox(scaleProps, (uint32_t*)final_src, (uint32_t*)screen->pixels);
+		return;
+	}
+#endif
 
 	//Escalamos la imagen con el escalador que hay almacenado en el puntero a funcion
 	gameMenu->current_scaler(scaleProps);
+}
+
+static inline void hw_refresh(const void *data, unsigned width, 
+                                unsigned height, std::size_t pitch) {
+    if (!data) return;
+
+    const int bpp = (fmt == RETRO_PIXEL_FORMAT_XRGB8888) ? 32 : 16;
+    const float current_ratio = aspectRatioValues[*gameMenu->current_ratio];
+    unsigned row_bytes = width * (bpp / 8);
+
+    SDL_Surface*& screen = gameMenu->gameScreen;
+
+	#ifdef _XBOX
+    if (width  != current_video_settings.sw || height != current_video_settings.sh || bpp != current_video_settings.bpp){
+        screen = SDL_SetVideoMode(width, height, bpp, SDL_DOUBLEBUF);
+        current_video_settings.sw  = width;
+        current_video_settings.sh  = height;
+        current_video_settings.bpp = bpp;
+    }
+	
+	if (current_video_settings.filter != *gameMenu->current_shader){
+		XBOX_SelectEffect(*gameMenu->current_shader);
+		current_video_settings.filter = *gameMenu->current_shader;
+	}
+
+	if (current_video_settings.force_fs != *gameMenu->current_force_fs){
+		SDL_XBOX_SetDisplayFullscreen(*gameMenu->current_force_fs == 1);
+		current_video_settings.force_fs = *gameMenu->current_force_fs;
+	}
+	#endif
+
+	if (current_video_settings.ratio != current_ratio){
+		LOG_DEBUG("SetDisplaySize: ratio=%.3f, tex=%dx%d", current_ratio, current_video_settings.sw, current_video_settings.sh);
+		#ifdef _XBOX
+		SDL_XBOX_SetDisplaySize(current_ratio);
+		#endif
+		current_video_settings.ratio = current_ratio;
+	}
+
+    // ── Determinar el puntero fuente definitivo ──────────────────────────────
+    const void* final_src = data;
+    std::size_t final_pitch = pitch;
+
+    if (fmt == RETRO_PIXEL_FORMAT_0RGB1555){
+        // El surface SDL de 16 bpp espera RGB565: hay que convertir
+        std::size_t needed = (std::size_t)width * height * sizeof(uint16_t);
+
+        if (!conversion_buffer || buffer_size < needed){
+            uint16_t* tmp = (uint16_t*)realloc(conversion_buffer, needed);
+            if (!tmp) return;          // sin memoria, abortar
+            conversion_buffer = tmp;
+            buffer_size       = needed;
+        }
+
+        convert_0RGB1555_to_RGB565((const uint16_t*)data,conversion_buffer,width, height,pitch);
+
+        final_src   = conversion_buffer;
+        final_pitch = width * sizeof(uint16_t); // pitch denso, sin padding
+    }
+
+    // ── Screenshot (usa la fuente ya convertida) ─────────────────────────────
+    if (action_postponed.cycles == 1 && action_postponed.action  == SAVE_STATE){
+        take_screenshot((void *)final_src, width, height, final_pitch);
+    }
+
+    // ── Copiar al surface SDL ─────────────────────────────────────────────────
+    if (SDL_LockSurface(screen) != 0) return;
+    uint8_t*       dst     = (uint8_t*)screen->pixels;
+    const uint8_t* src     = (const uint8_t*)final_src;
+
+    if (final_pitch == (std::size_t)screen->pitch && final_pitch == row_bytes){
+        memcpy(dst, src, row_bytes * height);       // copia directa
+    } else {
+        for (unsigned y = 0; y < height; ++y)       // fila por fila
+        {
+            memcpy(dst, src, row_bytes);
+            dst += screen->pitch;
+            src += final_pitch;
+        }
+    }
+    SDL_UnlockSurface(screen);
+}
+
+
+static void retro_video_refresh(const void *data, unsigned width, 
+                                unsigned height, std::size_t pitch) {
+	#ifdef _XBOX
+		hw_refresh(data, width, height, pitch);
+	#else
+		sw_refresh(data, width, height, pitch);
+	#endif
 }
 
 // Se llama antes de pedir el estado de los inputs
@@ -935,7 +1002,7 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
     int retMenu = gameMenu.recoverGameMenuPos(menuData, menuBeforeExit);
     if (retMenu == 0){
         if (menuBeforeExit.layout != menuData.layout){
-            menuData.setLayout(menuBeforeExit.layout, gameMenu.screen->w, gameMenu.screen->h);
+            menuData.setLayout(menuBeforeExit.layout, gameMenu.overlay->w, gameMenu.overlay->h);
         }
         menuData.animateBkg = menuBeforeExit.animateBkg;
     }
@@ -985,16 +1052,20 @@ void drawLoadingProgressBar(SDL_Surface* screen, float progress) {
     int barY = (screen->h / 2) + 40; // Debajo del texto de "Loading..."
 
     // Colores (Ajusta según tu paleta)
-    Uint32 colorBorder = SDL_MapRGB(screen->format, 200, 200, 200);
-    Uint32 colorFill   = SDL_MapRGB(screen->format, bkgMenu.r, bkgMenu.g, bkgMenu.b);
-	Uint32 colorFillLighter   = SDL_MapRGB(screen->format, bkgMenuLighter.r, bkgMenuLighter.g, bkgMenuLighter.b);
-    Uint32 colorBG     = SDL_MapRGB(screen->format, 40, 40, 40);
-
-    // 1. Dibujar fondo de la barra
+    Uint32 colorBorder		= SDL_MapRGBA(screen->format, 200, 200, 200, 0xFF);
+    Uint32 colorFill		= SDL_MapRGBA(screen->format, bkgMenu.r, bkgMenu.g, bkgMenu.b, 0xFF);
+	Uint32 colorFillLighter = SDL_MapRGBA(screen->format, bkgMenuLighter.r, bkgMenuLighter.g, bkgMenuLighter.b, 0xFF);
+    Uint32 colorBG			= SDL_MapRGBA(screen->format, 40, 40, 40, 0xFF);
+	
+    //Dibujar fondo de la barra
     SDL_Rect bgRect = { (Sint16)barX, (Sint16)barY, (Uint16)barW, (Uint16)barH };
+	//Actualizamos el area de la barra y el area del texto para que se puedan ver
+	SDL_Rect bgRectFill = { bgRect.x, bgRect.y, bgRect.w, barH * 5};
+	SDL_FillRect(screen, &bgRectFill, colors[clBackground].color);
+	//Mostramos el fondo de la barra
     SDL_FillRect(screen, &bgRect, colorBG);
 
-    // 2. Dibujar el progreso real
+    //Dibujar el progreso real
     if (progress > 1.0f) progress = 1.0f;
     int fillW = (int)(barW * progress);
     if (fillW > 0) {
@@ -1006,34 +1077,35 @@ void drawLoadingProgressBar(SDL_Surface* screen, float progress) {
 
 	const int txtW = 40;
 	SDL_Rect percentRect = { barX + barW / 2 - txtW, barY + barH, 80, barH * 4 };
-	SDL_FillRect(screen, &percentRect, PBUtil::rgb(screen, backgroundColor.r, backgroundColor.g, backgroundColor.b));
 	percentRect.x += txtW;
 	percentRect.y += 15;
 	PB_drawPercent(screen, (int)(progress * 100.0), percentRect.x, percentRect.y, 3, PBUtil::rgb(screen, 100, 210, 255));
 
-    // 3. Dibujar borde (opcional, 1px)
-    // SDL_FillRect no tiene "drawRect" vacío, así que usamos 4 líneas si quieres borde fino
-    
-    // Actualizar solo la región de la barra para ganar rendimiento
+    //Dibujar borde (opcional, 1px)
+    //SDL_FillRect no tiene "drawRect" vacío, así que usamos 4 líneas si quieres borde fino
+    //Actualizar solo la región de la barra para ganar rendimiento
     //SDL_UpdateRect(screen, barX, barY, barW, 3*barH);
-	SDL_Flip(screen);
+	SDL_FillRect(gameMenu->gameScreen, NULL, colors[clBackground].color);
+	SDL_Flip(gameMenu->gameScreen);
 }
 
 /**
 *
 */
 int launchGame(std::string rompath){
-	static Uint32 bkgText = SDL_MapRGB(gameMenu->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	const bool loadAchievement = gameMenu->getCfgLoader()->configMain[cfg::enableAchievements].valueBool;
 	std::string tempDir = Constant::getAppDir() + Constant::getFileSep() + "tmp";
 	unzippedFileInfo unzipped;
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));
 
-	std::string initMsg = "Loading " + dir.getFileName(rompath) + "...";
+	std::string initMsg = LanguageManager::instance()->get("msg.loading") + dir.getFileName(rompath) + "...";
 	const int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
-	Constant::drawTextCentTransparent(gameMenu->screen, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, face_h_big / 2, true, true, textColor, 0);
-	SDL_Flip(gameMenu->screen);
+
+	gameMenu->fillOverlay(clBackground);
+	Constant::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, face_h_big / 2, true, true, textColor, 0);
+	SDL_Flip(gameMenu->gameScreen);
 
 	romPaths.rompath.clear();
 	closeGame();
@@ -1047,7 +1119,7 @@ int launchGame(std::string rompath){
 		progress_loader.reset();
 		progress_loader.total_rom_files = getZipFileCountFiltered(rompath);
 		// Dibujamos la barra inicial al 0%
-		drawLoadingProgressBar(gameMenu->screen, 0.0f);
+		drawLoadingProgressBar(gameMenu->overlay, 0.0f);
 		unzipped.errorCode = 0;
 		unzipped.extractedPath = rompath;
 		unzipped.originalPath  = rompath;
@@ -1093,11 +1165,11 @@ int launchGame(std::string rompath){
 		gameMenu->loadGameAchievements(unzipped);
 	}
 
-	cfg::t_controller_port *port = gameMenu->getCfgLoader()->g_ports;
-	for (int i=0; i < MAX_PLAYERS; i++){
-		retro_set_controller_port_device(i, port[i].current_device_id < 0 ? RETRO_DEVICE_JOYPAD : port[i].current_device_id);
-	}
+	//Loading the rompaths and setting the control device
+	gameMenu->setRomPaths(rompath);
+	gameMenu->joystick->updateTypes();
 
+	//Giving a name to the window 
 	string romname = (gameMenu->getCfgLoader()->getCfgEmu() != NULL ? gameMenu->getCfgLoader()->getCfgEmu()->name + " - " : "") + dir.getFileNameNoExt(unzipped.originalPath);
 	SDL_WM_SetCaption(romname.c_str(), NULL);
 
@@ -1107,19 +1179,17 @@ int launchGame(std::string rompath){
 
 	//Obtener el aspect ratio
 	aspectRatioValues[RATIO_CORE] = av_info.geometry.aspect_ratio;
-
 	// Inicializar SDL Audio con la frecuencia del core
 	if (!audio_opened){
 		init_sdl_audio(av_info.timing.sample_rate);
 	}
 	//Iniciando el contador de fps
-	gameMenu->sync->init_fps_counter(av_info.timing.fps);
+	gameMenu->sync->init_fps_counter((float)av_info.timing.fps);
 	gameMenu->romLoaded = true;
-	gameMenu->setRomPaths(rompath);
 	gameMenu->configMenus->poblarPartidasGuardadas(gameMenu->getCfgLoader(), rompath);
 	loadSram(romPaths.sram.c_str());
 	gameMenu->setEmuStatus(EMU_STARTED);
-	SDL_FillRect(gameMenu->screen, NULL, bkgText);
+	gameMenu->clearOverlay();
 	return 1;
 }
 
@@ -1134,7 +1204,7 @@ bool loadGameAtStart(int argc, char *argv[]){
 			BYTE* pLaunchData = new BYTE [ dwLaunchDataSize ];
 			dwStatus = XGetLaunchData( pLaunchData, dwLaunchDataSize );
 			char* mensaje = (char*)pLaunchData;
-			ret = launchGame(mensaje);
+			ret = launchGame(mensaje) == 1;
 			LOG_DEBUG("Parametros recibidos: %s\n", mensaje);
 		} else if (dwStatus == ERROR_NOT_FOUND) {
 			// El programa se lanzó normalmente (sin XSetLaunchData)
@@ -1170,6 +1240,7 @@ void closeResources() {
 
 	delete logger;
 	delete gameMenu;
+	delete cfgLoader;
 }
 
 inline void updateGame() {
@@ -1235,9 +1306,9 @@ void processFrontendEvents(){
 */
 int main(int argc, char *argv[]) {
 	initPathAndLog(argv);
-	CfgLoader cfgLoader;
+	cfgLoader = new CfgLoader();
 
-	if (cfgLoader.isDebug()){
+	if (cfgLoader->isDebug()){
 		#ifndef DEBUG_LOG
 		#define DEBUG_LOG
 		#endif
@@ -1248,15 +1319,15 @@ int main(int argc, char *argv[]) {
 	LOG_DEBUG("appexe: %s\n", Constant::getAppExecutable().c_str());
 
 	// Se cargan los textos
-	const std::string mainLang = cfgLoader.configMain[cfg::mainLang].valueStr;
+	const std::string mainLang = cfgLoader->configMain[cfg::mainLang].valueStr;
 	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
-	gameMenu = new GameMenu(&cfgLoader);
-	ListMenu listMenu(gameMenu->screen->w, gameMenu->screen->h);
-	listMenu.setLayout(LAYBOXES, gameMenu->screen->w, gameMenu->screen->h);
+	gameMenu = new GameMenu(cfgLoader);
+	ListMenu listMenu(gameMenu->overlay->w, gameMenu->overlay->h);
+	listMenu.setLayout(LAYBOXES, gameMenu->overlay->w, gameMenu->overlay->h);
 
 	TileMap tileMap(9, 0, 16, 16);
     tileMap.load(Constant::getAppDir() + Constant::getFileSep() + "assets" + Constant::getFileSep() + "art" + Constant::getFileSep() + "bricks2.png");
-	initializeMenus(listMenu, *gameMenu, cfgLoader);
+	initializeMenus(listMenu, *gameMenu, *cfgLoader);
 	
 	//Callback de environment
 	retro_set_environment(retro_environment);
@@ -1306,8 +1377,11 @@ int main(int argc, char *argv[]) {
 		gameMenu->processFrontendEventsAfter();
 
 		// Actualizamos la pantalla
-		SDL_Flip(gameMenu->screen);
-
+		//double before = Constant::getTicks();
+		//SDL_SetAlpha(gameMenu->overlay, 0, 0);
+		//SDL_BlitSurface(gameMenu->overlay, NULL, SDL_XBOX_GetOverlay(), NULL);
+		SDL_Flip(gameMenu->gameScreen);
+		//LOG_DEBUG("time ms %.3f\n", Constant::getTicks() - before);
 		// Limitamos los frames si tenemos que sincronizar con el video
 		if (*gameMenu->current_sync == SYNC_TO_VIDEO){
 			gameMenu->sync->limit_fps(nextFrameTime);

@@ -19,7 +19,7 @@
 namespace PBUtil {
 
     static inline Uint32 rgb(SDL_Surface* s, Uint8 r, Uint8 g, Uint8 b) {
-        return SDL_MapRGB(s->format, r, g, b);
+        return SDL_MapRGBA(s->format, r, g, b, 0xFF);
     }
 
     static inline void fillRect(SDL_Surface* s, int x, int y, int w, int h, Uint32 color) {
@@ -33,7 +33,7 @@ namespace PBUtil {
         c.r = (Uint8)(a.r + (b.r - a.r) * t);
         c.g = (Uint8)(a.g + (b.g - a.g) * t);
         c.b = (Uint8)(a.b + (b.b - a.b) * t);
-        c.unused = 0;
+        c.unused = 0xFF;
         return c;
     }
 

@@ -11,7 +11,6 @@
 #endif
 
 Engine::Engine(){
-	
 }
 
 Engine::~Engine(){
@@ -34,7 +33,6 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		return 1;
     }
 
-
 	#ifdef WIN
 		if (video_fullscreen){
 			const SDL_VideoInfo* info = SDL_GetVideoInfo();
@@ -46,12 +44,29 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		}
 	#endif
 
-	screen = SDL_SetVideoMode(video_width, video_height, video_bpp, video_flags);
+	gameScreen = SDL_SetVideoMode(video_width, video_height, video_bpp, video_flags);
 
-	if (!screen){
+	if (!gameScreen){
 		LOG_ERROR("Error SDL_SetVideoMode: %s\n", SDL_GetError());
 		return 1;
 	}
+	
+#ifdef _XBOX
+	//En xbox dibujamos sobre un overlay para conseguir la maxima velocidad de renderizado
+	//Asi separamos la logica de los menus de la pantalla del juego
+	overlay = SDL_XBOX_GetOverlay();
+
+	if (!overlay){
+		LOG_ERROR("Error no se ha podido obtener el overlay\n");
+		return 1;
+	} else {
+		memset(overlay->pixels, 0, overlay->pitch * overlay->h);
+		SDL_XBOX_SetOverlayEnabled(1);
+	}
+#else
+	//En pc por ahora no tenemos overlay
+	overlay = gameScreen;
+#endif
 
 	SDL_WM_SetCaption("Salvia", NULL);
 
@@ -76,7 +91,7 @@ void Engine::stopEngine(){
 	#ifdef WIN
 		timeEndPeriod(1);
 	#endif
-	SDL_FreeSurface(screen);
+	SDL_FreeSurface(gameScreen);
 	BadgeDownloader::instance().stop();
     SDL_Quit();
 }
@@ -87,3 +102,9 @@ int Engine::initFont(){
 	return 0;
 }
 
+
+void Engine::initColors(){
+	for (int i=0; i < clTotalColors; i++){
+		colors[i].color = SDL_MapRGB(overlay->format, colors[i].sdlColor.r, colors[i].sdlColor.g, colors[i].sdlColor.b);
+	}
+}

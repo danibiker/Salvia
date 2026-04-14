@@ -45,11 +45,11 @@ bool processActions(GameMenu*& gameMenu, t_option_action &optionAction){
 		}
 	} else if(gameMenu->configMenus->getStatus() == EXIT_CONFIG) {
 		gameMenu->configMenus->resetStatus();
-		SDL_FillRect(gameMenu->video_page, NULL, gameMenu->uBkgColor);
+		gameMenu->clearOverlay();
 		gameMenu->setEmuStatus(gameMenu->getLastStatus());
 	} else if(gameMenu->configMenus->getStatus() == START_SCRAPPING) {
 		gameMenu->configMenus->volverMenuInicial();
-		SDL_FillRect(gameMenu->video_page, NULL, gameMenu->uBkgColor);
+		gameMenu->clearOverlay();
 		gameMenu->startScrapping();
 	} else if (gameMenu->configMenus->getStatus() == EXIT_EMULATION){
 		gameMenu->running = false;
@@ -64,7 +64,7 @@ bool processActions(GameMenu*& gameMenu, t_option_action &optionAction){
 }
 
 int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
-	static Uint32 bkgText = SDL_MapRGB(gameMenu->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	int res = 1;
 
 	if (gameMenu->configMenus->getStatus() == POLLING_INPUTS){
@@ -95,7 +95,7 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 		}
 		//gameMenu->joystick->resetAllValues();
 	} else {
-		gameMenu->joystick->pollKeys(gameMenu->screen);
+		gameMenu->joystick->pollKeys(gameMenu->overlay);
 
 		if (generalConfig){
 			if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
@@ -159,7 +159,7 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 				if (launchCommand.size() > 1){
 					std::string romToLaunch = launchCommand.at(1);
 					LOG_DEBUG("Launching rom %s", romToLaunch.c_str());
-					SDL_FillRect(gameMenu->screen, NULL, bkgText);
+					gameMenu->clearOverlay();
 					if (launchGame(romToLaunch)){
 						gameMenu->setEmuStatus(EMU_STARTED);
 					}
@@ -188,7 +188,7 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 
 		if (HK_VIEW_MENU == gameMenu->joystick->hotkeys->procesarHotkeys(&gameMenu->joystick->inputs)){
 			if (gameMenu->getLastStatus() == EMU_STARTED){
-				SDL_FillRect(gameMenu->video_page, NULL, gameMenu->uBkgColor);
+				gameMenu->clearOverlay();
 			}
 			gameMenu->setEmuStatus(gameMenu->getLastStatus());
 			if (gameMenu->bg_screenshot){
@@ -208,39 +208,40 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
  * 
  */
 void updateMenuScreen(TileMap &tileMap, GameMenu*& gameMenu, ListMenu &listMenu){
-	static Uint32 bkgText = SDL_MapRGB(gameMenu->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	static uint32_t lastTime = SDL_GetTicks();
 
 	ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
 	if (processInputs(gameMenu, listMenu, emu->generalConfig) == 1){
 		if (listMenu.animateBkg && gameMenu->getCfgLoader()->configMain[cfg::animBG].valueInt == BG_WAVES){
-			tileMap.drawWaves(gameMenu->video_page);
+			tileMap.drawWaves(gameMenu->overlay);
 		} else if (listMenu.animateBkg && gameMenu->getCfgLoader()->configMain[cfg::animBG].valueInt == BG_TILES){
-			tileMap.draw(gameMenu->video_page);
+			tileMap.draw(gameMenu->overlay);
 			if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
 				tileMap.incSpeed();
 			}
 		} else {
-			SDL_FillRect(gameMenu->video_page, NULL, bkgText);
+			gameMenu->fillOverlay(clBackground);
 		}
 		gameMenu->refreshScreen(listMenu);
 	}
 }
 
 void updateMenuOverlay(GameMenu*& gameMenu, ListMenu &listMenu){
-	static Uint32 bkgText = SDL_MapRGB(gameMenu->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	processInputs(gameMenu, listMenu, true);
 
-	cfg::t_cfg_props *cfg = gameMenu->getCfgLoader()->configMain;
-
-	//Si el modo hardcore esta activado, o no hay captura de pantalla, mostramos el menu en negro
-	if ((cfg[cfg::enableAchievements].valueBool && cfg[cfg::hardcoreRA].valueBool) || !gameMenu->bg_screenshot){
-		SDL_FillRect(gameMenu->video_page, NULL, bkgText);
-	} else if (gameMenu->bg_screenshot){
-		SDL_BlitSurface(gameMenu->bg_screenshot, NULL, gameMenu->video_page, NULL);
-	} 
-	
 	if (gameMenu->getEmuStatus() == EMU_MENU_OVERLAY){
-		gameMenu->configMenus->draw(gameMenu->video_page);
+		cfg::t_cfg_props* cfg = gameMenu->getCfgLoader()->configMain;
+		//Si el modo hardcore esta activado, o no hay captura de pantalla, mostramos el menu en negro
+		if ((cfg[cfg::enableAchievements].valueBool && cfg[cfg::hardcoreRA].valueBool) || !gameMenu->bg_screenshot){
+			gameMenu->fillOverlay(clBackground);
+		} else if (gameMenu->bg_screenshot){
+			//gameMenu->fillOverlayAlpha(clBackground, 128);
+			SDL_BlitSurface(gameMenu->bg_screenshot, NULL, gameMenu->overlay, NULL);
+			//gameMenu->fillOverlay(clBackground);
+		} 
+		gameMenu->configMenus->draw(gameMenu->overlay);
 	}
 }	
+

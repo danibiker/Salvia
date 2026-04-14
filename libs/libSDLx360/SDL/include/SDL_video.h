@@ -372,6 +372,32 @@ extern DECLSPEC void SDLCALL SDL_UpdateRect
 extern DECLSPEC int SDLCALL SDL_Flip(SDL_Surface *screen);
 
 /*
+ * Xbox 360: Update the display quad to maintain the given aspect ratio.
+ * aspect_ratio is width/height (e.g. 4.0f/3.0f for 4:3, 16.0f/9.0f for 16:9).
+ * Can be called at any time without recreating the surface.
+ */
+extern DECLSPEC void SDLCALL SDL_XBOX_SetDisplaySize(float aspect_ratio);
+
+/*
+ * Xbox 360: Set display mode.
+ * fullscreen=1 (default): scale to fill screen maintaining aspect ratio.
+ * fullscreen=0: pixel perfect size (tex_size * effect_scale), centered.
+ */
+extern DECLSPEC void SDLCALL SDL_XBOX_SetDisplayFullscreen(int fullscreen);
+
+/*
+ * Xbox 360: Get the overlay surface (1280x720, 32bpp ARGB).
+ * Drawn on top of the game quad with alpha blending each frame.
+ * Use alpha=0x00 for transparent pixels, alpha=0xFF for opaque.
+ */
+extern DECLSPEC SDL_Surface* SDLCALL SDL_XBOX_GetOverlay(void);
+
+/*
+ * Xbox 360: Enable (1) or disable (0) the overlay layer.
+ */
+extern DECLSPEC void SDLCALL SDL_XBOX_SetOverlayEnabled(int enabled);
+
+/*
  * Set the gamma correction for each of the color channels.
  * The gamma values range (approximately) between 0.1 and 10.0
  *

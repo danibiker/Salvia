@@ -183,14 +183,14 @@
     <ClCompile>
       <WarningLevel>Level2</WarningLevel>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>DISABLE_DYNAREC;C_UNALIGNED_MEMORY=0;_HAS_EXCEPTIONS=0;__ppc__;_XBOX;_XBOX360;WORDS_BIGENDIAN=1;NDEBUG;DBP_VS2010_COMPAT;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;__LIBRETRO__;_MBCS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DISABLE_DYNAREC;C_UNALIGNED_MEMORY=0;__ppc__;_XBOX;_XBOX360;WORDS_BIGENDIAN=1;NDEBUG;DBP_VS2010_COMPAT;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;__LIBRETRO__;_MBCS</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)..\include</AdditionalIncludeDirectories>
       <ForcedIncludeFiles>vs2010_compat.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <StringPooling>true</StringPooling>
@@ -207,7 +207,7 @@
       <UseUnicodeForAssemblerListing>false</UseUnicodeForAssemblerListing>
       <PreschedulingOptimization>false</PreschedulingOptimization>
       <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
-      <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <Link>
         <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -225,7 +225,9 @@
     <ClCompile Include="..\dosbox_pure_libretro.cpp" />
     <ClCompile Include="..\keyb2joypad.cpp" />
     <ClCompile Include="..\src\cpu\callback.cpp" />
-    <ClCompile Include="..\src\cpu\core_dynrec.cpp" />
+    <ClCompile Include="..\src\cpu\core_dynrec.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\src\cpu\core_dyn_x86.cpp">
       <ExcludedFromBuild Condition="'$(Platform)'=='Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>

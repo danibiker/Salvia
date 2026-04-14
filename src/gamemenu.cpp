@@ -23,37 +23,34 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	lastStatus = EMU_MENU;
 	romLoaded = false;
 	gameTicks.ticks = 0;
-	video_page = NULL;
-	dblBufferEnabled = true;
 	this->cfgLoader = cfgLoader;
 	this->initEngine(cfgLoader);
 
-	if (!initDblBuffer(getCfgLoader()->getWidth(), getCfgLoader()->getHeight())){
-		LOG_ERROR("No se pudo crear el buffer doble");
-		showLangSystemMessage("msg.error.dblbuffer", 3000);
-    }
-
 	int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
 	std::string initMsg = "Loading " + Constant::getAppExecutable() + "...";
-	Constant::drawTextCentTransparent(screen, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, textColor, 0);
-	SDL_Flip(screen);
+	Constant::drawTextCentTransparent(overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, textColor, 0);
+	SDL_Flip(gameScreen);
 
 	int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
 	int pixelDato = 0;
 	TTF_SizeText(Fonts::getFont(Fonts::FONTSMALL), "FPS: 888.8", &pixelDato, NULL);
 
-	rectFps.x = this->screen->w - pixelDato - 3;
+	rectFps.x = this->overlay->w - pixelDato - 3;
 	rectFps.y = 2*face_h;
-	rectFps.w = this->screen->w - rectFps.x;
+	rectFps.w = this->overlay->w - rectFps.x;
 	rectFps.h = face_h;
-	bkgTextFps = SDL_MapRGB(this->screen->format, 0, 0, 0);
-	uBkgColor = SDL_MapRGB(this->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	bkgTextFps = SDL_MapRGB(this->overlay->format, 0, 0, 0);
+	uBkgColor = SDL_MapRGB(this->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 
 	if (!joystick->init_all_joysticks()){
 		configButtonsJOY();
 	}
 
-	configMenus = new GestorMenus(screen->w, screen->h);
+	for (int i=0; i < clTotalColors; i++){
+		colors[i].color = SDL_MapRGBA(this->overlay->format, colors[i].sdlColor.r, colors[i].sdlColor.g, colors[i].sdlColor.b, 0xFF);
+	}
+
+	configMenus = new GestorMenus(overlay->w, overlay->h);
 	configMenus->inicializar(cfgLoader, joystick);
 	// En la clase Config o GameMenu
 	selectScalerMode(FULLSCREEN);
@@ -62,6 +59,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	this->current_ratio = &getCfgLoader()->configMain[cfg::aspectRatio].getIntRef();
 	this->current_sync = &getCfgLoader()->configMain[cfg::syncMode].getIntRef();
 	this->current_force_fs = &getCfgLoader()->configMain[cfg::forceFS].getBoolRef();
+	this->current_shader = &getCfgLoader()->configMain[cfg::shaderMode].getIntRef();
 	this->mustUpdateFps = &getCfgLoader()->configMain[cfg::showFps].getBoolRef();
 	processConfigChanges();
 
@@ -214,7 +212,7 @@ void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
 std::string GameMenu::configButtonsJOY(){
     bool salir = false;
     string salida = "";
-	Uint32 bkgText = SDL_MapRGB(this->screen->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	Uint32 bkgText = SDL_MapRGB(this->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	const int TIMETOLIMITFRAME = (int)(1000 / 30.0);
 	
 	int mNumJoysticks = SDL_NumJoysticks();
@@ -263,11 +261,11 @@ std::string GameMenu::configButtonsJOY(){
             double relacionAlto =  obj.getImgGestor()->getImgOrigHeight() > 1 ? this->getHeight() / (double) obj.getImgGestor()->getImgOrigHeight()  : 0.2;
             //Marcamos la posicion del boton que hay que pulsar
             pintarCirculo(imgW * imgButtonsRelScreen[i].x + imgX, imgh * imgButtonsRelScreen[i].y + imgY, 40 * (relacionAncho < relacionAlto ? relacionAncho : relacionAlto), cRojo);
-//            pintarFillCircle(screen,
+//            pintarFillCircle(overlay,
 //                             imgW * imgButtonsRelScreen[i].x + imgX,
 //                             imgh * imgButtonsRelScreen[i].y + imgY,
 //                             40 * relacionAncho,
-//                             SDL_MapRGB(screen->format, 255,0,0));
+//                             SDL_MapRGB(overlay->format, 255,0,0));
 
             //Dibujamos el texto de la accion
             drawTextCent(JoystickButtonsMSG[i], 0, 20, true, false, cBlanco);
@@ -276,9 +274,9 @@ std::string GameMenu::configButtonsJOY(){
             cachearObjeto(&obj);
         }*/
 		
-		SDL_FillRect(this->screen, NULL, bkgText);
-		Constant::drawTextCent(this->screen, Fonts::getFont(Fonts::FONTSMALL), FRONTEND_BTN_TXT[i].c_str(), 0, 20, true, false, textColor, 0);
-        SDL_Flip(this->screen);
+		SDL_FillRect(this->overlay, NULL, bkgText);
+		Constant::drawTextCent(this->overlay, Fonts::getFont(Fonts::FONTSMALL), FRONTEND_BTN_TXT[i].c_str(), 0, 20, true, false, textColor, 0);
+        SDL_Flip(this->gameScreen);
 		/*
         while( SDL_PollEvent( &event ) ){
              switch( event.type ){
@@ -342,31 +340,6 @@ std::string GameMenu::configButtonsJOY(){
     return salida;
 }
 
-bool GameMenu::initDblBuffer(int w, int h){
-#ifdef SW_DBL_BUFFER
-    if (video_page != NULL){
-		SDL_FreeSurface(video_page);
-    }
-
-	/* Create bitmap for page flipping */
-	video_page = SDL_CreateRGBSurface(
-        screen->flags,          // Mismos flags (SWSURFACE/HWSURFACE)
-        screen->w,              // Mismo ancho
-        screen->h,              // Mismo alto
-        screen->format->BitsPerPixel, // Misma profundidad de color
-        screen->format->Rmask,  // Máscara Roja
-        screen->format->Gmask,  // Máscara Verde
-        screen->format->Bmask,  // Máscara Azul
-        screen->format->Amask   // Máscara Alfa
-    );
-	dblBufferEnabled = true;
-#else 
-	video_page = screen;
-	dblBufferEnabled = false;
-#endif
-    return video_page != NULL;
-}
-
 bool GameMenu::isDebug(){
 	bool debug;
 	getCfgLoader()->configMain[cfg::debug].getPropValue(debug);
@@ -387,20 +360,20 @@ CfgLoader * GameMenu::getCfgLoader(){
 void GameMenu::createMenuImages(ListMenu &listMenu){
     /** snap */
     Image imageSnap;
-    const int snapW = screen->w / 2;
+    const int snapW = overlay->w / 2;
     const int snapH = listMenu.getH() / 2;
-    const int snapOffset = screen->w / 10;
+    const int snapOffset = overlay->w / 10;
     //const int snapOffset = 5;
     menuImages.clear();
     menuTextAreas.clear();
 
-    if (screen->w / 2 >= 320){
-        imageSnap.setX(screen->w / 2 + snapOffset);
+    if (overlay->w / 2 >= 320){
+        imageSnap.setX(overlay->w / 2 + snapOffset);
         imageSnap.setY(listMenu.getY());
         imageSnap.setW(snapW - snapOffset * 2);
         imageSnap.setH(snapH - snapOffset);
     } else {
-        imageSnap.setX(screen->w / 2);
+        imageSnap.setX(overlay->w / 2);
         imageSnap.setY(listMenu.getY());
         imageSnap.setW(snapW);
         imageSnap.setH(snapH);
@@ -411,9 +384,9 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
     /** Box2d */
     Image imageBox2d;
     const int box2dH = listMenu.getH() / 4;
-    const int box2dW = screen->w / 8;
-    imageBox2d.setX(screen->w / 2);
-    imageBox2d.setY(screen->h / 2 - box2dH);
+    const int box2dW = overlay->w / 8;
+    imageBox2d.setX(overlay->w / 2);
+    imageBox2d.setY(overlay->h / 2 - box2dH);
     imageBox2d.setW(box2dW);
     imageBox2d.setH(box2dH);
     menuImages.insert(make_pair(BOX2D, imageBox2d));
@@ -421,21 +394,21 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
     /** snaptit*/
     Image imageSnaptit;
     const int snapTitH = listMenu.getH() / 4;
-    const int snapTitW = screen->w / 6;
-    imageSnaptit.setX(screen->w - snapTitW);
-    imageSnaptit.setY(screen->h / 2 - snapTitH);
+    const int snapTitW = overlay->w / 6;
+    imageSnaptit.setX(overlay->w - snapTitW);
+    imageSnaptit.setY(overlay->h / 2 - snapTitH);
     imageSnaptit.setW(snapTitW);
     imageSnaptit.setH(snapTitH);
     menuImages.insert(make_pair(SNAPTIT, imageSnaptit));
 
-    Image imageSnapFs(0, 0, screen->w, screen->h);
+    Image imageSnapFs(0, 0, overlay->w, overlay->h);
     imageSnapFs.drawfaded = true;
     menuImages.insert(make_pair(SNAPFS, imageSnapFs));
     
     const int sectionGap = 0;
     const int textAreaY = listMenu.getH() / 2 + listMenu.getY() + sectionGap;
-    TextArea textarea(screen->w / 2, textAreaY, screen->w / 2, screen->h - textAreaY);
-    textarea.marginX = (int)floor((double)screen->w / 100);
+    TextArea textarea(overlay->w / 2, textAreaY, overlay->w / 2, overlay->h - textAreaY);
+    textarea.marginX = (int)floor((double)overlay->w / 100);
     menuTextAreas.insert(make_pair(SYNOPSIS, textarea));
 }
 
@@ -448,7 +421,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
     TTF_Font *fontBig = Fonts::getFont(Fonts::FONTBIG);
     TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
     const int sepVertX = listMenu.getW();
-    const int halfWidth = screen->w / 2;
+    const int halfWidth = overlay->w / 2;
 	int face_h_big = TTF_FontLineSkip(fontBig);
 	int face_h_small = TTF_FontLineSkip(fontsmall);
 	bool debug = true;
@@ -459,52 +432,42 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
         
         if (!game->shortFileName.empty()){
             if (listMenu.layout == LAYBOXES) {
-				Constant::drawTextCentTransparent(video_page, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+				Constant::drawTextCentTransparent(overlay, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 					true, false, textColor, 0);
 				showScrapProcess(listMenu);
-				fastline(this->video_page, listMenu.marginX, listMenu.marginY - 1 , screen->w - listMenu.marginX, listMenu.marginY - 1, menuBars);
-                fastline(this->video_page, sepVertX, listMenu.marginY , sepVertX, listMenu.getH() + listMenu.marginY - 1, menuBars);
-                listMenu.draw(this->video_page);
+				fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1 , overlay->w - listMenu.marginX, listMenu.marginY - 1, menuBars);
+                fastline(this->overlay, sepVertX, listMenu.marginY , sepVertX, listMenu.getH() + listMenu.marginY - 1, menuBars);
+                listMenu.draw(this->overlay);
 
-                //Drawing a transparent rectangle
-                //if (screen->w >= 640){
-                    //static const int transBGText = SDL_MapRGBA(this->video_page->format, 255, 255, 255, 20);
-					//SDL_Rect rec = {halfWidth + 1, listMenu.marginY, screen->w - (halfWidth + 2), screen->h - listMenu.marginY - 1};
-					//DrawRectAlpha(this->video_page, rec, white, 160);
-                //}
-
-                //Draw and update the screen because the loading of images can take a long time
+                //Draw and update the overlay because the loading of images can take a long time
                 if (listMenu.keyUp){
                     string assetsDir = dirutil::getPathPrefix(emu.assets) + string(Constant::tempFileSep);
                     //Drawing the rom's synopsis text
                     menuTextAreas[SYNOPSIS].loadTextFileFromGame(assetsDir + "synopsis" + string(Constant::tempFileSep), *game, ".txt");
                     menuTextAreas[SYNOPSIS].resetTicks(this->gameTicks);
-                    menuTextAreas[SYNOPSIS].draw(this->video_page, this->gameTicks);
+                    menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
 
                     //Snapshot picture
                     menuImages[SNAP].loadImageFromGame(assetsDir + "snap" + string(Constant::tempFileSep), *game, ".png");
-                    menuImages[SNAP].printImage(this->video_page);
-                    blit(this->video_page, screen, 0, 0, 0, 0, this->video_page->w, this->video_page->h);
+                    menuImages[SNAP].printImage(this->overlay);
 
-                    if (screen->w < 640){
+                    if (overlay->w < 640){
                         //If it's so small, only show the snapshot
                         return;
                     }
 
                     //Box picture
                     menuImages[BOX2D].loadImageFromGame(assetsDir + "box2d" + string(Constant::tempFileSep), *game, ".png");
-                    menuImages[BOX2D].printImage(this->video_page);
-                    blit(this->video_page, screen, 0, 0, 0, 0, this->video_page->w, this->video_page->h);
+                    menuImages[BOX2D].printImage(this->overlay);
 
                     //Title picture
                     menuImages[SNAPTIT].loadImageFromGame(assetsDir + "snaptit" + string(Constant::tempFileSep), *game, ".png");
-                    menuImages[SNAPTIT].printImage(this->video_page);
-                    blit(this->video_page, screen, 0, 0, 0, 0, this->video_page->w, this->video_page->h);
+                    menuImages[SNAPTIT].printImage(this->overlay);
                 } else {
-                    menuImages[SNAP].printImage(this->video_page);
-                    menuImages[BOX2D].printImage(this->video_page);
-                    menuImages[SNAPTIT].printImage(this->video_page);
-                    menuTextAreas[SYNOPSIS].draw(this->video_page, this->gameTicks);
+                    menuImages[SNAP].printImage(this->overlay);
+                    menuImages[BOX2D].printImage(this->overlay);
+                    menuImages[SNAPTIT].printImage(this->overlay);
+                    menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
                 }
 
             } else if (listMenu.layout == LAYSIMPLE) {
@@ -513,47 +476,47 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
                     menuImages[SNAPFS].loadImageFromGame(dirutil::getPathPrefix(emu.assets) + string(Constant::tempFileSep)
                         + "snap" + string(Constant::tempFileSep), *game, ".png");
                 }
-                menuImages[SNAPFS].printImage(this->video_page);
+                menuImages[SNAPFS].printImage(this->overlay);
                 //Draw the menu element after the image
-                Constant::drawTextCent(video_page, fontBig, emu.name.c_str(), 
+                Constant::drawTextCent(overlay, fontBig, emu.name.c_str(), 
 					halfWidth, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 					true, false, textColor, 0);
 
-                fastline(this->video_page, listMenu.marginX, listMenu.marginY - 1, listMenu.getW(), listMenu.marginY - 1, textColor);
-                listMenu.draw(this->video_page);
+                fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1, listMenu.getW(), listMenu.marginY - 1, textColor);
+                listMenu.draw(this->overlay);
 
             } else if (listMenu.layout == LAYTEXT) {
 
-				Constant::drawTextCent(video_page, fontBig, emu.name.c_str(), 
+				Constant::drawTextCent(overlay, fontBig, emu.name.c_str(), 
 					halfWidth, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 					true, false, textColor, 0);
 
-                fastline(this->video_page, listMenu.marginX, listMenu.marginY - 1, listMenu.getW(), listMenu.marginY - 1, textColor);
-                listMenu.draw(this->video_page);
+                fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1, listMenu.getW(), listMenu.marginY - 1, textColor);
+                listMenu.draw(this->overlay);
             }
         }
 	} else if (listMenu.getNumGames() == 0 && emu.generalConfig){
-		configMenus->draw(video_page);
+		configMenus->draw(overlay);
 		showScrapProcess(listMenu);
     } else if (listMenu.getNumGames() == 0){
-		//Constant::drawTextCent(video_page, fontBig, emu.name.c_str(), 
+		//Constant::drawTextCent(overlay, fontBig, emu.name.c_str(), 
 		//			cfgLoader->getWidth(), face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 		//			true, false, textColor, 0);
 
-		Constant::drawTextCentTransparent(video_page, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+		Constant::drawTextCentTransparent(overlay, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 					true, false, textColor, 0);
 
-        fastline(this->video_page, listMenu.marginX, listMenu.marginY - 1, screen->w - listMenu.marginX, listMenu.marginY - 1, textColor);
-		Constant::drawTextCent(video_page, fontsmall, "No roms found", 0, 0, true, true, textColor, 0);
+        fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1, overlay->w - listMenu.marginX, listMenu.marginY - 1, textColor);
+		Constant::drawTextCent(overlay, fontsmall, "No roms found", 0, 0, true, true, textColor, 0);
 
 		// Para renderizar, usas el puntero de la clase
         Menu* m = configMenus->obtenerMenuActual();
         // Dibujar m->titulo y m->opciones[i]->titulo...
 
     } else {
-		Constant::drawTextCent(video_page, fontsmall, "The configuration is not valid", 0, 0, true, true, textColor, 0);
-		Constant::drawTextCent(video_page, fontsmall, "Press TAB to select the next entry or", 0, face_h_small + 3, true, true, textColor, 0);
-		Constant::drawTextCent(video_page, fontsmall, "Press ESC to exit", 0, (face_h_small + 3) * 2, true, true, textColor, 0);
+		Constant::drawTextCent(overlay, fontsmall, "The configuration is not valid", 0, 0, true, true, textColor, 0);
+		Constant::drawTextCent(overlay, fontsmall, "Press TAB to select the next entry or", 0, face_h_small + 3, true, true, textColor, 0);
+		Constant::drawTextCent(overlay, fontsmall, "Press ESC to exit", 0, (face_h_small + 3) * 2, true, true, textColor, 0);
     }
 }
 
@@ -562,7 +525,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 */
 void GameMenu::showScrapProcess(ListMenu &listMenu){
 	TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
-    const int halfWidth = screen->w / 2;
+    const int halfWidth = overlay->w / 2;
 	int face_h_small = TTF_FontLineSkip(fontsmall);
 
 	if (Scrapper::isScrapping()){
@@ -572,8 +535,8 @@ void GameMenu::showScrapProcess(ListMenu &listMenu){
 			str += " - " + LanguageManager::instance()->get("msg.download.media") + " " + Constant::TipoToStr(Scrapper::g_status.remainingMedia);
 		}
 		std::string str2 = std::string(Scrapper::g_status.emuActual) + " - " + std::string(Scrapper::g_status.juegoActual);
-		Constant::drawTextTransparent(video_page, fontsmall, str.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 - face_h_small / 2 : 0 , textColor, 0);
-		Constant::drawTextTransparent(video_page, fontsmall, str2.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 + face_h_small / 2: 0 , textColor, 0);
+		Constant::drawTextTransparent(overlay, fontsmall, str.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 - face_h_small / 2 : 0 , textColor, 0);
+		Constant::drawTextTransparent(overlay, fontsmall, str2.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 + face_h_small / 2: 0 , textColor, 0);
 	}
 
 	if (Scrapper::g_status.abortType == ABORT_LIMIT_CUOTA){
@@ -586,47 +549,33 @@ void GameMenu::showScrapProcess(ListMenu &listMenu){
 }
 
 /**
-*
-*/
-void GameMenu::blit(SDL_Surface * src, SDL_Surface * dst, int x1, int y1, int w1, int h1, int w2, int h2){
-	if (this->dblBufferEnabled){
-		SDL_Rect srcRect = {x1, y1, w1, h1};
-		SDL_Rect dstRect = {0, 0, w2, h2};
-		SDL_BlitSurface(this->video_page, &srcRect, screen, &dstRect);
-	} 
-}
-
-/**
  * 
  */
 void GameMenu::showMessage(string msg){
     int startGray = 240;
-    static const int bkg = SDL_MapRGB(this->video_page->format, startGray, startGray, startGray);
+    static const int bkg = SDL_MapRGB(this->overlay->format, startGray, startGray, startGray);
     TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
 	int face_h_small = TTF_FontLineSkip(fontsmall);
     
     int rw = Fonts::getSize(Fonts::FONTSMALL, msg.c_str()) + 5; 
-    //int rh = this->video_page->h / 3;
+    //int rh = this->overlay->h / 3;
     int rh = face_h_small * 2;
-    int rx = (this->video_page->w - rw) / 2;
-    int ry = (this->video_page->h - rh) / 2 + face_h_small / 2;
+    int rx = (this->overlay->w - rw) / 2;
+    int ry = (this->overlay->h - rh) / 2 + face_h_small / 2;
 
 	SDL_Rect rect = {rx, ry, rw, rh};
-    //drawing_mode(DRAW_MODE_TRANS, this->video_page, rx, ry);
-    SDL_FillRect(this->video_page, &rect, bkg);
+    SDL_FillRect(this->overlay, &rect, bkg);
     
     const int step = 40;
     for (int i=1; i < 5; i++){
-        int fadingBkg = SDL_MapRGB(this->video_page->format, startGray - i*step, startGray - i*step, startGray - i*step);
-		//drawing_mode(DRAW_MODE_TRANS, this->video_page, rx, ry);
-		rectangleColor(this->video_page, rx - i, ry - i, rx + rw + i, ry + rh + i, fadingBkg);
+        int fadingBkg = SDL_MapRGB(this->overlay->format, startGray - i*step, startGray - i*step, startGray - i*step);
+		//drawing_mode(DRAW_MODE_TRANS, this->overlay, rx, ry);
+		rectangleColor(this->overlay, rx - i, ry - i, rx + rw + i, ry + rh + i, fadingBkg);
     }
 
-    //drawing_mode(DRAW_MODE_SOLID, this->video_page, rx, ry);
-	Constant::drawTextCent(video_page, fontsmall, msg.c_str(), 
-		this->video_page->w / 2, this->video_page->h / 2, true, true, black, -1);
-
-	SDL_BlitSurface(this->video_page, NULL, screen, NULL);
+    //drawing_mode(DRAW_MODE_SOLID, this->overlay, rx, ry);
+	Constant::drawTextCent(overlay, fontsmall, msg.c_str(), 
+		this->overlay->w / 2, this->overlay->h / 2, true, true, black, -1);
 }
 
 /**
@@ -635,14 +584,14 @@ void GameMenu::showMessage(string msg){
 void GameMenu::loadEmuCfg(ListMenu &menuData){
     TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
 	int face_h_small = TTF_FontLineSkip(fontsmall);
-	static const int cblack = SDL_MapRGB(this->video_page->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	static const int cblack = SDL_MapRGB(this->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 
     if (cfgLoader->emulators.size() == 0){
-        SDL_FillRect(screen, NULL, cblack);
+        SDL_FillRect(overlay, NULL, cblack);
         string msg = "There are no emulators configured. Exiting..."; 
-		Constant::drawTextCent(screen, fontsmall, msg.c_str(), 0, 0, true, true,  white, -1);
-		Constant::drawTextCent(screen, fontsmall, "Press a key to continue", 0, face_h_small + 3, true, true, white, -1);
-		SDL_Flip(screen);
+		Constant::drawTextCent(overlay, fontsmall, msg.c_str(), 0, 0, true, true,  white, -1);
+		Constant::drawTextCent(overlay, fontsmall, "Press a key to continue", 0, face_h_small + 3, true, true, white, -1);
+		SDL_Flip(gameScreen);
         SDL_Delay(3000);
 		return;
     }
@@ -666,9 +615,9 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
         extFilter = Constant::replaceAll(extFilter, " ", ".");
 
 		if (isDebug()){
-            SDL_FillRect(screen, NULL, cblack);
+            SDL_FillRect(overlay, NULL, cblack);
             string msg = "searching " + mapfilepath; 
-			Constant::drawTextCent(screen, fontsmall, msg.c_str(), screen->w / 2, screen->h / 2, true, true,  white, -1);
+			Constant::drawTextCent(overlay, fontsmall, msg.c_str(), overlay->w / 2, overlay->h / 2, true, true,  white, -1);
         }
 
         dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, true, false);
@@ -677,12 +626,12 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
         string mapfilepath = dirutil::getPathPrefix(emu.rom_directory);
 
         if (isDebug()){
-            SDL_FillRect(screen, NULL, cblack);
+            SDL_FillRect(overlay, NULL, cblack);
             string msg = "roms found: " + Constant::TipoToStr(files.size()); 
             string msg2 = "In dir " + mapfilepath;
-			Constant::drawTextCent(screen, fontsmall, msg.c_str(), 0, 0, true, true,  white, -1);
-            Constant::drawTextCent(screen, fontsmall, msg2.c_str(), 0, face_h_small + 3, true, true,  white, -1);
-			Constant::drawTextCent(screen, fontsmall, "Press a key to continue", 0, (face_h_small + 3) * 2, true, true,  white, -1);
+			Constant::drawTextCent(overlay, fontsmall, msg.c_str(), 0, 0, true, true,  white, -1);
+            Constant::drawTextCent(overlay, fontsmall, msg2.c_str(), 0, face_h_small + 3, true, true,  white, -1);
+			Constant::drawTextCent(overlay, fontsmall, "Press a key to continue", 0, (face_h_small + 3) * 2, true, true,  white, -1);
             SDL_Delay(3000);
         }
 
@@ -832,17 +781,19 @@ int GameMenu::recoverGameMenuPos(ListMenu &menuData, struct ListStatus &read_str
     return ret;
 }
 
-void GameMenu::updateFps(){
+bool GameMenu::updateFps(){
+	bool shouldUpdateFps = false;
     if (*this->mustUpdateFps) {
         uint32_t currentTick = SDL_GetTicks();
         
         // Temporizadores independientes
-        const bool shouldUpdateFps = (currentTick - lastFpsUpdate > 500) || fpsSurface == NULL;
+        shouldUpdateFps = (currentTick - lastFpsUpdate > 500) || fpsSurface == NULL;
+		//const bool shouldUpdateFps = (currentTick - lastFpsUpdate > 500);
         const bool shouldUpdateMem = (currentTick - lastMemUpdate > 5000) || memSurface == NULL;
 		int lastCpuW = 0;
 
         // 1. Actualización de contadores internos
-        this->sync->update_fps_counter(shouldUpdateFps);
+        this->sync->update_fps_counter(shouldUpdateFps, currentTick);
 
         // 2. Lógica para FPS y CPU (cada 500ms)
         if (shouldUpdateFps) {
@@ -853,9 +804,15 @@ void GameMenu::updateFps(){
 				lastCpuW = cpuSurface->w;
 				SDL_FreeSurface(cpuSurface);
 			}
-            
-            fpsSurface = TTF_RenderText(Fonts::getFont(Fonts::FONTSMALL), this->sync->fpsText, white, black);
-            cpuSurface = TTF_RenderText(Fonts::getFont(Fonts::FONTSMALL), this->sync->cpuText, white, black);
+            _snprintf(this->sync->cpuText, sizeof(this->sync->cpuText), CPU_FORMAT, this->sync->utilization);
+			//OutputDebugStringA(this->sync->cpuText);
+			//OutputDebugStringA(" fps: ");
+			_snprintf(this->sync->fpsText, sizeof(this->sync->fpsText), FPS_FORMAT, this->sync->g_actualFps);
+			//OutputDebugStringA(this->sync->fpsText);
+			//OutputDebugStringA("\n");
+			
+            fpsSurface = TTF_RenderUTF8(Fonts::getFont(Fonts::FONTSMALL), this->sync->fpsText, white, black);
+            cpuSurface = TTF_RenderUTF8(Fonts::getFont(Fonts::FONTSMALL), this->sync->cpuText, white, black);
             
             lastFpsUpdate = currentTick;
         }
@@ -900,21 +857,22 @@ void GameMenu::updateFps(){
         // 4. DIBUJO (En cada frame, usando las superficies actuales)
         if (fpsSurface && cpuSurface && memSurface) {
             // Dibujar MEM (Posición relativa a CPU)
-            SDL_Rect rectMem = {this->screen->w - memSurface->w -3, 1, memSurface->w, memSurface->h};
-            SDL_FillRect(this->screen, &rectMem, bkgTextFps);
-            SDL_BlitSurface(memSurface, NULL, this->screen, &rectMem);
+            SDL_Rect rectMem = {this->overlay->w - memSurface->w -3, 1, memSurface->w, memSurface->h};
+			clearOverlayRect(rectMem);
+            SDL_BlitSurface(memSurface, NULL, this->overlay, &rectMem);
 
             // Dibujar CPU (Posición relativa a FPS)
             SDL_Rect rectCpu = {rectFps.x, rectFps.y - fpsSurface->h, lastCpuW != cpuSurface->w ? lastCpuW : cpuSurface->w, cpuSurface->h};
-            SDL_FillRect(this->screen, &rectCpu, bkgTextFps);
-            SDL_BlitSurface(cpuSurface, NULL, this->screen, &rectCpu);
+            clearOverlayRect(rectCpu);
+            SDL_BlitSurface(cpuSurface, NULL, this->overlay, &rectCpu);
 			lastCpuW = cpuSurface->w;
 
 			// Dibujar FPS
-            SDL_FillRect(this->screen, &rectFps, bkgTextFps);
-            SDL_BlitSurface(fpsSurface, NULL, this->screen, &rectFps);
+            SDL_FillRect(this->overlay, &rectFps, bkgTextFps);
+            SDL_BlitSurface(fpsSurface, NULL, this->overlay, &rectFps);
         }
     }
+	return shouldUpdateFps;
 }
 
 void GameMenu::processFrontendEvents(HOTKEYS_LIST hotkey){
@@ -942,8 +900,6 @@ void GameMenu::processKeyUp(){
 */
 void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 	if (getEmuStatus() != EMU_STARTED) return;
-
-	static int actualFilter = 0;
 	int modeOk = true;
 	int startingMode = *this->current_scaler_mode;
 
@@ -951,60 +907,62 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 	retro_get_system_av_info(&av_info);
 	const unsigned ancho_base = av_info.geometry.base_width;
 	const unsigned alto_base = av_info.geometry.base_height;
+	std::string msgShader;
+	std::string choosenFilter;
 
 	switch (hotkey){
-		case HK_SCALE:
-			do {
-				*this->current_scaler_mode = ((*this->current_scaler_mode + 1) % TOTAL_VIDEO_SCALE);
-
-				const int dw = this->video_page->w;
-				const int dh = this->video_page->h;
-				bool cannotScale2x = (*current_scaler_mode == SCALE2X || *current_scaler_mode == SCALE_HQ2X_ALT //|| *current_scaler_mode == SCALE_HQ2X 
-					|| *current_scaler_mode == SCALE_XBRZ_2X 
-					|| *current_scaler_mode == SCALE_XBRZ_2X_TH) && ((int)ancho_base * 2 > dw || (int)alto_base * 2 > dh);
-				bool cannotScale3x = (*current_scaler_mode == SCALE3X || *current_scaler_mode == SCALE3X_ADV 
-					|| *current_scaler_mode == SCALE_HQ3X_ALT || *current_scaler_mode == SCALE_XBRZ_3X 
-					|| *current_scaler_mode == SCALE_XBRZ_3X_TH) && ((int)ancho_base * 3 > dw || (int)alto_base * 3 > dh);
-				bool cannotScale4x = (*current_scaler_mode == SCALE4X || *current_scaler_mode == SCALE4X_ADV 
-					|| *current_scaler_mode == SCALE_XBRZ_4X) && ((int)ancho_base * 4 > dw || (int)alto_base * 4 > dh);
-
-				#ifdef _XBOX
-					//XBOX CPU can't handle this algorithm implementations at 60fps
-					cannotScale2x = cannotScale2x || *current_scaler_mode == SCALE_XBRZ_2X  || *current_scaler_mode == SCALE_XBRZ_2X_TH || *current_scaler_mode == SCALE_HQ2X_ALT; //|| *current_scaler_mode == SCALE_HQ2X;
-					cannotScale3x = cannotScale3x || *current_scaler_mode == SCALE_XBRZ_3X || *current_scaler_mode == SCALE_XBRZ_3X_TH || *current_scaler_mode == SCALE_HQ3X_ALT;
-					cannotScale4x = cannotScale4x || *current_scaler_mode == SCALE_XBRZ_4X;
-				#endif
-
-				if (cannotScale2x || cannotScale3x || cannotScale4x || *current_scaler_mode == NO_VIDEO){
-					modeOk = false;
-				} else if (*this->current_force_fs && (*current_scaler_mode == SCALE4X || *current_scaler_mode == SCALE3X 
-							|| *current_scaler_mode == SCALE2X || *current_scaler_mode == SCALE1X)) {
-					//Si queremos pantalla completa, no tiene sentido pasemos por un scalenx.
-					modeOk = false;
-				} else {
-					modeOk = true;
-				}
-			} while(!modeOk && *current_scaler_mode != startingMode);
-
-			LOG_INFO("scaler %d - %s\n", *current_scaler_mode, videoScaleStrings[*current_scaler_mode].c_str());
-
-			selectScalerMode(*current_scaler_mode);
-			SDL_FillRect(this->video_page, NULL, this->uBkgColor);
-			showSystemMessage(videoScaleStrings[*current_scaler_mode], 3000);
-			break;
-
 		case HK_RATIO:
 			*this->current_ratio = (*this->current_ratio + 1) % TOTAL_VIDEO_RATIO;
-			SDL_FillRect(this->video_page, NULL, this->uBkgColor);
 			showSystemMessage(aspectRatioStrings[*this->current_ratio], 3000);
 			break;
 
 		case HK_SHADER:
 			#ifdef _XBOX
-				//Some tinkering with shaders
-				XBOX_SelectEffect((++actualFilter) % 3);
+				*this->current_shader = (*this->current_shader + 1) % TOTAL_SHADERS;
+				XBOX_SelectEffect(*current_shader);
+				choosenFilter = "menu.video.shader" + Constant::TipoToStr(*this->current_shader);
+				msgShader = LanguageManager::instance()->get("msg.filter") + " " 
+					+ LanguageManager::instance()->get(choosenFilter);
+				showSystemMessage(msgShader, 3000);
+			#else
+				do {
+					*this->current_scaler_mode = ((*this->current_scaler_mode + 1) % TOTAL_VIDEO_SCALE);
+
+					const int dw = this->overlay->w;
+					const int dh = this->overlay->h;
+					bool cannotScale2x = (*current_scaler_mode == SCALE2X || *current_scaler_mode == SCALE_HQ2X_ALT //|| *current_scaler_mode == SCALE_HQ2X 
+						|| *current_scaler_mode == SCALE_XBRZ_2X 
+						|| *current_scaler_mode == SCALE_XBRZ_2X_TH) && ((int)ancho_base * 2 > dw || (int)alto_base * 2 > dh);
+					bool cannotScale3x = (*current_scaler_mode == SCALE3X || *current_scaler_mode == SCALE3X_ADV 
+						|| *current_scaler_mode == SCALE_HQ3X_ALT || *current_scaler_mode == SCALE_XBRZ_3X 
+						|| *current_scaler_mode == SCALE_XBRZ_3X_TH) && ((int)ancho_base * 3 > dw || (int)alto_base * 3 > dh);
+					bool cannotScale4x = (*current_scaler_mode == SCALE4X || *current_scaler_mode == SCALE4X_ADV 
+						|| *current_scaler_mode == SCALE_XBRZ_4X) && ((int)ancho_base * 4 > dw || (int)alto_base * 4 > dh);
+
+					#ifdef _XBOX
+						//XBOX CPU can't handle this algorithm implementations at 60fps
+						cannotScale2x = cannotScale2x || *current_scaler_mode == SCALE_XBRZ_2X  || *current_scaler_mode == SCALE_XBRZ_2X_TH || *current_scaler_mode == SCALE_HQ2X_ALT; //|| *current_scaler_mode == SCALE_HQ2X;
+						cannotScale3x = cannotScale3x || *current_scaler_mode == SCALE_XBRZ_3X || *current_scaler_mode == SCALE_XBRZ_3X_TH || *current_scaler_mode == SCALE_HQ3X_ALT;
+						cannotScale4x = cannotScale4x || *current_scaler_mode == SCALE_XBRZ_4X;
+					#endif
+
+					if (cannotScale2x || cannotScale3x || cannotScale4x || *current_scaler_mode == NO_VIDEO){
+						modeOk = false;
+					} else if (*this->current_force_fs && (*current_scaler_mode == SCALE4X || *current_scaler_mode == SCALE3X 
+								|| *current_scaler_mode == SCALE2X || *current_scaler_mode == SCALE1X)) {
+						//Si queremos pantalla completa, no tiene sentido pasemos por un scalenx.
+						modeOk = false;
+					} else {
+						modeOk = true;
+					}
+				} while(!modeOk && *current_scaler_mode != startingMode);
+
+				LOG_INFO("scaler %d - %s\n", *current_scaler_mode, videoScaleStrings[*current_scaler_mode].c_str());
+
+				selectScalerMode(*current_scaler_mode);
+				SDL_FillRect(this->overlay, NULL, this->uBkgColor);
+				showSystemMessage(videoScaleStrings[*current_scaler_mode], 3000);
 			#endif
-			showLangSystemMessage("msg.filter", 3000);
 			break;
 		case HK_EXIT_GAME:
 			if (!Achievements::instance()->canPause()){
@@ -1025,11 +983,10 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 				bg_screenshot = NULL;
 			}
 
-			if (getEmuStatus() == EMU_MENU_OVERLAY && screen){
-				bg_screenshot = clonarPantalla(screen, 180);
-
+			if (getEmuStatus() == EMU_MENU_OVERLAY && overlay){
+				bg_screenshot = clonarPantalla(gameScreen, 180);
 				//Si hay mensajes de logros en curso, mostramos el menu de logros
-				if (!messagesAchievement.empty() && messagesAchievement.get_at(0).type == ACH_UNLOCKED){
+				if (!messagesAchievement.empty() && messagesAchievement.get_at(0)->type == ACH_UNLOCKED){
 					configMenus->setAchievementsAsSelected();
 					configMenus->descargarLogros();
 				} else if (!configMenus->obtenerMenuActual()->opciones.empty()){
@@ -1051,45 +1008,28 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 */
 SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
     if (!src) return NULL;
-
-    // Bloqueamos la superficie si es necesario (común en buffers de video directos)
-    if (SDL_MUSTLOCK(src)) {
-        if (SDL_LockSurface(src) < 0) return NULL;
-    }
-
+	SDL_Surface* copia = NULL;
+	//Dimensiones y cálculo de aspecto
+	Dimension srcDim = {src->w, src->h};
+	Dimension dstDim = {overlay->w, overlay->h};
+	Dimension resDim = Image::relacion(srcDim, dstDim);
+	Dimension resCen = Image::centrado(resDim, dstDim);
+	SDL_Rect dstRect = {resCen.w , resCen.h, (Uint16)resDim.w, (Uint16)resDim.h};
 	
-    // Creamos la copia con el mismo formato exacto
-    SDL_Surface* copia = SDL_ConvertSurface(src, src->format, src->flags);
-
-	if (transparency > 0){
-		// 1. Crear una superficie temporal del mismo tamaño que la original
-		// Usamos las mismas máscaras de bits para compatibilidad
-		SDL_Surface* overlay = SDL_CreateRGBSurface(SDL_SWSURFACE, 
-										copia->w, 
-										copia->h, 
-										copia->format->BitsPerPixel,
-										copia->format->Rmask, 
-										copia->format->Gmask, 
-										copia->format->Bmask, 
-										copia->format->Amask);
-
-		if (overlay) {
-			// 2. Pintar la superficie de negro
-			SDL_FillRect(overlay, NULL, SDL_MapRGB(overlay->format, 0, 0, 0));
-			// 3. Configurar el nivel de transparencia (0 = invisible, 255 = opaco)
-			// SDL_SRCALPHA activa el blending por pixel o por superficie
-			SDL_SetAlpha(overlay, SDL_SRCALPHA, transparency);
-			// 4. Dibujar el rectángulo negro sobre la superficie original
-			SDL_BlitSurface(overlay, NULL, copia, NULL);
-			// 5. Liberar la memoria de la superficie temporal
-			SDL_FreeSurface(overlay);
-		}
+	copia = SDL_CreateRGBSurface(SDL_SWSURFACE, overlay->w, overlay->h, 32, 
+		rmask, gmask, bmask, amask);
+	
+	if (resDim.w == src->w && resDim.h == src->h){
+		SDL_BlitSurface(src, NULL, copia, NULL);
+	} else {
+		double zoomX = (double)resDim.w / src->w;
+        double zoomY = (double)resDim.h / src->h;
+		SDL_Surface *redim = zoomSurface(src, zoomX, zoomY, 0);
+		SDL_BlitSurface(redim, NULL, copia, &dstRect);
+		SDL_FreeSurface(redim);
 	}
-
-    if (SDL_MUSTLOCK(src)) {
-        SDL_UnlockSurface(src);
-    }
-
+	SDL_SetAlpha(copia, SDL_SRCALPHA, 0);
+	boxRGBA(copia, 0, 0, copia->w -1, copia->h -1, colors[clBackground].sdlColor.r, colors[clBackground].sdlColor.g, colors[clBackground].sdlColor.b, transparency);
     return copia;
 }
 
@@ -1207,7 +1147,7 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
     msg.timeout = duration;
     msg.ticks = SDL_GetTicks();
     
-    std::string newText = Fonts::recortarAlTamanyo(text, this->screen->w);
+    std::string newText = Fonts::recortarAlTamanyo(text, this->overlay->w);
 	msg.cache = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTBIG), newText.c_str(), white);
     
     if (msg.cache) {
@@ -1216,7 +1156,6 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
         // La posición Y se calculará dinámicamente al dibujar para que se apilen
         msg.rect.w = msg.cache->w + 2;
         msg.rect.h = face_h + 4;
-        
         messages.push_back(msg);
     }
 }
@@ -1228,22 +1167,22 @@ void GameMenu::renderTrackers() {
     // No necesitamos bloquear aquí porque el método .render() interno ya lo hace
     TTF_Font* font = Fonts::getFont(Fonts::FONTSMALL);
     int margin = 20;
-    int posX = screen->w - margin; // Punto de anclaje derecho
+    int posX = overlay->w - margin; // Punto de anclaje derecho
     int posY = margin;
 
     // Llamamos al proceso seguro
-    ach->trackers.render(this->video_page, font, posX, posY);
+    ach->trackers.render(this->overlay, font, posX, posY);
 }
 
 
 void GameMenu::renderChallenges() {
     Achievements* ach = Achievements::instance();
     if (ach->challenges.empty()) return;
-	ach->challenges.render(this->video_page, this->uBkgColor);
+	ach->challenges.render(this->overlay, 0);
 }
 
 void GameMenu::renderProgress() {
-	Achievements::instance()->progress.render(video_page, uBkgColor, backgroundColor);
+	Achievements::instance()->progress.render(overlay, 0, colors[clBackground]);
 }
 
 void GameMenu::processMessagesAchievements(){
@@ -1268,7 +1207,7 @@ void GameMenu::processMessagesAchievements(){
 	// Renderizado (Si hay mensajes)
 	if (messagesAchievement.empty()) {
 		if (lastMessagesArea.h > 0) {
-			SDL_FillRect(this->video_page, &lastMessagesArea, this->uBkgColor);
+			clearOverlayRect(lastMessagesArea);
 			lastMessagesArea.x = 0;
 			lastMessagesArea.y = 0;
 			lastMessagesArea.w = 0;
@@ -1291,7 +1230,7 @@ void GameMenu::clearLastAchievementArea() {
     if (lastMessagesArea.w > 0 && lastMessagesArea.h > 0) {
         // Pintamos un rectángulo del color de fondo (uBkgColor) 
         // sobre el área que ocupaba el último logro
-        SDL_FillRect(this->video_page, &lastMessagesArea, this->uBkgColor);
+		clearOverlayRect(lastMessagesArea);
     }
 }
 
@@ -1323,36 +1262,35 @@ inline void GameMenu::handleMessageQueue(uint32_t currentTicks) {
     if (messagesAchievement.empty()) return;
 
     // Obtenemos referencia al primer mensaje
-	AchievementState ach = messagesAchievement.get_at(0);
+	AchievementState* ach = messagesAchievement.get_at(0);
     
-    if (ach.ticks == 0) {
+    if (ach->ticks == 0) {
         messagesAchievement.update_ticks(currentTicks); // Iniciar temporizador
-    } else if (currentTicks - ach.ticks > ach.timeout) {
+    } else if (currentTicks - ach->ticks > ach->timeout) {
 		//Limpiamos el ultimo mensaje
-		ach.clearSurfaces();
+		ach->clearSurfaces();
 		AchievementState msg;
         messagesAchievement.pop(msg);
     }
 }
 
 void GameMenu::renderCurrentAchievement() {
-	if (messagesAchievement.empty()) 
+	if (messagesAchievement.empty())
 		return;
 
-    AchievementState msg = messagesAchievement.get_at(0);
+    AchievementState* msg = messagesAchievement.get_at(0); 
 
-	if (msg.type == ACH_LOAD_GAME) {
-        showAchievementMessage(Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.title"), msg.title.c_str()), 
-							   Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.points"), msg.achvTotal, msg.scoreTotal), 
-							   Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.unlocked"), msg.achvUnlocked), 
-                               msg.badge, lastMessagesArea);
-    } else if (msg.type == ACH_UNLOCKED){
+	if (msg->type == ACH_LOAD_GAME) {
+        showAchievementMessage(Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.title"), msg->title.c_str()), 
+							   Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.points"), msg->achvTotal, msg->scoreTotal), 
+							   Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.unlocked"), msg->achvUnlocked), 
+                               msg->badge, lastMessagesArea);
+    } else if (msg->type == ACH_UNLOCKED){
 		Achievements::instance()->setShouldRefresh(true);
-        showAchievementMessage(LanguageManager::instance()->get("msg.achievement.unlocked.title"), msg.title, msg.description, msg.badge, lastMessagesArea);
-    } else if (msg.type == ACH_WARNING){
-        showAchievementMessage(LanguageManager::instance()->get("msg.achievement.warning.title"), msg.title, msg.description, msg.badge, lastMessagesArea);
+        showAchievementMessage(LanguageManager::instance()->get("msg.achievement.unlocked.title"), msg->title, msg->description, msg->badge, lastMessagesArea);
+    } else if (msg->type == ACH_WARNING){
+        showAchievementMessage(LanguageManager::instance()->get("msg.achievement.warning.title"), msg->title, msg->description, msg->badge, lastMessagesArea);
     }
-
 }
 
 void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str, std::string line3Str, SDL_Surface *badge, SDL_Rect& lastMessagesArea){
@@ -1368,36 +1306,36 @@ void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str
 	Achievements& self = *Achievements::instance();
 
 	Fonts::getBadgeSize(badgeW, badgeH, badgePad, line_height);
-	const int maxH = this->video_page->h -paddingBottom -line_height * 3;
+	const int maxH = this->overlay->h -paddingBottom -line_height * 3;
 
 	SDL_Rect rect = {10 + badgeW, 0, 0, line_height};
 	lastMessagesArea.x = rect.x - badgeW;
 	lastMessagesArea.y = maxH;
 	lastMessagesArea.w = maxW + badgeW + badgePad * 3;
-	lastMessagesArea.h = this->video_page->h - maxH - paddingBottom;
+	lastMessagesArea.h = this->overlay->h - maxH - paddingBottom;
 
-	//const Uint32 uPaleblue = SDL_MapRGB(this->screen->format, paleblue.r, paleblue.g, paleblue.b);
-	//SDL_FillRect(this->video_page, &lastMessagesArea, uPaleblue);
-	DrawRectAlpha(video_page, lastMessagesArea, black, 230);
+	const Uint32 uPaleblue = SDL_MapRGB(this->overlay->format, paleblue.r, paleblue.g, paleblue.b);
+	SDL_FillRect(this->overlay, &lastMessagesArea, uPaleblue);
+	//DrawRectAlpha(overlay, lastMessagesArea, black, 230);
 
 	SDL_Rect txtRect = {rect.x + badgePad * 2, maxH, 0, line1->w};
-	SDL_BlitSurface(line1, NULL, this->video_page, &txtRect);
+	SDL_BlitSurface(line1, NULL, this->overlay, &txtRect);
 
-	txtRect.y = this->video_page->h -paddingBottom -line_height * 2;
+	txtRect.y = this->overlay->h -paddingBottom -line_height * 2;
 	txtRect.w = line2->w;
-	SDL_BlitSurface(line2, NULL, this->video_page, &txtRect);
+	SDL_BlitSurface(line2, NULL, this->overlay, &txtRect);
 
-	txtRect.y = this->video_page->h -paddingBottom -line_height;
+	txtRect.y = this->overlay->h -paddingBottom -line_height;
 	txtRect.w = line3->w;
-	SDL_BlitSurface(line3, NULL, this->video_page, &txtRect);
+	SDL_BlitSurface(line3, NULL, this->overlay, &txtRect);
 	
 	SDL_FreeSurface(line1);
 	SDL_FreeSurface(line2);
 	SDL_FreeSurface(line3);
 
 	if (badge != NULL){
-		SDL_Rect rectBadge = {rect.x - badgeW + badgePad, this->video_page->h -paddingBottom -line_height * 3 + badgePad, 0, line_height};
-		SDL_BlitSurface(badge, NULL, this->video_page, &rectBadge);
+		SDL_Rect rectBadge = {rect.x - badgeW + badgePad, this->overlay->h -paddingBottom -line_height * 3 + badgePad, 0, line_height};
+		SDL_BlitSurface(badge, NULL, this->overlay, &rectBadge);
 	}
 }
 
@@ -1405,75 +1343,47 @@ void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str
 *
 */
 void GameMenu::processMessages() {
-    static SDL_Rect lastMessagesArea = {0, 0, 0, 0};
-    
-    // 1. LIMPIEZA EFICIENTE
-    if (lastMessagesArea.h > 0) {
-        SDL_FillRect(this->video_page, &lastMessagesArea, this->uBkgColor);
-    }
+    if (messages.empty()) return;
 
-    if (messages.empty()) {
-        lastMessagesArea.h = 0;
-        return;
-    }
-
-    uint32_t currentTicks = SDL_GetTicks();
-    
-    // 2. OPTIMIZACIÓN DE VECTOR: "Remove-erase idiom" manual
-    // En Xbox 360, borrar elementos uno a uno en un vector desplaza la memoria repetidamente.
-    // Es mejor mover los elementos válidos al principio y borrar al final una sola vez.
-    std::size_t writeIdx = 0;
+    // 1. LIMPIEZA TOTAL: Antes de mover nada, borramos la zona donde suelen estar
+    // (Opcional: puedes calcular un rect global que cubra todos los mensajes)
     for (std::size_t i = 0; i < messages.size(); ++i) {
-        if (currentTicks - messages[i].ticks <= messages[i].timeout) {
-            if (writeIdx != i) {
-                messages[writeIdx] = messages[i];
-            }
-            writeIdx++;
-        } else {
+        clearOverlayRect(messages[i].rect); 
+    }
+
+    // 2. ACTUALIZACIÓN: Eliminar mensajes caducados
+    uint32_t currentTicks = SDL_GetTicks();
+    for (int i = (int)messages.size() - 1; i >= 0; i--) {
+        if (currentTicks - messages[i].ticks > messages[i].timeout) {
             if (messages[i].cache) SDL_FreeSurface(messages[i].cache);
+            messages.erase(messages.begin() + i);
         }
     }
-    if (writeIdx != messages.size()) {
-        messages.resize(writeIdx);
-    }
 
-    if (messages.empty()) {
-        lastMessagesArea.h = 0;
-        return;
-    }
+    if (messages.empty()) return;
 
-    // 3. CACHEO DE VALORES CONSTANTES
-    static int line_height = 0;
-    if (line_height == 0) { // Solo calculamos una vez
-        line_height = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG)) + 4;
-    }
+    // 3. CÁLCULO DE POSICIONES Y DIBUJO
+    static int line_height = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG)) + 4;
+    int currentY = this->overlay->h - line_height;
 
-    // 4. DIBUJO Y CÁLCULO DE ÁREA (Sin iteradores, acceso directo por puntero)
-    int video_h = this->video_page->h;
-    int currentY = video_h - line_height;
-    int maxWidth = 0;
-    
-    // Acceso por puntero para evitar overhead de comprobación de límites del vector en Debug
-    Message* mData = &messages[0];
-    int msgCount = (int)messages.size();
-
-    for (int i = msgCount - 1; i >= 0; --i) {
-        Message &m = mData[i];
-        m.rect.y = (Sint16)currentY;
+    // Usamos referencia directa en el bucle para mayor seguridad que el puntero mData
+    for (int i = (int)messages.size() - 1; i >= 0; --i) {
+        Message &m = messages[i];
+        
+        // Actualizamos la nueva posición
         m.rect.x = 0;
+        m.rect.y = (Sint16)currentY;
 
         if (m.cache) {
-            SDL_BlitSurface(m.cache, NULL, this->video_page, &m.rect);
-            if (m.rect.w > maxWidth) maxWidth = m.rect.w;
+            m.rect.w = (Uint16)m.cache->w;
+            m.rect.h = (Uint16)m.cache->h;
+            
+            // Dibujamos fondo y texto
+            SDL_FillRect(overlay, &m.rect, colors[clBackground].color);
+            SDL_BlitSurface(m.cache, NULL, this->overlay, &m.rect);
         }
         currentY -= line_height;
     }
-
-    // 5. ACTUALIZAR ÁREA PARA EL PRÓXIMO FRAME
-    int totalHeight = msgCount * line_height;
-    lastMessagesArea.w = (Uint16)maxWidth;
-    lastMessagesArea.h = (Uint16)totalHeight;
-    lastMessagesArea.y = (Sint16)(video_h - totalHeight);
 }
 
 void GameMenu::processConfigChanges(){
@@ -1557,5 +1467,29 @@ void GameMenu::startScrapping(){
 	LOG_DEBUG("Total of games to scrap: %d", totalGames);
 	if (emuThreadedScrapper.size() > 0){
 		Scrapper::StartScrappingAsync(emuThreadedScrapper, config);
+	}
+}
+
+void GameMenu::clearOverlay(){
+	memset(overlay->pixels, 0, overlay->pitch * overlay->h); 
+	//SDL_FillRect(overlay, NULL, colors[clBackground].color);
+}
+
+void GameMenu::clearOverlayRect(SDL_Rect& rect){
+	//SDL_FillRect(overlay, &rect, colors[clBackground].color);
+	SDL_FillRect(overlay, &rect, 0);
+}
+
+void GameMenu::fillOverlay(int colorIndex){
+	if (colorIndex < clTotalColors){
+		SDL_FillRect(this->overlay, NULL, colors[colorIndex].color);
+	}
+}
+
+void GameMenu::fillOverlayAlpha(int colorIndex, int alpha){
+	if (colorIndex < clTotalColors){
+		const SDL_Color& col = colors[colorIndex].sdlColor;
+		const Uint32 colorA = SDL_MapRGBA(this->overlay->format, col.r, col.g, col.b, alpha);
+		SDL_FillRect(this->overlay, NULL, colorA);
 	}
 }

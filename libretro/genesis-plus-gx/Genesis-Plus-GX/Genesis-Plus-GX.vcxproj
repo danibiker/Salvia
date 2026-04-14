@@ -91,7 +91,7 @@
       <BufferSecurityCheck>true</BufferSecurityCheck>
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_DEBUG;_XBOX;_XBOX360;_7ZIP_ST;USE_LIBRETRO_VFS;USE_LIBCHDR;USE_LIBTREMOR;__LIBRETRO__;FRONTEND_SUPPORTS_RGB565;USE_16BPP_RENDERING;inline=_inline;__inline__=__inline;MSB_FIRST;BYTE_ORDER=BIG_ENDIAN;CPU_IS_BIG_ENDIAN=1;WORDS_BIGENDIAN=1</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_XBOX;_XBOX360;_7ZIP_ST;USE_LIBRETRO_VFS;USE_LIBCHDR;USE_LIBTREMOR;__LIBRETRO__;FRONTEND_SUPPORTS_RGB565;USE_16BPP_RENDERING;inline=_inline;__inline__=__inline;MSB_FIRST;BYTE_ORDER=BIG_ENDIAN;CPU_IS_BIG_ENDIAN=1;WORDS_BIGENDIAN=1</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)\core;$(ProjectDir)\libretro;$(SolutionDir)libretro;$(SolutionDir)core;$(SolutionDir)libretro\libretro-common\include\;$(SolutionDir)core\m68k;$(SolutionDir)core\z80;$(SolutionDir)core\sound;$(SolutionDir)core\cart_hw;$(SolutionDir)core\cd_hw;$(SolutionDir)core\input_hw;$(SolutionDir)core\cart_hw\svp;$(SolutionDir)core\ntsc;$(SolutionDir)core\sound\minimp3;$(SolutionDir)libretro\deps\libchdr\include;$(SolutionDir)libretro\deps\zlib-1.2.11;$(SolutionDir)libretro\deps\zstd\lib;$(SolutionDir)libretro\deps\lzma-19.00\include;$(SolutionDir)core\sound\tremor</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>

@@ -16,21 +16,20 @@ class Engine{
     public:
         Engine();
         ~Engine();
-        // Variable usada para la velocidad
-		SDL_Surface* screen;
-
+		SDL_Surface* overlay;
+		SDL_Surface* gameScreen;
 		Fonts* fonts;
 		// Instancia global para los callbacks
 		AudioBuffer g_audioBuffer;
 		Sync *sync;
 		Joystick *joystick;
-
 		// Variable global para controlar la ejecución
 		bool running;
 		int initEngine(CfgLoader* cfgLoader);
         void stopEngine();
     protected:
 		int initFont();
+		void initColors();
 		Fileio fileio;
     private:
 };

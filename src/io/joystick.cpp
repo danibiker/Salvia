@@ -5,7 +5,11 @@
 #include <io/dirutil.h>
 #include <const/constant.h>
 #include <io/cfgloader.h>
+#include <io/fileio.h>
 #include <cmath>
+#include <libretro.h>
+
+extern void retro_set_controller_port_device(unsigned port, unsigned device);
 
 Joystick::Joystick(){
 	ignoreButtonRepeats = false;
@@ -36,6 +40,7 @@ bool Joystick::init_all_joysticks() {
 			//inputs.names[joyId] = "Retropad Default";
 			//Loading default values
 			inputs.axisAsPad[joyId] = true;
+			inputs.joyTypeIdx[joyId] = 0;
 			//Setting mappers for the frontend
 			configMapperFrontend(inputs.mapperFrontend, joyId);
 			//Setting mappers for the core's emulator
@@ -45,6 +50,20 @@ bool Joystick::init_all_joysticks() {
 	std::string ruta = Constant::getAppDir() + Constant::getFileSep() + "retropad.ini";
 	loadButtonsRetro(ruta);
 	return true;
+}
+
+void Joystick::updateTypes(){
+	for (int i=0; i < MAX_PLAYERS; i++){
+		if (inputs.joyTypeIdx[i] < (int)g_ports[i].available_types.size()){
+			auto joyType = g_ports[i].available_types[inputs.joyTypeIdx[i]];
+			g_ports[i].current_device_id = joyType.first;
+			g_ports[i].current_desc = joyType.second;
+		} else {
+			g_ports[i].current_device_id = RETRO_DEVICE_JOYPAD;
+			g_ports[i].current_desc = "Retro pad";
+		}
+		retro_set_controller_port_device(i, g_ports[i].current_device_id);
+	}
 }
 
 /**
@@ -160,6 +179,7 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
         signature += "|";
         for (int i = 0; i < MAX_AXIS; i++)    signature += Constant::intToString(inputs.mapperCore.sdlToAxis[p][i]) + ",";
         signature += (inputs.axisAsPad[p] ? "1" : "0");
+		signature += inputs.joyTypeIdx[p];
 
         // 2. Verificar si esta configuración exacta ya fue guardada
         bool yaEscrito = false;
@@ -214,6 +234,7 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
             fileConfigJoystick.push_back(axis);
 
             fileConfigJoystick.push_back("anal=" + std::string(inputs.axisAsPad[p] ? "1" : "0"));
+			fileConfigJoystick.push_back("joytype=" + Constant::TipoToStr(inputs.joyTypeIdx[p]));
             fileConfigJoystick.push_back(""); // Linea en blanco
         }
     }
@@ -260,6 +281,7 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
 		fileConfigJoystick.push_back(axis);
 	}
     FileList::guardarVector(ruta, fileConfigJoystick);
+	Fileio::commit(ruta.c_str());
     return ruta;
 }
 
@@ -276,7 +298,10 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
     struct PadProfile {
         std::vector<int> btns, hats, axis;
         bool anal;
+		int joyTypeIdx;
+		PadProfile(): anal(false), joyTypeIdx(0) {}
     };
+
     std::map<std::string, PadProfile> profiles;
     std::string currentSection = "";
     std::string currentProfileName = "";
@@ -285,7 +310,7 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
         std::string line = Constant::Trim(lineas[i]);
         if (line.empty()) continue;
 
-        // Cambio de secci�n
+        // Cambio de seccion
         if (line[0] == '[' && line[line.size() - 1] == ']') {
             currentSection = line;
             continue;
@@ -304,6 +329,8 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
                     profiles[currentProfileName].axis = Constant::splitInt(line.substr(5), ',');
                 else if (line.find("anal=") == 0)
                     profiles[currentProfileName].anal = (line.substr(5) == "1");
+				else if (line.find("joytype=") == 0)
+					profiles[currentProfileName].joyTypeIdx = Constant::strToTipo<int>(line.substr(8));
             }
         } 
         else if (currentSection == "[RETROPAD]") {
@@ -322,6 +349,7 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
                     for (std::size_t j = 0; j < MAX_HATS && j < pf.hats.size(); j++)    inputs.mapperCore.setHatFromSdl(p, j, pf.hats[j]);
                     for (std::size_t j = 0; j < MAX_AXIS && j < pf.axis.size(); j++)    inputs.mapperCore.setAxisFromSdl(p, j, pf.axis[j]);
                     inputs.axisAsPad[p] = pf.anal;
+					inputs.joyTypeIdx[p] = pf.joyTypeIdx;
 					inputs.names[p] = profileName;
                 }
             }

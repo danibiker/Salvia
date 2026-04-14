@@ -82,6 +82,7 @@ bool GuardarCapturaPNG(const std::string& ruta, uint16_t* buffer, int w, int h) 
     // 3. Codificar y guardar el archivo en el HDD/USB de la Xbox
     // lodepng::encode devuelve 0 si tiene éxito
     unsigned error = lodepng::encode(ruta, rgb_buffer, w, h, LCT_RGB, 8);
+	Fileio::commit(ruta.c_str());
 
     if (error) {
         // En caso de error, puedes depurar con: lodepng_error_text(error)
@@ -97,25 +98,17 @@ bool guardar_comprimido_zlib(const char* path, void *buffer, std::size_t buffer_
     // "wb9" es compresión máxima. En la 360, "wb6" suele ser el equilibrio 
     // ideal entre velocidad de CPU y ahorro de espacio en HDD/USB.
     gzFile file = gzopen(path, "wb6"); 
-
     if (file) {
         // En zlib, gzwrite devuelve el número de bytes descomprimidos escritos (o 0 en error)
         int written = gzwrite(file, buffer, (unsigned int)buffer_size);
-        
         if (written <= 0) {
             LOG_ERROR("Error en gzwrite: %s\n", path);
             gzclose(file);
             return false;
         }
-
-        // 1. IMPORTANTE: gzflush asegura que zlib pase los datos al buffer del SO
         gzflush(file, Z_FINISH);
-
-        // 2. CRÍTICO XBOX: Para asegurar que el archivo se escriba físicamente 
-        // antes de que el Core continúe, extraemos el FILE* interno si es posible 
-        // o confiamos en el cierre limpio. 
         gzclose(file);
-
+		Fileio::commit(path);
         LOG_DEBUG("Archivo comprimido guardado: %s (%Iu bytes)\n", path, buffer_size);
         return true;
     } else {

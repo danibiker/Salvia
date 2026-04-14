@@ -18,7 +18,7 @@ Sync::Sync(int syncMode){
 	sprintf(fpsText, FPS_FORMAT, g_actualFps);
 	sprintf(cpuText, CPU_FORMAT, utilization);
 	g_sync_last = syncMode;
-	frameDelay = 1000.0 / (double)fps; // Aprox 16ms
+	frameDelay = 1000.0f / (float)fps; // Aprox 16ms
 }
 
 void Sync::initAverages(uint32_t avg){
@@ -28,11 +28,11 @@ void Sync::initAverages(uint32_t avg){
     }
 }
 
-void Sync::init_fps_counter(double gameFps){
+void Sync::init_fps_counter(float gameFps){
 	if (gameFps > 0){
         this->fps = gameFps;
         // Mantenemos el frameDelay como double para el limitador de alta precisiÃ³n
-        this->frameDelay = 1000.0 / gameFps; 
+        this->frameDelay = 1000.0f / gameFps; 
         
         // Para los promedios (que parecen usar enteros), usamos el redondeo mas cercano
         initAverages((uint32_t)(frameDelay + 0.5));
@@ -42,8 +42,7 @@ void Sync::init_fps_counter(double gameFps){
     }
 }
 
-void Sync::update_fps_counter(bool updateFpsOverlay) {
-	uint32_t currentTick = SDL_GetTicks();
+void Sync::update_fps_counter(bool updateFpsOverlay, uint32_t currentTick) {
     if (g_lastFrameTick == 0) g_lastFrameTick = currentTick; // Inicializacion en el primer uso
     
 	// Calculamos cuanto tiempo ha pasado realmente desde el frame anterior
@@ -52,7 +51,8 @@ void Sync::update_fps_counter(bool updateFpsOverlay) {
 
 	// Guardamos el tiempo de este frame en el buffer circular
 	g_frameTimes[g_frameTimeIndex] = frameTime;
-	g_frameTimeIndex = (g_frameTimeIndex + 1) % FPS_AVG_COUNT;
+	g_frameTimeIndex++;
+	if (g_frameTimeIndex == FPS_AVG_COUNT) g_frameTimeIndex = 0;
 	
 	if (updateFpsOverlay){
 		// Sumamos todos los tiempos almacenados
@@ -65,24 +65,21 @@ void Sync::update_fps_counter(bool updateFpsOverlay) {
 		if (totalTime > 0) {
 			// FPS = 1000ms / promedio_de_frame_en_ms
 			// Es lo mismo que: (1000 * cantidad_de_frames) / tiempo_total
-			g_actualFps = (1000.0f * (double)FPS_AVG_COUNT) / (double)totalTime;
-			_snprintf(fpsText, sizeof(fpsText), FPS_FORMAT, g_actualFps);
-			_snprintf(cpuText, sizeof(cpuText), CPU_FORMAT, utilization);
-			
+			g_actualFps = TIME_AVG_COUNT / (float)totalTime;
 		}
 	}
 }
 
 void Sync::limit_fps(double& nextFrameTime) {
     double currentTime = Constant::getTicks();
-    double diffTime = nextFrameTime - currentTime;
+    float diffTime = (float)(nextFrameTime - currentTime);
 
     // --- Métricas de utilización basadas en tiempo real de trabajo ---
     // workTime = tiempo que la CPU estuvo ocupada procesando el frame
     //          = desde que terminó el sleep del frame anterior hasta ahora
     if (lastWorkEnd > 0.0) {
-        double workTime = currentTime - lastWorkEnd;
-        double currentUtilization = (workTime / this->frameDelay) * 100.0;
+        float workTime = (float)(currentTime - lastWorkEnd);
+        float currentUtilization = (workTime / this->frameDelay) * 100.0f;
 
         // Clamp: 0% = idle total, 100% = justo al límite, >100% = no llega a tiempo
         if (currentUtilization < 0.0) currentUtilization = 0.0;
@@ -99,7 +96,6 @@ void Sync::limit_fps(double& nextFrameTime) {
         if (diffTime > 4.0) {
             SDL_Delay((uint32_t)(diffTime - 2.0));
         }
-
         // ESPERA ACTIVA: Clava el microsegundo exacto
         while (Constant::getTicks() < nextFrameTime) {
 			#ifdef _XBOX

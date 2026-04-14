@@ -7,7 +7,6 @@ typedef enum{
 	HK_MODIFIER = 0,
     HK_SAVESTATE, 
 	HK_LOADSTATE, 
-	HK_SCALE, 
 	HK_RATIO, 
 	HK_SHADER,
 	HK_SLOT_UP,

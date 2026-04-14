@@ -231,6 +231,76 @@ inline void scale_software_fixed_point_xbox_final(const t_scale_props& props) {
         }
     }
 }
+
+inline void scale_software_32bit_xbox(const t_scale_props& props, uint32_t* __restrict src_base, uint32_t* __restrict dst_base) {
+    int out_w, out_h, inv_scale_x_fp, inv_scale_y_fp;
+    calcDestDimFromRatio(props.sw, props.sh, props.dw, props.dh, props.ratio, out_w, out_h, inv_scale_x_fp, inv_scale_y_fp);
+
+    // En 32 bits, el stride en píxeles es pitch / 4
+    const int src_stride = (int)(props.spitch >> 2);
+    const int dst_stride = (int)(props.dpitch >> 2);
+    
+    // Cálculo del punto de inicio centrado
+    uint32_t* __restrict dst_ptr = dst_base + (((props.dh - out_h) >> 1) * dst_stride) + ((props.dw - out_w) >> 1);
+
+    int safe_out_w = out_w;
+    if (safe_out_w > 0 && (((safe_out_w * inv_scale_x_fp) >> 16) >= props.sw)) safe_out_w--;
+
+    const int s1 = inv_scale_x_fp;
+    const int s2 = s1 << 1; const int s3 = s1 * 3; const int s4 = s1 << 2;
+    const int s5 = s1 * 5; const int s6 = s1 * 6; const int s7 = s1 * 7;
+    const int s8 = s1 << 3;
+
+    int prev_src_y = -1;
+    const std::size_t dst_line_bytes = safe_out_w * sizeof(uint32_t);
+
+    uint32_t* line_dst = dst_ptr;
+    int curr_y_fp = 0;
+
+    for (int y = 0; y < out_h; y++, line_dst += dst_stride, curr_y_fp += inv_scale_y_fp) {
+        int src_y = curr_y_fp >> 16;
+        if (src_y >= props.sh) src_y = props.sh - 1;
+
+        // Optimización masiva: si la línea es igual a la anterior, usamos XMemCpy
+        if (src_y == prev_src_y && y > 0) {
+            memcpy(line_dst, line_dst - dst_stride, dst_line_bytes);
+            continue;
+        }
+        prev_src_y = src_y;
+
+        const uint32_t* __restrict line_src = src_base + (src_y * src_stride);
+        
+        // Data Cache Block Touch (Prefetch) - Muy importante en la 360
+        __dcbt(0, line_src); 
+
+        int curr_x_fp = 0;
+        int x = 0;
+
+        // Unrolling de 8 píxeles
+        for (; x <= safe_out_w - 8; x += 8) {
+            // El procesador Xenon procesa mejor estas lecturas de 32 bits alineadas
+            line_dst[x + 0] = line_src[curr_x_fp >> 16];
+            line_dst[x + 1] = line_src[(curr_x_fp + s1) >> 16];
+            line_dst[x + 2] = line_src[(curr_x_fp + s2) >> 16];
+            line_dst[x + 3] = line_src[(curr_x_fp + s3) >> 16];
+            line_dst[x + 4] = line_src[(curr_x_fp + s4) >> 16];
+            line_dst[x + 5] = line_src[(curr_x_fp + s5) >> 16];
+            line_dst[x + 6] = line_src[(curr_x_fp + s6) >> 16];
+            line_dst[x + 7] = line_src[(curr_x_fp + s7) >> 16];
+            curr_x_fp += s8;
+            
+            // Prefetch adelantado para la siguiente parte de la línea
+            if ((x & 31) == 0) __dcbt(128, &line_src[curr_x_fp >> 16]);
+        }
+
+        // Cleanup final para píxeles sobrantes
+        for (; x < out_w; x++) {
+            int sx = curr_x_fp >> 16;
+            line_dst[x] = line_src[sx >= props.sw ? props.sw - 1 : sx];
+            curr_x_fp += s1;
+        }
+    }
+}
 #endif
 
 

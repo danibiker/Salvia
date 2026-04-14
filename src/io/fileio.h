@@ -15,6 +15,7 @@ class Fileio{
 		bool clearFile();
 		int writeToFile(const char *uri, char * memblocktowrite, size_t tam, int append);
 		std::string cargarFichero(const std::string& ruta);
+		static void commit(const char *filepath);
     private:
 		void decodeError(int r);
         std::ifstream::pos_type size;

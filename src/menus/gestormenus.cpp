@@ -18,12 +18,14 @@ SDL_Surface* GestorMenus::imgText;
 std::string syncOptionsStrings[TOTAL_VIDEO_SYNC];
 std::string aspectRatioStrings[TOTAL_VIDEO_RATIO];
 std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
+std::string videoShaderStrings[TOTAL_SHADERS];
 std::string ACTION_ASK_STR[MAX_ASK];
 std::string TipoKeyStr[KEY_JOY_MAX];
 std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
 std::string configurablePortButtonsStr[MAXJOYBUTTONS];
 std::string configurablePortHatsStr[MAXJOYBUTTONS];
 std::string HOTKEYS_STR[HK_MAX];
+
 
 const char *scrapOrigins[] = {"SCREENSCRAPER", "THEGAMESDB", "EMPTY"};
 
@@ -253,13 +255,22 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 
 	//Escalado de video
     std::vector<std::string> filtros;
+
+#ifdef _XBOX
+	for (int i=0; i < TOTAL_SHADERS; i++){
+		videoShaderStrings[i] = LanguageManager::instance()->get("menu.video.shader" + Constant::TipoToStr(i));
+		filtros.push_back(videoShaderStrings[i]);
+	}
+	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.scale"), filtros, &refConfig->configMain[cfg::shaderMode].getIntRef()));
+#else
 	for (int i=0; i < TOTAL_VIDEO_SCALE; i++){
 		videoScaleStrings[i] = LanguageManager::instance()->get("menu.scale.scale" + Constant::TipoToStr(i));
 		filtros.push_back(videoScaleStrings[i]);
 	}
 	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.scale"), filtros, &refConfig->configMain[cfg::scaleMode].getIntRef()));
+#endif
+	
 	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.forcefs"), &refConfig->configMain[cfg::forceFS].getBoolRef()));
-
 	//Animacion del fondo de pantalla del menu
 	std::vector<std::string> bgMenu;
 	for (int i=0; i < BG_MAX; i++){
@@ -267,7 +278,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	}
 	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef()));
 	
-	Menu* menuAssignRetro = new Menu(LanguageManager::instance()->get("menu.options.paddassign"), menuEntrada);
+	menuAssignRetro = new Menu(LanguageManager::instance()->get("menu.options.paddassign"), menuEntrada);
 	Menu* menuAssignFrontend = new Menu(LanguageManager::instance()->get("menu.options.frontassign"), menuEntrada);
 	Menu* menuHotkeys = new Menu(LanguageManager::instance()->get("menu.options.hotkeys"), menuEntrada);
 	todosLosMenus.push_back(menuAssignRetro);
@@ -363,9 +374,9 @@ void GestorMenus::loadAchievements() {
     
     for (std::size_t i = 0; i < inst.achievements.size(); i++) {
         // Obtenemos una copia del logro sin hacer 'pop' (no se borra de la cola)
-        AchievementState currentAch = inst.achievements.get_at(i);
+        AchievementState* currentAch = inst.achievements.get_at(i);
         // Creamos la opción para el menú
-        menuAchievements->opciones.push_back(new OpcionAchievement(currentAch));
+        menuAchievements->opciones.push_back(new OpcionAchievement(*currentAch));
     }
     resetIndexPos();
 }
@@ -476,7 +487,7 @@ void GestorMenus::poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper){
 void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joystick, CfgLoader *refConfig){
 	menu->opciones.clear();
 	if (controlId < MAX_PLAYERS){
-		auto& controllerPad = refConfig->g_ports[controlId];
+		auto& controllerPad = joystick->g_ports[controlId];
 		std::vector<std::string> gamepads;
 
 		for (std::size_t i=0; i < controllerPad.available_types.size(); i++){
@@ -491,6 +502,49 @@ void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joys
 		}
 	}
 	menu->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.controller.analogpad"), &joystick->inputs.axisAsPad[controlId]));
+}
+
+/**
+*
+*/
+void GestorMenus::poblarJoystickTypes(Joystick *joystick){
+	for (unsigned int i=0; i < menuAssignRetro->opciones.size(); i++){
+		LOG_DEBUG("%s", menuAssignRetro->opciones[i]->titulo.c_str());
+		if (menuAssignRetro->opciones[i]->tipo == OPC_SUBMENU){
+			Menu* submenuJoy = ((OpcionSubMenu*)menuAssignRetro->opciones[i])->destino;
+			int numOpciones = submenuJoy->opciones.size();
+			LOG_DEBUG("Menu with %d opciones", numOpciones);
+			int nOpcion = 0;
+			if (submenuJoy->opciones[nOpcion]->tipo == OPC_LISTA && numOpciones > 0){
+				// 1. Liberar la memoria del objeto
+				delete submenuJoy->opciones[nOpcion]; 
+  				// 2. Eliminar el puntero del vector
+				submenuJoy->opciones.erase(submenuJoy->opciones.begin() + nOpcion);
+			}
+
+			//Una vez liberadas las opciones de seleccion de joystick, las recreamos de nuevo
+			auto available_types = joystick->g_ports[i].available_types;
+			std::vector<std::string> joystickDesc;
+			for (auto it = available_types.begin(); it != available_types.end(); ++it) {
+				unsigned id = it->first;
+				std::string name = it->second;
+				joystickDesc.push_back(name);
+				LOG_DEBUG("Player %d, JoyId: %u, Valor: %s\n", i, id, name.c_str());
+			}
+
+			OpcionLista *listaControllersTypes = new OpcionLista(LanguageManager::instance()->get("menu.controller.type"), joystickDesc, &joystick->inputs.joyTypeIdx[i]);
+			listaControllersTypes->callback = &GestorMenus::setControllerType;
+			listaControllersTypes->context = joystick;
+			submenuJoy->opciones.insert(submenuJoy->opciones.begin(), listaControllersTypes);
+		}
+	}
+}
+
+std::string GestorMenus::setControllerType(void* inst, void *index, void *values) {
+	if (!inst || !index || !values) return "";
+    Joystick* joystick = static_cast<Joystick*>(inst);
+	joystick->updateTypes();
+	return "";
 }
 
 /**
@@ -518,7 +572,7 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
 
 	menuCoreOptions->opciones.clear();
 	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.save"), &GestorMenus::guardarCoreConfig, refConfig, this));
-	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.version"), refConfig->configMain[cfg::libretro_core].valueStr + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
+	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.version"), string(refConfig->configMain[cfg::libretro_core].valueStr) + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.extensions"), refConfig->configMain[cfg::libretro_core_extensions].valueStr));
 
     // 3. Ahora recorremos el vector ordenado y buscamos en el mapa original por KEY
@@ -912,9 +966,9 @@ Menu* GestorMenus::obtenerMenuActual() {
 }
 
 void GestorMenus::draw(SDL_Surface *video_page){
-	static const int bkg = SDL_MapRGB(video_page->format, bkgMenu.r, bkgMenu.g, bkgMenu.b);
-	static const int iwhite = SDL_MapRGB(video_page->format, white.r, white.g, white.b);
-	static const int iblack = SDL_MapRGB(video_page->format, black.r, black.g, black.b);
+	static const int bkg = SDL_MapRGBA(video_page->format, bkgMenu.r, bkgMenu.g, bkgMenu.b, 0xFF);
+	static const int iwhite = SDL_MapRGBA(video_page->format, white.r, white.g, white.b, 0xFF);
+	static const int iblack = SDL_MapRGBA(video_page->format, black.r, black.g, black.b, 0xFF);
 	Icons icons;
 
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);

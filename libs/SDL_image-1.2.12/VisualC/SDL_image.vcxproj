@@ -674,8 +674,8 @@
       </HeaderFileName>
     </Midl>
     <ClCompile>
-      <Optimization>MaxSpeed</Optimization>
-      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <Optimization>Full</Optimization>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
       <AdditionalIncludeDirectories>..\..\SDL-1.2.14\include;external\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_XBOX;NDEBUG;LOAD_BMP;LOAD_GIF;LOAD_JPG;LOAD_PNG</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
@@ -694,6 +694,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -890,8 +891,8 @@
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <CompileAs>CompileAsC</CompileAs>
       <WholeProgramOptimization>false</WholeProgramOptimization>
-      <ExceptionHandling>Sync</ExceptionHandling>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
       <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
       <PreschedulingOptimization>false</PreschedulingOptimization>
       <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
@@ -915,8 +916,9 @@
     </Bscmake>
     <Lib>
       <AdditionalDependencies>$(ProjectDir)..\libjpeg\Debug\Xbox 360\jpeg.lib;$(ProjectDir)..\lpng1513\projects\vstudio\libpng\Debug\Xbox 360\libpng15.lib</AdditionalDependencies>
-      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
-      <IgnoreSpecificDefaultLibraries>xapilib.lib</IgnoreSpecificDefaultLibraries>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
     </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_DosboxPure|Xbox 360'">

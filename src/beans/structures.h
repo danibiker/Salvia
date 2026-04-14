@@ -75,7 +75,16 @@ struct t_scale_props{
     int dh; 
     int scale; 
     float ratio;
+	int bpp;
+	int filter;
 	bool force_fs;
+
+	t_scale_props(){
+		sw = sh = dw = dh = scale = 0;
+		ratio = .0f;
+		bpp = 16;
+		force_fs = true;
+	}
 };
 
 // Buffer para alojar el resultado de Scale2x (ej. 320x224 -> 640x448)
@@ -356,12 +365,15 @@ struct t_joy_state {
 
 	std::string names[MAX_PLAYERS];
 	bool axisAsPad[MAX_PLAYERS];
+	int joyTypeIdx[MAX_PLAYERS];
 
 	t_joy_state(){
 		clear(btn_state);
 		clear(axis_state);
 		clear(hats_state);
 		clear(g_analog_state, 0);
+		memset(axisAsPad, 0, sizeof(axisAsPad));
+		memset(joyTypeIdx, 0, sizeof(joyTypeIdx));
 	}
 
 	void clearAll(){

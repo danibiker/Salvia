@@ -1,4 +1,5 @@
 #include "fileio.h"
+#include <fcntl.h>
 #include <sstream>
 
 #if defined(_XBOX) || defined(_XBOX360)
@@ -98,4 +99,14 @@ void Fileio::decodeError(int r){
     char buff[100];
     strerror_s(buff, 100, r);
     printf("str_trim_left.error: %d %s\n", r, buff);
+}
+
+void Fileio::commit(const char *filepath){
+#ifdef _XBOX
+	int fd = _open(filepath, _O_RDONLY | _O_BINARY);
+    if (fd != -1) {
+        _commit(fd); 
+        _close(fd);
+    }
+#endif
 }

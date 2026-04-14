@@ -74,6 +74,16 @@ static const int configurableSdlFrontAxis[] = {
 
 extern t_rom_paths romPaths;
 
+struct t_controller_port {
+	int current_device_id;			// ID seleccionado actualmente (ej. RETRO_DEVICE_JOYPAD)
+	std::string current_desc;       // Descripción amigable (ej. "SuperScope")
+	// Lista de opciones que el core nos dio para este puerto
+	std::vector<std::pair<unsigned, std::string>> available_types; 
+	t_controller_port(){
+		current_device_id = -1;
+	}	
+};
+
 class Joystick{
     public:
         Joystick();
@@ -89,6 +99,7 @@ class Joystick{
 		std::string saveButtonsDefaultsCore();
 		std::string saveButtonsConfig(std::string, bool=true);
 		bool loadButtonsRetro(std::string);
+		void updateTypes();
 
 		HOTKEYS_LIST findHotkey();
 
@@ -96,6 +107,8 @@ class Joystick{
 		int8_t startHoldFrames[MAX_PLAYERS];
 		//Joysticks abiertos
 		SDL_Joystick* g_joysticks[MAX_PLAYERS];
+		//Type of the controller ports
+		t_controller_port g_ports[MAX_PLAYERS];
 		//Mapeo de botones para los joysticks
 		t_joy_state inputs;
 		//Devolvemos un objeto evento en el caso de peticion de salida de SDL

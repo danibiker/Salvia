@@ -1,5 +1,6 @@
 #pragma once
 #include "logger.h"
+#include <io/fileio.h>
 
 #ifdef _XBOX
     #include <xtl.h>
@@ -8,69 +9,59 @@
 #endif
 #include <time.h>
 
-// 1. MEMORIA ESTÁTICA: Asegurar que coincida con el nuevo enum (L_MAX)
-std::ofstream Logger::logFile;
+
 unsigned int Logger::numLogs = 0;
 char Logger::messageBuffer[MAX_MSG_BUFFER_LEN]; 
 const char* Logger::ERRLEVELSTXT[L_MAX] = { "DEBUG", "INFO", "WARN", "ERROR", "LIBRETRO" };
 int Logger::errorLevel = L_DEBUG;
 
-// 2. SINCRONIZACIÓN: Usar un objeto global real
 #ifdef _XBOX
     static CRITICAL_SECTION logSync;
     static bool csInitialized = false;
 #endif
 
 Logger::Logger(const char* filename) {
-#ifdef _XBOX
-    // Inicialización atómica simple para la 360
+	#ifdef _XBOX
     if (!csInitialized) {
         InitializeCriticalSection(&logSync);
         csInitialized = true;
     }
-#endif
-
-    if (filename && !logFile.is_open()) {
-        logFile.open(filename, std::ios::app);
-    }
+	#endif
+	size_t len = strlen(filename);
+	logFilepath = new char[len + 1]	;
+	strcpy_s(logFilepath, len + 1, filename);
 }
 
 void Logger::write(int level, const char* fmt, ...) {
-#ifndef DEBUG_LOG
+	#ifndef DEBUG_LOG
 	return;
-#endif
-
-    // Validación de seguridad inicial
+	#endif
     if (!fmt || level < errorLevel || level >= L_MAX) return;
 
-#ifdef _XBOX
+	#ifdef _XBOX
     EnterCriticalSection(&logSync);
-#endif
+	#endif
 
 	char levelStr[25];
 	if (level >= L_MAX || level < 0){
 		level = L_DEBUG;
 	} 
 
-    // 3. TIMESTAMP SEGURO (Específico de Xbox 360 / Win32)
     SYSTEMTIME st;
     char timestamp[32];
     GetLocalTime(&st);
     _snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02d %02d:%02d:%02d", 
               st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 
-    // 4. FORMATEO DEL MENSAJE
     va_list args;
     va_start(args, fmt);
-    int n = _vsnprintf(messageBuffer, sizeof(messageBuffer) - 1, fmt, args);
+	int n = _vsnprintf_s(messageBuffer, MAX_MSG_BUFFER_LEN, _TRUNCATE, fmt, args);
     va_end(args);
     
-    // Forzado de nulo manual
-    if (n < 0 || n >= (int)sizeof(messageBuffer) - 1) {
-        messageBuffer[sizeof(messageBuffer) - 1] = '\0';
+    if (n < 0 || n >= MAX_MSG_BUFFER_LEN - 1) {
+        messageBuffer[MAX_MSG_BUFFER_LEN - 1] = '\0';
     }
 
-    // 5. SALIDA COMBINADA SEGURA
     char finalBuffer[MAX_MSG_BUFFER_LEN];
     
     // Usamos sizeof(finalBuffer) - 2 para dejar sitio al \n y al \0
@@ -94,13 +85,10 @@ void Logger::write(int level, const char* fmt, ...) {
 		OutputDebugStringA("\n");
 	}
 
-    // Salida a archivo (si está abierto)
-    /*if (logFile.is_open()) {
-        logFile << finalBuffer;
-        logFile.flush(); // Crucial en la 360 si hay un crash, para no perder el log
-    }*/
+	/*Fileio fileio;
+	fileio.writeToFile(logFilepath, finalBuffer, strlen(finalBuffer), 1);*/
 
-#ifdef _XBOX
+	#ifdef _XBOX
     LeaveCriticalSection(&logSync);
-#endif
+	#endif
 }

@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <io/fileio.h>
 
 class FileList {
 public:
@@ -21,8 +22,8 @@ public:
 		for (unsigned int i=0; i < datos.size(); i++){
 		    archivo << datos.at(i) << "\n";
         }
-
         archivo.close();
+		Fileio::commit(nombreArchivo.c_str());
         return true;
     }
 
