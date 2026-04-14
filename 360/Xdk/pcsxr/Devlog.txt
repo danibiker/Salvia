@@ -1,0 +1,50 @@
+05-12-2016 
+
+		Done:
+			-- sync game selected between cover modes
+			-- add image for Devices
+			-- fix ui freeze LT+RT to get back to function properly
+
+07-12-2016
+
+		Done:
+			-- swizzy add rom loading data support from aurora
+
+22-12-2016
+
+		Done:
+			-- re-ADD psx.iso autoboot for freestyle dash cover mode
+
+
+23-12-2016
+
+		Done:
+			-- covermode init fix value = 1
+			-- profile menu fix working with profile setup for each individual game
+			-- sync covers between cover modes fix
+
+30-12-2016
+
+		Done:
+			-- pack resources into .xzp
+			-- full compile ready to release on build, just copy past release folder
+
+
+21-02-2017
+
+		Done:
+			-- Fix LoadGameProfile at current selection so you dont have to press Y button to load gamesettings for booting game setup correctly
+			-- fix open ingame menu on Aurora rom loaded iso & iso autoboot
+			-- Load gameprofile setting to autoboot isogame
+			
+	
+27-03-2017
+
+		Done:
+			--Fix game profile load after shutting off emulator to select new game to play
+			--Fix shaders readd it into gameprofile settings instead of another .ini file in gameshaders since it doesnt make sense
+
+Notes:
+
+		access skin xzp: 
+			m_BackVideo.Play( L"file://game:/media/PsxSkin.xzp#media\\Graphics\\a.png" );

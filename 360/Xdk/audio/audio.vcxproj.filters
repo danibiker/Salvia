@@ -1,0 +1,155 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="sdl">
+      <UniqueIdentifier>{d0add480-2fd0-4dad-be2f-5a83e280d277}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\plugins\dfsound\adsr.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\cfg.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\dma.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\freeze.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\registers.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\reverb.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\spu.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\xa.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\xaudio_2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\sdl\SDL_audio.c">
+      <Filter>sdl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\sdl\SDL_audiocvt.c">
+      <Filter>sdl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\sdl\SDL_audiodev.c">
+      <Filter>sdl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\sdl\SDL_audiotypecvt.c">
+      <Filter>sdl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\sdl\SDL_xaudio2.c">
+      <Filter>sdl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\sdl_2.c">
+      <Filter>sdl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\nullsnd.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\dfsound\externals.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\plugins\dfsound\adsr.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\cfg.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\dma.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\dsoundoss.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\externals.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\gauss_i.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\psemuxa.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\registers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\regs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\reverb.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\spu.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\stdafx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\xa.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\begin_code.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\close_code.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\SDL.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\SDL_audio.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\SDL_audio_c.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\SDL_audiodev_c.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\SDL_audiomem.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\SDL_config.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\SDL_endian.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\SDL_error.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\SDL_stdinc.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\SDL_sysaudio.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\SDL_types.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\sdl\SDL_wave.h">
+      <Filter>sdl</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="ReadMe.txt" />
+  </ItemGroup>
+</Project>

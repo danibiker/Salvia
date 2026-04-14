@@ -1,0 +1,124 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Source Files\sys">
+      <UniqueIdentifier>{f36651c8-9321-48d5-b1bb-5cb48ca2c8ac}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Source Files\gui">
+      <UniqueIdentifier>{d7100a80-507e-41df-8e63-11b4e3546a4d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Media">
+      <UniqueIdentifier>{d6927e01-36d6-41f8-9c48-71b76754d770}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="simpleini">
+      <UniqueIdentifier>{86fa7ba3-0642-4560-b250-9e7dc86bc317}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="bram.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="xb_sys.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\common\sys\time.c">
+      <Filter>Source Files\sys</Filter>
+    </ClCompile>
+    <ClCompile Include="gui.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="video.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="gui_video.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="gui_main.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="gui_tools.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="sys\Mount.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="xb_sys.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\sys\mman.h">
+      <Filter>Source Files\sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\sys\time.h">
+      <Filter>Source Files\sys</Filter>
+    </ClInclude>
+    <ClInclude Include="bram.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\config.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\common\opti.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="xbPlugins.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="gui.h">
+      <Filter>Source Files\gui</Filter>
+    </ClInclude>
+    <ClInclude Include="gui_class.h">
+      <Filter>Source Files\gui</Filter>
+    </ClInclude>
+    <ClInclude Include="simpleini\SimpleIni.h">
+      <Filter>simpleini</Filter>
+    </ClInclude>
+    <ClInclude Include="aurora.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Devlog.txt" />
+    <None Include="media\Graphics\osdmenu.xui">
+      <Filter>Media</Filter>
+    </None>
+    <None Include="media\Graphics\scene.xui">
+      <Filter>Media</Filter>
+    </None>
+    <None Include="media\Graphics\swapdisc.xui">
+      <Filter>Media</Filter>
+    </None>
+    <None Include="media\Graphics\filter.xui">
+      <Filter>Media</Filter>
+    </None>
+    <None Include="media\Graphics\gameguide.xui">
+      <Filter>Media</Filter>
+    </None>
+    <None Include="media\Graphics\gameguide_v2.xui">
+      <Filter>Media</Filter>
+    </None>
+    <None Include="media\Graphics\loadstates.xui">
+      <Filter>Media</Filter>
+    </None>
+    <None Include="media\Graphics\xarialuni.ttf">
+      <Filter>Media</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="media\Graphics\simple_scene_skin.xui">
+      <Filter>Media</Filter>
+    </CustomBuild>
+  </ItemGroup>
+</Project>
