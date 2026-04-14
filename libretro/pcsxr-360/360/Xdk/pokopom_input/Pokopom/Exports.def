@@ -1,0 +1,43 @@
+EXPORTS
+	PS2EgetLibType
+	PS2EgetLibName
+	PS2EgetLibVersion2
+
+	PSEgetLibType
+	PSEgetLibName
+	PSEgetLibVersion
+	PADreadPort1
+	PADreadPort2
+	PADinit
+	PADshutdown
+	PADopen
+	PADclose
+	PADkeyEvent
+	PADstartPoll
+	PADpoll
+	PADquery
+	PADconfigure
+	PADtest
+	PADabout
+	PADupdate
+	PADfreeze
+	PADsetSlot
+	PADsetSettingsDir
+	PADqueryMtap
+
+	dcGetInterface
+	GetInputInterface
+
+	GetDllInfo
+	CloseDLL
+	DllConfig
+	DllAbout
+	DllTest
+	RomOpen
+	RomClosed
+	InitiateControllers
+	GetKeys
+	ControllerCommand
+	ReadController
+	WM_KeyDown
+	WM_KeyUp

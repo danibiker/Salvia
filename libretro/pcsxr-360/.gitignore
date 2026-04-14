@@ -1,0 +1,7 @@
+*.user
+*.db
+*.db-shm
+*.db-wal
+*.ipch
+*.sdf
+*.suo
