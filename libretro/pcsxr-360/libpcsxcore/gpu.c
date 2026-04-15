@@ -55,11 +55,7 @@ static volatile  __declspec(align(128))  uint64_t tw_idx[2] = {0,0};
 // Taken from PEOPS SOFTGPU
 u32 lUsedAddr[3];
 
-#define GPUDMA_INT(eCycle) { \
-	psxRegs.interrupt |= (1 << PSXINT_GPUDMA); \
-	psxRegs.intCycle[PSXINT_GPUDMA].cycle = eCycle; \
-	psxRegs.intCycle[PSXINT_GPUDMA].sCycle = psxRegs.cycle; \
-}
+#define GPUDMA_INT(eCycle) set_event(PSXINT_GPUDMA, eCycle)
 
 __inline boolean CheckForEndlessLoop(u32 laddr) {
 	if (laddr == lUsedAddr[1]) return TRUE;
@@ -317,7 +313,7 @@ void gpuDmaThreadInit() {
 
 	// Create gpu thread on cpu 2
 	gpuHandle = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)gpuThread, NULL, CREATE_SUSPENDED, NULL);
-	SetThreadPriority(gpuHandle, THREAD_PRIORITY_HIGHEST);
+	SetThreadPriority(gpuHandle, THREAD_PRIORITY_ABOVE_NORMAL);
 	XSetThreadProcessor(gpuHandle, 4);
 
 	ResumeThread(gpuHandle);

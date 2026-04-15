@@ -633,6 +633,7 @@ int LoadState(const char *file) {
 	gzread(f, psxH_2, 0x00010000);//}//teste
 
 	gzread(f, (void *)&psxRegs, sizeof(psxRegs));
+	schedule_timeslice();
 
 	if (Config.HLE)
 		psxBiosFreeze(0);

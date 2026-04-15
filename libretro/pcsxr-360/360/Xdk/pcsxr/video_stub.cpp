@@ -50,6 +50,10 @@ extern "C" void UpdateScrenRes(int x, int y)
 {
     currentWidth  = x;
     currentHeight = y;
+	/* Update pitch to match the actual display width so the frontend 
+	 * can memcpy the framebuffer in one shot instead of row-by-row. */
+	g_pPitch   = g_useRGB565 ? (x * 2) : (x * 4);
+
 #ifdef LIBRETRO
     libretro_update_display_size(x, y);
 #endif

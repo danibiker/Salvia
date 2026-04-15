@@ -125,7 +125,7 @@ void _psxRcntWcount( u32 index, u32 value )
     }
     else
     {
-        rcnts[index].cycle = 0xffff * rcnts[index].rate;
+        rcnts[index].cycle = 0x10000 * rcnts[index].rate;
         rcnts[index].counterState = CountToOverflow;
     }
 }
@@ -139,11 +139,11 @@ u32 _psxRcntRcount( u32 index )
     count -= rcnts[index].cycleStart;
     count /= rcnts[index].rate;
 
-    if( count > 0xffff )
+    if( count > 0x10000 )
     {
-        verboseLog( 1, "[RCNT %i] rcount > 0xffff: %x\n", index, count );
-        count &= 0xffff;
+        verboseLog( 1, "[RCNT %i] rcount > 0x10000: %x\n", index, count );
     }
+    count &= 0xffff;
 
     return count;
 }
@@ -155,6 +155,7 @@ void psxRcntSet()
 {
     s32 countToUpdate;
     u32 i;
+    u32 next_counter_abs;
 
     psxNextsCounter = psxRegs.cycle;
     psxNextCounter  = 0x7fffffff;
@@ -174,6 +175,11 @@ void psxRcntSet()
             psxNextCounter = countToUpdate;
         }
     }
+
+    // Update next_interupt if counter event is sooner
+    next_counter_abs = psxNextsCounter + psxNextCounter;
+    if ((s32)(psxRegs.next_interupt - next_counter_abs) > 0)
+        psxRegs.next_interupt = next_counter_abs;
 }
 
 /******************************************************************************/
@@ -216,7 +222,7 @@ void psxRcntReset( u32 index )
         count  = psxRegs.cycle;
         count -= rcnts[index].cycleStart;
         count /= rcnts[index].rate;
-        count -= 0xffff;
+        count -= 0x10000;
 
         _psxRcntWcount( index, count );
 
@@ -303,7 +309,7 @@ __inline void psxRcntUpdate()
         }
     }
 
-    //DebugVSync();
+    DebugVSync();
 }
 
 /******************************************************************************/

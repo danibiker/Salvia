@@ -73,10 +73,10 @@ extern int CLAMP16(int x);
 #define LATENCY 10
 #elif defined (_WINDOWS)
 // work on most cards
-#define LATENCY 25
+#define LATENCY 50
 #else
 // work on most cards
-#define LATENCY 25
+#define LATENCY 50
 #endif
 
 

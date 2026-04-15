@@ -26,17 +26,8 @@
 // Dma0/1 in Mdec.c
 // Dma3   in CdRom.c
 
-#define SPUDMA_INT(eCycle) { \
-	psxRegs.interrupt |= (1 << PSXINT_SPUDMA); \
-	psxRegs.intCycle[PSXINT_SPUDMA].cycle = eCycle; \
-	psxRegs.intCycle[PSXINT_SPUDMA].sCycle = psxRegs.cycle; \
-}
-
-#define  GPUOTCDMA_INT(eCycle) { \
-	psxRegs.interrupt |= (1 << PSXINT_GPUOTCDMA); \
-	psxRegs.intCycle[PSXINT_GPUOTCDMA].cycle = eCycle; \
-	psxRegs.intCycle[PSXINT_GPUOTCDMA].sCycle = psxRegs.cycle; \
-}
+#define SPUDMA_INT(eCycle)    set_event(PSXINT_SPUDMA, eCycle)
+#define GPUOTCDMA_INT(eCycle) set_event(PSXINT_GPUOTCDMA, eCycle)
 
 /*
 void spuInterrupt() {

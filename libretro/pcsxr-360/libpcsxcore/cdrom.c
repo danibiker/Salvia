@@ -166,41 +166,12 @@ extern SPUregisterCallback SPU_registerCallback;
 #define H_CDLeft				0x1f801db0
 #define H_CDRight				0x1f801db2
 
-#define CDRDMA_INT(eCycle) { \
-	psxRegs.interrupt |= (1 << PSXINT_CDRDMA); \
-	psxRegs.intCycle[PSXINT_CDRDMA].cycle = eCycle; \
-	psxRegs.intCycle[PSXINT_CDRDMA].sCycle = psxRegs.cycle; \
-}
-
-#define CDR_INT(eCycle) { \
-	psxRegs.interrupt |= (1 << PSXINT_CDR); \
-	psxRegs.intCycle[PSXINT_CDR].cycle = eCycle; \
-	psxRegs.intCycle[PSXINT_CDR].sCycle = psxRegs.cycle; \
-}
-
-#define CDREAD_INT(eCycle) { \
-	psxRegs.interrupt |= (1 << PSXINT_CDREAD); \
-	psxRegs.intCycle[PSXINT_CDREAD].cycle = eCycle; \
-	psxRegs.intCycle[PSXINT_CDREAD].sCycle = psxRegs.cycle; \
-}
-
-#define CDRDBUF_INT(eCycle) { \
-	psxRegs.interrupt |= (1 << PSXINT_CDRDBUF); \
-	psxRegs.intCycle[PSXINT_CDRDBUF].cycle = eCycle; \
-	psxRegs.intCycle[PSXINT_CDRDBUF].sCycle = psxRegs.cycle; \
-}
-
-#define CDRLID_INT(eCycle) { \
-	psxRegs.interrupt |= (1 << PSXINT_CDRLID); \
-	psxRegs.intCycle[PSXINT_CDRLID].cycle = eCycle; \
-	psxRegs.intCycle[PSXINT_CDRLID].sCycle = psxRegs.cycle; \
-}
-
-#define CDRMISC_INT(eCycle) { \
-	psxRegs.interrupt |= (1 << PSXINT_CDRPLAY); \
-	psxRegs.intCycle[PSXINT_CDRPLAY].cycle = eCycle; \
-	psxRegs.intCycle[PSXINT_CDRPLAY].sCycle = psxRegs.cycle; \
-}
+#define CDRDMA_INT(eCycle)  set_event(PSXINT_CDRDMA, eCycle)
+#define CDR_INT(eCycle)     set_event(PSXINT_CDR, eCycle)
+#define CDREAD_INT(eCycle)  set_event(PSXINT_CDREAD, eCycle)
+#define CDRDBUF_INT(eCycle) set_event(PSXINT_CDRDBUF, eCycle)
+#define CDRLID_INT(eCycle)  set_event(PSXINT_CDRLID, eCycle)
+#define CDRMISC_INT(eCycle) set_event(PSXINT_CDRPLAY, eCycle)
 
 #define StopReading() { \
 	if (cdr.Reading) { \
@@ -228,15 +199,14 @@ extern SPUregisterCallback SPU_registerCallback;
 }
 
 
+static u8 irqMaskedPrev;
+
 static void setIrq(void)
 {
-	if (cdr.Stat & cdr.Reg2)
-{
-//if(use_vm)
-//		psxHu32ref(0x1070) |= SWAP32((u32)0x4);
-//else
-        psxHu32ref_2(0x1070) |= SWAP32((u32)0x4);//teste
-}
+	u8 new_masked = (cdr.Stat & cdr.Reg2) ? 1 : 0;
+	if (new_masked && !irqMaskedPrev)
+		psxHu32ref_2(0x1070) |= SWAP32((u32)0x4);
+	irqMaskedPrev = new_masked;
 }
 
 static void adjustTransferIndex(void)
@@ -1566,6 +1536,7 @@ void cdrWrite3(unsigned char rt) {
 		break; // transfer
 	case 1:
 		cdr.Stat &= ~rt;
+		irqMaskedPrev = (cdr.Stat & cdr.Reg2) ? 1 : 0;
 
 		if (rt & 0x40)
 			cdr.ParamC = 0;
@@ -1730,6 +1701,7 @@ void cdrReset() {
 	cdr.Stat = NoIntr;
 	cdr.DriveState = DRIVESTATE_STANDBY;
 	cdr.StatP = STATUS_ROTATING;
+	irqMaskedPrev = 0;
 
 	// BIOS player - default values
 	cdr.AttenuatorLeftToLeft = 0x80;

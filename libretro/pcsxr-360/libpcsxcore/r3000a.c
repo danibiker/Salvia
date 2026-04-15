@@ -25,6 +25,8 @@
 #include "mdec.h"
 #include "gpu.h"
 #include "gte.h"
+#include "sio.h"
+#include "psxdma.h"
 
 boolean use_vm;
 // extern boolean use_vm on psxcommon.h
@@ -72,6 +74,7 @@ void psxReset() {
 	memset(&psxRegs, 0, sizeof(psxRegs));
 
 	psxRegs.pc = 0xbfc00000; // Start in bootstrap
+	psxRegs.next_interupt = 0;
 
 	psxRegs.CP0.r[12] = 0x10900000; // COP0 enabled | BEV = 1 | TS = 1
 	psxRegs.CP0.r[15] = 0x00000002; // PRevID = Revision ID, same as R3000A
@@ -130,140 +133,74 @@ void psxException(u32 code, u32 bd) {
 	if (Config.HLE) psxBiosException();
 }
 
-void psxBranchTest() {
-	
-    // GameShark Sampler: Give VSync pin some delay before exception eats it
-/*
-if(use_vm){
-	
-	if (psxHu32(0x1070) & psxHu32(0x1074)) {
+void schedule_timeslice(void) {
+	u32 i, c = psxRegs.cycle;
+	u32 irqs = psxRegs.interrupt;
+	s32 min, dif;
 
-		if ((psxRegs.CP0.n.Status & 0x401) == 0x401) {
-			
-            u32 opcode;
-			u32 * code;
-			code = (u32 *)PSXM(psxRegs.pc);
+	// Start with next counter event
+	min = (s32)(psxNextsCounter + psxNextCounter - c);
+	if (min < 0) min = 0;
 
-		    //u32 *code = Read_ICache(psxRegs.pc, TRUE);;
-			// Crash Bandicoot 2: Don't run exceptions when GTE in pipeline
-			opcode = SWAP32(*code);
-
-			if( ((opcode >> 24) & 0xfe) != 0x4a ) {
-
-#ifdef PSXCPU_LOG
-				PSXCPU_LOG("Interrupt: %x %x\n", psxHu32(0x1070), psxHu32(0x1074));
-#endif
-				psxException(0x400, 0);
-       }
-     }
-   }
- }
-*/
-//else{
-
-    if (psxHu32_2(0x1070) & psxHu32_2(0x1074)) {
-
-		if ((psxRegs.CP0.n.Status & 0x401) == 0x401) {
-			
-            u32 opcode;
-			u32 * code;
-            code = (u32 *)PSXM_2(psxRegs.pc);//teste
-
-            //u32 *code = Read_ICache(psxRegs.pc, TRUE);;
-			// Crash Bandicoot 2: Don't run exceptions when GTE in pipeline
-			opcode = SWAP32(*code);
-
-			if( ((opcode >> 24) & 0xfe) != 0x4a ) {
-
-#ifdef PSXCPU_LOG
-				PSXCPU_LOG("Interrupt: %x %x\n", psxHu32(0x1070), psxHu32(0x1074));
-#endif
-				psxException(0x400, 0);
-			}
+	for (i = 0; irqs != 0; i++, irqs >>= 1) {
+		if (!(irqs & 1))
+			continue;
+		dif = (s32)(psxRegs.intCycle[i].sCycle + psxRegs.intCycle[i].cycle - c);
+		if (dif < min) {
+			if (dif < 0) { min = 0; break; }
+			min = dif;
 		}
 	}
-//}//teste
-	
-	if ((psxRegs.cycle - psxNextsCounter) >= psxNextCounter)
-		psxRcntUpdate();
+	psxRegs.next_interupt = c + min;
+}
 
-	if (psxRegs.interrupt) {
-		if ((psxRegs.interrupt & (1 << PSXINT_SIO)) && !Config.Sio) { // sio
-			if ((psxRegs.cycle - psxRegs.intCycle[PSXINT_SIO].sCycle) >= psxRegs.intCycle[PSXINT_SIO].cycle) {
-				psxRegs.interrupt &= ~(1 << PSXINT_SIO);
-				sioInterrupt();
-			}
-		}
-		if (psxRegs.interrupt & (1 << PSXINT_CDR)) { // cdr
-			if ((psxRegs.cycle - psxRegs.intCycle[PSXINT_CDR].sCycle) >= psxRegs.intCycle[PSXINT_CDR].cycle) {
-				psxRegs.interrupt &= ~(1 << PSXINT_CDR);
-				cdrInterrupt();
-			}
-		}
-		if (psxRegs.interrupt & (1 << PSXINT_CDREAD)) { // cdr read
-			if ((psxRegs.cycle - psxRegs.intCycle[PSXINT_CDREAD].sCycle) >= psxRegs.intCycle[PSXINT_CDREAD].cycle) {
-				psxRegs.interrupt &= ~(1 << PSXINT_CDREAD);
-				cdrReadInterrupt();
-			}
-		}
-		if (psxRegs.interrupt & (1 << PSXINT_GPUDMA)) { // gpu dma
-			if ((psxRegs.cycle - psxRegs.intCycle[PSXINT_GPUDMA].sCycle) >= psxRegs.intCycle[PSXINT_GPUDMA].cycle) {
-				psxRegs.interrupt &= ~(1 << PSXINT_GPUDMA);
-				gpuInterrupt();
-			}
-		}
-		if (psxRegs.interrupt & (1 << PSXINT_MDECOUTDMA)) { // mdec out dma
-			if ((psxRegs.cycle - psxRegs.intCycle[PSXINT_MDECOUTDMA].sCycle) >= psxRegs.intCycle[PSXINT_MDECOUTDMA].cycle) {
-				psxRegs.interrupt &= ~(1 << PSXINT_MDECOUTDMA);
-				mdec1Interrupt();
-			}
-		}
-		if (psxRegs.interrupt & (1 << PSXINT_SPUDMA)) { // spu dma
-			if ((psxRegs.cycle - psxRegs.intCycle[PSXINT_SPUDMA].sCycle) >= psxRegs.intCycle[PSXINT_SPUDMA].cycle) {
-				psxRegs.interrupt &= ~(1 << PSXINT_SPUDMA);
-				spuInterrupt();
+void psxBranchTest() {
+	// Event processing gated by next_interupt (fast path optimization)
+	if ((s32)(psxRegs.cycle - psxRegs.next_interupt) >= 0) {
+		if ((psxRegs.cycle - psxNextsCounter) >= psxNextCounter)
+			psxRcntUpdate();
+
+		if (psxRegs.interrupt) {
+			u32 irq, irq_bits;
+			for (irq = 0, irq_bits = psxRegs.interrupt; irq_bits != 0; irq++, irq_bits >>= 1) {
+				if (!(irq_bits & 1))
+					continue;
+				if ((psxRegs.cycle - psxRegs.intCycle[irq].sCycle) >= psxRegs.intCycle[irq].cycle) {
+					psxRegs.interrupt &= ~(1u << irq);
+					switch (irq) {
+						case PSXINT_SIO: if (!Config.Sio) sioInterrupt(); break;
+						case PSXINT_CDR: cdrInterrupt(); break;
+						case PSXINT_CDREAD: cdrReadInterrupt(); break;
+						case PSXINT_GPUDMA: gpuInterrupt(); break;
+						case PSXINT_MDECOUTDMA: mdec1Interrupt(); break;
+						case PSXINT_SPUDMA: spuInterrupt(); break;
+						case PSXINT_MDECINDMA: mdec0Interrupt(); break;
+						case PSXINT_GPUOTCDMA: gpuotcInterrupt(); break;
+						case PSXINT_CDRDMA: cdrDmaInterrupt(); break;
+						case PSXINT_CDRPLAY: cdrPlayInterrupt(); break;
+						case PSXINT_CDRDBUF: cdrDecodedBufferInterrupt(); break;
+						case PSXINT_CDRLID: cdrLidSeekInterrupt(); break;
+					}
+				}
 			}
 		}
 
-		if (psxRegs.interrupt & (1 << PSXINT_MDECINDMA)) { // mdec in
-			if ((psxRegs.cycle - psxRegs.intCycle[PSXINT_MDECINDMA].sCycle) >= psxRegs.intCycle[PSXINT_MDECINDMA].cycle) {
-				psxRegs.interrupt &= ~(1 << PSXINT_MDECINDMA);
-				mdec0Interrupt();
-			}
-		}
+		schedule_timeslice();
+	}
 
-		if (psxRegs.interrupt & (1 << PSXINT_GPUOTCDMA)) { // gpu otc
-			if ((psxRegs.cycle - psxRegs.intCycle[PSXINT_GPUOTCDMA].sCycle) >= psxRegs.intCycle[PSXINT_GPUOTCDMA].cycle) {
-				psxRegs.interrupt &= ~(1 << PSXINT_GPUOTCDMA);
-				gpuotcInterrupt();
-			}
-		}
-
-		if (psxRegs.interrupt & (1 << PSXINT_CDRDMA)) { // cdrom
-			if ((psxRegs.cycle - psxRegs.intCycle[PSXINT_CDRDMA].sCycle) >= psxRegs.intCycle[PSXINT_CDRDMA].cycle) {
-				psxRegs.interrupt &= ~(1 << PSXINT_CDRDMA);
-				cdrDmaInterrupt();
-			}
-		}
-
-		if (psxRegs.interrupt & (1 << PSXINT_CDRPLAY)) { // cdr play timing
-			if ((psxRegs.cycle - psxRegs.intCycle[PSXINT_CDRPLAY].sCycle) >= psxRegs.intCycle[PSXINT_CDRPLAY].cycle) {
-				psxRegs.interrupt &= ~(1 << PSXINT_CDRPLAY);
-				cdrPlayInterrupt();
-			}
-		}
-
-		if (psxRegs.interrupt & (1 << PSXINT_CDRDBUF)) { // cdr decoded buffer
-			if ((psxRegs.cycle - psxRegs.intCycle[PSXINT_CDRDBUF].sCycle) >= psxRegs.intCycle[PSXINT_CDRDBUF].cycle) {
-				psxRegs.interrupt &= ~(1 << PSXINT_CDRDBUF);
-				cdrDecodedBufferInterrupt();
-			}
-		}
-
-		if (psxRegs.interrupt & (1 << PSXINT_CDRLID)) { // cdr lid states
-			if ((psxRegs.cycle - psxRegs.intCycle[PSXINT_CDRLID].sCycle) >= psxRegs.intCycle[PSXINT_CDRLID].cycle) {
-				psxRegs.interrupt &= ~(1 << PSXINT_CDRLID);
-				cdrLidSeekInterrupt();
+	// Hardware interrupt check - ALWAYS runs (events above may set 0x1070)
+	if (psxHu32_2(0x1070) & psxHu32_2(0x1074)) {
+		if ((psxRegs.CP0.n.Status & 0x401) == 0x401) {
+			u32 opcode;
+			u32 *code;
+			code = (u32 *)PSXM_2(psxRegs.pc);
+			// Crash Bandicoot 2: Don't run exceptions when GTE in pipeline
+			opcode = SWAP32(*code);
+			if (((opcode >> 24) & 0xfe) != 0x4a) {
+#ifdef PSXCPU_LOG
+				PSXCPU_LOG("Interrupt: %x %x\n", psxHu32_2(0x1070), psxHu32_2(0x1074));
+#endif
+				psxException(0x400, 0);
 			}
 		}
 	}

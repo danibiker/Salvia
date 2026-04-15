@@ -118,7 +118,7 @@ extern void libretro_frame_sync(void);
 #endif
 
 void SysUpdate(){
-	ShowFPS();
+	//ShowFPS();
 #ifdef LIBRETRO
 	libretro_frame_sync();
 #endif

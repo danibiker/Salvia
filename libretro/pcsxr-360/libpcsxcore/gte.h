@@ -159,6 +159,24 @@ extern "C" {
 #define gteZSF4 (psxRegs.CP2C.p[30].sw.l)
 #define gteFLAG (psxRegs.CP2C.r[31])
 
+// Count leading zeros - uses PPC intrinsic on Xbox 360
+static __inline int gte_clz(u32 x) {
+#if defined(_XBOX)
+	return (x != 0) ? (int)_CountLeadingZeros(x) : 32;
+#elif defined(__GNUC__)
+	return (x != 0) ? __builtin_clz(x) : 32;
+#else
+	int n = 0;
+	if (x == 0) return 32;
+	if (!(x & 0xFFFF0000)) { n += 16; x <<= 16; }
+	if (!(x & 0xFF000000)) { n +=  8; x <<=  8; }
+	if (!(x & 0xF0000000)) { n +=  4; x <<=  4; }
+	if (!(x & 0xC0000000)) { n +=  2; x <<=  2; }
+	if (!(x & 0x80000000)) { n +=  1; }
+	return n;
+#endif
+}
+
 #define GTE_OP(op) ((op >> 20) & 31)
 #define GTE_SF(op) ((op >> 19) & 1)
 #define GTE_MX(op) ((op >> 17) & 3)

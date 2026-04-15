@@ -12,8 +12,8 @@
  * frontend thread.
  *
  * The SPU runs on its own dedicated thread (iUseTimer=0, core 4) for
- * performance.  Audio samples are accumulated in a shared buffer protected
- * by a CRITICAL_SECTION and drained by retro_run() each frame.
+ * performance.  Audio samples are sent directly to the frontend via
+ * audio_batch_cb from SoundFeedStreamData (no intermediate buffering).
  *
  * The PPC dynarec and all core emulation code remain untouched.
  */
@@ -88,9 +88,6 @@ static bool audio_cs_init = false;
 #define AUDIO_DRAIN_MAX    4096
 static int16_t audio_drain_buf[AUDIO_DRAIN_MAX];
 static long    audio_drain_count = 0;
-
-/* High-resolution timer for auto frameskip */
-static LARGE_INTEGER perf_freq;
 
 /* ===== Input state ===== */
 static uint16_t libretro_pad_state[2];
@@ -451,7 +448,6 @@ void retro_init(void) {
     emu_initialized   = false;
     fiber_main        = NULL;
     fiber_emu         = NULL;
-    QueryPerformanceFrequency(&perf_freq);
     check_pixel_format();
 }
 
@@ -477,6 +473,9 @@ bool retro_load_game(const struct retro_game_info *game) {
 
     strncpy(game_path_store, game->path, sizeof(game_path_store) - 1);
     game_path_store[sizeof(game_path_store) - 1] = '\0';
+
+	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+	XSetThreadProcessor(GetCurrentThread(), 1);
 
     fiber_main = ConvertThreadToFiber(NULL);
     if (!fiber_main) {
@@ -547,13 +546,14 @@ void retro_run(void) {
     {
         bool updated = false;
         if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
-            
+            check_pixel_format();
         }
     }
 
     /* 1. Poll input */
     poll_libretro_input();
 
+    /* 4. Run the emulator for one frame*/
     SwitchToFiber(fiber_emu);
 
     /* 5. Send video frame to frontend.
@@ -570,7 +570,7 @@ void retro_run(void) {
      *    buffer for the next frame (shifted via memmove). */
     audio_drain_count = 0;
     if (audio_cs_init) {
-        /* Target samples per frame: 44100Hz * 2ch / fps */
+        //Target samples per frame: 44100Hz * 2ch / fps
         long max_drain = (Config.PsxType == PSX_TYPE_PAL) ? 1764 : 1470;
         if (max_drain > AUDIO_DRAIN_MAX)
             max_drain = AUDIO_DRAIN_MAX;
@@ -584,7 +584,7 @@ void retro_run(void) {
             memcpy(audio_drain_buf, audio_buf, to_drain * sizeof(int16_t));
             audio_drain_count = to_drain;
 
-            /* Shift remaining samples to front of buffer */
+            //Shift remaining samples to front of buffer
             long remaining = audio_buf_pos - to_drain;
             if (remaining > 0)
                 memmove(audio_buf, &audio_buf[to_drain], remaining * sizeof(int16_t));
@@ -593,7 +593,8 @@ void retro_run(void) {
         LeaveCriticalSection(&audio_cs);
     }
     if (audio_drain_count > 0 && audio_batch_cb) {
-        long frames = audio_drain_count / 2;  /* stereo: 2 samples per frame */
+		// stereo: 2 samples per frame
+        long frames = audio_drain_count / 2;  
         if (frames > 0)
             audio_batch_cb(audio_drain_buf, (size_t)frames);
     }

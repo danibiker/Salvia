@@ -70,10 +70,8 @@ char Mcd1Data[MCD_SIZE], Mcd2Data[MCD_SIZE];
 
 
 #define SIO_INT(eCycle) \
-		if (!Config.Sio) { \
-		psxRegs.interrupt |= (1 << PSXINT_SIO); \
-		psxRegs.intCycle[PSXINT_SIO].cycle = eCycle; \
-		psxRegs.intCycle[PSXINT_SIO].sCycle = psxRegs.cycle; \
+	if (!Config.Sio) { \
+		set_event(PSXINT_SIO, eCycle); \
 	} \
 
 // clk cycle byte
@@ -841,9 +839,9 @@ void GetMcdBlockInfo(int mcd, int block, McdBlock *Info) {
 
 		ptr = data + block * 8192 + 128 + 128 * i; // icon data
 
-		for (x = 0; x < 16 * 16; x++) {
+		for (x = 0; x < 16 * 16; ) {
 			icon[x++] = clut[*ptr & 0xf];
-			icon[x] = clut[*ptr >> 4];
+			icon[x++] = clut[*ptr >> 4];
 			ptr++;
 		}
 	}

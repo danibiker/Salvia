@@ -173,8 +173,8 @@ enum {
 	PSXINT_CDRDMA,
 	PSXINT_CDRPLAY,
 	PSXINT_CDRDBUF,
-	PSXINT_CDRLID
-	
+	PSXINT_CDRLID,
+	PSXINT_COUNT
 };
 
 
@@ -187,6 +187,7 @@ typedef struct {
 	u32 code;			/* The instruction */
 	u32 cycle;
 	u32 interrupt;
+	u32 next_interupt;
 	struct { u32 sCycle, cycle; } intCycle[32];
 	u8 ICache_Addr[0x1000];
 	u8 ICache_Code[0x1000];
@@ -194,6 +195,17 @@ typedef struct {
 } psxRegisters;
 
 extern psxRegisters psxRegs;
+
+#define set_event(e, c) do { \
+	psxRegs.interrupt |= (1 << (e)); \
+	psxRegs.intCycle[e].cycle = (c); \
+	psxRegs.intCycle[e].sCycle = psxRegs.cycle; \
+	{ u32 abs_ = psxRegs.cycle + (c); \
+	  if ((s32)(psxRegs.next_interupt - abs_) > 0) \
+	      psxRegs.next_interupt = abs_; } \
+} while (0)
+
+void schedule_timeslice(void);
 
 #if defined(__BIGENDIAN__)
 
