@@ -147,7 +147,7 @@ std::string& Cross::MakePathAbsolute(std::string& str)
 	size_t strsz = str.size();
 	#ifdef WIN32
     // 1. Detectar si ya es absoluta (incluye el prefijo 'game:\' de Xbox)
-	if (strsz > 2 && (str[1] == ':' || (str[0]=='\\' && str[1]=='\\'))) return str;
+	if (strsz > 2 && (str[1] == ':' || (str[0]=='\\' && str[1]=='\\') || str.find(':') != std::string::npos)) return str;
 
     #ifdef _XBOX
     // 2. En Xbox 360, el "Directorio Actual" es siempre la raíz del juego

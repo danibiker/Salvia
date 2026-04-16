@@ -28,9 +28,10 @@ extern t_rom_paths romPaths;
 struct delayed_action{
 	int cycles;
 	ThreadAction action;
-	uint16_t* screenshot;
+	uint8_t* screenshot;
 	unsigned width;
 	unsigned height;
+	int bpp;
 
 	delayed_action(){
 		cycles = -1;
@@ -38,6 +39,7 @@ struct delayed_action{
 		screenshot = NULL;
 		width = 0;
 		height = 0;
+		bpp = 16;
 	}
 } action_postponed;
 
@@ -53,34 +55,49 @@ struct SaveData {
 	void *screenshot;
 	unsigned width;
 	unsigned height;
+	int bpp;
 	int slot;
 	std::size_t bufferSize;
 } g_saveQueue;
 
-bool GuardarCapturaPNG(const std::string& ruta, uint16_t* buffer, int w, int h) {
+bool GuardarCapturaPNG(const std::string& ruta, uint8_t* buffer, int w, int h, int bpp = 16) {
     if (!buffer) return false;
 
-    // 1. Crear un vector para los datos RGB (3 bytes por píxel)
+    const int total_pixels = w * h;
+
+    // 1. Crear un vector para los datos RGB (3 bytes por p?xel)
     std::vector<unsigned char> rgb_buffer;
-    rgb_buffer.resize(w * h * 3);
+    rgb_buffer.resize(total_pixels * 3);
 
-    // 2. Convertir de RGB565 a RGB888
-    for (int i = 0; i < w * h; ++i) {
-        uint16_t pixel = buffer[i];
-        
-        // Extraer componentes y expandir de 5/6 bits a 8 bits
-        // Usamos desplazamiento y bitwise OR para mantener el brillo correcto
-        uint8_t r = ((pixel >> 11) & 0x1F);
-        uint8_t g = ((pixel >> 5) & 0x3F);
-        uint8_t b = (pixel & 0x1F);
+    if (bpp == 32) {
+        // Convertir de XRGB8888 a RGB888
+        const uint32_t* src = (const uint32_t*)buffer;
+        for (int i = 0; i < total_pixels; ++i) {
+            uint32_t pixel = src[i];
+            rgb_buffer[i * 3 + 0] = (uint8_t)((pixel >> 16) & 0xFF); // R
+            rgb_buffer[i * 3 + 1] = (uint8_t)((pixel >>  8) & 0xFF); // G
+            rgb_buffer[i * 3 + 2] = (uint8_t)( pixel        & 0xFF); // B
+        }
+    } else {
+        // Convertir de RGB565 a RGB888
+        const uint16_t* src = (const uint16_t*)buffer;
+        for (int i = 0; i < total_pixels; ++i) {
+            uint16_t pixel = src[i];
 
-        rgb_buffer[i * 3 + 0] = (r << 3) | (r >> 2);
-        rgb_buffer[i * 3 + 1] = (g << 2) | (g >> 4);
-        rgb_buffer[i * 3 + 2] = (b << 3) | (b >> 2);
+            // Extraer componentes y expandir de 5/6 bits a 8 bits
+            // Usamos desplazamiento y bitwise OR para mantener el brillo correcto
+            uint8_t r = ((pixel >> 11) & 0x1F);
+            uint8_t g = ((pixel >> 5) & 0x3F);
+            uint8_t b = (pixel & 0x1F);
+
+            rgb_buffer[i * 3 + 0] = (r << 3) | (r >> 2);
+            rgb_buffer[i * 3 + 1] = (g << 2) | (g >> 4);
+            rgb_buffer[i * 3 + 2] = (b << 3) | (b >> 2);
+        }
     }
 
     // 3. Codificar y guardar el archivo en el HDD/USB de la Xbox
-    // lodepng::encode devuelve 0 si tiene éxito
+    // lodepng::encode devuelve 0 si tiene ?xito
     unsigned error = lodepng::encode(ruta, rgb_buffer, w, h, LCT_RGB, 8);
 	Fileio::commit(ruta.c_str());
 
@@ -232,11 +249,13 @@ void saveState() {
             // Gestión de la captura de pantalla para el Slot
             g_saveQueue.width = action_postponed.width;
             g_saveQueue.height = action_postponed.height;
-            const std::size_t total_pixels = g_saveQueue.width * g_saveQueue.height;
+            g_saveQueue.bpp = action_postponed.bpp;
+            const std::size_t bytes_per_pixel = (action_postponed.bpp == 32) ? 4 : 2;
+            const std::size_t total_bytes = (std::size_t)g_saveQueue.width * g_saveQueue.height * bytes_per_pixel;
 
-            if (total_pixels > 0 && action_postponed.screenshot != NULL) {
-                g_saveQueue.screenshot = new uint16_t[total_pixels];
-                std::memcpy(g_saveQueue.screenshot, action_postponed.screenshot, total_pixels * sizeof(uint16_t));
+            if (total_bytes > 0 && action_postponed.screenshot != NULL) {
+                g_saveQueue.screenshot = new uint8_t[total_bytes];
+                std::memcpy(g_saveQueue.screenshot, action_postponed.screenshot, total_bytes);
             }
             
             g_saveQueue.action = SAVE_STATE;
@@ -250,7 +269,7 @@ void saveState() {
     free(buffer);
     
     if (action_postponed.screenshot) {
-        delete[] action_postponed.screenshot;
+        delete[] action_postponed.screenshot; // uint8_t*
         action_postponed.screenshot = NULL;
     }
 }
@@ -358,6 +377,7 @@ int SaveThreadFunc(void* data) {
 		void* localScreenshot = sd->screenshot;
 		unsigned width = sd->width;
 		unsigned height = sd->height;
+		int bpp = sd->bpp;
 		int localSlot = sd->slot;
         SDL_mutexV(sd->saveMutex);
 
@@ -384,7 +404,7 @@ int SaveThreadFunc(void* data) {
 					if (guardar_comprimido_zlib(statePath.c_str(), localBuffer, localSize)){
 						if (localScreenshot != NULL) {
 							std::string imgPath = Constant::checkPath(localPath + STATE_IMG_EXT);
-							GuardarCapturaPNG(imgPath, (uint16_t*)localScreenshot, width,  height);
+							GuardarCapturaPNG(imgPath, (uint8_t*)localScreenshot, width, height, bpp);
 							gameMenu->configMenus->poblarPartidasGuardadas(gameMenu->getCfgLoader(), romPaths.rompath);
 							gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.state.save") + Constant::TipoToStr(localSlot), 3000);
 						} else {
@@ -395,7 +415,7 @@ int SaveThreadFunc(void* data) {
 					}
 
 					free(localBuffer); // Ahora es seguro porque es una copia dedicada
-					delete[] (uint16_t*)localScreenshot; // Liberar memoria de imagen
+					delete[] (uint8_t*)localScreenshot; // Liberar memoria de imagen
 
 					SDL_mutexP(sd->saveMutex);
 					sd->buffer = NULL;

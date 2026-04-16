@@ -125,14 +125,15 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
     }
     #endif
 
-	char buffer[128] = {0}; 
+	const unsigned int MAX_BUFFER = 128;
+	char buffer[MAX_BUFFER] = {0}; 
     va_list args;
     va_start(args, fmt);
-    int len = _vsnprintf_s(buffer, _countof(buffer), _TRUNCATE, fmt, args);
+    int len = _vsnprintf_s(buffer, MAX_BUFFER, _TRUNCATE, fmt, args);
     va_end(args);
+    buffer[MAX_BUFFER - 1] = '\0';
 
-    buffer[_countof(buffer) - 1] = '\0';
-
+	//This code is intended to detect loading process for fbanext and mame
     if (!gameMenu->romLoaded && progress_loader.total_rom_files > 0) {
         if (strstr(buffer, "Opening ROM file:")) {
             progress_loader.current_rom_file++;
@@ -140,6 +141,11 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
             drawLoadingProgressBar(gameMenu->overlay, (progress > 1.0f) ? 1.0f : progress);
         }
     }
+
+	//Log the output of the core
+	#ifdef DEBUG_LOG
+		OutputDebugStringA(buffer);
+	#endif
 }
 
 // ─────────────────────────────────────────────
@@ -589,20 +595,22 @@ static bool retro_environment(unsigned cmd, void *data) {
     return false; // Por defecto devolver false para comandos desconocidos
 }
 
-static inline void take_screenshot(void* final_src, unsigned width, unsigned height, std::size_t pitch){
+static inline void take_screenshot(void* final_src, unsigned width, unsigned height, std::size_t pitch, int bpp = 16){
     if (action_postponed.screenshot) {
         delete[] action_postponed.screenshot;
         action_postponed.screenshot = NULL;
     }
 
-    std::size_t num_pixels = width * height;
-    action_postponed.screenshot = new uint16_t[num_pixels];
+	const std::size_t bytes_per_pixel = (bpp == 32) ? 4 : 2;
+	const std::size_t total_bytes = (std::size_t)width * height * bytes_per_pixel;
+    action_postponed.screenshot = new uint8_t[total_bytes];
     action_postponed.width = width;
     action_postponed.height = height;
+	action_postponed.bpp = bpp;
 
     uint8_t* src_ptr = (uint8_t*)final_src;
-    uint8_t* dst_ptr = (uint8_t*)action_postponed.screenshot;
-    std::size_t row_size = width * sizeof(uint16_t);
+    uint8_t* dst_ptr = action_postponed.screenshot;
+    std::size_t row_size = width * bytes_per_pixel;
     for (unsigned y = 0; y < height; y++) {
         memcpy(dst_ptr, src_ptr, row_size);
         src_ptr += pitch;
@@ -735,7 +743,7 @@ static inline void hw_refresh(const void *data, unsigned width,
 
     // ── Screenshot (usa la fuente ya convertida) ─────────────────────────────
     if (action_postponed.cycles == 1 && action_postponed.action  == SAVE_STATE){
-        take_screenshot((void *)final_src, width, height, final_pitch);
+        take_screenshot((void *)final_src, width, height, final_pitch, bpp);
     }
 
     // ── Copiar al surface SDL ─────────────────────────────────────────────────
@@ -856,6 +864,16 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 
 		if (sdl_axis != -1) {
 			return gameMenu->joystick->inputs.g_analog_state[port][sdl_axis];
+		}
+	} else if (device == RETRO_DEVICE_MOUSE) {
+		switch (id) {
+			case RETRO_DEVICE_ID_MOUSE_X:      return inputs->mouse_rel_x;
+			case RETRO_DEVICE_ID_MOUSE_Y:      return inputs->mouse_rel_y;
+			case RETRO_DEVICE_ID_MOUSE_LEFT:   return inputs->mouse_buttons[0];
+			case RETRO_DEVICE_ID_MOUSE_RIGHT:  return inputs->mouse_buttons[2];
+			//case RETRO_DEVICE_ID_MOUSE_WHEELUP:   return (inputs->mouse_wheel > 0);
+			//case RETRO_DEVICE_ID_MOUSE_WHEELDOWN: return (inputs->mouse_wheel < 0);
+			case RETRO_DEVICE_ID_MOUSE_MIDDLE: return inputs->mouse_buttons[1];
 		}
 	}
 	return 0;

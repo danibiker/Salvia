@@ -3329,6 +3329,20 @@ void retro_get_system_av_info(struct retro_system_av_info *info) // #5
 void retro_unload_game(void)
 {
 	DBP_Shutdown();
+
+	// Reset state so the next retro_load_game treats it as new content.
+	// When compiled as a static library (instead of a DLL), static variables
+	// persist between game loads and must be explicitly reinitialized.
+	dbp_wasloaded = false;
+	dbp_port_mode[0] = dbp_port_mode[1] = dbp_port_mode[2] = dbp_port_mode[3] = DBP_PadMapping::MODE_MAPPER;
+	dbp_input_binds.clear();
+	dbp_custom_mapping.clear();
+	dbp_wheelitems.clear();
+	dbp_auto_mapping = NULL;
+	dbp_auto_mapping_names = NULL;
+	dbp_auto_mapping_title = NULL;
+	dbp_binds_changed = 0;
+	dbp_actionwheel_inputs = 0;
 }
 
 void retro_set_controller_port_device(unsigned port, unsigned device) //#5

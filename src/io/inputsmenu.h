@@ -237,9 +237,7 @@ void updateMenuOverlay(GameMenu*& gameMenu, ListMenu &listMenu){
 		if ((cfg[cfg::enableAchievements].valueBool && cfg[cfg::hardcoreRA].valueBool) || !gameMenu->bg_screenshot){
 			gameMenu->fillOverlay(clBackground);
 		} else if (gameMenu->bg_screenshot){
-			//gameMenu->fillOverlayAlpha(clBackground, 128);
 			SDL_BlitSurface(gameMenu->bg_screenshot, NULL, gameMenu->overlay, NULL);
-			//gameMenu->fillOverlay(clBackground);
 		} 
 		gameMenu->configMenus->draw(gameMenu->overlay);
 	}

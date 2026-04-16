@@ -349,6 +349,12 @@ struct t_joy_state {
 	//To store the positions of the analog axis, but is not used by any core actually
 	int16_t g_analog_state[MAX_PLAYERS][MAX_ANALOG_AXIS];
 
+	uint16_t mouse_x;
+	uint16_t mouse_y;
+	int16_t mouse_rel_x;
+	int16_t mouse_rel_y;
+	bool mouse_buttons[3];
+
 	// Estados del frame anterior
     bool btn_last_state[MAX_PLAYERS][MAX_BUTTONS];
     bool axis_last_state[MAX_PLAYERS][MAX_AXIS];
@@ -374,6 +380,8 @@ struct t_joy_state {
 		clear(g_analog_state, 0);
 		memset(axisAsPad, 0, sizeof(axisAsPad));
 		memset(joyTypeIdx, 0, sizeof(joyTypeIdx));
+		mouse_x = mouse_y = mouse_rel_x = mouse_rel_y = 0;
+		memset(mouse_buttons, 0, sizeof(mouse_buttons));
 	}
 
 	void clearAll(){

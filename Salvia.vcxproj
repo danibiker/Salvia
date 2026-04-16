@@ -1259,6 +1259,7 @@
       <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <StructMemberAlignment>Default</StructMemberAlignment>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>false</GenerateDebugInformation>

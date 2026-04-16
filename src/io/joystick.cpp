@@ -389,6 +389,9 @@ void Joystick::close_joysticks() {
 bool Joystick::pollKeys(SDL_Surface* screen){
     SDL_Event event;
 
+	inputs.mouse_rel_x = 0;
+	inputs.mouse_rel_y = 0;
+
 	#ifdef _XBOX
     // Optimización: Solo iterar si hay algún frame pendiente de liberar
     for (int i = 0; i < MAX_PLAYERS; i++) {
@@ -476,6 +479,33 @@ bool Joystick::pollKeys(SDL_Surface* screen){
                 }
                 break;
             }
+
+			case SDL_MOUSEMOTION: {
+			// Coordenadas absolutas
+				inputs.mouse_x = event.motion.x;
+				inputs.mouse_y = event.motion.y;
+				// Movimiento relativo (útil para shooters o juegos que capturan el cursor)
+				inputs.mouse_rel_x += event.motion.xrel;
+				inputs.mouse_rel_y += event.motion.yrel;
+				break;
+			}
+
+			case SDL_MOUSEBUTTONDOWN:
+			case SDL_MOUSEBUTTONUP: {
+				bool isDown = (event.type == SDL_MOUSEBUTTONDOWN);
+				switch (event.button.button) {
+				case SDL_BUTTON_LEFT:   inputs.mouse_buttons[0] = isDown; break;
+				case SDL_BUTTON_MIDDLE: inputs.mouse_buttons[1] = isDown; break;
+				case SDL_BUTTON_RIGHT:  inputs.mouse_buttons[2] = isDown; break;
+				}
+				break;
+			}
+
+			/*case SDL_MOUSEWHEEL: {
+				// event.wheel.y es positivo para arriba, negativo para abajo
+				inputs.mouse_wheel = event.wheel.y; 
+				break;
+			}*/
         }
     }
     return true;
