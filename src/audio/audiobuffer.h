@@ -96,4 +96,8 @@ public:
         // Despertar al productor si estaba dormido en WriteBlocking
         SetEvent(hSpaceEvent);
     }
+
+    // Nivel actual de llenado (muestras ocupadas). Thread-safe snapshot.
+    size_t getUsed() const { return used(head, tail); }
+    size_t getCapacity() const { return capacity; }
 };

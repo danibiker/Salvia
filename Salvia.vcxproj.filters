@@ -466,6 +466,9 @@
     <ClInclude Include="src\libretro\libretro.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\audio\audiorate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="DistroWin\assets\i18n\en.ini">

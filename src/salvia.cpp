@@ -309,6 +309,8 @@ static bool retro_environment(unsigned cmd, void *data) {
 		case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:{
 			const struct retro_system_av_info *av_info = (const struct retro_system_av_info *)data;
 			gameMenu->sync->init_fps_counter((float)av_info->timing.fps);
+			gameMenu->g_audioRate.reset();
+			gameMenu->g_audioRate.init(BUFF_SIZE);
 			return true;
 		}
 
@@ -895,20 +897,18 @@ void retro_audio_sample(int16_t left, int16_t right) {
 
 // Callback para ráfagas de muestras (el que usan casi todos los cores)
 std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_t frames) {
-    AudioBuffer& audio = gameMenu->g_audioBuffer;
     const int mode = *gameMenu->current_sync;
-    std::size_t total_samples = frames * 2;
 
     switch(mode) {
-        case SYNC_TO_AUDIO: 
-            audio.WriteBlocking(data, total_samples);
+        case SYNC_TO_AUDIO:
+            // El bloqueo ya sincroniza naturalmente con el reloj de audio
+            gameMenu->g_audioBuffer.WriteBlocking(data, frames * 2);
             break;
         case SYNC_FAST_FORWARD:
-            // En avance rápido no bloqueamos ni escribimos para no saturar
             return frames;
         default:
-            // Para otros modos, si no hay sitio, descartamos para no acumular lag
-            audio.Write(data, total_samples);
+            // SYNC_TO_VIDEO / SYNC_NONE: DRC ajusta la tasa para evitar drift
+            gameMenu->g_audioRate.processAndWrite(gameMenu->g_audioBuffer, data, frames, false);
             break;
     }
     return frames;
@@ -1051,6 +1051,7 @@ void closeGame(){
 			audio_opened = 0;
 			audio_closing = false;
 		}
+		gameMenu->g_audioRate.reset();
 		saveSram(romPaths.sram.c_str());
 		//Liberar recursos de libretro
 		 // 1. Limpieza total del juego anterior
@@ -1201,6 +1202,7 @@ int launchGame(std::string rompath){
 	if (!audio_opened){
 		init_sdl_audio(av_info.timing.sample_rate);
 	}
+	gameMenu->g_audioRate.init(BUFF_SIZE);
 	//Iniciando el contador de fps
 	gameMenu->sync->init_fps_counter((float)av_info.timing.fps);
 	gameMenu->romLoaded = true;

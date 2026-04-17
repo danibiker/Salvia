@@ -67,22 +67,25 @@ static int display_width  = 320;
 static int display_height = 240;
 static unsigned current_pixel_format = RETRO_PIXEL_FORMAT_XRGB8888;
 
-/* ===== Audio buffer (shared between SPU thread and main thread) =====
+/* ===== Audio ring buffer (SPSC lock-free) =====
  *
- * The SPU thread (iUseTimer=0) checks SoundGetBytesBuffered() > TESTSIZE
- * to decide when to sleep.  TESTSIZE = 24192 bytes in the SPU plugin.
- * Our buffer MUST be larger than TESTSIZE/sizeof(int16_t) = 12096 samples
- * so the throttle mechanism actually engages.  We use 32768 samples
- * (~371ms at 44100 Hz stereo) which gives plenty of headroom.
+ * Single producer (SPU thread via SoundFeedStreamData) and single
+ * consumer (emu fiber via retro_run drain).  We use a power-of-two
+ * ring indexed by unsigned 32-bit positions; count = wpos - rpos
+ * (wrap-safe as long as count <= AUDIO_BUF_SAMPLES).
  *
- * retro_run drains a capped amount per frame (~1 frame's worth of audio)
- * and shifts the remainder, keeping the flow smooth to the frontend.
+ * Synchronization on PPC (weak memory model):
+ *   Producer: write payload -> __lwsync() -> publish wpos
+ *   Consumer: read wpos    -> __lwsync() -> read payload
+ *             read payload -> __lwsync() -> publish rpos
+ *
+ * No critical section, no memmove.
  */
 #define AUDIO_BUF_SAMPLES  32768
-static int16_t audio_buf[AUDIO_BUF_SAMPLES];
-static volatile long audio_buf_pos = 0;
-static CRITICAL_SECTION audio_cs;
-static bool audio_cs_init = false;
+#define AUDIO_BUF_MASK     (AUDIO_BUF_SAMPLES - 1)
+static __declspec(align(128)) int16_t  audio_buf[AUDIO_BUF_SAMPLES];
+static __declspec(align(128)) volatile uint32_t audio_wpos = 0;  /* producer */
+static __declspec(align(128)) volatile uint32_t audio_rpos = 0;  /* consumer */
 
 /* Secondary buffer for drain: max 1 frame of audio + margin */
 #define AUDIO_DRAIN_MAX    4096
@@ -177,44 +180,46 @@ void retro_set_controller_port_device(unsigned port, unsigned device) {
  * ====================================================================== */
 
 extern "C" void SetupSound(void) {
-    /* Initialize the critical section for thread-safe audio buffer access */
-    if (!audio_cs_init) {
-        InitializeCriticalSection(&audio_cs);
-        audio_cs_init = true;
-    }
-    audio_buf_pos = 0;
+    audio_wpos = 0;
+    audio_rpos = 0;
 }
 
 extern "C" void RemoveSound(void) {
-    if (audio_cs_init) {
-        DeleteCriticalSection(&audio_cs);
-        audio_cs_init = false;
-    }
 }
 
 extern "C" unsigned long SoundGetBytesBuffered(void) {
-    /* Return the actual buffered amount so the SPU thread can throttle
-     * itself (sleeps when buffer > TESTSIZE).  This prevents runaway
-     * audio production while keeping the pipeline fed. */
-    long pos = audio_buf_pos;   /* volatile read, good enough for throttle */
-    return (unsigned long)(pos * sizeof(int16_t));
+    /* Count via unsigned subtraction is wrap-safe for SPSC rings. */
+    uint32_t count = audio_wpos - audio_rpos;
+    return (unsigned long)(count * sizeof(int16_t));
 }
 
 extern "C" void SoundFeedStreamData(unsigned char *pSound, long lBytes) {
     if (!pSound || lBytes <= 0)
         return;
 
-    long samples = lBytes / (long)sizeof(int16_t);
+    uint32_t samples = (uint32_t)(lBytes / (long)sizeof(int16_t));
 
-    EnterCriticalSection(&audio_cs);
-    long space = AUDIO_BUF_SAMPLES - audio_buf_pos;
-    if (samples > space)
-        samples = space;
-    if (samples > 0) {
-        memcpy(&audio_buf[audio_buf_pos], pSound, samples * sizeof(int16_t));
-        audio_buf_pos += samples;
+    uint32_t wpos   = audio_wpos;              /* own variable, plain read */
+    uint32_t rpos   = audio_rpos;              /* other side's pos (acquire not needed: worst case we see fewer free slots) */
+    uint32_t free_s = AUDIO_BUF_SAMPLES - (wpos - rpos);
+    if (samples > free_s)
+        samples = free_s;
+    if (samples == 0)
+        return;
+
+    uint32_t w = wpos & AUDIO_BUF_MASK;
+    uint32_t first = AUDIO_BUF_SAMPLES - w;
+    if (first > samples) first = samples;
+
+    memcpy(&audio_buf[w], pSound, first * sizeof(int16_t));
+    if (samples > first) {
+        memcpy(&audio_buf[0],
+               pSound + first * sizeof(int16_t),
+               (samples - first) * sizeof(int16_t));
     }
-    LeaveCriticalSection(&audio_cs);
+
+    __lwsync();                                /* release: payload before wpos */
+    audio_wpos = wpos + samples;
 }
 
 /* ======================================================================
@@ -460,11 +465,6 @@ void retro_deinit(void) {
         ConvertFiberToThread();
         fiber_main = NULL;
     }
-    /* Safety: clean up audio CS if SPUclose didn't run */
-    if (audio_cs_init) {
-        DeleteCriticalSection(&audio_cs);
-        audio_cs_init = false;
-    }
 }
 
 bool retro_load_game(const struct retro_game_info *game) {
@@ -563,38 +563,41 @@ void retro_run(void) {
         video_cb(pPsxScreen, display_width, display_height, g_pPitch);
     }
 
-    /* 6. Drain audio buffer under lock, then send outside lock.
-     *    The SPU thread writes concurrently, so we snapshot under CS.
-     *    We cap the drain to ~1 frame's worth of audio to keep the
-     *    frontend's audio pipeline smooth.  Leftover stays in the
-     *    buffer for the next frame (shifted via memmove). */
+    /* 6. Drain audio ring (lock-free SPSC consumer).
+     *    Cap the drain to ~1 frame's worth of audio; leftover stays
+     *    in the ring for the next frame without any memmove. */
     audio_drain_count = 0;
-    if (audio_cs_init) {
+    {
         //Target samples per frame: 44100Hz * 2ch / fps
-        long max_drain = (Config.PsxType == PSX_TYPE_PAL) ? 1764 : 1470;
+        uint32_t max_drain = (Config.PsxType == PSX_TYPE_PAL) ? 1764 : 1470;
         if (max_drain > AUDIO_DRAIN_MAX)
             max_drain = AUDIO_DRAIN_MAX;
 
-        EnterCriticalSection(&audio_cs);
-        if (audio_buf_pos > 0) {
-            long to_drain = audio_buf_pos;
-            if (to_drain > max_drain)
-                to_drain = max_drain;
+        uint32_t wpos = audio_wpos;            /* acquire: read producer's pos */
+        __lwsync();                            /* payload reads must come after */
+        uint32_t rpos  = audio_rpos;
+        uint32_t avail = wpos - rpos;
+        uint32_t take  = (avail > max_drain) ? max_drain : avail;
 
-            memcpy(audio_drain_buf, audio_buf, to_drain * sizeof(int16_t));
-            audio_drain_count = to_drain;
+        if (take > 0) {
+            uint32_t r = rpos & AUDIO_BUF_MASK;
+            uint32_t first = AUDIO_BUF_SAMPLES - r;
+            if (first > take) first = take;
 
-            //Shift remaining samples to front of buffer
-            long remaining = audio_buf_pos - to_drain;
-            if (remaining > 0)
-                memmove(audio_buf, &audio_buf[to_drain], remaining * sizeof(int16_t));
-            audio_buf_pos = remaining;
+            memcpy(audio_drain_buf, &audio_buf[r], first * sizeof(int16_t));
+            if (take > first) {
+                memcpy(audio_drain_buf + first, &audio_buf[0],
+                       (take - first) * sizeof(int16_t));
+            }
+            audio_drain_count = (long)take;
+
+            __lwsync();                        /* payload read before publishing rpos */
+            audio_rpos = rpos + take;
         }
-        LeaveCriticalSection(&audio_cs);
     }
     if (audio_drain_count > 0 && audio_batch_cb) {
 		// stereo: 2 samples per frame
-        long frames = audio_drain_count / 2;  
+        long frames = audio_drain_count / 2;
         if (frames > 0)
             audio_batch_cb(audio_drain_buf, (size_t)frames);
     }

@@ -61,8 +61,6 @@ unsigned int g_pPitch;
 int g_useRGB565 = 0;
 #endif
 
-unsigned int g_pPitch;
-
 int finalw,finalh;
 int iFPSEInterface =0;
 
@@ -266,6 +264,7 @@ void BlitScreen16(unsigned char * surf,long x,long y)
    dx>>=1;
 
    LineOffset = 512 - dx;
+   if((lPitch>>2) < (long)dx) return;               // pitch mismatch would wrap SurfOffset; skip blit
    SurfOffset = (lPitch>>2) - dx;
 
    for(column=0;column<dy;column++)

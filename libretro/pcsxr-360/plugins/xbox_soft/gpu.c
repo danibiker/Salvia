@@ -537,6 +537,8 @@ long PEOPS_GPUinit()                                // GPU INIT
  PSXDisplay.Disabled     = FALSE;
  PreviousPSXDisplay.Range.x0 =0;
  PreviousPSXDisplay.Range.y0 =0;
+ PreviousPSXDisplay.Range.x1 =0;
+ PreviousPSXDisplay.Range.y1 =0;                         // also used to cache last ChangeDispOffsetsX result
  PSXDisplay.Range.x0=0;
  PSXDisplay.Range.x1=0;
  PreviousPSXDisplay.DisplayModeNew.y=0;

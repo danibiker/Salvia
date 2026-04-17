@@ -24,6 +24,7 @@ bool processActions(GameMenu*& gameMenu, t_option_action &optionAction){
 					loadState();
 					gameMenu->setEmuStatus(EMU_STARTED);
 					gameMenu->configMenus->resetStatus();
+					gameMenu->clearOverlay();
 					ret = true;
 					break;
 				case ASK_GUARDAR:
@@ -33,6 +34,7 @@ bool processActions(GameMenu*& gameMenu, t_option_action &optionAction){
 					action_postponed.action = SAVE_STATE;
 					gameMenu->setEmuStatus(EMU_STARTED);
 					gameMenu->configMenus->resetStatus();
+					gameMenu->clearOverlay();
 					break;
 				case ASK_ELIMINAR:
 					LOG_DEBUG("Peticion eliminar Partida: %s", filepath);

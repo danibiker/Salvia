@@ -1,0 +1,94 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <None Include="ReadMe.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="chd">
+      <UniqueIdentifier>{ceeb40a9-3134-4fdc-bf9e-ee1baf7c7566}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="chd\libchdr">
+      <UniqueIdentifier>{4407c3c3-baf8-4dec-b18a-fc50ceb65cdc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="chd\lzma">
+      <UniqueIdentifier>{e8a6cf80-34a9-462b-9e17-dfb0ee35f7e1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="chd\zstd">
+      <UniqueIdentifier>{1b770b18-cb86-4962-9336-4d4c61340473}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\lib\libchdr\src\libchdr_bitstream.c">
+      <Filter>chd\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\libchdr\src\libchdr_cdrom.c">
+      <Filter>chd\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\libchdr\src\libchdr_chd.c">
+      <Filter>chd\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\libchdr\src\libchdr_flac.c">
+      <Filter>chd\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\libchdr\src\libchdr_huffman.c">
+      <Filter>chd\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\lzma-19.00\src\Alloc.c">
+      <Filter>chd\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\lzma-19.00\src\Bra86.c">
+      <Filter>chd\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\lzma-19.00\src\BraIA64.c">
+      <Filter>chd\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\lzma-19.00\src\CpuArch.c">
+      <Filter>chd\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\lzma-19.00\src\Delta.c">
+      <Filter>chd\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\lzma-19.00\src\LzFind.c">
+      <Filter>chd\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\lzma-19.00\src\Lzma86Dec.c">
+      <Filter>chd\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\lzma-19.00\src\LzmaDec.c">
+      <Filter>chd\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\lzma-19.00\src\LzmaEnc.c">
+      <Filter>chd\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\lzma-19.00\src\Sort.c">
+      <Filter>chd\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\zstd\lib\common\entropy_common.c">
+      <Filter>chd\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\zstd\lib\common\error_private.c">
+      <Filter>chd\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\zstd\lib\common\fse_decompress.c">
+      <Filter>chd\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\zstd\lib\common\xxhash.c">
+      <Filter>chd\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\zstd\lib\common\zstd_common.c">
+      <Filter>chd\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\zstd\lib\decompress\huf_decompress.c">
+      <Filter>chd\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\zstd\lib\decompress\zstd_ddict.c">
+      <Filter>chd\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\zstd\lib\decompress\zstd_decompress.c">
+      <Filter>chd\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\lib\zstd\lib\decompress\zstd_decompress_block.c">
+      <Filter>chd\zstd</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

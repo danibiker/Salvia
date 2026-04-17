@@ -37,6 +37,15 @@
 #endif
 #endif
 
+#ifdef USE_CHD
+#include <libchdr/chd.h>
+/* CHD stores 2352 bytes of sector data + 96 bytes of subcode per "frame" */
+#define CHD_CD_SECTOR_DATA      2352
+#define CHD_CD_SUBCODE_DATA     96
+#define CHD_CD_FRAME_SIZE       (CHD_CD_SECTOR_DATA + CHD_CD_SUBCODE_DATA)
+#define CHD_CD_TRACK_PADDING    4
+#endif
+
 static FILE *cdHandle = NULL;
 static FILE *subHandle = NULL;
 
@@ -73,6 +82,17 @@ struct trackinfo {
 
 static int numtracks = 0;
 static struct trackinfo ti[MAXTRACKS];
+
+#ifdef USE_CHD
+static chd_file      *chdFile        = NULL;
+static unsigned char *chdHunkBuf     = NULL;
+static unsigned int   chdHunkBytes   = 0;
+static int            chdCurrentHunk = -1;
+/* Per-track LBA (disc-relative, 0-based) where track content begins and the
+ * corresponding CHD sector index at which that content lives inside the CHD. */
+static int            chdTrackLBA[MAXTRACKS];
+static int            chdTrackCHDSector[MAXTRACKS];
+#endif
 
 // get a sector from a msf-array
 __inline unsigned int msf2sec(char *msf) {
@@ -466,6 +486,158 @@ static int parsemds(const char *isofile) {
 	return 0;
 }
 
+#ifdef USE_CHD
+// Parse a .chd file and fill in track information. Returns 0 on success.
+static int parsechd(const char *isofile) {
+	const chd_header *head;
+	int cumulative_chd_sectors = 0;
+	int i;
+
+	numtracks = 0;
+	chdFile = NULL;
+	chdHunkBuf = NULL;
+	chdCurrentHunk = -1;
+
+	if (chd_open(isofile, CHD_OPEN_READ, NULL, &chdFile) != CHDERR_NONE) {
+		chdFile = NULL;
+		return -1;
+	}
+
+	head = chd_get_header(chdFile);
+	if (head == NULL || head->hunkbytes == 0 ||
+	    (head->hunkbytes % CHD_CD_FRAME_SIZE) != 0) {
+		chd_close(chdFile);
+		chdFile = NULL;
+		return -1;
+	}
+
+	chdHunkBytes = head->hunkbytes;
+	chdHunkBuf = (unsigned char *)malloc(chdHunkBytes);
+	if (chdHunkBuf == NULL) {
+		chd_close(chdFile);
+		chdFile = NULL;
+		return -1;
+	}
+
+	memset(&ti, 0, sizeof(ti));
+	/* CHD stores CDDA samples big-endian; PSX core expects them byte-swapped */
+	cddaBigEndian = TRUE;
+
+	for (i = 0; i < MAXTRACKS - 1; i++) {
+		char metadata[256];
+		char type[16], subtype[16], pgtype[16], pgsub[16];
+		int  tracknum = 0, frames = 0, pregap = 0, postgap = 0;
+		int  pregap_content;
+		int  track_start_lba;
+
+		type[0] = subtype[0] = pgtype[0] = pgsub[0] = 0;
+
+		if (chd_get_metadata(chdFile, CDROM_TRACK_METADATA2_TAG, i,
+		                     metadata, sizeof(metadata), NULL, NULL, NULL) == CHDERR_NONE) {
+			if (sscanf(metadata, CDROM_TRACK_METADATA2_FORMAT,
+			           &tracknum, type, subtype, &frames,
+			           &pregap, pgtype, pgsub, &postgap) != 8)
+				break;
+		}
+		else if (chd_get_metadata(chdFile, CDROM_TRACK_METADATA_TAG, i,
+		                          metadata, sizeof(metadata), NULL, NULL, NULL) == CHDERR_NONE) {
+			if (sscanf(metadata, CDROM_TRACK_METADATA_FORMAT,
+			           &tracknum, type, subtype, &frames) != 4)
+				break;
+		}
+		else {
+			break; // no more tracks
+		}
+
+		if (tracknum != i + 1 || frames < 0 || pregap < 0 || postgap < 0)
+			break;
+
+		// pregap is "logically present" in LBA numbering only when PGTYPE is "V"
+		// (pregap content is actually stored in the CHD file). Otherwise the
+		// pregap is silent pause that is NOT stored in the CHD.
+		pregap_content = (pgtype[0] == 'V') ? pregap : 0;
+
+		if (i == 0) {
+			// First track always starts at LBA 0 (MSF 00:02:00 with PSX lead-in)
+			track_start_lba = 0;
+			// Track 1 on PSX is data (first track type comes from metadata)
+			if (strncmp(type, "AUDIO", 5) == 0)
+				ti[tracknum].type = CDDA;
+			else
+				ti[tracknum].type = DATA;
+		}
+		else {
+			// Next track starts right after previous track's total length
+			int prev_start_lba = msf2sec(ti[tracknum - 1].start) - 2 * 75;
+			int prev_length    = msf2sec(ti[tracknum - 1].length);
+			track_start_lba = prev_start_lba + prev_length;
+			if (strncmp(type, "AUDIO", 5) == 0)
+				ti[tracknum].type = CDDA;
+			else
+				ti[tracknum].type = DATA;
+		}
+
+		// Store MSF start (PCSX-R stores it with the standard +2s lead-in offset)
+		sec2msf(track_start_lba + 2 * 75, ti[tracknum].start);
+		sec2msf(frames, ti[tracknum].length);
+
+		// CHD sector index where this track's content (LBA = track_start_lba) lives.
+		// Silent pregap (pgtype != 'V') is not present in the CHD so it doesn't
+		// advance the CHD sector cursor; content-filled pregap does.
+		chdTrackLBA[tracknum]       = track_start_lba + pregap_content;
+		chdTrackCHDSector[tracknum] = cumulative_chd_sectors + pregap_content;
+
+		// Advance the CHD sector cursor by this track's frames, rounded up to
+		// the 4-sector track padding that CHD applies at end of each track.
+		cumulative_chd_sectors += ((frames + CHD_CD_TRACK_PADDING - 1)
+		                           / CHD_CD_TRACK_PADDING) * CHD_CD_TRACK_PADDING;
+
+		numtracks = tracknum;
+	}
+
+	if (numtracks == 0) {
+		free(chdHunkBuf);
+		chdHunkBuf = NULL;
+		chd_close(chdFile);
+		chdFile = NULL;
+		return -1;
+	}
+
+	return 0;
+}
+
+// Read one 2352-byte sector at the given LBA from the currently open CHD
+// into the provided buffer. Returns 0 on success, non-zero on error.
+static int readchdsector(int lba, unsigned char *buf) {
+	int t, chd_sector, hunknum, offset_in_hunk;
+
+	if (chdFile == NULL || chdHunkBuf == NULL)
+		return -1;
+
+	// Find track that owns this LBA (search backwards so higher tracks win)
+	t = numtracks;
+	while (t > 1 && lba < chdTrackLBA[t])
+		t--;
+	if (t < 1) t = 1;
+
+	chd_sector = chdTrackCHDSector[t] + (lba - chdTrackLBA[t]);
+	if (chd_sector < 0)
+		return -1;
+
+	hunknum = (chd_sector * CHD_CD_FRAME_SIZE) / chdHunkBytes;
+	offset_in_hunk = (chd_sector * CHD_CD_FRAME_SIZE) % chdHunkBytes;
+
+	if (hunknum != chdCurrentHunk) {
+		if (chd_read(chdFile, hunknum, chdHunkBuf) != CHDERR_NONE)
+			return -1;
+		chdCurrentHunk = hunknum;
+	}
+
+	memcpy(buf, chdHunkBuf + offset_in_hunk, CHD_CD_SECTOR_DATA);
+	return 0;
+}
+#endif
+
 // this function tries to get the .sub file of the given .img
 static int opensubfile(const char *isoname) {
 	char		subname[MAXPATHLEN];
@@ -493,6 +665,31 @@ long CALLBACK ISOinit(void) {
 	return 0; // do nothing
 }
 
+#ifdef USE_CHD
+static int IsChdFile(const char *filename) {
+	size_t n;
+	if (filename == NULL) return 0;
+	n = strlen(filename);
+	if (n < 4) return 0;
+	return (filename[n-4] == '.' &&
+	        (filename[n-3] == 'c' || filename[n-3] == 'C') &&
+	        (filename[n-2] == 'h' || filename[n-2] == 'H') &&
+	        (filename[n-1] == 'd' || filename[n-1] == 'D'));
+}
+
+static void ChdCloseAll(void) {
+	if (chdFile != NULL) {
+		chd_close(chdFile);
+		chdFile = NULL;
+	}
+	if (chdHunkBuf != NULL) {
+		free(chdHunkBuf);
+		chdHunkBuf = NULL;
+	}
+	chdCurrentHunk = -1;
+}
+#endif
+
 static long CALLBACK ISOshutdown(void) {
 	if (cdHandle != NULL) {
 		fclose(cdHandle);
@@ -502,6 +699,9 @@ static long CALLBACK ISOshutdown(void) {
 		fclose(subHandle);
 		subHandle = NULL;
 	}
+#ifdef USE_CHD
+	ChdCloseAll();
+#endif
 	playing = FALSE;
 	return 0;
 }
@@ -525,6 +725,28 @@ static long CALLBACK ISOopen(void) {
 	if (cdHandle != NULL) {
 		return 0; // it's already open
 	}
+
+#ifdef USE_CHD
+	if (chdFile != NULL) {
+		return 0; // already open as CHD
+	}
+
+	if (IsChdFile(GetIsoFile())) {
+		cddaBigEndian = FALSE;
+		subChanMixed = FALSE;
+		subChanRaw = FALSE;
+		isMode1ISO = FALSE;
+
+		if (parsechd(GetIsoFile()) != 0) {
+			return -1;
+		}
+
+		SysPrintf(_("Loaded CD Image: %s"), GetIsoFile());
+		SysPrintf("[+chd].\n");
+		PrintTracks();
+		return 0;
+	}
+#endif
 
 	cdHandle = fopen(GetIsoFile(), "rb");
 	if (cdHandle == NULL) {
@@ -580,6 +802,9 @@ static long CALLBACK ISOclose(void) {
 		fclose(subHandle);
 		subHandle = NULL;
 	}
+#ifdef USE_CHD
+	ChdCloseAll();
+#endif
 	playing = FALSE;
 	return 0;
 }
@@ -610,6 +835,21 @@ static long CALLBACK ISOgetTD(unsigned char track, unsigned char *buffer) {
 	if( track == 0 ) {
 		unsigned int pos, size;
 		unsigned char time[3];
+
+#ifdef USE_CHD
+		if (chdFile != NULL) {
+			unsigned int total_sectors = 0;
+			if (numtracks > 0) {
+				// MSF start already has +2s lead-in baked in
+				total_sectors = msf2sec(ti[numtracks].start) + msf2sec(ti[numtracks].length);
+			}
+			sec2msf(total_sectors, time);
+			buffer[2] = time[0];
+			buffer[1] = time[1];
+			buffer[0] = time[2];
+			return 0;
+		}
+#endif
 
 		// Vib Ribbon: return size of CD
 		// - ex. 20 min, 22 sec, 66 fra
@@ -660,6 +900,15 @@ static void DecodeRawSubData(void) {
 // time: byte 0 - minute; byte 1 - second; byte 2 - frame
 // uses bcd format
 static long CALLBACK ISOreadTrack(unsigned char *time) {
+#ifdef USE_CHD
+	if (chdFile != NULL) {
+		int lba = MSF2SECT(btoi(time[0]), btoi(time[1]), btoi(time[2]));
+		if (readchdsector(lba, cdbuffer) != 0)
+			return -1;
+		return 0;
+	}
+#endif
+
 	if (cdHandle == NULL) {
 		return -1;
 	}
@@ -803,5 +1052,8 @@ void cdrIsoInit(void) {
 }
 
 int cdrIsoActive(void) {
+#ifdef USE_CHD
+	if (chdFile != NULL) return 1;
+#endif
 	return (cdHandle != NULL);
 }

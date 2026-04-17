@@ -98,11 +98,11 @@ unsigned char * pMixIrq=0;
 int             iVolume=3;
 int             iXAPitch=1;
 int             iUseTimer=0;
-int             iSPUIRQWait=1;
+int             iSPUIRQWait=0;
 int             iDebugMode=0;
 int             iRecordMode=0;
 int             iUseReverb=2;
-int             iUseInterpolation=2;
+int             iUseInterpolation=1;
 int             iDisStereo=1;
 int							iFreqResponse=0;
 

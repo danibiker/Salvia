@@ -4,6 +4,7 @@
 #include <SDL_ttf.h>
 
 #include <audio\audiobuffer.h>
+#include <audio\audiorate.h>
 #include <const\Constant.h>
 #include <io\cfgloader.h>
 #include <io\joystick.h>
@@ -21,6 +22,7 @@ class Engine{
 		Fonts* fonts;
 		// Instancia global para los callbacks
 		AudioBuffer g_audioBuffer;
+		AudioRateControl g_audioRate;
 		Sync *sync;
 		Joystick *joystick;
 		// Variable global para controlar la ejecución
