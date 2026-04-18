@@ -26,6 +26,10 @@ std::string configurablePortButtonsStr[MAXJOYBUTTONS];
 std::string configurablePortHatsStr[MAXJOYBUTTONS];
 std::string HOTKEYS_STR[HK_MAX];
 
+extern bool swapToNewDisc(const std::string& newBinPath);
+extern bool swapDisc(unsigned new_idx);
+extern struct retro_disk_control_callback disk_control;
+
 
 const char *scrapOrigins[] = {"SCREENSCRAPER", "THEGAMESDB", "EMPTY"};
 
@@ -59,6 +63,10 @@ GestorMenus::GestorMenus(int screenw, int screenh){
 }
 
 GestorMenus::~GestorMenus() {
+	for (std::size_t i = 0; i < cdromListMenu->opciones.size(); ++i) {
+		delete ((OpcionTxt *)cdromListMenu->opciones[i])->context;
+	}
+
     for(std::size_t i = 0; i < todosLosMenus.size(); i++) {
 		if (todosLosMenus[i])
 			delete todosLosMenus[i];
@@ -244,6 +252,19 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	}
 	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.core.assign"), menuCores));
 
+	//--------Menu de gestion de discos---------
+	Menu* menuDisks = new Menu(LanguageManager::instance()->get("menu.disk.control"), menuEmulation);
+	cdromListMenu = new Menu(LanguageManager::instance()->get("menu.disk.selectcd"), menuDisks);
+
+	OpcionTxt* nextCd = new OpcionTxt(LanguageManager::instance()->get("menu.disk.nextcd"));
+	nextCd->callback = &GestorMenus::cdromNextSelected;
+
+	//Anyadimos la opcion de seleccion de discos
+	menuDisks->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.disk.selectcd"), cdromListMenu));
+	menuDisks->opciones.push_back(nextCd);
+	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.disk.control"), menuDisks));
+	//--------Menu de gestion de discos---------
+
     //Poblar Menú Video
 	//Relacion de aspecto
 	std::vector<std::string> aspectRates;
@@ -357,6 +378,43 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	// Establecer estado inicial
     menuActual = menuRaiz;
 	resetIndexPos();
+}
+
+std::string GestorMenus::cdromFileSelected(void* inst, void *value) {
+	std::string sendValue = *((std::string *)(value));
+	FileProps* pFile = static_cast<FileProps*>(inst);
+	LOG_DEBUG("cdromFileSelected: %s", sendValue.c_str());
+	swapToNewDisc(pFile->dir + Constant::getFileSep() + pFile->filename);
+	delete pFile;
+	return "";
+}
+
+std::string GestorMenus::cdromNextSelected(void* inst, void *value){
+	if (disk_control.get_num_images && disk_control.get_num_images() > 1) {
+		unsigned n   = disk_control.get_num_images();
+		unsigned cur = disk_control.get_image_index ? disk_control.get_image_index() : 0;
+		swapDisc((cur + 1) % n);
+	}
+	return "";
+}
+
+void GestorMenus::poblarCdList(std::string ruta){
+	dirutil dir;
+	vector<unique_ptr<FileProps>> files;
+	dir.listarFilesSuperFast(dir.getFolder(ruta).c_str(), files, ".iso .chd .bin .img .pbp", "", true, false);
+	for (std::size_t i = 0; i < cdromListMenu->opciones.size(); ++i) {
+		delete ((OpcionTxt *)cdromListMenu->opciones[i])->context;
+	}
+	
+	cdromListMenu->opciones.clear();
+	for (std::size_t i = 0; i < files.size(); ++i) {
+		OpcionTxt *cdElem = new OpcionTxt(files[i]->filename);
+		cdElem->callback = &GestorMenus::cdromFileSelected;
+		// Creamos una copia nueva en memoria persistente
+		FileProps* copia = new FileProps(*files[i]); 
+		cdElem->context = copia; 
+		cdromListMenu->opciones.push_back(cdElem);
+	} 
 }
 
 void GestorMenus::loadAchievements() {
@@ -825,6 +883,9 @@ std::string GestorMenus::confirmar(t_option_action *result) {
 		Opcion* e = (Opcion*)opt;
 		return e->ejecutar();
 	} else if (opt->tipo == OPC_SAVESTATE) {
+		Opcion* e = (Opcion*)opt;
+		return e->ejecutar();
+	} else if (opt->tipo == OPC_SHOW_TXT) {
 		Opcion* e = (Opcion*)opt;
 		return e->ejecutar();
 	}

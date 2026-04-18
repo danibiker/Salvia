@@ -539,69 +539,109 @@ static const char PcsxHeader[32] = "STv4 PCSX v" PACKAGE_VERSION;
 // If you make changes to the savestate version, please increment the value below.
 static const u32 SaveVersion = 0x8b410006;
 
-int SaveState(const char *file) {
-	gzFile f;
+/* ---------------------------------------------------------------------------
+ * In-memory savestate stream — backs the gzfreeze() macro.
+ * ------------------------------------------------------------------------ */
+int psxSS_write(psxSaveState_t *f, const void *ptr, size_t n) {
+	if (!f || f->overflow) return -1;
+	if (f->pos + n > f->size) { f->overflow = 1; return -1; }
+	memcpy(f->base + f->pos, ptr, n);
+	f->pos += n;
+	return (int)n;
+}
+
+int psxSS_read(psxSaveState_t *f, void *ptr, size_t n) {
+	if (!f || f->overflow) return -1;
+	if (f->pos + n > f->size) { f->overflow = 1; return -1; }
+	memcpy(ptr, f->base + f->pos, n);
+	f->pos += n;
+	return (int)n;
+}
+
+int psxSS_seek(psxSaveState_t *f, long offset, int whence) {
+	size_t newpos;
+	if (!f) return -1;
+	switch (whence) {
+		case SEEK_SET: newpos = (size_t)offset; break;
+		case SEEK_CUR: newpos = f->pos + (size_t)offset; break;
+		case SEEK_END: newpos = f->size + (size_t)offset; break;
+		default: return -1;
+	}
+	if (newpos > f->size) { f->overflow = 1; return -1; }
+	f->pos = newpos;
+	return 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * SaveStateMem / LoadStateMem — libretro entry points.  Same byte layout as
+ * the legacy gz-based savestate, but uncompressed and written to a caller-
+ * supplied buffer.  No disk I/O.
+ * ------------------------------------------------------------------------ */
+int SaveStateMem(void *data, size_t size, size_t *outUsed) {
+	psxSaveState_t ss;
 	GPUFreeze_t *gpufP;
 	SPUFreeze_t *spufP;
 	int Size;
 	unsigned char *pMem;
 
-	f = gzopen(file, "wb");
-	if (f == NULL) return -1;
+	if (!data || size == 0) return -1;
 
-	gzwrite(f, (void *)PcsxHeader, 32);
-	gzwrite(f, (void *)&SaveVersion, sizeof(u32));
-	gzwrite(f, (void *)&Config.HLE, sizeof(boolean));
+	ss.base = (unsigned char *)data;
+	ss.size = size;
+	ss.pos  = 0;
+	ss.mode = 1;
+	ss.overflow = 0;
+
+	psxSS_write(&ss, (void *)PcsxHeader, 32);
+	psxSS_write(&ss, (void *)&SaveVersion, sizeof(u32));
+	psxSS_write(&ss, (void *)&Config.HLE, sizeof(boolean));
 
 	pMem = (unsigned char *)malloc(128 * 96 * 3);
 	if (pMem == NULL) return -1;
 	GPU_getScreenPic(pMem);
-	gzwrite(f, pMem, 128 * 96 * 3);
+	psxSS_write(&ss, pMem, 128 * 96 * 3);
 	free(pMem);
 
 	if (Config.HLE)
 		psxBiosFreeze(1);
-//if(use_vm){
-//	gzwrite(f, psxM, 0x00200000);
-//	gzwrite(f, psxR, 0x00080000);
-//	gzwrite(f, psxH, 0x00010000);}
-//else{
-	gzwrite(f, psxM_2, 0x00200000);
-	gzwrite(f, psxR_2, 0x00080000);
-	gzwrite(f, psxH_2, 0x00010000);//}//teste
 
-	gzwrite(f, (void *)&psxRegs, sizeof(psxRegs));
+	psxSS_write(&ss, psxM_2, 0x00200000);
+	psxSS_write(&ss, psxR_2, 0x00080000);
+	psxSS_write(&ss, psxH_2, 0x00010000);
 
-	// gpu
+	psxSS_write(&ss, (void *)&psxRegs, sizeof(psxRegs));
+
+	/* gpu */
 	gpufP = (GPUFreeze_t *)malloc(sizeof(GPUFreeze_t));
 	gpufP->ulFreezeVersion = 1;
 	GPU_freeze(1, gpufP);
-	gzwrite(f, gpufP, sizeof(GPUFreeze_t));
+	psxSS_write(&ss, gpufP, sizeof(GPUFreeze_t));
 	free(gpufP);
 
-	// spu
-	spufP = (SPUFreeze_t *) malloc(16);
+	/* spu */
+	spufP = (SPUFreeze_t *)malloc(16);
 	SPU_freeze(2, spufP);
-	Size = spufP->Size; gzwrite(f, &Size, 4);
+	Size = spufP->Size;
+	psxSS_write(&ss, &Size, 4);
 	free(spufP);
-	spufP = (SPUFreeze_t *) malloc(Size);
+	spufP = (SPUFreeze_t *)malloc(Size);
 	SPU_freeze(1, spufP);
-	gzwrite(f, spufP, Size);
+	psxSS_write(&ss, spufP, Size);
 	free(spufP);
 
-	sioFreeze(f, 1);
-	cdrFreeze(f, 1);
-	psxHwFreeze(f, 1);
-	psxRcntFreeze(f, 1);
-	mdecFreeze(f, 1);
+	sioFreeze(&ss, 1);
+	cdrFreeze(&ss, 1);
+	psxHwFreeze(&ss, 1);
+	psxRcntFreeze(&ss, 1);
+	mdecFreeze(&ss, 1);
 
-	gzclose(f);
-
+	if (ss.overflow) return -1;
+	if (outUsed) *outUsed = ss.pos;
 	return 0;
 }
 
-int LoadState(const char *file) {
-	gzFile f;
+int LoadStateMem(const void *data, size_t size) {
+	psxSaveState_t ss;
 	GPUFreeze_t *gpufP;
 	SPUFreeze_t *spufP;
 	int Size;
@@ -609,75 +649,79 @@ int LoadState(const char *file) {
 	u32 version;
 	boolean hle;
 
-	f = gzopen(file, "rb");
-	if (f == NULL) return -1;
+	if (!data || size == 0) return -1;
 
-	gzread(f, header, sizeof(header));
-	gzread(f, &version, sizeof(u32));
-	gzread(f, &hle, sizeof(boolean));
+	/* The stream is logically read-only; cast away const for the shared
+	 * buffer pointer (psxSS_read never writes through it when mode==0). */
+	ss.base = (unsigned char *)data;
+	ss.size = size;
+	ss.pos  = 0;
+	ss.mode = 0;
+	ss.overflow = 0;
 
-	if (strncmp("STv4 PCSX", header, 9) != 0 || version != SaveVersion || hle != Config.HLE) {
-		gzclose(f);
+	psxSS_read(&ss, header, sizeof(header));
+	psxSS_read(&ss, &version, sizeof(u32));
+	psxSS_read(&ss, &hle, sizeof(boolean));
+
+	if (ss.overflow ||
+	    strncmp("STv4 PCSX", header, 9) != 0 ||
+	    version != SaveVersion ||
+	    hle != Config.HLE) {
 		return -1;
 	}
 
 	psxCpu->Reset();
-	gzseek(f, 128 * 96 * 3, SEEK_CUR);
-//if(use_vm){
-//	gzread(f, psxM, 0x00200000);
-//	gzread(f, psxR, 0x00080000);
-//	gzread(f, psxH, 0x00010000);}
-//else{
-	gzread(f, psxM_2, 0x00200000); 
-	gzread(f, psxR_2, 0x00080000); 
-	gzread(f, psxH_2, 0x00010000);//}//teste
+	psxSS_seek(&ss, 128 * 96 * 3, SEEK_CUR);
 
-	gzread(f, (void *)&psxRegs, sizeof(psxRegs));
+	psxSS_read(&ss, psxM_2, 0x00200000);
+	psxSS_read(&ss, psxR_2, 0x00080000);
+	psxSS_read(&ss, psxH_2, 0x00010000);
+
+	psxSS_read(&ss, (void *)&psxRegs, sizeof(psxRegs));
 	schedule_timeslice();
 
 	if (Config.HLE)
 		psxBiosFreeze(0);
 
-	// gpu
+	/* gpu */
 	gpufP = (GPUFreeze_t *)malloc(sizeof(GPUFreeze_t));
-	gzread(f, gpufP, sizeof(GPUFreeze_t));
+	psxSS_read(&ss, gpufP, sizeof(GPUFreeze_t));
 	GPU_freeze(0, gpufP);
 	free(gpufP);
 
-	// spu
-	gzread(f, &Size, 4);
+	/* spu */
+	psxSS_read(&ss, &Size, 4);
 	spufP = (SPUFreeze_t *)malloc(Size);
-	gzread(f, spufP, Size);
+	psxSS_read(&ss, spufP, Size);
 	SPU_freeze(0, spufP);
 	free(spufP);
 
-	sioFreeze(f, 0);
-	cdrFreeze(f, 0);
-	psxHwFreeze(f, 0);
-	psxRcntFreeze(f, 0);
-	mdecFreeze(f, 0);
+	sioFreeze(&ss, 0);
+	cdrFreeze(&ss, 0);
+	psxHwFreeze(&ss, 0);
+	psxRcntFreeze(&ss, 0);
+	mdecFreeze(&ss, 0);
 
-	gzclose(f);
-
-	return 0;
+	return ss.overflow ? -1 : 0;
 }
 
-int CheckState(const char *file) {
-	gzFile f;
+int CheckStateMem(const void *data, size_t size) {
+	const unsigned char *p;
 	char header[32];
 	u32 version;
 	boolean hle;
 
-	f = gzopen(file, "rb");
-	if (f == NULL) return -1;
+	if (!data || size < 32 + sizeof(u32) + sizeof(boolean))
+		return -1;
 
-	gzread(f, header, sizeof(header));
-	gzread(f, &version, sizeof(u32));
-	gzread(f, &hle, sizeof(boolean));
+	p = (const unsigned char *)data;
+	memcpy(header, p, 32);                                 p += 32;
+	memcpy(&version, p, sizeof(u32));                      p += sizeof(u32);
+	memcpy(&hle, p, sizeof(boolean));
 
-	gzclose(f);
-
-	if (strncmp("STv4 PCSX", header, 9) != 0 || version != SaveVersion || hle != Config.HLE)
+	if (strncmp("STv4 PCSX", header, 9) != 0 ||
+	    version != SaveVersion ||
+	    hle != Config.HLE)
 		return -1;
 
 	return 0;

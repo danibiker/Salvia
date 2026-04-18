@@ -185,12 +185,12 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>DISABLE_DYNAREC;C_UNALIGNED_MEMORY=0;__ppc__;_XBOX;_XBOX360;WORDS_BIGENDIAN=1;NDEBUG;DBP_VS2010_COMPAT;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;__LIBRETRO__;_MBCS</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)..\include</AdditionalIncludeDirectories>
       <ForcedIncludeFiles>vs2010_compat.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <StringPooling>true</StringPooling>
@@ -205,9 +205,9 @@
       <OpenMPSupport>false</OpenMPSupport>
       <CompileAs>CompileAsCpp</CompileAs>
       <UseUnicodeForAssemblerListing>false</UseUnicodeForAssemblerListing>
-      <PreschedulingOptimization>false</PreschedulingOptimization>
-      <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
-      <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <Link>
         <GenerateDebugInformation>false</GenerateDebugInformation>

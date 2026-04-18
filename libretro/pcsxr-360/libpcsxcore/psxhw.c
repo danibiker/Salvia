@@ -566,6 +566,6 @@ void psxHwWrite32(u32 add, u32 value) {
 	func(add, value);
 }
 
-int psxHwFreeze(gzFile f, int Mode) {
+int psxHwFreeze(psxSaveState_t *f, int Mode) {
 	return 0;
 }

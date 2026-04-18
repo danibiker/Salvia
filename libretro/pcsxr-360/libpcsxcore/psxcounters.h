@@ -42,7 +42,7 @@ u32 psxRcntRcount(u32 index);
 u32 psxRcntRmode(u32 index);
 u32 psxRcntRtarget(u32 index);
 
-s32 psxRcntFreeze(gzFile f, s32 Mode);
+s32 psxRcntFreeze(psxSaveState_t *f, s32 Mode);
 
 typedef struct Rcnt
 {

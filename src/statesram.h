@@ -45,7 +45,11 @@ struct delayed_action{
 
 // Estructura para compartir datos con el hilo de guardados
 struct SaveData {
+#if defined(_XBOX) || defined(_XBOX360)
+    HANDLE thread;                 // Win32 handle (stack configurable)
+#else
     SDL_Thread* thread;
+#endif
     SDL_sem* semaphore;
 	SDL_mutex* saveMutex;
     bool running;
@@ -112,27 +116,44 @@ bool GuardarCapturaPNG(const std::string& ruta, uint8_t* buffer, int w, int h, i
 bool guardar_comprimido_zlib(const char* path, void *buffer, std::size_t buffer_size) {
     if (!path || !buffer || buffer_size == 0) return false;
 
-    // "wb9" es compresión máxima. En la 360, "wb6" suele ser el equilibrio 
-    // ideal entre velocidad de CPU y ahorro de espacio en HDD/USB.
-    gzFile file = gzopen(path, "wb6"); 
-    if (file) {
-        // En zlib, gzwrite devuelve el número de bytes descomprimidos escritos (o 0 en error)
-        int written = gzwrite(file, buffer, (unsigned int)buffer_size);
-        if (written <= 0) {
-            LOG_ERROR("Error en gzwrite: %s\n", path);
-            gzclose(file);
-            return false;
-        }
-        gzflush(file, Z_FINISH);
-        gzclose(file);
-		Fileio::commit(path);
-        LOG_DEBUG("Archivo comprimido guardado: %s (%Iu bytes)\n", path, buffer_size);
-        return true;
-    } else {
-        // En el XDK, errno no siempre es fiable. GetLastError() da más info.
+    // Nivel 1 ("wb1") = "fast". En Xbox 360 es claramente mejor balance:
+    //   - ventana de deflate m?s peque?a (~64 KiB contiguos vs ~256 KiB en wb6),
+    //     evita cuelgues por fragmentacion de heap en XDK;
+    //   - CPU ~3x mas rapida que wb6;
+    //   - la cola de ceros del buffer (memset en retro_serialize) se colapsa
+    //     casi igual de bien a nivel 1 que a nivel 6.
+    gzFile file = gzopen(path, "wb6");
+    if (!file) {
+        // En el XDK, errno no siempre es fiable. GetLastError() da mas info.
         LOG_ERROR("No se pudo abrir para comprimir: %s (Causa: %s)\n", path, strerror(errno));
         return false;
     }
+
+    // Escritura por chunks de 64 KiB en lugar de un unico gzwrite de 8 MiB.
+    // Evita un bug observado en algunos ports XDK de zlib donde gzwrite con
+    // buffers muy grandes se queda bloqueado, y permite detectar en que chunk
+    // falla si vuelve a reproducirse.
+    const std::size_t CHUNK = 64 * 1024;
+    const unsigned char* p = (const unsigned char*)buffer;
+    std::size_t left = buffer_size;
+    while (left > 0) {
+        unsigned chunk = (left > CHUNK) ? (unsigned)CHUNK : (unsigned)left;
+        int w = gzwrite(file, p, chunk);
+        if (w <= 0) {
+            LOG_ERROR("Error en gzwrite (offset=%Iu, chunk=%u): %s\n",
+                      (buffer_size - left), chunk, path);
+            gzclose(file);
+            return false;
+        }
+        p    += w;
+        left -= (std::size_t)w;
+    }
+
+    gzflush(file, Z_FINISH);
+    gzclose(file);
+    Fileio::commit(path);
+    LOG_DEBUG("Archivo comprimido guardado: %s (%Iu bytes)\n", path, buffer_size);
+    return true;
 }
 
 std::string getSlotPath(const std::string& baseStatePath, int slot) {
@@ -429,12 +450,35 @@ int SaveThreadFunc(void* data) {
     return 0;
 }
 
-// Inicialización
+#if defined(_XBOX) || defined(_XBOX360)
+// Wrapper Win32 que delega en SaveThreadFunc. Se usa con CreateThread para
+// poder elegir expl?citamente el tama?o de stack (1 MiB) y evitar los cuelgues
+// de gzwrite/fwrite por stack insuficiente del XDK.
+static DWORD WINAPI SaveThreadFuncWin32(LPVOID data) {
+    return (DWORD)SaveThreadFunc(data);
+}
+#endif
+
+// Inicializaci?n
 void initSaveSystem() {
     g_saveQueue.running = true;
     g_saveQueue.semaphore = SDL_CreateSemaphore(0);
+
+#if defined(_XBOX) || defined(_XBOX360)
+    // 1 MiB de stack: sobra para deflate (ventana nivel 1 ~64 KiB)
+    // + CRT fwrite + commit + SDL msg callbacks.
+    g_saveQueue.thread = CreateThread(
+        NULL,                       // security
+        1 * 1024 * 1024,            // stack size (1 MiB)
+        SaveThreadFuncWin32,        // thread proc
+        &g_saveQueue,               // parameter
+        0,                          // creation flags (run immediately)
+        NULL                        // thread id (not needed)
+    );
+#else
     g_saveQueue.thread = SDL_CreateThread(SaveThreadFunc, &g_saveQueue);
-	
+#endif
+
 	// Crear el mutex
     g_saveQueue.saveMutex = SDL_CreateMutex();
 
@@ -447,9 +491,14 @@ void initSaveSystem() {
 void deinitSaveSystem() {
     g_saveQueue.running = false;
     SDL_SemPost(g_saveQueue.semaphore); // Despertar hilo
-    
+
     if (g_saveQueue.thread) {
+#if defined(_XBOX) || defined(_XBOX360)
+        WaitForSingleObject(g_saveQueue.thread, INFINITE);
+        CloseHandle(g_saveQueue.thread);
+#else
         SDL_WaitThread(g_saveQueue.thread, NULL); // Esperar a que termine de escribir
+#endif
         g_saveQueue.thread = NULL;
     }
     

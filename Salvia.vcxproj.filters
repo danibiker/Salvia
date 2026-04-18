@@ -469,6 +469,9 @@
     <ClInclude Include="src\audio\audiorate.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\salvia.h">
+      <Filter>Source Files\frontend</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="DistroWin\assets\i18n\en.ini">

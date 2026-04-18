@@ -473,7 +473,7 @@ void psxRcntInit()
 
 /******************************************************************************/
 
-s32 psxRcntFreeze( gzFile f, s32 Mode )
+s32 psxRcntFreeze( psxSaveState_t *f, s32 Mode )
 {
     gzfreeze( &rcnts, sizeof(rcnts) );
     gzfreeze( &hSyncCount, sizeof(hSyncCount) );

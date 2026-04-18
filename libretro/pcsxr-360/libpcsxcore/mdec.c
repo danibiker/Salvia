@@ -668,7 +668,7 @@ void mdec1Interrupt() {
 }
 
 
-int mdecFreeze(gzFile f, int Mode) {
+int mdecFreeze(psxSaveState_t *f, int Mode) {
 	gzfreeze(&mdec, sizeof(mdec));
 	gzfreeze(iq_y, sizeof(iq_y));
 	gzfreeze(iq_uv, sizeof(iq_uv));

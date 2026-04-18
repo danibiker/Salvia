@@ -30,12 +30,6 @@
 #define RETRO_VFS_FILE_ACCESS_UPDATE       (1 << 2)
 #endif
 
-//Si en el futuro quieres implementar un botón de "Cambiar Disco" en tu interfaz Salvia, usarías las funciones que acabas de guardar:
-//disk_control.set_eject_state(true) para abrir la bandeja.
-//disk_control.replace_image_index(index, &info) para cambiar el CHD.
-struct retro_disk_control_callback disk_control;
-struct retro_disk_control_ext_callback disk_control_ext;
-
 // Implementaciones mínimas usando stdio.h
 const char* vfs_get_path_impl(struct retro_vfs_file_handle* stream) { return NULL; }
 

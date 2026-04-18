@@ -240,20 +240,34 @@ static int parsetoc(const char *isofile) {
 // the necessary data is put into the ti (trackinformation)-array
 static int parsecue(const char *isofile) {
 	char			cuename[MAXPATHLEN];
+	char			binfullpath[MAXPATHLEN];
 	FILE			*fi;
 	char			*token;
 	char			time[20];
 	char			*tmp;
 	char			linebuf[256], dummy[256];
 	unsigned int	t;
+	int				input_is_cue = 0;
+	size_t			isolen;
 
 	numtracks = 0;
 
 	// copy name of the iso and change extension from .bin to .cue
 	strncpy(cuename, isofile, sizeof(cuename));
 	cuename[MAXPATHLEN - 1] = '\0';
-	if (strlen(cuename) >= 4) {
-		strcpy(cuename + strlen(cuename) - 4, ".cue");
+	isolen = strlen(cuename);
+	if (isolen >= 4) {
+		/* Detect if the caller already passed a .cue path (case-insensitive).
+		 * Modern frontends (libretro) pass the .cue directly, not the .bin. */
+		if (cuename[isolen - 4] == '.' &&
+		    (cuename[isolen - 3] == 'c' || cuename[isolen - 3] == 'C') &&
+		    (cuename[isolen - 2] == 'u' || cuename[isolen - 2] == 'U') &&
+		    (cuename[isolen - 1] == 'e' || cuename[isolen - 1] == 'E')) {
+			input_is_cue = 1;
+			/* cuename already points to the .cue; leave as-is */
+		} else {
+			strcpy(cuename + isolen - 4, ".cue");
+		}
 	}
 	else {
 		return -1;
@@ -261,6 +275,74 @@ static int parsecue(const char *isofile) {
 
 	if ((fi = fopen(cuename, "r")) == NULL) {
 		return -1;
+	}
+
+	/* When the caller passed a .cue directly, the outer LoadCdrom() opened
+	 * cdHandle to the .cue's text (98 bytes typical), not to the actual CD
+	 * binary. Parse the FILE directive, resolve it relative to the .cue's
+	 * directory, and reopen cdHandle to the .bin so that track-length
+	 * detection (which uses ftell on cdHandle) works correctly. */
+	if (input_is_cue) {
+		char	binrel[MAXPATHLEN];
+		binrel[0] = '\0';
+
+		while (fgets(linebuf, sizeof(linebuf), fi) != NULL) {
+			char *p = linebuf;
+			while (*p == ' ' || *p == '\t') p++;
+			if ((p[0] == 'F' || p[0] == 'f') &&
+			    (p[1] == 'I' || p[1] == 'i') &&
+			    (p[2] == 'L' || p[2] == 'l') &&
+			    (p[3] == 'E' || p[3] == 'e') &&
+			    (p[4] == ' ' || p[4] == '\t')) {
+				char *q1 = strchr(p, '"');
+				if (q1 != NULL) {
+					char *q2 = strchr(q1 + 1, '"');
+					if (q2 != NULL && q2 > q1 + 1) {
+						size_t n = (size_t)(q2 - q1 - 1);
+						if (n >= sizeof(binrel)) n = sizeof(binrel) - 1;
+						memcpy(binrel, q1 + 1, n);
+						binrel[n] = '\0';
+						break;
+					}
+				}
+			}
+		}
+		/* Rewind for the CD_ROM_XA sniff and the TRACK/INDEX parse below */
+		fseek(fi, 0, SEEK_SET);
+
+		if (binrel[0] != '\0') {
+			/* Resolve binrel against the directory of cuename */
+			const char *sep1 = strrchr(cuename, '/');
+			const char *sep2 = strrchr(cuename, '\\');
+			const char *sep  = (sep1 > sep2) ? sep1 : sep2;
+			FILE		*newCd;
+
+			if (sep != NULL) {
+				size_t dirlen = (size_t)(sep - cuename) + 1;
+				if (dirlen >= sizeof(binfullpath)) dirlen = sizeof(binfullpath) - 1;
+				memcpy(binfullpath, cuename, dirlen);
+				binfullpath[dirlen] = '\0';
+				strncat(binfullpath, binrel,
+				        sizeof(binfullpath) - dirlen - 1);
+			} else {
+				strncpy(binfullpath, binrel, sizeof(binfullpath) - 1);
+				binfullpath[sizeof(binfullpath) - 1] = '\0';
+			}
+
+			newCd = fopen(binfullpath, "rb");
+			if (newCd != NULL) {
+				if (cdHandle != NULL) fclose(cdHandle);
+				cdHandle = newCd;
+				SysPrintf("[cue->bin: %s] ", binfullpath);
+			} else {
+				SysPrintf("\nWARN: .cue references missing binary: %s\n",
+				          binfullpath);
+				/* Fall through: parse tracks anyway; last-track length
+				 * will be wrong but at least TRACK/INDEX get populated. */
+			}
+		} else {
+			SysPrintf("\nWARN: .cue has no FILE directive: %s\n", cuename);
+		}
 	}
 
 	// Some stupid tutorials wrongly tell users to use cdrdao to rip a

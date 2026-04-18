@@ -132,7 +132,7 @@ void cdrWrite0(unsigned char rt);
 void cdrWrite1(unsigned char rt);
 void cdrWrite2(unsigned char rt);
 void cdrWrite3(unsigned char rt);
-int cdrFreeze(gzFile f, int Mode);
+int cdrFreeze(psxSaveState_t *f, int Mode);
 
 #ifdef __cplusplus
 }

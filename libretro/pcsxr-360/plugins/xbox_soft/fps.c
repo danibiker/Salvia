@@ -43,12 +43,11 @@ float  fps_cur  = 0;
 void CheckFrameRate(void)
 {
 #ifdef LIBRETRO
-	//Pacing is drive by libretro calling retro_run() at the correct cadence. Any
-	//Frameskip or framecap here would sleep() inside the emu fiber and fight the 
-	//frontend-provided frame-timing
+	// Pacing is driven by the libretro frontend calling retro_run() at the
+	// correct cadence. Any FrameCap()/FrameSkip() here would Sleep() inside
+	// the emu fiber and fight the frontend-provided frame timing.
 	return;
 #endif
-
 	if(UseFrameSkip)                                      // skipping mode?
 	{
 		if(!(dwActFixes&0x80))                              // not old skipping mode?

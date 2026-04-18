@@ -42,7 +42,6 @@ extern "C" {
 #include <ctype.h>
 #include <sys/types.h>
 #include <assert.h>
-#include <zlib.h>
 
 // Define types
 typedef int8_t s8;
@@ -149,10 +148,27 @@ typedef struct {
 extern PcsxConfig Config;
 extern boolean NetOpened;
 
-#define gzfreeze(ptr, size) { \
-	if (Mode == 1) gzwrite(f, ptr, size); \
-	if (Mode == 0) gzread(f, ptr, size); \
-}
+/* ---------------------------------------------------------------------------
+ * In-memory savestate stream (libretro — no disk I/O from the library).
+ * `psxSaveState_t *f` replaces the historic `gzFile f` in all Freeze
+ * functions.  gzfreeze() below dispatches read/write on this stream.
+ * ------------------------------------------------------------------------ */
+typedef struct {
+	unsigned char *base;      /* buffer base */
+	size_t         size;      /* buffer capacity */
+	size_t         pos;       /* current offset */
+	int            mode;      /* 1 = write, 0 = read */
+	int            overflow;  /* set to 1 if a read/write was clipped */
+} psxSaveState_t;
+
+int psxSS_write(psxSaveState_t *f, const void *ptr, size_t n);
+int psxSS_read (psxSaveState_t *f, void *ptr,       size_t n);
+int psxSS_seek (psxSaveState_t *f, long offset, int whence);  /* SEEK_CUR/SET/END */
+
+#define gzfreeze(ptr, size) do { \
+	if (Mode == 1) psxSS_write(f, (ptr), (size)); \
+	else           psxSS_read (f, (ptr), (size)); \
+} while (0)
 
 // Make the timing events trigger faster as we are currently assuming everything
 // takes one cycle, which is not the case on real hardware.

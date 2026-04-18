@@ -70,10 +70,18 @@ public:
 //Esta clase no permite modificar ningún valor, sólo muestra texto
 class OpcionTxt : public Opcion {
 public:
-    OpcionTxt(std::string t) : Opcion(t, OPC_SHOW_TXT) {}
+	std::string valor;
+	CallbackValue callback; // Función estática
+    void* context;          // El "this" de GestorMenus
+    OpcionTxt(std::string t) : Opcion(t, OPC_SHOW_TXT), valor(t), callback(NULL), context(NULL) {}
+
 	std::string ejecutar() override {
+		if (callback != NULL) {
+            return callback(context, (void *)&valor); 
+        }
         return "";
     }
+	
 };
 
 //Esta clase no permite modificar ningún valor, sólo muestra texto y un valor
@@ -260,6 +268,8 @@ private:
 	Menu* menuAchievements;
 	Menu* menuAssignRetro;
 	int askNumOptions;
+	//Menu que rellena el frontend
+	Menu* cdromListMenu;
 
 	CONFIG_STATUS status;
 	int marginX;
@@ -304,8 +314,7 @@ private:
 	std::string guardarMainConfig(CfgLoader *refConfig);
 	std::string volverEmulacion(CONFIG_STATUS *st);
 	std::string salirEmulacion(CONFIG_STATUS *st);
-	std::string startScrapping(CONFIG_STATUS *st);
-	
+	std::string startScrapping(CONFIG_STATUS *st);	
 
 public:
     GestorMenus(int screenw, int screenh);
@@ -352,12 +361,16 @@ public:
 	void nextPos();
     void prevPos();
 	void volverMenuInicial();
+
+	void poblarCdList(std::string ruta);
 	
     std::string descargarLogros();
     static std::string sDescargarLogros(void* inst);
 	static std::string changeHardcoreMode(void* inst, void *value);
 	static std::string setDefaultEmu(void* inst, void *index, void *values);
 	static std::string setControllerType(void* inst, void *index, void *values);
+	static std::string cdromFileSelected(void* inst, void *value);
+	static std::string cdromNextSelected(void* inst, void *value);
 };
 
 template <typename T>

@@ -1,71 +1,144 @@
 #pragma once
 
-//Evita errores al usar el min o max de windows.h al incluir el filtro "io/xbrz/xbrz.h"
-#define NOMINMAX 
+#include "salvia.h"
 
-#include <SDL.h>
-#include <SDL_ttf.h>
-#include "SDL_thread.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+	#include "libretro/libretro.h"
+	#include "libretro/vfs.h"
 
-#include <string>
-#include <map>
-#include <algorithm>
-#include <zlib.h>
+    void retro_init(void);
+    void retro_deinit(void);
+    void retro_run(void);
+    void retro_get_system_info(struct retro_system_info *info);
+    void retro_get_system_av_info(struct retro_system_av_info *info);
+    void retro_set_environment(retro_environment_t);
+    void retro_set_video_refresh(retro_video_refresh_t);
+    void retro_set_audio_sample(retro_audio_sample_t);
+    void retro_set_audio_sample_batch(retro_audio_sample_batch_t);
+    void retro_set_input_poll(retro_input_poll_t);
+    void retro_set_input_state(retro_input_state_t);
+    bool retro_load_game(const struct retro_game_info *game);
+	void retro_unload_game(void);
+	void retro_set_controller_port_device(unsigned port, unsigned device);
+	retro_audio_buffer_status_callback_t audio_status_cb;
+#ifdef __cplusplus
+}
+#endif
 
-#include "gameMenu.h"
-#include "io/cfgloader.h"
-#include "io/dirutil.h"
-#include <io/progress_bar.h>
-#include "uiobjects/listmenu.h"
-#include "uiobjects/tilemap.h"
-#include "unzip/unziptool.h"
-#include "const/menuconst.h"
-#include "statesram.h"
-#include "io/inputsmenu.h"
-#include "io/inputscore.h"
-#include "image/icons.h"
-#include "utils/langmanager.h"
-#include "so/launcher.h"
 
-CfgLoader *cfgLoader;
-GameMenu *gameMenu;
-Logger *logger;
-dirutil dir;
+	//disk_control.set_eject_state(true) para abrir la bandeja.
+	//disk_control.replace_image_index(index, &info) para cambiar el CHD.
+	struct retro_disk_control_callback disk_control;
+	struct retro_disk_control_ext_callback disk_control_ext;
 
-/* ---------- Memory map descriptors from the core ----------
- * Capturados cuando el core llama RETRO_ENVIRONMENT_SET_MEMORY_MAPS.
- * Se usan para obtener punteros a regiones de memoria que no estan
- * disponibles via retro_get_memory_data (ej. HRAM en Game Boy). */
-#define MAX_LIBRETRO_MEM_DESCRIPTORS 32
-static struct retro_memory_descriptor g_mem_descriptors[MAX_LIBRETRO_MEM_DESCRIPTORS];
-static unsigned g_num_mem_descriptors = 0;
-
-/* Funciones de acceso para que otros modulos puedan consultar los descriptores */
-const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_count) {
-    if (out_count) *out_count = g_num_mem_descriptors;
-    return g_mem_descriptors;
+// ─────────────────────────────────────────────
+// Multi-disc helpers: persist last selected disc
+// next to the .m3u as "<rompath>.disc"
+// ─────────────────────────────────────────────
+static unsigned loadLastDiscIndex(const std::string& rompath) {
+    std::string p = rompath + ".disc";
+    FILE* f = fopen(p.c_str(), "r");
+    if (!f) return 0;
+    unsigned idx = 0;
+    fscanf(f, "%u", &idx);
+    fclose(f);
+    return idx;
 }
 
-// 1. Usa un buffer persistente para evitar allocs constantes al convertir desde ARGB8888
-enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
-int launchGame(std::string);
-void closeGame();
-//Maximo de 30 MB. Los CHD que son grandes no debemos cargarlos en memoria. Ya se encarga
-//la implementacion de vfs
-const int MAX_FILE_LOAD_MEMORY = 1024 * 2014 * 30; 
-const int maxJoyTargets = RETRO_DEVICE_ID_JOYPAD_R3 + 1;
-const std::string Constant::MAME_SYS_ID = "75";
-const std::string Constant::WHITESPACE = " \n\r\t";
-volatile uint32_t Constant::totalTicks = 0;
-int Constant::EXEC_METHOD = launch_batch;
-const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
-static uint16_t* conversion_buffer = NULL;
-static std::size_t buffer_size = 0;
-int audio_opened = 0;
-// En tu clase/global:
-volatile bool audio_closing = false;
-t_rom_paths romPaths;
-t_scale_props current_video_settings;
+static void saveLastDiscIndex(const std::string& rompath, unsigned idx) {
+    if (rompath.empty()) return;
+    std::string p = rompath + ".disc";
+    FILE* f = fopen(p.c_str(), "w");
+    if (!f) return;
+    fprintf(f, "%u\n", idx);
+    fclose(f);
+}
+
+// Attempt disc swap via the core-provided disk control interface.
+// Returns true if the swap was actually performed.
+bool swapDisc(unsigned new_idx) {
+    if (!disk_control.get_num_images || !disk_control.set_eject_state ||
+        !disk_control.set_image_index) {
+        return false;
+    }
+    unsigned n = disk_control.get_num_images();
+    if (n <= 1 || new_idx >= n) return false;
+    unsigned cur = disk_control.get_image_index ? disk_control.get_image_index() : 0;
+    if (new_idx == cur) return false;
+
+    disk_control.set_eject_state(true);
+    disk_control.set_image_index(new_idx);
+    disk_control.set_eject_state(false);
+
+    // OSD feedback
+    char buf[64];
+    _snprintf(buf, sizeof(buf), "Disc %u/%u", new_idx + 1, n);
+    buf[sizeof(buf) - 1] = '\0';
+    if (gameMenu) gameMenu->showSystemMessage(buf, 1500);
+    return true;
+}
+
+// Swap al vuelo a un .bin/.chd arbitrario escogido por el usuario
+// (juegos sin M3U que piden cambio de CD).
+//
+// Estrategia: el slot 0 es el disco original con el que se cargo el juego;
+// reutilizamos el slot 1 para todos los cambios futuros (crece la lista
+// solo una vez, evita saturar DISK_MAX_IMAGES).
+//
+// Llamar desde tu file browser tras elegir el fichero.
+bool swapToNewDisc(const std::string& newBinPath) {
+    if (newBinPath.empty()) return false;
+    if (!disk_control.get_num_images    || !disk_control.add_image_index   ||
+        !disk_control.replace_image_index || !disk_control.set_image_index ||
+        !disk_control.set_eject_state) {
+        if (gameMenu) gameMenu->showSystemMessage("Core no soporta swap dinamico de disco", 2500);
+        return false;
+    }
+
+    // 1. Escoger slot destino: si solo hay 1 disco (el original), ampliamos
+    //    la lista a 2 y usamos el nuevo slot 1. Si ya hay >= 2 discos,
+    //    reutilizamos el slot 1 pisando su ruta anterior.
+    unsigned target_idx = disk_control.get_num_images();   // sera 1 la primera vez
+    if (target_idx >= 1) target_idx = 1;                   // reuso de slot 1
+
+    if (target_idx >= disk_control.get_num_images()) {
+        if (!disk_control.add_image_index()) {
+            if (gameMenu) gameMenu->showSystemMessage("add_image_index fallo", 2000);
+            return false;
+        }
+    }
+
+    // 2. Asignar la ruta al slot
+    struct retro_game_info gi;
+    memset(&gi, 0, sizeof(gi));
+    gi.path = newBinPath.c_str();   // el core abre el fichero por su cuenta
+    gi.data = NULL;
+    gi.size = 0;
+    gi.meta = NULL;
+
+    if (!disk_control.replace_image_index(target_idx, &gi)) {
+        if (gameMenu) gameMenu->showSystemMessage("replace_image_index fallo", 2000);
+        return false;
+    }
+
+    // 3. Triada de swap: eject -> set_image_index -> uneject.
+    //    Los juegos PSX solo detectan el cambio en la transicion
+    //    cerrado->abierto->cerrado de la bandeja.
+    disk_control.set_eject_state(true);
+    disk_control.set_image_index(target_idx);
+    disk_control.set_eject_state(false);
+
+    // OSD feedback: mostrar solo el nombre del fichero, no la ruta completa
+    std::size_t sep = newBinPath.find_last_of("/\\");
+    std::string fname = (sep == std::string::npos) ? newBinPath : newBinPath.substr(sep + 1);
+    char buf[160];
+    _snprintf(buf, sizeof(buf), "Disc cambiado: %s", fname.c_str());
+    buf[sizeof(buf) - 1] = '\0';
+    if (gameMenu) gameMenu->showSystemMessage(buf, 2000);
+    return true;
+}
 
 struct retro_core_variable {
    const char *key;    // Nombre técnico: "nestopia_region"
@@ -90,33 +163,6 @@ struct t_progress_load{
 
 } progress_loader;
 
-// Ya no declaramos punteros a función, sino que usamos las funciones 
-// que vendrán dentro del .lib (se resuelven al linkar)
-#ifdef __cplusplus
-extern "C" {
-#endif
-	#include "libretro/libretro.h"
-	#include "libretro/vfs.h"
-
-    void retro_init(void);
-    void retro_deinit(void);
-    void retro_run(void);
-    void retro_get_system_info(struct retro_system_info *info);
-    void retro_get_system_av_info(struct retro_system_av_info *info);
-    void retro_set_environment(retro_environment_t);
-    void retro_set_video_refresh(retro_video_refresh_t);
-    void retro_set_audio_sample(retro_audio_sample_t);
-    void retro_set_audio_sample_batch(retro_audio_sample_batch_t);
-    void retro_set_input_poll(retro_input_poll_t);
-    void retro_set_input_state(retro_input_state_t);
-    bool retro_load_game(const struct retro_game_info *game);
-	void retro_unload_game(void);
-	void retro_set_controller_port_device(unsigned port, unsigned device);
-	retro_audio_buffer_status_callback_t audio_status_cb;
-	
-#ifdef __cplusplus
-}
-#endif
 
 void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
     #ifndef DEBUG_LOG
@@ -236,27 +282,56 @@ static bool retro_environment(unsigned cmd, void *data) {
 		}
 
 		case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE: {
-			const struct retro_disk_control_callback *cb = 
-				(const struct retro_disk_control_callback*)data;
-    
-			if (cb) {
-				disk_control = *cb; // Copiamos las funciones que nos da el core
-				LOG_DEBUG("Interfaz de control de disco registrada por el core.");
-			}
-			return true;
-		}
+            const struct retro_disk_control_callback *cb =
+                (const struct retro_disk_control_callback*)data;
 
-		// Es muy probable que en 2026 también te pida la versión extendida (V1)
-		case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE: {
-			const struct retro_disk_control_ext_callback *cb = 
-				(const struct retro_disk_control_ext_callback*)data;
-    
-			if (cb) {
-				disk_control_ext = *cb;
-				LOG_DEBUG("Interfaz de control de disco extendida registrada.");
-			}
-			return true;
-		}
+
+            if (cb) {
+                disk_control = *cb; // Copiamos las funciones que nos da el core
+                // Caso simetrico: si el core SOLO registra la basic (cores antiguos
+                // o builds sin EXT), replicamos los 7 callbacks comunes en
+                // disk_control_ext para que el codigo que lo consuma los vea
+                // poblados. Los 3 callbacks exclusivos de EXT (set_initial_image,
+                // get_image_path, get_image_label) quedan a NULL y DEBEN
+                // consultarse siempre con guard "if (disk_control_ext.xxx)".
+                disk_control_ext.set_eject_state     = cb->set_eject_state;
+                disk_control_ext.get_eject_state     = cb->get_eject_state;
+                disk_control_ext.get_image_index     = cb->get_image_index;
+                disk_control_ext.set_image_index     = cb->set_image_index;
+                disk_control_ext.get_num_images      = cb->get_num_images;
+                disk_control_ext.replace_image_index = cb->replace_image_index;
+                disk_control_ext.add_image_index     = cb->add_image_index;
+                LOG_DEBUG("Interfaz de control de disco registrada por el core.");
+            }
+            return true;
+        }
+
+
+        // Es muy probable que en 2026 también te pida la versión extendida (V1)
+        case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE: {
+            const struct retro_disk_control_ext_callback *cb =
+                (const struct retro_disk_control_ext_callback*)data;
+
+
+            if (cb) {
+                disk_control_ext = *cb;
+                // Si el core registra SOLO la EXT (comportamiento estandar:
+                // no llamara a SET_DISK_CONTROL_INTERFACE si esta retorna true),
+                // replicamos los 7 callbacks comunes en la estructura basic
+                // para que swapDisc/swapToNewDisc los vean poblados.
+                disk_control.set_eject_state     = cb->set_eject_state;
+                disk_control.get_eject_state     = cb->get_eject_state;
+                disk_control.get_image_index     = cb->get_image_index;
+                disk_control.set_image_index     = cb->set_image_index;
+                disk_control.get_num_images      = cb->get_num_images;
+                disk_control.replace_image_index = cb->replace_image_index;
+                disk_control.add_image_index     = cb->add_image_index;
+                LOG_DEBUG("Interfaz de control de disco extendida registrada.");
+            }
+            return true;
+        }
+
+
 
         case RETRO_ENVIRONMENT_GET_GAME_INFO_EXT:
             // Al devolver false, el core entiende que este frontend es simple
@@ -1053,6 +1128,14 @@ void closeGame(){
 		}
 		gameMenu->g_audioRate.reset();
 		saveSram(romPaths.sram.c_str());
+
+		// Multi-disc: persistir indice del disco actual para la proxima carga
+		if (!g_currentRompath.empty() && disk_control.get_num_images &&
+		    disk_control.get_num_images() > 1 && disk_control.get_image_index) {
+			saveLastDiscIndex(g_currentRompath, disk_control.get_image_index());
+		}
+		g_currentRompath.clear();
+
 		//Liberar recursos de libretro
 		 // 1. Limpieza total del juego anterior
 		retro_unload_game();
@@ -1132,7 +1215,30 @@ int launchGame(std::string rompath){
 	std::string allowedExtensions = Constant::replaceAll(info.valid_extensions, "|", " ");
 	LOG_DEBUG("Extensiones: %s\n", info.valid_extensions);
 	
-	const bool noUncompress = gameMenu->getCfgLoader()->getCfgEmu()->no_uncompress;
+	// Detectar contenedores que REFERENCIAN otros ficheros por ruta relativa:
+	//   .m3u  -> playlist de discos
+	//   .cue  -> descriptor de pistas que apunta a un .bin/.wav externo
+	//   .ccd  -> CloneCD, apunta a .img
+	//   .toc  -> cdrdao, apunta a .bin
+	//   .pbp  -> EBOOT PSP/PSX (multi-disco empaquetado)
+	// Estos NO se pueden cargar en un buffer de memoria porque el core pierde
+	// la ruta base para resolver los ficheros companeros. Hay que pasarle
+	// la ruta real al disco y que el core la abra via VFS.
+	bool isM3U        = false;
+	bool isContainer  = false;
+	{
+		std::size_t dot = rompath.find_last_of('.');
+		if (dot != std::string::npos) {
+			std::string e = rompath.substr(dot + 1);
+			for (std::size_t i = 0; i < e.size(); ++i)
+				e[i] = (char)tolower((unsigned char)e[i]);
+			isM3U = (e == "m3u");
+			isContainer = isM3U || (e == "cue") || (e == "ccd") ||
+			              (e == "toc") || (e == "pbp");
+		}
+	}
+
+	const bool noUncompress = gameMenu->getCfgLoader()->getCfgEmu()->no_uncompress || isContainer;
 	if (noUncompress){
 		LOG_DEBUG("Loading rom directly %s", rompath.c_str());
 		progress_loader.reset();
@@ -1162,7 +1268,16 @@ int launchGame(std::string rompath){
 	}
 
 	struct retro_game_info game = { unzipped.extractedPath.c_str(), unzipped.memoryBuffer, unzipped.romsize, NULL };
-	retro_init();	
+	retro_init();
+
+	// Multi-disc: si es un M3U, indicamos al core qué disco cargar de inicio
+	// antes de retro_load_game (asi el savestate coincide con el disco correcto).
+	if (isM3U && disk_control_ext.set_initial_image) {
+		unsigned saved_idx = loadLastDiscIndex(rompath);
+		disk_control_ext.set_initial_image(saved_idx, rompath.c_str());
+		LOG_DEBUG("Disc control: set_initial_image(%u, %s)", saved_idx, rompath.c_str());
+	}
+
 	bool success = retro_load_game(&game);
 	
 	//Liberar la memoria tras la carga exitosa
@@ -1185,6 +1300,7 @@ int launchGame(std::string rompath){
 	}
 
 	//Loading the rompaths and setting the control device
+	g_currentRompath = rompath;
 	gameMenu->setRomPaths(rompath);
 	gameMenu->joystick->updateTypes();
 
@@ -1195,6 +1311,9 @@ int launchGame(std::string rompath){
 	// Antes de cargar el juego, el core dice su frecuencia en retro_get_system_av_info
 	struct retro_system_av_info av_info;
 	retro_get_system_av_info(&av_info);
+
+	//Poblamos la lista de cdroms si aplica
+	gameMenu->configMenus->poblarCdList(unzipped.originalPath);
 
 	//Obtener el aspect ratio
 	aspectRatioValues[RATIO_CORE] = av_info.geometry.aspect_ratio;
@@ -1311,6 +1430,31 @@ void processFrontendEvents(){
 		case HK_SLOT_DOWN:
 			g_currentSlot = (g_currentSlot - 1 < 0) ? MAX_SAVESTATES - 1 : g_currentSlot - 1;
 			gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.selectslot") + Constant::intToString(g_currentSlot), 2000);
+			break;
+
+		// ─── Multi-disc (PSX M3U) ────────────────────────────────────────────
+		case HK_DISC_NEXT:
+			if (disk_control.get_num_images && disk_control.get_num_images() > 1) {
+				unsigned n   = disk_control.get_num_images();
+				unsigned cur = disk_control.get_image_index ? disk_control.get_image_index() : 0;
+				swapDisc((cur + 1) % n);
+			}
+			break;
+
+		case HK_DISC_PREV:
+			if (disk_control.get_num_images && disk_control.get_num_images() > 1) {
+				unsigned n   = disk_control.get_num_images();
+				unsigned cur = disk_control.get_image_index ? disk_control.get_image_index() : 0;
+				swapDisc(cur == 0 ? (n - 1) : (cur - 1));
+			}
+			break;
+
+		case HK_DISC_EJECT:
+			if (disk_control.set_eject_state && disk_control.get_eject_state) {
+				bool now = !disk_control.get_eject_state();
+				disk_control.set_eject_state(now);
+				gameMenu->showSystemMessage(now ? "Tray open" : "Tray closed", 1500);
+			}
 			break;
 
 		default:

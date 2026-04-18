@@ -64,9 +64,13 @@ int Load(const char *ExePath);
 char * getgameID();
 int fileExists(const char * filename);
 
-int SaveState(const char *file);
-int LoadState(const char *file);
-int CheckState(const char *file);
+/* In-memory savestates (libretro).  Return 0 on success.
+ * SaveStateMem writes up to `size` bytes starting at `data`.  On success,
+ * *outUsed (if non-NULL) receives the number of bytes written.
+ * LoadStateMem reads a state previously produced by SaveStateMem. */
+int SaveStateMem(void *data, size_t size, size_t *outUsed);
+int LoadStateMem(const void *data, size_t size);
+int CheckStateMem(const void *data, size_t size);
 
 int SendPcsxInfo();
 int RecvPcsxInfo();

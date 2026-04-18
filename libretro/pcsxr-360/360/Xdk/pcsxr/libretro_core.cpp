@@ -101,6 +101,8 @@ static char game_path_store[1024];
 
 #define PATH_MAX_LENGTH 4096
 
+static void disk_register_interface(void);
+
 /* ======================================================================
  * LIBRETRO CALLBACK SETTERS
  * ====================================================================== */
@@ -113,6 +115,10 @@ void retro_set_environment(retro_environment_t cb) {
         { NULL, NULL }
     };
     cb(RETRO_ENVIRONMENT_SET_VARIABLES, variables);
+
+    /* Publish the disk-control interface so the frontend can call
+     * set_initial_image() before retro_load_game (used for M3U resume). */
+    disk_register_interface();
 }
 
 void retro_set_video_refresh(retro_video_refresh_t cb)      { video_cb = cb; }
@@ -154,7 +160,7 @@ void retro_get_system_info(struct retro_system_info *info) {
     memset(info, 0, sizeof(*info));
     info->library_name     = "PCSXR-360";
     info->library_version  = "2.1.1";
-    info->valid_extensions = "bin|cue|img|mdf|pbp|cbn|iso";
+    info->valid_extensions = "bin|cue|img|mdf|pbp|cbn|iso|chd|m3u";
     info->need_fullpath    = true;
     info->block_extract    = false;
 }
@@ -444,6 +450,277 @@ static void CALLBACK EmuFiberProc(LPVOID param) {
 }
 
 /* ======================================================================
+ * DISK CONTROL (multi-disc M3U support)
+ *
+ * Exposes the libretro disk-control (+ EXT) interface so the frontend can
+ * swap discs at runtime on multi-disc PSX games (MGS, FF7, FF8, FF9, etc.).
+ *
+ * Swap cycle:
+ *   1. Frontend -> set_eject_state(true)
+ *      We call SetCdOpenCaseTime(-1) (shell permanently open) and close
+ *      the backing ISO (CDR_close).  The PSX BIOS/CD driver fires the lid
+ *      interrupt -> games show "Please insert disc N".
+ *   2. Frontend -> set_image_index(n)    (only valid while ejected)
+ *      We record the new index.
+ *   3. Frontend -> set_eject_state(false)
+ *      We SetIsoFile(images[n]) + CDR_open(), then SetCdOpenCaseTime
+ *      (now+2) so the lid closes shortly; game reads the new TOC and
+ *      resumes.
+ * ====================================================================== */
+
+#define DISK_MAX_IMAGES  16
+#define DISK_PATH_MAX    1024
+#define DISK_LABEL_MAX   256
+
+static char     disk_images[DISK_MAX_IMAGES][DISK_PATH_MAX];
+static char     disk_labels[DISK_MAX_IMAGES][DISK_LABEL_MAX];
+static unsigned disk_count        = 0;
+static unsigned disk_current      = 0;
+static bool     disk_ejected      = false;
+static unsigned disk_initial_idx  = 0;
+static char     disk_initial_path[DISK_PATH_MAX];
+
+/* Derive a short label (basename without extension) from a path. */
+static void disk_derive_label(char *out, const char *path, size_t outlen) {
+    if (!out || outlen == 0) return;
+    out[0] = '\0';
+    if (!path) return;
+
+    const char *base = path;
+    for (const char *p = path; *p; ++p) {
+        if (*p == '/' || *p == '\\' || *p == ':')
+            base = p + 1;
+    }
+
+    size_t i = 0;
+    while (base[i] && i + 1 < outlen && base[i] != '.') {
+        out[i] = base[i];
+        ++i;
+    }
+    /* If we stopped at an extension dot, check whether it's really the ext
+     * (last dot).  If there's another dot later, keep going.  Simpler: we
+     * accept first-dot truncation; file names like "Game Disc 1.bin" work. */
+    out[i] = '\0';
+}
+
+static bool disk_path_is_absolute(const char *p) {
+    if (!p || !p[0]) return false;
+    /* Xbox 360 absolute: "hdd1:\...", "game:\...", "d:\..." — colon present */
+    for (const char *q = p; *q; ++q) {
+        if (*q == ':') return true;
+        if (*q == '/' || *q == '\\') return (q == p); /* leading slash = absolute */
+    }
+    return false;
+}
+
+/* Directory (with trailing separator) part of a path, written into `out`. */
+static void disk_dirname(char *out, size_t outlen, const char *path) {
+    size_t lastsep = 0, i;
+    out[0] = '\0';
+    if (!path) return;
+    for (i = 0; path[i]; ++i) {
+        if (path[i] == '/' || path[i] == '\\' || path[i] == ':')
+            lastsep = i + 1;
+    }
+    if (lastsep == 0) return;
+    if (lastsep >= outlen) lastsep = outlen - 1;
+    memcpy(out, path, lastsep);
+    out[lastsep] = '\0';
+}
+
+/* Parse an M3U file and populate disk_images / disk_labels.
+ * Returns the number of entries added (0 on failure). */
+static unsigned disk_parse_m3u(const char *m3u_path) {
+    FILE *f = fopen(m3u_path, "rb");
+    if (!f) return 0;
+
+    char dir[DISK_PATH_MAX];
+    disk_dirname(dir, sizeof(dir), m3u_path);
+
+    disk_count = 0;
+
+    char line[DISK_PATH_MAX];
+    while (disk_count < DISK_MAX_IMAGES && fgets(line, sizeof(line), f)) {
+        /* Strip CR/LF and trailing whitespace */
+        size_t len = strlen(line);
+        while (len > 0 &&
+               (line[len - 1] == '\n' || line[len - 1] == '\r' ||
+                line[len - 1] == ' '  || line[len - 1] == '\t')) {
+            line[--len] = '\0';
+        }
+        /* Strip leading whitespace */
+        char *p = line;
+        while (*p == ' ' || *p == '\t') ++p;
+        /* Skip empty / comments / playlist directives */
+        if (*p == '\0' || *p == '#') continue;
+
+        char full[DISK_PATH_MAX];
+        if (disk_path_is_absolute(p)) {
+            strncpy(full, p, sizeof(full) - 1);
+            full[sizeof(full) - 1] = '\0';
+        } else {
+            /* XDK CRT has _snprintf, not C99 snprintf — just build it
+             * manually with bounds checks. */
+            size_t dl = strlen(dir);
+            size_t pl = strlen(p);
+            if (dl >= sizeof(full)) dl = sizeof(full) - 1;
+            memcpy(full, dir, dl);
+            if (dl + pl >= sizeof(full)) pl = sizeof(full) - 1 - dl;
+            memcpy(full + dl, p, pl);
+            full[dl + pl] = '\0';
+        }
+
+        strncpy(disk_images[disk_count], full, DISK_PATH_MAX - 1);
+        disk_images[disk_count][DISK_PATH_MAX - 1] = '\0';
+        disk_derive_label(disk_labels[disk_count], full, DISK_LABEL_MAX);
+        disk_count++;
+    }
+
+    fclose(f);
+    return disk_count;
+}
+
+/* Case-insensitive suffix check. */
+static bool disk_path_ends_with(const char *s, const char *suffix) {
+    if (!s || !suffix) return false;
+    size_t ls = strlen(s), lx = strlen(suffix);
+    if (lx > ls) return false;
+    for (size_t i = 0; i < lx; ++i) {
+        char a = s[ls - lx + i];
+        char b = suffix[i];
+        if (a >= 'A' && a <= 'Z') a = (char)(a + 32);
+        if (b >= 'A' && b <= 'Z') b = (char)(b + 32);
+        if (a != b) return false;
+    }
+    return true;
+}
+
+/* ---------- libretro disk control callbacks ---------- */
+
+static bool dc_set_eject_state(bool ejected) {
+    if (ejected == disk_ejected)
+        return true;
+
+    if (ejected) {
+        /* Open the shell permanently until we insert */
+        SetCdOpenCaseTime((s64)-1);
+        if (CDR_close) CDR_close();
+    } else {
+        /* Swap the backing file, then close the shell shortly */
+        if (disk_current < disk_count && disk_images[disk_current][0]) {
+            SetIsoFile(disk_images[disk_current]);
+            if (CDR_open) CDR_open();
+        }
+        /* +2 s keeps the lid-open window long enough for the BIOS to see
+         * both states; games treat the close transition as a fresh TOC. */
+        SetCdOpenCaseTime((s64)time(NULL) + 2);
+    }
+
+    disk_ejected = ejected;
+    return true;
+}
+
+static bool dc_get_eject_state(void) {
+    return disk_ejected;
+}
+
+static unsigned dc_get_image_index(void) {
+    return disk_current;
+}
+
+static bool dc_set_image_index(unsigned index) {
+    /* Spec: only valid while ejected.  Allow index >= count ("no disc"). */
+    if (!disk_ejected) return false;
+    disk_current = index;
+    return true;
+}
+
+static unsigned dc_get_num_images(void) {
+    return disk_count;
+}
+
+static bool dc_replace_image_index(unsigned index, const struct retro_game_info *info) {
+    if (index >= disk_count) return false;
+
+    if (info == NULL) {
+        /* Remove entry `index`, shifting the rest down */
+        for (unsigned i = index; i + 1 < disk_count; ++i) {
+            memcpy(disk_images[i], disk_images[i + 1], sizeof(disk_images[0]));
+            memcpy(disk_labels[i], disk_labels[i + 1], sizeof(disk_labels[0]));
+        }
+        disk_count--;
+        if (disk_current >= disk_count && disk_count > 0)
+            disk_current = disk_count - 1;
+        return true;
+    }
+    if (!info->path) return false;
+
+    strncpy(disk_images[index], info->path, DISK_PATH_MAX - 1);
+    disk_images[index][DISK_PATH_MAX - 1] = '\0';
+    disk_derive_label(disk_labels[index], info->path, DISK_LABEL_MAX);
+    return true;
+}
+
+static bool dc_add_image_index(void) {
+    if (disk_count >= DISK_MAX_IMAGES) return false;
+    disk_images[disk_count][0] = '\0';
+    disk_labels[disk_count][0] = '\0';
+    disk_count++;
+    return true;
+}
+
+static bool dc_set_initial_image(unsigned index, const char *path) {
+    if (!path) return false;
+    disk_initial_idx = index;
+    strncpy(disk_initial_path, path, sizeof(disk_initial_path) - 1);
+    disk_initial_path[sizeof(disk_initial_path) - 1] = '\0';
+    return true;
+}
+
+static bool dc_get_image_path(unsigned index, char *path, size_t len) {
+    if (!path || len == 0 || index >= disk_count) return false;
+    strncpy(path, disk_images[index], len - 1);
+    path[len - 1] = '\0';
+    return true;
+}
+
+static bool dc_get_image_label(unsigned index, char *label, size_t len) {
+    if (!label || len == 0 || index >= disk_count) return false;
+    strncpy(label, disk_labels[index], len - 1);
+    label[len - 1] = '\0';
+    return true;
+}
+
+static void disk_register_interface(void) {
+    if (!environ_cb) return;
+
+    static const struct retro_disk_control_ext_callback dc_ext = {
+        dc_set_eject_state,
+        dc_get_eject_state,
+        dc_get_image_index,
+        dc_set_image_index,
+        dc_get_num_images,
+        dc_replace_image_index,
+        dc_add_image_index,
+        dc_set_initial_image,
+        dc_get_image_path,
+        dc_get_image_label
+    };
+    static const struct retro_disk_control_callback dc_basic = {
+        dc_set_eject_state,
+        dc_get_eject_state,
+        dc_get_image_index,
+        dc_set_image_index,
+        dc_get_num_images,
+        dc_replace_image_index,
+        dc_add_image_index
+    };
+
+    if (!environ_cb(RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE, (void*)&dc_ext))
+        environ_cb(RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE, (void*)&dc_basic);
+}
+
+/* ======================================================================
  * RETRO CORE API
  * ====================================================================== */
 
@@ -471,7 +748,36 @@ bool retro_load_game(const struct retro_game_info *game) {
     if (!game || !game->path)
         return false;
 
-    strncpy(game_path_store, game->path, sizeof(game_path_store) - 1);
+    /* ---- Disk list population --------------------------------------- */
+    disk_count   = 0;
+    disk_current = 0;
+    disk_ejected = false;
+
+    if (disk_path_ends_with(game->path, ".m3u")) {
+        if (disk_parse_m3u(game->path) == 0) {
+            OutputDebugStringA("[PCSXR-LR] M3U parse failed or empty\n");
+            return false;
+        }
+        /* Honor frontend's set_initial_image only if its cached path
+         * matches the game we were actually asked to load.  Otherwise
+         * the user edited the M3U and a wrong index would boot the
+         * wrong disc — spec says fall back to 0 in that case. */
+        if (disk_initial_idx < disk_count &&
+            disk_initial_path[0] &&
+            strcmp(disk_initial_path, game->path) == 0) {
+            disk_current = disk_initial_idx;
+        }
+    } else {
+        /* Single disc image — build a one-entry list. */
+        strncpy(disk_images[0], game->path, DISK_PATH_MAX - 1);
+        disk_images[0][DISK_PATH_MAX - 1] = '\0';
+        disk_derive_label(disk_labels[0], game->path, DISK_LABEL_MAX);
+        disk_count   = 1;
+        disk_current = 0;
+    }
+
+    /* Seed the CDR with whatever image we'll boot from. */
+    strncpy(game_path_store, disk_images[disk_current], sizeof(game_path_store) - 1);
     game_path_store[sizeof(game_path_store) - 1] = '\0';
 
 	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
@@ -615,51 +921,40 @@ unsigned retro_get_region(void) {
  * SAVE STATES
  * ====================================================================== */
 
-#define SAVESTATE_MAX_SIZE (4 * 1024 * 1024)
+/*
+ * Savestate buffer sizing (worst-case, uncompressed):
+ *   header (37) + thumb 128*96*3 (36864)
+ *   + psxM_2 2 MiB (0x00200000)
+ *   + psxR_2 512 KiB (0x00080000)
+ *   + psxH_2 64 KiB  (0x00010000)
+ *   + psxRegs (~8.5 KiB — ICache included)
+ *   + GPUFreeze_t (1 MiB VRAM + header)
+ *   + SPU size(4) + SPUFreeze_t (cSPURam 0x80000 + cSPUPort + xa) + SPUOSSFreeze_t (s_chan[MAXCHAN])
+ *   + sio/cdr/hw/rcnt/mdec (< 32 KiB)
+ * Sum ~4.3 MiB.  8 MiB gives comfortable headroom for any future struct
+ * growth (cdr, SPU channel counts, GPU plugin versions).  The frontend
+ * handles persistence — no disk I/O from the library.
+ */
+#define SAVESTATE_MAX_SIZE (8 * 1024 * 1024)
 
 size_t retro_serialize_size(void) {
     return SAVESTATE_MAX_SIZE;
 }
 
 bool retro_serialize(void *data, size_t size) {
-    const char *tmpfile = "game:\\libretro_state.tmp";
-
-    if (SaveState(tmpfile) != 0)
-        return false;
-
-    FILE *f = fopen(tmpfile, "rb");
-    if (!f) return false;
-
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if ((size_t)fsize > size) {
-        fclose(f);
-        return false;
-    }
-
-    memset(data, 0, size);
-    fread(data, 1, fsize, f);
-    fclose(f);
-
-    remove(tmpfile);
+    if (!data || size == 0) return false;
+    size_t used = 0;
+    if (SaveStateMem(data, size, &used) != 0) return false;
+    /* Zero the tail so hashes/compression of the returned buffer are
+     * deterministic — not required by libretro but cheap and useful. */
+    if (used < size)
+        memset((uint8_t*)data + used, 0, size - used);
     return true;
 }
 
 bool retro_unserialize(const void *data, size_t size) {
-    const char *tmpfile = "game:\\libretro_state.tmp";
-
-    FILE *f = fopen(tmpfile, "wb");
-    if (!f) return false;
-
-    fwrite(data, 1, size, f);
-    fclose(f);
-
-    int result = LoadState(tmpfile);
-    remove(tmpfile);
-
-    return (result == 0);
+    if (!data || size == 0) return false;
+    return (LoadStateMem(data, size) == 0);
 }
 
 /* ======================================================================

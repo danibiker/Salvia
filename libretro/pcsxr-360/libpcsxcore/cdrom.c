@@ -1712,7 +1712,7 @@ void cdrReset() {
 	getCdInfo();
 }
 
-int cdrFreeze(gzFile f, int Mode) {
+int cdrFreeze(psxSaveState_t *f, int Mode) {
 	u8 tmpp[3];
 
 	if (Mode == 0 && !Config.Cdda)
