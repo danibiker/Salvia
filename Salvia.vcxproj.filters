@@ -472,6 +472,9 @@
     <ClInclude Include="src\salvia.h">
       <Filter>Source Files\frontend</Filter>
     </ClInclude>
+    <ClInclude Include="src\dischelper.h">
+      <Filter>Source Files\frontend</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="DistroWin\assets\i18n\en.ini">

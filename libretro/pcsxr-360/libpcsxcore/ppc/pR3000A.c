@@ -817,6 +817,56 @@ static void SetBranch() {
 static void iJump(u32 branchPC) {
 	u32 *b1, *b2;
 	branch = 1;
+
+	/* Safety: if branchPC lies outside the regions covered by psxRecLUT
+	 * (2MB RAM + KSEG0/KSEG1 mirrors + BIOS), PC_REC(branchPC) resolves
+	 * to `0 + (branchPC & 0xffff)` — a low host address. The emitted
+	 * `LWZ(3, 0, 3)` below would then deref that low address and crash
+	 * the host (this has been observed when recJR/recJALR is called with
+	 * a constant-resolved target that happens to be a data word loaded
+	 * from a corrupted stack frame). Compile a stub that raises AdEL at
+	 * runtime so the PSX exception handler gets a chance. */
+	if (psxRecLUT[branchPC >> 16] == 0) {
+#ifdef DYNAREC_GUARD_VERBOSE
+		/* pc already advanced past the branch opcode when we reach here
+		 * (recRecompile does `pc += 4` before calling recBSC). The branch
+		 * instruction itself lives at pc-4; offset inside the block is
+		 * (pc-4) - pcold. psxRegs.code still holds the MIPS opcode word
+		 * that triggered this iJump, so the caller can tell whether it was
+		 * j/jal (opcode 0x02/0x03) or jr/jalr (SPECIAL + funct 0x08/0x09)
+		 * and which Rs was constant-resolved. */
+		{
+			u32 branch_ip = pc - 4;
+			u32 off       = branch_ip - pcold;
+			u32 op        = (psxRegs.code >> 26) & 0x3f;
+			u32 funct     = psxRegs.code & 0x3f;
+			u32 rs_idx    = (psxRegs.code >> 21) & 0x1f;
+			const char *kind = "unknown";
+			if (op == 0x02) kind = "j";
+			else if (op == 0x03) kind = "jal";
+			else if (op == 0x00 && funct == 0x08) kind = "jr";
+			else if (op == 0x00 && funct == 0x09) kind = "jalr";
+			SysPrintf("iJump: unmapped branchPC 0x%08x (block 0x%08x, %s at +0x%x, code=0x%08x, $rs=r%u); emitting AdEL stub\n",
+			          branchPC, pcold, kind, off, psxRegs.code, rs_idx);
+		}
+#endif
+		/* Commit current register state and store BadVAddr + raise
+		 * exception via the standard psxException path. We reuse the
+		 * ARG1/ARG2 wiring used elsewhere for CALLFunc. */
+		iFlushRegs(0);
+		LIW(PutHWRegSpecial(ARG1), 0x10); /* ExcCode 4 (AdEL) << 2 */
+		LIW(PutHWRegSpecial(ARG2), 0);
+		/* Stash branchPC into CP0.BadVAddr so the log tells us where. */
+		LIW(0, branchPC);
+		STW(0, OFFSET(&psxRegs, &psxRegs.CP0.n.BadVAddr), GetHWRegSpecial(PSXREGS));
+		/* Also set PSXPC to pcold so exception takes from block entry. */
+		LIW(PutHWRegSpecial(PSXPC), pcold);
+		FlushAllHWReg();
+		CALLFunc((u32)psxException);
+		Return();
+		return;
+	}
+
 	psxRegs.code = PSXMu32_2(pc);
 	pc+=4;
 
@@ -928,17 +978,29 @@ static void iBranch(u32 branchPC, int savectx) {
 	CMPLW(GetHWRegSpecial(PSXPC), 0);
 	BNE_L(b1);
 
-	LIW(3, PC_REC(branchPC));
-	LWZ(3, 0, 3);
-	CMPLWI(3, 0);
-	BNE_L(b2);
+	/* Safety: same concern as iJump — if branchPC is unmapped, PC_REC
+	 * resolves through a NULL LUT slot and we'd dereference a low host
+	 * address. Conditional branches almost never cross out of mapped
+	 * space (16-bit signed offsets × 4 = ±128KB) but guard anyway: if
+	 * the target is unmapped, skip the direct-jump path and always
+	 * return to execute(), which will trip my guards and raise AdEL. */
+	if (psxRecLUT[branchPC >> 16] == 0) {
+		/* Just fall through to the Return path without the deref. */
+		B_DST(b1);
+		Return();
+	} else {
+		LIW(3, PC_REC(branchPC));
+		LWZ(3, 0, 3);
+		CMPLWI(3, 0);
+		BNE_L(b2);
 
-	B_DST(b1);
-	Return();
+		B_DST(b1);
+		Return();
 
-	B_DST(b2);
-	MTCTR(3);
-	BCTR();
+		B_DST(b2);
+		MTCTR(3);
+		BCTR();
+	}
 
 	pc-= 4;
 
@@ -1021,7 +1083,7 @@ static int allocMem() {
 	int i;
 
 	freeMem(1);
-        
+
 	if (psxRecLUT==NULL)
 		psxRecLUT = (u32*) malloc(0x010000 * 4);
 
@@ -1033,14 +1095,20 @@ static int allocMem() {
 		SysMessage("Error allocating memory"); return -1;
 	}
 
-	for (i=0; i<0x80; i++) 
+	/* Zero the full LUT first. Unmapped slots (everything outside the PSX
+	 * RAM mirrors and the BIOS range filled below) must read back as 0 so
+	 * execute() can detect a jump to an invalid PC and raise AdEL instead
+	 * of dereferencing garbage uninitialized heap. */
+	memset(psxRecLUT, 0, 0x010000 * 4);
+
+	for (i=0; i<0x80; i++)
 		psxRecLUT[i + 0x0000] = (u32)&recRAM[(i & 0x1f) << 16];
 
 	memcpy(psxRecLUT + 0x8000, psxRecLUT, 0x80 * 4);
 	memcpy(psxRecLUT + 0xa000, psxRecLUT, 0x80 * 4);
 
 	for (i=0; i<0x08; i++) psxRecLUT[i + 0xbfc0] = (u32)&recROM[i << 16];
-	
+
 	return 0;
 }
 
@@ -1075,15 +1143,129 @@ static void recError() {
 	SysRunGui();
 }
 
+#define RECENT_PC_COUNT 16
+static u32 recent_pcs[RECENT_PC_COUNT];
+static u32 recent_pc_idx = 0;
+
 __inline static void execute() {
     void (**recFunc)();
     char *p;
+    u32  pc = psxRegs.pc;
+    u32  hi = pc >> 16;
 
-    p = (char*) PC_REC(psxRegs.pc);
+    /* Defensive guard: if PC lands outside the regions mapped in psxRecLUT
+     * (2MB RAM + its KSEG0/KSEG1 mirrors, plus BIOS at 0xBFC0xxxx), the
+     * corresponding LUT slot is 0 (see allocMem). Dereferencing
+     * *(u32*)(0 + (pc & 0xffff)) would crash the host. Instead, log the
+     * first occurrence of each unique bad PC and raise an Address Error
+     * exception so the PSX BIOS handler gets a chance to run (it will
+     * usually just reset or escalate, but the host stays alive and the
+     * log tells us where the control flow went wrong). */
+    if (psxRecLUT[hi] == 0) {
+#ifdef DYNAREC_GUARD_VERBOSE
+        static u32 lastBadPC = 0;
+        if (pc != lastBadPC) {
+            lastBadPC = pc;
+            /* Dump enough MIPS state to diagnose how we got here. If $ra
+             * points to a valid instruction inside the caller's block and
+             * pc looks like garbage, this was probably a jr $ra with a
+             * corrupted stack. If $ra is also garbage or points to a
+             * return-target that no longer matches, it's a corrupted
+             * stack frame. The instruction at caller-4 is the jump that
+             * branched here. */
+            SysPrintf("recExecute: invalid PC 0x%08x (LUT hi=0x%04x unmapped); raising AdEL\n",
+                      pc, hi);
+            SysPrintf("  $ra=0x%08x $sp=0x%08x $fp=0x%08x $gp=0x%08x\n",
+                      psxRegs.GPR.n.ra, psxRegs.GPR.n.sp,
+                      psxRegs.GPR.n.s8, psxRegs.GPR.n.gp);
+            SysPrintf("  $t9=0x%08x $t8=0x%08x $v0=0x%08x $v1=0x%08x\n",
+                      psxRegs.GPR.n.t9, psxRegs.GPR.n.t8,
+                      psxRegs.GPR.n.v0, psxRegs.GPR.n.v1);
+            SysPrintf("  HI=0x%08x LO=0x%08x  CP0.EPC=0x%08x CP0.Cause=0x%08x\n",
+                      psxRegs.GPR.n.hi, psxRegs.GPR.n.lo,
+                      psxRegs.CP0.n.EPC, psxRegs.CP0.n.Cause);
+            /* Dump ring buffer of the last N entry-PCs. The LAST value
+             * is the block that issued the bogus jump. */
+            {
+                int i;
+                u32 idx = recent_pc_idx;
+                SysPrintf("  recent block entry PCs (oldest -> newest):\n");
+                for (i = 0; i < RECENT_PC_COUNT; i++) {
+                    u32 slot = (idx + i) % RECENT_PC_COUNT;
+                    SysPrintf("    [%2d] 0x%08x\n", i, recent_pcs[slot]);
+                }
+            }
+        }
+#endif
+        psxRegs.CP0.n.BadVAddr = pc;
+        /* ExcCode 4 (AdEL) => Cause = 4 << 2 = 0x10 */
+        psxException(0x10, 0);
+        return;
+    }
+
+    /* Record this block-entry PC in the ring buffer. */
+    recent_pcs[recent_pc_idx] = pc;
+    recent_pc_idx = (recent_pc_idx + 1) % RECENT_PC_COUNT;
+
+    p = (char*) PC_REC(pc);
 
     recFunc = (void (**)()) (u32) p;
 
     if (*recFunc == 0) {
+        /* Extra guard: before recompiling a fresh block, sanity-check the
+         * first MIPS opcode. If PC is 4-byte misaligned, that is an AdEL
+         * regardless. If the opcode is an obvious garbage pattern (j to an
+         * unmapped target, or all zeros — which is `sll $zero,$zero,0` =
+         * NOP, technically valid but a clear sign we're compiling zeroed
+         * data into a code block), abort with AdEL instead. This catches
+         * jr $ra into a MAPPED but non-code region, which my outer guard
+         * lets through (hi is in LUT range). */
+        u32 *codePtr = (u32 *)PSXM_2(pc);
+        u32  opcode  = codePtr ? SWAP32(*codePtr) : 0;
+        int  bad     = 0;
+        const char *why = NULL;
+
+        if (pc & 3) {
+            bad = 1; why = "misaligned PC";
+        } else if (codePtr == NULL) {
+            bad = 1; why = "PSXM_2 returned NULL";
+        } else if ((opcode >> 26) == 0x02 || (opcode >> 26) == 0x03) {
+            /* j / jal — target is (opcode & 0x3FFFFFF) << 2, combined with
+             * pc's high 4 bits. If that target is unmapped, it's garbage. */
+            u32 target = ((opcode & 0x03FFFFFF) << 2) | (pc & 0xF0000000);
+            if (psxRecLUT[target >> 16] == 0) {
+                bad = 1; why = "j/jal target unmapped";
+            }
+        }
+
+        if (bad) {
+#ifdef DYNAREC_GUARD_VERBOSE
+            static u32 lastBadPC2 = 0;
+            if (pc != lastBadPC2) {
+                lastBadPC2 = pc;
+                SysPrintf("recExecute: suspect code at PC 0x%08x opcode=0x%08x (%s); raising AdEL\n",
+                          pc, opcode, why);
+                SysPrintf("  $ra=0x%08x $sp=0x%08x $fp=0x%08x $gp=0x%08x\n",
+                          psxRegs.GPR.n.ra, psxRegs.GPR.n.sp,
+                          psxRegs.GPR.n.s8, psxRegs.GPR.n.gp);
+                SysPrintf("  CP0.EPC=0x%08x CP0.Cause=0x%08x\n",
+                          psxRegs.CP0.n.EPC, psxRegs.CP0.n.Cause);
+                {
+                    int i;
+                    u32 idx = recent_pc_idx;
+                    SysPrintf("  recent block entry PCs (oldest -> newest):\n");
+                    for (i = 0; i < RECENT_PC_COUNT; i++) {
+                        u32 slot = (idx + i) % RECENT_PC_COUNT;
+                        SysPrintf("    [%2d] 0x%08x\n", i, recent_pcs[slot]);
+                    }
+                }
+            }
+#endif
+            psxRegs.CP0.n.BadVAddr = pc;
+            psxException(0x10, 0);
+            return;
+        }
+
         recRecompile();
     }
     recRun(*recFunc, (u32) & psxRegs, (u32) & psxM_2);
@@ -2307,12 +2489,61 @@ static void recRecompile() {
 		u32 op;
 
 		p = (char *)PSXM_2(pc);
+		if (p == NULL) {
+			/* We stepped outside mapped memory while streaming bytes as
+			 * code. This definitely means the CPU reached here via a bad
+			 * jump; abort so the host doesn't deref NULL. */
+#ifdef DYNAREC_GUARD_VERBOSE
+			SysPrintf("recRecompile: PSXM_2(0x%08x) == NULL while compiling block at 0x%08x; aborting\n",
+			          pc, pcold);
+#endif
+			psxRegs.CP0.n.BadVAddr = pc;
+			psxRegs.pc = pcold;
+			/* Leave the LUT slot pointing to a "not yet compiled" so next
+			 * execute() hits my guard. */
+			PC_REC32(pcold) = 0;
+			psxException(0x10, 0);
+			return;
+		}
 		psxRegs.code = SWAP32(*(u32 *)p);
 
-		pc+=4; 
-		count++;
+		op = psxRegs.code >> 26;
 
-		op = psxRegs.code>>26;
+		/* Guard 3: if this instruction is j/jal to an unmapped target,
+		 * we're almost certainly compiling data as code (classic symptom
+		 * of a jr $ra into a data region). Abort the block to prevent
+		 * emitting garbage PPC that would crash the host when run. */
+		if (op == 0x02 || op == 0x03) {
+			u32 target = ((psxRegs.code & 0x03FFFFFF) << 2) | (pc & 0xF0000000);
+			if (psxRecLUT[target >> 16] == 0) {
+#ifdef DYNAREC_GUARD_VERBOSE
+				SysPrintf("recRecompile: block at 0x%08x contains %s 0x%08x (target unmapped) at offset +%d; aborting\n",
+				          pcold,
+				          (op == 0x02) ? "j" : "jal",
+				          target, count * 4);
+				SysPrintf("  $ra=0x%08x $sp=0x%08x $fp=0x%08x $gp=0x%08x\n",
+				          psxRegs.GPR.n.ra, psxRegs.GPR.n.sp,
+				          psxRegs.GPR.n.s8, psxRegs.GPR.n.gp);
+				{
+					int i;
+					u32 idx = recent_pc_idx;
+					SysPrintf("  recent block entry PCs (oldest -> newest):\n");
+					for (i = 0; i < RECENT_PC_COUNT; i++) {
+						u32 slot = (idx + i) % RECENT_PC_COUNT;
+						SysPrintf("    [%2d] 0x%08x\n", i, recent_pcs[slot]);
+					}
+				}
+#endif
+				psxRegs.CP0.n.BadVAddr = pcold;
+				psxRegs.pc = pcold;
+				PC_REC32(pcold) = 0;
+				psxException(0x10, 0);
+				return;
+			}
+		}
+
+		pc+=4;
+		count++;
 
 		recBSC[op]();
 

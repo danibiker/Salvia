@@ -30,6 +30,31 @@ GameMenu *gameMenu;
 Logger *logger;
 dirutil dir;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+	#include "libretro/libretro.h"
+	#include "libretro/vfs.h"
+
+    void retro_init(void);
+    void retro_deinit(void);
+    void retro_run(void);
+    void retro_get_system_info(struct retro_system_info *info);
+    void retro_get_system_av_info(struct retro_system_av_info *info);
+    void retro_set_environment(retro_environment_t);
+    void retro_set_video_refresh(retro_video_refresh_t);
+    void retro_set_audio_sample(retro_audio_sample_t);
+    void retro_set_audio_sample_batch(retro_audio_sample_batch_t);
+    void retro_set_input_poll(retro_input_poll_t);
+    void retro_set_input_state(retro_input_state_t);
+    bool retro_load_game(const struct retro_game_info *game);
+	void retro_unload_game(void);
+	void retro_set_controller_port_device(unsigned port, unsigned device);
+	
+#ifdef __cplusplus
+}
+#endif
+
 /* ---------- Memory map descriptors from the core ----------
  * Capturados cuando el core llama RETRO_ENVIRONMENT_SET_MEMORY_MAPS.
  * Se usan para obtener punteros a regiones de memoria que no estan

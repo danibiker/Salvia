@@ -1633,6 +1633,12 @@ void psxDma3(u32 madr, u32 bcr, u32 chcr) {
 				adjustTransferIndex();
 			}
 
+#ifdef PSXDMA_VERBOSE
+			/* Diagnostic: CDROM→RAM DMA. cdsize is in BYTES. */
+			SysPrintf("[DMA3-CDROM] madr=0x%08x bcr=0x%08x chcr=0x%08x size=%d bytes\n",
+			          madr, bcr, chcr, cdsize);
+#endif
+
 			psxCpu->Clear(madr, cdsize / 4);
 
 			// burst vs normal

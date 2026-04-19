@@ -253,14 +253,16 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.core.assign"), menuCores));
 
 	//--------Menu de gestion de discos---------
-	Menu* menuDisks = new Menu(LanguageManager::instance()->get("menu.disk.control"), menuEmulation);
+	menuDisks = new Menu(LanguageManager::instance()->get("menu.disk.control"), menuEmulation);
 	cdromListMenu = new Menu(LanguageManager::instance()->get("menu.disk.selectcd"), menuDisks);
-
-	OpcionTxt* nextCd = new OpcionTxt(LanguageManager::instance()->get("menu.disk.nextcd"));
+	OpcionTxtAndValue* nextCd = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.disk.nextcd"), LanguageManager::instance()->get("menu.disk.nom3u"));
 	nextCd->callback = &GestorMenus::cdromNextSelected;
 
 	//Anyadimos la opcion de seleccion de discos
-	menuDisks->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.disk.selectcd"), cdromListMenu));
+	OpcionSubMenu* diskSubmenu = new OpcionSubMenu(LanguageManager::instance()->get("menu.disk.selectcd"), cdromListMenu);
+	diskSubmenu->callback = &GestorMenus::cdromListAction;
+	diskSubmenu->context = cdromListMenu;
+	menuDisks->opciones.push_back(diskSubmenu);
 	menuDisks->opciones.push_back(nextCd);
 	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.disk.control"), menuDisks));
 	//--------Menu de gestion de discos---------
@@ -394,19 +396,42 @@ std::string GestorMenus::cdromNextSelected(void* inst, void *value){
 		unsigned n   = disk_control.get_num_images();
 		unsigned cur = disk_control.get_image_index ? disk_control.get_image_index() : 0;
 		swapDisc((cur + 1) % n);
+	} else {
+		return LanguageManager::instance()->get("msg.cd.m3urequired");
+	}
+	return "";
+}
+
+std::string GestorMenus::cdromListAction(void* inst){
+	Menu* listCdroms = static_cast<Menu*>(inst);
+	if (listCdroms->opciones.size() <= 0){
+		return LanguageManager::instance()->get("msg.cd.nofilestoselect");
 	}
 	return "";
 }
 
 void GestorMenus::poblarCdList(std::string ruta){
 	dirutil dir;
-	vector<unique_ptr<FileProps>> files;
-	dir.listarFilesSuperFast(dir.getFolder(ruta).c_str(), files, ".iso .chd .bin .img .pbp", "", true, false);
+
+	//Como pasamos un nuevo puntero, es mejor hacer el delete del new que se va a hacer mas adelante para cada elemento
 	for (std::size_t i = 0; i < cdromListMenu->opciones.size(); ++i) {
 		delete ((OpcionTxt *)cdromListMenu->opciones[i])->context;
 	}
-	
 	cdromListMenu->opciones.clear();
+
+	std::string ext = dir.getExtension(ruta);
+	Constant::lowerCase(&ext);
+	std::unordered_set<std::string> v;
+	Constant::splitCharSet(CD_FILTER, ' ', v);
+	int nElems = v.size();
+	if (v.count(ext) <= 0){
+		//El fichero cargado no es un cdrom y por lo tanto salimos
+		return;
+	}
+
+	vector<unique_ptr<FileProps>> files;
+	dir.listarFilesSuperFast(dir.getFolder(ruta).c_str(), files, CD_FILTER, "", true, false);
+	//Cada elemento del menu es un objeto FileProps con las propiedades del fichero seleccionado
 	for (std::size_t i = 0; i < files.size(); ++i) {
 		OpcionTxt *cdElem = new OpcionTxt(files[i]->filename);
 		cdElem->callback = &GestorMenus::cdromFileSelected;
@@ -415,6 +440,23 @@ void GestorMenus::poblarCdList(std::string ruta){
 		cdElem->context = copia; 
 		cdromListMenu->opciones.push_back(cdElem);
 	} 
+
+	//Obtenemos el numero de cd's cargados y mostramos el numero seleccionado respecto al total
+	unsigned n   = disk_control.get_num_images();
+	unsigned cur = disk_control.get_image_index ? disk_control.get_image_index() : 0;
+	if (menuDisks->opciones.size() > 1){
+		OpcionTxtAndValue* nextCdBtn = static_cast<OpcionTxtAndValue*>(menuDisks->opciones[1]);
+		if (nextCdBtn){
+			if (n > 1){
+				char buf[64];
+				_snprintf(buf, sizeof(buf), LanguageManager::instance()->get("msg.cd.discnum").c_str(), cur + 1, n);
+				buf[sizeof(buf) - 1] = '\0';
+				nextCdBtn->valor = string(buf);
+			} else {
+				nextCdBtn->valor = LanguageManager::instance()->get("menu.disk.nom3u");
+			}
+		}
+	}
 }
 
 void GestorMenus::loadAchievements() {
@@ -879,16 +921,10 @@ std::string GestorMenus::confirmar(t_option_action *result) {
 		k->changeAsked = true;
 		k->lastTimeAsked = SDL_GetTicks();
 		status = POLLING_INPUTS;
-    } else if (opt->tipo == OPC_EXEC) {
+	} else if (opt->tipo == OPC_EXEC || opt->tipo == OPC_SAVESTATE || opt->tipo == OPC_SHOW_TXT || opt->tipo == OPC_SHOW_TXT_VAL) {
 		Opcion* e = (Opcion*)opt;
 		return e->ejecutar();
-	} else if (opt->tipo == OPC_SAVESTATE) {
-		Opcion* e = (Opcion*)opt;
-		return e->ejecutar();
-	} else if (opt->tipo == OPC_SHOW_TXT) {
-		Opcion* e = (Opcion*)opt;
-		return e->ejecutar();
-	}
+	} 
 
 	return std::string("");
 }

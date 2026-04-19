@@ -83,6 +83,40 @@ struct trackinfo {
 static int numtracks = 0;
 static struct trackinfo ti[MAXTRACKS];
 
+/* Multi-FILE cue support.
+ *
+ * A .cue may reference more than one .bin (redump multi-track rips produce
+ * one .bin per track). In that case we need a FILE* per unique .bin and,
+ * for each track, (a) which handle to read from and (b) where in the disc
+ * (LBA, without lead-in) that file's data starts.
+ *
+ *   ti_handle[K]           - handle for track K's data. NULL means "use
+ *                            cdHandle" (the default / single-FILE case).
+ *   ti_fileLBAoffset[K]    - disc-LBA-without-lead-in at which ti_handle[K]'s
+ *                            data begins. 0 for single-FILE cues.
+ *
+ * All additional handles (everything beyond cdHandle) are tracked in
+ * cdExtraHandles[] so ISOclose/ISOshutdown can close them. cdHandle itself
+ * remains closed by the existing paths.
+ */
+static FILE         *ti_handle[MAXTRACKS];
+static unsigned int  ti_fileLBAoffset[MAXTRACKS];
+static FILE         *cdExtraHandles[MAXTRACKS];
+static int           cdExtraHandleCount = 0;
+
+static void CloseExtraCdHandles(void) {
+	int i;
+	for (i = 0; i < cdExtraHandleCount; i++) {
+		if (cdExtraHandles[i] != NULL) {
+			fclose(cdExtraHandles[i]);
+			cdExtraHandles[i] = NULL;
+		}
+	}
+	cdExtraHandleCount = 0;
+	memset(ti_handle, 0, sizeof(ti_handle));
+	memset(ti_fileLBAoffset, 0, sizeof(ti_fileLBAoffset));
+}
+
 #ifdef USE_CHD
 static chd_file      *chdFile        = NULL;
 static unsigned char *chdHunkBuf     = NULL;
@@ -238,8 +272,16 @@ static int parsetoc(const char *isofile) {
 
 // this function tries to get the .cue file of the given .bin
 // the necessary data is put into the ti (trackinformation)-array
+//
+// Supports single-FILE cues (classic: one .bin with all tracks, INDEX values
+// are disc-relative) and multi-FILE cues (redump style: one .bin per track,
+// each FILE directive starts a new sub-address space and INDEX values are
+// file-relative). The input path may be either a .cue or a .bin sibling of
+// a .cue; when a .cue is passed directly, cdHandle (opened by the caller on
+// the .cue text) is reopened to the first .bin referenced by FILE.
 static int parsecue(const char *isofile) {
 	char			cuename[MAXPATHLEN];
+	char			cuedir[MAXPATHLEN];
 	char			binfullpath[MAXPATHLEN];
 	FILE			*fi;
 	char			*token;
@@ -250,7 +292,14 @@ static int parsecue(const char *isofile) {
 	int				input_is_cue = 0;
 	size_t			isolen;
 
+	/* Running state of the FILE currently in effect while parsing. Any TRACK
+	 * we see inherits these; they advance on every FILE directive. */
+	FILE			*currentFileHandle = NULL;   /* NULL => falls back to cdHandle */
+	unsigned int	 currentFileLBA    = 0;       /* disc-LBA (no lead-in) where this file's data starts */
+	int				 filesOpened       = 0;
+
 	numtracks = 0;
+	CloseExtraCdHandles();
 
 	// copy name of the iso and change extension from .bin to .cue
 	strncpy(cuename, isofile, sizeof(cuename));
@@ -277,71 +326,18 @@ static int parsecue(const char *isofile) {
 		return -1;
 	}
 
-	/* When the caller passed a .cue directly, the outer LoadCdrom() opened
-	 * cdHandle to the .cue's text (98 bytes typical), not to the actual CD
-	 * binary. Parse the FILE directive, resolve it relative to the .cue's
-	 * directory, and reopen cdHandle to the .bin so that track-length
-	 * detection (which uses ftell on cdHandle) works correctly. */
-	if (input_is_cue) {
-		char	binrel[MAXPATHLEN];
-		binrel[0] = '\0';
-
-		while (fgets(linebuf, sizeof(linebuf), fi) != NULL) {
-			char *p = linebuf;
-			while (*p == ' ' || *p == '\t') p++;
-			if ((p[0] == 'F' || p[0] == 'f') &&
-			    (p[1] == 'I' || p[1] == 'i') &&
-			    (p[2] == 'L' || p[2] == 'l') &&
-			    (p[3] == 'E' || p[3] == 'e') &&
-			    (p[4] == ' ' || p[4] == '\t')) {
-				char *q1 = strchr(p, '"');
-				if (q1 != NULL) {
-					char *q2 = strchr(q1 + 1, '"');
-					if (q2 != NULL && q2 > q1 + 1) {
-						size_t n = (size_t)(q2 - q1 - 1);
-						if (n >= sizeof(binrel)) n = sizeof(binrel) - 1;
-						memcpy(binrel, q1 + 1, n);
-						binrel[n] = '\0';
-						break;
-					}
-				}
-			}
-		}
-		/* Rewind for the CD_ROM_XA sniff and the TRACK/INDEX parse below */
-		fseek(fi, 0, SEEK_SET);
-
-		if (binrel[0] != '\0') {
-			/* Resolve binrel against the directory of cuename */
-			const char *sep1 = strrchr(cuename, '/');
-			const char *sep2 = strrchr(cuename, '\\');
-			const char *sep  = (sep1 > sep2) ? sep1 : sep2;
-			FILE		*newCd;
-
-			if (sep != NULL) {
-				size_t dirlen = (size_t)(sep - cuename) + 1;
-				if (dirlen >= sizeof(binfullpath)) dirlen = sizeof(binfullpath) - 1;
-				memcpy(binfullpath, cuename, dirlen);
-				binfullpath[dirlen] = '\0';
-				strncat(binfullpath, binrel,
-				        sizeof(binfullpath) - dirlen - 1);
-			} else {
-				strncpy(binfullpath, binrel, sizeof(binfullpath) - 1);
-				binfullpath[sizeof(binfullpath) - 1] = '\0';
-			}
-
-			newCd = fopen(binfullpath, "rb");
-			if (newCd != NULL) {
-				if (cdHandle != NULL) fclose(cdHandle);
-				cdHandle = newCd;
-				SysPrintf("[cue->bin: %s] ", binfullpath);
-			} else {
-				SysPrintf("\nWARN: .cue references missing binary: %s\n",
-				          binfullpath);
-				/* Fall through: parse tracks anyway; last-track length
-				 * will be wrong but at least TRACK/INDEX get populated. */
-			}
+	/* Cue directory (used to resolve relative .bin paths from FILE). */
+	{
+		const char *sep1 = strrchr(cuename, '/');
+		const char *sep2 = strrchr(cuename, '\\');
+		const char *sep  = (sep1 > sep2) ? sep1 : sep2;
+		if (sep != NULL) {
+			size_t dirlen = (size_t)(sep - cuename) + 1;
+			if (dirlen >= sizeof(cuedir)) dirlen = sizeof(cuedir) - 1;
+			memcpy(cuedir, cuename, dirlen);
+			cuedir[dirlen] = '\0';
 		} else {
-			SysPrintf("\nWARN: .cue has no FILE directive: %s\n", cuename);
+			cuedir[0] = '\0';
 		}
 	}
 
@@ -362,14 +358,109 @@ static int parsecue(const char *isofile) {
 
 	while (fgets(linebuf, sizeof(linebuf), fi) != NULL) {
 		strncpy(dummy, linebuf, sizeof(linebuf));
-		token = strtok(dummy, " ");
+		token = strtok(dummy, " \t");
 
 		if (token == NULL) {
 			continue;
 		}
 
-		if (!strcmp(token, "TRACK")){
+		if (!strcmp(token, "FILE")) {
+			/* Parse the quoted filename from the raw line (strtok clobbers
+			 * spaces in the copy). */
+			char	binrel[MAXPATHLEN];
+			char	*q1, *q2;
+			int		isAbs;
+
+			binrel[0] = '\0';
+			q1 = strchr(linebuf, '"');
+			if (q1 != NULL) {
+				q2 = strchr(q1 + 1, '"');
+				if (q2 != NULL && q2 > q1 + 1) {
+					size_t n = (size_t)(q2 - q1 - 1);
+					if (n >= sizeof(binrel)) n = sizeof(binrel) - 1;
+					memcpy(binrel, q1 + 1, n);
+					binrel[n] = '\0';
+				}
+			}
+			if (binrel[0] == '\0') {
+				continue;  /* malformed FILE line; skip */
+			}
+
+			/* Resolve to full path: absolute stays, relative joins cuedir. */
+			isAbs = (binrel[0] == '/' || binrel[0] == '\\' ||
+			         (binrel[0] != '\0' && binrel[1] == ':'));
+			if (isAbs) {
+				strncpy(binfullpath, binrel, sizeof(binfullpath) - 1);
+				binfullpath[sizeof(binfullpath) - 1] = '\0';
+			} else {
+				strncpy(binfullpath, cuedir, sizeof(binfullpath) - 1);
+				binfullpath[sizeof(binfullpath) - 1] = '\0';
+				strncat(binfullpath, binrel,
+				        sizeof(binfullpath) - strlen(binfullpath) - 1);
+			}
+
+			if (filesOpened == 0) {
+				/* First FILE directive. Two possible starting states:
+				 *   - input_is_cue: cdHandle currently points at the .cue
+				 *     text (opened by LoadCdrom); retarget to the real .bin.
+				 *   - else (.bin was passed directly): cdHandle is already
+				 *     the .bin; keep it, even if FILE names a different one
+				 *     (we trust what the frontend gave us).
+				 */
+				if (input_is_cue) {
+					FILE *newCd = fopen(binfullpath, "rb");
+					if (newCd != NULL) {
+						if (cdHandle != NULL) fclose(cdHandle);
+						cdHandle = newCd;
+						SysPrintf("[cue->bin: %s] ", binfullpath);
+					} else {
+						SysPrintf("\nWARN: .cue references missing binary: %s\n",
+						          binfullpath);
+						/* Fall through; parse tracks anyway. */
+					}
+				}
+				currentFileHandle = NULL;   /* NULL => use cdHandle */
+				currentFileLBA    = 0;
+			} else {
+				/* Subsequent FILE: advance disc-LBA by the previous file's
+				 * size, then open the new .bin and track it for close. */
+				FILE *prevHandle = (currentFileHandle != NULL) ? currentFileHandle : cdHandle;
+				FILE *newHandle;
+				unsigned int prev_sectors = 0;
+
+				if (prevHandle != NULL) {
+					fseek(prevHandle, 0, SEEK_END);
+					prev_sectors = (unsigned int)(ftell(prevHandle) / 2352);
+				}
+				currentFileLBA += prev_sectors;
+
+				newHandle = fopen(binfullpath, "rb");
+				if (newHandle == NULL) {
+					SysPrintf("\nWARN: .cue references missing binary: %s\n",
+					          binfullpath);
+					/* Best-effort: keep currentFileHandle pointing at the
+					 * previous file so later reads don't outright crash; the
+					 * affected tracks will read garbage but the emulator
+					 * stays alive for single-track recovery. */
+				} else {
+					if (cdExtraHandleCount < MAXTRACKS) {
+						cdExtraHandles[cdExtraHandleCount++] = newHandle;
+					}
+					currentFileHandle = newHandle;
+					SysPrintf("[+bin: %s] ", binfullpath);
+				}
+			}
+
+			filesOpened++;
+		}
+		else if (!strcmp(token, "TRACK")){
 			numtracks++;
+
+			/* Remember which file this track lives in (for reads) and the
+			 * disc-LBA at which that file begins (INDEX values below are
+			 * file-relative in multi-FILE mode). */
+			ti_handle[numtracks]        = currentFileHandle;
+			ti_fileLBAoffset[numtracks] = currentFileLBA;
 
 			if (strstr(linebuf, "AUDIO") != NULL) {
 				ti[numtracks].type = CDDA;
@@ -388,7 +479,11 @@ static int parsecue(const char *isofile) {
 
 			tok2msf((char *)&time, (char *)&ti[numtracks].start);
 
-			t = msf2sec(ti[numtracks].start) + 2 * 75;
+			/* Disc-LBA (with lead-in) =
+			 *     file-relative-INDEX + file's disc-LBA offset + 2s lead-in.
+			 * For single-FILE cues, ti_fileLBAoffset[numtracks] is 0, which
+			 * reproduces the legacy behavior exactly. */
+			t = msf2sec(ti[numtracks].start) + ti_fileLBAoffset[numtracks] + 2 * 75;
 			sec2msf(t, ti[numtracks].start);
 
 			// If we've already seen another track, this is its end
@@ -401,11 +496,20 @@ static int parsecue(const char *isofile) {
 
 	fclose(fi);
 
-	// Fill out the last track's end based on size
+	/* Fill out the last track's end based on the size of the file that
+	 * actually contains it (which may not be cdHandle in multi-FILE mode). */
 	if (numtracks >= 1) {
-		fseek(cdHandle, 0, SEEK_END);
-		t = ftell(cdHandle) / 2352 - msf2sec(ti[numtracks].start) + 2 * 75;
-		sec2msf(t, ti[numtracks].length);
+		FILE *lastHandle = (ti_handle[numtracks] != NULL) ? ti_handle[numtracks] : cdHandle;
+		if (lastHandle != NULL) {
+			unsigned int fsz_sectors;
+			fseek(lastHandle, 0, SEEK_END);
+			fsz_sectors = (unsigned int)(ftell(lastHandle) / 2352);
+			/* end-LBA (with lead-in) = file_offset + file_size + 2s
+			 * length = end-LBA - track.start */
+			t = fsz_sectors + ti_fileLBAoffset[numtracks] + 2 * 75
+			    - msf2sec(ti[numtracks].start);
+			sec2msf(t, ti[numtracks].length);
+		}
 	}
 
 	return 0;
@@ -773,6 +877,7 @@ static void ChdCloseAll(void) {
 #endif
 
 static long CALLBACK ISOshutdown(void) {
+	CloseExtraCdHandles();
 	if (cdHandle != NULL) {
 		fclose(cdHandle);
 		cdHandle = NULL;
@@ -876,6 +981,7 @@ static long CALLBACK ISOopen(void) {
 }
 
 static long CALLBACK ISOclose(void) {
+	CloseExtraCdHandles();
 	if (cdHandle != NULL) {
 		fclose(cdHandle);
 		cdHandle = NULL;
@@ -935,15 +1041,24 @@ static long CALLBACK ISOgetTD(unsigned char track, unsigned char *buffer) {
 
 		// Vib Ribbon: return size of CD
 		// - ex. 20 min, 22 sec, 66 fra
-		pos = ftell( cdHandle );
-		fseek( cdHandle, 0, SEEK_END );
-		size = ftell( cdHandle );
-		fseek( cdHandle, pos, SEEK_SET );
+		if (numtracks > 0) {
+			/* Multi-FILE-safe path: ti[numtracks].start already has the 2s
+			 * lead-in baked in, and .length was computed from the owning
+			 * file's size. Works for both single- and multi-FILE cues. */
+			unsigned int total_sectors =
+				msf2sec(ti[numtracks].start) + msf2sec(ti[numtracks].length);
+			sec2msf(total_sectors, time);
+		} else {
+			pos = ftell( cdHandle );
+			fseek( cdHandle, 0, SEEK_END );
+			size = ftell( cdHandle );
+			fseek( cdHandle, pos, SEEK_SET );
 
-		// relative -> absolute time (+2 seconds)
-		size += 150 * 2352;
+			// relative -> absolute time (+2 seconds)
+			size += 150 * 2352;
 
-		sec2msf( size / 2352, time );
+			sec2msf( size / 2352, time );
+		}
 		buffer[2] = time[0];
 		buffer[1] = time[1];
 		buffer[0] = time[2];
@@ -982,6 +1097,11 @@ static void DecodeRawSubData(void) {
 // time: byte 0 - minute; byte 1 - second; byte 2 - frame
 // uses bcd format
 static long CALLBACK ISOreadTrack(unsigned char *time) {
+	int		disc_lba;
+	FILE	*h;
+	unsigned int fileLBAoff;
+	long	offset_lba;
+
 #ifdef USE_CHD
 	if (chdFile != NULL) {
 		int lba = MSF2SECT(btoi(time[0]), btoi(time[1]), btoi(time[2]));
@@ -995,29 +1115,51 @@ static long CALLBACK ISOreadTrack(unsigned char *time) {
 		return -1;
 	}
 
+	disc_lba   = MSF2SECT(btoi(time[0]), btoi(time[1]), btoi(time[2]));
+	h          = cdHandle;
+	fileLBAoff = 0;
+
+	/* Route the read to the file that owns this LBA. For single-FILE cues
+	 * ti_handle[] stays NULL and ti_fileLBAoffset[] stays 0, so this reduces
+	 * to the legacy behavior exactly. */
+	if (numtracks > 0) {
+		int k;
+		for (k = numtracks; k >= 1; k--) {
+			int track_start_lba = (int)msf2sec(ti[k].start) - 2 * 75;
+			if (track_start_lba <= disc_lba) {
+				if (ti_handle[k] != NULL) h = ti_handle[k];
+				fileLBAoff = ti_fileLBAoffset[k];
+				break;
+			}
+		}
+	}
+
+	offset_lba = (long)disc_lba - (long)fileLBAoff;
+	if (offset_lba < 0) offset_lba = 0;
+
 	if (subChanMixed) {
-		fseek(cdHandle, MSF2SECT(btoi(time[0]), btoi(time[1]), btoi(time[2])) * (CD_FRAMESIZE_RAW + SUB_FRAMESIZE), SEEK_SET);
-		fread(cdbuffer, 1, CD_FRAMESIZE_RAW, cdHandle);
-		fread(subbuffer, 1, SUB_FRAMESIZE, cdHandle);
+		fseek(h, offset_lba * (CD_FRAMESIZE_RAW + SUB_FRAMESIZE), SEEK_SET);
+		fread(cdbuffer, 1, CD_FRAMESIZE_RAW, h);
+		fread(subbuffer, 1, SUB_FRAMESIZE, h);
 
 		if (subChanRaw) DecodeRawSubData();
 	}
 	else {
 		if(isMode1ISO) {
-			fseek(cdHandle, MSF2SECT(btoi(time[0]), btoi(time[1]), btoi(time[2])) * MODE1_DATA_SIZE, SEEK_SET);
-			fread(cdbuffer + 12, 1, MODE1_DATA_SIZE, cdHandle);
+			fseek(h, offset_lba * MODE1_DATA_SIZE, SEEK_SET);
+			fread(cdbuffer + 12, 1, MODE1_DATA_SIZE, h);
 			memset(cdbuffer, 0, 12); //not really necessary, fake mode 2 header
 			cdbuffer[0] = (time[0]);
 			cdbuffer[1] = (time[1]);
 			cdbuffer[2] = (time[2]);
 			cdbuffer[3] = 1; //mode 1
 		} else {
-			fseek(cdHandle, MSF2SECT(btoi(time[0]), btoi(time[1]), btoi(time[2])) * CD_FRAMESIZE_RAW, SEEK_SET);
-			fread(cdbuffer, 1, CD_FRAMESIZE_RAW, cdHandle);
+			fseek(h, offset_lba * CD_FRAMESIZE_RAW, SEEK_SET);
+			fread(cdbuffer, 1, CD_FRAMESIZE_RAW, h);
 		}
 
 		if (subHandle != NULL) {
-			fseek(subHandle, MSF2SECT(btoi(time[0]), btoi(time[1]), btoi(time[2])) * SUB_FRAMESIZE, SEEK_SET);
+			fseek(subHandle, disc_lba * SUB_FRAMESIZE, SEEK_SET);
 			fread(subbuffer, 1, SUB_FRAMESIZE, subHandle);
 
 			if (subChanRaw) DecodeRawSubData();

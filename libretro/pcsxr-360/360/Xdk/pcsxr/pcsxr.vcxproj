@@ -318,6 +318,10 @@
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <OpenMPSupport>true</OpenMPSupport>
       <BufferSecurityCheck>false</BufferSecurityCheck>
+      <AssemblerListingLocation>$(IntDir)$(ProjectName)\</AssemblerListingLocation>
+      <ObjectFileName>$(IntDir)$(ProjectName)\</ObjectFileName>
+      <ProgramDataBaseFileName>$(IntDir)$(ProjectName)\vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+      <AssemblerOutput>NoListing</AssemblerOutput>
     </ClCompile>
     <Lib>
       <AdditionalDependencies>core.lib;video.lib;audio.lib;input.lib;cdrom.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -448,7 +452,7 @@
     <ClCompile>
       <Optimization>Full</Optimization>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <PreprocessorDefinitions>NO_GUI;LIBRETRO;NDEBUG;_XBOX;__BIG_ENDIAN__;__BIGENDIAN__;__ppc__;__PPC__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>PSXDMA_VERBOSE;DYNAREC_GUARD_VERBOSE;NO_GUI;LIBRETRO;NDEBUG;_XBOX;__BIG_ENDIAN__;__BIGENDIAN__;__ppc__;__PPC__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ExceptionHandling>false</ExceptionHandling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -467,6 +471,9 @@
       <StringPooling>true</StringPooling>
       <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
       <RegisterReservation>true</RegisterReservation>
+      <AssemblerListingLocation>$(IntDir)$(ProjectName)\</AssemblerListingLocation>
+      <ObjectFileName>$(IntDir)$(ProjectName)\</ObjectFileName>
+      <ProgramDataBaseFileName>$(IntDir)$(ProjectName)\vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
     </ClCompile>
     <Lib>
       <AdditionalDependencies>core.lib;video.lib;audio.lib;input.lib;cdrom.lib;%(AdditionalDependencies)</AdditionalDependencies>

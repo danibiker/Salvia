@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <stdint.h>
 #include <vector>
+#include <unordered_set>
 #include <stdarg.h>
 
 #include <utils/logger.h>
@@ -68,6 +69,7 @@ static const int LONGKEYTIMEOUT = 2000;
 static const int MAX_SAVESTATES = 10;
 static const char *STATE_IMG_EXT = ".png";
 static const char *STATE_EXT = ".state";
+static const char *CD_FILTER = ".bin .cue .img .mdf .pbp .cbn .iso .chd .m3u";
 
 typedef enum {
     cursor_hidden,
@@ -585,6 +587,17 @@ class Constant{
             }
             return elems;
         }
+
+		static std::unordered_set<std::string>& splitCharSet(const std::string &s, char delim, std::unordered_set<std::string> &elems) {
+			std::stringstream ss(s);
+			std::string item;
+			while (std::getline(ss, item, delim)) {
+				if (!item.empty()) { // Opcional: evita insertar cadenas vacías si hay dobles espacios
+					elems.insert(item);
+				}
+			}
+			return elems;
+		}
 
         template<class TIPO> static std::string TipoToStr(TIPO number){
            std::stringstream ss;//create a stringstream

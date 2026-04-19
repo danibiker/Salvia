@@ -289,17 +289,36 @@ static int _nextPsxRegUse(u32 pc, int psxreg, int numInstr)
 		else if((CHECK_ADR(adr))) {
 			ptr = (u32*)PSXM(pc);
 		} else {
-			printf("_nextPsxRegUse err %08x(%08x)\n", pc, adr);
-			// going nowhere... might as well assume a write, since we will hopefully never reach here
-			reguse = REGUSE_WRITE;
+#ifdef DYNAREC_GUARD_VERBOSE
+			printf("_nextPsxRegUse err %08x(%08x); assuming READ\n", pc, adr);
+#endif
+			/* See note in the non-VM branch below: assuming WRITE is
+			 * unsafe because the analyzer may be exploring a speculative
+			 * branch whose other side is still live. Assume READ so the
+			 * allocator preserves the register. */
+			reguse = REGUSE_READ;
 			break;
 		}
 #else
 		ptr = (u32*)PSXM_2(pc);
 		if (ptr==NULL) {
-			printf("_nextPsxRegUse err %08x\n", pc);
-			// going nowhere... might as well assume a write, since we will hopefully never reach here
-			reguse = REGUSE_WRITE;
+#ifdef DYNAREC_GUARD_VERBOSE
+			printf("_nextPsxRegUse err %08x (pcstart analysis; assuming READ)\n", pc);
+#endif
+			/* IMPORTANT CHANGE: the original code assumed REGUSE_WRITE here,
+			 * meaning "the next use is a write, so the current value is
+			 * dead and can be discarded". That is UNSAFE: this path is
+			 * reached when the analyzer is following a speculative branch
+			 * target (e.g. one side of a BEQ) whose PC landed in unmapped
+			 * memory. The OTHER side of the branch (fall-through) is still
+			 * valid code that may well read this register. Assuming WRITE
+			 * caused the allocator to drop live values — observed in
+			 * practice as corrupted $ra/$sp/$gp leading to wild `jr`
+			 * destinations and host crashes. Assume READ instead (= live),
+			 * which forces preservation. Worst case: slightly less
+			 * aggressive reg allocation; best case: eliminates a whole
+			 * class of hard-to-reproduce corruption bugs. */
+			reguse = REGUSE_READ;
 			break;
 		}
 #endif

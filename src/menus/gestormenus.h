@@ -72,7 +72,7 @@ class OpcionTxt : public Opcion {
 public:
 	std::string valor;
 	CallbackValue callback; // Función estática
-    void* context;          // El "this" de GestorMenus
+    void* context;
     OpcionTxt(std::string t) : Opcion(t, OPC_SHOW_TXT), valor(t), callback(NULL), context(NULL) {}
 
 	std::string ejecutar() override {
@@ -88,8 +88,14 @@ public:
 class OpcionTxtAndValue : public Opcion {
 public:
 	std::string valor;
-    OpcionTxtAndValue(std::string t, std::string v) : Opcion(t, OPC_SHOW_TXT_VAL), valor(v) {}
+	CallbackValue callback; // Función estática
+    void* context;
+
+    OpcionTxtAndValue(std::string t, std::string v) : Opcion(t, OPC_SHOW_TXT_VAL), valor(v), callback(NULL), context(NULL) {}
 	std::string ejecutar() override {
+		if (callback != NULL) {
+            return callback(context, (void *)&valor); 
+        }
         return "";
     }
 };
@@ -270,6 +276,7 @@ private:
 	int askNumOptions;
 	//Menu que rellena el frontend
 	Menu* cdromListMenu;
+	Menu* menuDisks;
 
 	CONFIG_STATUS status;
 	int marginX;
@@ -371,6 +378,7 @@ public:
 	static std::string setControllerType(void* inst, void *index, void *values);
 	static std::string cdromFileSelected(void* inst, void *value);
 	static std::string cdromNextSelected(void* inst, void *value);
+	static std::string cdromListAction(void* inst);
 };
 
 template <typename T>

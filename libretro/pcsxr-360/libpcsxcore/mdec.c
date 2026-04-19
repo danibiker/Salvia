@@ -542,6 +542,13 @@ void psxDma1(u32 adr, u32 bcr, u32 chcr) {
 	/* I guess the memory speed is limitating */
 	dmacnt = size;
 
+#ifdef PSXDMA_VERBOSE
+	/* Diagnostic: log outgoing MDEC DMA parameters. If the game programs
+	 * a bogus BCR this will show an absurd size and expose the overrun. */
+	SysPrintf("[DMA1-MDEC-OUT] adr=0x%08x bcr=0x%08x chcr=0x%08x size=%d\n",
+	          adr, bcr, chcr, dmacnt);
+#endif
+
 	if (!(mdec.reg1 & MDEC1_BUSY)) {
 		/* add to pending */
 		mdec.pending_dma1.adr = adr;
@@ -613,7 +620,17 @@ void psxDma1(u32 adr, u32 bcr, u32 chcr) {
 			mdec.block_buffer_pos = mdec.block_buffer + size;
 		}
 	}
-	
+
+	/* Invalidate the dynarec LUT for the region we just overwrote.
+	 * Without this, if the game later places code in this MDEC decode
+	 * buffer area (common after an FMV finishes, when the game reuses
+	 * main RAM for loading new overlays), the recompiler would execute
+	 * stale blocks compiled from whatever used to be there. dmacnt is in
+	 * bytes; recClear expects an instruction count, so divide by 4. */
+#ifdef PSXREC
+	psxCpu->Clear(adr, dmacnt / 4);
+#endif
+
 	/* define the power of mdec */
 	MDECOUTDMA_INT((int) ((dmacnt* MDEC_BIAS)));
 	}

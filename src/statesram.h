@@ -62,6 +62,14 @@ struct SaveData {
 	int bpp;
 	int slot;
 	std::size_t bufferSize;
+
+	SaveData(){
+		action = SAVE_NONE;
+		bufferSize = 0;
+		running = false;
+		slot = 0;
+	}
+	
 } g_saveQueue;
 
 bool GuardarCapturaPNG(const std::string& ruta, uint8_t* buffer, int w, int h, int bpp = 16) {
@@ -419,7 +427,6 @@ int SaveThreadFunc(void* data) {
 				}
 				break;
 			case SAVE_STATE:
-
 				if (localBuffer) {
 					std::string statePath = Constant::checkPath(localPath);
 					if (guardar_comprimido_zlib(statePath.c_str(), localBuffer, localSize)){

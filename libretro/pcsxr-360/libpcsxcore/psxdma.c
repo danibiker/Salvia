@@ -83,6 +83,13 @@ void psxDma4(u32 madr, u32 bcr, u32 chcr) { // SPU
 			}
 			size = (bcr >> 16) * (bcr & 0xffff) * 2;
 			SPU_readDMAMem(ptr, size);
+
+#ifdef PSXDMA_VERBOSE
+			/* Diagnostic: SPU→RAM DMA. size is in BYTES here. */
+			SysPrintf("[DMA4-SPU-OUT] madr=0x%08x bcr=0x%08x size=%d bytes\n",
+			          madr, bcr, size);
+#endif
+
 			psxCpu->Clear(madr, size);
 
 			SPUDMA_INT((bcr >> 16) * (bcr & 0xffff) / 2);
@@ -106,6 +113,7 @@ void psxDma4(u32 madr, u32 bcr, u32 chcr) { // SPU
 void psxDma6(u32 madr, u32 bcr, u32 chcr) {
 	u32 size;
 	u32 *mem;
+	u32 madr_top;
 //if(use_vm){
 //	mem = (u32 *)PSXM(madr);}
 //else{
@@ -133,12 +141,33 @@ void psxDma6(u32 madr, u32 bcr, u32 chcr) {
 		// already 32-bit size
 		size = bcr;
 
+		/* Save the original PSX address (top of the OT). The loop below
+		 * decrements madr as it writes the linked list downward, so after
+		 * the loop madr no longer points to the start of the region. */
+		madr_top = madr;
+
+#ifdef PSXDMA_VERBOSE
+		/* Diagnostic: log OTC DMA parameters. */
+		SysPrintf("[DMA6-OTC] madr=0x%08x size=%d words (bytes=%d)\n",
+		          madr_top, size, size * 4);
+#endif
+
 		while (bcr--) {
 			*mem-- = SWAP32((madr - 4) & 0xffffff);
 			madr -= 4;
 		}
-		mem++; 
+		mem++;
 		*mem = SWAP32(0xffffff);
+
+		/* OTC writes a linked-list into main RAM. If the game later reuses
+		 * that region for code (or had code there from a previous overlay),
+		 * the dynarec must be invalidated. The OT was written from madr_top
+		 * downward covering `size` 32-bit words, so the lowest written
+		 * address is (madr_top - (size-1)*4). size is in 32-bit words which
+		 * matches the MIPS instruction count recClear expects. */
+#ifdef PSXREC
+		psxCpu->Clear(madr_top - (size - 1) * 4, size);
+#endif
 
 		GPUOTCDMA_INT( size );
 		return;

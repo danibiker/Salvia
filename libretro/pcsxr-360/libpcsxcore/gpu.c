@@ -313,7 +313,7 @@ void gpuDmaThreadInit() {
 
 	// Create gpu thread on cpu 2
 	gpuHandle = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)gpuThread, NULL, CREATE_SUSPENDED, NULL);
-	SetThreadPriority(gpuHandle, THREAD_PRIORITY_NORMAL);
+	SetThreadPriority(gpuHandle, THREAD_PRIORITY_ABOVE_NORMAL);
 	XSetThreadProcessor(gpuHandle, 4);
 
 	ResumeThread(gpuHandle);
@@ -344,7 +344,14 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 			size = (bcr >> 16) * (bcr & 0xffff);
 //			gpuReadDataMem(ptr, size);
 			GPU_readDataMem(ptr, size);////////////////////////////////
-						
+
+#ifdef PSXDMA_VERBOSE
+			/* Diagnostic: GPU→RAM DMA (VRAM readback). size is in 32-bit
+			 * words; written bytes = size*4. */
+			SysPrintf("[DMA2-GPU-VRAM2MEM] madr=0x%08x bcr=0x%08x size=%d words (bytes=%d)\n",
+			          madr, bcr, size, size * 4);
+#endif
+
 			psxCpu->Clear(madr, size);
 
 			// already 32-bit word size ((size * 4) / 4)
