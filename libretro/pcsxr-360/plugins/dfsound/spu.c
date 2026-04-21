@@ -1061,8 +1061,10 @@ if(!tombraider2fix)
   // an IRQ. Only problem: the "wait for cpu" option is kinda hard to do here
   // in some of Peops timer modes. So: we ignore this option here (for now).
 
-#ifdef CRASH_TEAM_RACING
-   if(pMixIrq && irqCallback)
+   /* Crash Team Racing SPU IRQ emulation — runtime-toggleable
+    * via crashteamracingfix (see cfg.c). Originally gated by the
+    * CRASH_TEAM_RACING compile-time macro. */
+   if(crashteamracingfix && pMixIrq && irqCallback)
    {
     for(ns=0;ns<NSSIZE;ns++)
      {
@@ -1077,7 +1079,6 @@ if(!tombraider2fix)
       pMixIrq+=2;if(pMixIrq>spuMemC+0x3ff) pMixIrq=spuMemC;
      }
     }
-#endif
   InitREVERB();
 
   //////////////////////////////////////////////////////

@@ -33,6 +33,16 @@ extern "C" {
 #include "plugins.h"
 #include "misc.h"
 #include "psxmem.h"
+
+/* Per-game fix toggles exposed to the frontend as core variables. They
+ * live in different compilation units (xbox_soft, dfsound, libpcsxcore)
+ * and are applied together by check_game_fixes(). */
+extern int      darkforcesfix;       /* xbox_soft/cfg.c */
+extern uint32_t dwActFixes;          /* xbox_soft GPU fixes bitmask */
+extern int      iUseFixes;           /* xbox_soft gate for dwActFixes */
+extern BOOL     tombraider2fix;      /* dfsound/cfg.c */
+extern BOOL     crashteamracingfix;  /* dfsound/cfg.c */
+extern BOOL     frontmission3fix;    /* libpcsxcore/psxinterpreter.c */
 }
 
 #include "xbPlugins.h"
@@ -111,7 +121,16 @@ void retro_set_environment(retro_environment_t cb) {
     environ_cb = cb;
 
     struct retro_variable variables[] = {
-        { "pcsxr360_pixel_format", "Pixel Format; RGB565|XRGB8888" },
+        { "pcsxr360_pixel_format",       "Pixel Format; RGB565|XRGB8888" },
+        { "pcsxr360_fix_parasite_eve2",  "Game Fix: Parasite Eve 2 (counter); disabled|enabled" },
+        { "pcsxr360_fix_dark_forces",    "Game Fix: Dark Forces / Duke Nukem (GPU); disabled|enabled" },
+        { "pcsxr360_fix_ignore_brightness", "GPU Fix: Ignore black brightness; disabled|enabled" },
+        { "pcsxr360_fix_lazy_update",    "GPU Fix: Lazy screen update (Soul Reaver souls, Legacy of Kain); disabled|enabled" },
+        { "pcsxr360_fix_quads_to_tris",  "GPU Fix: Draw quads with triangles; disabled|enabled" },
+        { "pcsxr360_fix_front_mission3", "Game Fix: Front Mission 3 (CPU); disabled|enabled" },
+        { "pcsxr360_fix_tomb_raider2",   "Game Fix: Tomb Raider 2 (SPU); disabled|enabled" },
+        { "pcsxr360_fix_crash_t_racing", "Game Fix: Crash Team Racing (SPU); disabled|enabled" },
+        { "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
         { NULL, NULL }
     };
     cb(RETRO_ENVIRONMENT_SET_VARIABLES, variables);
@@ -146,6 +165,52 @@ static void check_pixel_format(void) {
 
     if (environ_cb)
         environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &current_pixel_format);
+}
+
+/* ======================================================================
+ * GAME FIXES
+ *
+ * Per-game compatibility toggles surfaced as libretro core variables.
+ * Each option maps onto one or more globals in xbox_soft / dfsound /
+ * libpcsxcore. Safe to call repeatedly (init + hot-reload via
+ * RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE).
+ * ====================================================================== */
+
+static bool read_bool_var(const char *key, bool defval) {
+    struct retro_variable var = { key, NULL };
+    if (!environ_cb || !environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) || !var.value)
+        return defval;
+    return strcmp(var.value, "enabled") == 0;
+}
+
+static void check_game_fixes(void) {
+    /* Parasite Eve 2 — root-counter timing fix (psxcounters.c). */
+    Config.RCntFix = read_bool_var("pcsxr360_fix_parasite_eve2", false) ? 1 : 0;
+
+    /* Front Mission 3 — MFC2 branch-delay quirk (psxinterpreter.c). */
+    frontmission3fix = read_bool_var("pcsxr360_fix_front_mission3", false) ? 1 : 0;
+
+    /* Tomb Raider 2 — SPU voice-silence handling (dfsound/spu.c). */
+    tombraider2fix = read_bool_var("pcsxr360_fix_tomb_raider2", false) ? 1 : 0;
+
+    /* Crash Team Racing — SPU IRQ mixer polling (dfsound/spu.c). Was a
+     * compile-time #ifdef; now a runtime flag. */
+    crashteamracingfix = read_bool_var("pcsxr360_fix_crash_t_racing", false) ? 1 : 0;
+
+    /* BIOS Slow Boot — skips ra-shortcut in misc.c so intros play. */
+    Config.SlowBoot = read_bool_var("pcsxr360_slow_boot", false) ? 1 : 0;
+
+    /* PEOPS GPU fix bitmask (xbox_soft). Each bit gates a different
+     * workaround in prim.c / gpu.c / soft.c. We OR-compose them and
+     * gate the whole thing on iUseFixes (see xbox_soft/cfg.c:77). */
+    uint32_t gpu_fixes = 0;
+    darkforcesfix = read_bool_var("pcsxr360_fix_dark_forces", false) ? 1 : 0;
+    if (darkforcesfix)                                                 gpu_fixes |= 0x100; /* Dark Forces / Duke Nukem: repeated flat-tex triangles */
+    if (read_bool_var("pcsxr360_fix_ignore_brightness", false))        gpu_fixes |= 0x004; /* Ignore black brightness colour */
+    if (read_bool_var("pcsxr360_fix_lazy_update", false))              gpu_fixes |= 0x040; /* Lazy screen update (Soul Reaver souls, LoK) */
+    if (read_bool_var("pcsxr360_fix_quads_to_tris", false))            gpu_fixes |= 0x200; /* Draw quads with triangles (geometry) */
+    dwActFixes = gpu_fixes;
+    iUseFixes  = gpu_fixes ? 1 : 0;
 }
 
 /* ======================================================================
@@ -423,6 +488,11 @@ static void CALLBACK EmuFiberProc(LPVOID param) {
     cdrIsoInit();
     SetIsoFile(game_path_store);
     gpuDmaThreadInit();
+
+    /* Re-apply game fixes right before SysInit: Config.SlowBoot must be
+     * set before the BIOS shortcut runs, and the GPU/SPU globals must
+     * match the user's choice for this boot. */
+    check_game_fixes();
 
     OutputDebugStringA("[PCSXR-LR] Calling SysInit...\n");
     if (SysInit() == -1) {
@@ -757,6 +827,7 @@ void retro_init(void) {
     fiber_main        = NULL;
     fiber_emu         = NULL;
     check_pixel_format();
+    check_game_fixes();
 }
 
 void retro_deinit(void) {
@@ -879,6 +950,7 @@ void retro_run(void) {
         bool updated = false;
         if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
             check_pixel_format();
+            check_game_fixes();
         }
     }
 

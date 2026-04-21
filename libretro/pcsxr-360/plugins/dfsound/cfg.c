@@ -23,6 +23,7 @@ email                : BlackDove@addcom.de
 
 BOOL spuirq = 0;
 BOOL tombraider2fix = 0;
+BOOL crashteamracingfix = 0;
 
 
 void StartCfgTool(char * pCmdLine)

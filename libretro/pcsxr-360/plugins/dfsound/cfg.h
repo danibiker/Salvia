@@ -17,6 +17,7 @@
 
 void ReadConfig(void);
 extern BOOL tombraider2fix;
+extern BOOL crashteamracingfix;
 
 #ifdef _WINDOWS
 BOOL CALLBACK AboutDlgProc(HWND hW, UINT uMsg, WPARAM wParam, LPARAM lParam);
