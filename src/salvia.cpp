@@ -1284,7 +1284,7 @@ void processFrontendEvents(){
 			break;
 
 		// ─── Multi-disc (PSX M3U) ────────────────────────────────────────────
-		case HK_DISC_NEXT:
+		/*case HK_DISC_NEXT:
 			if (disk_control.get_num_images && disk_control.get_num_images() > 1) {
 				unsigned n   = disk_control.get_num_images();
 				unsigned cur = disk_control.get_image_index ? disk_control.get_image_index() : 0;
@@ -1307,7 +1307,7 @@ void processFrontendEvents(){
 				gameMenu->showSystemMessage(now ? "Tray open" : "Tray closed", 1500);
 			}
 			break;
-
+		*/
 		default:
 			//LOG_DEBUG("Sending Hotkey %d\n", hotkey);
 			// Cualquier otro hotkey (ej. volumen, reset, menú) se delega al frontend

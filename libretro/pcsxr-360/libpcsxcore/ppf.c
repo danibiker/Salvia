@@ -23,6 +23,11 @@
 #include "psxcommon.h"
 #include "ppf.h"
 #include "cdrom.h"
+#include "plugins.h"
+
+/* Implemented in the libretro frontend (libretro_core.cpp): surfaces a
+ * user-visible message through RETRO_ENVIRONMENT_SET_MESSAGE. */
+extern void pcsxr_lr_notify_user(const char *msg, unsigned frames);
 
 typedef struct tagPPF_DATA {
 	s32					addr;
@@ -332,14 +337,89 @@ void BuildPPFCache() {
 	SysPrintf(_("Loaded PPF %d.0 patch: %s.\n"), method + 1, szPPF);
 }
 
+// LibCrypt-protected game serials (PAL only).
+// Source: alex-free/libcrypt-patcher (lcp.c), cross-checked against redump.org.
+// Used to emit a clear warning when a known libcrypt title is booted without
+// a matching .sbi file, so the user knows exactly what is missing.
+static const char libcrypt_serials[][10] = {
+	"SCES00311", "SCES01431", "SCES01444", "SCES01492", "SCES01493",
+	"SCES01494", "SCES01495", "SCES01516", "SCES01517", "SCES01518",
+	"SCES01519", "SCES01564", "SCES01695", "SCES01700", "SCES01701",
+	"SCES01702", "SCES01703", "SCES01704", "SCES01763", "SCES01882",
+	"SCES01909", "SCES01979", "SCES02004", "SCES02005", "SCES02006",
+	"SCES02007", "SCES02028", "SCES02029", "SCES02030", "SCES02031",
+	"SCES02104", "SCES02105", "SCES02181", "SCES02182", "SCES02184",
+	"SCES02185", "SCES02222", "SCES02264", "SCES02269", "SCES02290",
+	"SCES02365", "SCES02366", "SCES02367", "SCES02368", "SCES02369",
+	"SCES02430", "SCES02431", "SCES02432", "SCES02433", "SCES02487",
+	"SCES02488", "SCES02489", "SCES02490", "SCES02491", "SCES02544",
+	"SCES02545", "SCES02546", "SCES02834", "SCES02835",
+	"SLES00017", "SLES00995", "SLES01041", "SLES01226", "SLES01241",
+	"SLES01301", "SLES01362", "SLES01545", "SLES01715", "SLES01733",
+	"SLES01879", "SLES01880", "SLES01906", "SLES01907", "SLES01953",
+	"SLES02024", "SLES02025", "SLES02026", "SLES02027", "SLES02061",
+	"SLES02071", "SLES02080", "SLES02081", "SLES02082", "SLES02083",
+	"SLES02084", "SLES02086", "SLES02112", "SLES02113", "SLES02118",
+	"SLES02207", "SLES02208", "SLES02209", "SLES02210", "SLES02211",
+	"SLES02292", "SLES02293", "SLES02328", "SLES02329", "SLES02330",
+	"SLES02354", "SLES02355", "SLES02395", "SLES02396", "SLES02402",
+	"SLES02529", "SLES02530", "SLES02531", "SLES02532", "SLES02533",
+	"SLES02538", "SLES02558", "SLES02559", "SLES02560", "SLES02561",
+	"SLES02562", "SLES02563", "SLES02572", "SLES02573", "SLES02681",
+	"SLES02688", "SLES02689", "SLES02698", "SLES02700", "SLES02704",
+	"SLES02705", "SLES02706", "SLES02707", "SLES02708", "SLES02722",
+	"SLES02723", "SLES02724", "SLES02733", "SLES02754", "SLES02755",
+	"SLES02756", "SLES02763", "SLES02766", "SLES02767", "SLES02768",
+	"SLES02769", "SLES02824", "SLES02830", "SLES02831", "SLES02839",
+	"SLES02857", "SLES02858", "SLES02859", "SLES02860", "SLES02861",
+	"SLES02862", "SLES02965", "SLES02966", "SLES02967", "SLES02968",
+	"SLES02969", "SLES02975", "SLES02976", "SLES02977", "SLES02978",
+	"SLES02979", "SLES03061", "SLES03062", "SLES03189", "SLES03190",
+	"SLES03191", "SLES03241", "SLES03242", "SLES03243", "SLES03244",
+	"SLES03245", "SLES03324", "SLES03489", "SLES03519", "SLES03520",
+	"SLES03521", "SLES03522", "SLES03523", "SLES03530", "SLES03603",
+	"SLES03604", "SLES03605", "SLES03606", "SLES03607", "SLES03626",
+	"SLES03648",
+	"SLES11879", "SLES11880", "SLES12080", "SLES12081", "SLES12082",
+	"SLES12083", "SLES12084", "SLES12328", "SLES12329", "SLES12330",
+	"SLES12558", "SLES12559", "SLES12560", "SLES12561", "SLES12562",
+	"SLES12965", "SLES12966", "SLES12967", "SLES12968", "SLES12969",
+	"SLES22080", "SLES22081", "SLES22082", "SLES22083", "SLES22328",
+	"SLES22329", "SLES22330", "SLES22965", "SLES22966", "SLES22967",
+	"SLES22968", "SLES22969",
+	"SLES32080", "SLES32081", "SLES32082", "SLES32083", "SLES32084",
+	"SLES32965", "SLES32966", "SLES32967", "SLES32968", "SLES32969",
+};
+
+static int is_libcrypt_serial(const char *cdrom_id) {
+	size_t i, n = sizeof(libcrypt_serials) / sizeof(libcrypt_serials[0]);
+	char id[10];
+
+	for (i = 0; i < 9 && cdrom_id[i] != '\0'; i++)
+		id[i] = (char)toupper((unsigned char)cdrom_id[i]);
+	id[i] = '\0';
+	if (i < 9) return 0;
+
+	for (i = 0; i < n; i++) {
+		if (strcmp(id, libcrypt_serials[i]) == 0)
+			return 1;
+	}
+	return 0;
+}
+
 // redump.org SBI files
 static u8 sbitime[256][3], sbicount;
 
 void LoadSBI() {
-	FILE *sbihandle;
+	FILE *sbihandle = NULL;
 	char buffer[16], sbifile[MAXPATHLEN];
+	const char *isoFile;
 
-	// Generate filename in the format of SLUS_123.45.sbi
+	// init
+	sbicount = 0;
+
+	// Build canonical <CdromId>.sbi name (SLES_012.26.sbi form). Used both
+	// for the PatchesDir fallback and for the libcrypt warning message.
 	buffer[0] = toupper(CdromId[0]);
 	buffer[1] = toupper(CdromId[1]);
 	buffer[2] = toupper(CdromId[2]);
@@ -357,13 +437,50 @@ void LoadSBI() {
 	buffer[14] = 'i';
 	buffer[15] = '\0';
 
-	sprintf(sbifile, "%s%s", Config.PatchesDir, buffer);
+	// 1) Try <image_path_without_ext>.sbi next to the loaded image,
+	//    so any dump works without renaming or copying to PatchesDir.
+	isoFile = GetIsoFile();
+	if (isoFile != NULL && isoFile[0] != '\0') {
+		const char *slash1, *slash2, *sep, *dot;
+		size_t base_len;
 
-	// init
-	sbicount = 0;
+		strncpy(sbifile, isoFile, MAXPATHLEN - 1);
+		sbifile[MAXPATHLEN - 1] = '\0';
 
-	sbihandle = fopen(sbifile, "rb");
-	if (sbihandle == NULL) return;
+		slash1 = strrchr(sbifile, '/');
+		slash2 = strrchr(sbifile, '\\');
+		sep = slash1;
+		if (slash2 != NULL && (sep == NULL || slash2 > sep)) sep = slash2;
+
+		dot = strrchr(sbifile, '.');
+		if (dot != NULL && (sep == NULL || dot > sep))
+			base_len = dot - sbifile;
+		else
+			base_len = strlen(sbifile);
+
+		if (base_len + 5 <= MAXPATHLEN) {
+			strcpy(sbifile + base_len, ".sbi");
+			sbihandle = fopen(sbifile, "rb");
+		}
+	}
+
+	// 2) Fallback: <PatchesDir><CdromId>.sbi (format SLES_012.26.sbi).
+	if (sbihandle == NULL) {
+		sprintf(sbifile, "%s%s", Config.PatchesDir, buffer);
+		sbihandle = fopen(sbifile, "rb");
+	}
+
+	if (sbihandle == NULL) {
+		if (is_libcrypt_serial(CdromId)) {
+			char warn[256];
+			_snprintf(warn, sizeof(warn),
+			         "LibCrypt: %.9s requires %s. Place it next to the image "
+			         "or in the patches dir %s",
+			         CdromId, buffer, Config.PatchesDir);
+			pcsxr_lr_notify_user(warn, 600);
+		}
+		return;
+	}
 
 	// 4-byte SBI header
 	fread(buffer, 1, 4, sbihandle);

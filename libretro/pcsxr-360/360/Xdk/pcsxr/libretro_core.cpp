@@ -149,6 +149,23 @@ static void check_pixel_format(void) {
 }
 
 /* ======================================================================
+ * USER NOTIFICATIONS
+ *
+ * Bridge for core code (libpcsxcore) to surface user-visible messages via
+ * the libretro frontend. Used e.g. from LoadSBI() to warn about missing
+ * libcrypt .sbi files. Safe to call before environ_cb is installed
+ * (becomes a no-op in that case).
+ * ====================================================================== */
+
+extern "C" void pcsxr_lr_notify_user(const char *msg, unsigned frames) {
+    if (!environ_cb || !msg) return;
+    struct retro_message rmsg;
+    rmsg.msg    = msg;
+    rmsg.frames = frames ? frames : 600; /* ~10 s @ 60 fps */
+    environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &rmsg);
+}
+
+/* ======================================================================
  * SYSTEM INFO
  * ====================================================================== */
 
@@ -344,7 +361,7 @@ void pcsxr_log(enum retro_log_level level, const char *format, ...)
       pcsxr_log_cb(level, "[pcsxr] %s", msg);
    else
       fprintf((level == RETRO_LOG_ERROR) ? stderr : stdout,
-            "[Gambatte] %s", msg);
+            "[PCSXR] %s", msg);
 }
 
 /* ======================================================================
@@ -376,6 +393,15 @@ static void CALLBACK EmuFiberProc(LPVOID param) {
 
     strcpy(Config.Bios, "SCPH1001.BIN");
     strcpy(Config.BiosDir, system_dir);
+
+    // Patches dir: <system>\patches\psx  (must end with separator because
+    // the core concatenates <PatchesDir><file> without adding one).
+    if (system_dir) {
+        _snprintf(Config.PatchesDir, sizeof(Config.PatchesDir),
+                 "%s\\patches\\psx\\", system_dir);
+    } else {
+        Config.PatchesDir[0] = '\0';
+    }
 
 	char full_path[PATH_MAX_LENGTH];
 
