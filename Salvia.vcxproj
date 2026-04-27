@@ -2334,7 +2334,7 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
-      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
       <PreschedulingOptimization>true</PreschedulingOptimization>
       <StringPooling>true</StringPooling>
@@ -2347,7 +2347,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);pcsxr.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs\SDLx360\SDL\Release;libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\pcsxr-360\360\Xdk\pcsxr\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>libs\SDLx360\SDL\Release;libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)..\curl-7.50.1\builds\xbox\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)..\polarssl-mbedtls-2.6.0\visualc\VS2010\Release\Xbox 360;__$(ProjectDir)..\pcsx_rearmed_last_hope\msvc\Release;$(ProjectDir)libretro\pcsxr-360\360\Xdk\pcsxr\Release</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
@@ -3677,21 +3677,28 @@
     <ClCompile Include="src\io\fileio.cpp" />
     <ClCompile Include="src\io\filelist.h" />
     <ClCompile Include="src\io\hotkeys.cpp" />
-    <ClCompile Include="src\io\hq2xbox\hq2xx.cpp" />
+    <ClCompile Include="src\io\hq2xbox\hq2xx.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_pcsxr_360|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="src\io\hqx_2\hq2x.c">
       <CompileAs>CompileAsCpp</CompileAs>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_pcsxr_360|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="src\io\hqx_2\hq3x.c">
       <CompileAs>CompileAsCpp</CompileAs>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_pcsxr_360|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="src\io\hqx_2\init.c">
       <CompileAs>CompileAsCpp</CompileAs>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_pcsxr_360|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="src\io\joystick.cpp" />
     <ClCompile Include="src\io\sync.cpp">
       <CompileAs>CompileAsCpp</CompileAs>
     </ClCompile>
-    <ClCompile Include="src\io\xbrz\xbrz.cpp" />
+    <ClCompile Include="src\io\xbrz\xbrz.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_pcsxr_360|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="src\menus\gestormenus.cpp" />
     <ClCompile Include="src\retroachievements\CHDHashed.cpp" />
     <ClCompile Include="src\retroachievements\HashCHD.cpp" />
@@ -3889,7 +3896,9 @@
     <ClInclude Include="src\io\fileio.h" />
     <ClInclude Include="src\io\fileprops.h" />
     <ClInclude Include="src\io\hotkeys.h" />
-    <ClInclude Include="src\io\hq2xbox\hq2xx.h" />
+    <ClInclude Include="src\io\hq2xbox\hq2xx.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_pcsxr_360|Xbox 360'">true</ExcludedFromBuild>
+    </ClInclude>
     <ClInclude Include="src\io\inputscore.h" />
     <ClInclude Include="src\io\inputsmenu.h" />
     <ClInclude Include="src\io\joystick.h" />

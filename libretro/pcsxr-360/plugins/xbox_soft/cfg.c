@@ -73,10 +73,12 @@ void ReadConfig(void)
 
  // additional checks
  if(!iColDepth)       iColDepth=16;
-/* dwActFixes / iUseFixes are owned by the libretro frontend (see
- * check_game_fixes() in libretro_core.cpp). ReadConfig() used to
- * recompute them from the legacy `darkforcesfix` flag, which wiped
- * every other bit set by the frontend. Leave them alone here. */
+
+ /* dwActFixes / iUseFixes are owned by the libretro frontend (see
+  * check_game_fixes() in libretro_core.cpp). ReadConfig() used to
+  * recompute them from the legacy `darkforcesfix` flag, which wiped
+  * every other bit set by the frontend. Leave them alone here. */
+
  SetFixes();
 
 }

@@ -43,6 +43,12 @@ extern int      iUseFixes;           /* xbox_soft gate for dwActFixes */
 extern BOOL     tombraider2fix;      /* dfsound/cfg.c */
 extern BOOL     crashteamracingfix;  /* dfsound/cfg.c */
 extern BOOL     frontmission3fix;    /* libpcsxcore/psxinterpreter.c */
+
+/* Runtime selector for the new SwanStation-derived SW renderer that
+ * lives alongside PEOPS in the xbox_soft plugin. Defined in
+ * plugins/gpu_duck/gpu_duck_driver.cpp, read by the GP0 dispatch
+ * selector in plugins/xbox_soft/gpu.c. */
+extern int      duck_gpu_enabled;
 }
 
 #include "xbPlugins.h"
@@ -131,6 +137,7 @@ void retro_set_environment(retro_environment_t cb) {
         { "pcsxr360_fix_tomb_raider2",   "Game Fix: Tomb Raider 2 (SPU); disabled|enabled" },
         { "pcsxr360_fix_crash_t_racing", "Game Fix: Crash Team Racing (SPU); disabled|enabled" },
         { "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
+        { "pcsxr360_gpu_renderer",       "GPU Renderer (restart core to apply); xbox_soft|gpu_duck" },
         { NULL, NULL }
     };
     cb(RETRO_ENVIRONMENT_SET_VARIABLES, variables);
@@ -211,6 +218,18 @@ static void check_game_fixes(void) {
     if (read_bool_var("pcsxr360_fix_quads_to_tris", false))            gpu_fixes |= 0x200; /* Draw quads with triangles (geometry) */
     dwActFixes = gpu_fixes;
     iUseFixes  = gpu_fixes ? 1 : 0;
+
+    /* GPU renderer selector. Only read at startup (before SysInit /
+     * PEOPS_GPUinit) — swapping primTables mid-game would leave the
+     * driver state desynced, so the option label warns the user to
+     * restart. Default: PEOPS software (xbox_soft). */
+    {
+        struct retro_variable var = { "pcsxr360_gpu_renderer", NULL };
+        if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+            duck_gpu_enabled = (strcmp(var.value, "gpu_duck") == 0) ? 1 : 0;
+        else
+            duck_gpu_enabled = 0;
+    }
 }
 
 /* ======================================================================
@@ -462,8 +481,10 @@ static void CALLBACK EmuFiberProc(LPVOID param) {
     // Patches dir: <system>\patches\psx  (must end with separator because
     // the core concatenates <PatchesDir><file> without adding one).
     if (system_dir) {
+        /* XDK CRT has _snprintf, not C99 snprintf. */
         _snprintf(Config.PatchesDir, sizeof(Config.PatchesDir),
-                 "%s\\patches\\psx\\", system_dir);
+                  "%s\\patches\\psx\\", system_dir);
+        Config.PatchesDir[sizeof(Config.PatchesDir) - 1] = '\0';
     } else {
         Config.PatchesDir[0] = '\0';
     }

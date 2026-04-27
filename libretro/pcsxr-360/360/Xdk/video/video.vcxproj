@@ -569,6 +569,8 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="..\..\..\plugins\xbox_soft\xb_video.cpp" />
+    <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_driver.cpp" />
+    <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_sw_backend.cpp" />
     <ClCompile Include="..\..\..\plugins\xbox_soft\zn.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
@@ -595,6 +597,15 @@
     <ClInclude Include="..\..\..\plugins\xbox_soft\soft.h" />
     <ClInclude Include="..\..\..\plugins\xbox_soft\swap.h" />
     <ClInclude Include="..\..\..\plugins\xbox_soft\xb_video.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_bitfield.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_c_api.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_compat.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_driver.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_gpu_backend.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_gpu_types.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_rectangle.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_sw_backend.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_types.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />

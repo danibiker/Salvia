@@ -84,12 +84,6 @@ void psxDma4(u32 madr, u32 bcr, u32 chcr) { // SPU
 			size = (bcr >> 16) * (bcr & 0xffff) * 2;
 			SPU_readDMAMem(ptr, size);
 
-#ifdef PSXDMA_VERBOSE
-			/* Diagnostic: SPU→RAM DMA. size is in BYTES here. */
-			SysPrintf("[DMA4-SPU-OUT] madr=0x%08x bcr=0x%08x size=%d bytes\n",
-			          madr, bcr, size);
-#endif
-
 			psxCpu->Clear(madr, size);
 
 			SPUDMA_INT((bcr >> 16) * (bcr & 0xffff) / 2);
@@ -145,12 +139,6 @@ void psxDma6(u32 madr, u32 bcr, u32 chcr) {
 		 * decrements madr as it writes the linked list downward, so after
 		 * the loop madr no longer points to the start of the region. */
 		madr_top = madr;
-
-#ifdef PSXDMA_VERBOSE
-		/* Diagnostic: log OTC DMA parameters. */
-		SysPrintf("[DMA6-OTC] madr=0x%08x size=%d words (bytes=%d)\n",
-		          madr_top, size, size * 4);
-#endif
 
 		while (bcr--) {
 			*mem-- = SWAP32((madr - 4) & 0xffffff);

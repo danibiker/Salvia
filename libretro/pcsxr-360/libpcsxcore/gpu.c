@@ -52,27 +52,37 @@ static volatile uint32_t dma_addr;
 static __declspec(align(128)) uint32_t tw_ring[TW_RING_MAX_COUNT];
 static volatile  __declspec(align(128))  uint64_t tw_idx[2] = {0,0};
 
-// Taken from PEOPS SOFTGPU
-u32 lUsedAddr[3];
-
 #define GPUDMA_INT(eCycle) set_event(PSXINT_GPUDMA, eCycle)
 
-__inline boolean CheckForEndlessLoop(u32 laddr) {
-	if (laddr == lUsedAddr[1]) return TRUE;
-	if (laddr == lUsedAddr[2]) return TRUE;
-
-	if (laddr < lUsedAddr[0]) lUsedAddr[1] = laddr;
-	else lUsedAddr[2] = laddr;
-
-	lUsedAddr[0] = laddr;
-
-	return FALSE;
-}
+/*
+ * Historical note on two upstream fixes merged into this file:
+ *
+ *  1. Removed the legacy PEOPS-SOFTGPU `CheckForEndlessLoop` /
+ *     `lUsedAddr[3]` heuristic that used to guard the DMA-chain parser.
+ *     It tracked only two effective recent addresses and false-positived
+ *     on legitimate OT access patterns — notably Soul Reaver, which
+ *     splices particle-effect chunks into the ordering table post-sort,
+ *     producing non-monotonic revisits that tripped the heuristic and
+ *     caused every subsequent chain node to be silently dropped. The
+ *     plain DMACommandCounter safety net (also used by PCSX-ReARMed) is
+ *     sufficient.
+ *
+ *  2. End-of-linked-list terminator corrected from `addr == 0xffffff` to
+ *     `addr & 0x800000`. Contrary to some documentation, the PSX GPU
+ *     DMA-chain terminator is ANY pointer with bit 23 set, not the
+ *     specific value 0xFF'FFFF. Soul Reaver emits terminators like
+ *     0x800000 / 0x810000 / etc., which the old equality check walked
+ *     straight past — reading 32-bit words of RAM past the real end
+ *     into the GPU FIFO as if they were GP0 commands. Stray control
+ *     commands (E3 set-drawing-area, E4, E5 set-draw-offset, E1
+ *     texpage) landed there and corrupted GPU state for the rest of
+ *     the frame, silently scissoring out the next chain's soul
+ *     primitives. Matches PCSX-ReARMed behaviour.
+ */
 
 static u32 gpuDmaChainSize(u32 addr) {
 	u32 size;
 	u32 DMACommandCounter = 0;
-	lUsedAddr[0] = lUsedAddr[1] = lUsedAddr[2] = 0xffffff;
 
 	// initial linked list ptr (word)
 	size = 1;
@@ -81,17 +91,16 @@ static u32 gpuDmaChainSize(u32 addr) {
 		addr &= 0x1ffffc;
 
 		if (DMACommandCounter++ > 2000000) break;
-		if (CheckForEndlessLoop(addr)) break;
 
 
 		// # 32-bit blocks to transfer
 		size += psxMu8_2( addr + 3 );
 
-		
+
 		// next 32-bit pointer
 		addr = psxMu32_2( addr & ~0x3 ) & 0xffffff;
 		size += 1;
-	} while (addr != 0xffffff);
+	} while (!(addr & 0x800000));
 
 	
 	return size;
@@ -181,16 +190,12 @@ void gpuDmaChain(uint32_t addr)
 
 	 baseAddrL = (u32 *)psxM_2;
 
-
-	lUsedAddr[0]=lUsedAddr[1]=lUsedAddr[2]=0xffffff;
-
 	baseAddrB = (unsigned char*) baseAddrL;
 
 	do
 	{
 		addr&=0x1FFFFC;
 		if(DMACommandCounter++ > 2000000) break;
-		if(CheckForEndlessLoop(addr)) break;
 
 		count = baseAddrB[addr+3];
 
@@ -203,7 +208,7 @@ void gpuDmaChain(uint32_t addr)
 
 		addr = psxMu32_2( addr & ~0x3 ) & 0xffffff;
 	}
-	while (addr != 0xffffff);
+	while (!(addr & 0x800000));
 }
 
 void gpuReadDataMem(uint32_t * addr, int size) {
@@ -238,7 +243,7 @@ void gpuWriteData(u32 data) {
 
 	if(!gpu_thread_exit) {
 		WaitForGpuThread();
-	} 
+	}
 
 	GPU_writeData(data);
 }
@@ -275,7 +280,7 @@ void gpuUpdateLace() {
 
 	if(!gpu_thread_exit) {
 		WaitForGpuThread();
-	} 
+	}
 
 	GPU_updateLace();
 }
@@ -345,13 +350,6 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 //			gpuReadDataMem(ptr, size);
 			GPU_readDataMem(ptr, size);////////////////////////////////
 
-#ifdef PSXDMA_VERBOSE
-			/* Diagnostic: GPU→RAM DMA (VRAM readback). size is in 32-bit
-			 * words; written bytes = size*4. */
-			SysPrintf("[DMA2-GPU-VRAM2MEM] madr=0x%08x bcr=0x%08x size=%d words (bytes=%d)\n",
-			          madr, bcr, size, size * 4);
-#endif
-
 			psxCpu->Clear(madr, size);
 
 			// already 32-bit word size ((size * 4) / 4)
@@ -388,7 +386,7 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 			size = gpuDmaChainSize(madr);
 
 	        gpuDmaChain(madr & 0x1fffff);
-			
+
 			// Tekken 3 = use 1.0 only (not 1.5x)
 
 			// Einhander = parse linked list in pieces (todo)

@@ -9,6 +9,9 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
     </Filter>
+    <Filter Include="gpu_duck">
+      <UniqueIdentifier>{a1b2c3d4-e5f6-7890-abcd-ef0123456789}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\plugins\xbox_soft\cfg.c">
@@ -40,6 +43,12 @@
     </ClCompile>
     <ClCompile Include="..\..\..\plugins\xbox_soft\zn.c">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_driver.cpp">
+      <Filter>gpu_duck</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_sw_backend.cpp">
+      <Filter>gpu_duck</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -84,6 +93,33 @@
     </ClInclude>
     <ClInclude Include="..\..\..\plugins\xbox_soft\xb_video.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_bitfield.h">
+      <Filter>gpu_duck</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_c_api.h">
+      <Filter>gpu_duck</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_compat.h">
+      <Filter>gpu_duck</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_driver.h">
+      <Filter>gpu_duck</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_gpu_backend.h">
+      <Filter>gpu_duck</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_gpu_types.h">
+      <Filter>gpu_duck</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_rectangle.h">
+      <Filter>gpu_duck</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_sw_backend.h">
+      <Filter>gpu_duck</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_types.h">
+      <Filter>gpu_duck</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

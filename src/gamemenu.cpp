@@ -1044,6 +1044,7 @@ SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
 }
 
 void GameMenu::selectScalerMode(int mode){
+#ifndef _XBOX
 	// 3. Selector de escalado
 	switch(mode) {
 		case FULLSCREEN:
@@ -1145,6 +1146,7 @@ void GameMenu::selectScalerMode(int mode){
 			current_scaler = scale_software_fixed_point_safe2;
 			break;
 	}
+#endif
 }
 
 void GameMenu::showLangSystemMessage(std::string text, uint32_t duration) {

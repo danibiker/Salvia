@@ -542,13 +542,6 @@ void psxDma1(u32 adr, u32 bcr, u32 chcr) {
 	/* I guess the memory speed is limitating */
 	dmacnt = size;
 
-#ifdef PSXDMA_VERBOSE
-	/* Diagnostic: log outgoing MDEC DMA parameters. If the game programs
-	 * a bogus BCR this will show an absurd size and expose the overrun. */
-	SysPrintf("[DMA1-MDEC-OUT] adr=0x%08x bcr=0x%08x chcr=0x%08x size=%d\n",
-	          adr, bcr, chcr, dmacnt);
-#endif
-
 	if (!(mdec.reg1 & MDEC1_BUSY)) {
 		/* add to pending */
 		mdec.pending_dma1.adr = adr;

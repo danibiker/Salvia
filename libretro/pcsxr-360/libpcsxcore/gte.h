@@ -152,7 +152,11 @@ extern "C" {
 #define gteBFC (((s32 *)psxRegs.CP2C.r)[23])
 #define gteOFX (((s32 *)psxRegs.CP2C.r)[24])
 #define gteOFY (((s32 *)psxRegs.CP2C.r)[25])
-#define gteH   (psxRegs.CP2C.p[26].sw.l)
+/* gteH is the 16-bit unsigned projection plane distance. Using .sw.l (signed)
+ * would flip H >= 0x8000 to negative and, combined with DIVIDE()'s "n >= 0"
+ * guard, would return 0xffffffff for those projections — breaking perspective.
+ * Aligned with pcsx_rearmed which also uses the unsigned .w.l alias. */
+#define gteH   (psxRegs.CP2C.p[26].w.l)
 #define gteDQA (psxRegs.CP2C.p[27].sw.l)
 #define gteDQB (((s32 *)psxRegs.CP2C.r)[28])
 #define gteZSF3 (psxRegs.CP2C.p[29].sw.l)
@@ -192,6 +196,13 @@ static __inline int gte_clz(u32 x) {
 #define A1(a) BOUNDS((a), 0x7fffffff, (1 << 30), -(s64)0x80000000, (1 << 31) | (1 << 27))
 #define A2(a) BOUNDS((a), 0x7fffffff, (1 << 29), -(s64)0x80000000, (1 << 31) | (1 << 26))
 #define A3(a) BOUNDS((a), 0x7fffffff, (1 << 28), -(s64)0x80000000, (1 << 31) | (1 << 25))
+/* A1U/A2U/A3U: same semantics as A1/A2/A3 on PPC. Matches pcsx_rearmed's
+ * non-ARM path. Kept as separate names so intermediate saturations in
+ * lighting/color ops (NCDS/NCDT/DPCS/DPCT/INTPL/DCPL/CDP) are distinguishable
+ * from outer-result saturations. */
+#define A1U A1
+#define A2U A2
+#define A3U A3
 #define limB1(a, l) LIM((a), 0x7fff, -0x8000 * !l, (1 << 31) | (1 << 24))
 #define limB2(a, l) LIM((a), 0x7fff, -0x8000 * !l, (1 << 31) | (1 << 23))
 #define limB3(a, l) LIM((a), 0x7fff, -0x8000 * !l, (1 << 22))

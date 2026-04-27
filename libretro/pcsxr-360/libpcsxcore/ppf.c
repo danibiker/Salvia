@@ -474,9 +474,9 @@ void LoadSBI() {
 		if (is_libcrypt_serial(CdromId)) {
 			char warn[256];
 			_snprintf(warn, sizeof(warn),
-			         "LibCrypt: %.9s requires %s. Place it next to the image "
-			         "or in the patches dir %s",
-			         CdromId, buffer, Config.PatchesDir);
+			         "LibCrypt: %.9s requires %s — place it next to the image "
+			         "or in the patches dir, otherwise the game won't boot.",
+			         CdromId, buffer);
 			pcsxr_lr_notify_user(warn, 600);
 		}
 		return;

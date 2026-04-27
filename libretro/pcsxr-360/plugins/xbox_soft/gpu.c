@@ -137,6 +137,7 @@
 #include "key.h"
 #include "fps.h"
 #include "swap.h"
+#include "../gpu_duck/gpu_duck_c_api.h"
 
 ////////////////////////////////////////////////////////////////////////
 // PPDK developer must change libraryName field and can change revision and build
@@ -561,6 +562,19 @@ long PEOPS_GPUinit()                                // GPU INIT
  // Get a handle for kernel32.dll, and access the required export function
  LoadKernel32();
 
+ /* If the gpu_duck renderer was selected via the libretro option,
+  * stand it up now that psxVuw is valid. The duck backend's VRAM
+  * pointer aliases psxVuw so there is no copy on the hot path. */
+ if (duck_gpu_enabled)
+ {
+  if (!duck_init(psxVuw))
+  {
+   /* Fall back silently to the stock PEOPS rasteriser rather than
+    * refusing to boot — the emulator is still usable. */
+   duck_gpu_enabled = 0;
+  }
+ }
+
  return 0;
 }
 
@@ -663,10 +677,15 @@ long PEOPS_GPUclose()
 long CALLBACK GPUshutdown()                            // GPU SHUTDOWN
 #else 
 long PEOPS_GPUshutdown()
-#endif 
+#endif
 {
  // screensaver: release the handle for kernel32.dll
  FreeKernel32();
+
+ if (duck_gpu_enabled)
+ {
+  duck_shutdown();
+ }
 
 // free(psxVSecure);
  
@@ -1553,9 +1572,14 @@ ENDVRAM:
 
  if(DataWriteMode==DR_NORMAL)
   {
+   /* Dispatch target: the skip-frame stub, the stock PEOPS table, or
+    * the gpu_duck bridge. duck_primTable is cast to drop the `const`
+    * on the entries so primFunc can index it uniformly with the
+    * non-const tables above. */
    void (* *primFunc)(unsigned char *);
-   if(bSkipNextFrame) primFunc=primTableSkip;
-   else               primFunc=primTableJ;
+   if(bSkipNextFrame)       primFunc=primTableSkip;
+   else if(duck_gpu_enabled) primFunc=(void (**)(unsigned char *))duck_primTable;
+   else                     primFunc=primTableJ;
 
    for(;i<iSize;)
     {
