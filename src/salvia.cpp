@@ -990,7 +990,9 @@ void closeGame(){
 			audio_closing = false;
 		}
 		gameMenu->g_audioRate.reset();
+#ifndef NO_SRAM
 		saveSram(romPaths.sram.c_str());
+#endif
 
 		// Multi-disc: persistir indice del disco actual para la proxima carga
 		if (!g_currentRompath.empty() && disk_control.get_num_images &&
@@ -1226,13 +1228,14 @@ void closeResources() {
 }
 
 inline void updateGame() {
-    const Uint32 currentTime = SDL_GetTicks();
+    #ifndef NO_SRAM
+	const Uint32 currentTime = SDL_GetTicks();
     // Verificamos si ha pasado el intervalo desde el último guardado
     if (currentTime - lastSramSaved >= INTERVAL_SRAM_SAVE) {
         saveSram(romPaths.sram.c_str());
         lastSramSaved = currentTime;
     }
-
+	#endif
 	// retro_run hace todo: 
 	// 1. Llama a input_poll() -> update_input()
 	// 2. Calcula la lógica del juego
