@@ -639,6 +639,7 @@ static inline void hw_refresh(const void *data, unsigned width,
         current_video_settings.sw  = width;
         current_video_settings.sh  = height;
         current_video_settings.bpp = bpp;
+		SDL_FillRect(screen, NULL, colors[clBackground].color);
     }
 	
 	if (current_video_settings.filter != *gameMenu->current_shader){

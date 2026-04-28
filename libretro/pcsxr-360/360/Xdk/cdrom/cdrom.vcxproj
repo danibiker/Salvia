@@ -431,7 +431,7 @@
       <PreschedulingOptimization>true</PreschedulingOptimization>
       <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <RegisterReservation>true</RegisterReservation>
+      <RegisterReservation>false</RegisterReservation>
       <AssemblerListingLocation>$(IntDir)$(ProjectName)\</AssemblerListingLocation>
       <ObjectFileName>$(IntDir)$(ProjectName)\</ObjectFileName>
       <ProgramDataBaseFileName>$(IntDir)$(ProjectName)\vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>

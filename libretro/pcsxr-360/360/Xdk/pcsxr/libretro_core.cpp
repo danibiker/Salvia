@@ -43,7 +43,7 @@ extern int      iUseFixes;           /* xbox_soft gate for dwActFixes */
 extern BOOL     tombraider2fix;      /* dfsound/cfg.c */
 extern BOOL     crashteamracingfix;  /* dfsound/cfg.c */
 extern BOOL     frontmission3fix;    /* libpcsxcore/psxinterpreter.c */
-extern int      soul_reaver_quad_fix;/* libpcsxcore/gpu.c — Soul Reaver collapsed-quad workaround */
+extern int      collapsed_quad_fix;  /* libpcsxcore/gpu.c — Soul Reaver collapsed-quad workaround */
 
 /* Runtime selector for the new SwanStation-derived SW renderer that
  * lives alongside PEOPS in the xbox_soft plugin. Defined in
@@ -131,14 +131,14 @@ void retro_set_environment(retro_environment_t cb) {
         { "pcsxr360_pixel_format",       "Pixel Format; RGB565|XRGB8888" },
         { "pcsxr360_fix_parasite_eve2",  "Game Fix: Parasite Eve 2 (counter); disabled|enabled" },
         { "pcsxr360_fix_dark_forces",    "Game Fix: Dark Forces / Duke Nukem (GPU); disabled|enabled" },
-        { "pcsxr360_fix_ignore_brightness", "GPU Fix: Ignore black brightness; disabled|enabled" },
-        { "pcsxr360_fix_lazy_update",    "GPU Fix: Lazy screen update; disabled|enabled" },
-        { "pcsxr360_fix_quads_to_tris",  "GPU Fix: Draw quads with triangles; disabled|enabled" },
-        { "pcsxr360_fix_soul_reaver_quads", "Game Fix: Soul Reaver collapsed soul quads; disabled|enabled" },
         { "pcsxr360_fix_front_mission3", "Game Fix: Front Mission 3 (CPU); disabled|enabled" },
         { "pcsxr360_fix_tomb_raider2",   "Game Fix: Tomb Raider 2 (SPU); disabled|enabled" },
         { "pcsxr360_fix_crash_t_racing", "Game Fix: Crash Team Racing (SPU); disabled|enabled" },
-        { "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
+        { "pcsxr360_fix_ignore_brightness", "GPU Fix: Ignore black brightness; disabled|enabled" },
+        { "pcsxr360_fix_lazy_update",    "GPU Fix: Lazy screen update; disabled|enabled" },
+        { "pcsxr360_fix_quads_to_tris",  "GPU Fix: Draw quads with triangles; disabled|enabled" },
+        { "pcsxr360_fix_collapsed_quads", "GPU Fix: Collapsed quads; disabled|enabled" },
+		{ "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
         { "pcsxr360_gpu_renderer",       "GPU Renderer (restart core to apply); xbox_soft|gpu_duck" },
         { NULL, NULL }
     };
@@ -203,7 +203,7 @@ static void check_game_fixes(void) {
      * (libpcsxcore/gpu.c). The CPU/GTE emulation produces souls with all
      * four vertices identical (zero-area quad); this expands them to a
      * fixed-size sprite around the centre. */
-    soul_reaver_quad_fix = read_bool_var("pcsxr360_fix_soul_reaver_quads", false) ? 1 : 0;
+    collapsed_quad_fix = read_bool_var("pcsxr360_fix_collapsed_quads", false) ? 1 : 0;
 
     /* Tomb Raider 2 — SPU voice-silence handling (dfsound/spu.c). */
     tombraider2fix = read_bool_var("pcsxr360_fix_tomb_raider2", false) ? 1 : 0;
@@ -222,22 +222,34 @@ static void check_game_fixes(void) {
     darkforcesfix = read_bool_var("pcsxr360_fix_dark_forces", false) ? 1 : 0;
     if (darkforcesfix)                                                 gpu_fixes |= 0x100; /* Dark Forces / Duke Nukem: repeated flat-tex triangles */
     if (read_bool_var("pcsxr360_fix_ignore_brightness", false))        gpu_fixes |= 0x004; /* Ignore black brightness colour */
-    if (read_bool_var("pcsxr360_fix_lazy_update", false))              gpu_fixes |= 0x040; /* Lazy screen update (Soul Reaver souls, LoK) */
+    if (read_bool_var("pcsxr360_fix_lazy_update", false))              gpu_fixes |= 0x040; /* Lazy screen update */
     if (read_bool_var("pcsxr360_fix_quads_to_tris", false))            gpu_fixes |= 0x200; /* Draw quads with triangles (geometry) */
     dwActFixes = gpu_fixes;
     iUseFixes  = gpu_fixes ? 1 : 0;
 
-    /* GPU renderer selector. Only read at startup (before SysInit /
-     * PEOPS_GPUinit) — swapping primTables mid-game would leave the
-     * driver state desynced, so the option label warns the user to
-     * restart. Default: PEOPS software (xbox_soft). */
-    {
-        struct retro_variable var = { "pcsxr360_gpu_renderer", NULL };
-        if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-            duck_gpu_enabled = (strcmp(var.value, "gpu_duck") == 0) ? 1 : 0;
-        else
-            duck_gpu_enabled = 0;
-    }
+    /* (GPU renderer selector intentionally NOT re-applied here — see
+     * check_gpu_renderer_initial_only() and the comment on it. This
+     * function is hot-reloaded on RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE,
+     * but flipping duck_gpu_enabled mid-session without calling
+     * duck_init/duck_shutdown leaves s_driver NULL while the dispatch
+     * table points at duck handlers, leading to a crash on the very
+     * next GP0 packet — exactly the symptom users hit by changing the
+     * renderer "in caliente" through the libretro options menu. The
+     * variable is sampled once at startup by the initial-only helper
+     * below; subsequent changes take effect only after a core restart,
+     * matching the option label "(restart core to apply)". */
+}
+
+/* Snapshot the GPU renderer choice ONCE at core init, before
+ * SysInit / PEOPS_GPUinit creates the duck driver in xbox_soft/gpu.c.
+ * Splitting this out of check_game_fixes() prevents the hot-swap crash
+ * (s_driver NULL while duck_primTable is in use). */
+static void check_gpu_renderer_initial_only(void) {
+    struct retro_variable var = { "pcsxr360_gpu_renderer", NULL };
+    if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        duck_gpu_enabled = (strcmp(var.value, "gpu_duck") == 0) ? 1 : 0;
+    else
+        duck_gpu_enabled = 0;
 }
 
 /* ======================================================================
@@ -522,6 +534,14 @@ static void CALLBACK EmuFiberProc(LPVOID param) {
      * set before the BIOS shortcut runs, and the GPU/SPU globals must
      * match the user's choice for this boot. */
     check_game_fixes();
+
+    /* Sample the GPU renderer choice ONCE for this boot, before
+     * PEOPS_GPUinit (called by SysInit) decides whether to call
+     * duck_init(). This is intentionally outside check_game_fixes()
+     * because that runs on every libretro variable-update notification,
+     * and flipping duck_gpu_enabled mid-session would dispatch to the
+     * duck primTable while s_driver is still NULL. */
+    check_gpu_renderer_initial_only();
 
     OutputDebugStringA("[PCSXR-LR] Calling SysInit...\n");
     if (SysInit() == -1) {
@@ -905,9 +925,9 @@ bool retro_load_game(const struct retro_game_info *game) {
     /* Seed the CDR with whatever image we'll boot from. */
     strncpy(game_path_store, disk_images[disk_current], sizeof(game_path_store) - 1);
     game_path_store[sizeof(game_path_store) - 1] = '\0';
-
-	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
-	XSetThreadProcessor(GetCurrentThread(), 1);
+	
+	//SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+	//XSetThreadProcessor(GetCurrentThread(), 1);
 
     fiber_main = ConvertThreadToFiber(NULL);
     if (!fiber_main) {

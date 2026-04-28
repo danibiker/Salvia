@@ -84,6 +84,11 @@ __inline void UpdateGlobalTP(unsigned short gdata)
 			// tekken dithering? right now only if dithering is forced by user
 			if(iUseDither==2) iDither=2; else iDither=0;
 
+			/* See main path below for rationale. Same precompute on the
+			 * GPU-version-2 / 1024-tall early-return branch. */
+			GlobalTextureBaseW = psxVuw + (GlobalTextAddrY << 10) + GlobalTextAddrX;
+			GlobalTextureBaseB = psxVub + (GlobalTextAddrY << 11) + (GlobalTextAddrX << 1);
+
 			return;
 		}
 		else
@@ -115,6 +120,23 @@ __inline void UpdateGlobalTP(unsigned short gdata)
 		iDither=2;
 		break;
 	}
+
+	/* Precompute texture-page base pointers for the rasteriser inner
+	 * loops (gpu_unai #1 idea ported into PEOPS). Recomputed only when
+	 * the texture page changes (here), so per pixel we trade two
+	 * global loads + two adds for one indirection through a register.
+	 *
+	 * BaseW: psxVuw + GlobalTextAddrY*1024 + GlobalTextAddrX  (16-bit
+	 *        index, used by 15-bit direct textures and CLUT lookups)
+	 * BaseB: psxVub + GlobalTextAddrY*2048 + GlobalTextAddrX*2 (byte
+	 *        index, used by the 4-bit/8-bit CLUT fetch path which
+	 *        does psxVub[((posY>>5) & 0xFFFFF800) + YAdjust + ...]).
+	 *
+	 * The fast paths in soft.c read these via "&GlobalTextureBaseW[..]"
+	 * to drop the per-pixel adds. The slow paths still use the legacy
+	 * GlobalTextAddrX/Y arithmetic for now to limit blast radius. */
+	GlobalTextureBaseW = psxVuw + (GlobalTextAddrY << 10) + GlobalTextAddrX;
+	GlobalTextureBaseB = psxVub + (GlobalTextAddrY << 11) + (GlobalTextAddrX << 1);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -1121,6 +1143,106 @@ void primPolyFT3(unsigned char * baseAddr)
 }
 
 ////////////////////////////////////////////////////////////////////////
+// Sprite-simplification helper (gpu_unai #2 idea, ported into PEOPS)
+//
+// Many GP0 0x2C..0x2F (PolyFT4) packets are nothing but a textured
+// rectangle blit dressed up as a quad: HUD elements, menus, score
+// readouts, fight-game life bars, win-quote overlays, FMV mat[t]es.
+// Two-triangle Gouraud-style scanline rasterising of these is wildly
+// over-engineered — PEOPS' DrawSoftwareSprite already handles the
+// axis-aligned, 1:1, untransformed-UV case in a much tighter loop.
+//
+// gpu_unai's prim_try_simplify_quad_t inspired this: detect the
+// canonical TL/TR/BL/BR quad ordering with rectangular bounds and
+// 1:1 UV mapping, then synthesise a sprite call.  Conservative on
+// purpose — anything that doesn't match exactly falls through to
+// the original poly path so we never render incorrectly. UV/quad
+// permutations and scaled mappings stay on the slow path; that's
+// fine, sprite blits dominate the frequency anyway.
+//
+// Caller MUST have already populated lx0..lx3, ly0..ly3, called
+// UpdateGlobalTP and run CheckCoord4 before invoking this. Returns
+// non-zero if it dispatched the primitive (caller should skip the
+// rest of the poly path); zero leaves all globals untouched.
+////////////////////////////////////////////////////////////////////////
+
+extern void primSprtSRest(unsigned char * baseAddr,unsigned short type);
+
+static int tryQuadAsSprite(unsigned char *baseAddr)
+{
+	short w, h;
+	unsigned char u0, v0, u1, v1, u2, v2, u3, v3;
+	unsigned short uw, vh;
+
+	/* Rectangular, axis-aligned, canonical TL/TR/BL/BR ordering. */
+	if (ly0 != ly1 || ly2 != ly3) return 0;       /* top & bottom rows level */
+	if (lx0 != lx2 || lx1 != lx3) return 0;       /* left & right cols level */
+	if (lx1 <= lx0 || ly2 <= ly0) return 0;       /* not degenerate, not flipped */
+
+	/* UV byte offsets in a PolyFT4 GP0 packet (cmd 0x2C..0x2F):
+	 *   word 2 lo = uv0 → bytes 8 (u), 9  (v)
+	 *   word 4 lo = uv1 → bytes 16(u), 17 (v)
+	 *   word 6 lo = uv2 → bytes 24(u), 25 (v)
+	 *   word 8 lo = uv3 → bytes 32(u), 33 (v)  */
+	u0 = baseAddr[8];  v0 = baseAddr[9];
+	u1 = baseAddr[16]; v1 = baseAddr[17];
+	u2 = baseAddr[24]; v2 = baseAddr[25];
+	u3 = baseAddr[32]; v3 = baseAddr[33];
+
+	if (v0 != v1 || v2 != v3) return 0;           /* top/bottom V matches */
+	if (u0 != u2 || u1 != u3) return 0;           /* left/right U matches */
+	if (u1 <= u0 || v2 <= v0) return 0;           /* UV not flipped/degenerate */
+
+	w  = lx1 - lx0;
+	h  = ly2 - ly0;
+	uw = (unsigned short)(unsigned char)(u1 - u0);
+	vh = (unsigned short)(unsigned char)(v2 - v0);
+
+	/* Require strict 1:1 texel-to-pixel mapping. PSX UVs wrap modulo
+	 * 256 — if (u1-u0) doesn't equal w as an unsigned 8-bit delta, the
+	 * mapping is scaled or wraps the texture page edge, neither of
+	 * which DrawSoftwareSprite handles. Slow path. */
+	if (uw != (unsigned short)w || vh != (unsigned short)h) return 0;
+	if (w > 256 || h > 256) return 0;             /* sprite size cap */
+
+	/* Bail on the rare edge cases that primSprtS would dispatch to a
+	 * different rasteriser. Mirror is a sprite-only flag set by GP0
+	 * 0x60..0x63 (it persists in the global until cleared by another
+	 * sprite cmd), and texture-window invokes a separate code path
+	 * inside DrawSoftwareSpriteTWin. Both are uncommon for the
+	 * HUD-blit pattern we're targeting; falling through to the slow
+	 * poly path keeps them rendering correctly. */
+	if (bUsingTWin) return 0;
+	if (usMirror)   return 0;
+
+	/* Configure DrawSemiTrans + g_m1/2/3 from the cmd byte exactly the
+	 * way primSprtS does for native 0x64..0x67 sprite primitives. */
+	SetRenderMode(GETLE32(((uint32_t *)baseAddr)));
+
+	{
+		short sW = w, sH = h;
+		short tX = (short)u0, tY = (short)v0;
+		unsigned short sTypeRest = 0;
+
+		/* PSX hardware splits sprites that cross the 256-texel page
+		 * boundary into multiple draws; primSprtSRest handles the
+		 * remainder pieces. Mirror that here for correctness. */
+		if (tX + sW > 256) { sW = 256 - tX; sTypeRest += 1; }
+		if (tY + sH > 256) { sH = 256 - tY; sTypeRest += 2; }
+
+		DrawSoftwareSprite(baseAddr, sW, sH, tX, tY);
+
+		if (sTypeRest)
+		{
+			if (sTypeRest & 1)  primSprtSRest(baseAddr, 1);
+			if (sTypeRest & 2)  primSprtSRest(baseAddr, 2);
+			if (sTypeRest == 3) primSprtSRest(baseAddr, 3);
+		}
+	}
+	return 1;
+}
+
+////////////////////////////////////////////////////////////////////////
 // cmd: flat shaded Texture4
 ////////////////////////////////////////////////////////////////////////
 
@@ -1145,6 +1267,18 @@ void primPolyFT4(unsigned char * baseAddr)
 	{
 		AdjustCoord4();
 		if(CheckCoord4()) return;
+	}
+
+	/* gpu_unai-style sprite-simplification: if this textured quad is
+	 * an axis-aligned 1:1 blit (HUD / menu / score / win-quote /
+	 * 2D backdrop), short-circuit to PEOPS' faster sprite raster
+	 * instead of going through drawPoly4FT's two-triangle path.
+	 * Anything that doesn't match the conservative pattern just
+	 * falls through to the original code below. */
+	if (tryQuadAsSprite(baseAddr))
+	{
+		bDoVSyncUpdate = TRUE;
+		return;
 	}
 
 	offsetPSX4();

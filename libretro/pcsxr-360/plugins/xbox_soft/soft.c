@@ -99,6 +99,10 @@ short          ly0,lx0,ly1,lx1,ly2,lx2,ly3,lx3;        // global psx vertex coor
 int32_t           GlobalTextAddrX,GlobalTextAddrY,GlobalTextTP;
 int32_t           GlobalTextREST,GlobalTextABR,GlobalTextPAGE;
 
+/* Defined in prim.c's UpdateGlobalTP, declared in externals.h. */
+unsigned short *  GlobalTextureBaseW = 0;
+unsigned char  *  GlobalTextureBaseB = 0;
+
 ////////////////////////////////////////////////////////////////////////
 // POLYGON OFFSET FUNCS
 ////////////////////////////////////////////////////////////////////////
@@ -5440,7 +5444,108 @@ void drawPoly3TGEx4(short x1, short y1, short x2, short y2, short x3, short y3, 
 						(cB1>>16),(cG1>>16),(cR1>>16));
 				}
 			}
-			if(NextRow_GT()) 
+			if(NextRow_GT())
+			{
+				return;
+			}
+		}
+		return;
+	}
+
+	/* ---- Soul Reaver / additive 4-bit-CLUT semi-transparent fast path ----
+	 * Specialised for the GP0 packet captured from Soul Reaver's intro
+	 * inverted-pyramid water (cmd 0x36, texpage 0x002C: 4-bit CLUT page,
+	 * ABR=1):
+	 *   - DrawSemiTrans = TRUE, GlobalTextABR = 1 (additive blend),
+	 *   - 4-bit CLUT (this function),
+	 *   - dither off, mask check off.
+	 * ABR=1 formula: out = dst + (src * gouraud >> 7) per channel.
+	 * The fall-through slow path below still handles every other config.
+	 *
+	 * Wins per pixel vs the slow loop:
+	 *   - Inlined GetTextureTransColGX with ABR=1 hardcoded — the 4-way
+	 *     ABR if-chain and the bCheckMask/DrawSemiTrans early-outs are
+	 *     gone. Only the per-pixel `color==0` and `color&0x8000` (STP)
+	 *     tests remain, since those genuinely vary across the texture.
+	 *   - `iDither` and the global flag reads are hoisted out of the
+	 *     scanline loop entirely (they were re-loaded each iteration
+	 *     because the compiler couldn't prove no-aliasing with PUTLE16).
+	 *
+	 * Texture sample (4-bit CLUT) layout matches the existing code: byte
+	 * fetch + nibble extract + 16-bit CLUT lookup, identical to the slow
+	 * path so any clut/uv/page register effects stay correct. */
+	if(DrawSemiTrans && !iDither && !bCheckMask && GlobalTextABR == 1)
+	{
+		const u16 setmask = sSetMask;
+		for (i=ymin;i<=ymax;i++)
+		{
+			xmin=(left_x >> 16);
+			xmax=(right_x >> 16)-1;
+			if(drawW<xmax) xmax=drawW;
+
+			if(xmax>=xmin)
+			{
+				posX=left_u;
+				posY=left_v;
+				cR1=left_R;
+				cG1=left_G;
+				cB1=left_B;
+
+				if(xmin<drawX)
+				{j=drawX-xmin;xmin=drawX;posX+=j*difX;posY+=j*difY;cR1+=j*difR;cG1+=j*difG;cB1+=j*difB;}
+
+				for(j=xmin;j<=xmax;j++)
+				{
+					unsigned char texByte;
+					unsigned short src;
+
+					XAdjust=(posX>>16);
+					texByte = psxVub[((posY>>5)&(int32_t)0xFFFFF800)+YAdjust+(XAdjust>>1)];
+					tC1 = (texByte>>((XAdjust&1)<<2))&0xf;
+					src = GETLE16(&psxVuw[clutP+tC1]);
+
+					if(src)
+					{
+						unsigned short *pdst = &psxVuw[(i<<10)+j];
+						const short m1 = (short)(cB1>>16);
+						const short m2 = (short)(cG1>>16);
+						const short m3 = (short)(cR1>>16);
+						int32_t r,g,b;
+						const u16 l = (u16)(setmask | (src & 0x8000));
+
+						if(src & 0x8000)
+						{
+							/* ABR=1 additive: out = dst + (src * mN >> 7).
+							 * Same arithmetic as GetTextureTransColGX
+							 * GlobalTextABR==1 path. */
+							u16 d = GETLE16(pdst);
+							r = XCOL1(d) + ((XCOL1(src) * m1) >> 7);
+							b = XCOL2(d) + ((XCOL2(src) * m2) >> 7);
+							g = XCOL3(d) + ((XCOL3(src) * m3) >> 7);
+						}
+						else
+						{
+							/* STP bit clear → opaque texel: just modulate
+							 * by Gouraud, no destination read. */
+							r = (XCOL1(src) * m1) >> 7;
+							b = (XCOL2(src) * m2) >> 7;
+							g = (XCOL3(src) * m3) >> 7;
+						}
+
+						if(r & 0x7FFFFFE0) r = 0x1f;
+						if(b & 0x7FFFFC00) b = 0x3e0;
+						if(g & 0x7FFF8000) g = 0x7c00;
+
+						PUTLE16(pdst, (u16)(XPSXCOL(r,g,b) | l));
+					}
+					posX+=difX;
+					posY+=difY;
+					cR1+=difR;
+					cG1+=difG;
+					cB1+=difB;
+				}
+			}
+			if(NextRow_GT())
 			{
 				return;
 			}
@@ -5467,17 +5572,17 @@ void drawPoly3TGEx4(short x1, short y1, short x2, short y2, short x3, short y3, 
 			if(xmin<drawX)
 			{j=drawX-xmin;xmin=drawX;posX+=j*difX;posY+=j*difY;cR1+=j*difR;cG1+=j*difG;cB1+=j*difB;}
 
-			for(j=xmin;j<=xmax;j++) 
+			for(j=xmin;j<=xmax;j++)
 			{
 				XAdjust=(posX>>16);
 				tC1 = psxVub[((posY>>5)&(int32_t)0xFFFFF800)+YAdjust+(XAdjust>>1)];
 				tC1=(tC1>>((XAdjust&1)<<2))&0xf;
 				if(iDither)
-					GetTextureTransColGX_Dither(&psxVuw[(i<<10)+j], 
+					GetTextureTransColGX_Dither(&psxVuw[(i<<10)+j],
 					GETLE16(&psxVuw[clutP+tC1]),
 					(cB1>>16),(cG1>>16),(cR1>>16));
 				else
-					GetTextureTransColGX(&psxVuw[(i<<10)+j], 
+					GetTextureTransColGX(&psxVuw[(i<<10)+j],
 					GETLE16(&psxVuw[clutP+tC1]),
 					(cB1>>16),(cG1>>16),(cR1>>16));
 				posX+=difX;
@@ -5487,7 +5592,7 @@ void drawPoly3TGEx4(short x1, short y1, short x2, short y2, short x3, short y3, 
 				cB1+=difB;
 			}
 		}
-		if(NextRow_GT()) 
+		if(NextRow_GT())
 		{
 			return;
 		}
@@ -5946,9 +6051,98 @@ void drawPoly4TGEx4(short x1, short y1, short x2, short y2, short x3, short y3, 
 						(XAdjust>>1)];
 					tC1=(tC1>>((XAdjust&1)<<2))&0xf;
 
-					GetTextureTransColGX_S(&psxVuw[(i<<10)+j], 
+					GetTextureTransColGX_S(&psxVuw[(i<<10)+j],
 						GETLE16(&psxVuw[clutP+tC1]),
 						(cB1>>16),(cG1>>16),(cR1>>16));
+				}
+			}
+			if(NextRow_GT4()) return;
+		}
+		return;
+	}
+
+	/* Same Soul Reaver / additive 4-bit-CLUT semi-transparent fast path
+	 * as drawPoly3TGEx4 above, but for the 4-vertex (quad) variant. See
+	 * the comment there for rationale; the only structural differences
+	 * here are NextRow_GT4 (vs NextRow_GT) and the per-scanline
+	 * recomputation of difX/difY/difR/difG/difB from
+	 * (right_X - left_X) / num — the quad rasteriser doesn't keep
+	 * constant deltas across sections like the triangle version does. */
+	if(DrawSemiTrans && !iDither && !bCheckMask && GlobalTextABR == 1)
+	{
+		const u16 setmask = sSetMask;
+		for (i=ymin;i<=ymax;i++)
+		{
+			xmin=(left_x >> 16);
+			xmax=(right_x >> 16);
+
+			if(xmax>=xmin)
+			{
+				posX=left_u;
+				posY=left_v;
+
+				num=(xmax-xmin);
+				if(num==0) num=1;
+				difX=(right_u-posX)/num;
+				difY=(right_v-posY)/num;
+
+				cR1=left_R;
+				cG1=left_G;
+				cB1=left_B;
+				difR=(right_R-cR1)/num;
+				difG=(right_G-cG1)/num;
+				difB=(right_B-cB1)/num;
+
+				if(xmin<drawX)
+				{j=drawX-xmin;xmin=drawX;posX+=j*difX;posY+=j*difY;cR1+=j*difR;cG1+=j*difG;cB1+=j*difB;}
+				xmax--;if(drawW<xmax) xmax=drawW;
+
+				for(j=xmin;j<=xmax;j++)
+				{
+					unsigned char texByte;
+					unsigned short src;
+
+					XAdjust=(posX>>16);
+					texByte = psxVub[((posY>>5)&(int32_t)0xFFFFF800)+YAdjust+(XAdjust>>1)];
+					tC1 = (texByte>>((XAdjust&1)<<2))&0xf;
+					src = GETLE16(&psxVuw[clutP+tC1]);
+
+					if(src)
+					{
+						unsigned short *pdst = &psxVuw[(i<<10)+j];
+						const short m1 = (short)(cB1>>16);
+						const short m2 = (short)(cG1>>16);
+						const short m3 = (short)(cR1>>16);
+						int32_t r,g,b;
+						const u16 l = (u16)(setmask | (src & 0x8000));
+
+						if(src & 0x8000)
+						{
+							/* ABR=1 additive: out = dst + (src * mN >> 7). */
+							u16 d = GETLE16(pdst);
+							r = XCOL1(d) + ((XCOL1(src) * m1) >> 7);
+							b = XCOL2(d) + ((XCOL2(src) * m2) >> 7);
+							g = XCOL3(d) + ((XCOL3(src) * m3) >> 7);
+						}
+						else
+						{
+							/* STP bit clear → opaque texel: just modulate. */
+							r = (XCOL1(src) * m1) >> 7;
+							b = (XCOL2(src) * m2) >> 7;
+							g = (XCOL3(src) * m3) >> 7;
+						}
+
+						if(r & 0x7FFFFFE0) r = 0x1f;
+						if(b & 0x7FFFFC00) b = 0x3e0;
+						if(g & 0x7FFF8000) g = 0x7c00;
+
+						PUTLE16(pdst, (u16)(XPSXCOL(r,g,b) | l));
+					}
+					posX+=difX;
+					posY+=difY;
+					cR1+=difR;
+					cG1+=difG;
+					cB1+=difB;
 				}
 			}
 			if(NextRow_GT4()) return;
@@ -5996,11 +6190,11 @@ void drawPoly4TGEx4(short x1, short y1, short x2, short y2, short x3, short y3, 
 					(XAdjust>>1)];
 				tC1=(tC1>>((XAdjust&1)<<2))&0xf;
 				if(iDither)
-					GetTextureTransColGX_Dither(&psxVuw[(i<<10)+j], 
+					GetTextureTransColGX_Dither(&psxVuw[(i<<10)+j],
 					GETLE16(&psxVuw[clutP+tC1]),
 					(cB1>>16),(cG1>>16),(cR1>>16));
 				else
-					GetTextureTransColGX(&psxVuw[(i<<10)+j], 
+					GetTextureTransColGX(&psxVuw[(i<<10)+j],
 					GETLE16(&psxVuw[clutP+tC1]),
 					(cB1>>16),(cG1>>16),(cR1>>16));
 				posX+=difX;
@@ -6113,12 +6307,86 @@ void drawPoly3TGEx8(short x1, short y1, short x2, short y2, short x3, short y3, 
 				if(j==xmax)
 				{
 					tC1 = psxVub[((posY>>5)&(int32_t)0xFFFFF800)+YAdjust+((posX>>16))];
-					GetTextureTransColGX_S(&psxVuw[(i<<10)+j], 
+					GetTextureTransColGX_S(&psxVuw[(i<<10)+j],
 						GETLE16(&psxVuw[clutP+tC1]),
 						(cB1>>16),(cG1>>16),(cR1>>16));
 				}
 			}
-			if(NextRow_GT()) 
+			if(NextRow_GT())
+			{
+				return;
+			}
+		}
+		return;
+	}
+
+	/* Soul Reaver / additive 8-bit-CLUT semi-transparent fast path —
+	 * same shape as drawPoly3TGEx4's fast path, only difference is the
+	 * texture sample (8-bit byte index instead of 4-bit nibble extract). */
+	if(DrawSemiTrans && !iDither && !bCheckMask && GlobalTextABR == 1)
+	{
+		const u16 setmask = sSetMask;
+		for (i=ymin;i<=ymax;i++)
+		{
+			xmin=(left_x >> 16);
+			xmax=(right_x >> 16)-1;
+			if(drawW<xmax) xmax=drawW;
+
+			if(xmax>=xmin)
+			{
+				posX=left_u;
+				posY=left_v;
+				cR1=left_R;
+				cG1=left_G;
+				cB1=left_B;
+
+				if(xmin<drawX)
+				{j=drawX-xmin;xmin=drawX;posX+=j*difX;posY+=j*difY;cR1+=j*difR;cG1+=j*difG;cB1+=j*difB;}
+
+				for(j=xmin;j<=xmax;j++)
+				{
+					unsigned short src;
+
+					tC1 = psxVub[((posY>>5)&(int32_t)0xFFFFF800)+YAdjust+((posX>>16))];
+					src = GETLE16(&psxVuw[clutP+tC1]);
+
+					if(src)
+					{
+						unsigned short *pdst = &psxVuw[(i<<10)+j];
+						const short m1 = (short)(cB1>>16);
+						const short m2 = (short)(cG1>>16);
+						const short m3 = (short)(cR1>>16);
+						int32_t r,g,b;
+						const u16 l = (u16)(setmask | (src & 0x8000));
+
+						if(src & 0x8000)
+						{
+							u16 d = GETLE16(pdst);
+							r = XCOL1(d) + ((XCOL1(src) * m1) >> 7);
+							b = XCOL2(d) + ((XCOL2(src) * m2) >> 7);
+							g = XCOL3(d) + ((XCOL3(src) * m3) >> 7);
+						}
+						else
+						{
+							r = (XCOL1(src) * m1) >> 7;
+							b = (XCOL2(src) * m2) >> 7;
+							g = (XCOL3(src) * m3) >> 7;
+						}
+
+						if(r & 0x7FFFFFE0) r = 0x1f;
+						if(b & 0x7FFFFC00) b = 0x3e0;
+						if(g & 0x7FFF8000) g = 0x7c00;
+
+						PUTLE16(pdst, (u16)(XPSXCOL(r,g,b) | l));
+					}
+					posX+=difX;
+					posY+=difY;
+					cR1+=difR;
+					cG1+=difG;
+					cB1+=difB;
+				}
+			}
+			if(NextRow_GT())
 			{
 				return;
 			}
@@ -6149,11 +6417,11 @@ void drawPoly3TGEx8(short x1, short y1, short x2, short y2, short x3, short y3, 
 			{
 				tC1 = psxVub[((posY>>5)&(int32_t)0xFFFFF800)+YAdjust+((posX>>16))];
 				if(iDither)
-					GetTextureTransColGX_Dither(&psxVuw[(i<<10)+j], 
+					GetTextureTransColGX_Dither(&psxVuw[(i<<10)+j],
 					GETLE16(&psxVuw[clutP+tC1]),
 					(cB1>>16),(cG1>>16),(cR1>>16));
 				else
-					GetTextureTransColGX(&psxVuw[(i<<10)+j], 
+					GetTextureTransColGX(&psxVuw[(i<<10)+j],
 					GETLE16(&psxVuw[clutP+tC1]),
 					(cB1>>16),(cG1>>16),(cR1>>16));
 				posX+=difX;
@@ -6163,7 +6431,7 @@ void drawPoly3TGEx8(short x1, short y1, short x2, short y2, short x3, short y3, 
 				cB1+=difB;
 			}
 		}
-		if(NextRow_GT()) 
+		if(NextRow_GT())
 		{
 			return;
 		}
@@ -6595,9 +6863,89 @@ void drawPoly4TGEx8(short x1, short y1, short x2, short y2, short x3, short y3, 
 				if(j==xmax)
 				{
 					tC1 = psxVub[((posY>>5)&(int32_t)0xFFFFF800)+YAdjust+(posX>>16)];
-					GetTextureTransColGX_S(&psxVuw[(i<<10)+j], 
+					GetTextureTransColGX_S(&psxVuw[(i<<10)+j],
 						GETLE16(&psxVuw[clutP+tC1]),
 						(cB1>>16),(cG1>>16),(cR1>>16));
+				}
+			}
+			if(NextRow_GT4()) return;
+		}
+		return;
+	}
+
+	/* Soul Reaver / additive 8-bit-CLUT semi-transparent fast path for
+	 * the quad variant. Same shape as drawPoly3TGEx8's fast path, with
+	 * the per-scanline delta recomputation that quads need. */
+	if(DrawSemiTrans && !iDither && !bCheckMask && GlobalTextABR == 1)
+	{
+		const u16 setmask = sSetMask;
+		for (i=ymin;i<=ymax;i++)
+		{
+			xmin=(left_x >> 16);
+			xmax=(right_x >> 16);
+
+			if(xmax>=xmin)
+			{
+				posX=left_u;
+				posY=left_v;
+
+				num=(xmax-xmin);
+				if(num==0) num=1;
+				difX=(right_u-posX)/num;
+				difY=(right_v-posY)/num;
+
+				cR1=left_R;
+				cG1=left_G;
+				cB1=left_B;
+				difR=(right_R-cR1)/num;
+				difG=(right_G-cG1)/num;
+				difB=(right_B-cB1)/num;
+
+				if(xmin<drawX)
+				{j=drawX-xmin;xmin=drawX;posX+=j*difX;posY+=j*difY;cR1+=j*difR;cG1+=j*difG;cB1+=j*difB;}
+				xmax--;if(drawW<xmax) xmax=drawW;
+
+				for(j=xmin;j<=xmax;j++)
+				{
+					unsigned short src;
+
+					tC1 = psxVub[((posY>>5)&(int32_t)0xFFFFF800)+YAdjust+(posX>>16)];
+					src = GETLE16(&psxVuw[clutP+tC1]);
+
+					if(src)
+					{
+						unsigned short *pdst = &psxVuw[(i<<10)+j];
+						const short m1 = (short)(cB1>>16);
+						const short m2 = (short)(cG1>>16);
+						const short m3 = (short)(cR1>>16);
+						int32_t r,g,b;
+						const u16 l = (u16)(setmask | (src & 0x8000));
+
+						if(src & 0x8000)
+						{
+							u16 d = GETLE16(pdst);
+							r = XCOL1(d) + ((XCOL1(src) * m1) >> 7);
+							b = XCOL2(d) + ((XCOL2(src) * m2) >> 7);
+							g = XCOL3(d) + ((XCOL3(src) * m3) >> 7);
+						}
+						else
+						{
+							r = (XCOL1(src) * m1) >> 7;
+							b = (XCOL2(src) * m2) >> 7;
+							g = (XCOL3(src) * m3) >> 7;
+						}
+
+						if(r & 0x7FFFFFE0) r = 0x1f;
+						if(b & 0x7FFFFC00) b = 0x3e0;
+						if(g & 0x7FFF8000) g = 0x7c00;
+
+						PUTLE16(pdst, (u16)(XPSXCOL(r,g,b) | l));
+					}
+					posX+=difX;
+					posY+=difY;
+					cR1+=difR;
+					cG1+=difG;
+					cB1+=difB;
 				}
 			}
 			if(NextRow_GT4()) return;
@@ -6642,11 +6990,11 @@ void drawPoly4TGEx8(short x1, short y1, short x2, short y2, short x3, short y3, 
 			{
 				tC1 = psxVub[((posY>>5)&(int32_t)0xFFFFF800)+YAdjust+(posX>>16)];
 				if(iDither)
-					GetTextureTransColGX_Dither(&psxVuw[(i<<10)+j], 
+					GetTextureTransColGX_Dither(&psxVuw[(i<<10)+j],
 					GETLE16(&psxVuw[clutP+tC1]),
 					(cB1>>16),(cG1>>16),(cR1>>16));
 				else
-					GetTextureTransColGX(&psxVuw[(i<<10)+j], 
+					GetTextureTransColGX(&psxVuw[(i<<10)+j],
 					GETLE16(&psxVuw[clutP+tC1]),
 					(cB1>>16),(cG1>>16),(cR1>>16));
 				posX+=difX;
@@ -6715,7 +7063,7 @@ void drawPoly3TGD(short x1, short y1, short x2, short y2, short x3, short y3, sh
 #ifdef FASTSOLID
 
 	if(!bCheckMask && !DrawSemiTrans && !iDither)
-	{       
+	{
 		for (i=ymin;i<=ymax;i++)
 		{
 			xmin=(left_x >> 16);
@@ -6752,7 +7100,110 @@ void drawPoly3TGD(short x1, short y1, short x2, short y2, short x3, short y3, sh
 					GETLE16(&psxVuw[(((posY>>16)+GlobalTextAddrY)<<10)+(posX>>16)+GlobalTextAddrX]),
 					(cB1>>16),(cG1>>16),(cR1>>16));
 			}
-			if(NextRow_GT()) 
+			if(NextRow_GT())
+			{
+				return;
+			}
+		}
+		return;
+	}
+
+	/* ---- Soul Reaver / generic semi-transparent water fast path ----
+	 * Specialised loop for the most common Gouraud-shaded textured semi-
+	 * transparent triangle (TriangleGoraudSemiTex, GP0 0x36/0x37) when:
+	 *   - texture page is 15-bit direct  (this function),
+	 *   - ABR == 0  (50/50 blend with destination),
+	 *   - dither off,
+	 *   - mask check off.
+	 * That combination dominates Soul Reaver's animated water surfaces
+	 * (the inverted blue pyramid in the intro) and similar effects in
+	 * Tomb Raider / MGS / Castlevania. The fall-through slow path below
+	 * still handles every other ABR / dither / mask configuration.
+	 *
+	 * Wins vs the slow loop:
+	 *   - per-pixel `if(iDither)` branch eliminated (hoisted to outer).
+	 *   - inlined GetTextureTransColGX body with `GlobalTextABR == 0`
+	 *     hardcoded — the 4-way ABR if-chain disappears, and the
+	 *     `bCheckMask` / `DrawSemiTrans` early-outs go away too.
+	 *   - per-pixel reads of GlobalTextABR / DrawSemiTrans / iDither /
+	 *     bCheckMask globals removed (they were re-loaded each iter
+	 *     because the compiler couldn't prove no-aliasing with PUTLE16).
+	 *
+	 * Per pixel we keep:
+	 *   - the texel fetch + per-pixel STP-bit test (color & 0x8000),
+	 *     because the STP bit varies pixel-by-pixel across the texture,
+	 *   - the saturate/clamp on the final r/g/b,
+	 *   - the Gouraud interpolator increments. */
+	if(DrawSemiTrans && !iDither && !bCheckMask && GlobalTextABR == 0)
+	{
+		const u16 setmask = sSetMask;
+		for (i=ymin;i<=ymax;i++)
+		{
+			xmin=(left_x >> 16);
+			xmax=(right_x >> 16)-1;
+			if(drawW<xmax) xmax=drawW;
+
+			if(xmax>=xmin)
+			{
+				posX=left_u;
+				posY=left_v;
+				cR1=left_R;
+				cG1=left_G;
+				cB1=left_B;
+
+				if(xmin<drawX)
+				{j=drawX-xmin;xmin=drawX;posX+=j*difX;posY+=j*difY;cR1+=j*difR;cG1+=j*difG;cB1+=j*difB;}
+
+				for(j=xmin;j<=xmax;j++)
+				{
+					unsigned short *pdst = &psxVuw[(i<<10)+j];
+					unsigned short  src  = GETLE16(&psxVuw[(((posY>>16)+GlobalTextAddrY)<<10)
+					                                       +(posX>>16)+GlobalTextAddrX]);
+					if(src)
+					{
+						const short m1 = (short)(cB1>>16);
+						const short m2 = (short)(cG1>>16);
+						const short m3 = (short)(cR1>>16);
+						int32_t r,g,b;
+						const u16 l = (u16)(setmask | (src & 0x8000));
+
+						if(src & 0x8000)
+						{
+							/* ABR=0 50/50 blend with Gouraud modulation:
+							 *   d_half  = (dst & 0x7bde) >> 1
+							 *   c_half  = (src & 0x7bde) >> 1
+							 *   final   = d_half + (c_half * mN >> 7) per channel
+							 * (matches the original GetTextureTransColGX
+							 *  ABR==0 path bit-for-bit.) */
+							u16 d  = (u16)((GETLE16(pdst) & 0x7bde) >> 1);
+							u16 c2 = (u16)((src           & 0x7bde) >> 1);
+							r = XCOL1(d) + ((XCOL1(c2) * m1) >> 7);
+							b = XCOL2(d) + ((XCOL2(c2) * m2) >> 7);
+							g = XCOL3(d) + ((XCOL3(c2) * m3) >> 7);
+						}
+						else
+						{
+							/* STP bit clear → opaque texel: just modulate
+							 * by Gouraud, no destination read. */
+							r = (XCOL1(src) * m1) >> 7;
+							b = (XCOL2(src) * m2) >> 7;
+							g = (XCOL3(src) * m3) >> 7;
+						}
+
+						if(r & 0x7FFFFFE0) r = 0x1f;
+						if(b & 0x7FFFFC00) b = 0x3e0;
+						if(g & 0x7FFF8000) g = 0x7c00;
+
+						PUTLE16(pdst, (u16)(XPSXCOL(r,g,b) | l));
+					}
+					posX+=difX;
+					posY+=difY;
+					cR1+=difR;
+					cG1+=difG;
+					cB1+=difB;
+				}
+			}
+			if(NextRow_GT())
 			{
 				return;
 			}
@@ -6796,7 +7247,7 @@ void drawPoly3TGD(short x1, short y1, short x2, short y2, short x3, short y3, sh
 				cB1+=difB;
 			}
 		}
-		if(NextRow_GT()) 
+		if(NextRow_GT())
 		{
 			return;
 		}

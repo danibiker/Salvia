@@ -32,7 +32,7 @@
  * 320x240x16@60Hz => 9.216 MB/s
  * so 2.0 to 4.0 should be fine.
  */
-#define MDEC_BIAS 14
+#define MDEC_BIAS 2.0f
 
 #define DSIZE			8
 #define DSIZE2			(DSIZE * DSIZE)

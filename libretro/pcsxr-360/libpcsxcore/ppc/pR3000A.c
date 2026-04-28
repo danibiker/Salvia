@@ -879,6 +879,14 @@ static int dl_op_writeback_dest(u32 op)
 		if (rs == 0x00 || rs == 0x02)    /* MFC?, CFC? — write to _Rt_ */
 			return (op >> 16) & 0x1f;
 		return 0;
+	case 0x22: case 0x26:                /* LWL, LWR — REC_FUNC path, the
+	                                      * interpreter writes GPR.r[_Rt_]
+	                                      * directly (merged with current
+	                                      * value). Without a kill here, a
+	                                      * still-pending dload to _Rt_ from
+	                                      * a recent LW would commit AFTER
+	                                      * LWL/LWR and clobber the merge. */
+		return (op >> 16) & 0x1f;        /* _Rt_ */
 	default:
 		return 0;
 	}
@@ -2023,6 +2031,21 @@ static void dl_emit_defer_load(void)
 	    GetHWRegSpecial(PSXREGS));
 	dl_record_load(slot, _Rt_);
 }
+
+/* Variant for the const-address fast paths in recLW: caller has loaded
+ * the result into an arbitrary register (typically r0, used as scratch
+ * because no CALLFunc happens on these paths so the volatile-reg
+ * convention doesn't apply). Same semantics as dl_emit_defer_load:
+ * stash to dloadVal[slot] and queue the commit for the next step. */
+static void dl_emit_defer_load_reg(int src_reg)
+{
+	int slot;
+	if (_Rt_ == 0) return;
+	slot = dl_sel ^ 1;
+	STW(src_reg, OFFSET(&psxRegs, &psxRegs.dloadVal[slot]),
+	    GetHWRegSpecial(PSXREGS));
+	dl_record_load(slot, _Rt_);
+}
 #endif
 
 static void recLB() {
@@ -2091,33 +2114,63 @@ static void recLHU() {
 static void recLW() {
 	u32 func = (u32) psxMemRead32_2;
 
-#if !DLOAD_PORT
-	/* Const-address inline fast paths. Disabled when DLOAD_PORT is on
-	 * because they write the GPR shadow immediately, bypassing the load-
-	 * delay buffer. The dynarec falls through to the slow CALLFunc path
-	 * which goes through dl_emit_defer_load. */
+	/* Const-address inline fast paths. We know the target memory region
+	 * at compile time, so we can skip the entire psxMemRead32_2 dispatch
+	 * (which costs a CALLFunc to a function with multiple branches and
+	 * an LUT lookup) and emit a direct load. On Xenon, this collapses a
+	 * ~30-50 cycle helper call into ~3 PPC instructions (LIW + LWBRX +
+	 * STW into the dload buffer), with major impact on tight loops that
+	 * stream data from RAM/BIOS at known offsets — extremely common in
+	 * PSX game code (table lookups, copy loops, BIOS calls).
+	 *
+	 * Under DLOAD_PORT, the 1-cycle MIPS load delay still has to be
+	 * honoured: the loaded value is parked in psxRegs.dloadVal[slot] and
+	 * dl_record_load schedules the commit for the next instruction. This
+	 * matches the slow CALLFunc path's tail (dl_emit_defer_load) — only
+	 * the data-acquisition prologue is faster. */
 	if (IsConst(_Rs_)) {
 		u32 addr = iRegs[_Rs_].k + _Imm_;
 		int t = addr >> 16;
 
 		if ((t & 0xfff0) == 0xbfc0) {
 			if (!_Rt_) return;
-			// since bios is readonly it won't change
+			/* BIOS is read-only — fold the value at compile time and
+			 * push it through the dload buffer as an immediate. r0 is a
+			 * fine scratch here since no CALLFunc happens on this path
+			 * (the volatile-register convention doesn't apply). */
+#if DLOAD_PORT
+			LIW(0, psxRu32_2(addr));
+			dl_emit_defer_load_reg(0);
+#else
 			MapConst(_Rt_, psxRu32_2(addr));
+#endif
 			return;
 		}
 		if ((t & 0x1fe0) == 0 && (t & 0x1fff) != 0) {
 			if (!_Rt_) return;
-
+			/* Main RAM at known address: native byte-reversed load,
+			 * then queue via dload. */
+#if DLOAD_PORT
+			LIW(0, (u32)&psxM_2[addr & 0x1fffff]);
+			LWBRX(0, 0, 0);
+			dl_emit_defer_load_reg(0);
+#else
 			LIW(PutHWReg32(_Rt_), (u32)&psxM_2[addr & 0x1fffff]);
 			LWBRX(PutHWReg32(_Rt_), 0, GetHWReg32(_Rt_));
+#endif
 			return;
 		}
 		if (t == 0x1f80 && addr < 0x1f801000) {
 			if (!_Rt_) return;
-
+			/* Scratchpad: same shape as RAM, just a different base. */
+#if DLOAD_PORT
+			LIW(0, (u32)&psxH_2[addr & 0xfff]);
+			LWBRX(0, 0, 0);
+			dl_emit_defer_load_reg(0);
+#else
 			LIW(PutHWReg32(_Rt_), (u32)&psxH_2[addr & 0xfff]);
 			LWBRX(PutHWReg32(_Rt_), 0, GetHWReg32(_Rt_));
+#endif
 			return;
 		}
 		if (t == 0x1f80) {
@@ -2132,37 +2185,63 @@ static void recLW() {
 				case 0x1f801070: case 0x1f801074:
 				case 0x1f8010f0: case 0x1f8010f4:
 					if (!_Rt_) return;
-
+					/* DMA / IRQ HW registers — flat read from the H bank,
+					 * no side effects on read. */
+#if DLOAD_PORT
+					LIW(0, (u32)&psxH_2[addr & 0xffff]);
+					LWBRX(0, 0, 0);
+					dl_emit_defer_load_reg(0);
+#else
 					LIW(PutHWReg32(_Rt_), (u32)&psxH_2[addr & 0xffff]);
 					LWBRX(PutHWReg32(_Rt_), 0, GetHWReg32(_Rt_));
+#endif
 					return;
 
 				case 0x1f801810:
 					if (!_Rt_) return;
-
+					/* GPU read-data (FIFO drain). Plugin function has
+					 * side effects; we still need a CALLFunc but we can
+					 * skip the address-decode dispatch in
+					 * psxMemRead32_2. The result lands in r3 so the
+					 * standard dl_emit_defer_load tail applies. */
+#if DLOAD_PORT
+					dl_invalidate_iregs(_Rt_);
+#else
 					DisposeHWReg(iRegs[_Rt_].reg);
+#endif
 					InvalidateCPURegs();
 					CALLFunc((u32)GPU_readData);
 
+#if DLOAD_PORT
+					dl_emit_defer_load();
+#else
 					SetDstCPUReg(3);
 					PutHWReg32(_Rt_);
+#endif
 					return;
 
 				case 0x1f801814:
 					if (!_Rt_) return;
-
+					/* GPU read-status — same shape as readData. */
+#if DLOAD_PORT
+					dl_invalidate_iregs(_Rt_);
+#else
 					DisposeHWReg(iRegs[_Rt_].reg);
+#endif
 					InvalidateCPURegs();
 					CALLFunc((u32)GPU_readStatus);
 
+#if DLOAD_PORT
+					dl_emit_defer_load();
+#else
 					SetDstCPUReg(3);
 					PutHWReg32(_Rt_);
+#endif
 					return;
 			}
 		}
 //		SysPrintf("unhandled r32 %x\n", addr);
 	}
-#endif
 
 	preMemRead();
 	CALLFunc(func);

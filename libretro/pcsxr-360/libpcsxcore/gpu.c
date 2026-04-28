@@ -170,7 +170,7 @@ static void gpuThread() {
  * variable `pcsxr360_fix_soul_reaver_quads`). Default off so other games
  * are not perturbed.
  */
-int soul_reaver_quad_fix = 0;
+int collapsed_quad_fix = 0;
 
 /* Per-call scratch — chunks come from gpuDmaChain in nodes of <=255 words,
  * but the GP0 port path can pass larger blocks. 4096 words is the same cap
@@ -241,7 +241,7 @@ void threadedgpuWriteData(uint32_t * pMem, int size) {
 	 * with all 4 vertices identical, and expand them into a sized rectangle.
 	 * Only enabled when the libretro option requests it. We copy the chunk
 	 * to a scratch buffer first so we never mutate PSX RAM. */
-	if (soul_reaver_quad_fix && size > 0 && size <= SOUL_FIX_BUF_WORDS) {
+	if (collapsed_quad_fix && size > 0 && size <= SOUL_FIX_BUF_WORDS) {
 		int j;
 		for (j = 0; j < size; j++) soul_fix_buf[j] = pMem[j];
 		if (soul_fix_chunk(soul_fix_buf, size) > 0) {

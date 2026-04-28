@@ -229,6 +229,25 @@ extern int            iResX;
 extern int            iResY;
 extern int32_t           GlobalTextAddrX,GlobalTextAddrY,GlobalTextTP;
 extern int32_t           GlobalTextREST,GlobalTextABR,GlobalTextPAGE;
+
+/* Precomputed pointers to the start of the active texture page in
+ * VRAM, recomputed once per UpdateGlobalTP() call. The hot rasteriser
+ * loops in soft.c sample texels at (texU, texV) inside this page;
+ * with these bases the per-pixel address calculation collapses from
+ *   psxVuw[((texV + GlobalTextAddrY) << 10) + texU + GlobalTextAddrX]
+ * to
+ *   GlobalTextureBaseW[(texV << 10) + texU]
+ * saving two global loads (GlobalTextAddrX/Y) and two adds per pixel.
+ * In Xenon's in-order, scalar PPC core that's ~3-5 cycles per pixel
+ * across every textured primitive — small per pixel, large in
+ * aggregate over a frame's worth of texturing.
+ *
+ * BaseW is for 16-bit indexing (15-bit direct + CLUT lookups).
+ * BaseB is the byte-address equivalent (psxVub) used by the 4-bit
+ * and 8-bit CLUT fetches inside the inner loops, where the texel
+ * row stride is FRAME_BYTE_STRIDE (= 2048) bytes. */
+extern unsigned short *  GlobalTextureBaseW;
+extern unsigned char  *  GlobalTextureBaseB;
 extern short          ly0,lx0,ly1,lx1,ly2,lx2,ly3,lx3;
 extern long           lLowerpart;
 extern BOOL           bIsFirstFrame;

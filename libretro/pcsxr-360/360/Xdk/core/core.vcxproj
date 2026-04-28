@@ -467,7 +467,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <StringPooling>true</StringPooling>
       <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
-      <RegisterReservation>true</RegisterReservation>
+      <RegisterReservation>false</RegisterReservation>
       <AssemblerListingLocation>$(IntDir)$(ProjectName)\</AssemblerListingLocation>
       <ObjectFileName>$(IntDir)$(ProjectName)\</ObjectFileName>
       <ProgramDataBaseFileName>$(IntDir)$(ProjectName)\vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>

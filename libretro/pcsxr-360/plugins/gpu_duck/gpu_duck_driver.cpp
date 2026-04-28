@@ -482,18 +482,26 @@ void GPU_Duck_Driver::FlushForDisplay()
 namespace /* anonymous — one TU, no linkage */
 {
 
-/* Convenience: apply offset + 11-bit sign-extension to a raw (x,y). */
+/* Convenience: apply offset + 11-bit sign-extension to a raw (x,y).
+ * NULL-guard the driver lookup for the same reason as the state-command
+ * handlers above (duck_get_driver may return NULL during the early-init
+ * / hot-swap window). Falling back to offset (0,0) keeps the geometry
+ * mathematically valid; nothing is drawn that frame anyway because the
+ * drawing helpers further down also early-out on a missing backend. */
 static ALWAYS_INLINE void cook_xy(s16 raw_x, s16 raw_y, s32& out_x, s32& out_y)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
-  out_x = sx11(static_cast<s32>(raw_x)) + drv->GetDrawOffsetX();
-  out_y = sx11(static_cast<s32>(raw_y)) + drv->GetDrawOffsetY();
+  s32 ox = drv ? drv->GetDrawOffsetX() : 0;
+  s32 oy = drv ? drv->GetDrawOffsetY() : 0;
+  out_x = sx11(static_cast<s32>(raw_x)) + ox;
+  out_y = sx11(static_cast<s32>(raw_y)) + oy;
 }
 
 /* --- 0x02 FillVRAM ----------------------------------------------- */
 static void duck_primBlkFill(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 color = gp0_word(baseAddr, 0) & 0x00FFFFFFu;
   u16 x = static_cast<u16>(gp0_short(baseAddr, 2) & 0x3F0);  /* 16-pixel aligned */
   u16 y = static_cast<u16>(gp0_short(baseAddr, 3) & 0x1FF);
@@ -506,6 +514,7 @@ static void duck_primBlkFill(unsigned char* baseAddr)
 static void duck_primMoveImage(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u16 sx = static_cast<u16>(gp0_short(baseAddr, 2) & 0x3FF);
   const u16 sy = static_cast<u16>(gp0_short(baseAddr, 3) & 0x1FF);
   const u16 dx = static_cast<u16>(gp0_short(baseAddr, 4) & 0x3FF);
@@ -545,13 +554,26 @@ static void duck_primStoreImage(unsigned char* baseAddr)
   primStoreImage(baseAddr);
 }
 
-/* --- 0xE1..E6 state commands ------------------------------------- */
-static void duck_cmdTexturePage  (unsigned char* baseAddr) { duck_get_driver()->SetTexturePage   (gp0_word(baseAddr, 0)); }
-static void duck_cmdTextureWindow(unsigned char* baseAddr) { duck_get_driver()->SetTextureWindow (gp0_word(baseAddr, 0)); }
-static void duck_cmdDrawAreaTL   (unsigned char* baseAddr) { duck_get_driver()->SetDrawingAreaTL (gp0_word(baseAddr, 0)); }
-static void duck_cmdDrawAreaBR   (unsigned char* baseAddr) { duck_get_driver()->SetDrawingAreaBR (gp0_word(baseAddr, 0)); }
-static void duck_cmdDrawOffset   (unsigned char* baseAddr) { duck_get_driver()->SetDrawingOffset (gp0_word(baseAddr, 0)); }
-static void duck_cmdSTP          (unsigned char* baseAddr) { duck_get_driver()->SetMaskBitSetting(gp0_word(baseAddr, 0)); }
+/* --- 0xE1..E6 state commands -------------------------------------
+ *
+ * NULL-guard `duck_get_driver()` here. The dispatch tables in
+ * xbox_soft/gpu.c select duck_primTable based on `duck_gpu_enabled`,
+ * and there is a window — most visibly when a libretro frontend
+ * notifies a variable update mid-session, or at very early init
+ * before duck_init() has run — where `duck_gpu_enabled == 1` but
+ * `s_driver == NULL`. Without the guard, the next GP0 0xE1..E6
+ * packet dereferences NULL and the emulator crashes (this is the
+ * exact stack the user saw on duck_cmdTexturePage). Falling through
+ * silently for one frame is correct and harmless: the renderer
+ * choice is supposed to be sampled only at startup (the option
+ * label says "restart core to apply"), so any apparent in-flight
+ * change is a transient that the next retro_run cycle resolves. */
+static void duck_cmdTexturePage  (unsigned char* baseAddr) { GPU_Duck_Driver* drv = duck_get_driver(); if (drv) drv->SetTexturePage   (gp0_word(baseAddr, 0)); }
+static void duck_cmdTextureWindow(unsigned char* baseAddr) { GPU_Duck_Driver* drv = duck_get_driver(); if (drv) drv->SetTextureWindow (gp0_word(baseAddr, 0)); }
+static void duck_cmdDrawAreaTL   (unsigned char* baseAddr) { GPU_Duck_Driver* drv = duck_get_driver(); if (drv) drv->SetDrawingAreaTL (gp0_word(baseAddr, 0)); }
+static void duck_cmdDrawAreaBR   (unsigned char* baseAddr) { GPU_Duck_Driver* drv = duck_get_driver(); if (drv) drv->SetDrawingAreaBR (gp0_word(baseAddr, 0)); }
+static void duck_cmdDrawOffset   (unsigned char* baseAddr) { GPU_Duck_Driver* drv = duck_get_driver(); if (drv) drv->SetDrawingOffset (gp0_word(baseAddr, 0)); }
+static void duck_cmdSTP          (unsigned char* baseAddr) { GPU_Duck_Driver* drv = duck_get_driver(); if (drv) drv->SetMaskBitSetting(gp0_word(baseAddr, 0)); }
 
 /* --- Polygon helpers: extract opcode attribute flags. ------------ */
 static ALWAYS_INLINE bool is_raw_texture (u32 w) { return (w & (1u << 24)) != 0; }
@@ -562,6 +584,7 @@ static ALWAYS_INLINE bool is_shade_texture(u32 w) { return (w & (1u << 24)) == 0
 static void duck_primPolyF3(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   const u32 col = cmd & 0x00FFFFFFu;
 
@@ -579,6 +602,7 @@ static void duck_primPolyF3(unsigned char* baseAddr)
 static void duck_primPolyF4(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   const u32 col = cmd & 0x00FFFFFFu;
 
@@ -596,6 +620,7 @@ static void duck_primPolyF4(unsigned char* baseAddr)
 static void duck_primPolyFT3(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   /* For textured polys with shade-blend ON, upstream forces a neutral
    * 0x808080 vertex colour so the modulation is 1.0 — otherwise it's
@@ -628,6 +653,7 @@ static void duck_primPolyFT3(unsigned char* baseAddr)
 static void duck_primPolyFT4(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   const bool raw = is_raw_texture(cmd);
   const u32 col = raw ? 0x00808080u : (cmd & 0x00FFFFFFu);
@@ -654,6 +680,7 @@ static void duck_primPolyFT4(unsigned char* baseAddr)
 static void duck_primPolyG3(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
 
   GPU_Duck_Driver::DuckVertex v[3];
@@ -677,6 +704,7 @@ static void duck_primPolyG3(unsigned char* baseAddr)
 static void duck_primPolyG4(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
 
   GPU_Duck_Driver::DuckVertex v[4];
@@ -703,6 +731,7 @@ static void duck_primPolyG4(unsigned char* baseAddr)
 static void duck_primPolyGT3(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   const bool raw = is_raw_texture(cmd);
 
@@ -732,6 +761,7 @@ static void duck_primPolyGT3(unsigned char* baseAddr)
 static void duck_primPolyGT4(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   const bool raw = is_raw_texture(cmd);
   const u32 col0_force = raw ? 0x00808080u : 0;
@@ -762,6 +792,7 @@ static void duck_primPolyGT4(unsigned char* baseAddr)
 static void duck_primLineF2(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   const u32 col = cmd & 0x00FFFFFFu;
 
@@ -778,6 +809,7 @@ static void duck_primLineF2(unsigned char* baseAddr)
 static void duck_primLineG2(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
 
   GPU_Duck_Driver::DuckVertex v[2];
@@ -796,6 +828,7 @@ static void duck_primLineG2(unsigned char* baseAddr)
 static void duck_primLineFEx(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   const u32 col = cmd & 0x00FFFFFFu;
 
@@ -826,6 +859,7 @@ static void duck_primLineFEx(unsigned char* baseAddr)
 static void duck_primLineGEx(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
 
   GPU_Duck_Driver::DuckVertex v[256];
@@ -860,6 +894,7 @@ static void duck_primLineGEx(unsigned char* baseAddr)
 static void duck_primTileS(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   s32 x, y;
   cook_xy(gp0_short(baseAddr, 2), gp0_short(baseAddr, 3), x, y);
@@ -872,6 +907,7 @@ static void duck_primTileS(unsigned char* baseAddr)
 static void duck_primTile1(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   s32 x, y;
   cook_xy(gp0_short(baseAddr, 2), gp0_short(baseAddr, 3), x, y);
@@ -882,6 +918,7 @@ static void duck_primTile1(unsigned char* baseAddr)
 static void duck_primTile8(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   s32 x, y;
   cook_xy(gp0_short(baseAddr, 2), gp0_short(baseAddr, 3), x, y);
@@ -892,6 +929,7 @@ static void duck_primTile8(unsigned char* baseAddr)
 static void duck_primTile16(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   s32 x, y;
   cook_xy(gp0_short(baseAddr, 2), gp0_short(baseAddr, 3), x, y);
@@ -902,6 +940,7 @@ static void duck_primTile16(unsigned char* baseAddr)
 static void duck_primSprtS(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   const bool raw = is_raw_texture(cmd);
   const u32 col = raw ? 0x00808080u : (cmd & 0x00FFFFFFu);
@@ -919,6 +958,7 @@ static void duck_primSprtS(unsigned char* baseAddr)
 static void duck_primSprt8(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   const bool raw = is_raw_texture(cmd);
   const u32 col = raw ? 0x00808080u : (cmd & 0x00FFFFFFu);
@@ -934,6 +974,7 @@ static void duck_primSprt8(unsigned char* baseAddr)
 static void duck_primSprt16(unsigned char* baseAddr)
 {
   GPU_Duck_Driver* drv = duck_get_driver();
+  if (!drv) return;
   const u32 cmd = gp0_word(baseAddr, 0);
   const bool raw = is_raw_texture(cmd);
   const u32 col = raw ? 0x00808080u : (cmd & 0x00FFFFFFu);
