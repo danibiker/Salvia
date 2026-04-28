@@ -113,6 +113,38 @@ static void (*recCP0[32])();
 static void (*recCP2[64])();
 static void (*recCP2BSC[32])();
 
+/* ===== MIPS R3000A load-delay-slot emulation =====
+ *
+ * Soul Reaver (and other tight PSX code) rely on the R3000A's 1-cycle load
+ * delay: the instruction immediately following a `lw/lh/lb/lwc2/...` reads
+ * the OLD value of the load destination register, not the just-loaded one.
+ * pcsx_rearmed implements this with a 2-slot pending-load buffer; we port
+ * that scheme to the PowerPC dynarec.
+ *
+ * Compile-time state tracking:
+ *   `dl_reg[i]` records, while a block is being recompiled, which MIPS GPR
+ *   has a pending load queued in psxRegs.dloadVal[i]. 0 means the slot is
+ *   empty. `dl_sel` mirrors pcsx_rearmed's dloadSel — it toggles every MIPS
+ *   instruction to alternate which slot belongs to which instruction's
+ *   delay window.
+ *
+ * Runtime state:
+ *   psxRegs.dloadVal[2] — values waiting to be committed. Written by the
+ *   load instructions we recompile, read by the commit code we emit before
+ *   each subsequent instruction. dloadReg[2] is mostly compile-time-only,
+ *   but kept in struct for symmetry / future use.
+ *
+ * This system handles loads correctly only INSIDE a recompiled block. At
+ * block boundaries (branches, jumps, exceptions, returns) we emit a flush
+ * that commits both slots, so a block always starts with a clean buffer.
+ */
+#define DLOAD_PORT 1
+
+#if DLOAD_PORT
+static u32 dl_reg[2] = {0, 0};
+static int dl_sel = 0;
+#endif
+
 #define REG_LO			32
 #define REG_HI			33
 
@@ -686,9 +718,182 @@ static void iFlushRegs(u32 nextpc) {
 	}
 }
 
+#if DLOAD_PORT
+/* ===== Load-delay-slot dynarec emitters =====
+ *
+ * Emit PPC code that mirrors pcsx_rearmed's dloadStep / dloadFlush via a
+ * compile-time-tracked 2-slot buffer. All bookkeeping that pcsx_rearmed
+ * does at runtime in C (sel, kill on conflict, etc.) we do here in static
+ * variables; only the actual data movement (loaded value -> GPR shadow)
+ * lives at runtime as PPC instructions.
+ */
+
+/* Drop the dynarec's HW-reg cache for a MIPS GPR after we (about to)
+ * change psxRegs.GPR.r[reg] in memory. iFlushReg can be misleading here:
+ * it calls FlushHWReg → FlushPsxReg32 which itself consults
+ * nextPsxRegUse(pc-4, reg). When the very next MIPS instruction (the
+ * LW we're recompiling) writes `reg`, that helper concludes "no need
+ * to flush — the LW will overwrite it" and silently SKIPS the STW.
+ * That was fine pre-DLOAD_PORT (the load committed immediately) but
+ * is wrong now: under load-delay we need the OLD value of `reg` to
+ * remain in memory so the delay slot's read picks it up. So we go
+ * directly here: if mapped & dirty, emit the STW unconditionally; if
+ * const, materialise the constant into memory; then clear the
+ * tracker. */
+static void dl_invalidate_iregs(int reg)
+{
+	if (reg <= 0) return;
+
+	if (IsMapped(reg)) {
+		int hwreg = iRegs[reg].reg;
+		if (HWRegisters[hwreg].usage & HWUSAGE_WRITE) {
+			STW(HWRegisters[hwreg].code,
+			    OFFSET(&psxRegs, &psxRegs.GPR.r[reg]),
+			    GetHWRegSpecial(PSXREGS));
+		}
+		/* Drop the mapping cleanly. Mirror what FlushHWReg does for a
+		 * non-hardwired entry but without the flush-callback path. */
+		HWRegisters[hwreg].usage = HWUSAGE_NONE;
+		HWRegisters[hwreg].flush = NULL;
+		iRegs[reg].reg = -1;
+	} else if (IsConst(reg)) {
+		/* Materialise the constant into psxRegs.GPR.r[reg] using r0
+		 * as scratch (PSXREGS is hardwired to r31, never disposed). */
+		LIW(0, iRegs[reg].k);
+		STW(0, OFFSET(&psxRegs, &psxRegs.GPR.r[reg]),
+		    GetHWRegSpecial(PSXREGS));
+	}
+	iRegs[reg].state = ST_UNK;
+}
+
+/* Emit code that commits dl_reg[slot] to its destination GPR shadow,
+ * if any. After this returns, dl_reg[slot] is cleared at compile time. */
+static void emit_dload_commit_slot(int slot)
+{
+	u32 reg = dl_reg[slot];
+	if (reg == 0) return;
+
+	/* LWZ r0, dloadVal[slot], PSXREGS
+	 * STW r0, GPR.r[reg], PSXREGS
+	 * (use r0 as scratch — InvalidateCPURegs was called by any preceding
+	 * load helper, so r0 is safe.) */
+	LWZ(0, OFFSET(&psxRegs, &psxRegs.dloadVal[slot]),
+	    GetHWRegSpecial(PSXREGS));
+	STW(0, OFFSET(&psxRegs, &psxRegs.GPR.r[reg]),
+	    GetHWRegSpecial(PSXREGS));
+
+	dl_invalidate_iregs(reg);
+	dl_reg[slot] = 0;
+}
+
+/* Mirrors pcsx_rearmed's dloadStep: commit the slot pointed to by dl_sel,
+ * then toggle. Called at the start of every recompiled MIPS instruction. */
+static void emit_dload_step(void)
+{
+	emit_dload_commit_slot(dl_sel);
+	dl_sel ^= 1;
+}
+
+/* Commit both pending slots and reset the compile-time tracker. Used at
+ * any block-exiting boundary (branch, jump, exception, return). After
+ * this the runtime dloadVal entries are dead; the next block enters
+ * with an empty buffer. */
+static void emit_dload_flush(void)
+{
+	emit_dload_commit_slot(0);
+	emit_dload_commit_slot(1);
+	dl_sel = 0;
+}
+
+/* Called by load emitters to record that the value just stored to
+ * psxRegs.dloadVal[slot] should be committed to GPR `reg` later. We
+ * also invalidate the OTHER slot if it had a pending load to the same
+ * reg — pcsx_rearmed's doLoad does this to keep at most one in-flight
+ * load per dest register. */
+static void dl_record_load(int slot, u32 reg)
+{
+	if (reg == 0) {
+		dl_reg[slot] = 0;
+		return;
+	}
+	dl_reg[slot] = reg;
+	if (dl_reg[slot ^ 1] == reg)
+		dl_reg[slot ^ 1] = 0;
+
+	/* The MIPS reg's HW cache must be considered stale: any prior
+	 * value in cache will be overwritten by the load when its commit
+	 * fires. Drop the cache so subsequent reads (post-commit) reload
+	 * from memory. */
+	dl_invalidate_iregs(reg);
+}
+
+/* Called when an instruction writes a GPR (ALU op, LUI, MFC0/MFC2 etc.).
+ * If the target register has a pending load in flight, kill it so the
+ * load's commit at the next step doesn't clobber the ALU result.
+ * Mirrors the kill arm of pcsx_rearmed's dloadRt. */
+static void dl_kill_for_write(int reg)
+{
+	if (reg <= 0) return;
+	if (dl_reg[0] == reg) dl_reg[0] = 0;
+	if (dl_reg[1] == reg) dl_reg[1] = 0;
+}
+
+/* Compute the MIPS GPR that this instruction writes (or 0 if none / if
+ * it's a load that uses our deferral path). Loads themselves are NOT
+ * reported here — they queue via dl_record_load instead of killing.
+ * Returns 0 when no kill is needed. */
+static int dl_op_writeback_dest(u32 op)
+{
+	u32 mainop = op >> 26;
+	u32 funct;
+	u32 rs;
+
+	switch (mainop) {
+	case 0x00: /* SPECIAL */
+		funct = op & 0x3f;
+		switch (funct) {
+		case 0x00: case 0x02: case 0x03: /* SLL, SRL, SRA */
+		case 0x04: case 0x06: case 0x07: /* SLLV, SRLV, SRAV */
+		case 0x09:                       /* JALR (writes _Rd_) */
+		case 0x10: case 0x12:            /* MFHI, MFLO */
+		case 0x20: case 0x21: case 0x22: case 0x23: /* ADD ADDU SUB SUBU */
+		case 0x24: case 0x25: case 0x26: case 0x27: /* AND OR XOR NOR */
+		case 0x2a: case 0x2b:            /* SLT, SLTU */
+			return (op >> 11) & 0x1f;    /* _Rd_ */
+		}
+		return 0;
+	case 0x01: /* REGIMM: BLTZAL/BGEZAL write $ra */
+		rs = (op >> 16) & 0x1f;
+		if (rs == 0x10 || rs == 0x11) return 31;
+		return 0;
+	case 0x03: /* JAL: writes $ra */
+		return 31;
+	case 0x08: case 0x09:                /* ADDI, ADDIU */
+	case 0x0a: case 0x0b:                /* SLTI, SLTIU */
+	case 0x0c: case 0x0d: case 0x0e:     /* ANDI, ORI, XORI */
+	case 0x0f:                           /* LUI */
+		return (op >> 16) & 0x1f;        /* _Rt_ */
+	case 0x10: /* COP0 */
+	case 0x12: /* COP2 */
+		rs = (op >> 21) & 0x1f;
+		if (rs == 0x00 || rs == 0x02)    /* MFC?, CFC? — write to _Rt_ */
+			return (op >> 16) & 0x1f;
+		return 0;
+	default:
+		return 0;
+	}
+}
+#endif /* DLOAD_PORT */
+
 
 static void Return()
 {
+#if DLOAD_PORT
+	/* Commit any pending delayed load before exiting the block — the next
+	 * block must start with an empty dload buffer so the compile-time
+	 * tracker matches reality. */
+	emit_dload_flush();
+#endif
 	iFlushRegs(0);
 	FlushAllHWReg();
 	if (((u32)returnPC & 0x1fffffc) == (u32)returnPC) {
@@ -778,19 +983,32 @@ static void SetBranch() {
 
 //	recBSC[psxRegs.code>>26]();
 
-	switch( psxRegs.code >> 24 ) 
+	switch( psxRegs.code >> 24 )
 	{
  	   // Lode Runner (jr - beq)
- 	 
+
 	   // bltz - bgez - bltzal - bgezal / beq - bne - blez - bgtz
  	   case 0x04:
 	   case 0x10:
  	   case 0x14:
        case 0x18:
  	   case 0x1c:
-	   break; 
+	   break;
 
-       default: 
+       default:
+#if DLOAD_PORT
+	   {
+		   /* Same step+kill pattern as the main recompile loop applies to
+		    * the delay slot — the delay slot is executed AFTER the branch
+		    * decision but BEFORE the target, so it must run with the
+		    * pre-branch GPR values for any pending load. */
+		   int kill_dest;
+		   emit_dload_step();
+		   kill_dest = dl_op_writeback_dest(psxRegs.code);
+		   if (kill_dest > 0)
+			   dl_kill_for_write(kill_dest);
+	   }
+#endif
 	   recBSC[psxRegs.code>>26]();
 	   break;
 	}
@@ -883,12 +1101,32 @@ static void iJump(u32 branchPC) {
 		LIW(GetHWRegSpecial(PSXPC), pc);
 		FlushAllHWReg();
 		CALLFunc((u32)psxDelayTest);
-                
+
 		Return();
 		return;
 	}
 
+#if DLOAD_PORT
+	{
+		/* Step+kill for the unconditional-jump delay slot, mirroring
+		 * SetBranch / iBranch. */
+		int kill_dest;
+		emit_dload_step();
+		kill_dest = dl_op_writeback_dest(psxRegs.code);
+		if (kill_dest > 0)
+			dl_kill_for_write(kill_dest);
+	}
+#endif
 	recBSC[psxRegs.code>>26]();
+
+#if DLOAD_PORT
+	/* Commit any load pending at the end of the delay slot. Both the
+	 * Return() path AND the direct-jump-to-next-block path (BCTR via
+	 * PC_REC[branchPC]) leave the block here; the next block is
+	 * recompiled assuming an empty load buffer, so we must materialise
+	 * dloadVal[] into GPR.r[] before transferring control. */
+	emit_dload_flush();
+#endif
 
 	iFlushRegs(branchPC);
 	LIW(PutHWRegSpecial(PSXPC), branchPC);
@@ -927,14 +1165,23 @@ static void iBranch(u32 branchPC, int savectx) {
 	int HWRegUseCountS = 0;
 	u32 respold=0;
 	u32 *b1, *b2;
+#if DLOAD_PORT
+	u32 dl_regS[2];
+	int dl_selS;
+#endif
 
 	if (savectx) {
 		respold = resp;
 		memcpy(iRegsS, iRegs, sizeof(iRegs));
 		memcpy(HWRegistersS, HWRegisters, sizeof(HWRegisters));
 		HWRegUseCountS = HWRegUseCount;
+#if DLOAD_PORT
+		dl_regS[0] = dl_reg[0];
+		dl_regS[1] = dl_reg[1];
+		dl_selS    = dl_sel;
+#endif
 	}
-	
+
 	branch = 1;
 	psxRegs.code = PSXMu32_2(pc);
 
@@ -960,8 +1207,28 @@ static void iBranch(u32 branchPC, int savectx) {
 	}
 
 	pc+= 4;
+#if DLOAD_PORT
+	{
+		/* Step+kill for the conditional-branch delay slot, same as the
+		 * main loop and SetBranch. */
+		int kill_dest;
+		emit_dload_step();
+		kill_dest = dl_op_writeback_dest(psxRegs.code);
+		if (kill_dest > 0)
+			dl_kill_for_write(kill_dest);
+	}
+#endif
 	recBSC[psxRegs.code>>26]();
-	
+
+#if DLOAD_PORT
+	/* Commit any load pending at the end of the delay slot. Both the
+	 * Return() path AND the direct-jump-to-next-block path (BCTR via
+	 * PC_REC[branchPC]) leave the block here; the next block is
+	 * recompiled assuming an empty load buffer, so we must materialise
+	 * dloadVal[] into GPR.r[] before transferring control. */
+	emit_dload_flush();
+#endif
+
 	iFlushRegs(branchPC);
 	LIW(PutHWRegSpecial(PSXPC), branchPC);
 	FlushAllHWReg();
@@ -971,7 +1238,7 @@ static void iBranch(u32 branchPC, int savectx) {
 
 	FlushAllHWReg();
 	CALLFunc((u32)psxBranchTest);
-	
+
 	// always return for now...
 	// Return();
 	LIW(0, branchPC);
@@ -1004,12 +1271,17 @@ static void iBranch(u32 branchPC, int savectx) {
 
 	pc-= 4;
 
-	// Restore 
+	// Restore
 	if (savectx) {
 		resp = respold;
 		memcpy(iRegs, iRegsS, sizeof(iRegs));
 		memcpy(HWRegisters, HWRegistersS, sizeof(HWRegisters));
 		HWRegUseCount = HWRegUseCountS;
+#if DLOAD_PORT
+		dl_reg[0] = dl_regS[0];
+		dl_reg[1] = dl_regS[1];
+		dl_sel    = dl_selS;
+#endif
 	}
 }
 
@@ -1683,14 +1955,33 @@ static void preMemRead()
 
 	ReserveArgs(1);
 	if (_Rs_ != _Rt_) {
+#if DLOAD_PORT
+		/* Under load-delay emulation, the delay slot can read _Rt_ and
+		 * must see its pre-load value. The original DisposeHWReg path
+		 * dropped a dirty cache without writeback because the load was
+		 * about to overwrite the register; with DLOAD_PORT the load is
+		 * deferred two instructions, so any cached/dirty/const value
+		 * for _Rt_ has to land in memory FIRST so the delay slot can
+		 * read it back from psxRegs.GPR.r[_Rt_]. NOTE: we cannot use
+		 * iFlushReg here because FlushPsxReg32 short-circuits the STW
+		 * when nextPsxRegUse says the next instruction (the LW) will
+		 * overwrite the register — exactly the case we need to bypass.
+		 * dl_invalidate_iregs writes back unconditionally. */
+		dl_invalidate_iregs(_Rt_);
+#else
 		DisposeHWReg(iRegs[_Rt_].reg);
+#endif
 	}
 	rs = GetHWReg32(_Rs_);
 	if (rs != 3 || _Imm_ != 0) {
 		ADDI(PutHWRegSpecial(ARG1), rs, _Imm_);
 	}
 	if (_Rs_ == _Rt_) {
+#if DLOAD_PORT
+		dl_invalidate_iregs(_Rt_);
+#else
 		DisposeHWReg(iRegs[_Rt_].reg);
+#endif
 	}
 	InvalidateCPURegs();
 
@@ -1717,15 +2008,38 @@ static void preMemWrite(int size)
 	
 }
 
+#if DLOAD_PORT
+/* Common tail for the simple 8/16/32-bit loads. After CALLFunc, r3 holds
+ * the loaded value (already extended for LB/LH cases via the helper that
+ * the caller emitted before us). We park it in psxRegs.dloadVal[slot] and
+ * record the destination so that the NEXT instruction's emit_dload_step
+ * commits it to the GPR shadow — that's the 1-cycle MIPS load delay. */
+static void dl_emit_defer_load(void)
+{
+	int slot;
+	if (_Rt_ == 0) return;
+	slot = dl_sel ^ 1;
+	STW(3, OFFSET(&psxRegs, &psxRegs.dloadVal[slot]),
+	    GetHWRegSpecial(PSXREGS));
+	dl_record_load(slot, _Rt_);
+}
+#endif
+
 static void recLB() {
 	u32 func = (u32) psxMemRead8_2;
 
-
 	preMemRead();
 	CALLFunc(func);
+#if DLOAD_PORT
+	if (_Rt_) {
+		EXTSB(3, 3);             /* sign-extend in place */
+		dl_emit_defer_load();
+	}
+#else
 	if (_Rt_) {
 		EXTSB(PutHWReg32(_Rt_), 3);
 	}
+#endif
 }
 
 static void recLBU() {
@@ -1734,9 +2048,13 @@ static void recLBU() {
 	preMemRead();
 	CALLFunc(func);
 
+#if DLOAD_PORT
+	dl_emit_defer_load();
+#else
 	if (_Rt_) {
 		MR(PutHWReg32(_Rt_),3);
 	}
+#endif
 }
 
 static void recLH() {
@@ -1744,9 +2062,16 @@ static void recLH() {
 
 	preMemRead();
 	CALLFunc(func);
+#if DLOAD_PORT
+	if (_Rt_) {
+		EXTSH(3, 3);             /* sign-extend in place */
+		dl_emit_defer_load();
+	}
+#else
 	if (_Rt_) {
 		EXTSH(PutHWReg32(_Rt_), 3);
 	}
+#endif
 }
 
 static void recLHU() {
@@ -1754,14 +2079,23 @@ static void recLHU() {
 
 	preMemRead();
 	CALLFunc(func);
+#if DLOAD_PORT
+	dl_emit_defer_load();
+#else
 	if (_Rt_) {
 		MR(PutHWReg32(_Rt_),3);
 	}
+#endif
 }
 
 static void recLW() {
 	u32 func = (u32) psxMemRead32_2;
 
+#if !DLOAD_PORT
+	/* Const-address inline fast paths. Disabled when DLOAD_PORT is on
+	 * because they write the GPR shadow immediately, bypassing the load-
+	 * delay buffer. The dynarec falls through to the slow CALLFunc path
+	 * which goes through dl_emit_defer_load. */
 	if (IsConst(_Rs_)) {
 		u32 addr = iRegs[_Rs_].k + _Imm_;
 		int t = addr >> 16;
@@ -1788,17 +2122,17 @@ static void recLW() {
 		}
 		if (t == 0x1f80) {
 			switch (addr) {
-				case 0x1f801080: case 0x1f801084: case 0x1f801088: 
-				case 0x1f801090: case 0x1f801094: case 0x1f801098: 
-				case 0x1f8010a0: case 0x1f8010a4: case 0x1f8010a8: 
-				case 0x1f8010b0: case 0x1f8010b4: case 0x1f8010b8: 
-				case 0x1f8010c0: case 0x1f8010c4: case 0x1f8010c8: 
-				case 0x1f8010d0: case 0x1f8010d4: case 0x1f8010d8: 
-				case 0x1f8010e0: case 0x1f8010e4: case 0x1f8010e8: 
+				case 0x1f801080: case 0x1f801084: case 0x1f801088:
+				case 0x1f801090: case 0x1f801094: case 0x1f801098:
+				case 0x1f8010a0: case 0x1f8010a4: case 0x1f8010a8:
+				case 0x1f8010b0: case 0x1f8010b4: case 0x1f8010b8:
+				case 0x1f8010c0: case 0x1f8010c4: case 0x1f8010c8:
+				case 0x1f8010d0: case 0x1f8010d4: case 0x1f8010d8:
+				case 0x1f8010e0: case 0x1f8010e4: case 0x1f8010e8:
 				case 0x1f801070: case 0x1f801074:
 				case 0x1f8010f0: case 0x1f8010f4:
 					if (!_Rt_) return;
-					
+
 					LIW(PutHWReg32(_Rt_), (u32)&psxH_2[addr & 0xffff]);
 					LWBRX(PutHWReg32(_Rt_), 0, GetHWReg32(_Rt_));
 					return;
@@ -1820,7 +2154,7 @@ static void recLW() {
 					DisposeHWReg(iRegs[_Rt_].reg);
 					InvalidateCPURegs();
 					CALLFunc((u32)GPU_readStatus);
-					
+
 					SetDstCPUReg(3);
 					PutHWReg32(_Rt_);
 					return;
@@ -1828,12 +2162,17 @@ static void recLW() {
 		}
 //		SysPrintf("unhandled r32 %x\n", addr);
 	}
+#endif
 
 	preMemRead();
 	CALLFunc(func);
+#if DLOAD_PORT
+	dl_emit_defer_load();
+#else
 	if (_Rt_) {
 		MR(PutHWReg32(_Rt_),3);
 	}
+#endif
 }
 
 void recClear32(u32 addr) {
@@ -2482,7 +2821,15 @@ static void recRecompile() {
 	PC_REC32(psxRegs.pc) = (u32)ppcPtr;
 
 	pcold = pc = psxRegs.pc;
-	
+
+#if DLOAD_PORT
+	/* Each block starts with an empty load-delay buffer. The previous
+	 * block flushed before exiting (see Return()), so runtime state
+	 * matches our compile-time tracker. */
+	dl_reg[0] = dl_reg[1] = 0;
+	dl_sel = 0;
+#endif
+
 	for (count=0; count<500;) {
 
 		u32 adr = pc & 0x1fffff;
@@ -2544,6 +2891,20 @@ static void recRecompile() {
 
 		pc+=4;
 		count++;
+
+#if DLOAD_PORT
+		{
+			/* Mirror pcsx_rearmed's dloadStep + dloadRt's kill arm: commit
+			 * the slot we toggled away from on the previous instruction,
+			 * then kill any pending whose dest matches THIS instruction's
+			 * GPR write target. */
+			int kill_dest;
+			emit_dload_step();
+			kill_dest = dl_op_writeback_dest(psxRegs.code);
+			if (kill_dest > 0)
+				dl_kill_for_write(kill_dest);
+		}
+#endif
 
 		recBSC[op]();
 
