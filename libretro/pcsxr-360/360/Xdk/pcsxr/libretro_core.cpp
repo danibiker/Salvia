@@ -43,6 +43,7 @@ extern int      iUseFixes;           /* xbox_soft gate for dwActFixes */
 extern BOOL     tombraider2fix;      /* dfsound/cfg.c */
 extern BOOL     crashteamracingfix;  /* dfsound/cfg.c */
 extern BOOL     frontmission3fix;    /* libpcsxcore/psxinterpreter.c */
+extern int      soul_reaver_quad_fix;/* libpcsxcore/gpu.c — Soul Reaver collapsed-quad workaround */
 
 /* Runtime selector for the new SwanStation-derived SW renderer that
  * lives alongside PEOPS in the xbox_soft plugin. Defined in
@@ -131,8 +132,9 @@ void retro_set_environment(retro_environment_t cb) {
         { "pcsxr360_fix_parasite_eve2",  "Game Fix: Parasite Eve 2 (counter); disabled|enabled" },
         { "pcsxr360_fix_dark_forces",    "Game Fix: Dark Forces / Duke Nukem (GPU); disabled|enabled" },
         { "pcsxr360_fix_ignore_brightness", "GPU Fix: Ignore black brightness; disabled|enabled" },
-        { "pcsxr360_fix_lazy_update",    "GPU Fix: Lazy screen update (Soul Reaver souls, Legacy of Kain); disabled|enabled" },
+        { "pcsxr360_fix_lazy_update",    "GPU Fix: Lazy screen update; disabled|enabled" },
         { "pcsxr360_fix_quads_to_tris",  "GPU Fix: Draw quads with triangles; disabled|enabled" },
+        { "pcsxr360_fix_soul_reaver_quads", "Game Fix: Soul Reaver collapsed soul quads; disabled|enabled" },
         { "pcsxr360_fix_front_mission3", "Game Fix: Front Mission 3 (CPU); disabled|enabled" },
         { "pcsxr360_fix_tomb_raider2",   "Game Fix: Tomb Raider 2 (SPU); disabled|enabled" },
         { "pcsxr360_fix_crash_t_racing", "Game Fix: Crash Team Racing (SPU); disabled|enabled" },
@@ -196,6 +198,12 @@ static void check_game_fixes(void) {
 
     /* Front Mission 3 — MFC2 branch-delay quirk (psxinterpreter.c). */
     frontmission3fix = read_bool_var("pcsxr360_fix_front_mission3", false) ? 1 : 0;
+
+    /* Soul Reaver — rewrite collapsed 0x2E QuadSemiTex primitives in flight
+     * (libpcsxcore/gpu.c). The CPU/GTE emulation produces souls with all
+     * four vertices identical (zero-area quad); this expands them to a
+     * fixed-size sprite around the centre. */
+    soul_reaver_quad_fix = read_bool_var("pcsxr360_fix_soul_reaver_quads", false) ? 1 : 0;
 
     /* Tomb Raider 2 — SPU voice-silence handling (dfsound/spu.c). */
     tombraider2fix = read_bool_var("pcsxr360_fix_tomb_raider2", false) ? 1 : 0;

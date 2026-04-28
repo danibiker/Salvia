@@ -150,9 +150,105 @@ static void gpuThread() {
 }
 
 
+/* ===== Soul-Reaver collapsed-quad workaround =====
+ *
+ * Some game(s), most visibly Soul Reaver, render small textured sprites as
+ * 0x2E primitives (QuadFlatTexBlend SemiTrans, 9 words: cmd+color, V0, UV0,
+ * V1, UV1, V2, UV2, V3, UV3). pcsxr-360's CPU/GTE emulation produces these
+ * primitives with all four vertex words equal to the same 32-bit packed XY,
+ * so the quad has zero area and nothing is drawn. The cmd, color and UVs are
+ * correct — only the 4 vertices collapse.
+ *
+ * Workaround: scan every GP0 chunk on its way to the GPU plugin, find any
+ * 0x2E primitive whose 4 vertex words are identical, and expand the corners
+ * around that (correct) center using a fixed half-size of (11, 8). This is
+ * the sprite size observed in no$psx for the soul effect. Other games that
+ * happen to use 0x2E correctly are unaffected because their 4 vertices
+ * differ.
+ *
+ * Toggled at runtime by `soul_reaver_quad_fix` (set from the libretro core
+ * variable `pcsxr360_fix_soul_reaver_quads`). Default off so other games
+ * are not perturbed.
+ */
+int soul_reaver_quad_fix = 0;
+
+/* Per-call scratch — chunks come from gpuDmaChain in nodes of <=255 words,
+ * but the GP0 port path can pass larger blocks. 4096 words is the same cap
+ * PEOPS uses for prim assembly. */
+#define SOUL_FIX_BUF_WORDS 4096
+static u32 soul_fix_buf[SOUL_FIX_BUF_WORDS];
+
+/* PSX primitive length lookup. Returns 0 for cmds we don't recognise so the
+ * caller can fall back to advancing one word at a time. */
+static int soul_fix_prim_len(u8 cmd)
+{
+	switch (cmd >> 5) {
+	case 1: { /* polygon 0x20-0x3F */
+		int len = (cmd & 0x08) ? ((cmd & 0x04) ? 9 : 5)
+		                       : ((cmd & 0x04) ? 7 : 4);
+		if (cmd & 0x10) len += (cmd & 0x08) ? 3 : 2;
+		return len;
+	}
+	case 2: return (cmd & 0x10) ? 4 : 3;     /* line */
+	case 3: return (cmd & 0x18) ? ((cmd & 0x04) ? 3 : 2)
+	                            : ((cmd & 0x04) ? 4 : 3); /* sprite/rect */
+	default: return 0;
+	}
+}
+
+/* Walk `buf` (host-native u32s, i.e. PSX-LE bytes byte-swapped on BE) and
+ * rewrite collapsed 0x2E quads. Returns the number of primitives fixed. */
+static int soul_fix_chunk(u32 *buf, int size)
+{
+	int fixed = 0;
+	int i = 0;
+	while (i < size) {
+		u8 cmd = ((u8 *)&buf[i])[3];   /* PSX cmd byte = byte+3 of native u32 */
+		int len = soul_fix_prim_len(cmd);
+		if (len == 0) { i++; continue; }
+		if (i + len > size) break;
+
+		if (cmd == 0x2E
+		    && buf[i+1] == buf[i+3]
+		    && buf[i+3] == buf[i+5]
+		    && buf[i+5] == buf[i+7]) {
+			u32 psx_v = SWAP32(buf[i+1]);
+			s16 cx = (s16)(psx_v & 0xFFFF);
+			s16 cy = (s16)((psx_v >> 16) & 0xFFFF);
+			const s16 hw = 11;
+			const s16 hh = 8;
+			/* V0=BR, V1=BL, V2=TR, V3=TL — matches the UV layout no$psx
+			 * shows for the soul sprite (UV0 right-top, UV3 left-bottom). */
+			#define PACK_XY(x, y) \
+				(((u32)((u16)((s16)(y))) << 16) | ((u32)((u16)((s16)(x)))))
+			buf[i+1] = SWAP32(PACK_XY(cx + hw, cy + hh));
+			buf[i+3] = SWAP32(PACK_XY(cx - hw, cy + hh));
+			buf[i+5] = SWAP32(PACK_XY(cx + hw, cy - hh));
+			buf[i+7] = SWAP32(PACK_XY(cx - hw, cy - hh));
+			#undef PACK_XY
+			fixed++;
+		}
+		i += len;
+	}
+	return fixed;
+}
+
 void threadedgpuWriteData(uint32_t * pMem, int size) {
 	u32 * lda=pMem;
     u32 wi=tw_write_idx;
+
+	/* Soul-Reaver collapsed-quad workaround: scan the chunk for 0x2E quads
+	 * with all 4 vertices identical, and expand them into a sized rectangle.
+	 * Only enabled when the libretro option requests it. We copy the chunk
+	 * to a scratch buffer first so we never mutate PSX RAM. */
+	if (soul_reaver_quad_fix && size > 0 && size <= SOUL_FIX_BUF_WORDS) {
+		int j;
+		for (j = 0; j < size; j++) soul_fix_buf[j] = pMem[j];
+		if (soul_fix_chunk(soul_fix_buf, size) > 0) {
+			pMem = soul_fix_buf;
+			lda  = pMem;
+		}
+	}
 
 	if (gpu_thread_exit) {
 		GPU_writeDataMem(pMem, size);
