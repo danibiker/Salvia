@@ -55,7 +55,6 @@ static __inline u32 limE(u32 result) {
 
 void gteRTPS() {
 	int quotient;
-	s64 tmp;
 
 #ifdef GTE_LOG
 	GTE_LOG("GTE RTPS\n");
@@ -78,25 +77,14 @@ void gteRTPS() {
 	gteSX2 = limG1(F((s64)gteOFX + ((s64)gteIR1 * quotient)) >> 16);
 	gteSY2 = limG2(F((s64)gteOFY + ((s64)gteIR2 * quotient)) >> 16);
 
-	/* Backport from pcsx_rearmed (commit 8cb04d22 — fix for missing green
-	 * plasma balls in Legacy of Kain: Soul Reaver, also fixes Burning Road
-	 * road glitches and R4 lighting). gteMAC0 is the UNSHIFTED 32-bit
-	 * truncation of the depth-cue intermediate; gteIR0 must come from the
-	 * 64-bit unshifted value shifted by 12 then clamped — NOT from the
-	 * already-truncated MAC0. The previous code did the >>12 inside F()
-	 * (so MAC0 ended up as the shifted value), then read gteIR0 from
-	 * MAC0, losing the high bits when the unshifted result didn't fit in
-	 * s32. */
-	tmp = (s64)gteDQB + ((s64)gteDQA * quotient);
-	gteMAC0 = F(tmp);
-	gteIR0 = limH(tmp >> 12);
+	gteMAC0 = F((s64)(gteDQB + ((s64)gteDQA * quotient)) >> 12);
+	gteIR0 = limH(gteMAC0);
 }
 
 void gteRTPT() {
 	int quotient;
 	int v;
 	s32 vx, vy, vz;
-	s64 tmp;
 
 #ifdef GTE_LOG
 	GTE_LOG("GTE RTPT\n");
@@ -119,8 +107,6 @@ void gteRTPT() {
 		fSX(v) = limG1(F((s64)gteOFX + ((s64)gteIR1 * quotient)) >> 16);
 		fSY(v) = limG2(F((s64)gteOFY + ((s64)gteIR2 * quotient)) >> 16);
 	}
-	/* Same fix as gteRTPS — see comment there. */
-	tmp = (s64)gteDQB + ((s64)gteDQA * quotient);
-	gteMAC0 = F(tmp);
-	gteIR0 = limH(tmp >> 12);
+	gteMAC0 = F((s64)(gteDQB + ((s64)gteDQA * quotient)) >> 12);
+	gteIR0 = limH(gteMAC0);
 }

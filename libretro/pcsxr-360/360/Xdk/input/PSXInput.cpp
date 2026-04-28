@@ -12,6 +12,10 @@ extern "C"{
 #include "PSXInput.h"
 }
 
+/* Provided by libretro_core.cpp: returns the PSE_PAD_TYPE_* selected by the
+ * frontend via retro_set_controller_port_device for the given port. */
+extern "C" int libretro_get_pad_type(int port);
+
 #define PSX_BUTTON_TRIANGLE ~(1 << 12)
 #define PSX_BUTTON_SQUARE 	~(1 << 15)
 #define PSX_BUTTON_CROSS	~(1 << 14)
@@ -30,75 +34,53 @@ extern "C"{
 void PSxInputReadPort(PadDataS* pad, int port){
 
 	unsigned short pad_status = 0xFFFF;
-	int ls_x,ls_y,rs_x,rs_y;
 
 	XINPUT_STATE InputState;
-	DWORD XInputErr=XInputGetState( port, &InputState );
+	DWORD XInputErr = XInputGetState(port, &InputState);
 
-	if(	XInputErr == ERROR_SUCCESS) {
+	if (XInputErr == ERROR_SUCCESS) {
 
-		//Action
-		if(InputState.Gamepad.wButtons & XINPUT_GAMEPAD_A )
-			pad_status &= PSX_BUTTON_CROSS;
+		/* Face buttons */
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_A)             pad_status &= PSX_BUTTON_CROSS;
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_B)             pad_status &= PSX_BUTTON_CIRCLE;
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_X)             pad_status &= PSX_BUTTON_SQUARE;
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_Y)             pad_status &= PSX_BUTTON_TRIANGLE;
 
-		if(InputState.Gamepad.wButtons & XINPUT_GAMEPAD_B )
-			pad_status &= PSX_BUTTON_CIRCLE;
+		/* Menu buttons */
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_BACK)          pad_status &= PSX_BUTTON_SELECT;
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_START)         pad_status &= PSX_BUTTON_START;
 
-		if(InputState.Gamepad.wButtons & XINPUT_GAMEPAD_X )
-			pad_status &= PSX_BUTTON_SQUARE;
+		/* D-pad */
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT)     pad_status &= PSX_BUTTON_DLEFT;
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT)    pad_status &= PSX_BUTTON_DRIGHT;
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN)     pad_status &= PSX_BUTTON_DDOWN;
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP)       pad_status &= PSX_BUTTON_DUP;
 
-		if(InputState.Gamepad.wButtons & XINPUT_GAMEPAD_Y )
-			pad_status &= PSX_BUTTON_TRIANGLE;
+		/* Shoulder buttons */
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) pad_status &= PSX_BUTTON_L1;
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER)pad_status &= PSX_BUTTON_R1;
 
-		//back & start
-		if(InputState.Gamepad.wButtons & XINPUT_GAMEPAD_BACK )
-			pad_status &= PSX_BUTTON_SELECT;
+		/* Triggers as digital L2/R2 */
+		if (InputState.Gamepad.bLeftTrigger  > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) pad_status &= PSX_BUTTON_L2;
+		if (InputState.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) pad_status &= PSX_BUTTON_R2;
 
-		if(InputState.Gamepad.wButtons & XINPUT_GAMEPAD_START )
-			pad_status &= PSX_BUTTON_START;
+		/* Stick clicks (L3 / R3) — present on DualShock, ignored on standard */
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB)    pad_status &= ~(1 << 1); /* L3 */
+		if (InputState.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB)   pad_status &= ~(1 << 2); /* R3 */
 
-		//selection
-		if(InputState.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT )
-			pad_status &= PSX_BUTTON_DLEFT;
-
-		if(InputState.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT )
-			pad_status &= PSX_BUTTON_DRIGHT;
-
-		if(InputState.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN )
-			pad_status &= PSX_BUTTON_DDOWN;
-
-		if(InputState.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP )
-			pad_status &= PSX_BUTTON_DUP;
-
-		//L/R
-		//SHOULDER LB/RB
-		if(InputState.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER )
-			pad_status &= PSX_BUTTON_L1;
-
-		if(InputState.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER )
-			pad_status &= PSX_BUTTON_R1;
-
-		//TRIGGER RT/RB
-		if(InputState.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD )
-			pad_status &= PSX_BUTTON_L2;
-
-		if(InputState.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD )
-			pad_status &= PSX_BUTTON_R2;
-
-		//Analog	
-		ls_x= (int)(float(InputState.Gamepad.sThumbLX/0x500)*256)+128;
-		ls_y= (int)(float(InputState.Gamepad.sThumbLY/0x500)*256)+128;
-
-		rs_x= (int)(float(InputState.Gamepad.sThumbRX/0x500)*256)+128;
-		rs_y= (int)(float(InputState.Gamepad.sThumbRY/0x500)*256)+128;
-
-		pad->leftJoyX = ls_x;
-		pad->leftJoyY = ls_y;
-
-		pad->rightJoyX = rs_x;
-		pad->rightJoyY = rs_x;
+		/* Analog sticks.
+		 * XInput range: -32768..32767.  PSX range: 0..255, center=128.
+		 * PSX Y convention: 0=up, 255=down  (opposite of XInput where +Y=up).
+		 * Formula: (value >> 8) + 128  maps [-32768,32767] -> [0,255] exactly. */
+		pad->leftJoyX  = (uint8_t)(((int)InputState.Gamepad.sThumbLX  >> 8) + 128);
+		pad->leftJoyY  = (uint8_t)((-(int)InputState.Gamepad.sThumbLY >> 8) + 128);
+		pad->rightJoyX = (uint8_t)(((int)InputState.Gamepad.sThumbRX  >> 8) + 128);
+		pad->rightJoyY = (uint8_t)((-(int)InputState.Gamepad.sThumbRY >> 8) + 128);
 	}
 
-	pad->controllerType = PSE_PAD_TYPE_STANDARD; 	// Standard Pad
-	pad->buttonStatus = pad_status;					//Copy Buttons
+	/* Use the controller type selected by the frontend (Standard / DualShock / Analog).
+	 * Default is PSE_PAD_TYPE_STANDARD when the frontend has not called
+	 * retro_set_controller_port_device or if XInput read failed. */
+	pad->controllerType = libretro_get_pad_type(port);
+	pad->buttonStatus   = pad_status;
 };

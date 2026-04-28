@@ -192,15 +192,6 @@ typedef struct {
 	u8 ICache_Addr[0x1000];
 	u8 ICache_Code[0x1000];
 	boolean ICache_valid;
-	/* MIPS R3000A load-delay-slot emulation buffer (used by the PowerPC
-	 * dynarec — see libpcsxcore/ppc/pR3000A.c). The dynarec defers the
-	 * commit of every load by one MIPS instruction to mimic the real
-	 * hardware's 1-cycle load delay, which Soul Reaver and similarly
-	 * tight code rely on. dloadReg[i] is the destination GPR (0 = empty);
-	 * dloadVal[i] is the value waiting to be committed. The two slots
-	 * alternate so two consecutive loads can be in flight at once. */
-	u32 dloadReg[2];
-	u32 dloadVal[2];
 } psxRegisters;
 
 extern psxRegisters psxRegs;

@@ -443,17 +443,8 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 			}
 			// BA blocks * BS words (word = 32-bits)
 			size = (bcr >> 16) * (bcr & 0xffff);
-			/* Use the *synchronised* wrapper (gpuReadDataMem, lowercase),
-			 * not the raw plugin pointer GPU_readDataMem. The wrapper
-			 * waits for the GPU thread to drain its in-flight chunk
-			 * before entering the plugin; otherwise both threads can be
-			 * inside PEOPS_GPUreadDataMem at once, racing on its
-			 * internal state (DataReadMode, VRAMRead.*, gpuDataC, ...).
-			 * Tekken 3 hits this during the post-fight cinematic, where
-			 * a vram2mem read fires while the thread is still processing
-			 * polygon-batch commands, producing the random solid-colour
-			 * block artefacts in the HUD overlay. */
-			gpuReadDataMem(ptr, size);
+//			gpuReadDataMem(ptr, size);
+			GPU_readDataMem(ptr, size);////////////////////////////////
 
 			psxCpu->Clear(madr, size);
 
@@ -475,19 +466,8 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 			}
 			// BA blocks * BS words (word = 32-bits)
 			size = (bcr >> 16) * (bcr & 0xffff);
-			/* Use the *synchronised* wrapper (gpuWriteDataMem, lowercase),
-			 * not the raw plugin pointer GPU_writeDataMem. The bypass
-			 * commented out below is the actual cause of Tekken 3's
-			 * random solid-colour HUD blocks: PEOPS_GPUwriteDataMem keeps
-			 * a per-call multi-word command parser (gpuDataC, gpuCommand,
-			 * gpuDataM[], DataWriteMode), and lets the GPU thread (core 4,
-			 * draining tw_ring) and the main thread (this DMA path) both
-			 * enter it concurrently. The mem2vram payload words land
-			 * inside a half-parsed textured-sprite command, scrambling its
-			 * UV/palette and producing the solid-colour rectangles seen in
-			 * the post-fight cinematic. The wrapper drains the queue
-			 * first, restoring exclusive access. */
-			gpuWriteDataMem(ptr, size);
+//			gpuWriteDataMem(ptr, size);
+			GPU_writeDataMem(ptr, size);////////////////////////////////
 
 
 			// already 32-bit word size ((size * 4) / 4)

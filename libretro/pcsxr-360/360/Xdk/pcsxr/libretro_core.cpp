@@ -69,6 +69,15 @@ static retro_audio_sample_batch_t audio_batch_cb;
 static retro_input_poll_t         input_poll_cb;
 static retro_input_state_t        input_state_cb;
 
+/* ===== Controller types (matching pcsx-rearmed convention) ===== */
+#define RETRO_DEVICE_PSE_STANDARD  RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 0)
+#define RETRO_DEVICE_PSE_ANALOG    RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG,  0)
+#define RETRO_DEVICE_PSE_DUALSHOCK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG,  1)
+
+/* Per-port PSX controller type (PSE_PAD_TYPE_* values from psemu_plugin_defs.h).
+ * Updated by retro_set_controller_port_device; read by PSXInput via libretro_get_pad_type(). */
+static int in_type[2];
+
 /* ===== Fiber handles ===== */
 static LPVOID fiber_main = NULL;   /* retro_run context (frontend thread) */
 static LPVOID fiber_emu  = NULL;   /* emulator context */
@@ -143,6 +152,23 @@ void retro_set_environment(retro_environment_t cb) {
         { NULL, NULL }
     };
     cb(RETRO_ENVIRONMENT_SET_VARIABLES, variables);
+
+    /* Declare supported PSX controller types per port so the frontend can
+     * expose a type-selector UI (matching pcsx-rearmed's approach). */
+    {
+        static const struct retro_controller_description pads[] = {
+            { "standard",  RETRO_DEVICE_JOYPAD         },
+            { "dualshock", RETRO_DEVICE_PSE_DUALSHOCK  },
+            { "analog",    RETRO_DEVICE_PSE_ANALOG      },
+            { NULL, 0 }
+        };
+        static const struct retro_controller_info ports[] = {
+            { pads, 3 },
+            { pads, 3 },
+            { NULL, 0 }
+        };
+        cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
+    }
 
     /* Publish the disk-control interface so the frontend can call
      * set_initial_image() before retro_load_game (used for M3U resume). */
@@ -298,8 +324,24 @@ void retro_get_system_av_info(struct retro_system_av_info *info) {
 }
 
 void retro_set_controller_port_device(unsigned port, unsigned device) {
-    (void)port;
-    (void)device;
+    if (port >= 2) return;
+    switch (device) {
+        case RETRO_DEVICE_JOYPAD:
+        case RETRO_DEVICE_PSE_STANDARD:
+            in_type[port] = PSE_PAD_TYPE_STANDARD;   break;
+        case RETRO_DEVICE_PSE_DUALSHOCK:
+            in_type[port] = PSE_PAD_TYPE_ANALOGPAD;  break;
+        case RETRO_DEVICE_PSE_ANALOG:
+            in_type[port] = PSE_PAD_TYPE_ANALOGJOY;  break;
+        default:
+            in_type[port] = PSE_PAD_TYPE_STANDARD;   break;
+    }
+}
+
+/* Bridge for PSXInput.cpp (C++ code, XInput path) to query the per-port
+ * controller type selected by the frontend via retro_set_controller_port_device. */
+extern "C" int libretro_get_pad_type(int port) {
+    return (port >= 0 && port < 2) ? in_type[port] : PSE_PAD_TYPE_STANDARD;
 }
 
 /* ======================================================================
@@ -875,6 +917,8 @@ void retro_init(void) {
     emu_initialized   = false;
     fiber_main        = NULL;
     fiber_emu         = NULL;
+    in_type[0]        = PSE_PAD_TYPE_STANDARD;
+    in_type[1]        = PSE_PAD_TYPE_STANDARD;
     check_pixel_format();
     check_game_fixes();
 }
