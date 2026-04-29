@@ -43,7 +43,9 @@ extern int      iUseFixes;           /* xbox_soft gate for dwActFixes */
 extern BOOL     tombraider2fix;      /* dfsound/cfg.c */
 extern BOOL     crashteamracingfix;  /* dfsound/cfg.c */
 extern BOOL     frontmission3fix;    /* libpcsxcore/psxinterpreter.c */
-extern int      collapsed_quad_fix;  /* libpcsxcore/gpu.c — Soul Reaver collapsed-quad workaround */
+//extern int      collapsed_quad_fix;  /* libpcsxcore/gpu.c — Soul Reaver collapsed-quad workaround */
+//extern int      dload_enabled;       /* libpcsxcore/ppc/pR3000A.c — R3000A load-delay-slot peephole */
+//extern void     psxRec_setLoadDelay(int enabled); /* toggles dload_enabled + invalidates rec cache */
 
 /* Runtime selector for the new SwanStation-derived SW renderer that
  * lives alongside PEOPS in the xbox_soft plugin. Defined in
@@ -146,7 +148,8 @@ void retro_set_environment(retro_environment_t cb) {
         { "pcsxr360_fix_ignore_brightness", "GPU Fix: Ignore black brightness; disabled|enabled" },
         { "pcsxr360_fix_lazy_update",    "GPU Fix: Lazy screen update; disabled|enabled" },
         { "pcsxr360_fix_quads_to_tris",  "GPU Fix: Draw quads with triangles; disabled|enabled" },
-        { "pcsxr360_fix_collapsed_quads", "GPU Fix: Collapsed quads; disabled|enabled" },
+        //{ "pcsxr360_fix_collapsed_quads", "GPU Fix: Collapsed quads; disabled|enabled" },
+        //{ "pcsxr360_load_delay",         "CPU Fix: R3000A load-delay slots (Soul Calibur); enabled|disabled" },
 		{ "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
         { "pcsxr360_gpu_renderer",       "GPU Renderer (restart core to apply); xbox_soft|gpu_duck" },
         { NULL, NULL }
@@ -229,7 +232,15 @@ static void check_game_fixes(void) {
      * (libpcsxcore/gpu.c). The CPU/GTE emulation produces souls with all
      * four vertices identical (zero-area quad); this expands them to a
      * fixed-size sprite around the centre. */
-    collapsed_quad_fix = read_bool_var("pcsxr360_fix_collapsed_quads", false) ? 1 : 0;
+    //collapsed_quad_fix = read_bool_var("pcsxr360_fix_collapsed_quads", false) ? 1 : 0;
+
+    /* R3000A load-delay slot emulation in the PowerPC dynarec. Default
+     * ENABLED — Soul Calibur (and a handful of other tight games) rely
+     * on the 1-cycle load delay. Peephole keeps the cost negligible
+     * (only loads with a true read-in-N+1 hazard pay the deferral).
+     * Toggling at runtime invalidates the recompiler cache via
+     * psxRec_setLoadDelay; CPU/PSX state is preserved. */
+    //psxRec_setLoadDelay(read_bool_var("pcsxr360_load_delay", true) ? 1 : 0);
 
     /* Tomb Raider 2 — SPU voice-silence handling (dfsound/spu.c). */
     tombraider2fix = read_bool_var("pcsxr360_fix_tomb_raider2", false) ? 1 : 0;
