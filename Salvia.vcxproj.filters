@@ -42,9 +42,6 @@
     <Filter Include="i18n">
       <UniqueIdentifier>{90a15aba-848c-4278-a6b7-9e67c7c7b953}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\retroachievements\frontend">
-      <UniqueIdentifier>{014be384-24e8-4b13-949e-daf7eaff50fe}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source Files\db">
       <UniqueIdentifier>{f368115f-97f7-42ec-8273-63ac0cf57618}</UniqueIdentifier>
     </Filter>
@@ -206,9 +203,6 @@
     <ClCompile Include="src\retroachievements\HashCHD.cpp">
       <Filter>Source Files\retroachievements\chdhelper</Filter>
     </ClCompile>
-    <ClCompile Include="src\http\achievements.cpp">
-      <Filter>Source Files\retroachievements\frontend</Filter>
-    </ClCompile>
     <ClCompile Include="src\retroachievements\src\rc_client.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
@@ -313,6 +307,9 @@
     </ClCompile>
     <ClCompile Include="src\so\launcher.cpp">
       <Filter>Source Files\frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="src\http\achievements.cpp">
+      <Filter>Source Files\http</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -447,12 +444,6 @@
     </ClInclude>
     <ClInclude Include="src\http\safedownloadqueue.h">
       <Filter>Source Files\http</Filter>
-    </ClInclude>
-    <ClInclude Include="src\http\achievements.h">
-      <Filter>Source Files\retroachievements\frontend</Filter>
-    </ClInclude>
-    <ClInclude Include="src\retroachievements\achievementdb.h">
-      <Filter>Source Files\retroachievements\frontend</Filter>
     </ClInclude>
     <ClInclude Include="src\db\sqlite_xbox_fix.h">
       <Filter>Source Files\db</Filter>

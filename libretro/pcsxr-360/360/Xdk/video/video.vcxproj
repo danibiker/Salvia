@@ -439,7 +439,7 @@
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <AdditionalIncludeDirectories>../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
       <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -571,6 +571,16 @@
     <ClCompile Include="..\..\..\plugins\xbox_soft\xb_video.cpp" />
     <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_driver.cpp" />
     <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_sw_backend.cpp" />
+    <ClCompile Include="..\..\..\plugins\xbox_soft\peops_prof.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='debug_cc|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='debug_cc_optimised|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Opt|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
     <ClCompile Include="..\..\..\plugins\xbox_soft\zn.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
@@ -593,6 +603,7 @@
     <ClInclude Include="..\..\..\plugins\xbox_soft\interp.h" />
     <ClInclude Include="..\..\..\plugins\xbox_soft\key.h" />
     <ClInclude Include="..\..\..\plugins\xbox_soft\menu.h" />
+    <ClInclude Include="..\..\..\plugins\xbox_soft\peops_prof.h" />
     <ClInclude Include="..\..\..\plugins\xbox_soft\prim.h" />
     <ClInclude Include="..\..\..\plugins\xbox_soft\soft.h" />
     <ClInclude Include="..\..\..\plugins\xbox_soft\swap.h" />

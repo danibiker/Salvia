@@ -138,6 +138,7 @@
 #include "fps.h"
 #include "swap.h"
 #include "../gpu_duck/gpu_duck_c_api.h"
+#include "peops_prof.h"
 
 ////////////////////////////////////////////////////////////////////////
 // PPDK developer must change libraryName field and can change revision and build
@@ -508,6 +509,17 @@ long PEOPS_GPUinit()                                // GPU INIT
 
  szDebugText[0]=0;                                     // init debug text buffer
 
+ /* Defensive: si una sesion previa no llego a llamar PEOPS_GPUshutdown
+  * (o si el shutdown estaba bugueado historicamente con el free()
+  * comentado, ver mas abajo), liberamos antes de re-asignar para no
+  * filtrar 2-3 MB por cada retro_load_game.  Sin esto, cargar varios
+  * juegos consecutivamente agota el heap de la Xbox 360 (256 MB para
+  * apps) y eventualmente este malloc devuelve NULL -> EmuInit retorna
+  * -1 -> cuelgue silencioso en pantalla negra. */
+ if (psxVSecure) {
+   free(psxVSecure);
+   psxVSecure = NULL;
+ }
  psxVSecure=(unsigned char *)malloc((iGPUHeight*2)*1024 + (1024*1024)); // always alloc one extra MB for soft drawing funcs security
  if(!psxVSecure) return -1;
 
@@ -687,8 +699,17 @@ long PEOPS_GPUshutdown()
   duck_shutdown();
  }
 
-// free(psxVSecure);
- 
+ /* Liberar el buffer de seguridad asignado en PEOPS_GPUinit().  El
+  * free original estaba comentado: cada retro_load_game filtraba
+  * (iGPUHeight*2)*1024 + 1MB ~= 2-3 MB.  Con N juegos cargados en
+  * la misma sesion la Xbox 360 acaba sin heap contiguo y el malloc
+  * de PEOPS_GPUinit en el siguiente load devuelve NULL -> el frontend
+  * se queda con la pantalla en negro. */
+ if (psxVSecure) {
+   free(psxVSecure);
+   psxVSecure = NULL;
+ }
+
 #ifdef _MACGL
  CGReleaseAllDisplays();
 #endif
@@ -974,8 +995,8 @@ void PEOPS_GPUupdateLace(void)
   {
    if(dwActFixes&64)                                   // lazy screen update fix
     {
-     if(bDoLazyUpdate && !UseFrameSkip) 
-      updateDisplay(); 
+     if(bDoLazyUpdate && !UseFrameSkip)
+      updateDisplay();
      bDoLazyUpdate=FALSE;
     }
    else
@@ -1577,9 +1598,18 @@ ENDVRAM:
     * on the entries so primFunc can index it uniformly with the
     * non-const tables above. */
    void (* *primFunc)(unsigned char *);
-   if(bSkipNextFrame)       primFunc=primTableSkip;
-   else if(duck_gpu_enabled) primFunc=(void (**)(unsigned char *))duck_primTable;
-   else                     primFunc=primTableJ;
+#if PCSXR_PERF_ENABLED
+   /* Profile only when running the stock PEOPS rasteriser; skip-frame and
+    * duck have their own time domains and would muddle the buckets. */
+   int prof_active;
+   if(bSkipNextFrame)       { primFunc=primTableSkip;                              prof_active = 0; }
+   else if(duck_gpu_enabled){ primFunc=(void (**)(unsigned char *))duck_primTable; prof_active = 0; }
+   else                     { primFunc=primTableJ;                                 prof_active = 1; }
+#else
+   if(bSkipNextFrame)       { primFunc=primTableSkip;                              }
+   else if(duck_gpu_enabled){ primFunc=(void (**)(unsigned char *))duck_primTable; }
+   else                     { primFunc=primTableJ;                                 }
+#endif
 
    for(;i<iSize;)
     {
@@ -1634,7 +1664,22 @@ ENDVRAM:
 	DEBUG_print("close",DBG_SDGECKOCLOSE);
 #endif //PEOPS_SDLOG
        gpuDataC=gpuDataP=0;
+#if PCSXR_PERF_ENABLED
+       /* Per-bucket profiling.  We bracket the single call site that
+        * routes every GP0 opcode to its handler; classify on cmd plus
+        * the current GlobalTextTP for textured polygons.  QPC is wrapped
+        * in peops_prof_qpc_* so this TU doesn't need <xtl.h>. */
+       if (prof_active) {
+           int prof_bucket = peops_prof_classify(gpuCommand);
+           uint64_t prof_t0 = peops_prof_qpc_now();
+           primFunc[gpuCommand]((unsigned char *)gpuDataM);
+           peops_prof_qpc_account(prof_bucket, prof_t0);
+       } else {
+           primFunc[gpuCommand]((unsigned char *)gpuDataM);
+       }
+#else
        primFunc[gpuCommand]((unsigned char *)gpuDataM);
+#endif
 
 //       if(dwEmuFixes&0x0001 || dwActFixes&0x0400)      // hack for emulating "gpu busy" in some games
 //        iFakePrimBusy=4;

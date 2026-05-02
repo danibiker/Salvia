@@ -114,7 +114,7 @@ extern "C" unsigned int  VideoInit()
 		&pShaderCode, &pErrorMsg, NULL );
 	if( FAILED( hr ) )
 	{
-		OutputDebugStringA( pErrorMsg ? ( CHAR* )pErrorMsg->GetBufferPointer() : "" );
+		pcsxr_log(RETRO_LOG_DEBUG, pErrorMsg ? ( CHAR* )pErrorMsg->GetBufferPointer() : "" );
 		return E_FAIL;
 	}
 
@@ -132,7 +132,7 @@ extern "C" unsigned int  VideoInit()
 		&pShaderCode, &pErrorMsg, NULL );
 	if( FAILED( hr ) )
 	{
-		OutputDebugStringA( pErrorMsg ? ( CHAR* )pErrorMsg->GetBufferPointer() : "" );
+		pcsxr_log(RETRO_LOG_DEBUG, pErrorMsg ? ( CHAR* )pErrorMsg->GetBufferPointer() : "" );
 		return E_FAIL;
 	}
 

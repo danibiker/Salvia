@@ -918,7 +918,7 @@ int Scrapper::countWordsContained(std::string text1, std::string text2) {
 
 	//if (downloader.fetchUrl(urlInfo, response, &downloadProgress)) {
 	response = leerArchivoTexto("D:\\develop\\Github\\xbox360\\project\\Salvia\\test\\screenscrapper.xml");
-		LOG_DEBUG("\rProgreso: 100%% | Descarga completada. Tama�o: %d bytes\n", response.size());
+		LOG_DEBUG("\rProgreso: 100%% | Descarga completada. Tamanyo: %d bytes\n", response.size());
 		ScraperResult resultado;
 		procesarRespuestaScreenscraper(response, peticion, resultado);
 		LOG_DEBUG("Informacion descargada");

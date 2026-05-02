@@ -15,6 +15,21 @@
 
 static const int video_bpp = 16;
 #define CPU_THREAD 4
+/* I/O / network threads (HTTP requests for RetroAchievements, image
+ * downloads, server callbacks).  Pinned to HW thread 2 â€” physical core 1,
+ * SMT partner of the SPU thread on core 3.  Final layout:
+ *   core 0  main / Salvia / retro_run / dynarec PSX
+ *   core 1  idle (SMT partner of dynarec)
+ *   core 2  IO / HTTP (this)            â”
+ *   core 3  PSX SPU MAINThread          â”˜ same physical core
+ *   core 4  PSX GPU helper thread       â”
+ *   core 5  idle                        â”˜ same physical core
+ * Bursty HTTP and bursty (Sleep-paced) SPU coexist on physical core 1
+ * without competing for cycles in steady state.  Keeps HTTP off core 4
+ * where the GPU thread runs hot and would starve BELOW_NORMAL workers â€”
+ * symptom that motivated the move: rcheevos load_game callback never
+ * firing, achievements not loading. */
+#define IO_THREAD 2
 
 #ifdef _XBOX
 	static Uint32 video_flags = SDL_SWSURFACE;
@@ -102,7 +117,7 @@ struct Message {
     Uint32 ticks;
     Uint32 timeout;
     SDL_Surface* cache; // Nueva superficie para el mensaje renderizado
-    SDL_Rect rect;      // Para guardar el tamaño y posición calculados
+    SDL_Rect rect;      // Para guardar el tamanyo y posicion calculados
 
 	Message(){
 		cache = NULL;
@@ -128,13 +143,13 @@ struct AchievementState{
 	std::string badgeUrl;     // Url de la imagen
 	std::string badgeName;    // Nombre de la imagen
 	SDL_Surface *badge;       // Original a color
-	SDL_Surface *badgeLocked; // Versión en gris (caché)
+	SDL_Surface *badgeLocked; // Version en gris (cache)
 	std::string progress;	  // Progreso del logro
 	uint32_t id;			  // Id del logro
 	uint32_t gameId;		  // Id del juego
 	
     uint32_t ticks;			  // Para el temporizador de pantalla
-    uint32_t timeout;         // Cuánto tiempo debe mostrarse (ms)
+    uint32_t timeout;         // Cuanto tiempo debe mostrarse (ms)
     
     // Campos extra para el mensaje de "Juego Cargado"
     uint32_t achvTotal;		  // Numero de logros totales
@@ -186,9 +201,9 @@ struct AchievementState{
         copiarDesde(other);
     }
 
-    // 2. Operador de asignación (operador =)
+    // 2. Operador de asignacion (operador =)
     AchievementState& operator=(const AchievementState& other) {
-        if (this != &other) { // Evitar auto-asignación
+        if (this != &other) { // Evitar auto-asignacion
             copiarDesde(other);
         }
         return *this;
@@ -206,7 +221,7 @@ struct AchievementState{
 	}
 
 	private:
-    // Función auxiliar para centralizar la lógica de copia
+    // Funcion auxiliar para centralizar la logica de copia
     void copiarDesde(const AchievementState& other) {
         locked = other.locked;
         isDownloading = other.isDownloading;
@@ -229,8 +244,8 @@ struct AchievementState{
 		scoreUnlocked = other.scoreUnlocked;
 		reqWidth = other.reqWidth;
 		reqHeight = other.reqHeight;
-        // COPIA SUPERFICIAL: Solo copiamos la dirección de memoria.
-		// No usamos SDL_DisplayFormat aquí para evitar fugas de memoria.
+        // COPIA SUPERFICIAL: Solo copiamos la direccion de memoria.
+		// No usamos SDL_DisplayFormat aqui para evitar fugas de memoria.
 		this->badge = other.badge;
 		this->badgeLocked = other.badgeLocked;
     }
@@ -350,16 +365,16 @@ enum {
 };
 
 
-/* SDL 1.2: Definir máscaras según el orden de bytes del sistema */
+/* SDL 1.2: Definir mascaras segun el orden de bytes del sistema */
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
-    // Formato ARGB (Típico en PowerPC / Xbox 360)
+    // Formato ARGB (Tipico en PowerPC / Xbox 360)
     static Uint32 rmask = 0x00FF0000;
     static Uint32 gmask = 0x0000FF00;
     static Uint32 bmask = 0x000000FF;
     static Uint32 amask = 0xFF000000;
 #else
     // Formato ARGB en Little Endian (x86) se almacena como BGRA en memoria, 
-    // pero SDL maneja estas máscaras para que el uint32_t sea 0xAARRGGBB
+    // pero SDL maneja estas mascaras para que el uint32_t sea 0xAARRGGBB
     static Uint32 rmask = 0x00FF0000;
     static Uint32 gmask = 0x0000FF00;
     static Uint32 bmask = 0x000000FF;
@@ -392,7 +407,7 @@ class Constant{
             appExecutable = var;
         }
 
-		// Función auxiliar para convertir int a std::string (VS2008 no tiene std::to_string)
+		// Funcion auxiliar para convertir int a std::string (VS2008 no tiene std::to_string)
 		static std::string intToString(int value) {
 			std::stringstream ss;
 			ss << value;
@@ -426,17 +441,17 @@ class Constant{
 		static std::string ANSItoUTF8(const std::string& ansiStr) {
 			if (ansiStr.empty()) return "";
     
-			// 1. Pedir tamaño necesario para UTF-16 (WideChar)
+			// 1. Pedir tamanyo necesario para UTF-16 (WideChar)
 			int wlen = MultiByteToWideChar(CP_ACP, 0, ansiStr.c_str(), -1, NULL, 0);
 			std::wstring wstr(wlen, 0);
 			MultiByteToWideChar(CP_ACP, 0, ansiStr.c_str(), -1, &wstr[0], wlen);
 
-			// 2. Pedir tamaño necesario para UTF-8
+			// 2. Pedir tamanyo necesario para UTF-8
 			int u8len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, NULL, 0, NULL, NULL);
 			std::string utf8str(u8len, 0);
 			WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &utf8str[0], u8len, NULL, NULL);
 
-			// Eliminar el terminador nulo extra que añade std::string al redimensionar
+			// Eliminar el terminador nulo extra que anyade std::string al redimensionar
 			if (!utf8str.empty() && utf8str[utf8str.length()-1] == '\0') {
 				utf8str.erase(utf8str.length()-1);
 			}
@@ -567,7 +582,7 @@ class Constant{
 			std::istringstream tokenStream(s);
 
 			while (std::getline(tokenStream, token, delimiter)) {
-				// Trim opcional por si hay espacios entre la coma y el número
+				// Trim opcional por si hay espacios entre la coma y el numero
 				std::string trimmed = Constant::Trim(token); 
 				if (!trimmed.empty()) {
 					tokens.push_back(std::atoi(trimmed.c_str()));
@@ -592,7 +607,7 @@ class Constant{
 			std::stringstream ss(s);
 			std::string item;
 			while (std::getline(ss, item, delim)) {
-				if (!item.empty()) { // Opcional: evita insertar cadenas vacías si hay dobles espacios
+				if (!item.empty()) { // Opcional: evita insertar cadenas vacias si hay dobles espacios
 					elems.insert(item);
 				}
 			}
@@ -620,7 +635,7 @@ class Constant{
 			std::stringstream s_str(str);
     
 			// Si el tipo es de 1 byte (int8_t, uint8_t, char), 
-			// stringstream lo leería como carácter.
+			// stringstream lo leeria como caracter.
 			if (sizeof(TIPO) == 1) {
 				int temp;
 				s_str >> temp;
@@ -635,7 +650,7 @@ class Constant{
 		static bool esNumerico(const std::string& s) {
 			if (s.empty()) return false;
     
-			// Si permites números negativos, saltamos el signo '-'
+			// Si permites numeros negativos, saltamos el signo '-'
 			std::size_t inicio = (s[0] == '-' && s.size() > 1) ? 1 : 0;
 
 			for (size_t i = inicio; i < s.size(); i++) {
@@ -646,7 +661,7 @@ class Constant{
 			return true;
 		}
 
-		// Función auxiliar
+		// Funcion auxiliar
 		static bool compareNoCase(const std::string& a, const std::string& b) {
 			for (size_t i = 0; i < a.length() && i < b.length(); ++i) {
 				if (tolower(a[i]) != tolower(b[i]))
@@ -666,10 +681,10 @@ class Constant{
 				}
 				LARGE_INTEGER counter;
 				QueryPerformanceCounter(&counter);
-				// Retorna milisegundos con alta precisión decimal
+				// Retorna milisegundos con alta precision decimal
 				return (double)counter.QuadPart * 1000.0 / (double)freq.QuadPart;
 			#else
-				// Para otras plataformas, usamos la versión de 64 bits si es posible
+				// Para otras plataformas, usamos la version de 64 bits si es posible
 				// o el performance counter de SDL si usas SDL 2.0+
 				return (double)SDL_GetTicks(); 
 			#endif
@@ -689,16 +704,16 @@ class Constant{
 				}
 			}
 
-			// 3. Gestión de longitud máxima (42 caracteres)
+			// 3. Gestion de longitud maxima (42 caracteres)
 			if (filename.length() > 42) {
-				// Buscamos el PRIMER punto para identificar dónde empiezan las extensiones
+				// Buscamos el PRIMER punto para identificar donde empiezan las extensiones
 				// Ejemplo: "Sonic.Knuckles.bin" -> queremos conservar ".Knuckles.bin"
 				std::size_t firstDot = filename.find_first_of('.');
         
 				if (firstDot != std::string::npos) {
 					std::string allExtensions = filename.substr(firstDot); // ".bin.state"
             
-					// Si las extensiones son absurdamente largas (más de 30 chars), recortamos a lo bruto
+					// Si las extensiones son absurdamente largas (mas de 30 chars), recortamos a lo bruto
 					if (allExtensions.length() > 30) {
 						filename = filename.substr(0, 42);
 					} else {
@@ -727,21 +742,21 @@ class Constant{
 		}
 
 		 static std::string string_format(const std::string fmt, ...) {
-			int size = 256; // Tamaño inicial sugerido
+			int size = 256; // Tamanyo inicial sugerido
 			std::string str;
 			va_list ap;
 			while (1) {
 				str.resize(size);
 				va_start(ap, fmt);
-				// _vsnprintf es la versión segura para Visual Studio 2010
+				// _vsnprintf es la version segura para Visual Studio 2010
 				int n = _vsnprintf_s((char *)str.c_str(), size, _TRUNCATE, fmt.c_str(), ap);
 				va_end(ap);
 				if (n > -1 && n < size) {
 					str.resize(n);
 					return str;
 				}
-				if (n > -1) size = n + 1; // Tamaño exacto necesario
-				else size *= 2; // Doblar y reintentar (específico de implementaciones antiguas)
+				if (n > -1) size = n + 1; // Tamanyo exacto necesario
+				else size *= 2; // Doblar y reintentar (especifico de implementaciones antiguas)
 			}
 		}
 
@@ -756,7 +771,7 @@ class Constant{
 
 		static void setup_and_run_thread(HANDLE hThread, int core, bool autoClose = true) {
 			#ifdef _XBOX
-			// Forzar la ejecución en el núcleo especificado
+			// Forzar la ejecucion en el nucleo especificado
 			XSetThreadProcessor(hThread, core); 
 			#endif
 
@@ -767,7 +782,7 @@ class Constant{
 			ResumeThread(hThread);
 
 			if (autoClose){
-				// Liberar el handle (el hilo continúa su ejecución de forma independiente)
+				// Liberar el handle (el hilo continua su ejecucion de forma independiente)
 				CloseHandle(hThread);
 			}
 		}

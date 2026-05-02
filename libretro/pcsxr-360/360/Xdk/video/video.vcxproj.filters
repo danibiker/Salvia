@@ -38,6 +38,9 @@
     <ClCompile Include="..\..\..\plugins\xbox_soft\soft.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\plugins\xbox_soft\peops_prof.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\plugins\xbox_soft\xb_video.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -86,6 +89,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\plugins\xbox_soft\soft.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\xbox_soft\peops_prof.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\plugins\xbox_soft\swap.h">

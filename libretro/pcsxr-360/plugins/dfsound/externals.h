@@ -17,6 +17,13 @@
 
 #include <stdint.h>
 
+/* Heredamos el flag PCSXR_NO_THREADING desde libpcsxcore para que
+ * SetupTimer / RemoveTimer puedan optar por el modo polling (iUseTimer=2)
+ * en lugar de crear el SPU MAINThread.  Default a 0 si nadie lo definio. */
+#ifndef PCSXR_NO_THREADING
+#define PCSXR_NO_THREADING 0
+#endif
+
 /////////////////////////////////////////////////////////
 // generic defines
 /////////////////////////////////////////////////////////
@@ -279,9 +286,14 @@ extern unsigned short spuCtrl;
 extern unsigned short spuStat;
 extern unsigned short spuIrq;
 extern unsigned long  spuAddr;
-extern int      bEndThread;
-extern int      bThreadEnded;
-extern int      bSpuInit;
+/* Flags compartidos entre el SPU MAINThread y el main thread
+ * (SPU_open / SPU_close).  Volatile porque PowerPC tiene weak memory
+ * ordering: sin volatile, el compilador puede mantenerlos en registro
+ * y no observar cambios cross-thread.  Lecturas/escrituras criticas
+ * estan rodeadas de __lwsync() en spu.c. */
+extern volatile int bEndThread;
+extern volatile int bThreadEnded;
+extern volatile int bSpuInit;
 extern uint32_t dwNewChannel;
 extern unsigned int bIrqHit;
 

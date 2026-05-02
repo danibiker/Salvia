@@ -21,19 +21,19 @@ void CurlClient::init(){
 	int err = 0;
 
 	#ifdef _XBOX
-		// 1. Comprobar si XNet ya está corriendo (vía una función simple)
+		// 1. Comprobar si XNet ya esta corriendo (via una funcion simple)
 		XNetStartupParams xsp;
 		memset(&xsp, 0, sizeof(xsp));
 		xsp.cfgSizeOfStruct = sizeof(XNetStartupParams);
 		xsp.cfgFlags = XNET_STARTUP_BYPASS_SECURITY; 
 		err = XNetStartup(&xsp);
 			
-		// Esperar a que la interfaz tenga una IP válida y estado activo
+		// Esperar a que la interfaz tenga una IP valida y estado activo
 		XNADDR xnAddr;
 		DWORD dwStatus;
 		do {
 			dwStatus = XNetGetTitleXnAddr(&xnAddr);
-			LOG_DEBUG("Esperando configuración de red...\n");
+			LOG_DEBUG("Esperando configuracion de red...\n");
 			Sleep(200);
 		} while (dwStatus == XNET_GET_XNADDR_PENDING || dwStatus == XNET_GET_XNADDR_NONE);
 	#endif
@@ -53,7 +53,7 @@ void CurlClient::init(){
 		}
 
 	#ifdef _XBOX
-		// La IP está en xnAddr.ina.s_addr
+		// La IP esta en xnAddr.ina.s_addr
 		char ipStr[64];
 		sprintf(ipStr, "IP de mi Xbox: %d.%d.%d.%d\n", 
 				xnAddr.ina.S_un.S_un_b.s_b1, xnAddr.ina.S_un.S_un_b.s_b2, 
@@ -62,7 +62,7 @@ void CurlClient::init(){
 
 		mbedtls_entropy_init(&entropy);
 
-		// Añadimos nuestra fuente de la Xbox con prioridad fuerte
+		// Anyadimos nuestra fuente de la Xbox con prioridad fuerte
 		mbedtls_entropy_add_source(&entropy, CurlClient::xbox360_entropy_source, NULL, 
 									32, // Valor manual en lugar de MBEDTLS_ENTROPY_MIN_PLATFORM
 									MBEDTLS_ENTROPY_SOURCE_STRONG);
@@ -93,7 +93,7 @@ void CurlClient::close(){
 	#endif
 }
 
-// Función principal de descarga
+// Funcion principal de descarga
 bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, float* progressPtr) {
     CURL *curl = curl_easy_init();
     if (!curl) return false;
@@ -109,7 +109,7 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
 	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CurlClient::debug_callback);
 	#endif
 
-    // Configuración básica
+    // Configuracian basica
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         
     // SSL: Ignorar para evitar problemas con certificados en Xbox
@@ -170,7 +170,7 @@ bool CurlClient::postUrl(const std::string& url, const std::string& postData,con
 	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CurlClient::debug_callback);
 	#endif
 
-    // Configuración básica
+    // Configuracion basica
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
@@ -215,12 +215,12 @@ bool CurlClient::postUrl(const std::string& url, const std::string& postData,con
     return (res == CURLE_OK);
 }
 
-// Función principal de descarga
+// Funcion principal de descarga
 bool CurlClient::postUrl(const std::string& url, const std::string& postData, std::string& outResponse, float* progressPtr) {
 	return postUrl(url, postData, USERAGENT, outResponse, progressPtr);
 }
 
-// Añade esto a los métodos públicos de tu clase
+// Anyade esto a los metodos publicos de tu clase
 bool CurlClient::fetchFile(const std::string& url, const std::string& localPath, float* progressPtr) {
 	CURL *curl = curl_easy_init();
 	if (!curl) return false;
@@ -236,29 +236,29 @@ bool CurlClient::fetchFile(const std::string& url, const std::string& localPath,
 	pData.progressVar = progressPtr;
 	if (progressPtr) *progressPtr = 0.0f;
 
-	// Configuración de la URL y SSL
+	// Configuracion de la URL y SSL
 	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 
 	// Callback para escribir directamente al archivo
-	// Usamos el callback estándar de cURL para FILE*
+	// Usamos el callback estandar de cURL para FILE*
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL); // NULL usa fwrite por defecto
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
 
-	// Configuración de progreso
+	// Configuracion de progreso
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 	curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, ProgressCallback);
 	curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, &pData);
 
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, USERAGENT);
-	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); // Importante: seguir redirecciones de imágenes
+	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); // Importante: seguir redirecciones de imagenes
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L); // 15 segundos
 
 	// callback para llamar fuera a internet
 	#ifdef _XBOX
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, curl_sockopt_callback);
-	curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, NULL); // Podrías pasar 'this' si es una clase
+	curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, NULL); // Podrias pasar 'this' si es una clase
 	#endif
 
 	CURLcode res = curl_easy_perform(curl);
@@ -266,7 +266,7 @@ bool CurlClient::fetchFile(const std::string& url, const std::string& localPath,
 	fclose(fp);
 	curl_easy_cleanup(curl);
 
-	// Si la descarga falló, borramos el archivo parcial para no dejar basura
+	// Si la descarga falla, borramos el archivo parcial para no dejar basura
 	if (res != CURLE_OK) {
 		remove(localPath.c_str());
 		return false;
@@ -290,7 +290,7 @@ std::string CurlClient::escape(const std::string& text) {
 }
 
 #ifdef _XBOX
-	// Callback de entropía usando la API nativa de Xbox 360
+	// Callback de entropia usando la API nativa de Xbox 360
 	int CurlClient::xbox360_entropy_source(void *data, unsigned char *output, size_t len, size_t *olen) {
 		// XNetRandom devuelve 0 si falla o la cantidad de bytes generados
 		// En el XDK, suele llenar el buffer directamente.
@@ -300,14 +300,26 @@ std::string CurlClient::escape(const std::string& text) {
 	}
 #endif
 
-// Callback estático para recibir datos
+// Callback estatico para recibir datos
 std::size_t CurlClient::WriteCallback(void *contents, std::size_t size, std::size_t nmemb, void *userp) {
+    /* NULL check defensivo: si por alguna razon userp llega NULL,
+     * derreferenciarlo causaria access violation reading 0x00000010
+     * (el offset de los miembros internos de std::string en MSVC2010).
+     * Hemos visto crashes con esta firma; aqui devolvemos 0 para que
+     * curl marque la transferencia como fallida en vez de crashear. */
+    if (!userp) {
+        LOG_ERROR("WriteCallback: userp is NULL, aborting transfer");
+        return 0;
+    }
+    if (!contents || size == 0 || nmemb == 0) {
+        return 0;
+    }
     size_t totalSize = size * nmemb;
     ((std::string*)userp)->append((char*)contents, totalSize);
     return totalSize;
 }
 
-// Callback estático para el progreso
+// Callback estatico para el progreso
 int CurlClient::ProgressCallback(void* clientp, double dltotal, double dlnow, double ultotal, double ulnow) {
 	// En VS2010 leemos el flag con Interlocked
     if (InterlockedExchangeAdd(&g_abortScrapping, 0) == 1) {
@@ -321,10 +333,10 @@ int CurlClient::ProgressCallback(void* clientp, double dltotal, double dlnow, do
     return 0;
 }
 
-// Esta función se ejecuta después de socket() pero antes de connect()
+// Esta funcion se ejecuta despues de socket() pero antes de connect()
 int CurlClient::curl_sockopt_callback(void *clientp, curl_socket_t curlfd, curlsocktype purpose) {
 	DWORD bypass = 1;
-	// Aplicamos el parche mágico de Xbox 360
+	// Aplicamos el parche magico de Xbox 360
 	if (setsockopt(curlfd, SOL_SOCKET, 0x5801, (char*)&bypass, sizeof(bypass)) != 0) {
 		LOG_DEBUG("Error aplicando bypass en socket de cURL\n");
 	}
@@ -336,14 +348,14 @@ int CurlClient::debug_callback(CURL *handle, curl_infotype type,
     (void)handle; (void)userptr;
     
     if(type == CURLINFO_TEXT || type == CURLINFO_HEADER_IN || type == CURLINFO_HEADER_OUT) {
-        // En Xbox 360, mejor imprimir trozos pequeños para no saturar el bus de debug
+        // En Xbox 360, mejor imprimir trozos pequenyos para no saturar el bus de debug
         char buffer[128]; 
         size_t copySize = (size > 128) ? 128 : size;
         
         memcpy(buffer, data, copySize);
         buffer[copySize - 1] = '\0';
         
-        // Solo imprimir si hay contenido real para no saturar el canal de comunicación XDK
+        // Solo imprimir si hay contenido real para no saturar el canal de comunicacion XDK
         if (copySize > 0) {
 			LOG_DEBUG("CURL: %s", buffer);
         }

@@ -103,7 +103,7 @@ struct private_yuvhwdata {
 	Uint8 *planes[3];
 };
 
- // Declaraci�n global (debe ser un puntero a punteros)
+ // Declaracion global (debe ser un puntero a punteros)
 IDirect3DPixelShader9** pixelShaders = NULL;
 
 int have_vertexbuffer=0;
@@ -148,7 +148,7 @@ static const CHAR* g_strGradientShader =
     "                                                          \n"
     "struct VS_OUT                                             \n"
     "{                                                         \n"
-    "   float4 Position : POSITION;                            \n" // En vs_3_0 POSITION es v�lido
+    "   float4 Position : POSITION;                            \n" // En vs_3_0 POSITION es valido
     "   float2 UV       : TEXCOORD0;                           \n"
     "};                                                        \n"
     "                                                          \n"
@@ -166,19 +166,19 @@ static const CHAR* g_strGradientShader =
 /*const char* g_strPixelShaderProgram =
     " struct PS_IN                                 "
     " {                                            "
-    "     float2 TexCoord : TEXCOORD0;             " // TEXCOORD0 para coincidir con VS
+    "     float2 TexCoord : TEXCOORD0;             " 
     " };                                           "
     "                                              "
-    " sampler2D detail : register(s0);             " // Definici�n expl�cita de sampler2D
+    " sampler2D detail : register(s0);             " 
     "                                              "
-    " float4 main( PS_IN In ) : COLOR0             " // ps_3_0 usa COLOR0 como salida
+    " float4 main( PS_IN In ) : COLOR0             " 
     " {                                            "
     "     return tex2D( detail, In.TexCoord );     "
     " }     ";
 */
 
 const char* g_strPixelShaderProgram =
-    " float fFilterType : register(c0);            " // El par�metro vive aqu�
+    " float fFilterType : register(c0);            "
     "                                              "
     " struct PS_IN                                 "
     " {                                            "
@@ -743,20 +743,19 @@ SDL_Surface *XBOX_SetVideoMode(_THIS, SDL_Surface *current,
             
     }
  
-	// 3. Cambio en la compilaci�n del Vertex Shader: vs_2_0 -> vs_3_0
     if( NULL == g_pGradientVertexShader )
     {
         ID3DXBuffer* pShaderCode;
         if( SUCCEEDED( D3DXCompileShader( g_strGradientShader, (UINT)strlen( g_strGradientShader ),
                                        NULL, NULL, "GradientVertexShader", 
-                                       "vs_2_0", 0, // Cambiado a 3.0
+                                       "vs_2_0", 0, 
                                        &pShaderCode, NULL, NULL ) ) )
         {
             IDirect3DDevice9_CreateVertexShader(D3D_Device, (DWORD*)pShaderCode->lpVtbl->GetBufferPointer(pShaderCode), &g_pGradientVertexShader);
         }
     }
  	 
-// 4. Correcci�n de llamadas a la API (Usar los m�todos del Device correctamente)
+// 4. Correccion de llamadas a la API (Usar los metodos del Device correctamente)
     /* Release previous vertex buffer if re-setting video mode */
     if (vertexBuffer != NULL) {
         IDirect3DVertexBuffer9_Release(vertexBuffer);
@@ -1224,19 +1223,19 @@ HRESULT CreateShader(const char* source, IDirect3DPixelShader9** target) {
     hash = XBOX_HashShaderSource(source);
     cachedCode = XBOX_LoadCachedShader(hash, &cachedSize);
     if (cachedCode) {
-        OutputDebugString("  -> loaded from cache\n");
+        //OutputDebugString("  -> loaded from cache\n");
         hr = IDirect3DDevice9_CreatePixelShader(D3D_Device, cachedCode, target);
         free(cachedCode);
         return hr;
     }
 
     /* Cache miss: compile from source */
-    OutputDebugString("  -> compiling from source...\n");
+    //OutputDebugString("  -> compiling from source...\n");
     hr = D3DXCompileShader(source, (UINT)strlen(source), NULL, NULL, "main", "ps_3_0", 0, &pCode, &pError, NULL);
 
     if (FAILED(hr)) {
         if (pError) {
-            OutputDebugString((char*)pError->lpVtbl->GetBufferPointer(pError));
+            //OutputDebugString((char*)pError->lpVtbl->GetBufferPointer(pError));
             pError->lpVtbl->Release(pError);
         }
         *target = NULL;
@@ -1299,24 +1298,24 @@ static void XBOX_InitLUTTextures(void)
 {
     if (!g_hq2x_lut) {
         g_hq2x_lut = XBOX_CreateLUTTexture(hq2x_lut_data, HQ2X_LUT_WIDTH, HQ2X_LUT_HEIGHT);
-        if (g_hq2x_lut)
-            OutputDebugString("HQ2x LUT texture created (256x64)\n");
-        else
-            OutputDebugString("ERROR: Failed to create HQ2x LUT texture\n");
+        //if (g_hq2x_lut)
+            //OutputDebugString("HQ2x LUT texture created (256x64)\n");
+        //else
+        //    OutputDebugString("ERROR: Failed to create HQ2x LUT texture\n");
     }
     if (!g_hq3x_lut) {
         g_hq3x_lut = XBOX_CreateLUTTexture(hq3x_lut_data, HQ3X_LUT_WIDTH, HQ3X_LUT_HEIGHT);
-        if (g_hq3x_lut)
-            OutputDebugString("HQ3x LUT texture created (256x144)\n");
-        else
-            OutputDebugString("ERROR: Failed to create HQ3x LUT texture\n");
+        //if (g_hq3x_lut)
+        //    OutputDebugString("HQ3x LUT texture created (256x144)\n");
+        //else
+        //    OutputDebugString("ERROR: Failed to create HQ3x LUT texture\n");
     }
     if (!g_hq4x_lut) {
         g_hq4x_lut = XBOX_CreateLUTTexture(hq4x_lut_data, HQ4X_LUT_WIDTH, HQ4X_LUT_HEIGHT);
-        if (g_hq4x_lut)
-            OutputDebugString("HQ4x LUT texture created (256x256)\n");
-        else
-            OutputDebugString("ERROR: Failed to create HQ4x LUT texture\n");
+        //if (g_hq4x_lut)
+        //    OutputDebugString("HQ4x LUT texture created (256x256)\n");
+        //else
+        //    OutputDebugString("ERROR: Failed to create HQ4x LUT texture\n");
     }
 }
 
@@ -1337,21 +1336,21 @@ void initShaders() {
     /* 0=Nearest, 1=Bilinear, 2=Scanlines, 3=CRT, 4=HQ2x, 5=HQ3x, 6=HQ4x */
     pixelShaders = (IDirect3DPixelShader9**) calloc(NUM_EFFECTS, sizeof(IDirect3DPixelShader9*));
 
-    OutputDebugString("initShaders: compiling Nearest (Normal)...\n");
+    //OutputDebugString("initShaders: compiling Nearest (Normal)...\n");
 	CreateShader(g_strShaderNormalSource,      &pixelShaders[0]);
-    OutputDebugString("initShaders: compiling Bilinear (Normal)...\n");
+    //OutputDebugString("initShaders: compiling Bilinear (Normal)...\n");
 	CreateShader(g_strShaderNormalSource,      &pixelShaders[1]); 
-    OutputDebugString("initShaders: compiling Scanlines...\n");
+    //OutputDebugString("initShaders: compiling Scanlines...\n");
     CreateShader(g_strShaderScanlinesSource,   &pixelShaders[2]);
-    OutputDebugString("initShaders: compiling CRT...\n");
+    //OutputDebugString("initShaders: compiling CRT...\n");
     CreateShader(g_strShaderCRTSource,         &pixelShaders[3]);
-    OutputDebugString("initShaders: compiling HQ2x...\n");
+    //OutputDebugString("initShaders: compiling HQ2x...\n");
     CreateShader(g_strShaderHQ2xSource,        &pixelShaders[4]);
-    OutputDebugString("initShaders: compiling HQ3x...\n");
+    //OutputDebugString("initShaders: compiling HQ3x...\n");
     CreateShader(g_strShaderHQ3xSource,        &pixelShaders[5]);
-    OutputDebugString("initShaders: compiling HQ4x...\n");
+    //OutputDebugString("initShaders: compiling HQ4x...\n");
     CreateShader(g_strShaderHQ4xSource,        &pixelShaders[6]);
-    OutputDebugString("initShaders: all 7 shaders compiled.\n");
+    //OutputDebugString("initShaders: all 7 shaders compiled.\n");
 	// Create pixel shader.
 	g_pPixelShader = pixelShaders[0];
 	XBOX_SetVideoFilter(0);
@@ -1363,7 +1362,7 @@ void destroyShaders() {
 
     for (i = 0; i < NUM_EFFECTS; i++) {
         if (pixelShaders[i] != NULL) {
-            // En el XDK, si es un archivo .c, usa esta l�nea:
+            // En el XDK, si es un archivo .c, usa esta linea:
             IDirect3DPixelShader9_Release(pixelShaders[i]);
             
             // Si es un archivo .cpp, usa esta:

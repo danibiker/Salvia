@@ -13,7 +13,7 @@
 enum MEDIA_TYPES { MEDIA_TITLE = 0, MEDIA_SS, MEDIA_BOX, MEDIA_MAX };
 enum ASSETS_TYPES { ASSETS_TITLE = 0, ASSETS_SS, ASSETS_BOX, ASSETS_SINOPSIS, ASSETS_MAX};
 enum ABORT_TYPE {ABORT_NONE, ABORT_LIMIT_CUOTA, ABORT_SCRAP_END, ABORT_MAX};
-// Solo anunciamos que el array existe en alg�n lugar
+// Solo anunciamos que el array existe en algun lugar
 extern const char *MEDIAS_TO_FIND[];
 extern const char *ASSETS_DIR[];
 

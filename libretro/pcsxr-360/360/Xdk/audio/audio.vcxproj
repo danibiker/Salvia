@@ -443,6 +443,7 @@
       <AssemblerListingLocation>$(IntDir)$(ProjectName)\</AssemblerListingLocation>
       <ObjectFileName>$(IntDir)$(ProjectName)\</ObjectFileName>
       <ProgramDataBaseFileName>$(IntDir)$(ProjectName)\vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+      <AdditionalIncludeDirectories>$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">

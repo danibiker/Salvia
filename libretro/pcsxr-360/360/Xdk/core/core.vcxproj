@@ -454,7 +454,7 @@
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <AdditionalIncludeDirectories>../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;../../lib/libchdr/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;../../lib/libchdr/include;$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>

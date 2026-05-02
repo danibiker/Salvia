@@ -458,7 +458,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <AdditionalIncludeDirectories>../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
       <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -530,16 +530,6 @@
     <ClCompile Include="bram.cpp" />
     <ClCompile Include="video_stub.cpp" />
     <ClCompile Include="libretro_core.cpp" />
-    <ClCompile Include="xb_sys.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='debug_cc|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='debug_cc_optimised|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Opt|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
-    </ClCompile>
     <ClCompile Include="..\..\common\sys\time.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
@@ -553,7 +543,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="xb_sys.h" />
     <ClInclude Include="..\..\common\sys\mman.h" />
     <ClInclude Include="..\..\common\sys\time.h" />
     <ClInclude Include="bram.h" />

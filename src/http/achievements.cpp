@@ -40,10 +40,173 @@ extern "C" {
 void clearBadgeCache();
 static const std::string SALVIA_USER_AGENT = "Salvia/1.0";
 
+/* ======================================================================
+ * AchievementsWorker â€” implementacion
+ * ====================================================================== */
+
+AchievementsWorker::AchievementsWorker()
+    : m_thread(NULL), m_event(NULL), m_mutex(NULL), m_stop(false), m_started(false)
+{
+}
+
+AchievementsWorker::~AchievementsWorker()
+{
+    stop();
+}
+
+void AchievementsWorker::start()
+{
+    if (m_started) return;
+
+    m_stop    = false;
+    m_mutex   = SDL_CreateMutex();
+    m_event   = CreateEvent(NULL, FALSE /*auto-reset*/, FALSE /*non-signaled*/, NULL);
+    m_thread  = CreateThread(NULL, 0, &AchievementsWorker::WorkerProc, this, CREATE_SUSPENDED, NULL);
+
+    if (!m_thread) {
+        LOG_ERROR("AchievementsWorker: CreateThread FAILED, jobs will run inline");
+        if (m_event)  { CloseHandle(m_event);     m_event = NULL; }
+        if (m_mutex)  { SDL_DestroyMutex(m_mutex); m_mutex = NULL; }
+        return;
+    }
+
+    /* IO_THREAD = core 2; below normal para no robarle ciclos al emulador. */
+    XSetThreadProcessor(m_thread, IO_THREAD);
+    SetThreadPriority(m_thread, THREAD_PRIORITY_BELOW_NORMAL);
+    ResumeThread(m_thread);
+
+    m_started = true;
+    LOG_DEBUG("AchievementsWorker: started");
+}
+
+void AchievementsWorker::stop()
+{
+    if (!m_started) return;
+
+    /* Senyalizar fin y despertar al thread por si esta esperando. */
+    m_stop = true;
+    if (m_event) SetEvent(m_event);
+
+    /* Esperar a que termine de procesar / drenar.  Timeout defensivo:
+     * 10 segundos es de sobra para terminar lo que tenga en cola.  Si
+     * por algun motivo se atasca (HTTP request bloqueada en TCP, DNS
+     * lento), no podemos forzar â€” TerminateThread no esta disponible
+     * en el XDK de Xbox 360.  Loggeamos el caso y dejamos el thread
+     * vivo; cuando la HTTP request termine eventualmente, el thread
+     * vera m_stop=true en la siguiente iteracion y saldra solo.  El OS
+     * limpiara recursos cuando la app se cierre. */
+    DWORD wait_result = WaitForSingleObject(m_thread, 10000);
+    if (wait_result == WAIT_TIMEOUT) {
+        LOG_ERROR("AchievementsWorker: thread did not exit in 10s, leaving it running");
+    }
+    CloseHandle(m_thread);
+    m_thread = NULL;
+
+    if (m_event)  { CloseHandle(m_event);     m_event = NULL; }
+    if (m_mutex)  { SDL_DestroyMutex(m_mutex); m_mutex = NULL; }
+
+    /* Si quedaron jobs en cola (timeout), los descartamos.  Idealmente
+     * no llega aqui con nada â€” son notificaciones perdidas a peor caso. */
+    m_queue.clear();
+    m_started = false;
+    LOG_DEBUG("AchievementsWorker: stopped");
+}
+
+void AchievementsWorker::enqueue(ach_job_fn fn, LPVOID data)
+{
+    if (!fn) {
+        if (data) LOG_ERROR("AchievementsWorker::enqueue: null fn, leaking data");
+        return;
+    }
+
+    /* Si el worker no arranco (CreateThread fallo en start), ejecutar
+     * inline como fallback â€” es lo que hacia el codigo viejo en error
+     * path, mejor degradar a sincrono que dropear el job. */
+    if (!m_started) {
+        LOG_DEBUG("AchievementsWorker::enqueue: worker not started, running inline");
+        fn(data);
+        return;
+    }
+
+    AchJob j;
+    j.fn   = fn;
+    j.data = data;
+
+    {
+        ScopedLock lock(m_mutex);
+        m_queue.push_back(j);
+    }
+    SetEvent(m_event);
+}
+
+DWORD WINAPI AchievementsWorker::WorkerProc(LPVOID self_ptr)
+{
+    AchievementsWorker* self = static_cast<AchievementsWorker*>(self_ptr);
+    self->run();
+    return 0;
+}
+
+void AchievementsWorker::run()
+{
+    while (!m_stop) {
+        /* Wait con timeout corto para detectar m_stop sin estar siempre
+         * despiertos.  Cuando hay job, SetEvent nos despierta inmediato. */
+        WaitForSingleObject(m_event, 250);
+
+        for (;;) {
+            AchJob job;
+            job.fn   = NULL;
+            job.data = NULL;
+
+            {
+                ScopedLock lock(m_mutex);
+                if (!m_queue.empty()) {
+                    job = m_queue.front();
+                    m_queue.pop_front();
+                }
+            }
+            if (!job.fn) break;
+
+            /* La funcion del job hace su trabajo y libera job.data con
+             * delete.  Si lanza excepcion C++, no la atrapamos: en este
+             * codigo no se usan exceptions y el SDK XDK no las maneja
+             * bien, asi que un throw aqui crashearia â€” preferible que
+             * los jobs sean robustos. */
+            job.fn(job.data);
+        }
+    }
+
+    /* Drain final: si stop() nos pidio cerrar pero hay jobs pendientes,
+     * los procesamos antes de salir.  Si tarda mas de 10s, stop() hara
+     * TerminateThread (lo cual perderia datos en cola, asumido). */
+    for (;;) {
+        AchJob job;
+        job.fn   = NULL;
+        job.data = NULL;
+
+        {
+            ScopedLock lock(m_mutex);
+            if (!m_queue.empty()) {
+                job = m_queue.front();
+                m_queue.pop_front();
+            }
+        }
+        if (!job.fn) break;
+        job.fn(job.data);
+    }
+}
+
+/* ======================================================================
+ * Achievements
+ * ====================================================================== */
+
 void Achievements::initialize() {
 	if (g_client) return;
 	createDbAchievements();
 	progressMutex = SDL_CreateMutex();
+
+	/* Arrancar el worker thread persistente para todos los jobs async. */
+	worker.start();
 
 	// Creamos el cliente pasando la funcion de lectura de memoria
 	g_client = rc_client_create(read_memory, server_call);
@@ -77,6 +240,12 @@ void Achievements::shutdown() {
 			delete gameState;
 			gameState = NULL;
 		}
+
+		/* Parar el worker ANTES de destruir el cliente: jobs en cola
+		 * que llamen a callbacks de rcheevos (server_call -> data->callback)
+		 * podrian acceder a g_client si lo destruimos primero.  Tras
+		 * stop() la cola esta drenada y no hay threads vivos. */
+		worker.stop();
 
 		rc_client_destroy(g_client);
 		g_client = NULL;
@@ -113,8 +282,21 @@ void Achievements::clearAllData(){
 DWORD WINAPI ServerThreadFunction(LPVOID lpParam) {
 	ServerCallData* data = (ServerCallData*)lpParam;
 
+	/* Defensiva: si el job nos llega con data NULL, no podemos hacer
+	 * absolutamente nada â€” rcheevos espera una callback pero no podemos
+	 * recuperar el callback ni la URL.  Retornamos limpio para que el
+	 * worker no crashee. */
+	if (!data) {
+		LOG_ERROR("ServerThread: lpParam is NULL, dropping request");
+		return 0;
+	}
+
 	CurlClient curlClient;
 	float progress = 0;
+
+	LOG_DEBUG("ServerThread: starting %s (%s)",
+	          data->post_data.empty() ? "GET" : "POST",
+	          data->url.c_str());
 
 	// Ejecutamos la peticion
 	bool success = false;
@@ -124,6 +306,10 @@ DWORD WINAPI ServerThreadFunction(LPVOID lpParam) {
 		success = curlClient.fetchUrl(data->url, data->response, &progress);
 	}
 
+	LOG_DEBUG("ServerThread: HTTP done, success=%d, response=%u bytes",
+	          success ? 1 : 0,
+	          (unsigned)data->response.length());
+
 	// Preparamos la respuesta para la libreria
 	rc_api_server_response_t server_response;
 	memset(&server_response, 0, sizeof(server_response));
@@ -131,8 +317,20 @@ DWORD WINAPI ServerThreadFunction(LPVOID lpParam) {
 	server_response.body_length = data->response.length();
 	server_response.http_status_code = success ? 200 : 500;
 
-	// Ejecutamos el callback
-	data->callback(&server_response, data->callback_data);
+	/* Antes de invocar la callback de rcheevos, verificar que sigue
+	 * siendo valida.  Si el cliente RA fue destruido (no deberia pasar
+	 * porque el worker se para antes que rc_client_destroy, pero
+	 * defensiva), hacer la callback accederia a memoria liberada. */
+	if (!data->callback) {
+		LOG_ERROR("ServerThread: callback is NULL, skipping rcheevos notify");
+	} else {
+		LOG_DEBUG("ServerThread: invoking rcheevos callback (cb=%p, ctx=%p)",
+		          (void*)data->callback,
+		          (void*)data->callback_data);
+		// Ejecutamos el callback
+		data->callback(&server_response, data->callback_data);
+		LOG_DEBUG("ServerThread: callback returned");
+	}
 
 	// Limpiamos la memoria de la estructura y cerramos
 	delete data;
@@ -172,7 +370,7 @@ void clearBadgeCache() {
     Achievements* ach = Achievements::instance();
     if (!ach) return;
 	ach->badgeCache.clear();
-    LOG_DEBUG("Cache de badges limpiada con éxito");
+    LOG_DEBUG("Cache de badges limpiada con exito");
 }
 
 DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
@@ -232,16 +430,16 @@ DWORD WINAPI ChallengeIndicatorThread(LPVOID lpParam) {
     int badgeW, badgeH, badgePad, line_height;
     Fonts::getBadgeSize(badgeW, badgeH, badgePad, line_height);
     
-    // Asumimos que esta función devuelve la superficie ya procesada
+    // Asumimos que esta funcion devuelve la superficie ya procesada
     self.download_and_cache_image(data->badgeUrl, data->id, temp_badge, badgeW, badgeH);
 
-    // 2. Integración en la estructura th_challenge (Thread-Safe)
+    // 2. Integracion en la estructura th_challenge (Thread-Safe)
     challenge_data existing;
     if (self.challenges.find(data->id, existing)) {
-        // Si ya existía (porque alguien llamó a hide() antes de que terminara la descarga)
+        // Si ya existai (porque alguien llamo a hide() antes de que terminara la descarga)
         if (existing.pending_hide) {
             existing.active = false;
-            existing.pending_hide = false; // Ya hemos procesado la cancelación
+            existing.pending_hide = false; // Ya hemos procesado la cancelacion
         } else {
             existing.active = true;
         }
@@ -273,8 +471,8 @@ DWORD WINAPI ProgressIndicatorThread(LPVOID lpParam) {
     // 1. DESCARGA (Fuera del mutex para no bloquear el renderizado)
     self.download_and_cache_image(data->badgeUrl, data->id, tempBadge, badgeW, badgeH);
 
-    // 2. ACTUALIZACIÓN ATÓMICA
-    // El método update se encarga del ScopedLock internamente
+    // 2. ACTUALIZACION ATOMICA
+    // El metodo update se encarga del ScopedLock internamente
     self.progress.update(data->id, data->measured_progress, tempBadge);
 
     delete data;
@@ -286,6 +484,93 @@ void Achievements::login(const char* username, const char* password) {
 	if (!g_client) initialize();
 	LOG_DEBUG("RetroAchievements: Intentando login para %s...", username);
 	rc_client_begin_login_with_password(g_client, username, password, login_callback, this);
+}
+
+/* Resuelve la ruta absoluta del primer fichero referenciado por un .cue
+ * (FILE "xxx.bin" BINARY).  Devuelve string vacio si el cue no se puede
+ * abrir, no contiene un FILE valido, o el FILE resuelto no existe.
+ *
+ * Por que esto y no dejar que rcheevos parsee el cue:
+ *   El cdreader interno de rcheevos parsea cues en la mayoria de plataformas,
+ *   pero el path del .bin directo siempre funciona en Xbox 360 (cdreader_open_bin_track
+ *   autodetecta el sector size por modulo del file size).  Convertir el .cue a
+ *   .bin antes de llamar a rc_hash_generate_from_file evita cualquier quirk del
+ *   parser de cue (encoding, line endings, casing) y hace el path identico al
+ *   de un .bin directo, que el usuario ha confirmado funciona perfecto.
+ *
+ * Asunciones:
+ *   - El .cue es ASCII estandar (CDmage, ImgBurn, etc.).
+ *   - El primer FILE es la pista de datos (track 1), que es siempre el caso en PSX.
+ *   - El bin name dentro del cue es relativo al directorio del cue (caso comun)
+ *     o ya absoluto (raro, pero el resolver lo respeta si parece serlo). */
+static std::string resolveFirstFileFromCue(const std::string& cuePath) {
+	FILE* f = fopen(cuePath.c_str(), "rb");
+	if (!f) {
+		LOG_DEBUG("RetroAchievements: cannot open cue %s", cuePath.c_str());
+		return "";
+	}
+
+	std::string fileName;
+	char line[1024];
+	while (fgets(line, sizeof(line), f)) {
+		char* p = line;
+		while (*p == ' ' || *p == '\t') ++p;
+
+		/* Match "FILE " case-insensitive (ASCII).  El truco | 0x20 baja a
+		 * lowercase letras A-Z; otros bytes no se ven afectados de forma
+		 * que cambien el resultado del compare con minusculas. */
+		if (((p[0] | 0x20) == 'f') && ((p[1] | 0x20) == 'i') &&
+		    ((p[2] | 0x20) == 'l') && ((p[3] | 0x20) == 'e') &&
+		    (p[4] == ' ' || p[4] == '\t')) {
+			p += 5;
+			while (*p == ' ' || *p == '\t') ++p;
+
+			char* start;
+			char* end;
+			if (*p == '"') {
+				++p;
+				start = p;
+				end = strchr(p, '"');
+				if (!end) break;  /* malformed: no closing quote */
+			} else {
+				start = p;
+				end = p;
+				while (*end && *end != ' ' && *end != '\t' && *end != '\r' && *end != '\n')
+					++end;
+			}
+			if (end > start)
+				fileName.assign(start, end - start);
+			break;
+		}
+	}
+	fclose(f);
+
+	if (fileName.empty()) {
+		LOG_DEBUG("RetroAchievements: cue %s sin FILE", cuePath.c_str());
+		return "";
+	}
+
+	/* Si el nombre dentro del cue ya parece absoluto (contiene ':' como en
+	 * 'game:\path\file.bin' o 'D:\...'), respetarlo; si no, resolver
+	 * relativo al directorio del cue. */
+	std::string resolved;
+	if (fileName.find(':') != std::string::npos) {
+		resolved = fileName;
+	} else {
+		size_t lastSep = cuePath.find_last_of("\\/");
+		std::string dir = (lastSep == std::string::npos) ? "" : cuePath.substr(0, lastSep + 1);
+		resolved = dir + fileName;
+	}
+
+	/* Verificar que el fichero existe y es legible. */
+	FILE* test = fopen(resolved.c_str(), "rb");
+	if (!test) {
+		LOG_DEBUG("RetroAchievements: cue %s -> '%s' no existe", cuePath.c_str(), resolved.c_str());
+		return "";
+	}
+	fclose(test);
+
+	return resolved;
 }
 
 void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string path, uint32_t console_id, th_messages& messagesAchievement) {
@@ -345,18 +630,55 @@ void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string pa
 			// Manejar error: No se pudo generar hash del CHD
 			delete ctx;
 		}
-	} else 
-#endif		
+	} else
+#endif
+	{
+		/* Restablecer el lector de CD por defecto.  CHDHashed::InitSystems() registra
+		 * globalmente un lector CHD-only via rc_hash_init_chd_cdreader(); una vez
+		 * activado, queda persistente y rompe rc_hash_generate_from_file() para
+		 * .cue/.bin/.iso/.toc/.ccd/.mds porque chd_open() falla en archivos no-CHD.
+		 * Sintoma: tras cargar cualquier .chd en la sesion, las cargas posteriores
+		 * de .cue/.bin no detectan logros aunque el hash deberia poder calcularse.
+		 * Cores ROM-based (NES, SNES, Genesis, GBA...) van por la rama del rom buffer
+		 * y no tocan el cdreader, asi que esta linea no afecta a su flujo. */
+		rc_hash_init_default_cdreader();
+
 		// CASO NORMAL: ROM en memoria
 		if (rom != NULL && rom_size > 0) {
 			rc_client_begin_identify_and_load_game(g_client, console_id, NULL, rom, rom_size, load_game_callback, (void*)ctx);
-		} 
+		}
 		// CASO: Archivo plano
 		else if (!path.empty()) {
-			if (rc_hash_generate_from_file(romHash, console_id, path.c_str())) {
-				rc_client_begin_load_game(g_client, romHash, load_game_callback, (void*)ctx);
+			/* Si nos llega un .cue, resolver el primer FILE referenciado y pasar
+			 * ESE path a rcheevos en su lugar.  cdreader_open_bin_track maneja
+			 * .bin/.iso de forma uniforme y autodetecta sector size, mientras
+			 * que confiar en el parser de cue interno tiene quirks que han
+			 * dejado este flujo roto en Xbox 360. */
+			std::string hashPath = path;
+			std::string lowPathLocal = path;
+			Constant::lowerCase(&lowPathLocal);
+			if (lowPathLocal.size() >= 4 &&
+			    lowPathLocal.compare(lowPathLocal.size() - 4, 4, ".cue") == 0) {
+				std::string resolved = resolveFirstFileFromCue(path);
+				if (!resolved.empty()) {
+					LOG_DEBUG("RetroAchievements: cue %s -> %s", path.c_str(), resolved.c_str());
+					hashPath = resolved;
+				}
+				/* Si la resolucion falla, dejamos hashPath = path original; rcheevos
+				 * intentara su parser interno como ultimo recurso. */
 			}
+
+			if (rc_hash_generate_from_file(romHash, console_id, hashPath.c_str())) {
+				rc_client_begin_load_game(g_client, romHash, load_game_callback, (void*)ctx);
+			} else {
+				LOG_DEBUG("RetroAchievements: rc_hash_generate_from_file fallo para %s (console=%u)",
+				          hashPath.c_str(), console_id);
+				delete ctx;
+			}
+		} else {
+			delete ctx;
 		}
+	}
 }
 
 // --- CALLBACKS ---
@@ -380,7 +702,10 @@ void Achievements::login_callback(int result, const char* error_message, rc_clie
 
 void Achievements::load_game_callback(int result, const char* error_message, rc_client_t* client, void* userdata)
 {
-	LOG_DEBUG("load_game_callback");
+	LOG_DEBUG("load_game_callback: result=%d (%s) error=%s",
+	          result,
+	          result == RC_OK ? "RC_OK" : "ERROR",
+	          error_message ? error_message : "(none)");
 	// Creamos el paquete de datos
 	LoadGameThreadData* data = new LoadGameThreadData();
 	data->result = result;
@@ -388,14 +713,10 @@ void Achievements::load_game_callback(int result, const char* error_message, rc_
 	data->client = client;
 	data->userdata = userdata;
 
-	// Lanzamos el hilo
-	HANDLE hThread = CreateThread(NULL, 0, LoadGameThreadFunction, (LPVOID)data, CREATE_SUSPENDED, NULL);
-
-	if (hThread) {
-		Constant::setup_and_run_thread(hThread, CPU_THREAD);
-	} else {
-		delete data; // Limpieza en caso de error
-	}
+	/* Encolamos en el worker en lugar de crear un thread nuevo.  Patron
+	 * antiguo (CreateThread fire-and-forget) acumulaba threads por carga
+	 * y agotaba handles del kernel tras varias cargas consecutivas. */
+	Achievements::instance()->worker.enqueue(LoadGameThreadFunction, (LPVOID)data);
 }
 
 /* ---------- build_memory_map ----------
@@ -634,7 +955,7 @@ void Achievements::leaderboard_tracker_hide(const rc_client_leaderboard_tracker_
 void Achievements::create_tracker(uint32_t id, const char* display) {
     LOG_DEBUG("Creando tracker: %d - %s", id, display);
     // Accedemos directamente a la referencia en el mapa. 
-    // Si no existe, std::map la crea automáticamente.
+    // Si no existe, std::map la crea automaticamente.
     tracker_data data(id, display);
 	trackers.add(id, data);
     LOG_DEBUG("Tracker creado: %d - %s", id, display);
@@ -647,24 +968,20 @@ void Achievements::destroy_tracker(uint32_t id) {
 
 void Achievements::challenge_indicator_show(const rc_client_achievement_t* achievement)
 {
-	LOG_DEBUG("Showing challenge: %d - %s", achievement->id, achievement->title);
 	if (!achievement) return;
+	LOG_DEBUG("Showing challenge: %d - %s", achievement->id, achievement->title);
 
-	Achievements& self = *Achievements::instance();
-    // Reservamos memoria para los datos que usara el hilo
+    // Reservamos memoria para los datos que usara el job
     ChallengeThreadData* data = new ChallengeThreadData();
     data->id = achievement->id;
-	data->badgeName = achievement->badge_name; 
+	data->badgeName = achievement->badge_name;
     data->badgeUrl = achievement->badge_url;
 
-    // Lanzamos el hilo de Windows
-    HANDLE hThread = CreateThread(NULL, 0, ChallengeIndicatorThread, (LPVOID)data, CREATE_SUSPENDED, NULL);
-    
-    if (hThread) {
-		Constant::setup_and_run_thread(hThread, CPU_THREAD);
-    } else {
-        delete data; // Si falla el hilo, limpiamos para evitar leak
-    }
+    /* Encolar en el worker (un solo thread persistente) en lugar de
+     * crear un thread nuevo por cada llamada â€” el patron antiguo
+     * generaba decenas de threads concurrentes durante la carga del
+     * juego, agotando recursos del kernel. */
+    Achievements::instance()->worker.enqueue(ChallengeIndicatorThread, (LPVOID)data);
 }
 
 void Achievements::challenge_indicator_hide(const rc_client_achievement_t* achievement)
@@ -676,11 +993,11 @@ void Achievements::challenge_indicator_hide(const rc_client_achievement_t* achie
     
     // Intentamos marcar el reto para ocultar y limpiar
     if (!self->challenges.set_pending_hide(achievement->id)) {
-        // Si no existía (estaba descargando), creamos la entrada preventiva
+        // Si no existia (estaba descargando), creamos la entrada preventiva
         challenge_data c_data;
         c_data.id = achievement->id;
         c_data.active = false;
-        c_data.pending_hide = true; // El hilo de descarga verá esto y no lo activará
+        c_data.pending_hide = true; // El hilo de descarga vera esto y no lo activara
         c_data.badge = NULL;
         self->challenges.add(achievement->id, c_data);
     }
@@ -704,18 +1021,18 @@ void Achievements::progress_indicator_update(const rc_client_achievement_t* achi
     if (!achievement) return;
     Achievements* self = Achievements::instance();
 
-    // 1. COMPROBACIÓN RÁPIDA: ¿Ya tenemos la imagen en la caché global?
+    // 1. COMPROBACION RAPIDA: Ya tenemos la imagen en la cache global?
     SDL_Surface* cachedBadge = NULL;
-    // Asumo que tienes un método que busca en tu th_cache_image por nombre o ID
+    // Asumo que tienes un metodo que busca en tu th_cache_image por nombre o ID
 	if (self->badgeCache.find(achievement->id, cachedBadge)) {
         LOG_DEBUG("Progress update (Cache): %s", achievement->measured_progress);
         
-        // Si la imagen ya está, actualizamos directamente sin hilos
+        // Si la imagen ya esta, actualizamos directamente sin hilos
         self->progress.update(achievement->id, achievement->measured_progress, cachedBadge);
         return; 
     }
 
-    // 2. Si no está en caché, lanzamos el hilo (solo la primera vez o si falló antes)
+    // 2. Si no esta en cache, encolamos el job (solo la primera vez o si fallo antes)
     LOG_DEBUG("Progress update (Thread needed): %s", achievement->badge_url);
     ProgressThreadData* data = new ProgressThreadData();
     data->id = achievement->id;
@@ -723,12 +1040,7 @@ void Achievements::progress_indicator_update(const rc_client_achievement_t* achi
     data->badgeName = achievement->badge_name;
     data->badgeUrl = achievement->badge_url;
 
-    HANDLE hThread = CreateThread(NULL, 0, ProgressIndicatorThread, (LPVOID)data, CREATE_SUSPENDED, NULL);
-    if (hThread) {
-        Constant::setup_and_run_thread(hThread, CPU_THREAD);
-    } else {
-        delete data;
-    }
+    Achievements::instance()->worker.enqueue(ProgressIndicatorThread, (LPVOID)data);
 }
 
 std::string Achievements::format_total_playtime(){
@@ -749,7 +1061,7 @@ void Achievements::game_mastered(void)
 	snprintf(submessage, sizeof(submessage), "%s (%s)",
       rc_client_get_user_info(self->g_client)->display_name,
 	  Constant::formatPlayTime(self->updatePlayTime(self->game_id)).c_str());
-  
+
     // Creamos y rellenamos la estructura con copias de los strings
 	AchievementEventData* data = new AchievementEventData();
 	data->title = message;
@@ -758,13 +1070,7 @@ void Achievements::game_mastered(void)
 	data->badgeName = game->badge_name;
 	data->id = game->id;
 
-	// Lanzamos el hilo
-	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, CREATE_SUSPENDED, NULL);
-	if (hThread) {
-		Constant::setup_and_run_thread(hThread, CPU_THREAD);
-	} else {
-		delete data;
-	}
+	self->worker.enqueue(AchievementTriggeredThread, (LPVOID)data);
 }
 
 void Achievements::subset_completed(const rc_client_subset_t* subset)
@@ -772,14 +1078,14 @@ void Achievements::subset_completed(const rc_client_subset_t* subset)
 	char message[128], submessage[128];
 	Achievements* self = Achievements::instance();
 
-	snprintf(message, sizeof(message), "%s %s", 
+	snprintf(message, sizeof(message), "%s %s",
       rc_client_get_hardcore_enabled(self->g_client) ? LanguageManager::instance()->get("menu.achievement.mastered") : LanguageManager::instance()->get("menu.achievement.completed"),
       subset->title);
 
 	snprintf(submessage, sizeof(submessage), "%s (%s)",
       rc_client_get_user_info(self->g_client)->display_name,
 	  Constant::formatPlayTime(self->updatePlayTime(self->game_id)).c_str());
-  
+
     // Creamos y rellenamos la estructura con copias de los strings
 	AchievementEventData* data = new AchievementEventData();
 	data->title = message;
@@ -788,13 +1094,7 @@ void Achievements::subset_completed(const rc_client_subset_t* subset)
 	data->badgeName = subset->badge_name;
 	data->id = subset->id;
 
-	// Lanzamos el hilo
-	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, CREATE_SUSPENDED, NULL);
-	if (hThread) {
-		Constant::setup_and_run_thread(hThread, CPU_THREAD);
-	} else {
-		delete data;
-	}
+	self->worker.enqueue(AchievementTriggeredThread, (LPVOID)data);
 }
 
 void Achievements::server_error(const rc_client_server_error_t* error)
@@ -827,13 +1127,7 @@ void Achievements::achievement_update(rc_client_achievement_t* achievement){
 	data->id = achievement->id;
 
 	LOG_DEBUG("Trigering achievement %s", data->title.c_str());
-	// Lanzamos el hilo
-	HANDLE hThread = CreateThread(NULL, 0, AchievementTriggeredThread, (LPVOID)data, CREATE_SUSPENDED, NULL);
-	if (hThread) {
-		Constant::setup_and_run_thread(hThread, CPU_THREAD);
-	} else {
-		delete data;
-	}
+	Achievements::instance()->worker.enqueue(AchievementTriggeredThread, (LPVOID)data);
 }
 
 
@@ -1095,19 +1389,39 @@ void Achievements::updateAchievements(rc_client_t* client)
 void Achievements::server_call(const rc_api_request_t* request,
 	rc_client_server_callback_t callback, void* callback_data, rc_client_t* client) {
 
-		// Reservamos memoria para los datos que usar el hilo
+		// Reservamos memoria para los datos que usara el thread
 		ServerCallData* data = new ServerCallData();
 		data->url = request->url ? request->url : "";
 		data->post_data = request->post_data ? request->post_data : "";
 		data->callback = callback;
 		data->callback_data = callback_data;
 
-		// Creamos el hilo
+		LOG_DEBUG("server_call: %s%s (post=%u bytes)",
+		          data->url.c_str(),
+		          data->post_data.empty() ? " [GET]" : " [POST]",
+		          (unsigned)data->post_data.length());
+
+		/* server_call usa CreateThread directo (NO el worker) por dos
+		 * razones:
+		 *
+		 *  1. rcheevos puede invocar callbacks anidadas: la callback
+		 *     `data->callback(...)` que ejecutamos al final puede llamar
+		 *     a su vez `server_call` de nuevo (ej. tras un login se piden
+		 *     achievements, leaderboards, etc).  Si todo fuese por el
+		 *     mismo worker single-thread, la callback anidada se quedaria
+		 *     bloqueada esperando que el job actual termine -> deadlock.
+		 *
+		 *  2. server_call se llama poco (handful de requests por sesion,
+		 *     no decenas como challenge_indicator_show).  No es la fuente
+		 *     del agotamiento de handles que motivo el refactor del worker.
+		 *
+		 * Por tanto este sitio sigue con el patron viejo de fire-and-forget. */
 		HANDLE hThread = CreateThread(NULL, 0, ServerThreadFunction, (LPVOID)data, CREATE_SUSPENDED, NULL);
 
 		if (hThread) {
-			Constant::setup_and_run_thread(hThread, CPU_THREAD);
+			Constant::setup_and_run_thread(hThread, IO_THREAD);
 		} else {
+			LOG_ERROR("server_call: CreateThread FAILED, request will silently drop");
 			delete data;
 		}
 }
@@ -1170,7 +1484,7 @@ bool Achievements::download_and_cache_image(std::string url, uint32_t idImage, S
     float progress = 0;
 	const char *c_url = url.c_str();
 
-	// 1. CONSULTA CACHÉ (Retornamos una referencia, no una copia nueva)
+	// 1. CONSULTA CACHE (Retornamos una referencia, no una copia nueva)
 	if (badgeCache.find(idImage, image)){
 		return true;
 	}
@@ -1191,7 +1505,7 @@ bool Achievements::download_and_cache_image(std::string url, uint32_t idImage, S
 			// En lugar de DisplayFormat, usamos ConvertSurface (Seguro en hilos)
 			finalSurface = SDL_ConvertSurface(rawImg, targetFormat, SDL_SWSURFACE);
         } else if (rawImg->w > 0 && rawImg->h > 0){
-            // Solo usamos rotozoom si el tamaño difiere
+            // Solo usamos rotozoom si el tamanyo difiere
             double zoomX = (double)badgeW / rawImg->w;
             double zoomY = (double)badgeH / rawImg->h;
             SDL_Surface* zoomed = rotozoomSurfaceXY(rawImg, 0, zoomX, zoomY, SMOOTHING_ON);
@@ -1206,7 +1520,7 @@ bool Achievements::download_and_cache_image(std::string url, uint32_t idImage, S
                          rawImg->format->Bmask, rawImg->format->Amask);
 			if (zoomed) {
 				SDL_Rect destRect = {0, 0, badgeW, badgeH};
-				// Esta función es órdenes de magnitud más rápida que rotozoom
+				// Esta funcion es ordenes de magnitud mas rapida que rotozoom
 				SDL_SoftStretch(rawImg, NULL, zoomed, &destRect);
 				finalSurface = SDL_DisplayFormat(zoomed);
 				SDL_FreeSurface(zoomed);
@@ -1214,7 +1528,7 @@ bool Achievements::download_and_cache_image(std::string url, uint32_t idImage, S
         }
         SDL_FreeSurface(rawImg);
 
-        // 4. GUARDADO EN CACHÉ
+        // 4. GUARDADO EN CACHE
         if (finalSurface != NULL) {
 			badgeCache.add(idImage, finalSurface);
             image = finalSurface;

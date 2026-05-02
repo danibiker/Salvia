@@ -22,9 +22,19 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 	LOG_DEBUG("Initiating engine\n");
 
 	#ifdef WIN
-		// 1. Activar la precisi�n de 1ms en el reloj de Windows
+		// 1. Activar la precision de 1ms en el reloj de Windows
 		timeBeginPeriod(1);
 		SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+	#endif
+
+	#ifdef _XBOX
+		// Pinear el main thread (Salvia + retro_run + dynarec PSX del core libretro) a HW thread 0.
+		// Razones:
+		//  - SMT partner (HW thread 1) idle: pipeline del core fisico 0 enteramente para el dynarec.
+		//  - No comparte L1/L2 con SPU (HW thread 3), GPU helper (HW thread 4) ni IO/HTTP (HW thread 5).
+		//  - Salvia ya arranca en HW thread 0 por defecto; el pin solo garantiza que el
+		//    dispatcher no migre el thread bajo presion, no cambia el patron de ejecucion.
+		XSetThreadProcessor(GetCurrentThread(), 0);
 	#endif
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {

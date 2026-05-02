@@ -27,6 +27,10 @@
 PcsxConfig Config;
 boolean NetOpened = FALSE;
 
+/* Set by EmuUpdate at VBlank; tested by the CPU execute loops to return
+ * control to retro_run for one-frame-per-call libretro semantics. */
+volatile int frame_done = 0;
+
 int Log = 0;
 FILE *emuLog = NULL;
 
@@ -52,9 +56,12 @@ void EmuShutdown() {
 }
 
 void EmuUpdate() {
-	// Do not allow hotkeys inside a softcall from HLE BIOS
-	if (!Config.HLE || !hleSoftCall )
-		SysUpdate();
+	/* Signal end-of-frame to the CPU execute loop (libretro single-thread
+	 * model).  Skip during HLE BIOS softcalls — historically SysUpdate
+	 * was guarded against re-entrant input polling there; we keep the
+	 * same gate so the frame yield only happens at "safe" VBlanks. */
+	if (!Config.HLE || !hleSoftCall)
+		frame_done = 1;
 
 	ApplyCheats();
 }

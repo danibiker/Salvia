@@ -25,6 +25,27 @@
 #ifndef __PSXCOMMON_H__
 #define __PSXCOMMON_H__
 
+/* PCSXR_NO_THREADING — modo "todo en el hilo principal".
+ *
+ * Si este define esta activo (definir = 1), la emulacion corre 100%
+ * single-threaded:
+ *   - El GPU helper thread (libpcsxcore/gpu.c, core 4) NO se crea.
+ *     Los gpuWriteDataMem/Read/UpdateLace ejecutan inline en el thread
+ *     que los llama (CPU PSX en retro_run).
+ *   - El SPU MAINThread (plugins/dfsound/spu.c, core 3) NO se crea.
+ *     Se fuerza iUseTimer=2 (polling) y SPU_async se llama desde
+ *     psxcounters.c cada N hsync, dentro del propio retro_run.
+ *
+ * Util como diagnostico cuando aparecen freezes / deadlocks de origen
+ * desconocido — descarta race conditions entre hilos.  Coste: en
+ * juegos pesados (BR2 batalla) baja la fps porque la rasterizacion
+ * deja de paralelizarse con la CPU emulada, todo es secuencial.
+ *
+ * Default: 0 (threading activo, comportamiento normal). */
+#ifndef PCSXR_NO_THREADING
+#define PCSXR_NO_THREADING 0
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -148,8 +169,13 @@ typedef struct {
 extern PcsxConfig Config;
 extern boolean NetOpened;
 
+/* Set to 1 by EmuUpdate() at VBlank.  intExecute / recExecute check it
+ * each iteration and exit cleanly so retro_run can deliver the frame to
+ * the libretro frontend.  Replaces the legacy Win32-fiber yield. */
+extern volatile int frame_done;
+
 /* ---------------------------------------------------------------------------
- * In-memory savestate stream (libretro � no disk I/O from the library).
+ * In-memory savestate stream (libretro � no disk I/O from the library).
  * `psxSaveState_t *f` replaces the historic `gzFile f` in all Freeze
  * functions.  gzfreeze() below dispatches read/write on this stream.
  * ------------------------------------------------------------------------ */

@@ -87,6 +87,142 @@ email                : BlackDove@addcom.de
 #define XPSXCOL(r,g,b) ((g&0x7c00)|(b&0x3e0)|(r&0x1f))
 
 ////////////////////////////////////////////////////////////////////////////////////
+// gpu_unai-style fast path: LightLUT (modulacion 5x5 -> 5) + Blargg blends
+//
+// Port quirurgico de las dos optimizaciones core de pcsx_rearmed/plugins/gpu_unai
+// (gpu_inner_light.h, gpu_inner_blend.h).  Reemplaza la math per-pixel pesada
+// de PEOPS por una tabla LUT y 5 ALU ops de Blargg para el blend completo
+// (3 canales + saturacion).
+//
+// Triggered solo en el caso comun "DrawSemiTrans && !bCheckMask" en el
+// path generico de drawPoly{3,4}TEx4 (CLUT4 textured) — exactamente lo
+// que NFS3 emite para humo (cmd 0x2E, ABR=1).
+//
+// Si las precondiciones no se cumplen, el path generico de PEOPS sigue
+// activo intacto (preserva edge cases: bCheckMask, gouraud, otros ABR).
+////////////////////////////////////////////////////////////////////////////////////
+
+/* LUT 32x32 = 1024 bytes: modulacion 5-bit texture x 5-bit light -> 5-bit out.
+ * Indice: (light_5b * 32) | tex_5b.  Valor: clamp((tex * light) / 16, 0, 31).
+ * Light=16 es "no change" (matching gpu_unai semantics).  PEOPS pasa modulacion
+ * 8-bit en g_m{1,2,3}; convertimos shifteando >> 3 al indexar (128>>3=16). */
+static unsigned char g_LightLUT[32*32];
+static int g_LightLUT_initialized = 0;
+
+static __inline void EnsureLightLUT(void)
+{
+	int j, i;
+	if (g_LightLUT_initialized) return;
+	for (j = 0; j < 32; ++j) {
+		for (i = 0; i < 32; ++i) {
+			int val = (i * j) / 16;
+			if (val > 31) val = 31;
+			g_LightLUT[(j * 32) + i] = (unsigned char)val;
+		}
+	}
+	g_LightLUT_initialized = 1;
+}
+
+/* Blargg's bitwise modulo-clamping para blend de 5-5-5 packed.
+ * Saturacion implicita en los 3 canales a la vez via mascara 0x8420
+ * (los bits inmediatamente arriba de cada canal de 5-bit: bits 5/10/15).
+ * Origen: blargg.8bitalley.com/info/rgb_*.html y gpu_unai/gpu_inner_blend.h.
+ *
+ * __forceinline (MSVC): el compilador puede ser conservador con __inline
+ * cuando el caller esta en otra TU; queremos que el cuerpo se expanda
+ * dentro del inner loop si o si. */
+static __forceinline unsigned short blendBlargg_ABR0(unsigned short uSrc, unsigned short uDst)
+{
+	/* 0.5*B + 0.5*F (low-precision pero fast: pierde LSBs) */
+	return (unsigned short)(((uDst & 0x7bde) + (uSrc & 0x7bde)) >> 1);
+}
+
+static __forceinline unsigned short blendBlargg_ABR1(unsigned short uSrc, unsigned short uDst)
+{
+	/* 1.0*B + 1.0*F saturating */
+	uint32_t s = (uint32_t)uSrc & 0x7fffu;
+	uint32_t d = (uint32_t)uDst & 0x7fffu;
+	uint32_t sum      = s + d;
+	uint32_t low_bits = (s ^ d) & 0x0421u;
+	uint32_t carries  = (sum - low_bits) & 0x8420u;
+	uint32_t modulo   = sum - carries;
+	uint32_t clamp    = carries - (carries >> 5);
+	return (unsigned short)(modulo | clamp);
+}
+
+static __forceinline unsigned short blendBlargg_ABR2(unsigned short uSrc, unsigned short uDst)
+{
+	/* 1.0*B - 1.0*F clamp-a-cero */
+	uint32_t s = (uint32_t)uSrc & 0x7fffu;
+	uint32_t d = (uint32_t)uDst & 0x7fffu;
+	uint32_t diff     = d - s + 0x8420u;
+	uint32_t low_bits = (d ^ s) & 0x8420u;
+	uint32_t borrows  = (diff - low_bits) & 0x8420u;
+	uint32_t modulo   = diff - borrows;
+	uint32_t clamp    = borrows - (borrows >> 5);
+	return (unsigned short)(modulo & clamp);
+}
+
+static __forceinline unsigned short blendBlargg_ABR3(unsigned short uSrc, unsigned short uDst)
+{
+	/* 1.0*B + 0.25*F saturating */
+	uint32_t s = ((uint32_t)uSrc >> 2) & 0x1ce7u;
+	uint32_t d = (uint32_t)uDst & 0x7fffu;
+	uint32_t sum      = s + d;
+	uint32_t low_bits = (s ^ d) & 0x0421u;
+	uint32_t carries  = (sum - low_bits) & 0x8420u;
+	uint32_t modulo   = sum - carries;
+	uint32_t clamp    = carries - (carries >> 5);
+	return (unsigned short)(modulo | clamp);
+}
+
+/* Modulacion textura via LightLUT.  Toma r5/g5/b5 ya pre-shifteados a 5-bit
+ * (caller hace m_r>>3 una vez por draw, no por pixel) — saves 3 shifts/pixel
+ * y permite que esos valores vivan en registros durante toda la fila. */
+static __forceinline unsigned short lightTXT_LUT_pre(unsigned short uSrc, uint32_t r5, uint32_t g5, uint32_t b5)
+{
+	return (unsigned short)(
+		(g_LightLUT[((uSrc & 0x7C00) >> 5) | b5] << 10) |
+		(g_LightLUT[ (uSrc & 0x03E0)       | g5] << 5)  |
+		(g_LightLUT[((uSrc & 0x001F) << 5) | r5])       |
+		(uSrc & 0x8000)
+	);
+}
+
+/* Fast per-pixel writer para el caso ABR=1 + DrawSemiTrans + !bCheckMask.
+ *
+ * Combina: skip-on-transparent + lighting via LUT + Blargg blend ABR=1 + write.
+ * r5/g5/b5 son la modulacion ya bajada a 5-bit (caller los precomputa por
+ * polygon).  set_mask es sSetMask capturada por valor (evita re-load de
+ * volatile global por pixel).
+ *
+ * Coste estimado vs PEOPS GetTextureTransColG (~50 ciclos/pixel):
+ *   - Skip transparent      : 1 branch
+ *   - lightTXT_LUT_pre      : 3 LUT lookups + shifts/ORs ~ 6 ciclos
+ *   - blendBlargg_ABR1      : 5 ALU ops ~ 5 ciclos
+ *   - GETLE/PUTLE 16        : 2 byte-swap + load/store ~ 4 ciclos
+ *   Total: ~15 ciclos/pixel — ~3x speedup en humo. */
+static __forceinline void blend_fast_ABR1_pre(unsigned short *pdest, unsigned short sample,
+                                              uint32_t r5, uint32_t g5, uint32_t b5,
+                                              unsigned short set_mask)
+{
+	unsigned short lit;
+	if (!sample) return;
+
+	lit = lightTXT_LUT_pre(sample, r5, g5, b5);
+
+	if (sample & 0x8000) {
+		/* Texel semi-trans: blend con dest. */
+		unsigned short dst = GETLE16(pdest);
+		unsigned short mixed = blendBlargg_ABR1(lit, dst);
+		PUTLE16(pdest, (unsigned short)(mixed | 0x8000 | set_mask));
+	} else {
+		/* Texel opaco dentro de poly semi-trans: solo modulacion. */
+		PUTLE16(pdest, (unsigned short)(lit | set_mask));
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////
 // soft globals
 ////////////////////////////////////////////////////////////////////////////////////
 
@@ -2802,6 +2938,68 @@ void drawPoly3TEx4(short x1, short y1, short x2, short y2, short x3, short y3, s
 
 #endif
 
+	/* gpu_unai-style fast-path: DrawSemiTrans + ABR=1 + !bCheckMask
+	 * (cmd 0x2E + texpage ABR=1, exactamente el caso del humo de NFS3).
+	 * Sustituye GetTextureTransColG32 (~50 ciclos/pixel) por
+	 * blend_fast_ABR1_pre (~15 ciclos/pixel) — LightLUT + Blargg blend
+	 * + r5/g5/b5 pre-shifteados + sSetMask cacheada + dcbt prefetch.
+	 * Single-pixel inner loop (j++); el path generico abajo procesa
+	 * 2 pixeles/iter con la math antigua. */
+	if(!bCheckMask && DrawSemiTrans && GlobalTextABR == 1)
+	{
+		unsigned short local_clut[16];
+		uint32_t r5, g5, b5;
+		unsigned short set_mask;
+		int k;
+
+		EnsureLightLUT();
+		for(k=0;k<16;k++) local_clut[k] = GETLE16(&psxVuw[clutP+k]);
+
+		/* Hoist constantes per-poligono fuera del inner loop:
+		 *  - r5/g5/b5: modulacion bajada a 5-bit (3 shifts ahorrados/pixel)
+		 *  - set_mask: copia local de sSetMask (volatile, evita re-load) */
+		r5 = (uint32_t)g_m1 >> 3;
+		g5 = (uint32_t)g_m2 >> 3;
+		b5 = (uint32_t)g_m3 >> 3;
+		set_mask = sSetMask;
+
+		for (i=ymin;i<=ymax;i++)
+		{
+			xmin=(left_x >> 16);
+			xmax=(right_x >> 16)-1;
+			if(drawW<xmax) xmax=drawW;
+
+			if(xmax>=xmin)
+			{
+				posX=left_u;
+				posY=left_v;
+
+				if(xmin<drawX)
+				{j=drawX-xmin;xmin=drawX;posX+=j*difX;posY+=j*difY;}
+
+				/* Prefetch destino de la row al L1 mientras el inner loop
+				 * arranca; cubre la primera cache line (64 px = 128 bytes). */
+				__dcbt(0, &psxVuw[(i<<10)+xmin]);
+
+				for(j=xmin;j<=xmax;j++)
+				{
+					unsigned int adj = (unsigned int)(posX>>16);
+					unsigned char idx = psxVub[((posY>>5)&(int32_t)0xFFFFF800)+YAdjust+(adj>>1)];
+					unsigned char tC  = (unsigned char)((idx>>((adj&1)<<2))&0xf);
+					blend_fast_ABR1_pre(&psxVuw[(i<<10)+j], local_clut[tC],
+					                    r5, g5, b5, set_mask);
+					posX += difX;
+					posY += difY;
+				}
+			}
+			if(NextRow_FT())
+			{
+				return;
+			}
+		}
+		return;
+	}
+
 	for (i=ymin;i<=ymax;i++)
 	{
 		xmin=(left_x >> 16);
@@ -2842,7 +3040,7 @@ void drawPoly3TEx4(short x1, short y1, short x2, short y2, short x3, short y3, s
 				GetTextureTransColG(&psxVuw[(i<<10)+j],GETLE16(&psxVuw[clutP+tC1]));
 			}
 		}
-		if(NextRow_FT()) 
+		if(NextRow_FT())
 		{
 			return;
 		}
@@ -3243,6 +3441,60 @@ void drawPoly4TEx4(short x1, short y1, short x2, short y2, short x3, short y3, s
 	}
 
 #endif
+
+	/* gpu_unai-style fast-path para humo NFS3 (cmd 0x2E quad textured
+	 * semi-trans) — mismo razonamiento que en drawPoly3TEx4. */
+	if(!bCheckMask && DrawSemiTrans && GlobalTextABR == 1)
+	{
+		unsigned short local_clut[16];
+		uint32_t r5, g5, b5;
+		unsigned short set_mask;
+		int k;
+
+		EnsureLightLUT();
+		for(k=0;k<16;k++) local_clut[k] = GETLE16(&psxVuw[clutP+k]);
+
+		r5 = (uint32_t)g_m1 >> 3;
+		g5 = (uint32_t)g_m2 >> 3;
+		b5 = (uint32_t)g_m3 >> 3;
+		set_mask = sSetMask;
+
+		for (i=ymin;i<=ymax;i++)
+		{
+			xmin=(left_x >> 16);
+			xmax=(right_x >> 16);
+
+			if(xmax>=xmin)
+			{
+				posX=left_u;
+				posY=left_v;
+
+				num=(xmax-xmin);
+				if(num==0) num=1;
+				difX=(right_u-posX)/num;
+				difY=(right_v-posY)/num;
+
+				if(xmin<drawX)
+				{j=drawX-xmin;xmin=drawX;posX+=j*difX;posY+=j*difY;}
+				xmax--;if(drawW<xmax) xmax=drawW;
+
+				__dcbt(0, &psxVuw[(i<<10)+xmin]);
+
+				for(j=xmin;j<=xmax;j++)
+				{
+					unsigned int adj = (unsigned int)(posX>>16);
+					unsigned char idx = psxVub[((posY>>5)&(int32_t)0xFFFFF800)+YAdjust+(adj>>1)];
+					unsigned char tC  = (unsigned char)((idx>>((adj&1)<<2))&0xf);
+					blend_fast_ABR1_pre(&psxVuw[(i<<10)+j], local_clut[tC],
+					                    r5, g5, b5, set_mask);
+					posX += difX;
+					posY += difY;
+				}
+			}
+			if(NextRow_FT4()) return;
+		}
+		return;
+	}
 
 	for (i=ymin;i<=ymax;i++)
 	{

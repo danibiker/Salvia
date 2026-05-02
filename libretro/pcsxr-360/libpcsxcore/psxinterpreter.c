@@ -1098,7 +1098,7 @@ static void intReset() {
 }
 
 static void intExecute() {
-	while(Config.CpuRunning) {
+	while (Config.CpuRunning && !frame_done) {
 		execI();
 	}
 }

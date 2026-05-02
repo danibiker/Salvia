@@ -100,4 +100,14 @@ public:
     // Nivel actual de llenado (muestras ocupadas). Thread-safe snapshot.
     size_t getUsed() const { return used(head, tail); }
     size_t getCapacity() const { return capacity; }
+
+    // Vacia el buffer.  Llamado entre cargas de juego para que el
+    // siguiente juego no escuche residuos de audio del anterior.
+    // Importante: solo seguro mientras el callback de SDL este pausado
+    // (SDL_PauseAudio(1)) — sino tail se modifica concurrentemente.
+    void Clear() {
+        head = 0;
+        tail = 0;
+        memset(buffer, 0, sizeof(buffer));
+    }
 };

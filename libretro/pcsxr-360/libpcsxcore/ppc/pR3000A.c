@@ -1090,7 +1090,7 @@ __inline static void execute() {
 }
 
 void recExecute() {
-    while(Config.CpuRunning) {
+    while (Config.CpuRunning && !frame_done) {
         execute();
 	}
 }

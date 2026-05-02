@@ -23,17 +23,11 @@
     <ClCompile Include="video_stub.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="xb_sys.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\common\sys\time.c">
       <Filter>Source Files\sys</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="xb_sys.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\common\sys\mman.h">
       <Filter>Source Files\sys</Filter>
     </ClInclude>

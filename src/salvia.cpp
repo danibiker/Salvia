@@ -877,7 +877,7 @@ void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
 *
 */
 void init_sdl_audio(double sample_rate) {
-
+	LOG_DEBUG("init_sdl_audio %.1f\n", sample_rate);
 	/*	
 		El equilibrio de latencia y seguridad
 		-------------------------------------
@@ -980,15 +980,29 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
 
 void closeGame(){
 	if (gameMenu->romLoaded){
-		// 2. Cerrar el dispositivo y liberar el hardware
+		/* IMPORTANTE: NO cerrar el dispositivo de audio entre cargas.
+		 *
+		 * SDL 1.2 en Xbox 360 (libSDLx360) tiene un bug en el ciclo
+		 * SDL_OpenAudio / SDL_CloseAudio: tras varias iteraciones, el
+		 * proximo SDL_OpenAudio se cuelga silenciosamente y arrastra
+		 * todo el frontend.  Dado que PSX siempre es 44100 Hz estereo
+		 * S16 y el formato no cambia entre juegos, no hace falta
+		 * reabrir.  Estrategia:
+		 *   1. Pausar el callback de audio (SDL_PauseAudio(1)).
+		 *   2. Delay para dar tiempo a que el callback termine la
+		 *      ultima iteracion (no haya races con el AudioBuffer).
+		 *   3. Limpiar el AudioBuffer para que el siguiente juego no
+		 *      oiga residuos del anterior.
+		 *   4. Mantener audio_opened=1 — el device sigue vivo.
+		 * En launchGame se reanuda con SDL_PauseAudio(0). */
 		if (audio_opened) {
 			audio_closing = true;
-			// 1. Pausar el procesamiento de audio para detener el hilo de callback
 			SDL_PauseAudio(1);
 			SDL_Delay(50);
-			SDL_CloseAudio();
-			audio_opened = 0;
+			gameMenu->g_audioBuffer.Clear();
 			audio_closing = false;
+			/* audio_opened se mantiene a 1: el device sigue abierto,
+			 * solo pausado.  En la siguiente carga se reanuda. */
 		}
 		gameMenu->g_audioRate.reset();
 #ifndef NO_SRAM
@@ -1161,9 +1175,19 @@ int launchGame(std::string rompath){
 
 	//Obtener el aspect ratio
 	aspectRatioValues[RATIO_CORE] = av_info.geometry.aspect_ratio;
-	// Inicializar SDL Audio con la frecuencia del core
+	/* Inicializar SDL Audio con la frecuencia del core.
+	 *
+	 * El device se abre UNA SOLA VEZ por sesion (primer juego cargado)
+	 * y se mantiene abierto hasta cierre de la app — abrirlo/cerrarlo
+	 * en cada carga colgaba SDL_OpenAudio en Xbox 360 tras varias
+	 * iteraciones (ver closeGame para el rationale).
+	 *
+	 * En cargas posteriores el device sigue abierto (audio_opened==1)
+	 * pero el callback esta pausado.  Reanudamos con PauseAudio(0). */
 	if (!audio_opened){
 		init_sdl_audio(av_info.timing.sample_rate);
+	} else {
+		SDL_PauseAudio(0);
 	}
 	gameMenu->g_audioRate.init(BUFF_SIZE);
 	//Iniciando el contador de fps

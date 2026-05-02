@@ -19,6 +19,7 @@
 
 #define _IN_SPU
 
+#include <libretro.h>
 #include "externals.h"
 #include "cfg.h"
 #include "dsoundoss.h"
@@ -83,7 +84,6 @@ static char * libraryName     = N_("NULL Sound");
 static char * libraryInfo     = N_("P.E.Op.S. Sound Driver V1.7\nCoded by Pete Bernert and the P.E.Op.S. team\n");
 
 // globals
-
 // psx buffer / addresses
 
 unsigned short  regArea[10000];
@@ -124,11 +124,35 @@ unsigned short  spuCtrl=0;                             // some vars to store psx
 unsigned short  spuStat=0;
 unsigned short  spuIrq=0;
 unsigned long   spuAddr=0x200;                         // address into spu mem
-int             bEndThread=0;                          // thread handlers
-int             bEndThread2=0;                          // thread handlers
-int             bThreadEnded=0;
-int             bSpuInit=0;
-int             bSPUIsOpen=0;
+/* SPU MAINThread lifecycle flags.  Volatile imprescindible: PowerPC weak
+ * memory ordering.  Sin volatile, el compilador puede mantener bEndThread
+ * en registro dentro del while() del thread y no ver el cambio del main
+ * thread, causando que el thread no salga jamas (deadlock latente).
+ *
+ * Convencion:
+ *  - bEndThread: setado a 1 por main al pedir shutdown.  Polled por el
+ *    thread en su loop principal.  Lectura no requiere barrier porque es
+ *    una check on/off; un valor stale por una iter mas no es problema.
+ *  - bThreadEnded: setado a 1 por el thread al SALIR.  Read por main en
+ *    RemoveTimer para confirmar que el thread termino antes de cerrar
+ *    handle / liberar recursos.  Aqui SI necesitamos barrier (lwsync) en
+ *    el lado del thread para que cualquier write previo (a buffers
+ *    compartidos) sea visible para main antes de que main libere.
+ *  - bSpuInit: indica si los streams estan vivos.  Solo main escribe.
+ *  - bEndThread2: legacy, usado tambien para terminar el thread; mantenido
+ *    para no tocar las multiples partes del MAINProc que lo consultan. */
+volatile int bEndThread = 0;
+volatile int bEndThread2 = 0;
+volatile int bThreadEnded = 0;
+volatile int bSpuInit = 0;
+int          bSPUIsOpen = 0;
+
+/* Forward declarations.  SetupTimer ahora llama RemoveTimer (defensiva
+ * contra doble-init), y la definicion de RemoveTimer va mas abajo.  Sin
+ * estos prototipos, MSVC asume int(...) implicito en la primera llamada
+ * y choca con la firma real "void (void)" => C2371. */
+void SetupTimer(void);
+void RemoveTimer(void);
 
 #if defined(_WINDOWS) || defined(_XBOX)
 HWND    hWMain=0;                                      // window handle
@@ -143,6 +167,7 @@ uint32_t dwNewChannel=0;                          // flags for faster testing, i
 
 void (CALLBACK *irqCallback)(void)=0;                  // func of main emu, called on spu irq
 void (CALLBACK *cddavCallback)(unsigned short,unsigned short)=0;
+extern void pcsxr_log(enum retro_log_level level, const char *format, ...);
 
 // certain globals (were local before, but with the new timeproc I need em global)
 
@@ -1103,6 +1128,14 @@ if(!tombraider2fix)
 
  // end of big main loop...
 
+ /* Release barrier antes de publicar bThreadEnded=1.  Garantiza que
+  * cualquier escritura del thread a buffers compartidos (pSpuBuffer,
+  * sRVBStart, audio_wpos del ring de retro_run via SoundFeedStreamData)
+  * sea visible para main thread en cuanto este vea bThreadEnded=1.
+  * Sin este lwsync, RemoveTimer podria pasar por su acquire y hacer
+  * CloseHandle mientras los caches de Xenon no han propagado los
+  * writes finales del SPU. */
+ __lwsync();
  bThreadEnded = 1;
 
 #if defined(_WINDOWS) || defined(_XBOX)
@@ -1206,118 +1239,231 @@ void CALLBACK SPUplayCDDAchannel(short *pcm, int nbytes)
  FeedCDDA((unsigned char *)pcm, nbytes);
 }
 
-// SETUPTIMER: init of certain buffers and threads/timers
+// SETUPTIMER: spawn the SPU mixer thread on a dedicated Xbox 360 core.
+//
+// Upstream PEOPS-SPU supported three back-ends — Windows multimedia
+// timers (iUseTimer=1), an async-polling mode (iUseTimer=2) used by
+// some Linux ports, and a dedicated thread (iUseTimer=0).  Only the
+// thread mode is used in this libretro core (it produces samples into
+// the SPSC ring drained by retro_run via SoundFeedStreamData), so the
+// other branches are removed.
+/* ===========================================================================
+ * SPU MAINThread lifecycle — version reescrita 2026-05
+ * ===========================================================================
+ *
+ *  Idempotencia y robustez:
+ *
+ *  SetupTimer:
+ *    - Si ya hay un thread vivo (hMainThread != NULL), llama RemoveTimer
+ *      primero para no dejar dos threads concurrentes tocando los mismos
+ *      buffers.  Sin este check, retro_load_game tras un teardown que dio
+ *      timeout creaba un thread adicional y los dos pisaban el ring de
+ *      audio y el state interno del SPU → crashes y cuelgues.
+ *    - Inicializa todos los flags ANTES de CreateThread, con barrier
+ *      release, para que el thread arrancando vea estado consistente.
+ *
+ *  RemoveTimer:
+ *    - Idempotente: safe llamarla varias veces sin SetupTimer entre medio.
+ *    - Si el thread no responde al timeout, suelta el handle pero deja
+ *      el storage SPU vivo (es estatico ahora) — el thread fugado puede
+ *      seguir tocandolo sin causar use-after-free.  Eventualmente vera
+ *      bEndThread=1 y saldra solo.
+ *
+ *  Memory ordering:
+ *    - bEndThread set → __lwsync() → wait bThreadEnded.  Garantiza que
+ *      el thread ve el set de bEndThread antes de que main lea
+ *      bThreadEnded.
+ *    - Thread: write bThreadEnded=1 viene PRECEDIDO por __lwsync en
+ *      MAINProc (al final del bucle), garantizando que cualquier write
+ *      previo (a buffers compartidos) sea visible para main.
+ * ========================================================================= */
+
 void SetupTimer(void)
 {
+ /* Idempotencia: si por alguna razon ya hay un thread vivo (un
+  * SetupTimer previo sin RemoveTimer, o un RemoveTimer que dio timeout
+  * y dejo hMainThread=NULL pero el thread sigue ejecutandose), nos
+  * aseguramos de pararlo antes de crear otro.  Un fugado real (timeout)
+  * habra puesto hMainThread=NULL ya, asi que este check pilla el caso
+  * "double SetupTimer" sin RemoveTimer entre medio. */
+ if (hMainThread != NULL) {
+  pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] WARNING: SetupTimer with thread alive, calling RemoveTimer first\n");
+  RemoveTimer();
+ }
+
  memset(SSumR,0,NSSIZE*sizeof(int));                   // init some mixing buffers
  memset(SSumL,0,NSSIZE*sizeof(int));
  memset(iFMod,0,NSSIZE*sizeof(int));
  pS=(short *)pSpuBuffer;                               // setup soundbuffer pointer
 
- bEndThread=0;                                         // init thread vars
- bEndThread2=0;
- bThreadEnded=0;
- bSpuInit=1;                                           // flag: we are inited
+ /* Reset de flags ANTES de crear thread, con release barrier para que
+  * el thread arrancando vea valores consistentes desde la primera iter. */
+ bEndThread = 0;
+ bEndThread2 = 0;
+ bThreadEnded = 0;
+ bSpuInit = 1;
+ __lwsync();
 
-#if defined(_WINDOWS) || defined(_XBOX)
-
-#ifndef _XBOX
- if(iUseTimer==1)                                      // windows: use timer
-  {
-   timeBeginPeriod(1);
-   timeSetEvent(1,1,MAINProc,0,TIME_ONESHOT);
-  }
- else
-#endif
- if(iUseTimer==0)                                      //use thread
-  {
+#if PCSXR_NO_THREADING
+ /* Modo single-thread: forzamos iUseTimer=2 (polling).  No creamos
+  * thread; SPU_async se llama desde psxcounters.c cada 32 hsync y
+  * MAINProc inline produce muestras.  El branch iUseTimer==2 dentro
+  * de MAINProc gestiona el return cuando el buffer esta lleno. */
+ iUseTimer = 2;
+ hMainThread = NULL;
+#else
+ /* Reset explicito: si una sesion previa cayo al fallback de polling
+  * (iUseTimer=2 por CreateThread fallido), no queremos heredarlo aqui.
+  * Modo thread = iUseTimer=0. */
+ iUseTimer = 0;
+ {
    DWORD dw;
-   hMainThread=CreateThread(NULL,0,MAINThreadEx,0,CREATE_SUSPENDED,&dw);
-
+   hMainThread = CreateThread(NULL, 0, MAINThreadEx, 0, CREATE_SUSPENDED, &dw);
+   if (hMainThread == NULL) {
+     /* CreateThread fallo (heap exhausted o kernel handles agotados).
+      * Caer a polling como fallback en lugar de dropear el SPU.  No
+      * podemos cambiar PCSXR_NO_THREADING en runtime, pero si poner
+      * iUseTimer=2 logra el mismo efecto: psxcounters llama SPU_async
+      * que invoca MAINProc inline.  Mejor degradar que crash. */
+     pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] WARNING: SPU CreateThread failed, falling back to polling mode\n");
+     iUseTimer = 2;
+     return;
+   }
    SetThreadPriority(hMainThread, THREAD_PRIORITY_NORMAL);
    XSetThreadProcessor(hMainThread, 3);
-
    ResumeThread(hMainThread);
-  }
-#else
-
- if(!iUseTimer)                                        // linux: use thread
-  {
-   pthread_create(&thread, NULL, MAINThread, NULL);
-  }
-
+ }
 #endif
 }
 
-// REMOVETIMER: kill threads/timers
 void RemoveTimer(void)
 {
- bEndThread=1;                          // raise flag to end thread
- bEndThread2=1;
+ int waited_ms = 0;
 
-#if defined(_WINDOWS) || defined(_XBOX)
- #ifndef _XBOX
- if(iUseTimer!=2)                                      // windows thread?
-  {
-   while(!bThreadEnded) {Sleep(5L);}                   // -> wait till thread has ended
-   Sleep(5L);
-  }
+ /* Idempotencia: nada que parar. */
+ if (hMainThread == NULL) {
+  bEndThread   = 0;
+  bEndThread2  = 0;
+  bThreadEnded = 0;
+  bSpuInit     = 0;
+  return;
+ }
 
- if(iUseTimer==1) timeEndPeriod(1);                    // windows timer? stop it
-#else
- if(iUseTimer!=2)                                      // windows thread?
-  {
-   while(!bThreadEnded) {Sleep(5L);}                   // -> wait till thread has ended
-   Sleep(5L);
-   CloseHandle(hMainThread);                           // close thread
-  }
+ /* Pedir al thread que termine y publicar el flag con barrier release. */
+ bEndThread  = 1;
+ bEndThread2 = 1;
+ __lwsync();
 
-#endif
-#else
- if(!iUseTimer)                                        // linux tread?
-  {
-   int i=0;
-   while(!bThreadEnded && i<2000) {usleep(1000L);i++;} // -> wait until thread has ended
-   if(thread!=(pthread_t)-1) {pthread_cancel(thread);thread=(pthread_t)-1;}  // -> cancel thread anyway
-  }
+ /* Esperar al thread con timeout.  El loop interno de MAINProc tiene
+  * un Sleep(PAUSE_W=1ms) por iteracion, asi que normalmente el thread
+  * sale en <50ms.  Damos margen amplio (1s) para escenarios degradados.
+  *
+  * Si timeout: TerminateThread no esta disponible en XDK; soltamos el
+  * handle y seguimos.  Como los buffers SPU son estaticos ahora
+  * (s_spuMixStorage etc.), el thread fugado no puede causar
+  * use-after-free aunque siga corriendo unos ms mas tras el shutdown. */
+ while (!bThreadEnded && waited_ms < 1000) {
+  Sleep(5L);
+  waited_ms += 5;
+ }
 
-#endif
- bThreadEnded=0;                                       // no more spu is running
- bSpuInit=0;
+ if (!bThreadEnded) {
+  pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] WARNING: SPU MAINThread did not exit in 1s, leaving handle\n");
+  hMainThread  = NULL;   /* soltamos sin CloseHandle (handle leak controlado) */
+  bThreadEnded = 0;
+  bSpuInit     = 0;
+  return;
+ }
+
+ /* Acquire barrier: las escrituras del thread a buffers/state antes de
+  * setear bThreadEnded son ahora visibles aqui. */
+ __lwsync();
+ Sleep(5L);   /* margen extra por si el thread aun esta en el path
+               * "post-set bThreadEnded, pre-ExitThread" */
+ CloseHandle(hMainThread);
+ hMainThread = NULL;
+
+ bThreadEnded = 0;
+ bSpuInit     = 0;
 }
 
-// SETUPSTREAMS: init most of the spu buffers
+/* ===========================================================================
+ * SPU BUFFERS — backing storage estatico
+ * ===========================================================================
+ *
+ *  La version original alocaba estos buffers con malloc en SetupStreams y
+ *  los liberaba con free en RemoveStreams (cada SPU_open/close).  Ese
+ *  patron era doblemente fragil:
+ *
+ *    1. Si RemoveTimer daba timeout esperando al SPU MAINThread, el
+ *       thread quedaba vivo accediendo `pSpuBuffer`/`sRVBStart`/...
+ *       mientras `RemoveStreams` les hacia free → use-after-free → crash
+ *       impredecible (incluyendo cuelgues sin reinicio).
+ *    2. Cada carga de juego alocaba ~1 MB nuevo y liberaba el anterior.
+ *       Sumado a otras fuentes de fragmentacion del heap Xbox 360
+ *       (256 MB para apps), tras N cargas el malloc podia fallar y la
+ *       siguiente init de SPU rompia todo silenciosamente.
+ *
+ *  Solucion: storage estatico con tamaño peor-caso.  Los punteros viejos
+ *  siguen exportados (otros TUs los usan) apuntando al storage estatico.
+ *  RemoveStreams ya no libera nada (no-op).  SetupStreams solo resetea
+ *  los cursors play/feed y limpia el contenido si hace falta.
+ *
+ *  Tamaño peor-caso del reverb buffer:
+ *    iUseReverb==1 → 88200*2 ints = 705600 bytes.  Reservamos eso fijo;
+ *    si reverb esta apagado (NSSIZE*2 = 32 KB), simplemente usamos los
+ *    primeros bytes y el resto del array queda libre. */
+
+#define SPU_MIX_BUFFER_BYTES   32768
+#define SPU_RVB_BUFFER_INTS    (88200 * 2)
+#define SPU_XA_BUFFER_DWORDS   44100
+#define SPU_CDDA_BUFFER_DWORDS 44100
+
+static __declspec(align(128)) unsigned char s_spuMixStorage[SPU_MIX_BUFFER_BYTES];
+static __declspec(align(128)) int           s_spuRvbStorage[SPU_RVB_BUFFER_INTS];
+static __declspec(align(128)) uint32_t      s_spuXaStorage[SPU_XA_BUFFER_DWORDS];
+static __declspec(align(128)) uint32_t      s_spuCddaStorage[SPU_CDDA_BUFFER_DWORDS];
+
+// SETUPSTREAMS: init de los SPU buffers.  Apunta los punteros publicos
+// al storage estatico y limpia los buffers (zero-init para no arrastrar
+// muestras de la sesion anterior).  Idempotente: safe llamarla varias
+// veces seguidas sin RemoveStreams entre medio.
 void SetupStreams(void)
 {
  int i;
+ int rvb_count;
 
- pSpuBuffer=(unsigned char *)malloc(32768);            // alloc mixing buffer
+ /* Mixing buffer */
+ pSpuBuffer = s_spuMixStorage;
+ memset(pSpuBuffer, 0, SPU_MIX_BUFFER_BYTES);
 
- if(iUseReverb==1) i=88200*2;
- else              i=NSSIZE*2;
+ /* Reverb buffer.  Tamaño efectivo depende de iUseReverb pero el
+  * storage es siempre el peor caso para que el toggle reverb on/off
+  * en runtime no requiera realloc. */
+ if (iUseReverb == 1) rvb_count = 88200 * 2;
+ else                 rvb_count = NSSIZE * 2;
 
- sRVBStart = (int *)malloc(i*4);                       // alloc reverb buffer
- memset(sRVBStart,0,i*4);
- sRVBEnd  = sRVBStart + i;
+ sRVBStart = s_spuRvbStorage;
+ memset(sRVBStart, 0, rvb_count * sizeof(int));
+ sRVBEnd  = sRVBStart + rvb_count;
  sRVBPlay = sRVBStart;
 
- XAStart =                                             // alloc xa buffer
-  (uint32_t *)malloc(44100 * sizeof(uint32_t));
- XAEnd   = XAStart + 44100;
+ /* XA stream buffer */
+ XAStart = s_spuXaStorage;
+ memset(XAStart, 0, SPU_XA_BUFFER_DWORDS * sizeof(uint32_t));
+ XAEnd   = XAStart + SPU_XA_BUFFER_DWORDS;
  XAPlay  = XAStart;
  XAFeed  = XAStart;
 
- CDDAStart =                                           // alloc cdda buffer
-  (uint32_t *)malloc(44100 * sizeof(uint32_t));
- CDDAEnd   = CDDAStart + 44100;
+ /* CDDA stream buffer */
+ CDDAStart = s_spuCddaStorage;
+ memset(CDDAStart, 0, SPU_CDDA_BUFFER_DWORDS * sizeof(uint32_t));
+ CDDAEnd   = CDDAStart + SPU_CDDA_BUFFER_DWORDS;
  CDDAPlay  = CDDAStart;
  CDDAFeed  = CDDAStart;
 
  for(i=0;i<MAXCHAN;i++)                                // loop sound channels
   {
-// we don't use mutex sync... not needed, would only
-// slow us down:
-//   s_chan[i].hMutex=CreateMutex(NULL,FALSE,NULL);
    s_chan[i].ADSRX.SustainLevel = 1024;                // -> init sustain
    s_chan[i].iMute=0;
    s_chan[i].iIrqDone=0;
@@ -1329,17 +1475,14 @@ void SetupStreams(void)
   pMixIrq=spuMemC;                                     // enable decoded buffer irqs by setting the address
 }
 
-// REMOVESTREAMS: free most buffer
+// REMOVESTREAMS: ya no libera nada (storage estatico).  Mantenida como
+// no-op para no romper la API que llama SPUshutdown.  Si un MAINThread
+// queda fugado tras un timeout, los buffers siguen vivos y el thread
+// puede leerlos/escribirlos sin causar use-after-free; eventualmente
+// terminara cuando bEndThread se sete a 1 por el siguiente SPU_open.
 void RemoveStreams(void)
 {
- free(pSpuBuffer);                                     // free mixing buffer
- pSpuBuffer = NULL;
- free(sRVBStart);                                      // free reverb buffer
- sRVBStart = NULL;
- free(XAStart);                                        // free XA buffer
- XAStart = NULL;
- free(CDDAStart);                                      // free CDDA buffer
- CDDAStart = NULL;
+ /* No-op intencional.  Documentado arriba. */
 }
 
 // INIT/EXIT STUFF

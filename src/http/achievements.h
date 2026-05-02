@@ -697,13 +697,73 @@ public:
 };
 
 
+/* ----------------------------------------------------------------------
+ * AchievementsWorker
+ *
+ * Pool de un solo hilo persistente con cola de jobs.  Reemplaza el patron
+ * "fire-and-forget" que creaba un CreateThread por cada notificacion de
+ * RetroAchievements (challenge_indicator_show, progress_indicator_show,
+ * achievement_update, server_call, etc.).  Ese patron filtraba threads
+ * cuando los downloads tardaban: tras varias cargas consecutivas el
+ * kernel agotaba handles y CreateThread del propio core PSX devolvia
+ * NULL -> pantalla negra al cargar.
+ *
+ * Patron:
+ *   - Un thread permanente que arranca en Achievements::initialize() y
+ *     se detiene en shutdown().
+ *   - Cola FIFO protegida por mutex.
+ *   - SetEvent despierta al worker cuando hay nuevo job.
+ *   - En stop() drenamos los jobs pendientes con timeout y luego cerramos.
+ *
+ * Las funciones de los antiguos hilos (ServerThreadFunction,
+ * ChallengeIndicatorThread, etc.) se reusan tal cual: aceptan LPVOID,
+ * hacen su trabajo y borran el data al final con delete. */
+typedef DWORD (WINAPI *ach_job_fn)(LPVOID);
+
+struct AchJob {
+    ach_job_fn fn;
+    LPVOID     data;
+};
+
+class AchievementsWorker {
+public:
+    AchievementsWorker();
+    ~AchievementsWorker();
+
+    /* Arranca el thread.  Idempotente: si ya esta activo, no hace nada. */
+    void start();
+    /* Pide stop, drena pendientes con timeout, libera el thread. */
+    void stop();
+    /* Encola un job.  Toma ownership de `data` (la fn lo libera). */
+    void enqueue(ach_job_fn fn, LPVOID data);
+
+private:
+    static DWORD WINAPI WorkerProc(LPVOID self_ptr);
+    void run();
+
+    HANDLE              m_thread;
+    HANDLE              m_event;
+    SDL_mutex*          m_mutex;
+    std::deque<AchJob>  m_queue;
+    volatile bool       m_stop;
+    bool                m_started;
+
+    AchievementsWorker(const AchievementsWorker&);
+    AchievementsWorker& operator=(const AchievementsWorker&);
+};
+
+
 class Achievements {
-public:		
+public:
     // Acceso unico a la instancia (Singleton)
     static Achievements* instance() {
         static Achievements _instance;
         return &_instance;
     }
+
+    /* Worker thread compartido para todos los downloads/HTTP del module.
+     * Reemplaza CreateThread fire-and-forget; ver AchievementsWorker. */
+    AchievementsWorker worker;
 
 	th_cache_image badgeCache;
 	th_messages messages;
