@@ -518,28 +518,49 @@ void psxHwReset() {
 }
 
 
+/* Cada uno de los 6 dispatchers actualiza s_psxhw_active (vive en gpu.c)
+ * antes de invocar al handler del registro hw, y lo limpia despues.  Si
+ * el watchdog del GPU helper thread detecta que el cycle counter del
+ * main esta FROZEN con s_psxhw_active != 0, sabemos exactamente en que
+ * registro 0x1f80xxxx esta atrapado main.  Bit 16 distingue read/write.
+ *
+ * Cuando PCSXR_DIAG_INSTRUMENTATION=0, las macros DIAG_SET_HW_ACTIVE
+ * expanden a (void)0 y no hay overhead. */
+
 u8 psxHwRead8(u32 add) {
 	u32 p = add & 0xFFFF;
 	hw_read8_t func = NULL;
+	u8 r;
 
 	func = hw_read8_handler[p];
-	return func(add);
+	DIAG_SET_HW_ACTIVE(p);
+	r = func(add);
+	DIAG_SET_HW_ACTIVE(0);
+	return r;
 }
 
 u16 psxHwRead16(u32 add) {
 	u32 p = add & 0xFFFF;
 	hw_read16_t func = NULL;
+	u16 r;
 
 	func = hw_read16_handler[p];
-	return func(add);
+	DIAG_SET_HW_ACTIVE(p);
+	r = func(add);
+	DIAG_SET_HW_ACTIVE(0);
+	return r;
 }
 
 u32 psxHwRead32(u32 add) {
 	u32 p = add & 0xFFFF;
 	hw_read32_t func = NULL;
+	u32 r;
 
 	func = hw_read32_handler[p];
-	return func(add);
+	DIAG_SET_HW_ACTIVE(p);
+	r = func(add);
+	DIAG_SET_HW_ACTIVE(0);
+	return r;
 }
 
 void psxHwWrite8(u32 add, u8 value) {
@@ -547,7 +568,9 @@ void psxHwWrite8(u32 add, u8 value) {
 	hw_write8_t func = NULL;
 
 	func = hw_write8_handler[p];
+	DIAG_SET_HW_ACTIVE(p | PSXHW_WRITE_FLAG);
 	func(add, value);
+	DIAG_SET_HW_ACTIVE(0);
 }
 
 void psxHwWrite16(u32 add, u16 value) {
@@ -555,7 +578,9 @@ void psxHwWrite16(u32 add, u16 value) {
 	hw_write16_t func = NULL;
 
 	func = hw_write16_handler[p];
+	DIAG_SET_HW_ACTIVE(p | PSXHW_WRITE_FLAG);
 	func(add, value);
+	DIAG_SET_HW_ACTIVE(0);
 }
 
 void psxHwWrite32(u32 add, u32 value) {
@@ -563,7 +588,9 @@ void psxHwWrite32(u32 add, u32 value) {
 	hw_write32_t func = NULL;
 
 	func = hw_write32_handler[p];
+	DIAG_SET_HW_ACTIVE(p | PSXHW_WRITE_FLAG);
 	func(add, value);
+	DIAG_SET_HW_ACTIVE(0);
 }
 
 int psxHwFreeze(psxSaveState_t *f, int Mode) {

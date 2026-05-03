@@ -167,6 +167,12 @@ void psxBranchTest() {
 					continue;
 				if ((psxRegs.cycle - psxRegs.intCycle[irq].sCycle) >= psxRegs.intCycle[irq].cycle) {
 					psxRegs.interrupt &= ~(1u << irq);
+					/* Marcar que estamos en este IRQ handler para que el
+					 * GPU watchdog pueda identificar cuelgues aqui (ver
+					 * gpu.h, PCSXR_DIAG_INSTRUMENTATION).  Cuando esa
+					 * macro esta off, DIAG_SET_IRQ_HANDLER expande a
+					 * (void)0 sin overhead. */
+					DIAG_SET_IRQ_HANDLER((int)irq);
 					switch (irq) {
 						case PSXINT_SIO: if (!Config.Sio) sioInterrupt(); break;
 						case PSXINT_CDR: cdrInterrupt(); break;
@@ -181,6 +187,7 @@ void psxBranchTest() {
 						case PSXINT_CDRDBUF: cdrDecodedBufferInterrupt(); break;
 						case PSXINT_CDRLID: cdrLidSeekInterrupt(); break;
 					}
+					DIAG_SET_IRQ_HANDLER(PSX_IRQ_NONE);
 				}
 			}
 		}

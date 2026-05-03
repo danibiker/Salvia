@@ -123,6 +123,50 @@ static HANDLE            s_thread_handle = NULL;
  * Coste cero cuando no hay espera (ring_drain check rapido y retorna). */
 volatile uint64_t gpu_wait_ticks = 0;
 
+/* ===========================================================================
+ * Diagnostic instrumentation (gated by PCSXR_DIAG_INSTRUMENTATION in gpu.h).
+ *
+ * Cuando ON, estas variables forman la "telemetria" que el watchdog
+ * del consumer thread imprime cuando detecta que el cycle counter del
+ * main no avanza.  Permite responder a "donde se queda main cuando
+ * el juego se cuelga" sin attaching debugger, leyendo solo el log de
+ * pcsxr_log.
+ *
+ * Cuando OFF (default), nada de esto se compila; las macros DIAG_SET_*
+ * en gpu.h expanden a (void)0.
+ * =========================================================================== */
+#if PCSXR_DIAG_INSTRUMENTATION
+
+/* Section tracker para diagnostico: el main thread lo actualiza en
+ * cada fase de retro_run via DIAG_SET_RR_SEC().  El watchdog lo lee
+ * para identificar donde se quedo el main cuando deja de avanzar. */
+volatile int retro_run_section = 0;
+
+/* Hardware register access tracker: psxhw.c dispatcher setea la
+ * direccion (0x1f80xxxx) que esta siendo leida/escrita.  Bit 16
+ * distingue read/write.  0 = idle. */
+volatile uint32_t s_psxhw_active = 0;
+
+/* Interrupt handler tracker: psxBranchTest setea cual interrupt esta
+ * procesando.  Valores PSXINT_* del enum en r3000a.h.  -1 = idle. */
+volatile int s_psx_irq_handler = -1;
+
+/* Plugin call tracker: cada wrapper GPU marca su valor antes de llamar
+ * al puntero del plugin (GPU_*) y lo limpia despues.  Si watchdog ve
+ * cycle FROZEN con un valor != 0, main esta atrapado en ese plugin
+ * call (PEOPS o gpu_duck). */
+volatile int s_gpu_plugin_call = 0;
+
+/* Contadores de spin del producer/consumer del ring.  Si el cycle
+ * counter esta FROZEN y estos crecen rapido entre dos logs del
+ * watchdog, main esta atascado en uno de nuestros propios spin loops
+ * (no en una funcion externa del dynarec).  Solo informacional —
+ * los lee el watchdog y los muestra en delta. */
+static volatile uint64_t s_ring_drain_spin_count = 0;
+static volatile uint64_t s_ring_push_spin_count  = 0;
+
+#endif /* PCSXR_DIAG_INSTRUMENTATION */
+
 #define GPUDMA_INT(eCycle) set_event(PSXINT_GPUDMA, eCycle)
 
 /*
@@ -202,6 +246,9 @@ static void ring_push(const uint32_t *data, uint32_t size)
         uint32_t rpos = s_ring_rpos;
         uint32_t used = wpos - rpos;
         if (RING_SIZE - used >= size) break;
+#if PCSXR_DIAG_INSTRUMENTATION
+        s_ring_push_spin_count++;
+#endif
         YieldProcessor();
     }
 
@@ -251,6 +298,9 @@ static void ring_drain(void)
 
     QueryPerformanceCounter(&t0);
     while (s_ring_wpos != s_ring_rpos) {
+#if PCSXR_DIAG_INSTRUMENTATION
+        s_ring_drain_spin_count++;
+#endif
         YieldProcessor();
     }
     /* Acquire: ver psxVuw/state writes hechos por el thread antes de rpos. */
@@ -262,9 +312,22 @@ static void ring_drain(void)
 /* CONSUMER LOOP: GPU helper thread.  Ejecuta hasta state=STOPPING.  Lee
  * chunks contiguos del ring (sin wrap-split en una sola llamada — si hay
  * wrap, procesamos hasta el final del array y la siguiente iteracion
- * coge el resto). */
+ * coge el resto).
+ *
+ * Cuando PCSXR_DIAG_INSTRUMENTATION=1 incluye un WATCHDOG: si el ring
+ * se queda vacio durante muchas iteraciones consecutivas (=> el main no
+ * esta produciendo trabajo) Y el cycle counter del main no avanza, el
+ * sistema esta colgado.  Logueamos el state del main thread para
+ * diagnostico. */
 static void gpu_thread_proc(void)
 {
+#if PCSXR_DIAG_INSTRUMENTATION
+    uint32_t s_idle_iters = 0;
+    uint32_t s_last_cycle = 0;
+    uint64_t s_last_drain_spin = 0;
+    uint64_t s_last_push_spin  = 0;
+#endif
+
     while (s_thread_state != GPU_THREAD_STOPPING) {
         uint32_t wpos, rpos, used, ridx, chunk;
 
@@ -276,14 +339,123 @@ static void gpu_thread_proc(void)
 
         if (used == 0) {
             /* Ring vacio — yield para no quemar CPU. */
+#if PCSXR_DIAG_INSTRUMENTATION
+            /* Watchdog: si llevamos mucho tiempo idle Y el main no
+             * avanza cycles, el sistema esta colgado.  Logear state
+             * del main thread (best-effort, sin sincronizacion — solo
+             * lectura para diagnostico).  Thresholds geometricos para
+             * no spamear el log: ~10M / 50M / 250M iters de
+             * YieldProcessor.  En idle ese rate es del orden de 100s
+             * de millones por segundo, asi que estos thresholds
+             * representan ~0.1s / 0.5s / 2.5s aproximadamente. */
+            s_idle_iters++;
+            if (s_idle_iters == 10000000u  ||
+                s_idle_iters == 50000000u  ||
+                s_idle_iters == 250000000u)
+            {
+                /* C89 (VS2010 + Xbox 360 SDK): TODAS las declaraciones
+                 * tienen que ir al principio del bloque, antes de
+                 * cualquier statement. */
+                uint32_t cur_cycle;
+                uint32_t delta;
+                int sec;
+                uint64_t cur_drain_spin;
+                uint64_t cur_push_spin;
+                uint64_t drain_spin_delta;
+                uint64_t push_spin_delta;
+                int plugin_call;
+                uint32_t hw_active;
+                int irq_handler;
+                const char *irq_name;
+
+                cur_cycle = psxRegs.cycle;
+                delta = cur_cycle - s_last_cycle;
+                sec = retro_run_section;
+
+                /* Snapshot de los contadores de spin del main thread.
+                 * Si crecen rapido entre dos logs Y cycles estan FROZEN,
+                 * main esta atascado en uno de nuestros propios spin
+                 * loops (no en una funcion externa del dynarec). */
+                cur_drain_spin = s_ring_drain_spin_count;
+                cur_push_spin  = s_ring_push_spin_count;
+                drain_spin_delta = cur_drain_spin - s_last_drain_spin;
+                push_spin_delta  = cur_push_spin  - s_last_push_spin;
+
+                /* Plugin call activo (si != 0 con FROZEN, main esta en
+                 * el plugin GPU). */
+                plugin_call = s_gpu_plugin_call;
+
+                /* Hardware register access activo (psxhw.c dispatcher) y
+                 * IRQ handler activo (psxBranchTest).  Si plug=0 y main
+                 * sigue FROZEN, miramos `hw=0xXXXXX` o `irq=N(NAME)`
+                 * para identificar donde se quedo. */
+                hw_active = s_psxhw_active;
+                irq_handler = s_psx_irq_handler;
+                switch (irq_handler) {
+                    case -1:                  irq_name = "none";       break;
+                    case PSXINT_SIO:          irq_name = "sio";        break;
+                    case PSXINT_CDR:          irq_name = "cdr";        break;
+                    case PSXINT_CDREAD:       irq_name = "cdread";     break;
+                    case PSXINT_GPUDMA:       irq_name = "gpudma";     break;
+                    case PSXINT_MDECOUTDMA:   irq_name = "mdecout";    break;
+                    case PSXINT_SPUDMA:       irq_name = "spudma";     break;
+                    case PSXINT_MDECINDMA:    irq_name = "mdecin";     break;
+                    case PSXINT_GPUOTCDMA:    irq_name = "gpuotc";     break;
+                    case PSXINT_CDRDMA:       irq_name = "cdrdma";     break;
+                    case PSXINT_CDRPLAY:      irq_name = "cdrplay";    break;
+                    case PSXINT_CDRDBUF:      irq_name = "cdrdbuf";    break;
+                    case PSXINT_CDRLID:       irq_name = "cdrlid";     break;
+                    default:                  irq_name = "?";          break;
+                }
+
+                /* Log en DOS lineas porque el buffer de pcsxr_log
+                 * trunca cerca de los ~115 caracteres.  Linea 1: estado
+                 * del main thread (PC, cycles, plugin/irq actual).
+                 * Linea 2: ring state + spin counts + hw register. */
+                pcsxr_log(RETRO_LOG_INFO,
+                    "[WD] sec=%d pc=0x%08X cyc=%u dlt=%u %s plug=%d irq=%d(%s)\n",
+                    sec,
+                    (unsigned)psxRegs.pc,
+                    (unsigned)cur_cycle,
+                    (unsigned)delta,
+                    (delta == 0) ? "FROZEN"
+                                 : (delta < 1000) ? "TIGHT-LOOP"
+                                                  : "running",
+                    plugin_call, irq_handler, irq_name);
+                pcsxr_log(RETRO_LOG_INFO,
+                    "[WD] ring=%u/%u drain+=%u push+=%u hw=0x%05X\n",
+                    (unsigned)wpos,
+                    (unsigned)rpos,
+                    (unsigned)drain_spin_delta,
+                    (unsigned)push_spin_delta,
+                    (unsigned)hw_active);
+
+                s_last_cycle      = cur_cycle;
+                s_last_drain_spin = cur_drain_spin;
+                s_last_push_spin  = cur_push_spin;
+            }
+#endif
             YieldProcessor();
             continue;
         }
+
+#if PCSXR_DIAG_INSTRUMENTATION
+        /* Ring tiene trabajo, resetear watchdog. */
+        s_idle_iters = 0;
+        s_last_cycle = psxRegs.cycle;
+#endif
 
         ridx = rpos & RING_MASK;
         /* Limitar el chunk al tramo contiguo (no cruzar wrap). */
         chunk = (RING_SIZE - ridx < used) ? (RING_SIZE - ridx) : used;
 
+        /* No actualizamos s_gpu_plugin_call aqui aunque tecnicamente
+         * estamos en GPU_writeDataMem desde el consumer.  La intencion
+         * de ese tracker es identificar cuelgues del MAIN thread en
+         * plugin calls; si lo escribe tambien el consumer, falsea el
+         * diagnostico (main puede no estar dentro del plugin pero
+         * tracker lo dice).  GPU_CALL_THREAD_PROC se mantiene en gpu.h
+         * por si alguna vez quisieramos un tracker dual. */
         GPU_writeDataMem(&s_ring_data[ridx], chunk);
 
         /* Release: writes del GPU (psxVuw, state) visibles antes de
@@ -457,7 +629,9 @@ void gpuDmaChain(uint32_t addr)
 void gpuReadDataMem(uint32_t * addr, int size)
 {
     ring_drain();
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_READ_DATA_MEM);
     GPU_readDataMem(addr, size);
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_NONE);
 }
 
 void gpuWriteDataMem(uint32_t * pMem, int size)
@@ -467,19 +641,27 @@ void gpuWriteDataMem(uint32_t * pMem, int size)
      * No encolamos: el ring esta reservado para el DMA chain (donde la
      * latencia importa porque son 600+ comandos por frame). */
     ring_drain();
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_WRITE_DATA_MEM);
     GPU_writeDataMem(pMem, size);
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_NONE);
 }
 
 u32 gpuReadData(void)
 {
+    u32 r;
     ring_drain();
-    return GPU_readData();
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_READ_DATA);
+    r = GPU_readData();
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_NONE);
+    return r;
 }
 
 void gpuWriteData(u32 data)
 {
     ring_drain();
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_WRITE_DATA);
     GPU_writeData(data);
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_NONE);
 }
 
 void gpuWriteStatus(u32 data)
@@ -488,7 +670,9 @@ void gpuWriteStatus(u32 data)
      * etc).  Drain antes para que los draws encolados respeten el state
      * anterior y los siguientes vean el nuevo. */
     ring_drain();
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_WRITE_STATUS);
     GPU_writeStatus(data);
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_NONE);
 }
 
 void gpuUpdateLace(void)
@@ -497,7 +681,9 @@ void gpuUpdateLace(void)
      * thread modifica.  Drain primero para garantizar que el frame esta
      * completo antes de presentarlo. */
     ring_drain();
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_UPDATE_LACE);
     GPU_updateLace();
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_NONE);
 }
 
 /* ===========================================================================

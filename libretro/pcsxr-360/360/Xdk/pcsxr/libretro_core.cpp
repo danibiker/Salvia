@@ -1352,9 +1352,18 @@ void retro_unload_game(void) {
 }
 
 void retro_run(void) {
+    /* Marca la fase actual de retro_run para el GPU watchdog (cuando
+     * PCSXR_DIAG_INSTRUMENTATION=1 en gpu.h).  Si watchdog detecta que
+     * main no avanza cycles (psxRegs.cycle congelado), retro_run_section
+     * revela donde se quedo: dentro de psxCpu->Execute, en video_cb
+     * (Salvia/D3D), en audio_batch_cb (Salvia/SDL), o ya retornado a
+     * Salvia (OUT_OF_RUN).  Cuando OFF estas macros son (void)0. */
+    DIAG_SET_RR_SEC(RR_SEC_ENTRY);
+
     if (!emu_running) {
         if (video_cb)
             video_cb(NULL, display_width, display_height, 0);
+        DIAG_SET_RR_SEC(RR_SEC_OUT_OF_RUN);
         return;
     }
 
@@ -1413,6 +1422,7 @@ void retro_run(void) {
         was_skipping_this_frame = 0;
     }
 
+    DIAG_SET_RR_SEC(RR_SEC_INPUT_POLL);
     poll_libretro_input();
 #if PCSXR_PERF_ENABLED
     QueryPerformanceCounter(&t_after_sync);
@@ -1431,12 +1441,15 @@ void retro_run(void) {
      * o el dynarec (skipear no ayuda y solo causa flicker). */
     gpu_wait_ticks = 0;
     frame_done = 0;
+    DIAG_SET_RR_SEC(RR_SEC_CPU_EXEC);
     psxCpu->Execute();
 #if PCSXR_PERF_ENABLED
     QueryPerformanceCounter(&t_after_exec);
     perf_acc_exec     += perf_us(t_after_sync, t_after_exec);
     perf_acc_gpu_wait += (uint64_t)(gpu_wait_ticks * 1000000ll / perf_freq.QuadPart);
 #endif
+
+    DIAG_SET_RR_SEC(RR_SEC_AUTOSKIP);
 
     /* Auto-frameskip: decision basada en (a) el exceso sobre el budget
      * y (b) la fraccion de ese exceso que se debe a esperas al GPU.
@@ -1481,6 +1494,7 @@ void retro_run(void) {
      *  - Frame skipeado: video_cb(NULL) -> el frontend duplica el ultimo,
      *    nos ahorramos el envio.
      *  - Frame normal: video_cb(pPsxScreen) tal cual. */
+    DIAG_SET_RR_SEC(RR_SEC_VIDEO_CB);
     if (was_skipping_this_frame) {
         if (video_cb)
             video_cb(NULL, display_width, display_height, 0);
@@ -1494,6 +1508,7 @@ void retro_run(void) {
 
     /* Drain audio ring (lock-free SPSC consumer).  Cap drain to ~1 frame's
      * worth of audio; leftover stays in the ring for the next frame. */
+    DIAG_SET_RR_SEC(RR_SEC_AUDIO_DRAIN);
     audio_drain_count = 0;
     {
         uint32_t max_drain = (Config.PsxType == PSX_TYPE_PAL) ? 1764 : 1470;
@@ -1532,10 +1547,12 @@ void retro_run(void) {
     }
     if (audio_drain_count > 0 && audio_batch_cb) {
         long frames = audio_drain_count / 2;   /* stereo: 2 samples per frame */
-            audio_batch_cb(audio_drain_buf, (size_t)frames);
+        DIAG_SET_RR_SEC(RR_SEC_AUDIO_CB);
+        audio_batch_cb(audio_drain_buf, (size_t)frames);
     }
 
 #if PCSXR_PERF_ENABLED
+    DIAG_SET_RR_SEC(RR_SEC_PERF_DUMP);
     QueryPerformanceCounter(&t_end);
     perf_acc_aud      += perf_us(t_after_vid, t_end);
     perf_last_frame_end = t_end;
@@ -1544,6 +1561,12 @@ void retro_run(void) {
     if (perf_frame_count >= PERF_WINDOW_FRAMES)
         perf_dump(t_end);
 #endif
+
+    /* Salida de retro_run: a partir de aqui main esta de vuelta en el
+     * frontend (Salvia), presentando el frame, procesando OSD, etc.
+     * Si watchdog detecta congelamiento con sec=OUT_OF_RUN(0), el
+     * cuelgue esta fuera de pcsxr-360. */
+    DIAG_SET_RR_SEC(RR_SEC_OUT_OF_RUN);
 }
 
 void retro_reset(void) {
