@@ -461,16 +461,27 @@ static INLINE void FeedCDDA(unsigned char *pcm, int nBytes)
  while(nBytes>0)
   {
    if(CDDAFeed==CDDAEnd) CDDAFeed=CDDAStart;
-   while(CDDAFeed==CDDAPlay-1||
-         (CDDAFeed==CDDAEnd-1&&CDDAPlay==CDDAStart))
+   if(CDDAFeed==CDDAPlay-1||
+      (CDDAFeed==CDDAEnd-1&&CDDAPlay==CDDAStart))
    {
-#if defined(_WINDOWS) || defined(_XBOX)
-    if (!iUseTimer) Sleep(1);
-    else return;
-#else
-    if (!iUseTimer) usleep(1000);
-    else return;
-#endif
+    /* Buffer CDDA lleno.  El comportamiento original era:
+     *   - iUseTimer == 0 (modo thread):  Sleep(1) loop esperando al
+     *     SPU MAINThread a que consuma.
+     *   - iUseTimer != 0 (modo polling): return (drop samples).
+     *
+     * El Sleep(1) loop causaba un cuelgue total en GTA: este FeedCDDA
+     * lo llama el main thread desde cdrPlayInterrupt → SPUplayCDDAchannel.
+     * Si el SPU MAINThread (core 3) no consume CDDA con suficiente
+     * velocidad bajo carga (audio_buf saturado, contention de bus, etc.),
+     * el buffer CDDA se llena y main hace Sleep(1) infinito.  Y como
+     * main esta dormido, retro_run no avanza, audio_buf no se drena,
+     * SPU thread se queda con el buffer de salida lleno y deja de
+     * consumir CDDA → DEADLOCK clasico.
+     *
+     * Fix: igualar comportamiento con modo polling.  Drop samples y
+     * volver.  Resultado: micro-glitches CDDA bajo carga extrema en
+     * lugar de cuelgue total.  Aceptable. */
+    return;
    }
    *CDDAFeed++=(*pcm | (*(pcm+1)<<8) | (*(pcm+2)<<16) | (*(pcm+3)<<24));
    nBytes-=4;

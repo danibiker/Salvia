@@ -14,7 +14,7 @@
 #include <utils/logger.h>
 
 static const int video_bpp = 16;
-#define CPU_THREAD 4
+#define CPU_THREAD 0
 /* I/O / network threads (HTTP requests for RetroAchievements, image
  * downloads, server callbacks).  Pinned to HW thread 2 — physical core 1,
  * SMT partner of the SPU thread on core 3.  Final layout:
@@ -29,7 +29,7 @@ static const int video_bpp = 16;
  * where the GPU thread runs hot and would starve BELOW_NORMAL workers —
  * symptom that motivated the move: rcheevos load_game callback never
  * firing, achievements not loading. */
-#define IO_THREAD 2
+#define IO_THREAD 1
 
 #ifdef _XBOX
 	static Uint32 video_flags = SDL_SWSURFACE;
@@ -776,7 +776,7 @@ class Constant{
 			#endif
 
 			// Bajar prioridad para no afectar el rendimiento del juego/emulador
-			SetThreadPriority(hThread, THREAD_PRIORITY_BELOW_NORMAL);
+			SetThreadPriority(hThread, THREAD_PRIORITY_NORMAL);
 
 			// Arrancar el hilo que estaba suspendido
 			ResumeThread(hThread);

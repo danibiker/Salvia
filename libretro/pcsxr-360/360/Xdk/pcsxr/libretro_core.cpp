@@ -201,6 +201,7 @@ void retro_set_environment(retro_environment_t cb) {
 		{ "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
         { "pcsxr360_gpu_renderer",       "GPU Renderer (restart core to apply); xbox_soft|gpu_duck" },
         { "pcsxr360_auto_frameskip",     "Auto frameskip (skip render on overload); disabled|enabled" },
+        { "pcsxr360_threading",          "Helper threads GPU/SPU (restart core to apply); enabled|disabled" },
         { NULL, NULL }
     };
     cb(RETRO_ENVIRONMENT_SET_VARIABLES, variables);
@@ -342,6 +343,25 @@ static void check_gpu_renderer_initial_only(void) {
         duck_gpu_enabled = (strcmp(var.value, "gpu_duck") == 0) ? 1 : 0;
     else
         duck_gpu_enabled = 0;
+}
+
+/* Snapshot the helper-threads choice ONCE at core init, before the
+ * threads are spun up.  Sets the global g_pcsxr_threading_enabled
+ * (declared in psxcommon.h) which is read by:
+ *   - libpcsxcore/gpu.c  (gpuDmaThreadInit / gpuDmaThreadShutdown /
+ *                          chain_enqueue)
+ *   - plugins/dfsound/spu.c (SetupTimer)
+ * Must run BEFORE gpuDmaThreadInit and SPU_open in emu_setup, otherwise
+ * the threads boot with the previous boot's setting.  Toggling at
+ * runtime would require tearing down and recreating the threads
+ * mid-session — not worth the complexity for what is essentially a
+ * diagnostic switch.  Hence "(restart core to apply)" in the label. */
+static void check_threading_initial_only(void) {
+    struct retro_variable var = { "pcsxr360_threading", NULL };
+    if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        g_pcsxr_threading_enabled = (strcmp(var.value, "disabled") == 0) ? 0 : 1;
+    else
+        g_pcsxr_threading_enabled = 1;  /* default: threading on */
 }
 
 /* ======================================================================
@@ -550,7 +570,7 @@ static bool string_is_empty(const char *data)
 
 void pcsxr_log(enum retro_log_level level, const char *format, ...)
 {
-   char msg[128];
+   char msg[512];
    va_list ap;
 
    msg[0] = '\0';
@@ -645,6 +665,16 @@ static int emu_setup(void) {
     cdrIsoInit();
 	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] SetIsoFile\n");
     SetIsoFile(game_path_store);
+
+    /* Sample the helper-threads choice ONCE for this boot, before
+     * gpuDmaThreadInit() (and before SPU_open further down) decide
+     * whether to spin up the GPU/SPU helper threads.  Outside
+     * check_game_fixes for the same reason as check_gpu_renderer_only:
+     * tearing threads down mid-session via the hot-reload path would
+     * race with the producers/consumers.  Restart-to-apply by design. */
+	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] check_threading_initial_only\n");
+    check_threading_initial_only();
+
 	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] gpuDmaThreadInit\n");
     gpuDmaThreadInit();
 
@@ -1502,7 +1532,6 @@ void retro_run(void) {
     }
     if (audio_drain_count > 0 && audio_batch_cb) {
         long frames = audio_drain_count / 2;   /* stereo: 2 samples per frame */
-        if (frames > 0)
             audio_batch_cb(audio_drain_buf, (size_t)frames);
     }
 

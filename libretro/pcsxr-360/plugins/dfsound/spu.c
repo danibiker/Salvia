@@ -1304,14 +1304,18 @@ void SetupTimer(void)
  bSpuInit = 1;
  __lwsync();
 
-#if PCSXR_NO_THREADING
- /* Modo single-thread: forzamos iUseTimer=2 (polling).  No creamos
-  * thread; SPU_async se llama desde psxcounters.c cada 32 hsync y
-  * MAINProc inline produce muestras.  El branch iUseTimer==2 dentro
-  * de MAINProc gestiona el return cuando el buffer esta lleno. */
- iUseTimer = 2;
- hMainThread = NULL;
-#else
+ if (!g_pcsxr_threading_enabled) {
+   /* Modo single-thread (libretro option `pcsxr360_threading=disabled`):
+    * forzamos iUseTimer=2 (polling).  No creamos thread; SPU_async se
+    * llama desde psxcounters.c cada 32 hsync y MAINProc inline produce
+    * muestras.  El branch iUseTimer==2 dentro de MAINProc gestiona el
+    * return cuando el buffer esta lleno. */
+   iUseTimer = 2;
+   hMainThread = NULL;
+   pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] SPU helper thread disabled by core option (polling mode)\n");
+   return;
+ }
+
  /* Reset explicito: si una sesion previa cayo al fallback de polling
   * (iUseTimer=2 por CreateThread fallido), no queremos heredarlo aqui.
   * Modo thread = iUseTimer=0. */
@@ -1321,8 +1325,7 @@ void SetupTimer(void)
    hMainThread = CreateThread(NULL, 0, MAINThreadEx, 0, CREATE_SUSPENDED, &dw);
    if (hMainThread == NULL) {
      /* CreateThread fallo (heap exhausted o kernel handles agotados).
-      * Caer a polling como fallback en lugar de dropear el SPU.  No
-      * podemos cambiar PCSXR_NO_THREADING en runtime, pero si poner
+      * Caer a polling como fallback en lugar de dropear el SPU.
       * iUseTimer=2 logra el mismo efecto: psxcounters llama SPU_async
       * que invoca MAINProc inline.  Mejor degradar que crash. */
      pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] WARNING: SPU CreateThread failed, falling back to polling mode\n");
@@ -1333,7 +1336,6 @@ void SetupTimer(void)
    XSetThreadProcessor(hMainThread, 3);
    ResumeThread(hMainThread);
  }
-#endif
 }
 
 void RemoveTimer(void)

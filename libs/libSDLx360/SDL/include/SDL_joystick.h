@@ -161,6 +161,31 @@ extern DECLSPEC Uint8 SDLCALL SDL_JoystickGetButton(SDL_Joystick *joystick, int 
  */
 extern DECLSPEC void SDLCALL SDL_JoystickClose(SDL_Joystick *joystick);
 
+/* ===========================================================================
+ *  Xbox 360 extensions — vibration / rumble
+ * ===========================================================================
+ *
+ *  SDL_XBOX_SetVibration(port, leftMotor, rightMotor)
+ *
+ *      Send a vibration command to the gamepad on `port` (0..3).
+ *
+ *      leftMotor  — low-frequency motor speed (0..65535).
+ *                   On the official Xbox 360 controller this is the larger,
+ *                   heavier motor in the LEFT grip; produces a deep rumble.
+ *      rightMotor — high-frequency motor speed (0..65535).
+ *                   The smaller motor in the RIGHT grip; produces a higher
+ *                   buzzing sensation.
+ *
+ *      Pass (0, 0) to stop vibration.
+ *
+ *      Returns 0 on success, -1 if the port is invalid or the controller
+ *      is not connected.
+ *
+ *      Thread-safe relative to other XInput calls in the same way that
+ *      XInputSetState is — call from any thread, no locking required.
+ */
+extern DECLSPEC int SDLCALL SDL_XBOX_SetVibration(int port, Uint16 leftMotor, Uint16 rightMotor);
+
 
 /* Ends C function definitions when using C++ */
 #ifdef __cplusplus

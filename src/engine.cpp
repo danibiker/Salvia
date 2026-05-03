@@ -34,7 +34,7 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		//  - No comparte L1/L2 con SPU (HW thread 3), GPU helper (HW thread 4) ni IO/HTTP (HW thread 5).
 		//  - Salvia ya arranca en HW thread 0 por defecto; el pin solo garantiza que el
 		//    dispatcher no migre el thread bajo presion, no cambia el patron de ejecucion.
-		XSetThreadProcessor(GetCurrentThread(), 0);
+		XSetThreadProcessor(GetCurrentThread(), CPU_THREAD);
 	#endif
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {

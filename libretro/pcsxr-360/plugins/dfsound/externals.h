@@ -17,11 +17,15 @@
 
 #include <stdint.h>
 
-/* Heredamos el flag PCSXR_NO_THREADING desde libpcsxcore para que
- * SetupTimer / RemoveTimer puedan optar por el modo polling (iUseTimer=2)
- * en lugar de crear el SPU MAINThread.  Default a 0 si nadie lo definio. */
-#ifndef PCSXR_NO_THREADING
-#define PCSXR_NO_THREADING 0
+/* Runtime threading flag (defined in libpcsxcore/psxcommon.c, declared
+ * in psxcommon.h).  SetupTimer / RemoveTimer leen esta variable para
+ * decidir si crear el SPU MAINThread o forzar iUseTimer=2 (polling).
+ * Lo declaramos aqui localmente porque dfsound NO incluye psxcommon.h
+ * (es un plugin con su propio universo de tipos). */
+#ifdef __cplusplus
+extern "C" int g_pcsxr_threading_enabled;
+#else
+extern int g_pcsxr_threading_enabled;
 #endif
 
 /////////////////////////////////////////////////////////

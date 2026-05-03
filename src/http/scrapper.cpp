@@ -37,7 +37,7 @@ void Scrapper::StartScrappingAsync(std::vector<ConfigEmu>& emu, ScrapperConfig c
 		params->cfg = cfg;
 		hMainThread  = CreateThread(NULL, 0, mainScrapThread, params, CREATE_SUSPENDED, NULL);
 		if (hMainThread) {
-			Constant::setup_and_run_thread(hMainThread, CPU_THREAD, false);
+			Constant::setup_and_run_thread(hMainThread, IO_THREAD, false);
 		}
 	}
 }
@@ -53,7 +53,7 @@ DWORD WINAPI Scrapper::mainScrapThread(LPVOID lpParam) {
     if (!hImgThread) {
 		return 1;
 	}
-	Constant::setup_and_run_thread(hImgThread, CPU_THREAD, false);
+	Constant::setup_and_run_thread(hImgThread, IO_THREAD, false);
 
 	// Ejecutamos el scrapper (Productor)
 	for (std::size_t i=0; i < params->emu.size(); i++){

@@ -509,4 +509,38 @@ void SDL_SYS_JoystickQuit(void)
 {
 	return;
 }
- 
+
+/* ===========================================================================
+ *  SDL_XBOX_SetVibration — Xbox 360 rumble extension
+ * ===========================================================================
+ *
+ *  Wrap nativo de XInputSetState para que codigo cliente (frontend / cores)
+ *  pueda activar la vibracion sin tener que tocar XInput directamente.
+ *
+ *  Mapping de motores XInput:
+ *    leftMotor  (low-freq, vibracion grave)  -> grip izquierdo
+ *    rightMotor (high-freq, vibracion aguda) -> grip derecho
+ *
+ *  Cuando el caller traduce desde el formato del DualShock PSX:
+ *    - PSX big motor (analog 0..255)  -> XInput LEFT  motor (psx_big * 257)
+ *    - PSX small motor (digital 0/!0) -> XInput RIGHT motor (full speed if on)
+ */
+int SDL_XBOX_SetVibration(int port, Uint16 leftMotor, Uint16 rightMotor)
+{
+#ifdef _XBOX
+	XINPUT_VIBRATION vibration;
+	DWORD result;
+
+	if (port < 0 || port > 3)
+		return -1;
+
+	vibration.wLeftMotorSpeed  = leftMotor;
+	vibration.wRightMotorSpeed = rightMotor;
+
+	result = XInputSetState((DWORD)port, &vibration);
+	return (result == ERROR_SUCCESS) ? 0 : -1;
+#else
+	(void)port; (void)leftMotor; (void)rightMotor;
+	return -1;
+#endif
+}

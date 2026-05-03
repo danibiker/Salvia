@@ -466,7 +466,7 @@ static DWORD WINAPI SaveThreadFuncWin32(LPVOID data) {
 }
 #endif
 
-// Inicializaci?n
+// Inicializacion
 void initSaveSystem() {
     g_saveQueue.running = true;
     g_saveQueue.semaphore = SDL_CreateSemaphore(0);
@@ -476,12 +476,16 @@ void initSaveSystem() {
     // + CRT fwrite + commit + SDL msg callbacks.
     g_saveQueue.thread = CreateThread(
         NULL,                       // security
-        1 * 1024 * 1024,            // stack size (1 MiB)
+        0,				            // stack size (1 MiB)
         SaveThreadFuncWin32,        // thread proc
         &g_saveQueue,               // parameter
-        0,                          // creation flags (run immediately)
+        CREATE_SUSPENDED,			// creation flags (create suspended)
         NULL                        // thread id (not needed)
     );
+
+	if (g_saveQueue.thread) {
+		Constant::setup_and_run_thread(g_saveQueue.thread, IO_THREAD, false);
+	}
 #else
     g_saveQueue.thread = SDL_CreateThread(SaveThreadFunc, &g_saveQueue);
 #endif

@@ -19,6 +19,7 @@
 #include "r3000a.h"
 #include "debug.h"
 #include "socket.h"
+#include "gpu.h"   /* gpuUpdateLace wrapper para el pause loop */
 
 /*
 PCSX Debug console protocol description, version 1.0
@@ -403,7 +404,11 @@ void ProcessDebug() {
     while (paused) {
         GetClient();
         ProcessCommands();
-        GPU_updateLace();
+        /* gpuUpdateLace (wrapper) drena el ring del GPU thread antes
+         * de Present/BlitScreen.  GPU_updateLace directo era una race
+         * con el helper thread cuando el debugger pausaba dentro de
+         * un draw. */
+        gpuUpdateLace();
         SysUpdate();
     }
 }

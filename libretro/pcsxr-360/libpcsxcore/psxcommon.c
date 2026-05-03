@@ -31,6 +31,12 @@ boolean NetOpened = FALSE;
  * control to retro_run for one-frame-per-call libretro semantics. */
 volatile int frame_done = 0;
 
+/* Runtime threading flag (declared in psxcommon.h).  Default 1 = helper
+ * threads enabled.  libretro_core.cpp samples the `pcsxr360_threading`
+ * core option once at boot and writes here before gpuDmaThreadInit /
+ * SPU_open run.  See psxcommon.h for full semantics. */
+int g_pcsxr_threading_enabled = 1;
+
 int Log = 0;
 FILE *emuLog = NULL;
 

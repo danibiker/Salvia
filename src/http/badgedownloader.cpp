@@ -7,10 +7,10 @@ void BadgeDownloader::start() {
         if (hThread) {
 			#ifdef _XBOX
 			// Forzar la ejecución en el núcleo especificado
-			XSetThreadProcessor(hThread, CPU_THREAD); 
+			XSetThreadProcessor(hThread, IO_THREAD); 
 			#endif
 			// Bajar prioridad para no afectar el rendimiento del juego/emulador
-			SetThreadPriority(hThread, THREAD_PRIORITY_BELOW_NORMAL);
+			SetThreadPriority(hThread, THREAD_PRIORITY_NORMAL);
 			// Arrancar el hilo que estaba suspendido
 			ResumeThread(hThread);
 		}

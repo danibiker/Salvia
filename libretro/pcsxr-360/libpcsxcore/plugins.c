@@ -393,8 +393,72 @@ static int bufcount, bufc;
 
 PadDataS padd1, padd2;
 
+/* Vibration: hook al plugin de input para enviar vibracion al mando
+ * fisico Xbox via XInputSetState.  Definido en
+ * 360/Xdk/input/PSXInput.cpp.  Disparada desde el state machine del
+ * DualShock (libpcsxcore/dualshock_pad.c) cuando el juego envia rumble
+ * via cmd 0x42 + mapping previo de cmd 0x4D. */
+extern void PSxInputSetVibration(int port, unsigned char smallMotor, unsigned char bigMotor);
+
+/* DualShock SIO state machine completo (port de Pokopom).  Habilitado
+ * cuando el frontend selecciona "DualShock" (PSE_PAD_TYPE_ANALOGPAD) y
+ * reemplaza el _PADpoll simplificado original.  Para otros tipos de
+ * pad (Standard, Mouse, etc.) se sigue usando el comportamiento legacy. */
+#include "dualshock_pad.h"
+
+/* Bridge entre PSxInputSetVibration (que toma small/big) y el callback
+ * del state machine (mismo prototipo).  El state machine no conoce
+ * XInput; solo sabe que tiene que entregar (port, small, big). */
+static void plugins_ds_rumble_cb(int port, unsigned char small, unsigned char big) {
+    PSxInputSetVibration(port, small, big);
+}
+
+/* Inicializa el state machine la primera vez que se llama.  Idempotente.
+ * No tenemos un init central en plugins.c, asi que hacemos lazy init. */
+static int s_ds_initialized = 0;
+static void ensure_ds_init(void) {
+    if (!s_ds_initialized) {
+        ds_init(plugins_ds_rumble_cb);
+        s_ds_initialized = 1;
+    }
+}
+
+/* Track del puerto actual del SIO.  Se setea en PAD1__startPoll/PAD2__startPoll
+ * y lo lee _PADpoll para distinguir entre puerto 0 y 1 al despachar al
+ * state machine.  Counter del exchange (bufc) ya existe global. */
+static int s_ds_current_port = 0;
+
+/* Snapshot del pad type del intercambio actual.  Lo seteamos en
+ * _PADstartPoll y lo consultamos en _PADpoll para saber si delegar
+ * al state machine DualShock o usar el legacy path. */
+static int s_ds_current_type = 0;
+
 unsigned char _PADstartPoll(PadDataS *pad) {
     bufc = 0;
+    s_ds_current_type = pad->controllerType;
+
+    /* DualShock: delegar al state machine completo (Pokopom port).  Este
+     * path soporta config mode, queries, set rumble mapping, etc.  Sin
+     * el state machine los juegos que verifican el comportamiento real
+     * (Ape Escape, GT2 con vibracion) rompen.  Para otros tipos de pad
+     * usamos el path legacy (switch de abajo). */
+    if (pad->controllerType == PSE_PAD_TYPE_ANALOGPAD) {
+        ds_input_t input;
+        ensure_ds_init();
+        /* No forzamos analog cada poll — el juego puede togglear a digital
+         * con cmd 0x44 (e.g. opcion del usuario en menu).  ds_init dejo
+         * el padID a ANALOG_RED por defecto, suficiente para arrancar. */
+        input.buttons = pad->buttonStatus;
+        input.leftX   = pad->leftJoyX;
+        input.leftY   = pad->leftJoyY;
+        input.rightX  = pad->rightJoyX;
+        input.rightY  = pad->rightJoyY;
+        ds_set_input(s_ds_current_port, &input);
+        /* counter=0, data=0x01 (start byte que el juego ya escribio).
+         * El state machine devuelve dataBuffer[0] = 0xFF (header). */
+        bufcount = 8;   /* 9-byte exchange (counters 0..8) */
+        return ds_command(s_ds_current_port, 0, 0x01);
+    }
 
     switch (pad->controllerType) {
         case PSE_PAD_TYPE_MOUSE:
@@ -455,6 +519,17 @@ unsigned char _PADstartPoll(PadDataS *pad) {
 }
 
 unsigned char _PADpoll(unsigned char value) {
+    /* DualShock: delegar al state machine.  El counter del exchange es
+     * bufc (que _PADstartPoll dejo en 0 y se incrementa con cada poll). */
+    if (s_ds_current_type == PSE_PAD_TYPE_ANALOGPAD) {
+        unsigned char ret;
+        bufc++;   /* el state machine usa counter 1..8 para los polls */
+        ret = ds_command(s_ds_current_port, bufc, value);
+        return ret;
+    }
+
+    /* Otros tipos de pad: comportamiento legacy.  Solo devolvemos bytes
+     * preasignados por _PADstartPoll.  No hay state machine. */
     if (bufc > bufcount) return 0;
     return buf[bufc++];
 }
@@ -462,6 +537,7 @@ unsigned char _PADpoll(unsigned char value) {
 unsigned char CALLBACK PAD1__startPoll(int pad) {
     PadDataS padd;
 
+    s_ds_current_port = 0;
     PAD1_readPort1(&padd);
 
     return _PADstartPoll(&padd);
@@ -520,6 +596,7 @@ static int LoadPAD1plugin(const char *PAD1dll) {
 unsigned char CALLBACK PAD2__startPoll(int pad) {
 	PadDataS padd;
 
+	s_ds_current_port = 1;
 	PAD2_readPort2(&padd);
 
 	return _PADstartPoll(&padd);

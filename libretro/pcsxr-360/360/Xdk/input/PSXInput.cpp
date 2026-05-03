@@ -71,11 +71,30 @@ void PSxInputReadPort(PadDataS* pad, int port){
 		/* Analog sticks.
 		 * XInput range: -32768..32767.  PSX range: 0..255, center=128.
 		 * PSX Y convention: 0=up, 255=down  (opposite of XInput where +Y=up).
-		 * Formula: (value >> 8) + 128  maps [-32768,32767] -> [0,255] exactly. */
-		pad->leftJoyX  = (uint8_t)(((int)InputState.Gamepad.sThumbLX  >> 8) + 128);
-		pad->leftJoyY  = (uint8_t)((-(int)InputState.Gamepad.sThumbLY >> 8) + 128);
-		pad->rightJoyX = (uint8_t)(((int)InputState.Gamepad.sThumbRX  >> 8) + 128);
-		pad->rightJoyY = (uint8_t)((-(int)InputState.Gamepad.sThumbRY >> 8) + 128);
+		 *
+		 * Conversion gotcha: the formula (value>>8)+128 truncates incorrectly
+		 * for value == -32768 on the inverted Y axes.  Negating -32768 yields
+		 * +32768 (not representable in int16 but fine in int), which after
+		 * >>8 gives 128, and +128 = 256.  Casting to uint8_t truncates to 0
+		 * — which the PSX interprets as "stick up at max" instead of "down".
+		 * Result: in Ape Escape and other analog-heavy games, pushing the
+		 * stick fully down would lock the character into the "up" direction.
+		 *
+		 * Fix: convert via int math, clamp to [0,255], then cast. */
+		{
+			int lx = ( (int)InputState.Gamepad.sThumbLX  >> 8) + 128;
+			int ly = (-(int)InputState.Gamepad.sThumbLY >> 8) + 128;
+			int rx = ( (int)InputState.Gamepad.sThumbRX  >> 8) + 128;
+			int ry = (-(int)InputState.Gamepad.sThumbRY >> 8) + 128;
+			if (lx < 0) lx = 0; if (lx > 255) lx = 255;
+			if (ly < 0) ly = 0; if (ly > 255) ly = 255;
+			if (rx < 0) rx = 0; if (rx > 255) rx = 255;
+			if (ry < 0) ry = 0; if (ry > 255) ry = 255;
+			pad->leftJoyX  = (uint8_t)lx;
+			pad->leftJoyY  = (uint8_t)ly;
+			pad->rightJoyX = (uint8_t)rx;
+			pad->rightJoyY = (uint8_t)ry;
+		}
 	}
 
 	/* Use the controller type selected by the frontend (Standard / DualShock / Analog).
@@ -84,3 +103,43 @@ void PSxInputReadPort(PadDataS* pad, int port){
 	pad->controllerType = libretro_get_pad_type(port);
 	pad->buttonStatus   = pad_status;
 };
+
+/* ===========================================================================
+ *  Vibration / rumble — DualShock command 0x4D path
+ * ===========================================================================
+ *
+ *  Llamado desde plugins.c::_PADpoll cuando el state machine detecta que el
+ *  juego envio bytes de rumble durante un poll DualShock.  Hacemos la
+ *  traduccion del formato PSX (small=boolean, big=analog 0..255) al formato
+ *  XInput (left=low-freq 0..65535, right=high-freq 0..65535).
+ *
+ *  Cache del ultimo valor enviado: si el juego envia las mismas intensidades
+ *  cada frame (caso comun en arcade), evitamos hacer XInputSetState 60 veces
+ *  por segundo — que tiene latencia y compite con XInputGetState. */
+static unsigned short s_last_left[4]  = { 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF };
+static unsigned short s_last_right[4] = { 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF };
+
+extern "C" void PSxInputSetVibration(int port, unsigned char smallMotor, unsigned char bigMotor)
+{
+	if (port < 0 || port > 3) return;
+
+	/* PSX big motor (0..255) -> XInput left (low-freq) escalado a 0..65535.
+	 * Multiplicar por 257 mapea exacto: 0->0, 1->257, ..., 255->65535. */
+	unsigned short left  = (unsigned short)(bigMotor * 257u);
+
+	/* PSX small motor: documentado como digital pero algunos juegos pasan
+	 * cualquier valor != 0.  Lo tratamos como ON/OFF en XInput right.
+	 * Si el usuario quiere modulacion proporcional, cambiar aqui. */
+	unsigned short right = smallMotor ? 0xFFFF : 0x0000;
+
+	if (left == s_last_left[port] && right == s_last_right[port])
+		return;   /* sin cambio, ahorrarse el syscall */
+
+	s_last_left[port]  = left;
+	s_last_right[port] = right;
+
+	XINPUT_VIBRATION vib;
+	vib.wLeftMotorSpeed  = left;
+	vib.wRightMotorSpeed = right;
+	XInputSetState((DWORD)port, &vib);
+}

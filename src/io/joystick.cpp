@@ -470,11 +470,7 @@ bool Joystick::pollKeys(SDL_Surface* screen){
                     axisState[idxPos] = (val >  DEADZONE);
                     axisState[idxNeg] = (val < -DEADZONE);
                 } else {
-                    int32_t raw = event.jaxis.value;
-                    // Clampeo seguro: evitamos el overflow de 32767
-                    if (raw >  32760) raw =  32760;
-                    if (raw < -32760) raw = -32760;
-                    inputs.g_analog_state[p][axis] = (int16_t)raw;
+                    inputs.g_analog_state[p][axis] = event.jaxis.value;
 					//LOG_INFO("axis: %d=%d", axis, inputs.g_analog_state[p][axis]);
                 }
                 break;

@@ -2131,9 +2131,28 @@ struct DBP_MenuInterceptor : DBP_Interceptor
 
 	virtual void close() override
 	{
-		// Get latest values (without emitting events) when leaving intercepted screen
+		// Get latest values when leaving intercepted screen.
+		// For analog axes mapped to mouse movement (DBPET_JOYMX/DBPET_JOYMY) we
+		// MUST fire Update() so the consumer (mouse_joy_x / mouse_joy_y in
+		// GFX_Events) is refreshed; otherwise — if the user pushes the stick,
+		// opens the OSD, releases the stick during the OSD, and closes it —
+		// mouse_joy_x/y stay frozen at the pre-OSD value and the cursor drifts
+		// to a screen corner until the user touches the stick again.
+		// For everything else keep the silent assignment to avoid spamming
+		// events for inputs that changed during the intercepted screen.
 		for (size_t _xi = 0; _xi < dbp_input_binds.size(); _xi++)
-			{ DBP_InputBind& b = dbp_input_binds[_xi]; b.lastval = input_state_cb(b.port, b.device, b.index, b.id); }
+		{
+			DBP_InputBind& b = dbp_input_binds[_xi];
+			Bit16s newval = input_state_cb(b.port, b.device, b.index, b.id);
+			if (b.evt == DBPET_JOYMX || b.evt == DBPET_JOYMY)
+			{
+				if (newval != b.lastval) b.Update(newval);
+			}
+			else
+			{
+				b.lastval = newval;
+			}
+		}
 
 		// Release all keys when switching between key event intercepting
 		DBP_ReleaseKeyEvents(false);

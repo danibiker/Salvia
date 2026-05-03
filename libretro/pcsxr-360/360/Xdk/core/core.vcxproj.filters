@@ -59,6 +59,9 @@
     <ClInclude Include="..\..\..\libpcsxcore\plugins.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\libpcsxcore\dualshock_pad.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\libpcsxcore\ppf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -143,6 +146,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\libpcsxcore\plugins.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\libpcsxcore\dualshock_pad.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\libpcsxcore\ppf.c">

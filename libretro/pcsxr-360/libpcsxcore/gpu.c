@@ -81,7 +81,7 @@ extern unsigned int hSyncCount;
  *   state=STOPPING, espera al thread (con timeout), cierra handle.
  *   Idempotente y safe contra double-init/double-shutdown.
  *
- *   PCSXR_NO_THREADING: si el define esta a 1, NO se crea thread; las
+ *   g_pcsxr_threading_enabled: si esta a 0, NO se crea thread; las
  *   funciones encolan via direct call.  Modo single-thread completo,
  *   util como fallback / diagnostico.
  *
@@ -403,16 +403,16 @@ static void chain_enqueue(uint32_t *pMem, int size)
         }
     }
 
-#if PCSXR_NO_THREADING
-    GPU_writeDataMem(pMem, size);
-#else
-    if (s_thread_state == GPU_THREAD_RUNNING) {
-        ring_push((const uint32_t *)pMem, (uint32_t)size);
-    } else {
-        /* Pre-init, post-shutdown, o NO_THREADING runtime: directo. */
-        GPU_writeDataMem(pMem, size);
-    }
-#endif
+	if (!g_pcsxr_threading_enabled){
+		GPU_writeDataMem(pMem, size);
+	} else {
+		if (s_thread_state == GPU_THREAD_RUNNING) {
+			ring_push((const uint32_t *)pMem, (uint32_t)size);
+		} else {
+			/* Pre-init, post-shutdown, o NO_THREADING runtime: directo. */
+			GPU_writeDataMem(pMem, size);
+		}
+	}
 }
 
 ////////////////////////////////////////////////////////////gpu.c
@@ -506,48 +506,48 @@ void gpuUpdateLace(void)
 
 void gpuDmaThreadShutdown(void)
 {
-#if PCSXR_NO_THREADING
-    /* Modo single-thread: no hay nada que parar. */
-    s_thread_state = GPU_THREAD_STOPPED;
-    return;
-#else
-    DWORD wait_result;
+	if (!g_pcsxr_threading_enabled){
+		/* Modo single-thread: no hay nada que parar. */
+		s_thread_state = GPU_THREAD_STOPPED;
+		return;
+	} else {
+		DWORD wait_result;
 
-    if (s_thread_state == GPU_THREAD_STOPPED || s_thread_handle == NULL) {
-        /* Idempotente: ya cerrado o nunca abierto. */
-        s_thread_state  = GPU_THREAD_STOPPED;
-        s_thread_handle = NULL;
-        return;
-    }
+		if (s_thread_state == GPU_THREAD_STOPPED || s_thread_handle == NULL) {
+			/* Idempotente: ya cerrado o nunca abierto. */
+			s_thread_state  = GPU_THREAD_STOPPED;
+			s_thread_handle = NULL;
+			return;
+		}
 
-    /* Drenar ring antes de pedir stop, asi no perdemos comandos
-     * pendientes que el juego (o el BIOS) ya envio. */
-    while (s_ring_wpos != s_ring_rpos) {
-        YieldProcessor();
-    }
-    __lwsync();
+		/* Drenar ring antes de pedir stop, asi no perdemos comandos
+		 * pendientes que el juego (o el BIOS) ya envio. */
+		while (s_ring_wpos != s_ring_rpos) {
+			YieldProcessor();
+		}
+		__lwsync();
 
-    /* Pedir parada y esperar al thread.  Timeout defensivo: si el thread
-     * quedase atascado (ej. dentro de un GPU_writeDataMem patologicamente
-     * largo), no colgamos el unload — soltamos el handle y seguimos.
-     * TerminateThread no esta disponible en XDK Xbox 360. */
-    s_thread_state = GPU_THREAD_STOPPING;
+		/* Pedir parada y esperar al thread.  Timeout defensivo: si el thread
+		 * quedase atascado (ej. dentro de un GPU_writeDataMem patologicamente
+		 * largo), no colgamos el unload — soltamos el handle y seguimos.
+		 * TerminateThread no esta disponible en XDK Xbox 360. */
+		s_thread_state = GPU_THREAD_STOPPING;
 
-    wait_result = WaitForSingleObject(s_thread_handle, 5000);
-    if (wait_result == WAIT_TIMEOUT) {
-        pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] WARNING: GPU helper thread did not exit in 5s, leaving handle\n");
-        /* Marcamos como stopped para que la proxima init no reuse el
-         * handle viejo.  El thread fugado eventualmente saldra solo
-         * cuando vea STOPPING. */
-        s_thread_handle = NULL;
-        s_thread_state  = GPU_THREAD_STOPPED;
-        return;
-    }
+		wait_result = WaitForSingleObject(s_thread_handle, 5000);
+		if (wait_result == WAIT_TIMEOUT) {
+			pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] WARNING: GPU helper thread did not exit in 5s, leaving handle\n");
+			/* Marcamos como stopped para que la proxima init no reuse el
+			 * handle viejo.  El thread fugado eventualmente saldra solo
+			 * cuando vea STOPPING. */
+			s_thread_handle = NULL;
+			s_thread_state  = GPU_THREAD_STOPPED;
+			return;
+		}
 
-    CloseHandle(s_thread_handle);
-    s_thread_handle = NULL;
-    s_thread_state  = GPU_THREAD_STOPPED;
-#endif
+		CloseHandle(s_thread_handle);
+		s_thread_handle = NULL;
+		s_thread_state  = GPU_THREAD_STOPPED;
+	}
 }
 
 void gpuDmaThreadInit(void)
@@ -562,32 +562,32 @@ void gpuDmaThreadInit(void)
     s_ring_wpos = 0;
     s_ring_rpos = 0;
 
-#if PCSXR_NO_THREADING
-    /* Modo single-thread: no creamos thread.  chain_enqueue / ring_drain
-     * tomaran el path direct. */
-    s_thread_state = GPU_THREAD_STOPPED;
-    return;
-#else
-    /* Marcar RUNNING antes de ResumeThread.  El consumer hace check de
-     * STOPPING para parar; mientras este RUNNING corre normal. */
-    s_thread_state = GPU_THREAD_RUNNING;
+	if (!g_pcsxr_threading_enabled){
+		/* Modo single-thread: no creamos thread.  chain_enqueue / ring_drain
+		 * tomaran el path direct. */
+		s_thread_state = GPU_THREAD_STOPPED;
+		return;
+	} else {
+		/* Marcar RUNNING antes de ResumeThread.  El consumer hace check de
+		 * STOPPING para parar; mientras este RUNNING corre normal. */
+		s_thread_state = GPU_THREAD_RUNNING;
 
-    s_thread_handle = CreateThread(NULL, 0,
-                                   (LPTHREAD_START_ROUTINE)gpu_thread_proc,
-                                   NULL, CREATE_SUSPENDED, NULL);
-    if (!s_thread_handle) {
-        /* CreateThread fallo (heap exhausted, kernel handles, etc.).
-         * Caer a modo single-thread runtime: chain_enqueue / ring_drain
-         * detectan state != RUNNING y van direct. */
-        pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] WARNING: CreateThread for GPU helper failed, falling back to inline mode\n");
-        s_thread_state = GPU_THREAD_STOPPED;
-        return;
-    }
+		s_thread_handle = CreateThread(NULL, 0,
+									   (LPTHREAD_START_ROUTINE)gpu_thread_proc,
+									   NULL, CREATE_SUSPENDED, NULL);
+		if (!s_thread_handle) {
+			/* CreateThread fallo (heap exhausted, kernel handles, etc.).
+			 * Caer a modo single-thread runtime: chain_enqueue / ring_drain
+			 * detectan state != RUNNING y van direct. */
+			pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] WARNING: CreateThread for GPU helper failed, falling back to inline mode\n");
+			s_thread_state = GPU_THREAD_STOPPED;
+			return;
+		}
 
-    SetThreadPriority(s_thread_handle, THREAD_PRIORITY_ABOVE_NORMAL);
-    XSetThreadProcessor(s_thread_handle, 4);
-    ResumeThread(s_thread_handle);
-#endif
+		SetThreadPriority(s_thread_handle, THREAD_PRIORITY_ABOVE_NORMAL);
+		XSetThreadProcessor(s_thread_handle, 4);
+		ResumeThread(s_thread_handle);
+	}
 }
 
 /* gpuThreadEnable() solia existir y reseteaba gpu_thread_exit, anulando

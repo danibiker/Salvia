@@ -25,30 +25,37 @@
 #ifndef __PSXCOMMON_H__
 #define __PSXCOMMON_H__
 
-/* PCSXR_NO_THREADING — modo "todo en el hilo principal".
- *
- * Si este define esta activo (definir = 1), la emulacion corre 100%
- * single-threaded:
- *   - El GPU helper thread (libpcsxcore/gpu.c, core 4) NO se crea.
- *     Los gpuWriteDataMem/Read/UpdateLace ejecutan inline en el thread
- *     que los llama (CPU PSX en retro_run).
- *   - El SPU MAINThread (plugins/dfsound/spu.c, core 3) NO se crea.
- *     Se fuerza iUseTimer=2 (polling) y SPU_async se llama desde
- *     psxcounters.c cada N hsync, dentro del propio retro_run.
- *
- * Util como diagnostico cuando aparecen freezes / deadlocks de origen
- * desconocido — descarta race conditions entre hilos.  Coste: en
- * juegos pesados (BR2 batalla) baja la fps porque la rasterizacion
- * deja de paralelizarse con la CPU emulada, todo es secuencial.
- *
- * Default: 0 (threading activo, comportamiento normal). */
-#ifndef PCSXR_NO_THREADING
-#define PCSXR_NO_THREADING 0
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* g_pcsxr_threading_enabled — runtime selector for the helper-threads
+ * subsystem.  Sampled ONCE per boot from the libretro core option
+ * `pcsxr360_threading` (see check_threading_initial_only in
+ * libretro_core.cpp), before gpuDmaThreadInit and SPU_open get called.
+ *
+ * When 1 (default):
+ *   - GPU helper thread (libpcsxcore/gpu.c, core 4) is created.  DMA
+ *     chains are pushed to a SPSC ring and consumed in parallel with
+ *     the CPU.
+ *   - SPU MAINThread (plugins/dfsound/spu.c, core 3) is created with
+ *     iUseTimer=0.  Audio synthesised in parallel with the CPU.
+ *
+ * When 0:
+ *   - GPU helper thread is NOT created.  gpuWriteDataMem/Read/UpdateLace
+ *     run inline on the thread that calls them (CPU PSX in retro_run).
+ *   - SPU MAINThread is NOT created.  iUseTimer=2 (polling) forces
+ *     SPU_async invocations from psxcounters.c each N hsyncs, inline in
+ *     retro_run.
+ *
+ * Useful for diagnosing freezes / deadlocks of unknown origin — rules
+ * out cross-thread races.  Cost: heavy games (BR2 battle) drop fps
+ * because rasterisation no longer overlaps with the emulated CPU.
+ *
+ * The setting requires a core restart to take effect — the threads are
+ * spun up at emu_setup time and tearing them down mid-session is more
+ * trouble than it's worth. */
+extern int g_pcsxr_threading_enabled;
 
 #include "config.h"
 

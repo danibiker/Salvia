@@ -525,6 +525,7 @@
     <ClInclude Include="..\..\..\libpcsxcore\mdec.h" />
     <ClInclude Include="..\..\..\libpcsxcore\misc.h" />
     <ClInclude Include="..\..\..\libpcsxcore\plugins.h" />
+    <ClInclude Include="..\..\..\libpcsxcore\dualshock_pad.h" />
     <ClInclude Include="..\..\..\libpcsxcore\ppf.h" />
     <ClInclude Include="..\..\..\libpcsxcore\psemu_plugin_defs.h" />
     <ClInclude Include="..\..\..\libpcsxcore\psxbios.h" />
@@ -692,6 +693,17 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="..\..\..\libpcsxcore\plugins.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='debug_cc|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='debug_cc_optimised|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_Opt|Xbox 360'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\..\..\libpcsxcore\dualshock_pad.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">CompileAsC</CompileAs>

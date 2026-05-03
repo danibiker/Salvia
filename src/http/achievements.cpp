@@ -69,10 +69,13 @@ void AchievementsWorker::start()
         if (m_mutex)  { SDL_DestroyMutex(m_mutex); m_mutex = NULL; }
         return;
     }
-
+	
+	#ifdef _XBOX
     /* IO_THREAD = core 2; below normal para no robarle ciclos al emulador. */
     XSetThreadProcessor(m_thread, IO_THREAD);
-    SetThreadPriority(m_thread, THREAD_PRIORITY_BELOW_NORMAL);
+	#endif
+
+    SetThreadPriority(m_thread, THREAD_PRIORITY_NORMAL);
     ResumeThread(m_thread);
 
     m_started = true;
@@ -1427,7 +1430,7 @@ void Achievements::server_call(const rc_api_request_t* request,
 }
 
 void Achievements::download_and_cache_image(AchievementState* achievement, int badgeW, int badgeH, bool createNew) {
-    if (achievement->badgeName.empty() || achievement->badge != NULL) {
+    if (achievement->badgeName.empty() || achievement->badge != NULL || badgeW > 512 || badgeH > 512 || badgeW <= 0 || badgeH <= 0) {
 		achievement->isDownloading = false;
 		return;
 	}
@@ -1489,7 +1492,8 @@ bool Achievements::download_and_cache_image(std::string url, uint32_t idImage, S
 		return true;
 	}
 
-    if (curlClient.fetchUrl(url, response, &progress)) {
+    if ((badgeW < 512 && badgeH < 512 && badgeW > 0 || badgeH > 0) 
+		&& curlClient.fetchUrl(url, response, &progress)) {
         SDL_RWops* rw = SDL_RWFromMem((void*)response.data(), (int)response.size());
         SDL_Surface *rawImg = IMG_Load_RW(rw, 1);
 
