@@ -25,24 +25,36 @@
 
 /* VRAM and texture-page constants.
  * Upstream used a single inline-constexpr chain; broken out here so
- * each declaration is plain pre-C++17 syntax. */
-static const u32 VRAM_WIDTH           = 1024;
-static const u32 VRAM_HEIGHT          = 512;
-static const u32 VRAM_SIZE            = VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16);
-static const u32 VRAM_WIDTH_MASK      = VRAM_WIDTH - 1;
-static const u32 VRAM_HEIGHT_MASK     = VRAM_HEIGHT - 1;
-static const u32 TEXTURE_PAGE_WIDTH   = 256;
-static const u32 TEXTURE_PAGE_HEIGHT  = 256;
+ * each declaration is plain pre-C++17 syntax.
+ *
+ * Optimization (A): cambiados a `enum` (integer constant expressions)
+ * en lugar de `static const u32` para garantizar que MSVC PPC los
+ * trate como literales en codegen.  Con `static const u32` el
+ * compilador a veces no convierte `% VRAM_WIDTH` a `& VRAM_WIDTH_MASK`
+ * (deja una division/modulo de 30+ ciclos en Xenon).  Como enum, el
+ * patrón `% 1024` se ve como modulo por literal potencia-de-2 y se
+ * convierte a `& 1023` (1 ciclo).  Tambien garantiza que offsets como
+ * `VRAM_WIDTH * y + x` se calculen via shift (`y << 10`) en lugar de
+ * multiplicacion. */
+enum {
+    VRAM_WIDTH              = 1024,
+    VRAM_HEIGHT             = 512,
+    VRAM_WIDTH_MASK         = 1023,
+    VRAM_HEIGHT_MASK        = 511,
+    VRAM_SIZE               = 1024 * 512 * 2,   /* = sizeof(u16) bytes */
+    TEXTURE_PAGE_WIDTH      = 256,
+    TEXTURE_PAGE_HEIGHT     = 256,
 
-/* In interlaced modes we can exceed the 512 height of VRAM, up to 576
- * in PAL games. */
-static const u32 GPU_MAX_DISPLAY_WIDTH  = 720;
-static const u32 GPU_MAX_DISPLAY_HEIGHT = 576;
+    /* In interlaced modes we can exceed the 512 height of VRAM, up to
+     * 576 in PAL games. */
+    GPU_MAX_DISPLAY_WIDTH   = 720,
+    GPU_MAX_DISPLAY_HEIGHT  = 576,
 
-static const u32 DITHER_MATRIX_SIZE = 4;
+    DITHER_MATRIX_SIZE      = 4,
 
-static const s32 MAX_PRIMITIVE_WIDTH  = 1024;
-static const s32 MAX_PRIMITIVE_HEIGHT = 512;
+    MAX_PRIMITIVE_WIDTH     = 1024,
+    MAX_PRIMITIVE_HEIGHT    = 512
+};
 
 /* VS2010 (MSC_VER 1600) does not support `enum class` with a fixed
  * underlying type — both features require >= 1700. We emulate scoped

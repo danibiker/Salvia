@@ -56,10 +56,16 @@ public:
    * GetPixelPtr is NOT byteswapped — any caller using the raw pointer
    * must swap explicitly. No code currently does; it's only exposed
    * for parity with the upstream surface. */
-  ALWAYS_INLINE_RELEASE u16        GetPixel(u32 x, u32 y) const     { return VRAMSwap(m_vram_ptr[VRAM_WIDTH * y + x]); }
+  /* Optimization (C): GetPixel/SetPixel usan VRAMLoadLE/VRAMStoreLE que
+   * en Xbox 360 PPC se compilan a UNA instruccion (lhbrx/sthbrx) que
+   * combina load+byteswap o store+byteswap.  Antes el patron VRAMSwap(
+   * m_vram_ptr[i]) generaba 2 instrucciones (lhz + rlwinm/rlwimi).
+   * Multiplicado por millones de accesos a pixel/frame en BR2, ahorra
+   * ms perceptibles. */
+  ALWAYS_INLINE_RELEASE u16        GetPixel(u32 x, u32 y) const     { return VRAMLoadLE(&m_vram_ptr[VRAM_WIDTH * y + x]); }
   ALWAYS_INLINE_RELEASE const u16* GetPixelPtr(u32 x, u32 y) const  { return &m_vram_ptr[VRAM_WIDTH * y + x]; }
   ALWAYS_INLINE_RELEASE u16*       GetPixelPtr(u32 x, u32 y)        { return &m_vram_ptr[VRAM_WIDTH * y + x]; }
-  ALWAYS_INLINE_RELEASE void       SetPixel(u32 x, u32 y, u16 value){ m_vram_ptr[VRAM_WIDTH * y + x] = VRAMSwap(value); }
+  ALWAYS_INLINE_RELEASE void       SetPixel(u32 x, u32 y, u16 value){ VRAMStoreLE(&m_vram_ptr[VRAM_WIDTH * y + x], value); }
 
   /* Actually (31 * 255) >> 4 == 494, but rounded up to the next power
    * of two (512) to simplify addressing. */

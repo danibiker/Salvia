@@ -264,7 +264,14 @@ void BlitScreen16(unsigned char * surf,long x,long y)
    dx>>=1;
 
    LineOffset = 512 - dx;
-   if((lPitch>>2) < (long)dx) return;               // pitch mismatch would wrap SurfOffset; skip blit
+   
+   //if pitch mismatch would wrap SurfOffset; skip blit
+   if((lPitch>>2) < (long)dx) {
+	   OutputDebugStringA("pitch mismatch\n");
+	   return;
+   }
+	   
+
    SurfOffset = (lPitch>>2) - dx;
 
    for(column=0;column<dy;column++)

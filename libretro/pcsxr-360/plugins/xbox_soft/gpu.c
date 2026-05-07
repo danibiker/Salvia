@@ -138,6 +138,7 @@
 #include "fps.h"
 #include "swap.h"
 #include "../gpu_duck/gpu_duck_c_api.h"
+#include "../gpu_unai/gpu_unai_c_api.h"
 #include "peops_prof.h"
 
 ////////////////////////////////////////////////////////////////////////
@@ -587,6 +588,17 @@ long PEOPS_GPUinit()                                // GPU INIT
   }
  }
 
+ /* Same for gpu_unai.  Mutually exclusive with gpu_duck; libretro
+  * option parsing in libretro_core.cpp guarantees at most one of
+  * the two is non-zero. */
+ if (unai_gpu_enabled)
+ {
+  if (unai_init(psxVuw) != 0)
+  {
+   unai_gpu_enabled = 0;
+  }
+ }
+
  return 0;
 }
 
@@ -697,6 +709,10 @@ long PEOPS_GPUshutdown()
  if (duck_gpu_enabled)
  {
   duck_shutdown();
+ }
+ if (unai_gpu_enabled)
+ {
+  unai_shutdown();
  }
 
  /* Liberar el buffer de seguridad asignado en PEOPS_GPUinit().  El
@@ -1600,14 +1616,17 @@ ENDVRAM:
    void (* *primFunc)(unsigned char *);
 #if PCSXR_PERF_ENABLED
    /* Profile only when running the stock PEOPS rasteriser; skip-frame and
-    * duck have their own time domains and would muddle the buckets. */
+    * the alternate renderers (duck/unai) have their own time domains
+    * and would muddle the buckets. */
    int prof_active;
    if(bSkipNextFrame)       { primFunc=primTableSkip;                              prof_active = 0; }
    else if(duck_gpu_enabled){ primFunc=(void (**)(unsigned char *))duck_primTable; prof_active = 0; }
+   else if(unai_gpu_enabled){ primFunc=(void (**)(unsigned char *))unai_primTable; prof_active = 0; }
    else                     { primFunc=primTableJ;                                 prof_active = 1; }
 #else
    if(bSkipNextFrame)       { primFunc=primTableSkip;                              }
    else if(duck_gpu_enabled){ primFunc=(void (**)(unsigned char *))duck_primTable; }
+   else if(unai_gpu_enabled){ primFunc=(void (**)(unsigned char *))unai_primTable; }
    else                     { primFunc=primTableJ;                                 }
 #endif
 

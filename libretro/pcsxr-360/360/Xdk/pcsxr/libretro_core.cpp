@@ -98,6 +98,31 @@ extern void pcsxr_log(enum retro_log_level level, const char *format, ...);
  * selector in plugins/xbox_soft/gpu.c. */
 extern int      duck_gpu_enabled;
 
+/* Runtime selector for the gpu_unai SW renderer ported from
+ * PCSX-ReARMed.  Defined in plugins/gpu_unai/gpu_unai_driver.cpp.
+ * Mutually exclusive with duck_gpu_enabled — the GP0 dispatch
+ * selector picks at most one alternate primTable per session. */
+extern int      unai_gpu_enabled;
+int  unai_init(unsigned short* psx_vram);
+void unai_shutdown(void);
+void unai_apply_config(void);
+
+/* Mirror the gpu_unai_config_t layout from plugins/gpu_unai/gpu.h.
+ * Repeated here so we can populate it from libretro vars without
+ * including the gpu_unai header (which would clash with the
+ * libpcsxcore gpu.h that this TU already pulls in). */
+struct gpu_unai_config_t {
+    uint8_t pixel_skip:1;
+    uint8_t ilace_force:3;
+    uint8_t lighting:1;
+    uint8_t fast_lighting:1;
+    uint8_t blending:1;
+    uint8_t dithering:1;
+    uint8_t force_dithering:1;
+    uint8_t old_renderer:1;
+};
+extern struct gpu_unai_config_t gpu_unai_config_ext;
+
 }
 
 /* ===== CRT stub ===== */
@@ -196,10 +221,9 @@ void retro_set_environment(retro_environment_t cb) {
         { "pcsxr360_fix_ignore_brightness", "GPU Fix: Ignore black brightness; disabled|enabled" },
         { "pcsxr360_fix_lazy_update",    "GPU Fix: Lazy screen update; disabled|enabled" },
         { "pcsxr360_fix_quads_to_tris",  "GPU Fix: Draw quads with triangles; disabled|enabled" },
-        //{ "pcsxr360_fix_collapsed_quads", "GPU Fix: Collapsed quads; disabled|enabled" },
         //{ "pcsxr360_load_delay",         "CPU Fix: R3000A load-delay slots (Soul Calibur); enabled|disabled" },
 		{ "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
-        { "pcsxr360_gpu_renderer",       "GPU Renderer (restart core to apply); xbox_soft|gpu_duck" },
+        { "pcsxr360_gpu_renderer",       "GPU Renderer (restart core to apply); Peops|SwanStation|Unai" },
         { "pcsxr360_auto_frameskip",     "Auto frameskip (skip render on overload); disabled|enabled" },
         { "pcsxr360_threading",          "Helper threads GPU/SPU (restart core to apply); enabled|disabled" },
         { NULL, NULL }
@@ -338,11 +362,32 @@ static void check_game_fixes(void) {
  * Splitting this out of check_game_fixes() prevents the hot-swap crash
  * (s_driver NULL while duck_primTable is in use). */
 static void check_gpu_renderer_initial_only(void) {
+    /* Three-way switch: xbox_soft (PEOPS, default), gpu_duck (Swan
+     * Station port), gpu_unai (PCSX-ReARMed port).  At most one of
+     * the alternates is enabled per session; xbox_soft/gpu.c picks
+     * its primFunc dispatch table accordingly. */
+    duck_gpu_enabled = 0;
+    unai_gpu_enabled = 0;
+
     struct retro_variable var = { "pcsxr360_gpu_renderer", NULL };
-    if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-        duck_gpu_enabled = (strcmp(var.value, "gpu_duck") == 0) ? 1 : 0;
-    else
-        duck_gpu_enabled = 0;
+    if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+        if      (strcmp(var.value, "SwanStation") == 0) duck_gpu_enabled = 1;
+        else if (strcmp(var.value, "Unai") == 0) unai_gpu_enabled = 1;
+    }
+
+    if (unai_gpu_enabled) {
+        /* Populate gpu_unai's frontend-facing config struct from the
+         * libretro variables.  Mirrors PCSX-ReARMed's
+         * gpu_unai_config_ext that gets read by renderer_init. */
+        gpu_unai_config_ext.lighting        = 1;
+        gpu_unai_config_ext.fast_lighting   = 0;
+        gpu_unai_config_ext.blending        = 1;
+        gpu_unai_config_ext.dithering       = 0;
+        gpu_unai_config_ext.force_dithering = 0;
+        gpu_unai_config_ext.ilace_force     = 0;
+        gpu_unai_config_ext.pixel_skip      = 0;
+        gpu_unai_config_ext.old_renderer    = 0;
+    }
 }
 
 /* Snapshot the helper-threads choice ONCE at core init, before the

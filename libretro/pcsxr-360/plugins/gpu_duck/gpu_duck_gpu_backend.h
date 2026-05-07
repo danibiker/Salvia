@@ -53,16 +53,56 @@
  * endianness. */
 #define DUCK_VRAM_BIG_ENDIAN DUCK_BIG_ENDIAN
 
+#if DUCK_VRAM_BIG_ENDIAN && defined(_XBOX)
+/* Xbox 360 XDK exposes ppcintrinsics: lhbrx/sthbrx via these wrappers. */
+#include <ppcintrinsics.h>
+#endif
+
 ALWAYS_INLINE static u16 VRAMSwap(u16 v)
 {
 #if DUCK_VRAM_BIG_ENDIAN
-  /* Manual shift. On PPC, MSVC compiles this to a single `rlwinm` +
-   * `rlwimi` pair (1-2 cycles), same as the intrinsic path. Keeps us
-   * independent of `<stdlib.h>` being included for _byteswap_ushort,
-   * which the XDK headers do not always drag in for us. */
-  return static_cast<u16>(((v & 0x00FFu) << 8) | ((v & 0xFF00u) >> 8));
+  /* Optimization (C): para valores ya en registro usamos el intrinsic
+   * `_byteswap_ushort`.  En MSVC PPC se traduce a `rlwinm/rlwimi` (1-2
+   * ciclos), igual que el shift manual; pero permite que el optimizador
+   * lo reconozca como un patron y, en particular, lo fusione con loads
+   * adyacentes a `lhbrx` cuando se aplica directamente al resultado de
+   * un dereference (caso comun en VRAMSwap(*ptr)).
+   *
+   * Para el caso load/store directo a memoria preferir las helpers
+   * VRAMLoadLE / VRAMStoreLE definidas abajo, que generan `lhbrx` /
+   * `sthbrx` (load+swap en una sola instruccion).  Este wrapper queda
+   * para los casos donde el valor ya esta en registro tras un calculo. */
+  return _byteswap_ushort(v);
 #else
   return v;
+#endif
+}
+
+/* Load 16-bit value from VRAM memory and byteswap in a single PPC
+ * instruction (`lhbrx`).  En LE host es un load normal.  Reemplaza el
+ * patron `VRAMSwap(*ptr)` que MSVC compila a 2 instrucciones (lhz +
+ * swap manual) en lugar de 1 (lhbrx). */
+ALWAYS_INLINE static u16 VRAMLoadLE(const u16* ptr)
+{
+#if DUCK_VRAM_BIG_ENDIAN && defined(_XBOX)
+  return __loadshortbytereverse(0, const_cast<u16*>(ptr));
+#elif DUCK_VRAM_BIG_ENDIAN
+  return _byteswap_ushort(*ptr);
+#else
+  return *ptr;
+#endif
+}
+
+/* Store 16-bit value to VRAM memory after byteswap, single PPC
+ * instruction (`sthbrx`). */
+ALWAYS_INLINE static void VRAMStoreLE(u16* ptr, u16 v)
+{
+#if DUCK_VRAM_BIG_ENDIAN && defined(_XBOX)
+  __storeshortbytereverse(v, 0, ptr);
+#elif DUCK_VRAM_BIG_ENDIAN
+  *ptr = _byteswap_ushort(v);
+#else
+  *ptr = v;
 #endif
 }
 

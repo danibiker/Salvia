@@ -182,30 +182,30 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
       case GPUTextureMode::Palette4Bit:
       {
         const u16 palette_value =
-          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x / 4)) % VRAM_WIDTH,
-                   (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) % VRAM_HEIGHT);
+          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x / 4)) & VRAM_WIDTH_MASK,
+                   (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) & VRAM_HEIGHT_MASK);
         const u16 palette_index = static_cast<u16>((palette_value >> ((texcoord_x % 4) * 4)) & 0x0Fu);
 
         texture_color.bits =
-          GetPixel((cmd->palette.GetXBase() + ZeroExtend32(palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
+          GetPixel((cmd->palette.GetXBase() + ZeroExtend32(palette_index)) & VRAM_WIDTH_MASK, cmd->palette.GetYBase());
         break;
       }
 
       case GPUTextureMode::Palette8Bit:
       {
         const u16 palette_value =
-          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x / 2)) % VRAM_WIDTH,
-                   (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) % VRAM_HEIGHT);
+          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x / 2)) & VRAM_WIDTH_MASK,
+                   (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) & VRAM_HEIGHT_MASK);
         const u16 palette_index = static_cast<u16>((palette_value >> ((texcoord_x % 2) * 8)) & 0xFFu);
         texture_color.bits =
-          GetPixel((cmd->palette.GetXBase() + ZeroExtend32(palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
+          GetPixel((cmd->palette.GetXBase() + ZeroExtend32(palette_index)) & VRAM_WIDTH_MASK, cmd->palette.GetYBase());
         break;
       }
 
       default:
       {
-        texture_color.bits = GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x)) % VRAM_WIDTH,
-                                      (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) % VRAM_HEIGHT);
+        texture_color.bits = GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x)) & VRAM_WIDTH_MASK,
+                                      (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) & VRAM_HEIGHT_MASK);
         break;
       }
     }
@@ -829,7 +829,7 @@ void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GP
   {
     for (u32 yoffs = 0; yoffs < height; yoffs++)
     {
-      const u32 row = (y + yoffs) % VRAM_HEIGHT;
+      const u32 row = (y + yoffs) & VRAM_HEIGHT_MASK;
       std::fill_n(&m_vram_ptr[row * VRAM_WIDTH + x], width, color16);
     }
   }
@@ -838,14 +838,14 @@ void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GP
     const u32 active_field = static_cast<u32>(params.active_line_lsb);
     for (u32 yoffs = 0; yoffs < height; yoffs++)
     {
-      const u32 row = (y + yoffs) % VRAM_HEIGHT;
+      const u32 row = (y + yoffs) & VRAM_HEIGHT_MASK;
       if ((row & 1u) == active_field)
         continue;
 
       u16* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
       for (u32 xoffs = 0; xoffs < width; xoffs++)
       {
-        const u32 col = (x + xoffs) % VRAM_WIDTH;
+        const u32 col = (x + xoffs) & VRAM_WIDTH_MASK;
         row_ptr[col] = color16;
       }
     }
@@ -854,11 +854,11 @@ void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GP
   {
     for (u32 yoffs = 0; yoffs < height; yoffs++)
     {
-      const u32 row = (y + yoffs) % VRAM_HEIGHT;
+      const u32 row = (y + yoffs) & VRAM_HEIGHT_MASK;
       u16* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
       for (u32 xoffs = 0; xoffs < width; xoffs++)
       {
-        const u32 col = (x + xoffs) % VRAM_WIDTH;
+        const u32 col = (x + xoffs) & VRAM_WIDTH_MASK;
         row_ptr[col] = color16;
       }
     }
@@ -883,8 +883,9 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
     u16* dst_ptr = &m_vram_ptr[y * VRAM_WIDTH + x];
     for (u32 yoffs = 0; yoffs < height; yoffs++)
     {
+      /* Optimization (C): VRAMStoreLE -> sthbrx (1 instruccion). */
       for (u32 col = 0; col < width; ++col)
-        dst_ptr[col] = VRAMSwap(src_ptr[col]);
+        VRAMStoreLE(&dst_ptr[col], src_ptr[col]);
       src_ptr += width;
       dst_ptr += VRAM_WIDTH;
     }
@@ -897,12 +898,12 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
 
     for (u32 row = 0; row < height;)
     {
-      u16* dst_row_ptr = &m_vram_ptr[((y + row++) % VRAM_HEIGHT) * VRAM_WIDTH];
+      u16* dst_row_ptr = &m_vram_ptr[((y + row++) & VRAM_HEIGHT_MASK) * VRAM_WIDTH];
       for (u32 col = 0; col < width;)
       {
-        u16* pixel_ptr = &dst_row_ptr[(x + col++) % VRAM_WIDTH];
-        if ((VRAMSwap(*pixel_ptr) & mask_and) == 0)
-          *pixel_ptr = VRAMSwap(static_cast<u16>(*(src_ptr++) | mask_or));
+        u16* pixel_ptr = &dst_row_ptr[(x + col++) & VRAM_WIDTH_MASK];
+        if ((VRAMLoadLE(pixel_ptr) & mask_and) == 0)
+          VRAMStoreLE(pixel_ptr, static_cast<u16>(*(src_ptr++) | mask_or));
       }
     }
   }
@@ -929,13 +930,13 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
         const u32 columns_to_copy =
           (std::min<u32>)(remaining_columns, (std::min<u32>)(VRAM_WIDTH - current_src_x, VRAM_WIDTH - current_dst_x));
         CopyVRAM(current_src_x, current_src_y, current_dst_x, current_dst_y, columns_to_copy, rows_to_copy, params);
-        current_src_x = (current_src_x + columns_to_copy) % VRAM_WIDTH;
-        current_dst_x = (current_dst_x + columns_to_copy) % VRAM_WIDTH;
+        current_src_x = (current_src_x + columns_to_copy) & VRAM_WIDTH_MASK;
+        current_dst_x = (current_dst_x + columns_to_copy) & VRAM_WIDTH_MASK;
         remaining_columns -= columns_to_copy;
       }
 
-      current_src_y = (current_src_y + rows_to_copy) % VRAM_HEIGHT;
-      current_dst_y = (current_dst_y + rows_to_copy) % VRAM_HEIGHT;
+      current_src_y = (current_src_y + rows_to_copy) & VRAM_HEIGHT_MASK;
+      current_dst_y = (current_dst_y + rows_to_copy) & VRAM_HEIGHT_MASK;
       remaining_rows -= rows_to_copy;
     }
     return;
@@ -948,19 +949,21 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
    * test must compare host-native values, so we swap both sides; the
    * OR with mask_or is applied in host-native space and swapped back
    * before the store. */
-  if (src_x < dst_x || ((src_x + width - 1) % VRAM_WIDTH) < ((dst_x + width - 1) % VRAM_WIDTH))
+  if (src_x < dst_x || ((src_x + width - 1) & VRAM_WIDTH_MASK) < ((dst_x + width - 1) & VRAM_WIDTH_MASK))
   {
     for (u32 row = 0; row < height; row++)
     {
-      const u16* src_row_ptr = &m_vram_ptr[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
-      u16* dst_row_ptr = &m_vram_ptr[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+      const u16* src_row_ptr = &m_vram_ptr[((src_y + row) & VRAM_HEIGHT_MASK) * VRAM_WIDTH];
+      u16* dst_row_ptr = &m_vram_ptr[((dst_y + row) & VRAM_HEIGHT_MASK) * VRAM_WIDTH];
 
+      /* Optimization (C): VRAMLoadLE/VRAMStoreLE -> lhbrx/sthbrx
+       * (1 instruccion combinando load-or-store + byteswap). */
       for (s32 col = static_cast<s32>(width) - 1; col >= 0; col--)
       {
-        const u16 src_pixel = VRAMSwap(src_row_ptr[(src_x + static_cast<u32>(col)) % VRAM_WIDTH]);
-        u16* dst_pixel_ptr = &dst_row_ptr[(dst_x + static_cast<u32>(col)) % VRAM_WIDTH];
-        if ((VRAMSwap(*dst_pixel_ptr) & mask_and) == 0)
-          *dst_pixel_ptr = VRAMSwap(static_cast<u16>(src_pixel | mask_or));
+        const u16 src_pixel = VRAMLoadLE(&src_row_ptr[(src_x + static_cast<u32>(col)) & VRAM_WIDTH_MASK]);
+        u16* dst_pixel_ptr = &dst_row_ptr[(dst_x + static_cast<u32>(col)) & VRAM_WIDTH_MASK];
+        if ((VRAMLoadLE(dst_pixel_ptr) & mask_and) == 0)
+          VRAMStoreLE(dst_pixel_ptr, static_cast<u16>(src_pixel | mask_or));
       }
     }
   }
@@ -968,15 +971,15 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
   {
     for (u32 row = 0; row < height; row++)
     {
-      const u16* src_row_ptr = &m_vram_ptr[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
-      u16* dst_row_ptr = &m_vram_ptr[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+      const u16* src_row_ptr = &m_vram_ptr[((src_y + row) & VRAM_HEIGHT_MASK) * VRAM_WIDTH];
+      u16* dst_row_ptr = &m_vram_ptr[((dst_y + row) & VRAM_HEIGHT_MASK) * VRAM_WIDTH];
 
       for (u32 col = 0; col < width; col++)
       {
-        const u16 src_pixel = VRAMSwap(src_row_ptr[(src_x + col) % VRAM_WIDTH]);
-        u16* dst_pixel_ptr = &dst_row_ptr[(dst_x + col) % VRAM_WIDTH];
-        if ((VRAMSwap(*dst_pixel_ptr) & mask_and) == 0)
-          *dst_pixel_ptr = VRAMSwap(static_cast<u16>(src_pixel | mask_or));
+        const u16 src_pixel = VRAMLoadLE(&src_row_ptr[(src_x + col) & VRAM_WIDTH_MASK]);
+        u16* dst_pixel_ptr = &dst_row_ptr[(dst_x + col) & VRAM_WIDTH_MASK];
+        if ((VRAMLoadLE(dst_pixel_ptr) & mask_and) == 0)
+          VRAMStoreLE(dst_pixel_ptr, static_cast<u16>(src_pixel | mask_or));
       }
     }
   }

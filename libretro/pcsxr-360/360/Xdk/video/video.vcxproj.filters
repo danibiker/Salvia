@@ -12,6 +12,9 @@
     <Filter Include="gpu_duck">
       <UniqueIdentifier>{a1b2c3d4-e5f6-7890-abcd-ef0123456789}</UniqueIdentifier>
     </Filter>
+    <Filter Include="gpu_unai">
+      <UniqueIdentifier>{b2c3d4e5-f607-1890-bcde-f01234567890}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\plugins\xbox_soft\cfg.c">
@@ -52,6 +55,9 @@
     </ClCompile>
     <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_sw_backend.cpp">
       <Filter>gpu_duck</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\plugins\gpu_unai\gpu_unai_driver.cpp">
+      <Filter>gpu_unai</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -126,6 +132,54 @@
     </ClInclude>
     <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_types.h">
       <Filter>gpu_duck</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\arm_features.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\compiler_features.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_command.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_fixedpoint.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_inner.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_inner_blend.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_inner_light.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_inner_quantization.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_raster_image.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_raster_line.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_raster_polygon.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_raster_sprite.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_unai.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_unai_compat.h">
+      <Filter>gpu_unai</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_unai_driver.h">
+      <Filter>gpu_unai</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

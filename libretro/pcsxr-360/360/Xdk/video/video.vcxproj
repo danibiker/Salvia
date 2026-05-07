@@ -299,7 +299,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>LIBRETRO;_DEBUG;_XBOX;_LIB;__BIG_ENDIAN__;__BIGENDIAN__;__ppc__;__PPC__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ExceptionHandling>false</ExceptionHandling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -571,6 +571,7 @@
     <ClCompile Include="..\..\..\plugins\xbox_soft\xb_video.cpp" />
     <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_driver.cpp" />
     <ClCompile Include="..\..\..\plugins\gpu_duck\gpu_duck_sw_backend.cpp" />
+    <ClCompile Include="..\..\..\plugins\gpu_unai\gpu_unai_driver.cpp" />
     <ClCompile Include="..\..\..\plugins\xbox_soft\peops_prof.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
@@ -616,6 +617,22 @@
     <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_gpu_types.h" />
     <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_rectangle.h" />
     <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_sw_backend.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\arm_features.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\compiler_features.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_command.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_fixedpoint.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_inner.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_inner_blend.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_inner_light.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_inner_quantization.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_raster_image.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_raster_line.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_raster_polygon.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_raster_sprite.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_unai.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_unai_compat.h" />
+    <ClInclude Include="..\..\..\plugins\gpu_unai\gpu_unai_driver.h" />
     <ClInclude Include="..\..\..\plugins\gpu_duck\gpu_duck_types.h" />
   </ItemGroup>
   <ItemGroup>
