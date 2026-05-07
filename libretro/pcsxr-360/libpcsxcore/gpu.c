@@ -195,31 +195,15 @@ static volatile uint64_t s_ring_push_spin_count  = 0;
  *     primitives. Matches PCSX-ReARMed behaviour.
  */
 
-static u32 gpuDmaChainSize(u32 addr) {
-	u32 size;
-	u32 DMACommandCounter = 0;
-
-	// initial linked list ptr (word)
-	size = 1;
-
-	do {
-		addr &= 0x1ffffc;
-
-		if (DMACommandCounter++ > 2000000) break;
-
-
-		// # 32-bit blocks to transfer
-		size += psxMu8_2( addr + 3 );
-
-
-		// next 32-bit pointer
-		addr = psxMu32_2( addr & ~0x3 ) & 0xffffff;
-		size += 1;
-	} while (!(addr & 0x800000));
-
-	
-	return size;
-}
+/* Eliminada: gpuDmaChainSize hacia un walk separado de la misma linked
+ * list que gpuDmaChain ya recorre, duplicando lecturas a psxM_2.  En
+ * BR2 batalla pesada cada chain tiene cientos de nodos × 60 chains/seg
+ * = decenas de miles de lecturas redundantes/seg, pagando L1 miss
+ * frecuente (psxM_2 es 2MB, no cabe en L1 32KB del Xenon).  Ahora
+ * gpuDmaChain acumula y retorna el size durante su unico walk.
+ *
+ * Mantenemos esta nota como anclaje historico — la funcion antigua
+ * estaba en este punto del archivo. */
 
 /* ===========================================================================
  * Ring API: producer (CPU emulada) y consumer (GPU thread)
@@ -471,88 +455,6 @@ static void gpu_thread_proc(void)
 }
 
 
-/* ===== Soul-Reaver collapsed-quad workaround =====
- *
- * Some game(s), most visibly Soul Reaver, render small textured sprites as
- * 0x2E primitives (QuadFlatTexBlend SemiTrans, 9 words: cmd+color, V0, UV0,
- * V1, UV1, V2, UV2, V3, UV3). pcsxr-360's CPU/GTE emulation produces these
- * primitives with all four vertex words equal to the same 32-bit packed XY,
- * so the quad has zero area and nothing is drawn. The cmd, color and UVs are
- * correct — only the 4 vertices collapse.
- *
- * Workaround: scan every GP0 chunk on its way to the GPU plugin, find any
- * 0x2E primitive whose 4 vertex words are identical, and expand the corners
- * around that (correct) center using a fixed half-size of (11, 8). This is
- * the sprite size observed in no$psx for the soul effect. Other games that
- * happen to use 0x2E correctly are unaffected because their 4 vertices
- * differ.
- *
- * Toggled at runtime by `soul_reaver_quad_fix` (set from the libretro core
- * variable `pcsxr360_fix_soul_reaver_quads`). Default off so other games
- * are not perturbed.
- */
-int collapsed_quad_fix = 0;
-
-/* Per-call scratch — chunks come from gpuDmaChain in nodes of <=255 words,
- * but the GP0 port path can pass larger blocks. 4096 words is the same cap
- * PEOPS uses for prim assembly. */
-#define SOUL_FIX_BUF_WORDS 4096
-static u32 soul_fix_buf[SOUL_FIX_BUF_WORDS];
-
-/* PSX primitive length lookup. Returns 0 for cmds we don't recognise so the
- * caller can fall back to advancing one word at a time. */
-static int soul_fix_prim_len(u8 cmd)
-{
-	switch (cmd >> 5) {
-	case 1: { /* polygon 0x20-0x3F */
-		int len = (cmd & 0x08) ? ((cmd & 0x04) ? 9 : 5)
-		                       : ((cmd & 0x04) ? 7 : 4);
-		if (cmd & 0x10) len += (cmd & 0x08) ? 3 : 2;
-		return len;
-	}
-	case 2: return (cmd & 0x10) ? 4 : 3;     /* line */
-	case 3: return (cmd & 0x18) ? ((cmd & 0x04) ? 3 : 2)
-	                            : ((cmd & 0x04) ? 4 : 3); /* sprite/rect */
-	default: return 0;
-	}
-}
-
-/* Walk `buf` (host-native u32s, i.e. PSX-LE bytes byte-swapped on BE) and
- * rewrite collapsed 0x2E quads. Returns the number of primitives fixed. */
-static int soul_fix_chunk(u32 *buf, int size)
-{
-	int fixed = 0;
-	int i = 0;
-	while (i < size) {
-		u8 cmd = ((u8 *)&buf[i])[3];   /* PSX cmd byte = byte+3 of native u32 */
-		int len = soul_fix_prim_len(cmd);
-		if (len == 0) { i++; continue; }
-		if (i + len > size) break;
-
-		if (cmd == 0x2E
-		    && buf[i+1] == buf[i+3]
-		    && buf[i+3] == buf[i+5]
-		    && buf[i+5] == buf[i+7]) {
-			u32 psx_v = SWAP32(buf[i+1]);
-			s16 cx = (s16)(psx_v & 0xFFFF);
-			s16 cy = (s16)((psx_v >> 16) & 0xFFFF);
-			const s16 hw = 11;
-			const s16 hh = 8;
-			/* V0=BR, V1=BL, V2=TR, V3=TL — matches the UV layout no$psx
-			 * shows for the soul sprite (UV0 right-top, UV3 left-bottom). */
-			#define PACK_XY(x, y) \
-				(((u32)((u16)((s16)(y))) << 16) | ((u32)((u16)((s16)(x)))))
-			buf[i+1] = SWAP32(PACK_XY(cx + hw, cy + hh));
-			buf[i+3] = SWAP32(PACK_XY(cx - hw, cy + hh));
-			buf[i+5] = SWAP32(PACK_XY(cx + hw, cy - hh));
-			buf[i+7] = SWAP32(PACK_XY(cx - hw, cy - hh));
-			#undef PACK_XY
-			fixed++;
-		}
-		i += len;
-	}
-	return fixed;
-}
 
 /* ===========================================================================
  * DMA chain enqueue: aplica el fix de Soul Reaver y encola al ring.
@@ -563,19 +465,7 @@ static void chain_enqueue(uint32_t *pMem, int size)
 {
     if (size <= 0) return;
 
-    /* Soul-Reaver collapsed-quad workaround: scan el chunk en busca de
-     * primitivas 0x2E con los 4 vertices iguales, y expandirlas a un
-     * rectangulo razonable.  Solo activo si el toggle libretro lo pide.
-     * Copiamos al scratch para no mutar la PSX RAM. */
-    if (collapsed_quad_fix && size <= SOUL_FIX_BUF_WORDS) {
-        int j;
-        for (j = 0; j < size; j++) soul_fix_buf[j] = pMem[j];
-        if (soul_fix_chunk(soul_fix_buf, size) > 0) {
-            pMem = soul_fix_buf;
-        }
-    }
-
-	if (!g_pcsxr_threading_enabled){
+   	if (!g_pcsxr_threading_enabled){
 		GPU_writeDataMem(pMem, size);
 	} else {
 		if (s_thread_state == GPU_THREAD_RUNNING) {
@@ -590,14 +480,21 @@ static void chain_enqueue(uint32_t *pMem, int size)
 ////////////////////////////////////////////////////////////gpu.c
 
 /* PSX DMA linked-list parser. Cada nodo tiene `count` words a procesar
- * y un puntero al siguiente.  Termina cuando un puntero tiene bit 23. */
-void gpuDmaChain(uint32_t addr)
+ * y un puntero al siguiente.  Termina cuando un puntero tiene bit 23.
+ *
+ * Retorna el numero total de words "vistos" en el walk (initial ptr +
+ * suma de counts + 1 next-ptr por nodo).  Ese valor lo usa psxDma2
+ * para programar el GPUDMA_INT proporcional al trabajo, sustituyendo
+ * a la antigua `gpuDmaChainSize` que recorria la misma linked list
+ * por separado.  Walk unico = ~50% menos lecturas a psxM_2 por chain. */
+uint32_t gpuDmaChain(uint32_t addr)
 {
     uint32_t dmaMem;
     uint32_t * baseAddrL;
     unsigned char * baseAddrB;
     short count;
     unsigned int DMACommandCounter = 0;
+    uint32_t size = 1;   /* contar el initial linked list ptr word */
 
     baseAddrL = (u32 *)psxM_2;
     baseAddrB = (unsigned char*) baseAddrL;
@@ -614,9 +511,15 @@ void gpuDmaChain(uint32_t addr)
             chain_enqueue(&baseAddrL[dmaMem >> 2], count);
         }
 
+        /* Acumular size: count words del nodo + 1 word del next ptr
+         * (mismo calculo que hacia gpuDmaChainSize en su loop separado). */
+        size += (uint32_t)(unsigned char)count + 1u;
+
         addr = psxMu32_2(addr & ~0x3) & 0xffffff;
     }
     while (!(addr & 0x800000));
+
+    return size;
 }
 
 /* ===========================================================================
@@ -839,9 +742,14 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 			PSXDMA_LOG("*** DMA 2 - GPU dma chain *** %lx addr = %lx size = %lx\n", chcr, madr, bcr);
 #endif
 
-			size = gpuDmaChainSize(madr);
-
-	        gpuDmaChain(madr & 0x1fffff);
+			/* Walk unico: gpuDmaChain procesa la chain (encola al ring
+			 * SPSC) y retorna el size acumulado.  Antes hacia dos walks
+			 * separados (gpuDmaChainSize + gpuDmaChain) sobre la misma
+			 * linked list — la primera pasada solo era para calcular
+			 * `size` y programar GPUDMA_INT.  Eliminado.  En BR2/SR/FFVII
+			 * con cientos de nodos por chain ahorra decenas de miles de
+			 * lecturas a psxM_2 por segundo. */
+			size = gpuDmaChain(madr & 0x1fffff);
 
 			// Tekken 3 = use 1.0 only (not 1.5x)
 

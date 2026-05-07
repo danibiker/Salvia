@@ -457,7 +457,7 @@
       <AdditionalIncludeDirectories>../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;../../lib/libchdr/include;$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>

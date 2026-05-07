@@ -691,6 +691,8 @@ public:
 		SDL_Rect rectTxt;
 		rectTxt.x = newBgRect.x + 2 * margin + badgeW;
 		rectTxt.y = newBgRect.y + margin + (badgeH / 2) - (textCache->h / 2);
+		rectTxt.w = dest->w - rectTxt.x;
+		rectTxt.h = textCache->h;
 		SDL_FillRect(dest, &rectTxt, alphaColor.color);
 		SDL_BlitSurface(textCache, NULL, dest, &rectTxt);
 	}

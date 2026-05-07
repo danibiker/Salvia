@@ -1379,8 +1379,8 @@ void RemoveTimer(void)
 
  /* Acquire barrier: las escrituras del thread a buffers/state antes de
   * setear bThreadEnded son ahora visibles aqui. */
- __lwsync();
- Sleep(5L);   /* margen extra por si el thread aun esta en el path
+ //__lwsync();
+ YieldProcessor();   /* margen extra por si el thread aun esta en el path
                * "post-set bThreadEnded, pre-ExitThread" */
  CloseHandle(hMainThread);
  hMainThread = NULL;

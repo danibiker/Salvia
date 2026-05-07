@@ -1152,7 +1152,7 @@ int launchGame(std::string rompath){
 		return 0;
 	}
 
-	if (success && loadAchievement && !noUncompress){
+	if (success && loadAchievement){
 		//After the loading of the game, we load the achievements
 		gameMenu->loadGameAchievements(unzipped);
 	}
