@@ -15,6 +15,9 @@
  *                                                                         *
  ***************************************************************************/
 
+#ifndef __P_REGISTERS_H__
+#define __P_REGISTERS_H__
+
 #define H_SPUReverbAddr  0x0da2
 #define H_SPUirqAddr     0x0da4
 #define H_SPUaddr        0x0da6
@@ -41,6 +44,8 @@
 #define H_CDRight        0x0db2
 #define H_ExtLeft        0x0db4
 #define H_ExtRight       0x0db6
+#define H_SPUcmvolL      0x0db8
+#define H_SPUcmvolR      0x0dba
 #define H_Reverb         0x0dc0
 #define H_SPUPitch0      0x0c04
 #define H_SPUPitch1      0x0c14
@@ -142,44 +147,21 @@
 #define H_SPU_ADSRLevel22  0x0d68
 #define H_SPU_ADSRLevel23  0x0d78
 
+#define CTRL_CD                 0x0001
+#define CTRL_CDREVERB           0x0004
+#define CTRL_IRQ                0x0040
+#define CTRL_REVERB             0x0080
+#define CTRL_NOISE              0x3f00
+#define CTRL_MUTE               0x4000
+#define CTRL_ON                 0x8000
 
+#define STAT_IRQ                0x0040
+#define STAT_DMA_W              0x0100
+#define STAT_DMA_R              0x0200
+#define STAT_DMA_BUSY           0x0400
 
+///////////////////////////////////////////////////////////
 
-#define CTRL_CD_PLAY						0x01
-#define CTRL_CD_REVERB					0x02
-#define CTRL_EXT_PLAY						0x04
-#define CTRL_EXT_REVERB					0x08
+void CALLBACK SPUwriteRegister(unsigned long reg, unsigned short val, unsigned int cycles);
 
-#define CTRL_DMA_F							0x30
-#define CTRL_DMA_R							0x30
-#define CTRL_DMA_W							0x20
-#define CTRL_DMA_NON						0x10
-#define CTRL_DMA_OFF						0x00
-
-#define CTRL_IRQ								0x40
-#define CTRL_REVERB							0x80
-#define CTRL_NOISE							0x3f00
-#define CTRL_MUTE								0x4000
-#define CTRL_ON									0x8000
-
-
-
-
-#define STAT_CD_PLAY						0x01
-#define STAT_CD_REVERB					0x02
-#define STAT_EXT_PLAY						0x04
-#define STAT_EXT_REVERB					0x08
-
-#define STAT_DMA_F							0x10
-#define STAT_DMA_OFF						0x00
-#define STAT_DMA_NON						0x10
-#define STAT_DMA_W							(0x200 | 0x80 | 0x20)
-#define STAT_DMA_R							(0x100 | 0x80 | 0x20 | 0x10)
-
-#define STAT_IRQ								0x40
-#define STAT_DATA_BUSY					0x80
-#define STAT_DECODED						0x800
-
-
-
-extern int Check_IRQ( int addr, int force );
+#endif /* __P_REGISTERS_H__ */

@@ -224,7 +224,7 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y)
 
 void BlitScreen16(unsigned char * surf,long x,long y)
 {
-	
+
  unsigned long lu;
  unsigned short row,column;
  unsigned short dx=PreviousPSXDisplay.Range.x1;
@@ -232,11 +232,44 @@ void BlitScreen16(unsigned char * surf,long x,long y)
  unsigned short LineOffset,SurfOffset;
  long lPitch= g_pPitch;
 
+ /* Vertical letterbox bars.  BlitScreen32 already does this; the
+  * 16-bit path was missing it, which is why Descent (and any other
+  * game with non-zero Range.y0) showed a band of random/garbage
+  * pixels at the bottom of the screen in RGB565 mode while looking
+  * fine in XRGB8888.  The garbage is whatever was previously left in
+  * pPsxScreen for that region — random RetroArch backbuffer
+  * contents, residue from the previous frame, etc.
+  *
+  * Same arithmetic as BlitScreen32 but with 16-bit (2 byte) pixels
+  * instead of 32-bit, hence no <<2 shift on the byte counts. */
+ if (PreviousPSXDisplay.Range.y0)                       // centering needed?
+ {
+   TexZero(surf, (PreviousPSXDisplay.Range.y0 >> 1) * lPitch);
+
+   dy -= PreviousPSXDisplay.Range.y0;
+   surf += (PreviousPSXDisplay.Range.y0 >> 1) * lPitch;
+
+   TexZero(surf + dy * lPitch,
+           ((PreviousPSXDisplay.Range.y0 + 1) >> 1) * lPitch);
+ }
+
+ /* Horizontal letterbox columns.  Match BlitScreen32: zero the left
+  * margin column-by-column, then advance surf past it.  Bytes per
+  * pixel is 2 here (vs 4 in 32-bit), so the shift is <<1. */
+ if (PreviousPSXDisplay.Range.x0)
+ {
+   unsigned char *p;
+   for (column = 0; column < dy; column++)
+   {
+     p = surf + (column * lPitch);
+     TexZero(p, PreviousPSXDisplay.Range.x0 << 1);
+   }
+   surf += PreviousPSXDisplay.Range.x0 << 1;
+ }
+
  if(PSXDisplay.RGB24)
   {
    unsigned char * pD;unsigned int startxy;
-
-   surf+=PreviousPSXDisplay.Range.x0<<1;
 
    for(column=0;column<dy;column++)
     {
@@ -258,19 +291,23 @@ void BlitScreen16(unsigned char * surf,long x,long y)
    unsigned long * SRCPtr = (unsigned long *)(psxVuw +
                              (y<<10) + x);
 
-   unsigned long * DSTPtr =
-    ((unsigned long *)surf)+(PreviousPSXDisplay.Range.x0>>1);
+   /* surf was already advanced past the horizontal margin above
+    * (when Range.x0 != 0), so DSTPtr starts right at the content
+    * area.  The original code did `surf + (Range.x0 >> 1)` here as
+    * a 32-bit pointer offset, which was equivalent only when no
+    * horizontal centering was active. */
+   unsigned long * DSTPtr = (unsigned long *)surf;
 
    dx>>=1;
 
    LineOffset = 512 - dx;
-   
+
    //if pitch mismatch would wrap SurfOffset; skip blit
    if((lPitch>>2) < (long)dx) {
 	   OutputDebugStringA("pitch mismatch\n");
 	   return;
    }
-	   
+
 
    SurfOffset = (lPitch>>2) - dx;
 

@@ -16,12 +16,11 @@
 static const int video_bpp = 16;
 #define CPU_THREAD 0
 /* I/O / network threads (HTTP requests for RetroAchievements, image
- * downloads, server callbacks).  Pinned to HW thread 2 — physical core 1,
- * SMT partner of the SPU thread on core 3.  Final layout:
- *   core 0  main / Salvia / retro_run / dynarec PSX
- *   core 1  idle (SMT partner of dynarec)
- *   core 2  IO / HTTP (this)            ┐
- *   core 3  PSX SPU MAINThread          ┘ same physical core
+ * downloads, server callbacks). Final layout:
+ *   core 0  main / Salvia / retro_run / dynarec PSX ┐
+ *   core 1  IO / HTTP								 ┘ same physical core
+ *   core 2  idle	                     ┐
+ *   core 3  idle                        ┘ same physical core
  *   core 4  PSX GPU helper thread       ┐
  *   core 5  idle                        ┘ same physical core
  * Bursty HTTP and bursty (Sleep-paced) SPU coexist on physical core 1

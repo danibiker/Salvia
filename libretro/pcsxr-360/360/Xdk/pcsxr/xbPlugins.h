@@ -82,16 +82,18 @@ char * NULL_SPUgetLibInfos(void);
 void NULL_SPUabout(void);
 long NULL_SPUfreeze(unsigned long ulFreezeMode,SPUFreeze_t *);
 
-/* SPU PEOPS 1.9 */
+/* SPU PEOPS 1.9 — port to cycle-driven model (pcsx_rearmed).  All
+ * the cycle-bearing entry points take an extra `cycles` arg; the
+ * callback signatures changed too (see plugins.h for rationale). */
 //dma.c
 unsigned short CALLBACK PEOPS_SPUreadDMA(void);
-void CALLBACK PEOPS_SPUreadDMAMem(unsigned short * pusPSXMem,int iSize);
+void CALLBACK PEOPS_SPUreadDMAMem(unsigned short * pusPSXMem,int iSize, unsigned int cycles);
 void CALLBACK PEOPS_SPUwriteDMA(unsigned short val);
-void CALLBACK PEOPS_SPUwriteDMAMem(unsigned short * pusPSXMem,int iSize);
+void CALLBACK PEOPS_SPUwriteDMAMem(unsigned short * pusPSXMem,int iSize, unsigned int cycles);
 //PEOPSspu.c
-void CALLBACK PEOPS_SPUasync(unsigned long cycle);
+void CALLBACK PEOPS_SPUasync(unsigned int cycle, unsigned int flags);
 void CALLBACK PEOPS_SPUupdate(void);
-void CALLBACK PEOPS_SPUplayADPCMchannel(xa_decode_t *xap);
+void CALLBACK PEOPS_SPUplayADPCMchannel(xa_decode_t *xap, unsigned int cycle, int is_start);
 long CALLBACK PEOPS_SPUinit(void);
 long PEOPS_SPUopen(void);
 void PEOPS_SPUsetConfigFile(char * pCfg);
@@ -100,14 +102,17 @@ long CALLBACK PEOPS_SPUshutdown(void);
 long CALLBACK PEOPS_SPUtest(void);
 long CALLBACK PEOPS_SPUconfigure(void);
 void CALLBACK PEOPS_SPUabout(void);
-void CALLBACK PEOPS_SPUregisterCallback(void (CALLBACK *callback)(void));
-void CALLBACK PEOPS_SPUregisterCDDAVolume(void (CALLBACK *CDDAVcallback)(unsigned short,unsigned short));
-void CALLBACK PEOPS_SPUplayCDDAchannel(short *pcm, int nbytes);
+void CALLBACK PEOPS_SPUregisterCallback(void (CALLBACK *callback)(int));
+void CALLBACK PEOPS_SPUregisterScheduleCb(void (CALLBACK *callback)(unsigned int));
+void CALLBACK PEOPS_SPUregisterCDDAVolume(void (CALLBACK *CDDAVcallback)(short, short));
+int  CALLBACK PEOPS_SPUplayCDDAchannel(short *pcm, int nbytes, unsigned int cycle, int unused);
+void CALLBACK PEOPS_SPUsetCDvol(unsigned char ll, unsigned char lr,
+		unsigned char rl, unsigned char rr, unsigned int cycle);
 //registers.c
-void CALLBACK PEOPS_SPUwriteRegister(unsigned long reg, unsigned short val);
-unsigned short CALLBACK PEOPS_SPUreadRegister(unsigned long reg);
+void CALLBACK PEOPS_SPUwriteRegister(unsigned long reg, unsigned short val, unsigned int cycles);
+unsigned short CALLBACK PEOPS_SPUreadRegister(unsigned long reg, unsigned int cycles);
 //freeze.c
-long CALLBACK PEOPS_SPUfreeze(unsigned long ulFreezeMode,SPUFreeze_t * pF);
+long CALLBACK PEOPS_SPUfreeze(uint32_t ulFreezeMode,SPUFreeze_t * pF, uint32_t cycles);
 
 
 /* SPU PEOPS 1.9 */
@@ -314,7 +319,7 @@ HW_GPUvBlank}, \
 
 #define SPU_PEOPS_PLUGIN \
 	{ "SPU",      \
-	  19,         \
+	  21,         \
 	  { { "SPUinit",  \
 	      PEOPS_SPUinit }, \
 	    { "SPUshutdown",	\
@@ -347,12 +352,16 @@ HW_GPUvBlank}, \
 	      PEOPS_SPUfreeze}, \
 	    { "SPUregisterCallback", \
 	      PEOPS_SPUregisterCallback}, \
+	    { "SPUregisterScheduleCb", \
+	      PEOPS_SPUregisterScheduleCb}, \
 	    { "SPUregisterCDDAVolume", \
 	      PEOPS_SPUregisterCDDAVolume}, \
 		{ "SPUplayCDDAchannel", \
 	      PEOPS_SPUplayCDDAchannel}, \
 	    { "SPUasync", \
-	      PEOPS_SPUasync} \
+	      PEOPS_SPUasync}, \
+	    { "SPUsetCDvol", \
+	      PEOPS_SPUsetCDvol} \
 	       } }
       
 #if 0

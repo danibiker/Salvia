@@ -20,68 +20,50 @@
 #define _IN_REGISTERS
 
 #include "externals.h"
+/* spu.h MUST precede registers.h: it installs the PEOPS_* renames so
+ * the prototypes in registers.h match the function definitions here
+ * (which get the rename applied via the same mechanism). */
+#include "spu.h"
 #include "registers.h"
-#include "regs.h"
-#include "reverb.h"
+#include "spu_config.h"
 
-/*
-// adsr time values (in ms) by James Higgs ... see the end of
-// the adsr.c source for details
-
-#define ATTACK_MS     514L
-#define DECAYHALF_MS  292L
-#define DECAY_MS      584L
-#define SUSTAIN_MS    450L
-#define RELEASE_MS    446L
-*/
-
-// we have a timebase of 1.020408f ms, not 1 ms... so adjust adsr defines
-#define ATTACK_MS      494L
-#define DECAYHALF_MS   286L
-#define DECAY_MS       572L
-#define SUSTAIN_MS     441L
-#define RELEASE_MS     437L
-
-
-
-
-
-
-int Check_IRQ( int addr, int force ) {
-	if(spuCtrl & CTRL_IRQ)         // some callback and irq active?
-	{
-		if( ( bIrqHit == 0 ) &&
-				( force == 1 || pSpuIrq == spuMemC+addr ) )
-		{
-			if(irqCallback)
-				irqCallback();                        // -> call main emu
-
-			// one-time
-			bIrqHit = 1;
-			spuStat |= STAT_IRQ;
-
-#if 0
-			MessageBox( NULL, "IRQ", "SPU", MB_OK );
-#endif
-
-			return 1;
-		}
-	}
-
-
-	return 0;
-}
-
-
+static void SoundOn(int start,int end,unsigned short val);
+static void SoundOff(int start,int end,unsigned short val);
+static void FModOn(int start,int end,unsigned short val);
+static void NoiseOn(int start,int end,unsigned short val);
+static void SetVolumeL(unsigned char ch,short vol);
+static void SetVolumeR(unsigned char ch,short vol);
+static void SetPitch(int ch,unsigned short val);
+static void ReverbOn(int start,int end,unsigned short val);
 
 ////////////////////////////////////////////////////////////////////////
 // WRITE REGISTERS: called by main emu
 ////////////////////////////////////////////////////////////////////////
 
-void CALLBACK SPUwriteRegister(unsigned long reg, unsigned short val)
+static const uint32_t ignore_dupe[16] = {
+ // ch 0-15  c40         c80         cc0
+ 0x7f7f7f7f, 0x7f7f7f7f, 0x7f7f7f7f, 0x7f7f7f7f,
+ // ch 16-24 d40         control     reverb
+ 0x7f7f7f7f, 0x7f7f7f7f, 0xff05ff0f, 0xffffffff,
+ 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
+ 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff
+};
+
+void CALLBACK SPUwriteRegister(unsigned long reg, unsigned short val,
+ unsigned int cycles)
 {
- const unsigned long r=reg&0xfff;
- regArea[(r-0xc00)>>1] = val;
+ int r = reg & 0xffe;
+ int rofs = (r - 0xc00) >> 1;
+ int changed = spu.regArea[rofs] != val;
+ spu.regArea[rofs] = val;
+
+ if (!changed && (ignore_dupe[rofs >> 5] & (1u << (rofs & 0x1f))))
+  return;
+ // zero keyon/keyoff?
+ if (val == 0 && (r & 0xff8) == 0xd88)
+  return;
+
+ do_samples_if_needed(cycles, 0, 16);
 
  if(r>=0x0c00 && r<0x0d80)                             // some channel info?
   {
@@ -99,94 +81,35 @@ void CALLBACK SPUwriteRegister(unsigned long reg, unsigned short val)
      //------------------------------------------------// pitch
      case 4:                                           
        SetPitch(ch,val);
-       break;
+       goto upd_irq;
      //------------------------------------------------// start
      case 6:      
-			 // Brain Dead 13 - align to 16 boundary
-       s_chan[ch].pStart= spuMemC+(unsigned long)((val<<3)&~0xf);
+       // taken from regArea later
        break;
      //------------------------------------------------// level with pre-calcs
      case 8:
        {
-        const unsigned long lval=val;unsigned long lx;
+        const unsigned long lval=val;
         //---------------------------------------------//
-        s_chan[ch].ADSRX.AttackModeExp=(lval&0x8000)?1:0; 
-        s_chan[ch].ADSRX.AttackRate=(lval>>8) & 0x007f;
-        s_chan[ch].ADSRX.DecayRate=(lval>>4) & 0x000f;
-        s_chan[ch].ADSRX.SustainLevel=lval & 0x000f;
+        spu.s_chan[ch].ADSRX.AttackModeExp=(lval&0x8000)?1:0;
+        spu.s_chan[ch].ADSRX.AttackRate=(lval>>8) & 0x007f;
+        spu.s_chan[ch].ADSRX.DecayRate=(lval>>4) & 0x000f;
+        spu.s_chan[ch].ADSRX.SustainLevel=lval & 0x000f;
         //---------------------------------------------//
-        if(!iDebugMode) break;
-        //---------------------------------------------// stuff below is only for debug mode
-
-        s_chan[ch].ADSR.AttackModeExp=(lval&0x8000)?1:0;        //0x007f
-
-        lx=(((lval>>8) & 0x007f)>>2);                  // attack time to run from 0 to 100% volume
-        lx=min(31,lx);                                 // no overflow on shift!
-        if(lx) 
-         { 
-          lx = (1<<lx);
-          if(lx<2147483) lx=(lx*ATTACK_MS)/10000L;     // another overflow check
-          else           lx=(lx/10000L)*ATTACK_MS;
-          if(!lx) lx=1;
-         }
-        s_chan[ch].ADSR.AttackTime=lx;                
-
-        s_chan[ch].ADSR.SustainLevel=                 // our adsr vol runs from 0 to 1024, so scale the sustain level
-         (1024*((lval) & 0x000f))/15;
-
-        lx=(lval>>4) & 0x000f;                         // decay:
-        if(lx)                                         // our const decay value is time it takes from 100% to 0% of volume
-         {
-          lx = ((1<<(lx))*DECAY_MS)/10000L;
-          if(!lx) lx=1;
-         }
-        s_chan[ch].ADSR.DecayTime =                   // so calc how long does it take to run from 100% to the wanted sus level
-         (lx*(1024-s_chan[ch].ADSR.SustainLevel))/1024;
        }
       break;
      //------------------------------------------------// adsr times with pre-calcs
      case 10:
       {
-       const unsigned long lval=val;unsigned long lx;
+       const unsigned long lval=val;
 
        //----------------------------------------------//
-       s_chan[ch].ADSRX.SustainModeExp = (lval&0x8000)?1:0;
-       s_chan[ch].ADSRX.SustainIncrease= (lval&0x4000)?0:1;
-       s_chan[ch].ADSRX.SustainRate = (lval>>6) & 0x007f;
-       s_chan[ch].ADSRX.ReleaseModeExp = (lval&0x0020)?1:0;
-       s_chan[ch].ADSRX.ReleaseRate = lval & 0x001f;
+       spu.s_chan[ch].ADSRX.SustainModeExp = (lval&0x8000)?1:0;
+       spu.s_chan[ch].ADSRX.SustainIncrease= (lval&0x4000)?0:1;
+       spu.s_chan[ch].ADSRX.SustainRate = (lval>>6) & 0x007f;
+       spu.s_chan[ch].ADSRX.ReleaseModeExp = (lval&0x0020)?1:0;
+       spu.s_chan[ch].ADSRX.ReleaseRate = lval & 0x001f;
        //----------------------------------------------//
-       if(!iDebugMode) break;
-       //----------------------------------------------// stuff below is only for debug mode
-
-       s_chan[ch].ADSR.SustainModeExp = (lval&0x8000)?1:0;
-       s_chan[ch].ADSR.ReleaseModeExp = (lval&0x0020)?1:0;
-                   
-       lx=((((lval>>6) & 0x007f)>>2));                 // sustain time... often very high
-       lx=min(31,lx);                                  // values are used to hold the volume
-       if(lx)                                          // until a sound stop occurs
-        {                                              // the highest value we reach (due to 
-         lx = (1<<lx);                                 // overflow checking) is: 
-         if(lx<2147483) lx=(lx*SUSTAIN_MS)/10000L;     // 94704 seconds = 1578 minutes = 26 hours... 
-         else           lx=(lx/10000L)*SUSTAIN_MS;     // should be enuff... if the stop doesn't 
-         if(!lx) lx=1;                                 // come in this time span, I don't care :)
-        }
-       s_chan[ch].ADSR.SustainTime = lx;
-
-       lx=(lval & 0x001f);
-       s_chan[ch].ADSR.ReleaseVal     =lx;
-       if(lx)                                          // release time from 100% to 0%
-        {                                              // note: the release time will be
-         lx = (1<<lx);                                 // adjusted when a stop is coming,
-         if(lx<2147483) lx=(lx*RELEASE_MS)/10000L;     // so at this time the adsr vol will 
-         else           lx=(lx/10000L)*RELEASE_MS;     // run from (current volume) to 0%
-         if(!lx) lx=1;
-        }
-       s_chan[ch].ADSR.ReleaseTime=lx;
-
-       if(lval & 0x4000)                               // add/dec flag
-            s_chan[ch].ADSR.SustainModeDec=-1;
-       else s_chan[ch].ADSR.SustainModeDec=1;
       }
      break;
      //------------------------------------------------// adsr volume... mmm have to investigate this
@@ -194,114 +117,96 @@ void CALLBACK SPUwriteRegister(unsigned long reg, unsigned short val)
        break;
      //------------------------------------------------//
      case 14:                                          // loop?
-       //WaitForSingleObject(s_chan[ch].hMutex,2000);        // -> no multithread fuckups
-       
-			 s_chan[ch].pLoop=spuMemC+((unsigned long)((val<<3)&~0xf));
-       
-			 //s_chan[ch].bIgnoreLoop=1;
-       //ReleaseMutex(s_chan[ch].hMutex);                    // -> oki, on with the thread
-       break;
+       spu.s_chan[ch].pLoop=spu.spuMemC+((val&~1)<<3);
+       spu.s_chan[ch].bIgnoreLoop = 1;
+       goto upd_irq;
      //------------------------------------------------//
     }
-   iSpuAsyncWait=0;
    return;
+  }
+ else if (0x0e00 <= r && r < 0x0e60)
+  {
+   /* Original used the anonymous-union member iVolume[] inside SPUCHAN.
+    * Since externals.h spells the volume pair out as
+    * iLeftVolume/iRightVolume, route through the s_chan_iVolume macro. */
+   int ch = (r >> 2) & 0x1f;
+   log_unhandled("c%02d w %cvol %04x\n", ch, (r & 2) ? 'r' : 'l', val);
+   s_chan_iVolume(&spu.s_chan[ch], (r >> 1) & 1) = (signed short)val >> 1;
   }
 
  switch(r)
    {
     //-------------------------------------------------//
     case H_SPUaddr:
-      spuAddr = (unsigned long) val<<3;
+      spu.spuAddr = (unsigned int)val << 3;
+      //check_irq_io(spu.spuAddr);
       break;
     //-------------------------------------------------//
     case H_SPUdata:
-      // BIOS - allow dma 00
-      Check_IRQ( spuAddr, 0 );
-
-      spuMem[spuAddr>>1] = SWAP16(val);
-      spuAddr+=2;
-      if(spuAddr>0x7ffff) spuAddr=0;
+      *(unsigned short *)(spu.spuMemC + spu.spuAddr) = HTOLE16(val);
+      spu.spuAddr += 2;
+      spu.spuAddr &= 0x7fffe;
+      check_irq_io(spu.spuAddr);
       break;
     //-------------------------------------------------//
     case H_SPUctrl:
-      spuCtrl=val;
-
-
-			// flags
-			if( spuCtrl & CTRL_CD_PLAY )
-				spuStat |= CTRL_CD_PLAY;
-			else
-				spuStat &= ~CTRL_CD_PLAY;
-
-			if( spuCtrl & CTRL_CD_REVERB )
-				spuStat |= STAT_CD_REVERB;
-			else
-				spuStat &= ~STAT_CD_REVERB;
-
-
-			if( spuCtrl & CTRL_EXT_PLAY )
-				spuStat |= STAT_EXT_PLAY;
-			else
-				spuStat &= ~STAT_EXT_PLAY;
-
-			if( spuCtrl & CTRL_EXT_REVERB )
-				spuStat |= STAT_EXT_REVERB;
-			else
-				spuStat &= ~STAT_EXT_REVERB;
-
-
-			
-			spuStat &= ~(STAT_DMA_NON | STAT_DMA_R | STAT_DMA_W);
-
-			if( spuCtrl & CTRL_DMA_F )
-				spuStat |= STAT_DMA_F;
-
-			if( (spuCtrl & CTRL_DMA_F) == CTRL_DMA_R )
-				spuStat |= STAT_DMA_R;
-
-
-
-			// reset IRQ flag
-			if( (spuCtrl & CTRL_IRQ) == 0 ) {
-				bIrqHit = 0;
-				spuStat &= ~STAT_IRQ;
-			}
-
-
-			dwNoiseClock = (spuCtrl & CTRL_NOISE)>>8;
+      spu.spuStat = (spu.spuStat & ~0xbf) | (val & 0x3f) | ((val << 2) & 0x80);
+      spu.spuStat &= ~STAT_IRQ | val;
+      if (!(spu.spuCtrl & CTRL_IRQ)) {
+        if (val & CTRL_IRQ)
+         schedule_next_irq();
+      }
+      spu.spuCtrl=val;
       break;
     //-------------------------------------------------//
     case H_SPUstat:
-      spuStat=val & 0xf800;
+      //spu.spuStat=val&0xf800;
       break;
     //-------------------------------------------------//
     case H_SPUReverbAddr:
-      if(val==0xFFFF || val<=0x200)
-       {rvb.StartAddr=rvb.CurrAddr=0;}
-      else
-       {
-        const long iv=(unsigned long)val<<2;
-        if(rvb.StartAddr!=iv)
-         {
-          rvb.StartAddr=(unsigned long)val<<2;
-          rvb.CurrAddr=rvb.StartAddr;
-         }
-       }
-      break;
+      goto rvbd;
     //-------------------------------------------------//
     case H_SPUirqAddr:
-      spuIrq = val;
-      pSpuIrq=spuMemC+((unsigned long) val<<3);
-      break;
+      //if (val & 1)
+      //  log_unhandled("w irq with lsb: %08lx %04x\n", reg, val);
+      spu.pSpuIrq = spu.spuMemC + (((int)val << 3) & ~0xf);
+      //check_irq_io(spu.spuAddr);
+      goto upd_irq;
     //-------------------------------------------------//
     case H_SPUrvolL:
-      rvb.VolLeft=val;
+      spu.rvb->VolLeft = (int16_t)val;
       break;
     //-------------------------------------------------//
     case H_SPUrvolR:
-      rvb.VolRight=val;
+      spu.rvb->VolRight = (int16_t)val;
       break;
     //-------------------------------------------------//
+
+    case H_SPUmvolL:
+    case H_SPUmvolR: {
+      int ofs = H_SPUcmvolL - H_SPUmvolL;
+      unsigned short *cur = &regAreaGet(r + ofs);
+      /* MSVC compiles dfsound as C89.  Move the inner declarations
+       * to the top of the block — declaring after a statement is a
+       * C99 feature MSVC's C front-end rejects with C2143. */
+      int was_neg, dec, inv;
+      if (val & 0x8000) {
+        // this (for now?) lacks an update mechanism, so is instant
+        log_unhandled("w master sweep: %08lx %04x\n", reg, val);
+        was_neg = (*cur >> 14) & 1;
+        dec = (val >> 13) & 1;
+        inv = (val >> 12) & 1;
+        *cur = (was_neg ^ dec ^ inv) ? 0x7fff : 0;
+      }
+      else
+        *cur = val << 1;
+      break;
+     }
+
+    case 0x0dac:
+     if (val != 4)
+       log_unhandled("1f801dac %04x\n", val);
+     break;
 
 /*
     case H_ExtLeft:
@@ -310,14 +215,6 @@ void CALLBACK SPUwriteRegister(unsigned long reg, unsigned short val)
     //-------------------------------------------------//
     case H_ExtRight:
      //auxprintf("ER %d\n",val);
-      break;
-    //-------------------------------------------------//
-    case H_SPUmvolL:
-     //auxprintf("ML %d\n",val);
-      break;
-    //-------------------------------------------------//
-    case H_SPUmvolR:
-     //auxprintf("MR %d\n",val);
       break;
     //-------------------------------------------------//
     case H_SPUMute1:
@@ -330,29 +227,45 @@ void CALLBACK SPUwriteRegister(unsigned long reg, unsigned short val)
 */
     //-------------------------------------------------//
     case H_SPUon1:
+      spu.last_keyon_cycles = cycles;
+      do_samples_if_needed(cycles, 0, 2);
       SoundOn(0,16,val);
       break;
     //-------------------------------------------------//
-     case H_SPUon2:
+    case H_SPUon2:
+      spu.last_keyon_cycles = cycles;
+      do_samples_if_needed(cycles, 0, 2);
       SoundOn(16,24,val);
       break;
     //-------------------------------------------------//
     case H_SPUoff1:
+      if (cycles - spu.last_keyon_cycles < 786u) {
+       if (val & regAreaGet(H_SPUon1))
+        log_unhandled("koff1 %04x %d\n", val, cycles - spu.last_keyon_cycles);
+       val &= ~regAreaGet(H_SPUon1);
+      }
+      do_samples_if_needed(cycles, 0, 2);
       SoundOff(0,16,val);
       break;
     //-------------------------------------------------//
     case H_SPUoff2:
+      if (cycles - spu.last_keyon_cycles < 786u) {
+       if (val & regAreaGet(H_SPUon1))
+        log_unhandled("koff2 %04x %d\n", val, cycles - spu.last_keyon_cycles);
+       val &= ~regAreaGet(H_SPUon2);
+      }
+      do_samples_if_needed(cycles, 0, 2);
       SoundOff(16,24,val);
       break;
     //-------------------------------------------------//
     case H_CDLeft:
-			iLeftXAVol = val;
-			if(cddavCallback) cddavCallback(0,val);
-			break;
+      spu.iLeftXAVol=(int16_t)val;
+      //if(spu.cddavCallback) spu.cddavCallback(0,(int16_t)val);
+      break;
     case H_CDRight:
-			iRightXAVol = val;
-			if(cddavCallback) cddavCallback(1,val);
-			break;
+      spu.iRightXAVol=(int16_t)val;
+      //if(spu.cddavCallback) spu.cddavCallback(1,(int16_t)val);
+      break;
     //-------------------------------------------------//
     case H_FMod1:
       FModOn(0,16,val);
@@ -378,96 +291,106 @@ void CALLBACK SPUwriteRegister(unsigned long reg, unsigned short val)
       ReverbOn(16,24,val);
       break;
     //-------------------------------------------------//
-    case H_Reverb+0:
-
-      rvb.FB_SRC_A=val;
-
-      // OK, here's the fake REVERB stuff...
-      // depending on effect we do more or less delay and repeats... bah
-      // still... better than nothing :)
-
-      SetREVERB(val);
-      break;
-
-
-    case H_Reverb+2   : rvb.FB_SRC_B=(short)val;       break;
-    case H_Reverb+4   : rvb.IIR_ALPHA=(short)val;      break;
-    case H_Reverb+6   : rvb.ACC_COEF_A=(short)val;     break;
-    case H_Reverb+8   : rvb.ACC_COEF_B=(short)val;     break;
-    case H_Reverb+10  : rvb.ACC_COEF_C=(short)val;     break;
-    case H_Reverb+12  : rvb.ACC_COEF_D=(short)val;     break;
-    case H_Reverb+14  : rvb.IIR_COEF=(short)val;       break;
-    case H_Reverb+16  : rvb.FB_ALPHA=(short)val;       break;
-    case H_Reverb+18  : rvb.FB_X=(short)val;           break;
-    case H_Reverb+20  : rvb.IIR_DEST_A0=(short)val;    break;
-    case H_Reverb+22  : rvb.IIR_DEST_A1=(short)val;    break;
-    case H_Reverb+24  : rvb.ACC_SRC_A0=(short)val;     break;
-    case H_Reverb+26  : rvb.ACC_SRC_A1=(short)val;     break;
-    case H_Reverb+28  : rvb.ACC_SRC_B0=(short)val;     break;
-    case H_Reverb+30  : rvb.ACC_SRC_B1=(short)val;     break;
-    case H_Reverb+32  : rvb.IIR_SRC_A0=(short)val;     break;
-    case H_Reverb+34  : rvb.IIR_SRC_A1=(short)val;     break;
-    case H_Reverb+36  : rvb.IIR_DEST_B0=(short)val;    break;
-    case H_Reverb+38  : rvb.IIR_DEST_B1=(short)val;    break;
-    case H_Reverb+40  : rvb.ACC_SRC_C0=(short)val;     break;
-    case H_Reverb+42  : rvb.ACC_SRC_C1=(short)val;     break;
-    case H_Reverb+44  : rvb.ACC_SRC_D0=(short)val;     break;
-    case H_Reverb+46  : rvb.ACC_SRC_D1=(short)val;     break;
-    case H_Reverb+48  : rvb.IIR_SRC_B1=(short)val;     break;
-    case H_Reverb+50  : rvb.IIR_SRC_B0=(short)val;     break;
-    case H_Reverb+52  : rvb.MIX_DEST_A0=(short)val;    break;
-    case H_Reverb+54  : rvb.MIX_DEST_A1=(short)val;    break;
-    case H_Reverb+56  : rvb.MIX_DEST_B0=(short)val;    break;
-    case H_Reverb+58  : rvb.MIX_DEST_B1=(short)val;    break;
-    case H_Reverb+60  : rvb.IN_COEF_L=(short)val;      break;
-    case H_Reverb+62  : rvb.IN_COEF_R=(short)val;      break;
+    case H_Reverb + 0x00 : goto rvbd;
+    case H_Reverb + 0x02 : goto rvbd;
+    case H_Reverb + 0x04 : spu.rvb->vIIR   = (signed short)val; break;
+    case H_Reverb + 0x06 : spu.rvb->vCOMB1 = (signed short)val; break;
+    case H_Reverb + 0x08 : spu.rvb->vCOMB2 = (signed short)val; break;
+    case H_Reverb + 0x0a : spu.rvb->vCOMB3 = (signed short)val; break;
+    case H_Reverb + 0x0c : spu.rvb->vCOMB4 = (signed short)val; break;
+    case H_Reverb + 0x0e : spu.rvb->vWALL  = (signed short)val; break;
+    case H_Reverb + 0x10 : spu.rvb->vAPF1  = (signed short)val; break;
+    case H_Reverb + 0x12 : spu.rvb->vAPF2  = (signed short)val; break;
+    case H_Reverb + 0x14 : goto rvbd;
+    case H_Reverb + 0x16 : goto rvbd;
+    case H_Reverb + 0x18 : goto rvbd;
+    case H_Reverb + 0x1a : goto rvbd;
+    case H_Reverb + 0x1c : goto rvbd;
+    case H_Reverb + 0x1e : goto rvbd;
+    case H_Reverb + 0x20 : goto rvbd;
+    case H_Reverb + 0x22 : goto rvbd;
+    case H_Reverb + 0x24 : goto rvbd;
+    case H_Reverb + 0x26 : goto rvbd;
+    case H_Reverb + 0x28 : goto rvbd;
+    case H_Reverb + 0x2a : goto rvbd;
+    case H_Reverb + 0x2c : goto rvbd;
+    case H_Reverb + 0x2e : goto rvbd;
+    case H_Reverb + 0x30 : goto rvbd;
+    case H_Reverb + 0x32 : goto rvbd;
+    case H_Reverb + 0x34 : goto rvbd;
+    case H_Reverb + 0x36 : goto rvbd;
+    case H_Reverb + 0x38 : goto rvbd;
+    case H_Reverb + 0x3a : goto rvbd;
+    case H_Reverb + 0x3c : spu.rvb->vLIN = (signed short)val; break;
+    case H_Reverb + 0x3e : spu.rvb->vRIN = (signed short)val; break;
    }
+ return;
 
- iSpuAsyncWait=0;
+upd_irq:
+ if (spu.spuCtrl & CTRL_IRQ)
+  schedule_next_irq();
+ return;
+
+rvbd:
+ spu.rvb->dirty = 1; // recalculate on next update
 }
 
 ////////////////////////////////////////////////////////////////////////
 // READ REGISTER: called by main emu
 ////////////////////////////////////////////////////////////////////////
 
-unsigned short CALLBACK SPUreadRegister(unsigned long reg)
+unsigned short CALLBACK SPUreadRegister(unsigned long reg, unsigned int cycles)
 {
- const unsigned long r=reg&0xfff;
+ const unsigned long r = reg & 0xffe;
         
- iSpuAsyncWait=0;
-
  if(r>=0x0c00 && r<0x0d80)
   {
    switch(r&0x0f)
     {
      case 12:                                          // get adsr vol
       {
+       // this used to return 1 immediately after keyon to deal with
+       // some poor timing, but that causes Rayman 2 to lose track of
+       // its channels on busy scenes and start looping some of them forever
+       const int ch = (r>>4) - 0xc0;
+       if (spu.s_chan[ch].bStarting)
+        do_samples_if_needed(cycles, 0, 2);
+       return spu.s_chan[ch].ADSRX.EnvelopeVol;
+      }
+
+     case 14:                                          // get loop address
+      {
        const int ch=(r>>4)-0xc0;
-       if(s_chan[ch].bNew) return 1;                   // we are started, but not processed? return 1
-       if(s_chan[ch].ADSRX.lVolume &&                  // same here... we haven't decoded one sample yet, so no envelope yet. return 1 as well
-          !s_chan[ch].ADSRX.EnvelopeVol)                   
-        return 1;
-       return (unsigned short)(s_chan[ch].ADSRX.EnvelopeVol);
+       return (unsigned short)((spu.s_chan[ch].pLoop-spu.spuMemC)>>3);
       }
     }
+  }
+ else if (0x0e00 <= r && r < 0x0e60)
+  {
+   int ch = (r >> 2) & 0x1f;
+   int v = s_chan_iVolume(&spu.s_chan[ch], (r >> 1) & 1) << 1;
+   log_unhandled("c%02d r %cvol %04x\n", ch, (r & 2) ? 'r' : 'l', v);
+   return (unsigned short)v;
   }
 
  switch(r)
   {
-	case H_SPUaddr:
-     return spuAddr>>3;
-
     case H_SPUctrl:
-     return spuCtrl;
+     return spu.spuCtrl;
 
     case H_SPUstat:
-     return spuStat;
+     return spu.spuStat;
+        
+    case H_SPUaddr:
+     return (unsigned short)(spu.spuAddr>>3);
 
+    // this reportedly doesn't work on real hw
     case H_SPUdata:
      {
-      unsigned short s = SWAP16 (spuMem[spuAddr>>1]);
-      spuAddr+=2;
-      if(spuAddr>0x7ffff) spuAddr=0;
+      unsigned short s = LE16TOH(*(unsigned short *)(spu.spuMemC + spu.spuAddr));
+      spu.spuAddr += 2;
+      spu.spuAddr &= 0x7fffe;
+      //check_irq_io(spu.spuAddr);
       return s;
      }
 
@@ -477,43 +400,48 @@ unsigned short CALLBACK SPUreadRegister(unsigned long reg)
     //case H_SPUIsOn2:
     // return IsSoundOn(16,24);
  
+    case H_SPUMute1:
+    case H_SPUMute2:
+     log_unhandled("spu r isOn: %08lx %04x\n", reg, regAreaGet(r));
+     break;
+
+    case H_SPUmvolL:
+    case H_SPUmvolR:
+     log_unhandled("spu r mvol: %08lx %04x\n", reg, regAreaGet(r));
+     break;
+
+    case 0x0dac:
+    case H_SPUirqAddr:
+    case H_CDLeft:
+    case H_CDRight:
+    case H_ExtLeft:
+    case H_ExtRight:
+     break;
+
+    default:
+     if (r >= 0xda0)
+       log_unhandled("spu r %08lx %04x\n", reg, regAreaGet(r));
+     break;
   }
 
- return regArea[(r-0xc00)>>1];
+ return spu.regArea[(r-0xc00)>>1];
 }
  
 ////////////////////////////////////////////////////////////////////////
 // SOUND ON register write
 ////////////////////////////////////////////////////////////////////////
 
-void SoundOn(int start,int end,unsigned short val)     // SOUND ON PSX COMAND
+static void SoundOn(int start,int end,unsigned short val)
 {
  int ch;
 
  for(ch=start;ch<end;ch++,val>>=1)                     // loop channels
   {
-   if((val&1) && s_chan[ch].pStart)                    // mmm... start has to be set before key on !?!
+   if((val&1) && regAreaGetCh(ch, 6))                  // mmm... start has to be set before key on !?!
     {
-		 s_chan[ch].bLoopJump = 0;
-     s_chan[ch].bNew=1;
-
-		 // do this here, not in StartSound
-		 // - fixes fussy timing issues
-		 s_chan[ch].iSilent=0;
-		 s_chan[ch].bStop=0;
-		 s_chan[ch].bOn=1;
-		 s_chan[ch].pCurr=s_chan[ch].pStart;
-
-#if 0
-		 // ADSR init time (guess to # apu cycles)
-		 s_chan[ch].ADSRX.StartDelay = 0;
-#endif
-
-		 // Final Fantasy 7 - don't do any of these
-		 // - sets loop address before VoiceOn
-		 //s_chan[ch].pLoop = s_chan[ch].pStart;
-
-     dwNewChannel|=(1<<ch);                            // bitfield for faster testing
+     spu.s_chan[ch].bIgnoreLoop = 0;
+     spu.s_chan[ch].bStarting = 1;
+     spu.dwNewChannel|=(1<<ch);
     }
   }
 }
@@ -522,20 +450,20 @@ void SoundOn(int start,int end,unsigned short val)     // SOUND ON PSX COMAND
 // SOUND OFF register write
 ////////////////////////////////////////////////////////////////////////
 
-void SoundOff(int start,int end,unsigned short val)    // SOUND OFF PSX COMMAND
+static void SoundOff(int start,int end,unsigned short val)
 {
  int ch;
- for(ch=start;ch<end;ch++,val>>=1)                     // loop channels
+ for (ch = start; val && ch < end; ch++, val >>= 1)    // loop channels
   {
-   if(val&1)                                           // && s_chan[i].bOn)  mmm...
+   if(val&1)
     {
-     s_chan[ch].bStop=1;
+     spu.s_chan[ch].ADSRX.State = ADSR_RELEASE;
+     spu.s_chan[ch].ADSRX.StepCounter = 0;
 
-		 // Jungle Book - Rhythm 'n Groove
-		 // - turns off buzzing sound (loop hangs)
-		 s_chan[ch].bNew=0;
-		 dwNewChannel &= ~(1<<ch);
-		}                                                  
+     // Jungle Book - Rhythm 'n Groove
+     // - turns off buzzing sound (loop hangs)
+     spu.dwNewChannel &= ~(1<<ch);
+    }                                                  
   }
 }
 
@@ -543,7 +471,7 @@ void SoundOff(int start,int end,unsigned short val)    // SOUND OFF PSX COMMAND
 // FMOD register write
 ////////////////////////////////////////////////////////////////////////
 
-void FModOn(int start,int end,unsigned short val)      // FMOD ON PSX COMMAND
+static void FModOn(int start,int end,unsigned short val)
 {
  int ch;
 
@@ -553,13 +481,15 @@ void FModOn(int start,int end,unsigned short val)      // FMOD ON PSX COMMAND
     {
      if(ch>0) 
       {
-       s_chan[ch].bFMod=1;                             // --> sound channel
-       s_chan[ch-1].bFMod=2;                           // --> freq channel
+       spu.s_chan[ch].bFMod=1;                         // --> sound channel
+       spu.s_chan[ch-1].bFMod=2;                       // --> freq channel
       }
     }
    else
     {
-     s_chan[ch].bFMod=0;                               // --> turn off fmod
+     spu.s_chan[ch].bFMod=0;                           // --> turn off fmod
+     if(ch>0&&spu.s_chan[ch-1].bFMod==2)
+      spu.s_chan[ch-1].bFMod=0;
     }
   }
 }
@@ -568,20 +498,13 @@ void FModOn(int start,int end,unsigned short val)      // FMOD ON PSX COMMAND
 // NOISE register write
 ////////////////////////////////////////////////////////////////////////
 
-void NoiseOn(int start,int end,unsigned short val)     // NOISE ON PSX COMMAND
+static void NoiseOn(int start,int end,unsigned short val)
 {
  int ch;
 
  for(ch=start;ch<end;ch++,val>>=1)                     // loop channels
   {
-   if(val&1)                                           // -> noise on/off
-    {
-     s_chan[ch].bNoise=1;
-    }
-   else 
-    {
-     s_chan[ch].bNoise=0;
-    }
+   spu.s_chan[ch].bNoise=val&1;                        // -> noise on/off
   }
 }
 
@@ -592,13 +515,12 @@ void NoiseOn(int start,int end,unsigned short val)     // NOISE ON PSX COMMAND
 // please note: sweep and phase invert are wrong... but I've never seen
 // them used
 
-void SetVolumeL(unsigned char ch,short vol)            // LEFT VOLUME
+static void SetVolumeL(unsigned char ch,short vol)     // LEFT VOLUME
 {
- s_chan[ch].iLeftVolRaw=vol;
-
  if(vol&0x8000)                                        // sweep?
   {
    short sInc=1;                                       // -> sweep up?
+   log_unhandled("ch%d sweepl %04x\n", ch, vol);
    if(vol&0x2000) sInc=-1;                             // -> or down?
    if(vol&0x1000) vol^=0xffff;                         // -> mmm... phase inverted? have to investigate this
    vol=((vol&0x7f)+1)/2;                               // -> sweep: 0..127 -> 0..64
@@ -613,20 +535,20 @@ void SetVolumeL(unsigned char ch,short vol)            // LEFT VOLUME
   }
 
  vol&=0x3fff;
- s_chan[ch].iLeftVolume=vol;                           // store volume
+ spu.s_chan[ch].iLeftVolume=vol;                       // store volume
+ //spu.regArea[(0xe00-0xc00)/2 + ch*2 + 0] = vol << 1;
 }
 
 ////////////////////////////////////////////////////////////////////////
 // RIGHT VOLUME register write
 ////////////////////////////////////////////////////////////////////////
 
-void SetVolumeR(unsigned char ch,short vol)            // RIGHT VOLUME
+static void SetVolumeR(unsigned char ch,short vol)     // RIGHT VOLUME
 {
- s_chan[ch].iRightVolRaw=vol;
-
  if(vol&0x8000)                                        // comments... see above :)
   {
    short sInc=1;
+   log_unhandled("ch%d sweepr %04x\n", ch, vol);
    if(vol&0x2000) sInc=-1;
    if(vol&0x1000) vol^=0xffff;
    vol=((vol&0x7f)+1)/2;        
@@ -641,43 +563,39 @@ void SetVolumeR(unsigned char ch,short vol)            // RIGHT VOLUME
 
  vol&=0x3fff;
 
- s_chan[ch].iRightVolume=vol;
+ spu.s_chan[ch].iRightVolume=vol;
+ //spu.regArea[(0xe00-0xc00)/2 + ch*2 + 1] = vol << 1;
 }
 
 ////////////////////////////////////////////////////////////////////////
 // PITCH register write
 ////////////////////////////////////////////////////////////////////////
 
-void SetPitch(int ch,unsigned short val)               // SET PITCH
+static void SetPitch(int ch,unsigned short val)               // SET PITCH
 {
  int NP;
  if(val>0x3fff) NP=0x3fff;                             // get pitch val
  else           NP=val;
 
- s_chan[ch].iRawPitch=NP;
+ spu.s_chan[ch].iRawPitch = NP;
+ spu.s_chan[ch].sinc = NP << 4;
+ spu.s_chan[ch].sinc_inv = 0;
 
- NP=(44100L*NP)/4096L;                                 // calc frequency
- if(NP<1) NP=1;                                        // some security
- s_chan[ch].iActFreq=NP;                               // store frequency
+ // don't mess spu.dwChannelsAudible as adsr runs independently
 }
 
 ////////////////////////////////////////////////////////////////////////
 // REVERB register write
 ////////////////////////////////////////////////////////////////////////
 
-void ReverbOn(int start,int end,unsigned short val)    // REVERB ON PSX COMMAND
+static void ReverbOn(int start,int end,unsigned short val)
 {
  int ch;
 
  for(ch=start;ch<end;ch++,val>>=1)                     // loop channels
   {
-   if(val&1)                                           // -> reverb on/off
-    {
-     s_chan[ch].bReverb=1;
-    }
-   else 
-    {
-     s_chan[ch].bReverb=0;
-    }
+   spu.s_chan[ch].bReverb=val&1;                       // -> reverb on/off
   }
 }
+
+// vim:shiftwidth=1:expandtab

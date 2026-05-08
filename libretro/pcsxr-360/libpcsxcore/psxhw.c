@@ -260,17 +260,28 @@ _WF(u32, mdecWrite0);
 _WF(u32, mdecWrite1);
 
 /**
-* Spu
+* Spu — port to cycle-driven model.  Plugin needs psxRegs.cycle to
+* know how far to advance its internal sample counter before applying
+* the register write side effect.  See plugins.h for SPUwriteRegister
+* signature change.
 **/
 static void SpuWriteRegister16(u32 add, u16 value) {
-	SPU_writeRegister(add, value);
+	SPU_writeRegister(add, value, psxRegs.cycle);
 }
 
 static void SpuWriteRegister32(u32 add, u32 value) {
-	SPU_writeRegister(add, value&0xffff);
+	SPU_writeRegister(add, value&0xffff, psxRegs.cycle);
 
 	// next 16bit
-	SPU_writeRegister(add+2, (value>>16)&0xffff);
+	SPU_writeRegister(add+2, (value>>16)&0xffff, psxRegs.cycle);
+}
+
+/* The SPU read handler is registered directly as `hw_read16_handler[i] =
+ * (hw_read16_t)SPU_readRegister`.  With the new (reg, cycles) signature
+ * we need a wrapper too so the cycle gets passed.  hw_read16_t expects
+ * a single u32 argument, hence the wrapper. */
+static u16 SpuReadRegister16(u32 add) {
+	return SPU_readRegister(add, psxRegs.cycle);
 }
 
 
@@ -355,9 +366,9 @@ void psxHwInit() {
 		hw_write32_handler[i] = _psxHwMemWrite32;
 	}
 
-	// Spu
+	// Spu — read goes through SpuReadRegister16 wrapper to inject psxRegs.cycle
 	for(i = 0x1c00; i < 0x1e00; i++) {
-		hw_read16_handler[i] = (hw_read16_t)SPU_readRegister;
+		hw_read16_handler[i] = (hw_read16_t)SpuReadRegister16;
 		hw_write16_handler[i] = (hw_write16_t)SpuWriteRegister16;
 		hw_write32_handler[i] = (hw_write32_t)SpuWriteRegister32;
 	}

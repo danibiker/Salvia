@@ -20,103 +20,102 @@
 #define _IN_DMA
 
 #include "externals.h"
+/* spu.h before registers.h so PEOPS_* renames apply to the
+ * SPUreadDMAMem/SPUwriteDMAMem prototypes pulled in transitively. */
+#include "spu.h"
 #include "registers.h"
 
-////////////////////////////////////////////////////////////////////////
-// READ DMA (one value)
-////////////////////////////////////////////////////////////////////////
-
-unsigned short CALLBACK SPUreadDMA(void)
+static void set_dma_end(int iSize, unsigned int cycles)
 {
- unsigned short s=spuMem[spuAddr>>1];
- spuAddr+=2;
- if(spuAddr>0x7ffff) spuAddr=0;
-
- iSpuAsyncWait=0;
-
- return s;
+ // this must be > psxdma.c dma irq
+ // Road Rash also wants a considerable delay, maybe because of fifo?
+ cycles += iSize * 20;  // maybe
+ cycles |= 1;           // indicates dma is active
+ spu.cycles_dma_end = cycles;
 }
 
 ////////////////////////////////////////////////////////////////////////
 // READ DMA (many values)
 ////////////////////////////////////////////////////////////////////////
 
-void CALLBACK SPUreadDMAMem(unsigned short * pusPSXMem,int iSize)
+void CALLBACK SPUreadDMAMem(unsigned short *pusPSXMem, int iSize,
+ unsigned int cycles)
 {
- int i;
+ unsigned int addr = spu.spuAddr, irq_addr = regAreaGet(H_SPUirqAddr) << 3;
+ int i, irq_after;
 
- spuStat |= STAT_DATA_BUSY;
+ do_samples_if_needed(cycles, 1, 2);
+ irq_after = (irq_addr - addr) & 0x7ffff;
 
- for(i=0;i<iSize;i++)
-  {
-	 Check_IRQ( spuAddr, 0 );
-
-		
-	 *pusPSXMem++=spuMem[spuAddr>>1];                    // spu addr got by writeregister
-   spuAddr+=2;                                         // inc spu addr
-
-	 // guess based on Vib Ribbon (below)
-   if(spuAddr>0x7ffff) break;
-  }
-
- iSpuAsyncWait=0;
-
- spuStat &= ~STAT_DATA_BUSY;
- spuStat &= ~STAT_DMA_NON;
- spuStat &= ~STAT_DMA_W;
- spuStat |= STAT_DMA_R;
-}
-
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-
-// to investigate: do sound data updates by writedma affect spu
-// irqs? Will an irq be triggered, if new data is written to
-// the memory irq address?
-
-////////////////////////////////////////////////////////////////////////
-// WRITE DMA (one value)
-////////////////////////////////////////////////////////////////////////
-  
-void CALLBACK SPUwriteDMA(unsigned short val)
-{
- spuMem[spuAddr>>1] = val;                             // spu addr got by writeregister
-
- spuAddr+=2;                                           // inc spu addr
- if(spuAddr>0x7ffff) spuAddr=0;                        // wrap
-
- iSpuAsyncWait=0;
+ for(i = 0; i < iSize; i++)
+ {
+  *pusPSXMem++ = *(unsigned short *)(spu.spuMemC + addr);
+  addr += 2;
+  addr &= 0x7fffe;
+ }
+ if ((spu.spuCtrl & CTRL_IRQ) && irq_after < iSize * 2) {
+  log_unhandled("rdma spu irq: %x/%x-%x\n", irq_addr, spu.spuAddr, addr);
+  do_irq_io(irq_after);
+ }
+ spu.spuAddr = addr;
+ set_dma_end(iSize, cycles);
 }
 
 ////////////////////////////////////////////////////////////////////////
 // WRITE DMA (many values)
 ////////////////////////////////////////////////////////////////////////
 
-void CALLBACK SPUwriteDMAMem(unsigned short * pusPSXMem,int iSize)
+void CALLBACK SPUwriteDMAMem(unsigned short *pusPSXMem, int iSize,
+ unsigned int cycles)
 {
- int i;
-
- spuStat |= STAT_DATA_BUSY;
-
- for(i=0;i<iSize;i++)
-  {
-	 Check_IRQ( spuAddr, 0 );
-
-	 spuMem[spuAddr>>1] = *pusPSXMem++;                  // spu addr got by writeregister
-   spuAddr+=2;                                         // inc spu addr
-
-	 // Vib Ribbon - stop transfer (reverb playback)
-   if(spuAddr>0x7ffff) break;
-  }
+ unsigned int addr = spu.spuAddr, irq_addr = regAreaGet(H_SPUirqAddr) << 3;
+ int i, irq_after;
  
- iSpuAsyncWait=0;
+ do_samples_if_needed(cycles + iSize*2 * 4, 1, 2);
+ irq_after = (irq_addr - addr) & 0x7ffff;
+ spu.bMemDirty = 1;
 
-
- spuStat &= ~STAT_DATA_BUSY;
- spuStat &= ~STAT_DMA_NON;
- spuStat &= ~STAT_DMA_R;
- spuStat |= STAT_DMA_W;
+ if (addr + iSize*2 < 0x80000)
+ {
+  memcpy(spu.spuMemC + addr, pusPSXMem, iSize*2);
+  addr += iSize*2;
+ }
+ else
+ {
+  for (i = 0; i < iSize; i++)
+  {
+   *(unsigned short *)(spu.spuMemC + addr) = *pusPSXMem++;
+   addr += 2;
+   addr &= 0x7fffe;
+  }
+ }
+ if ((spu.spuCtrl & CTRL_IRQ) && irq_after < iSize * 2) {
+  log_unhandled("%u wdma spu irq: %x/%x-%x (%u)\n",
+    cycles, irq_addr, spu.spuAddr, addr, irq_after);
+  // this should be consistent with psxdma.c timing
+  // might also need more delay like in set_dma_end()
+  do_irq_io(irq_after * 4);
+ }
+ for (i = 0; i < MAXCHAN; i++) {
+  size_t ediff, p = spu.s_chan[i].pCurr - spu.spuMemC;
+  if (spu.s_chan[i].ADSRX.State == ADSR_RELEASE && !spu.s_chan[i].ADSRX.EnvelopeVol)
+   continue;
+  ediff = addr - p;
+  if (spu.spuAddr < p && p < spu.spuAddr + iSize * 2) {
+   log_unhandled("%u spu ch%02d play %zx dma %x-%x (%zd)\n",
+     cycles, i, p, spu.spuAddr, addr, ediff);
+   //exit(1);
+  }
+  // a hack for the super annoying timing issues in The Emperor's New Groove
+  // (which is a game bug, but tends to trigger more here)
+  if (ediff <= 0x20u) {
+   spu.s_chan[i].pCurr += ediff;
+   break;
+  }
+ }
+ spu.spuAddr = addr;
+ set_dma_end(iSize, cycles);
 }
 
 ////////////////////////////////////////////////////////////////////////
+// vim:shiftwidth=1:expandtab

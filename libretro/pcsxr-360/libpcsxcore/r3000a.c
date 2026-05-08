@@ -27,6 +27,7 @@
 #include "gte.h"
 #include "sio.h"
 #include "psxdma.h"
+#include "spu.h"  /* spuDelayedIrq, spuUpdate (cycle-driven SPU events) */
 
 boolean use_vm;
 // extern boolean use_vm on psxcommon.h
@@ -186,6 +187,9 @@ void psxBranchTest() {
 						case PSXINT_CDRPLAY: cdrPlayInterrupt(); break;
 						case PSXINT_CDRDBUF: cdrDecodedBufferInterrupt(); break;
 						case PSXINT_CDRLID: cdrLidSeekInterrupt(); break;
+						/* Cycle-driven SPU IRQ events (port from pcsx_rearmed) */
+						case PSXINT_SPU_IRQ: spuDelayedIrq(); break;
+						case PSXINT_SPU_UPDATE: spuUpdate(); break;
 					}
 					DIAG_SET_IRQ_HANDLER(PSX_IRQ_NONE);
 				}

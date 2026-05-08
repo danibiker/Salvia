@@ -174,6 +174,15 @@ enum {
 	PSXINT_CDRPLAY,
 	PSXINT_CDRDBUF,
 	PSXINT_CDRLID,
+	/* New events for the cycle-driven SPU (port from pcsx_rearmed).
+	 * PSXINT_SPU_IRQ:    SPUirq() with cycles_after > 0 schedules this so the
+	 *                    actual psxHu32(0x1070) bit-set happens at the right
+	 *                    cycle (cycles-correct IRQ delivery).
+	 * PSXINT_SPU_UPDATE: SPU plugin schedules itself via scheduleCallback to
+	 *                    be re-entered when the next predicted SPU IRQ is due
+	 *                    (see schedule_next_irq in dfsound/spu.c). */
+	PSXINT_SPU_IRQ,
+	PSXINT_SPU_UPDATE,
 	PSXINT_COUNT
 };
 

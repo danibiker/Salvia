@@ -540,7 +540,7 @@ static const char PcsxHeader[32] = "STv4 PCSX v" PACKAGE_VERSION;
 static const u32 SaveVersion = 0x8b410006;
 
 /* ---------------------------------------------------------------------------
- * In-memory savestate stream — backs the gzfreeze() macro.
+ * In-memory savestate stream ï¿½ backs the gzfreeze() macro.
  * ------------------------------------------------------------------------ */
 int psxSS_write(psxSaveState_t *f, const void *ptr, size_t n) {
 	if (!f || f->overflow) return -1;
@@ -573,7 +573,7 @@ int psxSS_seek(psxSaveState_t *f, long offset, int whence) {
 }
 
 /* ---------------------------------------------------------------------------
- * SaveStateMem / LoadStateMem — libretro entry points.  Same byte layout as
+ * SaveStateMem / LoadStateMem ï¿½ libretro entry points.  Same byte layout as
  * the legacy gz-based savestate, but uncompressed and written to a caller-
  * supplied buffer.  No disk I/O.
  * ------------------------------------------------------------------------ */
@@ -618,14 +618,15 @@ int SaveStateMem(void *data, size_t size, size_t *outUsed) {
 	psxSS_write(&ss, gpufP, sizeof(GPUFreeze_t));
 	free(gpufP);
 
-	/* spu */
+	/* spu â€” third arg is psxRegs.cycle so the cycle-driven plugin can
+	 * flush in-flight samples up to "now" before snapshotting state. */
 	spufP = (SPUFreeze_t *)malloc(16);
-	SPU_freeze(2, spufP);
+	SPU_freeze(2, spufP, psxRegs.cycle);
 	Size = spufP->Size;
 	psxSS_write(&ss, &Size, 4);
 	free(spufP);
 	spufP = (SPUFreeze_t *)malloc(Size);
-	SPU_freeze(1, spufP);
+	SPU_freeze(1, spufP, psxRegs.cycle);
 	psxSS_write(&ss, spufP, Size);
 	free(spufP);
 
@@ -689,11 +690,11 @@ int LoadStateMem(const void *data, size_t size) {
 	GPU_freeze(0, gpufP);
 	free(gpufP);
 
-	/* spu */
+	/* spu â€” third arg is psxRegs.cycle (cycle-driven plugin). */
 	psxSS_read(&ss, &Size, 4);
 	spufP = (SPUFreeze_t *)malloc(Size);
 	psxSS_read(&ss, spufP, Size);
-	SPU_freeze(0, spufP);
+	SPU_freeze(0, spufP, psxRegs.cycle);
 	free(spufP);
 
 	sioFreeze(&ss, 0);

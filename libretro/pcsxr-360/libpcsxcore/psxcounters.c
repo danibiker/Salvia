@@ -281,9 +281,15 @@ __inline void psxRcntUpdate()
         {
             spuSyncCount = 0;
 
+            /* Cycle-driven SPU (port from pcsx_rearmed): SPU_async now
+             * takes the current absolute psxRegs.cycle plus a flags
+             * argument.  Bit 0 of flags asks the plugin to also push
+             * any pending mixed samples to the audio output driver.
+             * We set it on every periodic update so the audio ring
+             * keeps draining at a steady cadence. */
             if( SPU_async )
             {
-                SPU_async( SpuUpdInterval[Config.PsxType] * rcnts[3].target );
+                SPU_async( psxRegs.cycle, 1 );
             }
         }
         

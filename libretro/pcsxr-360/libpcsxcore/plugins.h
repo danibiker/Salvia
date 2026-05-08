@@ -191,34 +191,44 @@ extern CDRsetfilename        CDR_setfilename;
 extern CDRreadCDDA           CDR_readCDDA;
 extern CDRgetTE              CDR_getTE;
 
-// SPU Functions
+// SPU Functions — cycle-driven model (port from pcsx_rearmed).
+//
+// All entry points that can trigger SPU IRQs (writeRegister, DMA mem
+// transfers, XA/CDDA stream feeders) now take an extra `cycles` arg so
+// the plugin can do_samples up to the current cycle before processing
+// the side effect.  This is what lets IRQs land at the right cycle.
+//
+// SPUasync(cycle, flags): cycle is psxRegs.cycle at the call site.
+//   flag bit 0: also push samples to the audio output driver.
+// SPUregisterCallback now takes a callback with cycles_after arg.
+// SPUregisterScheduleCb is new: the plugin asks us to re-enter at a
+//   specific future cycle (PSXINT_SPU_UPDATE event).
 typedef long (CALLBACK* SPUinit)(void);
 typedef long (CALLBACK* SPUshutdown)(void);
 typedef long (CALLBACK* SPUclose)(void);
 typedef void (CALLBACK* SPUplaySample)(unsigned char);
-typedef void (CALLBACK* SPUwriteRegister)(unsigned long, unsigned short);
-typedef unsigned short (CALLBACK* SPUreadRegister)(unsigned long);
+typedef void (CALLBACK* SPUwriteRegister)(unsigned long, unsigned short, unsigned int);
+typedef unsigned short (CALLBACK* SPUreadRegister)(unsigned long, unsigned int);
 typedef void (CALLBACK* SPUwriteDMA)(unsigned short);
 typedef unsigned short (CALLBACK* SPUreadDMA)(void);
-typedef void (CALLBACK* SPUwriteDMAMem)(unsigned short *, int);
-typedef void (CALLBACK* SPUreadDMAMem)(unsigned short *, int);
-typedef void (CALLBACK* SPUplayADPCMchannel)(xa_decode_t *);
-typedef void (CALLBACK* SPUregisterCallback)(void (CALLBACK *callback)(void));
+typedef void (CALLBACK* SPUwriteDMAMem)(unsigned short *, int, unsigned int);
+typedef void (CALLBACK* SPUreadDMAMem)(unsigned short *, int, unsigned int);
+typedef void (CALLBACK* SPUplayADPCMchannel)(xa_decode_t *, unsigned int, int);
+typedef void (CALLBACK* SPUregisterCallback)(void (CALLBACK *callback)(int));
+typedef void (CALLBACK* SPUregisterScheduleCb)(void (CALLBACK *callback)(unsigned int));
 typedef long (CALLBACK* SPUconfigure)(void);
 typedef long (CALLBACK* SPUtest)(void);
 typedef void (CALLBACK* SPUabout)(void);
-typedef struct {
-	unsigned char PluginName[8];
-	uint32_t PluginVersion;
-	uint32_t Size;
-	unsigned char SPUPorts[0x200];
-	unsigned char SPURam[0x80000];
-	xa_decode_t xa;
-	unsigned char *SPUInfo;
-} SPUFreeze_t;
-typedef long (CALLBACK* SPUfreeze)(uint32_t, SPUFreeze_t *);
-typedef void (CALLBACK* SPUasync)(uint32_t);
-typedef void (CALLBACK* SPUplayCDDAchannel)(short *, int);
+/* SPUFreeze_t lives in its own header so the SPU plugin can include
+ * it without pulling in the SPU* function-pointer typedefs further
+ * down (which collide with the actual SPU function declarations in
+ * dfsound/registers.h and dfsound/spu.h). */
+#include "spu_freeze.h"
+typedef long (CALLBACK* SPUfreeze)(uint32_t, SPUFreeze_t *, uint32_t);
+typedef void (CALLBACK* SPUasync)(uint32_t, uint32_t);
+typedef int  (CALLBACK* SPUplayCDDAchannel)(short *, int, unsigned int, int);
+typedef void (CALLBACK* SPUsetCDvol)(unsigned char, unsigned char,
+	unsigned char, unsigned char, unsigned int);
 
 // SPU function pointers
 extern SPUconfigure        SPU_configure;
@@ -238,8 +248,10 @@ extern SPUreadDMAMem       SPU_readDMAMem;
 extern SPUplayADPCMchannel SPU_playADPCMchannel;
 extern SPUfreeze           SPU_freeze;
 extern SPUregisterCallback SPU_registerCallback;
+extern SPUregisterScheduleCb SPU_registerScheduleCb;
 extern SPUasync            SPU_async;
 extern SPUplayCDDAchannel  SPU_playCDDAchannel;
+extern SPUsetCDvol         SPU_setCDvol;
 
 // PAD Functions
 typedef long (CALLBACK* PADconfigure)(void);

@@ -92,8 +92,10 @@ SPUreadDMAMem         SPU_readDMAMem;
 SPUplayADPCMchannel   SPU_playADPCMchannel;
 SPUfreeze             SPU_freeze;
 SPUregisterCallback   SPU_registerCallback;
+SPUregisterScheduleCb SPU_registerScheduleCb;
 SPUasync              SPU_async;
 SPUplayCDDAchannel    SPU_playCDDAchannel;
+SPUsetCDvol           SPU_setCDvol;
 
 PADconfigure          PAD1_configure;
 PADabout              PAD1_about;
@@ -375,8 +377,10 @@ static int LoadSPUplugin(const char *SPUdll) {
 	LoadSpuSym1(playADPCMchannel, "SPUplayADPCMchannel");
 	LoadSpuSym1(freeze, "SPUfreeze");
 	LoadSpuSym1(registerCallback, "SPUregisterCallback");
+	LoadSpuSymN(registerScheduleCb, "SPUregisterScheduleCb");
 	LoadSpuSymN(async, "SPUasync");
 	LoadSpuSymN(playCDDAchannel, "SPUplayCDDAchannel");
+	LoadSpuSymN(setCDvol, "SPUsetCDvol");
 
 	return 0;
 }

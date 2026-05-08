@@ -4,29 +4,19 @@
     begin                : Wed May 15 2002
     copyright            : (C) 2002 by Pete Bernert
     email                : BlackDove@addcom.de
+
+ Cycle-driven port from pcsx_rearmed (notaz, 2010-2015).
  ***************************************************************************/
-/***************************************************************************
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version. See also the license.txt file for *
- *   additional informations.                                              *
- *                                                                         *
- ***************************************************************************/
+
+#ifndef __P_SOUND_EXTERNALS_H__
+#define __P_SOUND_EXTERNALS_H__
 
 #include <stdint.h>
 
-/* Runtime threading flag (defined in libpcsxcore/psxcommon.c, declared
- * in psxcommon.h).  SetupTimer / RemoveTimer leen esta variable para
- * decidir si crear el SPU MAINThread o forzar iUseTimer=2 (polling).
- * Lo declaramos aqui localmente porque dfsound NO incluye psxcommon.h
- * (es un plugin con su propio universo de tipos). */
-#ifdef __cplusplus
-extern "C" int g_pcsxr_threading_enabled;
-#else
-extern int g_pcsxr_threading_enabled;
-#endif
+/* All GCC-isms (noinline, forceinline, unlikely, preload, ALIGN_VAR,
+ * __restrict__) are normalised in stdafx.h.  Include it first so the
+ * macros are available throughout the dfsound TU. */
+#include "stdafx.h"
 
 /////////////////////////////////////////////////////////
 // generic defines
@@ -42,160 +32,99 @@ extern int g_pcsxr_threading_enabled;
 #define min(a,b)            (((a) < (b)) ? (a) : (b))
 #endif
 
-
-
-// 15-bit value + 1-sign
-extern int CLAMP16(int x);
-
-
 ////////////////////////////////////////////////////////////////////////
 // spu defines
 ////////////////////////////////////////////////////////////////////////
 
-// sound buffer sizes
-// 400 ms complete sound buffer
-#define SOUNDSIZE   70560
-// 137 ms test buffer... if less than that is buffered, a new upload will happen
-#define TESTSIZE    24192
-
 // num of channels
 #define MAXCHAN     24
 
-
-// ~ 1 ms of data - somewhat slower than Eternal
-//#define NSSIZE 45
-//#define INTERVAL_TIME 1000
-
-// ~ 0.5 ms of data - roughly Eternal maybe
-//#define NSSIZE 23
-//#define INTERVAL_TIME 2000
-
-// ~ 0.25 ms of data - seems a little bad..?
-//#define NSSIZE 12
-//#define INTERVAL_TIME 4000
-
-#define NSSIZE 10
-#define APU_CYCLES_UPDATE NSSIZE
-
-
-// update times
-#if 0
-// PEOPS DSound 1.09a - good sound cards
-#define LATENCY 10
-#elif defined (_WINDOWS)
-// work on most cards
-#define LATENCY 50
-#else
-// work on most cards
-#define LATENCY 50
-#endif
-
-
-// make sure this is bigger than cpu action - no glitchy
-#define INTERVAL_TIME 4500
-
-
-#define CPU_CLOCK 33868800
+// note: must be even due to the way reverb works now.
+// pcsx_rearmed sized this to one frame (44100/50 + headroom),
+// rounded down to even.  At 50 Hz PAL that is 914 samples; at NTSC
+// the SPU is called more often so it never overflows.
+#define NSSIZE ((44100 / 50 + 32) & ~1)
 
 ///////////////////////////////////////////////////////////
 // struct defines
 ///////////////////////////////////////////////////////////
 
+enum ADSR_State {
+ ADSR_ATTACK = 0,
+ ADSR_DECAY = 1,
+ ADSR_SUSTAIN = 2,
+ ADSR_RELEASE = 3,
+};
+
 // ADSR INFOS PER CHANNEL
 typedef struct
 {
- int            AttackModeExp;
- long           AttackTime;
- long           DecayTime;
- long           SustainLevel;
- int            SustainModeExp;
- long           SustainModeDec;
- long           SustainTime;
- int            ReleaseModeExp;
- unsigned long  ReleaseVal;
- long           ReleaseTime;
- long           ReleaseStartTime;
- long           ReleaseVol;
- long           lTime;
- long           lVolume;
-} ADSRInfo;
-
-typedef struct
-{
- int            State;
- int            AttackModeExp;
- int            AttackRate;
- int            DecayRate;
- int            SustainLevel;
- int            SustainModeExp;
- int            SustainIncrease;
- int            SustainRate;
- int            ReleaseModeExp;
- int            ReleaseRate;
+ unsigned char  State;                /* ADSR_State (was bitfield :2) */
+ unsigned char  AttackModeExp;        /* (was :1) */
+ unsigned char  SustainModeExp;       /* (was :1) */
+ unsigned char  SustainIncrease;      /* (was :1) */
+ unsigned char  ReleaseModeExp;       /* (was :1) */
+ unsigned char  AttackRate;
+ unsigned char  DecayRate;
+ unsigned char  SustainLevel;
+ unsigned char  SustainRate;
+ unsigned char  ReleaseRate;
  int            EnvelopeVol;
- int            EnvelopeVol_f;			// fraction
- long           lVolume;
- long           lDummy1;
- long           lDummy2;
+ int            StepCounter;          /* 0 -> 32k */
 } ADSRInfoEx;
 
-///////////////////////////////////////////////////////////
+/* NOTE: pcsx_rearmed packed ADSR_State + 4 bool flags into one byte
+ * via bitfields (`State:2`, `AttackModeExp:1`, ...).  MSVC accepts
+ * the syntax but ABI is compiler-dependent and the freeze format
+ * reads/writes them as full ints.  Expanding to plain unsigned char
+ * removes any layout risk and costs only a couple of bytes per
+ * channel (24 channels × 4 = 96 B). */
 
-// Tmp Flags
-
-// used for debug channel muting
-#define FLAG_MUTE  1
-
-// used for simple interpolation
-#define FLAG_IPOL0 2
-#define FLAG_IPOL1 4
+struct xa_decode;
 
 ///////////////////////////////////////////////////////////
 
 // MAIN CHANNEL STRUCT
 typedef struct
 {
- // no mutexes used anymore... don't need them to sync access
- //HANDLE            hMutex;
-
- int               bNew;                               // start flag
-
  int               iSBPos;                             // mixing stuff
  int               spos;
  int               sinc;
- int               SB[32+32];                          // Pete added another 32 dwords in 1.6 ... prevents overflow issues with gaussian/cubic interpolation (thanx xodnizel!), and can be used for even better interpolations, eh? :)
- int               sval;
+ int               sinc_inv;
 
- unsigned char *   pStart;                             // start ptr into sound mem
  unsigned char *   pCurr;                              // current pos in sound mem
  unsigned char *   pLoop;                              // loop ptr in sound mem
 
- int               bOn;                                // is channel active (sample playing?)
- int               bStop;                              // is channel stopped (sample _can_ still be playing, ADSR Release phase)
- int               bReverb;                            // can we do reverb on this channel? must have ctrl register bit, to get active
- int               iActFreq;                           // current psx pitch
- int               iUsedFreq;                          // current pc pitch
+ /* Original used unsigned-int bitfields:
+  *   bReverb:1, bRVBActive:1, bNoise:1, bFMod:2, prevflags:3,
+  *   bIgnoreLoop:1, bStarting:1.
+  * Same packing concerns as ADSRInfoEx: expanded to plain unsigned
+  * char so MSVC ABI matches the source-code intent exactly. */
+ unsigned char     bReverb;            // (was :1) can we do reverb on this channel? must have ctrl reg bit, to get active
+ unsigned char     bRVBActive;         // (was :1) reverb active flag
+ unsigned char     bNoise;             // (was :1) noise active flag
+ unsigned char     bFMod;              // (was :2) freq mod (0=off, 1=sound channel, 2=freq channel)
+ unsigned char     prevflags;          // (was :3) flags from previous block
+ unsigned char     bIgnoreLoop;        // (was :1) ignore loop bit, if an external loop address is used
+ unsigned char     bStarting;          // (was :1) starting after keyon
+ unsigned char     _pad0[1];
+
+ /* The original source had an anonymous union with an anonymous
+  * inner struct (`union { struct { int iLeftVolume, iRightVolume;
+  * }; int iVolume[2]; };`).  MSVC C accepts that under /Zo (default),
+  * but it's brittle across compiler versions; rewrite as a plain
+  * pair plus a #define so callers reading `iVolume[0/1]` still
+  * compile.  In practice only the union-member names are used. */
  int               iLeftVolume;                        // left volume
- int               iLeftVolRaw;                        // left psx volume value
- int               bLoopJump;													 // ignore loop bit, if an external loop address is used
- int               iMute;                              // mute mode (debug)
- int               iSilent;                            // voice on - sound on/off
  int               iRightVolume;                       // right volume
- int               iRightVolRaw;                       // right psx volume value
+
+ ADSRInfoEx        ADSRX;
  int               iRawPitch;                          // raw pitch (0...3fff)
- int               iIrqDone;                           // debug irq done flag
- int               s_1;                                // last decoding infos
- int               s_2;
- int               bRVBActive;                         // reverb active flag
- int               iRVBOffset;                         // reverb offset
- int               iRVBRepeat;                         // reverb repeat
- int               bNoise;                             // noise active flag
- int               bFMod;                              // freq mod (0=off, 1=sound channel, 2=freq channel)
- int               iRVBNum;                            // another reverb helper
- int               iOldNoise;                          // old noise val for this channel
- ADSRInfo          ADSR;                               // active ADSR settings
- ADSRInfoEx        ADSRX;                              // next ADSR settings (will be moved to active on sample start)
 } SPUCHAN;
+
+/* Compatibility shim: pcsx_rearmed accesses iVolume[i] as an array.
+ * Expand to either iLeftVolume or iRightVolume via this macro. */
+#define s_chan_iVolume(s_chan, i) (*(((i) & 1) ? &(s_chan)->iRightVolume : &(s_chan)->iLeftVolume))
 
 ///////////////////////////////////////////////////////////
 
@@ -206,49 +135,143 @@ typedef struct
 
  int VolLeft;
  int VolRight;
- int iLastRVBLeft;
- int iLastRVBRight;
- int iRVBLeft;
- int iRVBRight;
 
- int FB_SRC_A;       // (offset)
- int FB_SRC_B;       // (offset)
- int IIR_ALPHA;      // (coef.)
- int ACC_COEF_A;     // (coef.)
- int ACC_COEF_B;     // (coef.)
- int ACC_COEF_C;     // (coef.)
- int ACC_COEF_D;     // (coef.)
- int IIR_COEF;       // (coef.)
- int FB_ALPHA;       // (coef.)
- int FB_X;           // (coef.)
- int IIR_DEST_A0;    // (offset)
- int IIR_DEST_A1;    // (offset)
- int ACC_SRC_A0;     // (offset)
- int ACC_SRC_A1;     // (offset)
- int ACC_SRC_B0;     // (offset)
- int ACC_SRC_B1;     // (offset)
- int IIR_SRC_A0;     // (offset)
- int IIR_SRC_A1;     // (offset)
- int IIR_DEST_B0;    // (offset)
- int IIR_DEST_B1;    // (offset)
- int ACC_SRC_C0;     // (offset)
- int ACC_SRC_C1;     // (offset)
- int ACC_SRC_D0;     // (offset)
- int ACC_SRC_D1;     // (offset)
- int IIR_SRC_B1;     // (offset)
- int IIR_SRC_B0;     // (offset)
- int MIX_DEST_A0;    // (offset)
- int MIX_DEST_A1;    // (offset)
- int MIX_DEST_B0;    // (offset)
- int MIX_DEST_B1;    // (offset)
- int IN_COEF_L;      // (coef.)
- int IN_COEF_R;      // (coef.)
+ // directly from nocash docs (SPU2-X register names)
+ int vIIR;    // 1DC4 volume  Reverb Reflection Volume 1
+ int vCOMB1;  // 1DC6 volume  Reverb Comb Volume 1
+ int vCOMB2;  // 1DC8 volume  Reverb Comb Volume 2
+ int vCOMB3;  // 1DCA volume  Reverb Comb Volume 3
+ int vCOMB4;  // 1DCC volume  Reverb Comb Volume 4
+ int vWALL;   // 1DCE volume  Reverb Reflection Volume 2
+ int vAPF1;   // 1DD0 volume  Reverb APF Volume 1
+ int vAPF2;   // 1DD2 volume  Reverb APF Volume 2
+ int mLSAME;  // 1DD4 src/dst Reverb Same Side Reflection Address 1 Left
+ int mRSAME;  // 1DD6 src/dst Reverb Same Side Reflection Address 1 Right
+ int mLCOMB1; // 1DD8 src     Reverb Comb Address 1 Left
+ int mRCOMB1; // 1DDA src     Reverb Comb Address 1 Right
+ int mLCOMB2; // 1DDC src     Reverb Comb Address 2 Left
+ int mRCOMB2; // 1DDE src     Reverb Comb Address 2 Right
+ int dLSAME;  // 1DE0 src     Reverb Same Side Reflection Address 2 Left
+ int dRSAME;  // 1DE2 src     Reverb Same Side Reflection Address 2 Right
+ int mLDIFF;  // 1DE4 src/dst Reverb Different Side Reflect Address 1 Left
+ int mRDIFF;  // 1DE6 src/dst Reverb Different Side Reflect Address 1 Right
+ int mLCOMB3; // 1DE8 src     Reverb Comb Address 3 Left
+ int mRCOMB3; // 1DEA src     Reverb Comb Address 3 Right
+ int mLCOMB4; // 1DEC src     Reverb Comb Address 4 Left
+ int mRCOMB4; // 1DEE src     Reverb Comb Address 4 Right
+ int dLDIFF;  // 1DF0 src     Reverb Different Side Reflect Address 2 Left
+ int dRDIFF;  // 1DF2 src     Reverb Different Side Reflect Address 2 Right
+ int mLAPF1;  // 1DF4 src/dst Reverb APF Address 1 Left
+ int mRAPF1;  // 1DF6 src/dst Reverb APF Address 1 Right
+ int mLAPF2;  // 1DF8 src/dst Reverb APF Address 2 Left
+ int mRAPF2;  // 1DFA src/dst Reverb APF Address 2 Right
+ int vLIN;    // 1DFC volume  Reverb Input Volume Left
+ int vRIN;    // 1DFE volume  Reverb Input Volume Right
+
+ // subtracted offsets
+ int mLAPF1_dAPF1, mRAPF1_dAPF1, mLAPF2_dAPF2, mRAPF2_dAPF2;
+
+ int dirty;   // registers changed
 } REVERBInfo;
 
-#ifdef _WINDOWS
-extern HINSTANCE hInst;
-#define WM_MUTE (WM_USER+543)
-#endif
+///////////////////////////////////////////////////////////
+
+// psx buffers / addresses
+
+typedef union {
+ short buf[4+28];
+ struct {
+  short old[4];        // old samples for interpolation
+  short decode[28];
+ };
+} sample_buf;
+
+typedef struct {
+ int sample[2][4*2];
+} sample_buf_rvb;
+
+typedef struct
+{
+ unsigned short  spuCtrl;
+ unsigned short  spuStat;
+
+ unsigned int    spuAddr;
+
+ unsigned int    cycles_played;
+ unsigned int    cycles_dma_end;
+ int             decode_pos;
+ int             decode_dirty_ch;
+ unsigned int    bSpuInit;             /* (was :1) */
+ unsigned int    bSPUIsOpen;           /* (was :1) */
+ unsigned int    bMemDirty;            /* (was :1) had external write to SPU RAM */
+
+ unsigned int    dwNoiseVal;           // global noise generator
+ unsigned int    dwNoiseCount;
+ unsigned int    dwNewChannel;         // flags for faster testing, if new channel starts
+ unsigned int    dwChannelsAudible;    // not silent channels
+ unsigned int    dwChannelDead;        // silent+not useful channels
+
+ unsigned int    XARepeat;
+ unsigned int    XALastVal;
+
+ int             iLeftXAVol;
+ int             iRightXAVol;
+
+ int             cdClearSamples;       // extra samples to clear the capture buffers
+ struct {                              // channel volume in the cd controller
+  unsigned char  ll, lr, rl, rr;       // see cdr.Attenuator* in cdrom.c
+ } cdv;                                // applied on spu side for easier emulation
+
+ unsigned int    last_keyon_cycles;
+
+ /* The original used an anonymous union here:
+  *   union { unsigned char *spuMemC; unsigned short *spuMem; };
+  * Same MSVC concern as in SPUCHAN; spell it out explicitly. */
+ unsigned char * spuMemC;
+ unsigned short *spuMem;
+
+ unsigned char * pSpuIrq;
+
+ unsigned char * pSpuBuffer;
+ short         * pS;
+
+ SPUCHAN       * s_chan;
+ REVERBInfo    * rvb;
+
+ int           * SSumLR;
+
+ void (CALLBACK *irqCallback)(int);
+ //void (CALLBACK *cddavCallback)(short, short);
+ void (CALLBACK *scheduleCallback)(unsigned int);
+
+ const struct xa_decode * xapGlobal;
+ unsigned int  * XAFeed;
+ unsigned int  * XAPlay;
+ unsigned int  * XAStart;
+ unsigned int  * XAEnd;
+
+ unsigned int  * CDDAFeed;
+ unsigned int  * CDDAPlay;
+ unsigned int  * CDDAStart;
+ unsigned int  * CDDAEnd;
+
+ ALIGN_VAR(32)
+ unsigned short  regArea[0x400];
+
+ sample_buf      sb[MAXCHAN];
+ sample_buf_rvb  sb_rvb; // for reverb filtering
+ int             interpolation;
+
+ /* Worker thread (USE_ASYNC_SPU / WANT_THREAD_CODE) is intentionally
+  * disabled in this port — see SPU plugin spu.c for rationale. */
+} SPUInfo;
+
+#define regAreaRef(offset) \
+  spu.regArea[((offset) - 0xc00) >> 1]
+#define regAreaGet(offset) \
+  regAreaRef(offset)
+#define regAreaGetCh(ch, offset) \
+  spu.regArea[(((ch) << 4) | (offset)) >> 1]
 
 ///////////////////////////////////////////////////////////
 // SPU.C globals
@@ -256,128 +279,22 @@ extern HINSTANCE hInst;
 
 #ifndef _IN_SPU
 
-// psx buffers / addresses
+extern SPUInfo spu;
 
-extern unsigned short  regArea[];
-extern unsigned short  spuMem[];
-extern unsigned char * spuMemC;
-extern unsigned char * pSpuIrq;
-extern unsigned char * pSpuBuffer;
+void do_samples(unsigned int cycles_to, int force_no_thread);
+void schedule_next_irq(void);
+void check_irq_io(unsigned int addr);
+void do_irq_io(int cycles_after);
 
-// user settings
-
-extern int        iVolume;
-extern int        iXAPitch;
-extern int        iUseTimer;
-extern int        iSPUIRQWait;
-extern int        iDebugMode;
-extern int        iRecordMode;
-extern int        iUseReverb;
-extern int        iUseInterpolation;
-extern int        iDisStereo;
-extern int				iFreqResponse;
-// MISC
-
-extern int iSpuAsyncWait;
-
-extern SPUCHAN s_chan[];
-extern REVERBInfo rvb;
-
-extern unsigned long dwNoiseVal;
-extern unsigned long dwNoiseClock;
-extern unsigned long dwNoiseCount;
-extern unsigned short spuCtrl;
-extern unsigned short spuStat;
-extern unsigned short spuIrq;
-extern unsigned long  spuAddr;
-/* Flags compartidos entre el SPU MAINThread y el main thread
- * (SPU_open / SPU_close).  Volatile porque PowerPC tiene weak memory
- * ordering: sin volatile, el compilador puede mantenerlos en registro
- * y no observar cambios cross-thread.  Lecturas/escrituras criticas
- * estan rodeadas de __lwsync() en spu.c. */
-extern volatile int bEndThread;
-extern volatile int bThreadEnded;
-extern volatile int bSpuInit;
-extern uint32_t dwNewChannel;
-extern unsigned int bIrqHit;
-
-extern int      SSumR[];
-extern int      SSumL[];
-extern int      iCycle;
-extern short *  pS;
-
-#ifdef _WINDOWS
-extern HWND    hWMain;                               // window handle
-extern HWND    hWDebug;
-#endif
-
-extern void (CALLBACK *cddavCallback)(unsigned short,unsigned short);
-extern void (CALLBACK *irqCallback)(void);                  // func of main emu, called on spu irq
+#define do_samples_if_needed(c, no_thread, samples) \
+ do { \
+  if ((no_thread) || (int)((c) - spu.cycles_played) >= (samples) * 768) \
+   do_samples(c, no_thread); \
+ } while (0)
 
 #endif
 
-///////////////////////////////////////////////////////////
-// DSOUND.C globals
-///////////////////////////////////////////////////////////
+void FeedXA(const struct xa_decode *xap);
+void FeedCDDA(unsigned char *pcm, int nBytes);
 
-#ifndef _IN_DSOUND
-
-#ifdef _WINDOWS
-extern unsigned long LastWrite;
-extern unsigned long LastPlay;
-#endif
-
-#endif
-
-///////////////////////////////////////////////////////////
-// RECORD.C globals
-///////////////////////////////////////////////////////////
-
-#ifndef _IN_RECORD
-
-#ifdef _WINDOWS
-extern int iDoRecord;
-#endif
-
-#endif
-
-///////////////////////////////////////////////////////////
-// XA.C globals
-///////////////////////////////////////////////////////////
-
-#ifndef _IN_XA
-
-extern xa_decode_t   * xapGlobal;
-
-extern uint32_t * XAFeed;
-extern uint32_t * XAPlay;
-extern uint32_t * XAStart;
-extern uint32_t * XAEnd;
-
-extern uint32_t   XARepeat;
-extern uint32_t   XALastVal;
-
-extern uint32_t * CDDAFeed;
-extern uint32_t * CDDAPlay;
-extern uint32_t * CDDAStart;
-extern uint32_t * CDDAEnd;
-
-extern int           iLeftXAVol;
-extern int           iRightXAVol;
-
-#endif
-
-///////////////////////////////////////////////////////////
-// REVERB.C globals
-///////////////////////////////////////////////////////////
-
-#ifndef _IN_REVERB
-
-extern int *          sRVBPlay;
-extern int *          sRVBEnd;
-extern int *          sRVBStart;
-extern int            iReverbOff;
-extern int            iReverbRepeat;
-extern int            iReverbNum;
-
-#endif
+#endif /* __P_SOUND_EXTERNALS_H__ */

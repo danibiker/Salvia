@@ -18,14 +18,46 @@
  ***************************************************************************/
 
 /*
-* Sound (SPU) functions.
-*/
+ * Sound (SPU) functions — cycle-driven model (port from pcsx_rearmed).
+ *
+ * The SPU plugin no longer runs in its own thread.  Instead the CPU
+ * scheduler (psxBranchTest, set_event) calls back into the plugin at
+ * specific cycles via SPUasync / spuUpdate.  This guarantees IRQ
+ * delivery at the correct cycle and removes the wait/handshake logic
+ * that broke games like Metal Gear Solid.
+ */
 
 #include "spu.h"
 
-void CALLBACK SPUirq(void) {
-//if(use_vm)
-//	psxHu32ref(0x1070) |= SWAPu32(0x200);
-//else
-	psxHu32ref_2(0x1070) |= SWAPu32(0x200);//teste
+void CALLBACK SPUirq(int cycles_after) {
+	if (cycles_after > 0) {
+		/* Schedule the bit-set as a future event.  The PSXINT_SPU_IRQ
+		 * handler is spuDelayedIrq() in psxBranchTest. */
+		set_event(PSXINT_SPU_IRQ, cycles_after);
+		return;
+	}
+
+	/* Immediate: SPU is mixing right at the IRQ point. */
+	psxHu32ref_2(0x1070) |= SWAPu32(0x200);
+}
+
+void spuDelayedIrq(void) {
+	/* PSXINT_SPU_IRQ handler — fires at the cycle scheduled by SPUirq. */
+	psxHu32ref_2(0x1070) |= SWAPu32(0x200);
+}
+
+/* PSXINT_SPU_UPDATE handler.  Re-enters the SPU plugin at the current
+ * CPU cycle so the plugin can do_samples up to here and re-schedule
+ * itself for the next predicted IRQ point.  Called from psxBranchTest
+ * when the scheduled cycle arrives. */
+void spuUpdate(void) {
+	if (SPU_async)
+		SPU_async(psxRegs.cycle, 0);
+}
+
+/* Registered with the SPU plugin via SPU_registerScheduleCb at boot.
+ * The plugin invokes this from schedule_next_irq when it has predicted
+ * the next IRQ point N cycles in the future. */
+void CALLBACK SPUschedule(unsigned int cycles_after) {
+	set_event(PSXINT_SPU_UPDATE, cycles_after);
 }

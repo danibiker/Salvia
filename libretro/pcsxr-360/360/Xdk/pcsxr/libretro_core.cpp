@@ -41,7 +41,8 @@ extern "C" {
 #include "misc.h"
 #include "psxmem.h"
 #include "sio.h"
-#include "spu.h"
+#include "spu.h"  /* SPUirq, SPUschedule (cycle-driven SPU event handlers) */
+#include "../../plugins/dfsound/spu_config.h"  /* SPUConfig spu_config */
 #include "../../plugins/xbox_soft/peops_prof.h"
 
 /* xbPlugins.h declares the static plugin function symbols (PEOPS_*,
@@ -57,9 +58,17 @@ extern "C" {
 extern int      darkforcesfix;       /* xbox_soft/cfg.c */
 extern uint32_t dwActFixes;          /* xbox_soft GPU fixes bitmask */
 extern int      iUseFixes;           /* xbox_soft gate for dwActFixes */
-extern BOOL     tombraider2fix;      /* dfsound/cfg.c */
-extern BOOL     crashteamracingfix;  /* dfsound/cfg.c */
 extern BOOL     frontmission3fix;    /* libpcsxcore/psxinterpreter.c */
+
+/* Note: tombraider2fix, crashteamracingfix, spuirq, iSPUIRQWait are
+ * legacy PEOPS-thread flags. The cycle-driven SPU port (pcsx_rearmed)
+ * makes them obsolete:
+ *   - Tomb Raider 2 voice silence: handled correctly upstream.
+ *   - Crash Team Racing decoded-buffer IRQ: handled correctly upstream.
+ *   - SPU IRQ wait: replaced by cycle-correct IRQ delivery via
+ *     PSXINT_SPU_IRQ scheduling (no more wait/handshake).
+ * The old globals still link (cfg.c stubs them) but nothing reads
+ * them inside the new SPU plugin. */
 //extern int      collapsed_quad_fix;  /* libpcsxcore/gpu.c — Soul Reaver collapsed-quad workaround */
 //extern int      dload_enabled;       /* libpcsxcore/ppc/pR3000A.c — R3000A load-delay-slot peephole */
 //extern void     psxRec_setLoadDelay(int enabled); /* toggles dload_enabled + invalidates rec cache */
@@ -176,7 +185,18 @@ static unsigned current_pixel_format = RETRO_PIXEL_FORMAT_XRGB8888;
  *
  * No critical section, no memmove.
  */
-#define AUDIO_BUF_SAMPLES  32768
+/* Audio ring sized so steady-state lag is bounded.
+ *
+ * 1 NTSC frame at 44.1 kHz stereo = 1470 int16 samples (1 PAL frame
+ * = 1764).  We keep ~5-6 frames of headroom (8192 samples ≈ 93 ms)
+ * which is enough to absorb a couple of frames of jitter from the
+ * cycle-driven SPU producing in bursts, without piling up the
+ * audio-vs-video lag.  The previous 32768 (≈ 372 ms) is what was
+ * causing the audible lag in Crash Bandicoot et al — once the ring
+ * stabilised near full at boot, that latency stayed forever in
+ * steady state.  Power-of-two so AUDIO_BUF_MASK works for the
+ * unsigned-subtraction wrap-safe count used throughout. */
+#define AUDIO_BUF_SAMPLES  8192
 #define AUDIO_BUF_MASK     (AUDIO_BUF_SAMPLES - 1)
 static __declspec(align(128)) int16_t  audio_buf[AUDIO_BUF_SAMPLES];
 static __declspec(align(128)) volatile uint32_t audio_wpos = 0;  /* producer */
@@ -212,20 +232,18 @@ void retro_set_environment(retro_environment_t cb) {
     environ_cb = cb;
 
     struct retro_variable variables[] = {
-        { "pcsxr360_pixel_format",       "Pixel Format; RGB565|XRGB8888" },
-        { "pcsxr360_fix_parasite_eve2",  "Game Fix: Parasite Eve 2 (counter); disabled|enabled" },
-        { "pcsxr360_fix_dark_forces",    "Game Fix: Dark Forces / Duke Nukem (GPU); disabled|enabled" },
-        { "pcsxr360_fix_front_mission3", "Game Fix: Front Mission 3 (CPU); disabled|enabled" },
-        { "pcsxr360_fix_tomb_raider2",   "Game Fix: Tomb Raider 2 (SPU); disabled|enabled" },
-        { "pcsxr360_fix_crash_t_racing", "Game Fix: Crash Team Racing (SPU); disabled|enabled" },
+        { "pcsxr360_gpu_renderer",       "GPU Renderer (restart core to apply); Unai|Peops|SwanStation" },
+		{ "pcsxr360_threading",          "GPU Thread (restart core to apply); enabled|disabled" },
+		{ "pcsxr360_pixel_format",       "Pixel Format; RGB565|XRGB8888" },
+        { "pcsxr360_auto_frameskip",     "Auto frameskip (skip render on overload); disabled|enabled" },
+		{ "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
+        { "pcsxr360_fix_parasite_eve2",  "Game Fix (PEOPS): Parasite Eve 2 (counter); disabled|enabled" },
+        { "pcsxr360_fix_dark_forces",    "Game Fix (PEOPS): Dark Forces / Duke Nukem (GPU); disabled|enabled" },
+        { "pcsxr360_fix_front_mission3", "Game Fix (PEOPS): Front Mission 3 (CPU); disabled|enabled" },
         { "pcsxr360_fix_ignore_brightness", "GPU Fix: Ignore black brightness; disabled|enabled" },
         { "pcsxr360_fix_lazy_update",    "GPU Fix: Lazy screen update; disabled|enabled" },
         { "pcsxr360_fix_quads_to_tris",  "GPU Fix: Draw quads with triangles; disabled|enabled" },
         //{ "pcsxr360_load_delay",         "CPU Fix: R3000A load-delay slots (Soul Calibur); enabled|disabled" },
-		{ "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
-        { "pcsxr360_gpu_renderer",       "GPU Renderer (restart core to apply); Peops|SwanStation|Unai" },
-        { "pcsxr360_auto_frameskip",     "Auto frameskip (skip render on overload); disabled|enabled" },
-        { "pcsxr360_threading",          "Helper threads GPU/SPU (restart core to apply); enabled|disabled" },
         { NULL, NULL }
     };
     cb(RETRO_ENVIRONMENT_SET_VARIABLES, variables);
@@ -316,12 +334,12 @@ static void check_game_fixes(void) {
      * psxRec_setLoadDelay; CPU/PSX state is preserved. */
     //psxRec_setLoadDelay(read_bool_var("pcsxr360_load_delay", true) ? 1 : 0);
 
-    /* Tomb Raider 2 — SPU voice-silence handling (dfsound/spu.c). */
-    tombraider2fix = read_bool_var("pcsxr360_fix_tomb_raider2", false) ? 1 : 0;
-
-    /* Crash Team Racing — SPU IRQ mixer polling (dfsound/spu.c). Was a
-     * compile-time #ifdef; now a runtime flag. */
-    crashteamracingfix = read_bool_var("pcsxr360_fix_crash_t_racing", false) ? 1 : 0;
+    /* Tomb Raider 2 / Crash Team Racing / SPU IRQ Wait options were
+     * tied to the legacy PEOPS-thread SPU and are gone now: the new
+     * cycle-driven SPU plugin (port from pcsx_rearmed) handles voice
+     * silence, decoded-buffer IRQs and IRQ delivery correctly out of
+     * the box.  See r3000a.h enum (PSXINT_SPU_IRQ / PSXINT_SPU_UPDATE)
+     * and libpcsxcore/spu.c for the new IRQ delivery path. */
 
     /* BIOS Slow Boot — skips ra-shortcut in misc.c so intros play. */
     Config.SlowBoot = read_bool_var("pcsxr360_slow_boot", false) ? 1 : 0;
@@ -477,14 +495,19 @@ extern "C" int libretro_get_pad_type(int port) {
 
 /* ======================================================================
  * AUDIO CAPTURE - Overrides audio.lib's XAudio2 output
+ *
+ * SetupSound() / RemoveSound() are no longer defined here: the
+ * cycle-driven SPU plugin (port from pcsx_rearmed) provides them via
+ * its out_driver abstraction in plugins/dfsound/out.c.  That layer
+ * calls pcsxr_audio_ring_reset() below at init time so the SPSC
+ * ring is in a known state before the SPU starts feeding samples.
  * ====================================================================== */
 
-extern "C" void SetupSound(void) {
+extern "C" void pcsxr_audio_ring_reset(void) {
+    /* Called from out.c::libretro_init at SPUopen time.  Both ends
+     * of the SPSC ring zero in the same TU, so no barrier needed. */
     audio_wpos = 0;
     audio_rpos = 0;
-}
-
-extern "C" void RemoveSound(void) {
 }
 
 extern "C" unsigned long SoundGetBytesBuffered(void) {
@@ -763,11 +786,48 @@ static int emu_setup(void) {
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling GPU_open...\n");
     ret = GPU_open(NULL);
     if (ret < 0) { pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] GPU_open FAILED\n"); return -1; }
+    /* Populate SPUConfig AFTER LoadPlugins (which already ran SPUinit
+     * and set iVolume = 768 as the plugin default).  We must NOT
+     * write iVolume = 0 here — that's how SPUinit signals "use the
+     * plugin's default" the first time around, but afterwards 0 is
+     * just zero and do_samples_finish's "muted" path zeroes every
+     * mixed sample, producing total silence (this was exactly the
+     * "no audio in Crash Bandicoot" symptom).
+     *
+     * Fields:
+     *  - iVolume:           1024 = unity (100 %).  Use the full PSX
+     *                       master, since RetroArch already exposes
+     *                       its own volume control on top.
+     *  - iUseReverb:        1 = enabled (PSX-correct reverb).
+     *  - iUseInterpolation: 2 = gauss (good quality, fast on Xenon).
+     *  - iTempo:            0 = no rate-stretch hack (RetroArch syncs).
+     *  - iUseThread:        0 = run mixing inline with the CPU
+     *                       emulator (cycle-driven model).  Worker
+     *                       thread is intentionally disabled — it
+     *                       trades 1 frame of latency for ~1 ms of
+     *                       parallelism, not worth it on this build. */
+    {
+        spu_config.iVolume = 1024;
+        spu_config.iXAPitch = 0;
+        spu_config.iUseReverb = 1;
+        spu_config.iUseInterpolation = 2;
+        spu_config.iTempo = 0;
+        spu_config.iUseThread = 0;
+    }
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling SPU_open...\n");
     ret = SPU_open(NULL);
     if (ret < 0) { pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] SPU_open FAILED\n"); return -1; }
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling SPU_registerCallback...\n");
+    /* Register the IRQ callback (cycles-aware: SPUirq(int cycles_after)).
+     * The new plugin schedules a PSXINT_SPU_IRQ event via set_event when
+     * cycles_after > 0, so the IRQ bit lands at the right cycle. */
     SPU_registerCallback(SPUirq);
+    /* Also register the schedule callback — the SPU plugin uses this
+     * to ask the CPU scheduler to re-enter SPUasync at the next
+     * predicted IRQ point (PSXINT_SPU_UPDATE event).  This is the
+     * core mechanism that replaces the legacy PEOPS-thread wait. */
+    if (SPU_registerScheduleCb)
+        SPU_registerScheduleCb(SPUschedule);
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling PAD1_open...\n");
     ret = PAD1_open(NULL);
     if (ret < 0) { pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] PAD1_open FAILED\n"); return -1; }
@@ -1551,19 +1611,30 @@ void retro_run(void) {
     perf_acc_vid += perf_us(t_after_exec, t_after_vid);
 #endif
 
-    /* Drain audio ring (lock-free SPSC consumer).  Cap drain to ~1 frame's
-     * worth of audio; leftover stays in the ring for the next frame. */
+    /* Drain audio ring (lock-free SPSC consumer).
+     *
+     * Normally we drain exactly 1 frame's worth so audio cadence
+     * matches video cadence (~16.6 ms NTSC / ~20 ms PAL).  But the
+     * cycle-driven SPU produces in bursts and can stuff the ring
+     * with several frames of headroom at boot or after a savestate
+     * load — that pile-up shows up as persistent audio-vs-video
+     * lag.  The catch-up logic below drains ~2× when the ring is
+     * carrying more than 3 frames of backlog, eating the surplus
+     * over a few frames so steady-state lag converges to ~1 frame
+     * (the minimum needed for jitter absorption). */
     DIAG_SET_RR_SEC(RR_SEC_AUDIO_DRAIN);
     audio_drain_count = 0;
     {
-        uint32_t max_drain = (Config.PsxType == PSX_TYPE_PAL) ? 1764 : 1470;
-        if (max_drain > AUDIO_DRAIN_MAX)
-            max_drain = AUDIO_DRAIN_MAX;
+        const uint32_t one_frame  = (Config.PsxType == PSX_TYPE_PAL) ? 1764 : 1470;
+        const uint32_t backlog_hi = one_frame * 3; /* ~50 ms NTSC */
 
         uint32_t wpos = audio_wpos;            /* acquire: read producer's pos */
         __lwsync();                            /* payload reads must come after */
         uint32_t rpos  = audio_rpos;
         uint32_t avail = wpos - rpos;
+        uint32_t max_drain = (avail > backlog_hi) ? one_frame * 2 : one_frame;
+        if (max_drain > AUDIO_DRAIN_MAX)
+            max_drain = AUDIO_DRAIN_MAX;
         uint32_t take  = (avail > max_drain) ? max_drain : avail;
 
 #if PCSXR_PERF_ENABLED

@@ -11,12 +11,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\plugins\dfsound\adsr.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\plugins\dfsound\cfg.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\plugins\dfsound\dma.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -26,35 +20,26 @@
     <ClCompile Include="..\..\..\plugins\dfsound\registers.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\plugins\dfsound\reverb.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\plugins\dfsound\spu.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\plugins\dfsound\xa.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\plugins\dfsound\nullsnd.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\plugins\dfsound\externals.c">
+    <ClCompile Include="..\..\..\plugins\dfsound\out.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\plugins\dfsound\adsr.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\plugins\dfsound\cfg.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\plugins\dfsound\dma.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\plugins\dfsound\dsoundoss.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
+    <!-- adsr.c, reverb.c, xa.c are #included from spu.c (single TU). -->
+    <None Include="..\..\..\plugins\dfsound\adsr.c">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="..\..\..\plugins\dfsound\reverb.c">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="..\..\..\plugins\dfsound\xa.c">
+      <Filter>Source Files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
     <ClInclude Include="..\..\..\plugins\dfsound\externals.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -67,19 +52,16 @@
     <ClInclude Include="..\..\..\plugins\dfsound\registers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\plugins\dfsound\regs.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\plugins\dfsound\reverb.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\plugins\dfsound\spu.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\plugins\dfsound\stdafx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\plugins\dfsound\xa.h">
+    <ClInclude Include="..\..\..\plugins\dfsound\out.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\plugins\dfsound\spu_config.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

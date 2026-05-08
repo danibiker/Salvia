@@ -39,7 +39,36 @@ extern "C" {
 #define H_SPUoff1        0x0d8c
 #define H_SPUoff2        0x0d8e
 
-void CALLBACK SPUirq(void);
+/* SPU IRQ callback (port from pcsx_rearmed cycle-driven SPU model).
+ *
+ * Old signature: void SPUirq(void)
+ *   - The SPU plugin (running on its own thread) called this directly.
+ *   - It set the IRQ pending bit in psxHu32(0x1070) immediately.
+ *   - This caused cross-thread visibility issues and an inability to
+ *     deliver IRQs at the correct cycle (Metal Gear Solid was the
+ *     canonical victim).
+ *
+ * New signature: void SPUirq(int cycles_after)
+ *   - Called by the SPU plugin from inside SPU_async / do_samples.
+ *   - If cycles_after > 0, schedules the bit-set as a future
+ *     PSXINT_SPU_IRQ event so it lands at the correct PSX cycle.
+ *   - If cycles_after == 0, sets the bit immediately (the most common
+ *     case: the IRQ point matches the cycle the SPU is about to mix).
+ *
+ * spuDelayedIrq is the PSXINT_SPU_IRQ handler invoked by psxBranchTest
+ * when the scheduled cycle arrives — sets the bit then.
+ *
+ * spuUpdate is the PSXINT_SPU_UPDATE handler — re-enters the SPU plugin
+ * via SPU_async at the cycle scheduled by schedule_next_irq. */
+void CALLBACK SPUirq(int cycles_after);
+void spuDelayedIrq(void);
+void spuUpdate(void);
+
+/* Schedule callback registered with the SPU plugin via
+ * SPU_registerScheduleCb. The plugin calls this to ask the CPU
+ * scheduler to re-enter SPU_async at exactly cycles_after future
+ * cycles (used by schedule_next_irq to predict the next IRQ point). */
+void CALLBACK SPUschedule(unsigned int cycles_after);
 
 #ifdef __cplusplus
 }

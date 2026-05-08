@@ -238,8 +238,8 @@ void cdrDecodedBufferInterrupt()
 
 	// check dbuf IRQ still active
 	if( cdr.Play == 0 ) return;
-	if( (SPU_readRegister( H_SPUctrl ) & 0x40) == 0 ) return;
-	if( (SPU_readRegister( H_SPUirqAddr ) * 8) >= 0x800 ) return;
+	if( (SPU_readRegister( H_SPUctrl, psxRegs.cycle ) & 0x40) == 0 ) return;
+	if( (SPU_readRegister( H_SPUirqAddr, psxRegs.cycle ) * 8) >= 0x800 ) return;
 
 
 	// turn off plugin SPU IRQ decoded buffer handling
@@ -585,7 +585,7 @@ u8 temp[3];//////////////////////////////////////////////////////////
 	//		SPU_playCDDAchannel((short *)cdr.Transfer, CD_FRAMESIZE_RAW);
 
     if( cdr.Play && SPU_playCDDAchannel)
-		SPU_playCDDAchannel((short *)cdr.Transfer, CD_FRAMESIZE_RAW);
+		SPU_playCDDAchannel((short *)cdr.Transfer, CD_FRAMESIZE_RAW, psxRegs.cycle, 0);
 
 //	}
 	CDRMISC_INT(cdReadTime);
@@ -660,7 +660,7 @@ void cdrPlayInterrupt()
 	if (Config.Cdda) memset( cdr.Transfer, 0, CD_FRAMESIZE_RAW );
 
 	if (SPU_playCDDAchannel)
-		SPU_playCDDAchannel((short *)cdr.Transfer, CD_FRAMESIZE_RAW);
+		SPU_playCDDAchannel((short *)cdr.Transfer, CD_FRAMESIZE_RAW, psxRegs.cycle, 0);
 
 	cdr.SetSectorPlay[2]++;
 	if (cdr.SetSectorPlay[2] == 75) {
@@ -1288,7 +1288,10 @@ if(use_vm){
 			int ret = xa_decode_sector(&cdr.Xa, cdr.Transfer+4, cdr.FirstSector);
 			if (!ret) {
 				cdrAttenuate(cdr.Xa.pcm, cdr.Xa.nsamples, cdr.Xa.stereo);
-				SPU_playADPCMchannel(&cdr.Xa);
+				/* New SPU plugin signature: (xa, cycle, is_start). is_start=1
+				 * on the first sector of an XA stream — pcsx_rearmed uses it
+				 * to reset XAFeed/XAPlay pointers cleanly. */
+				SPU_playADPCMchannel(&cdr.Xa, psxRegs.cycle, cdr.FirstSector);
 				cdr.FirstSector = 0;
 			}
 			else cdr.FirstSector = -1;
@@ -1552,6 +1555,16 @@ void cdrWrite3(unsigned char rt) {
 				cdr.AttenuatorLeftToLeft, cdr.AttenuatorLeftToRight,
 				cdr.AttenuatorRightToLeft, cdr.AttenuatorRightToRight);
 #endif
+			/* Propagate the CD controller's attenuator to the SPU
+			 * plugin (cycle-driven port from pcsx_rearmed).  Before
+			 * this call spu.cdv stays at zero and the SPU MixCD
+			 * routine treats every XA/CDDA sample as muted, which
+			 * is why CD music (Tomb Raider 3 menu, Crash credits,
+			 * any FMV audio, ...) was silent. */
+			if (SPU_setCDvol)
+				SPU_setCDvol(cdr.AttenuatorLeftToLeft, cdr.AttenuatorLeftToRight,
+				             cdr.AttenuatorRightToLeft, cdr.AttenuatorRightToRight,
+				             psxRegs.cycle);
 		}
 		return;
 	}
@@ -1708,6 +1721,16 @@ void cdrReset() {
 	cdr.AttenuatorLeftToRight = 0x00;
 	cdr.AttenuatorRightToLeft = 0x00;
 	cdr.AttenuatorRightToRight = 0x80;
+
+	/* Push the BIOS-default attenuator into the SPU plugin's spu.cdv
+	 * so CD audio is audible even before the game writes its first
+	 * CDR_REG3 commit (e.g. menus / pre-init credits that just rely
+	 * on the BIOS defaults).  Without this, MixCD sees spu.cdv == 0
+	 * and treats every XA/CDDA sample as muted. */
+	if (SPU_setCDvol)
+		SPU_setCDvol(cdr.AttenuatorLeftToLeft, cdr.AttenuatorLeftToRight,
+		             cdr.AttenuatorRightToLeft, cdr.AttenuatorRightToRight,
+		             psxRegs.cycle);
 
 	getCdInfo();
 }

@@ -30,7 +30,13 @@ typedef struct {
 	s32	y0, y1;
 } ADPCM_Decode_t;
 
-typedef struct {
+/* Named `struct xa_decode` (in addition to the typedef) so that
+ * forward declarations like `struct xa_decode;` in dfsound/externals.h
+ * resolve to the same type as `xa_decode_t`.  MSVC treats anonymous-
+ * tagged typedefs and `struct foo;` forwards as distinct types, so
+ * giving the struct a tag is what lets the SPU plugin and the cdrom
+ * code share the type without an explicit decode_xa.h include. */
+typedef struct xa_decode {
 	int				freq;
 	int				nbits;
 	int				stereo;
