@@ -14,7 +14,7 @@
 #include <utils/logger.h>
 
 static const int video_bpp = 16;
-#define CPU_THREAD 0
+#define CPU_THREAD 1
 /* I/O / network threads (HTTP requests for RetroAchievements, image
  * downloads, server callbacks). Final layout:
  *   core 0  main / Salvia / retro_run / dynarec PSX ┐
@@ -28,7 +28,7 @@ static const int video_bpp = 16;
  * where the GPU thread runs hot and would starve BELOW_NORMAL workers —
  * symptom that motivated the move: rcheevos load_game callback never
  * firing, achievements not loading. */
-#define IO_THREAD 1
+#define IO_THREAD 2
 
 #ifdef _XBOX
 	static Uint32 video_flags = SDL_SWSURFACE;

@@ -541,9 +541,10 @@
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <EnableFiberSafeOptimizations Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">false</EnableFiberSafeOptimizations>
     </ClCompile>
-    <!-- New file added by the cycle-driven SPU port (pcsx_rearmed):
-         out_driver glue connecting the plugin's mixer output to the
-         libretro audio_buf SPSC ring (libretro_core.cpp). -->
+    <!-- out_driver glue del puerto cycle-driven SPU.  Reenvia los
+         batches del mixer SPU directamente a audio_batch_cb del
+         frontend (libretro_core.cpp::SoundFeedStreamData), sin buffer
+         intermedio en el core. -->
     <ClCompile Include="..\..\..\plugins\dfsound\out.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>

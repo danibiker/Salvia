@@ -4,14 +4,15 @@
 /* Output-driver abstraction (port from pcsx_rearmed).
  *
  * The cycle-driven SPU pushes mixed samples through `out_current->feed`.
- * In pcsxr-360 / Xbox 360 there is exactly one driver: a thin wrapper
- * around the SPSC ring in libretro_core.cpp (audio_buf), drained by
- * retro_run via audio_batch_cb.
+ * En pcsxr-360 / Xbox 360 hay exactamente un driver: un thin wrapper
+ * sobre SoundFeedStreamData (libretro_core.cpp), que reenvia el batch
+ * directamente a audio_batch_cb del frontend.  El frontend mantiene su
+ * propio buffer de audio.
  *
  * `init` returns 0 on success.
  * `finish` is called from SPUclose.
  * `busy` is used by spu_config.iTempo (disabled in this port).
- * `feed(data, bytes)` writes interleaved 16-bit stereo PCM to the ring.
+ * `feed(data, bytes)` reenvia interleaved 16-bit stereo PCM al frontend.
  */
 struct out_driver {
 	const char *name;

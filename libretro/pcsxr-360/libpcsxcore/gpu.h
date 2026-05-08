@@ -71,8 +71,9 @@ extern "C"
 #define RR_SEC_CPU_EXEC       3   /* dentro de psxCpu->Execute (dynarec) */
 #define RR_SEC_AUTOSKIP       4   /* decidiendo auto-frameskip */
 #define RR_SEC_VIDEO_CB       5   /* en video_cb (Salvia/D3D present) */
-#define RR_SEC_AUDIO_DRAIN    6   /* drenando audio_buf */
-#define RR_SEC_AUDIO_CB       7   /* en audio_batch_cb (Salvia/SDL) */
+/* IDs 6 y 7 (audio drain / audio cb) eliminados: el audio ahora se
+ * pasa directamente al frontend desde SoundFeedStreamData (SPU
+ * cycle-driven), sin drenado ni audio_buf intermedio. */
 #define RR_SEC_PERF_DUMP      8   /* cerrando ventana [PERF] */
 
 /* === Hardware register access tracker (psxhw.c dispatchers) ===

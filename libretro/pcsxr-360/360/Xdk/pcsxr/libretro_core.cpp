@@ -4,22 +4,27 @@
  * Execution model (libretro-native):
  *
  *   retro_run()
- *     poll input -> frame_done = 0 -> psxCpu->Execute() -> video_cb / audio_batch_cb
+ *     poll input -> frame_done = 0 -> psxCpu->Execute() -> video_cb
  *
  * The CPU PSX runs synchronously inside retro_run on the frontend thread.
  * EmuUpdate() (called from psxRcntUpdate at VBlank) sets the global
  * `frame_done` flag, and the interpreter / PPC dynarec execute loops
  * exit cleanly so we can deliver one frame per retro_run call.
  *
- * Real parallelism comes from two dedicated Xbox 360 threads with core
+ * Audio path (cycle-driven SPU, no helper thread):
+ *   psxRcntUpdate -> SPU_async(cycle, flags=1) -> SoundFeedStreamData ->
+ *   audio_batch_cb directamente.  ~12 llamadas por frame NTSC, ~61 frames
+ *   estereo por llamada.  El frontend (Salvia) tiene su propio AudioBuffer
+ *   de ~93 ms con WriteBlocking + tolerancia a underrun, asi que no
+ *   necesitamos un buffer SPSC intermedio en el core.
+ *
+ * Real parallelism comes from one dedicated Xbox 360 thread with core
  * affinity:
  *   - GPU helper thread (libpcsxcore/gpu.c, core 4): consumer of an SPSC
  *     ring de 128K u32; lo llena chain_enqueue (CPU emulada via
  *     gpuDmaChain) y lo drena gpu_thread_proc invocando GPU_writeDataMem.
- *     Sincronizacion main↔helper mediante ring_drain() en cada acceso
+ *     Sincronizacion main<->helper mediante ring_drain() en cada acceso
  *     direct desde main.
- *   - SPU MAIN thread (plugins/dfsound/spu.c, core 3): produces audio
- *     samples into audio_buf[] which retro_run drains via audio_batch_cb.
  *
  * Legacy Sys-functions and PluginTable shims used by the rest of the core
  * are kept at the bottom of this file (formerly in 360/Xdk/pcsxr/xb_sys.c).
@@ -171,41 +176,18 @@ static int display_width  = 320;
 static int display_height = 240;
 static unsigned current_pixel_format = RETRO_PIXEL_FORMAT_XRGB8888;
 
-/* ===== Audio ring buffer (SPSC lock-free) =====
+/* ===== Audio path =====
  *
- * Single producer (SPU thread via SoundFeedStreamData) and single
- * consumer (emu fiber via retro_run drain).  We use a power-of-two
- * ring indexed by unsigned 32-bit positions; count = wpos - rpos
- * (wrap-safe as long as count <= AUDIO_BUF_SAMPLES).
+ * No mantenemos buffer intermedio en el core.  El SPU (cycle-driven)
+ * llama SPU_async(.., flags=1) ~12 veces por frame NTSC (~13 PAL),
+ * cada llamada produce ~60 frames estereo.  SoundFeedStreamData los
+ * pasa directamente a audio_batch_cb.
  *
- * Synchronization on PPC (weak memory model):
- *   Producer: write payload -> __lwsync() -> publish wpos
- *   Consumer: read wpos    -> __lwsync() -> read payload
- *             read payload -> __lwsync() -> publish rpos
- *
- * No critical section, no memmove.
- */
-/* Audio ring sized so steady-state lag is bounded.
- *
- * 1 NTSC frame at 44.1 kHz stereo = 1470 int16 samples (1 PAL frame
- * = 1764).  We keep ~5-6 frames of headroom (8192 samples ≈ 93 ms)
- * which is enough to absorb a couple of frames of jitter from the
- * cycle-driven SPU producing in bursts, without piling up the
- * audio-vs-video lag.  The previous 32768 (≈ 372 ms) is what was
- * causing the audible lag in Crash Bandicoot et al — once the ring
- * stabilised near full at boot, that latency stayed forever in
- * steady state.  Power-of-two so AUDIO_BUF_MASK works for the
- * unsigned-subtraction wrap-safe count used throughout. */
-#define AUDIO_BUF_SAMPLES  8192
-#define AUDIO_BUF_MASK     (AUDIO_BUF_SAMPLES - 1)
-static __declspec(align(128)) int16_t  audio_buf[AUDIO_BUF_SAMPLES];
-static __declspec(align(128)) volatile uint32_t audio_wpos = 0;  /* producer */
-static __declspec(align(128)) volatile uint32_t audio_rpos = 0;  /* consumer */
-
-/* Secondary buffer for drain: max 1 frame of audio + margin */
-#define AUDIO_DRAIN_MAX    4096
-static int16_t audio_drain_buf[AUDIO_DRAIN_MAX];
-static long    audio_drain_count = 0;
+ * El frontend (Salvia) mantiene su propio AudioBuffer SPSC con
+ * WriteBlocking (~93 ms a 44.1 kHz estereo) que absorbe la jitter y
+ * provee backpressure al CPU emulado.  El antiguo ring local
+ * audio_buf[] + drenado adaptativo en retro_run quedaron obsoletos
+ * cuando se elimino el thread SPU dedicado. */
 
 /* ===== Input state ===== */
 static uint16_t libretro_pad_state[2];
@@ -494,55 +476,25 @@ extern "C" int libretro_get_pad_type(int port) {
 }
 
 /* ======================================================================
- * AUDIO CAPTURE - Overrides audio.lib's XAudio2 output
+ * AUDIO CAPTURE - Direct passthrough to libretro audio_batch_cb
  *
- * SetupSound() / RemoveSound() are no longer defined here: the
- * cycle-driven SPU plugin (port from pcsx_rearmed) provides them via
- * its out_driver abstraction in plugins/dfsound/out.c.  That layer
- * calls pcsxr_audio_ring_reset() below at init time so the SPSC
- * ring is in a known state before the SPU starts feeding samples.
- * ====================================================================== */
-
-extern "C" void pcsxr_audio_ring_reset(void) {
-    /* Called from out.c::libretro_init at SPUopen time.  Both ends
-     * of the SPSC ring zero in the same TU, so no barrier needed. */
-    audio_wpos = 0;
-    audio_rpos = 0;
-}
-
-extern "C" unsigned long SoundGetBytesBuffered(void) {
-    /* Count via unsigned subtraction is wrap-safe for SPSC rings. */
-    uint32_t count = audio_wpos - audio_rpos;
-    return (unsigned long)(count * sizeof(int16_t));
-}
+ * SetupSound() / RemoveSound() son provistos por el plugin SPU
+ * cycle-driven (port de pcsx_rearmed) via su out_driver en
+ * plugins/dfsound/out.c.  El plugin invoca SoundFeedStreamData con
+ * batches de muestras estereo PCM 16-bit a 44.1 kHz cada vez que
+ * SPU_async se llama con flags=1 (psxcounters.c, ~12 veces/frame
+ * NTSC, ~13 PAL).
+ *
+ * SoundFeedStreamData reenvia esos batches directamente al frontend.
+ * El frontend (Salvia) tiene un AudioBuffer SPSC propio con
+ * WriteBlocking que provee backpressure al CPU emulado y tolera
+ * underrun rellenando con silencio.  No hace falta otro ring aqui. */
 
 extern "C" void SoundFeedStreamData(unsigned char *pSound, long lBytes) {
-    if (!pSound || lBytes <= 0)
+    if (!audio_batch_cb || !pSound || lBytes <= 0)
         return;
-
-    uint32_t samples = (uint32_t)(lBytes / (long)sizeof(int16_t));
-
-    uint32_t wpos   = audio_wpos;              /* own variable, plain read */
-    uint32_t rpos   = audio_rpos;              /* other side's pos (acquire not needed: worst case we see fewer free slots) */
-    uint32_t free_s = AUDIO_BUF_SAMPLES - (wpos - rpos);
-    if (samples > free_s)
-        samples = free_s;
-    if (samples == 0)
-        return;
-
-    uint32_t w = wpos & AUDIO_BUF_MASK;
-    uint32_t first = AUDIO_BUF_SAMPLES - w;
-    if (first > samples) first = samples;
-
-    memcpy(&audio_buf[w], pSound, first * sizeof(int16_t));
-    if (samples > first) {
-        memcpy(&audio_buf[0],
-               pSound + first * sizeof(int16_t),
-               (samples - first) * sizeof(int16_t));
-    }
-
-    __lwsync();                                /* release: payload before wpos */
-    audio_wpos = wpos + samples;
+    /* lBytes / 4 = numero de frames estereo (2 canales * 2 bytes/sample). */
+    audio_batch_cb((const int16_t *)pSound, (size_t)(lBytes >> 2));
 }
 
 /* ======================================================================
@@ -1154,19 +1106,19 @@ static void disk_register_interface(void) {
  * to move psxCpu->Execute() into its own thread.
  *
  * Output line (one per second):
- *   [PERF] 60fr 999ms | exec=14.20 vid=1.10 aud=0.30 sync=0.20 gap=0.60 | fps=60.0 budget=16.40 | aud_buf min=8000 avg=8500 max=8820
+ *   [PERF] 60fr 999ms | exec=14.20 vid=1.10 aud=0.30 sync=0.20 gap=0.60 | fps=60.0 budget=16.40 | cores=0x18
  *
  *   exec    = mean ms inside psxCpu->Execute() per frame
  *   vid     = mean ms inside video_cb per frame
- *   aud     = mean ms draining the SPU ring + audio_batch_cb per frame
+ *   aud     = residual ms post-vid pre-perf (audio se entrega ya
+ *             dentro de exec via SoundFeedStreamData -> audio_batch_cb,
+ *             asi que esta cifra suele ser ~0)
  *   sync    = mean ms in poll_input + hot-reload checks per frame
  *   gap     = mean ms between retro_run end and next retro_run start
  *             (== frontend-side cost: present, OSD, shaders, audio mix)
  *   fps     = effective frame rate over the 60-frame window
  *   budget  = mean total ms per frame (exec+vid+aud+sync+gap)
- *   aud_buf = stereo-int16 samples queued in the SPU ring at start of
- *             the drain (target ~ frame's worth = 1470 NTSC / 1764 PAL;
- *             min == 0 means the SPU thread underran, audio crackles).
+ *   cores   = bitmask of cores observed running retro_run en la ventana
  *
  * The whole block is gated by PCSXR_PERF_ENABLED (defined in
  * plugins/xbox_soft/peops_prof.h, default 0).  When disabled the storage,
@@ -1184,8 +1136,9 @@ static LARGE_INTEGER perf_window_start;
 static LARGE_INTEGER perf_last_frame_end;
 static uint64_t      perf_acc_exec, perf_acc_vid, perf_acc_aud, perf_acc_sync, perf_acc_gap;
 static uint64_t      perf_acc_gpu_wait;   /* subset of perf_acc_exec: time CPU stalled in WaitForGpuThread */
-static uint32_t      perf_aud_min, perf_aud_max;
-static uint64_t      perf_aud_sum;
+/* perf_aud_min/max/sum eliminados: ya no hay ring de audio interno que
+ * monitorizar (audio se pasa directo al frontend desde el SPU
+ * cycle-driven). */
 static uint32_t      perf_frame_count;
 static uint32_t      perf_core_mask;      /* bitfield of cores retro_run was observed on across the window */
 
@@ -1198,9 +1151,6 @@ static void perf_init(void) {
     QueryPerformanceFrequency(&perf_freq);
     perf_acc_exec = perf_acc_vid = perf_acc_aud = perf_acc_sync = perf_acc_gap = 0;
     perf_acc_gpu_wait = 0;
-    perf_aud_sum = 0;
-    perf_aud_min = 0xFFFFFFFFu;
-    perf_aud_max = 0;
     perf_frame_count = 0;
     perf_core_mask = 0;
     perf_last_frame_end.QuadPart = 0;
@@ -1228,11 +1178,10 @@ static void perf_dump(LARGE_INTEGER t_window_end) {
     uint64_t budget = e + v + a + s + g;
     /* Effective fps with one decimal; guard against zero-window edge case. */
     uint64_t fps_x10 = total_us ? (fc * 10ull * 1000000ull / total_us) : 0;
-    uint64_t aud_avg = perf_aud_sum / fc;
 
     char buf[384];
     _snprintf(buf, sizeof(buf),
-        "[PERF] %ufr %ums | exec=%u.%02u (gpu_wait=%u.%02u) vid=%u.%02u aud=%u.%02u sync=%u.%02u gap=%u.%02u | fps=%u.%u budget=%u.%02u | aud_buf min=%u avg=%u max=%u | cores=0x%02X\n",
+        "[PERF] %ufr %ums | exec=%u.%02u (gpu_wait=%u.%02u) vid=%u.%02u aud=%u.%02u sync=%u.%02u gap=%u.%02u | fps=%u.%u budget=%u.%02u | cores=0x%02X\n",
         (unsigned)fc, (unsigned)(total_us / 1000),
         (unsigned)(e  / 100), (unsigned)(e  % 100),
         (unsigned)(gw / 100), (unsigned)(gw % 100),
@@ -1242,7 +1191,6 @@ static void perf_dump(LARGE_INTEGER t_window_end) {
         (unsigned)(g  / 100), (unsigned)(g  % 100),
         (unsigned)(fps_x10 / 10), (unsigned)(fps_x10 % 10),
         (unsigned)(budget / 100), (unsigned)(budget % 100),
-        (unsigned)perf_aud_min, (unsigned)aud_avg, (unsigned)perf_aud_max,
         (unsigned)perf_core_mask);
     buf[sizeof(buf) - 1] = '\0';
     pcsxr_log(RETRO_LOG_DEBUG,buf);
@@ -1299,9 +1247,6 @@ static void perf_dump(LARGE_INTEGER t_window_end) {
 
     perf_acc_exec = perf_acc_vid = perf_acc_aud = perf_acc_sync = perf_acc_gap = 0;
     perf_acc_gpu_wait = 0;
-    perf_aud_sum  = 0;
-    perf_aud_min  = 0xFFFFFFFFu;
-    perf_aud_max  = 0;
     perf_frame_count = 0;
     perf_core_mask = 0;
 }
@@ -1460,8 +1405,9 @@ void retro_run(void) {
     /* Marca la fase actual de retro_run para el GPU watchdog (cuando
      * PCSXR_DIAG_INSTRUMENTATION=1 en gpu.h).  Si watchdog detecta que
      * main no avanza cycles (psxRegs.cycle congelado), retro_run_section
-     * revela donde se quedo: dentro de psxCpu->Execute, en video_cb
-     * (Salvia/D3D), en audio_batch_cb (Salvia/SDL), o ya retornado a
+     * revela donde se quedo: dentro de psxCpu->Execute (en cualquier
+     * sub-fase, incluida la entrega de audio via SoundFeedStreamData ->
+     * audio_batch_cb), en video_cb (Salvia/D3D), o ya retornado a
      * Salvia (OUT_OF_RUN).  Cuando OFF estas macros son (void)0. */
     DIAG_SET_RR_SEC(RR_SEC_ENTRY);
 
@@ -1611,65 +1557,17 @@ void retro_run(void) {
     perf_acc_vid += perf_us(t_after_exec, t_after_vid);
 #endif
 
-    /* Drain audio ring (lock-free SPSC consumer).
-     *
-     * Normally we drain exactly 1 frame's worth so audio cadence
-     * matches video cadence (~16.6 ms NTSC / ~20 ms PAL).  But the
-     * cycle-driven SPU produces in bursts and can stuff the ring
-     * with several frames of headroom at boot or after a savestate
-     * load — that pile-up shows up as persistent audio-vs-video
-     * lag.  The catch-up logic below drains ~2× when the ring is
-     * carrying more than 3 frames of backlog, eating the surplus
-     * over a few frames so steady-state lag converges to ~1 frame
-     * (the minimum needed for jitter absorption). */
-    DIAG_SET_RR_SEC(RR_SEC_AUDIO_DRAIN);
-    audio_drain_count = 0;
-    {
-        const uint32_t one_frame  = (Config.PsxType == PSX_TYPE_PAL) ? 1764 : 1470;
-        const uint32_t backlog_hi = one_frame * 3; /* ~50 ms NTSC */
-
-        uint32_t wpos = audio_wpos;            /* acquire: read producer's pos */
-        __lwsync();                            /* payload reads must come after */
-        uint32_t rpos  = audio_rpos;
-        uint32_t avail = wpos - rpos;
-        uint32_t max_drain = (avail > backlog_hi) ? one_frame * 2 : one_frame;
-        if (max_drain > AUDIO_DRAIN_MAX)
-            max_drain = AUDIO_DRAIN_MAX;
-        uint32_t take  = (avail > max_drain) ? max_drain : avail;
-
-#if PCSXR_PERF_ENABLED
-        /* Track how full the SPU ring was when we drained it: avg & extremes
-         * tell whether the SPU thread is keeping up (target ~ max_drain). */
-        if (avail < perf_aud_min) perf_aud_min = avail;
-        if (avail > perf_aud_max) perf_aud_max = avail;
-        perf_aud_sum += avail;
-#endif
-
-        if (take > 0) {
-            uint32_t r = rpos & AUDIO_BUF_MASK;
-            uint32_t first = AUDIO_BUF_SAMPLES - r;
-            if (first > take) first = take;
-
-            memcpy(audio_drain_buf, &audio_buf[r], first * sizeof(int16_t));
-            if (take > first) {
-                memcpy(audio_drain_buf + first, &audio_buf[0],
-                       (take - first) * sizeof(int16_t));
-            }
-            audio_drain_count = (long)take;
-
-            __lwsync();                        /* payload read before publishing rpos */
-            audio_rpos = rpos + take;
-        }
-    }
-    if (audio_drain_count > 0 && audio_batch_cb) {
-        long frames = audio_drain_count / 2;   /* stereo: 2 samples per frame */
-        DIAG_SET_RR_SEC(RR_SEC_AUDIO_CB);
-        audio_batch_cb(audio_drain_buf, (size_t)frames);
-    }
+    /* Audio: ya no hay drenado aqui.  El SPU cycle-driven invoca
+     * audio_batch_cb directamente desde SoundFeedStreamData (~12 veces
+     * por frame NTSC).  El frontend (Salvia) tiene su propio buffer
+     * con WriteBlocking, que provee backpressure si el dispositivo de
+     * salida va lento. */
 
 #if PCSXR_PERF_ENABLED
     DIAG_SET_RR_SEC(RR_SEC_PERF_DUMP);
     QueryPerformanceCounter(&t_end);
+    /* perf_acc_aud queda como diferencia minima (sin drenado real) — la
+     * mantenemos por compat con el dump. */
     perf_acc_aud      += perf_us(t_after_vid, t_end);
     perf_last_frame_end = t_end;
     perf_frame_count++;
