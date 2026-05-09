@@ -447,6 +447,17 @@ ConfigEmu* CfgLoader::getCfgEmu(){
     return &emulators.at(emuCfgPos)->config;
 }
 
+ConfigEmu* CfgLoader::findCfgEmu(std::string execName){
+	LOG_DEBUG("Buscando el ejecutable %s\n", execName.c_str());
+	for (unsigned int i=0; i < emulators.size(); i++){
+		LOG_DEBUG("Ejecutable %s\n", emulators.at(i)->config.executable.c_str());
+		if (emulators.at(i)->config.executable.find(execName) != std::string::npos){
+			return &emulators.at(i)->config;
+		}
+	}
+	return NULL;
+}
+
 std::map<std::string, std::unique_ptr<cfg::t_emu_props> >& CfgLoader::getLibretroParams() {
     // Retorna la referencia al mapa dentro del vector
     return startupLibretroParams;

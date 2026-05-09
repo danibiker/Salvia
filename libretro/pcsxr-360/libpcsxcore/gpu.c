@@ -673,8 +673,8 @@ void gpuDmaThreadInit(void)
 			return;
 		}
 
-		SetThreadPriority(s_thread_handle, THREAD_PRIORITY_HIGHEST);
-		XSetThreadProcessor(s_thread_handle, 4);
+		SetThreadPriority(s_thread_handle, THREAD_PRIORITY_NORMAL);
+		XSetThreadProcessor(s_thread_handle, 2);
 		ResumeThread(s_thread_handle);
 	}
 }

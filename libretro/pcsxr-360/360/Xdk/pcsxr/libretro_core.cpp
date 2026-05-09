@@ -168,6 +168,17 @@ static int in_type[2];
  * stays true until retro_unload_game.  retro_run gates work on this flag. */
 static bool emu_running = false;
 
+/* Modo "BIOS only": el frontend llamo retro_load_game(NULL) para
+ * arrancar la consola sin disco.  En este modo:
+ *   - emu_setup salta CheckCdrom/LoadCdrom (no hay TOC que leer).
+ *   - Force Config.SlowBoot = 1 para que la BIOS pase por su flujo
+ *     completo (logo PSX -> shell con MemCard manager + CD player).
+ *     Sin SlowBoot, misc.c hace `psxRegs.pc = ra` (shortcut a juego)
+ *     y se cuelga porque no hay juego cargado en RAM.
+ *   - El disco-virtual queda "ejected": disk_count = 0.
+ * El frontend Salvia activa este modo via launchGame("@bios-only"). */
+static bool g_boot_bios_only = false;
+
 /* ===== Video state ===== */
 extern "C" unsigned char *pPsxScreen;
 extern "C" unsigned int   g_pPitch;
@@ -250,6 +261,15 @@ void retro_set_environment(retro_environment_t cb) {
     /* Publish the disk-control interface so the frontend can call
      * set_initial_image() before retro_load_game (used for M3U resume). */
     disk_register_interface();
+
+    /* Anunciar al frontend que aceptamos retro_load_game(NULL) para
+     * arrancar la consola sin disco (shell de la BIOS PSX: gestor de
+     * Memory Cards + reproductor CD audio).  Salvia ofrece esta
+     * opcion via launchGame("@bios-only"). */
+    {
+        bool no_game = true;
+        cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &no_game);
+    }
 }
 
 void retro_set_video_refresh(retro_video_refresh_t cb)      { video_cb = cb; }
@@ -684,7 +704,18 @@ static int emu_setup(void) {
 	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] cdrIsoInit\n");
     cdrIsoInit();
 	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] SetIsoFile\n");
-    SetIsoFile(game_path_store);
+    /* En modo BIOS-only seteamos un path dummy para que UsingIso()
+     * devuelva true durante LoadPlugins.  Sin esto, LoadPlugins toma
+     * la rama LoadCDRplugin(Config.Cdr) que intenta cargar una DLL
+     * externa desde "" -> "Could not load CD-ROM plugin" -> falla.
+     * Con el dummy, toma la rama LoadCDRplugin(NULL) que reusa el
+     * cdrIsoInit interno.  El dummy se limpia despues de LoadPlugins
+     * (mas abajo) para que el resto del codigo vea "no disco". */
+    if (g_boot_bios_only) {
+        SetIsoFile("@bios-only");
+    } else {
+        SetIsoFile(game_path_store);
+    }
 
     /* Sample the helper-threads choice ONCE for this boot, before
      * gpuDmaThreadInit() (and before SPU_open further down) decide
@@ -703,6 +734,15 @@ static int emu_setup(void) {
      * match the user's choice for this boot. */
 	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] check_game_fixes\n");
     check_game_fixes();
+
+    /* Modo BIOS-only: forzar SlowBoot para evitar el shortcut de
+     * misc.c::LoadCdrom (que setea psxRegs.pc=ra y caeria al vacio
+     * sin un EXE en RAM).  Se aplica DESPUES de check_game_fixes
+     * para tener prioridad sobre la opcion del usuario. */
+    if (g_boot_bios_only) {
+        Config.SlowBoot = 1;
+        pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] BIOS-only mode: forcing Config.SlowBoot=1\n");
+    }
 
     /* Sample the GPU renderer choice ONCE for this boot, before
      * PEOPS_GPUinit (called by EmuInit/LoadPlugins) decides whether to
@@ -724,6 +764,15 @@ static int emu_setup(void) {
         pcsxr_log(RETRO_LOG_ERROR, "LoadPlugins failed\n");
         return -1;
     }
+
+    /* Limpiar el path dummy que pusimos antes de LoadPlugins en BIOS-only.
+     * Con IsoFile = "" el resto del flujo (CDR_open saltado, queries de
+     * estado del cdrom emulado) ve "no disco insertado" y la BIOS PSX
+     * arranca al shell. */
+    if (g_boot_bios_only) {
+        SetIsoFile(NULL);
+    }
+
     LoadMcds(Config.Mcd1, Config.Mcd2);
     pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] EmuInit OK\n");
 
@@ -732,9 +781,27 @@ static int emu_setup(void) {
      * lo gestiona Init/Shutdown.  Ya no la llamamos. */
     GPU_clearDynarec(clearDynarec);
 
-	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling CDR_open...\n");
-    ret = CDR_open();
-    if (ret < 0) { pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] CDR_open FAILED\n"); return -1; }
+    /* En modo BIOS-only no abrimos imagen: ISOopen haria fopen("",..)
+     * y fallaria.  CDR sigue inicializado por LoadPlugins (CDR_init),
+     * solo que sin handle: las queries de TOC del firmware emulado
+     * devuelven "no disc" y la BIOS pasa al shell.  Para que el
+     * frontend pueda meter un disco luego via Disk Control, marcamos
+     * disk_ejected = true (ya hecho en retro_load_game).
+     *
+     * Ademas seteamos cdOpenCaseTime = -1 (lid permanentemente abierta)
+     * para que el plugin CDR reporte Status=0x10 desde el primer
+     * getStatus.  Sin esto el plugin reporta "closed sin disco" y la
+     * BIOS muestra "INSERT PLAYSTATION CD-ROM" pero ignora el cambio
+     * a TOC nuevo cuando luego haces swap (no detecta la transicion
+     * open->close porque nunca vio "open"). */
+    if (g_boot_bios_only) {
+        pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] BIOS-only mode: skipping CDR_open, setting lid open\n");
+        SetCdOpenCaseTime((s64)-1);
+    } else {
+        pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling CDR_open...\n");
+        ret = CDR_open();
+        if (ret < 0) { pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] CDR_open FAILED\n"); return -1; }
+    }
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling GPU_open...\n");
     ret = GPU_open(NULL);
     if (ret < 0) { pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] GPU_open FAILED\n"); return -1; }
@@ -788,35 +855,55 @@ static int emu_setup(void) {
     if (ret < 0) { pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] PAD2_open FAILED\n"); return -1; }
     pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] PADs OK\n");
 	
-	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling CheckCdrom...\n");
-    CheckCdrom();
-	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling EmuReset...\n");
-    EmuReset();
-	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling LoadCdrom...\n");
-    LoadCdrom();
-    pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] LoadCdrom done\n");
+    /* Modo BIOS-only: no hay disco que inspeccionar, asi que saltamos
+     * CheckCdrom (lee la TOC + SYSTEM.CNF) y LoadCdrom (carga el EXE
+     * del juego).  EmuReset si se llama porque deja CPU/SPU/GPU en
+     * estado inicial coherente, que es lo que la BIOS PSX espera al
+     * arrancar. */
+    if (g_boot_bios_only) {
+        pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] BIOS-only mode: skipping CheckCdrom/LoadCdrom\n");
+        EmuReset();
+    } else {
+        pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling CheckCdrom...\n");
+        CheckCdrom();
+        pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling EmuReset...\n");
+        EmuReset();
+        pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling LoadCdrom...\n");
+        LoadCdrom();
+        pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] LoadCdrom done\n");
+    }
 
     Config.CpuRunning = 1;
     return 0;
 }
 
 /* Inverse of emu_setup: closes plugins and shuts down the GPU helper
- * thread.  Mirrors the legacy SysClose() but invoked directly. */
+ * thread.  Mirrors the legacy SysClose() but invoked directly.
+ *
+ * IMPORTANTE: este teardown puede ejecutarse despues de un emu_setup
+ * que fallo a media ruta (e.g. LoadPlugins devuelve -1 porque la BIOS
+ * o el plugin CD no estaba donde se esperaba).  En ese caso los punteros
+ * de plugin (PAD1_close, CDR_close, etc.) son NULL — Salvia los declara
+ * como globales sin inicializacion en libpcsxcore/plugins.c, y son
+ * LoadPlugins quien los rellena.  Si invocamos PAD2_close() etc.
+ * directamente sin guard, salta access violation 0xC0000005 leyendo
+ * desde 0x00000000 (el call goes to NULL function pointer).  Por eso
+ * cada close va gateado por un check de NULL. */
 static void emu_teardown(void) {
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] CpuRunning = 0\n");
     Config.CpuRunning = 0;
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] gpuDmaThreadShutdown\n");
     gpuDmaThreadShutdown();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] PAD2_close\n");
-    PAD2_close();
+    if (PAD2_close) PAD2_close();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] PAD1_close\n");
-    PAD1_close();
+    if (PAD1_close) PAD1_close();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] CDR_close\n");
-    CDR_close();
+    if (CDR_close)  CDR_close();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] GPU_close\n");
-    GPU_close();
+    if (GPU_close)  GPU_close();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] SPU_close\n");
-    SPU_close();
+    if (SPU_close)  SPU_close();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] EmuShutdown\n");
     EmuShutdown();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] ReleasePlugins\n");
@@ -973,13 +1060,21 @@ static bool disk_path_ends_with(const char *s, const char *suffix) {
 /* ---------- libretro disk control callbacks ---------- */
 
 static bool dc_set_eject_state(bool ejected) {
-    if (ejected == disk_ejected)
-        return true;
-
+    /* No early-return cuando los flags coinciden: en BIOS-only arrancamos
+     * con disk_ejected=true y cdOpenCaseTime=-1, y Salvia hara
+     * set_eject_state(true) (redundante en flag) seguido de
+     * set_image_index + set_eject_state(false).  Si el redundante
+     * no-op, el BIOS PSX no ve nada anormal entre ambos calls; pero
+     * tampoco hace daño re-llamar a SetCdOpenCaseTime/CDR_close, son
+     * idempotentes y aseguran estado limpio para el siguiente swap. */
     if (ejected) {
         /* Open the shell permanently until we insert */
         SetCdOpenCaseTime((s64)-1);
-        if (CDR_close) CDR_close();
+        /* CDR_close solo si previamente abierto: en BIOS-only inicial
+         * nunca llamamos CDR_open, asi que cdHandle es NULL.  ISOclose
+         * tolera handle NULL (early-return) pero llamarlo en bucle no
+         * cuesta y nos protege de estados huerfanos. */
+        if (CDR_close && !disk_ejected) CDR_close();
     } else {
         /* Swap the backing file, then close the shell shortly */
         if (disk_current < disk_count && disk_images[disk_current][0]) {
@@ -1302,10 +1397,14 @@ void retro_deinit(void) {
 bool retro_load_game(const struct retro_game_info *game) {
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] retro_load_game\n");
 
-    if (!game || !game->path){
-		pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] retro_load_game no game selected\n");
-        return false;
-	}
+    /* Modo "BIOS only": el frontend nos llama con game==NULL para
+     * arrancar la consola sin disco (shell PSX: MemCard manager + CD
+     * audio player).  Lo anunciamos via SET_SUPPORT_NO_GAME en
+     * retro_set_environment. */
+    g_boot_bios_only = (game == NULL || game->path == NULL || game->path[0] == '\0');
+    if (g_boot_bios_only) {
+        pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] retro_load_game: BIOS-only mode (no disc)\n");
+    }
 
     /* Defensiva: si por cualquier motivo el frontend nos llama a load
      * sin haber pasado por unload (o si una carga previa fallo a media
@@ -1328,36 +1427,47 @@ bool retro_load_game(const struct retro_game_info *game) {
     /* ---- Disk list population --------------------------------------- */
     disk_count   = 0;
     disk_current = 0;
-    disk_ejected = false;
+    /* En BIOS-only el disco esta "ejected" — no hay nada metido y la
+     * BIOS asi lo detecta al inicio.  El usuario podria luego usar
+     * Disk Control del frontend para meter un disco si quisiera, pero
+     * por defecto arrancamos sin nada. */
+    disk_ejected = g_boot_bios_only;
 
-	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] checking m3u\n");
-    if (disk_path_ends_with(game->path, ".m3u")) {
-        if (disk_parse_m3u(game->path) == 0) {
-            pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] M3U parse failed or empty\n");
-            return false;
-        }
-        /* Honor frontend's set_initial_image only if its cached path
-         * matches the game we were actually asked to load.  Otherwise
-         * the user edited the M3U and a wrong index would boot the
-         * wrong disc — spec says fall back to 0 in that case. */
-        if (disk_initial_idx < disk_count &&
-            disk_initial_path[0] &&
-            strcmp(disk_initial_path, game->path) == 0) {
-            disk_current = disk_initial_idx;
-        }
+    if (g_boot_bios_only) {
+        /* Sin path de disco, no hay TOC ni labels que poblar.
+         * game_path_store vacio + SetIsoFile(NULL) en emu_setup
+         * dejan UsingIso() == false. */
+        game_path_store[0] = '\0';
     } else {
-        /* Single disc image — build a one-entry list. */
-        strncpy(disk_images[0], game->path, DISK_PATH_MAX - 1);
-        disk_images[0][DISK_PATH_MAX - 1] = '\0';
-        disk_derive_label(disk_labels[0], game->path, DISK_LABEL_MAX);
-        disk_count   = 1;
-        disk_current = 0;
-    }
+        pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] checking m3u\n");
+        if (disk_path_ends_with(game->path, ".m3u")) {
+            if (disk_parse_m3u(game->path) == 0) {
+                pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] M3U parse failed or empty\n");
+                return false;
+            }
+            /* Honor frontend's set_initial_image only if its cached path
+             * matches the game we were actually asked to load.  Otherwise
+             * the user edited the M3U and a wrong index would boot the
+             * wrong disc — spec says fall back to 0 in that case. */
+            if (disk_initial_idx < disk_count &&
+                disk_initial_path[0] &&
+                strcmp(disk_initial_path, game->path) == 0) {
+                disk_current = disk_initial_idx;
+            }
+        } else {
+            /* Single disc image — build a one-entry list. */
+            strncpy(disk_images[0], game->path, DISK_PATH_MAX - 1);
+            disk_images[0][DISK_PATH_MAX - 1] = '\0';
+            disk_derive_label(disk_labels[0], game->path, DISK_LABEL_MAX);
+            disk_count   = 1;
+            disk_current = 0;
+        }
 
-	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] checking game_path_store\n");
-    /* Seed the CDR with whatever image we'll boot from. */
-    strncpy(game_path_store, disk_images[disk_current], sizeof(game_path_store) - 1);
-    game_path_store[sizeof(game_path_store) - 1] = '\0';
+        pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] checking game_path_store\n");
+        /* Seed the CDR with whatever image we'll boot from. */
+        strncpy(game_path_store, disk_images[disk_current], sizeof(game_path_store) - 1);
+        game_path_store[sizeof(game_path_store) - 1] = '\0';
+    }
 
     /* Threading layout note: Bloody Roar 2 [PERF] traces showed that
      * playing with retro_run/GPU/SPU thread affinity does NOT raise the

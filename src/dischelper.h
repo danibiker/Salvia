@@ -150,4 +150,8 @@ void findInitialImage(std::string rompath, bool isM3U){
 		LOG_DEBUG("Disc control: set_initial_image(%u, %s)", saved_idx, rompath.c_str());
 	}
 }
-	
+
+void launchBios(){
+	launchGame(BIOS_ONLY);
+	SDL_Flip(gameMenu->gameScreen);
+}

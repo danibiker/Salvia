@@ -18,6 +18,8 @@ enum TipoKey{KEY_JOY_BTN,KEY_JOY_HAT,KEY_JOY_AXIS, KEY_JOY_MAX};
 enum ACTION_ASK{ASK_CARGAR, ASK_GUARDAR, ASK_ELIMINAR, MAX_ASK};
 enum CONFIG_STATUS{NORMAL,POLLING_INPUTS,ASK_SAVESTATES, EXIT_CONFIG, EXIT_EMULATION, START_SCRAPPING, MAX_CONFIG_STATUS};
 
+const uint8_t BOOT_NO_DISK = 0x01;
+const uint8_t BOOT_WITH_DISK = 0x02;
 
 struct t_option_action{
 	int option;
@@ -348,6 +350,7 @@ public:
 	void poblarCoreOptions(CfgLoader *);
 	void poblarPartidasGuardadas(CfgLoader *, std::string);
 	void poblarJoystickTypes(Joystick *joystick);
+	void poblarMenuDiscos(int options);
 
 	std::string stopScrapping(CONFIG_STATUS *st);
 	void loadAchievements();
@@ -379,6 +382,8 @@ public:
 	static std::string cdromFileSelected(void* inst, void *value);
 	static std::string cdromNextSelected(void* inst, void *value);
 	static std::string cdromListAction(void* inst);
+	static std::string bootWithoutDisk(void* inst, void *value);
+	
 };
 
 template <typename T>

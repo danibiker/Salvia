@@ -56,6 +56,10 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
 	//Log the output of the core
 	#ifdef DEBUG_LOG
 		OutputDebugStringA(buffer);
+	#else 
+		if (level == RETRO_LOG_ERROR) {
+			OutputDebugStringA(buffer);
+		}
 	#endif
 }
 
@@ -521,6 +525,16 @@ static bool retro_environment(unsigned cmd, void *data) {
 		}
 		case RETRO_ENVIRONMENT_SHUTDOWN : {
 			gameMenu->setEmuStatus(EMU_MENU);
+			return true;
+		}
+		
+		case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME : {
+			if (data){
+				bool supported = *(const bool *) data;
+				g_currentCoreSupportsNoGame = supported;
+				LOG_DEBUG("Core anuncia SET_SUPPORT_NO_GAME = %d\n", supported ? 1 : 0);
+				gameMenu->configMenus->poblarMenuDiscos(g_currentCoreSupportsNoGame ? BOOT_NO_DISK : BOOT_WITH_DISK);
+			}
 			return true;
 		}
 		default: {
@@ -1082,7 +1096,15 @@ int launchGame(std::string rompath){
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));
 
-	std::string initMsg = LanguageManager::instance()->get("msg.loading") + dir.getFileName(rompath) + "...";
+	/* Modo "BIOS only": el frontend nos pasa el centinela "@bios-only"
+	 * para arrancar la consola sin disco.  El core debe haber anunciado
+	 * RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME en retro_set_environment.
+	 * En este modo saltamos toda la cadena de decompresion / lectura
+	 * de fichero y llamamos retro_load_game(NULL) directamente. */
+	const bool bios_only = rompath.compare(BIOS_ONLY) == 0;
+
+	std::string displayName = bios_only ? std::string("BIOS") : dir.getFileName(rompath);
+	std::string initMsg = LanguageManager::instance()->get("msg.loading") + displayName + "...";
 	const int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
 
 	gameMenu->fillOverlay(clBackground);
@@ -1097,47 +1119,65 @@ int launchGame(std::string rompath){
 
 	bool container = false;
 	bool isM3U = false;
-	detectContainer(rompath, isM3U, container);
 
-	const bool noUncompress = gameMenu->getCfgLoader()->getCfgEmu()->no_uncompress || container;
-	if (noUncompress){
-		LOG_DEBUG("Loading rom directly %s", rompath.c_str());
-		progress_loader.reset();
-		progress_loader.total_rom_files = getZipFileCountFiltered(rompath);
-
-		if (!container){
-			// Dibujamos la barra inicial al 0%
-			drawLoadingProgressBar(gameMenu->overlay, 0.0f);
-		}
+	if (bios_only) {
+		LOG_DEBUG("BIOS-only mode: skipping container detection / unzip\n");
+		/* Dejar unzipped en estado "vacio coherente" — los siguientes
+		 * pasos del flujo comun lo veran como "no hay fichero". */
 		unzipped.errorCode = 0;
-		unzipped.extractedPath = rompath;
-		unzipped.originalPath  = rompath;
+		unzipped.extractedPath = "";
+		unzipped.originalPath  = "";
+		unzipped.memoryBuffer  = NULL;
+		unzipped.romsize       = 0;
 	} else {
-		if (dir.dirExists(tempDir.c_str())){
-			dir.borrarDir(tempDir);
+		detectContainer(rompath, isM3U, container);
+
+		const bool noUncompress = gameMenu->getCfgLoader()->getCfgEmu()->no_uncompress || container;
+		if (noUncompress){
+			LOG_DEBUG("Loading rom directly %s", rompath.c_str());
+			progress_loader.reset();
+			progress_loader.total_rom_files = getZipFileCountFiltered(rompath);
+
+			if (!container){
+				// Dibujamos la barra inicial al 0%
+				drawLoadingProgressBar(gameMenu->overlay, 0.0f);
+			}
+			unzipped.errorCode = 0;
+			unzipped.extractedPath = rompath;
+			unzipped.originalPath  = rompath;
+		} else {
+			if (dir.dirExists(tempDir.c_str())){
+				dir.borrarDir(tempDir);
+			}
+			if (dir.createDir(tempDir) <= 0){
+				LOG_ERROR("Error creating the temporary directory %s\n", tempDir.c_str());
+				gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.direrror") + tempDir, 3000);
+				return 0;
+			}
+			LOG_DEBUG("Unzipping or loading rom %s", rompath.c_str());
+			unzipped = unzipOrLoad(rompath, allowedExtensions, !info.need_fullpath, tempDir);
 		}
-		if (dir.createDir(tempDir) <= 0){
-			LOG_ERROR("Error creating the temporary directory %s\n", tempDir.c_str());
-			gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.direrror") + tempDir, 3000);
+
+		if (unzipped.errorCode != 0){
+			LOG_ERROR("No se ha podido abrir el fichero o no se puede descomprimir: %s", rompath.c_str());
+			gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.openfileerror") + rompath, 3000);
 			return 0;
 		}
-		LOG_DEBUG("Unzipping or loading rom %s", rompath.c_str());
-		unzipped = unzipOrLoad(rompath, allowedExtensions, !info.need_fullpath, tempDir);
 	}
 
-	if (unzipped.errorCode != 0){
-		LOG_ERROR("No se ha podido abrir el fichero o no se puede descomprimir: %s", rompath.c_str());
-		gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.openfileerror") + rompath, 3000);
-		return 0;
-	}
-
-	struct retro_game_info game = { unzipped.extractedPath.c_str(), unzipped.memoryBuffer, unzipped.romsize, NULL };
 	retro_init();
-	// Multi-disc: si es un M3U, indicamos al core qué disco cargar de inicio
-	// antes de retro_load_game (asi el savestate coincide con el disco correcto).
-	findInitialImage(rompath, isM3U);
-	bool success = retro_load_game(&game);
-	
+	bool success;
+	if (bios_only) {
+		// Pasar NULL al core: el core debe haber anunciado SET_SUPPORT_NO_GAME.
+		success = retro_load_game(NULL);
+	} else {
+		struct retro_game_info game = { unzipped.extractedPath.c_str(), unzipped.memoryBuffer, unzipped.romsize, NULL };
+		// Multi-disc: si es un M3U, indicamos al core qué disco cargar de inicio
+		// antes de retro_load_game (asi el savestate coincide con el disco correcto).
+		findInitialImage(rompath, isM3U);
+		success = retro_load_game(&game);
+	}
+
 	//Liberar la memoria tras la carga exitosa
 	//La mayoría de los cores de Libretro ya han copiado los datos a su propia RAM interna
 	//Si hay logros habilitados, ya se encarga de liberarse posteriormente
@@ -1145,33 +1185,50 @@ int launchGame(std::string rompath){
 		free(unzipped.memoryBuffer);
 		unzipped.memoryBuffer = NULL;
 	}
-	
+
 	if(!success) {
 		LOG_ERROR("Error cargando la ROM\n");
 		gameMenu->showLangSystemMessage("msg.romopenerror", 3000);
 		return 0;
 	}
 
-	if (success && loadAchievement){
+	if (!bios_only && success && loadAchievement){
 		//After the loading of the game, we load the achievements
 		gameMenu->loadGameAchievements(unzipped);
 	}
 
 	//Loading the rompaths and setting the control device
 	g_currentRompath = rompath;
+	// En BIOS-only usamos el centinela como rom path: setRomPaths
+	// genera "@bios-only.sav" y "@bios-only.srm" coherentes para que
+	// los savestates del shell de la BIOS no machaquen ningun juego.
 	gameMenu->setRomPaths(rompath);
 	gameMenu->joystick->updateTypes();
 
-	//Giving a name to the window 
-	string romname = (gameMenu->getCfgLoader()->getCfgEmu() != NULL ? gameMenu->getCfgLoader()->getCfgEmu()->name + " - " : "") + dir.getFileNameNoExt(unzipped.originalPath);
+	//Giving a name to the window
+	const std::string captionName = bios_only ? std::string("BIOS")
+	                                          : dir.getFileNameNoExt(unzipped.originalPath);
+	string romname = (gameMenu->getCfgLoader()->getCfgEmu() != NULL ? gameMenu->getCfgLoader()->getCfgEmu()->name + " - " : "") + captionName;
 	SDL_WM_SetCaption(romname.c_str(), NULL);
 
 	// Antes de cargar el juego, el core dice su frecuencia en retro_get_system_av_info
 	struct retro_system_av_info av_info;
 	retro_get_system_av_info(&av_info);
 
-	//Poblamos la lista de cdroms si aplica
-	gameMenu->configMenus->poblarCdList(unzipped.originalPath);
+	//Poblamos la lista de cdroms si aplica.  En BIOS-only no hay disco
+	//cargado asi que no hay nada que listar.
+	if (!bios_only) {
+		gameMenu->configMenus->poblarCdList(unzipped.originalPath);
+	} else {
+		std::string execActual = Constant::getAppExecutable();
+		ConfigEmu* cfgEmu = gameMenu->getCfgLoader()->findCfgEmu(execActual);
+		if (cfgEmu != NULL){
+			LOG_DEBUG("Roms dir %s\n", cfgEmu->rom_directory.c_str());
+			std::string cdromsPath = cfgEmu->rom_directory + Constant::getFileSep() + BIOS_ONLY;
+			gameMenu->configMenus->poblarCdList(cdromsPath);
+		}
+	}
+	
 
 	//Obtener el aspect ratio
 	aspectRatioValues[RATIO_CORE] = av_info.geometry.aspect_ratio;
@@ -1193,8 +1250,13 @@ int launchGame(std::string rompath){
 	//Iniciando el contador de fps
 	gameMenu->sync->init_fps_counter((float)av_info.timing.fps);
 	gameMenu->romLoaded = true;
-	gameMenu->configMenus->poblarPartidasGuardadas(gameMenu->getCfgLoader(), rompath);
-	loadSram(romPaths.sram.c_str());
+	// Lista de partidas guardadas y SRAM solo si hay juego real cargado.
+	// En BIOS-only no aplica: el shell de la BIOS solo gestiona memory
+	// cards, que el core ya ha cargado via Config.Mcd1/2 en emu_setup.
+	if (!bios_only) {
+		gameMenu->configMenus->poblarPartidasGuardadas(gameMenu->getCfgLoader(), rompath);
+		loadSram(romPaths.sram.c_str());
+	}
 
 	SDL_FillRect(gameMenu->gameScreen, NULL, colors[clBackground].color);
 	gameMenu->setEmuStatus(EMU_STARTED);
@@ -1392,12 +1454,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	initSaveSystem();
-	//retro_set_controller_port_device(puerto, id_guardado);
-	//retro_set_controller_port_device(0, 1);
-	
 	CurlClient curlClient;
 	curlClient.init();
-	//scrapper->scrapSystem(*cfgLoader.getCfgEmu(), config);
 
 	double nextFrameTime = Constant::getTicks();
 	while (gameMenu->running) {

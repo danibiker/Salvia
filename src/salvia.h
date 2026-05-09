@@ -94,3 +94,6 @@ t_scale_props current_video_settings;
 
 // Current ROM path (needed to persist last disc index on closeGame)
 static std::string g_currentRompath;
+
+//Indica si el core puede arrancar sin disco introducido
+bool g_currentCoreSupportsNoGame;

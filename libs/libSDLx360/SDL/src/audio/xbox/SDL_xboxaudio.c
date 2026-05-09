@@ -116,7 +116,7 @@ static SDL_AudioDevice *Audio_CreateDevice(int devindex)
 
 	this->free = Audio_DeleteDevice;
 
-	// XAudio2 mezcla en el core 5 (recomendación XDK, deja que el sistema lo gestione)
+	// XAudio2 mezcla en el core 1 - thread 2
 	result = XAudio2Create(&sound, 0, XboxThread5 );
 	if ( result != S_OK ) {
 		return(0);
@@ -162,12 +162,9 @@ void XboxDX_SoundFocus(int nHwnd)
 	mainwin = (HWND)nHwnd;
 }
 
-// Tu hilo de callback SDL en el core 4 (mismo procesador físico, 
-// pero hardware thread distinto, sin competencia directa)
-// O mejor aún, en el core 2 ó 3, lejos del sistema
 static void XboxDX_ThreadInit(_THIS)
 {
-	XSetThreadProcessor(GetCurrentThread(), 3);
+	XSetThreadProcessor(GetCurrentThread(), 5);
 }
 
 static void XboxDX_WaitAudio_BusyWait(_THIS)

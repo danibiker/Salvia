@@ -14,21 +14,17 @@
 #include <utils/logger.h>
 
 static const int video_bpp = 16;
+
+/* Final layout:
+ *   core 0  Xbox 360 Dashboard                      ┐
+ *   core 1  main / Salvia / retro_run / dynarec PSX ┘ same physical core
+ *   core 2  PSX GPU helper thread        ┐
+ *   core 3  idle                         ┘ same physical core
+ *   core 4  IO & HTTP					  ┐
+ *   core 5  Xaudio and SDL Sound thread  ┘ same physical core
+ */
 #define CPU_THREAD 1
-/* I/O / network threads (HTTP requests for RetroAchievements, image
- * downloads, server callbacks). Final layout:
- *   core 0  main / Salvia / retro_run / dynarec PSX ┐
- *   core 1  IO / HTTP								 ┘ same physical core
- *   core 2  idle	                     ┐
- *   core 3  idle                        ┘ same physical core
- *   core 4  PSX GPU helper thread       ┐
- *   core 5  idle                        ┘ same physical core
- * Bursty HTTP and bursty (Sleep-paced) SPU coexist on physical core 1
- * without competing for cycles in steady state.  Keeps HTTP off core 4
- * where the GPU thread runs hot and would starve BELOW_NORMAL workers —
- * symptom that motivated the move: rcheevos load_game callback never
- * firing, achievements not loading. */
-#define IO_THREAD 2
+#define IO_THREAD 4
 
 #ifdef _XBOX
 	static Uint32 video_flags = SDL_SWSURFACE;
@@ -84,6 +80,7 @@ static const int MAX_SAVESTATES = 10;
 static const char *STATE_IMG_EXT = ".png";
 static const char *STATE_EXT = ".state";
 static const char *CD_FILTER = ".bin .cue .img .mdf .pbp .cbn .iso .chd .m3u";
+static const std::string BIOS_ONLY = "@bios-only";
 
 typedef enum {
     cursor_hidden,

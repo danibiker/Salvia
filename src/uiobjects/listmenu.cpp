@@ -290,7 +290,7 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
     if (mameDatabase.empty() && !emu.mame_roms_xml.empty()) {
 		LOG_DEBUG("Cargando xml %s\n", emu.mame_roms_xml.c_str());
         parse_mame_xml(dirutil::getPathPrefix(emu.mame_roms_xml), mameDatabase);
-		LOG_DEBUG("Xml cargado\n");
+		LOG_DEBUG("Xml cargado con %d elementos\n", mameDatabase.size());
     }
     
     // Ahora comprobamos si el mapa tiene datos, independientemente de cuándo se cargó
@@ -308,7 +308,8 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
         gFile->longFileName = file->filename;
 
         const string fileNameNoExt = dir.getFileNameNoExt(file->filename);
-        
+		//LOG_DEBUG("buscando %s\n", fileNameNoExt.c_str());
+
         if (hasMameData) {
             // Buscamos en el mapa persistente
             std::map<std::string, GameData>::iterator it = mameDatabase.find(fileNameNoExt); 
@@ -316,7 +317,10 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
                 gFile->gameData = &it->second; // Apuntamos a la memoria del mapa
                 gFile->gameTitle = it->second.description;
                 foundInMame = true;
-            } 
+				//LOG_DEBUG("Encontrada descripcion: %s \n", gFile->gameTitle.c_str());
+            } else {
+				LOG_DEBUG("[MAME]NODESC: %s\n", fileNameNoExt.c_str());
+			}
         }
 
 		if (!foundInMame) {

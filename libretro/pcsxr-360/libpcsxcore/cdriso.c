@@ -994,6 +994,28 @@ static long CALLBACK ISOclose(void) {
 	ChdCloseAll();
 #endif
 	playing = FALSE;
+
+	/* Reset de estado residual del CD anterior.
+	 *
+	 * Sin esto, al hacer un swap (ISOclose seguido de ISOopen del nuevo
+	 * CD), si los parsers de formato del nuevo CD (parsecue/parsemds/
+	 * parseccd/parsetoc) NO actualizan numtracks/ti[] (caso tipico:
+	 * .bin plano sin .cue acompañante), quedan los valores del CD
+	 * anterior.  El plugin entonces lee bytes del nuevo cdHandle
+	 * pero usa el TOC del anterior -> tracks fantasma, lecturas en
+	 * offsets incorrectos.  Sintoma observado: "si vuelvo a cargar
+	 * otro cdrom, las pistas no se actualizan".
+	 *
+	 * Limpiamos numtracks, ti[], los flags de formato y la posicion
+	 * de reproduccion CDDA.  cdHandle/subHandle ya quedaron NULL
+	 * arriba; los handles extra los cerro CloseExtraCdHandles. */
+	numtracks      = 0;
+	memset(ti, 0, sizeof(ti));
+	subChanMixed   = FALSE;
+	subChanRaw     = FALSE;
+	isMode1ISO     = FALSE;
+	cddaBigEndian  = FALSE;
+	cddaCurPos     = 0;
 	return 0;
 }
 
@@ -1048,7 +1070,7 @@ static long CALLBACK ISOgetTD(unsigned char track, unsigned char *buffer) {
 			unsigned int total_sectors =
 				msf2sec(ti[numtracks].start) + msf2sec(ti[numtracks].length);
 			sec2msf(total_sectors, time);
-		} else {
+		} else if (cdHandle != NULL){
 			pos = ftell( cdHandle );
 			fseek( cdHandle, 0, SEEK_END );
 			size = ftell( cdHandle );

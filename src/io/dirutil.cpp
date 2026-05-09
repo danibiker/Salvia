@@ -16,6 +16,8 @@ dirutil::~dirutil(){
  * @return 
  */
 bool dirutil::isDir(const char* ruta){
+	if (!ruta || !ruta[0]) return false;
+
     #ifdef DOS
         //Much faster for dos
         DIR* dir = opendir(ruta);
@@ -27,13 +29,11 @@ bool dirutil::isDir(const char* ruta){
 	//	return GetFileAttributes(ruta) != 0xFFFFFFFF;
     #else 
         struct stat info;
-        stat(ruta, &info);
-        
-        if(S_ISDIR(info.st_mode)){
-            return true;
-        } else{
-            return false;
-        }
+		memset(&info, 0, sizeof(info));
+		if (stat(ruta, &info) != 0)
+			return false;
+
+        return S_ISDIR(info.st_mode) ? true : false;
     #endif
 }
 
@@ -55,6 +55,7 @@ bool dirutil::fileExists(const char* file) {
 		return GetFileAttributes(file) != 0xFFFFFFFF;
     #else
         struct stat buf;
+		memset(&buf, 0, sizeof(buf));
         return (stat(file, &buf) == 0);
     #endif
 }
@@ -139,9 +140,10 @@ bool dirutil::setFileProperties(FileProps *propFile, string ruta){
     bool ret = true;
 
     struct stat info;
-    stat(ruta.c_str(), &info);
+	memset(&info, 0, sizeof(info));
+	bool stat_ok = stat(ruta.c_str(), &info) == 0;
 
-    if(S_ISDIR(info.st_mode)){
+    if(stat_ok && S_ISDIR(info.st_mode)){
         propFile->filetype = TIPODIRECTORIO;
         propFile->extension = STR_DIR_EXT;
     } else {
@@ -155,7 +157,7 @@ bool dirutil::setFileProperties(FileProps *propFile, string ruta){
     propFile->iCreationTime = time(&info.st_ctime);
     propFile->iModificationTime = time(&info.st_mtime);
 
-    return ret;
+    return stat_ok;
 }
 
 int dirutil::findIcon(const char *filename){
@@ -316,7 +318,8 @@ bool dirutil::foundFilter(std::string filtroExt, std::string filtroName, std::st
 }
 
 string dirutil::getFileNameNoExt(string file) {
-    if(isDir(file.c_str())) return file;
+    if(isDir(file.c_str())) 
+		return file;
 
     // 1. Encontrar el último separador de carpeta (cualquiera de los dos)
     size_t lastSep = file.find_last_of("/\\");

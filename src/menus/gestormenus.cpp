@@ -29,7 +29,7 @@ std::string HOTKEYS_STR[HK_MAX];
 extern bool swapToNewDisc(const std::string& newBinPath);
 extern bool swapDisc(unsigned new_idx);
 extern struct retro_disk_control_callback disk_control;
-
+extern void launchBios();
 
 const char *scrapOrigins[] = {"SCREENSCRAPER", "THEGAMESDB", "EMPTY"};
 
@@ -254,16 +254,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 
 	//--------Menu de gestion de discos---------
 	menuDisks = new Menu(LanguageManager::instance()->get("menu.disk.control"), menuEmulation);
-	cdromListMenu = new Menu(LanguageManager::instance()->get("menu.disk.selectcd"), menuDisks);
-	OpcionTxtAndValue* nextCd = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.disk.nextcd"), LanguageManager::instance()->get("menu.disk.nom3u"));
-	nextCd->callback = &GestorMenus::cdromNextSelected;
-
-	//Anyadimos la opcion de seleccion de discos
-	OpcionSubMenu* diskSubmenu = new OpcionSubMenu(LanguageManager::instance()->get("menu.disk.selectcd"), cdromListMenu);
-	diskSubmenu->callback = &GestorMenus::cdromListAction;
-	diskSubmenu->context = cdromListMenu;
-	menuDisks->opciones.push_back(diskSubmenu);
-	menuDisks->opciones.push_back(nextCd);
+	poblarMenuDiscos(BOOT_WITH_DISK);
 	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.disk.control"), menuDisks));
 	//--------Menu de gestion de discos---------
 
@@ -382,12 +373,39 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	resetIndexPos();
 }
 
+void GestorMenus::poblarMenuDiscos(int options){
+	menuDisks->opciones.clear();
+	
+	OpcionTxtAndValue* nextCd = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.disk.nextcd"), LanguageManager::instance()->get("menu.disk.nom3u"));
+	nextCd->callback = &GestorMenus::cdromNextSelected;
+
+	//Anyadimos la opcion de seleccion de discos
+	cdromListMenu = new Menu(LanguageManager::instance()->get("menu.disk.selectcd"), menuDisks);
+	OpcionSubMenu* diskSubmenu = new OpcionSubMenu(LanguageManager::instance()->get("menu.disk.selectcd"), cdromListMenu);
+	diskSubmenu->callback = &GestorMenus::cdromListAction;
+	diskSubmenu->context = cdromListMenu;
+	menuDisks->opciones.push_back(diskSubmenu);
+	menuDisks->opciones.push_back(nextCd);
+
+	if (options == BOOT_NO_DISK){
+		OpcionTxt* bootNoDisk = new OpcionTxt(LanguageManager::instance()->get("menu.disk.bootnocd"));
+		bootNoDisk->callback = &GestorMenus::bootWithoutDisk;
+		menuDisks->opciones.push_back(bootNoDisk);
+	}
+}
+
+std::string GestorMenus::bootWithoutDisk(void* inst, void *value){
+	launchBios();
+	return "";
+}
+
 std::string GestorMenus::cdromFileSelected(void* inst, void *value) {
 	std::string sendValue = *((std::string *)(value));
 	FileProps* pFile = static_cast<FileProps*>(inst);
-	LOG_DEBUG("cdromFileSelected: %s", sendValue.c_str());
-	swapToNewDisc(pFile->dir + Constant::getFileSep() + pFile->filename);
-	delete pFile;
+	std::string discFileToLoad = pFile->dir + Constant::getFileSep() + pFile->filename;
+	LOG_DEBUG("cdromFileSelected: %s", discFileToLoad.c_str());
+	swapToNewDisc(discFileToLoad);
+	//delete pFile;
 	return "";
 }
 
@@ -418,13 +436,12 @@ void GestorMenus::poblarCdList(std::string ruta){
 		delete ((OpcionTxt *)cdromListMenu->opciones[i])->context;
 	}
 	cdromListMenu->opciones.clear();
-
 	std::string ext = dir.getExtension(ruta);
 	Constant::lowerCase(&ext);
 	std::unordered_set<std::string> v;
 	Constant::splitCharSet(CD_FILTER, ' ', v);
 	int nElems = v.size();
-	if (v.count(ext) <= 0){
+	if (v.count(ext) <= 0 && ruta.find(BIOS_ONLY) == std::string::npos){
 		//El fichero cargado no es un cdrom y por lo tanto salimos
 		return;
 	}

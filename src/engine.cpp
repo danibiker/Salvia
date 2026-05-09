@@ -29,7 +29,7 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 
 	#ifdef _XBOX
 		HANDLE currrentThread = GetCurrentThread();
-		SetThreadPriority(currrentThread, THREAD_PRIORITY_HIGHEST);
+		SetThreadPriority(currrentThread, THREAD_PRIORITY_NORMAL);
 		// Pinear el main thread (Salvia + retro_run + dynarec PSX del core libretro) a HW thread 0.
 		// Razones:
 		//  - SMT partner (HW thread 1) idle: pipeline del core fisico 0 enteramente para el dynarec.
