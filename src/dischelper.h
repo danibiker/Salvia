@@ -6,12 +6,15 @@
 //disk_control.replace_image_index(index, &info) para cambiar el CHD.
 struct retro_disk_control_callback disk_control;
 struct retro_disk_control_ext_callback disk_control_ext;
+bool g_hasDiskControl = false;
 
 // ─────────────────────────────────────────────
 // Multi-disc helpers: persist last selected disc
 // next to the .m3u as "<rompath>.disc"
 // ─────────────────────────────────────────────
 static unsigned loadLastDiscIndex(const std::string& rompath) {
+	if (!g_hasDiskControl)
+		return 0;
     std::string p = rompath + ".disc";
     FILE* f = fopen(p.c_str(), "r");
     if (!f) return 0;
@@ -22,6 +25,8 @@ static unsigned loadLastDiscIndex(const std::string& rompath) {
 }
 
 static void saveLastDiscIndex(const std::string& rompath, unsigned idx) {
+	if (!g_hasDiskControl)
+		return;
     if (rompath.empty()) return;
     std::string p = rompath + ".disc";
     FILE* f = fopen(p.c_str(), "w");
@@ -33,7 +38,7 @@ static void saveLastDiscIndex(const std::string& rompath, unsigned idx) {
 // Attempt disc swap via the core-provided disk control interface.
 // Returns true if the swap was actually performed.
 bool swapDisc(unsigned new_idx) {
-    if (!disk_control.get_num_images || !disk_control.set_eject_state ||
+    if (!g_hasDiskControl || !disk_control.get_num_images || !disk_control.set_eject_state ||
         !disk_control.set_image_index) {
         return false;
     }
@@ -64,7 +69,9 @@ bool swapDisc(unsigned new_idx) {
 // reutilizamos el slot 1 para todos los cambios futuros (crece la lista
 // solo una vez, evita saturar DISK_MAX_IMAGES).
 bool swapToNewDisc(const std::string& newBinPath) {
-    if (newBinPath.empty()) return false;
+    if (newBinPath.empty() || !g_hasDiskControl) 
+		return false;
+
     if (!disk_control.get_num_images    || !disk_control.add_image_index   ||
         !disk_control.replace_image_index || !disk_control.set_image_index ||
         !disk_control.set_eject_state) {
@@ -142,6 +149,9 @@ void detectContainer(std::string rompath, bool& isM3U, bool& isContainer){
 }
 
 void findInitialImage(std::string rompath, bool isM3U){
+	if (!g_hasDiskControl)
+		return;
+
 	// Multi-disc: si es un M3U, indicamos al core qué disco cargar de inicio
 	// antes de retro_load_game (asi el savestate coincide con el disco correcto).
 	if (isM3U && disk_control_ext.set_initial_image) {

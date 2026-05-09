@@ -154,8 +154,7 @@ static bool retro_environment(unsigned cmd, void *data) {
             const struct retro_disk_control_callback *cb =
                 (const struct retro_disk_control_callback*)data;
 
-
-            if (cb) {
+			if (cb) {
                 disk_control = *cb; // Copiamos las funciones que nos da el core
                 // Caso simetrico: si el core SOLO registra la basic (cores antiguos
                 // o builds sin EXT), replicamos los 7 callbacks comunes en
@@ -170,6 +169,7 @@ static bool retro_environment(unsigned cmd, void *data) {
                 disk_control_ext.get_num_images      = cb->get_num_images;
                 disk_control_ext.replace_image_index = cb->replace_image_index;
                 disk_control_ext.add_image_index     = cb->add_image_index;
+				g_hasDiskControl = true;
                 LOG_DEBUG("Interfaz de control de disco registrada por el core.");
             }
             return true;
@@ -1192,6 +1192,7 @@ int launchGame(std::string rompath){
 		return 0;
 	}
 
+	Achievements::instance()->clearAllData();
 	if (!bios_only && success && loadAchievement){
 		//After the loading of the game, we load the achievements
 		gameMenu->loadGameAchievements(unzipped);
@@ -1217,18 +1218,19 @@ int launchGame(std::string rompath){
 
 	//Poblamos la lista de cdroms si aplica.  En BIOS-only no hay disco
 	//cargado asi que no hay nada que listar.
-	if (!bios_only) {
-		gameMenu->configMenus->poblarCdList(unzipped.originalPath);
-	} else {
-		std::string execActual = Constant::getAppExecutable();
-		ConfigEmu* cfgEmu = gameMenu->getCfgLoader()->findCfgEmu(execActual);
-		if (cfgEmu != NULL){
-			LOG_DEBUG("Roms dir %s\n", cfgEmu->rom_directory.c_str());
-			std::string cdromsPath = cfgEmu->rom_directory + Constant::getFileSep() + BIOS_ONLY;
-			gameMenu->configMenus->poblarCdList(cdromsPath);
+	if (g_hasDiskControl){
+		if (!bios_only) {
+			gameMenu->configMenus->poblarCdList(unzipped.originalPath);
+		} else {
+			std::string execActual = Constant::getAppExecutable();
+			ConfigEmu* cfgEmu = gameMenu->getCfgLoader()->findCfgEmu(execActual);
+			if (cfgEmu != NULL){
+				LOG_DEBUG("Roms dir %s\n", cfgEmu->rom_directory.c_str());
+				std::string cdromsPath = cfgEmu->rom_directory + Constant::getFileSep() + BIOS_ONLY;
+				gameMenu->configMenus->poblarCdList(cdromsPath);
+			}
 		}
 	}
-	
 
 	//Obtener el aspect ratio
 	aspectRatioValues[RATIO_CORE] = av_info.geometry.aspect_ratio;

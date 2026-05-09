@@ -59,9 +59,11 @@ struct AchievementComparer {
 	int getSectionPriority(uint8_t sectionType) const {
 		switch (sectionType) {
 		case 5:  return 0; // Mxima prioridad
-		case 2:  return 1; 
-		case 1:  return 2;
-		default: return 3; // El resto de tipos van al final
+        case 7:  return 1; 
+		case 6:  return 2; 
+		case 2:  return 3; 
+		case 1:  return 4;
+		default: return 5; // El resto de tipos van al final
 		}
 	}
 
@@ -418,9 +420,12 @@ public:
 			// 2. DIBUJO REAL
 			if (data.cache) {
 				SDL_Rect txtRect;
-				txtRect.x = (Sint16)(startX - data.cache->w); // Alineado a la derecha
+				txtRect.x = (Sint16)startX; // Alineado a la derecha
 				txtRect.y = (Sint16)yOffset;
-            
+				txtRect.w = data.cache->w;
+				txtRect.h = data.cache->h;
+				
+				SDL_FillRect(dest, &txtRect, colors[clBackground].color);
 				SDL_BlitSurface(data.cache, NULL, dest, &txtRect);
 				yOffset += data.cache->h + 2; // Espaciado dinámico según la fuente
 			}
@@ -691,7 +696,7 @@ public:
 		SDL_Rect rectTxt;
 		rectTxt.x = newBgRect.x + 2 * margin + badgeW;
 		rectTxt.y = newBgRect.y + margin + (badgeH / 2) - (textCache->h / 2);
-		rectTxt.w = dest->w - rectTxt.x;
+		rectTxt.w = newBgRect.w - (2 * margin + badgeW);
 		rectTxt.h = textCache->h;
 		SDL_FillRect(dest, &rectTxt, alphaColor.color);
 		SDL_BlitSurface(textCache, NULL, dest, &rectTxt);

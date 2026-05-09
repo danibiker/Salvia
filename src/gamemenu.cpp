@@ -1176,13 +1176,15 @@ void GameMenu::renderTrackers() {
     Achievements* ach = Achievements::instance();
     if (ach->trackers.empty()) return;
 
-    // No necesitamos bloquear aquí porque el método .render() interno ya lo hace
     TTF_Font* font = Fonts::getFont(Fonts::FONTSMALL);
-    int margin = 20;
-    int posX = overlay->w - margin; // Punto de anclaje derecho
-    int posY = margin;
+    //int posX = overlay->w - 150;
+	int posX = rectFps.x;
+    int posY = 5;
 
-    // Llamamos al proceso seguro
+	if (*this->mustUpdateFps) {
+		posY += rectFps.h +  rectFps.y;
+	}
+
     ach->trackers.render(this->overlay, font, posX, posY);
 }
 
