@@ -1,0 +1,388 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\libretro">
+      <UniqueIdentifier>{837da444-4683-478c-802b-d79079a09e70}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\chdr">
+      <UniqueIdentifier>{36ab705f-3281-4e96-b2e6-6859b640ed71}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\lzma">
+      <UniqueIdentifier>{1e3e14b4-f84b-454e-a5ab-35edf50dc19e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\zstd">
+      <UniqueIdentifier>{28814ef3-b603-4a2c-81d0-8b7fc50b64da}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\mp3">
+      <UniqueIdentifier>{7a0c7661-467c-4a65-a8fc-b21a7bb36478}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\ogg">
+      <UniqueIdentifier>{821667b8-e62e-4b70-ae6e-ebcbf18b0b85}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\tremor">
+      <UniqueIdentifier>{40b3051a-3c99-4b24-b9c2-198424937f15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\unzip">
+      <UniqueIdentifier>{7651fc5d-06d4-45dc-a111-0a790a1c7a5e}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="ReadMe.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\platform\libretro\libretro-common\compat\compat_posix_string.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\compat\compat_strcasestr.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\compat\compat_strl.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\encodings\encoding_utf.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\file\file_path.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\file\file_path_io.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\streams\file_stream.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\streams\file_stream_transforms.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\compat\fopen_utf8.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\memmap\memmap.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\formats\png\rpng.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\time\rtime.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\string\stdstring.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\streams\trans_stream.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\streams\trans_stream_pipe.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\streams\trans_stream_zlib.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\src\libchdr_bitstream.c">
+      <Filter>Source Files\chdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\src\libchdr_cdrom.c">
+      <Filter>Source Files\chdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\src\libchdr_chd.c">
+      <Filter>Source Files\chdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\src\libchdr_flac.c">
+      <Filter>Source Files\chdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\src\libchdr_huffman.c">
+      <Filter>Source Files\chdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\Alloc.c">
+      <Filter>Source Files\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\CpuArch.c">
+      <Filter>Source Files\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\Delta.c">
+      <Filter>Source Files\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\LzFind.c">
+      <Filter>Source Files\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\LzmaDec.c">
+      <Filter>Source Files\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\LzmaEnc.c">
+      <Filter>Source Files\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\Sort.c">
+      <Filter>Source Files\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\common\entropy_common.c">
+      <Filter>Source Files\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\common\error_private.c">
+      <Filter>Source Files\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\common\fse_decompress.c">
+      <Filter>Source Files\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\common\xxhash.c">
+      <Filter>Source Files\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\common\zstd_common.c">
+      <Filter>Source Files\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\decompress\huf_decompress.c">
+      <Filter>Source Files\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\decompress\zstd_ddict.c">
+      <Filter>Source Files\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\decompress\zstd_decompress.c">
+      <Filter>Source Files\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\decompress\zstd_decompress_block.c">
+      <Filter>Source Files\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cart.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\debug.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\draw.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\draw2.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\eeprom.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\media.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\misc.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\mode4.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\patch.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\pico.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\sek.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\sms.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\state.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\videoport.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\z80if.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\cd_image.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\cd_parse.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\cdc.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\cdd.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\gfx.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\gfx_dma.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\mcd.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\megasd.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\pcm.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\32x\32x.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\32x\pwm.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\32x\sh2soc.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\pico\xpcm.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\carthw\carthw.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\carthw\eeprom_spi.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\carthw\svp\ssp16.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\carthw\svp\svp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\sound\mix.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\sound\resampler.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\sound\sn76496.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\sound\sound.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\sound\vgm.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\sound\ym2413.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\sound\ym2612.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cpu\fame\famec.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cpu\cz80\cz80.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cpu\drc\cmn.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cpu\sh2\sh2.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\memorypico.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\memorycd.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\32x\memory32x.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\pico\memorypp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\carthw\svp\memorysvp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\pico\ppico.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\32x\draw32x.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\misccd.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\pico\cd\sekcd.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\libretro\libretro-common\compat\msvccompat.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\mp3_drmp3.c">
+      <Filter>Source Files\mp3</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\ogg.c">
+      <Filter>Source Files\ogg</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\bitwise.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\block.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\codebook.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\floor0.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\floor1.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\framing.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\info.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\mapping0.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\mdct.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\registry.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\res012.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\sharedbook.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\synthesis.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\vorbisfile.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\tremor\window.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\mp3.c">
+      <Filter>Source Files\mp3</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cpu\sh2\mame\sh2pico.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\unzip\unzip.c">
+      <Filter>Source Files\unzip</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform\common\mp3_sync.c">
+      <Filter>Source Files\mp3</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cpu\sh2\compiler.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

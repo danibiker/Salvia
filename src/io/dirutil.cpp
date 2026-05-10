@@ -318,8 +318,8 @@ bool dirutil::foundFilter(std::string filtroExt, std::string filtroName, std::st
 }
 
 string dirutil::getFileNameNoExt(string file) {
-    if(isDir(file.c_str())) 
-		return file;
+    //if(isDir(file.c_str())) 
+	//	return file;
 
     // 1. Encontrar el último separador de carpeta (cualquiera de los dos)
     size_t lastSep = file.find_last_of("/\\");
@@ -354,8 +354,12 @@ string dirutil::getFolder(string file) {
         return file.substr(0, found);
     }
 
+#ifdef _XBOX
+	return "game:";
+#else
     // Si no hay separadores, es un archivo en el directorio actual
     return "."; // O return "" según prefieras representar el directorio local
+#endif
 }
 
 /**

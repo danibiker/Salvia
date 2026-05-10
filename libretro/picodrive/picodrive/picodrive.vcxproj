@@ -1,0 +1,340 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Xbox 360">
+      <Configuration>Debug</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360">
+      <Configuration>Release</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{5957C51D-36D9-4222-A87B-D611322D45F8}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>picodrive</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release2|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release2|Xbox 360'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release2|Win32'">
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release2|Xbox 360'">
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;__i386__;_DEBUG;_LIB;inline=_inline;USE_LIBRETRO_VFS;__LIBRETRO__;USE_LIBCHDR;EMU_F68K;_USE_CZ80;_USE_MATH_DEFINES;USE_TREMOR;___DRC_SH2;Z7_ST</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)platform\libretro\libretro-common\include;$(SolutionDir);$(SolutionDir)platform\libretro\libretro-common\include\streams;$(SolutionDir)platform\libretro\libretro-common\include\string;$(SolutionDir)pico\cd\libchdr\include;$(SolutionDir)pico\cd\libchdr\deps\zlib-1.3.1;$(SolutionDir)pico\cd\libchdr\deps\lzma-24.05\include;$(SolutionDir)pico\cd\libchdr\deps\zstd-1.5.6\lib;$(SolutionDir)platform\libretro\libretro-common\include\compat;$(SolutionDir)platform\common\tremor;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MinimalRebuild>false</MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_XBOX;__ppc__;__BIG_ENDIAN__;_DEBUG;_LIB;inline=_inline;USE_LIBRETRO_VFS;__LIBRETRO__;USE_LIBCHDR;EMU_F68K;_USE_CZ80;_USE_MATH_DEFINES;USE_TREMOR;DRC_SH2;Z7_ST</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)platform\libretro\libretro-common\include;$(SolutionDir);$(SolutionDir)platform\libretro\libretro-common\include\streams;$(SolutionDir)platform\libretro\libretro-common\include\string;$(SolutionDir)pico\cd\libchdr\include;$(SolutionDir)pico\cd\libchdr\deps\zlib-1.3.1;$(SolutionDir)pico\cd\libchdr\deps\lzma-24.05\include;$(SolutionDir)pico\cd\libchdr\deps\zstd-1.5.6\lib;$(SolutionDir)platform\libretro\libretro-common\include\compat;$(SolutionDir)platform\common\tremor;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MinimalRebuild>false</MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <AdditionalDependencies>xboxkrnl.lib</AdditionalDependencies>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Full</Optimization>
+      <PreprocessorDefinitions>WIN32;__i386__;NDEBUG;_LIB;inline=_inline;USE_LIBRETRO_VFS;__LIBRETRO__;USE_LIBCHDR;EMU_F68K;_USE_CZ80;_USE_MATH_DEFINES;USE_TREMOR;DRC_SH2;Z7_ST</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)platform\libretro\libretro-common\include;$(SolutionDir);$(SolutionDir)platform\libretro\libretro-common\include\streams;$(SolutionDir)platform\libretro\libretro-common\include\string;$(SolutionDir)pico\cd\libchdr\include;$(SolutionDir)pico\cd\libchdr\deps\zlib-1.3.1;$(SolutionDir)pico\cd\libchdr\deps\lzma-24.05\include;$(SolutionDir)pico\cd\libchdr\deps\zstd-1.5.6\lib;$(SolutionDir)platform\libretro\libretro-common\include\compat;$(SolutionDir)platform\common\tremor;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MinimalRebuild>false</MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Full</Optimization>
+      <PreprocessorDefinitions>_XBOX;__ppc__;__BIG_ENDIAN__;NDEBUG;_LIB;inline=__inline;USE_LIBRETRO_VFS;__LIBRETRO__;USE_LIBCHDR;EMU_F68K;_USE_CZ80;_USE_MATH_DEFINES;USE_TREMOR;__DRC_SH2;Z7_ST</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)platform\libretro\libretro-common\include;$(SolutionDir);$(SolutionDir)platform\libretro\libretro-common\include\streams;$(SolutionDir)platform\libretro\libretro-common\include\string;$(SolutionDir)pico\cd\libchdr\include;$(SolutionDir)pico\cd\libchdr\deps\zlib-1.3.1;$(SolutionDir)pico\cd\libchdr\deps\lzma-24.05\include;$(SolutionDir)pico\cd\libchdr\deps\zstd-1.5.6\lib;$(SolutionDir)platform\libretro\libretro-common\include\compat;$(SolutionDir)platform\common\tremor;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MinimalRebuild>false</MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <CompileAs>CompileAsC</CompileAs>
+      <UndefinePreprocessorDefinitions>
+      </UndefinePreprocessorDefinitions>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalDependencies>xapilib.lib</AdditionalDependencies>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <None Include="ReadMe.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\cpu\cz80\cz80.c" />
+    <ClCompile Include="..\cpu\drc\cmn.c" />
+    <ClCompile Include="..\cpu\fame\famec.c">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">/Zm500 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\cpu\sh2\compiler.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\cpu\sh2\mame\sh2pico.c" />
+    <ClCompile Include="..\cpu\sh2\sh2.c" />
+    <ClCompile Include="..\pico\32x\32x.c" />
+    <ClCompile Include="..\pico\32x\draw32x.c" />
+    <ClCompile Include="..\pico\32x\memory32x.c" />
+    <ClCompile Include="..\pico\32x\pwm.c" />
+    <ClCompile Include="..\pico\32x\sh2soc.c" />
+    <ClCompile Include="..\pico\cart.c" />
+    <ClCompile Include="..\pico\carthw\carthw.c" />
+    <ClCompile Include="..\pico\carthw\eeprom_spi.c" />
+    <ClCompile Include="..\pico\carthw\svp\memorysvp.c" />
+    <ClCompile Include="..\pico\carthw\svp\ssp16.c" />
+    <ClCompile Include="..\pico\carthw\svp\svp.c" />
+    <ClCompile Include="..\pico\cd\cdc.c" />
+    <ClCompile Include="..\pico\cd\cdd.c" />
+    <ClCompile Include="..\pico\cd\cd_image.c" />
+    <ClCompile Include="..\pico\cd\cd_parse.c" />
+    <ClCompile Include="..\pico\cd\gfx.c" />
+    <ClCompile Include="..\pico\cd\gfx_dma.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\Alloc.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\CpuArch.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\Delta.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\LzFind.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\LzmaDec.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\LzmaEnc.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\lzma-24.05\src\Sort.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\common\entropy_common.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\common\error_private.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\common\fse_decompress.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\common\xxhash.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\common\zstd_common.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\decompress\huf_decompress.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\decompress\zstd_ddict.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\decompress\zstd_decompress.c" />
+    <ClCompile Include="..\pico\cd\libchdr\deps\zstd-1.5.6\lib\decompress\zstd_decompress_block.c" />
+    <ClCompile Include="..\pico\cd\libchdr\src\libchdr_bitstream.c" />
+    <ClCompile Include="..\pico\cd\libchdr\src\libchdr_cdrom.c" />
+    <ClCompile Include="..\pico\cd\libchdr\src\libchdr_chd.c" />
+    <ClCompile Include="..\pico\cd\libchdr\src\libchdr_flac.c" />
+    <ClCompile Include="..\pico\cd\libchdr\src\libchdr_huffman.c" />
+    <ClCompile Include="..\pico\cd\mcd.c" />
+    <ClCompile Include="..\pico\cd\megasd.c" />
+    <ClCompile Include="..\pico\cd\memorycd.c" />
+    <ClCompile Include="..\pico\cd\misccd.c" />
+    <ClCompile Include="..\pico\cd\pcm.c" />
+    <ClCompile Include="..\pico\cd\sekcd.c" />
+    <ClCompile Include="..\pico\debug.c" />
+    <ClCompile Include="..\pico\draw.c" />
+    <ClCompile Include="..\pico\draw2.c" />
+    <ClCompile Include="..\pico\eeprom.c" />
+    <ClCompile Include="..\pico\media.c" />
+    <ClCompile Include="..\pico\memorypico.c" />
+    <ClCompile Include="..\pico\misc.c" />
+    <ClCompile Include="..\pico\mode4.c" />
+    <ClCompile Include="..\pico\patch.c" />
+    <ClCompile Include="..\pico\pico.c" />
+    <ClCompile Include="..\pico\pico\memorypp.c" />
+    <ClCompile Include="..\pico\pico\ppico.c" />
+    <ClCompile Include="..\pico\pico\xpcm.c" />
+    <ClCompile Include="..\pico\sek.c" />
+    <ClCompile Include="..\pico\sms.c" />
+    <ClCompile Include="..\pico\sound\mix.c" />
+    <ClCompile Include="..\pico\sound\resampler.c" />
+    <ClCompile Include="..\pico\sound\sn76496.c" />
+    <ClCompile Include="..\pico\sound\sound.c" />
+    <ClCompile Include="..\pico\sound\vgm.c" />
+    <ClCompile Include="..\pico\sound\ym2413.c" />
+    <ClCompile Include="..\pico\sound\ym2612.c" />
+    <ClCompile Include="..\pico\state.c" />
+    <ClCompile Include="..\pico\videoport.c" />
+    <ClCompile Include="..\pico\z80if.c" />
+    <ClCompile Include="..\platform\common\mp3.c" />
+    <ClCompile Include="..\platform\common\mp3_drmp3.c" />
+    <ClCompile Include="..\platform\common\mp3_sync.c" />
+    <ClCompile Include="..\platform\common\ogg.c" />
+    <ClCompile Include="..\platform\common\tremor\bitwise.c" />
+    <ClCompile Include="..\platform\common\tremor\block.c" />
+    <ClCompile Include="..\platform\common\tremor\codebook.c" />
+    <ClCompile Include="..\platform\common\tremor\floor0.c" />
+    <ClCompile Include="..\platform\common\tremor\floor1.c" />
+    <ClCompile Include="..\platform\common\tremor\framing.c" />
+    <ClCompile Include="..\platform\common\tremor\info.c" />
+    <ClCompile Include="..\platform\common\tremor\mapping0.c" />
+    <ClCompile Include="..\platform\common\tremor\mdct.c" />
+    <ClCompile Include="..\platform\common\tremor\registry.c" />
+    <ClCompile Include="..\platform\common\tremor\res012.c" />
+    <ClCompile Include="..\platform\common\tremor\sharedbook.c" />
+    <ClCompile Include="..\platform\common\tremor\synthesis.c" />
+    <ClCompile Include="..\platform\common\tremor\vorbisfile.c" />
+    <ClCompile Include="..\platform\common\tremor\window.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\compat\compat_posix_string.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\compat\compat_strcasestr.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\compat\compat_strl.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\compat\fopen_utf8.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\compat\msvccompat.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\encodings\encoding_utf.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\file\file_path.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\file\file_path_io.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\formats\png\rpng.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\memmap\memmap.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\streams\file_stream.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\streams\file_stream_transforms.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\streams\trans_stream.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\streams\trans_stream_pipe.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\streams\trans_stream_zlib.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\string\stdstring.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\time\rtime.c" />
+    <ClCompile Include="..\platform\libretro\libretro-common\vfs\vfs_implementation.c" />
+    <ClCompile Include="..\platform\libretro\libretro.c" />
+    <ClCompile Include="..\unzip\unzip.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
+    </ClCompile>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

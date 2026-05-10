@@ -288,9 +288,35 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
 
     // 2. Carga/Verificación de la base de datos
     if (mameDatabase.empty() && !emu.mame_roms_xml.empty()) {
-		LOG_DEBUG("Cargando xml %s\n", emu.mame_roms_xml.c_str());
-        parse_mame_xml(dirutil::getPathPrefix(emu.mame_roms_xml), mameDatabase);
+		std::string mame_xml_path = dirutil::getPathPrefix(emu.mame_roms_xml);
+		LOG_DEBUG("Cargando xml %s\n", mame_xml_path.c_str());
+
+		//Buscamos primero con el xml custom
+		parse_mame_names(mame_xml_path, mameDatabase);
+
+		bool xmlFromMame = false;
+		if (mameDatabase.size() == 0){
+			// Buscamos los juegos con la etiqueta por defecto <game> del xml oficial de MAME
+			// Version usada en mame 2003+
+		    parse_mame_xml(mame_xml_path, mameDatabase);
+			xmlFromMame = true;
+		}
+
+		if (mameDatabase.size() == 0){
+			// Si no lo hemos encontrado con la llamada anterior, es que juegos estan con la 
+			// etiqueta <machine> del xml oficial de MAME.
+			// Versiones nuevas de mame
+			parse_mame_xml(mame_xml_path, mameDatabase, "machine");
+			xmlFromMame = true;
+		}
+
 		LOG_DEBUG("Xml cargado con %d elementos\n", mameDatabase.size());
+		if (mameDatabase.size() > 0 && xmlFromMame && mame_xml_path.find("merged_") == string::npos){
+			//Solo recreamos si hemos obtenido el xml de las versiones oficiales de mame, ya que tienen demasiados tags a recorrer
+			std::string newMameXmlPath = dirutil::getPathPrefix("merged_" + dir.getFileNameNoExt(mame_xml_path) + ".xml", dir.getFolder(mame_xml_path)) ;
+			LOG_DEBUG("Guardando xml reducido %s\n", newMameXmlPath.c_str());
+			write_mame_xml(newMameXmlPath, mameDatabase);
+		}
     }
     
     // Ahora comprobamos si el mapa tiene datos, independientemente de cuándo se cargó

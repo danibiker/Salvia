@@ -28,8 +28,6 @@ libs/
 obj/
 .opk_data
 .od_data
-PicoDrive
-picodrive
 picodrive_libretro*
 PicoDrive*.opk
 PicoDrive*.ipk
