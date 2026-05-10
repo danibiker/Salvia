@@ -44,7 +44,7 @@
 #include <ppcintrinsics.h>
 	static __inline int __builtin_ffs(int x) {
     if (x == 0) return 0;
-		// _CountLeadingZeros es la intrínseca oficial del XDK
+		// _CountLeadingZeros es la intrï¿½nseca oficial del XDK
 		// Para FFS (Find First Set) desde la derecha:
 		return 32 - _CountLeadingZeros(x & -x);
 	}
@@ -1340,7 +1340,9 @@ static void dr_flush_tcache(int tcid)
 static void *dr_failure(void)
 {
   printf("recompilation failed\n");
-  return;
+  /* Abort con crash predecible. */
+  *(volatile int *)0 = 0xDEAD0003;
+  return NULL;  /* unreachable */
 }
 
 // ---------------------------------------------------------------
@@ -1489,7 +1491,9 @@ static inline int gconst_alloc(sh2_reg_e r)
     gconsts[n].gregs = (1 << r);
   else {
     printf("all gconst buffers in use, aborting\n");
-    return;
+    /* Abort con crash predecible. */
+    *(volatile int *)0 = 0xDEAD0004;
+    return -1;  /* unreachable */
   }
   return n;
 }
@@ -1815,7 +1819,7 @@ static int rcache_allocate(int what, int minprio)
 
 
   if (prio < minprio || oldest == -1)
-    return;
+    return -1;
 
   if (cache_regs[oldest].type == HR_CACHED)
     rcache_evict_vreg(oldest);
@@ -1862,7 +1866,9 @@ static int rcache_map_reg(sh2_reg_e r, int hr)
   if (i < 0) {
     // must not happen
     printf("invalid host register %d\n", hr);
-    return;
+    /* Abort con crash predecible. */
+    *(volatile int *)0 = 0xDEAD0005;
+    return -1;  /* unreachable */
   }
 
   // remove old mappings of r and i if one exists
@@ -1996,7 +2002,9 @@ static int rcache_get_reg_(sh2_reg_e r, rc_gr_mode mode, int do_locking, int *hr
     // allocate a cache register
     if ((dst = rcache_allocate_vreg(rsp_d & (1 << r))) < 0) {
       printf("no registers to evict, aborting\n");
-      return;
+      /* Abort con crash predecible. */
+      *(volatile int *)0 = 0xDEAD0006;
+      return -1;  /* unreachable */
     }
   }
   tr = &cache_regs[dst];
@@ -2121,7 +2129,9 @@ static int rcache_get_tmp(void)
   i = rcache_allocate_temp();
   if (i < 0) {
     printf("cannot allocate temp\n");
-    return;
+    /* Abort con crash predecible. */
+    *(volatile int *)0 = 0xDEAD0007;
+    return -1;  /* unreachable */
   }
 
   cache_regs[i].type = HR_TEMP;
@@ -2136,15 +2146,28 @@ static int rcache_get_vreg_hr(int hr)
 
   i = reg_map_host[hr];
   if (i < 0 || cache_regs[i].locked) {
-    printf("host register %d is locked\n", hr);
-    return;
+    /* Diagnostico extendido: indica i, type, locked count y hreg para
+     * poder rastrear quien lockeo el registro previamente. */
+    if (i >= 0) {
+      printf("host register %d is locked (i=%d type=%d locked=%d)\n",
+             hr, i, cache_regs[i].type, cache_regs[i].locked);
+    } else {
+      printf("host register %d not in reg_map_host (i=%d)\n", hr, i);
+    }
+    /* Abort con crash predecible (NULL deref) en lugar de devolver
+     * basura del stack y corromper cache_regs[basura].  El upstream
+     * usa exit(1); en Xbox 360 mejor un crash que el debugger captura
+     * con un valor sentinel reconocible. */
+    *(volatile int *)0 = 0xDEAD0001;
+    return -1;  /* unreachable */
   }
 
   if (cache_regs[i].type == HR_CACHED)
     rcache_evict_vreg(i);
   else if (cache_regs[i].type == HR_TEMP && cache_regs[i].locked) {
-    printf("host reg %d already used, aborting\n", hr);
-    return;
+    printf("host reg %d already used, aborting (i=%d)\n", hr, i);
+    *(volatile int *)0 = 0xDEAD0002;
+    return -1;
   }
 
   return i;
@@ -2257,7 +2280,7 @@ static int rcache_save_tmp(int hr)
     // if none is available, store in drctmp
     emith_ctx_write(hr, offsetof(SH2, drc_tmp));
     rcache_free_tmp(hr);
-    return;
+    return -1;
   }
 
   cache_regs[i].type = HR_CACHED;
@@ -2279,7 +2302,9 @@ static int rcache_restore_tmp(int x)
   if (x >= 0) {
     if (cache_regs[x].type != HR_CACHED || cache_regs[x].gregs) {
       printf("invalid tmp storage %d\n", x);
-      return;
+      /* Abort con crash predecible. */
+      *(volatile int *)0 = 0xDEAD0008;
+      return -1;  /* unreachable */
     }
     // found, transform to a TEMP
     cache_regs[x].type = HR_TEMP;
@@ -2578,22 +2603,25 @@ static void rcache_create(void)
 
   // mapping from host_register to cache regs index
   memset(reg_map_host, -1, sizeof(reg_map_host));
-  for (i = 0; i < x; i++) { // Usa 'x' que es el contador real de registros añadidos
-    if (cache_regs[i].hreg == 4) continue; // SEGURIDAD: Nunca mapear r4 al DRC
-
+  /* IMPORTANTE: NO excluir r4 aqui.  El "if hreg==4 continue" anterior
+   * dejaba reg_map_host[4] = -1, asi que rcache_get_vreg_hr(4) (llamado
+   * con arg=1 -> r4 segun host_arg2reg) recibia i=-1 y abortaba.  El
+   * upstream itera todos los cache_regs sin exclusiones; r4 funciona
+   * como param/temp en el ABI Xenon. */
+  for (i = 0; i < x; i++) {
     if (cache_regs[i].htype)
       reg_map_host[cache_regs[i].hreg] = i;
     if (cache_regs[i].htype == HRT_REG)
       rcache_vregs_reg |= (1 << i);
   }
 
-  /* 2. Primer bucle: Inicialización */
+  /* 2. Primer bucle: Inicializaciï¿½n */
 	for (i = 0; i < (int)ARRAY_SIZE(guest_regs); i++) {
 		guest_regs[i].sreg  = -1;
-		guest_regs[i].flags = 0; /* Es buena práctica inicializar todos los campos en MSVC */
+		guest_regs[i].flags = 0; /* Es buena prï¿½ctica inicializar todos los campos en MSVC */
 	}
 
-	/* 3. Segundo bucle: Mapeo estático */
+	/* 3. Segundo bucle: Mapeo estï¿½tico */
 	for (i = 0; i < (int)ARRAY_SIZE(regs_static); i += 2) {
 		for (x = (int)ARRAY_SIZE(cache_regs) - 1; x >= 0; x--) {
 			if (cache_regs[x].hreg == regs_static[i + 1]) {
@@ -2602,7 +2630,7 @@ static void rcache_create(void)
 		}
 
 		if (x >= 0) {
-			/* Asignación manual compatible con VS2010 */
+			/* Asignaciï¿½n manual compatible con VS2010 */
 			guest_regs[regs_static[i]].flags = GRF_STATIC;
 			guest_regs[regs_static[i]].sreg  = x;
 
@@ -2674,10 +2702,10 @@ static int emit_get_rbase_and_offs(SH2 *sh2, sh2_reg_e r, int rmode, s32 *offs)
 
   // is r constant and points to a memory region?
   if (! gconst_get(r, &a))
-    return;
+    return -1;
   poffs = dr_ctx_get_mem_ptr(sh2, a + *offs, &mask);
   if (poffs == -1)
-    return;
+    return -1;
 
   if (mask < 0x20000) {
     // data array, BIOS, DRAM, can't safely access directly since host addr may
@@ -3214,7 +3242,7 @@ static inline int find_in_linkage(const struct linkage *array, int size, u32 pc)
     if (pc == array[i].pc)
       return i;
 
-  return;
+  return -1;
 }
 
 static int find_in_sorted_linkage(const struct linkage *array, int size, u32 pc)
@@ -3231,7 +3259,7 @@ static int find_in_sorted_linkage(const struct linkage *array, int size, u32 pc)
     else
       right = middle - 1;
   }
-  return;
+  return -1;
 }
 
 static void emit_branch_linkage_code(SH2 *sh2, struct block_desc *block, int tcache_id,
@@ -3360,7 +3388,9 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
   if (dr_pc_base == (void *)-1) {
     printf("invalid PC, aborting: %08lx\n", (long)base_pc);
     // FIXME: be less destructive
-    return;
+    /* Abort con crash predecible. */
+    *(volatile int *)0 = 0xDEAD0009;
+    return NULL;  /* unreachable */
   }
 
   // initial passes to disassemble and analyze the block
@@ -3397,8 +3427,8 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
       if (branch_target_count < ARRAY_SIZE(branch_targets)){
         /* 2. Asigna los valores manualmente */
 		tmp_link.pc = pc;
-		/* Si la estructura tiene más campos (como 'addr' o 'target'), 
-		   asegúrate de inicializarlos a 0 para replicar el comportamiento de C99 */
+		/* Si la estructura tiene mï¿½s campos (como 'addr' o 'target'), 
+		   asegï¿½rate de inicializarlos a 0 para replicar el comportamiento de C99 */
 
 		branch_targets[branch_target_count++] = tmp_link;
 	  } else {
@@ -3611,7 +3641,7 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
 
         if (blx_target_count < ARRAY_SIZE(blx_targets)) {
           // exit via stub in blx table (saves some 1-3 insns in the main flow)
-          /* Asignación manual compatible con el compilador de Xbox 360 */
+          /* Asignaciï¿½n manual compatible con el compilador de Xbox 360 */
 			blx_targets[blx_target_count].pc   = pc;
 			blx_targets[blx_target_count].ptr  = tcache_ptr;
 			blx_targets[blx_target_count].mask = 0x1;
@@ -3631,7 +3661,7 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
         if (blx_target_count < ARRAY_SIZE(blx_targets)) {
           // exit via stub in blx table (saves some 1-3 insns in the main flow)
           emith_cmp_r_imm(sr, 0);
-          /* Asignación manual compatible con MSVC / Xbox 360 */
+          /* Asignaciï¿½n manual compatible con MSVC / Xbox 360 */
 			blx_targets[blx_target_count].pc   = pc;
 			blx_targets[blx_target_count].ptr  = tcache_ptr;
 			blx_targets[blx_target_count].mask = 0x01;
@@ -4984,7 +5014,9 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
       if (!(op_flags[i] & OF_B_IN_DS)) {
         elprintf_sh2(sh2, EL_ANOMALY,
           "drc: illegal op %04x @ %08x", op, pc - 2);
-        return;
+        /* Abort con crash predecible. */
+        *(volatile int *)0 = 0xDEAD000A;
+        return NULL;  /* unreachable */
       }
     }
 
@@ -6075,7 +6107,7 @@ int sh2_drc_init(SH2 *sh2)
 
 fail:
   sh2_drc_finish(sh2);
-  return;
+  return -1;
 }
 
 void sh2_drc_finish(SH2 *sh2)

@@ -215,9 +215,10 @@ void updateMenuScreen(TileMap &tileMap, GameMenu*& gameMenu, ListMenu &listMenu)
 
 	ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
 	if (processInputs(gameMenu, listMenu, emu->generalConfig) == 1 && gameMenu->getEmuStatus() != EMU_STARTED){
-		if (listMenu.animateBkg && gameMenu->getCfgLoader()->configMain[cfg::animBG].valueInt == BG_WAVES){
-			tileMap.drawWaves(gameMenu->overlay);
-		} else if (listMenu.animateBkg && gameMenu->getCfgLoader()->configMain[cfg::animBG].valueInt == BG_TILES){
+		//if (listMenu.animateBkg && gameMenu->getCfgLoader()->configMain[cfg::animBG].valueInt == BG_WAVES){
+		//	tileMap.drawWaves(gameMenu->overlay);
+		//} else 
+		if (listMenu.animateBkg && gameMenu->getCfgLoader()->configMain[cfg::animBG].valueInt == BG_TILES){
 			tileMap.draw(gameMenu->overlay);
 			if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
 				tileMap.incSpeed();

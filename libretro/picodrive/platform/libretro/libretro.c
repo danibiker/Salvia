@@ -248,9 +248,49 @@ static void init_frameskip(void)
 
 /* functions called by the core */
 
+#if defined(_XBOX) && (defined(__ppc__) || defined(_M_PPC))
+/* Naked function emite una sola icbi.  Identico al patron de
+ * cpu/drc/emit_ppc.c (host_instructions_updated) y a pcsxr-360. */
+static void __declspec(naked) ppc_icbi_one(int offset, const void *base)
+{
+   __asm {
+      icbi  r3, r4
+      blr
+   }
+}
+#endif
+
 void cache_flush_d_inval_i(void *start, void *end)
 {
-#ifdef __arm__
+#if defined(_XBOX) && (defined(__ppc__) || defined(_M_PPC))
+   /* C89 strict: declaraciones al inicio del bloque. */
+   char *ptr;
+   char *end_ptr;
+
+   /* Xbox 360 / Xenon PowerPC.  Sin esto el JIT escribia codigo en
+    * D-cache pero el procesador ejecutaba basura desde I-cache.
+    * Cache line de Xenon = 128 bytes. */
+   ptr     = (char *)((unsigned int)start & ~127u);
+   end_ptr = (char *)end;
+
+   /* dcbst: flush D-cache line a memoria (visible para I-cache). */
+   while (ptr < end_ptr) {
+      __dcbst(0, ptr);
+      ptr += 128;
+   }
+   __sync();
+
+   /* icbi: invalida I-cache line.  Iteramos via la naked function
+    * porque el SDK de Xbox 360 no expone __icbi como intrinsic. */
+   ptr = (char *)((unsigned int)start & ~127u);
+   while (ptr < end_ptr) {
+      ppc_icbi_one(0, ptr);
+      ptr += 128;
+   }
+   /* isync: emitimos el opcode raw porque el XDK no expone __isync()
+    * en este toolchain (mismo workaround que pcsxr-360). */
+   __emit(0x4C00012C);  /* isync */
+#elif defined(__arm__)
    size_t len = (char *)end - (char *)start;
 #if defined(__BLACKBERRY_QNX__)
    msync(start, len, MS_SYNC | MS_CACHE_ONLY | MS_INVALIDATE_ICACHE);
@@ -528,7 +568,16 @@ void *plat_mem_get_for_drc(size_t size)
 int plat_mem_set_exec(void *ptr, size_t size)
 {
    int ret = -1;
-#ifdef _WIN32
+#ifdef _XBOX
+   /* En Xbox 360 dev mode, .data es ejecutable por defecto (no hay
+    * NX enforcement como en Windows retail).  Llamar a VirtualProtect
+    * con PAGE_EXECUTE_READWRITE sobre el array estatico tcache_default
+    * fallaba con ERROR_INVALID_PARAMETER (87) porque la pagina no fue
+    * asignada con VirtualAlloc.  No hay nada que cambiar — devolver
+    * exito para no abortar drc_cmn_init. */
+   (void)ptr; (void)size;
+   ret = 1;  /* truthy: indica exito en el contrato del caller */
+#elif defined(_WIN32)
    DWORD oldProtect = 0;
    ret = VirtualProtect(ptr, size, PAGE_EXECUTE_READWRITE, &oldProtect);
    if (ret == 0 && log_cb)

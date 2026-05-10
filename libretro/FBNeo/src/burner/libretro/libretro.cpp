@@ -19,7 +19,7 @@
 #include <streams/file_stream.h>
 #include <string/stdstring.h>
 
-#define PRINTF_BUFFER_SIZE 512
+#define PRINTF_BUFFER_SIZE 128
 
 #define STAT_NOFIND  0
 #define STAT_OK      1
@@ -287,7 +287,6 @@ int HandleMessage(enum retro_log_level level, TCHAR* szFormat, ...)
 		}
 		log_cb(level, buf);
 	}
-
 	return rc;
 }
 
@@ -2191,7 +2190,7 @@ static bool retro_load_game_common()
 		HandleMessage(RETRO_LOG_INFO, "[FBNeo] Adjusted audio buffer to match driver's refresh rate (%f Hz)\n", (nBurnFPS/100.0));
 
 		// Expose Ram for cheevos/cheats support
-		//CheevosInit();
+		CheevosInit();
 
 		// Loading minimal savestate (handle some machine settings)
 		snprintf_nowarn (g_autofs_path, sizeof(g_autofs_path), "%s%cfbneo%c%s.fs", g_save_dir, PATH_DEFAULT_SLASH_C(), PATH_DEFAULT_SLASH_C(), BurnDrvGetTextA(DRV_NAME));

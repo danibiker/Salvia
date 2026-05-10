@@ -54,7 +54,7 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::libretro_lang] = cfg::t_cfg_props("libretro_lang", (int)RETRO_LANGUAGE_SPANISH);
 	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
 	configMain[cfg::forceFS] = cfg::t_cfg_props("forceFS", true);
-	configMain[cfg::animBG] = cfg::t_cfg_props("animBG", (int)BG_WAVES);
+	configMain[cfg::animBG] = cfg::t_cfg_props("animBG", (int)BG_TILES);
 	configMain[cfg::apikeytgdb] = cfg::t_cfg_props("apikey.tgdb", "");
 	configMain[cfg::mainLang] = cfg::t_cfg_props("mainLang", "");
 	configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", "");

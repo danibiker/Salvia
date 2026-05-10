@@ -737,7 +737,67 @@ void Achievements::build_memory_map(uint32_t console_id) {
 
     const rc_memory_regions_t* regions = rc_console_memory_regions(console_id);
     if (!regions || regions->num_regions == 0) {
-        LOG_DEBUG("RetroAchievements: No memory regions for console %u", console_id);
+        LOG_DEBUG("RetroAchievements: No memory regions for console %u, building flat fallback map", console_id);
+
+        /* FALLBACK para consolas sin layout estandar en rcheevos (ej. Arcade
+         * console_id=27, donde cada placa tiene un mapa diferente).  En estos
+         * casos rcheevos espera que el frontend exponga la RAM directamente
+         * y los logros usan offsets crudos sobre ese buffer.
+         *
+         * Estrategia, en orden de preferencia:
+         *  1. Si el core mando descriptores via SET_MEMORY_MAPS, usarlos.
+         *  2. Si tenemos wram_ptr de retro_get_memory_data(SYSTEM_RAM),
+         *     crear una sola entry plana [0..wram_size) -> wram_ptr.
+         *  3. Idem con sram_ptr si esta disponible (lo encadenamos detras
+         *     del WRAM en el espacio virtual de direcciones). */
+
+        /* (1) Descriptores del core */
+        if (core_descriptors && core_descriptor_count > 0) {
+            for (unsigned d = 0; d < core_descriptor_count && memory_map_count < MAX_MEMORY_MAPPINGS; d++) {
+                const struct retro_memory_descriptor* desc = &core_descriptors[d];
+                if (!desc->ptr || desc->len == 0) continue;
+                memory_map[memory_map_count].start  = (uint32_t)desc->start;
+                memory_map[memory_map_count].end    = (uint32_t)(desc->start + desc->len - 1);
+                memory_map[memory_map_count].buffer = (uint8_t*)desc->ptr;
+                memory_map[memory_map_count].offset = (uint32_t)desc->offset;
+                LOG_DEBUG("  MEM MAP[%u] (flat-desc): 0x%05X-0x%05X -> CORE_DESC[%u] ptr=%p+0x%X",
+                          memory_map_count, memory_map[memory_map_count].start,
+                          memory_map[memory_map_count].end, d,
+                          desc->ptr, (uint32_t)desc->offset);
+                memory_map_count++;
+            }
+        }
+
+        /* (2) WRAM plana — solo si no hubo descriptores que ya cubran el rango 0 */
+        if (memory_map_count == 0 && wram_ptr && wram_size > 0) {
+            memory_map[memory_map_count].start  = 0;
+            memory_map[memory_map_count].end    = (uint32_t)(wram_size - 1);
+            memory_map[memory_map_count].buffer = wram_ptr;
+            memory_map[memory_map_count].offset = 0;
+            LOG_DEBUG("  MEM MAP[%u] (flat-wram): 0x%05X-0x%05X -> WRAM ptr=%p size=%u",
+                      memory_map_count, (uint32_t)0, (uint32_t)(wram_size - 1),
+                      wram_ptr, (uint32_t)wram_size);
+            memory_map_count++;
+
+            /* (3) SRAM encadenada detras del WRAM */
+            if (sram_ptr && sram_size > 0 && memory_map_count < MAX_MEMORY_MAPPINGS) {
+                memory_map[memory_map_count].start  = (uint32_t)wram_size;
+                memory_map[memory_map_count].end    = (uint32_t)(wram_size + sram_size - 1);
+                memory_map[memory_map_count].buffer = sram_ptr;
+                memory_map[memory_map_count].offset = 0;
+                LOG_DEBUG("  MEM MAP[%u] (flat-sram): 0x%05X-0x%05X -> SRAM ptr=%p size=%u",
+                          memory_map_count, (uint32_t)wram_size,
+                          (uint32_t)(wram_size + sram_size - 1),
+                          sram_ptr, (uint32_t)sram_size);
+                memory_map_count++;
+            }
+        }
+
+        if (memory_map_count == 0) {
+            LOG_DEBUG("RetroAchievements: flat fallback FAILED — no descriptors and no wram_ptr");
+        } else {
+            LOG_DEBUG("RetroAchievements: flat fallback OK — %u regions mapped", memory_map_count);
+        }
         return;
     }
 

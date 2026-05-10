@@ -1786,6 +1786,9 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreschedulingOptimization>true</PreschedulingOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>

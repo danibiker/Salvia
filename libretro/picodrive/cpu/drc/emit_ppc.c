@@ -108,7 +108,12 @@ static __inline int msvc_builtin_parity(unsigned int x) {
 // for OSX PIC code, on function calls r12 must contain the called address
 #define TOC_REG		2
 #define RET_REG		3
-#define PARAM_REGS	{ 3, 5, 6, 7, 8, 9, 10 }  /* r4 REMOVIDO */
+/* PARAM_REGS restaurado a {3..10} (r4 INCLUIDO).  Removerlo causaba
+ * los "host register 4 is locked" + "rcache_free_tmp fail" que se
+ * observaron en runtime: el rcache marca r4 como param-disponible
+ * por defecto y otros paths del backend sÃ­ lo usan; al excluirlo
+ * de PARAM_REGS el allocator queda inconsistente. */
+#define PARAM_REGS	{ 3, 4, 5, 6, 7, 8, 9, 10 }
 #define PRESERVED_REGS	{ 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 }
 #define TEMPORARY_REGS	{ 12 }
 
@@ -1646,130 +1651,67 @@ static int emith_cond_check(int cond)
 
 
 // this should normally be in libc clear_cache; however, it sometimes isn't.
+
+/* Naked function que emite UNA instruccion icbi.  Vive en .text del
+ * binario (siempre ejecutable), evitando la generacion dinamica de
+ * codigo en .data que tenia el approach anterior (problemas con NX
+ * y bootstrap del propio I-cache).
+ *
+ * Patron tomado de pcsxr-360 (libpcsxcore/ppc/pR3000A.c:30) que ya
+ * tiene un dynarec PowerPC funcionando en este XDK.
+ *
+ * Args (PPC EABI / Xbox 360 calling convention):
+ *   r3 = offset (int)
+ *   r4 = base   (const void *)
+ * `icbi r3, r4` con r3=0 invalida la linea que contiene r4 + 0. */
 #ifdef _XBOX
-
-/* 
- * OPCIÓN 1: Usar XMemCpuInvalidate del sistema (RECOMENDADO)
- * Si obtienes errores de linkeo, descomenta la línea siguiente para usar la opción 2
- */
-//#define USE_XMEM_INVALIDATE 1
-
-#if USE_XMEM_INVALIDATE
-/* 
- * Xbox 360 system function for cache invalidation
- * Requiere que xboxkrnl.lib esté linkeada
- */
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#pragma comment(lib, "xboxkrnl.lib")
-void __stdcall XMemCpuInvalidate(void* address, unsigned int size);
-
-#ifdef __cplusplus
-}
-#endif
-#endif /* USE_XMEM_INVALIDATE */
-
-#endif /* _XBOX */
-
-#if defined(_XBOX) && !USE_XMEM_INVALIDATE
-/*
- * OPCIÓN 2: Implementación manual de icbi (FALLBACK)
- * Genera código que ejecuta instrucciones icbi
- */
-static void manual_icbi_flush(void *base, void *end)
+void __declspec(naked) ppc_icbi_one(int offset, const void *base)
 {
-	char *ptr;
-	char *end_ptr;
-	unsigned int i;
-	static unsigned int icbi_code[16];
-	static int icbi_initialized = 0;
-	typedef void (*icbi_func_t)(void*, void*);
-	icbi_func_t icbi_func;
-	
-	/* Alinear a línea de caché (128 bytes en Xbox 360) */
-	ptr = (char *)((unsigned int)base & ~127u);
-	end_ptr = (char *)end;
-	
-	/* 
-	 * Generar un stub de código que ejecuta icbi en loop.
-	 * 
-	 * Código generado:
-	 * loop:
-	 *   icbi 0, r3      // r3 = dirección actual
-	 *   addi r3, r3, 128
-	 *   cmpw r3, r4     // r4 = dirección final
-	 *   blt loop
-	 *   isync
-	 *   blr
-	 */
-	
-
-	
-	if (!icbi_initialized) {
-		i = 0;
-		icbi_code[i++] = 0x7C001FAC; /* icbi r0, r3 */
-		icbi_code[i++] = 0x38630080; /* addi r3, r3, 128 */
-		icbi_code[i++] = 0x7C032000; /* cmpw cr0, r3, r4 */
-		icbi_code[i++] = 0x4180FFF4; /* blt -12 (loop) */
-		icbi_code[i++] = 0x4C00012C; /* isync */
-		icbi_code[i++] = 0x4E800020; /* blr */
-		
-		/* Flush el código generado */
-		__dcbst(0, icbi_code);
-		__sync();
-		
-		icbi_initialized = 1;
+	__asm {
+		icbi	r3, r4
+		blr
 	}
-	
-	/* Ejecutar el código generado */
-
-	icbi_func = (icbi_func_t)icbi_code;
-	icbi_func(ptr, end_ptr);
 }
-#endif /* _XBOX && !USE_XMEM_INVALIDATE */
+#endif
 
 static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 {
+	/* C89 strict (MSVC Xbox 360): TODAS las declaraciones al inicio
+	 * del bloque, antes de cualquier statement. */
 	char *ptr;
 	char *end_ptr;
-	unsigned int size;
-	
+
 	(void)force;
-	
+
 #ifdef _XBOX
-	
-#if USE_XMEM_INVALIDATE
-	/* OPCIÓN 1: Usar función del sistema (RECOMENDADO) */
-	size = (unsigned int)((char*)end - (char*)base);
-	XMemCpuInvalidate(base, size);
-	
-#else
-	/* OPCIÓN 2: Implementación manual */
-	
-	/* Alinear a línea de caché */
-	ptr = (char *)((unsigned int)base & ~127u);
+	/* Xenon cache line = 128 bytes.  Alinear base a linea para no
+	 * dejar bytes obsoletos al inicio.  end_ptr no requiere alinear
+	 * (mientras avancemos hasta cubrir el byte final basta). */
+	ptr     = (char *)((unsigned int)base & ~127u);
 	end_ptr = (char *)end;
-	
-	/* Data cache flush */
+
+	/* Pase 1: data cache block store por cada linea. */
 	while (ptr < end_ptr) {
 		__dcbst(0, ptr);
 		ptr += 128;
 	}
-	__sync();
-	
-	/* Instruction cache invalidation */
-	manual_icbi_flush(base, end);
-	
-	__sync();
-#endif /* USE_XMEM_INVALIDATE */
+	__sync();   /* asegura que los stores son visibles antes del icbi */
 
+	/* Pase 2: invalidate I-cache linea por linea via la naked function. */
+	ptr = (char *)((unsigned int)base & ~127u);
+	while (ptr < end_ptr) {
+		ppc_icbi_one(0, ptr);
+		ptr += 128;
+	}
+	/* isync: el XDK no expone __isync() como intrinsic en este toolchain
+	 * (sÃ­ __sync), asi que emitimos el opcode raw como hace pcsxr-360
+	 * (libpcsxcore/ppc/pR3000A.c:2339). */
+	__emit(0x4C00012C);  /* isync */
 #else
-	/* Fallback para plataformas no-Xbox */
-	ptr = (char *)((unsigned int)base & ~31u);
+	/* Fallback generico (no usado en pcsxr-360 build). */
+	ptr     = (char *)((unsigned int)base & ~31u);
 	end_ptr = (char *)end;
-	
+
 	while (ptr < end_ptr) {
 		__dcbst(0, ptr);
 		ptr += 32;

@@ -183,7 +183,7 @@ void CheevosInit()
 	BurnAcb = StateGetMainRamAcb;
 	BurnAreaScan(ACB_FULLSCAN, &nMin);
 	if (bMainRamFound) {
-		HandleMessage(RETRO_LOG_INFO, "[Cheevos] System RAM set to %p, size is %zu\n", pMainRamData, nMainRamSize);
+		HandleMessage(RETRO_LOG_INFO, "[Cheevos] System RAM set to %p, size is %lu\n", pMainRamData, (unsigned long)nMainRamSize);
 	}
 	if (bMemoryMapFound) {
 		struct retro_memory_map sMemoryMap = {};

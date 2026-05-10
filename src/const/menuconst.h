@@ -18,7 +18,8 @@ static const enum videoShaders { SHADER_NEAREST, SHADER_BILINEAR, SHADER_SCANLIN
 	TOTAL_SHADERS
 };
 
-static const enum animBackgrounds {BG_WAVES, BG_TILES, BG_NONE, BG_MAX};
+//static const enum animBackgrounds {BG_WAVES, BG_TILES, BG_NONE, BG_MAX};
+static const enum animBackgrounds {BG_TILES, BG_NONE, BG_MAX};
 
 static float aspectRatioValues [] = {4/3.0f, 4/3.0f, 3/2.0f, 8/7.0f, 10/9.0f, 1, 5/4.0f, 16/9.0f, 16/10.0f, -1};
 static const enum syncOptions {OPT_SYNC_AUDIO = SYNC_TO_AUDIO, OPT_SYNC_VIDEO = SYNC_TO_VIDEO, OPT_SYNC_NONE = SYNC_NONE, TOTAL_VIDEO_SYNC};
