@@ -7,6 +7,12 @@
 #include "burn_ym3526.h"
 #include "dac.h"
 
+#if defined(_MSC_VER) && _MSC_VER < 1800
+inline double round(double x) {
+    return floor(x + 0.5);
+}
+#endif
+
 static UINT8 *AllMem;
 static UINT8 *MemEnd;
 static UINT8 *AllRam;

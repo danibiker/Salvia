@@ -19,7 +19,11 @@
 #if !defined(UNICODE) && defined(BUILD_WIN32)
 #define UNICODE
 #endif
-#include "windows.h"
+#ifdef _XBOX
+	#include <xtl.h>
+#else 
+	#include "windows.h"
+#endif
 #endif
 
 #if !defined(WIN32) && ( defined(__linux__) || defined(__ANDROID__) || defined(__APPLE__) )

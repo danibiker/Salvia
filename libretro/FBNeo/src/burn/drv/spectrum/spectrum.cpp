@@ -5,15 +5,16 @@
 // media: .tap, .tzx, .z80 snapshots
 // input: kbd, kempston: joy1, sinclair intf.2: joy1 & joy2
 
+#include <math.h>
+#if defined (_MSC_VER)
+#define strcasecmp _stricmp
+#endif
+
 #include "tiles_generic.h"
 #include "spectrum.h"
 #include "z80_intf.h"
 #include "ay8910.h"
-#include <math.h>
 
-#if defined (_MSC_VER)
-#define strcasecmp stricmp
-#endif
 
 static INT32 SpecMode = 0;
 #define SPEC_TAP		(1 << 0)

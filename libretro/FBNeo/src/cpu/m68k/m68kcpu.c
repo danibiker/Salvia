@@ -816,6 +816,7 @@ int m68k_check_shouldinterrupt(void)
 /* ASG: removed per-instruction interrupt checks */
 int m68k_execute(int num_cycles)
 {
+	int insn_cycles = 0;
 	m68ki_cpu.end_run = 0;
 	if (m68ki_cpu.sleepuntilint) {
 		return num_cycles;
@@ -825,7 +826,7 @@ int m68k_execute(int num_cycles)
 	SET_CYCLES(num_cycles);
 	m68ki_cpu.initial_cycles = num_cycles;
 
-	int insn_cycles = GET_CYCLES();
+	insn_cycles = GET_CYCLES();
 
 	/* See if interrupts came in */
 	m68ki_check_interrupts();

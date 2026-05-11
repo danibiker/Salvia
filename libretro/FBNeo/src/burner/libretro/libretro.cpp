@@ -1385,8 +1385,8 @@ void retro_deinit()
 void retro_reset()
 {
 	// no driver loaded, we won't do anything
-	if (gui_show)
-		return;
+	//if (gui_show)
+	//	return;
 
 	// Saving minimal savestate (handle some machine settings)
 	// note : This is only useful to avoid losing nvram when switching from mvs to aes/unibios and resetting,

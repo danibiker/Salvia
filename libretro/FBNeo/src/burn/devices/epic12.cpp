@@ -1065,7 +1065,7 @@ static void gfx_exec_write(UINT32 data)
 			} else {  // new method (buffis)
 				// Every EP1C_VRAM_H_LINE_PERIOD_NANOSEC, the Blitter will block other operations, due
 				// to fetching a horizontal line from VRAM for output.
-				m_blit_delay_ns += floor( m_blit_delay_ns / EP1C_VRAM_H_LINE_PERIOD_NANOSEC ) * EP1C_VRAM_H_LINE_DURATION_NANOSEC;
+				m_blit_delay_ns += floor( m_blit_delay_ns / (float)EP1C_VRAM_H_LINE_PERIOD_NANOSEC ) * EP1C_VRAM_H_LINE_DURATION_NANOSEC;
 
 				// Check if Blitter takes longer than a frame to render.
 				// In practice, there's a bit less time than this to allow for lack of slowdown but
