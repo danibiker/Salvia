@@ -72,6 +72,15 @@
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="ascend" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Ascend (HB)</description>
+		<year>2022</year>
+		<manufacturer>Inufuto</manufacturer>
+		<rom name="Ascend (2022)(Inufuto).sg" size="9451" crc="69e60ce5"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="astrododge" sourcefile="sg1000/d_sg1000.cpp">
 		<comment>Homebrew</comment>
 		<description>Astrododge (HB)</description>
@@ -103,6 +112,15 @@
 		<year>198?</year>
 		<manufacturer>Aaronix</manufacturer>
 		<rom name="Bank Panic - Bi Li Da Dao (Taiwan)(198x)(Aaronix).sg" size="32768" crc="bd43fde4"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="battlot" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Battlot (HB)</description>
+		<year>2021</year>
+		<manufacturer>Inufuto</manufacturer>
+		<rom name="Battlot (2021)(Inufuto).sg" size="9745" crc="90532d80"/>
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -181,6 +199,15 @@
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="bootskell" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Bootskell (HB)</description>
+		<year>2021</year>
+		<manufacturer>Inufuto</manufacturer>
+		<rom name="Bootskell (2021)(Inufuto).sg" size="9448" crc="c2413720"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="bordrlin" sourcefile="sg1000/d_sg1000.cpp">
 		<description>Borderline (Euro, Japan)</description>
 		<year>1983</year>
@@ -236,6 +263,15 @@
 		<year>1986</year>
 		<manufacturer>Sega</manufacturer>
 		<rom name="Castle, The (Japan)(1986)(Sega).sg" size="32768" crc="092f29d6"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="cavit" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Cavit (HB)</description>
+		<year>2021</year>
+		<manufacturer>Inufuto</manufacturer>
+		<rom name="Cavit (2021)(Inufuto).sg" size="9984" crc="421d3f26"/>
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -800,6 +836,15 @@
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="girlgardpt" cloneof="girlgard" romof="girlgard" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Hack</comment>
+		<description>Girl's Garden ~ Jardim do Amor (Hack, Portuguese v2.0)</description>
+		<year>2016-26</year>
+		<manufacturer>Patryckpo</manufacturer>
+		<rom name="Jardim do Amor T-Por v2.0 (2016-26)(Patryckpo).sg" size="32768" crc="149ef6b1"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="golgo13" sourcefile="sg1000/d_sg1000.cpp">
 		<description>Golgo 13 (Japan)</description>
 		<year>1984</year>
@@ -1047,6 +1092,15 @@
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="lift" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Lift (HB)</description>
+		<year>2022</year>
+		<manufacturer>Inufuto</manufacturer>
+		<rom name="Lift (2022)(Inufuto).sg" size="8297" crc="f5e62875"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="ldrun" sourcefile="sg1000/d_sg1000.cpp">
 		<description>Lode Runner (Euro, Japan)</description>
 		<year>1984</year>
@@ -1252,6 +1306,15 @@
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="neuras" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Neuras (HB)</description>
+		<year>2021</year>
+		<manufacturer>Inufuto</manufacturer>
+		<rom name="Neuras (2021)(Inufuto).sg" size="8373" crc="beb45e42"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="ninjaprie" cloneof="ninjapri" romof="ninjapri" sourcefile="sg1000/d_sg1000.cpp">
 		<comment>Hack</comment>
 		<description>Ninja Princess (Hack, English)</description>
@@ -1307,6 +1370,15 @@
 		<year>1984</year>
 		<manufacturer>Sega</manufacturer>
 		<rom name="Orguss (Japan)(1984)(Sega).sg" size="32768" crc="f4f78b76"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="osotos" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Osotos (HB)</description>
+		<year>2024</year>
+		<manufacturer>Inufuto</manufacturer>
+		<rom name="Osotos (2024)(Inufuto).sg" size="16384" crc="5e4238de"/>
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -1503,6 +1575,15 @@
 		<year>1985</year>
 		<manufacturer>Sega</manufacturer>
 		<rom name="Rock n' Bolt (Japan)(1985)(Sega).sg" size="32768" crc="0ffdd03d"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="ruptus" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Ruptus (HB)</description>
+		<year>2021</year>
+		<manufacturer>Inufuto</manufacturer>
+		<rom name="Ruptus (2021)(Inufuto).sg" size="12455" crc="61b4a940"/>
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -1861,6 +1942,15 @@
 		<year>2025</year>
 		<manufacturer>Inufuto</manufacturer>
 		<rom name="Svellas (2025)(Inufuto).sg" size="16384" crc="ea0cc388"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="swordwork" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>SwordWork (HB)</description>
+		<year>2026</year>
+		<manufacturer>Inufuto</manufacturer>
+		<rom name="SwordWork (2026)(Inufuto).sg" size="16384" crc="1bfc657f"/>
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>

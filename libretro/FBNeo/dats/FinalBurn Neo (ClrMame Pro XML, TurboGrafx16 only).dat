@@ -166,6 +166,15 @@
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="ccshockman2" sourcefile="pce/d_pce.cpp">
+		<comment>Official English Translation</comment>
+		<description>Cyber Citizen Shockman 2: A New Menace (World)</description>
+		<year>1991-2024</year>
+		<manufacturer>NCS - Masaya Games</manufacturer>
+		<rom name="Cyber Citizen Shockman 2 - A New Menace (World)(1991-2024)(NCS - Masaya).pce" size="1048576" crc="c1972779"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="cybrcore" sourcefile="pce/d_pce.cpp">
 		<description>Cyber Core (USA)</description>
 		<year>1990</year>
@@ -339,6 +348,14 @@
 		<year>1992</year>
 		<manufacturer>Hudson Soft</manufacturer>
 		<rom name="Jackie Chan's Action Kung Fu (USA)(1992)(Hudson Soft).pce" size="524288" crc="9d2f6193"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="shubibi2" cloneof="ccshockman2" romof="ccshockman2" sourcefile="pce/d_pce.cpp">
+		<description>Kaizou Choujin Shubibinman 2: Aratanaru Teki (Japan)</description>
+		<year>1991</year>
+		<manufacturer>NCS - Masaya Games</manufacturer>
+		<rom name="Kaizou Choujin Shubibinman 2 - Aratanaru Teki (Japan)(1991)(NCS - Masaya).pce" size="524288" crc="109ba474"/>
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -543,11 +560,11 @@
 		<video type="raster" orientation="horizontal" width="264" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
-	<game name="shockman" sourcefile="pce/d_pce.cpp">
+	<game name="shockman" cloneof="ccshockman2" romof="ccshockman2" sourcefile="pce/d_pce.cpp">
 		<description>Shockman (USA)</description>
 		<year>1992</year>
-		<manufacturer>NEC</manufacturer>
-		<rom name="Shockman (USA)(1992)(NEC).pce" size="524288" crc="2774462c"/>
+		<manufacturer>NCS - Masaya Games</manufacturer>
+		<rom name="Shockman (USA)(1992)(NCS - Masaya).pce" size="524288" crc="2774462c"/>
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -556,7 +573,7 @@
 		<year>1989</year>
 		<manufacturer>Radiance Software</manufacturer>
 		<rom name="Side Arms - Hyper Dyne (USA)(1989)(Radiance Software).pce" size="262144" crc="d1993c9f"/>
-		<video type="raster" orientation="horizontal" width="352" height="242" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="silentd" sourcefile="pce/d_pce.cpp">

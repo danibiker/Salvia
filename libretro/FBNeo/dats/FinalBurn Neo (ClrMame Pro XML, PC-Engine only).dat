@@ -411,6 +411,15 @@
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="cityhuntee" cloneof="cityhunt" romof="cityhunt" sourcefile="pce/d_pce.cpp">
+		<comment>Official English Translation</comment>
+		<description>City Hunter (Enhanced Version) (World)</description>
+		<year>1989-2026</year>
+		<manufacturer>Sunsoft - Red Art Games</manufacturer>
+		<rom name="City Hunter (Enhanced Version) (World)(1989-2026)(Sunsoft - Red Art).pce" size="1048576" crc="18d09c0f"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="cityhunte" cloneof="cityhunt" romof="cityhunt" sourcefile="pce/d_pce.cpp">
 		<comment>Hack</comment>
 		<description>City Hunter (Hack, English v1.1)</description>
@@ -420,11 +429,29 @@
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
-	<game name="cityhunt" sourcefile="pce/d_pce.cpp">
+	<game name="cityhunthm" cloneof="cityhunt" romof="cityhunt" sourcefile="pce/d_pce.cpp">
+		<comment>Official English Translation</comment>
+		<description>City Hunter (Hard Mode) (World)</description>
+		<year>1989-2026</year>
+		<manufacturer>Sunsoft - Red Art Games</manufacturer>
+		<rom name="City Hunter (Hard Mode) (World)(1989-2026)(Sunsoft - Red Art).pce" size="1048576" crc="5d79e930"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="cityhuntj" cloneof="cityhunt" romof="cityhunt" sourcefile="pce/d_pce.cpp">
 		<description>City Hunter (Japan)</description>
 		<year>1989</year>
 		<manufacturer>Sunsoft</manufacturer>
 		<rom name="City Hunter (Japan)(1989)(Sunsoft).pce" size="393216" crc="f91b055f"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="cityhunt" sourcefile="pce/d_pce.cpp">
+		<comment>Official English Translation</comment>
+		<description>City Hunter (World)</description>
+		<year>1989-2026</year>
+		<manufacturer>Sunsoft - Red Art Games</manufacturer>
+		<rom name="City Hunter (World)(1989-2026)(Sunsoft - Red Art).pce" size="1048576" crc="7e9c2c7e"/>
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -460,6 +487,15 @@
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="ccshockman" sourcefile="pce/d_pce.cpp">
+		<comment>Official English Translation</comment>
+		<description>Cyber Citizen Shockman (World)</description>
+		<year>1989-2024</year>
+		<manufacturer>Extreme - Ratalaika Games</manufacturer>
+		<rom name="Cyber Citizen Shockman (World)(1989-2024)(Extreme - Ratalaika).pce" size="524288" crc="5842f0ca"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="cybrcore" sourcefile="pce/d_pce.cpp">
 		<description>Cyber Core (Japan)</description>
 		<year>1990</year>
@@ -492,11 +528,20 @@
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="donaturlte" cloneof="donaturl" romof="donaturl" sourcefile="pce/d_pce.cpp">
+		<comment>Hack</comment>
+		<description>Daichi Kun Crisis - Do Natural (Hack, English)</description>
+		<year>2026</year>
+		<manufacturer>washbear</manufacturer>
+		<rom name="Daichi Kun Crisis - Do Natural T-Eng (2026)(washbear).pce" size="393216" crc="d5060220"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="donaturl" sourcefile="pce/d_pce.cpp">
 		<description>Daichi Kun Crisis - Do Natural (Japan)</description>
 		<year>1989</year>
 		<manufacturer>Salio</manufacturer>
-		<rom name="daichi kun crisis - do natural (japan).pce" size="393216" crc="61a2935f"/>
+		<rom name="Daichi Kun Crisis - Do Natural (Japan)(1989)(Salio).pce" size="393216" crc="61a2935f"/>
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -873,10 +918,10 @@
 	</game>
 	<game name="necroste" cloneof="necros" romof="necros" sourcefile="pce/d_pce.cpp">
 		<comment>Hack</comment>
-		<description>Fortress of Necros (Hack, English v1.1)</description>
-		<year>2025</year>
+		<description>Fortress of Necros (Hack, English v1.3)</description>
+		<year>2025-26</year>
 		<manufacturer>washbear</manufacturer>
-		<rom name="Fortress of Necros T-Eng v1.1 (2025)(washbear).pce" size="524288" crc="e9138d89"/>
+		<rom name="Fortress of Necros T-Eng v1.3 (2025-26)(washbear).pce" size="524288" crc="e4965ab6"/>
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -1189,19 +1234,11 @@
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
-	<game name="shubibi" sourcefile="pce/d_pce.cpp">
+	<game name="shubibi" cloneof="ccshockman" romof="ccshockman" sourcefile="pce/d_pce.cpp">
 		<description>Kaizou Choujin Shubibinman (Japan)</description>
 		<year>1989</year>
-		<manufacturer>NCS - Masaya</manufacturer>
+		<manufacturer>NCS - Masaya Games</manufacturer>
 		<rom name="Kaizou Choujin Shubibinman (Japan)(1989)(NCS - Masaya).pce" size="262144" crc="a9084d6e"/>
-		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
-		<driver status="good"/>
-	</game>
-	<game name="shubibi2" sourcefile="pce/d_pce.cpp">
-		<description>Kaizou Choujin Shubibinman 2: Aratanaru Teki (Japan)</description>
-		<year>1991</year>
-		<manufacturer>Masaya</manufacturer>
-		<rom name="Kaizou Choujin Shubibinman 2 - Aratanaru Teki (Japan)(1991)(Masaya).pce" size="524288" crc="109ba474"/>
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -2310,7 +2347,7 @@
 		<year>1989</year>
 		<manufacturer>NEC Avenue</manufacturer>
 		<rom name="Side Arms - Hyper Dyne (Japan)(1989)(NEC Avenue).pce" size="262144" crc="e5e7b8b7"/>
-		<video type="raster" orientation="horizontal" width="352" height="242" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="352" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="silentd" sourcefile="pce/d_pce.cpp">

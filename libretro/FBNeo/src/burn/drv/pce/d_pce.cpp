@@ -1199,21 +1199,81 @@ struct BurnDriver BurnDrvpce_circusld = {
 };
 
 
-// City Hunter (Japan)
+// City Hunter (World)
 
 static struct BurnRomInfo pce_cityhuntRomDesc[] = {
-	{ "City Hunter (Japan)(1989)(Sunsoft).pce", 0x060000, 0xf91b055f, BRF_PRG | BRF_ESS },
+	{ "City Hunter (World)(1989-2026)(Sunsoft - Red Art).pce", 0x100000, 0x7e9c2c7e, BRF_PRG | BRF_ESS },
 };
 
 STD_ROM_PICK(pce_cityhunt)
 STD_ROM_FN(pce_cityhunt)
 
 struct BurnDriver BurnDrvpce_cityhunt = {
-	"pce_cityhunt", NULL, NULL, NULL, "1989",
-	"City Hunter (Japan)\0", NULL, "Sunsoft", "PC Engine",
+	"pce_cityhunt", NULL, NULL, NULL, "1989-2026",
+	"City Hunter (World)\0", "Official English Translation", "Sunsoft - Red Art Games", "PC Engine",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 1, HARDWARE_PCENGINE_PCENGINE, GBF_PLATFORM, 0,
 	PceGetZipName, pce_cityhuntRomInfo, pce_cityhuntRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
+	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
+	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
+};
+
+
+// City Hunter (Enhanced Version) (World)
+
+static struct BurnRomInfo pce_cityhunteeRomDesc[] = {
+	{ "City Hunter (Enhanced Version) (World)(1989-2026)(Sunsoft - Red Art).pce", 0x100000, 0x18d09c0f, BRF_PRG | BRF_ESS },
+};
+
+STD_ROM_PICK(pce_cityhuntee)
+STD_ROM_FN(pce_cityhuntee)
+
+struct BurnDriver BurnDrvpce_cityhuntee = {
+	"pce_cityhuntee", "pce_cityhunt", NULL, NULL, "1989-2026",
+	"City Hunter (Enhanced Version) (World)\0", "Official English Translation", "Sunsoft - Red Art Games", "PC Engine",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE, 1, HARDWARE_PCENGINE_PCENGINE, GBF_PLATFORM, 0,
+	PceGetZipName, pce_cityhunteeRomInfo, pce_cityhunteeRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
+	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
+	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
+};
+
+
+// City Hunter (Hard Mode) (World)
+
+static struct BurnRomInfo pce_cityhunthmRomDesc[] = {
+	{ "City Hunter (Hard Mode) (World)(1989-2026)(Sunsoft - Red Art).pce", 0x100000, 0x5d79e930, BRF_PRG | BRF_ESS },
+};
+
+STD_ROM_PICK(pce_cityhunthm)
+STD_ROM_FN(pce_cityhunthm)
+
+struct BurnDriver BurnDrvpce_cityhunthm = {
+	"pce_cityhunthm", "pce_cityhunt", NULL, NULL, "1989-2026",
+	"City Hunter (Hard Mode) (World)\0", "Official English Translation", "Sunsoft - Red Art Games", "PC Engine",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE, 1, HARDWARE_PCENGINE_PCENGINE, GBF_PLATFORM, 0,
+	PceGetZipName, pce_cityhunthmRomInfo, pce_cityhunthmRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
+	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
+	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
+};
+
+
+// City Hunter (Japan)
+
+static struct BurnRomInfo pce_cityhuntjRomDesc[] = {
+	{ "City Hunter (Japan)(1989)(Sunsoft).pce", 0x060000, 0xf91b055f, BRF_PRG | BRF_ESS },
+};
+
+STD_ROM_PICK(pce_cityhuntj)
+STD_ROM_FN(pce_cityhuntj)
+
+struct BurnDriver BurnDrvpce_cityhuntj = {
+	"pce_cityhuntj", "pce_cityhunt", NULL, NULL, "1989",
+	"City Hunter (Japan)\0", NULL, "Sunsoft", "PC Engine",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE, 1, HARDWARE_PCENGINE_PCENGINE, GBF_PLATFORM, 0,
+	PceGetZipName, pce_cityhuntjRomInfo, pce_cityhuntjRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
 	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
 	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
 };
@@ -1402,7 +1462,7 @@ struct BurnDriver BurnDrvpce_daisenpu = {
 // Daichi Kun Crisis - Do Natural (Japan)
 
 static struct BurnRomInfo pce_donaturlRomDesc[] = {
-	{ "daichi kun crisis - do natural (japan).pce", 0x060000, 0x61a2935f, BRF_PRG | BRF_ESS },
+	{ "Daichi Kun Crisis - Do Natural (Japan)(1989)(Salio).pce", 0x060000, 0x61a2935f, BRF_PRG | BRF_ESS },
 };
 
 STD_ROM_PICK(pce_donaturl)
@@ -1414,6 +1474,26 @@ struct BurnDriver BurnDrvpce_donaturl = {
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 1, HARDWARE_PCENGINE_PCENGINE, GBF_ADV, 0,
 	PceGetZipName, pce_donaturlRomInfo, pce_donaturlRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
+	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
+	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
+};
+
+
+// Daichi Kun Crisis - Do Natural (Hack, English)
+// https://github.com/alarixnia/daichikun-crisis-en
+static struct BurnRomInfo pce_donaturlteRomDesc[] = {
+	{ "Daichi Kun Crisis - Do Natural T-Eng (2026)(washbear).pce", 393216, 0xd5060220, BRF_PRG | BRF_ESS },
+};
+
+STD_ROM_PICK(pce_donaturlte)
+STD_ROM_FN(pce_donaturlte)
+
+struct BurnDriver BurnDrvpce_donaturlte = {
+	"pce_donaturlte", "pce_donaturl", NULL, NULL, "2026",
+	"Daichi Kun Crisis - Do Natural (Hack, English)\0", NULL, "washbear", "PC Engine",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HACK, 1, HARDWARE_PCENGINE_PCENGINE, GBF_ADV, 0,
+	PceGetZipName, pce_donaturlteRomInfo, pce_donaturlteRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
 	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
 	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
 };
@@ -3026,10 +3106,10 @@ STD_ROM_PICK(pce_shubibi)
 STD_ROM_FN(pce_shubibi)
 
 struct BurnDriver BurnDrvpce_shubibi = {
-	"pce_shubibi", NULL, NULL, NULL, "1989",
-	"Kaizou Choujin Shubibinman (Japan)\0", NULL, "NCS - Masaya", "PC Engine",
+	"pce_shubibi", "pce_ccshockman", NULL, NULL, "1989",
+	"Kaizou Choujin Shubibinman (Japan)\0", NULL, "NCS - Masaya Games", "PC Engine",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_PCENGINE_PCENGINE, GBF_PLATFORM, 0,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PCENGINE_PCENGINE, GBF_RUNGUN | GBF_PLATFORM, 0,
 	PceGetZipName, pce_shubibiRomInfo, pce_shubibiRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
 	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
 	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
@@ -3038,20 +3118,20 @@ struct BurnDriver BurnDrvpce_shubibi = {
 
 // Kaizou Choujin Shubibinman 2: Aratanaru Teki (Japan)
 
-static struct BurnRomInfo pce_shubibi2RomDesc[] = {
-	{ "Kaizou Choujin Shubibinman 2 - Aratanaru Teki (Japan)(1991)(Masaya).pce", 0x080000, 0x109ba474, BRF_PRG | BRF_ESS },
+static struct BurnRomInfo tg_shubibi2RomDesc[] = {
+	{ "Kaizou Choujin Shubibinman 2 - Aratanaru Teki (Japan)(1991)(NCS - Masaya).pce", 0x080000, 0x109ba474, BRF_PRG | BRF_ESS },
 };
 
-STD_ROM_PICK(pce_shubibi2)
-STD_ROM_FN(pce_shubibi2)
+STD_ROM_PICK(tg_shubibi2)
+STD_ROM_FN(tg_shubibi2)
 
-struct BurnDriver BurnDrvpce_shubibi2 = {
-	"pce_shubibi2", NULL, NULL, NULL, "1991",
-	"Kaizou Choujin Shubibinman 2: Aratanaru Teki (Japan)\0", NULL, "Masaya", "PC Engine",
+struct BurnDriver BurnDrvtg_shubibi2 = {
+	"tg_shubibi2", "tg_ccshockman2", NULL, NULL, "1991",
+	"Kaizou Choujin Shubibinman 2: Aratanaru Teki (Japan)\0", NULL, "NCS - Masaya Games", "TurboGrafx 16",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_PCENGINE_PCENGINE, GBF_RUNGUN | GBF_PLATFORM, 0,
-	PceGetZipName, pce_shubibi2RomInfo, pce_shubibi2RomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
-	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PCENGINE_TG16, GBF_RUNGUN | GBF_PLATFORM, 0,
+	TgGetZipName, tg_shubibi2RomInfo, tg_shubibi2RomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
+	TG16Init, PCEExit, PCEFrame, PCEDraw, PCEScan,
 	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
 };
 
@@ -4175,18 +4255,18 @@ struct BurnDriver BurnDrvpce_necros = {
 };
 
 
-// Fortress of Necros (Hack, English v1.1)
+// Fortress of Necros (Hack, English v1.3)
 // https://romhackplaza.org/translations/fortress-of-necros-eng-hack-english-translation-turbografx-16/
 static struct BurnRomInfo pce_necrosteRomDesc[] = {
-	{ "Fortress of Necros T-Eng v1.1 (2025)(washbear).pce", 524288, 0xe9138d89, BRF_PRG | BRF_ESS },
+	{ "Fortress of Necros T-Eng v1.3 (2025-26)(washbear).pce", 524288, 0xe4965ab6, BRF_PRG | BRF_ESS },
 };
 
 STD_ROM_PICK(pce_necroste)
 STD_ROM_FN(pce_necroste)
 
 struct BurnDriver BurnDrvpce_necroste = {
-	"pce_necroste", "pce_necros", NULL, NULL, "2025",
-	"Fortress of Necros (Hack, English v1.1)\0", NULL, "washbear", "PC Engine",
+	"pce_necroste", "pce_necros", NULL, NULL, "2025-26",
+	"Fortress of Necros (Hack, English v1.3)\0", NULL, "washbear", "PC Engine",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_HACK, 1, HARDWARE_PCENGINE_PCENGINE, GBF_RPG, 0,
 	PceGetZipName, pce_necrosteRomInfo, pce_necrosteRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
@@ -5698,7 +5778,7 @@ struct BurnDriver BurnDrvpce_sidearms = {
 	BDF_GAME_WORKING, 1, HARDWARE_PCENGINE_PCENGINE, GBF_HORSHOOT, 0,
 	PceGetZipName, pce_sidearmsRomInfo, pce_sidearmsRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
 	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
-	&PCEPaletteRecalc, 0x400, 352, 242, 4, 3
+	&PCEPaletteRecalc, 0x400, 352, 240, 4, 3
 };
 
 
@@ -8410,17 +8490,17 @@ struct BurnDriver BurnDrvtg_samuraig = {
 // Shockman (USA)
 
 static struct BurnRomInfo tg_shockmanRomDesc[] = {
-	{ "Shockman (USA)(1992)(NEC).pce", 0x080000, 0x2774462c, BRF_PRG | BRF_ESS },
+	{ "Shockman (USA)(1992)(NCS - Masaya).pce", 0x080000, 0x2774462c, BRF_PRG | BRF_ESS },
 };
 
 STD_ROM_PICK(tg_shockman)
 STD_ROM_FN(tg_shockman)
 
 struct BurnDriver BurnDrvtg_shockman = {
-	"tg_shockman", NULL, NULL, NULL, "1992",
-	"Shockman (USA)\0", NULL, "NEC", "TurboGrafx 16",
+	"tg_shockman", "tg_ccshockman2", NULL, NULL, "1992",
+	"Shockman (USA)\0", NULL, "NCS - Masaya Games", "TurboGrafx 16",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_PCENGINE_TG16, GBF_RUNGUN | GBF_PLATFORM, 0,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PCENGINE_TG16, GBF_RUNGUN | GBF_PLATFORM, 0,
 	TgGetZipName, tg_shockmanRomInfo, tg_shockmanRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
 	TG16Init, PCEExit, PCEFrame, PCEDraw, PCEScan,
 	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
@@ -8443,7 +8523,7 @@ struct BurnDriver BurnDrvtg_sidearms = {
 	BDF_GAME_WORKING, 1, HARDWARE_PCENGINE_TG16, GBF_HORSHOOT, 0,
 	TgGetZipName, tg_sidearmsRomInfo, tg_sidearmsRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
 	TG16Init, PCEExit, PCEFrame, PCEDraw, PCEScan,
-	&PCEPaletteRecalc, 0x400, 352, 242, 4, 3
+	&PCEPaletteRecalc, 0x400, 352, 240, 4, 3
 };
 
 
@@ -9154,6 +9234,44 @@ struct BurnDriver BurnDrvpce_bughunt = {
 	BDF_GAME_WORKING | BDF_HOMEBREW, 1, HARDWARE_PCENGINE_PCENGINE, GBF_ACTION, 0,
 	PceGetZipName, pce_bughuntRomInfo, pce_bughuntRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
 	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
+	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
+};
+
+// Cyber Citizen Shockman (World)
+
+static struct BurnRomInfo pce_ccshockmanRomDesc[] = {
+	{ "Cyber Citizen Shockman (World)(1989-2024)(Extreme - Ratalaika).pce", 0x080000, 0x5842f0ca, BRF_PRG | BRF_ESS },
+};
+
+STD_ROM_PICK(pce_ccshockman)
+STD_ROM_FN(pce_ccshockman)
+
+struct BurnDriver BurnDrvpce_ccshockman = {
+	"pce_ccshockman", NULL, NULL, NULL, "1989-2024",
+	"Cyber Citizen Shockman (World)\0", "Official English Translation", "Extreme - Ratalaika Games", "PC Engine",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING, 2, HARDWARE_PCENGINE_PCENGINE, GBF_RUNGUN | GBF_PLATFORM, 0,
+	PceGetZipName, pce_ccshockmanRomInfo, pce_ccshockmanRomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
+	PCEInit, PCEExit, PCEFrame, PCEDraw, PCEScan,
+	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
+};
+
+// Cyber Citizen Shockman 2: A New Menace (World)
+
+static struct BurnRomInfo tg_ccshockman2RomDesc[] = {
+	{ "Cyber Citizen Shockman 2 - A New Menace (World)(1991-2024)(NCS - Masaya).pce", 0x100000, 0xc1972779, BRF_PRG | BRF_ESS },
+};
+
+STD_ROM_PICK(tg_ccshockman2)
+STD_ROM_FN(tg_ccshockman2)
+
+struct BurnDriver BurnDrvtg_ccshockman2 = {
+	"tg_ccshockman2", NULL, NULL, NULL, "1991-2024",
+	"Cyber Citizen Shockman 2: A New Menace (World)\0", "Official English Translation", "NCS - Masaya Games", "TurboGrafx 16",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING, 2, HARDWARE_PCENGINE_TG16, GBF_RUNGUN | GBF_PLATFORM, 0,
+	TgGetZipName, tg_ccshockman2RomInfo, tg_ccshockman2RomName, NULL, NULL, NULL, NULL, pceInputInfo, pceDIPInfo,
+	TG16Init, PCEExit, PCEFrame, PCEDraw, PCEScan,
 	&PCEPaletteRecalc, 0x400, 1024, 240, 4, 3
 };
 

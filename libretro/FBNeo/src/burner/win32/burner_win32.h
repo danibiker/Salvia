@@ -50,6 +50,8 @@ INT32 Dx9Core_Init();
 #include "resource.h"
 #include "resource_string.h"
 #include "net.h"
+#include "zip.h" // unzip*() in sel.cpp
+
 // ---------------------------------------------------------------------------
 
 // Macro for releasing a COM object
@@ -334,6 +336,17 @@ bool MenuHandleKeyboard(MSG*);
 void MenuRemoveTheme();
 
 // sel.cpp
+
+	// unzip()'s buf must be free()'d after use.
+bool unzip(char *szZipFn, char *szFn, void **buf, size_t *bufsize);
+bool unzip_file_exists(char *szZipFn, char *szFn);
+
+	// context-based unzip, for unzipping many files from a single zip
+bool unzip_open_context(zip_t **zip_context, char *szZipFn);
+void unzip_close_context(zip_t **zip_context);
+bool unzip_unzip_context(zip_t **zip_context, char *szFn, void **buf, size_t *bufsize);
+bool unzip_exists_context(zip_t **zip_context, char *szFn);
+
 extern UINT64 nLoadMenuShowX;
 extern int nLoadMenuShowY;
 extern int nLoadMenuExpand;
@@ -379,6 +392,7 @@ extern TCHAR szNeoCDGamesDir[MAX_PATH];
 
 HBITMAP ImageToBitmap(HWND hwnd, IMAGE* img);
 HBITMAP PNGLoadBitmap(HWND hWnd, FILE* fp, int nWidth, int nHeight, int nPreset);
+HBITMAP PNGLoadBitmapBuffer(HWND hWnd, void *buffer, int bufferLength, int nWidth, int nHeight, int nPreset);
 HBITMAP LoadBitmap(HWND hWnd, FILE* fp, int nWidth, int nHeight, int nPreset);
 int NeoCDList_CheckISO(TCHAR* pszFile, void (*pfEntryCallBack)(INT32, TCHAR*));
 
@@ -520,12 +534,33 @@ void DisplayReplayProperties(HWND hDlg, bool bClear);
 
 // memcard.cpp
 extern int nMemoryCardStatus;						// & 1 = file selected, & 2 = inserted
+extern INT32 Pgm2MaxCardSlots;						// PGM2: number of card slots (0 = no cards)
 
 int	MemCardCreate();
 int	MemCardSelect();
 int	MemCardInsert();
 int	MemCardEject();
 int	MemCardToggle();
+
+// PGM2 per-slot card operations
+extern int nPgm2CardStatus[4];
+extern TCHAR szPgm2CardFile[4][MAX_PATH];
+int MemCardCreatePGM2Slot(int slot);
+int MemCardSelectPGM2Slot(int slot);
+int MemCardInsertPGM2Slot(int slot);
+int MemCardEjectPGM2Slot(int slot);
+
+// Returns true if the current driver supports memory card / IC card
+static inline bool HasMemCard() {
+	UINT32 hw = BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK;
+	return (hw == HARDWARE_SNK_NEOGEO || hw == HARDWARE_IGS_PGM2);
+}
+
+// Returns true if the current driver is PGM2 with card support
+static inline bool IsPGM2WithCards() {
+	UINT32 hw = BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK;
+	return (hw == HARDWARE_IGS_PGM2 && Pgm2MaxCardSlots > 0);
+}
 
 // progress.cpp
 int ProgressUpdateBurner(double dProgress, const TCHAR* pszText, bool bAbs);
