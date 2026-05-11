@@ -29,6 +29,7 @@ NEOGEO_DIR				:= $(FBNEO_BURN_DRIVERS_DIR)/neogeo
 NES_DIR					:= $(FBNEO_BURN_DRIVERS_DIR)/nes
 PCE_DIR					:= $(FBNEO_BURN_DRIVERS_DIR)/pce
 PGM_DIR					:= $(FBNEO_BURN_DRIVERS_DIR)/pgm
+PGM2_DIR				:= $(FBNEO_BURN_DRIVERS_DIR)/pgm2
 PRE90S_DIR				:= $(FBNEO_BURN_DRIVERS_DIR)/pre90s
 PSIKYO_DIR				:= $(FBNEO_BURN_DRIVERS_DIR)/psikyo
 PST90S_DIR				:= $(FBNEO_BURN_DRIVERS_DIR)/pst90s
@@ -42,6 +43,7 @@ TOAPLAN_DIR				:= $(FBNEO_BURN_DRIVERS_DIR)/toaplan
 ADSP2100_CPU_DIR		:= $(FBNEO_CPU_DIR)/adsp2100
 ARM_CPU_DIR				:= $(FBNEO_CPU_DIR)/arm
 ARM7_CPU_DIR			:= $(FBNEO_CPU_DIR)/arm7
+ARM9_CPU_DIR			:= $(FBNEO_CPU_DIR)/arm9
 E132XS_CPU_DIR			:= $(FBNEO_CPU_DIR)/e132xs
 F8_CPU_DIR				:= $(FBNEO_CPU_DIR)/f8
 H6280_CPU_DIR			:= $(FBNEO_CPU_DIR)/h6280
@@ -96,6 +98,7 @@ FBNEO_BURN_DRIVERS_DIRS := $(ATARI_DIR) \
 	$(NES_DIR) \
 	$(PCE_DIR) \
 	$(PGM_DIR) \
+	$(PGM2_DIR) \
 	$(PRE90S_DIR) \
 	$(PSIKYO_DIR) \
 	$(PST90S_DIR) \
@@ -116,6 +119,7 @@ FBNEO_CPU_DIRS := $(FBNEO_CPU_DIR) \
 	$(ADSP2100_CPU_DIR) \
 	$(ARM_CPU_DIR) \
 	$(ARM7_CPU_DIR) \
+	$(ARM9_CPU_DIR) \
 	$(E132XS_CPU_DIR) \
 	$(F8_CPU_DIR) \
 	$(H6280_CPU_DIR) \
@@ -334,7 +338,8 @@ SOURCES_CXX += $(LIBRETRO_DIR)/libretro.cpp \
 	$(LIBRETRO_DIR)/retro_memory.cpp \
 	$(LIBRETRO_DIR)/retro_string.cpp \
 	$(LIBRETRO_DIR)/ips_manager.cpp \
-	$(LIBRETRO_DIR)/romdata.cpp
+	$(LIBRETRO_DIR)/romdata.cpp \
+	$(LIBRETRO_DIR)/retro_pgm2_cards.cpp
 
 SOURCES_C += $(UGUI_DIR)/ugui.c \
 	$(UGUI_DIR)/ugui_textbox.c \

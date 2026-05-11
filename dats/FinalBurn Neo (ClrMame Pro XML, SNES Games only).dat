@@ -1171,6 +1171,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="magicquest3tp" cloneof="magicquest3" romof="magicquest3" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Aventura Magica 3 Estrelando Mickey &amp; Donald (Hack, Portuguese)</description>
+		<year>2020</year>
+		<manufacturer>RPGONE</manufacturer>
+		<rom name="Mickey to Donald - Magical Adventure 3 T-Por (2020)(RPGONE).sfc" size="2621440" crc="b5a295c4"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="advhouraits" cloneof="advhouraite" romof="advhouraite" sourcefile="snes/d_snes.cpp">
 		<comment>Hack</comment>
 		<description>Aventuras de Hourai High, Las (Hack, Spanish v1.1)</description>
@@ -1703,7 +1712,7 @@
 		<year>1992</year>
 		<manufacturer>Bandai</manufacturer>
 		<rom name="Bazooka Blitzkrieg (U)(1992)(Bandai).sfc" size="524288" crc="6810aa95"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="beavisbutte" cloneof="beavisbutt" romof="beavisbutt" sourcefile="snes/d_snes.cpp">
@@ -1786,7 +1795,7 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
-	<game name="bikedaisuki" romof="dsp1" sourcefile="snes/d_snes.cpp">
+	<game name="bikedaisuki" cloneof="riderspirits" romof="riderspirits" sourcefile="snes/d_snes.cpp">
 		<comment>DSP-1 enhancement chip</comment>
 		<description>Bike Daisuki! Hashiriya Tamashii (Japan)</description>
 		<year>1994</year>
@@ -2013,7 +2022,7 @@
 		<year>1993</year>
 		<manufacturer>Kemco</manufacturer>
 		<rom name="Blues Brothers, The (J)(1993)(Kemco).sfc" size="524288" crc="362620d2"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="bluesbros" sourcefile="snes/d_snes.cpp">
@@ -2021,7 +2030,7 @@
 		<year>1993</year>
 		<manufacturer>Titus</manufacturer>
 		<rom name="Blues Brothers, The (U)(1993)(Titus).sfc" size="524288" crc="82b97464"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="harvmoontsc" cloneof="harvmoon" romof="harvmoon" sourcefile="snes/d_snes.cpp">
@@ -2458,10 +2467,10 @@
 	</game>
 	<game name="bubsylbe" cloneof="bubsy" romof="bubsy" sourcefile="snes/d_snes.cpp">
 		<comment>Hack</comment>
-		<description>Bubsy: Less Bad Edition (Hack, v1.3)</description>
+		<description>Bubsy: Less Bad Edition (Hack, v2.11)</description>
 		<year>2026</year>
 		<manufacturer>NoPLo</manufacturer>
-		<rom name="Bubsy - Less Bad Edition v1.3 (2026)(NoPLo).sfc" size="2097152" crc="72f7fc86"/>
+		<rom name="Bubsy - Less Bad Edition v2.11 (2026)(NoPLo).sfc" size="2097152" crc="4837d7de"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -2831,6 +2840,15 @@
 		<year>1996</year>
 		<manufacturer>Absolute</manufacturer>
 		<rom name="Casper (U)(1996)(Absolute).sfc" size="1048576" crc="a3b745bc"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="castlevaniadxtp" cloneof="castlevaniadx" romof="castlevaniadx" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Castlevania Dracula X (Hack, Portuguese v3.0)</description>
+		<year>2023</year>
+		<manufacturer>ByFTR</manufacturer>
+		<rom name="Castlevania Dracula X PT-BR v3.0 (2023)(ByFTR).sfc" size="2097152" crc="b82c9024"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -3596,6 +3614,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="cutthroattp" cloneof="cutthroat" romof="cutthroat" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>CutThroat Island (Hack, Portuguese)</description>
+		<year>2010</year>
+		<manufacturer>Monkey's Traducoes</manufacturer>
+		<rom name="CutThroat Island PT-BR (2010)(Monkey's Traducoes).sfc" size="2097152" crc="eaa49af7"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="cutthroat" sourcefile="snes/d_snes.cpp">
 		<description>CutThroat Island (USA)</description>
 		<year>1995</year>
@@ -3610,6 +3637,15 @@
 		<year>2010</year>
 		<manufacturer>Overload</manufacturer>
 		<rom name="cx4test (2010)(Overload).sfc" size="32768" crc="f56a03d0"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="ccshockman0" cloneof="shockman0" romof="shockman0" sourcefile="snes/d_snes.cpp">
+		<comment>Official English Translation</comment>
+		<description>Cyber Citizen Shockman Zero (World)</description>
+		<year>1997-2024</year>
+		<manufacturer>Extreme - Ratalaika Games</manufacturer>
+		<rom name="Cyber Citizen Shockman Zero (W) (1997-2024)(Extreme - Ratalaika).sfc" size="1048576" crc="2b74f389"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -3693,7 +3729,7 @@
 		<year>1991</year>
 		<manufacturer>Asmik</manufacturer>
 		<rom name="D-Force (U)(1991)(Asmik).sfc" size="1048576" crc="24230807"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="dolls" sourcefile="snes/d_snes.cpp">
@@ -3791,6 +3827,15 @@
 		<year>2015</year>
 		<manufacturer>Aeon Genesis</manufacturer>
 		<rom name="Dark Half T-Eng (2015)(Aeon Genesis).sfc" size="4194304" crc="18877841"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="darkhalftp" cloneof="darkhalfte" romof="darkhalfte" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Dark Half (Hack, Portuguese v1.3)</description>
+		<year>2024</year>
+		<manufacturer>PSGM</manufacturer>
+		<rom name="Dark Half PT-BR v1.3 (2024)(PSGM).sfc" size="4194304" crc="1fd2bafe"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -4090,7 +4135,7 @@
 		<year>1993</year>
 		<manufacturer>Bandai</manufacturer>
 		<rom name="Destructive (J)(1993)(Bandai).sfc" size="524288" crc="21b47e62"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="dezaemonte" sourcefile="snes/d_snes.cpp">
@@ -4131,7 +4176,7 @@
 		<year>1991</year>
 		<manufacturer>Asmik</manufacturer>
 		<rom name="Dimension-Force (J)(1991)(Asmik).sfc" size="1048576" crc="3d0d6fdc"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="dinodini" sourcefile="snes/d_snes.cpp">
@@ -4139,7 +4184,7 @@
 		<year>1994</year>
 		<manufacturer>Virgin Interactive</manufacturer>
 		<rom name="Dino Dini's Soccer! (E)(1994)(Virgin Interactive).sfc" size="1048576" crc="dbf4a8ab"/>
-		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="dinocitye" cloneof="dinocity" romof="dinocity" sourcefile="snes/d_snes.cpp">
@@ -4791,7 +4836,7 @@
 		<year>1998</year>
 		<manufacturer>Nintendo</manufacturer>
 		<rom name="Dr. Mario (J)(1998)(Nintendo).sfc" size="524288" crc="63ce5132"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="dragonblse" cloneof="dragonbls" romof="dragonbls" sourcefile="snes/d_snes.cpp">
@@ -4807,6 +4852,15 @@
 		<year>1994</year>
 		<manufacturer>Acclaim Ent. - Virgin Int.</manufacturer>
 		<rom name="Dragon - The Bruce Lee Story (U)(1994)(Acclaim Ent. - Virgin).sfc" size="2097152" crc="407c5c24"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="dragballzrpgtp" cloneof="dragballzrpgte" romof="dragballzrpgte" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Dragon Ball Z - A Lenda de Goku - Embate (Hack, Portuguese)</description>
+		<year>2024</year>
+		<manufacturer>Nathan</manufacturer>
+		<rom name="Dragon Ball Z - A Lenda de Goku - Embate PT-BR (2024)(Nathan).sfc" size="2097152" crc="6e20d7eb"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -4902,15 +4956,6 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
-	<game name="dragballzrpgtp" cloneof="dragballzrpgte" romof="dragballzrpgte" sourcefile="snes/d_snes.cpp">
-		<comment>Hack</comment>
-		<description>Dragon Ball Z - Super Gokuuden - Totsugeki Hen (Hack, Portuguese)</description>
-		<year>2024</year>
-		<manufacturer>Nathan</manufacturer>
-		<rom name="Dragon Ball Z - Super Gokuuden - Totsugeki Hen PT-BR (2024)(Nathan).sfc" size="2097152" crc="6e20d7eb"/>
-		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
-		<driver status="good"/>
-	</game>
 	<game name="dragballz3ef" sourcefile="snes/d_snes.cpp">
 		<description>Dragon Ball Z - Ultime Menace (Euro, French)</description>
 		<year>1994</year>
@@ -4960,6 +5005,15 @@
 		<year>2022</year>
 		<manufacturer>DQ Translations - Rod Merida</manufacturer>
 		<rom name="Dragon Quest III T-Eng v1.0c (2022)(DQ Translations - Rod Merida).sfc" size="6291456" crc="7a1f8f09"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="dquest3tp" cloneof="dquest3te" romof="dquest3te" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Dragon Quest III (Hack, Portuguese v1.01)</description>
+		<year>2023</year>
+		<manufacturer>Dindo</manufacturer>
+		<rom name="Dragon Quest III PT-BR v1.01 (2023)(Dindo).sfc" size="6291456" crc="602c21d9"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -5225,6 +5279,15 @@
 		<year>1994</year>
 		<manufacturer>Playmates Interactive Ent.</manufacturer>
 		<rom name="Earthworm Jim (E)(1994)(Playmates).sfc" size="3145728" crc="84ab251b"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="earthwormjimtp" cloneof="earthwormjim" romof="earthwormjim" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Earthworm Jim (Hack, Portuguese)</description>
+		<year>2026</year>
+		<manufacturer>juliano_did</manufacturer>
+		<rom name="Earthworm Jim PT-BR (2026)(juliano_did).sfc" size="3145728" crc="5b989e82"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -5558,6 +5621,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="fzeroml" cloneof="fzero" romof="fzero" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>F-Zero: Max League (Hack)</description>
+		<year>2026</year>
+		<manufacturer>PowerPanda, Zephyrum25</manufacturer>
+		<rom name="F-Zero - MAX League (2026)(PowerPanda, Zephyrum25).sfc" size="1048576" crc="0539686b"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="f1polepose" cloneof="f1polepos" romof="f1polepos" sourcefile="snes/d_snes.cpp">
 		<description>F1 Pole Position (Euro)</description>
 		<year>1993</year>
@@ -5715,6 +5787,7 @@
 		<driver status="good"/>
 	</game>
 	<game name="feudalbros" sourcefile="snes/d_snes.cpp">
+		<comment>Official English Translation</comment>
 		<description>Feudal Bros - Tonosama 1 (World)</description>
 		<year>1995-2025</year>
 		<manufacturer>Sunsoft</manufacturer>
@@ -6144,6 +6217,15 @@
 		<year>2025</year>
 		<manufacturer>Miacis</manufacturer>
 		<rom name="Fire Emblem - Genealogy of the Holy War T-Eng v1.01 (2025)(Miacis).sfc" size="8388608" crc="0fba1e19"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="fireemblem4tp" cloneof="fireemblem4te" romof="fireemblem4te" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Fire Emblem - Genealogy of the Holy War (Hack, Portuguese v1.13)</description>
+		<year>2025</year>
+		<manufacturer>Escribas da Espada</manufacturer>
+		<rom name="Fire Emblem - Genealogy of the Holy War PT-BR v1.13 (2025)(Escribas da Espada).sfc" size="6926955" crc="328f3d50"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -6931,7 +7013,7 @@
 		<driver status="good"/>
 	</game>
 	<game name="gsmikami" sourcefile="snes/d_snes.cpp">
-		<description>Ghost Sweeper Mikami - Joreishi wa Nice Body (Japan)</description>
+		<description>Ghost Sweeper Mikami: Joreishi wa Nice Body (Japan)</description>
 		<year>1993</year>
 		<manufacturer>Banalex</manufacturer>
 		<rom name="Ghost Sweeper Mikami - Joreishi wa Nice Body (J)(1993)(Banalex).sfc" size="1048576" crc="444c9962"/>
@@ -7032,6 +7114,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="goackman3tp" cloneof="goackman3te" romof="goackman3te" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Go Go Ackman 3 (Hack, Portuguese)</description>
+		<year>2021</year>
+		<manufacturer>Linconlln</manufacturer>
+		<rom name="Go Go Ackman 3 PT-BR (2021)(Linconlln).sfc" size="2097152" crc="07379672"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="goackman3j" cloneof="goackman3te" romof="goackman3te" sourcefile="snes/d_snes.cpp">
 		<description>Go Go Ackman 3 (Japan)</description>
 		<year>1995</year>
@@ -7045,7 +7136,7 @@
 		<year>1992</year>
 		<manufacturer>Jaleco</manufacturer>
 		<rom name="Goal! (U)(1992)(Jaleco).sfc" size="1048576" crc="935ea22c"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="godse" cloneof="gods" romof="gods" sourcefile="snes/d_snes.cpp">
@@ -7203,6 +7294,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="mickeytokyotp" cloneof="mickeytokyote" romof="mickeytokyote" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Grande Aventura de Mickey na Disneylandia de Toquio, A (Hack, Portuguese v1.4)</description>
+		<year>2022</year>
+		<manufacturer>Svambo, Maverick Blue Warrior</manufacturer>
+		<rom name="Grande Aventura de Mickey na Disneylandia de Toquio, A PT-BR v1.4 (2022)(Svambo, Maverick B. Warrior).sfc" size="1572864" crc="bcc63775"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="greatbattle2te" sourcefile="snes/d_snes.cpp">
 		<comment>Hack</comment>
 		<description>Great Battle II, The - Last Fighter Twin (Hack, English v1.2)</description>
@@ -7279,6 +7379,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="greatcircmysttp" cloneof="greatcircmyst" romof="greatcircmyst" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Great Circus Mystery Starring Mickey &amp; Minnie, The (Hack, Portuguese v1.1)</description>
+		<year>2004</year>
+		<manufacturer>Fox Roms</manufacturer>
+		<rom name="Great Circus Mystery Starring Mickey &amp; Minnie, The T-Por v1.1 (2004)(Fox Roms).sfc" size="1572864" crc="a56b2a7b"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="greatcircmyst" sourcefile="snes/d_snes.cpp">
 		<description>Great Circus Mystery Starring Mickey &amp; Minnie, The (USA)</description>
 		<year>1994</year>
@@ -7296,7 +7405,7 @@
 		<driver status="good"/>
 	</game>
 	<game name="gunforce" sourcefile="snes/d_snes.cpp">
-		<description>GunForce - Battle Fire Engulfed Terror Island (USA)</description>
+		<description>GunForce: Battle Fire Engulfed Terror Island (USA)</description>
 		<year>1992</year>
 		<manufacturer>Irem</manufacturer>
 		<rom name="GunForce - Battle Fire Engulfed Terror Island (U)(1992)(Irem).sfc" size="524288" crc="6f5c5dc0"/>
@@ -7312,7 +7421,7 @@
 		<driver status="good"/>
 	</game>
 	<game name="hagane" sourcefile="snes/d_snes.cpp">
-		<description>Hagane - The Final Conflict (USA)</description>
+		<description>Hagane: The Final Conflict (USA)</description>
 		<year>1994</year>
 		<manufacturer>Hudson Soft</manufacturer>
 		<rom name="Hagane - The Final Conflict (U)(1994)(Hudson Soft).sfc" size="2097152" crc="8e0a7034"/>
@@ -7658,6 +7767,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="hooktp" cloneof="hook" romof="hook" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Hook (Hack, Portuguese v2.0)</description>
+		<year>2026</year>
+		<manufacturer>juliano_did</manufacturer>
+		<rom name="Hook PT-BR v2.0 (2026)(juliano_did).sfc" size="1048576" crc="d6ca1fad"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="hookj" cloneof="hook" romof="hook" sourcefile="snes/d_snes.cpp">
 		<description>Hook (Japan)</description>
 		<year>1992</year>
@@ -7753,7 +7871,7 @@
 		<year>1993</year>
 		<manufacturer>Hi Tech Expressions</manufacturer>
 		<rom name="Hunt for Red October, The (E)(1993)(Hi Tech Expressions).sfc" size="524288" crc="346e153f"/>
-		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="huntredoctj" cloneof="huntredoct" romof="huntredoct" sourcefile="snes/d_snes.cpp">
@@ -8022,7 +8140,7 @@
 		<year>1993</year>
 		<manufacturer>Koei</manufacturer>
 		<rom name="Inindo - Way of the Ninja (U)(1993)(Koei).sfc" size="1048576" crc="543f3327"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="inspgadget" sourcefile="snes/d_snes.cpp">
@@ -8047,7 +8165,7 @@
 		<year>1994</year>
 		<manufacturer>Sony Imagesoft</manufacturer>
 		<rom name="International Sensible Soccer - World Champions (E, Rev 1)(1994)(Sony Imagesoft).sfc" size="524288" crc="6ff2d97e"/>
-		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="isse" cloneof="iss" romof="iss" sourcefile="snes/d_snes.cpp">
@@ -8227,7 +8345,7 @@
 		<year>1992</year>
 		<manufacturer>THQ Inc.</manufacturer>
 		<rom name="James Bond Jr. (U)(1992)(THQ).sfc" size="524288" crc="69c2f850"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="jamespond3" sourcefile="snes/d_snes.cpp">
@@ -8408,6 +8526,15 @@
 		<year>1991</year>
 		<manufacturer>Data East</manufacturer>
 		<rom name="Joe &amp; Mac - Tatakae Genshijin (J)(1991)(Data East).sfc" size="1048576" crc="fb9f19ba"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="joemac2tp" cloneof="joemac2" romof="joemac2" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Joe &amp; Mac 2 - Lost in the Tropics (Hack, Portuguese)</description>
+		<year>2015</year>
+		<manufacturer>DarkLink, Denim</manufacturer>
+		<rom name="Joe &amp; Mac 2 - Lost in the Tropics PT-BR (2015)(DarkLink, Denim).sfc" size="1048576" crc="2831dd78"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -8708,11 +8835,11 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
-	<game name="shubibinman" cloneof="shockman0te" romof="shockman0te" sourcefile="snes/d_snes.cpp">
+	<game name="shubibinman" cloneof="shockman0" romof="shockman0" sourcefile="snes/d_snes.cpp">
 		<description>Kaizou Choujin Shubibinman Zero (Japan)</description>
 		<year>1997-2017</year>
 		<manufacturer>Masaya Games - Columbus Circle</manufacturer>
-		<rom name="Kaizou Choujin Shubibinman Zero (J)(1997-2017)(Masaya - Columbus Circle).sfc" size="1048576" crc="e59e1096"/>
+		<rom name="Kaizou Choujin Shubibinman Zero (J)(1997-2017)(Masaya - Columbus Circle).sfc" size="1048576" crc="26509904"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -8863,7 +8990,7 @@
 		<driver status="good"/>
 	</game>
 	<game name="gundamcd0079j" cloneof="gundamcd0079te" romof="gundamcd0079te" sourcefile="snes/d_snes.cpp">
-		<description>Kidou Senshi Gundam - Cross Dimension 0079 (Japan)</description>
+		<description>Kidou Senshi Gundam: Cross Dimension 0079 (Japan)</description>
 		<year>1995</year>
 		<manufacturer>Bandai</manufacturer>
 		<rom name="Kidou Senshi Gundam - Cross Dimension 0079 (J)(1995)(Bandai).sfc" size="1572864" crc="9ab3eb18"/>
@@ -9105,6 +9232,14 @@
 		<year>1994</year>
 		<manufacturer>Capcom</manufacturer>
 		<rom name="Knights of the Round (U)(1994)(Capcom).sfc" size="1572864" crc="aaa82126"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="knightsroundtp" cloneof="knightsround" romof="knightsround" sourcefile="snes/d_snes.cpp">
+		<description>Knights of the Round ~ Cavaleiros da Tavola Redonda (Hack, Portuguese v1.1)</description>
+		<year>2010</year>
+		<manufacturer>Denim</manufacturer>
+		<rom name="Cavaleiros da Tavola Redonda PT-BR v1.1 (2010)(Denim).sfc" size="2097151" crc="0ee54922"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -9681,7 +9816,7 @@
 		<year>2022</year>
 		<manufacturer>rainwarrior</manufacturer>
 		<rom name="Lizard NES2SNES (2022)(rainwarrior).sfc" size="557056" crc="34ee7436"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="lobo" sourcefile="snes/d_snes.cpp">
@@ -10010,6 +10145,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="magkraytp" cloneof="magkrayte" romof="magkrayte" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Magic Knight Rayearth (Hack, Portuguese)</description>
+		<year>1995</year>
+		<manufacturer>Monkey's Traducoes</manufacturer>
+		<rom name="Magic Knight Rayearth PT-BR (2013)(Monkey's Traducoes).sfc" size="1572864" crc="79767b74"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="magicsworde" cloneof="magicsword" romof="magicsword" sourcefile="snes/d_snes.cpp">
 		<description>Magic Sword (Euro)</description>
 		<year>1992</year>
@@ -10085,6 +10229,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="magicalquesttp" cloneof="magicalquest" romof="magicalquest" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Magical Quest Starring Mickey Mouse, The (Hack, Portuguese)</description>
+		<year>2004</year>
+		<manufacturer>Fox Roms</manufacturer>
+		<rom name="Magical Quest Starring Mickey Mouse, The T-Por (2004)(Fox Roms).sfc" size="1049088" crc="f666c92e"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="magicalquest" sourcefile="snes/d_snes.cpp">
 		<description>Magical Quest Starring Mickey Mouse, The (USA)</description>
 		<year>1992</year>
@@ -10103,7 +10256,7 @@
 		<driver status="good"/>
 	</game>
 	<game name="magicaltaruruutokun" sourcefile="snes/d_snes.cpp">
-		<description>Magical Taruruuto-kun - Magic Adventure (Japan)</description>
+		<description>Magical Taruruuto-kun: Magic Adventure (Japan)</description>
 		<year>1992</year>
 		<manufacturer>Bandai</manufacturer>
 		<rom name="Magical Taruruuto-kun - Magic Adventure (J)(1992)(Bandai).sfc" size="524288" crc="5f863463"/>
@@ -10613,6 +10766,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="megamanx3tp" cloneof="megamanx3" romof="megamanx3" sourcefile="snes/d_snes.cpp">
+		<comment>Hack, CX4 enhancement chip</comment>
+		<description>Mega Man X3 (Hack, Portuguese)</description>
+		<year>2019</year>
+		<manufacturer>Solid One</manufacturer>
+		<rom name="Mega Man X3 PT-BR (2019)(Solid One).sfc" size="4194304" crc="51c4afcf"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="megamanx3" sourcefile="snes/d_snes.cpp">
 		<comment>CX4 enhancement chip</comment>
 		<description>Mega Man X3 (USA)</description>
@@ -10671,7 +10833,7 @@
 		<year>1998</year>
 		<manufacturer>Twin Eagles Group</manufacturer>
 		<rom name="Men in Black (U)(Unl)(1998)(Twin Eagles Group).sfc" size="1048576" crc="cb5301b8"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="metalcombate" cloneof="metalcombat" romof="metalcombat" sourcefile="snes/d_snes.cpp">
@@ -10788,7 +10950,7 @@
 		<driver status="good"/>
 	</game>
 	<game name="mickeymania" sourcefile="snes/d_snes.cpp">
-		<description>Mickey Mania - The Timeless Adventures of Mickey Mouse (USA)</description>
+		<description>Mickey Mania: The Timeless Adventures of Mickey Mouse (USA)</description>
 		<year>1994</year>
 		<manufacturer>Sony Imagesoft</manufacturer>
 		<rom name="Mickey Mania - The Timeless Adventures of Mickey Mouse (U)(1994)(Sony Imagesoft).sfc" size="2097152" crc="08806b5b"/>
@@ -10812,7 +10974,7 @@
 		<driver status="good"/>
 	</game>
 	<game name="mickeymagicadv3" cloneof="magicquest3" romof="magicquest3" sourcefile="snes/d_snes.cpp">
-		<description>Mickey to Donald - Magical Adventure 3 (Japan)</description>
+		<description>Mickey to Donald: Magical Adventure 3 (Japan)</description>
 		<year>1995</year>
 		<manufacturer>Capcom</manufacturer>
 		<rom name="Mickey to Donald - Magical Adventure 3 (J)(1995)(Capcom).sfc" size="2097152" crc="32eea1e9"/>
@@ -10820,7 +10982,7 @@
 		<driver status="good"/>
 	</game>
 	<game name="mickeymagicadv2" cloneof="greatcircmyst" romof="greatcircmyst" sourcefile="snes/d_snes.cpp">
-		<description>Mickey to Minnie - Magical Adventure 2 (Japan)</description>
+		<description>Mickey to Minnie: Magical Adventure 2 (Japan)</description>
 		<year>1994</year>
 		<manufacturer>Capcom</manufacturer>
 		<rom name="Mickey to Minnie - Magical Adventure 2 (J)(1994)(Capcom).sfc" size="1572864" crc="8d258553"/>
@@ -10874,7 +11036,7 @@
 		<year>2019-24</year>
 		<manufacturer>Morphcat Games</manufacturer>
 		<rom name="Micro Mages NES2SNES (2019-24)(Morphcat Games).sfc" size="2097152" crc="711da3a0"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="micromages2" sourcefile="snes/d_snes.cpp">
@@ -10883,11 +11045,11 @@
 		<year>2022-24</year>
 		<manufacturer>Morphcat Games</manufacturer>
 		<rom name="Micro Mages - Second Quest NES2SNES (2022-24)(Morphcat Games).sfc" size="2097152" crc="da8a65e5"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="mightmagic2" sourcefile="snes/d_snes.cpp">
-		<description>Might and Magic II - Gates to Another World (Euro)</description>
+		<description>Might and Magic II: Gates to Another World (Euro)</description>
 		<year>1993</year>
 		<manufacturer>Elite</manufacturer>
 		<rom name="Might and Magic II - Gates to Another World (E)(1993)(Elite).sfc" size="1048576" crc="4062244b"/>
@@ -10896,7 +11058,7 @@
 	</game>
 	<game name="mightmagic3" sourcefile="snes/d_snes.cpp">
 		<comment>'SNES Mouse' compatible game (Set Dipswitches)</comment>
-		<description>Might and Magic III - Isles of Terra (USA)</description>
+		<description>Might and Magic III: Isles of Terra (USA)</description>
 		<year>1994</year>
 		<manufacturer>FCI Inc.</manufacturer>
 		<rom name="Might and Magic III - Isles of Terra (U)(1994)(FCI).sfc" size="1572864" crc="8af25e7e"/>
@@ -11012,21 +11174,21 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
-	<game name="gundamcd0079te" sourcefile="snes/d_snes.cpp">
-		<comment>Hack</comment>
-		<description>Mobile Suit Gundam - Cross Dimension 0079 (Hack, English)</description>
-		<year>2004</year>
-		<manufacturer>Aeon Genesis</manufacturer>
-		<rom name="Mobile Suit Gundam - Cross Dimension 0079 T-Eng (2004)(Aeon Genesis).sfc" size="1573376" crc="2116b6c5"/>
-		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
-		<driver status="good"/>
-	</game>
 	<game name="gundamwte" sourcefile="snes/d_snes.cpp">
 		<comment>Hack</comment>
-		<description>Mobile Suit Gundam Wing - Endless Duel (Hack, English)</description>
+		<description>Mobile Suit Gundam Wing: Endless Duel (Hack, English)</description>
 		<year>2002</year>
 		<manufacturer>Aeon Genesis</manufacturer>
 		<rom name="Mobile Suit Gundam Wing - Endless Duel T-Eng (2002)(Aeon Genesis).sfc" size="2097664" crc="8e2723ca"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="gundamcd0079te" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Mobile Suit Gundam: Cross Dimension 0079 (Hack, English)</description>
+		<year>2004</year>
+		<manufacturer>Aeon Genesis</manufacturer>
+		<rom name="Mobile Suit Gundam - Cross Dimension 0079 T-Eng (2004)(Aeon Genesis).sfc" size="1573376" crc="2116b6c5"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -11787,7 +11949,7 @@
 		<year>1993</year>
 		<manufacturer>GameTek - Gremlin Graphics</manufacturer>
 		<rom name="Nigel Mansell's World Championship Racing (U)(1993)(GameTek - Gremlin Graphics).sfc" size="1048576" crc="162252e2"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="nightbustbf" cloneof="nightbust" romof="nightbust" sourcefile="snes/d_snes.cpp">
@@ -11886,7 +12048,7 @@
 		<year>1994</year>
 		<manufacturer>Koei</manufacturer>
 		<rom name="Nobunaga's Ambition - Lord of Darkness (U)(1994)(Koei).sfc" size="1048576" crc="4d7b39cd"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="nolanryanbaseball" sourcefile="snes/d_snes.cpp">
@@ -12104,7 +12266,7 @@
 		<year>1994</year>
 		<manufacturer>Culture Brain</manufacturer>
 		<rom name="Ossu!! Karate-bu (J)(1994)(Culture Brain).sfc" size="2621440" crc="b4ecd206"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="othelloj" sourcefile="snes/d_snes.cpp">
@@ -12290,7 +12452,7 @@
 		<year>1994</year>
 		<manufacturer>Fox Interactive - Probe</manufacturer>
 		<rom name="Pagemaster, The (U)(1994)(Fox Interactive - Probe).sfc" size="2097152" crc="26c38eee"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="paladinsquest" sourcefile="snes/d_snes.cpp">
@@ -12451,7 +12613,7 @@
 		<year>1991</year>
 		<manufacturer>Electronic Arts</manufacturer>
 		<rom name="PGA Tour Golf (U)(1991)(Electronic Arts).sfc" size="524288" crc="b6566944"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="phalanxe" cloneof="phalanx" romof="phalanx" sourcefile="snes/d_snes.cpp">
@@ -12518,7 +12680,7 @@
 		<manufacturer>Nintendo</manufacturer>
 		<rom name="Pilotwings (E)(1992)(Nintendo).sfc" size="524288" crc="def45776"/>
 		<rom name="dsp1.bin" merge="dsp1.bin" size="10240" crc="2838f9f5"/>
-		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="pilotwingsj" cloneof="pilotwings" romof="pilotwings" sourcefile="snes/d_snes.cpp">
@@ -13459,7 +13621,7 @@
 		<year>1994</year>
 		<manufacturer>THQ Inc.</manufacturer>
 		<rom name="Ren &amp; Stimpy Show, The - Fire Dogs (U)(1994)(THQ).sfc" size="524288" crc="0b472197"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="rsstimewarp" sourcefile="snes/d_snes.cpp">
@@ -13595,6 +13757,16 @@
 		<year>1993</year>
 		<manufacturer>Extreme Entertainment</manufacturer>
 		<rom name="Riddick Bowe Boxing (U)(1993)(Extreme Entertainment).sfc" size="524288" crc="a967a041"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="riderspirits" romof="dsp1" sourcefile="snes/d_snes.cpp">
+		<comment>DSP-1 enhancement chip</comment>
+		<description>Rider's Spirits (World)</description>
+		<year>1994-2024</year>
+		<manufacturer>NCS - Masaya</manufacturer>
+		<rom name="Rider's Spirits (W)(1994-2024)(NCS - Masaya).sfc" size="1048576" crc="e5d5fa92"/>
+		<rom name="dsp1.bin" merge="dsp1.bin" size="10240" crc="2838f9f5"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -13934,6 +14106,24 @@
 		<year>1995</year>
 		<manufacturer>Squaresoft</manufacturer>
 		<rom name="Romancing Sa-Ga 3 (J, Rev 1)(1995)(Squaresoft).sfc" size="4194304" crc="6c50c2cf"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="rosalinaen" sourcefile="snes/d_snes.cpp">
+		<comment>Hack, Homebrew, GlobalHack of Super Mario World</comment>
+		<description>Rosalina's Gold Saga (GlobalHack, English)</description>
+		<year>2026</year>
+		<manufacturer>Tiozinho</manufacturer>
+		<rom name="Rosalina's Gold Saga EN (2026)(Tiozinho).sfc" size="4194304" crc="a206ec47"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="rosalinapt" cloneof="rosalinaen" romof="rosalinaen" sourcefile="snes/d_snes.cpp">
+		<comment>Hack, Homebrew, GlobalHack of Super Mario World</comment>
+		<description>Rosalina's Gold Saga (GlobalHack, Portuguese)</description>
+		<year>2026</year>
+		<manufacturer>Tiozinho</manufacturer>
+		<rom name="Rosalina's Gold Saga PT-BR (2026)(Tiozinho).sfc" size="4194304" crc="72668be1"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -14399,7 +14589,7 @@
 		<year>1994</year>
 		<manufacturer>Sony Imagesoft</manufacturer>
 		<rom name="Sensible Soccer - European Champions (E)(1994)(Sony Imagesoft).sfc" size="524288" crc="dcc702d4"/>
-		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="septentrion" cloneof="sos" romof="sos" sourcefile="snes/d_snes.cpp">
@@ -14485,7 +14675,7 @@
 		<driver status="good"/>
 	</game>
 	<game name="gundamwj" cloneof="gundamwte" romof="gundamwte" sourcefile="snes/d_snes.cpp">
-		<description>Shin Kidou Senki Gundam W - Endless Duel (Japan)</description>
+		<description>Shin Kidou Senki Gundam W: Endless Duel (Japan)</description>
 		<year>1996</year>
 		<manufacturer>Bandai</manufacturer>
 		<rom name="Shin Kidou Senki Gundam W - Endless Duel (J)(1996)(Bandai).sfc" size="2097152" crc="c0aecdca"/>
@@ -14594,12 +14784,21 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
-	<game name="shockman0te" sourcefile="snes/d_snes.cpp">
+	<game name="shockman0te" cloneof="shockman0" romof="shockman0" sourcefile="snes/d_snes.cpp">
 		<comment>Hack</comment>
 		<description>Shockman Zero (Hack, English)</description>
 		<year>2023</year>
 		<manufacturer>Svambo</manufacturer>
 		<rom name="Shockman Zero T-Eng (2023)(Svambo).sfc" size="1572864" crc="75d84c0f"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="shockman0" sourcefile="snes/d_snes.cpp">
+		<comment>Official English Translation</comment>
+		<description>Shockman Zero (World)</description>
+		<year>1997-2024</year>
+		<manufacturer>Extreme - Retro-bit</manufacturer>
+		<rom name="Shockman Zero (W) (1997-2024)(Extreme - Retro-bit).sfc" size="2097152" crc="fcb661e6"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -14621,7 +14820,7 @@
 	</game>
 	<game name="sicari2" sourcefile="snes/d_snes.cpp">
 		<comment>Hack, Homebrew, GlobalHack of Super Mario World</comment>
-		<description>Sicari 2 - The Brink of Time (GlobalHack, v1.061)</description>
+		<description>Sicari 2: The Brink of Time (GlobalHack, v1.061)</description>
 		<year>2022</year>
 		<manufacturer>Yukivee</manufacturer>
 		<rom name="Sicari 2 - The Brink of Time v1.061 (2022)(Yukivee).sfc" size="4194304" crc="93ae800f"/>
@@ -15932,7 +16131,7 @@
 		<year>1991</year>
 		<manufacturer>Jaleco</manufacturer>
 		<rom name="Super Bases Loaded (U)(1991)(Jaleco).sfc" size="1048576" crc="6b971f1e"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="sbloaded3lts" sourcefile="snes/d_snes.cpp">
@@ -16302,7 +16501,7 @@
 		<year>2022</year>
 		<manufacturer>Translated.Games</manufacturer>
 		<rom name="Super Chinese World T-Eng (2022)(Translated.Games).sfc" size="1572864" crc="f38fc8a5"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="supchiworldj" cloneof="supninjaboy" romof="supninjaboy" sourcefile="snes/d_snes.cpp">
@@ -16310,7 +16509,7 @@
 		<year>1991</year>
 		<manufacturer>Culture Brain</manufacturer>
 		<rom name="Super Chinese World (J)(1991)(Culture Brain).sfc" size="1048576" crc="52fff0bf"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="supchiworld2te" sourcefile="snes/d_snes.cpp">
@@ -16319,7 +16518,7 @@
 		<year>2022</year>
 		<manufacturer>Translated.Games</manufacturer>
 		<rom name="Super Chinese World 2 - The Interstellar Battle Arena - T-Eng v2 (2022)(Translated.Games).sfc" size="3145728" crc="200d64f6"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="supchiworld2j" cloneof="supchiworld2te" romof="supchiworld2te" sourcefile="snes/d_snes.cpp">
@@ -16327,7 +16526,7 @@
 		<year>1993</year>
 		<manufacturer>Culture Brain</manufacturer>
 		<rom name="Super Chinese World 2 - Uchuu Ichibu Toudaikai (J)(1993)(Culture Brain).sfc" size="2097152" crc="77dafbb6"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="supchiworld3te" sourcefile="snes/d_snes.cpp">
@@ -16336,7 +16535,7 @@
 		<year>2022</year>
 		<manufacturer>Translated.Games</manufacturer>
 		<rom name="Super Chinese World 3 T-Eng v2 (2022)(Translated.Games).sfc" size="2097152" crc="ad3fc93b"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="supchiworld3j" cloneof="supchiworld3te" romof="supchiworld3te" sourcefile="snes/d_snes.cpp">
@@ -16344,7 +16543,7 @@
 		<year>1995</year>
 		<manufacturer>Culture Brain</manufacturer>
 		<rom name="Super Chinese World 3 (J)(1995)(Culture Brain).sfc" size="1572864" crc="758a0322"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="sconflict" sourcefile="snes/d_snes.cpp">
@@ -16368,7 +16567,7 @@
 		<year>1992</year>
 		<manufacturer>Jaleco</manufacturer>
 		<rom name="Super Cup Soccer (J)(1992)(Jaleco).sfc" size="1048576" crc="14a03974"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="daikojidai" cloneof="unchwaters" romof="unchwaters" sourcefile="snes/d_snes.cpp">
@@ -16376,7 +16575,7 @@
 		<year>1991</year>
 		<manufacturer>Koei</manufacturer>
 		<rom name="Super Daikoukai Jidai (J, Rev 1)(1991)(Koei).sfc" size="1048576" crc="3a78fcd2"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="superdanyf" sourcefile="snes/d_snes.cpp">
@@ -16497,7 +16696,7 @@
 		<year>1992</year>
 		<manufacturer>Nichibutsu</manufacturer>
 		<rom name="Super F1 Circus (J)(1992)(Nichibutsu).sfc" size="1048576" crc="7c94c86c"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="sf1circus2j" sourcefile="snes/d_snes.cpp">
@@ -16505,7 +16704,7 @@
 		<year>1993</year>
 		<manufacturer>Nichibutsu</manufacturer>
 		<rom name="Super F1 Circus 2  (J)(1993)(Nichibutsu).sfc" size="1572864" crc="0ab53000"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="sf1circus3j" sourcefile="snes/d_snes.cpp">
@@ -16531,7 +16730,7 @@
 		<year>1992</year>
 		<manufacturer>Nichibutsu</manufacturer>
 		<rom name="Super F1 Circus Limited (J)(1992)(Nichibutsu).sfc" size="1048576" crc="047270f1"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="sfwarste" sourcefile="snes/d_snes.cpp">
@@ -16689,7 +16888,7 @@
 		<year>1993</year>
 		<manufacturer>Toho Co.</manufacturer>
 		<rom name="Super Godzilla (J)(1993)(Toho Co.).sfc" size="1572864" crc="56d63328"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="sgodzilla" sourcefile="snes/d_snes.cpp">
@@ -16697,7 +16896,7 @@
 		<year>1993</year>
 		<manufacturer>Toho Co.</manufacturer>
 		<rom name="Super Godzilla (U)(1993)(Toho Co.).sfc" size="1572864" crc="6a187c70"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="supgusoyoj" sourcefile="snes/d_snes.cpp">
@@ -16753,7 +16952,7 @@
 		<year>1992</year>
 		<manufacturer>Koei</manufacturer>
 		<rom name="Super Inindou - Datou Nobunaga (J)(1992)(Koei).sfc" size="1310720" crc="7bc8cd39"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="supintcricket" sourcefile="snes/d_snes.cpp">
@@ -16842,7 +17041,7 @@
 		<year>1993</year>
 		<manufacturer>Nintendo</manufacturer>
 		<rom name="Super Mario All-Stars + Super Mario World (E)(1993)(Nintendo).sfc" size="2621440" crc="303205d8"/>
-		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="smallstarswldttc" cloneof="smallstarsworld" romof="smallstarsworld" sourcefile="snes/d_snes.cpp">
@@ -17076,6 +17275,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="supermetroidtp" cloneof="supermetroid" romof="supermetroid" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Super Metroide (Hack, Portuguese)</description>
+		<year>2013</year>
+		<manufacturer>Denim, Spyblack</manufacturer>
+		<rom name="Super Metroide PT-BR (2013)(Denim, Spyblack).sfc" size="3145728" crc="f064cc3d"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="supermorph" sourcefile="snes/d_snes.cpp">
 		<description>Super Morph (Euro)</description>
 		<year>1993</year>
@@ -17165,7 +17373,7 @@
 		<year>1991</year>
 		<manufacturer>Koei</manufacturer>
 		<rom name="Super Nobunaga no Yabou - Bushou Fuuunroku (J, Rev 1)(1991)(Koei).sfc" size="1048576" crc="e42ca25a"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="nobunagaj" cloneof="nobunagas" romof="nobunagas" sourcefile="snes/d_snes.cpp">
@@ -17277,7 +17485,7 @@
 		<year>1991</year>
 		<manufacturer>Jaleco</manufacturer>
 		<rom name="Super Professional Baseball (J)(1991)(Jaleco).sfc" size="1048576" crc="ea0bfa66"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="superpunchoute" cloneof="superpunchout" romof="superpunchout" sourcefile="snes/d_snes.cpp">
@@ -18298,7 +18506,7 @@
 		<year>1993</year>
 		<manufacturer>Tecmo</manufacturer>
 		<rom name="Tecmo Super NBA Basketball (U, SNS-NA)(1993)(Tecmo).sfc" size="1048576" crc="a002eda1"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="tecmosnbaxm" sourcefile="snes/d_snes.cpp">
@@ -18307,7 +18515,7 @@
 		<year>1993</year>
 		<manufacturer>Tecmo</manufacturer>
 		<rom name="Tecmo Super NBA Basketball (U, SNS-XM)(1993)(Tecmo).sfc" size="1048576" crc="1b6f0b43"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="tmntive" cloneof="tmntiv" romof="tmntiv" sourcefile="snes/d_snes.cpp">
@@ -18521,7 +18729,7 @@
 		<year>1994</year>
 		<manufacturer>Nintendo</manufacturer>
 		<rom name="Tetris &amp; Dr. Mario (U)(1994)(Nintendo).sfc" size="1048576" crc="6c852ef3"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="tetris2e" cloneof="tetris2" romof="tetris2" sourcefile="snes/d_snes.cpp">
@@ -18850,7 +19058,7 @@
 		<year>1992</year>
 		<manufacturer>Hi Tech Expressions</manufacturer>
 		<rom name="Tom and Jerry (U)(1992)(Hi Tech Expressions).sfc" size="524288" crc="8b1dafbb"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="wintextreme" sourcefile="snes/d_snes.cpp">
@@ -19121,6 +19329,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="turrican15" sourcefile="snes/d_snes.cpp">
+		<comment>Homebrew</comment>
+		<description>Turrican 1.5 (HB)</description>
+		<year>2026</year>
+		<manufacturer>Super J11bit</manufacturer>
+		<rom name="Turrican 1.5 (2026)(Super J11bit).sfc" size="2097152" crc="a25868ac"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="twinbeerbj" cloneof="popntwinbeerbe" romof="popntwinbeerbe" sourcefile="snes/d_snes.cpp">
 		<description>TwinBee - Rainbow Bell Adventure (Japan)</description>
 		<year>1993</year>
@@ -19313,7 +19530,7 @@
 		<year>1991</year>
 		<manufacturer>Koei</manufacturer>
 		<rom name="Uncharted Waters (U)(1991)(Koei).sfc" size="1048576" crc="95724a2f"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="unchartedworld" sourcefile="snes/d_snes.cpp">
@@ -19843,7 +20060,7 @@
 		<year>2022</year>
 		<manufacturer>Matt Hughson</manufacturer>
 		<rom name="Witch n' Wiz NES2SNES (2022)(Matt Hughson).sfc" size="1048576" crc="7fec473b"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="wizardofoz" sourcefile="snes/d_snes.cpp">
@@ -20287,7 +20504,7 @@
 		<year>1993</year>
 		<manufacturer>Bullet Proof Software</manufacturer>
 		<rom name="Yoshi no Cookie (J)(1993)(Bullet Proof Software).sfc" size="524288" crc="1e1aa75f"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="yoshiroadhunt" cloneof="yoshisafari" romof="yoshisafari" sourcefile="snes/d_snes.cpp">
@@ -20312,7 +20529,7 @@
 		<year>1993</year>
 		<manufacturer>Bullet Proof Software</manufacturer>
 		<rom name="Yoshi's Cookie (U)(1993)(Bullet Proof Software).sfc" size="524288" crc="ef15f4c3"/>
-		<video type="raster" orientation="horizontal" width="512" height="478" aspectx="4" aspecty="3"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="yoshisafarie" cloneof="yoshisafari" romof="yoshisafari" sourcefile="snes/d_snes.cpp">

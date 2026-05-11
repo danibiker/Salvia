@@ -601,6 +601,18 @@
     <ClCompile Include="..\..\src\burn\drv\pgm\pgm_run.cpp">
       <Filter>burn\drv\pgm</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pgm2\d_pgm2.cpp">
+      <Filter>burn\drv\pgm2</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pgm2\pgm2_crypt.cpp">
+      <Filter>burn\drv\pgm2</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pgm2\pgm2_draw.cpp">
+      <Filter>burn\drv\pgm2</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pgm2\pgm2_run.cpp">
+      <Filter>burn\drv\pgm2</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_1942.cpp">
       <Filter>burn\drv\pre90s</Filter>
     </ClCompile>
@@ -3664,6 +3676,66 @@
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_circus.cpp">
       <Filter>burn\drv\pre90s</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_exidy.cpp">
+      <Filter>burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_musclem.cpp">
+      <Filter>burn\drv\pst90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_r2dtank.cpp">
+      <Filter>burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_champbas.cpp">
+      <Filter>burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_equites.cpp">
+      <Filter>burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_splndrbt.cpp">
+      <Filter>burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\ad59mc07.cpp">
+      <Filter>burn\devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\alpha8201.cpp">
+      <Filter>burn\devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\hmcs40\hmcs40.cpp">
+      <Filter>cpus\hmcs40</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\74259.cpp">
+      <Filter>burn\devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\i8155.cpp">
+      <Filter>burn\devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\i8085\i8085.cpp">
+      <Filter>cpus\i8085</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_miconkit.cpp">
+      <Filter>burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\beep.cpp">
+      <Filter>burn\snd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pre90s\d_wink.cpp">
+      <Filter>burn\drv\pre90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_xorworld_ms.cpp">
+      <Filter>burn\drv\pst90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\atari\d_atarisy1.cpp">
+      <Filter>burn\drv\atari</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\arm9\arm9.cpp">
+      <Filter>cpus\arm9</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\arm9_intf.cpp">
+      <Filter>cpus</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\zip\zip.c">
+      <Filter>libs\zip</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="burn">
@@ -3710,6 +3782,9 @@
     </Filter>
     <Filter Include="burn\drv\pgm">
       <UniqueIdentifier>{14559fe7-78ad-4e5d-9fde-0a27cfebe3f2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="burn\drv\pgm2">
+      <UniqueIdentifier>{36f1cf44-cad2-4b2b-844a-6e8cafb6f8f1}</UniqueIdentifier>
     </Filter>
     <Filter Include="burn\drv\pre90s">
       <UniqueIdentifier>{1ee2e0f5-6bec-41dd-8b09-f110a36e0fbd}</UniqueIdentifier>
@@ -3929,6 +4004,18 @@
     </Filter>
     <Filter Include="burn\drv\snes">
       <UniqueIdentifier>{de563016-fc13-46ea-8db4-9281899087b1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="cpus\hmcs40">
+      <UniqueIdentifier>{65a8b668-d26a-49cf-9326-8cf520b8ff07}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="cpus\i8085">
+      <UniqueIdentifier>{e0ac366b-11fb-4430-938e-4f632743540c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="cpus\arm9">
+      <UniqueIdentifier>{49209c37-c5b6-44a8-9441-0e9e5fad12ae}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libs\zip">
+      <UniqueIdentifier>{f2b6c5f4-1682-4590-965b-cbc71fb3d78f}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

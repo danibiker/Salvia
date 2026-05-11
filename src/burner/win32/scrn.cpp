@@ -838,6 +838,7 @@ static t_hw_Struct scrn_gamehw_cfg[] = {
 	{ "cps2",		{ HARDWARE_CAPCOM_CPS2, 0 } },
 	{ "cps3",		{ HARDWARE_CAPCOM_CPS3, 0 } },
 	{ "pgm",		{ HARDWARE_IGS_PGM, 0 } },
+	{ "pgm2",		{ HARDWARE_IGS_PGM2, 0 } },
 	{ "neogeo",		{ HARDWARE_SNK_NEOGEO, HARDWARE_SNK_MVS, HARDWARE_SNK_DEDICATED_PCB, 0 } },
 	{ "neogeocd",	{ HARDWARE_SNK_NEOCD, 0 } },
 	{ "arcade",		{ ~0, 0 } }, // default, if not found above
@@ -916,12 +917,57 @@ static void HandleBezelLoading(HWND hWnd, int cx, int cy)
 			}
 		}
 
-		if (fp) {
+		bool bFromZip = false;
+		size_t pngbufsize = 0;
+		void *pngbuf = NULL;
+
+		if (!fp) {
+			char szImageName[MAX_PATH];
+			char szZipName[MAX_PATH];
+			//char *szAnsiPath = TCHARToANSI(szPath, NULL, 0);
+
+			snprintf(szZipName, sizeof(szZipName), "support/bezel/bezel.zip");
+			snprintf(szImageName, sizeof(szImageName), "bezel/%s.png", BurnDrvGetTextA(DRV_NAME));
+			strcpy(szName, szImageName);
+
+			bool bExists = unzip_file_exists(szZipName, szImageName);
+
+			if (bExists == false && BurnDrvGetText(DRV_PARENT)) {
+				// try parent
+				snprintf(szImageName, sizeof(szImageName), "bezel/%s.png", BurnDrvGetTextA(DRV_PARENT));
+				strcpy(szName, szImageName);
+				bExists = unzip_file_exists(szZipName, szImageName);
+			}
+			if (bExists == false) {
+				// File doesn't exist, try to use system bezel
+				pszName = ScrnGetHWString(BurnDrvGetHardwareCode());
+
+				if (pszName != NULL) {
+					if (BurnDrvGetFlags() & BDF_ORIENTATION_VERTICAL) {
+						snprintf(szImageName, sizeof(szImageName), "bezel/%s_v.png", pszName);
+					} else {
+						snprintf(szImageName, sizeof(szImageName), "bezel/%s.png", pszName);
+					}
+					strcpy(szName, szImageName);
+				}
+			}
+
+			bFromZip = unzip(szZipName, szImageName, &pngbuf, &pngbufsize);
+		}
+
+		if (fp || bFromZip) {
 			bprintf(0, _T("Loading bezel \"%S\"\n"), szName);
-			hBezelBitmap = PNGLoadBitmap(hWnd, fp, cx, cy - nMenuHeight, 0);
+			if (fp) {
+				hBezelBitmap = PNGLoadBitmap(hWnd, fp, cx, cy - nMenuHeight, 0);
+			} else {
+				hBezelBitmap = PNGLoadBitmapBuffer(hWnd, pngbuf, pngbufsize, cx, cy - nMenuHeight, 0);
+				free(pngbuf);
+				pngbuf = NULL;
+				pngbufsize = 0;
+			}
 			nBezelCacheX = cx;
 			nBezelCacheY = cy - nMenuHeight;
-			fclose(fp);
+			if (fp) fclose(fp);
 		}
 	}
 }
@@ -1761,7 +1807,7 @@ static void OnCommand(HWND /*hDlg*/, int id, HWND /*hwndCtl*/, UINT codeNotify)
 			break;
 
 		case MENU_MEMCARD_CREATE:
-			if (bDrvOkay && UseDialogs() && !kNetGame && (BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_SNK_NEOGEO) {
+			if (bDrvOkay && UseDialogs() && !kNetGame && HasMemCard()) {
 				InputSetCooperativeLevel(false, bAlwaysProcessKeyboardInput);
 				AudBlankSound();
 				MemCardEject();
@@ -1771,7 +1817,7 @@ static void OnCommand(HWND /*hDlg*/, int id, HWND /*hwndCtl*/, UINT codeNotify)
 			}
 			break;
 		case MENU_MEMCARD_SELECT:
-			if (bDrvOkay && UseDialogs() && !kNetGame && (BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_SNK_NEOGEO) {
+			if (bDrvOkay && UseDialogs() && !kNetGame && HasMemCard()) {
 				InputSetCooperativeLevel(false, bAlwaysProcessKeyboardInput);
 				AudBlankSound();
 				MemCardEject();
@@ -1781,19 +1827,53 @@ static void OnCommand(HWND /*hDlg*/, int id, HWND /*hwndCtl*/, UINT codeNotify)
 			}
 			break;
 		case MENU_MEMCARD_INSERT:
-			if (!kNetGame && (BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_SNK_NEOGEO) {
+			if (!kNetGame && HasMemCard()) {
 				MemCardInsert();
 			}
 			break;
 		case MENU_MEMCARD_EJECT:
-			if (!kNetGame && (BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_SNK_NEOGEO) {
+			if (!kNetGame && HasMemCard()) {
 				MemCardEject();
 			}
 			break;
 
 		case MENU_MEMCARD_TOGGLE:
-			if (bDrvOkay && !kNetGame && (BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_SNK_NEOGEO) {
+			if (bDrvOkay && !kNetGame && HasMemCard()) {
 				MemCardToggle();
+			}
+			break;
+
+		// PGM2 per-slot card operations (IDs 10040..10055)
+		default:
+			if (id >= MENU_MEMCARD_PGM2_BASE && id < MENU_MEMCARD_PGM2_BASE + 16) {
+				int slot = (id - MENU_MEMCARD_PGM2_BASE) / 4;
+				int action = (id - MENU_MEMCARD_PGM2_BASE) % 4;
+				if (bDrvOkay && !kNetGame && IsPGM2WithCards() && slot < Pgm2MaxCardSlots) {
+					switch (action) {
+					case 0: // Create
+						InputSetCooperativeLevel(false, bAlwaysProcessKeyboardInput);
+						AudBlankSound();
+						MemCardEjectPGM2Slot(slot);
+						MemCardCreatePGM2Slot(slot);
+						MemCardInsertPGM2Slot(slot);
+						GameInpCheckMouse();
+						break;
+					case 1: // Select
+						InputSetCooperativeLevel(false, bAlwaysProcessKeyboardInput);
+						AudBlankSound();
+						MemCardEjectPGM2Slot(slot);
+						MemCardSelectPGM2Slot(slot);
+						MemCardInsertPGM2Slot(slot);
+						GameInpCheckMouse();
+						break;
+					case 2: // Insert
+						MemCardInsertPGM2Slot(slot);
+						break;
+					case 3: // Eject
+						MemCardEjectPGM2Slot(slot);
+						break;
+					}
+				}
 			}
 			break;
 

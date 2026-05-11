@@ -39,7 +39,7 @@ static HICON hDrvIconMiss;
 static char TreeBuilding		= 0;										// if 1, ignore TVN_SELCHANGED messages
 
 static int bImageOrientation;
-static int UpdatePreview(bool bReset, TCHAR *szPath, int HorCtrl, int VerCrtl);
+static int UpdatePreview(bool bReset, bool isPreview, TCHAR *szPath, int HorCtrl, int VerCrtl);
 
 int	nIconsSize					= ICON_16x16;
 int	nIconsSizeXY				= 16;
@@ -120,6 +120,7 @@ HTREEITEM hFilterKonami				= NULL;
 HTREEITEM hFilterNeogeo				= NULL;
 HTREEITEM hFilterPacman				= NULL;
 HTREEITEM hFilterPgm				= NULL;
+HTREEITEM hFilterPgm2				= NULL;
 HTREEITEM hFilterPsikyo				= NULL;
 HTREEITEM hFilterSega				= NULL;
 HTREEITEM hFilterSeta				= NULL;
@@ -244,6 +245,8 @@ static UINT64 PacmanValue			= HARDWARE_PREFIX_PACMAN >> 24;
 static UINT64 MASKPACMAN			= 1 << PacmanValue;
 static UINT64 PgmValue				= HARDWARE_PREFIX_IGS_PGM >> 24;
 static UINT64 MASKPGM				= 1 << PgmValue;
+static UINT64 Pgm2Value			= HARDWARE_PREFIX_IGS_PGM2 >> 24;
+static UINT64 MASKPGM2				= (UINT64)1 << Pgm2Value;
 static UINT64 PsikyoValue			= HARDWARE_PREFIX_PSIKYO >> 24;
 static UINT64 MASKPSIKYO			= 1 << PsikyoValue;
 static UINT64 SegaValue				= HARDWARE_PREFIX_SEGA >> 24;
@@ -291,7 +294,7 @@ static UINT64 MASKNGP				= (UINT64)1 << NgpValue;
 static UINT64 ChannelFValue			= (UINT64)HARDWARE_PREFIX_CHANNELF >> 24;
 static UINT64 MASKCHANNELF			= (UINT64)1 << ChannelFValue;
 
-static UINT64 MASKALL				= ((UINT64)MASKCAPMISC | MASKCAVE | MASKCPS | MASKCPS2 | MASKCPS3 | MASKDATAEAST | MASKGALAXIAN | MASKIREM | MASKKANEKO | MASKKONAMI | MASKNEOGEO | MASKPACMAN | MASKPGM | MASKPSIKYO | MASKSEGA | MASKSETA | MASKTAITO | MASKTECHNOS | MASKTOAPLAN | MASKMISCPRE90S | MASKMISCPOST90S | MASKMEGADRIVE | MASKPCENGINE | MASKSMS | MASKGG | MASKSG1000 | MASKCOLECO | MASKMSX | MASKSPECTRUM | MASKMIDWAY | MASKNES | MASKFDS | MASKSNES | MASKNGP | MASKCHANNELF );
+static UINT64 MASKALL				= ((UINT64)MASKCAPMISC | MASKCAVE | MASKCPS | MASKCPS2 | MASKCPS3 | MASKDATAEAST | MASKGALAXIAN | MASKIREM | MASKKANEKO | MASKKONAMI | MASKNEOGEO | MASKPACMAN | MASKPGM | MASKPGM2 | MASKPSIKYO | MASKSEGA | MASKSETA | MASKTAITO | MASKTECHNOS | MASKTOAPLAN | MASKMISCPRE90S | MASKMISCPOST90S | MASKMEGADRIVE | MASKPCENGINE | MASKSMS | MASKGG | MASKSG1000 | MASKCOLECO | MASKMSX | MASKSPECTRUM | MASKMIDWAY | MASKNES | MASKFDS | MASKSNES | MASKNGP | MASKCHANNELF );
 
 #define SEARCHSUBDIRS			(1 << 26)
 #define UNAVAILABLE				(1 << 27)
@@ -933,7 +936,7 @@ static void MyEndDialog()
 		DestroyIcon(hNotFoundNonEss);
 		hNotFoundNonEss = NULL;
 	}
-	if(hDrvIconMiss) {
+	if (hDrvIconMiss) {
 		DestroyIcon(hDrvIconMiss);
 		hDrvIconMiss = NULL;
 	}
@@ -1076,12 +1079,12 @@ FILE* OpenPreview(int nIndex, TCHAR *szPath)
 
 static VOID CALLBACK PreviewTimerProc(HWND, UINT, UINT_PTR, DWORD)
 {
-	UpdatePreview(false, szAppPreviewsPath, IDC_SCREENSHOT_H, IDC_SCREENSHOT_V);
+	UpdatePreview(false, true, szAppPreviewsPath, IDC_SCREENSHOT_H, IDC_SCREENSHOT_V);
 }
 
 static VOID CALLBACK InitPreviewTimerProc(HWND, UINT, UINT_PTR, DWORD)
 {
-	UpdatePreview(true, szAppPreviewsPath, IDC_SCREENSHOT_H, IDC_SCREENSHOT_V);
+	UpdatePreview(true, true, szAppPreviewsPath, IDC_SCREENSHOT_H, IDC_SCREENSHOT_V);
 
 	if (GetIpsNumPatches()) {
 		if (!nShowMVSCartsOnly) {
@@ -1102,7 +1105,93 @@ static VOID CALLBACK InitPreviewTimerProc(HWND, UINT, UINT_PTR, DWORD)
 	nInitPreviewTimer = 0;
 }
 
-static int UpdatePreview(bool bReset, TCHAR *szPath, int HorCtrl, int VerCtrl)
+// NOTE: unzip()'s buf must be free()'d after use.
+
+// context-based version, keeps .zip open the entire time until closed.
+bool unzip_open_context(zip_t **zip_context, char *szZipFn)
+{
+	*zip_context = zip_open(szZipFn, 0, 'r');
+
+	return (*zip_context != NULL);
+}
+
+void unzip_close_context(zip_t **zip_context)
+{
+	zip_close(*zip_context);
+	*zip_context = NULL;
+}
+
+bool unzip_unzip_context(zip_t **zip_context, char *szFn, void **buf, size_t *bufsize)
+{
+	bool retval = false;
+
+	if (*zip_context != NULL) {
+		if (!zip_entry_open(*zip_context, szFn)) {
+			retval = zip_entry_read(*zip_context, buf, bufsize) >= 0;
+		} else {
+			//bprintf(0, _T("unzip: not found [%S][%S]\n"), szZipFn, szFn);
+		}
+		zip_entry_close(*zip_context);
+	} else {
+		//bprintf(0, _T("unzip: .zip not found [%S][%S]\n"), szZipFn, szFn);
+	}
+
+	return retval;
+}
+
+bool unzip_exists_context(zip_t **zip_context, char *szFn)
+{
+	bool retval = false;
+
+	if (*zip_context != NULL) {
+		retval = !zip_entry_open(*zip_context, szFn);
+		zip_entry_close(*zip_context);
+	}
+
+	return retval;
+}
+
+// unzip a single file from a zip
+bool unzip(char *szZipFn, char *szFn, void **buf, size_t *bufsize)
+{
+	bool retval = false;
+
+	// read ZIP
+	zip_t *zip = zip_open(szZipFn, 0, 'r');
+	if (zip != NULL) {
+		if (!zip_entry_open(zip, szFn)) {
+			retval = zip_entry_read(zip, buf, bufsize) >= 0;
+		} else {
+			//bprintf(0, _T("unzip: not found [%S][%S]\n"), szZipFn, szFn);
+		}
+		zip_entry_close(zip);
+	} else {
+		//bprintf(0, _T("unzip: .zip not found [%S][%S]\n"), szZipFn, szFn);
+	}
+	zip_close(zip);
+
+	return retval;
+}
+
+// check if a file exists in the zip
+bool unzip_file_exists(char *szZipFn, char *szFn)
+{
+	bool retval = false;
+
+	// read ZIP
+	zip_t *zip = zip_open(szZipFn, 0, 'r');
+	if (zip != NULL) {
+		if (!zip_entry_open(zip, szFn)) {
+			retval = true;
+		}
+		zip_entry_close(zip);
+	}
+	zip_close(zip);
+
+	return retval;
+}
+
+static int UpdatePreview(bool bReset, bool isPreview, TCHAR *szPath, int HorCtrl, int VerCtrl)
 {
 	static int nIndex;
 	int nOldIndex = 0;
@@ -1124,6 +1213,10 @@ static int UpdatePreview(bool bReset, TCHAR *szPath, int HorCtrl, int VerCtrl)
 	}
 
 	nBurnDrvActive = nDialogSelect;
+
+	bool bFromZip = false;
+	size_t pngbufsize = 0;
+	void *pngbuf = NULL;
 
 	if ((nIndex != nOldIndex) || (HorCtrl == IDC_SCREENSHOT2_H)) {
 		int x, y, ax, ay;
@@ -1171,7 +1264,21 @@ static int UpdatePreview(bool bReset, TCHAR *szPath, int HorCtrl, int VerCtrl)
 			nIndex = 1;
 			fp = OpenPreview(nIndex, szPath);
 		}
-		if (fp) {
+
+		if (!fp) { // no file?  dink says: get from zip!
+
+			char szImageName[MAX_PATH];
+			char szZipName[MAX_PATH];
+			char *szAnsiPath = TCHARToANSI(szPath, NULL, 0);
+
+			snprintf(szImageName, sizeof(szImageName), isPreview ? "previews/%s.png" : "titles/%s.png", BurnDrvGetTextA(DRV_NAME));
+			snprintf(szZipName, sizeof(szZipName), "%s%s", szAnsiPath, isPreview ? "previews.zip" : "titles.zip");
+			//bprintf(0, _T("szImageName [%S]  szZipName [%S]\n"), szImageName, szZipName);
+
+			bFromZip = unzip(szZipName, szImageName, &pngbuf, &pngbufsize);
+
+		}
+		if (fp || bFromZip) {
 			if (ax > 4) {
 				// Check if title/preview image is captured from 1 monitor on a
 				// multi-monitor game, then make the proper adjustments so it
@@ -1179,8 +1286,12 @@ static int UpdatePreview(bool bReset, TCHAR *szPath, int HorCtrl, int VerCtrl)
 				IMAGE img;
 				INT32 game_x, game_y;
 
-				PNGGetInfo(&img, fp);
-				rewind(fp);
+				if (fp) {
+					PNGGetInfo(&img, fp);
+					rewind(fp);
+				} else {
+					PNGGetInfoBuffer(&img, pngbuf, pngbufsize);
+				}
 
 				BurnDrvGetFullSize(&game_x, &game_y);
 
@@ -1191,12 +1302,17 @@ static int UpdatePreview(bool bReset, TCHAR *szPath, int HorCtrl, int VerCtrl)
 					y = x * ay / ax;
 				}
 			}
-			hNewImage = PNGLoadBitmap(hSelDlg, fp, x, y, 3);
+			if (fp) {
+				hNewImage = PNGLoadBitmap(hSelDlg, fp, x, y, 3);
+			} else {
+				hNewImage = PNGLoadBitmapBuffer(hSelDlg, pngbuf, pngbufsize, x, y, 3);
+				free(pngbuf);
+			}
 		}
 	}
 
-	if (fp) {
-		fclose(fp);
+	if (fp || bFromZip) {
+		if (fp) fclose(fp);
 
 		if (HorCtrl == IDC_SCREENSHOT_H) nTimer = SetTimer(hSelDlg, 1, 2500, PreviewTimerProc);
 	} else {
@@ -1489,6 +1605,7 @@ static void CreateFilters()
 	_TVCreateFiltersA(hHardware		, IDS_SEL_NEOGEO		, hFilterNeogeo			, nLoadMenuShowX & MASKNEOGEO						);
 	_TVCreateFiltersA(hHardware		, IDS_SEL_PACMAN		, hFilterPacman			, nLoadMenuShowX & MASKPACMAN						);
 	_TVCreateFiltersA(hHardware		, IDS_SEL_PGM			, hFilterPgm			, nLoadMenuShowX & MASKPGM							);
+	_TVCreateFiltersA(hHardware		, IDS_SEL_PGM2			, hFilterPgm2			, nLoadMenuShowX & MASKPGM2							);
 	_TVCreateFiltersA(hHardware		, IDS_SEL_PSIKYO		, hFilterPsikyo			, nLoadMenuShowX & MASKPSIKYO						);
 
 	_TVCreateFiltersD(hHardware		, IDS_SEL_SEGA_GRP		, hFilterSegaGrp				, nLoadMenuShowX & MASKSEGAGRP				);
@@ -1555,6 +1672,97 @@ static CRITICAL_SECTION cs;
 
 static INT32 xClick, yClick;
 
+// LoadIconFromMemory(), returns HICON.
+// Very fast!, 4-6x faster than LoadImage() winapi,
+// even you factor in the fopen/fread stuff. (or unzip)
+
+#pragma pack(push, 1)
+typedef struct {
+    WORD idReserved;   // must be 0
+    WORD idType;       // 1 for icons
+    WORD idCount;      // number of images in .ico
+} ICONDIR;
+
+typedef struct {
+    BYTE  bWidth;
+    BYTE  bHeight;
+    BYTE  bColorCount;
+    BYTE  bReserved;
+    WORD  wPlanes;
+    WORD  wBitCount;
+    DWORD dwBytesInRes;
+    DWORD dwImageOffset;
+} ICONDIRENTRY;
+#pragma pack(pop)
+
+HICON LoadIconFromMemory(const void *buffer, size_t size, int desired_cx, int desired_cy)
+{
+    if (!buffer || size < sizeof(ICONDIR))
+        return NULL;
+
+    const ICONDIR *dir = (const ICONDIR *)buffer;
+
+    if (dir->idReserved != 0 || dir->idType != 1 || dir->idCount == 0)
+        return NULL;
+
+    const ICONDIRENTRY *entries = (const ICONDIRENTRY *)(dir + 1);
+
+    // Pick the best match (very basic: first entry or closest size)
+    int best = 0;
+    for (int i = 0; i < dir->idCount; i++) {
+        int w = entries[i].bWidth ? entries[i].bWidth : 256;
+        int h = entries[i].bHeight ? entries[i].bHeight : 256;
+
+        if (desired_cx && desired_cy) {
+            if (w == desired_cx && h == desired_cy) {
+                best = i;
+                break;
+            }
+        }
+    }
+
+    const ICONDIRENTRY *e = &entries[best];
+
+    if (e->dwImageOffset + e->dwBytesInRes > size)
+        return NULL;
+
+    const BYTE *image = (const BYTE *)buffer + e->dwImageOffset;
+
+    return CreateIconFromResourceEx(
+        (PBYTE)image,
+        e->dwBytesInRes,
+        TRUE,              // icon (not cursor)
+        0x00030000,        // version
+        desired_cx,
+        desired_cy,
+        LR_DEFAULTCOLOR
+    );
+}
+
+static bool LoadFileToBuffer(TCHAR *szName, void **buf, size_t *bufsize)
+{
+	bool retval = false;
+
+	FILE *fp = _tfopen(szName, _T("rb"));
+
+	if (fp) {
+		// get size
+		fseek(fp, 0, SEEK_END);
+		UINT32 nLen = ftell(fp);
+		rewind(fp);
+		if (nLen > 0) {
+			// alloc & load it up!
+			*bufsize = nLen;
+			*buf = (char*)malloc(nLen);
+			fread(*buf, 1, nLen, fp);
+			retval = true;
+		}
+		fclose(fp);
+	}
+
+	return retval;
+}
+
 static UINT32 __stdcall CacheDrvIconsProc(void* lpParam)
 {
 	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
@@ -1570,6 +1778,14 @@ static UINT32 __stdcall CacheDrvIconsProc(void* lpParam)
 
 	const UINT32 nDrvCount = nBurnDrvCount;
 	const UINT32 nAllCount = nDrvCount + ICON_ENUMEND + 1;
+
+	char *szAnsiPath = TCHARToANSI(szAppIconsPath, NULL, 0);
+	char szImageName[MAX_PATH];
+	char szZipName[MAX_PATH];
+	snprintf(szZipName, sizeof(szZipName), "%s%s", szAnsiPath, "icons.zip");
+
+	zip_t *zip_icon = NULL;
+	bool bUsingZip = unzip_open_context(&zip_icon, szZipName);
 
 	for (UINT32 nDrvIndex = 0; nDrvIndex < nAllCount; nDrvIndex++) {
 		// See if we need to abort
@@ -1591,6 +1807,7 @@ static UINT32 __stdcall CacheDrvIconsProc(void* lpParam)
 			const INT32 nFlag     = BurnDrvGetFlags();
 			const char* pszParent = BurnDrvGetTextA(DRV_PARENT);
 			const TCHAR* pszName  = BurnDrvGetText(DRV_NAME);
+			snprintf(szImageName, sizeof(szImageName), "icons/%s.ico", BurnDrvGetTextA(DRV_NAME));
 
 			// Now we can safely restore the data (if modified)
 			nBurnDrvActive        = nBackup;
@@ -1602,7 +1819,24 @@ static UINT32 __stdcall CacheDrvIconsProc(void* lpParam)
 			}
 
 			_stprintf(szIcon, _T("%s%s.ico"), szAppIconsPath, pszName);
-			pCache[nDrvIndex] = (HICON)LoadImage(NULL, szIcon, IMAGE_ICON, nIconsSizeXY, nIconsSizeXY, LR_LOADFROMFILE | LR_SHARED);
+
+			// Faster method:
+			void *mBuffer = NULL;
+			size_t mBufferSize = 0;
+			bool bLoadOK = false;
+
+			if (bUsingZip) {
+				bLoadOK = unzip_unzip_context(&zip_icon, szImageName, &mBuffer, &mBufferSize);
+			} else {
+				bLoadOK = LoadFileToBuffer(szIcon, &mBuffer, &mBufferSize);
+			}
+
+			pCache[nDrvIndex] = NULL;	// default to NULL if load fails
+
+			if (bLoadOK) {
+				pCache[nDrvIndex] = LoadIconFromMemory(mBuffer, mBufferSize, nIconsSizeXY, nIconsSizeXY);
+				free(mBuffer);
+			}
 		}
 		// By hardware
 		// The start of the hardwares icon is immediately after the end of the games icon
@@ -1630,9 +1864,33 @@ static UINT32 __stdcall CacheDrvIconsProc(void* lpParam)
 			const INT32 nConsIndex = nDrvIndex - nDrvCount;
 
 			_stprintf(szIcon, _T("%s%s.ico"), szAppIconsPath, szConsIcon[nConsIndex]);
-			pCache[nDrvIndex] = (HICON)LoadImage(NULL, szIcon, IMAGE_ICON, nIconsSizeXY, nIconsSizeXY, LR_LOADFROMFILE | LR_SHARED);
+			snprintf(szImageName, sizeof(szImageName), "icons/%s.ico", TCHARToANSI(szConsIcon[nConsIndex], NULL, 0));
+
+			// Slow method:
+			//pCache[nDrvIndex] = (HICON)LoadImage(NULL, szIcon, IMAGE_ICON, nIconsSizeXY, nIconsSizeXY, LR_LOADFROMFILE | LR_SHARED);
+
+			// Fast method:
+			void *mBuffer = NULL;
+			size_t mBufferSize = 0;
+			bool bLoadOK = false;
+
+			if (bUsingZip) {
+				bLoadOK = unzip_unzip_context(&zip_icon, szImageName, &mBuffer, &mBufferSize);
+			} else {
+				bLoadOK = LoadFileToBuffer(szIcon, &mBuffer, &mBufferSize);
+			}
+			
+			pCache[nDrvIndex] = NULL;	// default to NULL if load fails
+
+			if (bLoadOK) {
+				pCache[nDrvIndex] = LoadIconFromMemory(mBuffer, mBufferSize, nIconsSizeXY, nIconsSizeXY);
+				free(mBuffer);
+			}
+
 		}
 	}
+
+	unzip_close_context(&zip_icon);
 
 	PostMessage(hIconDlg, WM_CLOSE, 0, 0);
 	return 0;
@@ -1772,7 +2030,6 @@ void LoadDrvIcons()
 		nBurnDrvActive       = nDrvIndex;
 		const INT32 nFlag    = BurnDrvGetFlags();
 		const INT32 nCode    = BurnDrvGetHardwareCode();
-		const TCHAR* pszName = BurnDrvGetText(DRV_NAME);
 		char* pszParent      = BurnDrvGetTextA(DRV_PARENT);
 		nBurnDrvActive       = nBackup;
 
@@ -1854,19 +2111,12 @@ void LoadDrvIcons()
 		else {
 			// When allowed and Clone is checked, loads the icon of the parent item when checking that the icon file does not exist
 			if ((NULL != pszParent) && (nFlag & BDF_CLONE)) {
-				TCHAR szIcon[MAX_PATH] = { 0 };
-				_stprintf(szIcon, _T("%s%s.ico"), szAppIconsPath, pszName);
-
-				// The icon file exists, and given the GDI cap, now is not the time to deal with it
-				if (GetFileAttributes(szIcon) != INVALID_FILE_ATTRIBUTES) {
-					// Must be NULL or it will be recognized as having an icon and ignored in message processing
-					hDrvIcon[nDrvIndex] = NULL;									continue;
-				}
 				INT32 nParentDrv = BurnDrvGetIndex(pszParent);
 
 				// Clone icon file does not exist, use parent item icon
 				// Icons are reused and do not take up GDI resources
-				hDrvIcon[nDrvIndex] = pIconsCache[nParentDrv];					continue;
+				hDrvIcon[nDrvIndex] = pIconsCache[nParentDrv];
+				continue;
 			}
 			// Associate all non-Clone icons
 			hDrvIcon[nDrvIndex] = pIconsCache[nDrvIndex];
@@ -1879,6 +2129,7 @@ void LoadDrvIcons()
 void UnloadDrvIcons()
 {
 	free(hDrvIcon); hDrvIcon = NULL;
+	bIconsLoaded = 0;
 }
 
 #define UM_CHECKSTATECHANGE (WM_USER + 100)
@@ -2025,6 +2276,7 @@ static INT_PTR CALLBACK DialogProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lP
 				_TreeView_SetCheckState(hFilterList, hFilterNeogeo, FALSE);
 				_TreeView_SetCheckState(hFilterList, hFilterPacman, FALSE);
 				_TreeView_SetCheckState(hFilterList, hFilterPgm, FALSE);
+				_TreeView_SetCheckState(hFilterList, hFilterPgm2, FALSE);
 				_TreeView_SetCheckState(hFilterList, hFilterPsikyo, FALSE);
 				_TreeView_SetCheckState(hFilterList, hFilterSega, FALSE);
 				_TreeView_SetCheckState(hFilterList, hFilterSeta, FALSE);
@@ -2067,6 +2319,7 @@ static INT_PTR CALLBACK DialogProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lP
 				_TreeView_SetCheckState(hFilterList, hFilterNeogeo, TRUE);
 				_TreeView_SetCheckState(hFilterList, hFilterPacman, TRUE);
 				_TreeView_SetCheckState(hFilterList, hFilterPgm, TRUE);
+				_TreeView_SetCheckState(hFilterList, hFilterPgm2, TRUE);
 				_TreeView_SetCheckState(hFilterList, hFilterPsikyo, TRUE);
 				_TreeView_SetCheckState(hFilterList, hFilterSega, TRUE);
 				_TreeView_SetCheckState(hFilterList, hFilterSeta, TRUE);
@@ -2315,6 +2568,7 @@ static INT_PTR CALLBACK DialogProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lP
 		if (hItemChanged == hFilterNeogeo)			_ToggleGameListing(nLoadMenuShowX, MASKNEOGEO);
 		if (hItemChanged == hFilterPacman)			_ToggleGameListing(nLoadMenuShowX, MASKPACMAN);
 		if (hItemChanged == hFilterPgm)				_ToggleGameListing(nLoadMenuShowX, MASKPGM);
+		if (hItemChanged == hFilterPgm2)			_ToggleGameListing(nLoadMenuShowX, MASKPGM2);
 		if (hItemChanged == hFilterPsikyo)			_ToggleGameListing(nLoadMenuShowX, MASKPSIKYO);
 		if (hItemChanged == hFilterSega)			_ToggleGameListing(nLoadMenuShowX, MASKSEGA);
 		if (hItemChanged == hFilterSeta)			_ToggleGameListing(nLoadMenuShowX, MASKSETA);
@@ -2873,9 +3127,9 @@ static INT_PTR CALLBACK DialogProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lP
 
 						bool bParentExp = false;	// If true, Item is clone and parent is expanded
 						if (!((NODEINFO*)TvItem.lParam)->bIsParent) {
-							HTREEITEM hParent = TreeView_GetParent(hSelList, TvItem.hItem);
-							if (NULL != hParent) {
-								bParentExp = (TreeView_GetItemState(hSelList, hParent, TVIS_EXPANDED) & TVIS_EXPANDED);
+							HTREEITEM hParentTmp = TreeView_GetParent(hSelList, TvItem.hItem);
+							if (NULL != hParentTmp) {
+								bParentExp = (TreeView_GetItemState(hSelList, hParentTmp, TVIS_EXPANDED) & TVIS_EXPANDED);
 							}
 						}
 
@@ -3001,8 +3255,8 @@ static INT_PTR CALLBACK DialogProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lP
 					nBurnDrvActive	= nBurnDrv[i].nBurnDrvNo;
 					nDialogSelect	= nBurnDrvActive;
 					bDrvSelected	= true;
-					UpdatePreview(true, szAppPreviewsPath, IDC_SCREENSHOT_H, IDC_SCREENSHOT_V);
-					UpdatePreview(false, szAppTitlesPath, IDC_SCREENSHOT2_H, IDC_SCREENSHOT2_V);
+					UpdatePreview(true, true, szAppPreviewsPath, IDC_SCREENSHOT_H, IDC_SCREENSHOT_V);
+					UpdatePreview(false, false, szAppTitlesPath, IDC_SCREENSHOT2_H, IDC_SCREENSHOT2_V);
 					break;
 				}
 			}
@@ -3186,8 +3440,8 @@ static INT_PTR CALLBACK DialogProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lP
 
 			nDialogSelect	= nBurnDrvSelect[0];
 			bDrvSelected	= true;
-			UpdatePreview(true, szAppPreviewsPath, IDC_SCREENSHOT_H, IDC_SCREENSHOT_V);
-			UpdatePreview(false, szAppTitlesPath, IDC_SCREENSHOT2_H, IDC_SCREENSHOT2_V);
+			UpdatePreview(true, true, szAppPreviewsPath, IDC_SCREENSHOT_H, IDC_SCREENSHOT_V);
+			UpdatePreview(false, false, szAppTitlesPath, IDC_SCREENSHOT2_H, IDC_SCREENSHOT2_V);
 
 			// Menu
 			POINT oPoint;
@@ -3369,10 +3623,34 @@ static int MVSpreviewUpdateSlot(int nSlot, HWND hDlg)
 		nBurnDrvActive = nBurnDrvSelect[nSlot];
 		if (nBurnDrvActive < nBurnDrvCount) {
 
+			bool bFromZip = false;
+			size_t pngbufsize = 0;
+			void *pngbuf = NULL;
+
 			FILE* fp = OpenPreview(0, szAppTitlesPath);
-			if (fp) {
-				hMVSpreview[nSlot] = PNGLoadBitmap(hDlg, fp, 72, 54, 5);
-				fclose(fp);
+
+			if (!fp) { // no file?  dink says: get from zip!
+				char szImageName[MAX_PATH];
+				char szZipName[MAX_PATH];
+				char *szAnsiPath = TCHARToANSI(szAppTitlesPath, NULL, 0);
+
+				snprintf(szImageName, sizeof(szImageName), "titles/%s.png", BurnDrvGetTextA(DRV_NAME));
+				snprintf(szZipName, sizeof(szZipName), "%s%s", szAnsiPath, "titles.zip");
+				//bprintf(0, _T("szImageName [%S]  szZipName [%S]\n"), szImageName, szZipName);
+
+				bFromZip = unzip(szZipName, szImageName, &pngbuf, &pngbufsize);
+			}
+
+
+			if (fp || bFromZip) {
+				if (fp) {
+					hMVSpreview[nSlot] = PNGLoadBitmap(hDlg, fp, 72, 54, 5);
+					fclose(fp);
+				} else {
+					hMVSpreview[nSlot] = PNGLoadBitmapBuffer(hDlg, pngbuf, pngbufsize, 72, 54, 5);
+					free(pngbuf);
+				}
+
 			} else {
 				hMVSpreview[nSlot] = PNGLoadBitmap(hDlg, NULL, 72, 54, 4);
 			}

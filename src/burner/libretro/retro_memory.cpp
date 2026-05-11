@@ -262,11 +262,13 @@ static INT32 LibretroAreaScan(INT32 nAction)
 	// including multiple iterations of the same frame through runahead,
 	// but it needs to stay synced between multiple iterations of a given frame
 	SCAN_VAR(nCurrentFrame);
-	// We want to serialize this for single-instance runahead, otherwise the counter increases faster
-	if (nAction & ACB_RUNAHEAD)
-		SCAN_VAR(nDiagInputHoldCounter);
 
 	BurnAreaScan(nAction, 0);
+
+	// We want to serialize this for single-instance runahead, otherwise the counter increases faster
+	// Putting this at the end is somehow mitigating the bug from https://github.com/libretro/RetroArch/issues/16374
+	if (nAction & ACB_RUNAHEAD)
+		SCAN_VAR(nDiagInputHoldCounter);
 
 	return 0;
 }
@@ -286,7 +288,8 @@ static void TweakScanFlags(INT32 &nAction)
 				nAction |= ACB_RUNAHEAD;
 				break;
 			case RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_BINARY:
-				nAction |= ACB_2RUNAHEAD;
+				// Until https://github.com/libretro/RetroArch/issues/16374 is fixed, just use 100% standard savestates for second instance runahead
+				// nAction |= ACB_2RUNAHEAD;
 				break;
 			case RETRO_SAVESTATE_CONTEXT_ROLLBACK_NETPLAY:
 				EnableHiscores = false;

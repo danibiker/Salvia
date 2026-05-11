@@ -542,7 +542,7 @@ static INT32 DrvFrame()
 
 	INT32 nInterleave = 20;
 	INT32 nCyclesTotal[2] = { 1512000 / 60, 1512000 / 60 };
-	INT32 nCyclesDone[2] = { nExtraCycles };
+	INT32 nCyclesDone[2] = { nExtraCycles, 0 };
 	INT32 nSoundBufferPos = 0;
 
 	M6502Open(0);
@@ -564,7 +564,7 @@ static INT32 DrvFrame()
 	}
 	M6502Close();
 
-	nExtraCycles = nCyclesDone - nCyclesTotal;
+	nExtraCycles = nCyclesDone[0] - nCyclesTotal[0];
 
 	// Make sure the buffer is entirely filled.
 	if (pBurnSoundOut) {

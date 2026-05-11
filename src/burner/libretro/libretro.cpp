@@ -13,6 +13,9 @@
 #include "retro_input.h"
 #include "retro_memory.h"
 #include "ugui_tools.h"
+#ifndef NO_PGM2
+#include "retro_pgm2_cards.h"
+#endif
 
 #include <file/file_path.h>
 
@@ -1202,6 +1205,7 @@ static bool open_archive()
 
 		// Going over every rom to see if they are properly loaded before we continue ...
 		bool ret = true;
+		unsigned num_missing = 0;
 		for (unsigned i = 0; i < nRomCount; i++)
 		{
 			// Neither the available roms nor the unneeded ones should trigger an error here
@@ -1212,14 +1216,24 @@ static bool open_archive()
 				BurnDrvGetRomInfo(&ri, i);
 				if(!(ri.nType & BRF_OPT))
 				{
-					static char prev[2048];
-					strcpy(prev, text_missing_files);
+					num_missing++;
 					BurnDrvGetRomName(&rom_name, i, 0);
-					sprintf(text_missing_files, RETRO_ERROR_MESSAGES_11, prev, rom_name, ri.nCrc);
+					if (num_missing < 19)
+					{
+						static char prev[2048];
+						strcpy(prev, text_missing_files);
+						sprintf(text_missing_files, RETRO_ERROR_MESSAGES_11, prev, rom_name, ri.nCrc);
+					}
 					log_cb(RETRO_LOG_ERROR, "[FBNeo] ROM at index %d with name %s and CRC 0x%08x is required\n", i, rom_name, ri.nCrc);
 					ret = false;
 				}
 			}
+		}
+		if (num_missing >= 19)
+		{
+			static char prev[2048];
+			strcpy(prev, text_missing_files);
+			sprintf(text_missing_files, RETRO_ERROR_MESSAGES_12, prev, (num_missing - 18));
 		}
 
 		BurnExtLoadRom = archive_load_rom;
@@ -1330,6 +1344,8 @@ void retro_init()
 	else
 		log_cb = log_dummy;
 
+	HandleMessage(RETRO_LOG_INFO, "[FBNeo] Running v%x.%x.%x.%02x %s %s\n", nBurnVer >> 20, (nBurnVer >> 16) & 0x0F, (nBurnVer >> 8) & 0xFF, nBurnVer & 0xFF, GIT_DATE, GIT_VERSION);
+
 	set_multi_language_strings();	// Determine the user's language and initialize all strings.
 
 	libretro_msg_interface_version = 0;
@@ -1372,6 +1388,10 @@ void retro_deinit()
 
 void retro_reset()
 {
+	// no driver loaded, we won't do anything
+	if (gui_show)
+		return;
+
 	// Saving minimal savestate (handle some machine settings)
 	// note : This is only useful to avoid losing nvram when switching from mvs to aes/unibios and resetting,
 	//        it can actually be "harmful" in other games (trackfld)
@@ -2204,6 +2224,10 @@ static bool retro_load_game_common()
 			}
 		}
 
+#ifndef NO_PGM2
+		retro_pgm2_cards_refresh_environment();
+#endif
+
 		if (BurnDrvGetTextA(DRV_COMMENT) && strlen(BurnDrvGetTextA(DRV_COMMENT)) > 0) {
 			HandleMessage(RETRO_LOG_WARN, "[FBNeo] %s\n", BurnDrvGetTextA(DRV_COMMENT));
 		}
@@ -2510,6 +2534,9 @@ void retro_unload_game(void)
 {
 	if (nBurnDrvActive != ~0U)
 	{
+#ifndef NO_PGM2
+		retro_pgm2_cards_save_files();
+#endif
 		if (bIsNeogeoCartGame && nMemcardMode != 0) {
 			// Force newer format if the file doesn't exist yet
 			if(!filestream_exists(szMemoryCardFile))
@@ -2524,6 +2551,9 @@ void retro_unload_game(void)
 			CDEmuExit();
 		nBurnDrvActive = ~0U;
 	}
+#ifndef NO_PGM2
+	retro_pgm2_cards_reset();
+#endif
 	if (pVidImage) {
 		free(pVidImage);
 		pVidImage = NULL;
@@ -2546,6 +2576,9 @@ static void retro_incomplete_exit()
 {
 	if (nBurnDrvActive != ~0U)
 	{
+#ifndef NO_PGM2
+		retro_pgm2_cards_save_files();
+#endif
 		if (bIsNeogeoCartGame && nMemcardMode != 0) {
 			// Force newer format if the file doesn't exist yet
 			if (!filestream_exists(szMemoryCardFile))
@@ -2560,6 +2593,9 @@ static void retro_incomplete_exit()
 			CDEmuExit();
 		nBurnDrvActive = ~0U;
 	}
+#ifndef NO_PGM2
+	retro_pgm2_cards_reset();
+#endif
 	if (pVidImage) {
 		free(pVidImage);
 		pVidImage = NULL;
