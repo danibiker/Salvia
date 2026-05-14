@@ -55,8 +55,9 @@
 #define mbedtls_calloc    calloc
 #define mbedtls_snprintf   snprintf
 #endif
-
-#if defined(_WIN32) && !defined(EFIX64) && !defined(EFI32)
+#ifdef _XBOX
+#include <xtl.h>
+#elif defined(_WIN32) && !defined(EFIX64) && !defined(EFI32)
 #include <windows.h>
 #else
 #include <time.h>

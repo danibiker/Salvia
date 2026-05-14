@@ -53,7 +53,9 @@
  *
  * Comment to disable the use of assembly code.
  */
+#ifndef _XBOX
 #define MBEDTLS_HAVE_ASM
+#endif
 
 /**
  * \def MBEDTLS_NO_UDBL_DIVISION
@@ -117,7 +119,9 @@
  *
  * Comment if your system does not have a correct clock.
  */
+#ifndef _XBOX
 #define MBEDTLS_HAVE_TIME_DATE
+#endif
 
 /**
  * \def MBEDTLS_PLATFORM_MEMORY
@@ -879,7 +883,9 @@
  *
  * Enable functions that use the filesystem.
  */
+#ifndef _XBOX
 #define MBEDTLS_FS_IO
+#endif
 
 /**
  * \def MBEDTLS_NO_DEFAULT_ENTROPY_SOURCES
@@ -903,7 +909,9 @@
  *
  * Uncomment this macro to disable the built-in platform entropy functions.
  */
-//#define MBEDTLS_NO_PLATFORM_ENTROPY
+#ifdef _XBOX
+#define MBEDTLS_NO_PLATFORM_ENTROPY
+#endif
 
 /**
  * \def MBEDTLS_ENTROPY_FORCE_SHA256
@@ -1499,7 +1507,9 @@
  *
  * This modules adds support for the AES-NI instructions on x86-64
  */
+#ifndef _XBOX
 #define MBEDTLS_AESNI_C
+#endif 
 
 /**
  * \def MBEDTLS_AES_C
@@ -2063,7 +2073,9 @@
  *
  * This module provides networking routines.
  */
+#ifndef _XBOX
 #define MBEDTLS_NET_C
+#endif
 
 /**
  * \def MBEDTLS_OID_C
@@ -2100,7 +2112,9 @@
  *
  * This modules adds support for the VIA PadLock on x86.
  */
+#ifndef _XBOX
 #define MBEDTLS_PADLOCK_C
+#endif
 
 /**
  * \def MBEDTLS_PEM_PARSE_C

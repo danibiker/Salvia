@@ -47,7 +47,15 @@
 #define asm __asm
 #endif
 
-#if defined(_WIN32) && !defined(EFIX64) && !defined(EFI32)
+#if defined(_XBOX) // Priorizamos la detección de Xbox
+
+#include <xtl.h>
+
+struct _hr_time
+{
+    LARGE_INTEGER start;
+};
+#elif defined(_WIN32) && !defined(EFIX64) && !defined(EFI32)
 
 #include <windows.h>
 #include <winbase.h>

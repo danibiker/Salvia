@@ -59,8 +59,9 @@
 #if defined(MBEDTLS_THREADING_C)
 #include "mbedtls/threading.h"
 #endif
-
-#if defined(_WIN32) && !defined(EFIX64) && !defined(EFI32)
+#ifdef _XBOX
+#include <xtl.h>
+#elif defined(_WIN32) && !defined(EFIX64) && !defined(EFI32)
 #include <windows.h>
 #else
 #include <time.h>
@@ -1223,6 +1224,15 @@ cleanup:
 
     return( ret );
 }
+#elif defined(_XBOX)
+	
+	// Stubs para engañar al linker
+int mbedtls_x509_crt_parse_file(void *p, const char *f) { return -1; }
+int mbedtls_x509_crt_parse_path(void *p, const char *path) { return -1; }
+int mbedtls_x509_crl_parse_file(void *p, const char *f) { return -1; }
+int mbedtls_pk_parse_keyfile(void *p, const char *f, const char *pwd) { return -1; }
+
+
 #endif /* MBEDTLS_FS_IO */
 
 static int x509_info_subject_alt_name( char **buf, size_t *size,
