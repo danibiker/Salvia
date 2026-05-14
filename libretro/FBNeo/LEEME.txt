@@ -1,0 +1,2 @@
+Para generar la lista de juegos aceptada por fbneo, hay que ir a la carpeta src\dep\scripts y ejecutar en una
+consola de msys el regenerarListaCompleta.sh o regenerarListaRedux.sh

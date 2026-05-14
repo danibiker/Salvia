@@ -4,7 +4,11 @@
 #include "burnint.h"
 #include "timer.h"
 //#include "burn_sound.h" // included in burnint.h
+#ifdef DRIVER_REDUX
+#include "driverlistRedux.h"
+#else
 #include "driverlist.h"
+#endif
 
 #ifdef BUILD_WIN32
 #include "mbtwc.h"

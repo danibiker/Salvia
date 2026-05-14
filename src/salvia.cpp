@@ -80,6 +80,56 @@ std::vector<std::string> splitOptions(const std::string& raw) {
     return out;
 }
 
+/** Necesitamos borrar ciertos elementos porque sino da la sensacion de que tenemos 
+*   opciones del core duplicadas. Por ejemplo:
+*
+* Key: fbneo-dipswitch-msx_lic2kill-BIOS_-_NOTE__Changes_require_re-start!, Selected: 0
+* Key: fbneo-dipswitch-msx_007tld-BIOS_-_NOTE__Changes_require_re-start!, Selected: 0
+* Key: fbneo-dipswitch-msx_10yard-BIOS_-_NOTE__Changes_require_re-start!, Selected: 0
+*/
+void cleanPrefix(std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &data) {
+    const std::string prefijo = "fbneo-dipswitch";
+    
+    auto it = data.begin();
+    while (it != data.end()) {
+        // Comprobar si la clave empieza por el prefijo
+        if (it->first.compare(0, prefijo.length(), prefijo) == 0) {
+            // Guardar el iterador actual y avanzarlo antes de borrar
+            auto it_borrar = it++; 
+            data.erase(it_borrar);
+        } else {
+            // Avanzar normalmente si no cumple la condición
+            ++it;
+        }
+    }
+}
+
+/** Necesitamos borrar ciertos elementos porque sino da la sensacion de que tenemos 
+*   opciones del core duplicadas. Por ejemplo:
+*
+* Key: fbneo-dipswitch-msx_lic2kill-BIOS_-_NOTE__Changes_require_re-start!, Selected: 0
+* Key: fbneo-dipswitch-msx_007tld-BIOS_-_NOTE__Changes_require_re-start!, Selected: 0
+* Key: fbneo-dipswitch-msx_10yard-BIOS_-_NOTE__Changes_require_re-start!, Selected: 0
+*
+* Este metodo devolvera la key sin incluir el juego en particular: 
+*      fbneo-dipswitch-msx-BIOS_-_NOTE__Changes_require_re-start!
+*/
+std::string cleanPerGameKey(std::string key){
+	std::string validKey = key;
+	const std::string prefijo = "fbneo-dipswitch";
+	if (validKey.compare(0, prefijo.length(), prefijo) == 0) {
+		std::size_t posUnderscore = validKey.find_first_of("_");
+		if (posUnderscore != string::npos){
+			std::size_t nextMinus = validKey.substr(posUnderscore).find_first_of("-");
+			if (nextMinus != string::npos){
+				validKey = validKey.substr(0, posUnderscore) + 
+					validKey.substr(posUnderscore + nextMinus);
+			}
+		}
+	}
+	return validKey;
+}
+
 // Crea o actualiza una entrada preservando `selected` si ya existía.
 void applyEntry(std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &data,
                 const std::string& key,
@@ -87,22 +137,20 @@ void applyEntry(std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &data,
                 std::vector<std::string> values, // Pasamos por valor para mover
                 int defaultIdx = 0)
 {
-    auto it = data.find(key);
-    if (it != data.end()) {
+	std::string validKey = cleanPerGameKey(key);
+    
+	auto it = data.find(validKey);
+	if (it != data.end()) {
 		if (it->second->description.empty())
 			it->second->description = description;
 
 		if (it->second->values.empty())
 			it->second->values = values;
         
-		//Si ya estaba en el mapa, no lo tocamos
-        //if (it->second.selected < 0 || it->second.selected >= (int)it->second.values.size())
-        //    it->second.selected = defaultIdx;
-        
 		if (it->second->cachedValue.empty() && !it->second->values.empty())
             it->second->cachedValue = it->second->values[it->second->selected];
 
-		LOG_DEBUG("[Core Options] SET. Key already defined %s", key.c_str());
+		LOG_DEBUG("[Core Options] SET. Key already defined %s", validKey.c_str());
         return;
     } 
 
@@ -114,9 +162,8 @@ void applyEntry(std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &data,
     if (!raw->values.empty())
         raw->cachedValue = raw->values[defaultIdx];
 
-    LOG_DEBUG("[Core Options] SET %s = %s", key.c_str(), raw->cachedValue.c_str());
-    // Ahora data[key] usará el operator=(t_emu_props&&) que definimos arriba
-    data[key] = std::unique_ptr<cfg::t_emu_props>(raw); 
+    LOG_DEBUG("[Core Options] SET %s = %s", validKey.c_str(), raw->cachedValue.c_str());
+    data[validKey] = std::unique_ptr<cfg::t_emu_props>(raw); 
 }
 
 } // namespace anónimo
@@ -310,6 +357,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 			const auto* vars = static_cast<const retro_variable*>(data);
 			if (!vars) return false;
 
+			//cleanPrefix(gameMenu->getCfgLoader()->startupLibretroParams);
 			for (int i = 0; vars[i].key != nullptr; ++i) {
 				// 1. Protección contra keys vacias (basura recurrente en algunos cores)
 				if (vars[i].key[0] == '\0') continue;

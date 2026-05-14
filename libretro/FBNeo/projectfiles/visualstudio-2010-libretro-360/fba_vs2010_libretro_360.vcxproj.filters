@@ -3332,6 +3332,9 @@
     <ClCompile Include="..\..\src\cpu\arm9\arm9.cpp">
       <Filter>Source Files\cpu\arm9</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\burner\libretro\retro_pgm2_cards.cpp">
+      <Filter>Source Files\burner\libretro</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\dep\generated\driverlist.h">
