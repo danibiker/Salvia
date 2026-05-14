@@ -1,3 +1,5 @@
+@echo off
+
 set PATH=C:\Program Files (x86)\Microsoft Xbox 360 SDK\bin\win32;%PATH%
 set XDK_PATH=C:\Program Files (x86)\Microsoft Xbox 360 SDK
 :: Limpia el path de inclusión y pon el de Xbox primero
@@ -20,3 +22,5 @@ nmake /f Makefile.vc mode=static VC=10 ENABLE_IDN=no ENABLE_IPV6=no RTLIBCFG=sta
 
 rem MODO DEBUG
 nmake /f Makefile.vc mode=static VC=10 ENABLE_IDN=no ENABLE_IPV6=no RTLIBCFG=static ENABLE_SSPI=no ENABLE_WINSSL=no DEBUG=yes CUSTOM_CFLAGS="%CURL_CFLAG_EXTRAS%"
+
+pause

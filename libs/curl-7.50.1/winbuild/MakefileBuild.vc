@@ -50,13 +50,19 @@ ZIP        = zip.exe
 !IF "$(VC)"=="6"
 CC_NODEBUG  = cl.exe /O2 /DNDEBUG
 CC_DEBUG    = cl.exe /Od /Gm /Zi /DNDEBUG /GZ
-#CFLAGS     = /I. /I../lib /I../include /nologo /W3 /GX /DWIN32 /YX /FD /c /DBUILDING_LIBCURL
+!IF "$(MACHINE)"=="x86"
+CFLAGS     = /I. /I../lib /I../include /nologo /W3 /GX /DWIN32 /YX /FD /c /DBUILDING_LIBCURL
+!ELSE
 CFLAGS     = /I. /I../lib /I../include /nologo /W3 /GX /D_XBOX /D_ppc_ /D_MT /YX /FD /c /DBUILDING_LIBCURL
+!ENDIF
 !ELSE
 CC_NODEBUG  = cl.exe /O2 /DNDEBUG
 CC_DEBUG    = cl.exe /Od /DNDEBUG /RTC1 /Z7 /LDd /W3
-#CFLAGS      = /I. /I ../lib /I../include /nologo /W3 /EHsc /DWIN32 /FD /c /DBUILDING_LIBCURL
+!IF "$(MACHINE)"=="x86"
+CFLAGS      = /I. /I ../lib /I../include /nologo /W3 /EHsc /DWIN32 /FD /c /DBUILDING_LIBCURL
+!ELSE
 CFLAGS      = /I. /I ../lib /I../include /nologo /W0 /EHsc /D_XBOX /D_ppc_ /D_MT /FD /c /DBUILDING_LIBCURL 
+!ENDIF	
 !ENDIF
 
 LFLAGS     = /nologo /machine:$(MACHINE) /LTCG
@@ -68,11 +74,14 @@ LFLAGS_PDB = /incremental:no /opt:ref,icf
 
 CFLAGS_LIBCURL_STATIC  = /DCURL_STATICLIB
 
-#WIN_LIBS    = ws2_32.lib wldap32.lib advapi32.lib
+!IF "$(MACHINE)"=="x86"
+WIN_LIBS    = ws2_32.lib wldap32.lib advapi32.lib
+!ELSE
 !IF "$(DEBUG)" == "yes"
 WIN_LIBS    = xnet.lib xapilib.lib d3d9.lib xboxkrnl.lib
 !ELSE
 WIN_LIBS    = xnet.lib xapilib.lib d3d9.lib xboxkrnl.lib
+!ENDIF
 !ENDIF
 
 BASE_NAME              = libcurl
@@ -94,8 +103,11 @@ PDB_NAME_DLL_DEBUG     = $(BASE_NAME_DEBUG).pdb
 
 # CURL Command section
 PROGRAM_NAME = curl.exe
-#CURL_CFLAGS   =  /I../lib /I../include /nologo /W3 /EHsc /DWIN32 /FD /c
+!IF "$(MACHINE)"=="x86"
+CURL_CFLAGS   =  /I../lib /I../include /nologo /W3 /EHsc /DWIN32 /FD /c
+!ELSE
 CURL_CFLAGS   =  /I../lib /I../include /nologo /W3 /EHsc /D_XBOX /D_ppc_ /FD /c 
+!ENDIF
 CURL_LFLAGS   = /nologo /out:$(DIRDIST)\bin\$(PROGRAM_NAME) /subsystem:console /machine:$(MACHINE)
 CURL_RESFLAGS = /i../include
 
@@ -255,12 +267,18 @@ MANIFESTTOOL = mt -manifest $(DIRDIST)\$(PROGRAM_NAME).manifest -outputresource:
 !ENDIF
 
 # Runtime library configuration
+# Should fix the MD flag to be always MT
+!IF "$(MACHINE)"=="x86"
+RTLIB = /MD
+RTLIB_DEBUG  = /MD
+!ELSE
 !IF "$(RTLIBCFG)"=="static"
 RTLIB = /MT
-RTLIB_DEBUG = /MT
+RTLIB_DEBUG = /MTd
 !ELSE
 RTLIB = /MD
-RTLIB_DEBUG  = /MT
+RTLIB_DEBUG  = /MDd
+!ENDIF
 !ENDIF
 
 !IF "$(MODE)"=="static"

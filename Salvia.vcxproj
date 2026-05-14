@@ -2456,7 +2456,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)libs\curl-7.50.1\include;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include;$(ProjectDir)\libs\rcheevos\src</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\genesis-plus-gx\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\genesis-plus-gx\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);Genesis-Plus-GX.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2483,7 +2483,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)libs\curl-7.50.1\include;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include;$(ProjectDir)\libs\rcheevos\src</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\dosbox-pure\vs2010\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\dosbox-pure\vs2010\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);dosbox-pure.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcprt.lib;LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2525,7 +2525,7 @@
       <UseUnicodeForAssemblerListing>false</UseUnicodeForAssemblerListing>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\dosbox-pure\vs2010\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\dosbox-pure\vs2010\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);dosbox-pure.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcprt.lib;LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2554,7 +2554,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)libs\curl-7.50.1\include;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include;$(ProjectDir)\libs\rcheevos\src</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\beetle-supergrafx\msvc\build\Win32\Debug</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\beetle-supergrafx\msvc\build\Win32\Debug</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);mednafen_supergrafx_libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2581,7 +2581,7 @@
       <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\picodrive\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\picodrive\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);picodrive.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2610,7 +2610,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(SolutionDir)..\beetle-psx-libretro\Debug\Win32\;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(SolutionDir)..\beetle-psx-libretro\Debug\Win32\;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);beetle-psx-libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2638,7 +2638,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(SolutionDir)..\pcsx_rearmed\Debug\Win32;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(SolutionDir)..\pcsx_rearmed\Debug\Win32;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);pcsx_rearmed.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2668,7 +2668,7 @@
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\beetle-psx-libretro\Release\Win32;$(SolutionDir)..\pthread-win32\windows\VS2010\bin\Win32_MSVC2010.Release;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\beetle-psx-libretro\Release\Win32;$(SolutionDir)..\pthread-win32\windows\VS2010\bin\Win32_MSVC2010.Release;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);pthread_lib.lib;beetle-psx-libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2695,7 +2695,7 @@
       <SmallerTypeCheck>false</SmallerTypeCheck>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\nestopia\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\nestopia\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);nestopia.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2721,7 +2721,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\snes9x2010\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\snes9x2010\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);snes9x2010.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2747,7 +2747,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\snes9x\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\snes9x\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);snes9x.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2773,7 +2773,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\vba-next\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\vba-next\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);vba-next.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2799,7 +2799,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\beetle-pce\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\beetle-pce\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);beetle-pce-libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2825,7 +2825,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(SolutionDir)libretro\beetle-pce-fast\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(SolutionDir)libretro\beetle-pce-fast\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);beetle-pce-fast-libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2852,7 +2852,7 @@
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\snes9x2010\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\snes9x2010\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);snes9x2010.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib; LIBCPMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2880,7 +2880,7 @@
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\snes9x\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\snes9x\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);snes9x.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib; LIBCPMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2908,7 +2908,7 @@
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\snes9x\Release\Win32;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\snes9x\Release\Win32;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);snes9x.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib; LIBCPMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2939,7 +2939,7 @@
       <ExceptionHandling>Sync</ExceptionHandling>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\nestopia\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\nestopia\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);Nestopia.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib; LIBCPMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2965,7 +2965,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\gambatte\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\gambatte\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);gambatte-libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -2992,7 +2992,7 @@
       <WholeProgramOptimization>true</WholeProgramOptimization>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\gambatte\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\gambatte\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);gambatte-libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib; LIBCPMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3023,7 +3023,7 @@
       <StringPooling>true</StringPooling>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\genesis-plus-gx\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\genesis-plus-gx\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);Genesis-Plus-GX.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3057,7 +3057,7 @@
       <StringPooling>true</StringPooling>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\prboom\msvc2010\bin\Win32\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\prboom\msvc2010\bin\Win32\Release</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);prboom_libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3091,7 +3091,7 @@
       <StringPooling>true</StringPooling>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\prboom\msvc2010\bin\Win32\Debug</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\prboom\msvc2010\bin\Win32\Debug</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);prboom_libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3128,7 +3128,7 @@
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\mame-2003-plus\build\Win32\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\mame-2003-plus\build\Win32\Release</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);mame2003_plus_libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3164,7 +3164,7 @@
       <StringPooling>true</StringPooling>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);fba_vs2010_libretro_360.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3200,7 +3200,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);fba_vs2010_libretro_360.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3236,7 +3236,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\mame-2003-plus\build\Win32\Debug</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\mame-2003-plus\build\Win32\Debug</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);mame2003_plus_libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3263,7 +3263,7 @@
       <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\picodrive\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\picodrive\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);picodrive.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3290,7 +3290,7 @@
       <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\pcsx_rearmed\Release\Win32;$(ProjectDir)..\pthread-win32\windows\VS2010\bin\Win32_MSVC2010.Release;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\pcsx_rearmed\Release\Win32;$(ProjectDir)..\pthread-win32\windows\VS2010\bin\Win32_MSVC2010.Release;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);pcsx_rearmed.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3317,7 +3317,7 @@
       <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\pcsx_rearmed\Release\Win32;$(ProjectDir)..\pthread-win32\windows\VS2010\bin\Win32_MSVC2010.Release;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\pcsx_rearmed\Release\Win32;$(ProjectDir)..\pthread-win32\windows\VS2010\bin\Win32_MSVC2010.Release;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);pcsx_rearmed.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3344,7 +3344,7 @@
       <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\pcsx_rearmed\Release\Win32;$(ProjectDir)..\pthread-win32\windows\VS2010\bin\Win32_MSVC2010.Release;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\pcsx_rearmed\Release\Win32;$(ProjectDir)..\pthread-win32\windows\VS2010\bin\Win32_MSVC2010.Release;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);pcsx_rearmed.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3371,7 +3371,7 @@
       <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\pcsx_rearmed\Release\Win32;$(ProjectDir)..\pthread-win32\windows\VS2010\bin\Win32_MSVC2010.Release;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\pcsx_rearmed\Release\Win32;$(ProjectDir)..\pthread-win32\windows\VS2010\bin\Win32_MSVC2010.Release;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);pcsx_rearmed.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -3438,7 +3438,7 @@
     <Link>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);vba-next.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib; LIBCPMT.lib</IgnoreSpecificDefaultLibraries>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\vba-next\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\vba-next\Release\Win32</AdditionalLibraryDirectories>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -3456,7 +3456,7 @@
     <Link>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);beetle-pce-fast-libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib; LIBCPMT.lib</IgnoreSpecificDefaultLibraries>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(SolutionDir)libretro\beetle-pce-fast\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(SolutionDir)libretro\beetle-pce-fast\Release\Win32</AdditionalLibraryDirectories>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -3475,7 +3475,7 @@
     <Link>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);beetle-pce-libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib; LIBCPMT.lib</IgnoreSpecificDefaultLibraries>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\beetle-pce\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\beetle-pce\Release\Win32</AdditionalLibraryDirectories>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -3493,7 +3493,7 @@
     <Link>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);mednafen_supergrafx_libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib; LIBCPMT.lib</IgnoreSpecificDefaultLibraries>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)..\curl-7.50.1\builds\win\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\beetle-supergrafx\msvc\build\Win32\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\beetle-supergrafx\msvc\build\Win32\Release</AdditionalLibraryDirectories>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>false</GenerateDebugInformation>

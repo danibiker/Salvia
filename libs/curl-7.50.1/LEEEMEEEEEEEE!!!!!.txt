@@ -1,3 +1,5 @@
 ####################################################################
-
-* Para generar la libreria de xbox, ejecutar el .bat de winbuild\xbox_mbed.bat
+# Para generar la libreria de xbox y windows, ejecutar el .bat de: 
+#   winbuild\xbox_mbed.bat -> Para xbox
+#   winbuild\win_mbed.bat  -> Para windows
+####################################################################
