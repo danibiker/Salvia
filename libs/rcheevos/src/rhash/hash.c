@@ -6,7 +6,12 @@
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#ifdef _XBOX
+#include <xtl.h>
+#else 
+	#include <windows.h>
+	//#include <profileapi.h>
+#endif
 #include <share.h>
 #endif
 

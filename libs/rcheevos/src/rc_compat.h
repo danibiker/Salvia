@@ -5,7 +5,11 @@
  #ifndef WIN32_LEAN_AND_MEAN
   #define WIN32_LEAN_AND_MEAN
  #endif
- #include <windows.h>
+ #ifdef _XBOX
+   #include <xtl.h>
+ #else 
+   #include <windows.h>
+ #endif
 #endif
 
 #include "rc_export.h"
@@ -34,6 +38,12 @@ RC_BEGIN_C_DECLS
 #endif
 #ifndef strdup
  #define strdup _strdup
+#endif
+
+#define snprintf _snprintf
+
+#ifndef MB_ERR_INVALID_CHARS
+#define MB_ERR_INVALID_CHARS 0x00000008
 #endif
 
 #elif __STDC_VERSION__ < 199901L

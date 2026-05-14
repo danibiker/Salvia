@@ -15,8 +15,12 @@
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <profileapi.h>
+#ifdef _XBOX
+	#include <xtl.h>
+#else
+	#include <windows.h>
+#endif
+//#include <profileapi.h>
 #else
 #include <time.h>
 #endif

@@ -203,106 +203,106 @@
     <ClCompile Include="src\retroachievements\HashCHD.cpp">
       <Filter>Source Files\retroachievements\chdhelper</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rc_client.c">
+    <ClCompile Include="libs\rcheevos\src\rc_client.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rc_client_external.c">
+    <ClCompile Include="libs\rcheevos\src\rc_client_external.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rc_client_raintegration.c">
+    <ClCompile Include="libs\rcheevos\src\rc_client_raintegration.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rc_compat.c">
+    <ClCompile Include="libs\rcheevos\src\rc_compat.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rc_libretro.c">
+    <ClCompile Include="libs\rcheevos\src\rc_libretro.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rc_util.c">
+    <ClCompile Include="libs\rcheevos\src\rc_util.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rc_version.c">
+    <ClCompile Include="libs\rcheevos\src\rc_version.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\alloc.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\alloc.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\condition.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\condition.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\condset.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\condset.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\consoleinfo.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\consoleinfo.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\format.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\format.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\lboard.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\lboard.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\memref.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\memref.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\operand.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\operand.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\rc_validate.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\rc_validate.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\richpresence.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\richpresence.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\runtime.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\runtime.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\runtime_progress.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\runtime_progress.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\trigger.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\trigger.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rcheevos\value.c">
+    <ClCompile Include="libs\rcheevos\src\rcheevos\value.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rhash\aes.c">
+    <ClCompile Include="libs\rcheevos\src\rhash\aes.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rhash\cdreader.c">
+    <ClCompile Include="libs\rcheevos\src\rhash\cdreader.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rhash\hash.c">
+    <ClCompile Include="libs\rcheevos\src\rhash\hash.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rhash\hash_disc.c">
+    <ClCompile Include="libs\rcheevos\src\rhash\hash_disc.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rhash\hash_encrypted.c">
+    <ClCompile Include="libs\rcheevos\src\rhash\hash_encrypted.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rhash\hash_rom.c">
+    <ClCompile Include="libs\rcheevos\src\rhash\hash_rom.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rhash\hash_zip.c">
+    <ClCompile Include="libs\rcheevos\src\rhash\hash_zip.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rhash\md5.c">
+    <ClCompile Include="libs\rcheevos\src\rhash\md5.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rapi\rc_api_common.c">
+    <ClCompile Include="libs\rcheevos\src\rapi\rc_api_common.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rapi\rc_api_editor.c">
+    <ClCompile Include="libs\rcheevos\src\rapi\rc_api_editor.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rapi\rc_api_info.c">
+    <ClCompile Include="libs\rcheevos\src\rapi\rc_api_info.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rapi\rc_api_runtime.c">
+    <ClCompile Include="libs\rcheevos\src\rapi\rc_api_runtime.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\retroachievements\src\rapi\rc_api_user.c">
+    <ClCompile Include="libs\rcheevos\src\rapi\rc_api_user.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
     <ClCompile Include="src\so\launcher.cpp">
