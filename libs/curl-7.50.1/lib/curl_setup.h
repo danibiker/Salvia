@@ -251,6 +251,58 @@
 #  ifndef WIN32_LEAN_AND_MEAN
 #    define WIN32_LEAN_AND_MEAN
 #  endif
+#ifdef _XBOX
+#include <xtl.h>
+#include <winsockx.h>
+
+/* Xbox 360 no define sockaddr_storage. Usamos una estructura compatible 
+   con el tamanyo de sockaddr_in ya que no hay soporte IPv6 real. */
+struct sockaddr_storage {
+    short ss_family;
+    char __ss_pad1[6];
+    __int64 __ss_align;
+    char __ss_pad2[112];
+};
+
+  #define CURL_DISABLE_LDAP 1
+  #define CURL_DISABLE_SSPI 1
+  #define CURL_DISABLE_TELNET 1
+  #define CURL_DISABLE_DICT 1
+  #define CURL_DISABLE_FILE 1
+  #define CURL_DISABLE_GOPHER 1
+  #define CURL_DISABLE_MEMDEBUG 1
+  #define CURL_DISABLE_LIBCURL_OPTION 1
+  #define USE_BLOCKING_SOCKETS 1
+  #define CURL_DISABLE_CRYPTO_AUTH 1
+  #define CURL_WINDOWS_APP 1  // Engaña a curl para que no use APIs de escritorio
+  #undef USE_WIN32_CRYPTO     // Prohíbe explícitamente el uso de wincrypt.h
+  #define CURL_DISABLE_DIGEST_AUTH 1 // El Digest suele ser el que pide MD5/wincrypt
+  
+  // El XDK no soporta KeepAlive de esta forma o usa valores distintos
+  #ifndef SO_KEEPALIVE
+    #define SO_KEEPALIVE 0x0008
+  #endif
+
+  // WSAIoctl no existe en Xbox 360, se usa XNet o se omiten estas optimizaciones
+  #define IOC_VENDOR 0x18000000
+  
+   #undef HAVE_FORMATMESSAGE
+  //#define CURL_DISABLE_VERBOSE_STRINGS 1 // Recomendado para ahorrar memoria en 360
+  
+  // Xbox no tiene estas constantes de error de Windows
+  #ifndef FORMAT_MESSAGE_FROM_SYSTEM
+    #define FORMAT_MESSAGE_FROM_SYSTEM 0x00001000
+    #define FORMAT_MESSAGE_IGNORE_INSERTS 0x00000200
+  #endif
+  
+  #undef HAVE_GETADDRINFO
+  #undef HAVE_STRUCT_ADDRINFO
+  #define CURL_DISABLE_IPV6 1
+  
+  #define Curl_verify_windows_version(a,b,c,d) (1)
+  #define HAVE_GETHOSTBYNAME 1
+  
+#else
 #  include <windows.h>
 #  ifdef HAVE_WINSOCK2_H
 #    include <winsock2.h>
@@ -262,6 +314,7 @@
 #      include <winsock.h>
 #    endif
 #  endif
+#endif
 #  include <tchar.h>
 #  ifdef UNICODE
      typedef wchar_t *(*curl_wcsdup_callback)(const wchar_t *str);

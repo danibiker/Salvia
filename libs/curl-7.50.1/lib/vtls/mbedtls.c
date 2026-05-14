@@ -99,6 +99,33 @@ static int entropy_func_mutex(void *data, unsigned char *output, size_t len)
 /* Define this to enable lots of debugging for mbedTLS */
 #undef MBEDTLS_DEBUG
 
+#ifdef _XBOX
+#include <xtl.h>
+#include <winsockx.h>
+
+int xbox_mbedtls_send(void *ctx, const unsigned char *buf, size_t len) {
+    int fd = *(int *)ctx;
+    int ret = send(fd, (const char *)buf, (int)len, 0);
+    if(ret < 0) {
+        int err = WSAGetLastError();
+        if(err == WSAEWOULDBLOCK) return MBEDTLS_ERR_SSL_WANT_WRITE;
+        return MBEDTLS_ERR_NET_SEND_FAILED;
+    }
+    return ret;
+}
+
+int xbox_mbedtls_recv(void *ctx, unsigned char *buf, size_t len) {
+    int fd = *(int *)ctx;
+    int ret = recv(fd, (char *)buf, (int)len, 0);
+    if(ret < 0) {
+        int err = WSAGetLastError();
+        if(err == WSAEWOULDBLOCK) return MBEDTLS_ERR_SSL_WANT_READ;
+        return MBEDTLS_ERR_NET_RECV_FAILED;
+    }
+    return ret;
+}
+#endif 
+
 #ifdef MBEDTLS_DEBUG
 static void mbed_debug(void *context, int level, const char *f_name,
                        int line_nb, const char *line)
@@ -357,10 +384,19 @@ mbed_connect_step1(struct connectdata *conn,
 
   mbedtls_ssl_conf_rng(&connssl->config, mbedtls_ctr_drbg_random,
                        &connssl->ctr_drbg);
+					   
+  #ifdef _XBOX
+  mbedtls_ssl_set_bio(&connssl->ssl, 
+                      &conn->sock[sockindex], // Este es el contexto (el socket)
+                      xbox_mbedtls_send,      // Tu funcion puente
+                      xbox_mbedtls_recv,      // Tu funcion puente
+                      NULL);                  // No usamos timeout nativo de mbed
+  #else  
   mbedtls_ssl_set_bio(&connssl->ssl, &conn->sock[sockindex],
                       mbedtls_net_send,
                       mbedtls_net_recv,
                       NULL /*  rev_timeout() */);
+  #endif
 
   mbedtls_ssl_conf_ciphersuites(&connssl->config,
                                 mbedtls_ssl_list_ciphersuites());
@@ -490,8 +526,8 @@ mbed_connect_step2(struct connectdata *conn,
     return CURLE_PEER_FAILED_VERIFICATION;
   }
 
+#ifndef _XBOX
   peercert = mbedtls_ssl_get_peer_cert(&connssl->ssl);
-
   if(peercert && data->set.verbose) {
     const size_t bufsize = 16384;
     char *buffer = malloc(bufsize);
@@ -557,6 +593,7 @@ mbed_connect_step2(struct connectdata *conn,
     mbedtls_x509_crt_free(p);
     free(p);
   }
+#endif
 
 #ifdef HAS_ALPN
   if(conn->bits.tls_enable_alpn) {

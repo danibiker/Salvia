@@ -42,11 +42,15 @@ typedef enum {
   PLATFORM_WINNT
 } PlatformIdentifier;
 
+#if !defined(_XBOX)
 /* This is used to verify if we are running on a specific windows version */
 bool Curl_verify_windows_version(const unsigned int majorVersion,
                                  const unsigned int minorVersion,
                                  const PlatformIdentifier platform,
                                  const VersionCondition condition);
+#else
+#define Curl_verify_windows_version(a,b,c,d) (1)
+#endif
 
 #if defined(USE_WINDOWS_SSPI) || (!defined(CURL_DISABLE_TELNET) && \
                                   defined(USE_WINSOCK))

@@ -21,6 +21,7 @@
  ***************************************************************************/
 
 #include "curl_setup.h"
+#if !defined(_XBOX)
 
 #if defined(WIN32)
 
@@ -292,3 +293,4 @@ HMODULE Curl_load_library(LPCTSTR filename)
 #endif /* USE_WINDOWS_SSPI || (!CURL_DISABLE_TELNET && USE_WINSOCK) */
 
 #endif /* WIN32 */
+#endif

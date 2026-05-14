@@ -49,15 +49,17 @@ ZIP        = zip.exe
 
 !IF "$(VC)"=="6"
 CC_NODEBUG  = cl.exe /O2 /DNDEBUG
-CC_DEBUG    = cl.exe /Od /Gm /Zi /D_DEBUG /GZ
-CFLAGS     = /I. /I../lib /I../include /nologo /W3 /GX /DWIN32 /YX /FD /c /DBUILDING_LIBCURL
+CC_DEBUG    = cl.exe /Od /Gm /Zi /DNDEBUG /GZ
+#CFLAGS     = /I. /I../lib /I../include /nologo /W3 /GX /DWIN32 /YX /FD /c /DBUILDING_LIBCURL
+CFLAGS     = /I. /I../lib /I../include /nologo /W3 /GX /D_XBOX /D_ppc_ /D_MT /YX /FD /c /DBUILDING_LIBCURL
 !ELSE
 CC_NODEBUG  = cl.exe /O2 /DNDEBUG
-CC_DEBUG    = cl.exe /Od /D_DEBUG /RTC1 /Z7 /LDd /W3
-CFLAGS      = /I. /I ../lib /I../include /nologo /W3 /EHsc /DWIN32 /FD /c /DBUILDING_LIBCURL
+CC_DEBUG    = cl.exe /Od /DNDEBUG /RTC1 /Z7 /LDd /W3
+#CFLAGS      = /I. /I ../lib /I../include /nologo /W3 /EHsc /DWIN32 /FD /c /DBUILDING_LIBCURL
+CFLAGS      = /I. /I ../lib /I../include /nologo /W0 /EHsc /D_XBOX /D_ppc_ /D_MT /FD /c /DBUILDING_LIBCURL 
 !ENDIF
 
-LFLAGS     = /nologo /machine:$(MACHINE)
+LFLAGS     = /nologo /machine:$(MACHINE) /LTCG
 LNKDLL     = link.exe /DLL
 LNKLIB     = link.exe /lib
 
@@ -66,7 +68,12 @@ LFLAGS_PDB = /incremental:no /opt:ref,icf
 
 CFLAGS_LIBCURL_STATIC  = /DCURL_STATICLIB
 
-WIN_LIBS    = ws2_32.lib wldap32.lib advapi32.lib
+#WIN_LIBS    = ws2_32.lib wldap32.lib advapi32.lib
+!IF "$(DEBUG)" == "yes"
+WIN_LIBS    = xnet.lib xapilib.lib d3d9.lib xboxkrnl.lib
+!ELSE
+WIN_LIBS    = xnet.lib xapilib.lib d3d9.lib xboxkrnl.lib
+!ENDIF
 
 BASE_NAME              = libcurl
 BASE_NAME_DEBUG        = $(BASE_NAME)_debug
@@ -87,7 +94,8 @@ PDB_NAME_DLL_DEBUG     = $(BASE_NAME_DEBUG).pdb
 
 # CURL Command section
 PROGRAM_NAME = curl.exe
-CURL_CFLAGS   =  /I../lib /I../include /nologo /W3 /EHsc /DWIN32 /FD /c
+#CURL_CFLAGS   =  /I../lib /I../include /nologo /W3 /EHsc /DWIN32 /FD /c
+CURL_CFLAGS   =  /I../lib /I../include /nologo /W3 /EHsc /D_XBOX /D_ppc_ /FD /c 
 CURL_LFLAGS   = /nologo /out:$(DIRDIST)\bin\$(PROGRAM_NAME) /subsystem:console /machine:$(MACHINE)
 CURL_RESFLAGS = /i../include
 
@@ -103,6 +111,7 @@ DEVEL_INCLUDE  = $(WITH_DEVEL)/include
 DEVEL_LIB      = $(WITH_DEVEL)/lib
 DEVEL_BIN      = $(WITH_DEVEL)/bin
 
+CFLAGS = $(CFLAGS) $(CUSTOM_CFLAGS)
 CFLAGS         = $(CFLAGS) /I"$(DEVEL_INCLUDE)"
 LFLAGS         = $(LFLAGS) "/LIBPATH:$(DEVEL_LIB)"
 
@@ -131,7 +140,7 @@ MBEDTLS_LIBS   = mbedtls.lib mbedcrypto.lib mbedx509.lib
 
 !IF "$(WITH_CARES)"=="dll"
 !IF "$(DEBUG)"=="yes"
-CARES_LIBS     = caresd.lib
+CARES_LIBS     = cares.lib
 !ELSE
 CARES_LIBS     = cares.lib
 !ENDIF
@@ -139,7 +148,7 @@ USE_CARES      = true
 CARES          = dll
 !ELSEIF "$(WITH_CARES)"=="static"
 !IF "$(DEBUG)"=="yes"
-CARES_LIBS     = libcaresd.lib
+CARES_LIBS     = libcares.lib
 !ELSE
 CARES_LIBS     = libcares.lib
 !ENDIF
@@ -248,10 +257,10 @@ MANIFESTTOOL = mt -manifest $(DIRDIST)\$(PROGRAM_NAME).manifest -outputresource:
 # Runtime library configuration
 !IF "$(RTLIBCFG)"=="static"
 RTLIB = /MT
-RTLIB_DEBUG = /MTd
+RTLIB_DEBUG = /MT
 !ELSE
 RTLIB = /MD
-RTLIB_DEBUG  = /MDd
+RTLIB_DEBUG  = /MT
 !ENDIF
 
 !IF "$(MODE)"=="static"

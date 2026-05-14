@@ -48,6 +48,13 @@
  * For libcurl static library release builds no overriding takes place.
  */
 
+#ifdef _XBOX
+int Curl_gethostname(char *name, size_t namelen) {
+  if(namelen > 0) name[0] = '\0';
+  return 0;
+}
+#else
+
 int Curl_gethostname(char *name, GETHOSTNAME_TYPE_ARG2 namelen) {
 
 #ifndef HAVE_GETHOSTNAME
@@ -98,3 +105,4 @@ int Curl_gethostname(char *name, GETHOSTNAME_TYPE_ARG2 namelen) {
 #endif
 
 }
+#endif

@@ -107,6 +107,7 @@ static void
 tcpkeepalive(struct Curl_easy *data,
              curl_socket_t sockfd)
 {
+	#if defined(USE_WINSOCK) && !defined(_XBOX)
   int optval = data->set.tcp_keepalive?1:0;
 
   /* only set IDLE and INTVL if setting KEEPALIVE is successful */
@@ -158,6 +159,11 @@ tcpkeepalive(struct Curl_easy *data,
 #endif
 #endif
   }
+  #elif defined(_XBOX)
+  (void)data;
+  (void)sockfd;
+  /* La Xbox 360 no soporta las IOCTLs de KeepAlive estandar de Win32 */
+#endif
 }
 
 static CURLcode

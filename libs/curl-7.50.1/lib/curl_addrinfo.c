@@ -20,6 +20,20 @@
  *
  ***************************************************************************/
 
+#ifdef _XBOX
+#include <xtl.h>
+#include <winsockx.h>
+// Forzamos la definicion si el header fallo por macros de colision
+struct hostent {
+    char *h_name;
+    char **h_aliases;
+    short h_addrtype;
+    short h_length;
+    char **h_addr_list;
+};
+#define h_addr h_addr_list[0]
+#endif
+
 #include "curl_setup.h"
 
 #include <curl/curl.h>

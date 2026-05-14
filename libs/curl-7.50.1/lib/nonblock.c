@@ -47,7 +47,13 @@
 int curlx_nonblock(curl_socket_t sockfd,    /* operate on this */
                    int nonblock   /* TRUE or FALSE */)
 {
-#if defined(USE_BLOCKING_SOCKETS)
+#if defined(_XBOX)
+  (void)sockfd;
+  (void)nonblock;
+  /* No hacemos nada y devolvemos 0 (exito). 
+     Esto mantiene el socket en modo bloqueante por defecto. */
+  return 0; 
+#elif defined(USE_BLOCKING_SOCKETS)
 
   return 0; /* returns success */
 

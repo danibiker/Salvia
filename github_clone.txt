@@ -22,7 +22,8 @@ git subtree add --prefix=libretro/pcsxr-360 https://github.com/Wolf3s/pcsxr-360 
 ###########################################################################################################
 
 git subtree add --prefix=libs/rcheevos https://github.com/RetroAchievements/rcheevos.git master --squash
-
+git subtree add --prefix=libs/mbedtls https://github.com/Mbed-TLS/mbedtls.git mbedtls-2.6.0 --squash
+git subtree add --prefix=libs/curl-7.50.1 https://github.com/curl/curl.git curl-7_50_1 --squash
 
 ###########################################################################################################
 # Updating Libretro sources
