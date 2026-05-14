@@ -18,6 +18,13 @@ git subtree add --prefix=libretro/vba-next https://github.com/libretro/vba-next 
 git subtree add --prefix=libretro/pcsxr-360 https://github.com/Wolf3s/pcsxr-360 main --squash
 
 ###########################################################################################################
+# External libraries
+###########################################################################################################
+
+git subtree add --prefix=libs/rcheevos https://github.com/RetroAchievements/rcheevos.git master --squash
+
+
+###########################################################################################################
 # Updating Libretro sources
 ###########################################################################################################
 

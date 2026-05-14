@@ -27,6 +27,7 @@
 
 #define RC_CLIENT_UNKNOWN_GAME_ID (uint32_t)-1
 #define RC_CLIENT_RECENT_UNLOCK_DELAY_SECONDS (10 * 60) /* ten minutes */
+#define RC_CLIENT_ACHIEVEMENT_WARNING_ID 101000001
 
 #define RC_MINIMUM_UNPAUSED_FRAMES 20
 #define RC_PAUSE_DECAY_MULTIPLIER 4
@@ -244,7 +245,7 @@ static void rc_client_log_message_va(const rc_client_t* client, const char* form
     char buffer[2048];
 
 #ifdef __STDC_SECURE_LIB__
-    vsprintf_s(buffer, sizeof(buffer), format, args);
+    vsnprintf_s(buffer, sizeof(buffer), _TRUNCATE, format, args);
 #elif __STDC_VERSION__ >= 199901L /* vsnprintf requires c99 */
     vsnprintf(buffer, sizeof(buffer), format, args);
 #else /* c89 doesn't have a size-limited vsprintf function - assume the buffer is large enough */
@@ -309,187 +310,6 @@ void rc_client_log_message_formatted(const rc_client_t* client, const char* form
 
 #endif /* RC_NO_VARIADIC_MACROS */
 
-/* ===== Achievement Condition Debug Tracing =====
- * Set g_rc_debug_achievement_id to a non-zero achievement ID to log
- * every condition evaluation for that achievement each frame.
- * Set g_rc_debug_frame_interval to control how often the trace fires
- * (1 = every frame, 60 = once per second at 60fps, etc.).
- * Set both from your integration code (e.g. achievements.cpp). */
-uint32_t g_rc_debug_achievement_id = 0;
-uint32_t g_rc_debug_frame_interval = 60;
-
-static const char* rc_debug_oper_str(uint8_t oper) {
-  switch (oper) {
-    case RC_OPERATOR_EQ:   return "==";
-    case RC_OPERATOR_LT:   return "<";
-    case RC_OPERATOR_LE:   return "<=";
-    case RC_OPERATOR_GT:   return ">";
-    case RC_OPERATOR_GE:   return ">=";
-    case RC_OPERATOR_NE:   return "!=";
-    case RC_OPERATOR_NONE: return "none";
-    case RC_OPERATOR_MULT: return "*";
-    case RC_OPERATOR_DIV:  return "/";
-    case RC_OPERATOR_AND:  return "&";
-    case RC_OPERATOR_XOR:  return "^";
-    case RC_OPERATOR_MOD:  return "%%";
-    case RC_OPERATOR_ADD:  return "+";
-    case RC_OPERATOR_SUB:  return "-";
-    default:               return "?";
-  }
-}
-
-static const char* rc_debug_cond_type_str(uint8_t type) {
-  switch (type) {
-    case RC_CONDITION_STANDARD:      return "";
-    case RC_CONDITION_PAUSE_IF:      return "PauseIf ";
-    case RC_CONDITION_RESET_IF:      return "ResetIf ";
-    case RC_CONDITION_MEASURED_IF:   return "MeasuredIf ";
-    case RC_CONDITION_TRIGGER:       return "Trigger ";
-    case RC_CONDITION_MEASURED:      return "Measured ";
-    case RC_CONDITION_ADD_SOURCE:    return "AddSource ";
-    case RC_CONDITION_SUB_SOURCE:    return "SubSource ";
-    case RC_CONDITION_ADD_ADDRESS:   return "AddAddress ";
-    case RC_CONDITION_REMEMBER:      return "Remember ";
-    case RC_CONDITION_ADD_HITS:      return "AddHits ";
-    case RC_CONDITION_SUB_HITS:      return "SubHits ";
-    case RC_CONDITION_RESET_NEXT_IF: return "ResetNextIf ";
-    case RC_CONDITION_AND_NEXT:      return "AndNext ";
-    case RC_CONDITION_OR_NEXT:       return "OrNext ";
-    default:                         return "? ";
-  }
-}
-
-static const char* rc_debug_state_str(uint8_t state) {
-  switch (state) {
-    case RC_TRIGGER_STATE_INACTIVE:  return "INACTIVE";
-    case RC_TRIGGER_STATE_WAITING:   return "WAITING";
-    case RC_TRIGGER_STATE_ACTIVE:    return "ACTIVE";
-    case RC_TRIGGER_STATE_PAUSED:    return "PAUSED";
-    case RC_TRIGGER_STATE_RESET:     return "RESET";
-    case RC_TRIGGER_STATE_TRIGGERED: return "TRIGGERED";
-    case RC_TRIGGER_STATE_PRIMED:    return "PRIMED";
-    case RC_TRIGGER_STATE_DISABLED:  return "DISABLED";
-    default:                         return "?";
-  }
-}
-
-static const char* rc_debug_operand_type_str(uint8_t type) {
-  switch (type) {
-    case RC_OPERAND_ADDRESS:  return "mem";
-    case RC_OPERAND_DELTA:    return "d";
-    case RC_OPERAND_PRIOR:    return "p";
-    case RC_OPERAND_BCD:      return "b";
-    case RC_OPERAND_INVERTED: return "~";
-    default:                  return "?";
-  }
-}
-
-static uint32_t rc_debug_resolve_operand(const rc_operand_t* op) {
-  rc_typed_value_t val;
-  uint32_t raw;
-
-  if (op->type == RC_OPERAND_CONST)
-    return op->value.num;
-  if (op->type == RC_OPERAND_FP)
-    return (uint32_t)op->value.dbl;
-  if (!op->value.memref)
-    return 0;
-
-  switch (op->type) {
-    case RC_OPERAND_DELTA:
-      raw = op->value.memref->value.changed ?
-            op->value.memref->value.prior : op->value.memref->value.value;
-      break;
-    case RC_OPERAND_PRIOR:
-      raw = op->value.memref->value.prior;
-      break;
-    default:
-      raw = op->value.memref->value.value;
-      break;
-  }
-
-  val.type = RC_VALUE_TYPE_UNSIGNED;
-  val.value.u32 = raw;
-  rc_transform_memref_value(&val, op->size);
-  return val.value.u32;
-}
-
-static void rc_debug_format_operand(char* buf, size_t buf_size,
-                                    const rc_operand_t* op) {
-  uint32_t v;
-
-  if (op->type == RC_OPERAND_CONST) {
-    snprintf(buf, buf_size, "%u(0x%X)", op->value.num, op->value.num);
-    return;
-  }
-  if (op->type == RC_OPERAND_FP) {
-    snprintf(buf, buf_size, "fp:%f", op->value.dbl);
-    return;
-  }
-  if (op->type == RC_OPERAND_RECALL) {
-    snprintf(buf, buf_size, "recall");
-    return;
-  }
-  if (!op->value.memref) {
-    snprintf(buf, buf_size, "null");
-    return;
-  }
-
-  v = rc_debug_resolve_operand(op);
-  snprintf(buf, buf_size, "%s:0x%05X=%u(0x%X)",
-    rc_debug_operand_type_str(op->type),
-    op->value.memref->address, v, v);
-}
-
-static void rc_debug_log_trigger(const rc_client_t* client, uint32_t ach_id,
-                                 rc_trigger_t* trigger, int new_state) {
-  rc_condset_t* condset;
-  rc_condition_t* cond;
-  int group_idx;
-  int cond_idx;
-  char op1[80];
-  char op2[80];
-
-  RC_CLIENT_LOG_VERBOSE_FORMATTED(client,
-    "[TRACE %u] state=%s measured=%u/%u",
-    ach_id, rc_debug_state_str((uint8_t)new_state),
-    trigger->measured_value, trigger->measured_target);
-
-  /* Core group */
-  condset = trigger->requirement;
-  if (condset) {
-    cond_idx = 0;
-    for (cond = condset->conditions; cond; cond = cond->next, ++cond_idx) {
-      rc_debug_format_operand(op1, sizeof(op1), &cond->operand1);
-      rc_debug_format_operand(op2, sizeof(op2), &cond->operand2);
-      RC_CLIENT_LOG_VERBOSE_FORMATTED(client,
-        "[TRACE %u] Core.%d: %s%s %s %s => %s hits=%u/%u",
-        ach_id, cond_idx,
-        rc_debug_cond_type_str(cond->type),
-        op1, rc_debug_oper_str(cond->oper), op2,
-        (cond->is_true & 1) ? "TRUE" : "FALSE",
-        cond->current_hits, cond->required_hits);
-    }
-  }
-
-  /* Alt groups */
-  group_idx = 0;
-  for (condset = trigger->alternative; condset; condset = condset->next, ++group_idx) {
-    cond_idx = 0;
-    for (cond = condset->conditions; cond; cond = cond->next, ++cond_idx) {
-      rc_debug_format_operand(op1, sizeof(op1), &cond->operand1);
-      rc_debug_format_operand(op2, sizeof(op2), &cond->operand2);
-      RC_CLIENT_LOG_VERBOSE_FORMATTED(client,
-        "[TRACE %u] Alt%d.%d: %s%s %s %s => %s hits=%u/%u",
-        ach_id, group_idx, cond_idx,
-        rc_debug_cond_type_str(cond->type),
-        op1, rc_debug_oper_str(cond->oper), op2,
-        (cond->is_true & 1) ? "TRUE" : "FALSE",
-        cond->current_hits, cond->required_hits);
-    }
-  }
-}
-
 void rc_client_enable_logging(rc_client_t* client, int level, rc_client_message_callback_t callback)
 {
   client->callbacks.log_call = callback;
@@ -505,6 +325,22 @@ void rc_client_enable_logging(rc_client_t* client, int level, rc_client_message_
 
 static rc_clock_t rc_client_clock_get_now_millisecs(const rc_client_t* client)
 {
+#if defined(__APPLE__) && defined(__MACH__)
+ #ifdef CLOCK_MONOTONIC
+  /* clock_gettime() was added to Darwin in iOS 10.0 and macOS 10.12.
+   * On earlier deployment targets (like Leopard 10.5), the symbol doesn't exist
+   * in libSystem causing an "undefined reference to clock_gettime" linker error.
+   * To get the code to use the #else block below, forcibly undefine CLOCK_MONOTONIC
+   * when targeting earlier versions. */
+  #include <AvailabilityMacros.h>
+  #if (defined(MAC_OS_X_VERSION_MIN_REQUIRED) && MAC_OS_X_VERSION_MIN_REQUIRED < 101200)
+   #undef CLOCK_MONOTONIC
+  #elif (defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED < 100000)
+   #undef CLOCK_MONOTONIC
+  #endif
+ #endif
+#endif
+
 #if defined(CLOCK_MONOTONIC)
   struct timespec now;
   (void)client;
@@ -1119,6 +955,11 @@ static void rc_client_subset_get_user_game_summary(const rc_client_t* client,
   for (; achievement < stop; ++achievement) {
     switch (achievement->public_.category) {
       case RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE:
+        if (achievement->public_.id >= RC_CLIENT_ACHIEVEMENT_WARNING_ID) {
+          /* ignore warning achievements */
+          continue;
+        }
+
         ++summary->num_core_achievements;
         summary->points_core += achievement->public_.points;
 
@@ -1506,137 +1347,6 @@ static void rc_client_invalidate_memref_leaderboards(rc_client_game_info_t* game
   }
 }
 
-static const char* rc_condition_type_str(uint8_t type)
-{
-  switch (type) {
-    case RC_CONDITION_STANDARD:        return "STANDARD";
-    case RC_CONDITION_PAUSE_IF:        return "PAUSE_IF";
-    case RC_CONDITION_RESET_IF:        return "RESET_IF";
-    case RC_CONDITION_MEASURED:        return "MEASURED";
-    case RC_CONDITION_MEASURED_IF:     return "MEASURED_IF";
-    case RC_CONDITION_TRIGGER:         return "TRIGGER";
-    case RC_CONDITION_ADD_SOURCE:      return "ADD_SOURCE";
-    case RC_CONDITION_SUB_SOURCE:      return "SUB_SOURCE";
-    case RC_CONDITION_ADD_HITS:        return "ADD_HITS";
-    case RC_CONDITION_SUB_HITS:        return "SUB_HITS";
-    case RC_CONDITION_ADD_ADDRESS:     return "ADD_ADDRESS";
-    case RC_CONDITION_AND_NEXT:        return "AND_NEXT";
-    case RC_CONDITION_OR_NEXT:         return "OR_NEXT";
-    case RC_CONDITION_RESET_NEXT_IF:   return "RESET_NEXT_IF";
-    case RC_CONDITION_REMEMBER:        return "REMEMBER";
-    default:                           return "UNKNOWN";
-  }
-}
-
-static const char* rc_operator_str(uint8_t op)
-{
-  switch (op) {
-    case RC_OPERATOR_EQ:      return "==";
-    case RC_OPERATOR_NE:      return "!=";
-    case RC_OPERATOR_LT:      return "<";
-    case RC_OPERATOR_LE:      return "<=";
-    case RC_OPERATOR_GT:      return ">";
-    case RC_OPERATOR_GE:      return ">=";
-    case RC_OPERATOR_NONE:    return "(none)";
-    case RC_OPERATOR_MULT:    return "*";
-    case RC_OPERATOR_DIV:     return "/";
-    case RC_OPERATOR_AND:     return "&";
-    case RC_OPERATOR_XOR:     return "^";
-    case RC_OPERATOR_MOD:     return "%";
-    default:                  return "?";
-  }
-}
-
-static const char* rc_operand_type_str(uint8_t type)
-{
-  switch (type) {
-    case RC_OPERAND_ADDRESS:  return "MEM";
-    case RC_OPERAND_DELTA:    return "DELTA";
-    case RC_OPERAND_PRIOR:    return "PRIOR";
-    case RC_OPERAND_BCD:      return "BCD";
-    case RC_OPERAND_INVERTED: return "INVERTED";
-    case RC_OPERAND_CONST:    return "CONST";
-    case RC_OPERAND_FP:       return "FLOAT";
-    //case RC_OPERAND_LUA:      return "LUA";
-    default:                  return "?";
-  }
-}
-
-static void rc_client_log_achievement_addresses(rc_client_game_info_t* game, rc_client_t* client)
-{
-  rc_client_subset_info_t* subset;
-  rc_client_achievement_info_t* achievement;
-  const rc_client_achievement_info_t* achievement_end;
-  rc_trigger_t* trigger;
-  rc_condset_t* condset;
-  rc_condition_t* cond;
-  uint32_t cond_index;
-
-  subset = game->subsets;
-  for (; subset; subset = subset->next) {
-    achievement = subset->achievements;
-    achievement_end = achievement + subset->public_.num_achievements;
-
-    for (; achievement < achievement_end; ++achievement) {
-      trigger = achievement->trigger;
-      if (!trigger)
-        continue;
-
-      RC_CLIENT_LOG_VERBOSE_FORMATTED(client, "Achievement [%u] \"%s\":",
-          achievement->public_.id,
-          achievement->public_.title);
-
-      cond_index = 0;
-      condset = trigger->requirement;
-      for (; condset; condset = condset->next) {
-        cond = condset->conditions;
-        for (; cond; cond = cond->next, ++cond_index) {
-          /* Operando izquierdo */
-          char op1_str[32];
-          char op2_str[32];
-
-          if (cond->operand1.type == RC_OPERAND_ADDRESS ||
-              cond->operand1.type == RC_OPERAND_DELTA  ||
-              cond->operand1.type == RC_OPERAND_PRIOR  ||
-              cond->operand1.type == RC_OPERAND_BCD    ||
-              cond->operand1.type == RC_OPERAND_INVERTED) {
-            sprintf(op1_str, "%s[0x%06X]",
-                rc_operand_type_str(cond->operand1.type),
-                cond->operand1.value.memref->address);
-          } else if (cond->operand1.type == RC_OPERAND_FP) {
-            sprintf(op1_str, "FLOAT(%f)", cond->operand1.value.dbl);
-          } else {
-            sprintf(op1_str, "CONST(0x%X)", cond->operand1.value.num);
-          }
-
-          /* Operando derecho */
-          if (cond->operand2.type == RC_OPERAND_ADDRESS ||
-              cond->operand2.type == RC_OPERAND_DELTA  ||
-              cond->operand2.type == RC_OPERAND_PRIOR  ||
-              cond->operand2.type == RC_OPERAND_BCD    ||
-              cond->operand2.type == RC_OPERAND_INVERTED) {
-            sprintf(op2_str, "%s[0x%06X]",
-                rc_operand_type_str(cond->operand2.type),
-                cond->operand2.value.memref->address);
-          } else if (cond->operand2.type == RC_OPERAND_FP) {
-            sprintf(op2_str, "FLOAT(%f)", cond->operand2.value.dbl);
-          } else {
-            sprintf(op2_str, "CONST(0x%X)", cond->operand2.value.num);
-          }
-
-          RC_CLIENT_LOG_VERBOSE_FORMATTED(client,
-              "  [%02u] %-14s %s %s %s",
-              cond_index,
-              rc_condition_type_str(cond->type),
-              op1_str,
-              rc_operator_str(cond->oper),
-              op2_str);
-        }
-      }
-    }
-  }
-}
-
 static void rc_client_validate_addresses(rc_client_game_info_t* game, rc_client_t* client)
 {
   const rc_memory_regions_t* regions = rc_console_memory_regions(game->public_.console_id);
@@ -1645,33 +1355,28 @@ static void rc_client_validate_addresses(rc_client_game_info_t* game, rc_client_
   uint8_t buffer[8];
   uint32_t total_count = 0;
   uint32_t invalid_count = 0;
-  rc_memref_list_t* memref_list;
-  rc_memref_t* memref;
-  rc_memref_t* memref_end;
 
-  /* === NUEVO: mostrar logros y sus direcciones antes de validar === */
-  rc_client_log_achievement_addresses(game, client);
-
-  memref_list = &game->runtime.memrefs->memrefs;
+  rc_memref_list_t* memref_list = &game->runtime.memrefs->memrefs;
   for (; memref_list; memref_list = memref_list->next) {
-    memref = memref_list->items;
-    memref_end = memref + memref_list->count;
+    rc_memref_t* memref = memref_list->items;
+    const rc_memref_t* memref_end = memref + memref_list->count;
     total_count += memref_list->count;
 
     for (; memref < memref_end; ++memref) {
       if (memref->address > max_address ||
           client->callbacks.read_memory(memref->address, buffer, 1, client) == 0) {
         memref->value.type = RC_VALUE_TYPE_NONE;
+
         rc_client_invalidate_memref_achievements(game, client, memref);
         rc_client_invalidate_memref_leaderboards(game, client, memref);
+
         invalid_count++;
       }
     }
   }
 
   game->max_valid_address = max_address;
-  RC_CLIENT_LOG_VERBOSE_FORMATTED(client, "%u/%u memory addresses valid",
-      total_count - invalid_count, total_count);
+  RC_CLIENT_LOG_VERBOSE_FORMATTED(client, "%u/%u memory addresses valid", total_count - invalid_count, total_count);
 }
 
 static void rc_client_update_legacy_runtime_achievements(rc_client_game_info_t* game, uint32_t active_count)
@@ -4927,6 +4632,11 @@ static void rc_client_award_achievement(rc_client_t* client, rc_client_achieveme
 
   rc_mutex_unlock(&client->state.mutex);
 
+  if (achievement->public_.id >= RC_CLIENT_ACHIEVEMENT_WARNING_ID) {
+    RC_CLIENT_LOG_INFO_FORMATTED(client, "Unlocked warning achievement %u: %s", achievement->public_.id, achievement->public_.title);
+    return;
+  }
+
   if (client->callbacks.can_submit_achievement_unlock &&
       !client->callbacks.can_submit_achievement_unlock(achievement->public_.id, client)) {
     RC_CLIENT_LOG_INFO_FORMATTED(client, "Achievement %u unlock blocked by client", achievement->public_.id);
@@ -6131,9 +5841,6 @@ static void rc_client_update_memref_values(rc_client_t* client) {
     } while (modified_memref_list);
   }
 
-  if (client->game->runtime.richpresence && client->game->runtime.richpresence->richpresence)
-    rc_update_values(client->game->runtime.richpresence->richpresence->values, client->state.legacy_peek, client);
-
   if (invalidated_memref)
     rc_client_update_active_achievements(client->game);
 }
@@ -6159,19 +5866,6 @@ static void rc_client_do_frame_process_achievements(rc_client_t* client, rc_clie
      * we don't care about that particular notification, so look at the actual state. */
     if (new_state == RC_TRIGGER_STATE_RESET)
       new_state = trigger->state;
-
-    /* Debug trace: log all condition values for the target achievement */
-    if (g_rc_debug_achievement_id &&
-        achievement->public_.id == g_rc_debug_achievement_id) {
-      static uint32_t rc_debug_frame_counter = 0;
-      ++rc_debug_frame_counter;
-      if (g_rc_debug_frame_interval <= 1 ||
-          (rc_debug_frame_counter % g_rc_debug_frame_interval) == 0 ||
-          new_state != old_state ||
-          trigger->measured_value != old_measured_value) {
-        rc_debug_log_trigger(client, achievement->public_.id, trigger, new_state);
-      }
-    }
 
     /* if the measured value changed and the achievement hasn't triggered, show a progress indicator */
     if (trigger->measured_value != old_measured_value && old_measured_value != RC_MEASURED_UNKNOWN &&

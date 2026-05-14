@@ -26,17 +26,6 @@
 #define SALVIA_HOST_IS_BIG_ENDIAN 0
 #endif
 
-/* ---------- Debug trace for rcheevos conditions ----------
- * These variables live in rc_client.c.  Set g_rc_debug_achievement_id
- * to the numeric achievement ID you want to trace (0 = disabled).
- * g_rc_debug_frame_interval controls how often the trace fires
- * (1 = every frame, 60 = ~once/sec at 60 fps).  Traces also fire
- * immediately on any state change or measured-value change. */
-extern "C" {
-  extern uint32_t g_rc_debug_achievement_id;
-  extern uint32_t g_rc_debug_frame_interval;
-}
-
 void clearBadgeCache();
 static const std::string SALVIA_USER_AGENT = "Salvia/1.0";
 
@@ -214,19 +203,12 @@ void Achievements::initialize() {
 	// Creamos el cliente pasando la funcion de lectura de memoria
 	g_client = rc_client_create(read_memory, server_call);
 	// Habilitar logs detallados para debug
-	rc_client_enable_logging(g_client, RC_CLIENT_LOG_LEVEL_VERBOSE, log_message);
+	rc_client_enable_logging(g_client, RC_CLIENT_LOG_LEVEL_ERROR, log_message);
 
-	/* -------- TRAZA DE CONDICIONES DE UN LOGRO --------
-	 * Cambia el ID para trazar otro logro. Pon 0 para desactivar.
-	 * g_rc_debug_frame_interval controla cada cuantos frames se imprime
-	 * (siempre se imprime inmediatamente ante cambios de estado o progreso). */
-	g_rc_debug_achievement_id  = 0;   /* <-- PON AQUI EL ID DEL LOGRO (ej. 260) */
-	g_rc_debug_frame_interval  = 60;  /* 60 = ~1 vez/seg a 60fps, 1 = cada frame */
-
-	#ifdef _XBOX
+	//#ifdef _XBOX
 	// REGISTRA LA FUNCION DE TIEMPO (Crucial para Triggers/Challenges)
     //rc_client_set_get_time_millisecs_function(g_client, get_xbox_clock_millis);
-	#endif
+	//#endif
 	// Provide an event handler
 	rc_client_set_event_handler(g_client, event_handler);
 	// Hardcore 0 para evitar baneos accidentales durante el desarrollo
