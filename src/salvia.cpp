@@ -4,6 +4,8 @@
 #include "dischelper.h"
 
 retro_audio_buffer_status_callback_t audio_status_cb;
+// 1. Declara una variable global o estática para guardar el callback del core
+static retro_keyboard_event_t core_key_callback = nullptr;
 
 struct retro_core_variable {
    const char *key;    // Nombre técnico: "nestopia_region"
@@ -119,6 +121,13 @@ void applyEntry(std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &data,
 
 } // namespace anónimo
 
+// Puente entre los eventos SDL del frontend y el callback de teclado que
+// el core ha registrado via RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK. La
+// dirección del callback es: CORE → FRONTEND — el frontend lo INVOCA al
+// recibir teclas. DOSBox-Pure y otros cores que escuchan typing dependen
+// de este puente (no leen retro_input_state(RETRO_DEVICE_KEYBOARD)).
+extern "C" void salvia_dispatch_keyboard_event(bool down, unsigned retro_keycode,
+                                               uint32_t character, uint16_t modifiers);
 
 static bool retro_environment(unsigned cmd, void *data) {
 	static char dirSystem[MAX_PATH] = {0};
@@ -537,6 +546,19 @@ static bool retro_environment(unsigned cmd, void *data) {
 			}
 			return true;
 		}
+
+		case RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK: {
+			// El Core te está dando SU función callback. Tú solo la recibes.
+			const struct retro_keyboard_callback *cb = (const struct retro_keyboard_callback *)data;
+    
+			if (cb) {
+				core_key_callback = cb->callback;
+				LOG_INFO("El Core ha registrado exitosamente su callback de teclado.");
+				return true;
+			}
+			return false;
+		}
+
 		default: {
 			if (cmd < 65572){
 				LOG_DEBUG("Comando no tratado: %s", Constant::TipoToStr(cmd).c_str());
@@ -729,6 +751,17 @@ static void retro_video_refresh(const void *data, unsigned width,
 	#endif
 }
 
+// Despacha un evento SDL_KEYDOWN/KEYUP al core libretro que haya
+// registrado un callback de teclado. Se llama desde joystick.cpp en el
+// loop de eventos SDL. core_key_callback puede ser NULL si el core no
+// usa esta API (p.ej. cores que solo leen retro_input_state).
+extern "C" void salvia_dispatch_keyboard_event(bool down, unsigned retro_keycode,
+                                               uint32_t character, uint16_t modifiers) {
+    if (core_key_callback) {
+        core_key_callback(down, retro_keycode, character, modifiers);
+    }
+}
+
 // Se llama antes de pedir el estado de los inputs
 void retro_input_poll(void) {
     update_input();
@@ -830,6 +863,14 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 			//case RETRO_DEVICE_ID_MOUSE_WHEELDOWN: return (inputs->mouse_wheel < 0);
 			case RETRO_DEVICE_ID_MOUSE_MIDDLE: return inputs->mouse_buttons[1];
 		}
+	} else if (device == RETRO_DEVICE_KEYBOARD){
+		// Poll-based keyboard query (algunos cores lo usan; otros como
+		// DOSBox-Pure usan el callback event-based, ver
+		// salvia_dispatch_keyboard_event y RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK).
+		if (id < t_joy_state::MAX_RETRO_KEYS) {
+			return inputs->keyboard_state[id].keyjoydown ? 1 : 0;
+		}
+		return 0;
 	}
 	return 0;
 }

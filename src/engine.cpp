@@ -45,6 +45,12 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		return 1;
     }
 
+	// Habilitar traduccion a UNICODE en eventos de teclado. Sin esto,
+	// event.key.keysym.unicode siempre vale 0 y los cores libretro que
+	// dependen del campo `character` del callback (DOSBox-Pure, ScummVM
+	// para typing en menus, etc.) no reciben la tecla traducida.
+	SDL_EnableUNICODE(1);
+
 	#ifdef WIN
 		if (video_fullscreen){
 			const SDL_VideoInfo* info = SDL_GetVideoInfo();

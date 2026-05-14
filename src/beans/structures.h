@@ -6,6 +6,7 @@
 
 #include <const/constant.h>
 #include <const/menuconst.h>
+#include <const/keyconst.h>
 
 class FileLaunch{
     public:
@@ -88,7 +89,7 @@ struct t_scale_props{
 };
 
 // Buffer para alojar el resultado de Scale2x (ej. 320x224 -> 640x448)
-// Reservamos para el caso máximo (ej. 512x512 -> 1024x1024)
+// Reservamos para el caso maximo (ej. 512x512 -> 1024x1024)
 // 2048 * 1152 permite hasta Scale4x de una imagen de 512x256 o xBRZ alto
 static uint16_t temp_buffer[2048 * 1152]; // Ocupa aprox 4.5 MB
 
@@ -96,10 +97,10 @@ struct GameData {
     std::string description;
     std::string year;
     std::string manufacturer;
-    std::string cloneof;  // Si está vacío, es un "parent" (original)
+    std::string cloneof;  // Si esta vacio, es un "parent" (original)
     std::string romof;
     std::string driverStatus;
-    // Útil para saber si es clon rápidamente
+    // util para saber si es clon rapidamente
     bool isClone() const { return !cloneof.empty(); }
 };
 
@@ -115,7 +116,7 @@ class GameFile{
     std::string longFileName;
     std::string gameTitle;
     std::size_t cutTitleIdx;
-	std::string sortKey; // Nombre en minúsculas pre-calculado
+	std::string sortKey; // Nombre en minusculas pre-calculado
 	int systemid;
 };
 
@@ -185,6 +186,20 @@ struct t_retro_input{
 	t_retro_input(){
 		joy = -1;
 		key = -1;
+	}
+};
+
+struct t_key_input{
+    int key;
+    int keyMod;
+    int unicode;
+    bool keyjoydown;
+
+	t_key_input() {
+		key = -1;
+		keyMod = -1;
+		unicode = -1;
+		keyjoydown = false;
 	}
 };
 
@@ -272,7 +287,7 @@ struct t_joy_mapper{
 		return -1;
 	}
 
-	// Cambiamos M por M1 y M2 para permitir tamaños distintos
+	// Cambiamos M por M1 y M2 para permitir tamanyos distintos
 	template<size_t N, size_t M1, size_t M2>
 	void assignValue(int (&arrSdl)[N][M1], int (&arrBtn)[N][M2], int player, int sdlIdx, int coreIdx) {
 		if (player < 0 || player >= (int)N) return;
@@ -294,11 +309,11 @@ struct t_joy_mapper{
 		}
 	}
 
-    // Usamos una plantilla para detectar el tamaño de la fila automáticamente
+    // Usamos una plantilla para detectar el tamanyo de la fila automaticamente
     template<size_t Size>
     void clearPrevious(int (&arr)[Size], int valueToClear) {
-        // En VS2010, sizeof(arr) / sizeof(arr[0]) aquí SÍ funciona 
-        // porque 'arr' es una referencia al array con su tamaño real.
+        // En VS2010, sizeof(arr) / sizeof(arr[0]) aqui Si funciona 
+        // porque 'arr' es una referencia al array con su tamanyo real.
         for (size_t i = 0; i < Size; i++) {
             if (arr[i] == valueToClear) {
                 arr[i] = -1;
@@ -321,13 +336,13 @@ struct t_repeat_handler {
         }
 
         Uint32 now = SDL_GetTicks();
-        if (last_tick == 0) { // Primera pulsación
+        if (last_tick == 0) { // Primera pulsacion
             last_tick = now;
             return true;
         }
 
         Uint32 elapsed = now - last_tick;
-        Uint32 delay = repeat_mode ? 100 : 500; // 100ms ráfaga, 500ms pausa inicial
+        Uint32 delay = repeat_mode ? 100 : 500; // 100ms rafaga, 500ms pausa inicial
 
         if (elapsed > delay) {
             last_tick = now;
@@ -342,7 +357,7 @@ struct t_joy_state {
 	//This two arrays are used mainly to know the state of the buttons while the core is running
 	//They will be sent to the core
 	bool btn_state[MAX_PLAYERS][MAX_BUTTONS];
-	// Sticks analógicos como botones digitales
+	// Sticks analogicos como botones digitales
 	bool axis_state[MAX_PLAYERS][MAX_AXIS];    
 	// hats status
 	bool hats_state[MAX_PLAYERS][MAX_HATS];    
@@ -354,13 +369,17 @@ struct t_joy_state {
 	int16_t mouse_rel_x;
 	int16_t mouse_rel_y;
 	bool mouse_buttons[3];
+	
+	// Keyboard state for retro_keyboard_event callback (overlay support)
+	static const int MAX_RETRO_KEYS = 342;  // RETROK_LAST = 342
+	t_key_input keyboard_state[MAX_RETRO_KEYS];
 
 	// Estados del frame anterior
     bool btn_last_state[MAX_PLAYERS][MAX_BUTTONS];
     bool axis_last_state[MAX_PLAYERS][MAX_AXIS];
     bool hats_last_state[MAX_PLAYERS][MAX_HATS];
 
-	// Manejadores de repetición
+	// Manejadores de repeticion
     t_repeat_handler btn_repeat[MAX_PLAYERS][MAX_BUTTONS];
     t_repeat_handler hat_repeat[MAX_PLAYERS][MAX_HATS];
 	t_repeat_handler axis_repeat[MAX_PLAYERS][MAX_AXIS];
@@ -382,6 +401,9 @@ struct t_joy_state {
 		memset(joyTypeIdx, 0, sizeof(joyTypeIdx));
 		mouse_x = mouse_y = mouse_rel_x = mouse_rel_y = 0;
 		memset(mouse_buttons, 0, sizeof(mouse_buttons));
+		for (int i = 0; i < MAX_RETRO_KEYS; ++i) {
+			keyboard_state[i] = t_key_input();
+		}
 	}
 
 	void clearAll(){
@@ -495,7 +517,7 @@ struct t_joy_state {
         return getBtnReleased(p, i) || getHatReleased(p, i) || getAxisReleased(p, i);
     }
 
-	// Método genérico para detectar el "Tap" con auto-repeat
+	// Metodo generico para detectar el "Tap" con auto-repeat
     template<size_t N, size_t M>
     bool getTap(bool (&stateArray)[N][M], t_repeat_handler (&repeatArray)[N][M], int player, int index) {
         if (player < 0 || player >= (int)N || index < 0 || index >= (int)M) 
@@ -521,7 +543,7 @@ struct t_joy_state {
 		}
 	}
 
-	// Método genérico para detectar cuando se suelta
+	// Metodo generico para detectar cuando se suelta
 	template<size_t N, size_t M>
 	bool getReleased(bool (&curState)[N][M], bool (&lastState)[N][M], int player, int index) {
 		if (player < 0 || player >= (int)N || index < 0 || index >= (int)M) 

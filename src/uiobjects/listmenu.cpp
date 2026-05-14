@@ -281,13 +281,18 @@ bool ListMenu::compareUniquePtrsFast(const std::unique_ptr<GameFile>& a,
 void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) {
     this->clear();
     dirutil dir;
+	static string lastXmlRoute;
 
     // 1. Determinar el sistema
     vector<string> v = Constant::splitChar(emu.system, '_');
     int system = (v.size() > 0) ? Constant::strToTipo<int>(v.at(0)) : 0;
 
     // 2. Carga/Verificación de la base de datos
-    if (mameDatabase.empty() && !emu.mame_roms_xml.empty()) {
+    //if (mameDatabase.empty() && !emu.mame_roms_xml.empty())  {
+	if (!emu.mame_roms_xml.empty() && lastXmlRoute != emu.mame_roms_xml)  {
+		lastXmlRoute = emu.mame_roms_xml;
+		mameDatabase.clear();
+
 		std::string mame_xml_path = dirutil::getPathPrefix(emu.mame_roms_xml);
 		LOG_DEBUG("Cargando xml %s\n", mame_xml_path.c_str());
 

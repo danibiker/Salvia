@@ -11,6 +11,12 @@
 
 extern void retro_set_controller_port_device(unsigned port, unsigned device);
 
+// Bridge to the core's libretro keyboard callback (registered via
+// RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK in salvia.cpp). DOSBox-Pure
+// and similar cores depend on receiving key events through this path.
+extern "C" void salvia_dispatch_keyboard_event(bool down, unsigned retro_keycode,
+                                               uint32_t character, uint16_t modifiers);
+
 Joystick::Joystick(){
 	ignoreButtonRepeats = false;
 	this->w = 0;
@@ -470,7 +476,12 @@ bool Joystick::pollKeys(SDL_Surface* screen){
                     axisState[idxPos] = (val >  DEADZONE);
                     axisState[idxNeg] = (val < -DEADZONE);
                 } else {
-                    inputs.g_analog_state[p][axis] = event.jaxis.value;
+					int32_t raw = event.jaxis.value;
+                    // Clampeo seguro: evitamos el overflow de 32767
+					if (raw >= MAXINT16) raw =  MAXINT16 - 1;
+					if (raw <= MININT16) raw = MININT16 + 1;
+                    inputs.g_analog_state[p][axis] = (int16_t)raw;
+                    //inputs.g_analog_state[p][axis] = event.jaxis.value;
 					//LOG_INFO("axis: %d=%d", axis, inputs.g_analog_state[p][axis]);
                 }
                 break;
@@ -495,13 +506,54 @@ bool Joystick::pollKeys(SDL_Surface* screen){
 				case SDL_BUTTON_RIGHT:  inputs.mouse_buttons[2] = isDown; break;
 				}
 				break;
-			}
+			} 
 
 			/*case SDL_MOUSEWHEEL: {
 				// event.wheel.y es positivo para arriba, negativo para abajo
 				inputs.mouse_wheel = event.wheel.y; 
 				break;
 			}*/
+
+			case SDL_KEYDOWN: {
+				// MapSDLKeyToLibRetro hace bounds-check; sym >= SDLK_LAST → RETROK_UNKNOWN.
+				uint16_t retro_key = MapSDLKeyToLibRetro(event.key.keysym.sym);
+				uint16_t retro_mod = MapSDLModToLibRetro(event.key.keysym.mod);
+				// `character` para el callback: SDL ya traduce Shift/CapsLock al
+				// campo `unicode` cuando SDL_EnableUNICODE(1) funciona. En ports
+				// donde no funciona (Xbox 360 SDL) llega 0 — usamos fallback
+				// manual para letras y dígitos US-QWERTY.
+				uint32_t character = event.key.keysym.unicode;
+				if (character == 0) {
+					character = SDLKeyToASCIIFallback(event.key.keysym.sym,
+					                                   event.key.keysym.mod);
+				}
+				if (retro_key < t_joy_state::MAX_RETRO_KEYS && retro_key != RETROK_UNKNOWN) {
+					t_key_input *keyInput = &inputs.keyboard_state[retro_key];
+					keyInput->keyjoydown = true;
+					keyInput->key        = retro_key;
+					keyInput->keyMod     = retro_mod;
+					keyInput->unicode    = character;
+				}
+				// Despachar SIEMPRE al callback del core, incluso si la tecla no
+				// está en nuestra tabla — algunos cores hacen su propio mapeo.
+				salvia_dispatch_keyboard_event(true, retro_key, character, retro_mod);
+				break;
+			}
+
+			case SDL_KEYUP: {
+				uint16_t retro_key = MapSDLKeyToLibRetro(event.key.keysym.sym);
+				uint16_t retro_mod = MapSDLModToLibRetro(event.key.keysym.mod);
+				uint32_t character = event.key.keysym.unicode;
+				if (character == 0) {
+					character = SDLKeyToASCIIFallback(event.key.keysym.sym,
+					                                   event.key.keysym.mod);
+				}
+				if (retro_key < t_joy_state::MAX_RETRO_KEYS && retro_key != RETROK_UNKNOWN) {
+					inputs.keyboard_state[retro_key].keyjoydown = false;
+				}
+				salvia_dispatch_keyboard_event(false, retro_key, character, retro_mod);
+				break;
+			}
         }
     }
     return true;

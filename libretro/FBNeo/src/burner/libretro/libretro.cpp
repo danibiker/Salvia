@@ -258,7 +258,7 @@ int HandleMessage(enum retro_log_level level, TCHAR* szFormat, ...)
 	char buf[PRINTF_BUFFER_SIZE];
 	va_list vp;
 	va_start(vp, szFormat);
-	int rc = vsnprintf(buf, PRINTF_BUFFER_SIZE, szFormat, vp);
+	int rc = _vsnprintf_s(buf, PRINTF_BUFFER_SIZE, _TRUNCATE, szFormat, vp);
 	va_end(vp);
 	if (rc >= 0)
 	{
@@ -306,7 +306,7 @@ static INT32 __cdecl libretro_bprintf(INT32 nStatus, TCHAR* szFormat, ...)
 	//if (szFormat[strlen(szFormat)-1] != '\n') strncat(szFormat, "\n", 1);
 
 	va_start(vp, szFormat);
-	int rc = vsnprintf(buf, PRINTF_BUFFER_SIZE, szFormat, vp);
+	int rc = _vsnprintf_s(buf, PRINTF_BUFFER_SIZE, _TRUNCATE, szFormat, vp);
 	va_end(vp);
 
 	if (rc >= 0)
@@ -1146,7 +1146,11 @@ static bool open_archive()
 					char *real_rom_name;
 					uint32_t real_rom_crc;
 					int index = find_rom_by_crc(ri.nCrc, list, count, &real_rom_name);
-					HandleMessage(RETRO_LOG_DEBUG, "[FBNeo] Opening ROM file: %s\n", real_rom_name);
+					if (index >= 0 && real_rom_name != NULL)
+						HandleMessage(RETRO_LOG_DEBUG, "[FBNeo] Opening ROM file: %s\n", real_rom_name);
+					else 
+						HandleMessage(RETRO_LOG_DEBUG, "[FBNeo] realname not found\n");
+
 					BurnDrvGetRomName(&rom_name, i, 0);
 
 					bool unknown_crc = false;
