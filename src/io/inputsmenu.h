@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 #include <SDL_joystick.h>
+#include <io/keyboard.h>
 
 int launchGame(std::string);
 extern t_rom_paths romPaths;
@@ -11,6 +12,7 @@ extern t_rom_paths romPaths;
 */
 bool processActions(GameMenu*& gameMenu, t_option_action &optionAction){
 	bool ret = false;	
+	
 	if (optionAction.option == OPC_SAVESTATE){
 		const char *filepath = (const char *) optionAction.elem;
 		int iPosSlot = optionAction.indexSelected;
@@ -55,7 +57,7 @@ bool processActions(GameMenu*& gameMenu, t_option_action &optionAction){
 		gameMenu->startScrapping();
 	} else if (gameMenu->configMenus->getStatus() == EXIT_EMULATION){
 		gameMenu->running = false;
-	}
+	} 
 
 	gameMenu->joystick->inputs.clearAll();
 	if (optionAction.elem) {
@@ -99,7 +101,17 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 	} else {
 		gameMenu->joystick->pollKeys(gameMenu->overlay);
 
-		if (generalConfig){
+		if (gameMenu->isOnscreenKeybEnabled()){
+			if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
+				gameMenu->keyb->prevRow();
+			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
+				gameMenu->keyb->nextRow();
+			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
+				gameMenu->keyb->prevCol();
+			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
+				gameMenu->keyb->nextCol();
+			}
+		} else if (generalConfig){
 			if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
 				gameMenu->configMenus->prevPos();
 			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
@@ -174,11 +186,15 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 			LOG_DEBUG("Next page");
 			gameMenu->getCfgLoader()->getNextCfgEmu();
 			gameMenu->loadEmuCfg(listMenu);
+			ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
+			gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
 		}
 		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_L)){
 			LOG_DEBUG("Prev page");
 			gameMenu->getCfgLoader()->getPrevCfgEmu();
 			gameMenu->loadEmuCfg(listMenu);
+			ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
+			gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
 		}
 
 		listMenu.keyUp = gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_UP) ||

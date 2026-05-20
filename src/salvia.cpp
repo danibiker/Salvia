@@ -5,7 +5,7 @@
 
 retro_audio_buffer_status_callback_t audio_status_cb;
 // 1. Declara una variable global o estática para guardar el callback del core
-static retro_keyboard_event_t core_key_callback = nullptr;
+retro_keyboard_event_t core_key_callback = nullptr;
 
 struct retro_core_variable {
    const char *key;    // Nombre técnico: "nestopia_region"
@@ -723,7 +723,7 @@ static inline void hw_refresh(const void *data, unsigned width,
         current_video_settings.sw  = width;
         current_video_settings.sh  = height;
         current_video_settings.bpp = bpp;
-		SDL_FillRect(screen, NULL, colors[clBackground].color);
+		SDL_FillRect(screen, NULL, Constant::colors[clBackground].color);
     }
 	
 	if (current_video_settings.filter != *gameMenu->current_shader){
@@ -821,7 +821,7 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 	
 	t_joy_state *inputs = &gameMenu->joystick->inputs;
 
-	if (device == RETRO_DEVICE_JOYPAD) {
+	if (device == RETRO_DEVICE_JOYPAD && !gameMenu->isOnscreenKeybEnabled()) {
 		const int sdlModifier = inputs->mapperHotkeys.getSdlBtn(port, HK_MODIFIER);
 		const bool modifierPressed = inputs->getSdlBtn(port, sdlModifier);
 
@@ -872,7 +872,7 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 			return 0;
 		}
 	} 
-	else if (device == RETRO_DEVICE_ANALOG) {
+	else if (device == RETRO_DEVICE_ANALOG && !gameMenu->isOnscreenKeybEnabled()) {
 		int sdl_axis = -1;
 
 		if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT) {
@@ -901,7 +901,7 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 		if (sdl_axis != -1) {
 			return gameMenu->joystick->inputs.g_analog_state[port][sdl_axis];
 		}
-	} else if (device == RETRO_DEVICE_MOUSE) {
+	} else if (device == RETRO_DEVICE_MOUSE && !gameMenu->isOnscreenKeybEnabled()) {
 		switch (id) {
 			case RETRO_DEVICE_ID_MOUSE_X:      return inputs->mouse_rel_x;
 			case RETRO_DEVICE_ID_MOUSE_Y:      return inputs->mouse_rel_y;
@@ -1146,7 +1146,7 @@ void drawLoadingProgressBar(SDL_Surface* screen, float progress) {
     SDL_Rect bgRect = { (Sint16)barX, (Sint16)barY, (Uint16)barW, (Uint16)barH };
 	//Actualizamos el area de la barra y el area del texto para que se puedan ver
 	SDL_Rect bgRectFill = { bgRect.x, bgRect.y, bgRect.w, barH * 5};
-	SDL_FillRect(screen, &bgRectFill, colors[clBackground].color);
+	SDL_FillRect(screen, &bgRectFill, Constant::colors[clBackground].color);
 	//Mostramos el fondo de la barra
     SDL_FillRect(screen, &bgRect, colorBG);
 
@@ -1170,7 +1170,7 @@ void drawLoadingProgressBar(SDL_Surface* screen, float progress) {
     //SDL_FillRect no tiene "drawRect" vacío, así que usamos 4 líneas si quieres borde fino
     //Actualizar solo la región de la barra para ganar rendimiento
     //SDL_UpdateRect(screen, barX, barY, barW, 3*barH);
-	SDL_FillRect(gameMenu->gameScreen, NULL, colors[clBackground].color);
+	SDL_FillRect(gameMenu->gameScreen, NULL, Constant::colors[clBackground].color);
 	SDL_Flip(gameMenu->gameScreen);
 }
 
@@ -1349,7 +1349,7 @@ int launchGame(std::string rompath){
 		loadSram(romPaths.sram.c_str());
 	}
 
-	SDL_FillRect(gameMenu->gameScreen, NULL, colors[clBackground].color);
+	SDL_FillRect(gameMenu->gameScreen, NULL, Constant::colors[clBackground].color);
 	gameMenu->setEmuStatus(EMU_STARTED);
 	gameMenu->clearOverlay();
 	return 1;
@@ -1386,24 +1386,7 @@ bool loadGameAtStart(int argc, char *argv[]){
 	return ret;
 }
 
-void closeResources() {
-	closeGame();
-	Scrapper::ShutdownScrapper();
-    if (conversion_buffer != NULL) {
-        free(conversion_buffer);
-        conversion_buffer = NULL; // Importante ponerlo a NULL tras liberar
-        buffer_size = 0;
-    }
 
-	deinitSaveSystem();
-	Launcher::unmountAll();
-	CurlClient curlClient;
-	curlClient.close();
-
-	delete logger;
-	delete gameMenu;
-	delete cfgLoader;
-}
 
 inline void updateGame() {
     #ifndef NO_SRAM
@@ -1497,6 +1480,25 @@ void processFrontendEvents(){
 	}
 }
 
+void closeResources() {
+	closeGame();
+	Scrapper::ShutdownScrapper();
+    if (conversion_buffer != NULL) {
+        free(conversion_buffer);
+        conversion_buffer = NULL; // Importante ponerlo a NULL tras liberar
+        buffer_size = 0;
+    }
+
+	deinitSaveSystem();
+	Launcher::unmountAll();
+	CurlClient curlClient;
+	curlClient.close();
+
+	delete logger;
+	delete gameMenu;
+	delete cfgLoader;
+}
+
 /**
 *
 */
@@ -1535,7 +1537,6 @@ int main(int argc, char *argv[]) {
 	// Registrar los callbacks de audio
 	retro_set_audio_sample(retro_audio_sample);
 	retro_set_audio_sample_batch(retro_audio_sample_batch);
-	
 
 	if (!loadGameAtStart(argc, argv)){
 		//Workaround para mostrar una primera imagen del menu con las imagenes cargadas
@@ -1543,6 +1544,9 @@ int main(int argc, char *argv[]) {
 		gameMenu->refreshScreen(listMenu);
 		listMenu.keyUp = false;
 	}
+
+	ConfigEmu *emu = cfgLoader->getCfgEmu();
+	gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
 
 	initSaveSystem();
 	CurlClient curlClient;
@@ -1567,7 +1571,7 @@ int main(int argc, char *argv[]) {
 
 		// DIBUJO DE INTERFAZ (OSD, FPS, Mensajes)
 		gameMenu->processFrontendEventsAfter();
-
+		
 		// Actualizamos la pantalla
 		//double before = Constant::getTicks();
 		//SDL_SetAlpha(gameMenu->overlay, 0, 0);

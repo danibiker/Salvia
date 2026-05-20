@@ -7,6 +7,7 @@ Hotkeys::Hotkeys(t_joy_state *inputs){
 		inputs->mapperHotkeys.setBtnFromSdl(p, JOY_BUTTON_SELECT, HK_MODIFIER);
 		inputs->mapperHotkeys.setBtnFromSdl(p, JOY_BUTTON_A, HK_RATIO);
 		inputs->mapperHotkeys.setBtnFromSdl(p, JOY_BUTTON_B, HK_SHADER);
+		inputs->mapperHotkeys.setBtnFromSdl(p, JOY_BUTTON_X, HK_ONSCREEN_KEYB);
 		inputs->mapperHotkeys.setBtnFromSdl(p, JOY_BUTTON_Y, HK_VIEW_MENU);
 		inputs->mapperHotkeys.setBtnFromSdl(p, JOY_BUTTON_L, HK_SAVESTATE);
 		inputs->mapperHotkeys.setBtnFromSdl(p, JOY_BUTTON_R, HK_LOADSTATE);

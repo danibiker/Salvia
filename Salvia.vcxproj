@@ -3907,6 +3907,7 @@
     <ClInclude Include="src\io\inputscore.h" />
     <ClInclude Include="src\io\inputsmenu.h" />
     <ClInclude Include="src\io\joystick.h" />
+    <ClInclude Include="src\io\keyboard.h" />
     <ClInclude Include="src\io\progress_bar.h" />
     <ClInclude Include="src\io\sync.h" />
     <ClInclude Include="src\io\video.h" />

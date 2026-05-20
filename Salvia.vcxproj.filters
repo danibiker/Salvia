@@ -45,21 +45,15 @@
     <Filter Include="Source Files\db">
       <UniqueIdentifier>{f368115f-97f7-42ec-8273-63ac0cf57618}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\io">
+      <UniqueIdentifier>{e5fe074d-9b3d-4941-bc26-0e53b5776767}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\const\constant.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\io\fileio.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\font\fonts.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\io\dirutil.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\io\joystick.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\io\filelist.h">
@@ -143,9 +137,6 @@
     <ClCompile Include="src\menus\gestormenus.cpp">
       <Filter>Source Files\frontend</Filter>
     </ClCompile>
-    <ClCompile Include="src\io\hotkeys.cpp">
-      <Filter>Source Files\frontend</Filter>
-    </ClCompile>
     <ClCompile Include="src\io\cursorgestor.cpp">
       <Filter>Source Files\frontend\ui</Filter>
     </ClCompile>
@@ -160,9 +151,6 @@
     </ClCompile>
     <ClCompile Include="src\uiobjects\textarea.cpp">
       <Filter>Source Files\frontend\ui</Filter>
-    </ClCompile>
-    <ClCompile Include="src\io\cfgloader.cpp">
-      <Filter>Source Files\frontend</Filter>
     </ClCompile>
     <ClCompile Include="src\io\sync.cpp">
       <Filter>Source Files\frontend</Filter>
@@ -311,6 +299,21 @@
     <ClCompile Include="src\http\achievements.cpp">
       <Filter>Source Files\http</Filter>
     </ClCompile>
+    <ClCompile Include="src\io\joystick.cpp">
+      <Filter>Source Files\io</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\dirutil.cpp">
+      <Filter>Source Files\io</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\fileio.cpp">
+      <Filter>Source Files\io</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\cfgloader.cpp">
+      <Filter>Source Files\io</Filter>
+    </ClCompile>
+    <ClCompile Include="src\io\hotkeys.cpp">
+      <Filter>Source Files\io</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\const\constant.h">
@@ -421,15 +424,6 @@
     <ClInclude Include="src\statesram.h">
       <Filter>Source Files\frontend</Filter>
     </ClInclude>
-    <ClInclude Include="src\io\hotkeys.h">
-      <Filter>Source Files\frontend</Filter>
-    </ClInclude>
-    <ClInclude Include="src\io\inputsmenu.h">
-      <Filter>Source Files\frontend</Filter>
-    </ClInclude>
-    <ClInclude Include="src\io\inputscore.h">
-      <Filter>Source Files\frontend</Filter>
-    </ClInclude>
     <ClInclude Include="src\io\video_direct.h">
       <Filter>Source Files\filters</Filter>
     </ClInclude>
@@ -468,6 +462,18 @@
     </ClInclude>
     <ClInclude Include="src\http\achievements.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\hotkeys.h">
+      <Filter>Source Files\io</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\inputscore.h">
+      <Filter>Source Files\io</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\inputsmenu.h">
+      <Filter>Source Files\io</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\keyboard.h">
+      <Filter>Source Files\io</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

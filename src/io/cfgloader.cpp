@@ -361,6 +361,8 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 						cfgEmu->config.no_uncompress = value.compare("yes") == 0 ? true : false;
 					} else if (key.compare("mame_roms_xml") == 0){
 						cfgEmu->config.mame_roms_xml = value;
+					} else if (key.compare("keyboard_type") == 0){
+						cfgEmu->config.keyboard_type = value;
 					}
 				}
 			}             

@@ -10,6 +10,7 @@
 #include <libretro/libretro.h>
 #include <utils/langmanager.h>
 #include <menus/mameparser.h>
+#include <io/keyboard.h>
 
 /* Definida en salvia.cpp — devuelve los descriptores de memoria que el core
  * envio via RETRO_ENVIRONMENT_SET_MEMORY_MAPS (ej. HRAM en Game Boy). */
@@ -21,6 +22,7 @@ vector<SDL_Surface *> Icons::icons_carts;
 GameMenu::GameMenu(CfgLoader *cfgLoader){
     status = EMU_MENU;
 	lastStatus = EMU_MENU;
+	onscreenKeyboard = false;
 	romLoaded = false;
 	gameTicks.ticks = 0;
 	this->cfgLoader = cfgLoader;
@@ -46,10 +48,6 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 		configButtonsJOY();
 	}
 
-	for (int i=0; i < clTotalColors; i++){
-		colors[i].color = SDL_MapRGBA(this->overlay->format, colors[i].sdlColor.r, colors[i].sdlColor.g, colors[i].sdlColor.b, 0xFF);
-	}
-
 	configMenus = new GestorMenus(overlay->w, overlay->h);
 	configMenus->inicializar(cfgLoader, joystick);
 	// En la clase Config o GameMenu
@@ -73,6 +71,8 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	initAchievements();
 	Icons::loadIcons();
 	Launcher::initDrives();
+
+	initColors(overlay);
 };
 
 GameMenu::~GameMenu(){
@@ -888,6 +888,9 @@ void GameMenu::processFrontendEventsAfter(){
 	processMessagesAchievements();
 	//Actualizamos para detectar cuando soltamos un boton
 	processKeyUp();
+	if (isOnscreenKeybEnabled()){
+		drawKeyboard(Fonts::getFont(Fonts::FONTSMALL), *keyb);
+	}
 }
 
 void GameMenu::processKeyUp(){
@@ -999,8 +1002,17 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 				}
 			}
 			break;
+		case HK_ONSCREEN_KEYB:
+			ConfigEmu *emu = getCfgLoader()->getCfgEmu();
+			if (!emu->keyboard_type.empty()){
+				setOnscreenKeyboard(!isOnscreenKeybEnabled());
+				if (!isOnscreenKeybEnabled()){
+					SDL_Rect rectMem = {keyb->iniX, keyb->iniY, keyb->keyboardW + 1, keyb->keyboardH + 1};
+					clearOverlayRect(rectMem);
+				}
+			}
+			break;
 	}
-	//joystick->resetButtonsCore();
 }
 
 /**
@@ -1021,7 +1033,7 @@ SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
 		rmask, gmask, bmask, amask);
 		SDL_BlitSurface(src, NULL, copia, NULL);
 		SDL_SetAlpha(copia, SDL_SRCALPHA, 0);
-		boxRGBA(copia, 0, 0, copia->w -1, copia->h -1, colors[clBackground].sdlColor.r, colors[clBackground].sdlColor.g, colors[clBackground].sdlColor.b, transparency);
+		boxRGBA(copia, 0, 0, copia->w -1, copia->h -1, Constant::colors[clBackground].sdlColor.r, Constant::colors[clBackground].sdlColor.g, Constant::colors[clBackground].sdlColor.b, transparency);
 	} else {
 		SDL_Surface *tmp = SDL_CreateRGBSurface(SDL_SWSURFACE, overlay->w, overlay->h, 
 			src->format->BitsPerPixel, src->format->Rmask, src->format->Gmask, 
@@ -1031,9 +1043,9 @@ SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
 
 		if (transparency < 255) {
 			boxRGBA(tmp, 0, 0, tmp->w - 1, tmp->h - 1, 
-					colors[clBackground].sdlColor.r, 
-					colors[clBackground].sdlColor.g, 
-					colors[clBackground].sdlColor.b, 
+					Constant::colors[clBackground].sdlColor.r, 
+					Constant::colors[clBackground].sdlColor.g, 
+					Constant::colors[clBackground].sdlColor.b, 
 					transparency);
 		}
 		copia = SDL_DisplayFormat(tmp);
@@ -1196,7 +1208,7 @@ void GameMenu::renderChallenges() {
 }
 
 void GameMenu::renderProgress() {
-	Achievements::instance()->progress.render(overlay, 0, colors[clBackground]);
+	Achievements::instance()->progress.render(overlay, 0, Constant::colors[clBackground]);
 }
 
 void GameMenu::processMessagesAchievements(){
@@ -1393,7 +1405,7 @@ void GameMenu::processMessages() {
             m.rect.h = (Uint16)m.cache->h;
             
             // Dibujamos fondo y texto
-            SDL_FillRect(overlay, &m.rect, colors[clBackground].color);
+            SDL_FillRect(overlay, &m.rect, Constant::colors[clBackground].color);
             SDL_BlitSurface(m.cache, NULL, this->overlay, &m.rect);
         }
         currentY -= line_height;
@@ -1486,24 +1498,176 @@ void GameMenu::startScrapping(){
 
 void GameMenu::clearOverlay(){
 	memset(overlay->pixels, 0, overlay->pitch * overlay->h); 
-	//SDL_FillRect(overlay, NULL, colors[clBackground].color);
 }
 
 void GameMenu::clearOverlayRect(SDL_Rect& rect){
-	//SDL_FillRect(overlay, &rect, colors[clBackground].color);
 	SDL_FillRect(overlay, &rect, 0);
 }
 
 void GameMenu::fillOverlay(int colorIndex){
 	if (colorIndex < clTotalColors){
-		SDL_FillRect(this->overlay, NULL, colors[colorIndex].color);
+		SDL_FillRect(this->overlay, NULL, Constant::colors[colorIndex].color);
 	}
 }
 
 void GameMenu::fillOverlayAlpha(int colorIndex, int alpha){
 	if (colorIndex < clTotalColors){
-		const SDL_Color& col = colors[colorIndex].sdlColor;
+		const SDL_Color& col = Constant::colors[colorIndex].sdlColor;
 		const Uint32 colorA = SDL_MapRGBA(this->overlay->format, col.r, col.g, col.b, alpha);
 		SDL_FillRect(this->overlay, NULL, colorA);
+	}
+}
+
+void GameMenu::drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int col){
+	// 3. REMARCADO DE LA TECLA SELECCIONADA (En tiempo real)
+    if (row >= 0 && row < keyb.rows &&
+        col >= 0 && col < keyb.cols) 
+    {
+        // Para saber la posición X exacta de la tecla seleccionada, 
+        // sumamos los anchos de las teclas anteriores en su misma fila
+        int targetX = keyb.iniX;
+        for (int c = 0; c < col; c++) {
+            if (keyb.layoutWidth[row][c] == 0) continue; // Ignoramos celdas absorbidas
+            
+            // Si la celda es un salto por culpa del ENTER vertical, sumamos el ancho que le correspondería
+            if (keyb.caps[row][c].h == 0) {
+                int actualW = (keyb.layoutWidth[row][c] * 70) + ((keyb.layoutWidth[row][c] - 1) * keyb.spaceX);
+                targetX += actualW + keyb.spaceX;
+            } else {
+                targetX += keyb.caps[row][c].w + keyb.spaceX;
+            }
+        }
+
+        int targetY = keyb.iniY + row * (40 + keyb.spaceY);
+        int targetW = keyb.caps[row][col].w;
+        int targetH = keyb.caps[row][col].h;
+
+        // Solo dibujamos si es una tecla válida y visible
+        if (targetW > 0 && targetH > 0) {
+            // Pintar un fondo encima de otro color (ej: Amarillo semitransparente)
+            //boxRGBA(gameMenu->overlay, targetX, targetY, targetX + targetW, targetY + targetH, 255, 255, 0, 220);
+			static bool colorChange = false;
+			if (keyb.caps[row][col].blinkingPeriod == 0){
+				colorChange = false;
+			} else if (keyb.caps[row][col].blinkingPeriod-- % (TOTAL_BLINK_FRAMES / 3) == 0){
+				colorChange = !colorChange;
+			}
+
+			SDL_Rect rect = {targetX, targetY, targetW, targetH};
+			if (!colorChange){
+				//roundedBoxRGBA(this->overlay, targetX, targetY, targetX + targetW, targetY + targetH, 5, 255, 255, 0, 220);
+				SDL_FillRect(this->overlay, &rect, SDL_MapRGB(overlay->format, 255, 255, 0));
+			} else {
+				//roundedBoxRGBA(this->overlay, targetX, targetY, targetX + targetW, targetY + targetH, 5, 255, 128, 0, 255);
+				SDL_FillRect(this->overlay, &rect, SDL_MapRGB(overlay->format, 255, 128, 0));
+			}
+            
+            // Dibujar también un borde amarillo sólido para resaltar aún más
+            //roundedRectangleRGBA(this->overlay, targetX, targetY, targetX + targetW, targetY + targetH, 5, 255, 255, 0, 255);
+            //roundedRectangleRGBA(this->overlay, targetX + 1, targetY + 1, targetX + targetW - 1, targetY + targetH - 1, 5, 255, 255, 0, 255);
+			rectangleColor(overlay, targetX, targetY, targetX + targetW, targetY + targetH, SDL_MapRGB(overlay->format, 255, 255, 0));
+			rectangleColor(overlay, targetX + 1, targetY + 1, targetX + targetW - 1, targetY + targetH - 1, SDL_MapRGB(overlay->format, 255, 255, 0));
+
+            // Volvemos a pintar el texto encima para que destaque bien sobre el nuevo fondo de selección
+            if (font != nullptr && !keyb.caps[row][col].keyLabel.empty()) {
+                SDL_Surface* textSurface = TTF_RenderUTF8_Blended(font, keyb.caps[row][col].keyLabel.c_str(), keyb.textSelectedColor);
+                if (textSurface != nullptr) {
+                    SDL_Rect destRect;
+                    destRect.x = targetX + (targetW - textSurface->w) / 2;
+                    destRect.y = targetY + (targetH - textSurface->h) / 2;
+                    SDL_BlitSurface(textSurface, nullptr, this->overlay, &destRect);
+                    SDL_FreeSurface(textSurface);
+                }
+            }
+        }
+    }
+}
+
+
+void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
+    // 1. GENERACIÓN DE LA CACHÉ (Solo se ejecuta la primera vez)
+
+	int totalKeyboardW = (keyb.cols * (70 + keyb.spaceX));
+    int totalKeyboardH = (keyb.rows * (40 + keyb.spaceY));
+    if (keyb.keyboardSurface == nullptr) {
+        SDL_Surface* rawSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, totalKeyboardW, totalKeyboardH, 
+                                                       this->overlay->format->BitsPerPixel,
+                                                       this->overlay->format->Rmask, 
+                                                       this->overlay->format->Gmask, 
+                                                       this->overlay->format->Bmask, 
+                                                       this->overlay->format->Amask);
+        if (rawSurface == nullptr) return;
+
+        //Uint32 colorkey = SDL_MapRGB(rawSurface->format, 255, 0, 255);
+        //SDL_FillRect(rawSurface, nullptr, colorkey);
+        //SDL_SetColorKey(rawSurface, SDL_SRCCOLORKEY, colorkey);
+
+        for (int row = 0; row < keyb.rows; row++){
+            //int currentX = keyb.iniX;
+			int currentX = 0;
+            for (int col = 0; col < keyb.cols; col++){
+                if (keyb.layoutWidth[row][col] == 0) continue;
+                if (keyb.caps[row][col].h == 0) {
+                    int defaultW = 70;
+                    int actualW = (keyb.layoutWidth[row][col] * defaultW) + ((keyb.layoutWidth[row][col] - 1) * keyb.spaceX);
+                    currentX += actualW + keyb.spaceX;
+                    continue;
+                }
+                if (keyb.caps[row][col].keyLabel.empty()){
+                    currentX += keyb.caps[row][col].w + keyb.spaceX;
+                    continue;
+                }    
+
+                int keybPosX = currentX;
+                //int keybPosY = keyb.iniY + row * (40 + keyb.spaceY);
+				int keybPosY = row * (40 + keyb.spaceY);
+
+                // Dibujamos el fondo base (Rojo)
+                SDL_Rect rect = { keybPosX, keybPosY, keyb.caps[row][col].w, keyb.caps[row][col].h };
+                SDL_FillRect(rawSurface, &rect, Constant::colors[clRed].color);
+				/*roundedBoxRGBA(rawSurface, rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, 5,
+					Constant::colors[clRed].sdlColor.r,
+					Constant::colors[clRed].sdlColor.g,
+					Constant::colors[clRed].sdlColor.b,
+					0xff);*/
+				/*boxRGBA(rawSurface, rect.x, rect.y, rect.x + rect.w, rect.y + rect.h,
+					Constant::colors[clRed].sdlColor.r,
+					Constant::colors[clRed].sdlColor.g,
+					Constant::colors[clRed].sdlColor.b,
+					180);*/
+
+                if (font != nullptr && !keyb.caps[row][col].keyLabel.empty()) {
+                    SDL_Surface* textSurface = TTF_RenderUTF8_Blended(font, keyb.caps[row][col].keyLabel.c_str(), keyb.textColor);
+                    if (textSurface != nullptr) {
+                        SDL_Rect destRect;
+                        destRect.x = keybPosX + (keyb.caps[row][col].w - textSurface->w) / 2;
+                        destRect.y = keybPosY + (keyb.caps[row][col].h - textSurface->h) / 2;
+                        destRect.w = textSurface->w;
+                        destRect.h = textSurface->h;
+
+                        SDL_BlitSurface(textSurface, nullptr, rawSurface, &destRect);
+                        SDL_FreeSurface(textSurface);
+                    }
+                }
+                currentX += keyb.caps[row][col].w + keyb.spaceX;
+            }
+        }
+
+        //SDL_SetAlpha(rawSurface, SDL_SRCALPHA, 180);
+        //keyb.keyboardSurface = SDL_DisplayFormatAlpha(rawSurface);
+		keyb.keyboardSurface = SDL_DisplayFormat(rawSurface);
+        SDL_FreeSurface(rawSurface);
+    }
+
+    // 2. VOLCADO ULTRA RÁPIDO DEL TECLADO BASE
+	SDL_Rect rect = { keyb.iniX, keyb.iniY, totalKeyboardW, totalKeyboardH};
+    SDL_BlitSurface(keyb.keyboardSurface, nullptr, this->overlay, &rect);
+	
+	//Drawing the selected key
+	drawSelectedKey(font, keyb, keyb.selectedRow, keyb.selectedCol);
+
+	//Drawint a selected modifier if any
+	for (unsigned int i=0; i < keyb.pressedMods.size(); i++){
+		drawSelectedKey(font, keyb, keyb.pressedMods[i].row, keyb.pressedMods[i].col);
 	}
 }

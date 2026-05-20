@@ -1,5 +1,6 @@
 #include <engine.h>
 #include <io/joystick.h>
+#include <io/keyboard.h>
 #include <http/badgedownloader.h>
 
 #ifdef _XBOX
@@ -94,6 +95,7 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 
 	initFont();
 	joystick = new Joystick();
+	keyb = new t_keyboard();
 
 	int syncMode;
 	cfgLoader->configMain[cfg::syncMode].getPropValue(syncMode);
@@ -103,6 +105,7 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 
 void Engine::stopEngine(){
 	delete joystick;
+	delete keyb;
 	delete fonts;
 	delete sync;
 	// 3. Limpieza: Devolver el reloj del sistema a su estado normal
@@ -121,8 +124,8 @@ int Engine::initFont(){
 }
 
 
-void Engine::initColors(){
+void Engine::initColors(SDL_Surface *srf){
 	for (int i=0; i < clTotalColors; i++){
-		colors[i].color = SDL_MapRGB(overlay->format, colors[i].sdlColor.r, colors[i].sdlColor.g, colors[i].sdlColor.b);
+		Constant::colors[i].color = SDL_MapRGBA(srf->format, Constant::colors[i].sdlColor.r, Constant::colors[i].sdlColor.g, Constant::colors[i].sdlColor.b, 0xFF);
 	}
 }

@@ -106,6 +106,12 @@ class GameMenu : public Engine{
 
 		int getEmuStatus(){return status;}
 		int getLastStatus(){return lastStatus;}
+		bool isOnscreenKeybEnabled(){
+			return onscreenKeyboard;
+		}
+		void setOnscreenKeyboard(bool enabled){
+			onscreenKeyboard = enabled;
+		}
 		void setRomPaths(std::string rp);
 		std::string getSramPath();
 		void showSystemMessage(std::string, uint32_t);
@@ -130,6 +136,7 @@ class GameMenu : public Engine{
 		CfgLoader *cfgLoader;
 		int status;
 		int lastStatus;
+		bool onscreenKeyboard;
 		SDL_Rect rectFps;
 		Uint32 bkgTextFps;
 		SDL_Surface* fpsSurface;
@@ -158,4 +165,6 @@ class GameMenu : public Engine{
 		inline void handleMessageQueue(uint32_t currentTicks);
 		void renderCurrentAchievement();
 		void clearLastAchievementArea();
+		void drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int col);
+		void drawKeyboard(TTF_Font* font, t_keyboard& keyb);
 };

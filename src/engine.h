@@ -25,13 +25,15 @@ class Engine{
 		AudioRateControl g_audioRate;
 		Sync *sync;
 		Joystick *joystick;
+		struct t_keyboard *keyb;
 		// Variable global para controlar la ejecución
 		bool running;
 		int initEngine(CfgLoader* cfgLoader);
         void stopEngine();
+		void initColors(SDL_Surface *srf);
     protected:
 		int initFont();
-		void initColors();
+		
 		Fileio fileio;
     private:
 };

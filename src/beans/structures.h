@@ -8,6 +8,7 @@
 #include <const/menuconst.h>
 #include <const/keyconst.h>
 
+
 class FileLaunch{
     public:
             FileLaunch(){};
@@ -649,6 +650,8 @@ class ConfigEmu{
 	bool no_uncompress;
 	//Set the xml to obtain mame game names
 	std::string mame_roms_xml;
+	//Se the keyboard type
+	std::string keyboard_type;
 };
 
 struct t_rom_paths{

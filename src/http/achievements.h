@@ -425,7 +425,7 @@ public:
 				txtRect.w = data.cache->w;
 				txtRect.h = data.cache->h;
 				
-				SDL_FillRect(dest, &txtRect, colors[clBackground].color);
+				SDL_FillRect(dest, &txtRect, Constant::colors[clBackground].color);
 				SDL_BlitSurface(data.cache, NULL, dest, &txtRect);
 				yOffset += data.cache->h + 2; // Espaciado dinámico según la fuente
 			}

@@ -94,17 +94,13 @@ typedef enum {
 typedef enum {
     clBackground = 0,
 	clBkgMenu,
+	clRed,
     clTotalColors
 } enumColors;
 
 struct svColor{
 	SDL_Color sdlColor;
 	Uint32 color;
-};
-
-static svColor colors[clTotalColors] = {
-	{{0, 0, 0} , 0},			//clBackground
-	{{247, 221, 114}, 0}		//clBkgMenu
 };
 
 
@@ -388,6 +384,8 @@ class Constant{
         static const std::string WHITESPACE;
         static char tempFileSep[2];
         static volatile uint32_t totalTicks;
+
+		static svColor colors[clTotalColors];
 
 		static std::string getAppDir(){ 
             return appDir; 

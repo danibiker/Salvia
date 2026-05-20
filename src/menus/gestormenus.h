@@ -22,14 +22,14 @@ const uint8_t BOOT_NO_DISK = 0x01;
 const uint8_t BOOT_WITH_DISK = 0x02;
 
 struct t_option_action{
-	int option;
+	TipoOpcion option;
 	int action;
 	void *elem;
 	int indexSelected;
 	std::string message;
 	
 	t_option_action(){
-		option = 0;
+		option = OPC_BOOLEANA;
 		action = 0;
 		elem = NULL;
 		indexSelected = 0;

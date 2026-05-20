@@ -17,6 +17,8 @@ extern void retro_set_controller_port_device(unsigned port, unsigned device);
 extern "C" void salvia_dispatch_keyboard_event(bool down, unsigned retro_keycode,
                                                uint32_t character, uint16_t modifiers);
 
+extern retro_keyboard_event_t core_key_callback;
+
 Joystick::Joystick(){
 	ignoreButtonRepeats = false;
 	this->w = 0;
@@ -527,16 +529,19 @@ bool Joystick::pollKeys(SDL_Surface* screen){
 					character = SDLKeyToASCIIFallback(event.key.keysym.sym,
 					                                   event.key.keysym.mod);
 				}
-				if (retro_key < t_joy_state::MAX_RETRO_KEYS && retro_key != RETROK_UNKNOWN) {
+
+				if (core_key_callback) {
+					// Despachar SIEMPRE al callback del core, incluso si la tecla no
+					// está en nuestra tabla — algunos cores hacen su propio mapeo.
+					salvia_dispatch_keyboard_event(true, retro_key, character, retro_mod);
+				} else if (retro_key < t_joy_state::MAX_RETRO_KEYS && retro_key != RETROK_UNKNOWN) {
 					t_key_input *keyInput = &inputs.keyboard_state[retro_key];
 					keyInput->keyjoydown = true;
 					keyInput->key        = retro_key;
 					keyInput->keyMod     = retro_mod;
 					keyInput->unicode    = character;
 				}
-				// Despachar SIEMPRE al callback del core, incluso si la tecla no
-				// está en nuestra tabla — algunos cores hacen su propio mapeo.
-				salvia_dispatch_keyboard_event(true, retro_key, character, retro_mod);
+				
 				break;
 			}
 
@@ -548,10 +553,12 @@ bool Joystick::pollKeys(SDL_Surface* screen){
 					character = SDLKeyToASCIIFallback(event.key.keysym.sym,
 					                                   event.key.keysym.mod);
 				}
-				if (retro_key < t_joy_state::MAX_RETRO_KEYS && retro_key != RETROK_UNKNOWN) {
+				
+				if (core_key_callback) {
+					salvia_dispatch_keyboard_event(false, retro_key, character, retro_mod);
+				} else if (retro_key < t_joy_state::MAX_RETRO_KEYS && retro_key != RETROK_UNKNOWN) {
 					inputs.keyboard_state[retro_key].keyjoydown = false;
 				}
-				salvia_dispatch_keyboard_event(false, retro_key, character, retro_mod);
 				break;
 			}
         }
