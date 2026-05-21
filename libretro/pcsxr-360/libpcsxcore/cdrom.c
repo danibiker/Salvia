@@ -201,11 +201,20 @@ extern SPUregisterCallback SPU_registerCallback;
 
 static u8 irqMaskedPrev;
 
+#if PCSXR_DIAG_INSTRUMENTATION
+/* Counter compartido con r3000a.c. Ver comentario alli para detalles. */
+extern volatile uint32_t diag_hw_irq_set_count[11];
+#endif
+
 static void setIrq(void)
 {
 	u8 new_masked = (cdr.Stat & cdr.Reg2) ? 1 : 0;
-	if (new_masked && !irqMaskedPrev)
+	if (new_masked && !irqMaskedPrev) {
+#if PCSXR_DIAG_INSTRUMENTATION
+		diag_hw_irq_set_count[2]++;  /* bit 2 = CDROM IRQ */
+#endif
 		psxHu32ref_2(0x1070) |= SWAP32((u32)0x4);
+	}
 	irqMaskedPrev = new_masked;
 }
 
@@ -259,6 +268,9 @@ void cdrDecodedBufferInterrupt()
 //if(use_vm)
 //	psxHu32ref(0x1070) |= SWAP32((u32)0x200);
 //else
+#if PCSXR_DIAG_INSTRUMENTATION
+	diag_hw_irq_set_count[9]++;  /* bit 9 = SPU IRQ (CDDA databuf signal) */
+#endif
 	psxHu32ref_2(0x1070) |= SWAP32((u32)0x200);//teste
 
 
@@ -1209,6 +1221,32 @@ void cdrAttenuate(s16 *buf, int samples, int stereo)
 	}
 }
 
+/* === CDREAD anti-busyloop backoff ===
+ *
+ * El path original "espera ack del juego" (cdr.Irq || cdr.Stat set) reprograma
+ * el evento CDREAD a 0x100 cycles (256, ~7.6 us PSX). Si el juego nunca llega
+ * a procesar la IRQ (deadlock interno del state machine del juego o de los
+ * threads del emulador), ese path se ejecuta ~12.000 veces/segundo en bucle
+ * indefinido. La diagnostic instrumentation (`evt cdread`) lo confirmaba
+ * para Silent Hill: 35.000+ dispatches por ventana de 3s.
+ *
+ * No queremos romper la semantica de "esperar ack" para juegos donde es real
+ * (Brave Fencer Musashi y similares). Estrategia: dejar el path agresivo
+ * intacto para los primeros N reschedules consecutivos. A partir de ahi,
+ * backoff exponencial:
+ *   - waits < 32       : 0x100 cycles  (original, ~7.6 us)
+ *   - waits 32..256    : cdReadTime/16 (~3 ms)         <- juego ya tuvo
+ *                                                         tiempo de sobra
+ *   - waits 256..1024  : cdReadTime/2  (~6.7 ms)
+ *   - waits >= 1024    : cdReadTime    (~13.3 ms = 75 Hz, sector rate)
+ *
+ * El streak se resetea al primer sector procesado correctamente. Mientras
+ * el juego no salga del deadlock NO modificamos cdr.Stat (no corrompemos
+ * estado visible), solo dejamos de quemar CPU emulado. Eso libera ciclos
+ * para que otros eventos (SIO, vblank handlers) puedan progresar y permitan
+ * al juego desbloquearse por su cuenta. */
+static u32 s_cdr_read_wait_streak = 0;
+
 void cdrReadInterrupt() {
 	u8 *buf;
 
@@ -1216,9 +1254,28 @@ void cdrReadInterrupt() {
 		return;
 
 	if (cdr.Irq || cdr.Stat) {
-		CDREAD_INT(0x100);
+		u32 delay;
+		s_cdr_read_wait_streak++;
+		if      (s_cdr_read_wait_streak < 32)    delay = 0x100;
+		else if (s_cdr_read_wait_streak < 256)   delay = cdReadTime / 16;
+		else if (s_cdr_read_wait_streak < 1024)  delay = cdReadTime / 2;
+		else                                     delay = cdReadTime;
+#if PCSXR_DIAG_INSTRUMENTATION
+		/* Aviso UNA SOLA VEZ por streak: cuando cruzamos el umbral 256 ya
+		 * llevamos ~190 ms de wait acumulado, claramente patologico. */
+		if (s_cdr_read_wait_streak == 256) {
+			extern void pcsxr_log(int level, const char *format, ...);
+			pcsxr_log(2 /*RETRO_LOG_WARN*/,
+				"[CDR] cdrReadInterrupt stuck: 256+ reschedules waiting for game to ack (cdr.Irq=%u cdr.Stat=%u)\n",
+				(unsigned)cdr.Irq, (unsigned)cdr.Stat);
+		}
+#endif
+		CDREAD_INT(delay);
 		return;
 	}
+
+	/* Sector va a procesarse: resetear el streak de waits. */
+	s_cdr_read_wait_streak = 0;
 /*
 if(use_vm){
 	if ((psxHu32ref(0x1070) & psxHu32ref(0x1074) & SWAP32((u32)0x4)) && !cdr.ReadRescheduled) {

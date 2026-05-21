@@ -46,6 +46,20 @@
 #include <algorithm>
 #include <cstdlib> /* std::abs */
 
+/* Toggle global de dithering (libretro option `pcsxr360_dithering`).
+ * Definido en libretro_core.cpp. Cuando vale 0, el sw_backend salta el path
+ * de dither aunque el juego haya seteado el bit en GP1. Util para ganar
+ * fillrate o desactivar el dither en juegos donde produce artefactos. */
+extern "C" int g_pcsxr_dithering;
+
+/* True Color (24-bit shadow framebuffer). Definidos en gpu_duck_driver.cpp.
+ * `g_psxVuw24` es u32* (BGR888 con A=0) de 1024x512.  Cuando active vale 1
+ * Y g_psxVuw24 != NULL, ShadePixel y los path de VRAM ops escriben el valor
+ * 8-bit-por-canal al shadow ademas del 5-bit a psxVuw normal.  El display
+ * lo lee desde xbox_soft/draw_ok.c BlitScreen32. */
+extern "C" unsigned int* g_psxVuw24;
+extern "C" int           g_pcsxr_true_color_active;
+
 /* ------------------------------------------------------------------
  * Dither LUT — runtime-initialised once.
  * Upstream did this at compile time via `constexpr`; VS2010 has none.
@@ -126,7 +140,10 @@ void GPU_SW_Backend::DrawPolygon(const GPUBackendDrawPolygonCommand* cmd)
   GPURenderCommand rc;
   rc.bits = cmd->rc.bits;
 
-  const bool dithering_enable = rc.IsDitheringEnabled() && cmd->draw_mode.dither_enable;
+  /* AND con el flag global del libretro option pcsxr360_dithering: si el
+   * usuario lo desactiva, todas las primitivas van al path sin dither. */
+  const bool dithering_enable =
+      (g_pcsxr_dithering != 0) && rc.IsDitheringEnabled() && cmd->draw_mode.dither_enable;
 
   const DrawTriangleFunction DrawFunction = GetDrawTriangleFunction(
     rc.shading_enable, rc.texture_enable, rc.raw_texture_enable, rc.transparency_enable, dithering_enable);
@@ -149,8 +166,10 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
 
 void GPU_SW_Backend::DrawLine(const GPUBackendDrawLineCommand* cmd)
 {
+  /* Mismo AND con g_pcsxr_dithering que en DrawPolygon. */
+  const bool dithering_enable = (g_pcsxr_dithering != 0) && cmd->IsDitheringEnabled();
   const DrawLineFunction DrawFunction =
-    GetDrawLineFunction(cmd->rc.shading_enable, cmd->rc.transparency_enable, cmd->IsDitheringEnabled());
+    GetDrawLineFunction(cmd->rc.shading_enable, cmd->rc.transparency_enable, dithering_enable);
 
   for (u16 i = 1; i < cmd->num_vertices; i++)
     (this->*DrawFunction)(cmd, &cmd->vertices[i - 1], &cmd->vertices[i]);
@@ -168,6 +187,15 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
 {
   VRAMPixel color;
   color.bits = 0;
+
+  /* === True-color shadow value ===
+   * Cuando g_pcsxr_true_color_active != 0, computamos en paralelo el valor
+   * de 8-bits por canal del pixel y lo escribimos a g_psxVuw24 al final.
+   * Layout: 0x00RRGGBB (R en byte 2, G en byte 1, B en byte 0) -- el
+   * formato que BlitScreen32 puede OR-ar con 0xFF000000 sin shuffle.
+   * Cuando true-color esta off, el if final no entra y la variable se
+   * elimina por DCE del optimizador. */
+  u32 c24 = 0;
 
   if (texture_enable)
   {
@@ -216,6 +244,19 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
     if (raw_texture_enable)
     {
       color.bits = texture_color.bits;
+
+      /* True-color: texture-color de 5-bit -> 8-bit via bit-replication.
+       * Para raw texture no hay modulacion, el color 8-bit es simplemente
+       * el texel expandido a 256 niveles. */
+      if (g_pcsxr_true_color_active)
+      {
+        const u32 tr5 = (texture_color.bits >>  0) & 0x1F;
+        const u32 tg5 = (texture_color.bits >>  5) & 0x1F;
+        const u32 tb5 = (texture_color.bits >> 10) & 0x1F;
+        c24 = (((tr5 << 3) | (tr5 >> 2)) << 16)
+            | (((tg5 << 3) | (tg5 >> 2)) <<  8)
+            | (((tb5 << 3) | (tb5 >> 2)) <<  0);
+      }
     }
     else
     {
@@ -231,6 +272,41 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
         (ZeroExtend16(s_dither_lut[dither_y][dither_x][(tg * static_cast<u16>(color_g)) >> 4]) << 5) |
         (ZeroExtend16(s_dither_lut[dither_y][dither_x][(tb * static_cast<u16>(color_b)) >> 4]) << 10) |
         (texture_color.bits & 0x8000u));
+
+      /* True-color: modulacion 8-bit.
+       *
+       * CRITICAL: la formula DEBE satisfacer quantize_to_5bit(8bit_value)
+       * == 5bit_value de psxVuw, porque BlitScreen32 hace un sanity check
+       * per-pixel (quantize(shadow) ?= vram) y si falla reexpande desde
+       * psxVuw via bit-replication, perdiendo los 8 bits.
+       *
+       * El path 5-bit (LUT) hace: ((tr_5 * color_r) >> 4) >> 3 clamp 31
+       *                        = (tr_5 * color_r) >> 7 clamp 31
+       *
+       * Para que quantize(8bit) >> 3 == ese 5bit valor exactamente,
+       * usamos el valor intermedio del LUT (pre-quantize):
+       *   c24 = (tr_5 * color_r) >> 4 clamp 255
+       *
+       * Esto es exactamente lo que el LUT consume; el >>3 de quantize
+       * recupera el 5-bit oficial.  Y como tr_5 y color_r varian
+       * suavemente (Gouraud + texture sample), el valor 8-bit tambien:
+       * sin banding por cuantizacion.
+       *
+       * Una formulacion previa usaba bit-replicate(tr_5) y >>7 (i.e. la
+       * "matematica 8-bit teoricamente correcta" del PSX), pero diferia
+       * del LUT por ~3% por la no-linealidad de bit-replicate, lo que
+       * rompia el sanity check y producia banding identico al de
+       * dither-off.  Esta nueva formulacion lo arregla. */
+      if (g_pcsxr_true_color_active)
+      {
+        u32 r8 = (tr * static_cast<u32>(color_r)) >> 4;
+        u32 g8 = (tg * static_cast<u32>(color_g)) >> 4;
+        u32 b8 = (tb * static_cast<u32>(color_b)) >> 4;
+        if (r8 > 255) r8 = 255;
+        if (g8 > 255) g8 = 255;
+        if (b8 > 255) b8 = 255;
+        c24 = (r8 << 16) | (g8 << 8) | b8;
+      }
     }
   }
   else
@@ -243,6 +319,14 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
       (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_g]) << 5) |
       (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_b]) << 10) |
       (transparency_enable ? 0x8000u : 0u));
+
+    /* True-color: pure shaded - color_r/g/b ya estan en 8-bit. */
+    if (g_pcsxr_true_color_active)
+    {
+      c24 = (static_cast<u32>(color_r) << 16)
+          | (static_cast<u32>(color_g) <<  8)
+          |  static_cast<u32>(color_b);
+    }
   }
 
   VRAMPixel bg_color;
@@ -299,6 +383,90 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
         }
       }
 
+      /* === True-color: 8-bit transparency blend ===
+       * El blend nativo del PSX (arriba, en 5-bit) produce banding visible
+       * sobre gradientes suaves -- ESTE es el motivo por el que la niebla
+       * de Silent Hill mantiene su patron de "arcoiris" cuando se quita el
+       * dither: las primitivas de niebla son semi-transparentes, asi que
+       * cada pixel pasa por la formula de blend cuantizada a 5-bit.
+       *
+       * Aqui replicamos las 4 formulas en 8-bit, leyendo el background del
+       * shadow (con sanity check vs psxVuw para detectar writes externos
+       * que no pasaron por gpu_duck), y produciendo un foreground blend
+       * con precision completa de 8-bit.  El resultado se queda en c24,
+       * que sera el valor que se escriba al shadow al final. */
+      if (g_pcsxr_true_color_active && g_psxVuw24)
+      {
+        const u32 bg_idx = VRAM_WIDTH * y + x;
+        u32 bg24 = g_psxVuw24[bg_idx];
+        /* Verificar sync con psxVuw con tolerancia +-1 LSB por canal.
+         *
+         * CRITICAL: comparacion exacta NO funciona aqui.  Cuando un pixel
+         * ya ha sido modificado por una primitiva transparente previa,
+         * su 8-bit shadow y su 5-bit psxVuw difieren legitimamente por
+         * hasta 1 LSB (el blend 5-bit cuantiza fg/bg antes de mezclar,
+         * el 8-bit no).  Una comparacion estricta rechazaria casi todos
+         * los pixels de niebla compuesta (capas de transparencia sobre
+         * fondo previamente blendeado) y bit-replicaria desde 5-bit,
+         * tirando la precision 8-bit que es el ENTERO objetivo del modo
+         * true color.
+         *
+         * Tolerancia +-1 LSB acepta drift de cuantizacion legitimo y
+         * sigue detectando escrituras externas a psxVuw (loadImage,
+         * MDEC, etc.) que normalmente difieren por mucho mas. */
+        const u32 sh_r5 = (bg24 >> 19) & 0x1F;
+        const u32 sh_g5 = (bg24 >> 11) & 0x1F;
+        const u32 sh_b5 = (bg24 >>  3) & 0x1F;
+        const u32 bg_r5 = (bg_color.bits >>  0) & 0x1F;
+        const u32 bg_g5 = (bg_color.bits >>  5) & 0x1F;
+        const u32 bg_b5 = (bg_color.bits >> 10) & 0x1F;
+        s32 dr = (s32)sh_r5 - (s32)bg_r5; if (dr < 0) dr = -dr;
+        s32 dg = (s32)sh_g5 - (s32)bg_g5; if (dg < 0) dg = -dg;
+        s32 db = (s32)sh_b5 - (s32)bg_b5; if (db < 0) db = -db;
+        if (dr > 1 || dg > 1 || db > 1)
+        {
+          bg24 = (((bg_r5 << 3) | (bg_r5 >> 2)) << 16)
+               | (((bg_g5 << 3) | (bg_g5 >> 2)) <<  8)
+               | (((bg_b5 << 3) | (bg_b5 >> 2)) <<  0);
+        }
+
+        const u32 bgr = (bg24 >> 16) & 0xFFu;
+        const u32 bgg = (bg24 >>  8) & 0xFFu;
+        const u32 bgb = (bg24 >>  0) & 0xFFu;
+        const u32 fgr = (c24  >> 16) & 0xFFu;
+        const u32 fgg = (c24  >>  8) & 0xFFu;
+        const u32 fgb = (c24  >>  0) & 0xFFu;
+
+        u32 nr, ng, nb;
+        switch (cmd->draw_mode.transparency_mode)
+        {
+          case GPUTransparencyMode::HalfBackgroundPlusHalfForeground:
+            nr = (bgr + fgr) >> 1;
+            ng = (bgg + fgg) >> 1;
+            nb = (bgb + fgb) >> 1;
+            break;
+          case GPUTransparencyMode::BackgroundPlusForeground:
+            nr = bgr + fgr; if (nr > 255) nr = 255;
+            ng = bgg + fgg; if (ng > 255) ng = 255;
+            nb = bgb + fgb; if (nb > 255) nb = 255;
+            break;
+          case GPUTransparencyMode::BackgroundMinusForeground:
+            nr = (bgr > fgr) ? (bgr - fgr) : 0;
+            ng = (bgg > fgg) ? (bgg - fgg) : 0;
+            nb = (bgb > fgb) ? (bgb - fgb) : 0;
+            break;
+          case GPUTransparencyMode::BackgroundPlusQuarterForeground:
+            nr = bgr + (fgr >> 2); if (nr > 255) nr = 255;
+            ng = bgg + (fgg >> 2); if (ng > 255) ng = 255;
+            nb = bgb + (fgb >> 2); if (nb > 255) nb = 255;
+            break;
+          default:
+            nr = fgr; ng = fgg; nb = fgb;
+            break;
+        }
+        c24 = (nr << 16) | (ng << 8) | nb;
+      }
+
       if (!texture_enable)
         color.bits &= ~0x8000u;
     }
@@ -309,6 +477,17 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
     return;
 
   SetPixel(x, y, static_cast<u16>(color.bits | cmd->params.GetMaskOR()));
+
+  /* True-color: write shadow buffer.  c24 ya tiene el valor correcto en
+   * 8-bit por canal -- ya sea computado directamente en ShadePixel para
+   * pixels opacos (raw/modulated texture o pure shaded) o calculado con
+   * el 8-bit transparency blend arriba para pixels semi-transparentes.
+   * Cero quantizacion a 5-bit en el path true-color, asi que no hay
+   * banding en gradientes ni en la niebla de Silent Hill. */
+  if (g_pcsxr_true_color_active && g_psxVuw24)
+  {
+    g_psxVuw24[VRAM_WIDTH * y + x] = c24;
+  }
 }
 
 /* ------------------------------------------------------------------
@@ -825,12 +1004,21 @@ void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GP
    * and then all writes below drop the swapped value in directly. */
   const u16 color16 = VRAMSwap(VRAMRGBA8888ToRGBA5551(color));
 
+  /* True-color shadow: el `color` original (param 32-bit) viene en RGBA8888
+   * desde GPU_FillVRAM.  Lo convertimos a nuestro layout 0x00RRGGBB.  El
+   * input es RGBA con R en byte 0, G en byte 1, B en byte 2 (PSX GP0). */
+  const u32 c24 = ((color & 0xFFu) << 16)        /* R */
+                | (((color >> 8) & 0xFFu) << 8)  /* G */
+                | ((color >> 16) & 0xFFu);       /* B */
+
   if ((x + width) <= VRAM_WIDTH && !params.interlaced_rendering)
   {
     for (u32 yoffs = 0; yoffs < height; yoffs++)
     {
       const u32 row = (y + yoffs) & VRAM_HEIGHT_MASK;
       std::fill_n(&m_vram_ptr[row * VRAM_WIDTH + x], width, color16);
+      if (g_pcsxr_true_color_active && g_psxVuw24)
+        std::fill_n(&g_psxVuw24[row * VRAM_WIDTH + x], width, c24);
     }
   }
   else if (params.interlaced_rendering)
@@ -843,10 +1031,13 @@ void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GP
         continue;
 
       u16* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
+      u32* row_ptr24 = (g_pcsxr_true_color_active && g_psxVuw24)
+                       ? &g_psxVuw24[row * VRAM_WIDTH] : 0;
       for (u32 xoffs = 0; xoffs < width; xoffs++)
       {
         const u32 col = (x + xoffs) & VRAM_WIDTH_MASK;
         row_ptr[col] = color16;
+        if (row_ptr24) row_ptr24[col] = c24;
       }
     }
   }
@@ -856,10 +1047,13 @@ void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GP
     {
       const u32 row = (y + yoffs) & VRAM_HEIGHT_MASK;
       u16* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
+      u32* row_ptr24 = (g_pcsxr_true_color_active && g_psxVuw24)
+                       ? &g_psxVuw24[row * VRAM_WIDTH] : 0;
       for (u32 xoffs = 0; xoffs < width; xoffs++)
       {
         const u32 col = (x + xoffs) & VRAM_WIDTH_MASK;
         row_ptr[col] = color16;
+        if (row_ptr24) row_ptr24[col] = c24;
       }
     }
   }
@@ -881,11 +1075,28 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
   {
     const u16* src_ptr = static_cast<const u16*>(data);
     u16* dst_ptr = &m_vram_ptr[y * VRAM_WIDTH + x];
+    u32* dst24_base = (g_pcsxr_true_color_active && g_psxVuw24)
+                      ? &g_psxVuw24[y * VRAM_WIDTH + x] : 0;
     for (u32 yoffs = 0; yoffs < height; yoffs++)
     {
       /* Optimization (C): VRAMStoreLE -> sthbrx (1 instruccion). */
       for (u32 col = 0; col < width; ++col)
         VRAMStoreLE(&dst_ptr[col], src_ptr[col]);
+      /* Shadow: bit-replicate 5-bit src to 8-bit. */
+      if (dst24_base)
+      {
+        for (u32 col = 0; col < width; ++col)
+        {
+          const u16 s = src_ptr[col];
+          const u32 r5 = (s >>  0) & 0x1F;
+          const u32 g5 = (s >>  5) & 0x1F;
+          const u32 b5 = (s >> 10) & 0x1F;
+          dst24_base[col] = (((r5 << 3) | (r5 >> 2)) << 16)
+                          | (((g5 << 3) | (g5 >> 2)) <<  8)
+                          | (((b5 << 3) | (b5 >> 2)) <<  0);
+        }
+        dst24_base += VRAM_WIDTH;
+      }
       src_ptr += width;
       dst_ptr += VRAM_WIDTH;
     }
@@ -895,15 +1106,33 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
     const u16* src_ptr = static_cast<const u16*>(data);
     const u16 mask_and = params.GetMaskAND();
     const u16 mask_or = params.GetMaskOR();
+    const bool tc = (g_pcsxr_true_color_active && g_psxVuw24);
 
     for (u32 row = 0; row < height;)
     {
-      u16* dst_row_ptr = &m_vram_ptr[((y + row++) & VRAM_HEIGHT_MASK) * VRAM_WIDTH];
+      const u32 dst_row = (y + row++) & VRAM_HEIGHT_MASK;
+      u16* dst_row_ptr = &m_vram_ptr[dst_row * VRAM_WIDTH];
+      u32* dst_row24   = tc ? &g_psxVuw24[dst_row * VRAM_WIDTH] : 0;
       for (u32 col = 0; col < width;)
       {
-        u16* pixel_ptr = &dst_row_ptr[(x + col++) & VRAM_WIDTH_MASK];
+        const u32 dst_col = (x + col++) & VRAM_WIDTH_MASK;
+        u16* pixel_ptr = &dst_row_ptr[dst_col];
         if ((VRAMLoadLE(pixel_ptr) & mask_and) == 0)
-          VRAMStoreLE(pixel_ptr, static_cast<u16>(*(src_ptr++) | mask_or));
+        {
+          /* Match original semantics: src_ptr advances ONLY when we
+           * actually write.  Masked-out pixels reuse the same source. */
+          const u16 src = *(src_ptr++);
+          VRAMStoreLE(pixel_ptr, static_cast<u16>(src | mask_or));
+          if (dst_row24)
+          {
+            const u32 r5 = (src >>  0) & 0x1F;
+            const u32 g5 = (src >>  5) & 0x1F;
+            const u32 b5 = (src >> 10) & 0x1F;
+            dst_row24[dst_col] = (((r5 << 3) | (r5 >> 2)) << 16)
+                               | (((g5 << 3) | (g5 >> 2)) <<  8)
+                               | (((b5 << 3) | (b5 >> 2)) <<  0);
+          }
+        }
       }
     }
   }
@@ -944,26 +1173,40 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
 
   const u16 mask_and = params.GetMaskAND();
   const u16 mask_or = params.GetMaskOR();
+  const bool tc = (g_pcsxr_true_color_active && g_psxVuw24);
 
   /* Both src and dst rows live in psxVuw (PSX-LE bytes). The mask-bit
    * test must compare host-native values, so we swap both sides; the
    * OR with mask_or is applied in host-native space and swapped back
-   * before the store. */
+   * before the store.
+   *
+   * Para el shadow 24-bit: copiamos el slot correspondiente del src al
+   * dst.  El shadow no tiene mask bit, asi que el mask_and check del
+   * lado destino determina si copiamos o no (igual que el 5-bit). */
   if (src_x < dst_x || ((src_x + width - 1) & VRAM_WIDTH_MASK) < ((dst_x + width - 1) & VRAM_WIDTH_MASK))
   {
     for (u32 row = 0; row < height; row++)
     {
-      const u16* src_row_ptr = &m_vram_ptr[((src_y + row) & VRAM_HEIGHT_MASK) * VRAM_WIDTH];
-      u16* dst_row_ptr = &m_vram_ptr[((dst_y + row) & VRAM_HEIGHT_MASK) * VRAM_WIDTH];
+      const u32 src_y_eff = (src_y + row) & VRAM_HEIGHT_MASK;
+      const u32 dst_y_eff = (dst_y + row) & VRAM_HEIGHT_MASK;
+      const u16* src_row_ptr = &m_vram_ptr[src_y_eff * VRAM_WIDTH];
+      u16* dst_row_ptr       = &m_vram_ptr[dst_y_eff * VRAM_WIDTH];
+      const u32* src_row24   = tc ? &g_psxVuw24[src_y_eff * VRAM_WIDTH] : 0;
+      u32*       dst_row24   = tc ? &g_psxVuw24[dst_y_eff * VRAM_WIDTH] : 0;
 
       /* Optimization (C): VRAMLoadLE/VRAMStoreLE -> lhbrx/sthbrx
        * (1 instruccion combinando load-or-store + byteswap). */
       for (s32 col = static_cast<s32>(width) - 1; col >= 0; col--)
       {
-        const u16 src_pixel = VRAMLoadLE(&src_row_ptr[(src_x + static_cast<u32>(col)) & VRAM_WIDTH_MASK]);
-        u16* dst_pixel_ptr = &dst_row_ptr[(dst_x + static_cast<u32>(col)) & VRAM_WIDTH_MASK];
+        const u32 sc = (src_x + static_cast<u32>(col)) & VRAM_WIDTH_MASK;
+        const u32 dc = (dst_x + static_cast<u32>(col)) & VRAM_WIDTH_MASK;
+        const u16 src_pixel = VRAMLoadLE(&src_row_ptr[sc]);
+        u16* dst_pixel_ptr = &dst_row_ptr[dc];
         if ((VRAMLoadLE(dst_pixel_ptr) & mask_and) == 0)
+        {
           VRAMStoreLE(dst_pixel_ptr, static_cast<u16>(src_pixel | mask_or));
+          if (dst_row24) dst_row24[dc] = src_row24[sc];
+        }
       }
     }
   }
@@ -971,15 +1214,24 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
   {
     for (u32 row = 0; row < height; row++)
     {
-      const u16* src_row_ptr = &m_vram_ptr[((src_y + row) & VRAM_HEIGHT_MASK) * VRAM_WIDTH];
-      u16* dst_row_ptr = &m_vram_ptr[((dst_y + row) & VRAM_HEIGHT_MASK) * VRAM_WIDTH];
+      const u32 src_y_eff = (src_y + row) & VRAM_HEIGHT_MASK;
+      const u32 dst_y_eff = (dst_y + row) & VRAM_HEIGHT_MASK;
+      const u16* src_row_ptr = &m_vram_ptr[src_y_eff * VRAM_WIDTH];
+      u16* dst_row_ptr       = &m_vram_ptr[dst_y_eff * VRAM_WIDTH];
+      const u32* src_row24   = tc ? &g_psxVuw24[src_y_eff * VRAM_WIDTH] : 0;
+      u32*       dst_row24   = tc ? &g_psxVuw24[dst_y_eff * VRAM_WIDTH] : 0;
 
       for (u32 col = 0; col < width; col++)
       {
-        const u16 src_pixel = VRAMLoadLE(&src_row_ptr[(src_x + col) & VRAM_WIDTH_MASK]);
-        u16* dst_pixel_ptr = &dst_row_ptr[(dst_x + col) & VRAM_WIDTH_MASK];
+        const u32 sc = (src_x + col) & VRAM_WIDTH_MASK;
+        const u32 dc = (dst_x + col) & VRAM_WIDTH_MASK;
+        const u16 src_pixel = VRAMLoadLE(&src_row_ptr[sc]);
+        u16* dst_pixel_ptr = &dst_row_ptr[dc];
         if ((VRAMLoadLE(dst_pixel_ptr) & mask_and) == 0)
+        {
           VRAMStoreLE(dst_pixel_ptr, static_cast<u16>(src_pixel | mask_or));
+          if (dst_row24) dst_row24[dc] = src_row24[sc];
+        }
       }
     }
   }

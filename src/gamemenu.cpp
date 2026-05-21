@@ -1565,8 +1565,11 @@ void GameMenu::drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int co
             // Dibujar también un borde amarillo sólido para resaltar aún más
             //roundedRectangleRGBA(this->overlay, targetX, targetY, targetX + targetW, targetY + targetH, 5, 255, 255, 0, 255);
             //roundedRectangleRGBA(this->overlay, targetX + 1, targetY + 1, targetX + targetW - 1, targetY + targetH - 1, 5, 255, 255, 0, 255);
-			rectangleColor(overlay, targetX, targetY, targetX + targetW, targetY + targetH, SDL_MapRGB(overlay->format, 255, 255, 0));
-			rectangleColor(overlay, targetX + 1, targetY + 1, targetX + targetW - 1, targetY + targetH - 1, SDL_MapRGB(overlay->format, 255, 255, 0));
+			//rectangleColor(overlay, targetX, targetY, targetX + targetW, targetY + targetH, SDL_MapRGB(overlay->format, 255, 255, 0));
+			//rectangleColor(overlay, targetX + 1, targetY + 1, targetX + targetW - 1, targetY + targetH - 1, SDL_MapRGB(overlay->format, 255, 255, 0));
+			rectangleRGBA(this->overlay, targetX, targetY, targetX + targetW, targetY + targetH, 255, 200, 0, 255);
+            rectangleRGBA(this->overlay, targetX + 1, targetY + 1, targetX + targetW - 1, targetY + targetH - 1, 255, 200, 0, 255);
+			
 
             // Volvemos a pintar el texto encima para que destaque bien sobre el nuevo fondo de selección
             if (font != nullptr && !keyb.caps[row][col].keyLabel.empty()) {
@@ -1598,9 +1601,18 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
                                                        this->overlay->format->Amask);
         if (rawSurface == nullptr) return;
 
-        //Uint32 colorkey = SDL_MapRGB(rawSurface->format, 255, 0, 255);
-        //SDL_FillRect(rawSurface, nullptr, colorkey);
-        //SDL_SetColorKey(rawSurface, SDL_SRCCOLORKEY, colorkey);
+        // Nivel de opacidad de las teclas (0=transparente, 255=opaco). Como el
+        // overlay se mezcla luego en D3D9 (XBOX_DrawOverlay con D3DBLEND_SRCALPHA),
+        // este alpha controla cuánto se mezcla con el contenido detrás (el juego).
+        const Uint8 KEY_ALPHA = 180;
+		Uint8 fillColorAlpha = KEY_ALPHA;
+
+#ifndef _XBOX
+		Uint32 colorkey = SDL_MapRGB(rawSurface->format, 255, 0, 255);
+        SDL_FillRect(rawSurface, nullptr, colorkey);
+        SDL_SetColorKey(rawSurface, SDL_SRCCOLORKEY, colorkey);
+		fillColorAlpha = 0xFF;
+#endif
 
         for (int row = 0; row < keyb.rows; row++){
             //int currentX = keyb.iniX;
@@ -1622,19 +1634,19 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
                 //int keybPosY = keyb.iniY + row * (40 + keyb.spaceY);
 				int keybPosY = row * (40 + keyb.spaceY);
 
-                // Dibujamos el fondo base (Rojo)
+                // Dibujamos el fondo base de la tecla con alpha = KEY_ALPHA.
+                // CLAVE: SDL_MapRGBA (no SDL_MapRGB) para que el byte alpha del
+                // Uint32 empaquetado sea el que queremos, no 0. Si lo metiéramos
+                // con MapRGB o con un literal sin componente alta, los píxeles
+                // saldrían con alpha=0 y el overlay no mostraría nada.
                 SDL_Rect rect = { keybPosX, keybPosY, keyb.caps[row][col].w, keyb.caps[row][col].h };
-                SDL_FillRect(rawSurface, &rect, Constant::colors[clRed].color);
-				/*roundedBoxRGBA(rawSurface, rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, 5,
-					Constant::colors[clRed].sdlColor.r,
-					Constant::colors[clRed].sdlColor.g,
-					Constant::colors[clRed].sdlColor.b,
-					0xff);*/
-				/*boxRGBA(rawSurface, rect.x, rect.y, rect.x + rect.w, rect.y + rect.h,
-					Constant::colors[clRed].sdlColor.r,
-					Constant::colors[clRed].sdlColor.g,
-					Constant::colors[clRed].sdlColor.b,
-					180);*/
+                Uint32 keyBg = SDL_MapRGBA(rawSurface->format,
+                                            Constant::colors[clRed].sdlColor.r,
+                                            Constant::colors[clRed].sdlColor.g,
+                                            Constant::colors[clRed].sdlColor.b,
+                                            fillColorAlpha);
+
+                SDL_FillRect(rawSurface, &rect, keyBg);
 
                 if (font != nullptr && !keyb.caps[row][col].keyLabel.empty()) {
                     SDL_Surface* textSurface = TTF_RenderUTF8_Blended(font, keyb.caps[row][col].keyLabel.c_str(), keyb.textColor);
@@ -1652,11 +1664,29 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
                 currentX += keyb.caps[row][col].w + keyb.spaceX;
             }
         }
-
-        //SDL_SetAlpha(rawSurface, SDL_SRCALPHA, 180);
-        //keyb.keyboardSurface = SDL_DisplayFormatAlpha(rawSurface);
-		keyb.keyboardSurface = SDL_DisplayFormat(rawSurface);
-        SDL_FreeSurface(rawSurface);
+		
+#ifdef _XBOX
+        // NO convertimos con SDL_DisplayFormat (perdería el canal alpha) ni
+        // con SDL_DisplayFormatAlpha (haría un SDL_SRCALPHA per-surface que
+        // luego mezclaría INTERNAMENTE durante el blit en SDL, en lugar de
+        // dejar el alpha-blending para D3D9). El rawSurface ya tiene el
+        // formato exacto del overlay (clonamos sus máscaras al crearlo).
+        //
+        // Quitar SDL_SRCALPHA hace que el blit final (rawSurface ? overlay)
+        // sea una COPIA literal de píxeles RGBA. El alpha de cada píxel
+        // (KEY_ALPHA para fondos, 255 para texto, intermedio en bordes
+        // antialiasados) llega intacto al overlay; XBOX_DrawOverlay después
+        // dibuja el quad con D3DBLEND_SRCALPHA / D3DBLEND_INVSRCALPHA y
+        // mezcla cada píxel con el framebuffer del juego. Regla de SDL 1.2:
+        //   RGBA?RGBA SIN SDL_SRCALPHA = copia píxeles tal cual.
+        //   RGBA?RGBA CON SDL_SRCALPHA = SDL alpha-blendea internamente.
+        SDL_SetAlpha(rawSurface, 0, 0);
+        keyb.keyboardSurface = rawSurface;   // cacheamos directamente
+#else 
+		SDL_SetAlpha(rawSurface, SDL_SRCALPHA, KEY_ALPHA);
+        keyb.keyboardSurface = SDL_DisplayFormatAlpha(rawSurface);
+		SDL_FreeSurface(rawSurface);
+#endif
     }
 
     // 2. VOLCADO ULTRA RÁPIDO DEL TECLADO BASE

@@ -38,8 +38,28 @@ static void SetupLightLUT()
 }
 
 GPU_INLINE s32 clamp_c(s32 x) {
-	if (x < 0) return 0;
-	if (x > 31) return 31;
+	/* Branchless saturate to [0, 31].
+	 *
+	 * El equivalente con branches:
+	 *     if (x < 0)  return 0;
+	 *     if (x > 31) return 31;
+	 *     return x;
+	 * tiene DOS branches por llamada y se invoca 3 veces (R/G/B) por pixel
+	 * dentro del dither hot path. Sobre valores aleatorios eso son 6 branches
+	 * por pixel impredecibles -> ~16 ciclos de mispredict cada uno en el
+	 * Xenos (PPC in-order). Catastrofico para fillrate.
+	 *
+	 * Esta version usa dos trucos clasicos de saturacion entera signed:
+	 *   - `x >> 31` con shift aritmetico replica el bit de signo en todos
+	 *     los bits: -1 (0xFFFFFFFF) si x<0, 0 si x>=0.
+	 *   - `x & ~(x >> 31)` -> 0 si x<0, x si x>=0.  Equivale a max(x, 0).
+	 *   - Aplicado de nuevo sobre `(31 - x)` para clampar al limite alto:
+	 *       sign(31-x) = -1 si x>31, 0 si x<=31.
+	 *       resultado = (x & ~sign) | (31 & sign).
+	 * Cero branches, 7 instrucciones ALU (shifts + ands + ors). */
+	x = x & ~(x >> 31);
+	s32 over = 31 - x;
+	x = (x & ~(over >> 31)) | (31 & (over >> 31));
 	return x;
 }
 

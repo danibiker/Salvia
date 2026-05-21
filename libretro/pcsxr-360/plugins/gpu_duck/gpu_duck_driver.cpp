@@ -1092,6 +1092,95 @@ extern "C" {
  * the pcsxr360_gpu_plugin libretro option. */
 int duck_gpu_enabled = 0;
 
+/* ==================================================================
+ * 24-bit "True Color" shadow framebuffer
+ *
+ * PSX VRAM nativo es BGR555 (5 bits por canal) -> 32 niveles, banding
+ * visible en gradientes (especialmente Gouraud + lighting). El dither
+ * Bayer 4x4 es la solucion historica del hardware real para enmascarar
+ * ese banding.
+ *
+ * Cuando true-color esta activo, mantenemos un buffer paralelo de
+ * 1024x512 pixels XRGB8888 (8 bits por canal -> 256 niveles, sin
+ * banding perceptible). El layout es 0x00RRGGBB con R en byte 2,
+ * G en byte 1, B en byte 0 - directamente consumible por BlitScreen32
+ * sin shuffle. ShadePixel escribe a este buffer en paralelo a psxVuw.
+ *
+ * Para writes externos a psxVuw (primLoadImage, etc.) el shadow no se
+ * sincroniza activamente - el codigo de BlitScreen32 detecta la
+ * inconsistencia por pixel (quantize(shadow_8) != vram_5) y reexpande
+ * desde psxVuw con bit-replication. Asi un pixel cargado externamente
+ * (5-bit nativo) se ve como bit-replicado a 8 bits, mientras que un
+ * pixel pintado por ShadePixel conserva los 8 bits de precision.
+ *
+ * Memoria: 2 MB. Solo se aloca cuando duck_true_color_set_active(1)
+ * se llama (libretro_core lo invoca segun la opcion pcsxr360_true_color
+ * y el renderer/pixel_format activos). En modo off es NULL y la flag
+ * g_pcsxr_true_color_active = 0, asi que el resto del codigo trivialmente
+ * skipea su path. */
+u32* g_psxVuw24                  = 0;
+int  g_pcsxr_true_color_active   = 0;
+
+static void duck_true_color_init_from_vram(unsigned short* psx_vram)
+{
+  /* Inicializa el shadow expandiendo psxVuw (5-bit) a 8-bit via
+   * bit-replication: r8 = (r5 << 3) | (r5 >> 2).  Mantiene consistencia
+   * "compressed(shadow) == vram" para que el resync defensivo en
+   * BlitScreen32 no dispare hasta que ShadePixel sobrescriba algun pixel
+   * con valores 8-bit reales. */
+  if (!g_psxVuw24 || !psx_vram) return;
+  {
+    int i;
+    int total = 1024 * 512;
+    for (i = 0; i < total; i++) {
+      /* psxVuw esta en PSX-LE bytes (compartido con xbox_soft).  Lectura
+       * via __loadshortbytereverse en BE; en LE es load directo. */
+#if defined(_XBOX) || (defined(_MSC_VER) && defined(_M_PPC))
+      u16 s = (u16)__loadshortbytereverse(0, &psx_vram[i]);
+#else
+      u16 s = psx_vram[i];
+#endif
+      u32 r5 = (s >>  0) & 0x1F;
+      u32 g5 = (s >>  5) & 0x1F;
+      u32 b5 = (s >> 10) & 0x1F;
+      u32 r8 = (r5 << 3) | (r5 >> 2);
+      u32 g8 = (g5 << 3) | (g5 >> 2);
+      u32 b8 = (b5 << 3) | (b5 >> 2);
+      g_psxVuw24[i] = (r8 << 16) | (g8 << 8) | b8;  /* 0x00RRGGBB */
+    }
+  }
+}
+
+/* Activa/desactiva el modo true-color en caliente.  Idempotente: si ya
+ * estaba en el estado pedido, no hace nada.  Aloca/libera el shadow
+ * buffer segun el caller. */
+void duck_true_color_set_active(int active)
+{
+  if (active) {
+    if (g_psxVuw24) {
+      g_pcsxr_true_color_active = 1;
+      return;
+    }
+    g_psxVuw24 = (u32*)malloc((size_t)1024 * 512 * sizeof(u32));
+    if (!g_psxVuw24) {
+      g_pcsxr_true_color_active = 0;
+      return;
+    }
+    /* Init shadow desde psxVuw si el driver ya esta vivo. */
+    if (s_driver && s_driver->GetBackend())
+      duck_true_color_init_from_vram(s_driver->GetBackend()->GetVRAM());
+    else
+      memset(g_psxVuw24, 0, (size_t)1024 * 512 * sizeof(u32));
+    g_pcsxr_true_color_active = 1;
+  } else {
+    g_pcsxr_true_color_active = 0;
+    if (g_psxVuw24) {
+      free(g_psxVuw24);
+      g_psxVuw24 = 0;
+    }
+  }
+}
+
 int duck_init(unsigned short* psx_vram)
 {
   if (s_driver)
@@ -1102,7 +1191,11 @@ int duck_init(unsigned short* psx_vram)
     delete d;
     return 0;
   }
-  /* s_driver is set by Initialize on success. */
+  /* s_driver is set by Initialize on success.  Si el true-color ya
+   * estaba activado por libretro option antes de duck_init, ahora que
+   * ya tenemos s_driver podemos hacer init del shadow desde su VRAM. */
+  if (g_pcsxr_true_color_active && g_psxVuw24)
+    duck_true_color_init_from_vram(psx_vram);
   return 1;
 }
 
@@ -1114,6 +1207,13 @@ void duck_shutdown(void)
     d->Shutdown();
     delete d;
     /* Shutdown clears s_driver. */
+  }
+  /* Libera el shadow si esta alocado.  La flag se queda como esta;
+   * libretro_core la setea de nuevo al proximo retro_init segun
+   * pcsxr360_true_color. */
+  if (g_psxVuw24) {
+    free(g_psxVuw24);
+    g_psxVuw24 = 0;
   }
 }
 

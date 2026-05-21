@@ -63,6 +63,7 @@ extern "C" {
 extern int      darkforcesfix;       /* xbox_soft/cfg.c */
 extern uint32_t dwActFixes;          /* xbox_soft GPU fixes bitmask */
 extern int      iUseFixes;           /* xbox_soft gate for dwActFixes */
+extern int      iUseDither;          /* xbox_soft dither mode (0/1/2) */
 extern BOOL     frontmission3fix;    /* libpcsxcore/psxinterpreter.c */
 
 /* Note: tombraider2fix, crashteamracingfix, spuirq, iSPUIRQWait are
@@ -101,6 +102,16 @@ extern BOOL     frontmission3fix;    /* libpcsxcore/psxinterpreter.c */
 static int           g_auto_frameskip = 0;
 static int64_t       s_frame_budget_ticks = 0;
 static int           s_skipping_this_frame = 0;
+
+/* Toggle global de dithering, leido por los 3 renderers (Unai/Peops/Duck).
+ * 1 = respeta el bit de dither que el juego setea en GP1 (comportamiento PSX
+ *     original; algunas pantallas se ven con la matriz Bayer 4x4 caracteristica).
+ * 0 = fuerza dither off en todas las primitivas (gana fillrate, evita el cuelgue
+ *     de Silent Hill por timing GPU desincronizado en el path lento de gpu_unai).
+ * Hot-reloadable via check_game_fixes + RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE
+ * porque los 3 renderers lo consultan por primitiva, no en init. */
+extern "C" int g_pcsxr_dithering = 1;
+
 extern "C" void GPU_setSkipNextFrame(int skip);          /* xbox_soft/gpu.c */
 extern void pcsxr_log(enum retro_log_level level, const char *format, ...);
 
@@ -111,6 +122,14 @@ extern void pcsxr_log(enum retro_log_level level, const char *format, ...);
  * plugins/gpu_duck/gpu_duck_driver.cpp, read by the GP0 dispatch
  * selector in plugins/xbox_soft/gpu.c. */
 extern int      duck_gpu_enabled;
+
+/* True Color (24-bit shadow framebuffer) for gpu_duck.  Defined in
+ * plugins/gpu_duck/gpu_duck_driver.cpp.  See gpu_duck_c_api.h for the
+ * detailed contract.  Called from check_game_fixes() to apply the
+ * pcsxr360_true_color libretro option in caliente.  La definicion en
+ * gpu_duck_driver.cpp esta dentro de `extern "C" { }`, asi que aqui
+ * tenemos que matchearlo para que el linker resuelva el simbolo. */
+extern "C" void duck_true_color_set_active(int active);
 
 /* Runtime selector for the gpu_unai SW renderer ported from
  * PCSX-ReARMed.  Defined in plugins/gpu_unai/gpu_unai_driver.cpp.
@@ -229,6 +248,23 @@ void retro_set_environment(retro_environment_t cb) {
 		{ "pcsxr360_threading",          "GPU Thread (restart core to apply); enabled|disabled" },
 		{ "pcsxr360_pixel_format",       "Pixel Format; RGB565|XRGB8888" },
         { "pcsxr360_auto_frameskip",     "Auto frameskip (skip render on overload); disabled|enabled" },
+        /* Dithering: respeta el bit de dither que el juego setea en GP1.
+         * Cuando ON, las primitivas de Gouraud/lighting/blending pasan por el
+         * camino con offsets de la matriz Bayer 4x4 y reclamp por canal:
+         * imagen mas fiel a la PSX original pero ~15-20% mas fillrate.
+         * Cuando OFF, todas las primitivas saltan el dither. Aplica a los 3
+         * renderers (Unai, Peops, SwanStation). Cambia en caliente. */
+        { "pcsxr360_dithering",          "Dithering (PSX-style color quantization); enabled|disabled" },
+        /* True Color (24-bit internal rendering): elimina banding sin dither.
+         * Mantiene un framebuffer paralelo 8-bit/canal junto al BGR555 normal.
+         * Solo aplica al renderer SwanStation + pixel_format XRGB8888 (los
+         * otros renderers ignoran el flag).  Defaults:
+         *   - auto: ON si renderer=SwanStation Y pixel_format=XRGB8888
+         *   - enabled: forzado ON (si no es SwanStation no surte efecto)
+         *   - disabled: forzado OFF
+         * Coste: +2MB RAM, ~10-15% mas fillrate por el doble store en
+         * ShadePixel. */
+        { "pcsxr360_true_color",         "True Color 24-bit (SwanStation + XRGB8888 only); auto|enabled|disabled" },
 		{ "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
         { "pcsxr360_fix_parasite_eve2",  "Game Fix (PEOPS): Parasite Eve 2 (counter); disabled|enabled" },
         { "pcsxr360_fix_dark_forces",    "Game Fix (PEOPS): Dark Forces / Duke Nukem (GPU); disabled|enabled" },
@@ -364,6 +400,91 @@ static void check_game_fixes(void) {
      * perturbar juegos que ya van fluidos. */
     g_auto_frameskip = read_bool_var("pcsxr360_auto_frameskip", false) ? 1 : 0;
 
+    /* Dithering global (Unai / Peops / SwanStation): propagamos a cada
+     * renderer su flag nativo. Los 3 lo consultan POR PRIMITIVA, asi que el
+     * cambio es efectivo en el siguiente draw sin reiniciar.
+     * Default = enabled (look PSX original). Si el usuario lo apaga, se
+     * mejora fillrate y se evitan los cuelgues de Silent Hill en gpu_unai.
+     *
+     * Mapeo por plugin:
+     *   - gpu_unai:  gpu_unai_config_ext.dithering en {0,1} - respeta el bit
+     *                de GP1, OR-ado con force_dithering (lo dejamos a 0).
+     *   - xbox_soft: iUseDither en {0,1,2} donde 0=off, 1=respeta GP1,
+     *                2=force. Usamos {0,1} para mirror el comportamiento.
+     *   - gpu_duck:  se hace via la variable global g_pcsxr_dithering que
+     *                el sw_backend consulta antes de bifurcar al path con
+     *                dither. */
+    g_pcsxr_dithering = read_bool_var("pcsxr360_dithering", true) ? 1 : 0;
+    gpu_unai_config_ext.dithering = g_pcsxr_dithering;
+    iUseDither = g_pcsxr_dithering;
+    /* gpu_unai mantiene DOS structs de config: la externa (ext) que es la
+     * que toca el frontend, y la interna `gpu_unai.config` que es la que
+     * consulta `DitheringEnabled()` en el inner loop. Hay que llamar a
+     * `unai_apply_config()` para propagar ext -> internal o el cambio no
+     * surte efecto en caliente. Solo tiene sentido si Unai esta activo;
+     * con otro renderer la llamada copia datos a una zona muerta. */
+    if (unai_gpu_enabled)
+        unai_apply_config();
+
+    /* True Color (gpu_duck only): aloca/libera el shadow buffer paralelo
+     * 24-bit segun la libretro option.  Tres modos:
+     *   - "auto": ON si renderer=SwanStation Y pixel_format=XRGB8888.  Lo
+     *     gating por pixel_format es porque RGB565 (output 16-bit) no puede
+     *     mostrar 8-bit/canal, asi que el shadow no aporta nada.
+     *   - "enabled": ON siempre (si duck no esta activo, el flag se setea
+     *     pero el buffer no se aloca porque duck_true_color_set_active
+     *     solo aloca cuando duck esta vivo).
+     *   - "disabled": OFF.
+     *
+     * El flag g_pcsxr_true_color_active y el buffer g_psxVuw24 se gestionan
+     * via duck_true_color_set_active() (en gpu_duck_driver.cpp).  Cuando el
+     * usuario cambia la option en caliente: si pasa de OFF a ON y duck esta
+     * activo, se aloca el shadow y se inicializa expandiendo psxVuw.  Si
+     * pasa de ON a OFF, se libera el shadow. */
+    {
+        struct retro_variable var_tc = { "pcsxr360_true_color", NULL };
+        const char* tc_mode = NULL;
+        if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_tc) && var_tc.value)
+            tc_mode = var_tc.value;
+
+        int want_tc = 0;
+        if (tc_mode && strcmp(tc_mode, "enabled") == 0) {
+            want_tc = 1;
+        } else if (tc_mode && strcmp(tc_mode, "disabled") == 0) {
+            want_tc = 0;
+        } else {
+            /* "auto" (or default): habilitar si SwanStation + XRGB8888.
+             *
+             * IMPORTANTE: leemos pcsxr360_gpu_renderer DIRECTAMENTE de la
+             * core option, NO usamos `duck_gpu_enabled`.  Razon: en el
+             * arranque, check_game_fixes() corre ANTES de check_gpu_
+             * renderer_initial_only(), asi que duck_gpu_enabled todavia
+             * es 0 (su valor de inicializacion estatica) en este punto.
+             * Si nos basaramos en el global, el modo auto nunca activaria
+             * true-color al boot, solo despues de un toggle manual de la
+             * libretro option (que dispara variable-update y la re-evalua
+             * cuando ya hay state).  Leyendo la option directamente
+             * funciona en todos los timing paths. */
+            struct retro_variable var_pf = { "pcsxr360_pixel_format", NULL };
+            const char* pf = NULL;
+            if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_pf) && var_pf.value)
+                pf = var_pf.value;
+            const int is_xrgb = (pf && strcmp(pf, "XRGB8888") == 0);
+
+            struct retro_variable var_renderer = { "pcsxr360_gpu_renderer", NULL };
+            const char* renderer = NULL;
+            if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_renderer) && var_renderer.value)
+                renderer = var_renderer.value;
+            const int is_swanstation = (renderer && strcmp(renderer, "SwanStation") == 0);
+
+            want_tc = (is_swanstation && is_xrgb) ? 1 : 0;
+        }
+        duck_true_color_set_active(want_tc);
+        pcsxr_log(RETRO_LOG_INFO,
+            "[TrueColor] mode=%s -> active=%d\n",
+            tc_mode ? tc_mode : "(unset/auto)", want_tc);
+    }
+
     /* (GPU renderer selector intentionally NOT re-applied here — see
      * check_gpu_renderer_initial_only() and the comment on it. This
      * function is hot-reloaded on RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE,
@@ -398,11 +519,12 @@ static void check_gpu_renderer_initial_only(void) {
     if (unai_gpu_enabled) {
         /* Populate gpu_unai's frontend-facing config struct from the
          * libretro variables.  Mirrors PCSX-ReARMed's
-         * gpu_unai_config_ext that gets read by renderer_init. */
+         * gpu_unai_config_ext that gets read by renderer_init.
+         * Nota: dithering NO se setea aqui - check_game_fixes() lo aplica
+         * desde la libretro option pcsxr360_dithering en cada init/update. */
         gpu_unai_config_ext.lighting        = 1;
         gpu_unai_config_ext.fast_lighting   = 0;
         gpu_unai_config_ext.blending        = 1;
-        gpu_unai_config_ext.dithering       = 0;
         gpu_unai_config_ext.force_dithering = 0;
         gpu_unai_config_ext.ilace_force     = 0;
         gpu_unai_config_ext.pixel_skip      = 0;

@@ -38,11 +38,23 @@ void CALLBACK SPUirq(int cycles_after) {
 	}
 
 	/* Immediate: SPU is mixing right at the IRQ point. */
+#if PCSXR_DIAG_INSTRUMENTATION
+	{
+		extern volatile uint32_t diag_hw_irq_set_count[11];
+		diag_hw_irq_set_count[9]++;  /* bit 9 = SPU IRQ (immediate path) */
+	}
+#endif
 	psxHu32ref_2(0x1070) |= SWAPu32(0x200);
 }
 
 void spuDelayedIrq(void) {
-	/* PSXINT_SPU_IRQ handler — fires at the cycle scheduled by SPUirq. */
+	/* PSXINT_SPU_IRQ handler - fires at the cycle scheduled by SPUirq. */
+#if PCSXR_DIAG_INSTRUMENTATION
+	{
+		extern volatile uint32_t diag_hw_irq_set_count[11];
+		diag_hw_irq_set_count[9]++;  /* bit 9 = SPU IRQ (delayed path) */
+	}
+#endif
 	psxHu32ref_2(0x1070) |= SWAPu32(0x200);
 }
 

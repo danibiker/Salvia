@@ -98,10 +98,17 @@ extern "C" {
 //		psxHu32ref_2(0x1070) |= SWAP32(8);            \
 //	}
 
-__inline void DMA_INTERRUPT_2(int n){ 
-	if (SWAPu32(HW_DMA_ICR_2) & (1 << (16 + n))) {    
-		HW_DMA_ICR_2 |= SWAP32(1 << (24 + n));        
-		psxHu32ref_2(0x1070) |= SWAP32(8);            
+#if PCSXR_DIAG_INSTRUMENTATION
+extern volatile uint32_t diag_hw_irq_set_count[11];
+#endif
+
+__inline void DMA_INTERRUPT_2(int n){
+	if (SWAPu32(HW_DMA_ICR_2) & (1 << (16 + n))) {
+		HW_DMA_ICR_2 |= SWAP32(1 << (24 + n));
+#if PCSXR_DIAG_INSTRUMENTATION
+		diag_hw_irq_set_count[3]++;  /* bit 3 = DMA completion IRQ */
+#endif
+		psxHu32ref_2(0x1070) |= SWAP32(8);
 	}
 }
 

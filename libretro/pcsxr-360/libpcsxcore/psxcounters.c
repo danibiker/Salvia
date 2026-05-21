@@ -77,9 +77,26 @@ u32 psxNextCounter = 0, psxNextsCounter = 0;
 
 /******************************************************************************/
 
+#if PCSXR_DIAG_INSTRUMENTATION
+/* Counter compartido con r3000a.c (definido alli). Cada bit elevado en
+ * psxHu32(0x1070) suma 1 al slot correspondiente. Reset por el periodic
+ * dump de r3000a.c. */
+extern volatile uint32_t diag_hw_irq_set_count[11];
+#endif
+
 static __inline
 void setIrq( u32 irq )
 {
+#if PCSXR_DIAG_INSTRUMENTATION
+	/* Recorre los 11 bits relevantes (0..10) y suma para cada uno que
+	 * este elevandose en esta llamada. El game IRQ handler en la PSX
+	 * limpia los bits despues; este contador es de elevaciones, no de
+	 * estado actual. */
+	int i_;
+	for (i_ = 0; i_ < 11; i_++) {
+		if (irq & (1u << i_)) diag_hw_irq_set_count[i_]++;
+	}
+#endif
 //if(use_vm)
 //    psxHu32ref(0x1070) |= SWAPu32(irq);
 //else

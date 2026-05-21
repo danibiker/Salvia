@@ -119,9 +119,37 @@ static void CloseExtraCdHandles(void) {
 
 #ifdef USE_CHD
 static chd_file      *chdFile        = NULL;
-static unsigned char *chdHunkBuf     = NULL;
 static unsigned int   chdHunkBytes   = 0;
-static int            chdCurrentHunk = -1;
+
+/* === Hunk cache (LRU multi-slot) ===
+ *
+ * CHD stores CD content in compressed "hunks" of typically ~19 KB (8 sectors
+ * each).  Decompressing a hunk takes 1-3 ms on Xenos PPC; the disk I/O itself
+ * on USB has unpredictable latency (5-1000 ms depending on jitter).  CDDA
+ * playback issues 75 sector-reads/second sequentially, which means a hunk
+ * miss every ~8 sectors -> ~9 hunk-misses/second during music.
+ *
+ * Pre-cambio: cache de UN solo hunk.  Cada miss = chd_read sincrono dentro
+ * de cdrPlayInterrupt -> emulator freezes durante el read.  Silent Hill se
+ * cuelga al cargar cutscenes porque los reads chocan con I/O concurrente
+ * (descarga de badges de RetroAchievements, save-state writes, etc.).
+ *
+ * Post-cambio: LRU de N slots.  Cuando el juego salta hacia atras/adelante
+ * pocos hunks, los hits eliminan I/O.  Cuando recorre secuencialmente, el
+ * miss sigue ocurriendo pero los hits del resto del frame reducen presion.
+ * Memoria: 8 * ~19 KB = ~150 KB.  Despreciable.
+ *
+ * Lookup: linear scan de chdHunkCacheNum[].  Con N=8 son 8 comparaciones
+ * de int, trivial.  Hit ratio esperado para CDDA secuencial: 7/8 = 87.5%.
+ * Para data reads con seeks dispersos varia segun el patron del juego. */
+#define CHD_HUNK_CACHE_SLOTS    8
+
+static unsigned char *chdHunkPool                           = NULL; /* single backing alloc */
+static unsigned char *chdHunkCacheBuf[CHD_HUNK_CACHE_SLOTS] = { NULL };
+static int            chdHunkCacheNum[CHD_HUNK_CACHE_SLOTS] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+static unsigned int   chdHunkCacheLRU[CHD_HUNK_CACHE_SLOTS] = { 0 };
+static unsigned int   chdHunkCacheClock                     = 0;
+
 /* Per-track LBA (disc-relative, 0-based) where track content begins and the
  * corresponding CHD sector index at which that content lives inside the CHD. */
 static int            chdTrackLBA[MAXTRACKS];
@@ -681,8 +709,16 @@ static int parsechd(const char *isofile) {
 
 	numtracks = 0;
 	chdFile = NULL;
-	chdHunkBuf = NULL;
-	chdCurrentHunk = -1;
+	chdHunkPool = NULL;
+	{
+		int s;
+		for (s = 0; s < CHD_HUNK_CACHE_SLOTS; s++) {
+			chdHunkCacheBuf[s] = NULL;
+			chdHunkCacheNum[s] = -1;
+			chdHunkCacheLRU[s] = 0;
+		}
+		chdHunkCacheClock = 0;
+	}
 
 	if (chd_open(isofile, CHD_OPEN_READ, NULL, &chdFile) != CHDERR_NONE) {
 		chdFile = NULL;
@@ -698,11 +734,22 @@ static int parsechd(const char *isofile) {
 	}
 
 	chdHunkBytes = head->hunkbytes;
-	chdHunkBuf = (unsigned char *)malloc(chdHunkBytes);
-	if (chdHunkBuf == NULL) {
+	/* Single backing allocation of N * hunkBytes; slice it into per-slot
+	 * pointers.  Avoids N separate malloc/free pairs and keeps slots
+	 * contiguous in memory (better cache behavior on PPC). */
+	chdHunkPool = (unsigned char *)malloc((size_t)chdHunkBytes * CHD_HUNK_CACHE_SLOTS);
+	if (chdHunkPool == NULL) {
 		chd_close(chdFile);
 		chdFile = NULL;
 		return -1;
+	}
+	{
+		int s;
+		for (s = 0; s < CHD_HUNK_CACHE_SLOTS; s++) {
+			chdHunkCacheBuf[s] = chdHunkPool + (size_t)s * chdHunkBytes;
+			chdHunkCacheNum[s] = -1;
+			chdHunkCacheLRU[s] = 0;
+		}
 	}
 
 	memset(&ti, 0, sizeof(ti));
@@ -782,8 +829,13 @@ static int parsechd(const char *isofile) {
 	}
 
 	if (numtracks == 0) {
-		free(chdHunkBuf);
-		chdHunkBuf = NULL;
+		free(chdHunkPool);
+		chdHunkPool = NULL;
+		{
+			int s;
+			for (s = 0; s < CHD_HUNK_CACHE_SLOTS; s++)
+				chdHunkCacheBuf[s] = NULL;
+		}
 		chd_close(chdFile);
 		chdFile = NULL;
 		return -1;
@@ -792,15 +844,26 @@ static int parsechd(const char *isofile) {
 	return 0;
 }
 
-// Read one 2352-byte sector at the given LBA from the currently open CHD
-// into the provided buffer. Returns 0 on success, non-zero on error.
+/* Forward declaration for the diagnostic logger (defined in libretro_core.cpp).
+ * C-side cdriso.c calls it directly without a header; gpu.c does the same
+ * pattern. */
+extern void pcsxr_log(int level, const char *format, ...);
+
+/* Read one 2352-byte sector at the given LBA from the currently open CHD
+ * into the provided buffer.  Returns 0 on success, non-zero on error.
+ *
+ * Uses an LRU multi-slot hunk cache to reduce chd_read calls (each one is
+ * a sync disk+decompress that blocks the emulator for 5-1000+ ms on USB).
+ * See the CHD_HUNK_CACHE_SLOTS comment at top of file. */
 static int readchdsector(int lba, unsigned char *buf) {
 	int t, chd_sector, hunknum, offset_in_hunk;
+	int slot, lru_slot;
+	unsigned int lru_min;
 
-	if (chdFile == NULL || chdHunkBuf == NULL)
+	if (chdFile == NULL || chdHunkPool == NULL)
 		return -1;
 
-	// Find track that owns this LBA (search backwards so higher tracks win)
+	/* Find track that owns this LBA (search backwards so higher tracks win) */
 	t = numtracks;
 	while (t > 1 && lba < chdTrackLBA[t])
 		t--;
@@ -813,13 +876,79 @@ static int readchdsector(int lba, unsigned char *buf) {
 	hunknum = (chd_sector * CHD_CD_FRAME_SIZE) / chdHunkBytes;
 	offset_in_hunk = (chd_sector * CHD_CD_FRAME_SIZE) % chdHunkBytes;
 
-	if (hunknum != chdCurrentHunk) {
-		if (chd_read(chdFile, hunknum, chdHunkBuf) != CHDERR_NONE)
-			return -1;
-		chdCurrentHunk = hunknum;
+	/* === LRU cache lookup ===
+	 *
+	 * Linear scan: con N=8 son 8 comparaciones de int, mas rapido que un
+	 * hash table para este tamano. Si encontramos el hunk, marcamos como
+	 * MRU (most-recently-used) incrementando el contador global y copiamos. */
+	for (slot = 0; slot < CHD_HUNK_CACHE_SLOTS; slot++) {
+		if (chdHunkCacheNum[slot] == hunknum) {
+			chdHunkCacheLRU[slot] = ++chdHunkCacheClock;
+			memcpy(buf, chdHunkCacheBuf[slot] + offset_in_hunk, CHD_CD_SECTOR_DATA);
+			return 0;
+		}
 	}
 
-	memcpy(buf, chdHunkBuf + offset_in_hunk, CHD_CD_SECTOR_DATA);
+	/* === Cache miss: elegir slot LRU para evict ===
+	 *
+	 * El primer pase de uso (chdHunkCacheNum[slot] == -1, LRU == 0) gana
+	 * automaticamente porque tiene el LRU mas bajo posible (0).  Solo
+	 * cuando todos los slots estan ocupados empieza a evictar real. */
+	lru_slot = 0;
+	lru_min = chdHunkCacheLRU[0];
+	for (slot = 1; slot < CHD_HUNK_CACHE_SLOTS; slot++) {
+		if (chdHunkCacheLRU[slot] < lru_min) {
+			lru_min = chdHunkCacheLRU[slot];
+			lru_slot = slot;
+		}
+	}
+
+	/* === Leer el hunk ===
+	 *
+	 * Con PCSXR_DIAG_INSTRUMENTATION ON, medimos el tiempo y logueamos si
+	 * supera el threshold.  En USB del Xbox 360 lo normal es 5-15 ms; >50 ms
+	 * indica jitter del stack USB que puede causar perceived freezes en
+	 * juegos con CDDA pesado (Silent Hill cutscenes).  Threshold a 50 ms
+	 * porque a 60 fps cualquier read >16 ms ya provoca frame drop visible. */
+#if PCSXR_DIAG_INSTRUMENTATION
+	{
+		LARGE_INTEGER t0, t1, freq;
+		chd_error rc;
+		unsigned int ms;
+
+		QueryPerformanceFrequency(&freq);
+		QueryPerformanceCounter(&t0);
+		rc = chd_read(chdFile, hunknum, chdHunkCacheBuf[lru_slot]);
+		QueryPerformanceCounter(&t1);
+
+		if (rc != CHDERR_NONE) {
+			/* Mark slot as empty so a future lookup re-issues the read
+			 * (no false positive cache hit on stale data). */
+			chdHunkCacheNum[lru_slot] = -1;
+			return -1;
+		}
+
+		ms = (unsigned int)(((t1.QuadPart - t0.QuadPart) * 1000ULL) / freq.QuadPart);
+		if (ms >= 50) {
+			/* level 2 = RETRO_LOG_WARN.  Indica latencia I/O preocupante
+			 * (>50 ms = >3 frames a 60 fps).  En CDDA sostenido esto
+			 * causa el "freeze percibido" + audio que continua. */
+			pcsxr_log(2,
+				"[CHD] slow read: hunk %u took %u ms (slot %d, evicted hunk %d)\n",
+				(unsigned int)hunknum, ms, lru_slot, chdHunkCacheNum[lru_slot]);
+		}
+	}
+#else
+	if (chd_read(chdFile, hunknum, chdHunkCacheBuf[lru_slot]) != CHDERR_NONE) {
+		chdHunkCacheNum[lru_slot] = -1;
+		return -1;
+	}
+#endif
+
+	chdHunkCacheNum[lru_slot] = hunknum;
+	chdHunkCacheLRU[lru_slot] = ++chdHunkCacheClock;
+
+	memcpy(buf, chdHunkCacheBuf[lru_slot] + offset_in_hunk, CHD_CD_SECTOR_DATA);
 	return 0;
 }
 #endif
@@ -864,15 +993,21 @@ static int IsChdFile(const char *filename) {
 }
 
 static void ChdCloseAll(void) {
+	int s;
 	if (chdFile != NULL) {
 		chd_close(chdFile);
 		chdFile = NULL;
 	}
-	if (chdHunkBuf != NULL) {
-		free(chdHunkBuf);
-		chdHunkBuf = NULL;
+	if (chdHunkPool != NULL) {
+		free(chdHunkPool);
+		chdHunkPool = NULL;
 	}
-	chdCurrentHunk = -1;
+	for (s = 0; s < CHD_HUNK_CACHE_SLOTS; s++) {
+		chdHunkCacheBuf[s] = NULL;
+		chdHunkCacheNum[s] = -1;
+		chdHunkCacheLRU[s] = 0;
+	}
+	chdHunkCacheClock = 0;
 }
 #endif
 
@@ -1000,7 +1135,7 @@ static long CALLBACK ISOclose(void) {
 	 * Sin esto, al hacer un swap (ISOclose seguido de ISOopen del nuevo
 	 * CD), si los parsers de formato del nuevo CD (parsecue/parsemds/
 	 * parseccd/parsetoc) NO actualizan numtracks/ti[] (caso tipico:
-	 * .bin plano sin .cue acompañante), quedan los valores del CD
+	 * .bin plano sin .cue acompaï¿½ante), quedan los valores del CD
 	 * anterior.  El plugin entonces lee bytes del nuevo cdHandle
 	 * pero usa el TOC del anterior -> tracks fantasma, lecturas en
 	 * offsets incorrectos.  Sintoma observado: "si vuelvo a cargar

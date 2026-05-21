@@ -35,6 +35,88 @@ boolean use_vm;
 R3000Acpu *psxCpu = NULL;
 psxRegisters psxRegs;
 
+/* ===========================================================================
+ * IRQ diagnostic counters (gated por PCSXR_DIAG_INSTRUMENTATION).
+ *
+ * Cuando esta ON, cada dispatch de IRQ del scheduler de events y cada
+ * elevacion de bit en 0x1070 (HW IRQ via setIrq) incrementan contadores.
+ * Periodicamente (cada ~3 segundos emulados) se vuelcan via pcsxr_log para
+ * que el usuario pueda comparar dos ventanas: una en pantalla normal con
+ * juego avanzando vs otra en pantalla negra. Las diferencias indican que
+ * IRQ ha dejado de dispararse cuando el juego se queda esperando un evento.
+ *
+ * Tipos de tracking:
+ *   - diag_evt_irq_count[PSXINT_*]: count de dispatches del scheduler
+ *     interno (PSXINT_SIO, PSXINT_CDR, PSXINT_CDREAD, etc.). Estos son los
+ *     eventos que se programan via set_event/CDREAD_INT/etc.
+ *   - diag_hw_irq_set_count[bit]: count de elevaciones de bit en
+ *     psxHu32(0x1070), donde bit 0 = VBLANK, 2 = CDROM, 3 = DMA,
+ *     4..6 = Timers, 9 = SPU. Estos son los IRQs reales que el CPU PSX ve.
+ *   - diag_psx_exception_count: numero de psxException(0x400) tomadas.
+ *   - diag_psx_branch_test_calls: numero de psxBranchTest entries
+ *     (proxy de cuanto trabajo de CPU se esta haciendo).
+ *
+ * Coste runtime con OFF: cero. El compilador elimina las macros DIAG_INC_*. */
+#if PCSXR_DIAG_INSTRUMENTATION
+volatile uint32_t diag_evt_irq_count[PSXINT_COUNT];
+volatile uint32_t diag_hw_irq_set_count[11];   /* 11 bits relevantes de 0x1070 */
+volatile uint32_t diag_psx_exception_count = 0;
+volatile uint32_t diag_psx_branch_test_calls = 0;
+static   uint32_t diag_last_dump_cycle = 0;
+#define  DIAG_DUMP_INTERVAL_CYCLES (100000000u)   /* ~3 segundos emulados */
+
+/* Forward declaration: pcsxr_log esta en libretro_core.cpp.
+ * Mismo patron que en gpu.c y cdriso.c (declaracion local sin header). */
+extern void pcsxr_log(int level, const char *format, ...);
+
+static void diag_dump_irq_counts(uint32_t now_cycle) {
+    /* pcsxr_log trunca cerca de 115 chars, asi que partimos en lineas. */
+    pcsxr_log(1 /*RETRO_LOG_INFO*/,
+        "[IRQ] hw vbl=%u gpu=%u cdr=%u dma=%u tmr0=%u\n",
+        (unsigned)diag_hw_irq_set_count[0],
+        (unsigned)diag_hw_irq_set_count[1],
+        (unsigned)diag_hw_irq_set_count[2],
+        (unsigned)diag_hw_irq_set_count[3],
+        (unsigned)diag_hw_irq_set_count[4]);
+    pcsxr_log(1 /*RETRO_LOG_INFO*/,
+        "[IRQ] hw tmr1=%u tmr2=%u sio=%u spu=%u except=%u\n",
+        (unsigned)diag_hw_irq_set_count[5],
+        (unsigned)diag_hw_irq_set_count[6],
+        (unsigned)diag_hw_irq_set_count[7],
+        (unsigned)diag_hw_irq_set_count[9],
+        (unsigned)diag_psx_exception_count);
+    pcsxr_log(1 /*RETRO_LOG_INFO*/,
+        "[IRQ] evt cdr=%u cdread=%u gpudma=%u mdecout=%u spudma=%u\n",
+        (unsigned)diag_evt_irq_count[PSXINT_CDR],
+        (unsigned)diag_evt_irq_count[PSXINT_CDREAD],
+        (unsigned)diag_evt_irq_count[PSXINT_GPUDMA],
+        (unsigned)diag_evt_irq_count[PSXINT_MDECOUTDMA],
+        (unsigned)diag_evt_irq_count[PSXINT_SPUDMA]);
+    pcsxr_log(1 /*RETRO_LOG_INFO*/,
+        "[IRQ] evt mdecin=%u cdrplay=%u cdrdbuf=%u cdrlid=%u cdrdma=%u\n",
+        (unsigned)diag_evt_irq_count[PSXINT_MDECINDMA],
+        (unsigned)diag_evt_irq_count[PSXINT_CDRPLAY],
+        (unsigned)diag_evt_irq_count[PSXINT_CDRDBUF],
+        (unsigned)diag_evt_irq_count[PSXINT_CDRLID],
+        (unsigned)diag_evt_irq_count[PSXINT_CDRDMA]);
+    pcsxr_log(1 /*RETRO_LOG_INFO*/,
+        "[IRQ] branch_tests=%u pc=0x%08X cyc=%u\n",
+        (unsigned)diag_psx_branch_test_calls,
+        (unsigned)psxRegs.pc,
+        (unsigned)now_cycle);
+
+    /* Reset todos los contadores - cada dump es un DELTA respecto al previo,
+     * no un total acumulado. Asi cada ventana de ~3s es independiente. */
+    {
+        int i;
+        for (i = 0; i < PSXINT_COUNT; i++) diag_evt_irq_count[i] = 0;
+        for (i = 0; i < 11; i++) diag_hw_irq_set_count[i] = 0;
+    }
+    diag_psx_exception_count   = 0;
+    diag_psx_branch_test_calls = 0;
+}
+#endif
+
 
 int psxInit() {
 
@@ -156,6 +238,9 @@ void schedule_timeslice(void) {
 }
 
 void psxBranchTest() {
+#if PCSXR_DIAG_INSTRUMENTATION
+	diag_psx_branch_test_calls++;
+#endif
 	// Event processing gated by next_interupt (fast path optimization)
 	if ((s32)(psxRegs.cycle - psxRegs.next_interupt) >= 0) {
 		if ((psxRegs.cycle - psxNextsCounter) >= psxNextCounter)
@@ -174,6 +259,12 @@ void psxBranchTest() {
 					 * macro esta off, DIAG_SET_IRQ_HANDLER expande a
 					 * (void)0 sin overhead. */
 					DIAG_SET_IRQ_HANDLER((int)irq);
+#if PCSXR_DIAG_INSTRUMENTATION
+					/* Contador por tipo de IRQ (PSXINT_*) para el dump
+					 * periodico. Permite ver si algun event ha dejado de
+					 * dispararse cuando el juego se queda esperando. */
+					if (irq < PSXINT_COUNT) diag_evt_irq_count[irq]++;
+#endif
 					switch (irq) {
 						case PSXINT_SIO: if (!Config.Sio) sioInterrupt(); break;
 						case PSXINT_CDR: cdrInterrupt(); break;
@@ -211,10 +302,26 @@ void psxBranchTest() {
 #ifdef PSXCPU_LOG
 				PSXCPU_LOG("Interrupt: %x %x\n", psxHu32_2(0x1070), psxHu32_2(0x1074));
 #endif
+#if PCSXR_DIAG_INSTRUMENTATION
+				diag_psx_exception_count++;
+#endif
 				psxException(0x400, 0);
 			}
 		}
 	}
+
+#if PCSXR_DIAG_INSTRUMENTATION
+	/* Periodic IRQ counter dump. Threshold por cycle delta para que dispare
+	 * regular incluso si el ring del GPU esta lleno (watchdog principal solo
+	 * dispara con ring vacio). 100M cycles = ~3 segundos emulados a 33 MHz. */
+	{
+		uint32_t cur = psxRegs.cycle;
+		if ((cur - diag_last_dump_cycle) >= DIAG_DUMP_INTERVAL_CYCLES) {
+			diag_dump_irq_counts(cur);
+			diag_last_dump_cycle = cur;
+		}
+	}
+#endif
 }
 
 void psxJumpTest() {

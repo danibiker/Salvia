@@ -349,9 +349,10 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
                 gFile->gameTitle = it->second.description;
                 foundInMame = true;
 				//LOG_DEBUG("Encontrada descripcion: %s \n", gFile->gameTitle.c_str());
-            } else {
-				LOG_DEBUG("[MAME]NODESC: %s\n", fileNameNoExt.c_str());
-			}
+            } 
+			//else {
+				//LOG_DEBUG("[MAME]NODESC: %s\n", fileNameNoExt.c_str());
+			//}
         }
 
 		if (!foundInMame) {

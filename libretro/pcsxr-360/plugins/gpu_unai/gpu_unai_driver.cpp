@@ -424,8 +424,18 @@ static void unai_primPolyGT3(unsigned char* baseAddr)
             xor_ |= rgb0 ^ le32_raw(gpu_unai.PacketBuffer.U4[i * 3]);
         if ((xor_ & HTOLE32(0xf8f8f8)) == 0) {
             gouraud = 0;
-            if (!dithering && !need_lighting(rgb0))
+            /* Si los 3 vertices tienen el mismo color Y la iluminacion es
+             * neutra (0x808080), saltamos lighting Y dithering. El dithering
+             * sobre textura con luz neutra es practicamente invisible (anade
+             * +/-1 LSB de error en pares aislados, ya enmascarado por la
+             * cuantizacion de la textura) y nos ahorra entrar al inner-loop
+             * caro con clamp_c por canal. Silent Hill usa este tipo de polys
+             * masivamente para la niebla; sin este shortcut se cuelga el
+             * juego porque el frame timing se desincroniza. */
+            if (!need_lighting(rgb0)) {
                 lighting = 0;
+                dithering = 0;
+            }
         }
     }
     PP driver = gpuPolySpanDrivers[
@@ -453,8 +463,12 @@ static void unai_primPolyGT4(unsigned char* baseAddr)
             xor_ |= rgb0 ^ le32_raw(gpu_unai.PacketBuffer.U4[i * 3]);
         if ((xor_ & HTOLE32(0xf8f8f8)) == 0) {
             gouraud = 0;
-            if (!dithering && !need_lighting(rgb0))
+            /* Mismo shortcut que en PolyGT3: textura con luz neutra salta
+             * tambien el dither. Critico para Silent Hill. */
+            if (!need_lighting(rgb0)) {
                 lighting = 0;
+                dithering = 0;
+            }
         }
     }
     PP driver = gpuPolySpanDrivers[

@@ -448,6 +448,12 @@ void sioInterrupt() {
 //if(use_vm)
 //	psxHu32ref(0x1070) |= SWAPu32(0x80);
 //else
+#if PCSXR_DIAG_INSTRUMENTATION
+	{
+		extern volatile uint32_t diag_hw_irq_set_count[11];
+		diag_hw_irq_set_count[7]++;  /* bit 7 = SIO0/controllers IRQ */
+	}
+#endif
 	psxHu32ref_2(0x1070) |= SWAPu32(0x80);//teste
 
 #if 0

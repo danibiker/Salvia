@@ -111,6 +111,16 @@ __inline void TexZero(void * buf, int len) {
 	}
 }
 
+/* True Color (24-bit) shadow framebuffer.  Definidos en gpu_duck_driver.cpp.
+ * Cuando g_pcsxr_true_color_active != 0 Y g_psxVuw24 != NULL, esta funcion
+ * sirve los pixels desde el shadow en vez de hacer la expansion 5->8 bit
+ * desde psxVuw.  Se mantiene un sanity check por pixel para detectar
+ * inconsistencias (write externo a psxVuw que no toco el shadow): si la
+ * cuantizacion del shadow no coincide con el valor de psxVuw, ese pixel se
+ * reexpande desde psxVuw via bit-replication y se sincroniza el shadow. */
+extern unsigned int* g_psxVuw24;
+extern int           g_pcsxr_true_color_active;
+
 static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y)
 {
 	uint32_t * destpix;
@@ -129,6 +139,7 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y)
 	int loop = 0;
 	int offset = 0;
 	int32_t lPitch = g_pPitch;
+	const int true_color = (g_pcsxr_true_color_active && g_psxVuw24 != 0);
 
 	for(loop=0; loop < 1024; loop += 128)
 		__dcbt(loop, psxVuw);
@@ -174,6 +185,86 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y)
 				rdest[0] = d;
 
 				pD += 3;
+			}
+		}
+	}
+	else if (true_color)
+	{
+		/* === True-color path ===
+		 *
+		 * Sirve los pixels desde g_psxVuw24 (24-bit shadow) en vez de
+		 * expandir 5->8 bit desde psxVuw.  Por cada pixel hace un sanity
+		 * check (quantize(shadow_8) == vram_5).  Si NO coincide significa
+		 * que algo (primLoadImage, MDEC, save-state restore...) escribio
+		 * a psxVuw sin actualizar el shadow.  En ese caso re-expandimos
+		 * desde psxVuw via bit-replication y sincronizamos el shadow para
+		 * el proximo frame.
+		 *
+		 * Coste: ~4 ops por pixel + 1 branch.  A 1920x1080 ~ 2M pixels,
+		 * el tiempo extra es marginal.  Se mantiene loop simple (de a 1
+		 * pixel) en vez de unrolling 8x del path 5-bit porque el coste
+		 * de la rama de resync no merece la complejidad. */
+		for (column = 0; column < dy; column++)
+		{
+			startxy = (1024 * (column + y)) + x;
+			destpix = (uint32_t *)(surf + (column * lPitch));
+
+			for (row = 0; row < dx; row++)
+			{
+				unsigned short s_vram;
+				uint32_t s24;
+				unsigned int r5_vram, g5_vram, b5_vram;
+				unsigned int r5_sh, g5_sh, b5_sh;
+				int dr, dg, db;
+
+				s_vram = __loadshortbytereverse(0, &psxVuw[startxy]);
+				s24 = g_psxVuw24[startxy];
+				/* Sanity check con tolerancia de +-1 LSB.
+				 *
+				 * Por que tolerancia y no comparacion exacta:
+				 * ShadePixel escribe DOS valores diferentes -- el 5-bit
+				 * "PSX-accurate" a psxVuw (LUT + dither matrix + 5-bit
+				 * blend de transparencia) y el 8-bit true-color a g_psxVuw24
+				 * (formula directa + 8-bit blend de transparencia).  Ambos
+				 * operan sobre los mismos inputs pero las dos formulas no
+				 * dan resultados que roundtrip exactamente: el blend 5-bit
+				 * cuantiza fg y bg ANTES de mezclar, perdiendo precision
+				 * que el blend 8-bit conserva.  Resultado: hasta +-1 LSB
+				 * de drift por canal en pixels transparentes -- que en
+				 * Silent Hill (niebla = primitivas semi-transparentes) son
+				 * la mayoria.
+				 *
+				 * El sanity check original (comparacion exacta) rechazaba
+				 * todos esos pixels y reexpandia desde el 5-bit bit-replicado,
+				 * tirando la precision 8-bit.  Era equivalente a NO tener
+				 * true color en la niebla.
+				 *
+				 * Tolerancia +-1 LSB acepta el drift de cuantizacion y
+				 * sigue detectando escrituras externas grandes (loadImage,
+				 * MDEC, save-state restore) que no pasaron por gpu_duck.
+				 * Falsos negativos solo si la escritura externa cae justo
+				 * en una ventana de +-1 LSB de la stale shadow -- raro y
+				 * visualmente equivalente. */
+				r5_vram = (s_vram >>  0) & 0x1F;
+				g5_vram = (s_vram >>  5) & 0x1F;
+				b5_vram = (s_vram >> 10) & 0x1F;
+				r5_sh   = (s24 >> 19) & 0x1F;
+				g5_sh   = (s24 >> 11) & 0x1F;
+				b5_sh   = (s24 >>  3) & 0x1F;
+				dr = (int)r5_sh - (int)r5_vram; if (dr < 0) dr = -dr;
+				dg = (int)g5_sh - (int)g5_vram; if (dg < 0) dg = -dg;
+				db = (int)b5_sh - (int)b5_vram; if (db < 0) db = -db;
+				if (dr > 1 || dg > 1 || db > 1)
+				{
+					/* Out of sync.  External write to psxVuw.  Re-expand. */
+					const unsigned int r8 = (r5_vram << 3) | (r5_vram >> 2);
+					const unsigned int g8 = (g5_vram << 3) | (g5_vram >> 2);
+					const unsigned int b8 = (b5_vram << 3) | (b5_vram >> 2);
+					s24 = (r8 << 16) | (g8 << 8) | b8;
+					g_psxVuw24[startxy] = s24;
+				}
+				destpix[row] = s24 | 0xff000000;
+				startxy++;
 			}
 		}
 	}

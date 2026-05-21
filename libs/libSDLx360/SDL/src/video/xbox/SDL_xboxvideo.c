@@ -121,8 +121,11 @@ static int g_overlay_enabled = 0;
 static int g_overlay_locked = 0;
 static int g_current_effect = 0;
 
-/* Total number of effects: 0=Nearest, 1=Bilinear, 2=Scanlines, 3=CRT, 4=HQ2x, 5=HQ3x, 6=HQ4x */
-#define NUM_EFFECTS 7
+/* Total number of effects:
+ *   0=Nearest, 1=Sharp-Bilinear, 2=LCD-Grid-v2, 3=Scanlines,
+ *   4=CRT-Geom, 5=CRT-Lottes, 6=CRT-Easymode,
+ *   7=HQ2x, 8=HQ3x, 9=HQ4x, 10=xBR-lv2-fast */
+#define NUM_EFFECTS 11
 
 /* HQ2x/HQ3x/HQ4x LUT textures (created from embedded data) */
 static LPDIRECT3DTEXTURE9 g_hq2x_lut = NULL;
@@ -370,14 +373,19 @@ void XBOX_SetVideoFilter(int filterType)
 }
 
 /* Returns the pixel scale factor for the current effect.
-   Nearest/Bilinear/Scanlines/CRT = 1x, HQ2x = 2x, HQ3x = 3x, HQ4x = 4x. */
+   Nearest/Bilinear/Scanlines/CRT = 1x, HQ2x = 2x, HQ3x/xBR-lv2-fast = 3x, HQ4x = 4x.
+   xBR-lv2-fast usa `XBR_SCALE = 3.0` hardcoded en el shader para delta/deltaL/
+   deltaU, asi que el render target tiene que coincidir con scale=3 para que las
+   inecuaciones funcionen correctamente. */
 static int XBOX_GetEffectScale(void)
 {
 	switch (g_current_effect) {
-		case 4: return 2; /* HQ2x */
-		case 5: return 3; /* HQ3x */
-		case 6: return 4; /* HQ4x */
-		default: return 1; /* 0=Nearest, 1=Bilinear, 2=Scanlines, 3=CRT */
+		case 7:  return 2; /* HQ2x */
+		case 8:  return 3; /* HQ3x */
+		case 9:  return 4; /* HQ4x */
+		case 10: return 3; /* xBR-lv2-fast */
+		default: return 1; /* 0=Nearest, 1=Sharp-Bilinear, 2=LCD-Grid-v2,
+		                      3=Scanlines, 4=CRT-Geom, 5=CRT-Lottes, 6=CRT-Easymode */
 	}
 }
 
@@ -1151,11 +1159,28 @@ void XBOX_FreeYUVOverlay(_THIS, SDL_Overlay *overlay)
 }
 
 /* Simple hash for shader cache filenames (DJB2) */
-static unsigned long XBOX_HashShaderSource(const char* str) {
+/* Compile flag presets para CreateShader.
+ *
+ *   PS_FLAGS_DEFAULT: half precision (16-bit). El compilador puede empaquetar 2
+ *     half4 en 1 float4, doblando los temp registers efectivos. Suficiente para
+ *     la mayoria de shaders 2D (luma/coord/gamma con 10-11 bits de mantisa).
+ *   PS_FLAGS_FULL_PRECISION: full float (32-bit). Necesario cuando el shader hace
+ *     aritmetica con valores grandes (e.g. fmod(vpos.x, 3) en pantallas 1080p+
+ *     pierde precision en half y aparecen bandas verticales por subpixel mal
+ *     calculado a partir de vpos.x~256+).
+ */
+#define PS_FLAGS_DEFAULT         (D3DXSHADER_PARTIALPRECISION | D3DXSHADER_PREFER_FLOW_CONTROL)
+#define PS_FLAGS_FULL_PRECISION  (D3DXSHADER_PREFER_FLOW_CONTROL)
+
+/* Mezcla los flags en el hash del source para que el cache distinga compilaciones
+ * con flags distintos. Sin esto, dos llamadas con misma source pero distintos
+ * flags devolverian el mismo .pso cacheado. */
+static unsigned long XBOX_HashShaderSource(const char* str, DWORD flags) {
     unsigned long hash = 5381;
     int c;
     while ((c = *str++))
         hash = ((hash << 5) + hash) + c;
+    hash = ((hash << 5) + hash) + (unsigned long)flags;
     return hash;
 }
 
@@ -1209,7 +1234,7 @@ static void XBOX_SaveCachedShader(unsigned long hash, const void* bytecode, DWOR
     CloseHandle(hFile);
 }
 
-HRESULT CreateShader(const char* source, IDirect3DPixelShader9** target) {
+HRESULT CreateShader(const char* source, IDirect3DPixelShader9** target, DWORD flags) {
     ID3DXBuffer* pCode = NULL;
     ID3DXBuffer* pError = NULL;
     HRESULT hr;
@@ -1219,8 +1244,8 @@ HRESULT CreateShader(const char* source, IDirect3DPixelShader9** target) {
 
     if (!source || !target) return E_INVALIDARG;
 
-    /* Try loading from cache first */
-    hash = XBOX_HashShaderSource(source);
+    /* Try loading from cache first (hash incluye los flags) */
+    hash = XBOX_HashShaderSource(source, flags);
     cachedCode = XBOX_LoadCachedShader(hash, &cachedSize);
     if (cachedCode) {
         //OutputDebugString("  -> loaded from cache\n");
@@ -1229,13 +1254,26 @@ HRESULT CreateShader(const char* source, IDirect3DPixelShader9** target) {
         return hr;
     }
 
-    /* Cache miss: compile from source */
+    /* Cache miss: compile from source.
+     * Flags pasados por el caller (PS_FLAGS_DEFAULT / PS_FLAGS_FULL_PRECISION):
+     *   D3DXSHADER_PARTIALPRECISION - usa half (16-bit). Suficiente para shaders
+     *     de color (luma/coord ~11 bits) pero NO para aritmetica con vpos en
+     *     resoluciones 1080p+ (perdida de precision en fmod). Para esos casos
+     *     se pasa PS_FLAGS_FULL_PRECISION.
+     *   D3DXSHADER_PREFER_FLOW_CONTROL - prefiere ramas reales sobre predicacion.
+     *     Reduce pressure en shaders con branches dinamicos. */
     //OutputDebugString("  -> compiling from source...\n");
-    hr = D3DXCompileShader(source, (UINT)strlen(source), NULL, NULL, "main", "ps_3_0", 0, &pCode, &pError, NULL);
+    hr = D3DXCompileShader(source, (UINT)strlen(source), NULL, NULL, "main", "ps_3_0",
+                            flags,
+                            &pCode, &pError, NULL);
 
     if (FAILED(hr)) {
         if (pError) {
-            //OutputDebugString((char*)pError->lpVtbl->GetBufferPointer(pError));
+            /* Habilitado temporalmente para diagnosticar shaders que no compilan
+             * - el output va al debugger del XDK (si la consola esta conectada
+             * a un kit). Si tu setup es retail/RGH sin debugger, comenta esto
+             * de nuevo y dime los sintomas; podemos volcar a fichero tambien. */
+            OutputDebugString((char*)pError->lpVtbl->GetBufferPointer(pError));
             pError->lpVtbl->Release(pError);
         }
         *target = NULL;
@@ -1333,24 +1371,40 @@ void initShaders() {
     /* Create LUT textures for HQ2x/HQ3x/HQ4x */
     XBOX_InitLUTTextures();
 
-    /* 0=Nearest, 1=Bilinear, 2=Scanlines, 3=CRT, 4=HQ2x, 5=HQ3x, 6=HQ4x */
+    /* 0=Nearest, 1=Sharp-Bilinear, 2=LCD-Grid-v2, 3=Scanlines,
+       4=CRT-Geom, 5=CRT-Lottes, 6=CRT-Easymode,
+       7=HQ2x, 8=HQ3x, 9=HQ4x, 10=xBR-lv2-fast */
     pixelShaders = (IDirect3DPixelShader9**) calloc(NUM_EFFECTS, sizeof(IDirect3DPixelShader9*));
 
     //OutputDebugString("initShaders: compiling Nearest (Normal)...\n");
-	CreateShader(g_strShaderNormalSource,      &pixelShaders[0]);
-    //OutputDebugString("initShaders: compiling Bilinear (Normal)...\n");
-	CreateShader(g_strShaderNormalSource,      &pixelShaders[1]); 
+	CreateShader(g_strShaderNormalSource,        &pixelShaders[0],  PS_FLAGS_DEFAULT);
+    //OutputDebugString("initShaders: compiling Sharp-Bilinear...\n");
+	CreateShader(g_strShaderSharpBilinearSource, &pixelShaders[1],  PS_FLAGS_DEFAULT);
+    //OutputDebugString("initShaders: compiling LCD-Grid-v2...\n");
+    CreateShader(g_strShaderLCDGridSource,       &pixelShaders[2],  PS_FLAGS_DEFAULT);
     //OutputDebugString("initShaders: compiling Scanlines...\n");
-    CreateShader(g_strShaderScanlinesSource,   &pixelShaders[2]);
-    //OutputDebugString("initShaders: compiling CRT...\n");
-    CreateShader(g_strShaderCRTSource,         &pixelShaders[3]);
+    CreateShader(g_strShaderScanlinesSource,     &pixelShaders[3],  PS_FLAGS_DEFAULT);
+    //OutputDebugString("initShaders: compiling CRT-Geom...\n");
+    CreateShader(g_strShaderCRTSource,           &pixelShaders[4],  PS_FLAGS_DEFAULT);
+    /* CRT-Lottes: usa fmod(vpos, X) sobre la coord output -> mismo riesgo que
+     * Easymode si half precision pierde bits. Por defensa, full precision. */
+    //OutputDebugString("initShaders: compiling CRT-Lottes...\n");
+    CreateShader(g_strShaderCRTLottesSource,     &pixelShaders[5],  PS_FLAGS_FULL_PRECISION);
+    /* CRT-Easymode: el mask usa fmod(floor(vpos.x), 3.0). En half precision a
+     * partir de vpos~256 el step entre valores es >=0.25, lo que rompe la
+     * division /3 y produce bandas verticales anchas en la mitad derecha de
+     * pantalla. Full precision (float32) lo resuelve. */
+    //OutputDebugString("initShaders: compiling CRT-Easymode...\n");
+    CreateShader(g_strShaderCRTEasymodeSource,   &pixelShaders[6],  PS_FLAGS_FULL_PRECISION);
     //OutputDebugString("initShaders: compiling HQ2x...\n");
-    CreateShader(g_strShaderHQ2xSource,        &pixelShaders[4]);
+    CreateShader(g_strShaderHQ2xSource,          &pixelShaders[7],  PS_FLAGS_DEFAULT);
     //OutputDebugString("initShaders: compiling HQ3x...\n");
-    CreateShader(g_strShaderHQ3xSource,        &pixelShaders[5]);
+    CreateShader(g_strShaderHQ3xSource,          &pixelShaders[8],  PS_FLAGS_DEFAULT);
     //OutputDebugString("initShaders: compiling HQ4x...\n");
-    CreateShader(g_strShaderHQ4xSource,        &pixelShaders[6]);
-    //OutputDebugString("initShaders: all 7 shaders compiled.\n");
+    CreateShader(g_strShaderHQ4xSource,          &pixelShaders[9],  PS_FLAGS_DEFAULT);
+    //OutputDebugString("initShaders: compiling xBR-lv2-fast...\n");
+    CreateShader(g_strShaderXBRlv2FastSource,    &pixelShaders[10], PS_FLAGS_DEFAULT);
+    //OutputDebugString("initShaders: all 11 shaders compiled.\n");
 	// Create pixel shader.
 	g_pPixelShader = pixelShaders[0];
 	XBOX_SetVideoFilter(0);
@@ -1392,16 +1446,45 @@ void XBOX_SelectEffect(int effectID) {
         IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
         break;
 
-    case 1: /* Bilinear: passthrough + LINEAR */
+    case 1: /* Sharp-Bilinear (rsn8887/TheMaister): nearest dentro de cada
+             * pixel-fuente, bilinear hardware solo en las transiciones. Necesita
+             * textureDims en c1 (para texel = uv*dims) y LINEAR sampler (la
+             * interpolacion del hardware hace la rampa). */
+    {
+        float dims[4];
         IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[1]);
+        dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
+        dims[2] = 0.0f; dims[3] = 0.0f;
+        IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
         IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
         IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
         break;
+    }
 
-    case 2: /* Scanlines: dedicated shader + POINT + textureDims */
+    case 2: /* LCD-Grid-v2: simula la rejilla LCD de handhelds (GB/GBC/GBA/DS).
+             * Sampler POINT (cada subpixel es exacto, no se debe interpolar el
+             * sample base). textureDims en c1. */
+    {
+        if (pixelShaders[2] == NULL) {
+            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+        } else {
+            float dims[4];
+            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[2]);
+            dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
+            dims[2] = 0.0f; dims[3] = 0.0f;
+            IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+        }
+        break;
+    }
+
+    case 3: /* Scanlines: dedicated shader + POINT + textureDims */
     {
         float dims[4];
-        IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[2]);
+        IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[3]);
         dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
         dims[2] = 0.0f; dims[3] = 0.0f;
         IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
@@ -1410,10 +1493,10 @@ void XBOX_SelectEffect(int effectID) {
         break;
     }
 
-    case 3: /* CRT: dedicated shader + LINEAR + textureDims */
+    case 4: /* CRT-Geom: dedicated shader + LINEAR + textureDims */
     {
         float dims[4];
-        IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[3]);
+        IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[4]);
         dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
         dims[2] = 0.0f; dims[3] = 0.0f;
         IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
@@ -1422,9 +1505,58 @@ void XBOX_SelectEffect(int effectID) {
         break;
     }
 
-    case 4: /* HQ2x */
-    case 5: /* HQ3x */
-    case 6: /* HQ4x */
+    case 5: /* CRT-Lottes: Timothy Lottes' classic CRT shader. Sampler POINT
+             * (el shader usa Fetch() que snapea el UV manualmente). textureDims
+             * en c1. Bloom multi-pasa DESHABILITADO (DO_BLOOM no defined).
+             * Address mode CLAMP: el Warp barrel saca UVs fuera de [0,1] en
+             * las esquinas; con WRAP (default D3D9) se veria la fuente en
+             * mosaico. El shader ademas enmascara off-screen a negro, asi que
+             * con CLAMP queda lo correcto: negro en las esquinas curvadas. */
+    {
+        if (pixelShaders[5] == NULL) {
+            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+        } else {
+            float dims[4];
+            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[5]);
+            dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
+            dims[2] = 0.0f; dims[3] = 0.0f;
+            IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+        }
+        break;
+    }
+
+    case 6: /* CRT-Easymode (variante Salvia, estructura clonada de Lottes):
+             * Sampler POINT (el shader usa Fetch() que snapea UV manualmente,
+             * mismo patron que Lottes). textureDims en c1.xy. Address CLAMP
+             * defensivo para los Fetch en bordes. */
+    {
+        if (pixelShaders[6] == NULL) {
+            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+        } else {
+            float dims[4];
+            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[6]);
+            dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
+            dims[2] = 0.0f; dims[3] = 0.0f;
+            IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+        }
+        break;
+    }
+
+    case 7: /* HQ2x */
+    case 8: /* HQ3x */
+    case 9: /* HQ4x */
     {
         if (pixelShaders[effectID] == NULL) {
             /* Fallback to passthrough if shader failed to compile */
@@ -1433,8 +1565,8 @@ void XBOX_SelectEffect(int effectID) {
             IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
         } else {
             float dims[4];
-            LPDIRECT3DTEXTURE9 lut = (effectID == 4) ? g_hq2x_lut :
-                                     (effectID == 5) ? g_hq3x_lut : g_hq4x_lut;
+            LPDIRECT3DTEXTURE9 lut = (effectID == 7) ? g_hq2x_lut :
+                                     (effectID == 8) ? g_hq3x_lut : g_hq4x_lut;
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[effectID]);
             dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
             dims[2] = 0.0f; dims[3] = 0.0f;
@@ -1449,6 +1581,33 @@ void XBOX_SelectEffect(int effectID) {
                 IDirect3DDevice9_SetSamplerState(D3D_Device, 1, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
                 IDirect3DDevice9_SetSamplerState(D3D_Device, 1, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
             }
+        }
+        break;
+    }
+
+    case 10: /* xBR-lv2-fast: Hyllian's xBR Level 2 "fast" single-pass edge-aware
+              * upscaler. Vecindario 3x3 (9 samples) + 3 angulos (30/45/60,
+              * mas fx45i para SMOOTH_TIPS), ~1/3 del coste de xBR-lv3.
+              * Sampler s0: POINT (point-sampling para que las comparaciones YUV
+              * de edge detection sean exactas - bilinear las suaviza y arruina
+              * la deteccion). textureDims en c1 da la resolucion source para
+              * `fp = frac(uv*dims)` (subpixel position). Sin LUT, sampler s1
+              * queda sin bindear. */
+    {
+        if (pixelShaders[10] == NULL) {
+            /* Compile failure -> passthrough so the user notices something is off
+             * without crashing. */
+            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+        } else {
+            float dims[4];
+            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[10]);
+            dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
+            dims[2] = 0.0f; dims[3] = 0.0f;
+            IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
         }
         break;
     }

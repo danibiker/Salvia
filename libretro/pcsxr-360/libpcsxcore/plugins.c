@@ -740,7 +740,15 @@ unsigned short CALLBACK SIO1__readBaud16(void) { return 0; }
 unsigned long CALLBACK SIO1__readBaud32(void) { return 0; }
 void CALLBACK SIO1__registerCallback(void (CALLBACK *callback)(void)) {};
 
+#if PCSXR_DIAG_INSTRUMENTATION
+/* Counter compartido con r3000a.c. Ver comentario alli para detalles. */
+extern volatile uint32_t diag_hw_irq_set_count[11];
+#endif
+
 void CALLBACK SIO1irq(void) {
+#if PCSXR_DIAG_INSTRUMENTATION
+    diag_hw_irq_set_count[8]++;  /* bit 8 = SIO1 IRQ */
+#endif
     psxHu32ref(0x1070) |= SWAPu32(0x100);
 }
 
