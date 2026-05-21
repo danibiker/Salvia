@@ -237,7 +237,6 @@ static bool retro_environment(unsigned cmd, void *data) {
             const struct retro_disk_control_ext_callback *cb =
                 (const struct retro_disk_control_ext_callback*)data;
 
-
             if (cb) {
                 disk_control_ext = *cb;
                 // Si el core registra SOLO la EXT (comportamiento estandar:
@@ -251,6 +250,7 @@ static bool retro_environment(unsigned cmd, void *data) {
                 disk_control.get_num_images      = cb->get_num_images;
                 disk_control.replace_image_index = cb->replace_image_index;
                 disk_control.add_image_index     = cb->add_image_index;
+				g_hasDiskControl = true;
                 LOG_DEBUG("Interfaz de control de disco extendida registrada.");
             }
             return true;

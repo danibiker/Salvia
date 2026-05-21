@@ -440,7 +440,126 @@ static void gpu_thread_proc(void)
          * diagnostico (main puede no estar dentro del plugin pero
          * tracker lo dice).  GPU_CALL_THREAD_PROC se mantiene en gpu.h
          * por si alguna vez quisieramos un tracker dual. */
+#if PCSXR_DIAG_INSTRUMENTATION
+        {
+            /* [GPU-CHUNK] Instrumentacion temporal: detectar chunks de
+             * GPU_writeDataMem que tarden mucho.  Sospechoso para cuelgues
+             * tipo TOCA donde main spinea en ring_push 3.29B veces durante
+             * un retro_run >1min.  Si un comando concreto del PSX (ej.
+             * primera operacion de drawing area / texture upload) tarda
+             * 138s, este log lo captura con la primera palabra del data
+             * (= comando GP0/GP1) para identificarlo.  Ademas calcula el
+             * delta de contadores definidos en xbox_soft/gpu.c
+             * (g_xbox_soft_fastpath_words / slow_pixel_words /
+             *  primfunc_calls) para saber exactamente donde se gasta el
+             * tiempo del chunk: copia rapida de pixels, slow path
+             * pixel-a-pixel o rasterizado de polygons. */
+            static LARGE_INTEGER s_gpu_chunk_freq = {0};
+            static unsigned int s_last_fastpath_words   = 0;
+            static unsigned int s_last_slow_pixel_words = 0;
+            static unsigned int s_last_primfunc_calls   = 0;
+            extern volatile unsigned int g_xbox_soft_fastpath_words;
+            extern volatile unsigned int g_xbox_soft_slow_pixel_words;
+            extern volatile unsigned int g_xbox_soft_primfunc_calls;
+            const uint32_t GPU_CHUNK_WARN_MS = 50;
+            LARGE_INTEGER ct0, ct1;
+            uint32_t first_word;
+            uint64_t chunk_us;
+            unsigned int d_fast, d_slow, d_prim;
+            unsigned int cur_fast, cur_slow, cur_prim;
+
+            if (s_gpu_chunk_freq.QuadPart == 0)
+                QueryPerformanceFrequency(&s_gpu_chunk_freq);
+            first_word = s_ring_data[ridx];
+            QueryPerformanceCounter(&ct0);
+            GPU_writeDataMem(&s_ring_data[ridx], chunk);
+            QueryPerformanceCounter(&ct1);
+            chunk_us = (uint64_t)((ct1.QuadPart - ct0.QuadPart)
+                                 * 1000000LL / s_gpu_chunk_freq.QuadPart);
+
+            cur_fast = g_xbox_soft_fastpath_words;
+            cur_slow = g_xbox_soft_slow_pixel_words;
+            cur_prim = g_xbox_soft_primfunc_calls;
+            d_fast   = cur_fast - s_last_fastpath_words;
+            d_slow   = cur_slow - s_last_slow_pixel_words;
+            d_prim   = cur_prim - s_last_primfunc_calls;
+            s_last_fastpath_words   = cur_fast;
+            s_last_slow_pixel_words = cur_slow;
+            s_last_primfunc_calls   = cur_prim;
+
+            if (chunk_us >= GPU_CHUNK_WARN_MS * 1000ULL) {
+                static unsigned int s_slow_chunk_count = 0;
+                pcsxr_log(RETRO_LOG_DEBUG,
+                    "[GPU-CHUNK] slow: words=%u first=0x%08X (gp0_cmd=0x%02X) "
+                    "took %u ms | dFast=%u dSlow=%u dPrim=%u\n",
+                    (unsigned)chunk,
+                    (unsigned)first_word,
+                    (unsigned)((first_word >> 24) & 0xFF),
+                    (unsigned)(chunk_us / 1000ULL),
+                    d_fast, d_slow, d_prim);
+                s_slow_chunk_count++;
+
+                /* Cada 16 slow chunks, dump del top-8 comandos GP0 por
+                 * ticks acumulados.  Identifica QUE primitiva concreta
+                 * domina el tiempo: si hay un solo cmd al 90%, ataque
+                 * dirigido.  Si la distribucion es plana, el problema
+                 * esta en el dispatcher o el threading. */
+                if ((s_slow_chunk_count & 0xF) == 0) {
+                    extern volatile unsigned int g_xbox_soft_primfunc_cmd_calls[256];
+                    extern volatile uint64_t     g_xbox_soft_primfunc_cmd_ticks[256];
+                    extern volatile uint64_t     g_xbox_soft_qpc_freq;
+                    /* Selection-sort top-8 sobre indices [0..255] por ticks. */
+                    int top_idx[8];
+                    uint64_t top_ticks[8];
+                    uint64_t total_ticks = 0;
+                    unsigned int total_calls = 0;
+                    int k, j, b;
+                    for (k = 0; k < 8; k++) { top_idx[k] = -1; top_ticks[k] = 0; }
+                    for (k = 0; k < 256; k++) {
+                        uint64_t t = g_xbox_soft_primfunc_cmd_ticks[k];
+                        total_ticks += t;
+                        total_calls += g_xbox_soft_primfunc_cmd_calls[k];
+                        /* insertion en top-8 */
+                        for (j = 0; j < 8; j++) {
+                            if (t > top_ticks[j]) {
+                                for (b = 7; b > j; b--) {
+                                    top_ticks[b] = top_ticks[b-1];
+                                    top_idx[b]   = top_idx[b-1];
+                                }
+                                top_ticks[j] = t;
+                                top_idx[j]   = k;
+                                break;
+                            }
+                        }
+                    }
+                    pcsxr_log(RETRO_LOG_DEBUG,
+                        "[CMD-HIST] total_calls=%u total_ms=%u (top-8 by ticks):\n",
+                        total_calls,
+                        (unsigned)(g_xbox_soft_qpc_freq
+                                   ? (unsigned)((total_ticks * 1000ULL) / g_xbox_soft_qpc_freq)
+                                   : 0u));
+                    for (k = 0; k < 8; k++) {
+                        unsigned int cmd, calls;
+                        uint64_t ms, pct;
+                        if (top_idx[k] < 0 || top_ticks[k] == 0) break;
+                        cmd   = (unsigned int)top_idx[k];
+                        calls = g_xbox_soft_primfunc_cmd_calls[cmd];
+                        ms    = g_xbox_soft_qpc_freq
+                                ? (top_ticks[k] * 1000ULL) / g_xbox_soft_qpc_freq
+                                : 0;
+                        pct   = total_ticks ? (top_ticks[k] * 100ULL) / total_ticks : 0;
+                        pcsxr_log(RETRO_LOG_DEBUG,
+                            "[CMD-HIST]   cmd=0x%02X calls=%u total=%u ms (%u%%) avg=%u us/call\n",
+                            cmd, calls,
+                            (unsigned)ms, (unsigned)pct,
+                            calls ? (unsigned)((ms * 1000ULL) / calls) : 0u);
+                    }
+                }
+            }
+        }
+#else
         GPU_writeDataMem(&s_ring_data[ridx], chunk);
+#endif
 
         /* Release: writes del GPU (psxVuw, state) visibles antes de
          * publicar rpos.  El main thread en ring_drain hace lwsync
@@ -559,8 +678,27 @@ u32 gpuReadData(void)
     return r;
 }
 
+#if PCSXR_DIAG_INSTRUMENTATION
+/* Contadores GPU port writes definidos en r3000a.c, declarados aqui como
+ * extern para incrementar desde gpuWriteData/gpuWriteStatus.  El primer
+ * write engatilla un log puntual para marcar el momento en que el BIOS /
+ * juego empieza a usar el GPU (util para diagnosticar pantallas negras). */
+extern volatile uint32_t diag_gpu_data_writes;
+extern volatile uint32_t diag_gpu_status_writes;
+extern volatile uint32_t diag_gpu_first_write_seen;
+extern void pcsxr_log(int level, const char *format, ...);
+#endif
+
 void gpuWriteData(u32 data)
 {
+#if PCSXR_DIAG_INSTRUMENTATION
+    diag_gpu_data_writes++;
+    if (!diag_gpu_first_write_seen) {
+        diag_gpu_first_write_seen = 1;
+        pcsxr_log(RETRO_LOG_DEBUG,
+            "[GPU-IO] FIRST GPU write seen: data=0x%08x\n", (unsigned)data);
+    }
+#endif
     ring_drain();
     DIAG_SET_PLUGIN_CALL(GPU_CALL_WRITE_DATA);
     GPU_writeData(data);
@@ -569,6 +707,14 @@ void gpuWriteData(u32 data)
 
 void gpuWriteStatus(u32 data)
 {
+#if PCSXR_DIAG_INSTRUMENTATION
+    diag_gpu_status_writes++;
+    if (!diag_gpu_first_write_seen) {
+        diag_gpu_first_write_seen = 1;
+        pcsxr_log(RETRO_LOG_DEBUG,
+            "[GPU-IO] FIRST GPU write seen: status=0x%08x\n", (unsigned)data);
+    }
+#endif
     /* Status writes cambian register state (display mode, drawing area,
      * etc).  Drain antes para que los draws encolados respeten el state
      * anterior y los siguientes vean el nuevo. */

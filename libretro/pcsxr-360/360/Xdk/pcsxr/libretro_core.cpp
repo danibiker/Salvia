@@ -131,6 +131,11 @@ extern int      duck_gpu_enabled;
  * tenemos que matchearlo para que el linker resuelva el simbolo. */
 extern "C" void duck_true_color_set_active(int active);
 
+/* Async CD-ROM prefetch toggle (cdriso_async.c).  Hot-reloadable from
+ * the libretro option pcsxr360_cdrom_prefetch.  When OFF, cdra_read()
+ * bypasses the ring buffer and goes straight to the sync backend. */
+extern "C" void cdra_set_enabled(int enabled);
+
 /* Runtime selector for the gpu_unai SW renderer ported from
  * PCSX-ReARMed.  Defined in plugins/gpu_unai/gpu_unai_driver.cpp.
  * Mutually exclusive with duck_gpu_enabled — the GP0 dispatch
@@ -265,6 +270,16 @@ void retro_set_environment(retro_environment_t cb) {
          * Coste: +2MB RAM, ~10-15% mas fillrate por el doble store en
          * ShadePixel. */
         { "pcsxr360_true_color",         "True Color 24-bit (SwanStation + XRGB8888 only); auto|enabled|disabled" },
+        /* CD-ROM async prefetch: worker thread pinned to core 2 pre-reads the
+         * next 8 sectors after each successful CDR_readTrack into an in-memory
+         * ring buffer.  When the game requests one of those sectors, it's
+         * served zero-latency from the ring (no chd_read / fread / decompress).
+         * Biggest benefit: CHD-compressed games where each cold-cache sector
+         * costs 1-5ms of zlib decompression on the PPC -- prefetch hides that
+         * behind emulator CPU work.  BIN/CUE gets a small benefit too (disk
+         * I/O latency overlap).  Disable if you see crashes or hangs you
+         * suspect are CD-related so you can rule it out. */
+        { "pcsxr360_cdrom_prefetch",     "CD-ROM async prefetch (core 2 worker); enabled|disabled" },
 		{ "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
         { "pcsxr360_fix_parasite_eve2",  "Game Fix (PEOPS): Parasite Eve 2 (counter); disabled|enabled" },
         { "pcsxr360_fix_dark_forces",    "Game Fix (PEOPS): Dark Forces / Duke Nukem (GPU); disabled|enabled" },
@@ -417,6 +432,15 @@ static void check_game_fixes(void) {
     g_pcsxr_dithering = read_bool_var("pcsxr360_dithering", true) ? 1 : 0;
     gpu_unai_config_ext.dithering = g_pcsxr_dithering;
     iUseDither = g_pcsxr_dithering;
+
+    /* CD-ROM async prefetch (worker thread on core 2, see cdriso_async.c).
+     * Toggleable in caliente: cdra_set_enabled() flips a flag that the
+     * read path checks on every call.  When OFF, cdra_read() falls
+     * through to the sync path with no thread interaction.  Default ON
+     * because it's a pure latency-hiding win for CHD games and harmless
+     * for BIN/CUE.  Disable only to rule it out when debugging CD-related
+     * issues.  (extern "C" decl is at file scope above.) */
+    cdra_set_enabled(read_bool_var("pcsxr360_cdrom_prefetch", true) ? 1 : 0);
     /* gpu_unai mantiene DOS structs de config: la externa (ext) que es la
      * que toca el frontend, y la interna `gpu_unai.config` que es la que
      * consulta `DitheringEnabled()` en el inner loop. Hay que llamar a
@@ -1633,20 +1657,104 @@ void retro_unload_game(void) {
     emu_teardown();
 }
 
+#if PCSXR_DIAG_INSTRUMENTATION
+/* === [RR-PERSEC] timing por seccion (gated PCSXR_DIAG_INSTRUMENTATION) ===
+ * Versiones envueltas de DIAG_SET_RR_SEC que ademas acumulan tiempo wall
+ * en cada seccion.  Permite que [RR-SLOW] muestre breakdown por seccion
+ * en lugar de solo "ultima seccion al salir".  Coste cero en release. */
+static LARGE_INTEGER g_rr_sec_last_change = {0};
+static int           g_rr_current_section = RR_SEC_OUT_OF_RUN;
+static uint64_t      g_rr_sec_us[9] = {0};
+static LARGE_INTEGER g_rr_perf_freq = {0};
+
+static inline void rr_account_section(int new_sec) {
+    LARGE_INTEGER now;
+    uint64_t delta_us;
+    if (g_rr_perf_freq.QuadPart == 0) QueryPerformanceFrequency(&g_rr_perf_freq);
+    QueryPerformanceCounter(&now);
+    if (g_rr_sec_last_change.QuadPart != 0 &&
+        g_rr_current_section >= 0 && g_rr_current_section < 9) {
+        delta_us = (uint64_t)((now.QuadPart - g_rr_sec_last_change.QuadPart)
+                             * 1000000LL / g_rr_perf_freq.QuadPart);
+        g_rr_sec_us[g_rr_current_section] += delta_us;
+    }
+    g_rr_current_section = new_sec;
+    g_rr_sec_last_change = now;
+    retro_run_section = new_sec;
+}
+
+#define RR_SET_SEC(sec) rr_account_section(sec)
+#else
+/* En release, RR_SET_SEC degenera a DIAG_SET_RR_SEC (que tambien es
+ * no-op si PCSXR_DIAG_INSTRUMENTATION=0 en gpu.h).  Cero overhead. */
+#define RR_SET_SEC(sec) DIAG_SET_RR_SEC(sec)
+#endif
+
 void retro_run(void) {
+#if PCSXR_DIAG_INSTRUMENTATION
+    /* === [RR-HEARTBEAT] instrumentacion diagnostico ===
+     * Gateado tras PCSXR_DIAG_INSTRUMENTATION.  En release nada de
+     * esto compila — coste cero. */
+    LARGE_INTEGER rr_t_entry;
+    /* Resetear contadores por seccion para este frame */
+    {
+        int i;
+        for (i = 0; i < 9; i++) g_rr_sec_us[i] = 0;
+    }
+    {
+        extern LARGE_INTEGER g_rr_last_exit;
+        static LARGE_INTEGER s_rr_freq = {0};
+        static LARGE_INTEGER s_rr_window_start = {0};
+        static uint32_t s_rr_entry_count = 0;
+        static uint32_t s_rr_total_calls = 0;
+        const uint32_t  RR_LOG_EVERY = 60;
+        const uint32_t  RR_GAP_WARN_MS = 100;
+
+        if (s_rr_freq.QuadPart == 0)
+            QueryPerformanceFrequency(&s_rr_freq);
+        QueryPerformanceCounter(&rr_t_entry);
+
+        if (g_rr_last_exit.QuadPart != 0) {
+            uint64_t gap_us = (uint64_t)((rr_t_entry.QuadPart - g_rr_last_exit.QuadPart)
+                                        * 1000000LL / s_rr_freq.QuadPart);
+            if (gap_us >= RR_GAP_WARN_MS * 1000ULL) {
+                pcsxr_log(RETRO_LOG_DEBUG,
+                    "[RR-GAP] frontend gap=%u ms (call %u; >%u ms means Salvia held off the next retro_run)\n",
+                    (unsigned)(gap_us / 1000ULL),
+                    (unsigned)s_rr_total_calls,
+                    (unsigned)RR_GAP_WARN_MS);
+            }
+        }
+        s_rr_total_calls++;
+        s_rr_entry_count++;
+
+        if (s_rr_window_start.QuadPart == 0)
+            s_rr_window_start = rr_t_entry;
+        if (s_rr_entry_count >= RR_LOG_EVERY) {
+            uint64_t window_us = (uint64_t)((rr_t_entry.QuadPart - s_rr_window_start.QuadPart)
+                                           * 1000000LL / s_rr_freq.QuadPart);
+            pcsxr_log(RETRO_LOG_DEBUG,
+                "[RR-HEARTBEAT] %u entries in %u ms wall (avg %u ms/call) | total=%u\n",
+                (unsigned)s_rr_entry_count,
+                (unsigned)(window_us / 1000ULL),
+                window_us ? (unsigned)(window_us / s_rr_entry_count / 1000ULL) : 0u,
+                (unsigned)s_rr_total_calls);
+            s_rr_entry_count  = 0;
+            s_rr_window_start = rr_t_entry;
+        }
+    }
+#endif /* PCSXR_DIAG_INSTRUMENTATION */
+
     /* Marca la fase actual de retro_run para el GPU watchdog (cuando
-     * PCSXR_DIAG_INSTRUMENTATION=1 en gpu.h).  Si watchdog detecta que
-     * main no avanza cycles (psxRegs.cycle congelado), retro_run_section
-     * revela donde se quedo: dentro de psxCpu->Execute (en cualquier
-     * sub-fase, incluida la entrega de audio via SoundFeedStreamData ->
-     * audio_batch_cb), en video_cb (Salvia/D3D), o ya retornado a
-     * Salvia (OUT_OF_RUN).  Cuando OFF estas macros son (void)0. */
-    DIAG_SET_RR_SEC(RR_SEC_ENTRY);
+     * PCSXR_DIAG_INSTRUMENTATION=1 en gpu.h).  Si la macro esta ON,
+     * RR_SET_SEC acumula tiempo por seccion para [RR-SLOW]; si esta
+     * OFF, degenera a DIAG_SET_RR_SEC (tambien no-op). */
+    RR_SET_SEC(RR_SEC_ENTRY);
 
     if (!emu_running) {
         if (video_cb)
             video_cb(NULL, display_width, display_height, 0);
-        DIAG_SET_RR_SEC(RR_SEC_OUT_OF_RUN);
+        RR_SET_SEC(RR_SEC_OUT_OF_RUN);
         return;
     }
 
@@ -1705,7 +1813,7 @@ void retro_run(void) {
         was_skipping_this_frame = 0;
     }
 
-    DIAG_SET_RR_SEC(RR_SEC_INPUT_POLL);
+    RR_SET_SEC(RR_SEC_INPUT_POLL);
     poll_libretro_input();
 #if PCSXR_PERF_ENABLED
     QueryPerformanceCounter(&t_after_sync);
@@ -1724,7 +1832,7 @@ void retro_run(void) {
      * o el dynarec (skipear no ayuda y solo causa flicker). */
     gpu_wait_ticks = 0;
     frame_done = 0;
-    DIAG_SET_RR_SEC(RR_SEC_CPU_EXEC);
+    RR_SET_SEC(RR_SEC_CPU_EXEC);
     psxCpu->Execute();
 #if PCSXR_PERF_ENABLED
     QueryPerformanceCounter(&t_after_exec);
@@ -1732,7 +1840,7 @@ void retro_run(void) {
     perf_acc_gpu_wait += (uint64_t)(gpu_wait_ticks * 1000000ll / perf_freq.QuadPart);
 #endif
 
-    DIAG_SET_RR_SEC(RR_SEC_AUTOSKIP);
+    RR_SET_SEC(RR_SEC_AUTOSKIP);
 
     /* Auto-frameskip: decision basada en (a) el exceso sobre el budget
      * y (b) la fraccion de ese exceso que se debe a esperas al GPU.
@@ -1777,7 +1885,7 @@ void retro_run(void) {
      *  - Frame skipeado: video_cb(NULL) -> el frontend duplica el ultimo,
      *    nos ahorramos el envio.
      *  - Frame normal: video_cb(pPsxScreen) tal cual. */
-    DIAG_SET_RR_SEC(RR_SEC_VIDEO_CB);
+    RR_SET_SEC(RR_SEC_VIDEO_CB);
     if (was_skipping_this_frame) {
         if (video_cb)
             video_cb(NULL, display_width, display_height, 0);
@@ -1796,7 +1904,7 @@ void retro_run(void) {
      * salida va lento. */
 
 #if PCSXR_PERF_ENABLED
-    DIAG_SET_RR_SEC(RR_SEC_PERF_DUMP);
+    RR_SET_SEC(RR_SEC_PERF_DUMP);
     QueryPerformanceCounter(&t_end);
     /* perf_acc_aud queda como diferencia minima (sin drenado real) — la
      * mantenemos por compat con el dump. */
@@ -1808,12 +1916,61 @@ void retro_run(void) {
         perf_dump(t_end);
 #endif
 
-    /* Salida de retro_run: a partir de aqui main esta de vuelta en el
-     * frontend (Salvia), presentando el frame, procesando OSD, etc.
-     * Si watchdog detecta congelamiento con sec=OUT_OF_RUN(0), el
-     * cuelgue esta fuera de pcsxr-360. */
-    DIAG_SET_RR_SEC(RR_SEC_OUT_OF_RUN);
+    /* Mark exit phase para watchdog GPU.  Si DIAG_INSTRUMENTATION
+     * esta ON, RR_SET_SEC tambien acumula tiempo para el dump
+     * [RR-SLOW] del bloque diagnostico que sigue. */
+    RR_SET_SEC(RR_SEC_OUT_OF_RUN);
+
+#if PCSXR_DIAG_INSTRUMENTATION
+    /* === [RR-SLOW] desglose por seccion (gated DIAG) === */
+    {
+        extern LARGE_INTEGER g_rr_last_exit;
+        const uint32_t RR_FRAME_WARN_MS = 100;
+        const uint32_t RR_PERSEC_REPORT_MS = 20;  /* loguear secciones >=20 ms */
+        uint64_t frame_us = 0;
+        int i;
+
+        for (i = 0; i < 9; i++) frame_us += g_rr_sec_us[i];
+
+        if (frame_us >= RR_FRAME_WARN_MS * 1000ULL) {
+            pcsxr_log(RETRO_LOG_DEBUG,
+                "[RR-SLOW] frame_dur=%u ms wall, breakdown by section:\n",
+                (unsigned)(frame_us / 1000ULL));
+            for (i = 0; i < 9; i++) {
+                uint64_t sec_us = g_rr_sec_us[i];
+                const char *sec_name;
+                if (sec_us < RR_PERSEC_REPORT_MS * 1000ULL) continue;
+                switch (i) {
+                    case RR_SEC_ENTRY:       sec_name = "ENTRY";       break;
+                    case RR_SEC_INPUT_POLL:  sec_name = "INPUT_POLL";  break;
+                    case RR_SEC_CPU_EXEC:    sec_name = "CPU_EXEC";    break;
+                    case RR_SEC_AUTOSKIP:    sec_name = "AUTOSKIP";    break;
+                    case RR_SEC_VIDEO_CB:    sec_name = "VIDEO_CB";    break;
+                    case RR_SEC_PERF_DUMP:   sec_name = "PERF_DUMP";   break;
+                    case RR_SEC_OUT_OF_RUN:  sec_name = "OUT_OF_RUN";  break;
+                    default:                 sec_name = "?";           break;
+                }
+                pcsxr_log(RETRO_LOG_DEBUG,
+                    "[RR-SLOW]   %-12s = %u ms (%u%%)\n",
+                    sec_name,
+                    (unsigned)(sec_us / 1000ULL),
+                    frame_us ? (unsigned)((sec_us * 100ULL) / frame_us) : 0u);
+            }
+        }
+        {
+            LARGE_INTEGER rr_t_exit;
+            QueryPerformanceCounter(&rr_t_exit);
+            g_rr_last_exit = rr_t_exit;
+        }
+    }
+#endif /* PCSXR_DIAG_INSTRUMENTATION */
 }
+
+#if PCSXR_DIAG_INSTRUMENTATION
+/* [RR-HEARTBEAT] timestamp de salida del ultimo retro_run, leido por
+ * la siguiente entrada para calcular el gap del frontend. */
+LARGE_INTEGER g_rr_last_exit = {0};
+#endif
 
 void retro_reset(void) {
     EmuReset();

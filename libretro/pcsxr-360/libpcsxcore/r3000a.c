@@ -28,6 +28,9 @@
 #include "sio.h"
 #include "psxdma.h"
 #include "spu.h"  /* spuDelayedIrq, spuUpdate (cycle-driven SPU events) */
+#if PCSXR_DIAG_INSTRUMENTATION
+#include <libretro.h>  /* RETRO_LOG_DEBUG / RETRO_LOG_INFO (solo diag) */
+#endif
 
 boolean use_vm;
 // extern boolean use_vm on psxcommon.h
@@ -65,45 +68,127 @@ volatile uint32_t diag_psx_branch_test_calls = 0;
 static   uint32_t diag_last_dump_cycle = 0;
 #define  DIAG_DUMP_INTERVAL_CYCLES (100000000u)   /* ~3 segundos emulados */
 
+/* === Histograma de PC (diagnostico de cuelgues) ===
+ * Si el BIOS o un juego se queda atascado en pantalla negra mientras la CPU
+ * sigue ejecutando branches (sabido via diag_psx_branch_test_calls), saber
+ * EN QUE direccion esta gastando los ciclos es la pista mas directa para
+ * identificar el bucle.  Sampleamos psxRegs.pc cada N entradas a
+ * psxBranchTest y acumulamos en una pequena hashtable open-addressing.
+ * Al volcar, ordenamos por count y mostramos top-8.
+ *
+ * Coste con OFF: cero (todo dentro del #if).  Coste con ON: una division
+ * cada psxBranchTest y, cuando toca samplear, una busqueda lineal en una
+ * tabla de 16 entradas.  Despreciable.
+ *
+ * Granularidad: 1 sample cada 256 branch tests.  Con ~5M branch_tests/sec
+ * eso son ~20K muestras/sec.  En la ventana de 3s del dump tenemos ~60K
+ * muestras totales, mas que suficiente para que la moda emerja con claridad. */
+#define DIAG_PC_HIST_SLOTS 16
+#define DIAG_PC_SAMPLE_PERIOD 256u
+typedef struct {
+    uint32_t pc;
+    uint32_t count;
+} diag_pc_slot_t;
+static diag_pc_slot_t diag_pc_hist[DIAG_PC_HIST_SLOTS];
+static uint32_t diag_pc_samples_taken = 0;
+static uint32_t diag_pc_samples_evicted = 0;  /* sample tirado por tabla llena */
+
+/* === Contadores GPU port writes ===
+ * Incrementan en gpuWriteData() / gpuWriteStatus() de gpu.c (declarados
+ * extern alli).  Permiten ver si el BIOS llega o no a empezar a programar
+ * el GPU.  Si `push+=0` en watchdog + estos contadores a 0 -> BIOS muy
+ * temprano (todavia en init de hw).  Si los contadores > 0 + `push+=0` ->
+ * BIOS escribe al GPU pero el ring DMA del thread emulador no progresa. */
+volatile uint32_t diag_gpu_data_writes   = 0;
+volatile uint32_t diag_gpu_status_writes = 0;
+volatile uint32_t diag_gpu_first_write_seen = 0;  /* 0 hasta el primer write */
+
 /* Forward declaration: pcsxr_log esta en libretro_core.cpp.
  * Mismo patron que en gpu.c y cdriso.c (declaracion local sin header). */
 extern void pcsxr_log(int level, const char *format, ...);
 
 static void diag_dump_irq_counts(uint32_t now_cycle) {
     /* pcsxr_log trunca cerca de 115 chars, asi que partimos en lineas. */
-    pcsxr_log(1 /*RETRO_LOG_INFO*/,
+    pcsxr_log(RETRO_LOG_INFO,
         "[IRQ] hw vbl=%u gpu=%u cdr=%u dma=%u tmr0=%u\n",
         (unsigned)diag_hw_irq_set_count[0],
         (unsigned)diag_hw_irq_set_count[1],
         (unsigned)diag_hw_irq_set_count[2],
         (unsigned)diag_hw_irq_set_count[3],
         (unsigned)diag_hw_irq_set_count[4]);
-    pcsxr_log(1 /*RETRO_LOG_INFO*/,
+    pcsxr_log(RETRO_LOG_INFO,
         "[IRQ] hw tmr1=%u tmr2=%u sio=%u spu=%u except=%u\n",
         (unsigned)diag_hw_irq_set_count[5],
         (unsigned)diag_hw_irq_set_count[6],
         (unsigned)diag_hw_irq_set_count[7],
         (unsigned)diag_hw_irq_set_count[9],
         (unsigned)diag_psx_exception_count);
-    pcsxr_log(1 /*RETRO_LOG_INFO*/,
+    pcsxr_log(RETRO_LOG_INFO,
         "[IRQ] evt cdr=%u cdread=%u gpudma=%u mdecout=%u spudma=%u\n",
         (unsigned)diag_evt_irq_count[PSXINT_CDR],
         (unsigned)diag_evt_irq_count[PSXINT_CDREAD],
         (unsigned)diag_evt_irq_count[PSXINT_GPUDMA],
         (unsigned)diag_evt_irq_count[PSXINT_MDECOUTDMA],
         (unsigned)diag_evt_irq_count[PSXINT_SPUDMA]);
-    pcsxr_log(1 /*RETRO_LOG_INFO*/,
+    pcsxr_log(RETRO_LOG_INFO,
         "[IRQ] evt mdecin=%u cdrplay=%u cdrdbuf=%u cdrlid=%u cdrdma=%u\n",
         (unsigned)diag_evt_irq_count[PSXINT_MDECINDMA],
         (unsigned)diag_evt_irq_count[PSXINT_CDRPLAY],
         (unsigned)diag_evt_irq_count[PSXINT_CDRDBUF],
         (unsigned)diag_evt_irq_count[PSXINT_CDRLID],
         (unsigned)diag_evt_irq_count[PSXINT_CDRDMA]);
-    pcsxr_log(1 /*RETRO_LOG_INFO*/,
+    pcsxr_log(RETRO_LOG_INFO,
+        "[IRQ] evt sio=%u spu_irq=%u spu_upd=%u\n",
+        (unsigned)diag_evt_irq_count[PSXINT_SIO],
+        (unsigned)diag_evt_irq_count[PSXINT_SPU_IRQ],
+        (unsigned)diag_evt_irq_count[PSXINT_SPU_UPDATE]);
+    pcsxr_log(RETRO_LOG_INFO,
         "[IRQ] branch_tests=%u pc=0x%08X cyc=%u\n",
         (unsigned)diag_psx_branch_test_calls,
         (unsigned)psxRegs.pc,
         (unsigned)now_cycle);
+
+    /* GPU write activity desde el ultimo dump.  Si los counts son 0
+     * mientras branch_tests > 0, la CPU corre pero no toca el GPU
+     * (probablemente atascada en bucle BIOS antes de la fase video). */
+    pcsxr_log(RETRO_LOG_DEBUG,
+        "[GPU-IO] data_writes=%u status_writes=%u first_seen=%u\n",
+        (unsigned)diag_gpu_data_writes,
+        (unsigned)diag_gpu_status_writes,
+        (unsigned)diag_gpu_first_write_seen);
+
+    /* Top-8 PCs del histograma.  Ordenado por count descendente con un
+     * selection-sort in-place (la tabla es pequena, sobra).  Logueamos
+     * solo los slots con count > 0 para no spamear. */
+    {
+        int i, j;
+        uint32_t total = 0;
+        for (i = 0; i < DIAG_PC_HIST_SLOTS; i++) total += diag_pc_hist[i].count;
+        if (total > 0) {
+            pcsxr_log(RETRO_LOG_DEBUG,
+                "[PC-HIST] samples=%u evicted=%u (top by count):\n",
+                (unsigned)diag_pc_samples_taken,
+                (unsigned)diag_pc_samples_evicted);
+            for (i = 0; i < 8 && i < DIAG_PC_HIST_SLOTS; i++) {
+                int max_idx = i;
+                for (j = i + 1; j < DIAG_PC_HIST_SLOTS; j++) {
+                    if (diag_pc_hist[j].count > diag_pc_hist[max_idx].count)
+                        max_idx = j;
+                }
+                if (max_idx != i) {
+                    diag_pc_slot_t tmp = diag_pc_hist[i];
+                    diag_pc_hist[i] = diag_pc_hist[max_idx];
+                    diag_pc_hist[max_idx] = tmp;
+                }
+                if (diag_pc_hist[i].count == 0) break;
+                pcsxr_log(RETRO_LOG_DEBUG,
+                    "[PC-HIST]   pc=0x%08X count=%u (%u%%)\n",
+                    (unsigned)diag_pc_hist[i].pc,
+                    (unsigned)diag_pc_hist[i].count,
+                    total ? (unsigned)((diag_pc_hist[i].count * 100u) / total) : 0u);
+            }
+        }
+    }
 
     /* Reset todos los contadores - cada dump es un DELTA respecto al previo,
      * no un total acumulado. Asi cada ventana de ~3s es independiente. */
@@ -111,9 +196,47 @@ static void diag_dump_irq_counts(uint32_t now_cycle) {
         int i;
         for (i = 0; i < PSXINT_COUNT; i++) diag_evt_irq_count[i] = 0;
         for (i = 0; i < 11; i++) diag_hw_irq_set_count[i] = 0;
+        for (i = 0; i < DIAG_PC_HIST_SLOTS; i++) {
+            diag_pc_hist[i].pc    = 0;
+            diag_pc_hist[i].count = 0;
+        }
     }
     diag_psx_exception_count   = 0;
     diag_psx_branch_test_calls = 0;
+    diag_pc_samples_taken      = 0;
+    diag_pc_samples_evicted    = 0;
+    diag_gpu_data_writes       = 0;
+    diag_gpu_status_writes     = 0;
+    /* diag_gpu_first_write_seen NO se resetea: es un latch global,
+     * queremos ver "ya vimos GPU activity alguna vez" durante toda la
+     * sesion para saber si el cuelgue es PRE-init-GPU o POST. */
+}
+
+/* Llamada por psxBranchTest cada DIAG_PC_SAMPLE_PERIOD entradas.
+ * Inserta psxRegs.pc en el histograma; si el slot existe incrementa,
+ * si no busca slot vacio, si tampoco hay incrementa diag_pc_samples_evicted. */
+static void diag_pc_sample(uint32_t pc) {
+    int i, free_slot = -1;
+    diag_pc_samples_taken++;
+    for (i = 0; i < DIAG_PC_HIST_SLOTS; i++) {
+        if (diag_pc_hist[i].count != 0 && diag_pc_hist[i].pc == pc) {
+            diag_pc_hist[i].count++;
+            return;
+        }
+        if (diag_pc_hist[i].count == 0 && free_slot < 0)
+            free_slot = i;
+    }
+    if (free_slot >= 0) {
+        diag_pc_hist[free_slot].pc    = pc;
+        diag_pc_hist[free_slot].count = 1;
+    } else {
+        /* Tabla llena con 16 PCs distintos -> el codigo "anda" mucho
+         * (probablemente NO esta atascado en bucle).  Solo contabilizamos
+         * el sample tirado.  Si esto domina sobre samples_taken, el
+         * histograma no nos dira gran cosa y habra que recurrir a otra
+         * tecnica de diagnostico. */
+        diag_pc_samples_evicted++;
+    }
 }
 #endif
 
@@ -240,6 +363,11 @@ void schedule_timeslice(void) {
 void psxBranchTest() {
 #if PCSXR_DIAG_INSTRUMENTATION
 	diag_psx_branch_test_calls++;
+	/* Sampleo periodico del PC para el histograma.  No hace falta proteger
+	 * con CritSec porque psxBranchTest siempre corre en el thread emu. */
+	if ((diag_psx_branch_test_calls & (DIAG_PC_SAMPLE_PERIOD - 1u)) == 0u) {
+		diag_pc_sample(psxRegs.pc);
+	}
 #endif
 	// Event processing gated by next_interupt (fast path optimization)
 	if ((s32)(psxRegs.cycle - psxRegs.next_interupt) >= 0) {

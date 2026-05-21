@@ -137,6 +137,35 @@
 #include "key.h"
 #include "fps.h"
 #include "swap.h"
+
+/* PCSXR_DIAG_INSTRUMENTATION llega via /D del compilador (mismo que
+ * libpcsxcore/gpu.h espera).  Fallback a 0 si no llega: con OFF la
+ * instrumentacion de PEOPS_GPUwriteDataMem (counters per-cmd + QPC
+ * bracket) se elimina por completo del binario.  Coste runtime cero
+ * en release.  Para enable: /D PCSXR_DIAG_INSTRUMENTATION=1. */
+#ifndef PCSXR_DIAG_INSTRUMENTATION
+#define PCSXR_DIAG_INSTRUMENTATION 0
+#endif
+
+#if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION
+#include <xtl.h>  /* LARGE_INTEGER, QueryPerformanceCounter */
+
+/* Contadores globales para diagnostico desde libpcsxcore/gpu.c
+ * (donde se vuelca via los logs WD / GPU-CHUNK / CMD-HIST):
+ *   g_xbox_soft_fastpath_words   = words copiados via memcpy fast-path
+ *                                  en la rama DR_VRAMTRANSFER
+ *   g_xbox_soft_slow_pixel_words = words procesados pixel-a-pixel
+ *                                  (path lento de DR_VRAMTRANSFER)
+ *   g_xbox_soft_primfunc_calls   = dispatches al primFunc rasterizador
+ *   g_xbox_soft_primfunc_cmd_calls/ticks[256] = breakdown por cmd GP0
+ *   g_xbox_soft_qpc_freq         = frecuencia QPC, lazy init */
+volatile unsigned int g_xbox_soft_fastpath_words    = 0;
+volatile unsigned int g_xbox_soft_slow_pixel_words  = 0;
+volatile unsigned int g_xbox_soft_primfunc_calls    = 0;
+volatile unsigned int g_xbox_soft_primfunc_cmd_calls[256] = {0};
+volatile uint64_t     g_xbox_soft_primfunc_cmd_ticks[256] = {0};
+volatile uint64_t     g_xbox_soft_qpc_freq = 0;
+#endif
 #include "../gpu_duck/gpu_duck_c_api.h"
 #include "../gpu_unai/gpu_unai_c_api.h"
 #include "peops_prof.h"
@@ -1531,13 +1560,18 @@ const unsigned char primTableCX[256] =
 
 #ifndef _XBOX
 void CALLBACK GPUwriteDataMem(unsigned long * pMem, int iSize)
-#else 
+#else
 void PEOPS_GPUwriteDataMem(unsigned long * pMem, int iSize)
 #endif
 {
  unsigned char command;
  unsigned long gdata=0;
  int i=0;
+#if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION
+ /* Per-comando timing: QPC bracket alrededor de primFunc[cmd].
+  * Declarado aqui (top del bloque) para C89 strict de VS2010. */
+ LARGE_INTEGER prof_t0, prof_t1;
+#endif
 
 #ifdef PEOPS_SDLOG
  int jj,jjmax;
@@ -1562,13 +1596,76 @@ STARTVRAM:
    while(VRAMWrite.ImagePtr<psxVuw)
     VRAMWrite.ImagePtr+=iGPUHeight*1024;
 
-   // now do the loop
+   /* === LoadImage fast path =====================================
+    * El bucle original procesaba un pixel cada vez con GETLE32 +
+    * 2x PUTLE16 + boundary checks + bookkeeping de RowsRemaining.
+    * Medido en Xbox 360 PPC: ~70K words/segundo, o ~280 KB/s.
+    * Provocaba cuelgues de >1 minuto en juegos que cargan muchas
+    * texturas al boot (TOCA Championship Racing, por ejemplo).
+    *
+    * Observacion clave: los 2 byte-swaps (GETLE32 al leer pMem,
+    * PUTLE16 al escribir ImagePtr) se cancelan matematicamente.
+    * El layout de bytes en pMem (PSX little-endian word) es
+    * identico al layout que PUTLE16 produce en ImagePtr (PSX VRAM
+    * tambien little-endian).  Por tanto un memcpy directo da el
+    * mismo resultado a velocidad de memcpy nativo (varios GB/s en
+    * lugar de 280 KB/s).
+    *
+    * Trabajamos en bloques que cumplan TODAS estas condiciones:
+    *   - Cabemos en lo que queda de la fila actual (RowsRemaining)
+    *   - Cabemos en el input disponible ((iSize-i)*2 pixels)
+    *   - Cabemos hasta el fin del VRAM (psxVuw_eom-ImagePtr)
+    *   - Numero PAR de pixels (consumimos words completos)
+    *
+    * El path lento original gestiona los edge cases que la fast
+    * path no puede cubrir (pixel impar al final, wrap del VRAM
+    * mid-word, cambio de fila mid-word, input acabado mid-word). */
    while(VRAMWrite.ColsRemaining>0)
     {
+     /* Fast path: memcpy de tantos pixels consecutivos como sea
+      * posible.  Si fast_pixels acaba siendo 0 (caso muy raro,
+      * solo edge cases), el slow path debajo procesa el siguiente
+      * word como hace el codigo original. */
+     {
+      int pixels_in_row    = VRAMWrite.RowsRemaining;
+      int pixels_in_input  = (iSize - i) * 2;
+      int pixels_in_vram   = (int)(psxVuw_eom - VRAMWrite.ImagePtr);
+      int fast_pixels      = pixels_in_row;
+      if (pixels_in_input < fast_pixels) fast_pixels = pixels_in_input;
+      if (pixels_in_vram  < fast_pixels) fast_pixels = pixels_in_vram;
+      fast_pixels &= ~1;  /* redondeo a par: consumimos words enteros */
+
+      if (fast_pixels >= 2)
+       {
+        int fast_words = fast_pixels >> 1;
+        memcpy(VRAMWrite.ImagePtr, pMem, (size_t)fast_pixels * 2);
+        VRAMWrite.ImagePtr      += fast_pixels;
+        pMem                    += fast_words;
+        i                       += fast_words;
+        VRAMWrite.RowsRemaining = (short)(VRAMWrite.RowsRemaining - fast_pixels);
+        /* Mismo wrap-on-eom que aplica el slow path tras cada
+         * PUTLE16++.  Si fast_pixels llegaba a tocar psxVuw_eom
+         * exactamente, sin esto la siguiente iteracion (slow path)
+         * haria una escritura PUTLE16 con ImagePtr fuera de rango
+         * antes de hacer el check. */
+        if (VRAMWrite.ImagePtr >= psxVuw_eom)
+         VRAMWrite.ImagePtr -= iGPUHeight*1024;
+#if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION
+        g_xbox_soft_fastpath_words += (unsigned int)fast_words;
+#endif
+       }
+     }
+
+     /* Slow path: pixel-a-pixel para los edge cases (input
+      * agotado mid-word, wrap del VRAM, fin de fila con width
+      * impar, etc.).  Es el codigo original sin cambios. */
      while(VRAMWrite.RowsRemaining>0)
       {
        if(i>=iSize) {goto ENDVRAM;}
        i++;
+#if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION
+       g_xbox_soft_slow_pixel_words++;
+#endif
 
        gdata=GETLE32(pMem); pMem++;
 
@@ -1683,6 +1780,17 @@ ENDVRAM:
 	DEBUG_print("close",DBG_SDGECKOCLOSE);
 #endif //PEOPS_SDLOG
        gpuDataC=gpuDataP=0;
+#if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION
+       /* Per-comando profiling de Unai + PEOPS + cualquier primTable.
+        * QPC wraps primFunc independientemente de PCSXR_PERF_ENABLED
+        * (que solo cubre PEOPS).  Lazy init de la frecuencia QPC. */
+       if (g_xbox_soft_qpc_freq == 0) {
+           LARGE_INTEGER f;
+           QueryPerformanceFrequency(&f);
+           g_xbox_soft_qpc_freq = (uint64_t)f.QuadPart;
+       }
+       QueryPerformanceCounter(&prof_t0);
+#endif
 #if PCSXR_PERF_ENABLED
        /* Per-bucket profiling.  We bracket the single call site that
         * routes every GP0 opcode to its handler; classify on cmd plus
@@ -1690,14 +1798,21 @@ ENDVRAM:
         * in peops_prof_qpc_* so this TU doesn't need <xtl.h>. */
        if (prof_active) {
            int prof_bucket = peops_prof_classify(gpuCommand);
-           uint64_t prof_t0 = peops_prof_qpc_now();
+           uint64_t prof_t0_inner = peops_prof_qpc_now();
            primFunc[gpuCommand]((unsigned char *)gpuDataM);
-           peops_prof_qpc_account(prof_bucket, prof_t0);
+           peops_prof_qpc_account(prof_bucket, prof_t0_inner);
        } else {
            primFunc[gpuCommand]((unsigned char *)gpuDataM);
        }
 #else
        primFunc[gpuCommand]((unsigned char *)gpuDataM);
+#endif
+#if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION
+       /* Cerrar timing y attribute al bucket [gpuCommand]. */
+       QueryPerformanceCounter(&prof_t1);
+       g_xbox_soft_primfunc_calls++;
+       g_xbox_soft_primfunc_cmd_calls[gpuCommand]++;
+       g_xbox_soft_primfunc_cmd_ticks[gpuCommand] += (uint64_t)(prof_t1.QuadPart - prof_t0.QuadPart);
 #endif
 
 //       if(dwEmuFixes&0x0001 || dwActFixes&0x0400)      // hack for emulating "gpu busy" in some games
@@ -1709,16 +1824,16 @@ ENDVRAM:
  lGPUdataRet=gdata;
 
  GPUIsReadyForCommands;
- GPUIsIdle;                
+ GPUIsIdle;
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 #ifndef _XBOX
 void CALLBACK GPUwriteData(unsigned long gdata)
-#else 
+#else
 void PEOPS_GPUwriteData(unsigned long gdata)
-#endif 
+#endif
 {
  PUTLE32(&gdata, gdata);
  PEOPS_GPUwriteDataMem(&gdata,1);

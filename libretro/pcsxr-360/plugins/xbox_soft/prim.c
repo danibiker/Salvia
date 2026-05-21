@@ -679,39 +679,31 @@ void primMoveImage(unsigned char * baseAddr)
 		return;
 	}
 
-	if(imageSX&1)                                         // not dword aligned? slower func
+	/* === MoveImage row-by-row memcpy ============================
+	 * El loop dword-a-dword (caso comun) y pixel-a-pixel (odd width)
+	 * costaba ~182 us por call en Xbox 360 PPC.  El [CMD-HIST] de
+	 * TOCA confirma cmd=0x80 acumulando 38% del tiempo total (52 s
+	 * en una ventana de cuelgue de 134s).  src y dst son ambos
+	 * little-endian (psxVuw) sin wrap (chequeado por el if previo).
+	 * memcpy por fila usa el path nativo del PPC y va al rate del
+	 * subsistema de memoria.
+	 *
+	 * Semantica: identica al codigo original — forward copy row-by-
+	 * row.  Si los rects src/dst se solapan verticalmente con
+	 * dst.y > src.y, el resultado puede ser incorrecto (igual que en
+	 * el codigo original).  PSX MoveImage on real hardware tampoco
+	 * garantiza overlap behavior, asi que los juegos no deberian
+	 * depender de eso. */
 	{
-		unsigned short *SRCPtr, *DSTPtr;
-		unsigned short LineOffset;
-
-		SRCPtr = psxVuw + (1024*imageY0) + imageX0;
-		DSTPtr = psxVuw + (1024*imageY1) + imageX1;
-
-		LineOffset = 1024 - imageSX;
+		unsigned short *SRCPtr = psxVuw + (1024*imageY0) + imageX0;
+		unsigned short *DSTPtr = psxVuw + (1024*imageY1) + imageX1;
+		size_t row_bytes = (size_t)imageSX * 2;  /* 2 bytes/pixel */
 
 		for(j=0;j<imageSY;j++)
 		{
-			for(i=0;i<imageSX;i++) *DSTPtr++ = *SRCPtr++;
-			SRCPtr += LineOffset;
-			DSTPtr += LineOffset;
-		}
-	}
-	else                                                  // dword aligned
-	{
-		uint32_t *SRCPtr, *DSTPtr;
-		unsigned short LineOffset;
-		int dx=imageSX>>1;
-
-		SRCPtr = (uint32_t *)(psxVuw + (1024*imageY0) + imageX0);
-		DSTPtr = (uint32_t *)(psxVuw + (1024*imageY1) + imageX1);
-
-		LineOffset = 512 - dx;
-
-		for(j=0;j<imageSY;j++)
-		{
-			for(i=0;i<dx;i++) *DSTPtr++ = *SRCPtr++;
-			SRCPtr += LineOffset;
-			DSTPtr += LineOffset;
+			memcpy(DSTPtr, SRCPtr, row_bytes);
+			SRCPtr += 1024;
+			DSTPtr += 1024;
 		}
 	}
 

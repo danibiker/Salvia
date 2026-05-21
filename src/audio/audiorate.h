@@ -35,13 +35,22 @@ private:
         const double alpha = 0.1;
         smoothedFill = smoothedFill * (1.0 - alpha) + fill * alpha;
 
-        // Error: positivo si el buffer esta mas lleno de lo deseado
+        // Error: positivo si el buffer esta mas lleno de lo deseado.
+        // Rango: -0.5 (buffer vacio) .. +0.5 (buffer lleno).
         double error = smoothedFill - 0.5;
 
-        // Ajuste proporcional (kp = 0.005, conservador)
-        double adj = error * 0.005;
+        // Ajuste proporcional.  kp escogido para que un error maximo
+        // (|0.5|) produzca el clamp maximo (|0.02| = 2%), es decir:
+        //   kp = 0.02 / 0.5 = 0.04
+        // El kp anterior (0.005) era 8x demasiado pequeno: incluso con
+        // el buffer 100% lleno, adj apenas alcanzaba 0.25%, que es
+        // insuficiente para drenar el buffer durante el catch-up tras
+        // stalls del CD.  Resultado: buffer se llenaba, Write() no-
+        // bloqueante descartaba muestras silenciosamente, cada drop
+        // era una discontinuidad audible (crujido continuo).
+        double adj = error * 0.04;
 
-        // Clamp a +-2% maximo
+        // Clamp a +-2% maximo (limite de pitch shift imperceptible).
         if (adj >  0.02) adj =  0.02;
         if (adj < -0.02) adj = -0.02;
 
@@ -87,9 +96,28 @@ private:
                 s1R = s0R;
             }
 
-            // Interpolacion lineal
-            dst[i * 2]     = (int16_t)(s0L + (int16_t)((double)(s1L - s0L) * frac));
-            dst[i * 2 + 1] = (int16_t)(s0R + (int16_t)((double)(s1R - s0R) * frac));
+            // Interpolacion lineal.
+            //
+            // Aritmetica en int (32-bit) para evitar UB del estandar C
+            // al convertir doubles fuera de rango a int16_t.  El delta
+            // (s1L - s0L) puede ser hasta 65535; multiplicado por frac
+            // (0..1) puede dar 0..65535, que no cabe en int16_t.  Hacer
+            // el calculo en int y clampar antes del cast final garantiza
+            // que el cast a int16_t sea siempre dentro de rango.
+            //
+            // En la practica en PPC del 360 con MSVC el wraparound de
+            // 2's complement daba el resultado correcto por casualidad
+            // matematica, pero es UB segun el estandar y puede generar
+            // artefactos en optimizaciones agresivas o compiladores
+            // distintos.
+            int interpL = s0L + (int)((double)(s1L - s0L) * frac);
+            int interpR = s0R + (int)((double)(s1R - s0R) * frac);
+            if (interpL >  32767) interpL =  32767;
+            if (interpL < -32768) interpL = -32768;
+            if (interpR >  32767) interpR =  32767;
+            if (interpR < -32768) interpR = -32768;
+            dst[i * 2]     = (int16_t)interpL;
+            dst[i * 2 + 1] = (int16_t)interpR;
 
             pos += step;
         }

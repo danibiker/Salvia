@@ -25,6 +25,14 @@
 #include "cdrom.h"
 #include "ppf.h"
 #include "psxdma.h"
+/* PCSXR_DIAG_INSTRUMENTATION gating de la instrumentacion CDR-TRACE.
+ * Default 0 (release): toda la instrumentacion se elimina del binario. */
+#ifndef PCSXR_DIAG_INSTRUMENTATION
+#define PCSXR_DIAG_INSTRUMENTATION 0
+#endif
+#if PCSXR_DIAG_INSTRUMENTATION
+#include <libretro.h>  /* RETRO_LOG_DEBUG para pcsxr_log (solo diag) */
+#endif
 
 cdrStruct cdr;
 
@@ -691,15 +699,57 @@ void cdrPlayInterrupt()
 
 }
 
+/* === [CDR-TRACE] instrumentacion diagnostico ===
+ * Loguea hasta CDR_TRACE_MAX comandos durante el arranque, para
+ * diagnosticar juegos que se cuelgan en BIOS.  Solo activo si
+ * PCSXR_DIAG_INSTRUMENTATION=1 via /D del compilador.  Coste cero
+ * en release builds. */
+#if PCSXR_DIAG_INSTRUMENTATION
+#define CDR_TRACE_MAX 400
+static int s_cdr_trace_count = 0;
+extern void pcsxr_log(int level, const char *format, ...);
+#endif
+
 void cdrInterrupt() {
 	u16 Irq = cdr.Irq;
 	int no_busy_error = 0;
 	int start_rotating = 0;
 	int error = 0;
 	int delay;
+#if PCSXR_DIAG_INSTRUMENTATION
+	int trace_this = (s_cdr_trace_count < CDR_TRACE_MAX);
+	const char *cmd_name;
+
+	if (trace_this) {
+		cmd_name = (Irq < 0x20 && CmdName[Irq]) ? CmdName[Irq] : "?";
+		pcsxr_log(RETRO_LOG_DEBUG,
+			"[CDR-TRACE %d] >> Irq=%s(0x%02x) StatP=0x%02x Mode=0x%02x "
+			"Reading=%d Play=%d Seeked=%d SetLoc=[%02x:%02x:%02x] "
+			"ParamC=%d Param=[%02x %02x %02x %02x] "
+			"DriveState=%d IrqRepeated=%d Stat_in=%u\n",
+			s_cdr_trace_count,
+			cmd_name, (unsigned)Irq,
+			(unsigned)cdr.StatP, (unsigned)cdr.Mode,
+			(int)cdr.Reading, (int)cdr.Play, (int)cdr.Seeked,
+			(unsigned)cdr.SetSector[0], (unsigned)cdr.SetSector[1], (unsigned)cdr.SetSector[2],
+			(int)cdr.ParamC,
+			(unsigned)cdr.Param[0], (unsigned)cdr.Param[1],
+			(unsigned)cdr.Param[2], (unsigned)cdr.Param[3],
+			(int)cdr.DriveState, (int)cdr.IrqRepeated,
+			(unsigned)cdr.Stat);
+	}
+#endif
 
 	// Reschedule IRQ
 	if (cdr.Stat) {
+#if PCSXR_DIAG_INSTRUMENTATION
+		if (trace_this) {
+			pcsxr_log(RETRO_LOG_DEBUG,
+				"[CDR-TRACE %d] << reschedule (cdr.Stat=%u != 0)\n",
+				s_cdr_trace_count, (unsigned)cdr.Stat);
+			s_cdr_trace_count++;
+		}
+#endif
 		CDR_INT( 0x100 );
 		return;
 	}
@@ -1165,6 +1215,37 @@ void cdrInterrupt() {
 finish:
 	setIrq();
 	cdr.ParamC = 0;
+
+#if PCSXR_DIAG_INSTRUMENTATION
+	if (trace_this) {
+		const char *stat_name;
+		switch (cdr.Stat) {
+			case 0: stat_name = "NoIntr"; break;
+			case 1: stat_name = "DataReady"; break;
+			case 2: stat_name = "Complete"; break;
+			case 3: stat_name = "Acknowledge"; break;
+			case 4: stat_name = "DataEnd"; break;
+			case 5: stat_name = "DiskError"; break;
+			default: stat_name = "?"; break;
+		}
+		pcsxr_log(RETRO_LOG_DEBUG,
+			"[CDR-TRACE %d] << Stat=%s(%u) ResultC=%d "
+			"Result=[%02x %02x %02x %02x %02x %02x %02x %02x] "
+			"StatP_out=0x%02x Reading=%d Play=%d Seeked=%d "
+			"DriveState=%d eCycle=%u\n",
+			s_cdr_trace_count,
+			stat_name, (unsigned)cdr.Stat,
+			(int)cdr.ResultC,
+			(unsigned)cdr.Result[0], (unsigned)cdr.Result[1],
+			(unsigned)cdr.Result[2], (unsigned)cdr.Result[3],
+			(unsigned)cdr.Result[4], (unsigned)cdr.Result[5],
+			(unsigned)cdr.Result[6], (unsigned)cdr.Result[7],
+			(unsigned)cdr.StatP,
+			(int)cdr.Reading, (int)cdr.Play, (int)cdr.Seeked,
+			(int)cdr.DriveState, (unsigned)cdr.eCycle);
+		s_cdr_trace_count++;
+	}
+#endif
 
 #ifdef CDR_LOG_IO
 	{
@@ -1772,6 +1853,12 @@ void cdrReset() {
 	cdr.DriveState = DRIVESTATE_STANDBY;
 	cdr.StatP = STATUS_ROTATING;
 	irqMaskedPrev = 0;
+
+#if PCSXR_DIAG_INSTRUMENTATION
+	/* [CDR-TRACE] resetear contador en cada arranque para que el log
+	 * cubra siempre los primeros N comandos del boot del BIOS. */
+	s_cdr_trace_count = 0;
+#endif
 
 	// BIOS player - default values
 	cdr.AttenuatorLeftToLeft = 0x80;

@@ -22,6 +22,7 @@
 #include "plugins.h"
 #include "cdrom.h"
 #include "cdriso.h"
+#include "cdriso_async.h"  /* async prefetch layer; impl is #include'd at EOF */
 
 #ifdef _XBOX
 #include <xtl.h>
@@ -438,6 +439,7 @@ static int parsecue(const char *isofile) {
 				if (input_is_cue) {
 					FILE *newCd = fopen(binfullpath, "rb");
 					if (newCd != NULL) {
+						setvbuf(newCd, NULL, _IOFBF, 65536);  /* mitigation A */
 						if (cdHandle != NULL) fclose(cdHandle);
 						cdHandle = newCd;
 						SysPrintf("[cue->bin: %s] ", binfullpath);
@@ -471,6 +473,7 @@ static int parsecue(const char *isofile) {
 					 * affected tracks will read garbage but the emulator
 					 * stays alive for single-track recovery. */
 				} else {
+					setvbuf(newHandle, NULL, _IOFBF, 65536);  /* mitigation A */
 					if (cdExtraHandleCount < MAXTRACKS) {
 						cdExtraHandles[cdExtraHandleCount++] = newHandle;
 					}
@@ -971,13 +974,20 @@ static int opensubfile(const char *isoname) {
 	if (subHandle == NULL) {
 		return -1;
 	}
+	setvbuf(subHandle, NULL, _IOFBF, 16384);  /* mitigation A; sub files are small */
 
 	return 0;
 }
 
 long CALLBACK ISOinit(void) {
-
-	return 0; // do nothing
+	/* Spin up the async prefetch worker thread.  Plugin-level lifecycle:
+	 * the worker stays alive for the full pcsx-r plugin lifetime, NOT
+	 * tied to disc open/close.  This avoids the trap of CHD vs BIN/CUE
+	 * paths in ISOopen each needing to remember to call cdra_init --
+	 * one place, runs unconditionally before any sector read.  Idempotent
+	 * (no-op on subsequent calls). */
+	cdra_init();
+	return 0;
 }
 
 #ifdef USE_CHD
@@ -1012,6 +1022,10 @@ static void ChdCloseAll(void) {
 #endif
 
 static long CALLBACK ISOshutdown(void) {
+	/* Tear down the async layer FIRST so the worker can't fire reads
+	 * after we close the file/CHD handles below. */
+	cdra_shutdown();
+
 	CloseExtraCdHandles();
 	if (cdHandle != NULL) {
 		fclose(cdHandle);
@@ -1075,7 +1089,43 @@ static long CALLBACK ISOopen(void) {
 		return -1;
 	}
 
+	/* === Larger CRT read buffer (mitigation A) ===
+	 *
+	 * Default fread buffer is 4 KB on MSVCRT.  Each fread that misses the
+	 * buffer triggers a kernel ReadFile -> device driver -> physical I/O
+	 * round trip.  On Xbox 360, that round trip is what we measured as
+	 * `cpu=0 wall=300+ms` in pathological cases (the kernel parks our
+	 * thread waiting for IRP completion).
+	 *
+	 * Setting a 64 KB buffer means each kernel call covers ~27 sectors,
+	 * so we issue 27x fewer round trips for sequential play.  Fewer
+	 * round trips = fewer chances for the disk subsystem to insert a
+	 * latency outlier.  Doesn't help random seeks (each seek invalidates
+	 * the buffer) but most game I/O is sequential bursts.
+	 *
+	 * setvbuf(stream, NULL, _IOFBF, size) tells the CRT to allocate a
+	 * size-byte buffer itself.  Must be called BEFORE any I/O on the
+	 * stream, which we satisfy here (right after fopen).  Buffer is
+	 * freed automatically by fclose. */
+	setvbuf(cdHandle, NULL, _IOFBF, 65536);
+
 	SysPrintf(_("Loaded CD Image: %s"), GetIsoFile());
+
+	/* Log path + size of the .bin so we can correlate slow-read warnings
+	 * with file location.  On Xbox 360, USB drives mount at paths like
+	 * "Usb0:\..." and the internal HDD at "Hdd:\..." -- the prefix tells
+	 * us which storage device is the bottleneck.  Size in MB helps spot
+	 * fragmentation likelihood and whether the file fits in RAM cache. */
+	{
+		long fsz;
+		const char *path = GetIsoFile();
+		fseek(cdHandle, 0, SEEK_END);
+		fsz = ftell(cdHandle);
+		fseek(cdHandle, 0, SEEK_SET);
+		pcsxr_log(0 /* INFO */,
+		          "[cdra-disk] opened bin: path='%s' size=%ld bytes (%ld MB)\n",
+		          path ? path : "(null)", fsz, fsz / (1024 * 1024));
+	}
 
 	cddaBigEndian = FALSE;
 	subChanMixed = FALSE;
@@ -1112,10 +1162,24 @@ static long CALLBACK ISOopen(void) {
 
 	PrintTracks();
 
+	/* Async prefetch worker is spun up once in ISOinit (plugin-level).
+	 * Here we just invalidate the ring so any stale sectors from the
+	 * previous disc are dropped before the first read of the new one. */
+	cdra_invalidate();
+
 	return 0;
 }
 
 static long CALLBACK ISOclose(void) {
+	/* Invalidate the prefetch ring before closing handles, so the
+	 * worker doesn't try to read stale sector data through a file
+	 * handle that's about to close.  The io_cs in the async layer
+	 * also serializes against any in-flight read on the worker thread.
+	 * NOTE: don't call cdra_shutdown here -- the worker lifecycle is
+	 * plugin-level (ISOinit/ISOshutdown), not disc-level.  Disc swaps
+	 * just reset the ring contents. */
+	cdra_invalidate();
+
 	CloseExtraCdHandles();
 	if (cdHandle != NULL) {
 		fclose(cdHandle);
@@ -1253,77 +1317,26 @@ static void DecodeRawSubData(void) {
 // read track
 // time: byte 0 - minute; byte 1 - second; byte 2 - frame
 // uses bcd format
+/* === ISOreadTrack ===
+ *
+ * Thin wrapper around the async prefetch layer.  Converts BCD MSF to
+ * linear LBA and delegates to cdra_read() which:
+ *   - Returns from the prefetch ring buffer if the LBA is cached
+ *     (zero-latency hit on the main thread).
+ *   - Otherwise grabs the I/O critical section, calls
+ *     cdra_read_sync_internal() to do the actual file/CHD I/O, and
+ *     fires the worker thread to prefetch the next batch.
+ *
+ * The actual read logic (CHD path, BIN/CUE path, multi-FILE cue
+ * routing, sub channel handling, isMode1ISO fake header) lives in
+ * cdra_read_sync_internal() inside cdriso_async.c (#include'd at EOF).
+ *
+ * If the async layer is disabled (libretro option off, or init
+ * failed), cdra_read() falls through to the sync path directly with
+ * no thread interaction. */
 static long CALLBACK ISOreadTrack(unsigned char *time) {
-	int		disc_lba;
-	FILE	*h;
-	unsigned int fileLBAoff;
-	long	offset_lba;
-
-#ifdef USE_CHD
-	if (chdFile != NULL) {
-		int lba = MSF2SECT(btoi(time[0]), btoi(time[1]), btoi(time[2]));
-		if (readchdsector(lba, cdbuffer) != 0)
-			return -1;
-		return 0;
-	}
-#endif
-
-	if (cdHandle == NULL) {
-		return -1;
-	}
-
-	disc_lba   = MSF2SECT(btoi(time[0]), btoi(time[1]), btoi(time[2]));
-	h          = cdHandle;
-	fileLBAoff = 0;
-
-	/* Route the read to the file that owns this LBA. For single-FILE cues
-	 * ti_handle[] stays NULL and ti_fileLBAoffset[] stays 0, so this reduces
-	 * to the legacy behavior exactly. */
-	if (numtracks > 0) {
-		int k;
-		for (k = numtracks; k >= 1; k--) {
-			int track_start_lba = (int)msf2sec(ti[k].start) - 2 * 75;
-			if (track_start_lba <= disc_lba) {
-				if (ti_handle[k] != NULL) h = ti_handle[k];
-				fileLBAoff = ti_fileLBAoffset[k];
-				break;
-			}
-		}
-	}
-
-	offset_lba = (long)disc_lba - (long)fileLBAoff;
-	if (offset_lba < 0) offset_lba = 0;
-
-	if (subChanMixed) {
-		fseek(h, offset_lba * (CD_FRAMESIZE_RAW + SUB_FRAMESIZE), SEEK_SET);
-		fread(cdbuffer, 1, CD_FRAMESIZE_RAW, h);
-		fread(subbuffer, 1, SUB_FRAMESIZE, h);
-
-		if (subChanRaw) DecodeRawSubData();
-	}
-	else {
-		if(isMode1ISO) {
-			fseek(h, offset_lba * MODE1_DATA_SIZE, SEEK_SET);
-			fread(cdbuffer + 12, 1, MODE1_DATA_SIZE, h);
-			memset(cdbuffer, 0, 12); //not really necessary, fake mode 2 header
-			cdbuffer[0] = (time[0]);
-			cdbuffer[1] = (time[1]);
-			cdbuffer[2] = (time[2]);
-			cdbuffer[3] = 1; //mode 1
-		} else {
-			fseek(h, offset_lba * CD_FRAMESIZE_RAW, SEEK_SET);
-			fread(cdbuffer, 1, CD_FRAMESIZE_RAW, h);
-		}
-
-		if (subHandle != NULL) {
-			fseek(subHandle, disc_lba * SUB_FRAMESIZE, SEEK_SET);
-			fread(subbuffer, 1, SUB_FRAMESIZE, subHandle);
-
-			if (subChanRaw) DecodeRawSubData();
-		}
-	}
-
-	return 0;
+	int lba = MSF2SECT(btoi(time[0]), btoi(time[1]), btoi(time[2]));
+	return (cdra_read(lba) == 0) ? 0 : -1;
 }
 
 // return readed track
@@ -1438,3 +1451,20 @@ int cdrIsoActive(void) {
 #endif
 	return (cdHandle != NULL);
 }
+
+/* === Async prefetch layer ===
+ *
+ * The implementation of cdra_init / cdra_shutdown / cdra_read / etc.
+ * lives in cdriso_async.c, which is `#include`d here (NOT compiled as
+ * a separate TU).  See the header comment at the top of
+ * cdriso_async.c for the rationale -- the worker thread needs access
+ * to the file-static state above (cdHandle, ti[], subChanMixed, ...)
+ * and bringing it in via #include is the least-invasive way without
+ * exposing those as a separate header.
+ *
+ * Build note: do NOT add cdriso_async.c to pcsxr.vcxproj's compile
+ * list, or you'll get duplicate-symbol link errors AND a standalone
+ * compile failure because cdriso.c statics aren't visible. */
+#include "cdriso_async.c"
+
+

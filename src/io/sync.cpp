@@ -4,6 +4,7 @@
 #ifdef _XBOX
 #include <xtl.h>
 #elif defined(WIN)
+#include <windows.h>
 #include <xmmintrin.h>
 #endif
 
@@ -13,12 +14,19 @@ Sync::Sync(int syncMode){
 	g_actualFps = FPS_DESIRED;
 	fps = FPS_DESIRED;
 	utilization = 0.0;
-	lastWorkEnd = 0.0;
 	memset(fpsText, '\0', 50 * sizeof(char));
 	sprintf(fpsText, FPS_FORMAT, g_actualFps);
 	sprintf(cpuText, CPU_FORMAT, utilization);
 	g_sync_last = syncMode;
 	frameDelay = 1000.0f / (float)fps; // Aprox 16ms
+
+	// Estado del medidor de utilizacion CPU (GetThreadTimes-based).
+	cpu_prev_us       = 0;
+	wall_prev_ms      = 0.0;
+	cpu_prev_valid    = false;
+	cpu_util_index    = 0;
+	cpu_util_filled   = 0;
+	for (int i = 0; i < FPS_AVG_COUNT; i++) cpu_util_buffer[i] = 0.0f;
 }
 
 void Sync::initAverages(uint32_t avg){
@@ -70,29 +78,113 @@ void Sync::update_fps_counter(bool updateFpsOverlay, uint32_t currentTick) {
 	}
 }
 
+/* === sample_cpu_utilization ==================================================
+ *
+ * Mide la utilizacion REAL del CPU del thread principal usando
+ * GetThreadTimes (Win32/Xbox 360 SDK).  Devuelve el porcentaje del wall
+ * time que el thread estaba ejecutandose en CPU (user + kernel mode),
+ * frente al tiempo dormido / bloqueado.
+ *
+ * Diferencias vs la metrica anterior (workTime / frameDelay * 100):
+ *
+ *   - Anterior: media wall time del trabajo entre dos limit_fps.  No
+ *     distinguia trabajo real de espera bloqueante (WriteBlocking,
+ *     WaitForSingleObject, SDL_Delay), asi que un frame con 14 ms de
+ *     espera audio se contaba igual que uno con 14 ms de CPU activa.
+ *
+ *   - Nueva: GetThreadTimes solo suma tiempo en estado RUNNING del
+ *     thread.  SDL_Delay y WaitForSingleObject ponen el thread en
+ *     WAIT (no se cuenta).  El busy-wait al final de limit_fps
+ *     (YieldProcessor) SI se cuenta porque el thread sigue running.
+ *     Eso es correcto: busy-wait consume CPU; bloquear en evento no.
+ *
+ * Suavizado: ventana movil de FPS_AVG_COUNT muestras (mismo principio
+ * que el FPS counter, para consistencia visual).  La utilizacion
+ * promediada queda en this->utilization, lista para el overlay.
+ *
+ * Se llama desde GameMenu::updateFps() cada frame, en TODOS los modos
+ * de sync (la metrica anterior solo se actualizaba en SYNC_TO_VIDEO).
+ */
+void Sync::sample_cpu_utilization() {
+#if defined(_XBOX) || defined(WIN)
+    FILETIME creation_ft, exit_ft, kernel_ft, user_ft;
+    if (!GetThreadTimes(GetCurrentThread(),
+                        &creation_ft, &exit_ft,
+                        &kernel_ft, &user_ft)) {
+        return;  // GetThreadTimes fallo (raro); preservar ultimo valor
+    }
+
+    // Convertir FILETIME (100-ns units) a microsegundos.  Sumamos
+    // kernel + user porque ambos cuentan como tiempo CPU del thread.
+    ULARGE_INTEGER k_ui, u_ui;
+    k_ui.LowPart  = kernel_ft.dwLowDateTime;
+    k_ui.HighPart = kernel_ft.dwHighDateTime;
+    u_ui.LowPart  = user_ft.dwLowDateTime;
+    u_ui.HighPart = user_ft.dwHighDateTime;
+    uint64_t cpu_now_us = (k_ui.QuadPart + u_ui.QuadPart) / 10ULL;
+
+    // Wall time del mismo sample.
+    double wall_now_ms = Constant::getTicks();
+
+    if (cpu_prev_valid) {
+        // Delta CPU vs delta wall desde el sample anterior.
+        uint64_t delta_cpu_us  = (cpu_now_us  > cpu_prev_us)
+                                 ? (cpu_now_us - cpu_prev_us) : 0;
+        double   delta_wall_ms = wall_now_ms - wall_prev_ms;
+        // wall en ms, cpu en us â†’ convertir wall a us.
+        double   delta_wall_us = delta_wall_ms * 1000.0;
+
+        if (delta_wall_us >= 1000.0) {  // minimo 1 ms para evitar ruido
+            float pct = (float)(((double)delta_cpu_us / delta_wall_us) * 100.0);
+
+            // Clamp a [0, 200].  Por encima de 100% indica que el
+            // sample mide CPU de varios HW threads (no esperado en
+            // single-thread main, pero defensivo).
+            if (pct < 0.0f)   pct = 0.0f;
+            if (pct > 200.0f) pct = 200.0f;
+
+            cpu_util_buffer[cpu_util_index] = pct;
+            cpu_util_index++;
+            if (cpu_util_index == FPS_AVG_COUNT) cpu_util_index = 0;
+            if (cpu_util_filled < FPS_AVG_COUNT) cpu_util_filled++;
+
+            // Promedio sobre slots VALIDOS (durante el warm-up usa
+            // solo los que se han llenado, evitando arrastrar ceros).
+            float sum = 0.0f;
+            for (int i = 0; i < cpu_util_filled; i++) sum += cpu_util_buffer[i];
+            utilization = sum / (float)cpu_util_filled;
+
+            // Display cap a 100% â€” valores >100 confunden al usuario
+            // (no tenemos varios threads que mostrar como CPU%).
+            if (utilization > 100.0f) utilization = 100.0f;
+        }
+    }
+
+    cpu_prev_us    = cpu_now_us;
+    wall_prev_ms   = wall_now_ms;
+    cpu_prev_valid = true;
+#else
+    /* Sin GetThreadTimes (otras plataformas): preservar el valor
+     * actual o setear a 0.  No es critico fuera de la build de
+     * Xbox 360 / Windows. */
+    (void)0;
+#endif
+}
+
 void Sync::limit_fps(double& nextFrameTime) {
     double currentTime = Constant::getTicks();
     float diffTime = (float)(nextFrameTime - currentTime);
 
-    // --- Métricas de utilización basadas en tiempo real de trabajo ---
-    // workTime = tiempo que la CPU estuvo ocupada procesando el frame
-    //          = desde que terminó el sleep del frame anterior hasta ahora
-    if (lastWorkEnd > 0.0) {
-        float workTime = (float)(currentTime - lastWorkEnd);
-        float currentUtilization = (workTime / this->frameDelay) * 100.0f;
-
-        // Clamp: 0% = idle total, 100% = justo al límite, >100% = no llega a tiempo
-        if (currentUtilization < 0.0) currentUtilization = 0.0;
-        if (currentUtilization > 200.0) currentUtilization = 200.0;
-
-        // Suavizado EMA (alpha=0.1 para ~10 frames de convergencia)
-        //this->utilization = (this->utilization * 0.9) + (currentUtilization * 0.1);
-		this->utilization = currentUtilization;
-    }
+    // Nota: la metrica de utilizacion CPU se calcula ahora en
+    // sample_cpu_utilization() via GetThreadTimes, llamada cada frame
+    // desde GameMenu::updateFps().  Esto distingue trabajo real del
+    // CPU de espera bloqueante (la metrica wall-time anterior no lo
+    // hacia) y funciona en TODOS los modos de sync, no solo
+    // SYNC_TO_VIDEO (limit_fps solo se llama con SYNC_TO_VIDEO).
 
     if (diffTime > 0) {
         // Dormir el hilo si sobra tiempo suficiente (ahorro de CPU)
-        // SDL_Delay es seguro aquí porque el Busy Wait corregirá su imprecisión
+        // SDL_Delay es seguro aquï¿½ porque el Busy Wait corregirï¿½ su imprecisiï¿½n
         if (diffTime > 4.0) {
             SDL_Delay((uint32_t)(diffTime - 2.0));
         }
@@ -108,9 +200,6 @@ void Sync::limit_fps(double& nextFrameTime) {
         // Si hay un lag masivo, reseteamos para evitar el efecto "camara rapida"
         nextFrameTime = currentTime;
     }
-
-    // Registramos el instante en que terminamos de esperar (= inicio del trabajo del proximo frame)
-    lastWorkEnd = Constant::getTicks();
 
     // El siguiente frame se calcula sobre el objetivo ideal
     nextFrameTime += frameDelay;

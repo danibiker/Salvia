@@ -794,6 +794,11 @@ bool GameMenu::updateFps(){
 
         // 1. Actualización de contadores internos
         this->sync->update_fps_counter(shouldUpdateFps, currentTick);
+        // CPU utilization basada en GetThreadTimes — sampling cada
+        // frame (no solo cuando refrescamos el overlay) para que la
+        // ventana movil capture la actividad real del thread.  El
+        // valor suavizado queda en this->sync->utilization.
+        this->sync->sample_cpu_utilization();
 
         // 2. Lógica para FPS y CPU (cada 500ms)
         if (shouldUpdateFps) {
