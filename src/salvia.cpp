@@ -1005,7 +1005,8 @@ void init_sdl_audio(double sample_rate) {
 	#ifdef WIN
 	wanted.samples = 1024; // Tamaño del bloque (latencia)
 	#elif defined(_XBOX)
-	wanted.samples = 2048; // Tamaño del bloque (latencia)
+	//wanted.samples = 2048; // Tamaño del bloque (latencia)
+	wanted.samples = 1024; // Tamaño del bloque (latencia)
 	#endif
     wanted.callback = sdl_audio_callback;
 

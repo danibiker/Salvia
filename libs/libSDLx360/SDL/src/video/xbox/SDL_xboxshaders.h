@@ -744,6 +744,187 @@ const static char* g_strShaderXBRlv2FastSource =
     "     return float4(res, 1.0);                                                  \n"
     " }                                                                             \n";
 
+/* === 5xBR-v3.8a (Hyllian rounded) ============================================ *
+ * Port de "Hyllian's 5xBR v3.8a (rounded)" shader (GPL, Sergio "Hyllian" Diaz).  *
+ * Evolucion directa de v3.7a: mismo algoritmo de edge detection (5x5,            *
+ * weighted_distance con outer ring, inecuaciones de linea a 30/45/60), pero      *
+ * con OUTPUT SUAVIZADO mediante smoothstep + lerp en lugar de pixel substitution.*
+ *                                                                                *
+ * Cambios clave vs v3.7a:                                                        *
+ *   - fx/fx_left/fx_up se calculan SIN step() boolean, mantienen el valor raw   *
+ *     (Ao*fp.y + Bo*fp.x).                                                       *
+ *   - fx45 = smoothstep(Co - 0.2, Co + 0.2, fx) (idem fx30, fx60).               *
+ *     Genera transiciones suaves de ancho 0.4 alrededor del threshold.           *
+ *   - 3 finales separados (final45/30/60) y `maximo = max(...)` como factor de  *
+ *     blend final en lugar de hard substitution.                                 *
+ *   - Output: res = lerp(E, pix, maximo).                                        *
+ *                                                                                *
+ * Resultado: bordes con AA en las transiciones de subpixel - elimina el         *
+ * "staircase" visible que v3.7a generaba en algunas zonas. Mismo coste GPU      *
+ * dentro del margen de error (~5 ALU mas por los smoothstep + dot products).    *
+ *                                                                                *
+ * Estructura del algoritmo (igual que v3.7a):                                    *
+ *   - 5x5 (21 tex2D): 9 muestras del 3x3 interior + 12 del anillo exterior.    *
+ *   - weighted_distance usa h5/f4/i4/i5 para distinguir diagonales largas de   *
+ *     esquinas falsas.                                                           *
+ *   - Edge detection con threshold step (epsilon 0.001) - mismo trade-off       *
+ *     dithering-robustness que la v3.7a port.                                   *
+ *                                                                                *
+ * Color space:                                                                   *
+ *   - El original v3.8a declara matriz YUV completa pero solo usa la fila Y    *
+ *     (mismas weights NTSC que v3.7a: 14.352, 28.176, 5.472). Las componentes  *
+ *     U/V quedan declaradas pero no se aplican en este shader (probable        *
+ *     preparacion para xBR-lv3 que si las usa).                                 *
+ *                                                                                *
+ * Coste (estimado Xenos):                                                        *
+ *   - 21 tex2D + ~115 ALU (vs ~110 en v3.7a). Diferencia despreciable.         *
+ *                                                                                *
+ * Conversion Cg -> HLSL D3D9:                                                    *
+ *   - half3/half4 -> float3/float4.                                              *
+ *   - mul(float4x3(A,B,C,D), yuv_weighted[0]) -> 4x dot(_, yuv) per-row.         *
+ *   - bool4 + && + dot(bool, fx) collapsed a productos float-coded.             *
+ *   - if-else chain de salida -> lerp chain en orden inverso (priority).        *
+ *   - 3x render target scale (comparte infraestructura HQ3x).                   */
+const static char* g_strShaderXBRHyllianRoundedSource =
+    " float2 textureDims : register(c1);                                            \n"
+    " sampler2D detail : register(s0);                                              \n"
+    " struct PS_IN { float2 TexCoord : TEXCOORD0; };                                \n"
+    "                                                                               \n"
+    " static const float  coef = 2.0;                                               \n"
+    " /* YUV NTSC weights, equivalente a 48*(0.299, 0.587, 0.114) del original.   */\n"
+    " static const float3 yuv  = float3(14.352, 28.176, 5.472);                     \n"
+    " /* delta del smoothstep: ancho de la zona de transicion alrededor del      \n"
+    "    threshold de cada angulo.  0.2 = +/-0.2 -> banda de 0.4 unidades.        */\n"
+    " static const float4 delta = float4(0.2, 0.2, 0.2, 0.2);                       \n"
+    "                                                                               \n"
+    " float4 df(float4 A, float4 B) { return abs(A - B); }                          \n"
+    "                                                                               \n"
+    " /* weighted_distance: 4*df(g,h) + df(a,b)+df(a,c)+df(d,e)+df(d,f).          */\n"
+    " float4 wdist(float4 a, float4 b, float4 c, float4 d,                          \n"
+    "              float4 e, float4 f, float4 g, float4 h)                          \n"
+    " {                                                                             \n"
+    "     return df(a,b) + df(a,c) + df(d,e) + df(d,f) + 4.0*df(g,h);               \n"
+    " }                                                                             \n"
+    "                                                                               \n"
+    " float4 main(PS_IN In) : COLOR0                                                \n"
+    " {                                                                             \n"
+    "     float2 ps = 1.0 / textureDims;                                            \n"
+    "     float  dx = ps.x;                                                         \n"
+    "     float  dy = ps.y;                                                         \n"
+    "     float2 uv = In.TexCoord;                                                  \n"
+    "     float2 fp = frac(uv * textureDims);                                       \n"
+    "                                                                               \n"
+    "     /* === 3x3 inner neighborhood ===                                         \n"
+    "          A B C                                                                \n"
+    "          D E F                                                                \n"
+    "          G H I                                                                */\n"
+    "     float3 A = tex2D(detail, uv + float2(-dx, -dy)).rgb;                      \n"
+    "     float3 B = tex2D(detail, uv + float2(  0, -dy)).rgb;                      \n"
+    "     float3 C = tex2D(detail, uv + float2( dx, -dy)).rgb;                      \n"
+    "     float3 D = tex2D(detail, uv + float2(-dx,   0)).rgb;                      \n"
+    "     float3 E = tex2D(detail, uv + float2(  0,   0)).rgb;                      \n"
+    "     float3 F = tex2D(detail, uv + float2( dx,   0)).rgb;                      \n"
+    "     float3 G = tex2D(detail, uv + float2(-dx,  dy)).rgb;                      \n"
+    "     float3 H = tex2D(detail, uv + float2(  0,  dy)).rgb;                      \n"
+    "     float3 I = tex2D(detail, uv + float2( dx,  dy)).rgb;                      \n"
+    "                                                                               \n"
+    "     /* === 5x5 outer ring (12 muestras extra) ===                            */\n"
+    "     float3 A1 = tex2D(detail, uv + float2(-dx,    -2.0*dy)).rgb;              \n"
+    "     float3 C1 = tex2D(detail, uv + float2( dx,    -2.0*dy)).rgb;              \n"
+    "     float3 A0 = tex2D(detail, uv + float2(-2.0*dx, -dy   )).rgb;              \n"
+    "     float3 G0 = tex2D(detail, uv + float2(-2.0*dx,  dy   )).rgb;              \n"
+    "     float3 C4 = tex2D(detail, uv + float2( 2.0*dx, -dy   )).rgb;              \n"
+    "     float3 I4 = tex2D(detail, uv + float2( 2.0*dx,  dy   )).rgb;              \n"
+    "     float3 G5 = tex2D(detail, uv + float2(-dx,     2.0*dy)).rgb;              \n"
+    "     float3 I5 = tex2D(detail, uv + float2( dx,     2.0*dy)).rgb;              \n"
+    "     float3 B1 = tex2D(detail, uv + float2(  0,    -2.0*dy)).rgb;              \n"
+    "     float3 D0 = tex2D(detail, uv + float2(-2.0*dx,  0    )).rgb;              \n"
+    "     float3 H5 = tex2D(detail, uv + float2(  0,     2.0*dy)).rgb;              \n"
+    "     float3 F4 = tex2D(detail, uv + float2( 2.0*dx,  0    )).rgb;              \n"
+    "                                                                               \n"
+    "     /* === Lumas empaquetadas (4 rotaciones simultaneas) ===                 */\n"
+    "     float4 b = float4(dot(B, yuv), dot(D, yuv), dot(H, yuv), dot(F, yuv));    \n"
+    "     float4 c = float4(dot(C, yuv), dot(A, yuv), dot(G, yuv), dot(I, yuv));    \n"
+    "     float  E_lum = dot(E, yuv);                                               \n"
+    "     float4 e = float4(E_lum, E_lum, E_lum, E_lum);                            \n"
+    "     float4 d = b.yzwx;                                                        \n"
+    "     float4 f = b.wxyz;                                                        \n"
+    "     float4 g = c.zwxy;                                                        \n"
+    "     float4 h = b.zwxy;                                                        \n"
+    "     float4 i = c.wxyz;                                                        \n"
+    "                                                                               \n"
+    "     float4 i4 = float4(dot(I4, yuv), dot(C1, yuv), dot(A0, yuv), dot(G5, yuv)); \n"
+    "     float4 i5 = float4(dot(I5, yuv), dot(C4, yuv), dot(A1, yuv), dot(G0, yuv)); \n"
+    "     float4 h5 = float4(dot(H5, yuv), dot(F4, yuv), dot(B1, yuv), dot(D0, yuv)); \n"
+    "     float4 f4 = h5.yzwx;                                                      \n"
+    "                                                                               \n"
+    "     /* === Inecuaciones de linea (RAW, sin step) ===                          \n"
+    "        En v3.8a guardamos el valor sin clipear para que el smoothstep        \n"
+    "        produzca la transicion suave.                                         */\n"
+    "     float4 Ao = float4( 1.0, -1.0, -1.0,  1.0);                               \n"
+    "     float4 Bo = float4( 1.0,  1.0, -1.0, -1.0);                               \n"
+    "     float4 Co = float4( 1.5,  0.5, -0.5,  0.5);                               \n"
+    "     float4 Bx = float4( 0.5,  2.0, -0.5, -2.0);                               \n"
+    "     float4 Cx = float4( 1.0,  1.0, -0.5,  0.0);                               \n"
+    "     float4 By = float4( 2.0,  0.5, -2.0, -0.5);                               \n"
+    "     float4 Cy = float4( 2.0,  0.0, -1.0,  0.5);                               \n"
+    "                                                                               \n"
+    "     float4 fx      = Ao*fp.y + Bo*fp.x;                                       \n"
+    "     float4 fx_left = Ao*fp.y + Bx*fp.x;                                       \n"
+    "     float4 fx_up   = Ao*fp.y + By*fp.x;                                       \n"
+    "                                                                               \n"
+    "     /* smoothstep produce el blend factor por cada angulo en [0,1].          \n"
+    "        Reemplaza el step() boolean del v3.7a por una rampa de ancho 0.4.    */\n"
+    "     float4 fx45 = smoothstep(Co - delta, Co + delta, fx);                     \n"
+    "     float4 fx30 = smoothstep(Cx - delta, Cx + delta, fx_left);                \n"
+    "     float4 fx60 = smoothstep(Cy - delta, Cy + delta, fx_up);                  \n"
+    "                                                                               \n"
+    "     /* Interpolation restrictions: e!=f && e!=h, etc. Float-coded con        \n"
+    "        epsilon 0.001 (igual que v3.7a).                                      */\n"
+    "     float4 ir_lv1      = step(0.001, df(e, f)) * step(0.001, df(e, h));       \n"
+    "     float4 ir_lv2_left = step(0.001, df(e, g)) * step(0.001, df(d, g));       \n"
+    "     float4 ir_lv2_up   = step(0.001, df(e, c)) * step(0.001, df(b, c));       \n"
+    "                                                                               \n"
+    "     /* Weighted distance comparisons.                                        */\n"
+    "     float4 w1 = wdist(e, c, g, i, h5, f4, h, f);                              \n"
+    "     float4 w2 = wdist(h, d, i5, f, i4, b, e, i);                              \n"
+    "                                                                               \n"
+    "     float4 edr      = step(w1 + 0.0001, w2)            * ir_lv1;              \n"
+    "     float4 edr_left = step(coef * df(f, g), df(h, c))   * ir_lv2_left;        \n"
+    "     float4 edr_up   = step(coef * df(h, c), df(f, g))   * ir_lv2_up;          \n"
+    "                                                                               \n"
+    "     /* px.X: elige entre las dos alternativas de cada rotacion.              */\n"
+    "     float4 px = step(df(e, f), df(e, h));                                     \n"
+    "                                                                               \n"
+    "     /* final45/30/60: smoothstep value de la rotacion activa, ponderado     \n"
+    "        por su edge detection mask.  dot() en lugar de seleccion explicita    \n"
+    "        porque normalmente solo una rotacion esta activa por pixel.           */\n"
+    "     float final45 = dot(edr,            fx45);                                \n"
+    "     float final30 = dot(edr * edr_left, fx30);                                \n"
+    "     float final60 = dot(edr * edr_up,   fx60);                                \n"
+    "     float maximo  = max(max(final30, final60), final45);                      \n"
+    "                                                                               \n"
+    "     /* Mascaras binarias para la seleccion de pix (que rotacion gana).      \n"
+    "        Solo nos importa si ESTA activa (>epsilon), no su magnitud.          */\n"
+    "     float4 active = edr * saturate(fx45 + edr_left*fx30 + edr_up*fx60);       \n"
+    "     float4 nc     = step(0.001, active);                                      \n"
+    "                                                                               \n"
+    "     /* Reverse-order lerp chain para preservar la prioridad del if-else:    \n"
+    "        nc.x es la prioridad maxima, asi que la aplicamos al final            \n"
+    "        (sobrescribe).                                                        */\n"
+    "     float3 pix = E;                                                           \n"
+    "     pix = lerp(pix, lerp(D, H, px.w), nc.w);                                  \n"
+    "     pix = lerp(pix, lerp(B, D, px.z), nc.z);                                  \n"
+    "     pix = lerp(pix, lerp(F, B, px.y), nc.y);                                  \n"
+    "     pix = lerp(pix, lerp(H, F, px.x), nc.x);                                  \n"
+    "                                                                               \n"
+    "     /* Smooth blend final: maximo es 0 si no hay edge, sino el smoothstep   \n"
+    "        de la rotacion activa.  Genera la transicion suave en los bordes    \n"
+    "        de subpixel.                                                          */\n"
+    "     float3 res = lerp(E, pix, saturate(maximo));                              \n"
+    "     return float4(res, 1.0);                                                  \n"
+    " }                                                                             \n";
+
 /* === CRT-Lottes: port directo de crt-lottes.slang. ============================ *
  * Author: Timothy Lottes (public domain, autor del paper original sobre         *
  * shading CRT en GPUs y posterior empleado de NVIDIA/AMD).                       *
@@ -1006,155 +1187,70 @@ const static char* g_strShaderCRTEasymodeSource =
     "     return float4(ToSrgb(outColor), 1.0);                                 \n"
     " }                                                                         \n";
 
-/* === LCD-Grid-v2: port directo de lcd-grid-v2.slang. ========================== *
- * Author: cgwg (GPL).                                                           *
- *                                                                                *
- * Simula la rejilla LCD de handhelds: Game Boy / GBC / GBA / DS. Cada pixel    *
- * fuente se renderiza como subpixeles R/G/B rectangulares con espacio negro   *
- * entre ellos. Para juegos no-handheld da un look 'matricial' raro -> usar    *
- * solo para cores handheld.                                                    *
- *                                                                                *
- * El subpixel weighting usa una integral polinomial de 7 coeficientes para    *
- * box-filter prefilter. Pre-calculamos los pow(SUBPIX, outgamma) como float3 *
- * file-scope.                                                                  *
- *                                                                                *
- * Coste: 4 tex2D + ~80 ALU + 4 pow + 14 polinomios. Caro pero solo 4 tex.    *
- *                                                                                *
- * Parametros: usamos los valores del .slangp (gain=1.5, gamma=2.2, sub=0.75) *
- * que son los recomendados, no los defaults del .slang.                       */
+/* === LCD3x: port de Gigaherz' LCD3x.cg (public domain). =====================  *
+ * Simulacion sinusoidal de la rejilla LCD para handhelds (GB/GBC/GBA/DS, etc). *
+ * Reemplaza al port anterior basado en lcd-grid-v2.slang (cgwg, GPL) con:      *
+ *                                                                              *
+ *   - Modulacion sin() de scanlines verticales (Y) + subpixeles RGB (X).      *
+ *   - 3 offsets de fase a 120 grados para R/G/B - patron clasico LCD a tira. *
+ *   - 1 sola muestra de textura (vs 4 en LCD-Grid-v2).                        *
+ *   - Sin integrales de smear filter ni pow(): ~20 ALU + 4 sin() en total.    *
+ *                                                                              *
+ * Diferencia visual vs lcd-grid-v2:                                            *
+ *   - lcd-grid-v2: subpixeles RECTANGULARES discretos con gaps negros y       *
+ *     pre-filter integral. Aspecto "rejilla matriz" tipo GBA.                  *
+ *   - LCD3x: modulacion suave sinusoidal continua. Aspecto "phosphors" mas    *
+ *     proximo al tube simulation, sin gaps duros.                              *
+ *                                                                              *
+ * Coste estimado en Xenos:                                                     *
+ *   - 1 tex2D + 4 sin() + ~15 mul/add. ~3-4x mas barato que lcd-grid-v2.      *
+ *                                                                              *
+ * Configurabilidad:                                                            *
+ *   - brighten_scanlines (16): controla la profundidad del oscurecimiento en *
+ *     scanlines. Mas alto = menos efecto, imagen mas brillante.                *
+ *   - brighten_lcd (4): igual para los subpixeles RGB. Mas alto = colores    *
+ *     menos saturados pero pantalla mas brillante.                             *
+ *                                                                              *
+ * El vertex shader original precomputaba `omega = 2*PI*texture_size`. En el   *
+ * port PS-only lo calculamos inline (una multiplicacion, despreciable).        */
 const static char* g_strShaderLCDGridSource =
     " float2 textureDims : register(c1);                                        \n"
     " sampler2D detail : register(s0);                                          \n"
     " struct PS_IN { float2 TexCoord : TEXCOORD0; };                            \n"
     "                                                                           \n"
-    " /* Parametros (defaults del .slangp, no del .slang). */                   \n"
-    " #define LCD_RSUBPIX_R  0.75   /* color del subpixel R: componente R.  */  \n"
-    " #define LCD_RSUBPIX_G  0.0    /* color del subpixel R: componente G.  */  \n"
-    " #define LCD_RSUBPIX_B  0.0    /* color del subpixel R: componente B.  */  \n"
-    " #define LCD_GSUBPIX_R  0.0    /* color del subpixel G: R.             */  \n"
-    " #define LCD_GSUBPIX_G  0.75                                               \n"
-    " #define LCD_GSUBPIX_B  0.0                                                \n"
-    " #define LCD_BSUBPIX_R  0.0                                                \n"
-    " #define LCD_BSUBPIX_G  0.0                                                \n"
-    " #define LCD_BSUBPIX_B  0.75                                               \n"
-    " #define LCD_gain       1.5    /* ganancia (brillo pre-gamma).         */  \n"
-    " #define LCD_gamma_     2.2    /* gamma del LCD simulado.              */  \n"
-    " #define LCD_blacklevel 0.0    /* nivel de negro.                      */  \n"
-    " #define LCD_ambient    0.0    /* luz ambiental anadida (>0 = peor    \n"
-    "                                   contraste, simula reflejos).        */  \n"
-    " #define LCD_outgamma   2.2    /* gamma del display de salida.         */  \n"
+    " /* Parametros (constantes del original Gigaherz). Mas alto = imagen      \n"
+    "    mas brillante pero efecto menos pronunciado. */                        \n"
+    " #define BRIGHTEN_SCANLINES 16.0                                           \n"
+    " #define BRIGHTEN_LCD        4.0                                           \n"
     "                                                                           \n"
-    " /* Coeficientes de la integral de smear filter. Constantes file-scope    \n"
-    "    para que no consuman temp registers en el loop. */                     \n"
-    " static const float CX0 =  1.0;                                            \n"
-    " static const float CX1 = -2.0/3.0;                                        \n"
-    " static const float CX2 = -1.0/5.0;                                        \n"
-    " static const float CX3 =  4.0/7.0;                                        \n"
-    " static const float CX4 = -1.0/9.0;                                        \n"
-    " static const float CX5 = -2.0/11.0;                                       \n"
-    " static const float CX6 =  1.0/13.0;                                       \n"
-    " static const float CY0 =  1.0;                                            \n"
-    " static const float CY1 =  0.0;                                            \n"
-    " static const float CY2 = -4.0/5.0;                                        \n"
-    " static const float CY3 =  2.0/7.0;                                        \n"
-    " static const float CY4 =  4.0/9.0;                                        \n"
-    " static const float CY5 = -4.0/11.0;                                       \n"
-    " static const float CY6 =  1.0/13.0;                                       \n"
+    " static const float PI = 3.141592654;                                      \n"
     "                                                                           \n"
-    " float intsmear_func_x(float z) {                                          \n"
-    "     float z2 = z*z;                                                       \n"
-    "     float zn = z;                                                         \n"
-    "     float r  = zn*CX0; zn *= z2;                                          \n"
-    "     r += zn*CX1; zn *= z2;                                                \n"
-    "     r += zn*CX2; zn *= z2;                                                \n"
-    "     r += zn*CX3; zn *= z2;                                                \n"
-    "     r += zn*CX4; zn *= z2;                                                \n"
-    "     r += zn*CX5; zn *= z2;                                                \n"
-    "     r += zn*CX6;                                                          \n"
-    "     return r;                                                             \n"
-    " }                                                                         \n"
-    "                                                                           \n"
-    " float intsmear_func_y(float z) {                                          \n"
-    "     float z2 = z*z;                                                       \n"
-    "     float zn = z;                                                         \n"
-    "     float r  = zn*CY0; zn *= z2;                                          \n"
-    "     r += zn*CY1; zn *= z2;                                                \n"
-    "     r += zn*CY2; zn *= z2;                                                \n"
-    "     r += zn*CY3; zn *= z2;                                                \n"
-    "     r += zn*CY4; zn *= z2;                                                \n"
-    "     r += zn*CY5; zn *= z2;                                                \n"
-    "     r += zn*CY6;                                                          \n"
-    "     return r;                                                             \n"
-    " }                                                                         \n"
-    "                                                                           \n"
-    " float intsmear_x(float x, float dx, float d) {                            \n"
-    "     float zl = clamp((x - dx*0.5)/d, -1.0, 1.0);                          \n"
-    "     float zh = clamp((x + dx*0.5)/d, -1.0, 1.0);                          \n"
-    "     return d * (intsmear_func_x(zh) - intsmear_func_x(zl)) / dx;          \n"
-    " }                                                                         \n"
-    "                                                                           \n"
-    " float intsmear_y(float x, float dx, float d) {                            \n"
-    "     float zl = clamp((x - dx*0.5)/d, -1.0, 1.0);                          \n"
-    "     float zh = clamp((x + dx*0.5)/d, -1.0, 1.0);                          \n"
-    "     return d * (intsmear_func_y(zh) - intsmear_func_y(zl)) / dx;          \n"
-    " }                                                                         \n"
-    "                                                                           \n"
-    " /* Fetch en posicion entera (equivalente a texelFetchOffset). */          \n"
-    " float3 fetch_offset(float2 tli, float2 off) {                             \n"
-    "     float2 uv = (tli + off + 0.5) / textureDims;                          \n"
-    "     float3 c  = tex2D(detail, uv).rgb;                                    \n"
-    "     return pow(saturate(LCD_gain * c + LCD_blacklevel),                   \n"
-    "                float3(LCD_gamma_, LCD_gamma_, LCD_gamma_)) + LCD_ambient; \n"
-    " }                                                                         \n"
+    " /* Phase offsets de los 3 subpixeles RGB:                                 \n"
+    "      R: PI * (1/2)         =  PI/2  (peak en mitad del ciclo)            \n"
+    "      G: PI * (1/2 - 2/3)   = -PI/6  (120 grados desfasado)               \n"
+    "      B: PI * (1/2 - 4/3)   = -5PI/6 (240 grados desfasado)               \n"
+    "    Resultado: cada x del texel ilumina principalmente un canal RGB.    */ \n"
+    " static const float3 OFFSETS =                                             \n"
+    "     float3(PI * 0.5, PI * (0.5 - 2.0/3.0), PI * (0.5 - 4.0/3.0));         \n"
     "                                                                           \n"
     " float4 main(PS_IN In) : COLOR0                                            \n"
     " {                                                                         \n"
-    "     float2 texelSize = 1.0 / textureDims;                                 \n"
-    "     /* range = 1/OutputSize, derivado de ddx/ddy. */                      \n"
-    "     float2 range = float2(abs(ddx(In.TexCoord.x)),                        \n"
-    "                            abs(ddy(In.TexCoord.y)));                      \n"
+    "     float3 res = tex2D(detail, In.TexCoord).rgb;                          \n"
     "                                                                           \n"
-    "     float3 cred   = pow(saturate(float3(LCD_RSUBPIX_R, LCD_RSUBPIX_G,     \n"
-    "                                          LCD_RSUBPIX_B)),                 \n"
-    "                          float3(LCD_outgamma, LCD_outgamma,               \n"
-    "                                  LCD_outgamma));                          \n"
-    "     float3 cgreen = pow(saturate(float3(LCD_GSUBPIX_R, LCD_GSUBPIX_G,     \n"
-    "                                          LCD_GSUBPIX_B)),                 \n"
-    "                          float3(LCD_outgamma, LCD_outgamma,               \n"
-    "                                  LCD_outgamma));                          \n"
-    "     float3 cblue  = pow(saturate(float3(LCD_BSUBPIX_R, LCD_BSUBPIX_G,     \n"
-    "                                          LCD_BSUBPIX_B)),                 \n"
-    "                          float3(LCD_outgamma, LCD_outgamma,               \n"
-    "                                  LCD_outgamma));                          \n"
+    "     /* omega: frecuencia angular del patron, un ciclo por texel.       */ \n"
+    "     float2 omega = 2.0 * PI * textureDims;                                \n"
+    "     float2 angle = In.TexCoord * omega;                                   \n"
     "                                                                           \n"
-    "     float2 tli = floor(In.TexCoord / texelSize - 0.4999);                 \n"
+    "     /* yfactor: oscurecimiento por scanline (en [N/(N+1), 1]).          */ \n"
+    "     float yfactor =                                                       \n"
+    "         (BRIGHTEN_SCANLINES + sin(angle.y)) / (BRIGHTEN_SCANLINES + 1.0); \n"
     "                                                                           \n"
-    "     float subpix  = (In.TexCoord.x/texelSize.x - 0.4999 - tli.x) * 3.0;   \n"
-    "     float rsubpix = range.x / texelSize.x * 3.0;                          \n"
+    "     /* xfactors: per-channel weighting con phase shifts R/G/B.          */ \n"
+    "     float3 xfactors =                                                     \n"
+    "         (BRIGHTEN_LCD + sin(angle.x + OFFSETS)) / (BRIGHTEN_LCD + 1.0);   \n"
     "                                                                           \n"
-    "     float3 lcol = float3(intsmear_x(subpix + 1.0, rsubpix, 1.5),          \n"
-    "                          intsmear_x(subpix,       rsubpix, 1.5),          \n"
-    "                          intsmear_x(subpix - 1.0, rsubpix, 1.5));         \n"
-    "     float3 rcol = float3(intsmear_x(subpix - 2.0, rsubpix, 1.5),          \n"
-    "                          intsmear_x(subpix - 3.0, rsubpix, 1.5),          \n"
-    "                          intsmear_x(subpix - 4.0, rsubpix, 1.5));         \n"
-    "                                                                           \n"
-    "     float subpixY  = In.TexCoord.y/texelSize.y - 0.4999 - tli.y;          \n"
-    "     float rsubpixY = range.y / texelSize.y;                               \n"
-    "     float tcol = intsmear_y(subpixY,       rsubpixY, 0.63);               \n"
-    "     float bcol = intsmear_y(subpixY - 1.0, rsubpixY, 0.63);               \n"
-    "                                                                           \n"
-    "     float3 tl = fetch_offset(tli, float2(0,0)) * lcol * tcol;             \n"
-    "     float3 br = fetch_offset(tli, float2(1,1)) * rcol * bcol;             \n"
-    "     float3 bl = fetch_offset(tli, float2(0,1)) * lcol * bcol;             \n"
-    "     float3 tr = fetch_offset(tli, float2(1,0)) * rcol * tcol;             \n"
-    "                                                                           \n"
-    "     float3 avg = tl + br + bl + tr;                                       \n"
-    "     avg = mul(float3x3(cred, cgreen, cblue), avg);                        \n"
-    "                                                                           \n"
-    "     return float4(pow(saturate(avg), float3(1.0/LCD_outgamma,             \n"
-    "                                              1.0/LCD_outgamma,            \n"
-    "                                              1.0/LCD_outgamma)), 1.0);    \n"
+    "     float3 color = yfactor * xfactors * res;                              \n"
+    "     return float4(color, 1.0);                                            \n"
     " }                                                                         \n";
 
 const static char* g_strShaderFullscreen =

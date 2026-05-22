@@ -122,10 +122,10 @@ static int g_overlay_locked = 0;
 static int g_current_effect = 0;
 
 /* Total number of effects:
- *   0=Nearest, 1=Sharp-Bilinear, 2=LCD-Grid-v2, 3=Scanlines,
+ *   0=Nearest, 1=Sharp-Bilinear, 2=LCD3x, 3=Scanlines,
  *   4=CRT-Geom, 5=CRT-Lottes, 6=CRT-Easymode,
- *   7=HQ2x, 8=HQ3x, 9=HQ4x, 10=xBR-lv2-fast */
-#define NUM_EFFECTS 11
+ *   7=HQ2x, 8=HQ3x, 9=HQ4x, 10=xBR-lv2-fast, 11=5xBR-Hyllian-v3.8a */
+#define NUM_EFFECTS 12
 
 /* HQ2x/HQ3x/HQ4x LUT textures (created from embedded data) */
 static LPDIRECT3DTEXTURE9 g_hq2x_lut = NULL;
@@ -373,10 +373,11 @@ void XBOX_SetVideoFilter(int filterType)
 }
 
 /* Returns the pixel scale factor for the current effect.
-   Nearest/Bilinear/Scanlines/CRT = 1x, HQ2x = 2x, HQ3x/xBR-lv2-fast = 3x, HQ4x = 4x.
-   xBR-lv2-fast usa `XBR_SCALE = 3.0` hardcoded en el shader para delta/deltaL/
-   deltaU, asi que el render target tiene que coincidir con scale=3 para que las
-   inecuaciones funcionen correctamente. */
+   Nearest/Bilinear/Scanlines/CRT = 1x, HQ2x = 2x, HQ3x/xBR variants = 3x, HQ4x = 4x.
+   xBR shaders usan `fp = frac(uv*texDims)` para decidir el subpixel y son
+   scale-agnostic en el calculo per-pixel.  Renderizamos a 3x (la infraestructura
+   HQ3x) porque es suficiente para los detalles edge-aware del algoritmo y no
+   sobrecarga el fillrate como 5x lo haria. */
 static int XBOX_GetEffectScale(void)
 {
 	switch (g_current_effect) {
@@ -384,6 +385,7 @@ static int XBOX_GetEffectScale(void)
 		case 8:  return 3; /* HQ3x */
 		case 9:  return 4; /* HQ4x */
 		case 10: return 3; /* xBR-lv2-fast */
+		case 11: return 3; /* 5xBR-Hyllian (rendered at 3x via HQ3x infra) */
 		default: return 1; /* 0=Nearest, 1=Sharp-Bilinear, 2=LCD-Grid-v2,
 		                      3=Scanlines, 4=CRT-Geom, 5=CRT-Lottes, 6=CRT-Easymode */
 	}
@@ -418,32 +420,55 @@ static void XBOX_UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
 		/* Pixel perfect: exact size based on effect scale factor */
 		int scale = XBOX_GetEffectScale();
 
-		//We only scale the factor 1 to the maximum available pixel perfect factor
-		//wich affects to nearest neighbour, scanlines and crt filters
-		if (scale == 1 && tex_w > 0 && tex_h > 0){
-			int maxscale = min(floor(bbw / (float)tex_w), floor(bbh / (float)tex_h));
-			if (maxscale > 1){
-				scale = maxscale;
-			}
-		}
+		if (aspect_ratio > 0.0f && tex_w > 0 && tex_h > 0) {
+			/* Aspect ratio definido (4:3, 16:9, etc.): Y entero (crisp scanlines),
+			   X estirado para cumplir el ratio elegido. Comportamiento estandar
+			   de emuladores: lineas horizontales nitidas, ancho proporcional. */
+			int maxscale_h, maxscale_w, maxscale;
 
-		display_w = (float)(tex_w * scale);
-		display_h = (float)(tex_h * scale);
+			if (scale == 1) {
+				/* Factor 1 = filtros sin escalado propio (nearest, scanlines, crt).
+				   Subimos al maximo factor entero que cabe en el backbuffer. */
+				maxscale_h = (int)floor(bbh / (float)tex_h);
+				maxscale_w = (int)floor(bbw / ((float)tex_h * aspect_ratio));
+				maxscale = min(maxscale_h, maxscale_w);
+				if (maxscale > 1) {
+					scale = maxscale;
+				}
+			}
+
+			display_h = (float)(tex_h * scale);
+			display_w = display_h * aspect_ratio;
+		} else {
+			/* RATIO_CORE / aspect_ratio<=0: pixel perfect estricto en ambos ejes. */
+			//We only scale the factor 1 to the maximum available pixel perfect factor
+			//wich affects to nearest neighbour, scanlines and crt filters
+			if (scale == 1 && tex_w > 0 && tex_h > 0){
+				int maxscale = min(floor(bbw / (float)tex_w), floor(bbh / (float)tex_h));
+				if (maxscale > 1){
+					scale = maxscale;
+				}
+			}
+
+			display_w = (float)(tex_w * scale);
+			display_h = (float)(tex_h * scale);
+		}
 
 		/* Clamp to backbuffer if larger */
 		/* Ajuste proporcional si la imagen excede el backbuffer */
 		if (display_w > bbw || display_h > bbh) {
-			if (aspect_ratio <= 0.0f)
-				aspect_ratio = (float)tex_w / (float)tex_h;
+			float clamp_ratio = aspect_ratio;
+			if (clamp_ratio <= 0.0f)
+				clamp_ratio = (float)tex_w / (float)tex_h;
 
 			bb_ratio = bbw / bbh;
 
-			if (aspect_ratio > bb_ratio) {
+			if (clamp_ratio > bb_ratio) {
 				display_w = bbw;
-				display_h = bbw / aspect_ratio;
+				display_h = bbw / clamp_ratio;
 			} else {
 				display_h = bbh;
-				display_w = bbh * aspect_ratio;
+				display_w = bbh * clamp_ratio;
 			}
 		}
 	}
@@ -1371,9 +1396,9 @@ void initShaders() {
     /* Create LUT textures for HQ2x/HQ3x/HQ4x */
     XBOX_InitLUTTextures();
 
-    /* 0=Nearest, 1=Sharp-Bilinear, 2=LCD-Grid-v2, 3=Scanlines,
+    /* 0=Nearest, 1=Sharp-Bilinear, 2=LCD3x, 3=Scanlines,
        4=CRT-Geom, 5=CRT-Lottes, 6=CRT-Easymode,
-       7=HQ2x, 8=HQ3x, 9=HQ4x, 10=xBR-lv2-fast */
+       7=HQ2x, 8=HQ3x, 9=HQ4x, 10=xBR-lv2-fast, 11=5xBR-Hyllian-v3.8a */
     pixelShaders = (IDirect3DPixelShader9**) calloc(NUM_EFFECTS, sizeof(IDirect3DPixelShader9*));
 
     //OutputDebugString("initShaders: compiling Nearest (Normal)...\n");
@@ -1404,6 +1429,11 @@ void initShaders() {
     CreateShader(g_strShaderHQ4xSource,          &pixelShaders[9],  PS_FLAGS_DEFAULT);
     //OutputDebugString("initShaders: compiling xBR-lv2-fast...\n");
     CreateShader(g_strShaderXBRlv2FastSource,    &pixelShaders[10], PS_FLAGS_DEFAULT);
+    /* 5xBR-Hyllian v3.8a (rounded): 21 tex2D + ~115 ALU, identico coste que
+     * v3.7a pero con smoothstep + lerp blending (sin pixel substitution).
+     * FULL_PRECISION evita problemas con saturate y los step() de epsilon
+     * pequeno cuando el optimizador colapsa precision. */
+    CreateShader(g_strShaderXBRHyllianRoundedSource, &pixelShaders[11], PS_FLAGS_FULL_PRECISION);
     //OutputDebugString("initShaders: all 11 shaders compiled.\n");
 	// Create pixel shader.
 	g_pPixelShader = pixelShaders[0];
@@ -1461,9 +1491,11 @@ void XBOX_SelectEffect(int effectID) {
         break;
     }
 
-    case 2: /* LCD-Grid-v2: simula la rejilla LCD de handhelds (GB/GBC/GBA/DS).
-             * Sampler POINT (cada subpixel es exacto, no se debe interpolar el
-             * sample base). textureDims en c1. */
+    case 2: /* LCD3x (Gigaherz): simula la rejilla LCD de handhelds (GB/GBC/
+             * GBA/DS) con modulacion sinusoidal RGB. Sampler POINT (el sample
+             * de la fuente no debe interpolarse - el patron de subpixeles ya
+             * lo genera el shader). textureDims en c1 para que el periodo
+             * coincida con un texel del source. */
     {
         if (pixelShaders[2] == NULL) {
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
@@ -1603,6 +1635,30 @@ void XBOX_SelectEffect(int effectID) {
         } else {
             float dims[4];
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[10]);
+            dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
+            dims[2] = 0.0f; dims[3] = 0.0f;
+            IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+        }
+        break;
+    }
+
+    case 11: /* 5xBR-Hyllian v3.8a (rounded): evolucion de v3.7a con output
+              * SUAVIZADO via smoothstep + lerp (en lugar de pixel substitution).
+              * Mantiene el mismo 5x5 (21 tex2D) + weighted_distance + tres
+              * niveles de edge detection (lv1, edr_left a 30, edr_up a 60).
+              * Diferencia visible vs v3.7a: bordes con AA en las transiciones
+              * de subpixel, sin staircase. Mismo binding que lv2-fast:
+              * sampler s0 POINT + textureDims en c1. */
+    {
+        if (pixelShaders[11] == NULL) {
+            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+        } else {
+            float dims[4];
+            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[11]);
             dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
             dims[2] = 0.0f; dims[3] = 0.0f;
             IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);

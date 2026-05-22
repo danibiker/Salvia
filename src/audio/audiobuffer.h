@@ -4,7 +4,8 @@
 #include <string.h> // memcpy, memset
 
 #ifdef _XBOX
-#define BUFF_SIZE 16384
+//#define BUFF_SIZE 16384
+#define BUFF_SIZE 8192
 #include <xtl.h>
 #else
 #define BUFF_SIZE 8192
