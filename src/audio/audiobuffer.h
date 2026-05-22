@@ -4,11 +4,10 @@
 #include <string.h> // memcpy, memset
 
 #ifdef _XBOX
-//#define BUFF_SIZE 16384
-#define BUFF_SIZE 8192
+#define BUFF_SIZE 16384
 #include <xtl.h>
 #else
-#define BUFF_SIZE 8192
+#define BUFF_SIZE 16384
 #include <windows.h>
 #endif
 
@@ -100,13 +99,34 @@ public:
         return to_write;
     }
 
-    // Escritura bloqueante: duerme el hilo hasta que Read() libere espacio
+    // Escritura bloqueante: duerme el hilo hasta que Read() libere espacio.
+    //
+    // Robusta a count > capacity-1: el ring solo puede tener capacity-1
+    // muestras libres como maximo (1 slot sentinel para distinguir
+    // empty/full), asi que una espera por count > capacity-1 seria un
+    // deadlock matematico (la condicion nunca se cumple).  Para soportar
+    // bursts grandes (p.ej. la primera rafaga de audio tras boot del PSX,
+    // que puede acumular ~93 ms = ~8200 int16_t antes de devolver control)
+    // troceamos el write en chunks de hasta capacity-1 y esperamos espacio
+    // entre chunks.  El consumer (SDL callback) drena progresivamente,
+    // SetEvent(hSpaceEvent) en cada Read despierta esta espera.
     void WriteBlocking(const int16_t* samples, size_t count) {
-        while (capacity - used(head, tail) - 1 < count) {
-            WaitForSingleObject(hSpaceEvent, 2);
-        }
+        const size_t max_chunk = capacity - 1;
 
-        head = (long)copyIn((size_t)head, samples, count);
+        while (count > 0) {
+            size_t want = (count > max_chunk) ? max_chunk : count;
+
+            // Esperar a que haya hueco para 'want' muestras.  Como want
+            // <= capacity-1, esta condicion siempre puede cumplirse en
+            // algun momento (no deadlock).
+            while (capacity - used(head, tail) - 1 < want) {
+                WaitForSingleObject(hSpaceEvent, 2);
+            }
+
+            head = (long)copyIn((size_t)head, samples, want);
+            samples += want;
+            count   -= want;
+        }
     }
 
     // Lectura desde el callback de SDL: rellena con silencio si hay underrun,

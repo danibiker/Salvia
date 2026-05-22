@@ -686,7 +686,6 @@ u32 gpuReadData(void)
 extern volatile uint32_t diag_gpu_data_writes;
 extern volatile uint32_t diag_gpu_status_writes;
 extern volatile uint32_t diag_gpu_first_write_seen;
-extern void pcsxr_log(int level, const char *format, ...);
 #endif
 
 void gpuWriteData(u32 data)
