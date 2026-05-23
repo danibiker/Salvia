@@ -352,6 +352,27 @@ struct gpu_unai_t {
 	gpu_unai_config_t config;
 
 	u8  LightLUT[32*32];       /* 5-bit lighting LUT (gpu_inner_light.h) */
+
+	/* [XBOX360] LUT pre-multiplicada para el path dither rapido.
+	 *
+	 * LightDitherMul[(tex5 << 5) | light5] = tex5 * light5 * 8
+	 *
+	 * Se accede en gpuLightingTXTDitherFast para sustituir las 3 muls/pixel
+	 * por 3 loads.  La salida del LUT (s16) se alinea con el shift >>7 de
+	 * la formula original: `tex5*r8 + dv  >> 7` equivale a `LUT[tex5,r5]
+	 * + dv  >> 7`  (dropping 3 bits del light tras r5 = r8 >> 3).
+	 *
+	 * Coste cache: 32 * 32 * 2 = 2 KB, comparte L1 con texturas/CLUT sin
+	 * generar thrashing notable.
+	 *
+	 * Trade-off vs el path original (8-bit light): el dither sigue siendo
+	 * estructuralmente identico (mismo Bayer 4x4, misma cuantizacion a
+	 * 5 bits), pero la precision de luz se reduce de 8-bit a 5-bit.
+	 * Visualmente la diferencia es despreciable para emulacion PSX porque
+	 * la mayoria de luces vienen del Gouraud con valores pequenos
+	 * (light = ~0..128 tipico).  Solo en colores muy saturados con luz
+	 * intensa se notaria un ligero shift de tinte. */
+	s16 LightDitherMul[32*32];
 };
 
 /* [XBOX360] Single instance lives in gpu_unai_driver.cpp (state owned

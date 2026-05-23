@@ -52,6 +52,18 @@
 #ifndef __CDRISO_ASYNC_H__
 #define __CDRISO_ASYNC_H__
 
+/* [XBOX360] Diagnostics flag.  Build with -DPCSXR_CDRA_DIAG=1 para
+ * habilitar todos los logs informativos del subsistema CD-ROM y la
+ * instrumentacion de contadores/timing.  Con 0 (default produccion),
+ * todo eso queda compilado fuera = cero overhead, cero strings, cero
+ * llamadas a QueryPerformanceCounter en el hot path.
+ *
+ * Solo los WARN criticos (malloc/fopen/CreateEvent FAILED) se mantienen
+ * incondicionales — ocurren una vez por sesion, no afectan rendimiento. */
+#ifndef PCSXR_CDRA_DIAG
+#define PCSXR_CDRA_DIAG 0
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -82,6 +94,30 @@ int  cdra_read(int lba);
  * or any other event that means "the disc contents we cached may be
  * stale".  Doesn't stop the worker; next read will repopulate. */
 void cdra_invalidate(void);
+
+/* [XBOX360] Anticipated-seek hint.  Tells the prefetch worker that the
+ * emulator is about to read from this LBA, BEFORE the actual read
+ * happens.  Used at CDC command boundaries (CdlSetloc + CdlPlay,
+ * CdlReadN/S, CdlSeekL/P) where the emulator already knows the target
+ * LBA but the actual read won't fire until the emulated seek delay
+ * (cdrSeekTime, ported from pcsx-rearmed) completes.  For long seeks
+ * the worker gets ~300-500 ms of emulated time = plenty to prefetch
+ * the new region into the lock-free pool.
+ *
+ * Safe from any thread (Interlocked* + SetEvent). */
+void cdra_set_anchor(int lba);
+
+/* [XBOX360] Reset de contadores de telemetria a 0.  Llamado al inicio
+ * de cada disco (ISOopen) para que los stats reflejen SOLO la sesion
+ * actual, no acumulados de runs anteriores.
+ *
+ * Resetea: reads, pool_hits, pool_misses, pool_fills, slow_reads,
+ * total_slow_ms, max_read_ms, worker_slow_iter, worker_max_iter_ms,
+ * worker_wakes.
+ *
+ * NO toca el pool ni el target (eso es trabajo de cdra_invalidate,
+ * llamado en ISOclose/disc-swap). */
+void cdra_reset_stats(void);
 
 #ifdef __cplusplus
 }

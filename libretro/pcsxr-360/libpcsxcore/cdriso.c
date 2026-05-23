@@ -50,6 +50,32 @@
 static FILE *cdHandle = NULL;
 static FILE *subHandle = NULL;
 
+/* [XBOX360] Track del path FISICO al que cdHandle apunta actualmente.
+ * Necesario porque GetIsoFile() devuelve el path ORIGINAL pasado a
+ * ISOopen (puede ser un .cue), pero cdHandle se reabre al .bin real
+ * dentro de parsecue.  El async precache worker necesita abrir un
+ * SEGUNDO FILE* al mismo fichero fisico que cdHandle — usa este path. */
+static char cdHandle_actual_path[MAXPATHLEN] = "";
+
+/* [XBOX360] FILE* DEDICADO al prefetch worker (cdriso_async).
+ *
+ * RAZON: el FILE* estandar (stdio) tiene buffering en userspace y un
+ * indicador de posicion no-thread-safe.  Dos hilos llamando fread sobre
+ * el MISMO FILE* es UB y puede devolver datos corruptos o desalineados.
+ *
+ * Solucion: dos FILE* independientes apuntando al mismo .bin fisico.
+ * Cada uno tiene su buffer y su seek pointer.  El kernel serializa
+ * ReadFile() a nivel de device internamente; no necesitamos lock en
+ * userspace para BIN/CUE.
+ *
+ * NO se usa para CHD: chdFile/hunkcache no son thread-safe y el async
+ * worker se desactiva en ese caso (cdra_pool_active=0).
+ *
+ * Lifecycle: abierto en ISOopen (despues de que parsecue resuelva el
+ * .bin), cerrado en ISOclose.  NULL si no es BIN/CUE o si fallo el
+ * fopen secundario. */
+static FILE *cdHandle_worker = NULL;
+
 static boolean subChanMixed = FALSE;
 static boolean subChanRaw = FALSE;
 
@@ -105,6 +131,28 @@ static unsigned int  ti_fileLBAoffset[MAXTRACKS];
 static FILE         *cdExtraHandles[MAXTRACKS];
 static int           cdExtraHandleCount = 0;
 
+/* [XBOX360] Handles paralelos del worker para multi-track CUE.
+ *
+ * ti_handle_worker[k] mirrors ti_handle[k]: si main usa ti_handle[k]
+ * para leer track k, el worker usa ti_handle_worker[k] sobre el MISMO
+ * fichero fisico pero con su propio FILE* (buffer userspace stdio
+ * independiente).  Sin race entre main y worker.
+ *
+ * cdExtraHandles_worker[] mirrors cdExtraHandles[]: tracking de todos
+ * los FILE* extra del worker para cierre limpio.
+ *
+ * NULL en ti_handle_worker[k] significa "usa cdHandle_worker" igual
+ * que NULL en ti_handle[k] significa "usa cdHandle". */
+static FILE         *ti_handle_worker[MAXTRACKS];
+static FILE         *cdExtraHandles_worker[MAXTRACKS];
+static int           cdExtraHandleCount_worker = 0;
+
+/* Forward decl para el diagnostic logger (defined in libretro_core.cpp).
+ * Repetido aqui para que el bloque PreCache lo vea (la decl "principal"
+ * esta mas abajo, antes del bloque CHD). */
+extern void pcsxr_log(int level, const char *format, ...);
+
+
 static void CloseExtraCdHandles(void) {
 	int i;
 	for (i = 0; i < cdExtraHandleCount; i++) {
@@ -115,12 +163,35 @@ static void CloseExtraCdHandles(void) {
 	}
 	cdExtraHandleCount = 0;
 	memset(ti_handle, 0, sizeof(ti_handle));
+
+	/* [XBOX360] Cerrar tambien los handles paralelos del worker. */
+	for (i = 0; i < cdExtraHandleCount_worker; i++) {
+		if (cdExtraHandles_worker[i] != NULL) {
+			fclose(cdExtraHandles_worker[i]);
+			cdExtraHandles_worker[i] = NULL;
+		}
+	}
+	cdExtraHandleCount_worker = 0;
+	memset(ti_handle_worker, 0, sizeof(ti_handle_worker));
 	memset(ti_fileLBAoffset, 0, sizeof(ti_fileLBAoffset));
 }
 
 #ifdef USE_CHD
 static chd_file      *chdFile        = NULL;
 static unsigned int   chdHunkBytes   = 0;
+
+/* [XBOX360] Segundo handle de CHD dedicado al prefetch worker.
+ *
+ * libchdr permite multiples opens del mismo fichero — cada chd_file*
+ * tiene su propio buffer interno de descompresion (~256-512 KB) y su
+ * propio estado, asi que dos threads pueden descomprimir hunks en
+ * paralelo SIN locks.
+ *
+ * Mismo principio que cdHandle_worker para BIN/CUE: main usa chdFile,
+ * worker usa chdFile_worker.  El pool lock-free almacena sectores
+ * decomprimidos; el HunkCache (~150 KB) queda como fallback del main
+ * para el path sync directo en pool miss. */
+static chd_file      *chdFile_worker = NULL;
 
 /* === Hunk cache (LRU multi-slot) ===
  *
@@ -323,7 +394,8 @@ static int parsecue(const char *isofile) {
 
 	/* Running state of the FILE currently in effect while parsing. Any TRACK
 	 * we see inherits these; they advance on every FILE directive. */
-	FILE			*currentFileHandle = NULL;   /* NULL => falls back to cdHandle */
+	FILE			*currentFileHandle        = NULL;   /* NULL => falls back to cdHandle */
+	FILE			*currentFileHandle_worker = NULL;   /* NULL => falls back to cdHandle_worker */
 	unsigned int	 currentFileLBA    = 0;       /* disc-LBA (no lead-in) where this file's data starts */
 	int				 filesOpened       = 0;
 
@@ -442,6 +514,11 @@ static int parsecue(const char *isofile) {
 						setvbuf(newCd, NULL, _IOFBF, 65536);  /* mitigation A */
 						if (cdHandle != NULL) fclose(cdHandle);
 						cdHandle = newCd;
+						/* [XBOX360] Actualizar path tracker: cdHandle ahora apunta
+						 * al .bin real, no al .cue.  Async precache lo necesita
+						 * para abrir su FILE* dedicado al fichero correcto. */
+						strncpy(cdHandle_actual_path, binfullpath, MAXPATHLEN - 1);
+						cdHandle_actual_path[MAXPATHLEN - 1] = '\0';
 						SysPrintf("[cue->bin: %s] ", binfullpath);
 					} else {
 						SysPrintf("\nWARN: .cue references missing binary: %s\n",
@@ -449,13 +526,15 @@ static int parsecue(const char *isofile) {
 						/* Fall through; parse tracks anyway. */
 					}
 				}
-				currentFileHandle = NULL;   /* NULL => use cdHandle */
-				currentFileLBA    = 0;
+				currentFileHandle        = NULL;   /* NULL => use cdHandle */
+				currentFileHandle_worker = NULL;   /* NULL => use cdHandle_worker */
+				currentFileLBA           = 0;
 			} else {
 				/* Subsequent FILE: advance disc-LBA by the previous file's
 				 * size, then open the new .bin and track it for close. */
 				FILE *prevHandle = (currentFileHandle != NULL) ? currentFileHandle : cdHandle;
 				FILE *newHandle;
+				FILE *newHandle_worker;
 				unsigned int prev_sectors = 0;
 
 				if (prevHandle != NULL) {
@@ -479,6 +558,24 @@ static int parsecue(const char *isofile) {
 					}
 					currentFileHandle = newHandle;
 					SysPrintf("[+bin: %s] ", binfullpath);
+
+					/* [XBOX360] Abrir handle paralelo del worker sobre el
+					 * mismo .bin.  Si falla, el worker no podra leer este
+					 * track sin race; en ese caso fallback a sync read del
+					 * main para sectores de este track. */
+					newHandle_worker = fopen(binfullpath, "rb");
+					if (newHandle_worker != NULL) {
+						setvbuf(newHandle_worker, NULL, _IOFBF, 65536);
+						if (cdExtraHandleCount_worker < MAXTRACKS) {
+							cdExtraHandles_worker[cdExtraHandleCount_worker++] = newHandle_worker;
+						}
+						currentFileHandle_worker = newHandle_worker;
+					} else {
+						pcsxr_log(2 /* WARN */,
+						    "[cdra] worker handle fopen FAILED for '%s', "
+						    "ese track ira por main sync\n", binfullpath);
+						currentFileHandle_worker = NULL;
+					}
 				}
 			}
 
@@ -489,8 +586,10 @@ static int parsecue(const char *isofile) {
 
 			/* Remember which file this track lives in (for reads) and the
 			 * disc-LBA at which that file begins (INDEX values below are
-			 * file-relative in multi-FILE mode). */
+			 * file-relative in multi-FILE mode).  ti_handle_worker[] es
+			 * el paralelo para el worker thread; ambos arrays mirror. */
 			ti_handle[numtracks]        = currentFileHandle;
+			ti_handle_worker[numtracks] = currentFileHandle_worker;
 			ti_fileLBAoffset[numtracks] = currentFileLBA;
 
 			if (strstr(linebuf, "AUDIO") != NULL) {
@@ -735,6 +834,25 @@ static int parsechd(const char *isofile) {
 		chdFile = NULL;
 		return -1;
 	}
+
+	/* [XBOX360] Abrir segundo handle CHD dedicado al worker thread.
+	 * Si falla (memoria, etc.) seguimos con solo el handle main; el
+	 * pool se desactivara y todas las lecturas iran sync.  No es
+	 * critico — el HunkCache + cdrSeekTime ya cubren razonablemente.
+	 *
+	 * Cada chd_file* tiene su propio buffer de descompresion (~256 KB
+	 * tipico), asi que dos chd_read en paralelo no se pisan. */
+	if (chd_open(isofile, CHD_OPEN_READ, NULL, &chdFile_worker) != CHDERR_NONE) {
+		pcsxr_log(2 /* WARN */,
+		    "[chd] worker chd_open FAILED, async pool desactivado para este disco\n");
+		chdFile_worker = NULL;
+	}
+#if PCSXR_CDRA_DIAG
+	else {
+		pcsxr_log(0 /* INFO */,
+		    "[chd] worker chd_file opened (parallel decode handle)\n");
+	}
+#endif
 
 	chdHunkBytes = head->hunkbytes;
 	/* Single backing allocation of N * hunkBytes; slice it into per-slot
@@ -1008,6 +1126,10 @@ static void ChdCloseAll(void) {
 		chd_close(chdFile);
 		chdFile = NULL;
 	}
+	if (chdFile_worker != NULL) {
+		chd_close(chdFile_worker);
+		chdFile_worker = NULL;
+	}
 	if (chdHunkPool != NULL) {
 		free(chdHunkPool);
 		chdHunkPool = NULL;
@@ -1030,6 +1152,14 @@ static long CALLBACK ISOshutdown(void) {
 	if (cdHandle != NULL) {
 		fclose(cdHandle);
 		cdHandle = NULL;
+		cdHandle_actual_path[0] = '\0';
+	}
+	if (cdHandle_worker != NULL) {
+		/* Cerrar el FILE* del worker DESPUES de cdra_shutdown (ya hecho
+		 * arriba), garantizando que el worker thread no esta dentro de
+		 * fread() sobre este handle. */
+		fclose(cdHandle_worker);
+		cdHandle_worker = NULL;
 	}
 	if (subHandle != NULL) {
 		fclose(subHandle);
@@ -1062,6 +1192,14 @@ static long CALLBACK ISOopen(void) {
 		return 0; // it's already open
 	}
 
+	/* [XBOX360] Reset de contadores cdra para esta sesion.  Sin esto los
+	 * stats acumulan entre cargas de ROM (cdra_init es idempotente y NO
+	 * se reinicializa en cada disco), lo que hace imposible comparar
+	 * dos pruebas consecutivas: la primera linea de stats del run nuevo
+	 * arranca con los totales del run anterior.  Ver issue: usuario
+	 * comparando modos disabled/float_only/auto sin reiniciar consola. */
+	cdra_reset_stats();
+
 #ifdef USE_CHD
 	if (chdFile != NULL) {
 		return 0; // already open as CHD
@@ -1086,8 +1224,13 @@ static long CALLBACK ISOopen(void) {
 
 	cdHandle = fopen(GetIsoFile(), "rb");
 	if (cdHandle == NULL) {
+		cdHandle_actual_path[0] = '\0';
 		return -1;
 	}
+	/* [XBOX360] Trackear el path actual de cdHandle.  Si luego parsecue
+	 * reabre cdHandle al .bin real, actualizara este path. */
+	strncpy(cdHandle_actual_path, GetIsoFile(), MAXPATHLEN - 1);
+	cdHandle_actual_path[MAXPATHLEN - 1] = '\0';
 
 	/* === Larger CRT read buffer (mitigation A) ===
 	 *
@@ -1116,6 +1259,7 @@ static long CALLBACK ISOopen(void) {
 	 * "Usb0:\..." and the internal HDD at "Hdd:\..." -- the prefix tells
 	 * us which storage device is the bottleneck.  Size in MB helps spot
 	 * fragmentation likelihood and whether the file fits in RAM cache. */
+#if PCSXR_CDRA_DIAG
 	{
 		long fsz;
 		const char *path = GetIsoFile();
@@ -1126,6 +1270,7 @@ static long CALLBACK ISOopen(void) {
 		          "[cdra-disk] opened bin: path='%s' size=%ld bytes (%ld MB)\n",
 		          path ? path : "(null)", fsz, fsz / (1024 * 1024));
 	}
+#endif
 
 	cddaBigEndian = FALSE;
 	subChanMixed = FALSE;
@@ -1162,6 +1307,35 @@ static long CALLBACK ISOopen(void) {
 
 	PrintTracks();
 
+	/* [XBOX360] Abrir el FILE* dedicado del worker AHORA — despues de
+	 * parsecue/parsetoc/etc, que ya han resuelto cdHandle_actual_path
+	 * al .bin fisico (si el path original era un .cue).  Solo BIN/CUE;
+	 * para CHD chdFile mantiene io_cs.
+	 *
+	 * Si el fopen secundario falla (e.g., kernel sin descriptores libres,
+	 * fichero readonly y locked exclusivamente, etc.), cdHandle_worker
+	 * queda NULL y el worker hace fallback a usar cdHandle bajo lock,
+	 * comportamiento equivalente al previo. */
+	if (cdHandle != NULL && cdHandle_actual_path[0] != '\0') {
+		cdHandle_worker = fopen(cdHandle_actual_path, "rb");
+		if (cdHandle_worker != NULL) {
+			/* Mismo buffer grande que cdHandle (mitigacion A): 64 KB para
+			 * que cada ReadFile() del worker cubra ~27 sectores y reduzca
+			 * los round-trips al kernel. */
+			setvbuf(cdHandle_worker, NULL, _IOFBF, 65536);
+#if PCSXR_CDRA_DIAG
+			pcsxr_log(0 /* INFO */,
+			          "[cdra-disk] worker FILE* opened: path='%s'\n",
+			          cdHandle_actual_path);
+#endif
+		} else {
+			pcsxr_log(2 /* WARN */,
+			          "[cdra-disk] worker FILE* fopen FAILED for '%s'. "
+			          "Worker will fall back to shared cdHandle with io_cs.\n",
+			          cdHandle_actual_path);
+		}
+	}
+
 	/* Async prefetch worker is spun up once in ISOinit (plugin-level).
 	 * Here we just invalidate the ring so any stale sectors from the
 	 * previous disc are dropped before the first read of the new one. */
@@ -1171,19 +1345,28 @@ static long CALLBACK ISOopen(void) {
 }
 
 static long CALLBACK ISOclose(void) {
-	/* Invalidate the prefetch ring before closing handles, so the
+	/* Invalidate the lock-free pool before closing handles, so the
 	 * worker doesn't try to read stale sector data through a file
-	 * handle that's about to close.  The io_cs in the async layer
-	 * also serializes against any in-flight read on the worker thread.
-	 * NOTE: don't call cdra_shutdown here -- the worker lifecycle is
-	 * plugin-level (ISOinit/ISOshutdown), not disc-level.  Disc swaps
-	 * just reset the ring contents. */
+	 * handle that's about to close.  cdra_invalidate sets the pool
+	 * slots to -1 (empty), so any in-flight worker iter will discard
+	 * what it has and go back to wait. */
 	cdra_invalidate();
 
 	CloseExtraCdHandles();
 	if (cdHandle != NULL) {
 		fclose(cdHandle);
 		cdHandle = NULL;
+		cdHandle_actual_path[0] = '\0';
+	}
+	if (cdHandle_worker != NULL) {
+		/* cdra_invalidate (arriba) bumped la generation, asi que cualquier
+		 * iteracion del worker thread en marcha ya no escribira al ring.
+		 * El worker NO esta dentro de fread sobre cdHandle_worker en este
+		 * instante porque el lock io_cs / la espera del wakeup_event lo
+		 * mantienen fuera durante el close del disco.  Aun asi cerramos
+		 * DESPUES del invalidate por orden defensivo. */
+		fclose(cdHandle_worker);
+		cdHandle_worker = NULL;
 	}
 	if (subHandle != NULL) {
 		fclose(subHandle);

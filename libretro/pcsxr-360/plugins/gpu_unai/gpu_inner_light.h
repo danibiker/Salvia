@@ -37,30 +37,54 @@ static void SetupLightLUT()
 	}
 }
 
+/* [XBOX360] Build LightDitherMul: tex5 * light5 * 8 sin cuantizar ni clampar.
+ *
+ * Esta tabla sustituye las 3 muls/pixel del dither hot path por 3 loads.
+ * El factor *8 alinea el rango con el shift >>7 de la formula original:
+ *
+ *   Original 8-bit light:  r3 = (uSrc&0x1F) * light8 + dv;  out = clamp(r3 >> 7)
+ *   Nuevo    5-bit light:  r3 = LUT[(tex5 << 5) | light5] + dv;  out = clamp(r3 >> 7)
+ *
+ * donde LUT[x] = tex5 * light5 * 8.  Equivalente exacto al cambio light8 ->
+ * light5*8 en la formula original (precision de luz baja de 8b a 5b, dither
+ * mantiene su precision intacta).
+ *
+ * Rango maximo: 31 * 31 * 8 = 7688, comodamente dentro de s16. */
+static void SetupLightDitherMul()
+{
+	for (int t = 0; t < 32; t++) {
+		for (int l = 0; l < 32; l++) {
+			gpu_unai.LightDitherMul[(t << 5) | l] = (s16)(t * l * 8);
+		}
+	}
+}
+
 GPU_INLINE s32 clamp_c(s32 x) {
-	/* Branchless saturate to [0, 31].
+	/* Saturate to [0, 31].
 	 *
-	 * El equivalente con branches:
-	 *     if (x < 0)  return 0;
-	 *     if (x > 31) return 31;
-	 *     return x;
-	 * tiene DOS branches por llamada y se invoca 3 veces (R/G/B) por pixel
-	 * dentro del dither hot path. Sobre valores aleatorios eso son 6 branches
-	 * por pixel impredecibles -> ~16 ciclos de mispredict cada uno en el
-	 * Xenos (PPC in-order). Catastrofico para fillrate.
+	 * En PPC (Xenos) usamos la forma ternaria explicita: cmpwi+isel del
+	 * compilador genera 4 instrucciones (2 cmp + 2 isel, single-cycle
+	 * cada una) por clamp.  Se invoca 3 veces (R/G/B) por pixel dentro
+	 * del dither hot path, asi que el ahorro es notable (de 7 ALU ->
+	 * 4 ALU por clamp, -9 ALU por pixel dither).
 	 *
-	 * Esta version usa dos trucos clasicos de saturacion entera signed:
-	 *   - `x >> 31` con shift aritmetico replica el bit de signo en todos
-	 *     los bits: -1 (0xFFFFFFFF) si x<0, 0 si x>=0.
-	 *   - `x & ~(x >> 31)` -> 0 si x<0, x si x>=0.  Equivale a max(x, 0).
-	 *   - Aplicado de nuevo sobre `(31 - x)` para clampar al limite alto:
-	 *       sign(31-x) = -1 si x>31, 0 si x<=31.
-	 *       resultado = (x & ~sign) | (31 & sign).
-	 * Cero branches, 7 instrucciones ALU (shifts + ands + ors). */
+	 * En otras plataformas el fallback usa el truco clasico branchless
+	 * con shift aritmetico y andc:
+	 *   - `x >> 31` (shift aritmetico) replica el signo: -1 si x<0, 0
+	 *     si x>=0.
+	 *   - `x & ~(x >> 31)` -> 0 si x<0, x si x>=0  (= max(x,0)).
+	 *   - Repetido sobre `(31 - x)` clampa al limite alto.
+	 *  Cero branches, 7 ALU (shifts + ands + ors). */
+#if defined(_XBOX) || defined(__PPC__) || defined(__powerpc__) || defined(_M_PPC)
+	/* PPC isel via ternario: cmpwi cr0, x, 0 ; isel ... ; cmpwi cr0, x, 31 ; isel ... */
+	s32 a = (x < 0) ? 0 : x;
+	return (a > 31) ? 31 : a;
+#else
 	x = x & ~(x >> 31);
 	s32 over = 31 - x;
 	x = (x & ~(over >> 31)) | (31 & (over >> 31));
 	return x;
+#endif
 }
 
 /* Create packed Gouraud fixed-pt 8.8 rgb triplet.
@@ -127,7 +151,76 @@ GPU_INLINE uint_fast16_t gpuLightingTXTGouraudGeneric(uint_fast16_t uSrc, gcol_t
 	       (uSrc & 0x8000);
 }
 
-/* Apply high-precision 8-bit lighting to bgr555 texture color. */
+/* Apply high-precision 8-bit lighting to bgr555 texture color.
+ *
+ * Original upstream version: 3 muls + 3 adds + 3 shifts + 3 clamps por pixel
+ * (~35 ALU + 12 ciclos de mul = ~50 ciclos en Xenos).  La macro
+ * `GPU_UNAI_FAST_DITHER` (default ON en Xbox 360) selecciona la version
+ * rapida que sustituye las 3 muls por 3 LUT loads (LightDitherMul) y baja
+ * la precision de luz a 5-bit, manteniendo el dither estructural intacto.
+ *
+ * Si necesitas debuggear o comparar visualmente, define
+ * GPU_UNAI_FAST_DITHER=0 antes de incluir este header para usar la version
+ * upstream tradicional. */
+#if !defined(GPU_UNAI_FAST_DITHER)
+# if defined(_XBOX) || defined(__PPC__) || defined(__powerpc__) || defined(_M_PPC)
+#   define GPU_UNAI_FAST_DITHER 1
+# else
+#   define GPU_UNAI_FAST_DITHER 0
+# endif
+#endif
+
+#if GPU_UNAI_FAST_DITHER
+
+/* Path rapido: LUT pre-multiplicada (2 KB) + dither + clamp.
+ *
+ * Coste por pixel: 3 loads (~3 ciclos cada uno con L1 hit) + 3 adds + 3
+ * shifts + 3 clamps con isel (4 ALU) = ~25 ciclos.  La mitad que el path
+ * original.
+ *
+ * Toma los componentes de luz YA en 5-bit (los call-sites hacen >>3 o >>11
+ * segun sea bgr0888 o gcol_t).  Esto unifica el lookup con la indexacion
+ * `(tex5 << 5) | light5`. */
+GPU_INLINE uint_fast16_t gpuLightingTXTDitherRGB(uint_fast16_t uSrc,
+	uint_fast8_t r5, uint_fast8_t g5, uint_fast8_t b5, int_fast16_t dv)
+{
+	uint_fast16_t rs = uSrc & 0x001F;
+	uint_fast16_t gs = (uSrc >> 5) & 0x001F;
+	uint_fast16_t bs = (uSrc >> 10) & 0x001F;
+
+	s32 r3 = gpu_unai.LightDitherMul[(rs << 5) | r5] + dv;
+	s32 g3 = gpu_unai.LightDitherMul[(gs << 5) | g5] + dv;
+	s32 b3 = gpu_unai.LightDitherMul[(bs << 5) | b5] + dv;
+
+	return  clamp_c(r3 >> 7) |
+	       (clamp_c(g3 >> 7) << 5) |
+	       (clamp_c(b3 >> 7) << 10) |
+	       (uSrc & 0x8000);
+}
+
+GPU_INLINE uint_fast16_t gpuLightingTXTDither(uint_fast16_t uSrc, u32 bgr0888, int_fast16_t dv)
+{
+	/* bgr0888 layout: R en byte 0, G en byte 1, B en byte 2.  Tomamos los
+	 * top 5 bits de cada uno (>>3) para indexar LightDitherMul. */
+	return gpuLightingTXTDitherRGB(uSrc,
+		( bgr0888        & 0xff) >> 3,
+		((bgr0888 >> 8)  & 0xff) >> 3,
+		( bgr0888 >> 16)         >> 3,
+		dv);
+}
+
+GPU_INLINE uint_fast16_t gpuLightingTXTGouraudDither(uint_fast16_t uSrc, gcol_t gCol, int_fast8_t dv)
+{
+	/* gCol es fixed-pt 8.8; gCol.c.r >> 11 da los 5 bits altos de luz
+	 * (igual que en gpuLightingRGB y gpuLightingTXTGouraudGeneric). */
+	return gpuLightingTXTDitherRGB(uSrc,
+		gCol.c.r >> 11, gCol.c.g >> 11, gCol.c.b >> 11, dv);
+}
+
+#else /* !GPU_UNAI_FAST_DITHER */
+
+/* Path original upstream (precision de luz 8-bit, 3 muls/pixel).
+ * Mantenido para builds non-PPC y como referencia visual. */
 GPU_INLINE uint_fast16_t gpuLightingTXTDitherRGB(uint_fast16_t uSrc,
 	uint_fast8_t r, uint_fast8_t g, uint_fast8_t b, int_fast16_t dv)
 {
@@ -153,5 +246,7 @@ GPU_INLINE uint_fast16_t gpuLightingTXTGouraudDither(uint_fast16_t uSrc, gcol_t 
 {
 	return gpuLightingTXTDitherRGB(uSrc, gCol.c.r >> 8, gCol.c.g >> 8, gCol.c.b >> 8, dv);
 }
+
+#endif /* GPU_UNAI_FAST_DITHER */
 
 #endif  /* _OP_LIGHT_H_ */

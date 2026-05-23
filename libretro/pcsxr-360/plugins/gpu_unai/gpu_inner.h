@@ -579,10 +579,20 @@ template<int CF>
 static noinline void gpuPolySpanFn(const gpu_unai_t &gpu_unai, le16_t *pDst, u32 count, s32 y)
 {
 	bool should_blend;
-	s16 DitherLut16[4];
+	/* [XBOX360] Dither value se mantiene en un u32 packed (4 bytes signed,
+	 * uno por columna mod 4) que rota 8 bits por pixel.  Sustituye al
+	 * `memcpy(DitherLut16, ..., 8)` + lookup memory por pixel del path
+	 * original — ahora todo en registros. */
+	u32 dither_packed = 0;
 
-	if (CF_DITHER && CF_TEXTMODE)
-		memcpy(DitherLut16, &gpu_unai.DitherLut16[y & 3][0], sizeof(DitherLut16));
+	if (CF_DITHER && CF_TEXTMODE && CF_LIGHT) {
+		/* Pre-rotar segun la X inicial del span (pDst & 6) >> 1 = x%4.
+		 * El shift << 2 (* 4 bytes -> 32 bits / 8 bits-por-lane) lo
+		 * convierte en cantidad de rotacion en bits. */
+		uintptr_t rot = ((uintptr_t)pDst & 0x06) << 2;
+		dither_packed = gpu_unai.DitherLut32[y & 3];
+		dither_packed = (dither_packed >> rot) | (dither_packed << ((32 - rot) & 31));
+	}
 
 	if (!CF_TEXTMODE)
 	{
@@ -717,11 +727,15 @@ endpolynotextgou:
 			//!LIGHT && !BLEND => no dither
 
 			if (CF_DITHER && CF_LIGHT) {
-				int_fast16_t dv = DITHER_LKUP(DitherLut16, pDst);
+				/* Low byte del packed = signed dither delta para esta columna.
+				 * Rotamos despues de usarlo para que el siguiente pixel tenga
+				 * el delta de la siguiente columna en la posicion baja. */
+				int_fast16_t dv = (int_fast16_t)(s8)(dither_packed & 0xff);
 				if (CF_GOURAUD)
 					uSrc = gpuLightingTXTGouraudDither(uSrc, l_gCol, dv);
 				else
 					uSrc = gpuLightingTXTDither(uSrc, bgr0888, dv);
+				dither_packed = (dither_packed >> 8) | (dither_packed << 24);
 			}
 			else
 			{

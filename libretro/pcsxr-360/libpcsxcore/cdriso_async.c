@@ -41,131 +41,96 @@
 
 /* === Configuration === */
 
-/* === Ring slots (mitigation B) ===
- *
- * Bumped from 8 to 32 slots = ~78 KB ring.  Rationale:
- *
- * At 2x CD speed, a sector is ~6.7 ms of emulated time.  With 8 slots
- * we cover 53 ms of read-ahead.  If a stall hits during that window,
- * the game stalls.  With 32 slots we cover 215 ms of read-ahead.
- *
- * Disk stalls observed in the field were 30-330 ms (occasionally
- * higher).  A 215 ms ring absorbs most stalls cleanly; the game keeps
- * consuming hits from the ring while the worker's slow read blocks.
- *
- * Memory cost: 32 * (2352 + 96 + ~8) = ~78 KB.  Negligible.
- *
- * Increasing further (64+) gives diminishing returns: the worker's
- * fread throughput on USB is finite, so once the ring is fuller than
- * the worker can refill in one round trip, extra slots stay idle. */
-#define CDRA_RING_SLOTS 32
+/* PCSXR_CDRA_DIAG default 0 -- declarado en cdriso_async.h. */
+
+#if PCSXR_CDRA_DIAG
+#  define CDRA_LOG(level, ...)     pcsxr_log((level), __VA_ARGS__)
+#  define CDRA_STAT_INC(c)         InterlockedIncrement(&(c))
+#  define CDRA_STAT_ADD(c, v)      InterlockedExchangeAdd(&(c), (LONG)(v))
+#  define CDRA_STAT_EXCH(c, v)     InterlockedExchange(&(c), (LONG)(v))
+#else
+#  define CDRA_LOG(level, ...)     ((void)0)
+#  define CDRA_STAT_INC(c)         ((void)0)
+#  define CDRA_STAT_ADD(c, v)      ((void)0)
+#  define CDRA_STAT_EXCH(c, v)     ((void)0)
+#endif
 
 /* Xbox 360 hardware thread index for the worker.  HW thread 4 = core 2
  * primary, away from the main emulator threads. */
 #define CDRA_WORKER_HW_THREAD 4
 
-/* === LRU block cache (mitigation C) ===
+/* === Lock-free sector pool ===
  *
- * Second-level cache that sits between the small ring buffer (used for
- * "next N sectors" prefetch) and the OS fread.  Holds large contiguous
- * blocks of the .bin file in RAM so that random-access reads (game
- * seeks back to previously-touched regions) become memcpy operations
- * instead of OS round-trips.
+ * [XBOX360] Rediseno: pool de sectores indexado por (lba mod POOL_SIZE).
+ * SIN critical sections en el hot path.  Sincronizacion via seqlock
+ * sobre `lba` usando InterlockedExchange (full memory barriers en
+ * PowerPC del Xbox 360).
  *
- * Sizing:
- *   CDRA_LRU_BLOCK_SIZE   = 32 KB per block (about 14 PSX sectors)
- *   CDRA_LRU_NUM_BLOCKS   = 512 blocks
- *   Total RAM             = 16 MB
+ *  Worker (single producer):
+ *    1. InterlockedExchange(slot.lba, -1)   ; invalida slot
+ *    2. fread datos en slot.cd / slot.sub   ; sin lock
+ *    3. InterlockedExchange(slot.lba, lba)  ; publica
  *
- * Earlier iteration used 256 KB blocks but field testing showed that
- * each cache miss then did a 256 KB fread.  On Xbox 360 USB, larger
- * single reads have a higher chance of hitting the kernel I/O jitter
- * (firmware background work, USB stack queue contention, etc.) than
- * small reads.  A 256 KB miss could take 300+ ms while many small
- * sequential 32 KB reads each take 10-30 ms.  Net result: slow_reads
- * count actually went UP with the bigger blocks.
+ *  Main (single consumer):
+ *    1. InterlockedExchangeAdd(slot.lba,0)  ; lectura atomica con barrera
+ *    2. Si == lba_target: memcpy datos      ; sin lock
+ *    3. Re-read slot.lba                    ; si cambio = data invalida
  *
- * 32 KB strikes a balance: still 14x larger than a single sector read
- * (2352 bytes), so we amortize OS overhead across multiple sectors,
- * but each miss transfers an order of magnitude less data than the
- * 256 KB variant.  More cache slots (512 vs 64) means hit rate stays
- * comparable for sequential access -- only purely random scatter
- * loses slightly. */
-#define CDRA_LRU_BLOCK_SIZE   (32 * 1024)
-#define CDRA_LRU_NUM_BLOCKS   512
-#define CDRA_LRU_TOTAL_BYTES  ((size_t)CDRA_LRU_BLOCK_SIZE * CDRA_LRU_NUM_BLOCKS)
-
-/* === State === */
+ * Colisiones: dos LBAs con (lba % N) iguales comparten slot.  Solo el
+ * mas reciente cacheado.  Para gameplay secuencial (que es la mayoria
+ * del tiempo) funciona bien.
+ *
+ * POOL_SIZE 1024 = ~2.5 MB, ~13 s game-time prefetch ahead.  Absorbe
+ * outliers USB de 300 ms sin que el main thread pague nada.
+ *
+ * Soporta dos formatos:
+ *  - BIN/CUE/Mode1ISO: worker usa cdHandle_worker (FILE* paralelo)
+ *  - CHD: worker usa chdFile_worker (chd_file* paralelo)
+ * En ambos casos cada thread tiene su propio handle, sin race ni lock. */
+#define CDRA_POOL_SIZE  4096
 
 typedef struct {
-  volatile int  lba;                            /* sector LBA, or -1 if empty */
-  int           has_sub;                        /* 1 if `sub` field was populated */
+  volatile LONG lba;                            /* -1=empty/loading, else LBA */
+  volatile LONG has_sub;                        /* 1 if sub valido */
   unsigned char cd[CD_FRAMESIZE_RAW];           /* 2352 bytes */
   unsigned char sub[SUB_FRAMESIZE];             /* 96 bytes */
-} cdra_slot_t;
+} cdra_pool_slot_t;
 
-static cdra_slot_t       cdra_ring[CDRA_RING_SLOTS];
-static CRITICAL_SECTION  cdra_ring_cs;     /* protects ring + slot fields */
-static CRITICAL_SECTION  cdra_io_cs;       /* serializes file I/O between main+worker */
+static cdra_pool_slot_t *cdra_pool        = NULL;  /* alloc en init */
+static volatile LONG     cdra_pool_target = -1;    /* worker fills around this LBA */
+static int               cdra_pool_active = 0;     /* 0 si CHD (skip async) */
+
+/* === Worker control === */
 static HANDLE            cdra_wakeup_evt   = NULL;
 static HANDLE            cdra_worker_h     = NULL;
 static volatile LONG     cdra_worker_exit  = 0;
-static volatile LONG     cdra_anchor       = -1;  /* prefetch starts at this LBA */
-static volatile LONG     cdra_generation   = 0;   /* bumped on each main-thread read */
 static int               cdra_enabled      = 1;
 static int               cdra_initialized  = 0;
 
-/* Visible to host log via pcsxr_log.  Used by cdra_init/cdra_worker_proc
- * to confirm successful startup; counts let main thread spot whether the
- * worker is actually running and making progress. */
+/* Visible to host log via pcsxr_log. */
 extern void pcsxr_log(int level, const char *format, ...);
-static volatile LONG     cdra_worker_entered_count = 0;
-static volatile LONG     cdra_worker_wake_count    = 0;
-static volatile LONG     cdra_read_call_count      = 0;
-static volatile LONG     cdra_hit_count            = 0;
-static volatile LONG     cdra_miss_count           = 0;
 
-/* === I/O timing instrumentation ===
- *
- * Track wall-clock time spent inside synchronous backend reads so we
- * can correlate gameplay stalls with disk latency events.  All numbers
- * are wall-clock ms (not PSX cycles).  Updated from BOTH main and
- * worker threads via interlocked ops; readers see eventually-consistent
- * values which is fine for diagnostics. */
-/* Lowered from 30 ms to 15 ms.  At 15 ms a read is already eating ~1
- * PSX video frame's worth of wall clock.  We're trying to correlate
- * disk stalls with audio crackling -- the crackles likely come from
- * many sub-30ms but >5ms stalls compounding SPU sample-rate jitter.
- * 15 ms catches those without log spam from healthy 3-10 ms reads. */
+#if PCSXR_CDRA_DIAG
+/* === Diagnostic stats counters (compilados fuera si PCSXR_CDRA_DIAG=0) ===
+ * Sin DIAG estas variables no existen y los CDRA_STAT_* macros expanden
+ * a (void)0, asi que cero overhead en hot path. */
+static volatile LONG     cdra_pool_hits              = 0;
+static volatile LONG     cdra_pool_misses            = 0;
+static volatile LONG     cdra_pool_fills             = 0;
+static volatile LONG     cdra_worker_entered_count   = 0;
+static volatile LONG     cdra_worker_wake_count      = 0;
+static volatile LONG     cdra_read_call_count        = 0;
+
 #define CDRA_SLOW_READ_THRESHOLD_MS  15
-#define CDRA_STALL_BURST_THRESHOLD   8   /* consecutive misses to log */
-
-static LARGE_INTEGER     cdra_qpc_freq;          /* set in cdra_init */
-static volatile LONG     cdra_slow_read_count     = 0;
-static volatile LONG     cdra_slow_read_total_ms  = 0;
-static volatile LONG     cdra_max_single_read_ms  = 0;
-static volatile LONG     cdra_miss_streak_current = 0;
-static volatile LONG     cdra_miss_streak_max     = 0;
+static LARGE_INTEGER     cdra_qpc_freq;             /* set in cdra_init */
+static volatile LONG     cdra_slow_read_count        = 0;
+static volatile LONG     cdra_slow_read_total_ms     = 0;
+static volatile LONG     cdra_max_single_read_ms     = 0;
 static volatile LONG     cdra_worker_slow_iter_count = 0;  /* worker iter >100ms */
 static volatile LONG     cdra_worker_max_iter_ms     = 0;
+#endif /* PCSXR_CDRA_DIAG */
 
-/* === LRU block cache state === */
-typedef struct {
-  FILE         *handle;        /* owning file handle, NULL = empty slot */
-  long          base_offset;   /* file offset of block start (aligned) */
-  unsigned int  lru_clock;     /* updated on each hit */
-  size_t        valid_bytes;   /* how many bytes in `data` are valid */
-  unsigned char *data;         /* pointer into cdra_lru_pool */
-} cdra_lru_meta_t;
-
-static cdra_lru_meta_t   cdra_lru_meta[CDRA_LRU_NUM_BLOCKS];
-static unsigned char    *cdra_lru_pool       = NULL;
-static unsigned int      cdra_lru_clock      = 0;
-static CRITICAL_SECTION  cdra_lru_cs;
-static int               cdra_lru_initialized = 0;
-static volatile LONG     cdra_lru_hits        = 0;
-static volatile LONG     cdra_lru_misses      = 0;
-
+#if PCSXR_CDRA_DIAG
 /* Convert QPC delta to ms.  freq is ticks/sec, delta is in ticks. */
 static unsigned int cdra_qpc_delta_ms(LARGE_INTEGER t0, LARGE_INTEGER t1)
 {
@@ -173,44 +138,7 @@ static unsigned int cdra_qpc_delta_ms(LARGE_INTEGER t0, LARGE_INTEGER t1)
   return (unsigned int)(((t1.QuadPart - t0.QuadPart) * 1000ULL)
                         / cdra_qpc_freq.QuadPart);
 }
-
-/* === Thread CPU time helper ===
- *
- * GetThreadTimes returns kernel+user time consumed by the thread.  By
- * sampling before/after a blocking call we can distinguish:
- *
- *   wall - cpu == 0          : thread was running all the time
- *                              (busy-wait or CPU-heavy work)
- *   wall - cpu == wall       : thread was blocked / waiting / preempted
- *                              the whole time (I/O wait, mutex, etc.)
- *   wall - cpu == some_value : partial wait
- *
- * The FILETIME unit is 100-ns intervals; we convert to ms.  On Xbox 360
- * the kernel tracks thread times at scheduler granularity (~1 ms). */
-static unsigned int cdra_filetime_delta_ms(FILETIME a, FILETIME b)
-{
-  ULARGE_INTEGER ua, ub;
-  ua.LowPart  = a.dwLowDateTime;
-  ua.HighPart = a.dwHighDateTime;
-  ub.LowPart  = b.dwLowDateTime;
-  ub.HighPart = b.dwHighDateTime;
-  if (ub.QuadPart < ua.QuadPart) return 0;
-  /* 100 ns units -> ms = / 10000 */
-  return (unsigned int)((ub.QuadPart - ua.QuadPart) / 10000ULL);
-}
-
-/* Sample current thread's CPU time (kernel + user).  On Xbox 360 the
- * GetThreadTimes API is available via the XDK runtime. */
-static void cdra_sample_thread_cpu(FILETIME *user, FILETIME *kernel)
-{
-  FILETIME ct, et;  /* creation and exit time, unused */
-  if (!GetThreadTimes(GetCurrentThread(), &ct, &et, kernel, user)) {
-    kernel->dwLowDateTime  = 0;
-    kernel->dwHighDateTime = 0;
-    user->dwLowDateTime    = 0;
-    user->dwHighDateTime   = 0;
-  }
-}
+#endif
 
 /* === Forward decls for things defined in cdriso.c ===
  * These are all TU-locals at the point this file is included, so the
@@ -229,192 +157,125 @@ static void cdra_sample_thread_cpu(FILETIME *user, FILETIME *kernel)
 /* static int readchdsector(int lba, unsigned char *buf);  (USE_CHD only) */
 /* static void DecodeRawSubData(void); */
 
-/* === LRU block cache implementation ===
+
+/* === cdra_pool_read_sector_direct ===
  *
- * cdra_lru_fread() is a drop-in replacement for `fread` that consults
- * a 16 MB LRU cache of 256 KB blocks before touching the OS.  Same
- * semantics: reads `count` bytes from current file position into `buf`,
- * advances the file position, returns bytes actually read.
+ * [XBOX360] Lectura DIRECTA de un sector.  Sin LRU, sin locks.  Usado
+ * por el worker thread lock-free para llenar el pool.
  *
- * The cache covers spatial locality past the small prefetch ring: if
- * the game seeks back to a region read in the last few minutes, it's
- * still in RAM.
+ * Dos paths segun formato:
+ *   - CHD: usa chdFile_worker (chd_file* paralelo abierto en parsechd)
+ *     y descomprime un hunk en el buffer worker_hunk_buf, luego extrae
+ *     el sector.  Cada chd_file* tiene su propio buffer interno de
+ *     descompresion, no race con main thread (que usa chdFile).
+ *   - BIN/CUE/Mode1ISO: usa el FILE* `h` (cdHandle_worker) para
+ *     fseek + fread directo.
  *
- * Caller must hold cdra_io_cs (because we may issue an actual fread on
- * miss, which shares the underlying file handle). */
-static void cdra_lru_init(void)
+ * Argumentos:
+ *   lba             - sector PSX (LBA)
+ *   h               - FILE* del worker para BIN/CUE.  Ignorado en CHD.
+ *   worker_hunk_buf - buffer de descompresion del worker (>=chdHunkBytes).
+ *                     Solo usado en path CHD.  Si NULL y CHD activo, error.
+ *   out_cd          - buffer 2352 bytes
+ *   out_sub         - buffer 96 bytes (puede ser NULL)
+ *   out_has_sub     - se pone a 1 si rellenamos out_sub
+ *
+ * Returns 0 en exito, -1 en error. */
+static int cdra_pool_read_sector_direct(int lba, FILE *h,
+                                        unsigned char *worker_hunk_buf,
+                                        unsigned char *out_cd,
+                                        unsigned char *out_sub,
+                                        int *out_has_sub)
 {
-  int i;
-  if (cdra_lru_initialized) return;
+  unsigned int fileLBAoff = 0;
+  long         offset_lba;
+  int          k;
+  long         file_off;
+  size_t       got;
 
-  InitializeCriticalSection(&cdra_lru_cs);
+  *out_has_sub = 0;
 
-  cdra_lru_pool = (unsigned char *)malloc(CDRA_LRU_TOTAL_BYTES);
-  if (!cdra_lru_pool) {
-    pcsxr_log(2 /* WARN */,
-              "[cdra-lru] malloc(%u) failed; LRU cache disabled\n",
-              (unsigned)CDRA_LRU_TOTAL_BYTES);
-    DeleteCriticalSection(&cdra_lru_cs);
-    return;
-  }
+#ifdef USE_CHD
+  if (chdFile_worker != NULL) {
+    /* Worker CHD path.  Mismo mapeo lba -> CHD sector que
+     * readchdsector pero usando chdFile_worker en vez de chdFile,
+     * sin tocar el HunkCache compartido. */
+    int chd_sector, hunknum, offset_in_hunk;
+    int t;
 
-  for (i = 0; i < CDRA_LRU_NUM_BLOCKS; i++) {
-    cdra_lru_meta[i].handle       = NULL;
-    cdra_lru_meta[i].base_offset  = -1;
-    cdra_lru_meta[i].lru_clock    = 0;
-    cdra_lru_meta[i].valid_bytes  = 0;
-    cdra_lru_meta[i].data         = cdra_lru_pool + (size_t)i * CDRA_LRU_BLOCK_SIZE;
-  }
-  cdra_lru_clock = 0;
-  cdra_lru_initialized = 1;
+    if (worker_hunk_buf == NULL) return -1;
 
-  pcsxr_log(0 /* INFO */,
-            "[cdra-lru] cache ready: %d blocks x %d KB = %d MB\n",
-            CDRA_LRU_NUM_BLOCKS,
-            CDRA_LRU_BLOCK_SIZE / 1024,
-            (int)(CDRA_LRU_TOTAL_BYTES / (1024 * 1024)));
-}
+    /* Find track that owns this LBA */
+    t = numtracks;
+    while (t > 1 && lba < chdTrackLBA[t]) t--;
+    if (t < 1) t = 1;
 
-static void cdra_lru_shutdown(void)
-{
-  if (!cdra_lru_initialized) return;
-  if (cdra_lru_pool) {
-    free(cdra_lru_pool);
-    cdra_lru_pool = NULL;
-  }
-  DeleteCriticalSection(&cdra_lru_cs);
-  cdra_lru_initialized = 0;
-}
+    chd_sector = chdTrackCHDSector[t] + (lba - chdTrackLBA[t]);
+    if (chd_sector < 0) return -1;
 
-/* Drop all cached blocks.  Called from cdra_invalidate() on disc swap. */
-static void cdra_lru_invalidate_all(void)
-{
-  int i;
-  if (!cdra_lru_initialized) return;
-  EnterCriticalSection(&cdra_lru_cs);
-  for (i = 0; i < CDRA_LRU_NUM_BLOCKS; i++) {
-    cdra_lru_meta[i].handle      = NULL;
-    cdra_lru_meta[i].base_offset = -1;
-    cdra_lru_meta[i].valid_bytes = 0;
-  }
-  cdra_lru_clock = 0;
-  LeaveCriticalSection(&cdra_lru_cs);
-}
+    hunknum        = (chd_sector * CHD_CD_FRAME_SIZE) / chdHunkBytes;
+    offset_in_hunk = (chd_sector * CHD_CD_FRAME_SIZE) % chdHunkBytes;
 
-/* fread() wrapper.  `h` is the file handle (passed explicitly because
- * the cache keys on it -- we want separate cache slots for cdHandle vs
- * subHandle vs ti_handle[k]).  `file_offset` is the absolute offset in
- * the file where the read begins; caller must compute it (we don't
- * call ftell to avoid an extra CRT call).  Returns bytes read; if less
- * than `count`, the file has fewer bytes left from that offset (EOF). */
-static size_t cdra_lru_fread(void *buf,
-                             size_t count,
-                             FILE *h,
-                             long file_offset)
-{
-  long block_base;
-  long off_in_block;
-  size_t copy_now;
-  size_t copied = 0;
-  int    i, slot;
+    if (chd_read(chdFile_worker, hunknum, worker_hunk_buf) != CHDERR_NONE)
+      return -1;
 
-  if (!cdra_lru_initialized || h == NULL || count == 0) {
-    /* Fallback: plain fread on the underlying file.  Caller already
-     * holds io_cs so this is safe. */
-    if (h && count) {
-      fseek(h, file_offset, SEEK_SET);
-      return fread(buf, 1, count, h);
-    }
+    memcpy(out_cd, worker_hunk_buf + offset_in_hunk, CD_FRAMESIZE_RAW);
     return 0;
   }
+#endif
 
-  /* Reads may span block boundaries; handle each block separately. */
-  while (copied < count) {
-    block_base   = ((file_offset + (long)copied) / CDRA_LRU_BLOCK_SIZE) * CDRA_LRU_BLOCK_SIZE;
-    off_in_block = (file_offset + (long)copied) - block_base;
-    copy_now     = CDRA_LRU_BLOCK_SIZE - (size_t)off_in_block;
-    if (copy_now > count - copied) copy_now = count - copied;
+  /* BIN/CUE/Mode1ISO path. */
+  if (h == NULL) return -1;
 
-    /* Lookup in cache. */
-    EnterCriticalSection(&cdra_lru_cs);
-    slot = -1;
-    for (i = 0; i < CDRA_LRU_NUM_BLOCKS; i++) {
-      if (cdra_lru_meta[i].handle == h &&
-          cdra_lru_meta[i].base_offset == block_base) {
-        slot = i;
-        cdra_lru_meta[i].lru_clock = ++cdra_lru_clock;
+  /* Multi-track CUE: track 1 usa cdHandle_worker (= h pasado); tracks
+   * >= 2 con .bin separado usan ti_handle_worker[k] (paralelo abierto
+   * en parsecue).  Si por alguna razon no hay handle worker para ese
+   * track (fopen fallo), devolver -1 y dejar que main haga sync. */
+  if (numtracks > 0) {
+    for (k = numtracks; k >= 1; k--) {
+      int track_start_lba = (int)msf2sec(ti[k].start) - 2 * 75;
+      if (track_start_lba <= lba) {
+        if (ti_handle[k] != NULL && ti_handle[k] != cdHandle) {
+          /* Track con FILE* propio (multi-bin cue).  Usar el handle
+           * worker paralelo si esta disponible. */
+          if (ti_handle_worker[k] == NULL) return -1;
+          h = ti_handle_worker[k];
+        }
+        fileLBAoff = ti_fileLBAoffset[k];
         break;
       }
     }
+  }
 
-    if (slot >= 0) {
-      /* HIT -- copy from cache.  Bound by valid_bytes in case the
-       * block was short (EOF). */
-      size_t available = (cdra_lru_meta[slot].valid_bytes > (size_t)off_in_block)
-                       ? cdra_lru_meta[slot].valid_bytes - (size_t)off_in_block
-                       : 0;
-      if (available < copy_now) copy_now = available;
-      memcpy((unsigned char *)buf + copied,
-             cdra_lru_meta[slot].data + off_in_block,
-             copy_now);
-      LeaveCriticalSection(&cdra_lru_cs);
-      InterlockedIncrement(&cdra_lru_hits);
-      copied += copy_now;
-      if (copy_now == 0) break;  /* EOF in this block */
-      continue;
-    }
+  offset_lba = (long)lba - (long)fileLBAoff;
+  if (offset_lba < 0) offset_lba = 0;
 
-    /* MISS -- find LRU slot to evict.  Empty slots (handle==NULL) win
-     * automatically because they have lru_clock=0 (smallest). */
-    {
-      unsigned int lru_min = cdra_lru_meta[0].lru_clock;
-      int evict = 0;
-      for (i = 1; i < CDRA_LRU_NUM_BLOCKS; i++) {
-        if (cdra_lru_meta[i].lru_clock < lru_min) {
-          lru_min = cdra_lru_meta[i].lru_clock;
-          evict   = i;
-        }
-      }
-      slot = evict;
-      /* Mark invalid while we fill it -- if another thread looks up the
-       * same block, they'll miss and queue another read, which is wasteful
-       * but correct.  Worth refining only if profiling shows contention. */
-      cdra_lru_meta[slot].handle      = NULL;
-      cdra_lru_meta[slot].base_offset = -1;
-    }
-    LeaveCriticalSection(&cdra_lru_cs);
-    InterlockedIncrement(&cdra_lru_misses);
-
-    /* Issue the actual fread.  Reads a full block into the slot's data
-     * buffer.  May return less than CDRA_LRU_BLOCK_SIZE near EOF. */
-    {
-      size_t got;
-      fseek(h, block_base, SEEK_SET);
-      got = fread(cdra_lru_meta[slot].data, 1, CDRA_LRU_BLOCK_SIZE, h);
-
-      EnterCriticalSection(&cdra_lru_cs);
-      cdra_lru_meta[slot].handle      = h;
-      cdra_lru_meta[slot].base_offset = block_base;
-      cdra_lru_meta[slot].valid_bytes = got;
-      cdra_lru_meta[slot].lru_clock   = ++cdra_lru_clock;
-
-      /* Copy the slice that the caller wants. */
-      {
-        size_t available = (got > (size_t)off_in_block)
-                         ? got - (size_t)off_in_block
-                         : 0;
-        if (available < copy_now) copy_now = available;
-        memcpy((unsigned char *)buf + copied,
-               cdra_lru_meta[slot].data + off_in_block,
-               copy_now);
-      }
-      LeaveCriticalSection(&cdra_lru_cs);
-
-      copied += copy_now;
-      if (got < CDRA_LRU_BLOCK_SIZE || copy_now == 0) break;  /* short read -- EOF */
+  if (subChanMixed) {
+    file_off = offset_lba * (CD_FRAMESIZE_RAW + SUB_FRAMESIZE);
+    fseek(h, file_off, SEEK_SET);
+    got = fread(out_cd, 1, CD_FRAMESIZE_RAW, h);
+    if (got != CD_FRAMESIZE_RAW) return -1;
+    if (out_sub) {
+      got = fread(out_sub, 1, SUB_FRAMESIZE, h);
+      if (got == SUB_FRAMESIZE) *out_has_sub = 1;
     }
   }
-  return copied;
+  else if (isMode1ISO) {
+    file_off = offset_lba * MODE1_DATA_SIZE;
+    fseek(h, file_off, SEEK_SET);
+    got = fread(out_cd + 12, 1, MODE1_DATA_SIZE, h);
+    if (got != MODE1_DATA_SIZE) return -1;
+    memset(out_cd, 0, 12);
+    out_cd[12 + 3] = 1;
+  }
+  else {
+    file_off = offset_lba * CD_FRAMESIZE_RAW;
+    fseek(h, file_off, SEEK_SET);
+    got = fread(out_cd, 1, CD_FRAMESIZE_RAW, h);
+    if (got != CD_FRAMESIZE_RAW) return -1;
+  }
+
+  return 0;
 }
 
 /* === cdra_read_sync_internal ===
@@ -424,49 +285,51 @@ static size_t cdra_lru_fread(void *buf,
  * so it can target either the global cdbuffer/subbuffer (main thread
  * cache miss) or a ring slot's buffers (worker thread prefetch).
  *
- * Caller MUST hold cdra_io_cs.  We don't take it here because the main
- * thread may want to hold it across the read AND the subsequent
- * `ring slot consumed` bookkeeping under cdra_ring_cs (lock order:
- * io_cs first, then ring_cs).
+ * `file_override`: si != NULL, se usa como FILE* primario para BIN/CUE
+ * en lugar de cdHandle.  Permite que el worker thread use su propio
+ * FILE* (cdHandle_worker) y no colisione con el main thread en el
+ * buffer userspace de stdio.  Si es NULL se usa cdHandle como antes.
+ * NO afecta al camino CHD (chdFile es shared; el caller debe coger
+ * io_cs si necesita serializar HunkCache).
+ *
+ * Locking: para BIN/CUE con file_override != NULL, NO se necesita
+ * io_cs porque cada thread tiene su FILE* (el kernel serializa
+ * ReadFile al device).  Para BIN/CUE con file_override == NULL o
+ * para CHD, el caller debe coger io_cs (compatibilidad).
  *
  * Returns 0 on success, -1 on error.  Sets *out_has_sub to 1 iff the
  * sub buffer was populated. */
 static int cdra_read_sync_internal(int lba,
                                    unsigned char *out_cd,
                                    unsigned char *out_sub,
-                                   int *out_has_sub)
+                                   int *out_has_sub,
+                                   FILE *file_override)
 {
   FILE         *h;
   unsigned int  fileLBAoff;
   long          offset_lba;
   int           k;
-  LARGE_INTEGER it0, it1;
-  unsigned int  inner_ms;
-  int           rc_inner = 0;
-  int           path_id = 0;   /* 0=chd, 1=bin-mixed, 2=bin-mode1iso,
-                                  3=bin-2352, 4=bin+subhandle */
+  long          file_off;
+  size_t        got;
 
   *out_has_sub = 0;
-  QueryPerformanceCounter(&it0);
 
 #ifdef USE_CHD
   if (chdFile != NULL) {
-    /* CHD reader; goes through readchdsector which uses the HunkCache.
-     * HunkCache access is serialized here via cdra_io_cs being held by
-     * the caller.  No separate HunkCache mutex needed. */
-    path_id = 0;
-    rc_inner = (readchdsector(lba, out_cd) != 0) ? -1 : 0;
-    goto sync_done;
+    /* CHD path: usa el HunkCache de libchdr.  No es thread-safe sin
+     * locks; el pool lock-free se desactiva para CHD (cdra_pool_active=0)
+     * asi que main thread es el unico que llama aqui. */
+    return (readchdsector(lba, out_cd) != 0) ? -1 : 0;
   }
 #endif
 
-  if (cdHandle == NULL)
-    return -1;
+  if (cdHandle == NULL) return -1;
 
-  /* Pick the file handle that owns this LBA (multi-FILE cue support). */
-  h          = cdHandle;
+  /* Multi-FILE cue: track 1 usa cdHandle/override; tracks >= 2 usan
+   * ti_handle[k] (compartido entre main y worker -- single-track
+   * BIN/CUE como NFS3 no llega aqui). */
+  h          = (file_override != NULL) ? file_override : cdHandle;
   fileLBAoff = 0;
-
   if (numtracks > 0) {
     for (k = numtracks; k >= 1; k--) {
       int track_start_lba = (int)msf2sec(ti[k].start) - 2 * 75;
@@ -482,103 +345,43 @@ static int cdra_read_sync_internal(int lba,
   if (offset_lba < 0) offset_lba = 0;
 
   if (subChanMixed) {
-    LARGE_INTEGER tr0, tr1, tr2;
-    unsigned int  read_ms, read2_ms;
-    long          file_off = offset_lba * (CD_FRAMESIZE_RAW + SUB_FRAMESIZE);
-    path_id = 1;
-    /* mitigation C: cd + sub are contiguous; cache spans both. */
-    QueryPerformanceCounter(&tr0);
-    cdra_lru_fread(out_cd,  CD_FRAMESIZE_RAW, h, file_off);
-    QueryPerformanceCounter(&tr1);
-    cdra_lru_fread(out_sub, SUB_FRAMESIZE,    h, file_off + CD_FRAMESIZE_RAW);
-    QueryPerformanceCounter(&tr2);
-    read_ms  = cdra_qpc_delta_ms(tr0, tr1);
-    read2_ms = cdra_qpc_delta_ms(tr1, tr2);
-    if (read_ms + read2_ms >= CDRA_SLOW_READ_THRESHOLD_MS) {
-      pcsxr_log(2 /* WARN */,
-                "[cdra]     fine: lru_fread_cd=%u ms lru_fread_sub=%u ms "
-                "(subChanMixed, lba=%d)\n",
-                read_ms, read2_ms, lba);
-    }
+    file_off = offset_lba * (CD_FRAMESIZE_RAW + SUB_FRAMESIZE);
+    fseek(h, file_off, SEEK_SET);
+    got = fread(out_cd, 1, CD_FRAMESIZE_RAW, h);
+    if (got != CD_FRAMESIZE_RAW) return -1;
+    got = fread(out_sub, 1, SUB_FRAMESIZE, h);
+    if (got != SUB_FRAMESIZE) return -1;
     if (subChanRaw) {
-      /* DecodeRawSubData reads from the global subbuffer.  If we just
-       * wrote to a caller-provided out_sub that's NOT the global, we
-       * need to either (a) decode in place using out_sub, or (b) only
-       * support subChanRaw decoding when reading into the global.
-       *
-       * For now: copy into global subbuffer, decode, copy back.  This
-       * happens rarely (only some .toc/.cue setups expose raw subq)
-       * so the extra memcpy is negligible.  The caller must hold io_cs
-       * which prevents concurrent access to subbuffer.  Note: the
-       * main thread's "cdbuffer/subbuffer" globals are the target for
-       * cache-miss reads, in which case out_sub == subbuffer and the
-       * copies are no-ops. */
       if (out_sub != subbuffer) memcpy(subbuffer, out_sub, SUB_FRAMESIZE);
       DecodeRawSubData();
       if (out_sub != subbuffer) memcpy(out_sub, subbuffer, SUB_FRAMESIZE);
     }
     *out_has_sub = 1;
   }
+  else if (isMode1ISO) {
+    int total = lba + 2 * 75;
+    file_off = offset_lba * MODE1_DATA_SIZE;
+    fseek(h, file_off, SEEK_SET);
+    got = fread(out_cd + 12, 1, MODE1_DATA_SIZE, h);
+    if (got != MODE1_DATA_SIZE) return -1;
+    memset(out_cd, 0, 12);
+    out_cd[0] = itob((unsigned char)(total / 75 / 60));
+    out_cd[1] = itob((unsigned char)((total / 75) % 60));
+    out_cd[2] = itob((unsigned char)(total % 75));
+    out_cd[3] = 1;
+  }
   else {
-    if (isMode1ISO) {
-      int total = lba + 2 * 75;
-      LARGE_INTEGER tr0, tr1;
-      unsigned int  read_ms;
-      path_id = 2;
-      QueryPerformanceCounter(&tr0);
-      cdra_lru_fread(out_cd + 12, MODE1_DATA_SIZE, h,
-                     offset_lba * MODE1_DATA_SIZE);  /* mitigation C */
-      QueryPerformanceCounter(&tr1);
-      read_ms = cdra_qpc_delta_ms(tr0, tr1);
-      if (read_ms >= CDRA_SLOW_READ_THRESHOLD_MS) {
-        pcsxr_log(2 /* WARN */,
-                  "[cdra]     fine: lru_fread=%u ms (Mode1ISO, lba=%d)\n",
-                  read_ms, lba);
-      }
-      memset(out_cd, 0, 12);
-      /* Fake Mode 2 header: MSF in BCD + mode byte = 1 */
-      out_cd[0] = itob((unsigned char)(total / 75 / 60));
-      out_cd[1] = itob((unsigned char)((total / 75) % 60));
-      out_cd[2] = itob((unsigned char)(total % 75));
-      out_cd[3] = 1;
-    }
-    else {
-      /* === BIN/CUE raw 2352 path -- the most common case.
-       * Goes through the LRU block cache (mitigation C) for
-       * hit-on-revisit acceleration.  The cache also smooths over
-       * occasional kernel-level read stalls by amortizing them across
-       * a full 256 KB block. */
-      LARGE_INTEGER tr0, tr1;
-      unsigned int  read_ms;
-      long          file_off = offset_lba * CD_FRAMESIZE_RAW;
-      path_id = 3;
-      QueryPerformanceCounter(&tr0);
-      cdra_lru_fread(out_cd, CD_FRAMESIZE_RAW, h, file_off);
-      QueryPerformanceCounter(&tr1);
-      read_ms = cdra_qpc_delta_ms(tr0, tr1);
-      if (read_ms >= CDRA_SLOW_READ_THRESHOLD_MS) {
-        pcsxr_log(2 /* WARN */,
-                  "[cdra]     fine: lru_fread=%u ms "
-                  "(2352-raw, lba=%d, fpos=%ld bytes / %ld MB)\n",
-                  read_ms, lba, file_off, file_off / (1024 * 1024));
-      }
-    }
+    /* BIN/CUE raw 2352 - the most common case */
+    file_off = offset_lba * CD_FRAMESIZE_RAW;
+    fseek(h, file_off, SEEK_SET);
+    got = fread(out_cd, 1, CD_FRAMESIZE_RAW, h);
+    if (got != CD_FRAMESIZE_RAW) return -1;
+  }
 
-    if (subHandle != NULL) {
-      LARGE_INTEGER tr0, tr1;
-      unsigned int  read_ms;
-      path_id = 4;
-      QueryPerformanceCounter(&tr0);
-      cdra_lru_fread(out_sub, SUB_FRAMESIZE, subHandle,
-                     (long)lba * SUB_FRAMESIZE);  /* mitigation C */
-      QueryPerformanceCounter(&tr1);
-      read_ms = cdra_qpc_delta_ms(tr0, tr1);
-      if (read_ms >= CDRA_SLOW_READ_THRESHOLD_MS) {
-        pcsxr_log(2 /* WARN */,
-                  "[cdra]     fine: subHandle lru_fread=%u ms "
-                  "(lba=%d)\n",
-                  read_ms, lba);
-      }
+  if (subHandle != NULL && !subChanMixed) {
+    fseek(subHandle, (long)lba * SUB_FRAMESIZE, SEEK_SET);
+    got = fread(out_sub, 1, SUB_FRAMESIZE, subHandle);
+    if (got == SUB_FRAMESIZE) {
       if (subChanRaw) {
         if (out_sub != subbuffer) memcpy(subbuffer, out_sub, SUB_FRAMESIZE);
         DecodeRawSubData();
@@ -588,168 +391,156 @@ static int cdra_read_sync_internal(int lba,
     }
   }
 
-sync_done:
-  /* === Inner I/O timing ===
-   * Measures the actual file/CHD operation, no locks.  If this is
-   * slow, the disk subsystem is the bottleneck.  If the OUTER timer
-   * (in cdra_read miss path or worker_proc) is much higher than this
-   * inner one, the difference is lock contention.  Logs every slow
-   * inner I/O with the path identifier so we can spot which code
-   * branch (CHD / BIN-mixed / Mode1ISO / 2352-raw / +subhandle) is
-   * causing the latency.
-   *
-   * path_id:
-   *   0 = CHD readchdsector (with HunkCache)
-   *   1 = BIN/CUE with subChanMixed (cd+sub in same file)
-   *   2 = BIN/CUE Mode1ISO (2048-byte sectors + fake header)
-   *   3 = BIN/CUE raw 2352
-   *   4 = BIN/CUE 2352 + separate .sub file (fseek/fread twice) */
-  QueryPerformanceCounter(&it1);
-  inner_ms = cdra_qpc_delta_ms(it0, it1);
-  if (inner_ms >= CDRA_SLOW_READ_THRESHOLD_MS) {
-    pcsxr_log(2 /* WARN */,
-              "[cdra]   inner I/O slow: lba=%d %u ms path=%d "
-              "(disk-level latency, no lock wait)\n",
-              lba, inner_ms, path_id);
-  }
-  return rc_inner;
+  return 0;
 }
 
-/* === Worker thread ===
+/* === Worker thread (lock-free pool fill) ===
  *
- * Wakes on event, snapshots (generation, anchor), then iterates 0..N-1
- * issuing reads for anchor+i.  Each iteration:
- *   1. Recheck generation -- if main started a new chain, bail.
- *   2. Check ring for existing slot with this LBA -- skip if found.
- *   3. Read into tmp buffer (under io_cs).
- *   4. Recheck generation -- if main changed mind during the read, drop.
- *   5. Store into ring (under ring_cs): empty slot if any, else evict
- *      the slot whose LBA is furthest from `target` (the "least useful"
- *      cached sector relative to the current read frontier).
- */
+ * [XBOX360] Diseno lock-free.  Llena el cdra_pool con sectores
+ * proximos a cdra_pool_target.  Indexado por (lba % POOL_SIZE).
+ *
+ * Soporta BIN/CUE (via cdHandle_worker, fseek+fread) y CHD (via
+ * chdFile_worker, chd_read + descompresion en worker_hunk_buf).  En
+ * ambos casos sin locks: cada thread tiene su propio handle/state. */
 static DWORD WINAPI cdra_worker_proc(LPVOID arg)
 {
-  unsigned char tmp_cd[CD_FRAMESIZE_RAW];
-  unsigned char tmp_sub[SUB_FRAMESIZE];
+  unsigned char *worker_hunk_buf = NULL;   /* CHD: alocado on-demand */
+  size_t         worker_hunk_buf_size = 0;
 
   (void)arg;
 
-  /* Bump the entered counter so main thread can confirm we ran. */
-  InterlockedIncrement(&cdra_worker_entered_count);
+  CDRA_STAT_INC(cdra_worker_entered_count);
 
 #if defined(_XBOX)
-  /* Pin worker to core 2 (HW thread 4).  Return value ignored: on
-   * failure the thread runs on whatever core the scheduler picks --
-   * still gets parallelism. */
   XSetThreadProcessor(GetCurrentThread(), CDRA_WORKER_HW_THREAD);
 #endif
 
   while (!cdra_worker_exit) {
-    LONG local_gen;
-    LONG local_anchor;
-    int  i;
+    int   is_chd_disc;
 
-    /* Block until main signals a new prefetch chain (or shutdown). */
+    /* Bloquear hasta que main pida prefetch (cdra_pool_target update). */
     WaitForSingleObject(cdra_wakeup_evt, INFINITE);
     if (cdra_worker_exit) break;
-    InterlockedIncrement(&cdra_worker_wake_count);
+    CDRA_STAT_INC(cdra_worker_wake_count);
 
-    /* Snapshot current chain parameters.  Race-tolerant: if main
-     * changes them while we're working, we'll detect via generation
-     * mismatch and start over. */
-    local_gen    = cdra_generation;
-    local_anchor = cdra_anchor;
-    if (local_anchor < 0) continue;
+    if (!cdra_pool_active || cdra_pool == NULL) continue;
 
-    for (i = 0; i < CDRA_RING_SLOTS; i++) {
-      int target_lba;
-      int has_sub = 0;
-      int rc;
-      int j;
-      int found;
-      int slot;
+    /* Detectar formato y prerequisitos.  Si CHD: necesita
+     * chdFile_worker + worker_hunk_buf.  Si BIN/CUE: necesita
+     * cdHandle_worker. */
+#ifdef USE_CHD
+    is_chd_disc = (chdFile_worker != NULL);
+#else
+    is_chd_disc = 0;
+#endif
+
+    if (is_chd_disc) {
+#ifdef USE_CHD
+      /* Asegurar hunk buffer alocado y suficientemente grande.
+       * chdHunkBytes se setea en parsechd, antes de que el pool quede
+       * activo, asi que aqui ya es estable. */
+      if (worker_hunk_buf_size < (size_t)chdHunkBytes) {
+        free(worker_hunk_buf);
+        worker_hunk_buf = (unsigned char *)malloc(chdHunkBytes);
+        if (worker_hunk_buf == NULL) {
+          worker_hunk_buf_size = 0;
+          pcsxr_log(2 /* WARN */,
+                    "[cdra-pool] worker malloc(hunk_buf=%u) FAILED, "
+                    "CHD prefetch disabled this run\n", chdHunkBytes);
+          continue;
+        }
+        worker_hunk_buf_size = chdHunkBytes;
+      }
+#endif
+    } else {
+      if (cdHandle_worker == NULL) continue;  /* sin handle BIN/CUE */
+    }
+
+    /* Llenar la ventana del pool repetidamente hasta agotar trabajo.
+     * Cada iter re-lee target (puede avanzar mientras leemos). */
+    for (;;) {
+      LONG target;
+      int  fill_lba = -1;
+      int  off;
+      int  slot;
+      int  rc;
+      int  has_sub = 0;
 
       if (cdra_worker_exit) goto done;
-      if (cdra_generation != local_gen) break;     /* main started new chain */
-      if (!cdra_enabled)               break;      /* runtime disabled */
+      if (!cdra_enabled)    break;
 
-      target_lba = (int)local_anchor + i;
+      target = InterlockedExchangeAdd(&cdra_pool_target, 0);
+      if (target < 0) break;
 
-      /* Skip if already cached. */
-      EnterCriticalSection(&cdra_ring_cs);
-      found = 0;
-      for (j = 0; j < CDRA_RING_SLOTS; j++) {
-        if (cdra_ring[j].lba == target_lba) { found = 1; break; }
+      /* Buscar primera LBA en [target, target+POOL_SIZE) que no este
+       * ya en el pool.  Indexada por (lba % POOL_SIZE). */
+      for (off = 0; off < CDRA_POOL_SIZE; off++) {
+        int test_lba   = (int)target + off;
+        int test_slot  = test_lba % CDRA_POOL_SIZE;
+        LONG stored    = InterlockedExchangeAdd(&cdra_pool[test_slot].lba, 0);
+        if (stored != test_lba) {
+          fill_lba = test_lba;
+          break;
+        }
       }
-      LeaveCriticalSection(&cdra_ring_cs);
-      if (found) continue;
 
-      /* Do the actual read.  CHD hunk decompression / fread happens
-       * here.  Time it to spot worker preemption (if our wall-clock
-       * jumped despite no actual I/O work) vs slow disk (genuine
-       * decompress/fread latency). */
+      if (fill_lba < 0) break;  /* Ventana llena, dormir. */
+
+      slot = fill_lba % CDRA_POOL_SIZE;
+
+      /* Seqlock: invalidar antes de escribir. */
+      InterlockedExchange(&cdra_pool[slot].lba, -1);
+      InterlockedExchange(&cdra_pool[slot].has_sub, 0);
+
+#if PCSXR_CDRA_DIAG
       {
         LARGE_INTEGER wt0, wt1;
         unsigned int  wms;
-
         QueryPerformanceCounter(&wt0);
-        EnterCriticalSection(&cdra_io_cs);
-        rc = cdra_read_sync_internal(target_lba, tmp_cd, tmp_sub, &has_sub);
-        LeaveCriticalSection(&cdra_io_cs);
+        rc = cdra_pool_read_sector_direct(fill_lba,
+                                          cdHandle_worker,
+                                          worker_hunk_buf,
+                                          cdra_pool[slot].cd,
+                                          cdra_pool[slot].sub,
+                                          &has_sub);
         QueryPerformanceCounter(&wt1);
-
         wms = cdra_qpc_delta_ms(wt0, wt1);
+
         if (wms > (unsigned int)cdra_worker_max_iter_ms)
           InterlockedExchange(&cdra_worker_max_iter_ms, (LONG)wms);
         if (wms >= 100) {
-          /* 100 ms in a worker iteration is suspicious -- normal fread
-           * on a BIN/CUE is <5 ms, CHD decompression 1-3 ms.  Anything
-           * over 100 ms suggests Xbox kernel preempting the core. */
           InterlockedIncrement(&cdra_worker_slow_iter_count);
           pcsxr_log(2 /* WARN */,
-                    "[cdra] WORKER slow iter: lba=%d %u ms (rc=%d) -- "
-                    "preemption or slow disk?\n",
-                    target_lba, wms, rc);
+                    "[cdra-pool] WORKER slow iter: lba=%d %u ms (rc=%d)\n",
+                    fill_lba, wms, rc);
         }
       }
-      if (rc != 0) continue;
+#else
+      rc = cdra_pool_read_sector_direct(fill_lba,
+                                        cdHandle_worker,
+                                        worker_hunk_buf,
+                                        cdra_pool[slot].cd,
+                                        cdra_pool[slot].sub,
+                                        &has_sub);
+#endif
 
-      /* Drop the result if main has moved on (different generation). */
-      if (cdra_generation != local_gen) break;
+      if (rc != 0) {
+        /* Error de lectura: dejar slot como -1 (invalido), continuar. */
+        continue;
+      }
 
-      /* Find a slot to put this sector in.  Preference order:
-       *   1. Any slot with this exact LBA (idempotent overwrite).
-       *   2. Any empty slot.
-       *   3. The slot whose LBA is furthest from `target_lba`
-       *      (i.e., least useful for the current read frontier). */
-      EnterCriticalSection(&cdra_ring_cs);
-      slot = -1;
-      for (j = 0; j < CDRA_RING_SLOTS; j++) {
-        if (cdra_ring[j].lba == target_lba) { slot = j; break; }
-      }
-      if (slot < 0) {
-        for (j = 0; j < CDRA_RING_SLOTS; j++) {
-          if (cdra_ring[j].lba == -1) { slot = j; break; }
-        }
-      }
-      if (slot < 0) {
-        int worst_dist = -1;
-        for (j = 0; j < CDRA_RING_SLOTS; j++) {
-          int dist = cdra_ring[j].lba - target_lba;
-          if (dist < 0) dist = -dist;
-          if (dist > worst_dist) { worst_dist = dist; slot = j; }
-        }
-      }
-      if (slot >= 0) {
-        cdra_ring[slot].lba     = target_lba;
-        cdra_ring[slot].has_sub = has_sub;
-        memcpy(cdra_ring[slot].cd,  tmp_cd,  CD_FRAMESIZE_RAW);
-        if (has_sub) memcpy(cdra_ring[slot].sub, tmp_sub, SUB_FRAMESIZE);
-      }
-      LeaveCriticalSection(&cdra_ring_cs);
+      InterlockedExchange(&cdra_pool[slot].has_sub, has_sub);
+      CDRA_STAT_INC(cdra_pool_fills);
+
+      /* Publicar el LBA.  Tras este barrier, main thread puede hit. */
+      InterlockedExchange(&cdra_pool[slot].lba, fill_lba);
     }
   }
 done:
+  if (worker_hunk_buf != NULL) {
+    free(worker_hunk_buf);
+    worker_hunk_buf = NULL;
+  }
   return 0;
 }
 
@@ -761,33 +552,21 @@ void cdra_init(void)
   DWORD thread_id;
 
   if (cdra_initialized) {
-    pcsxr_log(0 /* INFO */, "[cdra] init: already initialized, skipping\n");
+    CDRA_LOG(0 /* INFO */, "[cdra] init: already initialized, skipping\n");
     return;
   }
 
-  pcsxr_log(0 /* INFO */, "[cdra] init: starting\n");
+  CDRA_LOG(0 /* INFO */, "[cdra] init: starting\n");
 
+#if PCSXR_CDRA_DIAG
   /* Capture the high-resolution counter frequency once so we can
-   * convert ticks->ms for slow-read diagnostics.  On Xbox 360 the
-   * QPC frequency is constant for the lifetime of the system. */
+   * convert ticks->ms for slow-read diagnostics. */
   QueryPerformanceFrequency(&cdra_qpc_freq);
-
-  InitializeCriticalSection(&cdra_ring_cs);
-  InitializeCriticalSection(&cdra_io_cs);
-
-  for (i = 0; i < CDRA_RING_SLOTS; i++) {
-    cdra_ring[i].lba     = -1;
-    cdra_ring[i].has_sub = 0;
-  }
+#endif
 
   cdra_worker_exit = 0;
-  cdra_anchor      = -1;
-  cdra_generation  = 0;
 
-  /* Auto-reset event: SetEvent wakes one waiter, then resets.  If main
-   * signals multiple times before worker wakes, they collapse into one
-   * wakeup -- but that's fine because the worker reads `cdra_anchor`
-   * (the latest value) each iteration. */
+  /* Auto-reset event: SetEvent wakes one waiter, then resets. */
   cdra_wakeup_evt = CreateEvent(NULL,
                                 FALSE,  /* bManualReset = FALSE */
                                 FALSE,  /* bInitialState = unsignaled */
@@ -795,35 +574,44 @@ void cdra_init(void)
   if (cdra_wakeup_evt == NULL) {
     pcsxr_log(2 /* WARN */, "[cdra] init: CreateEvent FAILED (gle=%lu)\n",
               (unsigned long)GetLastError());
-    DeleteCriticalSection(&cdra_ring_cs);
-    DeleteCriticalSection(&cdra_io_cs);
     return;
   }
 
   cdra_worker_h = CreateThread(NULL,
-                               64 * 1024,         /* small stack: worker is shallow */
+                               64 * 1024,
                                cdra_worker_proc,
                                NULL,
-                               0,                 /* run immediately */
+                               0,
                                &thread_id);
   if (cdra_worker_h == NULL) {
     pcsxr_log(2 /* WARN */, "[cdra] init: CreateThread FAILED (gle=%lu)\n",
               (unsigned long)GetLastError());
     CloseHandle(cdra_wakeup_evt);
     cdra_wakeup_evt = NULL;
-    DeleteCriticalSection(&cdra_ring_cs);
-    DeleteCriticalSection(&cdra_io_cs);
     return;
   }
 
   cdra_initialized = 1;
-  pcsxr_log(0 /* INFO */, "[cdra] init: ok, worker thread id=%lu\n",
-            (unsigned long)thread_id);
+  CDRA_LOG(0 /* INFO */, "[cdra] init: ok, worker thread id=%lu\n",
+           (unsigned long)thread_id);
 
-  /* Stand up the LRU block cache too (mitigation C).  Lives across
-   * disc swaps; cdra_invalidate() drops contents but keeps the
-   * allocation. */
-  cdra_lru_init();
+  /* Lock-free sector pool: ~2.5 MB de RAM. */
+  cdra_pool = (cdra_pool_slot_t *)malloc(sizeof(cdra_pool_slot_t) * CDRA_POOL_SIZE);
+  if (cdra_pool == NULL) {
+    pcsxr_log(2 /* WARN */, "[cdra-pool] malloc FAILED, sera bypass-async\n");
+    cdra_pool_active = 0;
+  } else {
+    for (i = 0; i < CDRA_POOL_SIZE; i++) {
+      cdra_pool[i].lba     = -1;
+      cdra_pool[i].has_sub = 0;
+    }
+    cdra_pool_active = 1;  /* habilitado por defecto; se desactiva si CHD */
+    CDRA_LOG(0 /* INFO */,
+             "[cdra-pool] lock-free pool ready: %d slots x %d bytes = %d KB\n",
+             CDRA_POOL_SIZE,
+             (int)sizeof(cdra_pool_slot_t),
+             (int)(sizeof(cdra_pool_slot_t) * CDRA_POOL_SIZE / 1024));
+  }
 }
 
 void cdra_shutdown(void)
@@ -840,12 +628,12 @@ void cdra_shutdown(void)
   CloseHandle(cdra_wakeup_evt);
   cdra_wakeup_evt = NULL;
 
-  DeleteCriticalSection(&cdra_ring_cs);
-  DeleteCriticalSection(&cdra_io_cs);
-
-  /* Tear down LRU block cache too (mitigation C).  Releases the 16 MB
-   * pool back to the heap. */
-  cdra_lru_shutdown();
+  /* Free lock-free pool. */
+  if (cdra_pool != NULL) {
+    free(cdra_pool);
+    cdra_pool = NULL;
+  }
+  cdra_pool_active = 0;
 
   cdra_initialized = 0;
 }
@@ -856,8 +644,8 @@ void cdra_set_enabled(int enabled)
   if (new_state == cdra_enabled) return;  /* no-op, avoid log spam */
   cdra_enabled = new_state;
   if (!cdra_enabled) cdra_invalidate();
-  pcsxr_log(0 /* INFO */, "[cdra] set_enabled -> %s (initialized=%d)\n",
-            cdra_enabled ? "ON" : "OFF", cdra_initialized);
+  CDRA_LOG(0 /* INFO */, "[cdra] set_enabled -> %s (initialized=%d)\n",
+           cdra_enabled ? "ON" : "OFF", cdra_initialized);
 }
 
 int cdra_is_enabled(void)
@@ -869,184 +657,174 @@ void cdra_invalidate(void)
 {
   int i;
   if (!cdra_initialized) return;
-  EnterCriticalSection(&cdra_ring_cs);
-  for (i = 0; i < CDRA_RING_SLOTS; i++)
-    cdra_ring[i].lba = -1;
-  LeaveCriticalSection(&cdra_ring_cs);
-  /* Bump generation so any in-flight worker iteration aborts. */
-  InterlockedIncrement(&cdra_generation);
 
-  /* Drop LRU cache contents too -- on disc swap the old blocks point
-   * at the previous disc image's data (via stale FILE*). */
-  cdra_lru_invalidate_all();
+  /* Invalida el lock-free pool (lo principal en hot path). */
+  if (cdra_pool != NULL) {
+    for (i = 0; i < CDRA_POOL_SIZE; i++) {
+      InterlockedExchange(&cdra_pool[i].lba, -1);
+      InterlockedExchange(&cdra_pool[i].has_sub, 0);
+    }
+  }
+  InterlockedExchange(&cdra_pool_target, -1);
+
+  /* [XBOX360] Activacion del pool depende del handle del worker:
+   *   - BIN/CUE/Mode1ISO: necesita cdHandle_worker (abierto en ISOopen)
+   *   - CHD: necesita chdFile_worker (abierto en parsechd)
+   * Si ninguno disponible, pool desactivado y main hace todo sync.
+   *
+   * Excepcion: si hay subHandle separado (.sub file paralelo al .bin,
+   * no subChanMixed), DESACTIVAMOS el pool.  Razon: el worker no tiene
+   * handle dedicado al .sub asi que no puede leer subchannel sin race
+   * con main thread.  Sin sub data correcto, juegos con libcrypt o que
+   * dependan de subQ (CdlGetlocP) pueden romperse.  Caso raro, vale
+   * sacrificar prestaciones. */
+  if (cdra_pool == NULL) {
+    cdra_pool_active = 0;
+  } else if (subHandle != NULL && !subChanMixed) {
+    cdra_pool_active = 0;
+    CDRA_LOG(0 /* INFO */,
+             "[cdra-pool] desactivado: subHandle separado, sub no thread-safe\n");
+  } else {
+#ifdef USE_CHD
+    if (chdFile != NULL) {
+      cdra_pool_active = (chdFile_worker != NULL) ? 1 : 0;
+    } else {
+      cdra_pool_active = (cdHandle_worker != NULL) ? 1 : 0;
+    }
+#else
+    cdra_pool_active = (cdHandle_worker != NULL) ? 1 : 0;
+#endif
+  }
+}
+
+/* [XBOX360] Hint del CDC emulator: actualiza el target del pool
+ * lock-free y despierta al worker para que prefetchee desde aqui. */
+void cdra_set_anchor(int lba)
+{
+  if (!cdra_initialized) return;
+  if (!cdra_enabled)     return;
+  if (lba < 0)           return;
+
+  if (cdra_pool_active) {
+    LONG cur_target = InterlockedExchangeAdd(&cdra_pool_target, 0);
+    if (cur_target != lba) {
+      InterlockedExchange(&cdra_pool_target, (LONG)lba);
+      SetEvent(cdra_wakeup_evt);
+    }
+  }
+}
+
+/* [XBOX360] Reset de contadores de telemetria al cargar disco.
+ * No-op cuando PCSXR_CDRA_DIAG=0 (los contadores ni se incrementan). */
+void cdra_reset_stats(void)
+{
+#if PCSXR_CDRA_DIAG
+  InterlockedExchange(&cdra_read_call_count,        0);
+  InterlockedExchange(&cdra_pool_hits,              0);
+  InterlockedExchange(&cdra_pool_misses,            0);
+  InterlockedExchange(&cdra_pool_fills,             0);
+  InterlockedExchange(&cdra_slow_read_count,        0);
+  InterlockedExchange(&cdra_slow_read_total_ms,     0);
+  InterlockedExchange(&cdra_max_single_read_ms,     0);
+  InterlockedExchange(&cdra_worker_slow_iter_count, 0);
+  InterlockedExchange(&cdra_worker_max_iter_ms,     0);
+  InterlockedExchange(&cdra_worker_wake_count,      0);
+
+  pcsxr_log(0 /* INFO */,
+            "[cdra] stats reset (new disc/session)\n");
+#endif
 }
 
 int cdra_read(int lba)
 {
   int has_sub = 0;
   int rc;
-  int i;
-  LONG call_count;
 
-  call_count = InterlockedIncrement(&cdra_read_call_count);
-
-  /* Periodic status log so we can verify the worker is actually doing
-   * work and spot slow-I/O patterns.  Threshold picked so the line
-   * shows up every ~14 seconds of gameplay (PSX issues ~75 reads/sec). */
-  if ((call_count & 0x3FF) == 0) {
-    pcsxr_log(0 /* INFO */,
-              "[cdra] reads=%ld hits=%ld misses=%ld | "
-              "lru_hits=%ld lru_misses=%ld | "
-              "slow_reads=%ld total_slow_ms=%ld max_read_ms=%ld | "
-              "miss_streak_max=%ld | "
-              "worker_iter_slow=%ld worker_max_iter_ms=%ld worker_wakes=%ld | "
-              "enabled=%d init=%d\n",
-              (long)cdra_read_call_count, (long)cdra_hit_count,
-              (long)cdra_miss_count,
-              (long)cdra_lru_hits, (long)cdra_lru_misses,
-              (long)cdra_slow_read_count, (long)cdra_slow_read_total_ms,
-              (long)cdra_max_single_read_ms,
-              (long)cdra_miss_streak_max,
-              (long)cdra_worker_slow_iter_count, (long)cdra_worker_max_iter_ms,
-              (long)cdra_worker_wake_count,
-              cdra_enabled, cdra_initialized);
-  }
-
-  /* Disabled path: bypass ring entirely.  Same code as pre-async.
-   * Still instrument so the user can see how bad sync I/O is even
-   * without the ring helping.  When disabled there's no worker so no
-   * lock contention either; the time is pure disk latency OR thread
-   * preemption / CPU-bound work outside this function. */
-  if (!cdra_enabled || !cdra_initialized) {
-    LARGE_INTEGER t0, t1;
-    FILETIME user0, kern0, user1, kern1;
-    unsigned int ms, cpu_ms;
-    int rc_dis;
-
-    cdra_sample_thread_cpu(&user0, &kern0);
-    QueryPerformanceCounter(&t0);
-    rc_dis = cdra_read_sync_internal(lba, cdbuffer, subbuffer, &has_sub);
-    QueryPerformanceCounter(&t1);
-    cdra_sample_thread_cpu(&user1, &kern1);
-
-    ms = cdra_qpc_delta_ms(t0, t1);
-    cpu_ms = cdra_filetime_delta_ms(user0, user1)
-           + cdra_filetime_delta_ms(kern0, kern1);
-
-    if (ms > (unsigned int)cdra_max_single_read_ms)
-      InterlockedExchange(&cdra_max_single_read_ms, (LONG)ms);
-    if (ms >= CDRA_SLOW_READ_THRESHOLD_MS) {
-      const char *kind;
-      InterlockedIncrement(&cdra_slow_read_count);
-      InterlockedExchangeAdd(&cdra_slow_read_total_ms, (LONG)ms);
-      if (cpu_ms * 10 < ms)         kind = "BLOCKED/PREEMPTED";
-      else if (cpu_ms * 5 > ms * 4) kind = "CPU-BOUND";
-      else                          kind = "MIXED";
-      pcsxr_log(2 /* WARN */,
-                "[cdra] SLOW direct read (prefetch off): lba=%d wall=%u ms "
-                "cpu=%u ms (%s) rc=%d has_sub=%d\n",
-                lba, ms, cpu_ms, kind, rc_dis, has_sub);
+#if PCSXR_CDRA_DIAG
+  {
+    LONG call_count = InterlockedIncrement(&cdra_read_call_count);
+    /* Periodic status log (cada 1024 reads ~= 13 segundos de gameplay). */
+    if ((call_count & 0x3FF) == 0) {
+      pcsxr_log(0 /* INFO */,
+                "[cdra-pool] reads=%ld pool_hits=%ld pool_misses=%ld fills=%ld | "
+                "slow_reads=%ld total_slow_ms=%ld max_read_ms=%ld | "
+                "worker_iter_slow=%ld worker_max_iter_ms=%ld worker_wakes=%ld | "
+                "enabled=%d init=%d pool_active=%d\n",
+                (long)cdra_read_call_count,
+                (long)cdra_pool_hits, (long)cdra_pool_misses,
+                (long)cdra_pool_fills,
+                (long)cdra_slow_read_count, (long)cdra_slow_read_total_ms,
+                (long)cdra_max_single_read_ms,
+                (long)cdra_worker_slow_iter_count, (long)cdra_worker_max_iter_ms,
+                (long)cdra_worker_wake_count,
+                cdra_enabled, cdra_initialized, cdra_pool_active);
     }
-    return rc_dis;
   }
+#endif
 
-  /* Ring lookup.  Hold ring_cs only for the lookup + copy out.  Don't
-   * call I/O code under ring_cs. */
-  EnterCriticalSection(&cdra_ring_cs);
-  for (i = 0; i < CDRA_RING_SLOTS; i++) {
-    if (cdra_ring[i].lba == lba) {
-      memcpy(cdbuffer, cdra_ring[i].cd, CD_FRAMESIZE_RAW);
-      if (cdra_ring[i].has_sub)
-        memcpy(subbuffer, cdra_ring[i].sub, SUB_FRAMESIZE);
-      cdra_ring[i].lba = -1;            /* mark consumed */
-      LeaveCriticalSection(&cdra_ring_cs);
-      InterlockedIncrement(&cdra_hit_count);
-      /* Reset miss streak counter on hit. */
-      InterlockedExchange(&cdra_miss_streak_current, 0);
-
-      /* Signal worker to keep prefetching from lba+1. */
-      InterlockedExchange(&cdra_anchor, (LONG)(lba + 1));
-      InterlockedIncrement(&cdra_generation);
+  /* Hint al worker: estamos en este LBA, prefetchea adelante.
+   * SIN locks, SIN generation.  Worker re-lee target atomicamente.
+   * FUNCIONAL — no se wrappa, debe ejecutarse siempre. */
+  if (cdra_pool_active) {
+    LONG cur_target = InterlockedExchangeAdd(&cdra_pool_target, 0);
+    if (cur_target != lba) {
+      InterlockedExchange(&cdra_pool_target, (LONG)lba);
       SetEvent(cdra_wakeup_evt);
-      return 0;
-    }
-  }
-  LeaveCriticalSection(&cdra_ring_cs);
-  InterlockedIncrement(&cdra_miss_count);
-
-  /* Track consecutive miss streaks.  A long streak means the worker
-   * couldn't keep up (random seeks, worker preemption, or huge hunk
-   * decompression chain).  Log when we cross the threshold. */
-  {
-    LONG streak = InterlockedIncrement(&cdra_miss_streak_current);
-    if (streak > cdra_miss_streak_max)
-      InterlockedExchange(&cdra_miss_streak_max, streak);
-    if (streak == CDRA_STALL_BURST_THRESHOLD) {
-      pcsxr_log(2 /* WARN */,
-                "[cdra] miss streak hit %ld consecutive (lba=%d, worker may be "
-                "preempted or seek pattern too random)\n",
-                (long)streak, lba);
     }
   }
 
-  /* Miss: do the read synchronously on the main thread (caller is
-   * waiting on this byte anyway).  Hold io_cs to serialize with the
-   * worker.  Time both wall clock AND thread CPU time so we can tell
-   * whether long stalls were I/O waits (cpu << wall) or CPU-bound work
-   * (cpu ~ wall). */
+  /* === FAST PATH: lock-free pool lookup === */
+  if (cdra_pool_active && cdra_pool != NULL) {
+    int slot = ((unsigned)lba) % CDRA_POOL_SIZE;
+    LONG stored_lba = InterlockedExchangeAdd(&cdra_pool[slot].lba, 0);
+    if (stored_lba == lba) {
+      LONG stored_sub;
+      /* Hit candidate.  Copia datos. */
+      memcpy(cdbuffer, cdra_pool[slot].cd, CD_FRAMESIZE_RAW);
+      stored_sub = InterlockedExchangeAdd(&cdra_pool[slot].has_sub, 0);
+      if (stored_sub) {
+        memcpy(subbuffer, cdra_pool[slot].sub, SUB_FRAMESIZE);
+      }
+      /* Re-check seqlock: si el LBA ha cambiado durante el memcpy,
+       * el worker estaba sobreescribiendo este slot -> datos corruptos,
+       * caer a sync read. */
+      if (InterlockedExchangeAdd(&cdra_pool[slot].lba, 0) == lba) {
+        CDRA_STAT_INC(cdra_pool_hits);
+        return 0;
+      }
+    }
+    CDRA_STAT_INC(cdra_pool_misses);
+  }
+
+  /* === SLOW PATH: sync read from main thread ===
+   *
+   * Pool miss (o pool desactivado/CHD).  Lectura directa sin locks. */
+#if PCSXR_CDRA_DIAG
   {
     LARGE_INTEGER t0, t1;
-    FILETIME user0, kern0, user1, kern1;
-    unsigned int ms, cpu_ms;
+    unsigned int  ms;
 
-    cdra_sample_thread_cpu(&user0, &kern0);
     QueryPerformanceCounter(&t0);
-    EnterCriticalSection(&cdra_io_cs);
-    rc = cdra_read_sync_internal(lba, cdbuffer, subbuffer, &has_sub);
-    LeaveCriticalSection(&cdra_io_cs);
+    rc = cdra_read_sync_internal(lba, cdbuffer, subbuffer, &has_sub,
+                                 NULL /* usa cdHandle */);
     QueryPerformanceCounter(&t1);
-    cdra_sample_thread_cpu(&user1, &kern1);
 
     ms = cdra_qpc_delta_ms(t0, t1);
-    cpu_ms = cdra_filetime_delta_ms(user0, user1)
-           + cdra_filetime_delta_ms(kern0, kern1);
-
     if (ms > (unsigned int)cdra_max_single_read_ms)
       InterlockedExchange(&cdra_max_single_read_ms, (LONG)ms);
-
     if (ms >= CDRA_SLOW_READ_THRESHOLD_MS) {
-      const char *kind;
       InterlockedIncrement(&cdra_slow_read_count);
       InterlockedExchangeAdd(&cdra_slow_read_total_ms, (LONG)ms);
-
-      /* Classify what kind of stall this was based on CPU vs wall.
-       * Threshold: if CPU < 10% of wall, the thread was mostly waiting
-       * (I/O, mutex, scheduler-preempted).  If CPU > 80% of wall, the
-       * thread was actively running -- possibly a JIT compile or other
-       * CPU-bound work happened during the read.  Otherwise mixed. */
-      if (cpu_ms * 10 < ms)
-        kind = "BLOCKED/PREEMPTED";      /* thread not running */
-      else if (cpu_ms * 5 > ms * 4)
-        kind = "CPU-BOUND";              /* thread actively running */
-      else
-        kind = "MIXED";
       pcsxr_log(2 /* WARN */,
-                "[cdra] SLOW sync read: lba=%d wall=%u ms cpu=%u ms (%s) "
-                "rc=%d has_sub=%d\n",
-                lba, ms, cpu_ms, kind, rc, has_sub);
+                "[cdra-pool] SLOW sync read: lba=%d wall=%u ms rc=%d\n",
+                lba, ms, rc);
     }
   }
+#else
+  rc = cdra_read_sync_internal(lba, cdbuffer, subbuffer, &has_sub,
+                               NULL /* usa cdHandle */);
+#endif
 
-  if (rc == 0) {
-    /* Bump generation BEFORE updating anchor so a worker that's mid-
-     * iteration bails before reading the new anchor.  The order
-     * doesn't strictly matter for correctness (the loop rechecks both
-     * each iteration) but generation-first slightly reduces wasted
-     * worker work on the old chain. */
-    InterlockedIncrement(&cdra_generation);
-    InterlockedExchange(&cdra_anchor, (LONG)(lba + 1));
-    SetEvent(cdra_wakeup_evt);
-  }
   return rc;
 }
 

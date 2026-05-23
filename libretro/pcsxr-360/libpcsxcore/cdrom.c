@@ -23,8 +23,22 @@
 
 
 #include "cdrom.h"
+#include "cdriso_async.h"   /* cdra_set_anchor: anticipated-seek prefetch hint */
 #include "ppf.h"
 #include "psxdma.h"
+
+/* [XBOX360] Prefetch hint para anticipar el cold miss en cambios de
+ * track/seek.  Se llama cuando el CDC sabe el LBA destino pero todavia
+ * no ha empezado la lectura real (porque hay seek-time emulado de
+ * 13-500 ms entre la commit del comando y la primera lectura).  Durante
+ * ese tiempo el worker prefetchea la nueva region, evitando que el
+ * primer read sea cold-miss. */
+#define CDRA_HINT_FROM_SETSECTORPLAY() do {                                \
+    int _lba = MSF2SECT(cdr.SetSectorPlay[0],                              \
+                        cdr.SetSectorPlay[1],                              \
+                        cdr.SetSectorPlay[2]);                             \
+    if (_lba >= 0) cdra_set_anchor(_lba);                                  \
+} while (0)
 /* PCSXR_DIAG_INSTRUMENTATION gating de la instrumentacion CDR-TRACE.
  * Default 0 (release): toda la instrumentacion se elimina del binario. */
 #ifndef PCSXR_DIAG_INSTRUMENTATION
@@ -147,6 +161,54 @@ extern void sec2msf(unsigned int s, const char *msf);
 // for that weird psemu API..
 static unsigned int fsm2sec(const u8 *msf) {
 	return ((msf[2] * 60 + msf[1]) * 75) + msf[0];
+}
+
+/* [XBOX360] Realistic CD seek time emulation, ported from pcsx-rearmed.
+ *
+ * Originally pcsxr-360 used a fixed delay of `cdReadTime` (~13 ms emulados)
+ * para CUALQUIER seek, sin importar la distancia.  Ese tiempo fijo dejaba
+ * al prefetch worker con muy poco margen antes del primer read en un nuevo
+ * LBA — con la latencia tipica del USB del Xbox 360 (30-50 ms para un
+ * sector cold) eso garantizaba un cold-miss stutter en cada cambio de
+ * musica, transicion cinematica o pantalla de carga.
+ *
+ * El hardware real del PSX tiene un seek time aproximadamente proporcional
+ * a la distancia que recorre la cabeza.  Para "sled seeks" (saltos largos
+ * >= 7200 sectores = ~96 segundos de CDDA, tipico en cambios de track
+ * de musica dinamica) el tiempo emulado pasa a ser cientos de ms, dando
+ * al worker margen sobrado para prefetchear la nueva region en el ring +
+ * LRU antes de que llegue el primer read real.
+ *
+ * Algunos juegos timing-sensitive (Crusaders of Might and Magic, Medievil,
+ * Rockman X5, Twisted Metal 2) REQUIEREN este timing para funcionar
+ * correctamente — los comentarios upstream del handler CdlSeekL lo
+ * mencionan.  Sin este cambio nuestra emulacion se aleja del comportamiento
+ * del HW real, lo que ademas explica por que algunas cinematicas o
+ * cargas pueden tener glitches sutiles. */
+static int cdrSeekTime(unsigned char *target) {
+	int target_lba  = ((target[0] * 60) + target[1]) * 75 + target[2];
+	int current_lba = ((cdr.SetSectorPlay[0] * 60) + cdr.SetSectorPlay[1]) * 75 + cdr.SetSectorPlay[2];
+	int diff        = target_lba - current_lba;
+	int seekTime;
+
+	if (diff < 0) diff = -diff;
+
+	/* Estimacion lineal: diff sectores × tiempo-por-step-del-cabezal.
+	 * cdReadTime / 2000 ≈ 226 ciclos PSX por sector a 1x. */
+	seekTime = diff * (cdReadTime / 2000);
+
+	/* Floor minimo: cualquier seek tiene un settle time minimo del cabezal. */
+	if (seekTime < 20000) seekTime = 20000;
+
+	/* "Sled seek" para distancias largas: el cabezal usa salto rapido
+	 * pero con settle time mas largo.  Esta formula da tiempos de
+	 * 300-500 ms emulados para saltos de 50K-200K sectores, tipicos
+	 * de cambios de track de musica.  Tiempo SOBRADO para que el
+	 * prefetch worker rellene la cache. */
+	if (diff >= 7200)
+		seekTime = PSXCLK / 7 + diff * 64;
+
+	return seekTime;
 }
 
 
@@ -692,6 +754,18 @@ void cdrPlayInterrupt()
 		}
 	}
 
+	/* [XBOX360] Hint del prefetcher con el sector que se VA A leer en la
+	 * siguiente iteracion.  Portado de pcsx-rearmed (cdrom.c L727).
+	 *
+	 * Sin esto el worker solo recibia el LBA inicial tras el seek, y si
+	 * el ring se vaciaba por un outlier USB no habia mecanismo de
+	 * recuperacion -> game miss -> sync fread -> stutter.
+	 *
+	 * Con el hint continuo, el worker recibe "proximo sector pendiente: X"
+	 * tras cada sector consumido, mantiene su chain sincronizada con la
+	 * posicion real del juego incluso despues de outliers. */
+	CDRA_HINT_FROM_SETSECTORPLAY();
+
 	CDRMISC_INT(cdReadTime);
 
 	// update for CdlGetlocP/autopause
@@ -788,13 +862,18 @@ void cdrInterrupt() {
 			break;
 
 		do_CdlPlay:
-		case CdlPlay:
+		case CdlPlay: {
+			/* [XBOX360] seekTime emulado realista (port de pcsx-rearmed).
+			 * Calculado ANTES de mutar SetSectorPlay para medir la
+			 * distancia desde la posicion CURRENT. */
+			int seekTime = 0;
 			StopCdda();
 			if (cdr.Seeked == SEEK_PENDING) {
 				// XXX: wrong, should seek instead..
 				cdr.Seeked = SEEK_DONE;
 			}
 			if (cdr.SetlocPending) {
+				seekTime = cdrSeekTime(cdr.SetSector);
 				memcpy(cdr.SetSectorPlay, cdr.SetSector, 4);
 				cdr.SetlocPending = 0;
 			}
@@ -820,6 +899,14 @@ void cdrInterrupt() {
 #endif
 
 				if (CDR_getTD((u8)cdr.CurTrack, cdr.ResultTD) != -1) {
+					/* [XBOX360] seekTime to track target BEFORE mutating
+					 * SetSectorPlay.  ResultTD layout [F, S, M] → reorder
+					 * to [M, S, F] for cdrSeekTime. */
+					unsigned char target_msf[3];
+					target_msf[0] = cdr.ResultTD[2];
+					target_msf[1] = cdr.ResultTD[1];
+					target_msf[2] = cdr.ResultTD[0];
+					seekTime = cdrSeekTime(target_msf);
 					cdr.SetSectorPlay[0] = cdr.ResultTD[2];
 					cdr.SetSectorPlay[1] = cdr.ResultTD[1];
 					cdr.SetSectorPlay[2] = cdr.ResultTD[0];
@@ -848,13 +935,20 @@ void cdrInterrupt() {
 			cdr.Result[0] = cdr.StatP;
 
 			cdr.StatP |= STATUS_PLAY;
-			
+
 			// BIOS player - set flag again
 			cdr.Play = TRUE;
 
-			CDRMISC_INT( cdReadTime );
+			/* [XBOX360] Avisar al prefetch worker del nuevo LBA antes de
+			 * que llegue cdrPlayInterrupt.  Con seekTime emulado realista
+			 * (300-500 ms para saltos lejanos), el worker tiene margen
+			 * sobrado para leer el nuevo LBA del USB. */
+			CDRA_HINT_FROM_SETSECTORPLAY();
+
+			CDRMISC_INT( cdReadTime + seekTime );
 			start_rotating = 1;
 			break;
+		}
 
 		case CdlForward:
 			// TODO: error 80 if stopped
@@ -1047,11 +1141,31 @@ void cdrInterrupt() {
 
 	//		Rockman X5 = 0.5-4x
 	//		- fix capcom logo
-			
-			CDRMISC_INT(cdr.Seeked == SEEK_DONE ? 0x800 : cdReadTime * 4);
+
+			{
+				/* [XBOX360] seekTime emulado realista + prefetch hint. */
+				int seekTime = 0;
+				if (cdr.SetlocPending) {
+					int _lba;
+					seekTime = cdrSeekTime(cdr.SetSector);
+					/* SetSector aun no aplicado a SetSectorPlay (lo hace
+					 * cdrPlayInterrupt al completar el seek), pero ya
+					 * conocemos el LBA destino. */
+					_lba = MSF2SECT(cdr.SetSector[0],
+					                cdr.SetSector[1],
+					                cdr.SetSector[2]);
+					if (_lba >= 0) cdra_set_anchor(_lba);
+				} else {
+					CDRA_HINT_FROM_SETSECTORPLAY();
+				}
+
+				CDRMISC_INT(cdr.Seeked == SEEK_DONE
+				            ? 0x800
+				            : cdReadTime * 4 + seekTime);
+			}
 			cdr.Seeked = SEEK_PENDING;
 			start_rotating = 1;
-			break; 
+			break;
 
 		case CdlTest:
 			switch (cdr.Param[0]) {
@@ -1126,8 +1240,13 @@ void cdrInterrupt() {
 			break;
 
 		case CdlReadN:
-		case CdlReadS:
+		case CdlReadS: {
+			/* [XBOX360] seekTime emulado realista (port de pcsx-rearmed).
+			 * Calculado ANTES de mutar SetSectorPlay. */
+			int seekTime = 0;
+			int read_cycles;
 			if (cdr.SetlocPending) {
+				seekTime = cdrSeekTime(cdr.SetSector);
 				memcpy(cdr.SetSectorPlay, cdr.SetSector, 4);
 				cdr.SetlocPending = 0;
 			}
@@ -1139,6 +1258,12 @@ void cdrInterrupt() {
 
 			cdr.Reading = 1;
 			cdr.FirstSector = 1;
+
+			/* [XBOX360] Prefetch hint para data reads.  Combinado con
+			 * seekTime emulado realista, el worker tiene tiempo suficiente
+			 * (cientos de ms para seeks grandes) para prefetchear el LBA
+			 * destino antes del primer read real. */
+			CDRA_HINT_FROM_SETSECTORPLAY();
 
 			// Fighting Force 2 - update subq time immediately
 			// - fixes new game
@@ -1159,6 +1284,8 @@ void cdrInterrupt() {
 			C-12 - Final Resistance - doesn't like seek
 			*/
 
+			read_cycles = ((cdr.Mode & 0x80) ? cdReadTime : (cdReadTime * 2)) + seekTime;
+
 			if (cdr.Seeked != SEEK_DONE) {
 				cdr.StatP |= STATUS_SEEK;
 				cdr.StatP &= ~STATUS_READ;
@@ -1167,17 +1294,18 @@ void cdrInterrupt() {
 				// - fix cutscene speech (startup)
 
 				// ??? - use more accurate seek time later
-				CDREAD_INT((cdr.Mode & 0x80) ? (cdReadTime) : cdReadTime * 2);
+				CDREAD_INT(read_cycles);
 			} else {
 				cdr.StatP |= STATUS_READ;
 				cdr.StatP &= ~STATUS_SEEK;
 
-				CDREAD_INT((cdr.Mode & 0x80) ? (cdReadTime) : cdReadTime * 2);
+				CDREAD_INT(read_cycles);
 			}
 
 			cdr.Result[0] = cdr.StatP;
 			start_rotating = 1;
 			break;
+		}
 
 		default:
 #ifdef CDR_LOG
@@ -1445,6 +1573,11 @@ if(use_vm){
 			cdr.SetSectorPlay[0]++;
 		}
 	}
+
+	/* [XBOX360] Hint del prefetcher con el sector que se VA A leer.
+	 * Portado de pcsx-rearmed (cdrom.c L1483).  Ver explicacion en
+	 * cdrPlayInterrupt. */
+	CDRA_HINT_FROM_SETSECTORPLAY();
 
 	cdr.Readed = 0;
 	cdr.ReadRescheduled = 0;

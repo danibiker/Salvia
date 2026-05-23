@@ -134,8 +134,12 @@ extern "C" int unai_init(unsigned short* psx_vram)
     gpu_unai.inn.ilace_mask = gpu_unai.config.ilace_force;
 
     /* Build the LUTs.  These are global one-shot tables, not per-frame
-     * state, so the cost is hidden behind init. */
+     * state, so the cost is hidden behind init.
+     *
+     * [XBOX360] SetupLightDitherMul prepara la tabla 2 KB que sustituye
+     * las 3 muls/pixel del dither hot path por 3 loads. */
     SetupLightLUT();
+    SetupLightDitherMul();
     SetupDitheringConstants();
 
     return 0;
