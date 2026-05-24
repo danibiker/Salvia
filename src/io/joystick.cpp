@@ -142,7 +142,7 @@ std::string Joystick::saveButtonsRetroGame() {
 	}
 }
 
-std::string Joystick::saveButtonsDefaultsCore() {
+std::string Joystick::saveButtonsRetroCore() {
 	if (!CfgLoader::coreDefault.empty()){
 		std::string coreDefaultsPath = Constant::getAppDir() + std::string(Constant::tempFileSep) + "config"
 			+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + CfgLoader::configMain[cfg::libretro_core].valueStr + CFG_EXT;
@@ -156,7 +156,7 @@ std::string Joystick::saveButtonsDefaultsCore() {
 /**
 *
 */
-std::string Joystick::saveButtonsRetroCore() {
+std::string Joystick::saveButtonsRetroDefault() {
 	std::string rutaGuardado = Constant::getAppDir() + Constant::getFileSep() + RETROPAD_INI;
 	return saveButtonsConfig(rutaGuardado);
 }
@@ -242,7 +242,11 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
             fileConfigJoystick.push_back(axis);
 
             fileConfigJoystick.push_back("anal=" + std::string(inputs.axisAsPad[p] ? "1" : "0"));
-			fileConfigJoystick.push_back("joytype=" + Constant::TipoToStr(inputs.joyTypeIdx[p]));
+
+			//Si estamos guardando la configuracion general, no tenemos en cuenta el tipo de joystick
+			//porque es dependiente del core elegido. Lo dejamos a 0 siempre
+			int joyType = hotkeysAndFrontend ? 0 : inputs.joyTypeIdx[p];
+			fileConfigJoystick.push_back("joytype=" + Constant::TipoToStr(joyType));
             fileConfigJoystick.push_back(""); // Linea en blanco
         }
     }

@@ -465,10 +465,16 @@ DWORD WINAPI ProgressIndicatorThread(LPVOID lpParam) {
     return 0;
 }
 
-void Achievements::login(const char* username, const char* password) {
+void Achievements::login(const char* username, const char* password, bool showMessageUserLogged) {
 	if (!g_client) initialize();
+	this->showMessageUserLogged = showMessageUserLogged;
 	LOG_DEBUG("RetroAchievements: Intentando login para %s...", username);
 	rc_client_begin_login_with_password(g_client, username, password, login_callback, this);
+}
+
+void Achievements::logout(){
+	if (!g_client) return;
+	rc_client_logout(g_client);
 }
 
 /* Resuelve la ruta absoluta del primer fichero referenciado por un .cue
@@ -666,13 +672,24 @@ void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string pa
 	}
 }
 
-// --- CALLBACKS ---
+void Achievements::sendMessage(std::string message){
+	Achievements& self = *Achievements::instance();
+	EnterCriticalSection(&self.m_csMessages); // Bloquear
+	self.messagesToInform.push_back(message); 
+	LeaveCriticalSection(&self.m_csMessages); // Desbloquear
+}
 
+// --- CALLBACKS ---
 void Achievements::login_callback(int result, const char* error_message, rc_client_t* client, void* userdata) {
 	Achievements* self = (Achievements*)userdata;
+	bool showMessage = self->showMessageUserLogged;
+	self->showMessageUserLogged = false;
 
 	if (result != RC_OK) {
-		LOG_DEBUG("RetroAchievements Error: %s", error_message ? error_message : "Unknown error");
+		std::string message = error_message ? error_message : LanguageManager::instance()->get("menu.achievement.error.unknown");
+		LOG_DEBUG("RetroAchievements Error: %s", message.c_str());	
+		if (showMessage) 
+			sendMessage(message);
 		return;
 	}
 
@@ -681,8 +698,23 @@ void Achievements::login_callback(int result, const char* error_message, rc_clie
 		self->ra_user = user->username;
 		self->ra_token = user->token;
 		self->ra_score = user->score;
-		LOG_DEBUG("RetroAchievements: Login exitoso. Usuario: %s | Puntos: %u", user->display_name, user->score);
+
+		// 1. Crear un buffer temporal para almacenar el texto formateado
+		char buffer[256];
+
+		// 2. Dar formato e introducir los datos en el buffer de forma segura
+		_snprintf_s(buffer, sizeof(buffer), _TRUNCATE, 
+			LanguageManager::instance()->get("menu.achievement.login.success").c_str(),
+            user->display_name, 
+            user->score);
+
+		LOG_DEBUG("RetroAchievements: ", buffer);
+
+		if (showMessage) 
+			sendMessage(buffer);
 	}
+
+	self->showMessageUserLogged = false;
 }
 
 void Achievements::load_game_callback(int result, const char* error_message, rc_client_t* client, void* userdata)

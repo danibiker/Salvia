@@ -24,6 +24,9 @@
 #include "image/icons.h"
 #include "utils/langmanager.h"
 #include "so/launcher.h"
+#include "dischelper.h"
+#include <so/soutils.h>
+
 
 CfgLoader *cfgLoader;
 GameMenu *gameMenu;

@@ -119,6 +119,16 @@ void cdra_set_anchor(int lba);
  * llamado en ISOclose/disc-swap). */
 void cdra_reset_stats(void);
 
+/* [XBOX360] Espera a que el worker thread NO este en medio de una I/O.
+ *
+ * Necesario llamar antes de cerrar cdHandle_worker / chdFile_worker
+ * en disc swap, para evitar use-after-free si el worker esta mid-fread
+ * o mid-chd_read.  Bounded a ~1 segundo en el peor caso (USB outlier).
+ *
+ * Tambien desactiva el pool para que el worker no inicie nuevas I/Os
+ * mientras esperamos. */
+void cdra_wait_worker_idle(void);
+
 #ifdef __cplusplus
 }
 #endif

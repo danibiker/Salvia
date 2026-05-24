@@ -780,6 +780,9 @@ public:
 	th_progress progress;
 	SDL_mutex *progressMutex;
 
+	CRITICAL_SECTION m_csMessages; // El candado para el deque de mensajes
+	std::deque<std::string> messagesToInform;
+
 	GameState *gameState;
 	uint32_t lastGameTick;
 	AchievementDB *achievementDb;
@@ -787,7 +790,8 @@ public:
     void initialize();
     void shutdown();
 	void clearAllData();
-    void login(const char* username, const char* password);
+    void login(const char* username, const char* password, bool showMessageUserLogged = false);
+	void logout();
 	void load_game(const uint8_t* rom, std::size_t rom_size, std::string path, uint32_t console_id, th_messages& messagesAchievement);
 	void reset_menu();
 	bool download_and_cache_image(std::string url, uint32_t id, SDL_Surface*& image, int badgeW, int badgeH);
@@ -871,6 +875,11 @@ public:
 private:
     Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false), hardcoreMode(true), gameState(NULL), lastGameTick(0), byte_swap_memory(false), current_console_id(0), memory_map_count(0), core_descriptors(NULL), core_descriptor_count(0) {
 		memset(memory_map, 0, sizeof(memory_map));
+		InitializeCriticalSection(&m_csMessages);
+	}
+
+	~Achievements(){
+		DeleteCriticalSection(&m_csMessages);
 	}
 
     rc_client_t* g_client;
@@ -898,7 +907,7 @@ private:
 	const struct retro_memory_descriptor* core_descriptors;
 	unsigned core_descriptor_count;
     CurlClient curlClient;	
-	
+	bool showMessageUserLogged;
     
 	// Callbacks estaticos obligatorios para la libreria C
     static uint32_t read_memory(uint32_t address, uint8_t* buffer, uint32_t num_bytes, rc_client_t* client);
@@ -926,11 +935,14 @@ private:
 	static void subset_completed(const rc_client_subset_t* subset);
 	static void server_error(const rc_client_server_error_t* error);
 	static std::string format_total_playtime();
+	static void sendMessage(std::string message);
+
 	void insertSectionHeader(int index, uint8_t type);
 	void create_tracker(uint32_t id, const char* display);
 	void destroy_tracker(uint32_t id);
 	void createDbAchievements();
 	void build_memory_map(uint32_t console_id);
+	
 };
 
 

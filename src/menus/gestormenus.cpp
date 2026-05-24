@@ -11,6 +11,7 @@
 #include <utils/langmanager.h>
 #include <http/httputil.h>
 #include <http/achievements.h>
+#include <so/soutils.h>
 
 
 SDL_Surface* GestorMenus::imgText;
@@ -32,6 +33,7 @@ extern struct retro_disk_control_callback disk_control;
 extern void launchBios();
 
 const char *scrapOrigins[] = {"SCREENSCRAPER", "THEGAMESDB", "EMPTY"};
+static const std::string PASS_MASK = "****";
 
 GestorMenus::GestorMenus(int screenw, int screenh){
 	menuRaiz = NULL;
@@ -76,7 +78,7 @@ GestorMenus::~GestorMenus() {
 
 std::string GestorMenus::guardarJoysticks(Joystick* joy){
 	LOG_DEBUG("Guardando valores del joystick");
-	return LanguageManager::instance()->get("msg.filesave") + joy->saveButtonsRetroCore();
+	return LanguageManager::instance()->get("msg.filesave") + joy->saveButtonsRetroDefault();
 }
 
 std::string GestorMenus::guardarGameJoysticks(Joystick* joy){
@@ -91,7 +93,7 @@ std::string GestorMenus::guardarGameJoysticks(Joystick* joy){
 
 std::string GestorMenus::guardarCoreJoysticks(Joystick* joy){
 	LOG_DEBUG("Guardando valores del joystick para el core");
-	std::string msg = joy->saveButtonsDefaultsCore();
+	std::string msg = joy->saveButtonsRetroCore();
 	return LanguageManager::instance()->get("msg.filesave") + msg;
 }
 
@@ -124,7 +126,7 @@ std::string GestorMenus::startScrapping(CONFIG_STATUS *st){
 	if (someSelected){
 		*st = START_SCRAPPING;
 		if (menuScrapper->opciones.size() > 0) {
-			// Obtener el último elemento
+			// Obtener el ultimo elemento
 			auto* baseOpt = menuScrapper->opciones.back();
 			OpcionExec<CONFIG_STATUS>* opcion = static_cast<OpcionExec<CONFIG_STATUS>*>(baseOpt);
 			if (opcion != nullptr) {
@@ -144,7 +146,7 @@ std::string GestorMenus::stopScrapping(CONFIG_STATUS *st){
 		*st = NORMAL;
 	}
 	if (menuScrapper->opciones.size() > 0) {
-		// Obtener el último elemento
+		// Obtener el ultimo elemento
 		auto* baseOpt = menuScrapper->opciones.back();
 		OpcionExec<CONFIG_STATUS>* opcion = static_cast<OpcionExec<CONFIG_STATUS>*>(baseOpt);
 		if (opcion != nullptr) {
@@ -169,7 +171,7 @@ void GestorMenus::setLayout(int layout, int screenw, int screenh){
     this->layout = layout;
 }
 
-// Inicializa la estructura de menús
+// Inicializa la estructura de menus
 void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
     TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 
@@ -183,7 +185,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	SDL_HAT_TO_XBOX[4] = LanguageManager::instance()->get("menu.controls.down");
 	SDL_HAT_TO_XBOX[8] = LanguageManager::instance()->get("menu.controls.left");
 
-	// 1. Crear contenedores de menús
+	// 1. Crear contenedores de menus
     menuRaiz = new Menu(LanguageManager::instance()->get("menu.main.options"));
     Menu* menuVideo = new Menu(LanguageManager::instance()->get("menu.main.video"), menuRaiz);
 	Menu* menuEmulation = new Menu(LanguageManager::instance()->get("menu.main.emulation"), menuRaiz);
@@ -207,6 +209,17 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	OpcionBool *opcionHardcore = new OpcionBool(LanguageManager::instance()->get("menu.achievement.hardcore"), &refConfig->configMain[cfg::hardcoreRA].getBoolRef());
 	opcionHardcore->callback = &GestorMenus::changeHardcoreMode;
 	parentAchievements->opciones.push_back(opcionHardcore);
+
+	OpcionTxtAndValue *opcionRAUser = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.achievement.user"), refConfig->configMain[cfg::raUser].getStringRef());
+	opcionRAUser->callback = &GestorMenus::changeRAUser;
+	opcionRAUser->context = refConfig;
+	parentAchievements->opciones.push_back(opcionRAUser);
+
+	string password = refConfig->configMain[cfg::raPass].getStringRef();
+	OpcionTxtAndValue *opcionRAPassword = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.achievement.password"), password.empty() ? "" : PASS_MASK);
+	opcionRAPassword->callback = &GestorMenus::changeRAPassword;
+	opcionRAPassword->context = refConfig;
+	parentAchievements->opciones.push_back(opcionRAPassword);
 
 	//Este menu no cuelga de ningun lado, pero ponemos partidas guardadas como padre
 	menuAskSavestates = new Menu(LanguageManager::instance()->get("menu.savestates.title"), menuSavestates);
@@ -258,7 +271,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.disk.control"), menuDisks));
 	//--------Menu de gestion de discos---------
 
-    //Poblar Menú Video
+    //Poblar Menu Video
 	//Relacion de aspecto
 	std::vector<std::string> aspectRates;
 	for (int i=0; i < TOTAL_VIDEO_RATIO; i++){
@@ -356,7 +369,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	}
 	menuAskSavestates->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.askTitle"), askOptions, &askNumOptions));
 
-	// Poblar Menú Principal
+	// Poblar Menu Principal
     menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.video"), menuVideo, ico_video));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.emulation"), menuEmulation, ico_settings));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.input"), menuEntrada, ico_remap));
@@ -492,7 +505,7 @@ void GestorMenus::loadAchievements() {
     for (std::size_t i = 0; i < inst.achievements.size(); i++) {
         // Obtenemos una copia del logro sin hacer 'pop' (no se borra de la cola)
         AchievementState* currentAch = inst.achievements.get_at(i);
-        // Creamos la opción para el menú
+        // Creamos la opcion para el menu
         menuAchievements->opciones.push_back(new OpcionAchievement(*currentAch));
     }
     resetIndexPos();
@@ -537,6 +550,61 @@ std::string GestorMenus::changeHardcoreMode(void* inst, void *value) {
 	bool sendValue = *((bool *)(value));
 	Achievements::instance()->setHardcoreMode(sendValue);
 	return "";
+}
+
+
+struct RAUserData {
+	std::string* valorPtr;
+	CfgLoader* config;
+};
+
+static void onRAUserText(const std::string& text, void* userData) {
+	RAUserData* data = (RAUserData*)userData;
+	if (!text.empty()) {
+		*data->valorPtr = text;
+		data->config->configMain[cfg::raUser].setPropValue(text);
+		Achievements::instance()->logout();
+		const std::string pass = data->config->configMain[cfg::raPass].valueStr;
+		Achievements::instance()->login(text.c_str(), pass.c_str(), true);
+	}
+	delete data;
+}
+
+struct RAPasswordData {
+	std::string* valorPtr;
+	CfgLoader* config;
+};
+
+static void onRAPasswordText(const std::string& text, void* userData) {
+	RAPasswordData* data = (RAPasswordData*)userData;
+	if (!text.empty()) {
+		*data->valorPtr = PASS_MASK;
+		data->config->configMain[cfg::raPass].setPropValue(text);
+		Achievements::instance()->logout();
+		const std::string user = data->config->configMain[cfg::raUser].valueStr;
+		Achievements::instance()->login(user.c_str(), text.c_str());
+	} 
+	delete data;
+}
+
+std::string GestorMenus::changeRAUser(void* inst, void *value) {
+	RAUserData* data = new RAUserData();
+	data->valorPtr = (std::string*)value;
+	data->config = (CfgLoader*)inst;
+
+	SOUtils::pedirTextoAsync("RetroAchievements", LanguageManager::instance()->get("menu.achievement.ask.user"),
+							 &onRAUserText, data);
+    return "";
+}
+
+std::string GestorMenus::changeRAPassword(void* inst, void *value) {
+	RAPasswordData* data = new RAPasswordData();
+	data->valorPtr = (std::string*)value;
+	data->config = (CfgLoader*)inst;
+
+	SOUtils::pedirTextoAsync("RetroAchievements", LanguageManager::instance()->get("menu.achievement.ask.password"),
+							 &onRAPasswordText, data);
+    return "";
 }
 
 void GestorMenus::poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper){
@@ -716,7 +784,7 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 	std::string filterName = dir.getFileNameNoExt(rompath) + keyToFind;
 
 	#ifdef _XBOX
-	//Filtramos nombres largos o caracteres extraños. sumamos un - para contemplar el tamanyo anyadido de los estados numerados
+	//Filtramos nombres largos o caracteres extranyos. sumamos un - para contemplar el tamanyo anyadido de los estados numerados
 	filterName = dir.getFileNameNoExt(Constant::checkPath(statesDir + Constant::getFileSep() + filterName + "-"));
 	#endif
 
@@ -745,7 +813,7 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 
 		LOG_DEBUG("File: %s", files[i]->filename.c_str());
 
-		// Extraer índice de la ranura
+		// Extraer indice de la ranura
 		int iPosSlot = 0;
 		if (pos + keyToFind.length() < files[i]->filename.length()){
 			posSlot = files[i]->filename.substr(pos + keyToFind.length());
@@ -755,7 +823,7 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 		}
 
 		if (iPosSlot >= 0 && iPosSlot < (int)menuSavestates->opciones.size()) {
-			// Usar un puntero temporal para legibilidad y evitar múltiples casteos
+			// Usar un puntero temporal para legibilidad y evitar multiples casteos
 			OpcionSavestate* opt = static_cast<OpcionSavestate*>(menuSavestates->opciones[iPosSlot]);
 			// FileProps con copia segura
 			opt->file = *files[i]; 
@@ -843,7 +911,7 @@ int GestorMenus::findAxisPos(int retroDirection){
 	return -1;
 }
 
-// Lógica para cambiar valores (Izquierda / Derecha)
+// Logica para cambiar valores (Izquierda / Derecha)
 void GestorMenus::cambiarValor(int dir) {
 	if (status == POLLING_INPUTS || menuActual->opciones.size() == 0) return;
 
@@ -897,7 +965,7 @@ void GestorMenus::resetAskPosition(){
 	}
 }
 
-// Lógica para confirmar (Botón A)
+// Logica para confirmar (Boton A)
 std::string GestorMenus::confirmar(t_option_action *result) {
 	if (status == POLLING_INPUTS || menuActual->opciones.size() == 0) return "";
 
@@ -946,7 +1014,7 @@ std::string GestorMenus::confirmar(t_option_action *result) {
 	return std::string("");
 }
 
-// Lógica para volver (Botón B)
+// Logica para volver (Boton B)
 void GestorMenus::volver() {
 	if (status == POLLING_INPUTS) return;
 
@@ -1006,12 +1074,12 @@ void GestorMenus::updateAxis(int sdlAxisValue, int sdlAxis){
 				//La posicion de la opcion 0 es el elemento que anyadimos en addControlerOptions
 				//en el orden de las inserciones en el vector.
 				if (menuActual->opciones.size() > 0 && menuActual->opciones[0]->tipo == OPC_BOOLEANA) {	
-					//Ponemos a true la opcion "Eje analógico como pad"
+					//Ponemos a true la opcion "Eje analagico como pad"
 					OpcionBool* b = (OpcionBool*)menuActual->opciones[0];
 					*(b->valor) = true;
 				}
 			} else {
-				// CENTRO: Opcionalmente manejar el reposo aquí si es necesario
+				// CENTRO: Opcionalmente manejar el reposo aqui si es necesario
 			}
 		}
 	}
@@ -1033,7 +1101,7 @@ void GestorMenus::updateButton(int sdlbtn, TipoKey tipoKey){
 			if (k->tipoKey == KEY_JOY_BTN){
 				k->joyMapper->setBtnFromSdl(k->gamepadId, sdlbtn, k->btn);
 			} else if (k->tipoKey == KEY_JOY_HAT || k->tipoKey == KEY_JOY_AXIS){
-				// Extraemos la dirección activa del Hat (limpiamos otros bits si fuera necesario)
+				// Extraemos la direccion activa del Hat (limpiamos otros bits si fuera necesario)
 				Uint8 sdlHatDir = (Uint8)(sdlbtn & (SDL_HAT_UP | SDL_HAT_DOWN | SDL_HAT_LEFT | SDL_HAT_RIGHT));
 				k->joyMapper->setHatFromSdl(k->gamepadId, sdlbtn, k->btn);
 			}
@@ -1191,7 +1259,7 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 	if (opt->changeAsked && elapsed < 4000) {
 		str = LanguageManager::instance()->get("menu.inputs.waitkeypress") + Constant::intToString((5000 - elapsed) / 1000) + " s";
 	} else {
-		// 2. Obtener el ID de SDL según el tipo de entrada
+		// 2. Obtener el ID de SDL segun el tipo de entrada
 		int sdlIdBtn = -1;
 		int sdlIdAxis = -1;
 
@@ -1217,7 +1285,7 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 			str += (str.empty() ? "" : ", ") + TipoKeyStr[KEY_JOY_AXIS] + axisStr;
 		} 
 
-		// Resetear estado de edición si estaba activo
+		// Resetear estado de edicion si estaba activo
 		if (opt->changeAsked && (sdlIdBtn > -1 || sdlIdAxis > -1)) {
 			opt->changeAsked = false;
 			opt->lastTimeAsked = 0;
@@ -1254,14 +1322,14 @@ void GestorMenus::drawBooleanSwitch(int i, OpcionBool *opcion, SDL_Surface *vide
 	SDL_Rect baseRect = { sw_x, sw_y, sw_w, sw_h };
 	SDL_FillRect(video_page, &baseRect, enabled ? iswitchenabled : iswitchdisabled);
 
-	// 3. Calcular el thumb (botón interno) de forma relativa
+	// 3. Calcular el thumb (boton interno) de forma relativa
 	const int spacing = 4;
 	const int size = sw_h - (spacing * 2);
 	int thumbX = sw_x + (enabled ? (sw_w - size - spacing) : spacing);
 
 	SDL_Rect thumbRect = { thumbX, sw_y + spacing, size, size };
 
-	// 4. Dibujar el thumb según el estado
+	// 4. Dibujar el thumb segun el estado
 	if (enabled) {
 		SDL_FillRect(video_page, &thumbRect, iblack);
 	} else {
@@ -1272,7 +1340,7 @@ void GestorMenus::drawBooleanSwitch(int i, OpcionBool *opcion, SDL_Surface *vide
 }
 
 void GestorMenus::drawAskMenu(SDL_Surface *video_page) {
-    // 1. Colores estáticos (usamos SDL_Color y el int mapeado según necesidad)
+    // 1. Colores estaticos (usamos SDL_Color y el int mapeado segun necesidad)
     static const int iaskClBg = SDL_MapRGB(video_page->format, askClBg.r, askClBg.g, askClBg.b);
     static const int iaskClLine = SDL_MapRGB(video_page->format, askClLine.r, askClLine.g, askClLine.b);
     static const int iaskClTitle = SDL_MapRGB(video_page->format, askClTitle.r, askClTitle.g, askClTitle.b);
@@ -1314,22 +1382,22 @@ void GestorMenus::drawAskMenu(SDL_Surface *video_page) {
         const int btnY = thumbRect.y + titleRect.h + (thumbRect.h - titleRect.h) / 2 - (btn_h / 2);
 
         for (int i = 0; i < numItems; i++) {
-            // Simplificación lógica: Si es onlySave, saltar índices que no sean ASK_GUARDAR
+            // Simplificacion logica: Si es onlySave, saltar indices que no sean ASK_GUARDAR
             if (onlySave && i != ASK_GUARDAR) continue;
 
             bool isSelected = (i == *(l->indice));
             
-            // Colores según selección
+            // Colores segun seleccion
             SDL_Color clText = isSelected ? askClTitle : askClText;
             int clBg = isSelected ? iaskClText : iaskClLine;
 
             SDL_Rect btnRect = { titleRect.x + 10 + ((btn_w + freeSpace) * i), btnY, btn_w, btn_h };
 
-            // Dibujar botón
+            // Dibujar boton
             SDL_FillRect(video_page, &btnRect, clBg);
             rect(video_page, btnRect.x, btnRect.y, btnRect.x + btnRect.w, btnRect.y + btnRect.h, clText);
 
-            // Centrar texto en el botón
+            // Centrar texto en el boton
             int textW;
             TTF_SizeText(fontMenu, l->items[i].c_str(), &textW, NULL);
             Constant::drawTextTransparent(video_page, fontMenu, l->items[i].c_str(), 
@@ -1395,7 +1463,7 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
 		Constant::drawTextTransparent(video_page, fontSmall, opcion->achievement.description.c_str(), this->getX() + imgH + marginImg * 3, position + face_h, lineTextColor);
 	}
 
-    // Solo intentamos añadir a la cola si NO tiene imagen Y NO se está descargando ya
+    // Solo intentamos anyadir a la cola si NO tiene imagen Y NO se esta descargando ya
     if (opcion->achievement.badge == NULL && 
         !opcion->achievement.isDownloading && 
         !opcion->achievement.badgeUrl.empty()) {
@@ -1409,7 +1477,7 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
                                 opcion->achievement.badgeLocked : 
                                 opcion->achievement.badge;
 
-	// Dibujar el badge si ya está descargado
+	// Dibujar el badge si ya esta descargado
     if (surfaceToDraw != NULL && !opcion->achievement.isDownloading) {
         SDL_Rect dest;
         dest.x = this->getX() + marginImg;
@@ -1461,7 +1529,7 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 
 		std::string rutaImg = opcion->file.dir + Constant::getFileSep() + opcion->file.filename + STATE_IMG_EXT;
 		#ifdef _XBOX
-		//Filtramos nombres largos o caracteres extraños
+		//Filtramos nombres largos o caracteres extranyos
 		rutaImg = Constant::checkPath(rutaImg);
 		#endif
 		imageMenu.loadImage(rutaImg);
@@ -1524,7 +1592,7 @@ void GestorMenus::prevPos(){
 }
 */
 
-// Lógica de navegación Arriba/Abajo
+// Logica de navegacion Arriba/Abajo
 void GestorMenus::navegar(int dir) { // -1 o 1
     if (!menuActual || status == POLLING_INPUTS || status == ASK_SAVESTATES) return;
 

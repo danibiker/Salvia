@@ -1,7 +1,7 @@
 #pragma once
 
 #include "salvia.h"
-#include "dischelper.h"
+
 
 retro_audio_buffer_status_callback_t audio_status_cb;
 // 1. Declara una variable global o estática para guardar el callback del core
@@ -1407,6 +1407,10 @@ inline void updateGame() {
 }
 
 void processFrontendEvents(){
+	// Procesamos el teclado virtual de Xbox (si hay uno pendiente)
+	SOUtils::updateKeyboard();
+	
+	//Procesamos las hotkeys
 	HOTKEYS_LIST hotkey = gameMenu->joystick->findHotkey();
 
 	if (action_postponed.cycles == 0){
@@ -1574,9 +1578,6 @@ int main(int argc, char *argv[]) {
 		gameMenu->processFrontendEventsAfter();
 		
 		// Actualizamos la pantalla
-		//double before = Constant::getTicks();
-		//SDL_SetAlpha(gameMenu->overlay, 0, 0);
-		//SDL_BlitSurface(gameMenu->overlay, NULL, SDL_XBOX_GetOverlay(), NULL);
 		SDL_Flip(gameMenu->gameScreen);
 		//LOG_DEBUG("time ms %.3f\n", Constant::getTicks() - before);
 		// Limitamos los frames si tenemos que sincronizar con el video

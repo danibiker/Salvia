@@ -383,6 +383,8 @@ public:
 	static std::string cdromNextSelected(void* inst, void *value);
 	static std::string cdromListAction(void* inst);
 	static std::string bootWithoutDisk(void* inst, void *value);
+	static std::string changeRAUser(void* inst, void *value);
+	static std::string changeRAPassword(void* inst, void *value);
 	
 };
 

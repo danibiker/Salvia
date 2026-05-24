@@ -48,6 +48,9 @@
     <Filter Include="Source Files\io">
       <UniqueIdentifier>{e5fe074d-9b3d-4941-bc26-0e53b5776767}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\so">
+      <UniqueIdentifier>{0f1ab722-9f2c-426c-9024-9a14bcc21513}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\const\constant.cpp">
@@ -293,9 +296,6 @@
     <ClCompile Include="libs\rcheevos\src\rapi\rc_api_user.c">
       <Filter>Source Files\retroachievements</Filter>
     </ClCompile>
-    <ClCompile Include="src\so\launcher.cpp">
-      <Filter>Source Files\frontend</Filter>
-    </ClCompile>
     <ClCompile Include="src\http\achievements.cpp">
       <Filter>Source Files\http</Filter>
     </ClCompile>
@@ -313,6 +313,12 @@
     </ClCompile>
     <ClCompile Include="src\io\hotkeys.cpp">
       <Filter>Source Files\io</Filter>
+    </ClCompile>
+    <ClCompile Include="src\so\launcher.cpp">
+      <Filter>Source Files\so</Filter>
+    </ClCompile>
+    <ClCompile Include="src\so\soutils.cpp">
+      <Filter>Source Files\so</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -474,6 +480,9 @@
     </ClInclude>
     <ClInclude Include="src\io\keyboard.h">
       <Filter>Source Files\io</Filter>
+    </ClInclude>
+    <ClInclude Include="src\so\soutils.h">
+      <Filter>Source Files\so</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

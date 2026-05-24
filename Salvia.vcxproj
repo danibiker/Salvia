@@ -651,11 +651,11 @@
     <EMU_LIB_PRBOOM>prboom</EMU_LIB_PRBOOM>
     <BUILD_DIR>$(ProjectDir)build\$(Configuration)\$(Platform)\</BUILD_DIR>
     <COMMON_PREPROCESSOR>_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB;RC_NO_THREADS;RC_CLIENT_SUPPORTS_HASH</COMMON_PREPROCESSOR>
-    <COMMON_PREPROCESSOR_DEBUG>DEBUG;DEBUG_LOG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_DEBUG>
+    <COMMON_PREPROCESSOR_DEBUG>NDEBUG;DEBUG_LOG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_DEBUG>
     <COMMON_PREPROCESSOR_RELEASE>NDEBUG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_RELEASE>
     <COMMON_LIBS_XBOX_D>xnet.lib;xapilib.lib;xboxkrnl.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;mbedTLS.lib</COMMON_LIBS_XBOX_D>
     <COMMON_LIBS_XBOX_R>xnet.lib;xapilib.lib;xboxkrnl.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;mbedTLS.lib</COMMON_LIBS_XBOX_R>
-    <COMMON_LIBS_XBOX_DEBUG>$(COMMON_LIBS_XBOX_D);libcurl_a_debug.lib</COMMON_LIBS_XBOX_DEBUG>
+    <COMMON_LIBS_XBOX_DEBUG>$(COMMON_LIBS_XBOX_D);libcurl_a.lib</COMMON_LIBS_XBOX_DEBUG>
     <COMMON_LIBS_XBOX_RELEASE>$(COMMON_LIBS_XBOX_R);libcurl_a.lib</COMMON_LIBS_XBOX_RELEASE>
     <COMMON_LIBS_WIN>SDLmain.lib;SDL.lib;SDL_ttf.lib;SDL_image.lib;libcurl_a.lib;Shell32.lib;winmm.lib</COMMON_LIBS_WIN>
   </PropertyGroup>
@@ -1178,7 +1178,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>true</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;HAVE_CHD;DEBUG_LOG;EMU_LIB_NAME="$(EMU_LIB_NAME)";$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;HAVE_CHD;EMU_LIB_NAME="$(EMU_LIB_NAME)";$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)libs\curl-7.50.1\include;$(ProjectDir)\libs\mbedtls\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include</AdditionalIncludeDirectories>
       <WholeProgramOptimization>false</WholeProgramOptimization>
@@ -1190,7 +1190,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);Genesis-Plus-GX.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Debug\Xbox 360;$(ProjectDir)libretro\genesis-plus-gx\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\genesis-plus-gx\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -3811,6 +3811,7 @@
     </ClCompile>
     <ClCompile Include="src\salvia.cpp" />
     <ClCompile Include="src\so\launcher.cpp" />
+    <ClCompile Include="src\so\soutils.cpp" />
     <ClCompile Include="src\uiobjects\image.cpp" />
     <ClCompile Include="src\uiobjects\listmenu.cpp" />
     <ClCompile Include="src\uiobjects\object.cpp" />
@@ -3918,6 +3919,7 @@
     <ClInclude Include="src\menus\gestormenus.h" />
     <ClInclude Include="src\salvia.h" />
     <ClInclude Include="src\so\launcher.h" />
+    <ClInclude Include="src\so\soutils.h" />
     <ClInclude Include="src\statesram.h" />
     <ClInclude Include="src\uiobjects\image.h" />
     <ClInclude Include="src\uiobjects\listmenu.h" />

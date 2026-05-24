@@ -12,6 +12,7 @@
 #include <menus/mameparser.h>
 #include <io/keyboard.h>
 
+
 /* Definida en salvia.cpp — devuelve los descriptores de memoria que el core
  * envio via RETRO_ENVIRONMENT_SET_MEMORY_MAPS (ej. HRAM en Game Boy). */
 extern const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_count);
@@ -881,6 +882,7 @@ bool GameMenu::updateFps(){
 }
 
 void GameMenu::processFrontendEvents(HOTKEYS_LIST hotkey){
+	// Procesamos hotkeys
 	processHotkeys(hotkey);
 }
 
@@ -1374,6 +1376,17 @@ void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str
 *
 */
 void GameMenu::processMessages() {
+	//Se anyaden mensajes recibidos desde achievements para el login
+	Achievements& ach = *Achievements::instance();
+	//EnterCriticalSection(&ach.m_csMessages);
+	while (!ach.messagesToInform.empty()){
+		// 1. Obtener el mensaje más antiguo (el primero que entro)
+		showSystemMessage(ach.messagesToInform.front(), 3000);
+		// 2. Eliminarlo del deque de forma definitiva
+		ach.messagesToInform.pop_front();
+	}
+	//LeaveCriticalSection(&ach.m_csMessages); // Liberamos el candado inmediatamente
+
     if (messages.empty()) return;
 
     // 1. LIMPIEZA TOTAL: Antes de mover nada, borramos la zona donde suelen estar

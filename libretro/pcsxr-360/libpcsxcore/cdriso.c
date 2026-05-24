@@ -1345,12 +1345,17 @@ static long CALLBACK ISOopen(void) {
 }
 
 static long CALLBACK ISOclose(void) {
-	/* Invalidate the lock-free pool before closing handles, so the
-	 * worker doesn't try to read stale sector data through a file
-	 * handle that's about to close.  cdra_invalidate sets the pool
-	 * slots to -1 (empty), so any in-flight worker iter will discard
-	 * what it has and go back to wait. */
+	/* Invalidate the lock-free pool before closing handles. */
 	cdra_invalidate();
+
+	/* [XBOX360] CRITICO: esperar a que el worker thread NO este en mid-I/O
+	 * sobre los handles que vamos a cerrar.  Sin esto, en disc swap
+	 * (especialmente CHD -> BIN/CUE o viceversa), el worker puede estar
+	 * dentro de chd_read(chdFile_worker, ...) o fread(cdHandle_worker, ...)
+	 * cuando hacemos chd_close/fclose -> use-after-free -> crash de la
+	 * consola.  cdra_wait_worker_idle desactiva el pool y espera hasta
+	 * ~1s a que la I/O actual termine. */
+	cdra_wait_worker_idle();
 
 	CloseExtraCdHandles();
 	if (cdHandle != NULL) {
@@ -1359,12 +1364,6 @@ static long CALLBACK ISOclose(void) {
 		cdHandle_actual_path[0] = '\0';
 	}
 	if (cdHandle_worker != NULL) {
-		/* cdra_invalidate (arriba) bumped la generation, asi que cualquier
-		 * iteracion del worker thread en marcha ya no escribira al ring.
-		 * El worker NO esta dentro de fread sobre cdHandle_worker en este
-		 * instante porque el lock io_cs / la espera del wakeup_event lo
-		 * mantienen fuera durante el close del disco.  Aun asi cerramos
-		 * DESPUES del invalidate por orden defensivo. */
 		fclose(cdHandle_worker);
 		cdHandle_worker = NULL;
 	}

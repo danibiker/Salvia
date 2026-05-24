@@ -80,8 +80,9 @@
  * mas reciente cacheado.  Para gameplay secuencial (que es la mayoria
  * del tiempo) funciona bien.
  *
- * POOL_SIZE 1024 = ~2.5 MB, ~13 s game-time prefetch ahead.  Absorbe
- * outliers USB de 300 ms sin que el main thread pague nada.
+ * POOL_SIZE 4096 = ~9.6 MB, ventana amplia para absorber outliers USB
+ * (>300 ms) y reducir colisiones mod-N en re-lecturas.  Memoria
+ * estaticamente alocada en BSS — sin malloc, sin null checks.
  *
  * Soporta dos formatos:
  *  - BIN/CUE/Mode1ISO: worker usa cdHandle_worker (FILE* paralelo)
@@ -96,9 +97,10 @@ typedef struct {
   unsigned char sub[SUB_FRAMESIZE];             /* 96 bytes */
 } cdra_pool_slot_t;
 
-static cdra_pool_slot_t *cdra_pool        = NULL;  /* alloc en init */
+/* Pool estatico en BSS — sin malloc/free, sin NULL checks. */
+static cdra_pool_slot_t  cdra_pool[CDRA_POOL_SIZE];
 static volatile LONG     cdra_pool_target = -1;    /* worker fills around this LBA */
-static int               cdra_pool_active = 0;     /* 0 si CHD (skip async) */
+static int               cdra_pool_active = 0;     /* 0 si CHD/sin worker handle */
 
 /* === Worker control === */
 static HANDLE            cdra_wakeup_evt   = NULL;
@@ -106,6 +108,15 @@ static HANDLE            cdra_worker_h     = NULL;
 static volatile LONG     cdra_worker_exit  = 0;
 static int               cdra_enabled      = 1;
 static int               cdra_initialized  = 0;
+
+/* [XBOX360] Flag para sincronizacion segura en disc swap.
+ *
+ * El worker thread lo pone a 1 mientras esta DENTRO de la llamada de
+ * I/O (chd_read / fseek+fread), y a 0 entre iteraciones.  ISOclose
+ * llama a cdra_wait_worker_idle() para esperar a que sea 0 antes de
+ * cerrar los handles, evitando que el chd_close/fclose libere memoria
+ * que el worker esta usando activamente. */
+static volatile LONG     cdra_worker_busy  = 0;
 
 /* Visible to host log via pcsxr_log. */
 extern void pcsxr_log(int level, const char *format, ...);
@@ -423,7 +434,7 @@ static DWORD WINAPI cdra_worker_proc(LPVOID arg)
     if (cdra_worker_exit) break;
     CDRA_STAT_INC(cdra_worker_wake_count);
 
-    if (!cdra_pool_active || cdra_pool == NULL) continue;
+    if (!cdra_pool_active) continue;
 
     /* Detectar formato y prerequisitos.  Si CHD: necesita
      * chdFile_worker + worker_hunk_buf.  Si BIN/CUE: necesita
@@ -492,6 +503,9 @@ static DWORD WINAPI cdra_worker_proc(LPVOID arg)
       InterlockedExchange(&cdra_pool[slot].lba, -1);
       InterlockedExchange(&cdra_pool[slot].has_sub, 0);
 
+      /* Marcar la zona de I/O para que ISOclose pueda esperarnos.
+       * El InterlockedExchange tambien actua como memory barrier. */
+      InterlockedExchange(&cdra_worker_busy, 1);
 #if PCSXR_CDRA_DIAG
       {
         LARGE_INTEGER wt0, wt1;
@@ -523,6 +537,7 @@ static DWORD WINAPI cdra_worker_proc(LPVOID arg)
                                         cdra_pool[slot].sub,
                                         &has_sub);
 #endif
+      InterlockedExchange(&cdra_worker_busy, 0);
 
       if (rc != 0) {
         /* Error de lectura: dejar slot como -1 (invalido), continuar. */
@@ -595,23 +610,18 @@ void cdra_init(void)
   CDRA_LOG(0 /* INFO */, "[cdra] init: ok, worker thread id=%lu\n",
            (unsigned long)thread_id);
 
-  /* Lock-free sector pool: ~2.5 MB de RAM. */
-  cdra_pool = (cdra_pool_slot_t *)malloc(sizeof(cdra_pool_slot_t) * CDRA_POOL_SIZE);
-  if (cdra_pool == NULL) {
-    pcsxr_log(2 /* WARN */, "[cdra-pool] malloc FAILED, sera bypass-async\n");
-    cdra_pool_active = 0;
-  } else {
-    for (i = 0; i < CDRA_POOL_SIZE; i++) {
-      cdra_pool[i].lba     = -1;
-      cdra_pool[i].has_sub = 0;
-    }
-    cdra_pool_active = 1;  /* habilitado por defecto; se desactiva si CHD */
-    CDRA_LOG(0 /* INFO */,
-             "[cdra-pool] lock-free pool ready: %d slots x %d bytes = %d KB\n",
-             CDRA_POOL_SIZE,
-             (int)sizeof(cdra_pool_slot_t),
-             (int)(sizeof(cdra_pool_slot_t) * CDRA_POOL_SIZE / 1024));
+  /* Pool estatico — solo inicializar slots a "vacio".  Sin malloc. */
+  for (i = 0; i < CDRA_POOL_SIZE; i++) {
+    cdra_pool[i].lba     = -1;
+    cdra_pool[i].has_sub = 0;
   }
+  cdra_pool_active = 1;  /* habilitado por defecto; se desactiva en
+                          * cdra_invalidate si CHD/sin worker handle */
+  CDRA_LOG(0 /* INFO */,
+           "[cdra-pool] static pool ready: %d slots x %d bytes = %d KB\n",
+           CDRA_POOL_SIZE,
+           (int)sizeof(cdra_pool_slot_t),
+           (int)(sizeof(cdra_pool_slot_t) * CDRA_POOL_SIZE / 1024));
 }
 
 void cdra_shutdown(void)
@@ -628,11 +638,7 @@ void cdra_shutdown(void)
   CloseHandle(cdra_wakeup_evt);
   cdra_wakeup_evt = NULL;
 
-  /* Free lock-free pool. */
-  if (cdra_pool != NULL) {
-    free(cdra_pool);
-    cdra_pool = NULL;
-  }
+  /* Pool es estatico — solo marcar inactivo (no hay nada que liberar). */
   cdra_pool_active = 0;
 
   cdra_initialized = 0;
@@ -659,11 +665,9 @@ void cdra_invalidate(void)
   if (!cdra_initialized) return;
 
   /* Invalida el lock-free pool (lo principal en hot path). */
-  if (cdra_pool != NULL) {
-    for (i = 0; i < CDRA_POOL_SIZE; i++) {
-      InterlockedExchange(&cdra_pool[i].lba, -1);
-      InterlockedExchange(&cdra_pool[i].has_sub, 0);
-    }
+  for (i = 0; i < CDRA_POOL_SIZE; i++) {
+    InterlockedExchange(&cdra_pool[i].lba, -1);
+    InterlockedExchange(&cdra_pool[i].has_sub, 0);
   }
   InterlockedExchange(&cdra_pool_target, -1);
 
@@ -678,9 +682,7 @@ void cdra_invalidate(void)
    * con main thread.  Sin sub data correcto, juegos con libcrypt o que
    * dependan de subQ (CdlGetlocP) pueden romperse.  Caso raro, vale
    * sacrificar prestaciones. */
-  if (cdra_pool == NULL) {
-    cdra_pool_active = 0;
-  } else if (subHandle != NULL && !subChanMixed) {
+  if (subHandle != NULL && !subChanMixed) {
     cdra_pool_active = 0;
     CDRA_LOG(0 /* INFO */,
              "[cdra-pool] desactivado: subHandle separado, sub no thread-safe\n");
@@ -695,6 +697,34 @@ void cdra_invalidate(void)
     cdra_pool_active = (cdHandle_worker != NULL) ? 1 : 0;
 #endif
   }
+}
+
+/* [XBOX360] Espera a que el worker no este en mid-I/O.  Llamar antes
+ * de cerrar handles en disc swap. */
+void cdra_wait_worker_idle(void)
+{
+  int spin;
+
+  if (!cdra_initialized) return;
+
+  /* Desactivar pool para que el worker NO inicie nuevas I/Os mientras
+   * esperamos.  cdra_invalidate hace esto pero lo repetimos por
+   * defensa (esta funcion debe ser segura llamada sola). */
+  cdra_pool_active = 0;
+  InterlockedExchange(&cdra_pool_target, -1);
+
+  /* Esperar a que la I/O actual del worker termine.  Maximo ~1 segundo
+   * (= max outlier USB observado + margen).  En la practica son <50 ms
+   * tipicos cuando el worker esta haciendo prefetch normal. */
+  for (spin = 0; spin < 100; spin++) {
+    if (InterlockedExchangeAdd(&cdra_worker_busy, 0) == 0) return;
+    Sleep(10);
+  }
+  /* Si llegamos aqui, el worker lleva >1s en I/O — probablemente USB
+   * congelado.  Seguimos adelante para no bloquear el cierre del
+   * emulador indefinidamente.  Si la I/O completa despues, el fclose
+   * habra liberado el handle y el worker crashearia — pero ese caso
+   * ya era patologico (USB device error). */
 }
 
 /* [XBOX360] Hint del CDC emulator: actualiza el target del pool
@@ -774,7 +804,7 @@ int cdra_read(int lba)
   }
 
   /* === FAST PATH: lock-free pool lookup === */
-  if (cdra_pool_active && cdra_pool != NULL) {
+  if (cdra_pool_active) {
     int slot = ((unsigned)lba) % CDRA_POOL_SIZE;
     LONG stored_lba = InterlockedExchangeAdd(&cdra_pool[slot].lba, 0);
     if (stored_lba == lba) {

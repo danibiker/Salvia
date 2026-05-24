@@ -94,9 +94,9 @@ class Joystick{
 		void close_joysticks();
 		int getNumJoysticks(){return mNumJoysticks;}
 		
-		std::string saveButtonsRetroCore();
+		std::string saveButtonsRetroDefault();
 		std::string saveButtonsRetroGame();
-		std::string saveButtonsDefaultsCore();
+		std::string saveButtonsRetroCore();
 		std::string saveButtonsConfig(std::string, bool=true);
 		bool loadButtonsRetro(std::string);
 		void updateTypes();
