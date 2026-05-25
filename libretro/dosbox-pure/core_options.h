@@ -911,7 +911,10 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 		"Emulation method (DOSBox CPU core) used.", NULL,
 		DBP_OptionCat::System,
 		{
-			#if defined(C_DYNAMIC_X86)
+			#if defined(_XBOX) || defined (_XBOX360)
+			/**El modo auto no esta soportado en xbox 360 por ahora*/
+			{ "dynamic", "Dynamic - Dynamic recompilation (fast, using dynamic_x86 implementation)" },
+			#elif defined(C_DYNAMIC_X86)
 			{ "auto", "Auto - Real-mode games use normal, protected-mode games use dynamic" },
 			{ "dynamic", "Dynamic - Dynamic recompilation (fast, using dynamic_x86 implementation)" },
 			#elif defined(C_DYNREC)
@@ -921,7 +924,14 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 			{ "normal", "Normal (interpreter)" },
 			{ "simple", "Simple (interpreter optimized for old real-mode games)" },
 		},
-		#if defined(C_DYNAMIC_X86) || defined(C_DYNREC)
+		#if defined(_XBOX) || defined(_XBOX360)
+		/* [Salvia/Xbox360] El dynarec PPC nativo (risc_ppc.h) ya esta operativo
+		 * tras el fix del RET near en decoder_opcodes.h.  En Xenon a 3.2 GHz
+		 * dynamic da ~5-20x mas rendimiento que normal en juegos protected mode
+		 * y mejora notable en real mode pesado.  Si un juego concreto falla,
+		 * el usuario puede cambiarlo a "normal" o "simple" desde core options. */
+		"dynamic"
+		#elif defined(C_DYNAMIC_X86) || defined(C_DYNREC)
 		"auto"
 		#else
 		"normal"

@@ -13,10 +13,10 @@ typedef enum{
     HK_SLOT_DOWN,
 	HK_EXIT_GAME,
 	HK_VIEW_MENU,
-	HK_DISC_NEXT,
-	HK_DISC_PREV,
-	HK_DISC_EJECT,
 	HK_ONSCREEN_KEYB,
+	//HK_DISC_NEXT,
+	//HK_DISC_PREV,
+	//HK_DISC_EJECT,
 	HK_MAX 
 } HOTKEYS_LIST;
 
@@ -33,8 +33,5 @@ class Hotkeys{
 		Hotkeys(t_joy_state *inputs);
 		~Hotkeys();
 		HOTKEYS_LIST procesarHotkeys(t_joy_state *inputs);
-		//std::vector<HotkeyConfig> g_hotkeys;
-		//int g_modifierButton; // Por ejemplo, el botón BACK (Select)
-		//int getTriggerForAction(HOTKEYS_LIST);
 	private:
 };

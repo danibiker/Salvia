@@ -109,7 +109,7 @@ bool GuardarCapturaPNG(const std::string& ruta, uint8_t* buffer, int w, int h, i
     }
 
     // 3. Codificar y guardar el archivo en el HDD/USB de la Xbox
-    // lodepng::encode devuelve 0 si tiene ?xito
+    // lodepng::encode devuelve 0 si tiene exito
     unsigned error = lodepng::encode(ruta, rgb_buffer, w, h, LCT_RGB, 8);
 	Fileio::commit(ruta.c_str());
 

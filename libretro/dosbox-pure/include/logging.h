@@ -37,9 +37,17 @@ enum LOG_SEVERITIES {
 	LOG_ERROR
 };
 
-#if C_DEBUG
-class LOG 
-{ 
+/* [Salvia/Xbox360] Forzar la rama C_DEBUG=0 en Xbox 360, sea cual sea el
+ * valor real de C_DEBUG.  Razon: este arbol no implementa DEBUG_ShowMsg
+ * para Xbox 360 (depende del debug GUI de DOSBox que no se construye aqui),
+ * asi que LOG_MSG=DEBUG_ShowMsg da unresolved external en el linker.
+ * GFX_ShowMsg SI esta implementado en dosbox_pure_libretro.cpp y es el
+ * que se ve como "[DOSBOX LOG] ..." en la consola.  Solo neutralizamos
+ * el class LOG aqui — la version completa con vsnprintf y forwarding la
+ * provee el bloque DBP_ENABLE_LOG_FUNCTION mas abajo. */
+#if C_DEBUG && !(defined(_XBOX) || defined(_XBOX360))
+class LOG
+{
 	LOG_TYPES       d_type;
 	LOG_SEVERITIES  d_severity;
 public:

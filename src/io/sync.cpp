@@ -184,7 +184,7 @@ void Sync::limit_fps(double& nextFrameTime) {
 
     if (diffTime > 0) {
         // Dormir el hilo si sobra tiempo suficiente (ahorro de CPU)
-        // SDL_Delay es seguro aqu� porque el Busy Wait corregir� su imprecisi�n
+        // SDL_Delay es seguro aqui porque el Busy Wait corregira su imprecision
         if (diffTime > 4.0) {
             SDL_Delay((uint32_t)(diffTime - 2.0));
         }

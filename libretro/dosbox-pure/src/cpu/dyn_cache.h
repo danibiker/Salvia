@@ -705,18 +705,29 @@ static void cache_init(bool enable) {
 		if (cache_code_start_ptr==NULL) {
 			// allocate the code cache memory
 #if defined(_XBOX)
-			// Xbox 360: Use a static buffer for the code cache.
-			// The .bss section is NOT executable by default, so we must call
-			// XPhysicalProtect to grant execute permission after allocation.
-			{
-				static __declspec(align(4096)) Bit8u xbox_dynrec_cache[CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP];
-				cache_code_start_ptr = xbox_dynrec_cache;
-				// Make the code cache executable
-				DWORD protect_size = CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP;
-				XPhysicalProtect(cache_code_start_ptr, protect_size, PAGE_EXECUTE_READWRITE);
-				LOG_MSG("DYNREC: Code cache at %p, size %u, XPhysicalProtect=%s",
-					cache_code_start_ptr, (unsigned)protect_size, "OK");
-			}
+			/* Xbox 360: code cache en buffer .bss static.  El XEX permite
+			 * ejecutar desde .bss por defecto (igual que el memData[] de
+			 * PCSX-R 360 en bram.cpp).
+			 *
+			 * Otros caminos descartados durante el desarrollo:
+			 *  - XPhysicalAlloc(PAGE_READWRITE): devuelve memoria en BATs
+			 *    de alta memoria sin permiso de execute (crash al fetch).
+			 *  - malloc() estandar del CRT: el heap del XEX tampoco es RWX.
+			 *  - XPhysicalProtect sobre buffer static: marca la pagina como
+			 *    no-ejecutable (rompe lo que iba a funcionar solo).
+			 *
+			 * align(128) = cache line de Xenon.  No usamos align(4096)
+			 * porque el linker del XDK rechaza alignments mayores que su
+			 * /ALIGN por defecto.  La alineacion a PAGESIZE_TEMP=4096 la
+			 * consigue el codigo de runtime justo debajo via
+			 *   cache_code = (ptr + PAGESIZE_TEMP-1) & ~(PAGESIZE_TEMP-1)
+			 * por eso reservamos PAGESIZE_TEMP-1 bytes extra al final. */
+			static __declspec(align(128)) Bit8u xbox_dynrec_cache[
+				CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP];
+			cache_code_start_ptr = xbox_dynrec_cache;
+			LOG_MSG("DYNREC: code cache static .bss en %p (%u bytes)",
+				cache_code_start_ptr,
+				(unsigned)(CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP));
 #elif defined (WIN32)
 			cache_code_start_ptr=(Bit8u*)VirtualAlloc(0,CACHE_TOTAL+CACHE_MAXSIZE+PAGESIZE_TEMP-1+PAGESIZE_TEMP,
 				MEM_COMMIT,PAGE_EXECUTE_READWRITE);
@@ -827,7 +838,8 @@ static void cache_close(void) {
 	}
 	if (cache_code_start_ptr != NULL) {
 #if defined(_XBOX)
-		// Static buffer — nothing to free
+		/* Buffer static en .bss — no se libera, queda vivo toda la sesion.
+		 * Mismo comportamiento que el memData[] de PCSX-R 360. */
 		cache_code_start_ptr = NULL;
 #elif defined (WIN32)
 		if (!VirtualFree(cache_code_start_ptr, 0, MEM_RELEASE))

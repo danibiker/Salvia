@@ -112,7 +112,17 @@ void Engine::stopEngine(){
 	#ifdef WIN
 		timeEndPeriod(1);
 	#endif
-	SDL_FreeSurface(gameScreen);
+
+	if (gameScreen){
+		SDL_FreeSurface(gameScreen);
+		gameScreen = NULL;
+	}
+
+	if (overlay){
+		SDL_FreeSurface(overlay);
+		overlay = NULL;
+	}
+
 	BadgeDownloader::instance().stop();
     SDL_Quit();
 }

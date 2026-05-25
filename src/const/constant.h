@@ -49,6 +49,7 @@ static const SDL_Color blue = { 76,194,255 };
 static const SDL_Color black = { 0,0,0 };
 static const SDL_Color lightgray = {222, 224, 219, 255};
 static const SDL_Color paleblue = {57, 72, 93, 255};
+static const SDL_Color red = {255,0,0};
 
 static const SDL_Color backgroundColor = black;
 static const SDL_Color textColor = white;

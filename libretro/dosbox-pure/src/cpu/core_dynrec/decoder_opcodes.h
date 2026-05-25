@@ -1189,7 +1189,16 @@ static void dyn_ret_near(Bitu bytes) {
 		gen_call_function_raw((void*)&dynrec_pop_word);
 		gen_extend_word(false,FC_RETOP);
 	}
-	gen_mov_word_from_reg(FC_RETOP,decode.big_op?(void*)(&reg_eip):(void*)(&reg_ip),true);
+	/* [Salvia/Xbox360 fix] El parametro original era `true` (store 32-bit) pero
+	 * en 16-bit el destino es &reg_ip que son solo 16 bits.  Funcionaba por
+	 * accidente en little-endian (los bytes bajos del store caen sobre reg_ip);
+	 * en big-endian (Xenon/Broadway) `&reg_ip = &reg_eip+2`, asi que un stw de
+	 * 32 bits sobrescribe reg_ip con 0 (los MSBs del valor extendido) y desborda
+	 * sobre el siguiente campo de cpu_regs.  Consecuencia: el RET salta a la
+	 * mitad alta del valor popeado (=0) en vez de la mitad baja (= return addr
+	 * real).  Sintoma observado en PoP 1: RET tras CALL E8 saltaba a CS:0000
+	 * en vez del verdadero return address. */
+	gen_mov_word_from_reg(FC_RETOP,decode.big_op?(void*)(&reg_eip):(void*)(&reg_ip),decode.big_op);
 
 	if (bytes) gen_add_direct_word(&reg_esp,bytes,true);
 	dyn_return(BR_Normal);

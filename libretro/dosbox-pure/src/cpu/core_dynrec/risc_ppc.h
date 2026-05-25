@@ -610,28 +610,66 @@ static void gen_fill_branch_long(const Bit8u* data) {
 
 static void cache_block_closing(const Bit8u* block_start,Bitu block_size)
 {
-	Bit8u* start = (Bit8u*)((Bit32u)block_start & -32);
+#if defined(_MSC_VER) && defined(_XBOX)
+	/* Secuencia correcta para self-modifying code en PowerPC (PowerISA
+	 * Book II 1.4 + Xenon errata):
+	 *   1. dcbst en cada linea modificada
+	 *   2. sync                          <-- ASEGURA que el flush termina
+	 *   3. icbi en cada linea modificada <-- ahora ve los datos en memoria
+	 *   4. sync
+	 *   5. isync                         <-- descarta prefetch del pipeline
+	 *
+	 * Mi version inicial intercalaba dcbst e icbi en el mismo loop.
+	 * Xenon (in-order, modelo de memoria debil) ejecuta icbi antes de
+	 * que dcbst llegue al L2, asi que la invalidacion ocurre sobre
+	 * datos viejos.  Funciona la primera vez pero falla cuando se
+	 * regenera codigo en la misma linea (SMC) — sintoma tipico:
+	 * 'Corrupt MCB chain' en DOS porque el JIT vuelve a ejecutar
+	 * codigo obsoleto que escribe valores incorrectos en estructuras
+	 * DOS.
+	 *
+	 * Xenon tiene lineas de cache de 128 bytes (L1d/L1i). */
+	Bit8u* start = (Bit8u*)((Bit32u)block_start & -128);
+	const Bit8u* end = block_start + block_size;
 
-	while (start < block_start + block_size)
+	/* Paso 1: dcbst en todas las lineas */
 	{
-#if defined(_MSC_VER) && defined(_XBOX)
-		// Xbox 360: dcbst writes dirty data cache line to memory,
-		// icbi invalidates the instruction cache line
-		// (same sequence used by PCSX-R 360 dynarec)
-		__dcbst(0, (const void*)start);
-		__dbp_icbi(0, (const void*)start);
-#elif defined(__GNUC__)
-		asm volatile("dcbst %y0\n\t icbi %y0" :: "Z"(*start));
-#else
-		#error "Don't know how to flush/invalidate CacheBlock with this compiler"
-#endif
-		start += 32;
+		Bit8u* p = start;
+		while (p < end) {
+			__dcbst(0, (const void*)p);
+			p += 128;
+		}
 	}
-#if defined(_MSC_VER) && defined(_XBOX)
+	/* Paso 2: sync — esperar a que dcbst lleguen a memoria */
 	__emit(0x7C0004AC); // sync
+
+	/* Paso 3: icbi en todas las lineas */
+	{
+		Bit8u* p = start;
+		while (p < end) {
+			__dbp_icbi(0, (const void*)p);
+			p += 128;
+		}
+	}
+	/* Paso 4: sync — esperar a que se procesen los icbi */
+	__emit(0x7C0004AC); // sync
+	/* Paso 5: isync — descartar prefetch del pipeline */
 	__emit(0x4C00012C); // isync
 #elif defined(__GNUC__)
+	/* Misma secuencia en dos pasadas con sync entre medias.  El codigo
+	 * original de DOSBox los intercalaba pero PowerPC Book II recomienda
+	 * separarlos.  En Broadway (Wii, in-order) raramente fallaba; Xenon
+	 * lo manifiesta. */
+	Bit8u* start = (Bit8u*)((Bit32u)block_start & -32);
+	Bit8u* p;
+	for (p = start; p < block_start + block_size; p += 32)
+		asm volatile("dcbst 0,%0" :: "r"(p));
+	asm volatile("sync");
+	for (p = start; p < block_start + block_size; p += 32)
+		asm volatile("icbi 0,%0" :: "r"(p));
 	asm volatile("sync\n\t isync");
+#else
+	#error "Don't know how to flush/invalidate CacheBlock with this compiler"
 #endif
 }
 

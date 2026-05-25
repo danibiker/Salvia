@@ -63,7 +63,19 @@ static char rcsid =
 #include "hq4x_lut.h"
 
 #define XBOXVID_DRIVER_NAME "XBOX"
- 
+
+/* [XBOX360] Critical section que serializa IDirect3DDevice9::Present.
+ *
+ * El runtime D3D9 de Xenon NO es thread-safe (no existe el flag
+ * D3DCREATE_MULTITHREADED).  Salvia tiene un watcher thread
+ * (th_printLoading) que puede llamar SDL_Flip durante un hang del main
+ * thread, lo que requiere serializar el Present para no corromper el
+ * ring buffer del GPU.
+ *
+ * Coste por Flip: ~us de adquisicion.  Despreciable a 60 fps.
+ * Solo aplica al wrap del Present; el rendering normal sigue intacto. */
+static CRITICAL_SECTION g_xboxFlipCS;
+static int              g_xboxFlipCSInit = 0;
 
 /* Initialization/Query functions */
 static int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat);
@@ -315,11 +327,21 @@ int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat)
 #endif
 
     if (!D3D_Device) {
-        // Usamos D3DCREATE_HARDWARE_VERTEXPROCESSING para asegurar soporte de VS_3_0
-        hr = IDirect3D9_CreateDevice(D3D, 0, D3DDEVTYPE_HAL, NULL, 
-                                     D3DCREATE_HARDWARE_VERTEXPROCESSING, 
+        // Usamos D3DCREATE_HARDWARE_VERTEXPROCESSING para asegurar soporte de VS_3_0.
+        //
+        // [XBOX360] NO usamos D3DCREATE_MULTITHREADED — no existe en el D3D9
+        // de Xenon.  La sincronizacion multi-thread del Present se hace via
+        // g_xboxFlipCS abajo en XBOX_RenderSurface.
+        hr = IDirect3D9_CreateDevice(D3D, 0, D3DDEVTYPE_HAL, NULL,
+                                     D3DCREATE_HARDWARE_VERTEXPROCESSING,
                                      &D3D_PP, &D3D_Device);
         if (FAILED(hr)) return 0;
+
+        /* Init del lock una sola vez. */
+        if (!g_xboxFlipCSInit) {
+            InitializeCriticalSection(&g_xboxFlipCS);
+            g_xboxFlipCSInit = 1;
+        }
     }
 
     vformat->BitsPerPixel = 32;
@@ -859,6 +881,11 @@ static int XBOX_RenderSurface(_THIS, SDL_Surface *surface)
 {
 	D3DLOCKED_RECT d3dlr;
 
+	/* [XBOX360] Serializar todo el bloque de rendering+Present con un
+	 * lock para que main thread y watcher thread no corrompan el ring
+	 * buffer del GPU si coinciden.  Coste: ~us por frame, despreciable. */
+	if (g_xboxFlipCSInit) EnterCriticalSection(&g_xboxFlipCS);
+
 	/* Unlock so the GPU can read the texture for rendering */
 	IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
 
@@ -877,6 +904,8 @@ static int XBOX_RenderSurface(_THIS, SDL_Surface *surface)
 
 	surface->pixels = d3dlr.pBits;
 	surface->pitch = d3dlr.Pitch;
+
+	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
 
 	return 0;
 }
@@ -938,6 +967,10 @@ static void XBOX_UpdateRects(_THIS, int numrects, SDL_Rect *rects)
 	if (!this->hidden->SDL_primary || !have_vertexbuffer)
 		return;
 
+	/* [XBOX360] Mismo lock que XBOX_RenderSurface — el watcher podria
+	 * llamar SDL_UpdateRect indirectamente, race con main thread. */
+	if (g_xboxFlipCSInit) EnterCriticalSection(&g_xboxFlipCS);
+
 	/* Unlock so the GPU can read the texture for rendering */
 	IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
 
@@ -955,6 +988,8 @@ static void XBOX_UpdateRects(_THIS, int numrects, SDL_Rect *rects)
 
 	this->screen->pixels = d3dlr.pBits;
 	this->screen->pitch = d3dlr.Pitch;
+
+	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
 }
 
 int XBOX_SetColors(_THIS, int firstcolor, int ncolors, SDL_Color *colors)

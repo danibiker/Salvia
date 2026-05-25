@@ -1919,6 +1919,28 @@ void GFX_ShowMsg(char const* format,...)
 	log_cb(RETRO_LOG_INFO, "[DOSBOX LOG] %s\n", buf);
 }
 
+#if defined(_XBOX) || defined(_XBOX360)
+/* [Salvia/Xbox360] DEBUG_ShowMsg es el destino de LOG_MSG cuando C_DEBUG=1.
+ * Originalmente vive en debug_gui.cpp (el debugger interactivo de DOSBox)
+ * que no se compila aqui.  Proveerlo como stub que rutea a retro_log_printf
+ * vee log_cb permite habilitar C_DEBUG=1 sin tener un unresolved external
+ * en el linker.  ATENCION: habilitar C_DEBUG=1 ademas requiere arreglar
+ * otros bugs preexistentes del codigo (risc_ppc.h:574 pointer arithmetic,
+ * dos_programs.cpp:1274 syntax error) que no se exponen hasta activar la
+ * macro.  Por ahora esta funcion existe simplemente para no romper el
+ * linker si alguien define C_DEBUG. */
+void DEBUG_ShowMsg(char const* format, ...)
+{
+	static char buf[1024];
+	va_list ap;
+	va_start(ap, format);
+	vsnprintf(buf, sizeof(buf), format, ap);
+	va_end(ap);
+	log_cb(RETRO_LOG_INFO, "[DOSBOX DEBUG] %s\n", buf);
+}
+#endif
+
+
 void GFX_SetPalette(Bitu start,Bitu count,GFX_PalEntry * entries) { }
 
 void DBP_ShowSlowLoading()
@@ -2388,13 +2410,7 @@ static bool check_variables()
 	dbp_auto_target = (1.0f * (cycles_numeric ? 1.0f : (float)atof(DBP_Option::Get(DBP_Option::cycle_limit)))) - 0.0075f; // was - 0.01f
 
 	bool cpu_core_changed = false;
-//#if defined(_XBOX)
-	// Xbox 360: Force simple interpreter until PPC dynarec is fully tested
-	// "simple" is faster than "normal" for most DOS games
-//	const char* cpu_core = "simple";
-//#else
 	const char* cpu_core = ((DOSBox_Boot && DBP_Option::Get(DBP_Option::bootos_forcenormal, &cpu_core_changed)[0] == 't') ? "normal" : DBP_Option::Get(DBP_Option::cpu_core, &cpu_core_changed));
-//#endif
 	DBP_Option::Apply(sec_cpu, "core", cpu_core, false, false, cpu_core_changed);
 	DBP_Option::GetAndApply(sec_cpu, "cputype", DBP_Option::cpu_type, true);
 

@@ -333,6 +333,7 @@
     </ClCompile>
     <ClCompile Include="..\dosbox_pure_libretro.cpp" />
     <ClCompile Include="..\keyb2joypad.cpp" />
+    <ClCompile Include="..\src\cpu\core_stubs_xbox.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\bios.h">
@@ -675,6 +676,15 @@
     <ClInclude Include="..\libretro-common\include\libretro.h" />
     <ClInclude Include="..\include\dbp_threads.h">
       <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\cpu\core_dynrec\dyn_mmx.h">
+      <Filter>src\cpu\core_dynrec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\cpu\core_dynrec\risc_ppc.h">
+      <Filter>src\cpu\core_dynrec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\cpu\core_dynrec\simde_x86_mmx.h">
+      <Filter>src\cpu\core_dynrec</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

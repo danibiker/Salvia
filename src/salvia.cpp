@@ -31,6 +31,7 @@ struct t_progress_load{
 } progress_loader;
 
 
+
 void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
     #ifndef DEBUG_LOG
     if (level != RETRO_LOG_ERROR && gameMenu->romLoaded) {
@@ -607,6 +608,10 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return false;
 		}
 
+		//Ignoramos este evento
+		case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: 
+			return false;
+
 		default: {
 			if (cmd < 65572){
 				LOG_DEBUG("Comando no tratado: %s", Constant::TipoToStr(cmd).c_str());
@@ -1016,6 +1021,7 @@ void init_sdl_audio(double sample_rate) {
         return;
     }
 	audio_opened = 1;
+	g_audio_opened_rate = wanted.freq;
     SDL_PauseAudio(0); // Inicia el audio
 }
 
@@ -1194,9 +1200,9 @@ int launchGame(std::string rompath){
 	const bool bios_only = rompath.compare(BIOS_ONLY) == 0;
 
 	std::string displayName = bios_only ? std::string("BIOS") : dir.getFileName(rompath);
+
 	std::string initMsg = LanguageManager::instance()->get("msg.loading") + displayName + "...";
 	const int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
-
 	gameMenu->fillOverlay(clBackground);
 	Constant::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, face_h_big / 2, true, true, textColor, 0);
 	SDL_Flip(gameMenu->gameScreen);
@@ -1332,11 +1338,38 @@ int launchGame(std::string rompath){
 	 * iteraciones (ver closeGame para el rationale).
 	 *
 	 * En cargas posteriores el device sigue abierto (audio_opened==1)
-	 * pero el callback esta pausado.  Reanudamos con PauseAudio(0). */
+	 * pero el callback esta pausado.  Reanudamos con PauseAudio(0).
+	 *
+	 * RESET_AUDIO (opt-in): si el sample_rate cambia entre cargas
+	 * (p.ej. FBNeo Neo Geo cart 48011 Hz -> Neo Geo CD 48000 Hz), el
+	 * consumidor SDL queda desincronizado y aparecen pops.  Con
+	 * RESET_AUDIO definido reabrimos el device a la nueva tasa.  Es
+	 * el camino "C": resuelve el desajuste a cambio de exponer el bug
+	 * historico de SDL_OpenAudio/CloseAudio en 360.  Sin la macro se
+	 * mantiene el comportamiento estable de no reabrir nunca. */
 	if (!audio_opened){
 		init_sdl_audio(av_info.timing.sample_rate);
 	} else {
+#ifdef RESET_AUDIO
+		int new_rate = (int)av_info.timing.sample_rate;
+		if (new_rate > 0 && new_rate != g_audio_opened_rate) {
+			LOG_DEBUG("RESET_AUDIO: rate change %d -> %d, reopening SDL audio\n",
+				g_audio_opened_rate, new_rate);
+			audio_closing = true;
+			SDL_PauseAudio(1);
+			SDL_Delay(50);              // dejar terminar el callback en vuelo
+			gameMenu->g_audioBuffer.Clear();
+			SDL_CloseAudio();
+			audio_opened = 0;
+			g_audio_opened_rate = 0;
+			audio_closing = false;
+			init_sdl_audio(av_info.timing.sample_rate);
+		} else {
+			SDL_PauseAudio(0);
+		}
+#else
 		SDL_PauseAudio(0);
+#endif
 	}
 	gameMenu->g_audioRate.init(BUFF_SIZE);
 	//Iniciando el contador de fps
@@ -1353,6 +1386,10 @@ int launchGame(std::string rompath){
 	SDL_FillRect(gameMenu->gameScreen, NULL, Constant::colors[clBackground].color);
 	gameMenu->setEmuStatus(EMU_STARTED);
 	gameMenu->clearOverlay();
+
+#ifdef WATCH_LOAD_STUCK
+	watchForLoadingStuck();
+#endif
 	return 1;
 }
 
@@ -1557,7 +1594,7 @@ int main(int argc, char *argv[]) {
 	CurlClient curlClient;
 	curlClient.init();
 
-	double nextFrameTime = Constant::getTicks();
+	nextFrameTime = Constant::getTicks();
 	while (gameMenu->running) {
 		// Procesamos eventos como pulsaciones de hotkeys
 		processFrontendEvents();
