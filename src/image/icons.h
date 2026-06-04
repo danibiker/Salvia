@@ -45,12 +45,18 @@ public:
 			SDL_Surface *img;
 			std::string str = Constant::getAppDir() + assetsDir + std::string(ICONS_PATH[i]);
 			if (dirutil::fileExists(str.c_str()) && (img = IMG_Load(str.c_str())) != NULL){   
-				double zoomX = (double)face_h / img->w;
-				double zoomY = (double)face_h / img->h;
-				SDL_Surface *resizeImage = rotozoomSurfaceXY(img, 0, zoomX, zoomY, true);
-				SDL_Surface *formattedImg = SDL_DisplayFormatAlpha(resizeImage);
-				SDL_FreeSurface(resizeImage);
-				SDL_FreeSurface(img);
+				SDL_Surface *formattedImg;
+				if (img->w > face_h || img->h > face_h){
+					double zoomX = (double)face_h / img->w;
+					double zoomY = (double)face_h / img->h;
+					SDL_Surface *resizeImage = rotozoomSurfaceXY(img, 0, zoomX, zoomY, true);
+					formattedImg = SDL_DisplayFormatAlpha(resizeImage);
+					SDL_FreeSurface(resizeImage);
+					SDL_FreeSurface(img);
+				} else {
+					formattedImg = SDL_DisplayFormatAlpha(img);
+					SDL_FreeSurface(img);
+				}
 				icons.push_back(formattedImg);
 			} else {
 				icons.push_back(NULL);
@@ -63,12 +69,18 @@ public:
 			SDL_Surface *img;
 			std::string str = Constant::getAppDir() + assetsDir + std::string(ICONS_CARTS_PATH[i]);
 			if (dirutil::fileExists(str.c_str()) && (img = IMG_Load(str.c_str())) != NULL){   
-				double zoomX = (double)face_h / img->w;
-				double zoomY = (double)face_h / img->h;
-				SDL_Surface *resizeImage = rotozoomSurfaceXY(img, 0, zoomX, zoomY, true);
-				SDL_FreeSurface(img);
-				SDL_Surface *formattedImg = SDL_DisplayFormatAlpha(resizeImage);
-				SDL_FreeSurface(resizeImage);
+				SDL_Surface *formattedImg;
+				if (img->w > face_h || img->h > face_h){
+					double zoomX = (double)face_h / img->w;
+					double zoomY = (double)face_h / img->h;
+					SDL_Surface *resizeImage = rotozoomSurfaceXY(img, 0, zoomX, zoomY, true);
+					SDL_FreeSurface(img);
+					formattedImg = SDL_DisplayFormatAlpha(resizeImage);
+					SDL_FreeSurface(resizeImage);
+				} else {
+					formattedImg = SDL_DisplayFormatAlpha(img);
+					SDL_FreeSurface(img);
+				}
 				icons_carts.push_back(formattedImg);
 				
 			} else {

@@ -13,7 +13,7 @@ class TextArea : public Object{
         TextArea(int x, int y, int w, int h);
 
 		void init();
-        bool loadTextFileFromGame(std::string baseDir, GameFile game, std::string ext);
+        bool loadTextFileFromGame(std::string baseDir, GameFile& game, std::string ext);
         bool loadTextFile(std::string filepathToOpen);
         void resetTicks(GameTicks gameTicks);
         void calcTicks(GameTicks gameTicks, int &scrollDesp, float &pixelDesp);

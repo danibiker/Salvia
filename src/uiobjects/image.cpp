@@ -8,6 +8,25 @@ Image::Image(){
     init();
 }
 
+Image::Image(int x, int y, int w, int h){
+    this->setX(x);
+    this->setY(y);
+    this->setW(w);
+    this->setH(h);
+    init();
+}
+
+void Image::init(){
+    filepath = "";
+    darkShift = 0xFF;
+    tamAuto = true;
+	fillGaps = false;
+    vAlign = ALIGN_MIDDLE;
+    setObjectType(GUIPICTURE);
+    img = NULL;
+	cachedSurface = NULL;
+}
+
 Image::~Image(){
     if (img != NULL){
 		SDL_FreeSurface(img);
@@ -20,12 +39,8 @@ Image::~Image(){
     }
 }
 
-Image::Image(int x, int y, int w, int h){
-    this->setX(x);
-    this->setY(y);
-    this->setW(w);
-    this->setH(h);
-    init();
+bool Image::hasImage(){
+	return cachedSurface != NULL || !filepath.empty();
 }
 
 bool Image::closeImage(){
@@ -42,26 +57,12 @@ bool Image::closeImage(){
 	return true;
 }
 
-void Image::init(){
-    filepath = "";
-    drawfaded = false;
-    tamAuto = true;
-    vAlign = ALIGN_MIDDLE;
-    setObjectType(GUIPICTURE);
-    img = NULL;
-	cachedSurface = NULL;
-}
-
-bool Image::loadImageFromGame(string baseDir, GameFile game, string ext){
+bool Image::loadImageFromGame(string baseDir, GameFile& game, string ext, SDL_PixelFormat* format){
     dirutil dir;
-    if (!loadImage(baseDir + dir.getFileNameNoExt(game.shortFileName) + ext)){
-        return loadImage(baseDir + dir.getFileNameNoExt(game.longFileName) + ext);
-    } else {
-        return true;
-    }
+    return loadImage(baseDir + dir.getFileNameNoExt(game.longFileName) + ext, format);
 }
 
-bool Image::loadImage(string filepathToOpen){
+bool Image::loadImage(string filepathToOpen, SDL_PixelFormat* format){
     bool ret = false;
     if (filepath.empty() || filepath.compare(filepathToOpen) != 0){
         if (img != NULL){
@@ -74,8 +75,18 @@ bool Image::loadImage(string filepathToOpen){
 		}
 
 		const char *cFilePathToOpen = filepathToOpen.c_str();
-		if (dirutil::fileExists(cFilePathToOpen) && (img = IMG_Load(cFilePathToOpen)) != NULL){   
+		SDL_Surface* raw;
+		if (dirutil::fileExists(cFilePathToOpen) && (raw = IMG_Load(cFilePathToOpen)) != NULL){   
 			filepath = filepathToOpen;
+			//Convertimos al formato de la pantalla apropiadamente. Esto elimina transparencias
+			//y deja las imagenes correctas para ser presentadas de la forma mas eficiente posible
+			//if (format->BitsPerPixel == 8 && format->palette) {
+			if (format != NULL){
+				img = SDL_ConvertSurface(raw, format, SDL_SWSURFACE);
+				SDL_FreeSurface(raw);
+			} else {
+				img = raw;
+			}
 			ret = true;
 		} else {
             filepath = "";
@@ -141,50 +152,54 @@ Dimension Image::centrado(const Dimension &src, const Dimension &dst) {
     return offset;
 }
 
-void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest, 
-                      int src_x, int src_y, int src_w, int src_h, 
-                      int dst_x, int dst_y, int dst_w, int dst_h) {
+void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
+                            int src_x, int src_y, int src_w, int src_h,
+                            int dst_x, int dst_y, int dst_w, int dst_h) {
+	
+	if (!src || !dest || src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) return;
+	
+	SDL_Rect dstRect = {
+        fillGaps ? this->getX() : dst_x,
+        fillGaps ? this->getY() : dst_y,
+        dst_w, dst_h
+    };
 
-    if (!cachedSurface || lastW != dst_w || lastH != dst_h) {
-        if (cachedSurface) SDL_FreeSurface(cachedSurface);
-
-        // 1. Crear el recorte (sub-sección)
-        //SDL_Rect srcRect = {src_x, src_y, src_w, src_h};
-        
-        // 2. Normalizar: Convertir la fuente al formato de la pantalla/destino
-        // Esto corrige automáticamente los errores de color (swapping de canales)
-        /*SDL_Surface* normalizedSrc = SDL_ConvertSurface(src, dest->format, SDL_SWSURFACE | SDL_SRCALPHA);
-        
-        // 3. Crear superficie para el recorte
-        SDL_Surface* subSrc = SDL_CreateRGBSurface(SDL_HWSURFACE, src_w, src_h, 
-                                 dest->format->BitsPerPixel, 
-                                 dest->format->Rmask, dest->format->Gmask, 
-                                 dest->format->Bmask, dest->format->Amask);
-								 */
-        // Copiar sección sin mezclar (copia pura de píxeles)
-        //SDL_SetAlpha(normalizedSrc, 0, 0);
-        //SDL_BlitSurface(normalizedSrc, &srcRect, subSrc, NULL);
-
-        // 4. Escalar
-        double zoomX = (double)dst_w / src_w;
-        double zoomY = (double)dst_h / src_h;
-        
-        // rotozoomSurfaceXY es más preciso para escalas no uniformes
-		SDL_Surface* zoomedSurface = rotozoomSurfaceXY(src, 0, zoomX, zoomY, SMOOTHING_ON);
-
-        // 5. Limpieza de temporales
-        //SDL_FreeSurface(normalizedSrc);
-        //SDL_FreeSurface(subSrc);
-
-		cachedSurface = SDL_DisplayFormat(zoomedSurface);
-		SDL_FreeSurface(zoomedSurface);
-        
-        lastW = dst_w; lastH = dst_h;
+	// --- Cache hit: blit directo y salir ---
+    if (cachedSurface && lastW == dst_w && lastH == dst_h) {
+        SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
+        return;
     }
 
-    // 6. Dibujo final
-    SDL_Rect dstRect = {dst_x, dst_y, dst_w, dst_h};
-    SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
+	SDL_Surface* zoomedSurface;
+	double zoomX = (double)dst_w / src_w;
+	double zoomY = (double)dst_h / src_h;
+	zoomedSurface = zoomSurface(src, zoomX, zoomY, false);
+
+	if (!zoomedSurface) return;
+
+	// --- Aplicar oscurecimiento ---
+    if (this->darkShift < 0xFF) {
+        Uint8 alpha = 255 - this->darkShift;
+        boxRGBA(zoomedSurface, 0, 0, dst_w - 1, dst_h - 1, 0, 0, 0, alpha);
+    }
+
+	// --- (Re)crear cache en el formato de dest ---
+    if (cachedSurface) SDL_FreeSurface(cachedSurface);
+	// Tomamos converted directamente como caché (ya tiene el tamaño y formato correctos)
+	cachedSurface = zoomedSurface;
+    lastW = dst_w;
+    lastH = dst_h;
+
+	// --- Configuracion alfa ---
+	const Uint32 aMask = src->format->Amask;
+    if (aMask != 0 || (src->flags & SDL_SRCCOLORKEY)) {
+        cachedSurface->flags |= SDL_SRCALPHA;
+        cachedSurface->format->alpha = src->format->alpha;
+    } else {
+        cachedSurface->flags &= ~SDL_SRCALPHA;
+    }
+	SDL_SetAlpha(cachedSurface, 0, 0);
+	SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
 }
 
 void Image::convertirGrises16Bits(SDL_Surface* surface) {
@@ -210,4 +225,229 @@ void Image::convertirGrises16Bits(SDL_Surface* surface) {
     }
 
     if (SDL_MUSTLOCK(surface)) SDL_UnlockSurface(surface);
-}
+}	
+
+/*void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
+                             int src_x, int src_y, int src_w, int src_h,
+                             int dst_x, int dst_y, int dst_w, int dst_h) {
+
+    if (!src || !dest) return;
+
+    if (!cachedSurface || lastW != dst_w || lastH != dst_h) {
+        if (cachedSurface) SDL_FreeSurface(cachedSurface);
+
+        // =====================================================================
+        // PASO 1: NORMALIZACIÓN (El secreto para que no salgan imágenes negras)
+        // Creamos una superficie temporal con un formato estándar RGBA de 32 bits
+        // =====================================================================
+        SDL_Surface* normalizedSrc = SDL_CreateRGBSurface(
+            SDL_SWSURFACE, src_w, src_h, 32,
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+            0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff
+#else
+            0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000
+#endif
+        );
+
+        if (!normalizedSrc) return;
+
+        // Guardamos el alfa del origen y lo desactivamos momentáneamente para hacer
+        // una copia exacta del bloque de píxeles (incluyendo el color de fondo cielo)
+        Uint32 srcFlags = src->flags & SDL_SRCALPHA;
+        Uint8 srcAlpha = src->format->alpha;
+        SDL_SetAlpha(src, 0, 0);
+
+        // Copiamos la porción exacta (src_x, src_y) al inicio de nuestra superficie normalizada
+        SDL_Rect srcRect = {src_x, src_y, src_w, src_h};
+        SDL_BlitSurface(src, &srcRect, normalizedSrc, NULL);
+
+        // Restauramos el comportamiento del origen de inmediato
+        SDL_SetAlpha(src, srcFlags, srcAlpha);
+
+        // =====================================================================
+        // PASO 2: ESCALADO SEGURO
+        // Ahora zoomSurface recibe un formato limpio y garantizado de 32 bits
+        // =====================================================================
+        double zoomX = (double)dst_w / src_w;
+        double zoomY = (double)dst_h / src_h;
+        
+        // Desactivamos el alpha en la superficie normalizada antes del zoom
+        // para obligar a zoomSurface a procesar los colores puros sin corromperlos
+        SDL_SetAlpha(normalizedSrc, 0, 0);
+        SDL_Surface* zoomedSurface = zoomSurface(normalizedSrc, zoomX, zoomY, false);
+        
+        // Ya no necesitamos la superficie normalizada de origen, la liberamos
+        SDL_FreeSurface(normalizedSrc);
+
+        if (!zoomedSurface) return;
+
+        // =====================================================================
+        // PASO 3: PREPARACIÓN DE LA CACHÉ Y RENDERIZADO FINAL
+        // =====================================================================
+        // Clonamos la estructura exacta que nos devolvió zoomSurface
+        cachedSurface = SDL_CreateRGBSurface(
+            SDL_SWSURFACE, dst_w, dst_h,
+            zoomedSurface->format->BitsPerPixel,
+            zoomedSurface->format->Rmask, zoomedSurface->format->Gmask, 
+            zoomedSurface->format->Bmask, zoomedSurface->format->Amask
+        );
+
+        if (!cachedSurface) {
+            SDL_FreeSurface(zoomedSurface);
+            return;
+        }
+
+        // Copia directa del contenido escalado a la caché sin mezclas intermedias
+        SDL_SetAlpha(zoomedSurface, 0, 0);
+        SDL_BlitSurface(zoomedSurface, NULL, cachedSurface, NULL);
+        SDL_FreeSurface(zoomedSurface);
+
+        // CONDICIÓN INTELIGENTE: Si el PNG original manejaba transparencias reales
+        // le indicamos a la caché que use mezcla nativa al dibujar en la pantalla
+        if (src->format->Amask != 0 || (src->flags & SDL_SRCCOLORKEY)) {
+            SDL_SetAlpha(cachedSurface, SDL_SRCALPHA, srcAlpha);
+        } else {
+            SDL_SetAlpha(cachedSurface, 0, 255);
+        }
+
+        lastW = dst_w;
+        lastH = dst_h;
+    }
+
+    // Dibujar de forma nativa sobre la pantalla usando el blitter de SDL
+    SDL_Rect dstRect = {dst_x, dst_y, dst_w, dst_h};
+    SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
+}*/
+
+/*void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest,
+                            int src_x, int src_y, int src_w, int src_h,
+                            int dst_x, int dst_y, int dst_w, int dst_h) {
+
+   if (!src || !dest || src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) return;
+
+   // --- Cache hit: blit directo y salir ---
+   if (cachedSurface && lastW == dst_w && lastH == dst_h) {
+       SDL_Rect dstRect = {
+           fillGaps ? this->getX() : dst_x,
+           fillGaps ? this->getY() : dst_y,
+           dst_w, dst_h
+       };
+       SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
+       return;
+   }
+
+   // --- (Re)crear caché ---
+   if (cachedSurface) SDL_FreeSurface(cachedSurface);
+   cachedSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, dst_w, dst_h, 32,
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+       0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff
+#else
+       0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000
+#endif
+   );
+   if (!cachedSurface) return;
+   lastW = dst_w;
+   lastH = dst_h;
+
+   // --- Escalado nearest-neighbor (punto fijo 16.16) ---
+   if (SDL_MUSTLOCK(src))           SDL_LockSurface(src);
+   if (SDL_MUSTLOCK(cachedSurface)) SDL_LockSurface(cachedSurface);
+
+   Uint8*  srcBytes  = (Uint8*)src->pixels;
+   Uint32* dstPixels = (Uint32*)cachedSurface->pixels;
+   const int srcPitch   = src->pitch;
+   const int dstPitch32 = cachedSurface->pitch >> 2;
+   const int bpp        = src->format->BytesPerPixel;
+   const Uint32 aMask   = src->format->Amask;
+   const int x_ratio = (int)((src_w << 16) / dst_w) + 1;
+   const int y_ratio = (int)((src_h << 16) / dst_h) + 1;
+
+   for (int y = 0; y < dst_h; ++y) {
+       Uint8*  srcRow = srcBytes  + (src_y + ((y * y_ratio) >> 16)) * srcPitch;
+       Uint32* dstRow = dstPixels + y * dstPitch32;
+       for (int x = 0; x < dst_w; ++x) {
+           Uint8* p = srcRow + (src_x + ((x * x_ratio) >> 16)) * bpp;
+           Uint32 rawColor;
+           switch (bpp) {
+               case 4: rawColor = *(Uint32*)p; break;
+               case 3:
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+                   rawColor = (p[0] << 16) | (p[1] << 8) | p[2];
+#else
+                   rawColor = p[0] | (p[1] << 8) | (p[2] << 16);
+#endif
+                   break;
+               case 2: rawColor = *(Uint16*)p; break;
+               default: rawColor = *p; break;
+           }
+           Uint8 r, g, b, a;
+           SDL_GetRGBA(rawColor, src->format, &r, &g, &b, &a);
+           if (aMask == 0) a = 255;
+
+		   if (darkShift < 0xFF){
+			   r = (r*darkShift >> 8);
+			   g = (g*darkShift >> 8);
+			   b = (b*darkShift >> 8);
+		   }
+
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+           dstRow[x] = (r << 24) | (g << 16) | (b << 8) | a;
+#else
+           dstRow[x] = r | (g << 8) | (b << 16) | (a << 24);
+#endif
+       }
+   }
+
+   if (SDL_MUSTLOCK(cachedSurface)) SDL_UnlockSurface(cachedSurface);
+   if (SDL_MUSTLOCK(src))           SDL_UnlockSurface(src);
+
+   SDL_Surface* converted = SDL_ConvertSurface(cachedSurface, dest->format, SDL_SWSURFACE);
+   SDL_FreeSurface(cachedSurface);
+   cachedSurface = converted;
+
+   // --- Configuración alfa ---
+   if (aMask != 0 || (src->flags & SDL_SRCCOLORKEY)) {
+       cachedSurface->flags |= SDL_SRCALPHA;
+       cachedSurface->format->alpha = src->format->alpha;
+   } else {
+       cachedSurface->flags &= ~SDL_SRCALPHA;
+   }
+
+   // --- FillGaps: envolver caché en superficie mayor con fondo rojo ---
+   const int offsetX = dst_x - this->getX();
+   const int offsetY = dst_y - this->getY();
+   SDL_Rect dstRect = {this->getX(), this->getY(), 0, 0};
+
+   if (fillGaps && offsetX > 0) {
+       SDL_Surface* tmp = SDL_CreateRGBSurface(SDL_SWSURFACE,
+           this->getW(), this->getH(), dest->format->BitsPerPixel,
+           dest->format->Rmask, dest->format->Gmask,
+           dest->format->Bmask, dest->format->Amask);
+       //Drawing to fill the gaps
+	   SDL_FillRect(tmp, NULL, Constant::colors[clBackground].color);
+       //Drawing the final image centered
+	   SDL_Rect r = {offsetX, offsetY, 0, 0};
+       SDL_BlitSurface(cachedSurface, NULL, tmp, &r);
+       SDL_FreeSurface(cachedSurface);
+       cachedSurface = tmp;
+   } else if (!fillGaps){
+	   dstRect.x += offsetX;
+	   dstRect.y += offsetY;
+   }
+
+// Justo antes del SDL_BlitSurface final:
+LOG_DEBUG("Properties of %s", filepath.c_str());
+
+LOG_DEBUG("src fmt: bpp=%d mask R=%08x G=%08x B=%08x A=%08x",
+    src->format->BitsPerPixel, src->format->Rmask,
+    src->format->Gmask, src->format->Bmask, src->format->Amask);
+LOG_DEBUG("dst fmt: bpp=%d mask R=%08x G=%08x B=%08x A=%08x",
+    dest->format->BitsPerPixel, dest->format->Rmask,
+    dest->format->Gmask, dest->format->Bmask, dest->format->Amask);
+LOG_DEBUG("cache fmt: bpp=%d mask R=%08x G=%08x B=%08x A=%08x",
+    cachedSurface->format->BitsPerPixel, cachedSurface->format->Rmask,
+    cachedSurface->format->Gmask, cachedSurface->format->Bmask,
+    cachedSurface->format->Amask);
+
+   SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
+}*/

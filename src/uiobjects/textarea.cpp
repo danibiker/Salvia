@@ -36,15 +36,9 @@ void TextArea::init(){
 /**
     * 
     */
-bool TextArea::loadTextFileFromGame(std::string baseDir, GameFile game, std::string ext){
+bool TextArea::loadTextFileFromGame(std::string baseDir, GameFile& game, std::string ext){
     dirutil dir;
-    std::string fileToOpen = baseDir + dir.getFileNameNoExt(game.shortFileName) + ext;
-
-    if (dir.fileExists(fileToOpen.c_str())){
-        return loadTextFile(fileToOpen);
-    } else {
-        return loadTextFile(baseDir + dir.getFileNameNoExt(game.longFileName) + ext);
-    }
+    return loadTextFile(baseDir + dir.getFileNameNoExt(game.longFileName) + ext);
 }
 
 /**
@@ -72,7 +66,7 @@ bool TextArea::loadTextFile(std::string filepathToOpen){
             lines.push_back("");
 
             const int spaceW = Fonts::getSize(Fonts::FONTSMALL, " ");
-            for (unsigned int i=0; i < words.size(); i++){
+            for (int i=0; i < (int)words.size(); i++){
 				std::string word = words.at(i);
                 int wordW = Fonts::getSize(Fonts::FONTSMALL, word.c_str());
                 int lineW = Fonts::getSize(Fonts::FONTSMALL, lines.at(lines.size()-1).c_str());
@@ -94,6 +88,8 @@ bool TextArea::loadTextFile(std::string filepathToOpen){
     } else if (!this->filepath.empty() && this->filepath.compare(filepathToOpen) == 0){
         ret = true;
     }
+
+	this->filepath = filepathToOpen;
     return ret;
 }
 
@@ -181,13 +177,9 @@ void TextArea::draw(SDL_Surface *video_page, GameTicks gameTicks){
 
     do{
         std::string line = lines.at(i + this->lastScroll);
-        //textout_justify_ex(video_page, font, line.c_str(), this->getX(), this->getX() + this->getW() -1,
-        //    nextLineY - pixelDesp, this->getW() / 3, Constant::textColor, -1);
-        //alfont_textout_ex(video_page, fontSmall, line.c_str(), this->getX() + this->marginX, nextLineY - pixelDesp, Constant::textColor, -1);
 		Constant::drawTextTransparent(video_page, fontSmall, line.c_str(), this->getX() + this->marginX, (int) (nextLineY - pixelDesp), white, 0);
-
         nextLineY = this->getY() + marginTop + (++i) * (face_h + lineSpace);
-    } while ((size_t) (i + this->lastScroll) < lines.size() && nextLineY < this->getY() + this->getH() - face_h);
+    } while ((std::size_t) (i + this->lastScroll) < lines.size() && nextLineY < this->getY() + this->getH() - face_h);
 }
 
 /**

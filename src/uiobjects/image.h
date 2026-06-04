@@ -12,10 +12,10 @@ class Image : public Object{
         Image(int x, int y, int w, int h);
         void init();
 
-        bool drawfaded;
+        uint8_t darkShift;
         bool tamAuto;
         int vAlign;
-        //PALETTE pal;
+        bool fillGaps;
 
 		static void convertirGrises16Bits(SDL_Surface*);
         static Dimension relacion(const Dimension &src, const Dimension &dst );
@@ -23,15 +23,15 @@ class Image : public Object{
 
 		Dimension relacionAuto(const Dimension &src, const Dimension &dst );
 
-        bool loadImageFromGame(string baseDir, GameFile game, string ext);
-        bool loadImage(string filepathToOpen);
+        bool loadImageFromGame(string baseDir, GameFile& game, string ext, SDL_PixelFormat* format = NULL);
+        bool loadImage(string filepathToOpen, SDL_PixelFormat* format = NULL);
 		void printImage(SDL_Surface *video_page);
 		bool closeImage();
+		bool hasImage();
 
-		void Image::stretch_blit_sdl(SDL_Surface* src, SDL_Surface* dest, 
+		void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest, 
                       int src_x, int src_y, int src_w, int src_h, 
                       int dst_x, int dst_y, int dst_w, int dst_h);
-
 
     private:
         string filepath;
@@ -39,6 +39,5 @@ class Image : public Object{
 
 		SDL_Surface* cachedSurface; // Almacena la imagen ya escalada
 		int lastW, lastH;           // Para detectar si el tamaño cambió
-
 		
 };

@@ -1,4 +1,4 @@
-//Evita errores al usar el min o max de windows.h al incluir el filtro "io/xbrz/xbrz.h"
+﻿//Evita errores al usar el min o max de windows.h al incluir el filtro "io/xbrz/xbrz.h"
 #define NOMINMAX 
 
 #include <SDL.h>
@@ -78,6 +78,8 @@ const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_
 enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
 int launchGame(std::string);
 void closeGame();
+void init_sdl_audio(double sample_rate);
+
 //Maximo de 30 MB. Los CHD que son grandes no debemos cargarlos en memoria. Ya se encarga
 //la implementacion de vfs
 const int MAX_FILE_LOAD_MEMORY = 1024 * 2014 * 30; 
@@ -140,7 +142,7 @@ DWORD WINAPI th_printLoading(LPVOID data) {
 	uint8_t  colors = 0;
 
 	const uint16_t updateCycle = 10;
-	const uint16_t updateDelay = 1000 / (float) updateCycle;
+	const uint16_t updateDelay = (uint16_t)(1000.0f / updateCycle);
 	const uint16_t watchPeriod = 10 * updateCycle; //10 segundos de comprobacion
 	bool salir = false;
 	bool hangDetected = false;
@@ -250,4 +252,387 @@ void watchForLoadingStuck(){
 		nextFrameTime = Constant::getTicks();
 		Constant::setup_and_run_thread(hThread, IO_THREAD, true);
 	}
+}
+
+
+retro_audio_buffer_status_callback_t audio_status_cb;
+// 1. Declara una variable global o estática para guardar el callback del core
+retro_keyboard_event_t core_key_callback = nullptr;
+
+struct retro_core_variable {
+   const char *key;    // Nombre técnico: "nestopia_region"
+   const char *value;  // Nombre visual y opciones: "Region; Auto|NTSC|PAL"
+};
+
+void drawLoadingProgressBar(SDL_Surface* screen, float progress);
+struct t_progress_load{
+	float loading_progress;
+	int total_rom_files;
+	int current_rom_file;
+
+	t_progress_load(){
+		reset();
+	}
+
+	void reset(){
+		loading_progress = 0.0f;
+		total_rom_files = 10; // Valor estimado o calculado abriendo el zip
+		current_rom_file = 0;
+	}
+
+} progress_loader;
+
+
+
+void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
+    #ifndef DEBUG_LOG
+    if (level != RETRO_LOG_ERROR && gameMenu->romLoaded) {
+        return;
+    }
+    #endif
+
+	const unsigned int MAX_BUFFER = 512;
+	char buffer[MAX_BUFFER] = {0}; 
+    va_list args;
+    va_start(args, fmt);
+    int len = _vsnprintf_s(buffer, MAX_BUFFER, _TRUNCATE, fmt, args);
+    va_end(args);
+    buffer[MAX_BUFFER - 1] = '\0';
+
+	//This code is intended to detect loading process for fbanext and mame
+    if (!gameMenu->romLoaded && progress_loader.total_rom_files > 0) {
+        if (strstr(buffer, "Opening ROM file:")) {
+            progress_loader.current_rom_file++;
+            float progress = (float)progress_loader.current_rom_file / (float)progress_loader.total_rom_files;
+            drawLoadingProgressBar(gameMenu->overlay, (progress > 1.0f) ? 1.0f : progress);
+        }
+    }
+
+	//Log the output of the core
+	#ifdef DEBUG_LOG
+		OutputDebugStringA(buffer);
+	#else 
+		if (level == RETRO_LOG_ERROR) {
+			OutputDebugStringA(buffer);
+		}
+	#endif
+}
+
+// ─────────────────────────────────────────────
+// Helper: split "opt1|opt2|opt3" → vector
+// ─────────────────────────────────────────────
+namespace {
+	std::vector<std::string> splitOptions(const std::string& raw) {
+		std::vector<std::string> out;
+		std::istringstream ss(raw);
+		std::string token;
+		while (std::getline(ss, token, '|')) {
+			if (!token.empty()) out.push_back(token);
+		}
+		return out;
+	}
+
+	/** Necesitamos borrar ciertos elementos porque sino da la sensacion de que tenemos 
+	*   opciones del core duplicadas. Por ejemplo:
+	*
+	* Key: fbneo-dipswitch-msx_lic2kill-BIOS_-_NOTE__Changes_require_re-start!, Selected: 0
+	* Key: fbneo-dipswitch-msx_007tld-BIOS_-_NOTE__Changes_require_re-start!, Selected: 0
+	* Key: fbneo-dipswitch-msx_10yard-BIOS_-_NOTE__Changes_require_re-start!, Selected: 0
+	*/
+	void cleanPrefix(std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &data) {
+		const std::string prefijo = "fbneo-dipswitch";
+    
+		auto it = data.begin();
+		while (it != data.end()) {
+			// Comprobar si la clave empieza por el prefijo
+			if (it->first.compare(0, prefijo.length(), prefijo) == 0) {
+				// Guardar el iterador actual y avanzarlo antes de borrar
+				auto it_borrar = it++; 
+				data.erase(it_borrar);
+			} else {
+				// Avanzar normalmente si no cumple la condición
+				++it;
+			}
+		}
+	}
+	/** Necesitamos borrar ciertos elementos porque sino da la sensacion de que tenemos 
+	*   opciones del core duplicadas. Por ejemplo:
+	*
+	* Key: fbneo-dipswitch-msx_lic2kill-BIOS_-_NOTE__Changes_require_re-start!, Selected: 0
+	* Key: fbneo-dipswitch-msx_007tld-BIOS_-_NOTE__Changes_require_re-start!, Selected: 0
+	* Key: fbneo-dipswitch-msx_10yard-BIOS_-_NOTE__Changes_require_re-start!, Selected: 0
+	*
+	* Este metodo devolvera la key sin incluir el juego en particular: 
+	*      fbneo-dipswitch-msx-BIOS_-_NOTE__Changes_require_re-start!
+	*/
+	std::string cleanPerGameKey(std::string key){
+		std::string validKey = key;
+		const std::string prefijo = "fbneo-dipswitch";
+		if (validKey.compare(0, prefijo.length(), prefijo) == 0) {
+			std::size_t posUnderscore = validKey.find_first_of("_");
+			if (posUnderscore != string::npos){
+				std::size_t nextMinus = validKey.substr(posUnderscore).find_first_of("-");
+				if (nextMinus != string::npos){
+					validKey = validKey.substr(0, posUnderscore) + 
+						validKey.substr(posUnderscore + nextMinus);
+				}
+			}
+		}
+		return validKey;
+	}
+
+	// Crea o actualiza una entrada preservando `selected` si ya existía.
+	void applyEntry(std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &data,
+					const std::string& key,
+					std::string description,       // Pasamos por valor para mover
+					std::vector<std::string> values, // Pasamos por valor para mover
+					int defaultIdx = 0)
+	{
+		std::string validKey = cleanPerGameKey(key);
+    
+		auto it = data.find(validKey);
+		if (it != data.end()) {
+			if (it->second->description.empty())
+				it->second->description = description;
+
+			if (it->second->values.empty())
+				it->second->values = values;
+        
+			if (it->second->cachedValue.empty() && !it->second->values.empty())
+				it->second->cachedValue = it->second->values[it->second->selected];
+
+			LOG_DEBUG("[Core Options] SET. Key already defined %s", validKey.c_str());
+			return;
+		} 
+
+		cfg::t_emu_props *raw = new cfg::t_emu_props();
+		raw->description = std::move(description);
+		raw->values      = std::move(values);
+		raw->selected    = defaultIdx;
+
+		if (!raw->values.empty())
+			raw->cachedValue = raw->values[defaultIdx];
+
+		LOG_DEBUG("[Core Options] SET %s = %s", validKey.c_str(), raw->cachedValue.c_str());
+		data[validKey] = std::unique_ptr<cfg::t_emu_props>(raw); 
+	}
+} // namespace anónimo
+
+
+/**
+*
+*/
+void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoader){
+    struct ListStatus menuBeforeExit;
+    int retMenu = gameMenu.recoverGameMenuPos(menuData, menuBeforeExit);
+    if (retMenu == 0){
+        if (menuBeforeExit.layout != menuData.layout){
+            menuData.setLayout(menuBeforeExit.layout, gameMenu.overlay->w, gameMenu.overlay->h);
+        }
+        menuData.animateBkg = menuBeforeExit.animateBkg;
+    }
+
+    gameMenu.loadEmuCfg(menuData);
+    if (retMenu == 0 && menuData.maxLines == menuBeforeExit.maxLines 
+		&& menuBeforeExit.iniPos >= 0 && menuBeforeExit.iniPos < menuData.listSize
+		&& menuBeforeExit.endPos > 0 && menuBeforeExit.endPos <= menuData.listSize
+		&& menuBeforeExit.curPos > 0 && menuBeforeExit.curPos < menuData.listSize){
+		//Setting the filter if it was set
+		menuData.gameDataFields.onlyParents = menuBeforeExit.onlyParents;
+		menuData.gameDataFields.posManufacturer = menuBeforeExit.posManufacturer;
+		menuData.gameDataFields.posSystem = menuBeforeExit.posSystem;
+		menuData.gameDataFields.posYear = menuBeforeExit.posYear;
+		menuData.checkFilter();
+		//Seting the menu to the proper position and the selected element
+		menuData.iniPos = menuBeforeExit.iniPos;
+        menuData.endPos = menuBeforeExit.endPos;
+        menuData.curPos = menuBeforeExit.curPos;
+    } else {
+		//Algun dato no es correcto segun el tamanyo de la lista
+		menuData.resetIndexPos();
+	}
+    gameMenu.createMenuImages(menuData);
+}
+
+void drawLoadingProgressBar(SDL_Surface* screen, float progress) {
+    if (!screen) return;
+
+    // Configuración de dimensiones
+    int barW = screen->w / 2;
+    int barH = 20;
+    int barX = (screen->w - barW) / 2;
+    int barY = (screen->h / 2) + 40; // Debajo del texto de "Loading..."
+
+    // Colores (Ajusta según tu paleta)
+    Uint32 colorBorder		= SDL_MapRGBA(screen->format, 200, 200, 200, 0xFF);
+    Uint32 colorFill		= SDL_MapRGBA(screen->format, bkgMenu.r, bkgMenu.g, bkgMenu.b, 0xFF);
+	Uint32 colorFillLighter = SDL_MapRGBA(screen->format, bkgMenuLighter.r, bkgMenuLighter.g, bkgMenuLighter.b, 0xFF);
+    Uint32 colorBG			= SDL_MapRGBA(screen->format, 40, 40, 40, 0xFF);
+	
+    //Dibujar fondo de la barra
+    SDL_Rect bgRect = { (Sint16)barX, (Sint16)barY, (Uint16)barW, (Uint16)barH };
+	//Actualizamos el area de la barra y el area del texto para que se puedan ver
+	SDL_Rect bgRectFill = { bgRect.x, bgRect.y, bgRect.w, barH * 5};
+	SDL_FillRect(screen, &bgRectFill, Constant::colors[clBackground].color);
+	//Mostramos el fondo de la barra
+    SDL_FillRect(screen, &bgRect, colorBG);
+
+    //Dibujar el progreso real
+    if (progress > 1.0f) progress = 1.0f;
+    int fillW = (int)(barW * progress);
+    if (fillW > 0) {
+        SDL_Rect fillRect = { (Sint16)barX, (Sint16)barY, (Uint16)fillW, (Uint16)(barH / 2.0) };
+        SDL_FillRect(screen, &fillRect, colorFillLighter);
+		fillRect.y += (Uint16)(barH / 2);
+        SDL_FillRect(screen, &fillRect, colorFill);
+    }
+
+	const int txtW = 40;
+	SDL_Rect percentRect = { barX + barW / 2 - txtW, barY + barH, 80, barH * 4 };
+	percentRect.x += txtW;
+	percentRect.y += 15;
+	PB_drawPercent(screen, (int)(progress * 100.0), percentRect.x, percentRect.y, 3, PBUtil::rgb(screen, 100, 210, 255));
+
+    //Dibujar borde (opcional, 1px)
+    //SDL_FillRect no tiene "drawRect" vacío, así que usamos 4 líneas si quieres borde fino
+    //Actualizar solo la región de la barra para ganar rendimiento
+    //SDL_UpdateRect(screen, barX, barY, barW, 3*barH);
+	SDL_FillRect(gameMenu->gameScreen, NULL, Constant::colors[clBackground].color);
+	SDL_Flip(gameMenu->gameScreen);
+}
+
+void initGameAudio(double sampleRate){
+	/* Inicializar SDL Audio con la frecuencia del core.
+	 *
+	 * El device se abre UNA SOLA VEZ por sesion (primer juego cargado)
+	 * y se mantiene abierto hasta cierre de la app — abrirlo/cerrarlo
+	 * en cada carga colgaba SDL_OpenAudio en Xbox 360 tras varias
+	 * iteraciones (ver closeGame para el rationale).
+	 *
+	 * En cargas posteriores el device sigue abierto (audio_opened==1)
+	 * pero el callback esta pausado.  Reanudamos con PauseAudio(0).
+	 *
+	 * RESET_AUDIO (opt-in): si el sample_rate cambia entre cargas
+	 * (p.ej. FBNeo Neo Geo cart 48011 Hz -> Neo Geo CD 48000 Hz), el
+	 * consumidor SDL queda desincronizado y aparecen pops.  Con
+	 * RESET_AUDIO definido reabrimos el device a la nueva tasa.  Es
+	 * el camino "C": resuelve el desajuste a cambio de exponer el bug
+	 * historico de SDL_OpenAudio/CloseAudio en 360.  Sin la macro se
+	 * mantiene el comportamiento estable de no reabrir nunca. */
+	if (!audio_opened){
+		init_sdl_audio(sampleRate);
+	} else {
+#ifdef RESET_AUDIO
+		int new_rate = (int)sampleRate;
+		if (new_rate > 0 && new_rate != g_audio_opened_rate) {
+			LOG_DEBUG("RESET_AUDIO: rate change %d -> %d, reopening SDL audio\n",
+				g_audio_opened_rate, new_rate);
+			audio_closing = true;
+			SDL_PauseAudio(1);
+			SDL_Delay(50);              // dejar terminar el callback en vuelo
+			gameMenu->g_audioBuffer.Clear();
+			SDL_CloseAudio();
+			audio_opened = 0;
+			g_audio_opened_rate = 0;
+			audio_closing = false;
+			init_sdl_audio(sampleRate);
+		} else {
+			SDL_PauseAudio(0);
+		}
+#else
+		SDL_PauseAudio(0);
+#endif
+	}
+	gameMenu->g_audioRate.init(BUFF_SIZE);
+}
+
+bool extractAndLoadGame(std::string rompath){
+	bool container = false;
+	bool isM3U = false;
+	struct retro_system_info info;
+	memset(&info, 0, sizeof(info));
+	bool gameLoaded;
+	unzippedFileInfo unzipped;
+	const bool loadAchievement = gameMenu->getCfgLoader()->configMain[cfg::enableAchievements].valueBool;
+	const std::string tempDir = Constant::getAppDir() + Constant::getFileSep() + "tmp";
+	const bool bios_only = rompath.compare(BIOS_ONLY) == 0;
+
+	romPaths.rompath.clear();
+	closeGame();
+	retro_get_system_info(&info);
+	std::string allowedExtensions = Constant::replaceAll(info.valid_extensions, "|", " ");
+	LOG_DEBUG("Extensiones: %s\n", info.valid_extensions);
+
+	if (bios_only) {
+		LOG_DEBUG("BIOS-only mode: skipping container detection / unzip\n");
+		/* Dejar unzipped en estado "vacio coherente" — los siguientes
+		 * pasos del flujo comun lo veran como "no hay fichero". */
+		unzipped.errorCode = 0;
+		unzipped.extractedPath = "";
+		unzipped.originalPath  = "";
+		unzipped.memoryBuffer  = NULL;
+		unzipped.romsize       = 0;
+	} else {
+		detectContainer(rompath, isM3U, container);
+		const bool noUncompress = gameMenu->getCfgLoader()->getCfgEmu()->no_uncompress || container;
+		if (noUncompress){
+			LOG_DEBUG("Loading rom directly %s", rompath.c_str());
+			progress_loader.reset();
+			progress_loader.total_rom_files = getZipFileCountFiltered(rompath);
+
+			if (!container){
+				// Dibujamos la barra inicial al 0%
+				drawLoadingProgressBar(gameMenu->overlay, 0.0f);
+			}
+			unzipped.errorCode = 0;
+			unzipped.extractedPath = rompath;
+			unzipped.originalPath  = rompath;
+		} else {
+			if (dir.dirExists(tempDir.c_str())){
+				dir.borrarDir(tempDir);
+			}
+			if (dir.createDir(tempDir) <= 0){
+				LOG_ERROR("Error creating the temporary directory %s\n", tempDir.c_str());
+				gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.direrror") + tempDir, 3000);
+				return false;
+			}
+			LOG_DEBUG("Unzipping or loading rom %s", rompath.c_str());
+			unzipped = unzipOrLoad(rompath, allowedExtensions, !info.need_fullpath, tempDir);
+		}
+
+		if (unzipped.errorCode != 0){
+			LOG_ERROR("No se ha podido abrir el fichero o no se puede descomprimir: %s", rompath.c_str());
+			gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.openfileerror") + rompath, 3000);
+			return false;
+		}
+	}
+
+	retro_init();
+	
+	if (bios_only) {
+		// Pasar NULL al core: el core debe haber anunciado SET_SUPPORT_NO_GAME.
+		gameLoaded = retro_load_game(NULL);
+	} else {
+		struct retro_game_info game = { unzipped.extractedPath.c_str(), unzipped.memoryBuffer, unzipped.romsize, NULL };
+		// Multi-disc: si es un M3U, indicamos al core qué disco cargar de inicio
+		// antes de retro_load_game (asi el savestate coincide con el disco correcto).
+		findInitialImage(rompath, isM3U);
+		gameLoaded = retro_load_game(&game);
+	}
+
+	//Liberar la memoria tras la carga exitosa
+	//La mayoría de los cores de Libretro ya han copiado los datos a su propia RAM interna
+	//Si hay logros habilitados, ya se encarga de liberarse posteriormente
+	if (unzipped.memoryBuffer && !loadAchievement){
+		free(unzipped.memoryBuffer);
+		unzipped.memoryBuffer = NULL;
+	}
+
+	//After the loading of the game, we load the achievements
+	Achievements::instance()->clearAllData();
+	if (!bios_only && gameLoaded && loadAchievement){
+		gameMenu->loadGameAchievements(unzipped);
+	}
+
+	return gameLoaded;
 }

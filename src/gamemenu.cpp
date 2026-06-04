@@ -45,6 +45,11 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	bkgTextFps = SDL_MapRGB(this->overlay->format, 0, 0, 0);
 	uBkgColor = SDL_MapRGB(this->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 
+	bg_image.setW(this->overlay->w);
+	bg_image.setH(this->overlay->h);
+	bg_image.fillGaps = true;
+	bg_image.darkShift = 150;
+
 	if (!joystick->init_all_joysticks()){
 		configButtonsJOY();
 	}
@@ -66,6 +71,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	cpuSurface = NULL;
 	memSurface = NULL;
 	bg_screenshot = NULL;
+	filterAlphaRec = NULL;
 	lastFpsUpdate = 0;
 	lastMemUpdate = 0;
 	cargarSystemAchievementTranslation(Constant::getAppDir() + ROUTE_ACHIEVEMENT_TRANSLATIONS);
@@ -84,7 +90,8 @@ GameMenu::~GameMenu(){
 	if (fpsSurface) SDL_FreeSurface(fpsSurface);
 	if (cpuSurface) SDL_FreeSurface(cpuSurface);
 	if (memSurface) SDL_FreeSurface(memSurface);
-	for (unsigned int i=0; i < messages.size(); i++) {
+	if (filterAlphaRec) SDL_FreeSurface(filterAlphaRec);
+	for (int i=0; i < (int)messages.size(); i++) {
 		SDL_FreeSurface(messages[i].cache);
 	}
 		
@@ -99,11 +106,192 @@ GameMenu::~GameMenu(){
 	Achievements::instance()->shutdown();
 }
 
+
+
+/**
+ * 
+ */
+void GameMenu::createMenuImages(ListMenu &listMenu){
+    /** snap */
+    Image imageSnap;
+    const int snapW = overlay->w / 2;
+    const int snapH = listMenu.getH() / 2;
+    const int snapOffset = overlay->w / 10;
+    //const int snapOffset = 5;
+    menuImages.clear();
+    menuTextAreas.clear();
+
+    if (overlay->w / 2 >= 320){
+        imageSnap.setX(overlay->w / 2 + snapOffset);
+        imageSnap.setY(listMenu.getY());
+        imageSnap.setW(snapW - snapOffset * 2);
+        imageSnap.setH(snapH - snapOffset);
+    } else {
+        imageSnap.setX(overlay->w / 2);
+        imageSnap.setY(listMenu.getY());
+        imageSnap.setW(snapW);
+        imageSnap.setH(snapH);
+    }
+    imageSnap.vAlign = ALIGN_TOP;
+    menuImages.insert(make_pair(SNAP, imageSnap));
+
+    /** Box2d */
+    Image imageBox2d;
+    const int box2dH = listMenu.getH() / 4;
+    const int box2dW = overlay->w / 8;
+    imageBox2d.setX(overlay->w / 2);
+    imageBox2d.setY(overlay->h / 2 - box2dH);
+    imageBox2d.setW(box2dW);
+    imageBox2d.setH(box2dH);
+    menuImages.insert(make_pair(BOX2D, imageBox2d));
+
+    /** snaptit*/
+    Image imageSnaptit;
+    const int snapTitH = listMenu.getH() / 4;
+    const int snapTitW = overlay->w / 6;
+    imageSnaptit.setX(overlay->w - snapTitW);
+    imageSnaptit.setY(overlay->h / 2 - snapTitH);
+    imageSnaptit.setW(snapTitW);
+    imageSnaptit.setH(snapTitH);
+    menuImages.insert(make_pair(SNAPTIT, imageSnaptit));
+
+    Image imageSnapFs(0, 0, overlay->w, overlay->h);
+    menuImages.insert(make_pair(SNAPFS, imageSnapFs));
+    
+    const int sectionGap = 0;
+    const int textAreaY = listMenu.getH() / 2 + listMenu.getY() + sectionGap;
+    TextArea textarea(overlay->w / 2, textAreaY, overlay->w / 2, overlay->h - textAreaY);
+    textarea.marginX = (int)floor((double)overlay->w / 100);
+    menuTextAreas.insert(make_pair(SYNOPSIS, textarea));
+}
+
+/**
+ * 
+ */
+void GameMenu::refreshScreen(ListMenu &listMenu){
+	ConfigEmu emu = *cfgLoader->getCfgEmu();
+    //Drawing the emulator name
+    TTF_Font *fontBig = Fonts::getFont(Fonts::FONTBIG);
+    TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
+    const int sepVertX = listMenu.getW();
+    const int halfWidth = overlay->w / 2;
+	int face_h_big = TTF_FontLineSkip(fontBig);
+	int face_h_small = TTF_FontLineSkip(fontsmall);
+	bool debug = true;
+
+    //Drawing the rest of list and images
+    if (listMenu.getNumGames() > (std::size_t)listMenu.curPos){
+        auto game = listMenu.filteredGames.at(listMenu.curPos);
+
+		if (!game->longFileName.empty()){
+            if (listMenu.layout == LAYBOXES) {
+				std::string title = emu.name;
+				if (listMenu.gameDataFields.systems.size() > 0 && (int)listMenu.gameDataFields.systems.size() > listMenu.gameDataFields.posSystem){
+					if (listMenu.gameDataFields.posSystem > -1){
+						title += " (" + listMenu.gameDataFields.systems[listMenu.gameDataFields.posSystem] + ")";
+					} else {
+						title += " " + LanguageManager::instance()->get("menu.filter.all");
+					}
+				}
+
+				Constant::drawTextCentTransparent(overlay, fontBig, title.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+					true, false, textColor, 0);
+				showScrapProcess(listMenu);
+				fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1 , overlay->w - listMenu.marginX, listMenu.marginY - 1, menuBars);
+                fastline(this->overlay, sepVertX, listMenu.marginY , sepVertX, listMenu.getH() + listMenu.marginY - 1, menuBars);
+                listMenu.draw(this->overlay, getEmuStatus() != EMU_MENU_FILTER);
+
+				if (getEmuStatus() == EMU_MENU_FILTER){
+					drawFilters(listMenu);
+				} else {
+					//Draw and update the overlay because the loading of images can take a long time
+					if (listMenu.keyUp){
+						string assetsDir = dirutil::getPathPrefix(emu.assets) + string(Constant::tempFileSep);
+						//Drawing the rom's synopsis text
+						menuTextAreas[SYNOPSIS].loadTextFileFromGame(assetsDir + "synopsis" + string(Constant::tempFileSep), *game, ".txt");
+						menuTextAreas[SYNOPSIS].resetTicks(this->gameTicks);
+						menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
+						
+						//Snapshot picture
+						menuImages[SNAP].loadImageFromGame(assetsDir + "snap" + string(Constant::tempFileSep), *game, ".png", this->overlay->format);
+						menuImages[SNAP].printImage(this->overlay);
+						
+						if (overlay->w < 640){
+							//If it's so small, only show the snapshot
+							return;
+						}
+						
+						//Box picture
+						menuImages[BOX2D].loadImageFromGame(assetsDir + "box2d" + string(Constant::tempFileSep), *game, ".png", this->overlay->format);
+						menuImages[BOX2D].printImage(this->overlay);
+						
+						//Title picture
+						menuImages[SNAPTIT].loadImageFromGame(assetsDir + "snaptit" + string(Constant::tempFileSep), *game, ".png", this->overlay->format);
+						menuImages[SNAPTIT].printImage(this->overlay);
+					} else {
+						menuImages[SNAP].printImage(this->overlay);
+						menuImages[BOX2D].printImage(this->overlay);
+						menuImages[SNAPTIT].printImage(this->overlay);
+						menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
+					}
+				}
+
+            } else if (listMenu.layout == LAYSIMPLE) {
+                if (listMenu.keyUp){
+                    //Snapshot picture
+                    menuImages[SNAPFS].loadImageFromGame(dirutil::getPathPrefix(emu.assets) + string(Constant::tempFileSep)
+                        + "snap" + string(Constant::tempFileSep), *game, ".png");
+                }
+                menuImages[SNAPFS].printImage(this->overlay);
+                //Draw the menu element after the image
+                Constant::drawTextCent(overlay, fontBig, emu.name.c_str(), 
+					halfWidth, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+					true, false, textColor, 0);
+
+                fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1, listMenu.getW(), listMenu.marginY - 1, textColor);
+                listMenu.draw(this->overlay);
+
+            } else if (listMenu.layout == LAYTEXT) {
+
+				Constant::drawTextCent(overlay, fontBig, emu.name.c_str(), 
+					halfWidth, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+					true, false, textColor, 0);
+
+                fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1, listMenu.getW(), listMenu.marginY - 1, textColor);
+                listMenu.draw(this->overlay);
+            }
+        }
+	} else if (listMenu.getNumGames() == 0 && emu.generalConfig){
+		configMenus->draw(overlay);
+		showScrapProcess(listMenu);
+    } else if (listMenu.getNumGames() == 0){
+		Constant::drawTextCentTransparent(overlay, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+			true, false, textColor, 0);
+		showScrapProcess(listMenu);
+		fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1 , overlay->w - listMenu.marginX, listMenu.marginY - 1, menuBars);
+
+		if (getEmuStatus() == EMU_MENU_FILTER){
+			fastline(this->overlay, sepVertX, listMenu.marginY , sepVertX, listMenu.getH() + listMenu.marginY - 1, menuBars);
+			drawFilters(listMenu);
+		} else {
+			Constant::drawTextCent(overlay, fontsmall, "No roms found", 0, 0, true, true, textColor, 0);
+		}
+
+    } else {
+		Constant::drawTextCent(overlay, fontsmall, "The configuration is not valid", 0, 0, true, true, textColor, 0);
+		Constant::drawTextCent(overlay, fontsmall, "Press TAB to select the next entry or", 0, face_h_small + 3, true, true, textColor, 0);
+		Constant::drawTextCent(overlay, fontsmall, "Press ESC to exit", 0, (face_h_small + 3) * 2, true, true, textColor, 0);
+    }
+}
+
 void GameMenu::initAchievements(){
-	Achievements::instance()->setHardcoreMode(getCfgLoader()->configMain[cfg::hardcoreRA].valueBool);
-	const std::string user = getCfgLoader()->configMain[cfg::raUser].valueStr;
-	const std::string pass = getCfgLoader()->configMain[cfg::raPass].valueStr;
-	Achievements::instance()->login(user.c_str(), pass.c_str());
+	const bool loadAchievement = getCfgLoader()->configMain[cfg::enableAchievements].valueBool;
+	if (loadAchievement){
+		Achievements::instance()->setHardcoreMode(getCfgLoader()->configMain[cfg::hardcoreRA].valueBool);
+		const std::string user = getCfgLoader()->configMain[cfg::raUser].valueStr;
+		const std::string pass = getCfgLoader()->configMain[cfg::raPass].valueStr;
+		Achievements::instance()->login(user.c_str(), pass.c_str());
+	}
 }
 
 /**
@@ -355,170 +543,100 @@ CfgLoader * GameMenu::getCfgLoader(){
 	return this->cfgLoader;
 }
 
-/**
- * 
- */
-void GameMenu::createMenuImages(ListMenu &listMenu){
-    /** snap */
-    Image imageSnap;
-    const int snapW = overlay->w / 2;
-    const int snapH = listMenu.getH() / 2;
-    const int snapOffset = overlay->w / 10;
-    //const int snapOffset = 5;
-    menuImages.clear();
-    menuTextAreas.clear();
+void GameMenu::drawFilters(ListMenu &listMenu){
+	int x = menuTextAreas[SYNOPSIS].getX() + listMenu.marginX;
+	int y = menuImages[SNAP].getY();
+	int w = menuTextAreas[SYNOPSIS].getW() - 2*listMenu.marginX;
+	std::string val;
+	TTF_Font *fontbig = Fonts::getFont(Fonts::FONTBIG);
+	int face_h = TTF_FontLineSkip(fontbig);
+	SDL_Color lineTextColor;
+	const int iswitchenabled = SDL_MapRGB(overlay->format, 200, 200, 200);
+	const int iswitchdisabled = SDL_MapRGB(overlay->format, 77, 77, 77);
+	const int sw_w = 50;
+	const int sw_h = face_h - 2;
+	auto opciones = configMenus->menuGameFilter->opciones;
 
-    if (overlay->w / 2 >= 320){
-        imageSnap.setX(overlay->w / 2 + snapOffset);
-        imageSnap.setY(listMenu.getY());
-        imageSnap.setW(snapW - snapOffset * 2);
-        imageSnap.setH(snapH - snapOffset);
-    } else {
-        imageSnap.setX(overlay->w / 2);
-        imageSnap.setY(listMenu.getY());
-        imageSnap.setW(snapW);
-        imageSnap.setH(snapH);
-    }
-    imageSnap.vAlign = ALIGN_TOP;
-    menuImages.insert(make_pair(SNAP, imageSnap));
+	SDL_Rect rectElem = {x, y, w, face_h};
+	
+	if (filterAlphaRec == NULL || filterAlphaRec->w != rectElem.w || filterAlphaRec->h != rectElem.h){
+		if (filterAlphaRec != NULL){
+			SDL_FreeSurface(filterAlphaRec);
+		}
+		Constant::createRectAlphaFilled(filterAlphaRec, rectElem, overlay->format, clBkgMenu, true);
+	}
 
-    /** Box2d */
-    Image imageBox2d;
-    const int box2dH = listMenu.getH() / 4;
-    const int box2dW = overlay->w / 8;
-    imageBox2d.setX(overlay->w / 2);
-    imageBox2d.setY(overlay->h / 2 - box2dH);
-    imageBox2d.setW(box2dW);
-    imageBox2d.setH(box2dH);
-    menuImages.insert(make_pair(BOX2D, imageBox2d));
+	JFY_TYPE justifyCenter(JFY_CENTER, w);
 
-    /** snaptit*/
-    Image imageSnaptit;
-    const int snapTitH = listMenu.getH() / 4;
-    const int snapTitW = overlay->w / 6;
-    imageSnaptit.setX(overlay->w - snapTitW);
-    imageSnaptit.setY(overlay->h / 2 - snapTitH);
-    imageSnaptit.setW(snapTitW);
-    imageSnaptit.setH(snapTitH);
-    menuImages.insert(make_pair(SNAPTIT, imageSnaptit));
+	std::string filterTitle = Constant::string_format(LanguageManager::instance()->get("menu.filter.number"), listMenu.filteredGames.size());
+	SDL_Rect fillHeaderRect = {x, y, w, face_h + 3};
+	fastline(this->overlay, x, y + face_h + 3, x + w, y + face_h + 3, menuBars);
+	//SDL_FillRect(this->overlay, &fillHeaderRect, Constant::colors[clWhite].color);
+	Constant::drawTextTransparent(overlay, fontbig, filterTitle.c_str(), x, y, Constant::colors[clWhite].sdlColor, 0, justifyCenter);
+	y += face_h + 7;
 
-    Image imageSnapFs(0, 0, overlay->w, overlay->h);
-    imageSnapFs.drawfaded = true;
-    menuImages.insert(make_pair(SNAPFS, imageSnapFs));
-    
-    const int sectionGap = 0;
-    const int textAreaY = listMenu.getH() / 2 + listMenu.getY() + sectionGap;
-    TextArea textarea(overlay->w / 2, textAreaY, overlay->w / 2, overlay->h - textAreaY);
-    textarea.marginX = (int)floor((double)overlay->w / 100);
-    menuTextAreas.insert(make_pair(SYNOPSIS, textarea));
-}
+	for (int i=0; i < (int)opciones.size(); i++){
+		if (i == configMenus->menuGameFilter->seleccionado){
+			rectElem.y = y + i * (face_h + 3);
+			SDL_BlitSurface(filterAlphaRec, NULL, overlay, &rectElem);
+			lineTextColor = black;
+		} else {
+			lineTextColor = white;
+		}
 
-/**
- * 
- */
-void GameMenu::refreshScreen(ListMenu &listMenu){
-	ConfigEmu emu = *cfgLoader->getCfgEmu();
-    //Drawing the emulator name
-    TTF_Font *fontBig = Fonts::getFont(Fonts::FONTBIG);
-    TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
-    const int sepVertX = listMenu.getW();
-    const int halfWidth = overlay->w / 2;
-	int face_h_big = TTF_FontLineSkip(fontBig);
-	int face_h_small = TTF_FontLineSkip(fontsmall);
-	bool debug = true;
+		SDL_Rect dimLeft = Constant::drawTextTransparent(overlay, fontbig, opciones[i]->titulo.c_str(), x, y + i * (face_h + 3), lineTextColor, 0);
+		const int leftTxtDim = dimLeft.w + 3;
+		JFY_TYPE justifyHelper(JFY_RIGHT, w - leftTxtDim);
 
-    //Drawing the rest of list and images
-    if (listMenu.getNumGames() > (std::size_t)listMenu.curPos){
-        auto game = listMenu.listGames.at(listMenu.curPos).get();
-        
-        if (!game->shortFileName.empty()){
-            if (listMenu.layout == LAYBOXES) {
-				Constant::drawTextCentTransparent(overlay, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
-					true, false, textColor, 0);
-				showScrapProcess(listMenu);
-				fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1 , overlay->w - listMenu.marginX, listMenu.marginY - 1, menuBars);
-                fastline(this->overlay, sepVertX, listMenu.marginY , sepVertX, listMenu.getH() + listMenu.marginY - 1, menuBars);
-                listMenu.draw(this->overlay);
+		if (opciones[i]->tipo == OPC_LISTA_REF){
+			OpcionListaRef* l = (OpcionListaRef*)opciones[i];
+			int num = (int)(*l->items).size();
+			int idx = *l->indice;
 
-                //Draw and update the overlay because the loading of images can take a long time
-                if (listMenu.keyUp){
-                    string assetsDir = dirutil::getPathPrefix(emu.assets) + string(Constant::tempFileSep);
-                    //Drawing the rom's synopsis text
-                    menuTextAreas[SYNOPSIS].loadTextFileFromGame(assetsDir + "synopsis" + string(Constant::tempFileSep), *game, ".txt");
-                    menuTextAreas[SYNOPSIS].resetTicks(this->gameTicks);
-                    menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
+			if (idx <= -1){
+				val = LanguageManager::instance()->get("menu.filter.all");
+			} else {
+				val = (*l->items).at(idx);
+				//Lamentablemente la informacion de los anyos de mame no esta bien especificada.
+				//revisar mameparser.h -> convertYear si se quiere saber como se clasifican los anyos con el simbolo ?
+				if (val.length() == 2){
+					if (val == "20"){
+						val = "2000's";
+					} else {
+						val = "19" + val + "'s";
+					}
+				} else if (val == "9999"){
+					val = LanguageManager::instance()->get("menu.filter.unknown");
+				}
+			}
+			SDL_Rect dimRight = Constant::drawTextTransparent(overlay, fontbig, val.c_str(), x + leftTxtDim, y + i * (face_h + 3), lineTextColor, 0, justifyHelper);
 
-                    //Snapshot picture
-                    menuImages[SNAP].loadImageFromGame(assetsDir + "snap" + string(Constant::tempFileSep), *game, ".png");
-                    menuImages[SNAP].printImage(this->overlay);
+		} else if (opciones[i]->tipo == OPC_BOOLEANA){
+			OpcionBool* b = (OpcionBool*)opciones[i];
+			bool enabled = *b->valor;
+			// 2. Dibujar el fondo del switch
+			const int sw_x = x + leftTxtDim + justifyHelper.getJustification(sw_w);
+			const int sw_y = y + i * (face_h + 3) + 1;
+			SDL_Rect baseRect = {sw_x, sw_y, sw_w, sw_h };
+			SDL_FillRect(overlay, &baseRect, enabled ? iswitchenabled : iswitchdisabled);
 
-                    if (overlay->w < 640){
-                        //If it's so small, only show the snapshot
-                        return;
-                    }
+			// 3. Calcular el thumb (boton interno) de forma relativa
+			const int spacing = 4;
+			const int size = sw_h - (spacing * 2);
+			int thumbX = sw_x + (enabled ? (sw_w - size - spacing) : spacing);
 
-                    //Box picture
-                    menuImages[BOX2D].loadImageFromGame(assetsDir + "box2d" + string(Constant::tempFileSep), *game, ".png");
-                    menuImages[BOX2D].printImage(this->overlay);
+			SDL_Rect thumbRect = { thumbX, sw_y + spacing, size, size };
 
-                    //Title picture
-                    menuImages[SNAPTIT].loadImageFromGame(assetsDir + "snaptit" + string(Constant::tempFileSep), *game, ".png");
-                    menuImages[SNAPTIT].printImage(this->overlay);
-                } else {
-                    menuImages[SNAP].printImage(this->overlay);
-                    menuImages[BOX2D].printImage(this->overlay);
-                    menuImages[SNAPTIT].printImage(this->overlay);
-                    menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
-                }
-
-            } else if (listMenu.layout == LAYSIMPLE) {
-                if (listMenu.keyUp){
-                    //Snapshot picture
-                    menuImages[SNAPFS].loadImageFromGame(dirutil::getPathPrefix(emu.assets) + string(Constant::tempFileSep)
-                        + "snap" + string(Constant::tempFileSep), *game, ".png");
-                }
-                menuImages[SNAPFS].printImage(this->overlay);
-                //Draw the menu element after the image
-                Constant::drawTextCent(overlay, fontBig, emu.name.c_str(), 
-					halfWidth, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
-					true, false, textColor, 0);
-
-                fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1, listMenu.getW(), listMenu.marginY - 1, textColor);
-                listMenu.draw(this->overlay);
-
-            } else if (listMenu.layout == LAYTEXT) {
-
-				Constant::drawTextCent(overlay, fontBig, emu.name.c_str(), 
-					halfWidth, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
-					true, false, textColor, 0);
-
-                fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1, listMenu.getW(), listMenu.marginY - 1, textColor);
-                listMenu.draw(this->overlay);
-            }
-        }
-	} else if (listMenu.getNumGames() == 0 && emu.generalConfig){
-		configMenus->draw(overlay);
-		showScrapProcess(listMenu);
-    } else if (listMenu.getNumGames() == 0){
-		//Constant::drawTextCent(overlay, fontBig, emu.name.c_str(), 
-		//			cfgLoader->getWidth(), face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
-		//			true, false, textColor, 0);
-
-		Constant::drawTextCentTransparent(overlay, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
-					true, false, textColor, 0);
-
-        fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1, overlay->w - listMenu.marginX, listMenu.marginY - 1, textColor);
-		Constant::drawTextCent(overlay, fontsmall, "No roms found", 0, 0, true, true, textColor, 0);
-
-		// Para renderizar, usas el puntero de la clase
-        Menu* m = configMenus->obtenerMenuActual();
-        // Dibujar m->titulo y m->opciones[i]->titulo...
-
-    } else {
-		Constant::drawTextCent(overlay, fontsmall, "The configuration is not valid", 0, 0, true, true, textColor, 0);
-		Constant::drawTextCent(overlay, fontsmall, "Press TAB to select the next entry or", 0, face_h_small + 3, true, true, textColor, 0);
-		Constant::drawTextCent(overlay, fontsmall, "Press ESC to exit", 0, (face_h_small + 3) * 2, true, true, textColor, 0);
-    }
+			// 4. Dibujar el thumb segun el estado
+			if (enabled) {
+				SDL_FillRect(overlay, &thumbRect, Constant::colors[clBlack].color);
+			} else {
+				// Usando los campos de thumbRect directamente para evitar sumas manuales
+				rect(overlay, thumbRect.x, thumbRect.y, thumbRect.x + size, thumbRect.y + size, black);
+				rect(overlay, thumbRect.x + 1, thumbRect.y + 1, thumbRect.x + size - 1, thumbRect.y + size - 1, black);
+			}
+		}
+	}
 }
 
 /**
@@ -621,7 +739,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 			Constant::drawTextCent(overlay, fontsmall, msg.c_str(), overlay->w / 2, overlay->h / 2, true, true,  white, -1);
         }
 
-        dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, true, false);
+        dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, false, false);
 
 		ConfigEmu emu = *cfgLoader->getCfgEmu();
         string mapfilepath = dirutil::getPathPrefix(emu.rom_directory);
@@ -639,6 +757,9 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
         menuData.filesToList(files, emu);
         files.clear();
     }
+
+	//Se inician los menus de los filtros
+	configMenus->iniciarFiltros(menuData.gameDataFields);
 }
 
 /**
@@ -673,20 +794,20 @@ vector<string> GameMenu::launchProgram(ListMenu &menuData){
     if (emu.options_before_rom){
         vector<string> v = Constant::splitChar(emu.global_options, ' ');
         //for (auto s : v){
-		for (unsigned int i=0; i < v.size(); i++){
+		for (int i=0; i < (int)v.size(); i++){
 			std::string s = v.at(i);
             commands.emplace_back(s);
         }
     }
 
-    if (menuData.listGames.size() <= (std::size_t)menuData.curPos)
+    if (menuData.filteredGames.size() <= (std::size_t)menuData.curPos)
         return commands;
 
-    auto game = menuData.listGames.at(menuData.curPos).get();
+    auto game = menuData.filteredGames.at(menuData.curPos);
     
     //Ignoring the fields if a rom file is used
     if (emu.use_rom_file){
-        commands.emplace_back(encloseWithCharIfSpaces(game->shortFileName, "\"")); 
+		commands.emplace_back(encloseWithCharIfSpaces(game->longFileName, "\"")); 
     } else {
         string romdir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory) + string(Constant::tempFileSep) : "";
         string romFile = game->longFileName;
@@ -739,7 +860,8 @@ int GameMenu::saveGameMenuPos(ListMenu &menuData){
     }
 
     struct ListStatus input1 = { cfgLoader->emuCfgPos, menuData.iniPos, menuData.endPos, 
-        menuData.curPos, menuData.maxLines, menuData.layout, menuData.animateBkg};
+		menuData.curPos, menuData.maxLines, menuData.layout, menuData.animateBkg, 
+		menuData.gameDataFields.posManufacturer, menuData.gameDataFields.posSystem, menuData.gameDataFields.posYear, menuData.gameDataFields.onlyParents};
 
     int flag = 0;
     flag = fwrite(&input1, sizeof(struct ListStatus), 1, outfile);
@@ -979,6 +1101,13 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 				showLangSystemMessage(LanguageManager::instance()->get("msg.error.hardcore.pause"), 3000);
 				break;
 			} 
+
+			if (bg_screenshot){
+				SDL_FreeSurface(bg_screenshot);
+				bg_screenshot = NULL;
+			}
+			bg_screenshot = clonarPantalla(gameScreen, 180);
+
 			setEmuStatus(EMU_MENU);
 			break;
 		case HK_VIEW_MENU:
@@ -1036,11 +1165,12 @@ SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
 	SDL_Rect dstRect = {resCen.w , resCen.h, (Uint16)resDim.w, (Uint16)resDim.h};
 
 	if (resDim.w == src->w && resDim.h == src->h){
-		copia = SDL_CreateRGBSurface(SDL_SWSURFACE, overlay->w, overlay->h, 32, 
-		rmask, gmask, bmask, amask);
+		copia = SDL_CreateRGBSurface(SDL_SWSURFACE, overlay->w, overlay->h, overlay->format->BitsPerPixel, 
+			overlay->format->Rmask, overlay->format->Gmask, 
+			overlay->format->Bmask, 0);
 		SDL_BlitSurface(src, NULL, copia, NULL);
-		SDL_SetAlpha(copia, SDL_SRCALPHA, 0);
 		boxRGBA(copia, 0, 0, copia->w -1, copia->h -1, Constant::colors[clBackground].sdlColor.r, Constant::colors[clBackground].sdlColor.g, Constant::colors[clBackground].sdlColor.b, transparency);
+		//SDL_SetAlpha(copia, 0, 0);
 	} else {
 		SDL_Surface *tmp = SDL_CreateRGBSurface(SDL_SWSURFACE, overlay->w, overlay->h, 
 			src->format->BitsPerPixel, src->format->Rmask, src->format->Gmask, 
@@ -1715,7 +1845,25 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
 	drawSelectedKey(font, keyb, keyb.selectedRow, keyb.selectedCol);
 
 	//Drawint a selected modifier if any
-	for (unsigned int i=0; i < keyb.pressedMods.size(); i++){
+	for (int i=0; i < (int)keyb.pressedMods.size(); i++){
 		drawSelectedKey(font, keyb, keyb.pressedMods[i].row, keyb.pressedMods[i].col);
 	}
+}
+
+
+bool GameMenu::loadBgImage(){
+	dirutil dir;
+	ANIM_BACKGROUNDS bgType = static_cast<ANIM_BACKGROUNDS>(this->cfgLoader->configMain[cfg::animBG].valueInt);
+	ConfigEmu *emu = this->cfgLoader->getCfgEmu();
+	//Loading the background image if exists
+	std::string imageNoExt = dir.getPathPrefix(emu->assets + Constant::getFileSep() + BG_FILENAME);
+	std::string image = imageNoExt + ".jpg";
+
+	bool found = dir.fileExists(image.c_str());
+	if (bgType == BG_IMAGE && found){
+		return this->bg_image.loadImage(image.c_str(), this->overlay->format);
+	} else {
+		this->bg_image.closeImage();
+	}
+	return false;
 }

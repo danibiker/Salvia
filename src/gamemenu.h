@@ -56,7 +56,8 @@ enum status_emu
 	EMU_STARTED = 0, 
 	//The menu is showing so, the emulation is paused
 	EMU_MENU, 
-	EMU_MENU_OVERLAY
+	EMU_MENU_OVERLAY,
+	EMU_MENU_FILTER
 };
 
 class GameMenu : public Engine{
@@ -64,6 +65,7 @@ class GameMenu : public Engine{
         GameMenu(CfgLoader *cfgLoader);
         ~GameMenu();
 		SDL_Surface *bg_screenshot;
+		Image bg_image;
 		GameTicks gameTicks;
 		GestorMenus *configMenus;
 		ScalerFunc current_scaler;
@@ -123,6 +125,8 @@ class GameMenu : public Engine{
 		void clearOverlayRect(SDL_Rect&);
 		void fillOverlay(int colorIndex);
 		void fillOverlayAlpha(int colorIndex, int alpha);
+		SDL_Surface* clonarPantalla(SDL_Surface*, int);
+		bool loadBgImage();
     private:
 		std::vector<Message> messages;
 		th_messages messagesAchievement;
@@ -148,8 +152,9 @@ class GameMenu : public Engine{
         std::map<std::string, Image> menuImages;
         std::map<std::string, TextArea> menuTextAreas;
 		SDL_Rect lastMessagesArea;
+		SDL_Surface *filterAlphaRec;
 
-		SDL_Surface* clonarPantalla(SDL_Surface*, int);
+		
 		void processMessages();
 		void processMessagesAchievements();
 		void renderTrackers();
@@ -167,4 +172,5 @@ class GameMenu : public Engine{
 		void clearLastAchievementArea();
 		void drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int col);
 		void drawKeyboard(TTF_Font* font, t_keyboard& keyb);
+		void drawFilters(ListMenu &listMenu);
 };

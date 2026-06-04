@@ -67,6 +67,107 @@ bool processActions(GameMenu*& gameMenu, t_option_action &optionAction){
 	return ret;
 }
 
+inline void procesarOverlayTeclado(){
+	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
+		gameMenu->keyb->prevRow();
+	} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
+		gameMenu->keyb->nextRow();
+	} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
+		gameMenu->keyb->prevCol();
+	} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
+		gameMenu->keyb->nextCol();
+	}
+}
+
+inline int procesarGeneralConfig(){
+	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
+		gameMenu->configMenus->prevPos();
+	} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
+		gameMenu->configMenus->nextPos();
+	}
+			
+	bool changeInConf = false;
+
+	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
+		gameMenu->configMenus->cambiarValor(-1);
+		changeInConf = true;
+		if (gameMenu->configMenus->isCoreOptions()){
+			gameMenu->configMenus->options_changed_flag = true;
+		}
+	} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
+		changeInConf = true;
+		if (gameMenu->configMenus->isCoreOptions()){
+			gameMenu->configMenus->options_changed_flag = true;
+		}
+		gameMenu->configMenus->cambiarValor(1);
+	}
+
+	if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
+		t_option_action optionAction;
+		std::string message = gameMenu->configMenus->confirmar(&optionAction);
+		if (processActions(gameMenu, optionAction)){
+			return 1;
+		}
+		if (!message.empty()){
+			gameMenu->showSystemMessage(message, 3000);
+		}
+		changeInConf = true;
+	} else if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_B)){
+		gameMenu->configMenus->volver();
+	}
+
+	if (changeInConf || gameMenu->configMenus->options_changed_flag){
+		gameMenu->processConfigChanges();
+	}
+
+	return 0;
+}
+
+int procesarAccionesMenu(ListMenu &listMenu){
+	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
+		listMenu.prevPos();
+	} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
+		listMenu.nextPos();
+	} 
+			
+	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
+		listMenu.prevPage();
+	} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
+		listMenu.nextPage();
+	} 
+
+	if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
+		//Always saving the position
+		gameMenu->saveGameMenuPos(listMenu);
+		//And launch the game
+		vector<string> launchCommand = gameMenu->launchProgram(listMenu);
+		if (launchCommand.size() > 1){
+			std::string romToLaunch = launchCommand.at(1);
+			LOG_DEBUG("Launching rom %s", romToLaunch.c_str());
+			gameMenu->clearOverlay();
+			if (launchGame(romToLaunch)){
+				gameMenu->setEmuStatus(EMU_STARTED);
+			}
+			return 0;
+		}
+	}
+
+	if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_L3)){
+		LOG_DEBUG("L3 pressed");
+		/*if (listMenu.gameDataFields.systems.size() > 0){
+			if (listMenu.gameDataFields.posSystem == listMenu.gameDataFields.systems.size() - 1){
+				listMenu.gameDataFields.posSystem = -1;
+			} else {
+				listMenu.gameDataFields.posSystem = listMenu.gameDataFields.posSystem + 1;
+			}
+			listMenu.checkFilter();
+		}*/
+		gameMenu->setEmuStatus(EMU_MENU_FILTER);
+	}
+
+	return 1;
+}
+
 int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	int res = 1;
@@ -102,99 +203,93 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 		gameMenu->joystick->pollKeys(gameMenu->overlay);
 
 		if (gameMenu->isOnscreenKeybEnabled()){
-			if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
-				gameMenu->keyb->prevRow();
-			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
-				gameMenu->keyb->nextRow();
-			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
-				gameMenu->keyb->prevCol();
-			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
-				gameMenu->keyb->nextCol();
-			}
+			//Se procesan las acciones del teclado que se muestra en un overlay. Solo MSX y SPECTRUM
+			procesarOverlayTeclado();
 		} else if (generalConfig){
-			if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
-				gameMenu->configMenus->prevPos();
-			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
-				gameMenu->configMenus->nextPos();
-			}
+			//Se procesan las acciones del menu de configuracion general
+			if (procesarGeneralConfig() == 1)
+				return 1;
+		} else if (gameMenu->getEmuStatus() == EMU_MENU_FILTER){
+			Menu *menuFilter = gameMenu->configMenus->menuGameFilter;
 			
-			bool changeInConf = false;
-
-			if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
-				gameMenu->configMenus->cambiarValor(-1);
-				changeInConf = true;
-				if (gameMenu->configMenus->isCoreOptions()){
-					gameMenu->configMenus->options_changed_flag = true;
+			if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_B) || gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_L3)) {
+				//Boton L3 o B para cancelar
+				gameMenu->setEmuStatus(gameMenu->getLastStatus());
+			} else if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_A)) {
+				//Boton A para cambiar las opciones de booleanos
+				if (menuFilter->opciones[menuFilter->seleccionado]->tipo == OPC_BOOLEANA){
+					OpcionBool* b = (OpcionBool*)menuFilter->opciones[menuFilter->seleccionado];
+					*b->valor = !*b->valor;
+				} 
+				listMenu.checkFilter();
+			} else if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_X)) {
+				//Boton X para resetear el filtro
+				if (menuFilter->opciones[menuFilter->seleccionado]->tipo == OPC_LISTA_REF){
+					OpcionListaRef* l = (OpcionListaRef*)menuFilter->opciones[menuFilter->seleccionado];
+					*l->indice = -1;
 				}
-			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
-				changeInConf = true;
-				if (gameMenu->configMenus->isCoreOptions()){
-					gameMenu->configMenus->options_changed_flag = true;
-				}
-				gameMenu->configMenus->cambiarValor(1);
-			}
-
-			if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
-				t_option_action optionAction;
-				std::string message = gameMenu->configMenus->confirmar(&optionAction);
-				if (processActions(gameMenu, optionAction)){
-					return 1;
-				}
-				if (!message.empty()){
-					gameMenu->showSystemMessage(message, 3000);
-				}
-				changeInConf = true;
-			} else if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_B)){
-				gameMenu->configMenus->volver();
-			}
-
-			if (changeInConf || gameMenu->configMenus->options_changed_flag){
-				gameMenu->processConfigChanges();
-			}
-
-		} else {
-			if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
-				listMenu.prevPos();
-			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
-				listMenu.nextPos();
-			} 
-			
-			if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
-				listMenu.prevPage();
-			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
-				listMenu.nextPage();
-			} 
-
-			if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
-				//Always saving the position
-				gameMenu->saveGameMenuPos(listMenu);
-				//And launch the game
-				vector<string> launchCommand = gameMenu->launchProgram(listMenu);
-				if (launchCommand.size() > 1){
-					std::string romToLaunch = launchCommand.at(1);
-					LOG_DEBUG("Launching rom %s", romToLaunch.c_str());
-					gameMenu->clearOverlay();
-					if (launchGame(romToLaunch)){
-						gameMenu->setEmuStatus(EMU_STARTED);
+				listMenu.checkFilter();
+			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)) {
+				//Boton Derecho para cambiar las opciones de listas
+				if (menuFilter->opciones[menuFilter->seleccionado]->tipo == OPC_LISTA_REF){
+					OpcionListaRef* l = (OpcionListaRef*)menuFilter->opciones[menuFilter->seleccionado];
+					auto items = *l->items;
+					if (items.empty() || *l->indice == (int)items.size() - 1){
+						*l->indice = -1;
+						listMenu.checkFilter();
+					} else if (items.size() > 0){
+						*l->indice = (*l->indice + 1) % (int)items.size();
+						listMenu.checkFilter();
 					}
-					return 0;
 				}
+			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)) {
+				//Boton Izquierdo para cambiar las opciones de listas
+				if (menuFilter->opciones[menuFilter->seleccionado]->tipo == OPC_LISTA_REF){
+					OpcionListaRef* l = (OpcionListaRef*)menuFilter->opciones[menuFilter->seleccionado];
+					auto items = *l->items;
+					if (items.empty() || *l->indice == 0){
+						*l->indice = -1;
+						listMenu.checkFilter();
+					} else if (items.size() > 0){
+						if (*l->indice == -1){
+							*l->indice = items.size() - 1;
+						} else {
+							*l->indice = *l->indice - 1;
+						}
+						listMenu.checkFilter();
+					}
+				}
+			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN) && !menuFilter->opciones.empty()) {
+				menuFilter->seleccionado = (menuFilter->seleccionado + 1) % (int)menuFilter->opciones.size();
+			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP) && !menuFilter->opciones.empty()) {
+				menuFilter->seleccionado = (menuFilter->seleccionado + (int)menuFilter->opciones.size() - 1)
+										  % (int)menuFilter->opciones.size();
 			}
+		} else {
+			//Acciones sobre listMenu
+			if (procesarAccionesMenu(listMenu) == 0)
+				return 0;
 		}
-
+	
 		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_R)){
 			LOG_DEBUG("Next page");
 			gameMenu->getCfgLoader()->getNextCfgEmu();
 			gameMenu->loadEmuCfg(listMenu);
 			ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
+			//Set the keyboard layout
 			gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
+			//Loading the background image if exists
+			gameMenu->loadBgImage();
 		}
 		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_L)){
 			LOG_DEBUG("Prev page");
 			gameMenu->getCfgLoader()->getPrevCfgEmu();
 			gameMenu->loadEmuCfg(listMenu);
 			ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
+			//Set the keyboard layout
 			gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
+			//Loading the background image if exists
+			gameMenu->loadBgImage();
 		}
 
 		listMenu.keyUp = gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_UP) ||
@@ -213,6 +308,7 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 				SDL_FreeSurface(gameMenu->bg_screenshot);
 				gameMenu->bg_screenshot = NULL;
 			}
+			gameMenu->bg_screenshot = gameMenu->clonarPantalla(gameMenu->gameScreen, 180);
 			return 0;
 		}
 
@@ -228,17 +324,26 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 void updateMenuScreen(TileMap &tileMap, GameMenu*& gameMenu, ListMenu &listMenu){
 	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	static uint32_t lastTime = SDL_GetTicks();
-
+	cfg::t_cfg_props* cfg = gameMenu->getCfgLoader()->configMain;
 	ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
+
+	ANIM_BACKGROUNDS bgType = static_cast<ANIM_BACKGROUNDS>(gameMenu->getCfgLoader()->configMain[cfg::animBG].valueInt);
+
 	if (processInputs(gameMenu, listMenu, emu->generalConfig) == 1 && gameMenu->getEmuStatus() != EMU_STARTED){
 		//if (listMenu.animateBkg && gameMenu->getCfgLoader()->configMain[cfg::animBG].valueInt == BG_WAVES){
 		//	tileMap.drawWaves(gameMenu->overlay);
 		//} else 
-		if (listMenu.animateBkg && gameMenu->getCfgLoader()->configMain[cfg::animBG].valueInt == BG_TILES){
+		if (listMenu.animateBkg && bgType == BG_TILES){
 			tileMap.draw(gameMenu->overlay);
 			if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
 				tileMap.incSpeed();
 			}
+		} else if (bgType == BG_IMAGE && gameMenu->bg_image.hasImage()){
+			gameMenu->bg_image.printImage(gameMenu->overlay);
+		} else if ((cfg[cfg::enableAchievements].valueBool && cfg[cfg::hardcoreRA].valueBool) || !gameMenu->bg_screenshot){
+			gameMenu->fillOverlay(clBackground);
+		} else if (gameMenu->bg_screenshot){
+			SDL_BlitSurface(gameMenu->bg_screenshot, NULL, gameMenu->overlay, NULL);
 		} else {
 			gameMenu->fillOverlay(clBackground);
 		}
@@ -246,6 +351,9 @@ void updateMenuScreen(TileMap &tileMap, GameMenu*& gameMenu, ListMenu &listMenu)
 	}
 }
 
+/**
+*
+*/
 void updateMenuOverlay(GameMenu*& gameMenu, ListMenu &listMenu){
 	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	processInputs(gameMenu, listMenu, true);

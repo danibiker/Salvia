@@ -61,7 +61,7 @@ DWORD WINAPI Scrapper::mainScrapThread(LPVOID lpParam) {
 		if (InterlockedExchangeAdd(&CurlClient::g_abortScrapping, 0) == 1) {
 			break;
 		}
-		LOG_DEBUG("Hilo Principal: Descargando para el sistema %s", params->emu[i].name.c_str());
+		LOG_DEBUG("Hilo Principal: Descargando para el sistema %s\n", params->emu[i].name.c_str());
 		scrapper.scrapSystem(params->emu[i], params->cfg, dwQueue);
 	}
 
@@ -121,7 +121,7 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 
 	for (std::size_t i = 0; i < files.size(); i++) {
 		FileProps* file = files.at(i).get();
-		LOG_DEBUG("Obteniendo file %s", dir.getFileName(file->filename).c_str());
+		LOG_DEBUG("Obteniendo file %s\n", dir.getFileName(file->filename).c_str());
 		resultado.clear();
 		resultado.filenameNoExt = dir.getFileNameNoExt(file->filename);
 			
@@ -171,7 +171,7 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 			urlBase += "&name=";
 			fullUrl = urlBase + peticion.romname;
 		}
-		LOG_DEBUG("Buscando datos para: %s en url: %s", file->filename.c_str(), fullUrl.c_str());
+		LOG_DEBUG("Buscando datos para: %s en url: %s\n", file->filename.c_str(), fullUrl.c_str());
 
 		if (downloader.fetchUrl(fullUrl, response, &downloadProgress)) {
 			if (scrapperConfig.origin == SC_SCREENCSRAPER){
@@ -203,7 +203,7 @@ DWORD WINAPI Scrapper::imageDownloaderThread(LPVOID lpParam) {
         g_status.remainingMedia = queue->size() + 1;
         LeaveCriticalSection(&g_status.cs);
 
-        LOG_DEBUG("Descargando: %s", task.destPath.c_str());
+        LOG_DEBUG("Descargando: %s\n", task.destPath.c_str());
         downloader.fetchFile(task.url, task.destPath, &task.downloadProgress);
 
         EnterCriticalSection(&g_status.cs);
@@ -211,7 +211,7 @@ DWORD WINAPI Scrapper::imageDownloaderThread(LPVOID lpParam) {
         LeaveCriticalSection(&g_status.cs);
     }
 
-    LOG_DEBUG("Hilo de descarga finalizado.");
+    LOG_DEBUG("Hilo de descarga finalizado\n");
     return 0;
 }
 
@@ -299,7 +299,7 @@ void Scrapper::procesarRespuestaScreenscraper(std::string& xmlData, ScraperAsk& 
 					tMedia.region = reg;
 					tMedia.type = static_cast<MEDIA_TYPES>(i);
 					tMedia.url = it->child_value();
-					LOG_DEBUG("Mejor imagen encontrada: %s (%s)", MEDIAS_TO_FIND[i], reg);
+					LOG_DEBUG("Mejor imagen encontrada: %s (%s)\n", MEDIAS_TO_FIND[i], reg);
 				}
 				break; 
 			}
@@ -307,9 +307,9 @@ void Scrapper::procesarRespuestaScreenscraper(std::string& xmlData, ScraperAsk& 
 	}
 
 	// --- LOGS ---
-	LOG_DEBUG("Juego: %s", resultado.nombre.c_str());
+	LOG_DEBUG("Juego: %s\n", resultado.nombre.c_str());
 	if (resultado.medias.count("box-2D")) {
-		LOG_DEBUG("URL Box (%d): %s",resultado.medias.count("box-2D"), resultado.medias["box-2D"].url.c_str());
+		LOG_DEBUG("URL Box (%d): %s\n",resultado.medias.count("box-2D"), resultado.medias["box-2D"].url.c_str());
 	}
 }
 
@@ -325,7 +325,7 @@ void Scrapper::procesarGamesDbConReintentos(std::string& urlBase, float &downloa
 
 	// --- INTENTO 1: Nombre completo limpio de simbolos ---
 	if (!procesarRespuestaGamesDb(response, peticion, resultado)){
-		LOG_DEBUG("No encontrado con nombre completo. Intentando quitar articulos...");
+		LOG_DEBUG("No encontrado con nombre completo. Intentando quitar articulos...\n");
     
 		// --- INTENTO 2: Quitar "Stop Words" (The, Of, And, etc.) ---
 		// Solo lo hacemos si tiene mas de 2 palabras para no quedarnos con un string vacio
@@ -346,7 +346,7 @@ void Scrapper::procesarGamesDbConReintentos(std::string& urlBase, float &downloa
 		// --- INTENTO 3: Recorte drastico (Si sigue sin aparecer) ---
 		// Si despues de quitar articulos aun no tenemos gameid, probamos con las 2 primeras palabras
 		if (peticion.gameid == -1) {
-			LOG_DEBUG("Sigue sin aparecer. Recortando a las 2 primeras palabras...");
+			LOG_DEBUG("Sigue sin aparecer. Recortando a las 2 primeras palabras...\n");
 			cutRomName = getFirstWords(peticion.romnameUnscaped, 2);
         
 			if (!cutRomName.empty()) {
@@ -381,7 +381,7 @@ bool Scrapper::procesarRespuestaGamesDb(std::string& jsonStr, ScraperAsk& petici
 	if (root.count("remaining_monthly_allowance") && (int)root["remaining_monthly_allowance"].get<double>() == 0) {
 		InterlockedExchange(&CurlClient::g_abortScrapping, 1); // Avisar a todos para cerrar recursos
 		g_status.abortType = ABORT_LIMIT_CUOTA;
-		LOG_DEBUG("Limit of monthly querys achieved");
+		LOG_DEBUG("Limit of monthly querys achieved\n");
 	}
 
     if (root.count("data") && root["data"].is<picojson::object>()) {
@@ -420,7 +420,7 @@ bool Scrapper::procesarRespuestaGamesDb(std::string& jsonStr, ScraperAsk& petici
             }
 
             if (idSeleccionado > -1) {
-                LOG_DEBUG("ID Usado: %d (Score: %d)", idSeleccionado, mejorPuntuacion);
+                LOG_DEBUG("ID Usado: %d (Score: %d)\n", idSeleccionado, mejorPuntuacion);
                 resultado.sinopsis = mejorOverview;
                 peticion.gameid = idSeleccionado;
                 
@@ -443,7 +443,7 @@ void Scrapper::obtenerImagenesTGDB(ScraperAsk& peticion, ScraperResult& resultad
 	std::string urlBase = "https://api.thegamesdb.net/v1/Games/Images";
 	std::string fullUrl = urlBase + "?apikey=" + peticion.apiKeyTGDB;
 	fullUrl += "&games_id=" + Constant::TipoToStr(peticion.gameid);
-	LOG_DEBUG("Buscando imagenes en url: %s", fullUrl.c_str());
+	LOG_DEBUG("Buscando imagenes en url: %s\n", fullUrl.c_str());
 
 	if (downloader.fetchUrl(fullUrl, response, &downloadProgress)) {
 		// Variables para almacenar las URLs finales
@@ -509,10 +509,10 @@ void Scrapper::obtenerImagenesTGDB(ScraperAsk& peticion, ScraperResult& resultad
 		}
 
 		// Imprimir resultados para verificar
-		LOG_DEBUG("Boxart: %s", urlBoxart.c_str());
-		LOG_DEBUG("Screenshot: %s", urlScreenshot.c_str());
-		LOG_DEBUG("Fanart: %s", urlFanart.c_str());
-		LOG_DEBUG("Titlescreen: %s", urlTitlescreen.c_str());
+		LOG_DEBUG("Boxart: %s\n", urlBoxart.c_str());
+		LOG_DEBUG("Screenshot: %s\n", urlScreenshot.c_str());
+		LOG_DEBUG("Fanart: %s\n", urlFanart.c_str());
+		LOG_DEBUG("Titlescreen: %s\n", urlTitlescreen.c_str());
 
 		if (!urlTitlescreen.empty())
 			resultado.medias.insert(
@@ -575,9 +575,9 @@ void Scrapper::guardarRecursos(SafeDownloadQueue& dwQueue, ScraperResult &result
 			task.url = it->second.url;
 			task.destPath = rutaImg;
 			task.downloadProgress = 0.0f;
-			LOG_DEBUG("Descargando imagen: %s con url: %s", dir.getFileName(rutaImg).c_str(), task.url.c_str());
+			LOG_DEBUG("Descargando imagen: %s con url: %s\n", dir.getFileName(rutaImg).c_str(), task.url.c_str());
 			dwQueue.push(task); // Encolamos para el otro hilo
-			LOG_DEBUG("Imagen encolada");
+			LOG_DEBUG("Imagen encolada\n");
 		}
 	}
 }

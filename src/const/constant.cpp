@@ -5,8 +5,10 @@ std::string Constant::appExecutable;
 char Constant::tempFileSep[2];
 svColor Constant::colors[clTotalColors] = {
 			{{0, 0, 0} , 0},			//clBackground
+			{{0, 0, 0} , 0},			//clBlack
+			{{0xFF, 0xFF, 0xFF} , 0},	//clWhite
 			{{247, 221, 114}, 0},		//clBkgMenu
-			{{255, 0, 0}, 0}		//clRed
+			{{255, 0, 0}, 0}			//clRed
 }; 
 
 const char *MEDIAS_TO_FIND[] = {"sstitle", "ss", "box-2D"};
@@ -16,6 +18,7 @@ const std::string RETROPAD_INI = "retropad.ini";
 const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS = "\\assets\\extra\\achievement_translations.cfg";
 const std::string ROUTE_SCRAP_TRANSLATIONS = "\\assets\\extra\\scrap_translations.cfg";
 const std::string PREFIX_DEFAULTS = "defaults_";
+const std::string BG_FILENAME = "background";
 
 const char *ICONS_PATH[] = {"menu_log.png",
 	"folder.png",

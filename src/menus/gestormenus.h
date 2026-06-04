@@ -13,7 +13,7 @@
 #include <string>
 
 // --- Definición de tipos de opciones ---
-enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SAVESTATE, OPC_ACHIEVEMENT};
+enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_LISTA_REF, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SAVESTATE, OPC_ACHIEVEMENT};
 enum TipoKey{KEY_JOY_BTN,KEY_JOY_HAT,KEY_JOY_AXIS, KEY_JOY_MAX};
 enum ACTION_ASK{ASK_CARGAR, ASK_GUARDAR, ASK_ELIMINAR, MAX_ASK};
 enum CONFIG_STATUS{NORMAL,POLLING_INPUTS,ASK_SAVESTATES, EXIT_CONFIG, EXIT_EMULATION, START_SCRAPPING, MAX_CONFIG_STATUS};
@@ -169,29 +169,55 @@ public:
     }
 };
 
-class OpcionLista : public Opcion {
+class OpcionListaCommon : public Opcion {
+public:
+	int* indice;
+	CallbackValues callback;
+	void* context;
+
+protected:
+    OpcionListaCommon(std::string t, TipoOpcion tipo, int* idx)
+        : Opcion(t, tipo), indice(idx), callback(NULL), context(NULL) {}
+
+    std::string ejecutarConItems(void* itemsPtr) {
+        if (callback != NULL && indice != NULL)
+            return callback(context, (void*)indice, itemsPtr);
+        return "";
+    }
+};
+
+class OpcionLista : public OpcionListaCommon {
 public:
     std::vector<std::string> items;
-    int* indice;
-	CallbackValues callback; // Función estática
-    void* context;
 
-    OpcionLista(std::string t, std::vector<std::string> it, int* idx) 
-        : Opcion(t, OPC_LISTA), items(it), indice(idx), callback(NULL), context(NULL) {}
-	
-	std::string ejecutar() override {
-        if (callback != NULL && indice != NULL) {
-            return callback(context, (void *)indice, (void*)&items); 
-        }
-        return "";
+    OpcionLista(std::string t, std::vector<std::string> it, int* idx)
+        : OpcionListaCommon(t, OPC_LISTA, idx), items(it) {}
+
+    std::string ejecutar() override {
+        return ejecutarConItems((void*)&items);
+    }
+};
+
+class OpcionListaRef : public OpcionListaCommon {
+public:
+    std::vector<std::string>* items;
+
+    OpcionListaRef(std::string t, std::vector<std::string>* it, int* idx)
+        : OpcionListaCommon(t, OPC_LISTA_REF, idx), items(it) {}
+
+    std::string ejecutar() override {
+        return ejecutarConItems((void*)items);
     }
 };
 
 class OpcionSubMenu : public Opcion {
 public:
+	//Menu al que navegar
     Menu* destino;
-	GestorCallback callback; // Función estática
-    void* context;           // El "this" de GestorMenus
+	//Funcion estatica
+	GestorCallback callback;
+	//Parametros que se le pasan a la funcion estatica
+    void* context;
 
     OpcionSubMenu(std::string t, Menu* d) : Opcion(t, OPC_SUBMENU), destino(d), callback(NULL), context(NULL){}
 	OpcionSubMenu(std::string t, Menu* d, int ico) : Opcion(t, OPC_SUBMENU, ico), destino(d), callback(NULL), context(NULL) {}
@@ -295,6 +321,7 @@ private:
     int lastSel;
     float pixelShift;
     static SDL_Surface* imgText;
+	SDL_Surface* tmpTextOption;
 	std::string lastImagePath;
 	Image imageMenu;
 	int scrapGamesSelection;
@@ -351,6 +378,9 @@ public:
 	void poblarPartidasGuardadas(CfgLoader *, std::string);
 	void poblarJoystickTypes(Joystick *joystick);
 	void poblarMenuDiscos(int options);
+
+	Menu* menuGameFilter;
+	void iniciarFiltros(GameDataFields& gameDataFieldsFilter);
 
 	std::string stopScrapping(CONFIG_STATUS *st);
 	void loadAchievements();

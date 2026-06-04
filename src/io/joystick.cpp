@@ -576,7 +576,6 @@ bool Joystick::pollKeys(SDL_Surface* screen){
 */
 HOTKEYS_LIST Joystick::findHotkey(){
 	return hotkeys->procesarHotkeys(&inputs);
-	return HK_MAX;
 }
 
 /**

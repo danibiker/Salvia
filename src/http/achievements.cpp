@@ -1365,8 +1365,8 @@ int Achievements::countUserUnlocked(rc_client_t* client) {
     rc_client_achievement_list_t* list = rc_client_create_achievement_list(client, RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE, RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_PROGRESS);
     
     if (list) {
-        for (unsigned int i = 0; i < list->num_buckets; i++){
-			for (unsigned int j = 0; j < list->buckets[i].num_achievements; j++){
+        for (int i = 0; i < (int)list->num_buckets; i++){
+			for (int j = 0; j < (int)list->buckets[i].num_achievements; j++){
 				const rc_client_achievement_t* achievement = list->buckets[i].achievements[j];
 				// Ignoramos el ID de aviso 101000001 y superiores de sistema
 				if (achievement->id < 101000000 && 
@@ -1410,13 +1410,13 @@ void Achievements::updateAchievements(rc_client_t* client)
 	// Clear any previously loaded menu items
 	self.reset_menu();
 
-	for (unsigned int i = 0; i < list->num_buckets; i++){
+	for (int i = 0; i < (int)list->num_buckets; i++){
 		// Create a header item for the achievement category
 		//std::string bucketTypeLabel = LanguageManager::instance()->get("msg.achievement.bucket.type" + Constant::TipoToStr<int>(list->buckets[i].bucket_type));
 		//self.achievements.push_back(AchievementState(bucketTypeLabel, list->buckets[i].bucket_type));
 		//LOG_DEBUG("buckets[i]: %s", list->buckets[i].label);
 
-		for (unsigned int j = 0; j < list->buckets[i].num_achievements; j++){
+		for (int j = 0; j < (int)list->buckets[i].num_achievements; j++){
 			const rc_client_achievement_t* achievement = list->buckets[i].achievements[j];
 			AchievementState achState;
 			// Generate a local filename to store the downloaded image.

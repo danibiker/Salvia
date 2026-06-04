@@ -19,7 +19,7 @@ public:
 
         // Iterar sobre el vector y escribir cada string en una línea nueva
         //for (const std::string& linea : datos) {
-		for (unsigned int i=0; i < datos.size(); i++){
+		for (int i=0; i < (int)datos.size(); i++){
 		    archivo << datos.at(i) << "\n";
         }
         archivo.close();

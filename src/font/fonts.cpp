@@ -7,24 +7,27 @@ Fileio Fonts::fileio;
 TTF_Font* Fonts::vFonts[2];
 
 Fonts::Fonts(){
+	if (TTF_Init() == -1) {
+		LOG_ERROR("Error TTF_Init: %s\n", TTF_GetError());
+	}
 }
 
 Fonts::~Fonts(){
 	LOG_DEBUG("Deleting Fonts...");
-	exit();
+	destroy();
 }
 
 /**
     * 
     */
-void Fonts::exit(){
+void Fonts::destroy(){
     for (unsigned int i=0; i < 2; i++){
         if (vFonts[i] != NULL){
             TTF_CloseFont(vFonts[i]);
             vFonts[i] = NULL;
         }
     }
-
+	TTF_Quit();
 	fileio.clearFile();
 }
         

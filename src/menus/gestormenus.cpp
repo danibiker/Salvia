@@ -62,6 +62,8 @@ GestorMenus::GestorMenus(int screenw, int screenh){
 	imageMenu.setH(box2dH);
 	askNumOptions = 0;
 	scrapGamesSelection = 1;
+
+	tmpTextOption = NULL;
 }
 
 GestorMenus::~GestorMenus() {
@@ -73,6 +75,10 @@ GestorMenus::~GestorMenus() {
 		if (todosLosMenus[i])
 			delete todosLosMenus[i];
 		todosLosMenus[i] = NULL;
+	}
+
+	if (tmpTextOption != NULL){
+		SDL_FreeSurface(tmpTextOption);
 	}
 }
 
@@ -247,7 +253,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	Menu* menuCores = new Menu(LanguageManager::instance()->get("menu.core.assign"), menuEmulation);
 	dirutil dir;
 
-	for (unsigned int i=0; i < refConfig->emulators.size(); i++){
+	for (int i=0; i < (int)refConfig->emulators.size(); i++){
 		const int nCores = refConfig->emulators[i]->config.cores.size();
 		const std::string coreName = refConfig->emulators[i]->config.name;
 		const unsigned int cfgIndex = refConfig->findConfigIndex(CfgLoader::coreDefault + refConfig->emulators[i]->config.internalName);
@@ -386,6 +392,15 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	resetIndexPos();
 }
 
+void GestorMenus::iniciarFiltros(GameDataFields& gameDataFieldsFilter){
+		//Menu para los filtros
+	menuGameFilter = new Menu(LanguageManager::instance()->get("menu.filter.title"));
+	menuGameFilter->opciones.push_back(new OpcionListaRef(LanguageManager::instance()->get("menu.filter.system"), &gameDataFieldsFilter.systems, &gameDataFieldsFilter.posSystem));
+	menuGameFilter->opciones.push_back(new OpcionListaRef(LanguageManager::instance()->get("menu.filter.manufacturer"), &gameDataFieldsFilter.manufacturers, &gameDataFieldsFilter.posManufacturer));
+	menuGameFilter->opciones.push_back(new OpcionListaRef(LanguageManager::instance()->get("menu.filter.year"), &gameDataFieldsFilter.years, &gameDataFieldsFilter.posYear));
+	menuGameFilter->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.filter.parents"), &gameDataFieldsFilter.onlyParents));
+}
+
 void GestorMenus::poblarMenuDiscos(int options){
 	menuDisks->opciones.clear();
 	
@@ -491,7 +506,7 @@ void GestorMenus::poblarCdList(std::string ruta){
 
 void GestorMenus::loadAchievements() {
     // 1. Limpieza de opciones antiguas
-    for (unsigned int i = 0; i < menuAchievements->opciones.size(); i++) {
+    for (int i = 0; i < (int)menuAchievements->opciones.size(); i++) {
         if (menuAchievements->opciones[i]->tipo == OPC_ACHIEVEMENT) {
             OpcionAchievement* opt = (OpcionAchievement*)menuAchievements->opciones[i];
             delete opt;
@@ -693,7 +708,7 @@ void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joys
 *
 */
 void GestorMenus::poblarJoystickTypes(Joystick *joystick){
-	for (unsigned int i=0; i < menuAssignRetro->opciones.size(); i++){
+	for (int i=0; i < (int)menuAssignRetro->opciones.size(); i++){
 		LOG_DEBUG("%s", menuAssignRetro->opciones[i]->titulo.c_str());
 		if (menuAssignRetro->opciones[i]->tipo == OPC_SUBMENU){
 			Menu* submenuJoy = ((OpcionSubMenu*)menuAssignRetro->opciones[i])->destino;
@@ -1153,8 +1168,18 @@ void GestorMenus::draw(SDL_Surface *video_page){
 	static const int iblack = SDL_MapRGBA(video_page->format, black.r, black.g, black.b, 0xFF);
 	Icons icons;
 
+
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 	int face_h = menuActual->rowHeight;
+
+	if (tmpTextOption == NULL || (tmpTextOption != NULL && tmpTextOption->format->BitsPerPixel != video_page->format->BitsPerPixel)){
+		tmpTextOption = SDL_CreateRGBSurface(SDL_SWSURFACE, this->getW() - marginX, face_h, 
+                                                       video_page->format->BitsPerPixel,
+                                                       video_page->format->Rmask, 
+                                                       video_page->format->Gmask, 
+                                                       video_page->format->Bmask, 
+                                                       video_page->format->Amask);
+	}
 
 	Constant::drawTextCentTransparent(video_page, fontMenu, this->menuActual->titulo.c_str(), 0, face_h < marginY ? (marginY - face_h) / 2 : 0 , 
 				true, false, textColor, 0);
@@ -1165,8 +1190,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
     const float pixelsScrollFps = std::max(ceil(face_h / (float)textFps), 1.0f);
 
     for (int i=this->iniPos; i < this->endPos; i++){
-        auto option = this->menuActual->opciones.at(i);
-       
+        const auto& option = this->menuActual->opciones.at(i);
 		std::string line;
 		std::string value;
 
@@ -1223,7 +1247,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 			SDL_BlitSurface(icons.icons[option->icon], NULL, video_page, &dstRect);
 		}
 
-        Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX() + marginIco, 
+		Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX() + marginIco, 
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
 
 		if (option->tipo == OPC_KEY && !((OpcionKey *)option)->description.empty()){
@@ -1235,6 +1259,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 			TTF_SizeUTF8(fontMenu, value.c_str(), &pixelDato, NULL);
 			Constant::drawTextTransparent(video_page, fontMenu, value.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
+
 		}
     }
 

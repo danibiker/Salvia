@@ -22,6 +22,9 @@ class ListMenu : public Object{
 		Icons *icons;
 		// El diccionario principal para mame: <nombre_zip, datos>
 		std::map<std::string, GameData> mameDatabase;
+		void loadMameDatabase(ConfigEmu& emu);
+		SDL_Surface *selecAlphaRec;
+		std::string extractSystem(const std::string &sourceFile);
 
     public:
         ListMenu(int screenw, int screenh);
@@ -41,14 +44,17 @@ class ListMenu : public Object{
         int lastSel;
         float pixelShift;
         vector<unique_ptr<GameFile>> listGames;
+		// Vista filtrada (punteros no propietarios)
+		vector<GameFile*> filteredGames;
 
+		GameDataFields gameDataFields;
         static SDL_Surface* imgText;
         
         void clear();
         std::size_t getNumGames();
         int getScreenNumLines();
         void setLayout(int layout, int screenw, int screenh);
-        void draw(SDL_Surface *video_page);
+        void draw(SDL_Surface *video_page, bool haveFocus = true);
         void mapFileToList(string filepath);
         static bool compareUniquePtrs(const std::unique_ptr<GameFile>& a,
                                 const std::unique_ptr<GameFile>& b);
@@ -56,8 +62,13 @@ class ListMenu : public Object{
                                  const std::unique_ptr<GameFile>&);
 
 		int getCartForSystem(int systemid);
-
         void filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu);
+		void checkFilter();
+		void applyFilter();
+		void resetFilter();
+		void sortFilters();
+
+
         void resetIndexPos();
         void nextPos();
         void prevPos();

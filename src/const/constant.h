@@ -2,11 +2,13 @@
 
 #include <SDL.h>
 #include <SDL_ttf.h>
+#include <gfx/gfx_utils.h>
 #include <string>
 #include <sstream>
 #include <cctype> // Para isdigit
 #include <algorithm>
 #include <stdint.h>
+#include <cmath>
 #include <vector>
 #include <unordered_set>
 #include <stdarg.h>
@@ -48,6 +50,8 @@ static const SDL_Color yellow = { 241,222,19 };
 static const SDL_Color blue = { 76,194,255 };
 static const SDL_Color black = { 0,0,0 };
 static const SDL_Color lightgray = {222, 224, 219, 255};
+static const SDL_Color darkgray = {160, 160, 160, 255};
+static const SDL_Color almostblack = {40, 40, 40, 255};
 static const SDL_Color paleblue = {57, 72, 93, 255};
 static const SDL_Color red = {255,0,0};
 
@@ -94,6 +98,8 @@ typedef enum {
 
 typedef enum {
     clBackground = 0,
+	clBlack,
+	clWhite,
 	clBkgMenu,
 	clRed,
     clTotalColors
@@ -122,6 +128,29 @@ struct Message {
 
 enum ACH_TYPE{ACH_LOAD_GAME, ACH_UNLOCKED, ACH_WARNING};
 
+enum TXT_JUSTIFY{JFY_LEFT, JFY_RIGHT, JFY_CENTER};
+
+struct JFY_TYPE{
+	//Tipo de justificacion
+	TXT_JUSTIFY jfy;
+	//Ancho para la justificacion a la derecha
+	int w;
+
+	JFY_TYPE(TXT_JUSTIFY pJfy, int pW) : jfy(JFY_LEFT), w(0){
+		jfy = pJfy;
+		w = pW;
+	}
+
+	int getJustification(int txtSize){
+		if (jfy == JFY_RIGHT && w > 0){
+			return w - txtSize;
+		} else if (jfy == JFY_CENTER && w > 0){
+			return (w - txtSize) / 2;
+		}
+		else 
+			return 0;
+	}
+};
 
 struct AchievementState{
 	volatile bool isDownloading;		// Especifica si se esta descargando el logro
@@ -339,6 +368,7 @@ extern const std::string RETROPAD_INI;
 extern const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS;
 extern const std::string ROUTE_SCRAP_TRANSLATIONS;
 extern const std::string PREFIX_DEFAULTS;
+extern const std::string BG_FILENAME;
 extern const char *SDL_BTN_TO_XBOX[12];
 extern std::string SDL_JOY_TO_XBOX[6];
 extern std::string SDL_HAT_TO_XBOX[9];
@@ -409,28 +439,34 @@ class Constant{
 			return ss.str();
 		}
 
-		static void drawText(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg){
+		static SDL_Rect drawText(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg){
+			SDL_Rect dest = { x, y, 0, 0 };
 			if (font) {
 				SDL_Surface* textSurf = TTF_RenderUTF8_Solid(font, s, color);
 				if (textSurf) {
 					SDL_SetAlpha(textSurf, 0, 0);
-					SDL_Rect dest = { x, y, 0, 0 };
+					dest.w = textSurf->w;
+					dest.h = textSurf->h;
 					SDL_BlitSurface(textSurf, NULL, surface, &dest);
 					SDL_FreeSurface(textSurf);
 				}
 			}
+			return dest;
 		}
 
-		static void drawTextTransparent(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg = -1){
+		static SDL_Rect drawTextTransparent(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg = -1,   JFY_TYPE& justifyHelper = JFY_TYPE(JFY_LEFT, 0)){
+			SDL_Rect dest = { x, y, 0, 0 };
 			if (font) {
 				SDL_Surface* textSurf = TTF_RenderUTF8_Blended(font, s, color);
 				if (textSurf) {
-					//SDL_SetAlpha(textSurf, 0, 0);
-					SDL_Rect dest = { x, y, 0, 0 };
+					dest.w = textSurf->w;
+					dest.h = textSurf->h;
+					dest.x += justifyHelper.getJustification(textSurf->w);
 					SDL_BlitSurface(textSurf, NULL, surface, &dest);
 					SDL_FreeSurface(textSurf);
 				}
 			}
+			return dest;
 		}
 
 		static std::string ANSItoUTF8(const std::string& ansiStr) {
@@ -779,6 +815,47 @@ class Constant{
 			if (autoClose){
 				// Liberar el handle (el hilo continua su ejecucion de forma independiente)
 				CloseHandle(hThread);
+			}
+		}
+
+		static void createRectAlphaFilled(SDL_Surface*& selecAlphaRec, SDL_Rect& rectElem, SDL_PixelFormat* format, enumColors color, bool border = false){
+			if (selecAlphaRec == NULL){
+				
+				SDL_Surface* rawSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, rectElem.w, rectElem.h, 
+															   format->BitsPerPixel,
+															   format->Rmask, 
+															   format->Gmask, 
+															   format->Bmask, 
+															   format->Amask);
+
+				const Uint8 KEY_ALPHA = 180;
+				Uint8 fillColorAlpha = KEY_ALPHA;
+				#ifndef _XBOX
+					Uint32 colorkey = SDL_MapRGB(rawSurface->format, 255, 0, 255);
+					SDL_FillRect(rawSurface, nullptr, colorkey);
+					SDL_SetColorKey(rawSurface, SDL_SRCCOLORKEY, colorkey);
+					fillColorAlpha = 0xFF;
+				#endif
+				
+				Uint32 keyBg = SDL_MapRGBA(rawSurface->format,
+                                            Constant::colors[color].sdlColor.r,
+                                            Constant::colors[color].sdlColor.g,
+                                            Constant::colors[color].sdlColor.b,
+                                            fillColorAlpha);
+
+				SDL_FillRect(rawSurface, NULL, keyBg);
+				
+				if (border)
+					rect(rawSurface, 0, 0, rectElem.w - 1, rectElem.h - 1, Constant::colors[color].sdlColor);
+
+				#ifdef _XBOX
+						//SDL_SetAlpha(rawSurface, 0, 0);
+						selecAlphaRec = rawSurface;   // cacheamos directamente
+				#else 
+						SDL_SetAlpha(rawSurface, SDL_SRCALPHA, KEY_ALPHA);
+						selecAlphaRec = SDL_DisplayFormatAlpha(rawSurface);
+						SDL_FreeSurface(rawSurface);
+				#endif
 			}
 		}
 

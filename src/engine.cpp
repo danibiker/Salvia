@@ -89,10 +89,6 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 
 	SDL_WM_SetCaption("Salvia", NULL);
 
-	if (TTF_Init() == -1) {
-		LOG_ERROR("Error TTF_Init: %s\n", TTF_GetError());
-	}
-
 	initFont();
 	joystick = new Joystick();
 	keyb = new t_keyboard();

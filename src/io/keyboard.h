@@ -255,9 +255,10 @@ struct t_keyboard {
 			initSpectrum(w, h);
 		} else if (keybType == "msx"){
 			initMSX(w, h);
-		} else {
-			initMSX(w, h);
-		}
+		} 
+		//else {
+		//	initMSX(w, h);
+		//}
 	}
 
     void initSpectrum(int screenW, int screenH) {

@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 #include <stdint.h>
 
 #include <const/constant.h>
@@ -59,6 +60,10 @@ struct ListStatus{
     int maxLines;
     int layout;
     bool animateBkg;
+	int posManufacturer;
+	int posSystem;
+	int posYear;
+	bool onlyParents;
 };
 
 struct t_scale_props{
@@ -94,31 +99,147 @@ struct t_scale_props{
 // 2048 * 1152 permite hasta Scale4x de una imagen de 512x256 o xBRZ alto
 static uint16_t temp_buffer[2048 * 1152]; // Ocupa aprox 4.5 MB
 
+struct GameDataFields{
+private:
+	int lastYear;
+	int lastManufacturer;
+	int lastSystem;
+	bool lastOnlyParents;
+
+public:
+    std::vector<std::string> years;
+    std::vector<std::string> manufacturers;
+    std::vector<std::string> systems;
+
+	int posYear;
+	int posManufacturer;
+	int posSystem;
+	bool onlyParents;
+	
+
+	void clear(){
+		resetFilters();
+		years.clear();
+		manufacturers.clear();
+		systems.clear();
+	}
+
+	void resetFilters(){
+		posYear = -1;
+		posManufacturer = -1;
+		posSystem = -1;
+		lastYear = -1;
+		lastManufacturer = -1;
+		lastSystem = -1;
+		onlyParents = false;
+	}
+	
+	bool shouldFilter(){
+		return posYear != -1 || posManufacturer != -1 || posSystem != -1 || 
+			(onlyParents && !years.empty() && !manufacturers.empty() && !systems.empty());
+	}
+
+	bool filterChanged(){
+		if (posYear != lastYear || posManufacturer != lastManufacturer || posSystem != lastSystem || onlyParents != lastOnlyParents){
+			lastYear = posYear;
+			lastManufacturer = posManufacturer;
+			lastSystem = posSystem;
+			lastOnlyParents = onlyParents;
+			return true;
+		} 
+		return false;
+	} 
+
+	bool filterManufacturer(const std::string &manufacturer){
+		return posManufacturer == -1 || (posManufacturer >= -1 && posManufacturer < (int)manufacturers.size() && manufacturer.find(manufacturers[posManufacturer]) != std::string::npos);
+	}
+	
+	bool filterYear(const std::string &year){
+		return posYear == -1 || (posYear >= -1 && posYear < (int)years.size() && year.find(years[posYear]) != std::string::npos);
+	}
+
+	bool filterSystem(const std::string &system){
+		return posSystem == -1 || (posSystem >= -1 && posSystem < (int)systems.size() && system.find(systems[posSystem]) != std::string::npos);
+	}
+
+	bool filterParent(const bool &parent) {
+		return !onlyParents || parent;
+	}
+};
+
 struct GameData {
-    std::string description;
-    std::string year;
-    std::string manufacturer;
-    std::string cloneof;  // Si esta vacio, es un "parent" (original)
-    std::string romof;
-    std::string driverStatus;
+	uint16_t year;
+	// Si esta vacio, es un "parent" (original)
+    char cloneof[25];  
+    char romof[25];
+	char sourcefile[25];
+    char manufacturer[50];
+	char description[80];
+
+	GameData(){
+		cloneof[0] = '\0';
+		romof[0] = '\0';
+		sourcefile[0] = '\0';
+		manufacturer[0] = '\0';
+		description[0] = '\0';
+	}
+
+	// --- Métodos SET seguros ---
+    void setCloneof(const char* src) {
+        // Copia asegurando que no se pase del tamaño y fuerza el carácter nulo al final
+        std::strncpy(cloneof, src, sizeof(cloneof) - 1);
+        cloneof[sizeof(cloneof) - 1] = '\0';
+    }
+
+    void setRomof(const char* src) {
+        std::strncpy(romof, src, sizeof(romof) - 1);
+        romof[sizeof(romof) - 1] = '\0';
+    }
+
+    void setSourcefile(const char* src) {
+        std::strncpy(sourcefile, src, sizeof(sourcefile) - 1);
+        sourcefile[sizeof(sourcefile) - 1] = '\0';
+    }
+
+    void setManufacturer(const char* src) {
+        std::strncpy(manufacturer, src, sizeof(manufacturer) - 1);
+        manufacturer[sizeof(manufacturer) - 1] = '\0';
+    }
+
+	void setDescription(const char* src){
+		std::strncpy(description, src, sizeof(description) - 1);
+        description[sizeof(description) - 1] = '\0';
+	}
+
     // util para saber si es clon rapidamente
-    bool isClone() const { return !cloneof.empty(); }
+    bool isClone() const { return *cloneof != '\0'; }
+	bool isSystem() const { return *cloneof != '\0' && *romof != '\0'; }
 };
 
 class GameFile{
-    public:
-    GameFile() : gameData(NULL), systemid(0){
-    }
-    ~GameFile(){
+public:
+	// id de consola
+	int systemid;
+	// Path del fichero
+    std::string longFileName;
+	// Nombre del titulo
+    std::string gameTitle;
+	// Nombre en minusculas pre-calculado para ordenar
+	std::string sortKey; 
+	// Superficie para cachear textos
+	SDL_Surface *cache;
+	//Detalle del juego
+	const GameData *gameData;
+
+    GameFile() : gameData(NULL), systemid(0), cache(NULL){
     }
 
-	const GameData *gameData;
-    std::string shortFileName;
-    std::string longFileName;
-    std::string gameTitle;
-    std::size_t cutTitleIdx;
-	std::string sortKey; // Nombre en minusculas pre-calculado
-	int systemid;
+    ~GameFile(){
+		if (cache != NULL){
+			SDL_FreeSurface(cache);
+			cache = NULL;
+		}
+    }
 };
 
 class FileName8_3 {
