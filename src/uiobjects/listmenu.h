@@ -24,7 +24,6 @@ class ListMenu : public Object{
 		std::map<std::string, GameData> mameDatabase;
 		void loadMameDatabase(ConfigEmu& emu);
 		SDL_Surface *selecAlphaRec;
-		std::string extractSystem(const std::string &sourceFile);
 		void drawIconListElem(SDL_Surface *video_page, GameFile *game, SDL_Rect& dstRectIcon);
 
     public:
@@ -49,6 +48,7 @@ class ListMenu : public Object{
 		vector<GameFile*> filteredGames;
 		t_zipped_file_paths listZipped;
 		void zippedToList(int system);
+		std::string extractSystem(const std::string &sourceFile);
 
 		GameDataFields gameDataFields;
         static SDL_Surface* imgText;

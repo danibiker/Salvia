@@ -46,7 +46,7 @@ class Executable{
 };
 
 struct GameTicks{
-    uint16_t ticks;
+    uint32_t ticks;
 };
 
 struct Dimension{

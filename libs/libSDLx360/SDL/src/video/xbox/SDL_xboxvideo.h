@@ -93,6 +93,13 @@ SDL_Surface* SDL_XBOX_GetOverlay(void);
 /* Enable (1) or disable (0) overlay rendering. */
 void SDL_XBOX_SetOverlayEnabled(int enabled);
 
+/* Apply screen rotation by remapping the texture coordinates of the display
+   quad. Free in HW (no extra blit, no extra memory, no shader change). The
+   texture in VRAM keeps its native orientation, so HQx/CRT shaders keep
+   working correctly because their texel math runs in texture space.
+   rotation: 0=0deg, 1=90 CCW, 2=180, 3=270 CCW (libretro convention). */
+void SDL_XBOX_SetRotation(int rotation);
+
 #endif /* _SDL_nullvideo_h */
 
  

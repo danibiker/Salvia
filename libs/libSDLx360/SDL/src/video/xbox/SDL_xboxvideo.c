@@ -124,6 +124,18 @@ static float g_display_aspect_ratio = 0.0f; /* 0 = use native pixel ratio */
 static int g_display_fullscreen = 1; /* 1 = scale to fill screen, 0 = pixel perfect size */
 static int g_texture_width = 0;
 static int g_texture_height = 0;
+static int g_screen_rotation = 0; /* 0..3 = 0/90/180/270 deg CCW (libretro convention) */
+
+/* UVs por rotacion, indexadas por g_screen_rotation. Cada fila tiene 8 floats:
+   v0.u, v0.v, v1.u, v1.v, v2.u, v2.v, v3.u, v3.v
+   donde v0=BL, v1=TL, v2=BR, v3=TR (triangle strip).
+   Derivado de rotar las UVs identidad: 90 CCW -> (u',v')=(1-v, u). */
+static const float g_uv_rot[4][8] = {
+	/* 0:   0 deg  */ {0.0f,1.0f, 0.0f,0.0f, 1.0f,1.0f, 1.0f,0.0f},
+	/* 1:  90 CCW  */ {0.0f,0.0f, 1.0f,0.0f, 0.0f,1.0f, 1.0f,1.0f},
+	/* 2: 180      */ {1.0f,0.0f, 1.0f,1.0f, 0.0f,0.0f, 0.0f,1.0f},
+	/* 3: 270 CCW  */ {1.0f,1.0f, 0.0f,1.0f, 1.0f,0.0f, 0.0f,0.0f},
+};
 
 /* Overlay system: a 1280x720 ARGB layer drawn on top of the game quad */
 static LPDIRECT3DTEXTURE9 g_overlay_texture = NULL;
@@ -424,6 +436,16 @@ static void XBOX_UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
 	float bbh = (float)D3D_PP.BackBufferHeight;
 	float bb_ratio;
 
+	/* Si el contenido se rota 90 o 270, el ancho y alto efectivos se
+	   intercambian para todo el calculo de tamano/posicion del quad. La
+	   textura en VRAM mantiene sus dimensiones reales: solo las UVs y el
+	   rectangulo en pantalla se invierten. */
+	if (g_screen_rotation & 1) {
+		int tmp = tex_w;
+		tex_w = tex_h;
+		tex_h = tmp;
+	}
+
 	if (g_display_fullscreen) {
 		/* Scale to fill screen maintaining aspect ratio */
 		float bb_ratio = bbw / bbh;
@@ -500,34 +522,39 @@ static void XBOX_UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
 
 	IDirect3DVertexBuffer9_Lock(vertexBuffer, 0, 0, (BYTE **)&pLockedVertexBuffer, 0L);
 
-	/* a=bottom-left, b=top-left, c=bottom-right, d=top-right (triangle strip) */
-	triangleStripVertices[0].x = offset_x - 0.5f;
-	triangleStripVertices[0].y = offset_y + display_h - 0.5f;
-	triangleStripVertices[0].z = 0;
-	triangleStripVertices[0].rhw = 1;
-	triangleStripVertices[0].tx = 0;
-	triangleStripVertices[0].ty = 1;
+	/* a=bottom-left, b=top-left, c=bottom-right, d=top-right (triangle strip).
+	   Las UVs salen de g_uv_rot para que la rotacion sea gratis en GPU. */
+	{
+		const float* uv = g_uv_rot[g_screen_rotation & 3];
 
-	triangleStripVertices[1].x = offset_x - 0.5f;
-	triangleStripVertices[1].y = offset_y - 0.5f;
-	triangleStripVertices[1].z = 0;
-	triangleStripVertices[1].rhw = 1;
-	triangleStripVertices[1].tx = 0;
-	triangleStripVertices[1].ty = 0;
+		triangleStripVertices[0].x = offset_x - 0.5f;
+		triangleStripVertices[0].y = offset_y + display_h - 0.5f;
+		triangleStripVertices[0].z = 0;
+		triangleStripVertices[0].rhw = 1;
+		triangleStripVertices[0].tx = uv[0];
+		triangleStripVertices[0].ty = uv[1];
 
-	triangleStripVertices[2].x = offset_x + display_w - 0.5f;
-	triangleStripVertices[2].y = offset_y + display_h - 0.5f;
-	triangleStripVertices[2].z = 0;
-	triangleStripVertices[2].rhw = 1;
-	triangleStripVertices[2].tx = 1;
-	triangleStripVertices[2].ty = 1;
+		triangleStripVertices[1].x = offset_x - 0.5f;
+		triangleStripVertices[1].y = offset_y - 0.5f;
+		triangleStripVertices[1].z = 0;
+		triangleStripVertices[1].rhw = 1;
+		triangleStripVertices[1].tx = uv[2];
+		triangleStripVertices[1].ty = uv[3];
 
-	triangleStripVertices[3].x = offset_x + display_w - 0.5f;
-	triangleStripVertices[3].y = offset_y - 0.5f;
-	triangleStripVertices[3].z = 0;
-	triangleStripVertices[3].rhw = 1;
-	triangleStripVertices[3].tx = 1;
-	triangleStripVertices[3].ty = 0;
+		triangleStripVertices[2].x = offset_x + display_w - 0.5f;
+		triangleStripVertices[2].y = offset_y + display_h - 0.5f;
+		triangleStripVertices[2].z = 0;
+		triangleStripVertices[2].rhw = 1;
+		triangleStripVertices[2].tx = uv[4];
+		triangleStripVertices[2].ty = uv[5];
+
+		triangleStripVertices[3].x = offset_x + display_w - 0.5f;
+		triangleStripVertices[3].y = offset_y - 0.5f;
+		triangleStripVertices[3].z = 0;
+		triangleStripVertices[3].rhw = 1;
+		triangleStripVertices[3].tx = uv[6];
+		triangleStripVertices[3].ty = uv[7];
+	}
 
 	memcpy(pLockedVertexBuffer, triangleStripVertices, sizeof(triangleStripVertices));
 	IDirect3DVertexBuffer9_Unlock(vertexBuffer);
@@ -543,6 +570,14 @@ void SDL_XBOX_SetDisplaySize(float aspect_ratio)
 void SDL_XBOX_SetDisplayFullscreen(int fullscreen)
 {
 	g_display_fullscreen = fullscreen;
+	XBOX_UpdateVertexBuffer(g_texture_width, g_texture_height, g_display_aspect_ratio);
+	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
+}
+
+void SDL_XBOX_SetRotation(int rotation)
+{
+	/* Saneo: solo 0..3 son validos (libretro). Cualquier otra cosa = sin rotacion. */
+	g_screen_rotation = (rotation >= 0 && rotation <= 3) ? rotation : 0;
 	XBOX_UpdateVertexBuffer(g_texture_width, g_texture_height, g_display_aspect_ratio);
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 }

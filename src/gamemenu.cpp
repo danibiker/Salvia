@@ -101,8 +101,6 @@ GameMenu::~GameMenu(){
 	Achievements::instance()->shutdown();
 }
 
-
-
 /**
  * 
  */
@@ -152,12 +150,34 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
 
     Image imageSnapFs(0, 0, overlay->w, overlay->h);
     menuImages.insert(make_pair(SNAPFS, imageSnapFs));
-    
-    const int sectionGap = 0;
-    const int textAreaY = listMenu.getH() / 2 + listMenu.getY() + sectionGap;
-    TextArea textarea(overlay->w / 2, textAreaY, overlay->w / 2, overlay->h - textAreaY);
-    textarea.marginX = (int)floor((double)overlay->w / 100);
-    menuTextAreas.insert(make_pair(SYNOPSIS, textarea));
+	
+	
+	const int sectionGap = 0;
+	int posTextSectionY = listMenu.getH() / 2 + listMenu.getY() + sectionGap;
+    int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
+
+	TextArea textareaYear(overlay->w / 2, posTextSectionY, overlay->w / 2, face_h_big);
+	textareaYear.setFontType(Fonts::FONTBIG);
+    textareaYear.marginX = (int)floor((double)overlay->w / 100);
+    menuTextAreas.insert(make_pair(YEAR, textareaYear));
+
+	posTextSectionY += face_h_big;
+	TextArea textareaManufacturer(overlay->w / 2, posTextSectionY, overlay->w / 2, face_h_big);
+	textareaManufacturer.setFontType(Fonts::FONTBIG);
+	textareaManufacturer.marginX = textareaYear.marginX;
+    menuTextAreas.insert(make_pair(MANUFACTURER, textareaManufacturer));
+
+	posTextSectionY += face_h_big;
+	TextArea textareaSystem(overlay->w / 2, posTextSectionY, overlay->w / 2, face_h_big);
+	textareaSystem.setFontType(Fonts::FONTBIG);
+    textareaSystem.marginX = textareaYear.marginX;
+    menuTextAreas.insert(make_pair(SYSTEM, textareaSystem));
+
+    posTextSectionY += face_h_big;
+    TextArea textareaSyn(overlay->w / 2, posTextSectionY, overlay->w / 2, overlay->h - posTextSectionY);
+	textareaSyn.setFontType(Fonts::FONTBIG);
+    textareaSyn.marginX = (int)floor((double)overlay->w / 100);
+    menuTextAreas.insert(make_pair(SYNOPSIS, textareaSyn));
 }
 
 /**
@@ -208,9 +228,27 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 					//Draw and update the overlay because the loading of images can take a long time
 					if (listMenu.keyUp){
 						string assetsDir = dirutil::getPathPrefix(emu.assets) + string(Constant::tempFileSep);
+
+						if (game->gameData != NULL){
+							menuTextAreas[YEAR].loadString(LanguageManager::instance()->get("menu.filter.year") + ": " + Constant::TipoToStr(game->gameData->year));
+							menuTextAreas[MANUFACTURER].loadString(LanguageManager::instance()->get("menu.filter.manufacturer") + ": " + game->gameData->manufacturer);
+							menuTextAreas[SYSTEM].loadString(LanguageManager::instance()->get("menu.filter.system") + ": " + listMenu.extractSystem(game->gameData->sourcefile));
+							menuTextAreas[YEAR].draw(this->overlay);
+							menuTextAreas[MANUFACTURER].draw(this->overlay);
+							menuTextAreas[SYSTEM].draw(this->overlay);
+						} else {
+							menuTextAreas[YEAR].clear();
+							menuTextAreas[MANUFACTURER].clear();
+							menuTextAreas[SYSTEM].clear();
+						}
+						
 						//Drawing the rom's synopsis text
 						menuTextAreas[SYNOPSIS].loadTextFileFromGame(assetsDir + "synopsis" + string(Constant::tempFileSep), *game, ".txt");
 						menuTextAreas[SYNOPSIS].resetTicks(this->gameTicks);
+						if (menuTextAreas[YEAR].isEmpty() && menuTextAreas[MANUFACTURER].isEmpty() && menuTextAreas[SYSTEM].isEmpty()){
+							menuTextAreas[SYNOPSIS].setY(menuTextAreas[YEAR].getY());
+							menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
+						}
 						menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
 						
 						//Snapshot picture
@@ -233,6 +271,14 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 						menuImages[SNAP].printImage(this->overlay);
 						menuImages[BOX2D].printImage(this->overlay);
 						menuImages[SNAPTIT].printImage(this->overlay);
+						if (menuTextAreas[YEAR].isEmpty() && menuTextAreas[MANUFACTURER].isEmpty() && menuTextAreas[SYSTEM].isEmpty()){
+							menuTextAreas[SYNOPSIS].setY(menuTextAreas[YEAR].getY());
+							menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
+						} else {
+							menuTextAreas[YEAR].draw(this->overlay);
+							menuTextAreas[MANUFACTURER].draw(this->overlay);
+							menuTextAreas[SYSTEM].draw(this->overlay);
+						}
 						menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
 					}
 				}

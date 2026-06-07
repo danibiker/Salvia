@@ -45,6 +45,9 @@ static const string BOX2D = "box2d";
 static const string SNAPTIT = "snaptit";
 static const string SNAPFS = "snapFs";
 static const string SYNOPSIS = "synopsis";
+static const string YEAR = "year";
+static const string MANUFACTURER = "manufacturer";
+static const string SYSTEM = "system";
 static const string MENUTMP = "menu.tmp";
 
 extern std::string videoScaleStrings[TOTAL_VIDEO_SCALE];

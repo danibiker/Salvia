@@ -30,6 +30,16 @@ static bool retro_environment(unsigned cmd, void *data) {
 			return true;
         }
 
+		// Rotacion solicitada por el core (juegos verticales tipo TATE).
+		// Aceptamos el comando y aplicamos la rotacion al framebuffer en sw_refresh.
+		case RETRO_ENVIRONMENT_SET_ROTATION: {
+			const unsigned *rot = (const unsigned*)data;
+			g_screen_rotation = rot ? (*rot & 3u) : 0u;
+			LOG_DEBUG("SET_ROTATION solicitada por el core: %u (%u grados CCW)",
+			          g_screen_rotation, g_screen_rotation * 90);
+			return true;
+		}
+
 		case RETRO_ENVIRONMENT_GET_VFS_INTERFACE: {
 			struct retro_vfs_interface_info* vfs_info = (struct retro_vfs_interface_info*)data;
 			// Si el core pide versión 1, 2 o 3, le damos nuestra v3
@@ -143,11 +153,17 @@ static bool retro_environment(unsigned cmd, void *data) {
 			gameMenu->sync->init_fps_counter((float)av_info->timing.fps);
 			gameMenu->g_audioRate.reset();
 			gameMenu->g_audioRate.init(BUFF_SIZE);
+			if (av_info->geometry.aspect_ratio > 0.0f){
+				aspectRatioValues[RATIO_CORE] = av_info->geometry.aspect_ratio;
+			}
 			return true;
 		}
 
 		case RETRO_ENVIRONMENT_SET_GEOMETRY:{
 			const struct retro_game_geometry *geom = (const struct retro_game_geometry*)data;
+			if (geom && geom->aspect_ratio > 0.0f){
+				aspectRatioValues[RATIO_CORE] = geom->aspect_ratio;
+			}
 			return true;
 		}
 		case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: {
@@ -482,6 +498,55 @@ static inline void take_screenshot(void* final_src, unsigned width, unsigned hei
     action_postponed.cycles = 0;
 }
 
+// Rota un framebuffer RGB565 (16 bpp) hacia un buffer denso.
+// `rotation` sigue la convencion libretro: 1=90 CCW, 2=180, 3=270 CCW.
+// Las dimensiones de salida son (sh x sw) para 90/270 y (sw x sh) para 180.
+// `src_pitch_bytes` es el pitch del origen en BYTES; el destino siempre queda
+// denso (pitch = dst_w * 2 bytes).
+static inline void rotate_buffer_16bpp(const uint16_t* src, unsigned sw, unsigned sh,
+                                       std::size_t src_pitch_bytes,
+                                       uint16_t* dst, unsigned rotation) {
+	const std::size_t spx = src_pitch_bytes >> 1; // pitch en pixeles
+
+	switch (rotation) {
+		case 1: { // 90 CCW: dst es sh (ancho) x sw (alto)
+			const unsigned dst_w = sh;
+			const unsigned dst_h = sw;
+			for (unsigned dy = 0; dy < dst_h; ++dy) {
+				uint16_t* drow = dst + dy * dst_w;
+				const unsigned sx_col = sw - 1 - dy;
+				for (unsigned dx = 0; dx < dst_w; ++dx) {
+					drow[dx] = src[dx * spx + sx_col];
+				}
+			}
+			break;
+		}
+		case 2: { // 180
+			for (unsigned dy = 0; dy < sh; ++dy) {
+				const uint16_t* srow = src + (sh - 1 - dy) * spx;
+				uint16_t* drow = dst + dy * sw;
+				for (unsigned dx = 0; dx < sw; ++dx) {
+					drow[dx] = srow[sw - 1 - dx];
+				}
+			}
+			break;
+		}
+		case 3: { // 270 CCW (90 CW): dst es sh (ancho) x sw (alto)
+			const unsigned dst_w = sh;
+			const unsigned dst_h = sw;
+			for (unsigned dy = 0; dy < dst_h; ++dy) {
+				uint16_t* drow = dst + dy * dst_w;
+				for (unsigned dx = 0; dx < dst_w; ++dx) {
+					drow[dx] = src[(sh - 1 - dx) * spx + dy];
+				}
+			}
+			break;
+		}
+		default:
+			break;
+	}
+}
+
 static inline void sw_refresh(const void *data, unsigned width, unsigned height, std::size_t pitch) {
     if (!data || width == 0 || height == 0 || *gameMenu->current_scaler_mode == NO_VIDEO) 
 		return;	
@@ -514,17 +579,40 @@ static inline void sw_refresh(const void *data, unsigned width, unsigned height,
 		final_src = (void*)conversion_buffer;
 	}
 
-	if (action_postponed.cycles == 1 && action_postponed.action == SAVE_STATE){
-		take_screenshot(final_src, width, height, pitch);
+	// Rotacion solicitada por el core (juegos verticales tipo agallet, Cave, etc.).
+	// Hecha aqui, tras la conversion a RGB565, para que el escalador reciba ya el
+	// framebuffer en la orientacion final y trabaje con dimensiones swapped si toca.
+	unsigned r_width = width;
+	unsigned r_height = height;
+	if (g_screen_rotation != 0) {
+		const unsigned rw = (g_screen_rotation == 2) ? width : height;
+		const unsigned rh = (g_screen_rotation == 2) ? height : width;
+		const std::size_t needed = (std::size_t)rw * rh * sizeof(uint16_t);
+		if (!rotation_buffer || rotation_buffer_size < needed) {
+			uint16_t* tmp = (uint16_t*)realloc(rotation_buffer, needed);
+			if (!tmp) return;
+			rotation_buffer = tmp;
+			rotation_buffer_size = needed;
+		}
+		rotate_buffer_16bpp((const uint16_t*)final_src, width, height, pitch,
+		                    rotation_buffer, g_screen_rotation);
+		final_src = (void*)rotation_buffer;
+		r_width = rw;
+		r_height = rh;
+		pitch = rw * sizeof(uint16_t); // destino denso
 	}
-	
+
+	if (action_postponed.cycles == 1 && action_postponed.action == SAVE_STATE){
+		take_screenshot(final_src, r_width, r_height, pitch);
+	}
+
     SDL_Surface* screen = gameMenu->gameScreen;
-	
+
 	t_scale_props scaleProps;
 	scaleProps.src = (uint16_t*)final_src;
 	scaleProps.dst = (uint16_t*)screen->pixels;
-	scaleProps.sw = (int)width;
-	scaleProps.sh = (int)height;
+	scaleProps.sw = (int)r_width;
+	scaleProps.sh = (int)r_height;
 	scaleProps.spitch = pitch;
 	scaleProps.dw = screen->w;
 	scaleProps.dh = screen->h;
@@ -582,6 +670,19 @@ static inline void hw_refresh(const void *data, unsigned width,
 		#endif
 		current_video_settings.ratio = current_ratio;
 	}
+
+	#ifdef _XBOX
+	// Rotacion HW: gratis en GPU (solo remap de UVs del quad).  No usamos
+	// rotation_buffer en la rama Xbox; la textura va a VRAM tal cual y
+	// los shaders (HQx/CRT/etc.) siguen trabajando con la orientacion nativa.
+	{
+		static unsigned last_hw_rotation = 0;
+		if (last_hw_rotation != g_screen_rotation){
+			SDL_XBOX_SetRotation((int)g_screen_rotation);
+			last_hw_rotation = g_screen_rotation;
+		}
+	}
+	#endif
 
     // ── Determinar el puntero fuente definitivo ──────────────────────────────
     const void* final_src = data;
@@ -946,6 +1047,10 @@ void closeGame(){
 int launchGame(std::string rompath, bool tmpDelete){
 	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 
+	// Reset de la rotacion antes de arrancar el core: si el nuevo core no llama
+	// a RETRO_ENVIRONMENT_SET_ROTATION, asumimos orientacion estandar (0 grados).
+	g_screen_rotation = 0;
+
 	/* Modo "BIOS only": el frontend nos pasa el centinela "@bios-only"
 	 * para arrancar la consola sin disco.  El core debe haber anunciado
 	 * RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME en retro_set_environment.
@@ -1163,6 +1268,11 @@ void closeResources() {
         conversion_buffer = NULL; // Importante ponerlo a NULL tras liberar
         buffer_size = 0;
     }
+    if (rotation_buffer != NULL) {
+        free(rotation_buffer);
+        rotation_buffer = NULL;
+        rotation_buffer_size = 0;
+    }
 
 	deinitSaveSystem();
 	Launcher::unmountAll();
@@ -1257,6 +1367,7 @@ int main(int argc, char *argv[]) {
 		if (*gameMenu->current_sync == SYNC_TO_VIDEO){
 			gameMenu->sync->limit_fps(nextFrameTime);
 		}
+		gameMenu->gameTicks.ticks++; 
 	}
 	closeResources();
     return 0;

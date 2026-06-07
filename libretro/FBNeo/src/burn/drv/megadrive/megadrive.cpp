@@ -54,6 +54,30 @@ static bool lg_has_reticle = true;
 #define MAX_CARTRIDGE_SIZE      0xf00000
 #define MAX_SRAM_SIZE           0x010000
 
+// VRAM tile pack: el VDP del MD almacena tiles como UINT16 byte-swapped (write
+// envuelto con BURN_ENDIAN_SWAP_INT16 en linea ~1173). El renderer lee 4 bytes
+// como UINT32 para sacar 8 pixels 4-bit a la vez.
+//
+// En LE host con memoria byte-swap'd por par, *(UINT32*) lee los bytes en
+// orden 0,1,2,3 (LE) -> combina como bytes [b1_swap][b0_swap][b3_swap][b2_swap]
+// que termina dando pack = (b2_nat << 24) | (b3_nat << 16) | (b0_nat << 8) | b1_nat.
+// TileNorm asume ese layout exacto.
+//
+// En BE host con la misma memoria, *(UINT32*) interpreta como BE -> da el
+// byte-swap completo del valor que esperamos. Aplicando BURN_ENDIAN_SWAP_INT32
+// (bswap32) deshacemos esa inversion y obtenemos el mismo orden que LE host.
+//
+// NOTA: ANTES esta macro hacia un swap byte-en-par (((raw & 0xFF00FF00) >> 8) |
+// ((raw & 0x00FF00FF) << 8)). Estaba MAL: producia 0x12345678 para un raw BE
+// 0x34127856, cuando lo correcto era 0x56781234. El sintoma visible era que
+// cada tile aparecia con sus dos mitades horizontales intercambiadas (lineas
+// verticales raras y texto del HUD con columnas mal alineadas).
+#ifdef LSB_FIRST
+#define VID_PACK32(raw)  (raw)
+#else
+#define VID_PACK32(raw)  BURN_ENDIAN_SWAP_INT32(raw)
+#endif
+
 // PicoDrive Sek interface
 static UINT64 SekCycleCnt, SekCycleAim, SekCycleCntDELTA, line_base_cycles;
 static INT32 lines_vis;
@@ -411,7 +435,7 @@ inline static void CalcCol(INT32 index, UINT16 nColour)
 	INT32 g = (nColour & 0x00e0) >> 4; 	// Green
 	INT32 b = (nColour & 0x0e00) >> 8;	// Blue
 
-	RamPal[index] = nColour & 0xeee;
+	RamPal[index] = BURN_ENDIAN_SWAP_INT16(nColour & 0xeee);
 
 	// Normal Color
 	MegadriveCurPal[index + 0x00] = BurnHighCol(color_ramp[r], color_ramp[g], color_ramp[b], 0);
@@ -788,6 +812,17 @@ static void DmaSlow(INT32 len)
 				d = *pd++;
 			}
 			if(a&1) d=(d<<8)|(d>>8);
+			// Workaround Paprium BE: paprium_s.ram esta mapeada con handler
+			// (paprium_r16) que devuelve VALOR LOGICO al wrapper Sek. El resto
+			// de juegos MD usan Ram68K mapped sin handler, donde SekReadWord
+			// devuelve raw memory (byteswap del logico en BE). Como DmaSlow
+			// asume el patron "raw memory" (r[]=d directo), aqui compensamos
+			// solo para Paprium. En LE host BURN_ENDIAN_SWAP_INT16 es no-op,
+			// asi que no afecta a Windows. La condicion `source < 0x10000`
+			// limita el fix a la region paprium_s.ram (0..0xFFFF).
+			if (papriummode && source <= 0x10000) {
+				d = BURN_ENDIAN_SWAP_INT16(d);
+			}
 			r[a>>1] = (UINT16)d; // will drop the upper bits
 			// AutoIncrement
 			a = (UINT16)(a+inc);
@@ -3949,12 +3984,20 @@ INT32 MegadriveExit()
 
 	if (papriummode) {
 		paprium_exit();
+		papriummode = 0;
 	}
 
 	if (sot4wmode) {
 		vx_exit();
 		sot4wmode = 0;
 	}
+
+	// Reset del resto de flags de modo especifico para no contaminar la
+	// siguiente carga (ej. Paprium -> Sonic dejaba papriummode en 1, y eso
+	// activaba el workaround de endianness en DmaSlow para Sonic, dejando
+	// la pantalla en rojo).
+	psolarmode = 0;
+	colocodxmode = 0;
 
 	if (has_gun != 0) {
 		BurnGunExit();
@@ -4140,7 +4183,7 @@ static void DrawStrip(struct MegadriveTileStrip *ts, INT32 lflags, INT32 cellski
   {
     UINT32 pack;
 
-    code = RamVid[ts->nametab + (tilex & ts->xmask)];
+    code = BURN_ENDIAN_SWAP_INT16(RamVid[ts->nametab + (tilex & ts->xmask)]);
     if (code == blank)
       continue;
 	if ((code >> 15) | (lflags & LF_FORCE)) { // high priority tile
@@ -4160,7 +4203,7 @@ static void DrawStrip(struct MegadriveTileStrip *ts, INT32 lflags, INT32 cellski
       pal=((code>>9)&0x30)|sh;
     }
 
-    pack = *(UINT32 *)(RamVid + addr);
+    pack = VID_PACK32(*(UINT32 *)(RamVid + addr));
     if (!pack) {
       blank = code;
       continue;
@@ -4195,7 +4238,7 @@ static void DrawStripVSRam(struct MegadriveTileStrip *ts, INT32 plane_sh, INT32 
     int adj = ((ts->hscroll ^ dx) >> 3) & 1;
     cell -= adj + 1;
     ts->cells -= adj;
-    RamSVid[0x3e] = RamSVid[0x3f] = plane_sh >> 16;
+    RamSVid[0x3e] = RamSVid[0x3f] = BURN_ENDIAN_SWAP_INT16(plane_sh >> 16);
   }
   cell+=cellskip;
   tilex+=cellskip;
@@ -4205,7 +4248,7 @@ static void DrawStripVSRam(struct MegadriveTileStrip *ts, INT32 plane_sh, INT32 
   if ((cell&1)==1)
   {
     INT32 line,vscroll;
-    vscroll = RamSVid[plane + (cell&0x3e)];
+    vscroll = BURN_ENDIAN_SWAP_INT16(RamSVid[plane + (cell&0x3e)]);
 
     // Find the line in the name table
     line=(vscroll+scan)&ts->line&0xffff; // ts->line is really ymask ..
@@ -4219,7 +4262,7 @@ static void DrawStripVSRam(struct MegadriveTileStrip *ts, INT32 plane_sh, INT32 
     if ((cell&1)==0)
     {
       INT32 line,vscroll;
-      vscroll = RamSVid[plane + (cell&0x3e)];
+      vscroll = BURN_ENDIAN_SWAP_INT16(RamSVid[plane + (cell&0x3e)]);
 
       // Find the line in the name table
       line=(vscroll+scan)&ts->line&0xffff; // ts->line is really ymask ..
@@ -4227,7 +4270,7 @@ static void DrawStripVSRam(struct MegadriveTileStrip *ts, INT32 plane_sh, INT32 
       ty=(line&7)<<1; // Y-Offset into tile
     }
 
-    code= RamVid[ts->nametab + nametabadd + (tilex & ts->xmask)];
+    code= BURN_ENDIAN_SWAP_INT16(RamVid[ts->nametab + nametabadd + (tilex & ts->xmask)]);
 //    code &= ~force; // forced always draw everything
     code |= ty<<16; // add ty since that can change pixel row for every 2nd tile
 
@@ -4283,7 +4326,7 @@ static void DrawStripInterlace(struct MegadriveTileStrip *ts, INT32 plane_sh)
   {
     UINT32 pack;
 
-    code = RamVid[ts->nametab + (tilex & ts->xmask)];
+    code = BURN_ENDIAN_SWAP_INT16(RamVid[ts->nametab + (tilex & ts->xmask)]);
     if (code==blank) continue;
     if (code>>15) { // high priority tile
       INT32 cval = (code&0xfc00) | (dx<<16) | (ty<<25);
@@ -4303,7 +4346,7 @@ static void DrawStripInterlace(struct MegadriveTileStrip *ts, INT32 plane_sh)
       pal=((code>>9)&0x30) | sh;
     }
 
-    pack = *(UINT32 *)(RamVid + addr);
+    pack = VID_PACK32(*(UINT32 *)(RamVid + addr));
     if (!pack) {
       blank = code;
       continue;
@@ -4356,11 +4399,11 @@ static void DrawLayer(INT32 plane_sh, UINT32 *hcache, INT32 cellskip, INT32 maxc
   htab+=plane_sh&LF_PLANE; // A or B
 
   // Get horizontal scroll value, will be masked later
-  ts.hscroll = RamVid[htab & 0x7fff];
+  ts.hscroll = BURN_ENDIAN_SWAP_INT16(RamVid[htab & 0x7fff]);
 
   if((RamVReg->reg[12]&6) == 6) {
     // interlace mode 2
-    vscroll = RamSVid[plane_sh & 1]; // Get vertical scroll value
+    vscroll = BURN_ENDIAN_SWAP_INT16(RamSVid[plane_sh & 1]); // Get vertical scroll value
 
     // Find the line in the name table
     ts.line=(vscroll+(Scanline<<1)+RamVReg->field)&((ymask<<1)|1);
@@ -4373,7 +4416,7 @@ static void DrawLayer(INT32 plane_sh, UINT32 *hcache, INT32 cellskip, INT32 maxc
     ts.line=ymask|(shift[width]<<24); // save some stuff instead of line
     if (nBurnLayer & 2) DrawStripVSRam(&ts, plane_sh, cellskip);
   } else {
-    vscroll = RamSVid[plane_sh & 1]; // Get vertical scroll value
+    vscroll = BURN_ENDIAN_SWAP_INT16(RamSVid[plane_sh & 1]); // Get vertical scroll value
 
     // Find the line in the name table
     ts.line=(vscroll+Scanline)&ymask;
@@ -4412,7 +4455,7 @@ static void DrawWindow(INT32 tstart, INT32 tend, INT32 prio, INT32 sh)
   if (prio && !(RamVReg->rendstatus & PDRAW_WND_DIFF_PRIO)) {
 	  return; // derptest
     // check the first tile code
-    code = RamVid[nametab + tilex];
+    code = BURN_ENDIAN_SWAP_INT16(RamVid[nametab + tilex]);
     // if the whole window uses same priority (what is often the case), we may be able to skip this field
     if ((code>>15) != prio) return;
   }
@@ -4429,7 +4472,7 @@ static void DrawWindow(INT32 tstart, INT32 tend, INT32 prio, INT32 sh)
       INT32 dx, addr;
       INT32 pal;
 
-      code = RamVid[nametab + tilex];
+      code = BURN_ENDIAN_SWAP_INT16(RamVid[nametab + tilex]);
 //      if (code==blank) continue;
       if ((code>>15) != prio) {
         RamVReg->rendstatus |= PDRAW_WND_DIFF_PRIO;
@@ -4440,7 +4483,7 @@ static void DrawWindow(INT32 tstart, INT32 tend, INT32 prio, INT32 sh)
       addr=(code&0x7ff)<<4;
       if (code&0x1000) addr+=14-ty; else addr+=ty; // Y-flip
 
-      pack = *(UINT32 *)(RamVid + addr);
+      pack = VID_PACK32(*(UINT32 *)(RamVid + addr));
       if (!pack) {
         blank = code;
         continue;
@@ -4461,7 +4504,7 @@ static void DrawWindow(INT32 tstart, INT32 tend, INT32 prio, INT32 sh)
       INT32 dx, addr;
       INT32 pal;
 
-      code = RamVid[nametab + tilex];
+      code = BURN_ENDIAN_SWAP_INT16(RamVid[nametab + tilex]);
 //      if(code==blank) continue;
       if((code>>15) != prio) {
         RamVReg->rendstatus |= PDRAW_WND_DIFF_PRIO;
@@ -4482,7 +4525,7 @@ static void DrawWindow(INT32 tstart, INT32 tend, INT32 prio, INT32 sh)
       addr=(code&0x7ff)<<4;
       if (code&0x1000) addr+=14-ty; else addr+=ty; // Y-flip
 
-      pack = *(UINT32 *)(RamVid + addr);
+      pack = VID_PACK32(*(UINT32 *)(RamVid + addr));
       if (!pack) {
         blank = code;
         continue;
@@ -4540,7 +4583,7 @@ static void DrawTilesFromCache(UINT32 *hc, INT32 sh, INT32 rlim)
       addr = (code & 0x7ff) << 4;
       addr += code >> 25; // y offset into tile
 
-      pack = *(UINT32 *)(RamVid + addr);
+      pack = VID_PACK32(*(UINT32 *)(RamVid + addr));
       if (!pack) {
         blank = (INT16)code;
         continue;
@@ -4569,7 +4612,7 @@ static void DrawTilesFromCache(UINT32 *hc, INT32 sh, INT32 rlim)
       *zb++ &= 0xbf; *zb++ &= 0xbf; *zb++ &= 0xbf; *zb++ &= 0xbf;
       *zb++ &= 0xbf; *zb++ &= 0xbf; *zb++ &= 0xbf; *zb++ &= 0xbf;
 
-      pack = *(UINT32 *)(RamVid + addr);
+      pack = VID_PACK32(*(UINT32 *)(RamVid + addr));
       if (!pack)
         continue;
 
@@ -4636,6 +4679,9 @@ static void DrawSprite(INT32 *sprite, INT32 sh)
   if (~nSpriteEnable & 0x01) return;
 
   // parse the sprite data
+  // NOTA: sprite apunta a HighPreSpr (cache pre-procesada en host-native),
+  // no a RamVid. NO necesita BURN_ENDIAN_SWAP_INT32 — los writes a HighPreSpr
+  // en PrepareSprites son INT32 nativos (no swap'd).
   sy=sprite[0];
   code=sprite[1];
   sx=code>>16; // X
@@ -4672,7 +4718,7 @@ static void DrawSprite(INT32 *sprite, INT32 sh)
     if(sx<=0)   continue;
     if(sx>=328) break; // Offscreen
 
-    pack = *(UINT32 *)(RamVid + (tile & 0x7fff));
+    pack = VID_PACK32(*(UINT32 *)(RamVid + (tile & 0x7fff)));
     fTileFunc(pd + sx, pack, pal);
   }
 }
@@ -4692,7 +4738,7 @@ static void DrawTilesFromCacheForced(const UINT32 *hc)
 
     dx = (code >> 16) & 0x1ff;
     pal = ((code >> 9) & 0x30);
-    pack = *(UINT32 *)(RamVid + addr);
+    pack = VID_PACK32(*(UINT32 *)(RamVid + addr));
 
     if (code & 0x0800) TileFlip_and(pd + dx, pack, pal);
     else               TileNorm_and(pd + dx, pack, pal);
@@ -4713,7 +4759,7 @@ static void DrawSpriteInterlace(UINT32 *sprite)
 	if (~nSpriteEnable & 0x02) return;
 
 	// parse the sprite data
-	sy=sprite[0];
+	sy= BURN_ENDIAN_SWAP_INT32(sprite[0]);
 	height=sy>>24;
 	sy=(sy&0x3ff)-0x100; // Y
 	width=(height>>2)&3; height&=3;
@@ -4721,7 +4767,7 @@ static void DrawSpriteInterlace(UINT32 *sprite)
 
 	row=((Scanline<<1)+RamVReg->field)-sy; // Row of the sprite we are on
 
-	code=sprite[1];
+	code= BURN_ENDIAN_SWAP_INT32(sprite[1]);
 	sx=((code>>16)&0x1ff)-0x78; // X
 
 	if (code&0x1000) row^=(8<<height)-1; // Flip Y
@@ -4743,7 +4789,7 @@ static void DrawSpriteInterlace(UINT32 *sprite)
 		if(sx<=0)   continue;
 		if(sx>=328) break; // Offscreen
 
-		pack = *(UINT32 *)(RamVid + (tile & 0x7fff));
+		pack = VID_PACK32(*(UINT32 *)(RamVid + (tile & 0x7fff)));
 		if (code & 0x0800) TileFlip(pd + sx, pack, pal);
 		else               TileNorm(pd + sx, pack, pal);
 	}
@@ -4766,8 +4812,8 @@ static void DrawAllSpritesInterlace(INT32 pri, INT32 sh)
 		sprite=(UINT32 *)(RamVid+((table+(link<<2))&0x7ffc)); // Find sprite
 
 		// get sprite info
-		code = sprite[0];
-		sx = sprite[1];
+		code = BURN_ENDIAN_SWAP_INT32(sprite[0]);
+		sx = BURN_ENDIAN_SWAP_INT32(sprite[1]);
 		if(((sx>>15)&1) != pri) goto nextsprite; // wrong priority sprite
 
 		// check if it is on this line
@@ -4824,6 +4870,7 @@ static void DrawSpritesSHi(UINT8 *sprited)
 
     offs = (p[cnt] & 0x7f) * 2;
     sprite = HighPreSpr + offs;
+    // sprite es HighPreSpr (cache host-native), no necesita swap
     code = sprite[1];
     pal = (code>>9)&0x30;
 
@@ -4843,7 +4890,7 @@ static void DrawSpritesSHi(UINT8 *sprited)
       else            fTileFunc=TileNorm;
     }
 
-    // parse remaining sprite data
+    // parse remaining sprite data (sprite es HighPreSpr — host-native, no swap)
     sy=sprite[0];
     sx=code>>16; // X
     width=sy>>28;
@@ -4868,7 +4915,7 @@ static void DrawSpritesSHi(UINT8 *sprited)
       if(sx<=0)   continue;
       if(sx>=328) break; // Offscreen
 
-      pack = *(UINT32 *)(RamVid + (tile & 0x7fff));
+      pack = VID_PACK32(*(UINT32 *)(RamVid + (tile & 0x7fff)));
       fTileFunc(pd + sx, pack, pal);
     }
   }
@@ -4899,6 +4946,7 @@ static void DrawSpritesHiAS(UINT8 *sprited, INT32 sh)
 
     offs = (p[entry] & 0x7f) * 2;
     sprite = HighPreSpr + offs;
+    // sprite es HighPreSpr (cache host-native), no necesita swap
     code = sprite[1];
     pal = (code>>9)&0x30;
 
@@ -4923,7 +4971,7 @@ static void DrawSpritesHiAS(UINT8 *sprited, INT32 sh)
       }
     }
 
-    // parse remaining sprite data
+    // parse remaining sprite data (sprite es HighPreSpr — host-native, no swap)
     sy=sprite[0];
     sx=code>>16; // X
     width=sy>>28;
@@ -4948,7 +4996,7 @@ static void DrawSpritesHiAS(UINT8 *sprited, INT32 sh)
       if(sx<=0)   continue;
       if(sx>=328) break; // Offscreen
 
-      pack = *(UINT32 *)(RamVid + (tile & 0x7fff));
+      pack = VID_PACK32(*(UINT32 *)(RamVid + (tile & 0x7fff)));
       fTileFunc(pd + sx, mb + sx, pack, pal);
     }
   }
@@ -4993,7 +5041,7 @@ static void PrepareSprites(INT32 full)
       sprite=(UINT32 *)(RamVid+((table+(link<<2))&0x7ffc)); // Find sprite
 
       // parse sprite info
-      code2 = sprite[1];
+      code2 = BURN_ENDIAN_SWAP_INT32(sprite[1]);
       sx = (code2>>16)&0x1ff;
       sx -= 0x78; // Get X coordinate + 8
       sy = (pack << 16) >> 16;
@@ -5029,7 +5077,7 @@ found:;
       pd[1] = code2;
 
       // Find next sprite
-      link=(sprite[0]>>16)&0x7f;
+      link=(BURN_ENDIAN_SWAP_INT32(sprite[0])>>16)&0x7f;
       if (!link) break; // End of sprites
     }
   }
@@ -5046,13 +5094,13 @@ found:;
       sprite=(UINT32 *)(RamVid+((table+(link<<2))&0x7ffc)); // Find sprite
 
       // parse sprite info
-      code = sprite[0];
+      code = BURN_ENDIAN_SWAP_INT32(sprite[0]);
       sy = (code&0x1ff)-0x80;
       hv = (code>>24)&0xf;
       height = (hv&3)+1;
 
       width  = (hv>>2)+1;
-      code2 = sprite[1];
+      code2 = BURN_ENDIAN_SWAP_INT32(sprite[1]);
       sx = (code2>>16)&0x1ff;
       sx -= 0x78; // Get X coordinate + 8
 

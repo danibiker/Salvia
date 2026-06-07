@@ -171,7 +171,7 @@ void Sync::sample_cpu_utilization() {
 #endif
 }
 
-void Sync::limit_fps(double& nextFrameTime) {
+double Sync::limit_fps(double& nextFrameTime) {
     double currentTime = Constant::getTicks();
     float diffTime = (float)(nextFrameTime - currentTime);
 
@@ -203,4 +203,6 @@ void Sync::limit_fps(double& nextFrameTime) {
 
     // El siguiente frame se calcula sobre el objetivo ideal
     nextFrameTime += frameDelay;
+
+	return currentTime;
 }

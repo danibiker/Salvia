@@ -201,7 +201,6 @@
     </ClCompile>
     <ClCompile Include="..\..\src\burn\devices\i2ceeprom.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\devices\i4x00.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
@@ -1170,19 +1169,15 @@
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\megadrive\d_mdarcbl.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\megadrive\d_megadrive.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\megadrive\megadrive.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\megadrive\stm95.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\midway\dcs2k.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
@@ -3388,7 +3383,6 @@
     </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\burn_md2612.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\burn_y8950.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
@@ -3572,7 +3566,6 @@
     </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\sn76496.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\snk6502_sound.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
@@ -3638,7 +3631,6 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Default</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">Default</CompileAs>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\snd\ymdeltat.c">
       <CompileAs>CompileAsC</CompileAs>
@@ -3890,6 +3882,7 @@
     <ClCompile Include="..\..\src\intf\audio\lowpass2.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\src\burn\drv\megadrive\paprium.h" />
     <ClInclude Include="..\..\src\dep\generated\driverlist.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

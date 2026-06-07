@@ -90,6 +90,15 @@ int Constant::EXEC_METHOD = launch_batch;
 const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
 static uint16_t* conversion_buffer = NULL;
 static std::size_t buffer_size = 0;
+
+// Rotacion de pantalla solicitada por el core via RETRO_ENVIRONMENT_SET_ROTATION.
+// Valores 0..3 = 0/90/180/270 grados en sentido antihorario (CCW),
+// segun la convencion libretro. Cores como FBNeo lo emiten automaticamente
+// para juegos verticales (Cave, agallet, ddonpach, etc.).
+static unsigned g_screen_rotation = 0;
+static uint16_t* rotation_buffer = NULL;
+static std::size_t rotation_buffer_size = 0;
+
 int audio_opened = 0;
 // En tu clase/global:
 volatile bool audio_closing = false;

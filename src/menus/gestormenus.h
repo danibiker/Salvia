@@ -407,6 +407,7 @@ public:
     std::string descargarLogros();
     static std::string sDescargarLogros(void* inst);
 	static std::string changeHardcoreMode(void* inst, void *value);
+	static std::string changeEnableAchievements(void* inst, void *value);
 	static std::string setDefaultEmu(void* inst, void *index, void *values);
 	static std::string setControllerType(void* inst, void *index, void *values);
 	static std::string cdromFileSelected(void* inst, void *value);

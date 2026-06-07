@@ -1,5 +1,4 @@
 #include <uiobjects/textarea.h>
-#include <font/fonts.h>
 #include <io/dirutil.h>
 
 TextArea::TextArea(){
@@ -30,9 +29,24 @@ void TextArea::init(){
     this->enableScroll = true;
     this->pixelDesp = 0;
     this->timesWaiting = 0;
+	this->timesWaitingEnd = 0;
     this->waiting = true;
+	setFontType(Fonts::FONTSMALL);
 }
 
+void TextArea::setFontType(Fonts::enumFonts type){
+	this->fontType = type;
+	this->fontText = Fonts::getFont(type);
+	this->face_h = TTF_FontLineSkip(this->fontText);
+}
+
+void TextArea::clear(){
+	lines.clear();
+}
+
+bool TextArea::isEmpty(){
+	return lines.empty();
+}
 /**
     * 
     */
@@ -65,11 +79,11 @@ bool TextArea::loadTextFile(std::string filepathToOpen){
             std::vector<std::string> words = Constant::splitChar(fulltxt, ' ');
             lines.push_back("");
 
-            const int spaceW = Fonts::getSize(Fonts::FONTSMALL, " ");
+            const int spaceW = Fonts::getSize(this->fontType, " ");
             for (int i=0; i < (int)words.size(); i++){
 				std::string word = words.at(i);
-                int wordW = Fonts::getSize(Fonts::FONTSMALL, word.c_str());
-                int lineW = Fonts::getSize(Fonts::FONTSMALL, lines.at(lines.size()-1).c_str());
+                int wordW = Fonts::getSize(this->fontType, word.c_str());
+                int lineW = Fonts::getSize(this->fontType, lines.at(lines.size()-1).c_str());
                 if (lineW + wordW + spaceW >= this->getW() - this->marginX){
                     lines.push_back("");
                     lines.at(lines.size()-1).append(word);
@@ -93,6 +107,29 @@ bool TextArea::loadTextFile(std::string filepathToOpen){
     return ret;
 }
 
+bool TextArea::loadString(std::string fulltxt){
+	lines.clear();
+    std::vector<std::string> words = Constant::splitChar(fulltxt, ' ');
+    lines.push_back("");
+
+    const int spaceW = Fonts::getSize(this->fontType, " ");
+    for (int i=0; i < (int)words.size(); i++){
+		std::string word = words.at(i);
+        int wordW = Fonts::getSize(this->fontType, word.c_str());
+        int lineW = Fonts::getSize(this->fontType, lines.at(lines.size()-1).c_str());
+        if (lineW + wordW + spaceW >= this->getW() - this->marginX){
+            lines.push_back("");
+            lines.at(lines.size()-1).append(word);
+        } else {
+            if (!lines.at(lines.size()-1).empty()){
+                lines.at(lines.size()-1).append(" ");
+            }
+            lines.at(lines.size()-1).append(word);
+        }
+    }
+    return true;
+}
+
 /**
     * 
     */
@@ -106,60 +143,82 @@ void TextArea::resetTicks(GameTicks gameTicks){
 }
 
 /**
-    * 
-    */
-void TextArea::calcTicks(GameTicks gameTicks, int &scrollDesp, float &pixelDesp){
-            
+* 
+*/
+void TextArea::calcTicks(GameTicks gameTicks, int& scrollDesp, float& pixelDesp)
+{
     if (!enableScroll)
         return;
 
-	TTF_Font *fontSmall = Fonts::getFont(Fonts::FONTSMALL);
-	int face_h = TTF_FontLineSkip(fontSmall);
+    const int   TICKS_PER_LINE  = 120;
+    const int   TICKS_PER_PIXEL = 1;
+    const int   LOOPS_TO_START  = 1;
+    const int   LOOPS_TO_END    = LOOPS_TO_START * 6;
+    const float PIXEL_STEP      = static_cast<float>(face_h + lineSpace)
+                                             / (TICKS_PER_LINE / TICKS_PER_PIXEL);
+    const float PIXEL_MAX       = static_cast<float>(face_h + lineSpace);
 
-    const size_t maxLines = (this->getH() - marginTop) / (face_h + lineSpace);
-    const int TICKSTOLINE = 40;
-    const int TICKSTOLINEPIXEL = 1;
-    const int LOOPSTOSTART = 1;
-            
-    //To wait some moments before start scrolling
-    if (scrollDesp == 0 && timesWaiting < LOOPSTOSTART){
-        if (abs(gameTicks.ticks - lastWaitTick) >= TICKSTOLINE){
-            timesWaiting += 1;
+    const std::size_t maxLines = (getH() - marginTop) / (face_h + lineSpace);
+    const bool        hasScroll = lines.size() > maxLines;
+    const int         lastLine  = hasScroll ? static_cast<int>(lines.size() - maxLines) : 0;
+
+    auto elapsed = [&](uint32_t ref) -> uint32_t {
+        return (gameTicks.ticks >= ref) ? gameTicks.ticks - ref : ref - gameTicks.ticks;
+    };
+
+    auto advancePixels = [&]() {
+        if (hasScroll && (int)elapsed(lastSubTick) >= TICKS_PER_PIXEL) {
+            lastSubTick = gameTicks.ticks;
+            pixelDesp  += PIXEL_STEP;
+        }
+    };
+
+    // --- 1. Espera inicial ---
+    if (scrollDesp == 0 && timesWaiting < LOOPS_TO_START) {
+        if (elapsed(lastWaitTick) >= TICKS_PER_LINE) {
+            ++timesWaiting;
             lastWaitTick = gameTicks.ticks;
-            waiting = true;
+            waiting      = true;
         }
         return;
-    } else if (waiting){
-        lastTick = gameTicks.ticks;
-        waiting = false;
     }
 
-    //Move one element of the list if needed
-    if (abs(gameTicks.ticks - lastTick) >= TICKSTOLINE ){
-        lastTick = gameTicks.ticks;
-        pixelDesp = 0;
-                
-        if (lines.size() > maxLines){
-            scrollDesp = (scrollDesp + 1) % (lines.size() - maxLines + 1) ;
-            //To reset the wait status when we reach the final position
-            if (scrollDesp == 0){
-                resetTicks(gameTicks);
-            }
-        } else {
-            scrollDesp = 0;
-        }
+    if (waiting) {
+        lastTick = lastSubTick = gameTicks.ticks;
+        waiting  = false;
     }
-            
-    //Move the text line an amount of pixels relative to the font height
-    if (abs(gameTicks.ticks - lastSubTick) >= TICKSTOLINEPIXEL){
-        lastSubTick = gameTicks.ticks;
-        if (lines.size() > maxLines){
-            if (TICKSTOLINEPIXEL != 0 && TICKSTOLINE / TICKSTOLINEPIXEL != 0)
-                pixelDesp += (face_h + lineSpace) / (float)(TICKSTOLINE / TICKSTOLINEPIXEL);
-            else 
-                pixelDesp = 0;
+
+    // --- 2. Espera final ---
+    if (hasScroll && scrollDesp == lastLine) {
+        if (pixelDesp < PIXEL_MAX) {           // completar desplazamiento de última línea
+            advancePixels();
+            return;
         }
+        if (timesWaitingEnd >= LOOPS_TO_END) { // espera terminada: volver al inicio
+            resetTicks(gameTicks);
+            timesWaitingEnd = scrollDesp = 0;
+            pixelDesp       = 0;
+            return;
+        }
+        if (elapsed(lastWaitTick) >= TICKS_PER_LINE) { // contar ciclos de espera
+            ++timesWaitingEnd;
+            lastWaitTick = gameTicks.ticks;
+        }
+
+        pixelDesp = PIXEL_MAX;
+        lastTick  = lastSubTick = gameTicks.ticks;
+        return;
     }
+
+    // --- 3. Avance de línea completa ---
+    if (elapsed(lastTick) >= TICKS_PER_LINE) {
+        lastTick   = gameTicks.ticks;
+        pixelDesp  = 0;
+        scrollDesp = hasScroll ? scrollDesp + 1 : 0;
+    }
+
+    // --- 4. Desplazamiento suavizado por píxeles ---
+    advancePixels();
 }
 
 /**
@@ -172,12 +231,10 @@ void TextArea::draw(SDL_Surface *video_page, GameTicks gameTicks){
         return;
     }
     calcTicks(gameTicks, this->lastScroll, pixelDesp);
-    TTF_Font *fontSmall = Fonts::getFont(Fonts::FONTSMALL);
-	int face_h = TTF_FontLineSkip(fontSmall);
 
     do{
         std::string line = lines.at(i + this->lastScroll);
-		Constant::drawTextTransparent(video_page, fontSmall, line.c_str(), this->getX() + this->marginX, (int) (nextLineY - pixelDesp), white, 0);
+		Constant::drawTextTransparent(video_page, this->fontText, line.c_str(), this->getX() + this->marginX, (int) (nextLineY - pixelDesp), white, 0);
         nextLineY = this->getY() + marginTop + (++i) * (face_h + lineSpace);
     } while ((std::size_t) (i + this->lastScroll) < lines.size() && nextLineY < this->getY() + this->getH() - face_h);
 }
@@ -189,17 +246,4 @@ void TextArea::draw(SDL_Surface *video_page){
     this->enableScroll = false;
 	GameTicks ticks = {0};
     draw(video_page, ticks);
-    //int nextLineY = this->getY() + marginTop;
-    //int i = 0;
-    //
-    //if (lines.empty() || lines.size() == 0){
-    //    return;
-    //}
-    //
-    //do{
-    //    std::string line = lines.at(i);
-    //    textout_justify_ex(video_page, font, line.c_str(), this->getX(), this->getX() + this->getW() -1,
-    //        nextLineY, this->getW() / 3, Constant::textColor, -1);
-    //    nextLineY = this->getY() + marginTop + (++i) * (fontSmall->face_h + lineSpace);
-    //} while (i < lines.size() && nextLineY < this->getY() + this->getH() - fontSmall->face_h);
 }

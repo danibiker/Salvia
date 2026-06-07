@@ -22,6 +22,11 @@
 
 #endif // INCLUDE_FLACMP3_SUPPORT
 
+#if defined(_WIN32 ) || defined(_XBOX)
+#define SEP_DIR "\\"
+#else
+#define SEP_DIR "/"
+#endif
 
 #define SAMPLE_DIRECTORY	szAppSamplesPath
 #define MAX_CHANNEL			32
@@ -95,6 +100,12 @@ static void make_raw(UINT8 *src, UINT32 len)
 	if (converted_len == 0) return;
 
 	sample_ptr->data = (UINT8*)BurnMalloc(converted_len * 4);
+	if (!sample_ptr->data) {
+		bprintf(0, _T("[samples] OOM allocating WAV (%u bytes), skipping sample\n"), converted_len * 4);
+		sample_ptr->flags = SAMPLE_IGNORE;
+		sample_ptr->length = 0;
+		return;
+	}
 
 	// up/down sample everything and convert to raw 16 bit stereo
 	INT16 *data = (INT16*)sample_ptr->data;
@@ -230,7 +241,9 @@ static void make_raw_flac(UINT8* src, UINT32 len)
 	drflac_int16* pcmData = (drflac_int16*)BurnMalloc(pcmDataSize);
 	if (!pcmData) {
 		drflac_close(pFlac);
-		bprintf(0, _T("Memory allocation failed for PCM data\n"));
+		bprintf(0, _T("[samples] OOM allocating FLAC PCM (%lu bytes), skipping sample\n"), (unsigned long)pcmDataSize);
+		sample_ptr->flags = SAMPLE_IGNORE;
+		sample_ptr->length = 0;
 		return;
 	}
 
@@ -256,6 +269,9 @@ static void make_raw_flac(UINT8* src, UINT32 len)
 		INT16* resampledData = (INT16*)BurnMalloc(convertedFrameCount * 2 * sizeof(INT16));
 		if (NULL == resampledData) {
 			BurnFree(pcmData);
+			bprintf(0, _T("[samples] OOM resampling FLAC (%lu bytes), skipping sample\n"), (unsigned long)(convertedFrameCount * 2 * sizeof(INT16)));
+			sample_ptr->flags = SAMPLE_IGNORE;
+			sample_ptr->length = 0;
 			return;
 		}
 
@@ -290,6 +306,14 @@ static void make_raw_flac(UINT8* src, UINT32 len)
 			}
 			BurnFree(pcmData);
 			pcmData = stereoData;
+		} else {
+			// OOM al duplicar mono->stereo: abortar el sample. Sin esto, el
+			// render lo trataria como stereo (acceso fuera de rango).
+			BurnFree(pcmData);
+			bprintf(0, _T("[samples] OOM mono->stereo FLAC (%lu bytes), skipping sample\n"), (unsigned long)(convertedFrameCount * 2 * sizeof(INT16)));
+			sample_ptr->flags = SAMPLE_IGNORE;
+			sample_ptr->length = 0;
+			return;
 		}
 	} else if (channels >= 2) {
 		for (drflac_uint64 i = 0; i < convertedFrameCount; i++) {
@@ -352,7 +376,9 @@ static void make_raw_mp3(UINT8* src, UINT32 len)
 	pcmData = (drmp3_int16*)BurnMalloc(pcmDataSize);
 	if (NULL == pcmData) {
 		drmp3_uninit(&mp3);
-		bprintf(0, _T("Memory allocation failed for PCM data\n"));
+		bprintf(0, _T("[samples] OOM allocating MP3 PCM (%lu bytes), skipping sample\n"), (unsigned long)pcmDataSize);
+		sample_ptr->flags = SAMPLE_IGNORE;
+		sample_ptr->length = 0;
 		return;
 	}
 
@@ -382,6 +408,9 @@ static void make_raw_mp3(UINT8* src, UINT32 len)
 		INT16* resampledData = (INT16*)BurnMalloc(convertedFrameCount * 2 * sizeof(INT16));
 		if (NULL == resampledData) {
 			BurnFree(pcmData);
+			bprintf(0, _T("[samples] OOM resampling MP3 (%lu bytes), skipping sample\n"), (unsigned long)(convertedFrameCount * 2 * sizeof(INT16)));
+			sample_ptr->flags = SAMPLE_IGNORE;
+			sample_ptr->length = 0;
 			return;
 		}
 
@@ -425,6 +454,14 @@ static void make_raw_mp3(UINT8* src, UINT32 len)
 			}
 			BurnFree(pcmData);
 			pcmData = stereoData;
+		} else {
+			// OOM al duplicar mono->stereo: abortar el sample. Sin esto, el
+			// render lo trataria como stereo (acceso fuera de rango).
+			BurnFree(pcmData);
+			bprintf(0, _T("[samples] OOM mono->stereo MP3 (%lu bytes), skipping sample\n"), (unsigned long)(convertedFrameCount * 2 * sizeof(INT16)));
+			sample_ptr->flags = SAMPLE_IGNORE;
+			sample_ptr->length = 0;
+			return;
 		}
 	}
 	// If it is stereo but the channel order is not correct, adjust the channel order
@@ -815,8 +852,64 @@ INT32 __cdecl ZipLoadOneFile(char* arcName, const char* fileName, void** Dest, I
 char* TCHARToANSI(const TCHAR* pszInString, char* pszOutString, INT32 nOutSize);
 #define _TtoA(a)	TCHARToANSI(a, NULL, 0)
 
+// Carga un sample desde disco. Intenta primero archivo suelto en
+// samples/<setname>/<sample_name>. Si no existe, cae al ZIP tradicional
+// samples/<setname>.zip. La carpeta se prefiere porque evita el overhead de
+// abrir + parsear el directorio central del ZIP cada vez, lo cual es lento en
+// dispositivos USB de Xbox 360 (cientos de ms por sample). Para Paprium con
+// SAMPLE_NOSTOREF (carga on-demand) la diferencia es muy notable.
+// Retro-compatible: si no creas la carpeta, todo sigue funcionando con el ZIP.
+//
+// destination es malloc()-ed (consistente con ZipLoadOneFile) y debe liberarse
+// con free() por el caller.
+static void LoadSampleFile(const char* samples_dir, const char* setname,
+                           const char* sample_name, void** destination, INT32* length)
+{
+	*destination = NULL;
+	*length = 0;
+
+	// Fast path: archivo suelto en carpeta samples/<setname>/<sample_name>
+	char folder_path[MAX_PATH];
+	snprintf(folder_path, sizeof(folder_path), "%s%s" SEP_DIR "%s", samples_dir, setname, sample_name);
+
+	FILE* f = fopen(folder_path, "rb");
+	if (f) {
+		fseek(f, 0, SEEK_END);
+		long sz = ftell(f);
+		if (sz > 0) {
+			fseek(f, 0, SEEK_SET);
+			void* buf = malloc(sz);
+			if (buf) {
+				size_t read = fread(buf, 1, sz, f);
+				if (read == (size_t)sz) {
+					*destination = buf;
+					*length = (INT32)sz;
+				} else {
+					free(buf);
+				}
+			}
+		}
+		fclose(f);
+		if (*length > 0) return;
+	}
+
+	// Fallback: ZIP tradicional samples/<setname>.zip
+	char zip_path[MAX_PATH];
+	snprintf(zip_path, sizeof(zip_path), "%s%s", samples_dir, setname);
+	ZipLoadOneFile((char*)zip_path, (const char*)sample_name, destination, length);
+}
+
 void BurnSampleInit(INT32 bAdd /*add samples to stream?*/)
 {
+#ifdef _XBOX
+	// Xbox 360: forzar SAMPLE_NOSTOREF en TODOS los samples para evitar OOM.
+	// La memoria disponible para apps es ~256 MB y los sample sets con musica
+	// remix (FLAC/MP3) pueden sumar decenas o cientos de MB tras conversion
+	// a 16-bit stereo a nBurnSoundRate. Con NOSTOREF solo un sample queda
+	// cargado a la vez (BurnSampleInitOne libera los demas al reproducir).
+	// Coste: latencia al disparar samples + se cortan los solapados.
+	bAdd |= 0x8000;
+#endif
 	bAddToStream = bAdd & ~0x8000;
 	bool bForceNostore = bAdd & 0x8000;
 
@@ -846,13 +939,34 @@ void BurnSampleInit(INT32 bAdd /*add samples to stream?*/)
 	}
 
 	strcpy(setname, BurnDrvGetTextA(DRV_SAMPLENAME));
+
+	// Detectar tambien la carpeta sin comprimir samples/<setname>/ como
+	// alternativa al ZIP. Si existe cualquiera de los dos, marcamos enabled.
+	// La carpeta se prefiere porque es mas rapida (sin overhead de ZIP).
 	sprintf(path, "%s%s.zip", szTempPath, setname);
-	
 	FILE *test = fopen(path, "rb");
-	if (test) 
+	if (test)
 	{
 		nEnableSamples = 1;
 		fclose(test);
+	}
+	else
+	{
+		// Probar carpeta: tocar un sample conocido para detectar su existencia.
+		// Usamos el primero del driver con extension .wav.
+		char probe[MAX_PATH];
+		struct BurnSampleInfo si_probe;
+		BurnDrvGetSampleInfo(&si_probe, 0);
+		char *probe_name = NULL;
+		BurnDrvGetSampleName(&probe_name, 0, 0);
+		if (probe_name) {
+			snprintf(probe, sizeof(probe), "%s%s" SEP_DIR "%s.wav", szTempPath, setname, probe_name);
+			FILE *test_dir = fopen(probe, "rb");
+			if (test_dir) {
+				nEnableSamples = 1;
+				fclose(test_dir);
+			}
+		}
 	}
 	
 #ifdef INCLUDE_7Z_SUPPORT
@@ -915,20 +1029,18 @@ void BurnSampleInit(INT32 bAdd /*add samples to stream?*/)
 			continue;
 		}
 
-		sprintf (path, "%s%s", szTempPath, setname);
-
 		destination = NULL;
 		length = 0;
 
 		if (nEnableSamples) {
-			ZipLoadOneFile((char*)path, (const char*)szSampleName, &destination, &length);
+			LoadSampleFile(szTempPath, setname, szSampleName, &destination, &length);
 		}
 
 		if (length) {
 			sample_ptr->flags = si.nFlags;
 			bprintf(0, _T("Loading \"%S\" @ %d: "), szSampleName, i);
 			make_raw((UINT8*)destination, length);
-			free(destination);			// ZipLoadOneFile uses malloc()
+			free(destination);
 		} else {
 #ifdef INCLUDE_FLACMP3_SUPPORT
 			// append .flac to filename
@@ -939,13 +1051,13 @@ void BurnSampleInit(INT32 bAdd /*add samples to stream?*/)
 			destination = NULL;
 			length = 0;
 
-			ZipLoadOneFile((char*)path, (const char*)szSampleName, &destination, &length);
+			LoadSampleFile(szTempPath, setname, szSampleName, &destination, &length);
 
 			if (length) {
 				sample_ptr->flags = si.nFlags;
 				bprintf(0, _T("Loading FLAC \"%S\" @ %d: "), szSampleName, i);
 				make_raw_flac((UINT8*)destination, length);
-				free(destination);		// ZipLoadOneFile uses malloc()
+				free(destination);
 			} else {
 				// append .mp3 to filename
 				memset(&szSampleName, 0, sizeof(szSampleName));
@@ -955,13 +1067,13 @@ void BurnSampleInit(INT32 bAdd /*add samples to stream?*/)
 				destination = NULL;
 				length = 0;
 
-				ZipLoadOneFile((char*)path, (const char*)szSampleName, &destination, &length);
+				LoadSampleFile(szTempPath, setname, szSampleName, &destination, &length);
 
 				if (length) {
 					sample_ptr->flags = si.nFlags;
 					bprintf(0, _T("Loading MP3 \"%S\" @ %d: "), szSampleName, i);
 					make_raw_mp3((UINT8*)destination, length);
-					free(destination);	// ZipLoadOneFile uses malloc()
+					free(destination);
 				} else {
 					sample_ptr->flags = SAMPLE_IGNORE;
 				}
@@ -1025,11 +1137,19 @@ void BurnSampleInitOne(INT32 sample)
 		return;
 	}
 
-	sprintf (path, "%s%s", szTempPath, setname);
+	// Aviso al frontend: la decodificacion FLAC/MP3 + resampling puede
+	// bloquear el hilo principal varios segundos en Xbox 360. El mensaje
+	// se mostrara cuando el frontend recupere el ciclo de render (justo
+	// despues de la carga), explicando el corte al usuario.
+	if (szSampleNameTmp) {
+		char szLoadingMsg[300];
+		snprintf(szLoadingMsg, sizeof(szLoadingMsg), "Loading sample: %s", szSampleNameTmp);
+		BurnUpdateProgress(0.0, szLoadingMsg, 0);
+	}
 
 	destination = NULL;
 	length = 0;
-	ZipLoadOneFile((char*)path, (const char*)szSampleName, &destination, &length);
+	LoadSampleFile(szTempPath, setname, szSampleName, &destination, &length);
 
 	if (length) {
 		make_raw((UINT8*)destination, length);
@@ -1041,11 +1161,9 @@ void BurnSampleInitOne(INT32 sample)
 		strncpy(&szSampleName[0], szSampleNameTmp, sizeof(szSampleName) - 6);		// leave space for ".flac" + null, just incase!
 		strcat(&szSampleName[0], ".flac");
 
-		sprintf(path, "%s%s", szTempPath, setname);
-
 		destination = NULL;
 		length = 0;
-		ZipLoadOneFile((char*)path, (const char*)szSampleName, &destination, &length);
+		LoadSampleFile(szTempPath, setname, szSampleName, &destination, &length);
 
 		if (length) {
 			make_raw_flac((UINT8*)destination, length);
@@ -1055,11 +1173,9 @@ void BurnSampleInitOne(INT32 sample)
 			strncpy(&szSampleName[0], szSampleNameTmp, sizeof(szSampleName) - 5);	// leave space for ".mp3" + null, just incase!
 			strcat(&szSampleName[0], ".mp3");
 
-			sprintf(path, "%s%s", szTempPath, setname);
-
 			destination = NULL;
 			length = 0;
-			ZipLoadOneFile((char*)path, (const char*)szSampleName, &destination, &length);
+			LoadSampleFile(szTempPath, setname, szSampleName, &destination, &length);
 
 			if (length) {
 				make_raw_mp3((UINT8*)destination, length);
@@ -1068,7 +1184,7 @@ void BurnSampleInitOne(INT32 sample)
 	}
 #endif
 
-	free(destination); // ZipLoadOneFile uses malloc()
+	free(destination); // malloc()-ed por LoadSampleFile (carpeta o ZIP)
 }
 
 // round ##.###### to ##.##

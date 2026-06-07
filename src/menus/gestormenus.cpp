@@ -210,7 +210,10 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
     listaLogros->context = this;
 	parentAchievements->opciones.push_back(listaLogros);
 	//Incluimos un indicador para habilitar logros
-	parentAchievements->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.achievement.enable"), &refConfig->configMain[cfg::enableAchievements].getBoolRef()));
+	OpcionBool *opcionEnableAchievements = new OpcionBool(LanguageManager::instance()->get("menu.achievement.enable"), &refConfig->configMain[cfg::enableAchievements].getBoolRef());
+	opcionEnableAchievements->callback = &GestorMenus::changeEnableAchievements;
+	parentAchievements->opciones.push_back(opcionEnableAchievements);
+
 	//Incluimos un indicador para habilitar el modo hardcore
 	OpcionBool *opcionHardcore = new OpcionBool(LanguageManager::instance()->get("menu.achievement.hardcore"), &refConfig->configMain[cfg::hardcoreRA].getBoolRef());
 	opcionHardcore->callback = &GestorMenus::changeHardcoreMode;
@@ -564,6 +567,17 @@ std::string GestorMenus::sDescargarLogros(void* inst) {
 std::string GestorMenus::changeHardcoreMode(void* inst, void *value) {
 	bool sendValue = *((bool *)(value));
 	Achievements::instance()->setHardcoreMode(sendValue);
+	return "";
+}
+
+std::string GestorMenus::changeEnableAchievements(void* inst, void *value) {
+	bool sendValue = *((bool *)(value));
+	Achievements::instance()->logout();
+	if (sendValue){
+		const std::string user = CfgLoader::configMain[cfg::raUser].valueStr;
+		const std::string pass = CfgLoader::configMain[cfg::raPass].valueStr;
+		Achievements::instance()->login(user.c_str(), pass.c_str());
+	}
 	return "";
 }
 

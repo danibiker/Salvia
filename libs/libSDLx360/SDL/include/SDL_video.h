@@ -398,6 +398,11 @@ extern DECLSPEC SDL_Surface* SDLCALL SDL_XBOX_GetOverlay(void);
 extern DECLSPEC void SDLCALL SDL_XBOX_SetOverlayEnabled(int enabled);
 
 /*
+ * Xbox 360: Set the screen rotation.
+ */
+extern DECLSPEC void SDL_XBOX_SetRotation(int rotation);
+
+/*
  * Set the gamma correction for each of the color channels.
  * The gamma values range (approximately) between 0.1 and 10.0
  *

@@ -2,6 +2,7 @@
 
 #include <uiobjects/object.h>
 #include <beans/structures.h>
+#include <font/fonts.h>
 
 #include <fstream>
 #include <string>
@@ -15,10 +16,14 @@ class TextArea : public Object{
 		void init();
         bool loadTextFileFromGame(std::string baseDir, GameFile& game, std::string ext);
         bool loadTextFile(std::string filepathToOpen);
+		bool loadString(std::string fulltxt);
         void resetTicks(GameTicks gameTicks);
         void calcTicks(GameTicks gameTicks, int &scrollDesp, float &pixelDesp);
 		void draw(SDL_Surface *video_page, GameTicks gameTicks);
         void draw(SDL_Surface *video_page);
+		void setFontType(Fonts::enumFonts);
+		void clear();
+		bool isEmpty();
 
         int lineSpace;
         int marginTop;
@@ -26,14 +31,18 @@ class TextArea : public Object{
         bool enableScroll;
         int lastScroll;
         int marginX;
-        uint16_t lastTick;
-        uint16_t lastSubTick;
-        uint16_t lastWaitTick;
+        uint32_t lastTick;
+        uint32_t lastSubTick;
+        uint32_t lastWaitTick;
         int timesWaiting;
+		int timesWaitingEnd;
         bool waiting;
         float pixelDesp;
 
     private:
         std::string filepath;     
         std::vector<std::string> lines; 
+		TTF_Font *fontText;
+		int face_h;
+		Fonts::enumFonts fontType;
 };

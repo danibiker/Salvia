@@ -3340,5 +3340,8 @@
     <ClInclude Include="..\..\src\dep\generated\driverlist.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\burn\drv\megadrive\paprium.h">
+      <Filter>Source Files\burn\drv\megadrive</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

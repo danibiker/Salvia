@@ -49,5 +49,5 @@ public:
     void initAverages(uint32_t);
     void update_fps_counter(bool, uint32_t);
     void sample_cpu_utilization();  // llamado por updateFps cada frame
-    void limit_fps(double&);
+    double limit_fps(double&);
 };
