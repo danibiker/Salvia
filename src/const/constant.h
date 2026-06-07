@@ -85,7 +85,9 @@ static const int MAX_SAVESTATES = 10;
 static const char *STATE_IMG_EXT = ".png";
 static const char *STATE_EXT = ".state";
 static const char *CD_FILTER = ".bin .cue .img .mdf .pbp .cbn .iso .chd .m3u";
+static const char *TMP_DIR = "tmp";
 static const std::string BIOS_ONLY = "@bios-only";
+static const std::string ASSETS_ICONS_DIR = "\\assets\\xmb\\retrosystem\\png\\";
 
 typedef enum {
     cursor_hidden,
@@ -358,6 +360,14 @@ typedef enum {cart_gba,
 			  cart_nes,
 			  cart_pce,
 			  cart_psx,
+			  cart_pce_cd,
+			  cart_mame,
+			  cart_neogeo_pocket,
+			  cart_zx,
+			  cart_msx,
+			  cart_dos,
+			  cart_doom,
+			  cart_supergrafx,
 			  max_carts};
 
 extern const char *JOY_DESCRIPTIONS[];
@@ -424,6 +434,10 @@ class Constant{
         static void setAppDir(std::string var){
             appDir = var;
         }
+
+		static std::string getTmpDir(){
+			return Constant::getAppDir() + Constant::getFileSep() + TMP_DIR;
+		}
 
 		static std::string getAppExecutable(){ 
             return appExecutable; 

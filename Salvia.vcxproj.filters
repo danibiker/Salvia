@@ -320,6 +320,9 @@
     <ClCompile Include="src\so\soutils.cpp">
       <Filter>Source Files\so</Filter>
     </ClCompile>
+    <ClCompile Include="src\image\icons.cpp">
+      <Filter>Source Files\image</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\const\constant.h">
@@ -483,6 +486,9 @@
     </ClInclude>
     <ClInclude Include="src\so\soutils.h">
       <Filter>Source Files\so</Filter>
+    </ClInclude>
+    <ClInclude Include="src\unzip\ZipBrowser.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

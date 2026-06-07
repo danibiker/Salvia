@@ -18,6 +18,8 @@
 #include <http/achievements.h>
 #include <unzip/unziptool_common.h>
 #include <io/video_common.h>
+#include "unzip/ZipBrowser.h"
+
 
 #ifdef _XBOX
 	#include <io/video_direct.h>
@@ -60,6 +62,20 @@ enum status_emu
 	EMU_MENU_FILTER
 };
 
+enum FILE_STATUS
+{
+	FS_ZIP_NAVIGATION = 0, 
+    FS_ZIP_FILE_EXTRACTED,
+	FS_ZIP_EXTRACT_ERROR,
+	FS_NOZIP_TO_LIST 
+};
+
+enum FILE_NAVIGATION
+{
+	FS_ZIP_CD = 0, 
+    FS_ZIP_CD_BACK
+};
+
 class GameMenu : public Engine{
     public:
         GameMenu(CfgLoader *cfgLoader);
@@ -85,7 +101,12 @@ class GameMenu : public Engine{
 		void processFrontendEvents(HOTKEYS_LIST);
 		void processFrontendEventsAfter();
 		void processHotkeys(HOTKEYS_LIST);
-        vector<string> launchProgram(ListMenu &);
+		bool emuCanLaunchGame();
+        vector<string> launchProgram(const std::string& fullPathRom);
+		FILE_STATUS listableZip(ListMenu &listMenu, FILE_NAVIGATION nav);
+		string getSelectedRomFile(const ListMenu &listMenu);
+		FILE_STATUS extractFileFromZip(const std::string& internalPath, const std::string& extractionPath, ZipBrowser& zb, ListMenu &listMenu);
+		std::string GetMD5(const std::string& input);
         int saveGameMenuPos(ListMenu &);
         int recoverGameMenuPos(ListMenu &, struct ListStatus &);
         void showMessage(string);

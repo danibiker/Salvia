@@ -649,6 +649,7 @@
     <EMU_LIB_FINALBURN>fba-neo</EMU_LIB_FINALBURN>
     <EMU_LIB_DOSBOXPURE>dosbox-pure</EMU_LIB_DOSBOXPURE>
     <EMU_LIB_PRBOOM>prboom</EMU_LIB_PRBOOM>
+    <SolutionName>Salvia</SolutionName>
     <BUILD_DIR>$(ProjectDir)build\$(Configuration)\$(Platform)\</BUILD_DIR>
     <COMMON_PREPROCESSOR>_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB;RC_NO_THREADS;RC_CLIENT_SUPPORTS_HASH</COMMON_PREPROCESSOR>
     <COMMON_PREPROCESSOR_DEBUG>NDEBUG;DEBUG_LOG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_DEBUG>
@@ -665,6 +666,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_DosboxPure|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -672,6 +674,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_DOSBOXPURE)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_DosboxPure|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -679,6 +682,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_DOSBOXPURE)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_beetle_pcfx|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -686,6 +690,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_picodrive|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -693,6 +698,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_PICODRIVE)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_beetle_psx|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -700,6 +706,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_pcsx|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -707,6 +714,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_PCSX)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_beetle_psx|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -714,6 +722,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_BEETLEPSX)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Nestopia|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -721,6 +730,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NESTOPIA)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Snes9x|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -728,6 +738,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_SNES9X2010)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Snes9x_latest|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -735,6 +746,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_SNES9X)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_vbanext|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -742,6 +754,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_VBANEXT)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_beetlepce|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -749,6 +762,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_BEETLEPCE)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_beetlepcefast|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -756,6 +770,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_BEETLEPCEFAST)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -763,6 +778,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_SNES9X2010)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x_latest|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -770,6 +786,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_SNES9X)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Snes9x_latest_lib360New|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -777,6 +794,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_SNES9X)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Nestopia|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -784,6 +802,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NESTOPIA)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Gambatte|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -791,6 +810,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_GAMBATTE)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Gambatte|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -798,6 +818,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_GAMBATTE)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -805,6 +826,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -812,6 +834,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_PRBOOM)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_prboom|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -819,6 +842,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_mame|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -826,6 +850,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_MAME2003PLUS)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_finalburn|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -833,6 +858,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_FINALBURN)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_finalburn|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -840,6 +866,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_FINALBURN)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_mame|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -847,6 +874,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_MAME2003PLUS)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_picodrive|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -854,6 +882,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_PICODRIVE)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_pcsx|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -861,6 +890,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_PCSX)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_pcsx_ppc|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -868,6 +898,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_PCSX)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_pcsxr_360|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -875,6 +906,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_PCSX)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_pcsxr_360|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -882,6 +914,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_PCSX)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseSdlX360New|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -889,6 +922,7 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -1151,21 +1185,25 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_vbanext|Xbox 360'">
     <IntDir>$(BUILD_DIR)</IntDir>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_VBANEXT)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_beetlepcefast|Xbox 360'">
     <IntDir>$(BUILD_DIR)</IntDir>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_BEETLEPCEFAST)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_beetlepce|Xbox 360'">
     <IntDir>$(BUILD_DIR)</IntDir>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_BEETLEPCE)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_beetlepce_fx|Xbox 360'">
     <IntDir>$(BUILD_DIR)</IntDir>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_BEETLEPCEFX)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
@@ -1945,12 +1983,14 @@
       <StringPooling>true</StringPooling>
     </ClCompile>
     <Link>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);Genesis-Plus-GX.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\genesis-plus-gx\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
     </Link>
     <Deploy>
       <DeploymentType>CopyToHardDrive</DeploymentType>
@@ -3677,6 +3717,7 @@
     <ClCompile Include="src\http\httputil.cpp" />
     <ClCompile Include="src\http\pugixml.cpp" />
     <ClCompile Include="src\http\scrapper.cpp" />
+    <ClCompile Include="src\image\icons.cpp" />
     <ClCompile Include="src\image\lodepng.cpp" />
     <ClCompile Include="src\io\cfgloader.cpp" />
     <ClCompile Include="src\io\cursorgestor.cpp" />
@@ -3930,6 +3971,7 @@
     <ClInclude Include="src\uiobjects\tilemap.h" />
     <ClInclude Include="src\unzip\GZipHelper.h" />
     <ClInclude Include="src\unzip\unziptool.h" />
+    <ClInclude Include="src\unzip\ZipBrowser.h" />
     <ClInclude Include="src\utils\logger.h" />
   </ItemGroup>
   <ItemGroup>

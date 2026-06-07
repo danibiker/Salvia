@@ -11,14 +11,12 @@
 #include <utils/langmanager.h>
 #include <menus/mameparser.h>
 #include <io/keyboard.h>
-
+#include "unzip/unziptool.h"
+#include "rhash/md5.h" // To generate a filename hash
 
 /* Definida en salvia.cpp — devuelve los descriptores de memoria que el core
  * envio via RETRO_ENVIRONMENT_SET_MEMORY_MAPS (ej. HRAM en Game Boy). */
 extern const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_count);
-
-vector<SDL_Surface *> Icons::icons;
-vector<SDL_Surface *> Icons::icons_carts;
 
 GameMenu::GameMenu(CfgLoader *cfgLoader){
     status = EMU_MENU;
@@ -76,16 +74,13 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 	lastMemUpdate = 0;
 	cargarSystemAchievementTranslation(Constant::getAppDir() + ROUTE_ACHIEVEMENT_TRANSLATIONS);
 	initAchievements();
-	Icons::loadIcons();
 	Launcher::initDrives();
-
 	initColors(overlay);
 };
 
 GameMenu::~GameMenu(){
 	LOG_DEBUG("Deleting GameMenu...");
 	delete configMenus;
-	Icons::freeIcons();
 
 	if (fpsSurface) SDL_FreeSurface(fpsSurface);
 	if (cpuSurface) SDL_FreeSurface(cpuSurface);
@@ -194,11 +189,17 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 					}
 				}
 
+				//Drawing the title
 				Constant::drawTextCentTransparent(overlay, fontBig, title.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 					true, false, textColor, 0);
+				//Draw the scrapping process text
 				showScrapProcess(listMenu);
+				//Horizontal separation line
 				fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1 , overlay->w - listMenu.marginX, listMenu.marginY - 1, menuBars);
+				//Vertical separation line
                 fastline(this->overlay, sepVertX, listMenu.marginY , sepVertX, listMenu.getH() + listMenu.marginY - 1, menuBars);
+
+				//Drawing all the menu entries
                 listMenu.draw(this->overlay, getEmuStatus() != EMU_MENU_FILTER);
 
 				if (getEmuStatus() == EMU_MENU_FILTER){
@@ -773,77 +774,171 @@ string GameMenu::encloseWithCharIfSpaces(string str, string encloseChar){
 /**
  * 
  */
-vector<string> GameMenu::launchProgram(ListMenu &menuData){
-    //Launcher launcher;
+vector<string> GameMenu::launchProgram(const std::string& fullPathRom){
     dirutil dir;
     vector<string> commands;
+	Launcher launcher;
 
     if (cfgLoader->emulators.size() <= (std::size_t)cfgLoader->emuCfgPos)
         return commands;
 
-	ConfigEmu emu = *cfgLoader->getCfgEmu();
-	string pathPrefix = dirutil::getPathPrefix(emu.directory);
-	
-	if (pathPrefix.at(pathPrefix.length()-1) != Constant::tempFileSep[0]){
-		pathPrefix += string(Constant::tempFileSep);
-	}
-	pathPrefix += emu.executable;
+	ConfigEmu* emu = cfgLoader->getCfgEmu();
+	const std::string pathExecutable = dirutil::getPathPrefix(emu->executable, dirutil::getPathPrefix(emu->directory));
+	//Setting the executable if needed to launch a different emulator than the current one
+	commands.emplace_back(pathExecutable);
 
-    commands.emplace_back(pathPrefix);
-    
-    if (emu.options_before_rom){
-        vector<string> v = Constant::splitChar(emu.global_options, ' ');
-        //for (auto s : v){
-		for (int i=0; i < (int)v.size(); i++){
-			std::string s = v.at(i);
-            commands.emplace_back(s);
-        }
-    }
-
-    if (menuData.filteredGames.size() <= (std::size_t)menuData.curPos)
-        return commands;
-
-    auto game = menuData.filteredGames.at(menuData.curPos);
-    
-    //Ignoring the fields if a rom file is used
-    if (emu.use_rom_file){
-		commands.emplace_back(encloseWithCharIfSpaces(game->longFileName, "\"")); 
-    } else {
-        string romdir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory) + string(Constant::tempFileSep) : "";
-        string romFile = game->longFileName;
-        string rom = emu.use_extension ? romFile : dir.getFileNameNoExt(romFile);
-
-		#ifdef LIBRETRO
-			std::string execActual = Constant::getAppExecutable();
-			if (emu.executable.find(execActual) != string::npos){
-				//Tenemos que lanzar la rom en el propio ejecutable porque el soporte es correcto para esta rom
-				commands.emplace_back(romdir + rom);
-				return commands;
-			} else {
-				#ifdef _XBOX
-					commands.emplace_back(romdir + rom);
-				#else
-					commands.emplace_back(encloseWithCharIfSpaces(romdir + rom, "\"")); 
-				#endif
-			}
-		#else
-			commands.emplace_back(encloseWithCharIfSpaces(romdir + rom, "\"")); 
-		#endif	
-    }
-
-    if (!emu.options_before_rom){
-        commands.emplace_back(emu.global_options);
-    }
-
-	std::string firstCommand = commands.at(0);
-	LOG_DEBUG("Launching %s\n", firstCommand.c_str());
-	#ifdef LIBRETRO
-		Launcher launcher;
-		this->running = !launcher.launch(commands, isDebug());
+	#ifdef _XBOX
+		//A la xbox le da igual si el path tiene espacios
+		commands.emplace_back(fullPathRom);
+	#else
+		commands.emplace_back(encloseWithCharIfSpaces(fullPathRom, "\"")); 
 	#endif
 
+	//Comprobamos si hay que lanzar el emulador correspondiente
+	if (!emuCanLaunchGame()){
+		LOG_DEBUG("Launching %s %s\n", emu->executable.c_str(), fullPathRom.c_str());
+		this->running = !launcher.launch(commands);
+	} 
+	// Si llegamos aqui, tenemos que lanzar la rom en el propio ejecutable porque el soporte es correcto para esta rom
 	return commands;
 }
+
+/**
+* Comprueba si el emulador para ejecutar el juego es el que hay cargado actualmente.
+* Devuelve true si es el actual
+* Devuelve false si hay que cargar el emulador correspondiente
+*/
+bool GameMenu::emuCanLaunchGame(){
+	ConfigEmu* emu = cfgLoader->getCfgEmu();
+	const std::string execActual = Constant::getAppExecutable();
+	return emu->executable.find(execActual) != string::npos;
+}
+
+/**
+* To list the contents of a zip file and be able to load a rom, the name of the zip file
+* should begin with a character "@"
+*/
+FILE_STATUS GameMenu::listableZip(ListMenu &listMenu, FILE_NAVIGATION nav){
+	dirutil dir;
+	ConfigEmu emu = *cfgLoader->getCfgEmu();
+	FILE_STATUS ret = FS_NOZIP_TO_LIST;
+	string romFile;
+
+	if (listMenu.curPos >= 0 && listMenu.curPos < (int)listMenu.filteredGames.size()){
+		auto game = listMenu.filteredGames.at(listMenu.curPos);
+		romFile = game->longFileName;
+	}
+
+	bool selectedListableZip = !romFile.empty() && romFile[0] == '@' && nav == FS_ZIP_CD;
+
+	if ( selectedListableZip || !listMenu.listZipped.getInternalDir().empty()){
+		//Try to list the contents of the directory
+		if (selectedListableZip){
+			listMenu.listZipped.dir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory) + string(Constant::tempFileSep) : "";
+			listMenu.listZipped.file = emu.use_extension ? romFile : dir.getFileNameNoExt(romFile);
+		} 
+		std::string romzip = listMenu.listZipped.dir + listMenu.listZipped.file;
+
+		// Abrir el ZIP
+		ZipBrowser zb;
+		if (!zb.Open(romzip)){
+			LOG_ERROR("Error: no se pudo abrir el fichero: %s", romzip.c_str());
+			return ret;
+		}
+		LOG_DEBUG("Fichero abierto correctamente: %s", romzip.c_str());
+		
+		std::string internalPath = listMenu.listZipped.getInternalDir();
+		if (!selectedListableZip && nav == FS_ZIP_CD){
+			internalPath += romFile;
+		} 
+
+		ZipBrowser::PathType pathType = zb.GetPathType(internalPath);
+
+		if (pathType == ZipBrowser::PATH_DIR){
+			//internalPath += Constant::getFileSep();
+			listMenu.listZipped.entries = zb.ListDirectory(internalPath);
+			if (!listMenu.listZipped.entries.empty()){
+				listMenu.clear();
+				listMenu.zippedToList(Constant::strToTipo<int>(emu.system));
+				//Solo actualizamos el path interno si es un directorio
+				if (nav == FS_ZIP_CD && (selectedListableZip || !romFile.empty())){
+					listMenu.listZipped.cd(romFile[0] != '@' ? romFile : "");
+				}
+			}
+			ret = FS_ZIP_NAVIGATION;
+		} else if (pathType == ZipBrowser::PATH_FILE){
+			// Extracting the file. We try to extract the file as is, with it's original name, but it can cause filesystem
+			// issues due to illegal characters. In order to address that, first we try the original name. If it was 
+			// unsuccesfull, we try removing those illegal characters. If after all, we have another error, we try to generate
+			// a MD5 hash and extract it with that name.
+			// We are on the need to generate a unique name to don't affect to the sram file save, since the name is used to 
+			// store the information and therefore, we will lose the data after loading a different game
+
+			std::string extractionPath = Constant::getTmpDir() + Constant::getFileSep() + dir.getFileName(internalPath);
+			//First try. Extract the current internal name file
+			ret = extractFileFromZip(internalPath, extractionPath, zb, listMenu);
+			
+			if (ret != FS_ZIP_FILE_EXTRACTED){
+				//Error Extract the file trying to remove some special characters
+				LOG_ERROR("Error extracting %s Trying to delete special chars...", extractionPath.c_str());
+				extractionPath = Constant::getTmpDir() + Constant::getFileSep() + Constant::checkPath(internalPath);
+				ret = extractFileFromZip(internalPath, extractionPath, zb, listMenu);
+			}
+
+			if (ret != FS_ZIP_FILE_EXTRACTED){
+				//Extract the file generating an md5 hash of the full filename path "\1 US - Q-Z\Sonic The Hedgehog 3 (USA).md"
+				LOG_ERROR("Error extracting %s Trying to generate an md5 hash...", extractionPath.c_str());
+				extractionPath = Constant::getTmpDir() + Constant::getFileSep() + GetMD5(internalPath) + dir.getExtension(internalPath);
+				ret = extractFileFromZip(internalPath, extractionPath, zb, listMenu);
+			}
+			
+			if (ret != FS_ZIP_FILE_EXTRACTED){
+				//We give up
+				LOG_ERROR("Unable to extract file");
+			}
+		} 
+		zb.Close();
+	}
+	return ret;
+}
+
+std::string GameMenu::GetMD5(const std::string& input)
+{
+    md5_state_t state;
+    md5_byte_t  digest[16];   // 128 bits = 16 bytes
+
+    md5_init(&state);
+    md5_append(&state,
+               reinterpret_cast<const md5_byte_t*>(input.c_str()),
+               (int)input.size());
+    md5_finish(&state, digest);
+
+    // Convertir los 16 bytes a cadena hexadecimal (32 caracteres)
+    char hex[33];
+    for (int i = 0; i < 16; ++i)
+        sprintf_s(hex + i*2, 3, "%02x", digest[i]);   // sprintf_s para VS2010
+    hex[32] = '\0';
+
+    return std::string(hex);
+}
+
+/**
+* Extracts a compressed file from the zip file, and sets it's filepath on "listMenu.listZipped.extractedFile" variable. 
+* Returns FS_ZIP_FILE_EXTRACTED on success or FS_ZIP_EXTRACT_ERROR on failure
+*/
+
+FILE_STATUS GameMenu::extractFileFromZip(const std::string& internalPath, const std::string& extractionPath, ZipBrowser& zb, ListMenu &listMenu){
+	LOG_DEBUG("extrayendo %s...", internalPath.c_str());
+	LOG_DEBUG("...en %s", extractionPath.c_str());
+	if (zb.ExtractFile(internalPath, extractionPath)){
+		//Establecemos cual es el nombre del fichero extraido en el filesystem
+		listMenu.listZipped.extractedFile = extractionPath;
+		return FS_ZIP_FILE_EXTRACTED;
+	} else {
+		return FS_ZIP_EXTRACT_ERROR;
+	}
+}
+
 
 /**
  * 
@@ -861,7 +956,13 @@ int GameMenu::saveGameMenuPos(ListMenu &menuData){
 
     struct ListStatus input1 = { cfgLoader->emuCfgPos, menuData.iniPos, menuData.endPos, 
 		menuData.curPos, menuData.maxLines, menuData.layout, menuData.animateBkg, 
-		menuData.gameDataFields.posManufacturer, menuData.gameDataFields.posSystem, menuData.gameDataFields.posYear, menuData.gameDataFields.onlyParents};
+		menuData.gameDataFields.posManufacturer, menuData.gameDataFields.posSystem, 
+		menuData.gameDataFields.posYear, menuData.gameDataFields.onlyParents
+	};
+
+	//Guardando los datos si se ha seleccionado un fichero zip
+	strcpy_s(input1.zipname, sizeof(input1.zipname), (menuData.listZipped.dir + Constant::getFileSep() + menuData.listZipped.file).c_str());
+	strcpy_s(input1.zippedPath, sizeof(input1.zippedPath), menuData.listZipped.getInternalDir().c_str());
 
     int flag = 0;
     flag = fwrite(&input1, sizeof(struct ListStatus), 1, outfile);
@@ -894,6 +995,7 @@ int GameMenu::recoverGameMenuPos(ListMenu &menuData, struct ListStatus &read_str
     if (fread(&read_struct, sizeof(read_struct), 1, infile) > 0){
         LOG_DEBUG("emupos: %d; inipos: %d; endpos: %d; curpos: %d; maxlines: %d; layout: %d; animateBkg: %d", read_struct.emuLoaded,  
 			read_struct.iniPos, read_struct.endPos, read_struct.curPos, read_struct.maxLines, read_struct.layout, read_struct.animateBkg);
+
         //Setting the emulator selected        
         cfgLoader->emuCfgPos = read_struct.emuLoaded;
     } else {

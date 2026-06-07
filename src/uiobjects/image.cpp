@@ -171,9 +171,14 @@ void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
     }
 
 	SDL_Surface* zoomedSurface;
-	double zoomX = (double)dst_w / src_w;
-	double zoomY = (double)dst_h / src_h;
-	zoomedSurface = zoomSurface(src, zoomX, zoomY, false);
+	if (dst_w == src_w && dst_h == src_h){
+		//Make a copy of the original image loaded. It's already converted to the dest surface format
+		zoomedSurface = SDL_ConvertSurface(src, src->format, src->flags);
+	} else {
+		double zoomX = (double)dst_w / src_w;
+		double zoomY = (double)dst_h / src_h;
+		zoomedSurface = zoomSurface(src, zoomX, zoomY, false);
+	}
 
 	if (!zoomedSurface) return;
 

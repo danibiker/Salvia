@@ -19,7 +19,7 @@ const int WRITE_BUFFER_SIZE = 65536;
 #endif
 
 // Función auxiliar para separar las extensiones y normalizarlas
-std::vector<std::string> splitExtensions(const std::string& extensions) {
+inline std::vector<std::string> splitExtensions(const std::string& extensions) {
     std::vector<std::string> list;
     std::stringstream ss(extensions);
     std::string ext;
@@ -32,7 +32,7 @@ std::vector<std::string> splitExtensions(const std::string& extensions) {
     return list;
 }
 
-int checkExtractionErrors(int result, std::size_t romsize){
+inline int checkExtractionErrors(int result, std::size_t romsize){
 	if (result < 0) {
 		// Error detectado
 		const char* errorMsg;
@@ -53,7 +53,7 @@ int checkExtractionErrors(int result, std::size_t romsize){
 	}
 }
 
-int getZipFileCount(const std::string& rompath) {
+inline int getZipFileCount(const std::string& rompath) {
     unzFile uf = unzOpen(rompath.c_str());
     if (!uf) return 0;
     unz_global_info global_info;
@@ -115,7 +115,7 @@ inline bool isBiosFile(const std::string& filename) {
     return false;
 }
 
-int getZipFileCountFiltered(const std::string& rompath) {
+inline int getZipFileCountFiltered(const std::string& rompath) {
     unzFile uf = unzOpen(rompath.c_str());
     if (!uf) return 0;
 
@@ -141,7 +141,7 @@ int getZipFileCountFiltered(const std::string& rompath) {
     return realCount;
 }
 
-unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& extensions, bool toMemory, const std::string& tempDir) {
+inline unzippedFileInfo unzipOrLoad(const std::string& rompath, const std::string& extensions, bool toMemory, const std::string& tempDir) {
     unzippedFileInfo ret;
     ret.originalPath = rompath;
     ret.errorCode = -1; // Por defecto error

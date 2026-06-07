@@ -2,6 +2,7 @@
 #include <io/joystick.h>
 #include <io/keyboard.h>
 #include <http/badgedownloader.h>
+#include <image/icons.h>
 
 #ifdef _XBOX
 	#include <xtl.h>
@@ -90,6 +91,7 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 	SDL_WM_SetCaption("Salvia", NULL);
 
 	initFont();
+	Icons::loadIcons(overlay);
 	joystick = new Joystick();
 	keyb = new t_keyboard();
 
@@ -118,7 +120,7 @@ void Engine::stopEngine(){
 		SDL_FreeSurface(overlay);
 		overlay = NULL;
 	}
-
+	Icons::freeIcons();
 	BadgeDownloader::instance().stop();
     SDL_Quit();
 }

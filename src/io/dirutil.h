@@ -48,6 +48,7 @@ class dirutil{
         ~dirutil();
         char * getDir(char *buffer);
         char * getDirActual();
+		bool isChild(const std::string& parent, const std::string& child);
         string getExtension(string file);
         bool setFileProperties(FileProps *propFile, string ruta);
         unsigned int listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtro, bool order, bool properties);

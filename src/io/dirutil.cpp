@@ -98,6 +98,16 @@ char * dirutil::getDirActual(){
     return getDir(rutaActual);
 }
 
+/**
+* Find out if a directory (param "parent") is contained whitin another one (param "child")
+*/
+bool dirutil::isChild(const std::string& parent, const std::string& child){
+	std::string lowParent = parent;
+	std::string lowChild = child;
+	Constant::lowerCase(&lowParent);
+	Constant::lowerCase(&lowChild);
+	return lowChild.find(lowParent) != string::npos;
+}
 
 /**
 * Obtiene la extensión del fichero (incluyendo el punto)
@@ -358,7 +368,7 @@ string dirutil::getFolder(string file) {
 	return "game:";
 #else
     // Si no hay separadores, es un archivo en el directorio actual
-    return "."; // O return "" según prefieras representar el directorio local
+    return ""; //segun prefieras representar el directorio local
 #endif
 }
 

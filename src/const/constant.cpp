@@ -92,8 +92,16 @@ const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",
 	"Sega - Game Gear-content.png",
 	"Sega - Mega-CD - Sega CD-content.png",
 	"Nintendo - Nintendo Entertainment System-content.png",
-	"NEC - PC Engine - TurboGrafx 16-content.png",
-	"Sony - PlayStation-content.png"
+	"NEC - PC Engine - TurboGrafx 16 (E)-content.png",
+	"Sony - PlayStation-content.png",
+	"NEC - PC Engine CD - TurboGrafx-CD-content.png",
+	"Arcade - STGSingle-content.png",
+	"SNK - Neo Geo Pocket Color-content.png",
+	"Sinclair - ZX Spectrum-content.png",
+	"Microsoft - MSX-content.png",
+	"DOS-content.png",
+	"DOOM-content.png",
+	"NEC - PC Engine SuperGrafx-content.png"
 };
 
 Constant::Constant(){

@@ -8,6 +8,7 @@
 #include <const/constant.h>
 #include <const/menuconst.h>
 #include <const/keyconst.h>
+#include "unzip/ZipBrowser.h"
 
 
 class FileLaunch{
@@ -64,6 +65,10 @@ struct ListStatus{
 	int posSystem;
 	int posYear;
 	bool onlyParents;
+	//Es el nombre del zip abierto
+	char zipname[260];
+	//Es el path seleccionado dentro del zip
+	char zippedPath[4096];
 };
 
 struct t_scale_props{
@@ -216,6 +221,13 @@ struct GameData {
 	bool isSystem() const { return *cloneof != '\0' && *romof != '\0'; }
 };
 
+enum FILE_TYPE
+{
+	FT_DIR = 0, 
+    FT_ZIP_LIST,
+	FT_CARTRIDGE
+};
+
 class GameFile{
 public:
 	// id de consola
@@ -230,8 +242,10 @@ public:
 	SDL_Surface *cache;
 	//Detalle del juego
 	const GameData *gameData;
+	//Indica si es un directorio
+	FILE_TYPE fileType;
 
-    GameFile() : gameData(NULL), systemid(0), cache(NULL){
+	GameFile() : gameData(NULL), systemid(0), cache(NULL), fileType(FT_CARTRIDGE){
     }
 
     ~GameFile(){
@@ -779,4 +793,52 @@ struct t_rom_paths{
 	std::string rompath;
 	std::string savestate;
 	std::string sram;
+};
+
+struct t_zipped_file_paths{
+private:
+	// Route selected in the contents of the zip
+	std::vector<std::string> pathInZip;
+
+public:
+	// Directory where the file is
+	std::string dir;
+	// Name of the file. It usually is a zipped file
+	std::string file;
+	// Files listed on the zipped selected internal directory
+	std::vector<ZipEntry> entries;
+	//File extracted
+	std::string extractedFile;
+
+	void clear(){
+		dir.clear();
+		file.clear();
+		pathInZip.clear();
+		entries.clear();
+		extractedFile.clear();
+	}
+
+	void cd(std::string newDir){
+		pathInZip.push_back(newDir);
+	}
+
+	bool cdBack(){
+		if (!pathInZip.empty()) {
+			pathInZip.pop_back();
+		}
+		return !pathInZip.empty();
+	}
+
+	std::string getInternalDir(){
+		std::string internalPath;
+		for (unsigned int i=0; i < pathInZip.size(); i++){
+			internalPath += pathInZip[i] + Constant::getFileSep();
+		}
+		return internalPath;
+	}
+
+	void setInternalDir(std::string dir){
+		pathInZip = Constant::split(dir, Constant::getFileSep());
+	}
+
 };

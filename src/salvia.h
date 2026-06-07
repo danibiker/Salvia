@@ -76,7 +76,6 @@ const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_
 
 // 1. Usa un buffer persistente para evitar allocs constantes al convertir desde ARGB8888
 enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
-int launchGame(std::string);
 void closeGame();
 void init_sdl_audio(double sample_rate);
 
@@ -424,6 +423,8 @@ namespace {
 */
 void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoader){
     struct ListStatus menuBeforeExit;
+	dirutil dir;
+
     int retMenu = gameMenu.recoverGameMenuPos(menuData, menuBeforeExit);
     if (retMenu == 0){
         if (menuBeforeExit.layout != menuData.layout){
@@ -432,7 +433,17 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
         menuData.animateBkg = menuBeforeExit.animateBkg;
     }
 
-    gameMenu.loadEmuCfg(menuData);
+	if (retMenu == 0 && menuBeforeExit.zipname[0] != '\0' && menuBeforeExit.zippedPath[0] != '\0'){
+		LOG_DEBUG("Loading zip %s...", menuBeforeExit.zipname);
+		LOG_DEBUG("...Internal path %s", menuBeforeExit.zippedPath);
+		menuData.listZipped.setInternalDir(menuBeforeExit.zippedPath);
+		menuData.listZipped.dir = dir.getFolder(menuBeforeExit.zipname);
+		menuData.listZipped.file = dir.getFileName(menuBeforeExit.zipname);
+		FILE_STATUS fs = gameMenu.listableZip(menuData, FS_ZIP_CD);
+	} else {
+		gameMenu.loadEmuCfg(menuData);
+	}
+
     if (retMenu == 0 && menuData.maxLines == menuBeforeExit.maxLines 
 		&& menuBeforeExit.iniPos >= 0 && menuBeforeExit.iniPos < menuData.listSize
 		&& menuBeforeExit.endPos > 0 && menuBeforeExit.endPos <= menuData.listSize
@@ -546,7 +557,7 @@ void initGameAudio(double sampleRate){
 	gameMenu->g_audioRate.init(BUFF_SIZE);
 }
 
-bool extractAndLoadGame(std::string rompath){
+bool extractAndLoadGame(std::string rompath, bool tmpDelete = true){
 	bool container = false;
 	bool isM3U = false;
 	struct retro_system_info info;
@@ -554,11 +565,20 @@ bool extractAndLoadGame(std::string rompath){
 	bool gameLoaded;
 	unzippedFileInfo unzipped;
 	const bool loadAchievement = gameMenu->getCfgLoader()->configMain[cfg::enableAchievements].valueBool;
-	const std::string tempDir = Constant::getAppDir() + Constant::getFileSep() + "tmp";
+	const std::string tempDir = Constant::getTmpDir();
 	const bool bios_only = rompath.compare(BIOS_ONLY) == 0;
+	dirutil dir;
+
+	// Don't delete the tmp dir if the rom we pretend to load is inside it.
+	// That is for the new functionality to be able to load a romfile that is inside the file structure
+	// of a zip file, and has previously extracted to the tmp dir to be loaded next. 
+	// See GameMenu::listableZip and ZipBrowser class
+	tmpDelete = tmpDelete && !dir.isChild(tempDir, rompath);
 
 	romPaths.rompath.clear();
 	closeGame();
+
+	//Obtaint the valid extensions to be loaded from the core information received
 	retro_get_system_info(&info);
 	std::string allowedExtensions = Constant::replaceAll(info.valid_extensions, "|", " ");
 	LOG_DEBUG("Extensiones: %s\n", info.valid_extensions);
@@ -588,7 +608,7 @@ bool extractAndLoadGame(std::string rompath){
 			unzipped.extractedPath = rompath;
 			unzipped.originalPath  = rompath;
 		} else {
-			if (dir.dirExists(tempDir.c_str())){
+			if (tmpDelete && dir.dirExists(tempDir.c_str())){
 				dir.borrarDir(tempDir);
 			}
 			if (dir.createDir(tempDir) <= 0){
@@ -607,6 +627,7 @@ bool extractAndLoadGame(std::string rompath){
 		}
 	}
 
+	// Llamada para iniciar el core
 	retro_init();
 	
 	if (bios_only) {
@@ -617,7 +638,9 @@ bool extractAndLoadGame(std::string rompath){
 		// Multi-disc: si es un M3U, indicamos al core qué disco cargar de inicio
 		// antes de retro_load_game (asi el savestate coincide con el disco correcto).
 		findInitialImage(rompath, isM3U);
+		// ******* Cargamos el juego en memoria **********
 		gameLoaded = retro_load_game(&game);
+		// ***********************************************
 	}
 
 	//Liberar la memoria tras la carga exitosa

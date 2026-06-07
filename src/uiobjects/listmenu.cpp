@@ -35,7 +35,6 @@ ListMenu::ListMenu(int screenw, int screenh){
     setLayout(LAYSIMPLE, screenw, screenh);
     //set_trans_blender(255, 255, 255, 190);
 	icons = new Icons();
-	icons->loadIcons();
 	selecAlphaRec = NULL;
 }
 
@@ -320,14 +319,40 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
 				}
 			}
 		}
-
-		//Dibujamos el icono
-		if (icons->icons.size() > page_white){
-			SDL_Surface *cartIcon = icons->icons_carts[getCartForSystem(game->systemid)];
-			if (cartIcon != NULL)
-				SDL_BlitSurface(icons->icons_carts[getCartForSystem(game->systemid)], NULL, video_page, &dstRectIcon);
-		}
+		drawIconListElem(video_page, game, dstRectIcon);
     }
+}
+
+void ListMenu::drawIconListElem(SDL_Surface *video_page, GameFile *game, SDL_Rect& dstRectIcon) {
+	SDL_Surface *icon = NULL;
+
+	// 1. Intentar obtener el icono de cartucho si aplica
+	const unsigned int posCart = getCartForSystem(game->systemid);
+	if (game->fileType == FT_CARTRIDGE && posCart < (int)icons->icons_carts.size()) {
+		icon = icons->icons_carts[posCart];
+		if (icon != NULL) {
+			SDL_BlitSurface(icon, NULL, video_page, &dstRectIcon);
+			return; // Si se dibuja el cartucho, terminamos aqui
+		}
+	}
+
+	// 2. Si no es cartucho (o no tenia imagen), determinar el tipo de icono generico
+	enumIco ico = page_white;
+	if (game->fileType == FT_DIR) {
+		ico = folder;
+	} else if (game->fileType == FT_ZIP_LIST) {
+		ico = page_white_zip;
+	}
+
+	// 3. Obtener y dibujar el icono generico aplicando el desplazamiento
+	if (ico < (int)icons->icons.size()) {
+		icon = icons->icons[ico];
+		if (icon != NULL) {
+			dstRectIcon.x -= 7;
+			dstRectIcon.y -= 7;
+			SDL_BlitSurface(icon, NULL, video_page, &dstRectIcon);
+		}
+	}
 }
 
 int ListMenu::getCartForSystem(int systemid){
@@ -354,6 +379,22 @@ int ListMenu::getCartForSystem(int systemid){
 			return cart_pce;
 		case 57:
 			return cart_psx;
+		case 114:
+			return cart_pce_cd;
+		case 75:
+			return cart_mame;
+		case 25:
+			return cart_neogeo_pocket;
+		case 76:
+			return cart_zx;
+		case 113:
+			return cart_msx;
+		case 135:
+			return cart_dos;
+		case 290:
+			return cart_doom;
+		case 105:
+			return cart_supergrafx;
 		default:
 			return cart_nes;
 	}
@@ -518,6 +559,10 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
 		if (!foundInMame) {
             gFile->gameTitle = fileNameNoExt;
         }
+
+		if (!gFile->longFileName.empty() && gFile->longFileName[0] == '@'){
+			gFile->fileType = FT_ZIP_LIST;
+		}
 		
 		// precalculo de clave para ordenar
 		gFile->sortKey = gFile->gameTitle;
@@ -533,6 +578,28 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
 		OutputDebugStringA("\n");
 	}*/
 
+	//Reset the filter and add all elements to be shown
+	resetFilter();
+}
+
+void ListMenu::zippedToList(int system) {
+	dirutil dir;
+
+	for (std::size_t i = 0; i < listZipped.entries.size(); ++i)
+    {
+        const ZipEntry& e = listZipped.entries[i];
+        //LOG_DEBUG("%s, %s, %s, %s", (e.isDir ? "[DIR]" : "[FIC]"), e.name.c_str(), 
+		//	(e.isDir ? "-" : std::to_string((long long)e.uncompressedSize).c_str()),
+        //    (e.isDir ? "-" : std::to_string((long long)e.compressedSize).c_str()));
+
+		GameFile* gFile = new GameFile();
+        gFile->systemid = system;
+		gFile->fileType = e.isDir ? FT_DIR : FT_CARTRIDGE;
+        gFile->longFileName = e.name;
+        const string fileNameNoExt = dir.getFileNameNoExt(e.name);
+        gFile->gameTitle = fileNameNoExt;
+        listGames.push_back(std::unique_ptr<GameFile>(gFile));
+    }
 	//Reset the filter and add all elements to be shown
 	resetFilter();
 }

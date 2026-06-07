@@ -943,7 +943,7 @@ void closeGame(){
 /**
 *
 */
-int launchGame(std::string rompath){
+int launchGame(std::string rompath, bool tmpDelete){
 	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 
 	/* Modo "BIOS only": el frontend nos pasa el centinela "@bios-only"
@@ -961,7 +961,7 @@ int launchGame(std::string rompath){
 	SDL_Flip(gameMenu->gameScreen);
 	
 	//Cargamos el juego en memoria o lo extraemos al disco
-	bool gameLoaded = extractAndLoadGame(rompath);
+	bool gameLoaded = extractAndLoadGame(rompath, tmpDelete);
 	if(!gameLoaded) {
 		LOG_ERROR("Error cargando la ROM\n");
 		gameMenu->showLangSystemMessage("msg.romopenerror", 3000);
