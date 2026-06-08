@@ -125,7 +125,7 @@ setlocal enabledelayedexpansion
 set PROJECT="Salvia.vcxproj"
 set PLATFORM="Xbox 360"
 :: Cambiado a /v:q (Quiet) y añadido /noconlog para evitar banners
-set MS_OPTS=/t:Rebuild /p:Platform=%PLATFORM% /v:q /nologo /clp:NoSummary
+set MS_OPTS=/t:Rebuild /p:Platform=%PLATFORM% /v:q /nologo /clp:NoSummary /p:DeployOnBuild=false
 
 set CORES=Release Release_beetlepce Release_beetlepcefast Release_beetlepce_fx ^
 Release_Gambatte Release_Nestopia Release_Snes9x Release_Snes9x_latest ^

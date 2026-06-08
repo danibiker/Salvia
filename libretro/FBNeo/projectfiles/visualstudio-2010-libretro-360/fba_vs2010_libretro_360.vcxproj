@@ -2586,6 +2586,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_littlerb.cpp" />
     <ClCompile Include="..\..\src\burn\drv\pst90s\d_lordgun.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
@@ -2906,6 +2907,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\d_segag80r.cpp" />
     <ClCompile Include="..\..\src\burn\drv\sega\d_segag80v.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
@@ -2978,6 +2980,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\sega\sega_speech.cpp" />
     <ClCompile Include="..\..\src\burn\drv\sega\sys16_fd1094.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_NeoCapcom|Xbox 360'">true</ExcludedFromBuild>

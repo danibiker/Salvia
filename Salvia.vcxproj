@@ -3980,6 +3980,11 @@
     <None Include="DistroWin\assets\i18n\es.ini" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="DeployToHardDrive" Condition="'$(DeployOnBuild)' == 'false' AND '$(Platform)' == 'Xbox 360'">
+    <Message Text="Omitiendo despliegue en consola. Copiando xex localmente..." Importance="high" />
+    <MakeDir Directories="$(ProjectDir)Distro360" Condition="!Exists('$(ProjectDir)Distro360')" />
+    <Copy SourceFiles="$(ImageXexOutput)" DestinationFolder="$(ProjectDir)Distro360" />
+  </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>
