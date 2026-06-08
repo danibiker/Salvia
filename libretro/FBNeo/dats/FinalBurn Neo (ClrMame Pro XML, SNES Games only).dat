@@ -5284,10 +5284,10 @@
 	</game>
 	<game name="earthwormjimtp" cloneof="earthwormjim" romof="earthwormjim" sourcefile="snes/d_snes.cpp">
 		<comment>Hack</comment>
-		<description>Earthworm Jim (Hack, Portuguese)</description>
+		<description>Earthworm Jim (Hack, Portuguese v2.0)</description>
 		<year>2026</year>
 		<manufacturer>juliano_did</manufacturer>
-		<rom name="Earthworm Jim PT-BR (2026)(juliano_did).sfc" size="3145728" crc="5b989e82"/>
+		<rom name="Earthworm Jim PT-BR v2.0 (2026)(juliano_did).sfc" size="3145728" crc="5e4fe99e"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -5566,10 +5566,10 @@
 	</game>
 	<game name="eyra" sourcefile="snes/d_snes.cpp">
 		<comment>Homebrew</comment>
-		<description>Eyra: The Crow Maiden (HB)</description>
+		<description>Eyra: The Crow Maiden (HB, v1.1)</description>
 		<year>2022-23</year>
 		<manufacturer>Second Dimension</manufacturer>
-		<rom name="Eyra - The Crow Maiden (2022-23)(Second Dimension).sfc" size="2097152" crc="891c5bad"/>
+		<rom name="Eyra - The Crow Maiden v1.1 (2022-23)(Second Dimension).sfc" size="2097152" crc="891c5bad"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -8505,6 +8505,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="joemactp" cloneof="joemac" romof="joemac" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Joe &amp; Mac (Hack, Portuguese)</description>
+		<year>2026</year>
+		<manufacturer>juliano_did</manufacturer>
+		<rom name="Joe &amp; Mac PT-BR (2026)(juliano_did).sfc" size="1048576" crc="8393e8ff"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="joemac" sourcefile="snes/d_snes.cpp">
 		<description>Joe &amp; Mac (USA)</description>
 		<year>1991</year>
@@ -9741,6 +9750,24 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="lieutenantgn" sourcefile="snes/d_snes.cpp">
+		<comment>Homebrew</comment>
+		<description>Lieutenant Gourmet (NTSC) (HB, Beta v25.12.31-2)</description>
+		<year>2025</year>
+		<manufacturer>RetroAntho</manufacturer>
+		<rom name="Lieutenant Gourmet Beta v25.12.31-2 (NTSC)(2025)(RetroAntho).sfc" size="1048576" crc="0dfab242"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="lieutenantgp" cloneof="lieutenantgn" romof="lieutenantgn" sourcefile="snes/d_snes.cpp">
+		<comment>Homebrew</comment>
+		<description>Lieutenant Gourmet (PAL) (HB, Beta v25.12.31-2)</description>
+		<year>2025</year>
+		<manufacturer>RetroAntho</manufacturer>
+		<rom name="Lieutenant Gourmet Beta v25.12.31-2 (PAL)(2025)(RetroAntho).sfc" size="1048576" crc="67d43bc0"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="lightfantte" sourcefile="snes/d_snes.cpp">
 		<comment>Hack</comment>
 		<description>Light Fantasy (Hack, English)</description>
@@ -10022,7 +10049,25 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
-	<game name="lupinsansei" sourcefile="snes/d_snes.cpp">
+	<game name="lupinsanseite" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Lupin Sansei - Densetsu no Hihou o Oe! (Hack, English v0.8)</description>
+		<year>2026</year>
+		<manufacturer>Bunkai, Jackic</manufacturer>
+		<rom name="Lupin Sansei - Densetsu no Hihou o Oe! T-Eng v0.8 (2026)(Bunkai, Jackic).sfc" size="1572864" crc="11596ecc"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="lupinsanseits" cloneof="lupinsanseite" romof="lupinsanseite" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Lupin Sansei - Densetsu no Hihou o Oe! (Hack, Spanish v0.8)</description>
+		<year>2026</year>
+		<manufacturer>Bunkai, Jackic</manufacturer>
+		<rom name="Lupin Sansei - Densetsu no Hihou o Oe! T-Spa v0.8 (2026)(Bunkai, Jackic).sfc" size="1572864" crc="71c9c650"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="lupinsansei" cloneof="lupinsanseite" romof="lupinsanseite" sourcefile="snes/d_snes.cpp">
 		<description>Lupin Sansei - Densetsu no Hihou o Oe! (Japan)</description>
 		<year>1994</year>
 		<manufacturer>Epoch Co.</manufacturer>
@@ -10662,6 +10707,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="megamanbasstp" cloneof="megamanbass" romof="megamanbass" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Mega Man &amp; Bass (Hack, Portuguese)</description>
+		<year>2014</year>
+		<manufacturer>Trans-Center, Monkey's Traducoes</manufacturer>
+		<rom name="Mega Man &amp; Bass PT-BR (2014)(Trans-Center, Monkey's Traducoes).sfc" size="4194304" crc="3a52b550"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="megaman7e" cloneof="megaman7" romof="megaman7" sourcefile="snes/d_snes.cpp">
 		<description>Mega Man 7 (Euro)</description>
 		<year>1995</year>
@@ -10702,6 +10756,15 @@
 		<year>2025</year>
 		<manufacturer>SCD</manufacturer>
 		<rom name="Mega Man 7 Restoration v1.2 (2025)(SCD).sfc" size="3145728" crc="f7ecba9d"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="megaman7tp" cloneof="megaman7" romof="megaman7" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Mega Man VII (Hack, Portuguese)</description>
+		<year>2015</year>
+		<manufacturer>Trans-Center, Monkey's Traducoes</manufacturer>
+		<rom name="Mega Man VII PT-BR (2015)(Trans-Center, Monkey's Traducoes).sfc" size="4194304" crc="fa0da7cd"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -16085,6 +16148,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="superadvislandtp" cloneof="superadvisland" romof="superadvisland" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Super Aventura na Ilha (Hack, Portuguese v3.0)</description>
+		<year>2026</year>
+		<manufacturer>juliano_did</manufacturer>
+		<rom name="Super Aventura na Ilha PT-BR v3.0 (2026)(juliano_did).sfc" size="1048576" crc="86507fe8"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="superbckid" cloneof="superbonk" romof="superbonk" sourcefile="snes/d_snes.cpp">
 		<description>Super B.C. Kid (Euro)</description>
 		<year>1994</year>
@@ -16398,10 +16470,10 @@
 	</game>
 	<game name="sbgaiden" sourcefile="snes/d_snes.cpp">
 		<comment>Homebrew</comment>
-		<description>Super Boss Gaiden (HB, v1.2)</description>
+		<description>Super Boss Gaiden (HB, v1.2b)</description>
 		<year>2018</year>
 		<manufacturer>ChronoMoogle</manufacturer>
-		<rom name="Super Boss Gaiden v1.2 (2018)(ChronoMoogle).sfc" size="524288" crc="c9a8412d"/>
+		<rom name="Super Boss Gaiden v1.2b (2018)(ChronoMoogle).sfc" size="524288" crc="2b2857f0"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -17268,10 +17340,10 @@
 	</game>
 	<game name="supermetroidxf" cloneof="supermetroid" romof="supermetroid" sourcefile="snes/d_snes.cpp">
 		<comment>Hack</comment>
-		<description>Super Metroid X-Fusion (Hack, v1.2)</description>
+		<description>Super Metroid X-Fusion (Hack, v1.3)</description>
 		<year>2025</year>
 		<manufacturer>Metaquarius</manufacturer>
-		<rom name="Super Metroid X-Fusion v1.2 (2025)(Metaquarius).sfc" size="4194304" crc="0526898e"/>
+		<rom name="Super Metroid X-Fusion v1.3 (2025)(Metaquarius).sfc" size="4194304" crc="cb4a6685"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -18863,6 +18935,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="tillandhat" sourcefile="snes/d_snes.cpp">
+		<comment>Homebrew</comment>
+		<description>Till &amp; Hat (HB, Demo v11-03d)</description>
+		<year>2026</year>
+		<manufacturer>Woodfrog</manufacturer>
+		<rom name="Till &amp; Hat Demo v11-03d (2026)(Woodfrog).sfc" size="2097152" crc="1d4266ee"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="timetrax" sourcefile="snes/d_snes.cpp">
 		<description>Time Trax (USA)</description>
 		<year>1994</year>
@@ -19030,10 +19111,10 @@
 	</game>
 	<game name="tmntfightgme" cloneof="tmntfight" romof="tmntfight" sourcefile="snes/d_snes.cpp">
 		<comment>Hack</comment>
-		<description>TMNT: Tournament Fighters - Grandmasters Edition (Hack, v3.7)</description>
+		<description>TMNT: Tournament Fighters - Grandmasters Edition (Hack, v3.9)</description>
 		<year>2025-26</year>
 		<manufacturer>Allo</manufacturer>
-		<rom name="TMNT Tournament Fighters - Grandmasters Edition v3.7 (2025-26)(Allo).sfc" size="4194304" crc="33f03afd"/>
+		<rom name="TMNT Tournament Fighters - Grandmasters Edition v3.9 (2025-26)(Allo).sfc" size="4194304" crc="58769ab4"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>

@@ -115,6 +115,15 @@
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="barbarricade" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Barbarricade (HB, 06-02-26)</description>
+		<year>2026</year>
+		<manufacturer>Jess Creations - ArugulaZ</manufacturer>
+		<rom name="Barbarricade 06-02-26 (2026)(Jess Creations, ArugulaZ).sg" size="40960" crc="e8b1959c"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="battlot" sourcefile="sg1000/d_sg1000.cpp">
 		<comment>Homebrew</comment>
 		<description>Battlot (HB)</description>
@@ -740,10 +749,10 @@
 	</game>
 	<game name="eyebrawls" sourcefile="sg1000/d_sg1000.cpp">
 		<comment>Homebrew</comment>
-		<description>Eye Brawls (HB, v1.2)</description>
+		<description>Eye Brawls (HB, 1-30-26)</description>
 		<year>2026</year>
 		<manufacturer>Jess Creations - ArugulaZ</manufacturer>
-		<rom name="Eye Brawls v1.2 (2026)(Jess Creations, ArugulaZ).sg" size="32768" crc="e2ce44f0"/>
+		<rom name="Eye Brawls 1-30-26 (2026)(Jess Creations, ArugulaZ).sg" size="32768" crc="3ea1da76"/>
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -1182,6 +1191,15 @@
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="manhole" sourcefile="sg1000/d_sg1000.cpp">
+		<comment>Homebrew</comment>
+		<description>Manhole (HB, v0.6b)</description>
+		<year>2024</year>
+		<manufacturer>Electric Dreams</manufacturer>
+		<rom name="Manhole v0.6b (2024)(Electric Dreams).sg" size="12276" crc="e96272f6"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="mazy" sourcefile="sg1000/d_sg1000.cpp">
 		<comment>Homebrew</comment>
 		<description>Mazy (HB)</description>
@@ -1358,10 +1376,10 @@
 	</game>
 	<game name="ophibernplus" sourcefile="sg1000/d_sg1000.cpp">
 		<comment>Homebrew</comment>
-		<description>Operation Hibernation Plus (HB, Rev.2)</description>
-		<year>2025</year>
+		<description>Operation Hibernation Plus (HB, 02-15-26)</description>
+		<year>2025-26</year>
 		<manufacturer>Jess Creations - ArugulaZ</manufacturer>
-		<rom name="Operation Hibernation Plus Rev.2 (2025)(Jess Creations - ArugulaZ).sg" size="49152" crc="d4b2189a"/>
+		<rom name="Operation Hibernation Plus 02-15-26 (2025-26)(Jess Creations - ArugulaZ).sg" size="49152" crc="abc33998"/>
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -1759,10 +1777,10 @@
 	</game>
 	<game name="solarfoxii" sourcefile="sg1000/d_sg1000.cpp">
 		<comment>Homebrew</comment>
-		<description>Solar Fox II (HB)</description>
+		<description>Solar Fox II (HB, 21-10-25)</description>
 		<year>2025</year>
 		<manufacturer>Jess Creations - ArugulaZ</manufacturer>
-		<rom name="Solar Fox II (2025)(Jess Creations - ArugulaZ).sg" size="40960" crc="2ce5cf6f"/>
+		<rom name="Solar Fox II 21-10-25 (2025)(Jess Creations - ArugulaZ).sg" size="40960" crc="7886d024"/>
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -1977,7 +1995,7 @@
 		<description>Whack 'Em Smack 'Em Byrons (HB)</description>
 		<year>2024</year>
 		<manufacturer>Jess Creations - ArugulaZ</manufacturer>
-		<rom name="Whack 'Em Smack 'Em Byrons (2024)(Jess Creations - ArugulaZ).sg" size="32706" crc="a444660d"/>
+		<rom name="Whack 'Em Smack 'Em Byrons (2024)(Jess Creations - ArugulaZ).sg" size="31770" crc="073dd0e9"/>
 		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>

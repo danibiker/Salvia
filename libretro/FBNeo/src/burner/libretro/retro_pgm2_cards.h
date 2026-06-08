@@ -12,7 +12,5 @@ void retro_pgm2_cards_push_options(std::vector<const retro_core_option_v2_defini
 void retro_pgm2_cards_refresh_environment();
 void retro_pgm2_cards_apply_variables();
 void retro_pgm2_cards_save_files();
-/** After SET_CORE_OPTIONS_V2; nudges frontends to refresh dynamic option rows. */
-void retro_pgm2_cards_after_set_environment(void);
 
 #endif

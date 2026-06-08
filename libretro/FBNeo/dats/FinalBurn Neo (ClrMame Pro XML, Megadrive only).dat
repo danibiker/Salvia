@@ -666,6 +666,15 @@
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="aliencat2a" cloneof="aliencat2" romof="aliencat2" sourcefile="megadrive/d_megadrive.cpp">
+		<comment>Homebrew</comment>
+		<description>Alien Cat 2 (HB, Alt)</description>
+		<year>2020</year>
+		<manufacturer>PSCD Games, Repa Games</manufacturer>
+		<rom name="Alien Cat 2 (Alt) (2020)(PSCD Games).bin" size="1310720" crc="159b1da2"/>
+		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="aliensol" sourcefile="megadrive/d_megadrive.cpp">
 		<description>Alien Soldier (Euro)</description>
 		<year>1995</year>
@@ -781,6 +790,15 @@
 		<year>1989</year>
 		<manufacturer>Sega</manufacturer>
 		<rom name="Altered Beast (Euro, USA)(1989)(Sega).bin" size="524288" crc="154d59bb"/>
+		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="altbeastpt" cloneof="altbeast" romof="altbeast" sourcefile="megadrive/d_megadrive.cpp">
+		<comment>Hack</comment>
+		<description>Altered Beast (Hack, Portuguese)</description>
+		<year>2026</year>
+		<manufacturer>CEGA Traducoes</manufacturer>
+		<rom name="Altered Beast PT-BR (2026)(CEGA Traducoes).bin" size="524288" crc="2676ef61"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -1570,47 +1588,47 @@
 		<driver status="good"/>
 	</game>
 	<game name="barbarianami" sourcefile="megadrive/d_megadrive.cpp">
-		<comment>Homebrew, raw conversion - no improvements</comment>
-		<description>Barbarian the Ultimate Warrior - Amiga (HB)</description>
-		<year>2017</year>
+		<comment>Homebrew, Raw conversion - no improvements</comment>
+		<description>Barbarian: The Ultimate Warrior - Amiga (HB)</description>
+		<year>2015	</year>
 		<manufacturer>F.L</manufacturer>
-		<rom name="Barbarian AMIGA (2017)(F.L).bin" size="1031574" crc="4fc515f5"/>
+		<rom name="Barbarian - The Ultimate Warrior - Amiga (2015)(F.L).bin" size="1031574" crc="4fc515f5"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="barbariancpc" cloneof="barbarianami" romof="barbarianami" sourcefile="megadrive/d_megadrive.cpp">
-		<comment>Homebrew, raw conversion - no improvements</comment>
-		<description>Barbarian the Ultimate Warrior - Amstrad CPC (HB)</description>
+		<comment>Homebrew, Raw conversion - no improvements</comment>
+		<description>Barbarian: The Ultimate Warrior - Amstrad CPC (HB)</description>
 		<year>2014</year>
 		<manufacturer>F.L</manufacturer>
-		<rom name="Barbarian Amstrad CPC (2014)(F.L).bin" size="2296122" crc="d63f8446"/>
+		<rom name="Barbarian - The Ultimate Warrior - Amstrad CPC (2014)(F.L).bin" size="2296122" crc="d63f8446"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="barbarianst" cloneof="barbarianami" romof="barbarianami" sourcefile="megadrive/d_megadrive.cpp">
-		<comment>Homebrew, raw conversion - no improvements</comment>
-		<description>Barbarian the Ultimate Warrior - Atari ST (HB)</description>
+		<comment>Homebrew, Raw conversion - no improvements</comment>
+		<description>Barbarian: The Ultimate Warrior - Atari ST (HB)</description>
 		<year>2014</year>
 		<manufacturer>F.L</manufacturer>
-		<rom name="Barbarian Atari ST (2014)(F.L).bin" size="2487416" crc="fec97705"/>
+		<rom name="Barbarian - The Ultimate Warrior - Atari ST (2014)(F.L).bin" size="2487416" crc="fec97705"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="barbarianc64" cloneof="barbarianami" romof="barbarianami" sourcefile="megadrive/d_megadrive.cpp">
-		<comment>Homebrew, raw conversion - no improvements</comment>
-		<description>Barbarian the Ultimate Warrior - C64 (HB)</description>
+		<comment>Homebrew, Raw conversion - no improvements</comment>
+		<description>Barbarian: The Ultimate Warrior - C64 (HB)</description>
 		<year>2014</year>
 		<manufacturer>F.L</manufacturer>
-		<rom name="Barbarian C64 (2014)(F.L).bin" size="3028428" crc="d37f9af0"/>
+		<rom name="Barbarian - The Ultimate Warrior - C64 (2014)(F.L).bin" size="3028428" crc="d37f9af0"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="barbarianzxs" cloneof="barbarianami" romof="barbarianami" sourcefile="megadrive/d_megadrive.cpp">
-		<comment>Homebrew, raw conversion - no improvements</comment>
-		<description>Barbarian the Ultimate Warrior - ZX Spectrum (HB)</description>
+		<comment>Homebrew, Raw conversion - no improvements</comment>
+		<description>Barbarian: The Ultimate Warrior - ZX Spectrum (HB)</description>
 		<year>2015</year>
 		<manufacturer>F.L</manufacturer>
-		<rom name="Barbarian ZX Spectrum (2015)(F.L).bin" size="1432448" crc="5360129d"/>
+		<rom name="Barbarian - The Ultimate Warrior - ZX Spectrum (2015)(F.L).bin" size="1432448" crc="5360129d"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -4810,20 +4828,20 @@
 		<driver status="good"/>
 	</game>
 	<game name="barbarianap2" cloneof="barbarianami" romof="barbarianami" sourcefile="megadrive/d_megadrive.cpp">
-		<comment>Homebrew, raw conversion - no improvements</comment>
+		<comment>Homebrew, Raw conversion - no improvements</comment>
 		<description>Death Sword - Apple II (HB)</description>
 		<year>2014</year>
 		<manufacturer>F.L</manufacturer>
-		<rom name="Death Sword Apple II (2014)(F.L).bin" size="425616" crc="12a01f70"/>
+		<rom name="Death Sword - Apple II (2014)(F.L).bin" size="425616" crc="12a01f70"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="barbarianpc" cloneof="barbarianami" romof="barbarianami" sourcefile="megadrive/d_megadrive.cpp">
-		<comment>Homebrew, raw conversion - no improvements</comment>
+		<comment>Homebrew, Raw conversion - no improvements</comment>
 		<description>Death Sword - PC CGA (HB)</description>
 		<year>2014</year>
 		<manufacturer>F.L</manufacturer>
-		<rom name="Death Sword PC CGA (2014)(F.L).bin" size="446380" crc="aaeaeb87"/>
+		<rom name="Death Sword - PC CGA (2014)(F.L).bin" size="446380" crc="aaeaeb87"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -7438,6 +7456,15 @@
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="foxylanda" cloneof="foxyland" romof="foxyland" sourcefile="megadrive/d_megadrive.cpp">
+		<comment>Homebrew</comment>
+		<description>Foxy Land (HB, Alt)</description>
+		<year>2020</year>
+		<manufacturer>PSCD Games, Bug Studio</manufacturer>
+		<rom name="Foxy Land (Alt) (2020)(PSCD-Bug Studio).bin" size="3014656" crc="0ba40013"/>
+		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="bighurt" sourcefile="megadrive/d_megadrive.cpp">
 		<description>Frank Thomas Big Hurt Baseball (Euro, USA)</description>
 		<year>1995</year>
@@ -7570,6 +7597,15 @@
 		<year>1993</year>
 		<manufacturer>Sega</manufacturer>
 		<rom name="G-LOC Air Battle (World, Proto)(1993)(Sega).bin" size="1048576" crc="175c7e63"/>
+		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="gzero" sourcefile="megadrive/d_megadrive.cpp">
+		<comment>Homebrew</comment>
+		<description>G-ZERO (HB, beta 4)</description>
+		<year>2025</year>
+		<manufacturer>gasega68k</manufacturer>
+		<rom name="G-ZERO (2025)(gasega68k).bin" size="524288" crc="e9d0c3f3"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -8126,10 +8162,10 @@
 	</game>
 	<game name="goldnaxeac" cloneof="goldnaxe" romof="goldnaxe" sourcefile="megadrive/d_megadrive.cpp">
 		<comment>Hack</comment>
-		<description>Golden Axe - Arcade Colors (Hack, v1.3)</description>
+		<description>Golden Axe - Arcade Colors (Hack, v1.4)</description>
 		<year>2026</year>
 		<manufacturer>SCD</manufacturer>
-		<rom name="Golden Axe - Arcade Colors v1.3 (2026)(SCD).bin" size="590842" crc="0f0f9154"/>
+		<rom name="Golden Axe - Arcade Colors v1.4 (2026)(SCD).bin" size="590842" crc="e19b97c4"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -11210,6 +11246,15 @@
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="mcastilla" sourcefile="megadrive/d_megadrive.cpp">
+		<comment>Homebrew</comment>
+		<description>Maldita Castilla: Requiem (HB, Demo v1.4)</description>
+		<year>2026</year>
+		<manufacturer>PlayOnRetro</manufacturer>
+		<rom name="Maldita Castilla - Requiem Demo v1.4 (2026)(PlayOnRetro).bin" size="2779803" crc="6e43f5e1"/>
+		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="whacacri" sourcefile="megadrive/d_megadrive.cpp">
 		<description>Mallet Legend's Whac-a-Critter (USA, Taiwan) (Unl)</description>
 		<year>1993</year>
@@ -11701,12 +11746,30 @@
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="megameatboy" sourcefile="megadrive/d_megadrive.cpp">
+		<comment>Homebrew</comment>
+		<description>Mega Meat Boy (HB, v0.31)</description>
+		<year>2025-26</year>
+		<manufacturer>jungrock</manufacturer>
+		<rom name="Mega Meat Boy v0.31 (2025-26)(jungrock).bin" size="917504" crc="88620f2d"/>
+		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="mindtris" sourcefile="megadrive/d_megadrive.cpp">
 		<comment>Homebrew</comment>
 		<description>Mega Mindtris (HB, v1.2)</description>
 		<year>2018</year>
 		<manufacturer>1985 Alternativo</manufacturer>
-		<rom name="megamindtris (2018)(1985 alternativo)(v1.2).bin" size="1114112" crc="bef5482f"/>
+		<rom name="Mega Mindtris v1.2 (2018)(1985 alternativo).bin" size="1114112" crc="bef5482f"/>
+		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="megapang" sourcefile="megadrive/d_megadrive.cpp">
+		<comment>Homebrew</comment>
+		<description>Mega Pang (HB, v0.3 Beta)</description>
+		<year>2025-26</year>
+		<manufacturer>RCampeador</manufacturer>
+		<rom name="Mega Pang v0.3 Beta (2025-26)(RCampeador).bin" size="1572864" crc="edc09063"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -11949,10 +12012,10 @@
 	</game>
 	<game name="metalgear" sourcefile="megadrive/d_megadrive.cpp">
 		<comment>Homebrew</comment>
-		<description>Metal Gear (HB, v1.1)</description>
+		<description>Metal Gear (HB, v1.2)</description>
 		<year>2025</year>
 		<manufacturer>h0ffman</manufacturer>
-		<rom name="Metal Gear v1.1 (2025)(h0ffman).bin" size="1572864" crc="724fe7b3"/>
+		<rom name="Metal Gear v1.2 (2025)(h0ffman).bin" size="2097152" crc="68ec8c19"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -12635,10 +12698,10 @@
 	</game>
 	<game name="mkaee" cloneof="mk" romof="mk" sourcefile="megadrive/d_megadrive.cpp">
 		<comment>Hack</comment>
-		<description>Mortal Kombat Arcade Edition Enhanced (Hack, v2.2)</description>
-		<year>2025</year>
+		<description>Mortal Kombat Arcade Edition Enhanced (Hack, v2.4)</description>
+		<year>2026</year>
 		<manufacturer>Rael G.C.</manufacturer>
-		<rom name="Mortal Kombat Arcade Edition Enhanced v2.2 (2025)(Rael G.C.).bin" size="4194304" crc="e0b10bf3"/>
+		<rom name="Mortal Kombat Arcade Edition Enhanced v2.4 (2026)(Rael G.C.).bin" size="4194304" crc="20e1378c"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -19206,6 +19269,15 @@
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="squarebrothers" sourcefile="megadrive/d_megadrive.cpp">
+		<comment>Homebrew</comment>
+		<description>Square Brothers (HB)</description>
+		<year>2025</year>
+		<manufacturer>Ratalaika Games, 9Ratones, Two Black Cats</manufacturer>
+		<rom name="Square Brothers (2025)(Ratalaika Games, 9Ratones, Two Black Cats).bin" size="1048576" crc="3e866383"/>
+		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="squirrel" sourcefile="megadrive/d_megadrive.cpp">
 		<description>Squirrel King (Taiwan) (Unl)</description>
 		<year>1995</year>
@@ -21684,6 +21756,15 @@
 		<year>2021</year>
 		<manufacturer>PSCD Games</manufacturer>
 		<rom name="Thunder Paw (2021)(PSCD Games).bin" size="3014656" crc="81858c5b"/>
+		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="thundpawa" cloneof="thundpaw" romof="thundpaw" sourcefile="megadrive/d_megadrive.cpp">
+		<comment>Homebrew</comment>
+		<description>Thunder Paw (HB, Alt)</description>
+		<year>2021</year>
+		<manufacturer>PSCD Games</manufacturer>
+		<rom name="Thunder Paw (Alt) (2021)(PSCD Games).bin" size="3014656" crc="3455d75c"/>
 		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
