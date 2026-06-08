@@ -399,6 +399,15 @@
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="legaxetp" cloneof="legaxe" romof="legaxe" sourcefile="pce/d_pce.cpp">
+		<comment>Hack</comment>
+		<description>Legendary Axe, The (Hack, Portuguese)</description>
+		<year>2018</year>
+		<manufacturer>Patryckpo</manufacturer>
+		<rom name="Legendary Axe, The T-Por (2018)(Patryckpo).pce" size="262144" crc="3682e4e1"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="legaxe" sourcefile="pce/d_pce.cpp">
 		<description>Legendary Axe, The (USA)</description>
 		<year>1989</year>
@@ -558,6 +567,15 @@
 		<manufacturer>TTI</manufacturer>
 		<rom name="Samurai-Ghost (USA)(1992)(TTI).pce" size="524288" crc="77a924b7"/>
 		<video type="raster" orientation="horizontal" width="264" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="shockmantp" cloneof="ccshockman2" romof="ccshockman2" sourcefile="pce/d_pce.cpp">
+		<comment>Hack</comment>
+		<description>Shockman (Hack, Portuguese v0.95)</description>
+		<year>2017</year>
+		<manufacturer>Maverick Blue Warrior</manufacturer>
+		<rom name="Shockman T-Por v0.95 (2017)(Maverick Blue Warrior).pce" size="524288" crc="6059ae18"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
 	<game name="shockman" cloneof="ccshockman2" romof="ccshockman2" sourcefile="pce/d_pce.cpp">

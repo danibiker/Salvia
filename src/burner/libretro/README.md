@@ -230,13 +230,13 @@ Here is a list of samples currently in use :
 | carnival     |                                                                        |
 | cheekyms     | Not from MAME                                                          |
 | circus       |                                                                        |
-| crash        |                                                                        |
 | congo        |                                                                        |
+| crash        |                                                                        |
 | deathnlead   | Not from MAME, megadrive                                               |
 | depthch      |                                                                        |
 | digger       | Not from MAME                                                          |
-| dkongjr      |                                                                        |
 | dkong        |                                                                        |
+| dkongjr      |                                                                        |
 | donpachi     | Not from MAME, optional, replace OG music by HQ music, requires dipsw. |
 | elim2        |                                                                        |
 | fantasy      |                                                                        |
@@ -257,7 +257,8 @@ Here is a list of samples currently in use :
 | qbert        |                                                                        |
 | radarscp     | Not from MAME                                                          |
 | rallyx       |                                                                        |
-| reactor      |                                                                        |
+| ripcord      |                                                                        |
+| robotbwl     |                                                                        |
 | safarir      |                                                                        |
 | sasuke       |                                                                        |
 | seawolf      |                                                                        |
@@ -295,7 +296,7 @@ This core widely supports the RetroArch input latency reduction features, with *
 
 Proper support for **runahead second instance** is not guaranteed because it doesn't exist in standalone FBNeo unlike the other methods.
 
-Note : There seems to be possible conflicts when rewind is active simultaneously, see https://github.com/libretro/RetroArch/issues/16374.
+Note : ~~There seems to be possible conflicts when rewind is active simultaneously, see https://github.com/libretro/RetroArch/issues/16374.~~ Edit 2026-05-12: this bug is seemingly fixed.
 
 ## RetroAchievements
 

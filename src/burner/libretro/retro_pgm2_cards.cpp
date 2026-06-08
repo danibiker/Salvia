@@ -28,7 +28,6 @@ static const INT32 kPgm2CardMaxChoices = 120; // kPgm2CardMaxChoices is constrai
 static const INT32 PGM2_CARD_SIZE = 0x108;
 static const INT32 PGM2_CARD_DATA_SIZE = 0x100;
 
-static bool s_pgm2_cards_built = false;
 /** Slots last exposed in core options (may be provisional 4 before BurnDrvInit sets Pgm2MaxCardSlots). */
 static int s_pgm2_card_option_slots = 0;
 static std::vector<std::string> s_file_paths[4]; // index 0 = first file (choice "1")
@@ -40,6 +39,74 @@ static retro_core_option_v2_definition s_opt_def[4];
 static char s_last_applied[4][16];
 static UINT8 s_pending_card_image[PGM2_CARD_SIZE];
 static std::string s_active_file_path[4];
+static std::string s_latest_new_card_path[4];
+
+static const char* PGM2_OPT_EMPTY = "empty";
+static const char* PGM2_OPT_DEFAULT = "default";
+static const char* PGM2_OPT_TEMPORARY = "temporary";
+static const char* PGM2_OPT_NEW = "new";
+static const char* PGM2_OPT_LATEST_NEW_FILE = "latest_new_card_file";
+
+static const struct {
+    const char* drv_name;
+    INT32 max_slots;
+} pgm2_slot_table[] = {
+    // ORLEG2
+    { "orleg2",           0 },  // overseas (V104)
+    { "orleg2_103",       0 },  // overseas
+    { "orleg2_101",       0 },  // overseas
+    { "orleg2_104jp",     0 },  // Japan
+    { "orleg2_103jp",     0 },  // Japan
+    { "orleg2_101jp",     0 },  // Japan
+    { "orleg2_104cn",     4 },  // China
+    { "orleg2_103cn",     4 },  // China
+    { "orleg2_101cn",     4 },  // China
+    { "orleg2_104hk",     4 },  // Hong Kong
+    { "orleg2_103hk",     4 },  // Hong Kong
+    { "orleg2_101hk",     4 },  // Hong Kong
+    { "orleg2_104tw",     4 },  // Taiwan
+    { "orleg2_103tw",     4 },  // Taiwan
+    { "orleg2_101tw",     4 },  // Taiwan
+
+    // KOV2NL
+    { "kov2nl",           4 },  // overseas (V302)
+    { "kov2nl_301",       4 },  // overseas
+    { "kov2nl_300",       4 },  // overseas
+    { "kov2nl_302jp",     4 },  // Japan
+    { "kov2nl_301jp",     4 },  // Japan
+    { "kov2nl_300jp",     4 },  // Japan
+    { "kov2nl_302cn",     4 },  // China
+    { "kov2nl_301cn",     4 },  // China
+    { "kov2nl_300cn",     4 },  // China
+    { "kov2nl_302hk",     4 },  // Hong Kong
+    { "kov2nl_301hk",     4 },  // Hong Kong
+    { "kov2nl_300hk",     4 },  // Hong Kong
+    { "kov2nl_302tw",     4 },  // Taiwan
+    { "kov2nl_301tw",     4 },  // Taiwan
+    { "kov2nl_300tw",     4 },  // Taiwan
+
+    // KOV3
+    { "kov3",             2 },
+    { "kov3_102",         2 },
+    { "kov3_101",         2 },
+    { "kov3_100",         2 },
+
+    // No card slots
+    { "ddpdojt",          0 },
+    { "kof98umh",         0 },
+};
+
+static INT32 get_pgm2_slot_count(const char* drv_name)
+{
+    if (!drv_name) return 0;
+
+    for (size_t i = 0; i < sizeof(pgm2_slot_table) / sizeof(pgm2_slot_table[0]); i++) {
+        if (strcmp(pgm2_slot_table[i].drv_name, drv_name) == 0) {
+            return pgm2_slot_table[i].max_slots;
+        }
+    }
+    return 0;
+}
 
 static int iequals_suffix(const char* name, const char* suf)
 {
@@ -112,7 +179,7 @@ static void clear_slot_state(int slot)
 	s_file_paths[slot].clear();
 }
 
-static void rebuild_scan(bool preinit_before_drv_init);
+static void rebuild_scan();
 
 static bool read_raw_card_file(const char* path, UINT8* dest, size_t dest_len)
 {
@@ -226,7 +293,6 @@ static bool create_timestamped_slot_card(int slot, std::string& out_path)
 	time_t now;
 	struct tm tm_now;
 
-	out_path.clear();
 	if (slot < 0 || slot >= 4 || !drvname || !drvname[0] || !get_card_dir_path(dir))
 		return false;
 	if (!build_builtin_card_image(s_pending_card_image, sizeof(s_pending_card_image)))
@@ -364,6 +430,37 @@ static void scan_slot_files(int slot, const char* drvname, char dir[MAX_PATH])
 	retro_closedir(d);
 
 	std::sort(names.begin(), names.end());
+
+	//setting s_latest_new_card_path[4]
+	if (!names.empty()) {
+		log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: names.size()=%u, starting backward scan for latest timestamped card\n",
+			slot + 1, (unsigned)names.size());
+		for (int i = (int)names.size() - 1; i >= 0; i--) {  // From back to front
+			const char* name = names[i].c_str();
+			log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: [%d] trying name=\"%s\"\n", slot + 1, i, name);
+			// <drvname>_pN_YYYYMMDD_HHMMSS.pg2
+			int slot_num;
+			int year, month, day, hour, min, sec;
+			int parsed = sscanf(name, "%*[^_]_%*[^_]_p%d_%4d%2d%2d_%2d%2d%2d.pg2",
+					   &slot_num, &year, &month, &day, &hour, &min, &sec);
+			log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: [%d] sscanf parsed=%d, slot_num=%d, date=%04d%02d%02d %02d:%02d:%02d\n",
+				slot + 1, i, parsed, slot_num, year, month, day, hour, min, sec);
+			if (parsed == 7) {
+				char path[MAX_PATH];
+				snprintf(path, sizeof(path), "%s%c%s", dir, PATH_DEFAULT_SLASH_C(), name);
+				log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: [%d] MATCHED! setting s_latest_new_card_path=\"%s\"\n",
+					slot + 1, i, path);
+				s_latest_new_card_path[slot] = path;
+				break;
+			} else {
+				log_cb(RETRO_LOG_WARN, "[FBNeo PGM2 cards] slot P%d: [%d] name=\"%s\" did NOT match timestamp pattern (need 7 fields)\n",
+					slot + 1, i, name);
+			}
+		}
+		log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: scan complete, final s_latest_new_card_path=\"%s\"\n",
+			slot + 1, s_latest_new_card_path[slot].c_str());
+	}
+
 	if ((int)names.size() > kPgm2CardMaxChoices)
 		names.resize(kPgm2CardMaxChoices);
 
@@ -380,6 +477,17 @@ static void scan_slot_files(int slot, const char* drvname, char dir[MAX_PATH])
 		log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards]   [%u] %s\n", (unsigned)(i + 1), names[i].c_str());
 }
 
+
+static void add_fixed_option(std::vector<std::string>& L, const char* value, const char* label) {
+    L.push_back(value);
+    L.push_back(label);
+}
+
+static void add_file_option(std::vector<std::string>& L, const char* path, std::string label) {
+    L.push_back(path);
+    L.push_back(label);
+}
+
 static void build_slot_option(int slot)
 {
 	clear_slot_option(slot);
@@ -391,23 +499,23 @@ static void build_slot_option(int slot)
 
 	std::vector<std::string>& L = s_opt_label_storage[slot];
 	L.clear();
-	L.reserve(2 * (3 + s_file_paths[slot].size()));
-	L.push_back("empty");
-	L.push_back(RETRO_PGM2_EMPTY_SLOT);
-	L.push_back("default");
-	L.push_back(RETRO_PGM2_DEFAULT_CARD);
-	L.push_back("temporary");
-	L.push_back(RETRO_PGM2_TEMPORARY_CARD);
-	L.push_back("new");
-	L.push_back(RETRO_PGM2_NEW_CARD);
-	for (size_t i = 0; i < s_file_paths[slot].size(); i++) {
-		char idx[12];
-		snprintf(idx, sizeof(idx), "%u", (unsigned)(i + 1));
-		L.push_back(idx);
-		L.push_back(label_for_card_file(s_file_paths[slot][i].c_str()));
+
+	//fixed options
+	add_fixed_option(L, PGM2_OPT_EMPTY, RETRO_PGM2_EMPTY_SLOT);
+	add_fixed_option(L, PGM2_OPT_DEFAULT, RETRO_PGM2_DEFAULT_CARD);
+	add_fixed_option(L, PGM2_OPT_TEMPORARY, RETRO_PGM2_TEMPORARY_CARD);
+	add_fixed_option(L, PGM2_OPT_NEW, RETRO_PGM2_NEW_CARD);
+	add_fixed_option(L, PGM2_OPT_LATEST_NEW_FILE, RETRO_PGM2_LATEST_NEW_CARD_FILE);
+
+	//file options
+	const size_t nfiles = s_file_paths[slot].size();
+	char idx[12];
+	for (size_t i = 0; i < nfiles; i++) {
+		const char* fname = s_file_paths[slot][i].c_str();
+		std::string label = label_for_card_file(fname);
+		add_file_option(L, fname, label);
 	}
 
-	const size_t nfiles = s_file_paths[slot].size();
 	char slot_ch = (char)('1' + slot);
 	/* Keep desc 7-bit ASCII only; some frontends reject or mangle UTF-8 punctuation in SET_CORE_OPTIONS_V2. */
 	char buf[96];
@@ -423,16 +531,15 @@ static void build_slot_option(int slot)
 	retro_core_option_v2_definition& def = s_opt_def[slot];
 	def.key = s_opt_key_str[slot].c_str();
 	def.desc = s_opt_desc_str[slot].c_str();
-	def.desc_categorized = def.desc;
 	def.info = s_opt_info_str[slot].c_str();
-	def.info_categorized = NULL;
 	def.category_key = "pgm2_memory_card";
 
-	int nvals = 4 + (int)s_file_paths[slot].size();
+	int nvals = L.size() / 2;
 	for (int i = 0; i < nvals; i++) {
-		def.values[i].value = L[(size_t)i * 2].c_str();
-		def.values[i].label = L[(size_t)i * 2 + 1].c_str();
+		def.values[i].value = L[i * 2].c_str();
+		def.values[i].label = L[i * 2 + 1].c_str();
 	}
+
 	def.values[nvals].value = NULL;
 	def.values[nvals].label = NULL;
 	/* default_value must match a values[].value string (same pointer is safest). */
@@ -443,7 +550,6 @@ static void build_slot_option(int slot)
 
 void retro_pgm2_cards_reset()
 {
-	s_pgm2_cards_built = false;
 	s_pgm2_card_option_slots = 0;
 	for (int i = 0; i < 4; i++) {
 		clear_slot_state(i);
@@ -451,6 +557,7 @@ void retro_pgm2_cards_reset()
 		s_opt_desc_str[i].clear();
 		s_opt_info_str[i].clear();
 		s_active_file_path[i].clear();
+		s_latest_new_card_path[i].clear();
 		memset(s_last_applied[i], 0, sizeof(s_last_applied[i]));
 	}
 }
@@ -459,37 +566,31 @@ void retro_pgm2_cards_push_options(std::vector<const retro_core_option_v2_defini
 {
 	if ((BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) != HARDWARE_IGS_PGM2)
 		return;
-	/*
-	 * First set_environment() runs before BurnDrvInit(); Pgm2MaxCardSlots is still 0 then.
-	 * Some front-ends only apply the first SET_CORE_OPTIONS_V2 — scan early so file lists
-	 * are present on that call (provisional slot count 4 until driver sets the real count).
-	 */
-	if (!s_pgm2_cards_built && Pgm2MaxCardSlots <= 0)
-		rebuild_scan(true);
-	if (!s_pgm2_cards_built)
-		return;
+
+	rebuild_scan();
 
 	for (int s = 0; s < s_pgm2_card_option_slots && s < 4; s++)
 		vars_systems.push_back(&s_opt_def[s]);
 }
 
-static void rebuild_scan(bool preinit_before_drv_init)
+static void rebuild_scan()
 {
-	s_pgm2_cards_built = false;
 	s_pgm2_card_option_slots = 0;
-	for (int i = 0; i < 4; i++)
+	for (int i = 0; i < 4; i++){
 		clear_slot_state(i);
+		memset(s_last_applied[i], 0, sizeof(s_last_applied[i]));
+	}
 
 	if ((BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) != HARDWARE_IGS_PGM2)
 		return;
 
-	// The value of "slots_eff" is based on "Pgm2MaxCardSlots", which comes from BurnDrvInit().
-	int slots_eff = Pgm2MaxCardSlots;
-	if (slots_eff <= 0 && !preinit_before_drv_init)
-		return;
-
 	const char* drvname = BurnDrvGetTextA(DRV_NAME);
 	if (!drvname || !drvname[0])
+		return;
+
+	// Get slot_count from table, instead of "Pgm2MaxCardSlots", which comes from BurnDrvInit()
+	int slots_eff = get_pgm2_slot_count(drvname);
+	if (slots_eff <= 0)
 		return;
 
 	char dir[MAX_PATH];
@@ -498,9 +599,8 @@ static void rebuild_scan(bool preinit_before_drv_init)
 	path_mkdir(dir);
 
 	log_cb(RETRO_LOG_INFO,
-		"[FBNeo PGM2 cards] scan: save_dir=\"%s\" card_dir=\"%s\" drvname=\"%s\" slots=%d%s\n",
-		g_save_dir, dir, drvname, slots_eff,
-		preinit_before_drv_init ? " (pre-init)" : "");
+		"[FBNeo PGM2 cards] scan: save_dir=\"%s\" card_dir=\"%s\" drvname=\"%s\" slots=%d\n",
+		g_save_dir, dir, drvname, slots_eff);
 
 	for (int s = 0; s < slots_eff && s < 4; s++) {
 		scan_slot_files(s, drvname, dir);
@@ -508,29 +608,27 @@ static void rebuild_scan(bool preinit_before_drv_init)
 	}
 
 	s_pgm2_card_option_slots = slots_eff;
-	s_pgm2_cards_built = true;
 }
 
 void retro_pgm2_cards_refresh_environment()
 {
-	rebuild_scan(false);
-	set_environment();
 	for (int i = 0; i < 4; i++)
 		memset(s_last_applied[i], 0, sizeof(s_last_applied[i]));
 	retro_pgm2_cards_apply_variables();
 }
 
-void retro_pgm2_cards_after_set_environment(void)
-{
-	if (!s_pgm2_cards_built || s_pgm2_card_option_slots <= 0)
-		return;
-	struct retro_core_option_display d;
-	for (int s = 0; s < s_pgm2_card_option_slots && s < 4; s++) {
-		d.key = s_opt_key_str[s].c_str();
-		d.visible = true;
-		environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &d);
-	}
+
+void set_option_applied(int slot, const char* value) {
+    struct retro_variable set_var = {0};
+    char key_apply[48];
+    snprintf(key_apply, sizeof(key_apply), "fbneo-pgm2-ic-p%d", slot + 1);
+    set_var.key = key_apply;
+    set_var.value = value;
+    environ_cb(RETRO_ENVIRONMENT_SET_VARIABLE, &set_var);
+    strncpy(s_last_applied[slot], value, sizeof(s_last_applied[slot]) - 1);
+    s_last_applied[slot][sizeof(s_last_applied[slot]) - 1] = '\0';
 }
+
 
 static void apply_one_slot(int slot)
 {
@@ -541,9 +639,10 @@ static void apply_one_slot(int slot)
 	char key[48];
 	snprintf(key, sizeof(key), "fbneo-pgm2-ic-p%d", slot + 1);
 	var.key = key;
-	if (!environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) || !var.value)
+	if (!environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) || !var.value || var.value[0] == '\0'){
+		memset(s_last_applied[slot], 0, sizeof(s_last_applied[slot]));
 		return;
-
+	}
 	if (strcmp(s_last_applied[slot], var.value) == 0)
 		return;
 	strncpy(s_last_applied[slot], var.value, sizeof(s_last_applied[slot]) - 1);
@@ -552,54 +651,40 @@ static void apply_one_slot(int slot)
 	save_active_slot_file(slot);
 
 	//Empty Slots
-	if (strcmp(var.value, "empty") == 0) {
+	if (strcmp(var.value, PGM2_OPT_EMPTY) == 0) {
 		eject_slot(slot);
-		log_cb(RETRO_LOG_WARN, "[FBNeo PGM2 cards] slot P%d: Use Empty Slot; Eject Card File.\n", slot + 1);
+		log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: Use Empty Slot; Eject Card File.\n", slot + 1);
 		return;
 	}
 
-	// Use Default Memory Card File ,end with '_defalut', Only one exists. If Failed ,fall back to Temporary Card.
-	if (strcmp(var.value, "default") == 0) {
+	// Use Default Memory Card File, end with '_default', Only one exists. If Failed, fall back to Temporary Card.
+	if (strcmp(var.value, PGM2_OPT_DEFAULT) == 0) {
 		if (!load_or_create_default_slot_card(slot)) {
-			if (!build_builtin_card_image(s_pending_card_image, sizeof(s_pending_card_image))) {
-				log_cb(RETRO_LOG_ERROR, "[FBNeo PGM2 cards] slot P%d: failed to build default ROM card template\n", slot + 1);
-				memset(s_last_applied[slot], 0, sizeof(s_last_applied[slot]));
-				return;
-			}
-			s_active_file_path[slot].clear();
-			log_cb(RETRO_LOG_WARN,
-				"[FBNeo PGM2 cards] slot P%d: failed to load/create default card file; using temporary ROM template\n",
-				slot + 1);
-		}
-
-		reinsert_slot_with_pending_image(slot);
-		if (!s_active_file_path[slot].empty()) {
-			log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: using default card file \"%s\"\n",
-				slot + 1, s_active_file_path[slot].c_str());
-		} else {
-			log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: using temporary default ROM template\n",
-				slot + 1);
-		}
-		return;
-	}
-
-	// Use IN-Memory Temporary Card ,No File. Expires on Exit Game.
-	if (strcmp(var.value, "temporary") == 0) {
-		if (!build_builtin_card_image(s_pending_card_image, sizeof(s_pending_card_image))) {
-			log_cb(RETRO_LOG_ERROR, "[FBNeo PGM2 cards] slot P%d: failed to build built-in ROM card template\n", slot + 1);
+			log_cb(RETRO_LOG_ERROR, "[FBNeo PGM2 cards] slot P%d: failed to load/create default card file\n", slot + 1);
 			memset(s_last_applied[slot], 0, sizeof(s_last_applied[slot]));
 			return;
 		}
+		reinsert_slot_with_pending_image(slot);
+		log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: using default card file \"%s\"\n", slot + 1, s_active_file_path[slot].c_str());
+		return;
+	}
 
+	// Use IN-Memory Temporary Card, No File. Expires on Exit Game.
+	if (strcmp(var.value, PGM2_OPT_TEMPORARY) == 0) {
+		if (!build_builtin_card_image(s_pending_card_image, sizeof(s_pending_card_image))) {
+			log_cb(RETRO_LOG_ERROR, "[FBNeo PGM2 cards] slot P%d: failed to use temporary card \n", slot + 1);
+			memset(s_last_applied[slot], 0, sizeof(s_last_applied[slot]));
+			return;
+		}
 		reinsert_slot_with_pending_image(slot);
 		s_active_file_path[slot].clear();
-		log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: using built-in ROM template (option value \"%s\")\n",
+		log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: using temporary card (option value \"%s\")\n",
 			slot + 1, var.value);
 		return;
 	}
 
 	// Create New Memory Card File, end with '_timestamped'. Multiple exist.
-	if (strcmp(var.value, "new") == 0) {
+	if (strcmp(var.value, PGM2_OPT_NEW) == 0) {
 		std::string new_path;
 		if (!create_timestamped_slot_card(slot, new_path)) {
 			log_cb(RETRO_LOG_ERROR, "[FBNeo PGM2 cards] slot P%d: failed to create timestamped card file\n", slot + 1);
@@ -609,41 +694,56 @@ static void apply_one_slot(int slot)
 
 		reinsert_slot_with_pending_image(slot);
 		s_active_file_path[slot] = new_path;
+		s_latest_new_card_path[slot] = s_active_file_path[slot];
 		log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: created timestamped card file \"%s\"\n",
 			slot + 1, new_path.c_str());
 
-		rebuild_scan(false);
-		set_environment();
+		// notifying frontend to select 'latest_new_card_file'
+		set_option_applied(slot, PGM2_OPT_LATEST_NEW_FILE);
+		log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: new card created, notifying frontend to select '%s'\n", slot + 1, PGM2_OPT_LATEST_NEW_FILE);
 
-		int new_choice = find_slot_file_choice(slot, new_path.c_str());
-		if (new_choice > 0) {
-			struct retro_variable set_var = {0};
-			char key_apply[48];
-			char choice_buf[12];
-			snprintf(key_apply, sizeof(key_apply), "fbneo-pgm2-ic-p%d", slot + 1);
-			snprintf(choice_buf, sizeof(choice_buf), "%d", new_choice);
-			set_var.key = key_apply;
-			set_var.value = choice_buf;
-			environ_cb(RETRO_ENVIRONMENT_SET_VARIABLE, &set_var);
-			strncpy(s_last_applied[slot], choice_buf, sizeof(s_last_applied[slot]) - 1);
-			s_last_applied[slot][sizeof(s_last_applied[slot]) - 1] = '\0';
+		return;
+	}
+
+	//Use latest New Card File ,Format: <drvname>_pN_YYYYMMDD_HHMMSS.pg2
+	if (strcmp(var.value, PGM2_OPT_LATEST_NEW_FILE) == 0) {
+		if (!s_latest_new_card_path[slot].empty()) {
+			if (read_raw_card_file(s_latest_new_card_path[slot].c_str(), s_pending_card_image, sizeof(s_pending_card_image))) {
+				reinsert_slot_with_pending_image(slot);
+				s_active_file_path[slot] = s_latest_new_card_path[slot];
+				log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: loaded card file from latest_new_card_file \"%s\"\n", slot + 1, s_latest_new_card_path[slot].c_str());
+			} else {
+				memset(s_last_applied[slot], 0, sizeof(s_last_applied[slot]));
+				log_cb(RETRO_LOG_ERROR, "[FBNeo PGM2 cards] slot P%d: latest_new_card_file: failed to read \"%s\".\n", slot + 1, s_latest_new_card_path[slot].c_str());
+			}
 		} else {
-			memset(s_last_applied[slot], 0, sizeof(s_last_applied[slot]));
+			set_option_applied(slot, PGM2_OPT_EMPTY);
+			log_cb(RETRO_LOG_INFO, "[FBNeo PGM2 cards] slot P%d: latest_new_card_file: no timestamped card found. Use empty slot.\n", slot + 1);
 		}
 		return;
 	}
 
-	//Choose memory card from 'g_save_dir'/fbneo/pgm2_memcards/. Default Card excluded.
-	int choice = atoi(var.value);
-	int fi = choice - 1;
-	if (fi < 0 || fi >= (int)s_file_paths[slot].size()) {
+	//Choose memory card file from file list('g_save_dir'/fbneo/pgm2_memcards/). Default Card excluded.
+	const char* target_file = var.value;
+	int fi = -1;
+	for (size_t i = 0; i < s_file_paths[slot].size(); i++) {
+		if (strcmp(s_file_paths[slot][i].c_str(), target_file) == 0) {
+			fi = (int)i;
+			break;
+		}
+	}
+	/* This branch is rarely triggered.
+	   When a selected file is deleted, its option is not regenerated on next load.
+	   RetroArch automatically falls back to the first option (the default) for invalid keys,
+	   so the environment variable is reset before reaching this code.
+	*/
+	if (fi < 0) {
+		set_option_applied(slot, PGM2_OPT_EMPTY);
 		log_cb(RETRO_LOG_WARN,
-			"[FBNeo PGM2 cards] slot P%d: invalid card index %d (have %u files); ignoring\n",
-			slot + 1, choice, (unsigned)s_file_paths[slot].size());
-		memset(s_last_applied[slot], 0, sizeof(s_last_applied[slot]));
+			"[FBNeo PGM2 cards] slot P%d: card file \"%s\" not found in scan list. Use empty slot.\n",
+			slot + 1, target_file);
 		return;
 	}
-
 	if (read_raw_card_file(s_file_paths[slot][fi].c_str(), s_pending_card_image, sizeof(s_pending_card_image))) {
 		reinsert_slot_with_pending_image(slot);
 		s_active_file_path[slot] = s_file_paths[slot][fi];
@@ -669,10 +769,10 @@ void retro_pgm2_cards_apply_variables()
 {
 	if ((BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) != HARDWARE_IGS_PGM2)
 		return;
-	if (!s_pgm2_cards_built)
-		return;
 
-	int n = (Pgm2MaxCardSlots > 0) ? Pgm2MaxCardSlots : s_pgm2_card_option_slots;
+	INT32 n = get_pgm2_slot_count(BurnDrvGetTextA(DRV_NAME));
+	if (n <= 0) n = s_pgm2_card_option_slots;
+
 	for (int s = 0; s < n && s < 4; s++)
 		apply_one_slot(s);
 }

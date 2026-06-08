@@ -444,6 +444,15 @@
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="bcastle" sourcefile="sms/d_sms.cpp">
+		<comment>Homebrew</comment>
+		<description>Black Castle (HB, 20240523)</description>
+		<year>2023-24</year>
+		<manufacturer>toxa</manufacturer>
+		<rom name="Black Castle 20240523 (2023-24)(toxa).gg" size="65536" crc="ee80f563"/>
+		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="bonkersp09" cloneof="bonkers" romof="bonkers" sourcefile="sms/d_sms.cpp">
 		<comment>Prototype</comment>
 		<description>Bonkers Wax Up! (Prototype, 19941126)</description>
@@ -3428,6 +3437,15 @@
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="psychicwpt" cloneof="psychicw" romof="psychicw" sourcefile="sms/d_sms.cpp">
+		<comment>Hack</comment>
+		<description>Psychic World (Hack, Portuguese v1.08)</description>
+		<year>2019</year>
+		<manufacturer>Antigeno</manufacturer>
+		<rom name="Psychic World T-Por v1.08 (2019)(Antigeno).gg" size="131072" crc="e8cf96ad"/>
+		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="psychicwj" cloneof="psychicw" romof="psychicw" sourcefile="sms/d_sms.cpp">
 		<description>Psychic World (Japan)</description>
 		<year>1991</year>
@@ -4555,6 +4573,15 @@
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="swordworkm" sourcefile="sms/d_sms.cpp">
+		<comment>Homebrew</comment>
+		<description>SwordWork Micro (HB)</description>
+		<year>2026</year>
+		<manufacturer>Inufuto</manufacturer>
+		<rom name="SwordWork Micro (2026)(Inufuto).gg" size="16384" crc="b45207a9"/>
+		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="sylvane" cloneof="sylvan" romof="sylvan" sourcefile="sms/d_sms.cpp">
 		<comment>Hack</comment>
 		<description>Sylvan Tale (Hack, English)</description>
@@ -4673,6 +4700,15 @@
 		<year>1994</year>
 		<manufacturer>GameTek</manufacturer>
 		<rom name="Tarzan - Lord of the Jungle (Euro)(1994)(GameTek).gg" size="262144" crc="ef3afe8b"/>
+		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="tarzanpt" cloneof="tarzan" romof="tarzan" sourcefile="sms/d_sms.cpp">
+		<comment>Hack</comment>
+		<description>Tarzan: Lord of the Jungle (Hack, Portuguese v1.03)</description>
+		<year>2026</year>
+		<manufacturer>Antigeno</manufacturer>
+		<rom name="Tarzan - Lord of the Jungle T-Por v1.03 (2026)(Antigeno).gg" size="262144" crc="88e1a294"/>
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -4870,10 +4906,10 @@
 	</game>
 	<game name="vexed" sourcefile="sms/d_sms.cpp">
 		<comment>Homebrew</comment>
-		<description>Vexed (HB, v1.08)</description>
-		<year>2023</year>
+		<description>Vexed (HB, v1.15)</description>
+		<year>2023-24</year>
 		<manufacturer>Under4Mhz</manufacturer>
-		<rom name="Vexed v1.08 (2023)(Under4Mhz).gg" size="32768" crc="36e8fa84"/>
+		<rom name="Vexed v1.15 (2023-24)(Under4Mhz).gg" size="32768" crc="3c456bbf"/>
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -4980,6 +5016,15 @@
 		<year>1993</year>
 		<manufacturer>Virgin Interactive</manufacturer>
 		<rom name="Wolfchild (Euro)(1993)(Virgin Interactive).gg" size="262144" crc="840a8f8e"/>
+		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="wolfenstein" sourcefile="sms/d_sms.cpp">
+		<comment>Homebrew</comment>
+		<description>Wolfenstein (HB, v1.16)</description>
+		<year>2023</year>
+		<manufacturer>Under4Mhz</manufacturer>
+		<rom name="Wolfenstein v1.16 (2023)(Under4Mhz).gg" size="524288" crc="c2760884"/>
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>

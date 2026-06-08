@@ -133,12 +133,48 @@
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
-	<game name="barbarian" sourcefile="pce/d_pce.cpp">
+	<game name="barbarianami" sourcefile="pce/d_pce.cpp">
 		<comment>Homebrew</comment>
-		<description>Barbarian (HB)</description>
+		<description>Barbarian: The Ultimate Warrior - Amiga (HB)</description>
 		<year>2017</year>
 		<manufacturer>F.L</manufacturer>
-		<rom name="Barbarian (2017)(F.L).pce" size="754176" crc="42d3c3f9"/>
+		<rom name="Barbarian - The Ultimate Warrior - Amiga (2017)(F.L).pce" size="754176" crc="42d3c3f9"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="barbariancpc" cloneof="barbarianami" romof="barbarianami" sourcefile="pce/d_pce.cpp">
+		<comment>Homebrew</comment>
+		<description>Barbarian: The Ultimate Warrior - Amstrad CPC (HB)</description>
+		<year>2017</year>
+		<manufacturer>F.L</manufacturer>
+		<rom name="Barbarian - The Ultimate Warrior - Amstrad CPC (2017)(F.L).pce" size="729600" crc="7e8670d1"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="barbarianst" cloneof="barbarianami" romof="barbarianami" sourcefile="pce/d_pce.cpp">
+		<comment>Homebrew</comment>
+		<description>Barbarian: The Ultimate Warrior - Atari ST (HB)</description>
+		<year>2017</year>
+		<manufacturer>F.L</manufacturer>
+		<rom name="Barbarian - The Ultimate Warrior - Atari ST (2017)(F.L).pce" size="729600" crc="b9424bb0"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="barbarianc64" cloneof="barbarianami" romof="barbarianami" sourcefile="pce/d_pce.cpp">
+		<comment>Homebrew</comment>
+		<description>Barbarian: The Ultimate Warrior - C64 (HB)</description>
+		<year>2017</year>
+		<manufacturer>F.L</manufacturer>
+		<rom name="Barbarian - The Ultimate Warrior - C64 (2017)(F.L).pce" size="729600" crc="c6c6f05b"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="barbarianzxs" cloneof="barbarianami" romof="barbarianami" sourcefile="pce/d_pce.cpp">
+		<comment>Homebrew</comment>
+		<description>Barbarian: The Ultimate Warrior - ZX Spectrum (HB)</description>
+		<year>2017</year>
+		<manufacturer>F.L</manufacturer>
+		<rom name="Barbarian - The Ultimate Warrior - ZX Spectrum (2017)(F.L).pce" size="893440" crc="affadae5"/>
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -569,6 +605,24 @@
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="barbarianap2" cloneof="barbarianami" romof="barbarianami" sourcefile="pce/d_pce.cpp">
+		<comment>Homebrew</comment>
+		<description>Death Sword - Apple II (HB)</description>
+		<year>2017</year>
+		<manufacturer>F.L</manufacturer>
+		<rom name="Death Sword - Apple II (2017)(F.L).pce" size="803328" crc="221793a6"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="barbarianpc" cloneof="barbarianami" romof="barbarianami" sourcefile="pce/d_pce.cpp">
+		<comment>Homebrew</comment>
+		<description>Death Sword - PC CGA (HB)</description>
+		<year>2017</year>
+		<manufacturer>F.L</manufacturer>
+		<rom name="Death Sword - PC CGA (2017)(F.L).pce" size="803328" crc="aae0a16e"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="deepblue" sourcefile="pce/d_pce.cpp">
 		<description>Deep Blue: Kaitei Shinwa (Japan)</description>
 		<year>1989</year>
@@ -599,6 +653,15 @@
 		<year>2011</year>
 		<manufacturer>Spinner 8 &amp; friends</manufacturer>
 		<rom name="Die Hard T-Eng (2011)(Spinner 8 &amp; friends).pce" size="524288" crc="91be0dec"/>
+		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="diehardtp" cloneof="diehard" romof="diehard" sourcefile="pce/d_pce.cpp">
+		<comment>Hack</comment>
+		<description>Die Hard (Hack, Portuguese)</description>
+		<year>2018</year>
+		<manufacturer>Patryckpo</manufacturer>
+		<rom name="Die Hard T-Por (2018)(Patryckpo).pce" size="524288" crc="6634dc79"/>
 		<video type="raster" orientation="horizontal" width="1024" height="240" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
