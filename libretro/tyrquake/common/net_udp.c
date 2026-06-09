@@ -130,7 +130,11 @@ UDP_Init(void)
    if (COM_CheckParm("-noudp"))
       return -1;
 
-   network_init();
+   if (!network_init())
+   {
+      Con_Printf("%s: network_init failed, UDP disabled\n", __func__);
+      return -1;
+   }
 
    /* determine my name & address, default to loopback */
    myAddr.ip.l = htonl(INADDR_LOOPBACK);
@@ -148,9 +152,16 @@ UDP_Init(void)
    } else {
       buff[MAXHOSTNAMELEN - 1] = 0;
       local = gethostbyname(buff);
-      if (!local) {
-         Con_Printf("%s: WARNING: gethostbyname failed\n", __func__);
-      } else if (local->h_addrtype != AF_INET) {
+       if (!local) {
+          Con_Printf("%s: WARNING: gethostbyname failed\n", __func__);
+#if defined(_XBOX360)
+          {
+             XNADDR xnAddr;
+             if (XNetGetTitleXnAddr(&xnAddr) != XNET_GET_XNADDR_NONE)
+                myAddr.ip.l = xnAddr.ina.s_addr;
+          }
+#endif
+       } else if (local->h_addrtype != AF_INET) {
          Con_Printf("%s: address from gethostbyname not IPv4\n", __func__);
       } else {
          struct in_addr *inaddr = (struct in_addr *)local->h_addr_list[0];
@@ -238,6 +249,9 @@ UDP_Listen(qboolean state)
 	    return;
 	if ((net_acceptsocket = UDP_OpenSocket(net_hostport)) == -1)
 	    Sys_Error("%s: Unable to open accept socket", __func__);
+#if defined(_XBOX360)
+	{ int bcast = 1; setsockopt(net_acceptsocket, SOL_SOCKET, SO_BROADCAST, (const char*)&bcast, sizeof(bcast)); }
+#endif
 	return;
     }
     /* disable listening */
@@ -256,6 +270,11 @@ UDP_OpenSocket(int port)
 
    if ((newsocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
       return -1;
+#if defined(_XBOX360)
+   { DWORD bypass = 1;
+     setsockopt(newsocket, SOL_SOCKET, 0x5801, (const char*)&bypass, sizeof(bypass));
+   }
+#endif
    socket_nonblock(newsocket);
 
    address.sin_family = AF_INET;
@@ -270,7 +289,11 @@ UDP_OpenSocket(int port)
    return newsocket;
 
 ErrorReturn:
+#if defined(_XBOX360) || defined(_WIN32)
+   closesocket(newsocket);
+#else
    close(newsocket);
+#endif
    return -1;
 }
 
@@ -278,25 +301,33 @@ ErrorReturn:
 int
 UDP_CloseSocket(int socket)
 {
+    if (socket < 0)
+       return 0;
     if (socket == net_broadcastsocket)
 	net_broadcastsocket = 0;
+#if defined(_XBOX360) || defined(_WIN32)
+    return closesocket(socket);
+#else
     return close(socket);
+#endif
 }
 
 
 int
 UDP_CheckNewConnections(void)
 {
-   struct sockaddr_in from;
-   socklen_t fromlen;
-   char buff[1];
+    fd_set fds;
+    struct timeval tv = {0, 0};
 
-   if (net_acceptsocket == -1)
-      return -1;
+    if (net_acceptsocket == -1)
+       return -1;
 
-   /* quietly absorb empty packets */
-   if (recvfrom (net_acceptsocket, buff, 0, 0, (struct sockaddr *)&from, &fromlen) >= 0)
-      return net_acceptsocket;
+    FD_ZERO(&fds);
+    FD_SET(net_acceptsocket, &fds);
+
+    if (select(net_acceptsocket + 1, &fds, NULL, NULL, &tv) > 0)
+       return net_acceptsocket;
+
    return -1;
 }
 

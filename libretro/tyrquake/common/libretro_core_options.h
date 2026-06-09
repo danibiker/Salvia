@@ -105,6 +105,8 @@ struct retro_core_option_definition option_defs_us[] = {
       "400x240"
 #elif defined(DINGUX)
       "320x240"
+#elif defined(_XBOX360)
+      "640x480"
 #else
       "320x200"
 #endif
@@ -184,7 +186,7 @@ struct retro_core_option_definition option_defs_us[] = {
          { "enabled",   "Enabled" },
          { NULL, NULL },
       },
-      "disabled"
+      "enabled"
    },
    {
       "tyrquake_analog_deadzone",
@@ -200,7 +202,7 @@ struct retro_core_option_definition option_defs_us[] = {
          { "30",  NULL },
          { NULL, NULL },
       },
-      "15"
+      "25"
    },
    { NULL, NULL, NULL, {{0}}, NULL },
 };

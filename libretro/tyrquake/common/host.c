@@ -712,6 +712,7 @@ Host_Init(quakeparms_t *parms)
        return false;
 
     Key_Init();
+    Draw_CacheResetMenuPics();
     Con_Init();
     M_Init();
     PR_Init();
@@ -834,12 +835,20 @@ Host_Shutdown(void)
     S_Shutdown();
     IN_Shutdown();
 
-    if (cls.state != ca_dedicated)
+    if (cls.state != ca_dedicated) {
 	VID_Shutdown();
+	SCR_Shutdown();
+    }
 
     Mod_Shutdown();
+    PR_Shutdown();
     Cmd_Shutdown();
     Cvar_Shutdown();
 
+    con_initialized = false;
+    scr_disabled_for_loading = false;
+    scr_disabled_time = 0;
+    host_initialized = false;
+    cls.demonum = 0;
     isdown = false;
 }

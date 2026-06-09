@@ -31,6 +31,9 @@
 #include <features/features_cpu.h>
 
 #include <net/net_socket.h>
+#ifdef _XBOX360
+#include <winsockx.h>
+#endif
 
 int socket_init(void **address, uint16_t port, const char *server,
       enum socket_type type, int family)
@@ -764,6 +767,11 @@ bool socket_connect_with_timeout(int fd, void *data, int timeout)
     * equivalent to errno) to 16. */
    if ((connect(fd, addr->ai_addr, addr->ai_addrlen) == -1)
          && socketlasterr() != SO_EISCONN)
+      return false;
+#elif defined(_XBOX360)
+   /* winsockx.h does not define SO_ERROR; check connect() result directly */
+   if ((connect(fd, addr->ai_addr, addr->ai_addrlen) == SOCKET_ERROR)
+         && WSAGetLastError() != WSAEISCONN)
       return false;
 #else
    {

@@ -726,6 +726,9 @@ Key_Init(void)
 {
     int i;
 
+    for (i = 0; i < K_LAST; i++)
+	keybindings[i] = NULL;
+
     for (i = 0; i < 32; i++) {
 	key_lines[i][0] = ']';
 	key_lines[i][1] = 0;

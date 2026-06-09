@@ -75,6 +75,17 @@ static cvar_t cmdline = { "cmdline", "0", false, true };
 static qboolean com_modified;		/* set true if using non-id files */
 static int static_registered = 1;	/* only for startup check, then set */
 
+#if defined(_WIN32) && defined(_XBOX)
+static void COM_SanitizePath(char *path)
+{
+	for (; *path; path++)
+	{
+		if (*path == '/')
+			*path = '\\';
+	}
+}
+#endif
+
 static void COM_InitFilesystem(void);
 static void COM_Path_f(void);
 static void *SZ_GetSpace(sizebuf_t *buf, int length);
@@ -1197,7 +1208,9 @@ void COM_WriteFile(const char *filename, const void *data, int len)
 
    if (COM_JoinPath(name, sizeof(name), com_gamedir, '/', filename) < 0)
       Sys_Error("Error opening %s: path too long", filename);
-
+#if defined(_WIN32) && defined(_XBOX)
+   COM_SanitizePath(name);
+#endif
    f = rfopen(name, "wb");
    if (!f)
    {
@@ -1260,14 +1273,17 @@ int COM_FOpenFile(const char *filename, RFILE **file)
             if (strchr(filename, '/') || strchr(filename, '\\'))
                continue;
          }
-         if (COM_JoinPath(path, sizeof(path), search->filename, '/', filename) < 0)
-            continue;
-         if (!path_is_valid(path))
-            continue;
+          if (COM_JoinPath(path, sizeof(path), search->filename, '/', filename) < 0)
+             continue;
+#if defined(_WIN32) && defined(_XBOX)
+          COM_SanitizePath(path);
+#endif
+          if (!path_is_valid(path))
+             continue;
 
-         *file        = rfopen(path, "rb");
-         com_filesize = COM_filelength(*file);
-         return com_filesize;
+          *file        = rfopen(path, "rb");
+          com_filesize = COM_filelength(*file);
+          return com_filesize;
       }
    }
 
@@ -1316,12 +1332,15 @@ qboolean COM_FileExists (const char *filename)
             if (strchr(filename, '/') || strchr(filename, '\\'))
                continue;
          }
-         if (COM_JoinPath(path, sizeof(path), search->filename, '/', filename) < 0)
-            continue;
-         if (!path_is_valid(path))
-            continue;
+          if (COM_JoinPath(path, sizeof(path), search->filename, '/', filename) < 0)
+             continue;
+#if defined(_WIN32) && defined(_XBOX)
+          COM_SanitizePath(path);
+#endif
+          if (!path_is_valid(path))
+             continue;
 
-         return true;
+          return true;
       }
    }
 
@@ -1427,9 +1446,12 @@ void COM_ScanDir(struct stree_root *root, const char *path, const char *pfx,
          COM_ScanDirPak(root, search->pack, path, pfx, ext, stripext);
       else
       {
-         if (COM_JoinPath(fullpath, MAX_OSPATH, search->filename, '/', path) < 0)
-            continue;
-         dir = retro_opendir(fullpath);
+          if (COM_JoinPath(fullpath, MAX_OSPATH, search->filename, '/', path) < 0)
+             continue;
+#if defined(_WIN32) && defined(_XBOX)
+          COM_SanitizePath(fullpath);
+#endif
+          dir = retro_opendir(fullpath);
 
          if (dir)
          {
@@ -1705,6 +1727,9 @@ static void COM_InitFilesystem(void)
 {
    int i;
    searchpath_t *search;
+
+   /* Clear stale search paths from previous session */
+   com_searchpaths = NULL;
 
    /* Set save directory */
    strlcpy(com_savedir, host_parms.savedir, sizeof(com_savedir));

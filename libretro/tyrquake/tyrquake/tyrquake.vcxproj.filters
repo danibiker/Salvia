@@ -1,0 +1,512 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Source Files\libretro">
+      <UniqueIdentifier>{82f2b9e7-198e-4b9b-8145-cb5d48e8b54e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\net">
+      <UniqueIdentifier>{5da037c0-33e3-4c0c-8f16-e444c97facf0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\flac">
+      <UniqueIdentifier>{394f863b-78cd-4c25-af93-cb5e09e71fd0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\vorbis">
+      <UniqueIdentifier>{c6467013-d549-4b70-aa1c-c4ca3f7fde30}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\ogg">
+      <UniqueIdentifier>{847b80a8-7c6e-4e60-ba2a-159fd068774e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\common">
+      <UniqueIdentifier>{8c59eff8-9f34-4054-9679-9291cc8fb337}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\vorbis">
+      <UniqueIdentifier>{71bcf0e4-b9de-4248-a293-e3e19827b166}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\net">
+      <UniqueIdentifier>{1d0dcf1d-a7a2-48f1-a9c9-89b03bc66100}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\libretro-common\file\retro_dirent.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\encodings\encoding_utf.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\string\stdstring.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\streams\file_stream.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\streams\file_stream_transforms.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\file\file_path.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\file\file_path_io.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\features\features_cpu.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_posix_string.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_snprintf.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_strcasestr.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_strl.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\fopen_utf8.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\time\rtime.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\net_none.c">
+      <Filter>Source Files\net</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libFLAC\bitreader.c">
+      <Filter>Source Files\flac</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libFLAC\crc.c">
+      <Filter>Source Files\flac</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libFLAC\fixed.c">
+      <Filter>Source Files\flac</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libFLAC\float.c">
+      <Filter>Source Files\flac</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libFLAC\format.c">
+      <Filter>Source Files\flac</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libFLAC\lpc.c">
+      <Filter>Source Files\flac</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libFLAC\md5.c">
+      <Filter>Source Files\flac</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libFLAC\memory.c">
+      <Filter>Source Files\flac</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libFLAC\ogg_decoder_aspect.c">
+      <Filter>Source Files\flac</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libFLAC\ogg_mapping.c">
+      <Filter>Source Files\flac</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libFLAC\stream_decoder.c">
+      <Filter>Source Files\flac</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\bitrate.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\block.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\codebook.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\envelope.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\floor0.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\floor1.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\info.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\lpc.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\lsp.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\mapping0.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\mdct.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\psy.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\registry.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\res0.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\sharedbook.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\smallft.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\synthesis.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\vorbisfile.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\window.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libogg\src\bitwise.c">
+      <Filter>Source Files\ogg</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libogg\src\framing.c">
+      <Filter>Source Files\ogg</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\alias_model.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\zone.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\backend_sw.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\backend_vulkan.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\bgmusic.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\cd_common.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\chase.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\cl_demo.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\cl_input.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\cl_main.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\cl_parse.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\cl_tent.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\cmd.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\common.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\console.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\crc.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\cvar.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\d_edge.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\d_init.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\d_modech.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\d_part.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\d_polyse.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\d_scan.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\d_sky.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\d_sprite.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\d_surf.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\d_vars.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\draw.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\host.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\host_cmd.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\keys.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\mathlib.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\menu.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\model.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\net_common.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\net_loop.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\net_main.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\perf_timing.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\pr_cmds.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\pr_edict.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\pr_exec.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_aclip.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_alias.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_bsp.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_draw.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_edge.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_efrag.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_light.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_main.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_misc.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_model.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_part.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_sky.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_sprite.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_subdiv.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_surf.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\r_vars.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\rb_tree.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\rhi.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\sbar.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\screen.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\shell.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_codec.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_dma.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_flac.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_mem.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_mikmod.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_mix.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_modplug.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_mp3.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_mpg123.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_opus.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_umx.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_vorbis.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_wave.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\sprite_model.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\surf_atlas.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\sv_main.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\sv_move.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\sv_phys.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\sv_user.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\view.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\wad.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\world.c">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\libretro.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\net_bsd.c">
+      <Filter>Source Files\net</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\net_dgrm.c">
+      <Filter>Source Files\net</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\net_udp.c">
+      <Filter>Source Files\net</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\net\net_compat.c">
+      <Filter>Source Files\net</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\net\net_socket.c">
+      <Filter>Source Files\net</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\deps\libvorbis\lib\backends.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\bitrate.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\codebook.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\codec_internal.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\envelope.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\highlevel.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\lpc.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\lsp.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\masking.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\mdct.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\misc.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\os.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\psy.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\registry.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\scales.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\smallft.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libvorbis\lib\window.h">
+      <Filter>Header Files\vorbis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libretro-common\include\net\net_compat.h">
+      <Filter>Header Files\net</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libretro-common\include\net\net_socket.h">
+      <Filter>Header Files\net</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

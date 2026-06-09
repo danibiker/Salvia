@@ -40,7 +40,18 @@
 #include "share/compat.h"
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1400)
+#ifdef _XBOX
+#include <ppcintrinsics.h>
+
+	static __inline unsigned char _BitScanReverse(unsigned long* index, unsigned long mask) {
+		if (mask == 0) return 0;
+		*index = 31 - _CountLeadingZeros(mask);
+		return 1;
+	}
+
+#else
 #include <intrin.h> /* for _BitScanReverse* */
+#endif
 #endif
 
 #include <retro_inline.h>

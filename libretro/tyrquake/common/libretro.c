@@ -18,6 +18,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
+#include <stdarg.h>
 #include "compat/strl.h"
 #include "libretro.h"
 #include "libretro_core_options.h"
@@ -366,7 +367,16 @@ retro_environment_t environ_cb;
 static retro_input_poll_t poll_cb;
 static retro_input_state_t input_cb;
 
-void Sys_Printf(const char *fmt, ...) { }
+void Sys_Printf(const char *fmt, ...)
+{
+   //char buf[4096];
+   //va_list args;
+   //va_start(args, fmt);
+   //vsnprintf(buf, sizeof(buf), fmt, args);
+   //va_end(args);
+   //if (log_cb)
+   //   log_cb(RETRO_LOG_INFO, "%s", buf);
+}
 void Sys_Quit(void) { Host_Shutdown(); }
 
 void Sys_Init(void)
@@ -1514,10 +1524,18 @@ void VID_SetPalette(unsigned char *palette)
    for (i = 0, j = 0; i < 256; i++, j += 3)
    {
       *pal16++ = MAKECOLOR(palette[j], palette[j+1], palette[j+2]);
+#if defined(MSB_FIRST)
+      /* Store so that memory bytes are [r, g, b, FF] */
+      *pal32++ = ((unsigned)palette[j+0] << 24)
+              | ((unsigned)palette[j+1] << 16)
+              | ((unsigned)palette[j+2] <<  8)
+              | 0x000000FFu;
+#else
       *pal32++ = 0xFF000000u
               | ((unsigned)palette[j+2] << 16)
               | ((unsigned)palette[j+1] <<  8)
               | ((unsigned)palette[j+0] <<  0);
+#endif
    }
 }
 
@@ -1541,14 +1559,23 @@ void	VID_SetPalette2 (unsigned char *palette)
 		if (g>255) g = 255;
 		if (b>255) b = 255;
 		pal += 3;
+#if defined(MSB_FIRST)
+		/* Store so that memory bytes are [r, g, b, FF] */
+		v = (r<<24) + (g<<16) + (b<<8) + 255;
+#else
 		v = (255<<24) + (r<<0) + (g<<8) + (b<<16);
+#endif
 		*table++ = v;
 		
 	}
 
 	
-	d_8to24table[255] &= 0xffffff;	/* 255 is transparent */
-	d_8to24table[0] &= 0x000000;	/* black is black */
+#if defined(MSB_FIRST)
+	d_8to24table[255] &= 0xFFFFFF00u;	/* clear alpha byte (byte 0) */
+#else
+	d_8to24table[255] &= 0x00FFFFFFu;	/* clear alpha byte (byte 3) */
+#endif
+	d_8to24table[0] = 0;			/* black is black */
 
 }
 
@@ -1604,9 +1631,11 @@ void VID_Init(unsigned char *palette)
    finalimage = (short*)malloc(fb_pixels * sizeof(short));
    surfcache  = (byte*)malloc(SURFCACHE_SIZE);
 
-   if (!vid_buffer || !zbuffer || !finalimage || !surfcache)
-      Sys_Error("VID_Init: failed to allocate framebuffer "
-                "(width=%u height=%u)", width, height);
+    if (!vid_buffer || !zbuffer || !finalimage || !surfcache) {
+       Sys_Error("VID_Init: failed to allocate framebuffer "
+                 "(width=%u height=%u)", width, height);
+       return;
+    }
 
     vid.width = width;
     vid.height = height;
@@ -1636,10 +1665,12 @@ void VID_Shutdown(void)
       free(finalimage);
    if (surfcache)
       free(surfcache);
-   vid_buffer = NULL;
-   zbuffer    = NULL;
-   finalimage = NULL;
-   surfcache  = NULL;
+    vid_buffer = NULL;
+    zbuffer    = NULL;
+    finalimage = NULL;
+    surfcache  = NULL;
+    vid.buffer = NULL;
+    vid.conbuffer = NULL;
 }
 
 void VID_Update(vrect_t *rects)

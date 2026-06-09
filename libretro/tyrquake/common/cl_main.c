@@ -269,9 +269,11 @@ void CL_Disconnect(void)
          Host_ShutdownServer(false);
    }
 
-   cls.demoplayback = false;
-   cls.timedemo = false;
-   cls.signon = 0;
+    cls.demoplayback = false;
+    cls.timedemo = false;
+    cls.signon = 0;
+
+    cl.worldmodel = NULL;
 }
 
 void CL_Disconnect_f(void)

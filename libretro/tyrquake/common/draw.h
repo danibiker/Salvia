@@ -30,6 +30,7 @@ extern const qpic_t *draw_disc;	/* also used on sbar */
 extern byte *draw_chars;
 
 void Draw_Init(void);
+void Draw_CacheResetMenuPics(void);
 void Draw_Character(int x, int y, int num);
 void Draw_Pic(int x, int y, const qpic_t *pic);
 void Draw_TransPic(int x, int y, const qpic_t *pic);

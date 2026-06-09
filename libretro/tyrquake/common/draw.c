@@ -199,8 +199,17 @@ static void Draw_Generate18BPPTable (void)
 	}
 }
 
+void Draw_CacheResetMenuPics(void)
+{
+    int i;
+    for (i = 0; i < MAX_CACHED_PICS; i++)
+        menu_cachepics[i].cache.data = NULL;
+    menu_numcachepics = 0;
+}
+
 void Draw_Init(void)
 {
+    Draw_CacheResetMenuPics();
     draw_chars = (byte*)W_GetLumpName("conchars");
     draw_disc = (const qpic_t*)W_GetLumpName("disc");
     draw_backtile = (const qpic_t*)W_GetLumpName("backtile");

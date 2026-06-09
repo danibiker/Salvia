@@ -20,7 +20,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 extern int m_state;
 
-#if defined(_WIN32)
+#ifdef _XBOX360
+#include <xtl.h>
+#elif defined(_WIN32)
 #include <winsock2.h>
 #include <windows.h>
 #else
@@ -210,6 +212,13 @@ static int
 ReSendMessage(qsocket_t *sock)
 {
     sock->sendNext = false;
+    /* ReSendMessage increments sendSequence via SendPacket.
+     * Without resetting to ackSequence here, a lost DATA
+     * fragment gets resent with a fresh sequence number that
+     * the receiver will reject (strict sequence matching),
+     * so the reliable message can never complete and the
+     * receiver's buffer accumulates fragments until overflow. */
+    sock->sendSequence = sock->ackSequence;
 
     return SendPacket(sock);
 }
@@ -1357,7 +1366,8 @@ _Datagram_Connect(const char *host, net_landriver_t *driver)
     snprintf(m_return_reason, sizeof(m_return_reason), "%s", reason);
     NET_FreeQSocket(sock);
   ErrorReturn2:
-    driver->CloseSocket(newsock);
+    if (newsock != -1)
+        driver->CloseSocket(newsock);
     if (m_return_onerror) {
 	key_dest = key_menu;
 	m_state = m_return_state;

@@ -525,6 +525,10 @@ Cmd_Shutdown(void)
     memset(&cmdalias_tree, 0, sizeof(cmdalias_tree));
     cmd_tree.minlen      = (unsigned int)-1;
     cmdalias_tree.minlen = (unsigned int)-1;
+
+    /* Z_Free in the next Cmd_TokenizeString would try to free
+     * pointers that lived in a now-destroyed zone heap. */
+    cmd_argc = 0;
 }
 
 /*

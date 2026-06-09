@@ -1,0 +1,365 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Xbox 360">
+      <Configuration>Debug</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360">
+      <Configuration>Release</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\common\alias_model.c" />
+    <ClCompile Include="..\common\backend_sw.c" />
+    <ClCompile Include="..\common\backend_vulkan.c" />
+    <ClCompile Include="..\common\bgmusic.c" />
+    <ClCompile Include="..\common\cd_common.c" />
+    <ClCompile Include="..\common\chase.c" />
+    <ClCompile Include="..\common\cl_demo.c" />
+    <ClCompile Include="..\common\cl_input.c" />
+    <ClCompile Include="..\common\cl_main.c" />
+    <ClCompile Include="..\common\cl_parse.c" />
+    <ClCompile Include="..\common\cl_tent.c" />
+    <ClCompile Include="..\common\cmd.c" />
+    <ClCompile Include="..\common\common.c" />
+    <ClCompile Include="..\common\console.c" />
+    <ClCompile Include="..\common\crc.c" />
+    <ClCompile Include="..\common\cvar.c" />
+    <ClCompile Include="..\common\draw.c" />
+    <ClCompile Include="..\common\d_edge.c" />
+    <ClCompile Include="..\common\d_init.c" />
+    <ClCompile Include="..\common\d_modech.c" />
+    <ClCompile Include="..\common\d_part.c" />
+    <ClCompile Include="..\common\d_polyse.c" />
+    <ClCompile Include="..\common\d_scan.c" />
+    <ClCompile Include="..\common\d_sky.c" />
+    <ClCompile Include="..\common\d_sprite.c" />
+    <ClCompile Include="..\common\d_surf.c" />
+    <ClCompile Include="..\common\d_vars.c" />
+    <ClCompile Include="..\common\host.c" />
+    <ClCompile Include="..\common\host_cmd.c" />
+    <ClCompile Include="..\common\keys.c" />
+    <ClCompile Include="..\common\libretro.c" />
+    <ClCompile Include="..\common\mathlib.c" />
+    <ClCompile Include="..\common\menu.c" />
+    <ClCompile Include="..\common\model.c" />
+    <ClCompile Include="..\common\net_bsd.c" />
+    <ClCompile Include="..\common\net_common.c" />
+    <ClCompile Include="..\common\net_dgrm.c" />
+    <ClCompile Include="..\common\net_loop.c" />
+    <ClCompile Include="..\common\net_main.c" />
+    <ClCompile Include="..\common\net_none.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\common\net_udp.c" />
+    <ClCompile Include="..\common\perf_timing.c" />
+    <ClCompile Include="..\common\pr_cmds.c" />
+    <ClCompile Include="..\common\pr_edict.c" />
+    <ClCompile Include="..\common\pr_exec.c" />
+    <ClCompile Include="..\common\rb_tree.c" />
+    <ClCompile Include="..\common\rhi.c" />
+    <ClCompile Include="..\common\r_aclip.c" />
+    <ClCompile Include="..\common\r_alias.c" />
+    <ClCompile Include="..\common\r_bsp.c" />
+    <ClCompile Include="..\common\r_draw.c" />
+    <ClCompile Include="..\common\r_edge.c" />
+    <ClCompile Include="..\common\r_efrag.c" />
+    <ClCompile Include="..\common\r_light.c" />
+    <ClCompile Include="..\common\r_main.c" />
+    <ClCompile Include="..\common\r_misc.c" />
+    <ClCompile Include="..\common\r_model.c" />
+    <ClCompile Include="..\common\r_part.c" />
+    <ClCompile Include="..\common\r_sky.c" />
+    <ClCompile Include="..\common\r_sprite.c" />
+    <ClCompile Include="..\common\r_subdiv.c" />
+    <ClCompile Include="..\common\r_surf.c" />
+    <ClCompile Include="..\common\r_vars.c" />
+    <ClCompile Include="..\common\sbar.c" />
+    <ClCompile Include="..\common\screen.c" />
+    <ClCompile Include="..\common\shell.c" />
+    <ClCompile Include="..\common\snd_codec.c" />
+    <ClCompile Include="..\common\snd_dma.c" />
+    <ClCompile Include="..\common\snd_flac.c" />
+    <ClCompile Include="..\common\snd_mem.c" />
+    <ClCompile Include="..\common\snd_mikmod.c" />
+    <ClCompile Include="..\common\snd_mix.c" />
+    <ClCompile Include="..\common\snd_modplug.c" />
+    <ClCompile Include="..\common\snd_mp3.c" />
+    <ClCompile Include="..\common\snd_mpg123.c" />
+    <ClCompile Include="..\common\snd_opus.c" />
+    <ClCompile Include="..\common\snd_umx.c" />
+    <ClCompile Include="..\common\snd_vorbis.c" />
+    <ClCompile Include="..\common\snd_wave.c" />
+    <ClCompile Include="..\common\sprite_model.c" />
+    <ClCompile Include="..\common\surf_atlas.c" />
+    <ClCompile Include="..\common\sv_main.c" />
+    <ClCompile Include="..\common\sv_move.c" />
+    <ClCompile Include="..\common\sv_phys.c" />
+    <ClCompile Include="..\common\sv_user.c" />
+    <ClCompile Include="..\common\view.c" />
+    <ClCompile Include="..\common\wad.c" />
+    <ClCompile Include="..\common\world.c" />
+    <ClCompile Include="..\common\zone.c" />
+    <ClCompile Include="..\deps\libFLAC\bitreader.c" />
+    <ClCompile Include="..\deps\libFLAC\crc.c" />
+    <ClCompile Include="..\deps\libFLAC\fixed.c" />
+    <ClCompile Include="..\deps\libFLAC\float.c" />
+    <ClCompile Include="..\deps\libFLAC\format.c" />
+    <ClCompile Include="..\deps\libFLAC\lpc.c" />
+    <ClCompile Include="..\deps\libFLAC\md5.c" />
+    <ClCompile Include="..\deps\libFLAC\memory.c" />
+    <ClCompile Include="..\deps\libFLAC\ogg_decoder_aspect.c" />
+    <ClCompile Include="..\deps\libFLAC\ogg_mapping.c" />
+    <ClCompile Include="..\deps\libFLAC\stream_decoder.c" />
+    <ClCompile Include="..\deps\libogg\src\bitwise.c" />
+    <ClCompile Include="..\deps\libogg\src\framing.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\bitrate.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\block.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\codebook.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\envelope.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\floor0.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\floor1.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\info.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\lpc.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\lsp.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\mapping0.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\mdct.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\psy.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\registry.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\res0.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\sharedbook.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\smallft.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\synthesis.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\vorbisfile.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\window.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_posix_string.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_snprintf.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_strcasestr.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_strl.c" />
+    <ClCompile Include="..\libretro-common\compat\fopen_utf8.c" />
+    <ClCompile Include="..\libretro-common\encodings\encoding_utf.c" />
+    <ClCompile Include="..\libretro-common\features\features_cpu.c" />
+    <ClCompile Include="..\libretro-common\file\file_path.c" />
+    <ClCompile Include="..\libretro-common\file\file_path_io.c" />
+    <ClCompile Include="..\libretro-common\file\retro_dirent.c" />
+    <ClCompile Include="..\libretro-common\net\net_compat.c" />
+    <ClCompile Include="..\libretro-common\net\net_socket.c" />
+    <ClCompile Include="..\libretro-common\streams\file_stream.c" />
+    <ClCompile Include="..\libretro-common\streams\file_stream_transforms.c" />
+    <ClCompile Include="..\libretro-common\string\stdstring.c" />
+    <ClCompile Include="..\libretro-common\time\rtime.c" />
+    <ClCompile Include="..\libretro-common\vfs\vfs_implementation.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\deps\libvorbis\lib\backends.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\bitrate.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\codebook.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\codec_internal.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\envelope.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\highlevel.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\lpc.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\lsp.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\masking.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\mdct.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\misc.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\os.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\psy.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\registry.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\scales.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\smallft.h" />
+    <ClInclude Include="..\deps\libvorbis\lib\window.h" />
+    <ClInclude Include="..\libretro-common\include\net\net_compat.h" />
+    <ClInclude Include="..\libretro-common\include\net\net_socket.h" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{505023A8-A1E9-4621-8985-8BECECD4385B}</ProjectGuid>
+    <Keyword>Xbox360Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <OutputFile>$(OutDir)$(Platform)\$(ProjectName).lib</OutputFile>
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>DEBUG;USE_CODEC_VORBIS;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline</PreprocessorDefinitions>
+      <CallAttributedProfiling>Callcap</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps\vulkan;$(ProjectDir)..\deps\vulkan\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)$(Platform)\%(RelativeDir)</ObjectFileName>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <StringPooling>true</StringPooling>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;__ppc__;MSB_FIRST;_XBOX360;_XBOX;USE_CODEC_VORBIS;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline;S_IRUSR=0400;S_IWUSR=0200;HAVE_SOCKET_LEGACY</PreprocessorDefinitions>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps\vulkan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)$(Platform)\%(RelativeDir)</ObjectFileName>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <StringPooling>true</StringPooling>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <CompileAs>Default</CompileAs>
+      <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>false</PreschedulingOptimization>
+      <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Full</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;USE_CODEC_VORBIS;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline</PreprocessorDefinitions>
+      <CallAttributedProfiling>Callcap</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps\vulkan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)$(Platform)\%(RelativeDir)</ObjectFileName>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <StringPooling>true</StringPooling>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Full</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;__ppc__;MSB_FIRST;_XBOX360;_XBOX;USE_CODEC_VORBIS;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline;S_IRUSR=0400
+;S_IWUSR=0200;HAVE_SOCKET_LEGACY</PreprocessorDefinitions>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps\vulkan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)$(Platform)\%(RelativeDir)</ObjectFileName>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <StringPooling>true</StringPooling>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <CompileAs>Default</CompileAs>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

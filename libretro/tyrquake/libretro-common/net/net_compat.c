@@ -469,7 +469,31 @@ bool network_init(void)
    {
       WSADATA wsaData;
 
-      if (WSAStartup(MAKEWORD(2, 2), &wsaData))
+#if defined(_XBOX360)
+      {
+         XNetStartupParams xsp;
+         memset(&xsp, 0, sizeof(xsp));
+         xsp.cfgSizeOfStruct = sizeof(XNetStartupParams);
+         xsp.cfgFlags = XNET_STARTUP_BYPASS_SECURITY;
+         if (XNetStartup(&xsp) != 0)
+            return false;
+
+         {
+            XNADDR xnAddr;
+            DWORD dwStatus;
+            int wait = 0;
+            do {
+               dwStatus = XNetGetTitleXnAddr(&xnAddr);
+               Sleep(200);
+               wait += 200;
+            } while ((dwStatus == XNET_GET_XNADDR_PENDING || dwStatus == XNET_GET_XNADDR_NONE) && wait < 10000);
+            if (dwStatus == XNET_GET_XNADDR_PENDING || dwStatus == XNET_GET_XNADDR_NONE)
+               return false;
+         }
+      }
+#endif
+
+      if (WSAStartup(MAKEWORD(1, 1), &wsaData))
       {
          WSACleanup();
 

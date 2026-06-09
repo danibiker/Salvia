@@ -136,7 +136,7 @@ static qboolean scr_drawloading;
  * from a load that never completed. Aged once per frame in Host_Frame
  * alongside the other realtime-domain countdowns; reset to 0 at the
  * top of each loading sequence. */
-static float scr_disabled_time;
+float scr_disabled_time;
 
 
 /* ============================================================================= */
@@ -870,6 +870,17 @@ SCR_UpdateScreen(void)
 }
 
 /* ============================================================================= */
+
+/*
+==================
+SCR_Shutdown
+==================
+*/
+void
+SCR_Shutdown(void)
+{
+    scr_initialized = false;
+}
 
 /*
 ==================

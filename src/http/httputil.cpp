@@ -362,3 +362,133 @@ int CurlClient::debug_callback(CURL *handle, curl_infotype type,
     }
     return 0;
 }
+
+#ifdef _XBOX
+#include <winsockx.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+	//Funcion definida en curl
+	int Curl_gethostname(char *name, size_t namelen);
+
+	//Hacemos un wrapper a la funcion de curl
+	int gethostname(char *name, size_t namelen){
+		return Curl_gethostname(name, namelen);
+	}
+
+	struct hostent* gethostbyaddr(const char* addr, int len, int type) {
+		static struct hostent h;
+		static char host_name[256];
+		static unsigned long address_list;
+		static char* h_addr_ptrs[2];
+		static char* host_aliases[1] = { NULL };
+
+		if (type != AF_INET || len != sizeof(struct in_addr)) {
+			return NULL;
+		}
+
+		struct in_addr* in = (struct in_addr*)addr;
+		char ip_str[32];
+
+		// Reemplazo nativo a inet_ntoa usando la estructura de sockets de Windows/Xbox
+		sprintf_s(ip_str, sizeof(ip_str), "%d.%d.%d.%d",
+				  in->S_un.S_un_b.s_b1,
+				  in->S_un.S_un_b.s_b2,
+				  in->S_un.S_un_b.s_b3,
+				  in->S_un.S_un_b.s_b4);
+    
+		// Por defecto, usamos la IP como respaldo si cURL no resuelve nada
+		strcpy_s(host_name, sizeof(host_name), ip_str);
+
+		// Consulta de DNS mediante cURL
+		CURL* curl = curl_easy_init();
+		if (curl) {
+			curl_easy_setopt(curl, CURLOPT_URL, ip_str);
+			curl_easy_setopt(curl, CURLOPT_NOBODY, 1L); 
+			curl_easy_setopt(curl, CURLOPT_TIMEOUT, 3L); 
+
+			if (curl_easy_perform(curl) == CURLE_OK) {
+				char* resolved_url = NULL;
+				if (curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &resolved_url) == CURLE_OK && resolved_url) {
+					char* clean_host = resolved_url;
+					if (strncmp(clean_host, "http://", 7) == 0) clean_host += 7;
+					if (strncmp(clean_host, "https://", 8) == 0) clean_host += 8;
+                
+					strcpy_s(host_name, sizeof(host_name), clean_host);
+				}
+			}
+			curl_easy_cleanup(curl);
+		}
+
+		// Estructurar la respuesta para el motor de TyrQuake
+		address_list = in->s_addr;
+		h_addr_ptrs[0] = (char*)&address_list;
+		h_addr_ptrs[1] = NULL;
+
+		h.h_name = host_name;
+		h.h_aliases = host_aliases;
+		h.h_addrtype = AF_INET;
+		h.h_length = sizeof(struct in_addr);
+		h.h_addr_list = h_addr_ptrs;
+
+		return &h;
+	}
+
+	// 1. Solución para inet_aton
+    // Convierte una cadena "X.X.X.X" en una estructura de dirección de red (in_addr)
+    int inet_aton(const char *cp, struct in_addr *inp) {
+        unsigned int b1, b2, b3, b4;
+        
+        // Escaneamos los 4 segmentos de la IP de forma segura
+        if (sscanf_s(cp, "%u.%u.%u.%u", &b1, &b2, &b3, &b4) != 4) {
+            return 0; // Error de parseo
+        }
+        
+        // Validamos que ningún byte exceda el límite de 255
+        if (b1 > 255 || b2 > 255 || b3 > 255 || b4 > 255) {
+            return 0;
+        }
+
+        // Reconstruimos los bytes en la estructura de destino
+        inp->S_un.S_un_b.s_b1 = (unsigned char)b1;
+        inp->S_un.S_un_b.s_b2 = (unsigned char)b2;
+        inp->S_un.S_un_b.s_b3 = (unsigned char)b3;
+        inp->S_un.S_un_b.s_b4 = (unsigned char)b4;
+        
+        return 1; // Éxito
+    }
+
+    // 2. Solución para inet_ntoa
+    // Convierte una estructura in_addr en texto legible "X.X.X.X"
+    char* inet_ntoa(struct in_addr in) {
+        // Usamos una variable estática local compartiendo el comportamiento del original thread-unsafe
+        static char buffer[32]; 
+        
+        sprintf_s(buffer, sizeof(buffer), "%d.%d.%d.%d",
+                  in.S_un.S_un_b.s_b1,
+                  in.S_un.S_un_b.s_b2,
+                  in.S_un.S_un_b.s_b3,
+                  in.S_un.S_un_b.s_b4);
+                  
+        return buffer;
+    }
+
+    // 3. Solución para inet_pton
+    // Equivalente seguro multiespecificación, TyrQuake solo la usa para AF_INET (IPv4)
+    int inet_pton(int af, const char *src, void *dst) {
+        if (af != AF_INET) {
+            return -1; // Xbox 360 no da soporte nativo a IPv6 (AF_INET6) en este entorno
+        }
+        
+        if (src == NULL || dst == NULL) {
+            return 0;
+        }
+
+        // Delegamos de forma limpia en nuestra función inet_aton ya definida arriba
+        return inet_aton(src, (struct in_addr*)dst);
+    }
+#ifdef __cplusplus
+}
+#endif
+#endif

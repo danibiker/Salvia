@@ -774,3 +774,11 @@ PR_SetString(const char *s)
     }
     return (int)(s - pr_strings);
 }
+
+void
+PR_Shutdown(void)
+{
+    pr_strtbl = NULL;
+    pr_strtbl_size = 0;
+    num_prstr = 0;
+}

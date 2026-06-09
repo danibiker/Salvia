@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 /* screen.h */
 
 void SCR_Init(void);
+void SCR_Shutdown(void);
 void SCR_UpdateScreen(void);
 void SCR_UpdateWholeScreen(void);
 void SCR_CenterPrint(const char *str);
@@ -50,6 +51,7 @@ extern float scr_centertime_start;
 extern int scr_fullupdate;	/* set to 0 to force full redraw */
 extern int clearnotify;		/* set to 0 whenever notify text is drawn */
 extern qboolean scr_disabled_for_loading;
+extern float scr_disabled_time;
 extern qboolean scr_skipupdate;
 extern qboolean scr_block_drawing;
 extern cvar_t scr_viewsize;

@@ -144,6 +144,21 @@ NET_AdrToString(const netadr_t *a)
 double
 SetNetTime(void)
 {
+#if defined(_WIN32)
+    /* Windows: host_time doesn't advance when the engine is
+     * spinning in the slist poll loop (NET_Connect -> NET_Poll).
+     * Use QPC so scheduled poll procedures fire even when no
+     * Host_Frame is running.  The original Sys_DoubleTime
+     * approach made retransmit / scheduling decisions vary
+     * with frontend pacing jitter and host CPU load, but
+     * host_time breaks the poll loop entirely. */
+    static LARGE_INTEGER freq = {0};
+    LARGE_INTEGER now;
+    if (freq.QuadPart == 0)
+        QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&now);
+    net_time = (double)now.QuadPart / freq.QuadPart;
+#else
     /* net_time used to come from Sys_DoubleTime, the
      * platform wall clock.  In a libretro core that's
      * a poor source -- it makes timeout / retransmit /
@@ -155,6 +170,7 @@ SetNetTime(void)
      * Same units (seconds), same monotonic property,
      * but tied to frame count instead of wall clock. */
     net_time = host_time;
+#endif
     return net_time;
 }
 
@@ -372,7 +388,7 @@ NET_Slist_f(void)
     }
 
     slistInProgress = true;
-    slistStartTime = host_time;
+    slistStartTime = net_time;
 
     SchedulePollProcedure(&slistSendProcedure, 0.0);
     SchedulePollProcedure(&slistPollProcedure, 0.1);
@@ -397,7 +413,7 @@ Slist_Send(void *arg)
 	net_driver->SearchForHosts(true);
     }
 
-    if ((host_time - slistStartTime) < 0.5)
+    if ((net_time - slistStartTime) < 0.5)
 	SchedulePollProcedure(&slistSendProcedure, 0.75);
 }
 
@@ -421,7 +437,7 @@ Slist_Poll(void *arg)
     if (!slistSilent)
 	PrintSlist();
 
-    if ((host_time - slistStartTime) < 1.5) {
+    if ((net_time - slistStartTime) < 1.5) {
 	SchedulePollProcedure(&slistPollProcedure, 0.1);
 	return;
     }
@@ -911,12 +927,7 @@ SchedulePollProcedure(PollProcedure *proc, double timeOffset)
 {
     PollProcedure *pp, *prev;
 
-    /* Schedule against host_time (synthetic per-frame
-     * clock).  The procedure list is processed in
-     * NET_Poll where SetNetTime() copies host_time
-     * into net_time and procedures with nextTime <=
-     * net_time fire.  Same scale, no wall clock. */
-    proc->nextTime = host_time + timeOffset;
+    proc->nextTime = net_time + timeOffset;
     for (pp = pollProcedureList, prev = NULL; pp; pp = pp->next) {
 	if (pp->nextTime >= proc->nextTime)
 	    break;
