@@ -33,6 +33,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "r_subdiv.h"
 #include "render.h"
 #include "screen.h"
+#include "dpmaster.h"
 #include "server.h"
 #include "sound.h"
 #include "vid.h"
@@ -70,6 +71,7 @@ static void M_Menu_LanConfig_f(void);
 static void M_Menu_GameOptions_f(void);
 static void M_Menu_Search_f(void);
 static void M_Menu_ServerList_f(void);
+static void M_Menu_ServerBrowser_f(void);
 
 static void M_Main_Draw(void);
 static void M_SinglePlayer_Draw(void);
@@ -90,6 +92,7 @@ static void M_LanConfig_Draw(void);
 static void M_GameOptions_Draw(void);
 static void M_Search_Draw(void);
 static void M_ServerList_Draw(void);
+static void M_ServerBrowser_Draw(void);
 
 static void M_Main_Key(int key);
 static void M_SinglePlayer_Key(int key);
@@ -110,6 +113,7 @@ static void M_LanConfig_Key(int key);
 static void M_GameOptions_Key(int key);
 static void M_Search_Key(int key);
 static void M_ServerList_Key(int key);
+static void M_ServerBrowser_Key(int key);
 
 static qboolean m_recursiveDraw;
 static qboolean m_entersound;	/* play after drawing a frame, so caching */
@@ -123,7 +127,7 @@ enum m_state_enum {
     m_none, m_main, m_singleplayer, m_load, m_save, m_multiplayer, m_setup,
     m_options, m_optionsinput, m_optionsvideo, m_optionsaudio, m_optionsgame,
     m_video, m_keys, m_help, m_quit, m_lanconfig, m_gameoptions,
-    m_search, m_slist
+    m_search, m_slist, m_serverbrowser
 };
 
 int m_state;
@@ -131,8 +135,28 @@ int m_state;
 #include "libretro.h"
 extern retro_environment_t environ_cb;
 
-#define StartingGame	(m_multiplayer_cursor == 1)
-#define JoiningGame	(m_multiplayer_cursor == 0)
+#define RETRO_ENVIRONMENT_GET_SERVERS_JSON 30000
+
+#define MAX_SB_SERVERS 256
+#define MAX_SB_VISIBLE 18
+
+typedef struct {
+   char name[64];
+   char map[64];
+   char address[48];
+   char gametype[16];
+   int players;
+   int max_players;
+} sb_entry_t;
+
+static sb_entry_t sb_servers[MAX_SB_SERVERS];
+static int sb_num_servers;
+static int sb_cursor;
+static int sb_scroll_offset;
+static qboolean sb_populated;
+
+#define StartingGame	(m_multiplayer_cursor == 2)
+#define JoiningGame	(m_multiplayer_cursor == 1)
 
 static void M_ConfigureNetSubsystem(void);
 
@@ -693,7 +717,7 @@ static void M_Save_Key(int k)
 /* ============================================================================= */
 /* MULTIPLAYER MENU */
 
-#define	MULTIPLAYER_ITEMS 3
+#define	MULTIPLAYER_ITEMS 4
 
 static int m_multiplayer_cursor;
 
@@ -713,7 +737,10 @@ static void M_MultiPlayer_Draw(void)
    M_DrawTransPic(16, 4, Draw_CachePic("gfx/qplaque.lmp"));
    p = Draw_CachePic("gfx/p_multi.lmp");
    M_DrawPic((320 - p->width) / 2, 4, p);
-   M_DrawTransPic(72, 32, Draw_CachePic("gfx/mp_menu.lmp"));
+   M_Print(72, 38, "  Server Browser");
+   M_Print(72, 58, "  Join Game");
+   M_Print(72, 78, "  Listen Server");
+   M_Print(72, 98, "  Setup");
 
    f = (int)(host_time * 10) % 6;
 
@@ -752,21 +779,25 @@ static void M_MultiPlayer_Key(int key)
       case K_JOY_A:
       case K_ENTER:
          m_entersound = true;
-         switch (m_multiplayer_cursor) {
-            case 0:
-               if (tcpipAvailable)
-                  M_Menu_LanConfig_f();
-               break;
+          switch (m_multiplayer_cursor) {
+             case 0:
+                M_Menu_ServerBrowser_f();
+                break;
 
-            case 1:
-               if (tcpipAvailable)
-                  M_Menu_LanConfig_f();
-               break;
+             case 1:
+                if (tcpipAvailable)
+                   M_Menu_LanConfig_f();
+                break;
 
-            case 2:
-               M_Menu_Setup_f();
-               break;
-         }
+             case 2:
+                if (tcpipAvailable)
+                   M_Menu_LanConfig_f();
+                break;
+
+             case 3:
+                M_Menu_Setup_f();
+                break;
+          }
    }
 }
 
@@ -3164,6 +3195,226 @@ M_ServerList_Key(int k)
 }
 
 /* ============================================================================= */
+/* SERVER BROWSER MENU */
+
+static void SB_ParseLine(const char *line)
+{
+   int n;
+   if (sb_num_servers >= MAX_SB_SERVERS)
+      return;
+   n = sscanf(line, "%63[^|]|%63[^|]|%47[^|]|%15[^|]|%d|%d",
+               sb_servers[sb_num_servers].name,
+               sb_servers[sb_num_servers].map,
+               sb_servers[sb_num_servers].address,
+               sb_servers[sb_num_servers].gametype,
+               &sb_servers[sb_num_servers].players,
+               &sb_servers[sb_num_servers].max_players);
+   if (n == 6)
+      sb_num_servers++;
+}
+
+static void SB_Populate(void)
+{
+   const char *data = NULL;
+   const char *p, *end;
+   char line[256];
+   size_t len;
+   sb_num_servers = 0;
+   sb_cursor = 0;
+   sb_scroll_offset = 0;
+   sb_populated = true;
+
+   /* Start dpmaster query (non-blocking, runs across frames) */
+   DPMaster_Poll(NULL, NULL, 0);
+
+   if (!environ_cb(RETRO_ENVIRONMENT_GET_SERVERS_JSON, &data) || !data || !data[0])
+      return;
+
+   p = data;
+   while (*p && sb_num_servers < MAX_SB_SERVERS)
+   {
+      while (*p == '\n' || *p == '\r')
+         p++;
+      if (!*p)
+         break;
+      end = p;
+      while (*end && *end != '\n')
+         end++;
+      len = end - p;
+      if (len >= sizeof(line))
+         len = sizeof(line) - 1;
+      memcpy(line, p, len);
+      line[len] = '\0';
+      SB_ParseLine(line);
+      p = end;
+   }
+
+   /* Kick off dpmaster right after frontend data is ready */
+   DPMaster_Poll(NULL, NULL, 0);
+}
+
+/* Append dpmaster servers, deduplicating by address */
+static void SB_AppendDPMaster(dpm_server_t *dpm, int n)
+{
+   int i, dup_count = 0, add_count = 0;
+   Con_Printf("SB_AppendDPMaster: n=%d sb_num_servers=%d\n", n, sb_num_servers);
+   for (i = 0; i < n && sb_num_servers < MAX_SB_SERVERS; i++)
+   {
+      int j;
+      qboolean dup = false;
+      for (j = 0; j < sb_num_servers; j++)
+      {
+         if (strcmp(sb_servers[j].address, dpm[i].address) == 0)
+         {
+            dup = true;
+            break;
+         }
+      }
+      if (dup)
+      {
+         Con_Printf("  UPDATE[%d] addr=%s name='%s' map='%s'\n",
+                    j, dpm[i].address, dpm[i].name, dpm[i].map);
+         memcpy(&sb_servers[j], &dpm[i], sizeof(sb_entry_t));
+         dup_count++;
+      }
+      else
+      {
+         Con_Printf("  ADD[%d] addr=%s name='%s' map='%s'\n",
+                    sb_num_servers, dpm[i].address, dpm[i].name, dpm[i].map);
+         memcpy(&sb_servers[sb_num_servers], &dpm[i], sizeof(sb_entry_t));
+         sb_num_servers++;
+         add_count++;
+      }
+   }
+   Con_Printf("SB_AppendDPMaster: dup=%d add=%d total=%d\n",
+              dup_count, add_count, sb_num_servers);
+}
+
+static void M_Menu_ServerBrowser_f(void)
+{
+   key_dest = key_menu;
+   m_state = m_serverbrowser;
+   m_entersound = true;
+   sb_populated = false;
+}
+
+static void M_ServerBrowser_Draw(void)
+{
+   int i, idx, y, vis_cursor, total_pages, cur_page, start_y;
+   char line[128];
+   const qpic_t *p;
+   start_y = 28;
+
+   if (!sb_populated)
+      SB_Populate();
+
+   p = Draw_CachePic("gfx/p_multi.lmp");
+   M_DrawPic((320 - p->width) / 2, 4, p);
+
+   if (sb_num_servers == 0)
+   {
+      M_PrintWhite(16, 64, "No servers available");
+      M_PrintWhite(16, 80, "Request list from Salvia frontend");
+   }
+   else
+   {
+      for (i = 0; i < MAX_SB_VISIBLE && (sb_scroll_offset + i) < sb_num_servers; i++)
+      {
+          idx = sb_scroll_offset + i;
+          y = start_y + 8 * i;
+          snprintf(line, sizeof(line), "%-18.18s %-6.6s %2d/%-2d %-6.6s",
+                   sb_servers[idx].name,
+                   sb_servers[idx].map,
+                   sb_servers[idx].players,
+                   sb_servers[idx].max_players,
+                   sb_servers[idx].gametype);
+          M_Print(16, y, line);
+      }
+
+      vis_cursor = sb_cursor - sb_scroll_offset;
+      M_DrawCharacter(8, start_y + vis_cursor * 8,
+                      12 + ((int)(realtime * 4) & 1));
+
+      if (sb_num_servers > MAX_SB_VISIBLE)
+      {
+         cur_page = sb_cursor / MAX_SB_VISIBLE + 1;
+         total_pages = (sb_num_servers + MAX_SB_VISIBLE - 1) / MAX_SB_VISIBLE;
+         M_PrintWhite(16, 184, va("Page %d/%d", cur_page, total_pages));
+      }
+   }
+
+   /* Poll dpmaster state machine across frames */
+   {
+      dpm_server_t dpm_new[DPM_MAX_SERVERS];
+      int dpm_n = 0;
+      int ret = DPMaster_Poll(dpm_new, &dpm_n, DPM_MAX_SERVERS);
+      if (ret == 0)
+         M_PrintWhite(16, 200, "Querying dpmaster servers...");
+      else if (ret == 1 && dpm_n > 0)
+         SB_AppendDPMaster(dpm_new, dpm_n);
+   }
+}
+
+static void M_ServerBrowser_Key(int key)
+{
+   switch (key)
+   {
+   case K_JOY_B:
+   case K_ESCAPE:
+      DPMaster_Cancel();
+      sb_populated = false;
+      M_Menu_MultiPlayer_f();
+      break;
+
+   case K_JOY_UP:
+   case K_UPARROW:
+      if (sb_num_servers <= 0) break;
+      S_LocalSound("misc/menu1.wav");
+      if (--sb_cursor < 0)
+      {
+         sb_cursor = sb_num_servers - 1;
+         sb_scroll_offset = ((sb_num_servers - 1) / MAX_SB_VISIBLE) * MAX_SB_VISIBLE;
+      }
+      if (sb_cursor < sb_scroll_offset)
+      {
+         sb_scroll_offset -= MAX_SB_VISIBLE;
+         if (sb_scroll_offset < 0)
+            sb_scroll_offset = 0;
+      }
+      break;
+
+   case K_JOY_DOWN:
+   case K_DOWNARROW:
+      if (sb_num_servers <= 0) break;
+      S_LocalSound("misc/menu1.wav");
+      if (++sb_cursor >= sb_num_servers)
+      {
+         sb_cursor = 0;
+         sb_scroll_offset = 0;
+      }
+      if (sb_cursor >= sb_scroll_offset + MAX_SB_VISIBLE)
+      {
+         sb_scroll_offset += MAX_SB_VISIBLE;
+         if (sb_scroll_offset + MAX_SB_VISIBLE > sb_num_servers)
+            sb_scroll_offset = sb_num_servers - MAX_SB_VISIBLE;
+      }
+      break;
+
+   case K_JOY_A:
+   case K_ENTER:
+      if (sb_num_servers > 0 && sb_cursor >= 0 && sb_cursor < sb_num_servers)
+      {
+         S_LocalSound("misc/menu2.wav");
+         sb_populated = false;
+         key_dest = key_game;
+         m_state = m_none;
+         Cbuf_AddText("connect \"%s\"\n", sb_servers[sb_cursor].address);
+      }
+      break;
+   }
+}
+
+/* ============================================================================= */
 /* Menu Subsystem */
 
 
@@ -3183,6 +3434,7 @@ M_Init(void)
     Cmd_AddCommand("menu_video", M_Menu_Video_f);
     Cmd_AddCommand("help", M_Menu_Help_f);
     Cmd_AddCommand("menu_quit", M_Menu_Quit_f);
+    Cmd_AddCommand("menu_serverbrowser", M_Menu_ServerBrowser_f);
 }
 
 
@@ -3284,6 +3536,10 @@ M_Draw(void)
       case m_slist:
          M_ServerList_Draw();
          break;
+
+      case m_serverbrowser:
+         M_ServerBrowser_Draw();
+         break;
    }
 
    if (m_entersound) {
@@ -3374,6 +3630,10 @@ M_Keydown(int key)
 
     case m_slist:
 	M_ServerList_Key(key);
+	return;
+
+    case m_serverbrowser:
+	M_ServerBrowser_Key(key);
 	return;
     }
 }

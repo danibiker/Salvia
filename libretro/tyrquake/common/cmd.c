@@ -85,7 +85,7 @@ Cbuf_Init
 void
 Cbuf_Init(void)
 {
-    SZ_Alloc(&cmd_text, 8192);
+    SZ_Alloc(&cmd_text, 65536);
 }
 
 
@@ -139,8 +139,10 @@ Cbuf_InsertText(const char *text)
 
     len = strlen(text);
     if (cmd_text.cursize) {
-	if (cmd_text.cursize + len + 1 > cmd_text.maxsize)
+	if (cmd_text.cursize + len + 1 > cmd_text.maxsize) {
 	    Sys_Error("%s: overflow", __func__);
+	    return;
+	}
 
 	/* move any commands still remaining in the exec buffer */
 	memmove(cmd_text.data + len + 1, cmd_text.data, cmd_text.cursize);

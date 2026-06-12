@@ -73,6 +73,18 @@ qboolean R_LiquidsAreTransparent(void);
 extern int r_renderpass;
 extern int r_renderpass_seen_liquid;
 extern int r_nocull_active;
+#ifdef ALPHA_TEXTURES
+extern int r_renderpass_seen_alpha;
+extern int r_alphapass;
+extern int r_alpha_pass_needed;
+
+/* Collects SURF_DRAWALPHA surfaces during pass 1 so the alpha pass
+ * can iterate them directly instead of re-walking the BSP tree. */
+#define MAX_ALPHA_SURFACES 4096
+
+extern msurface_t *r_alpha_surfaces[];
+extern int r_num_alpha_surfaces;
+#endif
 extern cvar_t r_phongshading;
 extern cvar_t r_coloredlight;
 extern cvar_t r_lightdither;

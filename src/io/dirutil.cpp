@@ -166,7 +166,6 @@ bool dirutil::setFileProperties(FileProps *propFile, string ruta){
     propFile->modificationTime = formatdate(mbstr, info.st_mtime);
     propFile->iCreationTime = time(&info.st_ctime);
     propFile->iModificationTime = time(&info.st_mtime);
-
     return stat_ok;
 }
 
@@ -206,25 +205,19 @@ int dirutil::findIcon(const char *filename){
     } else {
         return page_white;
     }
-
 }
 
-/**
- *
- * @param strdir
- * @param filelist
- * @param filtro
- * @param superfast
- * @return
- */
 unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtro, bool order, bool properties){
     unsigned int totalFiles = 0;
-	return listarFilesSuperFast(strdir, filelist, filtro, "", order, properties);
+	return listarFilesSuperFast(strdir, filelist, filtro, "", false, order, properties);
 }
 
-
 unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool order, bool properties){
-    unsigned int totalFiles = 0;
+    return listarFilesSuperFast(strdir, filelist, filtroExt, filtroName, false, order, properties);
+}
+
+unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool includeDirs, bool order, bool properties){
+	unsigned int totalFiles = 0;
 
 #ifdef _XBOX
 	WIN32_FIND_DATA findData;
@@ -237,7 +230,7 @@ unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr
 	string parentDir = searchPath;
     searchPath += "*";
 
-    // Iniciar la búsqueda
+    // Iniciar la busqueda
     hFind = FindFirstFile(searchPath.c_str(), &findData);
 
     if (hFind == INVALID_HANDLE_VALUE) {
@@ -251,26 +244,21 @@ unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr
         if (strcmp(findData.cFileName, ".") == 0 || strcmp(findData.cFileName, "..") == 0) {
             continue;
         }
-
-        // Comprobar si es un directorio o un archivo
-        /*if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            std::cout << "[DIR]  " << findData.cFileName << std::endl;
-        } else {
-            std::cout << "[FILE] " << findData.cFileName << std::endl;
-        }*/
-
+		bool esDirectorio = findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
 		string concatDir = parentDir + findData.cFileName;
-		extension = getExtension(findData.cFileName);
-        if (foundFilter(filtroExt, filtroName, extension, findData.cFileName)){
-            FileProps propFile(strdir, findData.cFileName, findIcon(findData.cFileName), TIPOFICHERO);
-            if (properties){
-                setFileProperties(&propFile, concatDir);
-                propFile.ico = findIcon(findData.cFileName);
-                propFile.filetype = TIPOFICHERO;
-            }
-			filelist.emplace_back(std::unique_ptr<FileProps>(new FileProps(propFile)));
-        }
-
+		if (!esDirectorio){
+			extension = getExtension(findData.cFileName);
+			if (foundFilter(filtroExt, filtroName, extension, findData.cFileName)){
+				std::unique_ptr<FileProps> propFile(new FileProps(strdir, findData.cFileName, findIcon(findData.cFileName), TIPOFICHERO));
+				if (properties){
+					setFileProperties(propFile.get(), concatDir);
+				}
+				filelist.emplace_back(std::move(propFile));
+			}
+		} else if (includeDirs){
+			std::unique_ptr<FileProps> propFile(new FileProps(strdir, findData.cFileName, folder, TIPODIRECTORIO));
+			filelist.emplace_back(std::move(propFile));
+		}
     } while (FindNextFile(hFind, &findData) != 0);
 
     // Es fundamental cerrar el handle para evitar fugas de memoria
@@ -290,27 +278,37 @@ unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr
         string extension;
 
         if((dp  = opendir(strdir)) == NULL) {
-            //Traza::print("Error al listar el directorio: " + string(strdir), W_ERROR);
             return 0;
         } else {
-            //Traza::print("Recorriendo ficheros", W_PARANOIC);
             while ((dirp = readdir(dp)) != NULL) {
-                string concatDir = parentDir + string(dirp->d_name);
-                //if (!isDir(concatDir)){
-                    extension = getExtension(dirp->d_name);
-                    if (foundFilter(filtroExt, filtroName, extension, dirp->d_name)){
-                        FileProps propFile(strdir, dirp->d_name, findIcon(dirp->d_name), TIPOFICHERO);
-                        if (properties){
-                            setFileProperties(&propFile, concatDir);
-                            propFile.ico = findIcon(dirp->d_name);
-                            propFile.filetype = TIPOFICHERO;
-                        }
-                        //filelist.emplace_back(make_unique<FileProps>(propFile));
-						filelist.emplace_back(std::unique_ptr<FileProps>(new FileProps(propFile)));
-                    }
-                //}
-            }
-            closedir(dp);
+				// 1. Descartar los directorios virtuales "." y ".." inmediatamente
+				if (strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0) {
+					continue;
+				}
+
+				// 2. Determinar si es un directorio (usando d_type o tu función alternativa)
+				bool esDirectorio = (dirp->d_type == DT_DIR); 
+				// Nota: Si no compila d_type, revierte a: bool esDirectorio = isDir(concatDir.c_str());
+
+				string concatDir = parentDir + string(dirp->d_name);
+
+				if (!esDirectorio) {
+					// Es un archivo: Aplicamos filtros
+					extension = getExtension(dirp->d_name);
+					if (foundFilter(filtroExt, filtroName, extension, dirp->d_name)) {
+						std::unique_ptr<FileProps> propFile(new FileProps(strdir, dirp->d_name, findIcon(dirp->d_name), TIPOFICHERO));
+						if (properties) {
+							setFileProperties(propFile.get(), concatDir);
+						}
+						filelist.emplace_back(std::move(propFile));
+					}
+				} else if (includeDirs) {
+					// Es un directorio y queremos incluirlos
+					std::unique_ptr<FileProps> propFile(new FileProps(strdir, dirp->d_name, folder, TIPODIRECTORIO));
+					filelist.emplace_back(std::move(propFile));
+				}
+			}
+			closedir(dp);
         }
     }
 #endif

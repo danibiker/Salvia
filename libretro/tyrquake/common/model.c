@@ -32,6 +32,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "model.h"
 
 #include "quakedef.h"
+#include "d_iface.h"
 #include "render.h"
 #include "sys.h"
 /* FIXME - quick hack to enable merging of NQ/QWSV shared code */
@@ -42,7 +43,7 @@ static model_t *loadmodel;
 static void Mod_LoadBrushModel(model_t *mod, void *buffer, unsigned long size);
 static model_t *Mod_LoadModel(model_t *mod, qboolean crash);
 
-#define MAX_MOD_KNOWN 512
+#define MAX_MOD_KNOWN 4096
 static model_t mod_known[MAX_MOD_KNOWN];
 static int mod_numknown;
 
@@ -190,6 +191,12 @@ Mod_InitPVSCache(int numleafs)
 
     memset(pvscache, 0, sizeof(pvscache));
     leafmem = (byte*)Hunk_Alloc(PVSCACHE_SIZE * memsize);
+
+    if (!fatpvs || !leafmem) {
+	SV_Error("%s: Hunk_Alloc failed (%p %p)", __func__, fatpvs, leafmem);
+	return;
+    }
+
     for (i = 0; i < PVSCACHE_SIZE; i++)
 	pvscache[i].leafbits = (leafbits_t *)(leafmem + i * memsize);
 }
@@ -207,6 +214,11 @@ Mod_DecompressVis(const byte *in, const model_t *model, leafbits_t *dest)
     int num_out;
     int shift;
     int count;
+
+    if (!dest || !model) {
+	SV_Error("%s: null pointer (dest=%p model=%p)", __func__, dest, model);
+	return;
+    }
 
     dest->numleafs = model->numleafs;
     out = dest->bits;
@@ -508,8 +520,10 @@ Mod_FindName(const char *name)
     int i;
     model_t *mod;
 
-    if (!name[0])
+    if (!name[0]) {
 	SV_Error("%s: NULL name", __func__);
+	return NULL;
+    }
 
 /**/
 /* search the currently loaded models */
@@ -519,8 +533,10 @@ Mod_FindName(const char *name)
 	    break;
 
     if (i == mod_numknown) {
-	if (mod_numknown == MAX_MOD_KNOWN)
+	if (mod_numknown == MAX_MOD_KNOWN) {
 	    SV_Error("mod_numknown == MAX_MOD_KNOWN");
+	    return NULL;
+	}
 	strlcpy(mod->name, name, sizeof(mod->name));
 	mod->needload = true;
 	mod_numknown++;
@@ -599,6 +615,8 @@ Mod_ForName(const char *name, qboolean crash)
     model_t *mod;
 
     mod = Mod_FindName(name);
+    if (!mod)
+	return NULL;
 
     return Mod_LoadModel(mod, crash);
 }
@@ -656,6 +674,12 @@ Mod_LoadTextures(lump_t *l)
 
    loadmodel->numtextures = m->nummiptex;
    loadmodel->textures = (texture_t**)Hunk_Alloc(m->nummiptex * sizeof(*loadmodel->textures));
+   if (!loadmodel->textures) {
+      SV_Error("%s: Hunk_Alloc failed for texture pointer array (%d entries) in %s",
+               __func__, m->nummiptex, loadmodel->name);
+      loadmodel->numtextures = 0;
+      return;
+   }
 
    for (i = 0; i < m->nummiptex; i++)
    {
@@ -697,6 +721,12 @@ Mod_LoadTextures(lump_t *l)
          SV_Error("%s: texture %s pixels (%d) extend past lump end",
                   __func__, mt->name, pixels);
       tx = (texture_t*)Hunk_Alloc(sizeof(texture_t) + pixels);
+      if (!tx) {
+         SV_Error("%s: Hunk_Alloc failed for texture %s (%dx%d) in %s",
+                  __func__, mt->name, mt->width, mt->height,
+                  loadmodel->name);
+         return;
+      }
       loadmodel->textures[i] = tx;
 
       memcpy(tx->name, mt->name, sizeof(tx->name));
@@ -740,7 +770,87 @@ Mod_LoadTextures(lump_t *l)
       /* the pixels immediately follow the structures */
       memcpy(tx + 1, mt + 1, pixels);
 
-      if (!strncmp(mt->name, "sky", 3))
+#ifdef ALPHA_TEXTURES
+       /* Sky textures use palette index 255 as a regular colour
+        * (bright white for clouds/stars), never as transparency.
+        * Skip the alpha scan -- otherwise every sky texture with
+        * >=24 index-255 pixels would get has_alpha = true, which
+        * would defer sky faces to the alpha pass and destroy the
+        * sky's bright highlights in lower mipmap levels. */
+       if (strncmp(mt->name, "sky", 3) != 0) {
+       /* scan for TRANSPARENT_COLOR in the texture pixel data.
+         * Only set has_alpha when palette index 255 appears in at
+         * least MIN_ALPHA_TEXELS distinct texels so we don't flag
+         * textures that happen to use 255 as an occasional accent
+         * / bright colour -- those would otherwise force the
+         * expensive two-pass render pipeline on every frame. */
+       {
+#define MIN_ALPHA_TEXELS 24
+          int k, nalpha = 0;
+          byte *pix = (byte *)(tx + 1);
+          tx->has_alpha = false;
+          for (k = 0; k < pixels; k++) {
+             if (pix[k] == TRANSPARENT_COLOR && ++nalpha >= MIN_ALPHA_TEXELS) {
+                tx->has_alpha = true;
+                break;
+             }
+          }
+#undef MIN_ALPHA_TEXELS
+       }
+
+       /* Regenerate mip levels 1..3 for alpha textures so the
+        * averaging pass doesn't blend TRANSPARENT_COLOR (index 255)
+        * with neighbouring texels, which would create solid-colored
+        * pixels at the edges of transparent regions in lower mips.
+        * Only opaque texels contribute to the average; if all four
+        * texels in a 2x2 block are transparent the output is also
+        * transparent. */
+       if (tx->has_alpha) {
+          int mip;
+          int srcw, srch;
+          byte *src;
+
+          src = (byte *)(tx + 1);
+          srcw = tx->width;
+          srch = tx->height;
+          for (mip = 1; mip < MIPLEVELS; mip++) {
+             int dstw = srcw >> 1;
+             int dsth = srch >> 1;
+             byte *dst = (byte *)tx + tx->offsets[mip];
+             int x, y;
+             for (y = 0; y < dsth; y++) {
+                for (x = 0; x < dstw; x++) {
+                   int sx = x << 1;
+                   int sy = y << 1;
+                   byte p[4];
+                   int n, sum, nopaque;
+                   p[0] = src[sy * srcw + sx];
+                   p[1] = src[sy * srcw + sx + 1];
+                   p[2] = src[(sy + 1) * srcw + sx];
+                   p[3] = src[(sy + 1) * srcw + sx + 1];
+                   sum = 0;
+                   nopaque = 0;
+                   for (n = 0; n < 4; n++) {
+                      if (p[n] != TRANSPARENT_COLOR) {
+                         sum += p[n];
+                         nopaque++;
+                      }
+                   }
+                   if (nopaque == 0)
+                      dst[y * dstw + x] = TRANSPARENT_COLOR;
+                   else
+                      dst[y * dstw + x] = (byte)(sum / nopaque);
+                }
+             }
+             src = dst;
+             srcw = dstw;
+             srch = dsth;
+          }
+        }
+       }  /* end skip-sky-textures */
+#endif
+
+       if (!strncmp(mt->name, "sky", 3))
          R_InitSky(tx);
    }
 
@@ -1068,37 +1178,27 @@ Mod_LoadSubmodels(lump_t *l)
    loadmodel->submodels = out;
    loadmodel->numsubmodels = count;
 
-   for (i = 0; i < count; i++, in++, out++)
+   for (i = 0; i < count; i++, out++)
    {
+      dmodel_t raw;
+      memcpy(&raw, in, sizeof(raw));
+      in = (dmodel_t*)((byte*)in + sizeof(dmodel_t));
+
       for (j = 0; j < 3; j++)
       {	/* spread the mins / maxs by a pixel */
-         out->mins[j]   = LittleFloat(in->mins[j]) - 1;
-         out->maxs[j]   = LittleFloat(in->maxs[j]) + 1;
-         out->origin[j] = LittleFloat(in->origin[j]);
-         /* mins/maxs/origin are the entity bounding box and
-          * spawn origin for every cl.model_precache submodel
-          * (movers, doors, plats, world brushes parented to
-          * func_* entities). They flow straight into
-          * cl_entities[].origin and bbox tests in the client
-          * and into edict_t->v.mins / maxs / origin and the
-          * server's collision routines. A NaN/Inf here makes
-          * the entity's bbox unbounded -- NaN-comparisons all
-          * return false so SV_AreaEdicts can't decide whether
-          * the entity overlaps the trace bounds, and the entity
-          * gets included or excluded inconsistently across
-          * traces. Reject the BSP at load. */
+         out->mins[j]   = LittleFloat(raw.mins[j]) - 1;
+         out->maxs[j]   = LittleFloat(raw.maxs[j]) + 1;
+         out->origin[j] = LittleFloat(raw.origin[j]);
          if (IS_NAN(out->mins[j]) || IS_NAN(out->maxs[j]) ||
                IS_NAN(out->origin[j]))
             SV_Error("%s: non-finite submodel bbox in %s",
                   __func__, loadmodel->name);
       }
       for (j = 0; j < MAX_MAP_HULLS; j++)
-      {
-         out->headnode[j] = LittleLong(in->headnode[j]);
-      }
-      out->visleafs  = LittleLong(in->visleafs);
-      out->firstface = LittleLong(in->firstface);
-      out->numfaces  = LittleLong(in->numfaces);
+         out->headnode[j] = LittleLong(raw.headnode[j]);
+      out->visleafs  = LittleLong(raw.visleafs);
+      out->firstface = LittleLong(raw.firstface);
+      out->numfaces  = LittleLong(raw.numfaces);
 
       /* headnode[0] is the root mnode_t for hull 0, used by
        * the renderer's BSP traversal.  headnode[1..] feed
@@ -1355,7 +1455,7 @@ CalcSurfaceExtents(msurface_t *s)
 	 * override at Mod_LoadFaces still happens for water
 	 * surfaces, but those are routed away from the
 	 * lightmap path by the texture-name check. */
-	if (s->extents[i] < 0 || s->extents[i] > 256)
+	if (s->extents[i] < 0 || s->extents[i] > 2048)
 	    SV_Error("Bad surface extents (%d)", s->extents[i]);
     }
 }
@@ -1498,6 +1598,11 @@ Mod_LoadFaces_BSP29(lump_t *l)
       }
 
       /* set the surface drawing flags */
+#ifdef ALPHA_TEXTURES
+      if (out->texinfo->texture->has_alpha) {
+         out->flags |= SURF_DRAWALPHA;
+      }
+#endif
       if (!strncmp(out->texinfo->texture->name, "sky", 3)) {
          out->flags |= (SURF_DRAWSKY | SURF_DRAWTILED);
       } else if (!strncmp(out->texinfo->texture->name, "*", 1)) {
@@ -1594,6 +1699,10 @@ static void Mod_LoadFaces_BSP2(lump_t *l)
       }
 
       /* set the surface drawing flags */
+#ifdef ALPHA_TEXTURES
+      if (out->texinfo->texture->has_alpha)
+         out->flags |= SURF_DRAWALPHA;
+#endif
       if (!strncmp(out->texinfo->texture->name, "sky", 3))
          out->flags |= (SURF_DRAWSKY | SURF_DRAWTILED);
       else if (!strncmp(out->texinfo->texture->name, "*", 1))
@@ -1777,8 +1886,80 @@ static void Mod_LoadNodes_BSP2(lump_t *l)
 
 /*
 =================
+Mod_LoadNodes_BSP2_DP (Darkplaces BSP2, float bbox)
+=================
+*/
+static void Mod_LoadNodes_BSP2_DP(lump_t *l)
+{
+   int i, count;
+   mnode_t *out;
+   bsp2_dp_dnode_t *in = (bsp2_dp_dnode_t *)(mod_base + l->fileofs);
+
+   if (l->filelen % sizeof(*in))
+      SV_Error("%s: funny lump size in %s", __func__, loadmodel->name);
+
+   count = l->filelen / sizeof(*in);
+   out   = (mnode_t*)Hunk_Alloc(count * sizeof(*out));
+
+   loadmodel->nodes    = out;
+   loadmodel->numnodes = count;
+
+   for (i = 0; i < count; i++, out++)
+   {
+      int j, p;
+      bsp2_dp_dnode_t raw;
+
+      memcpy(&raw, in, sizeof(raw));
+      in = (bsp2_dp_dnode_t*)((byte*)in + sizeof(bsp2_dp_dnode_t));
+
+      for (j = 0; j < 3; j++)
+      {
+         out->mins[j] = LittleFloat(raw.mins[j]);
+         out->maxs[j] = LittleFloat(raw.maxs[j]);
+      }
+
+      p = LittleLong(raw.planenum);
+      if (p < 0 || p >= loadmodel->numplanes)
+         SV_Error("%s: bad node planenum %i (numplanes=%i) in %s",
+               __func__, p, loadmodel->numplanes, loadmodel->name);
+      out->plane = loadmodel->planes + p;
+
+      out->firstsurface = (uint32_t)LittleLong(raw.firstface);
+      out->numsurfaces = (uint32_t)LittleLong(raw.numfaces);
+      if ((int)out->firstsurface > loadmodel->numsurfaces ||
+          (int)out->numsurfaces > loadmodel->numsurfaces - (int)out->firstsurface)
+         SV_Error("%s: bad node surface range (first=%u, num=%u; "
+                  "numsurfaces=%i) in %s",
+                  __func__, (unsigned)out->firstsurface,
+                  (unsigned)out->numsurfaces,
+                  loadmodel->numsurfaces, loadmodel->name);
+
+      for (j = 0; j < 2; j++)
+      {
+         p = LittleLong(raw.children[j]);
+         if (p >= 0) {
+            if (p >= loadmodel->numnodes)
+               SV_Error("%s: bad node child index %i (numnodes=%i) in %s",
+                     __func__, p, loadmodel->numnodes, loadmodel->name);
+            out->children[j] = loadmodel->nodes + p;
+         } else {
+            int leafidx = -1 - p;
+            if (leafidx < 0 || leafidx >= loadmodel->numleafs)
+               SV_Error("%s: bad node leaf index %i (numleafs=%i) in %s",
+                     __func__, leafidx, loadmodel->numleafs,
+                     loadmodel->name);
+            out->children[j] = (mnode_t *)(loadmodel->leafs + leafidx);
+         }
+      }
+   }
+
+   Mod_SetParent(loadmodel->nodes, NULL);
+}
+
+/*
+=================
 Mod_LoadLeafs
- => Two versions for the different BSP file formats
+ => Three versions for the different BSP file formats
 =================
 */
 static void
@@ -1835,7 +2016,7 @@ Mod_LoadLeafs_BSP29(lump_t *l)
        * for "no PVS data".  Out-of-range values cause the PVS
        * decompressor (Mod_DecompressVis) to walk off the end
        * of the visdata hunk allocation. */
-      if (p == -1)
+      if (p == -1 || loadmodel->visdatasize == 0)
          out->compressed_vis = NULL;
       else
       {
@@ -1896,7 +2077,7 @@ Mod_LoadLeafs_BSP2(lump_t *l)
 
       p = LittleLong(in->visofs);
 
-      if (p == -1)
+      if (p == -1 || loadmodel->visdatasize == 0)
          out->compressed_vis = NULL;
       else
       {
@@ -1909,6 +2090,76 @@ Mod_LoadLeafs_BSP2(lump_t *l)
 
       for (j = 0; j < 4; j++)
          out->ambient_sound_level[j] = in->ambient_level[j];
+   }
+}
+
+/*
+=================
+Mod_LoadLeafs_BSP2_DP (Darkplaces BSP2, float bbox)
+=================
+*/
+static void
+Mod_LoadLeafs_BSP2_DP(lump_t *l)
+{
+   bsp2_dp_dleaf_t *in;
+   mleaf_t *out;
+   int i, j, count, p;
+
+   in = (bsp2_dp_dleaf_t *)(mod_base + l->fileofs);
+   if (l->filelen % sizeof(*in))
+      SV_Error("%s: funny lump size in %s", __func__, loadmodel->name);
+   count = l->filelen / sizeof(*in);
+   if (count < 0 || count > MAX_MAP_LEAFS)
+      SV_Error("%s: bad leaf count %i (max %i) in %s", __func__,
+               count, MAX_MAP_LEAFS, loadmodel->name);
+   out = (mleaf_t*)Hunk_Alloc(count * sizeof(*out));
+
+   loadmodel->leafs = out;
+   loadmodel->numleafs = count;
+
+   for (i = 0; i < count; i++, out++) {
+      int j;
+      bsp2_dp_dleaf_t raw;
+
+      memcpy(&raw, in, sizeof(raw));
+      in = (bsp2_dp_dleaf_t*)((byte*)in + sizeof(bsp2_dp_dleaf_t));
+
+      for (j = 0; j < 3; j++) {
+         out->mins[j] = LittleFloat(raw.mins[j]);
+         out->maxs[j] = LittleFloat(raw.maxs[j]);
+      }
+
+      p = LittleLong(raw.contents);
+      out->contents = p;
+
+      {
+         uint32_t fms = (uint32_t)LittleLong(raw.firstmarksurface);
+         uint32_t nms = (uint32_t)LittleLong(raw.nummarksurfaces);
+         if (fms > (uint32_t)loadmodel->nummarksurfaces ||
+             nms > (uint32_t)loadmodel->nummarksurfaces - fms)
+            SV_Error("%s: bad marksurface range (first=%u, num=%u; "
+                     "nummarksurfaces=%i) in %s",
+                     __func__, fms, nms, loadmodel->nummarksurfaces,
+                     loadmodel->name);
+         out->firstmarksurface = loadmodel->marksurfaces + fms;
+         out->nummarksurfaces = nms;
+      }
+
+      p = LittleLong(raw.visofs);
+
+      if (p == -1 || loadmodel->visdatasize == 0)
+         out->compressed_vis = NULL;
+      else
+      {
+         if (p < 0 || p >= loadmodel->visdatasize)
+            SV_Error("%s: bad visofs %i (visdatasize=%i) in %s",
+                     __func__, p, loadmodel->visdatasize, loadmodel->name);
+         out->compressed_vis = loadmodel->visdata + p;
+      }
+      out->efrags = NULL;
+
+      for (j = 0; j < 4; j++)
+         out->ambient_sound_level[j] = raw.ambient_level[j];
    }
 }
 
@@ -2273,9 +2524,11 @@ static void Mod_LoadBrushModel(model_t *mod, void *buffer, unsigned long size)
       header->lumps[i].filelen = LittleLong(header->lumps[i].filelen);
    }
 
-   if (header->version != BSPVERSION && header->version != BSP2VERSION)
-      SV_Error("%s: %s has wrong version number (%i should be %i or %i)",
-            __func__, mod->name, header->version, BSPVERSION, BSP2VERSION);
+   if (header->version != BSPVERSION && header->version != BSP2VERSION && header->version != BSP2VERSION_DP) {
+      SV_Error("%s: %s has wrong version number (%i should be %i, %i or %i)",
+            __func__, mod->name, header->version, BSPVERSION, BSP2VERSION, BSP2VERSION_DP);
+      return;
+   }
 
    mod_base = (byte *)header;
 
@@ -2294,9 +2547,11 @@ static void Mod_LoadBrushModel(model_t *mod, void *buffer, unsigned long size)
        * - end > begin (again, overflow reqd.)
        * - end < size of file.
        */
-      if (b1 > e1 || e1 > size || b1 < 0 || e1 < 0)
+      if (b1 > e1 || e1 > size || b1 < 0 || e1 < 0) {
          SV_Error("%s: bad lump extents in %s", __func__,
                loadmodel->name);
+         return;
+      }
 
       /* Now, check that it doesn't overlap any other lumps */
       for (j = 0; j < HEADER_LUMPS; ++j)
@@ -2304,9 +2559,11 @@ static void Mod_LoadBrushModel(model_t *mod, void *buffer, unsigned long size)
          int b2 = header->lumps[j].fileofs;
          int e2 = b2 + header->lumps[j].filelen;
 
-         if ((b1 < b2 && e1 > b2) || (b2 < b1 && e2 > b1))
+         if ((b1 < b2 && e1 > b2) || (b2 < b1 && e2 > b1)) {
             SV_Error("%s: overlapping lumps in %s", __func__,
                   loadmodel->name);
+            return;
+         }
       }
    }
 
@@ -2333,6 +2590,10 @@ static void Mod_LoadBrushModel(model_t *mod, void *buffer, unsigned long size)
       Mod_LoadLeafs_BSP29(&header->lumps[LUMP_LEAFS]);
       Mod_LoadNodes_BSP29(&header->lumps[LUMP_NODES]);
       Mod_LoadClipnodes_BSP29(&header->lumps[LUMP_CLIPNODES]);
+   } else if (header->version == BSP2VERSION_DP) {
+      Mod_LoadLeafs_BSP2_DP(&header->lumps[LUMP_LEAFS]);
+      Mod_LoadNodes_BSP2_DP(&header->lumps[LUMP_NODES]);
+      Mod_LoadClipnodes_BSP2(&header->lumps[LUMP_CLIPNODES]);
    } else {
       Mod_LoadLeafs_BSP2(&header->lumps[LUMP_LEAFS]);
       Mod_LoadNodes_BSP2(&header->lumps[LUMP_NODES]);
@@ -2386,6 +2647,8 @@ static void Mod_LoadBrushModel(model_t *mod, void *buffer, unsigned long size)
 
                snprintf(name, sizeof(name), "*%i", i + 1);
                loadmodel = Mod_FindName(name);
+               if (!loadmodel)
+                  continue;
                *loadmodel = *mod;
                strlcpy(loadmodel->name, name, sizeof(loadmodel->name));
                mod = loadmodel;
@@ -2444,6 +2707,9 @@ Mod_TouchModel
 void Mod_TouchModel(char *name)
 {
    model_t *mod = Mod_FindName(name);
+
+   if (!mod)
+      return;
 
    if (!mod->needload)
    {

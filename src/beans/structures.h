@@ -3,12 +3,15 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <memory>
 #include <stdint.h>
 
 #include <const/constant.h>
 #include <const/menuconst.h>
 #include <const/keyconst.h>
-#include "unzip/ZipBrowser.h"
+#include <unzip/ZipBrowser.h>
+#include <io/fileprops.h>
+
 
 
 class FileLaunch{
@@ -69,6 +72,8 @@ struct ListStatus{
 	char zipname[260];
 	//Es el path seleccionado dentro del zip
 	char zippedPath[4096];
+	//Relative path selected
+	char relativePath[4096];
 };
 
 struct t_scale_props{
@@ -245,7 +250,12 @@ public:
 	//Indica si es un directorio
 	FILE_TYPE fileType;
 
-	GameFile() : gameData(NULL), systemid(0), cache(NULL), fileType(FT_CARTRIDGE){
+	GameFile() : 
+        systemid(0), 
+        cache(NULL), 
+        gameData(NULL), 
+        fileType(FT_CARTRIDGE) 
+    {
     }
 
     ~GameFile(){
@@ -736,6 +746,7 @@ class ConfigEmu{
         use_rom_directory = true;
 		generalConfig = false;
 		no_uncompress = false;
+		show_directories = false;
     }
     ~ConfigEmu(){
 
@@ -785,8 +796,12 @@ class ConfigEmu{
 	bool no_uncompress;
 	//Set the xml to obtain mame game names
 	std::string mame_roms_xml;
-	//Se the keyboard type
+	//Set the keyboard type
 	std::string keyboard_type;
+	//Show directories in the menu list
+	bool show_directories;
+	//Set the default servers to connect when required
+	std::string network_default_servers;
 };
 
 struct t_rom_paths{
@@ -841,4 +856,44 @@ public:
 		pathInZip = Constant::split(dir, Constant::getFileSep());
 	}
 
+};
+
+struct t_dir_file_paths{
+private:
+	// Route selected in the contents of the zip
+	std::vector<std::string> relativePath;
+public:
+	// Directory where the file is
+	std::string dir;
+	// Name of the selected file. It can be a directory or a regula file
+	std::string file;
+
+	void clear(){
+		relativePath.clear();
+		dir.clear();
+		file.clear();
+	}
+
+	std::string getRelativePath(){
+		std::string tmpPath = "";
+		for (unsigned int i=0; i < relativePath.size(); i++){
+			tmpPath += relativePath[i] + (i + 1 < relativePath.size() ? Constant::getFileSep() : "");
+		}
+		return tmpPath;
+	}
+
+	void addRelativePath(std::string dir){
+		relativePath.push_back(dir);
+	}
+
+	void setRelativePath(std::string dir){
+		relativePath = Constant::split(dir, Constant::getFileSep());
+	}
+
+	bool cdBack(){
+		if (!relativePath.empty()) {
+			relativePath.pop_back();
+		}
+		return !relativePath.empty();
+	}
 };

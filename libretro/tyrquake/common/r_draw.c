@@ -324,12 +324,17 @@ static qboolean R_EmitCachedEdge(void)
 {
    edge_t *edge;
 
-   /* In pass 2 (translucent liquid pass) the edge cache from pass 1
-    * is invalid: pass 1 emitted edges into r_edges, then
-    * R_BeginEdgeFrame reset edge_p back to r_edges so pass 2 can
-    * refill the buffer.  Any cachededgeoffset stamped during pass 1
-    * now points at a stale slot that pass 2 would misread. */
-   if (r_renderpass == 2)
+   /* In pass 2 (translucent liquid pass) and the alpha pass, the
+     * edge cache from pass 1 is invalid: pass 1 emitted edges into
+     * r_edges, then R_BeginEdgeFrame reset edge_p back to r_edges
+     * so the subsequent pass can refill the buffer.  Any
+     * cachededgeoffset stamped during pass 1 now points at a stale
+     * slot that the later pass would misread. */
+   if (r_renderpass == 2
+#ifdef ALPHA_TEXTURES
+       || r_alphapass
+#endif
+      )
       return false;
 
    /* If fully clipped, no action necessary */
@@ -372,13 +377,31 @@ void R_RenderFace(const entity_t *e, msurface_t *fa, int clipflags)
    medge_t *pedges, tedge;
    clipplane_t *pclip;
 
-   /* Two-pass filter: pass 1 skips liquid surfaces, pass 2 skips
-    * non-liquid surfaces.  In single-pass mode (r_renderpass == 0,
-    * the common case with no liquid translucency) both branches
-    * fall through to draw everything as before. */
-   if (r_renderpass == 1 && (fa->flags & SURF_DRAWTURB)) {
-      r_renderpass_seen_liquid = 1;
-      return;
+   /* Three-pass filter:
+     *   pass 0: draw everything (single-pass, no alpha/liquid filtering)
+     *   pass 1: opaque world only -- skip SURF_DRAWTURB + SURF_DRAWALPHA
+     *   pass 2: transparent pass (r_alphapass) -- only SURF_DRAWALPHA
+     *   pass 2: liquid pass (r_renderpass == 2) -- only SURF_DRAWTURB
+     * In single-pass mode (r_renderpass == 0, the common case with
+     * no liquid translucency and no alpha textures) both branches
+     * fall through to draw everything as before. */
+    if (r_renderpass == 1) {
+       if (r_nocull_active && (fa->flags & SURF_DRAWTURB)) {
+          r_renderpass_seen_liquid = 1;
+          return;
+       }
+#ifdef ALPHA_TEXTURES
+      if (fa->flags & SURF_DRAWALPHA) {
+         r_renderpass_seen_alpha = 1;
+         if (!r_alphapass) {
+            if (r_num_alpha_surfaces < MAX_ALPHA_SURFACES)
+               r_alpha_surfaces[r_num_alpha_surfaces++] = fa;
+            return;
+         }
+      } else if (r_alphapass) {
+         return;
+      }
+#endif
    }
    if (r_renderpass == 2 && !(fa->flags & SURF_DRAWTURB))
       return;
@@ -425,12 +448,18 @@ void R_RenderFace(const entity_t *e, msurface_t *fa, int clipflags)
          r_leftclipped = r_rightclipped = false;
          R_ClipEdge(&r_pcurrentvertbase[r_pedge->v[0]],
                &r_pcurrentvertbase[r_pedge->v[1]], pclip);
-         /* Only update the cache in pass 0 (single-pass) and pass 1
-          * (opaque pre-pass).  Pass 2's edges live in a different
-          * r_edges layout (post-R_BeginEdgeFrame reset), so caching
-          * them would corrupt the next frame's pass 1 cache. */
-         if (r_renderpass != 2)
-            r_pedge->cachededgeoffset = cacheoffset;
+          /* Only update the cache in pass 0 (single-pass) and pass 1
+           * (opaque pre-pass).  Pass 2's and the alpha pass's edges
+           * live in a different r_edges layout (post-R_BeginEdgeFrame
+           * reset), so caching them would corrupt the next frame's
+           * pass 1 cache. */
+          if (r_renderpass != 2
+#ifdef ALPHA_TEXTURES
+               && !r_alphapass
+#endif
+              )
+             r_pedge->cachededgeoffset = cacheoffset;
+
 
          if (r_leftclipped)
             makeleftedge = true;
@@ -451,18 +480,22 @@ void R_RenderFace(const entity_t *e, msurface_t *fa, int clipflags)
          r_leftclipped = r_rightclipped = false;
          R_ClipEdge(&r_pcurrentvertbase[r_pedge->v[1]],
                &r_pcurrentvertbase[r_pedge->v[0]], pclip);
-         if (r_renderpass != 2)
-            r_pedge->cachededgeoffset = cacheoffset;
+          if (r_renderpass != 2
+#ifdef ALPHA_TEXTURES
+               && !r_alphapass
+#endif
+              )
+             r_pedge->cachededgeoffset = cacheoffset;
 
-         if (r_leftclipped)
-            makeleftedge = true;
-         if (r_rightclipped)
-            makerightedge = true;
-         r_lastvertvalid = true;
-      }
-   }
+          if (r_leftclipped)
+             makeleftedge = true;
+          if (r_rightclipped)
+             makerightedge = true;
+          r_lastvertvalid = true;
+       }
+    }
 
-   /* if there was a clip off the left edge, add that edge too */
+    /* if there was a clip off the left edge, add that edge too */
    /* FIXME: faster to do in screen space? */
    /* FIXME: share clipped edges? */
    if (makeleftedge) {
@@ -529,9 +562,20 @@ void R_RenderBmodelFace(const entity_t *e, bedge_t *pedges, msurface_t *psurf)
    clipplane_t *pclip;
 
    /* See R_RenderFace for the pass filter rationale. */
-   if (r_renderpass == 1 && (psurf->flags & SURF_DRAWTURB)) {
-      r_renderpass_seen_liquid = 1;
-      return;
+    if (r_renderpass == 1) {
+       if (r_nocull_active && (psurf->flags & SURF_DRAWTURB)) {
+          r_renderpass_seen_liquid = 1;
+          return;
+       }
+#ifdef ALPHA_TEXTURES
+      if (psurf->flags & SURF_DRAWALPHA) {
+         r_renderpass_seen_alpha = 1;
+         if (!r_alphapass)
+            return;
+      } else if (r_alphapass) {
+         return;
+      }
+#endif
    }
    if (r_renderpass == 2 && !(psurf->flags & SURF_DRAWTURB))
       return;

@@ -139,6 +139,8 @@ int procesarAccionesMenu(ListMenu &listMenu){
 	if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_B)){
 		if (listMenu.listZipped.cdBack()){
 			gameMenu->listableZip(listMenu, FS_ZIP_CD_BACK);
+		} else if (listMenu.listDir.cdBack()){
+			gameMenu->listableDir(listMenu, FS_DIR_BACK);
 		} else {
 			gameMenu->loadEmuCfg(listMenu);
 			listMenu.listZipped.clear();
@@ -146,12 +148,17 @@ int procesarAccionesMenu(ListMenu &listMenu){
 	}
 
 	if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
+		if ((std::size_t)listMenu.curPos >= listMenu.filteredGames.size()){
+			LOG_ERROR("List is empty or position is wrong");
+			return 1;
+		}
+
 		//Saving the position
 		gameMenu->saveGameMenuPos(listMenu);
-
 		std::string romToLaunch;
 		bool deleteTmpDir = true;
 		auto& game = listMenu.filteredGames.at(listMenu.curPos);
+		ConfigEmu* emu = gameMenu->getCfgLoader()->getCfgEmu();
 		
 		//Call to listableZip to load a zip with games inside. The name of the file 
 		//should start with the character "@"
@@ -170,14 +177,21 @@ int procesarAccionesMenu(ListMenu &listMenu){
 			romToLaunch = listMenu.listZipped.extractedFile;
 			deleteTmpDir = false;
 		} else {
-			//Case to load a normal game placed in the filesystem
-			dirutil dir;
-			ConfigEmu* emu = gameMenu->getCfgLoader()->getCfgEmu();
-			const std::string romdir = emu->use_rom_directory ? dirutil::getPathPrefix(emu->rom_directory) + string(Constant::tempFileSep) : "";
-			const std::string rom = emu->use_extension ? game->longFileName : dir.getFileNameNoExt(game->longFileName);
-			romToLaunch = romdir + rom;
+			//It's not a zip file. Try to list if it's a directory
+			FILE_STATUS fs = gameMenu->listableDir(listMenu, FS_DIR_CD);
+			if (fs == FS_DIR_ISFILE){
+				romToLaunch = listMenu.listDir.dir;
+				std::string relativePath = listMenu.listDir.getRelativePath();
+				if (!relativePath.empty()){
+					romToLaunch.append(relativePath + Constant::getFileSep());
+				}
+				romToLaunch.append(listMenu.listDir.file);
+			} else {
+				//Navigating the directory
+				return 1;
+			}
 		}
-		
+
 		//Launch the game with the proper emulator if the actual is not correct
 		gameMenu->launchProgram(romToLaunch);
 		//Launch the game if the actual emulator is correct
@@ -303,6 +317,8 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 	
 		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_R)){
 			LOG_DEBUG("Next page");
+			listMenu.listZipped.clear();
+			listMenu.listDir.clear();
 			gameMenu->getCfgLoader()->getNextCfgEmu();
 			gameMenu->loadEmuCfg(listMenu);
 			ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
@@ -310,10 +326,11 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 			gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
 			//Loading the background image if exists
 			gameMenu->loadBgImage();
-			listMenu.listZipped.clear();
 		}
 		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_L)){
 			LOG_DEBUG("Prev page");
+			listMenu.listZipped.clear();
+			listMenu.listDir.clear();
 			gameMenu->getCfgLoader()->getPrevCfgEmu();
 			gameMenu->loadEmuCfg(listMenu);
 			ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
@@ -321,7 +338,6 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 			gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
 			//Loading the background image if exists
 			gameMenu->loadBgImage();
-			listMenu.listZipped.clear();
 		}
 
 		listMenu.keyUp = gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_UP) ||

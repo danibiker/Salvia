@@ -102,7 +102,7 @@ static bool libretro_supports_bitmasks = false;
 #elif defined(HW_RVL) || defined(_XBOX1) 
 #define DEFAULT_MEMSIZE_MB 24
 #else
-#define DEFAULT_MEMSIZE_MB 32
+#define DEFAULT_MEMSIZE_MB 256
 #endif
 
 #ifdef RHI_HAVE_VULKAN
@@ -132,7 +132,7 @@ static bool libretro_supports_bitmasks = false;
  * support, or user-selected) still gets the bigger pool, which
  * is benign -- Cache_FreeLow just fires less often. */
 #undef  DEFAULT_MEMSIZE_MB
-#define DEFAULT_MEMSIZE_MB 64
+#define DEFAULT_MEMSIZE_MB 256
 #endif
 
 /* Use 44.1 kHz by default (matches CD
@@ -369,13 +369,13 @@ static retro_input_state_t input_cb;
 
 void Sys_Printf(const char *fmt, ...)
 {
-   //char buf[4096];
-   //va_list args;
-   //va_start(args, fmt);
-   //vsnprintf(buf, sizeof(buf), fmt, args);
-   //va_end(args);
-   //if (log_cb)
-   //   log_cb(RETRO_LOG_INFO, "%s", buf);
+   char buf[4096];
+   va_list args;
+   va_start(args, fmt);
+   vsnprintf(buf, sizeof(buf), fmt, args);
+   va_end(args);
+   if (log_cb)
+      log_cb(RETRO_LOG_INFO, "%s", buf);
 }
 void Sys_Quit(void) { Host_Shutdown(); }
 

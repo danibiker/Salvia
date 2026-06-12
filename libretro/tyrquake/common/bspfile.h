@@ -37,7 +37,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	MAX_MAP_PLANES		16384	/* TYR - was 8192 */
 #define	MAX_MAP_NODES		32767	/* negative shorts are contents */
 #define	MAX_MAP_CLIPNODES	32767	/* negative shorts are contents */
-#define	MAX_MAP_LEAFS		32767	/* negative shorts are contents */
+#define	MAX_MAP_LEAFS		262144	/* negative shorts are contents */
 #define	MAX_MAP_VERTS		65535
 #define	MAX_MAP_FACES		65535
 #define	MAX_MAP_MARKSURFACES	65535
@@ -59,7 +59,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 /* ============================================================================= */
 
 #define BSPVERSION	29
-#define BSP2VERSION	(('B' << 24) | ('S' << 16) | ('P' << 8) | '2')
+#define BSP2VERSION_2PSB	(('B' << 24) | ('S' << 16) | ('P' << 8) | '2')	/* RMQ BSP2 (short mins/maxs) */
+#define BSP2VERSION	BSP2VERSION_2PSB						/* alias for current default */
+#define BSP2VERSION_DP		(('2' << 24) | ('P' << 16) | ('S' << 8) | 'B')	/* Darkplaces BSP2 (float mins/maxs) */
 
 typedef struct {
     int32_t fileofs;
@@ -165,6 +167,16 @@ typedef struct {
     uint32_t numfaces;	/* counting both sides */
 } bsp2_dnode_t;
 
+/* Darkplaces BSP2 node (float bbox) */
+typedef struct {
+    int32_t planenum;
+    int32_t children[2];
+    float mins[3];
+    float maxs[3];
+    uint32_t firstface;
+    uint32_t numfaces;
+} bsp2_dp_dnode_t;
+
 /*
  * Note that children are interpreted as unsigned values now, so that we can
  * handle > 32k clipnodes. Values > 0xFFF0 can be assumed to be CONTENTS
@@ -268,5 +280,19 @@ typedef struct {
 
     uint8_t ambient_level[NUM_AMBIENTS];
 } bsp2_dleaf_t;
+
+/* Darkplaces BSP2 leaf (float bbox) */
+typedef struct {
+    int32_t contents;
+    int32_t visofs;
+
+    float mins[3];
+    float maxs[3];
+
+    uint32_t firstmarksurface;
+    uint32_t nummarksurfaces;
+
+    uint8_t ambient_level[NUM_AMBIENTS];
+} bsp2_dp_dleaf_t;
 
 #endif /* BSPFILE_H */

@@ -76,7 +76,7 @@ static void	(*surfmiptableRGB[4])(void) =
 };
 
 /* static unsigned blocklights[18 * 18 * 3]; */
-int		blocklights[18*18*3]; /* LordHavoc: .lit support (*3 for RGB) */
+int		blocklights[65*65*3]; /* LordHavoc: .lit support (*3 for RGB) */
 
 /* Leilei - macros to make colored lighting code look a little more bearable to sanity */
 /* Macros for initiating the RGB light deltas. */

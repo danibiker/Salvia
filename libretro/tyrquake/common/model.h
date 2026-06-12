@@ -119,6 +119,9 @@ typedef struct texture_s {
     struct texture_s *anim_next;	/* in the animation sequence */
     struct texture_s *alternate_anims;	/* bmodels in frmae 1 use these */
     unsigned offsets[MIPLEVELS];	/* four mip maps stored */
+#ifdef ALPHA_TEXTURES
+    qboolean has_alpha;		/* texture uses TRANSPARENT_COLOR (palette index 255) */
+#endif
 } texture_t;
 
 
@@ -128,6 +131,7 @@ typedef struct texture_s {
 #define SURF_DRAWTURB		(1 << 4)
 #define SURF_DRAWTILED		(1 << 5)
 #define SURF_DRAWBACKGROUND	(1 << 6)
+#define SURF_DRAWALPHA		(1 << 7)
 
 /* !!! if this is changed, it must be changed in asm_draw.h too !!! */
 typedef struct {

@@ -363,6 +363,10 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 						cfgEmu->config.mame_roms_xml = value;
 					} else if (key.compare("keyboard_type") == 0){
 						cfgEmu->config.keyboard_type = value;
+					} else if (key.compare("menu_show_directories") == 0){
+						cfgEmu->config.show_directories = value.compare("yes") == 0 ? true : false;
+					} else if (key.compare("network_default_servers") == 0){
+						cfgEmu->config.network_default_servers = value;
 					}
 				}
 			}             

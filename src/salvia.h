@@ -30,6 +30,7 @@
 
 CfgLoader *cfgLoader;
 GameMenu *gameMenu;
+ListMenu *listMenu;
 Logger *logger;
 dirutil dir;
 
@@ -143,6 +144,15 @@ struct LoadingWatcherCtx {
 	SDL_Rect      drawRect;
 	volatile LONG exitRequested;
 };
+
+static void unescape_newlines(std::string& str) {
+    std::string::size_type pos = 0;
+    // Busca "\\n" (representado en código como "\\\\n")
+    while ((pos = str.find("\\n", pos)) != std::string::npos) {
+        str.replace(pos, 2, "\n"); // Reemplaza 2 caracteres por 1 salto de línea
+        ++pos; // Avanza para evitar bucles infinitos
+    }
+}
 
 DWORD WINAPI th_printLoading(LPVOID data) {
 	LoadingWatcherCtx* ctx = (LoadingWatcherCtx*)data;
@@ -450,6 +460,9 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
 		menuData.listZipped.file = dir.getFileName(menuBeforeExit.zipname);
 		FILE_STATUS fs = gameMenu.listableZip(menuData, FS_ZIP_CD);
 	} else {
+		if (menuBeforeExit.relativePath[0] != '\0'){
+			menuData.listDir.setRelativePath(menuBeforeExit.relativePath);
+		}
 		gameMenu.loadEmuCfg(menuData);
 	}
 
@@ -668,3 +681,4 @@ bool extractAndLoadGame(std::string rompath, bool tmpDelete = true){
 
 	return gameLoaded;
 }
+

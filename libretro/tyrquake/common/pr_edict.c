@@ -1197,18 +1197,21 @@ PR_LoadProgs(void)
                SV_Error("progs.dat: statement %i (OP_IF/IFNOT) has "
                         "bad globals index a=%u (numglobals=%d)",
                         i, (unsigned)st->a, ng);
-         } else {
-            /* Non-jump op: a/b/c must be valid globals indices. */
-            if ((unsigned)st->a > (unsigned)(ng - 3) ||
-                (unsigned)st->b > (unsigned)(ng - 3) ||
-                (unsigned)st->c > (unsigned)(ng - 3))
-               SV_Error("progs.dat: statement %i (op %u) has "
-                        "globals index out of range "
-                        "(a=%u b=%u c=%u; numglobals=%d)",
-                        i, (unsigned)st->op,
-                        (unsigned)st->a, (unsigned)st->b,
-                        (unsigned)st->c, ng);
-         }
+          } else {
+             /* Non-jump op: a/b/c must be valid globals indices.
+              * FTEQCC-compiled progs (e.g. Arcane Dimensions) may
+              * store temporaries in the last 9 slots (OFS_RETURN
+              * through OFS_PARM3), so accept indices 0..ng-1. */
+             if ((unsigned)st->a >= (unsigned)ng ||
+                 (unsigned)st->b >= (unsigned)ng ||
+                 (unsigned)st->c >= (unsigned)ng)
+                SV_Error("progs.dat: statement %i (op %u) has "
+                         "globals index out of range "
+                         "(a=%u b=%u c=%u; numglobals=%d)",
+                         i, (unsigned)st->op,
+                         (unsigned)st->a, (unsigned)st->b,
+                         (unsigned)st->c, ng);
+          }
       }
 
       /* Functions: first_statement is signed (negative = builtin),

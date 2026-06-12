@@ -449,6 +449,7 @@ void *Hunk_Alloc(int size)
    if (hunk_size - hunk_low_used - hunk_high_used < size)
    {
       Sys_Error ("%s: failed on %i bytes", __func__, size);
+      return NULL;
    }
 
    h = (hunk_t *)(hunk_base + hunk_low_used);

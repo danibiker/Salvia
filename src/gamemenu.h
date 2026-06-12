@@ -70,13 +70,18 @@ enum FILE_STATUS
 	FS_ZIP_NAVIGATION = 0, 
     FS_ZIP_FILE_EXTRACTED,
 	FS_ZIP_EXTRACT_ERROR,
-	FS_NOZIP_TO_LIST 
+	FS_NOZIP_TO_LIST,
+	FS_DIR_EMPTY,
+	FS_DIR_NAVIGATION,
+	FS_DIR_ISFILE
 };
 
 enum FILE_NAVIGATION
 {
 	FS_ZIP_CD = 0, 
-    FS_ZIP_CD_BACK
+    FS_ZIP_CD_BACK,
+	FS_DIR_CD,
+	FS_DIR_BACK
 };
 
 class GameMenu : public Engine{
@@ -107,6 +112,7 @@ class GameMenu : public Engine{
 		bool emuCanLaunchGame();
         vector<string> launchProgram(const std::string& fullPathRom);
 		FILE_STATUS listableZip(ListMenu &listMenu, FILE_NAVIGATION nav);
+		FILE_STATUS listableDir(ListMenu &listMenu, FILE_NAVIGATION nav);
 		string getSelectedRomFile(const ListMenu &listMenu);
 		FILE_STATUS extractFileFromZip(const std::string& internalPath, const std::string& extractionPath, ZipBrowser& zb, ListMenu &listMenu);
 		std::string GetMD5(const std::string& input);

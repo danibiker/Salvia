@@ -456,18 +456,34 @@ int
 UDP_GetAddrFromName(const char *name, netadr_t *addr)
 {
     struct hostent *hostentry;
+    char namebuf[256];
+    char *colon;
+    int port;
 
     if (name[0] >= '0' && name[0] <= '9')
 	return NET_PartialIPAddress(name, &myAddr, addr);
 
-    hostentry = gethostbyname(name);
+    /* Parse optional :port suffix on hostnames (e.g. "host:27015") */
+    strlcpy(namebuf, name, sizeof(namebuf));
+    colon = strchr(namebuf, ':');
+    if (colon)
+    {
+	*colon = '\0';
+	port = Q_atoi(colon + 1);
+    }
+    else
+    {
+	port = net_hostport;
+    }
+
+    hostentry = gethostbyname(namebuf);
     if (!hostentry)
 	return -1;
 
     /* memcpy avoids the strict-aliasing violation of dereferencing
      * h_addr_list[0] (a char *) through an int *. */
     memcpy(&addr->ip.l, hostentry->h_addr_list[0], sizeof(addr->ip.l));
-    addr->port = htons(net_hostport);
+    addr->port = htons(port);
 
     return 0;
 }

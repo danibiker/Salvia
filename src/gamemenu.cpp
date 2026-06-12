@@ -768,13 +768,19 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 
     dirutil dir;
 	ConfigEmu *emu = cfgLoader->getCfgEmu();
-    string mapfilepath = Constant::getAppDir() //+ string(Constant::tempFileSep) + "gmenu" 
+    string mapfilepath = Constant::getAppDir()
             + string(Constant::tempFileSep) + "config" + string(Constant::tempFileSep) + emu->map_file;
     
     if (emu->use_rom_file && !emu->map_file.empty() && dir.fileExists(mapfilepath.c_str())){
         menuData.mapFileToList(mapfilepath);
     } else {
-        mapfilepath = dirutil::getPathPrefix(emu->rom_directory);
+		mapfilepath = dirutil::getPathPrefix(emu->rom_directory);
+		std::string relativePath = menuData.listDir.getRelativePath();
+		if (!relativePath.empty()){
+			mapfilepath.append(Constant::getFileSep() + relativePath);
+		}
+		LOG_DEBUG("Listing directory: %s", mapfilepath.c_str());
+
         vector<unique_ptr<FileProps>> files;
 		
 		string extFilter = " " + emu->rom_extension;
@@ -786,10 +792,8 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 			Constant::drawTextCent(overlay, fontsmall, msg.c_str(), overlay->w / 2, overlay->h / 2, true, true,  white, -1);
         }
 
-        dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, false, false);
-
-		ConfigEmu emu = *cfgLoader->getCfgEmu();
-        string mapfilepath = dirutil::getPathPrefix(emu.rom_directory);
+		dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, "", emu->show_directories, false, false);
+        string mapfilepath = dirutil::getPathPrefix(emu->rom_directory);
 
         if (isDebug()){
             SDL_FillRect(overlay, NULL, cblack);
@@ -801,7 +805,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
             SDL_Delay(3000);
         }
 
-        menuData.filesToList(files, emu);
+        menuData.filesToList(files, *emu);
         files.clear();
     }
 
@@ -948,6 +952,52 @@ FILE_STATUS GameMenu::listableZip(ListMenu &listMenu, FILE_NAVIGATION nav){
 	return ret;
 }
 
+FILE_STATUS GameMenu::listableDir(ListMenu &listMenu, FILE_NAVIGATION nav){
+	dirutil dir;
+	ConfigEmu emu = *cfgLoader->getCfgEmu();
+	FILE_STATUS ret = FS_DIR_EMPTY;
+	string romFile;
+
+	if (listMenu.curPos >= 0 && listMenu.curPos < (int)listMenu.filteredGames.size()){
+		auto game = listMenu.filteredGames.at(listMenu.curPos);
+		romFile = game->longFileName;
+	}
+	
+	listMenu.listDir.dir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory) + string(Constant::tempFileSep) : "";
+	std::string fileSelected;
+	std::string rompath;
+
+	if (nav == FS_DIR_CD){
+		fileSelected = emu.use_extension ? romFile : dir.getFileNameNoExt(romFile);
+		rompath = listMenu.listDir.dir;
+		std::string relativePath = listMenu.listDir.getRelativePath();
+		if (!relativePath.empty()){
+			rompath.append(relativePath + Constant::getFileSep());
+		}
+		rompath.append(fileSelected);
+	} else if (nav == FS_DIR_BACK){
+		rompath = listMenu.listDir.dir + listMenu.listDir.getRelativePath();
+	}
+	LOG_DEBUG("rompath: %s", rompath.c_str());
+	
+	if (dir.isDir(rompath.c_str())){
+		vector<unique_ptr<FileProps>> files;
+		ConfigEmu *emu = cfgLoader->getCfgEmu();
+		string extFilter = " " + emu->rom_extension;
+		extFilter = Constant::replaceAll(extFilter, " ", ".");
+		dir.listarFilesSuperFast(rompath.c_str(), files, extFilter, "", emu->show_directories, false, false);
+		listMenu.filesToList(files, *emu);
+		if (nav == FS_DIR_CD){
+			listMenu.listDir.addRelativePath(fileSelected);
+		}
+		return FS_DIR_NAVIGATION;
+	} else {
+		listMenu.listDir.file = fileSelected;
+		return FS_DIR_ISFILE;
+	}
+	return ret;
+}
+
 std::string GameMenu::GetMD5(const std::string& input)
 {
     md5_state_t state;
@@ -1009,6 +1059,8 @@ int GameMenu::saveGameMenuPos(ListMenu &menuData){
 	//Guardando los datos si se ha seleccionado un fichero zip
 	strcpy_s(input1.zipname, sizeof(input1.zipname), (menuData.listZipped.dir + Constant::getFileSep() + menuData.listZipped.file).c_str());
 	strcpy_s(input1.zippedPath, sizeof(input1.zippedPath), menuData.listZipped.getInternalDir().c_str());
+	//Guardando los datos cuando se selecciona un directorio relativo al directorio de roms del emulador
+	strcpy_s(input1.relativePath, sizeof(input1.relativePath), menuData.listDir.getRelativePath().c_str());
 
     int flag = 0;
     flag = fwrite(&input1, sizeof(struct ListStatus), 1, outfile);
@@ -1041,7 +1093,6 @@ int GameMenu::recoverGameMenuPos(ListMenu &menuData, struct ListStatus &read_str
     if (fread(&read_struct, sizeof(read_struct), 1, infile) > 0){
         LOG_DEBUG("emupos: %d; inipos: %d; endpos: %d; curpos: %d; maxlines: %d; layout: %d; animateBkg: %d", read_struct.emuLoaded,  
 			read_struct.iniPos, read_struct.endPos, read_struct.curPos, read_struct.maxLines, read_struct.layout, read_struct.animateBkg);
-
         //Setting the emulator selected        
         cfgLoader->emuCfgPos = read_struct.emuLoaded;
     } else {

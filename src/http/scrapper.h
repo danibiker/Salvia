@@ -125,6 +125,7 @@ class Scrapper{
 		int scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig, SafeDownloadQueue& dwQueue, bool onlyCount = false);
 		static void StartScrappingAsync(std::vector<ConfigEmu>& emu, ScrapperConfig cfg);
 		static void ShutdownScrapper();
+		static std::string scrapQuakeList(); // returns pipe-delimited "name|map|address|gametype|players|max\n"
 	private:
 		static volatile LONG scrapping;
 		static HANDLE hMainThread;

@@ -368,6 +368,8 @@ typedef enum {cart_gba,
 			  cart_dos,
 			  cart_doom,
 			  cart_supergrafx,
+			  cart_quake,
+			  cart_default,
 			  max_carts};
 
 extern const char *JOY_DESCRIPTIONS[];
@@ -379,6 +381,10 @@ extern const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS;
 extern const std::string ROUTE_SCRAP_TRANSLATIONS;
 extern const std::string PREFIX_DEFAULTS;
 extern const std::string BG_FILENAME;
+extern const std::string QUAKE_LIST_URL;
+// Definimos el tamaño exacto a mano
+const int QUAKE_MAPS_COUNT = 2; 
+extern const std::string QUAKE_MAPS_URL[QUAKE_MAPS_COUNT];
 extern const char *SDL_BTN_TO_XBOX[12];
 extern std::string SDL_JOY_TO_XBOX[6];
 extern std::string SDL_HAT_TO_XBOX[9];

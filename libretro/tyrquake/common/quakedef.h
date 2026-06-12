@@ -94,7 +94,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  * Standard protocol sends the model/sound index as a byte (max = 256), but
  * other protocols may send as a short (up to 65536, potentially).
  */
-#define MAX_MODELS      1024
+#ifdef _XBOX360
+#define MAX_MODELS      4096
+#else
+#define MAX_MODELS      4096
+#endif
 #define MAX_SOUNDS      1024
 
 #define	SAVEGAME_COMMENT_LENGTH	39

@@ -19,6 +19,13 @@ const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS = "\\assets\\extra\\achievement
 const std::string ROUTE_SCRAP_TRANSLATIONS = "\\assets\\extra\\scrap_translations.cfg";
 const std::string PREFIX_DEFAULTS = "defaults_";
 const std::string BG_FILENAME = "background";
+//Url to obtain a list of available quake  servers
+const std::string QUAKE_LIST_URL = "https://www.quakeservers.net/quake/servers/";
+//Urls to download maps
+const std::string QUAKE_MAPS_URL[QUAKE_MAPS_COUNT] = {
+    "https://quakeone.com/qrack/maps/", 
+	"https://maps.quakeworld.nu/all/"
+};
 
 const char *ICONS_PATH[] = {"menu_log.png",
 	"folder.png",
@@ -101,7 +108,9 @@ const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",
 	"Microsoft - MSX-content.png",
 	"DOS-content.png",
 	"DOOM-content.png",
-	"NEC - PC Engine SuperGrafx-content.png"
+	"NEC - PC Engine SuperGrafx-content.png",
+	"Quake.png",
+	"default-content.png"
 };
 
 Constant::Constant(){

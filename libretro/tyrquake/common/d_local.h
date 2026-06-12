@@ -76,6 +76,9 @@ extern void (*D_DrawSpans)(espan_t *pspan);
 
 void D_DrawSpans16Qb(espan_t *pspans);
 void D_DrawSpans16QbDither(espan_t *pspans);
+#ifdef ALPHA_TEXTURES
+void D_DrawSpans_AlphaTest(espan_t *pspans);
+#endif
 
 void D_DrawZSpans(espan_t *pspans);
 void Turbulent8(espan_t *pspan);

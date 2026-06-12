@@ -37,6 +37,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "bgmusic.h"
 #include "sys.h"
 
+#include "libretro.h"
+extern retro_environment_t environ_cb;
+#define RETRO_ENVIRONMENT_DOWNLOAD_BSP 30001
+
 static const char *svc_strings[] = {
     "svc_bad",
     "svc_nop",
@@ -254,13 +258,20 @@ CL_KeepaliveMessage(void)
 	case 0:
 	    break;		/* nothing waiting */
 	case 1:
-	    Host_Error("%s: received a message", __func__);
+	    Con_Printf("CL_KeepaliveMessage: received unexpected message, disconnecting\n");
+	    CL_Disconnect();
+	    return;
 	case 2:
-	    if (MSG_ReadByte() != svc_nop)
-		Host_Error("%s: datagram wasn't a nop", __func__);
+	    if (MSG_ReadByte() != svc_nop) {
+		Con_Printf("CL_KeepaliveMessage: datagram wasn't a nop, disconnecting\n");
+		CL_Disconnect();
+		return;
+	    }
 	    break;
 	default:
-	    Host_Error("%s: CL_GetMessage failed", __func__);
+	    Con_Printf("CL_KeepaliveMessage: CL_GetMessage failed, disconnecting\n");
+	    CL_Disconnect();
+	    return;
 	}
     } while (ret);
 
@@ -432,7 +443,22 @@ CL_ParseServerInfo(void)
        if (cl.model_precache[i] == NULL)
        {
           Con_Printf("Model %s not found\n", model_precache[i]);
-          goto done;
+
+          if (COM_CheckExtension(model_precache[i], ".bsp"))
+          {
+             const char *bsp_name = COM_SkipPath(model_precache[i]);
+             Con_Printf("Downloading %s from frontend...\n", bsp_name);
+             if (environ_cb && environ_cb(RETRO_ENVIRONMENT_DOWNLOAD_BSP, &bsp_name))
+             {
+                Con_Printf("Download complete, retrying...\n");
+                cl.model_precache[i] = Mod_ForName(model_precache[i], false);
+             } else {
+				 Con_Printf("Could not download map from internet...\n");
+			 }
+          }
+
+          if (cl.model_precache[i] == NULL)
+             goto done;
        }
        CL_KeepaliveMessage();
     }
@@ -1158,13 +1184,15 @@ CL_ParseServerMessage(void)
             CL_ParseClientdata();
             break;
 
-         case svc_version:
-            i = MSG_ReadLong();
-            if (!Protocol_Known(i))
-               Host_Error("%s: Server returned unknown protocol version %i",
-                     __func__, i);
-            cl.protocol = i;
-            break;
+          case svc_version:
+             i = MSG_ReadLong();
+             if (!Protocol_Known(i)) {
+                Con_Printf("Server returned unknown protocol version %i, disconnecting\n", i);
+                CL_Disconnect();
+                return;
+             }
+             cl.protocol = i;
+             break;
 
          case svc_disconnect:
             Host_EndGame("Server disconnected\n");

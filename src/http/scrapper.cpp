@@ -926,3 +926,114 @@ int Scrapper::countWordsContained(std::string text1, std::string text2) {
 	//    printf("\nError en la descarga.\n");
 	//}
 }*/
+
+// Replace | in field values so pipe-delimited parsing doesn't break
+static void escape_pipe(std::string& s) {
+	for (std::size_t i = 0; i < s.size(); i++)
+		if (s[i] == '|') s[i] = '-';
+}
+
+std::string Scrapper::scrapQuakeList(){
+	CurlClient downloader;
+	std::string response;
+	float downloadProgress = 0.0f;
+
+	if (!downloader.fetchUrl(QUAKE_LIST_URL, response, &downloadProgress)) {
+		LOG_DEBUG("scrapQuakeList: download failed");
+		return "";
+	}
+
+	pugi::xml_document doc;
+	pugi::xml_parse_result result = doc.load_string(response.c_str());
+	response.clear();
+
+	if (!result) {
+		LOG_DEBUG("scrapQuakeList: pugixml parse error: %s", result.description());
+		return "";
+	}
+
+	// Navigate to <table class="servers">
+	pugi::xml_node html = doc.document_element();
+	if (!html) return "";
+	pugi::xml_node body = html.child("body");
+	if (!body) return "";
+	pugi::xml_node frame = body.find_child_by_attribute("div", "id", "frame");
+	if (!frame) return "";
+	pugi::xml_node main_div = frame.find_child_by_attribute("div", "id", "main");
+	if (!main_div) return "";
+	pugi::xml_node middle = main_div.find_child_by_attribute("div", "id", "middle");
+	if (!middle) return "";
+	pugi::xml_node middletext = middle.find_child_by_attribute("div", "id", "middletext");
+	if (!middletext) return "";
+	pugi::xml_node table = middletext.find_child_by_attribute("table", "class", "servers");
+	if (!table) {
+		LOG_DEBUG("scrapQuakeList: table.servers not found");
+		return "";
+	}
+
+	std::string result_data;
+	char players_buf[32];
+	int row_idx = 0;
+
+	// Iterate <tr> rows, skipping the header row (row 1)
+	for (pugi::xml_node tr = table.child("tr"); tr; tr = tr.next_sibling("tr")) {
+		row_idx++;
+		if (row_idx == 1) continue;
+
+		// Get <td> cells in order
+		pugi::xml_node td = tr.child("td");
+		if (!td) continue;
+		// td[0] = location, skip
+		td = td.next_sibling("td");
+		if (!td) continue;
+		pugi::xml_node td_desc = td;       // td[1] = description (server name)
+		td = td.next_sibling("td");
+		if (!td) continue;
+		pugi::xml_node td_addr = td;       // td[2] = address
+		td = td.next_sibling("td");
+		if (!td) continue;
+		pugi::xml_node td_map = td;        // td[3] = map
+		td = td.next_sibling("td");
+		if (!td) continue;
+		// td[4] = misc, skip
+		td = td.next_sibling("td");
+		if (!td) continue;
+		pugi::xml_node td_players = td;    // td[5] = players (format "x/y")
+		td = td.next_sibling("td");
+		if (!td) continue;
+		pugi::xml_node td_type = td;       // td[6] = type (gametype)
+
+		// Extract server name from <a> inside description cell
+		std::string name = Constant::Trim(td_desc.child("a").child_value());
+
+		// Extract address (text content of the cell, e.g. "10.0.0.1:27500")
+		std::string address = Constant::Trim(td_addr.child_value());
+
+		// Extract map name from <a> inside map cell
+		std::string map = Constant::Trim(td_map.child("a").child_value());
+
+		// Extract game type from <a> inside type cell
+		std::string gametype = Constant::Trim(td_type.child("a").child_value());
+
+		// Extract player count (format "x/y")
+		std::string players_str = Constant::Trim(td_players.child_value());
+		int players = 0, max_players = 0;
+		sscanf(players_str.c_str(), "%d/%d", &players, &max_players);
+
+		// Skip malformed entries
+		if (name.empty() || address.empty())
+			continue;
+
+		// Escape pipe characters in fields
+		escape_pipe(name);
+		escape_pipe(map);
+		escape_pipe(gametype);
+
+		// Format: name|map|address|gametype|players|max_players
+		sprintf(players_buf, "%d|%d", players, max_players);
+		result_data += name + "|" + map + "|" + address + "|" + gametype + "|" + players_buf + "\n";
+	}
+
+	LOG_DEBUG("scrapQuakeList: parsed %d servers", row_idx - 1);
+	return result_data;
+}

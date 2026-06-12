@@ -226,8 +226,10 @@ D_DrawTurbulent8Span(void)
             sturb = (sturb >> 16) & (TURB_TEX_SIZE - 1);
             tturb = r_turb_t + r_turb_turb[(r_turb_s >> 16) & (TURB_CYCLE - 1)];
             tturb = (tturb >> 16) & (TURB_TEX_SIZE - 1);
-            if ((short)(izi >> 16) >= *pzbuf)
+            if ((short)(izi >> 16) >= *pzbuf) {
                *r_turb_pdest = *(r_turb_pbase + (tturb * TURB_TEX_SIZE) + sturb);
+               *pzbuf = (short)(izi >> 16);
+            }
             r_turb_pdest++;
             pzbuf++;
             izi += izistep;
@@ -1065,6 +1067,177 @@ void D_DrawSpans16 (espan_t *pspan) /* qbism up it from 8 to 16.  This + unroll 
 
    } while ((pspan = pspan->pnext) != NULL);
 }
+
+#ifdef ALPHA_TEXTURES
+/*
+==================
+D_DrawSpans_AlphaTest
+  Per-pixel TRANSPARENT_COLOR check + inline z-buffer write.
+  Skips both color and z-buffer for transparent pixels so the
+  underlying opaque surface's z-buffer value is preserved.
+==================
+*/
+void D_DrawSpans_AlphaTest(espan_t *pspan)
+{
+   uint8_t *pbase = (uint8_t*)cacheblock;
+   fixed16_t sstep = 0, tstep = 0;
+
+   float sdivzstepu = d_sdivzstepu * 16;
+   float tdivzstepu = d_tdivzstepu * 16;
+   float zistepu    = d_zistepu * 16;
+
+   do
+   {
+      uint8_t *pdest = (uint8_t*)((byte *)d_viewbuffer +
+            (screenwidth * pspan->v) + pspan->u);
+      short *zbase = d_pzbuffer + d_zwidth * pspan->v + pspan->u;
+
+      int count = pspan->count;
+      int izi, izistep;
+
+      float du = (float)pspan->u;
+      float dv = (float)pspan->v;
+
+      float sdivz = d_sdivzorigin + dv*d_sdivzstepv + du*d_sdivzstepu;
+      float tdivz = d_tdivzorigin + dv*d_tdivzstepv + du*d_tdivzstepu;
+      float zi = d_ziorigin + dv*d_zistepv + du*d_zistepu;
+      float z = (float)0x10000 / zi;
+      fixed16_t s, t;
+
+      s = (int)(sdivz * z) + sadjust;
+      if (s > bbextents)
+         s = bbextents;
+      else if (s < 0)
+         s = 0;
+
+      t = (int)(tdivz * z) + tadjust;
+      if (t > bbextentt)
+         t = bbextentt;
+      else if (t < 0)
+         t = 0;
+
+      izi = (int)(zi * 0x8000 * 0x10000);
+      izistep = (int)(d_zistepu * 0x8000 * 0x10000);
+
+      do
+      {
+         fixed16_t snext, tnext;
+         int spancount = count;
+
+         if (count >= 16)
+            spancount = 16;
+
+         count -= spancount;
+
+         if (count)
+         {
+            sdivz += sdivzstepu;
+            tdivz += tdivzstepu;
+            zi += zistepu;
+            z = (float)0x10000 / zi;
+
+            snext = (int)(sdivz * z) + sadjust;
+            if (snext > bbextents)
+               snext = bbextents;
+            else if (snext <= 16)
+               snext = 16;
+
+            tnext = (int)(tdivz * z) + tadjust;
+            if (tnext > bbextentt)
+               tnext = bbextentt;
+            else if (tnext < 16)
+               tnext = 16;
+
+            sstep = (snext - s) >> 4;
+            tstep = (tnext - t) >> 4;
+         }
+         else
+         {
+            float spancountminus1 = (float)(spancount - 1);
+            sdivz += d_sdivzstepu * spancountminus1;
+            tdivz += d_tdivzstepu * spancountminus1;
+            zi += d_zistepu * spancountminus1;
+            z = (float)0x10000 / zi;
+            snext = (int)(sdivz * z) + sadjust;
+            if (snext > bbextents)
+               snext = bbextents;
+            else if (snext < 16)
+               snext = 16;
+
+            tnext = (int)(tdivz * z) + tadjust;
+            if (tnext > bbextentt)
+               tnext = bbextentt;
+            else if (tnext < 16)
+               tnext = 16;
+
+            if (spancount > 1)
+            {
+               sstep = (snext - s) / (spancount - 1);
+               tstep = (tnext - t) / (spancount - 1);
+            }
+         }
+
+         {
+            fixed16_t s_cur = s, t_cur = t;
+            int izi_cur = izi, izi_step = (int)(d_zistepu * 0x8000 * 0x10000);
+            int j;
+
+            if (r_alphapass)
+            {
+                /* Alpha pass: z-test against pass 1's z-buffer.
+                 * For opaque pixels: write color + z-buffer so
+                 * subsequent surfaces (aliases, sprites, etc.) are
+                 * properly occluded by the opaque parts of the
+                 * transparent surface (e.g. the metal bars of a
+                 * grate should block view of entities behind them).
+                 * Transparent pixels: skip entirely, preserving
+                 * pass 1's z-buffer (the background wall). */
+               for (j = 0; j < spancount; j++)
+               {
+                  byte pix = *(pbase + (s_cur >> 16) + (t_cur >> 16) * cachewidth);
+                  if (pix != TRANSPARENT_COLOR)
+                  {
+                     if ((short)(izi_cur >> 16) >= zbase[j])
+                     {
+                        pdest[j] = pix;
+                        zbase[j] = (short)(izi_cur >> 16);
+                     }
+                  }
+                  s_cur += sstep;
+                  t_cur += tstep;
+                  izi_cur += izi_step;
+               }
+            }
+            else
+            {
+               /* Single-pass / opaque pass: write both color and
+                * z-buffer unconditionally for opaque pixels. */
+               for (j = 0; j < spancount; j++)
+               {
+                  byte pix = *(pbase + (s_cur >> 16) + (t_cur >> 16) * cachewidth);
+                  if (pix != TRANSPARENT_COLOR)
+                  {
+                     pdest[j] = pix;
+                     zbase[j] = (short)(izi_cur >> 16);
+                  }
+                  s_cur += sstep;
+                  t_cur += tstep;
+                  izi_cur += izi_step;
+               }
+            }
+            pdest += spancount;
+            zbase += spancount;
+            izi = izi_cur;
+         }
+
+         s = snext;
+         t = tnext;
+
+      } while (count > 0);
+
+   } while ((pspan = pspan->pnext) != NULL);
+}
+#endif
 
 /*
 =============

@@ -153,6 +153,7 @@ void ListMenu::checkFilter(){
 }
 
 void ListMenu::sortFilters(){
+	LOG_DEBUG("Sorting the list of games");
 	std::sort(this->listGames.begin(), this->listGames.end(), ListMenu::compareUniquePtrsFast);
 	LOG_DEBUG("Sorting manufacters");
 	std::sort(gameDataFields.manufacturers.begin(), gameDataFields.manufacturers.end());
@@ -375,28 +376,30 @@ int ListMenu::getCartForSystem(int systemid){
 			return cart_mcd;
 		case 21:
 			return cart_gg;
+		case 25:
+			return cart_neogeo_pocket;
 		case 31:
 			return cart_pce;
 		case 57:
 			return cart_psx;
-		case 114:
-			return cart_pce_cd;
 		case 75:
 			return cart_mame;
-		case 25:
-			return cart_neogeo_pocket;
 		case 76:
 			return cart_zx;
+		case 105:
+			return cart_supergrafx;
 		case 113:
 			return cart_msx;
+		case 114:
+			return cart_pce_cd;
 		case 135:
 			return cart_dos;
 		case 290:
 			return cart_doom;
-		case 105:
-			return cart_supergrafx;
+		case 666:
+			return cart_quake;
 		default:
-			return cart_nes;
+			return cart_default;
 	}
 }
 
@@ -445,8 +448,13 @@ bool ListMenu::compareUniquePtrs(const std::unique_ptr<GameFile>& a,
 }
 
 bool ListMenu::compareUniquePtrsFast(const std::unique_ptr<GameFile>& a,
-                                 const std::unique_ptr<GameFile>& b) {
-    // Comparación directa de strings ya procesados
+                                     const std::unique_ptr<GameFile>& b) {
+    // 1. Si los tipos son diferentes, ordenamos estrictamente por el valor del enum (0, luego 1, luego 2)
+    if (a->fileType != b->fileType) {
+        return a->fileType < b->fileType;
+    }
+    
+    // 2. Si son del mismo tipo (ej. ambos son directorios), ordenamos alfabéticamente
     return a->sortKey < b->sortKey;
 }
 
@@ -562,6 +570,8 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
 
 		if (!gFile->longFileName.empty() && gFile->longFileName[0] == '@'){
 			gFile->fileType = FT_ZIP_LIST;
+		} else {
+			gFile->fileType = file->filetype == TIPODIRECTORIO ? FT_DIR : FT_CARTRIDGE;
 		}
 		
 		// precalculo de clave para ordenar

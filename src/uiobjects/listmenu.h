@@ -47,6 +47,7 @@ class ListMenu : public Object{
 		// Vista filtrada (punteros no propietarios)
 		vector<GameFile*> filteredGames;
 		t_zipped_file_paths listZipped;
+		t_dir_file_paths listDir;
 		void zippedToList(int system);
 		std::string extractSystem(const std::string &sourceFile);
 

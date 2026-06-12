@@ -41,7 +41,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define WARP_HEIGHT		720
 
 /* FIXME - was NQ=480, QW=200 - does it matter? */
-#define MAX_LBM_HEIGHT	480
+#define MAX_LBM_HEIGHT	1024
 
 typedef struct {
     float u, v;

@@ -254,6 +254,7 @@ bool CurlClient::fetchFile(const std::string& url, const std::string& localPath,
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, USERAGENT);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); // Importante: seguir redirecciones de imagenes
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L); // 15 segundos
+	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L); // Treat HTTP 4xx/5xx as curl error
 
 	// callback para llamar fuera a internet
 	#ifdef _XBOX

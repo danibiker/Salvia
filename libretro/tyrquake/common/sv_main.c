@@ -59,7 +59,7 @@ static sv_protocol_t sv_protocols[] = {
     {PROTOCOL_VERSION_BJP3, "bjp3", "BJP protocol (v3)"},
 };
 
-static int sv_protocol = PROTOCOL_VERSION_NQ;
+static int sv_protocol = PROTOCOL_VERSION_FITZ;
 
 static void SV_Protocol_f(void)
 {

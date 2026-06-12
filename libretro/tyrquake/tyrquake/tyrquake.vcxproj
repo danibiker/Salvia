@@ -33,6 +33,7 @@
     <ClCompile Include="..\common\cmd.c" />
     <ClCompile Include="..\common\common.c" />
     <ClCompile Include="..\common\console.c" />
+    <ClCompile Include="..\common\dpmaster.c" />
     <ClCompile Include="..\common\crc.c" />
     <ClCompile Include="..\common\cvar.c" />
     <ClCompile Include="..\common\draw.c" />
@@ -164,6 +165,7 @@
     <ClCompile Include="..\libretro-common\vfs\vfs_implementation.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\common\quakedef.h" />
     <ClInclude Include="..\deps\libvorbis\lib\backends.h" />
     <ClInclude Include="..\deps\libvorbis\lib\bitrate.h" />
     <ClInclude Include="..\deps\libvorbis\lib\codebook.h" />
@@ -311,7 +313,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>NDEBUG;USE_CODEC_VORBIS;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;ALPHA_TEXTURES;USE_CODEC_VORBIS;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline</PreprocessorDefinitions>
       <CallAttributedProfiling>Callcap</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps\vulkan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)$(Platform)\%(RelativeDir)</ObjectFileName>

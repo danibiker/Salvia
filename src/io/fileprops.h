@@ -28,11 +28,11 @@ class FileProps{
         }
         
         FileProps(string dir, string filename, int ico, int filetype){
-            this->dir = dir;
+            init();
+			this->dir = dir;
             this->filename = filename;
             this->ico = ico;
             this->filetype = filetype;
-            init();
         }
 
         void init(){

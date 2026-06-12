@@ -1,6 +1,8 @@
 #pragma once
 
 #include "salvia.h"
+#include <http/httputil.h>
+#include <http/scrapper.h>
 
 // Puente entre los eventos SDL del frontend y el callback de teclado que
 // el core ha registrado via RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK. La
@@ -460,6 +462,71 @@ static bool retro_environment(unsigned cmd, void *data) {
 		//Ignoramos este evento
 		case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: 
 			return false;
+
+		case 30000: { // RETRO_ENVIRONMENT_GET_SERVERS_JSON
+			// Fetch live server list from quakeservers.net
+			static std::string cached;
+			//if (cached.empty()){
+				//Some default servers
+				cached = gameMenu->getCfgLoader()->getCfgEmu()->network_default_servers;
+				unescape_newlines(cached);
+				//Obtained servers from the internet
+				cached.append(Scrapper::scrapQuakeList());
+			//}
+			*(const char **)data = cached.c_str();
+			return true;
+		}
+
+		case 30001: { // RETRO_ENVIRONMENT_DOWNLOAD_BSP
+			const char *filename = *(const char **)data;
+			if (!filename || !filename[0]) return false;
+
+			const std::string romPathLaunched = listMenu->listDir.dir + listMenu->listDir.getRelativePath();
+			std::string mapsDir = romPathLaunched  + Constant::getFileSep() + "maps";
+			std::string localPath = mapsDir + Constant::getFileSep() + filename;
+
+			LOG_DEBUG("Downloading map in: %s", localPath.c_str());
+
+			dirutil d;
+			if (!d.dirExists(mapsDir.c_str()))
+				d.createDirRecursive(mapsDir.c_str());
+
+			bool ok = false;
+			int i=0;
+
+			do{
+				std::string url = QUAKE_MAPS_URL[i] + filename;
+				CurlClient downloader;
+				float progress = 0.0f;
+				LOG_DEBUG("Downloading BSP: %s", url.c_str());
+				ok = downloader.fetchFile(url, localPath, &progress);
+				LOG_DEBUG("Download %s", ok ? "OK" : "FAILED");
+
+				if (ok) {
+					// Verify the downloaded file looks like a valid BSP (byte-level, endian-neutral)
+					FILE *fp = fopen(localPath.c_str(), "rb");
+					if (fp) {
+						unsigned char header[4] = {0};
+						if (fread(header, 1, 4, fp) == 4) {
+							static const unsigned char bsp29[4]  = {0x1D, 0x00, 0x00, 0x00};
+							static const unsigned char bsp2dp[4] = {'B', 'S', 'P', '2'};
+							static const unsigned char bsp2rmq[4]= {'2', 'S', 'P', 'B'};
+							if (memcmp(header, bsp29, 4) != 0 && memcmp(header, bsp2dp, 4) != 0 && memcmp(header, bsp2rmq, 4) != 0) {
+								LOG_DEBUG("Downloaded file is not a valid BSP (0x%02x%02x%02x%02x), deleting",
+									header[0], header[1], header[2], header[3]);
+								ok = false;
+							}
+						}
+						fclose(fp);
+					}
+					if (!ok)
+						remove(localPath.c_str());
+				}
+				i++;
+			} while (!ok && i < QUAKE_MAPS_COUNT);
+
+			return ok;
+		}
 
 		default: {
 			if (cmd < 65572){
@@ -1280,8 +1347,89 @@ void closeResources() {
 	curlClient.close();
 
 	delete logger;
+	delete listMenu;
 	delete gameMenu;
 	delete cfgLoader;
+}
+
+/**
+*  LogCrash — filter expression for __except.
+*
+*  GetExceptionInformation() is only valid in the filter expression,
+*  NOT in the __except handler body.  This function captures the
+*  exception record + context and writes them to "crash.log" before
+*  returning EXCEPTION_EXECUTE_HANDLER so the handler runs.
+*/
+static int LogCrash(DWORD code, EXCEPTION_POINTERS *ep) {
+#ifdef  _XBOX  
+	FILE *f = fopen("game:\\crash.log", "w");
+#else 
+	FILE *f = fopen("crash.log", "w");
+#endif
+	if (f) {
+		fprintf(f, "═══════════════════════════════════════\n");
+		fprintf(f, "  FATAL: Unhandled exception\n");
+		fprintf(f, "═══════════════════════════════════════\n");
+		fprintf(f, "  Code:     0x%08X\n", code);
+		if (ep && ep->ExceptionRecord) {
+			fprintf(f, "  Address:  %p\n", ep->ExceptionRecord->ExceptionAddress);
+			fprintf(f, "  Flags:    0x%X\n", ep->ExceptionRecord->ExceptionFlags);
+			if (code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2) {
+				DWORD op = (DWORD)ep->ExceptionRecord->ExceptionInformation[0];
+				void *fa = (void*)ep->ExceptionRecord->ExceptionInformation[1];
+				fprintf(f, "  Op:       %s\n", op == 0 ? "READ" : op == 1 ? "WRITE" : "DEP");
+				fprintf(f, "  Target:   %p\n", fa);
+			}
+		}
+		if (ep && ep->ContextRecord) {
+#ifdef _XBOX
+			fprintf(f, "  PC:       0x%08X\n", ep->ContextRecord->Iar);
+			fprintf(f, "  LR:       0x%08X\n", ep->ContextRecord->Lr);
+			fprintf(f, "  SP (Gpr1):0x%08X\n", ep->ContextRecord->Gpr1);
+#else
+			fprintf(f, "  EIP:      0x%08X\n", ep->ContextRecord->Eip);
+			fprintf(f, "  ESP:      0x%08X\n", ep->ContextRecord->Esp);
+			fprintf(f, "  EBP:      0x%08X\n", ep->ContextRecord->Ebp);
+#endif
+		}
+		fprintf(f, "═══════════════════════════════════════\n");
+		fclose(f);
+	}
+	return EXCEPTION_EXECUTE_HANDLER;
+}
+
+/*  runGameLoop — extracted into its own function so __try does not
+ *  share a stack frame with C++ objects that have destructors.
+ *  MSVC error C2712 forbids SEH __try in any function that requires
+ *  C++ object unwinding. */
+static void __declspec(noinline) runGameLoop(TileMap &tileMap) {
+	__try {
+		while (gameMenu->running) {
+			processFrontendEvents();
+
+			switch (gameMenu->getEmuStatus()){
+				case EMU_STARTED:
+					updateGame();
+					break;
+				case EMU_MENU:
+				case EMU_MENU_FILTER:
+					updateMenuScreen(tileMap, gameMenu, *listMenu);
+					break;
+				case EMU_MENU_OVERLAY:
+					updateMenuOverlay(gameMenu, *listMenu);
+					break;
+			}
+
+			gameMenu->processFrontendEventsAfter();
+			SDL_Flip(gameMenu->gameScreen);
+			if (*gameMenu->current_sync == SYNC_TO_VIDEO){
+				gameMenu->sync->limit_fps(nextFrameTime);
+			}
+			gameMenu->gameTicks.ticks++;
+		}
+	} __except (LogCrash(GetExceptionCode(), GetExceptionInformation())) {
+		LOG_ERROR("FATAL: Unhandled exception, details written to crash.log");
+	}
 }
 
 /**
@@ -1305,12 +1453,12 @@ int main(int argc, char *argv[]) {
 	const std::string mainLang = cfgLoader->configMain[cfg::mainLang].valueStr;
 	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
 	gameMenu = new GameMenu(cfgLoader);
-	ListMenu listMenu(gameMenu->overlay->w, gameMenu->overlay->h);
-	listMenu.setLayout(LAYBOXES, gameMenu->overlay->w, gameMenu->overlay->h);
+	listMenu = new ListMenu(gameMenu->overlay->w, gameMenu->overlay->h);
+	listMenu->setLayout(LAYBOXES, gameMenu->overlay->w, gameMenu->overlay->h);
 
 	TileMap tileMap(9, 0, 16, 16);
     tileMap.load(Constant::getAppDir() + Constant::getFileSep() + "assets" + Constant::getFileSep() + "art" + Constant::getFileSep() + "bricks2.png");
-	initializeMenus(listMenu, *gameMenu, *cfgLoader);
+	initializeMenus(*listMenu, *gameMenu, *cfgLoader);
 	
 	//Callback de environment
 	retro_set_environment(retro_environment);
@@ -1325,9 +1473,9 @@ int main(int argc, char *argv[]) {
 
 	if (!loadGameAtStart(argc, argv)){
 		//Workaround para mostrar una primera imagen del menu con las imagenes cargadas
-		listMenu.keyUp = true;
-		gameMenu->refreshScreen(listMenu);
-		listMenu.keyUp = false;
+		listMenu->keyUp = true;
+		gameMenu->refreshScreen(*listMenu);
+		listMenu->keyUp = false;
 	}
 
 	ConfigEmu *emu = cfgLoader->getCfgEmu();
@@ -1340,35 +1488,7 @@ int main(int argc, char *argv[]) {
 	curlClient.init();
 
 	nextFrameTime = Constant::getTicks();
-	while (gameMenu->running) {
-		// Procesamos eventos como pulsaciones de hotkeys
-		processFrontendEvents();
-
-		switch (gameMenu->getEmuStatus()){
-			case EMU_STARTED:
-				updateGame();
-				break;
-			case EMU_MENU:
-			case EMU_MENU_FILTER:
-				updateMenuScreen(tileMap, gameMenu, listMenu);
-				break;
-			case EMU_MENU_OVERLAY:
-				updateMenuOverlay(gameMenu, listMenu);
-				break;
-		}
-
-		// DIBUJO DE INTERFAZ (OSD, FPS, Mensajes)
-		gameMenu->processFrontendEventsAfter();
-		
-		// Actualizamos la pantalla
-		SDL_Flip(gameMenu->gameScreen);
-		//LOG_DEBUG("time ms %.3f\n", Constant::getTicks() - before);
-		// Limitamos los frames si tenemos que sincronizar con el video
-		if (*gameMenu->current_sync == SYNC_TO_VIDEO){
-			gameMenu->sync->limit_fps(nextFrameTime);
-		}
-		gameMenu->gameTicks.ticks++; 
-	}
+	runGameLoop(tileMap);
 	closeResources();
     return 0;
 }

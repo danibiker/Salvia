@@ -222,14 +222,19 @@ void D_DrawSurfaces(void)
       }
       else if (s->flags & SURF_DRAWBACKGROUND)
       {
-         /* In pass 2 (translucent liquid pass), the "background"
-          * surface owns every screen pixel that isn't covered by a
-          * liquid surface -- but those pixels already hold pass 1's
-          * world rendering, which we want to keep visible behind
-          * the stippled liquid.  Drawing the background here would
-          * paint solid r_clearcolor over the whole opaque world. */
-         if (r_renderpass == 2)
-            continue;
+          /* In pass 2 (translucent liquid pass) and the alpha pass,
+           * the "background" surface owns every screen pixel that
+           * isn't covered by an active surface -- but those pixels
+           * already hold pass 1's world rendering, which we want to
+           * keep visible behind transparent textures or stippled
+           * liquid.  Drawing the background here would paint solid
+           * r_clearcolor over the whole opaque world. */
+          if (r_renderpass == 2
+#ifdef ALPHA_TEXTURES
+               || r_alphapass
+#endif
+              )
+             continue;
 
          /* Set up a gradient for the background surface that places it
           * effectively at infinity distance from the viewpoint */
@@ -532,8 +537,18 @@ void D_DrawSurfaces(void)
          cachewidth = pcurrentcache->width;
 
          D_CalcGradients(pface);
-         D_DrawSpans(s->spans);
-         D_DrawZSpans(s->spans);
+#ifdef ALPHA_TEXTURES
+          if (pface->texinfo->texture
+              && pface->texinfo->texture->has_alpha) {
+             D_DrawSpans_AlphaTest(s->spans);
+          } else {
+             D_DrawSpans(s->spans);
+             D_DrawZSpans(s->spans);
+          }
+#else
+          D_DrawSpans(s->spans);
+          D_DrawZSpans(s->spans);
+#endif
 
          if (s->insubmodel)
          {
