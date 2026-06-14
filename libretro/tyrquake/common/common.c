@@ -1758,15 +1758,11 @@ static void COM_InitFilesystem(void)
       COM_AddGameDirectory(com_basedir, com_argv[i + 1]);
    }
    
-   /* Hack: Add save directory to search path, otherwise 'exec config.cfg' will fail */
-   /* (NB: 'host_parms.use_exernal_savedir' is a bit of a kludge, but since basedir */
-   /*  changes depending upon the game being loaded and various flags modify the */
-   /*  final 'rom' directory, it's the cleanest way to prevent the same directory */
-   /*  being added to the search list twice...) */
-   if (host_parms.use_exernal_savedir != 0)
-   {
-		COM_AddGameDirectory(com_savedir, "");
-	}
+   /* Add save directory to search path, otherwise 'exec config.cfg' will fail.
+    * Always add it regardless of use_exernal_savedir so that archived cvars
+    * (gamma, r_aspect, etc.) persist across sessions even when no external
+    * save directory is configured. */
+   COM_AddGameDirectory(com_savedir, "");
    
    /**/
    /* -path <dir or packfile> [<dir or packfile>] ... */

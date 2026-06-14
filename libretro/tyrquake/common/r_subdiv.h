@@ -85,8 +85,18 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MAXALIASVERTS_RUNTIME_RHI 65536
 #define MAXALIASTRIS_RUNTIME_RHI 131072
 
+#if defined(_XBOX360)
+/* Xbox 360 builds run the SW renderer exclusively (no Vulkan in the
+ * XDK), so the RHI-sized scratch buffers in r_alias.c and friends are
+ * pure waste -- 65k-vert tables eat ~830 KB of BSS and trash the 1 MB
+ * L2.  Cap at the SW limit (8192 verts / 16384 tris) which is well
+ * beyond any stock alias model (Shambler ~400 verts). */
+#define MAXALIASVERTS_RUNTIME MAXALIASVERTS_RUNTIME_SW
+#define MAXALIASTRIS_RUNTIME  MAXALIASTRIS_RUNTIME_SW
+#else
 #define MAXALIASVERTS_RUNTIME MAXALIASVERTS_RUNTIME_RHI
 #define MAXALIASTRIS_RUNTIME  MAXALIASTRIS_RUNTIME_RHI
+#endif
 
 /* User-controlled subdivision level cvar (0..R_POLYSUBDIV_MAX_PASSES). */
 extern cvar_t r_polysubdiv;

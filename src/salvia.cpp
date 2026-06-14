@@ -686,7 +686,7 @@ static inline void sw_refresh(const void *data, unsigned width, unsigned height,
 	scaleProps.dpitch = screen->pitch;
 	scaleProps.scale = gameMenu->current_scaler_scale;
 	scaleProps.ratio = aspectRatioValues[*gameMenu->current_ratio];
-	scaleProps.force_fs = *gameMenu->current_force_fs;
+	scaleProps.integer_scale = *gameMenu->current_integer_scale;
 
 	// 4. Pasar el buffer correcto (ya sea el original de 16 o el convertido)
 #ifdef _XBOX
@@ -706,7 +706,7 @@ static inline void hw_refresh(const void *data, unsigned width,
 
     const int bpp = (fmt == RETRO_PIXEL_FORMAT_XRGB8888) ? 32 : 16;
     const float current_ratio = aspectRatioValues[*gameMenu->current_ratio];
-    unsigned row_bytes = width * (bpp / 8);
+    const unsigned row_bytes = width * (bpp / 8);
 
     SDL_Surface*& screen = gameMenu->gameScreen;
 
@@ -724,9 +724,9 @@ static inline void hw_refresh(const void *data, unsigned width,
 		current_video_settings.filter = *gameMenu->current_shader;
 	}
 
-	if (current_video_settings.force_fs != *gameMenu->current_force_fs){
-		SDL_XBOX_SetDisplayFullscreen(*gameMenu->current_force_fs == 1);
-		current_video_settings.force_fs = *gameMenu->current_force_fs;
+	if (current_video_settings.integer_scale != *gameMenu->current_integer_scale){
+		SDL_XBOX_SetDisplayFullscreen(*gameMenu->current_integer_scale == false);
+		current_video_settings.integer_scale = *gameMenu->current_integer_scale;
 	}
 	#endif
 
@@ -778,7 +778,7 @@ static inline void hw_refresh(const void *data, unsigned width,
     }
 
     // ── Copiar al surface SDL ─────────────────────────────────────────────────
-    if (SDL_LockSurface(screen) != 0) return;
+    //if (SDL_LockSurface(screen) != 0) return;
     uint8_t*       dst     = (uint8_t*)screen->pixels;
     const uint8_t* src     = (const uint8_t*)final_src;
 
@@ -792,7 +792,7 @@ static inline void hw_refresh(const void *data, unsigned width,
             src += final_pitch;
         }
     }
-    SDL_UnlockSurface(screen);
+    //SDL_UnlockSurface(screen);
 }
 
 
@@ -1059,6 +1059,16 @@ std::string initPathAndLog(char** argv){
 	LOG_INFO("Directorio de app: %s\n", Constant::getAppDir().c_str());
 	LOG_INFO("Ejecutable: %s\n", Constant::getAppExecutable().c_str());
 
+	//Saving the name of the emulator to use it when an exception raises
+	//std::string appExe = Constant::getAppExecutable();
+	//std::size_t bufferSize = appExe.length() + 1;
+	//if (g_excp_emulator_path != NULL) {
+	//	delete [] g_excp_emulator_path;
+	//}
+	//g_excp_emulator_path = new char[bufferSize];
+	//strcpy_s(g_excp_emulator_path, bufferSize, appExe.c_str());
+	g_excp_emulator_path = Constant::getAppExecutable();
+
 	return Constant::getAppDir();
 }
 
@@ -1129,7 +1139,7 @@ int launchGame(std::string rompath, bool tmpDelete){
 	std::string initMsg = LanguageManager::instance()->get("msg.loading") + displayName + "...";
 	const int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
 	gameMenu->fillOverlay(clBackground);
-	Constant::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, face_h_big / 2, true, true, textColor, 0);
+	Constant::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, textColor, 0);
 	SDL_Flip(gameMenu->gameScreen);
 	
 	//Cargamos el juego en memoria o lo extraemos al disco
@@ -1150,7 +1160,7 @@ int launchGame(std::string rompath, bool tmpDelete){
 
 	//Giving a name to the window
 	const std::string captionName = bios_only ? std::string("BIOS") : dir.getFileNameNoExt(rompath);
-	string romname = (gameMenu->getCfgLoader()->getCfgEmu() != NULL ? gameMenu->getCfgLoader()->getCfgEmu()->name + " - " : "") + captionName;
+	std::string romname = (gameMenu->getCfgLoader()->getCfgEmu() != NULL ? gameMenu->getCfgLoader()->getCfgEmu()->name + " - " : "") + captionName;
 	SDL_WM_SetCaption(romname.c_str(), NULL);
 
 	// Antes de cargar el juego, el core dice su frecuencia en retro_get_system_av_info
@@ -1191,6 +1201,8 @@ int launchGame(std::string rompath, bool tmpDelete){
 	SDL_FillRect(gameMenu->gameScreen, NULL, Constant::colors[clBackground].color);
 	gameMenu->setEmuStatus(EMU_STARTED);
 	gameMenu->clearOverlay();
+	//We can reload the emulator if an exception is found from this point over
+	g_start_from_exception = false;
 
 #ifdef WATCH_LOAD_STUCK
 	watchForLoadingStuck();
@@ -1209,10 +1221,16 @@ bool loadGameAtStart(int argc, char *argv[]){
 			BYTE* pLaunchData = new BYTE [ dwLaunchDataSize ];
 			dwStatus = XGetLaunchData( pLaunchData, dwLaunchDataSize );
 			char* mensaje = (char*)pLaunchData;
-			ret = launchGame(mensaje) == 1;
 			LOG_DEBUG("Parametros recibidos: %s\n", mensaje);
+			//If we come from an exception, don't launch anything
+			if (START_FROM_EXCEPTION.compare(mensaje) == 0){
+				LOG_DEBUG("Starting emulator from a previous exception");
+				g_start_from_exception = true;
+			} else {
+				ret = launchGame(mensaje) == 1;	
+			}
 		} else if (dwStatus == ERROR_NOT_FOUND) {
-			// El programa se lanzó normalmente (sin XSetLaunchData)
+			// El programa se lanzo normalmente (sin XSetLaunchData)
 			LOG_DEBUG("No se encontraron datos de lanzamiento.\n");
 		}
 	#else 
@@ -1370,6 +1388,8 @@ static int LogCrash(DWORD code, EXCEPTION_POINTERS *ep) {
 		fprintf(f, "═══════════════════════════════════════\n");
 		fprintf(f, "  FATAL: Unhandled exception\n");
 		fprintf(f, "═══════════════════════════════════════\n");
+		fprintf(f, "  Emulator: %s\n", g_excp_emulator_path.c_str());
+		fprintf(f, "  rom:      %s\n", g_currentRompath.c_str());
 		fprintf(f, "  Code:     0x%08X\n", code);
 		if (ep && ep->ExceptionRecord) {
 			fprintf(f, "  Address:  %p\n", ep->ExceptionRecord->ExceptionAddress);
@@ -1391,6 +1411,34 @@ static int LogCrash(DWORD code, EXCEPTION_POINTERS *ep) {
 			fprintf(f, "  ESP:      0x%08X\n", ep->ContextRecord->Esp);
 			fprintf(f, "  EBP:      0x%08X\n", ep->ContextRecord->Ebp);
 #endif
+			fprintf(f, "  Call stack:\n");
+			int frame = 0;
+#ifdef _XBOX
+			DWORD base = (DWORD)GetModuleHandle(NULL);
+			DWORD *sp = (DWORD*)ep->ContextRecord->Gpr1;
+			while (sp && frame < 32) {
+				DWORD lr = 0;
+				__try {
+					lr = (DWORD)sp[2];
+					sp = (DWORD*)sp[0];
+				} __except (EXCEPTION_EXECUTE_HANDLER) { break; }
+				if (!lr) continue;
+				fprintf(f, "    [%02d] 0x%08X (+0x%X)\n", frame, lr, lr - base);
+				frame++;
+			}
+#else
+			DWORD base = (DWORD)GetModuleHandle(NULL);
+			DWORD *ebp = (DWORD*)ep->ContextRecord->Ebp;
+			while (ebp && frame < 32) {
+				DWORD ret = 0;
+				__try {
+					ret = ebp[1];
+					ebp = (DWORD*)ebp[0];
+				} __except (EXCEPTION_EXECUTE_HANDLER) { break; }
+				fprintf(f, "    [%02d] 0x%08X (+0x%X)\n", frame, ret, ret - base);
+				frame++;
+			}
+#endif
 		}
 		fprintf(f, "═══════════════════════════════════════\n");
 		fclose(f);
@@ -1398,11 +1446,27 @@ static int LogCrash(DWORD code, EXCEPTION_POINTERS *ep) {
 	return EXCEPTION_EXECUTE_HANDLER;
 }
 
+static void __declspec(noinline) printAndDelay(){
+	const int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
+	gameMenu->fillOverlay(clBackground);
+	Constant::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), LanguageManager::instance()->get("msg.error.fatal").c_str(), 0, -face_h_big / 2, true, true, textColor, 0);
+	SDL_Flip(gameMenu->gameScreen);
+	SDL_Delay(3000);
+
+	//We don't want the emulator restarting over and over if an exception is thrown previously, 
+	//without starting a new game. The g_start_from_exception flag is cleared when the game is loaded
+	if (!g_start_from_exception){
+		Launcher launch;
+		std::string pams = START_FROM_EXCEPTION;
+		launch.launchXboxWin(Constant::getAppDir() + Constant::getFileSep() + Constant::getAppExecutable(), pams);
+	}
+}
+
 /*  runGameLoop — extracted into its own function so __try does not
  *  share a stack frame with C++ objects that have destructors.
  *  MSVC error C2712 forbids SEH __try in any function that requires
  *  C++ object unwinding. */
-static void __declspec(noinline) runGameLoop(TileMap &tileMap) {
+static void __declspec(noinline) runGameLoop() {
 	__try {
 		while (gameMenu->running) {
 			processFrontendEvents();
@@ -1428,6 +1492,7 @@ static void __declspec(noinline) runGameLoop(TileMap &tileMap) {
 			gameMenu->gameTicks.ticks++;
 		}
 	} __except (LogCrash(GetExceptionCode(), GetExceptionInformation())) {
+		printAndDelay();
 		LOG_ERROR("FATAL: Unhandled exception, details written to crash.log");
 	}
 }
@@ -1455,8 +1520,6 @@ int main(int argc, char *argv[]) {
 	gameMenu = new GameMenu(cfgLoader);
 	listMenu = new ListMenu(gameMenu->overlay->w, gameMenu->overlay->h);
 	listMenu->setLayout(LAYBOXES, gameMenu->overlay->w, gameMenu->overlay->h);
-
-	TileMap tileMap(9, 0, 16, 16);
     tileMap.load(Constant::getAppDir() + Constant::getFileSep() + "assets" + Constant::getFileSep() + "art" + Constant::getFileSep() + "bricks2.png");
 	initializeMenus(*listMenu, *gameMenu, *cfgLoader);
 	
@@ -1488,7 +1551,7 @@ int main(int argc, char *argv[]) {
 	curlClient.init();
 
 	nextFrameTime = Constant::getTicks();
-	runGameLoop(tileMap);
+	runGameLoop();
 	closeResources();
     return 0;
 }

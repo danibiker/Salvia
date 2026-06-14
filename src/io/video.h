@@ -225,7 +225,7 @@ inline void scale_software_fixed_point_xbox_final(const t_scale_props& props) {
 #endif
 
 inline void fast_video_blit(const t_scale_props& props) {
-	if (props.force_fs){
+	if (!props.integer_scale){
 		#ifdef WIN
 			scale_software_fixed_point_safe2(props);		    //508fps	
 		#elif defined(_XBOX)
@@ -258,7 +258,7 @@ inline void fast_video_blit(const t_scale_props& props) {
 // Escalador 2x manual para RGB565
 inline void scale2x_software(const t_scale_props& props) {
 	
-	if (props.force_fs){
+	if (!props.integer_scale){
 		#ifdef WIN
 			scale_software_fixed_point_safe2(props);		    //508fps	
 		#elif defined(_XBOX)
@@ -293,7 +293,7 @@ inline void scale2x_software(const t_scale_props& props) {
 }
 
 inline void scale3x_software(const t_scale_props& props) {
-	if (props.force_fs){
+	if (!props.integer_scale){
 		#ifdef WIN
 			scale_software_fixed_point_safe2(props);		    //508fps	
 		#elif defined(_XBOX)
@@ -333,7 +333,7 @@ inline void scale3x_software(const t_scale_props& props) {
 
 
 inline void scale4x_software(const t_scale_props& props) {
-	if (props.force_fs){
+	if (!props.integer_scale){
 		#ifdef WIN
 			scale_software_fixed_point_safe2(props);		    //508fps	
 		#elif defined(_XBOX)
@@ -386,7 +386,7 @@ inline void scale4x_software(const t_scale_props& props) {
 inline void finalize_scaling(const t_scale_props& props, int scaled_w, int scaled_h) {
     int t_stride = scaled_w; // Stride en píxeles del temp_buffer
 
-    if (props.force_fs) {
+    if (!props.integer_scale) {
         // Caso A: Estirar el resultado del filtro a pantalla completa
         t_scale_props fsProps = props;
         fsProps.src = temp_buffer;

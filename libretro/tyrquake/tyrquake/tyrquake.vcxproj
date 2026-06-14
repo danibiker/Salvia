@@ -166,6 +166,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\quakedef.h" />
+    <ClInclude Include="..\common\r_subdiv.h" />
     <ClInclude Include="..\deps\libvorbis\lib\backends.h" />
     <ClInclude Include="..\deps\libvorbis\lib\bitrate.h" />
     <ClInclude Include="..\deps\libvorbis\lib\codebook.h" />

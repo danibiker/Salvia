@@ -383,8 +383,9 @@ extern const std::string PREFIX_DEFAULTS;
 extern const std::string BG_FILENAME;
 extern const std::string QUAKE_LIST_URL;
 // Definimos el tamaño exacto a mano
-const int QUAKE_MAPS_COUNT = 2; 
+const int QUAKE_MAPS_COUNT = 1; 
 extern const std::string QUAKE_MAPS_URL[QUAKE_MAPS_COUNT];
+extern const std::string START_FROM_EXCEPTION;
 extern const char *SDL_BTN_TO_XBOX[12];
 extern std::string SDL_JOY_TO_XBOX[6];
 extern std::string SDL_HAT_TO_XBOX[9];
@@ -511,41 +512,31 @@ class Constant{
 		}
 
 		static void drawTextCent(SDL_Surface* surface, TTF_Font* font, const char* dato, int x, int y, bool centx, bool centy, SDL_Color color, int bg){
-			if (font != NULL){
-				int pixelDato = 0;
-				TTF_SizeText(font, dato, &pixelDato, NULL);
-				int posDatox = x;
-				int posDatoy = y;
+			if (!font || !surface) return;
 
-				if (centx){
-					posDatox = (surface->w - pixelDato)/2;
-					posDatox += x;
-				}
-				if (centy){
-					posDatoy = (surface->h)/2;
-					posDatoy += y;
-				}
-				drawText(surface, font, dato,posDatox,posDatoy,color, bg);
-			} 
+			int textW = 0, textH = 0;
+			if (centx || centy) {
+				TTF_SizeText(font, dato, &textW, &textH);
+			}
+
+			if (centx) x = (surface->w - textW) / 2 + x;
+			if (centy) y = (surface->h - textH) / 2 + y;
+
+			drawText(surface, font, dato, x, y, color, bg);
 		}
 
-		static void drawTextCentTransparent(SDL_Surface* surface, TTF_Font* font, const char* dato, int x, int y, bool centx, bool centy, SDL_Color color, int bg){
-			if (font != NULL){
-				int pixelDato = 0;
-				TTF_SizeText(font, dato, &pixelDato, NULL);
-				int posDatox = x;
-				int posDatoy = y;
+		static void drawTextCentTransparent(SDL_Surface* surface, TTF_Font* font, const char* dato, int x, int y, bool centx, bool centy, SDL_Color color, int bg) {
+			if (!font || !surface) return;
 
-				if (centx){
-					posDatox = (surface->w - pixelDato)/2;
-					posDatox += x;
-				}
-				if (centy){
-					posDatoy = (surface->h)/2;
-					posDatoy += y;
-				}
-				drawTextTransparent(surface, font, dato,posDatox,posDatoy,color, bg);
-			} 
+			int textW = 0, textH = 0;
+			if (centx || centy) {
+				TTF_SizeText(font, dato, &textW, &textH);
+			}
+
+			if (centx) x = (surface->w - textW) / 2 + x;
+			if (centy) y = (surface->h - textH) / 2 + y;
+
+			drawTextTransparent(surface, font, dato, x, y, color, bg);
 		}
 
 		static double round(double number){

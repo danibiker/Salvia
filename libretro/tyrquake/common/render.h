@@ -99,6 +99,33 @@ typedef struct entity_s {
     vec3_t currentangles;
     float previousanglestime;
     float currentanglestime;
+
+    /* Cache for R_AliasDrawShadow.  SV_RecursiveHullCheck (the BSP
+     * line-vs-world trace used to find the floor under the entity)
+     * dominates the shadow cost for static entities -- a corpse that
+     * doesn't move re-pays the full BSP descent every frame.  Cache
+     * the result indexed by origin and invalidate when the entity
+     * moves more than R_SHADOW_FLOOR_CACHE_EPSILON units.
+     *
+     * cl_visedicts entries are byte-copies of the underlying
+     * cl_entities[] (or persistent gib) record, so writing the cache
+     * into the visedict copy would be discarded at end of frame.
+     * src_ent points back at the persistent source struct so the
+     * shadow cache can survive across frames; populated where
+     * cl_visedicts is filled (cl_main.c, r_efrag.c).
+     *
+     * shadow_floor_z       cached floor_z under shadow_origin_cache,
+     *                      or -FLT_MAX for "no floor in range"
+     * shadow_origin_cache  origin at which the cache was filled
+     * shadow_cache_valid   0 = cache empty (e.g. just spawned),
+     *                      1 = cache populated, valid for this origin
+     * src_ent              back-pointer to the persistent source
+     *                      record; NULL means "no persistent backing,
+     *                      don't cache" */
+    vec3_t shadow_origin_cache;
+    float  shadow_floor_z;
+    int    shadow_cache_valid;
+    struct entity_s *src_ent;
 } entity_t;
 
 extern cvar_t r_lerpmodels;

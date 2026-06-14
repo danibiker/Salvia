@@ -277,7 +277,11 @@ R_StoreEfrags(efrag_t **ppefrag)
 		(cl_numvisedicts < MAX_VISEDICTS)) {
 		/* mark that we've recorded this entity for this frame */
 		pent->visframe = r_framecount;
-		cl_visedicts[cl_numvisedicts++] = *pent;
+		cl_visedicts[cl_numvisedicts] = *pent;
+		/* See cl_main.c CL_RelinkEntities for why we
+		 * back-link to the persistent source. */
+		cl_visedicts[cl_numvisedicts].src_ent = pent;
+		cl_numvisedicts++;
 	    }
 	    ppefrag = &pefrag->leafnext;
 	    break;

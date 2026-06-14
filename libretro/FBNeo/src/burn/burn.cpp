@@ -4,7 +4,9 @@
 #include "burnint.h"
 #include "timer.h"
 //#include "burn_sound.h" // included in burnint.h
-#ifdef DRIVER_REDUX
+#ifdef DRIVER_REDUX_CAVE
+#include "driverlistReduxCave.h"
+#elif defined(DRIVER_REDUX)
 #include "driverlistRedux.h"
 #else
 #include "driverlist.h"

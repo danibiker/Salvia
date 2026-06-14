@@ -19,6 +19,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 /* r_alias.c: routines for setting up to draw alias models */
 
+#include <float.h>      /* FLT_MAX -- shadow floor-z cache sentinel */
+
 #include "console.h"
 #include "cvar.h"
 #include "model.h"
@@ -1110,6 +1112,24 @@ make a shadow project to absurd locations.
 #define R_SHADOW_MAX_FLOOR_DIST  512.0f
 #define R_SHADOW_FLOOR_BIAS      1.0f       /* tiny lift to defeat floor z-fight */
 
+/* Distance from the camera past which we don't even attempt to draw
+ * a shadow.  900 units is roughly the visible-detail horizon for
+ * Quake's typical light levels and the SW rasterizer's sub-pixel
+ * accuracy -- beyond that the shadow is a flicker of one or two
+ * pixels that the floor texture's own dither hides anyway.  Squared
+ * to keep the test free of a sqrt. */
+#define R_SHADOW_MAX_CAMERA_DIST     900.0f
+#define R_SHADOW_MAX_CAMERA_DIST_SQ  (R_SHADOW_MAX_CAMERA_DIST * R_SHADOW_MAX_CAMERA_DIST)
+
+/* Minimum height of the entity origin above the floor for a shadow
+ * to be worth drawing.  Corpses that have settled flat against the
+ * ground project a near-zero-height sliver that the floor's own
+ * texture (and the slight z-bias R_SHADOW_FLOOR_BIAS introduces)
+ * essentially hides; the cost of rasterising it is mostly wasted.
+ * 4 units is below Quake's smallest meaningful step height (which
+ * is 16). */
+#define R_SHADOW_MIN_FLOAT_HEIGHT    4.0f
+
 /* Fixed "sun" direction for shadow projection.  Points along the
  * light ray (from sun toward floor).  Picked to give a slightly
  * oblique shadow rather than a straight-down collapse-to-line --
@@ -1155,34 +1175,124 @@ void R_AliasDrawShadow(entity_t *e)
     if (!cl.worldmodel)
 	return;
 
-    /* Trace 512 units straight down from origin to find a floor. */
-    VectorCopy(e->origin, end);
-    end[2] -= R_SHADOW_MAX_FLOOR_DIST;
-    memset(&trace, 0, sizeof(trace));
-    trace.fraction = 1.0f;
-    trace.allsolid = true;
-    VectorCopy(end, trace.endpos);
-    SV_RecursiveHullCheck(&cl.worldmodel->hulls[0],
-                          cl.worldmodel->hulls[0].firstclipnode,
-                          0, 1, e->origin, end, &trace);
-    if (trace.fraction == 1.0f)
-	return;             /* no floor within trace range */
-    floor_z = trace.endpos[2] + R_SHADOW_FLOOR_BIAS;
+    /* Camera-distance cull.  An entity far enough that its shadow
+     * collapses to a couple of pixels isn't worth the BSP trace,
+     * the pose-blend, the projection loop, and the rasterizer pass.
+     * Squared compare keeps this branch FP-light. */
+    {
+	float dx = e->origin[0] - r_origin[0];
+	float dy = e->origin[1] - r_origin[1];
+	float dz = e->origin[2] - r_origin[2];
+	float dist2 = dx*dx + dy*dy + dz*dz;
+	if (dist2 > R_SHADOW_MAX_CAMERA_DIST_SQ)
+	    return;
+    }
+
+    /* Sanity-gate the framebuffer pointers ONCE per entity rather than
+     * paying the cost on every triangle inside D_DrawShadowTriangle.
+     * vid.colormap is hunk-resident; d_viewbuffer is the malloc'd
+     * framebuffer (set by D_SetupFrame).  A stale value here would
+     * crash the inner loop on the cmap[prow[x]] lookup. */
+    if (!Hunk_PointerInHunk(vid.colormap))
+	return;
+    if (!d_viewbuffer)
+	return;
+
+    /* Trace 512 units straight down from origin to find a floor.
+     *
+     * Cache lookup first.  Corpses and other static entities pin the
+     * BSP descent cost frame after frame even though their origin
+     * doesn't change; the cache lives on the persistent source
+     * entity (src_ent) so it survives the per-frame visedict copy.
+     *
+     * Hit conditions:
+     *   - src_ent set (visedict was populated from a persistent
+     *     record, not synthesised in place)
+     *   - cache_valid bit on the source
+     *   - source-cached origin matches the current origin exactly
+     *     (no epsilon -- entities re-link origins through fixed
+     *     msg slots, so identical-bit origin means truly static)
+     *
+     * A cached -FLT_MAX is the "no floor in range" sentinel; bail
+     * the same way the cold-path trace would on trace.fraction==1. */
+    {
+	entity_t *src = e->src_ent;
+	if (src && src->shadow_cache_valid &&
+	    src->shadow_origin_cache[0] == e->origin[0] &&
+	    src->shadow_origin_cache[1] == e->origin[1] &&
+	    src->shadow_origin_cache[2] == e->origin[2]) {
+	    if (src->shadow_floor_z == -FLT_MAX)
+		return;
+	    floor_z = src->shadow_floor_z;
+	} else {
+	    VectorCopy(e->origin, end);
+	    end[2] -= R_SHADOW_MAX_FLOOR_DIST;
+	    memset(&trace, 0, sizeof(trace));
+	    trace.fraction = 1.0f;
+	    trace.allsolid = true;
+	    VectorCopy(end, trace.endpos);
+	    SV_RecursiveHullCheck(&cl.worldmodel->hulls[0],
+				  cl.worldmodel->hulls[0].firstclipnode,
+				  0, 1, e->origin, end, &trace);
+
+	    if (trace.fraction == 1.0f) {
+		/* No floor: record the negative result so a flying
+		 * entity sitting in mid-air doesn't repay the trace
+		 * cost each frame. */
+		if (src) {
+		    VectorCopy(e->origin, src->shadow_origin_cache);
+		    src->shadow_floor_z    = -FLT_MAX;
+		    src->shadow_cache_valid = 1;
+		}
+		return;
+	    }
+	    floor_z = trace.endpos[2] + R_SHADOW_FLOOR_BIAS;
+	    if (src) {
+		VectorCopy(e->origin, src->shadow_origin_cache);
+		src->shadow_floor_z    = floor_z;
+		src->shadow_cache_valid = 1;
+	    }
+	}
+    }
+
+    /* Float-height cull.  Corpses lying flat against the floor have
+     * origin[2] - floor_z very small; the projected shadow collapses
+     * into a thin sliver that the floor z-bias and the texture
+     * itself essentially hide, so skip the pose-blend + projection
+     * + rasterise cost entirely.  Origin below the cached floor
+     * (e.g. entity poked into the floor by physics) also takes
+     * this branch -- the projection ray would point UP the light
+     * direction and produce a nonsense shadow. */
+    if (e->origin[2] - floor_z < R_SHADOW_MIN_FLOAT_HEIGHT)
+	return;
 
     pahdr = (aliashdr_t *)Mod_Extradata(e->model);
     swhdr = SW_Aliashdr(pahdr);
-    /* Run R_AliasSetupFrame to set r_apverts to the entity's
-     * current pose verts -- lerped between previous and current
-     * frames if r_lerpmodels is on, snapped to the current frame
-     * otherwise.  R_AliasDrawModel will run R_AliasSetupFrame
-     * again itself shortly afterwards; the redundancy is
-     * negligible (a single ~200-vert blend loop) and the
-     * alternative is duplicating the lerp setup in this function
-     * just so the shadow doesn't pop while the model body
-     * smoothly slides between poses when "Smooth Animation" is
-     * enabled. */
-    R_AliasSetupFrame(e, pahdr);
-    pverts = r_apverts;
+
+    /* Snap-frame setup: pick the current pose verts directly,
+     * bypassing R_AliasSetupFrame's lerp path.  The shadow is a
+     * flat silhouette projected onto the floor; a single-frame
+     * pop in the silhouette is invisible during play even with
+     * r_lerpmodels = 1, so the cost of R_AliasBlendPoseVerts
+     * (~200-vert per-channel int blend) is wasted on shadows.
+     * R_AliasDrawModel will run the full lerp setup for the
+     * model body itself a few microseconds later. */
+    {
+	int frame = e->frame;
+	int pose;
+	if (frame >= pahdr->numframes || frame < 0)
+	    frame = 0;
+	pose = pahdr->frames[frame].firstpose;
+	if (pahdr->frames[frame].numposes > 1) {
+	    float *intervals =
+		(float *)((byte *)pahdr + pahdr->poseintervals) + pose;
+	    pose += Mod_FindInterval(intervals,
+				     pahdr->frames[frame].numposes,
+				     cl.time + e->syncbase);
+	}
+	pverts = (trivertx_t *)((byte *)pahdr + pahdr->posedata)
+	       + pose * pahdr->numverts;
+    }
     ptri = (mtriangle_t *)((byte *)pahdr + swhdr->triangles);
 
     if (pahdr->numverts > MAXALIASVERTS_RUNTIME)

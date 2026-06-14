@@ -23,9 +23,10 @@ const std::string BG_FILENAME = "background";
 const std::string QUAKE_LIST_URL = "https://www.quakeservers.net/quake/servers/";
 //Urls to download maps
 const std::string QUAKE_MAPS_URL[QUAKE_MAPS_COUNT] = {
-    "https://quakeone.com/qrack/maps/", 
-	"https://maps.quakeworld.nu/all/"
+    "https://quakeone.com/qrack/maps/" 
+	//,"https://maps.quakeworld.nu/all/"
 };
+const std::string START_FROM_EXCEPTION = "%$_START_FROMEXCEPTION_$%";
 
 const char *ICONS_PATH[] = {"menu_log.png",
 	"folder.png",

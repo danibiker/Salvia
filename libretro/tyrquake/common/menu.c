@@ -533,7 +533,7 @@ static void M_ScanSaves(void)
 
    for (i = 0; i < MAX_SAVEGAMES; i++)
    {
-      int j, version;
+      int j;
       size_t cmt_len;
       char slot[24]; /* "s" + INT_MAX (10) + ".sav" + NUL = 16, round up */
       char name[MAX_OSPATH];
@@ -552,8 +552,9 @@ static void M_ScanSaves(void)
       f = rfopen(name, "r");
       if (!f)
          continue;
-      rfscanf(f, "%i\n", &version);
-      rfscanf(f, "%79s\n", comment);
+      rfgets(comment, sizeof(comment), f);
+      rfgets(comment, sizeof(comment), f);
+      comment[strcspn(comment, "\n")] = '\0';
       /* memcpy with explicit length avoids both -Wstringop-truncation
        * (which fires on strncpy(..., sizeof(dst)-1) as a known-truncate
        * idiom) and the missing-NUL footgun strncpy has when the source
@@ -757,10 +758,11 @@ static void M_MultiPlayer_Draw(void)
 static void M_MultiPlayer_Key(int key)
 {
    switch (key) {
-      case K_JOY_B:
-      case K_ESCAPE:
-         M_Menu_Main_f();
-         break;
+    case K_JOY_B:
+    case K_ESCAPE:
+	Host_SaveConfig();
+	M_Menu_Options_f();
+	break;
 
       case K_JOY_DOWN:
       case K_DOWNARROW:
@@ -1082,6 +1084,7 @@ M_OptionsInput_Key(int k)
     switch (k) {
     case K_JOY_B:
     case K_ESCAPE:
+	Host_SaveConfig();
 	M_Menu_Options_f();
 	break;
 
@@ -1663,6 +1666,7 @@ M_OptionsAudio_Key(int k)
     switch (k) {
     case K_JOY_B:
     case K_ESCAPE:
+	Host_SaveConfig();
 	M_Menu_Options_f();
 	break;
 
@@ -1820,6 +1824,7 @@ M_OptionsGame_Key(int k)
     switch (k) {
     case K_JOY_B:
     case K_ESCAPE:
+	Host_SaveConfig();
 	M_Menu_Options_f();
 	break;
 
@@ -1904,6 +1909,7 @@ M_Options_Key(int k)
     switch (k) {
     case K_JOY_B:
     case K_ESCAPE:
+	Host_SaveConfig();
 	M_Menu_Main_f();
 	break;
 
@@ -2097,7 +2103,7 @@ M_Keys_Key(int k)
 
     case K_JOY_B:
     case K_ESCAPE:
-	M_Menu_OptionsInput_f();
+	M_Menu_Main_f();
 	break;
 
     case K_JOY_LEFT:
@@ -2311,6 +2317,7 @@ M_Quit_Key(int key)
 #else
    extern bool shutdown_core;
 	key_dest = key_console;
+	Host_SaveConfig();
 	Host_Quit_f();
    shutdown_core = true;
    environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
@@ -3344,15 +3351,15 @@ static void M_ServerBrowser_Draw(void)
    }
 
    /* Poll dpmaster state machine across frames */
-   {
-      dpm_server_t dpm_new[DPM_MAX_SERVERS];
-      int dpm_n = 0;
-      int ret = DPMaster_Poll(dpm_new, &dpm_n, DPM_MAX_SERVERS);
-      if (ret == 0)
-         M_PrintWhite(16, 200, "Querying dpmaster servers...");
-      else if (ret == 1 && dpm_n > 0)
-         SB_AppendDPMaster(dpm_new, dpm_n);
-   }
+   //{
+   //   dpm_server_t dpm_new[DPM_MAX_SERVERS];
+   //   int dpm_n = 0;
+   //   int ret = DPMaster_Poll(dpm_new, &dpm_n, DPM_MAX_SERVERS);
+   //   if (ret == 0)
+   //      M_PrintWhite(16, 200, "Querying dpmaster servers...");
+   //   else if (ret == 1 && dpm_n > 0)
+   //      SB_AppendDPMaster(dpm_new, dpm_n);
+   //}
 }
 
 static void M_ServerBrowser_Key(int key)

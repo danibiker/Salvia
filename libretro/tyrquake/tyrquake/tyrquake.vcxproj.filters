@@ -449,6 +449,9 @@
     <ClCompile Include="..\libretro-common\net\net_socket.c">
       <Filter>Source Files\net</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\dpmaster.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\deps\libvorbis\lib\backends.h">
@@ -509,6 +512,9 @@
       <Filter>Header Files\net</Filter>
     </ClInclude>
     <ClInclude Include="..\common\quakedef.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\r_subdiv.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

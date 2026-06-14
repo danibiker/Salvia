@@ -306,7 +306,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.scale"), filtros, &refConfig->configMain[cfg::scaleMode].getIntRef()));
 #endif
 	
-	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.forcefs"), &refConfig->configMain[cfg::forceFS].getBoolRef()));
+	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.integerscale"), &refConfig->configMain[cfg::integerScale].getBoolRef()));
 	//Animacion del fondo de pantalla del menu
 	std::vector<std::string> bgMenu;
 	for (int i=0; i < BG_MAX; i++){

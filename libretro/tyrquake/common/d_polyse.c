@@ -39,6 +39,11 @@ typedef struct {
     int count;
     byte *ptex;
     int sfrac, tfrac, light, zi;
+    int x, y;               /* span start in screen coords -- populated by
+                             * D_PolysetScanLeftEdge so D_PolysetDrawSpans*
+                             * doesn't have to recover them from pdest with
+                             * an integer divide (~30 cycles on PPC) per
+                             * span.  See d_aspanx / d_aspany below. */
     float nx, ny, nz;       /* Phong: vertex normal at the start of this row */
 } spanpackage_t;
 
@@ -164,6 +169,11 @@ int a_sstepxfrac, a_tstepxfrac, r_lstepx, a_ststepxwhole;
 int r_sstepx, r_tstepx, r_lstepy, r_sstepy, r_tstepy;
 int r_zistepx, r_zistepy;
 int d_aspancount, d_countextrastep;
+/* Running screen-space (x, y) of the left edge as it's walked one row
+ * at a time by D_PolysetScanLeftEdge.  Used to populate the matching
+ * pspanpackage->x / y so the inner rasterizer doesn't have to recover
+ * them from pdest via an integer divide per span. */
+int d_aspanx, d_aspany;
 
 spanpackage_t *a_spans;
 spanpackage_t *d_pedgespanpackage;
@@ -667,6 +677,14 @@ void D_PolysetScanLeftEdge(int height)
       d_pedgespanpackage->light = d_light;
       d_pedgespanpackage->zi    = d_zi;
 
+      /* Stash (x, y) for the rasterizer.  d_pdest tracks a flat offset
+       * into the 8 bpp framebuffer; without this, D_PolysetDrawSpans*
+       * had to divide that offset by screenwidth (integer divide ~30
+       * cycles on the Xenon's PPC core) per span to recover the row
+       * index for dither lookups. */
+      d_pedgespanpackage->x = d_aspanx;
+      d_pedgespanpackage->y = d_aspany;
+
       if (r_phongshading.value) {
          d_pedgespanpackage->nx = d_nx;
          d_pedgespanpackage->ny = d_ny;
@@ -680,6 +698,8 @@ void D_PolysetScanLeftEdge(int height)
          d_pdest += d_pdestextrastep;
          d_pz += d_pzextrastep;
          d_aspancount += d_countextrastep;
+         d_aspanx += d_countextrastep;
+         d_aspany++;
          d_ptex += d_ptexextrastep;
          d_sfrac += d_sfracextrastep;
          d_ptex += d_sfrac >> 16;
@@ -702,6 +722,8 @@ void D_PolysetScanLeftEdge(int height)
          d_pdest += d_pdestbasestep;
          d_pz += d_pzbasestep;
          d_aspancount += ubasestep;
+         d_aspanx += ubasestep;
+         d_aspany++;
          d_ptex += d_ptexbasestep;
          d_sfrac += d_sfracbasestep;
          d_ptex += d_sfrac >> 16;
@@ -889,10 +911,9 @@ void D_PolysetDrawSpansPhong8(spanpackage_t *pspanpackage)
 
       if (lcount > 0)
       {
-         const int span_offset = (int)((byte*)pspanpackage->pdest - (byte*)d_viewbuffer);
-         const int span_y      = span_offset / screenwidth;
-         int       span_x      = span_offset - span_y * screenwidth;
-         const int *drow       = dtab[span_y & 3];
+         const int span_y = pspanpackage->y;
+         int       span_x = pspanpackage->x;
+         const int *drow  = dtab[span_y & 3];
 
          lpdest = (byte*)pspanpackage->pdest;
          lptex  = pspanpackage->ptex;
@@ -1018,10 +1039,9 @@ void D_PolysetDrawSpansPhongRGB(spanpackage_t *pspanpackage)
 
       if (lcount > 0)
       {
-         const int span_offset = (int)((byte*)pspanpackage->pdest - (byte*)d_viewbuffer);
-         const int span_y      = span_offset / screenwidth;
-         int       span_x      = span_offset - span_y * screenwidth;
-         const int *drow       = dtab[span_y & 3];
+         const int span_y = pspanpackage->y;
+         int       span_x = pspanpackage->x;
+         const int *drow  = dtab[span_y & 3];
 
          lpdest = (byte*)pspanpackage->pdest;
          lptex  = pspanpackage->ptex;
@@ -1153,15 +1173,11 @@ void D_PolysetDrawSpans8(spanpackage_t *pspanpackage)
 
       if (lcount > 0)
       {
-         /* Compute the span's screen-space (x, y) once, then walk
-          * x along with lpdest in the inner loop.  The framebuffer
-          * is a flat byte array of size screenwidth * screenheight,
-          * so y = offset / screenwidth and the span's starting x
-          * is the remainder. */
-         const int span_offset = (int)((byte*)pspanpackage->pdest - (byte*)d_viewbuffer);
-         const int span_y      = span_offset / screenwidth;
-         int       span_x      = span_offset - span_y * screenwidth;
-         const int *drow       = dtab[span_y & 3];
+         /* (x, y) precomputed by D_PolysetScanLeftEdge -- no per-span
+          * integer divide needed. */
+         const int span_y = pspanpackage->y;
+         int       span_x = pspanpackage->x;
+         const int *drow  = dtab[span_y & 3];
 
          lpdest = (byte*)pspanpackage->pdest;
          lptex = pspanpackage->ptex;
@@ -1228,10 +1244,9 @@ void D_PolysetDrawSpansRGB(spanpackage_t *pspanpackage)
 
       if (lcount > 0)
       {
-         const int span_offset = (int)((byte*)pspanpackage->pdest - (byte*)d_viewbuffer);
-         const int span_y      = span_offset / screenwidth;
-         int       span_x      = span_offset - span_y * screenwidth;
-         const int *drow       = dtab[span_y & 3];
+         const int span_y = pspanpackage->y;
+         int       span_x = pspanpackage->x;
+         const int *drow  = dtab[span_y & 3];
 
          lpdest = (byte*)pspanpackage->pdest;
          lptex = pspanpackage->ptex;
@@ -1366,6 +1381,9 @@ void D_RasterizeAliasPolySmooth(void)
    d_pdestextrastep = d_pdestbasestep + 1;
    d_pdest = (byte *)d_viewbuffer + ystart * screenwidth + plefttop[0];
    d_pz = d_pzbuffer + ystart * d_zwidth + plefttop[0];
+   /* Seed the (x, y) tracker that mirrors d_pdest. */
+   d_aspanx = plefttop[0];
+   d_aspany = ystart;
 
    /* TODO: can reuse partial expressions here */
 
@@ -1449,6 +1467,9 @@ void D_RasterizeAliasPolySmooth(void)
       d_pzbasestep = d_zwidth + ubasestep;
       d_pzextrastep = d_pzbasestep + 1;
       d_pz = d_pzbuffer + ystart * d_zwidth + plefttop[0];
+      /* Reseed the (x, y) tracker at the apex of the bottom edge. */
+      d_aspanx = plefttop[0];
+      d_aspany = ystart;
 
       if (ubasestep < 0)
          working_lstepx = r_lstepx - 1;
@@ -1642,54 +1663,35 @@ void
 D_DrawShadowTriangle(const float v0[2], const float v1[2], const float v2[2],
                      float zi0, float zi1, float zi2)
 {
+    /* Inputs are already produced by R_AliasDrawShadow's projection
+     * loop, which marks any vertex with depth < 4 as clipped and
+     * skips triangles touching one.  The caller also pre-validates
+     * vid.colormap / d_viewbuffer once per entity, so the rasterizer
+     * itself no longer pays the cost of a 9-float NaN/Inf sweep and
+     * two pointer-sanity checks per triangle (hundreds of times per
+     * entity).
+     *
+     * Colormap row 52 (of 64) for shadow darkness.  Floor texture
+     * darkened to ~20% brightness -- reads as deep shadow but the
+     * texture pattern is faintly visible, keeping the shadow from
+     * looking like a black hole.  One row = 256 entries (one per
+     * palette index).  Hoisted out of the loop. */
+    const byte *cmap = (const byte *)vid.colormap + 52 * 256;
     const float *p0 = v0, *p1 = v1, *p2 = v2, *tmp;
     float z0 = zi0, z1 = zi1, z2 = zi2, ztmp;
     float yspan02, yspan01, yspan12;
     float dx_long, dz_long;
     float dx_short_top, dz_short_top;
     float dx_short_bot, dz_short_bot;
+    /* Edge accumulators -- replace per-scanline (fy - p0[1]) * dx
+     * recomputation with a +=dx step.  long_x/long_z track the long
+     * edge (p0 -> p2); top_x/top_z and bot_x/bot_z track the short
+     * edges (p0 -> p1, p1 -> p2 respectively). */
+    float long_x, long_z;
+    float top_x,  top_z;
+    float bot_x,  bot_z;
     int   y, y_top, y_mid, y_bot;
     int   y_clamp_top, y_clamp_bot;
-
-    /* Defensive: reject NaN, Inf, or absurd inputs.  Bad floats
-     * here (e.g. from a degenerate projection where t blew up
-     * because L_z went to zero, or from triangles fed garbage
-     * coordinates due to vertex-index corruption upstream) would
-     * cause undefined behaviour on the float->int casts below
-     * and produce out-of-bounds y_top/y_mid/y_bot values that
-     * survive the vid.height clamp.  The chosen bound (1.0e6)
-     * is far past any legitimate screen coordinate or 1/depth.
-     * NaN fails both the < and > tests so it's also caught. */
-    if (!(v0[0] > -1.0e6f && v0[0] < 1.0e6f) ||
-        !(v0[1] > -1.0e6f && v0[1] < 1.0e6f) ||
-        !(v1[0] > -1.0e6f && v1[0] < 1.0e6f) ||
-        !(v1[1] > -1.0e6f && v1[1] < 1.0e6f) ||
-        !(v2[0] > -1.0e6f && v2[0] < 1.0e6f) ||
-        !(v2[1] > -1.0e6f && v2[1] < 1.0e6f) ||
-        !(zi0   > -1.0e6f && zi0   < 1.0e6f) ||
-        !(zi1   > -1.0e6f && zi1   < 1.0e6f) ||
-        !(zi2   > -1.0e6f && zi2   < 1.0e6f))
-        return;
-
-    /* Defensive: validate the vid pointers we'll dereference per
-     * pixel.  vid.colormap is hunk-allocated (host_colormap, set
-     * once at Host_Init) and so should be stable across map
-     * transitions, but heap reallocations on a content reload
-     * can leave it pointing at freed memory.  d_viewbuffer is
-     * reseated by D_SetupFrame from vid.buffer, which is the
-     * malloc'd framebuffer; if the rasterizer ever runs with a
-     * stale pointer (e.g. one frame that slipped through during
-     * the VID_Shutdown -> VID_Init window of a reload), the
-     * inner-loop write to prow[x] / read from cmap[prow[x]]
-     * lands in unmapped memory and crashes.
-     *
-     * Hunk_PointerInHunk checks colormap; for d_viewbuffer the
-     * test is just non-NULL since malloc'd framebuffers don't
-     * fall in the hunk. */
-    if (!Hunk_PointerInHunk(vid.colormap))
-        return;
-    if (!d_viewbuffer)
-        return;
 
     /* Sort verts top-to-bottom by Y, dragging per-vertex z values
      * along with the position pointers. */
@@ -1702,15 +1704,7 @@ D_DrawShadowTriangle(const float v0[2], const float v1[2], const float v2[2],
     y_bot = (int)p2[1];
 
     /* Clip Y to the 3D viewport (r_refdef.vrect), not the full
-     * framebuffer.  The shadow rasterizer used to clamp to
-     * [0, vid.height) and [0, screenwidth), which lets a long
-     * shadow that projects past the bottom of the viewport keep
-     * darkening pixels in the status-bar strip vid.buffer holds
-     * below it -- visible as a moving silhouette over the static
-     * HUD backdrop.  r_refdef.vrectbottom is exclusive (== vrect.y
-     * + vrect.height, from r_main.c::R_ViewChanged), so the last
-     * valid row is vrectbottom - 1; same for vrectright on the X
-     * axis below. */
+     * framebuffer.  r_refdef.vrectbottom is exclusive. */
     if (y_bot < r_refdef.vrect.y || y_top >= r_refdef.vrectbottom)
         return;
 
@@ -1744,25 +1738,42 @@ D_DrawShadowTriangle(const float v0[2], const float v1[2], const float v2[2],
 	dz_short_bot = 0.0f;
     }
 
+    /* Seed the edge accumulators at y_clamp_top.  Stepping each
+     * edge by its dx/dy slope produces the same float values as
+     * the original p0[0] + (fy - p0[1]) * dx expression, but with
+     * one add per scanline instead of one sub + one mul + one add.
+     * The bottom-half short edge is seeded relative to p1, so we
+     * step it from the row immediately AFTER y_mid (the row at
+     * y_mid is the last row of the top half).  See the branch on
+     * y < y_mid in the loop. */
+    {
+	float fy_top = (float)y_clamp_top;
+	long_x = p0[0] + (fy_top - p0[1]) * dx_long;
+	long_z = z0    + (fy_top - p0[1]) * dz_long;
+	top_x  = p0[0] + (fy_top - p0[1]) * dx_short_top;
+	top_z  = z0    + (fy_top - p0[1]) * dz_short_top;
+	bot_x  = p1[0] + (fy_top - p1[1]) * dx_short_bot;
+	bot_z  = z1    + (fy_top - p1[1]) * dz_short_bot;
+    }
+
     for (y = y_clamp_top; y <= y_clamp_bot; y++) {
-	float fy = (float)y;
 	float x_a, x_b, z_a, z_b;
 	float z_left, dz_dx;
 	int   xl, xr, x;
 	int16_t *zrow = zspantable[y];
 	byte    *prow = (byte *)d_viewbuffer + d_scantable[y];
 
-	/* Long edge X / Z at this scanline. */
-	x_a = p0[0] + (fy - p0[1]) * dx_long;
-	z_a = z0    + (fy - p0[1]) * dz_long;
+	/* Long edge X / Z at this scanline (read from accumulator). */
+	x_a = long_x;
+	z_a = long_z;
 
 	/* Short edge: top half uses (p0->p1), bottom half uses (p1->p2). */
 	if (y < y_mid) {
-	    x_b = p0[0] + (fy - p0[1]) * dx_short_top;
-	    z_b = z0    + (fy - p0[1]) * dz_short_top;
+	    x_b = top_x;
+	    z_b = top_z;
 	} else {
-	    x_b = p1[0] + (fy - p1[1]) * dx_short_bot;
-	    z_b = z1    + (fy - p1[1]) * dz_short_bot;
+	    x_b = bot_x;
+	    z_b = bot_z;
 	}
 
 	/* Order so xl <= xr; pick z_left and the dz/dx step. */
@@ -1781,23 +1792,30 @@ D_DrawShadowTriangle(const float v0[2], const float v1[2], const float v2[2],
 	    xl = r_refdef.vrect.x;
 	}
 	if (xr >= r_refdef.vrectright) xr = r_refdef.vrectright - 1;
-	if (xl > xr)           continue;
-
-	{
-	    /* Colormap row 52 (of 64) for shadow darkness.  Floor
-	     * texture darkened to ~20% brightness -- reads as deep
-	     * shadow but the texture pattern is faintly visible,
-	     * keeping the shadow from looking like a black hole.
-	     * One row = 256 entries (one per palette index). */
-	    const byte *cmap = (const byte *)vid.colormap + 52 * 256;
-	    float z_pix = z_left;
+	if (xl <= xr) {
+	    /* Inner loop in 1.15 fixed-point so the z compare against
+	     * zrow[x] (which is already 1.15) is a plain integer >=,
+	     * and the per-pixel float->int16 cast (one fctiwz + LHS,
+	     * ~20 cycles on Xenon) drops out entirely.  z_left max is
+	     * ~1.0 -> izi max 0x8000; izi_step is tiny (~0.0001 -> ~3),
+	     * both well within int range. */
+	    int izi      = (int)(z_left * (float)0x8000);
+	    int izi_step = (int)(dz_dx  * (float)0x8000);
 	    for (x = xl; x <= xr; x++) {
-		int16_t z_int = (int16_t)(z_pix * (float)0x8000);
+		int16_t z_int = (int16_t)izi;
 		if (z_int >= zrow[x]) {
 		    prow[x] = cmap[prow[x]];
 		}
-		z_pix += dz_dx;
+		izi += izi_step;
 	    }
 	}
+
+	/* Advance all three edge accumulators by one row. */
+	long_x += dx_long;
+	long_z += dz_long;
+	top_x  += dx_short_top;
+	top_z  += dz_short_top;
+	bot_x  += dx_short_bot;
+	bot_z  += dz_short_bot;
     }
 }

@@ -463,7 +463,7 @@ static void Host_SavegameComment(char *text)
       lname_len = 22;
    memcpy(text, cl.levelname, lname_len);
 
-   snprintf(kills, sizeof(kills), "kills:%3i/%3i", cl.stats[STAT_MONSTERS],
+   snprintf(kills, sizeof(kills), "kills:%i/%i", cl.stats[STAT_MONSTERS],
          cl.stats[STAT_TOTALMONSTERS]);
    memcpy(text + 22, kills, strlen(kills));
 
@@ -478,8 +478,8 @@ static void Host_SavegameComment(char *text)
     * BSPs are user-installed and may not be trusted. */
    for (i = 0; i < SAVEGAME_COMMENT_LENGTH; i++) {
       unsigned char c = (unsigned char)text[i];
-      if (c < 0x20 || c == 0x7f)
-         text[i] = '_';
+       if (c <= 0x20 || c == 0x7f)
+          text[i] = '_';
    }
 
    text[SAVEGAME_COMMENT_LENGTH] = '\0';
@@ -647,7 +647,12 @@ void Host_Loadgame_f(void)
       goto done;
    }
 
-   rfscanf(f, "%i\n", &version);
+   if (!rfgets(str, 32768, f))
+   {
+      rfclose(f);
+      goto done;
+   }
+   version = atoi(str);
    if (version != SAVEGAME_VERSION)
    {
       rfclose(f);
@@ -655,23 +660,28 @@ void Host_Loadgame_f(void)
             SAVEGAME_VERSION);
       goto done;
    }
-   /* Bound the %s reads.  Without a width modifier, scanf
-    * reads until whitespace with no limit -- a corrupt or
-    * hostile savegame can overflow the destination buffer. */
-   rfscanf(f, "%32767s\n", str);
+   rfgets(str, 32768, f);
+   str[strcspn(str, "\n")] = '\0';
    for (i = 0; i < NUM_SPAWN_PARMS; i++)
-      rfscanf(f, "%f\n", &spawn_parms[i]);
+   {
+      rfgets(str, 32768, f);
+      spawn_parms[i] = atof(str);
+   }
 
    /*
     * This silliness is so we can load 1.06 save files, which have float
     * skill values
     */
-   rfscanf(f, "%f\n", &tfloat);
+   rfgets(str, 32768, f);
+   tfloat = atof(str);
    current_skill = (int)(tfloat + 0.1);
    Cvar_SetValue("skill", (float)current_skill);
 
-   rfscanf(f, "%63s\n", mapname);
-   rfscanf(f, "%f\n", &time);
+   rfgets(str, 32768, f);
+   str[strcspn(str, "\n")] = '\0';
+   strlcpy(mapname, str, sizeof(mapname));
+   rfgets(str, 32768, f);
+   time = atof(str);
 
    CL_Disconnect_f();
 
@@ -690,7 +700,8 @@ void Host_Loadgame_f(void)
    for (i = 0; i < MAX_LIGHTSTYLES; i++)
    {
       size_t lslen;
-      rfscanf(f, "%32767s\n", str);
+      rfgets(str, 32768, f);
+      str[strcspn(str, "\n")] = '\0';
       lslen = strlen(str) + 1;
       lightstyle = (char*)Hunk_Alloc(lslen);
       memcpy(lightstyle, str, lslen);

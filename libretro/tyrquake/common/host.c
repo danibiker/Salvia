@@ -267,7 +267,11 @@ Host_WriteConfiguration(void)
 /* dedicated servers initialize the host but don't parse and set the */
 /* config.cfg cvars */
     if (host_initialized & !isDedicated) {
+#ifdef _WIN32
+	f = rfopen(va("%s\\config.cfg", com_savedir), "w");
+#else
 	f = rfopen(va("%s/config.cfg", com_savedir), "w");
+#endif
 	if (!f) {
 	    Con_Printf("Couldn't write config.cfg.\n");
 	    return;
@@ -282,6 +286,11 @@ Host_WriteConfiguration(void)
 
 	rfclose(f);
     }
+}
+
+void Host_SaveConfig(void)
+{
+    Host_WriteConfiguration();
 }
 
 

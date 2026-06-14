@@ -33,6 +33,7 @@ GameMenu *gameMenu;
 ListMenu *listMenu;
 Logger *logger;
 dirutil dir;
+TileMap tileMap(9, 0, 16, 16);
 
 #ifdef __cplusplus
 extern "C" {
@@ -106,7 +107,8 @@ volatile bool audio_closing = false;
 t_rom_paths romPaths;
 t_scale_props current_video_settings;
 
-// Current ROM path (needed to persist last disc index on closeGame)
+// Current ROM path (needed to persist last disc index on closeGame) and to add information
+// to the exception
 static std::string g_currentRompath;
 
 //Indica si el core puede arrancar sin disco introducido
@@ -120,6 +122,9 @@ double nextFrameTime;
  * RESET_AUDIO se mantiene el comportamiento por defecto (no reabrir nunca,
  * porque en 360 SDL_OpenAudio/CloseAudio repetidos colgaban). */
 static int g_audio_opened_rate = 0;
+
+bool g_start_from_exception = false;
+static std::string g_excp_emulator_path;
 
 /* [XBOX360] Contexto pasado al watcher thread.
  *
@@ -282,7 +287,8 @@ struct retro_core_variable {
    const char *value;  // Nombre visual y opciones: "Region; Auto|NTSC|PAL"
 };
 
-void drawLoadingProgressBar(SDL_Surface* screen, float progress);
+void drawLoadingProgressBar(SDL_Surface*& screen, float progress);
+
 struct t_progress_load{
 	float loading_progress;
 	int total_rom_files;
@@ -487,20 +493,21 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
     gameMenu.createMenuImages(menuData);
 }
 
-void drawLoadingProgressBar(SDL_Surface* screen, float progress) {
+void drawLoadingProgressBar(SDL_Surface*& screen, float progress) {
     if (!screen) return;
 
     // Configuración de dimensiones
-    int barW = screen->w / 2;
-    int barH = 20;
-    int barX = (screen->w - barW) / 2;
-    int barY = (screen->h / 2) + 40; // Debajo del texto de "Loading..."
+	const int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
+    const int barW = screen->w / 2;
+    const int barH = 20;
+    const int barX = (screen->w - barW) / 2;
+    const int barY = (screen->h / 2) + 1; // Debajo del texto de "Loading..."
 
     // Colores (Ajusta según tu paleta)
-    Uint32 colorBorder		= SDL_MapRGBA(screen->format, 200, 200, 200, 0xFF);
-    Uint32 colorFill		= SDL_MapRGBA(screen->format, bkgMenu.r, bkgMenu.g, bkgMenu.b, 0xFF);
-	Uint32 colorFillLighter = SDL_MapRGBA(screen->format, bkgMenuLighter.r, bkgMenuLighter.g, bkgMenuLighter.b, 0xFF);
-    Uint32 colorBG			= SDL_MapRGBA(screen->format, 40, 40, 40, 0xFF);
+    const Uint32 colorBorder		= SDL_MapRGBA(screen->format, 200, 200, 200, 0xFF);
+    const Uint32 colorFill			= SDL_MapRGBA(screen->format, bkgMenu.r, bkgMenu.g, bkgMenu.b, 0xFF);
+	const Uint32 colorFillLighter	= SDL_MapRGBA(screen->format, bkgMenuLighter.r, bkgMenuLighter.g, bkgMenuLighter.b, 0xFF);
+    const Uint32 colorBG			= SDL_MapRGBA(screen->format, 40, 40, 40, 0xFF);
 	
     //Dibujar fondo de la barra
     SDL_Rect bgRect = { (Sint16)barX, (Sint16)barY, (Uint16)barW, (Uint16)barH };

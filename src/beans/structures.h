@@ -94,13 +94,13 @@ struct t_scale_props{
     float ratio;
 	int bpp;
 	int filter;
-	bool force_fs;
+	bool integer_scale;
 
 	t_scale_props(){
 		sw = sh = dw = dh = scale = 0;
 		ratio = .0f;
 		bpp = 16;
-		force_fs = true;
+		integer_scale = false;
 	}
 };
 

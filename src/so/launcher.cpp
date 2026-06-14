@@ -29,7 +29,8 @@ int Launcher::launchXboxWin(const std::string& rutaCompletaExe, const std::strin
 	
 	#ifdef _XBOX
 		if (GetFileAttributes(rutaCompletaExe.c_str()) != 0xFFFFFFFF){
-			XSetLaunchData((PVOID)parametros.c_str(), (DWORD)parametros.length() + 1);
+			if (!parametros.empty())
+				XSetLaunchData((PVOID)parametros.c_str(), (DWORD)parametros.length() + 1);
 			XLaunchNewImage(rutaCompletaExe.c_str(), 0);
 			return 0;
 		}

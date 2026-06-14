@@ -16,10 +16,10 @@ class Launcher{
         ~Launcher(){};
 
         bool launch(std::vector<std::string> &commands);
+		int launchXboxWin(const std::string& rutaCompletaExe, const std::string& parametros);
 		static void initDrives();
 		static void unmountAll();
     private:
-		int launchXboxWin(const std::string& rutaCompletaExe, const std::string& parametros);
 		static void mount(const char* szDrive, const char* szDevice);
 		static void unmount(const char* szDrive);
 		static vector<string> mountedDrives;

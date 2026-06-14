@@ -99,7 +99,7 @@ class GameMenu : public Engine{
 		int *current_ratio;
 		int *current_shader;
 		int *current_sync;
-		bool *current_force_fs;
+		bool *current_integer_scale;
 		bool romLoaded;
 		Uint32 uBkgColor;
 
