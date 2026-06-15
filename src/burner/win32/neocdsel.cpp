@@ -18,9 +18,9 @@ static HWND		hNeoCDWnd			= NULL;
 static HWND		hListView			= NULL;
 static HWND		hProcParent			= NULL;
 static bool		bProcessingList		= false;
-static HANDLE   hProcessThread = NULL;
-static unsigned ProcessThreadID = 0;
-
+static HANDLE   hProcessThread		= NULL;
+static unsigned ProcessThreadID		= 0;
+static HBITMAP hCoverBMPs[3] 		= { 0, 0 };
 static HBRUSH hWhiteBGBrush;
 
 bool bNeoCDListScanSub			= false;
@@ -271,17 +271,25 @@ static void NeoCDList_ScanDir_Internal(HWND hList, TCHAR* pszDirectory)
 
 					TCHAR *pszISO = NeoCDList_ParseCUE( szParse );
 
+					NeoCDList_ParseCUE( szParse );
+
 					TCHAR szISO[512] =_T("\0");
 					_stprintf(szISO, _T("%s%s"), pszDirectory, pszISO);
 					free(pszISO);
 
 					NeoCDList_CheckISO(szISO, NeoCDSel_Callback);
 				}
+				else if (IsFileExt(ffdDirectory.cFileName, _T(".chd")))
+				{
+					// Found CHD file
+					TCHAR szFile[512] = _T("\0");
+					_stprintf(szFile, _T("%s%s"), pszDirectory, ffdDirectory.cFileName);
+					NeoCDSel_Callback(-1, szFile);
+				}
 			}
 		} while (FindNextFile(hDirectory, &ffdDirectory));
-
-		FindClose(hDirectory);
 	}
+	FindClose(hDirectory);
 
 	ScanDir_RecursionCount--;
 }
@@ -498,23 +506,44 @@ static void NeoCDList_ShowPreviewBuf(HWND hDlg, void *pPngBuf, size_t nPngSize, 
 
 	// ------------------------------------------------------
 
+	int cover_idx = nCtrID - IDC_NCD_FRONT_PIC;
+	if (cover_idx != 0 && cover_idx != 1) cover_idx = 2; // for IDC_NCD_COVER_PREVIEW_PIC
+
+	bprintf(0, _T("cover_idx %d\n"), cover_idx);
+	if (hCoverBMPs[cover_idx]) {
+		DeleteObject(hCoverBMPs[cover_idx]);
+		hCoverBMPs[cover_idx] = 0;
+	}
+
 	HBITMAP hCoverBmp = PNGLoadBitmapBuffer(hDlg, pPngBuf, nPngSize, (int)w, (int)h, 0);
+	hCoverBMPs[cover_idx] = hCoverBmp;
 	if (pPngBuf) free(pPngBuf);
 
 	SetWindowPos(GetDlgItem(hDlg, nCtrID), NULL, (int)(pt.x + x), (int)(pt.y + y), 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
 	SendDlgItemMessage(hDlg, nCtrID, STM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hCoverBmp);
 }
 
+//#define IDC_NCD_FRONT_PIC					20801
+//#define IDC_NCD_BACK_PIC					20802
 
-static void NeoCDList_Clean()
+static void NeoCDList_Clean(bool bExit)
 {
-	NeoCDList_ShowPreviewBuf(hNeoCDWnd, NULL, 0, IDC_NCD_FRONT_PIC, IDC_NCD_FRONT_PIC_FRAME, 0, 0);
-	NeoCDList_ShowPreviewBuf(hNeoCDWnd, NULL, 0, IDC_NCD_BACK_PIC, IDC_NCD_BACK_PIC_FRAME, 0, 0);
+	if (bExit == false) {
+		NeoCDList_ShowPreviewBuf(hNeoCDWnd, NULL, 0, IDC_NCD_FRONT_PIC, IDC_NCD_FRONT_PIC_FRAME, 0, 0);
+		NeoCDList_ShowPreviewBuf(hNeoCDWnd, NULL, 0, IDC_NCD_BACK_PIC, IDC_NCD_BACK_PIC_FRAME, 0, 0);
 
-	SetWindowText(GetDlgItem(hNeoCDWnd, IDC_NCD_TEXTSHORT), _T(""));
-	SetWindowText(GetDlgItem(hNeoCDWnd, IDC_NCD_TEXTPUBLISHER), _T(""));
-	SetWindowText(GetDlgItem(hNeoCDWnd, IDC_NCD_TEXTIMAGE), _T(""));
-	SetWindowText(GetDlgItem(hNeoCDWnd, IDC_NCD_TEXTAUDIO), _T(""));
+		SetWindowText(GetDlgItem(hNeoCDWnd, IDC_NCD_TEXTSHORT), _T(""));
+		SetWindowText(GetDlgItem(hNeoCDWnd, IDC_NCD_TEXTPUBLISHER), _T(""));
+		SetWindowText(GetDlgItem(hNeoCDWnd, IDC_NCD_TEXTIMAGE), _T(""));
+		SetWindowText(GetDlgItem(hNeoCDWnd, IDC_NCD_TEXTAUDIO), _T(""));
+	} else {
+		for (int i = 0; i < 3; i++) {
+			if (hCoverBMPs[i]) {
+				DeleteObject(hCoverBMPs[i]);
+				hCoverBMPs[i] = 0;
+			}
+		}
+	}
 
 	hProcessThread = NULL;
 	ProcessThreadID = 0;
@@ -650,7 +679,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 
 	if(Msg == WM_CLOSE)
 	{
-		NeoCDList_Clean();
+		NeoCDList_Clean(true);
 
 		DeleteObject(hWhiteBGBrush);
 
@@ -780,7 +809,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 				return 0;
 			}
 
-			NeoCDList_Clean();
+			NeoCDList_Clean(true);
 
 			hNeoCDWnd	= NULL;
 			hListView	= NULL;
@@ -871,7 +900,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 						break;
 					}
 
-					NeoCDList_Clean();
+					NeoCDList_Clean(true);
 
 					DeleteObject(hWhiteBGBrush);
 
@@ -888,7 +917,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 				{
 					if(bProcessingList) break;
 
-					NeoCDList_Clean();
+					NeoCDList_Clean(false);
 					hProcessThread = (HANDLE)_beginthreadex(NULL, 0, NeoCDList_DoProc, NULL, 0, &ProcessThreadID);
 					SetFocus(hListView);
 					break;
@@ -898,7 +927,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 				{
 					if(bProcessingList) break;
 
-					NeoCDList_Clean();
+					NeoCDList_Clean(false);
 
 					SupportDirCreate(hNeoCDWnd);
 					hProcessThread = (HANDLE)_beginthreadex(NULL, 0, NeoCDList_DoProc, NULL, 0, &ProcessThreadID);
@@ -916,7 +945,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 
 					if(bProcessingList) break;
 
-					NeoCDList_Clean();
+					NeoCDList_Clean(false);
 
 					hProcessThread = (HANDLE)_beginthreadex(NULL, 0, NeoCDList_DoProc, NULL, 0, &ProcessThreadID);
 					SetFocus(hListView);
@@ -933,7 +962,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 
 					if(bProcessingList) break;
 
-					NeoCDList_Clean();
+					NeoCDList_Clean(false);
 
 					hProcessThread = (HANDLE)_beginthreadex(NULL, 0, NeoCDList_DoProc, NULL, 0, &ProcessThreadID);
 					SetFocus(hListView);
@@ -942,7 +971,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 #endif
 				case IDC_NCD_CANCEL_BUTTON:
 				{
-					NeoCDList_Clean();
+					NeoCDList_Clean(true);
 
 					DeleteObject(hWhiteBGBrush);
 
@@ -975,6 +1004,7 @@ static unsigned __stdcall NeoCDList_DoProc(void*)
 	SetFocus(hListView);
 
 	bProcessingList = false;
+	CloseHandle(hProcessThread);
 	hProcessThread = NULL;
 	ProcessThreadID = 0;
 
