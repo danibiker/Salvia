@@ -2,6 +2,7 @@
 #include "retro_cdemu.h"
 #include "burnint.h"
 #include "file/file_path.h"
+#include "chd.h"
 
 #define DPRINTF_BUFFER_SIZE 512
 char dprintf_buf[DPRINTF_BUFFER_SIZE];
@@ -27,6 +28,7 @@ const int CD_FRAMES_SECOND =      75;
 const int CD_TYPE_NONE     = 1 << 0;
 const int CD_TYPE_BINCUE   = 1 << 1;
 const int CD_TYPE_CCD      = 1 << 2;
+const int CD_TYPE_CHD      = 1 << 3;
 
 static int cd_pregap;
 
@@ -38,6 +40,12 @@ struct cdimgCDROM_TOC { UINT8 FirstTrack; UINT8 LastTrack; UINT8 ImageType; bool
 static cdimgCDROM_TOC* cdimgTOC;
 
 static FILE*  cdimgFile = NULL;
+static chd_file* cdimgChdFile = NULL;
+static UINT32 cdimgChdBytesPerSector = 0;  // bytes per CD sector in CHD (2352 or 2448)
+static UINT32 cdimgChdSectorsPerHunk = 0;  // number of CD sectors per hunk
+static UINT8* cdimgChdHunkBuf = NULL;      // cached hunk buffer
+static INT32  cdimgChdCurHunk = -1;        // currently cached hunk, -1 = none
+static INT32  cdimgAudioFilePos = 0;       // audio read position (sector index within CHD)
 static int    cdimgTrack = 0;
 static int    cdimgLBA = 0;
 
@@ -171,6 +179,8 @@ static void cdimgPrintImageInfo()
 		bprintf(0, _T("TruRip (.CCD/.SUB/.IMG) format\n"));
 	if (cdimgTOC->ImageType == CD_TYPE_BINCUE)
 		bprintf(0, _T("Disk At Once (.BIN/.CUE) format\n"));
+	if (cdimgTOC->ImageType == CD_TYPE_CHD)
+		bprintf(0, _T("Compressed Hunks of Data (.CHD) format\n"));
 
 	for (INT32 trk = cdimgTOC->FirstTrack - 1; trk <= cdimgTOC->LastTrack; trk++) {
 		const UINT8* addressUNBCD = dinkLBAToMSF(cdimgMSFToLBA(cdimgTOC->TrackData[trk].Address));
@@ -491,6 +501,262 @@ static int cdimgParseCueFile()
 
 
 // -----------------------------------------------------------------------------
+// CHD support (libchdr).  The CHD file IS the complete image; sector data is
+// served via a one-slot hunk decompression cache.  CD-DA samples are stored
+// big-endian in CHD; we re-pack them as little-endian to match the .bin/.cue
+// in-memory layout, so the existing play loop (which uses BURN_ENDIAN_SWAP_INT16
+// to normalize on big-endian hosts like Xbox 360) works unchanged on both
+// little- and big-endian targets.
+
+// Decompress a single CHD sector into a 2352-byte raw mode-1 sector.
+//   sector : 0-based sector index inside the CHD file (no pregap offset)
+//   dest   : caller-provided buffer, must hold at least 2352 bytes
+//   return : 0 on success, non-zero on error
+static INT32 cdimgChdReadSector(INT32 sector, UINT8* dest)
+{
+	if (!cdimgChdFile || !cdimgChdHunkBuf || cdimgChdSectorsPerHunk == 0)
+		return 1;
+
+	INT32 hunk = sector / (INT32)cdimgChdSectorsPerHunk;
+	INT32 offset_in_hunk = (sector % (INT32)cdimgChdSectorsPerHunk) * (INT32)cdimgChdBytesPerSector;
+
+	if (cdimgChdCurHunk != hunk) {
+		chd_error err = chd_read(cdimgChdFile, (UINT32)hunk, cdimgChdHunkBuf);
+		if (err != CHDERR_NONE)
+			return 1;
+		cdimgChdCurHunk = hunk;
+	}
+
+	UINT32 copy_size = (cdimgChdBytesPerSector < 2352) ? cdimgChdBytesPerSector : 2352;
+	memcpy(dest, cdimgChdHunkBuf + offset_in_hunk, copy_size);
+	return 0;
+}
+
+// Unified raw-sector reader: hides whether the underlying image is a .bin/.cue
+// or a .chd.  LBA is data-track-relative (LBA 0 == first user sector).
+static INT32 cdimgReadRawSector(INT32 lba, UINT8* dest)
+{
+	if (!cdimgTOC)
+		return 1;
+
+	if (cdimgTOC->ImageType == CD_TYPE_CHD)
+		return cdimgChdReadSector(lba, dest);
+
+	if (!cdimgFile)
+		return 1;
+	if (fseek(cdimgFile, (long)lba * 2352, SEEK_SET) != 0)
+		return 1;
+	size_t n = fread(dest, 1, 2352, cdimgFile);
+	return (n == 2352) ? 0 : 1;
+}
+
+// Decompress audio sectors and write them into cdimgOutputbuffer using the
+// little-endian byte layout that the play loop expects.  Returns how many
+// sectors were successfully read (0 on hard failure).
+static INT32 cdimgChdFillAudioBuffer(INT32 base_sector, INT32 sectors_to_read)
+{
+	UINT8 sector_buf[2352];
+	INT32 read_count = 0;
+
+	UINT8* out_bytes = (UINT8*)cdimgOutputbuffer;
+
+	for (INT32 i = 0; i < sectors_to_read; i++) {
+		if (cdimgChdReadSector(base_sector + i, sector_buf) != 0)
+			break;
+
+		// CHD CD-DA = big-endian 16-bit PCM stereo. Repack to little-endian
+		// so the buffer matches the .bin convention used by the play loop.
+		// This is endian-safe: dst[0] = low byte, dst[1] = high byte, always.
+		UINT8* dst = out_bytes + i * 2352;
+		for (INT32 j = 0; j < 2352; j += 2) {
+			dst[j + 0] = sector_buf[j + 1]; // LE low byte
+			dst[j + 1] = sector_buf[j + 0]; // LE high byte
+		}
+		read_count++;
+	}
+	return read_count;
+}
+
+// Parse a "KEY:%d" pattern in a CHD metadata string.  -1 if missing.
+static INT32 chd_meta_get_int(const char* meta, const char* key)
+{
+	const char* p = strstr(meta, key);
+	if (!p) return -1;
+	return atoi(p + strlen(key));
+}
+
+// True if the track described by this CHD metadata entry is a data track
+// (TYPE starts with "MODE"); AUDIO returns false.  Defaults to data on
+// parse error.
+static bool chd_meta_is_data_track(const char* meta)
+{
+	const char* p = strstr(meta, "TYPE:");
+	if (!p) return true;
+	const char* type_start = p + 5;
+	if (strncmp(type_start, "AUDIO", 5) == 0) return false;
+	if (strncmp(type_start, "MODE",  4) == 0) return true;
+	return true;
+}
+
+static INT32 cdimgParseChdFile()
+{
+	// In the libretro port TCHAR == char, so CDEmuImage is already an
+	// 8-bit path that we can pass directly to chd_open.
+	chd_error err = chd_open(CDEmuImage, CHD_OPEN_READ, NULL, &cdimgChdFile);
+	if (err != CHDERR_NONE) {
+		dprintf(_T("*** Couldn't open .chd file\n"));
+		return 1;
+	}
+
+	const chd_header* header = chd_get_header(cdimgChdFile);
+	if (!header) {
+		dprintf(_T("*** Couldn't read CHD header\n"));
+		chd_close(cdimgChdFile);
+		cdimgChdFile = NULL;
+		return 1;
+	}
+
+	cdimgTOC->ImageType = CD_TYPE_CHD;
+	cdimgTOC->bMultiFile = false;
+	_tcscpy(cdimgTOC->Image, CDEmuImage);
+
+	// Standard CD pregap (2 seconds = 150 sectors).  The CHD stores the
+	// data image without the pregap so the disc-side LBA accounting must
+	// add it back manually.
+	cd_pregap = 150;
+
+	// Detect CD sector layout encoded in the CHD hunk size.
+	if (       header->hunkbytes % 2448 == 0) {
+		cdimgChdBytesPerSector = 2448;
+	} else if (header->hunkbytes % 2352 == 0) {
+		cdimgChdBytesPerSector = 2352;
+	} else if (header->hunkbytes % 2048 == 0) {
+		cdimgChdBytesPerSector = 2048;
+	} else {
+		cdimgChdBytesPerSector = header->hunkbytes;
+	}
+	cdimgChdSectorsPerHunk = header->hunkbytes / cdimgChdBytesPerSector;
+
+	cdimgChdHunkBuf = (UINT8*)malloc(header->hunkbytes);
+	if (!cdimgChdHunkBuf) {
+		dprintf(_T("*** Out of memory for CHD hunk buffer\n"));
+		chd_close(cdimgChdFile);
+		cdimgChdFile = NULL;
+		return 1;
+	}
+	cdimgChdCurHunk = -1;
+
+	// Walk the CHD track metadata to rebuild the disc TOC.  V2 metadata
+	// (CHT2) carries PREGAP/POSTGAP; V1 (CHTR) is the legacy fallback.
+	char   meta_buf[256];
+	UINT32 meta_resultlen = 0;
+	UINT8  meta_flags     = 0;
+	INT32  total_sectors  = 0;
+	INT32  trk            = 0;
+	UINT32 chd_sector_pos = 0;
+	UINT32 cd_lba         = 0;
+
+	for (INT32 idx = 0; idx < 99; idx++) {
+		err = chd_get_metadata(cdimgChdFile, CDROM_TRACK_METADATA2_TAG, idx,
+			meta_buf, sizeof(meta_buf) - 1, &meta_resultlen, NULL, &meta_flags);
+		if (err != CHDERR_NONE || meta_resultlen == 0) {
+			err = chd_get_metadata(cdimgChdFile, CDROM_TRACK_METADATA_TAG, idx,
+				meta_buf, sizeof(meta_buf) - 1, &meta_resultlen, NULL, &meta_flags);
+		}
+		if (err != CHDERR_NONE || meta_resultlen == 0)
+			break;
+
+		meta_buf[meta_resultlen] = '\0';
+
+		INT32 frames  = chd_meta_get_int(meta_buf, "FRAMES:");
+		if (frames <= 0) frames = 0;
+		INT32 pregap  = chd_meta_get_int(meta_buf, "PREGAP:");
+		if (pregap < 0) pregap = 0;
+		INT32 postgap = chd_meta_get_int(meta_buf, "POSTGAP:");
+		if (postgap < 0) postgap = 0;
+		bool is_data  = chd_meta_is_data_track(meta_buf);
+
+		// CHD stores tracks aligned to a 4-frame boundary.
+		if (chd_sector_pos % 4)
+			chd_sector_pos += 4 - (chd_sector_pos % 4);
+
+		if (pregap > 0)
+			cd_lba += pregap;
+
+		cdimgTOC->TrackData[trk].Control     = is_data ? 0x41 : 0x01;
+		cdimgTOC->TrackData[trk].TrackNumber = tobcd(trk + 1);
+
+		const UINT8* track_start_msf = cdimgLBAToMSF(cd_lba);
+		cdimgTOC->TrackData[trk].Address[0] = 0;
+		cdimgTOC->TrackData[trk].Address[1] = track_start_msf[1];
+		cdimgTOC->TrackData[trk].Address[2] = track_start_msf[2];
+		cdimgTOC->TrackData[trk].Address[3] = track_start_msf[3];
+
+		cd_lba += frames;
+		chd_sector_pos += frames;
+		if (postgap > 0)
+			cd_lba += postgap;
+
+		total_sectors = cd_lba;
+		trk++;
+
+		if (trk >= MAXIMUM_NUMBER_TRACKS)
+			break;
+	}
+
+	if (trk == 0) {
+		// No track metadata: assume a single data track covering the whole image.
+		trk = 1;
+		total_sectors = (INT32)(header->totalhunks) * cdimgChdSectorsPerHunk;
+
+		cdimgTOC->TrackData[0].Control     = 0x41;
+		cdimgTOC->TrackData[0].TrackNumber = tobcd(1);
+		const UINT8* start_msf = cdimgLBAToMSF(cd_pregap);
+		cdimgTOC->TrackData[0].Address[0]  = 0;
+		cdimgTOC->TrackData[0].Address[1]  = start_msf[1];
+		cdimgTOC->TrackData[0].Address[2]  = start_msf[2];
+		cdimgTOC->TrackData[0].Address[3]  = start_msf[3];
+
+		const UINT8* end_msf = cdimgLBAToMSF(total_sectors + cd_pregap);
+		cdimgTOC->TrackData[0].EndAddress[0] = 0;
+		cdimgTOC->TrackData[0].EndAddress[1] = end_msf[1];
+		cdimgTOC->TrackData[0].EndAddress[2] = end_msf[2];
+		cdimgTOC->TrackData[0].EndAddress[3] = end_msf[3];
+	} else {
+		for (INT32 i = 0; i < trk; i++) {
+			UINT32 end_lba = (i + 1 < trk)
+				? (UINT32)cdimgMSFToLBA(cdimgTOC->TrackData[i + 1].Address)
+				: (UINT32)total_sectors;
+			const UINT8* end_msf = cdimgLBAToMSF(end_lba);
+			cdimgTOC->TrackData[i].EndAddress[0] = 0;
+			cdimgTOC->TrackData[i].EndAddress[1] = end_msf[1];
+			cdimgTOC->TrackData[i].EndAddress[2] = end_msf[2];
+			cdimgTOC->TrackData[i].EndAddress[3] = end_msf[3];
+		}
+	}
+
+	cdimgTOC->FirstTrack = 1;
+	cdimgTOC->LastTrack  = trk;
+
+	// Lead-out track entry — used as the right-edge bound by cdimgFindTrack
+	// and end-of-track checks in the audio path.
+	UINT32 leadout_lba = (UINT32)total_sectors + (UINT32)cd_pregap;
+	const UINT8* leadout_msf = cdimgLBAToMSF(leadout_lba);
+	cdimgTOC->TrackData[trk].Control     = 0x41;
+	cdimgTOC->TrackData[trk].TrackNumber = 0xAA;
+	cdimgTOC->TrackData[trk].Address[0]  = 0;
+	cdimgTOC->TrackData[trk].Address[1]  = leadout_msf[1];
+	cdimgTOC->TrackData[trk].Address[2]  = leadout_msf[2];
+	cdimgTOC->TrackData[trk].Address[3]  = leadout_msf[3];
+
+	bprintf(0, _T("CHD: %u hunks, %u bytes/hunk (%u sectors/hunk, %u bytes/sector), %d tracks\n"),
+		(UINT32)header->totalhunks, header->hunkbytes,
+		cdimgChdSectorsPerHunk, cdimgChdBytesPerSector, trk);
+
+	return 0;
+}
+
+// -----------------------------------------------------------------------------
 
 static int cdimgExit()
 {
@@ -499,6 +765,17 @@ static int cdimgExit()
 	if (cdimgFile)
 		fclose(cdimgFile);
 	cdimgFile = NULL;
+
+	if (cdimgChdFile)
+		chd_close(cdimgChdFile);
+	cdimgChdFile = NULL;
+
+	if (cdimgChdHunkBuf)
+		free(cdimgChdHunkBuf);
+	cdimgChdHunkBuf = NULL;
+	cdimgChdCurHunk = -1;
+	cdimgChdBytesPerSector = 0;
+	cdimgChdSectorsPerHunk = 0;
 
 	cdimgTrack = 0;
 	cdimgLBA = 0;
@@ -551,6 +828,17 @@ static int cdimgInit()
 			return 1;
 		}
 
+	} else
+	if (IsFileExt(filename, _T(".chd")))
+	{
+		if (cdimgParseChdFile())
+		{
+			dprintf(_T("*** Couldn't parse .chd file\n"));
+			cdimgExit();
+
+			return 1;
+		}
+
 	}
 	else
 	{
@@ -566,11 +854,25 @@ static int cdimgInit()
 
 	cdimgInitStream();
 
+	cdimgLBA++;
+
+	// Validate the CD by scanning the ISO-9660 volume descriptor at sector 16.
+	if (cdimgTOC->ImageType == CD_TYPE_CHD)
+	{
+		// CHD: read a full 2352-byte raw sector and look at the user-data area.
+		// CD001 lives at byte 1 of the 2048-byte user data, i.e. byte 17 of the
+		// 2352-byte sector.
+		UINT8 buf[2352];
+		if (cdimgReadRawSector(16, buf) == 0)
+		{
+			if (strncmp("CD001", (const char*)(buf + 16 + 1), 5) != 0)
+				dprintf(_T("*** Bad CD!\n"));
+		}
+	}
+	else
 	{
 		char buf[2048];
 		FILE* h = fopen(cdimgTOC->Image, _T("rb"));
-
-		cdimgLBA++;
 
 		if (h)
 		{
@@ -644,7 +946,24 @@ static int cdimgPlayLBA(int LBA) // audio play start
 
 	bprintf(PRINT_IMPORTANT, _T("    playing track %2i\n"), cdimgTrack + 1);
 
-	if (cdimgTOC->bMultiFile) {
+	if (cdimgTOC->ImageType == CD_TYPE_CHD) {
+		// CHD: sector 0 of the CHD == first sector of the data track, same
+		// origin as a .bin file.  Audio playback starts at (disc LBA - pregap).
+		INT32 base = cdimgLBA - cd_pregap;
+		if (base < 0) base = 0;
+		cdimgAudioFilePos = base;
+
+		INT32 sectors_to_read = (cdimgOUT_SIZE * 4) / 2352;
+		INT32 read_count = cdimgChdFillAudioBuffer(base, sectors_to_read);
+		if (read_count == 0) {
+			cdimgStop();
+			return 1;
+		}
+		cdimgAudioFilePos += read_count;
+		// cdimgOutputbufferSize is counted in 4-byte (stereo s16) units, same
+		// as the value fread returns for the .bin path below.
+		cdimgOutputbufferSize = read_count * (2352 / 4);
+	} else if (cdimgTOC->bMultiFile) {
 		// Multi-archivo: abrir el fichero .bin especifico de esta pista de audio
 		cdimgFile = fopen(cdimgTOC->TrackData[cdimgTrack].TrackImage, _T("rb"));
 		if (cdimgFile == NULL) {
@@ -659,6 +978,8 @@ static int cdimgPlayLBA(int LBA) // audio play start
 		int file_frame = cdimgLBA - disc_file_start;
 		if (file_frame > 0)
 			cdimgSkip(cdimgFile, file_frame * (44100 / CD_FRAMES_SECOND));
+		if ((cdimgOutputbufferSize = fread(cdimgOutputbuffer, 4, cdimgOUT_SIZE, cdimgFile)) <= 0)
+			return 1;
 	} else {
 		// Fichero unico: comportamiento original
 		cdimgFile = fopen(cdimgTOC->Image, _T("rb"));
@@ -667,11 +988,9 @@ static int cdimgPlayLBA(int LBA) // audio play start
 		// advance if we're not starting at the beginning of a CD
 		if (cdimgLBA > cd_pregap)
 			cdimgSkip(cdimgFile, (cdimgLBA - cd_pregap) * (44100 / CD_FRAMES_SECOND));
+		if ((cdimgOutputbufferSize = fread(cdimgOutputbuffer, 4, cdimgOUT_SIZE, cdimgFile)) <= 0)
+			return 1;
 	}
-
-	// fill the input buffer
-	if ((cdimgOutputbufferSize = fread(cdimgOutputbuffer, 4, cdimgOUT_SIZE, cdimgFile)) <= 0)
-		return 1;
 
 	cdimgOutputPosition = 0;
 
@@ -697,9 +1016,24 @@ static int cdimgLoadSector(int LBA, char* pBuffer)
 {
 	if (CDEmuStatus == playing) return 0; // data loading
 
+	INT32 originalLBA = LBA;
 	if (CDEmuStatus == seeking) {
 		LBA -= cd_pregap; // when seeking, we must account for pregap
 		re_sync = 1;
+	}
+
+	// CHD path: serve the sector via the unified reader.  No FILE*/fseek
+	// state to maintain — the hunk cache inside cdimgChdReadSector takes
+	// care of locality.
+	if (cdimgTOC && cdimgTOC->ImageType == CD_TYPE_CHD) {
+		if (cdimgReadRawSector(LBA, (UINT8*)pBuffer) != 0) {
+			dprintf(_T("*** couldn't read sector (LBA %08u)\n"), originalLBA);
+			return 0;
+		}
+		CDEmuStatus = reading;
+		cdimgLBA = LBA + 1;
+		cdimgTrack = cdimgFindTrack(LBA + cd_pregap);
+		return cdimgLBA;
 	}
 
 	if (LBA != cdimgLBA || cdimgFile == NULL || re_sync)
@@ -905,13 +1239,15 @@ static int cdimgGetSoundBuffer(short* buffer, int samples)
 	}
 #endif
 
-	if (cdimgFile == NULL) { // restart play if fileptr lost
+	bool is_chd = (cdimgTOC && cdimgTOC->ImageType == CD_TYPE_CHD);
+
+	if (!is_chd && cdimgFile == NULL) { // restart play if fileptr lost
 		bprintf(0, _T("CDDA file pointer lost, re-starting @ %d!\n"), cdimgLBA);
 		if (cdimgLBA < cdimgMSFToLBA(cdimgTOC->TrackData[cdimgTrack + 1].Address))
 			cdimgPlayLBA(cdimgLBA);
 	}
 
-	if (cdimgFile == NULL) { // restart failed (really?) - time to give up.
+	if (!is_chd && cdimgFile == NULL) { // restart failed (really?) - time to give up.
 		cdimgStop();
 		return 0;
 	}
@@ -940,8 +1276,18 @@ static int cdimgGetSoundBuffer(short* buffer, int samples)
 		samples -= (cdimgOutputbufferSize - cdimgOutputPosition);
 
 		cdimgOutputPosition = 0;
-		if ((cdimgOutputbufferSize = fread(cdimgOutputbuffer, 4, cdimgOUT_SIZE, cdimgFile)) <= 0)
-			cdimgStop();
+		if (is_chd) {
+			// CHD: decompress the next batch of sectors and repack as LE.
+			INT32 sectors_to_read = (cdimgOUT_SIZE * 4) / 2352;
+			INT32 read_count = cdimgChdFillAudioBuffer(cdimgAudioFilePos, sectors_to_read);
+			cdimgAudioFilePos += read_count;
+			cdimgOutputbufferSize = read_count * (2352 / 4);
+			if (cdimgOutputbufferSize <= 0)
+				cdimgStop();
+		} else {
+			if ((cdimgOutputbufferSize = fread(cdimgOutputbuffer, 4, cdimgOUT_SIZE, cdimgFile)) <= 0)
+				cdimgStop();
+		}
 	}
 
 	if ((cdimgOutputPosition + samples) < cdimgOutputbufferSize)
@@ -977,6 +1323,7 @@ static INT32 cdimgScan(INT32 nAction, INT32 *pnMin)
 		SCAN_VAR(cdimgOutputPosition);
 		SCAN_VAR(cdimgSamples);
 		SCAN_VAR(cdimgOutputbufferSize);
+		SCAN_VAR(cdimgAudioFilePos);
 	}
 
 	if (nAction & ACB_WRITE && nAction & ACB_RUNAHEAD) { // run-ahead system state load

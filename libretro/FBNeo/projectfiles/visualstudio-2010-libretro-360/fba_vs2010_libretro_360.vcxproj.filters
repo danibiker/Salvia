@@ -219,6 +219,12 @@
     <Filter Include="Source Files\cpu\arm9">
       <UniqueIdentifier>{d246b7a7-0fae-4c32-ac98-76cf1133189f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\deps">
+      <UniqueIdentifier>{a32b2546-a72b-4935-8bc4-31429aac1d8d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\deps\libchdr">
+      <UniqueIdentifier>{7b22bfdb-7bd7-4980-b352-17f0451a6377}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\burn\drv\cps3\cps3snd.cpp">
@@ -3343,6 +3349,54 @@
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\sega\sega_speech.cpp">
       <Filter>Source Files\burn\drv\sega</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_bitstream.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_cdrom.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_chd.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_codec_cdfl.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_codec_cdlz.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_codec_cdzl.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_codec_cdzs.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_codec_flac.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_codec_huff.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_codec_lzma.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_codec_zlib.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_codec_zstd.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_flac.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_huffman.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\lzma\src\libchdr_lzma.c">
+      <Filter>Source Files\deps</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\zstd\zstddeclib.c">
+      <Filter>Source Files\deps</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

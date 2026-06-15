@@ -425,6 +425,8 @@ namespace {
 			if (it->second->cachedValue.empty() && !it->second->values.empty())
 				it->second->cachedValue = it->second->values[it->second->selected];
 
+			it->second->isForThisGame = true;
+
 			LOG_DEBUG("[Core Options] SET. Key already defined %s", validKey.c_str());
 			return;
 		} 
@@ -433,6 +435,7 @@ namespace {
 		raw->description = std::move(description);
 		raw->values      = std::move(values);
 		raw->selected    = defaultIdx;
+		raw->isForThisGame = true;
 
 		if (!raw->values.empty())
 			raw->cachedValue = raw->values[defaultIdx];
@@ -440,7 +443,7 @@ namespace {
 		LOG_DEBUG("[Core Options] SET %s = %s", validKey.c_str(), raw->cachedValue.c_str());
 		data[validKey] = std::unique_ptr<cfg::t_emu_props>(raw); 
 	}
-} // namespace anónimo
+} // anonim namespace
 
 
 /**

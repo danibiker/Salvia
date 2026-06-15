@@ -1477,7 +1477,7 @@ CHD_EXPORT chd_error chd_get_metadata(chd_file *chd, uint32_t searchtag, uint32_
 			uint32_t faux_length;
 
 			/* fill in the faux metadata */
-			snprintf(faux_metadata, sizeof(faux_metadata), HARD_DISK_METADATA_FORMAT, chd->header.obsolete_cylinders, chd->header.obsolete_heads, chd->header.obsolete_sectors, (chd->header.obsolete_hunksize != 0) ? (chd->header.hunkbytes / chd->header.obsolete_hunksize) : 0);
+			_snprintf(faux_metadata, sizeof(faux_metadata), HARD_DISK_METADATA_FORMAT, chd->header.obsolete_cylinders, chd->header.obsolete_heads, chd->header.obsolete_sectors, (chd->header.obsolete_hunksize != 0) ? (chd->header.hunkbytes / chd->header.obsolete_hunksize) : 0);
 			faux_length = (uint32_t)strlen(faux_metadata) + 1;
 
 			/* copy the metadata itself */
@@ -1554,6 +1554,7 @@ static chd_error header_read(chd_file *chd)
 	};
 
 	uint8_t rawheader[CHD_MAX_HEADER_SIZE];
+	chd_header *header = &chd->header;
 
 	/* punt if NULL */
 	if (chd == NULL)
@@ -1572,7 +1573,6 @@ static chd_error header_read(chd_file *chd)
 		return CHDERR_INVALID_DATA;
 
 	/* extract the direct data */
-	chd_header *header = &chd->header;
 	memset(header, 0, sizeof(*header));
 	header->length  = get_bigendian_uint32_t(&rawheader[8]);
 	header->version = get_bigendian_uint32_t(&rawheader[12]);

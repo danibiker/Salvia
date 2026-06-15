@@ -2298,7 +2298,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_FINALBURN)";$(COMMON_PREPROCESSOR_RELEASE);RESET_AUDIO;NO_SRAM;__DEBUG_LOG</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;HAVE_CHD;EMU_LIB_NAME="$(EMU_LIB_FINALBURN)";$(COMMON_PREPROCESSOR_RELEASE);RESET_AUDIO;NO_SRAM</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)libs\curl-7.50.1\include;$(ProjectDir)\libs\mbedtls\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include;$(ProjectDir)\libs\rcheevos\src</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
@@ -2315,7 +2315,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);libretro.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Release\Xbox 360</AdditionalLibraryDirectories>
@@ -3448,7 +3448,7 @@
       <ExceptionHandling>Async</ExceptionHandling>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Full</Optimization>
-      <PreprocessorDefinitions>WIN;$(COMMON_PREPROCESSOR_RELEASE);RESET_AUDIO;NO_SRAM</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN;HAVE_CHD;$(COMMON_PREPROCESSOR_RELEASE);RESET_AUDIO;NO_SRAM;DEBUG_LOG</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <CompileAs>CompileAsCpp</CompileAs>
       <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)libs\curl-7.50.1\include;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include</AdditionalIncludeDirectories>
@@ -3503,7 +3503,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);fba_vs2010_libretro_360.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>

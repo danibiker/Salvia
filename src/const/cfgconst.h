@@ -23,8 +23,9 @@ namespace cfg {
 		std::string description;
 		std::string cachedValue;
 		int selected;
+		bool isForThisGame;
 
-		t_emu_props() : selected(0) {}
+		t_emu_props() : selected(0), isForThisGame(false) {}
 
 		// Constructor de movimiento
 		t_emu_props(t_emu_props&& other) {

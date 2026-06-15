@@ -45,3 +45,12 @@ git subtree pull --prefix=libretro/mame-2003-plus https://github.com/libretro/ma
 git subtree pull --prefix=libretro/vba-next https://github.com/libretro/vba-next master --squash
 git subtree pull --prefix=libretro/pcsxr-360 https://github.com/Wolf3s/pcsxr-360 main --squash
 git subtree pull --prefix=libretro/tyrquake https://github.com/libretro/tyrquake master --squash
+
+###########################################################################################################
+# Merging conflicts
+###########################################################################################################
+
+git config --global merge.tool kdiff3
+git config --global mergetool.kdiff3.path "C:/Program Files/KDiff3/kdiff3.exe"
+git config --global mergetool.prompt false
+git mergetool --tool=kdiff3

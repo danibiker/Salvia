@@ -46,6 +46,28 @@
 /* TODO: Can't amalgamate ASM function */
 #define ZSTD_DISABLE_ASM 1
 
+#ifdef _MSC_VER
+#ifdef _XBOX
+#include <ppcintrinsics.h>
+	#ifndef BITSCAN_DECLARED
+	#define BITSCAN_DECLARED
+	static __inline unsigned char _BitScanReverse(unsigned long* index, unsigned long mask) {
+		if (mask == 0) return 0;
+		*index = 31 - _CountLeadingZeros(mask);
+		return 1;
+	}
+
+	static __inline unsigned char _BitScanForward(unsigned long* index, unsigned long mask) {
+		if (mask == 0) return 0;
+		*index = 31 - _CountLeadingZeros(mask & -(long)mask);
+		return 1;
+	}
+	#endif
+#else
+#  include <intrin.h>
+#endif  
+#endif
+
 /* Include zstd_deps.h first with all the options we need enabled. */
 #define ZSTD_DEPS_NEED_MALLOC
 /**** start inlining common/zstd_deps.h ****/
@@ -724,7 +746,6 @@ int g_debuglevel = DEBUGLEVEL;
 
 /* disable warnings */
 #ifdef _MSC_VER    /* Visual Studio */
-#  include <intrin.h>                    /* For Visual 2005 */
 #  pragma warning(disable : 4100)        /* disable: C4100: unreferenced formal parameter */
 #  pragma warning(disable : 4127)        /* disable: C4127: conditional expression is constant */
 #  pragma warning(disable : 4204)        /* disable: C4204: non-constant aggregate initializer */
@@ -997,7 +1018,6 @@ void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 ******************************************/
 #if defined(_MSC_VER)   /* Visual Studio */
 #   include <stdlib.h>  /* _byteswap_ulong */
-#   include <intrin.h>  /* _byteswap_* */
 #elif defined(__ICCARM__)
 #   include <intrinsics.h>
 #endif
@@ -3992,10 +4012,6 @@ size_t FSE_decompress_wksp_bmi2(void* dst, size_t dstCapacity, const void* cSrc,
  */
 
 /**** skipping file: mem.h ****/
-
-#ifdef _MSC_VER
-#include <intrin.h>
-#endif
 
 typedef struct {
     U32 f1c;

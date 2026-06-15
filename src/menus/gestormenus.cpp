@@ -776,7 +776,8 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
     // 1. Llenamos el vector con la clave y la descripcion
     for (auto it = params.begin(); it != params.end(); ++it) {
         TempElem e = { it->first, it->second->description };
-        sorter.push_back(e);
+		if (it->second->isForThisGame)
+			sorter.push_back(e);
     }
 
     // 2. Ordenamos por descripcion usando una lambda o funcion estatica
@@ -792,7 +793,7 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
     // 3. Ahora recorremos el vector ordenado y buscamos en el mapa original por KEY
     for (auto it = sorter.begin(); it != sorter.end(); ++it) {
         auto elem = params.find(it->key);
-        if (elem != params.end()) {
+		if (elem != params.end()) {
             LOG_INFO("Key: %s, Selected: %d", elem->first.c_str(), elem->second->selected);
             menuCoreOptions->opciones.push_back(new OpcionLista(elem->second->description, elem->second->values, &elem->second->selected));
         }

@@ -463,7 +463,7 @@ void retro_set_environment(retro_environment_t cb)
 		{ "Rom", "zip|7z", true, true, true, NULL, 0 },
 	};
 	static const struct retro_subsystem_rom_info subsystem_iso[] = {
-		{ "Iso", "ccd|cue",    true, true, true, NULL, 0 },
+		{ "Iso", "ccd|cue|chd", true, true, true, NULL, 0 },
 	};
 	static const struct retro_subsystem_info subsystems[] = {
 		{ "CBS ColecoVision",                    "cv",    subsystem_rom, 1, RETRO_GAME_TYPE_CV    },
@@ -508,7 +508,7 @@ void retro_get_system_info(struct retro_system_info *info)
 	info->library_version = strdup(library_version);
 	info->need_fullpath = true;
 	info->block_extract = true;
-	info->valid_extensions = "zip|7z|cue|ccd";
+	info->valid_extensions = "zip|7z|cue|ccd|chd";
 
 	free(library_version);
 }
@@ -2172,7 +2172,7 @@ static bool retro_load_game_common()
 		// Start CD reader emulation if needed
 		if (nGameType == RETRO_GAME_TYPE_NEOCD) {
 			const char* ext = path_get_extension(szRomsetPath);
-			if (strcmp(ext, "cue") != 0 && strcmp(ext, "ccd") != 0) {
+			if (strcmp(ext, "cue") != 0 && strcmp(ext, "ccd") != 0 && strcmp(ext, "chd") != 0) {
 				static char uguiText[4096];
 				const char* s1 = RETRO_ERROR_MESSAGES_13;
 				const char* s2 = RETRO_ERROR_MESSAGES_07;
@@ -2468,11 +2468,12 @@ bool retro_load_game(const struct retro_game_info *info)
 
 	if (dot) {
 		// Comparamos la extensión (ignorando mayúsculas/minúsculas si es necesario)
-		if (_stricmp(dot, ".cue") == 0 || _stricmp(dot, ".ccd") == 0) {
+		if (_stricmp(dot, ".cue") == 0 || _stricmp(dot, ".ccd") == 0 || _stricmp(dot, ".chd") == 0) {
 			is_neocd_extension = true;
 		}
 	}
-
+	//Reseting the nGameType to allow to load other systems after selecting a neocd game
+	nGameType = 0;
 	if(is_neocd_extension || strcmp(g_rom_parent_dir, "neocd")==0 || strncmp(g_driver_name, "neocd_", 6)==0) {
 		HandleMessage(RETRO_LOG_INFO, "[FBNeo] subsystem neocd identified from parent folder\n");
 		prefix = "";
