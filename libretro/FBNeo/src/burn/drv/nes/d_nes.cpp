@@ -20117,6 +20117,25 @@ struct BurnDriver BurnDrvnes_justiceduel = {
 	SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT
 };
 
+// Justice Duel (HB, Alt)
+// https://megacatstudios.itch.io/justice-duel
+static struct BurnRomInfo nes_justiceduelaRomDesc[] = {
+	{ "Justice Duel (Alt)(2019)(Mega Cat Studios).nes",          196624, 0xb751f4b2, BRF_ESS | BRF_PRG },
+};
+
+STD_ROM_PICK(nes_justiceduela)
+STD_ROM_FN(nes_justiceduela)
+
+struct BurnDriver BurnDrvnes_justiceduela = {
+	"nes_justiceduela", "nes_justiceduel", NULL, NULL, "2019",
+	"Justice Duel (HB, Alt)\0", NULL, "Mega Cat Studios", "NES / Famicom",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HOMEBREW, 4, HARDWARE_NES, GBF_ACTION, 0,
+	NESGetZipName, nes_justiceduelaRomInfo, nes_justiceduelaRomName, NULL, NULL, NULL, NULL, NES4ScoreInputInfo, NES4ScoreDIPInfo,
+	NES4ScoreInit, NESExit, NESFrame, NESDraw, NESScan, &NESRecalc, 0x40,
+	SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT
+};
+
 // Karate Kick (HB)
 static struct BurnRomInfo nes_karatekickRomDesc[] = {
 	{ "Karate Kick (2017)(Mike Moffitt).nes",          40976, 0xda688ee1, BRF_ESS | BRF_PRG },
@@ -23679,6 +23698,25 @@ struct BurnDriver BurnDrvnes_rescueforce = {
 	SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT
 };
 
+// Retro Replay: Pixel Panic (HB, v0.50)
+// https://retroreplay.itch.io/retro-replay-pixel-panic
+static struct BurnRomInfo nes_rrpixelpanicRomDesc[] = {
+	{ "Retro Replay - Pixel Panic v0.50 (2026)(Retro-Replay.com).nes",          40976, 0xb0d06f0c, BRF_ESS | BRF_PRG },
+};
+
+STD_ROM_PICK(nes_rrpixelpanic)
+STD_ROM_FN(nes_rrpixelpanic)
+
+struct BurnDriver BurnDrvnes_rrpixelpanic = {
+	"nes_rrpixelpanic", NULL, NULL, NULL, "2026",
+	"Retro Replay: Pixel Panic (HB, v0.50)\0", NULL, "Retro-Replay.com", "NES / Famicom",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_HOMEBREW, 1, HARDWARE_NES, GBF_ACTION | GBF_MAZE, 0,
+	NESGetZipName, nes_rrpixelpanicRomInfo, nes_rrpixelpanicRomName, NULL, NULL, NULL, NULL, NESInputInfo, NESDIPInfo,
+	NESInit, NESExit, NESFrame, NESDraw, NESScan, &NESRecalc, 0x40,
+	SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT
+};
+
 // Return to Anctrayl (HB)
 static struct BurnRomInfo nes_retanctraylRomDesc[] = {
 	{ "Return to Anctrayl (2024)(Bipedal Studios).nes",          131088, 0x8176e315, BRF_ESS | BRF_PRG },
@@ -25776,37 +25814,19 @@ struct BurnDriver BurnDrvnes_studyhall = {
 	SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT
 };
 
-// Super Tilt Bro. (HB, v2 RC3)
-static struct BurnRomInfo nes_supertiltbrorc3RomDesc[] = {
-	{ "Super Tilt Bro. v2 RC3 (2023)(Broke Studio).nes",          524304, 0x5802cf20, BRF_ESS | BRF_PRG },
-};
-
-STD_ROM_PICK(nes_supertiltbrorc3)
-STD_ROM_FN(nes_supertiltbrorc3)
-
-struct BurnDriver BurnDrvnes_supertiltbrorc3 = {
-	"nes_supertiltbrorc3", NULL, NULL, NULL, "2023",
-	"Super Tilt Bro. (HB, v2 RC3)\0", NULL, "Broke Studio", "NES / Famicom",
-	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_HOMEBREW, 2, HARDWARE_NES, GBF_VSFIGHT, 0,
-	NESGetZipName, nes_supertiltbrorc3RomInfo, nes_supertiltbrorc3RomName, NULL, NULL, NULL, NULL, NESInputInfo, NESDIPInfo,
-	NESInit, NESExit, NESFrame, NESDraw, NESScan, &NESRecalc, 0x40,
-	SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT
-};
-
-// Super Tilt Bro. (HB, v2 alpha1)
+// Super Tilt Bro. (HB, v2.6)
 static struct BurnRomInfo nes_supertiltbroRomDesc[] = {
-	{ "Super Tilt Bro v2 alpha1 (2018)(Broke Studio).nes",          524304, 0x58829008, BRF_ESS | BRF_PRG },
+	{ "Super Tilt Bro v2.6 (2016-26)(Sylvain Gadrat).nes",          524304, 0xfa4edd45, BRF_ESS | BRF_PRG },
 };
 
 STD_ROM_PICK(nes_supertiltbro)
 STD_ROM_FN(nes_supertiltbro)
 
 struct BurnDriver BurnDrvnes_supertiltbro = {
-	"nes_supertiltbro", "nes_supertiltbrorc3", NULL, NULL, "2018",
-	"Super Tilt Bro. (HB, v2 alpha1)\0", NULL, "Broke Studio", "NES / Famicom",
+	"nes_supertiltbro", NULL, NULL, NULL, "2016-26",
+	"Super Tilt Bro. (HB, v2.6)\0", NULL, "Sylvain Gadrat", "NES / Famicom",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_HOMEBREW, 2, HARDWARE_NES, GBF_VSFIGHT, 0,
+	BDF_GAME_WORKING | BDF_HOMEBREW, 2, HARDWARE_NES, GBF_VSFIGHT, 0,
 	NESGetZipName, nes_supertiltbroRomInfo, nes_supertiltbroRomName, NULL, NULL, NULL, NULL, NESInputInfo, NESDIPInfo,
 	NESInit, NESExit, NESFrame, NESDraw, NESScan, &NESRecalc, 0x40,
 	SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT
