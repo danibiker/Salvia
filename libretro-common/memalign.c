@@ -57,7 +57,13 @@ void *memalign_alloc_aligned(size_t size)
 #if defined(__x86_64__) || defined(__LP64) || defined(__IA64__) || defined(_M_X64) || defined(_WIN64)
    return memalign_alloc(64, size);
 #elif defined(__i386__) || defined(__i486__) || defined(__i686__) || defined(GEKKO)
+   /* Gekko / Broadway (GameCube, Wii) has 32-byte cache lines. */
    return memalign_alloc(32, size);
+#elif defined(__ppc__) || defined(__powerpc__) || defined(__POWERPC__) || defined(_XBOX360) || defined(__CELLOS_LV2__) || defined(WIIU)
+   /* PPC960 (PS3 Cell PPU), Xenon (Xbox 360), Espresso (Wii U) all have
+    * 128-byte L2 cache lines. Aligning large emulator buffers to a full
+    * line prevents false-sharing at the buffer boundary. */
+   return memalign_alloc(128, size);
 #else
    return memalign_alloc(32, size);
 #endif

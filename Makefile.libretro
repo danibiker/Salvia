@@ -5,10 +5,31 @@ STATIC_LINKING=0
 USE_CHEATS=1
 USE_TWEAKS=0
 USE_THREADED_RENDERER=0
+DEFAULT_THREADED_RENDERER_ENABLED=0
 USE_MOTION_SENSOR=0
 USE_FRAME_SKIP=0
 HAVE_NEON=0
 LOAD_FROM_MEMORY = 1
+
+# Compile the threaded renderer code path into desktop platform builds.
+# The compile-time USE_THREADED_RENDERER switch controls whether the
+# threaded code path is even present in the binary (some platforms have
+# no threading support, in which case this must stay 0).  Inside a
+# threaded-enabled binary, a runtime core option (vbanext_threaded_renderer)
+# selects between sync and async execution.  The
+# DEFAULT_THREADED_RENDERER_ENABLED flag below controls the option's
+# default value: 0 (sync) for desktops where single-thread is plenty fast,
+# 1 (async) for Vita where the worker thread is needed for headroom.
+DESKTOP_PLATFORMS := unix osx win \
+                     linux_x86 linux_x86_64 linux-portable_x86 linux-portable_x86_64 \
+                     osx_x86 osx_x86_64 \
+                     windows_x86 windows_x86_64 mingw_x86 mingw_x86_64 \
+                     windows_msvc2005_x86 windows_msvc2010_x86 windows_msvc2010_x64 \
+                     windows_msvc2017_desktop_x86 windows_msvc2017_desktop_x64 \
+                     windows_msvc2017_desktop_arm
+ifneq (,$(filter $(platform),$(DESKTOP_PLATFORMS)))
+   USE_THREADED_RENDERER=1
+endif
 
 SPACE :=
 SPACE := $(SPACE) $(SPACE)
@@ -79,6 +100,16 @@ ifeq ($(platform),)
 	else ifneq ($(findstring win,$(shell uname -s)),)
 		platform = win
 	endif
+endif
+
+# Re-apply the desktop-platform filter now that auto-detection above
+# has finalized $(platform).  The earlier filter at the top of this
+# file fires for explicit named platforms (mingw_x86_64, windows_msvc*,
+# etc.); this second pass catches the case where the user ran plain
+# `make` without specifying platform= and auto-detect resolved it to
+# win/unix/osx (which is what the libretro Windows buildbot does).
+ifneq (,$(filter $(platform),$(DESKTOP_PLATFORMS)))
+   USE_THREADED_RENDERER=1
 endif
 
 LIBRETRO_DIR := $(CORE_DIR)/libretro
@@ -342,6 +373,7 @@ else ifeq ($(platform), vita)
 	USE_CHEATS=0 #for performance boost.
 	USE_TWEAKS=1
 	USE_THREADED_RENDERER=1
+	DEFAULT_THREADED_RENDERER_ENABLED=1
 	USE_MOTION_SENSOR=1
     USE_FRAME_SKIP=1
 	HAVE_NEON=1
@@ -444,8 +476,8 @@ endif
 
 # Emscripten
 else ifeq ($(platform), emscripten)
-	EXT    ?= bc
-	TARGET := $(TARGET_NAME)_libretro_$(platform).$(EXT)
+   EXT    := bc
+   TARGET := $(TARGET_NAME)_libretro_$(platform).$(EXT)
    STATIC_LINKING = 1
 
 # Windows MSVC 2003 Xbox 1
@@ -586,7 +618,13 @@ else
 	LD = link.exe
 endif
 else
-	LD = $(CXX)
+	# All source files are now C (no more .cpp), so link with $(CC) and
+	# avoid the implicit libstdc++ dependency that $(CXX) would drag in.
+	# This also means libm is no longer pulled in transitively via the
+	# C++ runtime, so add it explicitly for the pow/sqrt/floor uses in
+	# the BIOS-HLE math impls and the blip-buffer factor calculation.
+	LD = $(CC)
+	LIBS += -lm
 endif
 
 $(TARGET): $(OBJECTS)
@@ -616,3 +654,21 @@ clean:
 endif
 
 endif
+
+# MSVC threaded builds need winmm.lib for timeGetTime / timeBeginPeriod, which
+# rthreads.c calls from scond_wait_win32 under the USE_WIN32_THREADS path.
+# The MSVC sub-Makefiles (build/Makefile.windows_msvc*) don't reference winmm
+# directly because the non-threaded link line never resolved through that TU;
+# enabling USE_THREADED_RENDERER pulls rthreads in and the link fails with
+# LNK2019 on __imp__timeGetTime@0 / __imp__timeBeginPeriod@4 unless winmm.lib
+# is on the link line.  This block sits at top-level scope -- past the
+# closing endif of the platform-include chain that begins at the `ifeq
+# ($(platform),android_arm64-v8a)` above -- so it fires for the explicit
+# `platform=windows_msvc*` targets that take an `include $(BUILD_DIR)/...`
+# branch and never enter the chain's catch-all `else` body.
+ifneq (,$(findstring msvc,$(platform)))
+ifeq ($(USE_THREADED_RENDERER), 1)
+LDFLAGS += winmm.lib
+endif
+endif
+

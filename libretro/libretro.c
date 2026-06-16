@@ -4,6 +4,8 @@
 #include <string.h>
 #include <ctype.h>
 
+#include <compat/msvc.h>
+
 #include <libretro.h>
 #include <vfs/vfs.h>
 #include <streams/file_stream.h>
@@ -58,7 +60,8 @@ size_t retro_get_memory_size(unsigned id)
 
 static bool scan_area(const uint8_t *data, unsigned size)
 {
-   for (unsigned i = 0; i < size; i++)
+   unsigned i;
+   for (i = 0; i < size; i++)
       if (data[i] != 0xff)
          return true;
 
@@ -184,9 +187,15 @@ static void check_system_specs(void)
    environ_cb(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &level);
 }
 
+static unsigned serialize_size = 0;
+
 void retro_init(void)
 {
+   enum retro_pixel_format rgb565;
    struct retro_log_callback log;
+#if HAVE_HLE_BIOS
+   const char* dir = NULL;
+#endif
    memset(libretro_save_buf, 0xff, sizeof(libretro_save_buf));
    adjust_save_ram();
    environ_cb(RETRO_ENVIRONMENT_GET_CAN_DUPE, &can_dupe);
@@ -195,8 +204,13 @@ void retro_init(void)
    else
       log_cb = NULL;
 
+   /* Conservative initial value so retro_serialize_size() is meaningful even
+    * if called before retro_load_game (rare, but achievements / RAM-watch
+    * front-ends sometimes do). Gets overwritten with the measured size during
+    * gba_init -> CPUWriteState dry-run. */
+   serialize_size = 700000;
+
 #if HAVE_HLE_BIOS
-   const char* dir = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &dir) && dir) {
       strcpy(filename_bios, dir);
       strcat(filename_bios, "/gba_bios.bin");
@@ -204,7 +218,7 @@ void retro_init(void)
 #endif
 
 #ifdef FRONTEND_SUPPORTS_RGB565
-   enum retro_pixel_format rgb565 = RETRO_PIXEL_FORMAT_RGB565;
+   rgb565 = RETRO_PIXEL_FORMAT_RGB565;
    if(environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &rgb565) && log_cb)
       log_cb(RETRO_LOG_DEBUG, "Frontend supports RGB565 - will use that instead of XRGB1555.\n");
 #endif
@@ -212,14 +226,18 @@ void retro_init(void)
    check_system_specs();
 
 #if THREADED_RENDERER
+	{
+		struct retro_variable var = { 0 };
+		var.key = "vbanext_threaded_renderer";
+		if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+			g_threaded_renderer_enabled = (strcmp(var.value, "enabled") == 0);
+	}
 	ThreadedRendererStart();
 #endif
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
       libretro_supports_bitmasks = true;
 }
-
-static unsigned serialize_size = 0;
 
 typedef struct
 {
@@ -233,7 +251,7 @@ typedef struct
 } ini_t;
 
 static const ini_t gbaover[256] = {
-			//romtitle,							    	romid	flash	save	rtc	mirror	bios
+			/*romtitle,							    	romid	flash	save	rtc	mirror	bios */
 			{"2 Games in 1 - Dragon Ball Z - The Legacy of Goku I & II (USA)",	"BLFE",	0,	1,	0,	0,	0},
 			{"2 Games in 1 - Dragon Ball Z - Buu's Fury + Dragon Ball GT - Transformation (USA)", "BUFE", 0, 1, 0, 0, 0},
 			{"Boktai - The Sun Is in Your Hand (Europe)(En,Fr,De,Es,It)",		"U3IP",	0,	0,	1,	0,	0},
@@ -344,6 +362,8 @@ static const ini_t gbaover[256] = {
 
 static void load_image_preferences (void)
 {
+	bool found;
+	int found_no;
 	char buffer[5];
 	buffer[0] = rom[0xac];
 	buffer[1] = rom[0xad];
@@ -354,10 +374,12 @@ static void load_image_preferences (void)
    if (log_cb)
       log_cb(RETRO_LOG_DEBUG, "GameID in ROM is: %s\n", buffer);
 
-	bool found = false;
-	int found_no = 0;
+	found = false;
+	found_no = 0;
 
-	for(int i = 0; i < 256; i++)
+	{
+		int i;
+		for(i = 0; i < 256; i++)
 	{
 		if(!strcmp(gbaover[i].romid, buffer))
 		{
@@ -365,6 +387,7 @@ static void load_image_preferences (void)
 			found_no = i;
          break;
 		}
+	}
 	}
 
 	if(found)
@@ -416,6 +439,8 @@ static int get_frameskip_code(void)
 
 static void gba_init(void)
 {
+   bool usebios;
+   uint8_t * state_buf;
    struct retro_variable var = { 0 };
    bool rtc = false;
  
@@ -448,7 +473,7 @@ static void gba_init(void)
    soundSetSampleRate(32000);
 
 #if HAVE_HLE_BIOS
-   bool usebios = false;
+   usebios = false;
 
    var.key = "vbanext_bios";
    var.value = NULL;
@@ -472,9 +497,28 @@ static void gba_init(void)
 
    soundReset();
 
-   uint8_t * state_buf = (uint8_t*)malloc(2000000);
-   serialize_size = CPUWriteState(state_buf, 2000000);
-   free(state_buf);
+   /* Dry-run write to measure serialize_size. With v11 (pix removed) the state
+    * is ~570KB; 700KB gives ~25% headroom. retro_serialize then uses the
+    * measured size for the actual user-visible save buffer. */
+   #define SERIALIZE_DRYRUN_CAP 700000u
+   state_buf = (uint8_t *)malloc(SERIALIZE_DRYRUN_CAP);
+   if (!state_buf) {
+      /* Out of memory at boot - fall back to a conservative constant.
+       * Frontends will still get a valid (oversized) buffer from retro_serialize. */
+      serialize_size = SERIALIZE_DRYRUN_CAP;
+   } else {
+      serialize_size = CPUWriteState(state_buf, SERIALIZE_DRYRUN_CAP);
+      if (serialize_size >= SERIALIZE_DRYRUN_CAP) {
+         /* This indicates we just walked past the end of the dry-run buffer.
+          * Bump SERIALIZE_DRYRUN_CAP when a future SAVE_GAME_VERSION adds fields. */
+         if (log_cb)
+            log_cb(RETRO_LOG_ERROR,
+                   "[vbanext] dry-run state size %u exceeds %u-byte cap\n",
+                   serialize_size, SERIALIZE_DRYRUN_CAP);
+      }
+      free(state_buf);
+   }
+   #undef SERIALIZE_DRYRUN_CAP
 
 #if USE_FRAME_SKIP
    SetFrameskip(get_frameskip_code());
@@ -489,6 +533,7 @@ void retro_deinit(void)
 #endif
 
 	CPUCleanUp();
+	soundCleanUp();
 
    libretro_supports_bitmasks = false;
 }
@@ -501,8 +546,8 @@ void retro_reset(void)
 #define MAX_BUTTONS 10
 #define TURBO_BUTTONS 2
 static bool option_turboEnable;
-static u32 option_turboDelay;
-static u32 turbo_delay_counter;
+static uint32_t option_turboDelay;
+static uint32_t turbo_delay_counter;
 
 static const unsigned binds[MAX_BUTTONS] = {
 	RETRO_DEVICE_ID_JOYPAD_A,
@@ -541,36 +586,59 @@ static void update_variables(void)
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
         option_turboDelay = atoi(var.value);
     }
+
+    /* RTC option: respect runtime toggles. Default is "auto" which only
+     * enables RTC for ROMs in the vba-over.ini list; "enabled" forces it on;
+     * "disabled" forces it off (overriding the per-ROM list). */
+    var.key = "vbanext_rtc";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+        bool want_rtc;
+        if (strcmp(var.value, "enabled") == 0)
+            want_rtc = true;
+        else if (strcmp(var.value, "disabled") == 0)
+            want_rtc = false;
+        else
+            want_rtc = enableRtc; /* "auto": use per-ROM override */
+        rtcEnable(want_rtc);
+    }
 }
 
 static void update_input(void)
 {
-   // Reset input states
-   u32 J = 0;
-   int16_t joy_bits = 0;
+   /* Reset input states */
+   uint32_t J = 0;
+   int32_t joy_bits = 0;
    unsigned i;
+   unsigned button;
 
    /* if (retropad_device[0] == RETRO_DEVICE_JOYPAD) */ {
       if (libretro_supports_bitmasks)
          joy_bits = input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
       else
       {
-         for (i = 0; i < (RETRO_DEVICE_ID_JOYPAD_R3+1); i++)
-            joy_bits |= input_cb(0, RETRO_DEVICE_JOYPAD, 0, i) ? (1 << i) : 0;
+         /* Only poll the buttons this core uses: MAX_BUTTONS (binds) + TURBO_BUTTONS (turbo) */
+         for (i = 0; i < MAX_BUTTONS; i++)
+            joy_bits |= input_cb(0, RETRO_DEVICE_JOYPAD, 0, binds[i]) ? (1 << binds[i]) : 0;
+         for (i = 0; i < TURBO_BUTTONS; i++)
+            joy_bits |= input_cb(0, RETRO_DEVICE_JOYPAD, 0, turbo_binds[i]) ? (1 << turbo_binds[i]) : 0;
       }
 
-      for (unsigned button = 0; button < MAX_BUTTONS; button++)
+      for (button = 0; button < MAX_BUTTONS; button++)
          J |= joy_bits & (1 << binds[button]) ? (1 << button) : 0;
 
       if (option_turboEnable) {
          /* Handle Turbo A & B buttons */
          bool button_pressed = false;
-         for (unsigned tbutton = 0; tbutton < TURBO_BUTTONS; tbutton++) {
+         {
+         	unsigned int tbutton;
+         	for (tbutton = 0; tbutton < TURBO_BUTTONS; tbutton++) {
             if (joy_bits & (1 << turbo_binds[tbutton])) {
                button_pressed = true;
                if (!turbo_delay_counter)
                   J |= 1 << tbutton;
             }
+         }
          }
          if (button_pressed) {
             turbo_delay_counter++;
@@ -582,7 +650,7 @@ static void update_input(void)
             /* If the button is not pressed, just reset the toggle */
             turbo_delay_counter = 0;
       }
-      // Do not allow opposing directions
+      /* Do not allow opposing directions */
       if ((J & 0x30) == 0x30)
          J &= ~(0x30);
       else if ((J & 0xC0) == 0xC0)
@@ -636,18 +704,18 @@ void retro_cheat_reset(void)
 
 void retro_cheat_set(unsigned index, bool enabled, const char *code)
 {
+   int i ;
    char name[128];
    unsigned cursor;
-   char *codeLine = NULL ;
+   int codePos      = 0;
    int codeLineSize = strlen(code)+5 ;
-   int codePos = 0 ;
-   int i ;
+   char *codeLine   = (char*)calloc(codeLineSize,sizeof(char)) ;
+   if (!codeLine)
+      return;
 
-   codeLine = (char*)calloc(codeLineSize,sizeof(char)) ;
+   snprintf(name, sizeof(name), "cheat_%u", index);
 
-   sprintf(name, "cheat_%d", index);
-
-   //Break the code into Parts
+   /*Break the code into Parts */
    for (cursor=0;;cursor++)
    {
       if (ISHEXDEC)
@@ -663,16 +731,19 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
                codeLine[8] = ' ' ;
                codeLine[13] = '\0' ;
                cheatsAddCBACode(codeLine, name);
-               log_cb(RETRO_LOG_DEBUG, "Cheat code added: '%s'\n", codeLine);
+               if (log_cb)
+                  log_cb(RETRO_LOG_DEBUG, "Cheat code added: '%s'\n", codeLine);
             } else if ( codePos == 16 )
             {
                codeLine[16] = '\0' ;
                cheatsAddGSACode(codeLine, name, true);
-               log_cb(RETRO_LOG_DEBUG, "Cheat code added: '%s'\n", codeLine);
+               if (log_cb)
+                  log_cb(RETRO_LOG_DEBUG, "Cheat code added: '%s'\n", codeLine);
             } else 
             {
                codeLine[codePos] = '\0' ;
-               log_cb(RETRO_LOG_ERROR, "Invalid cheat code '%s'\n", codeLine);
+               if (log_cb)
+                  log_cb(RETRO_LOG_ERROR, "Invalid cheat code '%s'\n", codeLine);
             }
             codePos = 0 ;
             memset(codeLine,0,codeLineSize) ;
@@ -682,16 +753,15 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
          break;
    }
 
-
    free(codeLine) ;
 }
 
-static u32 rom_size = 0;
+static uint32_t rom_size = 0;
 
 static void set_memory_maps(void)
 {
    struct retro_memory_descriptor descs[] = {
-      // flags, ptr, offset, start, select, disconnect, len, address space
+      /* flags, ptr, offset, start, select, disconnect, len, address space */
       { 0, bios,              0, 0x00000000, 0,          0, 0x4000,     "BIOS" },
       { 0, workRAM,           0, 0x02000000, 0,          0, 0x40000,    "EWRAM" },
       { 0, internalRAM,       0, 0x03000000, 0,          0, 0x8000,     "IWRAM" },
@@ -702,11 +772,11 @@ static void set_memory_maps(void)
       { 0, rom,               0, 0x08000000, 0,          0, rom_size,   "ROM-WS0" },
       { 0, rom,               0, 0x0A000000, 0,          0, rom_size,   "ROM-WS1" },
       { 0, rom,               0, 0x0C000000, 0,          0, rom_size,   "ROM-WS2" },
-      // normally, only 64K is accessible at-a-time, 128K flash are bankswitched
+      /* normally, only 64K is accessible at-a-time, 128K flash are bankswitched */
       { 0, libretro_save_buf, 0, 0x0E000000, 0,          0, 0x10000,    "SRAM" }
-      // NOTE: the eeprom can be accessed anywhere from D000000h-DFFFFFFh. The need to map
-      // eeprom pointer to a virtual address might be needed for direct and fixed access when time comes
-      // For VBA Next as well as Beetle GBA, eeprom ptr can be accessed from libretro_save_buf[128 * 1024]
+      /* NOTE: the eeprom can be accessed anywhere from D000000h-DFFFFFFh. The need to map */
+      /* eeprom pointer to a virtual address might be needed for direct and fixed access when time comes */
+      /* For VBA Next as well as Beetle GBA, eeprom ptr can be accessed from libretro_save_buf[128 * 1024] */
    };
 
    struct retro_memory_map mmaps = {
@@ -721,8 +791,6 @@ static void set_memory_maps(void)
 
 bool retro_load_game(const struct retro_game_info *game)
 {
-   update_variables();
-
    struct retro_input_descriptor desc[] = {
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "D-Pad Up" },
@@ -738,6 +806,8 @@ bool retro_load_game(const struct retro_game_info *game)
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "Turbo A" },
       { 0 },
    };
+
+   update_variables();
 
    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 
@@ -789,20 +859,20 @@ void systemOnWriteDataToSoundBuffer(int16_t *finalWave, int length)
 
 void systemDrawScreen(void)
 {
-   video_cb(pix, 240, 160, 512); //last arg is pitch
+   video_cb(pix, 240, 160, 512); /*last arg is pitch */
    g_video_frames++;
    has_frame = 1;
 }
 
 void systemMessage(const char* fmt, ...)
 {
-   if (!log_cb)
+   va_list ap;
+   char buffer[256];
+   if (!log_cb || !fmt)
       return;
 
-   char buffer[256];
-   va_list ap;
    va_start(ap, fmt);
-   vsprintf(buffer, fmt, ap);
+   vsnprintf(buffer, sizeof(buffer), fmt, ap);
    log_cb(RETRO_LOG_INFO, "%s\n", buffer);
    va_end(ap);
 }

@@ -2,6 +2,13 @@
 #define SYSTEM_H
 
 #include <stdint.h>
+#ifndef __cplusplus
+#include <boolean.h>
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern void systemDrawScreen (void);
 extern bool systemReadJoypads (void);
@@ -15,6 +22,11 @@ extern int  systemGetGyroZ (void);
 extern void systemSetSensorState(bool);
 #endif
 
-// sound functions
+/* sound functions */
 extern void systemOnWriteDataToSoundBuffer(int16_t * finalWave, int length);
-#endif // SYSTEM_H
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* SYSTEM_H */
