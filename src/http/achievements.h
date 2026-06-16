@@ -806,6 +806,18 @@ public:
 
 	void doUnload(){
 		rc_client_unload_game(g_client);
+		/* Invalidar el estado de memoria asociado al juego anterior:
+		 * los punteros (wram_ptr, sram_ptr, core_descriptors y los
+		 * memory_map[].buffer derivados) viven en la RAM del core y
+		 * dejan de ser validos en cuanto se descarga.  Sin este reset,
+		 * un read_memory() entre doUnload y la siguiente carga (o si
+		 * el nuevo core no reemite SET_MEMORY_MAPS) usaria punteros
+		 * colgantes. */
+		wram_ptr = NULL;             wram_size = 0;
+		sram_ptr = NULL;             sram_size = 0;
+		core_descriptors = NULL;     core_descriptor_count = 0;
+		memory_map_count = 0;
+		memset(memory_map, 0, sizeof(memory_map));
 	}
 
 	void doFrame(){

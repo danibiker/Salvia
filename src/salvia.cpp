@@ -1115,6 +1115,15 @@ void closeGame(){
 		retro_unload_game();
 		retro_deinit();
 		gameMenu->romLoaded = false;
+
+		/* Descartar los descriptores capturados via SET_MEMORY_MAPS:
+		 * sus punteros apuntan a RAM interna del core que acaba de
+		 * liberarse en retro_deinit().  Si el proximo juego/core no
+		 * vuelve a emitir SET_MEMORY_MAPS (caso NeoGeo tras NeoGeo CD
+		 * en FBNeo) heredariamos punteros colgantes y Achievements::
+		 * read_memory haria memcpy sobre memoria invalida. */
+		g_num_mem_descriptors = 0;
+		memset(g_mem_descriptors, 0, sizeof(g_mem_descriptors));
 	}
 }
 

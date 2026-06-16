@@ -431,9 +431,10 @@ void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
 	{
 		unsigned desc_count = 0;
 		const struct retro_memory_descriptor* descs = get_core_memory_descriptors(&desc_count);
-		if (descs && desc_count > 0) {
-			Achievements::instance()->set_core_descriptors(descs, desc_count);
-		}
+		/* Siempre actualizar — si desc_count==0 sobreescribimos cualquier
+		 * descriptor heredado de la carga anterior (defensa en profundidad
+		 * frente a cores que no reemiten SET_MEMORY_MAPS entre juegos). */
+		Achievements::instance()->set_core_descriptors(desc_count > 0 ? descs : NULL, desc_count);
 	}
 
 	LOG_DEBUG("Translating achievements");
