@@ -4,7 +4,7 @@
 #include "types.h"
 #include <stdint.h>
 
-//performance boost tweaks.
+/*performance boost tweaks. */
 #if USE_TWEAKS
     #define USE_TWEAK_SPEEDHACK 1
 	#define USE_TWEAK_MEMFUNC 1
@@ -15,11 +15,10 @@
 extern int saveType;
 extern bool useBios;
 extern bool skipBios;
-extern bool cpuIsMultiBoot;
 extern int cpuSaveType;
 extern bool mirroringEnable;
 extern bool enableRtc;
-extern bool skipSaveGameBattery; // skip battery data when reading save states
+extern bool skipSaveGameBattery; /* skip battery data when reading save states */
 
 extern int cpuDmaCount;
 
@@ -33,4 +32,4 @@ extern uint8_t *internalRAM;
 extern uint8_t *workRAM;
 extern uint8_t *paletteRAM;
 
-#endif // GLOBALS_H
+#endif /* GLOBALS_H */

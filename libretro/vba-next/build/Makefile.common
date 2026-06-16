@@ -30,7 +30,20 @@ COREDEFINES += -DLOAD_FROM_MEMORY
 endif
 
 ifeq ($(USE_THREADED_RENDERER), 1)
-COREDEFINES += -DTHREADED_RENDERER
+THREADED_RENDERER_FLAGS := -DTHREADED_RENDERER
+ifeq ($(DEFAULT_THREADED_RENDERER_ENABLED), 1)
+THREADED_RENDERER_FLAGS += -DDEFAULT_THREADED_RENDERER_ENABLED=1
+else
+THREADED_RENDERER_FLAGS += -DDEFAULT_THREADED_RENDERER_ENABLED=0
+endif
+COREDEFINES += $(THREADED_RENDERER_FLAGS)
+# MSVC and Flow B (manual unix/osx blocks in Makefile.libretro) pick up
+# COREDEFINES via their DEFINES line.  The MinGW/Linux/OSX/standard-Windows
+# build/Makefile.<X> files do not -- they have DEFINES = $(PLATDEFS) $(RETRODEFS)
+# with no $(COREDEFINES).  Add to DEFINES directly so the threaded-renderer
+# flags reach the compiler on those targets too.  Duplicate -D on the
+# MSVC/Flow-B path is harmless.
+DEFINES += $(THREADED_RENDERER_FLAGS)
 endif
 
 ifeq ($(USE_MOTION_SENSOR), 1)
@@ -45,13 +58,13 @@ ifeq ($(TILED_RENDERING), 1)
 COREDEFINES += -DTILED_RENDERING
 endif
 
-SOURCES_CXX := \
-	$(CORE_DIR)/src/sound.cpp \
-	$(CORE_DIR)/src/memory.cpp \
-	$(CORE_DIR)/src/gba.cpp \
-	$(CORE_DIR)/src/system.cpp \
-	$(CORE_DIR)/libretro/libretro.cpp
-SOURCES_C   :=
+SOURCES_CXX :=
+SOURCES_C   := \
+	$(CORE_DIR)/src/sound.c \
+	$(CORE_DIR)/src/memory.c \
+	$(CORE_DIR)/src/gba.c \
+	$(CORE_DIR)/src/system.c \
+	$(CORE_DIR)/libretro/libretro.c
 
 ifneq ($(STATIC_LINKING),1)
 SOURCES_C += $(LIBRETRO_COMM_DIR)/memalign.c

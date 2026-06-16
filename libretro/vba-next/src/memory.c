@@ -14,19 +14,19 @@
 ============================================================ */
 
 /* Not endian safe, but VBA itself doesn't seem to care */
-void utilWriteIntMem(uint8_t *& data, int val)
+void utilWriteIntMem(uint8_t **data, int val)
 {
-	memcpy(data, &val, sizeof(int));
-	data += sizeof(int);
+	memcpy(*data, &val, sizeof(int));
+	*data += sizeof(int);
 }
 
-void utilWriteMem(uint8_t *& data, const void *in_data, unsigned size)
+void utilWriteMem(uint8_t **data, const void *in_data, unsigned size)
 {
-	memcpy(data, in_data, size);
-	data += size;
+	memcpy(*data, in_data, size);
+	*data += size;
 }
 
-void utilWriteDataMem(uint8_t *& data, variable_desc *desc)
+void utilWriteDataMem(uint8_t **data, variable_desc *desc)
 {
 	while (desc->address) 
 	{
@@ -35,22 +35,22 @@ void utilWriteDataMem(uint8_t *& data, variable_desc *desc)
 	}
 }
 
-int utilReadIntMem(const uint8_t *& data)
+int utilReadIntMem(const uint8_t **data)
 {
 	int res;
 
-	memcpy(&res, data, sizeof(int));
-	data += sizeof(int);
+	memcpy(&res, *data, sizeof(int));
+	*data += sizeof(int);
 	return res;
 }
 
-void utilReadMem(void *buf, const uint8_t *& data, unsigned size)
+void utilReadMem(void *buf, const uint8_t **data, unsigned size)
 {
-	memcpy(buf, data, size);
-	data += size;
+	memcpy(buf, *data, size);
+	*data += size;
 }
 
-void utilReadDataMem(const uint8_t *& data, variable_desc *desc)
+void utilReadDataMem(const uint8_t **data, variable_desc *desc)
 {
 	while (desc->address)
 	{
@@ -90,12 +90,13 @@ static variable_desc flashSaveData3[] = {
   { &flashReadState, sizeof(int) },
   { &flashSize, sizeof(int) },
   { &flashBank, sizeof(int) },
-  { &flashSaveMemory[0], 0x20000 },
+  { NULL, 0x20000 },  /* .address populated in flashInit (flashSaveMemory non-constant at file scope) */
   { NULL, 0 }
 };
 
 void flashInit (void)
 {
+	flashSaveData3[4].address = flashSaveMemory;
 	memset(flashSaveMemory, 0xff, 0x20000);
 }
 
@@ -106,13 +107,14 @@ void flashReset(void)
 	flashBank = 0;
 }
 
-void flashSaveGameMem(uint8_t *& data)
+void flashSaveGameMem(uint8_t **data)
 {
 	utilWriteDataMem(data, flashSaveData3);
 }
 
-void flashReadGameMem(const uint8_t *& data, int)
+void flashReadGameMem(const uint8_t **data, int version)
 {
+	(void)version;
 	utilReadDataMem(data, flashSaveData3);
 }
 
@@ -125,11 +127,11 @@ void flashSetSize(int size)
 	}
    else
    {
-		flashDeviceID = 0x13; //0x09;
-		flashManufacturerID = 0x62; //0xc2;
+		flashDeviceID = 0x13; /*0x09; */
+		flashManufacturerID = 0x62; /*0xc2; */
 	}
-	// Added to make 64k saves compatible with 128k ones
-	// (allow wrongfuly set 64k saves to work for Pokemon games)
+	/* Added to make 64k saves compatible with 128k ones */
+	/* (allow wrongfuly set 64k saves to work for Pokemon games) */
 	if ((size == 0x20000) && (flashSize == 0x10000))
 		memcpy((uint8_t *)(flashSaveMemory+0x10000), (uint8_t *)(flashSaveMemory), 0x10000);
 	flashSize = size;
@@ -147,10 +149,10 @@ uint8_t flashRead(uint32_t address)
          switch(address & 0xFF)
          {
             case 0:
-               // manufacturer ID
+               /* manufacturer ID */
                return flashManufacturerID;
             case 1:
-               // device ID
+               /* device ID */
                return flashDeviceID;
          }
          break;
@@ -249,13 +251,13 @@ void flashWrite(uint32_t address, uint8_t byte)
          break;
       case FLASH_CMD_5:
          if(byte == 0x30) {
-            // SECTOR ERASE
+            /* SECTOR ERASE */
             memset(&flashSaveMemory[(flashBank << 16) + (address & 0xF000)],
                   0xff,
                   0x1000);
             flashReadState = FLASH_ERASE_COMPLETE;
          } else if(byte == 0x10) {
-            // CHIP ERASE
+            /* CHIP ERASE */
             memset(flashSaveMemory, 0xff, flashSize);
             flashReadState = FLASH_ERASE_COMPLETE;
          } else {
@@ -296,27 +298,43 @@ int eepromByte = 0;
 int eepromBits = 0;
 int eepromAddress = 0;
 
-// Workaround for broken-by-design GBA save semantics.
-extern u8 libretro_save_buf[0x20000 + 0x2000];
-u8 *eepromData = libretro_save_buf + 0x20000;
+/* Workaround for broken-by-design GBA save semantics. */
+extern uint8_t libretro_save_buf[0x20000 + 0x2000];
+uint8_t *eepromData = libretro_save_buf + 0x20000;
 
-u8 eepromBuffer[16];
+uint8_t eepromBuffer[16];
 bool eepromInUse = false;
 int eepromSize = 512;
 
+/* v11 layout: eepromData is only saved by the explicit utilWriteMem call
+ * below; the embedded {&eepromData[0], 512} field from the old layout was
+ * redundant — it duplicated the first 512 bytes that the 0x2000-byte
+ * trailing write already covered. */
 variable_desc eepromSaveData[] = {
   { &eepromMode, sizeof(int) },
   { &eepromByte, sizeof(int) },
   { &eepromBits , sizeof(int) },
   { &eepromAddress , sizeof(int) },
   { &eepromInUse, sizeof(bool) },
-  { &eepromData[0], 512 },
+  { &eepromBuffer[0], 16 },
+  { NULL, 0 }
+};
+
+/* v10 layout: kept for backward-compatible loading of older save states. */
+static variable_desc eepromSaveData_v10[] = {
+  { &eepromMode, sizeof(int) },
+  { &eepromByte, sizeof(int) },
+  { &eepromBits , sizeof(int) },
+  { &eepromAddress , sizeof(int) },
+  { &eepromInUse, sizeof(bool) },
+  { NULL, 512 },  /* .address populated in eepromInit (eepromData non-constant at file scope) */
   { &eepromBuffer[0], 16 },
   { NULL, 0 }
 };
 
 void eepromInit (void)
 {
+	eepromSaveData_v10[5].address = eepromData;
 	memset(eepromData, 255, 0x2000);
 }
 
@@ -330,16 +348,19 @@ void eepromReset (void)
 	eepromSize = 512;
 }
 
-void eepromSaveGameMem(uint8_t *& data)
+void eepromSaveGameMem(uint8_t **data)
 {
 	utilWriteDataMem(data, eepromSaveData);
 	utilWriteIntMem(data, eepromSize);
 	utilWriteMem(data, eepromData, 0x2000);
 }
 
-void eepromReadGameMem(const uint8_t *& data, int version)
+void eepromReadGameMem(const uint8_t **data, int version)
 {
-	utilReadDataMem(data, eepromSaveData);
+	if (version < SAVE_GAME_VERSION_11)
+		utilReadDataMem(data, eepromSaveData_v10);
+	else
+		utilReadDataMem(data, eepromSaveData);
 	eepromSize = utilReadIntMem(data);
 	utilReadMem(eepromData, data, 0x2000);
 }
@@ -381,11 +402,12 @@ int eepromRead (void)
    return 0;
 }
 
-void eepromWrite(u8 value)
+void eepromWrite(uint8_t value)
 {
+   int bit;
    if(cpuDmaCount == 0)
       return;
-   int bit = value & 1;
+   bit = value & 1;
    switch(eepromMode)
    {
       case EEPROM_IDLE:
@@ -443,7 +465,7 @@ void eepromWrite(u8 value)
          break;
       case EEPROM_READDATA:
       case EEPROM_READDATA2:
-         // should we reset here?
+         /* should we reset here? */
          eepromMode = EEPROM_IDLE;
          break;
       case EEPROM_WRITEDATA:
@@ -456,7 +478,7 @@ void eepromWrite(u8 value)
          {
             int i;
             eepromInUse = true;
-            // write data;
+            /* write data; */
             for(i = 0; i < 8; i++)
                eepromData[(eepromAddress << 3) + i] = eepromBuffer[i];
          }
@@ -474,19 +496,14 @@ void eepromWrite(u8 value)
 	SRAM
 ============================================================ */
 
-u8 sramRead(u32 address)
-{
-	return flashSaveMemory[address & 0xFFFF];
-}
-
-void sramDelayedWrite(u32 address, u8 byte)
+void sramDelayedWrite(uint32_t address, uint8_t byte)
 {
 	saveType = 1;
 	cpuSaveGameFunc = sramWrite;
 	sramWrite(address, byte);
 }
 
-void sramWrite(u32 address, u8 byte)
+void sramWrite(uint32_t address, uint8_t byte)
 {
 	flashSaveMemory[address & 0xFFFF] = byte;
 }
@@ -496,27 +513,27 @@ void sramWrite(u32 address, u8 byte)
 ============================================================ */
 
 #if USE_MOTION_SENSOR
-static u16 gyro_data[3];
+static uint16_t gyro_data[3];
 
 static void gyroWritePins(unsigned pins)
 {
    if (!hardware.readWrite) return;
 
-   uint16_t& t = gyro_data[0];
-   t &= hardware.direction;
-   hardware.pinState = t | (pins & ~hardware.direction & 0xF);
-   t = hardware.pinState;
+   /* C89 has no references; operate on the slot directly. */
+   gyro_data[0] &= hardware.direction;
+   hardware.pinState = gyro_data[0] | (pins & ~hardware.direction & 0xF);
+   gyro_data[0] = hardware.pinState;
 }
 
 static void gyroReadPins(void)
 {
-   // Normalize to ~12 bits, focused on 0x6C0
+   /* Normalize to ~12 bits, focused on 0x6C0 */
 	if (hardware.pinState & 1)
-		hardware.gyroSample = (systemGetGyroZ() >> 21) + 0x6C0; // Crop off an extra bit so that we can't go negative
+		hardware.gyroSample = (systemGetGyroZ() >> 21) + 0x6C0; /* Crop off an extra bit so that we can't go negative */
 
 	if (hardware.gyroEdge && !(hardware.pinState & 2))
    {
-		// Write bit on falling edge
+		/* Write bit on falling edge */
 		unsigned bit = hardware.gyroSample >> 15;
 		hardware.gyroSample <<= 1;
 		gyroWritePins(bit << 2);
@@ -525,7 +542,7 @@ static void gyroReadPins(void)
 	hardware.gyroEdge = !!(hardware.pinState & 2);
 }
 
-bool gyroWrite(u32 address, u16 value)
+bool gyroWrite(uint32_t address, uint16_t value)
 {
    switch (address)
    {
@@ -545,16 +562,15 @@ bool gyroWrite(u32 address, u16 value)
    }
    if (hardware.readWrite)
    {
-      uint16_t& t = gyro_data[0];
-      t &= ~hardware.direction;
-      t |= hardware.pinState;
+      gyro_data[0] &= ~hardware.direction;
+      gyro_data[0] |= hardware.pinState;
    }
    else
       gyro_data[0] = 0;
    return true;
 }
 
-u16 gyroRead(u32 address)
+uint16_t gyroRead(uint32_t address)
 {
 	return gyro_data[(address - 0x80000c4) >> 1];
 }
@@ -571,18 +587,18 @@ u16 gyroRead(u32 address)
 
 typedef struct
 {
-	u8 byte0;
-	u8 byte1;
-	u8 byte2;
-	u8 command;
+	uint8_t byte0;
+	uint8_t byte1;
+	uint8_t byte2;
+	uint8_t command;
 	int dataLen;
 	int bits;
 	int state;
-	u8 data[12];
-	// reserved variables for future
-	u8 reserved[12];
+	uint8_t data[12];
+	/* reserved variables for future */
+	uint8_t reserved[12];
 	bool reserved2;
-	u32 reserved3;
+	uint32_t reserved3;
 } RTCCLOCKDATA;
 
 static RTCCLOCKDATA rtcClockData;
@@ -593,12 +609,7 @@ void rtcEnable(bool e)
 	rtcEnabled = e;
 }
 
-bool rtcIsEnabled (void)
-{
-	return rtcEnabled;
-}
-
-u16 rtcRead(u32 address)
+uint16_t rtcRead(uint32_t address)
 {
    if(rtcEnabled)
    {
@@ -616,23 +627,25 @@ u16 rtcRead(u32 address)
    return READ16LE((&rom[address & 0x1FFFFFE]));
 }
 
-static u8 toBCD(u8 value)
+static uint8_t toBCD(uint8_t value)
 {
+	int l;
+	int h;
 	value = value % 100;
-	int l = value % 10;
-	int h = value / 10;
+	l = value % 10;
+	h = value / 10;
 	return h * 16 + l;
 };
 
-bool rtcWrite(u32 address, u16 value)
+bool rtcWrite(uint32_t address, uint16_t value)
 {
    if(!rtcEnabled)
       return false;
 
    if(address == 0x80000c8)
-      rtcClockData.byte2 = (u8)value; // enable ?
+      rtcClockData.byte2 = (uint8_t)value; /* enable ? */
    else if(address == 0x80000c6)
-      rtcClockData.byte1 = (u8)value; // read/write
+      rtcClockData.byte1 = (uint8_t)value; /* read/write */
    else if(address == 0x80000c4)
    {
       if(rtcClockData.byte2 & 1)
@@ -645,8 +658,8 @@ bool rtcWrite(u32 address, u16 value)
          }
          else if(!(rtcClockData.byte0 & 1) && (value & 1))
          {
-            // bit transfer
-            rtcClockData.byte0 = (u8)value;
+            /* bit transfer */
+            rtcClockData.byte0 = (uint8_t)value;
             switch(rtcClockData.state)
             {
                case COMMAND:
@@ -658,13 +671,13 @@ bool rtcWrite(u32 address, u16 value)
                      switch(rtcClockData.command)
                      {
                         case 0x60:
-                           // not sure what this command does but it doesn't take parameters
-                           // maybe it is a reset or stop
+                           /* not sure what this command does but it doesn't take parameters */
+                           /* maybe it is a reset or stop */
                            rtcClockData.state = IDLE;
                            rtcClockData.bits = 0;
                            break;
                         case 0x62:
-                           // this sets the control state but not sure what those values are
+                           /* this sets the control state but not sure what those values are */
                            rtcClockData.state = READDATA;
                            rtcClockData.dataLen = 1;
                            break;
@@ -710,7 +723,7 @@ bool rtcWrite(u32 address, u16 value)
                            }
                            break;
                         default:
-                           systemMessage(0, "Unknown RTC command %02x", rtcClockData.command);
+                           systemMessage("Unknown RTC command %02x", rtcClockData.command);
                            rtcClockData.state = IDLE;
                            break;
                      }
@@ -753,7 +766,7 @@ bool rtcWrite(u32 address, u16 value)
             }
          }
          else
-            rtcClockData.byte0 = (u8)value;
+            rtcClockData.byte0 = (uint8_t)value;
       }
    }
    return true;
@@ -772,12 +785,12 @@ void rtcReset (void)
 	rtcClockData.state = IDLE;
 }
 
-void rtcSaveGameMem(uint8_t *& data)
+void rtcSaveGameMem(uint8_t **data)
 {
 	utilWriteMem(data, &rtcClockData, sizeof(rtcClockData));
 }
 
-void rtcReadGameMem(const uint8_t *& data)
+void rtcReadGameMem(const uint8_t **data)
 {
 	utilReadMem(&rtcClockData, data, sizeof(rtcClockData));
 }

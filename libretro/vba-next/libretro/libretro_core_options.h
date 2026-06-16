@@ -67,11 +67,12 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "vbanext_rtc",
-      "Force Enable RTC (Restart)",
-      "Forces RTC to be enabled even for unknown roms. This is helpful for romhacks that needs RTC (like pokemon romhacks) without a matching override entry.",
+      "RTC (Restart)",
+      "Controls Real-Time Clock emulation. 'auto' uses the per-ROM override list. 'enabled' forces RTC on for any ROM (useful for ROM hacks needing RTC without a matching override). 'disabled' forces RTC off, overriding the override list.",
       {
          { "auto", NULL },
          { "enabled", NULL },
+         { "disabled", NULL },
          { NULL, NULL},
       },
       "auto"
@@ -92,6 +93,23 @@ struct retro_core_option_definition option_defs_us[] = {
          { NULL, NULL},
       },
       "0"
+   },
+#endif
+#ifdef THREADED_RENDERER
+   {
+      "vbanext_threaded_renderer",
+      "Threaded Renderer (Restart)",
+      "Render scanlines on a worker thread.  May reduce stutter on slower CPUs at the cost of slight input-to-display latency.  Restart required for changes to take effect.",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+#if DEFAULT_THREADED_RENDERER_ENABLED
+      "enabled"
+#else
+      "disabled"
+#endif
    },
 #endif
    {

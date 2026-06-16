@@ -2,8 +2,15 @@
 #define GBA_H
 
 #include <stdint.h>
+#ifndef __cplusplus
+#include <boolean.h>
+#endif
 #include "GBACheats.h"
 #include "thread.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define BITS_16 0
 #define BITS_32 1
@@ -18,7 +25,8 @@
 #define SAVE_GAME_VERSION_8 8
 #define SAVE_GAME_VERSION_9 9
 #define SAVE_GAME_VERSION_10 10
-#define SAVE_GAME_VERSION  SAVE_GAME_VERSION_10
+#define SAVE_GAME_VERSION_11 11
+#define SAVE_GAME_VERSION  SAVE_GAME_VERSION_11
 
 #define R13_IRQ  18
 #define R14_IRQ  19
@@ -71,15 +79,11 @@ typedef union {
 		uint16_t W1;
 #endif
 	} W;
-#ifdef MSB_FIRST
 	#ifdef _XBOX
 	uint32_t I;
 	#else 
-	volatile uint32_t I;
 	#endif
-#else
 	uint32_t I;
-#endif
 } reg_pair;
 
 typedef struct 
@@ -124,6 +128,7 @@ extern void SetFrameskip(int);
 #if THREADED_RENDERER
 extern void ThreadedRendererStart(void);
 extern void ThreadedRendererStop(void);
+extern int g_threaded_renderer_enabled;
 #endif
 
 #if USE_MOTION_SENSOR
@@ -149,4 +154,8 @@ extern hardware_t hardware;
 
 #endif
 
-#endif // GBA_H
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* GBA_H */

@@ -149,7 +149,7 @@ static void dump_sav(FILE *file, const uint8_t *data, enum save_type type)
    }
 }
 
-// One shot cowboy code :)
+/* One shot cowboy code :) */
 
 int main(int argc, char *argv[])
 {
