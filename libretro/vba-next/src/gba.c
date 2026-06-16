@@ -320,14 +320,16 @@ static void hardware_reset(void)
 	#define RENDERER_R_VCOUNT renderer_ctx.vcount
 	#define RENDERER_R_DISPCNT_Video_Mode renderer_ctx.renderfunc_mode
 
-	#define RENDERER_R_DISPCNT_Screen_Display_BG0 (RENDERER_GRAPHICS_LAYERS & (1 <<  8))
-	#define RENDERER_R_DISPCNT_Screen_Display_BG1 (RENDERER_GRAPHICS_LAYERS & (1 <<  9))
-	#define RENDERER_R_DISPCNT_Screen_Display_BG2 (RENDERER_GRAPHICS_LAYERS & (1 << 10))
-	#define RENDERER_R_DISPCNT_Screen_Display_BG3 (RENDERER_GRAPHICS_LAYERS & (1 << 11))
-	#define RENDERER_R_DISPCNT_Screen_Display_OBJ (RENDERER_GRAPHICS_LAYERS & (1 << 12))
-	#define RENDERER_R_DISPCNT_Window_0_Display   (RENDERER_GRAPHICS_LAYERS & (1 << 13))
-	#define RENDERER_R_DISPCNT_Window_1_Display   (RENDERER_GRAPHICS_LAYERS & (1 << 14))
-	#define RENDERER_R_DISPCNT_OBJ_Window_Display (RENDERER_GRAPHICS_LAYERS & (1 << 15))
+	/* See note above R_DISPCNT_Screen_Display_BG0 for the !=0 rationale
+	 * (bool-truncation under MSVC <1800 C mode). */
+	#define RENDERER_R_DISPCNT_Screen_Display_BG0 ((RENDERER_GRAPHICS_LAYERS & (1 <<  8)) != 0)
+	#define RENDERER_R_DISPCNT_Screen_Display_BG1 ((RENDERER_GRAPHICS_LAYERS & (1 <<  9)) != 0)
+	#define RENDERER_R_DISPCNT_Screen_Display_BG2 ((RENDERER_GRAPHICS_LAYERS & (1 << 10)) != 0)
+	#define RENDERER_R_DISPCNT_Screen_Display_BG3 ((RENDERER_GRAPHICS_LAYERS & (1 << 11)) != 0)
+	#define RENDERER_R_DISPCNT_Screen_Display_OBJ ((RENDERER_GRAPHICS_LAYERS & (1 << 12)) != 0)
+	#define RENDERER_R_DISPCNT_Window_0_Display   ((RENDERER_GRAPHICS_LAYERS & (1 << 13)) != 0)
+	#define RENDERER_R_DISPCNT_Window_1_Display   ((RENDERER_GRAPHICS_LAYERS & (1 << 14)) != 0)
+	#define RENDERER_R_DISPCNT_OBJ_Window_Display ((RENDERER_GRAPHICS_LAYERS & (1 << 15)) != 0)
 
 	#define RENDERER_R_WIN_Window0_X1 (RENDERER_IO_REGISTERS[REG_WIN0H] >> 8)
 	#define RENDERER_R_WIN_Window0_X2 (RENDERER_IO_REGISTERS[REG_WIN0H] & 0xFF)
@@ -377,14 +379,15 @@ static void hardware_reset(void)
 	#define RENDERER_R_VCOUNT (RENDERER_IO_REGISTERS[REG_VCOUNT])
 	#define RENDERER_R_DISPCNT_Video_Mode (RENDERER_IO_REGISTERS[REG_DISPCNT] & 7)
 
-	#define RENDERER_R_DISPCNT_Screen_Display_BG0 (RENDERER_GRAPHICS_LAYERS & (1 <<  8))
-	#define RENDERER_R_DISPCNT_Screen_Display_BG1 (RENDERER_GRAPHICS_LAYERS & (1 <<  9))
-	#define RENDERER_R_DISPCNT_Screen_Display_BG2 (RENDERER_GRAPHICS_LAYERS & (1 << 10))
-	#define RENDERER_R_DISPCNT_Screen_Display_BG3 (RENDERER_GRAPHICS_LAYERS & (1 << 11))
-	#define RENDERER_R_DISPCNT_Screen_Display_OBJ (RENDERER_GRAPHICS_LAYERS & (1 << 12))
-	#define RENDERER_R_DISPCNT_Window_0_Display   (RENDERER_GRAPHICS_LAYERS & (1 << 13))
-	#define RENDERER_R_DISPCNT_Window_1_Display   (RENDERER_GRAPHICS_LAYERS & (1 << 14))
-	#define RENDERER_R_DISPCNT_OBJ_Window_Display (RENDERER_GRAPHICS_LAYERS & (1 << 15))
+	/* See note above R_DISPCNT_Screen_Display_BG0 for the !=0 rationale. */
+	#define RENDERER_R_DISPCNT_Screen_Display_BG0 ((RENDERER_GRAPHICS_LAYERS & (1 <<  8)) != 0)
+	#define RENDERER_R_DISPCNT_Screen_Display_BG1 ((RENDERER_GRAPHICS_LAYERS & (1 <<  9)) != 0)
+	#define RENDERER_R_DISPCNT_Screen_Display_BG2 ((RENDERER_GRAPHICS_LAYERS & (1 << 10)) != 0)
+	#define RENDERER_R_DISPCNT_Screen_Display_BG3 ((RENDERER_GRAPHICS_LAYERS & (1 << 11)) != 0)
+	#define RENDERER_R_DISPCNT_Screen_Display_OBJ ((RENDERER_GRAPHICS_LAYERS & (1 << 12)) != 0)
+	#define RENDERER_R_DISPCNT_Window_0_Display   ((RENDERER_GRAPHICS_LAYERS & (1 << 13)) != 0)
+	#define RENDERER_R_DISPCNT_Window_1_Display   ((RENDERER_GRAPHICS_LAYERS & (1 << 14)) != 0)
+	#define RENDERER_R_DISPCNT_OBJ_Window_Display ((RENDERER_GRAPHICS_LAYERS & (1 << 15)) != 0)
 
 	#define RENDERER_R_WIN_Window0_X1 (RENDERER_IO_REGISTERS[REG_WIN0H] >> 8)
 	#define RENDERER_R_WIN_Window0_X2 (RENDERER_IO_REGISTERS[REG_WIN0H] & 0xFF)
@@ -482,20 +485,10 @@ static const uint8_t AlphaClampLUT[64] =
 	}
 
 static int cpuNextEvent = 0;
-static int holdState = 0;
+static bool holdState = false;
 static uint32_t cpuPrefetch[2];
 static int cpuTotalTicks = 0;
 
-#ifdef _XBOX
-static int memoryWait[16] =
-  { 0, 0, 2, 0, 0, 0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 0 };
-static int memoryWaitSeq[16] =
-  { 0, 0, 2, 0, 0, 0, 0, 0, 2, 2, 4, 4, 8, 8, 4, 0 };
-static int memoryWait32[16] =
-  { 0, 0, 5, 0, 0, 1, 1, 0, 7, 7, 9, 9, 13, 13, 4, 0 };
-static int memoryWaitSeq32[16] =
-  { 0, 0, 5, 0, 0, 1, 1, 0, 5, 5, 9, 9, 17, 17, 4, 0 };
-#else
 static uint8_t memoryWait[16] =
   { 0, 0, 2, 0, 0, 0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 0 };
 static uint8_t memoryWaitSeq[16] =
@@ -504,7 +497,7 @@ static uint8_t memoryWait32[16] =
   { 0, 0, 5, 0, 0, 1, 1, 0, 7, 7, 9, 9, 13, 13, 4, 0 };
 static uint8_t memoryWaitSeq32[16] =
   { 0, 0, 5, 0, 0, 1, 1, 0, 5, 5, 9, 9, 17, 17, 4, 0 };
-#endif
+
 /* GB sound-register address lookup; used only within this file.
  * Was non-static (accidental external linkage). */
 static const int table [0x40] =
@@ -528,22 +521,12 @@ static uint8_t biosProtected[4];
 static uint8_t cpuBitsSet[256];
 
 static void CPUSwitchMode(int mode, bool saveState, bool breakLoop);
-#ifdef _XBOX
-static int N_FLAG = 0;
-static int C_FLAG = 0;
-static int Z_FLAG = 0;
-static int V_FLAG = 0;
-static int armState = 1;
-static int armIrqEnable = 1;
-#else
 static bool N_FLAG = 0;
 static bool C_FLAG = 0;
 static bool Z_FLAG = 0;
 static bool V_FLAG = 0;
 static bool armState = true;
 static bool armIrqEnable = true;
-#endif
-
 static int armMode = 0x1f;
 
 typedef enum
@@ -617,14 +600,23 @@ static uint16_t io_registers[0x200];
 /* (Bit 13-14), color special effects may be used, and BG0-3 and */
 /* OBJ are controlled by the window(s). */
 
-#define R_DISPCNT_Screen_Display_BG0 (graphics.layerEnable & (1 <<  8))
-#define R_DISPCNT_Screen_Display_BG1 (graphics.layerEnable & (1 <<  9))
-#define R_DISPCNT_Screen_Display_BG2 (graphics.layerEnable & (1 << 10))
-#define R_DISPCNT_Screen_Display_BG3 (graphics.layerEnable & (1 << 11))
-#define R_DISPCNT_Screen_Display_OBJ (graphics.layerEnable & (1 << 12))
-#define R_DISPCNT_Window_0_Display   (graphics.layerEnable & (1 << 13))
-#define R_DISPCNT_Window_1_Display   (graphics.layerEnable & (1 << 14))
-#define R_DISPCNT_OBJ_Window_Display (graphics.layerEnable & (1 << 15))
+/* IMPORTANT: each macro yields 0 or 1, NOT the raw bit value.
+ * In C mode under MSVC < 1800 (e.g. VS2010), libretro-common's boolean.h
+ * defines `bool` as `unsigned char`, so a high bit such as 0x1000 (OBJ) or
+ * 0x8000 (OBJ-WIN) is truncated to 0 when assigned to `bool`. That silently
+ * disables the OBJ layer (and was the root cause of the missing sprites in
+ * the C port; the C++ build was unaffected because C++'s native `bool`
+ * converts any non-zero integer to true without truncation).
+ * Guard against this with `!= 0` so the macros are bool-assignment-safe at
+ * every call site, regardless of how the consumer uses the result. */
+#define R_DISPCNT_Screen_Display_BG0 ((graphics.layerEnable & (1 <<  8)) != 0)
+#define R_DISPCNT_Screen_Display_BG1 ((graphics.layerEnable & (1 <<  9)) != 0)
+#define R_DISPCNT_Screen_Display_BG2 ((graphics.layerEnable & (1 << 10)) != 0)
+#define R_DISPCNT_Screen_Display_BG3 ((graphics.layerEnable & (1 << 11)) != 0)
+#define R_DISPCNT_Screen_Display_OBJ ((graphics.layerEnable & (1 << 12)) != 0)
+#define R_DISPCNT_Window_0_Display   ((graphics.layerEnable & (1 << 13)) != 0)
+#define R_DISPCNT_Window_1_Display   ((graphics.layerEnable & (1 << 14)) != 0)
+#define R_DISPCNT_OBJ_Window_Display ((graphics.layerEnable & (1 << 15)) != 0)
 
 #define R_WIN_Window0_X1 (io_registers[REG_WIN0H] >> 8)
 #define R_WIN_Window0_X2 (io_registers[REG_WIN0H] & 0xFF)
@@ -3966,7 +3958,27 @@ static  void arm7F6(uint32_t opcode) { LDR_PREINC_WB(OFFSET_ROR, OP_LDRB, 16); }
 #if defined(__GNUC__) || defined(__clang__)
 #define CTZ_U32(x) __builtin_ctz((unsigned int)(x))
 #elif defined(_MSC_VER)
+
+#ifdef _XBOX
+	#include <ppcintrinsics.h>
+	#ifndef BITSCAN_DECLARED
+	#define BITSCAN_DECLARED
+	static __inline unsigned char _BitScanReverse(unsigned long* index, unsigned long mask) {
+		if (mask == 0) return 0;
+		*index = 31 - _CountLeadingZeros(mask);
+		return 1;
+	}
+
+	static __inline unsigned char _BitScanForward(unsigned long* index, unsigned long mask) {
+		if (mask == 0) return 0;
+		*index = 31 - _CountLeadingZeros(mask & -(long)mask);
+		return 1;
+	}
+	#endif
+#else
 #include <intrin.h>
+#endif
+
 #pragma intrinsic(_BitScanForward)
 static INLINE int _ctz_u32_msvc(uint32_t x)
 {
@@ -6855,7 +6867,6 @@ static uint32_t map_heights[] = { 256, 256, 512, 512 };
 #ifdef _MSC_VER
 union u8h
 {
-   __pragma( pack(push, 1));
    struct
    {
 #ifdef MSB_FIRST
@@ -6865,8 +6876,7 @@ union u8h
       /* 0*/	unsigned char lo:4;
       /* 4*/	unsigned char hi:4;
 #endif
-   }
-   __pragma(pack(pop));
+   };
    uint8_t val;
 };
 #else
@@ -9427,9 +9437,11 @@ int CPULoadRomData(const char *data, int size)
 #else
 int CPULoadRom(const char * file)
 {
-	uint8_t *whereToLoad = rom;
+	uint8_t *whereToLoad;
 	if (!CPUSetupBuffers())
       return 0;
+
+	 whereToLoad = rom;
 
 	if (file)
 	{

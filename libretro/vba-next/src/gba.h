@@ -79,10 +79,6 @@ typedef union {
 		uint16_t W1;
 #endif
 	} W;
-	#ifdef _XBOX
-	uint32_t I;
-	#else 
-	#endif
 	uint32_t I;
 } reg_pair;
 
