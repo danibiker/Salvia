@@ -392,7 +392,10 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
    ds = ccd_section_lookup(&ccd, "DISC", false);
    toc_entries          = (unsigned)ccd_read_int(ds, "TOCENTRIES", false);
    num_sessions         = (unsigned)ccd_read_int(ds, "SESSIONS", false);
-   data_tracks_scrambled = (bool)ccd_read_int(ds, "DATATRACKSSCRAMBLED", false);
+   /* ccd_read_int returns long; don't cast it to bool directly because on
+    * MSVC <1800 boolean.h defines bool as unsigned char and the cast would
+    * truncate values like 0x100, 0x200 to 0. Compare against zero instead. */
+   data_tracks_scrambled = ccd_read_int(ds, "DATATRACKSSCRAMBLED", false) != 0;
 
    if(num_sessions != 1)
    {

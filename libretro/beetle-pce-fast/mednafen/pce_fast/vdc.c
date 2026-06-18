@@ -170,6 +170,18 @@ static INLINE void CheckFixSpriteTileCache(vdc_t *which_vdc, uint16 no, uint32 s
                   | (vdc_spread8((uint8) bitplane1)       << 1);
          uint64 hi = vdc_spread8((uint8)(bitplane0 >> 8))
                   | (vdc_spread8((uint8)(bitplane1 >> 8)) << 1);
+#ifdef MSB_FIRST
+         /* vdc_spread8 places bit i in byte i (numerically, LSB=byte 0),
+          * but memcpy(uint8*, &uint64, 8) on BE puts the MSB at offset 0,
+          * giving tc[i] = bit(7-i). Byte-reverse so memcpy lands bit i in
+          * tc[i] just like on LE. */
+         lo = ((lo & 0x00000000FFFFFFFFULL) << 32) | ((lo >> 32) & 0x00000000FFFFFFFFULL);
+         lo = ((lo & 0x0000FFFF0000FFFFULL) << 16) | ((lo >> 16) & 0x0000FFFF0000FFFFULL);
+         lo = ((lo & 0x00FF00FF00FF00FFULL) <<  8) | ((lo >>  8) & 0x00FF00FF00FF00FFULL);
+         hi = ((hi & 0x00000000FFFFFFFFULL) << 32) | ((hi >> 32) & 0x00000000FFFFFFFFULL);
+         hi = ((hi & 0x0000FFFF0000FFFFULL) << 16) | ((hi >> 16) & 0x0000FFFF0000FFFFULL);
+         hi = ((hi & 0x00FF00FF00FF00FFULL) <<  8) | ((hi >>  8) & 0x00FF00FF00FF00FFULL);
+#endif
          memcpy(tc,     &lo, 8);
          memcpy(tc + 8, &hi, 8);
       }
@@ -195,6 +207,14 @@ static INLINE void CheckFixSpriteTileCache(vdc_t *which_vdc, uint16 no, uint32 s
                   | (vdc_spread8((uint8)(bitplane1 >> 8)) << 1)
                   | (vdc_spread8((uint8)(bitplane2 >> 8)) << 2)
                   | (vdc_spread8((uint8)(bitplane3 >> 8)) << 3);
+#ifdef MSB_FIRST
+         lo = ((lo & 0x00000000FFFFFFFFULL) << 32) | ((lo >> 32) & 0x00000000FFFFFFFFULL);
+         lo = ((lo & 0x0000FFFF0000FFFFULL) << 16) | ((lo >> 16) & 0x0000FFFF0000FFFFULL);
+         lo = ((lo & 0x00FF00FF00FF00FFULL) <<  8) | ((lo >>  8) & 0x00FF00FF00FF00FFULL);
+         hi = ((hi & 0x00000000FFFFFFFFULL) << 32) | ((hi >> 32) & 0x00000000FFFFFFFFULL);
+         hi = ((hi & 0x0000FFFF0000FFFFULL) << 16) | ((hi >> 16) & 0x0000FFFF0000FFFFULL);
+         hi = ((hi & 0x00FF00FF00FF00FFULL) <<  8) | ((hi >>  8) & 0x00FF00FF00FF00FFULL);
+#endif
          memcpy(tc,     &lo, 8);
          memcpy(tc + 8, &hi, 8);
       }

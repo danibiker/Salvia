@@ -43,14 +43,18 @@ extern bool setting_pce_fast_cdignoreerrors;
 #define PCECD_Drive_kingACK_mask	0x040
 #define PCECD_Drive_kingSEL_mask	0x100
 
-#define BSY_signal ((bool)(cd_bus.signals & PCECD_Drive_BSY_mask))
-#define ACK_signal ((bool)(cd_bus.signals & PCECD_Drive_kingACK_mask))
-#define RST_signal ((bool)(cd_bus.signals & PCECD_Drive_kingRST_mask))
-#define MSG_signal ((bool)(cd_bus.signals & PCECD_Drive_MSG_mask))
-#define SEL_signal ((bool)(cd_bus.signals & PCECD_Drive_kingSEL_mask))
-#define REQ_signal ((bool)(cd_bus.signals & PCECD_Drive_REQ_mask))
-#define IO_signal ((bool)(cd_bus.signals & PCECD_Drive_IO_mask))
-#define CD_signal ((bool)(cd_bus.signals & PCECD_Drive_CD_mask))
+/* Use !! instead of (bool) cast: on MSVC <1800 boolean.h defines
+ * `bool` as `unsigned char`, so `(bool)(signals & 0x100)` truncates
+ * the bit-8 SEL mask to 0 and the SCSI bus never leaves PHASE_BUS_FREE.
+ * !! produces 0/1 regardless of the bool typedef. */
+#define BSY_signal (!!(cd_bus.signals & PCECD_Drive_BSY_mask))
+#define ACK_signal (!!(cd_bus.signals & PCECD_Drive_kingACK_mask))
+#define RST_signal (!!(cd_bus.signals & PCECD_Drive_kingRST_mask))
+#define MSG_signal (!!(cd_bus.signals & PCECD_Drive_MSG_mask))
+#define SEL_signal (!!(cd_bus.signals & PCECD_Drive_kingSEL_mask))
+#define REQ_signal (!!(cd_bus.signals & PCECD_Drive_REQ_mask))
+#define IO_signal  (!!(cd_bus.signals & PCECD_Drive_IO_mask))
+#define CD_signal  (!!(cd_bus.signals & PCECD_Drive_CD_mask))
 
 #define DB_signal ((uint8)cd_bus.DB)
 

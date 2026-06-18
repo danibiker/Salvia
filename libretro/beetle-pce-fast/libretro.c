@@ -1539,16 +1539,25 @@ static bool MDFNI_LoadCD(const char *path, const char *ext)
 
    if(!strcasecmp(ext, "m3u"))
    {
-      M3UList file_list;
+      /* M3UList is ~1 MB (256 * 4096); allocate on the heap to avoid
+       * blowing the stack on platforms with small thread stacks (Xbox 360
+       * PPC has ~64-128 KB). MSVC reserves the full frame in the prologue
+       * regardless of which branch runs, so even a non-M3U load would hit
+       * _chkstk if this were on the stack. */
+      M3UList *file_list = (M3UList *)calloc(1, sizeof(M3UList));
       unsigned i;
 
-      file_list.n = 0;
-
-      ReadM3U(&file_list, path, 0);
-
-      for(i = 0; i < file_list.n; i++)
+      if (!file_list)
       {
-         CDIF *cdif = CDIF_Open(file_list.paths[i], cdimagecache);
+         log_cb(RETRO_LOG_ERROR, "Error allocating M3U list.\n");
+         return false;
+      }
+
+      ReadM3U(file_list, path, 0);
+
+      for(i = 0; i < file_list->n; i++)
+      {
+         CDIF *cdif = CDIF_Open(file_list->paths[i], cdimagecache);
 
          /* Do not push NULL interfaces into the vector: they would be
           * dereferenced by LoadCD()/PCECD_Drive_SetDisc() and deleted on
@@ -1556,13 +1565,15 @@ static bool MDFNI_LoadCD(const char *path, const char *ext)
          if (!cdif)
          {
             log_cb(RETRO_LOG_ERROR, "Error opening CD referenced by M3U: %s\n",
-                  file_list.paths[i]);
+                  file_list->paths[i]);
             continue;
          }
 
          cdifvec_push(&CDInterfaces, cdif);
          ret = true;
       }
+
+      free(file_list);
    }
    else
    {
