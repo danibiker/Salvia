@@ -13,17 +13,25 @@
 
 
 #define THREAD_CC WINAPI
-struct Thread { typedef DWORD RET_t; typedef RET_t (THREAD_CC *FUNC_t)(LPVOID); __inline static void StartDetached(FUNC_t f, void* p = NULL) { 
-	HANDLE h = CreateThread(0,DBP_STACK_SIZE,f,p,CREATE_SUSPENDED,0); 
-	if (h){
-		#ifdef _XBOX
-		XSetThreadProcessor(h, 2);
-		#endif
-		SetThreadPriority(h, THREAD_PRIORITY_HIGHEST);
-		ResumeThread(h);
-		CloseHandle(h); 
-	}
-} };
+// xbox_core selects the Xbox 360 hardware thread (0..5). Default 2 keeps prior behavior
+// (everything on core 2 next to the emulation loop). Pass 0 or 1 to move off-emu work
+// (decompression prefetch, seek cache writes, ...) to a different physical core.
+struct Thread { 
+	typedef DWORD RET_t; 
+	typedef RET_t (THREAD_CC *FUNC_t)(LPVOID); 
+	
+	__inline static void StartDetached(FUNC_t f, void* p = NULL, int xbox_core = 2) {
+		HANDLE h = CreateThread(0,DBP_STACK_SIZE,f,p,CREATE_SUSPENDED,0);
+		if (h){
+			#ifdef _XBOX
+			XSetThreadProcessor(h, xbox_core);
+			#endif
+			SetThreadPriority(h, THREAD_PRIORITY_HIGHEST);
+			ResumeThread(h);
+			CloseHandle(h);
+		}
+	} 
+};
 #ifdef _XBOX
 /* Xbox 360 XDK does not have the "A" (ANSI) variants of these functions */
 struct Mutex { __inline Mutex() : h(CreateMutex(0,FALSE,0)) {} __inline ~Mutex() { if (h) CloseHandle(h); } __inline void Lock() { WaitForSingleObject(h,INFINITE); } __inline void Unlock() { ReleaseMutex(h); } private:HANDLE h;Mutex(const Mutex&);Mutex& operator=(const Mutex&);};
@@ -47,7 +55,7 @@ struct SpinLock { __inline SpinLock() : f(0) {} __inline void Lock() { while (_I
 #include <atomic>
 #endif
 #define THREAD_CC
-struct Thread { typedef void* RET_t; typedef RET_t (THREAD_CC *FUNC_t)(void*); static void StartDetached(FUNC_t f, void* p = NULL) { pthread_t h = 0; pthread_attr_t a; pthread_attr_init(&a); pthread_attr_setstacksize(&a, DBP_STACK_SIZE); pthread_create(&h, &a, f, p); pthread_attr_destroy(&a); pthread_detach(h); } };
+struct Thread { typedef void* RET_t; typedef RET_t (THREAD_CC *FUNC_t)(void*); static void StartDetached(FUNC_t f, void* p = NULL, int xbox_core = 2) { (void)xbox_core; pthread_t h = 0; pthread_attr_t a; pthread_attr_init(&a); pthread_attr_setstacksize(&a, DBP_STACK_SIZE); pthread_create(&h, &a, f, p); pthread_attr_destroy(&a); pthread_detach(h); } };
 struct Mutex { __inline Mutex() { pthread_mutex_init(&h,0); } __inline ~Mutex() { pthread_mutex_destroy(&h); } __inline void Lock() { pthread_mutex_lock(&h); } __inline void Unlock() { pthread_mutex_unlock(&h); } private:pthread_mutex_t h;Mutex(const Mutex&);Mutex& operator=(const Mutex&);friend struct Conditional;};
 struct Conditional { __inline Conditional() { pthread_cond_init(&h,0); } __inline ~Conditional() { pthread_cond_destroy(&h); } __inline void Broadcast() { pthread_cond_broadcast(&h); } __inline void Wait(Mutex& m) { pthread_cond_wait(&h,&m.h); } private:pthread_cond_t h;Conditional(const Conditional&);Conditional& operator=(const Conditional&);};
 struct Semaphore { __inline Semaphore() : v(0) {} __inline void Post() { m.Lock(); v = 1; c.Broadcast(); m.Unlock(); } __inline void Wait() { m.Lock(); while (!v) c.Wait(m); v = 0; m.Unlock(); } private:Mutex m;Conditional c;int v;Semaphore(const Semaphore&);Semaphore& operator=(const Semaphore&);};

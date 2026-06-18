@@ -56,55 +56,62 @@ bool TextArea::loadTextFileFromGame(std::string baseDir, GameFile& game, std::st
 }
 
 /**
-    * 
-    */
-bool TextArea::loadTextFile(std::string filepathToOpen){
-    bool ret = false;
-
-    if (this->filepath.empty() || this->filepath.compare(filepathToOpen) != 0){
-        fstream fileRomTxt;
-
-        fileRomTxt.open(filepathToOpen, ios::in);
-        this->lastScroll = 0;
-
-        if (fileRomTxt.is_open()){
-            lines.clear();
-            std::string txt;
-            std::string fulltxt = "";
-            while(getline(fileRomTxt, txt)){
-                fulltxt.append(!fulltxt.empty() ? " " : "" + txt);
-            }
-            fileRomTxt.close();
-
-            std::vector<std::string> words = Constant::splitChar(fulltxt, ' ');
-            lines.push_back("");
-
-            const int spaceW = Fonts::getSize(this->fontType, " ");
-            for (int i=0; i < (int)words.size(); i++){
-				std::string word = words.at(i);
-                int wordW = Fonts::getSize(this->fontType, word.c_str());
-                int lineW = Fonts::getSize(this->fontType, lines.at(lines.size()-1).c_str());
-                if (lineW + wordW + spaceW >= this->getW() - this->marginX){
-                    lines.push_back("");
-                    lines.at(lines.size()-1).append(word);
-                } else {
-                    if (!lines.at(lines.size()-1).empty()){
-                        lines.at(lines.size()-1).append(" ");
-                    }
-                    lines.at(lines.size()-1).append(word);
-                }
-            }
-            this->filepath = filepathToOpen;
-            ret = true;
-        } else {
-            lines.clear();
-        }
-    } else if (!this->filepath.empty() && this->filepath.compare(filepathToOpen) == 0){
-        ret = true;
+* 
+*/
+bool TextArea::loadTextFile(std::string filepathToOpen) {
+    // 1. Comprobación rápida para evitar recargar el mismo archivo
+    if (!this->filepath.empty() && this->filepath == filepathToOpen) {
+        return true;
     }
 
-	this->filepath = filepathToOpen;
-    return ret;
+    std::ifstream fileRomTxt(filepathToOpen);
+    if (!fileRomTxt.is_open()) {
+        lines.clear();
+        return false;
+    }
+
+    this->filepath = filepathToOpen;
+    this->lastScroll = 0;
+    lines.clear();
+
+    const int spaceW = Fonts::getSize(this->fontType, " ");
+    const int maxW = this->getW() - this->marginX;
+    
+    std::string rawLine;
+    
+    // Leemos el archivo linea por linea para respetar los retornos de carro originales
+    while (std::getline(fileRomTxt, rawLine)) {
+        // Creamos una nueva linea en nuestro vector para este parrafo
+        lines.push_back("");
+        int currentLineW = 0;
+
+        std::stringstream ss(rawLine);
+        std::string word;
+
+        // Troceamos la linea actual por espacios
+        while (ss >> word) {
+            int wordW = Fonts::getSize(this->fontType, word.c_str());
+
+            // Si es la primera palabra de la linea actual
+            if (lines.back().empty()) {
+                lines.back() = std::move(word);
+                currentLineW = wordW;
+            } 
+            // Si la palabra cabe en la linea actual junto con el espacio
+            else if (currentLineW + spaceW + wordW < maxW) {
+                lines.back().append(" ").append(word);
+                currentLineW += spaceW + wordW;
+            } 
+            // Si no cabe, hacemos un salto de linea automático (ajuste de texto)
+            else {
+                lines.push_back(std::move(word));
+                currentLineW = wordW;
+            }
+        }
+    }
+
+    fileRomTxt.close();
+    return true;
 }
 
 bool TextArea::loadString(std::string fulltxt){

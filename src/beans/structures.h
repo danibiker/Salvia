@@ -812,10 +812,10 @@ struct t_rom_paths{
 
 struct t_zipped_file_paths{
 private:
-	// Route selected in the contents of the zip
-	std::vector<std::string> pathInZip;
 
 public:
+	// Route selected in the contents of the zip
+	std::vector<std::string> pathInZip;
 	// Directory where the file is
 	std::string dir;
 	// Name of the file. It usually is a zipped file
@@ -855,14 +855,14 @@ public:
 	void setInternalDir(std::string dir){
 		pathInZip = Constant::split(dir, Constant::getFileSep());
 	}
-
 };
 
 struct t_dir_file_paths{
 private:
+
+public:
 	// Route selected in the contents of the zip
 	std::vector<std::string> relativePath;
-public:
 	// Directory where the file is
 	std::string dir;
 	// Name of the selected file. It can be a directory or a regula file

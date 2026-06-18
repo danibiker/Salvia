@@ -144,6 +144,11 @@ int procesarAccionesMenu(ListMenu &listMenu){
 		} else {
 			gameMenu->loadEmuCfg(listMenu);
 			listMenu.listZipped.clear();
+			//Reseteamos el tamanyo de la lista para no mostrar la ruta relativa
+			//en el caso de que estuviesemos mostrando el contenido de un directorio
+			//o un fichero comprimido
+			listMenu.setLayout(LAYBOXES, gameMenu->overlay->w, gameMenu->overlay->h);
+			listMenu.resetIndexPos();
 		}
 	}
 
@@ -319,6 +324,8 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 			LOG_DEBUG("Next page");
 			listMenu.listZipped.clear();
 			listMenu.listDir.clear();
+			listMenu.resizeMarginTop(0, gameMenu->overlay->h);
+
 			gameMenu->getCfgLoader()->getNextCfgEmu();
 			gameMenu->loadEmuCfg(listMenu);
 			ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
@@ -331,6 +338,8 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 			LOG_DEBUG("Prev page");
 			listMenu.listZipped.clear();
 			listMenu.listDir.clear();
+			listMenu.resizeMarginTop(0, gameMenu->overlay->h);
+
 			gameMenu->getCfgLoader()->getPrevCfgEmu();
 			gameMenu->loadEmuCfg(listMenu);
 			ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();

@@ -71,7 +71,11 @@ void thread_set_priority(thread_t id, int priority) { sceKernelChangeThreadPrior
  * struct timespec is gated on _POSIX_C_SOURCE which we set at the top of
  * this file. */
 #if defined(_WIN32)
+#ifdef _XBOX
+#include <xtl.h>
+#else
 #include <windows.h>
+#endif 
 #define thread_sleep_ms(ms) Sleep((DWORD)(ms))
 #else
 #include <time.h>

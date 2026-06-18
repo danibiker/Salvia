@@ -19,7 +19,14 @@
  * the value the spinner is waiting on. */
 #if defined(__PS3__) || defined(__POWERPC__) || defined(__powerpc__) || defined(__ppc__) || defined(_XBOX360)
 /* `or 27,27,27` is the PPC low-priority SMT hint (Power ISA Book II) */
-#define SPIN_HINT() __asm__ volatile("or 27,27,27" ::: "memory")
+#if defined(_MSC_VER)
+    // Sintaxis para Visual Studio / Xbox 360 XDK
+    //#define SPIN_HINT() __asm { or r27, r27, r27 }
+	#define SPIN_HINT() YieldProcessor()
+#else
+    // Sintaxis original para GCC / Clang
+    #define SPIN_HINT() __asm__ volatile("or 27,27,27" ::: "memory")
+#endif
 #elif defined(_M_IX86) || defined(_M_X64)
 /* MSVC on x86/x64: no GCC-style __asm__ syntax; use the SSE2 PAUSE
  * intrinsic from <intrin.h>.  Available since MSVC 2005. */

@@ -104,6 +104,8 @@ typedef enum {
 	clWhite,
 	clBkgMenu,
 	clRed,
+	clMenuBars,
+	clTxtNavBar,
     clTotalColors
 } enumColors;
 
@@ -602,12 +604,25 @@ class Constant{
 			return elems;
 		}
 
-		/**
-		*
-		*/
-		static std::vector<std::string> Constant::split(std::string s, std::string delim) {
+		static std::vector<std::string> split(const std::string &s, const std::string &delims) {
 			std::vector<std::string> elems;
-			return split(s, delim, elems);
+			size_t start = 0;
+			size_t end = s.find_first_of(delims);
+
+			while (end != std::string::npos) {
+				// Evita añadir elementos vacíos si hay delimitadores consecutivos
+				if (end > start) {
+					elems.push_back(s.substr(start, end - start));
+				}
+				start = end + 1;
+				end = s.find_first_of(delims, start);
+			}
+
+			if (start < s.length()) {
+				elems.push_back(s.substr(start));
+			}
+
+			return elems;
 		}
 
         /**
@@ -877,6 +892,3 @@ class Constant{
 		static std::string appExecutable;
         static int EXEC_METHOD;
 };
-
-
-

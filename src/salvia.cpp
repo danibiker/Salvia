@@ -1290,21 +1290,29 @@ void processFrontendEvents(){
 
 	switch (hotkey) {
 		case HK_SAVESTATE:
-			SDL_mutexP(g_saveQueue.saveMutex);
-			if (g_saveQueue.action == SAVE_STATE){
-				LOG_ERROR("Savestate pending. Aborting new savestate...");
+			#ifdef NO_SAVEGAMES
+				gameMenu->showLangSystemMessage("msg.filesave.forbidden", 3000);
+			#else
+				SDL_mutexP(g_saveQueue.saveMutex);
+				if (g_saveQueue.action == SAVE_STATE){
+					LOG_ERROR("Savestate pending. Aborting new savestate...");
+					SDL_mutexV(g_saveQueue.saveMutex);
+					break;
+				}
 				SDL_mutexV(g_saveQueue.saveMutex);
-				break;
-			}
-			SDL_mutexV(g_saveQueue.saveMutex);
 
-			action_postponed.cycles = 1;
-			action_postponed.action = SAVE_STATE;
+				action_postponed.cycles = 1;
+				action_postponed.action = SAVE_STATE;
+			#endif
 			break;
 
 		case HK_LOADSTATE:
 			// loadState debe ejecutarse en el hilo principal		
-			loadState();
+			#ifdef NO_SAVEGAMES
+				gameMenu->showLangSystemMessage("msg.filesave.forbidden", 3000);
+			#else
+				loadState();
+			#endif
 			break;
 
 		case HK_MAX:

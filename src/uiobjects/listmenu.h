@@ -25,6 +25,7 @@ class ListMenu : public Object{
 		void loadMameDatabase(ConfigEmu& emu);
 		SDL_Surface *selecAlphaRec;
 		void drawIconListElem(SDL_Surface *video_page, GameFile *game, SDL_Rect& dstRectIcon);
+		void drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor, TTF_Font *fontMenu, int& face_h);
 
     public:
         ListMenu(int screenw, int screenh);
@@ -78,5 +79,6 @@ class ListMenu : public Object{
         void prevPos();
         void nextPage();
         void prevPage();
+		void resizeMarginTop(int addedMargin, int screenH);
 };
 

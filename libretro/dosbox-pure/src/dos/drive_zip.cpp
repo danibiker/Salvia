@@ -21,6 +21,7 @@
 #include "drives.h"
 #include "inout.h"
 #include "pic.h"
+#include "dbp_threads.h"
 
 #include <vector>
 
@@ -1304,7 +1305,17 @@ struct Zip_DeflateUnpacker : ZIP_Unpacker
 	enum { SEEK_CURSOR_MAX_DEFL = 128 + (sizeof(SeekCursor) + 9) / 10 * 11, SEEK_CACHE_CURSOR_NEED = 50, SEEK_CACHE_CURSOR_STEPS = 20 };
 	struct SeekCache { zipDrive* drv; std::string path; Bit32u count; } * seek_cache;
 
-	Zip_DeflateUnpacker(Zip_Archive& _archive, const Zip_File& f, zipDrive* drv, const char* path) : archive(_archive), crc_run(0), crc_ofs((Bit32u)-1), crc_failed(0), seek_cache(NULL)
+	// --- Async seek cache writer state (Step 1): WriteSeekCache used to run inline
+	// on the emu thread, holding it during the I/O + compression of the .SKC file.
+	// Now we snapshot cursors[] on the emu thread (cheap) and dispatch the heavy
+	// work to a detached thread on core 1.
+	Mutex          cursors_mtx;        // protects writes to cursors[] (vs async seek cache reader)
+	Mutex          skc_mtx;            // protects skc_writing
+	Semaphore      skc_sem_exited;     // worker -> destructor : writer has returned
+	bool           skc_writing;        // a writer is in flight
+
+	Zip_DeflateUnpacker(Zip_Archive& _archive, const Zip_File& f, zipDrive* drv, const char* path) : archive(_archive), crc_run(0), crc_ofs((Bit32u)-1), crc_failed(0), seek_cache(NULL),
+		skc_writing(false)
 	{
 		//printf("[%s] OPENED FILE!\n", f.name);
 		DBP_ASSERT(f.ofs_past_header);
@@ -1362,6 +1373,7 @@ struct Zip_DeflateUnpacker : ZIP_Unpacker
 
 	~Zip_DeflateUnpacker()
 	{
+		WaitForSeekCacheWriter();
 		if (seek_cache) delete seek_cache;
 		free(cursors);
 	}
@@ -1464,6 +1476,8 @@ struct Zip_DeflateUnpacker : ZIP_Unpacker
 			{
 				// Gear cursors toward the middle of the block to accommodate forward and backward seeking as well as possible
 				Bit32u idx = (out_buf_ofs / cursor_block);
+				bool wrote_cursor = false;
+				cursors_mtx.Lock();
 				if (!cursors[idx].cursor_out || (out_buf_ofs > cursors[idx].cursor_out + 120*1024 && out_buf_ofs < idx*cursor_block + cursor_block/2 + 70*1024))
 				{
 					//printf("[%s] STORE SEEK CURSOR #%u AT %u\n", f.name, idx, out_buf_ofs);
@@ -1476,7 +1490,12 @@ struct Zip_DeflateUnpacker : ZIP_Unpacker
 					cursors[idx].m_num_extra               = inflator.m_num_extra;
 					cursors[idx].m_dist_from_out_buf_start = inflator.m_dist_from_out_buf_start;
 					memcpy(cursors[idx].write_buf, write_buf, sizeof(write_buf));
+					wrote_cursor = true;
+				}
+				cursors_mtx.Unlock();
 
+				if (wrote_cursor)
+				{
 					// Write a seek cache next to the compressed file for larger files
 					if (seek_cache && idx > SEEK_CACHE_CURSOR_NEED)
 					{
@@ -1526,38 +1545,118 @@ struct Zip_DeflateUnpacker : ZIP_Unpacker
 		return true;
 	}
 
-	void WriteSeekCache(const Zip_File& f)
+	// === Step 1: async seek cache writer ===========================================
+	//
+	// Job descriptor heap-allocated by the emu thread before dispatching the worker.
+	// It owns a snapshot of cursors[] so the worker never touches the live array
+	// (which the emu thread keeps mutating in Read).
+	struct SeekCacheJob
 	{
-		DOS_File *df;
-		Bit8u drive_idx = DriveGetIndex(seek_cache->drv);
-		if (drive_idx == DOS_DRIVES || !Drives[drive_idx]->FileCreate(&df, (char*)seek_cache->path.c_str(), DOS_ATTR_ARCHIVE)) return;
+		Zip_DeflateUnpacker* unp;
+		SeekCursor* cursors_snapshot;
+		Bit32u cursor_count;
+		Bit32u cursor_block_local;
+		Bit32u decomp_size;
+		Bit32u comp_size;
+		Bit64u data_ofs;
+		zipDrive* drv;
+		std::string path;
+	};
+
+	void StartAsyncSeekCacheWrite(const Zip_File& f)
+	{
+		if (!seek_cache) return;
+		skc_mtx.Lock();
+		bool busy = skc_writing;
+		if (!busy) skc_writing = true;
+		skc_mtx.Unlock();
+		if (busy) return; // a writer is already in flight; this trigger is dropped (next PIC event will retry with fresher cursors)
+
+		Bit32u cursor_count_local = (f.decomp_size + (cursor_block - 1)) / cursor_block;
+		SeekCacheJob* job = new SeekCacheJob;
+		job->unp = this;
+		job->cursor_count = cursor_count_local;
+		job->cursor_block_local = cursor_block;
+		job->decomp_size = f.decomp_size;
+		job->comp_size = f.comp_size;
+		job->data_ofs = f.data_ofs;
+		job->drv = seek_cache->drv;
+		job->path = seek_cache->path;
+		job->cursors_snapshot = (SeekCursor*)malloc((size_t)cursor_count_local * sizeof(SeekCursor));
+
+		// Snapshot under the cursors mutex so we don't tear a SeekCursor while Read is mid-write.
+		cursors_mtx.Lock();
+		memcpy(job->cursors_snapshot, cursors, (size_t)cursor_count_local * sizeof(SeekCursor));
+		cursors_mtx.Unlock();
+
+		// Off-emu-core. Default is core 2 which is the emu core; use core 4 to actually parallelize.
+		Thread::StartDetached(SeekCacheThreadEntry, job, 4);
+	}
+
+	void WaitForSeekCacheWriter()
+	{
+		for (;;)
+		{
+			skc_mtx.Lock();
+			bool busy = skc_writing;
+			skc_mtx.Unlock();
+			if (!busy) break;
+			skc_sem_exited.Wait();
+		}
+	}
+
+	static Thread::RET_t THREAD_CC SeekCacheThreadEntry(void* arg)
+	{
+		SeekCacheJob* job = (SeekCacheJob*)arg;
+		DoWriteSeekCacheFromSnapshot(*job);
+		free(job->cursors_snapshot);
+		Zip_DeflateUnpacker* unp = job->unp;
+		delete job;
+		// Signal completion AFTER all resources owned by the job are freed,
+		// because the destructor of Zip_DeflateUnpacker is allowed to return
+		// as soon as it sees skc_writing==false.
+		unp->skc_mtx.Lock();
+		unp->skc_writing = false;
+		unp->skc_mtx.Unlock();
+		unp->skc_sem_exited.Post();
+		return 0;
+	}
+
+	static void DoWriteSeekCacheFromSnapshot(const SeekCacheJob& job)
+	{
+		DOS_File* df;
+		Bit8u drive_idx = DriveGetIndex(job.drv);
+		if (drive_idx == DOS_DRIVES || !Drives[drive_idx]->FileCreate(&df, (char*)job.path.c_str(), DOS_ATTR_ARCHIVE)) return;
 		df->AddRef();
-		Bit16u hdr[7] = { (Bit16u)0x5345, (Bit16u)sizeof(SeekCursor), (Bit16u)(f.comp_size>>16), (Bit16u)f.comp_size, (Bit16u)(f.data_ofs>>32), (Bit16u)(f.data_ofs>>16), (Bit16u)f.data_ofs }, idx_complen[2], sz;
+		Bit16u hdr[7] = { (Bit16u)0x5345, (Bit16u)sizeof(SeekCursor), (Bit16u)(job.comp_size>>16), (Bit16u)job.comp_size, (Bit16u)(job.data_ofs>>32), (Bit16u)(job.data_ofs>>16), (Bit16u)job.data_ofs }, idx_complen[2], sz;
 		df->Write((Bit8u*)hdr, &(sz = (Bit16u)sizeof(hdr)));
 		struct scomp { sdefl defl; Bit8u buf[SEEK_CURSOR_MAX_DEFL]; } *comp = new scomp;
-		for (Bit32u ii = (SEEK_CACHE_CURSOR_STEPS / 2), cursor_count = (f.decomp_size + (cursor_block - 1)) / cursor_block; ii < cursor_count; ii++)
+		for (Bit32u ii = (SEEK_CACHE_CURSOR_STEPS / 2); ii < job.cursor_count; ii++)
 		{
-			if (!cursors[ii].cursor_out) continue;
+			if (!job.cursors_snapshot[ii].cursor_out) continue;
 			idx_complen[0] = (Bit16u)ii;
 			ii = (SEEK_CACHE_CURSOR_STEPS / 2 - 1) + ((ii + (SEEK_CACHE_CURSOR_STEPS-1)) / SEEK_CACHE_CURSOR_STEPS * SEEK_CACHE_CURSOR_STEPS);
-			Bit32u complen = comp->defl.Run(comp->buf, (const unsigned char*)&cursors[idx_complen[0]], sizeof(SeekCursor));
+			Bit32u complen = comp->defl.Run(comp->buf, (const unsigned char*)&job.cursors_snapshot[idx_complen[0]], sizeof(SeekCursor));
 			DBP_ASSERT(complen < SEEK_CURSOR_MAX_DEFL);
-			idx_complen[1] = (complen < (sizeof(SeekCursor)-10) ? (Bit16u)complen : (Bit16u)0); // store compressed only when beneficial
+			idx_complen[1] = (complen < (sizeof(SeekCursor)-10) ? (Bit16u)complen : (Bit16u)0);
 			df->Write((Bit8u*)idx_complen, &(sz = (Bit16u)sizeof(idx_complen)));
 			if (idx_complen[1]) df->Write((Bit8u*)comp->buf, &idx_complen[1]);
-			else df->Write((Bit8u*)&cursors[idx_complen[0]], &(sz = (Bit16u)sizeof(SeekCursor)));
+			else df->Write((Bit8u*)&job.cursors_snapshot[idx_complen[0]], &(sz = (Bit16u)sizeof(SeekCursor)));
 		}
 		df->Close();
 		delete df;
 		delete comp;
 	}
+
 };
 
 void Zip_File::PICHandler(Bitu implPtr)
 {
 	Zip_File& f = *(Zip_File*)implPtr;
-	((Zip_DeflateUnpacker*)f.unpacker)->WriteSeekCache(f);
 	f.have_pic = 0;
+	// The .SKC writer used to run synchronously here, stalling the emu thread for
+	// hundreds of ms during the deflate + DOS_File writes. Dispatch it to core 1.
+	((Zip_DeflateUnpacker*)f.unpacker)->StartAsyncSeekCacheWrite(f);
 }
 
 struct Zip_Handle : public DOS_File

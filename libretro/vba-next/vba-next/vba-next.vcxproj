@@ -181,7 +181,7 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;FRONTEND_SUPPORTS_RGB565;LOAD_FROM_MEMORY;__LIBRETRO__;HAVE_HLE_BIOS;USE_CHEATS;USE_TWEAKS;TILED_RENDERING;USE_FRAME_SKIP;INLINE=_inline</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;FRONTEND_SUPPORTS_RGB565;LOAD_FROM_MEMORY;__LIBRETRO__;HAVE_HLE_BIOS;USE_CHEATS;USE_TWEAKS;TILED_RENDERING;THREADED_RENDERER;USE_FRAME_SKIP;INLINE=_inline</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)libretro-common\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>

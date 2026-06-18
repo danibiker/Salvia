@@ -245,8 +245,8 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 						//Drawing the rom's synopsis text
 						menuTextAreas[SYNOPSIS].loadTextFileFromGame(assetsDir + "synopsis" + string(Constant::tempFileSep), *game, ".txt");
 						menuTextAreas[SYNOPSIS].resetTicks(this->gameTicks);
-						if (menuTextAreas[YEAR].isEmpty() && menuTextAreas[MANUFACTURER].isEmpty() && menuTextAreas[SYSTEM].isEmpty()){
-							menuTextAreas[SYNOPSIS].setY(menuTextAreas[YEAR].getY());
+						if (!menuTextAreas[YEAR].isEmpty() && !menuTextAreas[MANUFACTURER].isEmpty() && !menuTextAreas[SYSTEM].isEmpty()){
+							menuTextAreas[SYNOPSIS].setY(menuTextAreas[SYSTEM].getY() + face_h_big * 2 + 2);
 							menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
 						}
 						menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
@@ -779,6 +779,9 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 		std::string relativePath = menuData.listDir.getRelativePath();
 		if (!relativePath.empty()){
 			mapfilepath.append(Constant::getFileSep() + relativePath);
+			TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+			int face_h = TTF_FontLineSkip(fontMenu);
+			menuData.resizeMarginTop(face_h, overlay->h);
 		}
 		LOG_DEBUG("Listing directory: %s", mapfilepath.c_str());
 
@@ -882,7 +885,7 @@ FILE_STATUS GameMenu::listableZip(ListMenu &listMenu, FILE_NAVIGATION nav){
 
 	bool selectedListableZip = !romFile.empty() && romFile[0] == '@' && nav == FS_ZIP_CD;
 
-	if ( selectedListableZip || !listMenu.listZipped.getInternalDir().empty()){
+	if ( selectedListableZip || !listMenu.listZipped.getInternalDir().empty() || !listMenu.listZipped.file.empty()){
 		//Try to list the contents of the directory
 		if (selectedListableZip){
 			listMenu.listZipped.dir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory) + string(Constant::tempFileSep) : "";
@@ -950,6 +953,13 @@ FILE_STATUS GameMenu::listableZip(ListMenu &listMenu, FILE_NAVIGATION nav){
 		} 
 		zb.Close();
 	}
+
+	if (ret != FS_NOZIP_TO_LIST){
+		//Cambiamos el tamanyo del listado para poder mostrar la ruta relativa de directorios
+		TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+		int face_h = TTF_FontLineSkip(fontMenu);
+		listMenu.resizeMarginTop(face_h, overlay->h);
+	}
 	return ret;
 }
 
@@ -991,10 +1001,17 @@ FILE_STATUS GameMenu::listableDir(ListMenu &listMenu, FILE_NAVIGATION nav){
 		if (nav == FS_DIR_CD){
 			listMenu.listDir.addRelativePath(fileSelected);
 		}
-		return FS_DIR_NAVIGATION;
+		ret = FS_DIR_NAVIGATION;
 	} else {
 		listMenu.listDir.file = fileSelected;
-		return FS_DIR_ISFILE;
+		ret = FS_DIR_ISFILE;
+	}
+
+	if (ret == FS_DIR_NAVIGATION){
+		//Cambiamos el tamanyo del listado para poder mostrar la ruta relativa de directorios
+		TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+		int face_h = TTF_FontLineSkip(fontMenu);
+		listMenu.resizeMarginTop(face_h, overlay->h);
 	}
 	return ret;
 }

@@ -8,7 +8,6 @@
 #include <io/cfgloader.h>
 #include <ostream>
 
-
 SDL_Surface* ListMenu::imgText;
 const int marginTextIcon = Icons::icon_w_add + 14;
 
@@ -74,14 +73,14 @@ void ListMenu::setLayout(int layout, int screenw, int screenh){
         this->setX(0);
         this->setY(marginY);
         this->setW(screenw / 2);
-        this->setH(screenh - marginY);
+        this->setH(screenh - this->getY());
         this->centerText = false;
         this->layout = layout;
     } else {
         this->setX(marginX);
         this->setY(marginY);
         this->setW(screenw - marginX);
-        this->setH(screenh - marginY);
+        this->setH(screenh - this->getY());
         this->centerText = true;
         this->layout = layout;
     }
@@ -250,6 +249,9 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
     prevIniPos = this->iniPos;
     prevEndPos = this->endPos;
 
+	//Dibujamos la ruta relativa que estamos explorando
+	drawNavBar(video_page, colorTextNotSel, fontMenu, face_h);
+
 	//Dibujamos el texto
     for (int i=this->iniPos; i < this->endPos; i++){
         auto& game = filteredGames.at(i);
@@ -322,6 +324,62 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
 		}
 		drawIconListElem(video_page, game, dstRectIcon);
     }
+}
+
+void ListMenu::drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor, TTF_Font *fontMenu, int& face_h){
+	SDL_Rect rectNavPath = {this->getX(), this->marginY, this->getW() -1, face_h};
+    std::string txtNav;
+
+    // 1. Si hay un archivo zip, empezamos la ruta con él
+    if (!listZipped.file.empty()) {
+        txtNav = listZipped.file;
+    }
+
+    // 2. Añadimos los directorios dentro del ZIP (si existen)
+    for (auto it = listZipped.pathInZip.begin(); it != listZipped.pathInZip.end(); ++it) {
+        if (it->empty()) continue;
+        if (!txtNav.empty()) 
+			txtNav.append(" > ");
+        txtNav.append(*it);
+    }
+
+    // 3. Si no había nada en el ZIP, procesamos la ruta relativa del directorio
+    if (listZipped.pathInZip.empty()) {
+        for (auto it = listDir.relativePath.begin(); it != listDir.relativePath.end(); ++it) {
+            if (it->empty()) continue;
+			if (!txtNav.empty()) 
+				txtNav.append(" > ");
+            txtNav.append(*it);
+        }
+    }
+
+	if (!txtNav.empty()){
+		const int prevStyle = TTF_GetFontStyle(fontMenu);
+		TTF_SetFontStyle(fontMenu, TTF_STYLE_ITALIC | TTF_STYLE_BOLD);
+		SDL_Surface *navPath = TTF_RenderUTF8_Blended(fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
+		TTF_SetFontStyle(fontMenu, prevStyle);
+		SDL_Rect rectSrcNavPath = {0, 0, navPath->w, navPath->h};
+		if (navPath->w > this->getW()){
+			rectSrcNavPath.x = navPath->w - rectNavPath.w;
+			rectSrcNavPath.w = rectNavPath.w;
+		}
+
+#ifdef _XBOX
+		SDL_Surface *filterAlphaRec;
+		Constant::createRectAlphaFilled(filterAlphaRec, rectNavPath, video_page->format, clBlack, true);
+		SDL_BlitSurface(filterAlphaRec, NULL, video_page, &rectNavPath);
+		SDL_FreeSurface(filterAlphaRec);
+#else
+		//SDL_FillRect(video_page, &rectNavPath, Constant::colors[clBlack].color);
+		SDL_Color& c = Constant::colors[clBlack].sdlColor;
+		boxRGBA(video_page, rectNavPath.x, rectNavPath.y, rectNavPath.x + rectNavPath.w, rectNavPath.y + rectNavPath. h, 
+			c.r, c.g, c.b, 160);
+#endif
+		//rect(video_page, rectNavPath.x - 1, rectNavPath.y - 1, rectNavPath.x + rectNavPath.w - 1, rectNavPath.y + rectNavPath.h - 1, Constant::colors[clMenuBars].sdlColor);
+		fastline(video_page, rectNavPath.x, rectNavPath.y + rectNavPath.h, rectNavPath.x + rectNavPath.w, rectNavPath.y + rectNavPath.h, menuBars);
+		SDL_BlitSurface(navPath, &rectSrcNavPath, video_page, &rectNavPath);
+		SDL_FreeSurface(navPath);
+	}
 }
 
 void ListMenu::drawIconListElem(SDL_Surface *video_page, GameFile *game, SDL_Rect& dstRectIcon) {
@@ -685,4 +743,13 @@ void ListMenu::prevPage(){
     for (int i=0; i < this->maxLines -1; i++){
         prevPos();
     }
+}
+
+void ListMenu::resizeMarginTop(int addedMargin, int screenH){
+	//Cambiamos el tamanyo del listado para poder mostrar la ruta relativa de directorios
+	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+	this->setY(this->marginY + addedMargin);
+	this->setH(screenH - this->getY());
+	this->maxLines = this->getScreenNumLines();
+	this->endPos = (int)this->filteredGames.size() > this->maxLines ? this->maxLines : this->filteredGames.size();
 }

@@ -8,7 +8,9 @@ svColor Constant::colors[clTotalColors] = {
 			{{0, 0, 0} , 0},			//clBlack
 			{{0xFF, 0xFF, 0xFF} , 0},	//clWhite
 			{{247, 221, 114}, 0},		//clBkgMenu
-			{{255, 0, 0}, 0}			//clRed
+			{{255, 0, 0}, 0},			//clRed
+			{{128, 128, 128}, 255},		//clMenuBars
+			{{138, 207, 178}, 255},		//clTxtNavBar
 }; 
 
 const char *MEDIAS_TO_FIND[] = {"sstitle", "ss", "box-2D"};

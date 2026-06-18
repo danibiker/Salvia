@@ -426,7 +426,16 @@ static void DBP_ReleaseKeyEvents(bool onlyPhysicalKeys)
 {
 	for (Bit8u i = KBD_NONE + 1, iEnd = (onlyPhysicalKeys ? KBD_LAST : KBD_LAST + 21); i != iEnd; i++)
 	{
-		if (!dbp_keys_down[i] || (onlyPhysicalKeys && (!(dbp_keys_down[i] & DBP_DOWN_BY_KEYBOARD) || input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0, dbp_keymap_dos2retro[i])))) continue;
+		// [Salvia] El path "onlyPhysicalKeys" original consultaba input_state_cb(RETRO_DEVICE_KEYBOARD)
+		// cada frame para verificar si una tecla seguia fisicamente pulsada. Cuando el frontend no
+		// implementa ese polling (RetroArch sin Game Focus, frontend de Xbox 360, etc.) devuelve 0
+		// para todo y se acaba liberando la tecla un frame despues del DOWN. Las letras "sobreviven"
+		// porque un par DOWN+UP basta para tipearlas, pero los modificadores se liberan antes de que
+		// llegue la combinacion con la letra y dejan de funcionar (Shift / Ctrl / Alt).
+		// Confiamos exclusivamente en el callback keyboard_event para enviar los UP fisicos.
+		// El caso "sticky keys tras Alt-Tab" que motivaba el polling era un edge raro; si reaparece,
+		// podemos anyadir un timeout en vez del polling.
+		if (!dbp_keys_down[i] || onlyPhysicalKeys) continue;
 		dbp_keys_down[i] = 1;
 		DBP_Event_Type type; int val = i;
 		if      (i < KBD_LAST +  0) type = DBPET_KEYUP;
