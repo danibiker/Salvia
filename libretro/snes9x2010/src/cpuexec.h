@@ -192,14 +192,14 @@ struct SOpcodes
 struct SICPU
 {
 	struct SOpcodes	*S9xOpcodes;
-	uint8	*S9xOpLengths;
-	uint8	_Carry;
-	uint8	_Zero;
-	uint8	_Negative;
-	uint8	_Overflow;
-	uint32	ShiftedPB;
-	uint32	ShiftedDB;
-	uint32	Frame;
+	const uint8_t	*S9xOpLengths;
+	uint8_t	_Carry;
+	uint8_t	_Zero;
+	uint8_t	_Negative;
+	uint8_t	_Overflow;
+	uint32_t	ShiftedPB;
+	uint32_t	ShiftedDB;
+	uint32_t	Frame;
 };
 
 extern struct SICPU		ICPU;
@@ -210,16 +210,24 @@ extern struct SOpcodes	S9xOpcodesM1X0[256];
 extern struct SOpcodes	S9xOpcodesM0X1[256];
 extern struct SOpcodes	S9xOpcodesM0X0[256];
 extern struct SOpcodes	S9xOpcodesSlow[256];
-extern uint8 S9xOpLengthsM1X1[256];
-extern uint8 S9xOpLengthsM1X0[256];
-extern uint8 S9xOpLengthsM0X1[256];
-extern uint8 S9xOpLengthsM0X0[256];
+extern const uint8_t S9xOpLengthsM1X1[256];
+extern const uint8_t S9xOpLengthsM1X0[256];
+extern const uint8_t S9xOpLengthsM0X1[256];
+extern const uint8_t S9xOpLengthsM0X0[256];
 
 void S9xMainLoop (void);
 void S9xReset (void);
 void S9xSoftReset (void);
 void S9xDoHEventProcessing (void);
 void S9xDeinitUpdate (int width, int height);
+
+/* Direct-render hooks for the libretro backend. The implementation in
+   libretro.c may try to redirect GFX.Screen at the exact known dimensions
+   for the current frame, then unwind that redirect if a mid-frame
+   resolution promotion forces a fallback. Other backends may stub these
+   to no-ops. Definitions live in libretro/libretro.c. */
+void S9xLibretroSwFbAcquire (int width, int height);
+void S9xLibretroSwFbAbort (void);
 
 #define S9X_CLEAR_IRQ(source) \
 	CPU.IRQActive &= ~source; \
@@ -247,6 +255,32 @@ void S9xDeinitUpdate (int width, int height);
 #define S9xPackStatus() \
 	Registers.PL &= ~(Zero | Negative | Carry | Overflow); \
 	Registers.PL |= ICPU._Carry | ((ICPU._Zero == 0) << 1) | (ICPU._Negative & 0x80) | (ICPU._Overflow << 6);
+
+/* memory_speed: bus-cycle cost for an SNES address. Folded into a
+ * macro so the body is guaranteed to be substituted at every call
+ * site at preprocess time, regardless of how the optimizer's
+ * inliner scores it. Once getset.h was split into small inline
+ * wrappers and big out-of-line slow paths, the wrappers themselves
+ * began to inline at ~1200 call sites; at that point GCC's inline
+ * cost model refused to also inline the static-INLINE memory_speed
+ * at most of those newly-exposed sites and ~1400 \`call memory_speed\`
+ * instructions came back into the production .so. A macro sidesteps
+ * the cost model entirely.
+ *
+ *   $00xx-$3Fxx, $80xx-$BFxx     bank-low / system area, slow
+ *   $40xx-$7Dxx                  WRAM and slow-ROM bank
+ *   $7Exx-$7Fxx                  WRAM, fast
+ *   $C0xx-$FFxx                  fast or slow depending on FastROMSpeed
+ *
+ * The macro evaluates its argument multiple times. Every existing
+ * call site passes a plain variable (Address / address), so this is
+ * safe; the lvalue would have been spilled to memory anyway. */
+#define memory_speed(addr) \
+	(((addr) & 0x408000) \
+		? (((addr) & 0x800000) ? CPU.FastROMSpeed : SLOW_ONE_CYCLE) \
+		: ((((addr) + 0x6000) & 0x4000) \
+			? SLOW_ONE_CYCLE \
+			: ((((addr) - 0x4000) & 0x7e00) ? ONE_CYCLE : TWO_CYCLES)))
 
 static INLINE void S9xFixCycles (void)
 {

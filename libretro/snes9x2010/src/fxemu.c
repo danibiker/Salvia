@@ -29,11 +29,6 @@
   (c) Copyright 2005 - 2006  Dreamer Nom,
                              zones
 
-  C4 x86 assembler and some C emulation code
-  (c) Copyright 2000 - 2003  _Demo_ (_demo_@zsnes.com),
-                             Nach,
-                             zsKnight (zsknight@zsnes.com)
-
   C4 C++ code
   (c) Copyright 2003 - 2006  Brad Jorsch,
                              Nach
@@ -100,11 +95,6 @@
                              Kris Bleakley,
                              Matthew Kendora
 
-  Super FX x86 assembler emulator code
-  (c) Copyright 1998 - 2003  _Demo_,
-                             pagefault,
-                             zsKnight
-
   Super FX C emulator code
   (c) Copyright 1997 - 1999  Ivar,
                              Gary Henderson,
@@ -117,32 +107,10 @@
   Sound emulator code used in 1.52+
   (c) Copyright 2004 - 2007  Shay Green (gblargg@gmail.com)
 
-  SH assembler code partly based on x86 assembler code
-  (c) Copyright 2002 - 2004  Marcus Comstedt (marcus@mc.pp.se)
-
-  2xSaI filter
-  (c) Copyright 1999 - 2001  Derek Liauw Kie Fa
-
-  HQ2x, HQ3x, HQ4x filters
-  (c) Copyright 2003         Maxim Stepin (maxim@hiend3d.com)
-
   NTSC filter
   (c) Copyright 2006 - 2007  Shay Green
 
-  GTK+ GUI code
-  (c) Copyright 2004 - 2010  BearOso
-
-  Win32 GUI code
-  (c) Copyright 2003 - 2006  blip,
-                             funkyass,
-                             Matthew Kendora,
-                             Nach,
-                             nitsuja
   (c) Copyright 2009 - 2010  OV2
-
-  Mac OS GUI code
-  (c) Copyright 1998 - 2001  John Stiles
-  (c) Copyright 2001 - 2010  zones
 
   (c) Copyright 2010 - 2016 Daniel De Matteis. (UNDER NO CIRCUMSTANCE 
   WILL COMMERCIAL RIGHTS EVER BE APPROPRIATED TO ANY PARTY)
@@ -183,8 +151,50 @@
 #include "fxinst.h"
 #include "fxemu.h"
 
-/* Set this define if you wish the plot instruction to check for y-pos limits (I don't think it's nessecary)*/
-/* #define CHECK_LIMITS*/
+/* Sign extend from 8 bit to 32 bit */
+#define SEX8(a)	((int32_t)  ((int8_t)   (a)))
+/* Sign extend from 16 bit to 32 bit */
+#define FX_SEX16(a) ((int32_t)  ((int16_t)  (a)))
+
+/* Unsign extend from 8/16 bit to 32 bit */
+#define USEX8(a)		((uint32_t) ((uint8_t)  (a)))
+#define USEX16(a)		((uint32_t) ((uint16_t) (a)))
+#define SUSEX16(a)		((int32_t)  ((uint16_t) (a)))
+
+/* Clear flags */
+#define CLRFLAGS		GSU.vStatusReg &= ~(FLG_ALT1 | FLG_ALT2 | FLG_B); GSU.pvDreg = GSU.pvSreg = &R0
+
+/* Read current RAM-Bank */
+#define RAM(adr)		GSU.pvRamBank[USEX16(adr)]
+
+/* Read current ROM-Bank */
+#define ROM(idx)		GSU.pvRomBank[USEX16(idx)]
+
+/* Access source register */
+#define SREG			(*GSU.pvSreg)
+
+/* Access destination register */
+#define DREG			(*GSU.pvDreg)
+
+
+/* Test flag */
+#define TF(a)			(GSU.vStatusReg &   FLG_##a)
+#define CF(a)			(GSU.vStatusReg &= ~FLG_##a)
+#define SF(a)			(GSU.vStatusReg |=  FLG_##a)
+
+/* Testing ALT1 & ALT2 bits */
+#define ALT1			( TF(ALT1) && !TF(ALT2))
+#define ALT2			(!TF(ALT1) &&  TF(ALT2))
+#define ALT3			( TF(ALT1) &&  TF(ALT2))
+
+/* Access the current value in the pipe */
+#define PIPE			GSU.vPipe
+
+/* Update pipe from ROM */
+#define FETCHPIPE		{ GSU.vPipe = PRGBANK(R15); }
+
+/* Access data in the current program bank */
+#define PRGBANK(idx)	GSU.pvPrgBank[USEX16(idx)]
 
 /*
  Codes used:
@@ -223,7 +233,7 @@ static void fx_nop (void)
 /* 02 - cache - reintialize GSU cache*/
 static void fx_cache (void)
 {
-	uint32 c = R15 & 0xfff0;
+	uint32_t c = R15 & 0xfff0;
 
 	if (GSU.vCacheBaseReg != c || !GSU.bCacheActive)
 	{
@@ -239,7 +249,7 @@ static void fx_cache (void)
 /* 03 - lsr - logic shift right*/
 static void fx_lsr (void)
 {
-	uint32	v = USEX16(SREG) >> 1;
+	uint32_t	v = USEX16(SREG) >> 1;
 	GSU.vCarry = SREG & 1;
 	R15++;
 	DREG = v;
@@ -252,7 +262,7 @@ static void fx_lsr (void)
 /* 04 - rol - rotate left*/
 static void fx_rol (void)
 {
-	uint32 v = USEX16((SREG << 1) + GSU.vCarry);
+	uint32_t v = USEX16((SREG << 1) + GSU.vCarry);
 	GSU.vCarry = (SREG >> 15) & 1;
 	R15++;
 	DREG = v;
@@ -265,7 +275,7 @@ static void fx_rol (void)
 /* 05 - bra - branch always*/
 static void fx_bra (void)
 {
-	uint8 v = PIPE;
+	uint8_t v = PIPE;
 	R15++;
 	FETCHPIPE;
 	R15 += SEX8(v);
@@ -273,7 +283,7 @@ static void fx_bra (void)
 
 /* Branch on condition*/
 #define	BRA_COND(cond) \
-	uint8 v = PIPE; \
+	uint8_t v = PIPE; \
 	R15++; \
 	FETCHPIPE; \
 	if (cond) \
@@ -550,8 +560,8 @@ static void fx_with_r15 (void)
 /* 30-3b - stw (rn) - store word*/
 #define FX_STW(reg) \
 	GSU.vLastRamAdr = GSU.avReg[reg]; \
-	RAM(GSU.avReg[reg]) = (uint8) SREG; \
-	RAM(GSU.avReg[reg] ^ 1) = (uint8) (SREG >> 8); \
+	RAM(GSU.avReg[reg]) = (uint8_t) SREG; \
+	RAM(GSU.avReg[reg] ^ 1) = (uint8_t) (SREG >> 8); \
 	CLRFLAGS; \
 	R15++
 
@@ -618,7 +628,7 @@ static void fx_stw_r11 (void)
 /* 30-3b (ALT1) - stb (rn) - store byte*/
 #define FX_STB(reg) \
 	GSU.vLastRamAdr = GSU.avReg[reg]; \
-	RAM(GSU.avReg[reg]) = (uint8) SREG; \
+	RAM(GSU.avReg[reg]) = (uint8_t) SREG; \
 	CLRFLAGS; \
 	R15++
 
@@ -686,7 +696,7 @@ static void fx_stb_r11 (void)
 static void fx_loop (void)
 {
 	GSU.vSign = GSU.vZero = --R12;
-	if ((uint16) R12 != 0)
+	if ((uint16_t) R12 != 0)
 		R15 = R13;
 	else
 		R15++;
@@ -720,10 +730,10 @@ static void fx_alt3 (void)
 
 /* 40-4b - ldw (rn) - load word from RAM*/
 #define FX_LDW(reg) \
-	uint32	v; \
+	uint32_t	v; \
 	GSU.vLastRamAdr = GSU.avReg[reg]; \
-	v = (uint32) RAM(GSU.avReg[reg]); \
-	v |= ((uint32) RAM(GSU.avReg[reg] ^ 1)) << 8; \
+	v = (uint32_t) RAM(GSU.avReg[reg]); \
+	v |= ((uint32_t) RAM(GSU.avReg[reg] ^ 1)) << 8; \
 	R15++; \
 	DREG = v; \
 	TESTR14; \
@@ -791,7 +801,7 @@ static void fx_ldw_r11 (void)
 
 /* 40-4b (ALT1) - ldb (rn) - load byte*/
 #define FX_LDB(reg) \
-	uint32	v = (uint32) RAM(GSU.avReg[reg]); \
+	uint32_t	v = (uint32_t) RAM(GSU.avReg[reg]); \
 	GSU.vLastRamAdr = GSU.avReg[reg]; \
 	R15++; \
 	DREG = v; \
@@ -861,26 +871,21 @@ static void fx_ldb_r11 (void)
 /* 4c - plot - plot pixel with R1, R2 as x, y and the color register as the color*/
 static void fx_plot_2bit (void)
 {
-   uint32 x = USEX8(R1);
-	uint32 y = USEX8(R2);
-	uint8	*a, v, c;
+   uint32_t x = USEX8(R1);
+	uint32_t y = USEX8(R2);
+	uint8_t	*a, v, c;
 
 	R15++;
 	CLRFLAGS;
 	R1++;
 
-#ifdef CHECK_LIMITS
-	if (y >= GSU.vScreenHeight)
-		return;
-#endif
-
 	if (!(GSU.vPlotOptionReg & 0x01) && !(COLR & 0xf))
 		return;
 
 	if (GSU.vPlotOptionReg & 0x02)
-		c = (x ^ y) & 1 ? (uint8) (GSU.vColorReg >> 4) : (uint8) GSU.vColorReg;
+		c = (x ^ y) & 1 ? (uint8_t) (GSU.vColorReg >> 4) : (uint8_t) GSU.vColorReg;
 	else
-		c = (uint8) GSU.vColorReg;
+		c = (uint8_t) GSU.vColorReg;
 
 	a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
 	v = 128 >> (x & 7);
@@ -899,50 +904,40 @@ static void fx_plot_2bit (void)
 /* 4c (ALT1) - rpix - read color of the pixel with R1, R2 as x, y*/
 static void fx_rpix_2bit (void)
 {
-   uint32 x = USEX8(R1);
-	uint32 y = USEX8(R2);
-	uint8 *a, v;
+   uint32_t x = USEX8(R1);
+	uint32_t y = USEX8(R2);
+	uint8_t *a, v;
 
 	R15++;
 	CLRFLAGS;
-
-#ifdef CHECK_LIMITS
-	if (y >= GSU.vScreenHeight)
-		return;
-#endif
 
 	a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
 	v = 128 >> (x & 7);
 
 	DREG = 0;
-	DREG |= ((uint32) ((a[0] & v) != 0)) << 0;
-	DREG |= ((uint32) ((a[1] & v) != 0)) << 1;
+	DREG |= ((uint32_t) ((a[0] & v) != 0)) << 0;
+	DREG |= ((uint32_t) ((a[1] & v) != 0)) << 1;
 	TESTR14;
 }
 
 /* 4c - plot - plot pixel with R1, R2 as x, y and the color register as the color*/
 static void fx_plot_4bit (void)
 {
-   uint32 x = USEX8(R1);
-	uint32 y = USEX8(R2);
-	uint8 *a, v, c;
+   uint32_t x = USEX8(R1);
+	uint32_t y = USEX8(R2);
+	uint8_t *a, v, c;
 
 	R15++;
 	CLRFLAGS;
 	R1++;
 
-#ifdef CHECK_LIMITS
-	if (y >= GSU.vScreenHeight)
-		return;
-#endif
-
 	if (!(GSU.vPlotOptionReg & 0x01) && !(COLR & 0xf))
 		return;
 
 	if (GSU.vPlotOptionReg & 0x02)
-		c = (x ^ y) & 1 ? (uint8) (GSU.vColorReg >> 4) : (uint8) GSU.vColorReg;
+		c = (x ^ y) & 1 ? (uint8_t) (GSU.vColorReg >> 4) : (uint8_t) GSU.vColorReg;
 	else
-		c = (uint8) GSU.vColorReg;
+		c = (uint8_t) GSU.vColorReg;
 
 	a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
 	v = 128 >> (x & 7);
@@ -971,48 +966,38 @@ static void fx_plot_4bit (void)
 /* 4c (ALT1) - rpix - read color of the pixel with R1, R2 as x, y*/
 static void fx_rpix_4bit (void)
 {
-	uint32	x = USEX8(R1);
-	uint32	y = USEX8(R2);
-	uint8	*a;
-	uint8	v;
+	uint32_t	x = USEX8(R1);
+	uint32_t	y = USEX8(R2);
+	uint8_t	*a;
+	uint8_t	v;
 
 	R15++;
 	CLRFLAGS;
-
-#ifdef CHECK_LIMITS
-	if (y >= GSU.vScreenHeight)
-		return;
-#endif
 
 	a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
 	v = 128 >> (x & 7);
 
 	DREG = 0;
-	DREG |= ((uint32) ((a[0x00] & v) != 0)) << 0;
-	DREG |= ((uint32) ((a[0x01] & v) != 0)) << 1;
-	DREG |= ((uint32) ((a[0x10] & v) != 0)) << 2;
-	DREG |= ((uint32) ((a[0x11] & v) != 0)) << 3;
+	DREG |= ((uint32_t) ((a[0x00] & v) != 0)) << 0;
+	DREG |= ((uint32_t) ((a[0x01] & v) != 0)) << 1;
+	DREG |= ((uint32_t) ((a[0x10] & v) != 0)) << 2;
+	DREG |= ((uint32_t) ((a[0x11] & v) != 0)) << 3;
 	TESTR14;
 }
 
 /* 4c - plot - plot pixel with R1, R2 as x, y and the color register as the color*/
 static void fx_plot_8bit (void)
 {
-	uint32	x = USEX8(R1);
-	uint32	y = USEX8(R2);
-	uint8	*a;
-	uint8	v, c;
+	uint32_t	x = USEX8(R1);
+	uint32_t	y = USEX8(R2);
+	uint8_t	*a;
+	uint8_t	v, c;
 
 	R15++;
 	CLRFLAGS;
 	R1++;
 
-#ifdef CHECK_LIMITS
-	if (y >= GSU.vScreenHeight)
-		return;
-#endif
-
-	c = (uint8) GSU.vColorReg;
+	c = (uint8_t) GSU.vColorReg;
 	if (!(GSU.vPlotOptionReg & 0x10))
 	{
 		if (!(GSU.vPlotOptionReg & 0x01) && !(c & 0xf))
@@ -1069,30 +1054,25 @@ static void fx_plot_8bit (void)
 /* 4c (ALT1) - rpix - read color of the pixel with R1, R2 as x, y*/
 static void fx_rpix_8bit (void)
 {
-	uint32 x = USEX8(R1);
-	uint32 y = USEX8(R2);
-   uint8 *a, v;
+	uint32_t x = USEX8(R1);
+	uint32_t y = USEX8(R2);
+	uint8_t *a, v;
 
 	R15++;
 	CLRFLAGS;
-
-#ifdef CHECK_LIMITS
-	if (y >= GSU.vScreenHeight)
-		return;
-#endif
 
 	a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
 	v = 128 >> (x & 7);
 
 	DREG = 0;
-	DREG |= ((uint32) ((a[0x00] & v) != 0)) << 0;
-	DREG |= ((uint32) ((a[0x01] & v) != 0)) << 1;
-	DREG |= ((uint32) ((a[0x10] & v) != 0)) << 2;
-	DREG |= ((uint32) ((a[0x11] & v) != 0)) << 3;
-	DREG |= ((uint32) ((a[0x20] & v) != 0)) << 4;
-	DREG |= ((uint32) ((a[0x21] & v) != 0)) << 5;
-	DREG |= ((uint32) ((a[0x30] & v) != 0)) << 6;
-	DREG |= ((uint32) ((a[0x31] & v) != 0)) << 7;
+	DREG |= ((uint32_t) ((a[0x00] & v) != 0)) << 0;
+	DREG |= ((uint32_t) ((a[0x01] & v) != 0)) << 1;
+	DREG |= ((uint32_t) ((a[0x10] & v) != 0)) << 2;
+	DREG |= ((uint32_t) ((a[0x11] & v) != 0)) << 3;
+	DREG |= ((uint32_t) ((a[0x20] & v) != 0)) << 4;
+	DREG |= ((uint32_t) ((a[0x21] & v) != 0)) << 5;
+	DREG |= ((uint32_t) ((a[0x30] & v) != 0)) << 6;
+	DREG |= ((uint32_t) ((a[0x31] & v) != 0)) << 7;
 	GSU.vZero = DREG;
 	TESTR14;
 }
@@ -1110,9 +1090,9 @@ static void fx_rpix_obj (void)
 /* 4d - swap - swap upper and lower byte of a register*/
 static void fx_swap (void)
 {
-	uint8 c = (uint8) SREG;
-	uint8 d = (uint8) (SREG >> 8);
-	uint32 v = (((uint32) c) << 8) | ((uint32) d);
+	uint8_t c = (uint8_t) SREG;
+	uint8_t d = (uint8_t) (SREG >> 8);
+	uint32_t v = (((uint32_t) c) << 8) | ((uint32_t) d);
 
 	R15++;
 	DREG = v;
@@ -1125,7 +1105,7 @@ static void fx_swap (void)
 /* 4e - color - copy source register to color register*/
 static void fx_color (void)
 {
-	uint8 c = (uint8) SREG;
+	uint8_t c = (uint8_t) SREG;
 
 	if (GSU.vPlotOptionReg & 0x04)
 		c = (c & 0xf0) | (c >> 4);
@@ -1144,9 +1124,9 @@ static void fx_color (void)
 static void fx_computeScreenPointers (void)
 {
    int i;
-   uint8 *pvScreenBase;
-   int32 condition, mask, result;
-   uint32 vmode, screenheight, incrementvalue;
+   uint8_t *pvScreenBase;
+   int32_t condition, mask, result;
+   uint32_t vmode, screenheight, incrementvalue;
 
    GSU.vSCBRDirty = FALSE;
 
@@ -1163,10 +1143,10 @@ static void fx_computeScreenPointers (void)
 
    if (screenheight == 256)
    {
-      uint32 mul_8192 = vmode << 13;
-      uint32 mul_4096 = vmode << 12;
-      uint32 apv_multiply = 0;
-      uint32 gsu_x_multiply = 0;
+      uint32_t mul_8192 = vmode << 13;
+      uint32_t mul_4096 = vmode << 12;
+      uint32_t apv_multiply = 0;
+      uint32_t gsu_x_multiply = 0;
       for( i = 0; i < 16; i++)
       {
          GSU.apvScreen[i] = GSU.apvScreen[i+16] = pvScreenBase + (apv_multiply * vmode);
@@ -1179,7 +1159,7 @@ static void fx_computeScreenPointers (void)
    }
    else
    {
-      uint32 vmode_mul = 0;
+      uint32_t vmode_mul = 0;
       for( i = 0; i < 32; i++)
       {
          GSU.x[i] = incrementvalue * i * vmode;
@@ -1211,7 +1191,7 @@ static void fx_cmode (void)
 /* 4f - not - perform exclusive exor with 1 on all bits*/
 static void fx_not (void)
 {
-	uint32 v = ~SREG;
+	uint32_t v = ~SREG;
 	R15++;
 	DREG = v;
 	GSU.vSign = v;
@@ -1222,7 +1202,7 @@ static void fx_not (void)
 
 /* 50-5f - add rn - add, register + register*/
 #define FX_ADD(reg) \
-	int32	s = SUSEX16(SREG) + SUSEX16(GSU.avReg[reg]); \
+	int32_t	s = SUSEX16(SREG) + SUSEX16(GSU.avReg[reg]); \
 	GSU.vCarry = s >= 0x10000; \
 	GSU.vOverflow = ~(SREG ^ GSU.avReg[reg]) & (GSU.avReg[reg] ^ s) & 0x8000; \
 	GSU.vSign = s; \
@@ -1314,7 +1294,7 @@ static void fx_add_r15 (void)
 
 /* 50-5f (ALT1) - adc rn - add with carry, register + register*/
 #define FX_ADC(reg) \
-	int32	s = SUSEX16(SREG) + SUSEX16(GSU.avReg[reg]) + FX_SEX16(GSU.vCarry); \
+	int32_t	s = SUSEX16(SREG) + SUSEX16(GSU.avReg[reg]) + FX_SEX16(GSU.vCarry); \
 	GSU.vCarry = s >= 0x10000; \
 	GSU.vOverflow = ~(SREG ^ GSU.avReg[reg]) & (GSU.avReg[reg] ^ s) & 0x8000; \
 	GSU.vSign = s; \
@@ -1406,7 +1386,7 @@ static void fx_adc_r15 (void)
 
 /* 50-5f (ALT2) - add #n - add, register + immediate*/
 #define FX_ADD_I(imm) \
-	int32	s = SUSEX16(SREG) + imm; \
+	int32_t	s = SUSEX16(SREG) + imm; \
 	GSU.vCarry = s >= 0x10000; \
 	GSU.vOverflow = ~(SREG ^ imm) & (imm ^ s) & 0x8000; \
 	GSU.vSign = s; \
@@ -1498,7 +1478,7 @@ static void fx_add_i15 (void)
 
 /* 50-5f (ALT3) - adc #n - add with carry, register + immediate*/
 #define FX_ADC_I(imm) \
-	int32	s = SUSEX16(SREG) + imm + SUSEX16(GSU.vCarry); \
+	int32_t	s = SUSEX16(SREG) + imm + SUSEX16(GSU.vCarry); \
 	GSU.vCarry = s >= 0x10000; \
 	GSU.vOverflow = ~(SREG ^ imm) & (imm ^ s) & 0x8000; \
 	GSU.vSign = s; \
@@ -1590,7 +1570,7 @@ static void fx_adc_i15 (void)
 
 /* 60-6f - sub rn - subtract, register - register*/
 #define FX_SUB(reg) \
-	int32	s = SUSEX16(SREG) - SUSEX16(GSU.avReg[reg]); \
+	int32_t	s = SUSEX16(SREG) - SUSEX16(GSU.avReg[reg]); \
 	GSU.vCarry = s >= 0; \
 	GSU.vOverflow = (SREG ^ GSU.avReg[reg]) & (SREG ^ s) & 0x8000; \
 	GSU.vSign = s; \
@@ -1682,7 +1662,7 @@ static void fx_sub_r15 (void)
 
 /* 60-6f (ALT1) - sbc rn - subtract with carry, register - register*/
 #define FX_SBC(reg) \
-	int32	s = SUSEX16(SREG) - SUSEX16(GSU.avReg[reg]) - (SUSEX16(GSU.vCarry ^ 1)); \
+	int32_t	s = SUSEX16(SREG) - SUSEX16(GSU.avReg[reg]) - (SUSEX16(GSU.vCarry ^ 1)); \
 	GSU.vCarry = s >= 0; \
 	GSU.vOverflow = (SREG ^ GSU.avReg[reg]) & (SREG ^ s) & 0x8000; \
 	GSU.vSign = s; \
@@ -1774,7 +1754,7 @@ static void fx_sbc_r15 (void)
 
 /* 60-6f (ALT2) - sub #n - subtract, register - immediate*/
 #define FX_SUB_I(imm) \
-	int32	s = SUSEX16(SREG) - imm; \
+	int32_t	s = SUSEX16(SREG) - imm; \
 	GSU.vCarry = s >= 0; \
 	GSU.vOverflow = (SREG ^ imm) & (SREG ^ s) & 0x8000; \
 	GSU.vSign = s; \
@@ -1866,7 +1846,7 @@ static void fx_sub_i15 (void)
 
 /* 60-6f (ALT3) - cmp rn - compare, register, register*/
 #define FX_CMP(reg) \
-	int32	s = SUSEX16(SREG) - SUSEX16(GSU.avReg[reg]); \
+	int32_t	s = SUSEX16(SREG) - SUSEX16(GSU.avReg[reg]); \
 	GSU.vCarry = s >= 0; \
 	GSU.vOverflow = (SREG ^ GSU.avReg[reg]) & (SREG ^ s) & 0x8000; \
 	GSU.vSign = s; \
@@ -1957,7 +1937,7 @@ static void fx_cmp_r15 (void)
 /* 70 - merge - R7 as upper byte, R8 as lower byte (used for texture-mapping)*/
 static void fx_merge (void)
 {
-	uint32	v = (R7 & 0xff00) | ((R8 & 0xff00) >> 8);
+	uint32_t	v = (R7 & 0xff00) | ((R8 & 0xff00) >> 8);
 	R15++;
 	DREG = v;
 	GSU.vOverflow = (v & 0xc0c0) << 16;
@@ -1970,7 +1950,7 @@ static void fx_merge (void)
 
 /* 71-7f - and rn - reister & register*/
 #define FX_AND(reg) \
-	uint32	v = SREG & GSU.avReg[reg]; \
+	uint32_t	v = SREG & GSU.avReg[reg]; \
 	R15++; \
 	DREG = v; \
 	GSU.vSign = v; \
@@ -2055,7 +2035,7 @@ static void fx_and_r15 (void)
 
 /* 71-7f (ALT1) - bic rn - reister & ~register*/
 #define FX_BIC(reg) \
-	uint32	v = SREG & ~GSU.avReg[reg];	\
+	uint32_t	v = SREG & ~GSU.avReg[reg];	\
 	R15++; \
 	DREG = v; \
 	GSU.vSign = v; \
@@ -2140,7 +2120,7 @@ static void fx_bic_r15 (void)
 
 /* 71-7f (ALT2) - and #n - reister & immediate*/
 #define FX_AND_I(imm) \
-	uint32	v = SREG & imm; \
+	uint32_t	v = SREG & imm; \
 	R15++; \
 	DREG = v; \
 	GSU.vSign = v; \
@@ -2225,7 +2205,7 @@ static void fx_and_i15 (void)
 
 /* 71-7f (ALT3) - bic #n - reister & ~immediate*/
 #define FX_BIC_I(imm) \
-	uint32	v = SREG & ~imm; \
+	uint32_t	v = SREG & ~imm; \
 	R15++; \
 	DREG = v; \
 	GSU.vSign = v; \
@@ -2310,7 +2290,7 @@ static void fx_bic_i15 (void)
 
 /* 80-8f - mult rn - 8 bit to 16 bit signed multiply, register * register*/
 #define FX_MULT(reg) \
-	uint32	v = (uint32) (SEX8(SREG) * SEX8(GSU.avReg[reg])); \
+	uint32_t	v = (uint32_t) (SEX8(SREG) * SEX8(GSU.avReg[reg])); \
 	R15++; \
 	DREG = v; \
 	GSU.vSign = v; \
@@ -2400,7 +2380,7 @@ static void fx_mult_r15 (void)
 
 /* 80-8f (ALT1) - umult rn - 8 bit to 16 bit unsigned multiply, register * register*/
 #define FX_UMULT(reg) \
-	uint32	v = USEX8(SREG) * USEX8(GSU.avReg[reg]); \
+	uint32_t	v = USEX8(SREG) * USEX8(GSU.avReg[reg]); \
 	R15++; \
 	DREG = v; \
 	GSU.vSign = v; \
@@ -2490,7 +2470,7 @@ static void fx_umult_r15 (void)
 
 /* 80-8f (ALT2) - mult #n - 8 bit to 16 bit signed multiply, register * immediate*/
 #define FX_MULT_I(imm) \
-	uint32	v = (uint32) (SEX8(SREG) * ((int32) imm)); \
+	uint32_t	v = (uint32_t) (SEX8(SREG) * ((int32_t) imm)); \
 	R15++; \
 	DREG = v; \
 	GSU.vSign = v; \
@@ -2580,7 +2560,7 @@ static void fx_mult_i15 (void)
 
 /* 80-8f (ALT3) - umult #n - 8 bit to 16 bit unsigned multiply, register * immediate*/
 #define FX_UMULT_I(imm) \
-	uint32	v = USEX8(SREG) * ((uint32) imm); \
+	uint32_t	v = USEX8(SREG) * ((uint32_t) imm); \
 	R15++; \
 	DREG = v; \
 	GSU.vSign = v; \
@@ -2671,8 +2651,8 @@ static void fx_umult_i15 (void)
 /* 90 - sbk - store word to last accessed RAM address*/
 static void fx_sbk (void)
 {
-	RAM(GSU.vLastRamAdr) = (uint8) SREG;
-	RAM(GSU.vLastRamAdr ^ 1) = (uint8) (SREG >> 8);
+	RAM(GSU.vLastRamAdr) = (uint8_t) SREG;
+	RAM(GSU.vLastRamAdr ^ 1) = (uint8_t) (SREG >> 8);
 	CLRFLAGS;
 	R15++;
 }
@@ -2706,7 +2686,7 @@ static void fx_link_i4 (void)
 /* 95 - sex - sign extend 8 bit to 16 bit*/
 static void fx_sex (void)
 {
-	uint32 v = (uint32) SEX8(SREG);
+	uint32_t v = (uint32_t) SEX8(SREG);
 	R15++;
 	DREG = v;
 	GSU.vSign = v;
@@ -2723,7 +2703,7 @@ static void fx_sex (void)
 /* 96 - asr - aritmetric shift right by one*/
 static void fx_asr (void)
 {
-	uint32 v = (uint32) (FX_SEX16(SREG) >> 1);
+	uint32_t v = (uint32_t) (FX_SEX16(SREG) >> 1);
 	GSU.vCarry = SREG & 1;
 	R15++;
 	DREG = v;
@@ -2740,14 +2720,14 @@ static void fx_asr (void)
 /* 96 (ALT1) - div2 - aritmetric shift right by one*/
 static void fx_div2 (void)
 {
-   int32 s = FX_SEX16(SREG);
-	uint32	v;
+   int32_t s = FX_SEX16(SREG);
+	uint32_t	v;
 
 	GSU.vCarry = s & 1;
 	if (s == -1)
 		v = 0;
 	else
-		v = (uint32) (s >> 1);
+		v = (uint32_t) (s >> 1);
 	R15++;
 	DREG = v;
 	GSU.vSign = v;
@@ -2759,7 +2739,7 @@ static void fx_div2 (void)
 /* 97 - ror - rotate right by one*/
 static void fx_ror (void)
 {
-	uint32 v = (USEX16(SREG) >> 1) | (GSU.vCarry << 15);
+	uint32_t v = (USEX16(SREG) >> 1) | (GSU.vCarry << 15);
 	GSU.vCarry = SREG & 1;
 	R15++;
 	DREG = v;
@@ -2846,7 +2826,7 @@ static void fx_ljmp_r13 (void)
 /* 9e - lob - set upper byte to zero (keep low byte)*/
 static void fx_lob (void)
 {
-	uint32	v = USEX8(SREG);
+	uint32_t	v = USEX8(SREG);
 	R15++;
 	DREG = v;
 	GSU.vSign = v << 8;
@@ -2858,9 +2838,9 @@ static void fx_lob (void)
 /* 9f - fmult - 16 bit to 32 bit signed multiplication, upper 16 bits only*/
 static void fx_fmult (void)
 {
-	uint32	v, c;
+	uint32_t	v, c;
 
-	c = (uint32) (FX_SEX16(SREG) * FX_SEX16(R6));
+	c = (uint32_t) (FX_SEX16(SREG) * FX_SEX16(R6));
 	v = c >> 16;
 	R15++;
 	DREG = v;
@@ -2874,9 +2854,9 @@ static void fx_fmult (void)
 /* 9f (ALT1) - lmult - 16 bit to 32 bit signed multiplication*/
 static void fx_lmult (void)
 {
-	uint32	v, c;
+	uint32_t	v, c;
 
-	c = (uint32) (FX_SEX16(SREG) * FX_SEX16(R6));
+	c = (uint32_t) (FX_SEX16(SREG) * FX_SEX16(R6));
 	R4 = c;
 	v = c >> 16;
 	R15++;
@@ -2891,7 +2871,7 @@ static void fx_lmult (void)
 
 /* a0-af - ibt rn, #pp - immediate byte transfer*/
 #define FX_IBT(reg) \
-	uint8	v = PIPE; \
+	uint8_t	v = PIPE; \
 	R15++; \
 	FETCHPIPE; \
 	R15++; \
@@ -2981,12 +2961,12 @@ static void fx_ibt_r15 (void)
 
 /* a0-af (ALT1) - lms rn, (yy) - load word from RAM (short address)*/
 #define FX_LMS(reg) \
-	GSU.vLastRamAdr = ((uint32) PIPE) << 1; \
+	GSU.vLastRamAdr = ((uint32_t) PIPE) << 1; \
 	R15++; \
 	FETCHPIPE; \
 	R15++; \
-	GSU.avReg[reg] = (uint32) RAM(GSU.vLastRamAdr); \
-	GSU.avReg[reg] |= ((uint32) RAM(GSU.vLastRamAdr + 1)) << 8; \
+	GSU.avReg[reg] = (uint32_t) RAM(GSU.vLastRamAdr); \
+	GSU.avReg[reg] |= ((uint32_t) RAM(GSU.vLastRamAdr + 1)) << 8; \
 	CLRFLAGS
 
 static void fx_lms_r0 (void)
@@ -3073,12 +3053,12 @@ static void fx_lms_r15 (void)
 /* a0-af (ALT2) - sms (yy), rn - store word in RAM (short address)*/
 /* XXX: If rn == r15, is the value of r15 before or after the extra byte is read ?*/
 #define FX_SMS(reg) \
-	uint32	v = GSU.avReg[reg]; \
-	GSU.vLastRamAdr = ((uint32) PIPE) << 1; \
+	uint32_t	v = GSU.avReg[reg]; \
+	GSU.vLastRamAdr = ((uint32_t) PIPE) << 1; \
 	R15++; \
 	FETCHPIPE; \
-	RAM(GSU.vLastRamAdr) = (uint8) v; \
-	RAM(GSU.vLastRamAdr + 1) = (uint8) (v >> 8); \
+	RAM(GSU.vLastRamAdr) = (uint8_t) v; \
+	RAM(GSU.vLastRamAdr + 1) = (uint8_t) (v >> 8); \
 	CLRFLAGS; \
 	R15++
 
@@ -3167,7 +3147,7 @@ static void fx_sms_r15 (void)
 #define FX_FROM(reg) \
 	if (TF(B)) \
 	{ \
-		uint32	v = GSU.avReg[reg]; \
+		uint32_t	v = GSU.avReg[reg]; \
 		R15++; \
 		DREG = v; \
 		GSU.vOverflow = (v & 0x80) << 16; \
@@ -3265,7 +3245,7 @@ static void fx_from_r15 (void)
 /* c0 - hib - move high-byte to low-byte*/
 static void fx_hib (void)
 {
-	uint32	v = USEX8(SREG >> 8);
+	uint32_t	v = USEX8(SREG >> 8);
 	R15++;
 	DREG = v;
 	GSU.vSign = v << 8;
@@ -3276,7 +3256,7 @@ static void fx_hib (void)
 
 /* c1-cf - or rn*/
 #define FX_OR(reg) \
-	uint32	v = SREG | GSU.avReg[reg]; \
+	uint32_t	v = SREG | GSU.avReg[reg]; \
 	R15++; \
 	DREG = v; \
 	GSU.vSign = v; \
@@ -3361,7 +3341,7 @@ static void fx_or_r15 (void)
 
 /* c1-cf (ALT1) - xor rn*/
 #define FX_XOR(reg) \
-	uint32	v = SREG ^ GSU.avReg[reg]; \
+	uint32_t	v = SREG ^ GSU.avReg[reg]; \
 	R15++; \
 	DREG = v; \
 	GSU.vSign = v; \
@@ -3446,7 +3426,7 @@ static void fx_xor_r15 (void)
 
 /* c1-cf (ALT2) - or #n*/
 #define FX_OR_I(imm) \
-	uint32	v = SREG | imm; \
+	uint32_t	v = SREG | imm; \
 	R15++; \
 	DREG = v; \
 	GSU.vSign = v; \
@@ -3531,7 +3511,7 @@ static void fx_or_i15 (void)
 
 /* c1-cf (ALT3) - xor #n*/
 #define FX_XOR_I(imm) \
-	uint32	v = SREG ^ imm; \
+	uint32_t	v = SREG ^ imm; \
 	R15++; \
 	DREG = v; \
 	GSU.vSign = v; \
@@ -3701,7 +3681,7 @@ static void fx_inc_r14 (void)
 /* df - getc - transfer ROM buffer to color register*/
 static void fx_getc (void)
 {
-	uint8 c;
+	uint8_t c;
 
 #ifndef FX_DO_ROMBUFFER
 	c = ROM(R14);
@@ -3829,11 +3809,11 @@ static void fx_dec_r14 (void)
 /* ef - getb - get byte from ROM at address R14*/
 static void fx_getb (void)
 {
-	uint32	v;
+	uint32_t	v;
 #ifndef FX_DO_ROMBUFFER
-	v = (uint32) ROM(R14);
+	v = (uint32_t) ROM(R14);
 #else
-	v = (uint32) GSU.vRomBuffer;
+	v = (uint32_t) GSU.vRomBuffer;
 #endif
 	R15++;
 	DREG = v;
@@ -3844,11 +3824,11 @@ static void fx_getb (void)
 /* ef (ALT1) - getbh - get high-byte from ROM at address R14*/
 static void fx_getbh (void)
 {
-	uint32	v;
+	uint32_t	v;
 #ifndef FX_DO_ROMBUFFER
-	uint32	c = (uint32) ROM(R14);
+	uint32_t	c = (uint32_t) ROM(R14);
 #else
-	uint32	c = USEX8(GSU.vRomBuffer);
+	uint32_t	c = USEX8(GSU.vRomBuffer);
 #endif
 	v = USEX8(SREG) | (c << 8);
 	R15++;
@@ -3860,10 +3840,10 @@ static void fx_getbh (void)
 /* ef (ALT2) - getbl - get low-byte from ROM at address R14*/
 static void fx_getbl (void)
 {
-	uint32	c, v;
+	uint32_t	c, v;
 
 #ifndef FX_DO_ROMBUFFER
-	c = (uint32) ROM(R14);
+	c = (uint32_t) ROM(R14);
 #else
 	c = USEX8(GSU.vRomBuffer);
 #endif
@@ -3877,9 +3857,9 @@ static void fx_getbl (void)
 /* ef (ALT3) - getbs - get sign extended byte from ROM at address R14*/
 static void fx_getbs (void)
 {
-	uint32	v;
+	uint32_t	v;
 #ifndef FX_DO_ROMBUFFER
-	int8	c;
+	int8_t	c;
 	c = ROM(R14);
 	v = SEX8(c);
 #else
@@ -3893,7 +3873,7 @@ static void fx_getbs (void)
 
 /* f0-ff - iwt rn, #xx - immediate word transfer to register*/
 #define FX_IWT(reg) \
-	uint32	v = PIPE; \
+	uint32_t	v = PIPE; \
 	R15++; \
 	FETCHPIPE; \
 	R15++; \
@@ -4081,15 +4061,15 @@ static void fx_lm_r15 (void)
 /* f0-ff (ALT2) - sm (xx), rn - store word in RAM*/
 /* XXX: If rn == r15, is the value of r15 before or after the extra bytes are read ?*/
 #define FX_SM(reg) \
-	uint32	v = GSU.avReg[reg]; \
+	uint32_t	v = GSU.avReg[reg]; \
 	GSU.vLastRamAdr = PIPE; \
 	R15++; \
 	FETCHPIPE; \
 	R15++; \
 	GSU.vLastRamAdr |= USEX8(PIPE) << 8; \
 	FETCHPIPE; \
-	RAM(GSU.vLastRamAdr) = (uint8) v; \
-	RAM(GSU.vLastRamAdr ^ 1) = (uint8) (v >> 8); \
+	RAM(GSU.vLastRamAdr) = (uint8_t) v; \
+	RAM(GSU.vLastRamAdr ^ 1) = (uint8_t) (v >> 8); \
 	CLRFLAGS; \
 	R15++
 
@@ -4392,26 +4372,26 @@ static void (*fx_OpcodeTable[]) (void) =
 
 static void fx_readRegisterSpace (void)
 {
-	uint8	*p;
+	uint8_t	*p;
 	int	i, n;
 
-	static const uint32	avHeight[] = { 128, 160, 192, 256 };
-	static const uint32	avMult[]   = {  16,  32,  32,  64 };
+	static const uint32_t	avHeight[] = { 128, 160, 192, 256 };
+	static const uint32_t	avMult[]   = {  16,  32,  32,  64 };
 
 	/*GSU.vErrorCode = 0;*/
 
 	/* Update R0-R15*/
 	p = GSU.pvRegisters;
 	for ( i = 0; i < 16; i++, p += 2)
-		GSU.avReg[i] = (uint32) READ_WORD(p);
+		GSU.avReg[i] = (uint32_t) READ_WORD(p);
 
 	/* Update other registers*/
 	p = GSU.pvRegisters;
-	GSU.vStatusReg     =  (uint32) READ_WORD(&p[GSU_SFR]);
-	GSU.vPrgBankReg    =  (uint32) p[GSU_PBR];
-	GSU.vRomBankReg    =  (uint32) p[GSU_ROMBR];
-	GSU.vRamBankReg    = ((uint32) p[GSU_RAMBR]) & (FX_RAM_BANKS - 1);
-	GSU.vCacheBaseReg  =  (uint32) READ_WORD(&p[GSU_CBR]);
+	GSU.vStatusReg     =  (uint32_t) READ_WORD(&p[GSU_SFR]);
+	GSU.vPrgBankReg    =  (uint32_t) p[GSU_PBR];
+	GSU.vRomBankReg    =  (uint32_t) p[GSU_ROMBR];
+	GSU.vRamBankReg    = ((uint32_t) p[GSU_RAMBR]) & (FX_RAM_BANKS - 1);
+	GSU.vCacheBaseReg  =  (uint32_t) READ_WORD(&p[GSU_CBR]);
 
 	/* Update status register variables*/
 	GSU.vZero     = !(GSU.vStatusReg & FLG_Z);
@@ -4455,7 +4435,7 @@ static void FxReset (struct FxInfo_s *psFxInfo)
 {
 	int i;
 	/* Clear all internal variables*/
-	memset((uint8 *) &GSU, 0, sizeof(struct FxRegs_s));
+	memset((uint8_t *) &GSU, 0, sizeof(struct FxRegs_s));
 
 	/* Set default registers*/
 	GSU.pvSreg = GSU.pvDreg = &R0;
@@ -4482,7 +4462,7 @@ static void FxReset (struct FxInfo_s *psFxInfo)
 	/* Make ROM bank table*/
 	for ( i = 0; i < 256; i++)
 	{
-		uint32	b = i & 0x7f;
+		uint32_t	b = i & 0x7f;
 
 		if (b >= 0x40)
 		{
@@ -4526,15 +4506,15 @@ void S9xResetSuperFX (void)
    else
       frames_per_second = 60.0f;
 
-   SuperFX.speedPerLine = (uint32) (Settings.SuperFXSpeedPerLine * ((1.0f / frames_per_second) / ((float) (Timings.V_Max))));
+   SuperFX.speedPerLine = (uint32_t) (Settings.SuperFXSpeedPerLine * ((1.0f / frames_per_second) / ((float) (Timings.V_Max))));
    SuperFX.oneLineDone = FALSE;
    SuperFX.vFlags = 0;
    FxReset(&SuperFX);
 }
 
-static bool8 fx_checkStartAddress (void)
+static uint8_t fx_checkStartAddress (void)
 {
-	bool8 condition1, condition2, condition3, condition4;
+	uint8_t condition1, condition2, condition3, condition4;
 
 	/* Check if we're in RAM and the RAN flag is not set*/
 	condition1 = GSU.vPrgBankReg >= 0x60 && GSU.vPrgBankReg <= 0x6f;
@@ -4551,7 +4531,7 @@ static bool8 fx_checkStartAddress (void)
 static void fx_writeRegisterSpace (void)
 {
 	int i;
-	uint8	*p;
+	uint8_t	*p;
 
 	p = GSU.pvRegisters;
 	for ( i = 0; i < 16; i++, p += 2)
@@ -4580,9 +4560,9 @@ static void fx_writeRegisterSpace (void)
 
 	p = GSU.pvRegisters;
 	WRITE_WORD(&p[GSU_SFR], GSU.vStatusReg);
-	p[GSU_PBR]     = (uint8)  GSU.vPrgBankReg;
-	p[GSU_ROMBR]   = (uint8)  GSU.vRomBankReg;
-	p[GSU_RAMBR]   = (uint8)  GSU.vRamBankReg;
+	p[GSU_PBR]     = (uint8_t)  GSU.vPrgBankReg;
+	p[GSU_ROMBR]   = (uint8_t)  GSU.vRomBankReg;
+	p[GSU_RAMBR]   = (uint8_t)  GSU.vRamBankReg;
 	WRITE_WORD(&p[GSU_CBR], GSU.vCacheBaseReg);
 }
 
@@ -4590,11 +4570,11 @@ static void fx_writeRegisterSpace (void)
 
 void S9xSuperFXExec (void)
 {
-	bool8 address_valid;
-	uint16 GSUStatus;
+	uint8_t address_valid;
+	uint16_t GSUStatus;
 	/* EMULATE FX CHIP*/
 	/* Execute until the next stop instruction*/
-	uint32 nInstructions = (Memory.FillRAM[0x3000 + GSU_CLSR] & 1) ? SuperFX.speedPerLine * 2 : SuperFX.speedPerLine;
+	uint32_t nInstructions = (Memory.FillRAM[0x3000 + GSU_CLSR] & 1) ? SuperFX.speedPerLine * 2 : SuperFX.speedPerLine;
 
 	/* Read registers and initialize GSU session*/
 	fx_readRegisterSpace();
@@ -4616,7 +4596,7 @@ void S9xSuperFXExec (void)
       while (TF(G) && GSU.vCounter-- > 0)
 		{
 			/* Execute instruction from the pipe, and fetch next byte to the pipe*/
-			uint32	vOpcode = (uint32) PIPE;
+			uint32_t	vOpcode = (uint32_t) PIPE;
 			FETCHPIPE;
 			(*fx_OpcodeTable[(GSU.vStatusReg & 0x300) | vOpcode])();
 		}

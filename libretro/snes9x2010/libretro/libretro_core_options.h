@@ -78,6 +78,21 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "auto"
    },
    {
+      "snes9x_2010_audio_interpolation",
+      "Audio Interpolation (Inaccurate)",
+      NULL,
+      "Choose how each SNES voice's pitch is interpolated. 'Gaussian' matches real hardware. 'Cubic' is brighter and less muffled, but does not match hardware and does not undo BRR sample compression. 'Sinc' is the sharpest/brightest (8-tap) and the most CPU-intensive.",
+      NULL,
+      NULL,
+      {
+         { "gaussian", "Gaussian (Accurate)" },
+         { "cubic",    "Cubic (Brighter)" },
+         { "sinc",     "Sinc (Sharpest)" },
+         { NULL, NULL},
+      },
+      "gaussian"
+   },
+   {
       "snes9x_2010_aspect",
       "Preferred Aspect Ratio",
       NULL,
@@ -237,6 +252,38 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { NULL, NULL},
       },
       "enabled"
+   },
+   {
+      "snes9x_2010_mode7_hires",
+      "Mode 7 - Hires (Restart)",
+      NULL,
+      "Render Mode 7 backgrounds at higher resolution. 2x renders at 512 px (smoother diagonals); 4x renders at 1024 px (smoothest, more expensive). The 2x_hv / 4x_hv variants additionally double the output vertically (448 rows) via an end-of-frame bilinear-Y average of adjacent rendered rows; HUD / sprites / non-M7 layers are row-duplicated. Smooths row-to-row transitions on Mode 7 ground textures but does not add per-line detail (the M7 plane still samples at 224 source rows). Affects only Mode 7 (driving / racing / overhead-rotation games). Other modes are unchanged. Default off.",
+      NULL,
+      "hacks",
+      {
+         { "disabled", NULL },
+         { "2x",       NULL },
+         { "4x",       NULL },
+         { "2x_hv",    NULL },
+         { "4x_hv",    NULL },
+         { NULL, NULL},
+      },
+      "disabled"
+   },
+   {
+      "snes9x_2010_mode7_hires_bilinear",
+      "Mode 7 - Bilinear Filter",
+      NULL,
+      "Apply bilinear filtering to Mode 7 backgrounds. Stable: blends along the X axis only with floor-Y sampling. Robust against high-contrast horizontal banding (rainbow rings, palette-rotation effects); recommended default. Smooth: 4-corner bilinear with a row-contrast guard that falls back to stable behaviour on high-contrast row pairs (avoids muddy seams on content like the Tiny Toons title screen). More aggressive smoothing along both axes; somewhat more expensive than stable. Independent of the Hires option; works at native, 2x and 4x.",
+      NULL,
+      "hacks",
+      {
+         { "disabled", NULL },
+         { "stable",   NULL },
+         { "smooth",   NULL },
+         { NULL, NULL},
+      },
+      "stable"
    },
 
    { NULL, NULL, NULL, NULL, NULL, NULL, {{0}}, NULL },

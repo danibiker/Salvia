@@ -29,11 +29,6 @@
   (c) Copyright 2005 - 2006  Dreamer Nom,
                              zones
 
-  C4 x86 assembler and some C emulation code
-  (c) Copyright 2000 - 2003  _Demo_ (_demo_@zsnes.com),
-                             Nach,
-                             zsKnight (zsknight@zsnes.com)
-
   C4 C++ code
   (c) Copyright 2003 - 2006  Brad Jorsch,
                              Nach
@@ -100,11 +95,6 @@
                              Kris Bleakley,
                              Matthew Kendora
 
-  Super FX x86 assembler emulator code
-  (c) Copyright 1998 - 2003  _Demo_,
-                             pagefault,
-                             zsKnight
-
   Super FX C emulator code
   (c) Copyright 1997 - 1999  Ivar,
                              Gary Henderson,
@@ -117,32 +107,10 @@
   Sound emulator code used in 1.52+
   (c) Copyright 2004 - 2007  Shay Green (gblargg@gmail.com)
 
-  SH assembler code partly based on x86 assembler code
-  (c) Copyright 2002 - 2004  Marcus Comstedt (marcus@mc.pp.se)
-
-  2xSaI filter
-  (c) Copyright 1999 - 2001  Derek Liauw Kie Fa
-
-  HQ2x, HQ3x, HQ4x filters
-  (c) Copyright 2003         Maxim Stepin (maxim@hiend3d.com)
-
   NTSC filter
   (c) Copyright 2006 - 2007  Shay Green
 
-  GTK+ GUI code
-  (c) Copyright 2004 - 2010  BearOso
-
-  Win32 GUI code
-  (c) Copyright 2003 - 2006  blip,
-                             funkyass,
-                             Matthew Kendora,
-                             Nach,
-                             nitsuja
   (c) Copyright 2009 - 2010  OV2
-
-  Mac OS GUI code
-  (c) Copyright 1998 - 2001  John Stiles
-  (c) Copyright 2001 - 2010  zones
 
   (c) Copyright 2010 - 2016 Daniel De Matteis. (UNDER NO CIRCUMSTANCE 
   WILL COMMERCIAL RIGHTS EVER BE APPROPRIATED TO ANY PARTY)
@@ -226,31 +194,31 @@ typedef union
    struct
    {
 #ifdef MSB_FIRST
-	uint8	h;
-   uint8 l;
+	uint8_t	h;
+   uint8_t l;
 #else
-	uint8	l;
-   uint8 h;
+	uint8_t	l;
+   uint8_t h;
 #endif
    } B;
-	uint16	W;
+	uint16_t	W;
 }	pair;
 
 typedef union
 {
 #ifdef MSB_FIRST
-	struct { uint8	z, xPB, xPCh, xPCl; } B;
-	struct { uint16	d, xPC; } W;
+	struct { uint8_t	z, xPB, xPCh, xPCl; } B;
+	struct { uint16_t	d, xPC; } W;
 #else
-	struct { uint8	xPCl, xPCh, xPB, z; } B;
-	struct { uint16	xPC, d; } W;
+	struct { uint8_t	xPCl, xPCh, xPB, z; } B;
+	struct { uint16_t	xPC, d; } W;
 #endif
-    uint32	xPBPC;
+    uint32_t	xPBPC;
 }	PC_t;
 
 struct SRegisters
 {
-	uint8	DB;
+	uint8_t	DB;
 	pair	P;
 	pair	A;
 	pair	D;

@@ -194,19 +194,40 @@
 #include "spc7110emu.h"
 #include "ppu.h"
 #include "tile.h"
+#include "cpuexec.h"
 
-extern uint8	*HDMAMemPointers[8];
+extern uint8_t	*HDMAMemPointers[8];
 
 extern struct SLineData			LineData[240];
-static uint8 dma_sa1_channels_chars[9][8];
+/* Bit-shuffle table for SA-1 SuperFX-style character DMA conversion.
+   Indexed [depth][bit_in_byte]. Only depth=2/4/8 are valid SA-1 BG
+   depths so the other rows stay zero-initialized. */
+static const uint8_t dma_sa1_channels_chars[9][8] = {
+	{0},
+	{0},
+	{0, 1, 0, 1, 0, 1, 0, 1},   /* depth 2 */
+	{0},
+	{0, 1, 16, 17, 0, 1, 16, 17}, /* depth 4 */
+	{0},
+	{0},
+	{0},
+	{0, 1, 16, 17, 32, 33, 48, 49} /* depth 8 */
+};
 
 extern bool reduce_sprite_flicker;
 
 #define TILE_PLUS(t, x)	(((t) & 0xfc00) | ((t + x) & 0x3ff))
 
-bool8 S9xGraphicsInit (void)
+uint8_t S9xGraphicsInit (void)
 {
-	uint32 r, g, b;
+	uint32_t r, g, b;
+
+	/* Defensive teardown: see Memory.Init() in memmap.c for the rationale.
+	   If S9xGraphicsInit is re-entered without an intervening
+	   S9xGraphicsDeinit (statically linked frontends), the 5 mallocs
+	   below would orphan the previous buffers. S9xGraphicsDeinit is
+	   idempotent. */
+	S9xGraphicsDeinit();
 
 	S9xInitTileRenderer();
 
@@ -217,17 +238,17 @@ bool8 S9xGraphicsInit (void)
 	IPPU.DirectColourMapsNeedRebuild = TRUE;
 	S9xFixColourBrightness();
 
-	GFX.X2   = (uint16 *) malloc(sizeof(uint16) * 0x10000);
-	GFX.ZERO = (uint16 *) malloc(sizeof(uint16) * 0x10000);
+	GFX.X2   = (uint16_t *) malloc(sizeof(uint16_t) * 0x10000);
+	GFX.ZERO = (uint16_t *) malloc(sizeof(uint16_t) * 0x10000);
 
 #ifdef GEKKO
 	GFX.ScreenSize = GFX.Pitch / 2 * SNES_HEIGHT_EXTENDED * (Settings.SupportHiRes ? 2 : 1);
 #else
 	GFX.ScreenSize = GFX.Pitch / 2 * SNES_HEIGHT_EXTENDED * 2;
 #endif
-	GFX.SubScreen  = (uint16 *) malloc(GFX.ScreenSize * sizeof(uint16));
-	GFX.ZBuffer    = (uint8 *)  malloc(GFX.ScreenSize);
-	GFX.SubZBuffer = (uint8 *)  malloc(GFX.ScreenSize);
+	GFX.SubScreen  = (uint16_t *) malloc(GFX.ScreenSize * sizeof(uint16_t));
+	GFX.ZBuffer    = (uint8_t *)  malloc(GFX.ScreenSize);
+	GFX.SubZBuffer = (uint8_t *)  malloc(GFX.ScreenSize);
 
 	if (!GFX.X2 || !GFX.ZERO || !GFX.SubScreen || !GFX.ZBuffer || !GFX.SubZBuffer)
 	{
@@ -236,22 +257,22 @@ bool8 S9xGraphicsInit (void)
 	}
 
 	/* Lookup table for color addition */
-	memset(GFX.X2, 0, 0x10000 * sizeof(uint16));
+	memset(GFX.X2, 0, 0x10000 * sizeof(uint16_t));
 	for ( r = 0; r <= MAX_RED; r++)
 	{
-		uint32	r2 = r << 1;
+		uint32_t	r2 = r << 1;
 		if (r2 > MAX_RED)
 			r2 = MAX_RED;
 
 		for ( g = 0; g <= MAX_GREEN; g++)
 		{
-			uint32	g2 = g << 1;
+			uint32_t	g2 = g << 1;
 			if (g2 > MAX_GREEN)
 				g2 = MAX_GREEN;
 
 			for ( b = 0; b <= MAX_BLUE; b++)
 			{
-				uint32	b2 = b << 1;
+				uint32_t	b2 = b << 1;
 				if (b2 > MAX_BLUE)
 					b2 = MAX_BLUE;
 
@@ -262,10 +283,10 @@ bool8 S9xGraphicsInit (void)
 	}
 
 	/* Lookup table for 1/2 color subtraction */
-	memset(GFX.ZERO, 0, 0x10000 * sizeof(uint16));
+	memset(GFX.ZERO, 0, 0x10000 * sizeof(uint16_t));
 	for ( r = 0; r <= MAX_RED; r++)
 	{
-		uint32	r2 = r;
+		uint32_t	r2 = r;
 		if (r2 & 0x10)
 			r2 &= ~0x10;
 		else
@@ -273,7 +294,7 @@ bool8 S9xGraphicsInit (void)
 
 		for ( g = 0; g <= MAX_GREEN; g++)
 		{
-			uint32	g2 = g;
+			uint32_t	g2 = g;
 			if (g2 & GREEN_HI_BIT)
 				g2 &= ~GREEN_HI_BIT;
 			else
@@ -281,7 +302,7 @@ bool8 S9xGraphicsInit (void)
 
 			for ( b = 0; b <= MAX_BLUE; b++)
 			{
-				uint32 b2 = b;
+				uint32_t b2 = b;
 
 				if (b2 & 0x10)
 					b2 &= ~0x10;
@@ -293,33 +314,6 @@ bool8 S9xGraphicsInit (void)
 			}
 		}
 	}
-
-	dma_sa1_channels_chars[2][0] = 0;
-	dma_sa1_channels_chars[2][1] = 1;
-	dma_sa1_channels_chars[2][2] = 0;
-	dma_sa1_channels_chars[2][3] = 1;
-	dma_sa1_channels_chars[2][4] = 0;
-	dma_sa1_channels_chars[2][5] = 1;
-	dma_sa1_channels_chars[2][6] = 0;
-	dma_sa1_channels_chars[2][7] = 1;
-
-	dma_sa1_channels_chars[4][0] = 0;
-	dma_sa1_channels_chars[4][1] = 1;
-	dma_sa1_channels_chars[4][2] = 16;
-	dma_sa1_channels_chars[4][3] = 17;
-	dma_sa1_channels_chars[4][4] = 0;
-	dma_sa1_channels_chars[4][5] = 1;
-	dma_sa1_channels_chars[4][6] = 16;
-	dma_sa1_channels_chars[4][7] = 17;
-
-	dma_sa1_channels_chars[8][0] = 0;
-	dma_sa1_channels_chars[8][1] = 1;
-	dma_sa1_channels_chars[8][2] = 16;
-	dma_sa1_channels_chars[8][3] = 17;
-	dma_sa1_channels_chars[8][4] = 32;
-	dma_sa1_channels_chars[8][5] = 33;
-	dma_sa1_channels_chars[8][6] = 48;
-	dma_sa1_channels_chars[8][7] = 49;
 
 	return (TRUE);
 }
@@ -343,7 +337,7 @@ void S9xGraphicsDeinit (void)
 	if (GFX.SubZBuffer) { free(GFX.SubZBuffer); GFX.SubZBuffer = NULL; }
 }
 
-static int objsize_array[8][4] = {
+static const int objsize_array[8][4] = {
 	{8,	8,	16,	16}, /*0*/
 	{8,	8,	32,	32}, /*1*/
 	{8,	8,	64,	64}, /*2*/
@@ -357,7 +351,7 @@ static int objsize_array[8][4] = {
 void SetupOBJ (void)
 {
 	int	Height, Y_two, SmallWidth, SmallHeight, LargeWidth, LargeHeight, inc, startline;
-	uint8	S, Y_one, line;
+	uint8_t	S, Y_one, line;
 
 	if(PPU.OBJSizeSelect < 8)
 	{
@@ -386,7 +380,7 @@ void SetupOBJ (void)
 	if (!PPU.OAMPriorityRotation || !(PPU.OAMFlip & PPU.OAMAddr & 1)) /* normal case*/
 	{
 		int i, j;
-		uint8	LineOBJ[SNES_HEIGHT_EXTENDED], FirstSprite;
+		uint8_t	LineOBJ[SNES_HEIGHT_EXTENDED], FirstSprite;
 
 		memset(LineOBJ, 0, sizeof(LineOBJ));
 
@@ -427,7 +421,7 @@ void SetupOBJ (void)
 				else
 					GFX.OBJVisibleTiles[S] = GFX.OBJWidths[S] >> 3;
 
-				Y_one = (uint8) (PPU.OBJ[S].VPos & 0xff);
+				Y_one = (uint8_t) (PPU.OBJ[S].VPos & 0xff);
 				for (line = startline; line < Height; Y_one++, line += inc)
 				{
 					if (Y_one >= SNES_HEIGHT_EXTENDED)
@@ -463,8 +457,8 @@ void SetupOBJ (void)
 	}
 	else /* evil FirstSprite+Y case*/
 	{
-		uint8	OBJOnLine[SNES_HEIGHT_EXTENDED][128];
-      bool8 AnyOBJOnLine[SNES_HEIGHT_EXTENDED];
+		static uint8_t	OBJOnLine[SNES_HEIGHT_EXTENDED][128];
+      uint8_t AnyOBJOnLine[SNES_HEIGHT_EXTENDED];
       memset(AnyOBJOnLine, FALSE, sizeof(AnyOBJOnLine));
 
 		/* First, find out which sprites are on which lines*/
@@ -496,7 +490,7 @@ void SetupOBJ (void)
 				else
 					GFX.OBJVisibleTiles[S] = GFX.OBJWidths[S] >> 3;
 
-				Y_one = (uint8) (PPU.OBJ[S].VPos & 0xff);
+				Y_one = (uint8_t) (PPU.OBJ[S].VPos & 0xff);
 				for (line = startline; line < Height; Y_one++, line += inc)
 				{
 					if (Y_one >= SNES_HEIGHT_EXTENDED)
@@ -520,7 +514,7 @@ void SetupOBJ (void)
 		/* Now go through and pull out those OBJ that are actually visible.*/
 		for (Y_two = 0; Y_two < SNES_HEIGHT_EXTENDED; Y_two++)
 		{
-			uint8 FirstSprite;
+			uint8_t FirstSprite;
 			int	j;
 
 			GFX.OBJLines[Y_two].RTOFlags = Y_two ? GFX.OBJLines[Y_two - 1].RTOFlags : 0;
@@ -564,38 +558,98 @@ void SetupOBJ (void)
 
 static void DrawOBJS (int D)
 {
-	uint32 Y, Offset;
+	uint32_t Y, Offset;
 	int O, S, t, x, PixWidth;
-	void (*DrawTile) (uint32, uint32, uint32, uint32) = NULL;
-	void (*DrawClippedTile) (uint32, uint32, uint32, uint32, uint32, uint32) = NULL;
+	void (*DrawTile) (uint32_t, uint32_t, uint32_t, uint32_t) = NULL;
+	void (*DrawClippedTile) (uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) = NULL;
 
-	PixWidth = IPPU.DoubleWidthPixels ? 2 : 1;
+	PixWidth = IPPU.QuadWidthPixels ? 4 : (IPPU.DoubleWidthPixels ? 2 : 1);
 	BG.InterlaceLine = GFX.InterlaceFrame ? 8 : 0;
 	GFX.Z1 = 2;
 
-	for ( Y = GFX.StartY, Offset = Y * GFX.PPL; Y <= GFX.EndY; Y++, Offset += GFX.PPL)
+	{
+	/* Batch scanline runs over which the per-line sprite state is
+	 * provably identical, the same way the background dispatchers
+	 * batch scroll-constant runs. Two lines are batchable when their
+	 * OBJ lists carry the same sprites in the same order with each
+	 * sprite's tile line advanced by exactly one, and the same tile
+	 * budget. Then the entire per-sprite setup, tile-budget walk and
+	 * window-clip walk are line-invariant, and every draw site can
+	 * issue one LineCount=n call instead of n LineCount=1 calls. A
+	 * pixel belongs to exactly one line and within that line sprites
+	 * are still written in list order, so equal-priority overlap
+	 * resolves identically and output is bit-exact. Vertically
+	 * flipped sprites step their tile line backwards and so simply
+	 * fail the probe, keeping those runs on the per-line path, as do
+	 * interlace and hires configurations. A sprite whose batch
+	 * crosses its 8-row tile band renders as two spans, the second
+	 * band-aligned with the tile row group re-derived. */
+	uint32_t BatchL;
+	uint8_t batch_cfg = (PixWidth == 1 && !IPPU.Interlace && !IPPU.InterlaceOBJ);
+
+	for ( Y = GFX.StartY, Offset = Y * GFX.PPL; Y <= GFX.EndY; Y += BatchL, Offset += BatchL * GFX.PPL)
 	{
 		int I, tiles;
+
+		BatchL = 1;
+		if (batch_cfg)
+		{
+			while (Y + BatchL <= GFX.EndY && BatchL < 8 &&
+			       GFX.OBJLines[Y].Tiles == GFX.OBJLines[Y + BatchL].Tiles)
+			{
+				int k, eq = 1;
+				for (k = 0; k < 32; k++)
+				{
+					int sA = GFX.OBJLines[Y].OBJ[k].Sprite;
+					int sB = GFX.OBJLines[Y + BatchL].OBJ[k].Sprite;
+					if (sA != sB)
+					{
+						eq = 0;
+						break;
+					}
+					if (sA < 0)
+						break;
+					if (GFX.OBJLines[Y + BatchL].OBJ[k].Line != GFX.OBJLines[Y].OBJ[k].Line + BatchL)
+					{
+						eq = 0;
+						break;
+					}
+				}
+				if (!eq)
+					break;
+				BatchL++;
+			}
+		}
 
 		I = 0;
 		tiles = GFX.OBJLines[Y].Tiles;
 
 		for ( S = GFX.OBJLines[Y].OBJ[I].Sprite; S >= 0 && I < 32; S = GFX.OBJLines[Y].OBJ[++I].Sprite)
 		{
-			int	BaseTile, TileX, TileLine, TileInc, DrawMode, clip, next_clip, X;
+			int	BaseTile, BaseTile2, TileX, TileLine, TileInc, DrawMode, clip, next_clip, X;
+			uint32_t Span1, Span2, Line0;
+
 			tiles += GFX.OBJVisibleTiles[S];
 			if (tiles <= 0)
 				continue;
 
-			BaseTile = (((GFX.OBJLines[Y].OBJ[I].Line << 1) + (PPU.OBJ[S].Name & 0xf0)) & 0xf0) | (PPU.OBJ[S].Name & 0x100) | (PPU.OBJ[S].Palette << 10);
+			Line0 = GFX.OBJLines[Y].OBJ[I].Line;
+			BaseTile = (((Line0 << 1) + (PPU.OBJ[S].Name & 0xf0)) & 0xf0) | (PPU.OBJ[S].Name & 0x100) | (PPU.OBJ[S].Palette << 10);
 			TileX = PPU.OBJ[S].Name & 0x0f;
-			TileLine = (GFX.OBJLines[Y].OBJ[I].Line & 7) * 8;
+			TileLine = (Line0 & 7) * 8;
 			TileInc = 1;
+
+			Span1 = 8 - (Line0 & 7);
+			if (Span1 > BatchL)
+				Span1 = BatchL;
+			Span2 = BatchL - Span1;
+			BaseTile2 = ((((Line0 + Span1) << 1) + (PPU.OBJ[S].Name & 0xf0)) & 0xf0) | (PPU.OBJ[S].Name & 0x100) | (PPU.OBJ[S].Palette << 10);
 
 			if (PPU.OBJ[S].HFlip)
 			{
 				TileX = (TileX + (GFX.OBJWidths[S] >> 3) - 1) & 0x0f;
 				BaseTile |= H_FLIP;
+				BaseTile2 |= H_FLIP;
 				TileInc = -1;
 			}
 
@@ -646,48 +700,57 @@ static void DrawOBJS (int D)
 					if (x == X && x + 8 < next_clip)
 					{
 						if (DrawMode)
-							DrawTile(BaseTile | TileX, O, TileLine, 1);
+						{
+							DrawTile(BaseTile | TileX, O, TileLine, Span1);
+							if (Span2)
+								DrawTile(BaseTile2 | TileX, O + Span1 * GFX.PPL, 0, Span2);
+						}
 						x += 8;
 					}
 					else
 					{
 						int	w = (next_clip <= X + 8) ? next_clip - x : X + 8 - x;
 						if (DrawMode)
-							DrawClippedTile(BaseTile | TileX, O, x - X, w, TileLine, 1);
+						{
+							DrawClippedTile(BaseTile | TileX, O, x - X, w, TileLine, Span1);
+							if (Span2)
+								DrawClippedTile(BaseTile2 | TileX, O + Span1 * GFX.PPL, x - X, w, 0, Span2);
+						}
 						x += w;
 					}
 				}
 			}
 		}
 	}
+	}
 }
 
-static void DrawBackground (int bg, uint8 Zh, uint8 Zl)
+static void DrawBackground (int bg, uint8_t Zh, uint8_t Zl)
 {
-	void (*DrawTile) (uint32, uint32, uint32, uint32);
-	void (*DrawClippedTile) (uint32, uint32, uint32, uint32, uint32, uint32);
+	void (*DrawTile) (uint32_t, uint32_t, uint32_t, uint32_t);
+	void (*DrawClippedTile) (uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 
 	int clip, OffsetMask, OffsetShift, PixWidth;
-	uint32	Lines, Tile, Y;
-	uint16	*SC0, *SC1, *SC2, *SC3;
-	bool8 HiresInterlace;
+	uint32_t	Lines, Tile, Y;
+	uint16_t	*SC0, *SC1, *SC2, *SC3;
+	uint8_t HiresInterlace;
 
 	BG.TileAddress = PPU.BG[bg].NameBase << 1;
 
-	SC0 = (uint16 *) &Memory.VRAM[PPU.BG[bg].SCBase << 1];
+	SC0 = (uint16_t *) &Memory.VRAM[PPU.BG[bg].SCBase << 1];
 	SC1 = (PPU.BG[bg].SCSize & 1) ? SC0 + 1024 : SC0;
-	if (SC1 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (SC1 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		SC1 -= 0x8000;
 	SC2 = (PPU.BG[bg].SCSize & 2) ? SC1 + 1024 : SC0;
-	if (SC2 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (SC2 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		SC2 -= 0x8000;
 	SC3 = (PPU.BG[bg].SCSize & 1) ? SC2 + 1024 : SC2;
-	if (SC3 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (SC3 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		SC3 -= 0x8000;
 
 	OffsetMask  = (BG.TileSizeH == 16) ? 0x3ff : 0x1ff;
 	OffsetShift = (BG.TileSizeV == 16) ? 4 : 3;
-	PixWidth = IPPU.DoubleWidthPixels ? 2 : 1;
+	PixWidth = IPPU.QuadWidthPixels ? 4 : (IPPU.DoubleWidthPixels ? 2 : 1);
 	HiresInterlace = IPPU.Interlace && IPPU.DoubleWidthPixels;
 
 	for ( clip = 0; clip < GFX.Clip[bg].Count; clip++)
@@ -707,12 +770,12 @@ static void DrawBackground (int bg, uint8 Zh, uint8 Zl)
 
 		for ( Y = GFX.StartY; Y <= GFX.EndY; Y += Lines)
 		{
-			uint32 Y2, VOffset, HOffset, TilemapRow, Left, Right, Offset, HPos, HTile, Width;
-			uint32 t1 = 0;
-			uint32 t2 = 16;
-			uint16	*t;
-			uint16  *b1 = SC0;
-			uint16  *b2 = SC1;
+			uint32_t Y2, VOffset, HOffset, TilemapRow, Left, Right, Offset, HPos, HTile, Width;
+			uint32_t t1 = 0;
+			uint32_t t2 = 16;
+			uint16_t	*t;
+			uint16_t  *b1 = SC0;
+			uint16_t  *b2 = SC1;
 			int VirtAlign;
 
 			Y2 = HiresInterlace ? Y * 2 + GFX.InterlaceFrame : Y;
@@ -774,7 +837,7 @@ static void DrawBackground (int bg, uint8 Zh, uint8 Zl)
 
 			if (HPos & 7)
 			{
-				uint32 l, w;
+				uint32_t l, w;
 
 				l = HPos & 7;
 				w = 8 - l;
@@ -877,8 +940,16 @@ static void DrawBackground (int bg, uint8 Zh, uint8 Zl)
 	}
 }
 
+/* RealScreenColors invariant across the whole backdrop pass: backdrop
+ * has no per-tile palette slice (unlike SELECT_PALETTE for regular
+ * tiles) and no Direct Colour Mode (unlike Mode 7), so it's always
+ * IPPU.ScreenColors. Hoist out of the per-clip-region loop and out
+ * of the 28 individual backdrop renderers. The renderers still pick
+ * ScreenColors per-call via ClipColors ? BlackColourMap :
+ * RealScreenColors, since BlackColourMap is private to tile.c. */
 #define DRAW_BACKDROP_NO_MATH() \
 	Offset = GFX.StartY * GFX.PPL; \
+	GFX.RealScreenColors = IPPU.ScreenColors; \
 	for ( clip = 0; clip < GFX.Clip[5].Count; clip++) \
 	{ \
 		GFX.ClipColors = !(GFX.Clip[5].DrawMode[clip] & 1); \
@@ -887,6 +958,7 @@ static void DrawBackground (int bg, uint8 Zh, uint8 Zl)
 
 #define DrawBackdrop() \
 	Offset = GFX.StartY * GFX.PPL; \
+	GFX.RealScreenColors = IPPU.ScreenColors; \
 	for ( clip = 0; clip < GFX.Clip[5].Count; clip++) \
 	{ \
 		GFX.ClipColors = !(GFX.Clip[5].DrawMode[clip] & 1); \
@@ -897,34 +969,34 @@ static void DrawBackground (int bg, uint8 Zh, uint8 Zl)
 			GFX.DrawBackdropNomath(Offset, GFX.Clip[5].Left[clip], GFX.Clip[5].Right[clip]); \
 	}
 
-static void DrawBackgroundMosaic (int bg, uint8 Zh, uint8 Zl)
+static void DrawBackgroundMosaic (int bg, uint8_t Zh, uint8_t Zl)
 {
-	void (*DrawPix) (uint32, uint32, uint32, uint32, uint32, uint32);
+	void (*DrawPix) (uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 
-	uint32	Tile, Y;
-	uint16	*SC0, *SC1, *SC2, *SC3;
+	uint32_t	Tile, Y;
+	uint16_t	*SC0, *SC1, *SC2, *SC3;
 	int	clip, Lines, OffsetMask, OffsetShift, PixWidth, MosaicStart;
-	bool8 HiresInterlace;
+	uint8_t HiresInterlace;
 
 	BG.TileAddress = PPU.BG[bg].NameBase << 1;
 
-	SC0 = (uint16 *) &Memory.VRAM[PPU.BG[bg].SCBase << 1];
+	SC0 = (uint16_t *) &Memory.VRAM[PPU.BG[bg].SCBase << 1];
 	SC1 = (PPU.BG[bg].SCSize & 1) ? SC0 + 1024 : SC0;
-	if (SC1 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (SC1 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		SC1 -= 0x8000;
 	SC2 = (PPU.BG[bg].SCSize & 2) ? SC1 + 1024 : SC0;
-	if (SC2 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (SC2 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		SC2 -= 0x8000;
 	SC3 = (PPU.BG[bg].SCSize & 1) ? SC2 + 1024 : SC2;
-	if (SC3 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (SC3 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		SC3 -= 0x8000;
 
 	OffsetMask  = (BG.TileSizeH == 16) ? 0x3ff : 0x1ff;
 	OffsetShift = (BG.TileSizeV == 16) ? 4 : 3;
-	PixWidth = IPPU.DoubleWidthPixels ? 2 : 1;
+	PixWidth = IPPU.QuadWidthPixels ? 4 : (IPPU.DoubleWidthPixels ? 2 : 1);
 	HiresInterlace = IPPU.Interlace && IPPU.DoubleWidthPixels;
 
-	MosaicStart = ((uint32) GFX.StartY - PPU.MosaicStart) % PPU.Mosaic;
+	MosaicStart = ((uint32_t) GFX.StartY - PPU.MosaicStart) % PPU.Mosaic;
 
 	for ( clip = 0; clip < GFX.Clip[bg].Count; clip++)
 	{
@@ -937,14 +1009,14 @@ static void DrawBackgroundMosaic (int bg, uint8 Zh, uint8 Zl)
 
 		for ( Y = GFX.StartY - MosaicStart; Y <= GFX.EndY; Y += PPU.Mosaic)
 		{
-			uint32	Y2, VOffset, HOffset, TilemapRow,
+			uint32_t	Y2, VOffset, HOffset, TilemapRow,
 			Left, Right, Offset, HPos, HTile, Width;
-			uint16 *t;
+			uint16_t *t;
 			int VirtAlign;
-			uint32 t1 = 0;
-			uint32 t2 = 16;
-			uint16 *b1 = SC0;
-			uint16 *b2 = SC1;
+			uint32_t t1 = 0;
+			uint32_t t2 = 16;
+			uint16_t *b1 = SC0;
+			uint16_t *b2 = SC1;
 
 			Y2 = Y << HiresInterlace;
 			VOffset = LineData[Y].BG[bg].VOffset + HiresInterlace;
@@ -1001,7 +1073,7 @@ static void DrawBackgroundMosaic (int bg, uint8 Zh, uint8 Zl)
 
 			while (Left < Right)
 			{
-				uint32	w = PPU.Mosaic - (Left % PPU.Mosaic);
+				uint32_t	w = PPU.Mosaic - (Left % PPU.Mosaic);
 				if (w > Width)
 					w = Width;
 
@@ -1059,39 +1131,39 @@ static void DrawBackgroundMosaic (int bg, uint8 Zh, uint8 Zl)
 	}
 }
 
-static void DrawBackgroundOffset (int bg, uint8 Zh, uint8 Zl, int VOffOff)
+static void DrawBackgroundOffset (int bg, uint8_t Zh, uint8_t Zl, int VOffOff)
 {
-	void (*DrawClippedTile) (uint32, uint32, uint32, uint32, uint32, uint32);
+	void (*DrawClippedTile) (uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 
 	int clip, OffsetMask, OffsetShift, Offset2Mask, Offset2Shift,
 	OffsetEnableMask, PixWidth;
-	uint32	Tile, Y;
-	bool8	HiresInterlace;
-	uint16	*SC0, *SC1, *SC2, *SC3;
-	uint16	*BPS0, *BPS1, *BPS2, *BPS3;
+	uint32_t	Tile, Y;
+	uint8_t	HiresInterlace;
+	uint16_t	*SC0, *SC1, *SC2, *SC3;
+	uint16_t	*BPS0, *BPS1, *BPS2, *BPS3;
 
 	BG.TileAddress = PPU.BG[bg].NameBase << 1;
 
-	BPS0 = (uint16 *) &Memory.VRAM[PPU.BG[2].SCBase << 1];
+	BPS0 = (uint16_t *) &Memory.VRAM[PPU.BG[2].SCBase << 1];
 	BPS1 = (PPU.BG[2].SCSize & 1) ? BPS0 + 1024 : BPS0;
-	if (BPS1 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (BPS1 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		BPS1 -= 0x8000;
 	BPS2 = (PPU.BG[2].SCSize & 2) ? BPS1 + 1024 : BPS0;
-	if (BPS2 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (BPS2 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		BPS2 -= 0x8000;
 	BPS3 = (PPU.BG[2].SCSize & 1) ? BPS2 + 1024 : BPS2;
-	if (BPS3 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (BPS3 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		BPS3 -= 0x8000;
 
-	SC0 = (uint16 *) &Memory.VRAM[PPU.BG[bg].SCBase << 1];
+	SC0 = (uint16_t *) &Memory.VRAM[PPU.BG[bg].SCBase << 1];
 	SC1 = (PPU.BG[bg].SCSize & 1) ? SC0 + 1024 : SC0;
-	if (SC1 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (SC1 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		SC1 -= 0x8000;
 	SC2 = (PPU.BG[bg].SCSize & 2) ? SC1 + 1024 : SC0;
-	if (SC2 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (SC2 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		SC2 -= 0x8000;
 	SC3 = (PPU.BG[bg].SCSize & 1) ? SC2 + 1024 : SC2;
-	if (SC3 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (SC3 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		SC3 -= 0x8000;
 
 	OffsetMask   = (BG.TileSizeH   == 16) ? 0x3ff : 0x1ff;
@@ -1099,11 +1171,13 @@ static void DrawBackgroundOffset (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 	Offset2Mask  = (BG.OffsetSizeH == 16) ? 0x3ff : 0x1ff;
 	Offset2Shift = (BG.OffsetSizeV == 16) ? 4 : 3;
 	OffsetEnableMask = 0x2000 << bg;
-	PixWidth = IPPU.DoubleWidthPixels ? 2 : 1;
+	PixWidth = IPPU.QuadWidthPixels ? 4 : (IPPU.DoubleWidthPixels ? 2 : 1);
 	HiresInterlace = IPPU.Interlace && IPPU.DoubleWidthPixels;
 
 	for ( clip = 0; clip < GFX.Clip[bg].Count; clip++)
 	{
+		uint32_t BatchLines;
+
 		GFX.ClipColors = !(GFX.Clip[bg].DrawMode[clip] & 1);
 
 		if (BG.EnableMath && (GFX.Clip[bg].DrawMode[clip] & 2))
@@ -1111,15 +1185,38 @@ static void DrawBackgroundOffset (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 		else
 			DrawClippedTile = GFX.DrawClippedTileNomath;
 
-		for ( Y = GFX.StartY; Y <= GFX.EndY; Y++)
+		for ( Y = GFX.StartY; Y <= GFX.EndY; Y += BatchLines)
 		{
-			uint32 Y2, VOff, HOff, HOffsetRow, VOffsetRow,
+			uint32_t Y2, VOff, HOff, HOffsetRow, VOffsetRow,
 			Left, Right, Offset, LineHOffset, Width;
-			uint16	*s;
-			uint16  *s1 = BPS0;
-			uint16  *s2 = BPS1;
-			int32 VOffsetOffset;
-			bool8 left_edge;
+			uint16_t	*s;
+			uint16_t  *s1 = BPS0;
+			uint16_t  *s2 = BPS1;
+			int32_t VOffsetOffset;
+			uint8_t left_edge;
+
+			/* Batch scroll-constant scanline runs, like DrawBackground
+			 * does. The per-column offset words come from VRAM, which
+			 * cannot change inside one rendering catch-up, so within a
+			 * run of lines whose offset-source (BG3) scroll and consumer
+			 * scroll are all unchanged, every column's effective H/V
+			 * offset is identical line to line. OPT alignment is per
+			 * column, so a batch is rendered as at most two tile spans
+			 * per column (split where that column crosses its 8-row tile
+			 * band; the second span starts band-aligned). Hires and
+			 * interlace keep the original per-line path: their Y2
+			 * stepping and VirtAlign halving are not corpus-verifiable
+			 * here, and they are rare in OPT modes. */
+			BatchLines = 1;
+			if (PixWidth == 1 && !IPPU.Interlace)
+			{
+				while (Y + BatchLines <= GFX.EndY && BatchLines < 8 &&
+				       LineData[Y].BG[2].VOffset  == LineData[Y + BatchLines].BG[2].VOffset  &&
+				       LineData[Y].BG[2].HOffset  == LineData[Y + BatchLines].BG[2].HOffset  &&
+				       LineData[Y].BG[bg].VOffset == LineData[Y + BatchLines].BG[bg].VOffset &&
+				       LineData[Y].BG[bg].HOffset == LineData[Y + BatchLines].BG[bg].HOffset)
+					BatchLines++;
+			}
 
 			Y2 = HiresInterlace ? Y * 2 + GFX.InterlaceFrame : Y;
 			VOff = LineData[Y].BG[2].VOffset - 1;
@@ -1148,13 +1245,13 @@ static void DrawBackgroundOffset (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 
 			while (Left < Right)
 			{
-				uint32	VOffset, HOffset, HPos, HTile, l, w;
-				uint16 HCellOffset, VCellOffset, *t;
+				uint32_t	VOffset, HOffset, HPos, HTile, l, w;
+				uint16_t HCellOffset, VCellOffset, *t;
 				int HOffTile, VirtAlign, TilemapRow;
-				uint32 t1 = 0;
-				uint32 t2 = 16;
-				uint16 *b1 = SC0;
-				uint16 *b2 = SC1;
+				uint32_t t1 = 0;
+				uint32_t t2 = 16;
+				uint16_t *b1 = SC0;
+				uint16_t *b2 = SC1;
 
 				if (left_edge)
 				{
@@ -1257,16 +1354,84 @@ static void DrawBackgroundOffset (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 				if (BG.TileSizeV == 16)
 					Tile = TILE_PLUS(Tile, ((Tile & V_FLIP) ? t2 : t1));
 
-				if (BG.TileSizeH == 8)
 				{
-					DrawClippedTile(Tile, Offset, l, w, VirtAlign, 1);
-				}
-				else
-				{
-					if (!(Tile & H_FLIP))
-						DrawClippedTile(TILE_PLUS(Tile, (HTile & 1)), Offset, l, w, VirtAlign, 1);
+					uint32_t DrawnTile, Span1;
+
+					if (BG.TileSizeH == 8)
+						DrawnTile = Tile;
+					else if (!(Tile & H_FLIP))
+						DrawnTile = TILE_PLUS(Tile, (HTile & 1));
 					else
-						DrawClippedTile(TILE_PLUS(Tile, 1 - (HTile & 1)), Offset, l, w, VirtAlign, 1);
+						DrawnTile = TILE_PLUS(Tile, 1 - (HTile & 1));
+
+					Span1 = 8 - ((Y2 + VOffset) & 7);
+					if (Span1 > BatchLines)
+						Span1 = BatchLines;
+
+					DrawClippedTile(DrawnTile, Offset, l, w, VirtAlign, Span1);
+
+					if (Span1 < BatchLines)
+					{
+						/* This column's batch crosses into the next
+						 * 8-row tile band: re-derive the tile entry at
+						 * the band boundary (which may be a new tilemap
+						 * row, or for 16-pixel-tall tiles the other half
+						 * of the same entry), reload priority from the
+						 * new entry, and render the remainder starting
+						 * band-aligned. */
+						uint32_t Yv2, Tile2, Drawn2;
+						uint32_t T1 = 0, T2 = 16;
+						uint16_t *B1 = SC0, *B2 = SC1, *T;
+						int TmRow2;
+
+						Yv2 = VOffset + Y2 + Span1;
+						TmRow2 = (int) (Yv2 >> OffsetShift);
+
+						if (Yv2 & 8)
+						{
+							T1 = 16;
+							T2 = 0;
+						}
+
+						if (TmRow2 & 0x20)
+						{
+							B1 = SC2;
+							B2 = SC3;
+						}
+
+						B1 += (TmRow2 & 0x1f) << 5;
+						B2 += (TmRow2 & 0x1f) << 5;
+
+						if (BG.TileSizeH == 8)
+						{
+							if (HTile > 31)
+								T = B2 + (HTile & 0x1f);
+							else
+								T = B1 + HTile;
+						}
+						else
+						{
+							if (HTile > 63)
+								T = B2 + ((HTile >> 1) & 0x1f);
+							else
+								T = B1 + (HTile >> 1);
+						}
+
+						Tile2 = READ_WORD(T);
+						GFX.Z1 = GFX.Z2 = (Tile2 & 0x2000) ? Zh : Zl;
+
+						if (BG.TileSizeV == 16)
+							Tile2 = TILE_PLUS(Tile2, ((Tile2 & V_FLIP) ? T2 : T1));
+
+						if (BG.TileSizeH == 8)
+							Drawn2 = Tile2;
+						else if (!(Tile2 & H_FLIP))
+							Drawn2 = TILE_PLUS(Tile2, (HTile & 1));
+						else
+							Drawn2 = TILE_PLUS(Tile2, 1 - (HTile & 1));
+
+						DrawClippedTile(Drawn2, Offset + Span1 * GFX.PPL, l, w, 0, BatchLines - Span1);
+					}
 				}
 
 				Left += w;
@@ -1277,38 +1442,38 @@ static void DrawBackgroundOffset (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 	}
 }
 
-static void DrawBackgroundOffsetMosaic (int bg, uint8 Zh, uint8 Zl, int VOffOff)
+static void DrawBackgroundOffsetMosaic (int bg, uint8_t Zh, uint8_t Zl, int VOffOff)
 {
-	void (*DrawPix) (uint32, uint32, uint32, uint32, uint32, uint32);
+	void (*DrawPix) (uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 
 	int clip, Lines, OffsetMask, OffsetShift, Offset2Mask, Offset2Shift,
 	OffsetEnableMask, PixWidth;
-	uint32	Tile, Y, MosaicStart;
-	uint16	*SC0, *SC1, *SC2, *SC3, *BPS0, *BPS1, *BPS2, *BPS3;
-	bool8 HiresInterlace;
+	uint32_t	Tile, Y, MosaicStart;
+	uint16_t	*SC0, *SC1, *SC2, *SC3, *BPS0, *BPS1, *BPS2, *BPS3;
+	uint8_t HiresInterlace;
 
 	BG.TileAddress = PPU.BG[bg].NameBase << 1;
 
-	BPS0 = (uint16 *) &Memory.VRAM[PPU.BG[2].SCBase << 1];
+	BPS0 = (uint16_t *) &Memory.VRAM[PPU.BG[2].SCBase << 1];
 	BPS1 = (PPU.BG[2].SCSize & 1) ? BPS0 + 1024 : BPS0;
-	if (BPS1 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (BPS1 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		BPS1 -= 0x8000;
 	BPS2 = (PPU.BG[2].SCSize & 2) ? BPS1 + 1024 : BPS0;
-	if (BPS2 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (BPS2 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		BPS2 -= 0x8000;
 	BPS3 = (PPU.BG[2].SCSize & 1) ? BPS2 + 1024 : BPS2;
-	if (BPS3 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (BPS3 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		BPS3 -= 0x8000;
 
-	SC0 = (uint16 *) &Memory.VRAM[PPU.BG[bg].SCBase << 1];
+	SC0 = (uint16_t *) &Memory.VRAM[PPU.BG[bg].SCBase << 1];
 	SC1 = (PPU.BG[bg].SCSize & 1) ? SC0 + 1024 : SC0;
-	if (SC1 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (SC1 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		SC1 -= 0x8000;
 	SC2 = (PPU.BG[bg].SCSize & 2) ? SC1 + 1024 : SC0;
-	if (SC2 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (SC2 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		SC2 -= 0x8000;
 	SC3 = (PPU.BG[bg].SCSize & 1) ? SC2 + 1024 : SC2;
-	if (SC3 >= (uint16 *) (Memory.VRAM + 0x10000))
+	if (SC3 >= (uint16_t *) (Memory.VRAM + 0x10000))
 		SC3 -= 0x8000;
 
 	OffsetMask   = (BG.TileSizeH   == 16) ? 0x3ff : 0x1ff;
@@ -1316,10 +1481,10 @@ static void DrawBackgroundOffsetMosaic (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 	Offset2Mask  = (BG.OffsetSizeH == 16) ? 0x3ff : 0x1ff;
 	Offset2Shift = (BG.OffsetSizeV == 16) ? 4 : 3;
 	OffsetEnableMask = 0x2000 << bg;
-	PixWidth = IPPU.DoubleWidthPixels ? 2 : 1;
+	PixWidth = IPPU.QuadWidthPixels ? 4 : (IPPU.DoubleWidthPixels ? 2 : 1);
 	HiresInterlace = IPPU.Interlace && IPPU.DoubleWidthPixels;
 
-	MosaicStart = ((uint32) GFX.StartY - PPU.MosaicStart) % PPU.Mosaic;
+	MosaicStart = ((uint32_t) GFX.StartY - PPU.MosaicStart) % PPU.Mosaic;
 
 	for ( clip = 0; clip < GFX.Clip[bg].Count; clip++)
 	{
@@ -1332,11 +1497,11 @@ static void DrawBackgroundOffsetMosaic (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 
 		for ( Y = GFX.StartY - MosaicStart; Y <= GFX.EndY; Y += PPU.Mosaic)
 		{
-			uint32 Y2, VOff, HOff, HOffsetRow, VOffsetRow,
+			uint32_t Y2, VOff, HOff, HOffsetRow, VOffsetRow,
 			Left, Right, Offset, LineHOffset, Width;
-			int32 VOffsetOffset;
-			uint16	*s, *s1, *s2;
-			bool8 left_edge;
+			int32_t VOffsetOffset;
+			uint16_t	*s, *s1, *s2;
+			uint8_t left_edge;
 
 			Y2 = Y << HiresInterlace;
 			VOff = LineData[Y].BG[2].VOffset - 1;
@@ -1374,8 +1539,8 @@ static void DrawBackgroundOffsetMosaic (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 
 			while (Left < Right)
 			{
-				uint32	VOffset, HOffset, t1, t2, HPos, HTile, w;
-				uint16	*b1, *b2, *t;
+				uint32_t	VOffset, HOffset, t1, t2, HPos, HTile, w;
+				uint16_t	*b1, *b2, *t;
 				int VirtAlign, TilemapRow;
 
 				if (left_edge)
@@ -1387,7 +1552,7 @@ static void DrawBackgroundOffsetMosaic (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 				}
 				else
 				{
-					uint16 HCellOffset, VCellOffset;
+					uint16_t HCellOffset, VCellOffset;
 					int	HOffTile = ((HOff + Left - 1) & Offset2Mask) >> 3;
 
 					if (BG.OffsetSizeH == 8)
@@ -1510,7 +1675,7 @@ static void DrawBackgroundOffsetMosaic (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 	}
 }
 
-static INLINE void DrawBackgroundMode7 (int bg, void (*DrawMath) (uint32, uint32, int), void (*DrawNomath) (uint32, uint32, int), int D)
+static INLINE void DrawBackgroundMode7 (int bg, void (*DrawMath) (uint32_t, uint32_t, int), void (*DrawNomath) (uint32_t, uint32_t, int), int D)
 {
 	int clip;
 	for ( clip = 0; clip < GFX.Clip[bg].Count; clip++)
@@ -1524,9 +1689,9 @@ static INLINE void DrawBackgroundMode7 (int bg, void (*DrawMath) (uint32, uint32
 	}
 }
 
-static INLINE void RenderScreen_SFXSpeedupHack()
+static INLINE void RenderScreen_SFXSpeedupHack(void)
 {
-	uint8	BGActive = Memory.FillRAM[0x212d];
+	uint8_t	BGActive = Memory.FillRAM[0x212d];
 	int	D = (Memory.FillRAM[0x2130] & 2) << 4; /* 'do math' depth flag */
 
 	GFX.S = GFX.SubScreen;
@@ -1556,24 +1721,6 @@ static INLINE void RenderScreen_SFXSpeedupHack()
 			BG.TileSizeV = (PPU.BG[n].BGSize) ? 16 : 8; \
 			S9xSelectTileConverter_Depth2(); \
 			DrawBackground(n, D + Zh, D + Zl); \
-		}
-
-	#define DO_BG_DEPTH4(n, pal, depth, hires, offset, Zh, Zl, voffoff) \
-		if (BGActive & (1 << n)) \
-		{ \
-			BG.StartPalette = pal; \
-			BG.EnableMath = 0; \
-			BG.TileSizeH = (PPU.BG[n].BGSize) ? 16 : 8; \
-			BG.TileSizeV = (PPU.BG[n].BGSize) ? 16 : 8; \
-			S9xSelectTileConverter_Depth4(); \
-			if (offset) \
-			{ \
-				BG.OffsetSizeH = BG.OffsetSizeV = (PPU.BG[2].BGSize) ? 16 : 8; \
-			} \
-			else \
-			{ \
-				DrawBackground(n, D + Zh, D + Zl); \
-			} \
 		}
 
 	#define DO_BG_DEPTH4_OFFSET0(n, pal, depth, hires, offset, Zh, Zl, voffoff) \
@@ -1613,14 +1760,10 @@ static INLINE void RenderScreen_SFXSpeedupHack()
 	}
 
 	#undef DO_BG_DEPTH2
-	#undef DO_BG_DEPTH4
 	#undef DO_BG_DEPTH4_OFFSET0
 	#undef DO_BG_DEPTH4_OFFSET1
 
 	BG.EnableMath = 0;
-
-	BGActive = 0;
-	D = 0;
 
 	GFX.S = GFX.Screen;
 	GFX.DB = GFX.ZBuffer;
@@ -1650,24 +1793,6 @@ static INLINE void RenderScreen_SFXSpeedupHack()
 			BG.TileSizeH = BG.TileSizeV = (PPU.BG[n].BGSize) ? 16 : 8; \
 			S9xSelectTileConverter_Depth2(); \
 			DrawBackground(n, D + Zh, D + Zl); \
-		}
-
-	#define DO_BG_DEPTH4(n, pal, depth, hires, offset, Zh, Zl, voffoff) \
-		if (BGActive & (1 << n)) \
-		{ \
-			BG.StartPalette = pal; \
-			BG.EnableMath = (Memory.FillRAM[0x2131] & (1 << n)); \
-			BG.TileSizeH = BG.TileSizeV = (PPU.BG[n].BGSize) ? 16 : 8; \
-			S9xSelectTileConverter_Depth4(); \
-			if (offset) \
-			{ \
-				BG.OffsetSizeH = BG.OffsetSizeV = (PPU.BG[2].BGSize) ? 16 : 8; \
-				DrawBackgroundOffset(n, D + Zh, D + Zl, voffoff); \
-			} \
-			else \
-			{ \
-				DrawBackground(n, D + Zh, D + Zl); \
-			} \
 		}
 
 	#define DO_BG_DEPTH4_OFFSET0(n, pal, depth, hires, offset, Zh, Zl, voffoff) \
@@ -1706,30 +1831,15 @@ static INLINE void RenderScreen_SFXSpeedupHack()
 	}
 
 	#undef DO_BG_DEPTH2
-	#undef DO_BG_DEPTH4
 	#undef DO_BG_DEPTH4_OFFSET0
 	#undef DO_BG_DEPTH4_OFFSET1
 
 	BG.EnableMath = (Memory.FillRAM[0x2131] & 0x20);
 }
 
-//#define REPORT_MODES 1
-
-#ifdef REPORT_MODES
-static uint8 prev_screen = 0;
-
-#define REPORT_SCREEN() \
-if(prev_screen != PPU.BGMode) \
-{ \
-   prev_screen = PPU.BGMode; \
-}
-#else
-#define REPORT_SCREEN()
-#endif
-
-static INLINE void RenderScreen (bool8 sub)
+static INLINE void RenderScreen (uint8_t sub)
 {
-	uint8	BGActive = Memory.FillRAM[0x212c+sub];
+	uint8_t	BGActive = Memory.FillRAM[0x212c+sub];
 	int		D;
 
 	GFX.Clip = IPPU.Clip[sub];
@@ -1762,49 +1872,6 @@ static INLINE void RenderScreen (bool8 sub)
 
 	BG.NameSelect = 0;
 	S9xSelectTileRenderers(PPU.BGMode, sub, FALSE);
-
-	#define DO_BG(n, pal, depth, hires, offset, Zh, Zl, voffoff) \
-		if (BGActive & (1 << n)) \
-		{ \
-			BG.StartPalette = pal; \
-			BG.EnableMath = !sub && (Memory.FillRAM[0x2131] & (1 << n)); \
-			BG.TileSizeH = (!hires && PPU.BG[n].BGSize) ? 16 : 8; \
-			BG.TileSizeV = (PPU.BG[n].BGSize) ? 16 : 8; \
-			S9xSelectTileConverter(depth, hires, sub, PPU.BGMosaic[n]); \
-			\
-			if (offset) \
-			{ \
-				BG.OffsetSizeH = (!hires && PPU.BG[2].BGSize) ? 16 : 8; \
-				BG.OffsetSizeV = (PPU.BG[2].BGSize) ? 16 : 8; \
-				\
-				if (PPU.BGMosaic[n] && (hires || PPU.Mosaic > 1)) \
-					DrawBackgroundOffsetMosaic(n, D + Zh, D + Zl, voffoff); \
-				else \
-					DrawBackgroundOffset(n, D + Zh, D + Zl, voffoff); \
-			} \
-			else \
-			{ \
-				if (PPU.BGMosaic[n] && (hires || PPU.Mosaic > 1)) \
-					DrawBackgroundMosaic(n, D + Zh, D + Zl); \
-				else \
-					DrawBackground(n, D + Zh, D + Zl); \
-			} \
-		}
-
-	#define DO_BG_HIRES0_OFFSET0(n, pal, depth, hires, offset, Zh, Zl, voffoff) \
-		if (BGActive & (1 << n)) \
-		{ \
-			BG.StartPalette = pal; \
-			BG.EnableMath = !sub && (Memory.FillRAM[0x2131] & (1 << n)); \
-			BG.TileSizeH = (PPU.BG[n].BGSize) ? 16 : 8; \
-			BG.TileSizeV = (PPU.BG[n].BGSize) ? 16 : 8; \
-			S9xSelectTileConverter(depth, hires, sub, PPU.BGMosaic[n]); \
-			\
-			if (PPU.BGMosaic[n] && (PPU.Mosaic > 1)) \
-				DrawBackgroundMosaic(n, D + Zh, D + Zl); \
-			else \
-				DrawBackground(n, D + Zh, D + Zl); \
-		}
 
 	#define DO_BG_HIRES0_OFFSET0_D2(n, pal, depth, hires, offset, Zh, Zl, voffoff) \
 		if (BGActive & (1 << n)) \
@@ -1849,24 +1916,6 @@ static INLINE void RenderScreen (bool8 sub)
 				DrawBackgroundMosaic(n, D + Zh, D + Zl); \
 			else \
 				DrawBackground(n, D + Zh, D + Zl); \
-		}
-
-	#define DO_BG_HIRES0_OFFSET1(n, pal, depth, hires, offset, Zh, Zl, voffoff) \
-		if (BGActive & (1 << n)) \
-		{ \
-			BG.StartPalette = pal; \
-			BG.EnableMath = !sub && (Memory.FillRAM[0x2131] & (1 << n)); \
-			BG.TileSizeH = (PPU.BG[n].BGSize) ? 16 : 8; \
-			BG.TileSizeV = (PPU.BG[n].BGSize) ? 16 : 8; \
-			S9xSelectTileConverter(depth, 0, sub, PPU.BGMosaic[n]); \
-			\
-			BG.OffsetSizeH = (PPU.BG[2].BGSize) ? 16 : 8; \
-			BG.OffsetSizeV = (PPU.BG[2].BGSize) ? 16 : 8; \
-			\
-			if (PPU.BGMosaic[n] && (PPU.Mosaic > 1)) \
-			DrawBackgroundOffsetMosaic(n, D + Zh, D + Zl, voffoff); \
-			else \
-			DrawBackgroundOffset(n, D + Zh, D + Zl, voffoff); \
 		}
 
 	#define DO_BG_HIRES0_OFFSET1_D2(n, pal, depth, hires, offset, Zh, Zl, voffoff) \
@@ -1954,23 +2003,6 @@ static INLINE void RenderScreen (bool8 sub)
 				else \
 					DrawBackgroundOffset(n, D + Zh, D + Zl, voffoff); \
 		}
-	#define DO_BG_HIRES1_OFFSET1(n, pal, depth, hires, offset, Zh, Zl, voffoff) \
-		if (BGActive & (1 << n)) \
-		{ \
-			BG.StartPalette = pal; \
-			BG.EnableMath = !sub && (Memory.FillRAM[0x2131] & (1 << n)); \
-			BG.TileSizeH = 8; \
-			BG.TileSizeV = (PPU.BG[n].BGSize) ? 16 : 8; \
-			S9xSelectTileConverter(depth, hires, sub, PPU.BGMosaic[n]); \
-			\
-				BG.OffsetSizeH = 8; \
-				BG.OffsetSizeV = (PPU.BG[2].BGSize) ? 16 : 8; \
-				\
-				if (PPU.BGMosaic[n]) \
-					DrawBackgroundOffsetMosaic(n, D + Zh, D + Zl, voffoff); \
-				else \
-					DrawBackgroundOffset(n, D + Zh, D + Zl, voffoff); \
-		}
 
 	switch (PPU.BGMode)
 	{
@@ -1979,43 +2011,36 @@ static INLINE void RenderScreen (bool8 sub)
 			DO_BG_HIRES0_OFFSET0_D2(1, 32, 2, FALSE, FALSE, 14, 10, 0);
 			DO_BG_HIRES0_OFFSET0_D2(2, 64, 2, FALSE, FALSE,  7,  3, 0);
 			DO_BG_HIRES0_OFFSET0_D2(3, 96, 2, FALSE, FALSE,  6,  2, 0);
-			REPORT_SCREEN();
 			break;
 
 		case 1:
 			DO_BG_HIRES0_OFFSET0_D4(0,  0, 4, FALSE, FALSE, 15, 11, 0);
 			DO_BG_HIRES0_OFFSET0_D4(1,  0, 4, FALSE, FALSE, 14, 10, 0);
 			DO_BG_HIRES0_OFFSET0_D2(2,  0, 2, FALSE, FALSE, (PPU.BG3Priority ? 17 : 7), 3, 0);
-			REPORT_SCREEN();
 			break;
 
 		case 2:
 			DO_BG_HIRES0_OFFSET1_D4(0,  0, 4, FALSE, TRUE,  15,  7, 8);
 			DO_BG_HIRES0_OFFSET1_D4(1,  0, 4, FALSE, TRUE,  11,  3, 8);
-			REPORT_SCREEN();
 			break;
 
 		case 3:
 			DO_BG_HIRES0_OFFSET0_D8(0,  0, 8, FALSE, FALSE, 15,  7, 0);
 			DO_BG_HIRES0_OFFSET0_D4(1,  0, 4, FALSE, FALSE, 11,  3, 0);
-			REPORT_SCREEN();
 			break;
 
 		case 4:
 			DO_BG_HIRES0_OFFSET1_D8(0,  0, 8, FALSE, TRUE,  15,  7, 0);
 			DO_BG_HIRES0_OFFSET1_D2(1,  0, 2, FALSE, TRUE,  11,  3, 0);
-			REPORT_SCREEN();
 			break;
 
 		case 5:
 			DO_BG_HIRES1_OFFSET0(0,  0, 4, TRUE,  FALSE, 15,  7, 0);
 			DO_BG_HIRES1_OFFSET0(1,  0, 2, TRUE,  FALSE, 11,  3, 0);
-			REPORT_SCREEN();
 			break;
 
 		case 6:
 			DO_BG_HIRES1_OFFSET1(0,  0, 4, TRUE,  TRUE,  15,  7, 8);
-			REPORT_SCREEN();
 			break;
 
 		case 7:
@@ -2030,20 +2055,22 @@ static INLINE void RenderScreen (bool8 sub)
 				BG.EnableMath = !sub && (Memory.FillRAM[0x2131] & 2);
 				DrawBackgroundMode7(1, GFX.DrawMode7BG2Math, GFX.DrawMode7BG2Nomath, D);
 			}
-			REPORT_SCREEN();
 			break;
 	}
 
-	#undef DO_BG
-	#undef DO_BG_HIRES0_OFFSET0
-	#undef DO_BG_HIRES0_OFFSET1
+	#undef DO_BG_HIRES0_OFFSET0_D2
+	#undef DO_BG_HIRES0_OFFSET0_D4
+	#undef DO_BG_HIRES0_OFFSET0_D8
+	#undef DO_BG_HIRES0_OFFSET1_D2
+	#undef DO_BG_HIRES0_OFFSET1_D4
+	#undef DO_BG_HIRES0_OFFSET1_D8
 	#undef DO_BG_HIRES1_OFFSET0
 	#undef DO_BG_HIRES1_OFFSET1
 
 	BG.EnableMath = !sub && (Memory.FillRAM[0x2131] & 0x20);
 }
 
-static INLINE uint8 CalcWindowMask (int i, uint8 W1, uint8 W2)
+static INLINE uint8_t CalcWindowMask (int i, uint8_t W1, uint8_t W2)
 {
 	if (!PPU.ClipWindow1Enable[i])
 	{
@@ -2088,38 +2115,6 @@ static INLINE uint8 CalcWindowMask (int i, uint8 W1, uint8 W2)
 	/* Never gets to here */
 	return (0);
 }
-
-#if 0
-static INLINE void StoreWindowRegions (uint8 Mask, struct ClipData *Clip, int n_regions, int16 *windows, uint8 *drawing_modes, bool8 sub, bool8 StoreMode0)
-{
-	int	ct = 0;
-
-	for (int j = 0; j < n_regions; j++)
-	{
-		int	DrawMode = drawing_modes[j];
-		if (sub)
-			DrawMode |= 1;
-		if (Mask & (1 << j))
-			DrawMode = 0;
-
-		if (!StoreMode0 && !DrawMode)
-			continue;
-
-		if (ct > 0 && Clip->Right[ct - 1] == windows[j] && Clip->DrawMode[ct - 1] == DrawMode)
-			Clip->Right[ct - 1] = windows[j + 1]; /* This region borders with and has the same drawing mode as the previous region: merge them.*/
-		else
-		{
-			/* Add a new region to the BG*/
-			Clip->Left[ct]     = windows[j];
-			Clip->Right[ct]    = windows[j + 1];
-			Clip->DrawMode[ct] = DrawMode;
-			ct++;
-		}
-	}
-
-	Clip->Count = ct;
-}
-#endif
 
 #define StoreWindowRegions_StoreMode1_Mask0(Clip, Clip2) \
 { \
@@ -2220,7 +2215,7 @@ static INLINE void StoreWindowRegions (uint8 Mask, struct ClipData *Clip, int n_
 	Clip.Count = ct; \
 }
 
-static uint8	region_map[6][6] =
+static uint8_t	region_map[6][6] =
 {
 	{ 0, 0x01, 0x03, 0x07, 0x0f, 0x1f },
 	{ 0,    0, 0x02, 0x06, 0x0e, 0x1e },
@@ -2231,10 +2226,10 @@ static uint8	region_map[6][6] =
 
 static void S9xComputeClipWindows (void)
 {
-	int16	windows[6] = { 0, 256, 256, 256, 256, 256 };
-	uint8	drawing_modes[5] = { 0, 0, 0, 0, 0 };
+	int16_t	windows[6] = { 0, 256, 256, 256, 256, 256 };
+	uint8_t	drawing_modes[5] = { 0, 0, 0, 0, 0 };
 	int	i, j, n_regions;
-	uint8	W1, W2, CW, CW_color, CW_math;
+	uint8_t	W1, W2, CW, CW_color, CW_math;
 
 	n_regions = 1;
 
@@ -2350,7 +2345,7 @@ static void S9xComputeClipWindows (void)
 
 	for (j = 0; j < 5; j++)
 	{
-		uint8 W, mask_a, mask_b;
+		uint8_t W, mask_a, mask_b;
 
 		W = CalcWindowMask(j, W1, W2);
 		mask_a = 0;
@@ -2368,8 +2363,12 @@ static void S9xComputeClipWindows (void)
 
 void S9xUpdateScreen (void)
 {
+	/* clip and Offset are referenced from inside the DRAW_BACKDROP_NO_MATH
+	   and DrawBackdrop macros below, which inline into this function's
+	   scope. They look unused at this declaration point but the macros
+	   need them. */
 	int clip;
-	uint32 Offset;
+	uint32_t Offset;
 
 	if (IPPU.OBJChanged || IPPU.InterlaceOBJ)
 		SetupOBJ();
@@ -2396,42 +2395,70 @@ void S9xUpdateScreen (void)
 
 		if(Settings.SupportHiRes)
 		{
-		if (!IPPU.DoubleWidthPixels && (PPU.BGMode == 5 || PPU.BGMode == 6 || IPPU.PseudoHires))
+		if (!IPPU.DoubleWidthPixels && (PPU.BGMode == 5 || PPU.BGMode == 6 || IPPU.PseudoHires
+				|| (Settings.Mode7Hires && PPU.BGMode == 7)))
 		{
-			register uint32 y;
+			register uint32_t y;
 			register int x;
+			/* Promote to 4x when this is Mode 7 with the 4x setting,
+			   otherwise to 2x as on hardware / 2x Mode 7 hires. */
+			int factor = (PPU.BGMode == 7 && Settings.Mode7Hires == 4) ? 4 : 2;
+
+			/* Mid-frame width promotion needs a wider buffer than
+			   we acquired. Bail out of any sw_fb redirect first;
+			   afterwards GFX.Screen points at the persistent buffer
+			   sized for max width, with the partial render copied
+			   into it. */
+			S9xLibretroSwFbAbort();
+
 			/* Have to back out of the regular speed hack */
 			for ( y = 0; y < GFX.StartY; y++)
 			{
-				register uint16 *p, *q;
+				register uint16_t *p, *q;
+				int i;
 
 				p = GFX.Screen + y * GFX.PPL + 255;
-				q = GFX.Screen + y * GFX.PPL + 510;
+				q = GFX.Screen + y * GFX.PPL + 256 * factor - 1;
 
-				for ( x = 255; x >= 0; x--, p--, q -= 2)
-					*q = *(q + 1) = *p;
+				for ( x = 255; x >= 0; x--, p--)
+				{
+					/* Replicate p's value 'factor' times into q, q-1, ... */
+					for (i = 0; i < factor; i++, q--)
+						*q = *p;
+				}
 			}
 
 			IPPU.DoubleWidthPixels = TRUE;
-			IPPU.RenderedScreenWidth = 512;
+			IPPU.QuadWidthPixels = (factor == 4);
+			IPPU.RenderedScreenWidth = SNES_WIDTH * factor;
+
+			/* M7 vert-2x post-pass: arm now if entering Mode 7 mid-
+			 * frame with hires + vertical-2x option enabled. The
+			 * already-rendered top-of-frame rows (HUD/Mode 1) below
+			 * GFX.StartY get row-replicated; rows from GFX.StartY
+			 * onward (where M7 will be drawn) get bilinear-Y blended
+			 * at end-of-frame. */
+			if (PPU.BGMode == 7 && Settings.Mode7HiresVertical)
+				IPPU.M7VertStartY = (int32_t)GFX.StartY;
 		}
 
 		if (!IPPU.DoubleHeightPixels && IPPU.Interlace && (PPU.BGMode == 5 || PPU.BGMode == 6))
 		{
-			register int32 y;
+			register int32_t y;
+
+			/* Same for mid-frame height promotion: acquired buffer
+			   is sized for unpromoted height. */
+			S9xLibretroSwFbAbort();
 
 			IPPU.DoubleHeightPixels = TRUE;
 			IPPU.RenderedScreenHeight = PPU.ScreenHeight << 1;
 			GFX.PPL = GFX.RealPPL << 1;
 			GFX.DoInterlace = 2;
 
-			for ( y = (int32) GFX.StartY - 1; y >= 0; y--)
-				memmove(GFX.Screen + y * GFX.PPL, GFX.Screen + y * GFX.RealPPL, IPPU.RenderedScreenWidth * sizeof(uint16));
+			for ( y = (int32_t) GFX.StartY - 1; y >= 0; y--)
+				memmove(GFX.Screen + y * GFX.PPL, GFX.Screen + y * GFX.RealPPL, IPPU.RenderedScreenWidth * sizeof(uint16_t));
 		}
 		}
-
-		if ((Memory.FillRAM[0x2130] & 0x30) != 0x30 && (Memory.FillRAM[0x2131] & 0x3f))
-			GFX.FixedColour = BUILD_PIXEL(IPPU.XB[PPU.FixedColourRed], IPPU.XB[PPU.FixedColourGreen], IPPU.XB[PPU.FixedColourBlue]);
 
 		if(!PPU.SFXSpeedupHack)
 		{
@@ -2455,19 +2482,19 @@ void S9xUpdateScreen (void)
 	}
 	else
 	{
-		uint32 l;
+		uint32_t l;
 		GFX.S = GFX.Screen + GFX.StartY * GFX.PPL;
 		if (GFX.DoInterlace && GFX.InterlaceFrame)
 			GFX.S += GFX.RealPPL;
 
 		for ( l = GFX.StartY; l <= GFX.EndY; l++, GFX.S += GFX.PPL)
-			memset(GFX.S, 0, IPPU.RenderedScreenWidth * sizeof(int));
+			memset(GFX.S, 0, IPPU.RenderedScreenWidth * sizeof(uint16_t));
 	}
 
 	IPPU.PreviousLine = IPPU.CurrentLine;
 }
 
-static uint16 get_crosshair_color (uint8 color)
+static uint16_t get_crosshair_color (uint8_t color)
 {
 	switch (color & 15)
 	{
@@ -2492,10 +2519,96 @@ static uint16 get_crosshair_color (uint8 color)
 	return (0);
 }
 
-void S9xDrawCrosshair (const char *crosshair, uint8 fgcolor, uint8 bgcolor, int16 x, int16 y)
+/* Mode 7 vertical-2x post-pass.
+ *
+ * Called from S9xEndScreenRefresh after all renderers have finished,
+ * before the buffer is handed to the frontend. Expands a 224-row
+ * (PPU.ScreenHeight) frame in GFX.Screen to 448 rows in place, with
+ * two regions:
+ *
+ *   - Rows [0, IPPU.M7VertStartY): HUD / Mode 1 area. Each input row
+ *     is duplicated to two output rows. Looks like a chunky 2x
+ *     upscale of the HUD; this is the documented cosmetic tradeoff
+ *     for the M7 plane improvement.
+ *   - Rows [IPPU.M7VertStartY, PPU.ScreenHeight): M7 plane area.
+ *     Output row 2y copies input row y verbatim; output row 2y+1 is
+ *     the per-channel average of input rows y and y+1, producing a
+ *     genuinely-new bilinear-Y intermediate row. Final M7 row's odd
+ *     output is just a copy (no row to interpolate with).
+ *
+ * Walks bottom-up so source rows aren't overwritten before they're
+ * read. For source row y, output is written at offsets 2y and 2y+1
+ * which are >= y for all y >= 0; source row y+1 (needed for the
+ * blend) sits at offset y+1 < 2y+2, so it isn't touched by earlier
+ * iterations either.
+ *
+ * Updates IPPU.RenderedScreenHeight to PPU.ScreenHeight * 2 so the
+ * frontend gets the doubled dimensions. */
+void S9xMode7VertResample (void)
 {
-	int16 r, rx, c, cx, W, H;
-	uint16 fg, bg, *s;
+	int32_t y, m7_start;
+	uint32_t ppl;
+	uint32_t width;
+
+	if (IPPU.M7VertStartY < 0)
+		return;
+
+	/* The sw_fb hook may have given us a 224-row frontend buffer at
+	 * frame start. We need to write rows 224..447, which would overrun
+	 * a 224-row buffer. Abort sw_fb so GFX.Screen points back at the
+	 * persistent buffer (sized for max width * max height, ~478 rows). */
+	S9xLibretroSwFbAbort();
+
+	m7_start = IPPU.M7VertStartY;
+	ppl      = GFX.PPL;
+	width    = IPPU.RenderedScreenWidth;
+
+	/* Bottom-up walk over the original PPU.ScreenHeight rows. */
+	for (y = (int32_t)PPU.ScreenHeight - 1; y >= 0; y--)
+	{
+		uint16_t *src      = GFX.Screen + (uint32_t)y * ppl;
+		uint16_t *dst_even = GFX.Screen + (uint32_t)(2 * y    ) * ppl;
+		uint16_t *dst_odd  = GFX.Screen + (uint32_t)(2 * y + 1) * ppl;
+
+		if (y >= m7_start && y + 1 < (int32_t)PPU.ScreenHeight)
+		{
+			/* M7 plane: bilinear-Y. dst_even = src; dst_odd =
+			 * (src + src_below) / 2 per channel. RGB565 is unpacked
+			 * with a fast trick: average packed values by taking the
+			 * low bits separately to avoid cross-channel carry. */
+			uint16_t *src_below = GFX.Screen + (uint32_t)(y + 1) * ppl;
+			uint32_t x;
+			for (x = 0; x < width; x++)
+			{
+				uint16_t a = src[x];
+				uint16_t b = src_below[x];
+				/* Blend each channel of RGB565 independently.
+				 * (a & 0xF7DE) >> 1 + (b & 0xF7DE) >> 1 averages
+				 * the high bits of each channel; the masked low
+				 * bit drops out (acceptable LSB rounding). */
+				uint16_t blend = ((a & 0xF7DE) >> 1) + ((b & 0xF7DE) >> 1);
+				dst_odd[x]  = blend;
+			}
+			memmove(dst_even, src, width * sizeof(uint16_t));
+		}
+		else
+		{
+			/* HUD region or last M7 row: row replication. memcpy is
+			 * safe for dst_odd (no overlap with src for y >= 1; for
+			 * y = 0 dst_odd row 1 doesn't overlap src row 0). memmove
+			 * for dst_even because dst_even == src when y == 0. */
+			memcpy (dst_odd,  src, width * sizeof(uint16_t));
+			memmove(dst_even, src, width * sizeof(uint16_t));
+		}
+	}
+
+	IPPU.RenderedScreenHeight = PPU.ScreenHeight * 2;
+}
+
+void S9xDrawCrosshair (const char *crosshair, uint8_t fgcolor, uint8_t bgcolor, int16_t x, int16_t y)
+{
+	int16_t r, rx, c, cx, W, H;
+	uint16_t fg, bg, *s;
 
 	if (!crosshair)
 		return;
@@ -2508,17 +2621,18 @@ void S9xDrawCrosshair (const char *crosshair, uint8 fgcolor, uint8 bgcolor, int1
 	x -= 7;
 	y -= 7;
 
-	if (IPPU.DoubleWidthPixels) { cx = 2; x *= 2; W *= 2; }
-	if (IPPU.DoubleHeightPixels) { rx = 2; y *= 2; H *= 2; }
+	if (IPPU.QuadWidthPixels)        { cx = 4; x *= 4; W *= 4; }
+	else if (IPPU.DoubleWidthPixels) { cx = 2; x *= 2; W *= 2; }
+	if (IPPU.DoubleHeightPixels)     { rx = 2; y *= 2; H *= 2; }
 
 	fg = get_crosshair_color(fgcolor);
 	bg = get_crosshair_color(bgcolor);
 
-	s = GFX.Screen + y * (int32)GFX.RealPPL + x;
+	s = GFX.Screen + y * (int32_t)GFX.RealPPL + x;
 
 	for (r = 0; r < 15 * rx; r++, s += GFX.RealPPL - 15 * cx)
 	{
-		uint8 p;
+		uint8_t p;
 		if (y + r < 0)
 		{
 			s += 15 * cx;
@@ -2552,11 +2666,11 @@ void S9xDrawCrosshair (const char *crosshair, uint8 fgcolor, uint8 bgcolor, int1
 
 static INLINE void S9xLatchCounters (void)
 {
-	int32 hc = CPU.Cycles;
+	int32_t hc = CPU.Cycles;
 	/* Latch h and v counters, like the gun */
 
 	PPU.HVBeamCounterLatched = 1;
-	PPU.VBeamPosLatched = (uint16) CPU.V_Counter;
+	PPU.VBeamPosLatched = (uint16_t) CPU.V_Counter;
 
 	/* From byuu:
 	   All dots are 4 cycles long, except dots 322 and 326.
@@ -2578,15 +2692,15 @@ static INLINE void S9xLatchCounters (void)
 			hc -= ONE_DOT_CYCLE_DIV_2;
 	}
 
-	PPU.HBeamPosLatched = (uint16) (hc / ONE_DOT_CYCLE);
+	PPU.HBeamPosLatched = (uint16_t) (hc / ONE_DOT_CYCLE);
 
 	Memory.FillRAM[0x213f] |= 0x40;
 }
 
 #define S9X_TRY_GUN_LATCH() \
 	PPU.HVBeamCounterLatched = 1; \
-	PPU.VBeamPosLatched = (uint16) PPU.GunVLatch; \
-	PPU.HBeamPosLatched = (uint16) PPU.GunHLatch; \
+	PPU.VBeamPosLatched = (uint16_t) PPU.GunVLatch; \
+	PPU.HBeamPosLatched = (uint16_t) PPU.GunHLatch; \
 	Memory.FillRAM[0x213f] |= 0x40;
 
 static void S9xUpdateHVTimerPosition (void)
@@ -2743,9 +2857,17 @@ void S9xFixColourBrightness (void)
 			 IPPU.XB[(PPU.CGDATA[i] >> 10) & 0x1f]
 			);
 	}
+
+	/* GFX.FixedColour depends on IPPU.XB; rebuild to keep it in sync.
+	 * Covers reset, snapshot unfreeze, and INIDISP brightness changes
+	 * that all call this function. COLDATA writes rebuild it directly
+	 * (see $2132 handler in S9xSetPPU). */
+	GFX.FixedColour = BUILD_PIXEL(IPPU.XB[PPU.FixedColourRed],
+	                              IPPU.XB[PPU.FixedColourGreen],
+	                              IPPU.XB[PPU.FixedColourBlue]);
 }
 
-static INLINE void REGISTER_2122 (uint8 Byte)
+static INLINE void REGISTER_2122 (uint8_t Byte)
 {
 	if (PPU.CGFLIP)
 	{
@@ -2755,7 +2877,7 @@ static INLINE void REGISTER_2122 (uint8 Byte)
 			PPU.CGDATA[PPU.CGADD] &= 0x00ff;
 			PPU.CGDATA[PPU.CGADD] |= (Byte & 0x7f) << 8;
 
-			IPPU.ScreenColors[PPU.CGADD] = (uint16) BUILD_PIXEL
+			IPPU.ScreenColors[PPU.CGADD] = (uint16_t) BUILD_PIXEL
 				(
 				 IPPU.XB[(PPU.CGDATA[PPU.CGADD]) & 0x1f],
 				 IPPU.XB[(PPU.CGDATA[PPU.CGADD] >> 5) & 0x1f],
@@ -2767,13 +2889,13 @@ static INLINE void REGISTER_2122 (uint8 Byte)
 	}
 	else
 	{
-		if (Byte != (uint8) (PPU.CGDATA[PPU.CGADD] & 0xff))
+		if (Byte != (uint8_t) (PPU.CGDATA[PPU.CGADD] & 0xff))
 		{
 			FLUSH_REDRAW();
 			PPU.CGDATA[PPU.CGADD] &= 0x7f00;
 			PPU.CGDATA[PPU.CGADD] |= Byte;
 
-			IPPU.ScreenColors[PPU.CGADD] = (uint16) BUILD_PIXEL
+			IPPU.ScreenColors[PPU.CGADD] = (uint16_t) BUILD_PIXEL
 				(
 				 IPPU.XB[Byte & 0x1f],
 				 IPPU.XB[(PPU.CGDATA[PPU.CGADD] >> 5) & 0x1f],
@@ -2788,9 +2910,9 @@ static INLINE void REGISTER_2122 (uint8 Byte)
 /* This code is correct, however due to Snes9x's inaccurate timings, some games might be broken by this change. */
 #define CHECK_INBLANK !(Settings.BlockInvalidVRAMAccess && !PPU.ForcedBlanking && CPU.V_Counter < PPU.ScreenHeight + FIRST_VISIBLE_LINE)
 
-static INLINE void REGISTER_2118 (uint8 Byte)
+static INLINE void REGISTER_2118 (uint8_t Byte)
 {
-	uint32	address, rem;
+	uint32_t	address, rem;
 
 	if (PPU.VMA.FullGraphicCount)
 	{
@@ -2819,9 +2941,9 @@ static INLINE void REGISTER_2118 (uint8 Byte)
 	}
 }
 
-static INLINE void REGISTER_2119 (uint8 Byte)
+static INLINE void REGISTER_2119 (uint8_t Byte)
 {
-	uint32	address, rem;
+	uint32_t	address, rem;
 
 	if (PPU.VMA.FullGraphicCount)
 	{
@@ -2848,9 +2970,9 @@ static INLINE void REGISTER_2119 (uint8 Byte)
 		PPU.VMA.Address += PPU.VMA.Increment;
 }
 
-static INLINE void REGISTER_2104 (uint8 Byte)
+static INLINE void REGISTER_2104 (uint8_t Byte)
 {
-	uint16 SignExtend[2] = {0x0000,0xff00};
+	uint16_t SignExtend[2] = {0x0000,0xff00};
 	int addr;
 
 	if (PPU.OAMAddr & 0x100)
@@ -2901,9 +3023,9 @@ static INLINE void REGISTER_2104 (uint8 Byte)
 	}
 	else
 	{
-		uint8 lowbyte, highbyte;
+		uint8_t lowbyte, highbyte;
 		PPU.OAMWriteRegister &= 0x00ff;
-		lowbyte = (uint8) (PPU.OAMWriteRegister);
+		lowbyte = (uint8_t) (PPU.OAMWriteRegister);
 		highbyte = Byte;
 		PPU.OAMWriteRegister |= Byte << 8;
 
@@ -2944,9 +3066,9 @@ static INLINE void REGISTER_2104 (uint8 Byte)
 	}
 }
 
-static void S9xSetSuperFX (uint8 byte, uint16 address)
+static void S9xSetSuperFX (uint8_t byte, uint16_t address)
 {
-   uint8 old_fill_ram = Memory.FillRAM[address];
+   uint8_t old_fill_ram = Memory.FillRAM[address];
    Memory.FillRAM[address] = byte;
 
 	switch (address)
@@ -2989,7 +3111,7 @@ static void S9xSetSuperFX (uint8 byte, uint16 address)
 			break;
 		case 0x303c:
 			/* Update BankReg and Bank pointer */
-			GSU.vRamBankReg = (uint32) byte & (FX_RAM_BANKS - 1);
+			GSU.vRamBankReg = (uint32_t) byte & (FX_RAM_BANKS - 1);
 			GSU.pvRamBank = GSU.apvRamBank[byte & 0x3];
 			break;
 
@@ -3022,9 +3144,9 @@ static void S9xSetSuperFX (uint8 byte, uint16 address)
 	PPU.WRAM &= 0x1ffff; \
 } while (0)
 
-bool8 coldata_update_screen = TRUE;
+uint8_t coldata_update_screen = TRUE;
 
-void S9xSetPPU (uint8 Byte, uint16 Address)
+void S9xSetPPU (uint8_t Byte, uint16_t Address)
 {
 	// MAP_PPU: $2000-$3FFF
 
@@ -3047,7 +3169,7 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 	else
 	if (Address <= MEM_PPU_WMADDH)
 	{
-		bool8 execute = Byte != Memory.FillRAM[Address];
+		uint8_t execute = Byte != Memory.FillRAM[Address];
 		switch (Address)
 		{
 			case MEM_PPU_INIDISP: // INIDISP
@@ -3071,7 +3193,7 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 
 				if ((Memory.FillRAM[MEM_PPU_INIDISP] & 0x80) && CPU.V_Counter == PPU.ScreenHeight + FIRST_VISIBLE_LINE)
 				{
-					uint8 tmp;
+					uint8_t tmp;
 					PPU.OAMAddr = PPU.SavedOAMAddr;
 
 					tmp = 0;
@@ -3187,7 +3309,7 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			case MEM_PPU_BG4SC: // BG4SC
 				if (execute)
 				{
-					uint32 bg_mode;
+					uint32_t bg_mode;
 					if (IPPU.PreviousLine != IPPU.CurrentLine)
 						S9xUpdateScreen();
 
@@ -3278,10 +3400,10 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 
 				if (Byte & 0x0c)
 				{
-					static uint16 Shift[4]    = { 0, 5, 6, 7 };
-					static uint16 IncCount[4] = { 0, 32, 64, 128 };
+					static const uint16_t Shift[4]    = { 0, 5, 6, 7 };
+					static const uint16_t IncCount[4] = { 0, 32, 64, 128 };
 
-					uint8 i = (Byte & 0x0c) >> 2;
+					uint8_t i = (Byte & 0x0c) >> 2;
 					PPU.VMA.FullGraphicCount = IncCount[i];
 					PPU.VMA.Mask1 = IncCount[i] * 8 - 1;
 					PPU.VMA.Shift = Shift[i];
@@ -3296,9 +3418,9 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			#ifdef CORRECT_VRAM_READS
 				if (PPU.VMA.FullGraphicCount)
 				{
-					uint32 addr = PPU.VMA.Address;
-					uint32 rem = addr & PPU.VMA.Mask1;
-					uint32 address = (addr & ~PPU.VMA.Mask1) + (rem >> PPU.VMA.Shift) + ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3);
+					uint32_t addr = PPU.VMA.Address;
+					uint32_t rem = addr & PPU.VMA.Mask1;
+					uint32_t address = (addr & ~PPU.VMA.Mask1) + (rem >> PPU.VMA.Shift) + ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3);
 					IPPU.VRAMReadBuffer = READ_WORD(Memory.VRAM + ((address << 1) & 0xffff));
 				}
 				else
@@ -3314,9 +3436,9 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			#ifdef CORRECT_VRAM_READS
 				if (PPU.VMA.FullGraphicCount)
 				{
-					uint32 addr = PPU.VMA.Address;
-					uint32 rem = addr & PPU.VMA.Mask1;
-					uint32 address = (addr & ~PPU.VMA.Mask1) + (rem >> PPU.VMA.Shift) + ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3);
+					uint32_t addr = PPU.VMA.Address;
+					uint32_t rem = addr & PPU.VMA.Mask1;
+					uint32_t address = (addr & ~PPU.VMA.Mask1) + (rem >> PPU.VMA.Shift) + ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3);
 					IPPU.VRAMReadBuffer = READ_WORD(Memory.VRAM + ((address << 1) & 0xffff));
 				}
 				else
@@ -3568,6 +3690,16 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 						PPU.FixedColourGreen = Byte & 0x1f;
 					if (Byte & 0x20)
 						PPU.FixedColourRed   = Byte & 0x1f;
+
+					/* Rebuild packed RGB565 fixed colour eagerly. Used to
+					 * happen once per S9xUpdateScreen flush; doing it here
+					 * instead means it's only rebuilt when the inputs
+					 * actually change, not every flush. Brightness changes
+					 * (which also affect IPPU.XB) rebuild via
+					 * S9xFixColourBrightness. */
+					GFX.FixedColour = BUILD_PIXEL(IPPU.XB[PPU.FixedColourRed],
+					                              IPPU.XB[PPU.FixedColourGreen],
+					                              IPPU.XB[PPU.FixedColourBlue]);
 				}
 
 				break;
@@ -3683,7 +3815,7 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 	Memory.FillRAM[Address] = Byte;
 }
 
-uint8 S9xGetPPU (uint16 Address)
+uint8_t S9xGetPPU (uint16_t Address)
 {
 	/* MAP_PPU: $2000-$3FFF */
 
@@ -3706,10 +3838,6 @@ uint8 S9xGetPPU (uint16 Address)
 		}
 	}
 
-#if 0
-   if (Address <= 0x2183)
-      return GetPPU[Address - 0x2100](Address);
-#else
 	if ((Address & 0xffc0) == 0x2140) /* APUIO0, APUIO1, APUIO2, APUIO3 */
 	{
 		/* will run the APU until given APU time before reading value */
@@ -3717,7 +3845,7 @@ uint8 S9xGetPPU (uint16 Address)
 	}
 	else if (Address <= 0x2183)
 	{
-		uint8	byte;
+		uint8_t	byte;
 
 		switch (Address)
 		{
@@ -3746,10 +3874,10 @@ uint8 S9xGetPPU (uint16 Address)
 			case 0x2136: /* MPYH*/
 				if (PPU.Need16x8Mulitply)
 				{
-					int32 r = (int32) PPU.MatrixA * (int32) (PPU.MatrixB >> 8);
-					Memory.FillRAM[0x2134] = (uint8) r;
-					Memory.FillRAM[0x2135] = (uint8) (r >> 8);
-					Memory.FillRAM[0x2136] = (uint8) (r >> 16);
+					int32_t r = (int32_t) PPU.MatrixA * (int32_t) (PPU.MatrixB >> 8);
+					Memory.FillRAM[0x2134] = (uint8_t) r;
+					Memory.FillRAM[0x2135] = (uint8_t) (r >> 8);
+					Memory.FillRAM[0x2136] = (uint8_t) (r >> 16);
 					PPU.Need16x8Mulitply = FALSE;
 				}
 				return (PPU.OpenBus1 = Memory.FillRAM[Address]);
@@ -3803,9 +3931,9 @@ uint8 S9xGetPPU (uint16 Address)
 				{
 					if (PPU.VMA.FullGraphicCount)
 					{
-						uint32 addr = PPU.VMA.Address;
-						uint32 rem = addr & PPU.VMA.Mask1;
-						uint32 address = (addr & ~PPU.VMA.Mask1) + (rem >> PPU.VMA.Shift) + ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3);
+						uint32_t addr = PPU.VMA.Address;
+						uint32_t rem = addr & PPU.VMA.Mask1;
+						uint32_t address = (addr & ~PPU.VMA.Mask1) + (rem >> PPU.VMA.Shift) + ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3);
 						IPPU.VRAMReadBuffer = READ_WORD(Memory.VRAM + ((address << 1) & 0xffff));
 					}
 					else
@@ -3819,9 +3947,9 @@ uint8 S9xGetPPU (uint16 Address)
 				else
 					if (PPU.VMA.FullGraphicCount)
 					{
-						uint32 addr = PPU.VMA.Address - 1;
-						uint32 rem = addr & PPU.VMA.Mask1;
-						uint32 address = (addr & ~PPU.VMA.Mask1) + (rem >> PPU.VMA.Shift) + ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3);
+						uint32_t addr = PPU.VMA.Address - 1;
+						uint32_t rem = addr & PPU.VMA.Mask1;
+						uint32_t address = (addr & ~PPU.VMA.Mask1) + (rem >> PPU.VMA.Shift) + ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3);
 						byte = Memory.VRAM[((address << 1) - 2) & 0xffff];
 					}
 					else
@@ -3842,9 +3970,9 @@ uint8 S9xGetPPU (uint16 Address)
 				{
 					if (PPU.VMA.FullGraphicCount)
 					{
-						uint32 addr = PPU.VMA.Address;
-						uint32 rem = addr & PPU.VMA.Mask1;
-						uint32 address = (addr & ~PPU.VMA.Mask1) + (rem >> PPU.VMA.Shift) + ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3);
+						uint32_t addr = PPU.VMA.Address;
+						uint32_t rem = addr & PPU.VMA.Mask1;
+						uint32_t address = (addr & ~PPU.VMA.Mask1) + (rem >> PPU.VMA.Shift) + ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3);
 						IPPU.VRAMReadBuffer = READ_WORD(Memory.VRAM + ((address << 1) & 0xffff));
 					}
 					else
@@ -3858,9 +3986,9 @@ uint8 S9xGetPPU (uint16 Address)
 				else
 					if (PPU.VMA.FullGraphicCount)
 					{
-						uint32 addr = PPU.VMA.Address - 1;
-						uint32 rem = addr & PPU.VMA.Mask1;
-						uint32 address = (addr & ~PPU.VMA.Mask1) + (rem >> PPU.VMA.Shift) + ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3);
+						uint32_t addr = PPU.VMA.Address - 1;
+						uint32_t rem = addr & PPU.VMA.Mask1;
+						uint32_t address = (addr & ~PPU.VMA.Mask1) + (rem >> PPU.VMA.Shift) + ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3);
 						byte = Memory.VRAM[((address << 1) - 1) & 0xffff];
 					}
 					else
@@ -3894,7 +4022,7 @@ uint8 S9xGetPPU (uint16 Address)
 				if (PPU.HBeamFlip)
 					byte = (PPU.OpenBus2 & 0xfe) | ((PPU.HBeamPosLatched >> 8) & 0x01);
 				else
-					byte = (uint8) PPU.HBeamPosLatched;
+					byte = (uint8_t) PPU.HBeamPosLatched;
 				PPU.HBeamFlip ^= 1;
 				return (PPU.OpenBus2 = byte);
 
@@ -3910,7 +4038,7 @@ uint8 S9xGetPPU (uint16 Address)
 				if (PPU.VBeamFlip)
 					byte = (PPU.OpenBus2 & 0xfe) | ((PPU.VBeamPosLatched >> 8) & 0x01);
 				else
-					byte = (uint8) PPU.VBeamPosLatched;
+					byte = (uint8_t) PPU.VBeamPosLatched;
 				PPU.VBeamFlip ^= 1;
 				return (PPU.OpenBus2 = byte);
 
@@ -3947,12 +4075,11 @@ uint8 S9xGetPPU (uint16 Address)
 				return (OpenBus);
 		}
 	}
-#endif
 	else
 	{
 		if (Settings.SuperFX && Address >= 0x3000 && Address <= 0x32ff)
 		{
-			uint8 byte = Memory.FillRAM[Address];
+			uint8_t byte = Memory.FillRAM[Address];
 			if (Address == 0x3031)
 			{
 				S9X_CLEAR_IRQ(GSU_IRQ_SOURCE);
@@ -3974,43 +4101,64 @@ uint8 S9xGetPPU (uint16 Address)
 	}
 }
 
-static uint8	sdd1_decode_buffer[0x10000];
+static uint8_t	sdd1_decode_buffer[0x10000];
 
-static INLINE bool8 addCyclesInDMA (uint8 dma_channel)
+/* addCyclesInDMA: advance the CPU clock by one slow cycle inside
+ * the per-byte DMA / HDMA transfer loops in S9xDoDMA, run any
+ * H-events that have come due, and report whether HDMA fired on
+ * this same channel mid-transfer (which kills the DMA).
+ *
+ * Plain expression macro at every call site. The earlier
+ * statement-expression form used a GCC extension that older MSVC
+ * rejects; this portable form inlines the hot path (one add, one
+ * compare, the bit test, the unconditional clear) at every site
+ * and only function-calls into addCyclesInDMA_drainEvents when
+ * the cycle counter has actually crossed an H-event boundary —
+ * which is rare during a single DMA byte. The drain helper itself
+ * contains the while loop, which cannot be expressed as a single
+ * expression in portable C.
+ *
+ * CALLER CONSTRAINT: dma_channel is referenced twice. All current
+ * call sites pass a simple variable (Channel), so this is safe.
+ *
+ * Returns TRUE if the DMA should continue, FALSE if HDMA fired in
+ * the middle on the same channel and killed it. */
+static void addCyclesInDMA_drainEvents (void)
 {
-	bool8 retval = TRUE;
-
-	/* Add 8 cycles per byte, sync APU, and do HC related events.*/
-	/* If HDMA was done in S9xDoHEventProcessing(), check if it used the same channel as DMA.*/
-	CPU.Cycles += SLOW_ONE_CYCLE;
-
 	while (CPU.Cycles >= CPU.NextEvent)
 		S9xDoHEventProcessing();
-
-	if (CPU.HDMARanInDMA & (1 << dma_channel))
-	{
-		/* If HDMA triggers in the middle of DMA transfer and it uses the same channel,*/
-		/* it kills the DMA transfer immediately. $43x2 and $43x5 stop updating.*/
-		retval = FALSE;
-	}
-
-	CPU.HDMARanInDMA = 0;
-	return retval;
 }
 
-static uint8 dma_channels_to_be_used[8] = {0};
-static bool8 special_chips_active = FALSE;
+#define addCyclesInDMA(dma_channel) \
+	( (CPU.Cycles += SLOW_ONE_CYCLE), \
+	  ((CPU.Cycles >= CPU.NextEvent) \
+		? (addCyclesInDMA_drainEvents(), 0) : 0), \
+	  ((CPU.HDMARanInDMA & (1u << (dma_channel))) \
+		? (CPU.HDMARanInDMA = 0, (uint8_t) FALSE) \
+		: (CPU.HDMARanInDMA = 0, (uint8_t) TRUE)) )
 
+static uint8_t dma_channels_to_be_used[8] = {0};
+static uint8_t special_chips_active = FALSE;
+
+
+/* S9xDoDMA's transfer-mode handlers for modes 1/3/4/5/7 use
+   switch-into-loop (Duff's device) to resume mid-stride from a saved
+   sub-index `b` when a DMA is interrupted. The resulting fallthroughs
+   between case labels are intentional. */
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
+#endif
 
 static void S9xDoDMA (void)
 {
-	uint8 Channel;
+	uint8_t Channel;
 	for( Channel = 0; Channel < 8; Channel++)
 	{
 		struct SDMA	*d = &DMA[Channel];
-		int32 inc, count;
-		bool8	in_sa1_dma;
-		uint8	*in_sdd1_dma, *spc7110_dma, Work;
+		int32_t inc, count;
+		uint8_t	in_sa1_dma;
+		uint8_t	*in_sdd1_dma, *spc7110_dma, Work;
 
 		if(dma_channels_to_be_used[Channel] != 1)
 			continue;
@@ -4022,7 +4170,7 @@ static void S9xDoDMA (void)
 		/* Check invalid DMA first */
 		if ((d->ABank == 0x7E || d->ABank == 0x7F) && d->BAddress == 0x80 && !d->ReverseTransfer)
 		{
-			int32 c = d->TransferBytes;
+			int32_t c = d->TransferBytes;
 			/* Attempting a DMA from WRAM to $2180 will not work, WRAM will not be written.*/
 			/* Attempting a DMA from $2180 to WRAM will similarly not work,*/
 			/* the value written is (initially) the OpenBus value.*/
@@ -4089,7 +4237,7 @@ static void S9xDoDMA (void)
 			{
 				if (d->AAddressFixed && Memory.FillRAM[0x4801] > 0)
 				{
-					uint8 *in_ptr;
+					uint8_t *in_ptr;
 					/* XXX: Should probably verify that we're DMAing from ROM?*/
 					/* And somewhere we should make sure we're not running across a mapping boundary too.*/
 					/* Hacky support for pre-decompressed S-DD1 data*/
@@ -4115,9 +4263,9 @@ static void S9xDoDMA (void)
 				if (d->AAddress == 0x4800 || d->ABank == 0x50)
 				{
 					int i;
-					int32 icount;
+					int32_t icount;
 
-					spc7110_dma = (uint8*)malloc(d->TransferBytes);
+					spc7110_dma = (uint8_t*)malloc(d->TransferBytes);
 
 					for ( i = 0; i < d->TransferBytes; i++)
 						spc7110_dma[i] = spc7110_decomp_read();
@@ -4138,9 +4286,9 @@ static void S9xDoDMA (void)
 			{
 				if (SA1.in_char_dma && d->BAddress == 0x18 && (d->ABank & 0xf0) == 0x40)
 				{
-					int32 num_chars, depth, bytes_per_char, bytes_per_line, char_line_bytes, i, l, b;
-					uint32 addr, inc_sa1, char_count, j;
-					uint8 *buffer, *p, *base, depth_comb;
+					int32_t num_chars, depth, bytes_per_char, bytes_per_line, char_line_bytes, i, l, b;
+					uint32_t addr, inc_sa1, char_count, j;
+					uint8_t *buffer, *p, *base, depth_comb;
 
 					/* Perform packed bitmap to PPU character format conversion on the data
 					   before transmitting it to V-RAM via-DMA. */
@@ -4171,15 +4319,15 @@ static void S9xDoDMA (void)
 
 					for ( i = 0; i < count; i += inc_sa1, base += char_line_bytes, inc_sa1 = char_line_bytes, char_count = num_chars)
 					{
-						uint8	*line = base + (num_chars - char_count) * depth;
+						uint8_t	*line = base + (num_chars - char_count) * depth;
 						for ( j = 0; j < char_count && p - buffer < count; j++, line += depth)
 						{
-							uint8	*q = line;
+							uint8_t	*q = line;
 							for ( l = 0; l < 8; l++, q += bytes_per_line)
 							{
 								for ( b = 0; b < depth; b++)
 								{
-									uint8	r = *(q + b);
+									uint8_t	r = *(q + b);
 									*(p) =		(*(p + dma_sa1_channels_chars[depth][0]) << 1) | (r & 1);
 									*(p + 1) =	(*(p + dma_sa1_channels_chars[depth][1]) << 1) | ((r >> 1) & 1);
 									*(p) =		(*(p + dma_sa1_channels_chars[depth][2]) << 1) | ((r >> 2) & 1);
@@ -4209,10 +4357,10 @@ static void S9xDoDMA (void)
 
 		if (!d->ReverseTransfer)
 		{
-			int32 b, rem;
-			uint16 p;
-			uint8 *base;
-			bool8 inWRAM_DMA;
+			int32_t b, rem;
+			uint16_t p;
+			uint8_t *base;
+			uint8_t inWRAM_DMA;
 
 			/* CPU -> PPU */
 			b = 0;
@@ -4318,8 +4466,8 @@ static void S9xDoDMA (void)
 						}
 						else if (d->TransferMode == 3 || d->TransferMode == 7 || d->TransferMode == 4)
 						{
-							uint32 startaddr = 0x2100;
-							uint32 endaddr = 0x2101;
+							uint32_t startaddr = 0x2100;
+							uint32_t endaddr = 0x2101;
 							if(d->TransferMode == 4)
 							{
 								startaddr++;
@@ -4531,8 +4679,8 @@ static void S9xDoDMA (void)
 						}
 						else if (d->TransferMode == 3 || d->TransferMode == 7 || d->TransferMode == 4)
 						{
-							uint32 startaddr = 0x2100;
-							uint32 endaddr = 0x2101;
+							uint32_t startaddr = 0x2100;
+							uint32_t endaddr = 0x2101;
 							if(d->TransferMode == 4)
 							{
 								startaddr++;
@@ -4733,7 +4881,11 @@ static void S9xDoDMA (void)
 	}
 }
 
-void S9xSetCPU (uint8 Byte, uint16 Address)
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+
+void S9xSetCPU (uint8_t Byte, uint16_t Address)
 {
 	if (Address < MEM_CPU_NMITIMEN)
 	{
@@ -4842,20 +4994,13 @@ void S9xSetCPU (uint8 Byte, uint16 Address)
 	}
 	else
 	{
-		uint16	pos;
+		uint16_t	pos;
 
 		switch (Address)
 		{
 			case 0x4200: /* NMITIMEN*/
-				if (Byte & 0x20)
-					PPU.VTimerEnabled = TRUE;
-				else
-					PPU.VTimerEnabled = FALSE;
-
-				if (Byte & 0x10)
-					PPU.HTimerEnabled = TRUE;
-				else
-					PPU.HTimerEnabled = FALSE;
+				PPU.VTimerEnabled = !!(Byte & 0x20);
+				PPU.HTimerEnabled = !!(Byte & 0x10);
 
 				S9xUpdateHVTimerPosition();
 
@@ -4864,7 +5009,7 @@ void S9xSetCPU (uint8 Byte, uint16 Address)
 				if ((PPU.HTimerPosition >= CPU.PrevCycles) && (PPU.HTimerPosition < (CPU.PrevCycles + (CPU.Cycles - CPU.PrevCycles))))
 				{
 					/*Check Missing H Timer Range*/
-					bool8 v_counter_eq_vtimer_pos = (CPU.V_Counter == PPU.VTimerPosition);
+					uint8_t v_counter_eq_vtimer_pos = (CPU.V_Counter == PPU.VTimerPosition);
 					if ((PPU.HTimerEnabled && (!PPU.VTimerEnabled || v_counter_eq_vtimer_pos)) || (PPU.VTimerEnabled && v_counter_eq_vtimer_pos))
 					{
 						S9X_SET_IRQ(PPU_IRQ_SOURCE);
@@ -4897,7 +5042,7 @@ void S9xSetCPU (uint8 Byte, uint16 Address)
 				}
 				else if (CPU.V_Counter >  PPU.GunVLatch || (CPU.V_Counter == PPU.GunVLatch && CPU.Cycles >= PPU.GunHLatch * ONE_DOT_CYCLE))
 				{
-					bool8 force = (Byte & 0x80) ? TRUE : FALSE;
+					uint8_t force = (Byte & 0x80) ? TRUE : FALSE;
 					if (force || (Memory.FillRAM[0x4213] & 0x80))
 					{
 						S9X_TRY_GUN_LATCH();
@@ -4912,12 +5057,12 @@ void S9xSetCPU (uint8 Byte, uint16 Address)
 
 			case 0x4203: /* WRMPYB*/
 			{
-				uint32 res;
+				uint32_t res;
 
 				res = Memory.FillRAM[0x4202] * Byte;
 				/* FIXME: The update occurs 8 machine cycles after $4203 is set.*/
-				Memory.FillRAM[0x4216] = (uint8) res;
-				Memory.FillRAM[0x4217] = (uint8) (res >> 8);
+				Memory.FillRAM[0x4216] = (uint8_t) res;
+				Memory.FillRAM[0x4217] = (uint8_t) (res >> 8);
 				break;
 			}
 
@@ -4927,16 +5072,16 @@ void S9xSetCPU (uint8 Byte, uint16 Address)
 
 			case 0x4206: /* WRDIVB*/
 			{
-				uint16 a, div, rem;
+				uint16_t a, div, rem;
 
 				a = Memory.FillRAM[0x4204] + (Memory.FillRAM[0x4205] << 8);
 				div = Byte ? a / Byte : 0xffff;
 				rem = Byte ? a % Byte : a;
 
 				/* FIXME: The update occurs 16 machine cycles after $4206 is set.*/
-				Memory.FillRAM[0x4214] = (uint8) div;
+				Memory.FillRAM[0x4214] = (uint8_t) div;
 				Memory.FillRAM[0x4215] = div >> 8;
-				Memory.FillRAM[0x4216] = (uint8) rem;
+				Memory.FillRAM[0x4216] = (uint8_t) rem;
 				Memory.FillRAM[0x4217] = rem >> 8;
 				break;
 			}
@@ -4976,12 +5121,9 @@ void S9xSetCPU (uint8 Byte, uint16 Address)
 				if (Byte)
 					CPU.Cycles += Timings.DMACPUSync;
 
-				memset(dma_channels_to_be_used, 0, 8 * sizeof(uint8));
+				memset(dma_channels_to_be_used, 0, 8 * sizeof(uint8_t));
 
-				if (Settings.SPC7110 || Settings.SDD1 || Settings.SA1)
-					special_chips_active = TRUE;
-				else
-					special_chips_active = FALSE;
+				special_chips_active = (Settings.SPC7110 || Settings.SDD1 || Settings.SA1);
 
 				if (Byte & 0x01)
 					dma_channels_to_be_used[0] = 1;
@@ -5051,9 +5193,9 @@ void S9xSetCPU (uint8 Byte, uint16 Address)
 	Memory.FillRAM[Address] = Byte;
 }
 
-static INLINE uint8 REGISTER_4212 (void)
+static INLINE uint8_t REGISTER_4212 (void)
 {
-	uint8 byte;
+	uint8_t byte;
 
 	byte = 0;
 
@@ -5068,7 +5210,7 @@ static INLINE uint8 REGISTER_4212 (void)
 	return (byte);
 }
 
-uint8 S9xGetCPU (uint16 Address)
+uint8_t S9xGetCPU (uint16_t Address)
 {
 	if (Address < MEM_CPU_NMITIMEN)
 	{
@@ -5135,7 +5277,7 @@ uint8 S9xGetCPU (uint16 Address)
 	}
 	else
 	{
-		uint8	byte;
+		uint8_t	byte;
 
 		switch (Address)
 		{
@@ -5363,12 +5505,11 @@ void S9xSoftResetPPU (void)
 	IPPU.Interlace = FALSE;
 	IPPU.InterlaceOBJ = FALSE;
 	IPPU.DoubleWidthPixels = FALSE;
+	IPPU.QuadWidthPixels = FALSE;
 	IPPU.DoubleHeightPixels = FALSE;
 	IPPU.CurrentLine = 0;
 	IPPU.PreviousLine = 0;
 	IPPU.XB = NULL;
-	for ( c = 0; c < 256; c++)
-		IPPU.ScreenColors[c] = c;
 	IPPU.RenderedScreenWidth = SNES_WIDTH;
 	IPPU.RenderedScreenHeight = SNES_HEIGHT;
 	IPPU.RenderThisFrame = TRUE;

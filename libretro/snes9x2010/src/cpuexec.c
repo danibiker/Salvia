@@ -193,140 +193,130 @@
 
 extern struct SLineData		LineData[240];
 extern struct SLineMatrixData	LineMatrixData[240];
-extern uint8	*HDMAMemPointers[8];
-static uint32 idle_loop_target_pc;
-static bool8 idle_loop_elimination_enable;
+extern uint8_t	*HDMAMemPointers[8];
+static uint32_t idle_loop_target_pc;
+static uint8_t idle_loop_elimination_enable;
 
-#ifdef LAGFIX
-bool8 finishedFrame = false;
-#endif
+static uint8_t finishedFrame = false;
 
 void S9xMainLoop (void)
 {
 	do
 	{
-#ifdef LAGFIX
-	do
-	{
-#endif
-		register uint8	Op;
-		register struct	SOpcodes *Opcodes;
+		do
+		{
+			register uint8_t	Op;
+			register struct	SOpcodes *Opcodes;
 
-		/* Speedhack - skip idle loop if exists. */
-		if (idle_loop_elimination_enable &&
+			/* Speedhack - skip idle loop if exists. */
+			if (idle_loop_elimination_enable &&
             (Registers.PBPC == idle_loop_target_pc) && (CPU.Cycles < CPU.NextEvent))
          CPU.Cycles = CPU.NextEvent;
 
-		if (CPU.Flags)
-		{
-			if (CPU.Flags & NMI_FLAG)
+			if (CPU.Flags)
 			{
-				if (Timings.NMITriggerPos <= CPU.Cycles)
+				if (CPU.Flags & NMI_FLAG)
 				{
-					CPU.Flags &= ~NMI_FLAG;
-					Timings.NMITriggerPos = 0xffff;
-					if (CPU.WaitingForInterrupt)
+					if (Timings.NMITriggerPos <= CPU.Cycles)
 					{
-						CPU.WaitingForInterrupt = FALSE;
-						Registers.PCw++;
-					}
+						CPU.Flags &= ~NMI_FLAG;
+						Timings.NMITriggerPos = 0xffff;
+						if (CPU.WaitingForInterrupt)
+						{
+							CPU.WaitingForInterrupt = FALSE;
+							Registers.PCw++;
+						}
 
-					S9xOpcode_NMI();
+						S9xOpcode_NMI();
+					}
 				}
-			}
 
 
-			if (CPU.Flags & IRQ_FLAG)
-			{
-				if (CPU.IRQPending)
-					CPU.IRQPending--;	/* FIXME: In case of IRQ during WRAM refresh */
-				else
+				if (CPU.Flags & IRQ_FLAG)
 				{
-					if (CPU.WaitingForInterrupt)
-					{
-						CPU.WaitingForInterrupt = FALSE;
-						Registers.PCw++;
-					}
-
-					if (CPU.IRQActive)
-					{
-						/* in IRQ handler $4211 is supposed to be read, so IRQ_FLAG should be cleared. */
-						if (!CheckFlag(IRQ))
-							S9xOpcode_IRQ();
-					}
+					if (CPU.IRQPending)
+						CPU.IRQPending--;	/* FIXME: In case of IRQ during WRAM refresh */
 					else
-						CPU.Flags &= ~IRQ_FLAG;
+					{
+						if (CPU.WaitingForInterrupt)
+						{
+							CPU.WaitingForInterrupt = FALSE;
+							Registers.PCw++;
+						}
+
+						if (CPU.IRQActive)
+						{
+							/* in IRQ handler $4211 is supposed to be read, so IRQ_FLAG should be cleared. */
+							if (!CheckFlag(IRQ))
+								S9xOpcode_IRQ();
+						}
+						else
+							CPU.Flags &= ~IRQ_FLAG;
+					}
 				}
+
+				if (CPU.Flags & SCAN_KEYS_FLAG)
+					break;
+
 			}
 
-			if (CPU.Flags & SCAN_KEYS_FLAG)
+			Opcodes = S9xOpcodesSlow;
+
+			CPU.PrevCycles = CPU.Cycles;
+
+			if (CPU.PCBase)
+			{
+				Op = CPU.PCBase[Registers.PCw];
+				CPU.Cycles += CPU.MemSpeed;
+				Opcodes = ICPU.S9xOpcodes;
+			}
+			else
+			{
+				Op = S9xGetByte(Registers.PBPC);
+				OpenBus = Op;
+			}
+
+			if ((Registers.PCw & MEMMAP_MASK) + ICPU.S9xOpLengths[Op] >= MEMMAP_BLOCK_SIZE)
+			{
+				uint8_t	*oldPCBase = CPU.PCBase;
+
+				CPU.PCBase = S9xGetBasePointer(ICPU.ShiftedPB + ((uint16_t) (Registers.PCw + 4)));
+				if (oldPCBase != CPU.PCBase || (Registers.PCw & ~MEMMAP_MASK) == (0xffff & ~MEMMAP_MASK))
+					Opcodes = S9xOpcodesSlow;
+			}
+
+			Registers.PCw++;
+			(*Opcodes[Op].S9xOpcode)();
+
+
+			if (Settings.SA1)
+				S9xSA1MainLoop();
+
+		#if (S9X_ACCURACY_LEVEL <= 2)
+			while (CPU.Cycles >= CPU.NextEvent)
+				S9xDoHEventProcessing();
+		#endif
+
+			if (finishedFrame)
 				break;
 
-		}
+		} while (1);
 
-		Opcodes = S9xOpcodesSlow;
-
-		CPU.PrevCycles = CPU.Cycles;
-
-		if (CPU.PCBase)
+		if (!finishedFrame)
 		{
-			Op = CPU.PCBase[Registers.PCw];
-			CPU.Cycles += CPU.MemSpeed;
-			Opcodes = ICPU.S9xOpcodes;
+			S9xPackStatus();
+
+			if (CPU.Flags & SCAN_KEYS_FLAG)
+			{
+				CPU.Flags &= ~SCAN_KEYS_FLAG;
+			}
 		}
 		else
 		{
-			Op = S9xGetByte(Registers.PBPC);
-			OpenBus = Op;
+			finishedFrame = false;
+			break;
 		}
-
-		if ((Registers.PCw & MEMMAP_MASK) + ICPU.S9xOpLengths[Op] >= MEMMAP_BLOCK_SIZE)
-		{
-			uint8	*oldPCBase = CPU.PCBase;
-
-			CPU.PCBase = S9xGetBasePointer(ICPU.ShiftedPB + ((uint16) (Registers.PCw + 4)));
-			if (oldPCBase != CPU.PCBase || (Registers.PCw & ~MEMMAP_MASK) == (0xffff & ~MEMMAP_MASK))
-				Opcodes = S9xOpcodesSlow;
-		}
-
-		Registers.PCw++;
-		(*Opcodes[Op].S9xOpcode)();
-
-
-		if (Settings.SA1)
-			S9xSA1MainLoop();
-
-	#if (S9X_ACCURACY_LEVEL <= 2)
-		while (CPU.Cycles >= CPU.NextEvent)
-			S9xDoHEventProcessing();
-	#endif
-	
-#ifdef LAGFIX
-	if (finishedFrame)
-        	break;
-#endif
-                
-	}while(1);
-
-#ifdef LAGFIX
-	if (!finishedFrame)
-        {
-#endif
-	S9xPackStatus();
-
-	if (CPU.Flags & SCAN_KEYS_FLAG)
-	{
-		CPU.Flags &= ~SCAN_KEYS_FLAG;
-	}
-#ifdef LAGFIX
-        }
-        else
-        {
-            finishedFrame = false;
-            break;
-        }
-    }while(!finishedFrame);
-#endif
+	} while (!finishedFrame);
 }
 
 
@@ -352,7 +342,7 @@ static void S9xCheckMissingHTimerHalt(void)
 
 static INLINE void speedhacks_manager (void)
 {
-	uint8 var_mem, var_mem2, var_mem3;
+	uint8_t var_mem, var_mem2, var_mem3;
    
    idle_loop_target_pc = 0x00;
    idle_loop_elimination_enable = FALSE;
@@ -389,29 +379,8 @@ static INLINE void speedhacks_manager (void)
          if(var_mem)
             coldata_update_screen = TRUE;
          break;
-#if 0
-      case SPEEDHACK_KILLER_INSTINCT:
-         {
-            PPU.SFXSpeedupHack = TRUE;
-            //fprintf(stderr, "character: %d\n", Memory.RAM[0x024E]);
-            //fprintf(stderr, "character #2: %d\n", Memory.RAM[0x0252]);
-            //fprintf(stderr, "stage: %d\n", Memory.RAM[0x12F0]);
-            uint8 level = Memory.RAM[0x12F0]; /* current level - 8012F0XX */
-            if(level == 8)
-               PPU.SFXSpeedupHack = FALSE;
-            break;
-         }
-      case SPEEDHACK_SUPER_METROID:
-         {
-            uint8 song = (Memory.RAM[0x07f3] | Memory.RAM[0x07f4] << 8);
-            fprintf(stderr, "current_song: %d.\n", song);
-         }
-#endif
       case SPEEDHACK_STAR_FOX_1:
-         if (PPU.BGMode == 1 || PPU.BGMode == 2)
-            PPU.SFXSpeedupHack = TRUE;
-         else
-            PPU.SFXSpeedupHack = FALSE;
+         PPU.SFXSpeedupHack = (PPU.BGMode == 1 || PPU.BGMode == 2);
          break;
       case SPEEDHACK_SUPER_MARIO_WORLD:
          idle_loop_target_pc = 0x00806B;
@@ -427,14 +396,18 @@ static void S9xEndScreenRefresh (void)
 	if (IPPU.RenderThisFrame)
 	{
 		FLUSH_REDRAW();
+		/* M7 vertical-2x post-pass: if armed by frame-start setup or
+		 * the mid-frame mode-switch hook in ppu.c, expand the 224-row
+		 * frame in place to 448 rows. Bumps IPPU.RenderedScreenHeight
+		 * to PPU.ScreenHeight*2 so the next call to S9xDeinitUpdate
+		 * picks up the new size. No-op if M7VertStartY is -1. */
+		S9xMode7VertResample();
 	}
 
 	if (!(GFX.DoInterlace && GFX.InterlaceFrame == 0))
 	{
 		S9xDeinitUpdate(IPPU.RenderedScreenWidth, IPPU.RenderedScreenHeight);
-#ifdef LAGFIX
 		finishedFrame = true;
-#endif
 	}
 	PPU.GunVLatch = 1000; /* i.e., never latch */
 	PPU.GunHLatch = 0;
@@ -450,7 +423,7 @@ static void S9xEndScreenRefresh (void)
 	S9xApplyCheats();
 }
 
-static void RenderLine (uint8 C)
+static void RenderLine (uint8_t C)
 {
 	if (IPPU.RenderThisFrame)
 	{
@@ -493,8 +466,8 @@ static void RenderLine (uint8 C)
 
 static INLINE void S9xReschedule (void)
 {
-	uint8 next;
-	int32 hpos;
+	uint8_t next;
+	int32_t hpos;
 
 	next = 0;
 	hpos = 0;
@@ -538,9 +511,9 @@ static INLINE void S9xReschedule (void)
 			break;
 	}
 
-	if (((int32) PPU.HTimerPosition > CPU.NextEvent) && ((int32) PPU.HTimerPosition < hpos))
+	if (((int32_t) PPU.HTimerPosition > CPU.NextEvent) && ((int32_t) PPU.HTimerPosition < hpos))
 	{
-		hpos = (int32) PPU.HTimerPosition;
+		hpos = (int32_t) PPU.HTimerPosition;
 
 		switch (next)
 		{
@@ -575,11 +548,11 @@ static INLINE void S9xReschedule (void)
 }
 
 
-static INLINE bool8 HDMAReadLineCount (int d)
+static INLINE uint8_t HDMAReadLineCount (int d)
 {
 	/* CPU.InDMA is set, so S9xGetXXX() / S9xSetXXX() incur no charges. */
 
-	uint8	line;
+	uint8_t	line;
 
 	line = S9xGetByte((DMA[d].ABank << 16) + DMA[d].Address);
 	CPU.Cycles += SLOW_ONE_CYCLE;
@@ -636,8 +609,8 @@ static INLINE bool8 HDMAReadLineCount (int d)
 
 static void S9xStartHDMA (void)
 {
-	uint8 i;
-	int32 tmpch;
+	uint8_t i;
+	int32_t tmpch;
 
 	PPU.HDMA = Memory.FillRAM[0x420c];
 	PPU.HDMAEnded = 0;
@@ -675,18 +648,18 @@ static void S9xStartHDMA (void)
 	CPU.CurrentDMAorHDMAChannel = tmpch;
 }
 
-static int HDMA_ModeByteCounts[8] =
+static const int HDMA_ModeByteCounts[8] =
 {
 	1, 2, 2, 4, 4, 4, 2, 4
 };
 
-static uint8 S9xDoHDMA (uint8 byte)
+static uint8_t S9xDoHDMA (uint8_t byte)
 {
-	uint8 mask;
-	uint32	ShiftedIBank;
-	uint16	IAddr;
-	bool8	temp;
-	int32	tmpch;
+	uint8_t mask;
+	uint32_t	ShiftedIBank;
+	uint16_t	IAddr;
+	uint8_t	temp;
+	int32_t	tmpch;
 	int d;
 	struct SDMA *p;
 
@@ -744,8 +717,8 @@ static uint8 S9xDoHDMA (uint8 byte)
 
 						#define DOBYTE(Addr, RegOff) \
 							CPU.InWRAMDMAorHDMA = (ShiftedIBank == 0x7e0000 || ShiftedIBank == 0x7f0000 || \
-								(!(ShiftedIBank & 0x400000) && ((uint16) (Addr)) < 0x2000)); \
-							S9xSetPPU(S9xGetByte(ShiftedIBank + ((uint16) (Addr))), 0x2100 + p->BAddress + (RegOff));
+								(!(ShiftedIBank & 0x400000) && ((uint16_t) (Addr)) < 0x2000)); \
+							S9xSetPPU(S9xGetByte(ShiftedIBank + ((uint16_t) (Addr))), 0x2100 + p->BAddress + (RegOff));
 
 						DOBYTE(IAddr, 0);
 						CPU.Cycles += SLOW_ONE_CYCLE;
@@ -804,7 +777,7 @@ static uint8 S9xDoHDMA (uint8 byte)
 						if (!HDMAMemPointers[d])
 						{
 							/* HDMA SLOW PATH */
-							uint32	Addr = ShiftedIBank + IAddr;
+							uint32_t	Addr = ShiftedIBank + IAddr;
 
 							switch (p->TransferMode)
 							{
@@ -955,7 +928,7 @@ static uint8 S9xDoHDMA (uint8 byte)
 
 void S9xDoHEventProcessing (void)
 {
-	uint8 tmp;
+	uint8_t tmp;
 
 	switch (CPU.WhichEvent)
 	{
@@ -1110,7 +1083,7 @@ void S9xDoHEventProcessing (void)
 					if (!GFX.DoInterlace || !GFX.InterlaceFrame)
 					{
 						/* S9x Start Screen Refresh */
-						bool8 cond_1, cond_2;
+						uint8_t cond_1, cond_2, cond_q;
 
 						GFX.DoInterlace -= (GFX.DoInterlace == TRUE);
 
@@ -1118,25 +1091,102 @@ void S9xDoHEventProcessing (void)
 						IPPU.InterlaceOBJ = Memory.FillRAM[0x2133] & 2;
 						IPPU.PseudoHires = Memory.FillRAM[0x2133] & 8;
 
-						cond_1 = (Settings.SupportHiRes && (PPU.BGMode == 5 || PPU.BGMode == 6 || IPPU.PseudoHires));
+						/* cond_1: this frame should render at 2x or wider.
+						   Triggered by Mode 5/6 / PseudoHires as on hardware,
+						   plus the Mode7Hires option which forces a wider
+						   buffer when the frame starts in Mode 7 so the
+						   M7Hires/M7HR4X renderers have room to write into.
+
+						   cond_q: this frame should render at 4x. Only set
+						   for Mode 7 with the 4x hires setting. */
+						cond_1 = (Settings.SupportHiRes && (PPU.BGMode == 5 || PPU.BGMode == 6 || IPPU.PseudoHires
+								|| (Settings.Mode7Hires && PPU.BGMode == 7)));
+						cond_q = (Settings.SupportHiRes && PPU.BGMode == 7 && Settings.Mode7Hires == 4);
 						cond_2 = (Settings.SupportHiRes && IPPU.Interlace);
 
 						GFX.RealPPL = GFX.Pitch >> 1;
-						IPPU.RenderedScreenWidth = SNES_WIDTH << cond_1;
+						/* Width factor: 4 for Mode 7 + 4x hires, 2 for any
+						   other hires path, 1 for native. */
+						{
+							int width_factor = cond_q ? 4 : (cond_1 ? 2 : 1);
+							IPPU.RenderedScreenWidth = SNES_WIDTH * width_factor;
+						}
 						IPPU.RenderedScreenHeight = PPU.ScreenHeight << cond_2;
 						IPPU.DoubleWidthPixels = cond_1;
+						IPPU.QuadWidthPixels = cond_q;
 						IPPU.DoubleHeightPixels = cond_2;
 
 						GFX.PPL = GFX.RealPPL << cond_2;
 						GFX.DoInterlace += cond_2;
+
+						/* M7 vertical-2x post-pass: arm if the user opted
+						 * in and the frame begins in BG mode 7 with hires
+						 * enabled. M7VertStartY = 0 means the entire
+						 * 0..PPU.ScreenHeight range gets bilinear-Y
+						 * interpolation at end-of-frame. Frames that
+						 * switch to mode 7 mid-frame are armed by the
+						 * mode-switch hook in ppu.c. */
+						IPPU.M7VertStartY = -1;
+						if (cond_1
+						 && PPU.BGMode == 7
+						 && Settings.Mode7HiresVertical)
+							IPPU.M7VertStartY = 0;
+
+						/* Backend hook: try to redirect GFX.Screen at the
+						   frontend's swapchain buffer for zero-copy
+						   presentation. May silently rewrite GFX.Screen,
+						   GFX.Pitch, GFX.RealPPL and GFX.PPL. No-op when
+						   redirect is not possible (NTSC filter on,
+						   frontend doesn't support sw_fb, etc.). */
+						S9xLibretroSwFbAcquire(IPPU.RenderedScreenWidth,
+								IPPU.RenderedScreenHeight);
 					}
 
 					PPU.MosaicStart = 0;
 					PPU.RecomputeClipWindows = TRUE;
 					IPPU.PreviousLine = IPPU.CurrentLine = 0;
 
-					memset(GFX.ZBuffer, 0, GFX.ScreenSize);
-					memset(GFX.SubZBuffer, 0, GFX.ScreenSize);
+					/* Clear only the byte range the renderer actually touches.
+
+					   Every render path in ppu.c / tile.c iterates
+					   `for (Y = StartY; Y <= EndY; Y++) Offset = Y * GFX.PPL`,
+					   with EndY clamped to PPU.ScreenHeight - 1, so the
+					   number of scanlines the renderer writes to the
+					   Z-buffers is IPPU.RenderedScreenHeight (which equals
+					   PPU.ScreenHeight in non-interlaced modes and twice
+					   that with interlace, because the interlaced renderer
+					   writes twice as many scanlines into the same buffer).
+					   Each scanline is RealPPL bytes (the buffer's true row
+					   stride, before the interlace PPL doubling).
+
+					   For non-interlaced 224-line NTSC content this is
+					   ~229 KB instead of GFX.ScreenSize's ~489 KB - a ~53%
+					   reduction. Doubled because we clear two buffers (Z
+					   and SubZ), so ~520 KB / frame avoided. At 60 fps
+					   that's ~31 MB/sec less zero-writing on weak hardware.
+					   Interlaced and ticks=4 hires modes hit the buffer's
+					   full extent, so the savings shrink to a few percent
+					   in those cases - the optimization just gracefully
+					   degrades to the full clear.
+
+					   high_water tracks the running max over the session
+					   so a transition from a wider footprint (interlace,
+					   bigger sw_fb pitch) to a narrower one still clears
+					   any stale Z values at byte positions that were
+					   written by the wider footprint. Never decreases;
+					   in pathological cases this means we keep clearing
+					   the high-water size after a one-time hires frame,
+					   which matches the behavior before this change. */
+					{
+						static size_t high_water = 0;
+						size_t footprint = (size_t)IPPU.RenderedScreenHeight * GFX.RealPPL;
+						if (footprint > high_water)
+							high_water = footprint;
+						if (high_water > GFX.ScreenSize)
+							high_water = GFX.ScreenSize;
+						memset(GFX.ZBuffer,    0, high_water);
+						memset(GFX.SubZBuffer, 0, high_water);
+					}
 				}
 			}
 
@@ -1157,7 +1207,7 @@ void S9xDoHEventProcessing (void)
 
 		case HC_RENDER_EVENT:
 			if (CPU.V_Counter >= FIRST_VISIBLE_LINE && CPU.V_Counter <= PPU.ScreenHeight)
-				RenderLine((uint8) (CPU.V_Counter - FIRST_VISIBLE_LINE));
+				RenderLine((uint8_t) (CPU.V_Counter - FIRST_VISIBLE_LINE));
 
 			if (PPU.HTimerPosition == Timings.RenderPos)
 				S9xCheckMissingHTimerPosition();

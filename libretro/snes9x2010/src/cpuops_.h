@@ -199,20 +199,20 @@
 
 static void Op69M1 (void)
 {
-	ADC8(Immediate8(READ));
+	ADC8(Immediate8_R());
 }
 
 static void Op69M0 (void)
 {
-	ADC16(Immediate16(READ));
+	ADC16(Immediate16_R());
 }
 
 static void Op69Slow (void)
 {
 	if (CheckMemory())
-		ADC8(Immediate8Slow(READ));
+		ADC8(Immediate8Slow_R());
 	else
-		ADC16(Immediate16Slow(READ));
+		ADC16(Immediate16Slow_R());
 }
 
 rOP8 (65M1,     Direct,                           WRAP_BANK, ADC)
@@ -285,13 +285,13 @@ rOPM (73Slow,   StackRelativeIndirectIndexedSlow, WRAP_NONE, ADC)
 
 static void Op29M1 (void)
 {
-	Registers.AL &= Immediate8(READ);
+	Registers.AL &= Immediate8_R();
 	SetZN8(Registers.AL);
 }
 
 static void Op29M0 (void)
 {
-	Registers.A.W &= Immediate16(READ);
+	Registers.A.W &= Immediate16_R();
 	SetZN16(Registers.A.W);
 }
 
@@ -299,12 +299,12 @@ static void Op29Slow (void)
 {
 	if (CheckMemory())
 	{
-		Registers.AL &= Immediate8Slow(READ);
+		Registers.AL &= Immediate8Slow_R();
 		SetZN8(Registers.AL);
 	}
 	else
 	{
-		Registers.A.W &= Immediate16Slow(READ);
+		Registers.A.W &= Immediate16Slow_R();
 		SetZN16(Registers.A.W);
 	}
 }
@@ -434,20 +434,20 @@ mOPM (1ESlow,   AbsoluteIndexedXSlow,             WRAP_NONE, ASL)
 
 static void Op89M1 (void)
 {
-	ICPU._Zero = Registers.AL & Immediate8(READ);
+	ICPU._Zero = Registers.AL & Immediate8_R();
 }
 
 static void Op89M0 (void)
 {
-	ICPU._Zero = (Registers.A.W & Immediate16(READ)) != 0;
+	ICPU._Zero = (Registers.A.W & Immediate16_R()) != 0;
 }
 
 static void Op89Slow (void)
 {
 	if (CheckMemory())
-		ICPU._Zero = Registers.AL & Immediate8Slow(READ);
+		ICPU._Zero = Registers.AL & Immediate8Slow_R();
 	else
-		ICPU._Zero = (Registers.A.W & Immediate16Slow(READ)) != 0;
+		ICPU._Zero = (Registers.A.W & Immediate16Slow_R()) != 0;
 }
 
 rOP8 (24M1,     Direct,                           WRAP_BANK, BIT)
@@ -473,35 +473,35 @@ rOPM (3CSlow,   AbsoluteIndexedXSlow,             WRAP_NONE, BIT)
 
 static void OpC9M1 (void)
 {
-	int16 Int16;
+	int16_t Int16;
 
-	Int16 = (int16) Registers.AL - (int16) Immediate8(READ);
+	Int16 = (int16_t) Registers.AL - (int16_t) Immediate8_R();
 	ICPU._Carry = Int16 >= 0;
-	SetZN8((uint8) Int16);
+	SetZN8((uint8_t) Int16);
 }
 
 static void OpC9M0 (void)
 {
-	int32 Int32;
+	int32_t Int32;
 
-	Int32 = (int32) Registers.A.W - (int32) Immediate16(READ);
+	Int32 = (int32_t) Registers.A.W - (int32_t) Immediate16_R();
 	ICPU._Carry = Int32 >= 0;
-	SetZN16((uint16) Int32);
+	SetZN16((uint16_t) Int32);
 }
 
 static void OpC9Slow (void)
 {
 	if (CheckMemory())
 	{
-		int16	Int16 = (int16) Registers.AL - (int16) Immediate8Slow(READ);
+		int16_t	Int16 = (int16_t) Registers.AL - (int16_t) Immediate8Slow_R();
 		ICPU._Carry = Int16 >= 0;
-		SetZN8((uint8) Int16);
+		SetZN8((uint8_t) Int16);
 	}
 	else
 	{
-		int32	Int32 = (int32) Registers.A.W - (int32) Immediate16Slow(READ);
+		int32_t	Int32 = (int32_t) Registers.A.W - (int32_t) Immediate16Slow_R();
 		ICPU._Carry = Int32 >= 0;
-		SetZN16((uint16) Int32);
+		SetZN16((uint16_t) Int32);
 	}
 }
 
@@ -575,31 +575,31 @@ rOPM (D3Slow,   StackRelativeIndirectIndexedSlow, WRAP_NONE, CMP)
 
 static void OpE0X1 (void)
 {
-	int16	Int16 = (int16) Registers.XL - (int16) Immediate8(READ);
+	int16_t	Int16 = (int16_t) Registers.XL - (int16_t) Immediate8_R();
 	ICPU._Carry = Int16 >= 0;
-	SetZN8((uint8) Int16);
+	SetZN8((uint8_t) Int16);
 }
 
 static void OpE0X0 (void)
 {
-	int32	Int32 = (int32) Registers.X.W - (int32) Immediate16(READ);
+	int32_t	Int32 = (int32_t) Registers.X.W - (int32_t) Immediate16_R();
 	ICPU._Carry = Int32 >= 0;
-	SetZN16((uint16) Int32);
+	SetZN16((uint16_t) Int32);
 }
 
 static void OpE0Slow (void)
 {
 	if (CheckIndex())
 	{
-		int16	Int16 = (int16) Registers.XL - (int16) Immediate8Slow(READ);
+		int16_t	Int16 = (int16_t) Registers.XL - (int16_t) Immediate8Slow_R();
 		ICPU._Carry = Int16 >= 0;
-		SetZN8((uint8) Int16);
+		SetZN8((uint8_t) Int16);
 	}
 	else
 	{
-		int32	Int32 = (int32) Registers.X.W - (int32) Immediate16Slow(READ);
+		int32_t	Int32 = (int32_t) Registers.X.W - (int32_t) Immediate16Slow_R();
 		ICPU._Carry = Int32 >= 0;
-		SetZN16((uint16) Int32);
+		SetZN16((uint16_t) Int32);
 	}
 }
 
@@ -615,31 +615,31 @@ rOPX (ECSlow,   AbsoluteSlow,                     WRAP_NONE, CPX)
 
 static void OpC0X1 (void)
 {
-	int16	Int16 = (int16) Registers.YL - (int16) Immediate8(READ);
+	int16_t	Int16 = (int16_t) Registers.YL - (int16_t) Immediate8_R();
 	ICPU._Carry = Int16 >= 0;
-	SetZN8((uint8) Int16);
+	SetZN8((uint8_t) Int16);
 }
 
 static void OpC0X0 (void)
 {
-	int32	Int32 = (int32) Registers.Y.W - (int32) Immediate16(READ);
+	int32_t	Int32 = (int32_t) Registers.Y.W - (int32_t) Immediate16_R();
 	ICPU._Carry = Int32 >= 0;
-	SetZN16((uint16) Int32);
+	SetZN16((uint16_t) Int32);
 }
 
 static void OpC0Slow (void)
 {
 	if (CheckIndex())
 	{
-		int16	Int16 = (int16) Registers.YL - (int16) Immediate8Slow(READ);
+		int16_t	Int16 = (int16_t) Registers.YL - (int16_t) Immediate8Slow_R();
 		ICPU._Carry = Int16 >= 0;
-		SetZN8((uint8) Int16);
+		SetZN8((uint8_t) Int16);
 	}
 	else
 	{
-		int32	Int32 = (int32) Registers.Y.W - (int32) Immediate16Slow(READ);
+		int32_t	Int32 = (int32_t) Registers.Y.W - (int32_t) Immediate16Slow_R();
 		ICPU._Carry = Int32 >= 0;
-		SetZN16((uint16) Int32);
+		SetZN16((uint16_t) Int32);
 	}
 }
 
@@ -706,13 +706,13 @@ mOPM (DESlow,   AbsoluteIndexedXSlow,             WRAP_NONE, DEC)
 
 static void Op49M1 (void)
 {
-	Registers.AL ^= Immediate8(READ);
+	Registers.AL ^= Immediate8_R();
 	SetZN8(Registers.AL);
 }
 
 static void Op49M0 (void)
 {
-	Registers.A.W ^= Immediate16(READ);
+	Registers.A.W ^= Immediate16_R();
 	SetZN16(Registers.A.W);
 }
 
@@ -720,12 +720,12 @@ static void Op49Slow (void)
 {
 	if (CheckMemory())
 	{
-		Registers.AL ^= Immediate8Slow(READ);
+		Registers.AL ^= Immediate8Slow_R();
 		SetZN8(Registers.AL);
 	}
 	else
 	{
-		Registers.A.W ^= Immediate16Slow(READ);
+		Registers.A.W ^= Immediate16Slow_R();
 		SetZN16(Registers.A.W);
 	}
 }
@@ -851,13 +851,13 @@ mOPM (FESlow,   AbsoluteIndexedXSlow,             WRAP_NONE, INC)
 
 static void OpA9M1 (void)
 {
-	Registers.AL = Immediate8(READ);
+	Registers.AL = Immediate8_R();
 	SetZN8(Registers.AL);
 }
 
 static void OpA9M0 (void)
 {
-	Registers.A.W = Immediate16(READ);
+	Registers.A.W = Immediate16_R();
 	SetZN16(Registers.A.W);
 }
 
@@ -865,12 +865,12 @@ static void OpA9Slow (void)
 {
 	if (CheckMemory())
 	{
-		Registers.AL = Immediate8Slow(READ);
+		Registers.AL = Immediate8Slow_R();
 		SetZN8(Registers.AL);
 	}
 	else
 	{
-		Registers.A.W = Immediate16Slow(READ);
+		Registers.A.W = Immediate16Slow_R();
 		SetZN16(Registers.A.W);
 	}
 }
@@ -945,13 +945,13 @@ rOPM (B3Slow,   StackRelativeIndirectIndexedSlow, WRAP_NONE, LDA)
 
 static void OpA2X1 (void)
 {
-	Registers.XL = Immediate8(READ);
+	Registers.XL = Immediate8_R();
 	SetZN8(Registers.XL);
 }
 
 static void OpA2X0 (void)
 {
-	Registers.X.W = Immediate16(READ);
+	Registers.X.W = Immediate16_R();
 	SetZN16(Registers.X.W);
 }
 
@@ -959,12 +959,12 @@ static void OpA2Slow (void)
 {
 	if (CheckIndex())
 	{
-		Registers.XL = Immediate8Slow(READ);
+		Registers.XL = Immediate8Slow_R();
 		SetZN8(Registers.XL);
 	}
 	else
 	{
-		Registers.X.W = Immediate16Slow(READ);
+		Registers.X.W = Immediate16Slow_R();
 		SetZN16(Registers.X.W);
 	}
 }
@@ -990,13 +990,13 @@ rOPX (BESlow,   AbsoluteIndexedYSlow,             WRAP_BANK, LDX)
 
 static void OpA0X1 (void)
 {
-	Registers.YL = Immediate8(READ);
+	Registers.YL = Immediate8_R();
 	SetZN8(Registers.YL);
 }
 
 static void OpA0X0 (void)
 {
-	Registers.Y.W = Immediate16(READ);
+	Registers.Y.W = Immediate16_R();
 	SetZN16(Registers.Y.W);
 }
 
@@ -1004,12 +1004,12 @@ static void OpA0Slow (void)
 {
 	if (CheckIndex())
 	{
-		Registers.YL = Immediate8Slow(READ);
+		Registers.YL = Immediate8Slow_R();
 		SetZN8(Registers.YL);
 	}
 	else
 	{
-		Registers.Y.W = Immediate16Slow(READ);
+		Registers.Y.W = Immediate16Slow_R();
 		SetZN16(Registers.Y.W);
 	}
 }
@@ -1090,13 +1090,13 @@ mOPM (5ESlow,   AbsoluteIndexedXSlow,             WRAP_NONE, LSR)
 
 static void Op09M1 (void)
 {
-	Registers.AL |= Immediate8(READ);
+	Registers.AL |= Immediate8_R();
 	SetZN8(Registers.AL);
 }
 
 static void Op09M0 (void)
 {
-	Registers.A.W |= Immediate16(READ);
+	Registers.A.W |= Immediate16_R();
 	SetZN16(Registers.A.W);
 }
 
@@ -1104,12 +1104,12 @@ static void Op09Slow (void)
 {
 	if (CheckMemory())
 	{
-		Registers.AL |= Immediate8Slow(READ);
+		Registers.AL |= Immediate8Slow_R();
 		SetZN8(Registers.AL);
 	}
 	else
 	{
-		Registers.A.W |= Immediate16Slow(READ);
+		Registers.A.W |= Immediate16Slow_R();
 		SetZN16(Registers.A.W);
 	}
 }
@@ -1184,21 +1184,21 @@ rOPM (13Slow,   StackRelativeIndirectIndexedSlow, WRAP_NONE, ORA)
 
 static void Op2AM1 (void)
 {
-	uint16 w;
+	uint16_t w;
 	AddCycles(ONE_CYCLE);
-	w = (((uint16) Registers.AL) << 1) | CheckCarry();
+	w = (((uint16_t) Registers.AL) << 1) | CheckCarry();
 	ICPU._Carry = w >= 0x100;
-	Registers.AL = (uint8) w;
+	Registers.AL = (uint8_t) w;
 	SetZN8(Registers.AL);
 }
 
 static void Op2AM0 (void)
 {
-	uint32 w;
+	uint32_t w;
 	AddCycles(ONE_CYCLE);
-	w = (((uint32) Registers.A.W) << 1) | CheckCarry();
+	w = (((uint32_t) Registers.A.W) << 1) | CheckCarry();
 	ICPU._Carry = w >= 0x10000;
-	Registers.A.W = (uint16) w;
+	Registers.A.W = (uint16_t) w;
 	SetZN16(Registers.A.W);
 }
 
@@ -1208,16 +1208,16 @@ static void Op2ASlow (void)
 
 	if (CheckMemory())
 	{
-		uint16	w = (((uint16) Registers.AL) << 1) | CheckCarry();
+		uint16_t	w = (((uint16_t) Registers.AL) << 1) | CheckCarry();
 		ICPU._Carry = w >= 0x100;
-		Registers.AL = (uint8) w;
+		Registers.AL = (uint8_t) w;
 		SetZN8(Registers.AL);
 	}
 	else
 	{
-		uint32	w = (((uint32) Registers.A.W) << 1) | CheckCarry();
+		uint32_t	w = (((uint32_t) Registers.A.W) << 1) | CheckCarry();
 		ICPU._Carry = w >= 0x10000;
-		Registers.A.W = (uint16) w;
+		Registers.A.W = (uint16_t) w;
 		SetZN16(Registers.A.W);
 	}
 }
@@ -1245,23 +1245,23 @@ mOPM (3ESlow,   AbsoluteIndexedXSlow,             WRAP_NONE, ROL)
 
 static void Op6AM1 (void)
 {
-	uint16 w;
+	uint16_t w;
 	AddCycles(ONE_CYCLE);
-	w = ((uint16) Registers.AL) | (((uint16) CheckCarry()) << 8);
+	w = ((uint16_t) Registers.AL) | (((uint16_t) CheckCarry()) << 8);
 	ICPU._Carry = w & 1;
 	w >>= 1;
-	Registers.AL = (uint8) w;
+	Registers.AL = (uint8_t) w;
 	SetZN8(Registers.AL);
 }
 
 static void Op6AM0 (void)
 {
-	uint32 w;
+	uint32_t w;
 	AddCycles(ONE_CYCLE);
-	w = ((uint32) Registers.A.W) | (((uint32) CheckCarry()) << 16);
+	w = ((uint32_t) Registers.A.W) | (((uint32_t) CheckCarry()) << 16);
 	ICPU._Carry = w & 1;
 	w >>= 1;
-	Registers.A.W = (uint16) w;
+	Registers.A.W = (uint16_t) w;
 	SetZN16(Registers.A.W);
 }
 
@@ -1271,18 +1271,18 @@ static void Op6ASlow (void)
 
 	if (CheckMemory())
 	{
-		uint16	w = ((uint16) Registers.AL) | (((uint16) CheckCarry()) << 8);
+		uint16_t	w = ((uint16_t) Registers.AL) | (((uint16_t) CheckCarry()) << 8);
 		ICPU._Carry = w & 1;
 		w >>= 1;
-		Registers.AL = (uint8) w;
+		Registers.AL = (uint8_t) w;
 		SetZN8(Registers.AL);
 	}
 	else
 	{
-		uint32	w = ((uint32) Registers.A.W) | (((uint32) CheckCarry()) << 16);
+		uint32_t	w = ((uint32_t) Registers.A.W) | (((uint32_t) CheckCarry()) << 16);
 		ICPU._Carry = w & 1;
 		w >>= 1;
-		Registers.A.W = (uint16) w;
+		Registers.A.W = (uint16_t) w;
 		SetZN16(Registers.A.W);
 	}
 }
@@ -1310,20 +1310,20 @@ mOPM (7ESlow,   AbsoluteIndexedXSlow,             WRAP_NONE, ROR)
 
 static void OpE9M1 (void)
 {
-	SBC8(Immediate8(READ));
+	SBC8(Immediate8_R());
 }
 
 static void OpE9M0 (void)
 {
-	SBC16(Immediate16(READ));
+	SBC16(Immediate16_R());
 }
 
 static void OpE9Slow (void)
 {
 	if (CheckMemory())
-		SBC8(Immediate8Slow(READ));
+		SBC8(Immediate8Slow_R());
 	else
-		SBC16(Immediate16Slow(READ));
+		SBC16(Immediate16Slow_R());
 }
 
 rOP8 (E5M1,     Direct,                           WRAP_BANK, SBC)
@@ -1536,58 +1536,51 @@ mOPM (0CSlow,   AbsoluteSlow,                     WRAP_BANK, TSB)
 /* BCC */
 bOP(90E0,   Relative,     !CheckCarry(),    0, 0)
 bOP(90E1,   Relative,     !CheckCarry(),    0, 1)
-bOP(90Slow, RelativeSlow, !CheckCarry(),    0, CheckEmulation())
+bOPSlow(90Slow, RelativeSlow, !CheckCarry(),    0, CheckEmulation())
 
 /* BCS*/
 bOP(B0E0,   Relative,      CheckCarry(),    0, 0)
 bOP(B0E1,   Relative,      CheckCarry(),    0, 1)
-bOP(B0Slow, RelativeSlow,  CheckCarry(),    0, CheckEmulation())
+bOPSlow(B0Slow, RelativeSlow,  CheckCarry(),    0, CheckEmulation())
 
 /* BEQ*/
 bOP(F0E0,   Relative,      CheckZero(),     2, 0)
 bOP(F0E1,   Relative,      CheckZero(),     2, 1)
-bOP(F0Slow, RelativeSlow,  CheckZero(),     2, CheckEmulation())
+bOPSlow(F0Slow, RelativeSlow,  CheckZero(),     2, CheckEmulation())
 
 /* BMI*/
 bOP(30E0,   Relative,      CheckNegative(), 1, 0)
 bOP(30E1,   Relative,      CheckNegative(), 1, 1)
-bOP(30Slow, RelativeSlow,  CheckNegative(), 1, CheckEmulation())
+bOPSlow(30Slow, RelativeSlow,  CheckNegative(), 1, CheckEmulation())
 
 /* BNE*/
 bOP(D0E0,   Relative,     !CheckZero(),     1, 0)
 bOP(D0E1,   Relative,     !CheckZero(),     1, 1)
-bOP(D0Slow, RelativeSlow, !CheckZero(),     1, CheckEmulation())
+bOPSlow(D0Slow, RelativeSlow, !CheckZero(),     1, CheckEmulation())
 
 /* BPL*/
 bOP(10E0,   Relative,     !CheckNegative(), 1, 0)
 bOP(10E1,   Relative,     !CheckNegative(), 1, 1)
-bOP(10Slow, RelativeSlow, !CheckNegative(), 1, CheckEmulation())
+bOPSlow(10Slow, RelativeSlow, !CheckNegative(), 1, CheckEmulation())
 
 /* BRA*/
 bOP(80E0,   Relative,     1,                X, 0)
 bOP(80E1,   Relative,     1,                X, 1)
-bOP(80Slow, RelativeSlow, 1,                X, CheckEmulation())
+bOPSlow(80Slow, RelativeSlow, 1,                X, CheckEmulation())
 
 /* BVC*/
 bOP(50E0,   Relative,     !CheckOverflow(), 0, 0)
 bOP(50E1,   Relative,     !CheckOverflow(), 0, 1)
-bOP(50Slow, RelativeSlow, !CheckOverflow(), 0, CheckEmulation())
+bOPSlow(50Slow, RelativeSlow, !CheckOverflow(), 0, CheckEmulation())
 
 /* BVS*/
 bOP(70E0,   Relative,      CheckOverflow(), 0, 0)
 bOP(70E1,   Relative,      CheckOverflow(), 0, 1)
-bOP(70Slow, RelativeSlow,  CheckOverflow(), 0, CheckEmulation())
+bOPSlow(70Slow, RelativeSlow,  CheckOverflow(), 0, CheckEmulation())
 
 /* BRL*/
-static void Op82 (void)
-{
-	S9xSetPCBase(ICPU.ShiftedPB + RelativeLong(JUMP));
-}
-
-static void Op82Slow (void)
-{
-	S9xSetPCBase(ICPU.ShiftedPB + RelativeLongSlow(JUMP));
-}
+jOP(82,     RelativeLong)
+jOP(82Slow, RelativeLongSlow)
 
 /* Flag Instructions ******************************************************* */
 
@@ -1773,26 +1766,192 @@ static void OpEA (void)
 
 /* PUSH Instructions ******************************************************* */
 
+/* PushW: native-mode 16-bit push. The original dispatched form
+ * (via S9xSetWord_Write1 with WRAP_BANK) is preserved for the
+ * SA1 instantiation - the WRAM-direct fast path can't be used
+ * there because addCyclesInMemoryAccess references CPU.Cycles
+ * and CPU.InDMAorHDMA, neither of which belong to the SA1
+ * struct (see the analogous PushBE / PushWE comments).
+ *
+ * For the main CPU, gate on a runtime bounds check covering
+ * both bytes of the word: S.W-1 and S.W must lie in $0000-$1FFF
+ * (the bank-0 WRAM mirror). Since S.W is uint16_t, S.W=0 would
+ * make S.W-1 wrap to $FFFF and address bank-0 WRAM byte $FFFF
+ * via Memory.RAM[] - which is in-range for the array but is NOT
+ * where the SNES would have written, so the lower bound S.W>=1
+ * is mandatory. The hit rate is ~100% in practice: native-mode
+ * games keep S in page 1 ($0100-$01FF) by convention. */
+#ifdef SA1_OPCODES
 #define PushW(w) \
-	S9xSetWord_Write1(w, Registers.S.W - 1, WRAP_BANK); \
+	S9xSetWord_Write1((w), Registers.S.W - 1, WRAP_BANK); \
 	Registers.S.W -= 2;
+#else
+#define PushW(w) do { \
+	uint16_t _pw_val = (uint16_t)(w); \
+	if (Registers.S.W >= 1 && Registers.S.W <= 0x1FFF) { \
+		int32_t speed = SLOW_ONE_CYCLE; \
+		WRITE_WORD(Memory.RAM + (Registers.S.W - 1), _pw_val); \
+		addCyclesInMemoryAccess_x2; \
+		Registers.S.W -= 2; \
+	} else { \
+		S9xSetWord_Write1(_pw_val, Registers.S.W - 1, WRAP_BANK); \
+		Registers.S.W -= 2; \
+	} \
+} while (0)
+#endif
 
+/* PushWE: 16-bit push in EMULATION mode. With SH hardware-forced
+ * to $01, both bytes always land in $0100-$01FF and the WRAP_PAGE
+ * semantics of the original S9xSetWord_Write1 call are exactly
+ * what two consecutive PushBE invocations produce: each PushBE
+ * writes at the current SP and then decrements SL, so the SH=$01
+ * lock makes the wrap at $0100↔$01FF happen naturally. Build on
+ * top of PushBE to inherit its compile-time fold of Memory.RAM
+ * and SLOW_ONE_CYCLE. */
+#ifdef SA1_OPCODES
 #define PushWE(w) \
 	Registers.SL--; \
 	S9xSetWord_Write1(w, Registers.S.W, WRAP_PAGE); \
 	Registers.SL--;
+#else
+#define PushWE(w) do { \
+	uint16_t _pwe_val = (w); \
+	PushBE((uint8_t) (_pwe_val >> 8)); /* high byte first */ \
+	PushBE((uint8_t) _pwe_val);        /* low byte */ \
+} while (0)
+#endif
 
+/* PushW_E1_PEA: 16-bit push variant used by PEA/PEI/PER in
+ * EMULATION mode (E=1). The 65C816 manual specifies that these
+ * three "new" instructions (added with the 65C816) don't enforce
+ * the SH=$01 wrap during the push — they use the native-mode
+ * WRAP_BANK word write, then each opcode re-asserts SH=$01
+ * afterwards. In practice S.W is in $0100-$01FF on entry, so
+ * S.W-1 is in $00FF-$01FE and the two byte writes always land in
+ * bank 0 WRAM low half. Same WRAM-direct fold as PushBE: skip the
+ * Map[] dispatch, write directly to Memory.RAM, use SLOW_ONE_CYCLE
+ * as a literal.
+ *
+ * SH is NOT reset here — the caller does \`Registers.SH = 1\` after
+ * using this macro, matching the original structure. */
+#ifdef SA1_OPCODES
+#define PushW_E1_PEA(val) \
+	S9xSetWord_Write1((val), Registers.S.W - 1, WRAP_BANK); \
+	Registers.S.W -= 2;
+#else
+#define PushW_E1_PEA(val) do { \
+	uint16_t _pea_val = (uint16_t) (val); \
+	int32_t  speed = SLOW_ONE_CYCLE; \
+	uint16_t _pea_addr = Registers.S.W - 1; \
+	Memory.RAM[(_pea_addr + 1) & 0xFFFF] = (uint8_t) (_pea_val >> 8); /* high */ \
+	addCyclesInMemoryAccess; \
+	Memory.RAM[_pea_addr]               = (uint8_t)  _pea_val;        /* low */ \
+	addCyclesInMemoryAccess; \
+	Registers.S.W -= 2; \
+} while (0)
+#endif
+
+/* PushB: native-mode 1-byte push. SA1 instantiation keeps the
+ * dispatched form (same justification as PushW). For the main
+ * CPU, runtime-check S.W <= $1FFF and bypass straight to
+ * Memory.RAM. Falls back to S9xSetByte for any non-WRAM stack
+ * pointer, which in practice never happens during gameplay. */
+#ifdef SA1_OPCODES
 #define PushB(b) \
-	S9xSetByte(b, Registers.S.W--);
+	S9xSetByte((b), Registers.S.W--);
+#else
+#define PushB(b) do { \
+	uint8_t _pb_val = (b); \
+	if (Registers.S.W <= 0x1FFF) { \
+		int32_t speed = SLOW_ONE_CYCLE; \
+		Memory.RAM[Registers.S.W] = _pb_val; \
+		addCyclesInMemoryAccess; \
+		Registers.S.W--; \
+	} else { \
+		S9xSetByte(_pb_val, Registers.S.W--); \
+	} \
+} while (0)
+#endif
 
+/* PushB_E1_JSL: byte push for JSL / RTL in EMULATION mode. Like
+ * PushB it decrements the full 16-bit Registers.S.W after the
+ * write (unlike PushBE which only touches SL and so wraps within
+ * page); this matches the 65C816's "new instruction" rule where
+ * JSL/JSR-long don't honour the SH=$01 emulation-mode bound during
+ * the push and the byte can legitimately land at \$00FE-\$00FF
+ * when SP crosses the page boundary mid-push.
+ *
+ * With Registers.S.W in \$0100-\$01FF on entry and at most three
+ * pushes per JSL, the byte addresses are always within
+ * \$00FD-\$01FF — bank 0 WRAM low half, which maps directly to
+ * Memory.RAM. Skip the WriteMap[] dispatch as in PushBE. */
+#ifdef SA1_OPCODES
+#define PushB_E1_JSL(b) \
+	S9xSetByte((b), Registers.S.W--);
+#else
+#define PushB_E1_JSL(b) do { \
+	int32_t speed = SLOW_ONE_CYCLE; \
+	Memory.RAM[Registers.S.W] = (b); \
+	addCyclesInMemoryAccess; \
+	Registers.S.W--; \
+} while (0)
+#endif
+
+/* PullB_E1_JSL: byte pull counterpart of PushB_E1_JSL, for RTL E1.
+ * Pre-increments the full 16-bit Registers.S.W and reads — same
+ * page-cross semantics as the original PullB / PullW combination
+ * that RTL uses. Address always in \$00FE-\$0100 (or higher up to
+ * \$01FF) which is WRAM bank 0 low half. */
+#ifdef SA1_OPCODES
+#define PullB_E1_JSL(b) do { \
+	++Registers.S.W; \
+	(b) = S9xGetByte(Registers.S.W); \
+} while (0)
+#else
+#define PullB_E1_JSL(b) do { \
+	int32_t speed = SLOW_ONE_CYCLE; \
+	Registers.S.W++; \
+	(b) = Memory.RAM[Registers.S.W]; \
+	addCyclesInMemoryAccess; \
+} while (0)
+#endif
+
+/* PushBE: 8-bit push in EMULATION mode. SH is hardware-forced to
+ * $01 in emulation mode, so the write address is always $0100-$01FF
+ * — which bank 0 maps directly to Memory.RAM with no offset (see
+ * MAP_SPACE(0x00, 0x3f, 0x0000, 0x1fff, Memory.RAM, true) in
+ * memmap.c). We can therefore skip the Memory.WriteMap[] lookup,
+ * the MAP_LAST sentinel check, the slow-path tail call, and the
+ * memory_speed bit-tests entirely: stack addresses in $0100-$01FF
+ * always return SLOW_ONE_CYCLE from memory_speed (both 0x408000
+ * and (addr+0x6000)&0x4000 are constant for that range).
+ *
+ * This is the answer to "can SetAddress be folded at compile time
+ * for some opcodes?" — for stack ops in E=1, yes, completely.
+ *
+ * Restricted to the main-CPU instantiation: when sa1.c re-includes
+ * cpuops_.h with SA1_OPCODES defined, `Cycles` and `InDMAorHDMA`
+ * (referenced by addCyclesInMemoryAccess) belong to the main CPU
+ * struct, not SA1's, so the macro would not compile in that pass.
+ * SA1 push opcodes are a much smaller fraction of the SA1 workload
+ * and keep the dispatched S9xSA1SetByte path. */
+#ifdef SA1_OPCODES
 #define PushBE(b) \
 	S9xSetByte(b, Registers.S.W); \
 	Registers.SL--;
+#else
+#define PushBE(b) do { \
+	int32_t speed = SLOW_ONE_CYCLE; \
+	Memory.RAM[Registers.S.W] = (b); \
+	addCyclesInMemoryAccess; \
+	Registers.SL--; \
+} while (0)
+#endif
 
 /* PEA*/
 static void OpF4E0 (void)
 {
-	uint16	val = (uint16) ABSOLUTE_MACRO(NONE);
+	uint16_t	val = (uint16_t) ABSOLUTE_MACRO(N);
 	PushW(val);
 	OpenBus = val & 0xff;
 }
@@ -1801,15 +1960,15 @@ static void OpF4E1 (void)
 {
 	/* Note: PEA is a new instruction,*/
 	/* and so doesn't respect the emu-mode stack bounds.*/
-	uint16	val = (uint16) ABSOLUTE_MACRO(NONE);
-	PushW(val);
+	uint16_t	val = (uint16_t) ABSOLUTE_MACRO(N);
+	PushW_E1_PEA(val);
 	OpenBus = val & 0xff;
 	Registers.SH = 1;
 }
 
 static void OpF4Slow (void)
 {
-	uint16	val = (uint16) ABSOLUTESLOW_MACRO(NONE);
+	uint16_t	val = (uint16_t) ABSOLUTESLOW_MACRO(N);
 	PushW(val);
 	OpenBus = val & 0xff;
 	if (CheckEmulation())
@@ -1819,7 +1978,7 @@ static void OpF4Slow (void)
 /* PEI*/
 static void OpD4E0 (void)
 {
-	uint16	val = (uint16) DirectIndirectE0(NONE);
+	uint16_t	val = (uint16_t) DirectIndirectE0_N();
 	PushW(val);
 	OpenBus = val & 0xff;
 }
@@ -1828,15 +1987,15 @@ static void OpD4E1 (void)
 {
 	/* Note: PEI is a new instruction,*/
 	/* and so doesn't respect the emu-mode stack bounds.*/
-	uint16	val = (uint16) DirectIndirectE1(NONE);
-	PushW(val);
+	uint16_t	val = (uint16_t) DirectIndirectE1_N();
+	PushW_E1_PEA(val);
 	OpenBus = val & 0xff;
 	Registers.SH = 1;
 }
 
 static void OpD4Slow (void)
 {
-	uint16	val = (uint16) DirectIndirectSlow(NONE);
+	uint16_t	val = (uint16_t) DirectIndirectSlow_N();
 	PushW(val);
 	OpenBus = val & 0xff;
 	if (CheckEmulation())
@@ -1846,7 +2005,7 @@ static void OpD4Slow (void)
 /* PER*/
 static void Op62E0 (void)
 {
-	uint16	val = (uint16) RelativeLong(NONE);
+	uint16_t	val = (uint16_t) RelativeLong_N();
 	PushW(val);
 	OpenBus = val & 0xff;
 }
@@ -1855,15 +2014,15 @@ static void Op62E1 (void)
 {
 	/* Note: PER is a new instruction,*/
 	/* and so doesn't respect the emu-mode stack bounds.*/
-	uint16	val = (uint16) RelativeLong(NONE);
-	PushW(val);
+	uint16_t	val = (uint16_t) RelativeLong_N();
+	PushW_E1_PEA(val);
 	OpenBus = val & 0xff;
 	Registers.SH = 1;
 }
 
 static void Op62Slow (void)
 {
-	uint16	val = (uint16) RelativeLongSlow(NONE);
+	uint16_t	val = (uint16_t) RelativeLongSlow_N();
 	PushW(val);
 	OpenBus = val & 0xff;
 	if (CheckEmulation())
@@ -2124,21 +2283,86 @@ static void Op5ASlow (void)
 
 /* PULL Instructions ******************************************************* */
 
+/* PullW: native-mode 16-bit pull. SA1 instantiation keeps the
+ * dispatched form. For the main CPU, runtime-check that both
+ * read bytes (at S.W+1 low and S.W+2 high) land in WRAM by
+ * gating on S.W <= $1FFD. The original S9xGetWord call uses
+ * WRAP_BANK, which means an S.W near $FFFE would wrap into
+ * bank 0 - the bypass check intentionally rejects those rare
+ * cases, falling through to the dispatched form. */
+#ifdef SA1_OPCODES
 #define PullW(w) \
-	w = S9xGetWord(Registers.S.W + 1, WRAP_BANK); \
+	(w) = S9xGetWord(Registers.S.W + 1, WRAP_BANK); \
 	Registers.S.W += 2;
+#else
+#define PullW(w) do { \
+	if (Registers.S.W <= 0x1FFD) { \
+		int32_t speed = SLOW_ONE_CYCLE; \
+		(w) = READ_WORD(Memory.RAM + Registers.S.W + 1); \
+		addCyclesInMemoryAccess_x2; \
+		Registers.S.W += 2; \
+	} else { \
+		(w) = S9xGetWord(Registers.S.W + 1, WRAP_BANK); \
+		Registers.S.W += 2; \
+	} \
+} while (0)
+#endif
 
+/* PullWE: 16-bit pull in EMULATION mode. Same justification as
+ * PushWE: two consecutive PullBE invocations reproduce the
+ * WRAP_PAGE semantics naturally because the SH=$01 lock keeps
+ * every byte read inside $0100-$01FF. */
+#ifdef SA1_OPCODES
 #define PullWE(w) \
 	Registers.SL++; \
 	w = S9xGetWord(Registers.S.W, WRAP_PAGE); \
 	Registers.SL++;
+#else
+#define PullWE(w) do { \
+	uint8_t _pwe_lo, _pwe_hi; \
+	PullBE(_pwe_lo); /* low byte first (at the lower address) */ \
+	PullBE(_pwe_hi); /* high byte */ \
+	(w) = (uint16_t) _pwe_lo | ((uint16_t) _pwe_hi << 8); \
+} while (0)
+#endif
 
-#define PullB(b) \
-	b = S9xGetByte(++Registers.S.W);
+/* PullB: native-mode 1-byte pull. SA1 instantiation keeps the
+ * dispatched form. For the main CPU, pre-increment S.W (matching
+ * the original ++S.W semantics: pull from the byte ABOVE the
+ * current SP), then runtime-check S.W <= $1FFF for the WRAM
+ * bypass. */
+#ifdef SA1_OPCODES
+#define PullB(b) do { \
+	++Registers.S.W; \
+	(b) = S9xGetByte(Registers.S.W); \
+} while (0)
+#else
+#define PullB(b) do { \
+	Registers.S.W++; \
+	if (Registers.S.W <= 0x1FFF) { \
+		int32_t speed = SLOW_ONE_CYCLE; \
+		(b) = Memory.RAM[Registers.S.W]; \
+		addCyclesInMemoryAccess; \
+	} else { \
+		(b) = S9xGetByte(Registers.S.W); \
+	} \
+} while (0)
+#endif
 
+/* PullBE: emulation-mode pull, same justification as PushBE.
+ * Address is $0100-$01FF, maps directly to Memory.RAM. */
+#ifdef SA1_OPCODES
 #define PullBE(b) \
 	Registers.SL++; \
 	b = S9xGetByte(Registers.S.W);
+#else
+#define PullBE(b) do { \
+	int32_t speed = SLOW_ONE_CYCLE; \
+	Registers.SL++; \
+	(b) = Memory.RAM[Registers.S.W]; \
+	addCyclesInMemoryAccess; \
+} while (0)
+#endif
 
 /* PLA*/
 static void Op68E1 (void)
@@ -2676,7 +2900,7 @@ static void OpBBSlow (void)
 
 static void OpFB (void)
 {
-	uint8 A1, A2;
+	uint8_t A1, A2;
 	AddCycles(ONE_CYCLE);
 
 	A1 = ICPU._Carry;
@@ -2704,7 +2928,7 @@ static void OpFB (void)
 
 static void Op00 (void)
 {
-	uint16 addr;
+	uint16_t addr;
 	AddCycles(CPU.MemSpeed);
 
 	if (!CheckEmulation())
@@ -2766,7 +2990,7 @@ void S9xOpcode_IRQ (void)
 		}
 		else
 		{
-			uint16	addr = S9xGetWord(0xFFEE, WRAP_NONE);
+			uint16_t	addr = S9xGetWord(0xFFEE, WRAP_NONE);
 			OpenBus = addr >> 8;
 			S9xSetPCBase(addr);
 		}
@@ -2794,7 +3018,7 @@ void S9xOpcode_IRQ (void)
 		}
 		else
 		{
-			uint16	addr = S9xGetWord(0xFFFE, WRAP_NONE);
+			uint16_t	addr = S9xGetWord(0xFFFE, WRAP_NONE);
 			OpenBus = addr >> 8;
 			S9xSetPCBase(addr);
 		}
@@ -2833,7 +3057,7 @@ void S9xOpcode_NMI (void)
 		}
 		else
 		{
-			uint16	addr = S9xGetWord(0xFFEA, WRAP_NONE);
+			uint16_t	addr = S9xGetWord(0xFFEA, WRAP_NONE);
 			OpenBus = addr >> 8;
 			S9xSetPCBase(addr);
 		}
@@ -2861,7 +3085,7 @@ void S9xOpcode_NMI (void)
 		}
 		else
 		{
-			uint16	addr = S9xGetWord(0xFFFA, WRAP_NONE);
+			uint16_t	addr = S9xGetWord(0xFFFA, WRAP_NONE);
 			OpenBus = addr >> 8;
 			S9xSetPCBase(addr);
 		}
@@ -2873,7 +3097,7 @@ void S9xOpcode_NMI (void)
 
 static void Op02 (void)
 {
-	uint16 addr;
+	uint16_t addr;
 	AddCycles(CPU.MemSpeed);
 
 	if (!CheckEmulation())
@@ -2906,57 +3130,19 @@ static void Op02 (void)
 
 /* JML ********************************************************************* */
 
-static void OpDC (void)
-{
-	S9xSetPCBase(AbsoluteIndirectLong(JUMP));
-}
-
-static void OpDCSlow (void)
-{
-	S9xSetPCBase(AbsoluteIndirectLongSlow(JUMP));
-}
-
-static void Op5C (void)
-{
-	S9xSetPCBase(AbsoluteLong(JUMP));
-}
-
-static void Op5CSlow (void)
-{
-	S9xSetPCBase(AbsoluteLongSlow(JUMP));
-}
+jOPL(DC,     AbsoluteIndirectLong)
+jOPL(DCSlow, AbsoluteIndirectLongSlow)
+jOPL(5C,     AbsoluteLong)
+jOPL(5CSlow, AbsoluteLongSlow)
 
 /* JMP ********************************************************************* */
 
-static void Op4C (void)
-{
-	S9xSetPCBase(ICPU.ShiftedPB + ((uint16) ABSOLUTE_MACRO(JUMP)));
-}
-
-static void Op4CSlow (void)
-{
-	S9xSetPCBase(ICPU.ShiftedPB + ((uint16) ABSOLUTESLOW_MACRO(JUMP)));
-}
-
-static void Op6C (void)
-{
-	S9xSetPCBase(ICPU.ShiftedPB + ((uint16) AbsoluteIndirect(JUMP)));
-}
-
-static void Op6CSlow (void)
-{
-	S9xSetPCBase(ICPU.ShiftedPB + ((uint16) AbsoluteIndirectSlow(JUMP)));
-}
-
-static void Op7C (void)
-{
-	S9xSetPCBase(ICPU.ShiftedPB + ((uint16) AbsoluteIndexedIndirect(JUMP)));
-}
-
-static void Op7CSlow (void)
-{
-	S9xSetPCBase(ICPU.ShiftedPB + ((uint16) AbsoluteIndexedIndirectSlow(JUMP)));
-}
+jOP(4C,     Absolute)
+jOP(4CSlow, AbsoluteSlow)
+jOP(6C,     AbsoluteIndirect)
+jOP(6CSlow, AbsoluteIndirectSlow)
+jOP(7C,     AbsoluteIndexedIndirect)
+jOP(7CSlow, AbsoluteIndexedIndirectSlow)
 
 /* JSL/RTL ***************************************************************** */
 
@@ -2964,16 +3150,19 @@ static void Op22E1 (void)
 {
 	/* Note: JSL is a new instruction,*/
 	/* and so doesn't respect the emu-mode stack bounds.*/
-	uint32	addr = AbsoluteLong(JSR);
-	PushB(Registers.PB);
-	PushW(Registers.PCw - 1);
+	uint32_t	addr = AbsoluteLong_JSR();
+	uint16_t	pcw_minus_1 = Registers.PCw - 1;
+
+	PushB_E1_JSL(Registers.PB);                          /* PB at S.W,    S.W-- */
+	PushB_E1_JSL((uint8_t) (pcw_minus_1 >> 8));          /* PCH at S.W-1, S.W-- */
+	PushB_E1_JSL((uint8_t)  pcw_minus_1);                /* PCL at S.W-2, S.W-- */
 	Registers.SH = 1;
 	S9xSetPCBase(addr);
 }
 
 static void Op22E0 (void)
 {
-	uint32	addr = AbsoluteLong(JSR);
+	uint32_t	addr = AbsoluteLong_JSR();
 	PushB(Registers.PB);
 	PushW(Registers.PCw - 1);
 	S9xSetPCBase(addr);
@@ -2981,7 +3170,7 @@ static void Op22E0 (void)
 
 static void Op22Slow (void)
 {
-	uint32	addr = AbsoluteLongSlow(JSR);
+	uint32_t	addr = AbsoluteLongSlow_JSR();
 	PushB(Registers.PB);
 	PushW(Registers.PCw - 1);
 	if (CheckEmulation())
@@ -2993,9 +3182,13 @@ static void Op6BE1 (void)
 {
 	/* Note: RTL is a new instruction,*/
 	/* and so doesn't respect the emu-mode stack bounds.*/
+	uint8_t pcw_lo, pcw_hi;
+
 	AddCycles(TWO_CYCLES);
-	PullW(Registers.PCw);
-	PullB(Registers.PB);
+	PullB_E1_JSL(pcw_lo);                                /* ++S.W; PCL */
+	PullB_E1_JSL(pcw_hi);                                /* ++S.W; PCH */
+	Registers.PCw = (uint16_t) pcw_lo | ((uint16_t) pcw_hi << 8);
+	PullB_E1_JSL(Registers.PB);                          /* ++S.W; PB */
 	Registers.SH = 1;
 	Registers.PCw++;
 	S9xSetPCBase(Registers.PBPC);
@@ -3025,7 +3218,7 @@ static void Op6BSlow (void)
 
 static void Op20E1 (void)
 {
-	uint16	addr = ABSOLUTE_MACRO(JSR);
+	uint16_t	addr = ABSOLUTE_MACRO(JSR);
 	AddCycles(ONE_CYCLE);
 	PushWE(Registers.PCw - 1);
 	S9xSetPCBase(ICPU.ShiftedPB + addr);
@@ -3033,7 +3226,7 @@ static void Op20E1 (void)
 
 static void Op20E0 (void)
 {
-	uint16	addr = ABSOLUTE_MACRO(JSR);
+	uint16_t	addr = ABSOLUTE_MACRO(JSR);
 	AddCycles(ONE_CYCLE);
 	PushW(Registers.PCw - 1);
 	S9xSetPCBase(ICPU.ShiftedPB + addr);
@@ -3041,7 +3234,7 @@ static void Op20E0 (void)
 
 static void Op20Slow (void)
 {
-	uint16	addr = ABSOLUTESLOW_MACRO(JSR);
+	uint16_t	addr = ABSOLUTESLOW_MACRO(JSR);
 
 	AddCycles(ONE_CYCLE);
 
@@ -3061,7 +3254,7 @@ static void OpFCE1 (void)
 {
 	/* Note: JSR (a,X) is a new instruction,*/
 	/* and so doesn't respect the emu-mode stack bounds.*/
-	uint16	addr = AbsoluteIndexedIndirect(JSR);
+	uint16_t	addr = AbsoluteIndexedIndirect_JSR();
 	PushW(Registers.PCw - 1);
 	Registers.SH = 1;
 	S9xSetPCBase(ICPU.ShiftedPB + addr);
@@ -3069,14 +3262,14 @@ static void OpFCE1 (void)
 
 static void OpFCE0 (void)
 {
-	uint16	addr = AbsoluteIndexedIndirect(JSR);
+	uint16_t	addr = AbsoluteIndexedIndirect_JSR();
 	PushW(Registers.PCw - 1);
 	S9xSetPCBase(ICPU.ShiftedPB + addr);
 }
 
 static void OpFCSlow (void)
 {
-	uint16	addr = AbsoluteIndexedIndirectSlow(JSR);
+	uint16_t	addr = AbsoluteIndexedIndirectSlow_JSR();
 	PushW(Registers.PCw - 1);
 	if (CheckEmulation())
 		Registers.SH = 1;
@@ -3123,11 +3316,11 @@ static void Op60Slow (void)
 
 static void Op54X1 (void)
 {
-	uint32	SrcBank;
+	uint32_t	SrcBank;
 
-	Registers.DB = Immediate8(NONE);
+	Registers.DB = Immediate8_N();
 	ICPU.ShiftedDB = Registers.DB << 16;
-	OpenBus = SrcBank = Immediate8(NONE);
+	OpenBus = SrcBank = Immediate8_N();
 
 	S9xSetByte(OpenBus = S9xGetByte((SrcBank << 16) + Registers.X.W), ICPU.ShiftedDB + Registers.Y.W);
 
@@ -3142,11 +3335,11 @@ static void Op54X1 (void)
 
 static void Op54X0 (void)
 {
-	uint32	SrcBank;
+	uint32_t	SrcBank;
 
-	Registers.DB = Immediate8(NONE);
+	Registers.DB = Immediate8_N();
 	ICPU.ShiftedDB = Registers.DB << 16;
-	OpenBus = SrcBank = Immediate8(NONE);
+	OpenBus = SrcBank = Immediate8_N();
 
 	S9xSetByte(OpenBus = S9xGetByte((SrcBank << 16) + Registers.X.W), ICPU.ShiftedDB + Registers.Y.W);
 
@@ -3161,11 +3354,11 @@ static void Op54X0 (void)
 
 static void Op54Slow (void)
 {
-	uint32	SrcBank;
+	uint32_t	SrcBank;
 
-	OpenBus = Registers.DB = Immediate8Slow(NONE);
+	OpenBus = Registers.DB = Immediate8Slow_N();
 	ICPU.ShiftedDB = Registers.DB << 16;
-	OpenBus = SrcBank = Immediate8Slow(NONE);
+	OpenBus = SrcBank = Immediate8Slow_N();
 
 	S9xSetByte(OpenBus = S9xGetByte((SrcBank << 16) + Registers.X.W), ICPU.ShiftedDB + Registers.Y.W);
 
@@ -3189,11 +3382,11 @@ static void Op54Slow (void)
 
 static void Op44X1 (void)
 {
-	uint32	SrcBank;
+	uint32_t	SrcBank;
 
-	Registers.DB = Immediate8(NONE);
+	Registers.DB = Immediate8_N();
 	ICPU.ShiftedDB = Registers.DB << 16;
-	OpenBus = SrcBank = Immediate8(NONE);
+	OpenBus = SrcBank = Immediate8_N();
 
 	S9xSetByte(OpenBus = S9xGetByte((SrcBank << 16) + Registers.X.W), ICPU.ShiftedDB + Registers.Y.W);
 
@@ -3208,11 +3401,11 @@ static void Op44X1 (void)
 
 static void Op44X0 (void)
 {
-	uint32	SrcBank;
+	uint32_t	SrcBank;
 
-	Registers.DB = Immediate8(NONE);
+	Registers.DB = Immediate8_N();
 	ICPU.ShiftedDB = Registers.DB << 16;
-	OpenBus = SrcBank = Immediate8(NONE);
+	OpenBus = SrcBank = Immediate8_N();
 
 	S9xSetByte(OpenBus = S9xGetByte((SrcBank << 16) + Registers.X.W), ICPU.ShiftedDB + Registers.Y.W);
 
@@ -3227,11 +3420,11 @@ static void Op44X0 (void)
 
 static void Op44Slow (void)
 {
-	uint32	SrcBank;
+	uint32_t	SrcBank;
 
-	OpenBus = Registers.DB = Immediate8Slow(NONE);
+	OpenBus = Registers.DB = Immediate8Slow_N();
 	ICPU.ShiftedDB = Registers.DB << 16;
-	OpenBus = SrcBank = Immediate8Slow(NONE);
+	OpenBus = SrcBank = Immediate8Slow_N();
 
 	S9xSetByte(OpenBus = S9xGetByte((SrcBank << 16) + Registers.X.W), ICPU.ShiftedDB + Registers.Y.W);
 
@@ -3257,7 +3450,7 @@ static void Op44Slow (void)
 
 static void OpC2 (void)
 {
-	uint8	Work8 = ~Immediate8(READ);
+	uint8_t	Work8 = ~Immediate8_R();
 	Registers.PL &= Work8;
 	ICPU._Carry &= Work8;
 	ICPU._Overflow &= (Work8 >> 6);
@@ -3282,7 +3475,7 @@ static void OpC2 (void)
 
 static void OpC2Slow (void)
 {
-	uint8	Work8 = ~Immediate8Slow(READ);
+	uint8_t	Work8 = ~Immediate8Slow_R();
 	Registers.PL &= Work8;
 	ICPU._Carry &= Work8;
 	ICPU._Overflow &= (Work8 >> 6);
@@ -3307,7 +3500,7 @@ static void OpC2Slow (void)
 
 static void OpE2 (void)
 {
-	uint8	Work8 = Immediate8(READ);
+	uint8_t	Work8 = Immediate8_R();
 	Registers.PL |= Work8;
 	ICPU._Carry |= Work8 & 1;
 	ICPU._Overflow |= (Work8 >> 6) & 1;
@@ -3333,7 +3526,7 @@ static void OpE2 (void)
 
 static void OpE2Slow (void)
 {
-	uint8	Work8 = Immediate8Slow(READ);
+	uint8_t	Work8 = Immediate8Slow_R();
 	Registers.PL |= Work8;
 	ICPU._Carry |= Work8 & 1;
 	ICPU._Overflow |= (Work8 >> 6) & 1;
@@ -3361,7 +3554,7 @@ static void OpE2Slow (void)
 
 static void OpEB (void)
 {
-	uint8	Work8 = Registers.AL;
+	uint8_t	Work8 = Registers.AL;
 	Registers.AL = Registers.AH;
 	Registers.AH = Work8;
 	SetZN8(Registers.AL);

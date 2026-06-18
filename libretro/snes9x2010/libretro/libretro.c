@@ -221,19 +221,28 @@ void linearFree(void* mem);
 #define CORE_VERSION	"1.52.4"
 #define LIBRETRO_LIB_NAME "Snes9x 2010"
 
-/* Use a 64ms buffer. */
-/* 32000*(64/1000) = 2048
- * 2048 * 2 = 4096 because of stereo. */
-#define APU_BUF_FRAMES (2048 * 2)
-#define APU_BUF_SIZE   (APU_BUF_FRAMES * sizeof(int16_t))
-
 #define VIDEO_REFRESH_RATE_PAL  (PAL_MASTER_CLOCK / (double)(SNES_CYCLES_PER_SCANLINE * SNES_MAX_PAL_VCOUNTER))
 #define VIDEO_REFRESH_RATE_NTSC (NTSC_MASTER_CLOCK / (double)(SNES_CYCLES_PER_SCANLINE * SNES_MAX_NTSC_VCOUNTER))
 
-static int16_t *audio_out_buffer     = NULL;
-static size_t audio_out_buffer_size  = 0;
-static size_t audio_out_buffer_pos   = 0;
-static size_t audio_batch_frames_max = (1 << 16);
+/* Pre-zeroed silence buffer used in place of real SPC output when
+   audio_muted is set. Sized for one worst-case PAL frame at the
+   highest effective SPC rate (ticks=4 speedup, ~651 stereo). The
+   '+ a bit' rounds up to a tidy power of two. RetroArch's audio_batch_cb
+   only reads (frame_count * 2) shorts, so over-sizing is harmless and
+   keeps the math simple if rates change.
+
+   Declared non-const so it lives in BSS (zero file footprint, zero
+   initialized at startup) rather than .rodata; we never write to it. */
+#define MUTE_BUFFER_FRAMES 768
+static int16_t mute_buffer[MUTE_BUFFER_FRAMES * 2];
+
+/* Set when the frontend has signalled that audio should not be played
+   (either user has disabled audio or a frontend-controlled fast-forward
+   path has set RETRO_AVENABLE_HARD_DISABLE_AUDIO). When set, we still
+   call audio_batch_cb every frame - skipping it would let RetroArch's
+   audio ring drain and pull DRC out of steady-state tracking - but
+   substitute the silence buffer for the SPC's actual output. */
+static bool audio_muted;
 
 enum
 {
@@ -284,6 +293,34 @@ static struct
 static uint8_t aspect_ratio_mode = ASPECT_RATIO_4_3;
 static bool libretro_supports_option_categories = false;
 static bool libretro_supports_bitmasks = false;
+static bool libretro_supports_sw_fb = false;
+static bool libretro_sw_fb_checked = false;
+
+/* Direct-render state for the sw_fb optimization. When sw_fb_active is
+   true for the current frame, GFX.Screen has been redirected to point at
+   a frontend-supplied software framebuffer. The renderer writes pixels
+   there directly, and S9xDeinitUpdate hands fb.data to video_cb instead
+   of GFX.Screen. The acquire happens at the cpuexec.c hook (after this
+   frame's resolution is known); abort happens at the ppu.c promotion
+   sites if a mid-frame mode change forces a wider/taller buffer.
+   Saved fields hold the originals for the abort/release-after-frame
+   restoration. */
+static bool      sw_fb_active        = false;
+static void     *sw_fb_data          = NULL;
+static unsigned  sw_fb_width         = 0;
+static unsigned  sw_fb_height        = 0;
+static size_t    sw_fb_pitch         = 0;
+static uint16_t   *sw_fb_saved_screen  = NULL;
+static int       sw_fb_saved_pitch   = 0;
+
+/* Persistent buffer pointers. GFX.Screen is allowed to be temporarily
+   overwritten by the sw_fb redirect and various swap paths; we always
+   know the buffer the core actually owns by keeping a separate copy
+   here, untouched after retro_init. retro_deinit frees these directly
+   instead of GFX.Screen so the wrong pointer can't be freed even if
+   some abnormal teardown path leaves the redirect state inconsistent. */
+static void *owned_screen_buffer  = NULL;
+static void *owned_ntsc_buffer    = NULL;
 static uint32_t retro_devices[2];
 
 // filter
@@ -291,7 +328,14 @@ static int snes_ntsc_filter = 0;
 static snes_ntsc_t snes_ntsc;
 static snes_ntsc_setup_t ntsc_setup;
 static uint16_t *ntsc_screen_buffer = NULL;
-static const uint32_t MAX_SNES_WIDTH_NTSC = ((SNES_NTSC_OUT_WIDTH(256) + 3) / 4) * 4;
+/* Buffer width must fit both NTSC filter output (~604 px after
+   rounding to a 4-pixel multiple) and the 4x Mode 7 hires renderer
+   (1024 px). The buffer is sized to the max of these. Frames that
+   don't use 4x hires write only the leftmost N px and the trailing
+   columns are unused garbage. */
+#define MAX_SNES_WIDTH_NTSC ((SNES_NTSC_OUT_WIDTH(256) + 3) / 4 * 4)
+#define MAX_SNES_WIDTH_4X   1024
+#define MAX_BUFFER_WIDTH    (MAX_SNES_WIDTH_4X > MAX_SNES_WIDTH_NTSC ? MAX_SNES_WIDTH_4X : MAX_SNES_WIDTH_NTSC)
 
 static void update_geometry();
 
@@ -378,6 +422,20 @@ static void check_variables(bool first_run)
 			Settings.PAL = TRUE;
 		}
 	}
+
+	var.key = "snes9x_2010_audio_interpolation";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+	{
+		if (strcmp(var.value, "cubic") == 0)
+			dsp_interp_mode = DSP_INTERP_CUBIC;
+		else if (strcmp(var.value, "sinc") == 0)
+			dsp_interp_mode = DSP_INTERP_SINC;
+		else
+			dsp_interp_mode = DSP_INTERP_GAUSSIAN;
+	}
+	else
+		dsp_interp_mode = DSP_INTERP_GAUSSIAN;
 
 	var.key = "snes9x_2010_frameskip";
 	var.value = NULL;
@@ -527,6 +585,54 @@ static void check_variables(bool first_run)
 		else
 			reduce_sprite_flicker = false;
 	}
+
+	var.key = "snes9x_2010_mode7_hires";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+	{
+		/* Order matters: the *_hv suffixes must be checked before the
+		 * unsuffixed forms so that strcmp("4x_hv", "4x") doesn't match
+		 * the wrong branch via strncmp logic if the parsing ever
+		 * changes. We use full strcmp here so it's not actually a hazard
+		 * today, but the order also makes the intent clear. */
+		if (strcmp(var.value, "4x_hv") == 0)
+		{
+			Settings.Mode7Hires = 4;
+			Settings.Mode7HiresVertical = 1;
+		}
+		else if (strcmp(var.value, "2x_hv") == 0)
+		{
+			Settings.Mode7Hires = 2;
+			Settings.Mode7HiresVertical = 1;
+		}
+		else if (strcmp(var.value, "4x") == 0)
+		{
+			Settings.Mode7Hires = 4;
+			Settings.Mode7HiresVertical = 0;
+		}
+		else if (strcmp(var.value, "2x") == 0 || strcmp(var.value, "enabled") == 0)
+		{
+			Settings.Mode7Hires = 2;
+			Settings.Mode7HiresVertical = 0;
+		}
+		else
+		{
+			Settings.Mode7Hires = 0;
+			Settings.Mode7HiresVertical = 0;
+		}
+	}
+
+	var.key = "snes9x_2010_mode7_hires_bilinear";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+	{
+		if (strcmp(var.value, "smooth") == 0)
+			Settings.Mode7HiresBilinear = 2;
+		else if (strcmp(var.value, "stable") == 0 || strcmp(var.value, "enabled") == 0)
+			Settings.Mode7HiresBilinear = 1;
+		else
+			Settings.Mode7HiresBilinear = 0;
+	}
 	/* Reinitialise frameskipping, if required */
 	if (!first_run &&
 	    ((frameskip_type     != prev_frameskip_type) ||
@@ -645,6 +751,9 @@ void retro_set_environment(retro_environment_t cb)
   
         libretro_supports_option_categories = local_bool_val;
 
+	/* (No option-visibility callback: the bilinear and hires options
+	   are now independent and both are always shown.) */
+
 	environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
 
 	vfs_iface_info.required_interface_version = 1;
@@ -666,94 +775,40 @@ void retro_get_system_info(struct retro_system_info *info)
 	info->block_extract    = false;
 }
 
-static void audio_out_buffer_init(void)
-{
-	float refresh_rate      = (retro_get_region() == RETRO_REGION_NTSC) ?
-			VIDEO_REFRESH_RATE_NTSC : VIDEO_REFRESH_RATE_PAL;
-	float samples_per_frame = SNES_AUDIO_FREQ / refresh_rate;
-	size_t buffer_size      = ((size_t)samples_per_frame + 1) << 1;
-
-	audio_out_buffer        = (int16_t *)malloc(buffer_size * sizeof(int16_t));
-	audio_out_buffer_size   = buffer_size;
-	audio_out_buffer_pos    = 0;
-	audio_batch_frames_max  = (1 << 16);
-}
-
-static void audio_out_buffer_deinit(void)
-{
-	if (audio_out_buffer)
-		free(audio_out_buffer);
-
-	audio_out_buffer       = NULL;
-	audio_out_buffer_size  = 0;
-	audio_out_buffer_pos   = 0;
-	audio_batch_frames_max = (1 << 16);
-}
-
-static void S9xAudioCallbackQueue(void)
-{
-	size_t available_samples;
-	size_t buffer_capacity = audio_out_buffer_size -
-			audio_out_buffer_pos;
-
-	S9xFinalizeSamples();
-	available_samples = S9xGetSampleCount();
-
-	if (buffer_capacity < available_samples)
-	{
-		int16_t *tmp_buffer = NULL;
-		size_t tmp_buffer_size;
-
-		tmp_buffer_size = audio_out_buffer_size + (available_samples - buffer_capacity);
-		tmp_buffer_size = (tmp_buffer_size << 1) - (tmp_buffer_size >> 1);
-		tmp_buffer      = (int16_t *)malloc(tmp_buffer_size * sizeof(int16_t));
-
-		memcpy(tmp_buffer, audio_out_buffer,
-				audio_out_buffer_pos * sizeof(int16_t));
-
-		free(audio_out_buffer);
-
-		audio_out_buffer      = tmp_buffer;
-		audio_out_buffer_size = tmp_buffer_size;
-	}
-
-	S9xMixSamples(audio_out_buffer + audio_out_buffer_pos,
-			available_samples);
-	audio_out_buffer_pos += available_samples;
-}
-
+/* Drain one frame of audio from the SPC and hand it to the frontend in a
+ * single audio_batch_cb call. Zero-copy: S9xDrainAudio returns a pointer
+ * directly into the SPC's landing_buffer, which RetroArch reads
+ * synchronously inside audio_batch_cb.
+ *
+ * libretro pulls audio exactly once per retro_run via the batch callback.
+ * The mid-frame "samples available" hook (S9xSetSamplesAvailableCallback)
+ * that upstream Snes9x exposes for SDL-style frontends is not wired here;
+ * samples accumulate in landing_buffer across the whole frame and ship in
+ * one batch when the frame ends.
+ *
+ * Sizing: ~534 stereo frames per NTSC frame, ~641 per PAL, plus up to
+ * 1.6% more on speedup-hack carts (the SPC produces samples at
+ * TEMPO_UNIT / timing_hack_denominator times its normal rate and we
+ * report that higher rate to the frontend - see S9xGetAudioSampleRate).
+ *
+ * On mute, send silence at the same cadence to keep the frontend's
+ * audio clock fed. Skipping the call would let RetroArch's audio ring
+ * drain and pull DRC out of its steady-state tracking. */
 static void audio_upload_samples(void)
 {
-	size_t available_frames;
-	int16_t *audio_out_buffer_ptr;
+	int n;
+	const int16_t *src = S9xDrainAudio(&n);
+	if (n <= 0)
+		return;
 
-	S9xAudioCallbackQueue();
-
-	audio_out_buffer_ptr = audio_out_buffer;
-	available_frames     = audio_out_buffer_pos >> 1;
-
-	/* Since the audio output buffer can
-	 * (theoretically) have an arbitrarily size,
-	 * we must write it in chunks of the largest
-	 * size supported by the frontend */
-	while (available_frames > 0)
+	if (audio_muted)
 	{
-		size_t frames_to_write = (available_frames >
-				audio_batch_frames_max) ?
-						audio_batch_frames_max :
-						available_frames;
-		size_t frames_written = audio_batch_cb(
-				audio_out_buffer_ptr, frames_to_write);
-
-		if ((frames_written < frames_to_write) &&
-			 (frames_written > 0))
-			audio_batch_frames_max = frames_written;
-
-		available_frames     -= frames_to_write;
-		audio_out_buffer_ptr += frames_to_write << 1;
+		src = mute_buffer;
+		if (n > MUTE_BUFFER_FRAMES * 2)
+			n = MUTE_BUFFER_FRAMES * 2;
 	}
 
-	audio_out_buffer_pos = 0;
+	audio_batch_cb(src, (size_t)n >> 1);
 }
 
 void retro_set_controller_port_device(unsigned in_port, unsigned device)
@@ -936,11 +991,16 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 
 	info->geometry.base_width   = width;
 	info->geometry.base_height  = height;
-	info->geometry.max_width    = MAX_SNES_WIDTH_NTSC;
+	info->geometry.max_width    = MAX_BUFFER_WIDTH;
 	info->geometry.max_height   = MAX_SNES_HEIGHT;
 	info->geometry.aspect_ratio = get_aspect_ratio(width, height);
 
-	info->timing.sample_rate    = SNES_AUDIO_FREQ;
+	/* The SPC's effective output rate is its native 32040 Hz for ordinary
+	   carts and ~32550 Hz (or similar) for carts that use the APU speedup
+	   hack (~70 game IDs handled in memmap.c). Reporting the effective
+	   rate here lets the frontend's resampler handle conversion to the
+	   host audio rate. */
+	info->timing.sample_rate    = (double)S9xGetAudioSampleRate();
 	info->timing.fps            = (retro_get_region() == RETRO_REGION_NTSC) ?
 			VIDEO_REFRESH_RATE_NTSC : VIDEO_REFRESH_RATE_PAL;
 }
@@ -977,11 +1037,8 @@ void retro_init(void)
 	memset(&Settings, 0, sizeof(Settings));
 
 	Settings.SpeedhackGameID = SPEEDHACK_NONE;
-	Settings.Transparency = TRUE;
 	Settings.FrameTimePAL = 20000;
 	Settings.FrameTimeNTSC = 16667;
-	Settings.SoundPlaybackRate = SNES_AUDIO_FREQ;
-	Settings.SoundInputRate = SNES_AUDIO_FREQ;
 	Settings.HDMATimingHack = 100;
 	Settings.CartAName[0] = 0;
 	Settings.CartBName[0] = 0;
@@ -998,37 +1055,67 @@ void retro_init(void)
 	if (!Init() || !S9xInitAPU())
 	{
 		Deinit();
-		S9xDeinitAPU();
 		S9xMessage(S9X_MSG_ERROR, S9X_CATEGORY_EXTERNAL, "Failed to init Memory or APU.");
 		exit(1);
 	}
 
-	if (S9xInitSound(APU_BUF_SIZE, 0) != true)
-	{
-		const char *const aud_err = "Audio output is disabled due to an internal error";
-		struct retro_message msg = { aud_err, 360 };
+	S9xInitSound();
 
-		if (environ_cb)
-			environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
+	GFX.Pitch = MAX_BUFFER_WIDTH * sizeof(uint16_t);
 
-		S9xDeinitAPU();
-	}
-
-	S9xSetSamplesAvailableCallback(S9xAudioCallbackQueue);
-
-	GFX.Pitch = MAX_SNES_WIDTH_NTSC * sizeof(uint16_t);
+	/* Defensive teardown: if retro_init is re-entered without an
+	   intervening retro_deinit (statically linked frontends, console
+	   re-init paths), the screen allocations below would orphan the
+	   prior buffers. Free via the canonical owned_* handles so we
+	   release the original allocations even if a sw_fb redirect had
+	   rewritten GFX.Screen to the frontend's swapchain. */
+#if defined(_3DS)
+	if (owned_screen_buffer)
+		linearFree(owned_screen_buffer);
+	if (owned_ntsc_buffer)
+		linearFree(owned_ntsc_buffer);
+#else
+	if (owned_screen_buffer)
+		free(owned_screen_buffer);
+	if (owned_ntsc_buffer)
+		free(owned_ntsc_buffer);
+#endif
+	owned_screen_buffer = NULL;
+	owned_ntsc_buffer   = NULL;
+	GFX.Screen          = NULL;
+	ntsc_screen_buffer  = NULL;
 
 #if defined(_POSIX_C_SOURCE) && (_POSIX_C_SOURCE >= 200112L) && !defined(GEKKO) && !defined(_3DS) && !defined(__SWITCH__) && !defined(VITA)
-	/* request 128-bit alignment here if possible */
-	posix_memalign((void**)&GFX.Screen, 16, GFX.Pitch * 512 * sizeof(uint16));
-	posix_memalign( (void**)&ntsc_screen_buffer, 16, GFX.Pitch * MAX_SNES_HEIGHT * sizeof(uint16_t) );
+	/* GFX.Pitch is already in bytes (= MAX_BUFFER_WIDTH * sizeof(uint16_t));
+	   buffer size is Pitch * lines, not Pitch * lines * sizeof(uint16_t) again.
+	   request 128-bit alignment here if possible.
+	   posix_memalign output goes through void* temporaries to avoid the
+	   strict-aliasing violation that '(void**)&GFX.Screen' would create. */
+	{
+		void *tmp_screen = NULL;
+		void *tmp_ntsc   = NULL;
+		if (posix_memalign(&tmp_screen, 16, GFX.Pitch * 512) != 0)
+			tmp_screen = NULL;
+		if (posix_memalign(&tmp_ntsc, 16, GFX.Pitch * MAX_SNES_HEIGHT) != 0)
+			tmp_ntsc = NULL;
+		GFX.Screen         = (uint16_t *)tmp_screen;
+		ntsc_screen_buffer = (uint16_t *)tmp_ntsc;
+	}
 #elif defined(_3DS)
-	GFX.Screen = (uint16*) linearMemAlign(GFX.Pitch * 512 * sizeof(uint16), 0x80);
-	ntsc_screen_buffer = (uint16_t*)linearMemAlign(GFX.Pitch *  MAX_SNES_HEIGHT * sizeof(uint16_t), 0x80);
+	GFX.Screen = (uint16_t*) linearMemAlign(GFX.Pitch * 512, 0x80);
+	ntsc_screen_buffer = (uint16_t*)linearMemAlign(GFX.Pitch * MAX_SNES_HEIGHT, 0x80);
 #else
-	GFX.Screen = (uint16*) calloc(1, GFX.Pitch * 512 * sizeof(uint16));
-	ntsc_screen_buffer = (uint16_t *)calloc(1, GFX.Pitch * MAX_SNES_HEIGHT * sizeof(uint16));
+	GFX.Screen = (uint16_t*) calloc(1, GFX.Pitch * 512);
+	ntsc_screen_buffer = (uint16_t *)calloc(1, GFX.Pitch * MAX_SNES_HEIGHT);
 #endif
+	if ((!GFX.Screen || !ntsc_screen_buffer) && log_cb)
+		log_cb(RETRO_LOG_ERROR, "Failed to allocate screen buffers.\n");
+
+	/* Stash the canonical pointers so retro_deinit always frees what we
+	   allocated, even if the sw_fb redirect leaves GFX.Screen pointing
+	   at the frontend's swapchain at teardown time. */
+	owned_screen_buffer = GFX.Screen;
+	owned_ntsc_buffer   = ntsc_screen_buffer;
 	S9xGraphicsInit();
 
 	retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
@@ -1047,24 +1134,41 @@ void retro_init(void)
 
 void retro_deinit(void)
 {
-	S9xDeinitAPU();
+	/* If the user closes content with pause-on-menu disabled, retro_deinit
+	   can fire while a frame is mid-render and GFX.Screen still points at
+	   the frontend's swapchain buffer. Restore for tidiness, but the
+	   actual robustness comes from freeing owned_screen_buffer below
+	   instead of GFX.Screen. */
+	if (sw_fb_saved_screen)
+	{
+		GFX.Screen   = sw_fb_saved_screen;
+		GFX.Pitch    = sw_fb_saved_pitch;
+		sw_fb_saved_screen = NULL;
+		sw_fb_active = false;
+	}
+
 	Deinit();
 	S9xGraphicsDeinit();
 	S9xUnmapAllControls();
 #if defined(_3DS)
-	if (GFX.Screen)
-		linearFree(GFX.Screen);
-	if (ntsc_screen_buffer)
-		linearFree(ntsc_screen_buffer);
+	if (owned_screen_buffer)
+		linearFree(owned_screen_buffer);
+	if (owned_ntsc_buffer)
+		linearFree(owned_ntsc_buffer);
 #else
-	free(GFX.Screen);
-	free(ntsc_screen_buffer);
+	free(owned_screen_buffer);
+	free(owned_ntsc_buffer);
 #endif
-	audio_out_buffer_deinit();
+	owned_screen_buffer = NULL;
+	owned_ntsc_buffer   = NULL;
+	GFX.Screen          = NULL;
+	ntsc_screen_buffer  = NULL;
 
 	/* Reset globals (required for static builds) */
 	libretro_supports_option_categories = false;
 	libretro_supports_bitmasks = false;
+	libretro_supports_sw_fb    = false;
+	libretro_sw_fb_checked     = false;
 	frameskip_type             = 0;
 	frameskip_threshold        = 0;
 	frameskip_counter          = 0;
@@ -1257,6 +1361,159 @@ static void report_buttons(void)
 #undef SWITCH_L2
 #undef PRESSED_R2
 
+/* Direct-render path for RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER.
+ *
+ * Why this exists: the frontend reuses a single buffer in its swapchain,
+ * so handing the core a write-through pointer to that buffer lets the
+ * renderer skip the end-of-frame copy from GFX.Screen. The libretro spec
+ * is strict about this path: when video_cb is called with a pointer
+ * obtained from sw_fb, the (data, width, height, pitch) values must
+ * match exactly what the env call returned. We therefore acquire the
+ * buffer at the exact dimensions for THIS frame, not the worst case.
+ *
+ * The hook lives in cpuexec.c at the same point that recomputes
+ * IPPU.RenderedScreenWidth/Height for the new frame (V_Counter ==
+ * FIRST_VISIBLE_LINE). At that point the frame's planned width/height
+ * are known and no scanline has rendered yet, so swapping GFX.Screen
+ * is safe.
+ *
+ * Mid-frame mode changes can promote the rendered area beyond what we
+ * acquired (BGMode 5/6 or pseudo-hires switched on after the frame
+ * started, or interlace toggled on). The promotion code in ppu.c calls
+ * S9xLibretroSwFbAbort() before its line-doubling loops; that copies
+ * whatever has been rendered so far back to the persistent GFX.Screen
+ * (which is sized for the worst case) and restores the GFX.* fields.
+ * The promotion then proceeds in the persistent buffer and the frame
+ * finishes on the no-sw_fb path. */
+static void sw_fb_acquire_internal(unsigned width, unsigned height)
+{
+	struct retro_framebuffer fb;
+
+	/* Defensive restore: if a previous frame left GFX.Screen pointing
+	   at a frontend buffer (sw_fb_saved_screen non-NULL means we have
+	   a valid restoration point cached from an earlier acquire that
+	   wasn't cleanly released), put it back BEFORE we evaluate any
+	   conditions for this frame. This ensures the renderer always
+	   writes at the canonical pitch when the NTSC filter is on or
+	   when the redirect would otherwise be skipped, regardless of
+	   how state got desynced. */
+	if (sw_fb_saved_screen)
+	{
+		GFX.Screen        = sw_fb_saved_screen;
+		GFX.Pitch         = sw_fb_saved_pitch;
+		GFX.RealPPL       = GFX.Pitch >> 1;
+		GFX.PPL           = GFX.RealPPL << (IPPU.DoubleHeightPixels ? 1 : 0);
+		sw_fb_saved_screen = NULL;
+	}
+	sw_fb_active = false;
+
+	if (!libretro_supports_sw_fb || !IPPU.RenderThisFrame || snes_ntsc_filter)
+		return;
+	if (width == 0 || height == 0)
+		return;
+
+	memset(&fb, 0, sizeof(fb));
+	fb.width        = width;
+	fb.height       = height;
+	fb.access_flags = RETRO_MEMORY_ACCESS_WRITE;
+
+	if (!environ_cb(RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER, &fb))
+		return;
+	if (fb.format != RETRO_PIXEL_FORMAT_RGB565)
+		return;
+	if (!fb.data)
+		return;
+	/* Reject buffers wider than our persistent GFX.Screen: the renderer
+	   indexes GFX.SubScreen with the same Offset += GFX.PPL stride it
+	   uses for GFX.Screen, and SubScreen is sized at init for the
+	   max-width pitch. A wider stride here would walk past SubScreen's
+	   allocation. Smaller is fine - we just use a sub-region of
+	   SubScreen. */
+	if ((int)fb.pitch > GFX.Pitch)
+		return;
+	/* Sanity: pitch must accommodate the requested width. */
+	if (fb.pitch < width * sizeof(uint16_t))
+		return;
+
+	sw_fb_saved_screen = GFX.Screen;
+	sw_fb_saved_pitch  = GFX.Pitch;
+
+	GFX.Screen   = (uint16_t *)fb.data;
+	GFX.Pitch    = (int)fb.pitch;
+	GFX.RealPPL  = GFX.Pitch >> 1;
+	GFX.PPL      = GFX.RealPPL << (IPPU.DoubleHeightPixels ? 1 : 0);
+
+	sw_fb_data   = fb.data;
+	sw_fb_width  = width;
+	sw_fb_height = height;
+	sw_fb_pitch  = fb.pitch;
+	sw_fb_active = true;
+}
+
+void S9xLibretroSwFbAcquire(int width, int height)
+{
+	sw_fb_acquire_internal((unsigned)width, (unsigned)height);
+}
+
+/* Abort an in-progress sw_fb redirect. Called from ppu.c when mid-frame
+   resolution promotion forces us off the direct-render path. Copies any
+   pixels rendered so far from fb.data back to the original GFX.Screen,
+   then restores the GFX.* fields. After this returns sw_fb_active is
+   false and GFX.Screen points at the persistent worst-case buffer. */
+void S9xLibretroSwFbAbort(void)
+{
+	unsigned y;
+	const uint8_t *src;
+	uint8_t *dst;
+	size_t copy_bytes;
+
+	if (!sw_fb_active)
+		return;
+
+	/* Copy the partial render back. We don't know how much of the buffer
+	   was actually written, but the renderer has been writing scanlines
+	   0..(height-1) in order via GFX.S, and the post-render hires/
+	   interlace promotion is the only thing that needs to re-read those
+	   pixels. Copy the full acquired region; cost is bounded by
+	   sw_fb_pitch * sw_fb_height = at most 1208 * 478 = 577 KB, only
+	   when a mid-frame promotion fires. */
+	src = (const uint8_t *)sw_fb_data;
+	dst = (uint8_t *)sw_fb_saved_screen;
+	copy_bytes = sw_fb_width * sizeof(uint16_t);
+	for (y = 0; y < sw_fb_height; y++)
+	{
+		memcpy(dst, src, copy_bytes);
+		src += sw_fb_pitch;
+		dst += sw_fb_saved_pitch;
+	}
+
+	GFX.Screen   = sw_fb_saved_screen;
+	GFX.Pitch    = sw_fb_saved_pitch;
+	GFX.RealPPL  = GFX.Pitch >> 1;
+	GFX.PPL      = GFX.RealPPL << (IPPU.DoubleHeightPixels ? 1 : 0);
+
+	sw_fb_active = false;
+	sw_fb_saved_screen = NULL;  /* mark restored */
+}
+
+/* Release the redirect after S9xMainLoop completes successfully (no
+   abort). Restores GFX.* without copying back, since S9xDeinitUpdate
+   already called video_cb on fb.data. */
+static void sw_fb_release_after_frame(void)
+{
+	if (!sw_fb_active)
+		return;
+
+	GFX.Screen = sw_fb_saved_screen;
+	GFX.Pitch  = sw_fb_saved_pitch;
+	GFX.RealPPL = GFX.Pitch >> 1;
+	GFX.PPL     = GFX.RealPPL << (IPPU.DoubleHeightPixels ? 1 : 0);
+	sw_fb_active = false;
+	sw_fb_saved_screen = NULL;  /* mark restored - prevents the
+	                               defensive re-restore in the next
+	                               acquire from undoing valid state */
+}
+
 void retro_run(void)
 {
 	int result = -1;
@@ -1277,13 +1534,13 @@ void retro_run(void)
 		bool hardDisableAudio = 0 != (result & 0x08);
 		IPPU.RenderThisFrame = videoEnabled;
 
-		S9xSetSoundMute(!audioEnabled || hardDisableAudio);
+		audio_muted = !audioEnabled || hardDisableAudio;
 		Settings.HardDisableAudio = hardDisableAudio;
 	}
 	else
 	{
 		IPPU.RenderThisFrame = true;
-		S9xSetSoundMute(false);
+		audio_muted = false;
 		Settings.HardDisableAudio = false;
 	}
 
@@ -1334,13 +1591,14 @@ void retro_run(void)
 	report_buttons();
 
 	S9xMainLoop();
+	sw_fb_release_after_frame();
 
 	audio_upload_samples();
 }
 
 size_t retro_serialize_size(void)
 {
-	int32 size = SnapshotSize();
+	int32_t size = SnapshotSize();
 
 	if (size < 0)
 		return 0;
@@ -1384,11 +1642,11 @@ void retro_cheat_reset(void)
 
 void retro_cheat_set(unsigned index, bool enabled, const char *code)
 {
-	uint32 address;
-	uint8 val;
+	uint32_t address;
+	uint8_t val;
 
-	bool8 sram;
-	uint8 bytes[3]; /* used only by GoldFinger, ignored for now */
+	uint8_t sram;
+	uint8_t bytes[3]; /* used only by GoldFinger, ignored for now */
 
 	if (S9xGameGenieToRaw(code, &address, &val) != NULL &&
 		S9xProActionReplayToRaw(code, &address, &val) != NULL &&
@@ -1524,7 +1782,6 @@ bool retro_load_game(const struct retro_game_info *game)
 
 	check_variables(true);
 
-	audio_out_buffer_init();
 	retro_set_audio_buff_status_cb();
 	set_system_specs();
 
@@ -1545,7 +1802,20 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
 	return false;
 }
 
-void retro_unload_game (void) { }
+void retro_unload_game (void)
+{
+	/* See retro_deinit: with pause-on-menu disabled the frontend may
+	   tear down while a frame is mid-render. Unwind any active sw_fb
+	   redirect so subsequent code (including a re-load_game without an
+	   intervening retro_deinit) sees GFX.Screen at its original value. */
+	if (sw_fb_saved_screen)
+	{
+		GFX.Screen   = sw_fb_saved_screen;
+		GFX.Pitch    = sw_fb_saved_pitch;
+		sw_fb_saved_screen = NULL;
+		sw_fb_active = false;
+	}
+}
 
 unsigned retro_get_region (void)
 {
@@ -1554,24 +1824,78 @@ unsigned retro_get_region (void)
 
 void S9xDeinitUpdate(int width, int height)
 {
-	static int burst_phase = 0;
-
 	if (!IPPU.RenderThisFrame)
 		video_cb(NULL, width, height, GFX.Pitch);
 	else if (snes_ntsc_filter)
 	{
-		burst_phase = (burst_phase + 1) % 3;
+		/* Both blitters (lores and hires) produce the same number of
+		   NTSC output pixels per scanline - the hires variant just
+		   consumes input pixels at twice the rate per output chunk.
+		   For a 256-wide lores frame and a 512-wide hires frame the
+		   output is identical at SNES_NTSC_OUT_WIDTH(256) = 602
+		   pixels. SNES_NTSC_OUT_WIDTH() is documented in
+		   filter/snes_ntsc.h as the LOW-RES output width formula and
+		   gives the wrong (1197) answer when applied to hires width
+		   - using that as the video_cb width would tell the frontend
+		   to display a 1197-wide frame whose rightmost ~595 pixels
+		   were never written. */
+		unsigned ntsc_out_width = SNES_NTSC_OUT_WIDTH(SNES_WIDTH);
+		size_t   ntsc_out_pitch = (size_t)ntsc_out_width * sizeof(uint16_t);
+		/* Tie the chroma burst phase to the emulated frame counter so
+		   the NTSC output is reproducible across retro_init/_deinit
+		   cycles and is unaffected by libretro frameskip (a skipped
+		   frame doesn't visit this branch but still bumps ICPU.Frame
+		   in cpuexec.c, so the phase advances either way). */
+		int burst_phase = (int)(ICPU.Frame % 3);
 
 		if (width == 512)
-			snes_ntsc_blit_hires(&snes_ntsc, GFX.Screen, GFX.Pitch / 2, burst_phase, width, height, ntsc_screen_buffer, GFX.Pitch);
+			snes_ntsc_blit_hires(&snes_ntsc, GFX.Screen, GFX.Pitch / 2, burst_phase, width, height, ntsc_screen_buffer, (long)ntsc_out_pitch);
 		else
-			snes_ntsc_blit(&snes_ntsc, GFX.Screen, GFX.Pitch / 2, burst_phase, width, height, ntsc_screen_buffer, GFX.Pitch);
+			snes_ntsc_blit(&snes_ntsc, GFX.Screen, GFX.Pitch / 2, burst_phase, width, height, ntsc_screen_buffer, (long)ntsc_out_pitch);
 
-		video_cb(ntsc_screen_buffer, SNES_NTSC_OUT_WIDTH(width), height, GFX.Pitch);
+		video_cb(ntsc_screen_buffer, ntsc_out_width, height, ntsc_out_pitch);
 	}
 	else
-		/* GFX.Pitch = width * 2; */
-		video_cb(GFX.Screen, width, height, GFX.Pitch);
+	{
+		/* Lazily probe sw_fb support on first non-NTSC frame. The probe
+		   only sets the libretro_supports_sw_fb flag; subsequent frames
+		   acquire via the cpuexec.c hook (S9xLibretroSwFbAcquire) at
+		   start-of-frame, where this frame's exact dimensions are known. */
+		if (!libretro_sw_fb_checked)
+		{
+			struct retro_framebuffer fb;
+			memset(&fb, 0, sizeof(fb));
+			fb.width         = width;
+			fb.height        = height;
+			fb.access_flags  = RETRO_MEMORY_ACCESS_WRITE;
+
+			if (environ_cb(RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER, &fb)
+					&& fb.format == RETRO_PIXEL_FORMAT_RGB565)
+			{
+				libretro_supports_sw_fb = true;
+				if (log_cb)
+					log_cb(RETRO_LOG_INFO, "Software framebuffer acquired successfully.\n");
+			}
+
+			libretro_sw_fb_checked = true;
+		}
+
+		if (sw_fb_active)
+		{
+			/* Renderer wrote directly into the frontend's buffer; just
+			   present it. video_cb gets exactly the (data, width,
+			   height, pitch) values returned by the env call. No copy. */
+			video_cb(sw_fb_data, sw_fb_width, sw_fb_height, sw_fb_pitch);
+		}
+		else
+		{
+			/* Either sw_fb is unsupported, or this frame's acquire
+			   was skipped/aborted. Hand GFX.Screen to the frontend;
+			   the frontend's own copy into its swapchain is
+			   unavoidable on this path. */
+			video_cb(GFX.Screen, width, height, GFX.Pitch);
+		}
+	}
 }
 
 /* Dummy functions that should probably be implemented correctly later. */
