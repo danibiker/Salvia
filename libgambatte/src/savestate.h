@@ -36,7 +36,7 @@ struct SaveState {
 		void set(T *p, std::size_t size) { ptr = p; size_ = size; }
 
 		friend class SaverList;
-		friend void setInitState(SaveState &, bool, bool);
+		friend void setInitState(SaveState &, bool, bool, bool);
 
 	private:
 		T *ptr;
@@ -76,6 +76,16 @@ struct SaveState {
 		unsigned char rambank;
 		unsigned char oamDmaPos;
 		unsigned char HuC3RAMflag;
+		unsigned char sachenOuterMask;
+		/* Sachen MMC1: count of CPU reads of 0x0100..0x01FF observed
+		 * while the cartridge is in its boot-time locked state.
+		 * Preserved so a savestate captured mid-bootstrap restores
+		 * the cart to exactly the right point in its 48-reads-to-
+		 * unlock sequence; without it, a mid-boot save would resume
+		 * with count=0 and unlock 48 reads too late, breaking the
+		 * bootstrap's verify pass. Unused (and zero) for every
+		 * non-Sachen cartridge. */
+		unsigned char sachenLockCount;
 #ifdef HAVE_NETWORK
 		unsigned char serialize_value;
 		bool serialize_is_fastcgb;

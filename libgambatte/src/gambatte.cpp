@@ -33,7 +33,7 @@ struct GB::Priv {
 	
 	Priv() : stateNo(1), gbaCgbMode(false) {}
 
-   void full_init();
+   void full_init(bool clearSram = true);
 };
 	
 GB::GB() : p_(new Priv) {}
@@ -53,11 +53,11 @@ long GB::runFor(gambatte::video_pixel_t *const videoBuf, const int pitch,
 	return cyclesSinceBlit < 0 ? cyclesSinceBlit : static_cast<long>(samples) - (cyclesSinceBlit >> 1);
 }
    
-void GB::Priv::full_init() {
+void GB::Priv::full_init(bool const clearSram) {
    SaveState state;
    
    cpu.setStatePtrs(state);
-   setInitState(state, cpu.isCgb(), gbaCgbMode);
+   setInitState(state, cpu.isCgb(), gbaCgbMode, clearSram);
    
    cpu.mem_.bootloader.reset();
    cpu.mem_.bootloader.set_address_space_start((void*)cpu.rombank0_ptr());
@@ -75,12 +75,24 @@ void GB::Priv::full_init() {
       ioamhram[0x148] = 0xFC;//object palette 0
       ioamhram[0x149] = 0xFC;//object palette 1
    }
-   
+
    cpu.loadState(state);
+
+   /* Sachen MMC1 carts need their lock-state overlay installed
+    * (or their VRAM logo injected) AFTER the generic state
+    * restore has finished, so the MBC's loadState handler can't
+    * tear down the overlay based on the default-initialized
+    * SaveState fields. For every non-Sachen cart this is a
+    * no-op; for Sachen carts it also wires the read-count
+    * unlock trigger into the Memory hot path. */
+   cpu.mem_.sachenLockSetup(cpu.mem_.bootloader.using_bootloader);
 }
 
 void GB::reset() {
-   p_->full_init();
+   /* Battery-backed SRAM and RTC must persist across a soft reset
+    * (matching real-hardware behavior; the cart battery keeps
+    * volatile SRAM alive while the console is power-cycled). */
+   p_->full_init(false);
 }
 
 void GB::setInputGetter(InputGetter *getInput) {
@@ -119,21 +131,27 @@ bool GB::isCgb() const {
 }
 
 bool GB::isLoaded() const {
-	return true;
+	/* Previously this unconditionally returned true. The
+	 * underlying Cartridge::loaded() reports whether an MBC has
+	 * been instantiated, which is a faithful "is a ROM loaded"
+	 * signal, so route through to it. */
+	return p_->cpu.mem_.loaded();
 }
 
 void GB::setDmgPaletteColor(unsigned palNum, unsigned colorNum, unsigned rgb32) {
 	p_->cpu.setDmgPaletteColor(palNum, colorNum, rgb32);
 }
 
-void GB::loadState(const void *data) {
+bool GB::loadState(const void *data, size_t size) {
    SaveState state;
    p_->cpu.setStatePtrs(state);
-   
-   if (StateSaver::loadState(state, data)) {
+
+   if (StateSaver::loadState(state, data, size)) {
       p_->cpu.loadState(state);
       p_->cpu.mem_.bootloader.choosebank(state.mem.ioamhram.get()[0x150] != 0xFF);
+      return true;
    }
+   return false;
 }
 
 void GB::saveState(void *data) {

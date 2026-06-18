@@ -42,6 +42,13 @@ private:
 	video_pixel_t *fbline_;
 	std::ptrdiff_t pitch_;
 
+	/* Shared 160-pixel scratch used as a destination when no real
+	 * framebuf is attached. With DUAL_MODE compiled in, both PPU
+	 * instances would write to this same buffer; the libretro
+	 * core is single-threaded so there is no data race, but it is
+	 * shared mutable state and nothing in the current code path
+	 * actually reads it back. Make it a non-static member of
+	 * PPUFrameBuf if DUAL_MODE is ever revived as a real feature. */
 	static video_pixel_t * nullfbline() { static video_pixel_t nullfbline_[160]; return nullfbline_; }
 };
 
@@ -56,6 +63,28 @@ struct PPUState {
 struct PPUPriv {
 	video_pixel_t bgPalette[8 * 4];
 	video_pixel_t spPalette[8 * 4];
+	/* Precomputed BG palette expansion.
+	 *
+	 * Indexed by [palette_id][byte][lane]: each byte of ntileword
+	 * packs four 2-bit palette indices (lanes 0..3 in byte order),
+	 * so each bgPaletteExpanded[p][byte] holds the four resolved
+	 * colours for that nibble of the tile word.  Both the DMG and
+	 * CGB renderers issue two 16-byte loads + two 16-byte stores
+	 * per 8-pixel tile instead of eight dependent scalar loads from
+	 * bgPalette.
+	 *
+	 * DMG mode uses only palette 0.  CGB mode picks palette
+	 * (nattrib & 7) per tile.  The table is rebuilt only when a BG
+	 * palette changes: BGP / refresh / doCgbBgColorChange paths.
+	 *
+	 * Size: 8 * 256 * 4 * sizeof(video_pixel_t).  For the default
+	 * libretro u32 build that's 32 KiB; for the VIDEO_RGB565 /
+	 * VIDEO_ABGR1555 u16 builds it's 16 KiB.  Modern x86 L1d is
+	 * 32-48 KiB and Cortex-A7/A53/A72 L1d is 32 KiB, so the worst
+	 * case fits.  In practice each frame uses only a few palettes
+	 * actively, so the hot working set is much smaller than the
+	 * full table. */
+	video_pixel_t bgPaletteExpanded[8][256][4];
 	struct Sprite { unsigned char spx, oampos, line, attrib; } spriteList[11];
 	unsigned short spwordList[11];
 	unsigned char nextSprite;
@@ -106,6 +135,27 @@ public:
 	}
 
 	video_pixel_t * bgPalette() { return p_.bgPalette; }
+
+	/* Recompute bgPaletteExpanded[palette_id] from the current
+	 * bgPalette[palette_id*4 .. palette_id*4+3].  DMG mode uses
+	 * palette 0 only.  Called by the LCD on every BG palette write
+	 * (BGP register, CGB BCPD register, refresh / savestate paths).
+	 * Idempotent and side-effect-free. */
+	void refreshBgPaletteExpansion(unsigned const palette_id)
+	{
+		video_pixel_t const *const pal = p_.bgPalette + palette_id * 4;
+		video_pixel_t const c0 = pal[0];
+		video_pixel_t const c1 = pal[1];
+		video_pixel_t const c2 = pal[2];
+		video_pixel_t const c3 = pal[3];
+		video_pixel_t const cs[4] = { c0, c1, c2, c3 };
+		for (int b = 0; b < 256; ++b) {
+			p_.bgPaletteExpanded[palette_id][b][0] = cs[ b       & 3];
+			p_.bgPaletteExpanded[palette_id][b][1] = cs[(b >> 2) & 3];
+			p_.bgPaletteExpanded[palette_id][b][2] = cs[(b >> 4) & 3];
+			p_.bgPaletteExpanded[palette_id][b][3] = cs[ b >> 6      ];
+		}
+	}
 	bool cgb() const { return p_.cgb; }
    void setDmgMode(bool mode) { p_.dmgMode = mode; }
    bool inDmgMode() const { return p_.dmgMode; }
