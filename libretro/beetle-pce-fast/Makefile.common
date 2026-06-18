@@ -65,12 +65,11 @@ ifeq ($(HAVE_CDROM), 1)
 endif
 
 ifneq ($(HAVE_GRIFFIN), 1)
-   SOURCES_CXX += \
-	$(CORE_EMU_DIR)/pcecd.cpp \
-	$(CORE_EMU_DIR)/pcecd_drive.cpp \
-	$(CORE_EMU_DIR)/psg.cpp \
-	$(MEDNAFEN_DIR)/hw_misc/arcade_card/arcade_card.cpp
    SOURCES_C += \
+	$(MEDNAFEN_DIR)/hw_misc/arcade_card/arcade_card.c \
+	$(CORE_EMU_DIR)/pcecd_drive.c \
+	$(CORE_EMU_DIR)/pcecd.c \
+	$(CORE_EMU_DIR)/psg.c \
 	$(CORE_EMU_DIR)/huc6280.c \
 	$(CORE_EMU_DIR)/input.c \
 	$(CORE_EMU_DIR)/vdc.c
@@ -109,19 +108,18 @@ ifeq ($(USE_CHEATS), 1)
 endif
 
 ifneq ($(HAVE_GRIFFIN),1)
-	SOURCES_CXX += \
-		$(CDROM_DIR)/CDAccess.cpp \
-		$(CDROM_DIR)/CDAccess_Image.cpp \
-		$(CDROM_DIR)/CDAccess_CCD.cpp \
-		$(CDROM_DIR)/CDAFReader.cpp \
-		$(CDROM_DIR)/CDAFReader_Vorbis.cpp \
-		$(CDROM_DIR)/cdromif.cpp \
-		$(CDROM_DIR)/CDUtility.cpp \
-		$(CDROM_DIR)/lec.cpp \
-		$(CDROM_DIR)/galois.cpp \
-		$(CDROM_DIR)/recover-raw.cpp \
-		$(CDROM_DIR)/l-ec.cpp \
-		$(CDROM_DIR)/edc_crc32.cpp
+	SOURCES_C += \
+		$(CDROM_DIR)/CDAccess.c \
+		$(CDROM_DIR)/CDAccess_Image.c \
+		$(CDROM_DIR)/CDAccess_CCD.c \
+		$(CDROM_DIR)/audioreader.c \
+		$(CDROM_DIR)/cdromif.c \
+		$(CDROM_DIR)/CDUtility.c \
+		$(CDROM_DIR)/lec.c \
+		$(CDROM_DIR)/galois.c \
+		$(CDROM_DIR)/l-ec.c \
+		$(CDROM_DIR)/edc_crc32.c \
+		$(CDROM_DIR)/recover-raw.c
 endif
 FLAGS += -DNEED_CD
 
@@ -144,7 +142,7 @@ ifeq ($(HAVE_CHD), 1)
 		SOURCES_C += $(ZLIB_SOURCES_C)
 	endif
 
-	SOURCES_CXX += $(CDROM_DIR)/CDAccess_CHD.cpp
+	SOURCES_C += $(CDROM_DIR)/CDAccess_CHD.c
 endif
 
 ifeq ($(NEED_TREMOR), 1)
@@ -153,16 +151,12 @@ ifeq ($(NEED_TREMOR), 1)
 endif
 
 ifneq ($(HAVE_GRIFFIN), 1)
-	SOURCES_CXX += \
-		$(MEDNAFEN_DIR)/general.cpp \
-		$(MEDNAFEN_DIR)/FileStream.cpp \
-		$(MEDNAFEN_DIR)/MemoryStream.cpp \
-		$(MEDNAFEN_DIR)/Stream.cpp \
-		$(MEDNAFEN_DIR)/mempatcher.cpp \
-		$(MEDNAFEN_DIR)/okiadpcm.cpp \
-		$(CORE_DIR)/libretro.cpp
-
 	SOURCES_C += \
+		$(CORE_DIR)/libretro.c \
+		$(MEDNAFEN_DIR)/general.c \
+		$(MEDNAFEN_DIR)/cdstream.c \
+		$(MEDNAFEN_DIR)/mempatcher.c \
+		$(MEDNAFEN_DIR)/okiadpcm.c \
 		$(MEDNAFEN_DIR)/file.c \
 		$(MEDNAFEN_DIR)/settings.c \
 		$(MEDNAFEN_DIR)/state.c \

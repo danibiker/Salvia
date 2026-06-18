@@ -19,7 +19,6 @@
 
 #include "../mednafen.h"
 #include "../mednafen-endian.h"
-#include "../cdrom/cdromif.h"
 #include "../cdrom/SimpleFIFO.h"
 #include "../state_helpers.h"
 
@@ -146,7 +145,7 @@ static pcecd_drive_t cd;
 pcecd_drive_bus_t cd_bus;
 static cdda_t cdda;
 
-static SimpleFIFO din(2048);
+static SimpleFIFO din;
 
 static TOC toc;
 
@@ -175,7 +174,7 @@ static void ChangePhase(const unsigned int new_phase);
 
 static void VirtualReset(void)
 {
- din.Flush();
+ SimpleFIFO_Flush(&din);
 
  cdda.CDDADivAcc = (int64)System_Clock * 65536 / 44100;
  CDReadTimer = 0;
@@ -189,7 +188,7 @@ static void VirtualReset(void)
  cdda.PlayMode = PLAYMODE_SILENT;
  cdda.CDDAReadPos = 0;
  cdda.CDDAStatus = CDDASTATUS_STOPPED;
- cdda.CDDADiv = 0;
+ cdda.CDDADiv = 1;
 
  cdda.ScanMode = 0;
  cdda.scan_sec_end = 0;
@@ -207,7 +206,7 @@ void PCECD_Drive_Power(pcecd_drive_timestamp_t system_timestamp)
  cd.DiscChanged = false;
 
  if(Cur_CDIF && !cd.TrayOpen)
-  Cur_CDIF->ReadTOC(&toc);
+  CDIF_ReadTOC(Cur_CDIF, &toc);
 
  CurrentPhase = PHASE_BUS_FREE;
 
@@ -243,9 +242,10 @@ static void GenSubQFromSubPW(void)
 
    if(subq_check_checksum(SubQBuf))
    {
+      uint8 adr;
       memcpy(cd.SubQBuf_Last, SubQBuf, 0xC);
 
-      uint8 adr = SubQBuf[0] & 0xF;
+      adr = SubQBuf[0] & 0xF;
 
       if(adr <= 0x3)
          memcpy(cd.SubQBuf[adr], SubQBuf, 0xC);
@@ -346,7 +346,7 @@ static void SendStatusAndMessage(uint8 status, uint8 message)
    if(din.in_count)
    {
       /* BUG: x bytes still in SCSI CD FIFO */
-      din.Flush();
+      SimpleFIFO_Flush(&din);
    }
 
    cd.message_pending = message;
@@ -366,7 +366,7 @@ static void SendStatusAndMessage(uint8 status, uint8 message)
 
 static void DoSimpleDataIn(const uint8 *data_in, uint32 len)
 {
- din.Write(data_in, len);
+ SimpleFIFO_Write(&din, data_in, len);
 
  cd.data_transfer_done = true;
 
@@ -384,7 +384,7 @@ void PCECD_Drive_SetDisc(bool tray_open, CDIF *cdif, bool no_emu_side_effects)
 
   if(cdif)
   {
-   cdif->ReadTOC(&toc);
+   CDIF_ReadTOC(cdif, &toc);
 
    if(!no_emu_side_effects)
    {
@@ -400,7 +400,7 @@ void PCECD_Drive_SetDisc(bool tray_open, CDIF *cdif, bool no_emu_side_effects)
  }
 }
 
-static void CommandCCError(int key, int asc = 0, int ascq = 0)
+static void CommandCCError(int key, int asc, int ascq)
 {
    /* CC error */
 
@@ -421,7 +421,7 @@ static bool ValidateRawDataSector(uint8 *data, const uint32 lba)
      
  if(!c && !setting_pce_fast_cdignoreerrors)
  {
-    din.Flush();
+    SimpleFIFO_Flush(&din);
     cd.data_transfer_done = false;
 
     CommandCCError(SENSEKEY_MEDIUM_ERROR, AP_LEC_UNCORRECTABLE_ERROR);
@@ -435,14 +435,14 @@ static void DoREADBase(uint32 sa, uint32 sc)
 {
  if(sa > toc.tracks[100].lba) // Another one of those off-by-one PC-FX CD bugs.
  {
-  CommandCCError(SENSEKEY_ILLEGAL_REQUEST, NSE_END_OF_VOLUME);
+  CommandCCError(SENSEKEY_ILLEGAL_REQUEST, NSE_END_OF_VOLUME, 0);
   return;
  }
 
  // Case for READ(10) and READ(12) where sc == 0, and sa == toc.tracks[100].lba
  if(!sc && sa == toc.tracks[100].lba)
  {
-  CommandCCError(SENSEKEY_MEDIUM_ERROR, NSE_HEADER_READ_ERROR);
+  CommandCCError(SENSEKEY_MEDIUM_ERROR, NSE_HEADER_READ_ERROR, 0);
   return;
  }
 
@@ -450,7 +450,7 @@ static void DoREADBase(uint32 sa, uint32 sc)
  SectorCount = sc;
  if(SectorCount)
  {
-  Cur_CDIF->HintReadSector(sa);	//, sa + sc);
+  CDIF_HintReadSector(Cur_CDIF, sa);	//, sa + sc);
 
   CDReadTimer = (uint64)3 * 2048 * System_Clock / CD_DATA_TRANSFER_RATE;
  }
@@ -565,7 +565,7 @@ static void DoNEC_PCE_SAPSP(const uint8 *cdb)
  }
 
  if(read_sec < toc.tracks[100].lba)
-  Cur_CDIF->HintReadSector(read_sec);
+  CDIF_HintReadSector(Cur_CDIF, read_sec);
 
  SendStatusAndMessage(STATUS_GOOD, 0x00);
  CDIRQCallback(PCECD_Drive_IRQ_DATA_TRANSFER_DONE);
@@ -649,7 +649,7 @@ static void DoNEC_PCE_PAUSE(const uint8 *cdb)
  }
  else // Definitely give an error if it tries to pause when no track is playing!
  {
-  CommandCCError(SENSEKEY_ILLEGAL_REQUEST, NSE_AUDIO_NOT_PLAYING);
+  CommandCCError(SENSEKEY_ILLEGAL_REQUEST, NSE_AUDIO_NOT_PLAYING, 0);
  }
 }
 
@@ -742,7 +742,7 @@ static void DoNEC_PCE_GETDIRINFO(const uint8 *cdb)
             }
             else if(track > 99)
             {
-               CommandCCError(SENSEKEY_ILLEGAL_REQUEST, NSE_INVALID_PARAMETER);
+               CommandCCError(SENSEKEY_ILLEGAL_REQUEST, NSE_INVALID_PARAMETER, 0);
                return;
             }
 
@@ -883,10 +883,13 @@ static INLINE void RunCDDA(uint32 system_timestamp, int32 run_time)
     {
      uint8 tmpbuf[2352 + 96];
 
-     Cur_CDIF->ReadRawSector(tmpbuf, read_sec);	//, read_sec_end, read_sec_start);
+     CDIF_ReadRawSector(Cur_CDIF, tmpbuf, read_sec);	//, read_sec_end, read_sec_start);
 
-     for(int i = 0; i < 588 * 2; i++)
-      cdda.CDDASectorBuffer[i] = MDFN_de16lsb(&tmpbuf[i * 2]);
+     {
+      int i;
+      for(i = 0; i < 588 * 2; i++)
+       cdda.CDDASectorBuffer[i] = MDFN_de16lsb(&tmpbuf[i * 2]);
+     }
 
      memcpy(cd.SubPWBuf, tmpbuf + 2352, 96);
     }
@@ -936,7 +939,7 @@ static INLINE void RunCDRead(uint32 system_timestamp, int32 run_time)
 
       if(CDReadTimer <= 0)
       {
-         if(din.CanWrite() < 2048)
+         if(SimpleFIFO_CanWrite(&din) < 2048)
          {
             CDReadTimer += (uint64) 1 * 2048 * System_Clock / CD_DATA_TRANSFER_RATE;
          }
@@ -946,29 +949,29 @@ static INLINE void RunCDRead(uint32 system_timestamp, int32 run_time)
 
             if(cd.TrayOpen)
             {
-               din.Flush();
+               SimpleFIFO_Flush(&din);
                cd.data_transfer_done = false;
 
-               CommandCCError(SENSEKEY_NOT_READY, NSE_TRAY_OPEN);
+               CommandCCError(SENSEKEY_NOT_READY, NSE_TRAY_OPEN, 0);
             }
             else if(SectorAddr >= toc.tracks[100].lba)
             {
-               CommandCCError(SENSEKEY_ILLEGAL_REQUEST, NSE_END_OF_VOLUME);
+               CommandCCError(SENSEKEY_ILLEGAL_REQUEST, NSE_END_OF_VOLUME, 0);
             }
-            else if(!Cur_CDIF->ReadRawSector(tmp_read_buf, SectorAddr))	//, SectorAddr + SectorCount))
+            else if(!CDIF_ReadRawSector(Cur_CDIF, tmp_read_buf, SectorAddr))	//, SectorAddr + SectorCount))
             {
                cd.data_transfer_done = false;
 
-               CommandCCError(SENSEKEY_ILLEGAL_REQUEST);
+               CommandCCError(SENSEKEY_ILLEGAL_REQUEST, 0, 0);
             }
             else if(ValidateRawDataSector(tmp_read_buf, SectorAddr))
             {
                memcpy(cd.SubPWBuf, tmp_read_buf + 2352, 96);
 
                if(tmp_read_buf[12 + 3] == 0x2)
-                  din.Write(tmp_read_buf + 24, 2048);
+                  SimpleFIFO_Write(&din, tmp_read_buf + 24, 2048);
                else
-                  din.Write(tmp_read_buf + 16, 2048);
+                  SimpleFIFO_Write(&din, tmp_read_buf + 16, 2048);
 
                GenSubQFromSubPW();
 
@@ -999,6 +1002,8 @@ static INLINE void RunCDRead(uint32 system_timestamp, int32 run_time)
 uint32 PCECD_Drive_Run(pcecd_drive_timestamp_t system_timestamp)
 {
    int32 run_time = system_timestamp - lastts;
+   bool ResetNeeded = false;
+   int32 next_time = 0x7fffffff;
 
    monotonic_timestamp += run_time;
 
@@ -1006,8 +1011,6 @@ uint32 PCECD_Drive_Run(pcecd_drive_timestamp_t system_timestamp)
 
    RunCDRead(system_timestamp, run_time);
    RunCDDA(system_timestamp, run_time);
-
-   bool ResetNeeded = false;
 
    if(RST_signal && !cd.last_RST_signal)
       ResetNeeded = true;
@@ -1043,7 +1046,7 @@ uint32 PCECD_Drive_Run(pcecd_drive_timestamp_t system_timestamp)
 
                if(cmd_info_ptr->pretty_name == NULL)	// Command not found!
                {
-                  CommandCCError(SENSEKEY_ILLEGAL_REQUEST, NSE_INVALID_COMMAND);
+                  CommandCCError(SENSEKEY_ILLEGAL_REQUEST, NSE_INVALID_COMMAND, 0);
 
                   /* Bad Command */
 
@@ -1053,15 +1056,15 @@ uint32 PCECD_Drive_Run(pcecd_drive_timestamp_t system_timestamp)
                {
                   if(cd.TrayOpen && (cmd_info_ptr->flags & SCF_REQUIRES_MEDIUM))
                   {
-                     CommandCCError(SENSEKEY_NOT_READY, NSE_TRAY_OPEN);
+                     CommandCCError(SENSEKEY_NOT_READY, NSE_TRAY_OPEN, 0);
                   }
                   else if(!Cur_CDIF && (cmd_info_ptr->flags & SCF_REQUIRES_MEDIUM))
                   {
-                     CommandCCError(SENSEKEY_NOT_READY, NSE_NO_DISC);
+                     CommandCCError(SENSEKEY_NOT_READY, NSE_NO_DISC, 0);
                   }
                   else if(cd.DiscChanged && (cmd_info_ptr->flags & SCF_REQUIRES_MEDIUM))
                   {
-                     CommandCCError(SENSEKEY_UNIT_ATTENTION, NSE_DISC_CHANGED);
+                     CommandCCError(SENSEKEY_UNIT_ATTENTION, NSE_DISC_CHANGED, 0);
                      cd.DiscChanged = false;
                   }
                   else
@@ -1110,7 +1113,7 @@ uint32 PCECD_Drive_Run(pcecd_drive_timestamp_t system_timestamp)
             }
             else
             {
-               cd_bus.DB = din.ReadUnit();
+               cd_bus.DB = SimpleFIFO_ReadUnit(&din);
                SetREQ(true);
             }
          }
@@ -1135,7 +1138,7 @@ uint32 PCECD_Drive_Run(pcecd_drive_timestamp_t system_timestamp)
          break;
    }
 
-   int32 next_time = 0x7fffffff;
+   next_time = 0x7fffffff;
 
    if(CDReadTimer > 0 && CDReadTimer < next_time)
       next_time = CDReadTimer;
@@ -1163,7 +1166,7 @@ void PCECD_Drive_SetTransferRate(uint32 TransferRate)
 
 void PCECD_Drive_Close(void)
 {
-
+ SimpleFIFO_Deinit(&din);
 }
 
 void PCECD_Drive_Init(int cdda_time_div, Blip_Buffer *leftbuf, Blip_Buffer *rightbuf, uint32 TransferRate, uint32 SystemClock, void (*IRQFunc)(int), void (*SSCFunc)(uint8, int))
@@ -1174,7 +1177,9 @@ void PCECD_Drive_Init(int cdda_time_div, Blip_Buffer *leftbuf, Blip_Buffer *righ
  monotonic_timestamp = 0;
  lastts = 0;
 
- //din = new SimpleFIFO(2048);
+ /* din's buffer was allocated by the C++ ctor at static init; allocate it
+  * explicitly now (capacity 2048, a power of two). */
+ SimpleFIFO_Init(&din, 2048);
  
  cdda.CDDATimeDiv = cdda_time_div;
 
@@ -1254,12 +1259,14 @@ int PCECD_Drive_StateAction(StateMem * sm, int load, int data_only, const char *
 
  if(load)
  {
-  din.in_count &= din.size - 1;
+  din.in_count %= din.size + 1;
   din.read_pos &= din.size - 1;
   din.write_pos = (din.read_pos + din.in_count) & (din.size - 1);
 
   if(cdda.CDDADiv <= 0)
    cdda.CDDADiv = 1;
+
+  cdda.CDDAReadPos %= 588 + 1;
  }
 
  return (ret);
