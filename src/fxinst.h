@@ -29,11 +29,6 @@
   (c) Copyright 2005 - 2006  Dreamer Nom,
                              zones
 
-  C4 x86 assembler and some C emulation code
-  (c) Copyright 2000 - 2003  _Demo_ (_demo_@zsnes.com),
-                             Nach,
-                             zsKnight (zsknight@zsnes.com)
-
   C4 C++ code
   (c) Copyright 2003 - 2006  Brad Jorsch,
                              Nach
@@ -100,11 +95,6 @@
                              Kris Bleakley,
                              Matthew Kendora
 
-  Super FX x86 assembler emulator code
-  (c) Copyright 1998 - 2003  _Demo_,
-                             pagefault,
-                             zsKnight
-
   Super FX C emulator code
   (c) Copyright 1997 - 1999  Ivar,
                              Gary Henderson,
@@ -117,32 +107,10 @@
   Sound emulator code used in 1.52+
   (c) Copyright 2004 - 2007  Shay Green (gblargg@gmail.com)
 
-  SH assembler code partly based on x86 assembler code
-  (c) Copyright 2002 - 2004  Marcus Comstedt (marcus@mc.pp.se)
-
-  2xSaI filter
-  (c) Copyright 1999 - 2001  Derek Liauw Kie Fa
-
-  HQ2x, HQ3x, HQ4x filters
-  (c) Copyright 2003         Maxim Stepin (maxim@hiend3d.com)
-
   NTSC filter
   (c) Copyright 2006 - 2007  Shay Green
 
-  GTK+ GUI code
-  (c) Copyright 2004 - 2010  BearOso
-
-  Win32 GUI code
-  (c) Copyright 2003 - 2006  blip,
-                             funkyass,
-                             Matthew Kendora,
-                             Nach,
-                             nitsuja
   (c) Copyright 2009 - 2010  OV2
-
-  Mac OS GUI code
-  (c) Copyright 1998 - 2001  John Stiles
-  (c) Copyright 2001 - 2010  zones
 
   (c) Copyright 2010 - 2016 Daniel De Matteis. (UNDER NO CIRCUMSTANCE 
   WILL COMMERCIAL RIGHTS EVER BE APPROPRIATED TO ANY PARTY)
@@ -298,84 +266,6 @@
  *
  */
 
-/* Number of banks in GSU RAM */
-#define FX_RAM_BANKS	4
-
-/* Emulate proper R14 ROM access (slower, but safer)
-   Without this, Doom has garbled graphics */
-#define FX_DO_ROMBUFFER
-
-/* Address checking (definately slow) */
-/* #define FX_ADDRESS_CHECK */
-
-struct FxRegs_s
-{
-	/* FxChip registers */
-	uint32	avReg[16];				/* 16 Generic registers */
-	uint32	vColorReg;				/* Internal color register */
-	uint32	vPlotOptionReg;				/* Plot option register */
-	uint32	vStatusReg;				/* Status register */
-	uint32	vPrgBankReg;				/* Program bank index register */
-	uint32	vRomBankReg;				/* Rom bank index register */
-	uint32	vRamBankReg;				/* Ram bank index register */
-	uint32	vCacheBaseReg;				/* Cache base address register */
-	uint32	vCacheFlags;				/* Saying what parts of the cache was written to */
-	uint32	vLastRamAdr;				/* Last RAM address accessed */
-	uint32	*pvDreg;				/* Pointer to current destination register */
-	uint32	*pvSreg;				/* Pointer to current source register */
-	uint8	vRomBuffer;				/* Current byte read by R14 */
-	uint8	vPipe;					/* Instructionset pipe */
-	uint32	vPipeAdr;				/* The address of where the pipe was read from */
-
-	/* Status register optimization stuff */
-	uint32	vSign;					/* v & 0x8000 */
-	uint32	vZero;					/* v == 0 */
-	uint32	vCarry;					/* a value of 1 or 0 */
-	int32	vOverflow;				/* (v >= 0x8000 || v < -0x8000) */
-
-	/* Other emulator variables */
-	int32	vErrorCode;
-	uint32	vIllegalAddress;
-
-	uint8	bBreakPoint;
-	uint32	vBreakPoint;
-	uint32	vStepPoint;
-
-	uint8	*pvRegisters;				/* 768 bytes located in the memory at address 0x3000 */
-	uint32	nRamBanks;				/* Number of 64kb-banks in FxRam (Don't confuse it with SNES-Ram!!!) */
-	uint8	*pvRam;					/* Pointer to FxRam */
-	uint32	nRomBanks;				/* Number of 32kb-banks in Cart-ROM */
-	uint8	*pvRom;					/* Pointer to Cart-ROM */
-
-	uint32	vMode;					/* Color depth/mode */
-	uint32	vPrevMode;				/* Previous depth */
-	uint8	*pvScreenBase;
-	uint8	*apvScreen[32];				/* Pointer to each of the 32 screen colums */
-	int32	x[32];
-	uint32	vScreenHeight;				/* 128, 160, 192 or 256 (could be overriden by cmode) */
-	uint32	vScreenRealHeight;			/* 128, 160, 192 or 256 */
-	uint32	vPrevScreenHeight;
-	uint32	vScreenSize;
-
-	uint8	*pvRamBank;				/* Pointer to current RAM-bank */
-	uint8	*pvRomBank;				/* Pointer to current ROM-bank */
-	uint8	*pvPrgBank;				/* Pointer to current program ROM-bank */
-
-	uint8	*apvRamBank[FX_RAM_BANKS];		/* Ram bank table (max 256kb) */
-	uint8	*apvRomBank[256];			/* Rom bank table */
-
-	uint8	bCacheActive;
-	uint8	*pvCache;				/* Pointer to the GSU cache */
-	uint8	avCacheBackup[512];			/* Backup of ROM when the cache has replaced it */
-	uint32	vCounter;
-	uint32	vInstCount;
-	uint32	vSCBRDirty;				/* If SCBR is written, our cached screen pointers need updating */
-	
-	uint8	*avRegAddr;				/* To reference avReg in snapshot.cpp */
-};
-
-extern struct FxRegs_s	GSU;
-
 /* GSU registers */
 #define GSU_R0			0x000
 #define GSU_R1			0x002
@@ -420,75 +310,91 @@ extern struct FxRegs_s	GSU;
 #define FLG_B			4096
 #define FLG_IRQ			32768
 
-/* Test flag */
-#define TF(a)			(GSU.vStatusReg &   FLG_##a)
-#define CF(a)			(GSU.vStatusReg &= ~FLG_##a)
-#define SF(a)			(GSU.vStatusReg |=  FLG_##a)
+/* Number of banks in GSU RAM */
+#define FX_RAM_BANKS	4
 
-/* Test and set flag if condition, clear if not */
-#define TS(a, b)		GSU.vStatusReg = ((GSU.vStatusReg & (~FLG_##a)) | ((!!(##b)) * FLG_##a))
+/* Emulate proper R14 ROM access (slower, but safer)
+   Without this, Doom has garbled graphics */
+#define FX_DO_ROMBUFFER
 
-/* Testing ALT1 & ALT2 bits */
-#define ALT0			(!TF(ALT1) && !TF(ALT2))
-#define ALT1			( TF(ALT1) && !TF(ALT2))
-#define ALT2			(!TF(ALT1) &&  TF(ALT2))
-#define ALT3			( TF(ALT1) &&  TF(ALT2))
+struct FxRegs_s
+{
+	/* FxChip registers */
+	uint32_t	avReg[16];				/* 16 Generic registers */
+	uint32_t	vColorReg;				/* Internal color register */
+	uint32_t	vPlotOptionReg;				/* Plot option register */
+	uint32_t	vStatusReg;				/* Status register */
+	uint32_t	vPrgBankReg;				/* Program bank index register */
+	uint32_t	vRomBankReg;				/* Rom bank index register */
+	uint32_t	vRamBankReg;				/* Ram bank index register */
+	uint32_t	vCacheBaseReg;				/* Cache base address register */
+	uint32_t	vCacheFlags;				/* Saying what parts of the cache was written to */
+	uint32_t	vLastRamAdr;				/* Last RAM address accessed */
+	uint32_t	*pvDreg;				/* Pointer to current destination register */
+	uint32_t	*pvSreg;				/* Pointer to current source register */
+	uint8_t	vRomBuffer;				/* Current byte read by R14 */
+	uint8_t	vPipe;					/* Instructionset pipe */
+	uint32_t	vPipeAdr;				/* The address of where the pipe was read from */
 
-/* Sign extend from 8/16 bit to 32 bit */
-#define SEX8(a)			((int32)  ((int8)   (a)))
-#define FX_SEX16(a)		((int32)  ((int16)  (a)))
+	/* Status register optimization stuff */
+	uint32_t	vSign;					/* v & 0x8000 */
+	uint32_t	vZero;					/* v == 0 */
+	uint32_t	vCarry;					/* a value of 1 or 0 */
+	int32_t	vOverflow;				/* (v >= 0x8000 || v < -0x8000) */
 
-/* Unsign extend from 8/16 bit to 32 bit */
-#define USEX8(a)		((uint32) ((uint8)  (a)))
-#define USEX16(a)		((uint32) ((uint16) (a)))
-#define SUSEX16(a)		((int32)  ((uint16) (a)))
+	/* Other emulator variables */
+	int32_t	vErrorCode;
+	uint32_t	vIllegalAddress;
 
-/* Set/Clr Sign and Zero flag */
-#define TSZ(num)		TS(S, ((num) & 0x8000)); TS(Z, (!USEX16(num)))
+	uint8_t	bBreakPoint;
+	uint32_t	vBreakPoint;
+	uint32_t	vStepPoint;
 
-/* Clear flags */
-#define CLRFLAGS		GSU.vStatusReg &= ~(FLG_ALT1 | FLG_ALT2 | FLG_B); GSU.pvDreg = GSU.pvSreg = &R0
+	uint8_t	*pvRegisters;				/* 768 bytes located in the memory at address 0x3000 */
+	uint32_t	nRamBanks;				/* Number of 64kb-banks in FxRam (Don't confuse it with SNES-Ram!!!) */
+	uint8_t	*pvRam;					/* Pointer to FxRam */
+	uint32_t	nRomBanks;				/* Number of 32kb-banks in Cart-ROM */
+	uint8_t	*pvRom;					/* Pointer to Cart-ROM */
 
-/* Read current RAM-Bank */
-#define RAM(adr)		GSU.pvRamBank[USEX16(adr)]
+	uint32_t	vMode;					/* Color depth/mode */
+	uint32_t	vPrevMode;				/* Previous depth */
+	uint8_t	*pvScreenBase;
+	uint8_t	*apvScreen[32];				/* Pointer to each of the 32 screen colums */
+	int32_t	x[32];
+	uint32_t	vScreenHeight;				/* 128, 160, 192 or 256 (could be overriden by cmode) */
+	uint32_t	vScreenRealHeight;			/* 128, 160, 192 or 256 */
+	uint32_t	vPrevScreenHeight;
+	uint32_t	vScreenSize;
 
-/* Read current ROM-Bank */
-#define ROM(idx)		GSU.pvRomBank[USEX16(idx)]
+	uint8_t	*pvRamBank;				/* Pointer to current RAM-bank */
+	uint8_t	*pvRomBank;				/* Pointer to current ROM-bank */
+	uint8_t	*pvPrgBank;				/* Pointer to current program ROM-bank */
 
-/* Access the current value in the pipe */
-#define PIPE			GSU.vPipe
+	uint8_t	*apvRamBank[FX_RAM_BANKS];		/* Ram bank table (max 256kb) */
+	uint8_t	*apvRomBank[256];			/* Rom bank table */
 
-/* Access data in the current program bank */
-#define PRGBANK(idx)	GSU.pvPrgBank[USEX16(idx)]
+	uint8_t	bCacheActive;
+	uint8_t	*pvCache;				/* Pointer to the GSU cache */
+	uint8_t	avCacheBackup[512];			/* Backup of ROM when the cache has replaced it */
+	uint32_t	vCounter;
+	uint32_t	vInstCount;
+	uint32_t	vSCBRDirty;				/* If SCBR is written, our cached screen pointers need updating */
+	
+	uint8_t	*avRegAddr;				/* To reference avReg in snapshot.cpp */
+};
 
-/* Update pipe from ROM */
-#define FETCHPIPE		{ PIPE = PRGBANK(R15); }
+extern struct FxRegs_s	GSU;
 
-/* ABS */
-#define ABS(x)			((x) < 0 ? -(x) : (x))
-
-/* Access source register */
-#define SREG			(*GSU.pvSreg)
-
-/* Access destination register */
-#define DREG			(*GSU.pvDreg)
-
-#ifndef FX_DO_ROMBUFFER
-
-/* Don't read R14 */
-#define READR14
-
-/* Don't test and/or read R14 */
-#define TESTR14
-
-#else
-
+#ifdef FX_DO_ROMBUFFER
 /* Read R14 */
 #define READR14			GSU.vRomBuffer = ROM(R14)
-
 /* Test and/or read R14 */
 #define TESTR14			if (GSU.pvDreg == &R14) READR14
-
+#else
+/* Don't read R14 */
+#define READR14
+/* Don't test and/or read R14 */
+#define TESTR14
 #endif
 
 /* Access to registers */

@@ -190,8 +190,6 @@
 #include "srtc.h"
 #include "display.h"
 
-#include "spc7110dec.h"
-
 #define MEMORY_CARTRTC_READ(a)		RTCData.reg[(a)]
 #define MEMORY_CARTRTC_WRITE(a, b)	{ RTCData.reg[(a)] = (b); }
 
@@ -202,7 +200,7 @@
 
 static signed srtc_index;
 
-static uint32 srtc_mode;
+static uint32_t srtc_mode;
 
 static const unsigned srtc_months[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
@@ -263,7 +261,7 @@ static void srtcemu_update_time (void)
 			days = srtc_months[month % 12];
 			if(days == 28)
 			{
-				bool8 leapyear = FALSE;
+				uint8_t leapyear = FALSE;
 				if((year % 4) == 0)
 				{
 					leapyear = TRUE;
@@ -327,7 +325,7 @@ static unsigned srtcemu_weekday(unsigned year, unsigned month, unsigned day)
 
 	while(y < year)
 	{
-		bool8 leapyear = FALSE;
+		uint8_t leapyear = FALSE;
 		if((y % 4) == 0)
 		{
 			leapyear = TRUE;
@@ -343,7 +341,7 @@ static unsigned srtcemu_weekday(unsigned year, unsigned month, unsigned day)
 		days = srtc_months[m - 1];
 		if(days == 28)
 		{
-			bool8 leapyear = FALSE;
+			uint8_t leapyear = FALSE;
 			if((y % 4) == 0)
 			{
 				leapyear = TRUE;
@@ -363,7 +361,6 @@ static unsigned srtcemu_weekday(unsigned year, unsigned month, unsigned day)
 
 void S9xInitSRTC (void)
 {
-	spc7110_decomp_start();
 	srtc_mode = RTCM_READ;
 	srtc_index = -1;
 	srtcemu_update_time();
@@ -377,7 +374,7 @@ void S9xResetSRTC (void)
 	srtcemu_update_time();
 }
 
-void S9xSetSRTC (uint8 data, uint16 address)
+void S9xSetSRTC (uint8_t data, uint16_t address)
 {
 	unsigned i;
 	address &= 0xffff;
@@ -440,7 +437,7 @@ void S9xSetSRTC (uint8 data, uint16 address)
 	}
 }
 
-uint8 S9xGetSRTC (uint16 address)
+uint8_t S9xGetSRTC (uint16_t address)
 {
 	address &= 0xffff;
 
@@ -469,8 +466,8 @@ uint8 S9xGetSRTC (uint16 address)
 
 void S9xSRTCPreSaveState (void)
 {
-	srtcsnap.rtc_mode  = (int32) srtc_mode;
-	srtcsnap.rtc_index = (int32) srtc_index;
+	srtcsnap.rtc_mode  = (int32_t) srtc_mode;
+	srtcsnap.rtc_index = (int32_t) srtc_index;
 }
 
 void S9xSRTCPostLoadState (void)

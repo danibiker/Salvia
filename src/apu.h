@@ -193,8 +193,6 @@ typedef void (*dsp_copy_func_t)( unsigned char** io, void* state, size_t );
    Reduces emulation accuracy. */
 
 #define VOICE_COUNT		8
-#define EXTRA_SIZE		16
-#define EXTRA_SIZE_DIV_2	8
 #define BRR_BUF_SIZE		12
 #define BRR_BUF_SIZE_X2		24
 #define BRR_BLOCK_SIZE		9
@@ -341,15 +339,11 @@ typedef struct
 
 	int rom_enabled;
 
-	short extra [EXTRA_SIZE];
-
 	uint8_t endx_buf;
 	uint8_t envx_buf;
 	uint8_t outx_buf;
 	uint8_t regs [REGISTER_COUNT];
 } dsp_state_t;
-
-#if !SPC_NO_COPY_STATE_FUNCS
 
 typedef struct {
 	dsp_copy_func_t func;
@@ -357,8 +351,6 @@ typedef struct {
 } spc_state_copy_t;
 
 #define SPC_COPY( type, state ) state = (type) spc_copier_copy_int(&copier, state, sizeof (type) );
-
-#endif
 
 #define REG_COUNT	0x10
 #define PORT_COUNT	4
@@ -391,10 +383,8 @@ typedef struct {
 /* Value that padding should be filled with */
 #define CPU_PAD_FILL 0xFF
 
-#if !SPC_NO_COPY_STATE_FUNCS
-	/* Saves/loads state */
-	void spc_copy_state( unsigned char** io, dsp_copy_func_t );
-#endif
+/* Saves/loads state */
+void spc_copy_state( unsigned char** io, dsp_copy_func_t );
 
 /* rel_time_t - Time relative to m_spc_time. Speeds up code a bit by eliminating
    need to constantly add m_spc_time to time from CPU. CPU uses time that ends 
@@ -415,11 +405,6 @@ uint8_t *spc_apuram (void);
 
 typedef struct
 {
-	short*   buf_begin;
-	short*	buf_end;
-	short*   extra_pos;
-	short    extra_buf [EXTRA_SIZE];
-
 	struct
 	{
 		int pc;
@@ -434,8 +419,6 @@ typedef struct
 	int  spc_time;
 
 	int         tempo;
-
-	int         extra_clocks;
 
 	int         rom_enabled;
 
@@ -462,33 +445,30 @@ typedef struct
 
 } spc_state_t;
 
-/* Number of samples written to output since last set */
-#define SPC_SAMPLE_COUNT() ((m.extra_clocks >> 5) * 2)
-
-typedef void (*apu_callback)(void);
-
 #define SPC_SAVE_STATE_BLOCK_SIZE	(STATE_SIZE + 8)
 
-bool8 S9xInitAPU (void);
-void S9xDeinitAPU (void);
+uint8_t S9xInitAPU (void);
+/* DSP voice interpolation mode core option: gaussian (accurate),
+ * cubic (inaccurate, brighter). dsp_interp_mode is defined in apu.c. */
+#define DSP_INTERP_GAUSSIAN 0
+#define DSP_INTERP_CUBIC    1
+#define DSP_INTERP_SINC     2
+extern int dsp_interp_mode;
+
 void S9xResetAPU (void);
 void S9xSoftResetAPU (void);
-uint8 S9xAPUReadPort (int port);
-void S9xAPUWritePort (int port, uint8 byte);
+uint8_t S9xAPUReadPort (int port);
+void S9xAPUWritePort (int port, uint8_t byte);
 void S9xAPUExecute (void);
-void S9xAPUSetReferenceTime (int32 cpucycles);
+void S9xAPUSetReferenceTime (int32_t cpucycles);
 void S9xAPUTimingSetSpeedup (int ticks);
-void S9xAPUAllowTimeOverflow (bool8 allow);
-void S9xAPULoadState (uint8 * block);
-void S9xAPUSaveState (uint8 * block);
+void S9xAPUAllowTimeOverflow (uint8_t allow);
+void S9xAPULoadState (uint8_t * block);
+void S9xAPUSaveState (uint8_t * block);
 
-bool8 S9xInitSound (size_t buffer_size, int lag_ms);
+void S9xInitSound (void);
 
-int S9xGetSampleCount (void);
-void S9xFinalizeSamples (void);
-void S9xClearSamples (void);
-bool8 S9xMixSamples (short * buffer, unsigned sample_count);
-void S9xSetSamplesAvailableCallback (apu_callback);
-void S9xSetSoundMute(bool8 mute);
+const short *S9xDrainAudio (int *count_out);
+unsigned S9xGetAudioSampleRate (void);
 
 #endif

@@ -144,7 +144,7 @@
   (c) Copyright 1998 - 2001  John Stiles
   (c) Copyright 2001 - 2010  zones
 
-  (c) Copyright 2010 - 2016 Daniel De Matteis. (UNDER NO CIRCUMSTANCE 
+  (c) Copyright 2010 - 2016 Daniel De Matteis. (UNDER NO CIRCUMSTANCE
   WILL COMMERCIAL RIGHTS EVER BE APPROPRIATED TO ANY PARTY)
 
   Specific ports contains the works of other authors. See headers in
@@ -207,7 +207,7 @@
 #include "spc7110dec.h"
 
 /*read() will spool chunks half the size of SPC7110_DECOMP_BUFFER_SIZE*/
-uint8* decomp_buffer;
+uint8_t* decomp_buffer;
 
 static unsigned decomp_mode;
 static unsigned decomp_offset;
@@ -225,64 +225,64 @@ ContextState context[32];
 /*==================*/
 /*decompression unit*/
 /*==================*/
-uint8 r4801; /*compression table low*/
-uint8 r4802; /*compression table high*/
-uint8 r4803; /*compression table bank*/
-uint8 r4804; /*compression table index*/
-uint8 r4805; /*decompression buffer index low*/
-uint8 r4806; /*decompression buffer index high*/
-uint8 r4807; /*???*/
-uint8 r4808; /*???*/
-uint8 r4809; /*compression length low*/
-uint8 r480a; /*compression length high*/
-uint8 r480b; /*decompression control register*/
-uint8 r480c; /*decompression status*/
+uint8_t r4801; /*compression table low*/
+uint8_t r4802; /*compression table high*/
+uint8_t r4803; /*compression table bank*/
+uint8_t r4804; /*compression table index*/
+uint8_t r4805; /*decompression buffer index low*/
+uint8_t r4806; /*decompression buffer index high*/
+uint8_t r4807; /*???*/
+uint8_t r4808; /*???*/
+uint8_t r4809; /*compression length low*/
+uint8_t r480a; /*compression length high*/
+uint8_t r480b; /*decompression control register*/
+uint8_t r480c; /*decompression status*/
 
 /*==============*/
 /*data port unit*/
 /*==============*/
-uint8 r4811; /*data pointer low*/
-uint8 r4812; /*data pointer high*/
-uint8 r4813; /*data pointer bank*/
-uint8 r4814; /*data adjust low*/
-uint8 r4815; /*data adjust high*/
-uint8 r4816; /*data increment low*/
-uint8 r4817; /*data increment high*/
-uint8 r4818; /*data port control register*/
+uint8_t r4811; /*data pointer low*/
+uint8_t r4812; /*data pointer high*/
+uint8_t r4813; /*data pointer bank*/
+uint8_t r4814; /*data adjust low*/
+uint8_t r4815; /*data adjust high*/
+uint8_t r4816; /*data increment low*/
+uint8_t r4817; /*data increment high*/
+uint8_t r4818; /*data port control register*/
 
-uint8 r481x;
+uint8_t r481x;
 
-bool8 r4814_latch;
-bool8 r4815_latch;
+uint8_t r4814_latch;
+uint8_t r4815_latch;
 
 /*=========*/
 /*math unit*/
 /*=========*/
-uint8 r4820; /*16-bit multiplicand B0, 32-bit dividend B0*/
-uint8 r4821; /*16-bit multiplicand B1, 32-bit dividend B1*/
-uint8 r4822; /*32-bit dividend B2*/
-uint8 r4823; /*32-bit dividend B3*/
-uint8 r4824; /*16-bit multiplier B0*/
-uint8 r4825; /*16-bit multiplier B1*/
-uint8 r4826; /*16-bit divisor B0*/
-uint8 r4827; /*16-bit divisor B1*/
-uint8 r4828; /*32-bit product B0, 32-bit quotient B0*/
-uint8 r4829; /*32-bit product B1, 32-bit quotient B1*/
-uint8 r482a; /*32-bit product B2, 32-bit quotient B2*/
-uint8 r482b; /*32-bit product B3, 32-bit quotient B3*/
-uint8 r482c; /*16-bit remainder B0*/
-uint8 r482d; /*16-bit remainder B1*/
-uint8 r482e; /*math control register*/
-uint8 r482f; /*math status*/
+uint8_t r4820; /*16-bit multiplicand B0, 32-bit dividend B0*/
+uint8_t r4821; /*16-bit multiplicand B1, 32-bit dividend B1*/
+uint8_t r4822; /*32-bit dividend B2*/
+uint8_t r4823; /*32-bit dividend B3*/
+uint8_t r4824; /*16-bit multiplier B0*/
+uint8_t r4825; /*16-bit multiplier B1*/
+uint8_t r4826; /*16-bit divisor B0*/
+uint8_t r4827; /*16-bit divisor B1*/
+uint8_t r4828; /*32-bit product B0, 32-bit quotient B0*/
+uint8_t r4829; /*32-bit product B1, 32-bit quotient B1*/
+uint8_t r482a; /*32-bit product B2, 32-bit quotient B2*/
+uint8_t r482b; /*32-bit product B3, 32-bit quotient B3*/
+uint8_t r482c; /*16-bit remainder B0*/
+uint8_t r482d; /*16-bit remainder B1*/
+uint8_t r482e; /*math control register*/
+uint8_t r482f; /*math status*/
 
 /*===================*/
 /*memory mapping unit*/
 /*===================*/
-uint8 r4830; /*SRAM write enable*/
-uint8 r4831; /*$[d0-df]:[0000-ffff] mapping*/
-uint8 r4832; /*$[e0-ef]:[0000-ffff] mapping*/
-uint8 r4833; /*$[f0-ff]:[0000-ffff] mapping*/
-uint8 r4834; /*???*/
+uint8_t r4830; /*SRAM write enable*/
+uint8_t r4831; /*$[d0-df]:[0000-ffff] mapping*/
+uint8_t r4832; /*$[e0-ef]:[0000-ffff] mapping*/
+uint8_t r4833; /*$[f0-ff]:[0000-ffff] mapping*/
+uint8_t r4834; /*???*/
 
 unsigned dx_offset;
 unsigned ex_offset;
@@ -291,9 +291,9 @@ unsigned fx_offset;
 /*====================*/
 /*real-time clock unit*/
 /*====================*/
-uint8 r4840; /*RTC latch*/
-uint8 r4841; /*RTC index/data port*/
-uint8 r4842; /*RTC status*/
+uint8_t r4840; /*RTC latch*/
+uint8_t r4841; /*RTC index/data port*/
+uint8_t r4842; /*RTC status*/
 
 #define RTCS_INACTIVE 0
 #define RTCS_MODESELECT 1
@@ -302,15 +302,376 @@ uint8 r4842; /*RTC status*/
 
 #define  RTCM_LINEAR 0x03
 #define RTCM_INDEXED 0x0c
-static uint32 spc7110_rtc_mode;
-static uint32 rtc_state;
+static uint32_t spc7110_rtc_mode;
+static uint32_t rtc_state;
 unsigned rtc_index;
 
 
-static unsigned morton16[2][256];
-static unsigned morton32[4][256];
+/* Reverse Morton lookup tables.
 
-static const uint8 evolution_table[53][4] =
+   morton16[plane][byte] returns a 16-bit value where the 8 input bits
+   are interleaved with one zero bit each: morton16[1] places input bits
+   in odd output positions (15,13,...,1), morton16[0] places them in
+   even positions (14,12,...,0). Adding morton16[0][lo]+morton16[1][hi]
+   reconstructs a 2-plane interleaved pixel from two byte halves.
+
+   morton32[plane][byte] is the analogous 4-plane variant: each input
+   byte spreads its 8 bits across one of four bit-position groups in
+   a 32-bit output (planes 3,2,1,0 occupy bits 31/23/15/7, 29/21/13/5,
+   27/19/11/3, 25/17/9/1 respectively, plus the same pattern shifted
+   one less for the low nibble of each input bit). Adding all four
+   morton32[N][byteN] values reconstructs a 4-plane interleaved pixel.
+
+   The values were previously computed at every spc7110_decomp_start
+   call from a bit-shuffle expression. They are deterministic and
+   small (6KB total), so they live in .rodata as static const. */
+static const unsigned morton16[2][256] =
+{
+	{
+		0x0000, 0x0001, 0x0100, 0x0101, 0x0002, 0x0003, 0x0102, 0x0103,
+		0x0200, 0x0201, 0x0300, 0x0301, 0x0202, 0x0203, 0x0302, 0x0303,
+		0x0004, 0x0005, 0x0104, 0x0105, 0x0006, 0x0007, 0x0106, 0x0107,
+		0x0204, 0x0205, 0x0304, 0x0305, 0x0206, 0x0207, 0x0306, 0x0307,
+		0x0400, 0x0401, 0x0500, 0x0501, 0x0402, 0x0403, 0x0502, 0x0503,
+		0x0600, 0x0601, 0x0700, 0x0701, 0x0602, 0x0603, 0x0702, 0x0703,
+		0x0404, 0x0405, 0x0504, 0x0505, 0x0406, 0x0407, 0x0506, 0x0507,
+		0x0604, 0x0605, 0x0704, 0x0705, 0x0606, 0x0607, 0x0706, 0x0707,
+		0x0008, 0x0009, 0x0108, 0x0109, 0x000a, 0x000b, 0x010a, 0x010b,
+		0x0208, 0x0209, 0x0308, 0x0309, 0x020a, 0x020b, 0x030a, 0x030b,
+		0x000c, 0x000d, 0x010c, 0x010d, 0x000e, 0x000f, 0x010e, 0x010f,
+		0x020c, 0x020d, 0x030c, 0x030d, 0x020e, 0x020f, 0x030e, 0x030f,
+		0x0408, 0x0409, 0x0508, 0x0509, 0x040a, 0x040b, 0x050a, 0x050b,
+		0x0608, 0x0609, 0x0708, 0x0709, 0x060a, 0x060b, 0x070a, 0x070b,
+		0x040c, 0x040d, 0x050c, 0x050d, 0x040e, 0x040f, 0x050e, 0x050f,
+		0x060c, 0x060d, 0x070c, 0x070d, 0x060e, 0x060f, 0x070e, 0x070f,
+		0x0800, 0x0801, 0x0900, 0x0901, 0x0802, 0x0803, 0x0902, 0x0903,
+		0x0a00, 0x0a01, 0x0b00, 0x0b01, 0x0a02, 0x0a03, 0x0b02, 0x0b03,
+		0x0804, 0x0805, 0x0904, 0x0905, 0x0806, 0x0807, 0x0906, 0x0907,
+		0x0a04, 0x0a05, 0x0b04, 0x0b05, 0x0a06, 0x0a07, 0x0b06, 0x0b07,
+		0x0c00, 0x0c01, 0x0d00, 0x0d01, 0x0c02, 0x0c03, 0x0d02, 0x0d03,
+		0x0e00, 0x0e01, 0x0f00, 0x0f01, 0x0e02, 0x0e03, 0x0f02, 0x0f03,
+		0x0c04, 0x0c05, 0x0d04, 0x0d05, 0x0c06, 0x0c07, 0x0d06, 0x0d07,
+		0x0e04, 0x0e05, 0x0f04, 0x0f05, 0x0e06, 0x0e07, 0x0f06, 0x0f07,
+		0x0808, 0x0809, 0x0908, 0x0909, 0x080a, 0x080b, 0x090a, 0x090b,
+		0x0a08, 0x0a09, 0x0b08, 0x0b09, 0x0a0a, 0x0a0b, 0x0b0a, 0x0b0b,
+		0x080c, 0x080d, 0x090c, 0x090d, 0x080e, 0x080f, 0x090e, 0x090f,
+		0x0a0c, 0x0a0d, 0x0b0c, 0x0b0d, 0x0a0e, 0x0a0f, 0x0b0e, 0x0b0f,
+		0x0c08, 0x0c09, 0x0d08, 0x0d09, 0x0c0a, 0x0c0b, 0x0d0a, 0x0d0b,
+		0x0e08, 0x0e09, 0x0f08, 0x0f09, 0x0e0a, 0x0e0b, 0x0f0a, 0x0f0b,
+		0x0c0c, 0x0c0d, 0x0d0c, 0x0d0d, 0x0c0e, 0x0c0f, 0x0d0e, 0x0d0f,
+		0x0e0c, 0x0e0d, 0x0f0c, 0x0f0d, 0x0e0e, 0x0e0f, 0x0f0e, 0x0f0f,
+
+	},
+	{
+		0x0000, 0x0010, 0x1000, 0x1010, 0x0020, 0x0030, 0x1020, 0x1030,
+		0x2000, 0x2010, 0x3000, 0x3010, 0x2020, 0x2030, 0x3020, 0x3030,
+		0x0040, 0x0050, 0x1040, 0x1050, 0x0060, 0x0070, 0x1060, 0x1070,
+		0x2040, 0x2050, 0x3040, 0x3050, 0x2060, 0x2070, 0x3060, 0x3070,
+		0x4000, 0x4010, 0x5000, 0x5010, 0x4020, 0x4030, 0x5020, 0x5030,
+		0x6000, 0x6010, 0x7000, 0x7010, 0x6020, 0x6030, 0x7020, 0x7030,
+		0x4040, 0x4050, 0x5040, 0x5050, 0x4060, 0x4070, 0x5060, 0x5070,
+		0x6040, 0x6050, 0x7040, 0x7050, 0x6060, 0x6070, 0x7060, 0x7070,
+		0x0080, 0x0090, 0x1080, 0x1090, 0x00a0, 0x00b0, 0x10a0, 0x10b0,
+		0x2080, 0x2090, 0x3080, 0x3090, 0x20a0, 0x20b0, 0x30a0, 0x30b0,
+		0x00c0, 0x00d0, 0x10c0, 0x10d0, 0x00e0, 0x00f0, 0x10e0, 0x10f0,
+		0x20c0, 0x20d0, 0x30c0, 0x30d0, 0x20e0, 0x20f0, 0x30e0, 0x30f0,
+		0x4080, 0x4090, 0x5080, 0x5090, 0x40a0, 0x40b0, 0x50a0, 0x50b0,
+		0x6080, 0x6090, 0x7080, 0x7090, 0x60a0, 0x60b0, 0x70a0, 0x70b0,
+		0x40c0, 0x40d0, 0x50c0, 0x50d0, 0x40e0, 0x40f0, 0x50e0, 0x50f0,
+		0x60c0, 0x60d0, 0x70c0, 0x70d0, 0x60e0, 0x60f0, 0x70e0, 0x70f0,
+		0x8000, 0x8010, 0x9000, 0x9010, 0x8020, 0x8030, 0x9020, 0x9030,
+		0xa000, 0xa010, 0xb000, 0xb010, 0xa020, 0xa030, 0xb020, 0xb030,
+		0x8040, 0x8050, 0x9040, 0x9050, 0x8060, 0x8070, 0x9060, 0x9070,
+		0xa040, 0xa050, 0xb040, 0xb050, 0xa060, 0xa070, 0xb060, 0xb070,
+		0xc000, 0xc010, 0xd000, 0xd010, 0xc020, 0xc030, 0xd020, 0xd030,
+		0xe000, 0xe010, 0xf000, 0xf010, 0xe020, 0xe030, 0xf020, 0xf030,
+		0xc040, 0xc050, 0xd040, 0xd050, 0xc060, 0xc070, 0xd060, 0xd070,
+		0xe040, 0xe050, 0xf040, 0xf050, 0xe060, 0xe070, 0xf060, 0xf070,
+		0x8080, 0x8090, 0x9080, 0x9090, 0x80a0, 0x80b0, 0x90a0, 0x90b0,
+		0xa080, 0xa090, 0xb080, 0xb090, 0xa0a0, 0xa0b0, 0xb0a0, 0xb0b0,
+		0x80c0, 0x80d0, 0x90c0, 0x90d0, 0x80e0, 0x80f0, 0x90e0, 0x90f0,
+		0xa0c0, 0xa0d0, 0xb0c0, 0xb0d0, 0xa0e0, 0xa0f0, 0xb0e0, 0xb0f0,
+		0xc080, 0xc090, 0xd080, 0xd090, 0xc0a0, 0xc0b0, 0xd0a0, 0xd0b0,
+		0xe080, 0xe090, 0xf080, 0xf090, 0xe0a0, 0xe0b0, 0xf0a0, 0xf0b0,
+		0xc0c0, 0xc0d0, 0xd0c0, 0xd0d0, 0xc0e0, 0xc0f0, 0xd0e0, 0xd0f0,
+		0xe0c0, 0xe0d0, 0xf0c0, 0xf0d0, 0xe0e0, 0xe0f0, 0xf0e0, 0xf0f0,
+
+	},
+};
+
+static const unsigned morton32[4][256] =
+{
+	{
+		0x00000000, 0x00000001, 0x00000100, 0x00000101,
+		0x00010000, 0x00010001, 0x00010100, 0x00010101,
+		0x01000000, 0x01000001, 0x01000100, 0x01000101,
+		0x01010000, 0x01010001, 0x01010100, 0x01010101,
+		0x00000002, 0x00000003, 0x00000102, 0x00000103,
+		0x00010002, 0x00010003, 0x00010102, 0x00010103,
+		0x01000002, 0x01000003, 0x01000102, 0x01000103,
+		0x01010002, 0x01010003, 0x01010102, 0x01010103,
+		0x00000200, 0x00000201, 0x00000300, 0x00000301,
+		0x00010200, 0x00010201, 0x00010300, 0x00010301,
+		0x01000200, 0x01000201, 0x01000300, 0x01000301,
+		0x01010200, 0x01010201, 0x01010300, 0x01010301,
+		0x00000202, 0x00000203, 0x00000302, 0x00000303,
+		0x00010202, 0x00010203, 0x00010302, 0x00010303,
+		0x01000202, 0x01000203, 0x01000302, 0x01000303,
+		0x01010202, 0x01010203, 0x01010302, 0x01010303,
+		0x00020000, 0x00020001, 0x00020100, 0x00020101,
+		0x00030000, 0x00030001, 0x00030100, 0x00030101,
+		0x01020000, 0x01020001, 0x01020100, 0x01020101,
+		0x01030000, 0x01030001, 0x01030100, 0x01030101,
+		0x00020002, 0x00020003, 0x00020102, 0x00020103,
+		0x00030002, 0x00030003, 0x00030102, 0x00030103,
+		0x01020002, 0x01020003, 0x01020102, 0x01020103,
+		0x01030002, 0x01030003, 0x01030102, 0x01030103,
+		0x00020200, 0x00020201, 0x00020300, 0x00020301,
+		0x00030200, 0x00030201, 0x00030300, 0x00030301,
+		0x01020200, 0x01020201, 0x01020300, 0x01020301,
+		0x01030200, 0x01030201, 0x01030300, 0x01030301,
+		0x00020202, 0x00020203, 0x00020302, 0x00020303,
+		0x00030202, 0x00030203, 0x00030302, 0x00030303,
+		0x01020202, 0x01020203, 0x01020302, 0x01020303,
+		0x01030202, 0x01030203, 0x01030302, 0x01030303,
+		0x02000000, 0x02000001, 0x02000100, 0x02000101,
+		0x02010000, 0x02010001, 0x02010100, 0x02010101,
+		0x03000000, 0x03000001, 0x03000100, 0x03000101,
+		0x03010000, 0x03010001, 0x03010100, 0x03010101,
+		0x02000002, 0x02000003, 0x02000102, 0x02000103,
+		0x02010002, 0x02010003, 0x02010102, 0x02010103,
+		0x03000002, 0x03000003, 0x03000102, 0x03000103,
+		0x03010002, 0x03010003, 0x03010102, 0x03010103,
+		0x02000200, 0x02000201, 0x02000300, 0x02000301,
+		0x02010200, 0x02010201, 0x02010300, 0x02010301,
+		0x03000200, 0x03000201, 0x03000300, 0x03000301,
+		0x03010200, 0x03010201, 0x03010300, 0x03010301,
+		0x02000202, 0x02000203, 0x02000302, 0x02000303,
+		0x02010202, 0x02010203, 0x02010302, 0x02010303,
+		0x03000202, 0x03000203, 0x03000302, 0x03000303,
+		0x03010202, 0x03010203, 0x03010302, 0x03010303,
+		0x02020000, 0x02020001, 0x02020100, 0x02020101,
+		0x02030000, 0x02030001, 0x02030100, 0x02030101,
+		0x03020000, 0x03020001, 0x03020100, 0x03020101,
+		0x03030000, 0x03030001, 0x03030100, 0x03030101,
+		0x02020002, 0x02020003, 0x02020102, 0x02020103,
+		0x02030002, 0x02030003, 0x02030102, 0x02030103,
+		0x03020002, 0x03020003, 0x03020102, 0x03020103,
+		0x03030002, 0x03030003, 0x03030102, 0x03030103,
+		0x02020200, 0x02020201, 0x02020300, 0x02020301,
+		0x02030200, 0x02030201, 0x02030300, 0x02030301,
+		0x03020200, 0x03020201, 0x03020300, 0x03020301,
+		0x03030200, 0x03030201, 0x03030300, 0x03030301,
+		0x02020202, 0x02020203, 0x02020302, 0x02020303,
+		0x02030202, 0x02030203, 0x02030302, 0x02030303,
+		0x03020202, 0x03020203, 0x03020302, 0x03020303,
+		0x03030202, 0x03030203, 0x03030302, 0x03030303,
+
+	},
+	{
+		0x00000000, 0x00000004, 0x00000400, 0x00000404,
+		0x00040000, 0x00040004, 0x00040400, 0x00040404,
+		0x04000000, 0x04000004, 0x04000400, 0x04000404,
+		0x04040000, 0x04040004, 0x04040400, 0x04040404,
+		0x00000008, 0x0000000c, 0x00000408, 0x0000040c,
+		0x00040008, 0x0004000c, 0x00040408, 0x0004040c,
+		0x04000008, 0x0400000c, 0x04000408, 0x0400040c,
+		0x04040008, 0x0404000c, 0x04040408, 0x0404040c,
+		0x00000800, 0x00000804, 0x00000c00, 0x00000c04,
+		0x00040800, 0x00040804, 0x00040c00, 0x00040c04,
+		0x04000800, 0x04000804, 0x04000c00, 0x04000c04,
+		0x04040800, 0x04040804, 0x04040c00, 0x04040c04,
+		0x00000808, 0x0000080c, 0x00000c08, 0x00000c0c,
+		0x00040808, 0x0004080c, 0x00040c08, 0x00040c0c,
+		0x04000808, 0x0400080c, 0x04000c08, 0x04000c0c,
+		0x04040808, 0x0404080c, 0x04040c08, 0x04040c0c,
+		0x00080000, 0x00080004, 0x00080400, 0x00080404,
+		0x000c0000, 0x000c0004, 0x000c0400, 0x000c0404,
+		0x04080000, 0x04080004, 0x04080400, 0x04080404,
+		0x040c0000, 0x040c0004, 0x040c0400, 0x040c0404,
+		0x00080008, 0x0008000c, 0x00080408, 0x0008040c,
+		0x000c0008, 0x000c000c, 0x000c0408, 0x000c040c,
+		0x04080008, 0x0408000c, 0x04080408, 0x0408040c,
+		0x040c0008, 0x040c000c, 0x040c0408, 0x040c040c,
+		0x00080800, 0x00080804, 0x00080c00, 0x00080c04,
+		0x000c0800, 0x000c0804, 0x000c0c00, 0x000c0c04,
+		0x04080800, 0x04080804, 0x04080c00, 0x04080c04,
+		0x040c0800, 0x040c0804, 0x040c0c00, 0x040c0c04,
+		0x00080808, 0x0008080c, 0x00080c08, 0x00080c0c,
+		0x000c0808, 0x000c080c, 0x000c0c08, 0x000c0c0c,
+		0x04080808, 0x0408080c, 0x04080c08, 0x04080c0c,
+		0x040c0808, 0x040c080c, 0x040c0c08, 0x040c0c0c,
+		0x08000000, 0x08000004, 0x08000400, 0x08000404,
+		0x08040000, 0x08040004, 0x08040400, 0x08040404,
+		0x0c000000, 0x0c000004, 0x0c000400, 0x0c000404,
+		0x0c040000, 0x0c040004, 0x0c040400, 0x0c040404,
+		0x08000008, 0x0800000c, 0x08000408, 0x0800040c,
+		0x08040008, 0x0804000c, 0x08040408, 0x0804040c,
+		0x0c000008, 0x0c00000c, 0x0c000408, 0x0c00040c,
+		0x0c040008, 0x0c04000c, 0x0c040408, 0x0c04040c,
+		0x08000800, 0x08000804, 0x08000c00, 0x08000c04,
+		0x08040800, 0x08040804, 0x08040c00, 0x08040c04,
+		0x0c000800, 0x0c000804, 0x0c000c00, 0x0c000c04,
+		0x0c040800, 0x0c040804, 0x0c040c00, 0x0c040c04,
+		0x08000808, 0x0800080c, 0x08000c08, 0x08000c0c,
+		0x08040808, 0x0804080c, 0x08040c08, 0x08040c0c,
+		0x0c000808, 0x0c00080c, 0x0c000c08, 0x0c000c0c,
+		0x0c040808, 0x0c04080c, 0x0c040c08, 0x0c040c0c,
+		0x08080000, 0x08080004, 0x08080400, 0x08080404,
+		0x080c0000, 0x080c0004, 0x080c0400, 0x080c0404,
+		0x0c080000, 0x0c080004, 0x0c080400, 0x0c080404,
+		0x0c0c0000, 0x0c0c0004, 0x0c0c0400, 0x0c0c0404,
+		0x08080008, 0x0808000c, 0x08080408, 0x0808040c,
+		0x080c0008, 0x080c000c, 0x080c0408, 0x080c040c,
+		0x0c080008, 0x0c08000c, 0x0c080408, 0x0c08040c,
+		0x0c0c0008, 0x0c0c000c, 0x0c0c0408, 0x0c0c040c,
+		0x08080800, 0x08080804, 0x08080c00, 0x08080c04,
+		0x080c0800, 0x080c0804, 0x080c0c00, 0x080c0c04,
+		0x0c080800, 0x0c080804, 0x0c080c00, 0x0c080c04,
+		0x0c0c0800, 0x0c0c0804, 0x0c0c0c00, 0x0c0c0c04,
+		0x08080808, 0x0808080c, 0x08080c08, 0x08080c0c,
+		0x080c0808, 0x080c080c, 0x080c0c08, 0x080c0c0c,
+		0x0c080808, 0x0c08080c, 0x0c080c08, 0x0c080c0c,
+		0x0c0c0808, 0x0c0c080c, 0x0c0c0c08, 0x0c0c0c0c,
+
+	},
+	{
+		0x00000000, 0x00000010, 0x00001000, 0x00001010,
+		0x00100000, 0x00100010, 0x00101000, 0x00101010,
+		0x10000000, 0x10000010, 0x10001000, 0x10001010,
+		0x10100000, 0x10100010, 0x10101000, 0x10101010,
+		0x00000020, 0x00000030, 0x00001020, 0x00001030,
+		0x00100020, 0x00100030, 0x00101020, 0x00101030,
+		0x10000020, 0x10000030, 0x10001020, 0x10001030,
+		0x10100020, 0x10100030, 0x10101020, 0x10101030,
+		0x00002000, 0x00002010, 0x00003000, 0x00003010,
+		0x00102000, 0x00102010, 0x00103000, 0x00103010,
+		0x10002000, 0x10002010, 0x10003000, 0x10003010,
+		0x10102000, 0x10102010, 0x10103000, 0x10103010,
+		0x00002020, 0x00002030, 0x00003020, 0x00003030,
+		0x00102020, 0x00102030, 0x00103020, 0x00103030,
+		0x10002020, 0x10002030, 0x10003020, 0x10003030,
+		0x10102020, 0x10102030, 0x10103020, 0x10103030,
+		0x00200000, 0x00200010, 0x00201000, 0x00201010,
+		0x00300000, 0x00300010, 0x00301000, 0x00301010,
+		0x10200000, 0x10200010, 0x10201000, 0x10201010,
+		0x10300000, 0x10300010, 0x10301000, 0x10301010,
+		0x00200020, 0x00200030, 0x00201020, 0x00201030,
+		0x00300020, 0x00300030, 0x00301020, 0x00301030,
+		0x10200020, 0x10200030, 0x10201020, 0x10201030,
+		0x10300020, 0x10300030, 0x10301020, 0x10301030,
+		0x00202000, 0x00202010, 0x00203000, 0x00203010,
+		0x00302000, 0x00302010, 0x00303000, 0x00303010,
+		0x10202000, 0x10202010, 0x10203000, 0x10203010,
+		0x10302000, 0x10302010, 0x10303000, 0x10303010,
+		0x00202020, 0x00202030, 0x00203020, 0x00203030,
+		0x00302020, 0x00302030, 0x00303020, 0x00303030,
+		0x10202020, 0x10202030, 0x10203020, 0x10203030,
+		0x10302020, 0x10302030, 0x10303020, 0x10303030,
+		0x20000000, 0x20000010, 0x20001000, 0x20001010,
+		0x20100000, 0x20100010, 0x20101000, 0x20101010,
+		0x30000000, 0x30000010, 0x30001000, 0x30001010,
+		0x30100000, 0x30100010, 0x30101000, 0x30101010,
+		0x20000020, 0x20000030, 0x20001020, 0x20001030,
+		0x20100020, 0x20100030, 0x20101020, 0x20101030,
+		0x30000020, 0x30000030, 0x30001020, 0x30001030,
+		0x30100020, 0x30100030, 0x30101020, 0x30101030,
+		0x20002000, 0x20002010, 0x20003000, 0x20003010,
+		0x20102000, 0x20102010, 0x20103000, 0x20103010,
+		0x30002000, 0x30002010, 0x30003000, 0x30003010,
+		0x30102000, 0x30102010, 0x30103000, 0x30103010,
+		0x20002020, 0x20002030, 0x20003020, 0x20003030,
+		0x20102020, 0x20102030, 0x20103020, 0x20103030,
+		0x30002020, 0x30002030, 0x30003020, 0x30003030,
+		0x30102020, 0x30102030, 0x30103020, 0x30103030,
+		0x20200000, 0x20200010, 0x20201000, 0x20201010,
+		0x20300000, 0x20300010, 0x20301000, 0x20301010,
+		0x30200000, 0x30200010, 0x30201000, 0x30201010,
+		0x30300000, 0x30300010, 0x30301000, 0x30301010,
+		0x20200020, 0x20200030, 0x20201020, 0x20201030,
+		0x20300020, 0x20300030, 0x20301020, 0x20301030,
+		0x30200020, 0x30200030, 0x30201020, 0x30201030,
+		0x30300020, 0x30300030, 0x30301020, 0x30301030,
+		0x20202000, 0x20202010, 0x20203000, 0x20203010,
+		0x20302000, 0x20302010, 0x20303000, 0x20303010,
+		0x30202000, 0x30202010, 0x30203000, 0x30203010,
+		0x30302000, 0x30302010, 0x30303000, 0x30303010,
+		0x20202020, 0x20202030, 0x20203020, 0x20203030,
+		0x20302020, 0x20302030, 0x20303020, 0x20303030,
+		0x30202020, 0x30202030, 0x30203020, 0x30203030,
+		0x30302020, 0x30302030, 0x30303020, 0x30303030,
+
+	},
+	{
+		0x00000000, 0x00000040, 0x00004000, 0x00004040,
+		0x00400000, 0x00400040, 0x00404000, 0x00404040,
+		0x40000000, 0x40000040, 0x40004000, 0x40004040,
+		0x40400000, 0x40400040, 0x40404000, 0x40404040,
+		0x00000080, 0x000000c0, 0x00004080, 0x000040c0,
+		0x00400080, 0x004000c0, 0x00404080, 0x004040c0,
+		0x40000080, 0x400000c0, 0x40004080, 0x400040c0,
+		0x40400080, 0x404000c0, 0x40404080, 0x404040c0,
+		0x00008000, 0x00008040, 0x0000c000, 0x0000c040,
+		0x00408000, 0x00408040, 0x0040c000, 0x0040c040,
+		0x40008000, 0x40008040, 0x4000c000, 0x4000c040,
+		0x40408000, 0x40408040, 0x4040c000, 0x4040c040,
+		0x00008080, 0x000080c0, 0x0000c080, 0x0000c0c0,
+		0x00408080, 0x004080c0, 0x0040c080, 0x0040c0c0,
+		0x40008080, 0x400080c0, 0x4000c080, 0x4000c0c0,
+		0x40408080, 0x404080c0, 0x4040c080, 0x4040c0c0,
+		0x00800000, 0x00800040, 0x00804000, 0x00804040,
+		0x00c00000, 0x00c00040, 0x00c04000, 0x00c04040,
+		0x40800000, 0x40800040, 0x40804000, 0x40804040,
+		0x40c00000, 0x40c00040, 0x40c04000, 0x40c04040,
+		0x00800080, 0x008000c0, 0x00804080, 0x008040c0,
+		0x00c00080, 0x00c000c0, 0x00c04080, 0x00c040c0,
+		0x40800080, 0x408000c0, 0x40804080, 0x408040c0,
+		0x40c00080, 0x40c000c0, 0x40c04080, 0x40c040c0,
+		0x00808000, 0x00808040, 0x0080c000, 0x0080c040,
+		0x00c08000, 0x00c08040, 0x00c0c000, 0x00c0c040,
+		0x40808000, 0x40808040, 0x4080c000, 0x4080c040,
+		0x40c08000, 0x40c08040, 0x40c0c000, 0x40c0c040,
+		0x00808080, 0x008080c0, 0x0080c080, 0x0080c0c0,
+		0x00c08080, 0x00c080c0, 0x00c0c080, 0x00c0c0c0,
+		0x40808080, 0x408080c0, 0x4080c080, 0x4080c0c0,
+		0x40c08080, 0x40c080c0, 0x40c0c080, 0x40c0c0c0,
+		0x80000000, 0x80000040, 0x80004000, 0x80004040,
+		0x80400000, 0x80400040, 0x80404000, 0x80404040,
+		0xc0000000, 0xc0000040, 0xc0004000, 0xc0004040,
+		0xc0400000, 0xc0400040, 0xc0404000, 0xc0404040,
+		0x80000080, 0x800000c0, 0x80004080, 0x800040c0,
+		0x80400080, 0x804000c0, 0x80404080, 0x804040c0,
+		0xc0000080, 0xc00000c0, 0xc0004080, 0xc00040c0,
+		0xc0400080, 0xc04000c0, 0xc0404080, 0xc04040c0,
+		0x80008000, 0x80008040, 0x8000c000, 0x8000c040,
+		0x80408000, 0x80408040, 0x8040c000, 0x8040c040,
+		0xc0008000, 0xc0008040, 0xc000c000, 0xc000c040,
+		0xc0408000, 0xc0408040, 0xc040c000, 0xc040c040,
+		0x80008080, 0x800080c0, 0x8000c080, 0x8000c0c0,
+		0x80408080, 0x804080c0, 0x8040c080, 0x8040c0c0,
+		0xc0008080, 0xc00080c0, 0xc000c080, 0xc000c0c0,
+		0xc0408080, 0xc04080c0, 0xc040c080, 0xc040c0c0,
+		0x80800000, 0x80800040, 0x80804000, 0x80804040,
+		0x80c00000, 0x80c00040, 0x80c04000, 0x80c04040,
+		0xc0800000, 0xc0800040, 0xc0804000, 0xc0804040,
+		0xc0c00000, 0xc0c00040, 0xc0c04000, 0xc0c04040,
+		0x80800080, 0x808000c0, 0x80804080, 0x808040c0,
+		0x80c00080, 0x80c000c0, 0x80c04080, 0x80c040c0,
+		0xc0800080, 0xc08000c0, 0xc0804080, 0xc08040c0,
+		0xc0c00080, 0xc0c000c0, 0xc0c04080, 0xc0c040c0,
+		0x80808000, 0x80808040, 0x8080c000, 0x8080c040,
+		0x80c08000, 0x80c08040, 0x80c0c000, 0x80c0c040,
+		0xc0808000, 0xc0808040, 0xc080c000, 0xc080c040,
+		0xc0c08000, 0xc0c08040, 0xc0c0c000, 0xc0c0c040,
+		0x80808080, 0x808080c0, 0x8080c080, 0x8080c0c0,
+		0x80c08080, 0x80c080c0, 0x80c0c080, 0x80c0c0c0,
+		0xc0808080, 0xc08080c0, 0xc080c080, 0xc080c0c0,
+		0xc0c08080, 0xc0c080c0, 0xc0c0c080, 0xc0c0c0c0,
+
+	},
+};
+
+static const uint8_t evolution_table[53][4] =
 {
 	/*{ prob, nextlps, nextmps, toggle invert },*/
 
@@ -373,7 +734,7 @@ static const uint8 evolution_table[53][4] =
 	{ 0x37, 51, 43, 0 },
 };
 
-const uint8 mode2_context_table[32][2] = {
+const uint8_t mode2_context_table[32][2] = {
 /*{ next 0, next 1 },*/
 
   {  1,  2 },
@@ -431,7 +792,7 @@ const uint8 mode2_context_table[32][2] = {
 #define NEXT_MPS(n) (evolution_table[context[n].index][2])
 #define TOGGLE_INVERT(n) (evolution_table[context[n].index][3])
 
-static uint8 spc7110_decomp_dataread (void)
+static uint8_t spc7110_decomp_dataread (void)
 {
 	unsigned size = Memory.CalculatedSize - 0x100000;
 	while(decomp_offset >= size)
@@ -439,19 +800,19 @@ static uint8 spc7110_decomp_dataread (void)
 	return memory_cartrom_read(0x100000 + decomp_offset++);
 }
 
-void spc7110_decomp_write(uint8 data)
+void spc7110_decomp_write(uint8_t data)
 {
 	decomp_buffer[decomp_buffer_wroffset++] = data;
 	decomp_buffer_wroffset &= SPC7110_DECOMP_BUFFER_SIZE - 1;
 	decomp_buffer_length++;
 }
 
-static void spc7110_decomp_mode2(bool8 init)
+static void spc7110_decomp_mode2(uint8_t init)
 {
 	unsigned i, pixel, data;
 	static unsigned pixelorder[16], realorder[16];
-	static uint8 bitplanebuffer[16], buffer_index;
-	static uint8 in, val, span;
+	static uint8_t bitplanebuffer[16], buffer_index;
+	static uint8_t in, val, span;
 	static int out0, out1, inverts, lps, in_count;
 
 	if(init == TRUE)
@@ -470,7 +831,7 @@ static void spc7110_decomp_mode2(bool8 init)
 
 	while(decomp_buffer_length < (SPC7110_DECOMP_BUFFER_SIZE >> 1))
 	{
-		unsigned bit, a, b, c, con, refcon, m, n, prob, flag_lps, 
+		unsigned bit, a, b, c, con, refcon, m, n, prob, flag_lps,
 		invertbit, shift;
 		for( pixel = 0; pixel < 8; pixel++)
 		{
@@ -577,11 +938,11 @@ static void spc7110_decomp_mode2(bool8 init)
 	}
 }
 
-void spc7110_decomp_mode1(bool8 init)
+void spc7110_decomp_mode1(uint8_t init)
 {
 	unsigned i, bit, pixel, data;
 	static unsigned pixelorder[4], realorder[4];
-	static uint8 in, val, span;
+	static uint8_t in, val, span;
 	static int out, inverts, lps, in_count;
 
 	if(init == TRUE)
@@ -689,10 +1050,10 @@ void spc7110_decomp_mode1(bool8 init)
 	}
 }
 
-static void spc7110_decomp_mode0(bool8 init)
+static void spc7110_decomp_mode0(uint8_t init)
 {
 	unsigned bit;
-	static uint8 val, in, span;
+	static uint8_t val, in, span;
 	static int out, inverts, lps, in_count;
 
 	if(init == TRUE)
@@ -711,8 +1072,8 @@ static void spc7110_decomp_mode0(bool8 init)
 		{
 			unsigned prob, mps, flag_lps, shift;
 			/*get context*/
-			uint8 mask = (1 << (bit & 3)) - 1;
-			uint8 con = mask + ((inverts & mask) ^ (lps & mask));
+			uint8_t mask = (1 << (bit & 3)) - 1;
+			uint8_t con = mask + ((inverts & mask) ^ (lps & mask));
 			if(bit > 3) con += 15;
 
 			/*get prob and mps*/
@@ -764,9 +1125,9 @@ static void spc7110_decomp_mode0(bool8 init)
 	}
 }
 
-uint8 spc7110_decomp_read (void)
+uint8_t spc7110_decomp_read (void)
 {
-	uint8 data;
+	uint8_t data;
 
 	if(decomp_buffer_length == 0)
 	{
@@ -841,30 +1202,10 @@ void spc7110_decomp_reset (void)
 
 void spc7110_decomp_start (void)
 {
-	unsigned i;
+	if (decomp_buffer)
+		free(decomp_buffer);
 	decomp_buffer = (uint8_t*)malloc(SPC7110_DECOMP_BUFFER_SIZE);
 	spc7110_decomp_reset();
-
-	/*initialize reverse morton lookup tables*/
-	for( i = 0; i < 256; i++)
-	{
-#define map(x, y) (((i >> x) & 1) << y)
-		/*2x8-bit*/
-		morton16[1][i] = map(7, 15) + map(6,  7) + map(5, 14) + map(4,  6)
-			+ map(3, 13) + map(2,  5) + map(1, 12) + map(0,  4);
-		morton16[0][i] = map(7, 11) + map(6,  3) + map(5, 10) + map(4,  2)
-			+ map(3,  9) + map(2,  1) + map(1,  8) + map(0,  0);
-		/*4x8-bit*/
-		morton32[3][i] = map(7, 31) + map(6, 23) + map(5, 15) + map(4,  7)
-			+ map(3, 30) + map(2, 22) + map(1, 14) + map(0,  6);
-		morton32[2][i] = map(7, 29) + map(6, 21) + map(5, 13) + map(4,  5)
-			+ map(3, 28) + map(2, 20) + map(1, 12) + map(0,  4);
-		morton32[1][i] = map(7, 27) + map(6, 19) + map(5, 11) + map(4,  3)
-			+ map(3, 26) + map(2, 18) + map(1, 10) + map(0,  2);
-		morton32[0][i] = map(7, 25) + map(6, 17) + map(5,  9) + map(4,  1)
-			+ map(3, 24) + map(2, 16) + map(1,  8) + map(0,  0);
-#undef map
-	}
 }
 
 static const unsigned months[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
@@ -896,7 +1237,7 @@ static void s7_set_data_pointer(unsigned addr)
 
 static void s7_update_time(int offset)
 {
-	bool8 update;
+	uint8_t update;
 	time_t rtc_time, current_time, diff;
 
 	rtc_time = (memory_cartrtc_read(16) <<  0)
@@ -928,7 +1269,7 @@ static void s7_update_time(int offset)
 	if(diff > 0 && update == TRUE)
 	{
 		unsigned second, minute, hour, day, days, month, year, weekday;
-		bool8 leapyear;
+		uint8_t leapyear;
 
 		second  = memory_cartrtc_read( 0) + memory_cartrtc_read( 1) * 10;
 		minute  = memory_cartrtc_read( 2) + memory_cartrtc_read( 3) * 10;
@@ -1010,7 +1351,7 @@ static void s7_update_time(int offset)
 	memory_cartrtc_write(19, current_time >> 24);
 }
 
-static void s7_mmio_write(unsigned addr, uint8 data)
+static void s7_mmio_write(unsigned addr, uint8_t data)
 {
 	addr &= 0xffff;
 
@@ -1082,14 +1423,14 @@ static void s7_mmio_write(unsigned addr, uint8 data)
 				{
 					increment = s7_data_adjust() & 0xff;
 					if(r4818 & 8)
-						increment = (int8)increment;  /*8-bit sign extend*/
+						increment = (int8_t)increment;  /*8-bit sign extend*/
 					s7_set_data_pointer(s7_data_pointer() + increment);
 				}
 				else if((r4818 & 0x60) == 0x40)
 				{
 					increment = s7_data_adjust();
 					if(r4818 & 8)
-						increment = (int16)increment;  /*16-bit sign extend*/
+						increment = (int16_t)increment;  /*16-bit sign extend*/
 					s7_set_data_pointer(s7_data_pointer() + increment);
 				}
 			}
@@ -1110,14 +1451,14 @@ static void s7_mmio_write(unsigned addr, uint8 data)
 				if((r4818 & 0x60) == 0x20)
 				{
 					increment = s7_data_adjust() & 0xff;
-					if(r4818 & 8) increment = (int8)increment;  /*8-bit sign extend*/
+					if(r4818 & 8) increment = (int8_t)increment;  /*8-bit sign extend*/
 					s7_set_data_pointer(s7_data_pointer() + increment);
 				}
 				else if((r4818 & 0x60) == 0x40)
 				{
 					increment = s7_data_adjust();
 					if(r4818 & 8)
-						increment = (int16)increment;  /*16-bit sign extend*/
+						increment = (int16_t)increment;  /*16-bit sign extend*/
 					s7_set_data_pointer(s7_data_pointer() + increment);
 				}
 			}
@@ -1164,8 +1505,8 @@ static void s7_mmio_write(unsigned addr, uint8 data)
 				if(r482e & 1)
 				{
 					/*signed 16-bit x 16-bit multiplication*/
-					int16 r0 = (int16)(r4824 + (r4825 << 8));
-					int16 r1 = (int16)(r4820 + (r4821 << 8));
+					int16_t r0 = (int16_t)(r4824 + (r4825 << 8));
+					int16_t r1 = (int16_t)(r4820 + (r4821 << 8));
 
 					result = r0 * r1;
 					r4828 = result;
@@ -1176,8 +1517,8 @@ static void s7_mmio_write(unsigned addr, uint8 data)
 				else
 				{
 					/*unsigned 16-bit x 16-bit multiplication*/
-					uint16 r0 = (uint16)(r4824 + (r4825 << 8));
-					uint16 r1 = (uint16)(r4820 + (r4821 << 8));
+					uint16_t r0 = (uint16_t)(r4824 + (r4825 << 8));
+					uint16_t r1 = (uint16_t)(r4820 + (r4821 << 8));
 
 					result = r0 * r1;
 					r4828 = result;
@@ -1197,16 +1538,16 @@ static void s7_mmio_write(unsigned addr, uint8 data)
 
 				if(r482e & 1)
 				{
-					int32 dividend, quotient;
-					int16 divisor, remainder;
+					int32_t dividend, quotient;
+					int16_t divisor, remainder;
 					/*signed 32-bit x 16-bit division*/
-					dividend = (int32)(r4820 + (r4821 << 8) + (r4822 << 16) + (r4823 << 24));
-					divisor  = (int16)(r4826 + (r4827 << 8));
+					dividend = (int32_t)(r4820 + (r4821 << 8) + (r4822 << 16) + (r4823 << 24));
+					divisor  = (int16_t)(r4826 + (r4827 << 8));
 
 					if(divisor)
 					{
-						quotient  = (int32)(dividend / divisor);
-						remainder = (int32)(dividend % divisor);
+						quotient  = (int32_t)(dividend / divisor);
+						remainder = (int32_t)(dividend % divisor);
 					}
 					else
 					{
@@ -1225,16 +1566,16 @@ static void s7_mmio_write(unsigned addr, uint8 data)
 				}
 				else
 				{
-					uint32 dividend, quotient;
-					uint16 divisor, remainder;
+					uint32_t dividend, quotient;
+					uint16_t divisor, remainder;
 					/*unsigned 32-bit x 16-bit division*/
-					dividend = (uint32)(r4820 + (r4821 << 8) + (r4822 << 16) + (r4823 << 24));
-					divisor  = (uint16)(r4826 + (r4827 << 8));
+					dividend = (uint32_t)(r4820 + (r4821 << 8) + (r4822 << 16) + (r4823 << 24));
+					divisor  = (uint16_t)(r4826 + (r4827 << 8));
 
 					if(divisor)
 					{
-						quotient  = (uint32)(dividend / divisor);
-						remainder = (uint16)(dividend % divisor);
+						quotient  = (uint32_t)(dividend / divisor);
+						remainder = (uint16_t)(dividend % divisor);
 					}
 					else
 					{
@@ -1477,7 +1818,7 @@ static void s7_set_data_adjust(unsigned addr)
 }
 
 
-static uint8 s7_mmio_read(unsigned addr)
+static uint8_t s7_mmio_read(unsigned addr)
 {
 	addr &= 0xffff;
 
@@ -1489,7 +1830,7 @@ static uint8 s7_mmio_read(unsigned addr)
 
 		case 0x4800:
 			{
-				uint16 counter = (r4809 + (r480a << 8));
+				uint16_t counter = (r4809 + (r480a << 8));
 				counter--;
 				r4809 = counter;
 				r480a = counter >> 8;
@@ -1519,7 +1860,7 @@ static uint8 s7_mmio_read(unsigned addr)
 			return r480b;
 		case 0x480c:
 			{
-				uint8 status = r480c;
+				uint8_t status = r480c;
 				r480c &= 0x7f;
 				return status;
 			}
@@ -1530,7 +1871,7 @@ static uint8 s7_mmio_read(unsigned addr)
 		case 0x4810:
 			{
 				unsigned addr, adjust, adjustaddr, increment;
-				uint8 data;
+				uint8_t data;
 
 				if(r481x != 0x07)
 					return 0x00;
@@ -1538,7 +1879,7 @@ static uint8 s7_mmio_read(unsigned addr)
 				addr = s7_data_pointer();
 				adjust = s7_data_adjust();
 				if(r4818 & 8)
-					adjust = (int16)adjust;  /*16-bit sign extend*/
+					adjust = (int16_t)adjust;  /*16-bit sign extend*/
 
 				adjustaddr = addr;
 				if(r4818 & 2)
@@ -1552,7 +1893,7 @@ static uint8 s7_mmio_read(unsigned addr)
 				{
 					increment = (r4818 & 1) ? s7_data_increment() : 1;
 					if(r4818 & 4)
-						increment = (int16)increment;  /*16-bit sign extend*/
+						increment = (int16_t)increment;  /*16-bit sign extend*/
 
 					if((r4818 & 16) == 0)
 						s7_set_data_pointer(addr + increment);
@@ -1581,7 +1922,7 @@ static uint8 s7_mmio_read(unsigned addr)
 		case 0x481a:
 			{
 				unsigned addr, adjust;
-				uint8 data;
+				uint8_t data;
 
 				if(r481x != 0x07)
 					return 0x00;
@@ -1590,7 +1931,7 @@ static uint8 s7_mmio_read(unsigned addr)
 				adjust = s7_data_adjust();
 
 				if(r4818 & 8)
-					adjust = (int16)adjust;  /*16-bit sign extend*/
+					adjust = (int16_t)adjust;  /*16-bit sign extend*/
 
 				data = memory_cartrom_read(s7_datarom_addr(addr + adjust));
 				if((r4818 & 0x60) == 0x60)
@@ -1625,7 +1966,7 @@ static uint8 s7_mmio_read(unsigned addr)
 		case 0x482e: return r482e;
 		case 0x482f:
 			     {
-				     uint8 status;
+				     uint8_t status;
 				     status = r482f;
 				     r482f &= 0x7f;
 				     return status;
@@ -1648,7 +1989,7 @@ static uint8 s7_mmio_read(unsigned addr)
 		case 0x4840: return r4840;
 		case 0x4841:
 			     {
-				     uint8 data;
+				     uint8_t data;
 
 				     if(rtc_state == RTCS_INACTIVE || rtc_state == RTCS_MODESELECT)
 					     return 0x00;
@@ -1660,7 +2001,7 @@ static uint8 s7_mmio_read(unsigned addr)
 			     }
 		case 0x4842:
 			     {
-				     uint8 status;
+				     uint8_t status;
 				     status = r4842;
 				     r4842 &= 0x7f;
 				     return status;
@@ -1688,56 +2029,56 @@ void S9xFreeSPC7110 (void)
 		free(decomp_buffer);
 }
 
-static void SetSPC7110SRAMMap (uint8 newstate)
+static void SetSPC7110SRAMMap (uint8_t newstate)
 {
 	if (newstate & 0x80)
 	{
-		Memory.Map[0x006] = (uint8 *) MAP_HIROM_SRAM;
-		Memory.Map[0x007] = (uint8 *) MAP_HIROM_SRAM;
-		Memory.Map[0x306] = (uint8 *) MAP_HIROM_SRAM;
-		Memory.Map[0x307] = (uint8 *) MAP_HIROM_SRAM;
+		Memory.Map[0x006] = (uint8_t *) MAP_HIROM_SRAM;
+		Memory.Map[0x007] = (uint8_t *) MAP_HIROM_SRAM;
+		Memory.Map[0x306] = (uint8_t *) MAP_HIROM_SRAM;
+		Memory.Map[0x307] = (uint8_t *) MAP_HIROM_SRAM;
 	}
 	else
 	{
-		Memory.Map[0x006] = (uint8 *) MAP_RONLY_SRAM;
-		Memory.Map[0x007] = (uint8 *) MAP_RONLY_SRAM;
-		Memory.Map[0x306] = (uint8 *) MAP_RONLY_SRAM;
-		Memory.Map[0x307] = (uint8 *) MAP_RONLY_SRAM;
+		Memory.Map[0x006] = (uint8_t *) MAP_RONLY_SRAM;
+		Memory.Map[0x007] = (uint8_t *) MAP_RONLY_SRAM;
+		Memory.Map[0x306] = (uint8_t *) MAP_RONLY_SRAM;
+		Memory.Map[0x307] = (uint8_t *) MAP_RONLY_SRAM;
 	}
 }
 
-uint8 * S9xGetBasePointerSPC7110 (uint32 address)
+uint8_t * S9xGetBasePointerSPC7110 (uint32_t address)
 {
-	uint32	i;
-	
+	uint32_t	i;
+
 	switch (address & 0xf00000)
 	{
 		case 0xd00000:
 			i = dx_offset;
 			break;
-			
+
 		case 0xe00000:
 			i = ex_offset;
 			break;
-			
+
 		case 0xf00000:
 			i = fx_offset;
 			break;
-			
+
 		default:
 			i = 0;
 			break;
 	}
-	
+
 	i += address & 0x0f0000;
 
 	return (&Memory.ROM[i]);
 }
 
-uint8 S9xGetSPC7110Byte (uint32 address)
+uint8_t S9xGetSPC7110Byte (uint32_t address)
 {
-	uint32 i;
-	
+	uint32_t i;
+
 	i = 0;
 
 	switch (address & 0xf00000)
@@ -1760,15 +2101,15 @@ uint8 S9xGetSPC7110Byte (uint32 address)
 	return (Memory.ROM[i]);
 }
 
-uint8 S9xGetSPC7110 (uint16 address)
+uint8_t S9xGetSPC7110 (uint16_t address)
 {
 	if (!Settings.SPC7110RTC && address > 0x483f)
 		return (OpenBus);
-	
+
 	return (s7_mmio_read(address));
 }
 
-void S9xSetSPC7110 (uint8 byte, uint16 address)
+void S9xSetSPC7110 (uint8_t byte, uint16_t address)
 {
 	if (!Settings.SPC7110RTC && address > 0x483f)
 		return;
@@ -1832,27 +2173,27 @@ void S9xSPC7110PreSaveState (void)
 	s7snap.r4833 = r4833;
 	s7snap.r4834 = r4834;
 
-	s7snap.dx_offset = (uint32) dx_offset;
-	s7snap.ex_offset = (uint32) ex_offset;
-	s7snap.fx_offset = (uint32) fx_offset;
+	s7snap.dx_offset = (uint32_t) dx_offset;
+	s7snap.ex_offset = (uint32_t) ex_offset;
+	s7snap.fx_offset = (uint32_t) fx_offset;
 
 	s7snap.r4840 = r4840;
 	s7snap.r4841 = r4841;
 	s7snap.r4842 = r4842;
 
-	s7snap.rtc_state = (int32)  rtc_state;
-	s7snap.rtc_mode  = (int32)  spc7110_rtc_mode;
-	s7snap.rtc_index = (uint32) rtc_index;
+	s7snap.rtc_state = (int32_t)  rtc_state;
+	s7snap.rtc_mode  = (int32_t)  spc7110_rtc_mode;
+	s7snap.rtc_index = (uint32_t) rtc_index;
 
-	s7snap.decomp_mode   = (uint32) decomp_mode;
-	s7snap.decomp_offset = (uint32) decomp_offset;
+	s7snap.decomp_mode   = (uint32_t) decomp_mode;
+	s7snap.decomp_offset = (uint32_t) decomp_offset;
 
 	for ( i = 0; i < SPC7110_DECOMP_BUFFER_SIZE; i++)
 		s7snap.decomp_buffer[i] = decomp_buffer[i];
 
-	s7snap.decomp_buffer_rdoffset = (uint32) decomp_buffer_rdoffset;
-	s7snap.decomp_buffer_wroffset = (uint32) decomp_buffer_wroffset;
-	s7snap.decomp_buffer_length   = (uint32) decomp_buffer_length;
+	s7snap.decomp_buffer_rdoffset = (uint32_t) decomp_buffer_rdoffset;
+	s7snap.decomp_buffer_wroffset = (uint32_t) decomp_buffer_wroffset;
+	s7snap.decomp_buffer_length   = (uint32_t) decomp_buffer_length;
 
 	for ( i = 0; i < 32; i++)
 	{
@@ -1935,6 +2276,6 @@ void S9xSPC7110PostLoadState (void)
 	decomp_buffer_length   = (unsigned) s7snap.decomp_buffer_length;
 
    memcpy(context,s7snap.context,sizeof(ContextState) * 32);
-   
+
 	s7_update_time(0);
 }
