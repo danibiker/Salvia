@@ -153,5 +153,8 @@
     <ClCompile Include="..\libgambatte\libretro-common\streams\file_stream_transforms.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\libgambatte\libretro\cc_resampler.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

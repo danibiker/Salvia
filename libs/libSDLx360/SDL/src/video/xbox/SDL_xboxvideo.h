@@ -47,7 +47,12 @@ typedef struct _VERTEX {
 } VERTEX; //our custom vertex with a constuctor for easier assignment
 
 
-VERTEX triangleStripVertices[4];					//the 4 vertices that make up our display rectangle
+/* "Single fullscreen triangle": un solo triangulo oversized que cubre todo
+ * el rect visible al ser clipeado por el scissor.  Elimina la diagonal
+ * TL->BR que aparecia al usar un triangle strip de 4 vertices (los dos
+ * triangulos comparten arista TL-BR y los 2x2 del rasterizador la cruzan
+ * con derivadas/coverage inconsistentes).  Misma o menor carga GPU. */
+VERTEX triangleStripVertices[3];
 
 struct SDL_PrivateVideoData {
 	LPDIRECT3DTEXTURE9 SDL_primary;

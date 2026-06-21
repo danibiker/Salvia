@@ -115,26 +115,92 @@ bool TextArea::loadTextFile(std::string filepathToOpen) {
 }
 
 bool TextArea::loadString(std::string fulltxt){
-	lines.clear();
-    std::vector<std::string> words = Constant::splitChar(fulltxt, ' ');
-    lines.push_back("");
+	this->lines = wrapString(fulltxt, this->fontType, this->getW() - this->marginX);
+	this->filepath = "";
+	this->lastScroll = 0;
+	return true;
+}
 
-    const int spaceW = Fonts::getSize(this->fontType, " ");
-    for (int i=0; i < (int)words.size(); i++){
-		std::string word = words.at(i);
-        int wordW = Fonts::getSize(this->fontType, word.c_str());
-        int lineW = Fonts::getSize(this->fontType, lines.at(lines.size()-1).c_str());
-        if (lineW + wordW + spaceW >= this->getW() - this->marginX){
-            lines.push_back("");
-            lines.at(lines.size()-1).append(word);
-        } else {
-            if (!lines.at(lines.size()-1).empty()){
-                lines.at(lines.size()-1).append(" ");
-            }
-            lines.at(lines.size()-1).append(word);
-        }
-    }
-    return true;
+/* ---------- Helpers estaticos para carga asincrona ----------
+ * Las versiones "WithFont" hacen todo el trabajo y son seguras desde
+ * cualquier hilo si la TTF_Font* es exclusiva de ese hilo (ver
+ * Fonts::createIndependentFont). */
+std::vector<std::string> TextArea::wrapStringWithFont(const std::string& fulltxt,
+                                                       TTF_Font* font, int maxW)
+{
+	std::vector<std::string> out;
+	std::vector<std::string> words = Constant::splitChar(fulltxt, ' ');
+	out.push_back("");
+
+	const int spaceW = Fonts::getSize(font, " ");
+	for (int i=0; i < (int)words.size(); i++){
+		const std::string& word = words.at(i);
+		int wordW = Fonts::getSize(font, word.c_str());
+		int lineW = Fonts::getSize(font, out.back().c_str());
+		if (lineW + wordW + spaceW >= maxW){
+			out.push_back("");
+			out.back().append(word);
+		} else {
+			if (!out.back().empty()){
+				out.back().append(" ");
+			}
+			out.back().append(word);
+		}
+	}
+	return out;
+}
+
+std::vector<std::string> TextArea::wrapTextFileWithFont(const std::string& filepathToOpen,
+                                                          TTF_Font* font, int maxW)
+{
+	std::vector<std::string> out;
+	std::ifstream fileRomTxt(filepathToOpen);
+	if (!fileRomTxt.is_open()) return out;
+
+	const int spaceW = Fonts::getSize(font, " ");
+	std::string rawLine;
+	while (std::getline(fileRomTxt, rawLine)) {
+		out.push_back("");
+		int currentLineW = 0;
+		std::stringstream ss(rawLine);
+		std::string word;
+		while (ss >> word) {
+			int wordW = Fonts::getSize(font, word.c_str());
+			if (out.back().empty()) {
+				out.back() = std::move(word);
+				currentLineW = wordW;
+			}
+			else if (currentLineW + spaceW + wordW < maxW) {
+				out.back().append(" ").append(word);
+				currentLineW += spaceW + wordW;
+			}
+			else {
+				out.push_back(std::move(word));
+				currentLineW = wordW;
+			}
+		}
+	}
+	return out;
+}
+
+/* Variantes por fontType — delegan en la version WithFont resolviendo
+ * la TTF_Font compartida (uso desde el main thread). */
+std::vector<std::string> TextArea::wrapString(const std::string& fulltxt,
+                                                Fonts::enumFonts fontType, int maxW)
+{
+	return wrapStringWithFont(fulltxt, Fonts::getFont(fontType), maxW);
+}
+
+std::vector<std::string> TextArea::wrapTextFile(const std::string& filepathToOpen,
+                                                  Fonts::enumFonts fontType, int maxW)
+{
+	return wrapTextFileWithFont(filepathToOpen, Fonts::getFont(fontType), maxW);
+}
+
+void TextArea::adoptLines(const std::vector<std::string>& newLines, const std::string& newPath){
+	this->lines = newLines;
+	this->filepath = newPath;
+	this->lastScroll = 0;
 }
 
 /**

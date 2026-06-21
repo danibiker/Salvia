@@ -78,10 +78,65 @@ enum FILE_STATUS
 
 enum FILE_NAVIGATION
 {
-	FS_ZIP_CD = 0, 
+	FS_ZIP_CD = 0,
     FS_ZIP_CD_BACK,
 	FS_DIR_CD,
 	FS_DIR_BACK
+};
+
+class GameMenu; // fwd
+
+/* MenuAssetLoader: worker dedicado a cargar de forma asincrona el panel
+ * derecho del menu (snap/box2d/snaptit + textos year/manufacturer/system
+ * y synopsis).  Permite que la navegacion del menu (lista izquierda)
+ * responda inmediatamente aunque el PNG/text de la rom seleccionada
+ * tarde en cargar.
+ *
+ * Cancelacion: cada submit() incrementa un contador.  Entre cada paso
+ * de carga el worker compara y, si llego una peticion mas reciente,
+ * abandona la actual y reentra con la nueva. */
+class MenuAssetLoader {
+public:
+    MenuAssetLoader();
+    ~MenuAssetLoader();
+
+    void start(GameMenu* owner);
+    void stop();
+
+    /* Encola una nueva peticion. El worker cancela la anterior si seguia en
+     * curso.  El worker maneja el synopsis (file IO + word-wrap) y las 3
+     * imagenes; usa una TTF_Font* INDEPENDIENTE (creada por
+     * Fonts::createIndependentFont) para evitar el race con la fuente
+     * compartida del main thread. */
+    void submit(const std::string& fileNoExt,
+                const std::string& assetsDir,
+                SDL_PixelFormat* format,
+                int overlayW,
+                int synopsisMaxW);
+
+private:
+    static DWORD WINAPI WorkerProc(LPVOID self_ptr);
+    void run();
+
+    GameMenu*           m_owner;
+    CRITICAL_SECTION    m_reqCS;
+    HANDLE              m_event;
+    HANDLE              m_thread;
+    volatile LONG       m_seqSubmitted;   // se incrementa en cada submit
+    volatile bool       m_stop;
+    bool                m_started;
+    bool                m_reqCSInited;
+    TTF_Font*           m_workerFont;     // copia INDEPENDIENTE para TTF en el worker
+
+    // Datos de la peticion pendiente (protegidos por m_reqCS)
+    std::string         m_pendFileNoExt;
+    std::string         m_pendAssetsDir;
+    SDL_PixelFormat*    m_pendFormat;
+    int                 m_pendOverlayW;
+    int                 m_pendSynopsisMaxW;
+
+    MenuAssetLoader(const MenuAssetLoader&);
+    MenuAssetLoader& operator=(const MenuAssetLoader&);
 };
 
 class GameMenu : public Engine{
@@ -183,6 +238,12 @@ class GameMenu : public Engine{
         std::map<std::string, TextArea> menuTextAreas;
 		SDL_Rect lastMessagesArea;
 		SDL_Surface *filterAlphaRec;
+
+		// Carga asincrona del panel de assets — ver MenuAssetLoader arriba.
+		friend class MenuAssetLoader;
+		CRITICAL_SECTION m_menuAssetCS;   // protege accesos a menuImages/menuTextAreas en zonas concurrentes
+		bool             m_menuAssetCSInited;
+		MenuAssetLoader  m_menuAssetLoader;
 
 		
 		void processMessages();

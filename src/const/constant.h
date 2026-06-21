@@ -464,7 +464,7 @@ class Constant{
 
 		static SDL_Rect drawText(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg){
 			SDL_Rect dest = { x, y, 0, 0 };
-			if (font) {
+			if (font && s != NULL && s[0] != '\0') {
 				SDL_Surface* textSurf = TTF_RenderUTF8_Solid(font, s, color);
 				if (textSurf) {
 					SDL_SetAlpha(textSurf, 0, 0);
@@ -479,7 +479,7 @@ class Constant{
 
 		static SDL_Rect drawTextTransparent(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg = -1,   JFY_TYPE& justifyHelper = JFY_TYPE(JFY_LEFT, 0)){
 			SDL_Rect dest = { x, y, 0, 0 };
-			if (font) {
+			if (font && s != NULL && s[0] != '\0') {
 				SDL_Surface* textSurf = TTF_RenderUTF8_Blended(font, s, color);
 				if (textSurf) {
 					dest.w = textSurf->w;
@@ -490,27 +490,6 @@ class Constant{
 				}
 			}
 			return dest;
-		}
-
-		static std::string ANSItoUTF8(const std::string& ansiStr) {
-			if (ansiStr.empty()) return "";
-    
-			// 1. Pedir tamanyo necesario para UTF-16 (WideChar)
-			int wlen = MultiByteToWideChar(CP_ACP, 0, ansiStr.c_str(), -1, NULL, 0);
-			std::wstring wstr(wlen, 0);
-			MultiByteToWideChar(CP_ACP, 0, ansiStr.c_str(), -1, &wstr[0], wlen);
-
-			// 2. Pedir tamanyo necesario para UTF-8
-			int u8len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, NULL, 0, NULL, NULL);
-			std::string utf8str(u8len, 0);
-			WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &utf8str[0], u8len, NULL, NULL);
-
-			// Eliminar el terminador nulo extra que anyade std::string al redimensionar
-			if (!utf8str.empty() && utf8str[utf8str.length()-1] == '\0') {
-				utf8str.erase(utf8str.length()-1);
-			}
-
-			return utf8str;
 		}
 
 		static void drawTextCent(SDL_Surface* surface, TTF_Font* font, const char* dato, int x, int y, bool centx, bool centy, SDL_Color color, int bg){
@@ -883,6 +862,39 @@ class Constant{
 						SDL_FreeSurface(rawSurface);
 				#endif
 			}
+		}
+
+		// Convierte de CP_ACP (ANSI) a UTF-8 si la cadena no es UTF-8 válido
+		static std::string ansiToUtf8(const std::string& s) {
+			if (s.empty()) return s;
+			// Verificar si ya es UTF-8 válido
+			bool validUtf8 = true;
+			for (size_t i = 0; i < s.size(); ++i) {
+				unsigned char c = (unsigned char)s[i];
+				if (c < 0x80) continue;
+				int seqLen = 0;
+				if      ((c & 0xE0) == 0xC0) seqLen = 2;
+				else if ((c & 0xF0) == 0xE0) seqLen = 3;
+				else if ((c & 0xF8) == 0xF0) seqLen = 4;
+				else { validUtf8 = false; break; }
+				for (int j = 1; j < seqLen; ++j) {
+					if (++i >= s.size() || ((unsigned char)s[i] & 0xC0) != 0x80)
+						{ validUtf8 = false; break; }
+				}
+				if (!validUtf8) break;
+			}
+			if (validUtf8) return s;
+			// No es UTF-8 válido → convertir de CP_ACP a UTF-8
+			int wideLen = MultiByteToWideChar(CP_ACP, 0, s.c_str(), -1, nullptr, 0);
+			if (wideLen <= 0) return s;
+			std::wstring wide(wideLen, L'\0');
+			MultiByteToWideChar(CP_ACP, 0, s.c_str(), -1, &wide[0], wideLen);
+			int utf8Len = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), -1, nullptr, 0, nullptr, nullptr);
+			if (utf8Len <= 0) return s;
+			std::string utf8(utf8Len, '\0');
+			WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), -1, &utf8[0], utf8Len, nullptr, nullptr);
+			utf8.pop_back(); // quitar null terminator
+			return utf8;
 		}
 
         static void setExecMethod(int var){EXEC_METHOD = var;}

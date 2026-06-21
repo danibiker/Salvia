@@ -29,6 +29,16 @@ class Image : public Object{
 		bool closeImage();
 		bool hasImage();
 
+		/* Helpers para carga asincrona: la parte lenta (file IO + IMG_Load
+		 * + SDL_ConvertSurface) se hace estaticamente sin tocar ninguna
+		 * instancia; el adoptSurface() reemplaza el surface interno y libera
+		 * el anterior — esa parte si debe ir bajo un lock externo si se
+		 * concurre con printImage(). */
+		static SDL_Surface* loadConvertedSurface(const std::string& filepathToOpen,
+		                                          SDL_PixelFormat* format);
+		void adoptSurface(SDL_Surface* newSurface, const std::string& newPath);
+		const std::string& getFilepath() const { return filepath; }
+
 		void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest, 
                       int src_x, int src_y, int src_w, int src_h, 
                       int dst_x, int dst_y, int dst_w, int dst_h);

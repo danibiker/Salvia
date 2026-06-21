@@ -29,6 +29,8 @@ public:
 
 	std::vector<std::unique_ptr<cfg::t_cfg_emu>> emulators;
 	std::map<std::string, std::unique_ptr<cfg::t_emu_props> > startupLibretroParams;
+	std::map<std::string, std::unique_ptr<cfg::t_emu_props> > gameSpecificLibretroParams;
+
 	std::string saveCoreParams();
 	void loadCoreParams();
 	std::string saveMainParams();

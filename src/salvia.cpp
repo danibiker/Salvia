@@ -4,6 +4,8 @@
 #include <http/httputil.h>
 #include <http/scrapper.h>
 
+const char* gameCategories[] = {"dipswitch", "cheat", "ips", "romdata"};
+
 // Puente entre los eventos SDL del frontend y el callback de teclado que
 // el core ha registrado via RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK. La
 // dirección del callback es: CORE → FRONTEND — el frontend lo INVOCA al
@@ -180,158 +182,212 @@ static bool retro_environment(unsigned cmd, void *data) {
             return true;
 		}
 
-		case RETRO_ENVIRONMENT_GET_LANGUAGE:{
-			// El núcleo nos pregunta: "¿En qué idioma quieres las descripciones?"
-            unsigned *lang = (unsigned*)data;
-			static int g_current_language = gameMenu->getCfgLoader()->configMain[cfg::libretro_save].valueInt;
-			*lang = g_current_language;
-            LOG_INFO("Core solicitó idioma: Enviando (%d)", g_current_language);
-            return true;
-		}
-
 		case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
 		{
-			const struct retro_subsystem_info *info = (const struct retro_subsystem_info*)data;
-			// 1. Limpiar lista de subsistemas previa
-			//gameMenu->clearSubsystems();
-
-			// 2. Iterar y guardar
-			while (info->ident) {
-				//gameMenu->registerSubsystem(info);
-				LOG_DEBUG("variable - %s:, %s, %d, %d, %s, %s", info->desc, info->ident, info->id, info->num_roms, info->roms->valid_extensions, info->roms->desc);
-				info++;
-			}
+			//const struct retro_subsystem_info *info = (const struct retro_subsystem_info*)data;
+			//// 1. Limpiar lista de subsistemas previa
+			////gameMenu->clearSubsystems();
+			//// 2. Iterar y guardar
+			//while (info->ident) {
+			//	//gameMenu->registerSubsystem(info);
+			//	LOG_DEBUG("variable - %s:, %s, %d, %d, %s, %s", info->desc, info->ident, info->id, info->num_roms, info->roms->valid_extensions, info->roms->desc);
+			//	info++;
+			//}
 			return true;
 		}
-		// ── 1. RETRO_ENVIRONMENT_SET_VARIABLES (formato clásico) ──────────────────
+		// RETRO_ENVIRONMENT_SET_VARIABLES (formato clásico) ──────────────────
 		case RETRO_ENVIRONMENT_SET_VARIABLES:
 		{
 			const auto* vars = static_cast<const retro_variable*>(data);
 			if (!vars) return false;
 
-			//cleanPrefix(gameMenu->getCfgLoader()->startupLibretroParams);
-			for (int i = 0; vars[i].key != nullptr; ++i) {
-				// 1. Protección contra keys vacias (basura recurrente en algunos cores)
-				if (vars[i].key[0] == '\0') continue;
-
-				const std::string key      = vars[i].key;
-				// 2. Protección contra valores nulos o vacíos
-				if (!vars[i].value || vars[i].value[0] == '\0') {
-					LOG_DEBUG("[Core Options] SKIP: Key %s has no value string", key.c_str());
-					continue;
-				}
-
-				const std::string rawValue = vars[i].value;
-				const std::size_t sep = rawValue.find("; ");
-
-				// 3. Protección de Formato: Si no hay "; ", el core está enviando algo fuera de estándar
-				if (sep != std::string::npos && sep > 0) {
-					std::string desc = rawValue.substr(0, sep);
-					std::string optionsPart = rawValue.substr(sep + 2);
-
-					// 4. Validación extra: ¿Hay opciones después del separador?
-					if (!optionsPart.empty()) {
-						std::vector<std::string> values = splitOptions(optionsPart);
-                
-						if (!values.empty()) {
-							LOG_DEBUG("[Core Options] PARSE OK: %s", key.c_str());
-							applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, std::move(values), 0);
-						} else {
-							LOG_DEBUG("[Core Options] ERROR: No split tokens in %s", key.c_str());
-						}
-					}
-				} else {
-					// DOSBox Pure a veces envía notificaciones que no son definiciones de opciones
-					LOG_DEBUG("[Core Options] INFO: Key %s format not recognized (Value: %s)", key.c_str(), rawValue.c_str());
-				}
+			//Some cores don't publish their options until a rom is loaded, so we need to diferenciate them
+			//from the game specific ones to be able to store them separately
+			if (!gameMenu->romLoaded && g_currentRompath.empty()){
+				processParameters(vars, gameMenu->getCfgLoader()->startupLibretroParams);
+			} else {
+				//We clear the previous game configuration if it existed
+				gameMenu->getCfgLoader()->gameSpecificLibretroParams.clear();
+				processParameters(vars, gameMenu->getCfgLoader()->gameSpecificLibretroParams);
 			}
-
 			gameMenu->configMenus->poblarCoreOptions(gameMenu->getCfgLoader());
+			gameMenu->configMenus->resetIndexPos();
+
 			return true;
 		}
 
 
-		// ── 2. RETRO_ENVIRONMENT_GET_VARIABLE ─────────────────────────────────────
+		// RETRO_ENVIRONMENT_GET_LANGUAGE ────────────────────────────────────
+		case RETRO_ENVIRONMENT_GET_LANGUAGE:
+		{
+			unsigned* lang = static_cast<unsigned*>(data);
+			if (!lang) return false;
+
+			const std::string langStr = gameMenu->getCfgLoader()->configMain[cfg::mainLang].valueStr;
+
+			if (langStr == "es")      *lang = RETRO_LANGUAGE_SPANISH;
+			else if (langStr == "fr") *lang = RETRO_LANGUAGE_FRENCH;
+			else if (langStr == "de") *lang = RETRO_LANGUAGE_GERMAN;
+			else if (langStr == "it") *lang = RETRO_LANGUAGE_ITALIAN;
+			else if (langStr == "pt") *lang = RETRO_LANGUAGE_PORTUGUESE_BRAZIL;
+			else if (langStr == "ru") *lang = RETRO_LANGUAGE_RUSSIAN;
+			else if (langStr == "ko") *lang = RETRO_LANGUAGE_KOREAN;
+			else if (langStr == "ja") *lang = RETRO_LANGUAGE_JAPANESE;
+			else if (langStr == "nl") *lang = RETRO_LANGUAGE_DUTCH;
+			else if (langStr == "pl") *lang = RETRO_LANGUAGE_POLISH;
+			else if (langStr == "ar") *lang = RETRO_LANGUAGE_ARABIC;
+			else if (langStr == "tr") *lang = RETRO_LANGUAGE_TURKISH;
+			else if (langStr == "zh") *lang = RETRO_LANGUAGE_CHINESE_SIMPLIFIED;
+			else                      *lang = RETRO_LANGUAGE_ENGLISH;
+
+			return true;
+		}
+
+		// RETRO_ENVIRONMENT_GET_VARIABLE ─────────────────────────────────────
 		case RETRO_ENVIRONMENT_GET_VARIABLE:
 		{
 			retro_variable* var = static_cast<retro_variable*>(data);
 			if (!var || !var->key) return false;
 
-			auto it = gameMenu->getCfgLoader()->startupLibretroParams.find(var->key);
-			if (it == gameMenu->getCfgLoader()->startupLibretroParams.end()) {
-				var->value = nullptr;
-				return false;
+			//Search first in the core parameters list
+			if (!setParameter(var, gameMenu->getCfgLoader()->startupLibretroParams)){
+				//If not found, search the parameter in the game specific parameters list
+				return setParameter(var, gameMenu->getCfgLoader()->gameSpecificLibretroParams);
 			}
-
-			const int nVals = static_cast<int>(it->second->values.size());
-			const int sel   = it->second->selected;
-
-			if (nVals > 0 && sel >= 0 && sel < nVals)
-				it->second->cachedValue = it->second->values[sel];
-			else if (nVals > 0)
-				it->second->cachedValue = it->second->values[0];
-			else {
-				var->value = nullptr;
-				return false;
-			}
-			var->value = it->second->cachedValue.c_str();
-			LOG_DEBUG("[Core Options] GET %s = %s", var->key, var->value);
 			return true;
 		}
 
 
-		// ── 3. RETRO_ENVIRONMENT_SET_CORE_OPTIONS (V1) ────────────────────────────
+
+		// RETRO_ENVIRONMENT_SET_CORE_OPTIONS / _INTL (V1) ──────────────────
 		case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
+		case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL:
 		{
-			const auto* defs = static_cast<const retro_core_option_definition*>(data);
-			if (!defs) return false;
+			const retro_core_option_definition* usDefs = nullptr;
+			const retro_core_option_definition* localDefs = nullptr;
 
-			for (int i = 0; defs[i].key != nullptr; ++i) {
-				const std::string key  = defs[i].key;
-				const std::string desc = defs[i].desc   ? defs[i].desc   : "";
+			if (cmd == RETRO_ENVIRONMENT_SET_CORE_OPTIONS) {
+				usDefs = static_cast<const retro_core_option_definition*>(data);
+				if (!usDefs) return false;
+			} else {
+				const auto* intl = static_cast<const retro_core_options_intl*>(data);
+				if (!intl || !intl->us) return false;
+				usDefs = intl->us;
+				const std::string lang = gameMenu->getCfgLoader()->configMain[cfg::mainLang].valueStr;
+				if (intl->local && lang != "en")
+					localDefs = intl->local;
+			}
 
-				std::vector<std::string> values;
+			// Construir un mapa de local key -> index para búsqueda rápida
+			std::map<std::string, int> localMap;
+			if (localDefs) {
+				for (int i = 0; localDefs[i].key != nullptr; ++i)
+					localMap[localDefs[i].key] = i;
+			}
+
+			for (int i = 0; usDefs[i].key != nullptr; ++i) {
+				const std::string key = usDefs[i].key;
+
+				// Si existe entrada local, usar su desc y labels; si no, usar us
+				const retro_core_option_definition* locEntry = nullptr;
+				if (localDefs && localMap.count(key))
+					locEntry = &localDefs[localMap[key]];
+
+				const std::string desc = Constant::ansiToUtf8(
+					(locEntry && locEntry->desc) ? locEntry->desc :
+					(usDefs[i].desc ? usDefs[i].desc : ""));
+
+				std::vector<std::string> values, labels;
 				for (int j = 0;
-					 j < RETRO_NUM_CORE_OPTION_VALUES_MAX && defs[i].values[j].value != nullptr;
+					 j < RETRO_NUM_CORE_OPTION_VALUES_MAX && usDefs[i].values[j].value != nullptr;
 					 ++j)
 				{
-					values.push_back(defs[i].values[j].value);
+					values.push_back(usDefs[i].values[j].value);
+					// Label: de local si existe y no está vacío, si no de us, si no el value key
+					const char* lbl = nullptr;
+					if (locEntry && locEntry->values[j].value)
+						lbl = locEntry->values[j].label;
+					if (!lbl || !*lbl)
+						lbl = usDefs[i].values[j].label;
+					labels.push_back(lbl && *lbl ? Constant::ansiToUtf8(lbl) : usDefs[i].values[j].value);
 				}
 
-				// Buscar índice del valor por defecto
+				// default_value siempre de us
 				int defaultIdx = 0;
-				if (defs[i].default_value) {
-					const std::string defVal = defs[i].default_value;
+				if (usDefs[i].default_value) {
+					const std::string defVal = usDefs[i].default_value;
 					for (int j = 0; j < static_cast<int>(values.size()); ++j) {
 						if (values[j] == defVal) { defaultIdx = j; break; }
 					}
 				}
 
-				applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, values, defaultIdx);
+				applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, values, defaultIdx, labels);
 			}
+			gameMenu->configMenus->poblarCoreOptions(gameMenu->getCfgLoader());
+			gameMenu->configMenus->resetIndexPos();
 			return true;
 		}
 
+		// RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION ──────────────────────────────
+		case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION: {
+			if (data) *(unsigned*)data = 2; //Soportamos V2
+			return true;
+		}
 
-		// ── 4. RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2 ──────────────────────────────
+		// RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2 / _V2_INTL ──────────────────
 		case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
+		case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
 		{
-			const auto* v2 = static_cast<const retro_core_options_v2*>(data);
+			const retro_core_options_v2* v2 = nullptr;
+			const retro_core_options_v2* usV2 = nullptr;
+			//Fbneo uses lots of parameters for cheats and dips, so it is mandatory
+			//to clear them before
+			gameMenu->getCfgLoader()->gameSpecificLibretroParams.clear();
+
+			if (cmd == RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2) {
+				v2 = static_cast<const retro_core_options_v2*>(data);
+			} else {
+				const auto* intl = static_cast<const retro_core_options_v2_intl*>(data);
+				if (!intl || !intl->us) return false;
+				usV2 = intl->us;
+				v2 = intl->us;
+				const std::string lang = gameMenu->getCfgLoader()->configMain[cfg::mainLang].valueStr;
+				if (intl->local && lang != "en")
+					v2 = intl->local;
+			}
+
 			if (!v2 || !v2->definitions) return false;
 
-			const retro_core_option_v2_definition* defs = v2->definitions;
+			const auto defs = v2->definitions;
+			std::vector<std::string> categoriesVec(std::begin(gameCategories), std::end(gameCategories));
 
 			for (int i = 0; defs[i].key != nullptr; ++i) {
 				const std::string key  = defs[i].key;
-				// V2 tiene desc y desc_categorized; usamos desc como descripción principal
-				const std::string desc = defs[i].desc ? defs[i].desc : "";
 
-				std::vector<std::string> values;
+				// Ocultar Debug Dip de FBNeo (neogeo) - no aportan nada al usuario
+				if (key.compare(0, 16, "fbneo-debug-dip-") == 0)
+					continue;
+
+				// Fallback a us por key (no por índice, los arrays pueden diferir en orden/cantidad)
+				const char* srcDesc = defs[i].desc;
+				if (!srcDesc && usV2 && usV2->definitions) {
+					for (int k = 0; usV2->definitions[k].key != nullptr; ++k) {
+						if (key == usV2->definitions[k].key) {
+							srcDesc = usV2->definitions[k].desc;
+							break;
+						}
+					}
+				}
+				const std::string desc = Constant::ansiToUtf8(srcDesc ? srcDesc : "");
+
+				std::vector<std::string> values, labels;
 				for (int j = 0;
 					 j < RETRO_NUM_CORE_OPTION_VALUES_MAX && defs[i].values[j].value != nullptr;
 					 ++j)
 				{
 					values.push_back(defs[i].values[j].value);
+					const char* lbl = defs[i].values[j].label;
+					labels.push_back(lbl && *lbl ? Constant::ansiToUtf8(lbl) : defs[i].values[j].value);
 				}
 
 				int defaultIdx = 0;
@@ -342,8 +398,20 @@ static bool retro_environment(unsigned cmd, void *data) {
 					}
 				}
 
-				applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, values, defaultIdx);
+				if (defs[i].category_key != nullptr) {
+					auto it = std::find(categoriesVec.begin(), categoriesVec.end(), defs[i].category_key);
+					if (it == categoriesVec.end())
+						applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, values, defaultIdx, labels);
+					else
+						applyEntry(gameMenu->getCfgLoader()->gameSpecificLibretroParams, key, desc, values, defaultIdx, labels);
+				} else {
+					applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, values, defaultIdx, labels);
+				}
 			}
+
+			gameMenu->configMenus->poblarCoreOptions(gameMenu->getCfgLoader());
+			gameMenu->configMenus->resetIndexPos();
+
 			return true;
 		}
 
@@ -778,7 +846,7 @@ static inline void hw_refresh(const void *data, unsigned width,
     }
 
     // ── Copiar al surface SDL ─────────────────────────────────────────────────
-    //if (SDL_LockSurface(screen) != 0) return;
+    if (SDL_LockSurface(screen) != 0) return;
     uint8_t*       dst     = (uint8_t*)screen->pixels;
     const uint8_t* src     = (const uint8_t*)final_src;
 
@@ -792,7 +860,7 @@ static inline void hw_refresh(const void *data, unsigned width,
             src += final_pitch;
         }
     }
-    //SDL_UnlockSurface(screen);
+    SDL_UnlockSurface(screen);
 }
 
 
@@ -1156,11 +1224,11 @@ int launchGame(std::string rompath, bool tmpDelete){
 	if(!gameLoaded) {
 		LOG_ERROR("Error cargando la ROM\n");
 		gameMenu->showLangSystemMessage("msg.romopenerror", 3000);
+		g_currentRompath.clear();
 		return 0;
 	}
 
-	//Loading the rompaths and setting the control device
-	g_currentRompath = rompath;
+
 	// En BIOS-only usamos el centinela como rom path: setRomPaths
 	// genera "@bios-only.sav" y "@bios-only.srm" coherentes para que
 	// los savestates del shell de la BIOS no machaquen ningun juego.

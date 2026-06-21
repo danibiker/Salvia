@@ -25,6 +25,32 @@ class TextArea : public Object{
 		void clear();
 		bool isEmpty();
 
+		/* Helpers para carga asincrona: separan la fase lenta (lectura
+		 * de fichero + ajuste de palabras con TTF) de la "adopcion" de
+		 * los resultados, que es atomica y rapida.  Permite que un worker
+		 * prepare el resultado sin lock y solo entre brevemente al lock
+		 * para reemplazar el estado de la instancia.
+		 *
+		 * Las variantes "WithFont" reciben un TTF_Font* explicito — para
+		 * uso desde otro hilo se debe pasar una fuente INDEPENDIENTE (ver
+		 * Fonts::createIndependentFont), porque TTF no es thread-safe a
+		 * nivel de la misma TTF_Font*. */
+		static std::vector<std::string> wrapString(const std::string& fulltxt,
+		                                            Fonts::enumFonts fontType,
+		                                            int maxW);
+		static std::vector<std::string> wrapTextFile(const std::string& filepathToOpen,
+		                                              Fonts::enumFonts fontType,
+		                                              int maxW);
+		static std::vector<std::string> wrapStringWithFont(const std::string& fulltxt,
+		                                                    TTF_Font* font,
+		                                                    int maxW);
+		static std::vector<std::string> wrapTextFileWithFont(const std::string& filepathToOpen,
+		                                                      TTF_Font* font,
+		                                                      int maxW);
+		void adoptLines(const std::vector<std::string>& newLines, const std::string& newPath);
+		const std::string& getFilepath() const { return filepath; }
+		Fonts::enumFonts   getFontType() const { return fontType; }
+
         int lineSpace;
         int marginTop;
         //To scroll the text

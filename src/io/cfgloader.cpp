@@ -45,7 +45,7 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::mp3_file] = cfg::t_cfg_props("mp3_file", "");
 	configMain[cfg::aspectRatio] = cfg::t_cfg_props("aspectRatio", (int)RATIO_CORE);
 	configMain[cfg::scaleMode] = cfg::t_cfg_props("scaleMode", (int)FULLSCREEN);
-	configMain[cfg::shaderMode] = cfg::t_cfg_props("shaderMode", (int)SHADER_NEAREST);
+	configMain[cfg::shaderMode] = cfg::t_cfg_props("shaderMode", (int)SHADER_BILINEAR);
 	configMain[cfg::syncMode] = cfg::t_cfg_props("syncMode", (int)OPT_SYNC_VIDEO);
 	configMain[cfg::soundMode] = cfg::t_cfg_props("soundMode", true);
 	configMain[cfg::libretrosystem] = cfg::t_cfg_props("libretrosystem", dir.getDirActual() + Constant::getFileSep() + "system");
@@ -556,5 +556,5 @@ std::string CfgLoader::getCoreCfgPath(){
 	}
 
 	return configMain[cfg::path_prefix].valueStr + (lastFileSep ? "" : Constant::getFileSep()) + 
-		"config" + Constant::getFileSep() + "core_" + configMain[cfg::libretro_core].valueStr + ".cfg";
+		"config" + Constant::getFileSep() + "core_" + configMain[cfg::libretro_core].valueStr + ".ini";
 }

@@ -838,7 +838,7 @@ SDL_Surface * SDL_ConvertSurface (SDL_Surface *surface,
 			SDL_SetColorKey(surface, 0, 0);
 		}
 	}
-	if ( (surface_flags & SDL_SRCALPHA) == SDL_SRCALPHA ) {
+	if (surface && surface->format && (surface_flags & SDL_SRCALPHA) == SDL_SRCALPHA ) {
 		/* Copy over the alpha channel to RGBA if requested */
 		if ( format->Amask ) {
 			surface->flags &= ~SDL_SRCALPHA;

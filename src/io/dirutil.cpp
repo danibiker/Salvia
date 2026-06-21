@@ -244,7 +244,7 @@ unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr
         if (strcmp(findData.cFileName, ".") == 0 || strcmp(findData.cFileName, "..") == 0) {
             continue;
         }
-		bool esDirectorio = findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+		bool esDirectorio = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 		string concatDir = parentDir + findData.cFileName;
 		if (!esDirectorio){
 			extension = getExtension(findData.cFileName);
@@ -325,25 +325,28 @@ bool dirutil::foundFilter(std::string filtroExt, std::string filtroName, std::st
 						 (!filtroName.empty() && name.find(filtroName) != string::npos);
 }
 
-string dirutil::getFileNameNoExt(string file) {
-    //if(isDir(file.c_str())) 
-	//	return file;
-
-    // 1. Encontrar el último separador de carpeta (cualquiera de los dos)
+// 1. Cambiado a 'const string&' para evitar copiar la cadena al entrar al método
+string dirutil::getFileNameNoExt(const string& file) {
+    
+    // 2. Encontrar el último separador
     size_t lastSep = file.find_last_of("/\\");
     
-    // 2. Extraer solo el nombre del archivo (con extensión)
-    string fileName = (lastSep == string::npos) ? file : file.substr(lastSep + 1);
+    // Calcular dónde empieza realmente el nombre del archivo
+    size_t startPos = (lastSep == string::npos) ? 0 : lastSep + 1;
     
-    // 3. Buscar el último punto solo en el nombre del archivo
-    size_t lastDot = fileName.find_last_of(".");
+    // 3. Buscar el último punto empezando desde el final de la cadena
+    size_t lastDot = file.find_last_of(".");
     
-    // 4. Si hay punto y no es el primer carácter (evita archivos ocultos tipo .bashrc)
-    if (lastDot != string::npos && lastDot > 0) {
-        return fileName.substr(0, lastDot);
+    // 4. Si el punto está antes del nombre del archivo, es que el archivo no tiene extensión
+    // (Ejemplo: "ruta.con.punto/archivo_sin_extension")
+    // También validamos que no sea un archivo oculto (ej. ".bashrc")
+    if (lastDot != string::npos && lastDot > startPos && lastDot != startPos) {
+        // Devolvemos el fragmento exacto: desde startPos, con una longitud de (lastDot - startPos)
+        return file.substr(startPos, lastDot - startPos);
     }
     
-    return fileName;
+    // Si no tiene extensión, devolvemos desde startPos hasta el final
+    return (startPos == 0) ? file : file.substr(startPos);
 }
 
 string dirutil::getFolder(string file) {

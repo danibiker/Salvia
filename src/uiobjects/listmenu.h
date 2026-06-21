@@ -4,6 +4,7 @@
 #include <string>
 #include <cmath>
 #include <memory>
+#include <unordered_map>
 
 #include <uiobjects/object.h>
 #include <io/fileprops.h>
@@ -13,6 +14,11 @@
 using namespace std;
 
 
+// Estructura para pasar múltiples datos al hilo secundario
+struct DatosDestruccion {
+    std::unordered_map<std::string, GameData> *vectorVacio;
+};
+
 class ListMenu : public Object{
     private:
         void clearSelectedText();
@@ -21,7 +27,7 @@ class ListMenu : public Object{
 		static const int frameTimeText = (int)(1000 / textFps);
 		Icons *icons;
 		// El diccionario principal para mame: <nombre_zip, datos>
-		std::map<std::string, GameData> mameDatabase;
+		std::unordered_map<std::string, GameData> mameDatabase;
 		void loadMameDatabase(ConfigEmu& emu);
 		SDL_Surface *selecAlphaRec;
 		void drawIconListElem(SDL_Surface *video_page, GameFile *game, SDL_Rect& dstRectIcon);
@@ -50,7 +56,7 @@ class ListMenu : public Object{
 		t_zipped_file_paths listZipped;
 		t_dir_file_paths listDir;
 		void zippedToList(int system);
-		std::string extractSystem(const std::string &sourceFile);
+		_inline std::string extractSystem(const std::string &sourceFile);
 
 		GameDataFields gameDataFields;
         static SDL_Surface* imgText;

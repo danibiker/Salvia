@@ -754,6 +754,9 @@ void GestorMenus::poblarJoystickTypes(Joystick *joystick){
 	}
 }
 
+/**
+*
+*/
 std::string GestorMenus::setControllerType(void* inst, void *index, void *values) {
 	if (!inst || !index || !values) return "";
     Joystick* joystick = static_cast<Joystick*>(inst);
@@ -765,13 +768,35 @@ std::string GestorMenus::setControllerType(void* inst, void *index, void *values
 *
 */
 void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
-    auto& params = refConfig->startupLibretroParams;
-    
-    // Estructura temporal para ordenar
+    auto& paramsCore = refConfig->startupLibretroParams;
+	auto& paramsGame = refConfig->gameSpecificLibretroParams;
+	
+	//Param independent options
+	menuCoreOptions->opciones.clear();
+	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.save"), &GestorMenus::guardarCoreConfig, refConfig, this));
+	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.version"), string(refConfig->configMain[cfg::libretro_core].valueStr) + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
+	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.extensions"), refConfig->configMain[cfg::libretro_core_extensions].valueStr));
+	
+	//Adding main core options
+	sortAndAddCoreOptions(paramsCore);
+	//Adding game options
+	sortAndAddCoreOptions(paramsGame);
+}
+
+/**
+*
+*/
+void GestorMenus::sortAndAddCoreOptions(const std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &params){
+
+	if (params.empty())
+		return;
+
+	// Estructura temporal para ordenar
     struct TempElem {
         std::string key;
         std::string desc;
     };
+
     std::vector<TempElem> sorter;
     // 1. Llenamos el vector con la clave y la descripcion
     for (auto it = params.begin(); it != params.end(); ++it) {
@@ -785,17 +810,13 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
         return Constant::compareNoCase(a.desc, b.desc);
     });
 
-	menuCoreOptions->opciones.clear();
-	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.save"), &GestorMenus::guardarCoreConfig, refConfig, this));
-	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.version"), string(refConfig->configMain[cfg::libretro_core].valueStr) + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
-	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.extensions"), refConfig->configMain[cfg::libretro_core_extensions].valueStr));
-
     // 3. Ahora recorremos el vector ordenado y buscamos en el mapa original por KEY
     for (auto it = sorter.begin(); it != sorter.end(); ++it) {
         auto elem = params.find(it->key);
 		if (elem != params.end()) {
             LOG_INFO("Key: %s, Selected: %d", elem->first.c_str(), elem->second->selected);
-            menuCoreOptions->opciones.push_back(new OpcionLista(elem->second->description, elem->second->values, &elem->second->selected));
+            const auto& displayItems = elem->second->labels.empty() ? elem->second->values : elem->second->labels;
+            menuCoreOptions->opciones.push_back(new OpcionLista(elem->second->description, displayItems, &elem->second->selected));
         }
     }
 }

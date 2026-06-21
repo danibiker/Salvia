@@ -62,6 +62,40 @@ bool Image::loadImageFromGame(string baseDir, GameFile& game, string ext, SDL_Pi
     return loadImage(baseDir + dir.getFileNameNoExt(game.longFileName) + ext, format);
 }
 
+/* ---------- Helpers estaticos para carga asincrona ----------
+ * No tocan estado de instancia; pueden llamarse desde un worker thread. */
+SDL_Surface* Image::loadConvertedSurface(const std::string& filepathToOpen, SDL_PixelFormat* format) {
+    const char* cPath = filepathToOpen.c_str();
+    if (!dirutil::fileExists(cPath)) return NULL;
+    SDL_Surface* raw = IMG_Load(cPath);
+    if (!raw) return NULL;
+    if (format) {
+        SDL_Surface* converted = SDL_ConvertSurface(raw, format, SDL_SWSURFACE);
+        SDL_FreeSurface(raw);
+        return converted; // puede ser NULL si fallo la conversion
+    }
+    return raw;
+}
+
+/* Atomico: reemplaza img/cachedSurface por newSurface, libera lo anterior.
+ * Llamar bajo el lock externo que protege printImage(). */
+void Image::adoptSurface(SDL_Surface* newSurface, const std::string& newPath) {
+    if (img != NULL) {
+        SDL_FreeSurface(img);
+        img = NULL;
+    }
+    if (cachedSurface != NULL) {
+        SDL_FreeSurface(cachedSurface);
+        cachedSurface = NULL;
+    }
+    if (newSurface) {
+        img = newSurface;
+        filepath = newPath;
+    } else {
+        filepath = "";
+    }
+}
+
 bool Image::loadImage(string filepathToOpen, SDL_PixelFormat* format){
     bool ret = false;
     if (filepath.empty() || filepath.compare(filepathToOpen) != 0){

@@ -408,9 +408,10 @@ namespace {
 	// Crea o actualiza una entrada preservando `selected` si ya existía.
 	void applyEntry(std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &data,
 					const std::string& key,
-					std::string description,       // Pasamos por valor para mover
+					std::string description,        // Pasamos por valor para mover
 					std::vector<std::string> values, // Pasamos por valor para mover
-					int defaultIdx = 0)
+					int defaultIdx,
+					std::vector<std::string> labels)
 	{
 		std::string validKey = cleanPerGameKey(key);
     
@@ -421,6 +422,9 @@ namespace {
 
 			if (it->second->values.empty())
 				it->second->values = values;
+
+			if (it->second->labels.empty() && !labels.empty())
+				it->second->labels = labels;
         
 			if (it->second->cachedValue.empty() && !it->second->values.empty())
 				it->second->cachedValue = it->second->values[it->second->selected];
@@ -434,6 +438,7 @@ namespace {
 		cfg::t_emu_props *raw = new cfg::t_emu_props();
 		raw->description = std::move(description);
 		raw->values      = std::move(values);
+		raw->labels      = std::move(labels);
 		raw->selected    = defaultIdx;
 		raw->isForThisGame = true;
 
@@ -442,6 +447,16 @@ namespace {
 
 		LOG_DEBUG("[Core Options] SET %s = %s", validKey.c_str(), raw->cachedValue.c_str());
 		data[validKey] = std::unique_ptr<cfg::t_emu_props>(raw); 
+	}
+
+	void applyEntry(std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &data,
+					const std::string& key,
+					std::string description,
+					std::vector<std::string> values,
+					int defaultIdx = 0)
+	{
+		std::vector<std::string> emptyLabels;
+		applyEntry(data, key, description, values, defaultIdx, emptyLabels);
 	}
 } // anonim namespace
 
@@ -610,7 +625,10 @@ bool extractAndLoadGame(std::string rompath, bool tmpDelete = true){
 	romPaths.rompath.clear();
 	closeGame();
 
-	//Obtaint the valid extensions to be loaded from the core information received
+	//Loading the rompaths
+	g_currentRompath = rompath;
+
+	//Obtain the valid extensions to be loaded from the core information received
 	retro_get_system_info(&info);
 	std::string allowedExtensions = Constant::replaceAll(info.valid_extensions, "|", " ");
 	LOG_DEBUG("Extensiones: %s\n", info.valid_extensions);
@@ -691,4 +709,72 @@ bool extractAndLoadGame(std::string rompath, bool tmpDelete = true){
 
 	return gameLoaded;
 }
+/**
+* Obtains all the parameters sent by RETRO_ENVIRONMENT_SET_VARIABLES and sets the parameter map in memory
+* with all the values
+*/
+void processParameters(const retro_variable* vars, std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &paramsMap){
+	//cleanPrefix(gameMenu->getCfgLoader()->startupLibretroParams);
+	for (int i = 0; vars[i].key != nullptr; ++i) {
+		// 1. Protección contra keys vacias (basura recurrente en algunos cores)
+		if (vars[i].key[0] == '\0') continue;
 
+		const std::string key      = vars[i].key;
+		// 2. Protección contra valores nulos o vacíos
+		if (!vars[i].value || vars[i].value[0] == '\0') {
+			LOG_DEBUG("[Core Options] SKIP: Key %s has no value string", key.c_str());
+			continue;
+		}
+
+		const std::string rawValue = vars[i].value;
+		const std::size_t sep = rawValue.find("; ");
+
+		// 3. Protección de Formato: Si no hay "; ", el core está enviando algo fuera de estándar
+		if (sep != std::string::npos && sep > 0) {
+			std::string desc = rawValue.substr(0, sep);
+			std::string optionsPart = rawValue.substr(sep + 2);
+
+			// 4. Validación extra: ¿Hay opciones después del separador?
+			if (!optionsPart.empty()) {
+				std::vector<std::string> values = splitOptions(optionsPart);
+                
+				if (!values.empty()) {
+					LOG_DEBUG("[Core Options] PARSE OK: %s", key.c_str());
+					applyEntry(paramsMap, key, desc, std::move(values), 0);
+				} else {
+					LOG_DEBUG("[Core Options] ERROR: No split tokens in %s", key.c_str());
+				}
+			}
+		} else {
+			// DOSBox Pure a veces envía notificaciones que no son definiciones de opciones
+			LOG_DEBUG("[Core Options] INFO: Key %s format not recognized (Value: %s)", key.c_str(), rawValue.c_str());
+		}
+	}
+}
+
+
+/**
+* Sets a parameter value if it exists on the parameter map
+*/
+bool setParameter(retro_variable* var, std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &paramsMap){
+	auto it = paramsMap.find(var->key);
+	if (it == paramsMap.end()) {
+		var->value = nullptr;
+		return false;
+	}
+
+	const int nVals = static_cast<int>(it->second->values.size());
+	const int sel   = it->second->selected;
+
+	if (nVals > 0 && sel >= 0 && sel < nVals)
+		it->second->cachedValue = it->second->values[sel];
+	else if (nVals > 0)
+		it->second->cachedValue = it->second->values[0];
+	else {
+		var->value = nullptr;
+		return false;
+	}
+	var->value = it->second->cachedValue.c_str();
+	LOG_DEBUG("[Core Options] GET %s = %s", var->key, var->value);
+	return true;
+}

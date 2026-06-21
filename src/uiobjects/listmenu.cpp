@@ -7,6 +7,31 @@
 #include <gfx/gfx_utils.h>
 #include <io/cfgloader.h>
 #include <ostream>
+#ifdef _XBOX
+	#include <xtl.h> // Cabecera obligatoria del XDK de Xbox
+#endif
+
+#include <unordered_set>
+#include <cstring>
+
+namespace {
+/* Hash y comparador para usar `const char*` como clave en unordered_set,
+ * comparando por contenido y no por puntero.  Permite deduplicar campos
+ * `char[]` de GameData (manufacturer, sourcefile) sin construir std::string
+ * temporales en cada iteracion. */
+struct CStrHash {
+    std::size_t operator()(const char* s) const {
+        std::size_t h = 5381; // djb2
+        while (*s) h = ((h << 5) + h) + (unsigned char)*s++;
+        return h;
+    }
+};
+struct CStrEqual {
+    bool operator()(const char* a, const char* b) const {
+        return std::strcmp(a, b) == 0;
+    }
+};
+}
 
 SDL_Surface* ListMenu::imgText;
 const int marginTextIcon = Icons::icon_w_add + 14;
@@ -259,17 +284,17 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
         const int fontHeightRect = screenPos * face_h;
         SDL_Rect dstRectIcon = {this->getX() + marginX, this->getY() + fontHeightRect + 2, 0, 0};
         SDL_Rect dstRectWithMargin = {dstRectIcon.x + marginTextIcon, dstRectIcon.y - 2, 0, 0};
-		string line = game->gameTitle.empty() ? game->longFileName : game->gameTitle;
+		const string line = game->gameTitle.empty() ? game->longFileName : game->gameTitle;
 
         // Color distinto si esta seleccionado
-        SDL_Color lineTextColor = i == this->curPos ? colorTextSel : colorTextNotSel;
+        const SDL_Color lineTextColor = i == this->curPos ? colorTextSel : colorTextNotSel;
 		// Establecemos el inicio de la superficie del texto que se mostara con scroll
 		srcRect.x = i == this->curPos ? (Sint16)pixelShift : 0;
 
 		//Drawing a faded background selection rectangle
         if (i == this->curPos){
 			SDL_Rect rectElemBlit = {this->getX() + marginX, this->getY() + fontHeightRect, rectElem.w, rectElem.h};
-			if (haveFocus){
+			if (haveFocus && selecAlphaRec){
 				SDL_BlitSurface(selecAlphaRec, NULL, video_page, &rectElemBlit);
 			} else {
 				rect(video_page, rectElemBlit.x, rectElemBlit.y, rectElemBlit.x + rectElemBlit.w - 1, rectElemBlit.y + rectElemBlit.h - 1, Constant::colors[clBkgMenu].sdlColor);
@@ -357,6 +382,7 @@ void ListMenu::drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor, TT
 		const int prevStyle = TTF_GetFontStyle(fontMenu);
 		TTF_SetFontStyle(fontMenu, TTF_STYLE_ITALIC | TTF_STYLE_BOLD);
 		SDL_Surface *navPath = TTF_RenderUTF8_Blended(fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
+		if (!navPath) return;
 		TTF_SetFontStyle(fontMenu, prevStyle);
 		SDL_Rect rectSrcNavPath = {0, 0, navPath->w, navPath->h};
 		if (navPath->w > this->getW()){
@@ -365,10 +391,12 @@ void ListMenu::drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor, TT
 		}
 
 #ifdef _XBOX
-		SDL_Surface *filterAlphaRec;
+		SDL_Surface *filterAlphaRec = NULL;
 		Constant::createRectAlphaFilled(filterAlphaRec, rectNavPath, video_page->format, clBlack, true);
-		SDL_BlitSurface(filterAlphaRec, NULL, video_page, &rectNavPath);
-		SDL_FreeSurface(filterAlphaRec);
+		if (filterAlphaRec){
+			SDL_BlitSurface(filterAlphaRec, NULL, video_page, &rectNavPath);
+			SDL_FreeSurface(filterAlphaRec);
+		}
 #else
 		//SDL_FillRect(video_page, &rectNavPath, Constant::colors[clBlack].color);
 		SDL_Color& c = Constant::colors[clBlack].sdlColor;
@@ -516,52 +544,106 @@ bool ListMenu::compareUniquePtrsFast(const std::unique_ptr<GameFile>& a,
     return a->sortKey < b->sortKey;
 }
 
+DWORD WINAPI HiloDestructor(LPVOID lpParam) {
+    DatosDestruccion* datos = static_cast<DatosDestruccion*>(lpParam);
+    
+    if (datos != NULL) {
+        // Ejecuta la limpieza costosa en este hilo secundario
+        delete datos->vectorVacio; 
+        
+        // Limpiamos la estructura contenedora de parámetros
+        delete datos;
+    }
+    return 0;
+}
+
 void ListMenu::loadMameDatabase(ConfigEmu& emu){
 	static string lastXmlRoute;
 	dirutil dir;
 
-	// 2. Carga/Verificación de la base de datos
-    //if (mameDatabase.empty() && !emu.mame_roms_xml.empty())  {
+	uint32_t time = SDL_GetTicks();
+	std::unordered_map<std::string, GameData> *vectorVacio = new std::unordered_map<std::string, GameData>();
+
+	//Carga/Verificación de la base de datos
 	if (!emu.mame_roms_xml.empty() && lastXmlRoute != emu.mame_roms_xml)  {
 		std::string mame_xml_path = dirutil::getPathPrefix(emu.mame_roms_xml);
-		LOG_DEBUG("Limpiando cache de xml");
 		lastXmlRoute = emu.mame_roms_xml;
 		// En vez de mameDatabase.clear():
-		std::map<std::string, GameData>().swap(mameDatabase);
+		mameDatabase.swap(*vectorVacio);
+		LOG_DEBUG("mameDatabase cleared %d", SDL_GetTicks() - time);
+		time = SDL_GetTicks();
 
-		LOG_DEBUG("Cargando xml custom %s\n", mame_xml_path.c_str());
 		//Buscamos primero con el xml custom
 		parse_mame_names(mame_xml_path, mameDatabase);
+		LOG_DEBUG("Cargado xml custom %s - %d", mame_xml_path.c_str(), SDL_GetTicks() - time);
+		time = SDL_GetTicks();
 
 		bool xmlFromMame = false;
 		if (mameDatabase.size() == 0){
 			// Buscamos los juegos con la etiqueta por defecto <game> del xml oficial de MAME
 			// Version usada en mame 2003+
-			LOG_DEBUG("Cargando xml mame 2003+");
 		    parse_mame_xml(mame_xml_path, mameDatabase);
 			xmlFromMame = true;
+			LOG_DEBUG("Cargando xml mame 2003+ %d", SDL_GetTicks() - time);
+			time = SDL_GetTicks();
 		}
 
 		if (mameDatabase.size() == 0){
 			// Si no lo hemos encontrado con la llamada anterior, es que juegos estan con la 
 			// etiqueta <machine> del xml oficial de MAME.
 			// Versiones nuevas de mame
-			LOG_DEBUG("Cargando xml mame new");
 			parse_mame_xml(mame_xml_path, mameDatabase, "machine");
 			xmlFromMame = true;
+			LOG_DEBUG("Cargando xml mame new %d", SDL_GetTicks() - time);
+			time = SDL_GetTicks();
 		}
 
 		LOG_DEBUG("Xml cargado con %d elementos\n", mameDatabase.size());
 		if (mameDatabase.size() > 0 && xmlFromMame && mame_xml_path.find("merged_") == string::npos){
 			//Solo recreamos si hemos obtenido el xml de las versiones oficiales de mame, ya que tienen demasiados tags a recorrer
 			std::string newMameXmlPath = dirutil::getPathPrefix("merged_" + dir.getFileNameNoExt(mame_xml_path) + ".xml", dir.getFolder(mame_xml_path)) ;
-			LOG_DEBUG("Guardando xml reducido %s\n", newMameXmlPath.c_str());
 			write_mame_xml(newMameXmlPath, mameDatabase);
+			LOG_DEBUG("Guardando xml reducido %s - %d", newMameXmlPath.c_str(), SDL_GetTicks() - time);
+			time = SDL_GetTicks();
 		}
     } else if (emu.mame_roms_xml.empty() && mameDatabase.size() > 0){
 		// En vez de mameDatabase.clear():
-		std::map<std::string, GameData>().swap(mameDatabase);
+		mameDatabase.swap(*vectorVacio);
 		lastXmlRoute = "";
+	}
+
+	if (!vectorVacio->empty()) {
+		// Reservamos los datos que se enviarán al hilo
+		DatosDestruccion* datos = new DatosDestruccion();
+		datos->vectorVacio = vectorVacio;
+
+		// Creamos el hilo en segundo plano
+		HANDLE hThread = CreateThread(
+			NULL,               // Atributos de seguridad por defecto
+			0,                  // Tamaño de pila por defecto
+			HiloDestructor,     // Función que ejecutará el hilo
+			datos,              // Parámetro enviado a la función
+			CREATE_SUSPENDED,   // Flags de creación (0 de inmediato)
+			NULL                // No necesitamos guardar el ID del hilo
+		);
+
+		if (hThread != NULL) {
+			// OPTIONAL / RECOMENDADO EN XBOX 360:
+			// El procesador de Xbox 360 tiene 3 núcleos físicos (6 hilos de hardware).
+			// Mandamos esta tarea pesada al Núcleo 2 (Hilo de hardware 4) para no perturbar el juego.
+			#ifdef _XBOX
+			XSetThreadProcessor(hThread, IO_THREAD);
+			#endif
+			ResumeThread(hThread);
+			// Cerramos el handle del hilo inmediatamente. 
+			// Esto NO destruye el hilo, solo le dice a la Xbox que libere sus recursos 
+			// automáticamente cuando 'HiloDestructor' termine de ejecutarse (evita memory leaks).
+			//CloseHandle(hThread);
+		} else {
+			// Fallback de seguridad: si el hilo falla al crearse, limpiamos en el hilo principal
+			delete vectorVacio;
+			delete datos;
+		}
 	}
 }
 
@@ -570,75 +652,121 @@ void ListMenu::loadMameDatabase(ConfigEmu& emu){
 */
 void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) {
 	LOG_DEBUG("Generando lista a partir de los ficheros\n");
+	uint32_t time = SDL_GetTicks();
     this->clear();
-	LOG_DEBUG("Lista de juegos anterior limpiada\n");
+	LOG_DEBUG("Lista de juegos anterior limpiada %d", SDL_GetTicks() - time);
+	time = SDL_GetTicks();
     dirutil dir;
-    //Determinar el sistema
+	/* Deduplicacion eficiente:
+	 *  - Manufacturer y sourcefile son char[] dentro de GameData (stable),
+	 *    asi que guardamos punteros directos con hash/equal por contenido
+	 *    y evitamos construir std::string temporales por juego.
+	 *  - `extractSystem` se difiere a despues del bucle: solo se llama una
+	 *    vez por cada sourcefile unico (~30) en lugar de N veces. */
+	std::tr1::unordered_set<const char*, CStrHash, CStrEqual> uniqueManufacturers(256);
+	std::tr1::unordered_set<uint16_t>                         uniqueYears(128);
+	std::tr1::unordered_set<const char*, CStrHash, CStrEqual> uniqueSourcefiles(64);
+
+	//Determinar el sistema
     vector<string> v = Constant::splitChar(emu.system, '_');
     int system = (v.size() > 0) ? Constant::strToTipo<int>(v.at(0)) : 0;
 	//Cargamos las descripciones para roms de MAME, FBNeo, ...
-	LOG_DEBUG("Cargando mame bdd\n");
 	loadMameDatabase(emu);
+	LOG_DEBUG("Cargado mame bdd %d", SDL_GetTicks() - time);
+	time = SDL_GetTicks();
+
     // Ahora comprobamos si el mapa tiene datos, independientemente de cuando se cargo
     bool hasMameData = !mameDatabase.empty();
 	bool foundInMame = false;
 	//Reservamos espacio y limpiamos el filtro
     listGames.reserve(files.size());
+	LOG_DEBUG("Game list reserved %d", SDL_GetTicks() - time);
+	time = SDL_GetTicks();
 	gameDataFields.clear();
-	LOG_DEBUG("Previous filters cleared and game list reserved \n");
+	LOG_DEBUG("Previous filters cleared %d", SDL_GetTicks() - time);
+	time = SDL_GetTicks();
 
-	for (auto it = files.cbegin(); it != files.cend(); ++it) {
-        const auto& file = *it;
-		foundInMame = false;
+	// Caché local para evitar llamar a cbegin()/cend() repetidamente en el bucle
+	const auto endIt = files.cend(); 
+
+	for (auto it = files.cbegin(); it != endIt; ++it) {
+		const auto& file = *it;
+    
 		GameFile* gFile = new GameFile();
+		gFile->systemid = system;
+    
+		// Intercambio instantáneo de memoria en 0ms
+		gFile->longFileName.swap(file->filename); 
+    
+		// 1. Calculamos el nombre sin extensión una sola vez
+		const string fileNameNoExt = dir.getFileNameNoExt(gFile->longFileName);
+    
+		// Variable local para el control de MAME en esta iteración concreta
+		bool gFileFoundInMame = false;
 
-        gFile->systemid = system;
-        gFile->longFileName = file->filename;
+		if (hasMameData) {
+			// 2. Búsqueda en el árbol del mapa (std::map)
+			auto itMame = mameDatabase.find(fileNameNoExt); 
+			if (itMame != mameDatabase.end()) {
+				const GameData& data = itMame->second; // Referencia directa para evitar escribir 'itMame->second'
+            
+				gFile->gameData = &data; 
+				gFile->gameTitle = data.description; // Copia el título real de MAME
+				gFileFoundInMame = true;
 
-        const string fileNameNoExt = dir.getFileNameNoExt(file->filename);
-		//LOG_DEBUG("buscando %s\n", fileNameNoExt.c_str());
+				uniqueManufacturers.insert(data.manufacturer); // const char* directo, 0 allocs
+				uniqueYears.insert(data.year);
+				uniqueSourcefiles.insert(data.sourcefile);     // dedup en crudo; extractSystem se aplica fuera
+			} 
+		}
+    
+		if (!gFileFoundInMame) {
+			gFile->gameTitle = fileNameNoExt;
+		}
 
-        if (hasMameData) {
-            // Buscamos en el mapa persistente
-            std::map<std::string, GameData>::iterator it = mameDatabase.find(fileNameNoExt); 
-            if (it != mameDatabase.end()) {
-                gFile->gameData = &it->second; // Apuntamos a la memoria del mapa
-                gFile->gameTitle = it->second.description;
-                foundInMame = true;
-				//LOG_DEBUG("Encontrada descripcion: %s \n", gFile->gameTitle.c_str());
-
-				/** Podria parecer ineficiente meter todos los campos en un vector aunque esten duplicados,
-				  * pero resulta que es mas rapido asi, y ordenar al final, eliminando duplicados,
-				  * que usando un set o un map */
- 				gameDataFields.manufacturers.push_back(it->second.manufacturer);
-				gameDataFields.years.push_back(Constant::TipoToStr(it->second.year));
-
-				std::string system = extractSystem(it->second.sourcefile);
-				if (!system.empty())
-					gameDataFields.systems.push_back(system);
-            } 
-			//else {
-				//LOG_DEBUG("[MAME]NODESC: %s\n", fileNameNoExt.c_str());
-			//}
-        }
-
-		if (!foundInMame) {
-            gFile->gameTitle = fileNameNoExt;
-        }
-
-		if (!gFile->longFileName.empty() && gFile->longFileName[0] == '@'){
+		const std::string& longName = gFile->longFileName;
+		if (!longName.empty() && longName[0] == '@') {
 			gFile->fileType = FT_ZIP_LIST;
 		} else {
-			gFile->fileType = file->filetype == TIPODIRECTORIO ? FT_DIR : FT_CARTRIDGE;
+			gFile->fileType = (file->filetype == TIPODIRECTORIO) ? FT_DIR : FT_CARTRIDGE;
 		}
-		
+
 		// precalculo de clave para ordenar
 		gFile->sortKey = gFile->gameTitle;
 		Constant::lowerCase(&gFile->sortKey); 
-        listGames.push_back(std::unique_ptr<GameFile>(gFile));
-    }
+		listGames.emplace_back(gFile);
+	}
 
-	LOG_DEBUG("Files added");
+	LOG_DEBUG("%d Files added %d(ms)", listGames.size(), SDL_GetTicks() - time);
+	time = SDL_GetTicks();
+
+	// Volcamos los elementos ÚNICOS a los vectores de la estructura.
+	// Una sola allocacion de std::string por valor unico (no por juego).
+	gameDataFields.manufacturers.clear();
+	gameDataFields.manufacturers.reserve(uniqueManufacturers.size());
+	for (auto it = uniqueManufacturers.begin(); it != uniqueManufacturers.end(); ++it) {
+		gameDataFields.manufacturers.emplace_back(*it); // const char* -> std::string, 1 vez por unico
+	}
+
+	// Sistemas: aplicamos extractSystem solo a sourcefiles unicos (~30 llamadas en vez de N).
+	// Volvemos a deduplicar el resultado por si dos sourcefiles distintos colapsan al mismo sistema.
+	gameDataFields.systems.clear();
+	gameDataFields.systems.reserve(uniqueSourcefiles.size());
+	std::tr1::unordered_set<std::string> uniqueSystemsOut(uniqueSourcefiles.size());
+	for (auto it = uniqueSourcefiles.begin(); it != uniqueSourcefiles.end(); ++it) {
+		std::string sys = extractSystem(std::string(*it));
+		if (uniqueSystemsOut.insert(sys).second) {
+			gameDataFields.systems.push_back(sys);
+		}
+	}
+
+	//Volcado manual convirtiendo cada número a string
+	gameDataFields.years.clear();
+	gameDataFields.years.reserve(uniqueYears.size());
+	for (auto it = uniqueYears.begin(); it != uniqueYears.end(); ++it) {
+		gameDataFields.years.emplace_back(Constant::TipoToStr(*it));
+	}
+
 	sortFilters();
 	/*for (auto it = gameDataFields.systems.cbegin(); it != gameDataFields.systems.cend(); ++it) {
 		const auto& s = *it;
@@ -648,6 +776,9 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
 
 	//Reset the filter and add all elements to be shown
 	resetFilter();
+
+	LOG_DEBUG("Files sorted and filter reset %d", SDL_GetTicks() - time);
+	time = SDL_GetTicks();
 }
 
 void ListMenu::zippedToList(int system) {
@@ -673,19 +804,26 @@ void ListMenu::zippedToList(int system) {
 }
 
 std::string ListMenu::extractSystem(const std::string& sourceFile) {
-    std::size_t posSlash = sourceFile.find('/');
-	if (posSlash != std::string::npos) {
-        std::size_t posCapcom = sourceFile.find("capcom");
-        if (posCapcom != std::string::npos)
-            return std::string(sourceFile, posSlash + 3, 4);
-        else
-            return std::string(sourceFile, 0, posSlash);
+    // 1. Buscamos el separador '/' de forma directa
+    const std::size_t posSlash = sourceFile.find('/');
+    if (posSlash != std::string::npos) {
+        // 2. Buscamos "capcom" de forma óptima
+        if (sourceFile.find("capcom") != std::string::npos) {
+            // Devuelve subcadena desde posSlash + 3 con una longitud de 4 caracteres
+            // .substr() activa de forma nativa la optimización RVO en VS2010
+            return sourceFile.substr(posSlash + 3, 4);
+        }
+        // Si no es capcom, devolvemos todo lo anterior al slash
+        return sourceFile.substr(0, posSlash);
     }
     
-	std::size_t posDot = sourceFile.find('.');
-    if (posDot != std::string::npos)
-        return std::string(sourceFile, 0, posDot);
+    // 3. Si no hay slash, buscamos el punto de la extensión
+    const std::size_t posDot = sourceFile.find('.');
+    if (posDot != std::string::npos) {
+        return sourceFile.substr(0, posDot);
+    }
 
+    // 4. Si no cumple nada, devolvemos una copia limpia de la cadena completa
     return sourceFile;
 }
 
@@ -751,5 +889,5 @@ void ListMenu::resizeMarginTop(int addedMargin, int screenH){
 	this->setY(this->marginY + addedMargin);
 	this->setH(screenH - this->getY());
 	this->maxLines = this->getScreenNumLines();
-	this->endPos = (int)this->filteredGames.size() > this->maxLines ? this->maxLines : this->filteredGames.size();
+	this->endPos = (int)this->filteredGames.size() > this->maxLines ? this->iniPos + this->maxLines : this->filteredGames.size();
 }

@@ -54,7 +54,7 @@ class dirutil{
         unsigned int listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtro, bool order, bool properties);
 		unsigned int listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool order, bool properties);
 		unsigned int listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool includeDirs, bool order, bool properties);
-        string getFileNameNoExt(string file);
+        string dirutil::getFileNameNoExt(const string& file);
         string getFolder(string file);
         string getFileName(string file);
         bool changeDirAbsolute(const char *str);

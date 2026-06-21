@@ -60,7 +60,6 @@ void AchievementsWorker::start()
     }
 	
 	#ifdef _XBOX
-    /* IO_THREAD = core 2; below normal para no robarle ciclos al emulador. */
     XSetThreadProcessor(m_thread, IO_THREAD);
 	#endif
 
@@ -387,10 +386,10 @@ DWORD WINAPI LoadGameThreadFunction(LPVOID lpParam) {
 			delete self.gameState;
 			self.gameState = NULL;
 		}
-
 		// Llamamos a los metodos de la clase a traves de la instancia
 		self.show_game_placard(data->client);
 		self.updateAchievements(data->client);
+
 		if (ctx->messages) {
 			self.send_message_game_loaded();
 		}
@@ -564,10 +563,11 @@ static std::string resolveFirstFileFromCue(const std::string& cuePath) {
 	return resolved;
 }
 
-void Achievements::load_game(const uint8_t* rom, size_t rom_size, std::string path, uint32_t console_id, th_messages& messagesAchievement) {
+void Achievements::load_game(const uint8_t* rom, std::size_t rom_size, std::string path, uint32_t console_id, th_messages& messagesAchievement) {
 	LoadContext* ctx = new LoadContext();
 	ctx->messages = &messagesAchievement;
 	ctx->romBuffer = (void*)rom;
+
 	char romHash[33] = {0};
 	shouldRefresh = true;
 
@@ -1513,15 +1513,18 @@ void Achievements::download_and_cache_image(AchievementState* achievement, int b
 	SDL_Surface *imageObtained = NULL;
 	SDL_Surface* tmpSurface = NULL;
 	bool needResize = false;
-	// Obtenemos el formato de la pantalla (asumiendo que es 16 bits)
-	SDL_PixelFormat* targetFormat = SDL_GetVideoSurface()->format;
 
 	if (!download_and_cache_image(achievement->badgeUrl, achievement->id, imageObtained, badgeW, badgeH)){
 		LOG_ERROR("Error downloading image %s", achievement->badgeUrl.c_str());
 		return;
 	}
+	SDL_PixelFormat* targetFormat = screenFormat;
+	if (!screenFormat){
+		targetFormat = SDL_GetVideoSurface()->format;
+	}
 
-	if (createNew){
+
+	if (createNew && imageObtained && targetFormat){
 		SDL_Surface* surfaceToResize = SDL_ConvertSurface(imageObtained, targetFormat, SDL_SWSURFACE);
 		//Si creamos una nueva superficie, comprobamos si necesita redimensionado
 		needResize = imageObtained->w != badgeW || imageObtained->h != badgeH;
@@ -1529,7 +1532,10 @@ void Achievements::download_and_cache_image(AchievementState* achievement, int b
 			//Si necesita redimensionado
 			double zoomX = (double)badgeW / imageObtained->w;
 			double zoomY = (double)badgeH / imageObtained->h;
-			tmpSurface = rotozoomSurfaceXY(surfaceToResize, 0, zoomX, zoomY, SMOOTHING_ON);
+			tmpSurface = zoomSurface(surfaceToResize, zoomX, zoomY, SMOOTHING_OFF);
+			#ifdef _XBOX
+			SDL_SetAlpha(tmpSurface, 0, 0);
+			#endif
 			SDL_FreeSurface(surfaceToResize);
 		} else if (surfaceToResize){
 			//No hizo falta redimensionarla, pero devolvemos la nueva que hemos creado
@@ -1542,8 +1548,11 @@ void Achievements::download_and_cache_image(AchievementState* achievement, int b
 		tmpSurface = imageObtained;
 	}
 
-	if (achievement->badgeLocked == NULL && achievement->locked && tmpSurface) {
+	if (achievement->badgeLocked == NULL && achievement->locked && tmpSurface && targetFormat) {
 		achievement->badgeLocked = SDL_ConvertSurface(tmpSurface, targetFormat, SDL_SWSURFACE);
+		#ifdef _XBOX
+		SDL_SetAlpha(achievement->badgeLocked, 0, 0);
+		#endif
 		if (achievement->badgeLocked){
 			Image::convertirGrises16Bits(achievement->badgeLocked);
 		}
@@ -1576,31 +1585,42 @@ bool Achievements::download_and_cache_image(std::string url, uint32_t idImage, S
 			return false;
 		}
         SDL_Surface* finalSurface = NULL;
-		SDL_PixelFormat* targetFormat = SDL_GetVideoSurface()->format;
+
+		SDL_PixelFormat* targetFormat = screenFormat;
+		if (!screenFormat){
+			targetFormat = SDL_GetVideoSurface()->format;
+		}
 
         // 3. ESCALADO OPTIMIZADO
         if (rawImg->w == badgeW && rawImg->h == badgeH) {
 			// En lugar de DisplayFormat, usamos ConvertSurface (Seguro en hilos)
 			finalSurface = SDL_ConvertSurface(rawImg, targetFormat, SDL_SWSURFACE);
-        } else if (rawImg->w > 0 && rawImg->h > 0){
+        } else if (rawImg->w > 0 && rawImg->h > 0 && badgeW > 0 && badgeH > 0){
             // Solo usamos rotozoom si el tamanyo difiere
             double zoomX = (double)badgeW / rawImg->w;
             double zoomY = (double)badgeH / rawImg->h;
-            SDL_Surface* zoomed = rotozoomSurfaceXY(rawImg, 0, zoomX, zoomY, SMOOTHING_ON);
+            SDL_Surface* zoomed = zoomSurface(rawImg, zoomX, zoomY, SMOOTHING_OFF);
             if (zoomed) {
-                //finalSurface = SDL_DisplayFormat(zoomed);
 				finalSurface = SDL_ConvertSurface(zoomed, targetFormat, SDL_SWSURFACE);
+				#ifdef _XBOX
+				SDL_SetAlpha(finalSurface, 0, 0);
+				#endif
                 SDL_FreeSurface(zoomed);
             }
+
 			/*SDL_Surface* zoomed = SDL_CreateRGBSurface(SDL_SWSURFACE, badgeW, badgeH, 
                          rawImg->format->BitsPerPixel,
                          rawImg->format->Rmask, rawImg->format->Gmask, 
                          rawImg->format->Bmask, rawImg->format->Amask);
 			if (zoomed) {
 				SDL_Rect destRect = {0, 0, badgeW, badgeH};
-				// Esta funcion es ordenes de magnitud mas rapida que rotozoom
+				// Esta funcion es ordenes de magnitud mas rapida que rotozoom, aunque el 
+				// smoothing hace que tenga mejor calidad
 				SDL_SoftStretch(rawImg, NULL, zoomed, &destRect);
-				finalSurface = SDL_DisplayFormat(zoomed);
+				finalSurface = SDL_ConvertSurface(zoomed, targetFormat, SDL_SWSURFACE);
+				#ifdef _XBOX
+				SDL_SetAlpha(finalSurface, 0, 0);
+				#endif
 				SDL_FreeSurface(zoomed);
 			}*/
         }

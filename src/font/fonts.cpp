@@ -5,6 +5,7 @@
 
 Fileio Fonts::fileio;
 TTF_Font* Fonts::vFonts[2];
+int Fonts::s_fontSize = 0;
 
 Fonts::Fonts(){
 	if (TTF_Init() == -1) {
@@ -35,6 +36,7 @@ void Fonts::destroy(){
     * 
     */
 void Fonts::initFonts(int fontSize){
+	s_fontSize = fontSize;   // necesario para reabrir copias independientes
 	vFonts[FONTBIG] = NULL;
 	vFonts[FONTSMALL] = NULL;
 	fileio.loadFromMem(Arimo_Regular_ttf, Arimo_Regular_ttf_size);
@@ -91,6 +93,32 @@ int Fonts::getSize(int fontId, std::string text){
 	return textW;
 }
 
+int Fonts::getSize(TTF_Font* font, const char* text){
+	if (!font || !text) return 0;
+	int textW = 0;
+	TTF_SizeText(font, text, &textW, NULL);
+	return textW;
+}
+
+int Fonts::getSize(TTF_Font* font, const std::string& text){
+	return getSize(font, text.c_str());
+}
+
+TTF_Font* Fonts::createIndependentFont(int fontId){
+	if (fontId < 0 || fontId > FONTSMALL) return NULL;
+	if (s_fontSize <= 0 || fileio.getFile() == NULL) return NULL;
+
+	const int sz = (fontId == FONTBIG) ? s_fontSize : (s_fontSize - 9);
+	SDL_RWops* rw = SDL_RWFromMem(fileio.getFile(), (int)fileio.getFileSize());
+	if (!rw) return NULL;
+	// 2do arg = 1 -> TTF cierra el RWops al cerrar la fuente
+	TTF_Font* font = TTF_OpenFontRW(rw, 1, sz);
+	if (!font) {
+		LOG_ERROR("Fonts::createIndependentFont(%d): %s", fontId, TTF_GetError());
+	}
+	return font;
+}
+
 std::string Fonts::recortarAlTamanyo(std::string text, int maxWidth){
 	std::string newText = text;
 	TTF_Font* font = Fonts::getFont(Fonts::FONTBIG);
@@ -102,17 +130,17 @@ std::string Fonts::recortarAlTamanyo(std::string text, int maxWidth){
 	if (textPixelSize > maxWidth) {
 		int totalChars = text.length();
     
-		// 1. Precalculamos el ancho promedio por carácter
+		// 1. Precalculamos el ancho promedio por carï¿½cter
 		float avgCharWidth = (float)textPixelSize / (float)totalChars;
     
-		// 2. Estimamos cuántos caracteres sobran para que quepa (incluyendo el "...")
+		// 2. Estimamos cuï¿½ntos caracteres sobran para que quepa (incluyendo el "...")
 		int dotsWidth = 0;
 		TTF_SizeText(font, "...", &dotsWidth, NULL);
     
 		int targetWidth = maxWidth - dotsWidth;
 		int charsThatFit = (int)(targetWidth / avgCharWidth);
     
-		// 3. Aplicamos el recorte inicial basado en la estimación
+		// 3. Aplicamos el recorte inicial basado en la estimaciï¿½n
 		// Queremos la mitad de los que caben al principio y la otra mitad al final
 		int leftPart = charsThatFit / 2;
 		int rightPart = totalChars - (charsThatFit / 2);
@@ -120,8 +148,8 @@ std::string Fonts::recortarAlTamanyo(std::string text, int maxWidth){
 		newText = text.substr(0, leftPart) + "..." + text.substr(rightPart);
 		TTF_SizeText(font, newText.c_str(), &textPixelSize, NULL);
 
-		// 4. Ajuste fino (por si la estimación fue optimista debido a caracteres anchos como 'W')
-		// Este bucle se ejecutará como mucho 1 o 2 veces, ahorrando mucha CPU
+		// 4. Ajuste fino (por si la estimaciï¿½n fue optimista debido a caracteres anchos como 'W')
+		// Este bucle se ejecutarï¿½ como mucho 1 o 2 veces, ahorrando mucha CPU
 		while (textPixelSize > maxWidth && leftPart > 0 && rightPart < totalChars) {
 			if (leftPart > 0) leftPart--;
 			if (rightPart < totalChars) rightPart++;

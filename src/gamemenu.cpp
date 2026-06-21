@@ -14,18 +14,278 @@
 #include "unzip/unziptool.h"
 #include "rhash/md5.h" // To generate a filename hash
 
-/* Definida en salvia.cpp — devuelve los descriptores de memoria que el core
+/* Definida en salvia.cpp devuelve los descriptores de memoria que el core
  * envio via RETRO_ENVIRONMENT_SET_MEMORY_MAPS (ej. HRAM en Game Boy). */
 extern const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_count);
 
-GameMenu::GameMenu(CfgLoader *cfgLoader){
+/* ======================================================================
+ * MenuAssetLoader implementacion
+ *
+ * Patron de un thread persistente con peticion + numero de secuencia.
+ * Submit() copia los datos necesarios e incrementa la secuencia; el worker
+ * compara la secuencia entre pasos para cancelar cargas obsoletas en
+ * cuanto el usuario sigue navegando.
+ *
+ * El acceso a menuImages/menuTextAreas se serializa con m_menuAssetCS
+ * del GameMenu (un solo lock simple).  El worker libera el lock entre
+ * pasos, de modo que el dibujo en el main thread bloquee como mucho lo
+ * que dura UNA carga (~50ms para una PNG), no toda la cadena.
+ * ====================================================================== */
+MenuAssetLoader::MenuAssetLoader()
+    : m_owner(NULL), m_event(NULL), m_thread(NULL), m_seqSubmitted(0),
+      m_stop(false), m_started(false), m_reqCSInited(false),
+      m_workerFont(NULL),
+      m_pendFormat(NULL), m_pendOverlayW(0), m_pendSynopsisMaxW(0)
+{
+}
+
+MenuAssetLoader::~MenuAssetLoader()
+{
+    stop();
+}
+
+void MenuAssetLoader::start(GameMenu* owner)
+{
+    if (m_started) return;
+
+    m_owner = owner;
+    InitializeCriticalSection(&m_reqCS);
+    m_reqCSInited = true;
+    m_event  = CreateEvent(NULL, FALSE /*auto-reset*/, FALSE, NULL);
+    m_stop   = false;
+
+    /* TTF_Font INDEPENDIENTE para uso exclusivo del worker.  Cada
+     * TTF_OpenFontRW devuelve una instancia con su propio FT_Face y
+     * caches de glifos  sin race con la fuente del main thread. */
+    m_workerFont = Fonts::createIndependentFont(Fonts::FONTBIG);
+    if (!m_workerFont) {
+        LOG_ERROR("MenuAssetLoader: no se pudo crear TTF_Font independiente");
+    }
+
+    m_thread = CreateThread(NULL, 0, &MenuAssetLoader::WorkerProc, this, CREATE_SUSPENDED, NULL);
+
+    if (!m_thread) {
+        LOG_ERROR("MenuAssetLoader: CreateThread FAILED  asset loads will be done inline");
+        if (m_workerFont) { TTF_CloseFont(m_workerFont); m_workerFont = NULL; }
+        if (m_event) { CloseHandle(m_event); m_event = NULL; }
+        if (m_reqCSInited) { DeleteCriticalSection(&m_reqCS); m_reqCSInited = false; }
+        return;
+    }
+
+#ifdef _XBOX
+    /* IO_THREAD ; below normal para no robarle ciclos al main loop. */
+    XSetThreadProcessor(m_thread, IO_THREAD);
+#endif
+
+	SetThreadPriority(m_thread, THREAD_PRIORITY_BELOW_NORMAL);
+    ResumeThread(m_thread);
+
+    m_started = true;
+    LOG_DEBUG("MenuAssetLoader: started");
+}
+
+void MenuAssetLoader::stop()
+{
+    if (!m_started) return;
+
+    m_stop = true;
+    if (m_event) SetEvent(m_event);
+
+    /* Timeout defensivo: el worker solo hace lecturas de disco e IMG_Load
+     *  no se cuelga.  3s es de sobra. */
+    if (m_thread) {
+        DWORD wr = WaitForSingleObject(m_thread, 3000);
+        if (wr == WAIT_TIMEOUT) {
+            LOG_ERROR("MenuAssetLoader: worker did not exit in 3s");
+        }
+        CloseHandle(m_thread);
+        m_thread = NULL;
+    }
+    if (m_event) { CloseHandle(m_event); m_event = NULL; }
+    if (m_reqCSInited) { DeleteCriticalSection(&m_reqCS); m_reqCSInited = false; }
+    if (m_workerFont) { TTF_CloseFont(m_workerFont); m_workerFont = NULL; }
+
+    m_started = false;
+    LOG_DEBUG("MenuAssetLoader: stopped");
+}
+
+void MenuAssetLoader::submit(const std::string& fileNoExt,
+                              const std::string& assetsDir,
+                              SDL_PixelFormat* format,
+                              int overlayW,
+                              int synopsisMaxW)
+{
+    if (!m_started) return;
+
+    EnterCriticalSection(&m_reqCS);
+    m_pendFileNoExt    = fileNoExt;
+    m_pendAssetsDir    = assetsDir;
+    m_pendFormat       = format;
+    m_pendOverlayW     = overlayW;
+    m_pendSynopsisMaxW = synopsisMaxW;
+    InterlockedIncrement(&m_seqSubmitted);
+    LeaveCriticalSection(&m_reqCS);
+
+    SetEvent(m_event);
+}
+
+DWORD WINAPI MenuAssetLoader::WorkerProc(LPVOID self_ptr)
+{
+    MenuAssetLoader* self = static_cast<MenuAssetLoader*>(self_ptr);
+    self->run();
+    return 0;
+}
+
+void MenuAssetLoader::run()
+{
+    while (!m_stop) {
+        WaitForSingleObject(m_event, 250);
+        if (m_stop) break;
+
+		while (!m_stop && m_owner->status == EMU_MENU) {
+            // Snapshot de la peticion
+            std::string fileNoExt, assetsDir;
+            SDL_PixelFormat* format;
+            int overlayW, synopsisMaxW;
+            LONG mySeq;
+
+            EnterCriticalSection(&m_reqCS);
+            fileNoExt    = m_pendFileNoExt;
+            assetsDir    = m_pendAssetsDir;
+            format       = m_pendFormat;
+            overlayW     = m_pendOverlayW;
+            synopsisMaxW = m_pendSynopsisMaxW;
+            mySeq        = m_seqSubmitted;
+            LeaveCriticalSection(&m_reqCS);
+
+            if (fileNoExt.empty()) break;
+
+            const std::string sep = std::string(Constant::tempFileSep);
+
+            /* Patron por asset:
+             *   1) leer la ruta actual del slot (LOCK breve)
+             *   2) si distinta -> trabajo lento (IO + decode/wrap) FUERA DEL LOCK
+             *   3) adopt en el slot (LOCK breve)
+             * Asi el lock se mantiene microsegundos.  Entre 2 y 3 hay
+             * chequeo de cancelacion.
+             *
+             * TTF: el worker usa m_workerFont (fuente INDEPENDIENTE de la
+             * del main thread)  sin race aunque concurra con TTF_RenderText
+             * del main thread sobre la fuente compartida. */
+            #define MAL_CANCELLED() (m_seqSubmitted != mySeq || m_stop)
+
+            // 1. SYNOPSIS (file IO + word-wrap con la fuente del worker)
+            if (m_workerFont && synopsisMaxW > 0) {
+                const std::string synPath = assetsDir + "synopsis" + sep + fileNoExt + ".txt";
+                std::string currentPath;
+                EnterCriticalSection(&m_owner->m_menuAssetCS);
+                currentPath = m_owner->menuTextAreas[SYNOPSIS].getFilepath();
+                LeaveCriticalSection(&m_owner->m_menuAssetCS);
+
+                if (currentPath != synPath) {
+                    std::vector<std::string> wrapped =
+                        TextArea::wrapTextFileWithFont(synPath, m_workerFont, synopsisMaxW);
+
+                    if (MAL_CANCELLED()) continue;
+
+                    EnterCriticalSection(&m_owner->m_menuAssetCS);
+                    m_owner->menuTextAreas[SYNOPSIS].adoptLines(wrapped, synPath);
+                    m_owner->menuTextAreas[SYNOPSIS].resetTicks(m_owner->gameTicks);
+                    LeaveCriticalSection(&m_owner->m_menuAssetCS);
+                }
+            }
+
+            if (MAL_CANCELLED()) continue;
+
+            // 2. SNAP
+            {
+                const std::string snapPath = assetsDir + "snap" + sep + fileNoExt + ".png";
+                std::string currentPath;
+                EnterCriticalSection(&m_owner->m_menuAssetCS);
+                currentPath = m_owner->menuImages[SNAP].getFilepath();
+                LeaveCriticalSection(&m_owner->m_menuAssetCS);
+
+                if (currentPath != snapPath) {
+                    SDL_Surface* newSurf = Image::loadConvertedSurface(snapPath, format);
+                    if (MAL_CANCELLED()) {
+                        if (newSurf) SDL_FreeSurface(newSurf);
+                        continue;
+                    }
+                    EnterCriticalSection(&m_owner->m_menuAssetCS);
+                    m_owner->menuImages[SNAP].adoptSurface(newSurf, snapPath);
+                    LeaveCriticalSection(&m_owner->m_menuAssetCS);
+                }
+            }
+
+            if (overlayW < 640) break;  // resoluciones bajas: no se cargan box2d ni snaptit
+            if (MAL_CANCELLED()) continue;
+
+            // 3. BOX2D
+            {
+                const std::string boxPath = assetsDir + "box2d" + sep + fileNoExt + ".png";
+                std::string currentPath;
+                EnterCriticalSection(&m_owner->m_menuAssetCS);
+                currentPath = m_owner->menuImages[BOX2D].getFilepath();
+                LeaveCriticalSection(&m_owner->m_menuAssetCS);
+
+                if (currentPath != boxPath) {
+                    SDL_Surface* newSurf = Image::loadConvertedSurface(boxPath, format);
+                    if (MAL_CANCELLED()) {
+                        if (newSurf) SDL_FreeSurface(newSurf);
+                        continue;
+                    }
+                    EnterCriticalSection(&m_owner->m_menuAssetCS);
+                    m_owner->menuImages[BOX2D].adoptSurface(newSurf, boxPath);
+                    LeaveCriticalSection(&m_owner->m_menuAssetCS);
+                }
+            }
+
+            if (MAL_CANCELLED()) continue;
+
+            // 4. SNAPTIT
+            {
+                const std::string titPath = assetsDir + "snaptit" + sep + fileNoExt + ".png";
+                std::string currentPath;
+                EnterCriticalSection(&m_owner->m_menuAssetCS);
+                currentPath = m_owner->menuImages[SNAPTIT].getFilepath();
+                LeaveCriticalSection(&m_owner->m_menuAssetCS);
+
+                if (currentPath != titPath) {
+                    SDL_Surface* newSurf = Image::loadConvertedSurface(titPath, format);
+                    if (MAL_CANCELLED()) {
+                        if (newSurf) SDL_FreeSurface(newSurf);
+                        continue;
+                    }
+                    EnterCriticalSection(&m_owner->m_menuAssetCS);
+                    m_owner->menuImages[SNAPTIT].adoptSurface(newSurf, titPath);
+                    LeaveCriticalSection(&m_owner->m_menuAssetCS);
+                }
+            }
+
+            #undef MAL_CANCELLED
+
+            if (m_seqSubmitted != mySeq) continue;
+            break; // todo cargado, volvemos a esperar
+        }
+    }
+}
+
+GameMenu::GameMenu(CfgLoader *cfgLoader)
+    : m_menuAssetCSInited(false)
+{
     status = EMU_MENU;
 	lastStatus = EMU_MENU;
 	onscreenKeyboard = false;
 	romLoaded = false;
 	gameTicks.ticks = 0;
+
 	this->cfgLoader = cfgLoader;
 	this->initEngine(cfgLoader);
+
+	/* Lock + worker para la carga asincrona del panel de assets del menu. */
+	InitializeCriticalSection(&m_menuAssetCS);
+	m_menuAssetCSInited = true;
+	m_menuAssetLoader.start(this);
 
 	int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
 	std::string initMsg = "Loading " + Constant::getAppExecutable() + "...";
@@ -80,6 +340,15 @@ GameMenu::GameMenu(CfgLoader *cfgLoader){
 
 GameMenu::~GameMenu(){
 	LOG_DEBUG("Deleting GameMenu...");
+
+	/* Parar el worker ANTES de liberar nada que el pueda tocar
+	 * (menuImages/menuTextAreas se destruyen al final). */
+	m_menuAssetLoader.stop();
+	if (m_menuAssetCSInited) {
+		DeleteCriticalSection(&m_menuAssetCS);
+		m_menuAssetCSInited = false;
+	}
+
 	delete configMenus;
 
 	if (fpsSurface) SDL_FreeSurface(fpsSurface);
@@ -105,6 +374,12 @@ GameMenu::~GameMenu(){
  * 
  */
 void GameMenu::createMenuImages(ListMenu &listMenu){
+    /* Bloquea el worker mientras reconstruimos los maps: createMenuImages
+     * se llama al cambiar de emulador, y el worker podria tener una
+     * peticion en vuelo del emulador anterior accediendo a menuImages[X]
+     * justo cuando hacemos clear()/insert(). */
+    if (m_menuAssetCSInited) EnterCriticalSection(&m_menuAssetCS);
+
     /** snap */
     Image imageSnap;
     const int snapW = overlay->w / 2;
@@ -178,6 +453,8 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
 	textareaSyn.setFontType(Fonts::FONTBIG);
     textareaSyn.marginX = (int)floor((double)overlay->w / 100);
     menuTextAreas.insert(make_pair(SYNOPSIS, textareaSyn));
+
+    if (m_menuAssetCSInited) LeaveCriticalSection(&m_menuAssetCS);
 }
 
 /**
@@ -225,62 +502,59 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 				if (getEmuStatus() == EMU_MENU_FILTER){
 					drawFilters(listMenu);
 				} else {
-					//Draw and update the overlay because the loading of images can take a long time
+					/* En keyUp: year/mfg/sys (rapido, ~1 ms cada uno) inline.
+					 * Synopsis y 3 PNGs (lentos) al worker  el worker usa
+					 * su propia TTF_Font para el wrap del synopsis y por
+					 * tanto no compite con la fuente del main thread. */
 					if (listMenu.keyUp){
-						string assetsDir = dirutil::getPathPrefix(emu.assets) + string(Constant::tempFileSep);
+						const std::string assetsDir = dirutil::getPathPrefix(emu.assets) + std::string(Constant::tempFileSep);
 
+						// Labels inline (bajo lock para no chocar con createMenuImages)
+						EnterCriticalSection(&m_menuAssetCS);
 						if (game->gameData != NULL){
 							menuTextAreas[YEAR].loadString(LanguageManager::instance()->get("menu.filter.year") + ": " + Constant::TipoToStr(game->gameData->year));
 							menuTextAreas[MANUFACTURER].loadString(LanguageManager::instance()->get("menu.filter.manufacturer") + ": " + game->gameData->manufacturer);
 							menuTextAreas[SYSTEM].loadString(LanguageManager::instance()->get("menu.filter.system") + ": " + listMenu.extractSystem(game->gameData->sourcefile));
-							menuTextAreas[YEAR].draw(this->overlay);
-							menuTextAreas[MANUFACTURER].draw(this->overlay);
-							menuTextAreas[SYSTEM].draw(this->overlay);
 						} else {
 							menuTextAreas[YEAR].clear();
 							menuTextAreas[MANUFACTURER].clear();
 							menuTextAreas[SYSTEM].clear();
 						}
-						
-						//Drawing the rom's synopsis text
-						menuTextAreas[SYNOPSIS].loadTextFileFromGame(assetsDir + "synopsis" + string(Constant::tempFileSep), *game, ".txt");
-						menuTextAreas[SYNOPSIS].resetTicks(this->gameTicks);
-						if (!menuTextAreas[YEAR].isEmpty() && !menuTextAreas[MANUFACTURER].isEmpty() && !menuTextAreas[SYSTEM].isEmpty()){
-							menuTextAreas[SYNOPSIS].setY(menuTextAreas[SYSTEM].getY() + face_h_big * 2 + 2);
-							menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
-						}
-						menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
-						
-						//Snapshot picture
-						menuImages[SNAP].loadImageFromGame(assetsDir + "snap" + string(Constant::tempFileSep), *game, ".png", this->overlay->format);
-						menuImages[SNAP].printImage(this->overlay);
-						
-						if (overlay->w < 640){
-							//If it's so small, only show the snapshot
-							return;
-						}
-						
-						//Box picture
-						menuImages[BOX2D].loadImageFromGame(assetsDir + "box2d" + string(Constant::tempFileSep), *game, ".png", this->overlay->format);
-						menuImages[BOX2D].printImage(this->overlay);
-						
-						//Title picture
-						menuImages[SNAPTIT].loadImageFromGame(assetsDir + "snaptit" + string(Constant::tempFileSep), *game, ".png", this->overlay->format);
-						menuImages[SNAPTIT].printImage(this->overlay);
-					} else {
-						menuImages[SNAP].printImage(this->overlay);
-						menuImages[BOX2D].printImage(this->overlay);
-						menuImages[SNAPTIT].printImage(this->overlay);
-						if (menuTextAreas[YEAR].isEmpty() && menuTextAreas[MANUFACTURER].isEmpty() && menuTextAreas[SYSTEM].isEmpty()){
-							menuTextAreas[SYNOPSIS].setY(menuTextAreas[YEAR].getY());
-							menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
-						} else {
-							menuTextAreas[YEAR].draw(this->overlay);
-							menuTextAreas[MANUFACTURER].draw(this->overlay);
-							menuTextAreas[SYSTEM].draw(this->overlay);
-						}
-						menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
+						const int synMaxW = menuTextAreas[SYNOPSIS].getW() - menuTextAreas[SYNOPSIS].marginX;
+						LeaveCriticalSection(&m_menuAssetCS);
+
+						// Synopsis + imagenes al worker
+						dirutil _dir;
+						m_menuAssetLoader.submit(_dir.getFileNameNoExt(game->longFileName),
+						                         assetsDir, this->overlay->format, this->overlay->w,
+						                         synMaxW);
 					}
+
+					/* Dibujo del panel bajo lock (operaciones triviales en
+					 * ambos hilos: el worker solo entra al lock para hacer
+					 * adopt  microsegundos). */
+					EnterCriticalSection(&m_menuAssetCS);
+
+					if (menuTextAreas[YEAR].isEmpty() && menuTextAreas[MANUFACTURER].isEmpty() && menuTextAreas[SYSTEM].isEmpty()){
+						menuTextAreas[SYNOPSIS].setY(menuTextAreas[YEAR].getY());
+						menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
+					} else if (!menuTextAreas[YEAR].isEmpty() && !menuTextAreas[MANUFACTURER].isEmpty() && !menuTextAreas[SYSTEM].isEmpty()){
+						menuTextAreas[SYNOPSIS].setY(menuTextAreas[SYSTEM].getY() + face_h_big * 2 + 2);
+						menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
+					}
+					menuTextAreas[YEAR].draw(this->overlay);
+					menuTextAreas[MANUFACTURER].draw(this->overlay);
+					menuTextAreas[SYSTEM].draw(this->overlay);
+					menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
+
+					menuImages[SNAP].printImage(this->overlay);
+					if (overlay->w < 640){
+						LeaveCriticalSection(&m_menuAssetCS);
+						return;
+					}
+					menuImages[BOX2D].printImage(this->overlay);
+					menuImages[SNAPTIT].printImage(this->overlay);
+					LeaveCriticalSection(&m_menuAssetCS);
 				}
 
             } else if (listMenu.layout == LAYSIMPLE) {
@@ -441,6 +715,8 @@ void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
     // 5. Cargar logica del juego
     int system = translateSystemAchievement();
     std::string pathToRom = unzipped.extractedPath.empty() ? unzipped.originalPath : unzipped.extractedPath;
+
+	Achievements::instance()->setScreenFormat(this->overlay->format);
 	LOG_DEBUG("Loading achievements from game");
     Achievements::instance()->load_game((uint8_t *)unzipped.memoryBuffer, unzipped.romsize, pathToRom, system, messagesAchievement);
 	
@@ -626,7 +902,8 @@ void GameMenu::drawFilters(ListMenu &listMenu){
 	for (int i=0; i < (int)opciones.size(); i++){
 		if (i == configMenus->menuGameFilter->seleccionado){
 			rectElem.y = y + i * (face_h + 3);
-			SDL_BlitSurface(filterAlphaRec, NULL, overlay, &rectElem);
+			if (filterAlphaRec)
+				SDL_BlitSurface(filterAlphaRec, NULL, overlay, &rectElem);
 			lineTextColor = black;
 		} else {
 			lineTextColor = white;
@@ -719,13 +996,14 @@ void GameMenu::showScrapProcess(ListMenu &listMenu){
  * 
  */
 void GameMenu::showMessage(string msg){
+	if (msg.empty()) return;
+
     int startGray = 240;
     static const int bkg = SDL_MapRGB(this->overlay->format, startGray, startGray, startGray);
     TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
 	int face_h_small = TTF_FontLineSkip(fontsmall);
     
     int rw = Fonts::getSize(Fonts::FONTSMALL, msg.c_str()) + 5; 
-    //int rh = this->overlay->h / 3;
     int rh = face_h_small * 2;
     int rx = (this->overlay->w - rw) / 2;
     int ry = (this->overlay->h - rh) / 2 + face_h_small / 2;
@@ -1520,6 +1798,9 @@ void GameMenu::showLangSystemMessage(std::string text, uint32_t duration) {
 }
 
 void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
+
+	if (text.empty() || duration == 0) return;
+
     Message msg;
     msg.content = text;
     msg.timeout = duration;
@@ -1543,7 +1824,6 @@ void GameMenu::renderTrackers() {
     if (ach->trackers.empty()) return;
 
     TTF_Font* font = Fonts::getFont(Fonts::FONTSMALL);
-    //int posX = overlay->w - 150;
 	int posX = rectFps.x;
     int posY = 5;
 
@@ -1621,7 +1901,7 @@ inline void GameMenu::updateAchievementsState(uint32_t currentTicks) {
         // Load new messages to the list
 		while (!ach->messages.empty()) {
 			AchievementState msg;
-			if (ach->messages.pop_with_new_surfaces(msg)){
+			if (ach->messages.pop_with_new_surfaces(msg, this->overlay->format)){
 				messagesAchievement.add(msg);
 			}
 			//Liberamos para que no se haga un doble free por si acaso

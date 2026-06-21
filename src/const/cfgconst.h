@@ -20,6 +20,7 @@ namespace cfg {
 
 	struct t_emu_props {
 		std::vector<std::string> values;
+		std::vector<std::string> labels;
 		std::string description;
 		std::string cachedValue;
 		int selected;
@@ -36,6 +37,7 @@ namespace cfg {
 		t_emu_props& operator=(t_emu_props&& other) {
 			if (this != &other) {
 				values      = std::move(other.values);
+				labels      = std::move(other.labels);
 				description = std::move(other.description);
 				cachedValue = std::move(other.cachedValue);
 				selected    = other.selected;
@@ -46,12 +48,13 @@ namespace cfg {
 
 		// VS2010 requiere que mantengas los de copia si los vas a usar
 		t_emu_props(const t_emu_props& other) 
-			: values(other.values), description(other.description), 
+			: values(other.values), labels(other.labels), description(other.description), 
 			  cachedValue(other.cachedValue), selected(other.selected) {}
 
 		t_emu_props& operator=(const t_emu_props& other) {
 			if (this != &other) {
 				values = other.values;
+				labels = other.labels;
 				description = other.description;
 				cachedValue = other.cachedValue;
 				selected = other.selected;

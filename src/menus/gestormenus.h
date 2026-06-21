@@ -351,6 +351,7 @@ private:
 	std::string volverEmulacion(CONFIG_STATUS *st);
 	std::string salirEmulacion(CONFIG_STATUS *st);
 	std::string startScrapping(CONFIG_STATUS *st);	
+	void sortAndAddCoreOptions(const std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &params);
 
 public:
     GestorMenus(int screenw, int screenh);

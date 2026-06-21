@@ -18,6 +18,8 @@
 #include <rc_client_internal.h>
 #include <rc_consoles.h>
 
+#include <SDL.h>
+
 /* Forward declaration definido en libretro.h */
 struct retro_memory_descriptor;
 
@@ -165,21 +167,17 @@ public:
         return true; // El lock se libera solo aquí
     }
 
-	bool pop_with_new_surfaces(AchievementState& out_msg) {
+	bool pop_with_new_surfaces(AchievementState& out_msg, SDL_PixelFormat* targetFormat) {
         ScopedLock lock(mutex);
         if (data.empty()) {
             return false; // El lock se libera solo aquí
         }
 
-		SDL_Surface* videoSurface = SDL_GetVideoSurface();
-        if (!videoSurface) return false;
-		SDL_PixelFormat* targetFormat = videoSurface->format;
-		
 		// Copiamos el dato al exterior
 		AchievementState& front = data.front();
 		out_msg = front; // Shallow copy; out_msg.badge == front.badge == 0x1234
 
-		if (data.front().badge){
+		if (front.badge && front.badge->format && targetFormat){
 			SDL_Surface* converted = SDL_ConvertSurface(front.badge, targetFormat, SDL_SWSURFACE);
 			if (!converted) {
 				// Conversión fallida: out_msg.badge apunta aún a front.badge
@@ -189,7 +187,7 @@ public:
 				out_msg.badge = converted; // out_msg tiene su propia surface
 			}
 		}
-		if (data.front().badgeLocked){
+		if (front.badgeLocked && front.badgeLocked->format && targetFormat){
 			SDL_Surface* converted = SDL_ConvertSurface(front.badgeLocked, targetFormat, SDL_SWSURFACE);
 			if (!converted) {
 				out_msg.badgeLocked = NULL;
@@ -408,7 +406,7 @@ public:
 			tracker_data& data = it->second;
 
 			// 1. GENERACIÓN DE CACHÉ (Solo si es necesario)
-			if (data.dirty || !data.cache) {
+			if ((data.dirty || !data.cache) && !data.value.empty()) {
 				// Importante: free_surface() ya limpia el puntero y libera
 				data.free_surface(); 
             
@@ -543,7 +541,7 @@ public:
 
 	void render(SDL_Surface* dest, uint32_t bgColor) {
 		ScopedLock lock(mutex);
-		if (active_challenges.empty()) return;
+		if (active_challenges.empty() || !dest) return;
 
 		// Configuración de márgenes (Esquina inferior derecha)
 		int margin = 20;
@@ -643,6 +641,8 @@ public:
 
     // EL MÉTODO DE RENDERIZADO DENTRO DE LA CLASE
     void render(SDL_Surface* dest, uint32_t uBkgColor, const svColor alphaColor) {
+		if (!dest || measured_progress.empty()) return;
+
 		ScopedLock lock(mutex);
 
 		// 1. LIMPIEZA SI SE DESACTIVÓ
@@ -884,6 +884,10 @@ public:
 		return hardcoreMode;
 	}
 
+	void setScreenFormat (SDL_PixelFormat *sf){
+		screenFormat = sf;
+	}
+
 private:
     Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false), hardcoreMode(true), gameState(NULL), lastGameTick(0), byte_swap_memory(false), current_console_id(0), memory_map_count(0), core_descriptors(NULL), core_descriptor_count(0) {
 		memset(memory_map, 0, sizeof(memory_map));
@@ -912,6 +916,7 @@ private:
 	bool hardcoreMode;
 	bool byte_swap_memory;  // true cuando el core emula una CPU big-endian de 16 bits
 	                        // (68000) en un host big-endian y necesita XOR de direcciones
+	SDL_PixelFormat *screenFormat;
 
 	uint32_t current_console_id;
 	MemoryMapping memory_map[MAX_MEMORY_MAPPINGS];

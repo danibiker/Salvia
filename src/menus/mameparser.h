@@ -10,7 +10,7 @@
 * Segun parece suele tener todos los nombres del catalogo de mame, fbneo, etc.
 * Lo usamos preferentemente, puesto que es muy liviano, aunque no tiene informacion
 */
-inline void parse_mame_names(std::string filepath, std::map<std::string, GameData>& mameDatabase) {
+inline void parse_mame_names(const std::string& filepath, std::unordered_map<std::string, GameData>& mameDatabase) {
 	pugi::xml_document doc;
 	if (!doc.load_file(filepath.c_str())) return;
 
@@ -68,7 +68,7 @@ inline uint16_t convertYear(const char *year){
 * Parsea un xml oficial de mame. Para la version 2003+, se utiliza la etiqueta <game> por defecto, pero se puede sustituir
 * por la etiqueta <machine> que se usa en las versiones posteriores
 */
-inline void parse_mame_xml(std::string filepath, std::map<std::string, GameData>& mameDatabase, const char* nodeName = "game"){
+inline void parse_mame_xml(const std::string& filepath, std::unordered_map<std::string, GameData>& mameDatabase, const char* nodeName = "game"){
 	pugi::xml_document doc;
 	if (!doc.load_file(filepath.c_str())) return;
 
@@ -96,13 +96,13 @@ inline void parse_mame_xml(std::string filepath, std::map<std::string, GameData>
 * Guardamos un xml que contenga solo la informacion necesaria en el mismo formato que las
 * versiones oficiales de MAME, solo que unicamente con los campos que nos interesan
 */
-inline void write_mame_xml(const std::string& filepath, const std::map<std::string, GameData>& mameDatabase) {
+inline void write_mame_xml(const std::string& filepath, const std::unordered_map<std::string, GameData>& mameDatabase) {
 	pugi::xml_document doc;
 
 	pugi::xml_node mame = doc.append_child("mame");
 	mame.append_attribute("build") = " Salvia";
 
-	for (std::map<std::string, GameData>::const_iterator it = mameDatabase.begin(); it != mameDatabase.end(); ++it) {
+	for (std::unordered_map<std::string, GameData>::const_iterator it = mameDatabase.begin(); it != mameDatabase.end(); ++it) {
 		const std::string& zipName = it->first;
 		const GameData& data = it->second;
 

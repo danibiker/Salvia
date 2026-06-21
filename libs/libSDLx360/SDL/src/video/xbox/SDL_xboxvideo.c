@@ -126,16 +126,25 @@ static int g_texture_width = 0;
 static int g_texture_height = 0;
 static int g_screen_rotation = 0; /* 0..3 = 0/90/180/270 deg CCW (libretro convention) */
 
-/* UVs por rotacion, indexadas por g_screen_rotation. Cada fila tiene 8 floats:
-   v0.u, v0.v, v1.u, v1.v, v2.u, v2.v, v3.u, v3.v
-   donde v0=BL, v1=TL, v2=BR, v3=TR (triangle strip).
-   Derivado de rotar las UVs identidad: 90 CCW -> (u',v')=(1-v, u). */
-static const float g_uv_rot[4][8] = {
-	/* 0:   0 deg  */ {0.0f,1.0f, 0.0f,0.0f, 1.0f,1.0f, 1.0f,0.0f},
-	/* 1:  90 CCW  */ {0.0f,0.0f, 1.0f,0.0f, 0.0f,1.0f, 1.0f,1.0f},
-	/* 2: 180      */ {1.0f,0.0f, 1.0f,1.0f, 0.0f,0.0f, 0.0f,1.0f},
-	/* 3: 270 CCW  */ {1.0f,1.0f, 0.0f,1.0f, 1.0f,0.0f, 0.0f,0.0f},
+/* UVs para el "single fullscreen triangle": 3 vertices por rotacion,
+ *   v0 = TL (cubre la esquina TL del rect visible)
+ *   v1 = 2x TR (TL + 2*(TR-TL))
+ *   v2 = 2x BL (TL + 2*(BL-TL))
+ * Las UVs llegan a (0..1) en las cuatro esquinas del rect visible al
+ * interpolarse y el resto del triangulo queda fuera del scissor.
+ * Identidad (0 deg): TL=(0,0), TR=(1,0), BL=(0,1) -> v0=(0,0), v1=(2,0), v2=(0,2).
+ * Para las demas rotaciones aplicamos la misma formula. */
+static const float g_uv_rot[4][6] = {
+	/* 0:   0 deg  */ { 0.0f, 0.0f,  2.0f, 0.0f,  0.0f, 2.0f },
+	/* 1:  90 CCW  */ { 1.0f, 0.0f,  1.0f, 2.0f, -1.0f, 0.0f },
+	/* 2: 180      */ { 1.0f, 1.0f, -1.0f, 1.0f,  1.0f,-1.0f },
+	/* 3: 270 CCW  */ { 0.0f, 1.0f,  0.0f,-1.0f,  2.0f, 1.0f },
 };
+
+/* Rect del area visible (sin las bandas negras de letterbox/pillarbox).
+ * Lo usamos como scissor para clipear el sobrepintado del triangulo
+ * oversized.  Se actualiza en XBOX_UpdateVertexBuffer. */
+static RECT g_visible_rect = { 0, 0, 0, 0 };
 
 /* Overlay system: a 1280x720 ARGB layer drawn on top of the game quad */
 static LPDIRECT3DTEXTURE9 g_overlay_texture = NULL;
@@ -144,6 +153,20 @@ static SDL_Surface* g_overlay_surface = NULL;
 static int g_overlay_enabled = 0;
 static int g_overlay_locked = 0;
 static int g_current_effect = 0;
+
+/* Filtro de muestreo actual del s0 segun el efecto activo (LINEAR/POINT).
+ * Lo mantiene XBOX_SetSampler0Filter cuando XBOX_SelectEffect lo decide.
+ * XBOX_DrawOverlay lee este valor para restaurar el filtro despues de
+ * forzar LINEAR temporal para dibujar el UI, sin tener que reentrar a
+ * XBOX_SelectEffect entero por frame. */
+static D3DTEXTUREFILTERTYPE g_current_sampler_filter = D3DTEXF_LINEAR;
+
+static void XBOX_SetSampler0Filter(D3DTEXTUREFILTERTYPE filter)
+{
+    g_current_sampler_filter = filter;
+    IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, filter);
+    IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, filter);
+}
 
 /* Total number of effects:
  *   0=Nearest, 1=Sharp-Bilinear, 2=LCD3x, 3=Scanlines,
@@ -425,9 +448,25 @@ static int XBOX_GetEffectScale(void)
 	}
 }
 
-/* aspect_ratio = desired width/height (e.g. 4.0f/3.0f for 4:3, 16.0f/9.0f for 16:9).
-   If aspect_ratio <= 0, uses the texture's native pixel ratio (tex_w/tex_h).
-   If g_display_fullscreen == 0, shows at pixel-perfect size (tex * effect_scale). */
+/* Dibuja el quad principal usando el "single fullscreen triangle".  El
+ * triangulo de 3 vertices excede el rect visible para evitar la arista
+ * compartida del antiguo triangle strip; el scissor lo recorta a la zona
+ * sin letterbox/pillarbox.  Se llama desde XBOX_RenderSurface y desde
+ * XBOX_UpdateRects (mismos parametros). */
+static void XBOX_DrawMainQuad(void)
+{
+	IDirect3DDevice9_SetScissorRect(D3D_Device, &g_visible_rect);
+	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_SCISSORTESTENABLE, TRUE);
+	IDirect3DDevice9_DrawPrimitive(D3D_Device, D3DPT_TRIANGLELIST, 0, 1);
+	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_SCISSORTESTENABLE, FALSE);
+}
+
+/* Si g_display_fullscreen == 1 (fullscreen): aspect_ratio define el aspect
+ *   del quad mostrado en pantalla (con letterbox/pillarbox).  aspect_ratio<=0
+ *   usa el ratio nativo del source (tex_w/tex_h).
+ * Si g_display_fullscreen == 0 (pixel-perfect): si aspect_ratio > 0 se aplica
+ *   tambien aqui (Y entero crisp, X estirado al ratio elegido).  Si <=0 se
+ *   escala por el maximo factor entero en ambos ejes (ratio nativo). */
 static void XBOX_UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
 {
 	void *pLockedVertexBuffer;
@@ -482,13 +521,13 @@ static void XBOX_UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
 			}
 
 			display_h = (float)(tex_h * scale);
-			display_w = display_h * aspect_ratio;
+			/* Forzar entero: aspect_ratio puede ser no entero (4:3 = 1.333...) y
+			   un display_w fraccional descuadra el muestreo en Xenos. */
+			display_w = (float)floor(display_h * aspect_ratio);
 		} else {
 			/* RATIO_CORE / aspect_ratio<=0: pixel perfect estricto en ambos ejes. */
-			//We only scale the factor 1 to the maximum available pixel perfect factor
-			//wich affects to nearest neighbour, scanlines and crt filters
 			if (scale == 1 && tex_w > 0 && tex_h > 0){
-				int maxscale = min(floor(bbw / (float)tex_w), floor(bbh / (float)tex_h));
+				int maxscale = min((int)floor(bbw / (float)tex_w), (int)floor(bbh / (float)tex_h));
 				if (maxscale > 1){
 					scale = maxscale;
 				}
@@ -499,7 +538,6 @@ static void XBOX_UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
 		}
 
 		/* Clamp to backbuffer if larger */
-		/* Ajuste proporcional si la imagen excede el backbuffer */
 		if (display_w > bbw || display_h > bbh) {
 			float clamp_ratio = aspect_ratio;
 			if (clamp_ratio <= 0.0f)
@@ -509,51 +547,67 @@ static void XBOX_UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
 
 			if (clamp_ratio > bb_ratio) {
 				display_w = bbw;
-				display_h = bbw / clamp_ratio;
+				display_h = (float)floor(bbw / clamp_ratio);
 			} else {
 				display_h = bbh;
-				display_w = bbh * clamp_ratio;
+				display_w = (float)floor(bbh * clamp_ratio);
 			}
 		}
 	}
 
-	offset_x = (bbw - display_w) * 0.5f;
-	offset_y = (bbh - display_h) * 0.5f;
+	/* Centrado entero: con dimensiones impares la mitad daria .5, lo que
+	   produce muestreo sub-pixel y blur permanente con LINEAR y "wobble"
+	   con POINT.  En Xenos (centro-de-pixel) las posiciones deben ser
+	   enteras para mantener pixel-perfect. */
+	offset_x = (float)floor((bbw - display_w) * 0.5f);
+	offset_y = (float)floor((bbh - display_h) * 0.5f);
+
+	/* Guardar el rect visible para que el scissor recorte el sobrepintado
+	   del triangulo oversized.  Coordenadas en pixeles del backbuffer. */
+	g_visible_rect.left   = (LONG)offset_x;
+	g_visible_rect.top    = (LONG)offset_y;
+	g_visible_rect.right  = (LONG)(offset_x + display_w);
+	g_visible_rect.bottom = (LONG)(offset_y + display_h);
 
 	IDirect3DVertexBuffer9_Lock(vertexBuffer, 0, 0, (BYTE **)&pLockedVertexBuffer, 0L);
 
-	/* a=bottom-left, b=top-left, c=bottom-right, d=top-right (triangle strip).
-	   Las UVs salen de g_uv_rot para que la rotacion sea gratis en GPU. */
+	/* SINGLE FULLSCREEN TRIANGLE: un solo triangulo oversized cubre el
+	   rect visible cuando lo recorta el scissor.  Sin arista compartida
+	   no hay "seam" diagonal en TL->BR, y se evita el doble shading
+	   (helper invocations) de los 2x2 del rasterizador que cruzan la
+	   union de dos triangulos.  Misma o menor carga GPU.
+
+	     v0 = TL                   (esquina TL del rect visible)
+	     v1 = TL + 2*(TR - TL)     (oversized hacia la derecha)
+	     v2 = TL + 2*(BL - TL)     (oversized hacia abajo)
+
+	   Las UVs (en g_uv_rot) siguen la misma formula. */
 	{
 		const float* uv = g_uv_rot[g_screen_rotation & 3];
 
-		triangleStripVertices[0].x = offset_x - 0.5f;
-		triangleStripVertices[0].y = offset_y + display_h - 0.5f;
-		triangleStripVertices[0].z = 0;
+		/* v0: TL del rect visible */
+		triangleStripVertices[0].x   = offset_x;
+		triangleStripVertices[0].y   = offset_y;
+		triangleStripVertices[0].z   = 0;
 		triangleStripVertices[0].rhw = 1;
-		triangleStripVertices[0].tx = uv[0];
-		triangleStripVertices[0].ty = uv[1];
+		triangleStripVertices[0].tx  = uv[0];
+		triangleStripVertices[0].ty  = uv[1];
 
-		triangleStripVertices[1].x = offset_x - 0.5f;
-		triangleStripVertices[1].y = offset_y - 0.5f;
-		triangleStripVertices[1].z = 0;
+		/* v1: 2x TR (estira 2x a la derecha desde TL) */
+		triangleStripVertices[1].x   = offset_x + 2.0f * display_w;
+		triangleStripVertices[1].y   = offset_y;
+		triangleStripVertices[1].z   = 0;
 		triangleStripVertices[1].rhw = 1;
-		triangleStripVertices[1].tx = uv[2];
-		triangleStripVertices[1].ty = uv[3];
+		triangleStripVertices[1].tx  = uv[2];
+		triangleStripVertices[1].ty  = uv[3];
 
-		triangleStripVertices[2].x = offset_x + display_w - 0.5f;
-		triangleStripVertices[2].y = offset_y + display_h - 0.5f;
-		triangleStripVertices[2].z = 0;
+		/* v2: 2x BL (estira 2x hacia abajo desde TL) */
+		triangleStripVertices[2].x   = offset_x;
+		triangleStripVertices[2].y   = offset_y + 2.0f * display_h;
+		triangleStripVertices[2].z   = 0;
 		triangleStripVertices[2].rhw = 1;
-		triangleStripVertices[2].tx = uv[4];
-		triangleStripVertices[2].ty = uv[5];
-
-		triangleStripVertices[3].x = offset_x + display_w - 0.5f;
-		triangleStripVertices[3].y = offset_y - 0.5f;
-		triangleStripVertices[3].z = 0;
-		triangleStripVertices[3].rhw = 1;
-		triangleStripVertices[3].tx = uv[6];
-		triangleStripVertices[3].ty = uv[7];
+		triangleStripVertices[2].tx  = uv[4];
+		triangleStripVertices[2].ty  = uv[5];
 	}
 
 	memcpy(pLockedVertexBuffer, triangleStripVertices, sizeof(triangleStripVertices));
@@ -717,10 +771,18 @@ static void XBOX_DrawOverlay(LPDIRECT3DTEXTURE9 game_texture)
 	/* Disable alpha blending */
 	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_ALPHABLENDENABLE, FALSE);
 
-	/* Restore game texture, vertex buffer and active shader */
+	/* Restore game texture, vertex buffer and active shader.
+	 * NO llamamos a XBOX_SelectEffect aqui: solo necesitamos restaurar lo
+	 * que el overlay ha tocado (shader del s0 y filtro MIN/MAG del s0).
+	 * Los uniformes (textureDims en c1), la LUT del s1 (HQx/xBR) y los
+	 * blend modes los deja como estaban ya que el overlay no los modifica.
+	 * Asi nos ahorramos un switch enorme + SetTexture+SetPixelShaderConstantF
+	 * por cada frame mientras el menu/HUD este activo. */
 	IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)game_texture);
 	IDirect3DDevice9_SetStreamSource(D3D_Device, 0, vertexBuffer, 0, sizeof(VERTEX));
-	XBOX_SelectEffect(g_current_effect);
+	IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[g_current_effect]);
+	IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, g_current_sampler_filter);
+	IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, g_current_sampler_filter);
 
 	/* Re-lock overlay texture so the app can keep drawing to it */
 	IDirect3DTexture9_LockRect(g_overlay_texture, 0, &d3dlr, NULL, 0);
@@ -874,6 +936,16 @@ SDL_Surface *XBOX_SetVideoMode(_THIS, SDL_Surface *current,
 	IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)this->hidden->SDL_primary);
 	IDirect3DDevice9_SetStreamSource(D3D_Device, 0, vertexBuffer, 0, sizeof(VERTEX));
 
+	/* Aplicar el efecto activo: deja shader + sampler + constants en el
+	 * estado correcto desde el primer frame.  El frontend solo invoca
+	 * XBOX_SelectEffect cuando el filtro CAMBIA respecto al previo, asi que
+	 * si la app arranca con su default y g_current_effect ya estaba a ese
+	 * valor (0 = Nearest), no entraria nunca y se quedaria el shader
+	 * pasante + sampler LINEAR puestos justo arriba (imagen blurry).
+	 * Tiene que llamarse despues de fijar g_texture_width/height — el
+	 * shader lee esas dims via SetPixelShaderConstantF. */
+	XBOX_SelectEffect(g_current_effect);
+
 	have_vertexbuffer=1;
 
 
@@ -927,7 +999,7 @@ static int XBOX_RenderSurface(_THIS, SDL_Surface *surface)
 
 	/* Clear for letterbox/pillarbox bars, then render game quad */
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
-	IDirect3DDevice9_DrawPrimitive(D3D_Device, D3DPT_TRIANGLESTRIP, 0, 2);
+	XBOX_DrawMainQuad();
 
 	/* Draw overlay on top if enabled */
 	XBOX_DrawOverlay(this->hidden->SDL_primary);
@@ -1011,7 +1083,7 @@ static void XBOX_UpdateRects(_THIS, int numrects, SDL_Rect *rects)
 
 
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
-	IDirect3DDevice9_DrawPrimitive(D3D_Device, D3DPT_TRIANGLESTRIP, 0, 2);
+	XBOX_DrawMainQuad();
 
 	/* Draw overlay on top if enabled */
 	XBOX_DrawOverlay(this->hidden->SDL_primary);
@@ -1185,8 +1257,8 @@ int XBOX_DisplayYUVOverlay(_THIS, SDL_Overlay *overlay, SDL_Rect *src, SDL_Rect 
     IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
 	IDirect3DTexture9_UnlockRect(surface, 0);
 
-	IDirect3DDevice9_DrawPrimitive(D3D_Device,  D3DPT_TRIANGLESTRIP, 0, 2 ); 
-	IDirect3DDevice9_Present(D3D_Device,NULL,NULL,NULL,NULL);	 
+	XBOX_DrawMainQuad();
+	IDirect3DDevice9_Present(D3D_Device,NULL,NULL,NULL,NULL);
 
 	return 0;
 }
@@ -1542,8 +1614,7 @@ void XBOX_SelectEffect(int effectID) {
     switch (effectID) {
     case 0: /* Nearest Neighbor: passthrough + POINT */
         IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-        IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-        IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+        XBOX_SetSampler0Filter(D3DTEXF_POINT);
         break;
 
     case 1: /* Sharp-Bilinear (rsn8887/TheMaister): nearest dentro de cada
@@ -1556,8 +1627,7 @@ void XBOX_SelectEffect(int effectID) {
         dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
         dims[2] = 0.0f; dims[3] = 0.0f;
         IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-        IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-        IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+        XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
         break;
     }
 
@@ -1569,16 +1639,14 @@ void XBOX_SelectEffect(int effectID) {
     {
         if (pixelShaders[2] == NULL) {
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+            XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
         } else {
             float dims[4];
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[2]);
             dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
             dims[2] = 0.0f; dims[3] = 0.0f;
             IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+            XBOX_SetSampler0Filter(D3DTEXF_POINT);
         }
         break;
     }
@@ -1590,8 +1658,7 @@ void XBOX_SelectEffect(int effectID) {
         dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
         dims[2] = 0.0f; dims[3] = 0.0f;
         IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-        IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-        IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+        XBOX_SetSampler0Filter(D3DTEXF_POINT);
         break;
     }
 
@@ -1602,8 +1669,7 @@ void XBOX_SelectEffect(int effectID) {
         dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
         dims[2] = 0.0f; dims[3] = 0.0f;
         IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-        IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-        IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+        XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
         break;
     }
 
@@ -1617,16 +1683,14 @@ void XBOX_SelectEffect(int effectID) {
     {
         if (pixelShaders[5] == NULL) {
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+            XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
         } else {
             float dims[4];
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[5]);
             dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
             dims[2] = 0.0f; dims[3] = 0.0f;
             IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+            XBOX_SetSampler0Filter(D3DTEXF_POINT);
             IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
             IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
         }
@@ -1640,16 +1704,14 @@ void XBOX_SelectEffect(int effectID) {
     {
         if (pixelShaders[6] == NULL) {
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+            XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
         } else {
             float dims[4];
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[6]);
             dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
             dims[2] = 0.0f; dims[3] = 0.0f;
             IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+            XBOX_SetSampler0Filter(D3DTEXF_POINT);
             IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
             IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
         }
@@ -1663,8 +1725,7 @@ void XBOX_SelectEffect(int effectID) {
         if (pixelShaders[effectID] == NULL) {
             /* Fallback to passthrough if shader failed to compile */
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+            XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
         } else {
             float dims[4];
             LPDIRECT3DTEXTURE9 lut = (effectID == 7) ? g_hq2x_lut :
@@ -1673,8 +1734,7 @@ void XBOX_SelectEffect(int effectID) {
             dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
             dims[2] = 0.0f; dims[3] = 0.0f;
             IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+            XBOX_SetSampler0Filter(D3DTEXF_POINT);
             /* Bind LUT texture to sampler s1 with POINT filtering */
             if (lut) {
                 IDirect3DDevice9_SetTexture(D3D_Device, 1, (D3DBaseTexture*)lut);
@@ -1700,16 +1760,14 @@ void XBOX_SelectEffect(int effectID) {
             /* Compile failure -> passthrough so the user notices something is off
              * without crashing. */
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+            XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
         } else {
             float dims[4];
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[10]);
             dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
             dims[2] = 0.0f; dims[3] = 0.0f;
             IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+            XBOX_SetSampler0Filter(D3DTEXF_POINT);
         }
         break;
     }
@@ -1724,24 +1782,21 @@ void XBOX_SelectEffect(int effectID) {
     {
         if (pixelShaders[11] == NULL) {
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+            XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
         } else {
             float dims[4];
             IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[11]);
             dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
             dims[2] = 0.0f; dims[3] = 0.0f;
             IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+            XBOX_SetSampler0Filter(D3DTEXF_POINT);
         }
         break;
     }
 
     default: /* Unknown: fallback to Nearest Neighbor */
         IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-        IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-        IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+        XBOX_SetSampler0Filter(D3DTEXF_POINT);
         break;
     }
 
