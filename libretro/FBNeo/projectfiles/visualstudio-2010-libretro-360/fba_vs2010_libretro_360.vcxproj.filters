@@ -225,6 +225,9 @@
     <Filter Include="Source Files\deps\libchdr">
       <UniqueIdentifier>{7b22bfdb-7bd7-4980-b352-17f0451a6377}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\deps\lzma">
+      <UniqueIdentifier>{8d695741-0d56-477f-ad13-9389b916c52f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\burn\drv\cps3\cps3snd.cpp">
@@ -3392,11 +3395,11 @@
     <ClCompile Include="..\..\src\dep\libs\libchdr\libchdr_huffman.c">
       <Filter>Source Files\deps\libchdr</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\dep\libs\lzma\src\libchdr_lzma.c">
-      <Filter>Source Files\deps</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\dep\libs\zstd\zstddeclib.c">
       <Filter>Source Files\deps</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\dep\libs\lzma\libchdr_lzma.c">
+      <Filter>Source Files\deps\lzma</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

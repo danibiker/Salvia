@@ -7,6 +7,8 @@ Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug_Cave|Win32 = Debug_Cave|Win32
 		Debug_Cave|Xbox 360 = Debug_Cave|Xbox 360
+		Debug_Sega|Win32 = Debug_Sega|Win32
+		Debug_Sega|Xbox 360 = Debug_Sega|Xbox 360
 		Debug|Win32 = Debug|Win32
 		Debug|Xbox 360 = Debug|Xbox 360
 		Release_NeoCapcom|Win32 = Release_NeoCapcom|Win32
@@ -20,6 +22,11 @@ Global
 		{00AAF92F-A249-4DF2-AE24-0C5427DB319E}.Debug_Cave|Xbox 360.ActiveCfg = Debug_Cave|Xbox 360
 		{00AAF92F-A249-4DF2-AE24-0C5427DB319E}.Debug_Cave|Xbox 360.Build.0 = Debug_Cave|Xbox 360
 		{00AAF92F-A249-4DF2-AE24-0C5427DB319E}.Debug_Cave|Xbox 360.Deploy.0 = Debug_Cave|Xbox 360
+		{00AAF92F-A249-4DF2-AE24-0C5427DB319E}.Debug_Sega|Win32.ActiveCfg = Debug_Sega|Win32
+		{00AAF92F-A249-4DF2-AE24-0C5427DB319E}.Debug_Sega|Win32.Build.0 = Debug_Sega|Win32
+		{00AAF92F-A249-4DF2-AE24-0C5427DB319E}.Debug_Sega|Xbox 360.ActiveCfg = Debug_Sega|Xbox 360
+		{00AAF92F-A249-4DF2-AE24-0C5427DB319E}.Debug_Sega|Xbox 360.Build.0 = Debug_Sega|Xbox 360
+		{00AAF92F-A249-4DF2-AE24-0C5427DB319E}.Debug_Sega|Xbox 360.Deploy.0 = Debug_Sega|Xbox 360
 		{00AAF92F-A249-4DF2-AE24-0C5427DB319E}.Debug|Win32.ActiveCfg = Debug|Win32
 		{00AAF92F-A249-4DF2-AE24-0C5427DB319E}.Debug|Win32.Build.0 = Debug|Win32
 		{00AAF92F-A249-4DF2-AE24-0C5427DB319E}.Debug|Xbox 360.ActiveCfg = Debug|Xbox 360

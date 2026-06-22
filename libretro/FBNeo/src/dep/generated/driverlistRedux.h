@@ -1739,6 +1739,7 @@ DRV		BurnSpeccorsarios1;
 DRV		BurnSpeccorsarios2;
 DRV		BurnSpecCosanostra;
 DRV		BurnDrvMSX_cosanost;
+DRV		BurnSpecCosmcruis;
 DRV		BurnSpecCosmiclan;
 DRV		BurnSpecCosmicpayback;
 DRV		BurnSpecCosmicraiders;
@@ -1877,6 +1878,10 @@ DRV		BurnDrvmd_cutthr;
 DRV		BurnDrvmd_cutthrs;
 DRV		BurnDrvmd_cutthrp;
 DRV		BurnDrvmd_eswatj;
+DRV		BurnSpecCybwraithen;
+DRV		BurnSpecCybwraithit;
+DRV		BurnSpecCybwraithpt;
+DRV		BurnSpecCybwraithes;
 DRV		BurnDrvmd_cybercop;
 DRV		BurnDrvCyberlip;
 DRV		BurnDrvmd_cyberbal;
@@ -5063,6 +5068,7 @@ DRV		BurnSpecMijavases;
 DRV		BurnDrvmd_ditkapf;
 DRV		BurnDrvmd_ditkapf1;
 DRV		BurnDrvmsx_mikegunn;
+DRV		BurnSpecMikeinvs;
 DRV		BurnSpecMiketheguitar2;
 DRV		BurnSpecMiketheguitar;
 DRV		BurnDrvmd_mikeyeldey;
@@ -9428,6 +9434,7 @@ DRV		BurnDrvmd_xenon2ac;
 DRV		BurnDrvmd_xenon2s;
 DRV		BurnSpecXenophobe;
 DRV		BurnSpecxevious;
+DRV		BurnDrvmd_xevious;
 DRV		BurnDrvXeviousng;
 DRV		BurnDrvmd_xiaomo;
 DRV		BurnDrvmd_xiaomei;
@@ -9616,7 +9623,7 @@ DRV		BurnSpecZzoom;
 // Structure containing addresses of all drivers
 // Needs to be kept sorted (using the full game name as the key) to prevent problems with the gamelist in Kaillera
 static struct BurnDriver* pDriver[] = {
-	&BurnSpecOo48,				// --=O O=-- (48K) (HB)
+	&BurnSpecOo48,				// --=O O=-- (48K) (HB, v1.1)
 	&BurnSpeclicencetokill128,	// 007 - Licence to Kill (128K)
 	&BurnSpeclicencetokill48,	// 007 - Licence to Kill (48K)
 	&BurnDrvMSX_lic2kill,		// 007 - Licence to Kill (Euro)
@@ -10576,7 +10583,7 @@ static struct BurnDriver* pDriver[] = {
 	&BurnDrvmd_blowemout,		// Blow'em Out (HB)
 	&BurnSpecBluber,			// Bluber (48K) (HB)
 	&BurnDrvmd_bluealma,		// Blue Almanac (Japan)
-	&BurnDrvblueandr,			// Blue And Red - Fight The Robots! (HB, v1.5 NTSC)
+	&BurnDrvblueandr,			// Blue And Red - Fight The Robots! (HB, v1.6 NTSC)
 	&BurnSpecBluemax,			// Blue Max (48K)
 	&BurnDrvBjourneyh,			// Blue's Journey / Raguy (ALH-001)
 	&BurnDrvBjourney,			// Blue's Journey / Raguy (ALM-001 ~ ALH-001)
@@ -11353,6 +11360,7 @@ static struct BurnDriver* pDriver[] = {
 	&BurnSpeccorsarios2,		// Corsarios - Part 2 (128K+2A)
 	&BurnSpecCosanostra,		// Cosa Nostra (48K)
 	&BurnDrvMSX_cosanost,		// Cosa Nostra (Euro, Spanish)
+	&BurnSpecCosmcruis,			// Cosmic Cruiser (48K)
 	&BurnSpecCosmiclan,			// Cosmic Lander (48K) (HB)
 	&BurnSpecCosmicpayback,		// Cosmic Payback (128K) (HB)
 	&BurnSpecCosmicraiders,		// Cosmic Raiders (16K)
@@ -11491,6 +11499,10 @@ static struct BurnDriver* pDriver[] = {
 	&BurnDrvmd_cutthrs,			// Cutthroat Island (Hack, Spanish)
 	&BurnDrvmd_cutthrp,			// CutThroat Island (Prototype)
 	&BurnDrvmd_eswatj,			// Cyber Police ESWAT (Japan, Rev. 0)
+	&BurnSpecCybwraithen,		// Cyber Wraith (English) (128K) (HB)
+	&BurnSpecCybwraithit,		// Cyber Wraith (Italian) (128K) (HB)
+	&BurnSpecCybwraithpt,		// Cyber Wraith (Portuguese) (128K) (HB)
+	&BurnSpecCybwraithes,		// Cyber Wraith (Spanish) (128K) (HB)
 	&BurnDrvmd_cybercop,		// Cyber-Cop (USA)
 	&BurnDrvCyberlip,			// Cyber-Lip (NGM-010)
 	&BurnDrvmd_cyberbal,		// CyberBall (World)
@@ -13077,7 +13089,7 @@ static struct BurnDriver* pDriver[] = {
 	&BurnDrvmd_haunting,		// Haunting Starring Polterguy (Euro, USA)
 	&BurnDrvmd_hauntings,		// Haunting Starring Polterguy (Hack, Spanish)
 	&BurnSpecHavoc,				// Havoc (128K)
-	&BurnSpecHawkstorm,			// Hawk Storm (128K)
+	&BurnSpecHawkstorm,			// Hawk Storm (48K-128K)
 	&BurnDrvmd_hayatosj,		// Hayato's Journey (HB)
 	&BurnSpecheadheel,			// Head over Heels (48K-128K)
 	&BurnDrvMSX_headheels,		// Head over Heels (Euro)
@@ -14677,7 +14689,8 @@ static struct BurnDriver* pDriver[] = {
 	&BurnDrvmd_ditkapf,			// Mike Ditka Power Football (Euro, USA)
 	&BurnDrvmd_ditkapf1,		// Mike Ditka Power Football (Euro, USA, Alt)
 	&BurnDrvmsx_mikegunn,		// Mike Gunner (Euro, Spanish) [Lightgun required, NOT WORKING]
-	&BurnSpecMiketheguitar2,	// Mike the Guitar - The Shooter (128K) (HB)
+	&BurnSpecMikeinvs,			// Mike Invaders (48K-128K) (HB)
+	&BurnSpecMiketheguitar2,	// Mike the Guitar: The Shooter (128K) (HB)
 	&BurnSpecMiketheguitar,		// Mike, The Guitar (128K) (HB)
 	&BurnDrvmd_mikeyeldey,		// Mikeyeldey the album (HB)
 	&BurnDrvmd_mikeyeldey95,	// Mikeyeldey95 (HB)
@@ -19042,6 +19055,7 @@ static struct BurnDriver* pDriver[] = {
 	&BurnDrvmd_xenon2s,			// Xenon 2: Megablast (Hack, Spanish)
 	&BurnSpecXenophobe,			// Xenophobe (128K)
 	&BurnSpecxevious,			// Xevious (48K)
+	&BurnDrvmd_xevious,			// Xevious (HB, alpha-0.02)
 	&BurnDrvXeviousng,			// Xevious - Neo Geo Conversion (HB, Beta1)
 	&BurnDrvmd_xiaomo,			// Xiao Monv: Magic Girl (Taiwan) (Unl)
 	&BurnDrvmd_xiaomei,			// Xiaomei and the Flame Dragon's Fist (HB, Japan)
@@ -19229,8 +19243,8 @@ static struct BurnDriver* pDriver[] = {
 
 // Lookup table containing sourcefiles of all drivers
 struct game_sourcefile_entry {
-	char game_name[32];
-	char sourcefile[32];
+	char *game_name;
+	char *sourcefile;
 };
 
 static game_sourcefile_entry sourcefile_table[] = {
@@ -20971,6 +20985,7 @@ static game_sourcefile_entry sourcefile_table[] = {
 	{ "spec_corsarios2", "/d_spectrum.cpp"},
 	{ "spec_cosanostra", "/d_spectrum.cpp"},
 	{ "msx_cosanost", "/d_msx.cpp"},
+	{ "spec_cosmcruis", "/d_spectrum.cpp"},
 	{ "spec_cosmiclan", "/d_spectrum.cpp"},
 	{ "spec_cosmicpayback", "/d_spectrum.cpp"},
 	{ "spec_cosmicraiders", "/d_spectrum.cpp"},
@@ -21109,6 +21124,10 @@ static game_sourcefile_entry sourcefile_table[] = {
 	{ "md_cutthrs", "/d_megadrive.cpp"},
 	{ "md_cutthrp", "/d_megadrive.cpp"},
 	{ "md_eswatj", "/d_megadrive.cpp"},
+	{ "spec_cybwraithen", "/d_spectrum.cpp"},
+	{ "spec_cybwraithit", "/d_spectrum.cpp"},
+	{ "spec_cybwraithpt", "/d_spectrum.cpp"},
+	{ "spec_cybwraithes", "/d_spectrum.cpp"},
 	{ "md_cybercop", "/d_megadrive.cpp"},
 	{ "cyberlip", "/d_neogeo.cpp"},
 	{ "md_cyberbal", "/d_megadrive.cpp"},
@@ -24293,6 +24312,7 @@ static game_sourcefile_entry sourcefile_table[] = {
 	{ "md_ditkapf", "/d_megadrive.cpp"},
 	{ "md_ditkapf1", "/d_megadrive.cpp"},
 	{ "msx_mikegunn", "/d_msx.cpp"},
+	{ "spec_mikeinvs", "/d_spectrum.cpp"},
 	{ "spec_miketheguitar2", "/d_spectrum.cpp"},
 	{ "spec_miketheguitar", "/d_spectrum.cpp"},
 	{ "md_mikeyeldey", "/d_megadrive.cpp"},
@@ -28646,6 +28666,7 @@ static game_sourcefile_entry sourcefile_table[] = {
 	{ "md_xenon2s", "/d_megadrive.cpp"},
 	{ "spec_xenophobe", "/d_spectrum.cpp"},
 	{ "spec_xevious", "/d_spectrum.cpp"},
+	{ "md_xevious", "/d_megadrive.cpp"},
 	{ "xeviousng", "/d_neogeo.cpp"},
 	{ "md_xiaomo", "/d_megadrive.cpp"},
 	{ "md_xiaomei", "/d_megadrive.cpp"},

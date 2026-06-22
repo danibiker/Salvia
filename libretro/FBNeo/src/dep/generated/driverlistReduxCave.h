@@ -237,8 +237,8 @@ static struct BurnDriver* pDriver[] = {
 
 // Lookup table containing sourcefiles of all drivers
 struct game_sourcefile_entry {
-	char game_name[32];
-	char sourcefile[32];
+	char *game_name;
+	char *sourcefile;
 };
 
 static game_sourcefile_entry sourcefile_table[] = {

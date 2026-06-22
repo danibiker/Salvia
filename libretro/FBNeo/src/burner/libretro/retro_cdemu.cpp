@@ -1,6 +1,8 @@
 #include "retro_common.h"
 #include "retro_cdemu.h"
 #include "burnint.h"
+#include "neocdlist.h"
+#include "neocdlist_games.h"
 #include "file/file_path.h"
 #include "chd.h"
 
