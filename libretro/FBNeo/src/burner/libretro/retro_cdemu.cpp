@@ -71,7 +71,35 @@ static short* cdimgOutputbuffer = NULL;
 
 static int cdimgOutputPosition;
 
+NGCDGAME* game;
+
 void NeoCDInfo_Exit() {}
+
+TCHAR* NeoCDInfo_Text(int nText)
+{
+#ifndef NO_NEOGEO
+	if(!game || !IsNeoGeoCD() || !bDrvOkay) return NULL;
+
+	switch(nText) 
+	{
+		case DRV_NAME:			return game->pszName;
+		case DRV_FULLNAME:		return game->pszTitle;
+		case DRV_MANUFACTURER:	return game->pszCompany;
+		case DRV_DATE:			return game->pszYear;
+	}
+#endif
+	return NULL;
+}
+
+int NeoCDInfo_ID() 
+{
+#ifndef NO_NEOGEO
+	if(!game || !IsNeoGeoCD() || !bDrvOkay) return 0;
+	return game->id;
+#else
+	return 0;
+#endif
+}
 
 /**
  * see src/intf/cd/win32/cd_img.cpp

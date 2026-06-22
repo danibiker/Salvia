@@ -2171,8 +2171,8 @@ static bool retro_load_game_common()
 
 		// Start CD reader emulation if needed
 		if (nGameType == RETRO_GAME_TYPE_NEOCD) {
-			const char* ext = path_get_extension(szRomsetPath);
-			if (strcmp(ext, "cue") != 0 && strcmp(ext, "ccd") != 0 && strcmp(ext, "chd") != 0) {
+			const char* ext = path_get_extension(CDEmuImage);
+			if (!string_is_equal_noncase(ext, "cue") && !string_is_equal_noncase(ext, "ccd") _noncase(ext, "chd") && !string_is_equa) {
 				static char uguiText[4096];
 				const char* s1 = RETRO_ERROR_MESSAGES_13;
 				const char* s2 = RETRO_ERROR_MESSAGES_07;
@@ -2462,12 +2462,12 @@ bool retro_load_game(const struct retro_game_info *info)
 		if (strncmp(g_driver_name, "chf_", 4) != 0) prefix = "chf_";
 	}
 
-	// Buscamos el último punto en la ruta del archivo
+	// Buscamos el ï¿½ltimo punto en la ruta del archivo
 	const char* dot = strrchr(szRomsetPath, '.');
 	bool is_neocd_extension = false;
 
 	if (dot) {
-		// Comparamos la extensión (ignorando mayúsculas/minúsculas si es necesario)
+		// Comparamos la extensiï¿½ (ignorando mayï¿½sculas/minï¿½sculas si es necesario)
 		if (_stricmp(dot, ".cue") == 0 || _stricmp(dot, ".ccd") == 0 || _stricmp(dot, ".chd") == 0) {
 			is_neocd_extension = true;
 		}

@@ -18142,16 +18142,16 @@
 	</game>
 	<game name="blueandr" romof="neogeo" sourcefile="neogeo/d_neogeo.cpp">
 		<comment>Homebrew</comment>
-		<description>Blue And Red - Fight The Robots! (HB, v1.5 NTSC)</description>
+		<description>Blue And Red - Fight The Robots! (HB, v1.6 NTSC)</description>
 		<year>2026</year>
 		<manufacturer>Kaiju Wasp</manufacturer>
-		<rom name="blueandr-p1.bin" size="1048576" crc="32b764e1"/>
+		<rom name="blueandr-p1.bin" size="1048576" crc="6e4f71aa"/>
 		<rom name="blueandr-s1.bin" size="131072" crc="0d0067f5"/>
-		<rom name="blueandr-c1.bin" size="262144" crc="c1554b81"/>
-		<rom name="blueandr-c2.bin" size="262144" crc="83a9c206"/>
-		<rom name="blueandr-m1.bin" size="262144" crc="864a8cf8"/>
+		<rom name="blueandr-c1.bin" size="262144" crc="79b934a5"/>
+		<rom name="blueandr-c2.bin" size="262144" crc="47647e8d"/>
+		<rom name="blueandr-m1.bin" size="262144" crc="19f32974"/>
 		<rom name="blueandr-v1.bin" size="262144" crc="7d5535dd"/>
-		<rom name="blueandr-v2.bin" size="12058624" crc="d6308621"/>
+		<rom name="blueandr-v2.bin" size="12058624" crc="d52a3036"/>
 		<rom name="sp-s3.sp1" merge="sp-s3.sp1" size="131072" crc="91b64be3"/>
 		<rom name="sp-s2.sp1" merge="sp-s2.sp1" size="131072" crc="9036d879"/>
 		<rom name="sp-s.sp1" merge="sp-s.sp1" size="131072" crc="c7f2fa45"/>
@@ -59231,6 +59231,27 @@
 		<video type="raster" orientation="vertical" width="224" height="256" aspectx="3" aspecty="4"/>
 		<driver status="good"/>
 	</game>
+	<game name="galaxianoly" cloneof="galaxian" romof="galaxian" sourcefile="galaxian/d_galaxian.cpp">
+		<comment>Bootleg</comment>
+		<description>Galaxian (Olympia bootleg)</description>
+		<year>1979</year>
+		<manufacturer>bootleg (Olympia)</manufacturer>
+		<rom name="20.bin" size="1024" crc="164b5c73"/>
+		<rom name="21.bin" size="1024" crc="cad1e702"/>
+		<rom name="22.bin" size="1024" crc="30e28016"/>
+		<rom name="23.bin" size="1024" crc="de7e7770"/>
+		<rom name="24.bin" size="1024" crc="a916c919"/>
+		<rom name="25.bin" size="1024" crc="9175882b"/>
+		<rom name="26.bin" size="1024" crc="5af35f13"/>
+		<rom name="27.bin" size="1024" crc="47f0d18a"/>
+		<rom name="28.bin" size="1024" crc="44b93d2e"/>
+		<rom name="29.bin" size="1024" crc="ad127c30"/>
+		<rom name="1h.bin" size="2048" crc="724a2044"/>
+		<rom name="1k.bin" size="2048" crc="656000a7"/>
+		<rom name="6l.bpr" merge="6l.bpr" size="32" crc="c3ac9467"/>
+		<video type="raster" orientation="vertical" width="224" height="256" aspectx="3" aspecty="4"/>
+		<driver status="good"/>
+	</game>
 	<game name="galaxrf" cloneof="galaxian" romof="galaxian" sourcefile="galaxian/d_galaxian.cpp">
 		<comment>Bootleg</comment>
 		<description>Galaxian (Recreativos Franco S.A. Spanish bootleg)</description>
@@ -76180,15 +76201,15 @@
 	</game>
 	<game name="hyxevious" cloneof="sxevious" romof="sxevious" sampleof="xevious" sourcefile="pre90s/d_galaga.cpp">
 		<comment>Hack, High difficulty level hack</comment>
-		<description>Hyper Xevious (Hack)</description>
+		<description>Hyper Xevious (Hack, 2026-06-18)</description>
 		<year>2026</year>
 		<manufacturer>zeroco</manufacturer>
 		<rom name="hx_cpu_3p.rom" size="4096" crc="3083987b"/>
-		<rom name="hx_cpu_3m.rom" size="4096" crc="b6afb51a"/>
-		<rom name="hx_xv3_3.2m" size="4096" crc="06a7b52d"/>
-		<rom name="hx_xv3_4.2l" size="4096" crc="bed75de8"/>
+		<rom name="hx_cpu_3m.rom" size="4096" crc="dd07d018"/>
+		<rom name="hx_xv3_3.2m" size="4096" crc="79c0fb2f"/>
+		<rom name="hx_xv3_4.2l" size="4096" crc="ec88d2bc"/>
 		<rom name="hx_xv3_5.3f" size="4096" crc="d921841a"/>
-		<rom name="hx_xv3_6.3j" size="4096" crc="51d1339f"/>
+		<rom name="hx_xv3_6.3j" size="4096" crc="c13e8374"/>
 		<rom name="xvi_7.2c" merge="xvi_7.2c" size="4096" crc="dd35cf1c"/>
 		<rom name="xvi_12.3b" merge="xvi_12.3b" size="4096" crc="088c8b26"/>
 		<rom name="xvi_13.3c" merge="xvi_13.3c" size="4096" crc="de60ba25"/>
@@ -118190,6 +118211,34 @@
 		<video type="raster" orientation="horizontal" width="256" height="224" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="ryukendnb" cloneof="shadoww" romof="shadoww" sourcefile="pst90s/d_gaiden.cpp">
+		<description>Ninja Ryukenden (Japan, set 3)</description>
+		<year>1989</year>
+		<manufacturer>Tecmo</manufacturer>
+		<rom name="1.3s" size="131072" crc="0ed5464c"/>
+		<rom name="2.4s" size="131072" crc="a93a8256"/>
+		<rom name="3.4b" size="65536" crc="6b686b69"/>
+		<rom name="hn27512p.7a" size="65536" crc="765e7baa"/>
+		<rom name="14.3a" merge="14.3a" size="131072" crc="1ecfddaa"/>
+		<rom name="15.3b" merge="15.3b" size="131072" crc="1291a696"/>
+		<rom name="16.1a" merge="16.1a" size="131072" crc="140b47ca"/>
+		<rom name="17.1b" merge="17.1b" size="131072" crc="7638cccb"/>
+		<rom name="18.6a" merge="18.6a" size="131072" crc="3fadafd6"/>
+		<rom name="19.6b" merge="19.6b" size="131072" crc="ddae9d5b"/>
+		<rom name="20.4b" merge="20.4b" size="131072" crc="08cf7a93"/>
+		<rom name="21.4b" merge="21.4b" size="131072" crc="1ac892f5"/>
+		<rom name="6.3m" merge="6.3m" size="131072" crc="e7ccdf9f"/>
+		<rom name="8.3n" merge="8.3n" size="131072" crc="7ef7f880"/>
+		<rom name="10.3r" merge="10.3r" size="131072" crc="a6451dec"/>
+		<rom name="12.3s" size="131072" crc="277204f0"/>
+		<rom name="7.1m" merge="7.1m" size="131072" crc="016bec95"/>
+		<rom name="9.1n" merge="9.1n" size="131072" crc="6e9b7fd3"/>
+		<rom name="11.1r" merge="11.1r" size="131072" crc="7fbfdf5e"/>
+		<rom name="13.1s" size="131072" crc="4e56a508"/>
+		<rom name="4.4a" merge="4.4a" size="131072" crc="b0e0faf9"/>
+		<video type="raster" orientation="horizontal" width="256" height="224" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="nspirit" sourcefile="irem/d_m72.cpp">
 		<description>Ninja Spirit (World)</description>
 		<year>1988</year>
@@ -131459,6 +131508,52 @@
 		<video type="raster" orientation="horizontal" width="256" height="448" aspectx="4" aspecty="6"/>
 		<driver status="good"/>
 	</game>
+	<game name="punchoutah" cloneof="punchout" romof="punchout" sourcefile="pre90s/d_punchout.cpp">
+		<description>Punch-Out!! (Rev A, harder)</description>
+		<year>1984</year>
+		<manufacturer>Nintendo</manufacturer>
+		<rom name="chp1-c.8l" size="8192" crc="c552c3c1"/>
+		<rom name="chp1-c.8k" size="8192" crc="f2907314"/>
+		<rom name="chp1-c.8j" merge="chp1-c.8j" size="8192" crc="7a7f870e"/>
+		<rom name="chp1-c.8h" merge="chp1-c.8h" size="8192" crc="5d8123d7"/>
+		<rom name="chp1-c.8f" size="16384" crc="687010a7"/>
+		<rom name="chp1-c.4k" merge="chp1-c.4k" size="8192" crc="cb6ef376"/>
+		<rom name="chp1-b.4c" size="8192" crc="e26dc8b3"/>
+		<rom name="chp1-b.4d" size="8192" crc="dd1310ca"/>
+		<rom name="chp1-b.4a" size="8192" crc="20fb4829"/>
+		<rom name="chp1-b.4b" size="8192" crc="edc34594"/>
+		<rom name="chp1-v.2r" merge="chp1-v.2r" size="16384" crc="bd1d4b2e"/>
+		<rom name="chp1-v.2t" merge="chp1-v.2t" size="16384" crc="dd9a688a"/>
+		<rom name="chp1-v.2u" merge="chp1-v.2u" size="8192" crc="da6a3c4b"/>
+		<rom name="chp1-v.2v" merge="chp1-v.2v" size="8192" crc="8c734a67"/>
+		<rom name="chp1-v.3r" merge="chp1-v.3r" size="16384" crc="2e74ad1d"/>
+		<rom name="chp1-v.3t" merge="chp1-v.3t" size="16384" crc="630ba9fb"/>
+		<rom name="chp1-v.3u" merge="chp1-v.3u" size="8192" crc="6440321d"/>
+		<rom name="chp1-v.3v" merge="chp1-v.3v" size="8192" crc="bb7b7198"/>
+		<rom name="chp1-v.4r" merge="chp1-v.4r" size="16384" crc="4e5b0fe9"/>
+		<rom name="chp1-v.4t" merge="chp1-v.4t" size="16384" crc="37ffc940"/>
+		<rom name="chp1-v.4u" merge="chp1-v.4u" size="8192" crc="1a7521d4"/>
+		<rom name="chp1-v.6p" size="8192" crc="16588f7a"/>
+		<rom name="chp1-v.6n" size="8192" crc="dc743674"/>
+		<rom name="chp1-v.8p" size="8192" crc="c2db5b4e"/>
+		<rom name="chp1-v.8n" size="8192" crc="e6af390e"/>
+		<rom name="chp1-b-6e_pink.6e" merge="chp1-b-6e_pink.6e" size="512" crc="e9ca3ac6"/>
+		<rom name="chp1-b-6f_pink.6f" merge="chp1-b-6f_pink.6f" size="512" crc="02be56ab"/>
+		<rom name="chp1-b-7f_pink.7f" merge="chp1-b-7f_pink.7f" size="512" crc="11de55f1"/>
+		<rom name="chp1-b-7e_white.7e" merge="chp1-b-7e_white.7e" size="512" crc="47adf7a2"/>
+		<rom name="chp1-b-8e_white.8e" merge="chp1-b-8e_white.8e" size="512" crc="b0fc15a8"/>
+		<rom name="chp1-b-8f_white.8f" merge="chp1-b-8f_white.8f" size="512" crc="1ffd894a"/>
+		<rom name="chp1-v-2d.2d" merge="chp1-v-2d.2d" size="256" crc="71dc0d48"/>
+		<rom name="chp1-c.6p" merge="chp1-c.6p" size="16384" crc="ea0bbb31"/>
+		<rom name="chp1-b-6e_white.6e" merge="chp1-b-6e_white.6e" size="512" crc="ddac5f0e"/>
+		<rom name="chp1-b-6f_white.6f" merge="chp1-b-6f_white.6f" size="512" crc="846c6261"/>
+		<rom name="chp1-b-7f_white.7f" merge="chp1-b-7f_white.7f" size="512" crc="1682dd30"/>
+		<rom name="chp1-b-7e_pink.7e" merge="chp1-b-7e_pink.7e" size="512" crc="fddaa777"/>
+		<rom name="chp1-b-8e_pink.8e" merge="chp1-b-8e_pink.8e" size="512" crc="c3d5d71f"/>
+		<rom name="chp1-b-8f_pink.8f" merge="chp1-b-8f_pink.8f" size="512" crc="a3037155"/>
+		<video type="raster" orientation="horizontal" width="256" height="448" aspectx="4" aspecty="6"/>
+		<driver status="good"/>
+	</game>
 	<game name="punchout" sourcefile="pre90s/d_punchout.cpp">
 		<description>Punch-Out!! (Rev B)</description>
 		<year>1984</year>
@@ -143381,6 +143476,28 @@
 		<rom name="tiedie_rom_7b.e6" size="4096" crc="3ecf4620"/>
 		<rom name="tiedie_rom_8b.c6" size="4096" crc="752d7a46"/>
 		<rom name="2084_rom_9b_3005-21.a6" merge="2084_rom_9b_3005-21.a6" size="4096" crc="b124367b"/>
+		<rom name="video_sound_rom_3_std_767.ic12" merge="video_sound_rom_3_std_767.ic12" size="4096" crc="c56c1d28"/>
+		<rom name="decoder_rom_4.3g" merge="decoder_rom_4.3g" size="512" crc="e6631c23"/>
+		<rom name="decoder_rom_6.3c" merge="decoder_rom_6.3c" size="512" crc="83faf25e"/>
+		<video type="raster" orientation="horizontal" width="292" height="240" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="robotronr3" cloneof="robotron" romof="robotron" sourcefile="pre90s/d_williams.cpp">
+		<description>Robotron: 2084 (Release 3)</description>
+		<year>1982</year>
+		<manufacturer>Williams / Vid Kidz</manufacturer>
+		<rom name="r3_10.a7" size="4096" crc="1fb75828"/>
+		<rom name="r3_11.c7" size="4096" crc="ccfaf7da"/>
+		<rom name="r3_12.e7" size="4096" crc="cfdc9990"/>
+		<rom name="r3_1.e4" size="4096" crc="2e5433ee"/>
+		<rom name="r3_2.c4" merge="2084_rom_2b_3005-14.c4" size="4096" crc="5bc6c614"/>
+		<rom name="r3_3.a4" size="4096" crc="37962af2"/>
+		<rom name="r3_4.e5" size="4096" crc="9c140843"/>
+		<rom name="r3_5.c5" size="4096" crc="24726007"/>
+		<rom name="r3_6.a5" size="4096" crc="097e174d"/>
+		<rom name="r3_7.e6" size="4096" crc="17a7ce34"/>
+		<rom name="r3_8.c6" size="4096" crc="b6e8dbb9"/>
+		<rom name="r3_9.a6" size="4096" crc="e7b53345"/>
 		<rom name="video_sound_rom_3_std_767.ic12" merge="video_sound_rom_3_std_767.ic12" size="4096" crc="c56c1d28"/>
 		<rom name="decoder_rom_4.3g" merge="decoder_rom_4.3g" size="512" crc="e6631c23"/>
 		<rom name="decoder_rom_6.3c" merge="decoder_rom_6.3c" size="512" crc="83faf25e"/>

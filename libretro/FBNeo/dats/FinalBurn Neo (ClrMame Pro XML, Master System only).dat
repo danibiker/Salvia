@@ -12,6 +12,15 @@
 		<url>https://neo-source.com/</url>
 		<clrmamepro forcenodump="ignore"/>
 	</header>
+	<game name="2048sms" sourcefile="sms/d_sms.cpp">
+		<comment>Homebrew</comment>
+		<description>2048-SMS! (HB)</description>
+		<year>2014</year>
+		<manufacturer>Sanqui</manufacturer>
+		<rom name="2048-SMS! (2014)(Sanqui).sms" size="32768" crc="4b7a237d"/>
+		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="4pak" sourcefile="sms/d_sms.cpp">
 		<description>4 PAK All Action (Australia)</description>
 		<year>1995</year>
@@ -3798,6 +3807,15 @@
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="mbarbarricade" sourcefile="sms/d_sms.cpp">
+		<comment>Homebrew</comment>
+		<description>Master Barbarricade (HB, RC2)</description>
+		<year>2026</year>
+		<manufacturer>Jess Creations - ArugulaZ</manufacturer>
+		<rom name="Master Barbarricade RC2 (2026)(Jess Creations - ArugulaZ).sms" size="49152" crc="12ab8665"/>
+		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="mastdark" sourcefile="sms/d_sms.cpp">
 		<description>Master of Darkness (Euro, Brazil)</description>
 		<year>1992</year>
@@ -6083,11 +6101,11 @@
 		<driver status="good"/>
 	</game>
 	<game name="smb" sourcefile="sms/d_sms.cpp">
-		<comment>Homebrew, Unofficial Port - only the first level is available</comment>
+		<comment>Homebrew</comment>
 		<description>Super Mario Bros. (HB, v0.12)</description>
 		<year>2026</year>
 		<manufacturer>Lack of Track</manufacturer>
-		<rom name="Super Mario Bros. v0.12 (2026)(Lack of Track).sms" size="262144" crc="03cfb75f"/>
+		<rom name="Super Mario Bros. v0.12 (2026)(Lack of Track).sms" size="262144" crc="b1928f81"/>
 		<video type="raster" orientation="horizontal" width="256" height="192" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
