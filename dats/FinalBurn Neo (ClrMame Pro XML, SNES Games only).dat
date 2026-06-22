@@ -108,6 +108,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="7thsagap" cloneof="7thsaga" romof="7thsaga" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>7th Saga, The (Hack Portuguese v1.0)</description>
+		<year>2002</year>
+		<manufacturer>Wanzeler</manufacturer>
+		<rom name="7th Saga, The (Hack Portuguese v1.0).sfc" size="1572864" crc="29bde67c"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="7thsaga" sourcefile="snes/d_snes.cpp">
 		<description>7th Saga, The (USA)</description>
 		<year>1993</year>
@@ -146,6 +155,15 @@
 		<year>1995</year>
 		<manufacturer>Viacom New Media</manufacturer>
 		<rom name="Aaahh!!! Real Monsters (E)(1995)(Viacom New Media).sfc" size="2097152" crc="946313fb"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="aaahhrmp" cloneof="aaahhrm" romof="aaahhrm" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Aaahh!!! Real Monsters (Hack Portuguese)</description>
+		<year>2011</year>
+		<manufacturer>Ruhan7</manufacturer>
+		<rom name="Aaahh!!! Real Monsters (Hack Portuguese).sfc" size="2097152" crc="13acbc83"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -2499,6 +2517,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="bugsbunnyp" cloneof="bugsbunny" romof="bugsbunny" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Bugs Bunny - Rabbit Rampage ( Hack Portuguese v.Beta 2.0 )</description>
+		<year>2018</year>
+		<manufacturer>Ripman</manufacturer>
+		<rom name="Bugs Bunny - Rabbit Rampage ( Hack Portuguese v.Beta 2.0 ).sfc" size="1572864" crc="fd2324cb"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="bugsbunnye" cloneof="bugsbunny" romof="bugsbunny" sourcefile="snes/d_snes.cpp">
 		<description>Bugs Bunny - Rabbit Rampage (Euro)</description>
 		<year>1993</year>
@@ -3120,6 +3147,15 @@
 		<year>1998</year>
 		<manufacturer>SadNES cITy</manufacturer>
 		<rom name="Chrono Trigger T-Ita v1.2 (1998)(SadNES cITy).sfc" size="4194304" crc="1bd38229"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="chronotriggertp" cloneof="chronotrigger" romof="chronotrigger" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Chrono Trigger (Hack, Portuguese v1.05)</description>
+		<year>2004</year>
+		<manufacturer>Lynx</manufacturer>
+		<rom name="Chrono Trigger T-Bra v1.05 (2004)(Lynx).sfc" size="4194304" crc="d1a61235"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -3749,6 +3785,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="daffyducktmmp" cloneof="daffyducktmm" romof="daffyducktmm" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Daffy Duck - The Marvin Missions (Hack Portuguese)</description>
+		<year>2000</year>
+		<manufacturer>Venom Total</manufacturer>
+		<rom name="Daffy Duck - The Marvin Missions (Hack Portuguese).sfc" size="1048576" crc="77ff056e"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="daffyducktmm" sourcefile="snes/d_snes.cpp">
 		<description>Daffy Duck - The Marvin Missions (USA)</description>
 		<year>1993</year>
@@ -4274,6 +4319,15 @@
 		<year>1994</year>
 		<manufacturer>Hudson Soft - Disney Int.</manufacturer>
 		<rom name="Disney's Beauty and the Beast (U)(1994)(Hudson Soft).sfc" size="1048576" crc="956e183c"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="bonkersp" cloneof="bonkers" romof="bonkers" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Disney's Bonkers (Hack Portuguese v.Beta 1.0)</description>
+		<year>2017</year>
+		<manufacturer>Capcom</manufacturer>
+		<rom name="Disney's Bonkers (Hack Portuguese v.Beta 1.0 Ripman).sfc" size="1048576" crc="cb7558f2"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -5312,6 +5366,15 @@
 		<year>1995</year>
 		<manufacturer>Playmates Interactive Ent.</manufacturer>
 		<rom name="Earthworm Jim 2 (E)(1995)(Playmates).sfc" size="3145728" crc="4f961f70"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="earthwormjim2p" cloneof="earthwormjim2" romof="earthwormjim2" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Earthworm Jim 2 (Portuguese)</description>
+		<year>2017</year>
+		<manufacturer>ripman</manufacturer>
+		<rom name="Earthworm Jim 2(Hack, Portuguese v1.0).sfc" size="3145728" crc="96fec634"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -9599,6 +9662,15 @@
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
+	<game name="legendofzeldatp" cloneof="legendofzelda" romof="legendofzelda" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Legend of Zelda, The: A Link to the Past (Hack, Portuguese v1.0)</description>
+		<year>2014</year>
+		<manufacturer>spyblack</manufacturer>
+		<rom name="Legend of Zelda, The - A Link to the Past T-Bra v1.0 (2014)(spyblack).sfc" size="2097152" crc="69f58bba"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
 	<game name="legendofzeldatsc" cloneof="legendofzelda" romof="legendofzelda" sourcefile="snes/d_snes.cpp">
 		<comment>Hack</comment>
 		<description>Legend of Zelda, The: A Link to the Past (Hack, Simplified Chinese)</description>
@@ -12160,6 +12232,15 @@
 		<year>1994</year>
 		<manufacturer>Asmik</manufacturer>
 		<rom name="Odekake Lester - Lelele no Le (J)(1994)(Asmik).sfc" size="1048576" crc="8d89a8e8"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="ogrebattlete" cloneof="ogrebattle" romof="ogrebattle" sourcefile="snes/d_snes.cpp">
+		<comment>Hack, Herostar Fix v0.1.0 by songbirder included</comment>
+		<description>Ogre Battle - The March of the Black Queen (Hack, English v1.2)</description>
+		<year>2018</year>
+		<manufacturer>FinS</manufacturer>
+		<rom name="Ogre Battle - The March of the Black Queen T-Eng v1.2 (2018)(FinS).sfc" size="2097152" crc="7514efdf"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
@@ -17362,6 +17443,15 @@
 		<year>2025</year>
 		<manufacturer>Metaquarius</manufacturer>
 		<rom name="Super Metroid X-Fusion v1.3 (2025)(Metaquarius).sfc" size="4194304" crc="cb4a6685"/>
+		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="supermetroidfcp" cloneof="supermetroid" romof="supermetroid" sourcefile="snes/d_snes.cpp">
+		<comment>Hack</comment>
+		<description>Super Metroid: Fix Collection Patch (Hack, v1.1)</description>
+		<year>2026</year>
+		<manufacturer>Furo_19</manufacturer>
+		<rom name="Super Metroid - Fix Collection Patch v1.1 (2026)(Furo_19).sfc" size="3145728" crc="3f8f3eaa"/>
 		<video type="raster" orientation="horizontal" width="512" height="448" aspectx="4" aspecty="3"/>
 		<driver status="good"/>
 	</game>
