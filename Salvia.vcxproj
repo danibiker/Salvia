@@ -201,6 +201,14 @@
       <Configuration>Release_DosboxPure</Configuration>
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_fbanext|Win32">
+      <Configuration>Release_fbanext</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_fbanext|Xbox 360">
+      <Configuration>Release_fbanext</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release_finalburn|Win32">
       <Configuration>Release_finalburn</Configuration>
       <Platform>Win32</Platform>
@@ -447,6 +455,11 @@
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbanext|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_finalburn|Xbox 360'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
@@ -543,6 +556,9 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_finalburn|Win32'" Label="Configuration">
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbanext|Win32'" Label="Configuration">
     <WholeProgramOptimization>false</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_finalburn|Win32'" Label="Configuration">
@@ -642,6 +658,9 @@
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_finalburn|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbanext|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug_finalburn|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -680,7 +699,8 @@
     <EMU_LIB_PCSX>pcsxr-360</EMU_LIB_PCSX>
     <EMU_LIB_PICODRIVE>picodrive</EMU_LIB_PICODRIVE>
     <EMU_LIB_MAME2003PLUS>mame-2003-plus</EMU_LIB_MAME2003PLUS>
-    <EMU_LIB_FINALBURN>fba-neo</EMU_LIB_FINALBURN>
+    <EMU_LIB_FBNEO>fbneo</EMU_LIB_FBNEO>
+    <EMU_LIB_FBANEXT>fbanext</EMU_LIB_FBANEXT>
     <EMU_LIB_DOSBOXPURE>dosbox-pure</EMU_LIB_DOSBOXPURE>
     <EMU_LIB_PRBOOM>prboom</EMU_LIB_PRBOOM>
     <EMU_LIB_TYRQUAKE>tyrquake</EMU_LIB_TYRQUAKE>
@@ -908,7 +928,15 @@
     <OutDir>$(BUILD_DIR)</OutDir>
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
-    <ImageXexOutput>$(OutDir)$(EMU_LIB_FINALBURN)$(ImageExt)</ImageXexOutput>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_FBNEO)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbanext|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_FBANEXT)$(ImageExt)</ImageXexOutput>
     <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_finalburn|Xbox 360'">
@@ -916,7 +944,7 @@
     <OutDir>$(BUILD_DIR)</OutDir>
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
-    <ImageXexOutput>$(OutDir)$(EMU_LIB_FINALBURN)$(ImageExt)</ImageXexOutput>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_FBNEO)$(ImageExt)</ImageXexOutput>
     <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_mame|Xbox 360'">
@@ -1157,13 +1185,19 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(BUILD_DIR)</OutDir>
     <IntDir>$(BUILD_DIR)</IntDir>
-    <TargetName>$(EMU_LIB_FINALBURN)</TargetName>
+    <TargetName>$(EMU_LIB_FBNEO)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbanext|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <TargetName>$(EMU_LIB_FBANEXT)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_finalburn|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(BUILD_DIR)</OutDir>
     <IntDir>$(BUILD_DIR)</IntDir>
-    <TargetName>$(EMU_LIB_FINALBURN)</TargetName>
+    <TargetName>$(EMU_LIB_FBNEO)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_mame|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -2305,11 +2339,56 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;HAVE_CHD;EMU_LIB_NAME="$(EMU_LIB_FINALBURN)";$(COMMON_PREPROCESSOR_RELEASE);RESET_AUDIO;NO_SRAM</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;HAVE_CHD;EMU_LIB_NAME="$(EMU_LIB_FBNEO)";$(COMMON_PREPROCESSOR_RELEASE);RESET_AUDIO;NO_SRAM;DEBUG_LOG</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)libs\curl-7.50.1\include;$(ProjectDir)\libs\mbedtls\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include;$(ProjectDir)\libs\rcheevos\src</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <InlineAssemblyOptimization>false</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>false</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>false</PreschedulingOptimization>
+      <StringPooling>true</StringPooling>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);libretro.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Release\Xbox 360</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateMapFile>true</GenerateMapFile>
+    </Link>
+    <Deploy>
+      <DeploymentType>CopyToHardDrive</DeploymentType>
+    </Deploy>
+    <ImageXex>
+      <HeapSize>0x18000000</HeapSize>
+    </ImageXex>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbanext|Xbox 360'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Full</Optimization>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_FBANEXT)";$(COMMON_PREPROCESSOR_RELEASE);RESET_AUDIO;NO_SRAM</PreprocessorDefinitions>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)libs\curl-7.50.1\include;$(ProjectDir)\libs\mbedtls\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include;$(ProjectDir)\libs\rcheevos\src</AdditionalIncludeDirectories>
+      <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
+      <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
@@ -2320,12 +2399,13 @@
       <PreschedulingOptimization>true</PreschedulingOptimization>
       <StringPooling>true</StringPooling>
       <FunctionLevelLinking>true</FunctionLevelLinking>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
     </ClCompile>
     <Link>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
-      <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);libretro.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);fb_alpha_libretro_xdk360.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\fbanext\projectfiles\visualstudio-2010-libretro-360\Release_LTCG</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2349,7 +2429,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;DEBUG_LOG;EMU_LIB_NAME="$(EMU_LIB_FINALBURN)";$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;DEBUG_LOG;EMU_LIB_NAME="$(EMU_LIB_FBNEO)";$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)libs\curl-7.50.1\include;$(ProjectDir)\libs\mbedtls\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include;$(ProjectDir)\libs\rcheevos\src</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>
@@ -3460,6 +3540,44 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_finalburn|Win32'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Full</Optimization>
+      <PreprocessorDefinitions>WIN;HAVE_CHD;$(COMMON_PREPROCESSOR_RELEASE);RESET_AUDIO;NO_SRAM;DEBUG_LOG</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)libs\curl-7.50.1\include;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include</AdditionalIncludeDirectories>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <OmitFramePointers>false</OmitFramePointers>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_WIN);fba_vs2010_libretro_360.lib</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbanext|Win32'">
     <ClCompile>
       <ExceptionHandling>Async</ExceptionHandling>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>

@@ -1,0 +1,53 @@
+Index: arm_intf.cpp
+===================================================================
+--- arm_intf.cpp	(revision 484)
++++ arm_intf.cpp	(working copy)
+@@ -192,7 +192,7 @@
+ #endif
+ 
+ 	if (membase[WRITE][addr >> PAGE_SHIFT] != NULL) {
+-		*((UINT32*)(membase[WRITE][addr >> PAGE_SHIFT] + (addr & PAGE_LONG_AND))) = data;
++		*((UINT32*)(membase[WRITE][addr >> PAGE_SHIFT] + (addr & PAGE_LONG_AND))) = BURN_ENDIAN_SWAP_INT32(data);
+ 		return;
+ 	}
+ 
+@@ -238,7 +238,7 @@
+ #endif
+ 
+ 	if (membase[ READ][addr >> PAGE_SHIFT] != NULL) {
+-		return *((UINT32*)(membase[ READ][addr >> PAGE_SHIFT] + (addr & PAGE_LONG_AND)));
++		return BURN_ENDIAN_SWAP_INT32(*((UINT32*)(membase[ READ][addr >> PAGE_SHIFT] + (addr & PAGE_LONG_AND))));
+ 	}
+ 
+ 	if (pReadLongHandler) {
+@@ -277,7 +277,7 @@
+ #endif
+ 
+ 	if (membase[FETCH][addr >> PAGE_SHIFT] != NULL) {
+-		return *((UINT32*)(membase[FETCH][addr >> PAGE_SHIFT] + (addr & PAGE_LONG_AND)));
++		return BURN_ENDIAN_SWAP_INT32(*((UINT32*)(membase[FETCH][addr >> PAGE_SHIFT] + (addr & PAGE_LONG_AND))));
+ 	}
+ 
+ 	// good enough for now...
+Index: arm_intf.h
+===================================================================
+--- arm_intf.h	(revision 484)
++++ arm_intf.h	(working copy)
+@@ -61,7 +61,7 @@
+ 
+ #define Write16Long(ram, a, b)							\
+ 	if (address >= a && address <= b) {					\
+-		*((UINT16*)(ram + (((address - a) & ~3)/2))) = data;	\
++		*((UINT16*)(ram + (((address - a) & ~3)/2))) = BURN_ENDIAN_SWAP_INT16(data);	\
+ 		return;								\
+ 	}
+ 
+@@ -76,7 +76,7 @@
+ 
+ #define Read16Long(ram, a, b)							\
+ 	if (address >= a && address <= b) {					\
+-		return *((UINT16*)(ram + (((address - a) & ~3)/2))) | ~0xffff;	\
++		return BURN_ENDIAN_SWAP_INT16(*((UINT16*)(ram + (((address - a) & ~3)/2)))) | ~0xffff;	\
+ 	}
+ 
+ #define Read16Byte(ram, a, b)							\

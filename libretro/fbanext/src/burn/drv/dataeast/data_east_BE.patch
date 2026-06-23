@@ -1,0 +1,95 @@
+Index: d_cbuster.cpp
+===================================================================
+--- d_cbuster.cpp	(revision 883)
++++ d_cbuster.cpp	(working copy)
+@@ -458,9 +458,9 @@
+ 	UINT16 *p1 = (UINT16*)DrvPalRAM1;
+ 
+ 	for (INT32 i = 0; i < BurnDrvGetPaletteEntries(); i++) {
+-		INT32 r = ((p0[i] & 0xff) * 175) / 100;
+-		INT32 g = ((p0[i] >>  8 ) * 175) / 100;
+-		INT32 b = ((p1[i] & 0xff) * 175) / 100;
++		INT32 r = ((BURN_ENDIAN_SWAP_INT16(p0[i]) & 0xff) * 175) / 100; //Seb
++		INT32 g = ((BURN_ENDIAN_SWAP_INT16(p0[i]) >>  8 ) * 175) / 100; //Seb
++		INT32 b =  ((BURN_ENDIAN_SWAP_INT16(p1[i]) & 0xff) * 175) / 100; //Seb
+ 
+ 		DrvPalette[i] = BurnHighCol(r, g, b, 0);
+ 	}
+@@ -474,12 +474,12 @@
+ 	{
+ 		INT32 x, y, sprite, colour, multi, fx, fy, inc, flash, mult;
+ 
+-		sprite = buffered_spriteram[offs + 1] & 0x7fff;
++		sprite =  BURN_ENDIAN_SWAP_INT16 (buffered_spriteram[offs + 1]) & 0x7fff; //Seb
+ 		if (!sprite)
+ 			continue;
+ 
+-		y = buffered_spriteram[offs];
+-		x = buffered_spriteram[offs + 2];
++		y = BURN_ENDIAN_SWAP_INT16 (buffered_spriteram[offs]); //Seb
++		x = BURN_ENDIAN_SWAP_INT16 (buffered_spriteram[offs + 2]); //Seb
+ 
+ 		if ((y & 0x8000) && pri == 1)
+ 			continue;
+Index: d_simpl156.cpp
+===================================================================
+--- d_simpl156.cpp	(revision 883)
++++ d_simpl156.cpp	(working copy)
+@@ -428,9 +428,9 @@
+ 
+ 	for (INT32 i = 0; i < 0x1000 / 4; i++)
+ 	{
+-		INT32 r = (p[i] >>  0) & 0x1f;
+-		INT32 g = (p[i] >>  5) & 0x1f;
+-		INT32 b = (p[i] >> 10) & 0x1f;
++		INT32 r =  (BURN_ENDIAN_SWAP_INT16 (p[i]) >>  0) & 0x1f; //Seb
++		INT32 g = (BURN_ENDIAN_SWAP_INT16 (p[i]) >>  5) & 0x1f; //Seb
++		INT32 b = (BURN_ENDIAN_SWAP_INT16 (p[i]) >> 10) & 0x1f; //Seb
+ 
+ 		r = (r << 3) | (r >> 2);
+ 		g = (g << 3) | (g >> 2);
+@@ -448,11 +448,11 @@
+ 	{
+ 		INT32 mult, inc;
+ 
+-		INT32 sy	  = spriteram[offs + 0];
++		INT32 sy	  = BURN_ENDIAN_SWAP_INT16 (spriteram[offs + 0]); //Seb
+ 		if ((sy & 0x1000) && (nCurrentFrame & 1)) continue;
+ 
+-		INT32 code  = spriteram[offs + 1];
+-		INT32 sx    = spriteram[offs + 2];
++		INT32 code  = BURN_ENDIAN_SWAP_INT16 (spriteram[offs + 1]); //Seb
++		INT32 sx    = BURN_ENDIAN_SWAP_INT16 (spriteram[offs + 2]); //Seb
+ 		INT32 color = (sx >> 9) & 0x1f;
+ 		INT32 pri   = sx & 0xc000;
+ 		INT32 flipx = sy & 0x2000;
+Index: d_supbtime.cpp
+===================================================================
+--- d_supbtime.cpp	(revision 883)
++++ d_supbtime.cpp	(working copy)
+@@ -359,9 +359,9 @@
+ 	UINT16 *p = (UINT16*)DrvPalRAM;
+ 
+ 	for (INT32 i = 0; i < 0x800 / 2; i++) {
+-		INT32 b = (p[i] >> 8) & 0x0f;
+-		INT32 g = (p[i] >> 4) & 0x0f;
+-		INT32 r = (p[i] >> 0) & 0x0f;
++		INT32 b = (BURN_ENDIAN_SWAP_INT16(p[i]) >> 8) & 0x0f; //Seb
++		INT32 g = (BURN_ENDIAN_SWAP_INT16(p[i]) >> 4) & 0x0f; //Seb
++		INT32 r = (BURN_ENDIAN_SWAP_INT16(p[i]) >> 0) & 0x0f; //Seb
+ 
+ 		r |= r << 4;
+ 		g |= g << 4;
+@@ -379,9 +379,9 @@
+ 	{
+ 		INT32 inc, mult;
+ 
+-		INT32 sy     = ram[offs + 0];
+-		INT32 code   = ram[offs + 1] & 0x3fff;
+-		INT32 sx     = ram[offs + 2];
++		INT32 sy     = BURN_ENDIAN_SWAP_INT16(ram[offs + 0]);
++		INT32 code   = BURN_ENDIAN_SWAP_INT16(ram[offs + 1]) & 0x3fff;
++		INT32 sx     = BURN_ENDIAN_SWAP_INT16(ram[offs + 2]);
+ 
+ 		if ((sy & 0x1000) && (nCurrentFrame & 1)) continue;
+ 

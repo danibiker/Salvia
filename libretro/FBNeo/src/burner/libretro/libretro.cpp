@@ -922,6 +922,34 @@ static void locate_archive(std::vector<located_archive>& pathList, const char* c
 {
 	static char path[MAX_PATH];
 
+	//Salvia added to speed-up neogeocd loading
+	if (nGameType == RETRO_GAME_TYPE_NEOCD) {
+		HandleMessage(RETRO_LOG_INFO, "[FBNeo] Searching neogeocd specific locations for romName %s\n", romName);
+
+		char path1[sizeof(path)], path2[sizeof(path)];
+		snprintf_nowarn(path1, sizeof(path1), "%s%c%s", g_rom_dir, PATH_DEFAULT_SLASH_C(), romName);
+		snprintf_nowarn(path2, sizeof(path2), "%s%cfbneo%c%s", g_system_dir, PATH_DEFAULT_SLASH_C(), PATH_DEFAULT_SLASH_C(), romName);
+
+		char* paths[2];
+		paths[0] = path1;
+		paths[1] = path2;
+
+		for (int i = 0; i < 2; ++i) {
+			char* p = paths[i];
+			HandleMessage(RETRO_LOG_INFO, "[FBNeo] Searching location %s\n", p);
+			if (ZipOpen(p) == 0) {
+				g_find_list_path.push_back(located_archive());
+				located_archive* located = &g_find_list_path.back();
+				located->path = p; 
+				located->ignoreCrc = false;
+				ZipClose();
+				HandleMessage(RETRO_LOG_INFO, "[FBNeo] Romset found at %s\n", p);
+				return;
+			}
+		}
+	}
+
+
 	if (bPatchedRomsetsEnabled)
 	{
 		// Search system fbneo "patched" subdirectory
@@ -939,24 +967,30 @@ static void locate_archive(std::vector<located_archive>& pathList, const char* c
 			HandleMessage(RETRO_LOG_INFO, "[FBNeo] No patched romset found at %s\n", path);
 	}
 
-	{
-		// Search rom dir
-		snprintf_nowarn(path, sizeof(path), "%s%c%s", g_rom_dir, PATH_DEFAULT_SLASH_C(), romName);
-		if (ZipOpen(path) == 0)
-		{
-			g_find_list_path.push_back(located_archive());
-			located_archive* located = &g_find_list_path.back();
-			located->path = path;
-			located->ignoreCrc = false;
-			ZipClose();
-			HandleMessage(RETRO_LOG_INFO, "[FBNeo] Romset found at %s\n", path);
-		}
-		else
-			HandleMessage(RETRO_LOG_INFO, "[FBNeo] No romset found at %s\n", path);
+	bool found_in_region = false;
+	// Search rom dir (base + console subdirs). Stop the subdir loop as
+	// soon as we find one match in this region: a romset is virtually
+	// never duplicated across `roms/<console>/` subdirs simultaneously.
 
-		// Continue to search in subdirectories
-		// g_rom_dir/arcade/romName
-		// g_rom_dir/consoles/romName
+	snprintf_nowarn(path, sizeof(path), "%s%c%s", g_rom_dir, PATH_DEFAULT_SLASH_C(), romName);
+	if (ZipOpen(path) == 0)
+	{
+		g_find_list_path.push_back(located_archive());
+		located_archive* located = &g_find_list_path.back();
+		located->path = path;
+		located->ignoreCrc = false;
+		ZipClose();
+		HandleMessage(RETRO_LOG_INFO, "[FBNeo] Romset found at %s\n", path);
+		found_in_region = true;
+	}
+	else
+		HandleMessage(RETRO_LOG_INFO, "[FBNeo] No romset found at %s\n", path);
+
+	// Continue to search in subdirectories only if not already found.
+	// g_rom_dir/arcade/romName
+	// g_rom_dir/consoles/romName
+	if (!found_in_region)
+	{
 		for (INT32 nType = 0; nType < TYPES_MAX; nType++)
 		{
 			memset(path, 0, sizeof(path));
@@ -969,30 +1003,35 @@ static void locate_archive(std::vector<located_archive>& pathList, const char* c
 				located->ignoreCrc = false;
 				ZipClose();
 				HandleMessage(RETRO_LOG_INFO, "[FBNeo] Romset found at %s\n", path);
+				break;
 			}
 			else
 				HandleMessage(RETRO_LOG_INFO, "[FBNeo] No romset found at %s\n", path);
 		}
 	}
+		
+	// Search system fbneo subdirectory (where samples/hiscore are stored).
+	// Same early-exit logic as the rom_dir region above.
 
+	snprintf_nowarn(path, sizeof(path), "%s%cfbneo%c%s", g_system_dir, PATH_DEFAULT_SLASH_C(), PATH_DEFAULT_SLASH_C(), romName);
+	if (ZipOpen(path) == 0)
 	{
-		// Search system fbneo subdirectory (where samples/hiscore are stored)
-		snprintf_nowarn(path, sizeof(path), "%s%cfbneo%c%s", g_system_dir, PATH_DEFAULT_SLASH_C(), PATH_DEFAULT_SLASH_C(), romName);
-		if (ZipOpen(path) == 0)
-		{
-			g_find_list_path.push_back(located_archive());
-			located_archive* located = &g_find_list_path.back();
-			located->path = path;
-			located->ignoreCrc = false;
-			ZipClose();
-			HandleMessage(RETRO_LOG_INFO, "[FBNeo] Romset found at %s\n", path);
-		}
-		else
-			HandleMessage(RETRO_LOG_INFO, "[FBNeo] No romset found at %s\n", path);
+		g_find_list_path.push_back(located_archive());
+		located_archive* located = &g_find_list_path.back();
+		located->path = path;
+		located->ignoreCrc = false;
+		ZipClose();
+		HandleMessage(RETRO_LOG_INFO, "[FBNeo] Romset found at %s\n", path);
+		found_in_region = true;
+	}
+	else
+		HandleMessage(RETRO_LOG_INFO, "[FBNeo] No romset found at %s\n", path);
 
-		// Continue to search in subdirectories
-		// g_system_dir/fbneo/arcade/romName
-		// g_system_dir/fbneo/consoles/romName
+	// Continue to search in subdirectories only if not already found.
+	// g_system_dir/fbneo/arcade/romName
+	// g_system_dir/fbneo/consoles/romName
+	if (!found_in_region)
+	{
 		for (INT32 nType = 0; nType < TYPES_MAX; nType++)
 		{
 			memset(path, 0, sizeof(path));
@@ -1005,35 +1044,37 @@ static void locate_archive(std::vector<located_archive>& pathList, const char* c
 				located->ignoreCrc = false;
 				ZipClose();
 				HandleMessage(RETRO_LOG_INFO, "[FBNeo] Romset found at %s\n", path);
+				break;
 			}
 			else
 				HandleMessage(RETRO_LOG_INFO, "[FBNeo] No romset found at %s\n", path);
 		}
 	}
 
+	// Search system directory
+	snprintf_nowarn(path, sizeof(path), "%s%c%s", g_system_dir, PATH_DEFAULT_SLASH_C(), romName);
+	if (ZipOpen(path) == 0)
 	{
-		// Search system directory
-		snprintf_nowarn(path, sizeof(path), "%s%c%s", g_system_dir, PATH_DEFAULT_SLASH_C(), romName);
-		if (ZipOpen(path) == 0)
-		{
-			g_find_list_path.push_back(located_archive());
-			located_archive* located = &g_find_list_path.back();
-			located->path = path;
-			located->ignoreCrc = false;
-			ZipClose();
-			HandleMessage(RETRO_LOG_INFO, "[FBNeo] Romset found at %s\n", path);
-		}
-		else
-			HandleMessage(RETRO_LOG_INFO, "[FBNeo] No romset found at %s\n", path);
+		g_find_list_path.push_back(located_archive());
+		located_archive* located = &g_find_list_path.back();
+		located->path = path;
+		located->ignoreCrc = false;
+		ZipClose();
+		HandleMessage(RETRO_LOG_INFO, "[FBNeo] Romset found at %s\n", path);
 	}
+	else
+		HandleMessage(RETRO_LOG_INFO, "[FBNeo] No romset found at %s\n", path);
 
 	if (0 == CoreRomPathsLoad())
 	{
-		// Search custom directories
+		// Search custom directories. Each custom dir is its own region with
+		// base + subdirs and early-exit semantics.
 		for (INT32 i = 0; i < DIRS_MAX; i++)
 		{
 			char* p = find_last_slash(CoreRomPaths[i]);
 			if ((NULL != p) && ('\0' == p[1])) p[0] = '\0';
+
+			bool found_in_region = false;
 
 			// custom_dir/romName
 			memset(path, 0, sizeof(path));
@@ -1046,28 +1087,33 @@ static void locate_archive(std::vector<located_archive>& pathList, const char* c
 				located->ignoreCrc = false;
 				ZipClose();
 				HandleMessage(RETRO_LOG_INFO, "[FBNeo] Romset found at %s\n", path);
+				found_in_region = true;
 			}
 			else
 				HandleMessage(RETRO_LOG_INFO, "[FBNeo] No romset found at %s\n", path);
 
-			// Continue to search in subdirectories
+			// Continue to search in subdirectories only if not already found.
 			// custom_dir/arcade/romName
 			// custom_dir/consoles/romName
-			for (INT32 nType = 0; nType < TYPES_MAX; nType++)
+			if (!found_in_region)
 			{
-				memset(path, 0, sizeof(path));
-				snprintf_nowarn(path, MAX_PATH - 1, "%s%c%s%c%s", CoreRomPaths[i], PATH_DEFAULT_SLASH_C(), szTypeEnum[0][nType], PATH_DEFAULT_SLASH_C(), romName);
-				if (ZipOpen(path) == 0)
+				for (INT32 nType = 0; nType < TYPES_MAX; nType++)
 				{
-					g_find_list_path.push_back(located_archive());
-					located_archive* located = &g_find_list_path.back();
-					located->path = path;
-					located->ignoreCrc = false;
-					ZipClose();
-					HandleMessage(RETRO_LOG_INFO, "[FBNeo] Romset found at %s\n", path);
+					memset(path, 0, sizeof(path));
+					snprintf_nowarn(path, MAX_PATH - 1, "%s%c%s%c%s", CoreRomPaths[i], PATH_DEFAULT_SLASH_C(), szTypeEnum[0][nType], PATH_DEFAULT_SLASH_C(), romName);
+					if (ZipOpen(path) == 0)
+					{
+						g_find_list_path.push_back(located_archive());
+						located_archive* located = &g_find_list_path.back();
+						located->path = path;
+						located->ignoreCrc = false;
+						ZipClose();
+						HandleMessage(RETRO_LOG_INFO, "[FBNeo] Romset found at %s\n", path);
+						break;
+					}
+					else
+						HandleMessage(RETRO_LOG_INFO, "[FBNeo] No romset found at %s\n", path);
 				}
-				else
-					HandleMessage(RETRO_LOG_INFO, "[FBNeo] No romset found at %s\n", path);
 			}
 		}
 	}

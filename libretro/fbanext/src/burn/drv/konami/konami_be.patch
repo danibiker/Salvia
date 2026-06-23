@@ -1,0 +1,569 @@
+Index: d_gradius3.cpp
+===================================================================
+--- d_gradius3.cpp	(revision 385)
++++ d_gradius3.cpp	(working copy)
+@@ -641,9 +641,9 @@
+ 	UINT8 r,g,b;
+ 	UINT16 *p = (UINT16*)DrvPalRAM;
+ 	for (INT32 i = 0; i < 0x1000 / 2; i++) {
+-		r = (p[i] >> 10) & 0x1f;
+-		g = (p[i] >>  5) & 0x1f;
+-		b = (p[i] >>  0) & 0x1f;
++		r = (BURN_ENDIAN_SWAP_INT16(p[i]) >> 10) & 0x1f;
++		g = (BURN_ENDIAN_SWAP_INT16(p[i]) >>  5) & 0x1f;
++		b = (BURN_ENDIAN_SWAP_INT16(p[i]) >>  0) & 0x1f;
+ 
+ 		r = (r << 3) | (r >> 2);
+ 		g = (g << 3) | (g >> 2);
+Index: d_parodius.cpp
+===================================================================
+--- d_parodius.cpp	(revision 385)
++++ d_parodius.cpp	(working copy)
+@@ -505,7 +505,7 @@
+ 	UINT8 r,g,b;
+ 	UINT16 *p = (UINT16*)DrvPalRAM;
+ 	for (INT32 i = 0; i < 0x1000 / 2; i++) {
+-		UINT16 d = (p[i] << 8) | (p[i] >> 8);
++		UINT16 d = (BURN_ENDIAN_SWAP_INT16(p[i]) << 8) | (BURN_ENDIAN_SWAP_INT16(p[i]) >> 8);
+ 
+ 		b = (d >> 10) & 0x1f;
+ 		g = (d >>  5) & 0x1f;
+Index: d_simpsons.cpp
+===================================================================
+--- d_simpsons.cpp	(revision 385)
++++ d_simpsons.cpp	(working copy)
+@@ -544,7 +544,7 @@
+ 	num_inactive = counter = 256;
+ 
+ 	do {
+-		if ((*src & 0x8000) && (*src & 0xff))
++		if ((*src & BURN_ENDIAN_SWAP_INT16(0x8000)) && (*src & BURN_ENDIAN_SWAP_INT16(0xff)))
+ 		{
+ 			memcpy(dst, src, 0x10);
+ 			dst += 8;
+@@ -562,7 +562,7 @@
+ 	UINT8 r,g,b;
+ 	UINT16 *p = (UINT16*)DrvPalRAM;
+ 	for (INT32 i = 0; i < 0x1000 / 2; i++) {
+-		UINT16 d = (p[i] << 8) | (p[i] >> 8);
++		UINT16 d = BURN_ENDIAN_SWAP_INT16((p[i] << 8) | (p[i] >> 8));
+ 
+ 		b = (d >> 10) & 0x1f;
+ 		g = (d >>  5) & 0x1f;
+Index: d_tmnt.cpp
+===================================================================
+--- d_tmnt.cpp	(revision 385)
++++ d_tmnt.cpp	(working copy)
+@@ -2903,7 +2903,7 @@
+ 		INT32 Offset = (a - 0x300000) >> 1;
+ 		
+ 		if (Offset & 0x31) {
+-			return SpriteRam[Offset];
++			return BURN_ENDIAN_SWAP_INT16(SpriteRam[Offset]);
+ 		} else {
+ 			Offset = ((Offset & 0x000e) >> 1) | ((Offset & 0x1fc0) >> 3);
+ 			return K053245ReadWord(0, Offset);
+@@ -2932,7 +2932,7 @@
+ 	if (a >= 0x300000 && a <= 0x303fff) {
+ 		UINT16 *SpriteRam = (UINT16*)DrvSpriteRam;
+ 		INT32 Offset = (a - 0x300000) >> 1;
+-		SpriteRam[Offset] = d;
++		SpriteRam[Offset] = BURN_ENDIAN_SWAP_INT16(d);
+ 		
+ 		if (!(Offset & 0x0031)) {
+ 			Offset = ((Offset & 0x000e) >> 1) | ((Offset & 0x1fc0) >> 3);
+@@ -2972,12 +2972,12 @@
+ 	UINT8 keepaspect, xlock, ylock, zlock;
+ 
+ 	mcu = (UINT16*)(Drv68KRam + 0x4800);
+-	if ((mcu[8] & 0xff00) != 0x8200) return;
++	if ((BURN_ENDIAN_SWAP_INT16(mcu[8]) & 0xff00) != 0x8200) return;
+ 
+-	src_addr = (mcu[0] | (mcu[1]&0xff)<<16) >> 1;
+-	dst_addr = (mcu[2] | (mcu[3]&0xff)<<16) >> 1;
+-	mod_addr = (mcu[4] | (mcu[5]&0xff)<<16) >> 1;
+-	zlock    = (mcu[8] & 0xff) == 0x0001;
++	src_addr = (BURN_ENDIAN_SWAP_INT16(mcu[0]) | (BURN_ENDIAN_SWAP_INT16(mcu[1])&0xff)<<16) >> 1;
++	dst_addr = (BURN_ENDIAN_SWAP_INT16(mcu[2]) | (BURN_ENDIAN_SWAP_INT16(mcu[3])&0xff)<<16) >> 1;
++	mod_addr = (BURN_ENDIAN_SWAP_INT16(mcu[4]) | (BURN_ENDIAN_SWAP_INT16(mcu[5])&0xff)<<16) >> 1;
++	zlock    = (BURN_ENDIAN_SWAP_INT16(mcu[8]) & 0xff) == 0x0001;
+ 
+ 	for (i=0; i< 4; i++) src[i] = SekReadWord((src_addr + i) * 2);
+ 	for (i=0; i<24; i++) mod[i] = SekReadWord((mod_addr + i) * 2);
+@@ -3051,7 +3051,7 @@
+ 
+ void __fastcall Tmnt268KProtWord(UINT32 a, UINT16 d)
+ {
+-	*((UINT16*)(Drv68KRam + 0x4800 + (a & 0x1e))) = d;
++	*((UINT16*)(Drv68KRam + 0x4800 + (a & 0x1e))) = BURN_ENDIAN_SWAP_INT16(d);
+ }
+ 
+ void __fastcall Tmnt268KProtByte(UINT32 a, UINT8 d)
+@@ -3333,7 +3333,7 @@
+ 		INT32 Offset = (a - 0x180000) >> 1;
+ 		
+ 		if (Offset & 0x31) {
+-			return SpriteRam[Offset];
++			return BURN_ENDIAN_SWAP_INT16(SpriteRam[Offset]);
+ 		} else {
+ 			Offset = ((Offset & 0x000e) >> 1) | ((Offset & 0x1fc0) >> 3);
+ 			return K053245ReadWord(0, Offset);
+@@ -3341,7 +3341,7 @@
+ 	}
+ 
+ 	if ((a & 0xffff80) == 0x1c0500) {
+-		return *((UINT16*)(Drv68KRam + 0x4000 + (a & 0x7e)));
++		return BURN_ENDIAN_SWAP_INT16(*((UINT16*)(Drv68KRam + 0x4000 + (a & 0x7e))));
+ 	}
+ 
+ 	if (a == 0x1c0800) return ssriders_protection_r();
+@@ -3360,7 +3360,7 @@
+ 	if (a >= 0x180000 && a <= 0x183fff) {
+ 		UINT16 *SpriteRam = (UINT16*)DrvSpriteRam;
+ 		INT32 Offset = (a - 0x180000) >> 1;
+-		SpriteRam[Offset] = d;
++		SpriteRam[Offset] = BURN_ENDIAN_SWAP_INT16(d);
+ 		
+ 		if (!(Offset & 0x0031)) {
+ 			Offset = ((Offset & 0x000e) >> 1) | ((Offset & 0x1fc0) >> 3);
+@@ -3379,7 +3379,7 @@
+ 	}
+ 
+ 	if ((a & 0xffff80) == 0x1c0500) {
+-		*((UINT16*)(Drv68KRam + 0x4000 + (a & 0x7e))) = d;
++		*((UINT16*)(Drv68KRam + 0x4000 + (a & 0x7e))) = BURN_ENDIAN_SWAP_INT16(d);
+ 		return;
+ 	}
+ 
+@@ -3521,7 +3521,7 @@
+ 		INT32 Offset = (a - 0xb0000) >> 1;
+ 		
+ 		if (Offset & 0x31) {
+-			return SpriteRam[Offset];
++			return BURN_ENDIAN_SWAP_INT16(SpriteRam[Offset]);
+ 		} else {
+ 			Offset = ((Offset & 0x000e) >> 1) | ((Offset & 0x1fc0) >> 3);
+ 			return K053245ReadWord(0, Offset);
+@@ -3590,7 +3590,7 @@
+ 	if (a >= 0xb0000 && a <= 0xb3fff) {
+ 		UINT16 *SpriteRam = (UINT16*)DrvSpriteRam;
+ 		INT32 Offset = (a - 0xb0000) >> 1;
+-		SpriteRam[Offset] = d;
++		SpriteRam[Offset] = BURN_ENDIAN_SWAP_INT16(d);
+ 		
+ 		if (!(Offset & 0x0031)) {
+ 			Offset = ((Offset & 0x000e) >> 1) | ((Offset & 0x1fc0) >> 3);
+@@ -5251,7 +5251,7 @@
+ 	
+ 	for (INT32 i = 0; i < 0x800; i += 2) {
+ 		INT32 Offset = i & ~1;
+-		UINT32 Data = (PaletteRam[Offset] << 8) | PaletteRam[Offset + 1];
++		UINT32 Data = (BURN_ENDIAN_SWAP_INT16(PaletteRam[Offset]) << 8) | BURN_ENDIAN_SWAP_INT16(PaletteRam[Offset + 1]);
+ 
+ 		Palette[Offset >> 1] = (pal5bit(Data >> 0) << 16) | (pal5bit(Data >> 5) << 8) | pal5bit(Data >> 10);
+ 		DrvPalette[Offset >> 1] = BurnHighCol(pal5bit(Data >> 0), pal5bit(Data >> 5), pal5bit(Data >> 10), 0);
+@@ -5263,7 +5263,7 @@
+ 	UINT16 *PaletteRam = (UINT16*)DrvPaletteRam;
+ 	
+ 	for (INT32 i = 0; i < 0x800; i++) {
+-		UINT32 Data = PaletteRam[i];
++		UINT32 Data = BURN_ENDIAN_SWAP_INT16(PaletteRam[i]);
+ 
+ 		Palette[i] = (pal5bit(Data >> 0) << 16) | (pal5bit(Data >> 5) << 8) | pal5bit(Data >> 10);
+ 		DrvPalette[i] = BurnHighCol(pal5bit(Data >> 0), pal5bit(Data >> 5), pal5bit(Data >> 10), 0);
+@@ -5304,7 +5304,7 @@
+ 	INT32 r,g,b;
+ 	UINT16 *PaletteRam = (UINT16*)DrvPaletteRam;
+ 	
+-	UINT32 Data = PaletteRam[i];
++	UINT32 Data = BURN_ENDIAN_SWAP_INT16(PaletteRam[i]);
+ 
+ 	r = pal5bit(Data >> 0);
+ 	g = pal5bit(Data >> 5);
+Index: d_twin16.cpp
+===================================================================
+--- d_twin16.cpp	(revision 385)
++++ d_twin16.cpp	(working copy)
+@@ -517,8 +517,8 @@
+ 
+ static void twin16_spriteram_process()
+ {
+-	INT32 dx = scrollx[0];
+-	INT32 dy = scrolly[0];
++	INT32 dx = BURN_ENDIAN_SWAP_INT16(scrollx[0]);
++	INT32 dy = BURN_ENDIAN_SWAP_INT16(scrolly[0]);
+ 
+ 	UINT16 *spriteram16 = (UINT16*)DrvSprRAM;
+ 	UINT16 *source = spriteram16;
+@@ -528,23 +528,23 @@
+ 
+ 	while (source < finish)
+ 	{
+-		INT32 priority = source[0];
++		INT32 priority = BURN_ENDIAN_SWAP_INT16(source[0]);
+ 		if (priority & 0x8000 )
+ 		{
+ 			UINT16 *dest = &spriteram16[0x1800 + ((priority & 0xff) << 2)];
+ 
+-			INT32 xpos = (source[4] << 16) | source[5];
+-			INT32 ypos = (source[6] << 16) | source[7];
++			INT32 xpos = (BURN_ENDIAN_SWAP_INT16(source[4]) << 16) | BURN_ENDIAN_SWAP_INT16(source[5]);
++			INT32 ypos = (BURN_ENDIAN_SWAP_INT16(source[6]) << 16) | BURN_ENDIAN_SWAP_INT16(source[7]);
+ 
+-			INT32 attributes = source[2]&0x03ff;
++			INT32 attributes = BURN_ENDIAN_SWAP_INT16(source[2])&0x03ff;
+ 			if (priority & 0x0200) attributes |= 0x4000;
+ 
+ 			attributes |= 0x8000;
+ 
+ 			dest[0] = source[3];
+-			dest[1] = ((xpos >> 8) - dx) & 0xffff;
+-			dest[2] = ((ypos >> 8) - dy) & 0xffff;
+-			dest[3] = attributes;
++			dest[1] = BURN_ENDIAN_SWAP_INT16(((xpos >> 8) - dx) & 0xffff);
++			dest[2] = BURN_ENDIAN_SWAP_INT16(((ypos >> 8) - dy) & 0xffff);
++			dest[3] = BURN_ENDIAN_SWAP_INT16(attributes);
+ 		}
+ 
+ 		source += 0x50/2;
+@@ -617,17 +617,17 @@
+ 		case 0xc0002:
+ 		case 0xc0006:
+ 		case 0xc000a:
+-			scrollx[((address - 2) & 0x0c) >> 2] = data;
++			scrollx[((address - 2) & 0x0c) >> 2] = BURN_ENDIAN_SWAP_INT16(data);
+ 		return;
+ 
+ 		case 0xc0004:
+ 		case 0xc0008:
+ 		case 0xc000c:
+-			scrolly[((address - 4) & 0x0c) >> 2] = data;
++			scrolly[((address - 4) & 0x0c) >> 2] = BURN_ENDIAN_SWAP_INT16(data);
+ 		return;
+ 
+ 		case 0xe0000:
+-			gfx_bank = data;
++			gfx_bank = BURN_ENDIAN_SWAP_INT16(data);
+ 		return;
+ 	}
+ }
+@@ -746,7 +746,7 @@
+ {
+ 	if ((address & 0xfc0000) == 0x500000) {
+ 		INT32 offset = address & 0x3ffff;
+-		*((UINT16*)(DrvTileRAM + offset)) = data;	
++		*((UINT16*)(DrvTileRAM + offset)) = BURN_ENDIAN_SWAP_INT16(data);	
+ 		twin16_tile_write(offset);
+ 		return;
+ 	}
+@@ -1055,7 +1055,7 @@
+ 	UINT16 *p = (UINT16*)DrvPalRAM;
+ 	for (INT32 i = 0; i < 0x1000 / 2; i+=2)
+ 	{
+-		INT32 d = ((p[i+0] & 0xff) << 8) | (p[i+1] & 0xff);
++		INT32 d = ((BURN_ENDIAN_SWAP_INT16(p[i+0]) & 0xff) << 8) | (BURN_ENDIAN_SWAP_INT16(p[i+1]) & 0xff);
+ 
+ 		r = (d >>  0) & 0x1f;
+ 		g = (d >>  5) & 0x1f;
+@@ -1089,7 +1089,7 @@
+ 
+ 		if (sx >= nScreenWidth) continue;
+ 
+-		INT32 attr  = vram[offs];
++		INT32 attr  = BURN_ENDIAN_SWAP_INT16(vram[offs]);
+ 		INT32 code  = attr & 0x1ff;
+ 		INT32 color = (attr >> 9) & 0x0f;
+ 
+@@ -1123,8 +1123,8 @@
+ 	banks[1] = (gfx_bank >>  4) & 0x0f;
+ 	banks[0] =  gfx_bank & 0xf;
+ 
+-	INT32 dx = scrollx[1+o];
+-	INT32 dy = scrolly[1+o];
++	INT32 dx = BURN_ENDIAN_SWAP_INT16(scrollx[1+o]);
++	INT32 dy = BURN_ENDIAN_SWAP_INT16(scrolly[1+o]);
+ 
+ 	INT32 flipx = 0;
+ 	INT32 flipy = 0;
+@@ -1156,7 +1156,7 @@
+ 
+ 		sy -= 16;
+ 
+-		INT32 code  = vram[offs];
++		INT32 code  = BURN_ENDIAN_SWAP_INT16(vram[offs]);
+ 		INT32 color = (0x20 + (code >> 13) + 8 * palette);
+ 		    code = (code & 0x7ff) | (banks[(code >> 11) & 3] << 11);
+ 
+@@ -1249,7 +1249,7 @@
+ 
+ 				if (sx >= 0 && sx < 320)
+ 				{
+-					INT32 pen = pen_data[x/4];
++					INT32 pen = BURN_ENDIAN_SWAP_INT16(pen_data[x/4]);
+ 
+ 					pen = (pen >> ((~x & 3) << 2)) & 0x0f;
+ 
+@@ -1273,16 +1273,16 @@
+ 
+ 	for (; source < finish; source += 4)
+ 	{
+-		INT32 attributes = source[3];
++		INT32 attributes = BURN_ENDIAN_SWAP_INT16(source[3]);
+ 		INT32 prio = (attributes&0x4000) >> 14;
+ 		if (prio != priority) continue;
+ 
+-		INT32 code = source[0];
++		INT32 code = BURN_ENDIAN_SWAP_INT16(source[0]);
+ 
+ 		if (code != 0xffff && attributes & 0x8000)
+ 		{
+-			INT32 xpos 	= source[1];
+-			INT32 ypos 	= source[2];
++			INT32 xpos 	= BURN_ENDIAN_SWAP_INT16(source[1]);
++			INT32 ypos 	= BURN_ENDIAN_SWAP_INT16(source[2]);
+ 
+ 			INT32 pal_base	= ((attributes&0xf)+0x10)*16;
+ 			INT32 height	= 16<<((attributes>>6)&0x3);
+Index: d_vendetta.cpp
+===================================================================
+--- d_vendetta.cpp	(revision 385)
++++ d_vendetta.cpp	(working copy)
+@@ -746,7 +746,7 @@
+ 	UINT8 r,g,b;
+ 	UINT16 *p = (UINT16*)DrvPalRAM;
+ 	for (INT32 i = 0; i < 0x1000 / 2; i++) {
+-		UINT16 d = (p[i] << 8) | (p[i] >> 8);
++		UINT16 d = BURN_ENDIAN_SWAP_INT16((p[i] << 8) | (p[i] >> 8));
+ 
+ 		b = (d >> 10) & 0x1f;
+ 		g = (d >>  5) & 0x1f;
+Index: d_xmen.cpp
+===================================================================
+--- d_xmen.cpp	(revision 385)
++++ d_xmen.cpp	(working copy)
+@@ -524,7 +524,7 @@
+ 	UINT8 r,g,b;
+ 	UINT16 *p = (UINT16*)DrvPalRAM;
+ 	for (INT32 i = 0; i < 0x1000 / 2; i++) {
+-		INT32 d = p[i];
++		INT32 d = BURN_ENDIAN_SWAP_INT16(p[i]);
+ 
+ 		r = (d >>  0) & 0x1f;
+ 		g = (d >>  5) & 0x1f;
+Index: k053245.cpp
+===================================================================
+--- k053245.cpp	(revision 385)
++++ k053245.cpp	(working copy)
+@@ -129,7 +129,7 @@
+ 
+ 	return (r << 8) | (r >> 8);
+ #else
+-	return ret[offset];
++	return BURN_ENDIAN_SWAP_INT16(ret[offset]);
+ #endif
+ }
+ 
+@@ -140,7 +140,7 @@
+ #if 0
+ 	ret[offset] = (data << 8) | (data >> 8);
+ #else
+-	ret[offset] = data;
++	ret[offset] = BURN_ENDIAN_SWAP_INT16(data);
+ #endif
+ }
+ 
+@@ -241,7 +241,7 @@
+ 	/* prebuild a sorted table */
+ 	for (i=0x800/2, offs=0; offs<i; offs+=8)
+ 	{
+-		pri_code = sprbuf[offs];
++		pri_code = BURN_ENDIAN_SWAP_INT16(sprbuf[offs]);
+ 		if (pri_code & 0x8000)
+ 		{
+ 			pri_code &= 0x007f;
+@@ -259,17 +259,17 @@
+ 		offs = sortedlist[pri_code];
+ 		if (offs == -1) continue;
+ 
+-		code = sprbuf[offs+1];
++		code = BURN_ENDIAN_SWAP_INT16(sprbuf[offs+1]);
+ 		code = ((code & 0xffe1) + ((code & 0x0010) >> 2) + ((code & 0x0008) << 1)
+ 				 + ((code & 0x0004) >> 1) + ((code & 0x0002) << 2));
+-		color = sprbuf[offs+6] & 0x00ff;
++		color = BURN_ENDIAN_SWAP_INT16(sprbuf[offs+6]) & 0x00ff;
+ 		pri = 0;
+ 
+ 		(*K053245Callback[chip])(&code,&color,&pri);
+ 
+ 		if (pri != priority) continue;//------------------------------------------------------- OK??
+ 
+-		size = (sprbuf[offs] & 0x0f00) >> 8;
++		size = (BURN_ENDIAN_SWAP_INT16(sprbuf[offs]) & 0x0f00) >> 8;
+ 
+ 		w = 1 << (size & 0x03);
+ 		h = 1 << ((size >> 2) & 0x03);
+@@ -279,13 +279,13 @@
+           <0x40 enlarge (0x20 = double size)
+           >0x40 reduce (0x80 = half size)
+         */
+-		zoomy = sprbuf[offs+4];
++		zoomy = BURN_ENDIAN_SWAP_INT16(sprbuf[offs+4]);
+ 		if (zoomy > 0x2000) continue;
+ 		if (zoomy) zoomy = (0x400000+zoomy/2) / zoomy;
+ 		else zoomy = 2 * 0x400000;
+-		if ((sprbuf[offs] & 0x4000) == 0)
++		if ((BURN_ENDIAN_SWAP_INT16(sprbuf[offs]) & 0x4000) == 0)
+ 		{
+-			zoomx = sprbuf[offs+5];
++			zoomx = BURN_ENDIAN_SWAP_INT16(sprbuf[offs+5]);
+ 			if (zoomx > 0x2000) continue;
+ 			if (zoomx) zoomx = (0x400000+zoomx/2) / zoomx;
+ 			else zoomx = 2 * 0x400000;
+@@ -293,18 +293,18 @@
+ 		}
+ 		else zoomx = zoomy;
+ 
+-		ox = sprbuf[offs+3] + spriteoffsX;
+-		oy = sprbuf[offs+2];
++		ox = BURN_ENDIAN_SWAP_INT16(sprbuf[offs+3]) + spriteoffsX;
++		oy = BURN_ENDIAN_SWAP_INT16(sprbuf[offs+2]);
+ 
+ 		ox += K053245_dx[chip];
+ 		oy += K053245_dy[chip];
+ 
+-		flipx = sprbuf[offs] & 0x1000;
+-		flipy = sprbuf[offs] & 0x2000;
+-		mirrorx = sprbuf[offs+6] & 0x0100;
++		flipx = BURN_ENDIAN_SWAP_INT16(sprbuf[offs]) & 0x1000;
++		flipy = BURN_ENDIAN_SWAP_INT16(sprbuf[offs]) & 0x2000;
++		mirrorx = BURN_ENDIAN_SWAP_INT16(sprbuf[offs+6]) & 0x0100;
+ 		if (mirrorx) flipx = 0; // documented and confirmed
+-		mirrory = sprbuf[offs+6] & 0x0200;
+-		shadow = sprbuf[offs+6] & 0x0080;
++		mirrory = BURN_ENDIAN_SWAP_INT16(sprbuf[offs+6]) & 0x0200;
++		shadow = BURN_ENDIAN_SWAP_INT16(sprbuf[offs+6]) & 0x0080;
+ 
+ 		if (flipscreenX)
+ 		{
+Index: k053247.cpp
+===================================================================
+--- k053247.cpp	(revision 385)
++++ k053247.cpp	(working copy)
+@@ -134,7 +134,7 @@
+ void K053247Write(INT32 offset, INT32 data)
+ {
+ 	if (data & 0x10000) { // use word
+-		*((UINT16*)(K053247Ram + (offset & 0xffe))) = data;
++		*((UINT16*)(K053247Ram + (offset & 0xffe))) = BURN_ENDIAN_SWAP_INT16(data);
+ 	} else {
+ 		K053247Ram[offset & 0xfff] = data;
+ 	}
+@@ -160,7 +160,7 @@
+ void K053246Write(INT32 offset, INT32 data)
+ {
+ 	if (data & 0x10000) { // handle it as a word
+-		*((UINT16*)(K053246Regs + (offset & 6))) = data;
++		*((UINT16*)(K053246Regs + (offset & 6))) = BURN_ENDIAN_SWAP_INT16(data);
+ 	} else {
+ 		K053246Regs[offset & 7] = data;
+ 	}
+@@ -271,12 +271,12 @@
+ 	if (zcode == -1)
+ 	{
+ 		for (; offs<0x800; offs+=8)
+-			if (SprRam[offs] & 0x8000) sortedlist[count++] = offs;
++			if (BURN_ENDIAN_SWAP_INT16(SprRam[offs]) & 0x8000) sortedlist[count++] = offs;
+ 	}
+ 	else
+ 	{
+ 		for (; offs<0x800; offs+=8)
+-			if ((SprRam[offs] & 0x8000) && ((SprRam[offs] & 0xff) != zcode)) sortedlist[count++] = offs;
++			if ((BURN_ENDIAN_SWAP_INT16(SprRam[offs]) & 0x8000) && ((BURN_ENDIAN_SWAP_INT16(SprRam[offs]) & 0xff) != zcode)) sortedlist[count++] = offs;
+ 	}
+ 
+ 	w = count;
+@@ -289,11 +289,11 @@
+ 		for (y=0; y<h; y++)
+ 		{
+ 			offs = sortedlist[y];
+-			zcode = SprRam[offs] & 0xff;
++			zcode = BURN_ENDIAN_SWAP_INT16(SprRam[offs]) & 0xff;
+ 			for (x=y+1; x<w; x++)
+ 			{
+ 				temp = sortedlist[x];
+-				code = SprRam[temp] & 0xff;
++				code = BURN_ENDIAN_SWAP_INT16(SprRam[temp]) & 0xff;
+ 				if (zcode <= code) { zcode = code; sortedlist[x] = offs; sortedlist[y] = offs = temp; }
+ 			}
+ 		}
+@@ -304,11 +304,11 @@
+ 		for (y=0; y<h; y++)
+ 		{
+ 			offs = sortedlist[y];
+-			zcode = SprRam[offs] & 0xff;
++			zcode = BURN_ENDIAN_SWAP_INT16(SprRam[offs]) & 0xff;
+ 			for (x=y+1; x<w; x++)
+ 			{
+ 				temp = sortedlist[x];
+-				code = SprRam[temp] & 0xff;
++				code = BURN_ENDIAN_SWAP_INT16(SprRam[temp]) & 0xff;
+ 				if (zcode >= code) { zcode = code; sortedlist[x] = offs; sortedlist[y] = offs = temp; }
+ 			}
+ 		}
+@@ -318,15 +318,15 @@
+ 	{
+ 		offs = sortedlist[i];
+ 
+-		code = SprRam[offs+1];
+-		shadow = color = SprRam[offs+6];
++		code = BURN_ENDIAN_SWAP_INT16(SprRam[offs+1]);
++		shadow = color = BURN_ENDIAN_SWAP_INT16(SprRam[offs+6]);
+ 		primask = 0;
+ 
+ 		(*K053247Callback)(&code,&color,&primask);
+ 
+ 		if (primask != priority) continue;	//--------------------------------------- fix me!
+ 
+-		temp = SprRam[offs];
++		temp = BURN_ENDIAN_SWAP_INT16(SprRam[offs]);
+ 
+ 		size = (temp & 0x0f00) >> 8;
+ 		w = 1 << (size & 0x03);
+@@ -344,8 +344,8 @@
+ 		if (code & 0x20) ya += 4;
+ 		code &= ~0x3f;
+ 
+-		oy = (INT16)SprRam[offs+2];
+-		ox = (INT16)SprRam[offs+3];
++		oy = (INT16)BURN_ENDIAN_SWAP_INT16(SprRam[offs+2]);
++		ox = (INT16)BURN_ENDIAN_SWAP_INT16(SprRam[offs+3]);
+ 
+ 		if (K053247_wraparound)
+ 		{
+@@ -355,11 +355,11 @@
+ 			ox &= 0x3ff;
+ 		}
+ 
+-		y = zoomy = SprRam[offs+4] & 0x3ff;
++		y = zoomy = BURN_ENDIAN_SWAP_INT16(SprRam[offs+4]) & 0x3ff;
+ 		if (zoomy) zoomy = (0x400000+(zoomy>>1)) / zoomy; else zoomy = 0x800000;
+ 		if (!(temp & 0x4000))
+ 		{
+-			x = zoomx = SprRam[offs+5] & 0x3ff;
++			x = zoomx = BURN_ENDIAN_SWAP_INT16(SprRam[offs+5]) & 0x3ff;
+ 			if (zoomx) zoomx = (0x400000+(zoomx>>1)) / zoomx;
+ 			else zoomx = 0x800000;
+ 		}
+Index: konamiic.cpp
+===================================================================
+--- konamiic.cpp	(revision 385)
++++ konamiic.cpp	(working copy)
+@@ -74,7 +74,7 @@
+ 	UINT8 r,g,b;
+ 	UINT16 *p = (UINT16*)src;
+ 	for (INT32 i = 0; i < len / 2; i++) {
+-		UINT16 d = (p[i] << 8) | (p[i] >> 8);
++		UINT16 d = BURN_ENDIAN_SWAP_INT16((p[i] << 8) | (p[i] >> 8));
+ 
+ 		b = (d >> 10) & 0x1f;
+ 		g = (d >>  5) & 0x1f;
