@@ -142,6 +142,7 @@ public:
 		lastManufacturer = -1;
 		lastSystem = -1;
 		onlyParents = false;
+		lastOnlyParents = onlyParents;
 	}
 	
 	bool shouldFilter(){
@@ -519,6 +520,7 @@ struct t_joy_state {
 	// Keyboard state for retro_keyboard_event callback (overlay support)
 	static const int MAX_RETRO_KEYS = 342;  // RETROK_LAST = 342
 	t_key_input keyboard_state[MAX_RETRO_KEYS];
+	t_key_input last_key_processed[MAX_RETRO_KEYS];
 
 	// Estados del frame anterior
     bool btn_last_state[MAX_PLAYERS][MAX_BUTTONS];

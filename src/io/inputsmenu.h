@@ -79,6 +79,14 @@ inline void procesarOverlayTeclado(){
 	}
 }
 
+static void popBackUtf8(std::string& s) {
+    if (s.empty()) return;
+    std::size_t pos = s.size() - 1;
+    while (pos > 0 && (s[pos] & 0xC0) == 0x80)
+        pos--;  // saltar bytes de continuación
+    s.erase(pos);
+}
+
 inline int procesarGeneralConfig(){
 	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
 		gameMenu->configMenus->prevPos();
@@ -114,6 +122,47 @@ inline int procesarGeneralConfig(){
 		changeInConf = true;
 	} else if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_B)){
 		gameMenu->configMenus->volver();
+	}
+
+	int& retro_key = gameMenu->joystick->inputs.last_key_processed->key;
+	if (retro_key != -1){
+		t_key_input *keyInput = &gameMenu->joystick->inputs.keyboard_state[retro_key];
+		LOG_DEBUG("keyInput->keyjoydown: %d, %d, %d->%c", keyInput->key, keyInput->keyMod, keyInput->unicode, keyInput->unicode);
+		//Reset the last key pressed
+		retro_key = -1;
+
+		Menu* menuActual = gameMenu->configMenus->obtenerMenuActual();
+		if ((int)menuActual->opciones.size() > menuActual->seleccionado && menuActual->opciones[menuActual->seleccionado]->tipo == OPC_SHOW_TXT_VAL){
+			OpcionTxtAndValue *OptSel = static_cast<OpcionTxtAndValue *>(menuActual->opciones[menuActual->seleccionado]);
+
+			if (!OptSel->editable){
+				return 0;
+			}
+			
+			if (keyInput->key == RETROK_RETURN){
+				//Actualizamos el valor realmente en CFG::
+				if (OptSel->cfgKey < cfg::MAIN_CFG_MAX){
+					CfgLoader::configMain[OptSel->cfgKey].setPropValue(OptSel->tmpValue);
+				} 
+				//Volvemos a dejar el valor ofuscado si aplica
+				if (OptSel->isPassword)
+					OptSel->valor = PASS_MASK;
+			} else if (keyInput->key == RETROK_DELETE){
+				OptSel->tmpValue.clear();
+				OptSel->valor = OptSel->tmpValue;
+				LOG_DEBUG("Modificando valor del menu");
+			} else if (keyInput->key == RETROK_BACKSPACE){
+				if (!OptSel->valor.empty()){
+					popBackUtf8(OptSel->tmpValue);
+				}
+				OptSel->valor = OptSel->tmpValue;
+				LOG_DEBUG("Modificando valor del menu");
+			} else if (keyInput->key >= RETROK_SPACE && keyInput->unicode > 0){
+				OptSel->tmpValue += Constant::unicodeToUtf8String(keyInput->unicode);
+				OptSel->valor = OptSel->tmpValue;
+				LOG_DEBUG("Modificando valor del menu");
+			}
+		}
 	}
 
 	if (changeInConf || gameMenu->configMenus->options_changed_flag){

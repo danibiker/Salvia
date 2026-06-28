@@ -7,6 +7,7 @@
 #include <beans/structures.h>
 #include <font/fonts.h>
 #include <http/badgedownloader.h>
+#include <const/cfgconst.h>
 
 #include <iostream>
 #include <vector>
@@ -63,8 +64,10 @@ public:
     std::string titulo;
     TipoOpcion tipo;
 	int icon;
-    Opcion(std::string t, TipoOpcion tp) : titulo(t), tipo(tp), icon(-1) {}
-	Opcion(std::string t, TipoOpcion tp, int ico) : titulo(t), tipo(tp), icon(ico) {}
+	bool editable;
+
+    Opcion(std::string t, TipoOpcion tp) : titulo(t), tipo(tp), icon(-1), editable(false) {}
+	Opcion(std::string t, TipoOpcion tp, int ico) : titulo(t), tipo(tp), icon(ico), editable(false) {}
 	virtual std::string ejecutar() = 0; // Método virtual puro
     virtual ~Opcion() {}
 };
@@ -92,8 +95,21 @@ public:
 	std::string valor;
 	CallbackValue callback; // Función estática
     void* context;
+	bool isPassword;
+	std::string tmpValue;
+	cfg::MAIN_CFG_PROPS_KEYS cfgKey;
 
-    OpcionTxtAndValue(std::string t, std::string v) : Opcion(t, OPC_SHOW_TXT_VAL), valor(v), callback(NULL), context(NULL) {}
+    OpcionTxtAndValue(std::string t, std::string v) : Opcion(t, OPC_SHOW_TXT_VAL), valor(v), tmpValue(v), cfgKey(cfg::MAIN_CFG_MAX), callback(NULL), context(NULL), isPassword(false) {}
+	OpcionTxtAndValue(std::string t, cfg::MAIN_CFG_PROPS_KEYS k) : Opcion(t, OPC_SHOW_TXT_VAL), cfgKey(k), callback(NULL), context(NULL), isPassword(false) {
+		CfgLoader::configMain[k].getPropValue(valor);
+		tmpValue = valor;
+	}
+
+	void setPassword(bool b){
+		isPassword = b;
+		if (b) valor = PASS_MASK;
+	}
+
 	std::string ejecutar() override {
 		if (callback != NULL) {
             return callback(context, (void *)&valor); 
@@ -293,6 +309,20 @@ private:
 	static const int textFps = 20;
 	static const int frameTimeText = (int)(1000 / textFps);
 
+	struct AskUserData {
+		std::string* valorPtr;
+		CfgLoader* config;
+		bool isPassword;
+		cfg::MAIN_CFG_PROPS_KEYS cfgKey;
+
+		AskUserData(){
+			isPassword = false;
+			cfgKey = cfg::MAIN_CFG_MAX;
+			valorPtr = NULL;
+			config = NULL;
+		}
+	};
+
     // Lista de todos los menús para liberar memoria al final
     std::vector<Menu*> todosLosMenus;
 	Menu* menuCoreOptions;
@@ -417,7 +447,13 @@ public:
 	static std::string bootWithoutDisk(void* inst, void *value);
 	static std::string changeRAUser(void* inst, void *value);
 	static std::string changeRAPassword(void* inst, void *value);
-	
+	static std::string changeScrapUser(void* inst, void *value);
+	static std::string changeScrapPassword(void* inst, void *value);
+
+	static void onUserText(const std::string& text, void* userData);
+	static void onScrapPasswordText(const std::string& text, void* userData);
+	static void onRAUserText(const std::string& text, void* userData);
+	static void onRAPasswordText(const std::string& text, void* userData);
 };
 
 template <typename T>

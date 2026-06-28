@@ -622,3 +622,13 @@ std::string dirutil::getPathPrefix(std::string filepath, std::string basePath) {
 	//LOG_DEBUG("filepath relative. Returning: %s", (result + filepath).c_str());
     return result + filepath;
 }
+
+std::string dirutil::getRelativeDir(std::string filepath, std::string basePath) {
+	const std::size_t ini = filepath.find(basePath);
+	const std::size_t beginCut = ini + basePath.length();
+	if (ini != std::string::npos && beginCut < filepath.length()){
+		return filepath.substr(beginCut);
+	} else {
+		return filepath;
+	}
+}

@@ -4,9 +4,16 @@
 #define PICOJSON_USE_RVALUE_REFERENCE 0
 #include <http/picojson.h>
 
+// Warning: DEV_ID_SCREENSCRAPPER and DEV_PASS_SCREENSCRAPPER credentials should be created independently, 
+// and not included in the github repository. I define them into dev_credentials.h and add it to .gitignore
+#include "dev_credentials.h"
+
+
 volatile LONG Scrapper::scrapping = 0;
 ScrapStatus Scrapper::g_status;
 HANDLE Scrapper::hMainThread = NULL;
+FilePackage Scrapper::filePackage;
+HANDLE Scrapper::hEventPausa = NULL;
 
 // Caracteres que queremos sustituir por un espacio (para no pegar palabras)
 const char SYMBOLS_TO_SPACE[] = ":-._/\\|,;"; 
@@ -17,6 +24,13 @@ const char SYMBOLS_TO_REMOVE[] = "\"\'!?*#¿¡";
 Scrapper::Scrapper(){
 	InterlockedExchange(&scrapping, 0);
 	cargarEquivalencias(Constant::getAppDir() + ROUTE_SCRAP_TRANSLATIONS);
+	// El tercer parametro a FALSE (nace cerrado/rojo)
+	hEventPausa = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if (hEventPausa == NULL) {
+        // Esto te dirá el código de error exacto de Windows si falla
+        DWORD error = GetLastError(); 
+        LOG_DEBUG("Error crítico al crear el evento: %d", error);
+    }
 }
 
 Scrapper::~Scrapper(){
@@ -75,6 +89,19 @@ DWORD WINAPI Scrapper::mainScrapThread(LPVOID lpParam) {
 	return 0;
 }
 
+// Lambda interna para unificar la comprobación de existencia
+bool Scrapper::archivoExiste(const std::string& rutaBase, const std::string& sufijo, bool saveToBin, bool esMetadata) {
+	dirutil dir;
+	std::string rutaCompleta = rutaBase + sufijo;
+	if (saveToBin) {
+		std::size_t tam;
+		std::string rutaRelativa = getRelativeDir(rutaCompleta);
+		return esMetadata ? !filePackage.GetFileText(rutaRelativa).empty() 
+							: filePackage.GetFile(rutaRelativa, tam) != nullptr;
+	}
+	return dir.fileExists(rutaCompleta.c_str());
+};
+
 /**
 *
 */
@@ -109,12 +136,18 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 	resultado.titledir = assetsdir + ASSETS_DIR[ASSETS_TITLE];
 	resultado.boxdir = assetsdir + ASSETS_DIR[ASSETS_BOX];
 	resultado.sinopsisdir = assetsdir + ASSETS_DIR[ASSETS_SINOPSIS];
+	CfgLoader::configMain[cfg::packedImages].getPropValue(resultado.saveToBin);
 
-	// Creacion de directorios
-	if (!onlyCount && !dir.dirExists(resultado.snapdir.c_str())) dir.createDirRecursive(resultado.snapdir.c_str());
-	if (!onlyCount && !dir.dirExists(resultado.titledir.c_str())) dir.createDirRecursive(resultado.titledir.c_str());
-	if (!onlyCount && !dir.dirExists(resultado.boxdir.c_str())) dir.createDirRecursive(resultado.boxdir.c_str());
-	if (!onlyCount && !dir.dirExists(resultado.sinopsisdir.c_str())) dir.createDirRecursive(resultado.sinopsisdir.c_str());
+	if (resultado.saveToBin){
+		std::string packetAssetsFile = dir.getPathPrefix(emulatorCfg.assets + Constant::getFileSep() + SCRAPPING_DAT);
+		filePackage.Load(packetAssetsFile);
+	} else {
+		// Creacion de directorios
+		if (!onlyCount && !dir.dirExists(resultado.snapdir.c_str())) dir.createDirRecursive(resultado.snapdir.c_str());
+		if (!onlyCount && !dir.dirExists(resultado.titledir.c_str())) dir.createDirRecursive(resultado.titledir.c_str());
+		if (!onlyCount && !dir.dirExists(resultado.boxdir.c_str())) dir.createDirRecursive(resultado.boxdir.c_str());
+		if (!onlyCount && !dir.dirExists(resultado.sinopsisdir.c_str())) dir.createDirRecursive(resultado.sinopsisdir.c_str());
+	}
 
 	dir.listarFilesSuperFast(romsdir.c_str(), files, extFilter, true, false);
 	std::string urlBase, fullUrl;
@@ -124,16 +157,13 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 		LOG_DEBUG("Obteniendo file %s\n", dir.getFileName(file->filename).c_str());
 		resultado.clear();
 		resultado.filenameNoExt = dir.getFileNameNoExt(file->filename);
-			
-		//Si ya existen los elementos, no es necesario hacer peticiones a screenscrapper
-		if (scrapperConfig.scrapArtType == SCRAP_NO_SCREENSHOT && dir.fileExists(std::string(resultado.snapdir + Constant::getFileSep() + resultado.filenameNoExt + ".png").c_str())) 
-			continue;
-		if (scrapperConfig.scrapArtType == SCRAP_NO_BOX && dir.fileExists(std::string(resultado.boxdir + Constant::getFileSep() + resultado.filenameNoExt + ".png").c_str())) 
-			continue;
-		if (scrapperConfig.scrapArtType == SCRAP_NO_TITLE && dir.fileExists(std::string(resultado.titledir + Constant::getFileSep() + resultado.filenameNoExt + ".png").c_str())) 
-			continue;
-		if (scrapperConfig.scrapArtType == SCRAP_NO_METADATA && dir.fileExists(std::string(resultado.sinopsisdir + Constant::getFileSep() + resultado.filenameNoExt + ".txt").c_str())) 
-			continue;
+
+		const std::string filename = Constant::getFileSep() + resultado.filenameNoExt ;
+		// Validación unificada de tipos de scraping
+		if (scrapperConfig.scrapArtType == SCRAP_NO_SCREENSHOT && archivoExiste(resultado.snapdir, filename + ".png", resultado.saveToBin)) continue;
+		if (scrapperConfig.scrapArtType == SCRAP_NO_BOX        && archivoExiste(resultado.boxdir, filename + ".png", resultado.saveToBin))  continue;
+		if (scrapperConfig.scrapArtType == SCRAP_NO_TITLE      && archivoExiste(resultado.titledir, filename + ".png", resultado.saveToBin)) continue;
+		if (scrapperConfig.scrapArtType == SCRAP_NO_METADATA   && archivoExiste(resultado.sinopsisdir, filename + ".txt", resultado.saveToBin, true)) continue;
 
 		if (onlyCount){
 			counterFiles++;
@@ -160,7 +190,10 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 		if (scrapperConfig.origin == SC_SCREENCSRAPER){
 			// URL base fuera del bucle para ahorrar CPU/RAM
 			urlBase = "https://api.screenscraper.fr/api2/jeuInfos.php";
-			fullUrl = urlBase + "?devid=jelos&devpassword=jelos&softname=scrapdos1&output=xml&ssid=test&sspassword=test";
+			std::string user = CfgLoader::configMain[cfg::scrapUser].valueStr;
+			std::string pass = CfgLoader::configMain[cfg::scrapPass].valueStr;
+			fullUrl = urlBase + "?devid=" + DEV_ID_SCREENSCRAPPER +"&devpassword=" + DEV_PASS_SCREENSCRAPPER 
+				+ "&softname=salvia&output=xml&ssid=" + user + "&sspassword=" + pass;
 			fullUrl += "&systemeid=" + Constant::TipoToStr(sistema);
 			fullUrl +=  "&romtype=rom&romnom=" + peticion.romname;
 		} else if (scrapperConfig.origin == SC_THEGAMESDB){
@@ -171,7 +204,7 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 			urlBase += "&name=";
 			fullUrl = urlBase + peticion.romname;
 		}
-		LOG_DEBUG("Buscando datos para: %s en url: %s\n", file->filename.c_str(), fullUrl.c_str());
+		//LOG_DEBUG("Buscando datos para: %s en url: %s\n", file->filename.c_str(), fullUrl.c_str());
 
 		if (downloader.fetchUrl(fullUrl, response, &downloadProgress)) {
 			if (scrapperConfig.origin == SC_SCREENCSRAPER){
@@ -183,6 +216,15 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 			guardarRecursos(dwQueue, resultado);
 		}
 	}
+
+	//Esperamos a que se descarguen todas las imagenes del sistema para continuar
+	//if (resultado.saveToBin && !onlyCount && dwQueue.size() > 0){
+	//	WaitForSingleObject(hEventPausa, INFINITE);
+	//	std::string packetAssetsFile = dir.getPathPrefix(emulatorCfg.assets + Constant::getFileSep() + SCRAPPING_DAT);
+	//	filePackage.SaveAs(packetAssetsFile);
+	//	ResetEvent(hEventPausa);
+	//}
+
 	return counterFiles;
 }
 
@@ -204,10 +246,26 @@ DWORD WINAPI Scrapper::imageDownloaderThread(LPVOID lpParam) {
         LeaveCriticalSection(&g_status.cs);
 
         LOG_DEBUG("Descargando: %s\n", task.destPath.c_str());
-        downloader.fetchFile(task.url, task.destPath, &task.downloadProgress);
+		if (task.saveToBin){
+			std::string contents;
+			if (downloader.fetchUrl(task.url, contents, &task.downloadProgress) && contents.size() > 0){
+				std::string relativeDir = getRelativeDir(task.destPath);
+				LOG_DEBUG("Storing image to bin with relative dir: %s\n", relativeDir.c_str());
+				filePackage.AddFileToDisk(relativeDir, reinterpret_cast<const unsigned char*>(contents.data()), contents.size(), "");
+			} else {
+				LOG_DEBUG("Image could not be saved: %s\n", task.url.c_str());
+			}
+		} else {
+			downloader.fetchFile(task.url, task.destPath, &task.downloadProgress);
+		}
 
         EnterCriticalSection(&g_status.cs);
         g_status.remainingMedia--;
+
+		//if (g_status.remainingMedia == 0 && queue->size() == 0){
+		//	//Reanudamos los otros sistemas y guardamos el binario con todas las imagenes si procede
+		//	SetEvent(hEventPausa);
+		//}
         LeaveCriticalSection(&g_status.cs);
     }
 
@@ -547,6 +605,19 @@ void Scrapper::obtenerImagenesTGDB(ScraperAsk& peticion, ScraperResult& resultad
 	}
 }
 
+std::string Scrapper::getRelativeDir(std::string s){
+	if (s.empty())
+		return "";
+	//Buscamos el último separador de carpeta para aislar el nombre
+	std::size_t lastSep = s.find_last_of("/\\");
+	if (lastSep != std::string::npos){
+		//Pero realmente queremos incluir el ultimo directorio
+		lastSep = s.substr(0, lastSep).find_last_of("/\\");
+	}
+	std::size_t startSearch = (lastSep == string::npos) ? 0 : lastSep + 1;
+	return s.substr(startSearch);
+}
+
 /**
 *
 */
@@ -554,9 +625,20 @@ void Scrapper::guardarRecursos(SafeDownloadQueue& dwQueue, ScraperResult &result
 	// 1. Guardar Sinopsis
 	dirutil dir;
 	std::string rutaTxt = resultado.sinopsisdir + Constant::getFileSep() + resultado.filenameNoExt + ".txt";
-	if (!dir.fileExists(rutaTxt.c_str()) && !resultado.sinopsis.empty()) {
-		guardarArchivoTexto(rutaTxt, resultado.sinopsis);
+	
+	if (resultado.saveToBin){
+		std::string relativeDir = getRelativeDir(rutaTxt);
+		std::string text = filePackage.GetFileText(relativeDir);
+		if (text.empty() && !resultado.sinopsis.empty()){
+			LOG_DEBUG("Storing text to bin with relative dir: %s\n", relativeDir.c_str());
+			filePackage.AddFileToDisk(relativeDir, NULL, 0, resultado.sinopsis);
+		}
+	} else {
+		if (!dir.fileExists(rutaTxt.c_str()) && !resultado.sinopsis.empty()) {
+			guardarArchivoTexto(rutaTxt, resultado.sinopsis);
+		}
 	}
+	
 
 	// 2. Guardar Imagenes
 	std::map<std::string, t_media>::iterator it;
@@ -570,11 +652,11 @@ void Scrapper::guardarRecursos(SafeDownloadQueue& dwQueue, ScraperResult &result
 		}
 		std::string rutaImg = destDir + Constant::getFileSep() + resultado.filenameNoExt + ".png";
 		if (!dir.fileExists(rutaImg.c_str()) && !it->second.url.empty()) {
-			//downloader.fetchFile(it->second.url, rutaImg, &downloadProgress);
 			DownloadTask task;
 			task.url = it->second.url;
 			task.destPath = rutaImg;
 			task.downloadProgress = 0.0f;
+			task.saveToBin = resultado.saveToBin;
 			LOG_DEBUG("Descargando imagen: %s con url: %s\n", dir.getFileName(rutaImg).c_str(), task.url.c_str());
 			dwQueue.push(task); // Encolamos para el otro hilo
 			LOG_DEBUG("Imagen encolada\n");

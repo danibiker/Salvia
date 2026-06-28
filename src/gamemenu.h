@@ -1,24 +1,30 @@
 #pragma once
 
+#include <string>
+#include <sstream>
+#include <fstream>
+#include <iostream>
+#include <vector>
+#include <list>
+#include <map>
+
 #include <SDL.h>
 #include <const/Constant.h>
-//#include "io/screen.h"
-//#include "io/sound.h"
-//#include "utils/so/launcher.h"
-
 #include <beans/structures.h>
 #include <uiobjects/image.h>
 #include <uiobjects/textarea.h>
 #include <uiobjects/listmenu.h>
 #include <menus/gestormenus.h>
-#include <io/cfgloader.h>
 #include <engine.h>
-#include <io/dirutil.h>
 #include <http/scrapper.h>
 #include <http/achievements.h>
 #include <unzip/unziptool_common.h>
-#include <io/video_common.h>
 #include "unzip/ZipBrowser.h"
+#include <io/video_common.h>
+#include <io/dirutil.h>
+#include <io/cfgloader.h>
+#include <io/filepackage.h>
+#include "menuassetloader.h"
 
 
 #ifdef _XBOX
@@ -29,15 +35,6 @@
 	#include <io/video.h>
 	#include <io/hqx_2/hqx.h>
 #endif
-
-#include <memory>
-#include <string>
-#include <sstream>
-#include <fstream>
-#include <iostream>
-#include <vector>
-#include <list>
-#include <map>
 
 
 static const string SNAP = "snap";
@@ -84,61 +81,6 @@ enum FILE_NAVIGATION
 	FS_DIR_BACK
 };
 
-class GameMenu; // fwd
-
-/* MenuAssetLoader: worker dedicado a cargar de forma asincrona el panel
- * derecho del menu (snap/box2d/snaptit + textos year/manufacturer/system
- * y synopsis).  Permite que la navegacion del menu (lista izquierda)
- * responda inmediatamente aunque el PNG/text de la rom seleccionada
- * tarde en cargar.
- *
- * Cancelacion: cada submit() incrementa un contador.  Entre cada paso
- * de carga el worker compara y, si llego una peticion mas reciente,
- * abandona la actual y reentra con la nueva. */
-class MenuAssetLoader {
-public:
-    MenuAssetLoader();
-    ~MenuAssetLoader();
-
-    void start(GameMenu* owner);
-    void stop();
-
-    /* Encola una nueva peticion. El worker cancela la anterior si seguia en
-     * curso.  El worker maneja el synopsis (file IO + word-wrap) y las 3
-     * imagenes; usa una TTF_Font* INDEPENDIENTE (creada por
-     * Fonts::createIndependentFont) para evitar el race con la fuente
-     * compartida del main thread. */
-    void submit(const std::string& fileNoExt,
-                const std::string& assetsDir,
-                SDL_PixelFormat* format,
-                int overlayW,
-                int synopsisMaxW);
-
-private:
-    static DWORD WINAPI WorkerProc(LPVOID self_ptr);
-    void run();
-
-    GameMenu*           m_owner;
-    CRITICAL_SECTION    m_reqCS;
-    HANDLE              m_event;
-    HANDLE              m_thread;
-    volatile LONG       m_seqSubmitted;   // se incrementa en cada submit
-    volatile bool       m_stop;
-    bool                m_started;
-    bool                m_reqCSInited;
-    TTF_Font*           m_workerFont;     // copia INDEPENDIENTE para TTF en el worker
-
-    // Datos de la peticion pendiente (protegidos por m_reqCS)
-    std::string         m_pendFileNoExt;
-    std::string         m_pendAssetsDir;
-    SDL_PixelFormat*    m_pendFormat;
-    int                 m_pendOverlayW;
-    int                 m_pendSynopsisMaxW;
-
-    MenuAssetLoader(const MenuAssetLoader&);
-    MenuAssetLoader& operator=(const MenuAssetLoader&);
-};
-
 class GameMenu : public Engine{
     public:
         GameMenu(CfgLoader *cfgLoader);
@@ -178,6 +120,7 @@ class GameMenu : public Engine{
 		CfgLoader * getCfgLoader();
         void setCfgLoader(CfgLoader *cfgLoader);
 	    bool isDebug();
+		FilePackage filePackage;
 		
 		void setEmuStatus(int tmpStat){
 			lastStatus = status;
@@ -212,6 +155,7 @@ class GameMenu : public Engine{
 		void fillOverlayAlpha(int colorIndex, int alpha);
 		SDL_Surface* clonarPantalla(SDL_Surface*, int);
 		bool loadBgImage();
+
     private:
 		std::vector<Message> messages;
 		th_messages messagesAchievement;
@@ -241,8 +185,11 @@ class GameMenu : public Engine{
 
 		// Carga asincrona del panel de assets — ver MenuAssetLoader arriba.
 		friend class MenuAssetLoader;
-		CRITICAL_SECTION m_menuAssetCS;   // protege accesos a menuImages/menuTextAreas en zonas concurrentes
-		bool             m_menuAssetCSInited;
+		CRITICAL_SECTION m_csSnap;
+		CRITICAL_SECTION m_csBox2d;
+		CRITICAL_SECTION m_csSnaptit;
+		CRITICAL_SECTION m_csSynopsis;
+		bool             m_csInited;
 		MenuAssetLoader  m_menuAssetLoader;
 
 		

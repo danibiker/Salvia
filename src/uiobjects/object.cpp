@@ -24,3 +24,17 @@ void Object::draw(SDL_Surface *video_page){
 void Object::draw(SDL_Surface *video_page, GameTicks gameTicks){
     //To implement on the child
 }
+
+void Object::addAttempt(const std::string &filepath){
+	latestLoadAttempts.push_back(filepath);
+}
+
+bool Object::isAttempted(const std::string &filepath){
+	// Buscar el elemento
+    auto it = std::find(latestLoadAttempts.begin(), latestLoadAttempts.end(), filepath);
+    return it != latestLoadAttempts.end();
+}
+
+void Object::clearAttempts(){
+	latestLoadAttempts.clear();
+}

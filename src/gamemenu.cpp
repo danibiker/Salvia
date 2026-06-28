@@ -18,260 +18,8 @@
  * envio via RETRO_ENVIRONMENT_SET_MEMORY_MAPS (ej. HRAM en Game Boy). */
 extern const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_count);
 
-/* ======================================================================
- * MenuAssetLoader implementacion
- *
- * Patron de un thread persistente con peticion + numero de secuencia.
- * Submit() copia los datos necesarios e incrementa la secuencia; el worker
- * compara la secuencia entre pasos para cancelar cargas obsoletas en
- * cuanto el usuario sigue navegando.
- *
- * El acceso a menuImages/menuTextAreas se serializa con m_menuAssetCS
- * del GameMenu (un solo lock simple).  El worker libera el lock entre
- * pasos, de modo que el dibujo en el main thread bloquee como mucho lo
- * que dura UNA carga (~50ms para una PNG), no toda la cadena.
- * ====================================================================== */
-MenuAssetLoader::MenuAssetLoader()
-    : m_owner(NULL), m_event(NULL), m_thread(NULL), m_seqSubmitted(0),
-      m_stop(false), m_started(false), m_reqCSInited(false),
-      m_workerFont(NULL),
-      m_pendFormat(NULL), m_pendOverlayW(0), m_pendSynopsisMaxW(0)
-{
-}
-
-MenuAssetLoader::~MenuAssetLoader()
-{
-    stop();
-}
-
-void MenuAssetLoader::start(GameMenu* owner)
-{
-    if (m_started) return;
-
-    m_owner = owner;
-    InitializeCriticalSection(&m_reqCS);
-    m_reqCSInited = true;
-    m_event  = CreateEvent(NULL, FALSE /*auto-reset*/, FALSE, NULL);
-    m_stop   = false;
-
-    /* TTF_Font INDEPENDIENTE para uso exclusivo del worker.  Cada
-     * TTF_OpenFontRW devuelve una instancia con su propio FT_Face y
-     * caches de glifos  sin race con la fuente del main thread. */
-    m_workerFont = Fonts::createIndependentFont(Fonts::FONTBIG);
-    if (!m_workerFont) {
-        LOG_ERROR("MenuAssetLoader: no se pudo crear TTF_Font independiente");
-    }
-
-    m_thread = CreateThread(NULL, 0, &MenuAssetLoader::WorkerProc, this, CREATE_SUSPENDED, NULL);
-
-    if (!m_thread) {
-        LOG_ERROR("MenuAssetLoader: CreateThread FAILED  asset loads will be done inline");
-        if (m_workerFont) { TTF_CloseFont(m_workerFont); m_workerFont = NULL; }
-        if (m_event) { CloseHandle(m_event); m_event = NULL; }
-        if (m_reqCSInited) { DeleteCriticalSection(&m_reqCS); m_reqCSInited = false; }
-        return;
-    }
-
-#ifdef _XBOX
-    /* IO_THREAD ; below normal para no robarle ciclos al main loop. */
-    XSetThreadProcessor(m_thread, IO_THREAD);
-#endif
-
-	SetThreadPriority(m_thread, THREAD_PRIORITY_BELOW_NORMAL);
-    ResumeThread(m_thread);
-
-    m_started = true;
-    LOG_DEBUG("MenuAssetLoader: started");
-}
-
-void MenuAssetLoader::stop()
-{
-    if (!m_started) return;
-
-    m_stop = true;
-    if (m_event) SetEvent(m_event);
-
-    /* Timeout defensivo: el worker solo hace lecturas de disco e IMG_Load
-     *  no se cuelga.  3s es de sobra. */
-    if (m_thread) {
-        DWORD wr = WaitForSingleObject(m_thread, 3000);
-        if (wr == WAIT_TIMEOUT) {
-            LOG_ERROR("MenuAssetLoader: worker did not exit in 3s");
-        }
-        CloseHandle(m_thread);
-        m_thread = NULL;
-    }
-    if (m_event) { CloseHandle(m_event); m_event = NULL; }
-    if (m_reqCSInited) { DeleteCriticalSection(&m_reqCS); m_reqCSInited = false; }
-    if (m_workerFont) { TTF_CloseFont(m_workerFont); m_workerFont = NULL; }
-
-    m_started = false;
-    LOG_DEBUG("MenuAssetLoader: stopped");
-}
-
-void MenuAssetLoader::submit(const std::string& fileNoExt,
-                              const std::string& assetsDir,
-                              SDL_PixelFormat* format,
-                              int overlayW,
-                              int synopsisMaxW)
-{
-    if (!m_started) return;
-
-    EnterCriticalSection(&m_reqCS);
-    m_pendFileNoExt    = fileNoExt;
-    m_pendAssetsDir    = assetsDir;
-    m_pendFormat       = format;
-    m_pendOverlayW     = overlayW;
-    m_pendSynopsisMaxW = synopsisMaxW;
-    InterlockedIncrement(&m_seqSubmitted);
-    LeaveCriticalSection(&m_reqCS);
-
-    SetEvent(m_event);
-}
-
-DWORD WINAPI MenuAssetLoader::WorkerProc(LPVOID self_ptr)
-{
-    MenuAssetLoader* self = static_cast<MenuAssetLoader*>(self_ptr);
-    self->run();
-    return 0;
-}
-
-void MenuAssetLoader::run()
-{
-    while (!m_stop) {
-        WaitForSingleObject(m_event, 250);
-        if (m_stop) break;
-
-		while (!m_stop && m_owner->status == EMU_MENU) {
-            // Snapshot de la peticion
-            std::string fileNoExt, assetsDir;
-            SDL_PixelFormat* format;
-            int overlayW, synopsisMaxW;
-            LONG mySeq;
-
-            EnterCriticalSection(&m_reqCS);
-            fileNoExt    = m_pendFileNoExt;
-            assetsDir    = m_pendAssetsDir;
-            format       = m_pendFormat;
-            overlayW     = m_pendOverlayW;
-            synopsisMaxW = m_pendSynopsisMaxW;
-            mySeq        = m_seqSubmitted;
-            LeaveCriticalSection(&m_reqCS);
-
-            if (fileNoExt.empty()) break;
-
-            const std::string sep = std::string(Constant::tempFileSep);
-
-            /* Patron por asset:
-             *   1) leer la ruta actual del slot (LOCK breve)
-             *   2) si distinta -> trabajo lento (IO + decode/wrap) FUERA DEL LOCK
-             *   3) adopt en el slot (LOCK breve)
-             * Asi el lock se mantiene microsegundos.  Entre 2 y 3 hay
-             * chequeo de cancelacion.
-             *
-             * TTF: el worker usa m_workerFont (fuente INDEPENDIENTE de la
-             * del main thread)  sin race aunque concurra con TTF_RenderText
-             * del main thread sobre la fuente compartida. */
-            #define MAL_CANCELLED() (m_seqSubmitted != mySeq || m_stop)
-
-            // 1. SYNOPSIS (file IO + word-wrap con la fuente del worker)
-            if (m_workerFont && synopsisMaxW > 0) {
-                const std::string synPath = assetsDir + "synopsis" + sep + fileNoExt + ".txt";
-                std::string currentPath;
-                EnterCriticalSection(&m_owner->m_menuAssetCS);
-                currentPath = m_owner->menuTextAreas[SYNOPSIS].getFilepath();
-                LeaveCriticalSection(&m_owner->m_menuAssetCS);
-
-                if (currentPath != synPath) {
-                    std::vector<std::string> wrapped =
-                        TextArea::wrapTextFileWithFont(synPath, m_workerFont, synopsisMaxW);
-
-                    if (MAL_CANCELLED()) continue;
-
-                    EnterCriticalSection(&m_owner->m_menuAssetCS);
-                    m_owner->menuTextAreas[SYNOPSIS].adoptLines(wrapped, synPath);
-                    m_owner->menuTextAreas[SYNOPSIS].resetTicks(m_owner->gameTicks);
-                    LeaveCriticalSection(&m_owner->m_menuAssetCS);
-                }
-            }
-
-            if (MAL_CANCELLED()) continue;
-
-            // 2. SNAP
-            {
-                const std::string snapPath = assetsDir + "snap" + sep + fileNoExt + ".png";
-                std::string currentPath;
-                EnterCriticalSection(&m_owner->m_menuAssetCS);
-                currentPath = m_owner->menuImages[SNAP].getFilepath();
-                LeaveCriticalSection(&m_owner->m_menuAssetCS);
-
-                if (currentPath != snapPath) {
-                    SDL_Surface* newSurf = Image::loadConvertedSurface(snapPath, format);
-                    if (MAL_CANCELLED()) {
-                        if (newSurf) SDL_FreeSurface(newSurf);
-                        continue;
-                    }
-                    EnterCriticalSection(&m_owner->m_menuAssetCS);
-                    m_owner->menuImages[SNAP].adoptSurface(newSurf, snapPath);
-                    LeaveCriticalSection(&m_owner->m_menuAssetCS);
-                }
-            }
-
-            if (overlayW < 640) break;  // resoluciones bajas: no se cargan box2d ni snaptit
-            if (MAL_CANCELLED()) continue;
-
-            // 3. BOX2D
-            {
-                const std::string boxPath = assetsDir + "box2d" + sep + fileNoExt + ".png";
-                std::string currentPath;
-                EnterCriticalSection(&m_owner->m_menuAssetCS);
-                currentPath = m_owner->menuImages[BOX2D].getFilepath();
-                LeaveCriticalSection(&m_owner->m_menuAssetCS);
-
-                if (currentPath != boxPath) {
-                    SDL_Surface* newSurf = Image::loadConvertedSurface(boxPath, format);
-                    if (MAL_CANCELLED()) {
-                        if (newSurf) SDL_FreeSurface(newSurf);
-                        continue;
-                    }
-                    EnterCriticalSection(&m_owner->m_menuAssetCS);
-                    m_owner->menuImages[BOX2D].adoptSurface(newSurf, boxPath);
-                    LeaveCriticalSection(&m_owner->m_menuAssetCS);
-                }
-            }
-
-            if (MAL_CANCELLED()) continue;
-
-            // 4. SNAPTIT
-            {
-                const std::string titPath = assetsDir + "snaptit" + sep + fileNoExt + ".png";
-                std::string currentPath;
-                EnterCriticalSection(&m_owner->m_menuAssetCS);
-                currentPath = m_owner->menuImages[SNAPTIT].getFilepath();
-                LeaveCriticalSection(&m_owner->m_menuAssetCS);
-
-                if (currentPath != titPath) {
-                    SDL_Surface* newSurf = Image::loadConvertedSurface(titPath, format);
-                    if (MAL_CANCELLED()) {
-                        if (newSurf) SDL_FreeSurface(newSurf);
-                        continue;
-                    }
-                    EnterCriticalSection(&m_owner->m_menuAssetCS);
-                    m_owner->menuImages[SNAPTIT].adoptSurface(newSurf, titPath);
-                    LeaveCriticalSection(&m_owner->m_menuAssetCS);
-                }
-            }
-
-            #undef MAL_CANCELLED
-
-            if (m_seqSubmitted != mySeq) continue;
-            break; // todo cargado, volvemos a esperar
-        }
-    }
-}
-
 GameMenu::GameMenu(CfgLoader *cfgLoader)
-    : m_menuAssetCSInited(false)
+    : m_csInited(false)
 {
     status = EMU_MENU;
 	lastStatus = EMU_MENU;
@@ -283,8 +31,11 @@ GameMenu::GameMenu(CfgLoader *cfgLoader)
 	this->initEngine(cfgLoader);
 
 	/* Lock + worker para la carga asincrona del panel de assets del menu. */
-	InitializeCriticalSection(&m_menuAssetCS);
-	m_menuAssetCSInited = true;
+	InitializeCriticalSection(&m_csSnap);
+	InitializeCriticalSection(&m_csBox2d);
+	InitializeCriticalSection(&m_csSnaptit);
+	InitializeCriticalSection(&m_csSynopsis);
+	m_csInited = true;
 	m_menuAssetLoader.start(this);
 
 	int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
@@ -344,9 +95,12 @@ GameMenu::~GameMenu(){
 	/* Parar el worker ANTES de liberar nada que el pueda tocar
 	 * (menuImages/menuTextAreas se destruyen al final). */
 	m_menuAssetLoader.stop();
-	if (m_menuAssetCSInited) {
-		DeleteCriticalSection(&m_menuAssetCS);
-		m_menuAssetCSInited = false;
+	if (m_csInited) {
+		DeleteCriticalSection(&m_csSnap);
+		DeleteCriticalSection(&m_csBox2d);
+		DeleteCriticalSection(&m_csSnaptit);
+		DeleteCriticalSection(&m_csSynopsis);
+		m_csInited = false;
 	}
 
 	delete configMenus;
@@ -378,7 +132,12 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
      * se llama al cambiar de emulador, y el worker podria tener una
      * peticion en vuelo del emulador anterior accediendo a menuImages[X]
      * justo cuando hacemos clear()/insert(). */
-    if (m_menuAssetCSInited) EnterCriticalSection(&m_menuAssetCS);
+    if (m_csInited) {
+        EnterCriticalSection(&m_csSnap);
+        EnterCriticalSection(&m_csBox2d);
+        EnterCriticalSection(&m_csSnaptit);
+        EnterCriticalSection(&m_csSynopsis);
+    }
 
     /** snap */
     Image imageSnap;
@@ -402,6 +161,7 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
     }
     imageSnap.vAlign = ALIGN_TOP;
     menuImages.insert(make_pair(SNAP, imageSnap));
+    menuImages[SNAP].m_objCS = &m_csSnap;
 
     /** Box2d */
     Image imageBox2d;
@@ -412,6 +172,7 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
     imageBox2d.setW(box2dW);
     imageBox2d.setH(box2dH);
     menuImages.insert(make_pair(BOX2D, imageBox2d));
+    menuImages[BOX2D].m_objCS = &m_csBox2d;
 
     /** snaptit*/
     Image imageSnaptit;
@@ -422,6 +183,7 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
     imageSnaptit.setW(snapTitW);
     imageSnaptit.setH(snapTitH);
     menuImages.insert(make_pair(SNAPTIT, imageSnaptit));
+    menuImages[SNAPTIT].m_objCS = &m_csSnaptit;
 
     Image imageSnapFs(0, 0, overlay->w, overlay->h);
     menuImages.insert(make_pair(SNAPFS, imageSnapFs));
@@ -453,8 +215,14 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
 	textareaSyn.setFontType(Fonts::FONTBIG);
     textareaSyn.marginX = (int)floor((double)overlay->w / 100);
     menuTextAreas.insert(make_pair(SYNOPSIS, textareaSyn));
+    menuTextAreas[SYNOPSIS].m_objCS = &m_csSynopsis;
 
-    if (m_menuAssetCSInited) LeaveCriticalSection(&m_menuAssetCS);
+    if (m_csInited) {
+        LeaveCriticalSection(&m_csSynopsis);
+        LeaveCriticalSection(&m_csSnaptit);
+        LeaveCriticalSection(&m_csBox2d);
+        LeaveCriticalSection(&m_csSnap);
+    }
 }
 
 /**
@@ -470,6 +238,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 	int face_h_big = TTF_FontLineSkip(fontBig);
 	int face_h_small = TTF_FontLineSkip(fontsmall);
 	bool debug = true;
+	dirutil dir;
 
     //Drawing the rest of list and images
     if (listMenu.getNumGames() > (std::size_t)listMenu.curPos){
@@ -508,9 +277,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 					 * tanto no compite con la fuente del main thread. */
 					if (listMenu.keyUp){
 						const std::string assetsDir = dirutil::getPathPrefix(emu.assets) + std::string(Constant::tempFileSep);
-
 						// Labels inline (bajo lock para no chocar con createMenuImages)
-						EnterCriticalSection(&m_menuAssetCS);
 						if (game->gameData != NULL){
 							menuTextAreas[YEAR].loadString(LanguageManager::instance()->get("menu.filter.year") + ": " + Constant::TipoToStr(game->gameData->year));
 							menuTextAreas[MANUFACTURER].loadString(LanguageManager::instance()->get("menu.filter.manufacturer") + ": " + game->gameData->manufacturer);
@@ -520,20 +287,17 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 							menuTextAreas[MANUFACTURER].clear();
 							menuTextAreas[SYSTEM].clear();
 						}
-						const int synMaxW = menuTextAreas[SYNOPSIS].getW() - menuTextAreas[SYNOPSIS].marginX;
-						LeaveCriticalSection(&m_menuAssetCS);
 
-						// Synopsis + imagenes al worker
-						dirutil _dir;
-						m_menuAssetLoader.submit(_dir.getFileNameNoExt(game->longFileName),
+						const int synMaxW = menuTextAreas[SYNOPSIS].getW() - menuTextAreas[SYNOPSIS].marginX;
+						m_menuAssetLoader.submit(dir.getFileNameNoExt(game->longFileName),
 						                         assetsDir, this->overlay->format, this->overlay->w,
 						                         synMaxW);
 					}
-
-					/* Dibujo del panel bajo lock (operaciones triviales en
-					 * ambos hilos: el worker solo entra al lock para hacer
-					 * adopt  microsegundos). */
-					EnterCriticalSection(&m_menuAssetCS);
+					
+					/* Textos estaticos (YEAR/MANUFACTURER/SYSTEM): solo lectura, sin lock */
+					menuTextAreas[YEAR].draw(this->overlay);
+					menuTextAreas[MANUFACTURER].draw(this->overlay);
+					menuTextAreas[SYSTEM].draw(this->overlay);
 
 					if (menuTextAreas[YEAR].isEmpty() && menuTextAreas[MANUFACTURER].isEmpty() && menuTextAreas[SYSTEM].isEmpty()){
 						menuTextAreas[SYNOPSIS].setY(menuTextAreas[YEAR].getY());
@@ -542,21 +306,29 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 						menuTextAreas[SYNOPSIS].setY(menuTextAreas[SYSTEM].getY() + face_h_big * 2 + 2);
 						menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
 					}
-					menuTextAreas[YEAR].draw(this->overlay);
-					menuTextAreas[MANUFACTURER].draw(this->overlay);
-					menuTextAreas[SYSTEM].draw(this->overlay);
-					menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
 
-					menuImages[SNAP].printImage(this->overlay);
-					if (overlay->w < 640){
-						LeaveCriticalSection(&m_menuAssetCS);
-						return;
+					/* SYNOPSIS: try-lock por si el worker lo esta adoptando */
+					if (TryEnterCriticalSection(menuTextAreas[SYNOPSIS].m_objCS)){
+						menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
+						LeaveCriticalSection(menuTextAreas[SYNOPSIS].m_objCS);
 					}
-					menuImages[BOX2D].printImage(this->overlay);
-					menuImages[SNAPTIT].printImage(this->overlay);
-					LeaveCriticalSection(&m_menuAssetCS);
-				}
 
+					/* Imagenes: try-lock independiente por asset */
+					if (TryEnterCriticalSection(menuImages[SNAP].m_objCS)){
+						menuImages[SNAP].printImage(this->overlay);
+						LeaveCriticalSection(menuImages[SNAP].m_objCS);
+					}
+					if (overlay->w >= 640){
+						if (TryEnterCriticalSection(menuImages[BOX2D].m_objCS)){
+							menuImages[BOX2D].printImage(this->overlay);
+							LeaveCriticalSection(menuImages[BOX2D].m_objCS);
+						}
+						if (TryEnterCriticalSection(menuImages[SNAPTIT].m_objCS)){
+							menuImages[SNAPTIT].printImage(this->overlay);
+							LeaveCriticalSection(menuImages[SNAPTIT].m_objCS);
+						}
+					}
+				}
             } else if (listMenu.layout == LAYSIMPLE) {
                 if (listMenu.keyUp){
                     //Snapshot picture
@@ -642,20 +414,20 @@ bool GameMenu::cargarSystemAchievementTranslation(const std::string& nombreArchi
     while (std::getline(file, line)) {
         // Eliminar espacios en blanco al inicio/final si fuera necesario (opcional)
             
-        // 1. Buscamos el inicio de la sección
+        // 1. Buscamos el inicio de la seccion
         if (line == "[SALVIA_TO_ACHIEVEMENTS]") {
             seccionEncontrada = true;
-            continue; // Pasamos a la siguiente línea
+            continue; // Pasamos a la siguiente linea
         }
 
-        // 2. Si ya estamos en la sección correcta, procesamos los datos
+        // 2. Si ya estamos en la seccion correcta, procesamos los datos
         if (seccionEncontrada) {
-            // Si encontramos otra sección (empieza por [), dejamos de leer
+            // Si encontramos otra seccion (empieza por [), dejamos de leer
             if (!line.empty() && line[0] == '[') {
                 break; 
             }
 
-            // Ignorar comentarios o líneas vacías
+            // Ignorar comentarios o lineas vacias
             if (line.empty() || line[0] == '#') {
                 continue;
             }
@@ -690,7 +462,7 @@ void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
     Achievements::instance()->setHardcoreMode(getCfgLoader()->configMain[cfg::hardcoreRA].valueBool);
 
 	LOG_DEBUG("Getting libretro memory");
-    // 3. Obtener punteros de memoria (Asegúrate de que el Core ya está cargado)
+    // 3. Obtener punteros de memoria (Asegarate de que el Core ya esta cargado)
     uint8_t* w_data = (uint8_t*)retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM);
     std::size_t w_size = retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM);
     uint8_t* s_data = (uint8_t*)retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
@@ -705,7 +477,7 @@ void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
 	{
 		unsigned desc_count = 0;
 		const struct retro_memory_descriptor* descs = get_core_memory_descriptors(&desc_count);
-		/* Siempre actualizar — si desc_count==0 sobreescribimos cualquier
+		/* Siempre actualizar si desc_count==0 sobreescribimos cualquier
 		 * descriptor heredado de la carga anterior (defensa en profundidad
 		 * frente a cores que no reemiten SET_MEMORY_MAPS entre juegos). */
 		Achievements::instance()->set_core_descriptors(desc_count > 0 ? descs : NULL, desc_count);
@@ -832,7 +604,7 @@ std::string GameMenu::configButtonsJOY(){
 
 							joystick->buttonsMapperFrontend.axis[buttonIdx] = JoyButtonsVal[i++];
 						} else {
-							// CENTRO: Opcionalmente manejar el reposo aquí si es necesario
+							// CENTRO: Opcionalmente manejar el reposo aqui si es necesario
 						}
                     }
                     mPrevAxisValues[event.jaxis.which][event.jaxis.axis] = event.jaxis.value;
@@ -1093,6 +865,15 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 
 	//Se inician los menus de los filtros
 	configMenus->iniciarFiltros(menuData.gameDataFields);
+
+	//Se cargan las imagenes
+	std::string packetAssetsFile = dir.getPathPrefix(emu->assets + Constant::getFileSep() + SCRAPPING_DAT);
+	if (!dir.fileExists(packetAssetsFile.c_str())){
+		//filePackage.Pack(dir.getPathPrefix(emu->assets), packetAssetsFile.c_str());
+		LOG_DEBUG("Creating assets in %s\n", emu->assets.c_str());
+	} else {
+		filePackage.Load(packetAssetsFile.c_str());
+	}
 }
 
 /**
@@ -1410,15 +1191,15 @@ bool GameMenu::updateFps(){
         const bool shouldUpdateMem = (currentTick - lastMemUpdate > 5000) || memSurface == NULL;
 		int lastCpuW = 0;
 
-        // 1. Actualización de contadores internos
+        // 1. Actualizacion de contadores internos
         this->sync->update_fps_counter(shouldUpdateFps, currentTick);
-        // CPU utilization basada en GetThreadTimes — sampling cada
+        // CPU utilization basada en GetThreadTimes sampling cada
         // frame (no solo cuando refrescamos el overlay) para que la
         // ventana movil capture la actividad real del thread.  El
         // valor suavizado queda en this->sync->utilization.
         this->sync->sample_cpu_utilization();
 
-        // 2. Lógica para FPS y CPU (cada 500ms)
+        // 2. Logica para FPS y CPU (cada 500ms)
         if (shouldUpdateFps) {
             if (fpsSurface) {
 				SDL_FreeSurface(fpsSurface);
@@ -1440,7 +1221,7 @@ bool GameMenu::updateFps(){
             lastFpsUpdate = currentTick;
         }
 
-        // 3. Lógica para MEMORIA (cada 5000ms / 5 segundos)
+        // 3. Logica para MEMORIA (cada 5000ms / 5 segundos)
 		if (shouldUpdateMem) {
 			if (memSurface) SDL_FreeSurface(memSurface);
 			
@@ -1451,7 +1232,7 @@ bool GameMenu::updateFps(){
 			ms.dwLength = sizeof(ms);
 			GlobalMemoryStatus(&ms);
 			availMB = (double)ms.dwAvailPhys / (1024.0 * 1024.0);
-			// Cálculo manual del porcentaje: (Usado / Total) * 100
+			// Calculo manual del porcentaje: (Usado / Total) * 100
 			double totalPhys = (double)ms.dwTotalPhys;
 			if (totalPhys > 0) {
 				totalPercent = ((totalPhys - (double)ms.dwAvailPhys) / totalPhys) * 100.0;
@@ -1466,7 +1247,7 @@ bool GameMenu::updateFps(){
 			totalPercent = ms.dwMemoryLoad;
 #endif
 			char memText[64];
-			// Usamos double para mayor precisión en los cálculos de GB
+			// Usamos double para mayor precision en los calculos de GB
 			if (availMB >= 1024.0) {
 				sprintf(memText, "MEM: %.0f%% (%.2fGB Free)", totalPercent, availMB / 1024.0);
 			} else {
@@ -1479,12 +1260,12 @@ bool GameMenu::updateFps(){
 
         // 4. DIBUJO (En cada frame, usando las superficies actuales)
         if (fpsSurface && cpuSurface && memSurface) {
-            // Dibujar MEM (Posición relativa a CPU)
+            // Dibujar MEM (Posicion relativa a CPU)
             SDL_Rect rectMem = {this->overlay->w - memSurface->w -3, 1, memSurface->w, memSurface->h};
 			clearOverlayRect(rectMem);
             SDL_BlitSurface(memSurface, NULL, this->overlay, &rectMem);
 
-            // Dibujar CPU (Posición relativa a FPS)
+            // Dibujar CPU (Posicion relativa a FPS)
             SDL_Rect rectCpu = {rectFps.x, rectFps.y - fpsSurface->h, lastCpuW != cpuSurface->w ? lastCpuW : cpuSurface->w, cpuSurface->h};
             clearOverlayRect(rectCpu);
             SDL_BlitSurface(cpuSurface, NULL, this->overlay, &rectCpu);
@@ -1652,7 +1433,7 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
     if (!src) return NULL;
 	SDL_Surface* copia = NULL;
-	//Dimensiones y cálculo de aspecto
+	//Dimensiones y calculo de aspecto
 	Dimension srcDim = {src->w, src->h};
 	Dimension dstDim = {overlay->w, overlay->h};
 	Dimension resDim = Image::relacion(srcDim, dstDim);
@@ -1812,7 +1593,7 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
     if (msg.cache) {
         int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
         msg.rect.x = 0;
-        // La posición Y se calculará dinámicamente al dibujar para que se apilen
+        // La posicion Y se calculara dinamicamente al dibujar para que se apilen
         msg.rect.w = msg.cache->w + 2;
         msg.rect.h = face_h + 4;
         messages.push_back(msg);
@@ -1852,13 +1633,13 @@ void GameMenu::processMessagesAchievements(){
 	const uint32_t currentTicks = SDL_GetTicks();
 
 	// 2. Solo procesar si realmente ha pasado tiempo (Throttle)
-    // No necesitas actualizar la lógica de logros cada 16ms (60fps). 
-    // Hacerlo cada 33ms o 100ms libera muchísima CPU.
+    // No necesitas actualizar la logica de logros cada 16ms (60fps). 
+    // Hacerlo cada 33ms o 100ms libera muchisima CPU.
     static uint32_t lastUpdate = 0;
     if (currentTicks - lastUpdate > 33) { 
 		// Actualizar estado interno de los logros
 		updateAchievementsState(currentTicks);
-		// Gestión de la cola de mensajes (Expiración y carga)
+		// Gestion de la cola de mensajes (Expiracion y carga)
 		handleMessageQueue(currentTicks);
 		lastUpdate = currentTicks;
 	}
@@ -1886,10 +1667,10 @@ void GameMenu::processMessagesAchievements(){
 }
 
 void GameMenu::clearLastAchievementArea() {
-    // Solo limpiamos si el área tiene dimensiones válidas
+    // Solo limpiamos si el area tiene dimensiones validas
     if (lastMessagesArea.w > 0 && lastMessagesArea.h > 0) {
-        // Pintamos un rectángulo del color de fondo (uBkgColor) 
-        // sobre el área que ocupaba el último logro
+        // Pintamos un rectungulo del color de fondo (uBkgColor) 
+        // sobre el area que ocupaba el ultimo logro
 		clearOverlayRect(lastMessagesArea);
     }
 }
@@ -2007,7 +1788,7 @@ void GameMenu::processMessages() {
 	Achievements& ach = *Achievements::instance();
 	//EnterCriticalSection(&ach.m_csMessages);
 	while (!ach.messagesToInform.empty()){
-		// 1. Obtener el mensaje más antiguo (el primero que entro)
+		// 1. Obtener el mensaje mas antiguo (el primero que entro)
 		showSystemMessage(ach.messagesToInform.front(), 3000);
 		// 2. Eliminarlo del deque de forma definitiva
 		ach.messagesToInform.pop_front();
@@ -2022,7 +1803,7 @@ void GameMenu::processMessages() {
         clearOverlayRect(messages[i].rect); 
     }
 
-    // 2. ACTUALIZACIÓN: Eliminar mensajes caducados
+    // 2. ACTUALIZACION: Eliminar mensajes caducados
     uint32_t currentTicks = SDL_GetTicks();
     for (int i = (int)messages.size() - 1; i >= 0; i--) {
         if (currentTicks - messages[i].ticks > messages[i].timeout) {
@@ -2033,7 +1814,7 @@ void GameMenu::processMessages() {
 
     if (messages.empty()) return;
 
-    // 3. CÁLCULO DE POSICIONES Y DIBUJO
+    // 3. CALCULO DE POSICIONES Y DIBUJO
     static int line_height = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG)) + 4;
     int currentY = this->overlay->h - line_height;
 
@@ -2041,7 +1822,7 @@ void GameMenu::processMessages() {
     for (int i = (int)messages.size() - 1; i >= 0; --i) {
         Message &m = messages[i];
         
-        // Actualizamos la nueva posición
+        // Actualizamos la nueva posicion
         m.rect.x = 0;
         m.rect.y = (Sint16)currentY;
 
@@ -2168,13 +1949,13 @@ void GameMenu::drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int co
     if (row >= 0 && row < keyb.rows &&
         col >= 0 && col < keyb.cols) 
     {
-        // Para saber la posición X exacta de la tecla seleccionada, 
+        // Para saber la posicion X exacta de la tecla seleccionada, 
         // sumamos los anchos de las teclas anteriores en su misma fila
         int targetX = keyb.iniX;
         for (int c = 0; c < col; c++) {
             if (keyb.layoutWidth[row][c] == 0) continue; // Ignoramos celdas absorbidas
             
-            // Si la celda es un salto por culpa del ENTER vertical, sumamos el ancho que le correspondería
+            // Si la celda es un salto por culpa del ENTER vertical, sumamos el ancho que le corresponderia
             if (keyb.caps[row][c].h == 0) {
                 int actualW = (keyb.layoutWidth[row][c] * 70) + ((keyb.layoutWidth[row][c] - 1) * keyb.spaceX);
                 targetX += actualW + keyb.spaceX;
@@ -2187,7 +1968,7 @@ void GameMenu::drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int co
         int targetW = keyb.caps[row][col].w;
         int targetH = keyb.caps[row][col].h;
 
-        // Solo dibujamos si es una tecla válida y visible
+        // Solo dibujamos si es una tecla valida y visible
         if (targetW > 0 && targetH > 0) {
             // Pintar un fondo encima de otro color (ej: Amarillo semitransparente)
             //boxRGBA(gameMenu->overlay, targetX, targetY, targetX + targetW, targetY + targetH, 255, 255, 0, 220);
@@ -2207,7 +1988,7 @@ void GameMenu::drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int co
 				SDL_FillRect(this->overlay, &rect, SDL_MapRGB(overlay->format, 255, 128, 0));
 			}
             
-            // Dibujar también un borde amarillo sólido para resaltar aún más
+            // Dibujar tambien un borde amarillo salido para resaltar aun mas
             //roundedRectangleRGBA(this->overlay, targetX, targetY, targetX + targetW, targetY + targetH, 5, 255, 255, 0, 255);
             //roundedRectangleRGBA(this->overlay, targetX + 1, targetY + 1, targetX + targetW - 1, targetY + targetH - 1, 5, 255, 255, 0, 255);
 			//rectangleColor(overlay, targetX, targetY, targetX + targetW, targetY + targetH, SDL_MapRGB(overlay->format, 255, 255, 0));
@@ -2216,7 +1997,7 @@ void GameMenu::drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int co
             rectangleRGBA(this->overlay, targetX + 1, targetY + 1, targetX + targetW - 1, targetY + targetH - 1, 255, 200, 0, 255);
 			
 
-            // Volvemos a pintar el texto encima para que destaque bien sobre el nuevo fondo de selección
+            // Volvemos a pintar el texto encima para que destaque bien sobre el nuevo fondo de seleccion
             if (font != nullptr && !keyb.caps[row][col].keyLabel.empty()) {
                 SDL_Surface* textSurface = TTF_RenderUTF8_Blended(font, keyb.caps[row][col].keyLabel.c_str(), keyb.textSelectedColor);
                 if (textSurface != nullptr) {
@@ -2233,7 +2014,7 @@ void GameMenu::drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int co
 
 
 void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
-    // 1. GENERACIÓN DE LA CACHÉ (Solo se ejecuta la primera vez)
+    // 1. GENERACION DE LA CACHE (Solo se ejecuta la primera vez)
 
 	int totalKeyboardW = (keyb.cols * (70 + keyb.spaceX));
     int totalKeyboardH = (keyb.rows * (40 + keyb.spaceY));
@@ -2248,7 +2029,7 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
 
         // Nivel de opacidad de las teclas (0=transparente, 255=opaco). Como el
         // overlay se mezcla luego en D3D9 (XBOX_DrawOverlay con D3DBLEND_SRCALPHA),
-        // este alpha controla cuánto se mezcla con el contenido detrás (el juego).
+        // este alpha controla cuanto se mezcla con el contenido detras (el juego).
         const Uint8 KEY_ALPHA = 180;
 		Uint8 fillColorAlpha = KEY_ALPHA;
 
@@ -2281,9 +2062,9 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
 
                 // Dibujamos el fondo base de la tecla con alpha = KEY_ALPHA.
                 // CLAVE: SDL_MapRGBA (no SDL_MapRGB) para que el byte alpha del
-                // Uint32 empaquetado sea el que queremos, no 0. Si lo metiéramos
-                // con MapRGB o con un literal sin componente alta, los píxeles
-                // saldrían con alpha=0 y el overlay no mostraría nada.
+                // Uint32 empaquetado sea el que queremos, no 0. Si lo metieramos
+                // con MapRGB o con un literal sin componente alta, los pixeles
+                // saldrian con alpha=0 y el overlay no mostraria nada.
                 SDL_Rect rect = { keybPosX, keybPosY, keyb.caps[row][col].w, keyb.caps[row][col].h };
                 Uint32 keyBg = SDL_MapRGBA(rawSurface->format,
                                             Constant::colors[clRed].sdlColor.r,
@@ -2311,19 +2092,19 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
         }
 		
 #ifdef _XBOX
-        // NO convertimos con SDL_DisplayFormat (perdería el canal alpha) ni
-        // con SDL_DisplayFormatAlpha (haría un SDL_SRCALPHA per-surface que
-        // luego mezclaría INTERNAMENTE durante el blit en SDL, en lugar de
+        // NO convertimos con SDL_DisplayFormat (perderia el canal alpha) ni
+        // con SDL_DisplayFormatAlpha (haria un SDL_SRCALPHA per-surface que
+        // luego mezclaria INTERNAMENTE durante el blit en SDL, en lugar de
         // dejar el alpha-blending para D3D9). El rawSurface ya tiene el
-        // formato exacto del overlay (clonamos sus máscaras al crearlo).
+        // formato exacto del overlay (clonamos sus mascaras al crearlo).
         //
         // Quitar SDL_SRCALPHA hace que el blit final (rawSurface ? overlay)
-        // sea una COPIA literal de píxeles RGBA. El alpha de cada píxel
+        // sea una COPIA literal de pixeles RGBA. El alpha de cada pixel
         // (KEY_ALPHA para fondos, 255 para texto, intermedio en bordes
-        // antialiasados) llega intacto al overlay; XBOX_DrawOverlay después
+        // antialiasados) llega intacto al overlay; XBOX_DrawOverlay despues
         // dibuja el quad con D3DBLEND_SRCALPHA / D3DBLEND_INVSRCALPHA y
-        // mezcla cada píxel con el framebuffer del juego. Regla de SDL 1.2:
-        //   RGBA?RGBA SIN SDL_SRCALPHA = copia píxeles tal cual.
+        // mezcla cada pixel con el framebuffer del juego. Regla de SDL 1.2:
+        //   RGBA?RGBA SIN SDL_SRCALPHA = copia pixeles tal cual.
         //   RGBA?RGBA CON SDL_SRCALPHA = SDL alpha-blendea internamente.
         SDL_SetAlpha(rawSurface, 0, 0);
         keyb.keyboardSurface = rawSurface;   // cacheamos directamente
@@ -2334,7 +2115,7 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
 #endif
     }
 
-    // 2. VOLCADO ULTRA RÁPIDO DEL TECLADO BASE
+    // 2. VOLCADO ULTRA RAPIDO DEL TECLADO BASE
 	SDL_Rect rect = { keyb.iniX, keyb.iniY, totalKeyboardW, totalKeyboardH};
     SDL_BlitSurface(keyb.keyboardSurface, nullptr, this->overlay, &rect);
 	

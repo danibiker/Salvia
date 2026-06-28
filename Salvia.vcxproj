@@ -2384,7 +2384,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_FBANEXT)";$(COMMON_PREPROCESSOR_RELEASE);RESET_AUDIO;NO_SRAM</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_FBANEXT)";$(COMMON_PREPROCESSOR_RELEASE);NO_SRAM</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)libs\curl-7.50.1\include;$(ProjectDir)\libs\mbedtls\include;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include;$(ProjectDir)\libs\rcheevos\src</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
@@ -2399,10 +2399,10 @@
       <PreschedulingOptimization>true</PreschedulingOptimization>
       <StringPooling>true</StringPooling>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
     </ClCompile>
     <Link>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);fb_alpha_libretro_xdk360.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\fbanext\projectfiles\visualstudio-2010-libretro-360\Release_LTCG</AdditionalLibraryDirectories>
@@ -2761,6 +2761,10 @@
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <FloatingPointModel>Fast</FloatingPointModel>
       <AdditionalIncludeDirectories>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)libs\curl-7.50.1\include;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include;$(ProjectDir)\libs\rcheevos\src</AdditionalIncludeDirectories>
+      <StringPooling>true</StringPooling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-x86-release-static-sspi-winssl-obj-lib;$(ProjectDir)libretro\genesis-plus-gx\Debug\Win32</AdditionalLibraryDirectories>
@@ -2769,6 +2773,8 @@
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateMapFile>true</GenerateMapFile>
+      <AssemblyDebug>true</AssemblyDebug>
     </Link>
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
@@ -4149,6 +4155,7 @@
     <ClCompile Include="src\io\cursorgestor.cpp" />
     <ClCompile Include="src\io\dirutil.cpp" />
     <ClCompile Include="src\io\fileio.cpp" />
+    <ClCompile Include="src\io\filepackage.cpp" />
     <ClCompile Include="src\io\filelist.h" />
     <ClCompile Include="src\io\hotkeys.cpp" />
     <ClCompile Include="src\io\hq2xbox\hq2xx.cpp">
@@ -4173,6 +4180,7 @@
     <ClCompile Include="src\io\xbrz\xbrz.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release_pcsxr_360|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="src\menuassetloader.cpp" />
     <ClCompile Include="src\menus\gestormenus.cpp" />
     <ClCompile Include="src\retroachievements\CHDHashed.cpp" />
     <ClCompile Include="src\retroachievements\HashCHD.cpp" />
@@ -4361,6 +4369,7 @@
     <ClInclude Include="src\gfx\SDL_gfxPrimitives_font.h" />
     <ClInclude Include="src\gfx\SDL_rotozoom.h" />
     <ClInclude Include="src\http\achievements.h" />
+    <ClInclude Include="src\http\dev_credentials.h" />
     <ClInclude Include="src\http\safedownloadqueue.h" />
     <ClInclude Include="src\http\scrapper.h" />
     <ClInclude Include="src\image\icons.h" />
@@ -4369,6 +4378,7 @@
     <ClInclude Include="src\io\cursorgestor.h" />
     <ClInclude Include="src\io\dirutil.h" />
     <ClInclude Include="src\io\fileio.h" />
+    <ClInclude Include="src\io\filepackage.h" />
     <ClInclude Include="src\io\fileprops.h" />
     <ClInclude Include="src\io\hotkeys.h" />
     <ClInclude Include="src\io\hq2xbox\hq2xx.h">

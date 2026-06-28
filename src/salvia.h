@@ -1,14 +1,14 @@
 ﻿//Evita errores al usar el min o max de windows.h al incluir el filtro "io/xbrz/xbrz.h"
 #define NOMINMAX 
 
-#include <SDL.h>
-#include <SDL_ttf.h>
-#include "SDL_thread.h"
-
 #include <string>
 #include <map>
 #include <algorithm>
 #include <zlib.h>
+
+#include <SDL.h>
+#include <SDL_ttf.h>
+#include "SDL_thread.h"
 
 #include "gameMenu.h"
 #include "io/cfgloader.h"
@@ -27,6 +27,8 @@
 #include "dischelper.h"
 #include <so/soutils.h>
 
+#include "libretro/libretro.h"
+#include "libretro/vfs.h"
 
 CfgLoader *cfgLoader;
 GameMenu *gameMenu;
@@ -34,31 +36,6 @@ ListMenu *listMenu;
 Logger *logger;
 dirutil dir;
 TileMap tileMap(9, 0, 16, 16);
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-	#include "libretro/libretro.h"
-	#include "libretro/vfs.h"
-
-    void retro_init(void);
-    void retro_deinit(void);
-    void retro_run(void);
-    void retro_get_system_info(struct retro_system_info *info);
-    void retro_get_system_av_info(struct retro_system_av_info *info);
-    void retro_set_environment(retro_environment_t);
-    void retro_set_video_refresh(retro_video_refresh_t);
-    void retro_set_audio_sample(retro_audio_sample_t);
-    void retro_set_audio_sample_batch(retro_audio_sample_batch_t);
-    void retro_set_input_poll(retro_input_poll_t);
-    void retro_set_input_state(retro_input_state_t);
-    bool retro_load_game(const struct retro_game_info *game);
-	void retro_unload_game(void);
-	void retro_set_controller_port_device(unsigned port, unsigned device);
-	
-#ifdef __cplusplus
-}
-#endif
 
 /* ---------- Memory map descriptors from the core ----------
  * Capturados cuando el core llama RETRO_ENVIRONMENT_SET_MEMORY_MAPS.
@@ -87,12 +64,13 @@ const int MAX_FILE_LOAD_MEMORY = 1024 * 2014 * 30;
 const int maxJoyTargets = RETRO_DEVICE_ID_JOYPAD_R3 + 1;
 const std::string Constant::MAME_SYS_ID = "75";
 const std::string Constant::WHITESPACE = " \n\r\t";
+const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
+const char* gameCategories[] = {"dipswitch", "cheat", "ips", "romdata"};
+
 volatile uint32_t Constant::totalTicks = 0;
 int Constant::EXEC_METHOD = launch_batch;
-const std::string CfgLoader::CONFIGFILE = "salvia.cfg";
 static uint16_t* conversion_buffer = NULL;
 static std::size_t buffer_size = 0;
-
 // Rotacion de pantalla solicitada por el core via RETRO_ENVIRONMENT_SET_ROTATION.
 // Valores 0..3 = 0/90/180/270 grados en sentido antihorario (CCW),
 // segun la convencion libretro. Cores como FBNeo lo emiten automaticamente
@@ -100,7 +78,6 @@ static std::size_t buffer_size = 0;
 static unsigned g_screen_rotation = 0;
 static uint16_t* rotation_buffer = NULL;
 static std::size_t rotation_buffer_size = 0;
-
 int audio_opened = 0;
 // En tu clase/global:
 volatile bool audio_closing = false;
@@ -315,7 +292,7 @@ void retro_log_printf(enum retro_log_level level, const char *fmt, ...) {
     }
     #endif
 
-	const unsigned int MAX_BUFFER = 512;
+	const unsigned int MAX_BUFFER = 128;
 	char buffer[MAX_BUFFER] = {0}; 
     va_list args;
     va_start(args, fmt);

@@ -4,8 +4,28 @@
 #include <beans/structures.h>
 #include <font/fonts.h>
 
+#ifdef _XBOX
+#include <xtl.h>
+#else
+#include <windows.h>
+#endif
+
 #include <fstream>
 #include <string>
+
+struct t_line{
+	SDL_Surface *lineSrf;
+	std::string text;
+	SDL_Rect dest;
+
+ 	t_line() {
+		lineSrf = NULL;
+		dest.x = 0;
+		dest.y = 0;
+		dest.w = 0;
+		dest.h = 0;
+	}
+};
 
 class TextArea : public Object{
     public:
@@ -35,21 +55,22 @@ class TextArea : public Object{
 		 * uso desde otro hilo se debe pasar una fuente INDEPENDIENTE (ver
 		 * Fonts::createIndependentFont), porque TTF no es thread-safe a
 		 * nivel de la misma TTF_Font*. */
-		static std::vector<std::string> wrapString(const std::string& fulltxt,
+		static std::vector<t_line> wrapString(const std::string& fulltxt,
 		                                            Fonts::enumFonts fontType,
 		                                            int maxW);
-		static std::vector<std::string> wrapTextFile(const std::string& filepathToOpen,
+		static std::vector<t_line> wrapTextFile(const std::string& filepathToOpen,
 		                                              Fonts::enumFonts fontType,
 		                                              int maxW);
-		static std::vector<std::string> wrapStringWithFont(const std::string& fulltxt,
+		static std::vector<t_line> wrapStringWithFont(const std::string& fulltxt,
 		                                                    TTF_Font* font,
 		                                                    int maxW);
-		static std::vector<std::string> wrapTextFileWithFont(const std::string& filepathToOpen,
+		static std::vector<t_line> wrapTextFileWithFont(const std::string& filepathToOpen,
 		                                                      TTF_Font* font,
 		                                                      int maxW);
-		void adoptLines(const std::vector<std::string>& newLines, const std::string& newPath);
+		void adoptLines(const std::vector<t_line>& newLines, const std::string& newPath);
 		const std::string& getFilepath() const { return filepath; }
 		Fonts::enumFonts   getFontType() const { return fontType; }
+		void setFilepath(const string& p){ filepath = p;}
 
         int lineSpace;
         int marginTop;
@@ -67,8 +88,13 @@ class TextArea : public Object{
 
     private:
         std::string filepath;     
-        std::vector<std::string> lines; 
+        std::vector<t_line> lines; 
 		TTF_Font *fontText;
 		int face_h;
 		Fonts::enumFonts fontType;
+	public:
+		mutable CRITICAL_SECTION* m_objCS; // apunta al CS externo que protege este objeto
+	private:
+
+		SDL_Rect drawTextAreaTransparent(SDL_Surface*, TTF_Font*, t_line&, int, int, SDL_Color, int bg = -1,   JFY_TYPE& justifyHelper = JFY_TYPE(JFY_LEFT, 0));
 };

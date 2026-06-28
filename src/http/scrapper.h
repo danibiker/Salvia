@@ -8,6 +8,7 @@
 #include <const/constant.h>
 #include <io/cfgloader.h>
 #include <io/dirutil.h>
+#include <io/filepackage.h>
 #include <const/menuconst.h>
 
 enum MEDIA_TYPES { MEDIA_TITLE = 0, MEDIA_SS, MEDIA_BOX, MEDIA_MAX };
@@ -67,6 +68,12 @@ struct ScraperResult {
     std::string nombre;
     std::string sinopsis;
     std::map<std::string, t_media> medias;
+
+	bool saveToBin;
+
+	ScraperResult(){
+		saveToBin = true;
+	}
 
 	void clear(){
 		filenameNoExt.clear();
@@ -133,6 +140,12 @@ class Scrapper{
 		static DWORD WINAPI imageDownloaderThread(LPVOID lpParam);
 		static DWORD WINAPI mainScrapThread(LPVOID lpParam);
 
+		// Declaración de la variable
+		static HANDLE hEventPausa;
+		static FilePackage filePackage;
+		static std::string getRelativeDir(std::string s);
+		bool archivoExiste(const std::string& rutaBase, const std::string& sufijo, bool saveToBin, bool esMetadata = false);
+
 		void procesarRespuestaScreenscraper(std::string&, ScraperAsk&, ScraperResult&);
 		void procesarGamesDbConReintentos(std::string&, float &, ScraperAsk&, ScraperResult&);
 		bool procesarRespuestaGamesDb(std::string&, ScraperAsk&, ScraperResult&);
@@ -156,6 +169,7 @@ class Scrapper{
 		int countWordsContained(std::string, std::string);
 		std::string toLower(std::string s);
 		std::string getFirstWords(std::string text, int n);
+		
 };
 
 	

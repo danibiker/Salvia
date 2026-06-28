@@ -12,7 +12,12 @@
 struct DownloadTask {
     std::string url;
     std::string destPath;
-    float downloadProgress; // Usamos valor por copia para evitar punteros volátiles
+    float downloadProgress;
+	bool saveToBin;
+
+	DownloadTask(){
+		saveToBin = true;
+	}
 };
 
 namespace safequeue{

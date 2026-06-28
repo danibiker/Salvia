@@ -44,15 +44,37 @@ static uint32_t g_fba_frame[1024 * 1024];
 static int16_t g_audio_buf[AUDIO_SEGMENT_LENGTH * 2];
 
 // libretro globals
+// IMPORTANT: Every libretro callback pointer below is explicitly initialised
+// to a non-NULL sentinel. This is a *workaround* for an Xbox 360 / Salvia
+// linker bug: there is a specific .bss address that gets clobbered with
+// 0x00000000 between the time the frontend registers the callbacks and the
+// first retro_run call. Diagnosis showed that any static variable that
+// happens to land at that address gets zeroed (verified with sentinels in
+// adjacent slots that stayed intact, and by observing the bug "move" from
+// audio_batch_cb to video_cb when only audio_batch_cb was initialised).
+// Forcing these into .data via an initialiser keeps them out of the poisoned
+// .bss slot. The sentinel value is irrelevant; what matters is that they
+// are not zero-initialised.
+static retro_environment_t        environ_cb       = (retro_environment_t)       (uintptr_t)0x1;
+static retro_video_refresh_t      video_cb         = (retro_video_refresh_t)     (uintptr_t)0x1;
+static retro_input_poll_t         poll_cb          = (retro_input_poll_t)        (uintptr_t)0x1;
+static retro_input_state_t        input_cb         = (retro_input_state_t)       (uintptr_t)0x1;
+static retro_audio_sample_batch_t audio_batch_cb   = (retro_audio_sample_batch_t)(uintptr_t)0x1;
+static retro_audio_sample_t       audio_cb         = (retro_audio_sample_t)      (uintptr_t)0x1;
 
-static retro_environment_t environ_cb;
-static retro_video_refresh_t video_cb;
-static retro_input_poll_t poll_cb;
-static retro_input_state_t input_cb;
-static retro_audio_sample_batch_t audio_batch_cb;
-void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
-void retro_set_audio_sample(retro_audio_sample_t) {}
-void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_cb = cb; }
+void retro_set_video_refresh(retro_video_refresh_t cb) { 
+	video_cb = cb; 
+	fprintf(stderr, "[FBA] retro_set_video_refresh(%p)\n", (void*)cb);
+}
+void retro_set_audio_sample(retro_audio_sample_t cb) {
+	audio_cb = cb;
+	fprintf(stderr, "[FBA] retro_set_audio_sample(%p)\n", (void*)cb);
+}
+void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { 
+	audio_batch_cb = cb; 
+	fprintf(stderr, "[FBA] retro_set_audio_sample_batch(cb=%p) &audio_batch_cb=%p stored=%p\n",
+      (void*)cb, (void*)&audio_batch_cb, (void*)audio_batch_cb);
+}
 void retro_set_input_poll(retro_input_poll_t cb) { poll_cb = cb; }
 void retro_set_input_state(retro_input_state_t cb) { input_cb = cb; }
 
@@ -589,8 +611,16 @@ void retro_run()
          nBurnPitch = width * pitch_size;
    }
 
-   if (video_cb) video_cb(g_fba_frame, width, height, nBurnPitch);
-   if (audio_batch_cb) audio_batch_cb(g_audio_buf, nBurnSoundLen);
+   video_cb(g_fba_frame, width, height, nBurnPitch);
+
+   if (audio_batch_cb){
+      audio_batch_cb(g_audio_buf, nBurnSoundLen);
+   } else if (audio_cb) {
+      // Fallback: frontend only registered single-sample audio. Stream the
+      // batch one sample at a time.
+      for (unsigned i = 0; i < nBurnSoundLen; i++)
+         audio_cb(g_audio_buf[i * 2 + 0], g_audio_buf[i * 2 + 1]);
+   }
 
    bool updated = false;
    if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
@@ -665,9 +695,7 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
    int maximum = width > height ? width : height;
    struct retro_game_geometry geom = { width, height, maximum, maximum };
 
-   //struct retro_system_timing timing = { (nBurnFPS / 100.0), (nBurnFPS / 100.0) * AUDIO_SEGMENT_LENGTH };
-
-   struct retro_system_timing timing = { (nBurnFPS / 100.0), AUDIO_SAMPLERATE };
+   struct retro_system_timing timing = { (nBurnFPS / 100.0), (nBurnFPS / 100.0) * AUDIO_SEGMENT_LENGTH };
 
    info->geometry = geom;
    info->timing   = timing;

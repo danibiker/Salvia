@@ -29,6 +29,8 @@ const std::string QUAKE_MAPS_URL[QUAKE_MAPS_COUNT] = {
 	//,"https://maps.quakeworld.nu/all/"
 };
 const std::string START_FROM_EXCEPTION = "%$_START_FROMEXCEPTION_$%";
+const std::string SCRAPPING_DAT = "images.bin";
+const std::string PASS_MASK = "****";
 
 const char *ICONS_PATH[] = {"menu_log.png",
 	"folder.png",

@@ -60,6 +60,8 @@ ListMenu::ListMenu(int screenw, int screenh){
     //set_trans_blender(255, 255, 255, 190);
 	icons = new Icons();
 	selecAlphaRec = NULL;
+	filterAlphaRec = NULL;
+	navPath = NULL;
 }
 
 ListMenu::~ListMenu(){
@@ -68,6 +70,8 @@ ListMenu::~ListMenu(){
 	filteredGames.clear();
 	listGames.clear();
 	delete icons;
+	if (filterAlphaRec) SDL_FreeSurface(filterAlphaRec);
+	if (navPath) SDL_FreeSurface(navPath);
 }
 
 void ListMenu::clear(){
@@ -303,28 +307,20 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
 
         if (game->cache == NULL) {
             // Cache no existe -> renderizar
+			#ifdef _XBOX 
+			game->cache = TTF_RenderUTF8_Solid(fontMenu, line.c_str(), lineTextColor);
+			#else
 			game->cache = TTF_RenderUTF8_Blended(fontMenu, line.c_str(), lineTextColor);
+			#endif
 			//Huge speedup if the background is static
-//#ifdef _XBOX
-//			if (staticBg && i != this->curPos){
-//				SDL_SetAlpha(game->cache, 0, 0);
-//			}
-//#endif
-			//if (game->cache->format->BitsPerPixel != video_page->format->BitsPerPixel ||
-			//		game->cache->format->Amask != video_page->format->Amask || 
-			//		game->cache->format->Rmask != video_page->format->Rmask || 
-			//		game->cache->format->Gmask != video_page->format->Gmask || 
-			//		game->cache->format->Bmask != video_page->format->Bmask){
-			//	SDL_Surface* convertTxt = SDL_ConvertSurface(game->cache, video_page->format, SDL_SWSURFACE);
-			//	SDL_FreeSurface(game->cache);
-			//	game->cache = convertTxt;
-			//}
-			//LOG_DEBUG("Renderizando %s", line.c_str());
-            SDL_BlitSurface(game->cache, &srcRect, video_page, &dstRectWithMargin);
-        } else {
-            // Cache existente -> solo dibujar
-            SDL_BlitSurface(game->cache, &srcRect, video_page, &dstRectWithMargin);
-        }
+			// 1. Crear superficie optimizada de 8 bits con Anti-aliasing
+			//game->cache = TTF_RenderUTF8_Shaded(fontMenu, line.c_str(), lineTextColor, Constant::colors[clBlack].sdlColor);
+			// 2. Hacer que el fondo negro (índice 0) sea completamente transparente
+			// SDL_SRCCOLORKEY activa la transparencia por color en el volcado
+			//SDL_SetColorKey(game->cache, SDL_SRCCOLORKEY, 0); 
+        } 
+
+		SDL_BlitSurface(game->cache, &srcRect, video_page, &dstRectWithMargin);
 
 		int txtDifWidth = game->cache->w - (selecAlphaRec->w - marginX - marginTextIcon);
 		//Comprobando si el tamanyo del texto es mayor que el espacio disponible
@@ -351,63 +347,82 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
     }
 }
 
-void ListMenu::drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor, TTF_Font *fontMenu, int& face_h){
-	SDL_Rect rectNavPath = {this->getX(), this->marginY, this->getW() -1, face_h};
+void ListMenu::drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor,
+                          TTF_Font *fontMenu, int& face_h)
+{
+    // --- 1. Construir txtNav ---
     std::string txtNav;
-
-    // 1. Si hay un archivo zip, empezamos la ruta con él
     if (!listZipped.file.empty()) {
         txtNav = listZipped.file;
+        for (size_t i = 0; i < listZipped.pathInZip.size(); ++i)
+            appendSegment(txtNav, listZipped.pathInZip[i]);
+    } else {
+        for (size_t i = 0; i < listDir.relativePath.size(); ++i)
+            appendSegment(txtNav, listDir.relativePath[i]);
     }
 
-    // 2. Añadimos los directorios dentro del ZIP (si existen)
-    for (auto it = listZipped.pathInZip.begin(); it != listZipped.pathInZip.end(); ++it) {
-        if (it->empty()) continue;
-        if (!txtNav.empty()) 
-			txtNav.append(" > ");
-        txtNav.append(*it);
+    // --- 2. Salida temprana si no hay ruta ---
+    if (txtNav.empty()) {
+        if (navPath)         { SDL_FreeSurface(navPath);         navPath         = NULL; }
+        if (filterAlphaRec)  { SDL_FreeSurface(filterAlphaRec);  filterAlphaRec  = NULL; }
+        lastTxtNav = txtNav;
+        return;
     }
 
-    // 3. Si no había nada en el ZIP, procesamos la ruta relativa del directorio
-    if (listZipped.pathInZip.empty()) {
-        for (auto it = listDir.relativePath.begin(); it != listDir.relativePath.end(); ++it) {
-            if (it->empty()) continue;
-			if (!txtNav.empty()) 
-				txtNav.append(" > ");
-            txtNav.append(*it);
-        }
-    }
+    // --- 3. Regenerar superficie de texto si cambió ---
+    SDL_Rect rectNavPath = {this->getX(), this->marginY, this->getW() - 1, face_h};
 
-	if (!txtNav.empty()){
-		const int prevStyle = TTF_GetFontStyle(fontMenu);
-		TTF_SetFontStyle(fontMenu, TTF_STYLE_ITALIC | TTF_STYLE_BOLD);
-		SDL_Surface *navPath = TTF_RenderUTF8_Blended(fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
-		if (!navPath) return;
-		TTF_SetFontStyle(fontMenu, prevStyle);
-		SDL_Rect rectSrcNavPath = {0, 0, navPath->w, navPath->h};
-		if (navPath->w > this->getW()){
-			rectSrcNavPath.x = navPath->w - rectNavPath.w;
-			rectSrcNavPath.w = rectNavPath.w;
-		}
+    if (txtNav != lastTxtNav) {
+        lastTxtNav = txtNav;
+
+        const int prevStyle = TTF_GetFontStyle(fontMenu);
+        TTF_SetFontStyle(fontMenu, TTF_STYLE_ITALIC | TTF_STYLE_BOLD);
+
+        if (navPath) SDL_FreeSurface(navPath);
+#ifdef _XBOX
+        navPath = TTF_RenderUTF8_Solid  (fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
+#else
+        navPath = TTF_RenderUTF8_Blended(fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
+#endif
+        TTF_SetFontStyle(fontMenu, prevStyle);
+        if (!navPath) return;
 
 #ifdef _XBOX
-		SDL_Surface *filterAlphaRec = NULL;
-		Constant::createRectAlphaFilled(filterAlphaRec, rectNavPath, video_page->format, clBlack, true);
-		if (filterAlphaRec){
-			SDL_BlitSurface(filterAlphaRec, NULL, video_page, &rectNavPath);
-			SDL_FreeSurface(filterAlphaRec);
-		}
-#else
-		//SDL_FillRect(video_page, &rectNavPath, Constant::colors[clBlack].color);
-		SDL_Color& c = Constant::colors[clBlack].sdlColor;
-		boxRGBA(video_page, rectNavPath.x, rectNavPath.y, rectNavPath.x + rectNavPath.w, rectNavPath.y + rectNavPath. h, 
-			c.r, c.g, c.b, 160);
+        if (!filterAlphaRec ||
+            filterAlphaRec->w != rectNavPath.w ||
+            filterAlphaRec->h != rectNavPath.h)
+        {
+            if (filterAlphaRec) SDL_FreeSurface(filterAlphaRec);
+            Constant::createRectAlphaFilled(filterAlphaRec, rectNavPath,
+                                            video_page->format, clBlack, true);
+        }
 #endif
-		//rect(video_page, rectNavPath.x - 1, rectNavPath.y - 1, rectNavPath.x + rectNavPath.w - 1, rectNavPath.y + rectNavPath.h - 1, Constant::colors[clMenuBars].sdlColor);
-		fastline(video_page, rectNavPath.x, rectNavPath.y + rectNavPath.h, rectNavPath.x + rectNavPath.w, rectNavPath.y + rectNavPath.h, menuBars);
-		SDL_BlitSurface(navPath, &rectSrcNavPath, video_page, &rectNavPath);
-		SDL_FreeSurface(navPath);
-	}
+    }
+
+    // --- 4. Dibujar fondo ---
+#ifdef _XBOX
+    if (filterAlphaRec)
+        SDL_BlitSurface(filterAlphaRec, NULL, video_page, &rectNavPath);
+#else
+    SDL_Color& c = Constant::colors[clBlack].sdlColor;
+    boxRGBA(video_page,
+            rectNavPath.x, rectNavPath.y,
+            rectNavPath.x + rectNavPath.w, rectNavPath.y + rectNavPath.h,
+            c.r, c.g, c.b, 160);
+#endif
+
+    // --- 5. Dibujar línea y texto ---
+    fastline(video_page,
+             rectNavPath.x, rectNavPath.y + rectNavPath.h,
+             rectNavPath.x + rectNavPath.w, rectNavPath.y + rectNavPath.h,
+             menuBars);
+
+    SDL_Rect rectSrc = {0, 0, navPath->w, navPath->h};
+    if (navPath->w > this->getW()) {
+        rectSrc.x = navPath->w - rectNavPath.w;
+        rectSrc.w = rectNavPath.w;
+    }
+    SDL_BlitSurface(navPath, &rectSrc, video_page, &rectNavPath);
 }
 
 void ListMenu::drawIconListElem(SDL_Surface *video_page, GameFile *game, SDL_Rect& dstRectIcon) {

@@ -53,6 +53,7 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::libretro_state] = cfg::t_cfg_props("libretro_state", dir.getDirActual() + Constant::getFileSep() + "data" + Constant::getFileSep() + "states");
 	configMain[cfg::libretro_lang] = cfg::t_cfg_props("libretro_lang", (int)RETRO_LANGUAGE_SPANISH);
 	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
+	configMain[cfg::packedImages] = cfg::t_cfg_props("packedImages", true);
 	configMain[cfg::integerScale] = cfg::t_cfg_props("integerScale", false);
 	configMain[cfg::animBG] = cfg::t_cfg_props("animBG", (int)BG_TILES);
 	configMain[cfg::apikeytgdb] = cfg::t_cfg_props("apikey.tgdb", "");
@@ -64,10 +65,13 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::hardcoreRA] = cfg::t_cfg_props("hardcoreRA", true);
 	configMain[cfg::raUser] = cfg::t_cfg_props("raUser", "");
 	configMain[cfg::raPass] = cfg::t_cfg_props("raPass", "");
+	configMain[cfg::scrapUser] = cfg::t_cfg_props("scrapUser", "");
+	configMain[cfg::scrapPass] = cfg::t_cfg_props("scrapPass", "");
 	configMain[cfg::coreGenesis] = cfg::t_cfg_props(coreDefault + "genesis", (int)0);
 	configMain[cfg::coreSnes] = cfg::t_cfg_props(coreDefault + "snes", (int)0);
 	configMain[cfg::corePce] = cfg::t_cfg_props(coreDefault + "pce", (int)0);
 	configMain[cfg::corePceCd] = cfg::t_cfg_props(coreDefault + "pcecd", (int)0);
+	configMain[cfg::coreFbn] = cfg::t_cfg_props(coreDefault + "fbn", (int)0);
 
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));

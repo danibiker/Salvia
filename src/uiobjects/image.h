@@ -3,6 +3,12 @@
 #include <uiobjects/object.h>
 #include <beans/structures.h>
 
+#ifdef _XBOX
+#include <xtl.h>
+#else
+#include <windows.h>
+#endif
+
 using namespace std;
 
 class Image : public Object{
@@ -25,6 +31,7 @@ class Image : public Object{
 
         bool loadImageFromGame(string baseDir, GameFile& game, string ext, SDL_PixelFormat* format = NULL);
         bool loadImage(string filepathToOpen, SDL_PixelFormat* format = NULL);
+        bool loadImageFromMemory(const unsigned char* buffer, std::size_t bufferSize, SDL_PixelFormat* format = NULL);
 		void printImage(SDL_Surface *video_page);
 		bool closeImage();
 		bool hasImage();
@@ -36,6 +43,9 @@ class Image : public Object{
 		 * concurre con printImage(). */
 		static SDL_Surface* loadConvertedSurface(const std::string& filepathToOpen,
 		                                          SDL_PixelFormat* format);
+		static SDL_Surface* loadConvertedSurfaceFromMem(const unsigned char* buffer,
+		                                                std::size_t bufferSize,
+		                                                SDL_PixelFormat* format);
 		void adoptSurface(SDL_Surface* newSurface, const std::string& newPath);
 		const std::string& getFilepath() const { return filepath; }
 
@@ -46,8 +56,9 @@ class Image : public Object{
     private:
         string filepath;
         SDL_Surface* img;
-
 		SDL_Surface* cachedSurface; // Almacena la imagen ya escalada
-		int lastW, lastH;           // Para detectar si el tamaño cambió
-		
+		int lastW, lastH;           // Para detectar si el tamanyo cambio
+	public:
+		mutable CRITICAL_SECTION* m_objCS; // apunta al CS externo que protege este objeto
+	private:
 };

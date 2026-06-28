@@ -33,7 +33,6 @@ extern struct retro_disk_control_callback disk_control;
 extern void launchBios();
 
 const char *scrapOrigins[] = {"SCREENSCRAPER", "THEGAMESDB", "EMPTY"};
-static const std::string PASS_MASK = "****";
 
 GestorMenus::GestorMenus(int screenw, int screenh){
 	menuRaiz = NULL;
@@ -219,15 +218,18 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	opcionHardcore->callback = &GestorMenus::changeHardcoreMode;
 	parentAchievements->opciones.push_back(opcionHardcore);
 
-	OpcionTxtAndValue *opcionRAUser = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.achievement.user"), refConfig->configMain[cfg::raUser].getStringRef());
+	OpcionTxtAndValue *opcionRAUser = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.achievement.user"), cfg::raUser);
 	opcionRAUser->callback = &GestorMenus::changeRAUser;
 	opcionRAUser->context = refConfig;
+	opcionRAUser->editable = true;
 	parentAchievements->opciones.push_back(opcionRAUser);
 
 	string password = refConfig->configMain[cfg::raPass].getStringRef();
-	OpcionTxtAndValue *opcionRAPassword = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.achievement.password"), password.empty() ? "" : PASS_MASK);
+	OpcionTxtAndValue *opcionRAPassword = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.achievement.password"), cfg::raPass);
 	opcionRAPassword->callback = &GestorMenus::changeRAPassword;
 	opcionRAPassword->context = refConfig;
+	opcionRAPassword->editable = true;
+	opcionRAPassword->setPassword(true);
 	parentAchievements->opciones.push_back(opcionRAPassword);
 
 	//Este menu no cuelga de ningun lado, pero ponemos partidas guardadas como padre
@@ -581,14 +583,8 @@ std::string GestorMenus::changeEnableAchievements(void* inst, void *value) {
 	return "";
 }
 
-
-struct RAUserData {
-	std::string* valorPtr;
-	CfgLoader* config;
-};
-
-static void onRAUserText(const std::string& text, void* userData) {
-	RAUserData* data = (RAUserData*)userData;
+void GestorMenus::onRAUserText(const std::string& text, void* userData) {
+	AskUserData* data = (AskUserData*)userData;
 	if (!text.empty()) {
 		*data->valorPtr = text;
 		data->config->configMain[cfg::raUser].setPropValue(text);
@@ -599,13 +595,8 @@ static void onRAUserText(const std::string& text, void* userData) {
 	delete data;
 }
 
-struct RAPasswordData {
-	std::string* valorPtr;
-	CfgLoader* config;
-};
-
-static void onRAPasswordText(const std::string& text, void* userData) {
-	RAPasswordData* data = (RAPasswordData*)userData;
+void GestorMenus::onRAPasswordText(const std::string& text, void* userData) {
+	AskUserData* data = (AskUserData*)userData;
 	if (!text.empty()) {
 		*data->valorPtr = PASS_MASK;
 		data->config->configMain[cfg::raPass].setPropValue(text);
@@ -617,7 +608,7 @@ static void onRAPasswordText(const std::string& text, void* userData) {
 }
 
 std::string GestorMenus::changeRAUser(void* inst, void *value) {
-	RAUserData* data = new RAUserData();
+	AskUserData* data = new AskUserData();
 	data->valorPtr = (std::string*)value;
 	data->config = (CfgLoader*)inst;
 
@@ -627,12 +618,45 @@ std::string GestorMenus::changeRAUser(void* inst, void *value) {
 }
 
 std::string GestorMenus::changeRAPassword(void* inst, void *value) {
-	RAPasswordData* data = new RAPasswordData();
+	AskUserData* data = new AskUserData();
 	data->valorPtr = (std::string*)value;
 	data->config = (CfgLoader*)inst;
 
 	SOUtils::pedirTextoAsync("RetroAchievements", LanguageManager::instance()->get("menu.achievement.ask.password"),
 							 &onRAPasswordText, data);
+    return "";
+}
+
+void GestorMenus::onUserText(const std::string& text, void* userData) {
+	AskUserData* data = (AskUserData*)userData;
+	if (!text.empty()) {
+		*data->valorPtr = data->isPassword ? PASS_MASK : text;
+		data->config->configMain[data->cfgKey].setPropValue(text);
+	}
+	delete data;
+}
+
+std::string GestorMenus::changeScrapUser(void* inst, void *value) {
+	AskUserData* data = new AskUserData();
+	data->valorPtr = (std::string*)value;
+	data->config = (CfgLoader*)inst;
+	data->cfgKey = cfg::scrapUser;
+	data->isPassword = false;
+
+	SOUtils::pedirTextoAsync("Scrapper", LanguageManager::instance()->get("menu.scrap.ask.user"),
+							 &GestorMenus::onUserText, data);
+    return "";
+}
+
+std::string GestorMenus::changeScrapPassword(void* inst, void *value) {
+	AskUserData* data = new AskUserData();
+	data->valorPtr = (std::string*)value;
+	data->config = (CfgLoader*)inst;
+	data->cfgKey = cfg::scrapPass;
+	data->isPassword = true;
+
+	SOUtils::pedirTextoAsync("Scrapper", LanguageManager::instance()->get("menu.scrap.ask.password"),
+							 &GestorMenus::onUserText, data);
     return "";
 }
 
@@ -689,11 +713,27 @@ void GestorMenus::poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper){
 		menuScrapOptions->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.scrap.lang"), idiomaDesc, &refConfig->idxIdioma));
 	}
 
+	OpcionTxtAndValue *opcionScrapUser = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.scrap.user"), cfg::scrapUser);
+	opcionScrapUser->callback = &GestorMenus::changeScrapUser;
+	opcionScrapUser->context = refConfig;
+	opcionScrapUser->editable = true;
+	menuScrapOptions->opciones.push_back(opcionScrapUser);
+
+	string password = refConfig->configMain[cfg::scrapPass].getStringRef();
+	OpcionTxtAndValue *opcionScrapPassword = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.scrap.password"), cfg::scrapPass);
+	opcionScrapPassword->callback = &GestorMenus::changeScrapPassword;
+	opcionScrapPassword->context = refConfig;
+	opcionScrapPassword->editable = true;
+	opcionScrapPassword->setPassword(true);
+	menuScrapOptions->opciones.push_back(opcionScrapPassword);
+
+	OpcionBool *opcionScrapToBin = new OpcionBool(LanguageManager::instance()->get("menu.scrap.packed"), &refConfig->configMain[cfg::packedImages].getBoolRef());
+	menuScrapOptions->opciones.push_back(opcionScrapToBin);
+	
+
 	menuScrapper->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.scrap.other"), menuScrapOptions));
 	menuScrapper->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.scrap.start"), &GestorMenus::startScrapping, &status, this));
 }
-
-
 
 /**
 *

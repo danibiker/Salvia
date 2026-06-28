@@ -557,12 +557,17 @@ bool Joystick::pollKeys(SDL_Surface* screen){
 					character = SDLKeyToASCIIFallback(event.key.keysym.sym,
 					                                   event.key.keysym.mod);
 				}
-				
 				if (core_key_callback) {
 					salvia_dispatch_keyboard_event(false, retro_key, character, retro_mod);
 				} else if (retro_key < t_joy_state::MAX_RETRO_KEYS && retro_key != RETROK_UNKNOWN) {
 					inputs.keyboard_state[retro_key].keyjoydown = false;
 				}
+
+				inputs.last_key_processed->key = retro_key;
+				inputs.last_key_processed->keyMod = retro_mod;
+				inputs.last_key_processed->unicode = character;
+				inputs.last_key_processed->keyjoydown = false;
+
 				break;
 			}
         }

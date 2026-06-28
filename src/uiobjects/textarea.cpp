@@ -7,7 +7,7 @@ TextArea::TextArea(){
 
 TextArea::~TextArea(){
 	LOG_DEBUG("Deleting TextArea...\n");
-    lines.clear();
+	clear();
 }
 
 TextArea::TextArea(int x, int y, int w, int h){
@@ -41,6 +41,11 @@ void TextArea::setFontType(Fonts::enumFonts type){
 }
 
 void TextArea::clear(){
+	for (unsigned int i=0; i < lines.size(); i++){
+		if (lines[i].lineSrf != NULL){
+			SDL_FreeSurface(lines[i].lineSrf);
+		}
+	}
 	lines.clear();
 }
 
@@ -66,13 +71,13 @@ bool TextArea::loadTextFile(std::string filepathToOpen) {
 
     std::ifstream fileRomTxt(filepathToOpen);
     if (!fileRomTxt.is_open()) {
-        lines.clear();
+        clear();
         return false;
     }
 
     this->filepath = filepathToOpen;
     this->lastScroll = 0;
-    lines.clear();
+    clear();
 
     const int spaceW = Fonts::getSize(this->fontType, " ");
     const int maxW = this->getW() - this->marginX;
@@ -81,8 +86,9 @@ bool TextArea::loadTextFile(std::string filepathToOpen) {
     
     // Leemos el archivo linea por linea para respetar los retornos de carro originales
     while (std::getline(fileRomTxt, rawLine)) {
+		t_line line;
         // Creamos una nueva linea en nuestro vector para este parrafo
-        lines.push_back("");
+        lines.push_back(std::move(line));
         int currentLineW = 0;
 
         std::stringstream ss(rawLine);
@@ -93,18 +99,19 @@ bool TextArea::loadTextFile(std::string filepathToOpen) {
             int wordW = Fonts::getSize(this->fontType, word.c_str());
 
             // Si es la primera palabra de la linea actual
-            if (lines.back().empty()) {
-                lines.back() = std::move(word);
+            if (lines.back().text.empty()) {
+                lines.back().text = std::move(word);
                 currentLineW = wordW;
             } 
             // Si la palabra cabe en la linea actual junto con el espacio
             else if (currentLineW + spaceW + wordW < maxW) {
-                lines.back().append(" ").append(word);
+                lines.back().text.append(" ").append(word);
                 currentLineW += spaceW + wordW;
             } 
             // Si no cabe, hacemos un salto de linea automático (ajuste de texto)
             else {
-                lines.push_back(std::move(word));
+				line.text = std::move(word);
+                lines.push_back(std::move(line));
                 currentLineW = wordW;
             }
         }
@@ -125,79 +132,187 @@ bool TextArea::loadString(std::string fulltxt){
  * Las versiones "WithFont" hacen todo el trabajo y son seguras desde
  * cualquier hilo si la TTF_Font* es exclusiva de ese hilo (ver
  * Fonts::createIndependentFont). */
-std::vector<std::string> TextArea::wrapStringWithFont(const std::string& fulltxt,
-                                                       TTF_Font* font, int maxW)
+std::vector<t_line> TextArea::wrapStringWithFont(const std::string& fulltxt, TTF_Font* font, int maxW)
 {
-	std::vector<std::string> out;
-	std::vector<std::string> words = Constant::splitChar(fulltxt, ' ');
-	out.push_back("");
+    std::vector<t_line> out;
+    if (fulltxt.empty()) return out;
 
-	const int spaceW = Fonts::getSize(font, " ");
-	for (int i=0; i < (int)words.size(); i++){
-		const std::string& word = words.at(i);
-		int wordW = Fonts::getSize(font, word.c_str());
-		int lineW = Fonts::getSize(font, out.back().c_str());
-		if (lineW + wordW + spaceW >= maxW){
-			out.push_back("");
-			out.back().append(word);
-		} else {
-			if (!out.back().empty()){
-				out.back().append(" ");
-			}
-			out.back().append(word);
-		}
-	}
-	return out;
+    // 1. Preasignamos memoria estimada para evitar realojamientos del vector
+    out.reserve(fulltxt.size() / 20 + 1); 
+    out.push_back(t_line());
+
+    int currentLineW = 0;
+    const int spaceW = Fonts::getSize(font, " ");
+    
+    std::size_t start = 0;
+    std::size_t length = fulltxt.length();
+
+    // Reutilizamos un único buffer dinámico para extraer palabras sin reservar memoria continuamente
+    std::string word;
+    word.reserve(32); 
+
+    while (start < length) {
+        // Saltar espacios iniciales pero marcar que venimos de uno
+        bool preSpace = (start > 0 && fulltxt[start - 1] == ' ');
+        
+        // 2. Encontrar el final de la palabra actual de forma eficiente
+        std::size_t end = start;
+        bool hasBreak = false;
+        std::size_t breakPos = std::string::npos;
+
+        while (end < length && fulltxt[end] != ' ') {
+            if (fulltxt[end] == '\n' || fulltxt[end] == '\r') {
+                hasBreak = true;
+                breakPos = end;
+                break; // Paramos en el salto de línea para procesarlo
+            }
+            ++end;
+        }
+
+        // 3. Extraer la palabra reutilizando la capacidad del string (sin hacer New/Delete de memoria)
+        word.assign(fulltxt, start, (hasBreak ? breakPos : end) - start);
+
+        int wordW = word.empty() ? 0 : Fonts::getSize(font, word.c_str());
+        bool hasSpace = !out.back().text.empty();
+        int addedW = wordW + (hasSpace ? spaceW : 0);
+
+        // 4. Evaluar si cabe en la línea actual
+        if (currentLineW + addedW >= maxW) {
+            out.push_back(t_line());
+            out.back().text = word;
+            currentLineW = wordW;
+        } else {
+            if (!word.empty()) {
+                if (hasSpace) out.back().text += " ";
+                out.back().text += word;
+                currentLineW += addedW;
+            }
+        }
+
+        // 5. Avanzar los índices según lo que hemos encontrado
+        if (hasBreak) {
+            // Saltamos el '\n' o '\r'
+            start = breakPos + 1;
+            // Si el siguiente carácter es el compañero (\r\n), lo saltamos también
+            if (start < length && ((fulltxt[breakPos] == '\r' && fulltxt[start] == '\n') || 
+                                   (fulltxt[breakPos] == '\n' && fulltxt[start] == '\r'))) {
+                ++start;
+            }
+            // Forzamos la creación de una nueva línea debido al salto explícito
+            out.push_back(t_line());
+            currentLineW = 0;
+        } else {
+            // Avanzamos al siguiente carácter después del espacio
+            start = end + 1; 
+        }
+    }
+
+    return out;
 }
 
-std::vector<std::string> TextArea::wrapTextFileWithFont(const std::string& filepathToOpen,
-                                                          TTF_Font* font, int maxW)
+std::vector<t_line> TextArea::wrapTextFileWithFont(const std::string& filepathToOpen, TTF_Font* font, int maxW)
 {
-	std::vector<std::string> out;
-	std::ifstream fileRomTxt(filepathToOpen);
-	if (!fileRomTxt.is_open()) return out;
+    std::vector<t_line> out;
+    
+    // Abrir el archivo en modo binario para controlar manualmente \r y \n
+    std::ifstream file(filepathToOpen.c_str(), std::ios::binary);
+    if (!file.is_open()) return out;
 
-	const int spaceW = Fonts::getSize(font, " ");
-	std::string rawLine;
-	while (std::getline(fileRomTxt, rawLine)) {
-		out.push_back("");
-		int currentLineW = 0;
-		std::stringstream ss(rawLine);
-		std::string word;
-		while (ss >> word) {
-			int wordW = Fonts::getSize(font, word.c_str());
-			if (out.back().empty()) {
-				out.back() = std::move(word);
-				currentLineW = wordW;
-			}
-			else if (currentLineW + spaceW + wordW < maxW) {
-				out.back().append(" ").append(word);
-				currentLineW += spaceW + wordW;
-			}
-			else {
-				out.push_back(std::move(word));
-				currentLineW = wordW;
-			}
-		}
-	}
-	return out;
+    // Preasignamos un tamaño estimado inicial para evitar realojamientos del vector
+    out.reserve(50); 
+    out.push_back(t_line());
+
+    int currentLineW = 0;
+    const int spaceW = Fonts::getSize(font, " ");
+
+    // Buffer en el Stack (memoria ultrarrápida) para leer bloques del disco
+    const std::size_t BUFFER_SIZE = 4096;
+    char buffer[BUFFER_SIZE];
+
+    std::string word;
+    word.reserve(32); // Evita allocs constantes al crecer la palabra
+
+    while (file.read(buffer, BUFFER_SIZE) || file.gcount() > 0) {
+        std::streamsize bytesRead = file.gcount();
+        
+        for (std::streamsize i = 0; i < bytesRead; ++i) {
+            char c = buffer[i];
+
+            // 1. Detectar delimitadores (Espacio o Saltos de línea)
+            if (c == ' ' || c == '\n' || c == '\r') {
+                
+                // Si teníamos una palabra acumulada, la procesamos
+                if (!word.empty()) {
+                    int wordW = Fonts::getSize(font, word.c_str());
+                    bool hasSpace = !out.back().text.empty();
+                    int addedW = wordW + (hasSpace ? spaceW : 0);
+
+                    if (currentLineW + addedW >= maxW) {
+                        out.push_back(t_line());
+                        out.back().text = word;
+                        currentLineW = wordW;
+                    } else {
+                        if (hasSpace) out.back().text += " ";
+                        out.back().text += word;
+                        currentLineW += addedW;
+                    }
+                    word.clear(); // Vacía el string sin liberar su memoria interna
+                }
+
+                // 2. Gestión estricta de saltos de línea nativos (\n, \r, \r\n)
+                if (c == '\n' || c == '\r') {
+                    // Si es un \r y el siguiente es \n, nos lo saltamos para no duplicar
+                    if (c == '\r' && (i + 1 < bytesRead) && buffer[i + 1] == '\n') {
+                        ++i; 
+                    } else if (c == '\r' && (i + 1 == bytesRead) && file.peek() == '\n') {
+                        file.get(); // Saltamos el \n si quedó justo en el límite del buffer
+                    }
+
+                    // Forzar nueva línea en el ajuste de texto
+                    out.push_back(t_line());
+                    currentLineW = 0;
+                }
+            } 
+            else {
+                // Acumular carácter en la palabra actual
+                word.push_back(c);
+            }
+        }
+    }
+
+    // Procesar la última palabra si el fichero no terminaba en espacio/salto de línea
+    if (!word.empty()) {
+        int wordW = Fonts::getSize(font, word.c_str());
+        bool hasSpace = !out.back().text.empty();
+        if (currentLineW + wordW + (hasSpace ? spaceW : 0) >= maxW) {
+            out.push_back(t_line());
+            out.back().text = word;
+        } else {
+            if (hasSpace) out.back().text += " ";
+            out.back().text += word;
+        }
+    }
+
+    file.close();
+    return out;
 }
 
-/* Variantes por fontType â€” delegan en la version WithFont resolviendo
+/* Variantes por fontType delegan en la version WithFont resolviendo
  * la TTF_Font compartida (uso desde el main thread). */
-std::vector<std::string> TextArea::wrapString(const std::string& fulltxt,
+
+std::vector<t_line> TextArea::wrapString(const std::string& fulltxt,
                                                 Fonts::enumFonts fontType, int maxW)
 {
 	return wrapStringWithFont(fulltxt, Fonts::getFont(fontType), maxW);
 }
 
-std::vector<std::string> TextArea::wrapTextFile(const std::string& filepathToOpen,
+std::vector<t_line> TextArea::wrapTextFile(const std::string& filepathToOpen,
                                                   Fonts::enumFonts fontType, int maxW)
 {
 	return wrapTextFileWithFont(filepathToOpen, Fonts::getFont(fontType), maxW);
 }
 
-void TextArea::adoptLines(const std::vector<std::string>& newLines, const std::string& newPath){
+void TextArea::adoptLines(const std::vector<t_line>& newLines, const std::string& newPath){
 	this->lines = newLines;
 	this->filepath = newPath;
 	this->lastScroll = 0;
@@ -295,8 +410,8 @@ void TextArea::calcTicks(GameTicks gameTicks, int& scrollDesp, float& pixelDesp)
 }
 
 /**
-    * 
-    */
+* 
+*/
 void TextArea::draw(SDL_Surface *video_page, GameTicks gameTicks){
     int nextLineY = this->getY() + marginTop;
     int i = 0;
@@ -306,17 +421,40 @@ void TextArea::draw(SDL_Surface *video_page, GameTicks gameTicks){
     calcTicks(gameTicks, this->lastScroll, pixelDesp);
 
     do{
-        std::string line = lines.at(i + this->lastScroll);
-		Constant::drawTextTransparent(video_page, this->fontText, line.c_str(), this->getX() + this->marginX, (int) (nextLineY - pixelDesp), white, 0);
+		t_line& line = lines.at(i + this->lastScroll);
+		drawTextAreaTransparent(video_page, this->fontText, line, this->getX() + this->marginX, (int) (nextLineY - pixelDesp), white, 0);
         nextLineY = this->getY() + marginTop + (++i) * (face_h + lineSpace);
     } while ((std::size_t) (i + this->lastScroll) < lines.size() && nextLineY < this->getY() + this->getH() - face_h);
 }
 
 /**
-    * 
-    */
+* 
+*/
 void TextArea::draw(SDL_Surface *video_page){
     this->enableScroll = false;
 	GameTicks ticks = {0};
     draw(video_page, ticks);
+}
+
+SDL_Rect TextArea::drawTextAreaTransparent(SDL_Surface* surface, TTF_Font* font, t_line& line, int x, int y, SDL_Color color, int bg, JFY_TYPE& justifyHelper){
+	if (font && !line.text.empty()) {
+		if (line.lineSrf == NULL){
+			#ifdef _XBOX 
+			line.lineSrf = TTF_RenderUTF8_Solid(font, line.text.c_str(), color);
+			#else
+			line.lineSrf = TTF_RenderUTF8_Blended(font, line.text.c_str(), color);
+			#endif
+			if (line.lineSrf){
+				line.dest.w = line.lineSrf->w;
+				line.dest.h = line.lineSrf->h;
+				line.dest.x = x + justifyHelper.getJustification(line.lineSrf->w);
+			}
+		}
+
+		if (line.lineSrf) {
+			line.dest.y = y;	
+			SDL_BlitSurface(line.lineSrf, NULL, surface, &line.dest);
+		}
+	}
+	return line.dest;
 }

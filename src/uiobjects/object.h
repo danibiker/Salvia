@@ -28,6 +28,9 @@ class Object{
 
         int getObjectType() { return classType; }
         void setObjectType(int val) { classType = val; }
+		void addAttempt(const std::string &);
+		bool isAttempted(const std::string &);
+		void clearAttempts();
 
      protected:
         int x;          //Posicion horizontal del objeto
@@ -35,4 +38,5 @@ class Object{
         int w;          //Ancho en pixeles del objeto
         int h;          //Alto en pixeles del objeto
         int classType;  //Tipo de elemento al que hace referencia el objeto
+		std::vector<std::string> latestLoadAttempts;
 };

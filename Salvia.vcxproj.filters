@@ -323,6 +323,12 @@
     <ClCompile Include="src\image\icons.cpp">
       <Filter>Source Files\image</Filter>
     </ClCompile>
+    <ClCompile Include="src\io\filepackage.cpp">
+      <Filter>Source Files\io</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menuassetloader.cpp">
+      <Filter>Source Files\frontend</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\const\constant.h">
@@ -488,6 +494,12 @@
       <Filter>Source Files\so</Filter>
     </ClInclude>
     <ClInclude Include="src\unzip\ZipBrowser.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\filepackage.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\http\dev_credentials.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

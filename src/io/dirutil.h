@@ -66,6 +66,7 @@ class dirutil{
 		static bool fileExists(const char* file);
 		static bool dirExists(const char* ruta);
 		static bool isDir(const char* ruta);
+		static std::string getRelativeDir(std::string filepath, std::string basePath);
     private:
         char rutaActual[PATH_MAX]; //Ruta actual que se esta navegando
         char* formatdate(char* str, time_t val);

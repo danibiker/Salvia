@@ -4,11 +4,9 @@
 #include <http/httputil.h>
 #include <http/scrapper.h>
 
-const char* gameCategories[] = {"dipswitch", "cheat", "ips", "romdata"};
-
 // Puente entre los eventos SDL del frontend y el callback de teclado que
 // el core ha registrado via RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK. La
-// dirección del callback es: CORE → FRONTEND — el frontend lo INVOCA al
+// direccion del callback es: CORE → FRONTEND — el frontend lo INVOCA al
 // recibir teclas. DOSBox-Pure y otros cores que escuchan typing dependen
 // de este puente (no leen retro_input_state(RETRO_DEVICE_KEYBOARD)).
 extern "C" void salvia_dispatch_keyboard_event(bool down, unsigned retro_keycode,
@@ -46,7 +44,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 
 		case RETRO_ENVIRONMENT_GET_VFS_INTERFACE: {
 			struct retro_vfs_interface_info* vfs_info = (struct retro_vfs_interface_info*)data;
-			// Si el core pide versión 1, 2 o 3, le damos nuestra v3
+			// Si el core pide version 1, 2 o 3, le damos nuestra v3
 			if (vfs_info->required_interface_version <= 3) {
 				vfs_info->iface = &vfs_interface;
 				return true;
@@ -80,7 +78,7 @@ static bool retro_environment(unsigned cmd, void *data) {
         }
 
 
-        // Es muy probable que en 2026 también te pida la versión extendida (V1)
+        // Es muy probable que en 2026 tambien te pida la version extendida (V1)
         case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE: {
             const struct retro_disk_control_ext_callback *cb =
                 (const struct retro_disk_control_ext_callback*)data;
@@ -106,11 +104,11 @@ static bool retro_environment(unsigned cmd, void *data) {
 
         case RETRO_ENVIRONMENT_GET_GAME_INFO_EXT:
             // Al devolver false, el core entiende que este frontend es simple
-            // y usará la estructura retro_game_info estándar.
+            // y usara la estructura retro_game_info estandar.
             return false;
 
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
-            // El core envía un puntero al formato que desea usar
+            // El core envia un puntero al formato que desea usar
             enum retro_pixel_format requested = *(enum retro_pixel_format*)data;
 			LOG_DEBUG("Solicitando pixelformat %d", (int)requested);
 			fmt = requested; // Guarda esto en tu 
@@ -127,7 +125,7 @@ static bool retro_environment(unsigned cmd, void *data) {
         }
 
 		case RETRO_ENVIRONMENT_GET_CAN_DUPE: {
-			// Aquí le decimos al núcleo que el frontend SÍ puede duplicar frames.
+			// Aqui le decimos al nucleo que el frontend Si puede duplicar frames.
 			*(bool*)data = true; 
 			return true;
 		}
@@ -137,7 +135,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 
 		case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS:
 			// Al devolver true, le decimos al core: 
-			// "Sí, puedes pedirme todos los botones de golpe".
+			// "Si, puedes pedirme todos los botones de golpe".
 			return true;
 
 		case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:{
@@ -147,7 +145,7 @@ static bool retro_environment(unsigned cmd, void *data) {
             strncpy(dirSystem, currentPath.c_str(), sizeof(dirSystem) - 1);
             savePath[sizeof(dirSystem) - 1] = '\0'; // Aseguramos el cierre nulo
 
-            // Entregamos SIEMPRE la misma dirección de memoria
+            // Entregamos SIEMPRE la misma direccion de memoria
             *(const char**)data = dirSystem;
             return true;
 		}
@@ -177,7 +175,7 @@ static bool retro_environment(unsigned cmd, void *data) {
             strncpy(savePath, currentPath.c_str(), sizeof(savePath) - 1);
             savePath[sizeof(savePath) - 1] = '\0'; // Aseguramos el cierre nulo
 
-            // Entregamos SIEMPRE la misma dirección de memoria
+            // Entregamos SIEMPRE la misma direccion de memoria
             *(const char**)data = savePath;
             return true;
 		}
@@ -195,7 +193,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 			//}
 			return true;
 		}
-		// RETRO_ENVIRONMENT_SET_VARIABLES (formato clásico) ──────────────────
+		// RETRO_ENVIRONMENT_SET_VARIABLES (formato clasico) ──────────────────
 		case RETRO_ENVIRONMENT_SET_VARIABLES:
 		{
 			const auto* vars = static_cast<const retro_variable*>(data);
@@ -278,7 +276,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 					localDefs = intl->local;
 			}
 
-			// Construir un mapa de local key -> index para búsqueda rápida
+			// Construir un mapa de local key -> index para busqueda rapida
 			std::map<std::string, int> localMap;
 			if (localDefs) {
 				for (int i = 0; localDefs[i].key != nullptr; ++i)
@@ -303,7 +301,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 					 ++j)
 				{
 					values.push_back(usDefs[i].values[j].value);
-					// Label: de local si existe y no está vacío, si no de us, si no el value key
+					// Label: de local si existe y no esta vacio, si no de us, si no el value key
 					const char* lbl = nullptr;
 					if (locEntry && locEntry->values[j].value)
 						lbl = locEntry->values[j].label;
@@ -368,7 +366,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 				if (key.compare(0, 16, "fbneo-debug-dip-") == 0)
 					continue;
 
-				// Fallback a us por key (no por índice, los arrays pueden diferir en orden/cantidad)
+				// Fallback a us por key (no por indice, los arrays pueden diferir en orden/cantidad)
 				const char* srcDesc = defs[i].desc;
 				if (!srcDesc && usV2 && usV2->definitions) {
 					for (int k = 0; usV2->definitions[k].key != nullptr; ++k) {
@@ -416,7 +414,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 		}
 
 		case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: {
-			// Solo devolvemos true si el usuario ha tocado algo en el menú
+			// Solo devolvemos true si el usuario ha tocado algo en el menu
 			// de la Xbox 360 recientemente.
 			bool *updated = (bool*)data;
 			*updated = gameMenu->configMenus->options_changed_flag;
@@ -431,7 +429,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 
 		case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: {
             const struct retro_controller_info *info = (const struct retro_controller_info *)data;
-            // Aquí el Core te está diciendo qué dispositivos soporta.
+            // Aqui el Core te esta diciendo que dispositivos soporta.
             for (unsigned i = 0; info[i].types && i < MAX_PLAYERS; ++i) {
 				t_controller_port *port = &gameMenu->joystick->g_ports[i];
 				port->available_types.clear();
@@ -440,7 +438,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 					const char* desc = info[i].types[j].desc;
 
 					if (desc == NULL) {
-						LOG_DEBUG("Puerto %d: Se recibió un descriptor NULL para el ID %u. Saltando...", i, id);
+						LOG_DEBUG("Puerto %d: Se recibio un descriptor NULL para el ID %u. Saltando...", i, id);
 						continue; 
 					}
 
@@ -461,7 +459,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 				(const struct retro_audio_buffer_status_callback*)data;
 
 			if (cb) {
-				audio_status_cb = cb->callback; // Guardamos la función que el core llamará
+				audio_status_cb = cb->callback; // Guardamos la funcion que el core llamara
 			}
 			return true;
 		}
@@ -469,8 +467,8 @@ static bool retro_environment(unsigned cmd, void *data) {
 			const unsigned *latency_ms = (const unsigned*)data;
 			if (latency_ms) {
 				unsigned requested_latency = *latency_ms;
-				LOG_DEBUG("El core solicita una latencia mínima de audio de: %u ms", requested_latency);
-				// Aquí deberías ajustar el tamaño de tu buffer de salida de audio (ej. SDL, XAudio2, etc.)
+				LOG_DEBUG("El core solicita una latencia minima de audio de: %u ms", requested_latency);
+				// Aqui deberias ajustar el tamaño de tu buffer de salida de audio (ej. SDL, XAudio2, etc.)
 				// para que sea al menos de ese tamaño.
 				//audio_system->set_minimum_latency(requested_latency);
 			}
@@ -516,7 +514,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 		}
 
 		case RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK: {
-			// El Core te está dando SU función callback. Tú solo la recibes.
+			// El Core te esta dando SU funcion callback. Tu solo la recibes.
 			const struct retro_keyboard_callback *cb = (const struct retro_keyboard_callback *)data;
     
 			if (cb) {
@@ -691,7 +689,7 @@ static inline void sw_refresh(const void *data, unsigned width, unsigned height,
 	//Hacemos la comprobacion del pitch >= width * 4, por si hemos solicitado el RETRO_PIXEL_FORMAT_RGB565
 	//pero el core no lo acepta
 	if (video_bpp == 16 && fmt != RETRO_PIXEL_FORMAT_RGB565){
-		// 2. Gestionar buffer de conversión de forma eficiente
+		// 2. Gestionar buffer de conversion de forma eficiente
 		std::size_t needed = width * height * sizeof(uint16_t);
 		if (!conversion_buffer || buffer_size < needed) {
 			uint16_t* temp = (uint16_t*)realloc(conversion_buffer, needed);
@@ -899,16 +897,16 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 		const int sdlModifier = inputs->mapperHotkeys.getSdlBtn(port, HK_MODIFIER);
 		const bool modifierPressed = inputs->getSdlBtn(port, sdlModifier);
 
-		// 1. Gestión del Latch de Start
+		// 1. Gestion del Latch de Start
 		#ifdef _XBOX
-		// 1. Cachear el valor para evitar múltiples accesos al array
+		// 1. Cachear el valor para evitar multiples accesos al array
 		const int holdFrames = gameMenu->joystick->startHoldFrames[port];
 		if (holdFrames > 0) {
-			// 2. Obtener el índice del botón una sola vez
+			// 2. Obtener el indice del boton una sola vez
 			int sdlBtn = inputs->mapperCore.getSdlBtn(port, RETRO_DEVICE_ID_JOYPAD_START);
-			// 3. Validación de rango rápida
+			// 3. Validacion de rango rapida
 			if ((unsigned int)sdlBtn < MAX_BUTTONS) { 
-				// Forzamos el estado true mientras haya frames de retención
+				// Forzamos el estado true mientras haya frames de retencion
 				inputs->btn_state[port][sdlBtn] = true;
 			}
 		}
@@ -1011,7 +1009,7 @@ void retro_audio_sample(int16_t left, int16_t right) {
     audio.Write(samples, 2);
 }
 
-// Callback para ráfagas de muestras (el que usan casi todos los cores)
+// Callback para rafagas de muestras (el que usan casi todos los cores)
 std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_t frames) {
     const int mode = *gameMenu->current_sync;
 
@@ -1043,7 +1041,7 @@ void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
     int16_t* samples = (int16_t*)stream;
     
     // len es el tamaño en bytes. 
-    // Como usamos AUDIO_S16SYS (2 bytes por muestra), count es el número de muestras totales.
+    // Como usamos AUDIO_S16SYS (2 bytes por muestra), count es el numero de muestras totales.
     std::size_t count = len / sizeof(int16_t);
 
     // 3. Leer de tu buffer circular
@@ -1061,20 +1059,20 @@ void init_sdl_audio(double sample_rate) {
 		Buffer Total (AudioBuffer::AUDIO_BUFFER_SIZE = 4096): Tienes un margen de maniobra de unos 92ms (a 44.1kHz). 
 			Es suficiente para que Windows haga tareas en segundo plano sin que el audio sufra cortes.
 		Bloque SDL (1024): Al pedir 1024 muestras (AudioBuffer::AUDIO_BUFFER_SIZE / 4), la latencia de respuesta de la tarjeta de sonido es de unos 23ms. 
-			Es una latencia excelente, casi imperceptible para el oído humano.
-		La Proporción (1/4): Al ser el bloque 4 veces más pequeño que el buffer total, el hilo de audio de SDL 
-			llamará a tu callback 4 veces antes de vaciar el buffer por completo. Esto da al emulador mucho tiempo 
+			Es una latencia excelente, casi imperceptible para el oido humano.
+		La Proporcion (1/4): Al ser el bloque 4 veces mas pequeño que el buffer total, el hilo de audio de SDL 
+			llamara a tu callback 4 veces antes de vaciar el buffer por completo. Esto da al emulador mucho tiempo 
 			para rellenar el head antes de que el tail lo alcance.
 	*/
 
     SDL_AudioSpec wanted;
     wanted.freq = (int)sample_rate;
     wanted.format = AUDIO_S16SYS;	// 16 bits nativos
-    wanted.channels = 2;			// Estéreo
+    wanted.channels = 2;			// Estereo
 	// --- AJUSTE PARA XBOX 360 ---
     // Si escuchas chasquidos (crackling), aumenta este valor.
     // 1024 = ~23ms (Riesgo de cortes en 360)
-    // 2048 = ~46ms (Recomendado para estabilidad en emulación)
+    // 2048 = ~46ms (Recomendado para estabilidad en emulacion)
     // 4096 = ~92ms (Seguro, pero con lag perceptible)
 	#ifdef WIN
 	wanted.samples = 1024; // Tamaño del bloque (latencia)
@@ -1329,7 +1327,7 @@ bool loadGameAtStart(int argc, char *argv[]){
 inline void updateGame() {
     #ifndef NO_SRAM
 	const Uint32 currentTime = SDL_GetTicks();
-    // Verificamos si ha pasado el intervalo desde el último guardado
+    // Verificamos si ha pasado el intervalo desde el ultimo guardado
     if (currentTime - lastSramSaved >= INTERVAL_SRAM_SAVE) {
         saveSram(romPaths.sram.c_str());
         lastSramSaved = currentTime;
@@ -1337,9 +1335,9 @@ inline void updateGame() {
 	#endif
 	// retro_run hace todo: 
 	// 1. Llama a input_poll() -> update_input()
-	// 2. Calcula la lógica del juego
-	// 3. Llama a audio_batch() -> (Aquí el audio bloquea si va muy rápido)
-	// 4. Llama a video_refresh() -> (Aquí se dibuja el frame y los FPS)
+	// 2. Calcula la logica del juego
+	// 3. Llama a audio_batch() -> (Aqui el audio bloquea si va muy rapido)
+	// 4. Llama a video_refresh() -> (Aqui se dibuja el frame y los FPS)
 	retro_run();
 }
 
@@ -1384,7 +1382,7 @@ void processFrontendEvents(){
 			break;
 
 		case HK_MAX:
-			// No hacemos nada para el valor límite
+			// No hacemos nada para el valor limite
 			break;
 
 		case HK_SLOT_UP:
@@ -1424,7 +1422,7 @@ void processFrontendEvents(){
 		*/
 		default:
 			//LOG_DEBUG("Sending Hotkey %d\n", hotkey);
-			// Cualquier otro hotkey (ej. volumen, reset, menú) se delega al frontend
+			// Cualquier otro hotkey (ej. volumen, reset, menu) se delega al frontend
 			gameMenu->processFrontendEvents(hotkey);
 			break;
 	}
@@ -1552,7 +1550,7 @@ static void __declspec(noinline) printAndDelay(){
  *  MSVC error C2712 forbids SEH __try in any function that requires
  *  C++ object unwinding. */
 static void __declspec(noinline) runGameLoop() {
-	__try {
+	//__try {
 		while (gameMenu->running) {
 			processFrontendEvents();
 
@@ -1576,10 +1574,10 @@ static void __declspec(noinline) runGameLoop() {
 			}
 			gameMenu->gameTicks.ticks++;
 		}
-	} __except (LogCrash(GetExceptionCode(), GetExceptionInformation())) {
-		printAndDelay();
-		LOG_ERROR("FATAL: Unhandled exception, details written to crash.log");
-	}
+	//} __except (LogCrash(GetExceptionCode(), GetExceptionInformation())) {
+	//	printAndDelay();
+	//	LOG_ERROR("FATAL: Unhandled exception, details written to crash.log");
+	//}
 }
 
 /**

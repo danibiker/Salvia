@@ -110,7 +110,7 @@ static int           s_skipping_this_frame = 0;
  *     de Silent Hill por timing GPU desincronizado en el path lento de gpu_unai).
  * Hot-reloadable via check_game_fixes + RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE
  * porque los 3 renderers lo consultan por primitiva, no en init. */
-extern "C" int g_pcsxr_dithering = 1;
+extern "C" int g_pcsxr_dithering = 0;
 
 extern "C" void GPU_setSkipNextFrame(int skip);          /* xbox_soft/gpu.c */
 extern void pcsxr_log(enum retro_log_level level, const char *format, ...);

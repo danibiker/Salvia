@@ -4,6 +4,16 @@
 #include <gfx/SDL_rotozoom.h>
 #include <io/dirutil.h>
 
+#ifndef SDL_RWFromConstMem
+#define SDL_RWFromConstMem(p, s) SDL_RWFromMem(const_cast<void*>(static_cast<const void*>(p)), s)
+#endif
+
+#ifdef _XBOX
+	const bool SMOOTH_RESIZE = false;
+#else 
+	const bool SMOOTH_RESIZE = true;
+#endif
+
 Image::Image(){
     init();
 }
@@ -77,6 +87,20 @@ SDL_Surface* Image::loadConvertedSurface(const std::string& filepathToOpen, SDL_
     return raw;
 }
 
+SDL_Surface* Image::loadConvertedSurfaceFromMem(const unsigned char* buffer, std::size_t bufferSize, SDL_PixelFormat* format) {
+    if (buffer == NULL || bufferSize == 0) return NULL;
+    SDL_RWops* rw = SDL_RWFromConstMem(buffer, bufferSize);
+    if (rw == NULL) return NULL;
+    SDL_Surface* raw = IMG_Load_RW(rw, 1);
+    if (!raw) return NULL;
+    if (format) {
+        SDL_Surface* converted = SDL_ConvertSurface(raw, format, SDL_SWSURFACE);
+        SDL_FreeSurface(raw);
+        return converted;
+    }
+    return raw;
+}
+
 /* Atomico: reemplaza img/cachedSurface por newSurface, libera lo anterior.
  * Llamar bajo el lock externo que protege printImage(). */
 void Image::adoptSurface(SDL_Surface* newSurface, const std::string& newPath) {
@@ -129,6 +153,43 @@ bool Image::loadImage(string filepathToOpen, SDL_PixelFormat* format){
         ret = true;
     }
     return ret;
+}
+
+bool Image::loadImageFromMemory(const unsigned char* buffer, std::size_t bufferSize, SDL_PixelFormat* format){
+    if (buffer == NULL || bufferSize == 0){
+        return false;
+    }
+
+    if (img != NULL){
+        SDL_FreeSurface(img);
+        img = NULL;
+    }
+    if (cachedSurface != NULL){
+        SDL_FreeSurface(cachedSurface);
+        cachedSurface = NULL;
+    }
+
+    SDL_RWops* rw = SDL_RWFromConstMem(buffer, bufferSize);
+    if (rw == NULL){
+        filepath = "";
+        return false;
+    }
+
+    SDL_Surface* raw = IMG_Load_RW(rw, 1);
+    if (raw == NULL){
+        filepath = "";
+        return false;
+    }
+
+    if (format != NULL){
+        img = SDL_ConvertSurface(raw, format, SDL_SWSURFACE);
+        SDL_FreeSurface(raw);
+    } else {
+        img = raw;
+    }
+
+    filepath = ":memory:";
+    return true;
 }
 
 void Image::printImage(SDL_Surface *video_page){
@@ -191,7 +252,7 @@ void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
                             int dst_x, int dst_y, int dst_w, int dst_h) {
 	
 	if (!src || !dest || src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) return;
-	
+
 	SDL_Rect dstRect = {
         fillGaps ? this->getX() : dst_x,
         fillGaps ? this->getY() : dst_y,
@@ -211,7 +272,7 @@ void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
 	} else {
 		double zoomX = (double)dst_w / src_w;
 		double zoomY = (double)dst_h / src_h;
-		zoomedSurface = zoomSurface(src, zoomX, zoomY, false);
+		zoomedSurface = zoomSurface(src, zoomX, zoomY, SMOOTH_RESIZE);
 	}
 
 	if (!zoomedSurface) return;

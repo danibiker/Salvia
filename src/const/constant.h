@@ -391,6 +391,8 @@ extern const std::string START_FROM_EXCEPTION;
 extern const char *SDL_BTN_TO_XBOX[12];
 extern std::string SDL_JOY_TO_XBOX[6];
 extern std::string SDL_HAT_TO_XBOX[9];
+extern const std::string SCRAPPING_DAT;
+extern const std::string PASS_MASK;
 
 typedef enum {
     launch_system,          //0
@@ -465,9 +467,12 @@ class Constant{
 		static SDL_Rect drawText(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg){
 			SDL_Rect dest = { x, y, 0, 0 };
 			if (font && s != NULL && s[0] != '\0') {
+				#ifdef _XBOX 
 				SDL_Surface* textSurf = TTF_RenderUTF8_Solid(font, s, color);
+				#else
+				SDL_Surface* textSurf = TTF_RenderUTF8_Blended(font, s, color);
+				#endif
 				if (textSurf) {
-					SDL_SetAlpha(textSurf, 0, 0);
 					dest.w = textSurf->w;
 					dest.h = textSurf->h;
 					SDL_BlitSurface(textSurf, NULL, surface, &dest);
@@ -480,7 +485,11 @@ class Constant{
 		static SDL_Rect drawTextTransparent(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg = -1,   JFY_TYPE& justifyHelper = JFY_TYPE(JFY_LEFT, 0)){
 			SDL_Rect dest = { x, y, 0, 0 };
 			if (font && s != NULL && s[0] != '\0') {
+				#ifdef _XBOX 
+				SDL_Surface* textSurf = TTF_RenderUTF8_Solid(font, s, color);
+				#else
 				SDL_Surface* textSurf = TTF_RenderUTF8_Blended(font, s, color);
+				#endif
 				if (textSurf) {
 					dest.w = textSurf->w;
 					dest.h = textSurf->h;
@@ -884,7 +893,7 @@ class Constant{
 				if (!validUtf8) break;
 			}
 			if (validUtf8) return s;
-			// No es UTF-8 válido → convertir de CP_ACP a UTF-8
+			// No es UTF-8 válido -> convertir de CP_ACP a UTF-8
 			int wideLen = MultiByteToWideChar(CP_ACP, 0, s.c_str(), -1, nullptr, 0);
 			if (wideLen <= 0) return s;
 			std::wstring wide(wideLen, L'\0');
@@ -895,6 +904,27 @@ class Constant{
 			WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), -1, &utf8[0], utf8Len, nullptr, nullptr);
 			utf8.pop_back(); // quitar null terminator
 			return utf8;
+		}
+
+		static std::string unicodeToUtf8String(unsigned int cp){
+			std::string value;
+			if (cp < 0x80) {
+				value = (char)cp;
+			} else if (cp < 0x800) {
+				value = (char)(0xC0 | (cp >> 6));
+				value += (char)(0x80 | (cp & 0x3F));
+			} else if (cp < 0x10000) {
+				value = (char)(0xE0 | (cp >> 12));
+				value += (char)(0x80 | ((cp >> 6) & 0x3F));
+				value += (char)(0x80 | (cp & 0x3F));
+			} else {
+				value = (char)(0xF0 | (cp >> 18));
+				value += (char)(0x80 | ((cp >> 12) & 0x3F));
+				value += (char)(0x80 | ((cp >> 6) & 0x3F));
+				value += (char)(0x80 | (cp & 0x3F));
+			}
+
+			return value;
 		}
 
         static void setExecMethod(int var){EXEC_METHOD = var;}
