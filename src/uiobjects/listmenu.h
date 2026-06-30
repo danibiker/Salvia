@@ -31,7 +31,7 @@ class ListMenu : public Object{
 		void loadMameDatabase(ConfigEmu& emu);
 		SDL_Surface *selecAlphaRec;
 		void drawIconListElem(SDL_Surface *video_page, GameFile *game, SDL_Rect& dstRectIcon);
-		void drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor, TTF_Font *fontMenu, int& face_h);
+		void drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor, TTF_Font *fontMenu, const int& face_h);
 		SDL_Surface *filterAlphaRec;
 		std::string lastTxtNav;
 		SDL_Surface *navPath;

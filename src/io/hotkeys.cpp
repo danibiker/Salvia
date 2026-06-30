@@ -11,7 +11,7 @@ Hotkeys::Hotkeys(t_joy_state *inputs){
 		inputs->mapperHotkeys.setBtnFromSdl(p, JOY_BUTTON_Y, HK_VIEW_MENU);
 		inputs->mapperHotkeys.setBtnFromSdl(p, JOY_BUTTON_L, HK_SAVESTATE);
 		inputs->mapperHotkeys.setBtnFromSdl(p, JOY_BUTTON_R, HK_LOADSTATE);
-		inputs->mapperHotkeys.setBtnFromSdl(p, JOY_BUTTON_R3, HK_EXIT_GAME);
+		inputs->mapperHotkeys.setBtnFromSdl(p, JOY_BUTTON_START, HK_EXIT_GAME);
 		inputs->mapperHotkeys.setHatFromSdl(p, SDL_HAT_UP, HK_SLOT_UP);
 		inputs->mapperHotkeys.setHatFromSdl(p, SDL_HAT_DOWN, HK_SLOT_DOWN);
     }

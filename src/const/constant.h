@@ -33,38 +33,15 @@ static const int video_bpp = 16;
 	static int video_width = 1280;
 	static int video_height = 720;
 	static const char *LOG_PATH = "game:\\salvia.log";
-	static bool video_fullscreen = false;
 	#include <xtl.h>
 #elif defined(WIN)
 	//static Uint32 video_flags = SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN; //SDL_SWSURFACE; //SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN;
-	static Uint32 video_flags = SDL_SWSURFACE;
+	static Uint32 video_flags = SDL_SWSURFACE; 
 	static int video_width = 1280;
 	static int video_height = 720;
-	static bool video_fullscreen = false;
 	static const char *LOG_PATH = "salvia.log";
 	#include <windows.h>
 #endif
-
-static const SDL_Color white = { 255,255,255 };
-static const SDL_Color yellow = { 241,222,19 };
-static const SDL_Color blue = { 76,194,255 };
-static const SDL_Color black = { 0,0,0 };
-static const SDL_Color lightgray = {222, 224, 219, 255};
-static const SDL_Color darkgray = {160, 160, 160, 255};
-static const SDL_Color almostblack = {40, 40, 40, 255};
-static const SDL_Color paleblue = {57, 72, 93, 255};
-static const SDL_Color red = {255,0,0};
-
-static const SDL_Color backgroundColor = black;
-static const SDL_Color textColor = white;
-static const SDL_Color menuBars = { 128, 128, 128, 255};
-static const SDL_Color bkgMenu = {247, 221, 114};
-static const SDL_Color bkgMenuLighter = {237, 221, 150};
-
-static const SDL_Color askClTitle = {59,59,59};
-static const SDL_Color askClBg = {69,69,69};
-static const SDL_Color askClLine = {91,91,91};
-static const SDL_Color askClText = {190,190,190};
 
 static const int bkgSpeedPixPerS = 15;
 static const double bkgFrameTimeTick = 1000.0 / bkgSpeedPixPerS;
@@ -89,6 +66,12 @@ static const char *TMP_DIR = "tmp";
 static const std::string BIOS_ONLY = "@bios-only";
 static const std::string ASSETS_ICONS_DIR = "\\assets\\xmb\\retrosystem\\png\\";
 
+#ifdef _XBOX
+	const bool SMOOTH_RESIZE = false;
+#else 
+	const bool SMOOTH_RESIZE = true;
+#endif
+
 typedef enum {
     cursor_hidden,
     cursor_arrow,
@@ -102,12 +85,26 @@ typedef enum {
     clBackground = 0,
 	clBlack,
 	clWhite,
-	clBkgMenu,
+	clYellow,
 	clRed,
+	clBlue,
+	clBkgMenu,
+	clBkgMenuLighter,
+	clBG,
+	clBorder,
 	clMenuBars,
 	clTxtNavBar,
+	clDarkGray,
+	clSwitchEnabled,
+	clSwitchDisabled,
+	clPaleBlue,
+	clAskTitle,
+	clAskBg, 	
+	clAskLine, 
+	clAskText, 
     clTotalColors
 } enumColors;
+
 
 struct svColor{
 	SDL_Color sdlColor;

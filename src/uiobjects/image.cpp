@@ -8,12 +8,6 @@
 #define SDL_RWFromConstMem(p, s) SDL_RWFromMem(const_cast<void*>(static_cast<const void*>(p)), s)
 #endif
 
-#ifdef _XBOX
-	const bool SMOOTH_RESIZE = false;
-#else 
-	const bool SMOOTH_RESIZE = true;
-#endif
-
 Image::Image(){
     init();
 }
@@ -298,7 +292,7 @@ void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
     } else {
         cachedSurface->flags &= ~SDL_SRCALPHA;
     }
-	SDL_SetAlpha(cachedSurface, 0, 0);
+	SDL_SetAlpha(cachedSurface, SDL_RLEACCEL, 0);
 	SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
 }
 

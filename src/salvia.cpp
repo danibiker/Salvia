@@ -776,15 +776,22 @@ static inline void hw_refresh(const void *data, unsigned width,
 
     SDL_Surface*& screen = gameMenu->gameScreen;
 
-	#ifdef _XBOX
+	#ifdef SALVIA_GPU_VIDEO
     if (width  != current_video_settings.sw || height != current_video_settings.sh || bpp != current_video_settings.bpp){
+        #ifdef _XBOX
+        // El driver SDL de Xbox crea la textura al tamano del core.
         screen = SDL_SetVideoMode(width, height, bpp, SDL_DOUBLEBUF);
+        #else
+        // Windows: recrea la textura D3D9 y su surface al tamano del core
+        // SIN tocar la ventana ni el backbuffer.
+        screen = WinD3D9_SetGameMode(width, height, bpp);
+        #endif
         current_video_settings.sw  = width;
         current_video_settings.sh  = height;
         current_video_settings.bpp = bpp;
 		SDL_FillRect(screen, NULL, Constant::colors[clBackground].color);
     }
-	
+
 	if (current_video_settings.filter != *gameMenu->current_shader){
 		XBOX_SelectEffect(*gameMenu->current_shader);
 		current_video_settings.filter = *gameMenu->current_shader;
@@ -798,15 +805,15 @@ static inline void hw_refresh(const void *data, unsigned width,
 
 	if (current_video_settings.ratio != current_ratio){
 		LOG_DEBUG("SetDisplaySize: ratio=%.3f, tex=%dx%d", current_ratio, current_video_settings.sw, current_video_settings.sh);
-		#ifdef _XBOX
+		#ifdef SALVIA_GPU_VIDEO
 		SDL_XBOX_SetDisplaySize(current_ratio);
 		#endif
 		current_video_settings.ratio = current_ratio;
 	}
 
-	#ifdef _XBOX
+	#ifdef SALVIA_GPU_VIDEO
 	// Rotacion HW: gratis en GPU (solo remap de UVs del quad).  No usamos
-	// rotation_buffer en la rama Xbox; la textura va a VRAM tal cual y
+	// rotation_buffer en la rama GPU; la textura va a VRAM tal cual y
 	// los shaders (HQx/CRT/etc.) siguen trabajando con la orientacion nativa.
 	{
 		static unsigned last_hw_rotation = 0;
@@ -862,11 +869,13 @@ static inline void hw_refresh(const void *data, unsigned width,
 }
 
 
-static void retro_video_refresh(const void *data, unsigned width, 
+static void retro_video_refresh(const void *data, unsigned width,
                                 unsigned height, std::size_t pitch) {
-	#ifdef _XBOX
+	#ifdef SALVIA_GPU_VIDEO
+		// Xbox y Windows: la GPU escala la textura nativa y aplica el shader.
 		hw_refresh(data, width, height, pitch);
 	#else
+		// Solo plataformas sin ruta GPU: escalado por software.
 		sw_refresh(data, width, height, pitch);
 	#endif
 }
@@ -1197,8 +1206,6 @@ void closeGame(){
 *
 */
 int launchGame(std::string rompath, bool tmpDelete){
-	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
-
 	// Reset de la rotacion antes de arrancar el core: si el nuevo core no llama
 	// a RETRO_ENVIRONMENT_SET_ROTATION, asumimos orientacion estandar (0 grados).
 	g_screen_rotation = 0;
@@ -1214,8 +1221,8 @@ int launchGame(std::string rompath, bool tmpDelete){
 	std::string initMsg = LanguageManager::instance()->get("msg.loading") + displayName + "...";
 	const int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
 	gameMenu->fillOverlay(clBackground);
-	Constant::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, textColor, 0);
-	SDL_Flip(gameMenu->gameScreen);
+	Constant::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, Constant::colors[clWhite].sdlColor, 0);
+	salviaFlip(gameMenu->gameScreen);
 	
 	//Cargamos el juego en memoria o lo extraemos al disco
 	bool gameLoaded = extractAndLoadGame(rompath, tmpDelete);
@@ -1532,8 +1539,8 @@ static int LogCrash(DWORD code, EXCEPTION_POINTERS *ep) {
 static void __declspec(noinline) printAndDelay(){
 	const int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
 	gameMenu->fillOverlay(clBackground);
-	Constant::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), LanguageManager::instance()->get("msg.error.fatal").c_str(), 0, -face_h_big / 2, true, true, textColor, 0);
-	SDL_Flip(gameMenu->gameScreen);
+	Constant::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), LanguageManager::instance()->get("msg.error.fatal").c_str(), 0, -face_h_big / 2, true, true, Constant::colors[clWhite].sdlColor, 0);
+	salviaFlip(gameMenu->gameScreen);
 	SDL_Delay(3000);
 
 	//We don't want the emulator restarting over and over if an exception is thrown previously, 
@@ -1550,7 +1557,7 @@ static void __declspec(noinline) printAndDelay(){
  *  MSVC error C2712 forbids SEH __try in any function that requires
  *  C++ object unwinding. */
 static void __declspec(noinline) runGameLoop() {
-	//__try {
+	__try {
 		while (gameMenu->running) {
 			processFrontendEvents();
 
@@ -1568,16 +1575,16 @@ static void __declspec(noinline) runGameLoop() {
 			}
 
 			gameMenu->processFrontendEventsAfter();
-			SDL_Flip(gameMenu->gameScreen);
+			salviaFlip(gameMenu->gameScreen);
 			if (*gameMenu->current_sync == SYNC_TO_VIDEO){
 				gameMenu->sync->limit_fps(nextFrameTime);
 			}
 			gameMenu->gameTicks.ticks++;
 		}
-	//} __except (LogCrash(GetExceptionCode(), GetExceptionInformation())) {
-	//	printAndDelay();
-	//	LOG_ERROR("FATAL: Unhandled exception, details written to crash.log");
-	//}
+	} __except (LogCrash(GetExceptionCode(), GetExceptionInformation())) {
+		printAndDelay();
+		LOG_ERROR("FATAL: Unhandled exception, details written to crash.log");
+	}
 }
 
 /**

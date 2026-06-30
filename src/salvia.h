@@ -161,7 +161,7 @@ DWORD WINAPI th_printLoading(LPVOID data) {
 
 				SDL_FillRect(ctx->rawSurface, nullptr, ctx->keyBg);
 				SDL_BlitSurface(line, nullptr, ctx->rawSurface, nullptr);
-				SDL_SetAlpha(ctx->rawSurface, 0, 0);
+				SDL_SetAlpha(ctx->rawSurface, SDL_RLEACCEL, 0);
 				if (gameMenu->overlay){
 					if (!hangDetected){
 						gameMenu->clearOverlay();
@@ -176,7 +176,7 @@ DWORD WINAPI th_printLoading(LPVOID data) {
 				}
 
 				hangDetected = true;
-				SDL_Flip(gameMenu->gameScreen);
+				salviaFlip(gameMenu->gameScreen);
 			} else if (hangDetected){
 				//Se ha restablecido el sistema. Salimos del loop
 				salir = true;
@@ -201,7 +201,7 @@ void watchForLoadingStuck(){
 	 * no son thread-safe respecto a otras llamadas SDL/TTF concurrentes, asi
 	 * que las hacemos AQUI en el main thread.  El watcher solo hara
 	 * SDL_FillRect/Blit/Flip sobre estas surfaces ya creadas. */
-	static SDL_Color s_watcherColors[] = {white, yellow, blue, red};
+	static SDL_Color s_watcherColors[] = {Constant::colors[clWhite].sdlColor, Constant::colors[clYellow].sdlColor, Constant::colors[clBlue].sdlColor, Constant::colors[clRed].sdlColor};
 	static const int  s_watcherNumColors = sizeof(s_watcherColors) / sizeof(s_watcherColors[0]);
 	static SDL_Surface* s_watcherText[s_watcherNumColors] = {0};
 	static SDL_Surface* s_watcherRaw = nullptr;
@@ -498,28 +498,23 @@ void drawLoadingProgressBar(SDL_Surface*& screen, float progress) {
     const int barX = (screen->w - barW) / 2;
     const int barY = (screen->h / 2) + 1; // Debajo del texto de "Loading..."
 
-    // Colores (Ajusta según tu paleta)
-    const Uint32 colorBorder		= SDL_MapRGBA(screen->format, 200, 200, 200, 0xFF);
-    const Uint32 colorFill			= SDL_MapRGBA(screen->format, bkgMenu.r, bkgMenu.g, bkgMenu.b, 0xFF);
-	const Uint32 colorFillLighter	= SDL_MapRGBA(screen->format, bkgMenuLighter.r, bkgMenuLighter.g, bkgMenuLighter.b, 0xFF);
-    const Uint32 colorBG			= SDL_MapRGBA(screen->format, 40, 40, 40, 0xFF);
-	
+   
     //Dibujar fondo de la barra
     SDL_Rect bgRect = { (Sint16)barX, (Sint16)barY, (Uint16)barW, (Uint16)barH };
 	//Actualizamos el area de la barra y el area del texto para que se puedan ver
 	SDL_Rect bgRectFill = { bgRect.x, bgRect.y, bgRect.w, barH * 5};
 	SDL_FillRect(screen, &bgRectFill, Constant::colors[clBackground].color);
 	//Mostramos el fondo de la barra
-    SDL_FillRect(screen, &bgRect, colorBG);
+    SDL_FillRect(screen, &bgRect, Constant::colors[clBG].color);
 
     //Dibujar el progreso real
     if (progress > 1.0f) progress = 1.0f;
     int fillW = (int)(barW * progress);
     if (fillW > 0) {
         SDL_Rect fillRect = { (Sint16)barX, (Sint16)barY, (Uint16)fillW, (Uint16)(barH / 2.0) };
-        SDL_FillRect(screen, &fillRect, colorFillLighter);
+        SDL_FillRect(screen, &fillRect, Constant::colors[clBkgMenuLighter].color);
 		fillRect.y += (Uint16)(barH / 2);
-        SDL_FillRect(screen, &fillRect, colorFill);
+        SDL_FillRect(screen, &fillRect, Constant::colors[clBkgMenu].color);
     }
 
 	const int txtW = 40;
@@ -533,7 +528,7 @@ void drawLoadingProgressBar(SDL_Surface*& screen, float progress) {
     //Actualizar solo la región de la barra para ganar rendimiento
     //SDL_UpdateRect(screen, barX, barY, barW, 3*barH);
 	SDL_FillRect(gameMenu->gameScreen, NULL, Constant::colors[clBackground].color);
-	SDL_Flip(gameMenu->gameScreen);
+	salviaFlip(gameMenu->gameScreen);
 }
 
 void initGameAudio(double sampleRate){

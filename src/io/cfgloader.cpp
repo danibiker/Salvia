@@ -39,6 +39,7 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::debug] = cfg::t_cfg_props("debug", false);
 	configMain[cfg::resolution_width] = cfg::t_cfg_props("resolution_width", 1280);
 	configMain[cfg::resolution_height] = cfg::t_cfg_props("resolution_height", 720);
+	configMain[cfg::fullscreen] = cfg::t_cfg_props("fullscreen", false);
 	configMain[cfg::path_prefix] = cfg::t_cfg_props("path_prefix", dir.getDirActual() + Constant::getFileSep());
 	configMain[cfg::alsaReset] = cfg::t_cfg_props("alsaReset", false);
 	configMain[cfg::background_music] = cfg::t_cfg_props("background_music", false);

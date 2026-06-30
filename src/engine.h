@@ -13,6 +13,32 @@
 #include <font\fonts.h>
 #include <map>
 
+/* Video por GPU con shaders: en Xbox lo hace el driver SDL custom
+   (SDL_xboxvideo.c); en Windows la capa D3D9 propia (src/video/win_d3d9.*).
+   Ambas plataformas comparten los call-sites del frontend bajo este flag. */
+#if defined(_XBOX) || defined(WIN)
+	#define SALVIA_GPU_VIDEO 1
+#endif
+
+#ifdef WIN
+	#include <video/win_d3d9.h>
+#endif
+
+/* "Flip" del frontend. En Xbox el driver SDL compone game+overlay dentro de
+   SDL_Flip; en Windows lo hace WinD3D9_Present (sube la textura, dibuja el
+   quad con shader y compone el overlay). En cualquier otra plataforma cae al
+   SDL_Flip estandar. */
+static inline void salviaFlip(SDL_Surface* s){
+#ifdef WIN
+	(void)s; WinD3D9_Present();
+#else
+	SDL_Flip(s);
+#endif
+}
+
+//Definimos un tamanyo de fuente base de 24, que va bien a una resolucion 720
+const int BASE_FONT_HEIGHT = 24;
+
 class Engine{
     public:
         Engine();
@@ -26,7 +52,7 @@ class Engine{
 		Sync *sync;
 		Joystick *joystick;
 		struct t_keyboard *keyb;
-		// Variable global para controlar la ejecución
+		// Variable global para controlar la ejecuciï¿½n
 		bool running;
 		int initEngine(CfgLoader* cfgLoader);
         void stopEngine();

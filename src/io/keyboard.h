@@ -89,8 +89,8 @@ struct t_keyboard {
 
     t_keyboard(): spaceX(3), spaceY(6), iniX(0), iniY(0), selectedRow(0), selectedCol(0)
     {
-		textColor = white;
-		textSelectedColor = black;
+		textColor = Constant::colors[clWhite].sdlColor;
+		textSelectedColor = Constant::colors[clBlack].sdlColor;
 		dirtyKeyb = true;
 		keyW = KEYCAP_W;
 		keyH = KEYCAP_H;

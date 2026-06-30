@@ -267,7 +267,6 @@ int procesarAccionesMenu(ListMenu &listMenu){
 }
 
 int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
-	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	int res = 1;
 
 	if (gameMenu->configMenus->getStatus() == POLLING_INPUTS){
@@ -428,7 +427,6 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
  * 
  */
 void updateMenuScreen(TileMap &tileMap, GameMenu*& gameMenu, ListMenu &listMenu){
-	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	static uint32_t lastTime = SDL_GetTicks();
 	cfg::t_cfg_props* cfg = gameMenu->getCfgLoader()->configMain;
 	ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
@@ -461,9 +459,7 @@ void updateMenuScreen(TileMap &tileMap, GameMenu*& gameMenu, ListMenu &listMenu)
 *
 */
 void updateMenuOverlay(GameMenu*& gameMenu, ListMenu &listMenu){
-	static Uint32 bkgText = SDL_MapRGB(gameMenu->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	processInputs(gameMenu, listMenu, true);
-
 	if (gameMenu->getEmuStatus() == EMU_MENU_OVERLAY){
 		cfg::t_cfg_props* cfg = gameMenu->getCfgLoader()->configMain;
 		//Si el modo hardcore esta activado, o no hay captura de pantalla, mostramos el menu en negro

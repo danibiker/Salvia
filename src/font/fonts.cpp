@@ -130,17 +130,17 @@ std::string Fonts::recortarAlTamanyo(std::string text, int maxWidth){
 	if (textPixelSize > maxWidth) {
 		int totalChars = text.length();
     
-		// 1. Precalculamos el ancho promedio por car�cter
+		// 1. Precalculamos el ancho promedio por caracter
 		float avgCharWidth = (float)textPixelSize / (float)totalChars;
     
-		// 2. Estimamos cu�ntos caracteres sobran para que quepa (incluyendo el "...")
+		// 2. Estimamos cuantos caracteres sobran para que quepa (incluyendo el "...")
 		int dotsWidth = 0;
 		TTF_SizeText(font, "...", &dotsWidth, NULL);
     
 		int targetWidth = maxWidth - dotsWidth;
 		int charsThatFit = (int)(targetWidth / avgCharWidth);
     
-		// 3. Aplicamos el recorte inicial basado en la estimaci�n
+		// 3. Aplicamos el recorte inicial basado en la estimacion
 		// Queremos la mitad de los que caben al principio y la otra mitad al final
 		int leftPart = charsThatFit / 2;
 		int rightPart = totalChars - (charsThatFit / 2);
@@ -148,8 +148,8 @@ std::string Fonts::recortarAlTamanyo(std::string text, int maxWidth){
 		newText = text.substr(0, leftPart) + "..." + text.substr(rightPart);
 		TTF_SizeText(font, newText.c_str(), &textPixelSize, NULL);
 
-		// 4. Ajuste fino (por si la estimaci�n fue optimista debido a caracteres anchos como 'W')
-		// Este bucle se ejecutar� como mucho 1 o 2 veces, ahorrando mucha CPU
+		// 4. Ajuste fino (por si la estimacion fue optimista debido a caracteres anchos como 'W')
+		// Este bucle se ejecutara como mucho 1 o 2 veces, ahorrando mucha CPU
 		while (textPixelSize > maxWidth && leftPart > 0 && rightPart < totalChars) {
 			if (leftPart > 0) leftPart--;
 			if (rightPart < totalChars) rightPart++;

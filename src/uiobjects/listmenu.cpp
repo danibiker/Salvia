@@ -34,7 +34,6 @@ struct CStrEqual {
 }
 
 SDL_Surface* ListMenu::imgText;
-const int marginTextIcon = Icons::icon_w_add + 14;
 
 void ListMenu::clearSelectedText(){
     if (imgText != NULL){
@@ -203,8 +202,8 @@ void ListMenu::sortFilters(){
 
 void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
     TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-    int face_h = TTF_FontLineSkip(fontMenu);
-	bool staticBg = CfgLoader::configMain[cfg::animBG].valueInt != BG_TILES;
+    const int face_h = TTF_FontLineSkip(fontMenu);
+	const int marginTextIcon = face_h;
 	static bool lastHaveFocus = haveFocus;
 
     // Guarda la posicion seleccionada del frame anterior para saber cuando cambio
@@ -222,8 +221,8 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
 	//To scroll one letter in one second. We use the face_h because the width of 
     //a letter is not fixed.
     const float pixelsScrollFps = max(ceil(face_h / (float)textFps), 1.0f);
-	const SDL_Color colorTextSel = haveFocus ? black : darkgray;
-	const SDL_Color colorTextNotSel = haveFocus ? white : darkgray;
+	const SDL_Color colorTextSel = haveFocus ? Constant::colors[clBlack].sdlColor : Constant::colors[clDarkGray].sdlColor;
+	const SDL_Color colorTextNotSel = haveFocus ? Constant::colors[clWhite].sdlColor : Constant::colors[clDarkGray].sdlColor;
 
 	//Creamos el rectangulo de elemento seleccionado translucido
 	SDL_Rect rectElem = {0, 0, this->getW() - 2 * marginX, face_h};
@@ -348,7 +347,7 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
 }
 
 void ListMenu::drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor,
-                          TTF_Font *fontMenu, int& face_h)
+                          TTF_Font *fontMenu, const int& face_h)
 {
     // --- 1. Construir txtNav ---
     std::string txtNav;
@@ -415,7 +414,7 @@ void ListMenu::drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor,
     fastline(video_page,
              rectNavPath.x, rectNavPath.y + rectNavPath.h,
              rectNavPath.x + rectNavPath.w, rectNavPath.y + rectNavPath.h,
-             menuBars);
+             Constant::colors[clMenuBars].sdlColor);
 
     SDL_Rect rectSrc = {0, 0, navPath->w, navPath->h};
     if (navPath->w > this->getW()) {

@@ -3,15 +3,30 @@
 std::string Constant::appDir;
 std::string Constant::appExecutable;
 char Constant::tempFileSep[2];
+
 svColor Constant::colors[clTotalColors] = {
-			{{0, 0, 0} , 0},			//clBackground
-			{{0, 0, 0} , 0},			//clBlack
-			{{0xFF, 0xFF, 0xFF} , 0},	//clWhite
-			{{247, 221, 114}, 0},		//clBkgMenu
-			{{255, 0, 0}, 0},			//clRed
-			{{128, 128, 128}, 255},		//clMenuBars
-			{{138, 207, 178}, 255},		//clTxtNavBar
+	{{0, 0, 0} , 0},			//clBackground
+	{{0, 0, 0} , 0},			//clBlack
+	{{0xFF, 0xFF, 0xFF} , 0},	//clWhite
+	{{241, 222, 19}, 255},		//clYellow
+	{{255, 0, 0}, 0},			//clRed
+	{{76,194,255}, 255},		//clBlue
+	{{247, 221, 114}, 0},		//clBkgMenu
+	{{237, 221, 150}, 255},		//clBkgMenuLighter
+	{{40, 40, 40}, 0xFF},		//clBG
+	{{200, 200, 200}, 255},		//clBorder
+	{{128, 128, 128}, 255},		//clMenuBars
+	{{138, 207, 178}, 255},		//clTxtNavBar
+	{{160, 160, 160}, 255},		//clDarkGray
+	{{200, 200, 200}, 255},		//clSwitchEnabled
+	{{77, 77, 77}, 255},		//clSwitchEnabled
+	{{57, 72, 93}, 255},		//clPaleBlue
+	{{59,59,59}	 , 255},		//clAskTitle
+	{{69,69,69}	 , 255},		//clAskBg 	
+	{{91,91,91}	 , 255},		//clAskLine 
+	{{190,190,190}, 255},		//clAskText 
 }; 
+
 
 const char *MEDIAS_TO_FIND[] = {"sstitle", "ss", "box-2D"};
 const char *ASSETS_DIR[] = {"snaptit", "snap", "box2d", "synopsis"};

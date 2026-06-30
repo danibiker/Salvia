@@ -163,5 +163,5 @@ void findInitialImage(std::string rompath, bool isM3U){
 
 void launchBios(){
 	launchGame(BIOS_ONLY);
-	SDL_Flip(gameMenu->gameScreen);
+	salviaFlip(gameMenu->gameScreen);
 }

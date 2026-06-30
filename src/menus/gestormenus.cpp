@@ -314,6 +314,8 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	for (int i=0; i < BG_MAX; i++){
 		bgMenu.push_back(LanguageManager::instance()->get("menu.background.anim" + Constant::TipoToStr(i)));
 	}
+	
+	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.fullscreen"), &refConfig->configMain[cfg::fullscreen].getBoolRef()));
 	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef()));
 	
 	menuAssignRetro = new Menu(LanguageManager::instance()->get("menu.options.paddassign"), menuEntrada);
@@ -1239,11 +1241,7 @@ Menu* GestorMenus::obtenerMenuActual() {
 }
 
 void GestorMenus::draw(SDL_Surface *video_page){
-	static const int bkg = SDL_MapRGBA(video_page->format, bkgMenu.r, bkgMenu.g, bkgMenu.b, 0xFF);
-	static const int iwhite = SDL_MapRGBA(video_page->format, white.r, white.g, white.b, 0xFF);
-	static const int iblack = SDL_MapRGBA(video_page->format, black.r, black.g, black.b, 0xFF);
 	Icons icons;
-
 
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 	int face_h = menuActual->rowHeight;
@@ -1258,8 +1256,8 @@ void GestorMenus::draw(SDL_Surface *video_page){
 	}
 
 	Constant::drawTextCentTransparent(video_page, fontMenu, this->menuActual->titulo.c_str(), 0, face_h < marginY ? (marginY - face_h) / 2 : 0 , 
-				true, false, textColor, 0);
-	fastline(video_page, marginX, marginY - 1, video_page->w - marginX, marginY - 1, textColor);
+				true, false, Constant::colors[clWhite].sdlColor, 0);
+	fastline(video_page, marginX, marginY - 1, video_page->w - marginX, marginY - 1, Constant::colors[clWhite].sdlColor);
 
     //To scroll one letter in one second. We use the face_h because the width of 
     //a letter is not fixed.
@@ -1300,7 +1298,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 		const int screenPos = i - this->iniPos;
         const int fontHeightRect = screenPos * face_h;
         const int lineBackground = -1;
-        SDL_Color lineTextColor = i == this->curPos ? black : white;
+        SDL_Color lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
 
         //Drawing a faded background selection rectangle
         if (i == this->curPos){
@@ -1308,22 +1306,22 @@ void GestorMenus::draw(SDL_Surface *video_page){
             //Gaining some extra fps when the screen resolution is low
 			SDL_Rect rectElem = {this->getX(), y, this->getW() - marginX, face_h};
             if (video_page->h >= 480){
-				DrawRectAlpha(video_page, rectElem, bkgMenu, 190);
+				DrawRectAlpha(video_page, rectElem, Constant::colors[clBkgMenu].sdlColor, 190);
             } else {
-                lineTextColor = white;
+                lineTextColor = Constant::colors[clWhite].sdlColor;
             }
-			rect(video_page, rectElem.x - 1, rectElem.y - 1, rectElem.x + rectElem.w, rectElem.y + rectElem.h, bkgMenu);
+			rect(video_page, rectElem.x - 1, rectElem.y - 1, rectElem.x + rectElem.w, rectElem.y + rectElem.h, Constant::colors[clBkgMenu].sdlColor);
         }
         
 		int marginIco = 0;
 
 		if (option->icon > -1 && option->icon < max_icons){
-			marginIco = icons.icon_w_add * 2 + 5;
-			SDL_Rect dstRect = {this->getX() - icons.icon_w_add + 2, this->getY() + fontHeightRect - icons.icon_w_add / 2, 0, 0};
+			marginIco = face_h;
+			SDL_Rect dstRect = {this->getX(), this->getY() + fontHeightRect - icons.icon_w_add / 2, 0, 0};
 			SDL_BlitSurface(icons.icons[option->icon], NULL, video_page, &dstRect);
 		}
 
-		Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX() + marginIco, 
+		Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX() + marginIco + icons.icon_w_add, 
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
 
 		if (option->tipo == OPC_KEY && !((OpcionKey *)option)->description.empty()){
@@ -1348,7 +1346,7 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 	const int face_h = TTF_FontLineSkip(fontMenu);
 	const int screenPos = i - this->iniPos;
     const int fontHeightRect = screenPos * face_h;
-	SDL_Color lineTextColor = i == this->curPos ? black : white;
+	const SDL_Color& lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
 
 	std::string titulo = this->menuActual->titulo;
 	Constant::lowerCase(&titulo);
@@ -1407,21 +1405,18 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 void GestorMenus::drawBooleanSwitch(int i, OpcionBool *opcion, SDL_Surface *video_page){
 	// 1. Extraer el valor y definir dimensiones base
 	bool enabled = *opcion->valor;
-	const int iblack = SDL_MapRGB(video_page->format, black.r, black.g, black.b);
-	const int iswitchenabled = SDL_MapRGB(video_page->format, 200, 200, 200);
-	const int iswitchdisabled = SDL_MapRGB(video_page->format, 77, 77, 77);
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 	const int face_h = TTF_FontLineSkip(fontMenu);
 	const int screenPos = i - this->iniPos;
     const int fontHeightRect = screenPos * face_h;
 	const int sw_h = face_h - 5;
-	const int sw_w = 50;
+	const int sw_w = sw_h * 2;
 	const int sw_x = getX() + getW() - marginX - sw_w;
 	const int sw_y = getY() + fontHeightRect + 2;
 
 	// 2. Dibujar el fondo del switch
 	SDL_Rect baseRect = { sw_x, sw_y, sw_w, sw_h };
-	SDL_FillRect(video_page, &baseRect, enabled ? iswitchenabled : iswitchdisabled);
+	SDL_FillRect(video_page, &baseRect, enabled ? Constant::colors[clSwitchEnabled].color : Constant::colors[clSwitchDisabled].color);
 
 	// 3. Calcular el thumb (boton interno) de forma relativa
 	const int spacing = 4;
@@ -1432,21 +1427,15 @@ void GestorMenus::drawBooleanSwitch(int i, OpcionBool *opcion, SDL_Surface *vide
 
 	// 4. Dibujar el thumb segun el estado
 	if (enabled) {
-		SDL_FillRect(video_page, &thumbRect, iblack);
+		SDL_FillRect(video_page, &thumbRect, Constant::colors[clBlack].color);
 	} else {
 		// Usando los campos de thumbRect directamente para evitar sumas manuales
-		rect(video_page, thumbRect.x, thumbRect.y, thumbRect.x + size, thumbRect.y + size, black);
-		rect(video_page, thumbRect.x + 1, thumbRect.y + 1, thumbRect.x + size - 1, thumbRect.y + size - 1, black);
+		rect(video_page, thumbRect.x, thumbRect.y, thumbRect.x + size, thumbRect.y + size, Constant::colors[clBlack].sdlColor);
+		rect(video_page, thumbRect.x + 1, thumbRect.y + 1, thumbRect.x + size - 1, thumbRect.y + size - 1, Constant::colors[clBlack].sdlColor);
 	}
 }
 
 void GestorMenus::drawAskMenu(SDL_Surface *video_page) {
-    // 1. Colores estaticos (usamos SDL_Color y el int mapeado segun necesidad)
-    static const int iaskClBg = SDL_MapRGB(video_page->format, askClBg.r, askClBg.g, askClBg.b);
-    static const int iaskClLine = SDL_MapRGB(video_page->format, askClLine.r, askClLine.g, askClLine.b);
-    static const int iaskClTitle = SDL_MapRGB(video_page->format, askClTitle.r, askClTitle.g, askClTitle.b);
-    static const int iaskClText = SDL_MapRGB(video_page->format, askClText.r, askClText.g, askClText.b);
-    
     if (status != ASK_SAVESTATES) return;
 
     TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
@@ -1457,14 +1446,14 @@ void GestorMenus::drawAskMenu(SDL_Surface *video_page) {
     SDL_Rect titleRect = { thumbRect.x, thumbRect.y, thumbRect.w, 40 };
 
     // Dibujado de fondo y bordes (agrupado)
-    SDL_FillRect(video_page, &thumbRect, iaskClBg);
-    SDL_FillRect(video_page, &titleRect, iaskClTitle);
-    rect(video_page, thumbRect.x, thumbRect.y, thumbRect.x + thumbRect.w, thumbRect.y + thumbRect.h, askClLine);
-    rect(video_page, thumbRect.x - 1, thumbRect.y - 1, thumbRect.x + thumbRect.w + 1, thumbRect.y + thumbRect.h + 1, askClLine);
+    SDL_FillRect(video_page, &thumbRect, Constant::colors[clAskBg].color);
+    SDL_FillRect(video_page, &titleRect, Constant::colors[clAskTitle].color);
+	rect(video_page, thumbRect.x, thumbRect.y, thumbRect.x + thumbRect.w, thumbRect.y + thumbRect.h, Constant::colors[clAskLine].sdlColor);
+    rect(video_page, thumbRect.x - 1, thumbRect.y - 1, thumbRect.x + thumbRect.w + 1, thumbRect.y + thumbRect.h + 1, Constant::colors[clAskLine].sdlColor);
 
     Opcion* opt = menuAskSavestates->opciones[0];
     Constant::drawTextTransparent(video_page, fontMenu, opt->titulo.c_str(), 
-                                 titleRect.x + marginTitle, titleRect.y + (titleRect.h - face_h) / 2, askClText, 0);
+                                 titleRect.x + marginTitle, titleRect.y + (titleRect.h - face_h) / 2, Constant::colors[clAskText].sdlColor, 0);
 
     if (opt->tipo == OPC_LISTA) {
         OpcionLista* l = static_cast<OpcionLista*>(opt);
@@ -1489,8 +1478,8 @@ void GestorMenus::drawAskMenu(SDL_Surface *video_page) {
             bool isSelected = (i == *(l->indice));
             
             // Colores segun seleccion
-            SDL_Color clText = isSelected ? askClTitle : askClText;
-            int clBg = isSelected ? iaskClText : iaskClLine;
+            SDL_Color clText = isSelected ? Constant::colors[clAskTitle].sdlColor : Constant::colors[clAskText].sdlColor;
+            int clBg = isSelected ? Constant::colors[clAskText].color : Constant::colors[clAskLine].color;
 
             SDL_Rect btnRect = { titleRect.x + 10 + ((btn_w + freeSpace) * i), btnY, btn_w, btn_h };
 
@@ -1514,7 +1503,7 @@ void GestorMenus::drawSelectionBox(int i, SDL_Surface *video_page, SDL_Color& li
 	int face_h = menuActual->rowHeight;
 	const int screenPos = i - this->iniPos;
     const int fontHeightRect = screenPos * face_h;
-	lineTextColor = i == this->curPos ? black : white;
+	lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
 
 	std::string rutaSelected;
 	if (i == this->curPos){
@@ -1522,12 +1511,12 @@ void GestorMenus::drawSelectionBox(int i, SDL_Surface *video_page, SDL_Color& li
         //Gaining some extra fps when the screen resolution is low
 		SDL_Rect rectElem = {this->getX(), y, menuActual->menuWidth, face_h};
         if (video_page->h >= 480){
-			DrawRectAlpha(video_page, rectElem, bkgMenu, 190);
+			DrawRectAlpha(video_page, rectElem, Constant::colors[clBkgMenu].sdlColor, 190);
         } else {
-            lineTextColor = white;
+            lineTextColor = Constant::colors[clWhite].sdlColor;
         }
 		//Drawing the selection menu
-		rect(video_page, rectElem.x - 1, rectElem.y - 1, rectElem.x + rectElem.w, rectElem.y + rectElem.h, bkgMenu);
+		rect(video_page, rectElem.x - 1, rectElem.y - 1, rectElem.x + rectElem.w, rectElem.y + rectElem.h, Constant::colors[clBkgMenu].sdlColor);
     } 
 }
 
@@ -1535,7 +1524,7 @@ void GestorMenus::drawSelectionBox(int i, SDL_Surface *video_page, SDL_Color& li
 *
 */
 void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface *video_page){
-	SDL_Color lineTextColor = i == this->curPos ? black : white;
+	SDL_Color lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
 	drawSelectionBox(i, video_page, lineTextColor);
 
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
@@ -1552,7 +1541,7 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
 		Constant::drawTextTransparent(video_page, fontMenu, s.c_str(), 
 			this->getX() + imgH + marginImg * 3, 
 			position + menuActual->rowHeight / 2 - face_h / 2, 
-			i == this->curPos ? black : blue);
+			i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clBlue].sdlColor);
 	} else {
 		std::string firstLine = opcion->achievement.title;
 		if (opcion->achievement.points > 0){
@@ -1600,7 +1589,7 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
     const int screenPos = i - this->iniPos;
     const int fontHeightRect = screenPos * face_h;
     const int lineBackground = -1;
-    SDL_Color lineTextColor = i == this->curPos ? black : white;
+    SDL_Color lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
 	const std::string line = opcion->titulo;
 	std::string rutaSelected;
 
@@ -1613,16 +1602,16 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 			//Drawing below the image
 			Constant::drawTextTransparent(video_page, fontSmall, std::string(LanguageManager::instance()->get("menu.savestate.latestsave") 
 				+ opcion->file.modificationTime).c_str(), imageMenu.getX(), 
-                imageMenu.getY() + imageMenu.getH() + 2, white, 0);
+                imageMenu.getY() + imageMenu.getH() + 2, Constant::colors[clWhite].sdlColor, 0);
 		}
     } else {
 		if (opcion->file.modificationTime.empty()){
-			lineTextColor = menuBars;
+			lineTextColor = Constant::colors[clMenuBars].sdlColor;
 		}
 	}
 
 	//Drawing the text
-    Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX(), 
+    SDL_Rect txtRect = Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX(), 
                 this->getY() + fontHeightRect, lineTextColor, lineBackground);
 	
 	//Drawing the image
@@ -1639,7 +1628,7 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 
 	//Drawing the date besides the text
 	if (!opcion->file.modificationTime.empty()){
-		Constant::drawTextTransparent(video_page, fontSmall, opcion->file.modificationTime.c_str(), this->getX() + 120, 
+		Constant::drawTextTransparent(video_page, fontSmall, opcion->file.modificationTime.c_str(), this->getX() + txtRect.w + 10, 
                 this->getY() + fontHeightRect + face_h_small / 3, lineTextColor, lineBackground);
 	}
 	

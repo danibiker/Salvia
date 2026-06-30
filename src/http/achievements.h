@@ -411,7 +411,7 @@ public:
 				data.free_surface(); 
             
 				// Usamos Blended para máxima calidad o Solid para velocidad
-				data.cache = TTF_RenderUTF8_Blended(font, data.value.c_str(), white);
+				data.cache = TTF_RenderUTF8_Blended(font, data.value.c_str(), Constant::colors[clWhite].sdlColor);
 				data.dirty = false;
 			}
 
@@ -657,7 +657,7 @@ public:
 		// 2. RE-GENERAR CACHÉ DE TEXTO (Solo si dirty)
 		if (dirty || !textCache) {
 			if (textCache) SDL_FreeSurface(textCache);
-			textCache = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), measured_progress.c_str(), white);
+			textCache = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), measured_progress.c_str(), Constant::colors[clWhite].sdlColor);
 			dirty = false;
 		}
 

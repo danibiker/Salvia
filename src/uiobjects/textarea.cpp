@@ -422,7 +422,7 @@ void TextArea::draw(SDL_Surface *video_page, GameTicks gameTicks){
 
     do{
 		t_line& line = lines.at(i + this->lastScroll);
-		drawTextAreaTransparent(video_page, this->fontText, line, this->getX() + this->marginX, (int) (nextLineY - pixelDesp), white, 0);
+		drawTextAreaTransparent(video_page, this->fontText, line, this->getX() + this->marginX, (int) (nextLineY - pixelDesp), Constant::colors[clWhite].sdlColor, 0);
         nextLineY = this->getY() + marginTop + (++i) * (face_h + lineSpace);
     } while ((std::size_t) (i + this->lastScroll) < lines.size() && nextLineY < this->getY() + this->getH() - face_h);
 }

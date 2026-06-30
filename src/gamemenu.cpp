@@ -40,8 +40,8 @@ GameMenu::GameMenu(CfgLoader *cfgLoader)
 
 	int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
 	std::string initMsg = "Loading " + Constant::getAppExecutable() + "...";
-	Constant::drawTextCentTransparent(overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, textColor, 0);
-	SDL_Flip(gameScreen);
+	Constant::drawTextCentTransparent(overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, Constant::colors[clWhite].sdlColor, 0);
+	salviaFlip(gameScreen);
 
 	int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
 	int pixelDato = 0;
@@ -51,8 +51,8 @@ GameMenu::GameMenu(CfgLoader *cfgLoader)
 	rectFps.y = 2*face_h;
 	rectFps.w = this->overlay->w - rectFps.x;
 	rectFps.h = face_h;
-	bkgTextFps = SDL_MapRGB(this->overlay->format, 0, 0, 0);
-	uBkgColor = SDL_MapRGB(this->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	bkgTextFps = Constant::colors[clBlack].color;
+	uBkgColor = Constant::colors[clBackground].color;
 
 	bg_image.setW(this->overlay->w);
 	bg_image.setH(this->overlay->h);
@@ -239,6 +239,8 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 	int face_h_small = TTF_FontLineSkip(fontsmall);
 	bool debug = true;
 	dirutil dir;
+	const SDL_Color &textColor = Constant::colors[clWhite].sdlColor;
+	const SDL_Color &menuBars = Constant::colors[clMenuBars].sdlColor;
 
     //Drawing the rest of list and images
     if (listMenu.getNumGames() > (std::size_t)listMenu.curPos){
@@ -497,9 +499,7 @@ void GameMenu::loadGameAchievements(unzippedFileInfo& unzipped){
 std::string GameMenu::configButtonsJOY(){
     bool salir = false;
     string salida = "";
-	Uint32 bkgText = SDL_MapRGB(this->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
 	const int TIMETOLIMITFRAME = (int)(1000 / 30.0);
-	
 	int mNumJoysticks = SDL_NumJoysticks();
 	std::map<int, int>* mPrevAxisValues; //Almacena los valores de los ejes de cada joystick
 	std::map<int, int>* mPrevHatValues; //Almacena los valores de las crucetas de cada joystick
@@ -559,9 +559,9 @@ std::string GameMenu::configButtonsJOY(){
             cachearObjeto(&obj);
         }*/
 		
-		SDL_FillRect(this->overlay, NULL, bkgText);
-		Constant::drawTextCent(this->overlay, Fonts::getFont(Fonts::FONTSMALL), FRONTEND_BTN_TXT[i].c_str(), 0, 20, true, false, textColor, 0);
-        SDL_Flip(this->gameScreen);
+		SDL_FillRect(this->overlay, NULL, Constant::colors[clBackground].color);
+		Constant::drawTextCent(this->overlay, Fonts::getFont(Fonts::FONTSMALL), FRONTEND_BTN_TXT[i].c_str(), 0, 20, true, false, Constant::colors[clWhite].sdlColor, 0);
+        salviaFlip(this->gameScreen);
 		/*
         while( SDL_PollEvent( &event ) ){
              switch( event.type ){
@@ -647,12 +647,12 @@ void GameMenu::drawFilters(ListMenu &listMenu){
 	TTF_Font *fontbig = Fonts::getFont(Fonts::FONTBIG);
 	int face_h = TTF_FontLineSkip(fontbig);
 	SDL_Color lineTextColor;
-	const int iswitchenabled = SDL_MapRGB(overlay->format, 200, 200, 200);
-	const int iswitchdisabled = SDL_MapRGB(overlay->format, 77, 77, 77);
-	const int sw_w = 50;
 	const int sw_h = face_h - 2;
+	const int sw_w = sw_h * 2;
 	auto opciones = configMenus->menuGameFilter->opciones;
-
+	const SDL_Color &black = Constant::colors[clBlack].sdlColor;
+	const SDL_Color &white = Constant::colors[clWhite].sdlColor;
+	const SDL_Color &menuBars = Constant::colors[clMenuBars].sdlColor;
 	SDL_Rect rectElem = {x, y, w, face_h};
 	
 	if (filterAlphaRec == NULL || filterAlphaRec->w != rectElem.w || filterAlphaRec->h != rectElem.h){
@@ -667,7 +667,6 @@ void GameMenu::drawFilters(ListMenu &listMenu){
 	std::string filterTitle = Constant::string_format(LanguageManager::instance()->get("menu.filter.number"), listMenu.filteredGames.size());
 	SDL_Rect fillHeaderRect = {x, y, w, face_h + 3};
 	fastline(this->overlay, x, y + face_h + 3, x + w, y + face_h + 3, menuBars);
-	//SDL_FillRect(this->overlay, &fillHeaderRect, Constant::colors[clWhite].color);
 	Constant::drawTextTransparent(overlay, fontbig, filterTitle.c_str(), x, y, Constant::colors[clWhite].sdlColor, 0, justifyCenter);
 	y += face_h + 7;
 
@@ -715,7 +714,7 @@ void GameMenu::drawFilters(ListMenu &listMenu){
 			const int sw_x = x + leftTxtDim + justifyHelper.getJustification(sw_w);
 			const int sw_y = y + i * (face_h + 3) + 1;
 			SDL_Rect baseRect = {sw_x, sw_y, sw_w, sw_h };
-			SDL_FillRect(overlay, &baseRect, enabled ? iswitchenabled : iswitchdisabled);
+			SDL_FillRect(overlay, &baseRect, enabled ? Constant::colors[clSwitchEnabled].color : Constant::colors[clSwitchDisabled].color);
 
 			// 3. Calcular el thumb (boton interno) de forma relativa
 			const int spacing = 4;
@@ -742,7 +741,8 @@ void GameMenu::drawFilters(ListMenu &listMenu){
 void GameMenu::showScrapProcess(ListMenu &listMenu){
 	TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
     const int halfWidth = overlay->w / 2;
-	int face_h_small = TTF_FontLineSkip(fontsmall);
+	const int face_h_small = TTF_FontLineSkip(fontsmall);
+	const SDL_Color &textColor = Constant::colors[clWhite].sdlColor;
 
 	if (Scrapper::isScrapping()){
 		Scrapper::g_status.procesados;
@@ -792,7 +792,7 @@ void GameMenu::showMessage(string msg){
 
     //drawing_mode(DRAW_MODE_SOLID, this->overlay, rx, ry);
 	Constant::drawTextCent(overlay, fontsmall, msg.c_str(), 
-		this->overlay->w / 2, this->overlay->h / 2, true, true, black, -1);
+		this->overlay->w / 2, this->overlay->h / 2, true, true, Constant::colors[clBlack].sdlColor, -1);
 }
 
 /**
@@ -801,14 +801,15 @@ void GameMenu::showMessage(string msg){
 void GameMenu::loadEmuCfg(ListMenu &menuData){
     TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
 	int face_h_small = TTF_FontLineSkip(fontsmall);
-	static const int cblack = SDL_MapRGB(this->overlay->format, backgroundColor.r, backgroundColor.g, backgroundColor.b);
+	const int& cblack = Constant::colors[clBlack].color;
+	const SDL_Color& white = Constant::colors[clWhite].sdlColor;
 
     if (cfgLoader->emulators.size() == 0){
         SDL_FillRect(overlay, NULL, cblack);
         string msg = "There are no emulators configured. Exiting..."; 
 		Constant::drawTextCent(overlay, fontsmall, msg.c_str(), 0, 0, true, true,  white, -1);
 		Constant::drawTextCent(overlay, fontsmall, "Press a key to continue", 0, face_h_small + 3, true, true, white, -1);
-		SDL_Flip(gameScreen);
+		salviaFlip(gameScreen);
         SDL_Delay(3000);
 		return;
     }
@@ -1215,8 +1216,8 @@ bool GameMenu::updateFps(){
 			//OutputDebugStringA(this->sync->fpsText);
 			//OutputDebugStringA("\n");
 			
-            fpsSurface = TTF_RenderUTF8(Fonts::getFont(Fonts::FONTSMALL), this->sync->fpsText, white, black);
-            cpuSurface = TTF_RenderUTF8(Fonts::getFont(Fonts::FONTSMALL), this->sync->cpuText, white, black);
+            fpsSurface = TTF_RenderUTF8(Fonts::getFont(Fonts::FONTSMALL), this->sync->fpsText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
+            cpuSurface = TTF_RenderUTF8(Fonts::getFont(Fonts::FONTSMALL), this->sync->cpuText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
             
             lastFpsUpdate = currentTick;
         }
@@ -1254,7 +1255,7 @@ bool GameMenu::updateFps(){
 				sprintf(memText, "MEM: %.0f%% (%.0fMB Free)", totalPercent, availMB);
 			}
 
-			memSurface = TTF_RenderText(Fonts::getFont(Fonts::FONTSMALL), memText, white, black);
+			memSurface = TTF_RenderText(Fonts::getFont(Fonts::FONTSMALL), memText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
 			lastMemUpdate = currentTick;
 		}
 
@@ -1325,7 +1326,7 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 			break;
 
 		case HK_SHADER:
-			#ifdef _XBOX
+			#ifdef SALVIA_GPU_VIDEO
 				*this->current_shader = (*this->current_shader + 1) % TOTAL_SHADERS;
 				XBOX_SelectEffect(*current_shader);
 				choosenFilter = "menu.video.shader" + Constant::TipoToStr(*this->current_shader);
@@ -1446,13 +1447,16 @@ SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
 			overlay->format->Bmask, 0);
 		SDL_BlitSurface(src, NULL, copia, NULL);
 		boxRGBA(copia, 0, 0, copia->w -1, copia->h -1, Constant::colors[clBackground].sdlColor.r, Constant::colors[clBackground].sdlColor.g, Constant::colors[clBackground].sdlColor.b, transparency);
-		//SDL_SetAlpha(copia, 0, 0);
 	} else {
 		SDL_Surface *tmp = SDL_CreateRGBSurface(SDL_SWSURFACE, overlay->w, overlay->h, 
 			src->format->BitsPerPixel, src->format->Rmask, src->format->Gmask, 
 			src->format->Bmask, src->format->Amask);
-
-		SDL_SoftStretch(src, NULL, tmp, &dstRect);
+		
+		double zoomX = (double)dstRect.w / srcDim.w;
+		double zoomY = (double)dstRect.h / srcDim.h;
+		SDL_Surface *tmp2 = zoomSurface(src, zoomX, zoomY, SMOOTH_RESIZE);
+		SDL_BlitSurface(tmp2, NULL, tmp, &dstRect);
+		SDL_FreeSurface(tmp2);
 
 		if (transparency < 255) {
 			boxRGBA(tmp, 0, 0, tmp->w - 1, tmp->h - 1, 
@@ -1588,7 +1592,7 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
     msg.ticks = SDL_GetTicks();
     
     std::string newText = Fonts::recortarAlTamanyo(text, this->overlay->w);
-	msg.cache = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTBIG), newText.c_str(), white);
+	msg.cache = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTBIG), newText.c_str(), Constant::colors[clWhite].sdlColor);
     
     if (msg.cache) {
         int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
@@ -1735,9 +1739,9 @@ void GameMenu::renderCurrentAchievement() {
 }
 
 void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str, std::string line3Str, SDL_Surface *badge, SDL_Rect& lastMessagesArea){
-	SDL_Surface *line1 = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), line1Str.c_str(), white);
-	SDL_Surface *line2 = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), line2Str.c_str(), yellow);
-	SDL_Surface *line3 = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), line3Str.c_str(), blue);
+	SDL_Surface *line1 = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), line1Str.c_str(), Constant::colors[clWhite].sdlColor);
+	SDL_Surface *line2 = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), line2Str.c_str(), Constant::colors[clYellow].sdlColor);
+	SDL_Surface *line3 = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), line3Str.c_str(), Constant::colors[clBlue].sdlColor);
 
 	int maxW = line1->w > line2->w ? line1->w : line2->w;
 	maxW = maxW > line3->w ? maxW : line3->w; 
@@ -1755,8 +1759,7 @@ void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str
 	lastMessagesArea.w = maxW + badgeW + badgePad * 3;
 	lastMessagesArea.h = this->overlay->h - maxH - paddingBottom;
 
-	const Uint32 uPaleblue = SDL_MapRGB(this->overlay->format, paleblue.r, paleblue.g, paleblue.b);
-	SDL_FillRect(this->overlay, &lastMessagesArea, uPaleblue);
+	SDL_FillRect(this->overlay, &lastMessagesArea, Constant::colors[clPaleBlue].color);
 	//DrawRectAlpha(overlay, lastMessagesArea, black, 230);
 
 	SDL_Rect txtRect = {rect.x + badgePad * 2, maxH, 0, line1->w};
@@ -2106,10 +2109,10 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
         // mezcla cada pixel con el framebuffer del juego. Regla de SDL 1.2:
         //   RGBA?RGBA SIN SDL_SRCALPHA = copia pixeles tal cual.
         //   RGBA?RGBA CON SDL_SRCALPHA = SDL alpha-blendea internamente.
-        SDL_SetAlpha(rawSurface, 0, 0);
+        SDL_SetAlpha(rawSurface, SDL_RLEACCEL, 0);
         keyb.keyboardSurface = rawSurface;   // cacheamos directamente
 #else 
-		SDL_SetAlpha(rawSurface, SDL_SRCALPHA, KEY_ALPHA);
+		SDL_SetAlpha(rawSurface, SDL_SRCALPHA | SDL_RLEACCEL, KEY_ALPHA);
         keyb.keyboardSurface = SDL_DisplayFormatAlpha(rawSurface);
 		SDL_FreeSurface(rawSurface);
 #endif
