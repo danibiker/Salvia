@@ -368,31 +368,38 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 				return 0;
 		}
 	
+		const bool showEmpty = CfgLoader::configMain[cfg::showEmptyEmulators].valueBool;
+		CfgLoader *cfg = gameMenu->getCfgLoader();
+		const int firstPos = cfg->emuCfgPos;
+
 		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_R)){
-			LOG_DEBUG("Next page");
 			listMenu.listZipped.clear();
 			listMenu.listDir.clear();
 			listMenu.resizeMarginTop(0, gameMenu->overlay->h);
 
-			gameMenu->getCfgLoader()->getNextCfgEmu();
-			gameMenu->loadEmuCfg(listMenu);
-			ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
+			do{
+				cfg->getNextCfgEmu();
+				gameMenu->loadEmuCfg(listMenu);
+			} while (listMenu.getNumGames() == 0 && cfg->emuCfgPos != firstPos && !showEmpty && !cfg->getCfgEmu()->generalConfig);
+
 			//Set the keyboard layout
-			gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
+			gameMenu->keyb->setKeyboardLayout(cfg->getCfgEmu()->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
 			//Loading the background image if exists
 			gameMenu->loadBgImage();
 		}
+
 		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_L)){
-			LOG_DEBUG("Prev page");
 			listMenu.listZipped.clear();
 			listMenu.listDir.clear();
 			listMenu.resizeMarginTop(0, gameMenu->overlay->h);
+			
+			do {
+				cfg->getPrevCfgEmu();
+				gameMenu->loadEmuCfg(listMenu);
+			} while (listMenu.getNumGames() == 0 && cfg->emuCfgPos != firstPos && !showEmpty && !cfg->getCfgEmu()->generalConfig);
 
-			gameMenu->getCfgLoader()->getPrevCfgEmu();
-			gameMenu->loadEmuCfg(listMenu);
-			ConfigEmu *emu = gameMenu->getCfgLoader()->getCfgEmu();
 			//Set the keyboard layout
-			gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
+			gameMenu->keyb->setKeyboardLayout(cfg->getCfgEmu()->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
 			//Loading the background image if exists
 			gameMenu->loadBgImage();
 		}

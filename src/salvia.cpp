@@ -1219,9 +1219,9 @@ int launchGame(std::string rompath, bool tmpDelete){
 	const std::string displayName = bios_only ? std::string("BIOS") : dir.getFileName(rompath);
 
 	std::string initMsg = LanguageManager::instance()->get("msg.loading") + displayName + "...";
-	const int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
+	const int face_h_big = Fonts::getLineSkip(Fonts::FONTBIG);
 	gameMenu->fillOverlay(clBackground);
-	Constant::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, Constant::colors[clWhite].sdlColor, 0);
+	Fonts::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, Constant::colors[clWhite].sdlColor, 0);
 	salviaFlip(gameMenu->gameScreen);
 	
 	//Cargamos el juego en memoria o lo extraemos al disco
@@ -1537,9 +1537,9 @@ static int LogCrash(DWORD code, EXCEPTION_POINTERS *ep) {
 }
 
 static void __declspec(noinline) printAndDelay(){
-	const int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
+	const int face_h_big = Fonts::getLineSkip(Fonts::FONTBIG);
 	gameMenu->fillOverlay(clBackground);
-	Constant::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), LanguageManager::instance()->get("msg.error.fatal").c_str(), 0, -face_h_big / 2, true, true, Constant::colors[clWhite].sdlColor, 0);
+	Fonts::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), LanguageManager::instance()->get("msg.error.fatal").c_str(), 0, -face_h_big / 2, true, true, Constant::colors[clWhite].sdlColor, 0);
 	salviaFlip(gameMenu->gameScreen);
 	SDL_Delay(3000);
 

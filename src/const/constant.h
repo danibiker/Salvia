@@ -14,6 +14,7 @@
 #include <stdarg.h>
 
 #include <utils/logger.h>
+#include <font/fonts.h>
 
 static const int video_bpp = 16;
 
@@ -45,8 +46,6 @@ static const int video_bpp = 16;
 
 static const int bkgSpeedPixPerS = 15;
 static const double bkgFrameTimeTick = 1000.0 / bkgSpeedPixPerS;
-
-static const int SCREENHDIV = 15;
 
 static const unsigned long KEYRETRASO = 500;
 static const int JOYHATOFFSET = 100;
@@ -108,7 +107,8 @@ typedef enum {
 
 struct svColor{
 	SDL_Color sdlColor;
-	Uint32 color;
+	Uint32 color;		//Color converted through SDL_MapRGBA
+	Uint32 colorRaw;	//Color converted through byte shifts
 };
 
 
@@ -128,30 +128,6 @@ struct Message {
 };
 
 enum ACH_TYPE{ACH_LOAD_GAME, ACH_UNLOCKED, ACH_WARNING};
-
-enum TXT_JUSTIFY{JFY_LEFT, JFY_RIGHT, JFY_CENTER};
-
-struct JFY_TYPE{
-	//Tipo de justificacion
-	TXT_JUSTIFY jfy;
-	//Ancho para la justificacion a la derecha
-	int w;
-
-	JFY_TYPE(TXT_JUSTIFY pJfy, int pW) : jfy(JFY_LEFT), w(0){
-		jfy = pJfy;
-		w = pW;
-	}
-
-	int getJustification(int txtSize){
-		if (jfy == JFY_RIGHT && w > 0){
-			return w - txtSize;
-		} else if (jfy == JFY_CENTER && w > 0){
-			return (w - txtSize) / 2;
-		}
-		else 
-			return 0;
-	}
-};
 
 struct AchievementState{
 	volatile bool isDownloading;		// Especifica si se esta descargando el logro
@@ -321,8 +297,12 @@ typedef enum {JOY_BUTTON_A = 0,
             JOY_AXIS_R2,
             MAXJOYBUTTONS} joystickButtons;
 
-static int FRONTEND_BTN_VAL[] = {JOY_BUTTON_UP, JOY_BUTTON_DOWN, JOY_BUTTON_LEFT, JOY_BUTTON_RIGHT, JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y
-		, JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_SELECT, JOY_BUTTON_START, JOY_BUTTON_L3, JOY_BUTTON_R3};
+//static int FRONTEND_BTN_VAL[] = {JOY_BUTTON_UP, JOY_BUTTON_DOWN, JOY_BUTTON_LEFT, JOY_BUTTON_RIGHT, JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y
+//		, JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_SELECT, JOY_BUTTON_START, JOY_BUTTON_L3, JOY_BUTTON_R3};
+
+static int FRONTEND_BTN_VAL[] = {JOY_BUTTON_UP, JOY_BUTTON_DOWN, JOY_BUTTON_LEFT, JOY_BUTTON_RIGHT, JOY_BUTTON_A, JOY_BUTTON_B, 
+	JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_L3};
+
 
 #define MAX_PLAYERS 4
 
@@ -388,6 +368,7 @@ extern const std::string START_FROM_EXCEPTION;
 extern const char *SDL_BTN_TO_XBOX[12];
 extern std::string SDL_JOY_TO_XBOX[6];
 extern std::string SDL_HAT_TO_XBOX[9];
+extern std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
 extern const std::string SCRAPPING_DAT;
 extern const std::string PASS_MASK;
 
@@ -459,71 +440,6 @@ class Constant{
 			std::stringstream ss;
 			ss << value;
 			return ss.str();
-		}
-
-		static SDL_Rect drawText(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg){
-			SDL_Rect dest = { x, y, 0, 0 };
-			if (font && s != NULL && s[0] != '\0') {
-				#ifdef _XBOX 
-				SDL_Surface* textSurf = TTF_RenderUTF8_Solid(font, s, color);
-				#else
-				SDL_Surface* textSurf = TTF_RenderUTF8_Blended(font, s, color);
-				#endif
-				if (textSurf) {
-					dest.w = textSurf->w;
-					dest.h = textSurf->h;
-					SDL_BlitSurface(textSurf, NULL, surface, &dest);
-					SDL_FreeSurface(textSurf);
-				}
-			}
-			return dest;
-		}
-
-		static SDL_Rect drawTextTransparent(SDL_Surface* surface, TTF_Font* font, const char *s, int x, int y, SDL_Color color, int bg = -1,   JFY_TYPE& justifyHelper = JFY_TYPE(JFY_LEFT, 0)){
-			SDL_Rect dest = { x, y, 0, 0 };
-			if (font && s != NULL && s[0] != '\0') {
-				#ifdef _XBOX 
-				SDL_Surface* textSurf = TTF_RenderUTF8_Solid(font, s, color);
-				#else
-				SDL_Surface* textSurf = TTF_RenderUTF8_Blended(font, s, color);
-				#endif
-				if (textSurf) {
-					dest.w = textSurf->w;
-					dest.h = textSurf->h;
-					dest.x += justifyHelper.getJustification(textSurf->w);
-					SDL_BlitSurface(textSurf, NULL, surface, &dest);
-					SDL_FreeSurface(textSurf);
-				}
-			}
-			return dest;
-		}
-
-		static void drawTextCent(SDL_Surface* surface, TTF_Font* font, const char* dato, int x, int y, bool centx, bool centy, SDL_Color color, int bg){
-			if (!font || !surface) return;
-
-			int textW = 0, textH = 0;
-			if (centx || centy) {
-				TTF_SizeText(font, dato, &textW, &textH);
-			}
-
-			if (centx) x = (surface->w - textW) / 2 + x;
-			if (centy) y = (surface->h - textH) / 2 + y;
-
-			drawText(surface, font, dato, x, y, color, bg);
-		}
-
-		static void drawTextCentTransparent(SDL_Surface* surface, TTF_Font* font, const char* dato, int x, int y, bool centx, bool centy, SDL_Color color, int bg) {
-			if (!font || !surface) return;
-
-			int textW = 0, textH = 0;
-			if (centx || centy) {
-				TTF_SizeText(font, dato, &textW, &textH);
-			}
-
-			if (centx) x = (surface->w - textW) / 2 + x;
-			if (centy) y = (surface->h - textH) / 2 + y;
-
-			drawTextTransparent(surface, font, dato, x, y, color, bg);
 		}
 
 		static double round(double number){

@@ -37,7 +37,7 @@ void TextArea::init(){
 void TextArea::setFontType(Fonts::enumFonts type){
 	this->fontType = type;
 	this->fontText = Fonts::getFont(type);
-	this->face_h = TTF_FontLineSkip(this->fontText);
+	this->face_h = Fonts::getLineSkip(type);
 }
 
 void TextArea::clear(){
@@ -440,9 +440,9 @@ SDL_Rect TextArea::drawTextAreaTransparent(SDL_Surface* surface, TTF_Font* font,
 	if (font && !line.text.empty()) {
 		if (line.lineSrf == NULL){
 			#ifdef _XBOX 
-			line.lineSrf = TTF_RenderUTF8_Solid(font, line.text.c_str(), color);
+			line.lineSrf = Fonts::renderUtf8Solid(font, line.text.c_str(), color);
 			#else
-			line.lineSrf = TTF_RenderUTF8_Blended(font, line.text.c_str(), color);
+			line.lineSrf = Fonts::renderUtf8Blended(font, line.text.c_str(), color);
 			#endif
 			if (line.lineSrf){
 				line.dest.w = line.lineSrf->w;

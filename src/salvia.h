@@ -107,7 +107,7 @@ static std::string g_excp_emulator_path;
  *
  * Las surfaces SDL/TTF se pre-rendereeron en el MAIN thread antes de
  * lanzar el watcher.  Esto elimina las llamadas no-thread-safe a
- * TTF_RenderUTF8_Blended y SDL_CreateRGBSurface desde el watcher.
+ * Fonts::renderUtf8Blended y SDL_CreateRGBSurface desde el watcher.
  *
  * El watcher solo hace operaciones "seguras" sobre surfaces ajenas:
  * SDL_FillRect, SDL_BlitSurface, SDL_Flip.  Estas operan sobre buffers
@@ -197,7 +197,7 @@ DWORD WINAPI th_printLoading(LPVOID data) {
 
 void watchForLoadingStuck(){
 	/* [XBOX360] Pre-render de surfaces para el watcher de carga (lazy init
-	 * una sola vez por sesion).  TTF_RenderUTF8_Blended y SDL_CreateRGBSurface
+	 * una sola vez por sesion).  Fonts::renderUtf8Blended y SDL_CreateRGBSurface
 	 * no son thread-safe respecto a otras llamadas SDL/TTF concurrentes, asi
 	 * que las hacemos AQUI en el main thread.  El watcher solo hara
 	 * SDL_FillRect/Blit/Flip sobre estas surfaces ya creadas. */
@@ -212,7 +212,7 @@ void watchForLoadingStuck(){
 	if (s_watcherRaw == nullptr) {
 		const char* msg = "waiting for the game to load";
 		for (int i = 0; i < s_watcherNumColors; i++) {
-			s_watcherText[i] = TTF_RenderUTF8_Blended(
+			s_watcherText[i] = Fonts::renderUtf8Blended(
 				Fonts::getFont(Fonts::FONTBIG), msg, s_watcherColors[i]);
 		}
 		if (s_watcherText[0] != nullptr) {
@@ -492,7 +492,7 @@ void drawLoadingProgressBar(SDL_Surface*& screen, float progress) {
     if (!screen) return;
 
     // Configuración de dimensiones
-	const int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
+	const int face_h_big = Fonts::getLineSkip(Fonts::FONTBIG);
     const int barW = screen->w / 2;
     const int barH = 20;
     const int barX = (screen->w - barW) / 2;

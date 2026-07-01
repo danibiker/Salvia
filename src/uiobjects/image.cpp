@@ -201,6 +201,7 @@ void Image::printImage(SDL_Surface *video_page){
         } else {
             stretch_blit_sdl(img, video_page, 0, 0, img->w, img->h, this->getX(), this->getY(), this->getW(), this->getH());
         }
+		//rect(video_page, getX(), getY(), getX() + getW(), getY() + getH(), Constant::colors[clWhite].sdlColor);
     }
 }
 

@@ -35,6 +35,8 @@ class ListMenu : public Object{
 		SDL_Surface *filterAlphaRec;
 		std::string lastTxtNav;
 		SDL_Surface *navPath;
+		int face_h_big;
+		int face_h_small;
 
 		static void appendSegment(std::string& path, const std::string& seg) {
 			if (seg.empty()) return;
@@ -54,6 +56,7 @@ class ListMenu : public Object{
         int listSize;
         int maxLines;
         int layout;
+		bool showBottomInfo;
         bool animateBkg;
         bool centerText;
         bool keyUp;

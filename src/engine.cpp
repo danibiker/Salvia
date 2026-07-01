@@ -137,6 +137,8 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 	int syncMode;
 	cfgLoader->configMain[cfg::syncMode].getPropValue(syncMode);
 	sync = new Sync(syncMode);
+
+	initColors(overlay);
 	return 0;
 }
 
@@ -184,5 +186,6 @@ int Engine::initFont(){
 void Engine::initColors(SDL_Surface *srf){
 	for (int i=0; i < clTotalColors; i++){
 		Constant::colors[i].color = SDL_MapRGBA(srf->format, Constant::colors[i].sdlColor.r, Constant::colors[i].sdlColor.g, Constant::colors[i].sdlColor.b, 0xFF);
+		Constant::colors[i].colorRaw = (Constant::colors[i].sdlColor.r << 24) | (Constant::colors[i].sdlColor.g << 16) | (Constant::colors[i].sdlColor.b << 8) | 0xFF; // RRGGBBAA
 	}
 }

@@ -10,7 +10,7 @@ svColor Constant::colors[clTotalColors] = {
 	{{0xFF, 0xFF, 0xFF} , 0},	//clWhite
 	{{241, 222, 19}, 255},		//clYellow
 	{{255, 0, 0}, 0},			//clRed
-	{{76,194,255}, 255},		//clBlue
+	{{76, 194, 255}, 255},		//clBlue
 	{{247, 221, 114}, 0},		//clBkgMenu
 	{{237, 221, 150}, 255},		//clBkgMenuLighter
 	{{40, 40, 40}, 0xFF},		//clBG
@@ -75,7 +75,7 @@ const char *ICONS_PATH[] = {"menu_log.png",
 //Translated later on the first lines of GestorMenus::inicializar
 std::string SDL_JOY_TO_XBOX[6] = {"Left", "Right", "Up", "Down", "R2", "L2"};
 std::string SDL_HAT_TO_XBOX[9] = {"","Up","Right", "", "Down", "","","", "Left"};
-
+std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
 
 const char *JOY_DESCRIPTIONS[] = {"JOY_BUTTON_A",
             "JOY_BUTTON_B",

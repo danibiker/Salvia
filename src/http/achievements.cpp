@@ -194,7 +194,6 @@ void AchievementsWorker::run()
 void Achievements::initialize() {
 	if (g_client) return;
 	createDbAchievements();
-	progressMutex = SDL_CreateMutex();
 
 	/* Arrancar el worker thread persistente para todos los jobs async. */
 	worker.start();
@@ -237,7 +236,6 @@ void Achievements::shutdown() {
 		delete achievementDb;
 		#endif
 		clearAllData();
-		SDL_DestroyMutex(progressMutex);
 		LOG_DEBUG("RetroAchievements: Cliente destruido.");
 	}
 }

@@ -27,6 +27,7 @@ Joystick::Joystick(){
 	setCursor(cursor_hidden);
 	hotkeys = new Hotkeys(&this->inputs);
 	memset(startHoldFrames, 0, sizeof(startHoldFrames));
+	infoButtonsDirty = true;
 }
 
 Joystick::~Joystick(){
@@ -158,6 +159,7 @@ std::string Joystick::saveButtonsRetroCore() {
 */
 std::string Joystick::saveButtonsRetroDefault() {
 	std::string rutaGuardado = Constant::getAppDir() + Constant::getFileSep() + RETROPAD_INI;
+	setInfoButtons();
 	return saveButtonsConfig(rutaGuardado);
 }
 
@@ -591,4 +593,30 @@ HOTKEYS_LIST Joystick::findHotkey(){
 void Joystick::setCursor(int cursor){
     SDL_SetCursor(gestorCursor->getCursor(cursor));
     actualCursor = cursor;
+}
+
+void Joystick::setInfoButtons(){
+	//Dando valor a la ayuda de los botones que se muestra en el menu
+	int num_port_buttons = sizeof(FRONTEND_BTN_VAL) / sizeof(FRONTEND_BTN_VAL[0]);
+
+	//Son las posiciones de los botones que nos interesan en FRONTEND_BTN_VAL y FRONTEND_BTN_TXT
+	int buttonsToShowInfo[] = {4, 5, 6, 7, 8};
+	int num_port_buttons_info = sizeof(buttonsToShowInfo) / sizeof(buttonsToShowInfo[0]);
+
+	infoButtons.clear();	
+	for (int i=0; i < num_port_buttons_info; i++){
+		t_info_btn btn;
+		btn.description = FRONTEND_BTN_TXT[buttonsToShowInfo[i]];
+		const int sdlIdBtn = inputs.mapperFrontend.getSdlBtn(0, FRONTEND_BTN_VAL[buttonsToShowInfo[i]]);
+		btn.text = std::string(SDL_BTN_TO_XBOX[sdlIdBtn]);
+		
+		if (btn.text == "R3" || btn.text == "L3")
+			btn.shape = BS_DOUBLE_CIRCLE;
+		else 
+			btn.shape = BS_CIRCLE;
+
+		infoButtons.push_back(btn);
+		LOG_DEBUG("Added  key info: %s -> %s", btn.description.c_str(), btn.text.c_str());
+	}
+	infoButtonsDirty = true;
 }

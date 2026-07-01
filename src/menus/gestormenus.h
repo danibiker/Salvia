@@ -285,8 +285,7 @@ struct Menu{
 	int menuWidth;
 
     Menu(std::string t, Menu* p = NULL) : titulo(t), seleccionado(0), padre(p) {
-		TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-		rowHeight = TTF_FontLineSkip(fontMenu);
+		rowHeight = Fonts::getLineSkip(Fonts::FONTBIG);
 	}
 	
 	Menu(std::string t, int rh, int mw, Menu* p = NULL) : titulo(t), seleccionado(0), padre(p) {
@@ -355,6 +354,9 @@ private:
 	std::string lastImagePath;
 	Image imageMenu;
 	int scrapGamesSelection;
+	int face_h_big;
+	int face_h_small;
+
 
 	int getScreenNumLines();
 	void clearSelectedText();

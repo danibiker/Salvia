@@ -36,8 +36,7 @@ void Icons::freeIcons(){
 }
 
 void Icons::loadIcons(SDL_Surface* dest){
-	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-	int face_h = TTF_FontLineSkip(fontMenu) + icon_w_add;
+	int face_h = Fonts::getLineSkip(Fonts::FONTBIG) + icon_w_add;
 
 	for (int i=0; i < max_icons; i++){
 		SDL_Surface *img;
@@ -69,7 +68,7 @@ void Icons::loadIcons(SDL_Surface* dest){
 		}
 	}
 
-	face_h = TTF_FontLineSkip(fontMenu) - icon_w_add / 2;
+	face_h = Fonts::getLineSkip(Fonts::FONTBIG) - icon_w_add / 2;
 
 	for (int i=0; i < max_carts; i++){
 		SDL_Surface *img;

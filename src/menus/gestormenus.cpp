@@ -22,7 +22,6 @@ std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
 std::string videoShaderStrings[TOTAL_SHADERS];
 std::string ACTION_ASK_STR[MAX_ASK];
 std::string TipoKeyStr[KEY_JOY_MAX];
-std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
 std::string configurablePortButtonsStr[MAXJOYBUTTONS];
 std::string configurablePortHatsStr[MAXJOYBUTTONS];
 std::string HOTKEYS_STR[HK_MAX];
@@ -35,6 +34,8 @@ extern void launchBios();
 const char *scrapOrigins[] = {"SCREENSCRAPER", "THEGAMESDB", "EMPTY"};
 
 GestorMenus::GestorMenus(int screenw, int screenh){
+	face_h_big = Fonts::getLineSkip(Fonts::FONTBIG);
+	face_h_small = Fonts::getLineSkip(Fonts::FONTSMALL);
 	menuRaiz = NULL;
 	menuActual = NULL;
 	setObjectType(GUIOPTIONS);
@@ -44,7 +45,7 @@ GestorMenus::GestorMenus(int screenw, int screenh){
     listSize = 0;
     maxLines = 0;
     marginX = (int)floor((double)(screenw / 100));
-    marginY = (int) (screenh / SCREENHDIV * 1.5);
+    marginY = face_h_big * 2;
     lastSel = -1;
     pixelShift = 0;
     keyUp = false;
@@ -63,6 +64,8 @@ GestorMenus::GestorMenus(int screenw, int screenh){
 	scrapGamesSelection = 1;
 
 	tmpTextOption = NULL;
+
+
 }
 
 GestorMenus::~GestorMenus() {
@@ -165,7 +168,7 @@ std::string GestorMenus::stopScrapping(CONFIG_STATUS *st){
 
 
 void GestorMenus::setLayout(int layout, int screenw, int screenh){
-	this->marginY = (int) (screenh / SCREENHDIV * 1.5);
+	this->marginY = face_h_big * 2;
     clearSelectedText();
   
     this->setX(marginX);
@@ -178,8 +181,6 @@ void GestorMenus::setLayout(int layout, int screenw, int screenh){
 
 // Inicializa la estructura de menus
 void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
-    TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-
 	SDL_JOY_TO_XBOX[0] = LanguageManager::instance()->get("menu.controls.left");
 	SDL_JOY_TO_XBOX[1] = LanguageManager::instance()->get("menu.controls.right");
 	SDL_JOY_TO_XBOX[2] = LanguageManager::instance()->get("menu.controls.up");
@@ -196,12 +197,12 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	Menu* menuEmulation = new Menu(LanguageManager::instance()->get("menu.main.emulation"), menuRaiz);
 	Menu* menuEntrada = new Menu(LanguageManager::instance()->get("menu.main.input"), menuRaiz);
 	menuCoreOptions = new Menu(LanguageManager::instance()->get("menu.main.core.options"), menuRaiz);
-	menuSavestates = new Menu(LanguageManager::instance()->get("menu.main.saves"), TTF_FontLineSkip(fontMenu), this->getW() / 2 - 2 * marginX, menuRaiz);
+	menuSavestates = new Menu(LanguageManager::instance()->get("menu.main.saves"), face_h_big, this->getW() / 2 - 2 * marginX, menuRaiz);
 	menuScrapper = new Menu(LanguageManager::instance()->get("menu.main.scrapper"), menuRaiz);
 	
 	Menu* parentAchievements = new Menu(LanguageManager::instance()->get("menu.achievement.title"), menuRaiz);
 	//Creamos el submenu que contiene la lista de logros
-	const int rowAchHeight = TTF_FontLineSkip(fontMenu) * 2;
+	const int rowAchHeight = face_h_big * 2;
 	const int menuAchWidth = this->getW() - marginX;
 	menuAchievements = new Menu(LanguageManager::instance()->get("menu.achievement.list.title"), rowAchHeight, menuAchWidth, parentAchievements);
 	OpcionSubMenu *listaLogros = new OpcionSubMenu(LanguageManager::instance()->get("menu.achievement.list.title"), menuAchievements);
@@ -314,9 +315,14 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	for (int i=0; i < BG_MAX; i++){
 		bgMenu.push_back(LanguageManager::instance()->get("menu.background.anim" + Constant::TipoToStr(i)));
 	}
-	
+
+	#ifndef _XBOX
+	//En xbox siempre mostramos pantalla completa
 	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.fullscreen"), &refConfig->configMain[cfg::fullscreen].getBoolRef()));
+	#endif
 	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef()));
+	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.showempty"), &refConfig->configMain[cfg::showEmptyEmulators].getBoolRef()));
+	
 	
 	menuAssignRetro = new Menu(LanguageManager::instance()->get("menu.options.paddassign"), menuEntrada);
 	Menu* menuAssignFrontend = new Menu(LanguageManager::instance()->get("menu.options.frontassign"), menuEntrada);
@@ -1255,7 +1261,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
                                                        video_page->format->Amask);
 	}
 
-	Constant::drawTextCentTransparent(video_page, fontMenu, this->menuActual->titulo.c_str(), 0, face_h < marginY ? (marginY - face_h) / 2 : 0 , 
+	Fonts::drawTextCentTransparent(video_page, fontMenu, this->menuActual->titulo.c_str(), 0, face_h < marginY ? (marginY - face_h) / 2 : 0 , 
 				true, false, Constant::colors[clWhite].sdlColor, 0);
 	fastline(video_page, marginX, marginY - 1, video_page->w - marginX, marginY - 1, Constant::colors[clWhite].sdlColor);
 
@@ -1321,7 +1327,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 			SDL_BlitSurface(icons.icons[option->icon], NULL, video_page, &dstRect);
 		}
 
-		Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX() + marginIco + icons.icon_w_add, 
+		Fonts::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX() + marginIco + icons.icon_w_add, 
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
 
 		if (option->tipo == OPC_KEY && !((OpcionKey *)option)->description.empty()){
@@ -1329,9 +1335,8 @@ void GestorMenus::draw(SDL_Surface *video_page){
 		} else if (option->tipo == OPC_BOOLEANA){
 			drawBooleanSwitch(i, (OpcionBool *)option, video_page);			
 		} else if (!value.empty()){
-			int pixelDato;
-			TTF_SizeUTF8(fontMenu, value.c_str(), &pixelDato, NULL);
-			Constant::drawTextTransparent(video_page, fontMenu, value.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 
+			const int pixelDato = Fonts::getSize(fontMenu, value);
+			Fonts::drawTextTransparent(video_page, fontMenu, value.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
 
 		}
@@ -1342,10 +1347,8 @@ void GestorMenus::draw(SDL_Surface *video_page){
 
 void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 	std::string str = "";
-	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-	const int face_h = TTF_FontLineSkip(fontMenu);
 	const int screenPos = i - this->iniPos;
-    const int fontHeightRect = screenPos * face_h;
+	const int fontHeightRect = screenPos * face_h_big;
 	const SDL_Color& lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
 
 	std::string titulo = this->menuActual->titulo;
@@ -1396,20 +1399,18 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 		}
 	}
 
-	int pixelDato;
-	TTF_SizeText(fontMenu, str.c_str(), &pixelDato, NULL);
-	Constant::drawTextTransparent(video_page, fontMenu, str.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 
+	int pixelDato = Fonts::getSize(Fonts::FONTBIG, str);
+	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+	Fonts::drawTextTransparent(video_page, fontMenu, str.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 
             this->getY() + fontHeightRect, lineTextColor, 0);
 }
 
 void GestorMenus::drawBooleanSwitch(int i, OpcionBool *opcion, SDL_Surface *video_page){
 	// 1. Extraer el valor y definir dimensiones base
 	bool enabled = *opcion->valor;
-	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-	const int face_h = TTF_FontLineSkip(fontMenu);
 	const int screenPos = i - this->iniPos;
-    const int fontHeightRect = screenPos * face_h;
-	const int sw_h = face_h - 5;
+    const int fontHeightRect = screenPos * face_h_big;
+	const int sw_h = face_h_big - 5;
 	const int sw_w = sw_h * 2;
 	const int sw_x = getX() + getW() - marginX - sw_w;
 	const int sw_y = getY() + fontHeightRect + 2;
@@ -1440,7 +1441,6 @@ void GestorMenus::drawAskMenu(SDL_Surface *video_page) {
 
     TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
     const int ask_w = 520, ask_h = 200, btn_h = 30, btn_w = 150, marginTitle = 10;
-    int face_h = TTF_FontLineSkip(fontMenu);
 
     SDL_Rect thumbRect = { (this->w - ask_w) / 2, (this->h - ask_h) / 2, ask_w, ask_h };
     SDL_Rect titleRect = { thumbRect.x, thumbRect.y, thumbRect.w, 40 };
@@ -1452,8 +1452,8 @@ void GestorMenus::drawAskMenu(SDL_Surface *video_page) {
     rect(video_page, thumbRect.x - 1, thumbRect.y - 1, thumbRect.x + thumbRect.w + 1, thumbRect.y + thumbRect.h + 1, Constant::colors[clAskLine].sdlColor);
 
     Opcion* opt = menuAskSavestates->opciones[0];
-    Constant::drawTextTransparent(video_page, fontMenu, opt->titulo.c_str(), 
-                                 titleRect.x + marginTitle, titleRect.y + (titleRect.h - face_h) / 2, Constant::colors[clAskText].sdlColor, 0);
+    Fonts::drawTextTransparent(video_page, fontMenu, opt->titulo.c_str(), 
+                                 titleRect.x + marginTitle, titleRect.y + (titleRect.h - face_h_big) / 2, Constant::colors[clAskText].sdlColor, 0);
 
     if (opt->tipo == OPC_LISTA) {
         OpcionLista* l = static_cast<OpcionLista*>(opt);
@@ -1488,10 +1488,9 @@ void GestorMenus::drawAskMenu(SDL_Surface *video_page) {
             rect(video_page, btnRect.x, btnRect.y, btnRect.x + btnRect.w, btnRect.y + btnRect.h, clText);
 
             // Centrar texto en el boton
-            int textW;
-            TTF_SizeText(fontMenu, l->items[i].c_str(), &textW, NULL);
-            Constant::drawTextTransparent(video_page, fontMenu, l->items[i].c_str(), 
-                                         btnRect.x + (btn_w - textW) / 2, btnRect.y + (btn_h - face_h) / 2, clText, 0);
+			int textW = Fonts::getSize(Fonts::FONTBIG, l->items[i]);
+            Fonts::drawTextTransparent(video_page, fontMenu, l->items[i].c_str(), 
+                                         btnRect.x + (btn_w - textW) / 2, btnRect.y + (btn_h - face_h_big) / 2, clText, 0);
         }
     }
 }
@@ -1529,7 +1528,7 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
 
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 	TTF_Font *fontSmall = Fonts::getFont(Fonts::FONTSMALL);
-	const int face_h = TTF_FontLineSkip(fontMenu);
+
 	const int screenPos = i - this->iniPos;
 	const int fontHeightRect = screenPos * menuActual->rowHeight;
 	const int marginImg = 2;
@@ -1538,9 +1537,9 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
 	const int position = this->getY() + fontHeightRect;
 	if (opcion->achievement.isSection){
 		const std::string s = "----- " + opcion->achievement.title + " -----";
-		Constant::drawTextTransparent(video_page, fontMenu, s.c_str(), 
+		Fonts::drawTextTransparent(video_page, fontMenu, s.c_str(), 
 			this->getX() + imgH + marginImg * 3, 
-			position + menuActual->rowHeight / 2 - face_h / 2, 
+			position + menuActual->rowHeight / 2 - face_h_big / 2, 
 			i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clBlue].sdlColor);
 	} else {
 		std::string firstLine = opcion->achievement.title;
@@ -1548,9 +1547,9 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
 			firstLine += " (" + Constant::TipoToStr(opcion->achievement.points) + " point" + (opcion->achievement.points > 1 ? "s" : "") + ")";
 		}
 		//Drawing the first line of text on big font
-		Constant::drawTextTransparent(video_page, fontMenu, firstLine.c_str(), this->getX() + imgH + marginImg * 3, position, lineTextColor);
+		Fonts::drawTextTransparent(video_page, fontMenu, firstLine.c_str(), this->getX() + imgH + marginImg * 3, position, lineTextColor);
 		//Drawing the second line of text on a smaller font
-		Constant::drawTextTransparent(video_page, fontSmall, opcion->achievement.description.c_str(), this->getX() + imgH + marginImg * 3, position + face_h, lineTextColor);
+		Fonts::drawTextTransparent(video_page, fontSmall, opcion->achievement.description.c_str(), this->getX() + imgH + marginImg * 3, position + face_h_big, lineTextColor);
 	}
 
     // Solo intentamos anyadir a la cola si NO tiene imagen Y NO se esta descargando ya
@@ -1584,10 +1583,8 @@ void GestorMenus::drawAchievement(int i, OpcionAchievement *opcion, SDL_Surface 
 void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Surface *video_page){
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 	TTF_Font *fontSmall = Fonts::getFont(Fonts::FONTSMALL);
-	const int face_h = TTF_FontLineSkip(fontMenu);
-	const int face_h_small = TTF_FontLineSkip(fontSmall);
     const int screenPos = i - this->iniPos;
-    const int fontHeightRect = screenPos * face_h;
+    const int fontHeightRect = screenPos * face_h_big;
     const int lineBackground = -1;
     SDL_Color lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
 	const std::string line = opcion->titulo;
@@ -1600,7 +1597,7 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 		//Drawing the modification date
 		if (!opcion->file.modificationTime.empty()){
 			//Drawing below the image
-			Constant::drawTextTransparent(video_page, fontSmall, std::string(LanguageManager::instance()->get("menu.savestate.latestsave") 
+			Fonts::drawTextTransparent(video_page, fontSmall, std::string(LanguageManager::instance()->get("menu.savestate.latestsave") 
 				+ opcion->file.modificationTime).c_str(), imageMenu.getX(), 
                 imageMenu.getY() + imageMenu.getH() + 2, Constant::colors[clWhite].sdlColor, 0);
 		}
@@ -1611,7 +1608,7 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 	}
 
 	//Drawing the text
-    SDL_Rect txtRect = Constant::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX(), 
+    SDL_Rect txtRect = Fonts::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX(), 
                 this->getY() + fontHeightRect, lineTextColor, lineBackground);
 	
 	//Drawing the image
@@ -1628,7 +1625,7 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 
 	//Drawing the date besides the text
 	if (!opcion->file.modificationTime.empty()){
-		Constant::drawTextTransparent(video_page, fontSmall, opcion->file.modificationTime.c_str(), this->getX() + txtRect.w + 10, 
+		Fonts::drawTextTransparent(video_page, fontSmall, opcion->file.modificationTime.c_str(), this->getX() + txtRect.w + 10, 
                 this->getY() + fontHeightRect + face_h_small / 3, lineTextColor, lineBackground);
 	}
 	

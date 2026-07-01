@@ -59,9 +59,6 @@
     <ClCompile Include="src\const\constant.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\font\fonts.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\io\filelist.h">
       <Filter>Header Files</Filter>
     </ClCompile>
@@ -160,9 +157,6 @@
     </ClCompile>
     <ClCompile Include="src\io\sync.cpp">
       <Filter>Source Files\frontend</Filter>
-    </ClCompile>
-    <ClCompile Include="src\utils\logger.cpp">
-      <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\gfx\SDL_gfxBlitFunc.c">
       <Filter>Source Files\image</Filter>
@@ -334,6 +328,12 @@
     </ClCompile>
     <ClCompile Include="src\video\win_d3d9.cpp">
       <Filter>Source Files\video</Filter>
+    </ClCompile>
+    <ClCompile Include="src\font\fonts.cpp">
+      <Filter>Source Files\io</Filter>
+    </ClCompile>
+    <ClCompile Include="src\utils\logger.cpp">
+      <Filter>Source Files\io</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

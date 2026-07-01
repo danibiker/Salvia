@@ -43,17 +43,21 @@ void ListMenu::clearSelectedText(){
 }
 
 ListMenu::ListMenu(int screenw, int screenh){
-    iniPos = 0;
+	face_h_big = Fonts::getLineSkip(Fonts::FONTBIG);
+	face_h_small = Fonts::getLineSkip(Fonts::FONTSMALL);
+
+	iniPos = 0;
     endPos = 0;
     curPos = 0;
     listSize = 0;
     maxLines = 0;
     marginX = (int)floor((double)(screenw / 100));
-    marginY = (int) (screenh / SCREENHDIV * 1.5);
+	marginY = face_h_big * 2;
     lastSel = -1;
     pixelShift = 0;
     keyUp = false;
     animateBkg = true;
+	showBottomInfo = true;
     setObjectType(GUILISTBOX);
     setLayout(LAYSIMPLE, screenw, screenh);
     //set_trans_blender(255, 255, 255, 190);
@@ -85,17 +89,15 @@ std::size_t ListMenu::getNumGames(){
 }
 
 int ListMenu::getScreenNumLines(){
-	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-	int face_h = TTF_FontLineSkip(fontMenu);
-    return face_h != 0 ? (int)std::floor((double)getH() / face_h) : 0;
+    return face_h_big != 0 ? (int)std::floor((double)getH() / face_h_big) : 0;
 }
 
 /**
     * 
     */
 void ListMenu::setLayout(int layout, int screenw, int screenh){
-    this->marginY = (int) (screenh / SCREENHDIV * 1.5);
     clearSelectedText();
+	this->marginY = face_h_big * 2;
 
     if (layout == LAYBOXES){
         this->setX(0);
@@ -104,7 +106,12 @@ void ListMenu::setLayout(int layout, int screenw, int screenh){
         this->setH(screenh - this->getY());
         this->centerText = false;
         this->layout = layout;
-    } else {
+
+		if (showBottomInfo){
+			this->setH(this->getH() - face_h_big * 2);
+		}
+	
+	} else {
         this->setX(marginX);
         this->setY(marginY);
         this->setW(screenw - marginX);
@@ -202,8 +209,7 @@ void ListMenu::sortFilters(){
 
 void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
     TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-    const int face_h = TTF_FontLineSkip(fontMenu);
-	const int marginTextIcon = face_h;
+	const int marginTextIcon = face_h_big;
 	static bool lastHaveFocus = haveFocus;
 
     // Guarda la posicion seleccionada del frame anterior para saber cuando cambio
@@ -215,17 +221,17 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
 	SDL_Rect srcRect;
 	srcRect.y = 0;
 	srcRect.w = this->getW() - 2 * this->marginX - marginTextIcon;
-	srcRect.h = face_h;
+	srcRect.h = face_h_big;
 	//Para controlar el tiempo de scrolling del texto
 	static uint32_t lastTick = 0;
 	//To scroll one letter in one second. We use the face_h because the width of 
     //a letter is not fixed.
-    const float pixelsScrollFps = max(ceil(face_h / (float)textFps), 1.0f);
+    const float pixelsScrollFps = max(ceil(face_h_big / (float)textFps), 1.0f);
 	const SDL_Color colorTextSel = haveFocus ? Constant::colors[clBlack].sdlColor : Constant::colors[clDarkGray].sdlColor;
 	const SDL_Color colorTextNotSel = haveFocus ? Constant::colors[clWhite].sdlColor : Constant::colors[clDarkGray].sdlColor;
 
 	//Creamos el rectangulo de elemento seleccionado translucido
-	SDL_Rect rectElem = {0, 0, this->getW() - 2 * marginX, face_h};
+	SDL_Rect rectElem = {0, 0, this->getW() - 2 * marginX, face_h_big};
 	if (selecAlphaRec == NULL || selecAlphaRec->w != rectElem.w || selecAlphaRec->h != rectElem.h){
 		if (selecAlphaRec != NULL){
 			SDL_FreeSurface(selecAlphaRec);
@@ -278,13 +284,13 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
     prevEndPos = this->endPos;
 
 	//Dibujamos la ruta relativa que estamos explorando
-	drawNavBar(video_page, colorTextNotSel, fontMenu, face_h);
+	drawNavBar(video_page, colorTextNotSel, fontMenu, face_h_big);
 
 	//Dibujamos el texto
     for (int i=this->iniPos; i < this->endPos; i++){
         auto& game = filteredGames.at(i);
         const int screenPos = i - this->iniPos;
-        const int fontHeightRect = screenPos * face_h;
+        const int fontHeightRect = screenPos * face_h_big;
         SDL_Rect dstRectIcon = {this->getX() + marginX, this->getY() + fontHeightRect + 2, 0, 0};
         SDL_Rect dstRectWithMargin = {dstRectIcon.x + marginTextIcon, dstRectIcon.y - 2, 0, 0};
 		const string line = game->gameTitle.empty() ? game->longFileName : game->gameTitle;
@@ -307,9 +313,9 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
         if (game->cache == NULL) {
             // Cache no existe -> renderizar
 			#ifdef _XBOX 
-			game->cache = TTF_RenderUTF8_Solid(fontMenu, line.c_str(), lineTextColor);
+			game->cache = Fonts::renderUtf8Solid(fontMenu, line.c_str(), lineTextColor);
 			#else
-			game->cache = TTF_RenderUTF8_Blended(fontMenu, line.c_str(), lineTextColor);
+			game->cache = Fonts::renderUtf8Blended(fontMenu, line.c_str(), lineTextColor);
 			#endif
 			//Huge speedup if the background is static
 			// 1. Crear superficie optimizada de 8 bits con Anti-aliasing
@@ -379,9 +385,9 @@ void ListMenu::drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor,
 
         if (navPath) SDL_FreeSurface(navPath);
 #ifdef _XBOX
-        navPath = TTF_RenderUTF8_Solid  (fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
+        navPath = Fonts::renderUtf8Solid  (fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
 #else
-        navPath = TTF_RenderUTF8_Blended(fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
+        navPath = Fonts::renderUtf8Blended(fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
 #endif
         TTF_SetFontStyle(fontMenu, prevStyle);
         if (!navPath) return;
@@ -899,9 +905,11 @@ void ListMenu::prevPage(){
 
 void ListMenu::resizeMarginTop(int addedMargin, int screenH){
 	//Cambiamos el tamanyo del listado para poder mostrar la ruta relativa de directorios
-	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 	this->setY(this->marginY + addedMargin);
 	this->setH(screenH - this->getY());
+	if (showBottomInfo){
+		this->setH(this->getH() - face_h_big * 2);
+	}
 	this->maxLines = this->getScreenNumLines();
 	this->endPos = (int)this->filteredGames.size() > this->maxLines ? this->iniPos + this->maxLines : this->filteredGames.size();
 }

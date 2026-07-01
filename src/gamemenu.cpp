@@ -18,8 +18,7 @@
  * envio via RETRO_ENVIRONMENT_SET_MEMORY_MAPS (ej. HRAM en Game Boy). */
 extern const struct retro_memory_descriptor* get_core_memory_descriptors(unsigned* out_count);
 
-GameMenu::GameMenu(CfgLoader *cfgLoader)
-    : m_csInited(false)
+GameMenu::GameMenu(CfgLoader *cfgLoader) : m_csInited(false)
 {
     status = EMU_MENU;
 	lastStatus = EMU_MENU;
@@ -38,19 +37,20 @@ GameMenu::GameMenu(CfgLoader *cfgLoader)
 	m_csInited = true;
 	m_menuAssetLoader.start(this);
 
-	int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
+	face_h_big = Fonts::getLineSkip(Fonts::FONTBIG);
+	face_h_small = Fonts::getLineSkip(Fonts::FONTSMALL);
+
 	std::string initMsg = "Loading " + Constant::getAppExecutable() + "...";
-	Constant::drawTextCentTransparent(overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, Constant::colors[clWhite].sdlColor, 0);
+	Fonts::drawTextCentTransparent(overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, Constant::colors[clWhite].sdlColor, 0);
 	salviaFlip(gameScreen);
 
-	int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTSMALL));
-	int pixelDato = 0;
-	TTF_SizeText(Fonts::getFont(Fonts::FONTSMALL), "FPS: 888.8", &pixelDato, NULL);
+	
+	int pixelDato = Fonts::getSize(Fonts::FONTSMALL, "FPS: 888.8");
 
 	rectFps.x = this->overlay->w - pixelDato - 3;
-	rectFps.y = 2*face_h;
+	rectFps.y = 2 * face_h_small;
 	rectFps.w = this->overlay->w - rectFps.x;
-	rectFps.h = face_h;
+	rectFps.h = face_h_small;
 	bkgTextFps = Constant::colors[clBlack].color;
 	uBkgColor = Constant::colors[clBackground].color;
 
@@ -81,12 +81,13 @@ GameMenu::GameMenu(CfgLoader *cfgLoader)
 	memSurface = NULL;
 	bg_screenshot = NULL;
 	filterAlphaRec = NULL;
+	infoBtnSrf = NULL;
 	lastFpsUpdate = 0;
 	lastMemUpdate = 0;
 	cargarSystemAchievementTranslation(Constant::getAppDir() + ROUTE_ACHIEVEMENT_TRANSLATIONS);
 	initAchievements();
 	Launcher::initDrives();
-	initColors(overlay);
+	joystick->setInfoButtons();
 };
 
 GameMenu::~GameMenu(){
@@ -109,6 +110,8 @@ GameMenu::~GameMenu(){
 	if (cpuSurface) SDL_FreeSurface(cpuSurface);
 	if (memSurface) SDL_FreeSurface(memSurface);
 	if (filterAlphaRec) SDL_FreeSurface(filterAlphaRec);
+	if (infoBtnSrf) SDL_FreeSurface(infoBtnSrf);
+
 	for (int i=0; i < (int)messages.size(); i++) {
 		SDL_FreeSurface(messages[i].cache);
 	}
@@ -143,31 +146,35 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
     Image imageSnap;
     const int snapW = overlay->w / 2;
     const int snapH = listMenu.getH() / 2;
-    const int snapOffset = overlay->w / 10;
-    //const int snapOffset = 5;
+    //const int snapOffset = overlay->w / 10;
+    const int snapOffset = 5;
+	const int box2dH = (int)(listMenu.getH() / 3.5f);
+    const int box2dW = overlay->w / 8;
+    const int snapTitH = listMenu.getH() / 4;
+    const int snapTitW = overlay->w / 6;
+
     menuImages.clear();
     menuTextAreas.clear();
 
-    if (overlay->w / 2 >= 320){
-        imageSnap.setX(overlay->w / 2 + snapOffset);
+//    if (overlay->w / 2 >= 320){
+//        imageSnap.setX(overlay->w / 2 + snapOffset);
+//        imageSnap.setY(listMenu.getY());
+//        imageSnap.setW(snapW - snapOffset * 2);
+//        imageSnap.setH(snapH - snapOffset);
+//    } else {
+        imageSnap.setX(overlay->w / 2 + box2dW);
         imageSnap.setY(listMenu.getY());
-        imageSnap.setW(snapW - snapOffset * 2);
-        imageSnap.setH(snapH - snapOffset);
-    } else {
-        imageSnap.setX(overlay->w / 2);
-        imageSnap.setY(listMenu.getY());
-        imageSnap.setW(snapW);
+        imageSnap.setW(snapW - box2dW);
         imageSnap.setH(snapH);
-    }
+//    }
     imageSnap.vAlign = ALIGN_TOP;
     menuImages.insert(make_pair(SNAP, imageSnap));
     menuImages[SNAP].m_objCS = &m_csSnap;
 
     /** Box2d */
     Image imageBox2d;
-    const int box2dH = listMenu.getH() / 4;
-    const int box2dW = overlay->w / 8;
-    imageBox2d.setX(overlay->w / 2);
+    
+	imageBox2d.setX(overlay->w / 2 + (snapTitW-box2dW) / 2);
     imageBox2d.setY(overlay->h / 2 - box2dH);
     imageBox2d.setW(box2dW);
     imageBox2d.setH(box2dH);
@@ -176,10 +183,8 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
 
     /** snaptit*/
     Image imageSnaptit;
-    const int snapTitH = listMenu.getH() / 4;
-    const int snapTitW = overlay->w / 6;
-    imageSnaptit.setX(overlay->w - snapTitW);
-    imageSnaptit.setY(overlay->h / 2 - snapTitH);
+    imageSnaptit.setX(overlay->w / 2);
+    imageSnaptit.setY(listMenu.getY());
     imageSnaptit.setW(snapTitW);
     imageSnaptit.setH(snapTitH);
     menuImages.insert(make_pair(SNAPTIT, imageSnaptit));
@@ -191,7 +196,6 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
 	
 	const int sectionGap = 0;
 	int posTextSectionY = listMenu.getH() / 2 + listMenu.getY() + sectionGap;
-    int face_h_big = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
 
 	TextArea textareaYear(overlay->w / 2, posTextSectionY, overlay->w / 2, face_h_big);
 	textareaYear.setFontType(Fonts::FONTBIG);
@@ -235,8 +239,6 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
     TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
     const int sepVertX = listMenu.getW();
     const int halfWidth = overlay->w / 2;
-	int face_h_big = TTF_FontLineSkip(fontBig);
-	int face_h_small = TTF_FontLineSkip(fontsmall);
 	bool debug = true;
 	dirutil dir;
 	const SDL_Color &textColor = Constant::colors[clWhite].sdlColor;
@@ -258,7 +260,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 				}
 
 				//Drawing the title
-				Constant::drawTextCentTransparent(overlay, fontBig, title.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+				Fonts::drawTextCentTransparent(overlay, fontBig, title.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 					true, false, textColor, 0);
 				//Draw the scrapping process text
 				showScrapProcess(listMenu);
@@ -302,11 +304,15 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 					menuTextAreas[SYSTEM].draw(this->overlay);
 
 					if (menuTextAreas[YEAR].isEmpty() && menuTextAreas[MANUFACTURER].isEmpty() && menuTextAreas[SYSTEM].isEmpty()){
-						menuTextAreas[SYNOPSIS].setY(menuTextAreas[YEAR].getY());
+						menuTextAreas[SYNOPSIS].setY(this->overlay->h / 2 + face_h_big);
 						menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
 					} else if (!menuTextAreas[YEAR].isEmpty() && !menuTextAreas[MANUFACTURER].isEmpty() && !menuTextAreas[SYSTEM].isEmpty()){
 						menuTextAreas[SYNOPSIS].setY(menuTextAreas[SYSTEM].getY() + face_h_big * 2 + 2);
 						menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
+					}
+
+					if (listMenu.showBottomInfo){
+						menuTextAreas[SYNOPSIS].setH(menuTextAreas[SYNOPSIS].getH() - face_h_big * 2);
 					}
 
 					/* SYNOPSIS: try-lock por si el worker lo esta adoptando */
@@ -321,16 +327,24 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 						LeaveCriticalSection(menuImages[SNAP].m_objCS);
 					}
 					if (overlay->w >= 640){
-						if (TryEnterCriticalSection(menuImages[BOX2D].m_objCS)){
-							menuImages[BOX2D].printImage(this->overlay);
-							LeaveCriticalSection(menuImages[BOX2D].m_objCS);
-						}
 						if (TryEnterCriticalSection(menuImages[SNAPTIT].m_objCS)){
 							menuImages[SNAPTIT].printImage(this->overlay);
 							LeaveCriticalSection(menuImages[SNAPTIT].m_objCS);
 						}
+						if (TryEnterCriticalSection(menuImages[BOX2D].m_objCS)){
+							menuImages[BOX2D].printImage(this->overlay);
+							LeaveCriticalSection(menuImages[BOX2D].m_objCS);
+						}
 					}
 				}
+
+				if (listMenu.showBottomInfo){
+					const int posYBottom = listMenu.getY() + listMenu.getH();
+					fastline(this->overlay, 0, posYBottom , overlay->w - 1, posYBottom, menuBars);
+					SDL_Rect rect = {0, posYBottom + 1, overlay->w, overlay->h - posYBottom};
+					drawInfoButtons(rect);
+				}
+
             } else if (listMenu.layout == LAYSIMPLE) {
                 if (listMenu.keyUp){
                     //Snapshot picture
@@ -339,7 +353,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
                 }
                 menuImages[SNAPFS].printImage(this->overlay);
                 //Draw the menu element after the image
-                Constant::drawTextCent(overlay, fontBig, emu.name.c_str(), 
+                Fonts::drawTextCent(overlay, fontBig, emu.name.c_str(), 
 					halfWidth, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 					true, false, textColor, 0);
 
@@ -348,7 +362,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 
             } else if (listMenu.layout == LAYTEXT) {
 
-				Constant::drawTextCent(overlay, fontBig, emu.name.c_str(), 
+				Fonts::drawTextCent(overlay, fontBig, emu.name.c_str(), 
 					halfWidth, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 					true, false, textColor, 0);
 
@@ -360,7 +374,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 		configMenus->draw(overlay);
 		showScrapProcess(listMenu);
     } else if (listMenu.getNumGames() == 0){
-		Constant::drawTextCentTransparent(overlay, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+		Fonts::drawTextCentTransparent(overlay, fontBig, emu.name.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
 			true, false, textColor, 0);
 		showScrapProcess(listMenu);
 		fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1 , overlay->w - listMenu.marginX, listMenu.marginY - 1, menuBars);
@@ -369,14 +383,93 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 			fastline(this->overlay, sepVertX, listMenu.marginY , sepVertX, listMenu.getH() + listMenu.marginY - 1, menuBars);
 			drawFilters(listMenu);
 		} else {
-			Constant::drawTextCent(overlay, fontsmall, "No roms found", 0, 0, true, true, textColor, 0);
+			Fonts::drawTextCent(overlay, fontsmall, "No roms found", 0, 0, true, true, textColor, 0);
 		}
 
     } else {
-		Constant::drawTextCent(overlay, fontsmall, "The configuration is not valid", 0, 0, true, true, textColor, 0);
-		Constant::drawTextCent(overlay, fontsmall, "Press TAB to select the next entry or", 0, face_h_small + 3, true, true, textColor, 0);
-		Constant::drawTextCent(overlay, fontsmall, "Press ESC to exit", 0, (face_h_small + 3) * 2, true, true, textColor, 0);
+		Fonts::drawTextCent(overlay, fontsmall, "The configuration is not valid", 0, 0, true, true, textColor, 0);
+		Fonts::drawTextCent(overlay, fontsmall, "Press TAB to select the next entry or", 0, face_h_small + 3, true, true, textColor, 0);
+		Fonts::drawTextCent(overlay, fontsmall, "Press ESC to exit", 0, (face_h_small + 3) * 2, true, true, textColor, 0);
     }
+}
+
+void GameMenu::drawInfoButtons(SDL_Rect &rect){
+
+	if (joystick->infoButtonsDirty){
+		if (infoBtnSrf){
+			SDL_FreeSurface(infoBtnSrf);
+			infoBtnSrf = NULL;
+		}
+		joystick->infoButtonsDirty = false;
+	}
+
+	if (infoBtnSrf != NULL){
+		SDL_BlitSurface(infoBtnSrf, NULL, overlay, &rect);
+		return;
+	}
+
+	TTF_Font *fontBig = Fonts::getFont(Fonts::FONTBIG);
+	const int face_h_big = Fonts::getLineSkip(Fonts::FONTBIG);
+	const int posY = (rect.h - face_h_big) / 2;
+	int x = 10;
+	
+	SDL_Surface *txtSrf = SDL_CreateRGBSurface(SDL_SWSURFACE, rect.w, rect.h, overlay->format->BitsPerPixel, 
+			overlay->format->Rmask, overlay->format->Gmask, overlay->format->Bmask, overlay->format->Amask);
+	
+	const int buttonsColor = clWhite;
+	const int buttonsTransparentColor = clBlack;
+
+	//Setting the transparency effect
+	Uint32 colorkey = SDL_MapRGBA(txtSrf->format,
+                                            Constant::colors[buttonsTransparentColor].sdlColor.r,
+                                            Constant::colors[buttonsTransparentColor].sdlColor.g,
+                                            Constant::colors[buttonsTransparentColor].sdlColor.b,
+                                            0xFF);
+
+    //SDL_SetColorKey(txtSrf, SDL_SRCCOLORKEY, colorkey);
+	//SDL_SetAlpha(txtSrf, SDL_RLEACCEL, colorkey);
+	SDL_FillRect(txtSrf, NULL, colorkey);
+
+	SDL_Rect drawnRect = {0, 0, 0, 0};
+	int tw = 0, th = 0;
+	const int circleCenterY = posY + face_h_big / 2;
+	
+	for (unsigned int i=0; i < joystick->infoButtons.size(); i++){
+		Fonts::getSize(fontBig, joystick->infoButtons[i].text, tw, th);
+		const int circleCenterX = x + tw / 2;
+
+		if (joystick->infoButtons[i].shape == BS_CIRCLE){
+			filledCircleColor(txtSrf, circleCenterX, circleCenterY, face_h_big / 2, Constant::colors[buttonsColor].colorRaw);
+		} else if (joystick->infoButtons[i].shape == BS_DOUBLE_CIRCLE){
+			filledCircleColor(txtSrf, circleCenterX, circleCenterY, (int)(face_h_big * 4 / 5.0f), Constant::colors[buttonsColor].colorRaw);
+			filledCircleColor(txtSrf, circleCenterX, circleCenterY, (int)(face_h_big * 2 / 3.0f + 2), Constant::colors[buttonsTransparentColor].colorRaw);
+			filledCircleColor(txtSrf, circleCenterX, circleCenterY, face_h_big / 2 + 2, Constant::colors[buttonsColor].colorRaw);
+		}
+		
+		drawnRect = Fonts::drawText(txtSrf, fontBig, joystick->infoButtons[i].text.c_str(), x, posY, Constant::colors[buttonsTransparentColor].sdlColor, 0);
+		x += drawnRect.w + face_h_big / 2;
+		drawnRect = Fonts::drawText(txtSrf, fontBig, joystick->infoButtons[i].description.c_str(), x, posY, Constant::colors[buttonsColor].sdlColor, 0);
+		x += drawnRect.w + (i + 1 < joystick->infoButtons.size() ? face_h_big * 2 : 0);
+	}
+
+	drawnRect.w = x;
+	drawnRect.x = 0;
+	drawnRect.y = 0;
+	drawnRect.h = rect.h;
+
+	SDL_Rect dstRect = { (rect.w - drawnRect.w) / 2, rect.y, 0, 0};
+
+	infoBtnSrf = SDL_CreateRGBSurface(SDL_SWSURFACE, rect.w, rect.h, overlay->format->BitsPerPixel, 
+			overlay->format->Rmask, overlay->format->Gmask, overlay->format->Bmask, overlay->format->Amask);
+	SDL_FillRect(infoBtnSrf, NULL, colorkey);
+	
+	SDL_Rect dstRect2 = { (rect.w - drawnRect.w) / 2, 0, 0, 0};
+	SDL_BlitSurface(txtSrf, &drawnRect, infoBtnSrf, &dstRect2);
+	SDL_BlitSurface(infoBtnSrf, NULL, overlay, &rect);
+	SDL_SetAlpha(infoBtnSrf, SDL_RLEACCEL, 0);
+
+	//SDL_BlitSurface(txtSrf, &drawnRect, overlay, &dstRect);
+	SDL_FreeSurface(txtSrf);
 }
 
 void GameMenu::initAchievements(){
@@ -560,7 +653,7 @@ std::string GameMenu::configButtonsJOY(){
         }*/
 		
 		SDL_FillRect(this->overlay, NULL, Constant::colors[clBackground].color);
-		Constant::drawTextCent(this->overlay, Fonts::getFont(Fonts::FONTSMALL), FRONTEND_BTN_TXT[i].c_str(), 0, 20, true, false, Constant::colors[clWhite].sdlColor, 0);
+		Fonts::drawTextCent(this->overlay, Fonts::getFont(Fonts::FONTSMALL), FRONTEND_BTN_TXT[i].c_str(), 0, 20, true, false, Constant::colors[clWhite].sdlColor, 0);
         salviaFlip(this->gameScreen);
 		/*
         while( SDL_PollEvent( &event ) ){
@@ -645,15 +738,14 @@ void GameMenu::drawFilters(ListMenu &listMenu){
 	int w = menuTextAreas[SYNOPSIS].getW() - 2*listMenu.marginX;
 	std::string val;
 	TTF_Font *fontbig = Fonts::getFont(Fonts::FONTBIG);
-	int face_h = TTF_FontLineSkip(fontbig);
 	SDL_Color lineTextColor;
-	const int sw_h = face_h - 2;
+	const int sw_h = face_h_big - 2;
 	const int sw_w = sw_h * 2;
 	auto opciones = configMenus->menuGameFilter->opciones;
 	const SDL_Color &black = Constant::colors[clBlack].sdlColor;
 	const SDL_Color &white = Constant::colors[clWhite].sdlColor;
 	const SDL_Color &menuBars = Constant::colors[clMenuBars].sdlColor;
-	SDL_Rect rectElem = {x, y, w, face_h};
+	SDL_Rect rectElem = {x, y, w, face_h_big};
 	
 	if (filterAlphaRec == NULL || filterAlphaRec->w != rectElem.w || filterAlphaRec->h != rectElem.h){
 		if (filterAlphaRec != NULL){
@@ -665,14 +757,14 @@ void GameMenu::drawFilters(ListMenu &listMenu){
 	JFY_TYPE justifyCenter(JFY_CENTER, w);
 
 	std::string filterTitle = Constant::string_format(LanguageManager::instance()->get("menu.filter.number"), listMenu.filteredGames.size());
-	SDL_Rect fillHeaderRect = {x, y, w, face_h + 3};
-	fastline(this->overlay, x, y + face_h + 3, x + w, y + face_h + 3, menuBars);
-	Constant::drawTextTransparent(overlay, fontbig, filterTitle.c_str(), x, y, Constant::colors[clWhite].sdlColor, 0, justifyCenter);
-	y += face_h + 7;
+	SDL_Rect fillHeaderRect = {x, y, w, face_h_big + 3};
+	fastline(this->overlay, x, y + face_h_big + 3, x + w, y + face_h_big + 3, menuBars);
+	Fonts::drawTextTransparent(overlay, fontbig, filterTitle.c_str(), x, y, Constant::colors[clWhite].sdlColor, 0, justifyCenter);
+	y += face_h_big + 7;
 
 	for (int i=0; i < (int)opciones.size(); i++){
 		if (i == configMenus->menuGameFilter->seleccionado){
-			rectElem.y = y + i * (face_h + 3);
+			rectElem.y = y + i * (face_h_big + 3);
 			if (filterAlphaRec)
 				SDL_BlitSurface(filterAlphaRec, NULL, overlay, &rectElem);
 			lineTextColor = black;
@@ -680,7 +772,7 @@ void GameMenu::drawFilters(ListMenu &listMenu){
 			lineTextColor = white;
 		}
 
-		SDL_Rect dimLeft = Constant::drawTextTransparent(overlay, fontbig, opciones[i]->titulo.c_str(), x, y + i * (face_h + 3), lineTextColor, 0);
+		SDL_Rect dimLeft = Fonts::drawTextTransparent(overlay, fontbig, opciones[i]->titulo.c_str(), x, y + i * (face_h_big + 3), lineTextColor, 0);
 		const int leftTxtDim = dimLeft.w + 3;
 		JFY_TYPE justifyHelper(JFY_RIGHT, w - leftTxtDim);
 
@@ -705,14 +797,14 @@ void GameMenu::drawFilters(ListMenu &listMenu){
 					val = LanguageManager::instance()->get("menu.filter.unknown");
 				}
 			}
-			SDL_Rect dimRight = Constant::drawTextTransparent(overlay, fontbig, val.c_str(), x + leftTxtDim, y + i * (face_h + 3), lineTextColor, 0, justifyHelper);
+			SDL_Rect dimRight = Fonts::drawTextTransparent(overlay, fontbig, val.c_str(), x + leftTxtDim, y + i * (face_h_big + 3), lineTextColor, 0, justifyHelper);
 
 		} else if (opciones[i]->tipo == OPC_BOOLEANA){
 			OpcionBool* b = (OpcionBool*)opciones[i];
 			bool enabled = *b->valor;
 			// 2. Dibujar el fondo del switch
 			const int sw_x = x + leftTxtDim + justifyHelper.getJustification(sw_w);
-			const int sw_y = y + i * (face_h + 3) + 1;
+			const int sw_y = y + i * (face_h_big + 3) + 1;
 			SDL_Rect baseRect = {sw_x, sw_y, sw_w, sw_h };
 			SDL_FillRect(overlay, &baseRect, enabled ? Constant::colors[clSwitchEnabled].color : Constant::colors[clSwitchDisabled].color);
 
@@ -741,7 +833,6 @@ void GameMenu::drawFilters(ListMenu &listMenu){
 void GameMenu::showScrapProcess(ListMenu &listMenu){
 	TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
     const int halfWidth = overlay->w / 2;
-	const int face_h_small = TTF_FontLineSkip(fontsmall);
 	const SDL_Color &textColor = Constant::colors[clWhite].sdlColor;
 
 	if (Scrapper::isScrapping()){
@@ -751,8 +842,8 @@ void GameMenu::showScrapProcess(ListMenu &listMenu){
 			str += " - " + LanguageManager::instance()->get("msg.download.media") + " " + Constant::TipoToStr(Scrapper::g_status.remainingMedia);
 		}
 		std::string str2 = std::string(Scrapper::g_status.emuActual) + " - " + std::string(Scrapper::g_status.juegoActual);
-		Constant::drawTextTransparent(overlay, fontsmall, str.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 - face_h_small / 2 : 0 , textColor, 0);
-		Constant::drawTextTransparent(overlay, fontsmall, str2.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 + face_h_small / 2: 0 , textColor, 0);
+		Fonts::drawTextTransparent(overlay, fontsmall, str.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 - face_h_small / 2 : 0 , textColor, 0);
+		Fonts::drawTextTransparent(overlay, fontsmall, str2.c_str(), halfWidth + halfWidth / 4, face_h_small < listMenu.marginY ? (listMenu.marginY - face_h_small) / 2 + face_h_small / 2: 0 , textColor, 0);
 	}
 
 	if (Scrapper::g_status.abortType == ABORT_LIMIT_CUOTA){
@@ -773,9 +864,8 @@ void GameMenu::showMessage(string msg){
     int startGray = 240;
     static const int bkg = SDL_MapRGB(this->overlay->format, startGray, startGray, startGray);
     TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
-	int face_h_small = TTF_FontLineSkip(fontsmall);
     
-    int rw = Fonts::getSize(Fonts::FONTSMALL, msg.c_str()) + 5; 
+    int rw = Fonts::getSize(Fonts::FONTSMALL, msg) + 5; 
     int rh = face_h_small * 2;
     int rx = (this->overlay->w - rw) / 2;
     int ry = (this->overlay->h - rh) / 2 + face_h_small / 2;
@@ -791,7 +881,7 @@ void GameMenu::showMessage(string msg){
     }
 
     //drawing_mode(DRAW_MODE_SOLID, this->overlay, rx, ry);
-	Constant::drawTextCent(overlay, fontsmall, msg.c_str(), 
+	Fonts::drawTextCent(overlay, fontsmall, msg.c_str(), 
 		this->overlay->w / 2, this->overlay->h / 2, true, true, Constant::colors[clBlack].sdlColor, -1);
 }
 
@@ -800,15 +890,14 @@ void GameMenu::showMessage(string msg){
  */
 void GameMenu::loadEmuCfg(ListMenu &menuData){
     TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
-	int face_h_small = TTF_FontLineSkip(fontsmall);
 	const int& cblack = Constant::colors[clBlack].color;
 	const SDL_Color& white = Constant::colors[clWhite].sdlColor;
 
     if (cfgLoader->emulators.size() == 0){
         SDL_FillRect(overlay, NULL, cblack);
         string msg = "There are no emulators configured. Exiting..."; 
-		Constant::drawTextCent(overlay, fontsmall, msg.c_str(), 0, 0, true, true,  white, -1);
-		Constant::drawTextCent(overlay, fontsmall, "Press a key to continue", 0, face_h_small + 3, true, true, white, -1);
+		Fonts::drawTextCent(overlay, fontsmall, msg.c_str(), 0, 0, true, true,  white, -1);
+		Fonts::drawTextCent(overlay, fontsmall, "Press a key to continue", 0, face_h_small + 3, true, true, white, -1);
 		salviaFlip(gameScreen);
         SDL_Delay(3000);
 		return;
@@ -830,9 +919,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 		std::string relativePath = menuData.listDir.getRelativePath();
 		if (!relativePath.empty()){
 			mapfilepath.append(Constant::getFileSep() + relativePath);
-			TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-			int face_h = TTF_FontLineSkip(fontMenu);
-			menuData.resizeMarginTop(face_h, overlay->h);
+			menuData.resizeMarginTop(face_h_big, overlay->h);
 		}
 		LOG_DEBUG("Listing directory: %s", mapfilepath.c_str());
 
@@ -844,7 +931,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 		if (isDebug()){
             SDL_FillRect(overlay, NULL, cblack);
             string msg = "searching " + mapfilepath; 
-			Constant::drawTextCent(overlay, fontsmall, msg.c_str(), overlay->w / 2, overlay->h / 2, true, true,  white, -1);
+			Fonts::drawTextCent(overlay, fontsmall, msg.c_str(), overlay->w / 2, overlay->h / 2, true, true,  white, -1);
         }
 
 		dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, "", emu->show_directories, false, false);
@@ -854,9 +941,9 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
             SDL_FillRect(overlay, NULL, cblack);
             string msg = "roms found: " + Constant::TipoToStr(files.size()); 
             string msg2 = "In dir " + mapfilepath;
-			Constant::drawTextCent(overlay, fontsmall, msg.c_str(), 0, 0, true, true,  white, -1);
-            Constant::drawTextCent(overlay, fontsmall, msg2.c_str(), 0, face_h_small + 3, true, true,  white, -1);
-			Constant::drawTextCent(overlay, fontsmall, "Press a key to continue", 0, (face_h_small + 3) * 2, true, true,  white, -1);
+			Fonts::drawTextCent(overlay, fontsmall, msg.c_str(), 0, 0, true, true,  white, -1);
+            Fonts::drawTextCent(overlay, fontsmall, msg2.c_str(), 0, face_h_small + 3, true, true,  white, -1);
+			Fonts::drawTextCent(overlay, fontsmall, "Press a key to continue", 0, (face_h_small + 3) * 2, true, true,  white, -1);
             SDL_Delay(3000);
         }
 
@@ -1016,9 +1103,7 @@ FILE_STATUS GameMenu::listableZip(ListMenu &listMenu, FILE_NAVIGATION nav){
 
 	if (ret != FS_NOZIP_TO_LIST){
 		//Cambiamos el tamanyo del listado para poder mostrar la ruta relativa de directorios
-		TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-		int face_h = TTF_FontLineSkip(fontMenu);
-		listMenu.resizeMarginTop(face_h, overlay->h);
+		listMenu.resizeMarginTop(face_h_big, overlay->h);
 	}
 	return ret;
 }
@@ -1069,9 +1154,7 @@ FILE_STATUS GameMenu::listableDir(ListMenu &listMenu, FILE_NAVIGATION nav){
 
 	if (ret == FS_DIR_NAVIGATION){
 		//Cambiamos el tamanyo del listado para poder mostrar la ruta relativa de directorios
-		TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
-		int face_h = TTF_FontLineSkip(fontMenu);
-		listMenu.resizeMarginTop(face_h, overlay->h);
+		listMenu.resizeMarginTop(face_h_big, overlay->h);
 	}
 	return ret;
 }
@@ -1216,8 +1299,8 @@ bool GameMenu::updateFps(){
 			//OutputDebugStringA(this->sync->fpsText);
 			//OutputDebugStringA("\n");
 			
-            fpsSurface = TTF_RenderUTF8(Fonts::getFont(Fonts::FONTSMALL), this->sync->fpsText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
-            cpuSurface = TTF_RenderUTF8(Fonts::getFont(Fonts::FONTSMALL), this->sync->cpuText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
+            fpsSurface = Fonts::renderUtf8Shaded(Fonts::getFont(Fonts::FONTSMALL), this->sync->fpsText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
+            cpuSurface = Fonts::renderUtf8Shaded(Fonts::getFont(Fonts::FONTSMALL), this->sync->cpuText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
             
             lastFpsUpdate = currentTick;
         }
@@ -1255,7 +1338,7 @@ bool GameMenu::updateFps(){
 				sprintf(memText, "MEM: %.0f%% (%.0fMB Free)", totalPercent, availMB);
 			}
 
-			memSurface = TTF_RenderText(Fonts::getFont(Fonts::FONTSMALL), memText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
+			memSurface = Fonts::renderUtf8Shaded(Fonts::getFont(Fonts::FONTSMALL), memText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
 			lastMemUpdate = currentTick;
 		}
 
@@ -1592,14 +1675,13 @@ void GameMenu::showSystemMessage(std::string text, uint32_t duration) {
     msg.ticks = SDL_GetTicks();
     
     std::string newText = Fonts::recortarAlTamanyo(text, this->overlay->w);
-	msg.cache = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTBIG), newText.c_str(), Constant::colors[clWhite].sdlColor);
+	msg.cache = Fonts::renderUtf8Blended(Fonts::getFont(Fonts::FONTBIG), newText.c_str(), Constant::colors[clWhite].sdlColor);
     
     if (msg.cache) {
-        int face_h = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG));
         msg.rect.x = 0;
         // La posicion Y se calculara dinamicamente al dibujar para que se apilen
         msg.rect.w = msg.cache->w + 2;
-        msg.rect.h = face_h + 4;
+        msg.rect.h = face_h_big + 4;
         messages.push_back(msg);
     }
 }
@@ -1739,9 +1821,9 @@ void GameMenu::renderCurrentAchievement() {
 }
 
 void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str, std::string line3Str, SDL_Surface *badge, SDL_Rect& lastMessagesArea){
-	SDL_Surface *line1 = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), line1Str.c_str(), Constant::colors[clWhite].sdlColor);
-	SDL_Surface *line2 = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), line2Str.c_str(), Constant::colors[clYellow].sdlColor);
-	SDL_Surface *line3 = TTF_RenderUTF8_Blended(Fonts::getFont(Fonts::FONTSMALL), line3Str.c_str(), Constant::colors[clBlue].sdlColor);
+	SDL_Surface *line1 = Fonts::renderUtf8Blended(Fonts::getFont(Fonts::FONTSMALL), line1Str.c_str(), Constant::colors[clWhite].sdlColor);
+	SDL_Surface *line2 = Fonts::renderUtf8Blended(Fonts::getFont(Fonts::FONTSMALL), line2Str.c_str(), Constant::colors[clYellow].sdlColor);
+	SDL_Surface *line3 = Fonts::renderUtf8Blended(Fonts::getFont(Fonts::FONTSMALL), line3Str.c_str(), Constant::colors[clBlue].sdlColor);
 
 	int maxW = line1->w > line2->w ? line1->w : line2->w;
 	maxW = maxW > line3->w ? maxW : line3->w; 
@@ -1818,7 +1900,7 @@ void GameMenu::processMessages() {
     if (messages.empty()) return;
 
     // 3. CALCULO DE POSICIONES Y DIBUJO
-    static int line_height = TTF_FontLineSkip(Fonts::getFont(Fonts::FONTBIG)) + 4;
+    static int line_height = face_h_big + 4;
     int currentY = this->overlay->h - line_height;
 
     // Usamos referencia directa en el bucle para mayor seguridad que el puntero mData
@@ -2002,7 +2084,7 @@ void GameMenu::drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int co
 
             // Volvemos a pintar el texto encima para que destaque bien sobre el nuevo fondo de seleccion
             if (font != nullptr && !keyb.caps[row][col].keyLabel.empty()) {
-                SDL_Surface* textSurface = TTF_RenderUTF8_Blended(font, keyb.caps[row][col].keyLabel.c_str(), keyb.textSelectedColor);
+                SDL_Surface* textSurface = Fonts::renderUtf8Blended(font, keyb.caps[row][col].keyLabel.c_str(), keyb.textSelectedColor);
                 if (textSurface != nullptr) {
                     SDL_Rect destRect;
                     destRect.x = targetX + (targetW - textSurface->w) / 2;
@@ -2078,7 +2160,7 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
                 SDL_FillRect(rawSurface, &rect, keyBg);
 
                 if (font != nullptr && !keyb.caps[row][col].keyLabel.empty()) {
-                    SDL_Surface* textSurface = TTF_RenderUTF8_Blended(font, keyb.caps[row][col].keyLabel.c_str(), keyb.textColor);
+                    SDL_Surface* textSurface = Fonts::renderUtf8Blended(font, keyb.caps[row][col].keyLabel.c_str(), keyb.textColor);
                     if (textSurface != nullptr) {
                         SDL_Rect destRect;
                         destRect.x = keybPosX + (keyb.caps[row][col].w - textSurface->w) / 2;

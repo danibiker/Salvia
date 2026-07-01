@@ -73,6 +73,7 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::corePce] = cfg::t_cfg_props(coreDefault + "pce", (int)0);
 	configMain[cfg::corePceCd] = cfg::t_cfg_props(coreDefault + "pcecd", (int)0);
 	configMain[cfg::coreFbn] = cfg::t_cfg_props(coreDefault + "fbn", (int)0);
+	configMain[cfg::showEmptyEmulators] = cfg::t_cfg_props("showEmptyEmulators", false);
 
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));

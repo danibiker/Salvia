@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug_beetlepcefast|Win32">
@@ -2622,7 +2622,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN;__x86_64__;HAVE_CHD;$(COMMON_PREPROCESSOR_RELEASE);DEBUG_LOG</PreprocessorDefinitions>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <CompileAs>CompileAsCpp</CompileAs>
       <EnablePREfast>false</EnablePREfast>
       <IntrinsicFunctions>false</IntrinsicFunctions>
@@ -2644,7 +2644,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <GenerateMapFile>true</GenerateMapFile>
-      <AssemblyDebug>true</AssemblyDebug>
+      <AssemblyDebug>false</AssemblyDebug>
     </Link>
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
@@ -2680,7 +2680,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -2716,7 +2715,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -2750,7 +2748,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -2797,7 +2794,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -2829,7 +2825,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -2862,7 +2857,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -2895,7 +2889,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -2928,7 +2921,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -2963,7 +2955,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -2996,7 +2987,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3027,7 +3017,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3058,7 +3047,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3089,7 +3077,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3120,7 +3107,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3151,7 +3137,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3184,7 +3169,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3217,7 +3201,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3253,7 +3236,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3287,7 +3269,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3319,7 +3300,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3398,7 +3378,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3437,7 +3416,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3479,7 +3457,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3521,7 +3498,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3563,7 +3539,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3604,7 +3579,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3642,7 +3616,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3674,7 +3647,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3706,7 +3678,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3738,7 +3709,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3770,7 +3740,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3802,7 +3771,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3812,7 +3780,6 @@
       <ExceptionHandling>Async</ExceptionHandling>
       <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
     </ClCompile>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3822,7 +3789,6 @@
       <ExceptionHandling>Async</ExceptionHandling>
       <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
     </ClCompile>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3832,7 +3798,6 @@
       <ExceptionHandling>Async</ExceptionHandling>
       <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
     </ClCompile>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3842,7 +3807,6 @@
       <ExceptionHandling>Async</ExceptionHandling>
       <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
     </ClCompile>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3865,7 +3829,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3889,7 +3852,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3912,7 +3874,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
@@ -3935,7 +3896,6 @@
     <PostBuildEvent>
       <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
     </PostBuildEvent>
-  
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>

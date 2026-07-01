@@ -162,10 +162,6 @@ class GameMenu : public Engine{
 		Scrapper scrapper;
 
 		map<int,int> gsTogdGameid;
-		bool cargarSystemAchievementTranslation(const std::string& nombreArchivo);
-		int translateSystemAchievement();
-
-		std::string configButtonsJOY();
 		CfgLoader *cfgLoader;
 		int status;
 		int lastStatus;
@@ -182,6 +178,9 @@ class GameMenu : public Engine{
         std::map<std::string, TextArea> menuTextAreas;
 		SDL_Rect lastMessagesArea;
 		SDL_Surface *filterAlphaRec;
+		SDL_Surface *infoBtnSrf;
+		int face_h_big;
+		int face_h_small;
 
 		// Carga asincrona del panel de assets — ver MenuAssetLoader arriba.
 		friend class MenuAssetLoader;
@@ -192,7 +191,9 @@ class GameMenu : public Engine{
 		bool             m_csInited;
 		MenuAssetLoader  m_menuAssetLoader;
 
-		
+		bool cargarSystemAchievementTranslation(const std::string& nombreArchivo);
+		int translateSystemAchievement();
+		std::string configButtonsJOY();
 		void processMessages();
 		void processMessagesAchievements();
 		void renderTrackers();
@@ -211,4 +212,6 @@ class GameMenu : public Engine{
 		void drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int col);
 		void drawKeyboard(TTF_Font* font, t_keyboard& keyb);
 		void drawFilters(ListMenu &listMenu);
+		void drawInfoButtons(SDL_Rect &rect);
+		
 };

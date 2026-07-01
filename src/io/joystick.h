@@ -84,6 +84,19 @@ struct t_controller_port {
 	}	
 };
 
+
+enum BTN_SHAPE{
+	BS_CIRCLE,
+	BS_DOUBLE_CIRCLE,
+	BS_IMAGE
+};
+
+struct t_info_btn{
+	BTN_SHAPE shape;
+	std::string text;
+	std::string description;
+};
+
 class Joystick{
     public:
         Joystick();
@@ -100,8 +113,8 @@ class Joystick{
 		std::string saveButtonsConfig(std::string, bool=true);
 		bool loadButtonsRetro(std::string);
 		void updateTypes();
-
 		HOTKEYS_LIST findHotkey();
+		void setInfoButtons();
 
 		//Array para poder detectar la pulsacion del start en xbox360
 		int8_t startHoldFrames[MAX_PLAYERS];
@@ -115,12 +128,14 @@ class Joystick{
 		tEvento evento;
 		//Se guardan las hotkeys en una clase aparte
 		Hotkeys* hotkeys;
+		//Se guardan los botones para mostrar informacion al usuario
+		std::vector<t_info_btn> infoButtons;
+		bool infoButtonsDirty;
+		
     private:
 
 		void configMapperRetro(t_joy_mapper& mapper, int joyId);
 		void configMapperFrontend(t_joy_mapper& mapper, int joyId);
-
-
 		template <size_t N>
 		void cargarValoresEnArray(int8_t (&arr)[N], std::string str, int maxValues) {
 			std::vector<std::string> v = Constant::splitChar(str, ',');
@@ -135,5 +150,6 @@ class Joystick{
 		int actualCursor;
 		CursorGestor *gestorCursor;
 		void setCursor(int cursor);
+		
 };
 
