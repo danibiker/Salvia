@@ -1441,6 +1441,9 @@ static MACHINE_DRIVER_START( ldrun3 )
 
 	/* video hardware */
 	MDRV_GFXDECODE(ldrun3_gfxdecodeinfo)
+
+	/* sound hardware */
+	MDRV_SOUND_ADD(SAMPLES, tr606_samples_interface )
 MACHINE_DRIVER_END
 
 
@@ -1456,6 +1459,9 @@ static MACHINE_DRIVER_START( ldrun4 )
 	MDRV_GFXDECODE(ldrun3_gfxdecodeinfo)
 	MDRV_VIDEO_START(ldrun4)
 	MDRV_VIDEO_UPDATE(ldrun4)
+
+	/* sound hardware */
+	MDRV_SOUND_ADD(SAMPLES, tr606_samples_interface )
 MACHINE_DRIVER_END
 
 
