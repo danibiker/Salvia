@@ -1,8 +1,11 @@
-/****************************************************************************
+/***************************************************************************************
  *  Genesis Plus
- *  Microwire Serial EEPROM (93C46 only) support
+ *  Inovation's Smash Controller support
  *
- *  Copyright (C) 2011-2026  Eke-Eke (Genesis Plus GX)
+ *  References:
+ *    https://gendev.spritesmind.net/forum/viewtopic.php?t=1083
+ *
+ *  Copyright (C) 2025  Eke-Eke (Genesis Plus GX)
  *
  *  Redistribution and use of this code or any derivative works are permitted
  *  provided that the following conditions are met:
@@ -36,37 +39,69 @@
  *
  ****************************************************************************************/
 
-#ifndef _EEPROM_93C_H_
-#define _EEPROM_93C_H_
+#include "shared.h"
 
-typedef enum
+INLINE unsigned char smash_read(int port)
 {
-  WAIT_STANDBY,
-  WAIT_START,
-  GET_OPCODE,
-  WRITE_WORD,
-  READ_WORD
-} T_STATE_93C;
+  /* 9-buttons input state */
+  unsigned int temp = input.pad[port];
 
-typedef struct
+  /* 4-bit output (active-low) */
+  unsigned char data;
+
+  /* 9-Line to 4-Line decoding (74LS147 chip) */
+  if (temp & INPUT_SMASH_UP)
+  {
+    data = 0x9;
+  }
+  else if (temp & INPUT_SMASH_DOWN_RIGHT)
+  {
+    data = 0xD;
+  }
+  else if (temp & INPUT_SMASH_DOWN)
+  {
+    data = 0x2;
+  }
+  else if (temp & INPUT_SMASH_UP_LEFT)
+  {
+    data = 0x6;
+  }
+  else if (temp & INPUT_SMASH_DOWN_LEFT)
+  {
+    data = 0x3;
+  }
+  else if (temp & INPUT_SMASH_CENTER)
+  {
+    data = 0x7;
+  }
+  else if (temp & INPUT_SMASH_LEFT)
+  {
+    data = 0xA;
+  }
+  else if (temp & INPUT_SMASH_RIGHT)
+  {
+    data = 0xE;
+  }
+  else if (temp & INPUT_SMASH_UP_RIGHT)
+  {
+    data = 0xB;
+  }
+  else
+  {
+    data = 0xF;
+  }
+
+  /* TL/TR are connected to GND and TH is disconnected */
+  return data | 0x40;
+}
+
+
+unsigned char smash_1_read(void)
 {
-  uint8 enabled;  /* 1: chip enabled */
-  uint8 cs;       /* CHIP SELECT line state */
-  uint8 clk;      /* CLK line state */
-  uint8 data;     /* DATA OUT line state */
-  uint8 cycles;   /* current operation cycle */
-  uint8 we;       /* 1: write enabled */
-  uint8 opcode;   /* 8-bit opcode + address */
-  uint16 buffer;  /* 16-bit data buffer */
-  T_STATE_93C state; /* current operation state */
-} T_EEPROM_93C;
+  return smash_read(0);
+}
 
-/* global variables */
-extern T_EEPROM_93C eeprom_93c;
-
-/* Function prototypes */
-extern void eeprom_93c_init(void);
-extern void eeprom_93c_write(unsigned char data);
-extern unsigned char eeprom_93c_read(void);
-
-#endif
+unsigned char smash_2_read(void)
+{
+  return smash_read(4);
+}
