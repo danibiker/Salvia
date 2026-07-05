@@ -869,6 +869,32 @@ static void fx_ldb_r11 (void)
 }
 
 /* 4c - plot - plot pixel with R1, R2 as x, y and the color register as the color*/
+/* SuperFX plot transparency (the hardware PLOT_EXEC test): in each colour
+ * depth only the bits that actually exist are compared against zero.
+ *   mode 0 (2bpp): colour & 0x03
+ *   mode 1 (4bpp): colour & 0x0f
+ *   mode 2 / 3   : colour & 0xff, or & 0x0f when the freeze-high bit (POR bit
+ *                  3) is set
+ * POR bit 0 (transparency disabled) always forces the pixel opaque. */
+static int fx_plot_opaque (void)
+{
+	uint8_t c = (uint8_t) GSU.vColorReg;
+
+	if (GSU.vPlotOptionReg & 0x01)
+		return TRUE;
+	switch (GSU.vMode)
+	{
+		case 0:
+			return (c & 0x03) != 0;
+		case 1:
+			return (c & 0x0f) != 0;
+		default:
+			if (GSU.vPlotOptionReg & 0x08)
+				return (c & 0x0f) != 0;
+			return (c & 0xff) != 0;
+	}
+}
+
 static void fx_plot_2bit (void)
 {
    uint32_t x = USEX8(R1);
@@ -879,7 +905,7 @@ static void fx_plot_2bit (void)
 	CLRFLAGS;
 	R1++;
 
-	if (!(GSU.vPlotOptionReg & 0x01) && !(COLR & 0xf))
+	if (!fx_plot_opaque())
 		return;
 
 	if (GSU.vPlotOptionReg & 0x02)
@@ -917,6 +943,8 @@ static void fx_rpix_2bit (void)
 	DREG = 0;
 	DREG |= ((uint32_t) ((a[0] & v) != 0)) << 0;
 	DREG |= ((uint32_t) ((a[1] & v) != 0)) << 1;
+	GSU.vSign = DREG;
+	GSU.vZero = DREG;
 	TESTR14;
 }
 
@@ -931,7 +959,7 @@ static void fx_plot_4bit (void)
 	CLRFLAGS;
 	R1++;
 
-	if (!(GSU.vPlotOptionReg & 0x01) && !(COLR & 0xf))
+	if (!fx_plot_opaque())
 		return;
 
 	if (GSU.vPlotOptionReg & 0x02)
@@ -982,6 +1010,8 @@ static void fx_rpix_4bit (void)
 	DREG |= ((uint32_t) ((a[0x01] & v) != 0)) << 1;
 	DREG |= ((uint32_t) ((a[0x10] & v) != 0)) << 2;
 	DREG |= ((uint32_t) ((a[0x11] & v) != 0)) << 3;
+	GSU.vSign = DREG;
+	GSU.vZero = DREG;
 	TESTR14;
 }
 
@@ -998,13 +1028,7 @@ static void fx_plot_8bit (void)
 	R1++;
 
 	c = (uint8_t) GSU.vColorReg;
-	if (!(GSU.vPlotOptionReg & 0x10))
-	{
-		if (!(GSU.vPlotOptionReg & 0x01) && !(c & 0xf))
-			return;
-	}
-	else
-	if (!(GSU.vPlotOptionReg & 0x01) && !c)
+	if (!fx_plot_opaque())
 		return;
 
 	a = GSU.apvScreen[y >> 3] + GSU.x[x >> 3] + ((y & 7) << 1);
@@ -1073,6 +1097,7 @@ static void fx_rpix_8bit (void)
 	DREG |= ((uint32_t) ((a[0x21] & v) != 0)) << 5;
 	DREG |= ((uint32_t) ((a[0x30] & v) != 0)) << 6;
 	DREG |= ((uint32_t) ((a[0x31] & v) != 0)) << 7;
+	GSU.vSign = DREG;
 	GSU.vZero = DREG;
 	TESTR14;
 }
@@ -2863,8 +2888,7 @@ static void fx_lmult (void)
 	DREG = v;
 	GSU.vSign = v;
 	GSU.vZero = v;
-	/* XXX: R6 or R4?*/
-	GSU.vCarry = (R4 >> 15) & 1; /* should it be bit 15 of R4 instead ?*/
+	GSU.vCarry = (R4 >> 15) & 1;
 	TESTR14;
 	CLRFLAGS;
 }
@@ -4498,15 +4522,29 @@ static void FxReset (struct FxInfo_s *psFxInfo)
 
 void S9xResetSuperFX (void)
 {
-   float frames_per_second;
+   /* GSU cycles per scanline.  A scanline lasts SNES_CYCLES_PER_SCANLINE (1364)
+    * master-clock cycles, so the number of GSU cycles that elapse in one line is
+    *
+    *    speedPerLine = SuperFXSpeedPerLine * 1364 / master_clock
+    *
+    * This is the hardware-exact form: it uses the real master clock and dot
+    * count rather than a rounded 50/60 Hz refresh.  fps and V_Max both cancel
+    * out, since master_clock == fps * V_Max * SNES_CYCLES_PER_SCANLINE, so the
+    * divisor is a nonzero compile-time constant (no V_Max==0 hazard).
+    *
+    * Integer math throughout: the SNES has no FPU, and this value is the per-line
+    * SuperFX instruction budget, so it must be bit-identical across platforms for
+    * deterministic emulation (netplay/savestates/runahead).  The master-clock
+    * macros are doubles, but the casts are compile-time constant conversions
+    * (21477272.0 / 21281370.0 are exact), so no runtime float op is emitted; the
+    * SuperFXSpeedPerLine * 1364 product needs the 64-bit intermediate.
+    *
+    * FIXME: Snes9x can't execute CPU and SuperFX at a time. Don't ask me what
+    * is the 0.417 baked into Settings.SuperFXSpeedPerLine :P */
+   uint32_t master_clock = Settings.PAL ? (uint32_t) PAL_MASTER_CLOCK : (uint32_t) NTSC_MASTER_CLOCK;
 
-   /* FIXME: Snes9x can't execute CPU and SuperFX at a time. Don't ask me what is 0.417 :P*/
-   if (Settings.PAL)
-      frames_per_second = 50.0f;
-   else
-      frames_per_second = 60.0f;
-
-   SuperFX.speedPerLine = (uint32_t) (Settings.SuperFXSpeedPerLine * ((1.0f / frames_per_second) / ((float) (Timings.V_Max))));
+   SuperFX.speedPerLine = (uint32_t) ((uint64_t) Settings.SuperFXSpeedPerLine
+                                      * SNES_CYCLES_PER_SCANLINE / master_clock);
    SuperFX.oneLineDone = FALSE;
    SuperFX.vFlags = 0;
    FxReset(&SuperFX);
@@ -4568,6 +4606,51 @@ static void fx_writeRegisterSpace (void)
 
 /* NOTE: no use to return anything here*/
 
+/* --- Optional per-opcode GSU cycle-cost model (experimental) -------------------
+ * When fx_cycle_accuracy is 0 the executor is bit-identical to the historical
+ * instruction-count model.  When 1, each opcode is charged an approximate GSU
+ * cycle cost so that multiplies (incl. the MS0 fast/slow bit), RAM/ROM access
+ * and plots consume the per-line budget at hardware-like relative rates.
+ *
+ * The per-line budget is scaled by FX_CYC_AVG_NUM/FX_CYC_AVG_DEN (~2.4), which
+ * un-bakes the legacy 0.417 average-instructions-per-cycle factor so the *average*
+ * throughput (and therefore the overclock scaling, which multiplies speedPerLine)
+ * is preserved; only the per-op distribution changes.  Integer only -> the model
+ * stays deterministic for netplay/savestates/runahead. */
+#define FX_CYC_BASE	2
+#define FX_CYC_MEM	3
+#define FX_CYC_PLOT	3
+#define FX_CYC_MULT	2
+#define FX_CYC_FMULT	3
+#define FX_CYC_AVG_NUM	12	/* budget scale numerator   (12/5 == 2.4 ~= 1/0.417) */
+#define FX_CYC_AVG_DEN	5	/* budget scale denominator */
+
+int		fx_cycle_accuracy = 1;	/* set from the core option (default on) */
+static uint8_t	fx_OpcodeCycles[1024];	/* indexed by (vStatusReg & 0x300) | opcode, i.e. 0..0x3ff */
+static uint32_t	fx_multWait;
+static int	fx_cycleTableReady = 0;
+
+static void fx_initCycleTable (void)
+{
+	int alt, op;
+	for (op = 0; op < 1024; op++) fx_OpcodeCycles[op] = FX_CYC_BASE;
+	for (alt = 0; alt < 4; alt++)
+	{
+		int b = alt << 8;
+		for (op = 0x30; op <= 0x3b; op++) fx_OpcodeCycles[b | op] = FX_CYC_MEM;	/* stw/stb  */
+		for (op = 0x40; op <= 0x4b; op++) fx_OpcodeCycles[b | op] = FX_CYC_MEM;	/* ldw/ldb  */
+		fx_OpcodeCycles[b | 0x4c] = FX_CYC_PLOT;				/* plot/rpix*/
+		for (op = 0x80; op <= 0x8f; op++) fx_OpcodeCycles[b | op] = FX_CYC_MULT;	/* mult/umult */
+		fx_OpcodeCycles[b | 0x9f] = FX_CYC_FMULT;				/* fmult/lmult */
+		fx_OpcodeCycles[b | 0xef] = FX_CYC_MEM;					/* getb*    */
+	}
+	fx_OpcodeCycles[0x90] = FX_CYC_MEM;	/* sbk  */
+	fx_OpcodeCycles[0xdf] = FX_CYC_MEM;	/* getc */
+	for (op = 0xa0; op <= 0xaf; op++) { fx_OpcodeCycles[(1<<8)|op] = FX_CYC_MEM; fx_OpcodeCycles[(2<<8)|op] = FX_CYC_MEM; } /* lms/sms */
+	for (op = 0xf0; op <= 0xff; op++) { fx_OpcodeCycles[(1<<8)|op] = FX_CYC_MEM; fx_OpcodeCycles[(2<<8)|op] = FX_CYC_MEM; } /* lm/sm   */
+	fx_cycleTableReady = 1;
+}
+
 void S9xSuperFXExec (void)
 {
 	uint8_t address_valid;
@@ -4578,6 +4661,9 @@ void S9xSuperFXExec (void)
 
 	/* Read registers and initialize GSU session*/
 	fx_readRegisterSpace();
+
+	if (fx_cycle_accuracy && !fx_cycleTableReady) fx_initCycleTable();
+	fx_multWait = (GSU.pvRegisters[GSU_CFGR] & 0x20) ? 0 : 1;
    
 	/* Check if we start inside the cache*/
 	if (GSU.bCacheActive && R15 >= GSU.vCacheBaseReg && R15 < (GSU.vCacheBaseReg + 512))
@@ -4592,13 +4678,32 @@ void S9xSuperFXExec (void)
 		CF(IRQ);
       
 		/* GSU executions functions*/
-		GSU.vCounter = nInstructions;
-      while (TF(G) && GSU.vCounter-- > 0)
+		if (!fx_cycle_accuracy)
 		{
-			/* Execute instruction from the pipe, and fetch next byte to the pipe*/
-			uint32_t	vOpcode = (uint32_t) PIPE;
-			FETCHPIPE;
-			(*fx_OpcodeTable[(GSU.vStatusReg & 0x300) | vOpcode])();
+			GSU.vCounter = nInstructions;
+			while (TF(G) && GSU.vCounter-- > 0)
+			{
+				/* Execute instruction from the pipe, and fetch next byte to the pipe*/
+				uint32_t	vOpcode = (uint32_t) PIPE;
+				FETCHPIPE;
+				(*fx_OpcodeTable[(GSU.vStatusReg & 0x300) | vOpcode])();
+			}
+		}
+		else
+		{
+			/* Per-opcode cycle budget (see fx_initCycleTable above). */
+			GSU.vCounter = (uint32_t)((uint64_t)nInstructions * FX_CYC_AVG_NUM / FX_CYC_AVG_DEN);
+			while (TF(G) && GSU.vCounter > 0)
+			{
+				uint32_t	vOpcode = (uint32_t) PIPE;
+				uint32_t	idx, cost;
+				FETCHPIPE;
+				idx = (GSU.vStatusReg & 0x300) | vOpcode;
+				(*fx_OpcodeTable[idx])();
+				cost = fx_OpcodeCycles[idx];
+				if ((vOpcode & 0xf0) == 0x80) cost += fx_multWait;	/* MS0=0 slow multiply */
+				GSU.vCounter = (GSU.vCounter > cost) ? (GSU.vCounter - cost) : 0;
+			}
 		}
 	}
 	else
