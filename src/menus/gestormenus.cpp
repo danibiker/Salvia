@@ -19,6 +19,7 @@ SDL_Surface* GestorMenus::imgText;
 std::string syncOptionsStrings[TOTAL_VIDEO_SYNC];
 std::string aspectRatioStrings[TOTAL_VIDEO_RATIO];
 std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
+std::string videoIntScaleStrings[TOTAL_INT_SCALE];
 std::string videoShaderStrings[TOTAL_SHADERS];
 std::string ACTION_ASK_STR[MAX_ASK];
 std::string TipoKeyStr[KEY_JOY_MAX];
@@ -295,7 +296,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	//Escalado de video
     std::vector<std::string> filtros;
 
-#ifdef _XBOX
+#if defined(_XBOX) || defined(SALVIA_GPU_VIDEO)
 	for (int i=0; i < TOTAL_SHADERS; i++){
 		videoShaderStrings[i] = LanguageManager::instance()->get("menu.video.shader" + Constant::TipoToStr(i));
 		filtros.push_back(videoShaderStrings[i]);
@@ -310,6 +311,15 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 #endif
 	
 	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.integerscale"), &refConfig->configMain[cfg::integerScale].getBoolRef()));
+	
+	std::vector<std::string> scaleInt;
+	for (int i=0; i < TOTAL_INT_SCALE; i++){
+		videoIntScaleStrings[i] = LanguageManager::instance()->get("menu.options.integerscale.type" + Constant::TipoToStr(i));
+		scaleInt.push_back(videoIntScaleStrings[i]);
+	}
+	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.integerscale.type"), scaleInt, &refConfig->configMain[cfg::scaleIntMode].getIntRef()));
+
+
 	//Animacion del fondo de pantalla del menu
 	std::vector<std::string> bgMenu;
 	for (int i=0; i < BG_MAX; i++){
@@ -335,8 +345,6 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.frontassign"), menuAssignFrontend));
 	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.hotkeys"), menuHotkeys));
 	menuEntrada->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.saveassign"), &GestorMenus::guardarJoysticks, joystick, this));
-	menuEntrada->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savecoreassign"), &GestorMenus::guardarCoreJoysticks, joystick, this));
-	menuEntrada->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savegameassign"), &GestorMenus::guardarGameJoysticks, joystick, this));
 
 	//Traducciones para las teclas
 	std::size_t num_elementos = sizeof(FRONTEND_BTN_VAL) / sizeof(FRONTEND_BTN_VAL[0]);
@@ -372,6 +380,10 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 		menuAssignRetro->opciones.push_back(new OpcionSubMenu(controlStr, menuControlesPuerto));
 		todosLosMenus.push_back(menuControlesPuerto);
 	}
+
+	menuAssignRetro->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savecoreassign"), &GestorMenus::guardarCoreJoysticks, joystick, this));
+	menuAssignRetro->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savegameassign"), &GestorMenus::guardarGameJoysticks, joystick, this));
+
 
 	//Poblar menu hotkeys
 	poblarMenuHotkeys(menuHotkeys, joystick);

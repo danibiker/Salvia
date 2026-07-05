@@ -83,11 +83,13 @@ void XBOX_FreeYUVOverlay(_THIS, SDL_Overlay *overlay);
    E.g. 4.0f/3.0f for 4:3, 16.0f/9.0f for 16:9.
    Can be called at any time without recreating the texture or surface. */
 void SDL_XBOX_SetDisplaySize(float aspect_ratio);
+SDL_Surface* XBOX_ResizeGameTexture(int width, int height, int bpp);
 
 /* Set display mode: 1 = scale to fill screen (default), 0 = pixel perfect size.
    In pixel perfect mode, the quad is tex_size * effect_scale, centered on screen.
    E.g. 320x240 with Scale2x = 640x480 centered. */
 void SDL_XBOX_SetDisplayFullscreen(int fullscreen);
+void SDL_XBOX_SetDisplayOverflow(int overflow);
 
 /* Get the overlay surface (1280x720, 32bpp ARGB).
    The overlay is drawn on top of the game quad with alpha blending.

@@ -212,7 +212,7 @@ void MenuAssetLoader::loadMenuText(const std::string& menuTxtId,
 void MenuAssetLoader::run()
 {
     while (!m_stop) {
-        WaitForSingleObject(m_event, 250);
+        WaitForSingleObject(m_event, 5000);
         if (m_stop) break;
 
         while (!m_stop && m_owner->status == EMU_MENU) {
@@ -221,6 +221,7 @@ void MenuAssetLoader::run()
             int overlayW, synopsisMaxW;
             LONG mySeq;
 
+            // 1. Bloqueamos y copiamos los datos
             EnterCriticalSection(&m_reqCS);
             fileNoExt    = m_pendFileNoExt;
             assetsDir    = m_pendAssetsDir;
@@ -228,27 +229,38 @@ void MenuAssetLoader::run()
             overlayW     = m_pendOverlayW;
             synopsisMaxW = m_pendSynopsisMaxW;
             mySeq        = m_seqSubmitted;
+
+            // 2. CLAVE: Limpiamos la peticion original para que no se procese dos veces
+            m_pendFileNoExt.clear(); 
             LeaveCriticalSection(&m_reqCS);
 
+            // Si no hay archivo nuevo que cargar, salimos del bucle interno de inmediato
             if (fileNoExt.empty()) break;
 
             const std::string sep = std::string(Constant::tempFileSep);
 
             #define MAL_CANCELLED() (m_seqSubmitted != mySeq || m_stop)
 
+            // Proceso de carga por pasos
             loadMenuText(SYNOPSIS, assetsDir, fileNoExt);
-            if (MAL_CANCELLED()) continue;
+            if (MAL_CANCELLED()) continue; // Si se cancela, vuelve arriba (pero fileNoExt ya estara vacio gracias al paso 2 y saldra)
+
             loadMenuImage(SNAP, assetsDir, fileNoExt, format);
-            if (overlayW < 640) break;
+            if (overlayW < 640) break; // Termina la carga de este juego de forma prematura y segura
             if (MAL_CANCELLED()) continue;
+
             loadMenuImage(BOX2D, assetsDir, fileNoExt, format);
             if (MAL_CANCELLED()) continue;
+
             loadMenuImage(SNAPTIT, assetsDir, fileNoExt, format);
 
             #undef MAL_CANCELLED
 
+            // Si el usuario cambió de juego en el último milisegundo, repetimos para verificar
             if (m_seqSubmitted != mySeq) continue;
-            break;
+            
+            // Todo se cargó con éxito para este juego, salimos del bucle interno
+            break; 
         }
     }
 }

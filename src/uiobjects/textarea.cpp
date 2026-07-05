@@ -340,8 +340,8 @@ void TextArea::calcTicks(GameTicks gameTicks, int& scrollDesp, float& pixelDesp)
 
     const int   TICKS_PER_LINE  = 120;
     const int   TICKS_PER_PIXEL = 1;
-    const int   LOOPS_TO_START  = 1;
-    const int   LOOPS_TO_END    = LOOPS_TO_START * 6;
+    const int   LOOPS_TO_START  = 4;
+    const int   LOOPS_TO_END    = LOOPS_TO_START * 2;
     const float PIXEL_STEP      = static_cast<float>(face_h + lineSpace)
                                              / (TICKS_PER_LINE / TICKS_PER_PIXEL);
     const float PIXEL_MAX       = static_cast<float>(face_h + lineSpace);

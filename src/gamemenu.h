@@ -81,12 +81,25 @@ enum FILE_NAVIGATION
 	FS_DIR_BACK
 };
 
+struct t_achievement_surface{
+	SDL_Surface *srf;
+	SDL_Rect pos;
+	SDL_Rect lastPos;
+
+	t_achievement_surface(){
+		pos.x = pos.y = pos.w = pos.h = 0;
+		lastPos.x = lastPos.y = lastPos.w = lastPos.h = 0;
+		srf = NULL;
+	}
+};
+
 class GameMenu : public Engine{
     public:
         GameMenu(CfgLoader *cfgLoader);
         ~GameMenu();
 		SDL_Surface *bg_screenshot;
 		Image bg_image;
+		Image title_image;
 		GameTicks gameTicks;
 		GestorMenus *configMenus;
 		ScalerFunc current_scaler;
@@ -97,6 +110,7 @@ class GameMenu : public Engine{
 		int *current_shader;
 		int *current_sync;
 		bool *current_integer_scale;
+		int *current_integer_scale_type;
 		bool romLoaded;
 		Uint32 uBkgColor;
 
@@ -148,7 +162,7 @@ class GameMenu : public Engine{
 		void showLangSystemMessage(std::string, uint32_t);
 		void startScrapping();
 		void loadGameAchievements(unzippedFileInfo& unzipped);
-		void showAchievementMessage(std::string line1Str, std::string line2Str, std::string line3Str, SDL_Surface *badge, SDL_Rect& lastMessagesArea);
+		void showAchievementMessage(const std::string &line1Str, const std::string &line2Str, const std::string &line3Str, SDL_Surface *badge);
 		void clearOverlay();
 		void clearOverlayRect(SDL_Rect&);
 		void fillOverlay(int colorIndex);
@@ -176,7 +190,7 @@ class GameMenu : public Engine{
 		bool *mustUpdateFps;
         std::map<std::string, Image> menuImages;
         std::map<std::string, TextArea> menuTextAreas;
-		SDL_Rect lastMessagesArea;
+		t_achievement_surface achievement_surface;
 		SDL_Surface *filterAlphaRec;
 		SDL_Surface *infoBtnSrf;
 		int face_h_big;
@@ -213,5 +227,7 @@ class GameMenu : public Engine{
 		void drawKeyboard(TTF_Font* font, t_keyboard& keyb);
 		void drawFilters(ListMenu &listMenu);
 		void drawInfoButtons(SDL_Rect &rect);
-		
+		void drawTitle(ListMenu &listMenu, TTF_Font *fontBig);
+		void drawSelectedGameAssets(ListMenu &listMenu, GameFile *game);
+		string getAssetsDir(ConfigEmu *emu);
 };

@@ -122,6 +122,7 @@ int have_vertexbuffer=0;
 int have_direct3dtexture=0;
 static float g_display_aspect_ratio = 0.0f; /* 0 = use native pixel ratio */
 static int g_display_fullscreen = 1; /* 1 = scale to fill screen, 0 = pixel perfect size */
+static int g_display_overflow   = 0; /* 1 = integer scale puede salirse de pantalla */
 static int g_texture_width = 0;
 static int g_texture_height = 0;
 static int g_screen_rotation = 0; /* 0..3 = 0/90/180/270 deg CCW (libretro convention) */
@@ -438,11 +439,11 @@ void XBOX_SetVideoFilter(int filterType)
 static int XBOX_GetEffectScale(void)
 {
 	switch (g_current_effect) {
-		case 7:  return 2; /* HQ2x */
-		case 8:  return 3; /* HQ3x */
-		case 9:  return 4; /* HQ4x */
-		case 10: return 3; /* xBR-lv2-fast */
-		case 11: return 3; /* 5xBR-Hyllian (rendered at 3x via HQ3x infra) */
+//		case 7:  return 2; /* HQ2x */
+//		case 8:  return 3; /* HQ3x */
+//		case 9:  return 4; /* HQ4x */
+//		case 10: return 3; /* xBR-lv2-fast */
+//		case 11: return 3; /* 5xBR-Hyllian (rendered at 3x via HQ3x infra) */
 		default: return 1; /* 0=Nearest, 1=Sharp-Bilinear, 2=LCD-Grid-v2,
 		                      3=Scanlines, 4=CRT-Geom, 5=CRT-Lottes, 6=CRT-Easymode */
 	}
@@ -509,12 +510,12 @@ static void XBOX_UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
 			   de emuladores: lineas horizontales nitidas, ancho proporcional. */
 			int maxscale_h, maxscale_w, maxscale;
 
-			if (scale == 1) {
+			if (scale == 1 || g_display_overflow) {
 				/* Factor 1 = filtros sin escalado propio (nearest, scanlines, crt).
 				   Subimos al maximo factor entero que cabe en el backbuffer. */
 				maxscale_h = (int)floor(bbh / (float)tex_h);
 				maxscale_w = (int)floor(bbw / ((float)tex_h * aspect_ratio));
-				maxscale = min(maxscale_h, maxscale_w);
+				maxscale = g_display_overflow ? max(maxscale_h, maxscale_w) : min(maxscale_h, maxscale_w);
 				if (maxscale > 1) {
 					scale = maxscale;
 				}
@@ -526,8 +527,10 @@ static void XBOX_UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
 			display_w = (float)floor(display_h * aspect_ratio);
 		} else {
 			/* RATIO_CORE / aspect_ratio<=0: pixel perfect estricto en ambos ejes. */
-			if (scale == 1 && tex_w > 0 && tex_h > 0){
-				int maxscale = min((int)floor(bbw / (float)tex_w), (int)floor(bbh / (float)tex_h));
+			if ((scale == 1 || g_display_overflow) && tex_w > 0 && tex_h > 0){
+				int maxscale_w = (int)floor(bbw / (float)tex_w);
+				int maxscale_h = (int)floor(bbh / (float)tex_h);
+				int maxscale = g_display_overflow ? max(maxscale_w, maxscale_h) : min(maxscale_w, maxscale_h);
 				if (maxscale > 1){
 					scale = maxscale;
 				}
@@ -538,7 +541,7 @@ static void XBOX_UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
 		}
 
 		/* Clamp to backbuffer if larger */
-		if (display_w > bbw || display_h > bbh) {
+		if (!g_display_overflow && (display_w > bbw || display_h > bbh)) {
 			float clamp_ratio = aspect_ratio;
 			if (clamp_ratio <= 0.0f)
 				clamp_ratio = (float)tex_w / (float)tex_h;
@@ -624,6 +627,13 @@ void SDL_XBOX_SetDisplaySize(float aspect_ratio)
 void SDL_XBOX_SetDisplayFullscreen(int fullscreen)
 {
 	g_display_fullscreen = fullscreen;
+	XBOX_UpdateVertexBuffer(g_texture_width, g_texture_height, g_display_aspect_ratio);
+	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
+}
+
+void SDL_XBOX_SetDisplayOverflow(int overflow)
+{
+	g_display_overflow = overflow;
 	XBOX_UpdateVertexBuffer(g_texture_width, g_texture_height, g_display_aspect_ratio);
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 }
@@ -970,6 +980,120 @@ SDL_Surface *XBOX_SetVideoMode(_THIS, SDL_Surface *current,
  
 	/* We're done */
 	return(current);
+}
+
+/* =====================================================================
+ * XBOX_ResizeGameTexture - Redimensiona la textura del juego en caliente
+ * SIN tocar el modo de video ni el backbuffer.
+ *
+ * A diferencia de SDL_SetVideoMode (que libera y recrea shaders, vertex
+ * buffers, declaraciones y hace un Clear+Present forzado produciendo un
+ * flash negro), esta funcion solo cambia el tamano de la textura donde
+ * el core escribe los frames.  Los shaders, el vertex buffer (quad
+ * fullscreen) y el resto del pipeline D3D permanecen intactos.
+ *
+ * Equivalente funcional a WinD3D9_SetGameMode en la rama Windows.
+ * Llamar desde hw_refresh cuando cambia la resolucion del core.
+ *
+ * Parametros:
+ *   width, height  - nueva resolucion nativa del core
+ *   bpp            - 16 (RGB565) o 32 (X8R8G8B8)
+ * Retorno:
+ *   SDL_Surface*   - el surface del gameScreen con pixels apuntando
+ *                    a la textura D3D lockeada permanentemente, o NULL
+ *                    si falla la creacion de la textura.
+ * =================================================================== */
+SDL_Surface* XBOX_ResizeGameTexture(int width, int height, int bpp)
+{
+	SDL_VideoDevice *this = current_video;
+	D3DLOCKED_RECT d3dlr;
+	int pixel_mode, pitch_bpp;
+	Uint32 Rmask, Gmask, Bmask;
+	HRESULT ret;
+
+	if (!this || !this->hidden) return NULL;
+
+	switch (bpp) {
+		case 8:
+		case 16:
+			pixel_mode = D3DFMT_LIN_R5G6B5; pitch_bpp = 16;
+			Rmask = 0x0000F800; Gmask = 0x000007E0; Bmask = 0x0000001F;
+			break;
+		case 24:
+		case 32:
+			pixel_mode = D3DFMT_LIN_X8R8G8B8; pitch_bpp = 32;
+			Rmask = 0x00FF0000; Gmask = 0x0000FF00; Bmask = 0x000000FF;
+			break;
+		default:
+			return NULL;
+	}
+
+	/* Liberar textura D3D anterior */
+	if (this->hidden->SDL_primary) {
+		IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+		IDirect3DDevice9_SetTexture(D3D_Device, 0, NULL);
+		IDirect3DTexture9_Release(this->hidden->SDL_primary);
+		this->hidden->SDL_primary = NULL;
+	}
+
+	/* Crear textura D3D */
+	ret = IDirect3DDevice9_CreateTexture(D3D_Device, width, height, 1, 0,
+		pixel_mode, D3DUSAGE_CPU_CACHED_MEMORY,
+		(D3DTexture**)&this->hidden->SDL_primary, NULL);
+	if (ret != D3D_OK) { this->hidden->SDL_primary = NULL; return NULL; }
+	have_direct3dtexture = 1;
+
+	/* Lock permanente: core escribe directo a VRAM (zero-copy) */
+	ret = IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
+	if (ret != D3D_OK) {
+		IDirect3DTexture9_Release(this->hidden->SDL_primary);
+		this->hidden->SDL_primary = NULL;
+		return NULL;
+	}
+
+	/* Liberar el surface SDL anterior (si existe) y crear uno nuevo
+	 * apuntando a la textura D3D lockeada, igual que XBOX_SetVideoMode.
+	 * NO reusamos SDL_ReallocFormat: crear surface nuevo evita
+	 * problemas de coherencia con el format del overlay. */
+	if (this->screen) {
+		/* Los pixels apuntan a la textura D3D anterior (ya liberada),
+		 * asi que SDL no debe free() el buffer. */
+		this->screen->pixels = NULL;
+		SDL_FreeSurface(this->screen);
+	}
+	this->screen = SDL_CreateRGBSurface(SDL_SWSURFACE | SDL_PREALLOC,
+		width, height, pitch_bpp, Rmask, Gmask, Bmask, 0);
+	if (!this->screen) {
+		IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+		IDirect3DTexture9_Release(this->hidden->SDL_primary);
+		this->hidden->SDL_primary = NULL;
+		return NULL;
+	}
+	/* Reemplazar el buffer interno por la textura D3D lockeada */
+	if (this->screen->pixels) free(this->screen->pixels);
+	this->screen->pixels = d3dlr.pBits;
+	this->screen->pitch = d3dlr.Pitch;
+	this->screen->flags |= SDL_PREALLOC;
+
+	/* Dimensiones globales + quad */
+	g_texture_width = width;
+	g_texture_height = height;
+	XBOX_UpdateVertexBuffer(width, height, g_display_aspect_ratio);
+
+	/* D3D state minimo (equivalente a WinD3D9_SetGameMode) */
+	IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)this->hidden->SDL_primary);
+	IDirect3DDevice9_SetStreamSource(D3D_Device, 0, vertexBuffer, 0, sizeof(VERTEX));
+	XBOX_SelectEffect(g_current_effect);
+
+	/* Sincronizacion GPU: Clear+Present ligero.
+	 * XBOX_SetVideoMode termina con Clear+Present para forzar coherencia
+	 * de cache.  El Clear pinta el backbuffer a negro temporalmente
+	 * (el unico flash que queda, inevitable).  Sin el, la GPU ve datos
+	 * stale del overlay aunque la CPU tenga alpha=0xFF. */
+	//IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
+	IDirect3DDevice9_Present(D3D_Device, NULL, NULL, NULL, NULL);
+
+	return this->screen;
 }
 
 /* We don't actually allow hardware surfaces other than the main one */

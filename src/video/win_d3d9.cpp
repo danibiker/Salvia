@@ -30,6 +30,7 @@
 
 #ifndef min
 #define min(a,b) (((a) < (b)) ? (a) : (b))
+#define max(a,b) (((a) > (b)) ? (a) : (b))
 #endif
 
 /* 0=Nearest,1=Sharp-Bilinear,2=LCD3x,3=Scanlines,4=CRT-Geom,5=CRT-Lottes,
@@ -71,6 +72,7 @@ static int                    g_current_effect = 0;
 static D3DTEXTUREFILTERTYPE   g_current_filter = D3DTEXF_LINEAR;
 static float                  g_aspect     = 0.0f;       /* 0 = ratio nativo */
 static int                    g_fullscreen = 1;          /* 1 = fill, 0 = pixel-perfect */
+static int                    g_overflow   = 0;          /* 1 = integer scale puede salirse de pantalla */
 static int                    g_rotation   = 0;          /* 0..3 (libretro) */
 static RECT                   g_visible    = { 0, 0, 0, 0 };
 
@@ -193,12 +195,13 @@ static void SetSampler0Filter(D3DTEXTUREFILTERTYPE f)
 static int EffectScale(void)
 {
     switch (g_current_effect) {
-        case 7:  return 2;
-        case 8:  return 3;
-        case 9:  return 4;
-        case 10: return 3;
-        case 11: return 3;
-        default: return 1;
+//		case 7:  return 2; /* HQ2x */
+//		case 8:  return 3; /* HQ3x */
+//		case 9:  return 4; /* HQ4x */
+//		case 10: return 3; /* xBR-lv2-fast */
+//		case 11: return 3; /* 5xBR-Hyllian (rendered at 3x via HQ3x infra) */
+		default: return 1; /* 0=Nearest, 1=Sharp-Bilinear, 2=LCD-Grid-v2,
+		                      3=Scanlines, 4=CRT-Geom, 5=CRT-Lottes, 6=CRT-Easymode */
     }
 }
 
@@ -228,23 +231,25 @@ static void UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
     } else {
         int scale = EffectScale();
         if (aspect_ratio > 0.0f && tex_w > 0 && tex_h > 0) {
-            if (scale == 1) {
+            if (scale == 1 || g_overflow) {
                 int mh = (int)floor(bbh / (float)tex_h);
                 int mw = (int)floor(bbw / ((float)tex_h * aspect_ratio));
-                int ms = min(mh, mw);
+                int ms = g_overflow ? max(mh, mw) : min(mh, mw);
                 if (ms > 1) scale = ms;
             }
             display_h = (float)(tex_h * scale);
             display_w = (float)floor(display_h * aspect_ratio);
         } else {
-            if (scale == 1 && tex_w > 0 && tex_h > 0) {
-                int ms = min((int)floor(bbw / (float)tex_w), (int)floor(bbh / (float)tex_h));
+            if ((scale == 1 || g_overflow) && tex_w > 0 && tex_h > 0) {
+                int mw = (int)floor(bbw / (float)tex_w);
+                int mh = (int)floor(bbh / (float)tex_h);
+                int ms = g_overflow ? max(mw, mh) : min(mw, mh);
                 if (ms > 1) scale = ms;
             }
             display_w = (float)(tex_w * scale);
             display_h = (float)(tex_h * scale);
         }
-        if (display_w > bbw || display_h > bbh) {
+        if (!g_overflow && (display_w > bbw || display_h > bbh)) {
             float cr = aspect_ratio;
             if (cr <= 0.0f) cr = (float)tex_w / (float)tex_h;
             bb_ratio = bbw / bbh;
@@ -565,6 +570,13 @@ void SDL_XBOX_SetDisplaySize(float aspect_ratio)
 void SDL_XBOX_SetDisplayFullscreen(int fullscreen)
 {
     g_fullscreen = fullscreen;
+    UpdateVertexBuffer(g_tex_w, g_tex_h, g_aspect);
+    if (g_dev) g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
+}
+
+void SDL_XBOX_SetDisplayOverflow(int overflow)
+{
+    g_overflow = overflow;
     UpdateVertexBuffer(g_tex_w, g_tex_h, g_aspect);
     if (g_dev) g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
 }

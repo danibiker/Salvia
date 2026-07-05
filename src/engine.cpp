@@ -91,7 +91,7 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		memset(overlay->pixels, 0, overlay->pitch * overlay->h);
 		SDL_XBOX_SetOverlayEnabled(1);
 	}
-#elif defined(WIN)
+#elif defined(WIN) && defined(SALVIA_GPU_VIDEO)
 	// SDL_SetVideoMode solo nos ha servido para crear la ventana (driver
 	// windib). Inicializamos D3D9 sobre su HWND y montamos el mismo modelo
 	// que en Xbox: textura de juego escalada por GPU + overlay ARGB.
@@ -152,7 +152,7 @@ void Engine::stopEngine(){
 		timeEndPeriod(1);
 	#endif
 
-#ifdef WIN
+#if defined(WIN) && defined(SALVIA_GPU_VIDEO)
 	// gameScreen (textura de juego) y overlay son propiedad de WinD3D9;
 	// los libera WinD3D9_Shutdown junto con el device D3D9.
 	WinD3D9_Shutdown();

@@ -95,12 +95,14 @@ struct t_scale_props{
 	int bpp;
 	int filter;
 	bool integer_scale;
+	int integer_scale_type;
 
 	t_scale_props(){
 		sw = sh = dw = dh = scale = 0;
 		ratio = .0f;
 		bpp = 16;
 		integer_scale = false;
+		integer_scale_type = SCALE_INT_REDUCE;
 	}
 };
 
@@ -804,6 +806,8 @@ class ConfigEmu{
 	bool show_directories;
 	//Set the default servers to connect when required
 	std::string network_default_servers;
+	//Se the default title
+	std::string title_bkg_assets;
 };
 
 struct t_rom_paths{

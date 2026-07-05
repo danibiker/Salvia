@@ -8,16 +8,20 @@
 #define SDL_RWFromConstMem(p, s) SDL_RWFromMem(const_cast<void*>(static_cast<const void*>(p)), s)
 #endif
 
+const int SHADOW_OFFSET = 3;
+const int SHADOW_THICKNESS = 5;
+const int SHADOW_ALPHA = 128;
+
 Image::Image(){
     init();
 }
 
 Image::Image(int x, int y, int w, int h){
-    this->setX(x);
+    init();
+	this->setX(x);
     this->setY(y);
     this->setW(w);
     this->setH(h);
-    init();
 }
 
 void Image::init(){
@@ -29,6 +33,12 @@ void Image::init(){
     setObjectType(GUIPICTURE);
     img = NULL;
 	cachedSurface = NULL;
+	this->setX(0);
+    this->setY(0);
+    this->setW(0);
+    this->setH(0);
+	keepAlpha = false;
+	drawShadow = false;
 }
 
 Image::~Image(){
@@ -58,7 +68,14 @@ bool Image::closeImage(){
         cachedSurface = NULL;
     }
 	filepath = "";
+	clearShadows();
 	return true;
+}
+
+void Image::clearShadows(){
+	for (std::size_t i = 0; i < shadows.size(); i++)
+        delete shadows[i];
+    shadows.clear();
 }
 
 bool Image::loadImageFromGame(string baseDir, GameFile& game, string ext, SDL_PixelFormat* format){
@@ -106,6 +123,8 @@ void Image::adoptSurface(SDL_Surface* newSurface, const std::string& newPath) {
         SDL_FreeSurface(cachedSurface);
         cachedSurface = NULL;
     }
+	clearShadows();
+
     if (newSurface) {
         img = newSurface;
         filepath = newPath;
@@ -125,6 +144,7 @@ bool Image::loadImage(string filepathToOpen, SDL_PixelFormat* format){
 			SDL_FreeSurface(cachedSurface);
 			cachedSurface = NULL;
 		}
+		clearShadows();
 
 		const char *cFilePathToOpen = filepathToOpen.c_str();
 		SDL_Surface* raw;
@@ -162,6 +182,7 @@ bool Image::loadImageFromMemory(const unsigned char* buffer, std::size_t bufferS
         SDL_FreeSurface(cachedSurface);
         cachedSurface = NULL;
     }
+	clearShadows();
 
     SDL_RWops* rw = SDL_RWFromConstMem(buffer, bufferSize);
     if (rw == NULL){
@@ -191,18 +212,88 @@ void Image::printImage(SDL_Surface *video_page){
         if (tamAuto) {
             Dimension src = {img->w, img->h};
             Dimension dst = {this->getW(), this->getH()};
-            Dimension newDim = relacionAuto(src, dst);
-            Dimension offset = centrado(newDim, dst);
+            newDim = relacionAuto(src, dst);
+            newOffset = centrado(newDim, dst);
 
             if (vAlign == ALIGN_TOP){
-                offset.h = 0;
+                newOffset.h = 0;
             }
-            stretch_blit_sdl(img, video_page, 0, 0, img->w, img->h, this->getX() + offset.w, this->getY() + offset.h, newDim.w, newDim.h);
+            stretch_blit_sdl(img, video_page, 0, 0, img->w, img->h, this->getX() + newOffset.w, this->getY() + newOffset.h, newDim.w, newDim.h);
         } else {
             stretch_blit_sdl(img, video_page, 0, 0, img->w, img->h, this->getX(), this->getY(), this->getW(), this->getH());
         }
 		//rect(video_page, getX(), getY(), getX() + getW(), getY() + getH(), Constant::colors[clWhite].sdlColor);
+		if (drawShadow)
+			printShadow(video_page);
     }
+}
+
+void Image::printShadow(SDL_Surface *video_page){
+	if (tamAuto) {
+		//if (shadows.empty()){
+		//	const int posX = this->getX() + newOffset.w + SHADOW_OFFSET;
+		//	const int posY = this->getY() + newOffset.h + newDim.h;
+		//	const int posYRight = this->getY() + newOffset.h + SHADOW_OFFSET;
+		//	int posXRight = posX + newDim.w - SHADOW_OFFSET;
+		//
+		//	//Creamos la sombra inferior
+		//	t_shadow* shadow = new t_shadow();
+		//	shadow->rect.x = posX;
+		//	shadow->rect.y = posY;
+		//	shadow->rect.w = newDim.w + SHADOW_THICKNESS - SHADOW_OFFSET;
+		//	shadow->rect.h = SHADOW_THICKNESS;
+		//	Constant::createRectAlphaFilled(shadow->srf, shadow->rect, video_page->format, clBG);
+		//	shadows.push_back(shadow);
+		//	
+		//	//Creamos la sombra derecha
+		//	if (posXRight < video_page->w){
+		//		const int posXRightThick = posXRight + SHADOW_THICKNESS < video_page->w ? posXRight + SHADOW_THICKNESS : video_page->w - posXRight;
+		//		t_shadow* shadowR = new t_shadow();
+		//		shadowR->rect.x = posXRight;
+		//		shadowR->rect.y = posYRight;
+		//		shadowR->rect.w = posXRightThick - posXRight;
+		//		shadowR->rect.h = posY - posYRight;
+		//		Constant::createRectAlphaFilled(shadowR->srf, shadowR->rect, video_page->format, clBG);
+		//		shadows.push_back(shadowR);
+		//	}
+		//} 
+		//
+		//for (unsigned int i=0; i < shadows.size(); i++){
+		//	SDL_BlitSurface(shadows[i]->srf, NULL, video_page, &shadows[i]->rect);
+		//}
+
+		//const int posX = this->getX() + newOffset.w + SHADOW_OFFSET;
+		//const int posY = this->getY() + newOffset.h + newDim.h;
+		////Dibujamos la sombra inferior
+		//boxRGBA(video_page, posX, posY, posX + newDim.w + SHADOW_THICKNESS - SHADOW_OFFSET, posY + SHADOW_THICKNESS, 0, 0, 0, SHADOW_ALPHA);
+		//
+		//const int posYRight = this->getY() + newOffset.h + SHADOW_OFFSET;
+		//int posXRight = posX + newDim.w - SHADOW_OFFSET;
+		//if (posXRight < video_page->w){
+		//	const int posXRightThick = posXRight + SHADOW_THICKNESS < video_page->w ? posXRight + SHADOW_THICKNESS : video_page->w - posXRight;
+		//	//Dibujamos la sombra lateral derecha
+		//	boxRGBA(video_page, posXRight, posYRight, 
+		//		posXRightThick, posY - 1, 
+		//		0, 0, 0, SHADOW_ALPHA);	
+		//}
+
+		const int posX = this->getX() + newOffset.w + SHADOW_OFFSET;
+		const int posY = this->getY() + newOffset.h + newDim.h;
+		//Dibujamos la sombra inferior
+		boxColor(video_page, posX, posY, 
+			posX + newDim.w + SHADOW_THICKNESS - SHADOW_OFFSET, posY + SHADOW_THICKNESS, 
+			Constant::colors[clBG].colorRaw);
+		
+		const int posYRight = this->getY() + newOffset.h + SHADOW_OFFSET;
+		const int posXRight = posX + newDim.w - SHADOW_OFFSET;
+		if (posXRight < video_page->w){
+			const int posXRightThick = posXRight + SHADOW_THICKNESS < video_page->w ? posXRight + SHADOW_THICKNESS : abs(video_page->w - posXRight);
+			//Dibujamos la sombra lateral derecha
+			boxColor(video_page, posXRight, posYRight, 
+				posXRightThick, posY - 1, 
+				Constant::colors[clBG].colorRaw);	
+		}
+	}
 }
 
 Dimension Image::relacionAuto(const Dimension &src, const Dimension &dst) {
@@ -254,46 +345,97 @@ void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
         dst_w, dst_h
     };
 
-	// --- Cache hit: blit directo y salir ---
+	// --- 1. Cache hit: blit directo y salir ---
     if (cachedSurface && lastW == dst_w && lastH == dst_h) {
         SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
         return;
     }
 
-	SDL_Surface* zoomedSurface;
+	// --- 2. Escalado de la imagen ---
+	SDL_Surface* zoomedSurface = NULL;
 	if (dst_w == src_w && dst_h == src_h){
-		//Make a copy of the original image loaded. It's already converted to the dest surface format
+		// Copia exacta en el formato original
 		zoomedSurface = SDL_ConvertSurface(src, src->format, src->flags);
 	} else {
 		double zoomX = (double)dst_w / src_w;
 		double zoomY = (double)dst_h / src_h;
-		zoomedSurface = zoomSurface(src, zoomX, zoomY, SMOOTH_RESIZE);
+		// zoomSurface (SDL_gfx) siempre devuelve una superficie RGBA de 32 bits genérica
+		zoomedSurface = zoomSurface(src, zoomX, zoomY, true); //SMOOTH_RESIZE = TRUE
 	}
 
 	if (!zoomedSurface) return;
 
-	// --- Aplicar oscurecimiento ---
-    if (this->darkShift < 0xFF) {
-        Uint8 alpha = 255 - this->darkShift;
-        boxRGBA(zoomedSurface, 0, 0, dst_w - 1, dst_h - 1, 0, 0, 0, alpha);
+	// --- 3. Procesar Canal Alfa según 'keepAlpha' ---
+	// Si tiene alfa por píxel, optimizamos el formato RGBA para que coincida con la pantalla
+	// usando SDL_DisplayFormatAlpha. Esto acelera el Blit enormemente.
+	SDL_Surface* finalSurface = SDL_ConvertSurface(zoomedSurface, dest->format, dest->flags);
+	SDL_FreeSurface(zoomedSurface);
+
+	if (!finalSurface) return;
+
+	if (!keepAlpha) {
+		// Eliminamos el canal alfa adaptando la superficie al formato exacto del destino (RGB)
+		SDL_SetAlpha(finalSurface, SDL_RLEACCEL, 0xFF);
+	} else {
+		if (src->format->Amask != 0) {
+			// Alfa por píxel: Desactivamos el alfa global para que no rompa el mapa de bits
+			SDL_SetAlpha(finalSurface, 0, 0); 
+			finalSurface->flags |= SDL_SRCALPHA;
+		} 
+		else {
+			if (src->flags & SDL_SRCCOLORKEY) {
+				// No tiene mapa alfa, pero tiene transparencia por color clave
+				SDL_SetColorKey(finalSurface, SDL_SRCCOLORKEY | SDL_RLEACCEL, src->format->colorkey);
+			} else {
+				// Imagen plana sin transparencias
+				SDL_SetAlpha(finalSurface, SDL_RLEACCEL, 0xFF);
+			}
+		}
+	}
+
+	// --- 4. Aplicar Oscurecimiento Seguro para SDL 1.2 ---
+    if (this->darkShift < 0xFF && finalSurface) {
+        /*Uint8 factor = 255 - this->darkShift; // 255 = sin oscurecer, 0 = negro total
+		if (keepAlpha && src->format->Amask != 0) {
+			// ALFA POR PÍXEL: Modulamos los canales RGB píxel a píxel respetando el canal Alfa original
+			if (SDL_MUSTLOCK(finalSurface)) SDL_LockSurface(finalSurface);
+
+			Uint32* pixels = (Uint32*)finalSurface->pixels;
+			int pixelCount = finalSurface->w * finalSurface->h;
+			SDL_PixelFormat* fmt = finalSurface->format;
+
+			for (int i = 0; i < pixelCount; ++i) {
+				Uint32 pixel = pixels[i];
+				
+				// Extraemos los componentes usando el formato de la arquitectura actual
+				Uint8 r = (pixel & fmt->Rmask) >> fmt->Rshift;
+				Uint8 g = (pixel & fmt->Gmask) >> fmt->Gshift;
+				Uint8 b = (pixel & fmt->Bmask) >> fmt->Bshift;
+				Uint8 a = (pixel & fmt->Amask) >> fmt->Ashift;
+
+				// Multiplicamos RGB por el factor de oscuridad
+				r = (r * factor) / 255;
+				g = (g * factor) / 255;
+				b = (b * factor) / 255;
+
+				// Reensamblamos el píxel manteniendo intacto el Alfa ('a') original
+				pixels[i] = (r << fmt->Rshift) | (g << fmt->Gshift) | (b << fmt->Bshift) | (a << fmt->Ashift);
+			}
+
+			if (SDL_MUSTLOCK(finalSurface)) SDL_UnlockSurface(finalSurface);
+		} else {*/
+			// SIN ALFA POR PÍXEL: Podemos usar boxRGBA de forma segura ya que no hay bordes transparentes
+			boxRGBA(finalSurface, 0, 0, dst_w - 1, dst_h - 1, 0, 0, 0, this->darkShift);
+		//}
     }
 
-	// --- (Re)crear cache en el formato de dest ---
+	// --- 5. Guardar en Caché y Renderizar ---
     if (cachedSurface) SDL_FreeSurface(cachedSurface);
-	// Tomamos converted directamente como caché (ya tiene el tamaño y formato correctos)
-	cachedSurface = zoomedSurface;
+	
+	cachedSurface = finalSurface;
     lastW = dst_w;
     lastH = dst_h;
 
-	// --- Configuracion alfa ---
-	const Uint32 aMask = src->format->Amask;
-    if (aMask != 0 || (src->flags & SDL_SRCCOLORKEY)) {
-        cachedSurface->flags |= SDL_SRCALPHA;
-        cachedSurface->format->alpha = src->format->alpha;
-    } else {
-        cachedSurface->flags &= ~SDL_SRCALPHA;
-    }
-	SDL_SetAlpha(cachedSurface, SDL_RLEACCEL, 0);
 	SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
 }
 

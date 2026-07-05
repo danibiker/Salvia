@@ -52,6 +52,7 @@ void WinD3D9_Present(void);
 void         XBOX_SelectEffect(int effectID);
 void         SDL_XBOX_SetDisplaySize(float aspect_ratio);
 void         SDL_XBOX_SetDisplayFullscreen(int fullscreen);
+void         SDL_XBOX_SetDisplayOverflow(int overflow);
 void         SDL_XBOX_SetRotation(int rotation);
 SDL_Surface* SDL_XBOX_GetOverlay(void);
 void         SDL_XBOX_SetOverlayEnabled(int enabled);

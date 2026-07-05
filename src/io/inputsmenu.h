@@ -384,8 +384,6 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 
 			//Set the keyboard layout
 			gameMenu->keyb->setKeyboardLayout(cfg->getCfgEmu()->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
-			//Loading the background image if exists
-			gameMenu->loadBgImage();
 		}
 
 		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_L)){
@@ -400,8 +398,6 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 
 			//Set the keyboard layout
 			gameMenu->keyb->setKeyboardLayout(cfg->getCfgEmu()->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
-			//Loading the background image if exists
-			gameMenu->loadBgImage();
 		}
 
 		listMenu.keyUp = gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_UP) ||

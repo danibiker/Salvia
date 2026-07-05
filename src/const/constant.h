@@ -29,19 +29,25 @@ static const int video_bpp = 16;
 #define CPU_THREAD 1
 #define IO_THREAD 4
 
+static int video_width = 1280;
+static int video_height = 720;
+
 #ifdef _XBOX
 	static Uint32 video_flags = SDL_SWSURFACE;
-	static int video_width = 1280;
-	static int video_height = 720;
 	static const char *LOG_PATH = "game:\\salvia.log";
 	#include <xtl.h>
 #elif defined(WIN)
-	//static Uint32 video_flags = SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN; //SDL_SWSURFACE; //SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN;
+	//SDL_SWSURFACE | SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN
 	static Uint32 video_flags = SDL_SWSURFACE; 
-	static int video_width = 1280;
-	static int video_height = 720;
 	static const char *LOG_PATH = "salvia.log";
 	#include <windows.h>
+#endif
+
+/* Video por GPU con shaders: en Xbox lo hace el driver SDL custom
+(SDL_xboxvideo.c); en Windows la capa D3D9 propia (src/video/win_d3d9.*).
+Ambas plataformas comparten los call-sites del frontend bajo este flag. */
+#if defined(_XBOX) || defined(WIN)
+	#define SALVIA_GPU_VIDEO 1
 #endif
 
 static const int bkgSpeedPixPerS = 15;
@@ -360,6 +366,7 @@ extern const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS;
 extern const std::string ROUTE_SCRAP_TRANSLATIONS;
 extern const std::string PREFIX_DEFAULTS;
 extern const std::string BG_FILENAME;
+extern const std::string TITLE_EMU_FILENAME;
 extern const std::string QUAKE_LIST_URL;
 // Definimos el tamaño exacto a mano
 const int QUAKE_MAPS_COUNT = 1; 
@@ -611,7 +618,7 @@ class Constant{
 			// Si permites numeros negativos, saltamos el signo '-'
 			std::size_t inicio = (s[0] == '-' && s.size() > 1) ? 1 : 0;
 
-			for (size_t i = inicio; i < s.size(); i++) {
+			for (std::size_t i = inicio; i < s.size(); i++) {
 				if (!std::isdigit(static_cast<unsigned char>(s[i]))) {
 					return false;
 				}
@@ -621,7 +628,7 @@ class Constant{
 
 		// Funcion auxiliar
 		static bool compareNoCase(const std::string& a, const std::string& b) {
-			for (size_t i = 0; i < a.length() && i < b.length(); ++i) {
+			for (std::size_t i = 0; i < a.length() && i < b.length(); ++i) {
 				if (tolower(a[i]) != tolower(b[i]))
 					return tolower(a[i]) < tolower(b[i]);
 			}
@@ -746,8 +753,12 @@ class Constant{
 		}
 
 		static void createRectAlphaFilled(SDL_Surface*& selecAlphaRec, SDL_Rect& rectElem, SDL_PixelFormat* format, enumColors color, bool border = false){
+			bool drawWithAlfa = true;
+			#if defined(_XBOX)
+				drawWithAlfa = false;
+			#endif
+
 			if (selecAlphaRec == NULL){
-				
 				SDL_Surface* rawSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, rectElem.w, rectElem.h, 
 															   format->BitsPerPixel,
 															   format->Rmask, 
@@ -757,7 +768,7 @@ class Constant{
 
 				const Uint8 KEY_ALPHA = 180;
 				Uint8 fillColorAlpha = KEY_ALPHA;
-				#ifndef _XBOX
+				#if !defined(_XBOX) && !defined(SALVIA_GPU_VIDEO)
 					Uint32 colorkey = SDL_MapRGB(rawSurface->format, 255, 0, 255);
 					SDL_FillRect(rawSurface, nullptr, colorkey);
 					SDL_SetColorKey(rawSurface, SDL_SRCCOLORKEY, colorkey);
@@ -768,16 +779,19 @@ class Constant{
                                             Constant::colors[color].sdlColor.r,
                                             Constant::colors[color].sdlColor.g,
                                             Constant::colors[color].sdlColor.b,
-                                            fillColorAlpha);
+                                            drawWithAlfa ? fillColorAlpha : 0xFF);
 
 				SDL_FillRect(rawSurface, NULL, keyBg);
 				
-				if (border)
+				if (border && drawWithAlfa)
 					rect(rawSurface, 0, 0, rectElem.w - 1, rectElem.h - 1, Constant::colors[color].sdlColor);
 
-				#ifdef _XBOX
-						//SDL_SetAlpha(rawSurface, 0, 0);
-						selecAlphaRec = rawSurface;   // cacheamos directamente
+				#if defined(_XBOX)
+					//En xbox es demasiado intensivo dibujar transparencias
+					SDL_SetAlpha(rawSurface, SDL_RLEACCEL, 0xFF);
+					selecAlphaRec = rawSurface;
+				#elif defined(SALVIA_GPU_VIDEO)
+					selecAlphaRec = rawSurface;
 				#else 
 						SDL_SetAlpha(rawSurface, SDL_SRCALPHA, KEY_ALPHA);
 						selecAlphaRec = SDL_DisplayFormatAlpha(rawSurface);
@@ -791,7 +805,7 @@ class Constant{
 			if (s.empty()) return s;
 			// Verificar si ya es UTF-8 válido
 			bool validUtf8 = true;
-			for (size_t i = 0; i < s.size(); ++i) {
+			for (std::size_t i = 0; i < s.size(); ++i) {
 				unsigned char c = (unsigned char)s[i];
 				if (c < 0x80) continue;
 				int seqLen = 0;

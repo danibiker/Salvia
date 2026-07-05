@@ -331,11 +331,13 @@ DWORD WINAPI AchievementTriggeredThread(LPVOID lpParam) {
 		msg.type = data->type;
 		msg.badgeName = data->badgeName;
 		msg.id = data->id;
+		msg.timeout = TIMEOUT_ACHIEVEMENT;
 		LOG_DEBUG("AchievementTriggeredThread: %s - %s", msg.title.c_str(), msg.description.c_str());
 		int line_height, badgeW, badgeH, badgePad;
 		Fonts::getBadgeSize(badgeW, badgeH, badgePad, line_height);
 		self.download_and_cache_image(&msg, badgeW, badgeH);
 		self.setShouldRefresh(true);
+		
 		self.messages.add(msg); // Anyadimos a la cola de forma "thread safe" con el add
 		//Aunque el destructor de AchievementState, ahora mismo, no libera memoria, para curarnos 
 		//en salud por si en un futuro esto cambia, ponemos a null los campos de la variable local msg
@@ -1279,7 +1281,7 @@ void Achievements::send_message_game_loaded(){
 	msg.achvTotal = self.getSummary().num_core_achievements;
 	msg.badgeName = self.getGameBadge();
 	msg.badgeUrl = self.getGameBadgeUrl();
-	msg.timeout = 5000;
+	msg.timeout = TIMEOUT_PLACARD;
 	msg.ticks = SDL_GetTicks();
 	self.download_and_cache_image(&msg, badgeW, badgeH);
 
@@ -1521,7 +1523,6 @@ void Achievements::download_and_cache_image(AchievementState* achievement, int b
 		targetFormat = SDL_GetVideoSurface()->format;
 	}
 
-
 	if (createNew && imageObtained && targetFormat){
 		SDL_Surface* surfaceToResize = SDL_ConvertSurface(imageObtained, targetFormat, SDL_SWSURFACE);
 		//Si creamos una nueva superficie, comprobamos si necesita redimensionado
@@ -1531,7 +1532,6 @@ void Achievements::download_and_cache_image(AchievementState* achievement, int b
 			double zoomX = (double)badgeW / imageObtained->w;
 			double zoomY = (double)badgeH / imageObtained->h;
 			tmpSurface = zoomSurface(surfaceToResize, zoomX, zoomY, SMOOTH_RESIZE);
-			SDL_SetAlpha(tmpSurface, SDL_RLEACCEL, 0);
 			SDL_FreeSurface(surfaceToResize);
 		} else if (surfaceToResize){
 			//No hizo falta redimensionarla, pero devolvemos la nueva que hemos creado
@@ -1544,9 +1544,12 @@ void Achievements::download_and_cache_image(AchievementState* achievement, int b
 		tmpSurface = imageObtained;
 	}
 
+	if (tmpSurface)
+		SDL_SetAlpha(tmpSurface, SDL_RLEACCEL, 0xFF);
+
 	if (achievement->badgeLocked == NULL && achievement->locked && tmpSurface && targetFormat) {
 		achievement->badgeLocked = SDL_ConvertSurface(tmpSurface, targetFormat, SDL_SWSURFACE);
-		SDL_SetAlpha(achievement->badgeLocked, SDL_RLEACCEL, 0);
+		SDL_SetAlpha(achievement->badgeLocked, SDL_RLEACCEL, 0xFF);
 		if (achievement->badgeLocked){
 			Image::convertirGrises16Bits(achievement->badgeLocked);
 		}
@@ -1596,7 +1599,6 @@ bool Achievements::download_and_cache_image(std::string url, uint32_t idImage, S
             SDL_Surface* zoomed = zoomSurface(rawImg, zoomX, zoomY, SMOOTH_RESIZE);
             if (zoomed) {
 				finalSurface = SDL_ConvertSurface(zoomed, targetFormat, SDL_SWSURFACE);
-				SDL_SetAlpha(finalSurface, SDL_RLEACCEL, 0);
                 SDL_FreeSurface(zoomed);
             }
         }
@@ -1604,6 +1606,7 @@ bool Achievements::download_and_cache_image(std::string url, uint32_t idImage, S
 
         // 4. GUARDADO EN CACHE
         if (finalSurface != NULL) {
+			SDL_SetAlpha(finalSurface, SDL_RLEACCEL, 0xFF);
 			badgeCache.add(idImage, finalSurface);
             image = finalSurface;
             LOG_DEBUG("Image id: %u cached: %s", idImage, c_url);

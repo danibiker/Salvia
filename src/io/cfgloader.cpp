@@ -56,6 +56,7 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
 	configMain[cfg::packedImages] = cfg::t_cfg_props("packedImages", true);
 	configMain[cfg::integerScale] = cfg::t_cfg_props("integerScale", false);
+	configMain[cfg::scaleIntMode] = cfg::t_cfg_props("scaleIntMode", (int)SCALE_INT_REDUCE);
 	configMain[cfg::animBG] = cfg::t_cfg_props("animBG", (int)BG_TILES);
 	configMain[cfg::apikeytgdb] = cfg::t_cfg_props("apikey.tgdb", "");
 	configMain[cfg::mainLang] = cfg::t_cfg_props("mainLang", "");
@@ -73,7 +74,7 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::corePce] = cfg::t_cfg_props(coreDefault + "pce", (int)0);
 	configMain[cfg::corePceCd] = cfg::t_cfg_props(coreDefault + "pcecd", (int)0);
 	configMain[cfg::coreFbn] = cfg::t_cfg_props(coreDefault + "fbn", (int)0);
-	configMain[cfg::showEmptyEmulators] = cfg::t_cfg_props("showEmptyEmulators", false);
+	configMain[cfg::showEmptyEmulators] = cfg::t_cfg_props("showEmptyEmulators", true);
 
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));
@@ -373,6 +374,8 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 						cfgEmu->config.show_directories = value.compare("yes") == 0 ? true : false;
 					} else if (key.compare("network_default_servers") == 0){
 						cfgEmu->config.network_default_servers = value;
+					} else if (key.compare("title_bkg_assets") == 0){
+						cfgEmu->config.title_bkg_assets = value;
 					}
 				}
 			}             

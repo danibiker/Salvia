@@ -348,6 +348,30 @@ extern DECLSPEC SDL_Rect ** SDLCALL SDL_ListModes(SDL_PixelFormat *format, Uint3
 extern DECLSPEC SDL_Surface * SDLCALL SDL_SetVideoMode
 			(int width, int height, int bpp, Uint32 flags);
 
+
+/* =====================================================================
+ * XBOX_ResizeGameTexture - Redimensiona la textura del juego en caliente
+ * SIN tocar el modo de video ni el backbuffer.
+ *
+ * A diferencia de SDL_SetVideoMode (que libera y recrea shaders, vertex
+ * buffers, declaraciones y hace un Clear+Present forzado produciendo un
+ * flash negro), esta funcion solo cambia el tamano de la textura donde
+ * el core escribe los frames.  Los shaders, el vertex buffer (quad
+ * fullscreen) y el resto del pipeline D3D permanecen intactos.
+ *
+ * Equivalente funcional a WinD3D9_SetGameMode en la rama Windows.
+ * Llamar desde hw_refresh cuando cambia la resolucion del core.
+ *
+ * Parametros:
+ *   width, height  - nueva resolucion nativa del core
+ *   bpp            - 16 (RGB565) o 32 (X8R8G8B8)
+ * Retorno:
+ *   SDL_Surface*   - el surface del gameScreen con pixels apuntando
+ *                    a la textura D3D lockeada permanentemente, o NULL
+ *                    si falla la creacion de la textura.
+ * =================================================================== */
+extern DECLSPEC SDL_Surface* XBOX_ResizeGameTexture(int width, int height, int bpp);
+
 /*
  * Makes sure the given list of rectangles is updated on the given screen.
  * If 'x', 'y', 'w' and 'h' are all 0, SDL_UpdateRect will update the entire
@@ -384,6 +408,7 @@ extern DECLSPEC void SDLCALL SDL_XBOX_SetDisplaySize(float aspect_ratio);
  * fullscreen=0: pixel perfect size (tex_size * effect_scale), centered.
  */
 extern DECLSPEC void SDLCALL SDL_XBOX_SetDisplayFullscreen(int fullscreen);
+extern DECLSPEC void SDLCALL SDL_XBOX_SetDisplayOverflow(int overflow);
 
 /*
  * Xbox 360: Get the overlay surface (1280x720, 32bpp ARGB).

@@ -63,7 +63,6 @@ ListMenu::ListMenu(int screenw, int screenh){
     //set_trans_blender(255, 255, 255, 190);
 	icons = new Icons();
 	selecAlphaRec = NULL;
-	filterAlphaRec = NULL;
 	navPath = NULL;
 }
 
@@ -73,7 +72,6 @@ ListMenu::~ListMenu(){
 	filteredGames.clear();
 	listGames.clear();
 	delete icons;
-	if (filterAlphaRec) SDL_FreeSurface(filterAlphaRec);
 	if (navPath) SDL_FreeSurface(navPath);
 }
 
@@ -359,75 +357,59 @@ void ListMenu::drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor,
     std::string txtNav;
     if (!listZipped.file.empty()) {
         txtNav = listZipped.file;
-        for (size_t i = 0; i < listZipped.pathInZip.size(); ++i)
+        for (std::size_t i = 0; i < listZipped.pathInZip.size(); ++i)
             appendSegment(txtNav, listZipped.pathInZip[i]);
     } else {
-        for (size_t i = 0; i < listDir.relativePath.size(); ++i)
+        for (std::size_t i = 0; i < listDir.relativePath.size(); ++i)
             appendSegment(txtNav, listDir.relativePath[i]);
     }
-
+	
     // --- 2. Salida temprana si no hay ruta ---
     if (txtNav.empty()) {
         if (navPath)         { SDL_FreeSurface(navPath);         navPath         = NULL; }
-        if (filterAlphaRec)  { SDL_FreeSurface(filterAlphaRec);  filterAlphaRec  = NULL; }
         lastTxtNav = txtNav;
         return;
     }
 
-    // --- 3. Regenerar superficie de texto si cambió ---
-    SDL_Rect rectNavPath = {this->getX(), this->marginY, this->getW() - 1, face_h};
-
+	SDL_Rect rectNavPath = {this->getX(), this->marginY, this->getW() - 1, face_h};
+	
+	// --- 3. Regenerar superficie de texto si cambió ---
     if (txtNav != lastTxtNav) {
         lastTxtNav = txtNav;
 
         const int prevStyle = TTF_GetFontStyle(fontMenu);
         TTF_SetFontStyle(fontMenu, TTF_STYLE_ITALIC | TTF_STYLE_BOLD);
 
-        if (navPath) SDL_FreeSurface(navPath);
+        if (navPath) {
+			SDL_FreeSurface(navPath);
+			navPath = NULL;
+		}
 #ifdef _XBOX
-        navPath = Fonts::renderUtf8Solid  (fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
+        SDL_Surface *txtNavPath = Fonts::renderUtf8Solid  (fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
 #else
-        navPath = Fonts::renderUtf8Blended(fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
+        SDL_Surface *txtNavPath = Fonts::renderUtf8Blended(fontMenu, txtNav.c_str(), Constant::colors[clBkgMenu].sdlColor);
 #endif
         TTF_SetFontStyle(fontMenu, prevStyle);
-        if (!navPath) return;
 
-#ifdef _XBOX
-        if (!filterAlphaRec ||
-            filterAlphaRec->w != rectNavPath.w ||
-            filterAlphaRec->h != rectNavPath.h)
-        {
-            if (filterAlphaRec) SDL_FreeSurface(filterAlphaRec);
-            Constant::createRectAlphaFilled(filterAlphaRec, rectNavPath,
-                                            video_page->format, clBlack, true);
-        }
-#endif
+		//Creamos una superficie transparente de color negro
+		Constant::createRectAlphaFilled(navPath, rectNavPath, video_page->format, clBG, true);
+
+        if (!txtNavPath || !navPath) 
+			return;
+
+		fastline(navPath, 0, rectNavPath.h-1, rectNavPath.w, rectNavPath.h-1, Constant::colors[clMenuBars].sdlColor);
+		
+		//Y le dibujamos el texto renderizado anteriormente
+		SDL_Rect rectSrc = {0, 0, txtNavPath->w, face_h};
+		if (txtNavPath->w > rectNavPath.w){
+			rectSrc.x = txtNavPath->w - rectNavPath.w;
+			rectSrc.w = rectNavPath.w;
+		} 
+
+		SDL_BlitSurface(txtNavPath, &rectSrc, navPath, NULL);
+		SDL_FreeSurface(txtNavPath);
     }
-
-    // --- 4. Dibujar fondo ---
-#ifdef _XBOX
-    if (filterAlphaRec)
-        SDL_BlitSurface(filterAlphaRec, NULL, video_page, &rectNavPath);
-#else
-    SDL_Color& c = Constant::colors[clBlack].sdlColor;
-    boxRGBA(video_page,
-            rectNavPath.x, rectNavPath.y,
-            rectNavPath.x + rectNavPath.w, rectNavPath.y + rectNavPath.h,
-            c.r, c.g, c.b, 160);
-#endif
-
-    // --- 5. Dibujar línea y texto ---
-    fastline(video_page,
-             rectNavPath.x, rectNavPath.y + rectNavPath.h,
-             rectNavPath.x + rectNavPath.w, rectNavPath.y + rectNavPath.h,
-             Constant::colors[clMenuBars].sdlColor);
-
-    SDL_Rect rectSrc = {0, 0, navPath->w, navPath->h};
-    if (navPath->w > this->getW()) {
-        rectSrc.x = navPath->w - rectNavPath.w;
-        rectSrc.w = rectNavPath.w;
-    }
-    SDL_BlitSurface(navPath, &rectSrc, video_page, &rectNavPath);
+    SDL_BlitSurface(navPath, NULL, video_page, &rectNavPath);
 }
 
 void ListMenu::drawIconListElem(SDL_Surface *video_page, GameFile *game, SDL_Rect& dstRectIcon) {

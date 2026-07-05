@@ -6,8 +6,8 @@
 #include <font/fonts.h>
 #include <io/dirutil.h>
 
-vector<SDL_Surface *> Icons::icons;
-vector<SDL_Surface *> Icons::icons_carts;
+std::array<SDL_Surface*, max_icons> Icons::icons;
+std::array<SDL_Surface*, max_carts> Icons::icons_carts;
 
 Icons::Icons(){
 	//Icons are loaded once from engine.cpp
@@ -24,7 +24,6 @@ void Icons::freeIcons(){
 			icons[i] = NULL;
 		}
 	}
-	icons.clear();
 		
 	for (std::size_t i=0; i < icons_carts.size(); i++){
 		if (icons_carts[i] != NULL){
@@ -32,7 +31,6 @@ void Icons::freeIcons(){
 			icons_carts[i] = NULL;
 		}
 	}
-	icons_carts.clear();
 }
 
 void Icons::loadIcons(SDL_Surface* dest){
@@ -48,28 +46,19 @@ void Icons::loadIcons(SDL_Surface* dest){
 				double zoomY = (double)face_h / img->h;
 				SDL_Surface *resizeImage = zoomSurface(img, zoomX, zoomY, true);
 				SDL_FreeSurface(img);
-#ifdef _XBOX
 				formattedImg = SDL_ConvertSurface(resizeImage, dest->format, dest->flags);
-#else
-				formattedImg = SDL_DisplayFormatAlpha(resizeImage);
-#endif
 				SDL_FreeSurface(resizeImage);
 			} else {
-#ifdef _XBOX
 				formattedImg = SDL_ConvertSurface(img, dest->format, dest->flags);
-#else
-				formattedImg = SDL_DisplayFormatAlpha(img);
-#endif
 				SDL_FreeSurface(img);
 			}
-			icons.push_back(formattedImg);
+			icons[i] = formattedImg;
 		} else {
-			icons.push_back(NULL);
+			icons[i] = NULL;
 		}
 	}
 
 	face_h = Fonts::getLineSkip(Fonts::FONTBIG) - icon_w_add / 2;
-
 	for (int i=0; i < max_carts; i++){
 		SDL_Surface *img;
 		std::string str = Constant::getAppDir() + ASSETS_ICONS_DIR + std::string(ICONS_CARTS_PATH[i]);
@@ -80,24 +69,15 @@ void Icons::loadIcons(SDL_Surface* dest){
 				double zoomY = (double)face_h / img->h;
 				SDL_Surface *resizeImage = zoomSurface(img, zoomX, zoomY, true);
 				SDL_FreeSurface(img);
-#ifdef _XBOX
 				formattedImg = SDL_ConvertSurface(resizeImage, dest->format, dest->flags);
-#else
-				formattedImg = SDL_DisplayFormatAlpha(resizeImage);
-#endif
 				SDL_FreeSurface(resizeImage);
 			} else {
-#ifdef _XBOX
 				formattedImg = SDL_ConvertSurface(img, dest->format, dest->flags);
-#else
-				formattedImg = SDL_DisplayFormatAlpha(img);
-#endif
 				SDL_FreeSurface(img);
 			}
-			icons_carts.push_back(formattedImg);
-				
+			icons_carts[i] = formattedImg;
 		} else {
-			icons_carts.push_back(NULL);
+			icons_carts[i] = NULL;
 		}
 	}
 }

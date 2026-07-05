@@ -135,16 +135,20 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, NULL); // Se podria pasar this
 	#endif
 
+	#ifdef NET_DEBUG
 	LOG_DEBUG("Downloading url: %s", url.c_str());
+	#endif
 
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
 
+	#ifdef NET_DEBUG
 	if(res != CURLE_OK) {
 		LOG_DEBUG("get_KO: %s\n", curl_easy_strerror(res));
 	} else {
 		LOG_DEBUG("get_ok curl: %s\n", url.c_str());
 	}
+	#endif
 
     return (res == CURLE_OK);
 }
@@ -204,11 +208,13 @@ bool CurlClient::postUrl(const std::string& url, const std::string& postData,con
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
 
+	#ifdef NET_DEBUG
 	if(res != CURLE_OK) {
 		LOG_DEBUG("post_KO curl: %s\n", curl_easy_strerror(res));
 	} else {
 		LOG_DEBUG("post_ok curl: %s\n", url.c_str());
 	}
+	#endif
 	
 	if (headers) curl_slist_free_all(headers);
 

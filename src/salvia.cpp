@@ -780,7 +780,8 @@ static inline void hw_refresh(const void *data, unsigned width,
     if (width  != current_video_settings.sw || height != current_video_settings.sh || bpp != current_video_settings.bpp){
         #ifdef _XBOX
         // El driver SDL de Xbox crea la textura al tamano del core.
-        screen = SDL_SetVideoMode(width, height, bpp, SDL_DOUBLEBUF);
+		screen = XBOX_ResizeGameTexture(width, height, bpp);
+//		screen = SDL_SetVideoMode(width, height, bpp, SDL_DOUBLEBUF);
         #else
         // Windows: recrea la textura D3D9 y su surface al tamano del core
         // SIN tocar la ventana ni el backbuffer.
@@ -800,6 +801,11 @@ static inline void hw_refresh(const void *data, unsigned width,
 	if (current_video_settings.integer_scale != *gameMenu->current_integer_scale){
 		SDL_XBOX_SetDisplayFullscreen(*gameMenu->current_integer_scale == false);
 		current_video_settings.integer_scale = *gameMenu->current_integer_scale;
+	}
+
+	if (current_video_settings.integer_scale_type != *gameMenu->current_integer_scale_type){
+		SDL_XBOX_SetDisplayOverflow(*gameMenu->current_integer_scale_type);
+		current_video_settings.integer_scale_type = *gameMenu->current_integer_scale_type;
 	}
 	#endif
 
@@ -1281,8 +1287,8 @@ int launchGame(std::string rompath, bool tmpDelete){
 	}
 
 	SDL_FillRect(gameMenu->gameScreen, NULL, Constant::colors[clBackground].color);
-	gameMenu->setEmuStatus(EMU_STARTED);
 	gameMenu->clearOverlay();
+	gameMenu->setEmuStatus(EMU_STARTED);
 	//We can reload the emulator if an exception is found from this point over
 	g_start_from_exception = false;
 
@@ -1625,17 +1631,18 @@ int main(int argc, char *argv[]) {
 	retro_set_audio_sample_batch(retro_audio_sample_batch);
 
 	if (!loadGameAtStart(argc, argv)){
+		gameMenu->fillOverlay(clBackground);
+		gameMenu->loadBgImage();
 		//Workaround para mostrar una primera imagen del menu con las imagenes cargadas
 		listMenu->keyUp = true;
 		gameMenu->refreshScreen(*listMenu);
 		listMenu->keyUp = false;
+	} else {
+		gameMenu->clearOverlay();
 	}
 
 	ConfigEmu *emu = cfgLoader->getCfgEmu();
 	gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
-	gameMenu->clearOverlay();
-	gameMenu->loadBgImage();
-
 	initSaveSystem();
 	CurlClient curlClient;
 	curlClient.init();

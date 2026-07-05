@@ -72,6 +72,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader) : m_csInited(false)
 	this->current_ratio = &getCfgLoader()->configMain[cfg::aspectRatio].getIntRef();
 	this->current_sync = &getCfgLoader()->configMain[cfg::syncMode].getIntRef();
 	this->current_integer_scale = &getCfgLoader()->configMain[cfg::integerScale].getBoolRef();
+	this->current_integer_scale_type = &getCfgLoader()->configMain[cfg::scaleIntMode].getIntRef();
 	this->current_shader = &getCfgLoader()->configMain[cfg::shaderMode].getIntRef();
 	this->mustUpdateFps = &getCfgLoader()->configMain[cfg::showFps].getBoolRef();
 	processConfigChanges();
@@ -117,6 +118,7 @@ GameMenu::~GameMenu(){
 	}
 		
 	if (bg_screenshot) SDL_FreeSurface(bg_screenshot);
+	clearLastAchievementArea();
 
 	#ifndef _XBOX
 		if (srf_32_convert.src32) SDL_FreeSurface(srf_32_convert.src32);
@@ -142,6 +144,13 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
         EnterCriticalSection(&m_csSynopsis);
     }
 
+	title_image.setY(5);
+	title_image.setH(listMenu.marginY - 10);
+	title_image.setW(overlay->w);
+	title_image.keepAlpha = true;
+
+	LOG_DEBUG("El title tiene una altura de %d", title_image.getH());
+
     /** snap */
     Image imageSnap;
     const int snapW = overlay->w / 2;
@@ -156,18 +165,13 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
     menuImages.clear();
     menuTextAreas.clear();
 
-//    if (overlay->w / 2 >= 320){
-//        imageSnap.setX(overlay->w / 2 + snapOffset);
-//        imageSnap.setY(listMenu.getY());
-//        imageSnap.setW(snapW - snapOffset * 2);
-//        imageSnap.setH(snapH - snapOffset);
-//    } else {
-        imageSnap.setX(overlay->w / 2 + box2dW);
-        imageSnap.setY(listMenu.getY());
-        imageSnap.setW(snapW - box2dW);
-        imageSnap.setH(snapH);
-//    }
+	/** snap */
+    imageSnap.setX(overlay->w / 2 + box2dW);
+    imageSnap.setY(listMenu.getY());
+    imageSnap.setW(snapW - box2dW);
+    imageSnap.setH(snapH);
     imageSnap.vAlign = ALIGN_TOP;
+	imageSnap.drawShadow = true;
     menuImages.insert(make_pair(SNAP, imageSnap));
     menuImages[SNAP].m_objCS = &m_csSnap;
 
@@ -178,6 +182,7 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
     imageBox2d.setY(overlay->h / 2 - box2dH);
     imageBox2d.setW(box2dW);
     imageBox2d.setH(box2dH);
+	imageBox2d.drawShadow = true;
     menuImages.insert(make_pair(BOX2D, imageBox2d));
     menuImages[BOX2D].m_objCS = &m_csBox2d;
 
@@ -187,6 +192,7 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
     imageSnaptit.setY(listMenu.getY());
     imageSnaptit.setW(snapTitW);
     imageSnaptit.setH(snapTitH);
+	imageSnaptit.drawShadow = true;
     menuImages.insert(make_pair(SNAPTIT, imageSnaptit));
     menuImages[SNAPTIT].m_objCS = &m_csSnaptit;
 
@@ -233,14 +239,13 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
  * 
  */
 void GameMenu::refreshScreen(ListMenu &listMenu){
-	ConfigEmu emu = *cfgLoader->getCfgEmu();
+	const ConfigEmu emu = *cfgLoader->getCfgEmu();
     //Drawing the emulator name
     TTF_Font *fontBig = Fonts::getFont(Fonts::FONTBIG);
     TTF_Font *fontsmall = Fonts::getFont(Fonts::FONTSMALL);
     const int sepVertX = listMenu.getW();
     const int halfWidth = overlay->w / 2;
 	bool debug = true;
-	dirutil dir;
 	const SDL_Color &textColor = Constant::colors[clWhite].sdlColor;
 	const SDL_Color &menuBars = Constant::colors[clMenuBars].sdlColor;
 
@@ -250,92 +255,21 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 
 		if (!game->longFileName.empty()){
             if (listMenu.layout == LAYBOXES) {
-				std::string title = emu.name;
-				if (listMenu.gameDataFields.systems.size() > 0 && (int)listMenu.gameDataFields.systems.size() > listMenu.gameDataFields.posSystem){
-					if (listMenu.gameDataFields.posSystem > -1){
-						title += " (" + listMenu.gameDataFields.systems[listMenu.gameDataFields.posSystem] + ")";
-					} else {
-						title += " " + LanguageManager::instance()->get("menu.filter.all");
-					}
-				}
-
-				//Drawing the title
-				Fonts::drawTextCentTransparent(overlay, fontBig, title.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
-					true, false, textColor, 0);
+				//Draw the title. It can be an image or a text
+				drawTitle(listMenu, fontBig);				
 				//Draw the scrapping process text
 				showScrapProcess(listMenu);
 				//Horizontal separation line
 				fastline(this->overlay, listMenu.marginX, listMenu.marginY - 1 , overlay->w - listMenu.marginX, listMenu.marginY - 1, menuBars);
 				//Vertical separation line
                 fastline(this->overlay, sepVertX, listMenu.marginY , sepVertX, listMenu.getH() + listMenu.marginY - 1, menuBars);
-
 				//Drawing all the menu entries
                 listMenu.draw(this->overlay, getEmuStatus() != EMU_MENU_FILTER);
 
 				if (getEmuStatus() == EMU_MENU_FILTER){
 					drawFilters(listMenu);
 				} else {
-					/* En keyUp: year/mfg/sys (rapido, ~1 ms cada uno) inline.
-					 * Synopsis y 3 PNGs (lentos) al worker  el worker usa
-					 * su propia TTF_Font para el wrap del synopsis y por
-					 * tanto no compite con la fuente del main thread. */
-					if (listMenu.keyUp){
-						const std::string assetsDir = dirutil::getPathPrefix(emu.assets) + std::string(Constant::tempFileSep);
-						// Labels inline (bajo lock para no chocar con createMenuImages)
-						if (game->gameData != NULL){
-							menuTextAreas[YEAR].loadString(LanguageManager::instance()->get("menu.filter.year") + ": " + Constant::TipoToStr(game->gameData->year));
-							menuTextAreas[MANUFACTURER].loadString(LanguageManager::instance()->get("menu.filter.manufacturer") + ": " + game->gameData->manufacturer);
-							menuTextAreas[SYSTEM].loadString(LanguageManager::instance()->get("menu.filter.system") + ": " + listMenu.extractSystem(game->gameData->sourcefile));
-						} else {
-							menuTextAreas[YEAR].clear();
-							menuTextAreas[MANUFACTURER].clear();
-							menuTextAreas[SYSTEM].clear();
-						}
-
-						const int synMaxW = menuTextAreas[SYNOPSIS].getW() - menuTextAreas[SYNOPSIS].marginX;
-						m_menuAssetLoader.submit(dir.getFileNameNoExt(game->longFileName),
-						                         assetsDir, this->overlay->format, this->overlay->w,
-						                         synMaxW);
-					}
-					
-					/* Textos estaticos (YEAR/MANUFACTURER/SYSTEM): solo lectura, sin lock */
-					menuTextAreas[YEAR].draw(this->overlay);
-					menuTextAreas[MANUFACTURER].draw(this->overlay);
-					menuTextAreas[SYSTEM].draw(this->overlay);
-
-					if (menuTextAreas[YEAR].isEmpty() && menuTextAreas[MANUFACTURER].isEmpty() && menuTextAreas[SYSTEM].isEmpty()){
-						menuTextAreas[SYNOPSIS].setY(this->overlay->h / 2 + face_h_big);
-						menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
-					} else if (!menuTextAreas[YEAR].isEmpty() && !menuTextAreas[MANUFACTURER].isEmpty() && !menuTextAreas[SYSTEM].isEmpty()){
-						menuTextAreas[SYNOPSIS].setY(menuTextAreas[SYSTEM].getY() + face_h_big * 2 + 2);
-						menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
-					}
-
-					if (listMenu.showBottomInfo){
-						menuTextAreas[SYNOPSIS].setH(menuTextAreas[SYNOPSIS].getH() - face_h_big * 2);
-					}
-
-					/* SYNOPSIS: try-lock por si el worker lo esta adoptando */
-					if (TryEnterCriticalSection(menuTextAreas[SYNOPSIS].m_objCS)){
-						menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
-						LeaveCriticalSection(menuTextAreas[SYNOPSIS].m_objCS);
-					}
-
-					/* Imagenes: try-lock independiente por asset */
-					if (TryEnterCriticalSection(menuImages[SNAP].m_objCS)){
-						menuImages[SNAP].printImage(this->overlay);
-						LeaveCriticalSection(menuImages[SNAP].m_objCS);
-					}
-					if (overlay->w >= 640){
-						if (TryEnterCriticalSection(menuImages[SNAPTIT].m_objCS)){
-							menuImages[SNAPTIT].printImage(this->overlay);
-							LeaveCriticalSection(menuImages[SNAPTIT].m_objCS);
-						}
-						if (TryEnterCriticalSection(menuImages[BOX2D].m_objCS)){
-							menuImages[BOX2D].printImage(this->overlay);
-							LeaveCriticalSection(menuImages[BOX2D].m_objCS);
-						}
-					}
+					drawSelectedGameAssets(listMenu, game);
 				}
 
 				if (listMenu.showBottomInfo){
@@ -391,6 +325,104 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 		Fonts::drawTextCent(overlay, fontsmall, "Press TAB to select the next entry or", 0, face_h_small + 3, true, true, textColor, 0);
 		Fonts::drawTextCent(overlay, fontsmall, "Press ESC to exit", 0, (face_h_small + 3) * 2, true, true, textColor, 0);
     }
+}
+
+void GameMenu::drawSelectedGameAssets(ListMenu &listMenu, GameFile *game){
+	dirutil dir;
+	const ConfigEmu emu = *cfgLoader->getCfgEmu();
+
+	/* En keyUp: year/mfg/sys (rapido, ~1 ms cada uno) inline.
+		* Synopsis y 3 PNGs (lentos) al worker  el worker usa
+		* su propia TTF_Font para el wrap del synopsis y por
+		* tanto no compite con la fuente del main thread. */
+	if (listMenu.keyUp){
+		const std::string assetsDir = dirutil::getPathPrefix(emu.assets) + std::string(Constant::tempFileSep);
+		// Labels inline (bajo lock para no chocar con createMenuImages)
+		if (game->gameData != NULL){
+			menuTextAreas[YEAR].loadString(LanguageManager::instance()->get("menu.filter.year") + ": " + Constant::TipoToStr(game->gameData->year));
+			menuTextAreas[MANUFACTURER].loadString(LanguageManager::instance()->get("menu.filter.manufacturer") + ": " + game->gameData->manufacturer);
+			menuTextAreas[SYSTEM].loadString(LanguageManager::instance()->get("menu.filter.system") + ": " + listMenu.extractSystem(game->gameData->sourcefile));
+		} else {
+			menuTextAreas[YEAR].clear();
+			menuTextAreas[MANUFACTURER].clear();
+			menuTextAreas[SYSTEM].clear();
+		}
+
+		const int synMaxW = menuTextAreas[SYNOPSIS].getW() - menuTextAreas[SYNOPSIS].marginX;
+		m_menuAssetLoader.submit(dir.getFileNameNoExt(game->longFileName),
+						            assetsDir, this->overlay->format, this->overlay->w,
+						            synMaxW);
+	}
+					
+	/* Textos estaticos (YEAR/MANUFACTURER/SYSTEM): solo lectura, sin lock */
+	menuTextAreas[YEAR].draw(this->overlay);
+	menuTextAreas[MANUFACTURER].draw(this->overlay);
+	menuTextAreas[SYSTEM].draw(this->overlay);
+
+	if (menuTextAreas[YEAR].isEmpty() && menuTextAreas[MANUFACTURER].isEmpty() && menuTextAreas[SYSTEM].isEmpty()){
+		menuTextAreas[SYNOPSIS].setY(this->overlay->h / 2 + face_h_big);
+		menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
+	} else if (!menuTextAreas[YEAR].isEmpty() && !menuTextAreas[MANUFACTURER].isEmpty() && !menuTextAreas[SYSTEM].isEmpty()){
+		menuTextAreas[SYNOPSIS].setY(menuTextAreas[SYSTEM].getY() + face_h_big * 2 + 2);
+		menuTextAreas[SYNOPSIS].setH(overlay->h - menuTextAreas[SYNOPSIS].getY());
+	}
+
+	if (listMenu.showBottomInfo){
+		menuTextAreas[SYNOPSIS].setH(menuTextAreas[SYNOPSIS].getH() - face_h_big * 2);
+	}
+
+	/* SYNOPSIS: try-lock por si el worker lo esta adoptando */
+	if (TryEnterCriticalSection(menuTextAreas[SYNOPSIS].m_objCS)){
+		menuTextAreas[SYNOPSIS].draw(this->overlay, this->gameTicks);
+		LeaveCriticalSection(menuTextAreas[SYNOPSIS].m_objCS);
+	}
+
+	/* Imagenes: try-lock independiente por asset */
+	if (TryEnterCriticalSection(menuImages[SNAP].m_objCS)){
+		menuImages[SNAP].printImage(this->overlay);
+		LeaveCriticalSection(menuImages[SNAP].m_objCS);
+	}
+	if (overlay->w >= 640){
+		if (TryEnterCriticalSection(menuImages[SNAPTIT].m_objCS)){
+			menuImages[SNAPTIT].printImage(this->overlay);
+			LeaveCriticalSection(menuImages[SNAPTIT].m_objCS);
+		}
+		if (TryEnterCriticalSection(menuImages[BOX2D].m_objCS)){
+			menuImages[BOX2D].printImage(this->overlay);
+			LeaveCriticalSection(menuImages[BOX2D].m_objCS);
+		}
+	}
+}
+
+void GameMenu::drawTitle(ListMenu &listMenu, TTF_Font *fontBig){
+	const SDL_Color &textColor = Constant::colors[clWhite].sdlColor;
+	const ConfigEmu emu = *cfgLoader->getCfgEmu();
+
+	std::string title;
+	if (!title_image.hasImage()){
+		title = emu.name;
+	} 
+
+	if (listMenu.gameDataFields.systems.size() > 0 && (int)listMenu.gameDataFields.systems.size() > listMenu.gameDataFields.posSystem){
+		if (listMenu.gameDataFields.posSystem > -1){
+			title += " (" + listMenu.gameDataFields.systems[listMenu.gameDataFields.posSystem] + ")";
+		} else {
+			title += " " + LanguageManager::instance()->get("menu.filter.all");
+		}
+	}
+
+	//Drawing the title
+	if (title_image.hasImage()){
+		title_image.printImage(this->overlay);
+		if (!title.empty()){
+			Fonts::drawTextTransparent(overlay, fontBig, title.c_str(), title_image.newOffset.w + title_image.newDim.w + 10, 
+				face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+				textColor, 0);
+		}
+	} else {
+		Fonts::drawTextCentTransparent(overlay, fontBig, title.c_str(), 0, face_h_big < listMenu.marginY ? (listMenu.marginY - face_h_big) / 2 : 0 , 
+		true, false, textColor, 0);
+	}
 }
 
 void GameMenu::drawInfoButtons(SDL_Rect &rect){
@@ -466,7 +498,7 @@ void GameMenu::drawInfoButtons(SDL_Rect &rect){
 	SDL_Rect dstRect2 = { (rect.w - drawnRect.w) / 2, 0, 0, 0};
 	SDL_BlitSurface(txtSrf, &drawnRect, infoBtnSrf, &dstRect2);
 	SDL_BlitSurface(infoBtnSrf, NULL, overlay, &rect);
-	SDL_SetAlpha(infoBtnSrf, SDL_RLEACCEL, 0);
+	SDL_SetAlpha(infoBtnSrf, SDL_RLEACCEL, 0xFF);
 
 	//SDL_BlitSurface(txtSrf, &drawnRect, overlay, &dstRect);
 	SDL_FreeSurface(txtSrf);
@@ -955,13 +987,32 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 	configMenus->iniciarFiltros(menuData.gameDataFields);
 
 	//Se cargan las imagenes
-	std::string packetAssetsFile = dir.getPathPrefix(emu->assets + Constant::getFileSep() + SCRAPPING_DAT);
-	if (!dir.fileExists(packetAssetsFile.c_str())){
-		//filePackage.Pack(dir.getPathPrefix(emu->assets), packetAssetsFile.c_str());
-		LOG_DEBUG("Creating assets in %s\n", emu->assets.c_str());
-	} else {
+	const std::string assetsDir = getAssetsDir(emu);
+	const std::string packetAssetsFile = dir.getPathPrefix(assetsDir + Constant::getFileSep() + SCRAPPING_DAT);
+
+	if (dir.fileExists(packetAssetsFile.c_str())){
 		filePackage.Load(packetAssetsFile.c_str());
+	} 
+	//else {
+	//	filePackage.Pack(dir.getPathPrefix(emu->assets), packetAssetsFile.c_str());
+	//	LOG_DEBUG("Creating assets in %s\n", emu->assets.c_str());
+	//}
+
+	//Se carga la imagen del emulador que va en el titulo
+	std::string titleEmuImg = dir.getPathPrefix(assetsDir + Constant::getFileSep() + TITLE_EMU_FILENAME);
+	if (dir.fileExists(titleEmuImg.c_str())){
+		if (title_image.getFilepath() != titleEmuImg)
+			title_image.loadImage(titleEmuImg, NULL);
+	} else {
+		title_image.closeImage();
 	}
+
+	//Loading the background image if exists
+	loadBgImage();
+}
+
+string GameMenu::getAssetsDir(ConfigEmu *emu){
+	return emu->title_bkg_assets.empty() ? emu->assets : emu->title_bkg_assets;
 }
 
 /**
@@ -1266,6 +1317,8 @@ int GameMenu::recoverGameMenuPos(ListMenu &menuData, struct ListStatus &read_str
 
 bool GameMenu::updateFps(){
 	bool shouldUpdateFps = false;
+	TTF_Font *font = Fonts::getFont(Fonts::FONTSMALL);
+
     if (*this->mustUpdateFps) {
         uint32_t currentTick = SDL_GetTicks();
         
@@ -1299,8 +1352,8 @@ bool GameMenu::updateFps(){
 			//OutputDebugStringA(this->sync->fpsText);
 			//OutputDebugStringA("\n");
 			
-            fpsSurface = Fonts::renderUtf8Shaded(Fonts::getFont(Fonts::FONTSMALL), this->sync->fpsText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
-            cpuSurface = Fonts::renderUtf8Shaded(Fonts::getFont(Fonts::FONTSMALL), this->sync->cpuText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
+            fpsSurface = Fonts::renderUtf8Shaded(font, this->sync->fpsText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
+            cpuSurface = Fonts::renderUtf8Shaded(font, this->sync->cpuText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
             
             lastFpsUpdate = currentTick;
         }
@@ -1338,7 +1391,7 @@ bool GameMenu::updateFps(){
 				sprintf(memText, "MEM: %.0f%% (%.0fMB Free)", totalPercent, availMB);
 			}
 
-			memSurface = Fonts::renderUtf8Shaded(Fonts::getFont(Fonts::FONTSMALL), memText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
+			memSurface = Fonts::renderUtf8Shaded(font, memText, Constant::colors[clWhite].sdlColor, Constant::colors[clBlack].sdlColor);
 			lastMemUpdate = currentTick;
 		}
 
@@ -1467,7 +1520,9 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 				bg_screenshot = NULL;
 			}
 			bg_screenshot = clonarPantalla(gameScreen, 180);
-
+			fillOverlay(clBackground);
+			//fillOverlay(clBlack);
+			//clearOverlay();
 			setEmuStatus(EMU_MENU);
 			break;
 		case HK_VIEW_MENU:
@@ -1548,10 +1603,13 @@ SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
 					Constant::colors[clBackground].sdlColor.b, 
 					transparency);
 		}
-		copia = SDL_DisplayFormat(tmp);
+		copia = SDL_ConvertSurface(tmp, overlay->format, overlay->flags);
+		//copia = SDL_DisplayFormat(tmp);
 		SDL_FreeSurface(tmp);
 	}
 	
+	// Imagen plana sin transparencias
+	SDL_SetAlpha(copia, SDL_RLEACCEL, 0xFF);
     return copia;
 }
 
@@ -1732,15 +1790,7 @@ void GameMenu::processMessagesAchievements(){
     
 	// 3. Renderizado condicional: Solo entra si hay algo que dibujar
 	// Renderizado (Si hay mensajes)
-	if (messagesAchievement.empty()) {
-		if (lastMessagesArea.h > 0) {
-			clearOverlayRect(lastMessagesArea);
-			lastMessagesArea.x = 0;
-			lastMessagesArea.y = 0;
-			lastMessagesArea.w = 0;
-			lastMessagesArea.h = 0;
-		}
-    } else {
+	if (!messagesAchievement.empty()) {
 		renderCurrentAchievement();
 	}
     
@@ -1750,15 +1800,6 @@ void GameMenu::processMessagesAchievements(){
 	renderChallenges();
 	// Renderizado de progresos
 	renderProgress();
-}
-
-void GameMenu::clearLastAchievementArea() {
-    // Solo limpiamos si el area tiene dimensiones validas
-    if (lastMessagesArea.w > 0 && lastMessagesArea.h > 0) {
-        // Pintamos un rectungulo del color de fondo (uBkgColor) 
-        // sobre el area que ocupaba el ultimo logro
-		clearOverlayRect(lastMessagesArea);
-    }
 }
 
 inline void GameMenu::updateAchievementsState(uint32_t currentTicks) {
@@ -1798,7 +1839,23 @@ inline void GameMenu::handleMessageQueue(uint32_t currentTicks) {
 		ach->clearSurfaces();
 		AchievementState msg;
         messagesAchievement.pop(msg);
+		clearLastAchievementArea();
     }
+}
+
+
+void GameMenu::clearLastAchievementArea() {
+    // Solo limpiamos si el area tiene dimensiones validas
+	if (achievement_surface.lastPos.w > 0 && achievement_surface.lastPos.h > 0) {
+        // Pintamos un rectungulo del color de fondo (uBkgColor) 
+        // sobre el area que ocupaba el ultimo logro
+		clearOverlayRect(achievement_surface.lastPos);
+    }
+
+	if (achievement_surface.srf){
+		SDL_FreeSurface(achievement_surface.srf);
+		achievement_surface.srf = NULL;
+	}
 }
 
 void GameMenu::renderCurrentAchievement() {
@@ -1811,57 +1868,77 @@ void GameMenu::renderCurrentAchievement() {
         showAchievementMessage(Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.title"), msg->title.c_str()), 
 							   Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.points"), msg->achvTotal, msg->scoreTotal), 
 							   Constant::string_format(LanguageManager::instance()->get("msg.achievement.loaded.unlocked"), msg->achvUnlocked), 
-                               msg->badge, lastMessagesArea);
+                               msg->badge);
     } else if (msg->type == ACH_UNLOCKED){
 		Achievements::instance()->setShouldRefresh(true);
-        showAchievementMessage(LanguageManager::instance()->get("msg.achievement.unlocked.title"), msg->title, msg->description, msg->badge, lastMessagesArea);
+        showAchievementMessage(LanguageManager::instance()->get("msg.achievement.unlocked.title"), msg->title, msg->description, msg->badge);
     } else if (msg->type == ACH_WARNING){
-        showAchievementMessage(LanguageManager::instance()->get("msg.achievement.warning.title"), msg->title, msg->description, msg->badge, lastMessagesArea);
+        showAchievementMessage(LanguageManager::instance()->get("msg.achievement.warning.title"), msg->title, msg->description, msg->badge);
     }
 }
 
-void GameMenu::showAchievementMessage(std::string line1Str, std::string line2Str, std::string line3Str, SDL_Surface *badge, SDL_Rect& lastMessagesArea){
-	SDL_Surface *line1 = Fonts::renderUtf8Blended(Fonts::getFont(Fonts::FONTSMALL), line1Str.c_str(), Constant::colors[clWhite].sdlColor);
-	SDL_Surface *line2 = Fonts::renderUtf8Blended(Fonts::getFont(Fonts::FONTSMALL), line2Str.c_str(), Constant::colors[clYellow].sdlColor);
-	SDL_Surface *line3 = Fonts::renderUtf8Blended(Fonts::getFont(Fonts::FONTSMALL), line3Str.c_str(), Constant::colors[clBlue].sdlColor);
+void GameMenu::showAchievementMessage(const std::string &line1Str, const std::string &line2Str, const std::string &line3Str, SDL_Surface *badge){
 
-	int maxW = line1->w > line2->w ? line1->w : line2->w;
-	maxW = maxW > line3->w ? maxW : line3->w; 
-	const int paddingBottom = 10;
-	int line_height, badgeW, badgeH, badgePad;
+	if (achievement_surface.srf == NULL){
+		SDL_Surface *line1 = Fonts::renderUtf8Blended(Fonts::getFont(Fonts::FONTSMALL), line1Str.c_str(), Constant::colors[clWhite].sdlColor);
+		SDL_Surface *line2 = Fonts::renderUtf8Blended(Fonts::getFont(Fonts::FONTSMALL), line2Str.c_str(), Constant::colors[clYellow].sdlColor);
+		SDL_Surface *line3 = Fonts::renderUtf8Blended(Fonts::getFont(Fonts::FONTSMALL), line3Str.c_str(), Constant::colors[clBlue].sdlColor);
 
-	Achievements& self = *Achievements::instance();
+		const int paddingBottom = 10;
+		int maxW = line1->w > line2->w ? line1->w : line2->w;
+		maxW = maxW > line3->w ? maxW : line3->w; 
+		int line_height, badgeW, badgeH, badgePad;
+		Fonts::getBadgeSize(badgeW, badgeH, badgePad, line_height);
+		maxW = paddingBottom + maxW + badgePad * 3 > overlay->w ? (paddingBottom + maxW + badgePad * 3) - overlay->w : maxW;
+		const int maxH = this->overlay->h -paddingBottom -line_height * 3;
+		SDL_Rect rect = {10 + badgeW, 0, 0, line_height};
+		achievement_surface.pos.x = rect.x - badgeW;
+		achievement_surface.pos.y = maxH;
+		achievement_surface.pos.w = maxW + badgeW + badgePad * 3;
+		achievement_surface.pos.h = this->overlay->h - maxH - paddingBottom;
 
-	Fonts::getBadgeSize(badgeW, badgeH, badgePad, line_height);
-	const int maxH = this->overlay->h -paddingBottom -line_height * 3;
+		Achievements& self = *Achievements::instance();
 
-	SDL_Rect rect = {10 + badgeW, 0, 0, line_height};
-	lastMessagesArea.x = rect.x - badgeW;
-	lastMessagesArea.y = maxH;
-	lastMessagesArea.w = maxW + badgeW + badgePad * 3;
-	lastMessagesArea.h = this->overlay->h - maxH - paddingBottom;
+		//Limpiamos el espacio ocupado por la superficie anterior
+		clearLastAchievementArea();
+		achievement_surface.lastPos = achievement_surface.pos;
+		//La creamos de nuevo
+		achievement_surface.srf = SDL_CreateRGBSurface(SDL_SWSURFACE, achievement_surface.pos.w, achievement_surface.pos.h, 
+															overlay->format->BitsPerPixel,
+															overlay->format->Rmask, 
+															overlay->format->Gmask, 
+															overlay->format->Bmask, 
+															overlay->format->Amask);
 
-	SDL_FillRect(this->overlay, &lastMessagesArea, Constant::colors[clPaleBlue].color);
-	//DrawRectAlpha(overlay, lastMessagesArea, black, 230);
+		if (achievement_surface.srf == NULL)
+			return;
 
-	SDL_Rect txtRect = {rect.x + badgePad * 2, maxH, 0, line1->w};
-	SDL_BlitSurface(line1, NULL, this->overlay, &txtRect);
+		SDL_FillRect(achievement_surface.srf, NULL, Constant::colors[clPaleBlue].color);
+		SDL_SetAlpha(achievement_surface.srf, SDL_RLEACCEL, 0xFF);
 
-	txtRect.y = this->overlay->h -paddingBottom -line_height * 2;
-	txtRect.w = line2->w;
-	SDL_BlitSurface(line2, NULL, this->overlay, &txtRect);
+		SDL_Rect txtRect = {badgeW + badgePad * 2, 0, line1->w, line_height};
+		SDL_BlitSurface(line1, NULL, achievement_surface.srf, &txtRect);
 
-	txtRect.y = this->overlay->h -paddingBottom -line_height;
-	txtRect.w = line3->w;
-	SDL_BlitSurface(line3, NULL, this->overlay, &txtRect);
+		txtRect.y = line_height;
+		txtRect.w = line2->w;
+		SDL_BlitSurface(line2, NULL, achievement_surface.srf, &txtRect);
+
+		txtRect.y = line_height * 2;
+		txtRect.w = line3->w;
+		SDL_BlitSurface(line3, NULL, achievement_surface.srf, &txtRect);
 	
-	SDL_FreeSurface(line1);
-	SDL_FreeSurface(line2);
-	SDL_FreeSurface(line3);
+		SDL_FreeSurface(line1);
+		SDL_FreeSurface(line2);
+		SDL_FreeSurface(line3);
 
-	if (badge != NULL){
-		SDL_Rect rectBadge = {rect.x - badgeW + badgePad, this->overlay->h -paddingBottom -line_height * 3 + badgePad, 0, line_height};
-		SDL_BlitSurface(badge, NULL, this->overlay, &rectBadge);
+		if (badge != NULL){
+			SDL_Rect rectBadge = {badgePad, badgePad, 0, 0};
+			SDL_BlitSurface(badge, NULL, achievement_surface.srf, &rectBadge);
+		}
+	}
+
+	if (achievement_surface.srf != NULL){
+		SDL_BlitSurface(achievement_surface.srf, NULL, overlay, &achievement_surface.pos);
 	}
 }
 
@@ -2191,7 +2268,7 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
         // mezcla cada pixel con el framebuffer del juego. Regla de SDL 1.2:
         //   RGBA?RGBA SIN SDL_SRCALPHA = copia pixeles tal cual.
         //   RGBA?RGBA CON SDL_SRCALPHA = SDL alpha-blendea internamente.
-        SDL_SetAlpha(rawSurface, SDL_RLEACCEL, 0);
+        SDL_SetAlpha(rawSurface, SDL_RLEACCEL, 0xFF);
         keyb.keyboardSurface = rawSurface;   // cacheamos directamente
 #else 
 		SDL_SetAlpha(rawSurface, SDL_SRCALPHA | SDL_RLEACCEL, KEY_ALPHA);
@@ -2215,12 +2292,9 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
 
 
 bool GameMenu::loadBgImage(){
-	dirutil dir;
-	ANIM_BACKGROUNDS bgType = static_cast<ANIM_BACKGROUNDS>(this->cfgLoader->configMain[cfg::animBG].valueInt);
-	ConfigEmu *emu = this->cfgLoader->getCfgEmu();
-	//Loading the background image if exists
-	std::string imageNoExt = dir.getPathPrefix(emu->assets + Constant::getFileSep() + BG_FILENAME);
-	std::string image = imageNoExt + ".jpg";
+	const dirutil dir;
+	const ANIM_BACKGROUNDS bgType = static_cast<ANIM_BACKGROUNDS>(this->cfgLoader->configMain[cfg::animBG].valueInt);
+	const std::string image = dir.getPathPrefix(getAssetsDir(cfgLoader->getCfgEmu()) + Constant::getFileSep() + BG_FILENAME) + ".jpg";
 
 	bool found = dir.fileExists(image.c_str());
 	if (bgType == BG_IMAGE && found){

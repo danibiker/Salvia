@@ -11,6 +11,26 @@
 
 using namespace std;
 
+struct t_shadow{
+    SDL_Rect rect;
+    SDL_Surface *srf;
+
+    t_shadow() : srf(NULL) {
+        rect.x = rect.y = rect.w = rect.h = 0;
+    }
+
+    ~t_shadow(){
+        if (srf != NULL) {
+            SDL_FreeSurface(srf);
+            srf = NULL;
+        }
+    }
+
+private:
+    t_shadow(const t_shadow&);
+    t_shadow& operator=(const t_shadow&);
+};
+
 class Image : public Object{
     public:
         Image();
@@ -22,6 +42,10 @@ class Image : public Object{
         bool tamAuto;
         int vAlign;
         bool fillGaps;
+		bool keepAlpha;
+		bool drawShadow;
+		Dimension newDim;
+		Dimension newOffset;
 
 		static void convertirGrises16Bits(SDL_Surface*);
         static Dimension relacion(const Dimension &src, const Dimension &dst );
@@ -52,13 +76,16 @@ class Image : public Object{
 		void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest, 
                       int src_x, int src_y, int src_w, int src_h, 
                       int dst_x, int dst_y, int dst_w, int dst_h);
+		mutable CRITICAL_SECTION* m_objCS; // apunta al CS externo que protege este objeto
 
     private:
         string filepath;
         SDL_Surface* img;
 		SDL_Surface* cachedSurface; // Almacena la imagen ya escalada
 		int lastW, lastH;           // Para detectar si el tamanyo cambio
-	public:
-		mutable CRITICAL_SECTION* m_objCS; // apunta al CS externo que protege este objeto
-	private:
+		std::vector<t_shadow*> shadows;
+		
+		void printShadow(SDL_Surface *video_page);
+		void clearShadows();
+
 };

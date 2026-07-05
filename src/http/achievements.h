@@ -27,6 +27,11 @@ struct retro_memory_descriptor;
  * de la consola) al buffer correcto (WRAM o SRAM) + offset. */
 #define MAX_MEMORY_MAPPINGS 16
 
+//6 segundos en los que se muestra el logro
+#define TIMEOUT_ACHIEVEMENT 6000; 
+//5 segundos en los que mostramos el juego iniciado
+#define TIMEOUT_PLACARD 5000; 
+
 struct MemoryMapping {
     uint32_t start;     // Direccion RA de inicio (inclusive)
     uint32_t end;       // Direccion RA de fin (inclusive)

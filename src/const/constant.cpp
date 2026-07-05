@@ -45,6 +45,7 @@ const std::string QUAKE_MAPS_URL[QUAKE_MAPS_COUNT] = {
 };
 const std::string START_FROM_EXCEPTION = "%$_START_FROMEXCEPTION_$%";
 const std::string SCRAPPING_DAT = "images.bin";
+const std::string TITLE_EMU_FILENAME = "title.png";
 const std::string PASS_MASK = "****";
 
 const char *ICONS_PATH[] = {"menu_log.png",
