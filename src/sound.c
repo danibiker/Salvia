@@ -396,15 +396,6 @@ static INLINE void Blip_Synth_offset( const Blip_Synth *self, int32_t t, int del
 	p [1] = right;
 }
 
-static INLINE void Blip_Synth_volume( Blip_Synth *self, float v )
-{
-	/* (double)v is deliberate: it keeps the scale multiply in double
-	 * precision.  The old form spelled this `(v * 1.0)`, which looks
-	 * like a no-op but is what promoted the expression to double --
-	 * dropping it would compute delta_factor in float instead. */
-	self->delta_factor = (int)((double)v * (1L << BLIP_SAMPLE_BITS) + 0.5);
-}
-
 static INLINE int Gb_Wave_read( const Gb_Wave *self, unsigned addr )
 {
 	/* Gb_Wave_access(self,addr) was just `addr & 0x0F` with self unused,
@@ -451,7 +442,24 @@ int   SOUND_CLOCK_TICKS  = SOUND_CLOCK_TICKS_;
 int   soundTicks         = SOUND_CLOCK_TICKS_;
 
 static int soundEnableFlag   = 0x3ff; /* emulator channels enabled*/
-static float const apu_vols [4] = { -0.25f, -0.5f, -1.0f, -0.25f };
+/* The GB APU master-volume scale used to be a float table (apu_vols) feeding a
+ * float chain  v = apu_vols[idx]*0.60/OSC_COUNT/15/8*iv  ->  Blip_Synth_volume()
+ * ->  delta_factor = (int)((double)v*2^30+0.5).  That put floating point in the
+ * value that scales every synthesized sample, so the resulting int16 stream was
+ * not guaranteed bit-identical across platforms/FPU modes.  The chain has a tiny
+ * fixed domain -- idx = SGCNT0_H&3 (apu_vols = {-0.25,-0.5,-1.0,-0.25}) and
+ * iv = max(L,R)+1 in 1..8 -- so the exact delta_factor integers are baked here.
+ * Values are bit-identical to the previous float output (verified across the
+ * full idx x iv domain) and now involve no runtime floating point. */
+static const int gb_apu_delta_factor[4][9] =
+{
+   { 0, -335543, -671088, -1006632, -1342176, -1677721, -2013265, -2348809, -2684354 },
+   { 0, -671088, -1342176, -2013265, -2684354, -3355442, -4026531, -4697620, -5368708 },
+   { 0, -1342176, -2684354, -4026531, -5368708, -6710886, -8053063, -9395240, -10737417 },
+   { 0, -335543, -671088, -1006632, -1342176, -1677721, -2013265, -2348809, -2684354 }
+};
+/* pcm_synth delta_factor, was Blip_Synth_volume(&pcm_synth, 0.66/256*-1) */
+#define PCM_SYNTH_DELTA_FACTOR (-2768240)
 
 static const int table [0x40] =
 {
@@ -571,7 +579,7 @@ struct gb_apu_t
 	int32_t		frame_time;	/* time of next frame sequencer action */
 	int32_t		frame_period;       /* clocks between each frame sequencer step */
 	int32_t         frame_phase;    /* phase of next frame sequencer step */
-	float		volume_;
+	int		volume_;            /* master volume selector (SGCNT0_H & 3); -1 = unset */
 	Gb_Osc*		oscs [OSC_COUNT];
 	Gb_Sweep_Square square1;
 	Gb_Square       square2;
@@ -646,9 +654,16 @@ static void gb_apu_reduce_clicks( bool reduce )
 
 static void gb_apu_synth_volume( int iv )
 {
-	float v = gb_apu.volume_ * 0.60 / OSC_COUNT / 15 /*steps*/ / 8 /*master vol range*/ * iv;
-	Blip_Synth_volume(&gb_apu.good_synth, v);
-	Blip_Synth_volume(&gb_apu.med_synth, v);
+	/* iv = max(left,right)+1 in 1..8; volume_ = SGCNT0_H&3 in 0..3.
+	 * delta_factor is looked up from the baked table -- bit-identical to the
+	 * old  v = volume_scale*0.60/OSC_COUNT/15/8*iv -> (int)(v*2^30+0.5)  path,
+	 * with no runtime floating point.  While volume_ is still the -1 sentinel
+	 * (during reset, before the first gb_apu_volume() applies the real index)
+	 * the synth factor is forced to 0; that value is always overwritten before
+	 * any sample is synthesized, exactly as in the old volume_==1.0 transient. */
+	int df = (gb_apu.volume_ < 0) ? 0 : gb_apu_delta_factor[gb_apu.volume_][iv];
+	gb_apu.good_synth.delta_factor = df;
+	gb_apu.med_synth.delta_factor  = df;
 }
 
 static void gb_apu_apply_volume (void)
@@ -963,7 +978,7 @@ static void gb_apu_new(void)
 	gb_apu.reduce_clicks_ = false;
 	gb_apu.frame_period = 4194304 / 512; /* 512 Hz*/
 
-	gb_apu.volume_ = 1.0;
+	gb_apu.volume_ = -1;                 /* sentinel: forces first gb_apu_volume() to apply */
 	gb_apu_reset(MODE_AGB, false);
 }
 
@@ -986,11 +1001,11 @@ static void gb_apu_set_output( Blip_Buffer* center, Blip_Buffer* left, Blip_Buff
 	while ( i < osc );
 }
 
-static void gb_apu_volume( float v )
+static void gb_apu_volume( int idx )
 {
-	if ( gb_apu.volume_ != v )
+	if ( gb_apu.volume_ != idx )
 	{
-		gb_apu.volume_ = v;
+		gb_apu.volume_ = idx;
 		gb_apu_apply_volume();
 	}
 }
@@ -1727,9 +1742,18 @@ static const char * Blip_Buffer_set_sample_rate(Blip_Buffer *self, long new_rate
 
 static uint32_t Blip_Buffer_clock_rate_factor(const Blip_Buffer *self, long rate)
 {
-   float ratio = (float) self->sample_rate_ / rate;
-   int32_t factor = (int32_t) floor( ratio * (1L << BLIP_BUFFER_ACCURACY) + 0.5 );
-   return (uint32_t) factor;
+   /* factor = round( sample_rate / rate * 2^ACCURACY ), computed entirely in
+    * integer math.  The previous float form rounded sample_rate/rate to single
+    * precision *before* scaling, so for sample rates whose ratio is not exactly
+    * representable in float the result could land one LSB either side of the
+    * true value -- and which side depended on the platform FPU.  The 64-bit
+    * exact-rounding division below is deterministic everywhere and reproduces
+    * the float result bit-for-bit at every rate the core actually uses
+    * (32000/44100/48000 against the 2^24 GBA clock), while being strictly more
+    * accurate for arbitrary rates. */
+   uint64_t num = ((uint64_t) self->sample_rate_ << BLIP_BUFFER_ACCURACY)
+                + (uint64_t) (rate >> 1);
+   return (uint32_t) (num / (uint64_t) rate);
 }
 
 
@@ -1986,7 +2010,7 @@ static void soundEvent_u16_parallel(uint32_t address[])
 				WRITE16LE( &ioMem [SGCNT0_H], 0 & 0x770F );
 				pcm_fifo_write_control(0, 0);
 
-				gb_apu_volume( apu_vols [ioMem [SGCNT0_H] & 3] );
+				gb_apu_volume( ioMem [SGCNT0_H] & 3 );
 				/*End of SGCNT0_H */
 				break;
 
@@ -2106,7 +2130,7 @@ void soundEvent_u16(uint32_t address, uint16_t data)
 			WRITE16LE( &ioMem [SGCNT0_H], data & 0x770F );
 			pcm_fifo_write_control( data, data >> 4);
 
-			gb_apu_volume( apu_vols [ioMem [SGCNT0_H] & 3] );
+			gb_apu_volume( ioMem [SGCNT0_H] & 3 );
 			/*End of SGCNT0_H */
 			break;
 
@@ -2232,9 +2256,9 @@ static void remake_stereo_buffer (void)
 
 	apply_muting();
 
-	gb_apu_volume(apu_vols [ioMem [SGCNT0_H] & 3] );
+	gb_apu_volume( ioMem [SGCNT0_H] & 3 );
 
-	Blip_Synth_volume(&pcm_synth,  0.66 / 256 * -1);
+	pcm_synth.delta_factor = PCM_SYNTH_DELTA_FACTOR;
 }
 
 void soundCleanUp (void)
@@ -2397,7 +2421,7 @@ void soundReadGameMem(const uint8_t **in_data, int version)
 	WRITE16LE( &ioMem [SGCNT0_H], data & 0x770F );
 	pcm_fifo_write_control( data, data >> 4 );
 
-	gb_apu_volume(apu_vols [ioMem [SGCNT0_H] & 3] );
+	gb_apu_volume( ioMem [SGCNT0_H] & 3 );
 	/*End of SGCNT0_H */
 }
 
