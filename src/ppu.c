@@ -1678,6 +1678,12 @@ static void DrawBackgroundOffsetMosaic (int bg, uint8_t Zh, uint8_t Zl, int VOff
 static INLINE void DrawBackgroundMode7 (int bg, void (*DrawMath) (uint32_t, uint32_t, int), void (*DrawNomath) (uint32_t, uint32_t, int), int D)
 {
 	int clip;
+	/* Refresh the de-interleaved Mode 7 tilemap/graphics planes from
+	 * current VRAM before sampling. VRAM is VBlank-stable across a frame's
+	 * Mode 7 rendering, so this snapshot is valid for every clip segment
+	 * below; rebuilding here (rather than on every VRAM write) keeps the
+	 * write path untouched. */
+	S9xMode7DeinterleaveVRAM();
 	for ( clip = 0; clip < GFX.Clip[bg].Count; clip++)
 	{
 		GFX.ClipColors = !(GFX.Clip[bg].DrawMode[clip] & 1);
@@ -4235,10 +4241,22 @@ static void S9xDoDMA (void)
 		{
 			if (Settings.SDD1)
 			{
-				if (d->AAddressFixed && Memory.FillRAM[0x4801] > 0)
+				/* The chip streams decompressed data only for reads of the
+				 * c0-ff banks, and only on a DMA channel whose bit is set in
+				 * both $4800 (enable) and $4801 (run); when the transfer
+				 * completes, the hardware clears just that channel's run bit
+				 * and leaves any other armed channels alone (ares and the
+				 * MiSTer core agree on all three points). The old code
+				 * ignored $4800, triggered on any nonzero $4801, and wiped
+				 * the whole run register after every DMA while the chip was
+				 * present, so a stale $4801 could decompress an unrelated
+				 * fixed-address ROM transfer. Both retail games arm channel 0
+				 * with $4800=$4801=$01 and read from banks >= $c0 on every
+				 * decompression (verified by logging). */
+				if (d->AAddressFixed && d->ABank >= 0xc0 &&
+						(Memory.FillRAM[0x4800] & Memory.FillRAM[0x4801] & (1 << Channel)))
 				{
 					uint8_t *in_ptr;
-					/* XXX: Should probably verify that we're DMAing from ROM?*/
 					/* And somewhere we should make sure we're not running across a mapping boundary too.*/
 					/* Hacky support for pre-decompressed S-DD1 data*/
 					inc = !d->AAddressDecrement ? 1 : -1;
@@ -4251,9 +4269,8 @@ static void S9xDoDMA (void)
 					}
 
 					in_sdd1_dma = sdd1_decode_buffer;
+					Memory.FillRAM[0x4801] &= ~(1 << Channel);
 				}
-
-				Memory.FillRAM[0x4801] = 0;
 			}
 
 			/* SPC7110 */
@@ -5015,6 +5032,28 @@ void S9xSetCPU (uint8_t Byte, uint16_t Address)
 						S9X_SET_IRQ(PPU_IRQ_SOURCE);
 					}
 				}
+				/* Pure vertical IRQ (no H component) enabled while the beam is
+				   already on the target scanline must fire immediately,
+				   regardless of the current horizontal position. The
+				   H-position-window check above only catches this when the
+				   write happens to land near the start of the line, so a
+				   V-IRQ enabled later in the scanline would otherwise be
+				   deferred a whole frame - the game stays in forced blank and
+				   the screen strobes. Affects e.g. RoboCop vs. The Terminator,
+				   whose lightning/strobe effect flickers constantly instead of
+				   at the intended interval.
+
+				   Only fire on an off-to-on transition of the IRQ-enable bits
+				   (old $4200 & 0x30 == 0), matching the "initial" immediate-IRQ
+				   path in upstream Snes9x's S9xUpdateIRQPositions; this avoids
+				   spuriously re-triggering when a game rewrites $4200 with
+				   V-IRQ already active. */
+				else if (PPU.VTimerEnabled && !PPU.HTimerEnabled &&
+				         (CPU.V_Counter == PPU.VTimerPosition) &&
+				         ((Memory.FillRAM[0x4200] & 0x30) == 0))
+				{
+					S9X_SET_IRQ(PPU_IRQ_SOURCE);
+				}
 
 				if (!(Byte & 0x30))
 				{
@@ -5185,7 +5224,7 @@ void S9xSetCPU (uint8_t Byte, uint16_t Address)
 					S9xSetSPC7110(Byte, Address);
 				else
 				if (Settings.SDD1 && Address >= 0x4804 && Address <= 0x4807)
-					S9xSetSDD1MemoryMap(Address - 0x4804, Byte & 7);
+					S9xSetSDD1MemoryMap(Address - 0x4804, Byte & 0x0f);
 				break;
 		}
 	}

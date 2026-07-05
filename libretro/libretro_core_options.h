@@ -226,6 +226,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "disabled"
    },
    {
+      "snes9x_2010_superfx_cycle_accuracy",
+      "SuperFX Cycle Accuracy",
+      NULL,
+      "Charge each SuperFX (GSU) instruction an approximate hardware cycle cost (multiplies, RAM/ROM access, plots) rather than a flat per-instruction budget, for more hardware-like GSU timing. Set to 'disabled' for the legacy instruction-count behaviour. Works together with the SuperFX overclock option.",
+      NULL,
+      "hacks",
+      {
+         { "enabled",  NULL },
+         { "disabled", NULL },
+         { NULL, NULL},
+      },
+      "enabled"
+   },
+   {
       "snes9x_2010_reduce_sprite_flicker",
       "Reduce Flickering (Hack, Unsafe)",
       NULL,
@@ -284,6 +298,21 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { NULL, NULL},
       },
       "stable"
+   },
+
+   {
+      "snes9x_2010_pseudo_hires_blend",
+      "Pseudo-Hires Blending",
+      NULL,
+      "Blends adjacent column pairs in pseudo-hires frames to reproduce the composite-video softening that some games rely on for fake transparency effects (waterfalls, glass, fog: Kirby's Dream Land 3, Jurassic Park). Applies a 2-tap horizontal average to the finished 512 px frame while keeping the full hires resolution; it does not reduce the image to 256 px. Affects only frames that actually use pseudo-hires; native and true Mode 5/6 hires output is unchanged. Ignored when the Blargg NTSC filter is active, since that already simulates the same softening. Default off.",
+      NULL,
+      NULL,
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL},
+      },
+      "disabled"
    },
 
    { NULL, NULL, NULL, NULL, NULL, NULL, {{0}}, NULL },

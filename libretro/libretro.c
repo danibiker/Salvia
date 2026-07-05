@@ -221,8 +221,8 @@ void linearFree(void* mem);
 #define CORE_VERSION	"1.52.4"
 #define LIBRETRO_LIB_NAME "Snes9x 2010"
 
-#define VIDEO_REFRESH_RATE_PAL  (PAL_MASTER_CLOCK / (double)(SNES_CYCLES_PER_SCANLINE * SNES_MAX_PAL_VCOUNTER))
-#define VIDEO_REFRESH_RATE_NTSC (NTSC_MASTER_CLOCK / (double)(SNES_CYCLES_PER_SCANLINE * SNES_MAX_NTSC_VCOUNTER))
+#define VIDEO_REFRESH_RATE_PAL  (PAL_MASTER_CLOCK / (SNES_CYCLES_PER_SCANLINE * SNES_MAX_PAL_VCOUNTER))
+#define VIDEO_REFRESH_RATE_NTSC (NTSC_MASTER_CLOCK / (SNES_CYCLES_PER_SCANLINE * SNES_MAX_NTSC_VCOUNTER))
 
 /* Pre-zeroed silence buffer used in place of real SPC output when
    audio_muted is set. Sized for one worst-case PAL frame at the
@@ -235,6 +235,19 @@ void linearFree(void* mem);
    initialized at startup) rather than .rodata; we never write to it. */
 #define MUTE_BUFFER_FRAMES 768
 static int16_t mute_buffer[MUTE_BUFFER_FRAMES * 2];
+
+/* Backing buffer for the in-memory STREAM abstraction (see snes9x.h).
+ * Upstream libretro-common dropped memstream_set_buffer/get_last_size and
+ * now requires the buffer at memstream_open() time, so we publish it here
+ * for the OPEN_STREAM() macro to pick up. */
+uint8_t *s9x_stream_buffer      = NULL;
+uint64_t s9x_stream_buffer_size = 0;
+
+void S9xSetStreamBuffer(uint8_t *buffer, uint64_t size)
+{
+	s9x_stream_buffer      = buffer;
+	s9x_stream_buffer_size = size;
+}
 
 /* Set when the frontend has signalled that audio should not be played
    (either user has disabled audio or a frontend-controlled fast-forward
@@ -275,7 +288,9 @@ static bool update_audio_latency = false;
 
 extern s9xcommand_t keymap[1024];
 bool overclock_cycles = false;
+extern int fx_cycle_accuracy; /* fxemu.c SuperFX cycle-cost toggle */
 bool reduce_sprite_flicker = false;
+bool pseudo_hires_blend = false;
 extern uint16_t joypad[8];
 int one_c, slow_one_c, two_c;
 
@@ -483,19 +498,34 @@ static void check_variables(bool first_run)
 	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
 	{
 		char *endptr;
-		double freq = strtod(var.value, &endptr);
+		long freq = strtol(var.value, &endptr, 10);
 
 		/* There must be a space between the value and the unit. Therefore, we
-		 * check that the character after the converter integer is a space. */
-		if (*endptr != ' ' || freq == 0.0)
+		 * check that the character after the converted integer is a space. */
+		if (*endptr != ' ' || freq == 0)
 		{
 			S9xMessage(S9X_MSG_WARN, S9X_CATEGORY_EXTERNAL, "Unable to obtain SuperFX overclock setting.");
-			freq = 10.0;
+			freq = 10;
 		}
 
-		/* Convert MHz value to Hz and multiply by required factors. */
-		Settings.SuperFXSpeedPerLine = 0.417 * 1.5e6 * freq;
+		/* 0.417 * 1.5e6 == 625500 GSU cycles/second per MHz (the option list
+		 * is integer MHz only). Computed in integer math: the SNES has no FPU
+		 * and this value feeds the per-line instruction budget, so it must be
+		 * bit-identical across platforms for deterministic SuperFX execution. */
+		Settings.SuperFXSpeedPerLine = 625500u * (uint32_t)freq;
 		reset_sfx = true;
+	}
+
+	var.key = "snes9x_2010_superfx_cycle_accuracy";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+	{
+		int newval = (!strcmp(var.value, "enabled")) ? 1 : 0;
+		if (newval != fx_cycle_accuracy)
+		{
+			fx_cycle_accuracy = newval;
+			reset_sfx = true;
+		}
 	}
 
    	var.key = "snes9x_2010_turbodelay";
@@ -632,6 +662,16 @@ static void check_variables(bool first_run)
 			Settings.Mode7HiresBilinear = 1;
 		else
 			Settings.Mode7HiresBilinear = 0;
+	}
+
+	var.key = "snes9x_2010_pseudo_hires_blend";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+	{
+		if (strcmp(var.value, "enabled") == 0)
+			pseudo_hires_blend = true;
+		else
+			pseudo_hires_blend = false;
 	}
 	/* Reinitialise frameskipping, if required */
 	if (!first_run &&
@@ -942,39 +982,54 @@ static void map_buttons(void)
 	LR_MAP_BUTTON(MAKE_BUTTON(5, RETRO_DEVICE_ID_JOYPAD_DOWN), "Joypad5 Down");
 }
 
-float get_aspect_ratio(unsigned width, unsigned height)
+static float get_aspect_ratio(unsigned width, unsigned height)
 {
-	double sample_frequency_ntsc;
-	double sample_frequency_pal;
-	double sample_freq;
-	double dot_rate;
-    double par;
+	/* Pixel aspect ratio = sample_freq / 2 / dot_rate, with
+	   dot_rate = master_clock / 4. That reduces to an exact ratio of
+	   integers, so it is evaluated in 64-bit integer math and only
+	   converted to float (the geometry field's type) at the boundary:
+	     aspect = width * 2 * sf_num / (height * sf_den * master_clock)
+	   NTSC sample frequency is 135000000/11 Hz, PAL is 14750000 Hz.
+	   OV2: not sure if these really make sense - NTSC is similar to
+	   4:3, PAL looks weird. */
+	int64_t sf_num, sf_den, master_clock, num, den;
 
 	if (aspect_ratio_mode == ASPECT_RATIO_4_3)
 		return (4.0f / 3.0f);
 	else if (aspect_ratio_mode == ASPECT_RATIO_1_1)
 		return (float)width / (float)height;
 
-	// OV2: not sure if these really make sense - NTSC is similar to 4:3, PAL looks weird
-	sample_frequency_ntsc = 135000000.0f / 11.0f;
-	sample_frequency_pal = 14750000.0;
-	sample_freq = (retro_get_region() == RETRO_REGION_NTSC) ? sample_frequency_ntsc : sample_frequency_pal;
-	dot_rate = (Settings.PAL ? PAL_MASTER_CLOCK : NTSC_MASTER_CLOCK) / 4.0;
-
-	if (aspect_ratio_mode == ASPECT_RATIO_NTSC) // ntsc
+	if (aspect_ratio_mode == ASPECT_RATIO_NTSC) /* ntsc */
 	{
-		sample_freq = sample_frequency_ntsc;
-		dot_rate = NTSC_MASTER_CLOCK / 4.0;
+		sf_num       = 135000000;
+		sf_den       = 11;
+		master_clock = (int64_t)NTSC_MASTER_CLOCK;
 	}
-	else if (aspect_ratio_mode == ASPECT_RATIO_PAL) // pal
+	else if (aspect_ratio_mode == ASPECT_RATIO_PAL) /* pal */
 	{
-		sample_freq = sample_frequency_pal;
-		dot_rate = PAL_MASTER_CLOCK / 4.0;
+		sf_num       = 14750000;
+		sf_den       = 1;
+		master_clock = (int64_t)PAL_MASTER_CLOCK;
+	}
+	else /* auto: sample rate follows region, dot clock follows Settings.PAL */
+	{
+		if (retro_get_region() == RETRO_REGION_NTSC)
+		{
+			sf_num = 135000000;
+			sf_den = 11;
+		}
+		else
+		{
+			sf_num = 14750000;
+			sf_den = 1;
+		}
+		master_clock = Settings.PAL ? (int64_t)PAL_MASTER_CLOCK : (int64_t)NTSC_MASTER_CLOCK;
 	}
 
-	par = sample_freq / 2.0 / dot_rate;
+	num = (int64_t)width  * 2 * sf_num;
+	den = (int64_t)height * sf_den * master_clock;
 
-	return (float)(width * par / height);
+	return (float)num / (float)den;
 }
 
 static void update_geometry(void)
@@ -1000,7 +1055,7 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 	   hack (~70 game IDs handled in memmap.c). Reporting the effective
 	   rate here lets the frontend's resampler handle conversion to the
 	   host audio rate. */
-	info->timing.sample_rate    = (double)S9xGetAudioSampleRate();
+	info->timing.sample_rate    = S9xGetAudioSampleRate();
 	info->timing.fps            = (retro_get_region() == RETRO_REGION_NTSC) ?
 			VIDEO_REFRESH_RATE_NTSC : VIDEO_REFRESH_RATE_PAL;
 }
@@ -1124,8 +1179,10 @@ void retro_init(void)
 	S9xUnmapAllControls();
 	map_buttons();
 
-	/* Initialize SuperFX CPU to normal speed by default */
-	Settings.SuperFXSpeedPerLine = 0.417 * 10.5e6;
+	/* Initialize SuperFX CPU to normal speed by default.
+	 * 0.417 * 10.5e6 == 4378500 exactly; kept as an integer so the
+	 * GSU instruction budget stays FPU-free and deterministic. */
+	Settings.SuperFXSpeedPerLine = 4378500;
 }
 
 /* libretro uses relative values for analogue devices. 
@@ -1614,7 +1671,7 @@ bool retro_serialize(void *data, size_t size)
 	if (environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &result))
 		Settings.FastSavestates = 0 != (result & 0x04);
 
-	memstream_set_buffer((uint8_t*)data, (uint64_t)size);
+	S9xSetStreamBuffer((uint8_t*)data, (uint64_t)size);
 
 	if (S9xFreezeGame() == FALSE)
 		return FALSE;
@@ -1628,7 +1685,7 @@ bool retro_unserialize(const void * data, size_t size)
 	if (environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &result))
 		Settings.FastSavestates = 0 != (result & 0x04);
 
-	memstream_set_buffer((uint8_t*)data, (uint64_t)size);
+	S9xSetStreamBuffer((uint8_t*)data, (uint64_t)size);
 
 	if (S9xUnfreezeGame() == FALSE)
 		return FALSE;
@@ -1766,7 +1823,7 @@ bool retro_load_game(const struct retro_game_info *game)
 	memorydesc_c = 0;
 
 	/* Hack. S9x cannot do stuff from RAM. <_< */
-	memstream_set_buffer((uint8_t*)game->data, (uint64_t)game->size);
+	S9xSetStreamBuffer((uint8_t*)game->data, (uint64_t)game->size);
 
 	loaded = LoadROM();
 	if (!loaded)
@@ -1822,6 +1879,108 @@ void retro_unload_game (void)
 unsigned retro_get_region (void)
 {
 	return Settings.PAL ? RETRO_REGION_PAL : RETRO_REGION_NTSC;
+}
+
+/* ---------------------------------------------------------------------------
+ * Pseudo-hires blend
+ *
+ * Games that set the pseudo-hires bit ($2133 & 8 -> IPPU.PseudoHires) emit the
+ * main and sub screens in alternating 256-px columns within a genuine 512-px
+ * frame. On original hardware over a composite/RF signal the limited bandwidth
+ * blurs each adjacent column pair together, which the games exploit to fake
+ * transparency (waterfalls, glass, fog: Kirby's Dream Land 3, Jurassic Park).
+ * With a digital scaler the columns stay distinct and the effect is lost.
+ *
+ * This post-pass applies a 2-tap horizontal box filter to the finished 512-px
+ * frame, in place: out[x] = avg(orig[x], orig[x-1]). It reproduces the
+ * composite blur while preserving the full 512-px resolution (it does NOT
+ * collapse to 256 px the way snes9x2005 does). Each output pixel is averaged
+ * against the *original* left neighbour, so the blur stays a true 2-tap and
+ * does not smear across the scanline.
+ *
+ * The per-pixel average is the same overflow-safe RGB565 halving-add identity
+ * used by the tile compositor in src/tile.c (tile_color_add_half):
+ *     avg = ((a & 0xF7DE) >> 1) + ((b & 0xF7DE) >> 1) + (a & b & 0x0821)
+ * which is bit-exact to per-channel floor((ca+cb)/2). SIMD kernels (SSE2 /
+ * NEON, selected at compile time exactly like src/tile.c) must stay bit-exact
+ * with the scalar reference; a 256-px scratch copy of the original row feeds
+ * the vector loads so the in-place store cannot perturb a not-yet-read
+ * neighbour.
+ *
+ * Gated on width == 512 && IPPU.PseudoHires: true Mode 5/6 hires is left sharp,
+ * and lores frames are untouched. Skipped when the NTSC filter is active, since
+ * that path already performs its own composite bandwidth simulation.
+ * ------------------------------------------------------------------------- */
+#if defined(__SSE2__)
+#include <emmintrin.h>
+#define HIRES_BLEND_SSE2 1
+#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
+#include <arm_neon.h>
+#define HIRES_BLEND_NEON 1
+#endif
+
+static uint16_t hires_blend_pix(uint16_t a, uint16_t b)
+{
+	return (uint16_t)(((a & 0xF7DEu) >> 1) + ((b & 0xF7DEu) >> 1) + (a & b & 0x0821u));
+}
+
+/* scratch must hold at least 'width' uint16_t (width <= 512 here). */
+static void hires_blend_row(uint16_t *row, int width, uint16_t *scratch)
+{
+	int x;
+
+	for (x = 0; x < width; x++)
+		scratch[x] = row[x];
+
+	x = 1;
+
+#if defined(HIRES_BLEND_SSE2)
+	{
+		const __m128i mask_no_low = _mm_set1_epi16((short) 0xF7DE);
+		const __m128i mask_low    = _mm_set1_epi16((short) 0x0821);
+		for (; x + 8 <= width; x += 8)
+		{
+			__m128i cur  = _mm_loadu_si128((const __m128i*)(scratch + x));
+			__m128i prev = _mm_loadu_si128((const __m128i*)(scratch + x - 1));
+			__m128i a    = _mm_srli_epi16(_mm_and_si128(cur,  mask_no_low), 1);
+			__m128i b    = _mm_srli_epi16(_mm_and_si128(prev, mask_no_low), 1);
+			__m128i carry= _mm_and_si128(_mm_and_si128(cur, prev), mask_low);
+			_mm_storeu_si128((__m128i*)(row + x),
+				_mm_add_epi16(_mm_add_epi16(a, b), carry));
+		}
+	}
+#elif defined(HIRES_BLEND_NEON)
+	{
+		const uint16x8_t mask_no_low = vdupq_n_u16(0xF7DE);
+		const uint16x8_t mask_low    = vdupq_n_u16(0x0821);
+		for (; x + 8 <= width; x += 8)
+		{
+			uint16x8_t cur  = vld1q_u16(scratch + x);
+			uint16x8_t prev = vld1q_u16(scratch + x - 1);
+			uint16x8_t a    = vshrq_n_u16(vandq_u16(cur,  mask_no_low), 1);
+			uint16x8_t b    = vshrq_n_u16(vandq_u16(prev, mask_no_low), 1);
+			uint16x8_t carry= vandq_u16(vandq_u16(cur, prev), mask_low);
+			vst1q_u16(row + x, vaddq_u16(vaddq_u16(a, b), carry));
+		}
+	}
+#endif
+
+	for (; x < width; x++)
+		row[x] = hires_blend_pix(scratch[x], scratch[x - 1]);
+}
+
+static void hires_blend_frame(uint16_t *screen, int width, int height, int pitch_px)
+{
+	/* One row of scratch; max hires width is 512. Kept on the stack so the
+	   pass needs no allocation and the buffer stays hot in L1. */
+	uint16_t scratch[512];
+	int y;
+
+	if (width > 512)
+		return; /* defensive: never the case for pseudo-hires */
+
+	for (y = 0; y < height; y++)
+		hires_blend_row(screen + (size_t)y * pitch_px, width, scratch);
 }
 
 void S9xDeinitUpdate(int width, int height)
@@ -1880,6 +2039,19 @@ void S9xDeinitUpdate(int width, int height)
 			}
 
 			libretro_sw_fb_checked = true;
+		}
+
+		/* Pseudo-hires composite-blur post-pass. Operates on the live
+		   buffer (sw_fb or GFX.Screen) just before presentation, only
+		   for genuine pseudo-hires frames; true Mode 5/6 hires and lores
+		   are left untouched. The NTSC branch above is never reached
+		   here, so this never double-blurs. */
+		if (pseudo_hires_blend && width == 512 && IPPU.PseudoHires)
+		{
+			if (sw_fb_active)
+				hires_blend_frame((uint16_t*)sw_fb_data, width, (int)sw_fb_height, (int)(sw_fb_pitch / sizeof(uint16_t)));
+			else
+				hires_blend_frame(GFX.Screen, width, height, GFX.Pitch / 2);
 		}
 
 		if (sw_fb_active)

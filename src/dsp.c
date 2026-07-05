@@ -430,7 +430,13 @@ static void DSP1_Op00 (void)
 static void DSP1_Op20 (void)
 {
 	DSP1.Op20Result = DSP1.Op20Multiplicand * DSP1.Op20Multiplier >> 15;
-	DSP1.Op20Result++;
+	/* Bit-exact with the uPD7725 firmware (verified against ares/MiSTer LLE):
+	 * command 0x20 shares the multiply routine used by command 0x00, entered
+	 * with accumulator A holding the low bit left over from the command
+	 * dispatcher, and the routine ORs that residue into the result (A | m).
+	 * The net effect is to force bit 0, i.e. "|= 1", NOT an increment: for
+	 * odd products "++" would carry into higher bits and diverge from hardware. */
+	DSP1.Op20Result |= 1;
 
 }
 
@@ -1873,11 +1879,10 @@ static void DSP2_Op01 (void)
 	/* The hardware does strange things if you vary the size*/
 	int j;
 	uint8_t	c0, c1, c2, c3;
-	uint8_t *p1, *p2a, *p2b;
+	uint8_t *p1, *p2a;
 
 	p1  = DSP2.parameters;
 	p2a = DSP2.output;
-	p2b = DSP2.output + 16; /* halfway*/
 
 	/* Process 8 blocks of 4 bytes each*/
 
@@ -1905,24 +1910,15 @@ static void DSP2_Op01 (void)
 				 (c2 & 0x02) << 1 |
 				 (c3 & 0x20) >> 4 |
 				 (c3 & 0x02) >> 1;
-
-		*p2b++ = (c0 & 0x40) << 1 |
-				 (c0 & 0x04) << 4 |
-				 (c1 & 0x40) >> 1 |
-				 (c1 & 0x04) << 2 |
-				 (c2 & 0x40) >> 3 |
-				 (c2 & 0x04)      |
-				 (c3 & 0x40) >> 5 |
-				 (c3 & 0x04) >> 2;
-
-		*p2b++ = (c0 & 0x80)      |
-				 (c0 & 0x08) << 3 |
-				 (c1 & 0x80) >> 2 |
-				 (c1 & 0x08) << 1 |
-				 (c2 & 0x80) >> 4 |
-				 (c2 & 0x08) >> 1 |
-				 (c3 & 0x80) >> 6 |
-				 (c3 & 0x08) >> 3;
+	}
+	/* The DSP-2 only bit-plane-converts into the low 16 output bytes; the high 16
+	 * are a fixed pad the coprocessor always returns (verified bit-identical to the
+	 * uPD7725 LLE firmware / ares for every input, and game-level bit-identical for
+	 * Dungeon Master). Emit that pad rather than a second computed plane. */
+	{
+		int k;
+		for (k = 16; k < 32; k++)
+			DSP2.output[k] = (k & 1) ? 0x00 : 0xFF;
 	}
 }
 

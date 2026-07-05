@@ -190,6 +190,14 @@
 extern "C" {
 #endif
 
+/* S9X_ACCURACY_LEVEL must be visible to port.h: the level >= 2 check in
+ * port.h selects the event-draining addCyclesInMemoryAccess variants. With
+ * the define placed after the include, the macro was undefined (0) during
+ * preprocessing and every translation unit silently compiled the drain-free
+ * memory-access macros, deferring due events (HV-IRQ among them) by up to a
+ * full opcode sequence. */
+#define S9X_ACCURACY_LEVEL		3
+
 #include "port.h"
 #include "65c816.h"
 #include "messages.h"
@@ -197,9 +205,6 @@ extern "C" {
 #define ACCESSORY_AUTODETECTION_CONFIRM   0
 #define ACCESSORY_AUTODETECTION_ENABLED   1
 #define ACCESSORY_AUTODETECTION_NONE      2
-
-#define S9X_ACCURACY_LEVEL		3
-
 
 #ifndef SNES_SUPPORT_MULTI_CART
 #define SNES_SUPPORT_MULTI_CART		0
@@ -220,7 +225,15 @@ extern "C" {
 #define WRITE_STREAM(p, l, s)    memstream_write(s, p, l)
 #define GETS_STREAM(p, l, s)     memstream_gets(s, p, l)
 #define GETC_STREAM(s)           memstream_getc(s)
-#define OPEN_STREAM(w)           memstream_open(w)
+/* memstream_open() now takes the backing buffer and its size up front
+ * (upstream libretro-common removed memstream_set_buffer/get_last_size).
+ * The buffer for the active save/load/ROM operation is published by
+ * libretro.c via S9xSetStreamBuffer() and consumed here so the existing
+ * OPEN_STREAM(w) call sites in snapshot.c / memmap.c stay unchanged. */
+extern uint8_t *s9x_stream_buffer;
+extern uint64_t s9x_stream_buffer_size;
+void S9xSetStreamBuffer(uint8_t *buffer, uint64_t size);
+#define OPEN_STREAM(w)           memstream_open(s9x_stream_buffer, s9x_stream_buffer_size, (w))
 #define FIND_STREAM(f)           memstream_pos(f)
 #define REVERT_STREAM(f, o, s)   memstream_seek(f, o, s)
 #define CLOSE_STREAM(s)          memstream_close(s)
@@ -422,7 +435,7 @@ struct SSettings
 	   Toons rainbow rings). Stable matches HD-no-BL's Y-axis sampling
 	   and only smooths X. */
 	int32_t		Mode7HiresBilinear;
-   float    SuperFXSpeedPerLine;
+   uint32_t SuperFXSpeedPerLine; /* GSU clock cycles per second (already scaled by the 0.417 duty factor) */
    uint8_t	FastSavestates;
    uint8_t	HardDisableAudio;
 };
