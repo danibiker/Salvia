@@ -243,6 +243,7 @@
     <ClCompile Include="..\core\input_hw\lightgun.c" />
     <ClCompile Include="..\core\input_hw\mouse.c" />
     <ClCompile Include="..\core\input_hw\paddle.c" />
+    <ClCompile Include="..\core\input_hw\smash.c" />
     <ClCompile Include="..\core\input_hw\sportspad.c" />
     <ClCompile Include="..\core\input_hw\teamplayer.c" />
     <ClCompile Include="..\core\input_hw\terebi_oekaki.c" />

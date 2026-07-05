@@ -329,6 +329,9 @@
     <ClCompile Include="..\core\cart_hw\yx5200.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\core\input_hw\smash.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\core\genesis.h">
