@@ -1,8 +1,11 @@
-/****************************************************************************
+/***************************************************************************************
  *  Genesis Plus
- *  Microwire Serial EEPROM (93C46 only) support
+ *  Inovation's Smash Controller support
  *
- *  Copyright (C) 2011-2026  Eke-Eke (Genesis Plus GX)
+ *  References:
+ *    https://gendev.spritesmind.net/forum/viewtopic.php?t=1083
+ *
+ *  Copyright (C) 2025  Eke-Eke (Genesis Plus GX)
  *
  *  Redistribution and use of this code or any derivative works are permitted
  *  provided that the following conditions are met:
@@ -36,37 +39,11 @@
  *
  ****************************************************************************************/
 
-#ifndef _EEPROM_93C_H_
-#define _EEPROM_93C_H_
-
-typedef enum
-{
-  WAIT_STANDBY,
-  WAIT_START,
-  GET_OPCODE,
-  WRITE_WORD,
-  READ_WORD
-} T_STATE_93C;
-
-typedef struct
-{
-  uint8 enabled;  /* 1: chip enabled */
-  uint8 cs;       /* CHIP SELECT line state */
-  uint8 clk;      /* CLK line state */
-  uint8 data;     /* DATA OUT line state */
-  uint8 cycles;   /* current operation cycle */
-  uint8 we;       /* 1: write enabled */
-  uint8 opcode;   /* 8-bit opcode + address */
-  uint16 buffer;  /* 16-bit data buffer */
-  T_STATE_93C state; /* current operation state */
-} T_EEPROM_93C;
-
-/* global variables */
-extern T_EEPROM_93C eeprom_93c;
+#ifndef _SMASH_H_
+#define _SMASH_H_
 
 /* Function prototypes */
-extern void eeprom_93c_init(void);
-extern void eeprom_93c_write(unsigned char data);
-extern unsigned char eeprom_93c_read(void);
+extern unsigned char smash_1_read(void);
+extern unsigned char smash_2_read(void);
 
 #endif
