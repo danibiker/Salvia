@@ -1136,7 +1136,7 @@ const struct RomModule *rom_first_chunk(const struct RomModule *romp)
 const struct RomModule *rom_next_chunk(const struct RomModule *romp)
 {
 	romp++;
-	return (ROMENTRY_ISCONTINUE(romp)) ? romp : NULL;
+	return (ROMENTRY_ISCONTINUE(romp) || ROMENTRY_ISIGNORE(romp)) ? romp : NULL;
 }
 
 
@@ -1453,10 +1453,10 @@ static int open_rom_file(struct rom_load_data *romdata, const struct RomModule *
 	   attempts any kind of load by checksum supported by the archives. */
 	romdata->file = NULL;
 	for (drv = Machine->gamedrv; !romdata->file && drv; drv = drv->clone_of)
-  {
+  
 		if (drv->name && *drv->name)
 			romdata->file = mame_fopen_rom(drv->name, ROM_GETNAME(romp), ROM_GETHASHDATA(romp));
-  }
+  
 
 	/* return the result */
 	return (romdata->file != NULL);
@@ -1695,6 +1695,9 @@ static int process_rom_entries(struct rom_load_data *romdata, const struct RomMo
 			log_cb(RETRO_LOG_ERROR, LOGPRE "Error in RomModule definition: ROM_CONTINUE not preceded by ROM_LOAD\n");
 			goto fatalerror;
 		}
+		/* if this is an ignore entry, it's invalid */
+		if (ROMENTRY_ISIGNORE(romp))
+			fatalerror("Error in RomModule definition: ROM_IGNORE not preceded by ROM_LOAD\n");
 
 		/* if this is a reload entry, it's invalid */
 		if (ROMENTRY_ISRELOAD(romp))
@@ -1757,11 +1760,14 @@ static int process_rom_entries(struct rom_load_data *romdata, const struct RomMo
 						explength += ROM_GETLENGTH(&modified_romp);
 
 						/* attempt to read using the modified entry */
+						if (!ROMENTRY_ISIGNORE(&modified_romp))
+						{
 						readresult = read_rom_data(romdata, &modified_romp);
 						if (readresult == -1)
 							goto fatalerror;
 					}
-					while (ROMENTRY_ISCONTINUE(romp));
+					}
+					while (ROMENTRY_ISCONTINUE(romp) || ROMENTRY_ISIGNORE(romp));
 
 					/* if this was the first use of this file, verify the length and CRC */
 					if (baserom)
