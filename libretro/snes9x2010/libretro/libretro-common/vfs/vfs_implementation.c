@@ -39,6 +39,8 @@
 #  ifdef _XBOX
 #    include <xtl.h>
 #    define INVALID_FILE_ATTRIBUTES -1
+#    define S_IRUSR  S_IREAD                      /* read, user */
+#    define S_IWUSR  S_IWRITE                     /* write, user */
 #  else
 
 #    include <fcntl.h>

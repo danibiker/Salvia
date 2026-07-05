@@ -203,6 +203,7 @@
     <ClCompile Include="..\libretro\libretro-common\file\file_path_io.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\memmap\memalign.c" />
     <ClCompile Include="..\libretro\libretro-common\streams\file_stream.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
@@ -257,9 +258,7 @@
     <ClCompile Include="..\src\hwregisters.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
-    <ClCompile Include="..\src\memmap.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-    </ClCompile>
+    <ClCompile Include="..\src\memmap.c" />
     <ClCompile Include="..\src\obc1.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>

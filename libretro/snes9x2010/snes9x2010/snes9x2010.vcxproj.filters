@@ -51,9 +51,6 @@
     <ClCompile Include="..\src\hwregisters.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\memmap.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\obc1.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -127,6 +124,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\libretro\libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\memmap\memalign.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\memmap.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
