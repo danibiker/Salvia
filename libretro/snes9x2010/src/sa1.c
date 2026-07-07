@@ -396,24 +396,147 @@ static uint8_t S9xSA1GetByteFromRegister (uint8_t *GetAddress, uint32_t address)
 
 /* S9xSA1GetByte: SA1 memory read fast-path wrapper.
  *
- * Folded to a statement-expression macro for the same reason
- * memory_speed and spc_cpu_read were folded: once the slow path
- * moved to an out-of-line *FromRegister helper, the wrapper itself
- * is small enough to inline everywhere, but GCC's inline cost
- * model still kept ~270 \`call S9xSA1GetByte\` instructions in the
- * production .so. A macro removes the optimizer's discretion.
+ * This MUST be a function, not a plain-expression macro. The 8-bit
+ * opcode wrappers in cpuops (rOP8/rOPC) call it as
  *
- * Plain expression macro: `address` is referenced four times and
- * the SA1.Map[] lookup is replayed three times. All current call
- * sites pass simple expressions (variables, struct members, +1
- * offsets) so the duplication is CSE'd by the compiler. Do NOT
- * pass side-effecting expressions through this macro. The earlier
- * statement-expression form captured into locals for safety but
- * relied on a GCC extension that older MSVC rejects. */
-#define S9xSA1GetByte(address) \
-	((SA1.Map[(((address) & 0xffffff) >> MEMMAP_SHIFT)] >= (uint8_t *) MAP_LAST) \
-		? *(SA1.Map[(((address) & 0xffffff) >> MEMMAP_SHIFT)] + ((address) & 0xffff)) \
-		: S9xSA1GetByteFromRegister(SA1.Map[(((address) & 0xffffff) >> MEMMAP_SHIFT)], (address)))
+ *     val = OpenBus = S9xGetByte(ADDR##_R());
+ *
+ * where ADDR##_R() is a *side-effecting* addressing helper (e.g.
+ * DirectIndirectLong_R(), which reads the direct-page pointer, walks
+ * memory and updates OpenBus). A multiple-evaluation macro that
+ * referenced `address` several times re-invoked that helper on each
+ * expansion, so the MAP_LAST check and the pointer dereference could
+ * see two different resolved addresses — combining a base pointer
+ * from one evaluation with an offset from another and reading out of
+ * bounds. This crashed e.g. Kirby's Dream Land 3 in OpE7 (SBC [d]).
+ *
+ * A static INLINE function evaluates the argument exactly once,
+ * matching the main-CPU S9xGetByte, and still inlines under -O2. */
+static INLINE uint8_t S9xSA1GetByte (uint32_t address)
+{
+	uint8_t	*GetAddress = SA1.Map[(address & 0xffffff) >> MEMMAP_SHIFT];
+
+	if (GetAddress >= (uint8_t *) MAP_LAST)
+		return (*(GetAddress + (address & 0xffff)));
+
+	return (S9xSA1GetByteFromRegister(GetAddress, address));
+}
+
+/* BW-RAM write protection.
+ *
+ * Mirrors ares' rule (SA1::BWRAM::writeCPU / writeLinear): a write to
+ * the BW-RAM linear region is blocked only when BOTH write-enables are
+ * off and the (18-bit) offset falls inside the protected window.
+ *
+ *   swen = $2226 bit7    (SNES-side BW-RAM write enable)
+ *   cwen = $2227 bit7    (SA-1-side BW-RAM write enable)
+ *   bwp  = $2228 bits0-3 (protect size; window = 0x100 << bwp)
+ *
+ * Protection applies to linear BW-RAM writes from both the S-CPU and
+ * the SA-1; it does NOT apply to the bitmap write paths, matching
+ * hardware. `bwoffset` is the BW-RAM-relative byte offset (same space
+ * as the DSA register).
+ *
+ * Both write-enables reset to 0 and bwp resets to 0x0f, so BW-RAM is
+ * fully protected at power-on until a game asserts SWEN or CWEN -- this
+ * matches hardware and ares. */
+int S9xSA1BWRAMWriteProtected (uint32_t bwoffset)
+{
+	if ((Memory.FillRAM[0x2226] & 0x80) || (Memory.FillRAM[0x2227] & 0x80))
+		return (0); /* writes enabled */
+
+	if ((bwoffset & 0x3ffff) < (0x100u << (Memory.FillRAM[0x2228] & 0x0f)))
+		return (1); /* inside protected window */
+
+	return (0);
+}
+
+/* Type-1 character-conversion DMA read.
+ *
+ * When CC1 is armed (in_char_dma), the S-CPU reads of the BW-RAM
+ * character window return SNES-tile-format data that the SA-1
+ * converts on the fly from the linear bitmap in BW-RAM. Hardware
+ * buffers one whole character into I-RAM on each character-boundary
+ * read, then the individual bytes are read back out of that I-RAM
+ * buffer. This mirrors ares' SA1::dmaCC1Read exactly (verified
+ * bit-exact against it across all bpp/size/offset combinations).
+ *
+ * `bwoffset` is the BW-RAM-relative byte offset being read (same
+ * address space as the DSA source register). Returns the converted
+ * byte from the I-RAM buffer at FillRAM[0x3000].
+ *
+ * Registers:
+ *   $2231: dmacb = bits0-1 (colour-depth code, clamped to 2),
+ *          dmasize = bits2-4 (clamped to 5)
+ *   $2232-4: DSA (BW-RAM source address)
+ *   $2235-6: DDA (I-RAM destination address) */
+uint8_t S9xSA1ReadCC1 (uint32_t bwoffset)
+{
+	uint32_t charmask, bpp, bpl, bwmask, tile, ty, tx, bwaddr, dsa, dda;
+	int      dmacb, dmasize;
+	uint32_t y, x, byte;
+
+	dmacb   = Memory.FillRAM[0x2231] & 3;
+	if (dmacb > 2)
+		dmacb = 2;
+	dmasize = (Memory.FillRAM[0x2231] >> 2) & 7;
+	if (dmasize > 5)
+		dmasize = 5;
+
+	dsa = Memory.FillRAM[0x2232] | (Memory.FillRAM[0x2233] << 8) | (Memory.FillRAM[0x2234] << 16);
+	dda = Memory.FillRAM[0x2235] | (Memory.FillRAM[0x2236] << 8);
+
+	charmask = (1u << (6 - dmacb)) - 1;
+
+	if ((bwoffset & charmask) == 0)
+	{
+		bpp    = 2u << (2 - dmacb);
+		bpl    = (8u << dmasize) >> dmacb;
+		bwmask = Memory.SRAMMask;
+		tile   = ((bwoffset - dsa) & bwmask) >> (6 - dmacb);
+		ty     = tile >> dmasize;
+		tx     = tile & ((1u << dmasize) - 1);
+		bwaddr = dsa + ty * 8 * bpl + tx * bpp;
+
+		for (y = 0; y < 8; y++)
+		{
+			uint64_t data = 0;
+			uint8_t  out[8];
+
+			for (byte = 0; byte < bpp; byte++)
+				data |= (uint64_t) Memory.SRAM[(bwaddr + byte) & bwmask] << (byte << 3);
+
+			bwaddr += bpl;
+
+			memset(out, 0, sizeof(out));
+			for (x = 0; x < 8; x++)
+			{
+				out[0] |= (data & 1) << (7 - x); data >>= 1;
+				out[1] |= (data & 1) << (7 - x); data >>= 1;
+				if (dmacb != 2)
+				{
+					out[2] |= (data & 1) << (7 - x); data >>= 1;
+					out[3] |= (data & 1) << (7 - x); data >>= 1;
+					if (dmacb != 1)
+					{
+						out[4] |= (data & 1) << (7 - x); data >>= 1;
+						out[5] |= (data & 1) << (7 - x); data >>= 1;
+						out[6] |= (data & 1) << (7 - x); data >>= 1;
+						out[7] |= (data & 1) << (7 - x); data >>= 1;
+					}
+				}
+			}
+
+			for (byte = 0; byte < bpp; byte++)
+			{
+				uint32_t p = dda + (y << 1) + ((byte & 6) << 3) + (byte & 1);
+				Memory.FillRAM[0x3000 + (p & 0x7ff)] = out[byte];
+			}
+		}
+	}
+
+	return (Memory.FillRAM[0x3000 + ((dda + (bwoffset & charmask)) & 0x7ff)]);
+}
 
 #ifdef __GNUC__
 __attribute__((noinline))
@@ -517,7 +640,15 @@ uint8_t S9xGetSA1 (uint32_t address)
 	switch (address)
 	{
 		case 0x2300:
-			return ((uint8_t) ((Memory.FillRAM[0x2209] & 0x5f) | (CPU.IRQActive & (SA1_IRQ_SOURCE | SA1_DMA_IRQ_SOURCE))));
+			/* SFR (S-CPU flag read). The IRQ/CDMA-IRQ flag bits (7 and 5)
+			 * latch independently of their enables, so they must be read
+			 * from the latched flag register in FillRAM[0x2300] -- not
+			 * reconstructed from CPU.IRQActive, which only reflects the
+			 * (enable-gated) S-CPU IRQ line. A game that polls SFR to see a
+			 * pending IRQ before enabling it previously read the flags as 0.
+			 * Bits 0-4,6 (CMEG, NMI/IRQ vector-select) come from the last
+			 * $2209 write. Matches ares (SFR) and the MiSTer T-SA-1 RTL. */
+			return ((uint8_t) ((Memory.FillRAM[0x2209] & 0x5f) | (Memory.FillRAM[0x2300] & 0xa0)));
 
 		case 0x2301:
 			return ((Memory.FillRAM[0x2200] & 0xf) | (Memory.FillRAM[0x2301] & 0xf0));
@@ -536,6 +667,9 @@ uint8_t S9xGetSA1 (uint32_t address)
 
 		case 0x230a:
 			return ((uint8_t) (SA1.sum >> 32));
+
+		case 0x230b: /* Arithmetic overflow flag (sigma), bit 7*/
+			return ((uint8_t) (SA1.overflow << 7));
 
 		case 0x230c:
 			return (Memory.FillRAM[0x230c]);
@@ -976,21 +1110,52 @@ void S9xSetSA1 (uint8_t byte, uint32_t address)
 			switch (SA1.arithmetic_op)
 			{
 				case 0:	/* multiply*/
-					SA1.sum = SA1.op1 * SA1.op2;
+					/* Signed 16x16 -> 32-bit product, zero-extended into the
+					 * 40-bit MR result register (MR[39:32] read as 0x00).
+					 * The previous "SA1.op1 * SA1.op2" sign-extended the int
+					 * product across all of the int64_t, corrupting the byte
+					 * read back at $230a for negative products. */
+					SA1.sum = (uint32_t) ((int32_t) SA1.op1 * (int32_t) SA1.op2);
+					/* Multiplication clears the multiplier (MB) only. */
+					SA1.op2 = 0;
 					break;
 
 				case 1: /* divide*/
-					if (SA1.op2 == 0)
-						SA1.sum = SA1.op1 << 16;
+					/* Signed dividend / unsigned divisor, Euclidean
+					 * (remainder always non-negative), packed as
+					 * MR = (remainder << 16) | quotient. Division by zero
+					 * yields MR = 0 on hardware. The previous truncating C
+					 * division produced negative quotients/remainders and a
+					 * bogus op1<<16 on divide-by-zero. */
+					if ((uint16_t) SA1.op2 == 0)
+						SA1.sum = 0;
 					else
-						SA1.sum = (SA1.op1 / (int) ((uint16_t) SA1.op2)) | ((SA1.op1 % (int) ((uint16_t) SA1.op2)) << 16);
+					{
+						int16_t  dividend  = SA1.op1;
+						uint16_t divisor   = (uint16_t) SA1.op2;
+						uint16_t remainder = (dividend >= 0)
+							? (uint16_t) (dividend % divisor)
+							: (uint16_t) (((dividend % divisor) + divisor) % divisor);
+						uint16_t quotient  = (uint16_t) ((dividend - (int) remainder) / divisor);
+
+						SA1.sum = ((int64_t) remainder << 16) | quotient;
+					}
+					/* Division clears both the dividend (MA) and divisor (MB). */
+					SA1.op1 = 0;
+					SA1.op2 = 0;
 					break;
 
 				case 2: /* cumulative sum*/
 				default:
-					SA1.sum += SA1.op1 * SA1.op2;
-					if (SA1.sum & ((int64_t) 0xffffff << 32))
-						SA1.overflow = TRUE;
+					/* Accumulate signed 32-bit products into the 40-bit MR.
+					 * Overflow is MR bit 40 for the current result (not a
+					 * sticky OR of the top bytes), then MR is truncated to
+					 * 40 bits. */
+					SA1.sum += (int32_t) SA1.op1 * (int32_t) SA1.op2;
+					SA1.overflow = (uint8_t) ((SA1.sum >> 40) & 1);
+					SA1.sum &= ((int64_t) 0xffffffffff);
+					/* Cumulative sum clears the multiplier (MB) only. */
+					SA1.op2 = 0;
 					break;
 			}
 
@@ -1056,7 +1221,8 @@ static void S9xSA1SetByteToRegister (uint8_t byte, uint8_t *SetAddress, uint32_t
 			return;
 
 		case MAP_BWRAM:
-			*(SA1.BWRAM + ((address & 0x7fff) - 0x6000)) = byte;
+			if (!S9xSA1BWRAMWriteProtected((uint32_t)(SA1.BWRAM - Memory.SRAM) + ((address & 0x7fff) - 0x6000)))
+				*(SA1.BWRAM + ((address & 0x7fff) - 0x6000)) = byte;
 			return;
 
 		case MAP_BWRAM_BITMAP:
