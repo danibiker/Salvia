@@ -228,6 +228,7 @@
     <ClCompile Include="..\src\apu.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
+    <ClCompile Include="..\src\bsflash.c" />
     <ClCompile Include="..\src\bsx.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
@@ -259,6 +260,7 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="..\src\memmap.c" />
+    <ClCompile Include="..\src\msu1.c" />
     <ClCompile Include="..\src\obc1.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
