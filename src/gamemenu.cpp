@@ -81,6 +81,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader) : m_csInited(false)
 	this->current_integer_scale_type = &getCfgLoader()->configMain[cfg::scaleIntMode].getIntRef();
 	this->current_shader = &getCfgLoader()->configMain[cfg::shaderMode].getIntRef();
 	this->mustUpdateFps = &getCfgLoader()->configMain[cfg::showFps].getBoolRef();
+	this->current_fast_forward = false;
 	processConfigChanges();
 
 	fpsSurface = NULL; 
@@ -1579,15 +1580,20 @@ void GameMenu::processKeyUp(){
 */
 void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 	if (getEmuStatus() != EMU_STARTED) return;
+
+	#ifndef SALVIA_GPU_VIDEO
 	int modeOk = true;
 	int startingMode = *this->current_scaler_mode;
-
 	struct retro_system_av_info av_info;
 	retro_get_system_av_info(&av_info);
 	const unsigned ancho_base = av_info.geometry.base_width;
 	const unsigned alto_base = av_info.geometry.base_height;
+	#endif
+
 	std::string msgShader;
 	std::string choosenFilter;
+	ConfigEmu *emu = getCfgLoader()->getCfgEmu();
+	static int lastSync = *current_sync;
 
 	switch (hotkey){
 		case HK_RATIO:
@@ -1688,7 +1694,6 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 			}
 			break;
 		case HK_ONSCREEN_KEYB:
-			ConfigEmu *emu = getCfgLoader()->getCfgEmu();
 			if (!emu->keyboard_type.empty()){
 				setOnscreenKeyboard(!isOnscreenKeybEnabled());
 				if (!isOnscreenKeybEnabled()){
@@ -1697,7 +1702,38 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 				}
 			}
 			break;
+		case HK_FAST_FORWARD:
+			if (!Achievements::instance()->isHardcoreMode()){
+				const float speed = CfgLoader::configMain[cfg::fastForwardMult].valueInt / (float)10;
+				if (speed == 0){
+					showLangSystemMessage("msg.fastfoward.speed.wrong", 3000);
+					break;
+				}
+				const float originalFps = (float)getAvInfo().timing.fps;
+				current_fast_forward = !current_fast_forward;
+				SDL_XBOX_SetVSync(current_fast_forward ? 0 : 1);
+				if (current_fast_forward){
+					sync->init_fps_counter(originalFps * speed);
+					lastSync = *current_sync;
+					*current_sync = SYNC_TO_VIDEO;
+					showSystemMessage(Constant::string_format(LanguageManager::instance()->get("msg.fastfoward.speed"), speed * 100), 3000);
+				} else {
+					sync->init_fps_counter(originalFps);
+					*current_sync = lastSync;
+					showLangSystemMessage("msg.fastfoward.reset", 3000);
+				}
+			} else {
+				showLangSystemMessage("msg.fastfoward.hardcore", 3000);
+			}
+			break;
 	}
+}
+
+struct retro_system_av_info GameMenu::getAvInfo(){
+	struct retro_system_av_info av_info;
+	memset(&av_info, 0, sizeof(av_info));
+	retro_get_system_av_info(&av_info);
+	return av_info;
 }
 
 /**

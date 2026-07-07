@@ -1021,7 +1021,7 @@ void retro_audio_sample(int16_t left, int16_t right) {
     AudioBuffer& audio = gameMenu->g_audioBuffer;
     const int mode = *gameMenu->current_sync;
 
-    if (mode == SYNC_FAST_FORWARD) return;
+	if (gameMenu->current_fast_forward && CfgLoader::configMain[cfg::fastForwardMult].valueInt > 10) return;
 
     int16_t samples[2] = { left, right };
     audio.Write(samples, 2);
@@ -1029,8 +1029,10 @@ void retro_audio_sample(int16_t left, int16_t right) {
 
 // Callback para rafagas de muestras (el que usan casi todos los cores)
 std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_t frames) {
-    const int mode = *gameMenu->current_sync;
-
+	if (gameMenu->current_fast_forward && CfgLoader::configMain[cfg::fastForwardMult].valueInt > 10)
+		return frames;
+	
+	const int mode = *gameMenu->current_sync;
     switch(mode) {
         case SYNC_TO_AUDIO:
             // El bloqueo ya sincroniza naturalmente con el reloj de audio
@@ -1255,9 +1257,7 @@ int launchGame(std::string rompath, bool tmpDelete){
 	SDL_WM_SetCaption(romname.c_str(), NULL);
 
 	// Antes de cargar el juego, el core dice su frecuencia en retro_get_system_av_info
-	struct retro_system_av_info av_info;
-	memset(&av_info, 0, sizeof(av_info));
-	retro_get_system_av_info(&av_info);
+	struct retro_system_av_info av_info = gameMenu->getAvInfo();
 
 	//Poblamos la lista de cdroms si aplica
 	if (g_hasDiskControl){
@@ -1281,6 +1281,12 @@ int launchGame(std::string rompath, bool tmpDelete){
 	//Iniciando el sistema de audio
 	initGameAudio(av_info.timing.sample_rate);
 	gameMenu->romLoaded = true;
+	//Deshabilitamos el fast forward si estaba a true y restauramos el vsync por defecto
+	if (gameMenu->current_fast_forward){
+		gameMenu->current_fast_forward = false;
+		SDL_XBOX_SetVSync(true);
+	}
+
 	// Lista de partidas guardadas y SRAM solo si hay juego real cargado.
 	// En BIOS-only no aplica: el shell de la BIOS solo gestiona memory
 	// cards, que el core ya ha cargado via Config.Mcd1/2 en emu_setup.

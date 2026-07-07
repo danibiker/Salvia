@@ -255,6 +255,9 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 		syncvals.push_back(syncOptionsStrings[i]);
 	}
 	menuEmulation->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.sync"), syncvals, &refConfig->configMain[cfg::syncMode].getIntRef()));
+	menuEmulation->opciones.push_back(new OpcionInt(LanguageManager::instance()->get("menu.options.fastforward"), 
+		&refConfig->configMain[cfg::fastForwardMult].getIntRef(), "%.1fx", 10));
+
 	menuEmulation->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.fps"), &refConfig->configMain[cfg::showFps].getBoolRef()));
 
 	Menu* menuCores = new Menu(LanguageManager::instance()->get("menu.core.assign"), menuEmulation);
@@ -332,7 +335,6 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	#endif
 	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef()));
 	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.showempty"), &refConfig->configMain[cfg::showEmptyEmulators].getBoolRef()));
-	
 	
 	menuAssignRetro = new Menu(LanguageManager::instance()->get("menu.options.paddassign"), menuEntrada);
 	Menu* menuAssignFrontend = new Menu(LanguageManager::instance()->get("menu.options.frontassign"), menuEntrada);
@@ -1054,6 +1056,10 @@ void GestorMenus::cambiarValor(int dir) {
 		b->ejecutar();
     } else if (opt->tipo == OPC_INT) {
 		OpcionInt* i = (OpcionInt*)opt;
+		if (!(dir < 0 && *(i->valor) == 0)){
+			*(i->valor) = *(i->valor) + dir;
+		}
+		i->description = Constant::string_format(i->format, *(i->valor) / (float)i->divisor);
 	} else if (opt->tipo == OPC_ACHIEVEMENT){
 		for (int i=0; i < this->maxLines -1; i++){
 			if (dir > 0){
@@ -1328,6 +1334,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 			line = option->titulo + " >";
 		} else if (option->tipo == OPC_INT){
 			line = option->titulo;// + " " + ((OpcionInt *)option)->description + Constant::intToString(*((OpcionInt *)option)->valor);
+			value = ((OpcionInt *)option)->description;
 		} else if (option->tipo == OPC_SHOW_TXT_VAL){
 			line = option->titulo;
 			value = ((OpcionTxtAndValue *)option)->valor;

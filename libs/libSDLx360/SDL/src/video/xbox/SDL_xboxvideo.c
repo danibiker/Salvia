@@ -646,6 +646,124 @@ void SDL_XBOX_SetRotation(int rotation)
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 }
 
+void SDL_XBOX_SetVSync(int enabled)
+{
+	SDL_VideoDevice *this = current_video;
+	D3DLOCKED_RECT d3dlr;
+	void *pLocked;
+	float bbw, bbh;
+
+	if (!D3D_Device) return;
+
+	if (g_xboxFlipCSInit) EnterCriticalSection(&g_xboxFlipCS);
+
+	/* Unlock game texture before Reset */
+	if (this && this->hidden && this->hidden->SDL_primary)
+		IDirect3DTexture9_UnlockRect(this->hidden->SDL_primary, 0);
+
+	/* Unlock overlay texture if locked */
+	if (g_overlay_texture && g_overlay_locked) {
+		IDirect3DTexture9_UnlockRect(g_overlay_texture, 0);
+		g_overlay_locked = 0;
+	}
+
+	/* Release D3DPOOL_DEFAULT resources (lost on Reset) */
+	if (vertexBuffer) {
+		IDirect3DVertexBuffer9_Release(vertexBuffer);
+		vertexBuffer = NULL;
+		have_vertexbuffer = 0;
+	}
+	if (g_overlay_vb) {
+		IDirect3DVertexBuffer9_Release(g_overlay_vb);
+		g_overlay_vb = NULL;
+	}
+
+	/* Modify PresentationInterval */
+	D3D_PP.PresentationInterval = enabled ? D3DPRESENT_INTERVAL_ONE : D3DPRESENT_INTERVAL_IMMEDIATE;
+
+	/* Reset device with new presentation parameters */
+	IDirect3DDevice9_Reset(D3D_Device, &D3D_PP);
+
+	/* Recreate game vertex buffer (D3DPOOL_DEFAULT fue destruido) */
+	IDirect3DDevice9_CreateVertexBuffer(D3D_Device, sizeof(triangleStripVertices),
+		D3DUSAGE_WRITEONLY, 0, D3DPOOL_DEFAULT, &vertexBuffer, NULL);
+	have_vertexbuffer = 1;
+	if (vertexBuffer) {
+		IDirect3DVertexBuffer9_Lock(vertexBuffer, 0, 0, (BYTE **)&pLocked, 0L);
+		memcpy(pLocked, triangleStripVertices, sizeof(triangleStripVertices));
+		IDirect3DVertexBuffer9_Unlock(vertexBuffer);
+	}
+
+	/* Re-lock game texture (CPU-cached, sobrevive al Reset) */
+	if (this && this->hidden && this->hidden->SDL_primary) {
+		IDirect3DTexture9_LockRect(this->hidden->SDL_primary, 0, &d3dlr, NULL, 0);
+		if (this->screen) {
+			this->screen->pixels = d3dlr.pBits;
+			this->screen->pitch = d3dlr.Pitch;
+		}
+	}
+
+	/* Recrear overlay vertex buffer si hacía falta */
+	if (g_overlay_texture) {
+		VERTEX overlayVerts[4];
+		bbw = (float)D3D_PP.BackBufferWidth;
+		bbh = (float)D3D_PP.BackBufferHeight;
+
+		IDirect3DDevice9_CreateVertexBuffer(D3D_Device,
+			sizeof(overlayVerts), D3DUSAGE_WRITEONLY, 0,
+			D3DPOOL_DEFAULT, &g_overlay_vb, NULL);
+
+		if (g_overlay_vb) {
+			overlayVerts[0].x = -0.5f;        overlayVerts[0].y = bbh - 0.5f;
+			overlayVerts[0].z = 0; overlayVerts[0].rhw = 1;
+			overlayVerts[0].tx = 0; overlayVerts[0].ty = 1;
+
+			overlayVerts[1].x = -0.5f;        overlayVerts[1].y = -0.5f;
+			overlayVerts[1].z = 0; overlayVerts[1].rhw = 1;
+			overlayVerts[1].tx = 0; overlayVerts[1].ty = 0;
+
+			overlayVerts[2].x = bbw - 0.5f;   overlayVerts[2].y = bbh - 0.5f;
+			overlayVerts[2].z = 0; overlayVerts[2].rhw = 1;
+			overlayVerts[2].tx = 1; overlayVerts[2].ty = 1;
+
+			overlayVerts[3].x = bbw - 0.5f;   overlayVerts[3].y = -0.5f;
+			overlayVerts[3].z = 0; overlayVerts[3].rhw = 1;
+			overlayVerts[3].tx = 1; overlayVerts[3].ty = 0;
+
+			IDirect3DVertexBuffer9_Lock(g_overlay_vb, 0, 0, (BYTE **)&pLocked, 0L);
+			memcpy(pLocked, overlayVerts, sizeof(overlayVerts));
+			IDirect3DVertexBuffer9_Unlock(g_overlay_vb);
+		}
+
+		/* Re-lock overlay texture */
+		IDirect3DTexture9_LockRect(g_overlay_texture, 0, &d3dlr, NULL, 0);
+		if (g_overlay_surface) {
+			g_overlay_surface->pixels = d3dlr.pBits;
+			g_overlay_surface->pitch = d3dlr.Pitch;
+		}
+		g_overlay_locked = 1;
+	}
+
+	/* Restaurar estado D3D perdido tras el Reset */
+	IDirect3DDevice9_SetVertexShader(D3D_Device, g_pGradientVertexShader);
+	IDirect3DDevice9_SetVertexDeclaration(D3D_Device, g_pGradientVertexDecl);
+	D3DDevice_SetRenderState(D3D_Device, D3DRS_VIEWPORTENABLE, FALSE);
+
+	D3DDevice_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+	D3DDevice_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+
+	if (this && this->hidden && this->hidden->SDL_primary)
+		IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)this->hidden->SDL_primary);
+	if (vertexBuffer)
+		IDirect3DDevice9_SetStreamSource(D3D_Device, 0, vertexBuffer, 0, sizeof(VERTEX));
+
+	XBOX_SelectEffect(g_current_effect);
+
+	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
+
+	if (g_xboxFlipCSInit) LeaveCriticalSection(&g_xboxFlipCS);
+}
+
 /* ---- Overlay system ---- */
 
 static void XBOX_InitOverlay(void)

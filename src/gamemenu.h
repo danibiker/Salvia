@@ -127,6 +127,7 @@ class GameMenu : public Engine{
 		int *current_sync;
 		bool *current_integer_scale;
 		int *current_integer_scale_type;
+		bool current_fast_forward;
 		bool romLoaded;
 		Uint32 uBkgColor;
 		int selectedFsImage;
@@ -195,6 +196,7 @@ class GameMenu : public Engine{
 		void nextImageLoaded();
 		void prevImageLoaded();
 		void findFirstImage();
+		struct retro_system_av_info getAvInfo();
     private:
 		std::vector<Message> messages;
 		th_messages messagesAchievement;

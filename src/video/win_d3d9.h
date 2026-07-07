@@ -54,6 +54,7 @@ void         SDL_XBOX_SetDisplaySize(float aspect_ratio);
 void         SDL_XBOX_SetDisplayFullscreen(int fullscreen);
 void         SDL_XBOX_SetDisplayOverflow(int overflow);
 void         SDL_XBOX_SetRotation(int rotation);
+void         SDL_XBOX_SetVSync(int enable);
 SDL_Surface* SDL_XBOX_GetOverlay(void);
 void         SDL_XBOX_SetOverlayEnabled(int enabled);
 

@@ -75,6 +75,7 @@ static int                    g_fullscreen = 1;          /* 1 = fill, 0 = pixel-
 static int                    g_overflow   = 0;          /* 1 = integer scale puede salirse de pantalla */
 static int                    g_rotation   = 0;          /* 0..3 (libretro) */
 static RECT                   g_visible    = { 0, 0, 0, 0 };
+static int                    g_vsync      = 1;          /* 1 = vsync on (DEFAULT), 0 = vsync off */
 
 /* Overlay ARGB (1 capa sobre el quad del juego). */
 static LPDIRECT3DTEXTURE9      g_ovl_tex    = NULL;       /* DYNAMIC, DEFAULT */
@@ -637,6 +638,19 @@ static int RecreateDefaultResources(void)
     return 1;
 }
 
+void SDL_XBOX_SetVSync(int enable)
+{
+    if (!g_dev) return;
+    if ((enable && g_vsync) || (!enable && !g_vsync)) return; /* no change */
+
+    g_vsync = enable ? 1 : 0;
+    g_pp.PresentationInterval = g_vsync ? D3DPRESENT_INTERVAL_ONE : D3DPRESENT_INTERVAL_IMMEDIATE;
+
+    ReleaseDefaultResources();
+    if (FAILED(g_dev->Reset(&g_pp))) return;
+    RecreateDefaultResources();
+}
+
 static int HandleDeviceLost(void)
 {
     HRESULT hr = g_dev->TestCooperativeLevel();
@@ -727,13 +741,7 @@ int WinD3D9_Init(HWND hwnd, int bbw, int bbh)
     g_pp.BackBufferFormat     = dm.Format;
     g_pp.hDeviceWindow        = hwnd;
     g_pp.EnableAutoDepthStencil = FALSE;
-
-	#ifdef NOVSYNC_WIN
-		g_pp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
-		g_pp.SwapEffect = D3DSWAPEFFECT_DISCARD;
-	#else
-		g_pp.PresentationInterval = D3DPRESENT_INTERVAL_ONE; /* vsync (como Xbox sin NOVSYNC) */
-	#endif
+    g_pp.PresentationInterval = g_vsync ? D3DPRESENT_INTERVAL_ONE : D3DPRESENT_INTERVAL_IMMEDIATE;
     
 
     /* MULTITHREADED: el watcher thread (th_printLoading) puede llamar a

@@ -179,7 +179,13 @@ class OpcionInt : public Opcion {
 public:
     int* valor;
 	std::string description;
-    OpcionInt(std::string t, int* v, std::string desc) : Opcion(t, OPC_INT), valor(v), description(desc) {}
+	std::string format;
+	int divisor;
+
+    OpcionInt(std::string t, int* v, std::string f, int div) : Opcion(t, OPC_INT), valor(v), format(f) {
+		divisor = div == 0 ? 1 : div;
+		description = Constant::string_format(f, *v / (float)divisor);
+	}
 	std::string ejecutar() override {
         return "";
     }

@@ -193,6 +193,8 @@ void AchievementsWorker::run()
 
 void Achievements::initialize() {
 	if (g_client) return;
+
+	hardcoreMode = false;
 	createDbAchievements();
 
 	/* Arrancar el worker thread persistente para todos los jobs async. */

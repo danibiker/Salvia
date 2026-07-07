@@ -427,6 +427,11 @@ extern DECLSPEC void SDLCALL SDL_XBOX_SetOverlayEnabled(int enabled);
  */
 extern DECLSPEC void SDL_XBOX_SetRotation(int rotation);
 
+/* Enable (1) or disable (0) vertical sync.  Modifica PresentationInterval
+   en caliente via IDirect3DDevice9_Reset.  La textura del juego (creada
+   con D3DUSAGE_CPU_CACHED_MEMORY) sobrevive al Reset, no se recrea. */
+extern DECLSPEC void SDL_XBOX_SetVSync(int enabled);
+
 /*
  * Set the gamma correction for each of the color channels.
  * The gamma values range (approximately) between 0.1 and 10.0

@@ -895,6 +895,7 @@ public:
 private:
     Achievements() : g_client(NULL), ra_score(0), shouldRefresh(false), hardcoreMode(true), gameState(NULL), lastGameTick(0), byte_swap_memory(false), current_console_id(0), memory_map_count(0), core_descriptors(NULL), core_descriptor_count(0) {
 		memset(memory_map, 0, sizeof(memory_map));
+		hardcoreMode = false;
 		InitializeCriticalSection(&m_csMessages);
 	}
 

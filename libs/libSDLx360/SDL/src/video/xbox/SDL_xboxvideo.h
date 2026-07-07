@@ -107,6 +107,11 @@ void SDL_XBOX_SetOverlayEnabled(int enabled);
    rotation: 0=0deg, 1=90 CCW, 2=180, 3=270 CCW (libretro convention). */
 void SDL_XBOX_SetRotation(int rotation);
 
+/* Enable (1) or disable (0) vertical sync.  Modifica PresentationInterval
+   en caliente via IDirect3DDevice9_Reset.  La textura del juego (creada
+   con D3DUSAGE_CPU_CACHED_MEMORY) sobrevive al Reset, no se recrea. */
+void SDL_XBOX_SetVSync(int enabled);
+
 #endif /* _SDL_nullvideo_h */
 
  
