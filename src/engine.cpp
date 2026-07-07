@@ -51,6 +51,8 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		return 1;
     }
 
+	SDL_ShowCursor(SDL_DISABLE);
+
 	// Habilitar traduccion a UNICODE en eventos de teclado. Sin esto,
 	// event.key.keysym.unicode siempre vale 0 y los cores libretro que
 	// dependen del campo `character` del callback (DOSBox-Pure, ScummVM

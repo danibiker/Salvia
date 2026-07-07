@@ -72,11 +72,16 @@ class Image : public Object{
 		                                                SDL_PixelFormat* format);
 		void adoptSurface(SDL_Surface* newSurface, const std::string& newPath);
 		const std::string& getFilepath() const { return filepath; }
+		void cloneSurface(SDL_Surface* newSurface, const std::string& newPath, SDL_PixelFormat* format);
 
 		void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest, 
                       int src_x, int src_y, int src_w, int src_h, 
                       int dst_x, int dst_y, int dst_w, int dst_h);
 		mutable CRITICAL_SECTION* m_objCS; // apunta al CS externo que protege este objeto
+
+		SDL_Surface* getImg(){
+			return img;
+		}
 
     private:
         string filepath;

@@ -46,6 +46,7 @@ static const string YEAR = "year";
 static const string MANUFACTURER = "manufacturer";
 static const string SYSTEM = "system";
 static const string MENUTMP = "menu.tmp";
+static const string FS_IMAGES[] = {BOX2D, SNAP, SNAPTIT};
 
 extern std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
 extern std::string aspectRatioStrings[TOTAL_VIDEO_RATIO];
@@ -59,7 +60,8 @@ enum status_emu
 	//The menu is showing so, the emulation is paused
 	EMU_MENU, 
 	EMU_MENU_OVERLAY,
-	EMU_MENU_FILTER
+	EMU_MENU_FILTER,
+	EMU_MENU_IMAGE_VIEWER
 };
 
 enum FILE_STATUS
@@ -93,6 +95,20 @@ struct t_achievement_surface{
 	}
 };
 
+// Estructura auxiliar para ordenar por frecuencia
+struct WordFreq {
+    std::string word;
+    int count;
+    std::size_t originalOrder; // Para desempatar por orden de aparición
+
+    bool operator<(const WordFreq& other) const {
+        if (count != other.count) {
+            return count > other.count; // Mayor frecuencia primero
+        }
+        return originalOrder < other.originalOrder; // Si empatan, el que apareció antes
+    }
+};
+
 class GameMenu : public Engine{
     public:
         GameMenu(CfgLoader *cfgLoader);
@@ -113,6 +129,7 @@ class GameMenu : public Engine{
 		int *current_integer_scale_type;
 		bool romLoaded;
 		Uint32 uBkgColor;
+		int selectedFsImage;
 
 		void createMenuImages(ListMenu &);
         void loadEmuCfg(ListMenu &);
@@ -137,7 +154,12 @@ class GameMenu : public Engine{
 		FilePackage filePackage;
 		
 		void setEmuStatus(int tmpStat){
-			lastStatus = status;
+			if (status == EMU_MENU_IMAGE_VIEWER){
+				//No queremos volver al visor de imagenes 
+				lastStatus = EMU_MENU;
+			} else {
+				lastStatus = status;
+			}
 			status = tmpStat;
 			//Siempre que cambiemos de estado de emulacion,
 			//reseteamos los botones del joystick
@@ -169,11 +191,16 @@ class GameMenu : public Engine{
 		void fillOverlayAlpha(int colorIndex, int alpha);
 		SDL_Surface* clonarPantalla(SDL_Surface*, int);
 		bool loadBgImage();
-
+		bool someImageLoaded();
+		void nextImageLoaded();
+		void prevImageLoaded();
+		void findFirstImage();
     private:
 		std::vector<Message> messages;
 		th_messages messagesAchievement;
 		Scrapper scrapper;
+		
+		Image fsImage;
 
 		map<int,int> gsTogdGameid;
 		CfgLoader *cfgLoader;
@@ -230,4 +257,5 @@ class GameMenu : public Engine{
 		void drawTitle(ListMenu &listMenu, TTF_Font *fontBig);
 		void drawSelectedGameAssets(ListMenu &listMenu, GameFile *game);
 		string getAssetsDir(ConfigEmu *emu);
+		std::string reduceWords(const std::string &sentence1, const std::string &sentence2);
 };

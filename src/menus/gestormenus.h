@@ -403,8 +403,8 @@ public:
     Menu* obtenerMenuActual();
 	void setAchievementsAsSelected(){menuActual = menuAchievements;}
 	void draw(SDL_Surface *video_page);
-	void updateButton(int, TipoKey);
-	void updateAxis(int, int);
+	void updateButton(const SDL_Event &event, TipoKey);
+	void updateAxis(const SDL_Event &event);
 	bool options_changed_flag;
 	std::vector<t_scrap> scrapSelection;
 	void poblarCoreOptions(CfgLoader *);

@@ -259,6 +259,14 @@ int procesarAccionesMenu(ListMenu &listMenu){
 		}
 	}
 
+	//Mostramos la primera imagen del art del juego
+	const int sdlBtnModif = gameMenu->joystick->inputs.mapperHotkeys.getSdlBtn(0, HK_MODIFIER);
+	if ((sdlBtnModif == -1 || !gameMenu->joystick->inputs.getSdlBtn(0, sdlBtnModif)) && gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_Y) && gameMenu->someImageLoaded()) {
+		gameMenu->findFirstImage();
+		gameMenu->setEmuStatus(EMU_MENU_IMAGE_VIEWER);
+	}
+
+	//Mostramos el filtro de juegos
 	if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_L3)){
 		gameMenu->setEmuStatus(EMU_MENU_FILTER);
 	}
@@ -279,17 +287,17 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 					break;
 				case SDL_JOYBUTTONDOWN:
 					//LOG_INFO("Boton detectado: ID %d", (int)event.jbutton.button);
-					gameMenu->configMenus->updateButton(event.jbutton.button, KEY_JOY_BTN);
+					gameMenu->configMenus->updateButton(event, KEY_JOY_BTN); //event.jbutton.button
 					break;
 				case SDL_JOYHATMOTION:
 					//LOG_INFO("hat detectado: ID %d", (int)event.jhat.value);
 					if (event.jhat.value != 0){ //Solo en el momento del joydown
-						gameMenu->configMenus->updateButton(event.jhat.value, KEY_JOY_HAT);
+						gameMenu->configMenus->updateButton(event, KEY_JOY_HAT); //event.jhat.value
                     }
                     break;
 				case SDL_JOYAXISMOTION:
 					//LOG_INFO("axis detectado: value %d axis: %d", (int)event.jaxis.value, (int)event.jaxis.axis);
-					gameMenu->configMenus->updateAxis(event.jaxis.value, event.jaxis.axis);
+					gameMenu->configMenus->updateAxis(event); //event.jaxis.value, event.jaxis.axis
 					break;
 				default:
 					break;
@@ -298,6 +306,7 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 		//gameMenu->joystick->resetAllValues();
 	} else {
 		gameMenu->joystick->pollKeys(gameMenu->overlay);
+		
 
 		if (gameMenu->isOnscreenKeybEnabled()){
 			//Se procesan las acciones del teclado que se muestra en un overlay. Solo MSX y SPECTRUM
@@ -361,7 +370,18 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP) && !menuFilter->opciones.empty()) {
 				menuFilter->seleccionado = (menuFilter->seleccionado + (int)menuFilter->opciones.size() - 1)
 										  % (int)menuFilter->opciones.size();
+			} 
+		} else if (gameMenu->getEmuStatus() == EMU_MENU_IMAGE_VIEWER){
+			if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_Y) || gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_B)) {
+				gameMenu->setEmuStatus(gameMenu->getLastStatus());
+				gameMenu->selectedFsImage = 0;
+				return 0;
+			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)) {
+				gameMenu->nextImageLoaded();
+			} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)) {
+				gameMenu->prevImageLoaded();
 			}
+			return 1;
 		} else {
 			//Acciones sobre listMenu
 			if (procesarAccionesMenu(listMenu) == 0)

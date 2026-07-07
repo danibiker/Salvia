@@ -95,6 +95,7 @@ struct t_info_btn{
 	BTN_SHAPE shape;
 	std::string text;
 	std::string description;
+	bool mergeNext;
 };
 
 class Joystick{

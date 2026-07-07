@@ -19,6 +19,14 @@ extern "C" void salvia_dispatch_keyboard_event(bool down, unsigned retro_keycode
 
 extern retro_keyboard_event_t core_key_callback;
 
+// Estructura temporal para almacenar los perfiles definidos en RETROPAD_LIST
+struct PadProfile {
+    std::vector<int> btns, hats, axis;
+    bool anal;
+	int joyTypeIdx;
+	PadProfile(): anal(false), joyTypeIdx(0) {}
+};
+
 Joystick::Joystick(){
 	ignoreButtonRepeats = false;
 	this->w = 0;
@@ -305,20 +313,14 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
 bool Joystick::loadButtonsRetro(std::string ruta) {
     
     std::vector<std::string> lineas;
-	FileList::cargarVector(ruta, lineas);
-    if (lineas.empty()) return false;
-
-    // Estructura temporal para almacenar los perfiles definidos en RETROPAD_LIST
-    struct PadProfile {
-        std::vector<int> btns, hats, axis;
-        bool anal;
-		int joyTypeIdx;
-		PadProfile(): anal(false), joyTypeIdx(0) {}
-    };
-
     std::map<std::string, PadProfile> profiles;
     std::string currentSection = "";
     std::string currentProfileName = "";
+	int foundProfiles = 0;
+	bool foundFirstJoy = false;
+
+	FileList::cargarVector(ruta, lineas);
+    if (lineas.empty()) return false;
 
     for (std::size_t i = 0; i < lineas.size(); ++i) {
         std::string line = Constant::Trim(lineas[i]);
@@ -346,17 +348,27 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
 				else if (line.find("joytype=") == 0)
 					profiles[currentProfileName].joyTypeIdx = Constant::strToTipo<int>(line.substr(8));
             }
-        } 
-        else if (currentSection == "[RETROPAD]") {
+        } else if (currentSection == "[RETROPAD]") {
             // Formato: player0_name=Xbox Controller
             std::size_t eqPos = line.find('=');
             if (eqPos != std::string::npos) {
                 std::string key = line.substr(0, eqPos);
                 std::string profileName = line.substr(eqPos + 1);
                 
-                // Extraer el numero de jugador de "playerX_name"
-				int p = Constant::strToTipo<int>(key.substr(6, key.find('_') - 6));
-                
+                // Incrementamos siempre de antemano. Si entra en el 'if' del primer mando, se sobrescribira.
+				foundProfiles++;
+				int p = foundProfiles;
+
+				if (!foundFirstJoy) {
+					// Comparamos el nombre del perfil con el mando conectado al primer puerto
+					if (profileName.find(inputs.names[0]) != std::string::npos) {
+						p = 0;
+						foundFirstJoy = true;
+						// Compensamos el incremento previo ya que este caso no consume un perfil generico
+						foundProfiles--; 
+					}
+				}
+
                 if (p < MAX_PLAYERS && profiles.count(profileName)) {
                     PadProfile& pf = profiles[profileName];
                     for (std::size_t j = 0; j < MAX_BUTTONS && j < pf.btns.size(); j++) inputs.mapperCore.setBtnFromSdl(p, j, pf.btns[j]);
@@ -367,8 +379,7 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
 					inputs.names[p] = profileName;
                 }
             }
-        }
-        else if (currentSection == "[HOTKEYS]" || currentSection == "[FRONTEND]") {
+        } else if (currentSection == "[HOTKEYS]" || currentSection == "[FRONTEND]") {
             auto& targetMapper = (currentSection == "[HOTKEYS]") ? inputs.mapperHotkeys : inputs.mapperFrontend;
             if (line.find("btns=") == 0) {
                 std::vector<int> v = Constant::splitInt(line.substr(5), ',');
@@ -597,11 +608,12 @@ void Joystick::setCursor(int cursor){
 
 void Joystick::setInfoButtons(){
 	//Dando valor a la ayuda de los botones que se muestra en el menu
-	int num_port_buttons = sizeof(FRONTEND_BTN_VAL) / sizeof(FRONTEND_BTN_VAL[0]);
-
+	const int num_port_buttons = sizeof(FRONTEND_BTN_VAL) / sizeof(FRONTEND_BTN_VAL[0]);
 	//Son las posiciones de los botones que nos interesan en FRONTEND_BTN_VAL y FRONTEND_BTN_TXT
-	int buttonsToShowInfo[] = {4, 5, 6, 7, 8};
-	int num_port_buttons_info = sizeof(buttonsToShowInfo) / sizeof(buttonsToShowInfo[0]);
+	const int buttonsToShowInfo[] = {4, 5, 7, 8, 9, 6};
+	const bool mergeNextArr[] = {false, false, true, false, false, false};
+	const int num_port_buttons_info = sizeof(buttonsToShowInfo) / sizeof(buttonsToShowInfo[0]);
+
 
 	infoButtons.clear();	
 	for (int i=0; i < num_port_buttons_info; i++){
@@ -609,6 +621,7 @@ void Joystick::setInfoButtons(){
 		btn.description = FRONTEND_BTN_TXT[buttonsToShowInfo[i]];
 		const int sdlIdBtn = inputs.mapperFrontend.getSdlBtn(0, FRONTEND_BTN_VAL[buttonsToShowInfo[i]]);
 		btn.text = std::string(SDL_BTN_TO_XBOX[sdlIdBtn]);
+		btn.mergeNext = mergeNextArr[i];
 		
 		if (btn.text == "R3" || btn.text == "L3")
 			btn.shape = BS_DOUBLE_CIRCLE;

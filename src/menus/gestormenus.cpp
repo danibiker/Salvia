@@ -1160,7 +1160,10 @@ void GestorMenus::resetKeyElement(int sdlbtn, TipoKey tipoKey){
 /**
 *
 */
-void GestorMenus::updateAxis(int sdlAxisValue, int sdlAxis){
+void GestorMenus::updateAxis(const SDL_Event &event){
+	const int sdlAxisValue = event.jaxis.value;
+	const int sdlAxis = event.jaxis.axis;
+
 	if (status != POLLING_INPUTS) return;
 	Opcion* opt = menuActual->opciones[menuActual->seleccionado];
 
@@ -1189,9 +1192,10 @@ void GestorMenus::updateAxis(int sdlAxisValue, int sdlAxis){
 					OpcionBool* b = (OpcionBool*)menuActual->opciones[0];
 					*(b->valor) = true;
 				}
-			} else {
+			} 
+			//else {
 				// CENTRO: Opcionalmente manejar el reposo aqui si es necesario
-			}
+			//}
 		}
 	}
 }
@@ -1199,12 +1203,30 @@ void GestorMenus::updateAxis(int sdlAxisValue, int sdlAxis){
 /**
 *
 */
-void GestorMenus::updateButton(int sdlbtn, TipoKey tipoKey){
+void GestorMenus::updateButton(const SDL_Event &event, TipoKey tipoKey){
+	int joyNumber = -1; 
+	int sdlbtn = -1;
+
+	if (tipoKey == KEY_JOY_BTN){
+		joyNumber = event.button.which;
+		sdlbtn    = event.button.button;
+	} else if (tipoKey == KEY_JOY_AXIS){
+		joyNumber = event.jhat.which;
+		sdlbtn    = event.jhat.value;
+	} else {
+		return;
+	}
+	
 	if (status != POLLING_INPUTS) return;
 	Opcion* opt = menuActual->opciones[menuActual->seleccionado];
 
 	if (opt->tipo == OPC_KEY) {
 		OpcionKey* k = static_cast<OpcionKey*>(opt);
+
+		//We avoid setting pads if the selected one is not correct
+		if (joyNumber != k->gamepadId)
+			return;
+
 		if (k && k->joyInputs) {
 			k->description = TipoKeyStr[tipoKey];
 			k->tipoKey = tipoKey;

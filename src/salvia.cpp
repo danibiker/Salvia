@@ -766,6 +766,9 @@ static inline void sw_refresh(const void *data, unsigned width, unsigned height,
 	gameMenu->current_scaler(scaleProps);
 }
 
+/**
+*
+*/
 static inline void hw_refresh(const void *data, unsigned width, 
                                 unsigned height, std::size_t pitch) {
     if (!data) return;
@@ -1573,6 +1576,7 @@ static void __declspec(noinline) runGameLoop() {
 					break;
 				case EMU_MENU:
 				case EMU_MENU_FILTER:
+				case EMU_MENU_IMAGE_VIEWER:
 					updateMenuScreen(tileMap, gameMenu, *listMenu);
 					break;
 				case EMU_MENU_OVERLAY:

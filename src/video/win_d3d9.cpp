@@ -194,15 +194,16 @@ static void SetSampler0Filter(D3DTEXTUREFILTERTYPE f)
 /* Factor de escala del efecto (para el modo pixel-perfect). */
 static int EffectScale(void)
 {
-    switch (g_current_effect) {
+//    switch (g_current_effect) {
 //		case 7:  return 2; /* HQ2x */
 //		case 8:  return 3; /* HQ3x */
 //		case 9:  return 4; /* HQ4x */
 //		case 10: return 3; /* xBR-lv2-fast */
 //		case 11: return 3; /* 5xBR-Hyllian (rendered at 3x via HQ3x infra) */
-		default: return 1; /* 0=Nearest, 1=Sharp-Bilinear, 2=LCD-Grid-v2,
-		                      3=Scanlines, 4=CRT-Geom, 5=CRT-Lottes, 6=CRT-Easymode */
-    }
+//		default: return 1; /* 0=Nearest, 1=Sharp-Bilinear, 2=LCD-Grid-v2,
+//		                      3=Scanlines, 4=CRT-Geom, 5=CRT-Lottes, 6=CRT-Easymode */
+//    }
+	return 1;
 }
 
 /* =====================================================================
@@ -726,7 +727,14 @@ int WinD3D9_Init(HWND hwnd, int bbw, int bbh)
     g_pp.BackBufferFormat     = dm.Format;
     g_pp.hDeviceWindow        = hwnd;
     g_pp.EnableAutoDepthStencil = FALSE;
-    g_pp.PresentationInterval = D3DPRESENT_INTERVAL_ONE; /* vsync (como Xbox sin NOVSYNC) */
+
+	#ifdef NOVSYNC_WIN
+		g_pp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+		g_pp.SwapEffect = D3DSWAPEFFECT_DISCARD;
+	#else
+		g_pp.PresentationInterval = D3DPRESENT_INTERVAL_ONE; /* vsync (como Xbox sin NOVSYNC) */
+	#endif
+    
 
     /* MULTITHREADED: el watcher thread (th_printLoading) puede llamar a
        WinD3D9_Present. FPU_PRESERVE: que D3D no cambie la FPU a precision

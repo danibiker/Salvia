@@ -29,6 +29,12 @@ GameMenu::GameMenu(CfgLoader *cfgLoader) : m_csInited(false)
 	this->cfgLoader = cfgLoader;
 	this->initEngine(cfgLoader);
 
+	selectedFsImage = 0;
+	fsImage.setX(0);
+	fsImage.setY(0);
+	fsImage.setW(overlay->w);
+	fsImage.setH(overlay->h);
+
 	/* Lock + worker para la carga asincrona del panel de assets del menu. */
 	InitializeCriticalSection(&m_csSnap);
 	InitializeCriticalSection(&m_csBox2d);
@@ -235,6 +241,56 @@ void GameMenu::createMenuImages(ListMenu &listMenu){
     }
 }
 
+bool GameMenu::someImageLoaded(){
+	std::map<std::string, Image>::iterator it;
+	bool hasImage = false;
+	for (it = menuImages.begin(); it != menuImages.end() && !hasImage; ++it) {
+		std::string clave = it->first;
+		hasImage = it->second.hasImage();
+	}
+	return hasImage;
+}
+
+void GameMenu::findFirstImage(){
+	int count = 0;
+	if (sizeof(FS_IMAGES[0]) > 0){
+		count = sizeof(FS_IMAGES) / sizeof(FS_IMAGES[0]);
+	}
+	const int initial = selectedFsImage;
+	while (!menuImages[FS_IMAGES[selectedFsImage]].hasImage()){
+		selectedFsImage = (selectedFsImage + 1) % count;
+		if (selectedFsImage == initial)
+			break;
+	}
+}
+
+void GameMenu::nextImageLoaded(){
+	bool hasImage = false;
+	int count = 0;
+	if (sizeof(FS_IMAGES[0]) > 0){
+		count = sizeof(FS_IMAGES) / sizeof(FS_IMAGES[0]);
+	}
+	const int initial = selectedFsImage;
+	do{
+		selectedFsImage = (selectedFsImage + 1) % count;
+		hasImage = menuImages[FS_IMAGES[selectedFsImage]].hasImage();
+	} while (!hasImage && initial != selectedFsImage);
+}
+
+void GameMenu::prevImageLoaded(){
+	bool hasImage = false;
+	int count = 0;
+	if (sizeof(FS_IMAGES[0]) > 0){
+		count = sizeof(FS_IMAGES) / sizeof(FS_IMAGES[0]);
+	}
+	const int initial = selectedFsImage;
+
+	do{
+		selectedFsImage = selectedFsImage == 0 ? count - 1 : selectedFsImage - 1;
+		hasImage = menuImages[FS_IMAGES[selectedFsImage]].hasImage();
+	} while (!hasImage && initial != selectedFsImage);
+}
+
 /**
  * 
  */
@@ -249,10 +305,15 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 	const SDL_Color &textColor = Constant::colors[clWhite].sdlColor;
 	const SDL_Color &menuBars = Constant::colors[clMenuBars].sdlColor;
 
-    //Drawing the rest of list and images
-    if (listMenu.getNumGames() > (std::size_t)listMenu.curPos){
+	if (getEmuStatus() == EMU_MENU_IMAGE_VIEWER){
+		const std::string path = menuImages[FS_IMAGES[selectedFsImage]].getFilepath();
+		if (path != fsImage.getFilepath()){
+			fsImage.cloneSurface(menuImages[FS_IMAGES[selectedFsImage]].getImg(), path, overlay->format);
+		}
+		fsImage.printImage(overlay);
+	} else if (listMenu.getNumGames() > (std::size_t)listMenu.curPos){
+		//Drawing the rest of list and images
         auto game = listMenu.filteredGames.at(listMenu.curPos);
-
 		if (!game->longFileName.empty()){
             if (listMenu.layout == LAYBOXES) {
 				//Draw the title. It can be an image or a text
@@ -479,9 +540,29 @@ void GameMenu::drawInfoButtons(SDL_Rect &rect){
 		}
 		
 		drawnRect = Fonts::drawText(txtSrf, fontBig, joystick->infoButtons[i].text.c_str(), x, posY, Constant::colors[buttonsTransparentColor].sdlColor, 0);
-		x += drawnRect.w + face_h_big / 2;
-		drawnRect = Fonts::drawText(txtSrf, fontBig, joystick->infoButtons[i].description.c_str(), x, posY, Constant::colors[buttonsColor].sdlColor, 0);
-		x += drawnRect.w + (i + 1 < joystick->infoButtons.size() ? face_h_big * 2 : 0);
+
+		if (!joystick->infoButtons[i].mergeNext){
+			x += drawnRect.w + face_h_big / 2;
+		} else {
+			x += drawnRect.w;
+		}
+		
+		if (!joystick->infoButtons[i].mergeNext){
+			std::string desc = joystick->infoButtons[i].description;
+			if (i > 0 && joystick->infoButtons[i-1].mergeNext){
+				//desc = joystick->infoButtons[i-1].description + "/" + desc;
+				desc = reduceWords(joystick->infoButtons[i-1].description, joystick->infoButtons[i].description);
+			}
+			drawnRect = Fonts::drawText(txtSrf, fontBig, desc.c_str(), x, posY, Constant::colors[buttonsColor].sdlColor, 0);
+		} else {
+			drawnRect.w = 0;
+		}
+
+		if (!joystick->infoButtons[i].mergeNext){
+			x += drawnRect.w + (i + 1 < joystick->infoButtons.size() ? face_h_big * 2 : 0);
+		} else {
+			x += drawnRect.w + (i + 1 < joystick->infoButtons.size() ? face_h_big : 0);
+		}
 	}
 
 	drawnRect.w = x;
@@ -503,6 +584,59 @@ void GameMenu::drawInfoButtons(SDL_Rect &rect){
 	//SDL_BlitSurface(txtSrf, &drawnRect, overlay, &dstRect);
 	SDL_FreeSurface(txtSrf);
 }
+
+std::string GameMenu::reduceWords(const std::string &sentence1, const std::string &sentence2) {
+    // 1. Unir todas las palabras en un solo flujo manteniendo el orden original
+    std::vector<std::string> allWords = Constant::splitChar(sentence1, ' ');
+    std::vector<std::string> v2 = Constant::splitChar(sentence2, ' ');
+    allWords.insert(allWords.end(), v2.begin(), v2.end());
+
+    // 2. Contar frecuencias y registrar la primera aparicion de cada palabra
+    std::map<std::string, int> counts;
+    std::map<std::string, std::size_t> firstAppearance;
+    
+    for (std::size_t i = 0; i < allWords.size(); ++i) {
+        const std::string &w = allWords[i];
+        counts[w]++;
+        if (firstAppearance.find(w) == firstAppearance.end()) {
+            firstAppearance[w] = i;
+        }
+    }
+
+    // 3. Pasar los datos unicos a un vector para poder ordenarlos
+    std::vector<WordFreq> sortedWords;
+    std::map<std::string, int>::iterator it;
+    for (it = counts.begin(); it != counts.end(); ++it) {
+        WordFreq wf = { it->first, it->second, firstAppearance[it->first] };
+        sortedWords.push_back(wf);
+    }
+
+    // 4. Ordenar: mayor frecuencia primero
+    std::sort(sortedWords.begin(), sortedWords.end());
+
+    // 5. Construir la frase final respetando la logica de separadores
+    std::string finalSentence;
+    int lastWordHits = 0;
+
+    for (std::size_t i = 0; i < sortedWords.size(); ++i) {
+        const std::string &elem = sortedWords[i].word;
+        
+        // '/' si la anterior no se repetia, ' ' si se repetia
+        std::string sep = (lastWordHits == 0) ? "/" : " ";
+        finalSentence += finalSentence.empty() ? elem : sep + elem;
+
+        // Si la palabra actual se repite (count > 1), marcamos hit
+        lastWordHits = (sortedWords[i].count > 1) ? 1 : 0;
+    }
+
+	// CORRECCION: Forzar la primera letra a mayúscula si el texto no esta vacio
+    if (!finalSentence.empty()) {
+        finalSentence[0] = static_cast<char>(::toupper(static_cast<unsigned char>(finalSentence[0])));
+    }
+
+    return finalSentence;
+}
+
 
 void GameMenu::initAchievements(){
 	const bool loadAchievement = getCfgLoader()->configMain[cfg::enableAchievements].valueBool;

@@ -133,6 +133,25 @@ void Image::adoptSurface(SDL_Surface* newSurface, const std::string& newPath) {
     }
 }
 
+void Image::cloneSurface(SDL_Surface* newSurface, const std::string& newPath, SDL_PixelFormat* format) {
+    if (img != NULL) {
+        SDL_FreeSurface(img);
+        img = NULL;
+    }
+    if (cachedSurface != NULL) {
+        SDL_FreeSurface(cachedSurface);
+        cachedSurface = NULL;
+    }
+	clearShadows();
+
+    if (newSurface) {
+		img = SDL_ConvertSurface(newSurface, format, SDL_SWSURFACE);
+        filepath = newPath;
+    } else {
+        filepath = "";
+    }
+}
+
 bool Image::loadImage(string filepathToOpen, SDL_PixelFormat* format){
     bool ret = false;
     if (filepath.empty() || filepath.compare(filepathToOpen) != 0){
@@ -279,18 +298,20 @@ void Image::printShadow(SDL_Surface *video_page){
 
 		const int posX = this->getX() + newOffset.w + SHADOW_OFFSET;
 		const int posY = this->getY() + newOffset.h + newDim.h;
+
+		const int posXBottomRight = posX + newDim.w - SHADOW_OFFSET + SHADOW_THICKNESS;
 		//Dibujamos la sombra inferior
 		boxColor(video_page, posX, posY, 
-			posX + newDim.w + SHADOW_THICKNESS - SHADOW_OFFSET, posY + SHADOW_THICKNESS, 
+			posXBottomRight > video_page->w ? video_page->w : posXBottomRight, posY + SHADOW_THICKNESS, 
 			Constant::colors[clBG].colorRaw);
 		
 		const int posYRight = this->getY() + newOffset.h + SHADOW_OFFSET;
 		const int posXRight = posX + newDim.w - SHADOW_OFFSET;
 		if (posXRight < video_page->w){
-			const int posXRightThick = posXRight + SHADOW_THICKNESS < video_page->w ? posXRight + SHADOW_THICKNESS : abs(video_page->w - posXRight);
+			const int posXRightThick = posXRight + SHADOW_THICKNESS;
 			//Dibujamos la sombra lateral derecha
 			boxColor(video_page, posXRight, posYRight, 
-				posXRightThick, posY - 1, 
+				posXRightThick > video_page->w ? video_page->w : posXRightThick, posY - 1, 
 				Constant::colors[clBG].colorRaw);	
 		}
 	}
