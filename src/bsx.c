@@ -187,6 +187,7 @@
 #include "snes9x.h"
 #include "memmap.h"
 #include "bsx.h"
+#include "bsflash.h"
 #include "display.h"
 
 #include <streams/file_stream.h>
@@ -205,6 +206,10 @@ struct SBSX_RTC
 	int	minutes;
 	int	seconds;
 	int	ticks;
+	int	wday;
+	int	mday;
+	int	month;
+	int	year;
 };
 
 static struct SBSX_RTC	BSX_RTC;
@@ -220,16 +225,19 @@ static const uint8_t	flashcard[20] =
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
-static const uint8_t	init2192[32] =	/* FIXME */
+static const uint8_t	init2192[32] =	/* Satellaview time channel (ch 0) */
 {
-	00, 00, 00, 00, 00,		/* unknown */
-	01, 01, 00, 00, 00,
-	00,				/* seconds (?) */
-	00,				/* minutes */
-	00,				/* hours */
-	10, 10, 10, 10, 10,		/* unknown */
-	10, 10, 10, 10, 10,		/* dummy */
-	00, 00, 00, 00, 00, 00, 00, 00, 00
+	/* Layout follows the MiSTer BSX RTL channel-0 data stream:
+	   [4]=0x10, [5]=0x01, [6]=0x01 are fixed; [10..12]=sec/min/hour;
+	   [13]=weekday, [14]=day, [15]=month, [16..17]=year (seeded at init). */
+	0x00, 0x00, 0x00, 0x00, 0x10,
+	0x01, 0x01, 0x00, 0x00, 0x00,
+	0x00,				/* seconds */
+	0x00,				/* minutes */
+	0x00,				/* hours   */
+	0x00, 0x00, 0x00, 0x00, 0x00,	/* weekday, day, month, year lo/hi */
+	0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
 static uint8_t	FlashMode;
@@ -611,16 +619,28 @@ uint8_t S9xGetBSX (uint32_t address)
 		/* default: read-through mode */
 		t = BSX_Get_Bypass_FlashIO(offset);
 
+		/* When the ares-accurate flash chip is in one of the command modes
+		   it owns (chip-id, page buffer, compatible/extended status), return
+		   its response: these are position-independent register reads the
+		   BS-X BIOS performs after a Sharp command. In plain flash-read mode
+		   the chip is not consulted, so ordinary flash-content reads continue
+		   through the MMC-mapped path above (preserving dumped-BS games). */
+		if (BSFlashChip.memory && BSFlashChip.size && !BSFlashChip.is_rom &&
+			BSFlashChip.mode != BSF_MODE_FLASH)
+		{
+			t = S9xBSFlashRead(offset);
+		}
+
 		/* note: may be more registers, purposes unknown */
 		switch (offset)
 		{
 			case 0x0002:
-				if (BSX.flash_enable)
+				if (BSX.flash_enable && BSFlashChip.mode == BSF_MODE_FLASH)
 					t = 0x80; /* status register? */
 				break;
 
 			case 0x5555:
-				if (BSX.flash_enable)
+				if (BSX.flash_enable && BSFlashChip.mode == BSF_MODE_FLASH)
 					t = 0x80; /* ??? */
 				break;
 
@@ -634,8 +654,10 @@ uint8_t S9xGetBSX (uint32_t address)
 			case 0xFF0E:
 			case 0xFF10:
 			case 0xFF12:
-				/* return flash vendor information */
-				if (BSX.read_enable)
+				/* Legacy vendor-information window (older 0xAA55 unlock path).
+				   Only used when the chip is in flash-read mode; the Sharp
+				   command path returns this info via the page buffer above. */
+				if (BSX.read_enable && BSFlashChip.mode == BSF_MODE_FLASH)
 					t = flashcard[offset - 0xFF00];
 				break;
 		}
@@ -702,6 +724,15 @@ void S9xSetBSX (uint8_t byte, uint32_t address)
 			BSX_Set_Bypass_FlashIO(offset, byte);
 			return;
 		}
+
+		/* Feed command bytes to the ares-accurate flash chip so its mode,
+		   page buffers and status registers track the real Sharp command
+		   sequence the BS-X BIOS issues (0x38/0x71/0x72/0x75/0x99/...). The
+		   legacy state machine below is kept in lock-step so the existing,
+		   verified boot path is unchanged; reads consult the chip only for
+		   the command modes it owns (see S9xGetBSX). */
+		if (BSFlashChip.memory && BSFlashChip.size && !BSFlashChip.is_rom)
+			S9xBSFlashWrite(offset, byte);
 
 		/* flash command handling
 		   NOTE: incomplete */
@@ -828,11 +859,41 @@ uint8_t S9xGetBSXPPU (uint16_t address)
 				BSX_RTC.hours++;
 			}
 			if (BSX_RTC.hours >= 24)
+			{
 				BSX_RTC.hours = 0;
+				/* Advance the date on day rollover so long sessions keep a
+				   coherent calendar (weekday 0-6, day-of-month, month). */
+				BSX_RTC.wday = (BSX_RTC.wday + 1) % 7;
+				BSX_RTC.mday++;
+				{
+					static const int mdays[12] =
+						{ 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+					int dim = mdays[(BSX_RTC.month - 1) % 12];
+					if (BSX_RTC.month == 2 &&
+						((BSX_RTC.year % 4 == 0 && BSX_RTC.year % 100 != 0) ||
+						 (BSX_RTC.year % 400 == 0)))
+						dim = 29;
+					if (BSX_RTC.mday > dim)
+					{
+						BSX_RTC.mday = 1;
+						BSX_RTC.month++;
+						if (BSX_RTC.month > 12)
+						{
+							BSX_RTC.month = 1;
+							BSX_RTC.year++;
+						}
+					}
+				}
+			}
 
-			BSX.test2192[10] = BSX_RTC.seconds;
-			BSX.test2192[11] = BSX_RTC.minutes;
-			BSX.test2192[12] = BSX_RTC.hours;
+			BSX.test2192[10] = (uint8_t) BSX_RTC.seconds;
+			BSX.test2192[11] = (uint8_t) BSX_RTC.minutes;
+			BSX.test2192[12] = (uint8_t) BSX_RTC.hours;
+			BSX.test2192[13] = (uint8_t) BSX_RTC.wday;
+			BSX.test2192[14] = (uint8_t) BSX_RTC.mday;
+			BSX.test2192[15] = (uint8_t) BSX_RTC.month;
+			BSX.test2192[16] = (uint8_t) (BSX_RTC.year & 0xFF);
+			BSX.test2192[17] = (uint8_t) ((BSX_RTC.year >> 8) & 0xFF);
 
 			break;
 
@@ -1078,14 +1139,39 @@ void S9xInitBSX (void)
 		MapROM = NULL;
 		FlashROM = Memory.ROM;
 
+		/* Initialise the ares-accurate BS Memory flash chip over the same
+		   image the legacy mapping uses. The BS-X base unit hosts a writable
+		   Flash cassette (the BIOS issues real Sharp flash commands), so the
+		   chip is active there. Dumped BS-game ROM cassettes are read-only and
+		   read straight through, so they are unaffected. FlashMode mirrors the
+		   legacy "flash present" flag; treat a non-flash dumped cart as a ROM
+		   cassette. */
+		S9xBSFlashInit(FlashROM, FlashSize,
+			(Settings.BSXItself || FlashMode) ? FALSE : TRUE);
+
 		time(&t);
 		tmr = localtime(&t);
 
 		BSX_RTC.ticks = 0;
 		memcpy(BSX.test2192, init2192, sizeof(init2192));
+		/* Seed the Satellaview time channel (channel 0) from the host clock.
+		   Layout matches the MiSTer BSX RTL's channel-0 data: index 10-12 are
+		   sec/min/hour, 13 = weekday, 14 = day, 15 = month, 16-17 = year
+		   (little-endian). Previously only sec/min/hour were provided (the
+		   date read back as zero); the full date is now populated so BS
+		   software that shows the date behaves correctly. */
 		BSX.test2192[10] = BSX_RTC.seconds = tmr->tm_sec;
 		BSX.test2192[11] = BSX_RTC.minutes = tmr->tm_min;
 		BSX.test2192[12] = BSX_RTC.hours   = tmr->tm_hour;
+		BSX_RTC.wday  = tmr->tm_wday;
+		BSX_RTC.mday  = tmr->tm_mday;
+		BSX_RTC.month = tmr->tm_mon + 1;
+		BSX_RTC.year  = tmr->tm_year + 1900;
+		BSX.test2192[13] = (uint8_t) BSX_RTC.wday;
+		BSX.test2192[14] = (uint8_t) BSX_RTC.mday;
+		BSX.test2192[15] = (uint8_t) BSX_RTC.month;
+		BSX.test2192[16] = (uint8_t) (BSX_RTC.year & 0xFF);
+		BSX.test2192[17] = (uint8_t) ((BSX_RTC.year >> 8) & 0xFF);
 		SNESGameFixes.SRAMInitialValue = 0x00;
 	}
 }

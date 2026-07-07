@@ -200,10 +200,13 @@ void linearFree(void* mem);
 #include "../src/display.h"
 #include "../src/fxemu.h"
 #include "../src/memmap.h"
+#include "../src/bsx.h"
+#include "../src/bsflash.h"
 #include "../src/messages.h"
 #include "../src/ppu.h"
 #include "../src/snapshot.h"
 #include "../src/snes9x.h"
+#include "../src/msu1.h"
 #include "../src/srtc.h"
 #include "../filter/snes_ntsc.h"
 
@@ -214,6 +217,10 @@ void linearFree(void* mem);
 #define BTN_POINTER2		(BTN_POINTER + 1)
 
 #define RETRO_DEVICE_JOYPAD_MULTITAP		RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 0)
+
+/* Subsystem id for the Satellaview (BS-X base cart + memory pack) pairing. */
+#define RETRO_GAME_TYPE_BSX			0x0101
+#define RETRO_GAME_TYPE_SUFAMI_TURBO		0x0102
 #define RETRO_DEVICE_LIGHTGUN_SUPER_SCOPE		RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_LIGHTGUN, 0)
 #define RETRO_DEVICE_LIGHTGUN_JUSTIFIER		RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_LIGHTGUN, 1)
 #define RETRO_DEVICE_LIGHTGUN_JUSTIFIERS		RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_LIGHTGUN, 2)
@@ -256,6 +263,21 @@ void S9xSetStreamBuffer(uint8_t *buffer, uint64_t size)
    audio ring drain and pull DRC out of steady-state tracking - but
    substitute the silence buffer for the SPC's actual output. */
 static bool audio_muted;
+
+/* MSU-1 Enhanced Audio: when enabled AND an MSU1 cart is loaded, the whole
+   output pipeline runs at 44.1 kHz (the SPC's ~32040 Hz output is resampled up
+   and the MSU1 stream mixes in at its native rate, avoiding the intermediate
+   downsample). Latched at content load so the reported sample rate is stable
+   for the frontend. `msu1_enhanced_pref` is the user's option; the active rate
+   is only raised when MSU1 is actually present. */
+#define MSU1_ENHANCED_RATE 44100
+static bool msu1_enhanced_pref = false;
+
+/* True when 44.1 kHz output is actually in effect (option on AND MSU1 active). */
+static bool msu1_enhanced_active(void)
+{
+	return msu1_enhanced_pref && Settings.MSU1;
+}
 
 enum
 {
@@ -451,6 +473,13 @@ static void check_variables(bool first_run)
 	}
 	else
 		dsp_interp_mode = DSP_INTERP_GAUSSIAN;
+
+	var.key = "snes9x_2010_msu1_enhanced_audio";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+		msu1_enhanced_pref = (strcmp(var.value, "enabled") == 0);
+	else
+		msu1_enhanced_pref = false;
 
 	var.key = "snes9x_2010_frameskip";
 	var.value = NULL;
@@ -796,6 +825,29 @@ void retro_set_environment(retro_environment_t cb)
 
 	environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
 
+	/* Satellaview subsystem: a BS-X base cartridge (Slot A) paired with a
+	   swappable BS Memory pack (Slot B), matching the two-slot model used by
+	   mainline snes9x and bsnes-plus. The single-ROM heuristic path (which
+	   auto-detects dumped BS games and the BS-X BIOS by header) is retained,
+	   so this subsystem is an additional, explicit way to pair a base cart
+	   with a specific memory-pack dump. */
+	{
+		static const struct retro_subsystem_rom_info bsx_roms[] = {
+			{ "BS-X Base Cartridge", "bsx|sfc|smc|bin", false, false, true, NULL, 0 },
+			{ "BS Memory Pack",      "bs|sfc|smc|bin",  false, false, false, NULL, 0 },
+		};
+		static const struct retro_subsystem_rom_info st_roms[] = {
+			{ "Sufami Turbo Cartridge (Slot 1)", "st|sfc|smc|bin", false, false, true,  NULL, 0 },
+			{ "Sufami Turbo Cartridge (Slot 2)", "st|sfc|smc|bin", false, false, false, NULL, 0 },
+		};
+		static const struct retro_subsystem_info subsystems[] = {
+			{ "Satellaview (BS-X + Memory Pack)", "bsx", bsx_roms, 2, RETRO_GAME_TYPE_BSX },
+			{ "Sufami Turbo",                     "st",  st_roms,  2, RETRO_GAME_TYPE_SUFAMI_TURBO },
+			{ NULL, NULL, NULL, 0, 0 },
+		};
+		environ_cb(RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO, (void*)subsystems);
+	}
+
 	vfs_iface_info.required_interface_version = 1;
 	vfs_iface_info.iface                      = NULL;
 	if (environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface_info))
@@ -846,6 +898,81 @@ static void audio_upload_samples(void)
 		src = mute_buffer;
 		if (n > MUTE_BUFFER_FRAMES * 2)
 			n = MUTE_BUFFER_FRAMES * 2;
+	}
+
+	/* MSU-1 Enhanced Audio path: run the whole frame at 44.1 kHz. The SPC's
+	   ~32040 Hz output is linearly upsampled to 44.1 kHz, then the MSU1 stream
+	   mixes in at its native rate (no downsample), and the 44.1 kHz result
+	   ships to the frontend. Only taken when an MSU1 cart is loaded and the
+	   option is on; every other game skips this entirely. */
+	if (!audio_muted && msu1_enhanced_active())
+	{
+		/* 44.1 kHz needs more room per frame than the 32 kHz mute buffer:
+		   PAL worst case is 44100/50 = 882 frames, plus up to ~1.6% for the
+		   APU speedup hack. 1024 covers it with margin. */
+		#define MSU1_ENH_FRAMES 1024
+		static int16_t enh_buffer[MSU1_ENH_FRAMES * 2];
+		int   in_frames  = n >> 1;
+		/* Number of 44.1 kHz output frames for this batch of SPC frames. */
+		uint32_t out_rate = (uint32_t) ((double) MSU1_ENHANCED_RATE
+			* (double) S9xGetAudioSampleRate() / 32040.0);
+		int   out_frames;
+		int   i;
+		/* 16.16 step through the SPC (source) buffer per output frame. */
+		uint32_t step = (uint32_t) (((uint64_t) S9xGetAudioSampleRate() << 16) / out_rate);
+		uint32_t pos  = 0;
+
+		out_frames = (int) (((uint64_t) in_frames * out_rate) / S9xGetAudioSampleRate());
+		if (out_frames > MSU1_ENH_FRAMES)
+			out_frames = MSU1_ENH_FRAMES;
+
+		for (i = 0; i < out_frames; i++)
+		{
+			uint32_t idx = pos >> 16;
+			uint32_t frac = pos & 0xffff;
+			int32_t  l0, r0, l1, r1;
+
+			if ((int) idx >= in_frames) idx = in_frames - 1;
+			l0 = src[idx * 2 + 0];
+			r0 = src[idx * 2 + 1];
+			if ((int) idx + 1 < in_frames)
+			{
+				l1 = src[idx * 2 + 2];
+				r1 = src[idx * 2 + 3];
+			}
+			else
+			{
+				l1 = l0;
+				r1 = r0;
+			}
+
+			enh_buffer[i * 2 + 0] = (int16_t) (l0 + (((l1 - l0) * (int32_t) frac) >> 16));
+			enh_buffer[i * 2 + 1] = (int16_t) (r0 + (((r1 - r0) * (int32_t) frac) >> 16));
+			pos += step;
+		}
+
+		/* Mix MSU1 at the 44.1 kHz output rate (native: step == 1.0). */
+		if (MSU1.MSU1_AudioPlay)
+			S9xMSU1Mix(enh_buffer, (size_t) out_frames, out_rate);
+
+		audio_batch_cb(enh_buffer, (size_t) out_frames);
+		return;
+	}
+
+	/* MSU1 audio mix (normal ~32040 Hz path): S9xDrainAudio returns a const
+	   pointer into the SPC landing buffer, so when MSU1 is streaming we copy
+	   the SPC output into a writable scratch buffer, add the (downsampled) MSU1
+	   stream, and ship that. No-op for non-MSU1 carts and when nothing plays. */
+	if (!audio_muted && Settings.MSU1 && MSU1.MSU1_AudioPlay)
+	{
+		static int16_t msu_mix_buffer[MUTE_BUFFER_FRAMES * 2];
+		int frames = n >> 1;
+		if (frames > MUTE_BUFFER_FRAMES)
+			frames = MUTE_BUFFER_FRAMES;
+		memcpy(msu_mix_buffer, src, (size_t) frames * 2 * sizeof(int16_t));
+		S9xMSU1Mix(msu_mix_buffer, (size_t) frames, S9xGetAudioSampleRate());
+		audio_batch_cb(msu_mix_buffer, (size_t) frames);
+		return;
 	}
 
 	audio_batch_cb(src, (size_t)n >> 1);
@@ -1054,8 +1181,16 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 	   carts and ~32550 Hz (or similar) for carts that use the APU speedup
 	   hack (~70 game IDs handled in memmap.c). Reporting the effective
 	   rate here lets the frontend's resampler handle conversion to the
-	   host audio rate. */
-	info->timing.sample_rate    = S9xGetAudioSampleRate();
+	   host audio rate.
+
+	   MSU-1 Enhanced Audio: only when an MSU1 cart is actually loaded and the
+	   option is on do we raise the whole pipeline to 44.1 kHz (scaled by the
+	   same APU speedup factor). For every non-MSU1 game this is untouched. */
+	if (msu1_enhanced_active())
+		info->timing.sample_rate = (double) MSU1_ENHANCED_RATE
+			* (double) S9xGetAudioSampleRate() / 32040.0;
+	else
+		info->timing.sample_rate = S9xGetAudioSampleRate();
 	info->timing.fps            = (retro_get_region() == RETRO_REGION_NTSC) ?
 			VIDEO_REFRESH_RATE_NTSC : VIDEO_REFRESH_RATE_PAL;
 }
@@ -1839,6 +1974,54 @@ bool retro_load_game(const struct retro_game_info *game)
 		return FALSE;
 	}
 
+	/* MSU1: locate companion files next to the ROM and enable the chip if a
+	   "<rom>.msu" data ROM or "<rom>-0.pcm" audio track is present.
+
+	   The ROM image is loaded from the frontend's memory buffer (need_fullpath
+	   is false, to preserve softpatching and buffer loading for every game), so
+	   game->path is not guaranteed to be non-NULL. MSU1 nevertheless needs the
+	   on-disk ROM path to find its companion files, so we ask the frontend for
+	   it via RETRO_ENVIRONMENT_GET_GAME_INFO_EXT, which supplies the content
+	   path even when the ROM was handed over as a buffer. We fall back to
+	   game->path for older frontends that lack the ext interface. */
+	Settings.MSU1 = FALSE;
+	{
+		const char *msu_path = NULL;
+		char        rebuilt[PATH_MAX + 8];
+		const struct retro_game_info_ext *info_ext = NULL;
+
+		if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_GAME_INFO_EXT, &info_ext) && info_ext)
+		{
+			if (info_ext->full_path && info_ext->full_path[0])
+				msu_path = info_ext->full_path;
+			else if (info_ext->dir && info_ext->name)
+			{
+				/* Reconstruct "<dir>/<name>.<ext>"; MSU1 resolution only needs
+				   the directory + basename, so any extension resolves the same
+				   companion files. */
+				snprintf(rebuilt, sizeof(rebuilt), "%s/%s.%s",
+					info_ext->dir,
+					info_ext->name,
+					(info_ext->ext && info_ext->ext[0]) ? info_ext->ext : "sfc");
+				msu_path = rebuilt;
+			}
+		}
+
+		if (!msu_path && game->path && game->path[0])
+			msu_path = game->path;
+
+		if (msu_path)
+		{
+			S9xMSU1SetROMPath(msu_path);
+			if (S9xMSU1ROMExists())
+			{
+				Settings.MSU1 = TRUE;
+				S9xResetMSU1();
+				S9xMSU1Init();
+			}
+		}
+	}
+
 	check_variables(true);
 
 	retro_set_audio_buff_status_cb();
@@ -1854,11 +2037,149 @@ bool retro_load_game(const struct retro_game_info *game)
 
 bool retro_load_game_special(unsigned game_type, const struct retro_game_info *info, size_t num_info)
 {
-	(void)game_type;
-	(void)info;
-	(void)num_info;
+	/* Satellaview subsystem: Slot A = BS-X base cartridge, Slot B = optional
+	   BS Memory pack. Mirrors mainline snes9x's two-slot model. The base cart
+	   is loaded as the running ROM through the normal path (so header-based
+	   BS-X detection in S9xInitBSX still applies); the memory-pack dump, when
+	   present, is copied into the BS flash region so the BS-X BIOS sees a
+	   cassette to browse and flash. The single-ROM heuristic path is retained
+	   for auto-detected dumped BS games and the BIOS loaded on its own. */
+	int loaded;
+	const struct retro_game_info *base;
+	const struct retro_game_info *pack;
 
-	return false;
+	if (game_type == RETRO_GAME_TYPE_SUFAMI_TURBO)
+	{
+		/* Sufami Turbo: assemble the base-cassette BIOS + one or two minicart
+		 * dumps into the "combined image" layout that the existing Sufami Turbo
+		 * pseudo-LoROM map consumes (BIOS mirrored across 0..0x100000, minicart
+		 * A at 0x100000, minicart B at 0x200000), then load it through the
+		 * normal path. This reuses the verified combined-image mapping instead
+		 * of the bit-rotted, file-path-based LoadMultiCart machinery.
+		 *
+		 * The base cassette is the 256KB "BANDAI SFC-ADX"/"SFC-ADX BACKUP"
+		 * firmware; a minicart is "BANDAI SFC-ADX" WITHOUT the second signature.
+		 * We accept the two ROMs in any slot order: whichever is the base
+		 * cassette becomes banks $00-$1F, and the minicart(s) go into slots
+		 * A/B. If neither ROM is a base cassette the load is rejected (a BIOS
+		 * is required; there is no HLE path yet). */
+		const struct retro_game_info *bios = NULL;
+		const struct retro_game_info *miniA = NULL;
+		const struct retro_game_info *miniB = NULL;
+		uint8_t *image;
+		uint32_t total;
+		unsigned i;
+
+		if (!info || num_info < 1)
+			return (false);
+
+		for (i = 0; i < num_info && i < 2; i++)
+		{
+			const struct retro_game_info *g = &info[i];
+			const uint8_t *d;
+			if (!g->data || g->size < 0x8000)
+				continue;
+			d = (const uint8_t *) g->data;
+			if (strncmp((const char *) d, "BANDAI SFC-ADX", 14) != 0)
+				continue;
+			if (g->size >= 0x40000
+			 && strncmp((const char *) (d + 0x10), "SFC-ADX BACKUP", 14) == 0)
+			{
+				if (!bios)
+					bios = g;              /* base cassette */
+			}
+			else if (!miniA)
+				miniA = g;                 /* first minicart */
+			else if (!miniB)
+				miniB = g;                 /* second minicart (link play) */
+		}
+
+		/* A base cassette and at least one minicart are required. */
+		if (!bios || !miniA)
+			return (false);
+
+		image = (uint8_t *) calloc(1, MAX_ROM_SIZE);
+		if (!image)
+			return (false);
+
+		/* Mirror the 256KB base cassette across banks $00-$1F (0..0x100000),
+		 * matching how a combined ST image is laid out. */
+		{
+			uint32_t biossz = (uint32_t) bios->size;
+			uint32_t off;
+			if (biossz > 0x40000)
+				biossz = 0x40000;
+			for (off = 0; off + biossz <= 0x100000; off += 0x40000)
+				memcpy(image + off, bios->data, biossz);
+		}
+
+		/* Minicart A -> 0x100000 (banks $20-$3F). */
+		{
+			uint32_t szA = (uint32_t) miniA->size;
+			if (szA > 0x100000)
+				szA = 0x100000;
+			memcpy(image + 0x100000, miniA->data, szA);
+		}
+
+		/* Minicart B -> 0x200000 (banks $40-$5F), when present. */
+		if (miniB)
+		{
+			uint32_t szB = (uint32_t) miniB->size;
+			if (szB > 0x100000)
+				szB = 0x100000;
+			memcpy(image + 0x200000, miniB->data, szB);
+			total = 0x300000;
+		}
+		else
+			total = 0x200000;
+
+		init_descriptors();
+		memorydesc_c = 0;
+
+		S9xSetStreamBuffer(image, (uint64_t) total);
+		loaded = LoadROM();
+		free(image);
+		if (!loaded)
+			return (false);
+
+		Settings.MSU1 = FALSE;
+		return (true);
+	}
+
+	if (game_type != RETRO_GAME_TYPE_BSX)
+		return (false);
+	if (!info || num_info < 1 || !info[0].data)
+		return (false);
+
+	base = &info[0];
+	pack = (num_info >= 2 && info[1].data && info[1].size) ? &info[1] : NULL;
+
+	init_descriptors();
+	memorydesc_c = 0;
+
+	/* Load the base cartridge as the running ROM. */
+	S9xSetStreamBuffer((uint8_t *) base->data, (uint64_t) base->size);
+	loaded = LoadROM();
+	if (!loaded)
+		return (false);
+
+	/* Copy the memory-pack dump into the BS flash region (Memory.BSRAM =
+	   Memory.ROM + 0x400000). S9xInitBSX has already run inside LoadROM and
+	   set up the base-unit mapping; the pack now backs the flash cassette. */
+	if (pack)
+	{
+		uint32_t pack_size = (uint32_t) pack->size;
+		if (pack_size > (uint32_t)(MAX_ROM_SIZE - 0x400000))
+			pack_size = (uint32_t)(MAX_ROM_SIZE - 0x400000);
+		memcpy(Memory.BSRAM, pack->data, pack_size);
+
+		/* Re-initialise the flash chip over the freshly-loaded pack image as
+		   a writable Flash cassette. */
+		S9xBSFlashInit(Memory.BSRAM, pack_size ? pack_size : 0x200000, FALSE);
+	}
+
+	Settings.MSU1 = FALSE;
+	return (true);
 }
 
 void retro_unload_game (void)
