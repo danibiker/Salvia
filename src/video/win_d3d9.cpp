@@ -643,12 +643,61 @@ void SDL_XBOX_SetVSync(int enable)
     if (!g_dev) return;
     if ((enable && g_vsync) || (!enable && !g_vsync)) return; /* no change */
 
+    if (g_cs_init) EnterCriticalSection(&g_cs);
+
     g_vsync = enable ? 1 : 0;
     g_pp.PresentationInterval = g_vsync ? D3DPRESENT_INTERVAL_ONE : D3DPRESENT_INTERVAL_IMMEDIATE;
 
-    ReleaseDefaultResources();
-    if (FAILED(g_dev->Reset(&g_pp))) return;
-    RecreateDefaultResources();
+    /* Liberar solo recursos GPU (D3DPOOL_DEFAULT).  NO tocamos g_game_surf
+     * ni g_ovl_surf (superficies CPU) — el core mantiene punteros a ellas
+     * y se romperian si las recrearamos (use-after-free). */
+    if (g_game_tex) { g_game_tex->Release(); g_game_tex = NULL; }
+    if (g_ovl_tex)  { g_ovl_tex->Release();  g_ovl_tex  = NULL; }
+    if (g_ovl_vb)   { g_ovl_vb->Release();   g_ovl_vb   = NULL; }
+    if (g_vb)       { g_vb->Release();       g_vb       = NULL; }
+
+    if (FAILED(g_dev->Reset(&g_pp))) {
+        /* Intentar recuperar recursos minimos tras fallo de Reset */
+        if (g_tex_w > 0 && g_tex_h > 0) {
+            D3DFORMAT fmt = (g_tex_bpp == 16) ? D3DFMT_R5G6B5 : D3DFMT_X8R8G8B8;
+            g_dev->CreateTexture(g_tex_w, g_tex_h, 1, D3DUSAGE_DYNAMIC,
+                                 fmt, D3DPOOL_DEFAULT, &g_game_tex, NULL);
+        }
+        g_dev->CreateVertexBuffer(sizeof(g_verts), D3DUSAGE_WRITEONLY, VTX_FVF,
+                                  D3DPOOL_DEFAULT, &g_vb, NULL);
+        if (g_ovl_surf) InitOverlay();
+        if (g_cs_init) LeaveCriticalSection(&g_cs);
+        return;
+    }
+
+    /* Recrear vertex buffer del quad principal */
+    g_dev->CreateVertexBuffer(sizeof(g_verts), D3DUSAGE_WRITEONLY, VTX_FVF,
+                              D3DPOOL_DEFAULT, &g_vb, NULL);
+
+    /* Recrear textura GPU del juego.  g_game_surf (CPU) se conserva
+     * intacto, incluidos sus pixels — el core sigue escribiendo ahi
+     * sin saber que la textura ha cambiado. */
+    if (g_tex_w > 0 && g_tex_h > 0) {
+        D3DFORMAT fmt = (g_tex_bpp == 16) ? D3DFMT_R5G6B5 : D3DFMT_X8R8G8B8;
+        g_dev->CreateTexture(g_tex_w, g_tex_h, 1, D3DUSAGE_DYNAMIC,
+                             fmt, D3DPOOL_DEFAULT, &g_game_tex, NULL);
+    }
+
+    /* Restaurar estado D3D (todo se pierde tras Reset) */
+    if (g_game_tex) g_dev->SetTexture(0, g_game_tex);
+    if (g_vb) {
+        g_dev->SetStreamSource(0, g_vb, 0, sizeof(VTX));
+        g_dev->SetFVF(VTX_FVF);
+    }
+    XBOX_SelectEffect(g_current_effect);
+    UpdateVertexBuffer(g_tex_w, g_tex_h, g_aspect);
+
+    /* Recrear recursos GPU del overlay (g_ovl_surf preservado) */
+    if (g_ovl_surf) InitOverlay();
+
+    g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
+
+    if (g_cs_init) LeaveCriticalSection(&g_cs);
 }
 
 static int HandleDeviceLost(void)
