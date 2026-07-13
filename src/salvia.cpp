@@ -529,6 +529,17 @@ static bool retro_environment(unsigned cmd, void *data) {
 		case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: 
 			return false;
 
+		case RETRO_ENVIRONMENT_GET_INPUT_MAX_USERS:
+		{
+			 unsigned *core_max_users_ptr = (unsigned*)data;
+			 if (core_max_users_ptr)
+			 {
+				*core_max_users_ptr = MAX_PLAYERS;
+				return true; 
+			 }
+			 return false;
+		}
+
 		case 30000: { // RETRO_ENVIRONMENT_GET_SERVERS_JSON
 			// Fetch live server list from quakeservers.net
 			static std::string cached;

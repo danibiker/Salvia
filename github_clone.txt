@@ -17,6 +17,7 @@ git subtree add --prefix=libretro/mame-2003-plus https://github.com/libretro/mam
 git subtree add --prefix=libretro/vba-next https://github.com/libretro/vba-next master --squash
 git subtree add --prefix=libretro/pcsxr-360 https://github.com/Wolf3s/pcsxr-360 main --squash
 git subtree add --prefix=libretro/tyrquake https://github.com/libretro/tyrquake master --squash
+git subtree add --prefix=libretro/opera-libretro https://github.com/libretro/opera-libretro master --squash
 
 ###########################################################################################################
 # External libraries
@@ -45,6 +46,7 @@ git subtree pull --prefix=libretro/mame-2003-plus https://github.com/libretro/ma
 git subtree pull --prefix=libretro/vba-next https://github.com/libretro/vba-next master --squash
 git subtree pull --prefix=libretro/pcsxr-360 https://github.com/Wolf3s/pcsxr-360 main --squash
 git subtree pull --prefix=libretro/tyrquake https://github.com/libretro/tyrquake master --squash
+git subtree pull --prefix=libretro/opera-libretro https://github.com/libretro/opera-libretro master --squash
 
 ###########################################################################################################
 # Merging conflicts

@@ -35,14 +35,11 @@ static char rcsid =
 #include "SDL_audio.h"
 #include "SDL_audio_c.h"
 #include "SDL_xboxaudio.h"
- 
+
 /* Audio driver functions */
 static int XboxDX_OpenAudio(_THIS, SDL_AudioSpec *spec);
 static void XboxDX_ThreadInit(_THIS);
 static void XboxDX_WaitAudio_BusyWait(_THIS);
-#ifdef USE_POSITION_NOTIFY
-static void XboxDX_WaitAudio_EventWait(_THIS);
-#endif
 static void XboxDX_PlayAudio(_THIS);
 static Uint8 *XboxDX_GetAudioBuf(_THIS);
 static void XboxDX_WaitDone(_THIS);
@@ -66,7 +63,7 @@ static void XboxDX_Unload(void)
 	// do nothing
 }
 static int XboxDX_Load(void)
-{	
+{
 	return 1;
 }
 
@@ -130,7 +127,7 @@ static SDL_AudioDevice *Audio_CreateDevice(int devindex)
 
 	mixbuf = NULL;
 
-	
+
 
 	return this;
 }
@@ -139,20 +136,6 @@ AudioBootStrap DSOUND_bootstrap = {
 	"XAudio2", "XBOX 360 XAudio2 SDL Driver 0.01",
 	Audio_Available, Audio_CreateDevice
 };
-
-static void SetDSerror(const char *function, int code)
-{
-	static const char *error;
-	static char  errbuf[1024];
-
-	errbuf[0] = 0;
- 
-	if ( ! errbuf[0] ) {
-		sprintf(errbuf, "%s: %s", function, error);
-	}
-	SDL_SetError("%s", errbuf);
-	return;
-}
 
 /* DirectSound needs to be associated with a window */
 static HWND mainwin = NULL;
@@ -169,49 +152,21 @@ static void XboxDX_ThreadInit(_THIS)
 
 static void XboxDX_WaitAudio_BusyWait(_THIS)
 {
- 
-	/* Semi-busy wait, since we have no way of getting play notification
-	   on a primary mixing buffer located in hardware (DirectX 5.0)
-	*/
+	/* No-op: el ritmo de reproduccion lo marca XboxDX_PlayAudio, que espera
+	   (cediendo la CPU con Sleep) a que XAudio2 libere un buffer antes de
+	   encolar el siguiente. */
 
 	if (!mixbuf)
 		return;
-
- 
 }
-
-#ifdef USE_POSITION_NOTIFY
-static void XboxDX_WaitAudio_EventWait(_THIS)
-{
-	DWORD status;
-	HRESULT result;
-	
-	if (!mixbuf)
-		return;
-
-	/* Try to restore a lost sound buffer */
-	IDirectSoundBuffer_GetStatus(mixbuf, &status);
-	 
-	if ( ! (status&DSBSTATUS_PLAYING) ) {
-		result = IDirectSoundBuffer_Play(mixbuf, 0, 0, DSBPLAY_LOOPING);
-		if ( result != DS_OK ) {
-#ifdef DEBUG_SOUND
-			SetDSerror("DirectSound Play", result);
-#endif
-			return;
-		}
-	}
-	WaitForSingleObject(audio_event, INFINITE);
-}
-#endif /* USE_POSITION_NOTIFY */
 
 static void XboxDX_PlayAudio(_THIS)
 {
 	XAUDIO2_VOICE_STATE state;
 	XAUDIO2_BUFFER xa2buffer={0};
-		
+
 	while (1) {
-				
+
 		IXAudio2SourceVoice_GetState(mixbuf, &state, 1); //Wolf3s: "vs2010 Warning: Not actual parameter").
 		xa2buffer.Flags = XAUDIO2_END_OF_STREAM;
          if (state.BuffersQueued < NUM_BUFFERS - 1) {
@@ -221,11 +176,15 @@ static void XboxDX_PlayAudio(_THIS)
             // there is at least one free buffer
             break;
         }
+        /* Todos los buffers encolados: cede HW5 en vez de girar al 100%.
+           Con varios buffers encolados (decenas de ms) dormir 1 ms no
+           provoca underrun y libera el core para su hermano SMT (HW4). */
+        Sleep(1);
     }
-	
+
 	if (locked_buf)
-	{		 	
-		
+	{
+
 		memcpy(&pAudioBuffers[currentBuffer * mixlen], locked_buf, mixlen);
 		xa2buffer.AudioBytes=mixlen;
 		xa2buffer.pAudioData= &pAudioBuffers[currentBuffer * mixlen];
@@ -235,9 +194,9 @@ static void XboxDX_PlayAudio(_THIS)
 
 		currentBuffer++;
 		currentBuffer %= (NUM_BUFFERS);
-	 
+
 	}
-	 
+
 
 }
 
@@ -250,7 +209,7 @@ static Uint8 *XboxDX_GetAudioBuf(_THIS)
 static void XboxDX_WaitDone(_THIS)
 {
 	Uint8 *stream;
- 
+
 	/* Wait for the playing chunk to finish */
 	stream = this->GetAudioBuf(this);
 	if ( stream != NULL ) {
@@ -263,7 +222,7 @@ static void XboxDX_WaitDone(_THIS)
 		return;
 
 	/* Stop the looping sound buffer */
- 
+
 }
 
 static void XboxDX_CloseAudio(_THIS)
@@ -292,82 +251,6 @@ static void XboxDX_CloseAudio(_THIS)
     }
 }
 
-#ifdef USE_PRIMARY_BUFFER
-/* This function tries to create a primary audio buffer, and returns the
-   number of audio chunks available in the created buffer.
-*/
-static int CreatePrimary(LPDIRECTSOUND sndObj, HWND focus, 
-	LPDIRECTSOUNDBUFFER *sndbuf, WAVEFORMATEX *wavefmt, Uint32 chunksize)
-{
-	HRESULT result;
-	DSBUFFERDESC format;
-	DSBCAPS caps;
-	int numchunks;
-
-	/* Try to set primary mixing privileges */
-	result = IDirectSound_SetCooperativeLevel(sndObj, focus,
-							DSSCL_WRITEPRIMARY);
-	if ( result != DS_OK ) {
-#ifdef DEBUG_SOUND
-		SetDSerror("DirectSound SetCooperativeLevel", result);
-#endif
-		return(-1);
-	}
-
-	/* Try to create the primary buffer */
-	memset(&format, 0, sizeof(format));
-	format.dwSize = sizeof(format);
-	format.dwFlags=(DSBCAPS_PRIMARYBUFFER|DSBCAPS_GETCURRENTPOSITION2);
-	format.dwFlags |= DSBCAPS_STICKYFOCUS;
-#ifdef USE_POSITION_NOTIFY
-	format.dwFlags |= DSBCAPS_CTRLPOSITIONNOTIFY;
-#endif
-	result = IDirectSound_CreateSoundBuffer(sndObj, &format, sndbuf, NULL);
-	if ( result != DS_OK ) {
-#ifdef DEBUG_SOUND
-		SetDSerror("DirectSound CreateSoundBuffer", result);
-#endif
-		return(-1);
-	}
-
-	/* Check the size of the fragment buffer */
-	memset(&caps, 0, sizeof(caps));
-	caps.dwSize = sizeof(caps);
-	result = IDirectSoundBuffer_GetCaps(*sndbuf, &caps);
-	if ( result != DS_OK ) {
-#ifdef DEBUG_SOUND
-		SetDSerror("DirectSound GetCaps", result);
-#endif
-		IDirectSoundBuffer_Release(*sndbuf);
-		return(-1);
-	}
-	if ( (chunksize > caps.dwBufferBytes) ||
-				((caps.dwBufferBytes%chunksize) != 0) ) {
-		/* The primary buffer size is not a multiple of 'chunksize'
-		   -- this hopefully doesn't happen when 'chunksize' is a 
-		      power of 2.
-		*/
-		IDirectSoundBuffer_Release(*sndbuf);
-		SDL_SetError(
-"Primary buffer size is: %d, cannot break it into chunks of %d bytes\n",
-					caps.dwBufferBytes, chunksize);
-		return(-1);
-	}
-	numchunks = (caps.dwBufferBytes/chunksize);
-
-	/* Set the primary audio format */
-	result = IDirectSoundBuffer_SetFormat(*sndbuf, wavefmt);
-	if ( result != DS_OK ) {
-#ifdef DEBUG_SOUND
-		SetDSerror("DirectSound SetFormat", result);
-#endif
-		IDirectSoundBuffer_Release(*sndbuf);
-		return(-1);
-	}
-	return(numchunks);
-}
-#endif /* USE_PRIMARY_BUFFER */
-
 /* This function tries to create a secondary audio buffer, and returns the
    number of audio chunks available in the created buffer.
 */
@@ -378,64 +261,18 @@ static int CreateSecondary(IXAudio2 *sndObj, int focus,
 	IXAudio2SourceVoice *sndbuf, WAVEFORMATEX *wavefmt, Uint32 chunksize)
 {
 	const int numchunks = 2;
-	 
- 
-	IXAudio2_CreateSourceVoice(sndObj, &sndbuf, wavefmt, XAUDIO2_VOICE_USEFILTER , 
+
+
+	IXAudio2_CreateSourceVoice(sndObj, &sndbuf, wavefmt, XAUDIO2_VOICE_USEFILTER ,
 								XAUDIO2_DEFAULT_FREQ_RATIO, NULL, NULL, NULL );
 
- 
+
 	return(numchunks);
 }
 
-
-
-
-
-/* This function tries to set position notify events on the mixing buffer */
-#ifdef USE_POSITION_NOTIFY
-static int CreateAudioEvent(_THIS)
-{
-	DSBPOSITIONNOTIFY *notify_positions;
-	int i, retval;
-	HRESULT result;
-
-	/* Default to fail on exit */
-	retval = -1;
-	 
-	/* Allocate the notify structures */
-	notify_positions = (DSBPOSITIONNOTIFY *)malloc(NUM_BUFFERS*
-					sizeof(*notify_positions));
-	if ( notify_positions == NULL ) {
-		goto done;
-	}
-
-	/* Create the notify event */
-	audio_event = CreateEvent(NULL, FALSE, FALSE, NULL);
-	if ( audio_event == NULL ) {
-		goto done;
-	}
-
-	/* Set up the notify structures */
-	for ( i=0; i<NUM_BUFFERS; ++i ) {
-		notify_positions[i].dwOffset = i*mixlen;
-		notify_positions[i].hEventNotify = audio_event;
-	}
-	result = IDirectSoundNotify_SetNotificationPositions(mixbuf,
-					NUM_BUFFERS, notify_positions);
-	if ( result == DS_OK ) {
-		retval = 0;
-	}
-done:
-	//if ( notify != NULL ) {
-	//	IDirectSoundNotify_Release(notify);
-	//}
-	return(retval);
-}
-#endif /* USE_POSITION_NOTIFY */
-
 static int XboxDX_OpenAudio(_THIS, SDL_AudioSpec *spec)
 {
-	int nXAudio2Fps = 60*100; 
+	int nXAudio2Fps = 60*100;
 	int nAudSegLen = (spec->freq * 100 + (nXAudio2Fps >> 1)) / nXAudio2Fps;
 	int nAudSegCount = 6;
     int nAudAllocSegLen = nAudSegLen << 2;
@@ -443,10 +280,10 @@ static int XboxDX_OpenAudio(_THIS, SDL_AudioSpec *spec)
 	HRESULT hr;
 
 	WAVEFORMATEX waveformat;
-	
+
 	mixbuf = NULL;
 
-	
+
 
 	/* Set basic WAVE format parameters */
 	memset(&waveformat, 0, sizeof(waveformat));
@@ -474,27 +311,18 @@ static int XboxDX_OpenAudio(_THIS, SDL_AudioSpec *spec)
 	waveformat.nSamplesPerSec = spec->freq;
 	waveformat.nBlockAlign =
 		waveformat.nChannels * (waveformat.wBitsPerSample/8);
-	waveformat.nAvgBytesPerSec = 
+	waveformat.nAvgBytesPerSec =
 		waveformat.nSamplesPerSec * waveformat.nBlockAlign;
 
 	/* Update the fragment size as size in bytes */
 	SDL_CalculateAudioSpec(spec);
- 
+
 	locked_buf = (BYTE *)malloc(spec->size);
-	 
-	/* Create the audio buffer to which we write */
-	NUM_BUFFERS = -1;
-#ifdef USE_PRIMARY_BUFFER
-	 
-		NUM_BUFFERS = CreatePrimary(sound, 1, &mixbuf,
-						&waveformat, spec->size);
-	 
-#endif /* USE_PRIMARY_BUFFER */
-	if ( NUM_BUFFERS < 0 ) {
-		NUM_BUFFERS = 4;
+
+	/* Create the audio buffer to which we write (XAudio2 source voice) */
+	NUM_BUFFERS = 4;
 
 	pAudioBuffers = (BYTE *)malloc(spec->size*NUM_BUFFERS);
-
 
 	hr = IXAudio2_CreateSourceVoice(sound, &mixbuf, &waveformat,
                                          XAUDIO2_VOICE_USEFILTER,
@@ -508,29 +336,9 @@ static int XboxDX_OpenAudio(_THIS, SDL_AudioSpec *spec)
 
 	IXAudio2SourceVoice_Start(mixbuf, 0, 0);
 
-		if ( NUM_BUFFERS < 0 ) {
-			return(-1);
-		}
-#ifdef DEBUG_SOUND
-		fprintf(stderr, "Using secondary audio buffer\n");
-#endif
-	}
-#ifdef DEBUG_SOUND
-	else
-		fprintf(stderr, "Using primary audio buffer\n");
-#endif
-
 	/* The buffer will auto-start playing in DX5_WaitAudio() */
 	playing = 0;
 	mixlen = spec->size;
 
-#ifdef USE_POSITION_NOTIFY
-	/* See if we can use DirectX 6 event notification */
-	if ( CreateAudioEvent(this) == 0 ) {
-		this->WaitAudio = XboxDX_WaitAudio_EventWait;
-	} else {
-		this->WaitAudio = XboxDX_WaitAudio_BusyWait;
-	}
-#endif
 	return(0);
 }

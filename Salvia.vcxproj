@@ -153,6 +153,14 @@
       <Configuration>ReleaseTyrQuake</Configuration>
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_3DOX|Win32">
+      <Configuration>Release_3DOX</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_3DOX|Xbox 360">
+      <Configuration>Release_3DOX</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release_beetlepcefast|Win32">
       <Configuration>Release_beetlepcefast</Configuration>
       <Platform>Win32</Platform>
@@ -231,6 +239,14 @@
     </ProjectConfiguration>
     <ProjectConfiguration Include="Release_Nestopia|Xbox 360">
       <Configuration>Release_Nestopia</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_Opera3DO|Win32">
+      <Configuration>Release_Opera3DO</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_Opera3DO|Xbox 360">
+      <Configuration>Release_Opera3DO</Configuration>
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="Release_pcsxr_360|Win32">
@@ -414,6 +430,16 @@
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Opera3DO|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_3DOX|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Xbox 360'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
@@ -517,6 +543,12 @@
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Opera3DO|Win32'" Label="Configuration">
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_3DOX|Win32'" Label="Configuration">
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Win32'" Label="Configuration">
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
@@ -614,6 +646,12 @@
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_Opera3DO|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_3DOX|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -669,6 +707,8 @@
     <EMU_LIB_DOSBOXPURE>dosbox-pure</EMU_LIB_DOSBOXPURE>
     <EMU_LIB_PRBOOM>prboom</EMU_LIB_PRBOOM>
     <EMU_LIB_TYRQUAKE>tyrquake</EMU_LIB_TYRQUAKE>
+    <EMU_LIB_OPERA3DO>opera-3do</EMU_LIB_OPERA3DO>
+    <EMU_LIB_3DOX>3dox</EMU_LIB_3DOX>
     <SolutionName>Salvia</SolutionName>
     <BUILD_DIR>$(ProjectDir)build\$(Configuration)\$(Platform)\</BUILD_DIR>
     <COMMON_PREPROCESSOR>_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB;RC_NO_THREADS;RC_CLIENT_SUPPORTS_HASH</COMMON_PREPROCESSOR>
@@ -857,6 +897,22 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Opera3DO|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_OPERA3DO)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_3DOX|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_3DOX)$(ImageExt)</ImageXexOutput>
     <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Xbox 360'">
@@ -1107,6 +1163,18 @@
     <OutDir>$(BUILD_DIR)</OutDir>
     <IntDir>$(BUILD_DIR)</IntDir>
     <TargetName>$(EMU_LIB_NAME)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_Opera3DO|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <TargetName>$(EMU_LIB_OPERA3DO)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_3DOX|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <TargetName>$(EMU_LIB_OPERA3DO)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -2113,6 +2181,90 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_Opera3DO|Xbox 360'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Full</Optimization>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_XBOX;HAVE_CHD;EMU_LIB_NAME="$(EMU_LIB_OPERA3DO)";$(COMMON_PREPROCESSOR_RELEASE);DEBUG_LOG</PreprocessorDefinitions>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_XBOX)</AdditionalIncludeDirectories>
+      <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <StringPooling>true</StringPooling>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);opera.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\opera-libretro\opera\Release\Xbox 360</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateMapFile>true</GenerateMapFile>
+    </Link>
+    <Deploy>
+      <DeploymentType>CopyToHardDrive</DeploymentType>
+    </Deploy>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_3DOX|Xbox 360'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Full</Optimization>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_XBOX;HAVE_CHD;EMU_LIB_NAME="$(EMU_LIB_3DOX)";$(COMMON_PREPROCESSOR_RELEASE);DEBUG_LOG</PreprocessorDefinitions>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_XBOX)</AdditionalIncludeDirectories>
+      <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <StringPooling>true</StringPooling>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);3dox_libretro.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\3dox\Release</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateMapFile>true</GenerateMapFile>
+    </Link>
+    <Deploy>
+      <DeploymentType>CopyToHardDrive</DeploymentType>
+    </Deploy>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_prboom|Xbox 360'">
     <ClCompile>
       <ExceptionHandling>Async</ExceptionHandling>
@@ -2556,7 +2708,7 @@
       <StructMemberAlignment>Default</StructMemberAlignment>
     </ClCompile>
     <Link>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);pcsxr.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>libs\SDLx360\SDL\Release;libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;__$(ProjectDir)..\pcsx_rearmed_last_hope\msvc\Release;$(ProjectDir)libretro\pcsxr-360\360\Xdk\pcsxr\Release</AdditionalLibraryDirectories>
@@ -2565,6 +2717,7 @@
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateMapFile>true</GenerateMapFile>
     </Link>
     <Deploy>
       <DeploymentType>CopyToHardDrive</DeploymentType>
@@ -3329,6 +3482,86 @@
     <Link>
       <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);$(ProjectDir)libretro\genesis-plus-gx\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);Genesis-Plus-GX.lib</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
+    </PostBuildEvent>
+    <Manifest>
+      <EnableDPIAwareness>true</EnableDPIAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_Opera3DO|Win32'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Full</Optimization>
+      <PreprocessorDefinitions>WIN;HAVE_CHD;$(COMMON_PREPROCESSOR_RELEASE);DEBUG_LOG</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <StringPooling>true</StringPooling>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);$(ProjectDir)libretro\opera-libretro\opera\Release</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_WIN);opera.lib</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
+    </PostBuildEvent>
+    <Manifest>
+      <EnableDPIAwareness>true</EnableDPIAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_3DOX|Win32'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Full</Optimization>
+      <PreprocessorDefinitions>WIN;HAVE_CHD;$(COMMON_PREPROCESSOR_RELEASE);DEBUG_LOG</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <StringPooling>true</StringPooling>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);$(ProjectDir)libretro\opera-libretro\opera\Release</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_WIN);opera.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <SubSystem>Windows</SubSystem>

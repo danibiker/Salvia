@@ -1,0 +1,313 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    Self-contained libretro core for the 3DOplay / libFreeDO engine.
+    Builds all libFreeDO/*.cpp (except DxSound.cpp, replaced by libretro.cpp)
+    plus libretro.cpp into a single static library that the Salvia frontend
+    links, exactly like opera-libretro was consumed.
+
+    THREADING is defined in BOTH Xbox 360 configurations (the original
+    libFreeDO.vcxproj only set it in Debug) so the DSP + CEL threading is kept
+    in Release as well.
+
+    NOTE: adjust the libretro.h include path below (AdditionalIncludeDirectories)
+    if your libretro-common lives elsewhere.
+  -->
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Xbox 360">
+      <Configuration>Debug</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360">
+      <Configuration>Release</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A7E3C9D1-4B2F-4E6A-9C8D-1F2E3A4B5C6D}</ProjectGuid>
+    <RootNamespace>threedox_libretro</RootNamespace>
+    <Keyword>Xbox360Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <!--
+    CHD support: the bundled deps/libchdr (+lzma +zstd, zlib headers) is compiled
+    with these include dirs / defines applied PER-FILE only (see the CHD ItemGroup
+    below). The main emulator sources (libFreeDO, libretro.cpp) keep the original
+    global settings untouched so their codegen/framerate is unaffected. zlib is
+    NOT compiled here (headers only) — the Salvia app already links zlib and
+    compiling it again would cause LNK2005. Endianness/threading defines mirror
+    the confirmed-working pcsxr-360 cdrom project.
+  -->
+  <PropertyGroup Label="CHD">
+    <ChdInc>$(ProjectDir)deps\chdstream\include;$(ProjectDir)deps\libchdr\include;$(ProjectDir)deps\lzma-19.00\include;$(ProjectDir)deps\zlib-1.2.5;$(ProjectDir)deps\zstd\lib;$(ProjectDir)deps\zstd\lib\common</ChdInc>
+    <ChdDef>_7ZIP_ST</ChdDef>
+    <ChdDef Condition="'$(Platform)'=='Xbox 360'">_7ZIP_ST;__BIG_ENDIAN__;__BIGENDIAN__;__ppc__;__PPC__</ChdDef>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PreprocessorDefinitions>_DEBUG;_XBOX;_LIB;BIG_ENDIAN;THREADING;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)libFreeDO;$(ProjectDir)..\genesis-plus-gx\libretro\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <StructMemberAlignment>Default</StructMemberAlignment>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;_XBOX;_LIB;BIG_ENDIAN;THREADING;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)libFreeDO;$(ProjectDir)..\genesis-plus-gx\libretro\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <!-- Xbox 360 (Xenon) in-order PPC tuning, matching the pcsxr-360 core.
+           PreschedulingOptimization is the big win for the interpreter loop. -->
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;_LIB;WIN32;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)libFreeDO;$(ProjectDir)..\genesis-plus-gx\libretro\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;_LIB;WIN32;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)libFreeDO;$(ProjectDir)..\genesis-plus-gx\libretro\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="libretro.cpp" />
+    <ClCompile Include="libFreeDO\_3do_sys.cpp" />
+    <ClCompile Include="libFreeDO\arm.cpp" />
+    <ClCompile Include="libFreeDO\bitop.cpp" />
+    <ClCompile Include="libFreeDO\Clio.cpp" />
+    <ClCompile Include="libFreeDO\DiagPort.cpp" />
+    <ClCompile Include="libFreeDO\DSP.cpp" />
+    <ClCompile Include="libFreeDO\Iso.cpp" />
+    <ClCompile Include="libFreeDO\Madam.cpp" />
+    <ClCompile Include="libFreeDO\quarz.cpp" />
+    <ClCompile Include="libFreeDO\SPORT.cpp" />
+    <ClCompile Include="libFreeDO\vdlp.cpp" />
+    <ClCompile Include="libFreeDO\XBUS.cpp" />
+  </ItemGroup>
+  <!--
+    CHD reader: disc_chd.c (our bridge) + the bundled deps/libchdr, deps/lzma and
+    deps/zstd (zlib headers only). Each file gets the CHD include dirs + defines
+    per-file via $(ChdInc)/$(ChdDef); the main emulator sources above are left on
+    the original global settings. File set mirrors pcsxr-360's cdrom project.
+  -->
+  <ItemGroup>
+    <ClCompile Include="disc_chd.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\chdstream\chd_stream.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\libchdr\src\libchdr_bitstream.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\libchdr\src\libchdr_cdrom.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\libchdr\src\libchdr_chd.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\libchdr\src\libchdr_flac.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\libchdr\src\libchdr_huffman.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\lzma-19.00\src\Alloc.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\lzma-19.00\src\Bra86.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\lzma-19.00\src\BraIA64.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\lzma-19.00\src\CpuArch.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="deps\lzma-19.00\src\Delta.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\lzma-19.00\src\LzFind.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\lzma-19.00\src\Lzma86Dec.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\lzma-19.00\src\LzmaDec.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\lzma-19.00\src\LzmaEnc.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\lzma-19.00\src\Sort.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\common\entropy_common.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\common\error_private.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\common\fse_decompress.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\common\xxhash.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\common\zstd_common.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\decompress\huf_decompress.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\decompress\zstd_ddict.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\decompress\zstd_decompress.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\decompress\zstd_decompress_block.c">
+      <AdditionalIncludeDirectories>$(ChdInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(ChdDef);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="libFreeDO\3doplay.h" />
+    <ClInclude Include="libFreeDO\arm.h" />
+    <ClInclude Include="libFreeDO\bitop.h" />
+    <ClInclude Include="libFreeDO\Clio.h" />
+    <ClInclude Include="libFreeDO\DiagPort.h" />
+    <ClInclude Include="libFreeDO\DSP.h" />
+    <ClInclude Include="libFreeDO\freedoconfig.h" />
+    <ClInclude Include="libFreeDO\IsoXBUS.h" />
+    <ClInclude Include="libFreeDO\Madam.h" />
+    <ClInclude Include="libFreeDO\quarz.h" />
+    <ClInclude Include="libFreeDO\SPORT.h" />
+    <ClInclude Include="libFreeDO\types.h" />
+    <ClInclude Include="libFreeDO\vdlp.h" />
+    <ClInclude Include="libFreeDO\XBUS.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

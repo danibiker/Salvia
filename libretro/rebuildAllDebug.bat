@@ -71,6 +71,9 @@ echo =======================================================
 	
 	set NAME[16]=pcsxr-360
 	set SLN[16]=pcsxr-360\360\Xdk\pcsxr\pcsxr.sln
+	
+	set NAME[17]=3dox
+	set SLN[17]=3dox\3dox_libretro.sln
 	::-----------------------------------------------------------
 
 	for /l %%i in (0,1,14) do (
@@ -91,7 +94,7 @@ echo =======================================================
 echo Compilando %PLATFORM_XBOX% (Modo Silencioso)
 echo =======================================================	
 	
-	for /l %%i in (0,1,16) do (
+	for /l %%i in (0,1,17) do (
 		echo [+] Procesando: !NAME[%%i]!...
 		msbuild !SLN[%%i]! %MS_OPTS_360% /p:Configuration=%CONFIG% > nul
 		

@@ -1,0 +1,125 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="libretro">
+      <UniqueIdentifier>{11111111-1111-1111-1111-111111111111}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libFreeDO">
+      <UniqueIdentifier>{22222222-2222-2222-2222-222222222222}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="includes">
+      <UniqueIdentifier>{95222442-0b68-464c-abde-70ff76ce8f99}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="libretro.cpp">
+      <Filter>libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libFreeDO\_3do_sys.cpp">
+      <Filter>libFreeDO</Filter>
+    </ClCompile>
+    <ClCompile Include="libFreeDO\arm.cpp">
+      <Filter>libFreeDO</Filter>
+    </ClCompile>
+    <ClCompile Include="libFreeDO\bitop.cpp">
+      <Filter>libFreeDO</Filter>
+    </ClCompile>
+    <ClCompile Include="libFreeDO\Clio.cpp">
+      <Filter>libFreeDO</Filter>
+    </ClCompile>
+    <ClCompile Include="libFreeDO\DiagPort.cpp">
+      <Filter>libFreeDO</Filter>
+    </ClCompile>
+    <ClCompile Include="libFreeDO\DSP.cpp">
+      <Filter>libFreeDO</Filter>
+    </ClCompile>
+    <ClCompile Include="libFreeDO\Iso.cpp">
+      <Filter>libFreeDO</Filter>
+    </ClCompile>
+    <ClCompile Include="libFreeDO\Madam.cpp">
+      <Filter>libFreeDO</Filter>
+    </ClCompile>
+    <ClCompile Include="libFreeDO\quarz.cpp">
+      <Filter>libFreeDO</Filter>
+    </ClCompile>
+    <ClCompile Include="libFreeDO\SPORT.cpp">
+      <Filter>libFreeDO</Filter>
+    </ClCompile>
+    <ClCompile Include="libFreeDO\vdlp.cpp">
+      <Filter>libFreeDO</Filter>
+    </ClCompile>
+    <ClCompile Include="libFreeDO\XBUS.cpp">
+      <Filter>libFreeDO</Filter>
+    </ClCompile>
+    <ClCompile Include="disc_chd.c" />
+    <ClCompile Include="deps\chdstream\chd_stream.c" />
+    <ClCompile Include="deps\libchdr\src\libchdr_bitstream.c" />
+    <ClCompile Include="deps\libchdr\src\libchdr_cdrom.c" />
+    <ClCompile Include="deps\libchdr\src\libchdr_chd.c" />
+    <ClCompile Include="deps\libchdr\src\libchdr_flac.c" />
+    <ClCompile Include="deps\libchdr\src\libchdr_huffman.c" />
+    <ClCompile Include="deps\lzma-19.00\src\Alloc.c" />
+    <ClCompile Include="deps\lzma-19.00\src\Bra86.c" />
+    <ClCompile Include="deps\lzma-19.00\src\BraIA64.c" />
+    <ClCompile Include="deps\lzma-19.00\src\CpuArch.c" />
+    <ClCompile Include="deps\lzma-19.00\src\Delta.c" />
+    <ClCompile Include="deps\lzma-19.00\src\LzFind.c" />
+    <ClCompile Include="deps\lzma-19.00\src\Lzma86Dec.c" />
+    <ClCompile Include="deps\lzma-19.00\src\LzmaDec.c" />
+    <ClCompile Include="deps\lzma-19.00\src\LzmaEnc.c" />
+    <ClCompile Include="deps\lzma-19.00\src\Sort.c" />
+    <ClCompile Include="deps\zstd\lib\common\entropy_common.c" />
+    <ClCompile Include="deps\zstd\lib\common\error_private.c" />
+    <ClCompile Include="deps\zstd\lib\common\fse_decompress.c" />
+    <ClCompile Include="deps\zstd\lib\common\xxhash.c" />
+    <ClCompile Include="deps\zstd\lib\common\zstd_common.c" />
+    <ClCompile Include="deps\zstd\lib\decompress\huf_decompress.c" />
+    <ClCompile Include="deps\zstd\lib\decompress\zstd_ddict.c" />
+    <ClCompile Include="deps\zstd\lib\decompress\zstd_decompress.c" />
+    <ClCompile Include="deps\zstd\lib\decompress\zstd_decompress_block.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="libFreeDO\3doplay.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\arm.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\bitop.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\Clio.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\DiagPort.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\DSP.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\freedoconfig.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\IsoXBUS.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\Madam.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\quarz.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\SPORT.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\types.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\vdlp.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+    <ClInclude Include="libFreeDO\XBUS.h">
+      <Filter>includes</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
