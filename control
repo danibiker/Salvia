@@ -1,0 +1,10 @@
+Package: com.libretro.opera
+Name: Opera
+Depends:
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: libretro iOS core of Opera
+Maintainer: libretro
+Author: libretro
+Section: System
+Tag: role::developer

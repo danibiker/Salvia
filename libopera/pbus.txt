@@ -1,0 +1,250 @@
+# PBUS
+
+The PBUS (player bus) is not at all well documented. There exists
+the patent WO09410636A1 "PLAYER BUS APPARATUS AND METHOD" which was
+filed on 1992-02-11. The primary details of the protocol can be
+found in pages 21 - 23.
+
+> Since the above described arrangement permits 448 bits to be
+> transferred per field and the minimum bit transfer per device is
+> 8bits, a maximum of approximately 56 devices can be on the bus at
+> one time.
+>
+> Each of the player devices has an ID code embedded in its response
+> data. An ID code is mapped by software in the system to the number
+> of input and output bits for the device identified. Since the ID
+> code is embedded, it is received by the system 100 both at
+> initialization and when data is being read in under normal
+> operation. In this manner, it is possible to reconfigure the
+> system (add or delete devices) without re-initializing and without
+> adversely affecting those device already on the line.
+>
+> During an initialization sequence, a string of zeros is shifted
+> out from the system 100. A requirement for all of the player
+> devices is that they see a string of zeros either as an
+> initialization or don't cares.
+>
+> The first 4 bits of data stream received by the system 100 from
+> each device is that device's basic identification code (ID
+> code). The embedding of an ID code in the data stream functions as
+> follows for a joystick 15. The basic joystick 15 will have 8 bits
+> of data that are (inverted): down, up, right, left, switch-2,
+> switch-1, fire-2 and fire-1. Using the inability of the joystick
+> to indicate both up and down at the same time, the ID codes for a
+> basic joystick are 01QQ, 10QQ and 11QQ, where QQ is 01, 10 or
+> 11. All other devices start with 00QQ. All joysticks are incapable
+> of generating 00 for their first 2 bits. With regard to the escape
+> function, the 1100 sequence indicates escape for the joystick. In
+> all other devices, the escape function is indicated by the bit
+> immediately following the 4 bit identification code. A string of
+> zeros indicate the end of input data into the system 100 device.
+
+However, information from the original FreeDO release and later
+discovered does not match with the specifics of the patent.
+
+## Device Data Formats
+
+### JOYPAD
+
+The joypad's data layout is clear but less so in regards to it's
+layout in the stream. 3DO's SDK indicates the ID is 0x80. Unlike other
+device IDs it appears the joypad's ID is embedded. In the FreeDO
+source it was questionably referred to as a connection bit.
+
+MSB -> LSB
+
+1bit: set, the high order bit from the ID (0x80)
+2bit: unused, unset, part of the joypad mask
+1bit: down
+1bit: up
+1bit: right
+1bit: left
+1bit: A
+1bit: B
+1bit: C
+1bit: P
+1bit: X
+1bit: right trigger
+1bit: left trigger
+2bit: unused / 0
+
+
+### FLIGHTSTICK
+
+MSB -> LSB
+
+* 8bit: identifier 0 (0x01)
+* 8bit: identifier 1 (0x7B)
+* 8bit: length? (0x08)
+* 10bit: horizontal position
+* 10bit: vertical position
+* 10bit: depth position
+* 2bit: capability bits (0x02 for 4-way stick)
+* 1bit: trigger / fire
+* 1bit: A
+* 1bit: B
+* 1bit: C
+* 1bit: up
+* 1bit: down
+* 1bit: right
+* 1bit: left
+* 1bit: P
+* 1bit: X
+* 1bit: left trigger
+* 1bit: right trigger
+* 4bit: 0
+
+
+### MOUSE
+
+MSB -> LSB
+
+* 8bit: identifier (0x49)
+* 1bit: left button
+* 1bit: middle button
+* 1bit: right button
+* 1bit: shift button
+* 10bit: X delta (signed)
+* 10bit: Y delta (signed)
+
+
+### LIGHTGUN
+
+x = 0 - 319
+y = 0 - 239
+counter = (((y * NTSC_DEFAULT_YSCANTIME) +
+           ((x * NTSC_DEFAULT_XSCANTIME * 10) / NTSC_WIDTH)) / 10) -
+          NTSC_DEFAULT_TIMEOFFSET
+
+MSB -> LSB
+8bit: identifier (0x4D)
+1bit: trigger
+1bit: service button (arcade shooters)
+1bit: coin button (arcade shooters)
+1bit: start (arcade shooters)
+1bit: holster (arcade shooters) / option (retail)
+2bit: unused?
+20bit: scan counter
+5bit: line pulse / hit count
+
+Forced retail reload packets use a zero scan counter and a zero hit count.
+Some software checks the counter directly instead of the hit count to detect
+an off-screen shot.
+
+Unlike the mouse, when placed twice in a buffer it doesn't get picked up
+as 1p and 2p. One instance shows up as player 2.
+
+According to the 3DO SDK's lightgun.c:
+
+```
+DESCRIPTION OF LIGHTGUN HARDWARE
+--------------------------------
+The lightgun is not capable of returning an (X, Y) position value when
+reporting events.  It does report a counter value that returns the
+time it took between the beginning of a field (vertical blank) and
+when the scan-beam passes into the field of view of the light sensor
+in the lightgun.  The X and Y value can be calculated from the timer
+value returned from the lightgun based on how long it takes to draw
+from the start of one scan line to the start of the scan line
+immediately below it (YSCANTIME) and how long it takes to draw from
+the first pixel to the last pixel on the same scan line (XSCANTIME).
+A third required value, is a time offset value that takes into
+consideration the time between the beginning of a field and when
+scan-beam begings drawing to the first pixel on the first scan line
+(TIMEOFFSET).
+
+#define	NTSC_DEFAULT_XSCANTIME	  1030
+#define NTSC_DEFAULT_YSCANTIME	 12707
+#define NTSC_DEFAULT_TIMEOFFSET	-12835
+#define PAL_DEFAULT_XSCANTIME	  1051
+#define PAL_DEFAULT_YSCANTIME	 12796
+#define PAL_DEFAULT_TIMEOFFSET  -58995
+#define PAL_WIDTH		   388
+#define NTSC_WIDTH		   320
+
+x = ((((10 * counter) % NTSC_DEFAULT_YSCANTIME) * NTSC_WIDTH) /
+     (NTSC_DEFAULT_XSCANTIME * 10));
+y = ((10 * counter) / NTSC_DEFAULT_YSCANTIME);
+```
+
+
+### ORBATAK TRACKBALL
+
+Orbatak uses two different devices per player. The trackballs are just
+mice as described above. The buttons (coins, start, service) use the
+SILLY_CONTROL_PAD (0xC0) identifier as defined in the 3DO SDK (event.h).
+The Portfolio OS EventBroker parses 0xC0 as a 24-bit (3 byte) device
+(EventBroker.c: inBits=24, outBits=8).
+
+The standard SILLY_CONTROL_PAD format (3 bytes, 24 bits):
+
+MSB -> LSB
+* 8bit: identifier (0xC0) in bits 7-5, standard control pad buttons
+        (down, up, right, left, A) in bits 4-0
+* 8bit: standard control pad buttons (B, C, Start, X, RT, LT) in
+        bits 7-2, unused in bits 1-0
+* 8bit: unused by the standard driver, available for custom devices
+
+Orbatak maps its arcade buttons in byte 2 (the third byte):
+
+MSB -> LSB
+2bit: unused          (bits 7,6)
+1bit: coin (p1)       (bit 5)
+1bit: coin (p2)       (bit 4)
+1bit: unused          (bit 3)
+1bit: start (p2)      (bit 2)
+1bit: start (p1)      (bit 1)
+1bit: service         (bit 0)
+
+
+## Device Usage In Games
+
+### Games supporting 3DO mouse
+
+* Crime Patrol (1993)
+* Cyberdillo (1996)
+* Drug Wars (1994)
+* Fun 'n Games (1994)
+* Kingdom: The Far Reaches (1995)
+* Lemmings (1993)
+* Mad Dog II: The Lost Gold (1994)
+* Myst (1995)
+* Policenauts (1995)
+* Shanghai: Triple-Threat (1994)
+* Space Pirates (1994)
+* The Last Bounty Hunter (1995)
+* World Cup Golf: Hyatt Dorado Beach (1994)
+* Zhadnost: The People's Party (1995)
+
+### Games supporting GAMECON (3DO lightgun)
+
+* Corpse Killer (1994) (1 Player)
+* Crime Patrol (1993) (1 Player or 2 Players simultaneously)
+* Demolition Man (1995) (1 Player)
+* Drug Wars (1994) (1 Player or 2 Players simultaneously)
+* Mad Dog McCree (1994) (1 Player or 2 Players simultaneously)
+* Mad Dog II: The Lost Gold (1994) (1 Player or 2 Players simultaneously)
+* Policenauts (1995) (1 Player)
+* Space Pirates (1994) (1 Player or 2 Players simultaneously)
+* The Last Bounty Hunter (1995) (1 Player or 2 Players simultaneously)
+* Who Shot Johnny Rock (1995) (1 Player or 2 Players simultaneously)
+
+### Games supporting 3DO flight stick
+
+* Blade Force (1995)
+* Cyberia (1996)
+* Doom (1996)
+* Flying Nightmares (1994)
+* Killing Time (1995)
+* Mega Race (1994)
+* Phoenix 3 (1995)
+* PO'ed (1995)
+* Return Fire (1995)
+* Scramble Cobra (1995)
+* Shockwave 2: Beyond The Gate (1995)
+* Space Ace (1995)
+* Star Fighter (1996)
+* Star Wars: Rebel Assault (1995)
+* Super Wing Commander (1994)
+* VR Stalker (1994)
+* Wing Commander III: Heart Of The Tiger (1995)
