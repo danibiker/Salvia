@@ -1,0 +1,12 @@
+*.o
+*.so
+*.dll
+*.dylib
+*.exe
+/.project
+/obj/
+/libs/
+*.a
+/test-harness
+/test-harness-runs/
+.vscode/pro-deployer.json
