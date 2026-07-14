@@ -1,0 +1,416 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Source Files\libopera">
+      <UniqueIdentifier>{fdefd586-6ae4-4571-ade9-48b9ed990bdf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libretro-common">
+      <UniqueIdentifier>{b91ce066-1b02-49ac-bb1d-78d1f56d5c83}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\deps">
+      <UniqueIdentifier>{eea810f5-ab8e-411b-81ca-17d9f65b67ad}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\deps\lzma-19.00">
+      <UniqueIdentifier>{17800e0d-dae6-4423-86f5-983bd3d50f55}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\deps\libchdr">
+      <UniqueIdentifier>{3b33c083-67de-4af7-a5d4-8732d162495c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\deps\zlib">
+      <UniqueIdentifier>{a6015322-ced3-475f-a817-5f293db0aca3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\cuefile.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro_core_options.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lr_input.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lr_input_crosshair.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lr_input_descs.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\opera_lr_callbacks.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\opera_lr_dsp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\opera_lr_nvram.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\opera_lr_opts.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\retro_cdimage.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\prng16.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\prng32.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_3do.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_arm.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_bios.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_bitop.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_cdrom.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_clio.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_clock.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_diag_port.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_dsp.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_fixedpoint_math.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_log.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_madam.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_mem.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_nvram.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_pbus.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_region.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_sport.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_state.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_vdlp.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_xbus.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_xbus_cdrom_plugin.c">
+      <Filter>Source Files\libopera</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\streams\file_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\streams\file_stream_transforms.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\streams\interface_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\streams\memory_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\encodings\encoding_utf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_posix_string.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_snprintf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_strcasestr.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_strl.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\fopen_utf8.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\memmap\memmap.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\string\stdstring.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\file\file_path.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\file\retro_dirent.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\lists\dir_list.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\lists\string_list.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\memmap\memalign.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\cdrom\cdrom.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\vfs\vfs_implementation_cdrom.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\rthreads\rthreads.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\streams\chd_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\Alloc.c">
+      <Filter>Source Files\deps\lzma-19.00</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\Bra86.c">
+      <Filter>Source Files\deps\lzma-19.00</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\BraIA64.c">
+      <Filter>Source Files\deps\lzma-19.00</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\CpuArch.c">
+      <Filter>Source Files\deps\lzma-19.00</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\Delta.c">
+      <Filter>Source Files\deps\lzma-19.00</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\LzFind.c">
+      <Filter>Source Files\deps\lzma-19.00</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\Lzma86Dec.c">
+      <Filter>Source Files\deps\lzma-19.00</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\Lzma86Enc.c">
+      <Filter>Source Files\deps\lzma-19.00</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\LzmaDec.c">
+      <Filter>Source Files\deps\lzma-19.00</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\LzmaEnc.c">
+      <Filter>Source Files\deps\lzma-19.00</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\lzma-19.00\src\Sort.c">
+      <Filter>Source Files\deps\lzma-19.00</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libchdr\src\libchdr_bitstream.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libchdr\src\libchdr_cdrom.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libchdr\src\libchdr_chd.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libchdr\src\libchdr_flac.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libchdr\src\libchdr_huffman.c">
+      <Filter>Source Files\deps\libchdr</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\zlib-1.3.1.2\adler32.c">
+      <Filter>Source Files\deps\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\zlib-1.3.1.2\crc32.c">
+      <Filter>Source Files\deps\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\zlib-1.3.1.2\inffast.c">
+      <Filter>Source Files\deps\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\zlib-1.3.1.2\inflate.c">
+      <Filter>Source Files\deps\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\zlib-1.3.1.2\inftrees.c">
+      <Filter>Source Files\deps\zlib</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\zlib-1.3.1.2\zutil.c">
+      <Filter>Source Files\deps\zlib</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\libretro-common\include\compat\msvc\stdint.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libretro_core_options.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lr_input.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lr_input_crosshair.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\lr_input_descs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\opera_lr_callbacks.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\opera_lr_dsp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\opera_lr_nvram.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\opera_lr_opts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retro_cdimage.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\discdata.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\endianness.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\extern_c.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\flags.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\inline.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\linkedmemblock.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_3do.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_arm.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_arm_core.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_bios.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_bitop.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_cdrom.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_clio.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_clock.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_core.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_diag_port.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_dsp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_dsp2_i.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_fixedpoint_math.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_log.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_madam.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_mem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_nvram.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_pbus.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_region.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_region_i.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_sport.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_state.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_swi_hle_0x5XXXX.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_timing.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_vdl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_vdlp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_vdlp_i.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_xbus.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\opera_xbus_cdrom_plugin.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\prng16.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\prng32.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libopera\static_assert.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\libchdr\include\dr_libs\dr_flac.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

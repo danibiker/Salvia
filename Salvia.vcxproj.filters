@@ -54,6 +54,9 @@
     <Filter Include="Source Files\video">
       <UniqueIdentifier>{34e49a88-2b56-498c-8ead-810dae206e28}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\retroachievements\include">
+      <UniqueIdentifier>{6144c2e4-5c8f-4bd3-abd3-59f2bcf9fa48}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\const\constant.cpp">
@@ -510,6 +513,9 @@
     </ClInclude>
     <ClInclude Include="src\video\win_d3d9.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="libs\rcheevos\include\rc_consoles.h">
+      <Filter>Source Files\retroachievements\include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

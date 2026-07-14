@@ -139,6 +139,10 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 	CfgLoader::configMain[cfg::packedImages].getPropValue(resultado.saveToBin);
 
 	if (resultado.saveToBin){
+		std::string parentFolder = dir.getPathPrefix(emulatorCfg.assets);
+		if (!dir.dirExists(parentFolder.c_str())) 
+			dir.createDirRecursive(parentFolder.c_str());
+
 		std::string packetAssetsFile = dir.getPathPrefix(emulatorCfg.assets + Constant::getFileSep() + SCRAPPING_DAT);
 		filePackage.Load(packetAssetsFile);
 	} else {

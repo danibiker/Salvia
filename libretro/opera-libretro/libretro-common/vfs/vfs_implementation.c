@@ -223,6 +223,12 @@ int64_t retro_vfs_file_seek_internal(libretro_vfs_implementation_file *stream, i
          return 0;
       }
 #else
+
+#ifndef fseeko
+	#define fseeko _fseeki64
+	#define ftello _ftelli64
+#endif
+
       return fseeko(stream->fp, (off_t)offset, whence);
 #endif
    }

@@ -1,0 +1,328 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Xbox 360">
+      <Configuration>Debug</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360">
+      <Configuration>Release</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\cuefile.c" />
+    <ClCompile Include="..\deps\libchdr\src\libchdr_bitstream.c" />
+    <ClCompile Include="..\deps\libchdr\src\libchdr_cdrom.c" />
+    <ClCompile Include="..\deps\libchdr\src\libchdr_chd.c" />
+    <ClCompile Include="..\deps\libchdr\src\libchdr_flac.c" />
+    <ClCompile Include="..\deps\libchdr\src\libchdr_huffman.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\Alloc.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\Bra86.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\BraIA64.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\CpuArch.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\Delta.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\LzFind.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\Lzma86Dec.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\Lzma86Enc.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\LzmaDec.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\LzmaEnc.c" />
+    <ClCompile Include="..\deps\lzma-19.00\src\Sort.c" />
+    <ClCompile Include="..\deps\zlib-1.3.1.2\adler32.c" />
+    <ClCompile Include="..\deps\zlib-1.3.1.2\crc32.c" />
+    <ClCompile Include="..\deps\zlib-1.3.1.2\inffast.c" />
+    <ClCompile Include="..\deps\zlib-1.3.1.2\inflate.c" />
+    <ClCompile Include="..\deps\zlib-1.3.1.2\inftrees.c" />
+    <ClCompile Include="..\deps\zlib-1.3.1.2\zutil.c" />
+    <ClCompile Include="..\libopera\opera_3do.c" />
+    <ClCompile Include="..\libopera\opera_arm.c" />
+    <ClCompile Include="..\libopera\opera_bios.c" />
+    <ClCompile Include="..\libopera\opera_bitop.c">
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Disabled</InlineFunctionExpansion>
+      <IntrinsicFunctions Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">false</IntrinsicFunctions>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_cdrom.c" />
+    <ClCompile Include="..\libopera\opera_clio.c" />
+    <ClCompile Include="..\libopera\opera_clock.c" />
+    <ClCompile Include="..\libopera\opera_diag_port.c" />
+    <ClCompile Include="..\libopera\opera_dsp.c">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">MaxSpeed</Optimization>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Disabled</Optimization>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_fixedpoint_math.c" />
+    <ClCompile Include="..\libopera\opera_log.c" />
+    <ClCompile Include="..\libopera\opera_madam.c">
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Disabled</InlineFunctionExpansion>
+      <IntrinsicFunctions Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">false</IntrinsicFunctions>
+    </ClCompile>
+    <ClCompile Include="..\libopera\opera_mem.c" />
+    <ClCompile Include="..\libopera\opera_nvram.c" />
+    <ClCompile Include="..\libopera\opera_pbus.c" />
+    <ClCompile Include="..\libopera\opera_region.c" />
+    <ClCompile Include="..\libopera\opera_sport.c" />
+    <ClCompile Include="..\libopera\opera_state.c" />
+    <ClCompile Include="..\libopera\opera_vdlp.c" />
+    <ClCompile Include="..\libopera\opera_xbus.c" />
+    <ClCompile Include="..\libopera\opera_xbus_cdrom_plugin.c" />
+    <ClCompile Include="..\libopera\prng16.c" />
+    <ClCompile Include="..\libopera\prng32.c" />
+    <ClCompile Include="..\libretro-common\cdrom\cdrom.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\libretro-common\compat\compat_posix_string.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_snprintf.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_strcasestr.c" />
+    <ClCompile Include="..\libretro-common\compat\compat_strl.c" />
+    <ClCompile Include="..\libretro-common\compat\fopen_utf8.c" />
+    <ClCompile Include="..\libretro-common\encodings\encoding_utf.c" />
+    <ClCompile Include="..\libretro-common\file\file_path.c" />
+    <ClCompile Include="..\libretro-common\file\retro_dirent.c" />
+    <ClCompile Include="..\libretro-common\lists\dir_list.c" />
+    <ClCompile Include="..\libretro-common\lists\string_list.c" />
+    <ClCompile Include="..\libretro-common\memmap\memalign.c" />
+    <ClCompile Include="..\libretro-common\memmap\memmap.c" />
+    <ClCompile Include="..\libretro-common\rthreads\rthreads.c" />
+    <ClCompile Include="..\libretro-common\streams\chd_stream.c" />
+    <ClCompile Include="..\libretro-common\streams\file_stream.c" />
+    <ClCompile Include="..\libretro-common\streams\file_stream_transforms.c" />
+    <ClCompile Include="..\libretro-common\streams\interface_stream.c" />
+    <ClCompile Include="..\libretro-common\streams\memory_stream.c" />
+    <ClCompile Include="..\libretro-common\string\stdstring.c" />
+    <ClCompile Include="..\libretro-common\vfs\vfs_implementation.c" />
+    <ClCompile Include="..\libretro-common\vfs\vfs_implementation_cdrom.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\libretro.c" />
+    <ClCompile Include="..\libretro_core_options.c" />
+    <ClCompile Include="..\lr_input.c" />
+    <ClCompile Include="..\lr_input_crosshair.c" />
+    <ClCompile Include="..\lr_input_descs.c" />
+    <ClCompile Include="..\opera_lr_callbacks.c" />
+    <ClCompile Include="..\opera_lr_dsp.c" />
+    <ClCompile Include="..\opera_lr_nvram.c" />
+    <ClCompile Include="..\opera_lr_opts.c" />
+    <ClCompile Include="..\retro_cdimage.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\deps\libchdr\include\dr_libs\dr_flac.h" />
+    <ClInclude Include="..\libopera\discdata.h" />
+    <ClInclude Include="..\libopera\endianness.h" />
+    <ClInclude Include="..\libopera\extern_c.h" />
+    <ClInclude Include="..\libopera\flags.h" />
+    <ClInclude Include="..\libopera\inline.h" />
+    <ClInclude Include="..\libopera\linkedmemblock.h" />
+    <ClInclude Include="..\libopera\opera_3do.h" />
+    <ClInclude Include="..\libopera\opera_arm.h" />
+    <ClInclude Include="..\libopera\opera_arm_core.h" />
+    <ClInclude Include="..\libopera\opera_bios.h" />
+    <ClInclude Include="..\libopera\opera_bitop.h" />
+    <ClInclude Include="..\libopera\opera_cdrom.h" />
+    <ClInclude Include="..\libopera\opera_clio.h" />
+    <ClInclude Include="..\libopera\opera_clock.h" />
+    <ClInclude Include="..\libopera\opera_core.h" />
+    <ClInclude Include="..\libopera\opera_diag_port.h" />
+    <ClInclude Include="..\libopera\opera_dsp.h" />
+    <ClInclude Include="..\libopera\opera_dsp2_i.h" />
+    <ClInclude Include="..\libopera\opera_fixedpoint_math.h" />
+    <ClInclude Include="..\libopera\opera_log.h" />
+    <ClInclude Include="..\libopera\opera_madam.h" />
+    <ClInclude Include="..\libopera\opera_mem.h" />
+    <ClInclude Include="..\libopera\opera_nvram.h" />
+    <ClInclude Include="..\libopera\opera_pbus.h" />
+    <ClInclude Include="..\libopera\opera_region.h" />
+    <ClInclude Include="..\libopera\opera_region_i.h" />
+    <ClInclude Include="..\libopera\opera_sport.h" />
+    <ClInclude Include="..\libopera\opera_state.h" />
+    <ClInclude Include="..\libopera\opera_swi_hle_0x5XXXX.h" />
+    <ClInclude Include="..\libopera\opera_timing.h" />
+    <ClInclude Include="..\libopera\opera_vdl.h" />
+    <ClInclude Include="..\libopera\opera_vdlp.h" />
+    <ClInclude Include="..\libopera\opera_vdlp_i.h" />
+    <ClInclude Include="..\libopera\opera_xbus.h" />
+    <ClInclude Include="..\libopera\opera_xbus_cdrom_plugin.h" />
+    <ClInclude Include="..\libopera\prng16.h" />
+    <ClInclude Include="..\libopera\prng32.h" />
+    <ClInclude Include="..\libopera\static_assert.h" />
+    <ClInclude Include="..\libretro-common\include\compat\msvc\stdint.h" />
+    <ClInclude Include="..\libretro_core_options.h" />
+    <ClInclude Include="..\lr_input.h" />
+    <ClInclude Include="..\lr_input_crosshair.h" />
+    <ClInclude Include="..\lr_input_descs.h" />
+    <ClInclude Include="..\opera_lr_callbacks.h" />
+    <ClInclude Include="..\opera_lr_dsp.h" />
+    <ClInclude Include="..\opera_lr_nvram.h" />
+    <ClInclude Include="..\opera_lr_opts.h" />
+    <ClInclude Include="..\retro_cdimage.h" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{74411CE8-2D5B-4B7F-AF22-8292AC238105}</ProjectGuid>
+    <Keyword>Xbox360Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <OutputFile>$(OutDir)$(Platform)\$(ProjectName).lib</OutputFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PreprocessorDefinitions>_DEBUG;_XBOX;_LIB</PreprocessorDefinitions>
+      <CallAttributedProfiling>Callcap</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\libopera;$(ProjectDir)..\deps;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_WIN32;INLINE=_inline;THREADED_DSP;HAVE_CDROM;HAVE_CHD;_7ZIP_ST;DR_FLAC_NO_STDIO</PreprocessorDefinitions>
+      <CallAttributedProfiling>Callcap</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\libopera;$(ProjectDir)..\deps;$(ProjectDir)..\deps\lzma-19.00\include;$(ProjectDir)..\deps\libchdr\include;$(ProjectDir)..\deps\zlib-1.3.1.2;$(ProjectDir)..\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <StringPooling>true</StringPooling>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Full</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_XBOX;_XBOX360;MSB_FIRST;NDEBUG;INLINE=_inline;THREADED_DSP;HAVE_CHD;_7ZIP_ST;DR_FLAC_NO_STDIO;__STDC_LIMIT_MACROS</PreprocessorDefinitions>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\libopera;$(ProjectDir)..\deps;$(ProjectDir)..\deps\lzma-19.00\include;$(ProjectDir)..\deps\libchdr\include;$(ProjectDir)..\deps\zlib-1.3.1.2;$(ProjectDir)..\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <StringPooling>true</StringPooling>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>false</PreschedulingOptimization>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Full</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_WIN32;NDEBUG;INLINE=_inline;THREADED_DSP;HAVE_CDROM;HAVE_CHD;_7ZIP_ST;DR_FLAC_NO_STDIO</PreprocessorDefinitions>
+      <CallAttributedProfiling>Callcap</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\libopera;$(ProjectDir)..\deps;$(ProjectDir)..\deps\lzma-19.00\include;$(ProjectDir)..\deps\libchdr\include;$(ProjectDir)..\deps\zlib-1.3.1.2;$(ProjectDir)..\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <StringPooling>true</StringPooling>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>false</OmitFramePointers>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

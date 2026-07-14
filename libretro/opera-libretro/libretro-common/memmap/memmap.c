@@ -21,6 +21,7 @@
  */
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <memmap.h>
 
 #ifndef PROT_READ
@@ -47,7 +48,7 @@
 #define MAP_FAILED        ((void *) -1)
 #endif
 
-#ifdef _WIN32
+#ifdef HAVE_MMAN
 void* mmap(void *addr, size_t len, int prot, int flags,
       int fildes, size_t offset)
 {
