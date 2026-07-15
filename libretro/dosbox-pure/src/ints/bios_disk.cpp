@@ -792,13 +792,20 @@ struct sparseVhd
 	};
 
 	enum vhdDefs : Bit32u { BYTESPERSECTOR = 512, CACHECOUNT = 256 };
-	enum EAction { NONE,READ,WRITE } last_action = NONE;
-	Bit32u  footer_sector, bat_sector, total_sectors, sectors_per_block, bitmap_sectors, cache_blocknum = 0;
-	Bit32u* bat = NULL;
+	enum EAction { NONE,READ,WRITE } last_action;
+	Bit32u  footer_sector, bat_sector, total_sectors, sectors_per_block, bitmap_sectors, cache_blocknum;
+	Bit32u* bat;
 	Bit8u   *seen_blocks;
-	Bit64u  current_fpos = 0;
+	Bit64u  current_fpos;
 	Bit8u   cacheSectorData[CACHECOUNT][BYTESPERSECTOR];
 	Bit32u  cacheSectorNumber[CACHECOUNT];
+
+	sparseVhd(){
+		last_action = NONE;
+		bat = NULL;
+		current_fpos = 0;
+		cache_blocknum = 0;
+	}
 
 	#define VHD_READ_BE16(p) (((Bit16u)static_cast<const Bit8u*>(p)[0] << 8U) | (Bit16u)static_cast<const Bit8u*>(p)[1])
 	#define VHD_READ_BE32(p) (((Bit32u)static_cast<const Bit8u*>(p)[0] << 24U) | ((Bit32u)static_cast<const Bit8u*>(p)[1] << 16U) | ((Bit32u)static_cast<const Bit8u*>(p)[2] << 8U) | (Bit32u)static_cast<const Bit8u*>(p)[3])
@@ -1451,6 +1458,7 @@ imageDisk::imageDisk(FILE *imgFile, const char *imgName, Bit32u imgSizeK, bool i
 imageDisk::imageDisk(class DOS_Drive *useDrive, Bit32u freeSpaceMB, const char* savePath, Bit32u driveSerial, const StringToPointerHashMap<void>* fileFilter)
 {
 	discard = NULL;
+	vhd = NULL;
 	differencing = NULL;
 	ffdd = new fatFromDOSDrive(useDrive, freeSpaceMB, savePath, driveSerial, fileFilter);
 	last_action = NONE;

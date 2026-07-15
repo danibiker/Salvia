@@ -95,7 +95,7 @@ private:
 	#endif
 	struct discardDisk* discard;
 	struct differencingDisk* differencing;
-	struct sparseVhd* vhd = NULL;
+	struct sparseVhd* vhd;
 	#else
 	Bit32u current_fpos;
 	#endif

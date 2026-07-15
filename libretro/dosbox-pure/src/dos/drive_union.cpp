@@ -567,7 +567,7 @@ struct unionDriveImpl
 		if (path)
 		{
 			const Bit32u namecrc = DriveCalculateCRC32((const Bit8u*)path, (size_t)strlen(path));
-			for (Bit32u it : dirty_paths) { if (it == namecrc) { goto alreadydirty; } }
+			for (int i=0; i < dirty_paths.size(); i++){if (dirty_paths[i] == namecrc) { goto alreadydirty; } }
 			dirty_paths.push_back(namecrc);
 			alreadydirty:;
 		}

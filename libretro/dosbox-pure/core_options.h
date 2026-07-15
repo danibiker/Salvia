@@ -923,7 +923,7 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 		{
 			#if defined(_XBOX) || defined (_XBOX360)
 			/**El modo auto no esta soportado en xbox 360 por ahora*/
-			{ "dynamic", "Dynamic - Dynamic recompilation (fast, using dynamic_x86 implementation)" },
+			{ "dynamic", "Dynamic - Dynamic recompilation (fast, using dynamic_powerpc implementation)" },
 			#elif defined(C_DYNAMIC_X86)
 			{ "auto", "Auto - Real-mode games use normal, protected-mode games use dynamic" },
 			{ "dynamic", "Dynamic - Dynamic recompilation (fast, using dynamic_x86 implementation)" },
