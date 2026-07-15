@@ -169,16 +169,18 @@ struct DBP_PadMapping
 			for (int n = nBegin; n != nEnd; n++)
 			{
 				if (!checkPresets[n]) { if (n == nBegin) nBegin++; continue; }
-				Bit8u match_id = (!oskshift || n != PRESET_GENERICKEYBOARD ? btn_id : RETRO_DEVICE_ID_JOYPAD_L3), match = (bind_count == 0);;
+				Bit8u match_id = (!oskshift || n != PRESET_GENERICKEYBOARD ? btn_id : RETRO_DEVICE_ID_JOYPAD_L3), match = (bind_count == 0), in_preset = 0;
 				for (BindDecoder _bd_it(checkPresets[n]); _bd_it != _bd_it; ++_bd_it)
 				{
 					const BindDecoder& it = _bd_it;
 					if (it.BtnID != match_id) continue;
+					in_preset = 1;
 					match = (it.KeyCount == bind_count && !memcmp(it.P, bind_buf, it.KeyCount * (it.IsAnalog ? 2 : 1)));
 					if (!match) checkPresets[n] = NULL;
 					break;
 				}
 				if (check_one && !match) return PRESET_CUSTOM;
+				if (!in_preset && bind_count) checkPresets[n] = NULL;
 			}
 		}
 		if (nBegin <= PRESET_AUTOMAPPED && nEnd > PRESET_AUTOMAPPED && checkPresets[PRESET_AUTOMAPPED])

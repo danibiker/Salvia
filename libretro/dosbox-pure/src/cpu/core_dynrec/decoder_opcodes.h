@@ -1189,7 +1189,7 @@ static void dyn_ret_near(Bitu bytes) {
 		gen_call_function_raw((void*)&dynrec_pop_word);
 		gen_extend_word(false,FC_RETOP);
 	}
-	/* [Salvia/Xbox360 fix] El parametro original era `true` (store 32-bit) pero
+	gen_mov_word_from_reg(FC_RETOP,decode.big_op?(void*)(&reg_eip):(void*)(&reg_ip),decode.big_op);
 	 * en 16-bit el destino es &reg_ip que son solo 16 bits.  Funcionaba por
 	 * accidente en little-endian (los bytes bajos del store caen sobre reg_ip);
 	 * en big-endian (Xenon/Broadway) `&reg_ip = &reg_eip+2`, asi que un stw de
