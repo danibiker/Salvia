@@ -3,6 +3,7 @@
 
 //static const char* USERAGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0";
 static const char* USERAGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:45.0) Gecko/20100101 Firefox/45.0";
+static const char* COOKIE_JAR_FILE = "cookies.txt";
 
 #ifdef _XBOX
 mbedtls_entropy_context CurlClient::entropy;
@@ -128,6 +129,17 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
     // Opciones adicionales
     curl_easy_setopt(curl, CURLOPT_USERAGENT, USERAGENT);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L); // 10 segundos
+
+	if (!cookie.empty()){
+		// Inyecta la cadena de cookies directamente (separadas por punto y coma)
+		curl_easy_setopt(curl, CURLOPT_COOKIE, this->cookie);
+	} else {
+		//Lee las cookies de este archivo para la peticion actual
+		curl_easy_setopt(curl, CURLOPT_COOKIEFILE, COOKIE_JAR_FILE);	
+	}
+	// Guarda las cookies nuevas/actualizadas aqui al finalizar
+    curl_easy_setopt(curl, CURLOPT_COOKIEJAR, COOKIE_JAR_FILE);
+	
 
 	// callback para llamar fuera a internet
 	#ifdef _XBOX

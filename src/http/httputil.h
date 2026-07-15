@@ -34,7 +34,13 @@ class CurlClient {
 		bool fetchFile(const std::string&, const std::string&, float*);
 		std::string escape(const std::string&);
 
+		void setCookie(const std::string &s){
+			cookie = s;
+		}
+
 	private:
+		std::string cookie;
+
 	#ifdef _XBOX
 		static mbedtls_entropy_context entropy;
 		static mbedtls_ctr_drbg_context ctr_drbg;
