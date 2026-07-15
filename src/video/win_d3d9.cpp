@@ -23,6 +23,7 @@
 
 /* HLSL compartido con la rama Xbox (single source of truth). */
 #include "../../libs/libSDLx360/SDL/src/video/xbox/SDL_shaders_src.h"
+#include "HLSLBackground.h"
 /* LUTs de HQ2x/HQ3x/HQ4x (datos embebidos, neutros de plataforma). */
 #include "../../libs/libSDLx360/SDL/src/video/xbox/hq2x_lut.h"
 #include "../../libs/libSDLx360/SDL/src/video/xbox/hq3x_lut.h"
@@ -86,6 +87,201 @@ static int                     g_ovl_enabled = 0;
 static CRITICAL_SECTION        g_cs;
 static int                     g_cs_init    = 0;
 
+/* Instance global de HLSLBackground (fondo animado por shader). */
+static HLSLBackground          g_hlslBkg;
+int                     g_hlslBkg_active = 0;
+
+IDirect3DDevice9* WinD3D9_GetDevice(void) { return g_dev; }
+
+void HLSLBackground_setActive(int n) {
+    g_hlslBkg_active = n;
+}
+
+int HLSLBackground_getActive(){
+	return g_hlslBkg_active;
+}
+
+/* =====================================================================
+ * HLSLBackground — implementacion Windows (clase C++)
+ * =================================================================== */
+
+typedef struct { float x, y, z, rhw; float u, v; } HLSL_BG_VTX;
+#define HLSL_BG_FVF (D3DFVF_XYZRHW | D3DFVF_TEX1)
+
+/* HLSL pixel shader (ps_3_0) — adaptado de GLSL (one-liner demo).
+ * Original GLSL:
+ *   vec2 p=(FC.xy*2.-r)/r.y,l,v=p*(1.-(l+=abs(.7-dot(p,p))))/.2;
+ *   for(float i;i++<8.;o+=(sin(v.xyyx)+1.)*abs(v.x-v.y)*.2)
+ *     v+=cos(v.yx*i+vec2(0,i)+t)/i+.7;
+ *   o=tanh(exp(p.y*vec4(1,-1,-2,0))*exp(-4.*l.x)/o);
+ *
+ * Uniforms: c0.x = time, c1.xy = resolution */
+
+/* =====================================================================
+ * Shader cache — DJB2 hash + disk load/save
+ * =================================================================== */
+
+static unsigned long Win_HashShaderSource(const char* str, DWORD flags) {
+    unsigned long hash = 5381;
+    int c;
+    while ((c = *str++))
+        hash = ((hash << 5) + hash) + c;
+    hash = ((hash << 5) + hash) + (unsigned long)flags;
+    return hash;
+}
+
+static DWORD* Win_LoadCachedShader(unsigned long hash, DWORD* outSize) {
+    char path[256];
+    HANDLE hFile;
+    DWORD fileSize, bytesRead;
+    DWORD* buffer;
+
+    sprintf(path, "shadercache\\%08lX.pso", hash);
+    hFile = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL,
+                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) return NULL;
+
+    fileSize = GetFileSize(hFile, NULL);
+    if (fileSize == 0 || fileSize == INVALID_FILE_SIZE) {
+        CloseHandle(hFile);
+        return NULL;
+    }
+
+    buffer = (DWORD*)malloc(fileSize);
+    if (!buffer) { CloseHandle(hFile); return NULL; }
+
+    if (!ReadFile(hFile, buffer, fileSize, &bytesRead, NULL) || bytesRead != fileSize) {
+        free(buffer);
+        CloseHandle(hFile);
+        return NULL;
+    }
+
+    CloseHandle(hFile);
+    *outSize = fileSize;
+    return buffer;
+}
+
+static void Win_SaveCachedShader(unsigned long hash, const void* bytecode, DWORD size) {
+    char path[256];
+    HANDLE hFile;
+    DWORD bytesWritten;
+
+    CreateDirectoryA("shadercache", NULL);
+
+    sprintf(path, "shadercache\\%08lX.pso", hash);
+    hFile = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) return;
+
+    WriteFile(hFile, bytecode, size, &bytesWritten, NULL);
+    CloseHandle(hFile);
+}
+
+HLSLBackground::HLSLBackground() : m_dev(NULL), m_psAlphaFix(NULL), m_vb(NULL), m_inited(false) {
+	for (int i = 0; i < HLSL_BG_COUNT; i++) m_psBg[i] = NULL;
+}
+
+void HLSLBackground::init(IDirect3DDevice9* dev) {
+	if (m_inited || !dev) return;
+	m_dev = dev;
+
+	g_strHLSLBackgrounds[0] = g_strHLSLBackground;
+	g_strHLSLBackgrounds[1] = g_strHLSLBackgroundEther;
+	g_strHLSLBackgrounds[2] = g_strHLSLBackgroundWormholes;
+	//g_strHLSLBackgrounds[3] = g_strHLSLBackgroundShootingStars;
+	//g_strHLSLBackgrounds[4] = g_strHLSLBackgroundNeonBars;
+
+	ID3DXBuffer* code = NULL;
+	ID3DXBuffer* errs = NULL;
+
+	/* Compile all background shaders (with disk cache) */
+	for (int i = 0; i < HLSL_BG_COUNT; i++) {
+		unsigned long hash = Win_HashShaderSource(g_strHLSLBackgrounds[i], D3DXSHADER_PARTIALPRECISION | D3DXSHADER_PREFER_FLOW_CONTROL);
+		DWORD cachedSize = 0;
+		DWORD* cachedCode = Win_LoadCachedShader(hash, &cachedSize);
+		if (cachedCode) {
+			m_dev->CreatePixelShader(cachedCode, &m_psBg[i]);
+			free(cachedCode);
+		} else {
+			if (SUCCEEDED(D3DXCompileShader(g_strHLSLBackgrounds[i], (UINT)strlen(g_strHLSLBackgrounds[i]),
+					NULL, NULL, "main", "ps_3_0",
+					D3DXSHADER_PARTIALPRECISION | D3DXSHADER_PREFER_FLOW_CONTROL,
+					&code, &errs, NULL))) {
+				Win_SaveCachedShader(hash, code->GetBufferPointer(), code->GetBufferSize());
+				m_dev->CreatePixelShader((const DWORD*)code->GetBufferPointer(), &m_psBg[i]);
+				code->Release();
+			}
+			if (errs) { OutputDebugStringA((const char*)errs->GetBufferPointer()); errs->Release(); errs = NULL; }
+		}
+	}
+
+	/* Alpha-fixup shader para overlay cuando HLSL background esta activo */
+	{
+		unsigned long hash = Win_HashShaderSource(g_strHLSLAlphaFix, 0);
+		DWORD cachedSize = 0;
+		DWORD* cachedCode = Win_LoadCachedShader(hash, &cachedSize);
+		if (cachedCode) {
+			m_dev->CreatePixelShader(cachedCode, &m_psAlphaFix);
+			free(cachedCode);
+		} else {
+			if (SUCCEEDED(D3DXCompileShader(g_strHLSLAlphaFix, (UINT)strlen(g_strHLSLAlphaFix),
+					NULL, NULL, "main", "ps_3_0", 0, &code, &errs, NULL))) {
+				Win_SaveCachedShader(hash, code->GetBufferPointer(), code->GetBufferSize());
+				m_dev->CreatePixelShader((const DWORD*)code->GetBufferPointer(), &m_psAlphaFix);
+				code->Release();
+			}
+			if (errs) { errs->Release(); }
+		}
+	}
+
+	m_dev->CreateVertexBuffer(sizeof(HLSL_BG_VTX), D3DUSAGE_WRITEONLY,
+		HLSL_BG_FVF, D3DPOOL_DEFAULT, &m_vb, NULL);
+	m_inited = true;
+}
+
+void HLSLBackground::draw() {
+	if (!m_dev || !m_psBg[0] || !m_vb) return;
+
+	D3DVIEWPORT9 vp;
+	m_dev->GetViewport(&vp);
+	float w = (float)vp.Width;
+	float h = (float)vp.Height;
+
+	struct QuadVTX { float x, y, z, rhw; float u, v; };
+	QuadVTX* vtx;
+	m_vb->Lock(0, 0, (void**)&vtx, 0);
+	vtx[0].x = -0.5f;    vtx[0].y = h - 0.5f; vtx[0].z = 0; vtx[0].rhw = 1; vtx[0].u = 0; vtx[0].v = 1;
+	vtx[1].x = -0.5f;    vtx[1].y = -0.5f;    vtx[1].z = 0; vtx[1].rhw = 1; vtx[1].u = 0; vtx[1].v = 0;
+	vtx[2].x = w - 0.5f; vtx[2].y = h - 0.5f; vtx[2].z = 0; vtx[2].rhw = 1; vtx[2].u = 1; vtx[2].v = 1;
+	vtx[3].x = w - 0.5f; vtx[3].y = -0.5f;    vtx[3].z = 0; vtx[3].rhw = 1; vtx[3].u = 1; vtx[3].v = 0;
+	m_vb->Unlock();
+
+	float t = SDL_GetTicks() / 1000.0f;
+	float cTime[4] = { t, 0, 0, 0 };
+	float cRes[4]  = { w, h, 0, 0 };
+
+	m_dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+	m_dev->SetTexture(0, NULL);
+	m_dev->SetStreamSource(0, m_vb, 0, sizeof(HLSL_BG_VTX));
+	m_dev->SetFVF(HLSL_BG_FVF);
+	m_dev->SetPixelShaderConstantF(0, cTime, 1);
+	m_dev->SetPixelShaderConstantF(1, cRes, 1);
+	int idx = (g_hlslBkg_active >= 1 && g_hlslBkg_active <= HLSL_BG_COUNT) ? g_hlslBkg_active - 1 : 0;
+	m_dev->SetPixelShader(m_psBg[idx]);
+	m_dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+	m_dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+	m_dev->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, 2);
+}
+
+void HLSLBackground::shutdown() {
+	if (m_vb) { m_vb->Release(); m_vb = NULL; }
+	for (int i = 0; i < HLSL_BG_COUNT; i++) {
+		if (m_psBg[i]) { m_psBg[i]->Release(); m_psBg[i] = NULL; }
+	}
+	if (m_psAlphaFix) { m_psAlphaFix->Release(); m_psAlphaFix = NULL; }
+	m_dev = NULL;
+	m_inited = false;
+}
+
 /* UVs del "single fullscreen triangle" por rotacion (identico a Xbox). */
 static const float g_uv_rot[4][6] = {
     /* 0:   0 deg  */ { 0.0f, 0.0f,  2.0f, 0.0f,  0.0f, 2.0f },
@@ -94,18 +290,25 @@ static const float g_uv_rot[4][6] = {
     /* 3: 270 CCW  */ { 0.0f, 1.0f,  0.0f,-1.0f,  2.0f, 1.0f },
 };
 
-/* =====================================================================
- * Shaders
- * =================================================================== */
-
 static HRESULT CreateShader(const char* src, LPDIRECT3DPIXELSHADER9* target, DWORD flags)
 {
     ID3DXBuffer* code  = NULL;
     ID3DXBuffer* errs  = NULL;
     HRESULT hr;
+    unsigned long hash;
+    DWORD cachedSize = 0;
+    DWORD* cachedCode;
 
     if (!src || !target) return E_INVALIDARG;
     *target = NULL;
+
+    hash = Win_HashShaderSource(src, flags);
+    cachedCode = Win_LoadCachedShader(hash, &cachedSize);
+    if (cachedCode) {
+        hr = g_dev->CreatePixelShader(cachedCode, target);
+        free(cachedCode);
+        return hr;
+    }
 
     hr = D3DXCompileShader(src, (UINT)strlen(src), NULL, NULL, "main", "ps_3_0",
                            flags, &code, &errs, NULL);
@@ -116,6 +319,9 @@ static HRESULT CreateShader(const char* src, LPDIRECT3DPIXELSHADER9* target, DWO
         }
         return hr;
     }
+
+    Win_SaveCachedShader(hash, code->GetBufferPointer(), code->GetBufferSize());
+
     hr = g_dev->CreatePixelShader((const DWORD*)code->GetBufferPointer(), target);
     code->Release();
     if (errs) errs->Release();
@@ -481,7 +687,11 @@ static void DrawOverlay(void)
 
     g_dev->SetTexture(0, g_ovl_tex);
     g_dev->SetStreamSource(0, g_ovl_vb, 0, sizeof(VTX));
-    g_dev->SetPixelShader(g_shaders[0]);
+    /* When HLSL background is active, use alpha-fixup shader instead of normal
+     * passthrough.  Forces alpha=1 for any non-black pixel on GPU, replacing
+     * the slow CPU loop that iterates every pixel. */
+    g_dev->SetPixelShader((g_hlslBkg_active && g_hlslBkg.alphaFixShader())
+        ? g_hlslBkg.alphaFixShader() : g_shaders[0]);
     g_dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
     g_dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
 
@@ -746,7 +956,9 @@ void WinD3D9_Present(void)
         g_dev->SetStreamSource(0, g_vb, 0, sizeof(VTX));
         g_dev->SetFVF(VTX_FVF);
         DrawMainQuad();
+        if (g_hlslBkg_active) g_hlslBkg.draw();
         DrawOverlay();
+        g_hlslBkg_active = 0;
         g_dev->EndScene();
     }
 
@@ -821,6 +1033,7 @@ int WinD3D9_Init(HWND hwnd, int bbw, int bbh)
     g_dev->SetRenderState(D3DRS_ZENABLE,  FALSE);
 
     InitShaders();
+    g_hlslBkg.init(g_dev);
 
     g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
     g_dev->Present(NULL, NULL, NULL, NULL);
@@ -833,6 +1046,7 @@ void WinD3D9_Shutdown(void)
 
     DestroyOverlay();
     DestroyGameTexture();
+    g_hlslBkg.shutdown();
     if (g_vb) { g_vb->Release(); g_vb = NULL; }
     DestroyShaders();
     if (g_dev) { g_dev->Release(); g_dev = NULL; }

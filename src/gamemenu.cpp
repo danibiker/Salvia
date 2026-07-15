@@ -342,7 +342,7 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 				}
 
             } else if (listMenu.layout == LAYSIMPLE) {
-                if (listMenu.keyUp){
+                if (listMenu.updateAssets){
                     //Snapshot picture
                     menuImages[SNAPFS].loadImageFromGame(dirutil::getPathPrefix(emu.assets) + string(Constant::tempFileSep)
                         + "snap" + string(Constant::tempFileSep), *game, ".png");
@@ -390,14 +390,9 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 }
 
 void GameMenu::drawSelectedGameAssets(ListMenu &listMenu, GameFile *game){
-	dirutil dir;
 	const ConfigEmu emu = *cfgLoader->getCfgEmu();
 
-	/* En keyUp: year/mfg/sys (rapido, ~1 ms cada uno) inline.
-		* Synopsis y 3 PNGs (lentos) al worker  el worker usa
-		* su propia TTF_Font para el wrap del synopsis y por
-		* tanto no compite con la fuente del main thread. */
-	if (listMenu.keyUp){
+	if (listMenu.updateAssets){
 		const std::string assetsDir = dirutil::getPathPrefix(emu.assets) + std::string(Constant::tempFileSep);
 		// Labels inline (bajo lock para no chocar con createMenuImages)
 		if (game->gameData != NULL){
@@ -411,7 +406,7 @@ void GameMenu::drawSelectedGameAssets(ListMenu &listMenu, GameFile *game){
 		}
 
 		const int synMaxW = menuTextAreas[SYNOPSIS].getW() - menuTextAreas[SYNOPSIS].marginX;
-		m_menuAssetLoader.submit(dir.getFileNameNoExt(game->longFileName),
+		m_menuAssetLoader.submit(dirutil::getFileNameNoExt(game->longFileName),
 						            assetsDir, this->overlay->format, this->overlay->w,
 						            synMaxW);
 	}

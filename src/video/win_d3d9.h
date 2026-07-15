@@ -58,6 +58,10 @@ void         SDL_XBOX_SetVSync(int enable);
 SDL_Surface* SDL_XBOX_GetOverlay(void);
 void         SDL_XBOX_SetOverlayEnabled(int enabled);
 
+/* Devuelve el IDirect3DDevice9 interno (para HLSLBackground u otros). */
+struct IDirect3DDevice9;
+struct IDirect3DDevice9* WinD3D9_GetDevice(void);
+
 #ifdef __cplusplus
 }
 #endif

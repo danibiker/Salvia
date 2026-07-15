@@ -157,10 +157,10 @@ void CfgLoader::loadMainConfig(){
 	}
 
 	//Adding always the configuration options
-	// Opción para C++11 (donde no existe make_unique)
 	std::unique_ptr<cfg::t_cfg_emu> salviaConfig(new cfg::t_cfg_emu);
 	salviaConfig->config.generalConfig = true;
 	salviaConfig->config.name = "Options";
+	salviaConfig->config.title_bkg_assets = "assets\\cfg";
 	emulators.push_back(std::move(salviaConfig));
 }
 

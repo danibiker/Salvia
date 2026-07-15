@@ -4535,6 +4535,7 @@
     </ClInclude>
     <ClInclude Include="src\dischelper.h" />
     <ClInclude Include="src\engine.h" />
+    <ClInclude Include="src\video\HLSLBackground.h" />
     <ClInclude Include="src\video\win_d3d9.h" />
     <ClInclude Include="src\font\Arimo_Regular.ttf.h" />
     <ClInclude Include="src\font\fonts.h" />

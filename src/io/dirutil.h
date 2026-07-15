@@ -54,7 +54,6 @@ class dirutil{
         unsigned int listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtro, bool order, bool properties);
 		unsigned int listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool order, bool properties);
 		unsigned int listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool includeDirs, bool order, bool properties);
-        string dirutil::getFileNameNoExt(const string& file);
         string getFolder(string file);
         string getFileName(string file);
         bool changeDirAbsolute(const char *str);
@@ -62,11 +61,13 @@ class dirutil{
 		void borrarDir(string path);
 		int createDir(std::string dir);
 		int createDirRecursive(const char* path);
+
 		static std::string getPathPrefix(std::string filepath, std::string basePath = "");
 		static bool fileExists(const char* file);
 		static bool dirExists(const char* ruta);
 		static bool isDir(const char* ruta);
 		static std::string getRelativeDir(std::string filepath, std::string basePath);
+		static string dirutil::getFileNameNoExt(const string& file);
     private:
         char rutaActual[PATH_MAX]; //Ruta actual que se esta navegando
         char* formatdate(char* str, time_t val);

@@ -6,7 +6,7 @@ char Constant::tempFileSep[2];
 
 svColor Constant::colors[clTotalColors] = {
 	{{0, 0, 0} , 0},			//clBackground
-	{{0, 0, 0} , 0},			//clBlack
+	{{1, 1, 1} , 0},			//clBlack (1,1,1 en vez de 0,0,0 para que alpha-fixup shader lo distinga de píxel vacío)
 	{{0xFF, 0xFF, 0xFF} , 0},	//clWhite
 	{{241, 222, 19}, 255},		//clYellow
 	{{255, 0, 0}, 0},			//clRed

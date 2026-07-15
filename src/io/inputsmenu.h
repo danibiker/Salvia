@@ -3,6 +3,15 @@
 #include <SDL.h>
 #include <SDL_joystick.h>
 #include <io/keyboard.h>
+#include <video/HLSLBackground.h>
+
+#ifdef WIN
+	#include <video/win_d3d9.h>
+#endif
+
+#ifdef _XBOX
+	extern "C" struct IDirect3DDevice9* D3D_Device;
+#endif
 
 extern int launchGame(std::string rompath, bool tmpDelete=true);
 extern t_rom_paths romPaths;
@@ -83,7 +92,7 @@ static void popBackUtf8(std::string& s) {
     if (s.empty()) return;
     std::size_t pos = s.size() - 1;
     while (pos > 0 && (s[pos] & 0xC0) == 0x80)
-        pos--;  // saltar bytes de continuación
+        pos--;  // saltar bytes de continuaciï¿½n
     s.erase(pos);
 }
 
@@ -420,12 +429,13 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 			gameMenu->keyb->setKeyboardLayout(cfg->getCfgEmu()->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
 		}
 
-		listMenu.keyUp = gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_UP) ||
+		listMenu.updateAssets = gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_UP) ||
 				gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_DOWN) ||
 				gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_LEFT) ||
 				gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_RIGHT)||
-				gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_L)||
-				gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_R);
+				gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_L)    ||
+				gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_R)    ||
+				gameMenu->gameTicks.ticks == 0;
 
 		if (HK_VIEW_MENU == gameMenu->joystick->hotkeys->procesarHotkeys(&gameMenu->joystick->inputs)){
 			if (gameMenu->getLastStatus() == EMU_STARTED){
@@ -447,7 +457,7 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 }
 
 /**
- * 
+ * Shows the background and all the menu elements
  */
 void updateMenuScreen(TileMap &tileMap, GameMenu*& gameMenu, ListMenu &listMenu){
 	static uint32_t lastTime = SDL_GetTicks();
@@ -457,10 +467,11 @@ void updateMenuScreen(TileMap &tileMap, GameMenu*& gameMenu, ListMenu &listMenu)
 	ANIM_BACKGROUNDS bgType = static_cast<ANIM_BACKGROUNDS>(gameMenu->getCfgLoader()->configMain[cfg::animBG].valueInt);
 
 	if (processInputs(gameMenu, listMenu, emu->generalConfig) == 1 && gameMenu->getEmuStatus() != EMU_STARTED){
-		//if (listMenu.animateBkg && gameMenu->getCfgLoader()->configMain[cfg::animBG].valueInt == BG_WAVES){
-		//	tileMap.drawWaves(gameMenu->overlay);
-		//} else 
-		if (listMenu.animateBkg && bgType == BG_TILES){
+		//Draw the background
+		if (listMenu.animateBkg && bgType >= BG_HLSL && bgType < BG_NONE){
+			HLSLBackground_setActive(bgType - BG_HLSL + 1);
+			gameMenu->clearOverlay();
+		} else if (listMenu.animateBkg && bgType == BG_TILES){
 			tileMap.draw(gameMenu->overlay);
 			if (SDL_GetTicks() - lastTime > bkgFrameTimeTick && (lastTime = SDL_GetTicks()) > 0){
 				tileMap.incSpeed();
@@ -474,12 +485,14 @@ void updateMenuScreen(TileMap &tileMap, GameMenu*& gameMenu, ListMenu &listMenu)
 		} else {
 			gameMenu->fillOverlay(clBackground);
 		}
+
+		//Draw the menu
 		gameMenu->refreshScreen(listMenu);
 	}
 }
 
 /**
-*
+* Shows a menu to edit the options while being ingame
 */
 void updateMenuOverlay(GameMenu*& gameMenu, ListMenu &listMenu){
 	processInputs(gameMenu, listMenu, true);

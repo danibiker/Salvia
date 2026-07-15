@@ -58,7 +58,7 @@ class ListMenu : public Object{
 		bool showBottomInfo;
         bool animateBkg;
         bool centerText;
-        bool keyUp;
+        bool updateAssets;
         int lastSel;
         float pixelShift;
         vector<unique_ptr<GameFile>> listGames;

@@ -49,7 +49,6 @@ GestorMenus::GestorMenus(int screenw, int screenh){
     marginY = face_h_big * 2;
     lastSel = -1;
     pixelShift = 0;
-    keyUp = false;
 	this->setLayout(0, screenw, screenh);
 	status = NORMAL;
 	options_changed_flag = false;

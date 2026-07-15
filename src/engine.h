@@ -17,6 +17,8 @@
 	#include <video/win_d3d9.h>
 #endif
 
+#include <video/HLSLBackground.h>
+
 /* "Flip" del frontend. En Xbox el driver SDL compone game+overlay dentro de
    SDL_Flip; en Windows lo hace WinD3D9_Present (sube la textura, dibuja el
    quad con shader y compone el overlay). En cualquier otra plataforma cae al
@@ -38,6 +40,9 @@ class Engine{
         ~Engine();
 		SDL_Surface* overlay;
 		SDL_Surface* gameScreen;
+#ifdef WIN
+		HLSLBackground hlslBkg;
+#endif
 		Fonts* fonts;
 		// Instancia global para los callbacks
 		AudioBuffer g_audioBuffer;

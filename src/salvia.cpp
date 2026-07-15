@@ -1106,7 +1106,7 @@ void init_sdl_audio(double sample_rate) {
     // 2048 = ~46ms (Recomendado para estabilidad en emulacion)
     // 4096 = ~92ms (Seguro, pero con lag perceptible)
 	#ifdef WIN
-	wanted.samples = 1024; // Tamaño del bloque (latencia)
+	wanted.samples = 2048; // Tamaño del bloque (latencia)
 	#elif defined(_XBOX)
 	//wanted.samples = 2048; // Tamaño del bloque (latencia)
 	wanted.samples = 1024; // Tamaño del bloque (latencia)
@@ -1651,14 +1651,7 @@ int main(int argc, char *argv[]) {
 	retro_set_audio_sample(retro_audio_sample);
 	retro_set_audio_sample_batch(retro_audio_sample_batch);
 
-	if (!loadGameAtStart(argc, argv)){
-		gameMenu->fillOverlay(clBackground);
-		gameMenu->loadBgImage();
-		//Workaround para mostrar una primera imagen del menu con las imagenes cargadas
-		listMenu->keyUp = true;
-		gameMenu->refreshScreen(*listMenu);
-		listMenu->keyUp = false;
-	} else {
+	if (loadGameAtStart(argc, argv)){
 		gameMenu->clearOverlay();
 	}
 

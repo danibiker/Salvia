@@ -517,6 +517,9 @@
     <ClInclude Include="libs\rcheevos\include\rc_consoles.h">
       <Filter>Source Files\retroachievements\include</Filter>
     </ClInclude>
+    <ClInclude Include="src\video\HLSLBackground.h">
+      <Filter>Source Files\video</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="DistroWin\assets\i18n\en.ini">

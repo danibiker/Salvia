@@ -352,7 +352,6 @@ private:
     int layout;
     bool animateBkg;
     bool centerText;
-    bool keyUp;
     int lastSel;
     float pixelShift;
     static SDL_Surface* imgText;

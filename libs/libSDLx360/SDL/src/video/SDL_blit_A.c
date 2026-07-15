@@ -1573,7 +1573,7 @@ static void BlitRGBtoRGBPixelAlpha(SDL_BlitInfo *info)
 		   Benchmark this! */
 		if(alpha) {   
 		  if(alpha == SDL_ALPHA_OPAQUE) {
-		    *dstp = (s & 0x00ffffff) | (*dstp & 0xff000000);
+		    *dstp = s;
 		  } else {
 		    /*
 		     * take out the middle component (green), and process
@@ -1587,6 +1587,8 @@ static void BlitRGBtoRGBPixelAlpha(SDL_BlitInfo *info)
 		    s &= 0xff00;
 		    d &= 0xff00;
 		    d = (d + ((s - d) * alpha >> 8)) & 0xff00;
+		    /* Composite alpha: new_a = src_a + dst_a*(255-src_a)/255 */
+		    dalpha = (alpha + ((dalpha >> 24) * (255 - alpha) >> 8)) << 24;
 		    *dstp = d1 | d | dalpha;
 		  }
 		}

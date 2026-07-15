@@ -55,7 +55,7 @@ ListMenu::ListMenu(int screenw, int screenh){
 	marginY = face_h_big * 2;
     lastSel = -1;
     pixelShift = 0;
-    keyUp = false;
+    updateAssets = false;
     animateBkg = true;
 	showBottomInfo = true;
     setObjectType(GUILISTBOX);

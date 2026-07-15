@@ -61,8 +61,174 @@ static char rcsid =
 #include "hq2x_lut.h"
 #include "hq3x_lut.h"
 #include "hq4x_lut.h"
+#include "../../../../../src/video/HLSLBackground.h"
 
 #define XBOXVID_DRIVER_NAME "XBOX"
+
+/* ─── HLSLBackground: Xbox 360 C implementation ───────────────── */
+static unsigned long XBOX_HashShaderSource(const char* str, DWORD flags);
+static DWORD* XBOX_LoadCachedShader(unsigned long hash, DWORD* outSize);
+static void XBOX_SaveCachedShader(unsigned long hash, const void* bytecode, DWORD size);
+
+static LPDIRECT3DPIXELSHADER9  g_hlslBg_ps[HLSL_BG_COUNT];
+static LPDIRECT3DPIXELSHADER9  g_hlslBg_psAlphaFix = NULL;
+static LPDIRECT3DVERTEXBUFFER9 g_hlslBg_vb  = NULL;
+static LPDIRECT3DVERTEXDECLARATION9 g_hlslBg_vd = NULL;
+static int g_hlslBkg_active = 0;
+
+typedef struct { float x, y, z, rhw; float u, v; } HLSL_BG_VTX;
+
+static const D3DVERTEXELEMENT9 g_hlslBg_decl[] = {
+	{ 0, 0,  D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+	{ 0, 16, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD,  0 },
+	D3DDECL_END()
+};
+
+static const char* g_strHLSLBgVS =
+	" struct VS_IN  { float4 Pos : POSITION; float2 UV : TEXCOORD0; }; \n"
+	" struct VS_OUT { float4 Pos : POSITION; float2 UV : TEXCOORD0; }; \n"
+	" VS_OUT main(VS_IN In) {                                          \n"
+	"     VS_OUT Out; Out.Pos = In.Pos; Out.UV = In.UV; return Out;   \n"
+	" }                                                                \n";
+
+void HLSLBackground_init(LPDIRECT3DDEVICE9 dev)
+{
+	ID3DXBuffer* code = NULL;
+	ID3DXBuffer* errs = NULL;
+	ID3DXBuffer* vsCode = NULL;
+	int i;
+
+	g_strHLSLBackgrounds[0] = g_strHLSLBackground;
+	g_strHLSLBackgrounds[1] = g_strHLSLBackgroundEther;
+	g_strHLSLBackgrounds[2] = g_strHLSLBackgroundWormholes;
+	//g_strHLSLBackgrounds[3] = g_strHLSLBackgroundShootingStars;
+	//g_strHLSLBackgrounds[4] = g_strHLSLBackgroundNeonBars;
+
+	if (!dev || g_hlslBg_ps[0]) return;
+
+	/* Compile all background shaders (with disk cache) */
+	for (i = 0; i < HLSL_BG_COUNT; i++) {
+		unsigned long hash = XBOX_HashShaderSource(g_strHLSLBackgrounds[i], 0);
+		DWORD cachedSize = 0;
+		DWORD* cachedCode = XBOX_LoadCachedShader(hash, &cachedSize);
+		if (cachedCode) {
+			IDirect3DDevice9_CreatePixelShader(dev, cachedCode, &g_hlslBg_ps[i]);
+			free(cachedCode);
+		} else {
+			if (SUCCEEDED(D3DXCompileShader(g_strHLSLBackgrounds[i], (UINT)strlen(g_strHLSLBackgrounds[i]),
+					NULL, NULL, "main", "ps_3_0",
+					0, &code, &errs, NULL))) {
+				XBOX_SaveCachedShader(hash,
+					code->lpVtbl->GetBufferPointer(code),
+					code->lpVtbl->GetBufferSize(code));
+				IDirect3DDevice9_CreatePixelShader(dev, (DWORD*)code->lpVtbl->GetBufferPointer(code), &g_hlslBg_ps[i]);
+				code->lpVtbl->Release(code);
+			}
+			if (errs) { errs->lpVtbl->Release(errs); errs = NULL; }
+		}
+	}
+
+	/* Compilar alpha-fixup shader (con cache) */
+	{
+		unsigned long hash = XBOX_HashShaderSource(g_strHLSLAlphaFix, 0);
+		DWORD cachedSize = 0;
+		DWORD* cachedCode = XBOX_LoadCachedShader(hash, &cachedSize);
+		if (cachedCode) {
+			IDirect3DDevice9_CreatePixelShader(dev, cachedCode, &g_hlslBg_psAlphaFix);
+			free(cachedCode);
+		} else {
+			if (SUCCEEDED(D3DXCompileShader(g_strHLSLAlphaFix, (UINT)strlen(g_strHLSLAlphaFix),
+					NULL, NULL, "main", "ps_3_0",
+					0, &code, &errs, NULL))) {
+				XBOX_SaveCachedShader(hash,
+					code->lpVtbl->GetBufferPointer(code),
+					code->lpVtbl->GetBufferSize(code));
+				IDirect3DDevice9_CreatePixelShader(dev, (DWORD*)code->lpVtbl->GetBufferPointer(code), &g_hlslBg_psAlphaFix);
+				code->lpVtbl->Release(code);
+			}
+			if (errs) { errs->lpVtbl->Release(errs); errs = NULL; }
+		}
+	}
+
+	if (SUCCEEDED(D3DXCompileShader(g_strHLSLBgVS, (UINT)strlen(g_strHLSLBgVS),
+			NULL, NULL, "main", "vs_3_0",
+			0, &vsCode, &errs, NULL))) {
+		D3DVertexShader* pVS = NULL;
+		IDirect3DDevice9_CreateVertexShader(dev, (DWORD*)vsCode->lpVtbl->GetBufferPointer(vsCode), &pVS);
+		if (pVS) { IDirect3DDevice9_SetVertexShader(dev, pVS); D3DVertexShader_Release(pVS); }
+		vsCode->lpVtbl->Release(vsCode);
+	}
+	if (errs) { errs->lpVtbl->Release(errs); errs = NULL; }
+
+	IDirect3DDevice9_CreateVertexDeclaration(dev, g_hlslBg_decl, &g_hlslBg_vd);
+	IDirect3DDevice9_CreateVertexBuffer(dev, sizeof(HLSL_BG_VTX) * 4, D3DUSAGE_WRITEONLY,
+		0, D3DPOOL_DEFAULT, &g_hlslBg_vb, NULL);
+}
+
+void HLSLBackground_draw(LPDIRECT3DDEVICE9 dev)
+{
+	HLSL_BG_VTX* vtx;
+	D3DVIEWPORT9 vp;
+	float w, h, t;
+	float cTime[4], cRes[4];
+
+	if (!dev || !g_hlslBg_ps[0] || !g_hlslBg_vb) return;
+
+	IDirect3DDevice9_GetViewport(dev, &vp);
+	w = (float)vp.Width;
+	h = (float)vp.Height;
+
+	IDirect3DVertexBuffer9_Lock(g_hlslBg_vb, 0, 0, (BYTE**)&vtx, 0);
+	vtx[0].x = -0.5f;    vtx[0].y = h - 0.5f; vtx[0].z = 0; vtx[0].rhw = 1; vtx[0].u = 0; vtx[0].v = 1;
+	vtx[1].x = -0.5f;    vtx[1].y = -0.5f;    vtx[1].z = 0; vtx[1].rhw = 1; vtx[1].u = 0; vtx[1].v = 0;
+	vtx[2].x = w - 0.5f; vtx[2].y = h - 0.5f; vtx[2].z = 0; vtx[2].rhw = 1; vtx[2].u = 1; vtx[2].v = 1;
+	vtx[3].x = w - 0.5f; vtx[3].y = -0.5f;    vtx[3].z = 0; vtx[3].rhw = 1; vtx[3].u = 1; vtx[3].v = 0;
+	IDirect3DVertexBuffer9_Unlock(g_hlslBg_vb);
+
+	t = SDL_GetTicks() / 1000.0f;
+	cTime[0] = t; cTime[1] = 0; cTime[2] = 0; cTime[3] = 0;
+	cRes[0]  = w; cRes[1]  = h; cRes[2]  = 0; cRes[3]  = 0;
+
+	IDirect3DDevice9_SetRenderState(dev, D3DRS_SCISSORTESTENABLE, FALSE);
+	IDirect3DDevice9_SetTexture(dev, 0, NULL);
+	IDirect3DDevice9_SetStreamSource(dev, 0, g_hlslBg_vb, 0, sizeof(HLSL_BG_VTX));
+	IDirect3DDevice9_SetVertexDeclaration(dev, g_hlslBg_vd);
+	IDirect3DDevice9_SetPixelShaderConstantF(dev, 0, cTime, 1);
+	IDirect3DDevice9_SetPixelShaderConstantF(dev, 1, cRes, 1);
+	{
+		int idx = (g_hlslBkg_active >= 1 && g_hlslBkg_active <= HLSL_BG_COUNT) ? g_hlslBkg_active - 1 : 0;
+		IDirect3DDevice9_SetPixelShader(dev, g_hlslBg_ps[idx]);
+	}
+	IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+	IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+	IDirect3DDevice9_DrawPrimitive(dev, D3DPT_TRIANGLESTRIP, 0, 2);
+}
+
+void HLSLBackground_shutdown(void)
+{
+	int i;
+	if (g_hlslBg_vb) { IDirect3DVertexBuffer9_Release(g_hlslBg_vb); g_hlslBg_vb = NULL; }
+	for (i = 0; i < HLSL_BG_COUNT; i++) {
+		if (g_hlslBg_ps[i]) { IDirect3DPixelShader9_Release(g_hlslBg_ps[i]); g_hlslBg_ps[i] = NULL; }
+	}
+	if (g_hlslBg_psAlphaFix) { IDirect3DPixelShader9_Release(g_hlslBg_psAlphaFix); g_hlslBg_psAlphaFix = NULL; }
+	if (g_hlslBg_vd) { IDirect3DVertexDeclaration9_Release(g_hlslBg_vd); g_hlslBg_vd = NULL; }
+}
+
+void HLSLBackground_setActive(int active)
+{
+	g_hlslBkg_active = active;
+}
+
+int HLSLBackground_getActive(){
+	return g_hlslBkg_active;
+}
+
+LPDIRECT3DPIXELSHADER9 HLSLBackground_getAlphaFixShader(void)
+{
+	return g_hlslBg_psAlphaFix;
+}
+/* ─── End HLSLBackground ─────────────────────────────────────── */
 
 /* [XBOX360] Critical section que serializa IDirect3DDevice9::Present.
  *
@@ -378,6 +544,8 @@ int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat)
             InitializeCriticalSection(&g_xboxFlipCS);
             g_xboxFlipCSInit = 1;
         }
+
+        HLSLBackground_init(D3D_Device);
     }
 
     vformat->BitsPerPixel = 32;
@@ -872,8 +1040,10 @@ static void XBOX_DestroyOverlay(void)
 }
 
 /* Draw the overlay quad with alpha blending (called during flip).
-   game_texture is the primary D3D texture to restore after drawing. */
-static void XBOX_DrawOverlay(LPDIRECT3DTEXTURE9 game_texture)
+   game_texture is the primary D3D texture to restore after drawing.
+   useAlphaFix: when true, use the alpha-fixup shader to force all non-black
+   pixels opaque (avoids the CPU loop that sets alpha=0xFF per pixel). */
+static void XBOX_DrawOverlay(LPDIRECT3DTEXTURE9 game_texture, int useAlphaFix)
 {
 	D3DLOCKED_RECT d3dlr;
 
@@ -887,10 +1057,10 @@ static void XBOX_DrawOverlay(LPDIRECT3DTEXTURE9 game_texture)
 	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
 	IDirect3DDevice9_SetRenderState(D3D_Device, D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
 
-	/* Switch to overlay texture and vertex buffer, use normal shader (no Scale2x) */
 	IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)g_overlay_texture);
 	IDirect3DDevice9_SetStreamSource(D3D_Device, 0, g_overlay_vb, 0, sizeof(VERTEX));
-	IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
+	IDirect3DDevice9_SetPixelShader(D3D_Device,
+		(useAlphaFix && g_hlslBg_psAlphaFix) ? g_hlslBg_psAlphaFix : pixelShaders[0]);
 	IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
 	IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
 
@@ -1229,6 +1399,7 @@ static void XBOX_FreeHWSurface(_THIS, SDL_Surface *surface)
 static int XBOX_RenderSurface(_THIS, SDL_Surface *surface)
 {
 	D3DLOCKED_RECT d3dlr;
+	int hlslWasActive;
 
 	/* [XBOX360] Serializar todo el bloque de rendering+Present con un
 	 * lock para que main thread y watcher thread no corrompan el ring
@@ -1243,8 +1414,15 @@ static int XBOX_RenderSurface(_THIS, SDL_Surface *surface)
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 	XBOX_DrawMainQuad();
 
-	/* Draw overlay on top if enabled */
-	XBOX_DrawOverlay(this->hidden->SDL_primary);
+	/* Draw HLSL background after game quad (as menu background) */
+	if (g_hlslBkg_active) HLSLBackground_draw(D3D_Device);
+
+	/* Draw overlay on top if enabled.
+	 * Pass g_hlslBkg_active so DrawOverlay can use the alpha-fixup shader
+	 * when the HLSL background is visible. */
+	hlslWasActive = g_hlslBkg_active;
+	g_hlslBkg_active = 0;
+	XBOX_DrawOverlay(this->hidden->SDL_primary, hlslWasActive);
 
 	IDirect3DDevice9_Present(D3D_Device, NULL, NULL, NULL, NULL);
 
@@ -1326,9 +1504,9 @@ static void XBOX_UpdateRects(_THIS, int numrects, SDL_Rect *rects)
 
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 	XBOX_DrawMainQuad();
-
-	/* Draw overlay on top if enabled */
-	XBOX_DrawOverlay(this->hidden->SDL_primary);
+	if (g_hlslBkg_active) HLSLBackground_draw(D3D_Device);
+	g_hlslBkg_active = 0;
+	XBOX_DrawOverlay(this->hidden->SDL_primary, 0);
 
 	IDirect3DDevice9_Present(D3D_Device, NULL, NULL, NULL, NULL);
 
@@ -1351,6 +1529,7 @@ int XBOX_SetColors(_THIS, int firstcolor, int ncolors, SDL_Color *colors)
 */
 void XBOX_VideoQuit(_THIS)
 {
+	 HLSLBackground_shutdown();
 	 XBOX_DestroyOverlay();
 	 if (this->hidden->SDL_primary)
 	 {
