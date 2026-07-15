@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 2002-2021  The DOSBox Team
- *  Copyright (C) 2020-2025  Bernhard Schelling
+ *  Copyright (C) 2020-2026  Bernhard Schelling
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -503,7 +503,7 @@ bool ReadAndClose(DOS_File *df, std::string& out, Bit32u maxsize = 1024*1024);
 Bit16u DriveReadFileBytes(DOS_Drive* drv, const char* path, Bit8u* outbuf, Bit16u numbytes);
 bool DriveCreateFile(DOS_Drive* drv, const char* path, const Bit8u* buf, Bit32u numbytes);
 Bit32u DriveCalculateCRC32(const Bit8u *ptr, size_t len, Bit32u crc = 0);
-void DriveFileIterator(DOS_Drive* drv, void(*func)(const char* path, bool is_dir, Bit32u size, Bit16u date, Bit16u time, Bit8u attr, Bitu data), Bitu data = 0, const char* root = nullptr);
+void DriveFileIterator(DOS_Drive* drv, void(*func)(const char* path, bool is_dir, Bit32u size, Bit16u date, Bit16u time, Bit8u attr, Bitu data), Bitu data = 0, Bit32u limitDirVisits = (Bit32u)-1, const char* root = nullptr);
 
 template <typename TVal> struct BaseHashMap
 {
@@ -720,9 +720,20 @@ struct rawFile : public DOS_File
 	virtual bool Read(Bit8u* data, Bit16u* size) { *size = (Bit16u)fread(data, 1, *size, f); return open; }
 	virtual bool Write(Bit8u* data, Bit16u* size) { if (!OPEN_IS_WRITING(flags)) return false; *size = (Bit16u)fwrite(data, 1, *size, f); return (*size && open); }
 	virtual bool Seek(Bit32u* pos, Bit32u type) { fseek(f, (long)*pos, type); *pos = (Bit32u)ftell_wrap(f); return open; }
-	virtual bool Seek64(Bit64u* pos, Bit32u type) { fseek_wrap(f, *pos, type); *pos = (Bit64u)ftell_wrap(f); return open; }
+	virtual bool Seek64(Bit64u* pos, Bit32u type) { if (fseek_wrap(f, *pos, type) || type != DOS_SEEK_SET) { *pos = (Bit64u)ftell_wrap(f); } return open; }
 	virtual Bit16u GetInformation(void) { return (OPEN_IS_WRITING(flags) ? 0x40 : 0); }
 	static rawFile* TryOpen(const char* path) { FILE* f = fopen_wrap(path, "rb"); return (f ? new rawFile(f, false) : NULL); }
+};
+
+struct invalidFileHandle : public DOS_File
+{
+	invalidFileHandle(DOS_File& base) : DOS_File(base) { }
+	invalidFileHandle(bool _open, const char* _name) { open = _open; SetName(_name); }
+	virtual bool Read(Bit8u* data, Bit16u* size) { return (dos.errorcode = (Drives[GetDrive()] ? DOSERR_FILE_NOT_FOUND : DOSERR_DRIVE_NOT_READY), false); }
+	virtual bool Write(Bit8u* data, Bit16u* size) { return (dos.errorcode = (Drives[GetDrive()] ? DOSERR_FILE_NOT_FOUND : DOSERR_DRIVE_NOT_READY), false); }
+	virtual bool Seek(Bit32u* pos, Bit32u type) { return (dos.errorcode = (Drives[GetDrive()] ? DOSERR_FILE_NOT_FOUND : DOSERR_DRIVE_NOT_READY), false); }
+	virtual bool Close() { if (refCtr == 1) open = false; return true; }
+	virtual Bit16u GetInformation(void) { return (OPEN_IS_WRITING(flags) ? 0x40 : 0); }
 };
 
 class memoryDrive : public DOS_Drive {

@@ -508,7 +508,6 @@ struct DBP_MenuState
 		for (const char* line = str, *p, *pmax, *lastspace; *line; line = (*lastspace ? lastspace + 1 : lastspace))
 		{
 			for (lastspace = NULL, p = line, pmax = p + lineLength; *p && p != pmax;) { if (*(++p) <= ' ' && *(lastspace = p) == '\n') break; }
-			if (*line == '\n' && !line[1]) break;
 			list.emplace_back(IT_NONE, info, prefix);
 			list.back().str.append(line, (size_t)(*line == '\n' ? 0 : (lastspace - line)));
 		}
@@ -1359,6 +1358,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 			if (DBP_Run::autoboot.startup.mode == DBP_Run::RUN_VARIANT) DBP_Run::autoboot.use = false; // DBP_Run::WriteAutoBoot force enables auto boot for RUN_VARIANT
 		}
 		else if (patchDrive::variants.Len()) RefreshList(IT_VARIANTLIST);
+		open_ticks = DBP_GetTicks(); // avoid very slow RefreshList causing this to be too long ago already
 	}
 
 	~DBP_PureMenuState()
@@ -1554,14 +1554,14 @@ struct DBP_PureMenuState final : DBP_MenuState
 
 			if (fs_rows) { list.emplace_back(IT_NONE); fs_rows++; }
 
-			// Scan drive C first, any others after
+			// Scan drive C first, any others after (limit to 1000 directories to avoid scanning an absurd number of directories if someone mounts an enormous host hard drive)
 			sel = ('C'-'A'); // use sel to have access to it in FileIter
 			exe_count = 0;
-			DriveFileIterator(Drives[sel], FileIter, (Bitu)this);
+			DriveFileIterator(Drives[sel], FileIter, (Bitu)this, 1000);
 			for (sel = ('A'-'A'); sel != ('Z'-'A'); sel++)
 			{
 				if (sel == ('C'-'A') || !Drives[sel]) continue;
-				DriveFileIterator(Drives[sel], FileIter, (Bitu)this);
+				DriveFileIterator(Drives[sel], FileIter, (Bitu)this, 1000);
 				multidrive = true;
 			}
 			if (exe_count) list.emplace_back(IT_NONE);
@@ -1596,7 +1596,7 @@ struct DBP_PureMenuState final : DBP_MenuState
 			std::string osimg = DBP_GetSaveFile(SFT_NEWOSIMAGE, &filename);
 			list.emplace_back(IT_NONE, INFO_HEADER, "Hard Disk Size For Install");
 			list.emplace_back(IT_NONE);
-			list.emplace_back(IT_NONE, INFO_WARN, "Create a new hard disk image in the following location:");
+			list.emplace_back(IT_NONE, INFO_WARN, "Create a new dynamic hard disk image in the following location:");
 			if (filename > &osimg[0]) { list.emplace_back(IT_NONE, INFO_WARN); list.back().str.assign(&osimg[0], filename - &osimg[0]); }
 			list.emplace_back(IT_NONE, INFO_WARN, filename);
 			list.emplace_back(IT_NONE);
@@ -2279,12 +2279,16 @@ static void DBP_PureMenuProgram(Program** make)
 		virtual void gfx(DBP_Buffer& _buf) override
 		{
 			char msgbuf[100];
-			if      (msgType == 1) sprintf(msgbuf, "* GAME ENDED - EXITTING IN %u SECONDS - PRESS ANY KEY TO CONTINUE *", ((Bit32u)dbp_menu_time - ((DBP_GetTicks() - opentime) / 1000)));
+			if      (msgType == 1) sprintf(msgbuf, "* GAME ENDED - EXITING IN %u SECONDS - PRESS ANY KEY TO CONTINUE *", ((Bit32u)dbp_menu_time - ((DBP_GetTicks() - opentime) / 1000)));
 			else if (msgType == 2) sprintf(msgbuf, "* PRESS ANY KEY TO RETURN TO START MENU *");
 			DBP_BufferDrawing& buf = static_cast<DBP_BufferDrawing&>(_buf);
 			int lh = (buf.height >= 400 ? 14 : 8), w = buf.width, h = buf.height, y = h - lh*5/2;
 			buf.DrawBox(8, y-3, w-16, lh+6, buf.BGCOL_MENU, buf.COL_LINEBOX);
 			buf.PrintCenteredOutlined(lh, 0, w, y, msgbuf);
+			#ifndef STATIC_LINKING
+			if (msgType == 2 && dbp_menu_time == 99)
+				buf.PrintCenteredOutlined(lh, 0, w, h - lh - 2, "Use setting General > Advanced > Start Menu to enable exiting automatically", 0x40FFFFFF, 0x40000000);
+			#endif
 		}
 
 		virtual bool evnt(DBP_Event_Type type, int val, int) override
@@ -2705,5 +2709,11 @@ void DBPS_AddDisc(const char* path)
 const std::string& DBPS_GetContentName()
 {
 	return dbp_content_name;
+}
+
+void DBPS_InitLEDs(uint16_t key_modifiers)
+{
+	int leds = ((key_modifiers & RETROKMOD_NUMLOCK) ? KLED_NUMLOCK : 0) | ((key_modifiers & RETROKMOD_CAPSLOCK) ? KLED_CAPSLOCK : 0) | ((key_modifiers & RETROKMOD_SCROLLOCK) ? KLED_SCROLLLOCK : 0);
+	BIOS_SetKeyboardLEDOverwrite(KBD_scrolllock, (KBD_LEDS)leds); // pass KBD_scrolllock to only apply static values during startup
 }
 #endif
