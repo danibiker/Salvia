@@ -2,12 +2,13 @@
 
 #include <stdint.h>
 #include <string.h> // memcpy, memset
+#include <utils/logger.h>
 
 #ifdef _XBOX
 #define BUFF_SIZE 16384
 #include <xtl.h>
 #else
-#define BUFF_SIZE 16384
+#define BUFF_SIZE 8192
 #include <windows.h>
 #endif
 
@@ -91,6 +92,12 @@ public:
         size_t to_write = (count > free_space) ? free_space : count;
 
         if (to_write < count) {
+#ifdef AUDIO_LOG
+            LOG_DEBUG("[ABUF] DROP: requested=%lu written=%lu dropped=%lu fill=%lu/%lu",
+                (unsigned long)count, (unsigned long)to_write,
+                (unsigned long)(count - to_write),
+                (unsigned long)used(h, tail), (unsigned long)capacity);
+#endif
             InterlockedExchangeAdd(&dropsTotal, (LONG)(count - to_write));
         }
         if (to_write == 0) return 0;
@@ -141,12 +148,25 @@ public:
         size_t avail = used(head, (long)t);
         size_t to_copy = (avail < count) ? avail : count;
 
+#ifdef AUDIO_LOG
+        // Trace periodico cada 2s: buffer fill level
+        {
+            static DWORD lastTrace = 0;
+            DWORD now = GetTickCount();
+            if (now - lastTrace >= 2000) {
+                lastTrace = now;
+                size_t fill = getUsed();
+                DWORD pct = (DWORD)(fill * 100 / capacity);
+                LOG_DEBUG("[ABUF] fill=%lu/%lu (%lu%%) drops=%ld underruns=%ld",
+                    (unsigned long)fill, (unsigned long)capacity,
+                    (unsigned long)pct, dropsTotal, underrunsTotal);
+            }
+        }
+#endif
+
         if (to_copy > 0) {
             t = copyOut(t, stream, to_copy);
 
-            // Memorizar la ultima muestra entregada como punto de partida
-            // para el fade-out de un futuro underrun.  Si to_copy es impar
-            // (no deberia pasar) la R se queda en su valor anterior.
             if (to_copy >= 2) {
                 lastOutL = stream[to_copy - 2];
                 lastOutR = stream[to_copy - 1];
@@ -156,42 +176,31 @@ public:
         }
 
         if (to_copy < count) {
-            // Underrun.  En lugar de un memset(0) brusco que produce step
-            // function audible cuando la ultima muestra era != 0, generamos
-            // un fade-out lineal de las primeras FADE_SAMPLES muestras desde
-            // (lastOutL, lastOutR) hacia (0, 0), y luego silencio puro.
-            //
-            // FADE_SAMPLES = 64 frames stereo = 128 muestras = ~1.5 ms a 44.1 kHz.
-            // Suficientemente largo para ser inaudible como fade pero corto
-            // como para no enmascarar samples reales que lleguen mientras
-            // todavia procesamos el underrun.
+#ifdef AUDIO_LOG
+            LOG_DEBUG("[ABUF] UNDERRUN: requested=%lu avail=%lu missing=%lu fill=%lu/%lu",
+                (unsigned long)count, (unsigned long)to_copy,
+                (unsigned long)(count - to_copy),
+                (unsigned long)avail, (unsigned long)capacity);
+#endif
             const size_t FADE_FRAMES   = 64;
             const size_t FADE_SAMPLES  = FADE_FRAMES * 2;
             size_t missing = count - to_copy;
             int16_t *missingStart = stream + to_copy;
 
-            // Numero de muestras a fade-fillear (puede ser menor que
-            // FADE_SAMPLES si el underrun es muy pequeno).
             size_t fadeNow = (missing < FADE_SAMPLES) ? missing : FADE_SAMPLES;
 
-            // Fade-out frame por frame.  Cada frame contiene L y R.
             for (size_t f = 0; f < fadeNow / 2; f++) {
-                // Coeficiente que va de 1.0 a 0.0 linealmente
                 int num = (int)(FADE_FRAMES - 1 - f);
                 int den = (int)FADE_FRAMES;
                 missingStart[f * 2]     = (int16_t)((int)lastOutL * num / den);
                 missingStart[f * 2 + 1] = (int16_t)((int)lastOutR * num / den);
             }
 
-            // Resto del missing: silencio puro.
             if (missing > fadeNow) {
                 memset(missingStart + fadeNow, 0,
                        (missing - fadeNow) * sizeof(int16_t));
             }
 
-            // Tras un underrun la "ultima muestra" efectiva queda a 0,
-            // para que el proximo Read recobre desde silencio limpio
-            // (sin doble fade en cascada).
             lastOutL = 0;
             lastOutR = 0;
 
@@ -200,7 +209,6 @@ public:
 
         tail = (long)t;
 
-        // Despertar al productor si estaba dormido en WriteBlocking
         SetEvent(hSpaceEvent);
     }
 

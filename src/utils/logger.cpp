@@ -15,18 +15,14 @@ char Logger::messageBuffer[MAX_MSG_BUFFER_LEN];
 const char* Logger::ERRLEVELSTXT[L_MAX] = { "DEBUG", "INFO", "WARN", "ERROR", "LIBRETRO" };
 int Logger::errorLevel = L_DEBUG;
 
-#ifdef _XBOX
-    static CRITICAL_SECTION logSync;
-    static bool csInitialized = false;
-#endif
+static CRITICAL_SECTION logSync;
+static bool csInitialized = false;
 
 Logger::Logger(const char* filename) {
-	#ifdef _XBOX
     if (!csInitialized) {
         InitializeCriticalSection(&logSync);
         csInitialized = true;
     }
-	#endif
 	size_t len = strlen(filename);
 	logFilepath = new char[len + 1]	;
 	strcpy_s(logFilepath, len + 1, filename);
@@ -38,9 +34,7 @@ void Logger::write(int level, const char* fmt, ...) {
 	#else
 		if (!fmt || level < errorLevel || level >= L_MAX) return;
 
-		#ifdef _XBOX
 		EnterCriticalSection(&logSync);
-		#endif
 
 		char levelStr[25];
 		if (level >= L_MAX || level < 0){
@@ -67,7 +61,7 @@ void Logger::write(int level, const char* fmt, ...) {
 		// Usamos sizeof(finalBuffer) - 2 para dejar sitio al \n y al \0
 		int res = _snprintf(finalBuffer, sizeof(finalBuffer) - 1, "%s", messageBuffer);
 
-		// Si hubo truncado o error, aseguramos el cierre y el salto de línea al final
+		// Si hubo truncado o error, aseguramos el cierre y el salto de lï¿½nea al final
 		if (res < 0 || res >= (int)sizeof(finalBuffer) - 1) {
 			finalBuffer[sizeof(finalBuffer) - 1] = '\0';
 		}
@@ -88,8 +82,6 @@ void Logger::write(int level, const char* fmt, ...) {
 		/*Fileio fileio;
 		fileio.writeToFile(logFilepath, finalBuffer, strlen(finalBuffer), 1);*/
 
-		#ifdef _XBOX
 		LeaveCriticalSection(&logSync);
-		#endif
 	#endif
 }

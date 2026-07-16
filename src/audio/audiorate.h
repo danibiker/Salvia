@@ -28,35 +28,32 @@ private:
 
     // --- Controlador proporcional con EMA ---
     void updateRatio(size_t currentUsed) {
-        // Fraccion de llenado actual
         double fill = (double)currentUsed / (double)bufCapacity;
 
-        // Filtro EMA (alpha = 0.1, ~10 frames de constante de tiempo)
         const double alpha = 0.1;
         smoothedFill = smoothedFill * (1.0 - alpha) + fill * alpha;
 
-        // Error: positivo si el buffer esta mas lleno de lo deseado.
-        // Rango: -0.5 (buffer vacio) .. +0.5 (buffer lleno).
         double error = smoothedFill - 0.5;
 
-        // Ajuste proporcional.  kp escogido para que un error maximo
-        // (|0.5|) produzca el clamp maximo (|0.02| = 2%), es decir:
-        //   kp = 0.02 / 0.5 = 0.04
-        // El kp anterior (0.005) era 8x demasiado pequeno: incluso con
-        // el buffer 100% lleno, adj apenas alcanzaba 0.25%, que es
-        // insuficiente para drenar el buffer durante el catch-up tras
-        // stalls del CD.  Resultado: buffer se llenaba, Write() no-
-        // bloqueante descartaba muestras silenciosamente, cada drop
-        // era una discontinuidad audible (crujido continuo).
         double adj = error * 0.04;
 
-        // Clamp a +-2% maximo (limite de pitch shift imperceptible).
         if (adj >  0.02) adj =  0.02;
         if (adj < -0.02) adj = -0.02;
 
-        // ratio > 1.0: avanzamos mas rapido en el input -> producimos menos output -> buffer baja
-        // ratio < 1.0: avanzamos mas lento -> producimos mas output -> buffer sube
         ratio = 1.0 + adj;
+
+#ifdef AUDIO_LOG
+        // Trace periodico cada 2s: DRC state
+        {
+            static DWORD lastDrct = 0;
+            DWORD now = GetTickCount();
+            if (now - lastDrct >= 2000) {
+                lastDrct = now;
+                LOG_DEBUG("[DRC] ratio=%.4f fill_raw=%.1f%% fill_smooth=%.1f%% err=%.4f adj=%.4f",
+                    ratio, fill * 100.0, smoothedFill * 100.0, error, adj);
+            }
+        }
+#endif
     }
 
     // --- Resampler lineal estereo ---
@@ -165,7 +162,6 @@ public:
     size_t processAndWrite(AudioBuffer& buffer, const int16_t* data, size_t frames, bool blocking) {
         if (frames == 0) return 0;
 
-        // Durante el warmup, escribir directo sin DRC
         if (warmup > 0) {
             warmup--;
             if (blocking)
@@ -175,18 +171,36 @@ public:
             return frames;
         }
 
-        // Actualizar ratio segun nivel del buffer
         updateRatio(buffer.getUsed());
 
-        // Resamplear en buffer temporal en stack
         int16_t tmpBuf[DRC_MAX_FRAMES * 2];
         size_t maxOut = DRC_MAX_FRAMES;
         if (maxOut > frames + frames / 10 + 16)
-            maxOut = frames + frames / 10 + 16; // no sobredimensionar
+            maxOut = frames + frames / 10 + 16;
 
         size_t outFrames = resample(data, frames, tmpBuf, maxOut);
 
-        // Escribir al ring buffer
+#ifdef AUDIO_LOG
+        // Trace periodico cada 2s: resampler stats
+        {
+            static DWORD lastRsTrace = 0;
+            static size_t totalIn = 0, totalOut = 0, batchCount = 0;
+            totalIn += frames;
+            totalOut += outFrames;
+            batchCount++;
+            DWORD now = GetTickCount();
+            if (now - lastRsTrace >= 2000) {
+                lastRsTrace = now;
+                LOG_DEBUG("[DRC] batches=%lu avg_in=%lu avg_out=%lu total_ratio=%.4f",
+                    (unsigned long)batchCount,
+                    (unsigned long)(totalIn / batchCount),
+                    (unsigned long)(totalOut / batchCount),
+                    batchCount > 0 ? (double)totalOut / (double)totalIn : 0.0);
+                totalIn = totalOut = batchCount = 0;
+            }
+        }
+#endif
+
         if (blocking)
             buffer.WriteBlocking(tmpBuf, outFrames * 2);
         else

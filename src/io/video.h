@@ -25,6 +25,11 @@ typedef void (*ScalerFunc)(const t_scale_props& props);
 struct SrfConvert { 
 	SDL_Surface *src32;
 	SDL_Surface *dst32;
+	SrfConvert() : src32(NULL), dst32(NULL){};
+	~SrfConvert(){
+		if (srf_32_convert.src32) SDL_FreeSurface(srf_32_convert.src32);
+		if (srf_32_convert.dst32) SDL_FreeSurface(srf_32_convert.dst32);
+	}
 } static srf_32_convert;
 
 inline void check_center(uint16_t* src, uint16_t*& dst, int sw, int sh, std::size_t spitch, 

@@ -818,6 +818,7 @@ void SDL_XBOX_SetOverlayEnabled(int enabled)
  * =================================================================== */
 static void ReleaseDefaultResources(void)
 {
+    g_hlslBkg.shutdown();
     if (g_game_tex) { g_game_tex->Release(); g_game_tex = NULL; }
     if (g_ovl_tex)  { g_ovl_tex->Release();  g_ovl_tex  = NULL; }
     if (g_ovl_vb)   { g_ovl_vb->Release();   g_ovl_vb   = NULL; }
@@ -845,6 +846,10 @@ static int RecreateDefaultResources(void)
        asi gameMenu->overlay sigue apuntando a memoria valida). */
     if (g_ovl_surf)
         InitOverlay();
+
+    /* Re-iniciar el HLSL background tras el Reset */
+    g_hlslBkg.init(g_dev);
+
     return 1;
 }
 
@@ -857,6 +862,11 @@ void SDL_XBOX_SetVSync(int enable)
 
     g_vsync = enable ? 1 : 0;
     g_pp.PresentationInterval = g_vsync ? D3DPRESENT_INTERVAL_ONE : D3DPRESENT_INTERVAL_IMMEDIATE;
+
+    /* Liberar recursos GPU del HLSL background ANTES del Reset.
+     * m_vb y los pixel shaders son D3DPOOL_DEFAULT y se destruyen
+     * con el Reset; sin esto quedan como dangling pointers. */
+    g_hlslBkg.shutdown();
 
     /* Liberar solo recursos GPU (D3DPOOL_DEFAULT).  NO tocamos g_game_surf
      * ni g_ovl_surf (superficies CPU) — el core mantiene punteros a ellas
@@ -876,6 +886,7 @@ void SDL_XBOX_SetVSync(int enable)
         g_dev->CreateVertexBuffer(sizeof(g_verts), D3DUSAGE_WRITEONLY, VTX_FVF,
                                   D3DPOOL_DEFAULT, &g_vb, NULL);
         if (g_ovl_surf) InitOverlay();
+        g_hlslBkg.init(g_dev);
         if (g_cs_init) LeaveCriticalSection(&g_cs);
         return;
     }
@@ -904,6 +915,9 @@ void SDL_XBOX_SetVSync(int enable)
 
     /* Recrear recursos GPU del overlay (g_ovl_surf preservado) */
     if (g_ovl_surf) InitOverlay();
+
+    /* Re-iniciar el HLSL background tras el Reset */
+    g_hlslBkg.init(g_dev);
 
     g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
 

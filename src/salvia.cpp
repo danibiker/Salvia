@@ -1062,20 +1062,33 @@ std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_
 void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
     if (audio_closing) {
         memset(stream, 0, len);
-        return;   // salir limpio sin tocar el estado del core
+        return;
     }
 	
-	// 1. Limpiar el buffer de salida de SDL (Opcional pero recomendado en SDL 1.2)
-    // Esto garantiza que si el emulador se pausa o va lento, haya silencio en lugar de ruido.
-    //memset(stream, 0, len);
-    // 2. Convertir a puntero de 16 bits para trabajar con muestras
     int16_t* samples = (int16_t*)stream;
-    
-    // len es el tamaño en bytes. 
-    // Como usamos AUDIO_S16SYS (2 bytes por muestra), count es el numero de muestras totales.
     std::size_t count = len / sizeof(int16_t);
 
-    // 3. Leer de tu buffer circular
+#ifdef AUDIO_LOG
+    // Trace periodico cada 2s: callback info
+    {
+        static DWORD lastCbTrace = 0;
+        static DWORD cbCount = 0;
+        cbCount++;
+        DWORD now = GetTickCount();
+        if (now - lastCbTrace >= 2000) {
+            DWORD elapsed = now - lastCbTrace;
+            lastCbTrace = now;
+            float callsPerSec = (float)cbCount * 1000.0f / (float)elapsed;
+            cbCount = 0;
+            char buf[128];
+            _snprintf(buf, sizeof(buf),
+                "[SDL_CB] freq=%.1f Hz request=%lu samples (%lu frames)",
+                callsPerSec, (unsigned long)count, (unsigned long)(count / 2));
+            OutputDebugStringA(buf);
+        }
+    }
+#endif
+
     gameMenu->g_audioBuffer.Read(samples, count);
 }
 
@@ -1084,34 +1097,27 @@ void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
 */
 void init_sdl_audio(double sample_rate) {
 	LOG_DEBUG("init_sdl_audio %.1f\n", sample_rate);
-	/*	
-		El equilibrio de latencia y seguridad
-		-------------------------------------
-		Buffer Total (AudioBuffer::AUDIO_BUFFER_SIZE = 4096): Tienes un margen de maniobra de unos 92ms (a 44.1kHz). 
-			Es suficiente para que Windows haga tareas en segundo plano sin que el audio sufra cortes.
-		Bloque SDL (1024): Al pedir 1024 muestras (AudioBuffer::AUDIO_BUFFER_SIZE / 4), la latencia de respuesta de la tarjeta de sonido es de unos 23ms. 
-			Es una latencia excelente, casi imperceptible para el oido humano.
-		La Proporcion (1/4): Al ser el bloque 4 veces mas pequeño que el buffer total, el hilo de audio de SDL 
-			llamara a tu callback 4 veces antes de vaciar el buffer por completo. Esto da al emulador mucho tiempo 
-			para rellenar el head antes de que el tail lo alcance.
-	*/
-
     SDL_AudioSpec wanted;
     wanted.freq = (int)sample_rate;
-    wanted.format = AUDIO_S16SYS;	// 16 bits nativos
-    wanted.channels = 2;			// Estereo
-	// --- AJUSTE PARA XBOX 360 ---
-    // Si escuchas chasquidos (crackling), aumenta este valor.
-    // 1024 = ~23ms (Riesgo de cortes en 360)
-    // 2048 = ~46ms (Recomendado para estabilidad en emulacion)
-    // 4096 = ~92ms (Seguro, pero con lag perceptible)
+    wanted.format = AUDIO_S16SYS;
+    wanted.channels = 2;
 	#ifdef WIN
-	wanted.samples = 2048; // Tamaño del bloque (latencia)
+	wanted.samples = 1024;
 	#elif defined(_XBOX)
-	//wanted.samples = 2048; // Tamaño del bloque (latencia)
-	wanted.samples = 1024; // Tamaño del bloque (latencia)
+	wanted.samples = 1024; 
 	#endif
     wanted.callback = sdl_audio_callback;
+
+#ifdef AUDIO_LOG
+    {
+        char buf[128];
+        _snprintf(buf, sizeof(buf),
+            "[AUDIO_INIT] rate=%d samples=%d buffer=%d callback_ms=%.1f",
+            wanted.freq, wanted.samples, BUFF_SIZE,
+            (float)wanted.samples / (float)wanted.freq * 1000.0f);
+        OutputDebugStringA(buf);
+    }
+#endif
 
     if (SDL_OpenAudio(&wanted, NULL) < 0) {
 		string error = "Error SDL Audio: " + string(SDL_GetError());
@@ -1155,17 +1161,7 @@ std::string initPathAndLog(char** argv){
 
 	LOG_INFO("Directorio de app: %s\n", Constant::getAppDir().c_str());
 	LOG_INFO("Ejecutable: %s\n", Constant::getAppExecutable().c_str());
-
-	//Saving the name of the emulator to use it when an exception raises
-	//std::string appExe = Constant::getAppExecutable();
-	//std::size_t bufferSize = appExe.length() + 1;
-	//if (g_excp_emulator_path != NULL) {
-	//	delete [] g_excp_emulator_path;
-	//}
-	//g_excp_emulator_path = new char[bufferSize];
-	//strcpy_s(g_excp_emulator_path, bufferSize, appExe.c_str());
 	g_excp_emulator_path = Constant::getAppExecutable();
-
 	return Constant::getAppDir();
 }
 
@@ -1371,6 +1367,13 @@ inline void updateGame() {
 	// 2. Calcula la logica del juego
 	// 3. Llama a audio_batch() -> (Aqui el audio bloquea si va muy rapido)
 	// 4. Llama a video_refresh() -> (Aqui se dibuja el frame y los FPS)
+	// Notificar al core el estado del buffer de audio (para frameskip)
+	if (audio_status_cb) {
+		size_t fill = gameMenu->g_audioBuffer.getUsed();
+		unsigned occupancy = (unsigned)(fill * 100 / gameMenu->g_audioBuffer.getCapacity());
+		bool underrun_likely = (fill < gameMenu->g_audioBuffer.getCapacity() / 4);
+		audio_status_cb(true, occupancy, underrun_likely);
+	}
 	retro_run();
 }
 

@@ -20,8 +20,7 @@
 #include <stddef.h>  // La cabecera estándar para NULL
 #include "hqx.h"
 
-uint32_t   *RGBtoYUV;
-uint32_t   YUV1, YUV2;
+uint32_t   *RGBtoYUV = NULL;
 
 void hqxInit(void)
 {

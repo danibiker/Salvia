@@ -835,6 +835,11 @@ void SDL_XBOX_SetVSync(int enabled)
 		g_overlay_locked = 0;
 	}
 
+	/* Release HLSL background resources ANTES del Reset.
+	 * g_hlslBg_vb es D3DPOOL_DEFAULT y se destruye con el Reset;
+	 * sin esto queda como dangling pointer. */
+	//HLSLBackground_shutdown();
+
 	/* Release D3DPOOL_DEFAULT resources (lost on Reset) */
 	if (vertexBuffer) {
 		IDirect3DVertexBuffer9_Release(vertexBuffer);
@@ -926,6 +931,9 @@ void SDL_XBOX_SetVSync(int enabled)
 		IDirect3DDevice9_SetStreamSource(D3D_Device, 0, vertexBuffer, 0, sizeof(VERTEX));
 
 	XBOX_SelectEffect(g_current_effect);
+
+	/* Re-iniciar el HLSL background tras el Reset */
+	//HLSLBackground_init(D3D_Device);
 
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 

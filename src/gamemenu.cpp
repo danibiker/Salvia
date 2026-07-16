@@ -128,8 +128,6 @@ GameMenu::~GameMenu(){
 	clearLastAchievementArea();
 
 	#ifndef _XBOX
-		if (srf_32_convert.src32) SDL_FreeSurface(srf_32_convert.src32);
-		if (srf_32_convert.dst32) SDL_FreeSurface(srf_32_convert.dst32);
 		hqxClose();
 	#endif
 

@@ -258,6 +258,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 		&refConfig->configMain[cfg::fastForwardMult].getIntRef(), "%.1fx", 10));
 
 	menuEmulation->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.fps"), &refConfig->configMain[cfg::showFps].getBoolRef()));
+	menuEmulation->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.showempty"), &refConfig->configMain[cfg::showEmptyEmulators].getBoolRef()));
 
 	Menu* menuCores = new Menu(LanguageManager::instance()->get("menu.core.assign"), menuEmulation);
 	dirutil dir;
@@ -333,7 +334,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.fullscreen"), &refConfig->configMain[cfg::fullscreen].getBoolRef()));
 	#endif
 	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef()));
-	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.showempty"), &refConfig->configMain[cfg::showEmptyEmulators].getBoolRef()));
+	
 	
 	menuAssignRetro = new Menu(LanguageManager::instance()->get("menu.options.paddassign"), menuEntrada);
 	Menu* menuAssignFrontend = new Menu(LanguageManager::instance()->get("menu.options.frontassign"), menuEntrada);

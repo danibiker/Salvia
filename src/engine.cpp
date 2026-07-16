@@ -26,8 +26,8 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 
 	#ifdef WIN
 		// 1. Activar la precision de 1ms en el reloj de Windows
-		timeBeginPeriod(1);
-		SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+		//timeBeginPeriod(1);
+		//SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 		// Forzar el driver GDI: SDL solo gestiona la ventana/eventos; el
 		// render lo hace nuestra capa D3D9 (no llamamos a SDL_Flip en PC).
 		SDL_putenv("SDL_VIDEODRIVER=windib");
@@ -150,9 +150,9 @@ void Engine::stopEngine(){
 	delete fonts;
 	delete sync;
 	// 3. Limpieza: Devolver el reloj del sistema a su estado normal
-	#ifdef WIN
-		timeEndPeriod(1);
-	#endif
+	//#ifdef WIN
+	//	timeEndPeriod(1);
+	//#endif
 
 #if defined(WIN) && defined(SALVIA_GPU_VIDEO)
 	// gameScreen (textura de juego) y overlay son propiedad de WinD3D9;
