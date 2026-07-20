@@ -1,20 +1,23 @@
 #include <http/httputil.h>
 #include <const/constant.h>
+#include <stdarg.h>
 
-//static const char* USERAGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0";
 static const char* USERAGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:45.0) Gecko/20100101 Firefox/45.0";
-
-#ifdef _XBOX
-mbedtls_entropy_context CurlClient::entropy;
-mbedtls_ctr_drbg_context CurlClient::ctr_drbg;
-#endif
-
 volatile long CurlClient::g_abortScrapping;
 
 CurlClient::CurlClient(){
+	sslVersion = CURL_SSLVERSION_DEFAULT;
+	sessionIdCache = true;
+	httpVersion = CURL_HTTP_VERSION_NONE;
+	lastHttpCode = 0;
+	m_curl = NULL;
 }
 
 CurlClient::~CurlClient(){
+	if (m_curl) {
+		curl_easy_cleanup(m_curl);
+		m_curl = NULL;
+	}
 }
 
 void CurlClient::init(){
@@ -59,30 +62,27 @@ void CurlClient::init(){
 				xnAddr.ina.S_un.S_un_b.s_b1, xnAddr.ina.S_un.S_un_b.s_b2, 
 				xnAddr.ina.S_un.S_un_b.s_b3, xnAddr.ina.S_un.S_un_b.s_b4);
 		LOG_DEBUG(ipStr);
-
-		mbedtls_entropy_init(&entropy);
-
-		// Anyadimos nuestra fuente de la Xbox con prioridad fuerte
-		mbedtls_entropy_add_source(&entropy, CurlClient::xbox360_entropy_source, NULL, 
-									32, // Valor manual en lugar de MBEDTLS_ENTROPY_MIN_PLATFORM
-									MBEDTLS_ENTROPY_SOURCE_STRONG);
-
-		// Es vital "sembrar" el generador
-		mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, (const unsigned char *)"XBOX360", 7);
 	#endif
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
+
+	// Diagnostico de capacidades de la libcurl compilada: backend TLS (wolfSSL),
+	// HTTP/2 (nghttp2) y compresiones. Clave para saber que fingerprint podemos imitar.
+	{
+		curl_version_info_data *vinfo = curl_version_info(CURLVERSION_NOW);
+		LOG_DEBUG("cURL: %s", curl_version());
+		if (vinfo) {
+			LOG_DEBUG("  HTTP2=%s BROTLI=%s LIBZ=%s",
+				(vinfo->features & CURL_VERSION_HTTP2)  ? "SI" : "NO",
+				(vinfo->features & CURL_VERSION_BROTLI) ? "SI" : "NO",
+				(vinfo->features & CURL_VERSION_LIBZ)   ? "SI" : "NO");
+		}
+	}
 }
 
 void CurlClient::close(){
 	// 1. Limpiar cURL
 	curl_global_cleanup();
-
-	#ifdef _XBOX
-	// 2. Limpiar mbedTLS
-	mbedtls_ctr_drbg_free(&ctr_drbg);
-	mbedtls_entropy_free(&entropy);
-	#endif
 
 	// 3. Cerrar Winsock
 	WSACleanup();
@@ -95,8 +95,15 @@ void CurlClient::close(){
 
 // Funcion principal de descarga
 bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, float* progressPtr) {
-    CURL *curl = curl_easy_init();
+    // Handle reutilizable: mantiene el cookie engine (y la conexion keep-alive) vivos
+    // entre peticiones del mismo CurlClient. Clave para el warm-up (home -> search):
+    // el __cf_bm que Cloudflare pone en la home debe reenviarse en la busqueda.
+    // curl_easy_reset limpia las OPCIONES de la peticion anterior pero CONSERVA las
+    // cookies, la conexion y la cache DNS.
+    if (!m_curl) m_curl = curl_easy_init();
+    CURL *curl = m_curl;
     if (!curl) return false;
+    curl_easy_reset(curl);
 
     ProgressData pData;
     pData.progressVar = progressPtr;
@@ -125,9 +132,47 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
     curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, ProgressCallback);
     curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, &pData);
 
-    // Opciones adicionales
+	// Opciones adicionales
     curl_easy_setopt(curl, CURLOPT_USERAGENT, USERAGENT);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L); // 10 segundos
+	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
+	// SSL / TLS options
+	if(sslVersion != CURL_SSLVERSION_DEFAULT)
+		curl_easy_setopt(curl, CURLOPT_SSLVERSION, sslVersion);
+	if(!cipherList.empty())
+		curl_easy_setopt(curl, CURLOPT_SSL_CIPHER_LIST, cipherList.c_str());
+	if(!sessionIdCache)
+		curl_easy_setopt(curl, CURLOPT_SSL_SESSIONID_CACHE, 0L);
+	if(httpVersion != CURL_HTTP_VERSION_NONE)
+		curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, httpVersion);
+
+	// Descompresion automatica: si los headers incluyen Accept-Encoding,
+	// curl lo envia pero no descomprime. CURLOPT_ACCEPT_ENCODING fuerza la descompresion.
+	curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
+
+	// Cabeceras HTTP personalizadas (saltamos Accept-Encoding para no duplicar)
+	struct curl_slist *req_headers = NULL;
+	if (!customHeaders.empty()) {
+		for (std::map<std::string, std::string>::const_iterator it = customHeaders.begin();
+			 it != customHeaders.end(); ++it) {
+			if(it->first == "Accept-Encoding") continue;
+			std::string h = it->first + ": " + it->second;
+			req_headers = curl_slist_append(req_headers, h.c_str());
+		}
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, req_headers);
+	}
+
+	if (!cookie.empty()){
+		// Inyecta la cadena de cookies directamente (separadas por punto y coma)
+		curl_easy_setopt(curl, CURLOPT_COOKIE, this->cookie);
+	}
+	// Cookie engine EN MEMORIA (COOKIEFILE=""): activa el motor de cookies sin leer/
+	// escribir fichero. Las cookies (p.ej. __cf_bm de Cloudflare puesto en la home)
+	// viven en el handle reutilizado y se reenvian en la siguiente peticion. Evita el
+	// cookie jar en disco, que en Xbox (game: read-only) no se puede escribir.
+	curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "");
+	
 
 	// callback para llamar fuera a internet
 	#ifdef _XBOX
@@ -135,12 +180,25 @@ bool CurlClient::fetchUrl(const std::string& url, std::string& outResponse, floa
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, NULL); // Se podria pasar this
 	#endif
 
-	#ifdef NET_DEBUG
-	LOG_DEBUG("Downloading url: %s", url.c_str());
-	#endif
+    //#ifdef NET_DEBUG
+	//LOG_DEBUG("Downloading url: %s", url.c_str());
+	//#endif
 
     CURLcode res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
+
+    // Capturar estado HTTP y version negociada ANTES de cleanup.
+    // Un 403/503 de Cloudflare devuelve CURLE_OK: sin esto, un bloqueo parece exito.
+    lastHttpCode = 0;
+    long negotiatedHttp = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &lastHttpCode);
+    curl_easy_getinfo(curl, CURLINFO_HTTP_VERSION, &negotiatedHttp);
+    LOG_DEBUG("HTTP status=%ld http_ver=%ld bytes=%u (%s)",
+        lastHttpCode, negotiatedHttp, (unsigned int)outResponse.size(),
+        curl_easy_strerror(res));
+
+    // NO se hace curl_easy_cleanup(curl): el handle se reutiliza para conservar las
+    // cookies (warm-up). Se libera en el destructor de CurlClient.
+	if (req_headers) curl_slist_free_all(req_headers);
 
 	#ifdef NET_DEBUG
 	if(res != CURLE_OK) {
@@ -296,17 +354,6 @@ std::string CurlClient::escape(const std::string& text) {
 	return escapedStr;
 }
 
-#ifdef _XBOX
-	// Callback de entropia usando la API nativa de Xbox 360
-	int CurlClient::xbox360_entropy_source(void *data, unsigned char *output, size_t len, size_t *olen) {
-		// XNetRandom devuelve 0 si falla o la cantidad de bytes generados
-		// En el XDK, suele llenar el buffer directamente.
-		XNetRandom(output, (UINT)len);
-		*olen = len;
-		return 0;
-	}
-#endif
-
 // Callback estatico para recibir datos
 std::size_t CurlClient::WriteCallback(void *contents, std::size_t size, std::size_t nmemb, void *userp) {
     /* NULL check defensivo: si por alguna razon userp llega NULL,
@@ -375,14 +422,6 @@ int CurlClient::debug_callback(CURL *handle, curl_infotype type,
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-	//Funcion definida en curl
-	int Curl_gethostname(char *name, size_t namelen);
-
-	//Hacemos un wrapper a la funcion de curl
-	int gethostname(char *name, size_t namelen){
-		return Curl_gethostname(name, namelen);
-	}
 
 	struct hostent* gethostbyaddr(const char* addr, int len, int type) {
 		static struct hostent h;
@@ -494,6 +533,45 @@ extern "C" {
 
         // Delegamos de forma limpia en nuestra función inet_aton ya definida arriba
         return inet_aton(src, (struct in_addr*)dst);
+    }
+
+    // ========================================================================
+    // Stubs de CRT / WinSock / curl que el XDK (Xbox 360) no provee, requeridos
+    // al enlazar libcurl (PPC) y wolfssl (PPC). Implementaciones minimas: las
+    // rutas que los usan (keylog, session cache persistente, multi async,
+    // cookies con nombres UTF-8) no son criticas para el scraping via curl_easy.
+    // ========================================================================
+
+    // wolfSSL: POSIX de string que MSVC nombra con guion bajo
+    int strcasecmp(const char *a, const char *b) { return _stricmp(a, b); }
+    int strncasecmp(const char *a, const char *b, size_t n) { return _strnicmp(a, b, n); }
+    char *strtok_r(char *str, const char *delim, char **ctx) { return strtok_s(str, delim, ctx); }
+    int snprintf(char *buf, size_t n, const char *fmt, ...) {
+        int r; va_list ap; va_start(ap, fmt); r = _vsnprintf(buf, n, fmt, ap); va_end(ap); return r;
+    }
+
+    // curl: CRT no disponible en el XDK
+    char *getenv(const char *name) { (void)name; return NULL; } // Xbox no tiene variables de entorno
+    char *_fullpath(char *absPath, const char *relPath, size_t maxLength) {
+        if (!absPath || !relPath || maxLength == 0) return NULL;
+        strncpy(absPath, relPath, maxLength);
+        absPath[maxLength - 1] = '\0';
+        return absPath;
+    }
+
+    // curl: wrappers WinAPI/curlx (ASCII; el XDK no tiene _wfopen ni estas curlx_*)
+    FILE *curlx_win32_fopen(const char *filename, const char *mode) { return fopen(filename, mode); }
+    int curlx_win32_rename(const char *oldpath, const char *newpath) { return rename(oldpath, newpath); }
+    int curlx_win32_open(const char *filename, int oflag, ...) { (void)filename; (void)oflag; return -1; }
+    int curlx_win32_stat(const char *path, void *buffer) { (void)path; (void)buffer; return -1; }
+    const char *curlx_get_winapi_error(unsigned long err, char *buf, size_t buflen) {
+        if (buf && buflen) { _snprintf(buf, buflen, "winapi error %lu", err); buf[buflen - 1] = '\0'; }
+        return buf;
+    }
+
+    // curl multi: eventos WinSock async (no usados en la ruta curl_easy de Xbox)
+    int WSAEnumNetworkEvents(SOCKET s, void *hEvent, void *lpNetworkEvents) {
+        (void)s; (void)hEvent; (void)lpNetworkEvents; return -1;
     }
 #ifdef __cplusplus
 }

@@ -432,7 +432,7 @@ void TextArea::draw(SDL_Surface *video_page, GameTicks gameTicks){
 */
 void TextArea::draw(SDL_Surface *video_page){
     this->enableScroll = false;
-	GameTicks ticks = {0};
+	GameTicks ticks;
     draw(video_page, ticks);
 }
 

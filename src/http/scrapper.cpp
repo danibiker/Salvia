@@ -15,12 +15,6 @@ HANDLE Scrapper::hMainThread = NULL;
 FilePackage Scrapper::filePackage;
 HANDLE Scrapper::hEventPausa = NULL;
 
-// Caracteres que queremos sustituir por un espacio (para no pegar palabras)
-const char SYMBOLS_TO_SPACE[] = ":-._/\\|,;"; 
-
-// Caracteres que queremos eliminar por completo (ruido)
-const char SYMBOLS_TO_REMOVE[] = "\"\'!?*#¿¡";
-
 Scrapper::Scrapper(){
 	InterlockedExchange(&scrapping, 0);
 	cargarEquivalencias(Constant::getAppDir() + ROUTE_SCRAP_TRANSLATIONS);
@@ -188,7 +182,7 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 		peticion.lenguaPreferida = scrapperConfig.lenguaPreferida;
 			
 		// Escapamos el nombre
-		peticion.romnameUnscaped = limpiarNombreJuego(resultado.filenameNoExt);
+		peticion.romnameUnscaped = Constant::limpiarNombreJuego(resultado.filenameNoExt);
 		peticion.romname = downloader.escape(peticion.romnameUnscaped);
 		
 		if (scrapperConfig.origin == SC_SCREENCSRAPER){
@@ -815,57 +809,6 @@ bool Scrapper::cargarEquivalencias(const std::string& nombreArchivo) {
     }
     file.close();
     return seccionEncontrada;
-}
-
-std::string Scrapper::limpiarNombreJuego(std::string nombre) {
-    std::string temporal = "";
-    int nivelParentesis = 0;
-
-    for (size_t i = 0; i < nombre.length(); ++i) {
-        char c = nombre[i];
-
-        // 1. Gestion de parentesis/corchetes
-        if (c == '(' || c == '[') { nivelParentesis++; continue; }
-        if (c == ')' || c == ']') { if (nivelParentesis > 0) nivelParentesis--; continue; }
-
-        if (nivelParentesis == 0) {
-            // 2. Es un caracter para sustituir por espacio?
-            if (strchr(SYMBOLS_TO_SPACE, c)) {
-                temporal += ' ';
-            }
-            // 3. Es un caracter para eliminar?
-            else if (strchr(SYMBOLS_TO_REMOVE, c)) {
-                continue;
-            }
-            // 4. Caracter normal
-            else {
-                temporal += c;
-            }
-        }
-    }
-
-    // 5. Colapsar espacios multiples y Trim (Limpieza final)
-    std::string resultado = "";
-    bool ultimoFueEspacio = true; // Empezamos en true para evitar espacio al inicio
-
-    for (size_t i = 0; i < temporal.length(); ++i) {
-        if (isspace(temporal[i])) {
-            if (!ultimoFueEspacio) {
-                resultado += ' ';
-                ultimoFueEspacio = true;
-            }
-        } else {
-            resultado += temporal[i];
-            ultimoFueEspacio = false;
-        }
-    }
-
-    // Eliminar el posible espacio final
-    if (!resultado.empty() && resultado[resultado.length()-1] == ' ') {
-        resultado.erase(resultado.length()-1);
-    }
-
-    return resultado;
 }
 
 std::string Scrapper::quitarArticulos(std::string texto) {

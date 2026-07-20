@@ -171,9 +171,17 @@ void Sync::sample_cpu_utilization() {
 #endif
 }
 
-double Sync::limit_fps(double& nextFrameTime) {
+double Sync::limit_fps(double& nextFrameTime, int syncType, GameTicks &gameTicks) {
     double currentTime = Constant::getTicks();
-    float diffTime = (float)(nextFrameTime - currentTime);
+    const float diffTime = (float)(nextFrameTime - currentTime);
+
+	gameTicks.ticks++;
+	gameTicks.dt = (float)(currentTime - gameTicks.lastTime);
+	gameTicks.lastTime = currentTime;
+
+	if (syncType != SYNC_TO_VIDEO){
+		return currentTime;
+	}
 
     // Nota: la metrica de utilizacion CPU se calcula ahora en
     // sample_cpu_utilization() via GetThreadTimes, llamada cada frame

@@ -1,5 +1,6 @@
 #include <algorithm> // Imprescindible para std::sort
 #include <math.h>
+#include <sstream>
 
 #include <menus/gestormenus.h>
 #include <const/constant.h>
@@ -56,16 +57,20 @@ GestorMenus::GestorMenus(int screenw, int screenh){
 	const int box2dW = screenw / 2 - 2 * marginX;
 	const int box2dH = box2dW;
     
-	imageMenu.setX(screenw - box2dW - marginX);
-    imageMenu.setY(getY() + 3);
-    imageMenu.setW(box2dW);
-	imageMenu.setH(box2dH);
+	imageSavestate.setX(screenw - box2dW - marginX);
+    imageSavestate.setY(getY() + 3);
+    imageSavestate.setW(box2dW);
+	imageSavestate.setH(box2dH);
+
+	imageFaq.setX(getX());
+	imageFaq.setY(getY());
+	imageFaq.setW(getW() - marginX);
+	imageFaq.setH(getH());
+
 	askNumOptions = 0;
 	scrapGamesSelection = 1;
 
 	tmpTextOption = NULL;
-
-
 }
 
 GestorMenus::~GestorMenus() {
@@ -82,6 +87,9 @@ GestorMenus::~GestorMenus() {
 	if (tmpTextOption != NULL){
 		SDL_FreeSurface(tmpTextOption);
 	}
+
+	imageSavestate.closeImage();
+	imageFaq.closeImage();
 }
 
 std::string GestorMenus::guardarJoysticks(Joystick* joy){
@@ -233,8 +241,10 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	opcionRAPassword->setPassword(true);
 	parentAchievements->opciones.push_back(opcionRAPassword);
 
+	Menu* menuSearchGamesGuide = new Menu(LanguageManager::instance()->get("menu.guides.title"), face_h_big * 2, this->getW() - marginX, menuRaiz);
+
 	//Este menu no cuelga de ningun lado, pero ponemos partidas guardadas como padre
-	menuAskSavestates = new Menu(LanguageManager::instance()->get("menu.savestates.title"), menuSavestates);
+	menuAskSavestates = new Menu(LanguageManager::instance()->get("menu.guides.search.title"), menuSavestates);
         
     todosLosMenus.push_back(menuRaiz);
     todosLosMenus.push_back(menuVideo);
@@ -245,6 +255,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	todosLosMenus.push_back(menuAskSavestates);
 	todosLosMenus.push_back(menuScrapper);
 	todosLosMenus.push_back(parentAchievements);
+	todosLosMenus.push_back(menuSearchGamesGuide);
 
 	//Poblar menu emulacion
 	//Escalado de video
@@ -410,13 +421,127 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.saves"), menuSavestates, ico_savestates));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.scrapper"), menuScrapper, ico_scrapper));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.achievement.title"), parentAchievements, ico_achievements));
+
+	OpcionSubMenu *submenuSearchGuides = new OpcionSubMenu(LanguageManager::instance()->get("menu.guides.search.title"), menuSearchGamesGuide, ico_help);
+	submenuSearchGuides->callback = &GestorMenus::gameSearchAction;
+	submenuSearchGuides->context = this;
+	menuGuides = new Menu(LanguageManager::instance()->get("menu.guides.title"), face_h_big * 2, this->getW() - marginX, menuSearchGamesGuide);
+	menuGuideText = new Menu(LanguageManager::instance()->get("menu.guides.content"), menuGuides);
+	menuRaiz->opciones.push_back(submenuSearchGuides);
+
 	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, ico_saving, this));
 	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, ico_return, this));
 	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.exit"), &GestorMenus::salirEmulacion, &status, ico_shutdown, this));
-
+	
 	// Establecer estado inicial
     menuActual = menuRaiz;
 	resetIndexPos();
+}
+
+std::string GestorMenus::gameSearchAction(void* inst){
+	GestorMenus* gesMenu = static_cast<GestorMenus*>(inst);
+	GameFaqsMenu* faq = &gesMenu->gameFaqsMenu;
+
+	dirutil dir;
+	std::vector<Opcion*> *list = &gesMenu->menuActual->opciones;
+	LOG_DEBUG("submenu elementos: %d", list->size());
+	std::string filename = Constant::limpiarNombreJuego(dir.getFileNameNoExt(faq->gameName));
+	
+	if (filename.empty()){
+		return LanguageManager::instance()->get("msg.guides.notfound");
+	}
+
+	LOG_DEBUG("Searching faq for: %s", filename.c_str());
+	std::size_t foundGames = faq->gameFaqs.searchGame(filename);
+
+	if (foundGames > 0){
+		list->clear();
+		const std::vector<GameResult> *games = faq->gameFaqs.getGames();
+		for (std::size_t i=0; i < foundGames; i++){
+			LOG_DEBUG("game found: %s", games->at(i).name.c_str());
+			OpcionGameFaq *opcion = new OpcionGameFaq(games->at(i));
+			opcion->callback = &GestorMenus::gameGuidesSearchAction;
+			opcion->context = gesMenu;
+			list->push_back(opcion);
+		}
+	} else {
+		return LanguageManager::instance()->get("msg.guides.notfound");
+	}
+	return "";
+}
+
+/**
+*
+*/
+std::string GestorMenus::gameGuidesSearchAction(void* inst, void *value){
+	GestorMenus* gesMenu = static_cast<GestorMenus*>(inst);
+	const std::vector<Opcion*> *listActual = &gesMenu->menuActual->opciones;
+	const std::size_t actualPos = gesMenu->menuActual->seleccionado;
+	std::vector<Opcion*> *list = &gesMenu->menuGuides->opciones;
+	GameFaqsMenu* faq = &gesMenu->gameFaqsMenu;
+
+	if (actualPos < listActual->size() && listActual->at(actualPos)->tipo == OPC_FAQ_SEARCH){
+		std::size_t foundGuides = faq->gameFaqs.findGuides(gesMenu->menuActual->seleccionado);
+		if (foundGuides > 0){
+			const std::vector<GuidesResult> *guides = faq->gameFaqs.getGuides();
+			int index = -1;
+			list->clear();
+
+			for (std::size_t i=0; i < foundGuides; i++){
+				LOG_DEBUG("guide found: %s", guides->at(i).name.c_str());
+				OpcionFaq *opcion = new OpcionFaq(guides->at(i));
+
+				if (guides->at(i).categ_id != index){
+					index = guides->at(i).categ_id;
+					const std::string categ = faq->gameFaqs.getCategories()->at(index);
+					OpcionFaq *opcionCateg = new OpcionFaq(categ);
+					list->push_back(opcionCateg);
+				}
+
+				opcion->callback = &GestorMenus::gameGuideAction;
+				opcion->context = inst;
+				opcion->valor.guidePos = i;
+				list->push_back(opcion);
+			}
+		}
+	}
+	gesMenu->menuActual = gesMenu->menuGuides;
+	return "";
+}
+
+/**
+*
+*/
+std::string GestorMenus::gameGuideAction(void* inst, void *value){
+	GestorMenus* gesMenu = static_cast<GestorMenus*>(inst);
+	const std::vector<Opcion*> *listActual = &gesMenu->menuActual->opciones;
+	const std::size_t actualPos = gesMenu->menuActual->seleccionado;
+	std::vector<Opcion*> *list = &gesMenu->menuGuideText->opciones;
+	GameFaqsMenu* faq = &gesMenu->gameFaqsMenu;
+
+	LOG_DEBUG("Downloading guide in txt");
+	if (actualPos < listActual->size() && listActual->at(actualPos)->tipo == OPC_FAQ_SELECT){
+		OpcionFaq *opcion = (OpcionFaq *)listActual->at(actualPos);
+		GuideContent guideContent;
+        faq->gameFaqs.getGuideText(opcion->valor.guidePos, guideContent);
+		list->clear();
+
+		if (guideContent.type == GUIDE_TXT){
+			LOG_DEBUG("text guide length: %d", guideContent.text.length());
+			std::stringstream stream(guideContent.text);
+			std::string linea;	
+			// El bucle lee el flujo linea a linea hasta que se termina el texto
+			while (std::getline(stream, linea)) {
+				list->push_back(new OpcionTxt(linea));
+			}
+		} else if (guideContent.type == GUIDE_IMG){
+			LOG_DEBUG("Image url: %s", guideContent.url.c_str());
+			OpcionImage *opcionImage = new OpcionImage(guideContent.url);
+			list->push_back(opcionImage);
+		}
+	}
+	gesMenu->menuActual = gesMenu->menuGuideText;
+	return "";
 }
 
 void GestorMenus::iniciarFiltros(GameDataFields& gameDataFieldsFilter){
@@ -888,7 +1013,7 @@ void GestorMenus::sortAndAddCoreOptions(const std::map<std::string, std::unique_
 */
 void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string rompath){
 	this->lastImagePath = "";
-	imageMenu.closeImage();
+	imageSavestate.closeImage();
 
 	dirutil dir;
 	const std::string statesDir = refConfig->configMain[cfg::libretro_state].valueStr + Constant::getFileSep() +
@@ -1110,12 +1235,21 @@ std::string GestorMenus::confirmar(t_option_action *result) {
 		return e->ejecutar();
 	}
 
+	if ((std::size_t)menuActual->seleccionado >= menuActual->opciones.size()) return "";
+
     Opcion* opt = menuActual->opciones[menuActual->seleccionado];
+
+	if (opt->tipo == OPC_SUBMENU || opt->tipo == OPC_FAQ_SEARCH || opt->tipo == OPC_FAQ_SELECT) {
+		MenuStatus ms = {iniPos, endPos, curPos, maxLines, listSize, menuActual->seleccionado};
+		historyMenu.push_back(ms);
+	}
+
     if (opt->tipo == OPC_SUBMENU) {
         menuActual = ((OpcionSubMenu*)opt)->destino;
-		resetIndexPos();
 		Opcion* e = (Opcion*)opt;
-		return e->ejecutar();
+		std::string ret = e->ejecutar();
+		resetIndexPos();
+		return ret;
     } else if (opt->tipo == OPC_BOOLEANA) {
         cambiarValor(1);
 	} else if (opt->tipo == OPC_KEY) {
@@ -1123,11 +1257,23 @@ std::string GestorMenus::confirmar(t_option_action *result) {
 		k->changeAsked = true;
 		k->lastTimeAsked = SDL_GetTicks();
 		status = POLLING_INPUTS;
-	} else if (opt->tipo == OPC_EXEC || opt->tipo == OPC_SAVESTATE || opt->tipo == OPC_SHOW_TXT || opt->tipo == OPC_SHOW_TXT_VAL) {
+	} else if (opt->tipo == OPC_EXEC || opt->tipo == OPC_SAVESTATE || opt->tipo == OPC_SHOW_TXT || opt->tipo == OPC_SHOW_TXT_VAL 
+		|| opt->tipo == OPC_FAQ_SEARCH || opt->tipo == OPC_FAQ_SELECT) {
 		Opcion* e = (Opcion*)opt;
-		return e->ejecutar();
-	} 
+		std::string ret = e->ejecutar();
 
+		if ((opt->tipo == OPC_FAQ_SEARCH && ((OpcionGameFaq*)opt)->callback != NULL) 
+				|| (opt->tipo == OPC_FAQ_SELECT && ((OpcionFaq*)opt)->callback != NULL)){
+			resetIndexPos();
+		}
+		return ret;
+	} else if (opt->tipo == OPC_SHOW_IMG){
+		const SDL_Rect fr = {0, 0, getW() - marginX, getH()};
+		imageFaq.setTamAuto(!imageFaq.isTamAuto(), fr); 
+	}
+
+	
+	
 	return std::string("");
 }
 
@@ -1146,6 +1292,20 @@ void GestorMenus::volver() {
 
     if (menuActual->padre != NULL) {
         menuActual = menuActual->padre;
+		if (!menuActual->opciones.empty() && !historyMenu.empty()){
+			Opcion* opt = menuActual->opciones.front();
+			if (opt->tipo == OPC_SUBMENU || opt->tipo == OPC_FAQ_SEARCH || opt->tipo == OPC_FAQ_SELECT || opt->tipo == OPC_SHOW_IMG) {
+				MenuStatus ms = historyMenu.back();
+				historyMenu.pop_back();
+				this->iniPos = ms.iniPos;
+				this->endPos = ms.endPos;
+				this->curPos = ms.curPos;
+				this->maxLines = ms.maxLines;
+				this->listSize = ms.listSize;
+				this->menuActual->seleccionado = ms.selectedMenuPos;
+				return;
+			}
+		} 
 		resetIndexPos();
     }
 }
@@ -1309,7 +1469,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
     //a letter is not fixed.
     const float pixelsScrollFps = std::max(ceil(face_h / (float)textFps), 1.0f);
 
-    for (int i=this->iniPos; i < this->endPos; i++){
+	for (int i=this->iniPos; i < this->endPos && i < (int)this->menuActual->opciones.size(); i++){
         const auto& option = this->menuActual->opciones.at(i);
 		std::string line;
 		std::string value;
@@ -1319,6 +1479,15 @@ void GestorMenus::draw(SDL_Surface *video_page){
 			continue;
 		} else if (option->tipo == OPC_ACHIEVEMENT){
 			drawAchievement(i, (OpcionAchievement *) option, video_page);
+			continue;
+		} else if (option->tipo == OPC_FAQ_SEARCH){
+			drawFaqSearch(i, (OpcionGameFaq *) option, video_page);
+			continue;
+		} else if (option->tipo == OPC_FAQ_SELECT){
+			drawFaqSelect(i, (OpcionFaq *) option, video_page);
+			continue;
+		} else if (option->tipo == OPC_SHOW_IMG){
+			drawImage(i, (OpcionImage *) option, video_page);
 			continue;
 		} else if (option->tipo == OPC_BOOLEANA){
 			line = option->titulo;// + " " + std::string(*((OpcionBool *)option)->valor ? "Y" : "N");
@@ -1539,8 +1708,11 @@ void GestorMenus::drawAskMenu(SDL_Surface *video_page) {
 /**
 *
 */
-void GestorMenus::drawSelectionBox(int i, SDL_Surface *video_page, SDL_Color& lineTextColor){
-	int face_h = menuActual->rowHeight;
+void GestorMenus::drawSelectionBox(int i, SDL_Surface *video_page, SDL_Color& lineTextColor, int face_h){
+	if (face_h == 0){
+		face_h = menuActual->rowHeight;
+	}
+
 	const int screenPos = i - this->iniPos;
     const int fontHeightRect = screenPos * face_h;
 	lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
@@ -1558,6 +1730,68 @@ void GestorMenus::drawSelectionBox(int i, SDL_Surface *video_page, SDL_Color& li
 		//Drawing the selection menu
 		rect(video_page, rectElem.x - 1, rectElem.y - 1, rectElem.x + rectElem.w, rectElem.y + rectElem.h, Constant::colors[clBkgMenu].sdlColor);
     } 
+}
+
+/**
+*
+*/
+void GestorMenus::drawFaqSearch(int i, OpcionGameFaq *opcion, SDL_Surface *video_page){
+	const GameResult *gameResult = &opcion->valor;
+	const int screenPos = i - this->iniPos;
+	const int face_h = this->menuActual->rowHeight;
+	const int fontHeightRect = screenPos * face_h;
+	SDL_Color lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
+	
+	drawSelectionBox(i, video_page, lineTextColor, face_h);
+
+	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+	TTF_Font *fontSmall = Fonts::getFont(Fonts::FONTSMALL);
+
+	Fonts::drawTextTransparent(video_page, fontMenu, gameResult->name.c_str(), this->getX() + marginX, 
+            this->getY() + fontHeightRect, lineTextColor, 0);
+
+	std::string details = gameResult->platform + " (" + gameResult->info + ")";
+
+	Fonts::drawTextTransparent(video_page, fontSmall, details.c_str(), this->getX() + marginX, 
+		this->getY() + fontHeightRect + face_h_big, lineTextColor, 0);
+}
+
+/**
+*
+*/
+void GestorMenus::drawFaqSelect(int i, OpcionFaq *opcion, SDL_Surface *video_page){
+	const GuidesResult *guideResult = &opcion->valor;
+	const int screenPos = i - this->iniPos;
+	const int face_h = this->menuActual->rowHeight;
+	const int fontHeightRect = screenPos * face_h;
+	SDL_Color lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
+	
+	drawSelectionBox(i, video_page, lineTextColor, face_h);
+
+	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
+	TTF_Font *fontSmall = Fonts::getFont(Fonts::FONTSMALL);
+
+	if (guideResult->categ_id >= 0){
+		Fonts::drawTextTransparent(video_page, fontMenu, guideResult->name.c_str(), this->getX() + marginX, 
+            this->getY() + fontHeightRect, lineTextColor, 0);
+
+		std::string details = guideResult->author + " (" + (guideResult->platform.empty() ? "" : (guideResult->platform + ", ")) + guideResult->year + ")";
+
+		Fonts::drawTextTransparent(video_page, fontSmall, details.c_str(), this->getX() + marginX, 
+		this->getY() + fontHeightRect + face_h_big, lineTextColor, 0);
+	} else {
+		const std::string s = "----- " + guideResult->name + " -----";
+		Fonts::drawTextTransparent(video_page, fontMenu, s.c_str(), this->getX() + marginX, 
+            this->getY() + fontHeightRect + (face_h - face_h_big) / 2, i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clBlue].sdlColor);
+	}
+}
+
+void GestorMenus::drawImage(int i, OpcionImage *opcion, SDL_Surface *video_page){
+	if (!imageFaq.hasImage() || opcion->url != imageFaq.getFilepath()){
+		gameFaqsMenu.gameFaqs.getImage(opcion->url, imageFaq, video_page->format);
+		LOG_DEBUG("Downloading image: %s", opcion->url.c_str());
+	} 
+	imageFaq.printImage(video_page);
 }
 
 /**
@@ -1639,8 +1873,8 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 		if (!opcion->file.modificationTime.empty()){
 			//Drawing below the image
 			Fonts::drawTextTransparent(video_page, fontSmall, std::string(LanguageManager::instance()->get("menu.savestate.latestsave") 
-				+ opcion->file.modificationTime).c_str(), imageMenu.getX(), 
-                imageMenu.getY() + imageMenu.getH() + 2, Constant::colors[clWhite].sdlColor, 0);
+				+ opcion->file.modificationTime).c_str(), imageSavestate.getX(), 
+                imageSavestate.getY() + imageSavestate.getH() + 2, Constant::colors[clWhite].sdlColor, 0);
 		}
     } else {
 		if (opcion->file.modificationTime.empty()){
@@ -1660,7 +1894,7 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 		//Filtramos nombres largos o caracteres extranyos
 		rutaImg = Constant::checkPath(rutaImg);
 		#endif
-		imageMenu.loadImage(rutaImg);
+		imageSavestate.loadImage(rutaImg);
 		lastImagePath = opcion->file.filename;
 	}
 
@@ -1671,9 +1905,9 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 	}
 	
 	if (!rutaSelected.empty() && !opcion->file.modificationTime.empty()){
-		imageMenu.printImage(video_page);
+		imageSavestate.printImage(video_page);
 	}
-	//rect(video_page, imageMenu.getX(), imageMenu.getY(), imageMenu.getX() + imageMenu.getW(), imageMenu.getY() + imageMenu.getH(), white);
+	//rect(video_page, imageSavestate.getX(), imageSavestate.getY(), imageSavestate.getX() + imageSavestate.getW(), imageSavestate.getY() + imageSavestate.getH(), white);
 }
 
 /**
@@ -1681,7 +1915,7 @@ void GestorMenus::drawSavestateWithImage(int i, OpcionSavestate *opcion, SDL_Sur
 */
 int GestorMenus::getScreenNumLines(){
 	if (this->menuActual != NULL){
-		const int face_h = this->menuActual->rowHeight;
+		int face_h = this->menuActual->rowHeight;
 		return face_h != 0 ? (int)std::floor((double)getH() / face_h) : 0;
 	}
 	return 0;
@@ -1708,26 +1942,9 @@ void GestorMenus::resetIndexPos(){
 	}
 }
 
-/**
-void GestorMenus::nextPos(){
-	this->navegar(1);
-	this->curPos = menuActual->seleccionado;
-}
-
-void GestorMenus::prevPos(){
-	this->navegar(-1);
-	this->curPos = menuActual->seleccionado;
-}
-*/
-
 // Logica de navegacion Arriba/Abajo
 void GestorMenus::navegar(int dir) { // -1 o 1
     if (!menuActual || status == POLLING_INPUTS || status == ASK_SAVESTATES) return;
-
-    /*int num = (int)menuActual->opciones.size();
-	if (num > 0){
-		menuActual->seleccionado = (menuActual->seleccionado + dir + num) % num;
-	}*/
 
 	if (dir > 0){
 		if (this->curPos < this->listSize - 1){
@@ -1763,6 +1980,18 @@ void GestorMenus::nextPos(){
 
 void GestorMenus::prevPos(){
     navegar(-1);
+}
+
+void GestorMenus::nextPage(){
+    for (int i=0; i < this->maxLines -1; i++){
+        nextPos();
+    }
+}
+
+void GestorMenus::prevPage(){
+    for (int i=0; i < this->maxLines -1; i++){
+        prevPos();
+    }
 }
 
 void GestorMenus::volverMenuInicial(){

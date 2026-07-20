@@ -331,6 +331,7 @@ typedef enum {
 		ico_scrapper,
 		ico_achievements,
 		ico_shutdown,
+		ico_help,
 		max_icons
 }enumIco;
 
@@ -378,6 +379,8 @@ extern std::string SDL_HAT_TO_XBOX[9];
 extern std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
 extern const std::string SCRAPPING_DAT;
 extern const std::string PASS_MASK;
+extern const char SYMBOLS_TO_SPACE[];
+extern const char SYMBOLS_TO_REMOVE[];
 
 typedef enum {
     launch_system,          //0
@@ -386,7 +389,7 @@ typedef enum {
     launch_batch
 } launchMethods;
 
-enum {
+enum SYNC_TYPES{
 	SYNC_TO_AUDIO = 0,
 	SYNC_TO_VIDEO,
 	SYNC_NONE,
@@ -852,6 +855,57 @@ class Constant{
 			}
 
 			return value;
+		}
+
+		static std::string limpiarNombreJuego(std::string nombre) {
+			std::string temporal = "";
+			int nivelParentesis = 0;
+
+			for (std::size_t i = 0; i < nombre.length(); ++i) {
+				char c = nombre[i];
+
+				// 1. Gestion de parentesis/corchetes
+				if (c == '(' || c == '[') { nivelParentesis++; continue; }
+				if (c == ')' || c == ']') { if (nivelParentesis > 0) nivelParentesis--; continue; }
+
+				if (nivelParentesis == 0) {
+					// 2. Es un caracter para sustituir por espacio?
+					if (strchr(SYMBOLS_TO_SPACE, c)) {
+						temporal += ' ';
+					}
+					// 3. Es un caracter para eliminar?
+					else if (strchr(SYMBOLS_TO_REMOVE, c)) {
+						continue;
+					}
+					// 4. Caracter normal
+					else {
+						temporal += c;
+					}
+				}
+			}
+
+			// 5. Colapsar espacios multiples y Trim (Limpieza final)
+			std::string resultado = "";
+			bool ultimoFueEspacio = true; // Empezamos en true para evitar espacio al inicio
+
+			for (std::size_t i = 0; i < temporal.length(); ++i) {
+				if (isspace(temporal[i])) {
+					if (!ultimoFueEspacio) {
+						resultado += ' ';
+						ultimoFueEspacio = true;
+					}
+				} else {
+					resultado += temporal[i];
+					ultimoFueEspacio = false;
+				}
+			}
+
+			// Eliminar el posible espacio final
+			if (!resultado.empty() && resultado[resultado.length()-1] == ' ') {
+				resultado.erase(resultado.length()-1);
+			}
+
+			return resultado;
 		}
 
         static void setExecMethod(int var){EXEC_METHOD = var;}

@@ -37,6 +37,8 @@ void Image::init(){
     this->setY(0);
     this->setW(0);
     this->setH(0);
+	targetX = 0;
+	targetY = 0;
 	keepAlpha = false;
 	drawShadow = false;
 }
@@ -69,6 +71,10 @@ bool Image::closeImage(){
     }
 	filepath = "";
 	clearShadows();
+	targetX = 0;
+	targetY = 0;
+	fitRect.x = 0;
+	fitRect.y = 0;
 	return true;
 }
 
@@ -115,22 +121,11 @@ SDL_Surface* Image::loadConvertedSurfaceFromMem(const unsigned char* buffer, std
 /* Atomico: reemplaza img/cachedSurface por newSurface, libera lo anterior.
  * Llamar bajo el lock externo que protege printImage(). */
 void Image::adoptSurface(SDL_Surface* newSurface, const std::string& newPath) {
-    if (img != NULL) {
-        SDL_FreeSurface(img);
-        img = NULL;
-    }
-    if (cachedSurface != NULL) {
-        SDL_FreeSurface(cachedSurface);
-        cachedSurface = NULL;
-    }
-	clearShadows();
-
+	closeImage();
     if (newSurface) {
         img = newSurface;
         filepath = newPath;
-    } else {
-        filepath = "";
-    }
+    } 
 }
 
 void Image::cloneSurface(SDL_Surface* newSurface, const std::string& newPath, SDL_PixelFormat* format) {
@@ -239,9 +234,9 @@ void Image::printImage(SDL_Surface *video_page){
             }
             stretch_blit_sdl(img, video_page, 0, 0, img->w, img->h, this->getX() + newOffset.w, this->getY() + newOffset.h, newDim.w, newDim.h);
         } else {
-            stretch_blit_sdl(img, video_page, 0, 0, img->w, img->h, this->getX(), this->getY(), this->getW(), this->getH());
+            normal_blit_sdl(img, video_page, this->getX(), this->getY(), this->getW(), this->getH());
         }
-		//rect(video_page, getX(), getY(), getX() + getW(), getY() + getH(), Constant::colors[clWhite].sdlColor);
+
 		if (drawShadow)
 			printShadow(video_page);
     }
@@ -352,6 +347,88 @@ Dimension Image::centrado(const Dimension &src, const Dimension &dst) {
     offset.h = (dst.h - src.h) >> 1; // El desplazamiento de bits (>> 1) es igual a / 2
     offset.w = (dst.w - src.w) >> 1;
     return offset;
+}
+
+void Image::normal_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
+                            int dst_x, int dst_y, int dst_w, int dst_h) {
+	if (src != NULL){
+		SDL_Rect dstRect = {dst_x, dst_y, dst_w, dst_h};
+		if (!tamAuto){
+			if (dst_w > src->w)
+				dstRect.x += (dst_w - src->w) / 2;
+			if (dst_h > src->h)
+				dstRect.y += (dst_h - src->h) / 2;
+		}
+		SDL_BlitSurface(src, &fitRect, dest, &dstRect);
+	}
+}
+
+void Image::setTamAuto(bool b, const SDL_Rect &fr){
+	tamAuto = b;
+	if (!tamAuto){
+		fitRect.x = fr.x;
+		fitRect.y = fr.y;
+		fitRect.w = fr.w;
+		fitRect.h = fr.h;
+	}
+}
+
+void Image::softMove(const float &dt, const int &button){
+	if (img == NULL) return;
+
+	// CALCULAR LOS INCREMENTOS (5% del tamaño de la pantalla/contenedor)
+	const float incrementX = img->w * 0.05f;
+	const float incrementY = img->h * 0.05f;
+
+	bool itup	 = button == JOY_BUTTON_UP || button == JOY_BUTTON_UPLEFT || button == JOY_BUTTON_UPRIGHT;
+	bool itdown  = button == JOY_BUTTON_DOWN || button == JOY_BUTTON_DOWNLEFT || button == JOY_BUTTON_DOWNRIGHT;
+	bool itleft  = button == JOY_BUTTON_LEFT || button == JOY_BUTTON_DOWNLEFT || button == JOY_BUTTON_UPLEFT;
+	bool itright = button == JOY_BUTTON_RIGHT || button == JOY_BUTTON_DOWNRIGHT || button == JOY_BUTTON_UPRIGHT;
+
+	// REGISTRAR LOS TAPS (Modifican el destino, no la posición actual)
+	if (itup){
+		targetY -= incrementY;
+	} else if (itdown){
+		targetY += incrementY;
+	}
+
+	if (itleft){
+		targetX -= incrementX;
+	} else if (itright){
+		targetX += incrementX;
+	}
+
+	// CONTROL DE LÍMITES SOBRE EL DESTINO
+	if (targetX < 0) targetX = 0;
+	if (targetY < 0) targetY = 0;
+
+	if (targetX + fitRect.w > img->w) {
+		targetX = (float)(img->w - fitRect.w);
+	}
+	if (targetY + fitRect.h > img->h) {
+		targetY = (float)(img->h - fitRect.h);
+	}
+
+	// CONTROL DE LÍMITES SOBRE EL DESTINO
+	if (targetX < 0) targetX = 0;
+	if (targetY < 0) targetY = 0;
+
+	// INTERPOLACIÓN SUAVE CON DELTA TIME EN SEGUNDOS
+	// Convertimos los milisegundos (ej: 17) a fracciones de segundo (ej: 0.017)
+	float dtSegundos = dt / 1000.0f; 
+	const float easingFactor = 10.0f; // Fuerza del suavizado (mayor número = más rápido)
+
+	// Calculamos las posiciones intermedias de este frame
+	float currentX = fitRect.x + (targetX - fitRect.x) * easingFactor * dtSegundos;
+	float currentY = fitRect.y + (targetY - fitRect.y) * easingFactor * dtSegundos;
+
+	// Evitamos temblores o saltos infinitos cuando esté extremadamente cerca del destino
+	if (fabsf(targetX - currentX) < 0.1f) currentX = targetX;
+	if (fabsf(targetY - currentY) < 0.1f) currentY = targetY;
+
+	// ASIGNAR LAS POSICIONES VISUALES FINALES
+	fitRect.x = (Sint16)currentX;
+	fitRect.y = (Sint16)currentY;
 }
 
 void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,

@@ -2171,12 +2171,12 @@ void GameMenu::setRomPaths(std::string rp){
 	dirutil dir;
 	romPaths.rompath = rp;
 	const std::string coreName = getCfgLoader()->configMain[cfg::libretro_core].valueStr;
-
 	std::string statesDir = getCfgLoader()->configMain[cfg::libretro_state].valueStr + Constant::getFileSep() + coreName;
 			
 	if (!dir.dirExists(statesDir.c_str())){
 		dir.createDirRecursive(statesDir.c_str());
 	}
+
 	romPaths.savestate = statesDir + Constant::getFileSep() + 
 		dir.getFileNameNoExt(rp) + STATE_EXT;
 
@@ -2198,6 +2198,9 @@ void GameMenu::setRomPaths(std::string rp){
 		std::string rutaIni = Constant::getAppDir() + Constant::getFileSep() + RETROPAD_INI;
 		joystick->loadButtonsRetro(rutaIni);
 	}
+
+	//Setting the romname to the Faqs downloader menu
+	configMenus->setGameLoaded(rp);
 }
 
 std::string GameMenu::getSramPath(){

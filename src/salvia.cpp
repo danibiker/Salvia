@@ -3,6 +3,7 @@
 #include "salvia.h"
 #include <http/httputil.h>
 #include <http/scrapper.h>
+#include <http/gamefaqs.h>
 
 // Puente entre los eventos SDL del frontend y el callback de teclado que
 // el core ha registrado via RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK. La
@@ -1606,10 +1607,7 @@ static void __declspec(noinline) runGameLoop() {
 
 			gameMenu->processFrontendEventsAfter();
 			salviaFlip(gameMenu->gameScreen);
-			if (*gameMenu->current_sync == SYNC_TO_VIDEO){
-				gameMenu->sync->limit_fps(nextFrameTime);
-			}
-			gameMenu->gameTicks.ticks++;
+			gameMenu->sync->limit_fps(nextFrameTime, *gameMenu->current_sync, gameMenu->gameTicks);
 		}
 	} __except (LogCrash(GetExceptionCode(), GetExceptionInformation())) {
 		printAndDelay();
@@ -1669,3 +1667,30 @@ int main(int argc, char *argv[]) {
 	closeResources();
     return 0;
 }
+
+//int main(int argc, char *argv[]) {
+//
+//	initPathAndLog(argv);
+//	cfgLoader = new CfgLoader();
+//
+//	if (cfgLoader->isDebug()){
+//		#ifndef DEBUG_LOG
+//		#define DEBUG_LOG
+//		#endif
+//        logger->errorLevel = L_DEBUG;
+//    }
+//
+//	LOG_DEBUG("appdir: %s\n", Constant::getAppDir().c_str());
+//	LOG_DEBUG("appexe: %s\n", Constant::getAppExecutable().c_str());
+//
+//	GameFaqs gameFaqs;
+//	int foundGames = gameFaqs.searchGame("Legend of Zelda, The_ A Link to the Past");
+//	if (foundGames > 0){
+//		if (gameFaqs.findGuides(0) > 0){
+//			gameFaqs.getGuideText(0);
+//		}
+//	}
+//
+//	//gameFaqs.runAllTests();
+//	return 0;
+//}

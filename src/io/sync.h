@@ -3,6 +3,8 @@
 #include <const/constant.h>
 #include <stdint.h>
 
+#include <beans/structures.h>
+
 //Only to set the number of frames to count on a buffer
 #define FPS_AVG_COUNT 20
 #define FPS_DESIRED 60
@@ -49,5 +51,5 @@ public:
     void initAverages(uint32_t);
     void update_fps_counter(bool, uint32_t);
     void sample_cpu_utilization();  // llamado por updateFps cada frame
-    double limit_fps(double&);
+    double limit_fps(double&, int syncType, GameTicks &gameTicks);
 };
