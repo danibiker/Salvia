@@ -27,7 +27,7 @@
 
 #define GLOBAL_INIT_IS_THREADSAFE
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 
 #define curl_simple_lock      SRWLOCK
 #define CURL_SIMPLE_LOCK_INIT SRWLOCK_INIT

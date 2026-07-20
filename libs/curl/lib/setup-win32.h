@@ -57,6 +57,10 @@
 #  define SEND_TYPE_ARG1 int
 #  undef SEND_TYPE_ARG3
 #  define SEND_TYPE_ARG3 size_t
+#elif defined(_XBOX)
+  /* Xbox 360: use XDK headers which provide socket types via winsockx.h */
+#  define USE_WINSOCK 2
+#  include <xtl.h>
 #elif defined(_WIN32)
 #  define USE_WINSOCK 2
 #  include <winsock2.h>
@@ -71,7 +75,7 @@
  * <sys/socket.h>) and the Winsock headers should never be included when
  * __CYGWIN__ is defined.
  */
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 #  if defined(UNICODE) && !defined(_UNICODE)
 #    error "UNICODE is defined but _UNICODE is not defined"
 #  endif

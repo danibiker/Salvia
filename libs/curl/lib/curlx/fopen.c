@@ -38,7 +38,7 @@ int curlx_fseek(void *stream, curl_off_t offset, int whence)
 #endif
 }
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 
 #include <share.h>  /* for _SH_DENYNO */
 

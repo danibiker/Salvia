@@ -33,7 +33,7 @@
 #include "rand.h"
 #include "escape.h"
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 #include <bcrypt.h>
 #ifndef STATUS_SUCCESS
 #define STATUS_SUCCESS ((NTSTATUS)0x00000000L)

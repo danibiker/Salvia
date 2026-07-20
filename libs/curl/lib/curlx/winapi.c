@@ -27,7 +27,7 @@
  * curlx_winapi_strerror:
  * Variant of curlx_strerror if the error code is definitely Windows API.
  */
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 #include "curlx/winapi.h"
 #include "curlx/snprintf.h"
 #include "curlx/strcopy.h"

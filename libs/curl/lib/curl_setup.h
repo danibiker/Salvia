@@ -677,7 +677,7 @@
 #endif /* _WIN32 */
 
 /* We want to use mutex when available. */
-#if defined(HAVE_THREADS_POSIX) || defined(_WIN32)
+#if defined(HAVE_THREADS_POSIX) || (defined(_WIN32) && !defined(_XBOX))
 #define USE_MUTEX
 #endif
 
