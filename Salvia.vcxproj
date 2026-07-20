@@ -714,15 +714,13 @@
     <COMMON_PREPROCESSOR>_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB;RC_NO_THREADS;RC_CLIENT_SUPPORTS_HASH</COMMON_PREPROCESSOR>
     <COMMON_PREPROCESSOR_DEBUG>NDEBUG;DEBUG_LOG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_DEBUG>
     <COMMON_PREPROCESSOR_RELEASE>NDEBUG;$(COMMON_PREPROCESSOR)</COMMON_PREPROCESSOR_RELEASE>
-    <COMMON_LIBS_XBOX_D>xnet.lib;xapilib.lib;xboxkrnl.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;libcurl.lib;wolfssl.lib</COMMON_LIBS_XBOX_D>
-    <COMMON_LIBS_XBOX_R>xnet.lib;xapilib.lib;xboxkrnl.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;libcurl.lib;wolfssl.lib</COMMON_LIBS_XBOX_R>
-    <COMMON_LIBS_XBOX_DEBUG>$(COMMON_LIBS_XBOX_D)</COMMON_LIBS_XBOX_DEBUG>
-    <COMMON_LIBS_XBOX_RELEASE>$(COMMON_LIBS_XBOX_R)</COMMON_LIBS_XBOX_RELEASE>
+    <COMMON_LIBS_XBOX_DEBUG>xnet.lib;xapilib.lib;xboxkrnl.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;libcurl.lib;wolfssl.lib</COMMON_LIBS_XBOX_DEBUG>
+    <COMMON_LIBS_XBOX_RELEASE>xnet.lib;xapilib.lib;xboxkrnl.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xaudio2.lib;xact3.lib;x3daudio.lib;xmcore.lib;vcomp.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;libcurl.lib;wolfssl.lib</COMMON_LIBS_XBOX_RELEASE>
     <COMMON_LIBS_WIN>SDLmain.lib;SDL.lib;SDL_ttf.lib;SDL_image.lib;libcurl.lib;wolfssl.lib;ws2_32.lib;advapi32.lib;bcrypt.lib;Shell32.lib;winmm.lib;d3d9.lib;d3dx9.lib</COMMON_LIBS_WIN>
-    <ADDITIONAL_LIB_DIRS_WIN>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;D:\develop\Github\xbox360\project\curl\projects\Windows\VC10\lib\Win32\LIB Release - wolfSSL;$(DXSDK_DIR)Lib\x86;D:\develop\Github\xbox360\project\wolfssl\IDE\XBOX360\Release\Win32</ADDITIONAL_LIB_DIRS_WIN>
-    <ADDITIONAL_LIB_DIRS_XBOX_D>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;D:\develop\Github\xbox360\project\curl\projects\Windows\VC10\lib\Xbox 360\LIB Release - wolfSSL;D:\develop\Github\xbox360\project\wolfssl\IDE\XBOX360\Release\Xbox 360</ADDITIONAL_LIB_DIRS_XBOX_D>
-    <ADDITIONAL_INCLUDE_DIRS_WIN>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;D:\develop\Github\xbox360\project\curl\include;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include;$(DXSDK_DIR)Include</ADDITIONAL_INCLUDE_DIRS_WIN>
-    <ADDITIONAL_INCLUDE_DIRS_XBOX>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;D:\develop\Github\xbox360\project\curl\include;D:\develop\Github\xbox360\project\wolfssl;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include</ADDITIONAL_INCLUDE_DIRS_XBOX>
+    <ADDITIONAL_LIB_DIRS_WIN>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\sdl_image-devel-1.2.12\lib\x86;$(ProjectDir)libs\curl\projects\Windows\VC10\lib\Win32\Release;$(DXSDK_DIR)Lib\x86;$(ProjectDir)libs\wolfssl\IDE\XBOX360\Release\Win32</ADDITIONAL_LIB_DIRS_WIN>
+    <ADDITIONAL_LIB_DIRS_XBOX>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\wolfssl\IDE\XBOX360\Release\Xbox 360;$(ProjectDir)libs\curl\projects\Windows\VC10\lib\Xbox 360\Release</ADDITIONAL_LIB_DIRS_XBOX>
+    <ADDITIONAL_INCLUDE_DIRS_WIN>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\src\unzip\minizip-1.2.5;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\sdl_image-devel-1.2.12\include;$(ProjectDir)libs\curl\include;$(ProjectDir)libs\wolfssl;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include;$(DXSDK_DIR)Include</ADDITIONAL_INCLUDE_DIRS_WIN>
+    <ADDITIONAL_INCLUDE_DIRS_XBOX>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)libs\curl\include;$(ProjectDir)libs\wolfssl;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include</ADDITIONAL_INCLUDE_DIRS_XBOX>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
@@ -1335,7 +1333,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);Genesis-Plus-GX.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX_D);$(ProjectDir)libretro\genesis-plus-gx\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\genesis-plus-gx\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1382,7 +1380,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);tyrquake.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\tyrquake\tyrquake\Debug</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\tyrquake\tyrquake\Debug</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1429,7 +1427,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);tyrquake.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\tyrquake\tyrquake\Release\Xbox 360\</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\tyrquake\tyrquake\Release\Xbox 360\</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1483,7 +1481,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);dosbox-pure.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Debug\Xbox 360;$(ProjectDir)..\mame2003-plus-libretro\build\Xbox 360\Debug;$(ProjectDir)libretro\dosbox-pure\vs2010\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\dosbox-pure\vs2010\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>false</OptimizeReferences>
@@ -1534,7 +1532,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);dosbox-pure.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\dosbox-pure\vs2010\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\dosbox-pure\vs2010\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1574,7 +1572,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);mednafen_supergrafx_libretro_xbox360.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Debug\Xbox 360;$(ProjectDir)libretro\beetle-supergrafx\msvc\build\Xbox 360\Debug</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\beetle-supergrafx\msvc\build\Xbox 360\Debug</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1613,7 +1611,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);picodrive.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Debug\Xbox 360;$(ProjectDir)libretro\picodrive\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\picodrive\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1646,7 +1644,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);beetle-psx-libretro.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;../../project/Genesis-Plus-GX/Debug/Xbox 360;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1679,7 +1677,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);pcsx_rearmed.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;../../project/pcsx_rearmed/Debug/Xbox 360;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1714,7 +1712,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);beetle-psx-libretro.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;../../project/beetle-psx-libretro/Release/Xbox 360;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1751,7 +1749,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);nestopia.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\nestopia\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\nestopia\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1785,7 +1783,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);snes9x2010.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Debug\Xbox 360;$(ProjectDir)libretro\snes9x2010\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\snes9x2010\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1822,7 +1820,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);Snes9x.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Debug\Xbox 360;$(SolutionDir)libretro\snes9x\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(SolutionDir)libretro\snes9x\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1857,7 +1855,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);vba-next.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Debug\Xbox 360;$(ProjectDir)libretro\vba-next\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\vba-next\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1892,7 +1890,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);beetle-pce-libretro.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Debug\Xbox 360;$(ProjectDir)libretro\beetle-pce\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\beetle-pce\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1926,7 +1924,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);beetle-pce-fast-libretro.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Debug\Xbox 360;$(SolutionDir)libretro\beetle-pce-fast\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(SolutionDir)libretro\beetle-pce-fast\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -1968,7 +1966,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);snes9x2010.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(SolutionDir)libretro\snes9x2010\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(SolutionDir)libretro\snes9x2010\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2009,7 +2007,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);snes9x.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\snes9x\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\snes9x\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2049,7 +2047,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);nestopia.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\nestopia\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\nestopia\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2090,7 +2088,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);gambatte-libretro.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\gambatte\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\gambatte\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>XAPI.lib</IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -2130,7 +2128,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);gambatte-libretro.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\gambatte\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\gambatte\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>XAPI.lib</IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -2171,7 +2169,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);Genesis-Plus-GX.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\genesis-plus-gx\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\genesis-plus-gx\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2213,7 +2211,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);opera.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\opera-libretro\opera\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\opera-libretro\opera\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2255,7 +2253,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);3dox_libretro.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\3dox\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\3dox\Release</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2296,7 +2294,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);prboom_libretro_xdk360.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\prboom\msvc2010\bin\Xbox360\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\prboom\msvc2010\bin\Xbox360\Release</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2335,7 +2333,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);Genesis-Plus-GX.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\genesis-plus-gx\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\genesis-plus-gx\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
     </Link>
@@ -2373,7 +2371,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);mame2003_plus_libretro_xdk360.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\mame-2003-plus\build\Xbox 360\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\mame-2003-plus\build\Xbox 360\Release</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2417,7 +2415,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);libretro.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2462,7 +2460,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);fb_alpha_libretro_xdk360.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\fbanext\projectfiles\visualstudio-2010-libretro-360\Release\</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\fbanext\projectfiles\visualstudio-2010-libretro-360\Release\</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2507,7 +2505,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);fba_vs2010_libretro_360.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Debug\Xbox 360;$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\FBNeo\projectfiles\visualstudio-2010-libretro-360\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2553,7 +2551,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);mame2003_plus_libretro_xdk360.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Debug;libs/SDL_ttf360/Debug;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Debug\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-debug-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Debug\Xbox 360;$(ProjectDir)libretro\mame-2003-plus\build\Xbox 360\Debug</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\mame-2003-plus\build\Xbox 360\Debug</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <GenerateMapFile>true</GenerateMapFile>
@@ -2595,7 +2593,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);picodrive.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libretro\picodrive\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\picodrive\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -2634,7 +2632,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);pcsx_rearmed.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)..\pcsx_rearmed_working\Debug\Xbox 360;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)..\pcsx_rearmed_working\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
     </Link>
@@ -2670,7 +2668,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);pcsx_rearmed_libretro_xbox360.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)..\pcsx_rearmed_ppc\xbox360\build\Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)..\pcsx_rearmed_ppc\xbox360\build\Release</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
     </Link>
@@ -2712,7 +2710,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);pcsxr.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs\SDLx360\SDL\Release;libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;__$(ProjectDir)..\pcsx_rearmed_last_hope\msvc\Release;$(ProjectDir)libretro\pcsxr-360\360\Xdk\pcsxr\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\pcsxr-360\360\Xdk\pcsxr\Release</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
@@ -2759,7 +2757,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);pcsxr.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>libs\SDLx360\SDL\Release;libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\pcsxr-360\360\Xdk\pcsxr\Debug</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\pcsxr-360\360\Xdk\pcsxr\Debug</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
@@ -4202,7 +4200,7 @@
       <StringPooling>true</StringPooling>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\vba-next\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\vba-next\Release\Xbox 360</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);vba-next.lib</AdditionalDependencies>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -4230,7 +4228,7 @@
       <StringPooling>true</StringPooling>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\beetle-pce-fast\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\beetle-pce-fast\Release\Xbox 360</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);beetle-pce-fast-libretro.lib</AdditionalDependencies>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <OptimizeReferences>true</OptimizeReferences>
@@ -4261,7 +4259,7 @@
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\beetle-pce\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\beetle-pce\Release\Xbox 360</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);beetle-pce-libretro.lib</AdditionalDependencies>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -4293,7 +4291,7 @@
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>libs/libSDLx360/Release;libs/SDL_ttf360/Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\curl-7.50.1\builds\libcurl-vc10-PPCBE-release-static-obj-lib;$(ProjectDir)\libs\mbedtls\visualc\VS2010\Release\Xbox 360;$(ProjectDir)libretro\beetle-supergrafx\msvc\build\Xbox 360\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\beetle-supergrafx\msvc\build\Xbox 360\Release</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);mednafen_supergrafx_libretro_xbox360.lib</AdditionalDependencies>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <GenerateDebugInformation>false</GenerateDebugInformation>

@@ -112,49 +112,6 @@ int inet_pton(int af, const char *src, void *dst)
 }
 #endif
 
-#elif defined(_XBOX)
-struct hostent *gethostbyname(const char *name)
-{
-   static struct in_addr addr = {0};
-   static struct hostent he   = {0};
-   WSAEVENT event;
-   XNDNS          *dns = NULL;
-   struct hostent *ret = NULL;
-
-   if (!name)
-      return NULL;
-
-   event = WSACreateEvent();
-
-   XNetDnsLookup(name, event, &dns);
-   if (!dns)
-   {
-      WSACloseEvent(event);
-      return NULL;
-   }
-
-   WaitForSingleObject((HANDLE)event, INFINITE);
-
-   if (!dns->iStatus)
-   {
-      memcpy(&addr, dns->aina, sizeof(addr));
-
-      he.h_name      = NULL;
-      he.h_aliases   = NULL;
-      he.h_addrtype  = AF_INET;
-      he.h_length    = sizeof(addr);
-      he.h_addr_list = &he.h_addr;
-      he.h_addr      = (char*)&addr;
-
-      ret = &he;
-   }
-
-   WSACloseEvent(event);
-   XNetDnsRelease(dns);
-
-   return ret;
-}
-
 #elif defined(VITA)
 #define COMPAT_NET_INIT_SIZE 0x80000
 

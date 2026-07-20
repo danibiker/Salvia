@@ -382,9 +382,6 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 int inet_pton(int af, const char *src, void *dst);
 #endif
 
-#elif defined(_XBOX)
-struct hostent *gethostbyname(const char *name);
-
 #elif defined(VITA)
 char *inet_ntoa(struct in_addr in);
 int inet_aton(const char *cp, struct in_addr *inp);
