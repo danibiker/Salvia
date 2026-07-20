@@ -8,19 +8,23 @@
 #include <font/fonts.h>
 #include <http/badgedownloader.h>
 #include <const/cfgconst.h>
+#include <http/gamefaqs.h>
 
 #include <iostream>
 #include <vector>
 #include <string>
 
 // --- Definición de tipos de opciones ---
-enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_LISTA_REF, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SAVESTATE, OPC_ACHIEVEMENT};
+enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_LISTA_REF, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SAVESTATE, OPC_ACHIEVEMENT, 
+	OPC_FAQ_SEARCH, OPC_FAQ_SELECT, OPC_FAQ_TXT, OPC_SHOW_IMG, OPC_UNDEFINED};
+
 enum TipoKey{KEY_JOY_BTN,KEY_JOY_HAT,KEY_JOY_AXIS, KEY_JOY_MAX};
 enum ACTION_ASK{ASK_CARGAR, ASK_GUARDAR, ASK_ELIMINAR, MAX_ASK};
 enum CONFIG_STATUS{NORMAL,POLLING_INPUTS,ASK_SAVESTATES, EXIT_CONFIG, EXIT_EMULATION, START_SCRAPPING, MAX_CONFIG_STATUS};
 
 const uint8_t BOOT_NO_DISK = 0x01;
 const uint8_t BOOT_WITH_DISK = 0x02;
+
 
 struct t_option_action{
 	TipoOpcion option;
@@ -86,7 +90,58 @@ public:
         }
         return "";
     }
+};
+
+class OpcionGameFaq : public Opcion {
+public:
+	GameResult valor;
+	CallbackValue callback; // Función estatica
+    void* context;
+    OpcionGameFaq(GameResult t) : Opcion(t.name, OPC_FAQ_SEARCH), valor(t), callback(NULL), context(NULL) {}
+
+	std::string ejecutar() override {
+		if (callback != NULL) {
+            return callback(context, (void *)&valor); 
+        }
+        return "";
+    }
+};
+
+class OpcionFaq : public Opcion {
+public:
+	GuidesResult valor;
+	CallbackValue callback;
+    void* context;
+
+    OpcionFaq(GuidesResult t) : Opcion(t.name, OPC_FAQ_SELECT), valor(t), callback(NULL), context(NULL) {}
 	
+	OpcionFaq(std::string categ) : Opcion(categ, OPC_FAQ_SELECT), callback(NULL), context(NULL) {
+		valor.name = categ;
+	}
+
+	std::string ejecutar() override {
+		if (callback != NULL) {
+            return callback(context, (void *)&valor); 
+        }
+        return "";
+    }
+};
+
+class OpcionImage : public Opcion {
+public:
+	std::string url;
+	CallbackValue callback; // Funcion estatica
+	
+
+    void* context;
+    OpcionImage(std::string t) : Opcion(t, OPC_SHOW_IMG), url(t), callback(NULL), context(NULL) {}
+
+	std::string ejecutar() override {
+		if (callback != NULL) {
+            return callback(context, (void *)&url); 
+        }
+        return "";
+    }
 };
 
 //Esta clase no permite modificar ningún valor, sólo muestra texto y un valor
@@ -234,7 +289,7 @@ public:
 
 class OpcionSubMenu : public Opcion {
 public:
-	//Menu al que navegar
+	//Menu al que navegar para volver
     Menu* destino;
 	//Funcion estatica
 	GestorCallback callback;
@@ -243,7 +298,7 @@ public:
 
     OpcionSubMenu(std::string t, Menu* d) : Opcion(t, OPC_SUBMENU), destino(d), callback(NULL), context(NULL){}
 	OpcionSubMenu(std::string t, Menu* d, int ico) : Opcion(t, OPC_SUBMENU, ico), destino(d), callback(NULL), context(NULL) {}
-	
+
 	std::string ejecutar() override {
         if (callback != NULL && context != NULL) {
             return callback(context); 
@@ -304,6 +359,19 @@ struct Menu{
     }
 };
 
+struct GameFaqsMenu{
+	std::string gameName;
+	GameFaqs gameFaqs;
+};
+
+struct MenuStatus{
+	int iniPos;
+    int endPos;
+    int curPos;
+    int maxLines;
+	int listSize;
+	int selectedMenuPos;
+};
 
 // --- Clase Principal de Gestión de Menús ---
 class GestorMenus : public Object{
@@ -340,6 +408,8 @@ private:
 	//Menu que rellena el frontend
 	Menu* cdromListMenu;
 	Menu* menuDisks;
+	Menu* menuGuides;
+	Menu* menuGuideText;
 
 	CONFIG_STATUS status;
 	int marginX;
@@ -357,11 +427,12 @@ private:
     static SDL_Surface* imgText;
 	SDL_Surface* tmpTextOption;
 	std::string lastImagePath;
-	Image imageMenu;
+	Image imageSavestate;
 	int scrapGamesSelection;
 	int face_h_big;
 	int face_h_small;
-
+	GameFaqsMenu gameFaqsMenu;
+	std::vector<struct MenuStatus> historyMenu;
 
 	int getScreenNumLines();
 	void clearSelectedText();
@@ -370,12 +441,16 @@ private:
 	void addControlerButtons(Menu*&, int, Joystick *);
 	int findAxisPos(int retroDirection);
 	void resetKeyElement(int, TipoKey);
-	void drawSelectionBox(int i, SDL_Surface *video_page, SDL_Color& lineTextColor);
+	void drawSelectionBox(int i, SDL_Surface *video_page, SDL_Color& lineTextColor, int face_h = 0);
 	void drawSavestateWithImage(int, OpcionSavestate *, SDL_Surface *);
 	void drawBooleanSwitch(int, OpcionBool *, SDL_Surface *);
 	void drawAskMenu(SDL_Surface *video_page);
 	void drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page);
 	void drawAchievement(int, OpcionAchievement *, SDL_Surface *);
+	void drawFaqSearch(int i, OpcionGameFaq *opcion, SDL_Surface *video_page);
+	void drawFaqSelect(int i, OpcionFaq *opcion, SDL_Surface *video_page);
+	void drawImage(int i, OpcionImage *opcion, SDL_Surface *video_page);
+
 	void resetAskPosition();
 	void poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper);
 	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);
@@ -416,6 +491,9 @@ public:
 	void poblarPartidasGuardadas(CfgLoader *, std::string);
 	void poblarJoystickTypes(Joystick *joystick);
 	void poblarMenuDiscos(int options);
+	void setGameLoaded(std::string gn){
+		this->gameFaqsMenu.gameName = gn;
+	}
 
 	Menu* menuGameFilter;
 	void iniciarFiltros(GameDataFields& gameDataFieldsFilter);
@@ -438,11 +516,21 @@ public:
 
 	void nextPos();
     void prevPos();
+	void nextPage();
+	void prevPage();
 	void volverMenuInicial();
-
 	void poblarCdList(std::string ruta);
 	
-    std::string descargarLogros();
+	Image imageFaq;
+	TipoOpcion getMenuType(){
+		if (menuActual->seleccionado < (int)menuActual->opciones.size()){
+			return menuActual->opciones[menuActual->seleccionado]->tipo;
+		} else {
+			return OPC_UNDEFINED;
+		}
+	}
+	
+	std::string descargarLogros();
     static std::string sDescargarLogros(void* inst);
 	static std::string changeHardcoreMode(void* inst, void *value);
 	static std::string changeEnableAchievements(void* inst, void *value);
@@ -456,6 +544,9 @@ public:
 	static std::string changeRAPassword(void* inst, void *value);
 	static std::string changeScrapUser(void* inst, void *value);
 	static std::string changeScrapPassword(void* inst, void *value);
+	static std::string gameSearchAction(void* inst);
+	static std::string gameGuidesSearchAction(void* inst, void *value);
+	static std::string gameGuideAction(void* inst, void *value);
 
 	static void onUserText(const std::string& text, void* userData);
 	static void onScrapPasswordText(const std::string& text, void* userData);
@@ -487,3 +578,4 @@ public:
         return (instanciaGestor->*execfunc)(data);
     }
 };
+

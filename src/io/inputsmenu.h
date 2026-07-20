@@ -92,31 +92,74 @@ static void popBackUtf8(std::string& s) {
     if (s.empty()) return;
     std::size_t pos = s.size() - 1;
     while (pos > 0 && (s[pos] & 0xC0) == 0x80)
-        pos--;  // saltar bytes de continuaci�n
+        pos--;  // saltar bytes de continuacion
     s.erase(pos);
 }
 
-inline int procesarGeneralConfig(){
-	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
-		gameMenu->configMenus->prevPos();
-	} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
-		gameMenu->configMenus->nextPos();
-	}
-			
-	bool changeInConf = false;
+inline int getPressedButton(){
+	int pressedButton = -1;
 
-	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
-		gameMenu->configMenus->cambiarValor(-1);
-		changeInConf = true;
-		if (gameMenu->configMenus->isCoreOptions()){
-			gameMenu->configMenus->options_changed_flag = true;
+	// 1. OBTENER ESTADOS DE LOS BOTONES CARDINALES
+	bool up    = gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP);
+	bool down  = gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN);
+	bool left  = gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT);
+	bool right = gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT);
+
+	// 2. DETECTAR DIAGONALES PRIMERO (Combinación de dos ejes)
+	if (up && left)          pressedButton = JOY_BUTTON_UPLEFT;
+	else if (up && right)     pressedButton = JOY_BUTTON_UPRIGHT;
+	else if (down && left)    pressedButton = JOY_BUTTON_DOWNLEFT;
+	else if (down && right)   pressedButton = JOY_BUTTON_DOWNRIGHT;
+    
+	// 3. DETECTAR CARDINALES SI NO HUBO DIAGONAL (Un solo eje)
+	else if (up)              pressedButton = JOY_BUTTON_UP;
+	else if (down)            pressedButton = JOY_BUTTON_DOWN;
+	else if (left)            pressedButton = JOY_BUTTON_LEFT;
+	else if (right)           pressedButton = JOY_BUTTON_RIGHT;
+
+	return pressedButton;
+}
+
+inline int procesarGeneralConfig(){
+	bool changeInConf = false;
+	const TipoOpcion type = gameMenu->configMenus->getMenuType();
+	
+	if (type == OPC_SHOW_IMG && !gameMenu->configMenus->imageFaq.isTamAuto()){
+		//Handling FAQ image movement
+		gameMenu->configMenus->imageFaq.softMove(gameMenu->gameTicks.dt, getPressedButton());
+	} else if (type == OPC_FAQ_SEARCH || type == OPC_FAQ_SELECT || type == OPC_FAQ_TXT || type == OPC_SHOW_TXT){
+		//Handling non modificable menu options
+		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
+			gameMenu->configMenus->prevPos();
+		} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
+			gameMenu->configMenus->nextPos();
+		} 
+		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
+			gameMenu->configMenus->prevPage();
+		} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
+			gameMenu->configMenus->nextPage();
 		}
-	} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
-		changeInConf = true;
-		if (gameMenu->configMenus->isCoreOptions()){
-			gameMenu->configMenus->options_changed_flag = true;
+	} else {
+		//Handling modificable menu options
+		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
+			gameMenu->configMenus->prevPos();
+		} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
+			gameMenu->configMenus->nextPos();
 		}
-		gameMenu->configMenus->cambiarValor(1);
+
+		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
+			gameMenu->configMenus->cambiarValor(-1);
+			changeInConf = true;
+			if (gameMenu->configMenus->isCoreOptions()){
+				gameMenu->configMenus->options_changed_flag = true;
+			}
+		} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
+			changeInConf = true;
+			if (gameMenu->configMenus->isCoreOptions()){
+				gameMenu->configMenus->options_changed_flag = true;
+			}
+			gameMenu->configMenus->cambiarValor(1);
+		}
 	}
 
 	if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){

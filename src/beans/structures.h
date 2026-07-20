@@ -50,6 +50,14 @@ class Executable{
 
 struct GameTicks{
     uint32_t ticks;
+	double lastTime;
+	float dt;
+
+	GameTicks(){
+		ticks = 0;
+		lastTime = 0;
+		dt = 0.0;
+	}
 };
 
 struct Dimension{

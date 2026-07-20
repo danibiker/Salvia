@@ -216,9 +216,10 @@ SDL_Rect Fonts::drawText(SDL_Surface* surface, TTF_Font* font, const char *s, in
 		} else {
 			LOG_ERROR("Error al crear la surface para: %s\n", s);
 		}
-	} else {
-		LOG_ERROR("Error al comprobar los parametros de entrada: %s\n", s);
-	}
+	} 
+	//else {
+	//	LOG_ERROR("Error al comprobar los parametros de entrada: %s\n", s);
+	//}
 	return dest;
 }
 
@@ -240,9 +241,10 @@ SDL_Rect Fonts::drawTextTransparent(SDL_Surface* surface, TTF_Font* font, const 
 		} else {
 			LOG_ERROR("Error al crear la surface para: %s\n", s);
 		}
-	} else {
-		LOG_ERROR("Error al comprobar los parametros de entrada: %s\n", s);
-	}
+	} 
+	//else {
+	//	LOG_ERROR("Error al comprobar los parametros de entrada: %s\n", s);
+	//}
 	return dest;
 }
 

@@ -1604,10 +1604,7 @@ static void __declspec(noinline) runGameLoop() {
 
 			gameMenu->processFrontendEventsAfter();
 			salviaFlip(gameMenu->gameScreen);
-			if (*gameMenu->current_sync == SYNC_TO_VIDEO){
-				gameMenu->sync->limit_fps(nextFrameTime);
-			}
-			gameMenu->gameTicks.ticks++;
+			gameMenu->sync->limit_fps(nextFrameTime, *gameMenu->current_sync, gameMenu->gameTicks);
 		}
 	} __except (LogCrash(GetExceptionCode(), GetExceptionInformation())) {
 		printAndDelay();
@@ -1618,7 +1615,58 @@ static void __declspec(noinline) runGameLoop() {
 /**
 *
 */
+int main(int argc, char *argv[]) {
+	initPathAndLog(argv);
+	cfgLoader = new CfgLoader();
+
+	if (cfgLoader->isDebug()){
+		#ifndef DEBUG_LOG
+		#define DEBUG_LOG
+		#endif
+        logger->errorLevel = L_DEBUG;
+    }
+
+	LOG_DEBUG("appdir: %s\n", Constant::getAppDir().c_str());
+	LOG_DEBUG("appexe: %s\n", Constant::getAppExecutable().c_str());
+
+	// Se cargan los textos
+	const std::string mainLang = cfgLoader->configMain[cfg::mainLang].valueStr;
+	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
+	gameMenu = new GameMenu(cfgLoader);
+	listMenu = new ListMenu(gameMenu->overlay->w, gameMenu->overlay->h);
+	listMenu->setLayout(LAYBOXES, gameMenu->overlay->w, gameMenu->overlay->h);
+    tileMap.load(Constant::getAppDir() + Constant::getFileSep() + "assets" + Constant::getFileSep() + "art" + Constant::getFileSep() + "bricks2.png");
+	initializeMenus(*listMenu, *gameMenu, *cfgLoader);
+	
+	//Callback de environment
+	retro_set_environment(retro_environment);
+	//Registrar callback de video
+    retro_set_video_refresh(retro_video_refresh);
+	//Registrar los callbacks de inputs
+    retro_set_input_poll(retro_input_poll);
+    retro_set_input_state(retro_input_state);
+	// Registrar los callbacks de audio
+	retro_set_audio_sample(retro_audio_sample);
+	retro_set_audio_sample_batch(retro_audio_sample_batch);
+
+	if (loadGameAtStart(argc, argv)){
+		gameMenu->clearOverlay();
+	}
+
+	ConfigEmu *emu = cfgLoader->getCfgEmu();
+	gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
+	initSaveSystem();
+	CurlClient curlClient;
+	curlClient.init();
+
+	nextFrameTime = Constant::getTicks();
+	runGameLoop();
+	closeResources();
+    return 0;
+}
+
 //int main(int argc, char *argv[]) {
+//
 //	initPathAndLog(argv);
 //	cfgLoader = new CfgLoader();
 //
@@ -1632,44 +1680,14 @@ static void __declspec(noinline) runGameLoop() {
 //	LOG_DEBUG("appdir: %s\n", Constant::getAppDir().c_str());
 //	LOG_DEBUG("appexe: %s\n", Constant::getAppExecutable().c_str());
 //
-//	// Se cargan los textos
-//	const std::string mainLang = cfgLoader->configMain[cfg::mainLang].valueStr;
-//	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
-//	gameMenu = new GameMenu(cfgLoader);
-//	listMenu = new ListMenu(gameMenu->overlay->w, gameMenu->overlay->h);
-//	listMenu->setLayout(LAYBOXES, gameMenu->overlay->w, gameMenu->overlay->h);
-//    tileMap.load(Constant::getAppDir() + Constant::getFileSep() + "assets" + Constant::getFileSep() + "art" + Constant::getFileSep() + "bricks2.png");
-//	initializeMenus(*listMenu, *gameMenu, *cfgLoader);
-//	
-//	//Callback de environment
-//	retro_set_environment(retro_environment);
-//	//Registrar callback de video
-//    retro_set_video_refresh(retro_video_refresh);
-//	//Registrar los callbacks de inputs
-//    retro_set_input_poll(retro_input_poll);
-//    retro_set_input_state(retro_input_state);
-//	// Registrar los callbacks de audio
-//	retro_set_audio_sample(retro_audio_sample);
-//	retro_set_audio_sample_batch(retro_audio_sample_batch);
-//
-//	if (loadGameAtStart(argc, argv)){
-//		gameMenu->clearOverlay();
+//	GameFaqs gameFaqs;
+//	int foundGames = gameFaqs.searchGame("Legend of Zelda, The_ A Link to the Past");
+//	if (foundGames > 0){
+//		if (gameFaqs.findGuides(0) > 0){
+//			gameFaqs.getGuideText(0);
+//		}
 //	}
 //
-//	ConfigEmu *emu = cfgLoader->getCfgEmu();
-//	gameMenu->keyb->setKeyboardLayout(emu->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
-//	initSaveSystem();
-//	CurlClient curlClient;
-//	curlClient.init();
-//
-//	nextFrameTime = Constant::getTicks();
-//	runGameLoop();
-//	closeResources();
-//    return 0;
+//	//gameFaqs.runAllTests();
+//	return 0;
 //}
-
-int main(int argc, char *argv[]) {
-	GameFaqs gameFaqs;
-	gameFaqs.searchGame("Legend of Zelda, The_ A Link to the Past");
-	return 0;
-}

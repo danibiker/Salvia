@@ -48,6 +48,12 @@ const std::string SCRAPPING_DAT = "images.bin";
 const std::string TITLE_EMU_FILENAME = "title.png";
 const std::string PASS_MASK = "****";
 
+// Caracteres que queremos sustituir por un espacio (para no pegar palabras)
+const char SYMBOLS_TO_SPACE[] = ":-._/\\|,;"; 
+
+// Caracteres que queremos eliminar por completo (ruido)
+const char SYMBOLS_TO_REMOVE[] = "\"\'!?*#¿¡";
+
 const char *ICONS_PATH[] = {"menu_log.png",
 	"folder.png",
 	"file.png",
@@ -65,7 +71,8 @@ const char *ICONS_PATH[] = {"menu_log.png",
 	"resume.png",
 	"screenshot.png",
 	"achievement-list.png",
-	"menu_shutdown.png"
+	"menu_shutdown.png",
+	"menu_help.png"
 };
 
 #ifdef _XBOX

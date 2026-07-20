@@ -2,17 +2,39 @@
 
 #include <string>
 #include <vector>
+#include <map>
 
 #include <SDL.h>
-#include <curl/curl.h>
 
+// En Xbox 360 la red va por el XDK (xtl.h / WinSockX.h). Estas cabeceras deben ir
+// ANTES que curl.h, y marcamos _WINSOCKAPI_ para que curl.h NO intente incluir
+// <winsock2.h> (inexistente en el XDK; ver curl.h ~L77-85: solo lo incluye si no
+// estan definidos _WINSOCKAPI_ / _WINSOCK_H).
 #ifdef _XBOX
 	#include <xtl.h>
 	#include <WinSockX.h>
-	#include <mbedtls/entropy.h>
-	#include <mbedtls/ctr_drbg.h>
+	#ifndef _WINSOCKAPI_
+		#define _WINSOCKAPI_
+	#endif
 	typedef int socklen_t;
+
+	// El XDK no define struct hostent (Xbox 360 no tiene gethostbyname/gethostbyaddr
+	// nativos; se resuelve por XNetDnsLookup). Antes llegaba via el winsock2.h de curl,
+	// que ahora bloqueamos con _WINSOCKAPI_. La definimos para los wrappers de
+	// resolucion de httputil.cpp (usados por curl / tyrquake).
+	#ifndef SALVIA_XBOX_HOSTENT_DEFINED
+	#define SALVIA_XBOX_HOSTENT_DEFINED
+	struct hostent {
+		char*  h_name;
+		char** h_aliases;
+		short  h_addrtype;
+		short  h_length;
+		char** h_addr_list;
+	};
+	#endif
 #endif
+
+#include <curl/curl.h>
 
 struct ProgressData {
     float* progressVar;
@@ -38,15 +60,41 @@ class CurlClient {
 			cookie = s;
 		}
 
+		void setHeaders(const std::map<std::string, std::string> &h){
+			customHeaders = h;
+		}
+
+		void setSSLVersion(long v){
+			sslVersion = v;
+		}
+
+		void setCipherList(const std::string &c){
+			cipherList = c;
+		}
+
+		void setSessionIdCache(bool enabled){
+			sessionIdCache = enabled;
+		}
+
+		void setHttpVersion(long v){
+			httpVersion = v;
+		}
+
+		// Ultimo codigo de estado HTTP (200, 403, 503...) de la peticion mas reciente.
+		// Imprescindible para medir bloqueos de Cloudflare: un 403/503 devuelve CURLE_OK.
+		long getLastHttpCode() const {
+			return lastHttpCode;
+		}
+
 	private:
 		std::string cookie;
-
-	#ifdef _XBOX
-		static mbedtls_entropy_context entropy;
-		static mbedtls_ctr_drbg_context ctr_drbg;
-		// Callback de entropía usando la API nativa de Xbox 360
-		static int xbox360_entropy_source(void *data, unsigned char *output, size_t len, size_t *olen);
-	#endif
+		std::map<std::string, std::string> customHeaders;
+		long sslVersion;
+		std::string cipherList;
+		bool sessionIdCache;
+		long httpVersion;
+		long lastHttpCode;
+		CURL* m_curl; // handle reutilizable: conserva cookies (en memoria) entre peticiones
 
 		// Callback estático para recibir datos
 		static std::size_t __cdecl WriteCallback(void *contents, std::size_t size, std::size_t nmemb, void *userp);
