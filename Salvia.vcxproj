@@ -2394,7 +2394,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;HAVE_CHD;EMU_LIB_NAME="$(EMU_LIB_FBNEO)";$(COMMON_PREPROCESSOR_RELEASE);RESET_AUDIO;NO_SRAM;DEBUG_LOG</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;HAVE_CHD;EMU_LIB_NAME="$(EMU_LIB_FBNEO)";$(COMMON_PREPROCESSOR_RELEASE);RESET_AUDIO;NO_SRAM</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_XBOX)</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
