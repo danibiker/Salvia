@@ -3,8 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#ifndef __cplusplus
 #include <stdbool.h>
-
+#endif
 #include "apu.h"
 #include "snes.h"
 #include "spc.h"

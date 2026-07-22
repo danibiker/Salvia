@@ -3,7 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#ifndef __cplusplus
 #include <stdbool.h>
+#endif
 
 #include "cpu_sa1.h"
 #include "sa1.h"

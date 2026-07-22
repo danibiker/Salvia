@@ -462,7 +462,7 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 		CfgLoader *cfg = gameMenu->getCfgLoader();
 		const int firstPos = cfg->emuCfgPos;
 
-		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_R)){
+		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_R) && gameMenu->getEmuStatus() == EMU_MENU){
 			listMenu.listZipped.clear();
 			listMenu.listDir.clear();
 			listMenu.resizeMarginTop(0, gameMenu->overlay->h);
@@ -476,7 +476,7 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 			gameMenu->keyb->setKeyboardLayout(cfg->getCfgEmu()->keyboard_type, gameMenu->overlay->w, gameMenu->overlay->h);
 		}
 
-		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_L)){
+		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_L) && gameMenu->getEmuStatus() == EMU_MENU){
 			listMenu.listZipped.clear();
 			listMenu.listDir.clear();
 			listMenu.resizeMarginTop(0, gameMenu->overlay->h);

@@ -3,7 +3,9 @@
 #define CPU_SA1_H
 
 #include <stdint.h>
+#ifndef __cplusplus
 #include <stdbool.h>
+#endif
 
 #include "statehandler.h"
 

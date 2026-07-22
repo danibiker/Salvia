@@ -5,7 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#ifndef __cplusplus
 #include <stdbool.h>
+#endif
 
 #include "cart.h"
 #include "snes.h"

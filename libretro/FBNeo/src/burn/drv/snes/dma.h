@@ -3,7 +3,9 @@
 #define DMA_H
 
 #include <stdint.h>
+#ifndef __cplusplus
 #include <stdbool.h>
+#endif
 
 typedef struct Dma Dma;
 

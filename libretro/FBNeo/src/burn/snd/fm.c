@@ -4468,7 +4468,7 @@ void YM2612UpdateOne(int num, INT16 **buffer, int length)
 #ifdef _STATE_H
 static void YM2612_postload(void)
 {
-	int num , r;
+	int num , r, c, s;
 
 	FM_IS_POSTLOADING = 1;
 
@@ -4499,9 +4499,9 @@ static void YM2612_postload(void)
 		  /* restore outputs connections */
 #endif
 		/* restore DT table address pointer for each channel slots */
-		for (int c=0; c<6; c++)
+		for (c=0; c<6; c++)
 		{
-			for (int s=0; s<4; s++)            //ST->dt_tab[(v>>4)&7];
+			for (s=0; s<4; s++)            //ST->dt_tab[(v>>4)&7];
 			{
 				FM2612[num].CH[c].SLOT[s].DT = FM2612[num].OPN.ST.dt_tab[FM2612[num].CH[c].SLOT[s].dt_val];
 			}

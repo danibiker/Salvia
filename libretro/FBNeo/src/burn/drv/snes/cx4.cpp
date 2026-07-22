@@ -16,7 +16,9 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#ifndef __cplusplus
 #include <stdbool.h>
+#endif
 #include <stddef.h>
 #include <math.h>
 #include "snes.h"
@@ -146,11 +148,11 @@ void cx4_init(void *mem)
 
 	cx4.struct_data_length = struct_sizeto(CX4, dma_timer);
 
-	double pi = atan(1) * 4;
+	double pi = atan((double)1) * 4;
 
 	for (int i = 0; i < 0x100; i++) {
 		cx4.rom[0x000 + i] = (i == 0) ? 0xffffff : (0x800000 / i);
-		cx4.rom[0x100 + i] = 0x100000 * sqrt(i);
+		cx4.rom[0x100 + i] = 0x100000 * sqrt((double)i);
 	}
 	for (int i = 0; i < 0x80; i++) {
 		cx4.rom[0x200 + i] = 0x1000000 * sin(((i * 90.0) / 128.0) * pi / 180.0);

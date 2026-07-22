@@ -835,11 +835,6 @@ std::string ListMenu::extractSystem(const std::string& sourceFile) {
 void ListMenu::resetIndexPos(){
     this->listSize = this->filteredGames.size();
     this->maxLines = this->getScreenNumLines();
-    /*To go to the bottom of the list*/
-    //this->endPos = getListGames()->size();
-    //this->iniPos = (int)getListGames()->size() >= this->maxLines ? getListGames()->size() - this->maxLines : 0;
-    //this->curPos = this->endPos - 1;
-    /*To go to the init of the list*/
     this->iniPos = 0;
     this->curPos = 0;
     this->endPos = (int)this->filteredGames.size() > this->maxLines ? this->maxLines : this->filteredGames.size();

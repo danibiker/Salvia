@@ -3,7 +3,9 @@
 #define PPU_H
 
 #include <stdint.h>
+#ifndef __cplusplus
 #include <stdbool.h>
+#endif
 
 #include "snes.h"
 #include "statehandler.h"

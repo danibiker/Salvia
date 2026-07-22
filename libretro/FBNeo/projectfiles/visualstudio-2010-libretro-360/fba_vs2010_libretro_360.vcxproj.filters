@@ -228,6 +228,12 @@
     <Filter Include="Source Files\deps\lzma">
       <UniqueIdentifier>{8d695741-0d56-477f-ad13-9389b916c52f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\burn\drv\snes">
+      <UniqueIdentifier>{75818d08-f332-4217-8e64-a4c103f30fdf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\cpu\t11">
+      <UniqueIdentifier>{9f846f1b-2e5c-446b-9f18-943c2a984fea}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\burn\drv\cps3\cps3snd.cpp">
@@ -449,9 +455,6 @@
     <ClCompile Include="..\..\src\burn\drv\galaxian\gal_gfx.cpp">
       <Filter>Source Files\burn\drv\galaxian</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\galaxian\cclimber_audio.cpp">
-      <Filter>Source Files\burn\drv\galaxian</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\galaxian\gal_run.cpp">
       <Filter>Source Files\burn\drv\galaxian</Filter>
     </ClCompile>
@@ -566,9 +569,6 @@
     <ClCompile Include="..\..\src\burn\drv\konami\d_xmen.cpp">
       <Filter>Source Files\burn\drv\konami</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\devices\k051316.cpp">
-      <Filter>burn\devices</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\konami\k051733.cpp">
       <Filter>Source Files\burn\drv\konami</Filter>
     </ClCompile>
@@ -586,9 +586,6 @@
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\konami\k053251.cpp">
       <Filter>Source Files\burn\drv\konami</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burn\devices\k053936.cpp">
-      <Filter>burn\devices</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\konami\k054000.cpp">
       <Filter>Source Files\burn\drv\konami</Filter>
@@ -739,9 +736,6 @@
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_meijinsn.cpp">
       <Filter>Source Files\burn\drv\pre90s</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\capcom\d_mitchell.cpp">
-      <Filter>burn\drv\capcom</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_mole.cpp">
       <Filter>Source Files\burn\drv\pre90s</Filter>
@@ -1076,9 +1070,6 @@
     <ClCompile Include="..\..\src\burn\drv\sega\genesis_vid.cpp">
       <Filter>Source Files\burn\drv\sega</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\devices\mc8123.cpp">
-      <Filter>burn\devices</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\sega\sys16_fd1094.cpp">
       <Filter>Source Files\burn\drv\sega</Filter>
     </ClCompile>
@@ -1159,9 +1150,6 @@
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\taito\taito_ic.cpp">
       <Filter>Source Files\burn\drv\taito</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burn\devices\taito_m68705.cpp">
-      <Filter>burn\devices</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\taito\tc0100scn.cpp">
       <Filter>Source Files\burn\drv\taito</Filter>
@@ -2105,9 +2093,6 @@
     <ClCompile Include="..\..\src\burn\drv\konami\konamigx.cpp">
       <Filter>Source Files\burn\drv\konami</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\konami\timeplt_snd.cpp">
-      <Filter>Source Files\burn\drv\konami</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\spectrum\d_spectrum.cpp">
       <Filter>Source Files\burn\drv\spectrum</Filter>
     </ClCompile>
@@ -2552,9 +2537,6 @@
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_lockon.cpp">
       <Filter>Source Files\burn\drv\pre90s</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_madmotor.cpp">
-      <Filter>Source Files\burn\drv\pre90s</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_magmax.cpp">
       <Filter>Source Files\burn\drv\pre90s</Filter>
     </ClCompile>
@@ -2783,9 +2765,6 @@
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_toypop.cpp">
       <Filter>Source Files\burn\drv\pre90s</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\pre90s\d_travrusa.cpp">
-      <Filter>Source Files\burn\drv\pre90s</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pre90s\d_tsamurai.cpp">
       <Filter>Source Files\burn\drv\pre90s</Filter>
     </ClCompile>
@@ -2951,9 +2930,6 @@
     <ClCompile Include="..\..\src\burn\drv\pst90s\d_metro.cpp">
       <Filter>Source Files\burn\drv\pst90s</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\pst90s\d_mirage.cpp">
-      <Filter>Source Files\burn\drv\pst90s</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pst90s\d_missb2.cpp">
       <Filter>Source Files\burn\drv\pst90s</Filter>
     </ClCompile>
@@ -3067,9 +3043,6 @@
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\pst90s\d_yunsung8.cpp">
       <Filter>Source Files\burn\drv\pst90s</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\burn\drv\sega\d_119.cpp">
-      <Filter>Source Files\burn\drv\sega</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\burn\drv\sega\d_appoooh.cpp">
       <Filter>Source Files\burn\drv\sega</Filter>
@@ -3403,6 +3376,111 @@
     </ClCompile>
     <ClCompile Include="..\..\src\dep\libs\lzma\libchdr_lzma.c">
       <Filter>Source Files\deps\lzma</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\i8255.cpp">
+      <Filter>Source Files\burn\devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\k051316.cpp">
+      <Filter>Source Files\burn\devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\k053936.cpp">
+      <Filter>Source Files\burn\devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\mc8123.cpp">
+      <Filter>Source Files\burn\devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\devices\taito_m68705.cpp">
+      <Filter>Source Files\burn\devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\capcom\d_mitchell.cpp">
+      <Filter>Source Files\burn\drv\capcom</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_madmotor.cpp">
+      <Filter>Source Files\burn\drv\dataeast</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\dataeast\d_mirage.cpp">
+      <Filter>Source Files\burn\drv\dataeast</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\galaxian\d_119.cpp">
+      <Filter>Source Files\burn\drv\galaxian</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\irem\d_travrusa.cpp">
+      <Filter>Source Files\burn\drv\irem</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\pst90s\d_megaphx.cpp">
+      <Filter>Source Files\burn\drv\pst90s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\apu.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\cart.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\cpu.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\cpu_sa1.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\cx4.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\d_snes.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\dma.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\dsp.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\epsonrtc.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\gsu.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\input.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\ppu.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\sa1.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\sdd1.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\snes.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\snes_other.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\spc.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\spc7110.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\snes\statehandler.cpp">
+      <Filter>Source Files\burn\drv\snes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\taito\d_sbowling.cpp">
+      <Filter>Source Files\burn\drv\taito</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\snd\timeplt_snd.cpp">
+      <Filter>Source Files\burn\snd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\t11\t11.cpp">
+      <Filter>Source Files\cpu\t11</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\cpu\t11_intf.cpp">
+      <Filter>Source Files\cpu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\burn\drv\galaxian\cclimber_audio.cpp">
+      <Filter>Source Files\burn\drv\galaxian</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

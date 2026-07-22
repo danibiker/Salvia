@@ -3,7 +3,9 @@
 #define STATEHANDLER_H
 
 #include <stdint.h>
+#ifndef __cplusplus
 #include <stdbool.h>
+#endif
 #include "burnint.h"
 
 typedef struct StateHandler {
