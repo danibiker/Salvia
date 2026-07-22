@@ -371,6 +371,7 @@ struct MenuStatus{
     int maxLines;
 	int listSize;
 	int selectedMenuPos;
+	Menu *menu;
 };
 
 // --- Clase Principal de Gestión de Menús ---

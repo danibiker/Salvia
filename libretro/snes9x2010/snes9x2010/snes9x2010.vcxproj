@@ -94,8 +94,8 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>__LIBRETRO__;__WIN32__;_DEBUG;FRONTEND_SUPPORTS_RGB565;RIGHTSHIFT_IS_SAR</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>__LIBRETRO__;__WIN32__;_DEBUG;FRONTEND_SUPPORTS_RGB565;RIGHTSHIFT_IS_SAR;HAVE_RPNG;HAVE_RWEBP;HAVE_RDDS;HAVE_ZLIB;INLINE=_inline</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)libretro\libretro-common\include\compat\zlib;$(SolutionDir)deps\libz;$(SolutionDir)src</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <UndefinePreprocessorDefinitions>FAST_LSB_WORD_ACCESS</UndefinePreprocessorDefinitions>
     </ClCompile>
@@ -110,8 +110,8 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_XBOX;MSB_FIRST;_XBOX360;__LIBRETRO__;RIGHTSHIFT_IS_SAR;__LIBXENON__;__ppc__;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_XBOX;MSB_FIRST;_XBOX360;__LIBRETRO__;RIGHTSHIFT_IS_SAR;__LIBXENON__;__ppc__;_DEBUG;_LIB;HAVE_RPNG;HAVE_RWEBP;HAVE_RDDS;HAVE_ZLIB;INLINE=_inline</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)libretro\libretro-common\include\compat\zlib;$(SolutionDir)deps\libz;$(SolutionDir)src</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <CompileAs>CompileAsC</CompileAs>
@@ -129,8 +129,8 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>__LIBRETRO__;RIGHTSHIFT_IS_SAR;WIN32;NDEBUG;</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>__LIBRETRO__;RIGHTSHIFT_IS_SAR;WIN32;NDEBUG;HAVE_RPNG;HAVE_RWEBP;HAVE_RDDS;HAVE_ZLIB;INLINE=_inline</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)libretro\libretro-common\include\compat\zlib;$(SolutionDir)deps\libz;$(SolutionDir)src</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -151,10 +151,10 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>false</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>_XBOX;_XBOX360;MSB_FIRST;__LIBRETRO__;RIGHTSHIFT_IS_SAR;__LIBXENON__;__ppc__;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;_XBOX360;MSB_FIRST;__LIBRETRO__;RIGHTSHIFT_IS_SAR;__LIBXENON__;__ppc__;NDEBUG;HAVE_RPNG;HAVE_RWEBP;HAVE_RDDS;HAVE_ZLIB;INLINE=_inline;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <CompileAs>CompileAsC</CompileAs>
-      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)libretro\libretro-common\include\compat\zlib;$(SolutionDir)deps\libz;$(SolutionDir)src</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <FloatingPointModel>Fast</FloatingPointModel>
@@ -176,6 +176,14 @@
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\deps\libz\adler32.c" />
+    <ClCompile Include="..\deps\libz\deflate.c" />
+    <ClCompile Include="..\deps\libz\inffast.c" />
+    <ClCompile Include="..\deps\libz\inflate.c" />
+    <ClCompile Include="..\deps\libz\inftrees.c" />
+    <ClCompile Include="..\deps\libz\libz-crc32.c" />
+    <ClCompile Include="..\deps\libz\trees.c" />
+    <ClCompile Include="..\deps\libz\zutil.c" />
     <ClCompile Include="..\filter\snes_ntsc.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
@@ -194,6 +202,7 @@
     <ClCompile Include="..\libretro\libretro-common\compat\fopen_utf8.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\encodings\encoding_crc32.c" />
     <ClCompile Include="..\libretro\libretro-common\encodings\encoding_utf.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
@@ -203,6 +212,12 @@
     <ClCompile Include="..\libretro\libretro-common\file\file_path_io.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\formats\dds\rdds.c" />
+    <ClCompile Include="..\libretro\libretro-common\formats\image_transfer.c" />
+    <ClCompile Include="..\libretro\libretro-common\formats\png\rpng.c" />
+    <ClCompile Include="..\libretro\libretro-common\formats\png\rpng_encode.c" />
+    <ClCompile Include="..\libretro\libretro-common\formats\vp8\rvp8.c" />
+    <ClCompile Include="..\libretro\libretro-common\formats\webp\rwebp.c" />
     <ClCompile Include="..\libretro\libretro-common\memmap\memalign.c" />
     <ClCompile Include="..\libretro\libretro-common\streams\file_stream.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
@@ -210,9 +225,14 @@
     <ClCompile Include="..\libretro\libretro-common\streams\file_stream_transforms.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\interface_stream.c" />
     <ClCompile Include="..\libretro\libretro-common\streams\memory_stream.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\rzip_stream.c" />
+    <ClCompile Include="..\libretro\libretro-common\streams\trans_stream.c" />
+    <ClCompile Include="..\libretro\libretro-common\streams\trans_stream_pipe.c" />
+    <ClCompile Include="..\libretro\libretro-common\streams\trans_stream_zlib.c" />
     <ClCompile Include="..\libretro\libretro-common\string\stdstring.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
@@ -256,6 +276,7 @@
     <ClCompile Include="..\src\globals.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
+    <ClCompile Include="..\src\hdpack.c" />
     <ClCompile Include="..\src\hwregisters.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>

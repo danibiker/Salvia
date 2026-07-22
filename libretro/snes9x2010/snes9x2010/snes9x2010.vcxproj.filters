@@ -13,6 +13,12 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\libz">
+      <UniqueIdentifier>{b7b7404d-1f78-4247-8340-a168f4e83280}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libretro-common">
+      <UniqueIdentifier>{0bea21d7-ec77-4819-88d6-9314b7cc7379}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -84,49 +90,7 @@
     <ClCompile Include="..\libretro\libretro.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\streams\file_stream.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\streams\file_stream_transforms.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\streams\memory_stream.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\compat\compat_posix_string.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\compat\compat_snprintf.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\compat\compat_strcasestr.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\compat\compat_strl.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\compat\fopen_utf8.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\encodings\encoding_utf.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\file\file_path.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\file\file_path_io.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\string\stdstring.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\libretro\libretro-common\time\rtime.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\vfs\vfs_implementation.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\memmap\memalign.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\src\memmap.c">
@@ -136,6 +100,111 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\src\msu1.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libz\adler32.c">
+      <Filter>Source Files\libz</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libz\deflate.c">
+      <Filter>Source Files\libz</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libz\inffast.c">
+      <Filter>Source Files\libz</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libz\inflate.c">
+      <Filter>Source Files\libz</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libz\inftrees.c">
+      <Filter>Source Files\libz</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libz\libz-crc32.c">
+      <Filter>Source Files\libz</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libz\trees.c">
+      <Filter>Source Files\libz</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libz\zutil.c">
+      <Filter>Source Files\libz</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_posix_string.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_strl.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_snprintf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_strcasestr.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\formats\png\rpng.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\formats\png\rpng_encode.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\formats\image_transfer.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\formats\webp\rwebp.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\formats\vp8\rvp8.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\formats\dds\rdds.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\trans_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\trans_stream_pipe.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\trans_stream_zlib.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\encodings\encoding_crc32.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\interface_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\rzip_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\encodings\encoding_utf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\fopen_utf8.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\file\file_path.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\file\file_path_io.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\file_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\file_stream_transforms.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\string\stdstring.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\memmap\memalign.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\memory_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\hdpack.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

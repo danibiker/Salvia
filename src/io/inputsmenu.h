@@ -15,6 +15,7 @@
 
 extern int launchGame(std::string rompath, bool tmpDelete=true);
 extern t_rom_paths romPaths;
+std::vector<struct MenuStatus> historyNavigation;
 
 /**
 *
@@ -224,6 +225,18 @@ inline int procesarGeneralConfig(){
 	return 0;
 }
 
+void restoreHistory(ListMenu &listMenu){
+	if (!historyNavigation.empty()){
+		MenuStatus ms = historyNavigation.back();
+		historyNavigation.pop_back();
+		listMenu.iniPos = ms.iniPos;
+		listMenu.endPos = ms.endPos;
+		listMenu.curPos = ms.curPos;
+	} else {
+		listMenu.resetIndexPos();
+	}
+}
+
 int procesarAccionesMenu(ListMenu &listMenu){
 	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
 		listMenu.prevPos();
@@ -249,8 +262,8 @@ int procesarAccionesMenu(ListMenu &listMenu){
 			//en el caso de que estuviesemos mostrando el contenido de un directorio
 			//o un fichero comprimido
 			listMenu.setLayout(LAYBOXES, gameMenu->overlay->w, gameMenu->overlay->h);
-			listMenu.resetIndexPos();
 		}
+		restoreHistory(listMenu);
 	}
 
 	if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
@@ -261,6 +274,9 @@ int procesarAccionesMenu(ListMenu &listMenu){
 
 		//Saving the position
 		gameMenu->saveGameMenuPos(listMenu);
+		//Save the actual positions to the history to be able to step back and highlight the proper menu
+		MenuStatus ms = {listMenu.iniPos, listMenu.endPos, listMenu.curPos, 0, 0, 0, NULL};
+
 		std::string romToLaunch;
 		bool deleteTmpDir = true;
 		auto& game = listMenu.filteredGames.at(listMenu.curPos);
@@ -269,9 +285,10 @@ int procesarAccionesMenu(ListMenu &listMenu){
 		//Call to listableZip to load a zip with games inside. The name of the file 
 		//should start with the character "@"
 		FILE_STATUS fs = gameMenu->listableZip(listMenu, FS_ZIP_CD);
-
+		
 		if (fs == FS_ZIP_NAVIGATION){
-			//Case navigating inside the zip structure
+			//Case navigating inside the zip structure	
+			historyNavigation.push_back(ms);
 			return 1;
 		} else if (fs == FS_ZIP_EXTRACT_ERROR){
 			//Case for extraction errors
@@ -294,6 +311,7 @@ int procesarAccionesMenu(ListMenu &listMenu){
 				romToLaunch.append(listMenu.listDir.file);
 			} else {
 				//Navigating the directory
+				historyNavigation.push_back(ms);
 				return 1;
 			}
 		}

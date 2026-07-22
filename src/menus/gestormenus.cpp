@@ -1238,9 +1238,8 @@ std::string GestorMenus::confirmar(t_option_action *result) {
 	if ((std::size_t)menuActual->seleccionado >= menuActual->opciones.size()) return "";
 
     Opcion* opt = menuActual->opciones[menuActual->seleccionado];
-
 	if (opt->tipo == OPC_SUBMENU || opt->tipo == OPC_FAQ_SEARCH || opt->tipo == OPC_FAQ_SELECT) {
-		MenuStatus ms = {iniPos, endPos, curPos, maxLines, listSize, menuActual->seleccionado};
+		MenuStatus ms = {iniPos, endPos, curPos, maxLines, listSize, menuActual->seleccionado, menuActual};
 		historyMenu.push_back(ms);
 	}
 
@@ -1292,10 +1291,9 @@ void GestorMenus::volver() {
 
     if (menuActual->padre != NULL) {
         menuActual = menuActual->padre;
-		if (!menuActual->opciones.empty() && !historyMenu.empty()){
-			Opcion* opt = menuActual->opciones.front();
-			if (opt->tipo == OPC_SUBMENU || opt->tipo == OPC_FAQ_SEARCH || opt->tipo == OPC_FAQ_SELECT || opt->tipo == OPC_SHOW_IMG) {
-				MenuStatus ms = historyMenu.back();
+		if (!historyMenu.empty()){
+			MenuStatus ms = historyMenu.back();
+			if (menuActual == ms.menu){
 				historyMenu.pop_back();
 				this->iniPos = ms.iniPos;
 				this->endPos = ms.endPos;
@@ -1303,10 +1301,10 @@ void GestorMenus::volver() {
 				this->maxLines = ms.maxLines;
 				this->listSize = ms.listSize;
 				this->menuActual->seleccionado = ms.selectedMenuPos;
-				return;
 			}
-		} 
-		resetIndexPos();
+		} else {
+			resetIndexPos();
+		}
     }
 }
 
