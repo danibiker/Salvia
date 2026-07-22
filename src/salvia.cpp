@@ -1318,6 +1318,7 @@ int launchGame(std::string rompath, bool tmpDelete){
 bool loadGameAtStart(int argc, char *argv[]){
 	LOG_DEBUG("argc: %d\n", argc);
 	bool ret = false;
+	std::string romToLaunch;
 
 	#ifdef _XBOX
 		DWORD dwLaunchDataSize = 0;    
@@ -1325,14 +1326,14 @@ bool loadGameAtStart(int argc, char *argv[]){
 		if( dwStatus == ERROR_SUCCESS ){
 			BYTE* pLaunchData = new BYTE [ dwLaunchDataSize ];
 			dwStatus = XGetLaunchData( pLaunchData, dwLaunchDataSize );
-			char* mensaje = (char*)pLaunchData;
-			LOG_DEBUG("Parametros recibidos: %s\n", mensaje);
+			romToLaunch = (char*)pLaunchData;
+			LOG_DEBUG("Parametros recibidos: %s\n", romToLaunch.c_str());
 			//If we come from an exception, don't launch anything
-			if (START_FROM_EXCEPTION.compare(mensaje) == 0){
+			if (START_FROM_EXCEPTION.compare(romToLaunch) == 0){
 				LOG_DEBUG("Starting emulator from a previous exception");
 				g_start_from_exception = true;
 			} else {
-				ret = launchGame(mensaje) == 1;	
+				ret = launchGame(romToLaunch) == 1;	
 			}
 		} else if (dwStatus == ERROR_NOT_FOUND) {
 			// El programa se lanzo normalmente (sin XSetLaunchData)
@@ -1340,6 +1341,7 @@ bool loadGameAtStart(int argc, char *argv[]){
 		}
 	#else 
 		if (argc > 1){
+			romToLaunch = argv[1];
 			LOG_DEBUG("argv[1]: %s\n", argv[1]);
 			ret = launchGame(argv[1]) == 1;
 		}
@@ -1347,6 +1349,8 @@ bool loadGameAtStart(int argc, char *argv[]){
 
 	if (ret){
 		gameMenu->setEmuStatus(EMU_STARTED);
+		//Setting the romname to the Faqs downloader menu
+		gameMenu->configMenus->setGameLoaded(romToLaunch);
 	}
 	
 	return ret;

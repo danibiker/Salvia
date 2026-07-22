@@ -2198,9 +2198,6 @@ void GameMenu::setRomPaths(std::string rp){
 		std::string rutaIni = Constant::getAppDir() + Constant::getFileSep() + RETROPAD_INI;
 		joystick->loadButtonsRetro(rutaIni);
 	}
-
-	//Setting the romname to the Faqs downloader menu
-	configMenus->setGameLoaded(rp);
 }
 
 std::string GameMenu::getSramPath(){

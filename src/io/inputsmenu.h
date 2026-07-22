@@ -324,6 +324,13 @@ int procesarAccionesMenu(ListMenu &listMenu){
 			gameMenu->clearOverlay();
 			if (launchGame(romToLaunch, deleteTmpDir)){
 				gameMenu->setEmuStatus(EMU_STARTED);
+
+				//Setting the romname to the Faqs downloader menu
+				if (!game->gameTitle.empty()){
+					gameMenu->configMenus->setGameLoaded(game->gameTitle);
+				} else {
+					gameMenu->configMenus->setGameLoaded(romToLaunch);
+				}
 			}
 			return 0;
 		}
