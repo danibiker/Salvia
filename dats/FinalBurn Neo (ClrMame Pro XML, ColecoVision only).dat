@@ -448,10 +448,10 @@
 	</game>
 	<game name="barbarricade" romof="coleco" sourcefile="coleco/d_coleco.cpp">
 		<comment>Homebrew</comment>
-		<description>Barbarricade (HB, 06-17-26)</description>
+		<description>Barbarricade (HB, 06-25-26)</description>
 		<year>2026</year>
 		<manufacturer>Jess Creations</manufacturer>
-		<rom name="Barbarricade 06-17-26 (2026)(Jess Creations).rom" size="32768" crc="ad6630ce"/>
+		<rom name="Barbarricade 06-25-26 (2026)(Jess Creations).rom" size="32768" crc="e5d8753d"/>
 		<rom name="coleco.rom" merge="coleco.rom" size="8192" crc="3aa93ef3"/>
 		<rom name="colecoa.rom" merge="colecoa.rom" size="8192" crc="39bb16fc"/>
 		<rom name="svi603.rom" merge="svi603.rom" size="8192" crc="19e91b82"/>
@@ -1623,6 +1623,19 @@
 		<year>1983</year>
 		<manufacturer>Bit Corporation</manufacturer>
 		<rom name="Cosmic Crisis (Euro)(1983)(Bit Corporation).rom" size="16384" crc="7c2c7c41"/>
+		<rom name="coleco.rom" merge="coleco.rom" size="8192" crc="3aa93ef3"/>
+		<rom name="colecoa.rom" merge="colecoa.rom" size="8192" crc="39bb16fc"/>
+		<rom name="svi603.rom" merge="svi603.rom" size="8192" crc="19e91b82"/>
+		<rom name="czz50.rom" merge="czz50.rom" size="16384" crc="4999abc6"/>
+		<video type="raster" orientation="horizontal" width="272" height="228" aspectx="4" aspecty="3"/>
+		<driver status="good"/>
+	</game>
+	<game name="crackpots" romof="coleco" sourcefile="coleco/d_coleco.cpp">
+		<comment>Homebrew</comment>
+		<description>CrackPots (HB)</description>
+		<year>2026</year>
+		<manufacturer>Electric Dreams</manufacturer>
+		<rom name="CrackPots (2026)(Electric Dreams).rom" size="131072" crc="91e0fa0f"/>
 		<rom name="coleco.rom" merge="coleco.rom" size="8192" crc="3aa93ef3"/>
 		<rom name="colecoa.rom" merge="colecoa.rom" size="8192" crc="39bb16fc"/>
 		<rom name="svi603.rom" merge="svi603.rom" size="8192" crc="19e91b82"/>
