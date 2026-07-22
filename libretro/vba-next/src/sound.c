@@ -13,7 +13,6 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include <math.h>
 
 #include "sound.h"
 
@@ -441,6 +440,9 @@ long  soundSampleRate    = 32000;
 int   SOUND_CLOCK_TICKS  = SOUND_CLOCK_TICKS_;
 int   soundTicks         = SOUND_CLOCK_TICKS_;
 
+/* Muting bitmask; the bits control the following channels:
+ * 0x001 Pulse 1, 0x002 Pulse 2, 0x004 Wave, 0x008 Noise,
+ * 0x100 PCM 1, 0x200 PCM 2 */
 static int soundEnableFlag   = 0x3ff; /* emulator channels enabled*/
 /* The GB APU master-volume scale used to be a float table (apu_vols) feeding a
  * float chain  v = apu_vols[idx]*0.60/OSC_COUNT/15/8*iv  ->  Blip_Synth_volume()
@@ -1680,10 +1682,6 @@ static void Gb_Wave_run(Gb_Wave *self, int32_t time, int32_t end_time)
 /* Blip_Buffer 0.4.1. http://www.slack.net/~ant */
 
 #define FIXED_SHIFT 12
-#define SAL_FIXED_SHIFT 4096
-#define TO_FIXED( f )   int ((f) * SAL_FIXED_SHIFT)
-#define FROM_FIXED( f ) ((f) >> FIXED_SHIFT)
-
 static uint32_t Blip_Buffer_clock_rate_factor(const Blip_Buffer *self, long rate);
 
 static void Blip_Buffer_clear(Blip_Buffer *self)
@@ -1763,7 +1761,6 @@ static uint32_t Blip_Buffer_clock_rate_factor(const Blip_Buffer *self, long rate
 
 /* Uses three buffers (one for center) and outputs stereo sample pairs. */
 
-#define STEREO_BUFFER_SAMPLES_AVAILABLE() ((long)(bufs_buffer[0].offset_ -  mixer_samples_read) << 1)
 #define stereo_buffer_samples_avail() ((((bufs_buffer [0].offset_ >> BLIP_BUFFER_ACCURACY) - mixer_samples_read) << 1))
 
 
@@ -1817,7 +1814,11 @@ static INLINE void stereo_buffer_mixer_read_pairs( int16_t* out, int count )
 	 * step is the classic blip one-pole DC blocker:
 	 *     accum -= accum >> 9;   (9 == old BLIP_READER_DEFAULT_BASS)
 	 *     accum += buf[offset];
-	 * and the clamp narrows the >>14 mix result to int16_t range. */
+	 * and the clamp narrows the >>14 mix result to int16_t range.  The
+	 * + (1 << 13) rounds the quantization to nearest (half toward +inf)
+	 * instead of the old floor shift, removing the floor's constant
+	 * -0.5 LSB average bias; each sample is unchanged or +1 LSB vs the
+	 * old output, never further from the exact 2^30-domain value. */
 	const int32_t* center_buf;
 	/* TODO: if caller never marks buffers as modified, uses mono*/
 	/* except that buffer isn't cleared, so caller can encounter*/
@@ -1843,7 +1844,7 @@ static INLINE void stereo_buffer_mixer_read_pairs( int16_t* out, int count )
 		offset = -count;
 		do
 		{
-			int s = (center_accum + side_accum) >> 14;
+			int s = (center_accum + side_accum + (1 << 13)) >> 14;
 			side_accum   += side_buf   [offset] - (side_accum   >> 9);
 			center_accum += center_buf [offset] - (center_accum >> 9);
 			if ( s < -0x8000 || 0x7FFF < s )
@@ -1870,7 +1871,7 @@ static INLINE void stereo_buffer_mixer_read_pairs( int16_t* out, int count )
 		offset = -count;
 		do
 		{
-			int s = (center_accum + side_accum) >> 14;
+			int s = (center_accum + side_accum + (1 << 13)) >> 14;
 			side_accum   += side_buf   [offset] - (side_accum   >> 9);
 			center_accum += center_buf [offset] - (center_accum >> 9);
 			if ( s < -0x8000 || 0x7FFF < s )
@@ -1913,8 +1914,9 @@ static void blip_buffer_remove_all_samples( long count )
 static long stereo_buffer_read_samples( int16_t * out, long out_size )
 {
 	int pair_count;
+	long avail = stereo_buffer_samples_avail();
 
-        out_size = (STEREO_BUFFER_SAMPLES_AVAILABLE() < out_size) ? STEREO_BUFFER_SAMPLES_AVAILABLE() : out_size;
+        out_size = (avail < out_size) ? avail : out_size;
 
         pair_count = (int)(out_size >> 1);
         if ( pair_count )
@@ -2217,7 +2219,7 @@ void process_sound_tick_fn (void)
 static void apply_muting (void)
 {
 	/* PCM */
-	gba_pcm_apply_control(1, 0 );
+	gba_pcm_apply_control(0, 0 );
 	gba_pcm_apply_control(1, 1 );
 
 	/* APU */

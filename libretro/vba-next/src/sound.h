@@ -7,17 +7,6 @@
 extern "C" {
 #endif
 
-void soundSetVolume(float unused);
-
-/* Manages muting bitmask. The bits control the following channels: */
-/* 0x001 Pulse 1 */
-/* 0x002 Pulse 2 */
-/* 0x004 Wave */
-/* 0x008 Noise */
-/* 0x100 PCM 1 */
-/* 0x200 PCM 2 */
-void soundPause (void);
-void soundResume (void);
 void soundSetSampleRate(long sampleRate);
 void soundReset (void);
 /* Frees the heap-allocated blip-buffer storage owned by the audio
