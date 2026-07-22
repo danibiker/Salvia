@@ -239,7 +239,7 @@ static INT32 TraverseDirectoryRecurse(const TCHAR* dirPath, INT32(*pFoundCallBac
 	const TCHAR* searchFormat = ends_with_slash(dirPath) ? _T("%s*") : _T("%s\\*");
 
 	// Build search pattern string
-	int retPrint = _sntprintf(searchPath, MAX_PATH, searchFormat, dirPath);
+	INT32 retPrint = _sntprintf(searchPath, MAX_PATH, searchFormat, dirPath);
 	// Check format failure or buffer overflow
 	if (retPrint < 0 || (size_t)retPrint >= MAX_PATH - 1)
 		return 0;
@@ -249,9 +249,16 @@ static INT32 TraverseDirectoryRecurse(const TCHAR* dirPath, INT32(*pFoundCallBac
 	WIN32_FIND_DATA findData = { 0 };
 	INT32 itemCount = 0;
 
-	HANDLE hFind = FindFirstFile(searchPath, &findData);
-	if (hFind == INVALID_HANDLE_VALUE)
-		return 0;
+	HANDLE hFind = FindFirstFileEx(searchPath, FindExInfoBasic,    &findData, FindExSearchNameMatch, NULL, FIND_FIRST_EX_LARGE_FETCH);
+	if (hFind == INVALID_HANDLE_VALUE) {
+		hFind    = FindFirstFileEx(searchPath, FindExInfoStandard, &findData, FindExSearchNameMatch, NULL, 0);
+
+		if (hFind == INVALID_HANDLE_VALUE) {
+			return 0;
+		} else {
+			bprintf(PRINT_ERROR, _T("TraverseDirectoryRecurse: Is Windows XP\n"));
+		}
+	}
 
 	bool bInterrupted = false;
 
@@ -332,13 +339,22 @@ static INT32 TraverseDirectoryRecurse(const TCHAR* dirPath, INT32(*pFoundCallBac
 static INT32 TraverseDirectoryExt(const TCHAR* dirPath, INT32(*pFoundCallBack)(const TCHAR*), bool bDirectoriesOnly, bool bScanSubdirs)
 {
 	const INT32 MAX_RECURSION_DEPTH = 4;
-
-	// Reject empty path
 	if (IsStrEmpty(dirPath))
 		return 0;
 
+	TCHAR normRoot[MAX_PATH] = { 0 };
+	_tcsncpy(normRoot, dirPath, MAX_PATH - 1);
+	normRoot[MAX_PATH - 1] = _T('\0');
+	size_t len = _tcslen(normRoot);
+	if (len > 0 && normRoot[len - 1] == _T('/'))
+		normRoot[len - 1] = _T('\\');
+
+	DWORD dwAttr = GetFileAttributes(normRoot);
+	if (dwAttr == INVALID_FILE_ATTRIBUTES || !(dwAttr & FILE_ATTRIBUTE_DIRECTORY))
+		return 0;
+
 	// Start recursive traversal with initial depth 0
-	return TraverseDirectoryRecurse(dirPath, pFoundCallBack, bDirectoriesOnly, bScanSubdirs, 0, MAX_RECURSION_DEPTH);
+	return TraverseDirectoryRecurse(normRoot, pFoundCallBack, bDirectoriesOnly, bScanSubdirs, 0, MAX_RECURSION_DEPTH);
 }
 
 // For files: keep subdir control
@@ -475,20 +491,17 @@ static void GameLib_Destroy(struct GAME_LIB* pLib)
 	pLib->hGLDlg = NULL;
 
 	// Step 4: Safely acquire critical section to release game data memory
-	BOOL bLockAcquired = TryEnterCriticalSection(&pLib->csLock);
-	if (bLockAcquired) {
-		// Free all heap string members inside every GAMELIST entry
-		for (INT32 i = 0; i < pLib->dataCount; i++)
-			FreeGameItem(&pLib->pGameData[i]);
+	EnterCriticalSection(&pLib->csLock);
+	// Free all heap string members inside every GAMELIST entry
+	for (INT32 i = 0; i < pLib->dataCount; i++)
+		FreeGameItem(&pLib->pGameData[i]);
 
-		// Release dynamic game data array buffer
-		free_s((void**)&pLib->pGameData);
-		pLib->pGameData     = NULL;
-		pLib->dataCount     = 0;
-		pLib->progressCount = 0;
-
-		LeaveCriticalSection(&pLib->csLock);
-	}
+	// Release dynamic game data array buffer
+	free_s((void**)&pLib->pGameData);
+	pLib->pGameData     = NULL;
+	pLib->dataCount     = 0;
+	pLib->progressCount = 0;
+	LeaveCriticalSection(&pLib->csLock);
 	// Critical section can be deleted safely whether locked or not
 	DeleteCriticalSection(&pLib->csLock);
 
@@ -706,12 +719,7 @@ static struct GAMELIST* CreateChdBaseGameItem(TCHAR* chdFullPath)
 
 	pItem->bFoundCUE = FALSE;
 
-	// Step 1: open stdio file stream
-	FILE* fpChd = _tfopen(chdFullPath, _T("rb"));
-	if (!fpChd)
-		return pItem;
-
-	// Step 2: open CHD via FILE handle
+	// Get audio track count from CHD metadata
 	const INT32 nAudioTracks = cdimgCountChdAudioTracks(chdFullPath);
 
 	TCHAR szBuffer[10] = { 0 };
@@ -720,8 +728,6 @@ static struct GAMELIST* CreateChdBaseGameItem(TCHAR* chdFullPath)
 	szBuffer[nSize - 1] = _T('\0');
 	pItem->szAudioTracks = _tcsdup_s(szBuffer);
 
-	// core_stdio_nonowner: CHD will not close FILE*, we must close it manually
-	fclose(fpChd);
 	return pItem;
 }
 
@@ -730,7 +736,7 @@ static struct GAMELIST* CreateChdBaseGameItem(TCHAR* chdFullPath)
 static BOOL NeoCD_BuildGameEntry(UINT32 nGameID, TCHAR* filePath, struct GAMELIST** ppOutItem)
 {
 	if (IsStrEmpty(filePath) || !ppOutItem)
-		return NULL;
+		return FALSE;
 
 	*ppOutItem = NULL;
 	INT32 nImgIdx = -1;
@@ -763,20 +769,43 @@ static BOOL NeoCD_BuildGameEntry(UINT32 nGameID, TCHAR* filePath, struct GAMELIS
 	_sntprintf(szBuffer, nLen, _T("%s (%s)"), pMeta->pszCompany, pMeta->pszYear);
 	szBuffer[nLen - 1] = _T('\0');
 	pItem->szPublisher = _tcsdup_s(szBuffer);
-	memset(szBuffer, 0, sizeof(szBuffer));
+	if (!pItem->szPublisher) {
+		FreeNGCDGame(&pMeta);
+		FreeGameItem(pItem);
+		free_s((void**)&pItem);
+		return FALSE;
+	}
 
 	// Fill game identity & display text fields
 	pItem->szShortName = _tcsdup_s(pMeta->pszName);
+	if (!pItem->szShortName) {
+		FreeNGCDGame(&pMeta);
+		FreeGameItem(pItem);
+		free_s((void**)&pItem);
+		return FALSE;
+	}
 
 	if (nGameID == 0x0000)
 		pItem->szTitle = _tcsdup_s(pItem->szPath);
 	else
 		pItem->szTitle = _tcsdup_s(pMeta->pszTitle);
+	if (!pItem->szTitle) {
+		FreeNGCDGame(&pMeta);
+		FreeGameItem(pItem);
+		free_s((void**)&pItem);
+		return FALSE;
+	}
 
 	memset(szBuffer, 0, sizeof(szBuffer));
 	_sntprintf(szBuffer, nLen, _T("%04X"), nGameID);
 	szBuffer[nLen - 1] = _T('\0');
 	pItem->szGameId    = _tcsdup_s(szBuffer);
+	if (!pItem->szGameId) {
+		FreeNGCDGame(&pMeta);
+		FreeGameItem(pItem);
+		free_s((void**)&pItem);
+		return FALSE;
+	}
 
 	// Assign icon index based on file type
 	pItem->nIconIdx    = nImgIdx;
@@ -944,8 +973,15 @@ static void GameLibThreadExit()
 static void NeoCD_ScanWithProgress(HWND hDlg)
 {
 	// Initialize global game library singleton if not created
-	if (!NeoCD_GameLibInit() || !pGameLib)
+	if (!NeoCD_GameLibInit() || !pGameLib) {
+		if (!pGameLib)
+		{
+			bprintf(PRINT_ERROR, _T("NeoCD_ScanWithProgress: Invalid game library\n"));
+		} else {
+			bprintf(PRINT_ERROR, _T("NeoCD_ScanWithProgress: NeoCD_GameLibInit failed\n"));
+		}
 		return;
+	}
 
 	// Bind current dialog handle to library for progress message sending
 	pGameLib->hGLDlg = hDlg;
@@ -1061,7 +1097,19 @@ static INT_PTR CALLBACK CacheGameLibWaitProc(HWND hDlg, UINT Msg, WPARAM wParam,
 static void NeoCDList_AddGame(struct GAME_LIB* pLib)
 {
 	if (!pLib || pLib->dataCount <= 0 || !hListView) {
-		bprintf(PRINT_ERROR, _T("NeoCDList_Add: Empty game library or invalid ListView handle\n"));
+		if (!pLib)
+		{
+			bprintf(PRINT_ERROR, _T("NeoCDList_Add: Invalid game library\n"));
+		}
+		if (pLib->dataCount <= 0)
+		{
+			bprintf(PRINT_ERROR, _T("NeoCDList_Add: Empty game library\n"));
+		}
+		if (!hListView)
+		{
+			bprintf(PRINT_ERROR, _T("NeoCDList_Add: Invalid ListView handle\n"));
+		}
+//		bprintf(PRINT_ERROR, _T("NeoCDList_Add: Empty game library or invalid ListView handle\n"));
 		return;
 	}
 	const INT32 total = pLib->dataCount;
@@ -1112,6 +1160,48 @@ static void NeoCDList_AddGame(struct GAME_LIB* pLib)
 	bprintf(PRINT_NORMAL, _T("NeoCDList_AddGame: Render total %d games\n"), total);
 }
 
+static INT32 sort_direction = 0;
+enum {
+	SORT_ASCENDING = 0,
+	SORT_DESCENDING = 1
+};
+
+struct LVCOMPAREINFO {
+	HWND  hWnd;
+	INT32 nColumn;
+	BOOL  bAscending;
+};
+
+static LVCOMPAREINFO lv_compare;
+
+static int CALLBACK ListViewCompareFunc(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort)
+{
+	TCHAR buf1[MAX_PATH];
+	TCHAR buf2[MAX_PATH];
+	LVCOMPAREINFO* lpsd = (struct LVCOMPAREINFO*)lParamSort;
+
+	ListView_GetItemText(lpsd->hWnd, (int)lParam1, lpsd->nColumn, buf1, sizeof(buf1));
+	ListView_GetItemText(lpsd->hWnd, (int)lParam2, lpsd->nColumn, buf2, sizeof(buf2));
+
+	switch (lpsd->bAscending) {
+		case SORT_ASCENDING:
+			return (_tcsicmp(buf1, buf2));
+		case SORT_DESCENDING:
+			return (0 - _tcsicmp(buf1, buf2));
+	}
+
+	return 0;
+}
+
+static void ListViewSort(int nDirection, int nColumn)
+{
+	// sort the list
+	lv_compare.hWnd       = hListView;
+	lv_compare.nColumn    = nColumn;
+	lv_compare.bAscending = nDirection;
+	ListView_SortItemsEx(hListView, ListViewCompareFunc, &lv_compare);
+}
+
 // Trigger full rescan when binary verification fails, wipe all invalid partial scan data
 void CreateNGCDListCache()
 {
@@ -1146,51 +1236,13 @@ void CreateNGCDListCache()
 
 	LeaveCriticalSection(&pGameLib->csLock);
 
+	// Keep the modal window always on top
+	HWND hParent = hNeoCDWnd ? hNeoCDWnd : hScrnWnd;
+
 	// Step3: Pop modal progress dialog to start brand new full scan
-	FBADialogBox(hAppInst, MAKEINTRESOURCE(IDD_WAIT), NULL, (DLGPROC)CacheGameLibWaitProc);
+	FBADialogBox(hAppInst, MAKEINTRESOURCE(IDD_WAIT), hParent, (DLGPROC)CacheGameLibWaitProc);
 	NeoCDList_AddGame(pGameLib);
-}
-
-static INT32 sort_direction = 0;
-enum {
-	SORT_ASCENDING = 0,
-	SORT_DESCENDING = 1
-};
-
-struct LVCOMPAREINFO {
-	HWND  hWnd;
-	INT32 nColumn;
-	BOOL  bAscending;
-};
-
-static LVCOMPAREINFO lv_compare;
-
-static int CALLBACK ListViewCompareFunc(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort)
-{
-	TCHAR buf1[MAX_PATH];
-	TCHAR buf2[MAX_PATH];
-	LVCOMPAREINFO* lpsd = (struct LVCOMPAREINFO*)lParamSort;
-
-	ListView_GetItemText(lpsd->hWnd, (int)lParam1, lpsd->nColumn, buf1, sizeof(buf1));
-	ListView_GetItemText(lpsd->hWnd, (int)lParam2, lpsd->nColumn, buf2, sizeof(buf2));
-
-	switch (lpsd->bAscending) {
-		case SORT_ASCENDING:
-			return (_tcsicmp(buf1, buf2));
-		case SORT_DESCENDING:
-			return (0 - _tcsicmp(buf1, buf2));
-		}
-
-	return 0;
-}
-
-static void ListViewSort(int nDirection, int nColumn)
-{
-	// sort the list
-	lv_compare.hWnd       = hListView;
-	lv_compare.nColumn    = nColumn;
-	lv_compare.bAscending = nDirection;
-	ListView_SortItemsEx(hListView, ListViewCompareFunc, &lv_compare);
+	ListViewSort(SORT_ASCENDING, 0);
 }
 
 static void NeoCDList_InitListView()
@@ -1244,13 +1296,13 @@ static void NeoCDList_InitListView()
 		// Load cue icon
 		hIconCue = (HICON)LoadImage(hAppInst, MAKEINTRESOURCE(IDI_LV_CDIMAGE_CUE), IMAGE_ICON, nIconsSizeXY, nIconsSizeXY, LR_DEFAULTCOLOR);
 		if (hIconCue) {
-			INT32 idx = ImageList_AddIcon(NeoCD_ImageList, hIconCue);
+			ImageList_AddIcon(NeoCD_ImageList, hIconCue);
 			DestroyIcon(hIconCue);
 		}
 		// Load chd icon
 		hIconChd = (HICON)LoadImage(hAppInst, MAKEINTRESOURCE(IDI_LV_CDIMAGE_CHD), IMAGE_ICON, nIconsSizeXY, nIconsSizeXY, LR_DEFAULTCOLOR);
 		if (hIconChd) {
-			INT32 idx = ImageList_AddIcon(NeoCD_ImageList, hIconChd);
+			ImageList_AddIcon(NeoCD_ImageList, hIconChd);
 			DestroyIcon(hIconChd);
 		}
 		// Bind imagelist to listview icon slot
@@ -1749,7 +1801,8 @@ void NeoCDList_InitCoverDlg()
 
 static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
-	static bool bNeedRun = false;
+	static bool  bNeedRun = false;
+	static HICON hDlgIcon = NULL;
 
 	if(Msg == WM_INITDIALOG)
 	{
@@ -1758,11 +1811,9 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 		NeoCDList_InitListView();
 
 		CreateNGCDListCache();
-		// Scan finished, render cached game data directly
-//		NeoCDList_AddGame(pGameLib);
 
-		HICON hIcon   = LoadIcon(hAppInst, MAKEINTRESOURCE(IDI_APP));
-		SendMessage(hDlg, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);		// Set the Game Selection dialog icon.
+		hDlgIcon = LoadIcon(hAppInst, MAKEINTRESOURCE(IDI_APP));
+		SendMessage(hDlg, WM_SETICON, ICON_SMALL, (LPARAM)hDlgIcon);		// Set the Game Selection dialog icon.
 
 		hWhiteBGBrush = CreateSolidBrush(RGB(0xFF, 0xFF, 0xFF));
 
@@ -1794,7 +1845,6 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 	if(Msg == WM_CLOSE)
 	{
 		NeoCDList_Clean(true);
-		DeleteObject(hWhiteBGBrush);
 
 		hNeoCDWnd	= NULL;
 		hListView	= NULL;
@@ -1805,6 +1855,18 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 			bNeedRun = false;
 			BurnerLoadDriver(_T("neocdz"));
 		}
+		return TRUE;
+	}
+
+	if (Msg == WM_DESTROY)
+	{
+		NeoCDList_Clean(true);
+
+		if (hDlgIcon) {
+			DestroyIcon(hDlgIcon);
+			hDlgIcon = NULL;
+		}
+		return TRUE;
 	}
 
 	if (Msg == WM_CTLCOLORSTATIC)
@@ -1947,6 +2009,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 
 			// Save currently selected game array index globally
 			nSelectedItem = nArrIdx;
+			return TRUE;
 		}
 
 		// Sort Change
@@ -1954,6 +2017,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 		{
 			sort_direction ^= 1;
 			ListViewSort(sort_direction, pNMLV->iSubItem);
+			return TRUE;
 		}
 
 
@@ -1968,10 +2032,11 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 				CDEmuImage[MAX_PATH - 1]= _T('\0');
 				bNeedRun = true;
 			} else {
-				return 0;
+				return TRUE;
 			}
 
 			PostMessage(hDlg, WM_CLOSE, 0, 0);
+			return TRUE;
 		}
 	}
 
@@ -2002,7 +2067,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 						NeoCDList_InitCoverDlg();
 					}
 				}
-				return 0;
+				return TRUE;
 			}
 
 			if(nCtrlID == IDC_NCD_BACK_PIC)
@@ -2035,7 +2100,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 						NeoCDList_InitCoverDlg();
 					}
 				}
-				return 0;
+				return TRUE;
 			}
 		}
 
@@ -2065,7 +2130,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 					}
 
 					PostMessage(hDlg, WM_CLOSE, 0, 0);
-					break;
+					return TRUE;
 				}
 
 				case IDC_NCD_SCAN_BUTTON:
@@ -2074,11 +2139,14 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 					CreateNGCDListCache();
 //					NeoCDList_AddGame(pGameLib);
 					SetFocus(hListView);
-					break;
+					return TRUE;
 				}
 
 				case IDC_NCD_SEL_DIR_BUTTON:
 				{
+					if (pGameLib && pGameLib->hGLDlg)
+						return TRUE;
+
 					TCHAR szBackup[MAX_PATH] = { 0 };
 					_tcsncpy(szBackup, szNeoCDGamesDir, MAX_PATH - 1);
 					szBackup[MAX_PATH - 1] = _T('\0');
@@ -2092,7 +2160,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 
 //					NeoCDList_AddGame(pGameLib);
 					SetFocus(hListView);
-					break;
+					return TRUE;
 				}
 
 				case IDC_NCD_SSUBDIR_CHECK:
@@ -2103,7 +2171,7 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 						bNeoCDListScanSub = false;
 					}
 					SetFocus(hListView);
-					break;
+					return TRUE;
 				}
 #if 0
 				case IDC_NCD_SISO_ONLY_CHECK:
@@ -2126,12 +2194,12 @@ static INT_PTR CALLBACK NeoCDList_WndProc(HWND hDlg, UINT Msg, WPARAM wParam, LP
 				case IDCANCEL:
 				{
 					PostMessage(hDlg, WM_CLOSE, 0, 0);
-					break;
+					return TRUE;
 				}
 			}
 		}
 	}
-	return 0;
+	return FALSE;
 }
 
 /*

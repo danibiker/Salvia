@@ -1,4 +1,4 @@
-// FBAlpha cd-img, TruRip .ccd/.sub/.img support by Jan Klaassen
+// FBNeo cd-img, TruRip .ccd/.sub/.img support by Jan Klaassen
 // .bin/.cue re-work by dink
 // .chd support: compressed CD image backend via libchdr (MAME project, BSD-3-Clause).
 // The image IS the .chd file; no CUE parsing required.  Sector layout is
@@ -66,6 +66,11 @@ static INT32 cdimgAudioFilePos;  // Track audio read position within file (file 
 
 // -----------------------------------------------------------------------------
 
+// neocdlist.h declares GetIsoPath() extern only under BUILD_NEOGEO and provides
+// a static-inline stub otherwise. Guard the definition to match, so a build
+// without the Neo Geo driver (e.g. a single non-neogeo driver) does not hit a
+// redefinition. All callers live in BUILD_NEOGEO-guarded code.
+#ifdef BUILD_NEOGEO
 TCHAR* GetIsoPath()
 {
 	if (cdimgTOC) {
@@ -79,6 +84,7 @@ TCHAR* GetIsoPath()
 
 	return NULL;
 }
+#endif
 
 static inline UINT8 bcd(const UINT8 v)
 {
@@ -577,14 +583,21 @@ static bool chd_meta_is_data_track(const char* meta)
 INT32 cdimgCountChdAudioTracks(TCHAR* pszFile)
 {
     TCHAR* pszPath = pszFile ? pszFile : CDEmuImage;
-    if (!pszPath || _tcslen(pszPath) < 5) return 0;
+    if (!pszPath || _tcslen(pszPath) < 5) {
+        bprintf(PRINT_ERROR, _T("cdimgCountChdAudioTracks: invalid path\n"));
+        return 0;
+    }
 
     FILE* fp = _tfopen(pszPath, _T("rb"));
-    if (!fp) return 0;
+    if (!fp) {
+        bprintf(PRINT_ERROR, _T("cdimgCountChdAudioTracks: _tfopen failed for %s\n"), pszPath);
+        return 0;
+    }
 
     chd_file* chd = NULL;
     chd_error err = chd_open_file(fp, CHD_OPEN_READ, NULL, &chd);
     if (err != CHDERR_NONE) {
+        bprintf(PRINT_ERROR, _T("cdimgCountChdAudioTracks: chd_open_file failed for %s, error=%d\n"), pszPath, (int)err);
         fclose(fp);
         return 0;
     }
@@ -616,6 +629,7 @@ INT32 cdimgCountChdAudioTracks(TCHAR* pszFile)
     }
 
     chd_close(chd);
+    fclose(fp);  // core_stdio_nonowner: chd_close does not close FILE*, we must
     return audio_track_count;
 }
 
