@@ -47,6 +47,5 @@ build/**
 DistroWin/**
 Distro360/**
 *.log
-src/http/dev_credentials.h
 libretro/snes9x/external/**
 libretro/snes9x/win32/libpng/**
