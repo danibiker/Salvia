@@ -356,6 +356,7 @@ typedef enum {cart_gba,
 			  cart_supergrafx,
 			  cart_quake,
 			  cart_default,
+			  cart_3do,
 			  max_carts};
 
 extern const char *JOY_DESCRIPTIONS[];

@@ -466,6 +466,8 @@ int ListMenu::getCartForSystem(int systemid){
 			return cart_gg;
 		case 25:
 			return cart_neogeo_pocket;
+		case 29:
+			return cart_3do;
 		case 31:
 			return cart_pce;
 		case 57:
