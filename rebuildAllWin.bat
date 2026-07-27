@@ -15,6 +15,8 @@ Release_Gambatte Release_Nestopia Release_Snes9x Release_Snes9x_latest ^
 Release_vbanext Release_picodrive Release_prboom ReleaseTyrQuake ^
 Release_Opera3DO Release_DosboxPure Release_mame Release_finalburn
 
+md DistroWin
+
 echo =======================================================
 echo Compilando %PLATFORM% (Modo Silencioso)
 echo =======================================================
