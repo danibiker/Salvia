@@ -167,6 +167,8 @@ Usb0:\Roms
 ├── Genesis\             (Megadrive/Genesis --> md bin zip)
 ├── gg\                  (GameGear --> gg zip)  
 ├── mame2003\            (M.A.M.E --> zip)
+│   ├── roms\            
+│   ├── samples\         
 ├── megacd\              (Sega CD --> md bin chd zip)
 ├── msx\                 (FBNeo MSX --> zip)
 ├── nes\                 (Nintendo Nes/Famicom --> nes zip)
@@ -179,7 +181,9 @@ Usb0:\Roms
 ├── quake\               (Quake 1 Engine -> pak)
 ├── sms\                 (Master System/SG-1000 --> sms zip)
 ├── snes\                (Super Nintendo/Super Famicom --> zip sfc)
-├── spectrum\            (FBNeo ZX Spectrum --> zip
+├── spectrum\            (FBNeo ZX Spectrum --> zip)
 ```
+
+If you want to change this routes, they should be changed manually editing the field **rom_directory** form the corresponding .cfg file of the config subdirectory
 
 
