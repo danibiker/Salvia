@@ -110,9 +110,6 @@ system/
 ├── syscard1.pce
 ├── syscard2.pce
 ├── syscard3.pce
-└── patches/
-│   ├── psx/
-│   │   ├── SCES_003.11.sbi ... SLES_329.69.sbi (197 .sbi files)
 ├── fbneo/
 │   ├── blend/
 │   │   ├── 1941.bld ... zupapan.bld (110 .bld files)
@@ -149,12 +146,16 @@ system/
 │   ├── spectrum.zip
 │   └── ym2608.zip
 └── mame2003-plus/
-    ├── artwork/
-    ├── samples/
-    └── hiscore.dat
+│   ├── artwork/
+│   ├── samples/
+│   └── hiscore.dat
+└── patches/
+│   ├── psx/
+│   │   ├── SCES_003.11.sbi ... SLES_329.69.sbi (197 .sbi files)
+
 ```
 ### Roms
-The config files come prepared to read the games from the directory Roms of the first usb (Usb0:\Roms) 
+The config files come prepared to read the games from the directory Roms of **the first usb (Usb0:\Roms)**
 To get started, you simply need to place your backed-up games into their respective directories:
 
 ```
@@ -189,4 +190,72 @@ Usb0:\Roms
 
 If you want to change this routes, they should be changed manually editing the field **rom_directory** form the corresponding .cfg file of the config subdirectory
 
+## Core Configurations
 
+### PSX
+The psx core needs some .sbi files to work properly with certain PAL titles. If your game hangs or is unable to boot, it's likely to need it. The .sbi files must be copied into the directory system\patches\psx, or alternatively, renamed with the same name as the cd file loaded, but mantaining the .sbi extension in the same directory 
+
+<img width="985" height="458" alt="image" src="https://github.com/user-attachments/assets/782e1da3-6ca9-492e-a2e2-2b3d5e7daf8e" />
+
+Certain games are only compatible with a DualShock controller. If required by the title, this can be configured directly within the Options menu:
+Options > Input > Retropad assignments > Port Controller 1 > Joystick type
+
+<img width="1279" height="276" alt="image" src="https://github.com/user-attachments/assets/ce5e9684-40be-452d-8cf4-2a0ce7ded53f" />
+
+### DOSBOX-PURE
+This core can load games from a compressed .zip file, but if the game is too big or demanding, it can introduce slowdowns. For this games (like Duke Nukem 3D) it's better to load them uncompressed from a directory
+
+It also may be required a specific joystick type. If the game fails to respond to your controller, adjust the settings within the Options menu:
+Options > Input > Retropad assignments > Port Controller 1 > Joystick type
+
+<img width="1279" height="275" alt="image" src="https://github.com/user-attachments/assets/15fcf292-7c27-466e-b28a-1c9aa030ae42" />
+
+### FBNEO
+For this core, there are two subdirectories available **neocd** (to load neogeo cd games) and  **megadrive** (it can load megadrive games for the fbneo core, but its main purpose is to load the game Paprium as Genesis-plus-gx is the gold standard for megadrive)
+
+Some games should run fullspeed but the fbneo team introduced some changes that make them slower than it should be (Altered Beast for example). For these game, use the alternative emulator FBANext
+
+#### Paprium
+To run this game, the following files must be present. Additionally, upon launching the game for the first time, you will be prompted to select your preferred language. Once selected, the game requires a restart, and this preference will be saved for future sessions.
+
+```
+system
+├── fbneo/
+│   ├── samples/
+│   │   ├── paprium/ (01 Theme of Paprium.wav ... 52 Waterfront Beat.wav --> 52 .wav files)
+```
+```
+Usb0:\Roms
+├── fbneo\               (Arcade FBNeo --> zip cue ccd chd)
+│   ├── megadrive\       (FBNeo Megadrive core)
+│   │   ├── paprium.zip  (Paprium game containing 'Paprium (World)(2020)(WaterMelon).bin')
+```
+#### Other FBNEO cores
+The MSX, ZX-Spectrum and NeoGeo Pocket rely on FBNEO. Search a compatible romset for this core 
+
+### QUAKE
+To load the right episode or mod of quake, a subdirectory must be created for each of them. The structure should be as:
+```
+Usb0:\Roms
+├── quake\
+│   ├── id1\ 
+│   │   ├── music
+│   │   │   ├── track02.ogg ... track11.ogg (10 .ogg files)
+│   │   ├── pak0.pak
+│   │   ├── pak1.pak
+│   ├── hipnotic\ 
+│   │   ├── music
+│   │   │   ├── track02.ogg ... track09.ogg (8 .ogg files)
+│   │   ├── pak0.pak
+```
+### DOOM
+To load the right episode or mod of Doom, the wad files should be copied on the prboom directory. The structure should be as:
+```
+Usb0:\Roms
+├── prboom\
+│   ├── DOOM.WAD
+│   ├── DOOM2.WAD
+│   ├── PLUTONIA.WAD
+│   ├── SIGIL.WAD
+│   ├── TNT.WAD
+```
