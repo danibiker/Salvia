@@ -47,4 +47,4 @@ build/**
 DistroWin/**
 Distro360/**
 *.log
-#src/http/dev_credentials.h
+src/http/dev_credentials.h
