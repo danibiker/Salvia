@@ -47,5 +47,4 @@ build/**
 DistroWin/**
 Distro360/**
 *.log
-libs/SDL_image-1.2.12/lpng1513/projects/vstudio/vstudio.suo
-src/http/dev_credentials.h
+#src/http/dev_credentials.h
