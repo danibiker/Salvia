@@ -110,6 +110,9 @@ system/
 ├── syscard1.pce
 ├── syscard2.pce
 ├── syscard3.pce
+└── patches/
+│   ├── psx/
+│   │   ├── SCES_003.11.sbi ... SLES_329.69.sbi (197 .sbi files)
 ├── fbneo/
 │   ├── blend/
 │   │   ├── 1941.bld ... zupapan.bld (110 .bld files)
