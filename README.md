@@ -73,7 +73,8 @@ Salvia can be installed into any directory (HDD or USB). As a suggestion, I like
 <img width="694" height="527" alt="image" src="https://github.com/user-attachments/assets/2e667993-959c-4f28-8117-97db79dd522b" />
 
 ### Bios
-The only thing needed to the emulators to work, is to provide the proper bios, as usual on every retroarch frontend. So the system directory should have the following files:
+The only thing needed to the emulators to work, is to provide the proper bios, as usual on every retroarch frontend. All the files needed can be downloaded from [https://github.com/Abdess/retrobios](https://github.com/Abdess/retrobios/releases/download/v2026.04.02/RetroPie_v1.22.2_Platform_BIOS_Pack.zip).
+The system directory should have the following files:
 
 ```
 system/
@@ -111,7 +112,7 @@ system/
 ├── syscard2.pce
 ├── syscard3.pce
 ├── fbneo/
-│   ├── blend/
+│   ├── blend/ (Not needed really but nice to have)
 │   │   ├── 1941.bld ... zupapan.bld (110 .bld files)
 │   │   └── ...
 │   ├── cheats/
@@ -192,11 +193,13 @@ If you want to change this routes, they should be changed manually editing the f
 ## Core Configurations
 
 ### PSX
-The psx core needs some .sbi files to work properly with certain PAL titles. If your game hangs or is unable to boot, it's likely to need it. The .sbi files must be copied into the directory system\patches\psx, or alternatively, renamed with the same name as the cd file loaded, but mantaining the .sbi extension in the same directory 
+The psx core needs some .sbi files to work properly with certain PAL titles. If your game hangs or is unable to boot, it's likely to need it. The .sbi files must be copied into the directory system\patches\psx, or alternatively, renamed with the same name as the cd file loaded, but mantaining the .sbi extension in the same directory.
+
+This files can be downloaded from [psxdatacenter.com](https://psxdatacenter.com/sbifiles.html). You can use the Firefox plugin [DownThemAll](https://www.downthemall.net/) to download them easily:
 
 <img width="985" height="458" alt="image" src="https://github.com/user-attachments/assets/782e1da3-6ca9-492e-a2e2-2b3d5e7daf8e" />
 
-This files can be downloaded from [psxdatacenter.com](https://psxdatacenter.com/sbifiles.html) You can use the Firefox plugin [DownThemAll](https://www.downthemall.net/) to download them easily
+
 
 Certain games are only compatible with a DualShock controller. If required by the title, this can be configured directly within the Options menu:
 Options > Input > Retropad assignments > Port Controller 1 > Joystick type
@@ -210,6 +213,10 @@ It also may be required a specific joystick type. If the game fails to respond t
 Options > Input > Retropad assignments > Port Controller 1 > Joystick type
 
 <img width="1279" height="275" alt="image" src="https://github.com/user-attachments/assets/15fcf292-7c27-466e-b28a-1c9aa030ae42" />
+
+This core features a built-in virtual keyboard, which is activated by pressing the L3 stick by default. Once the window appears, you can cycle through the various options using the L and R buttons. This interface allows you to both use the keyboard and map or modify specific keys to the controller buttons.
+
+<img width="1278" height="721" alt="image" src="https://github.com/user-attachments/assets/4f5a428b-fc2f-46d2-8ed6-3debee99cdbe" />
 
 ### FBNEO
 For this core, there are two subdirectories available **neocd** (to load neogeo cd games) and  **megadrive** (it can load megadrive games for the fbneo core, but its main purpose is to load the game Paprium as Genesis-plus-gx is the gold standard for megadrive)
@@ -234,10 +241,14 @@ Usb0:\Roms
         └── paprium.zip  (Paprium game containing 'Paprium (World)(2020)(WaterMelon).bin')
 ```
 #### Other FBNEO cores
-The MSX, ZX-Spectrum and NeoGeo Pocket rely on FBNEO. Search a compatible romset for this core 
+The MSX, ZX-Spectrum and NeoGeo Pocket rely on FBNEO. Search a compatible romset for these cores.
+For MSX and ZX Spectrum cores, an on-screen overlay keyboard is available and can be enabled by pressing the default shortcut SELECT + X
+
+<img width="1281" height="722" alt="image" src="https://github.com/user-attachments/assets/01e73cc0-96b4-4e67-82e5-b78738a58989" />
+
 
 ### QUAKE
-To load the right episode or mod of quake, a subdirectory must be created for each of them. The structure should be as:
+To load the right episode or mod of quake, a subdirectory must be created for each of them. The structure should be as follows:
 ```
 Usb0:\Roms
 └── quake\
@@ -252,7 +263,7 @@ Usb0:\Roms
         └── pak0.pak
 ```
 ### DOOM
-To load the right episode or mod of Doom, the wad files should be copied on the prboom directory. The structure should be as:
+To load the right episode or mod of Doom, the wad files should be copied on the prboom directory. The structure should be as follows:
 ```
 Usb0:\Roms
 └── prboom\
