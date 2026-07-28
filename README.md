@@ -285,7 +285,7 @@ To be able to load achievements for your local games, you must first register in
 Once you are registered, you must enter your username and password using the menu: Options > Achievements > User | Password
 
 ## Games artwork and titles
-### Builting scraper
+### Built-in scraper
 To be able to scrap your local games, you must first register into the following link: [screenscraper.fr](https://www.screenscraper.fr/membreinscription.php)
 
 Once you are registered, you must enter your username and password using the menu: Options > Scraper > Other configuration > User | Password
