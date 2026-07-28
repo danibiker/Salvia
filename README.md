@@ -264,14 +264,42 @@ If you don't want to use the builtin scraper, you can add your images and text f
 ```
 Usb0:\Salvia\assets\mame
 ├── box2d\ (An image of the game box cartridge)
-    └── 3countb.png ... zzyzzyxx.png (2919 .png files)
+|   └── 3countb.png ... zzyzzyxx.png (2919 .png files)
 ├── snap\ (An ingame screenshot)
-    └── 3countb.png ... zzyzzyxx.png (2919 .png files)
+|   └── 3countb.png ... zzyzzyxx.png (2919 .png files)
 ├── snaptit\ (A game's title screenshot)
-    └── 3countb.png ... zzyzzyxx.png (2919 .png files)
+|   └── 3countb.png ... zzyzzyxx.png (2919 .png files)
 └── synopsis\
     └── 1on1gov.txt ... zzyzzyxx2.txt (37751 .txt files)
 ```
+
+The images can be easily found on internet, but to generate the synopsys directory files, a script is provided in the utils\extract_history.ps1 git main path. To execute it, edit its content and modify the $baseDir line with a directory path containing the MAME "history.xml" file. Open a "Windows power shell" and execute it. 
+
+<img width="591" height="158" alt="image" src="https://github.com/user-attachments/assets/3676f16c-d8fe-4a1a-9768-fd666ea002e3" />
+
+### Games titles
+Some emulators like MAME or Final Burn Neo/Alpha, have short rom filenames that make really difficult to differenciate which game is which, so, to translate them, some files are prepared in the main distribution of the salvia frontend. The location is the following:
+
+```
+Usb0:\Salvia\assets\extra
+├── merged_mame.xml
+└── merged_fbneo.xml
+└── merged_ngp_spectrum_msx.xml
+```
+Furthermore, each file must be referentiated into the mame_roms_xml property of the .cfg file for each emulator 
+
+```
+mame_roms_xml = assets\extra\merged_mame.xml
+```
+
+if you want manually generate the titles for each game, a script is provided in the utils\merge_mame_files.ps1 git main path. This script needs the .dat or .xml files provided for MAME or FBNEO, and generates a reduced xml with the important information extracted. For example, the merged-* files described above where generated with the following files
+
+- fbneo.dat
+- MAME 0.284.dat
+- mame2003-plus.xml
+
+<img width="655" height="230" alt="image" src="https://github.com/user-attachments/assets/ee3a2e89-5134-4509-b290-085b1c0be87e" />
+
 
 # Compiling
 [see COMPILING.md](COMPILING.md)
