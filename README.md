@@ -258,3 +258,20 @@ Usb0:\Roms
     ├── SIGIL.WAD
     └── TNT.WAD
 ```
+## Games artwork
+If you don't want to use the builtin scraper, you can add your images and text for each game manually. The images must be in png format and the description must be a .txt file. To be able to do that, you must create this directory structure for the emulator. For example, to add images and text descriptions for the mame core:
+
+```
+Usb0:\Salvia\assets\mame
+├── box2d\ (An image of the game box cartridge)
+    └── 3countb.png ... zzyzzyxx.png (2919 .png files)
+├── snap\ (An ingame screenshot)
+    └── 3countb.png ... zzyzzyxx.png (2919 .png files)
+├── snaptit\ (A game's title screenshot)
+    └── 3countb.png ... zzyzzyxx.png (2919 .png files)
+└── synopsis\
+    └── 1on1gov.txt ... zzyzzyxx2.txt (37751 .txt files)
+```
+
+# Compiling
+[see COMPILING.md](COMPILING.md)
