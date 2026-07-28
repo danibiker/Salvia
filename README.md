@@ -129,7 +129,6 @@ system/
 │   ├── fdsbios.zip
 │   ├── hiscore.dat
 │   ├── isgsm.zip
-│   ├── md_paprium.zip
 │   ├── midssio.zip
 │   ├── msx.zip
 │   ├── namcoc69.zip
@@ -150,8 +149,8 @@ system/
 │   ├── samples/
 │   └── hiscore.dat
 └── patches/
-│   ├── psx/
-│   │   ├── SCES_003.11.sbi ... SLES_329.69.sbi (197 .sbi files)
+    └── psx/
+       └── SCES_003.11.sbi ... SLES_329.69.sbi (197 .sbi files)
 
 ```
 ### Roms
@@ -165,14 +164,14 @@ Usb0:\Roms
 ├── fbneo\               (Arcade FBNeo --> zip cue ccd chd)
 │   ├── neocd\           (NeoGeo CD --> cue ccd chd)
 │   ├── megadrive\       (FBNeo Megadrive core)
-│   │   ├── paprium.zip  (Paprium game containing 'Paprium (World)(2020)(WaterMelon).bin')
+│       └── paprium.zip  (Paprium game containing 'Paprium (World)(2020)(WaterMelon).bin')
 ├── gb\                  (Game boy --> zip gb)
 ├── gba\                 (Game boy advance --> gba zip)
 ├── Genesis\             (Megadrive/Genesis --> md bin zip)
 ├── gg\                  (GameGear --> gg zip)  
 ├── mame2003\            (M.A.M.E --> zip)
-│   ├── roms\            
-│   ├── samples\         
+│   └── roms\            
+│   └── samples\         
 ├── megacd\              (Sega CD --> md bin chd zip)
 ├── msx\                 (FBNeo MSX --> zip)
 ├── nes\                 (Nintendo Nes/Famicom --> nes zip)
@@ -185,7 +184,7 @@ Usb0:\Roms
 ├── quake\               (Quake 1 Engine -> pak)
 ├── sms\                 (Master System/SG-1000 --> sms zip)
 ├── snes\                (Super Nintendo/Super Famicom --> zip sfc)
-├── spectrum\            (FBNeo ZX Spectrum --> zip)
+└── spectrum\            (FBNeo ZX Spectrum --> zip)
 ```
 
 If you want to change this routes, they should be changed manually editing the field **rom_directory** form the corresponding .cfg file of the config subdirectory
@@ -220,15 +219,15 @@ To run this game, the following files must be present. Additionally, upon launch
 
 ```
 system
-├── fbneo/
-│   ├── samples/
-│   │   ├── paprium/ (01 Theme of Paprium.wav ... 52 Waterfront Beat.wav --> 52 .wav files)
+└── fbneo/
+    └── samples/
+        └── paprium/ (01 Theme of Paprium.wav ... 52 Waterfront Beat.wav --> 52 .wav files)
 ```
 ```
 Usb0:\Roms
-├── fbneo\               (Arcade FBNeo --> zip cue ccd chd)
-│   ├── megadrive\       (FBNeo Megadrive core)
-│   │   ├── paprium.zip  (Paprium game containing 'Paprium (World)(2020)(WaterMelon).bin')
+└── fbneo\               (Arcade FBNeo --> zip cue ccd chd)
+    └── megadrive\       (FBNeo Megadrive core)
+        └── paprium.zip  (Paprium game containing 'Paprium (World)(2020)(WaterMelon).bin')
 ```
 #### Other FBNEO cores
 The MSX, ZX-Spectrum and NeoGeo Pocket rely on FBNEO. Search a compatible romset for this core 
@@ -237,25 +236,25 @@ The MSX, ZX-Spectrum and NeoGeo Pocket rely on FBNEO. Search a compatible romset
 To load the right episode or mod of quake, a subdirectory must be created for each of them. The structure should be as:
 ```
 Usb0:\Roms
-├── quake\
-│   ├── id1\ 
-│   │   ├── music
-│   │   │   ├── track02.ogg ... track11.ogg (10 .ogg files)
-│   │   ├── pak0.pak
-│   │   ├── pak1.pak
-│   ├── hipnotic\ 
-│   │   ├── music
-│   │   │   ├── track02.ogg ... track09.ogg (8 .ogg files)
-│   │   ├── pak0.pak
+└── quake\
+    ├── id1\ 
+    │   ├── music
+    │   │   └── track02.ogg ... track11.ogg (10 .ogg files)
+    │   ├── pak0.pak
+    │   └── pak1.pak
+    └── hipnotic\ 
+        ├── music
+        │   └── track02.ogg ... track09.ogg (8 .ogg files)
+        └── pak0.pak
 ```
 ### DOOM
 To load the right episode or mod of Doom, the wad files should be copied on the prboom directory. The structure should be as:
 ```
 Usb0:\Roms
-├── prboom\
-│   ├── DOOM.WAD
-│   ├── DOOM2.WAD
-│   ├── PLUTONIA.WAD
-│   ├── SIGIL.WAD
-│   ├── TNT.WAD
+└── prboom\
+    ├── DOOM.WAD
+    ├── DOOM2.WAD
+    ├── PLUTONIA.WAD
+    ├── SIGIL.WAD
+    └── TNT.WAD
 ```
