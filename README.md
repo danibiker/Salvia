@@ -190,6 +190,12 @@ Usb0:\Roms
 
 If you want to change this routes, they should be changed manually editing the field **rom_directory** form the corresponding .cfg file of the config subdirectory
 
+### Hotkeys
+Hotkeys can be accessed via the menu: Options > Input > Hotkeys. By default, the SELECT button acts as the primary hotkey enabler and must be pressed first, followed by the corresponding function button to execute the desired action. For instance, the 'SELECT + START' combination exits the emulation, returning you to the game selection screen. Another essential shortcut is 'SELECT + Y', which brings up an overlay containing the options menu or returns to the game emulation if pressed again. The remaining options are fairly self-explanatory.
+
+<img width="1279" height="381" alt="image" src="https://github.com/user-attachments/assets/1cdfb429-d4f4-40ef-baf9-d13c7808c39e" />
+
+
 ## Core Configurations
 
 ### PSX
