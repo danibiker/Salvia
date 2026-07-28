@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "beetle-psx-libretro", "beetle-psx-libretro\beetle-psx-libretro.vcxproj", "{0D6B8713-C2AA-475E-B7E1-41AF4DD2C35D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Debug|Xbox 360 = Debug|Xbox 360
+		Release|Win32 = Release|Win32
+		Release|Xbox 360 = Release|Xbox 360
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0D6B8713-C2AA-475E-B7E1-41AF4DD2C35D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{0D6B8713-C2AA-475E-B7E1-41AF4DD2C35D}.Debug|Win32.Build.0 = Debug|Win32
+		{0D6B8713-C2AA-475E-B7E1-41AF4DD2C35D}.Debug|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{0D6B8713-C2AA-475E-B7E1-41AF4DD2C35D}.Debug|Xbox 360.Build.0 = Debug|Xbox 360
+		{0D6B8713-C2AA-475E-B7E1-41AF4DD2C35D}.Debug|Xbox 360.Deploy.0 = Debug|Xbox 360
+		{0D6B8713-C2AA-475E-B7E1-41AF4DD2C35D}.Release|Win32.ActiveCfg = Release|Win32
+		{0D6B8713-C2AA-475E-B7E1-41AF4DD2C35D}.Release|Win32.Build.0 = Release|Win32
+		{0D6B8713-C2AA-475E-B7E1-41AF4DD2C35D}.Release|Xbox 360.ActiveCfg = Release|Xbox 360
+		{0D6B8713-C2AA-475E-B7E1-41AF4DD2C35D}.Release|Xbox 360.Build.0 = Release|Xbox 360
+		{0D6B8713-C2AA-475E-B7E1-41AF4DD2C35D}.Release|Xbox 360.Deploy.0 = Release|Xbox 360
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

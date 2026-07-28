@@ -1,0 +1,406 @@
+SOURCES_CXX :=
+SOURCES_C   :=
+
+DEPS_DIR     := $(CORE_DIR)/deps
+LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro-common
+LIBKIRK_DIR  := $(DEPS_DIR)/libkirk
+MEDNAFEN_DIR := $(CORE_DIR)/mednafen
+CORE_EMU_DIR := $(MEDNAFEN_DIR)/psx
+RSXGL_DIR    := $(CORE_DIR)/rustation-libretro/src
+CDROM_DIR    := $(MEDNAFEN_DIR)/cdrom
+LIBZMA_DIR   := $(DEPS_DIR)/lzma-19.00
+ZLIB_DIR     := $(DEPS_DIR)/zlib-1.2.11
+
+LIBCHDR_INCFLAGS = \
+                     -I$(LIBZMA_DIR)/include \
+                     -I$(DEPS_DIR)/libchdr/include \
+                     -I$(DEPS_DIR)/zstd/lib \
+
+LIBCHDR_SOURCES_C = \
+                     $(LIBZMA_DIR)/src/Alloc.c \
+                     $(LIBZMA_DIR)/src/Bra86.c \
+                     $(LIBZMA_DIR)/src/BraIA64.c \
+                     $(LIBZMA_DIR)/src/CpuArch.c \
+                     $(LIBZMA_DIR)/src/Delta.c \
+                     $(LIBZMA_DIR)/src/LzFind.c \
+                     $(LIBZMA_DIR)/src/Lzma86Dec.c \
+                     $(LIBZMA_DIR)/src/LzmaDec.c \
+                     $(LIBZMA_DIR)/src/LzmaEnc.c \
+                     $(DEPS_DIR)/libchdr/src/libchdr_bitstream.c \
+                     $(DEPS_DIR)/libchdr/src/libchdr_cdrom.c \
+                     $(DEPS_DIR)/libchdr/src/libchdr_chd.c \
+                     $(DEPS_DIR)/libchdr/src/libchdr_flac.c \
+                     $(DEPS_DIR)/libchdr/src/libchdr_huffman.c \
+                     $(DEPS_DIR)/zstd/lib/common/entropy_common.c \
+                     $(DEPS_DIR)/zstd/lib/common/error_private.c \
+                     $(DEPS_DIR)/zstd/lib/common/fse_decompress.c \
+                     $(DEPS_DIR)/zstd/lib/common/zstd_common.c \
+                     $(DEPS_DIR)/zstd/lib/common/xxhash.c \
+                     $(DEPS_DIR)/zstd/lib/decompress/huf_decompress.c \
+                     $(DEPS_DIR)/zstd/lib/decompress/zstd_ddict.c \
+                     $(DEPS_DIR)/zstd/lib/decompress/zstd_decompress.c \
+                     $(DEPS_DIR)/zstd/lib/decompress/zstd_decompress_block.c \
+
+ZLIB_INCFLAGS = -I$(ZLIB_DIR)
+ZLIB_SOURCES_C = \
+		 $(ZLIB_DIR)/adler32.c \
+		 $(ZLIB_DIR)/crc32.c \
+		 $(ZLIB_DIR)/inffast.c \
+		 $(ZLIB_DIR)/inflate.c \
+		 $(ZLIB_DIR)/inftrees.c \
+		 $(ZLIB_DIR)/zutil.c
+
+ifeq ($(HAVE_OPENGL), 1)
+   ifeq ($(GLES3), 1)
+      GLFLAGS  := -DHAVE_OPENGLES -DHAVE_OPENGLES3
+      CFLAGS   += $(GLFLAGS)
+      CXXFLAGS += $(GLFLAGS)
+      SOURCES_C += $(LIBRETRO_COMM_DIR)/glsym/glsym_es3.c
+   else ifeq ($(GLES), 1)
+      GLFLAGS  := -DHAVE_OPENGLES -DHAVE_OPENGLES2
+      CFLAGS   += $(GLFLAGS)
+      CXXFLAGS += $(GLFLAGS)
+      SOURCES_C += $(LIBRETRO_COMM_DIR)/glsym/glsym_es2.c
+   else
+      GLFLAGS   := -DHAVE_OPENGL -DCORE
+      CFLAGS    += $(GLFLAGS)
+      CXXFLAGS  += $(GLFLAGS)
+      SOURCES_C += $(LIBRETRO_COMM_DIR)/glsym/glsym_gl.c
+   endif
+
+   SOURCES_C += $(LIBRETRO_COMM_DIR)/glsm/glsm.c \
+                $(LIBRETRO_COMM_DIR)/glsym/rglgen.c
+
+   SOURCES_CXX += $(CORE_DIR)/rsx/rsx_lib_gl.cpp
+endif
+
+INCFLAGS := -I$(CORE_DIR) \
+            -I$(MEDNAFEN_DIR) \
+            -I$(MEDNAFEN_DIR)/include \
+            -I$(MEDNAFEN_DIR)/intl \
+            -I$(MEDNAFEN_DIR)/hw_sound \
+            -I$(MEDNAFEN_DIR)/hw_cpu \
+            -I$(MEDNAFEN_DIR)/hw_misc \
+            -I$(LIBRETRO_COMM_DIR)/include \
+            -I$(DEPS_DIR)/ugui
+
+ifneq (,$(findstring msvc,$(platform)))
+   INCFLAGS += -I$(CORE_DIR)/msvc
+endif
+
+SOURCES_C += $(DEPS_DIR)/ugui/ugui.c \
+               $(CORE_DIR)/ugui_tools.c
+
+ifeq ($(SYSTEM_ZLIB), 1)
+   CFLAGS += $(shell pkg-config --cflags zlib)
+   LIBS += $(shell pkg-config --libs zlib)
+else
+   INCFLAGS += $(ZLIB_INCFLAGS)
+   SOURCES_C += $(ZLIB_SOURCES_C)
+endif
+
+ifeq ($(HAVE_GRIFFIN),1)
+   SOURCES_CXX += beetle_psx_griffin.cpp \
+                  $(CORE_EMU_DIR)/dma.cpp \
+                  $(CORE_EMU_DIR)/sio.cpp
+
+   SOURCES_C += beetle_psx_griffin_c.c
+endif
+
+FLAGS += -DHAVE_PBP
+
+ifeq ($(DEBUG), 1)
+   SOURCES_CXX += $(CORE_EMU_DIR)/dis.cpp
+endif
+
+ifeq ($(NEED_THREADING), 1)
+   FLAGS += -DWANT_THREADING -DHAVE_THREADS
+endif
+
+ifeq ($(NEED_CRC32), 1)
+   FLAGS += -DWANT_CRC32
+   SOURCES_C += $(CORE_DIR)/scrc32.c
+endif
+
+ifeq ($(NEED_DEINTERLACER), 1)
+   FLAGS += -DNEED_DEINTERLACER
+endif
+
+ifeq ($(IS_X86), 1)
+   FLAGS += -DARCH_X86
+endif
+
+ifeq ($(NEED_BPP), 8)
+   FLAGS += -DWANT_8BPP
+endif
+
+ifeq ($(NEED_BPP), 16)
+   FLAGS += -DWANT_16BPP
+endif
+
+ifeq ($(NEED_BPP), 32)
+   FLAGS += -DWANT_32BPP
+endif
+
+ifeq ($(NO_COMPUTED_GOTO), 1)
+   FLAGS += -DNO_COMPUTED_GOTO
+endif
+
+ifeq ($(FRONTEND_SUPPORTS_RGB565), 1)
+   FLAGS += -DFRONTEND_SUPPORTS_RGB565
+endif
+
+ifeq ($(NEED_CD), 1)
+   FLAGS += -DNEED_CD
+endif
+
+ifeq ($(HAVE_CHD), 1)
+   FLAGS += -DHAVE_CHD -D_7ZIP_ST -DZSTD_DISABLE_ASM
+
+   ifeq ($(SYSTEM_LIBCHDR), 1)
+      INCFLAGS += $(shell pkg-config --cflags libchdr)
+      LIBS += $(shell pkg-config --libs libchdr)
+   else
+      INCFLAGS += $(LIBCHDR_INCFLAGS)
+   endif
+endif
+
+ifeq ($(NEED_TREMOR), 1)
+   FLAGS += -DNEED_TREMOR
+endif
+
+ifeq ($(HAVE_LIGHTREC), 1)
+   FLAGS += -DHAVE_LIGHTREC
+
+   ifeq ($(LIGHTREC_LOG_LEVEL),)
+       FLAGS += -DLOG_LEVEL=3 \
+                -DENABLE_DISASSEMBLER=0
+   else
+       ifeq ($(LIGHTREC_LOG_LEVEL), 4)
+           FLAGS += -DLOG_LEVEL=4 \
+                    -DENABLE_DISASSEMBLER=1
+       else
+           FLAGS += -DLOG_LEVEL=$(LIGHTREC_LOG_LEVEL) \
+                    -DENABLE_DISASSEMBLER=0
+       endif
+   endif
+
+   ifeq ($(NO_GCC), 1)
+       FLAGS += -DHAS_DEFAULT_ELM=0
+   else
+       FLAGS += -DHAS_DEFAULT_ELM=1
+   endif
+
+   ifeq ($(THREADED_RECOMPILER), 0)
+       FLAGS += -DENABLE_THREADED_COMPILER=0
+   else
+      ifeq ($(DEBUG), 0)
+          FLAGS += -DENABLE_THREADED_COMPILER=1
+      else
+          FLAGS += -DENABLE_THREADED_COMPILER=0
+      endif
+   endif
+
+   ifneq (,$(findstring win,$(platform)))
+       FLAGS += -DLIGHTREC_STATIC=1
+       INCFLAGS += -isystem$(DEPS_DIR)/mman
+   endif
+
+   INCFLAGS += -I$(DEPS_DIR)/lightning/include \
+               -I$(DEPS_DIR)/lightrec \
+               -I$(CORE_DIR)/lightning-lightrec-include \
+               -include $(CORE_DIR)/lightning-lightrec-include/debug.h
+endif
+
+ifneq ($(HAVE_GRIFFIN), 1)
+   SOURCES_CXX += $(CORE_EMU_DIR)/irq.cpp \
+                  $(CORE_EMU_DIR)/timer.cpp \
+                  $(CORE_EMU_DIR)/dma.cpp \
+                  $(CORE_EMU_DIR)/frontio.cpp \
+                  $(CORE_EMU_DIR)/sio.cpp \
+                  $(CORE_EMU_DIR)/cpu.cpp \
+                  $(CORE_EMU_DIR)/gte.cpp \
+                  $(CORE_EMU_DIR)/cdc.cpp \
+                  $(CORE_EMU_DIR)/spu.cpp \
+                  $(CORE_EMU_DIR)/gpu.cpp \
+                  $(CORE_EMU_DIR)/gpu_polygon_sub.cpp \
+                  $(CORE_EMU_DIR)/mdec.cpp \
+                  $(CORE_EMU_DIR)/input/gamepad.cpp \
+                  $(CORE_EMU_DIR)/input/dualanalog.cpp \
+                  $(CORE_EMU_DIR)/input/dualshock.cpp \
+                  $(CORE_EMU_DIR)/input/justifier.cpp \
+                  $(CORE_EMU_DIR)/input/guncon.cpp \
+                  $(CORE_EMU_DIR)/input/negcon.cpp \
+                  $(CORE_EMU_DIR)/input/negconrumble.cpp \
+                  $(CORE_EMU_DIR)/input/memcard.cpp \
+                  $(CORE_EMU_DIR)/input/multitap.cpp \
+                  $(CORE_EMU_DIR)/input/mouse.cpp
+
+   ifeq ($(HAVE_JIT), 1)
+      SOURCES_CXX += $(CORE_EMU_DIR)/decomp.cpp
+   endif
+
+   SOURCES_C += $(CORE_DIR)/libretro_cbs.c \
+                $(CORE_DIR)/beetle_psx_globals.c
+
+   ifeq ($(NEED_TREMOR), 1)
+      SOURCES_C += $(sort $(wildcard $(MEDNAFEN_DIR)/tremor/*.c))
+   endif
+
+   SOURCES_CXX += $(CDROM_DIR)/CDAccess.cpp \
+                  $(CDROM_DIR)/CDAccess_Image.cpp \
+                  $(CDROM_DIR)/CDAccess_CCD.cpp \
+                  $(CDROM_DIR)/CDAccess_PBP.cpp \
+                  $(CDROM_DIR)/audioreader.cpp \
+                  $(CDROM_DIR)/misc.cpp \
+                  $(CDROM_DIR)/cdromif.cpp
+
+   SOURCES_C +=   $(CDROM_DIR)/CDUtility.c \
+                  $(CDROM_DIR)/galois.c \
+                  $(CDROM_DIR)/l-ec.c \
+                  $(CDROM_DIR)/lec.c \
+                  $(CDROM_DIR)/recover-raw.c \
+                  $(CDROM_DIR)/edc_crc32.c
+
+   SOURCES_CXX += $(MEDNAFEN_DIR)/error.cpp \
+                  $(MEDNAFEN_DIR)/general.cpp \
+                  $(MEDNAFEN_DIR)/FileStream.cpp \
+                  $(MEDNAFEN_DIR)/MemoryStream.cpp \
+                  $(MEDNAFEN_DIR)/Stream.cpp \
+                  $(MEDNAFEN_DIR)/mempatcher.cpp \
+                  $(MEDNAFEN_DIR)/video/Deinterlacer.cpp \
+                  $(MEDNAFEN_DIR)/video/surface.cpp \
+                  $(CORE_DIR)/libretro.cpp \
+                  $(MEDNAFEN_DIR)/mednafen-endian.cpp \
+                  $(CORE_DIR)/input.cpp \
+                  $(CORE_DIR)/rsx/rsx_intf.cpp
+
+   SOURCES_C +=   \
+						$(MEDNAFEN_DIR)/settings.c \
+                  $(MEDNAFEN_DIR)/state.c
+
+   ifneq ($(RSX_DUMP),)
+      SOURCES_CXX += $(CORE_DIR)/rsx/rsx_dump.cpp
+      CFLAGS      += -DRSX_DUMP
+      CXXFLAGS    += -DRSX_DUMP
+   endif
+
+   ifeq ($(HAVE_VULKAN), 1)
+      CFLAGS      += -DTEXTURE_DUMPING_ENABLED
+      CXXFLAGS    += -DTEXTURE_DUMPING_ENABLED
+      SOURCES_CXX += $(wildcard $(CORE_DIR)/parallel-psx/renderer/*.cpp) \
+                     $(wildcard $(CORE_DIR)/parallel-psx/custom-textures/*.cpp) \
+                     $(wildcard $(CORE_DIR)/parallel-psx/atlas/*.cpp) \
+                     $(wildcard $(CORE_DIR)/parallel-psx/vulkan/*.cpp) \
+                     $(wildcard $(CORE_DIR)/parallel-psx/SPIRV-Cross/*.cpp) \
+                     $(CORE_DIR)/parallel-psx/util/timer.cpp \
+                     $(CORE_DIR)/rsx/rsx_lib_vulkan.cpp
+
+      SOURCES_C += $(wildcard $(CORE_DIR)/parallel-psx/volk/*.c)
+
+      EXTRA_INCLUDES += -I$(CORE_DIR)/parallel-psx/SPIRV-Cross \
+                        -I$(CORE_DIR)/parallel-psx/renderer \
+                        -I$(CORE_DIR)/parallel-psx/khronos/include \
+                        -I$(CORE_DIR)/parallel-psx/atlas \
+                        -I$(CORE_DIR)/parallel-psx/vulkan \
+                        -I$(CORE_DIR)/parallel-psx/util \
+                        -I$(CORE_DIR)/parallel-psx/volk \
+                        -I$(CORE_DIR)/parallel-psx/glsl/prebuilt
+
+      CXXFLAGS += -std=c++11 -DHAVE_LIBRETRO
+      ifneq ($(VULKAN_DEBUG),)
+         FLAGS += -DVULKAN_DEBUG
+      endif
+   endif
+
+   ifneq ($(STATIC_LINKING), 1)
+      SOURCES_C +=   $(LIBRETRO_COMM_DIR)/streams/file_stream.c \
+                     $(LIBRETRO_COMM_DIR)/streams/file_stream_transforms.c \
+                     $(LIBRETRO_COMM_DIR)/file/file_path.c \
+                     $(LIBRETRO_COMM_DIR)/file/retro_dirent.c \
+                     $(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c \
+                     $(LIBRETRO_COMM_DIR)/lists/dir_list.c \
+                     $(LIBRETRO_COMM_DIR)/lists/string_list.c \
+                     $(LIBRETRO_COMM_DIR)/string/stdstring.c \
+                     $(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
+                     $(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
+                     $(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c \
+                     $(LIBRETRO_COMM_DIR)/compat/compat_posix_string.c \
+                     $(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c \
+                     $(LIBRETRO_COMM_DIR)/memmap/memalign.c \
+                     $(LIBRETRO_COMM_DIR)/time/rtime.c \
+                     $(LIBRETRO_COMM_DIR)/hash/rhash.c
+
+      ifeq ($(HAVE_CDROM), 1)
+         CFLAGS    += -DHAVE_CDROM
+         CXXFLAGS  += -DHAVE_CDROM
+         SOURCES_C += $(LIBRETRO_COMM_DIR)/cdrom/cdrom.c \
+                      $(LIBRETRO_COMM_DIR)/vfs/vfs_implementation_cdrom.c
+
+         ifeq ($(CDROM_DEBUG), 1)
+            CFLAGS += -DCDROM_DEBUG
+            CXXFLAGS += -DCDROM_DEBUG
+         endif
+      endif
+
+      ifeq ($(NEED_THREADING), 1)
+         SOURCES_C += $(LIBRETRO_COMM_DIR)/rthreads/rthreads.c
+      endif
+
+   endif
+endif ## ifneq($(HAVE_GRIFFIN, 1))
+
+SOURCES_C +=   $(LIBKIRK_DIR)/aes.c \
+               $(LIBKIRK_DIR)/amctrl.c \
+               $(LIBKIRK_DIR)/bn.c \
+               $(LIBKIRK_DIR)/des.c \
+               $(LIBKIRK_DIR)/ec.c \
+               $(LIBKIRK_DIR)/kirk_engine.c \
+               $(LIBKIRK_DIR)/sha1.c
+
+SOURCES_C +=   $(CORE_DIR)/pgxp/pgxp_cpu.c \
+               $(CORE_DIR)/pgxp/pgxp_debug.c \
+               $(CORE_DIR)/pgxp/pgxp_gpu.c \
+               $(CORE_DIR)/pgxp/pgxp_gte.c \
+               $(CORE_DIR)/pgxp/pgxp_main.c \
+               $(CORE_DIR)/pgxp/pgxp_mem.c \
+               $(CORE_DIR)/pgxp/pgxp_value.c
+
+ifeq ($(HAVE_CHD), 1)
+   ifneq ($(SYSTEM_LIBCHDR), 1)
+      SOURCES_C += $(LIBCHDR_SOURCES_C)
+   endif
+
+   SOURCES_CXX += $(CDROM_DIR)/CDAccess_CHD.cpp
+endif ## ifeq ($(HAVE_CHD), 1)
+
+ifeq ($(HAVE_LIGHTREC), 1)
+   SOURCES_C +=   $(DEPS_DIR)/lightning/lib/jit_memory.c \
+                  $(DEPS_DIR)/lightning/lib/jit_names.c \
+                  $(DEPS_DIR)/lightning/lib/jit_note.c \
+                  $(DEPS_DIR)/lightning/lib/jit_size.c \
+                  $(DEPS_DIR)/lightning/lib/lightning.c \
+                  $(DEPS_DIR)/lightrec/blockcache.c \
+                  $(DEPS_DIR)/lightrec/emitter.c \
+                  $(DEPS_DIR)/lightrec/interpreter.c \
+                  $(DEPS_DIR)/lightrec/lightrec.c \
+                  $(DEPS_DIR)/lightrec/memmanager.c \
+                  $(DEPS_DIR)/lightrec/optimizer.c \
+                  $(DEPS_DIR)/lightrec/reaper.c \
+                  $(DEPS_DIR)/lightrec/regcache.c
+
+   ifeq ($(THREADED_RECOMPILER), 1)
+      ifeq ($(DEBUG), 0)
+          SOURCES_C +=   $(DEPS_DIR)/lightrec/recompiler.c
+      endif
+   endif
+
+   ifeq ($(LIGHTREC_LOG_LEVEL), 4)
+      SOURCES_C +=   $(DEPS_DIR)/lightrec/disassembler.c
+   endif
+
+   ifneq (,$(findstring win,$(platform)))
+      SOURCES_C +=   $(DEPS_DIR)/mman/sys/mman.c
+   endif
+
+endif ##ifeq ($(HAVE_LIGHTREC), 1)

@@ -1,0 +1,247 @@
+# DESCRIPTION: GitLab CI/CD for libRetro (NOT FOR GitLab-proper)
+
+##############################################################################
+################################# BOILERPLATE ################################
+##############################################################################
+
+# Core definitions
+.core-defs:
+  variables:
+    JNI_PATH: .
+    CORENAME: mednafen_psx
+
+.core-defs-lightrec:
+  extends: .core-defs
+  variables:
+    HAVE_LIGHTREC: 1
+
+.core-defs-lightrec-static-libcplusplus:
+   extends: .core-defs-lightrec
+   variables:
+      LINK_STATIC_LIBCPLUSPLUS: 1
+
+.core-defs-hw:
+  extends: .core-defs
+  variables:
+    CORENAME: mednafen_psx_hw
+    HAVE_HW: 1
+
+.core-defs-hw-static-libcplusplus:
+   extends: .core-defs-hw
+   variables:
+      LINK_STATIC_LIBCPLUSPLUS: 1
+
+.core-defs-hw-lightrec:
+  extends: .core-defs-lightrec
+  extends: .core-defs-hw
+
+.core-defs-hw-lightrec-static-libcplusplus:
+   extends: .core-defs-hw-lightrec
+   variables:
+      LINK_STATIC_LIBCPLUSPLUS: 1
+
+# Inclusion templates, required for the build to work
+include:
+  ################################## DESKTOPS ################################
+  # Windows 64-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/windows-x64-mingw.yml'
+    
+  # Windows 32-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/windows-i686-mingw.yml'
+
+  # Linux 64-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/linux-x64.yml'
+
+  # Linux 32-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/linux-i686.yml'
+
+  # MacOS 64-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/osx-x64.yml'
+ 
+  # MacOS ARM 64-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/osx-arm64.yml'
+
+  ################################## CELLULAR ################################
+  # Android
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/android-jni.yml'
+
+  # iOS
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ios-arm64.yml'
+
+  # iOS (armv7)
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ios9.yml'
+
+  ################################## CONSOLES ################################
+
+  # tvOS (AppleTV)
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/tvos-arm64.yml'
+
+  #################################### MISC ##################################
+    
+# Stages for building
+stages:
+  - build-prepare
+  - build-shared
+  - build-static
+
+##############################################################################
+#################################### STAGES ##################################
+##############################################################################
+#
+################################### DESKTOPS #################################
+# Windows 64-bit
+libretro-build-windows-x64:
+  extends:
+    - .libretro-windows-x64-mingw-make-default
+    - .core-defs-lightrec
+
+# Windows 64-bit (HW)
+libretro-build-windows-x64-hw:
+  extends:
+    - .libretro-windows-x64-mingw-make-default
+    - .core-defs-hw-lightrec
+    
+# Windows 32-bit
+libretro-build-windows-i686:
+  extends:
+    - .libretro-windows-i686-mingw-make-default
+    - .core-defs-lightrec
+
+# Windows 32-bit (HW)
+libretro-build-windows-i686-hw:
+  extends:
+    - .libretro-windows-i686-mingw-make-default
+    - .core-defs-hw-lightrec
+
+# Linux 64-bit
+libretro-build-linux-x64:
+  extends:
+    - .libretro-linux-x64-make-default
+    - .core-defs-lightrec-static-libcplusplus
+
+# Linux 32-bit
+libretro-build-linux-i686:
+  extends:
+    - .libretro-linux-i686-make-default
+    - .core-defs-lightrec-static-libcplusplus
+
+# Linux 64-bit (HW) 
+libretro-build-linux-x64-hw:
+  extends:
+    - .libretro-linux-x64-make-default
+    - .core-defs-hw-lightrec-static-libcplusplus
+
+# Linux 32-bit (HW)
+libretro-build-linux-i686-hw:
+  extends:
+    - .libretro-linux-i686-make-default
+    - .core-defs-hw-lightrec-static-libcplusplus
+
+# MacOS 64-bit
+libretro-build-osx-x64:
+  extends:
+    - .libretro-osx-x64-make-default
+    - .core-defs
+
+libretro-build-osx-x64-hw:
+  extends:
+    - .libretro-osx-x64-make-default
+    - .core-defs-hw
+
+# MacOS ARM 64-bit
+libretro-build-osx-arm64:
+  extends:
+    - .libretro-osx-arm64-make-default
+    - .core-defs
+
+libretro-build-osx-arm64-hw:
+  extends:
+    - .libretro-osx-arm64-make-default
+    - .core-defs-hw
+
+################################### CELLULAR #################################
+# Android ARMv7a
+android-armeabi-v7a:
+  extends:
+    - .libretro-android-jni-armeabi-v7a
+    - .core-defs
+
+# Android ARMv7a (HW)
+android-armeabi-v7a-hw:
+  extends:
+    - .libretro-android-jni-armeabi-v7a
+    - .core-defs-hw
+
+# Android ARMv8a
+android-arm64-v8a:
+  extends:
+    - .libretro-android-jni-arm64-v8a
+    - .core-defs
+
+# Android ARMv8a (HW)
+android-arm64-v8a-hw:
+  extends:
+    - .libretro-android-jni-arm64-v8a
+    - .core-defs-hw
+
+# Android 64-bit x86
+android-x86_64:
+  extends:
+    - .libretro-android-jni-x86_64
+    - .core-defs
+
+# Android 64-bit x86 (HW)
+android-x86_64-hw:
+  extends:
+    - .libretro-android-jni-x86_64
+    - .core-defs-hw
+
+# Android 32-bit x86
+android-x86:
+  extends:
+    - .libretro-android-jni-x86
+    - .core-defs
+
+# Android 32-bit x86 (HW)
+android-x86-hw:
+  extends:
+    - .libretro-android-jni-x86
+    - .core-defs-hw
+
+# iOS
+libretro-build-ios-arm64:
+  extends:
+    - .libretro-ios-arm64-make-default
+    - .core-defs
+
+libretro-build-ios-arm64-hw:
+  extends:
+    - .libretro-ios-arm64-make-default
+    - .core-defs-hw
+
+# iOS (armv7) [iOS 9 and up]
+libretro-build-ios9:
+  extends:
+    - .libretro-ios9-make-default
+    - .core-defs
+    
+# tvOS
+libretro-build-tvos-arm64:
+  extends:
+    - .libretro-tvos-arm64-make-default
+    - .core-defs
+
+libretro-build-tvos-arm64-hw:
+  extends:
+    - .libretro-tvos-arm64-make-default
+    - .core-defs-hw
