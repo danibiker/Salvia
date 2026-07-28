@@ -279,7 +279,18 @@ Usb0:\Roms
     ├── SIGIL.WAD
     └── TNT.WAD
 ```
-## Games artwork
+## Retroachievements
+To be able to load achievements for your local games, you must first register into the following link: [retroachievements.org](https://retroachievements.org/createaccount.php)
+
+Once you are registered, you must enter your username and password using the menu: Options > Achievements > User | Password
+
+## Games artwork and titles
+### Builting scraper
+To be able to scrap your local games, you must first register into the following link: [screenscraper.fr](https://www.screenscraper.fr/membreinscription.php)
+
+Once you are registered, you must enter your username and password using the menu: Options > Scraper > Other configuration > User | Password
+
+### Specify artwork directories
 If you don't want to use the builtin scraper, you can add your images and text for each game manually. The images must be in png format and the description must be a .txt file. To be able to do that, you must create this directory structure for the emulator. For example, to add images and text descriptions for the mame core:
 
 ```
