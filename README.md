@@ -196,6 +196,8 @@ The psx core needs some .sbi files to work properly with certain PAL titles. If 
 
 <img width="985" height="458" alt="image" src="https://github.com/user-attachments/assets/782e1da3-6ca9-492e-a2e2-2b3d5e7daf8e" />
 
+This files can be downloaded from [psxdatacenter.com](https://psxdatacenter.com/sbifiles.html) You can use the Firefox plugin [DownThemAll](https://www.downthemall.net/) to download them easily
+
 Certain games are only compatible with a DualShock controller. If required by the title, this can be configured directly within the Options menu:
 Options > Input > Retropad assignments > Port Controller 1 > Joystick type
 
@@ -216,6 +218,8 @@ Some games should run fullspeed but the fbneo team introduced some changes that 
 
 #### Paprium
 To run this game, the following files must be present. Additionally, upon launching the game for the first time, you will be prompted to select your preferred language. Once selected, the game requires a restart, and this preference will be saved for future sessions.
+
+The files needed must be placed in the following directories. Take into account that the music files are usually in mp3 format. To avoid slowdowns and reduce the memory footprint for Xbox 360, convert them to wav files. I recommend this portable conversion tool [fre:ac Portable](https://portableapps.com/apps/music_video/freac_portable)
 
 ```
 system
