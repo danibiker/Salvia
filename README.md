@@ -283,7 +283,7 @@ Some emulators like MAME or Final Burn Neo/Alpha, have short rom filenames that 
 ```
 Usb0:\Salvia\assets\extra
 ├── merged_mame.xml
-└── merged_fbneo.xml
+├── merged_fbneo.xml
 └── merged_ngp_spectrum_msx.xml
 ```
 Furthermore, each file must be referentiated into the mame_roms_xml property of the .cfg file for each emulator 
