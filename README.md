@@ -19,7 +19,7 @@ I had grown weary of juggling a multitude of different emulators, each requiring
 * Image and description **scraper** from screenscraper.fr
 * **F.A.Q and Walktrough** viewer from gamefaqs.gamespot.com
 * **Fast forward**
-* **Navigate zipped files** and load contained games directly (they need to have a symbol @ as the first letter to be opened)
+* **Navigate zipped files** and load contained games directly (they need to have a symbol @ as the first letter to be opened. Search "htgdb-gamepacks" in archive.org and you will thank me XD)
 * **Disc control** to change disks on PSX, SegaCD and PC Engine CD
 * **Bios Boot** (To organize PSX memory card savegames)
 * **Buttons mapper** for each controller
