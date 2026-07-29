@@ -543,6 +543,7 @@ public:
 	static std::string bootWithoutDisk(void* inst, void *value);
 	static std::string changeRAUser(void* inst, void *value);
 	static std::string changeRAPassword(void* inst, void *value);
+	static std::string changeRomPath(void* inst, void *value);
 	static std::string changeScrapUser(void* inst, void *value);
 	static std::string changeScrapPassword(void* inst, void *value);
 	static std::string gameSearchAction(void* inst);
@@ -553,6 +554,7 @@ public:
 	static void onScrapPasswordText(const std::string& text, void* userData);
 	static void onRAUserText(const std::string& text, void* userData);
 	static void onRAPasswordText(const std::string& text, void* userData);
+	static void onRomPath(const std::string& text, void* userData);
 };
 
 template <typename T>

@@ -618,6 +618,11 @@ std::string dirutil::getPathPrefix(std::string filepath, std::string basePath) {
     else if (result.at(result.length() - 1) == Constant::tempFileSep[0] && filepath[0] == Constant::tempFileSep[0]) {
         filepath.erase(0, 1);
     }
+	
+#ifdef _XBOX
+	//Check if the drive is correct for xbox
+	checkXboxDrive(result);
+#endif
 
 	//LOG_DEBUG("filepath relative. Returning: %s", (result + filepath).c_str());
     return result + filepath;
@@ -630,5 +635,23 @@ std::string dirutil::getRelativeDir(std::string filepath, std::string basePath) 
 		return filepath.substr(beginCut);
 	} else {
 		return filepath;
+	}
+}
+
+//En los casos en los que se corre el xploit que necesita un usb con el hack de bad update,
+//usb0 puede estar ocupado. En esos casos se puede usar una unidad usb:\\ para que se busque automaticamente
+//la unidad correcta
+void dirutil::checkXboxDrive(std::string &path){
+	std::string pathLow = path;
+	Constant::lowerCase(&pathLow);
+	const std::string usb = "usb:" + Constant::getFileSep();
+	if (pathLow.find(usb) != std::string::npos){
+		for (int i=0; i < 3; i++){
+			const std::string newResult = "Usb" + Constant::TipoToStr(i) + ":" + Constant::getFileSep() + path.substr(usb.length());
+			if (dirExists(newResult.c_str())){
+				path = newResult;
+				break;
+			}
+		}
 	}
 }

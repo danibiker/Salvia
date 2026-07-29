@@ -52,7 +52,7 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::libretrosystem] = cfg::t_cfg_props("libretrosystem", dir.getDirActual() + Constant::getFileSep() + "system");
 	configMain[cfg::libretro_save] = cfg::t_cfg_props("libretro_save", dir.getDirActual() + Constant::getFileSep() + "data" + Constant::getFileSep() + "saves");
 	configMain[cfg::libretro_state] = cfg::t_cfg_props("libretro_state", dir.getDirActual() + Constant::getFileSep() + "data" + Constant::getFileSep() + "states");
-	configMain[cfg::libretro_lang] = cfg::t_cfg_props("libretro_lang", (int)RETRO_LANGUAGE_SPANISH);
+	configMain[cfg::roms_path] = cfg::t_cfg_props("roms_path", "");	
 	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
 	configMain[cfg::packedImages] = cfg::t_cfg_props("packedImages", true);
 	configMain[cfg::integerScale] = cfg::t_cfg_props("integerScale", false);

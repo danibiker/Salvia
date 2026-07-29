@@ -1276,7 +1276,7 @@ int launchGame(std::string rompath, bool tmpDelete){
 			ConfigEmu* cfgEmu = gameMenu->getCfgLoader()->findCfgEmu(execActual);
 			if (cfgEmu != NULL){
 				LOG_DEBUG("Roms dir %s\n", cfgEmu->rom_directory.c_str());
-				std::string cdromsPath = cfgEmu->rom_directory + Constant::getFileSep() + BIOS_ONLY;
+				std::string cdromsPath = dirutil::getPathPrefix(cfgEmu->rom_directory + Constant::getFileSep() + BIOS_ONLY, CfgLoader::configMain[cfg::roms_path].valueStr);
 				gameMenu->configMenus->poblarCdList(cdromsPath);
 			}
 		}
@@ -1671,30 +1671,3 @@ int main(int argc, char *argv[]) {
 	closeResources();
     return 0;
 }
-
-//int main(int argc, char *argv[]) {
-//
-//	initPathAndLog(argv);
-//	cfgLoader = new CfgLoader();
-//
-//	if (cfgLoader->isDebug()){
-//		#ifndef DEBUG_LOG
-//		#define DEBUG_LOG
-//		#endif
-//        logger->errorLevel = L_DEBUG;
-//    }
-//
-//	LOG_DEBUG("appdir: %s\n", Constant::getAppDir().c_str());
-//	LOG_DEBUG("appexe: %s\n", Constant::getAppExecutable().c_str());
-//
-//	GameFaqs gameFaqs;
-//	int foundGames = gameFaqs.searchGame("Legend of Zelda, The_ A Link to the Past");
-//	if (foundGames > 0){
-//		if (gameFaqs.findGuides(0) > 0){
-//			gameFaqs.getGuideText(0);
-//		}
-//	}
-//
-//	//gameFaqs.runAllTests();
-//	return 0;
-//}

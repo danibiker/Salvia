@@ -258,19 +258,25 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	todosLosMenus.push_back(menuSearchGamesGuide);
 
 	//Poblar menu emulacion
-	//Escalado de video
+	//--------Menu de sincronizacion de video---------
     std::vector<std::string> syncvals;
 	for (int i=0; i < TOTAL_VIDEO_SYNC; i++){
 		syncOptionsStrings[i] = LanguageManager::instance()->get("menu.sync.sync" + Constant::TipoToStr(i));
 		syncvals.push_back(syncOptionsStrings[i]);
 	}
 	menuEmulation->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.sync"), syncvals, &refConfig->configMain[cfg::syncMode].getIntRef()));
+	
+	//--------Opcion de fastforward---------
 	menuEmulation->opciones.push_back(new OpcionInt(LanguageManager::instance()->get("menu.options.fastforward"), 
 		&refConfig->configMain[cfg::fastForwardMult].getIntRef(), "%.1fx", 10));
-
+	
+	//--------Opcion de fps---------
 	menuEmulation->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.fps"), &refConfig->configMain[cfg::showFps].getBoolRef()));
+	
+	//--------Opcion de mostrar emuladores vacios---------
 	menuEmulation->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.showempty"), &refConfig->configMain[cfg::showEmptyEmulators].getBoolRef()));
-
+	
+	//--------menu de asignacion de cores---------
 	Menu* menuCores = new Menu(LanguageManager::instance()->get("menu.core.assign"), menuEmulation);
 	dirutil dir;
 
@@ -296,7 +302,13 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuDisks = new Menu(LanguageManager::instance()->get("menu.disk.control"), menuEmulation);
 	poblarMenuDiscos(BOOT_WITH_DISK);
 	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.disk.control"), menuDisks));
-	//--------Menu de gestion de discos---------
+	
+	//--------Opcion para cambiar la ruta del directorio de roms---------
+	OpcionTxtAndValue *opcionChangeRomPath = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.options.romdir"), cfg::roms_path);
+	opcionChangeRomPath->callback = &GestorMenus::changeRomPath;
+	opcionChangeRomPath->context = refConfig;
+	opcionChangeRomPath->editable = true;
+	menuEmulation->opciones.push_back(opcionChangeRomPath);
 
     //Poblar Menu Video
 	//Relacion de aspecto
@@ -772,6 +784,26 @@ std::string GestorMenus::changeRAPassword(void* inst, void *value) {
 	SOUtils::pedirTextoAsync("RetroAchievements", LanguageManager::instance()->get("menu.achievement.ask.password"),
 							 &onRAPasswordText, data);
     return "";
+}
+
+std::string GestorMenus::changeRomPath(void* inst, void *value) {
+	AskUserData* data = new AskUserData();
+	data->valorPtr = (std::string*)value;
+	data->config = (CfgLoader*)inst;
+
+	SOUtils::pedirTextoAsync(LanguageManager::instance()->get("menu.options.romdir.asktitle"), 
+							 LanguageManager::instance()->get("menu.options.romdir.askpath"),
+							 &onRomPath, data);
+    return "";
+}
+
+void GestorMenus::onRomPath(const std::string& text, void* userData) {
+	AskUserData* data = (AskUserData*)userData;
+	if (!text.empty()) {
+		*data->valorPtr = text;
+		data->config->configMain[cfg::roms_path].setPropValue(text);
+	}
+	delete data;
 }
 
 void GestorMenus::onUserText(const std::string& text, void* userData) {

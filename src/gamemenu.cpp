@@ -1075,7 +1075,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
     if (emu->use_rom_file && !emu->map_file.empty() && dir.fileExists(mapfilepath.c_str())){
         menuData.mapFileToList(mapfilepath);
     } else {
-		mapfilepath = dirutil::getPathPrefix(emu->rom_directory);
+		mapfilepath = dirutil::getPathPrefix(emu->rom_directory, CfgLoader::configMain[cfg::roms_path].valueStr);
 		std::string relativePath = menuData.listDir.getRelativePath();
 		if (!relativePath.empty()){
 			mapfilepath.append(Constant::getFileSep() + relativePath);
@@ -1095,7 +1095,6 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
         }
 
 		dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, "", emu->show_directories, false, false);
-        string mapfilepath = dirutil::getPathPrefix(emu->rom_directory);
 
         if (isDebug()){
             SDL_FillRect(overlay, NULL, cblack);
@@ -1214,7 +1213,7 @@ FILE_STATUS GameMenu::listableZip(ListMenu &listMenu, FILE_NAVIGATION nav){
 	if ( selectedListableZip || !listMenu.listZipped.getInternalDir().empty() || !listMenu.listZipped.file.empty()){
 		//Try to list the contents of the directory
 		if (selectedListableZip){
-			listMenu.listZipped.dir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory) + string(Constant::tempFileSep) : "";
+			listMenu.listZipped.dir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory, CfgLoader::configMain[cfg::roms_path].valueStr) + string(Constant::tempFileSep) : "";
 			listMenu.listZipped.file = emu.use_extension ? romFile : dir.getFileNameNoExt(romFile);
 		} 
 		std::string romzip = listMenu.listZipped.dir + listMenu.listZipped.file;
@@ -1298,7 +1297,7 @@ FILE_STATUS GameMenu::listableDir(ListMenu &listMenu, FILE_NAVIGATION nav){
 		romFile = game->longFileName;
 	}
 	
-	listMenu.listDir.dir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory) + string(Constant::tempFileSep) : "";
+	listMenu.listDir.dir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory, CfgLoader::configMain[cfg::roms_path].valueStr) + string(Constant::tempFileSep) : "";
 	std::string fileSelected;
 	std::string rompath;
 
@@ -1390,11 +1389,10 @@ int GameMenu::saveGameMenuPos(ListMenu &menuData){
         return 1;
     }
 
-    struct ListStatus input1 = { cfgLoader->emuCfgPos, menuData.iniPos, menuData.endPos, 
+    struct ListStatus input1(cfgLoader->emuCfgPos, menuData.iniPos, menuData.endPos, 
 		menuData.curPos, menuData.maxLines, menuData.layout, menuData.animateBkg, 
 		menuData.gameDataFields.posManufacturer, menuData.gameDataFields.posSystem, 
-		menuData.gameDataFields.posYear, menuData.gameDataFields.onlyParents
-	};
+		menuData.gameDataFields.posYear, menuData.gameDataFields.onlyParents);
 
 	//Guardando los datos si se ha seleccionado un fichero zip
 	strcpy_s(input1.zipname, sizeof(input1.zipname), (menuData.listZipped.dir + Constant::getFileSep() + menuData.listZipped.file).c_str());

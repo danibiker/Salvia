@@ -82,6 +82,35 @@ struct ListStatus{
 	char zippedPath[4096];
 	//Relative path selected
 	char relativePath[4096];
+
+	ListStatus(){
+		std::memset(relativePath, 0, sizeof(relativePath));
+		std::memset(zippedPath, 0, sizeof(zippedPath));
+		std::memset(zipname, 0, sizeof(zipname));
+	}
+
+	// Constructor con parametros de entrada
+    ListStatus(int _emuLoaded, int _iniPos, int _endPos, int _curPos, int _maxLines, 
+               int _layout, bool _animateBkg, int _posManufacturer, int _posSystem, 
+               int _posYear, bool _onlyParents)
+        : emuLoaded(_emuLoaded),
+          iniPos(_iniPos),
+          endPos(_endPos),
+          curPos(_curPos),
+          maxLines(_maxLines),
+          layout(_layout),
+          animateBkg(_animateBkg),
+          posManufacturer(_posManufacturer),
+          posSystem(_posSystem),
+          posYear(_posYear),
+          onlyParents(_onlyParents)
+    {
+        // Los arrays de char se siguen inicializando vacíos automáticamente
+        std::memset(relativePath, 0, sizeof(relativePath));
+        std::memset(zippedPath, 0, sizeof(zippedPath));
+        std::memset(zipname, 0, sizeof(zipname));
+    }    
+	
 };
 
 struct t_scale_props{

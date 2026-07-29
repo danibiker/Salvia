@@ -101,7 +101,7 @@ bool Scrapper::archivoExiste(const std::string& rutaBase, const std::string& suf
 */
 int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig, SafeDownloadQueue& dwQueue, bool onlyCount) {
 	dirutil dir;
-	std::string romsdir = dir.getPathPrefix(emulatorCfg.rom_directory);
+	std::string romsdir = dir.getPathPrefix(emulatorCfg.rom_directory, CfgLoader::configMain[cfg::roms_path].valueStr);
 	std::string assetsdir = dir.getPathPrefix(emulatorCfg.assets);
 
 	if (assetsdir.at(assetsdir.length() - 1) != Constant::tempFileSep[0]) {

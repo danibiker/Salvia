@@ -73,6 +73,6 @@ class dirutil{
         char* formatdate(char* str, time_t val);
         int findIcon(const char *filename);
 		bool foundFilter(std::string filtroExt, std::string filtroName, std::string extension, std::string name);
-
+		static void checkXboxDrive(std::string &path);
 };
 
