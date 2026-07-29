@@ -187,18 +187,9 @@ Usb0:\Roms
 ├── snes\                (Super Nintendo/Super Famicom --> zip sfc)
 └── spectrum\            (FBNeo ZX Spectrum --> zip)
 ```
-If you want to change this routes, they should be changed manually editing the field **rom_directory** from the corresponding .cfg file of the config subdirectory
+If you want to change this routes, they should be changed manually editing the field **roms_path** from the main configuration file "salvia.cfg", or alternatively through the menu: Options > Emulation > Roms main directory. This property now defines the parent directory for all emulator ROMs. Notably, if configured as usb:..., the system will dynamically detect the correct USB port, eliminating the need to specify Usb0 or Usb1.
 
-**NOTE FOR BAD UPDATE XPLOIT USERS**
-If you are using bad update, it is likely that your USB0 port will be occupied. In that case you will need to change manually each .cfg file of the config directory. For example, for the final burn emulator "config\fbn.cfg" change the following line
-
-```
-rom_directory = Usb0:\Roms\fbneo
-```
-with this one 
-```
-rom_directory = Usb1:\Roms\fbneo
-```
+<img width="1275" height="301" alt="image" src="https://github.com/user-attachments/assets/8272f1bb-9f65-4e78-aba9-409f8715476c" />
 
 ### Hotkeys
 Hotkeys can be accessed via the menu: Options > Input > Hotkeys. By default, the SELECT button acts as the primary hotkey enabler and must be pressed first, followed by the corresponding function button to execute the desired action. For instance, the 'SELECT + START' combination exits the emulation, returning you to the game selection screen. Another essential shortcut is 'SELECT + Y', which brings up an overlay containing the options menu or returns to the game emulation if pressed again. The remaining options are fairly self-explanatory.
