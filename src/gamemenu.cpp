@@ -1074,41 +1074,24 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
     
     if (emu->use_rom_file && !emu->map_file.empty() && dir.fileExists(mapfilepath.c_str())){
         menuData.mapFileToList(mapfilepath);
-    } else {
+    } else if (!emu->rom_directory.empty()){
 		mapfilepath = dirutil::getPathPrefix(emu->rom_directory, CfgLoader::configMain[cfg::roms_path].valueStr);
 		std::string relativePath = menuData.listDir.getRelativePath();
 		if (!relativePath.empty()){
 			mapfilepath.append(Constant::getFileSep() + relativePath);
 			menuData.resizeMarginTop(face_h_big, overlay->h);
 		}
-		LOG_DEBUG("Listing directory: %s", mapfilepath.c_str());
 
+		LOG_DEBUG("Listing directory: %s", mapfilepath.c_str());
         vector<unique_ptr<FileProps>> files;
-		
 		string extFilter = " " + emu->rom_extension;
         extFilter = Constant::replaceAll(extFilter, " ", ".");
-
-		if (isDebug()){
-            SDL_FillRect(overlay, NULL, cblack);
-            string msg = "searching " + mapfilepath; 
-			Fonts::drawTextCent(overlay, fontsmall, msg.c_str(), overlay->w / 2, overlay->h / 2, true, true,  white, -1);
-        }
-
 		dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, "", emu->show_directories, false, false);
-
-        if (isDebug()){
-            SDL_FillRect(overlay, NULL, cblack);
-            string msg = "roms found: " + Constant::TipoToStr(files.size()); 
-            string msg2 = "In dir " + mapfilepath;
-			Fonts::drawTextCent(overlay, fontsmall, msg.c_str(), 0, 0, true, true,  white, -1);
-            Fonts::drawTextCent(overlay, fontsmall, msg2.c_str(), 0, face_h_small + 3, true, true,  white, -1);
-			Fonts::drawTextCent(overlay, fontsmall, "Press a key to continue", 0, (face_h_small + 3) * 2, true, true,  white, -1);
-            SDL_Delay(3000);
-        }
-
         menuData.filesToList(files, *emu);
         files.clear();
-    }
+    } else {
+		menuData.clear();
+	}
 
 	//Se inician los menus de los filtros
 	configMenus->iniciarFiltros(menuData.gameDataFields);

@@ -587,6 +587,11 @@ std::string dirutil::getPathPrefix(std::string filepath, std::string basePath) {
 	}
 
 	if (filepath.empty()){
+		#ifdef _XBOX
+			//Check if the drive is correct for xbox
+			checkXboxDrive(BASE_PATH);
+		#endif
+
 		LOG_DEBUG("filepath empty. Returning: %s", BASE_PATH.c_str());
 		return BASE_PATH;
 	}
