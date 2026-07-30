@@ -166,6 +166,12 @@ public:
 	bool onlyParents;
 	
 
+	GameDataFields(){
+		clear();
+		//By default, show only the parent roms
+		onlyParents = true;
+	}
+
 	void clear(){
 		resetFilters();
 		years.clear();
@@ -180,7 +186,6 @@ public:
 		lastYear = -1;
 		lastManufacturer = -1;
 		lastSystem = -1;
-		onlyParents = false;
 		lastOnlyParents = onlyParents;
 	}
 	

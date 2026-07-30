@@ -168,10 +168,12 @@ void ListMenu::applyFilter() {
 
 void ListMenu::resetFilter() {
     filteredGames.clear();
-    filteredGames.reserve(listGames.size());
-    for (auto it = listGames.cbegin(); it != listGames.cend(); ++it) {
-        filteredGames.push_back(it->get());
-    }
+	if (!listGames.empty()){
+		filteredGames.reserve(listGames.size());
+		for (auto it = listGames.cbegin(); it != listGames.cend(); ++it) {
+			filteredGames.push_back(it->get());
+		}
+	}
 	resetIndexPos();
 }
 
@@ -772,14 +774,14 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
 	}
 
 	sortFilters();
+	applyFilter();
+	resetIndexPos();
+
 	/*for (auto it = gameDataFields.systems.cbegin(); it != gameDataFields.systems.cend(); ++it) {
 		const auto& s = *it;
 		OutputDebugStringA(s.c_str());
 		OutputDebugStringA("\n");
 	}*/
-
-	//Reset the filter and add all elements to be shown
-	resetFilter();
 
 	LOG_DEBUG("Files sorted and filter reset %d", SDL_GetTicks() - time);
 	time = SDL_GetTicks();
