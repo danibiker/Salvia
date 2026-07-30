@@ -19,7 +19,7 @@ I had grown weary of juggling a multitude of different emulators, each requiring
 * Image and description **scraper** from screenscraper.fr
 * **F.A.Q and Walktrough** viewer from gamefaqs.gamespot.com
 * **Fast forward**
-* **Navigate zipped files** and load contained games directly (they need to have a symbol @ as the first letter to be opened)
+* **Navigate zipped files** and load contained games directly (they need to have a symbol @ as the first letter to be opened. Search "htgdb-gamepacks" in archive.org and you will thank me XD)
 * **Disc control** to change disks on PSX, SegaCD and PC Engine CD
 * **Bios Boot** (To organize PSX memory card savegames)
 * **Buttons mapper** for each controller
@@ -155,8 +155,11 @@ system/
 
 ```
 ### Roms
-The config files come prepared to read the games from the directory Roms of **the first usb (Usb0:\Roms)**
-To get started, you simply need to place your backed-up games into their respective directories:
+**On Xbox 360**, the configuration files are preconfigured to read games from the "Roms" directory located at the root of your USB drive (usb:\roms). To begin, simply extract the "Roms" directory from the release archive and move it to the root of your USB device.
+
+**On Windows**, the system utilizes the default "Roms" directory. You only need to copy your ROMs directly into that folder.
+
+You are now ready to place your backup games into their respective directories:
 
 ```
 Usb0:\Roms
@@ -187,18 +190,10 @@ Usb0:\Roms
 ├── snes\                (Super Nintendo/Super Famicom --> zip sfc)
 └── spectrum\            (FBNeo ZX Spectrum --> zip)
 ```
-If you want to change this routes, they should be changed manually editing the field **rom_directory** from the corresponding .cfg file of the config subdirectory
 
-**NOTE FOR BAD UPDATE XPLOIT USERS**
-If you are using bad update, it is likely that your USB0 port will be occupied. In that case you will need to change manually each .cfg file of the config directory. For example, for the final burn emulator "config\fbn.cfg" change the following line
+To change these paths, you can manually modify the **roms_path** field within the main configuration file (salvia.cfg). Alternatively, this can be adjusted via the in-game menu: Options > Emulation > Roms Main Directory. This property now defines the parent directory for all emulator ROMs. Notably, if configured as usb:\..., the system will dynamically detect the correct USB port, eliminating the need to specify Usb0 or Usb1.
 
-```
-rom_directory = Usb0:\Roms\fbneo
-```
-with this one 
-```
-rom_directory = Usb1:\Roms\fbneo
-```
+<img width="1275" height="301" alt="image" src="https://github.com/user-attachments/assets/8272f1bb-9f65-4e78-aba9-409f8715476c" />
 
 ### Hotkeys
 Hotkeys can be accessed via the menu: Options > Input > Hotkeys. By default, the SELECT button acts as the primary hotkey enabler and must be pressed first, followed by the corresponding function button to execute the desired action. For instance, the 'SELECT + START' combination exits the emulation, returning you to the game selection screen. Another essential shortcut is 'SELECT + Y', which brings up an overlay containing the options menu or returns to the game emulation if pressed again. The remaining options are fairly self-explanatory.
