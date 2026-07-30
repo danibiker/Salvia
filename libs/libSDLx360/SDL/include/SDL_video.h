@@ -418,6 +418,11 @@ extern DECLSPEC void SDLCALL SDL_XBOX_SetDisplayOverflow(int overflow);
 extern DECLSPEC SDL_Surface* SDLCALL SDL_XBOX_GetOverlay(void);
 
 /*
+* Xbox 360: Set the overscan for the overlay surface
+*/
+extern DECLSPEC void SDLCALL SDL_XBOX_SetOverscan(int x, int y);
+
+/*
  * Xbox 360: Enable (1) or disable (0) the overlay layer.
  */
 extern DECLSPEC void SDLCALL SDL_XBOX_SetOverlayEnabled(int enabled);

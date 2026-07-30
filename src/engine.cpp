@@ -124,11 +124,15 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		}
 		memset(overlay->pixels, 0, overlay->pitch * overlay->h);
 		SDL_XBOX_SetOverlayEnabled(1);
+
 	}
 #else
 	overlay = gameScreen;
 #endif
 
+	//Actualizar overscan en windows y xbox
+	SDL_XBOX_SetOverscan(cfgLoader->configMain[cfg::overscan_x].valueInt, cfgLoader->configMain[cfg::overscan_y].valueInt);
+	
 	SDL_WM_SetCaption("Salvia", NULL);
 
 	initFont();

@@ -83,6 +83,8 @@ static LPDIRECT3DTEXTURE9      g_ovl_tex    = NULL;       /* DYNAMIC, DEFAULT */
 static LPDIRECT3DVERTEXBUFFER9 g_ovl_vb     = NULL;
 static SDL_Surface*            g_ovl_surf   = NULL;       /* fuente CPU (bb res) */
 static int                     g_ovl_enabled = 0;
+static int                     g_ovl_overscan_x = 0;   /* pixeles de overscan (positivo = reduce area) */
+static int                     g_ovl_overscan_y = 0;
 
 static CRITICAL_SECTION        g_cs;
 static int                     g_cs_init    = 0;
@@ -607,12 +609,34 @@ void XBOX_SelectEffect(int effectID)
 /* =====================================================================
  * Overlay (capa ARGB sobre el quad del juego) - port de XBOX_*Overlay.
  * =================================================================== */
+/* Aplica los valores actuales de overscan al vertex buffer del overlay.
+   Llamar tras crear el VB y cada vez que cambien g_ovl_overscan_x/y. */
+static void UpdateOverlayVertices(void)
+{
+    float bbw = (float)g_bbw, bbh = (float)g_bbh;
+    float ox  = (float)g_ovl_overscan_x;
+    float oy  = (float)g_ovl_overscan_y;
+    void* locked;
+
+    if (!g_ovl_vb) return;
+
+    VTX ov[4];
+    ov[0].x = -0.5f + ox;      ov[0].y = bbh - 0.5f - oy; ov[0].z = 0; ov[0].rhw = 1; ov[0].u = 0; ov[0].v = 1;
+    ov[1].x = -0.5f + ox;      ov[1].y = -0.5f + oy;      ov[1].z = 0; ov[1].rhw = 1; ov[1].u = 0; ov[1].v = 0;
+    ov[2].x = bbw - 0.5f - ox; ov[2].y = bbh - 0.5f - oy; ov[2].z = 0; ov[2].rhw = 1; ov[2].u = 1; ov[2].v = 1;
+    ov[3].x = bbw - 0.5f - ox; ov[3].y = -0.5f + oy;      ov[3].z = 0; ov[3].rhw = 1; ov[3].u = 1; ov[3].v = 0;
+
+    if (SUCCEEDED(g_ovl_vb->Lock(0, 0, (void**)&locked, 0))) {
+        memcpy(locked, ov, sizeof(ov));
+        g_ovl_vb->Unlock();
+    }
+}
+
 /* Idempotente por recurso: crea solo lo que falte. El surface CPU del
    overlay persiste a traves de device-lost; la textura/VB (DEFAULT) se
    recrean en el reset llamando otra vez aqui. */
 static void InitOverlay(void)
 {
-    void* locked;
     D3DLOCKED_RECT lr;
     float bbw = (float)g_bbw, bbh = (float)g_bbh;
 
@@ -639,19 +663,11 @@ static void InitOverlay(void)
 
     /* Vertex buffer del quad fullscreen (TRIANGLESTRIP de 4 verts, medio pixel). */
     if (!g_ovl_vb) {
-        VTX ov[4];
-        if (FAILED(g_dev->CreateVertexBuffer(sizeof(ov), D3DUSAGE_WRITEONLY, VTX_FVF,
+        if (FAILED(g_dev->CreateVertexBuffer(sizeof(VTX) * 4, D3DUSAGE_WRITEONLY, VTX_FVF,
                                              D3DPOOL_DEFAULT, &g_ovl_vb, NULL)))
             return;
-        ov[0].x = -0.5f;      ov[0].y = bbh - 0.5f; ov[0].z = 0; ov[0].rhw = 1; ov[0].u = 0; ov[0].v = 1;
-        ov[1].x = -0.5f;      ov[1].y = -0.5f;      ov[1].z = 0; ov[1].rhw = 1; ov[1].u = 0; ov[1].v = 0;
-        ov[2].x = bbw - 0.5f; ov[2].y = bbh - 0.5f; ov[2].z = 0; ov[2].rhw = 1; ov[2].u = 1; ov[2].v = 1;
-        ov[3].x = bbw - 0.5f; ov[3].y = -0.5f;      ov[3].z = 0; ov[3].rhw = 1; ov[3].u = 1; ov[3].v = 0;
-        if (SUCCEEDED(g_ovl_vb->Lock(0, 0, (void**)&locked, 0))) {
-            memcpy(locked, ov, sizeof(ov));
-            g_ovl_vb->Unlock();
-        }
     }
+    UpdateOverlayVertices();  /* llena el VB con el overscan actual */
 }
 
 static void DestroyOverlay(void)
@@ -810,6 +826,13 @@ void SDL_XBOX_SetOverlayEnabled(int enabled)
 {
     if (enabled && !g_ovl_surf) InitOverlay();
     g_ovl_enabled = enabled;
+}
+
+void SDL_XBOX_SetOverscan(int x, int y)
+{
+    g_ovl_overscan_x = x;
+    g_ovl_overscan_y = y;
+    if (g_ovl_vb) UpdateOverlayVertices();
 }
 
 /* =====================================================================

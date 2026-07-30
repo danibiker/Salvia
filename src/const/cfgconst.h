@@ -15,7 +15,7 @@ namespace cfg {
 			showFps, integerScale, animBG,
 			mainLang, scrapRegion, scrapLang, scrapOrigin, scrapUser, scrapPass, apikeytgdb, raUser, raPass, enableAchievements, hardcoreRA,
 			coreGenesis, coreSnes, corePce, corePceCd, coreFbn,
-			showEmptyEmulators,
+			showEmptyEmulators, overscan_x, overscan_y, 
 			MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
 
 	typedef enum{generalConfig = 0, name,

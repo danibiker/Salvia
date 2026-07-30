@@ -236,10 +236,12 @@ public:
 	std::string description;
 	std::string format;
 	int divisor;
+	bool allowNegative;
 
     OpcionInt(std::string t, int* v, std::string f, int div) : Opcion(t, OPC_INT), valor(v), format(f) {
 		divisor = div == 0 ? 1 : div;
 		description = Constant::string_format(f, *v / (float)divisor);
+		allowNegative = false;
 	}
 	std::string ejecutar() override {
         return "";
@@ -412,6 +414,7 @@ private:
 	Menu* menuDisks;
 	Menu* menuGuides;
 	Menu* menuGuideText;
+	Menu *menuOverscan;
 
 	CONFIG_STATUS status;
 	int marginX;
@@ -452,6 +455,7 @@ private:
 	void drawFaqSearch(int i, OpcionGameFaq *opcion, SDL_Surface *video_page);
 	void drawFaqSelect(int i, OpcionFaq *opcion, SDL_Surface *video_page);
 	void drawImage(int i, OpcionImage *opcion, SDL_Surface *video_page);
+	void drawBordersMenuOverlay(SDL_Surface *video_page);
 
 	void resetAskPosition();
 	void poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper);
@@ -492,6 +496,7 @@ public:
 	void poblarCoreOptions(CfgLoader *);
 	void poblarPartidasGuardadas(CfgLoader *, std::string);
 	void poblarJoystickTypes(Joystick *joystick);
+	void poblarMenuOverscan(Menu *menu);
 	void poblarMenuDiscos(int options);
 	void setGameLoaded(std::string gn){
 		this->gameFaqsMenu.gameName = gn;
@@ -509,6 +514,10 @@ public:
 
 	bool isFrontendKeysMenu(){
 		return obtenerMenuActual() == menuAssignFrontend;
+	}
+
+	bool isOverscanmenu(){
+		return obtenerMenuActual() == menuOverscan;
 	}
 
 	CONFIG_STATUS getStatus(){ return status;}

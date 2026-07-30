@@ -222,6 +222,19 @@ inline int procesarGeneralConfig(){
 		gameMenu->processConfigChanges();
 	}
 
+	// Overscan del overlay: monitorea cambios en los valores de config
+	// y actualiza el vertex buffer del overlay en caliente.
+	if (gameMenu->configMenus->isOverscanmenu()){
+		static int last_ovs_x = 0, last_ovs_y = 0;
+		int cur_x = CfgLoader::configMain[cfg::overscan_x].valueInt;
+		int cur_y = CfgLoader::configMain[cfg::overscan_y].valueInt;
+		if (last_ovs_x != cur_x || last_ovs_y != cur_y){
+			SDL_XBOX_SetOverscan(cur_x, cur_y);
+			last_ovs_x = cur_x;
+			last_ovs_y = cur_y;
+		}
+	}
+
 	return 0;
 }
 

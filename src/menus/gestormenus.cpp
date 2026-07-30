@@ -358,6 +358,10 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	#endif
 	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef()));
 	
+	//--------Menu de overscan---------
+	menuOverscan = new Menu(LanguageManager::instance()->get("menu.video.overscan"), menuVideo);
+	poblarMenuOverscan(menuOverscan);
+	menuVideo->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.video.overscan"), menuOverscan));
 	
 	menuAssignRetro = new Menu(LanguageManager::instance()->get("menu.options.paddassign"), menuEntrada);
 	menuAssignFrontend = new Menu(LanguageManager::instance()->get("menu.options.frontassign"), menuEntrada);
@@ -563,6 +567,21 @@ void GestorMenus::iniciarFiltros(GameDataFields& gameDataFieldsFilter){
 	menuGameFilter->opciones.push_back(new OpcionListaRef(LanguageManager::instance()->get("menu.filter.manufacturer"), &gameDataFieldsFilter.manufacturers, &gameDataFieldsFilter.posManufacturer));
 	menuGameFilter->opciones.push_back(new OpcionListaRef(LanguageManager::instance()->get("menu.filter.year"), &gameDataFieldsFilter.years, &gameDataFieldsFilter.posYear));
 	menuGameFilter->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.filter.parents"), &gameDataFieldsFilter.onlyParents));
+}
+
+void GestorMenus::poblarMenuOverscan(Menu *menu){
+	const std::string format = LanguageManager::instance()->get("menu.video.overscan.format");
+
+	OpcionInt* overscan_x = new OpcionInt(LanguageManager::instance()->get("menu.video.overscan.x"), 
+		&CfgLoader::configMain[cfg::overscan_x].getIntRef(), format, 1);
+	overscan_x->allowNegative = true;
+
+	OpcionInt* overscan_y = new OpcionInt(LanguageManager::instance()->get("menu.video.overscan.y"), 
+		&CfgLoader::configMain[cfg::overscan_y].getIntRef(), format, 1);
+	overscan_y->allowNegative = true;
+	
+	menu->opciones.push_back(overscan_x);
+	menu->opciones.push_back(overscan_y);
 }
 
 void GestorMenus::poblarMenuDiscos(int options){
@@ -1213,7 +1232,7 @@ void GestorMenus::cambiarValor(int dir) {
 		b->ejecutar();
     } else if (opt->tipo == OPC_INT) {
 		OpcionInt* i = (OpcionInt*)opt;
-		if (!(dir < 0 && *(i->valor) == 0)){
+		if (!(dir < 0 && *(i->valor) == 0) || i->allowNegative){
 			*(i->valor) = *(i->valor) + dir;
 		}
 		i->description = Constant::string_format(i->format, *(i->valor) / (float)i->divisor);
@@ -1583,8 +1602,43 @@ void GestorMenus::draw(SDL_Surface *video_page){
     }
 
 	drawAskMenu(video_page);
+	drawBordersMenuOverlay(video_page);
+
 }
 
+void GestorMenus::drawBordersMenuOverlay(SDL_Surface *video_page) {
+    if (!isOverscanmenu()) return;
+
+    const Uint32 bordersColor = Constant::colors[clWhite].color;
+    const int thickness = 10;
+    const int lineLen = (int)(video_page->h * 0.1);
+    const int w = video_page->w;
+    const int h = video_page->h;
+
+    // Array de 8 rectángulos
+    SDL_Rect rects[8] = {
+        // Bordes Verticales Izquierda (Arriba / Abajo)
+        {0, 0, (Uint16)thickness, (Uint16)lineLen},
+        {0, (Sint16)(h - lineLen), (Uint16)thickness, (Uint16)lineLen},
+        
+        // Bordes Verticales Derecha (Arriba / Abajo)
+        {(Sint16)(w - thickness), 0, (Uint16)thickness, (Uint16)lineLen},
+        {(Sint16)(w - thickness), (Sint16)(h - lineLen), (Uint16)thickness, (Uint16)lineLen},
+        
+        // Bordes Horizontales Arriba (Izquierda / Derecha)
+        {0, 0, (Uint16)lineLen, (Uint16)thickness},
+        {(Sint16)(w - lineLen), 0, (Uint16)lineLen, (Uint16)thickness},
+        
+        // Bordes Horizontales Abajo (Izquierda / Derecha)
+        {0, (Sint16)(h - thickness), (Uint16)lineLen, (Uint16)thickness},
+        {(Sint16)(w - lineLen), (Sint16)(h - thickness), (Uint16)lineLen, (Uint16)thickness}
+    };
+
+    // En SDL 1.2 recorremos el array y llamamos a SDL_FillRect por cada uno
+    for (int i = 0; i < 8; i++) {
+        SDL_FillRect(video_page, &rects[i], bordersColor);
+    }
+}
 void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 	std::string str = "";
 	const int screenPos = i - this->iniPos;

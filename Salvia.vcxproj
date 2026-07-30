@@ -1273,7 +1273,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_beetlepce_fx|Win32'">
     <IntDir>$(BUILD_DIR)</IntDir>
-    <TargetName>$(EMU_LIB_BEETLEPCE)</TargetName>
+    <TargetName>$(EMU_LIB_BEETLEPCEFX)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_vbanext|Xbox 360'">
     <OutDir>$(BUILD_DIR)</OutDir>

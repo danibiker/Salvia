@@ -57,6 +57,7 @@ void         SDL_XBOX_SetRotation(int rotation);
 void         SDL_XBOX_SetVSync(int enable);
 SDL_Surface* SDL_XBOX_GetOverlay(void);
 void         SDL_XBOX_SetOverlayEnabled(int enabled);
+void         SDL_XBOX_SetOverscan(int x, int y);
 
 /* Devuelve el IDirect3DDevice9 interno (para HLSLBackground u otros). */
 struct IDirect3DDevice9;

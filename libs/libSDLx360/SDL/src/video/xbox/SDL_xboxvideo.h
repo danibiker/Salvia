@@ -100,6 +100,10 @@ SDL_Surface* SDL_XBOX_GetOverlay(void);
 /* Enable (1) or disable (0) overlay rendering. */
 void SDL_XBOX_SetOverlayEnabled(int enabled);
 
+/* Ajusta el overscan del overlay (desplaza los bordes del quad).
+   x,y > 0 reducen el area visible; x,y < 0 la expanden. */
+void SDL_XBOX_SetOverscan(int x, int y);
+
 /* Apply screen rotation by remapping the texture coordinates of the display
    quad. Free in HW (no extra blit, no extra memory, no shader change). The
    texture in VRAM keeps its native orientation, so HQx/CRT shaders keep

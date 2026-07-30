@@ -321,6 +321,11 @@ static int g_overlay_enabled = 0;
 static int g_overlay_locked = 0;
 static int g_current_effect = 0;
 
+/* Overscan del overlay: desplaza los bordes del quad hacia adentro (positivo)
+   o hacia afuera (negativo).  Se aplica via SDL_XBOX_SetOverscan. */
+static int g_overlay_overscan_x = 0;
+static int g_overlay_overscan_y = 0;
+
 /* Filtro de muestreo actual del s0 segun el efecto activo (LINEAR/POINT).
  * Lo mantiene XBOX_SetSampler0Filter cuando XBOX_SelectEffect lo decide.
  * XBOX_DrawOverlay lee este valor para restaurar el filtro despues de
@@ -814,6 +819,9 @@ void SDL_XBOX_SetRotation(int rotation)
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 }
 
+/* Forward decl for XBOX_UpdateOverlayVertices, defined below */ 
+static void XBOX_UpdateOverlayVertices(void);
+
 void SDL_XBOX_SetVSync(int enabled)
 {
 	SDL_VideoDevice *this = current_video;
@@ -878,35 +886,12 @@ void SDL_XBOX_SetVSync(int enabled)
 
 	/* Recrear overlay vertex buffer si hacía falta */
 	if (g_overlay_texture) {
-		VERTEX overlayVerts[4];
-		bbw = (float)D3D_PP.BackBufferWidth;
-		bbh = (float)D3D_PP.BackBufferHeight;
-
 		IDirect3DDevice9_CreateVertexBuffer(D3D_Device,
-			sizeof(overlayVerts), D3DUSAGE_WRITEONLY, 0,
+			sizeof(VERTEX[4]), D3DUSAGE_WRITEONLY, 0,
 			D3DPOOL_DEFAULT, &g_overlay_vb, NULL);
 
-		if (g_overlay_vb) {
-			overlayVerts[0].x = -0.5f;        overlayVerts[0].y = bbh - 0.5f;
-			overlayVerts[0].z = 0; overlayVerts[0].rhw = 1;
-			overlayVerts[0].tx = 0; overlayVerts[0].ty = 1;
-
-			overlayVerts[1].x = -0.5f;        overlayVerts[1].y = -0.5f;
-			overlayVerts[1].z = 0; overlayVerts[1].rhw = 1;
-			overlayVerts[1].tx = 0; overlayVerts[1].ty = 0;
-
-			overlayVerts[2].x = bbw - 0.5f;   overlayVerts[2].y = bbh - 0.5f;
-			overlayVerts[2].z = 0; overlayVerts[2].rhw = 1;
-			overlayVerts[2].tx = 1; overlayVerts[2].ty = 1;
-
-			overlayVerts[3].x = bbw - 0.5f;   overlayVerts[3].y = -0.5f;
-			overlayVerts[3].z = 0; overlayVerts[3].rhw = 1;
-			overlayVerts[3].tx = 1; overlayVerts[3].ty = 0;
-
-			IDirect3DVertexBuffer9_Lock(g_overlay_vb, 0, 0, (BYTE **)&pLocked, 0L);
-			memcpy(pLocked, overlayVerts, sizeof(overlayVerts));
-			IDirect3DVertexBuffer9_Unlock(g_overlay_vb);
-		}
+		if (g_overlay_vb)
+			XBOX_UpdateOverlayVertices();
 
 		/* Re-lock overlay texture */
 		IDirect3DTexture9_LockRect(g_overlay_texture, 0, &d3dlr, NULL, 0);
@@ -942,10 +927,46 @@ void SDL_XBOX_SetVSync(int enabled)
 
 /* ---- Overlay system ---- */
 
-static void XBOX_InitOverlay(void)
+/* Recalcula los 4 vertices del overlay quad aplicando el overscan actual.
+   Llamar cuando cambien g_overlay_overscan_x/y, o cuando se cree el VB. */
+static void XBOX_UpdateOverlayVertices(void)
 {
 	VERTEX overlayVerts[4];
+	float bbw = (float)D3D_PP.BackBufferWidth;
+	float bbh = (float)D3D_PP.BackBufferHeight;
+	float ox = (float)g_overlay_overscan_x;
+	float oy = (float)g_overlay_overscan_y;
 	void *pLocked;
+
+	if (!g_overlay_vb) return;
+
+	overlayVerts[0].x = -0.5f + ox;
+	overlayVerts[0].y = bbh - 0.5f + oy;
+	overlayVerts[0].z = 0; overlayVerts[0].rhw = 1;
+	overlayVerts[0].tx = 0; overlayVerts[0].ty = 1;
+
+	overlayVerts[1].x = -0.5f + ox;
+	overlayVerts[1].y = -0.5f - oy;
+	overlayVerts[1].z = 0; overlayVerts[1].rhw = 1;
+	overlayVerts[1].tx = 0; overlayVerts[1].ty = 0;
+
+	overlayVerts[2].x = bbw - 0.5f - ox;
+	overlayVerts[2].y = bbh - 0.5f + oy;
+	overlayVerts[2].z = 0; overlayVerts[2].rhw = 1;
+	overlayVerts[2].tx = 1; overlayVerts[2].ty = 1;
+
+	overlayVerts[3].x = bbw - 0.5f - ox;
+	overlayVerts[3].y = -0.5f - oy;
+	overlayVerts[3].z = 0; overlayVerts[3].rhw = 1;
+	overlayVerts[3].tx = 1; overlayVerts[3].ty = 0;
+
+	IDirect3DVertexBuffer9_Lock(g_overlay_vb, 0, 0, (BYTE **)&pLocked, 0L);
+	memcpy(pLocked, overlayVerts, sizeof(overlayVerts));
+	IDirect3DVertexBuffer9_Unlock(g_overlay_vb);
+}
+
+static void XBOX_InitOverlay(void)
+{
 	D3DLOCKED_RECT d3dlr;
 	float bbw = (float)D3D_PP.BackBufferWidth;
 	float bbh = (float)D3D_PP.BackBufferHeight;
@@ -962,7 +983,7 @@ static void XBOX_InitOverlay(void)
 
 	/* Create fullscreen vertex buffer for the overlay quad */
 	IDirect3DDevice9_CreateVertexBuffer(D3D_Device,
-		sizeof(overlayVerts), D3DUSAGE_WRITEONLY, 0,
+		sizeof(VERTEX[4]), D3DUSAGE_WRITEONLY, 0,
 		D3DPOOL_DEFAULT, &g_overlay_vb, NULL);
 
 	if (!g_overlay_vb) {
@@ -971,30 +992,8 @@ static void XBOX_InitOverlay(void)
 		return;
 	}
 
-	/* Fullscreen quad vertices */
-	overlayVerts[0].x = -0.5f;
-	overlayVerts[0].y = bbh - 0.5f;
-	overlayVerts[0].z = 0; overlayVerts[0].rhw = 1;
-	overlayVerts[0].tx = 0; overlayVerts[0].ty = 1;
-
-	overlayVerts[1].x = -0.5f;
-	overlayVerts[1].y = -0.5f;
-	overlayVerts[1].z = 0; overlayVerts[1].rhw = 1;
-	overlayVerts[1].tx = 0; overlayVerts[1].ty = 0;
-
-	overlayVerts[2].x = bbw - 0.5f;
-	overlayVerts[2].y = bbh - 0.5f;
-	overlayVerts[2].z = 0; overlayVerts[2].rhw = 1;
-	overlayVerts[2].tx = 1; overlayVerts[2].ty = 1;
-
-	overlayVerts[3].x = bbw - 0.5f;
-	overlayVerts[3].y = -0.5f;
-	overlayVerts[3].z = 0; overlayVerts[3].rhw = 1;
-	overlayVerts[3].tx = 1; overlayVerts[3].ty = 0;
-
-	IDirect3DVertexBuffer9_Lock(g_overlay_vb, 0, 0, (BYTE **)&pLocked, 0L);
-	memcpy(pLocked, overlayVerts, sizeof(overlayVerts));
-	IDirect3DVertexBuffer9_Unlock(g_overlay_vb);
+	/* Fill vertex buffer with overscan applied */
+	XBOX_UpdateOverlayVertices();
 
 	/* Create SDL_Surface wrapper for the overlay */
 	g_overlay_surface = SDL_CreateRGBSurface(SDL_SWSURFACE | SDL_SRCALPHA,
@@ -1108,6 +1107,17 @@ void SDL_XBOX_SetOverlayEnabled(int enabled)
 	if (enabled && !g_overlay_surface)
 		XBOX_InitOverlay();
 	g_overlay_enabled = enabled;
+}
+
+/* Ajusta el overscan del overlay.
+   x,y > 0 desplazan los bordes hacia adentro (reduce area visible).
+   x,y < 0 los expanden hacia afuera.  Se puede llamar en cualquier
+   momento sin reiniciar el overlay. */
+void SDL_XBOX_SetOverscan(int x, int y)
+{
+	g_overlay_overscan_x = x;
+	g_overlay_overscan_y = y;
+	XBOX_UpdateOverlayVertices();
 }
 
 SDL_Surface *XBOX_SetVideoMode(_THIS, SDL_Surface *current,

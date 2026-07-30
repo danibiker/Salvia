@@ -76,6 +76,9 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::coreFbn] = cfg::t_cfg_props(coreDefault + "fbn", (int)0);
 	configMain[cfg::showEmptyEmulators] = cfg::t_cfg_props("showEmptyEmulators", true);
 	configMain[cfg::fastForwardMult] = cfg::t_cfg_props("fastForwardMult", (int)30);
+	configMain[cfg::overscan_x] = cfg::t_cfg_props("overscan_x", (int)0);
+	configMain[cfg::overscan_y] = cfg::t_cfg_props("overscan_y", (int)0);
+
 
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));
