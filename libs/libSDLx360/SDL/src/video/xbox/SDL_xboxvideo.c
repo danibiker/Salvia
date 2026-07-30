@@ -941,22 +941,22 @@ static void XBOX_UpdateOverlayVertices(void)
 	if (!g_overlay_vb) return;
 
 	overlayVerts[0].x = -0.5f + ox;
-	overlayVerts[0].y = bbh - 0.5f + oy;
+	overlayVerts[0].y = bbh - 0.5f - oy;
 	overlayVerts[0].z = 0; overlayVerts[0].rhw = 1;
 	overlayVerts[0].tx = 0; overlayVerts[0].ty = 1;
 
 	overlayVerts[1].x = -0.5f + ox;
-	overlayVerts[1].y = -0.5f - oy;
+	overlayVerts[1].y = -0.5f + oy;
 	overlayVerts[1].z = 0; overlayVerts[1].rhw = 1;
 	overlayVerts[1].tx = 0; overlayVerts[1].ty = 0;
 
 	overlayVerts[2].x = bbw - 0.5f - ox;
-	overlayVerts[2].y = bbh - 0.5f + oy;
+	overlayVerts[2].y = bbh - 0.5f - oy;
 	overlayVerts[2].z = 0; overlayVerts[2].rhw = 1;
 	overlayVerts[2].tx = 1; overlayVerts[2].ty = 1;
 
 	overlayVerts[3].x = bbw - 0.5f - ox;
-	overlayVerts[3].y = -0.5f - oy;
+	overlayVerts[3].y = -0.5f + oy;
 	overlayVerts[3].z = 0; overlayVerts[3].rhw = 1;
 	overlayVerts[3].tx = 1; overlayVerts[3].ty = 0;
 
