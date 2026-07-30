@@ -76,12 +76,13 @@ const char *ICONS_PATH[] = {"menu_log.png",
 };
 
 #ifdef _XBOX
-	const char *SDL_BTN_TO_XBOX[12] = {"A", "B", "X", "Y", "L", "R", "L3", "R3", "Start", "Select", "L2", "R2"};
+	const char *SDL_BTN_TO_XBOX[12] = {"A", "B", "X", "Y", "LB", "RB", "L3", "R3", "Start", "Back", "LT", "RT"};
+	std::string SDL_JOY_TO_XBOX[6] = {"Left", "Right", "Up", "Down", "LT", "RT"};
 #else
 	const char *SDL_BTN_TO_XBOX[12] = {"A", "B", "X", "Y", "L", "R", "Select", "Start", "L3", "R3", "", ""};
+	std::string SDL_JOY_TO_XBOX[6] = {"Left", "Right", "Up", "Down", "R2", "L2"};
 #endif
 //Translated later on the first lines of GestorMenus::inicializar
-std::string SDL_JOY_TO_XBOX[6] = {"Left", "Right", "Up", "Down", "R2", "L2"};
 std::string SDL_HAT_TO_XBOX[9] = {"","Up","Right", "", "Down", "","","", "Left"};
 std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
 

@@ -403,12 +403,21 @@ PadDataS padd1, padd2;
  * DualShock (libpcsxcore/dualshock_pad.c) cuando el juego envia rumble
  * via cmd 0x42 + mapping previo de cmd 0x4D. */
 extern void PSxInputSetVibration(int port, unsigned char smallMotor, unsigned char bigMotor);
+extern void PSxInputReadPort(PadDataS* pad, int port);
 
 /* DualShock SIO state machine completo (port de Pokopom).  Habilitado
  * cuando el frontend selecciona "DualShock" (PSE_PAD_TYPE_ANALOGPAD) y
  * reemplaza el _PADpoll simplificado original.  Para otros tipos de
  * pad (Standard, Mouse, etc.) se sigue usando el comportamiento legacy. */
 #include "dualshock_pad.h"
+
+/* Multitap state: -1 = no multitap, 0 = port 0, 1 = port 1.  Seteado
+ * por retro_set_controller_port_device en libretro_core.cpp. */
+extern int g_multitap_port;
+
+/* Input snapshot de los 4 slaves multitap, capturados en _PADstartPoll
+ * y usados en _PADpoll en bufc=1 para poblar los DS state machines. */
+static ds_input_t s_mtap_slave_input[4];
 
 /* Bridge entre PSxInputSetVibration (que toma small/big) y el callback
  * del state machine (mismo prototipo).  El state machine no conoce
@@ -438,8 +447,31 @@ static int s_ds_current_port = 0;
 static int s_ds_current_type = 0;
 
 unsigned char _PADstartPoll(PadDataS *pad) {
+	int s = 0;
     bufc = 0;
     s_ds_current_type = pad->controllerType;
+
+    /* Multitap: SCPH-1130 via g_multitap_port (set by frontend device selection).
+     * Intercambio extendido de 35 bytes: el state machine DS de cada uno de los
+     * 4 slots se inicializa en _PADpoll (bufc=1) cuando recibimos el cmd byte.
+     * Los 4 slaves ocupan LR ports 0-3 (mismos que los slots Salvia 1-4).
+     * El puerto fisico 2 no esta disponible en este modo. */
+    if (g_multitap_port == s_ds_current_port) {
+        ensure_ds_init();
+        /* Capturar input de los 4 slaves (LR ports 0..3) antes del exchange. */
+        for (s = 0; s < 4; s++) {
+            PadDataS slave_pad;
+            PSxInputReadPort(&slave_pad, s);
+            s_mtap_slave_input[s].buttons = slave_pad.buttonStatus;
+            s_mtap_slave_input[s].leftX   = slave_pad.leftJoyX;
+            s_mtap_slave_input[s].leftY   = slave_pad.leftJoyY;
+            s_mtap_slave_input[s].rightX  = slave_pad.rightJoyX;
+            s_mtap_slave_input[s].rightY  = slave_pad.rightJoyY;
+        }
+        s_ds_current_type = 0;  /* _PADpoll identifica MTAP via g_multitap_port */
+        bufcount = 34;    /* 35-byte multitap exchange (counters 0..34) */
+        return 0xFF;      /* counter 0: start byte response */
+    }
 
     /* DualShock: delegar al state machine completo (Pokopom port).  Este
      * path soporta config mode, queries, set rumble mapping, etc.  Sin
@@ -523,6 +555,36 @@ unsigned char _PADstartPoll(PadDataS *pad) {
 }
 
 unsigned char _PADpoll(unsigned char value) {
+    /* Multitap (SCPH-1130): exchange de 35 bytes.  El state machine DS de
+     * cada slot (port 2..5) se inicializo en bufc=1 con el comando. */
+    if (g_multitap_port == s_ds_current_port) {
+        bufc++;
+        if (bufc == 1) {
+            /* Comando recibido (e.g. 0x42).  Inicializar los 4 DS slaves
+             * en DS ports 0-3 (LR ports 0-3, slots Salvia 1-4). */
+            int s;
+            for (s = 0; s < 4; s++) {
+                ds_set_input(s, &s_mtap_slave_input[s]);
+                ds_command(s, 0, 0x01);
+                ds_command(s, 1, value);
+                ds_command(s, 2, 0x00);
+            }
+            return 0x80;  /* MTAP ID = lower nibble 0 → sio.c bufcount = 34 */
+        }
+        if (bufc == 2) {
+            return 0x5A;  /* Post-ID global constant */
+        }
+        if (bufc >= 3 && bufc <= 34) {
+            /* Cada slot: 8 bytes (DS counters 1..8 sin el start byte).
+             * Slots mapean a DS ports 0-3 (LR ports 0-3). */
+            int b    = bufc - 3;
+            int slot = b / 8;              /* 0..3 */
+            int ds_c = (b % 8) + 1;        /* DS counter 1..8 */
+            return ds_command(slot, ds_c, value);
+        }
+        return 0x00;
+    }
+
     /* DualShock: delegar al state machine.  El counter del exchange es
      * bufc (que _PADstartPoll dejo en 0 y se incrementa con cada poll). */
     if (s_ds_current_type == PSE_PAD_TYPE_ANALOGPAD) {

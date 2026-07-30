@@ -360,7 +360,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	
 	
 	menuAssignRetro = new Menu(LanguageManager::instance()->get("menu.options.paddassign"), menuEntrada);
-	Menu* menuAssignFrontend = new Menu(LanguageManager::instance()->get("menu.options.frontassign"), menuEntrada);
+	menuAssignFrontend = new Menu(LanguageManager::instance()->get("menu.options.frontassign"), menuEntrada);
 	Menu* menuHotkeys = new Menu(LanguageManager::instance()->get("menu.options.hotkeys"), menuEntrada);
 	todosLosMenus.push_back(menuAssignRetro);
 	todosLosMenus.push_back(menuAssignFrontend);

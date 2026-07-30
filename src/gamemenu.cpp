@@ -496,8 +496,9 @@ void GameMenu::drawInfoButtons(SDL_Rect &rect){
 	}
 
 	TTF_Font *fontBig = Fonts::getFont(Fonts::FONTBIG);
-	const int face_h_big = Fonts::getLineSkip(Fonts::FONTBIG);
-	const int posY = (rect.h - face_h_big) / 2;
+	TTF_Font *fontSmall = Fonts::getFont(Fonts::FONTSMALL);
+
+	const int posY = rect.h / 2;
 	int x = 10;
 	
 	SDL_Surface *txtSrf = SDL_CreateRGBSurface(SDL_SWSURFACE, rect.w, rect.h, overlay->format->BitsPerPixel, 
@@ -519,10 +520,10 @@ void GameMenu::drawInfoButtons(SDL_Rect &rect){
 
 	SDL_Rect drawnRect = {0, 0, 0, 0};
 	int tw = 0, th = 0;
-	const int circleCenterY = posY + face_h_big / 2;
+	const int circleCenterY = posY;
 	
 	for (unsigned int i=0; i < joystick->infoButtons.size(); i++){
-		Fonts::getSize(fontBig, joystick->infoButtons[i].text, tw, th);
+		Fonts::getSize(fontSmall, joystick->infoButtons[i].text, tw, th);
 		const int circleCenterX = x + tw / 2;
 
 		if (joystick->infoButtons[i].shape == BS_CIRCLE){
@@ -533,7 +534,7 @@ void GameMenu::drawInfoButtons(SDL_Rect &rect){
 			filledCircleColor(txtSrf, circleCenterX, circleCenterY, face_h_big / 2 + 2, Constant::colors[buttonsColor].colorRaw);
 		}
 		
-		drawnRect = Fonts::drawText(txtSrf, fontBig, joystick->infoButtons[i].text.c_str(), x, posY, Constant::colors[buttonsTransparentColor].sdlColor, 0);
+		drawnRect = Fonts::drawText(txtSrf, fontSmall, joystick->infoButtons[i].text.c_str(), x, posY - face_h_small / 2, Constant::colors[buttonsTransparentColor].sdlColor, 0);
 
 		if (!joystick->infoButtons[i].mergeNext){
 			x += drawnRect.w + face_h_big / 2;
@@ -544,10 +545,9 @@ void GameMenu::drawInfoButtons(SDL_Rect &rect){
 		if (!joystick->infoButtons[i].mergeNext){
 			std::string desc = joystick->infoButtons[i].description;
 			if (i > 0 && joystick->infoButtons[i-1].mergeNext){
-				//desc = joystick->infoButtons[i-1].description + "/" + desc;
 				desc = reduceWords(joystick->infoButtons[i-1].description, joystick->infoButtons[i].description);
 			}
-			drawnRect = Fonts::drawText(txtSrf, fontBig, desc.c_str(), x, posY, Constant::colors[buttonsColor].sdlColor, 0);
+			drawnRect = Fonts::drawText(txtSrf, fontBig, desc.c_str(), x, posY - face_h_big / 2, Constant::colors[buttonsColor].sdlColor, 0);
 		} else {
 			drawnRect.w = 0;
 		}

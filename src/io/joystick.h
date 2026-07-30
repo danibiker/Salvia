@@ -13,6 +13,9 @@
 //independientemente de cómo sea físicamente el dispositivo.
 #define MAX_HAT_POSITIONS 9
 
+static int FRONTEND_BTN_VAL[] = {JOY_BUTTON_UP, JOY_BUTTON_DOWN, JOY_BUTTON_LEFT, JOY_BUTTON_RIGHT, JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_Y,
+	JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_L3};
+
 static const int configurablePortButtons[] = {
 	RETRO_DEVICE_ID_JOYPAD_A,
 	RETRO_DEVICE_ID_JOYPAD_B,

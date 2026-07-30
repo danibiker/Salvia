@@ -61,7 +61,7 @@ static const uint8_t WTF[6] = { 0x00, 0x00, 0x02, 0x00, 0x00, 0x5A };
  *  State per-port
  * ========================================================================= */
 
-#define DS_NUM_PORTS  2
+#define DS_NUM_PORTS  6  /* 2 physical + 4 multitap slaves */
 #define DS_BUF_SIZE   9   /* 9 bytes en intercambio SIO normal de DualShock */
 
 typedef struct {

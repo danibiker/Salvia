@@ -182,10 +182,12 @@ static retro_input_state_t        input_state_cb;
 #define RETRO_DEVICE_PSE_STANDARD  RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 0)
 #define RETRO_DEVICE_PSE_ANALOG    RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG,  0)
 #define RETRO_DEVICE_PSE_DUALSHOCK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG,  1)
+#define RETRO_DEVICE_PSE_MULTITAP  RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 2)
 
 /* Per-port PSX controller type (PSE_PAD_TYPE_* values from psemu_plugin_defs.h).
+ * Array size matches DS_NUM_PORTS in dualshock_pad.c (6: 2 physical + 4 MTAP slaves).
  * Updated by retro_set_controller_port_device; read by PSXInput via libretro_get_pad_type(). */
-static int in_type[2];
+static int in_type[6];
 
 /* ===== Emulator lifecycle state =====
  * emu_running becomes true after retro_load_game completes successfully and
@@ -225,8 +227,8 @@ static unsigned current_pixel_format = RETRO_PIXEL_FORMAT_XRGB8888;
  * cuando se elimino el thread SPU dedicado. */
 
 /* ===== Input state ===== */
-static uint16_t libretro_pad_state[2];
-static uint8_t  libretro_analog[2][4];   /* [port][lx, ly, rx, ry] */
+static uint16_t libretro_pad_state[6];
+static uint8_t  libretro_analog[6][4];   /* [port][lx, ly, rx, ry] */
 
 /* ===== Game path storage ===== */
 static char game_path_store[1024];
@@ -295,15 +297,28 @@ void retro_set_environment(retro_environment_t cb) {
     /* Declare supported PSX controller types per port so the frontend can
      * expose a type-selector UI (matching pcsx-rearmed's approach). */
     {
-        static const struct retro_controller_description pads[] = {
-            { "standard",  RETRO_DEVICE_JOYPAD         },
-            { "dualshock", RETRO_DEVICE_PSE_DUALSHOCK  },
-            { "analog",    RETRO_DEVICE_PSE_ANALOG      },
+        static const struct retro_controller_description pads_physical[] = {
+            { "standard",  RETRO_DEVICE_JOYPAD          },
+            { "dualshock", RETRO_DEVICE_PSE_DUALSHOCK   },
+            { "analog",    RETRO_DEVICE_PSE_ANALOG       },
+            { "multitap",  RETRO_DEVICE_PSE_MULTITAP    },
             { NULL, 0 }
         };
+        static const struct retro_controller_description pads_slave[] = {
+            { "none",      RETRO_DEVICE_NONE            },
+            { "standard",  RETRO_DEVICE_JOYPAD          },
+            { "dualshock", RETRO_DEVICE_PSE_DUALSHOCK   },
+            { "analog",    RETRO_DEVICE_PSE_ANALOG       },
+            { NULL, 0 }
+        };
+        /* Salvia expone solo 4 slots (LR ports 0-3).  Los primeros 2 son
+         * puertos fisicos (con opcion multitap); los ultimos 2 son slaves
+         * (solo cuando el multitap esta activo, mapeados a LR 0-3). */
         static const struct retro_controller_info ports[] = {
-            { pads, 3 },
-            { pads, 3 },
+            { pads_physical, 4 },
+            { pads_physical, 4 },
+            { pads_slave, 4 },
+            { pads_slave, 4 },
             { NULL, 0 }
         };
         cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
@@ -620,8 +635,12 @@ void retro_get_system_av_info(struct retro_system_av_info *info) {
     info->timing.sample_rate = 44100.0;
 }
 
+/* Track which physical port (0 or 1) has a multitap, or -1 if none.
+ * Set from retro_set_controller_port_device; read from plugins.c MTAP path. */
+extern "C" int g_multitap_port = -1;
+
 void retro_set_controller_port_device(unsigned port, unsigned device) {
-    if (port >= 2) return;
+    if (port >= 4) return;
     switch (device) {
         case RETRO_DEVICE_JOYPAD:
         case RETRO_DEVICE_PSE_STANDARD:
@@ -630,15 +649,29 @@ void retro_set_controller_port_device(unsigned port, unsigned device) {
             in_type[port] = PSE_PAD_TYPE_ANALOGPAD;  break;
         case RETRO_DEVICE_PSE_ANALOG:
             in_type[port] = PSE_PAD_TYPE_ANALOGJOY;  break;
+        case RETRO_DEVICE_PSE_MULTITAP:
+            in_type[port] = PSE_PAD_TYPE_STANDARD; /* physical port type */
+            if (port < 2) {
+                g_multitap_port = (int)port;
+                /* Mapea los 4 slaves a LR ports 0-3 (slots Salvia 1-4).
+                 * El puerto fisico 2 no esta disponible en este modo
+                 * (misma limitacion que snesx). */
+                for (int i = 0; i < 4; i++)
+                    in_type[i] = PSE_PAD_TYPE_ANALOGPAD;
+            }
+            return;
         default:
             in_type[port] = PSE_PAD_TYPE_STANDARD;   break;
     }
+    /* If a physical port is changed to non-multitap, clear g_multitap_port */
+    if (port < 2 && g_multitap_port == (int)port)
+        g_multitap_port = -1;
 }
 
 /* Bridge for PSXInput.cpp (C++ code, XInput path) to query the per-port
  * controller type selected by the frontend via retro_set_controller_port_device. */
 extern "C" int libretro_get_pad_type(int port) {
-    return (port >= 0 && port < 2) ? in_type[port] : PSE_PAD_TYPE_STANDARD;
+    return (port >= 0 && port < 4) ? in_type[port] : PSE_PAD_TYPE_STANDARD;
 }
 
 /* ======================================================================
@@ -668,10 +701,10 @@ extern "C" void SoundFeedStreamData(unsigned char *pSound, long lBytes) {
  * ====================================================================== */
 
 static const struct { int retro_id; int psx_bit; } button_map[] = {
-    { RETRO_DEVICE_ID_JOYPAD_B,      14 }, /* Cross */
-    { RETRO_DEVICE_ID_JOYPAD_A,      13 }, /* Circle */
-    { RETRO_DEVICE_ID_JOYPAD_Y,      15 }, /* Square */
-    { RETRO_DEVICE_ID_JOYPAD_X,      12 }, /* Triangle */
+    { RETRO_DEVICE_ID_JOYPAD_A,      14 }, /* Cross (abajo) */
+    { RETRO_DEVICE_ID_JOYPAD_B,      13 }, /* Circle (derecha) */
+    { RETRO_DEVICE_ID_JOYPAD_X,      15 }, /* Square (izquierda) */
+    { RETRO_DEVICE_ID_JOYPAD_Y,      12 }, /* Triangle (arriba) */
     { RETRO_DEVICE_ID_JOYPAD_SELECT,  0 }, /* Select */
     { RETRO_DEVICE_ID_JOYPAD_START,   3 }, /* Start */
     { RETRO_DEVICE_ID_JOYPAD_UP,      4 }, /* D-Up */
@@ -693,7 +726,7 @@ static void poll_libretro_input(void) {
 
     input_poll_cb();
 
-    for (int port = 0; port < 2; port++) {
+    for (int port = 0; port < 4; port++) {
         uint16_t buttons = 0xFFFF;
 
         for (unsigned i = 0; i < BUTTON_MAP_SIZE; i++) {
@@ -726,6 +759,11 @@ static void poll_libretro_input(void) {
 extern "C" void libretro_get_pad_state(int port, uint16_t *buttons,
                                         uint8_t *lx, uint8_t *ly,
                                         uint8_t *rx, uint8_t *ry) {
+    if (port < 0 || port >= 4) {
+        *buttons = 0xFFFF;
+        *lx = *ly = *rx = *ry = 0x80;
+        return;
+    }
     *buttons = libretro_pad_state[port];
     *lx = libretro_analog[port][0];
     *ly = libretro_analog[port][1];
@@ -1523,9 +1561,9 @@ void retro_init(void) {
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] retro_init\n");
     emu_running = false;
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] PSE_PAD_TYPE_STANDARD 0\n");
-    in_type[0]  = PSE_PAD_TYPE_STANDARD;
-	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] PSE_PAD_TYPE_STANDARD 1\n");
-    in_type[1]  = PSE_PAD_TYPE_STANDARD;
+    for (int i = 0; i < 6; i++)
+        in_type[i]  = PSE_PAD_TYPE_STANDARD;
+    g_multitap_port = -1;
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] perf_init\n");
     perf_init();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] check_pixel_format\n");

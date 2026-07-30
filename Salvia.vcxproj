@@ -3097,8 +3097,8 @@
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>$(COMMON_LIBS_WIN);pthread_lib.lib;beetle-psx-libretro.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);$(ProjectDir)libretro\beetle-psx-libretro\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_WIN);beetle-psx-libretro.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <SubSystem>Windows</SubSystem>

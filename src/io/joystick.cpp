@@ -614,12 +614,15 @@ void Joystick::setInfoButtons(){
 	const bool mergeNextArr[] = {false, false, true, false, false, false};
 	const int num_port_buttons_info = sizeof(buttonsToShowInfo) / sizeof(buttonsToShowInfo[0]);
 
-
 	infoButtons.clear();	
 	for (int i=0; i < num_port_buttons_info; i++){
 		t_info_btn btn;
 		btn.description = FRONTEND_BTN_TXT[buttonsToShowInfo[i]];
 		const int sdlIdBtn = inputs.mapperFrontend.getSdlBtn(0, FRONTEND_BTN_VAL[buttonsToShowInfo[i]]);
+
+		if (sdlIdBtn == -1)
+			continue;
+
 		btn.text = std::string(SDL_BTN_TO_XBOX[sdlIdBtn]);
 		btn.mergeNext = mergeNextArr[i];
 		

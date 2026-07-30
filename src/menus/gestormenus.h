@@ -405,6 +405,7 @@ private:
 	Menu* menuScrapper;
 	Menu* menuAchievements;
 	Menu* menuAssignRetro;
+	Menu* menuAssignFrontend;
 	int askNumOptions;
 	//Menu que rellena el frontend
 	Menu* cdromListMenu;
@@ -504,6 +505,10 @@ public:
 
 	bool isCoreOptions(){
 		return obtenerMenuActual() == menuCoreOptions;
+	}
+
+	bool isFrontendKeysMenu(){
+		return obtenerMenuActual() == menuAssignFrontend;
 	}
 
 	CONFIG_STATUS getStatus(){ return status;}

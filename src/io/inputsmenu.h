@@ -365,6 +365,9 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 				case SDL_JOYBUTTONDOWN:
 					//LOG_INFO("Boton detectado: ID %d", (int)event.jbutton.button);
 					gameMenu->configMenus->updateButton(event, KEY_JOY_BTN); //event.jbutton.button
+					if (gameMenu->configMenus->isFrontendKeysMenu()){
+						gameMenu->joystick->setInfoButtons();
+					}
 					break;
 				case SDL_JOYHATMOTION:
 					//LOG_INFO("hat detectado: ID %d", (int)event.jhat.value);
@@ -380,7 +383,7 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 					break;
 			}
 		}
-		//gameMenu->joystick->resetAllValues();
+		
 	} else {
 		gameMenu->joystick->pollKeys(gameMenu->overlay);
 		
