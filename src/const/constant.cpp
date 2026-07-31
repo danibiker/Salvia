@@ -140,7 +140,8 @@ const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",
 	"NEC - PC Engine SuperGrafx-content.png",
 	"Quake.png",
 	"default-content.png",
-	"The 3DO Company - 3DO-content.png"
+	"The 3DO Company - 3DO-content.png",
+	"Bandai - WonderSwan-content.png"
 };
 
 Constant::Constant(){

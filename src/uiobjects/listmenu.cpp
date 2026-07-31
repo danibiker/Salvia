@@ -472,6 +472,8 @@ int ListMenu::getCartForSystem(int systemid){
 			return cart_3do;
 		case 31:
 			return cart_pce;
+		case 46:
+			return cart_wonderswan;
 		case 57:
 			return cart_psx;
 		case 75:
