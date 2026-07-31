@@ -112,6 +112,12 @@ static int           s_skipping_this_frame = 0;
  * porque los 3 renderers lo consultan por primitiva, no en init. */
 extern "C" int g_pcsxr_dithering = 0;
 
+/* Widescreen hack (16:9): la GTE (gte_divider.c) comprime la X proyectada 3/4
+ * alrededor del centro para ensanchar el FOV, y aqui reportamos aspect 16:9.
+ * Init-only ("restart core to apply") para que geometria y aspect vayan juntos:
+ * togglearlo en caliente dejaria la imagen comprimida a 4:3 hasta reiniciar. */
+extern "C" int g_pcsxr_widescreen = 0;
+
 extern "C" void GPU_setSkipNextFrame(int skip);          /* xbox_soft/gpu.c */
 extern void pcsxr_log(enum retro_log_level level, const char *format, ...);
 
@@ -253,6 +259,7 @@ void retro_set_environment(retro_environment_t cb) {
     struct retro_variable variables[] = {
         { "pcsxr360_gpu_renderer",       "GPU Renderer (restart core to apply); Unai|Peops|SwanStation" },
 		{ "pcsxr360_threading",          "GPU Thread (restart core to apply); enabled|disabled" },
+		{ "pcsxr360_widescreen",         "Widescreen hack 16:9 GTE FOV (restart core to apply); disabled|enabled" },
 		{ "pcsxr360_pixel_format",       "Pixel Format; RGB565|XRGB8888" },
         { "pcsxr360_auto_frameskip",     "Auto frameskip (skip render on overload); disabled|enabled" },
         /* Dithering: respeta el bit de dither que el juego setea en GP1.
@@ -588,6 +595,17 @@ static void check_threading_initial_only(void) {
         g_pcsxr_threading_enabled = (strcmp(var.value, "disabled") == 0) ? 0 : 1;
     else
         g_pcsxr_threading_enabled = 1;  /* default: threading on */
+
+    /* Widescreen: init-only por el mismo motivo que threading — el aspect ratio
+     * se reporta una vez en get_system_av_info y la compresion de la GTE debe
+     * ir a juego con el, asi que togglearlo requiere reiniciar el core. */
+    {
+        struct retro_variable wv = { "pcsxr360_widescreen", NULL };
+        if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &wv) && wv.value)
+            g_pcsxr_widescreen = (strcmp(wv.value, "enabled") == 0) ? 1 : 0;
+        else
+            g_pcsxr_widescreen = 0;  /* default: off (4:3) */
+    }
 }
 
 /* ======================================================================
@@ -629,7 +647,7 @@ void retro_get_system_av_info(struct retro_system_av_info *info) {
     info->geometry.base_height  = 240;
     info->geometry.max_width    = 1024;
     info->geometry.max_height   = 512;
-    info->geometry.aspect_ratio = 4.0f / 3.0f;
+    info->geometry.aspect_ratio = g_pcsxr_widescreen ? (16.0f / 9.0f) : (4.0f / 3.0f);
 
     info->timing.fps         = (Config.PsxType == PSX_TYPE_PAL) ? 50.0 : 60.0;
     info->timing.sample_rate = 44100.0;

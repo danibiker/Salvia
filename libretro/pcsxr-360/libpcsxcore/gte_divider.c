@@ -4,6 +4,14 @@
 #include "gte.h"
 #include "psxcommon.h"
 
+/* Widescreen hack (16:9): cuando g_pcsxr_widescreen esta activo, la GTE
+ * comprime la X proyectada 3/4 (= (4:3)/(16:9)) alrededor de OFX (el centro),
+ * ensanchando el FOV horizontal (mas mundo a los lados). Al mostrar el
+ * framebuffer estirado a 16:9, la geometria sale correcta. Solo X (RTPS/RTPT).
+ * Definido en 360/Xdk/pcsxr/libretro_core.cpp (init-only, "restart to apply"). */
+extern int g_pcsxr_widescreen;
+#define WSX_DISP(d) (g_pcsxr_widescreen ? ((d) * 3 / 4) : (d))
+
 /* UNR reciprocal table — MUST be bit-exact with pcsx_rearmed (originally from
  * smf's MAME GTE implementation). A previous version of this file had the
  * second half of the table corrupted (shifted entries starting at idx 129,
@@ -75,7 +83,7 @@ void gteRTPS() {
 	quotient = limE(DIVIDE(gteH, gteSZ3));
 	gteSXY0 = gteSXY1;
 	gteSXY1 = gteSXY2;
-	gteSX2 = limG1(F((s64)gteOFX + ((s64)gteIR1 * quotient)) >> 16);
+	gteSX2 = limG1(F((s64)gteOFX + WSX_DISP((s64)gteIR1 * quotient)) >> 16);
 	gteSY2 = limG2(F((s64)gteOFY + ((s64)gteIR2 * quotient)) >> 16);
 
 	/* Backport from pcsx_rearmed (commit 8cb04d22 — fix for missing green
@@ -116,7 +124,7 @@ void gteRTPT() {
 		gteIR3 = limB3(gteMAC3, 0);
 		fSZ(v) = limD(gteMAC3);
 		quotient = limE(DIVIDE(gteH, fSZ(v)));
-		fSX(v) = limG1(F((s64)gteOFX + ((s64)gteIR1 * quotient)) >> 16);
+		fSX(v) = limG1(F((s64)gteOFX + WSX_DISP((s64)gteIR1 * quotient)) >> 16);
 		fSY(v) = limG2(F((s64)gteOFY + ((s64)gteIR2 * quotient)) >> 16);
 	}
 	/* Same fix as gteRTPS — see comment there. */
