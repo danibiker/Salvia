@@ -415,16 +415,14 @@ static void FlushPsxReg32(int hwreg)
 	}
 
 	if (HWRegisters[hwreg].usage & HWUSAGE_WRITE) {
-		if (branch) {
-		{
-				STW(HWRegisters[hwreg].code, OFFSET(&psxRegs, &psxRegs.GPR.r[reg]), GetHWRegSpecial(PSXREGS));
-		}
-		} else {
-			int reguse = nextPsxRegUse(pc-4, reg);
-			if (reguse == REGUSE_NONE || (reguse & REGUSE_READ)) {
-				STW(HWRegisters[hwreg].code, OFFSET(&psxRegs, &psxRegs.GPR.r[reg]), GetHWRegSpecial(PSXREGS));
-			}
-		}
+		/* [FIX] Volcar SIEMPRE el registro sucio al desalojarlo. La omision por
+		 * liveness (nextPsxRegUse decia "se sobrescribe antes de leerse => no
+		 * hace falta volcar") DESCARTABA valores VIVOS bajo presion de registros
+		 * (analisis de liveness incorrecto en algun caso de flujo), causando la
+		 * corrupcion dependiente de presion (el doblez del carnet de RE1 /
+		 * Quake2). Mismo criterio que dl_invalidate_iregs en pR3000A_loaddelay.c.
+		 * Coste: algun STW redundante de un valor realmente muerto. */
+		STW(HWRegisters[hwreg].code, OFFSET(&psxRegs, &psxRegs.GPR.r[reg]), GetHWRegSpecial(PSXREGS));
 	}
 
 	iRegs[reg].reg = -1;
