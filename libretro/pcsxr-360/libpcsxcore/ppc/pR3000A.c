@@ -663,16 +663,13 @@ static void iFlushReg(u32 nextpc, int reg) {
 		GetHWReg32(reg);
 	}
 	if (IsMapped(reg)) {
-		if (nextpc) {
-			int use = nextPsxRegUse(nextpc, reg);
-			if ((use & REGUSE_RW) == REGUSE_WRITE) {
-				DisposeHWReg(iRegs[reg].reg);
-			} else {
-				FlushHWReg(iRegs[reg].reg);
-			}
-		} else {
-			FlushHWReg(iRegs[reg].reg);
-		}
+		/* [FIX] Volcar SIEMPRE (antes: DisposeHWReg -descartar sin volcar- si
+		 * nextPsxRegUse creia el reg write-only tras el bloque). Misma clase de
+		 * bug que en FlushPsxReg32: el analisis de liveness podia marcar como
+		 * muerto un valor VIVO y descartarlo => corrupcion. Volcar siempre es
+		 * conservador y correcto; coste: algun STW redundante. */
+		(void)nextpc;
+		FlushHWReg(iRegs[reg].reg);
 	}
 }
 
