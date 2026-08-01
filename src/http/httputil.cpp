@@ -317,7 +317,15 @@ bool CurlClient::fetchFile(const std::string& url, const std::string& localPath,
 
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, USERAGENT);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); // Importante: seguir redirecciones de imagenes
-	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L); // 15 segundos
+	// En Xbox 360 la conexion es lenta: un fichero grande (p.ej. un .rdb de ~8MB) no
+	// cabe en 15s de tope absoluto y se cortaba a medias. En vez de un CURLOPT_TIMEOUT
+	// corto, abortamos por ESTANCAMIENTO: si el ritmo baja de 200 B/s durante 20s se
+	// cancela, pero una descarga lenta que PROGRESA llega a completarse. Dejamos un tope
+	// absoluto amplio de seguridad y un limite para la fase de conexion.
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20L);   // solo conectar
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 200L); // si baja de 200 B/s...
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 20L);   // ...durante 20s -> abortar
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 180L);         // tope absoluto de seguridad
 	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L); // Treat HTTP 4xx/5xx as curl error
 
 	// callback para llamar fuera a internet

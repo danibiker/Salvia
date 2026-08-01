@@ -82,6 +82,63 @@ int audio_opened = 0;
 // En tu clase/global:
 volatile bool audio_closing = false;
 t_rom_paths romPaths;
+// CRC32 de la ROM cargada (0 si desconocido). Para resolver el .cht por hash via .rdb.
+uint32_t g_currentRomCrc = 0;
+
+// CRC32 estilo No-Intro de una ROM en memoria. Salta la cabecera iNES (NES, 16B) y
+// el header de copier (SNES, 512B) para que el CRC cuadre con el de No-Intro.
+static inline uint32_t computeRomCrc(const uint8_t* data, std::size_t size){
+	if (!data || size == 0) return 0;
+	std::size_t off = 0;
+	if (size >= 16 && data[0]=='N' && data[1]=='E' && data[2]=='S' && data[3]==0x1A)
+		off = 16;                          // cabecera iNES
+	else if ((size % 1024) == 512)
+		off = 512;                         // cabecera de copier (SNES, etc.)
+	if (off >= size) off = 0;
+	uLong c = crc32(0L, Z_NULL, 0);
+	c = crc32(c, data + off, (uInt)(size - off));
+	return (uint32_t)c;
+}
+
+// CRC32 estilo No-Intro de una ROM en disco, para cores need_fullpath (memoryBuffer
+// == NULL, solo hay fichero extraido). Streaming por bloques + skip de cabecera
+// iNES/SNES. Devuelve 0 si no se puede abrir o si el fichero es demasiado grande:
+// las imagenes de CD (cientos de MB) no se hashean -- su CRC no cuadra con No-Intro
+// y evitamos el retardo en cada carga (caeria al match por nombre).
+static inline uint32_t computeRomCrcFromFile(const std::string& path){
+	if (path.empty()) return 0;
+	FILE* f = fopen(path.c_str(), "rb");
+	if (!f) return 0;
+	uint32_t crc = 0;
+	do {
+		if (fseek(f, 0, SEEK_END) != 0) break;
+		long sz = ftell(f);
+		if (sz <= 0) break;
+		const long CRC_FILE_MAX = 96L * 1024 * 1024;   // tope: no hashear imagenes de CD
+		if (sz > CRC_FILE_MAX) break;
+
+		if (fseek(f, 0, SEEK_SET) != 0) break;
+		unsigned char head[4] = {0, 0, 0, 0};
+		std::size_t nh = fread(head, 1, 4, f);
+		long off = 0;
+		if (nh >= 4 && head[0]=='N' && head[1]=='E' && head[2]=='S' && head[3]==0x1A)
+			off = 16;                        // cabecera iNES
+		else if ((sz % 1024) == 512)
+			off = 512;                       // cabecera de copier (SNES, etc.)
+		if (off >= sz) off = 0;
+
+		if (fseek(f, off, SEEK_SET) != 0) break;
+		uLong c = crc32(0L, Z_NULL, 0);
+		unsigned char buf[32768];
+		std::size_t r;
+		while ((r = fread(buf, 1, sizeof(buf), f)) > 0)
+			c = crc32(c, buf, (uInt)r);
+		crc = (uint32_t)c;
+	} while (0);
+	fclose(f);
+	return crc;
+}
+
 t_scale_props current_video_settings;
 
 // Current ROM path (needed to persist last disc index on closeGame) and to add information
@@ -664,6 +721,14 @@ bool extractAndLoadGame(std::string rompath, bool tmpDelete = true){
 		gameLoaded = retro_load_game(&game);
 		// ***********************************************
 	}
+
+	// CRC32 de la ROM (para resolver el .cht via .rdb por hash; fallback a nombre).
+	// Con buffer en memoria lo hasheamos directo; si el core es need_fullpath y solo
+	// hay fichero extraido en disco, hasheamos ese fichero (unzipped.extractedPath).
+	if (unzipped.memoryBuffer && unzipped.romsize > 0)
+		g_currentRomCrc = computeRomCrc((const uint8_t*)unzipped.memoryBuffer, unzipped.romsize);
+	else
+		g_currentRomCrc = computeRomCrcFromFile(unzipped.extractedPath);
 
 	//Liberar la memoria tras la carga exitosa
 	//La mayoría de los cores de Libretro ya han copiado los datos a su propia RAM interna

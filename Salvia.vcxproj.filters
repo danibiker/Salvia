@@ -57,6 +57,9 @@
     <Filter Include="Source Files\retroachievements\include">
       <UniqueIdentifier>{6144c2e4-5c8f-4bd3-abd3-59f2bcf9fa48}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\cheats">
+      <UniqueIdentifier>{78c871d8-1661-495d-bff5-44c890aab6ad}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\const\constant.cpp">
@@ -341,6 +344,12 @@
     <ClCompile Include="src\http\gamefaqs.cpp">
       <Filter>Source Files\http</Filter>
     </ClCompile>
+    <ClCompile Include="src\cheats\cheatmanager.cpp">
+      <Filter>Source Files\cheats</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cheats\rdbreader.cpp">
+      <Filter>Source Files\cheats</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\const\constant.h">
@@ -524,6 +533,12 @@
       <Filter>Source Files\video</Filter>
     </ClInclude>
     <ClInclude Include="src\http\gamefaqs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cheats\cheatmanager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cheats\rdbreader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

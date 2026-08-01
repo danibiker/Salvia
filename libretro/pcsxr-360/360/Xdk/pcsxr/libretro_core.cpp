@@ -45,6 +45,7 @@ extern "C" {
 #include "plugins.h"
 #include "misc.h"
 #include "psxmem.h"
+#include "cheat.h"  /* motor de cheats GameShark de PCSX-R (ClearAllCheats/AddCheat/ApplyCheats) */
 #include "sio.h"
 #include "spu.h"  /* SPUirq, SPUschedule (cycle-driven SPU event handlers) */
 #include "../../plugins/dfsound/spu_config.h"  /* SPUConfig spu_config */
@@ -2030,6 +2031,55 @@ LARGE_INTEGER g_rr_last_exit = {0};
 
 void retro_reset(void) {
     EmuReset();
+}
+
+/* ======================================================================
+ * CHEATS  (motor GameShark interno de PCSX-R; ApplyCheats() ya se llama por
+ * frame en EmuUpdate()).  El frontend hace retro_cheat_reset() y luego un
+ * retro_cheat_set() por cada cheat habilitado.
+ * ====================================================================== */
+void retro_cheat_reset(void) {
+    ClearAllCheats();
+}
+
+void retro_cheat_set(unsigned index, bool enabled, const char *code) {
+    (void)index;
+    if (!code || !code[0])
+        return;
+
+    /* Los .cht de libretro-database (PSX/GameShark) separan CADA token con '+' y sin
+     * espacios: "D002D51C+023A+8002D51E+1000".  AddCheat() en cambio espera lineas
+     * "DIRECCION VALOR" (sscanf "%x %x"; parte por '\n' y MODIFICA el buffer).  Aqui
+     * tokenizamos por cualquier separador (+, espacio, ;, salto) y reemitimos
+     * emparejando: token impar = direccion, token par = valor -> "DIR VAL\n...". */
+    char buf[2048];
+    size_t o = 0;
+    int    inLine = 0;         /* 0 = esperamos direccion, 1 = esperamos valor */
+    size_t i = 0;
+
+    while (code[i] && o < sizeof(buf) - 2) {
+        /* saltar separadores */
+        while (code[i] == '+' || code[i] == ' ' || code[i] == '\t' ||
+               code[i] == '\n' || code[i] == '\r' || code[i] == ';')
+            i++;
+        if (!code[i])
+            break;
+
+        if (inLine)     buf[o++] = ' ';    /* separa direccion y valor */
+        else if (o > 0) buf[o++] = '\n';   /* cierra la linea anterior */
+
+        while (code[i] && code[i] != '+' && code[i] != ' ' && code[i] != '\t' &&
+               code[i] != '\n' && code[i] != '\r' && code[i] != ';' && o < sizeof(buf) - 2)
+            buf[o++] = code[i++];
+
+        inLine ^= 1;
+    }
+    buf[o] = '\0';
+
+    /* AddCheat anade el cheat con Enabled=0 y devuelve 0 si parseo algun codigo
+     * valido; fijamos su estado segun 'enabled'. */
+    if (AddCheat("", buf) == 0 && NumCheats > 0)
+        Cheats[NumCheats - 1].Enabled = enabled ? 1 : 0;
 }
 
 unsigned retro_get_region(void) {

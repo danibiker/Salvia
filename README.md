@@ -289,6 +289,43 @@ To be able to load achievements for your local games, you must first register in
 
 Once you are registered, you must enter your username and password using the menu: Options > Achievements > User | Password
 
+## Cheats
+
+Salvia supports cheats through the standard RetroArch cheat files (`.cht`), the same ones hosted in the [libretro cheat database](https://github.com/libretro/libretro-database/tree/master/cht).
+
+### Enabling cheats
+1. Load a game and open the in-game menu.
+2. Go to **Cheats** and switch **ON** the ones you want — they take effect immediately.
+
+Cheats always start **disabled** each time you load a game, so you only turn on what you need.
+
+### Downloading them automatically
+If the **Cheats** menu shows no cheats for the current game, select **Download cheats**. Salvia looks the game up in the libretro cheat database and downloads the matching `.cht` for you (an internet connection is required). The list refreshes automatically when it finishes. **Reload .cht** re-reads the file from disk.
+
+> The first time you download for a given system, Salvia also fetches and caches that system's cheat list, so that first lookup can take a few seconds.
+
+### Adding them manually
+You can also download the `.cht` yourself from the [libretro cheat database](https://github.com/libretro/libretro-database/tree/master/cht): open your system's folder and grab the file for your game.
+
+Copy it into the **`data/cheats/<core>/`** directory — the `<core>` subfolder is named after the core (the same name used for your save files) — and rename the file to **match your ROM name** (without the extension):
+
+```
+data/
+└── cheats/
+    ├── Genesis Plus GX/
+    │   └── Sonic The Hedgehog (USA, Europe).cht
+    └── PCSXR-360/
+        └── Crash Bandicoot (USA).cht
+```
+
+For example, a ROM named `Sonic The Hedgehog (USA, Europe).md` running on *Genesis Plus GX* needs the file `data/cheats/Genesis Plus GX/Sonic The Hedgehog (USA, Europe).cht`.
+
+The `data/cheats/<core>/` folder is created automatically the first time you launch a game with that core (just like `data/saves` and `data/states`). After copying a file, reload the game or pick **Reload .cht** in the Cheats menu.
+
+### Notes
+- Cheats only work on cores that support them — Genesis, SNES, NES, Game Boy / GBA, PC Engine, PlayStation (pcsxr-360) and others. Cores such as arcade (FBNeo / MAME), DOSBox or 3DO do not.
+- For **PlayStation**, use the **GameShark** files. Other variants such as *Game Buster* use a different code format and won't work.
+
 ## Games artwork and titles
 ### Built-in scraper
 To be able to scrap your local games, you must first register into the following link: [screenscraper.fr](https://www.screenscraper.fr/membreinscription.php)

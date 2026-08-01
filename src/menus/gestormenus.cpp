@@ -13,6 +13,7 @@
 #include <http/httputil.h>
 #include <http/achievements.h>
 #include <so/soutils.h>
+#include <cheats/cheatmanager.h>
 
 
 SDL_Surface* GestorMenus::imgText;
@@ -32,6 +33,7 @@ extern bool swapToNewDisc(const std::string& newBinPath);
 extern bool swapDisc(unsigned new_idx);
 extern struct retro_disk_control_callback disk_control;
 extern void launchBios();
+extern std::string downloadCheatWithProgress();
 
 const char *scrapOrigins[] = {"SCREENSCRAPER", "THEGAMESDB", "EMPTY"};
 
@@ -205,6 +207,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	Menu* menuEmulation = new Menu(LanguageManager::instance()->get("menu.main.emulation"), menuRaiz);
 	Menu* menuEntrada = new Menu(LanguageManager::instance()->get("menu.main.input"), menuRaiz);
 	menuCoreOptions = new Menu(LanguageManager::instance()->get("menu.main.core.options"), menuRaiz);
+	menuCheats = new Menu(LanguageManager::instance()->get("menu.main.cheats"), menuRaiz);
 	menuSavestates = new Menu(LanguageManager::instance()->get("menu.main.saves"), face_h_big, this->getW() / 2 - 2 * marginX, menuRaiz);
 	menuScrapper = new Menu(LanguageManager::instance()->get("menu.main.scrapper"), menuRaiz);
 	
@@ -251,6 +254,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	todosLosMenus.push_back(menuEmulation);
 	todosLosMenus.push_back(menuEntrada);
 	todosLosMenus.push_back(menuCoreOptions);
+	todosLosMenus.push_back(menuCheats);
 	todosLosMenus.push_back(menuSavestates);
 	todosLosMenus.push_back(menuAskSavestates);
 	todosLosMenus.push_back(menuScrapper);
@@ -434,6 +438,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.emulation"), menuEmulation, ico_settings));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.input"), menuEntrada, ico_remap));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.core.options"), menuCoreOptions, ico_settings_core));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.cheats"), menuCheats, ico_cheats));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.saves"), menuSavestates, ico_savestates));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.scrapper"), menuScrapper, ico_scrapper));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.achievement.title"), parentAchievements, ico_achievements));
@@ -1019,6 +1024,70 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
 	sortAndAddCoreOptions(paramsCore);
 	//Adding game options
 	sortAndAddCoreOptions(paramsGame);
+}
+
+/**
+* Puebla el submenu de cheats a partir de la lista cargada por CheatManager.
+* Calca el patron de poblarCoreOptions.
+*/
+void GestorMenus::poblarCheats(CfgLoader *refConfig){
+	menuCheats->opciones.clear();
+
+	// Accion fija: recargar la lista desde el .cht en disco (todos desactivados).
+	menuCheats->opciones.push_back(new OpcionExec<CfgLoader>(
+		LanguageManager::instance()->get("menu.cheats.reload"), &GestorMenus::reloadCheats, refConfig, this));
+
+	std::vector<Cheat>& cheats = CheatManager::instance()->list();
+	if (cheats.empty()){
+		// Sin cheats locales: ofrecer descargarlos de libretro-database.
+		menuCheats->opciones.push_back(new OpcionExec<CfgLoader>(
+			LanguageManager::instance()->get("menu.cheats.download"), &GestorMenus::descargarCheats, refConfig, this));
+		menuCheats->opciones.push_back(new OpcionTxt(LanguageManager::instance()->get("menu.cheats.none")));
+		return;
+	}
+
+	// El vector ya esta completo: los OpcionBool apuntan a &cheats[i].enabled, asi
+	// que el vector no debe reasignarse despues de este punto.
+	for (std::size_t i = 0; i < cheats.size(); ++i){
+		OpcionBool* op = new OpcionBool(cheats[i].desc, &cheats[i].enabled);
+		op->callback = &GestorMenus::sApplyCheats;   // re-aplica al alternar (A / izq-der)
+		menuCheats->opciones.push_back(op);
+	}
+}
+
+/**
+* Recarga el .cht desde disco, repuebla el menu y reaplica al core.
+*/
+std::string GestorMenus::reloadCheats(CfgLoader *refConfig){
+	CheatManager::instance()->reload();
+	poblarCheats(refConfig);
+	CheatManager::instance()->applyToCore();
+	resetIndexPos();   // el numero de opciones pudo cambiar
+	return LanguageManager::instance()->get("msg.cheats.reloaded");
+}
+
+/**
+* Descarga bajo demanda el .cht del juego actual desde libretro-database y, si tiene
+* exito, repuebla el submenu de cheats. Bloquea el overlay durante la descarga.
+*/
+std::string GestorMenus::descargarCheats(CfgLoader *refConfig){
+	std::string path = downloadCheatWithProgress();
+	if (path.empty())
+		return LanguageManager::instance()->get("msg.cheats.download.none");
+
+	CheatManager::instance()->loadFromFile(path);
+	poblarCheats(refConfig);
+	resetIndexPos();
+	return LanguageManager::instance()->get("msg.cheats.download.ok");
+}
+
+/**
+* Callback de cada OpcionBool de cheat: reaplica toda la lista al alternar.
+*/
+std::string GestorMenus::sApplyCheats(void* inst, void* value){
+	(void)inst; (void)value;
+	CheatManager::instance()->applyToCore();
+	return "";
 }
 
 /**
@@ -1615,7 +1684,7 @@ void GestorMenus::drawBordersMenuOverlay(SDL_Surface *video_page) {
     const int w = video_page->w;
     const int h = video_page->h;
 
-    // Array de 8 rectángulos
+    // Array de 8 rectangulos
     SDL_Rect rects[8] = {
         // Bordes Verticales Izquierda (Arriba / Abajo)
         {0, 0, (Uint16)thickness, (Uint16)lineLen},

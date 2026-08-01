@@ -325,6 +325,7 @@ typedef enum {
 		ico_achievements,
 		ico_shutdown,
 		ico_help,
+		ico_cheats,
 		max_icons
 }enumIco;
 
@@ -357,6 +358,10 @@ typedef enum {cart_gba,
 extern const char *JOY_DESCRIPTIONS[];
 extern const char *ICONS_PATH[];
 extern const char *ICONS_CARTS_PATH[];
+// Nombres de sistema de libretro-database (para los ficheros .rdb / carpetas .cht),
+// indexado por el enum cart_*. "" = sistema sin base de cheats por CRC. Independiente
+// de ICONS_CARTS_PATH (que es solo para los iconos del listado).
+extern const char *RDB_SYSTEM_NAMES[];
 extern const std::string CFG_EXT;
 extern const std::string RETROPAD_INI;
 extern const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS;

@@ -83,7 +83,7 @@ class ListMenu : public Object{
 		static bool compareUniquePtrsFast(const std::unique_ptr<GameFile>&,
                                  const std::unique_ptr<GameFile>&);
 
-		int getCartForSystem(int systemid);
+		static int getCartForSystem(int systemid);
         void filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu);
 		void checkFilter();
 		void applyFilter();

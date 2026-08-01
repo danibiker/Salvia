@@ -72,7 +72,8 @@ const char *ICONS_PATH[] = {"menu_log.png",
 	"screenshot.png",
 	"achievement-list.png",
 	"menu_shutdown.png",
-	"menu_help.png"
+	"menu_help.png",
+	"core-cheat-options.png"
 };
 
 #ifdef _XBOX
@@ -143,6 +144,36 @@ const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",
 	"The 3DO Company - 3DO-content.png",
 	"Bandai - WonderSwan-content.png",
 	"Nintendo - Virtual Boy-content.png"
+};
+
+// Nombres de sistema de libretro-database (ficheros rdb/ y carpetas cht/), indexado por
+// el enum cart_*. Debe seguir EXACTAMENTE el orden del enum. "" = sistema sin base de
+// cheats por CRC (arcade, DOS, Doom, Quake, default) -> no se intenta resolver/descargar.
+const char *RDB_SYSTEM_NAMES[] = {
+	"Nintendo - Game Boy Advance",                     // cart_gba
+	"Nintendo - Game Boy",                             // cart_gb
+	"Sega - Master System - Mark III",                 // cart_sms
+	"Sega - Mega Drive - Genesis",                     // cart_genesis
+	"Nintendo - Super Nintendo Entertainment System",  // cart_snes
+	"Sega - 32X",                                      // cart_32x
+	"Sega - Game Gear",                                // cart_gg
+	"Sega - Mega-CD - Sega CD",                        // cart_mcd
+	"Nintendo - Nintendo Entertainment System",        // cart_nes
+	"NEC - PC Engine - TurboGrafx 16",                 // cart_pce
+	"Sony - PlayStation",                              // cart_psx
+	"NEC - PC Engine CD - TurboGrafx-CD",              // cart_pce_cd
+	"",                                                // cart_mame (arcade: cheats por set, no por CRC)
+	"SNK - Neo Geo Pocket Color",                      // cart_neogeo_pocket
+	"Sinclair - ZX Spectrum",                          // cart_zx
+	"Microsoft - MSX",                                 // cart_msx
+	"",                                                // cart_dos
+	"",                                                // cart_doom
+	"NEC - PC Engine SuperGrafx",                      // cart_supergrafx
+	"",                                                // cart_quake
+	"",                                                // cart_default
+	"The 3DO Company - 3DO",                           // cart_3do
+	"Bandai - WonderSwan",                             // cart_wonderswan
+	"Nintendo - Virtual Boy"                           // cart_virtualboy
 };
 
 Constant::Constant(){

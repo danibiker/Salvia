@@ -402,6 +402,7 @@ private:
     // Lista de todos los menús para liberar memoria al final
     std::vector<Menu*> todosLosMenus;
 	Menu* menuCoreOptions;
+	Menu* menuCheats;
 	Menu* menuSavestates;
 	Menu* menuAskSavestates;
 	Menu* menuScrapper;
@@ -466,6 +467,8 @@ private:
 	std::string guardarCoreJoysticks(Joystick* joy);
 	std::string guardarCoreConfig(CfgLoader *refConfig);
 	std::string guardarMainConfig(CfgLoader *refConfig);
+	std::string reloadCheats(CfgLoader *refConfig);
+	std::string descargarCheats(CfgLoader *refConfig);
 	std::string volverEmulacion(CONFIG_STATUS *st);
 	std::string salirEmulacion(CONFIG_STATUS *st);
 	std::string startScrapping(CONFIG_STATUS *st);	
@@ -494,6 +497,7 @@ public:
 	bool options_changed_flag;
 	std::vector<t_scrap> scrapSelection;
 	void poblarCoreOptions(CfgLoader *);
+	void poblarCheats(CfgLoader *);
 	void poblarPartidasGuardadas(CfgLoader *, std::string);
 	void poblarJoystickTypes(Joystick *joystick);
 	void poblarMenuOverscan(Menu *menu);
@@ -549,6 +553,7 @@ public:
     static std::string sDescargarLogros(void* inst);
 	static std::string changeHardcoreMode(void* inst, void *value);
 	static std::string changeEnableAchievements(void* inst, void *value);
+	static std::string sApplyCheats(void* inst, void *value);
 	static std::string setDefaultEmu(void* inst, void *index, void *values);
 	static std::string setControllerType(void* inst, void *index, void *values);
 	static std::string cdromFileSelected(void* inst, void *value);

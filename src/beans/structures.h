@@ -856,6 +856,7 @@ struct t_rom_paths{
 	std::string rompath;
 	std::string savestate;
 	std::string sram;
+	std::string cht;        // ruta del fichero de cheats .cht del juego (formato RetroArch)
 };
 
 struct t_zipped_file_paths{

@@ -2165,6 +2165,15 @@ void GameMenu::setRomPaths(std::string rp){
 	romPaths.sram = sramDir + Constant::getFileSep() + 
 		dir.getFileNameNoExt(rp) + ".srm";
 
+	// Cheats: <path_prefix>\data\cheats\<core>\<rom>.cht (formato RetroArch). path_prefix
+	// ya termina en separador. El usuario deja aqui sus .cht importados.
+	std::string cheatsDir = getCfgLoader()->configMain[cfg::path_prefix].valueStr + "data" + Constant::getFileSep() + "cheats" +
+		Constant::getFileSep() + coreName;
+	if (!dir.dirExists(cheatsDir.c_str())){
+		dir.createDirRecursive(cheatsDir.c_str());
+	}
+	romPaths.cht = cheatsDir + Constant::getFileSep() + dir.getFileNameNoExt(rp) + ".cht";
+
 	//Loading the joystick configuration if exists
 	std::string ruta = dir.getFolder(rp) + Constant::getFileSep() + dir.getFileNameNoExt(rp) + CFG_EXT;
 

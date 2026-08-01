@@ -4,6 +4,12 @@
 #include <http/httputil.h>
 #include <http/scrapper.h>
 #include <http/gamefaqs.h>
+#include <cheats/cheatmanager.h>
+#include <cheats/rdbreader.h>
+#define PICOJSON_USE_RVALUE_REFERENCE 0   // VS2010 no soporta noexcept
+#include <http/picojson.h>
+#include <io/filelist.h>
+#include <cheats/cheatlocator.h>
 
 // Puente entre los eventos SDL del frontend y el callback de teclado que
 // el core ha registrado via RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK. La
@@ -1206,6 +1212,10 @@ void closeGame(){
 
 		//Liberar recursos de libretro
 		 // 1. Limpieza total del juego anterior
+		// Cheats: limpiar (retro_cheat_reset) ANTES de descargar el core, con este aun
+		// cargado, para que no queden cheats activos al cargar el siguiente juego.
+		CheatManager::instance()->clear();
+
 		retro_unload_game();
 		retro_deinit();
 		gameMenu->romLoaded = false;
@@ -1257,6 +1267,18 @@ int launchGame(std::string rompath, bool tmpDelete){
 	// genera "@bios-only.sav" y "@bios-only.srm" coherentes para que
 	// los savestates del shell de la BIOS no machaquen ningun juego.
 	gameMenu->setRomPaths(rompath);
+
+	// Cheats: importar el .cht del juego (formato RetroArch) y aplicarlo al core.
+	// Solo se pasan codigos que el core decodifica (retro_cheat_set). En cores que
+	// dejan esa funcion vacia (pcsxr-360, beetle-vb, 3dox/opera, dosbox...) es no-op.
+	// Cargar la lista de cheats del .cht (formato RetroArch). Arrancan TODOS
+	// desactivados y NO se aplica nada en la carga (como RetroArch con "Apply Cheats
+	// After Load" desactivado): el usuario los activa a mano desde el menu, ya con el
+	// juego arrancado, y se aplican al instante (sApplyCheats). Asi no se parchea la
+	// ROM antes de su checksum de arranque, que colgaba a juegos como Sonic 1.
+	CheatManager::instance()->loadFromFile(resolveCheatPath(romPaths.cht));
+	gameMenu->configMenus->poblarCheats(gameMenu->getCfgLoader());
+
 	gameMenu->joystick->updateTypes();
 
 	//Giving a name to the window

@@ -4752,6 +4752,8 @@
     </Deploy>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\cheats\cheatmanager.cpp" />
+    <ClCompile Include="src\cheats\rdbreader.cpp" />
     <ClCompile Include="src\const\constant.cpp" />
     <ClCompile Include="src\engine.cpp" />
     <ClCompile Include="src\font\fonts.cpp" />
@@ -4975,6 +4977,8 @@
     <ClInclude Include="src\audio\audiobuffer.h" />
     <ClInclude Include="src\audio\audiorate.h" />
     <ClInclude Include="src\beans\structures.h" />
+    <ClInclude Include="src\cheats\cheatmanager.h" />
+    <ClInclude Include="src\cheats\rdbreader.h" />
     <ClInclude Include="src\compat\dirent.h" />
     <ClInclude Include="src\const\cfgconst.h" />
     <ClInclude Include="src\const\constant.h" />
