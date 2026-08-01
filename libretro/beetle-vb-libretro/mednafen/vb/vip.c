@@ -374,7 +374,10 @@ static int32 SBOUT_InactiveTime;
 
 static void CheckIRQ(void)
 {
-   VBIRQ_Assert(VBIRQ_SOURCE_VIP, (bool)(InterruptEnable & InterruptPending));
+   /* bool==unsigned char en MSVC<1800: mascaras con solo bits altos (XPEND=0x4000,
+    * TIMEERR=0x8000, SBHIT=0x2000) se truncarian a 0 y el IRQ del VIP no se
+    * afirmaria. `!= 0` evita la truncacion. */
+   VBIRQ_Assert(VBIRQ_SOURCE_VIP, (InterruptEnable & InterruptPending) != 0);
 }
 
 
@@ -851,6 +854,20 @@ void VIP_ResetTS(void)
 
 #include "vip_draw.inc"
 
+/* Framebuffer pixel type/base shared by the non-anaglyph copy routines below.
+ * A 16bpp build keeps the image in surface->pixels16 (surface->pixels is NULL);
+ * a 32bpp build keeps it in surface->pixels. CScope/SideBySide/VLI/HLI and the
+ * AnaglyphSlow combine dereferenced surface->pixels unconditionally, which is
+ * NULL under WANT_16BPP -> access violation the moment one of those 3D modes is
+ * selected (Anaglyph_BASE already branches on bpp per-copy). */
+#if defined(WANT_16BPP)
+typedef uint16 fb_target_t;
+#define FB_SURF_PIXELS pixels16
+#else
+typedef uint32 fb_target_t;
+#define FB_SURF_PIXELS pixels
+#endif
+
 static INLINE void CopyFBColumnToTarget_Anaglyph_BASE(const bool DisplayActive_arg, const int lr)
 {
    int y, y_sub;
@@ -990,7 +1007,7 @@ static INLINE void CopyFBColumnToTarget_AnaglyphSlow_BASE(const bool DisplayActi
    else
    {
       int y;
-      uint32         *target = surface->pixels + Column;
+      fb_target_t    *target = surface->FB_SURF_PIXELS + Column;
       const uint32 *left_src = AnaSlowBuf[Column];
       const int32    pitch32 = surface->pitch32;
 
@@ -1034,7 +1051,7 @@ static void CopyFBColumnToTarget_CScope_BASE(const bool DisplayActive_arg, const
 
    if(dest_lr)
    {
-      uint32 *target = surface->pixels + (512 - 16 - 1) + (Column) 
+      fb_target_t *target = surface->FB_SURF_PIXELS + (512 - 16 - 1) + (Column)
          * surface->pitch32;
       if(DisplayActive_arg)
       {
@@ -1066,7 +1083,7 @@ static void CopyFBColumnToTarget_CScope_BASE(const bool DisplayActive_arg, const
    }
    else
    {
-      uint32 *target = surface->pixels + 16 + (383 - Column) * surface->pitch32;
+      fb_target_t *target = surface->FB_SURF_PIXELS + 16 + (383 - Column) * surface->pitch32;
       if(DisplayActive_arg)
       {
          for(y = 56; y; y--)
@@ -1110,7 +1127,7 @@ static void CopyFBColumnToTarget_CScope(void)
 static void CopyFBColumnToTarget_SideBySide_BASE(const bool DisplayActive_arg, const int lr, const int dest_lr)
 {
    const int fb = DisplayFB;
-   uint32 *target = surface->pixels + Column + (dest_lr ? (384 + VBSBS_Separation) : 0);
+   fb_target_t *target = surface->FB_SURF_PIXELS + Column + (dest_lr ? (384 + VBSBS_Separation) : 0);
    const int32 pitch32 = surface->pitch32;
    const uint8 *fb_source = &FB[fb][lr][64 * Column];
 
@@ -1161,7 +1178,7 @@ static void CopyFBColumnToTarget_SideBySide(void)
 static INLINE void CopyFBColumnToTarget_VLI_BASE(const bool DisplayActive_arg, const int lr, const int dest_lr)
 {
    const int fb           = DisplayFB;
-   uint32 *target         = surface->pixels + Column * 2 * VBPrescale + dest_lr;
+   fb_target_t *target    = surface->FB_SURF_PIXELS + Column * 2 * VBPrescale + dest_lr;
    const int32 pitch32    = surface->pitch32;
    const uint8 *fb_source = &FB[fb][lr][64 * Column];
 
@@ -1221,7 +1238,7 @@ static INLINE void CopyFBColumnToTarget_HLI_BASE(const bool DisplayActive_arg, c
 {
    const int fb = DisplayFB;
    const int32 pitch32 = surface->pitch32;
-   uint32 *target = surface->pixels + Column + dest_lr * pitch32;
+   fb_target_t *target = surface->FB_SURF_PIXELS + Column + dest_lr * pitch32;
    const uint8 *fb_source = &FB[fb][lr][64 * Column];
 
    if(VBPrescale <= 4)

@@ -13,7 +13,7 @@ set MS_OPTS=/t:Rebuild /p:Platform=%PLATFORM% /v:q /nologo /clp:NoSummary /p:Dep
 set CORES=Release Release_beetlepce Release_beetlepcefast Release_beetlepce_fx ^
 Release_Gambatte Release_Nestopia Release_Snes9x Release_Snes9x_latest ^
 Release_vbanext Release_picodrive Release_prboom ReleaseTyrQuake Release_pcsxr_360 ^
-Release_3DOX Release_Wonderswan Release_DosboxPure Release_mame Release_fbanext Release_finalburn 
+Release_3DOX Release_Wonderswan Release_VirtualBoy Release_DosboxPure Release_mame Release_fbanext Release_finalburn 
 
 md Distro360
 

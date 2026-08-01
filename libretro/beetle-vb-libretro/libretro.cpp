@@ -2284,10 +2284,46 @@ static void check_variables(void)
 static uint16_t input_buf[MAX_PLAYERS];
 static uint16_t low_battery;
 
+/* (Re)allocate the emulator display surface for the *current* 3D mode.
+ * FB_WIDTH depends on setting_vb_3dmode, so switching modes at runtime
+ * (e.g. anaglyph 384-wide -> cyberscope, which the VIP lays out as a
+ * 512-wide rotated image, or side-by-side 768+separation) changes the
+ * framebuffer size and pitch the VIP column-copy routines require. A
+ * surface still sized for the previous mode gets written out of bounds ->
+ * access violation. Frees any previous buffer first so load/unload and
+ * mode switches don't leak. surf.format must already be set. */
+static bool alloc_mdfn_surface(void)
+{
+   void *rpix = NULL;
+
+#if defined(WANT_16BPP)
+   if(surf.pixels16)
+      free(surf.pixels16);
+#elif defined(WANT_32BPP)
+   if(surf.pixels)
+      free(surf.pixels);
+#endif
+
+   surf.pixels16 = NULL;
+   surf.pixels   = NULL;
+
+   if(!(rpix = calloc(1, FB_WIDTH * FB_HEIGHT * (surf.format.bpp / 8))))
+      return false;
+
+#if defined(WANT_16BPP)
+   surf.pixels16 = (uint16 *)rpix;
+#elif defined(WANT_32BPP)
+   surf.pixels   = (uint32 *)rpix;
+#endif
+   surf.w          = FB_WIDTH;
+   surf.h          = FB_HEIGHT;
+   surf.pitchinpix = FB_WIDTH;
+   return true;
+}
+
 bool retro_load_game(const struct retro_game_info *info)
 {
    struct MDFN_PixelFormat pix_fmt;
-   void *rpix = NULL;
 #ifdef WANT_32BPP
    enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
 #endif
@@ -2357,31 +2393,11 @@ bool retro_load_game(const struct retro_game_info *info)
 
    surf.format                  = pix_fmt;
 
-   /* retro_unload_game() does not release the surface, so a previous load
-    * may have left one allocated. Free it before dropping the pointer,
-    * otherwise every load/unload cycle leaks a whole framebuffer. */
-#if defined(WANT_16BPP)
-   if(surf.pixels16)
-      free(surf.pixels16);
-#elif defined(WANT_32BPP)
-   if(surf.pixels)
-      free(surf.pixels);
-#endif
-
-   surf.pixels16                = NULL;
-   surf.pixels                  = NULL;
-
-   if(!(rpix = calloc(1, FB_WIDTH * FB_HEIGHT * (pix_fmt.bpp / 8))))
+   /* Allocate the display surface for the current 3D mode. The helper frees
+    * any previous buffer first, so load/unload cycles don't leak a whole
+    * framebuffer (retro_unload_game() does not release it). */
+   if(!alloc_mdfn_surface())
       return false;
-
-#if defined(WANT_16BPP)
-   surf.pixels16                = (uint16 *)rpix;
-#elif defined(WANT_32BPP)
-   surf.pixels                  = (uint32 *)rpix;
-#endif
-   surf.w                       = FB_WIDTH;
-   surf.h                       = FB_HEIGHT;
-   surf.pitchinpix              = FB_WIDTH;
 
    /* Possible endian bug ... */
    VBINPUT_SetInput(0, "gamepad", &input_buf[0]);
@@ -2532,6 +2548,14 @@ void retro_run(void)
    input_poll_cb();
 
    update_input();
+
+   /* The framebuffer is sized for the 3D mode active when it was allocated.
+    * If the user switched vb_3dmode at runtime (check_variables runs at the
+    * end of the previous retro_run), FB_WIDTH no longer matches the surface
+    * pitch and the VIP column-copy routines (e.g. CScope) would write past
+    * the buffer -> access violation. Resize before the VIP renders. */
+   if (surf.pitchinpix != (int32)FB_WIDTH && !alloc_mdfn_surface())
+      return;
 
    spec.surface            = &surf;
    spec.VideoFormatChanged = false;

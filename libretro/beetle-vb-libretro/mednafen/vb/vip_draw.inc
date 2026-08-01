@@ -297,8 +297,12 @@ static void DrawOBJ(uint8 *fb[2], uint16 Y, bool lron[2])
   palette_selector = oam_ptr[3] >> 14;
   vflip_xor = (oam_ptr[3] & 0x1000) ? 7 : 0;
   char_sub_y = vflip_xor ^ tile_y;
-  jlron[0] = (bool)(oam_ptr[1] & 0x8000);
-  jlron[1] = (bool)(oam_ptr[1] & 0x4000);
+  /* MSVC < 1800 compila estos .c en C con boolean.h -> `#define bool unsigned char`.
+   * `(bool)(x & 0x8000)` seria `(unsigned char)0x8000` == 0: los bits de habilitacion
+   * L/R del objeto (0x8000/0x4000) se truncan y NADA se dibuja. Comparar contra 0
+   * produce int 0/1 y evita la truncacion. */
+  jlron[0] = (oam_ptr[1] & 0x8000) != 0;
+  jlron[1] = (oam_ptr[1] & 0x4000) != 0;
   char_no = oam_ptr[3] & 0x7FF;
   pixels_save = CHR16[char_no * 8 + char_sub_y];
 
@@ -370,7 +374,10 @@ void VIP_DrawBlock(uint8 block_no, uint8 *fb_l, uint8 *fb_r)
   uint32 scy = (world_ptr[0] >> 8) & 3;
   uint32 scx = (world_ptr[0] >> 10) & 3;
   uint32 bgm = (world_ptr[0] >> 12) & 3;
-  bool lron[2] =  { (bool)(world_ptr[0] & 0x8000), (bool)(world_ptr[0] & 0x4000) };
+  /* Idem que en DrawOBJ: con bool==unsigned char (MSVC<1800) los bits LON/RON
+   * (0x8000/0x4000) del world se truncarian a 0 y no se dibujaria ningun fondo
+   * -> pantalla negra con audio correcto. `!= 0` normaliza a int 0/1. */
+  bool lron[2] =  { (world_ptr[0] & 0x8000) != 0, (world_ptr[0] & 0x4000) != 0 };
 
   uint16 gx = sign_11_to_s16(world_ptr[1]);
   uint16 gp = ParallaxDisabled ? 0 : sign_9_to_s16(world_ptr[2]);
