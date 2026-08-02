@@ -289,6 +289,7 @@ int have_direct3dtexture=0;
 static float g_display_aspect_ratio = 0.0f; /* 0 = use native pixel ratio */
 static int g_display_fullscreen = 1; /* 1 = scale to fill screen, 0 = pixel perfect size */
 static int g_display_overflow   = 0; /* 1 = integer scale puede salirse de pantalla */
+static int g_display_scale_type = 0; /* 0=reduce,1=increase,2..6=escala fija 1x..5x */
 static int g_texture_width = 0;
 static int g_texture_height = 0;
 static int g_screen_rotation = 0; /* 0..3 = 0/90/180/270 deg CCW (libretro convention) */
@@ -677,13 +678,18 @@ static void XBOX_UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
 		/* Pixel perfect: exact size based on effect scale factor */
 		int scale = XBOX_GetEffectScale();
 
+		/* Modos de escala entera FIJA 1x..5x (g_display_scale_type 2..6): factor fijo,
+		   se salta el auto-calculo y puede salirse de pantalla (g_display_overflow ya es true). */
+		int fixed = (g_display_scale_type >= 2) ? (g_display_scale_type - 1) : 0;
+		if (fixed > 0) scale = fixed;
+
 		if (aspect_ratio > 0.0f && tex_w > 0 && tex_h > 0) {
 			/* Aspect ratio definido (4:3, 16:9, etc.): Y entero (crisp scanlines),
 			   X estirado para cumplir el ratio elegido. Comportamiento estandar
 			   de emuladores: lineas horizontales nitidas, ancho proporcional. */
 			int maxscale_h, maxscale_w, maxscale;
 
-			if (scale == 1 || g_display_overflow) {
+			if (fixed == 0 && (scale == 1 || g_display_overflow)) {
 				/* Factor 1 = filtros sin escalado propio (nearest, scanlines, crt).
 				   Subimos al maximo factor entero que cabe en el backbuffer. */
 				maxscale_h = (int)floor(bbh / (float)tex_h);
@@ -700,7 +706,7 @@ static void XBOX_UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
 			display_w = (float)floor(display_h * aspect_ratio);
 		} else {
 			/* RATIO_CORE / aspect_ratio<=0: pixel perfect estricto en ambos ejes. */
-			if ((scale == 1 || g_display_overflow) && tex_w > 0 && tex_h > 0){
+			if (fixed == 0 && (scale == 1 || g_display_overflow) && tex_w > 0 && tex_h > 0){
 				int maxscale_w = (int)floor(bbw / (float)tex_w);
 				int maxscale_h = (int)floor(bbh / (float)tex_h);
 				int maxscale = g_display_overflow ? max(maxscale_w, maxscale_h) : min(maxscale_w, maxscale_h);
@@ -804,9 +810,10 @@ void SDL_XBOX_SetDisplayFullscreen(int fullscreen)
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 }
 
-void SDL_XBOX_SetDisplayOverflow(int overflow)
+void SDL_XBOX_SetDisplayOverflow(int type)
 {
-	g_display_overflow = overflow;
+	g_display_scale_type = type;
+	g_display_overflow   = (type != 0);   /* reduce(0) recorta a pantalla; increase y 1x-5x pueden salirse */
 	XBOX_UpdateVertexBuffer(g_texture_width, g_texture_height, g_display_aspect_ratio);
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 }

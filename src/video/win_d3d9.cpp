@@ -74,6 +74,7 @@ static D3DTEXTUREFILTERTYPE   g_current_filter = D3DTEXF_LINEAR;
 static float                  g_aspect     = 0.0f;       /* 0 = ratio nativo */
 static int                    g_fullscreen = 1;          /* 1 = fill, 0 = pixel-perfect */
 static int                    g_overflow   = 0;          /* 1 = integer scale puede salirse de pantalla */
+static int                    g_scale_type = 0;          /* 0=reduce,1=increase,2..6=escala fija 1x..5x */
 static int                    g_rotation   = 0;          /* 0..3 (libretro) */
 static RECT                   g_visible    = { 0, 0, 0, 0 };
 static int                    g_vsync      = 1;          /* 1 = vsync on (DEFAULT), 0 = vsync off */
@@ -440,8 +441,12 @@ static void UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
         else                         { display_h = bbh; display_w = bbh * aspect_ratio; }
     } else {
         int scale = EffectScale();
+        /* Modos de escala entera FIJA 1x..5x (g_scale_type 2..6): factor fijo, se salta
+           el auto-calculo y puede salirse de pantalla (g_overflow ya es true). */
+        int fixed = (g_scale_type >= 2) ? (g_scale_type - 1) : 0;
+        if (fixed > 0) scale = fixed;
         if (aspect_ratio > 0.0f && tex_w > 0 && tex_h > 0) {
-            if (scale == 1 || g_overflow) {
+            if (fixed == 0 && (scale == 1 || g_overflow)) {
                 int mh = (int)floor(bbh / (float)tex_h);
                 int mw = (int)floor(bbw / ((float)tex_h * aspect_ratio));
                 int ms = g_overflow ? max(mh, mw) : min(mh, mw);
@@ -450,7 +455,7 @@ static void UpdateVertexBuffer(int tex_w, int tex_h, float aspect_ratio)
             display_h = (float)(tex_h * scale);
             display_w = (float)floor(display_h * aspect_ratio);
         } else {
-            if ((scale == 1 || g_overflow) && tex_w > 0 && tex_h > 0) {
+            if (fixed == 0 && (scale == 1 || g_overflow) && tex_w > 0 && tex_h > 0) {
                 int mw = (int)floor(bbw / (float)tex_w);
                 int mh = (int)floor(bbh / (float)tex_h);
                 int ms = g_overflow ? max(mw, mh) : min(mw, mh);
@@ -802,9 +807,10 @@ void SDL_XBOX_SetDisplayFullscreen(int fullscreen)
     if (g_dev) g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
 }
 
-void SDL_XBOX_SetDisplayOverflow(int overflow)
+void SDL_XBOX_SetDisplayOverflow(int type)
 {
-    g_overflow = overflow;
+    g_scale_type = type;
+    g_overflow   = (type != 0);   /* reduce(0) recorta a pantalla; increase y 1x-5x pueden salirse */
     UpdateVertexBuffer(g_tex_w, g_tex_h, g_aspect);
     if (g_dev) g_dev->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
 }
