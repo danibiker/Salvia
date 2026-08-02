@@ -13,17 +13,19 @@ I had grown weary of juggling a multitude of different emulators, each requiring
 ## Features
 * Integration with **retroachievements**
 * Graphic **filters** (Nearest, Sharp bilinear, LCD3x, scanlines, CRT-Geom, CRT-Lottes, CRT-EasyMode, HQ2X, HQ3X, HQ4X, XBR, 5XBR)
-* **Integer scaling** (reduced or increased scale)
+* **Integer scaling** (reduced, increased scale or fixed 1x:5x)
 * Different **aspect ratios**
 * **Savestates**
+* **Cheats support** with automatic cheats download from [libretro database](https://github.com/libretro/libretro-database)
 * Image and description **scraper** from screenscraper.fr
 * **F.A.Q and Walktrough** viewer from gamefaqs.gamespot.com
 * **Fast forward**
 * **Navigate zipped files** and load contained games directly (they need to have a symbol @ as the first letter to be opened. Search "htgdb-gamepacks" in archive.org and you will thank me XD)
 * **Disc control** to change disks on PSX, SegaCD and PC Engine CD
 * **Bios Boot** (To organize PSX memory card savegames)
-* **Buttons mapper** for each controller
+* **Buttons mapper** for each Joystick
 * Ingame **Hotkeys**
+* Joystick **Rapid-fire**
 * **Animated** or static frontend **backgrounds**
 * Game **library search filters** (for FBNeo, FBANext and Mame 2003 plus)
 * **Per-core** libretro configuration
