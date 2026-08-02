@@ -1061,6 +1061,15 @@ void GestorMenus::poblarCheats(CfgLoader *refConfig){
 	std::vector<Cheat>& cheats = CheatManager::instance()->list();
 	if (cheats.empty()){
 		menuCheats->opciones.push_back(new OpcionTxt(LanguageManager::instance()->get("menu.cheats.none")));
+
+		// Al cambiar de juego (o vaciar la lista) menuCheats se repuebla pero es persistente:
+		// reiniciar la seleccion para no quedar con un indice obsoleto de la lista anterior.
+		if (menuActual == menuCheats){
+			resetIndexPos();
+		} else {
+			menuCheats->seleccionado = 0;
+		}
+
 		return;
 	}
 
