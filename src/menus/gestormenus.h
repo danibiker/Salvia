@@ -53,16 +53,16 @@ struct t_scrap{
 };
 
 
-struct Menu; // Declaración anticipada
+struct Menu; // Declaracion anticipada
 class OpcionSavestate;
 class OpcionBool;
 
-// Definimos un tipo de función que devuelve string y no recibe nada
+// Definimos un tipo de funcion que devuelve string y no recibe nada
 typedef std::string (*GestorCallback)(void* instance);
 typedef std::string (*CallbackValue) (void* instance, void* value);
 typedef std::string (*CallbackValues)(void* instance, void* index, void* values);
 
-// Clase Base para las opciones del menú
+// Clase Base para las opciones del menu
 class Opcion {
 public:
     std::string titulo;
@@ -72,15 +72,15 @@ public:
 
     Opcion(std::string t, TipoOpcion tp) : titulo(t), tipo(tp), icon(-1), editable(false) {}
 	Opcion(std::string t, TipoOpcion tp, int ico) : titulo(t), tipo(tp), icon(ico), editable(false) {}
-	virtual std::string ejecutar() = 0; // Método virtual puro
+	virtual std::string ejecutar() = 0; // Metodo virtual puro
     virtual ~Opcion() {}
 };
 
-//Esta clase no permite modificar ningún valor, sólo muestra texto
+//Esta clase no permite modificar ningun valor, solo muestra texto
 class OpcionTxt : public Opcion {
 public:
 	std::string valor;
-	CallbackValue callback; // Función estática
+	CallbackValue callback; // Funcion estatica
     void* context;
     OpcionTxt(std::string t) : Opcion(t, OPC_SHOW_TXT), valor(t), callback(NULL), context(NULL) {}
 
@@ -95,7 +95,7 @@ public:
 class OpcionGameFaq : public Opcion {
 public:
 	GameResult valor;
-	CallbackValue callback; // Función estatica
+	CallbackValue callback; // Funcion estatica
     void* context;
     OpcionGameFaq(GameResult t) : Opcion(t.name, OPC_FAQ_SEARCH), valor(t), callback(NULL), context(NULL) {}
 
@@ -144,11 +144,11 @@ public:
     }
 };
 
-//Esta clase no permite modificar ningún valor, sólo muestra texto y un valor
+//Esta clase no permite modificar ningun valor, solo muestra texto y un valor
 class OpcionTxtAndValue : public Opcion {
 public:
 	std::string valor;
-	CallbackValue callback; // Función estática
+	CallbackValue callback; // Funcion estatica
     void* context;
 	bool isPassword;
 	std::string tmpValue;
@@ -217,7 +217,7 @@ public:
 class OpcionBool : public Opcion {
 public:
     bool* valor;
-	CallbackValue callback; // Función estática
+	CallbackValue callback; // Funcion estatica
     void* context;          // El "this" de GestorMenus
 
     OpcionBool(std::string t, bool* v) : Opcion(t, OPC_BOOLEANA), valor(v), callback(NULL), context(NULL) {}
@@ -338,7 +338,7 @@ public:
     }
 };
 
-// Estructura del Menú
+// Estructura del Menu
 struct Menu{
     std::string titulo;
     std::vector<Opcion*> opciones;
@@ -376,11 +376,11 @@ struct MenuStatus{
 	Menu *menu;
 };
 
-// --- Clase Principal de Gestión de Menús ---
+// --- Clase Principal de Gestion de Menus ---
 class GestorMenus : public Object{
 private:
-    Menu* menuRaiz;     // Menú principal (almacenado permanentemente)
-    Menu* menuActual;   // Puntero al menú que se está mostrando ahora
+    Menu* menuRaiz;     // Menu principal (almacenado permanentemente)
+    Menu* menuActual;   // Puntero al menu que se esta mostrando ahora
     static const int waitTitleMove = 2000;
 	static const int textFps = 20;
 	static const int frameTimeText = (int)(1000 / textFps);
@@ -399,7 +399,7 @@ private:
 		}
 	};
 
-    // Lista de todos los menús para liberar memoria al final
+    // Lista de todos los menus para liberar memoria al final
     std::vector<Menu*> todosLosMenus;
 	Menu* menuCoreOptions;
 	Menu* menuCheats;
@@ -462,6 +462,7 @@ private:
 	void poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper);
 	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);
 	void poblarMenuAssignFrontend(Menu* menuHotkeys, Joystick *joystick);
+	void poblarMenuRapidFire(Menu* menuRapidFire, Joystick *joystick);
 	std::string guardarJoysticks(Joystick* joy);
 	std::string guardarGameJoysticks(Joystick* joy);
 	std::string guardarCoreJoysticks(Joystick* joy);
@@ -477,18 +478,18 @@ private:
 public:
     GestorMenus(int screenw, int screenh);
 	~GestorMenus();
-    // Inicializa la estructura de menús
+    // Inicializa la estructura de menus
     void inicializar(CfgLoader *, Joystick *);
-    // Lógica de navegación Arriba/Abajo
+    // Logica de navegacion Arriba/Abajo
     void navegar(int dir);
-    // Lógica para cambiar valores (Izquierda / Derecha)
+    // Logica para cambiar valores (Izquierda / Derecha)
     void cambiarValor(int dir);
-    // Lógica para confirmar (Botón A)
+    // Logica para confirmar (Boton A)
     std::string confirmar(t_option_action *);
-    // Lógica para volver (Botón B)
+    // Logica para volver (Boton B)
     void volver();
 	void resetIndexPos();
-    // Método simple para obtener qué dibujar
+    // Metodo simple para obtener que dibujar
     Menu* obtenerMenuActual();
 	void setAchievementsAsSelected(){menuActual = menuAchievements;}
 	void draw(SDL_Surface *video_page);
@@ -579,13 +580,13 @@ public:
 template <typename T>
 class OpcionExec : public Opcion {
 public:
-    // Definimos el puntero a un método de GestorMenus
+    // Definimos el puntero a un metodo de GestorMenus
     // Sintaxis: Tipo_Retorno (Nombre_Clase::*Nombre_Puntero)(Argumentos)
     typedef std::string (GestorMenus::*FuncType)(T*);
     
     FuncType execfunc;
     T* data;
-    GestorMenus* instanciaGestor; // Necesitamos la instancia para llamar al método
+    GestorMenus* instanciaGestor; // Necesitamos la instancia para llamar al metodo
 
     OpcionExec(std::string t, FuncType v, T* p, GestorMenus* gestor) 
         : Opcion(t, OPC_EXEC), execfunc(v), data(p), instanciaGestor(gestor) {}
@@ -593,9 +594,9 @@ public:
 	OpcionExec(std::string t, FuncType v, T* p, int ico, GestorMenus* gestor) 
         : Opcion(t, OPC_EXEC, ico), execfunc(v), data(p), instanciaGestor(gestor) {}
 
-    // Implementación del método virtual
+    // Implementacion del metodo virtual
     std::string ejecutar() {
-        // En C++, para llamar a un puntero a función miembro:
+        // En C++, para llamar a un puntero a funcion miembro:
         // (instancia.*puntero)(argumentos)
         return (instanciaGestor->*execfunc)(data);
     }

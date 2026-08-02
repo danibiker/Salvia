@@ -50,6 +50,10 @@ Salvia provides the following emulators from the latests releases:
   - beetle-pce-fast
 * PC Engine SuperGrafx
   - beetle-supergrafx
+* WonderSwan/WonderSwan Color
+  - beetle-wswan
+* Virtual Boy
+  - beetle-vb
 * Arcade
   - FBNeo
   - FBANext (ported from the magicseb repository)
@@ -163,32 +167,34 @@ You are now ready to place your backup games into their respective directories:
 
 ```
 Usb0:\Roms
-├── 3do\                 (3DO --> iso chd bin)
-├── dos\                 (MS-DOS --> zip exe bat)
-├── fbneo\               (Arcade FBNeo --> zip cue ccd chd)
+├── 3do\                 (3DO --> iso bin cue chd)
+├── dos\                 (MS-DOS --> zip dosz exe com bat iso chd cue ins img ima vhd jrc m3u m3u8 conf)
+├── fbneo\               (Arcade FBNeo --> zip 7z cue ccd chd)
 │   ├── neocd\           (NeoGeo CD --> cue ccd chd)
 │   ├── megadrive\       (FBNeo Megadrive core)
 │       └── paprium.zip  (Paprium game containing 'Paprium (World)(2020)(WaterMelon).bin')
-├── gb\                  (Game boy --> zip gb)
+├── gb\                  (Game boy --> zip gb gbc dmg)
 ├── gba\                 (Game boy advance --> gba zip)
-├── Genesis\             (Megadrive/Genesis --> md bin zip)
+├── Genesis\             (Megadrive/Genesis --> m3u mdx md smd gen sgd 68k bin zip)
 ├── gg\                  (GameGear --> gg zip)  
 ├── mame2003\            (M.A.M.E --> zip)
 │   └── roms\            
 │   └── samples\         
-├── megacd\              (Sega CD --> md bin chd zip)
+├── megacd\              (Sega CD --> m3u bin cue iso chd zip)
 ├── msx\                 (FBNeo MSX --> zip)
-├── nes\                 (Nintendo Nes/Famicom --> nes zip)
-├── ngp\                 (FBNeo NeoGeo Pocket --> zip
+├── nes\                 (Nintendo Nes/Famicom --> nes fds unf unif zip)
+├── ngp\                 (FBNeo NeoGeo Pocket --> zip)
 ├── pce\                 (PcEngine/Turbografx16 --> zip pce)
-├── pcecd\               (PcEngineCD/TurbografxCD --> zip pce chd)
-├── pcfx\                (PCFX/Supergrafx --> zip pce)
+├── pcecd\               (PcEngineCD/TurbografxCD --> zip pce chd cue ccd toc m3u)
+├── pcfx\                (PCFX/Supergrafx --> zip pce sgx)
 ├── prboom\              (Doom Engine --> wad)
-├── psx\                 (Play Station 1 --> iso chd bin cue m3u)
+├── psx\                 (Play Station 1 --> iso chd bin cue m3u img mdf pbp cbn)
 ├── quake\               (Quake 1 Engine -> pak)
-├── sms\                 (Master System/SG-1000 --> sms zip)
-├── snes\                (Super Nintendo/Super Famicom --> zip sfc)
-└── spectrum\            (FBNeo ZX Spectrum --> zip)
+├── sms\                 (Master System/SG-1000 --> sms bms sg zip)
+├── snes\                (Super Nintendo/Super Famicom --> zip sfc smc fig gd3 gd7 dx2 bsx swc)
+├── spectrum\            (FBNeo ZX Spectrum --> zip)
+├── virtualboy\          (Virtual Boy --> zip vb vboy bin)
+└── wonderswan\          (Wonderswan --> zip ws wsc)
 ```
 
 To change these paths, you can manually modify the **roms_path** field within the main configuration file (salvia.cfg). Alternatively, this can be adjusted via the in-game menu: Options > Emulation > Roms Main Directory. This property now defines the parent directory for all emulator ROMs. Notably, if configured as usb:\..., the system will dynamically detect the correct USB port, eliminating the need to specify Usb0 or Usb1.
@@ -322,9 +328,28 @@ For example, a ROM named `Sonic The Hedgehog (USA, Europe).md` running on *Genes
 
 The `data/cheats/<core>/` folder is created automatically the first time you launch a game with that core (just like `data/saves` and `data/states`). After copying a file, reload the game or pick **Reload .cht** in the Cheats menu.
 
+### Which cheat variant to use (per system)
+
+The libretro cheat database offers each game in several *device* variants — `(Game Genie)`, `(GameShark)`, `(Action Replay)`, `(Pro Action Replay)`, `(Code Breaker)`… — and each core only understands some of them. When you use **Download cheats**, Salvia already picks the right variant for the system automatically, so you don't need to worry about this. It only matters when you grab the `.cht` **yourself**:
+
+| System (core) | `.cht` variant to use |
+| --- | --- |
+| NES (nestopia) | **Game Genie** — the *Action Replay* files use a raw format this core can't read |
+| Mega Drive / Genesis / Sega CD / 32X (genesis-plus-gx, picodrive) | **Game Genie**, or **GameShark** / **Action Replay** / **Pro Action Replay** |
+| Master System / Game Gear | **Game Genie** or **Action Replay** |
+| SNES (snes9x) | **Game Genie** or **Pro Action Replay** |
+| Game Boy / Color (gambatte) | **Game Genie** or **GameShark** |
+| Game Boy Advance (vba-next) | **GameShark** / **Action Replay**, or **Code Breaker** |
+| PC Engine / TurboGrafx-16 / CD (beetle-pce, beetle-pce-fast) | **Action Replay** / raw (no Game Genie) |
+| SuperGrafx (beetle-supergrafx) | **Action Replay** / raw |
+| WonderSwan (beetle-wswan) | **Action Replay** / raw |
+| PlayStation (pcsxr-360) | **GameShark** — *not* Game Buster |
+
 ### Notes
-- Cheats only work on cores that support them — Genesis, SNES, NES, Game Boy / GBA, PC Engine, PlayStation (pcsxr-360) and others. Cores such as arcade (FBNeo / MAME), DOSBox or 3DO do not.
-- For **PlayStation**, use the **GameShark** files. Other variants such as *Game Buster* use a different code format and won't work.
+- Cheats only work on cores that support them. **Not supported:** DOSBox, 3DO and **Virtual Boy**.
+- **Doom** (prboom) and **Quake** (tyrquake) accept their engine's own cheats, not RAM codes. These aren't in the online database, so you make the `.cht` yourself with the classic strings in the `code` field — Doom cheat codes (`iddqd`, `idkfa`, `idclip`, `idbeholdv`…) or Quake console commands (`god`, `noclip`, `impulse 9`…). Note: Doom cheats can't be switched back off once applied.
+- **arcade (FBNeo / MAME)** have their own cheats engine
+- Whatever the device name, the code inside must match the format the core expects — the variants listed in the table above are the ones known to work on each system.
 
 ## Games artwork and titles
 ### Built-in scraper

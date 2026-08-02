@@ -7,6 +7,8 @@
 #include <libretro.h>
 #include "libretro_core_options.h"
 #include <math.h>
+#include <string.h>
+#include <stdlib.h>
 
 #include "mednafen/mednafen.h"
 #include "mednafen/git.h"
@@ -2102,8 +2104,49 @@ size_t retro_get_memory_size(unsigned type)
 void retro_cheat_reset(void)
 {}
 
-void retro_cheat_set(unsigned, bool, const char *)
-{}
+void retro_cheat_set(unsigned index, bool enabled, const char *code)
+{
+   char temp[256];
+   char *codepart;
+
+   (void)index;
+   (void)enabled;
+
+   if (code == NULL)
+      return;
+
+   /* Portado de beetle-pce-fast. Formato raw: 1Fxxxx:xx (RAM), 10xxxx:xx (CD-RAM),
+      F8xxxx:xx (direccion fisica de RAM). Ambos cores mapean BaseRAM en 0x1F0000
+      (MDFNMP_AddRAM(..., 0xf8*8192, BaseRAM)), asi que las direcciones coinciden.
+      El frontend hace retro_cheat_reset + retro_cheat_set solo de los habilitados. */
+   strncpy(temp, code, sizeof(temp) - 1);
+   temp[sizeof(temp) - 1] = '\0';
+   codepart = strtok(temp, "+,;._ ");
+
+   while (codepart)
+   {
+      if ((strlen(codepart) == 9) && (codepart[6] == ':'))
+      {
+         uint32 a;
+         uint64 v;
+
+         codepart[6] = '\0';
+         a = strtoul(codepart, NULL, 16);
+         v = strtoul(codepart + 7, NULL, 16);
+
+         if ((a & 0xFFE000) == 0xF82000) { a &= 0x1FFF; a |= 0x1F0000; }  /* fisica RAM    -> raw */
+         if ((a & 0xFFC000) == 0x80C000) { a &= 0x1FFF; a |= 0x10A000; }  /* fisica CD-RAM -> raw */
+
+         if (((a >= 0x1F0000) && (a < 0x1F2000)) ||   /* RAM principal */
+             ((a >= 0x100000) && (a < 0x110000)) ||   /* CD-RAM */
+             ((a >= 0x00D000) && (a < 0x10FFFF)))      /* System Card RAM */
+         {
+            MDFNI_AddCheat("N/A", a, v, 0, 'R', 1, 0);
+         }
+      }
+      codepart = strtok(NULL, "+,;._ ");
+   }
+}
 
 #ifdef _WIN32
 static void sanitize_path(std::string &path)

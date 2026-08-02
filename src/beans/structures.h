@@ -584,6 +584,12 @@ struct t_joy_state {
 	bool axisAsPad[MAX_PLAYERS];
 	int joyTypeIdx[MAX_PLAYERS];
 
+	// Disparo rapido (turbo/autofire). rapidFire indexado por (jugador, id RETRO 0..15);
+	// se usan solo los slots 0..15 de MAX_BUTTONS. Por defecto desactivado.
+	bool rapidFire[MAX_PLAYERS][MAX_BUTTONS];
+	int  rapidFireRateIdx;   // 0=lento, 1=medio, 2=rapido
+	bool turboPhaseOn;       // fase on/off, recalculada 1 vez por frame en retro_input_poll
+
 	t_joy_state(){
 		clear(btn_state);
 		clear(axis_state);
@@ -591,6 +597,9 @@ struct t_joy_state {
 		clear(g_analog_state, 0);
 		memset(axisAsPad, 0, sizeof(axisAsPad));
 		memset(joyTypeIdx, 0, sizeof(joyTypeIdx));
+		memset(rapidFire, 0, sizeof(rapidFire));
+		rapidFireRateIdx = 1;
+		turboPhaseOn = true;
 		mouse_x = mouse_y = mouse_rel_x = mouse_rel_y = 0;
 		memset(mouse_buttons, 0, sizeof(mouse_buttons));
 		for (int i = 0; i < MAX_RETRO_KEYS; ++i) {

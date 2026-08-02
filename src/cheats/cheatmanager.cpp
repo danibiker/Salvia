@@ -106,4 +106,5 @@ void CheatManager::clear() {
 	retro_cheat_reset();
 	cheats.clear();
 	currentPath.clear();
+	sourceName.clear();
 }

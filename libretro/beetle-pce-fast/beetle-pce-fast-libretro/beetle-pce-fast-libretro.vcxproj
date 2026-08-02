@@ -180,7 +180,7 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;WANT_16BPP;WANT_STEREO_SOUND;FRONTEND_SUPPORTS_RGB565;INLINE=_inline;MEDNAFEN_VERSION_NUMERIC=931;__LIBRETRO__;_LOW_ACCURACY_;_7ZIP_ST;HAVE_CHD;ZSTD_DISABLE_ASM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;WANT_16BPP;USE_CHEATS;WANT_STEREO_SOUND;FRONTEND_SUPPORTS_RGB565;INLINE=_inline;MEDNAFEN_VERSION_NUMERIC=931;__LIBRETRO__;_LOW_ACCURACY_;_7ZIP_ST;HAVE_CHD;ZSTD_DISABLE_ASM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)\deps;$(SolutionDir)\mednafen;$(SolutionDir)\mednafen\include;$(SolutionDir)\mednafen\hw_sound;$(SolutionDir)\mednafen\hw_cpu;$(SolutionDir)\mednafen\hw_misc;$(SolutionDir)\libretro-common\include;$(SolutionDir)\deps\libchdr\include;$(SolutionDir)\deps\lzma-19.00\include;$(SolutionDir)\deps\zstd\lib;$(SolutionDir)\deps\zlib-1.2.11;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -201,7 +201,7 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_DEBUG;_XBOX;__LIBXENON__;__ppc__;MSB_FIRST;BYTE_ORDER=BIG_ENDIAN;WANT_16BPP;WANT_PCE_FAST_EMU;WANT_STEREO_SOUND;FRONTEND_SUPPORTS_RGB565;INLINE=_inline;MEDNAFEN_VERSION_NUMERIC=931;__LIBRETRO__;_LOW_ACCURACY_;_7ZIP_ST;HAVE_CHD;ZSTD_DISABLE_ASM</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_XBOX;__LIBXENON__;__ppc__;MSB_FIRST;BYTE_ORDER=BIG_ENDIAN;WANT_16BPP;USE_CHEATS;WANT_PCE_FAST_EMU;WANT_STEREO_SOUND;FRONTEND_SUPPORTS_RGB565;INLINE=_inline;MEDNAFEN_VERSION_NUMERIC=931;__LIBRETRO__;_LOW_ACCURACY_;_7ZIP_ST;HAVE_CHD;ZSTD_DISABLE_ASM</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)\deps;$(SolutionDir)\mednafen;$(SolutionDir)\mednafen\include;$(SolutionDir)\mednafen\hw_sound;$(SolutionDir)\mednafen\hw_cpu;$(SolutionDir)\mednafen\hw_misc;$(SolutionDir)\libretro-common\include;$(SolutionDir)\deps\libchdr\include;$(SolutionDir)\deps\lzma-19.00\include;$(SolutionDir)\deps\zstd\lib;$(SolutionDir)\deps\zlib-1.2.11;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -226,7 +226,7 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>false</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;WANT_16BPP;WANT_PCE_FAST_EMU;WANT_STEREO_SOUND;FRONTEND_SUPPORTS_RGB565;INLINE=_inline;MEDNAFEN_VERSION_NUMERIC=931;__LIBRETRO__;_7ZIP_ST;HAVE_CHD;ZSTD_DISABLE_ASM</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;WANT_16BPP;USE_CHEATS;WANT_PCE_FAST_EMU;WANT_STEREO_SOUND;FRONTEND_SUPPORTS_RGB565;INLINE=_inline;MEDNAFEN_VERSION_NUMERIC=931;__LIBRETRO__;_7ZIP_ST;HAVE_CHD;ZSTD_DISABLE_ASM</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)\deps;$(SolutionDir)\mednafen;$(SolutionDir)\mednafen\include;$(SolutionDir)\mednafen\hw_sound;$(SolutionDir)\mednafen\hw_cpu;$(SolutionDir)\mednafen\hw_misc;$(SolutionDir)\libretro-common\include;$(SolutionDir)\deps\libchdr\include;$(SolutionDir)\deps\lzma-19.00\include;$(SolutionDir)\deps\zstd\lib;$(SolutionDir)\deps\zlib-1.2.11;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -251,7 +251,7 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>false</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>NDEBUG;_XBOX;__LIBXENON__;__ppc__;MSB_FIRST;BYTE_ORDER=BIG_ENDIAN;WANT_16BPP;WANT_PCE_FAST_EMU;WANT_STEREO_SOUND;FRONTEND_SUPPORTS_RGB565;INLINE=_inline;MEDNAFEN_VERSION_NUMERIC=931;__LIBRETRO__;_7ZIP_ST;HAVE_CHD;ZSTD_DISABLE_ASM</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_XBOX;__LIBXENON__;__ppc__;MSB_FIRST;BYTE_ORDER=BIG_ENDIAN;WANT_16BPP;USE_CHEATS;WANT_PCE_FAST_EMU;WANT_STEREO_SOUND;FRONTEND_SUPPORTS_RGB565;INLINE=_inline;MEDNAFEN_VERSION_NUMERIC=931;__LIBRETRO__;_7ZIP_ST;HAVE_CHD;ZSTD_DISABLE_ASM</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)\deps;$(SolutionDir)\mednafen;$(SolutionDir)\mednafen\include;$(SolutionDir)\mednafen\hw_sound;$(SolutionDir)\mednafen\hw_cpu;$(SolutionDir)\mednafen\hw_misc;$(SolutionDir)\libretro-common\include;$(SolutionDir)\deps\libchdr\include;$(SolutionDir)\deps\lzma-19.00\include;$(SolutionDir)\deps\zstd\lib;$(SolutionDir)\deps\zlib-1.2.11;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>

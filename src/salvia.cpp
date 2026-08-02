@@ -6,7 +6,7 @@
 #include <http/gamefaqs.h>
 #include <cheats/cheatmanager.h>
 #include <cheats/rdbreader.h>
-#define PICOJSON_USE_RVALUE_REFERENCE 0   // VS2010 no soporta noexcept
+#define PICOJSON_USE_RVALUE_REFERENCE 0   // VS2010 no soporta noexcept (ver scrapper.cpp)
 #include <http/picojson.h>
 #include <io/filelist.h>
 #include <cheats/cheatlocator.h>
@@ -921,6 +921,18 @@ extern "C" void salvia_dispatch_keyboard_event(bool down, unsigned retro_keycode
 // Se llama antes de pedir el estado de los inputs
 void retro_input_poll(void) {
     update_input();
+    // Disparo rapido: fase on/off calculada 1 vez por frame (barato). Solo se consulta
+    // dentro de retro_run() -> EMU_STARTED, asi que no tiene efecto fuera del juego.
+    t_joy_state *in = &gameMenu->joystick->inputs;
+    if (Achievements::instance()->isHardcoreMode()) {
+        // Hardcore RetroAchievements: sin disparo rapido. Forzando la fase a "on", el
+        // gate de retro_input_state nunca suprime -> el boton se comporta normal.
+        in->turboPhaseOn = true;
+    } else {
+        static const Uint32 RF_HALF_MS[3] = {66, 44, 33}; // lento/medio/rapido (~7.5/11/15 Hz)
+        int r = ((unsigned)in->rapidFireRateIdx < 3) ? in->rapidFireRateIdx : 1;
+        in->turboPhaseOn = ((SDL_GetTicks() / RF_HALF_MS[r]) & 1) == 0;
+    }
 }
 
 int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsigned id) {
@@ -955,6 +967,8 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 				// Fast path: sin modifier, lectura directa sin getSdlBtn por iteracion
 				for (int i = 0; i < maxJoyTargets; i++) {
 					if (inputs->getCoreAny(port, i)) {
+						// Disparo rapido: suprime el bit durante medio ciclo
+						if (inputs->rapidFire[port][i] && !inputs->turboPhaseOn) continue;
 						mask |= (int16_t)(1 << i);
 					}
 				}
@@ -972,7 +986,10 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 		} else {
 			if (id < maxJoyTargets) {
 				if (!modifierPressed) {
-					return inputs->getCoreAny(port, id) ? 1 : 0;
+					if (!inputs->getCoreAny(port, id)) return 0;
+					// Disparo rapido: suprime la pulsacion durante medio ciclo
+					if (inputs->rapidFire[port][id] && !inputs->turboPhaseOn) return 0;
+					return 1;
 				}
 				return (inputs->mapperCore.getSdlBtn(port, id) == sdlModifier ||
 						inputs->getCoreAny(port, id)) ? 1 : 0;

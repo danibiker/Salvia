@@ -46,6 +46,22 @@ public:
 	std::vector<Cheat>& list()        { return cheats; }
 	bool                empty() const { return cheats.empty(); }
 
+	// Nombre (basename) del .cht cargado actualmente; "" si no hay ninguno.
+	std::string currentFilename() const {
+		std::size_t p = currentPath.find_last_of("\\/");
+		return (p == std::string::npos) ? currentPath : currentPath.substr(p + 1);
+	}
+
+	// Nombre REAL del .cht en el repo de GitHub que se descargo (lo fija descargarCheats tras
+	// una descarga con exito). Se conserva entre recargas; se limpia en clear() (cierre de juego).
+	void setSourceName(const std::string& n) { sourceName = n; }
+
+	// Nombre a mostrar en el menu: el real de GitHub si se conoce (descarga), si no el basename
+	// local (nombre de ROM, con el que se guarda romPaths.cht).
+	std::string displayFilename() const {
+		return sourceName.empty() ? currentFilename() : sourceName;
+	}
+
 private:
 	CheatManager() {}
 	CheatManager(const CheatManager&);
@@ -53,6 +69,7 @@ private:
 
 	std::vector<Cheat> cheats;
 	std::string        currentPath;
+	std::string        sourceName;   // nombre real del .cht en GitHub (solo tras descarga)
 };
 
 #endif // CHEATS_CHEATMANAGER_H

@@ -147,7 +147,7 @@
       <Optimization>Disabled</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>false</IntrinsicFunctions>
-      <PreprocessorDefinitions>_XBOX;_XBOX360;MSB_FIRST;NDEBUG;LOAD_FROM_MEMORY;FRONTEND_SUPPORTS_RGB565;__LIBRETRO__;HAVE_HLE_BIOS;TILED_RENDERING;USE_FRAME_SKIP;INLINE=_inline;USE_TWEAKS;USE_CACHE_PREFETCH</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;_XBOX360;MSB_FIRST;NDEBUG;LOAD_FROM_MEMORY;FRONTEND_SUPPORTS_RGB565;__LIBRETRO__;HAVE_HLE_BIOS;USE_CHEATS;TILED_RENDERING;USE_FRAME_SKIP;INLINE=_inline;USE_TWEAKS;USE_CACHE_PREFETCH</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)libretro-common\include;$(SolutionDir)..\Salvia\libs\libSDLx360\SDL\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <InlineFunctionExpansion>Default</InlineFunctionExpansion>
@@ -199,7 +199,7 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>_XBOX;_XBOX360;MSB_FIRST;NDEBUG;FRONTEND_SUPPORTS_RGB565;LOAD_FROM_MEMORY;__LIBRETRO__;HAVE_HLE_BIOS;TILED_RENDERING;USE_FRAME_SKIP;INLINE=_inline;USE_TWEAKS;USE_CACHE_PREFETCH</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;_XBOX360;MSB_FIRST;NDEBUG;FRONTEND_SUPPORTS_RGB565;LOAD_FROM_MEMORY;__LIBRETRO__;HAVE_HLE_BIOS;USE_CHEATS;TILED_RENDERING;USE_FRAME_SKIP;INLINE=_inline;USE_TWEAKS;USE_CACHE_PREFETCH</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)libretro-common\include;$(SolutionDir)..\Salvia\libs\libSDLx360\SDL\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>

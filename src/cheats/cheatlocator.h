@@ -16,6 +16,14 @@ static volatile long g_cheatDone     = 0;      // 1 cuando el worker termina
 static float         g_cheatProgress = 0.0f;   // 0..1 (por transferencia); lo escribe ProgressCallback
 static volatile long g_cheatStage    = 0;      // paso actual (CHEAT_STAGE_*)
 static char          g_cheatResult[520] = {0}; // ruta del .cht descargado (o vacio)
+static char          g_cheatSourceName[260] = {0}; // nombre REAL del .cht en GitHub (basename)
+
+// Guarda el nombre real (basename) del .cht elegido en GitHub, para mostrarlo en el menu de
+// cheats (el contenido se guarda localmente como romPaths.cht, con el nombre de la ROM).
+static void setCheatSourceName(const std::string& n){
+	strncpy(g_cheatSourceName, n.c_str(), sizeof(g_cheatSourceName) - 1);
+	g_cheatSourceName[sizeof(g_cheatSourceName) - 1] = '\0';
+}
 
 static const char* cheatStageKey(long s){
 	switch (s){
@@ -164,8 +172,9 @@ static bool getChtFolderList(const std::string& sys, std::vector<std::string>& f
 }
 
 // Elige el mejor .cht de 'listing' cuyo nombre normalizado coincide con 'wanted' (ya
-// limpio con cleanName). Prefiere GameShark, descarta Game Buster (pcsxr-360 no la
-// parsea) y desempata por region (regionScore vs romNoExt). "" si ninguno coincide.
+// limpio con cleanName). Prefiere GameShark y luego Game Genie, descarta Game Buster
+// (pcsxr-360 no la parsea) y desempata por region (regionScore vs romNoExt). "" si
+// ninguno coincide.
 static std::string pickBestCht(const std::vector<std::string>& listing,
                                const std::string& wanted, const std::string& romNoExt){
 	if (wanted.empty()) return "";
@@ -182,9 +191,12 @@ static std::string pickBestCht(const std::vector<std::string>& listing,
 			if (low[k] >= 'A' && low[k] <= 'Z') low[k] = (char)(low[k] + 32);
 		if (low.find("game buster") != std::string::npos) continue;    // pcsxr-360 no la parsea
 
-		int score = 1;                                                  // el nombre coincide
-		if (low.find("gameshark") != std::string::npos) score += 1000; // preferir GameShark
-		score += regionScore(base, romNoExt);                          // desempate por region
+		int score = 1;                                                       // el nombre coincide
+		if (low.find("gameshark") != std::string::npos)       score += 1000; // GameShark: PSX (pcsxr-360 solo parsea esta), Genesis, GB
+		else if (low.find("game genie") != std::string::npos) score += 900;  // Game Genie: NES/SNES/GB/Genesis. En NES es el unico que
+		                                                                     // decodifica nestopia; los .cht (Action Replay) traen raw
+		                                                                     // "00AAAAVV" que su parser (espera "AAAA:VV") ignora.
+		score += regionScore(base, romNoExt);                                // desempate por region
 		if (score > bestScore){ bestScore = score; best = fn; }
 	}
 	return best;
@@ -199,6 +211,8 @@ static std::string pickBestCht(const std::vector<std::string>& listing,
 static std::string downloadCheatForCurrentGame(float* progressOut){
 	const std::string RAW = "https://raw.githubusercontent.com/libretro/libretro-database/master/";
 
+	g_cheatSourceName[0] = '\0';   // se rellena abajo solo si la descarga tiene exito
+
 	std::string sys = getRdbSystemName();
 	if (sys.empty() || romPaths.cht.empty()) return "";
 
@@ -211,8 +225,10 @@ static std::string downloadCheatForCurrentGame(float* progressOut){
 	// 1) Intento directo por nombre de ROM (funciona si ya tiene nombre canonico).
 	//    fetchFile devuelve true solo en 2xx; en 404 borra el fichero parcial y da false.
 	InterlockedExchange(&g_cheatStage, CHEAT_STAGE_SEARCH);
-	if (dl.fetchFile(RAW + "cht/" + sysEnc + "/" + urlEncodeSegment(romNoExt) + ".cht", romPaths.cht, progressOut))
+	if (dl.fetchFile(RAW + "cht/" + sysEnc + "/" + urlEncodeSegment(romNoExt) + ".cht", romPaths.cht, progressOut)){
+		setCheatSourceName(romNoExt + ".cht");   // acierto directo: el nombre en GitHub = nombre de ROM
 		return romPaths.cht;
+	}
 
 	// 2) Listar la carpeta REAL de .cht del sistema y elegir por match de nombre normalizado.
 	std::vector<std::string> listing;
@@ -243,8 +259,10 @@ static std::string downloadCheatForCurrentGame(float* progressOut){
 	// 3) Descargar el elegido -> romPaths.cht (nombre de ROM, para que lo reencuentre
 	//    resolveCheatPath en la siguiente carga).
 	InterlockedExchange(&g_cheatStage, CHEAT_STAGE_CHEAT);
-	if (dl.fetchFile(RAW + "cht/" + sysEnc + "/" + urlEncodeSegment(best), romPaths.cht, progressOut))
+	if (dl.fetchFile(RAW + "cht/" + sysEnc + "/" + urlEncodeSegment(best), romPaths.cht, progressOut)){
+		setCheatSourceName(best);   // nombre real del .cht en GitHub (p.ej. "Foo (World) (GameShark).cht")
 		return romPaths.cht;
+	}
 
 	return "";
 }
@@ -297,4 +315,11 @@ std::string downloadCheatWithProgress(){
 	WaitForSingleObject(h, INFINITE);
 	CloseHandle(h);
 	return std::string(g_cheatResult);
+}
+
+// Nombre REAL del .cht en el repo de GitHub descargado en la ultima llamada (basename), o ""
+// si no hubo descarga con exito. Valido tras retornar downloadCheatWithProgress() (el worker
+// ya termino). El contenido se guarda como romPaths.cht; esto es solo para mostrarlo.
+std::string lastCheatSourceName(){
+	return std::string(g_cheatSourceName);
 }

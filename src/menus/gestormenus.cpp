@@ -34,6 +34,7 @@ extern bool swapDisc(unsigned new_idx);
 extern struct retro_disk_control_callback disk_control;
 extern void launchBios();
 extern std::string downloadCheatWithProgress();
+extern std::string lastCheatSourceName();
 
 const char *scrapOrigins[] = {"SCREENSCRAPER", "THEGAMESDB", "EMPTY"};
 
@@ -370,13 +371,16 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuAssignRetro = new Menu(LanguageManager::instance()->get("menu.options.paddassign"), menuEntrada);
 	menuAssignFrontend = new Menu(LanguageManager::instance()->get("menu.options.frontassign"), menuEntrada);
 	Menu* menuHotkeys = new Menu(LanguageManager::instance()->get("menu.options.hotkeys"), menuEntrada);
+	Menu* menuRapidFire = new Menu(LanguageManager::instance()->get("menu.options.rapidfire"), menuEntrada);
 	todosLosMenus.push_back(menuAssignRetro);
 	todosLosMenus.push_back(menuAssignFrontend);
 	todosLosMenus.push_back(menuHotkeys);
+	todosLosMenus.push_back(menuRapidFire);
 
 	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.paddassign"), menuAssignRetro));
 	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.frontassign"), menuAssignFrontend));
 	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.hotkeys"), menuHotkeys));
+	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.rapidfire"), menuRapidFire));
 	menuEntrada->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.saveassign"), &GestorMenus::guardarJoysticks, joystick, this));
 
 	//Traducciones para las teclas
@@ -420,6 +424,8 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 
 	//Poblar menu hotkeys
 	poblarMenuHotkeys(menuHotkeys, joystick);
+	//Poblar menu disparo rapido
+	poblarMenuRapidFire(menuRapidFire, joystick);
 	//Menu de teclas para el frontend
 	poblarMenuAssignFrontend(menuAssignFrontend, joystick);
 	//Menu del scrapper que rellena los idiomas y lenguas
@@ -752,6 +758,18 @@ std::string GestorMenus::sDescargarLogros(void* inst) {
 std::string GestorMenus::changeHardcoreMode(void* inst, void *value) {
 	bool sendValue = *((bool *)(value));
 	Achievements::instance()->setHardcoreMode(sendValue);
+	if (sendValue){
+		// Hardcore RetroAchievements: los cheats no estan permitidos. Desactivar todos
+		// y quitarlos del core (applyToCore reaplica solo los habilitados = ninguno).
+		// Solo si hay lista cargada (juego en marcha): asi no se llama a retro_cheat_reset
+		// sin core cargado.
+		std::vector<Cheat>& cheats = CheatManager::instance()->list();
+		if (!cheats.empty()){
+			for (std::size_t i = 0; i < cheats.size(); ++i)
+				cheats[i].enabled = false;
+			CheatManager::instance()->applyToCore();
+		}
+	}
 	return "";
 }
 
@@ -1032,18 +1050,26 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
 */
 void GestorMenus::poblarCheats(CfgLoader *refConfig){
 	menuCheats->opciones.clear();
-
 	// Accion fija: recargar la lista desde el .cht en disco (todos desactivados).
 	menuCheats->opciones.push_back(new OpcionExec<CfgLoader>(
 		LanguageManager::instance()->get("menu.cheats.reload"), &GestorMenus::reloadCheats, refConfig, this));
 
+	// Descargar de libretro-database. Siempre disponible (re-descarga / reemplaza el .cht).
+	menuCheats->opciones.push_back(new OpcionExec<CfgLoader>(
+		LanguageManager::instance()->get("menu.cheats.download"), &GestorMenus::descargarCheats, refConfig, this));
+
 	std::vector<Cheat>& cheats = CheatManager::instance()->list();
 	if (cheats.empty()){
-		// Sin cheats locales: ofrecer descargarlos de libretro-database.
-		menuCheats->opciones.push_back(new OpcionExec<CfgLoader>(
-			LanguageManager::instance()->get("menu.cheats.download"), &GestorMenus::descargarCheats, refConfig, this));
 		menuCheats->opciones.push_back(new OpcionTxt(LanguageManager::instance()->get("menu.cheats.none")));
 		return;
+	}
+
+	// Justo despues del boton de descarga: nombre del .cht cargado. Solo con cheats
+	// cargados (loadFromFile fija currentPath aunque el fichero no exista, asi que sin
+	// esta guarda se mostraria un nombre para un .cht candidato inexistente).
+	std::string chtName = CheatManager::instance()->displayFilename();
+	if (!chtName.empty()){
+		menuCheats->opciones.push_back(new OpcionTxt(chtName));
 	}
 
 	// El vector ya esta completo: los OpcionBool apuntan a &cheats[i].enabled, asi
@@ -1053,6 +1079,15 @@ void GestorMenus::poblarCheats(CfgLoader *refConfig){
 		op->callback = &GestorMenus::sApplyCheats;   // re-aplica al alternar (A / izq-der)
 		menuCheats->opciones.push_back(op);
 	}
+
+	// Al cambiar de juego (o vaciar la lista) menuCheats se repuebla pero es persistente:
+	// reiniciar la seleccion para no quedar con un indice obsoleto de la lista anterior.
+	if (menuActual == menuCheats){
+		resetIndexPos();
+	} else {
+		menuCheats->seleccionado = 0;
+	}
+
 }
 
 /**
@@ -1076,6 +1111,7 @@ std::string GestorMenus::descargarCheats(CfgLoader *refConfig){
 		return LanguageManager::instance()->get("msg.cheats.download.none");
 
 	CheatManager::instance()->loadFromFile(path);
+	CheatManager::instance()->setSourceName(lastCheatSourceName());   // nombre real del .cht en GitHub
 	poblarCheats(refConfig);
 	resetIndexPos();
 	return LanguageManager::instance()->get("msg.cheats.download.ok");
@@ -1085,7 +1121,14 @@ std::string GestorMenus::descargarCheats(CfgLoader *refConfig){
 * Callback de cada OpcionBool de cheat: reaplica toda la lista al alternar.
 */
 std::string GestorMenus::sApplyCheats(void* inst, void* value){
-	(void)inst; (void)value;
+	(void)inst;
+	if (Achievements::instance()->isHardcoreMode()){
+		// Hardcore RetroAchievements: no se permite activar cheats. Revertir el toggle
+		// (el menu ya invirtio *value antes de llamar a este callback).
+		if (value != NULL) *((bool*)value) = false;
+		CheatManager::instance()->applyToCore();
+		return "";
+	}
 	CheatManager::instance()->applyToCore();
 	return "";
 }
@@ -1223,6 +1266,34 @@ void GestorMenus::poblarMenuAssignFrontend(Menu* menuAssign, Joystick *joystick)
 		}
 
 		menuAssign->opciones.push_back(new OpcionKey(text, input, &input->mapperFrontend, 0, fVal, type, TipoKeyStr[type]));	
+	}
+}
+
+void GestorMenus::poblarMenuRapidFire(Menu* menuRapidFire, Joystick *joystick){
+	t_joy_state *input = &joystick->inputs;
+
+	// Selector de velocidad global. El indice se lee cada frame en retro_input_poll (sin callback).
+	std::vector<std::string> rate;
+	rate.push_back(LanguageManager::instance()->get("menu.rapidfire.rate.slow"));
+	rate.push_back(LanguageManager::instance()->get("menu.rapidfire.rate.medium"));
+	rate.push_back(LanguageManager::instance()->get("menu.rapidfire.rate.fast"));
+	menuRapidFire->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.rapidfire.rate"), rate, &input->rapidFireRateIdx));
+
+	// Un submenu por puerto (como menuAssignRetro), con un OpcionBool por boton.
+	int num_port_buttons = sizeof(configurablePortButtons) / sizeof(configurablePortButtons[0]);
+	for (int controlId = 0; controlId < MAX_PLAYERS; controlId++){
+		std::string controlStr = LanguageManager::instance()->get("menu.options.portcontrols")
+			+ std::string(" ") + Constant::TipoToStr(controlId + 1) + " " +
+			input->names[controlId];
+
+		Menu* menuPort = new Menu(controlStr, menuRapidFire);
+		for (int sdlBtnIdx=0; sdlBtnIdx < num_port_buttons; sdlBtnIdx++){
+			const std::string text = configurablePortButtonsStr[sdlBtnIdx];
+			const int retroBtnValue = configurablePortButtons[sdlBtnIdx]; // id RETRO 0..15
+			menuPort->opciones.push_back(new OpcionBool(text, &input->rapidFire[controlId][retroBtnValue]));
+		}
+		menuRapidFire->opciones.push_back(new OpcionSubMenu(controlStr, menuPort));
+		todosLosMenus.push_back(menuPort);
 	}
 }
 

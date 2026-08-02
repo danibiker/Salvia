@@ -1429,7 +1429,7 @@ static void report_buttons(void)
 							ret |= (1 << i);
 				}
 
-				joypad[port] = 0; // Limpiar el estado del joypad antes de aplicar la máscara nueva
+				joypad[port] = 0; // Limpiar el estado del joypad antes de aplicar la mï¿½scara nueva
 				for (i = RETRO_DEVICE_ID_JOYPAD_B; i <= RETRO_DEVICE_ID_JOYPAD_R; i++)
 				{
 					if (ret & (1 << i))
@@ -1853,24 +1853,42 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
 	uint8_t sram;
 	uint8_t bytes[3]; /* used only by GoldFinger, ignored for now */
 
-	if (S9xGameGenieToRaw(code, &address, &val) != NULL &&
-		S9xProActionReplayToRaw(code, &address, &val) != NULL &&
-		S9xGoldFingerToRaw(code, &address, &sram, &val, bytes) != NULL)
-	{
-		/* Ignore bad codes. */
+	char codeCopy[256];
+	char *part;
+
+	(void)index;
+
+	if (code == NULL)
 		return;
+
+	/* Un mismo cheat de un .cht puede traer varios codigos unidos por '+' (o ',',';'...),
+	   p.ej. Super Mario World: "EDA5-0F6F+61A5-040F+61A6-0D6F". Los decodificadores de abajo
+	   exigen longitud EXACTA (9 Game Genie, 8 Pro Action Replay), asi que hay que trocear la
+	   cadena y anadir cada codigo por separado. Se ignora 'index' y se van anadiendo al final
+	   (el frontend hace retro_cheat_reset + retro_cheat_set secuencial). */
+	strncpy(codeCopy, code, sizeof(codeCopy) - 1);
+	codeCopy[sizeof(codeCopy) - 1] = '\0';
+
+	part = strtok(codeCopy, "+,;._ ");
+	while (part != NULL)
+	{
+		/* Estos decodificadores devuelven NULL si el codigo es valido (y rellenan
+		   address/val); si al menos uno acierta, anadimos el cheat. */
+		if (S9xGameGenieToRaw(part, &address, &val) == NULL ||
+			S9xProActionReplayToRaw(part, &address, &val) == NULL ||
+			S9xGoldFingerToRaw(part, &address, &sram, &val, bytes) == NULL)
+		{
+			if (Cheat.num_cheats < MAX_CHEATS)
+			{
+				Cheat.c[Cheat.num_cheats].address = address;
+				Cheat.c[Cheat.num_cheats].byte    = val;
+				Cheat.c[Cheat.num_cheats].enabled = enabled;
+				Cheat.c[Cheat.num_cheats].saved   = FALSE; /* it'll be saved next time cheats run */
+				Cheat.num_cheats++;
+			}
+		}
+		part = strtok(NULL, "+,;._ ");
 	}
-	if (index > Cheat.num_cheats)
-		return; /* Ignore cheat added in weird order. */
-
-	if (index == Cheat.num_cheats)
-		Cheat.num_cheats++;
-
-	Cheat.c[index].address = address;
-	Cheat.c[index].byte = val;
-	Cheat.c[index].enabled = enabled;
-
-	Cheat.c[index].saved = FALSE; /* it'll be saved next time cheats run */
 
 	Settings.ApplyCheats = true;
 	S9xApplyCheats();

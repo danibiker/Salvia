@@ -84,7 +84,8 @@ double MDFN_GetSettingF(const char *name)
 bool MDFN_GetSettingB(const char *name)
 {
    if (!strcmp("cheats", name))
-      return 0;
+      return 1;   /* Salvia: motor de cheats de mednafen activo (enable por-cheat lo
+                     gestiona el frontend); antes 0 -> no aplicaba nada. */
    /* LIBRETRO */
    if (!strcmp("libretro.cd_load_into_ram", name))
       return 0;
