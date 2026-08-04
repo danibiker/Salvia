@@ -420,7 +420,24 @@ void vgm_frame(void)
                 cmd_pos, type);
           }
           break;
-        case 0x70 ... 0x7f: // wait
+        case 0x70:
+		case 0x71:
+		case 0x72:
+		case 0x73:
+		case 0x74:
+		case 0x75:
+		case 0x76:
+		case 0x77:
+		case 0x78:
+		case 0x79:
+		case 0x7a:
+		case 0x7b:
+		case 0x7c:
+		case 0x7d:
+		case 0x7e:
+		case 0x7f:
+			// wait
+			break;
           wait_samples = (cmd & 0x0f) + 1;
         wait:
           vgm->sample_pos += wait_samples;
@@ -428,7 +445,12 @@ void vgm_frame(void)
           Pico.t.z80c_aim = samples * osc_cyc_per_smp / (15 * 256u);
           SekCycleCntS68k = s68k_base + (samples * scd_cyc_per_smp >> 8);
           break;
-        case 0x80 ... 0x8f: // ym2612 dac write
+        case 0x80: case 0x81: case 0x82: case 0x83:
+		case 0x84: case 0x85: case 0x86: case 0x87:
+		case 0x88: case 0x89: case 0x8a: case 0x8b:
+		case 0x8c: case 0x8d: case 0x8e: case 0x8f:
+			// ym2612 dac write
+			break;
           data = 0x80;
           if (vgm->blocks[0].pos < vgm->blocks[0].end) // always block 0?
             data = vgm->data[vgm->blocks[0].pos++];

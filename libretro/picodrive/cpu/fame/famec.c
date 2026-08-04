@@ -24,7 +24,9 @@
 #define FAMEC_CHECK_BRANCHES
 #define FAMEC_EXTRA_INLINE
 // #define FAMEC_DEBUG
+#ifndef FAMEC_NO_GOTOS
 #define FAMEC_NO_GOTOS
+#endif
 #define FAMEC_ADR_BITS  24
 // #define FAMEC_FETCHBITS 8
 #define FAMEC_DATABITS  8

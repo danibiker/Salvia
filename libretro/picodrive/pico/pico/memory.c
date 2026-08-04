@@ -9,7 +9,11 @@
 #include "../pico_int.h"
 #include "../memory.h"
 #include <platform/common/input_pico.h>
+#if defined(_WIN32)
+#include <windows.h>
+#else
 #include <sys/time.h>
+#endif
 
 /*
 void dump(u16 w)
@@ -29,6 +33,9 @@ void dump(u16 w)
 
 u64 get_ticks(void)
 {
+#if defined(_WIN32)
+    return (u64)GetTickCount() * 1000;
+#else
     struct timeval tv;
     u64 ret;
 
@@ -39,6 +46,7 @@ u64 get_ticks(void)
     ret += ((unsigned)tv.tv_usec * 4195) >> 22;
 
     return ret;
+#endif
 }
 
 static u32 PicoRead16_pico(u32 a)
@@ -132,6 +140,7 @@ static void PicoWrite16_pico(u32 a, u32 d)
 static u32 PicoRead8_pico_kb(u32 a)
 {
   u32 d = 0;
+  u32 key_shift, key, key_code, key_code_7654, key_code_3210;
   if (!(PicoIn.opt & POPT_EN_KBD)) {
     elprintf(EL_PICOHW, "kb: r @%06X %04X = %04X\n", SekPc, a, d);
     return d;
@@ -139,8 +148,8 @@ static u32 PicoRead8_pico_kb(u32 a)
 
   PicoPicohw.kb.has_read = 1;
 
-  u32 key_shift = (PicoIn.kbd & 0xff00) >> 8;
-  u32 key = (PicoIn.kbd & 0x00ff);
+  key_shift = (PicoIn.kbd & 0xff00) >> 8;
+  key = (PicoIn.kbd & 0x00ff);
 
   // The Shift key requires 2 key up events to be registered:
   // SHIFT_UP_HELD_DOWN to allow the game to register the key down event
@@ -150,14 +159,14 @@ static u32 PicoRead8_pico_kb(u32 a)
   // For the second key up event, we need to
   // override the parsed key code with PEVB_KBD_SHIFT,
   // otherwise it will be zero and the game won't clear its Shift key state.
-  u32 key_code = (key_shift
+  key_code = (key_shift
       && !key
       && PicoPicohw.kb.key_state != PKEY_UP
       && PicoPicohw.kb.shift_state != PSHIFT_UP_HELD_DOWN)
     ? key_shift
     : PicoPicohw.kb.shift_state == PSHIFT_UP ? PEVB_KBD_LSHIFT : key;
-  u32 key_code_7654 = (key_code & 0xf0) >> 4;
-  u32 key_code_3210 = (key_code & 0x0f);
+  key_code_7654 = (key_code & 0xf0) >> 4;
+  key_code_3210 = (key_code & 0x0f);
   switch(PicoPicohw.kb.i) {
     case 0x0: d = 1; // m5id
       break;

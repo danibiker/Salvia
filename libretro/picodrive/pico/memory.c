@@ -518,7 +518,7 @@ static NOINLINE u32 port_read(int i)
   u32 data_reg = PicoMem.ioports[i + 1];
   u32 ctrl_reg = PicoMem.ioports[i + 4] | 0x80;
   u32 cycles = SekCyclesDone();
-  u32 in, out;
+  u32 in, out, mask;
 
   out = data_reg & ctrl_reg;
 
@@ -532,7 +532,7 @@ static NOINLINE u32 port_read(int i)
   // disables output before doing TH-low read, so emulate RC filter for TH.
   // Decap Attack reportedly doesn't work on Nomad but works on most
   // other MD revisions (different pull-up strength?).
-  u32 mask = 0x3f;
+  mask = 0x3f;
   if (CYCLES_GE(cycles, padTHLatency[i])) {
     mask |= 0x40;
     padTHLatency[i] = cycles;
@@ -1287,6 +1287,7 @@ static void m68k_mem_setup(void)
 
 static int get_scanline(int is_from_z80)
 {
+  int lines;
   if (is_from_z80) {
     // ugh... compute by dividing cycles since frame start by cycles per line
     // need some fractional resolution here, else there may be an extra line
@@ -1300,7 +1301,7 @@ static int get_scanline(int is_from_z80)
       if (cycles_line_o != cycles_line)
         { cycles_line_o = cycles_line, cycles_line_i = (1<<22) / cycles_line; }
       // compute lines = diff/cycles_line = diff*(1/cycles_line)
-      int lines = ((cycles_z80 - cycles) * cycles_line_i) >> 22;
+      lines = ((cycles_z80 - cycles) * cycles_line_i) >> 22;
       Pico.t.z80_scanline += lines, cycles += cycles_line * lines;
     }
     // handle any rounding leftover

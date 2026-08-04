@@ -276,6 +276,8 @@ static void Pico32xRenderSync(int lines)
 
 void Pico32xDrawSync(SH2 *sh2)
 {
+	void *dest;
+	int incr;
   // the fast renderer isn't operating on a line-by-line base
   if (sh2 && !(PicoIn.opt & POPT_ALT_RENDERER)) {
     unsigned int cycle = (sh2 ? sh2_cycles_done_m68k(sh2) : SekCyclesDone());
@@ -286,8 +288,8 @@ void Pico32xDrawSync(SH2 *sh2)
       PicoDrawSync(line, 0, 0);
 
       // pfff... need to save and restore some persistent data for MD renderer
-      void *dest = Pico.est.DrawLineDest;
-      int incr = Pico.est.DrawLineDestIncr;
+      dest = Pico.est.DrawLineDest;
+      incr = Pico.est.DrawLineDestIncr;
       Pico32xRenderSync(line);
       Pico.est.DrawLineDest = dest;
       Pico.est.DrawLineDestIncr = incr;

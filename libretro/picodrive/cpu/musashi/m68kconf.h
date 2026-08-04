@@ -102,7 +102,7 @@
 
 /* If ON, the CPU will monitor the trace flags and take trace exceptions
  */
-#define M68K_EMULATE_TRACE          OPT_ON
+#define M68K_EMULATE_TRACE          OPT_OFF
 
 
 /* If ON, CPU will call the output reset callback when it encounters a reset
@@ -189,7 +189,7 @@
 /* If ON, the enulation core will use 64-bit integers to speed up some
  * operations.
 */
-#define M68K_USE_64_BIT  OPT_OFF
+#define M68K_USE_64_BIT  OPT_ON
 
 
 /* Set to your compiler's static inline keyword to enable it, or

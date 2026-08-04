@@ -252,8 +252,10 @@ static NOINLINE void sh2_poll_write(u32 a, u32 d, unsigned int cycles, SH2 *sh2)
     q->d = d;
   } else {
     // store write to poll address in fifo
-    fifo[wr] = (struct sh2_poll_fifo)
-        { .cycles = cycles, .a = a, .d = d, .cpu = ~cpu & 7 };
+    fifo[wr].cycles = cycles;
+	fifo[wr].a      = a;
+	fifo[wr].d      = d;
+	fifo[wr].cpu    = ~cpu & 7;
     wr = (wr+1) % PFIFO_SZ;
     if (wr == rd)
       // fifo overflow, discard oldest value
