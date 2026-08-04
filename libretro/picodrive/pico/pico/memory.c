@@ -9,7 +9,9 @@
 #include "../pico_int.h"
 #include "../memory.h"
 #include <platform/common/input_pico.h>
-#if defined(_WIN32)
+#ifdef _XBOX
+#include <xtl.h>
+#elif defined(_WIN32)
 #include <windows.h>
 #else
 #include <sys/time.h>
