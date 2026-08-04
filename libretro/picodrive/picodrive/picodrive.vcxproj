@@ -126,7 +126,7 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_XBOX;__ppc__;__BIG_ENDIAN__;_DEBUG;_LIB;inline=_inline;USE_LIBRETRO_VFS;__LIBRETRO__;USE_LIBCHDR;EMU_F68K;_USE_CZ80;_USE_MATH_DEFINES;USE_TREMOR;__DRC_SH2;Z7_ST</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;__ppc__;__BIG_ENDIAN__;_DEBUG;_LIB;inline=_inline;USE_LIBRETRO_VFS;__LIBRETRO__;USE_LIBCHDR;EMU_F68K;_USE_CZ80;_USE_MATH_DEFINES;USE_TREMOR;DRC_SH2;Z7_ST</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)platform\libretro\libretro-common\include;$(SolutionDir);$(SolutionDir)platform\libretro\libretro-common\include\streams;$(SolutionDir)platform\libretro\libretro-common\include\string;$(SolutionDir)pico\cd\libchdr\include;$(SolutionDir)pico\cd\libchdr\deps\zlib-1.3.1;$(SolutionDir)pico\cd\libchdr\deps\lzma-24.05\include;$(SolutionDir)pico\cd\libchdr\deps\zstd-1.5.6\lib;$(SolutionDir)platform\libretro\libretro-common\include\compat;$(SolutionDir)platform\common\tremor;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MinimalRebuild>false</MinimalRebuild>
@@ -181,7 +181,7 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Full</Optimization>
-      <PreprocessorDefinitions>_XBOX;__ppc__;__BIG_ENDIAN__;NDEBUG;inline=__inline;USE_LIBRETRO_VFS;__LIBRETRO__;USE_LIBCHDR;EMU_F68K;_USE_CZ80;_USE_MATH_DEFINES;USE_TREMOR;__DRC_SH2;Z7_ST</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;__ppc__;__BIG_ENDIAN__;NDEBUG;inline=__inline;USE_LIBRETRO_VFS;__LIBRETRO__;USE_LIBCHDR;EMU_F68K;_USE_CZ80;_USE_MATH_DEFINES;USE_TREMOR;DRC_SH2;Z7_ST;__DRC_CMP;__DRC_CMP_RECORD;__SALVIA_CMP_START_FRAME=800;__SALVIA_CMP_SH2=0;__SALVIA_FORCE_SLAVE_INTERP;__SALVIA_DUMP_PC=0x0204654a</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)platform\libretro\libretro-common\include;$(SolutionDir);$(SolutionDir)platform\libretro\libretro-common\include\streams;$(SolutionDir)platform\libretro\libretro-common\include\string;$(SolutionDir)pico\cd\libchdr\include;$(SolutionDir)pico\cd\libchdr\deps\zlib-1.3.1;$(SolutionDir)pico\cd\libchdr\deps\lzma-24.05\include;$(SolutionDir)pico\cd\libchdr\deps\zstd-1.5.6\lib;$(SolutionDir)platform\libretro\libretro-common\include\compat;$(SolutionDir)platform\common\tremor;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MinimalRebuild>false</MinimalRebuild>

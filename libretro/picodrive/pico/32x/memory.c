@@ -1730,10 +1730,13 @@ static void REGPARM(3) sh2_write8_dram(u32 a, u32 d, SH2 *sh2)
 static void REGPARM(3) sh2_write8_sdram(u32 a, u32 d, SH2 *sh2)
 {
   u32 a1 = MEM_BE2(a & 0x3ffff);
+#ifdef DRC_SH2 /* [Salvia/Xbox360] decls al inicio (MSVC C89) */
+  u8 *p; u32 t;
+#endif
   ((u8 *)sh2->p_sdram)[a1] = d;
 #ifdef DRC_SH2
-  u8 *p = sh2->p_drcblk_ram;
-  u32 t = p[a1 >> SH2_DRCBLK_RAM_SHIFT];
+  p = sh2->p_drcblk_ram;
+  t = p[a1 >> SH2_DRCBLK_RAM_SHIFT];
   if (t)
     sh2_sdram_checks(a & ~1, ((u16 *)sh2->p_sdram)[a1 / 2], sh2, t);
 #endif
@@ -1742,10 +1745,13 @@ static void REGPARM(3) sh2_write8_sdram(u32 a, u32 d, SH2 *sh2)
 static void REGPARM(3) sh2_write8_da(u32 a, u32 d, SH2 *sh2)
 {
   u32 a1 = MEM_BE2(a & 0xfff);
+#ifdef DRC_SH2 /* [Salvia/Xbox360] decls al inicio (MSVC C89) */
+  u8 *p; u32 t;
+#endif
   sh2->data_array[a1] = d;
 #ifdef DRC_SH2
-  u8 *p = sh2->p_drcblk_da;
-  u32 t = p[a1 >> SH2_DRCBLK_DA_SHIFT];
+  p = sh2->p_drcblk_da;
+  t = p[a1 >> SH2_DRCBLK_DA_SHIFT];
   if (t)
     sh2_da_checks(a, t, sh2);
 #endif
@@ -1806,10 +1812,13 @@ static void REGPARM(3) sh2_write16_dram(u32 a, u32 d, SH2 *sh2)
 static void REGPARM(3) sh2_write16_sdram(u32 a, u32 d, SH2 *sh2)
 {
   u32 a1 = a & 0x3fffe;
+#ifdef DRC_SH2 /* [Salvia/Xbox360] decls al inicio (MSVC C89) */
+  u8 *p; u32 t;
+#endif
   ((u16 *)sh2->p_sdram)[a1 / 2] = d;
 #ifdef DRC_SH2
-  u8 *p = sh2->p_drcblk_ram;
-  u32 t = p[a1 >> SH2_DRCBLK_RAM_SHIFT];
+  p = sh2->p_drcblk_ram;
+  t = p[a1 >> SH2_DRCBLK_RAM_SHIFT];
   if (t)
     sh2_sdram_checks(a, d, sh2, t);
 #endif
@@ -1818,10 +1827,13 @@ static void REGPARM(3) sh2_write16_sdram(u32 a, u32 d, SH2 *sh2)
 static void REGPARM(3) sh2_write16_da(u32 a, u32 d, SH2 *sh2)
 {
   u32 a1 = a & 0xffe;
+#ifdef DRC_SH2 /* [Salvia/Xbox360] decls al inicio (MSVC C89) */
+  u8 *p; u32 t;
+#endif
   ((u16 *)sh2->data_array)[a1 / 2] = d;
 #ifdef DRC_SH2
-  u8 *p = sh2->p_drcblk_da;
-  u32 t = p[a1 >> SH2_DRCBLK_DA_SHIFT];
+  p = sh2->p_drcblk_da;
+  t = p[a1 >> SH2_DRCBLK_DA_SHIFT];
   if (t)
     sh2_da_checks(a, t, sh2);
 #endif
@@ -1881,11 +1893,14 @@ static void REGPARM(3) sh2_write32_dram(u32 a, u32 d, SH2 *sh2)
 static void REGPARM(3) sh2_write32_sdram(u32 a, u32 d, SH2 *sh2)
 {
   u32 a1 = a & 0x3fffc;
+#ifdef DRC_SH2 /* [Salvia/Xbox360] decls al inicio (MSVC C89) */
+  u8 *p; u32 t, u;
+#endif
   *(u32 *)((char*)sh2->p_sdram + a1) = CPU_BE2(d);
 #ifdef DRC_SH2
-  u8 *p = sh2->p_drcblk_ram;
-  u32 t = p[a1 >> SH2_DRCBLK_RAM_SHIFT];
-  u32 u = p[(a1+2) >> SH2_DRCBLK_RAM_SHIFT];
+  p = sh2->p_drcblk_ram;
+  t = p[a1 >> SH2_DRCBLK_RAM_SHIFT];
+  u = p[(a1+2) >> SH2_DRCBLK_RAM_SHIFT];
   if (t|(u<<16))
     sh2_sdram_checks_l(a, d, sh2, t|(u<<16));
 #endif
@@ -1894,11 +1909,14 @@ static void REGPARM(3) sh2_write32_sdram(u32 a, u32 d, SH2 *sh2)
 static void REGPARM(3) sh2_write32_da(u32 a, u32 d, SH2 *sh2)
 {
   u32 a1 = a & 0xffc;
+#ifdef DRC_SH2 /* [Salvia/Xbox360] decls al inicio (MSVC C89) */
+  u8 *p; u32 t, u;
+#endif
   *((u32 *)sh2->data_array + a1/4) = CPU_BE2(d);
 #ifdef DRC_SH2
-  u8 *p = sh2->p_drcblk_da;
-  u32 t = p[a1 >> SH2_DRCBLK_DA_SHIFT];
-  u32 u = p[(a1+2) >> SH2_DRCBLK_DA_SHIFT];
+  p = sh2->p_drcblk_da;
+  t = p[a1 >> SH2_DRCBLK_DA_SHIFT];
+  u = p[(a1+2) >> SH2_DRCBLK_DA_SHIFT];
   if (t|(u<<16))
     sh2_da_checks_l(a, t|(u<<16), sh2);
 #endif

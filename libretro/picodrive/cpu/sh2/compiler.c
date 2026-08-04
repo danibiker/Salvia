@@ -52,16 +52,98 @@
 #endif
 
 // features
+/* [Salvia/Xbox360] En DRC_CMP necesitamos lockstep EXACTO instruccion-a-
+ * instruccion con el interprete. Varias optimizaciones rompen ese lockstep
+ * porque "saltan" trabajo que el interprete si hace:
+ *  - LOOP_DETECTION/LOOP_OPTIMIZER: cortocircuitan poll/idle/delay loops
+ *    (el DRC acaba con PC en la salida del loop, el interprete girando).
+ *  - T_OPTIMIZER: elimina escrituras intermedias del flag T -> SR difiere.
+ *  - DIV_OPTIMIZER: colapsa secuencias DIV0/DIV1 -> registros intermedios
+ *    divergen.
+ *  - PROPAGATE_CONSTANTS: inlinea literales cacheados en codegen; si el
+ *    valor real cambia en runtime (SDRAM no inicializada al traducir) el
+ *    DRC usa el cacheado y diverge.
+ * Las demas (LINK_BRANCHES, BRANCH_CACHE, CALL_STACK, ALIAS_REGISTERS,
+ * REMAP_REGISTER) son transparentes a la semantica observable. */
+#if defined(DRC_CMP)
+#define PROPAGATE_CONSTANTS     0
+#define LOOP_DETECTION          0
+#define LOOP_OPTIMIZER          0
+#define T_OPTIMIZER             0
+#define DIV_OPTIMIZER           0
+#else
 #define PROPAGATE_CONSTANTS     1
+#define LOOP_DETECTION          1
+#define LOOP_OPTIMIZER          1
+#define T_OPTIMIZER             1
+#define DIV_OPTIMIZER           1
+#endif
 #define LINK_BRANCHES           1
 #define BRANCH_CACHE            1
 #define CALL_STACK              1
 #define ALIAS_REGISTERS         1
 #define REMAP_REGISTER          1
-#define LOOP_DETECTION          1
-#define LOOP_OPTIMIZER          1
-#define T_OPTIMIZER             1
-#define DIV_OPTIMIZER           1
+
+/* [Salvia/Xbox360] DIAGNOSTICO de HANG del master-DRC (bisección granular).
+ * SALVIA_DRC_MINIMAL desactiva TODO (equivale a los 4 sub-toggles). Para
+ * bisecar, en vez de SALVIA_DRC_MINIMAL define solo el/los sub-toggle(s) que
+ * quieras desactivar y deja el resto activo:
+ *   SALVIA_NO_CALLSTACK -> desactiva CALL_STACK (predicción de retorno RTS)
+ *   SALVIA_NO_LINK      -> desactiva LINK_BRANCHES + BRANCH_CACHE (linking)
+ *   SALVIA_NO_LOOP      -> desactiva LOOP_DETECTION + LOOP_OPTIMIZER
+ *   SALVIA_NO_CONST     -> desactiva PROPAGATE_CONSTANTS + T_ + DIV_OPTIMIZER
+ * Si al desactivar SOLO uno el hang desaparece, ese grupo es el culpable. */
+#ifdef SALVIA_DRC_MINIMAL
+# define SALVIA_NO_LINK
+# define SALVIA_NO_CALLSTACK
+# define SALVIA_NO_LOOP
+# define SALVIA_NO_CONST
+#endif
+#ifdef SALVIA_NO_LINK
+# undef LINK_BRANCHES
+# undef BRANCH_CACHE
+# define LINK_BRANCHES       0
+# define BRANCH_CACHE        0
+#endif
+#ifdef SALVIA_NO_CALLSTACK
+# undef CALL_STACK
+# define CALL_STACK          0
+#endif
+#ifdef SALVIA_NO_LOOP
+# define SALVIA_NO_LOOPDET
+# define SALVIA_NO_LOOPOPT
+#endif
+#ifdef SALVIA_NO_LOOPDET
+# undef LOOP_DETECTION
+# define LOOP_DETECTION      0
+#endif
+#ifdef SALVIA_NO_LOOPOPT
+# undef LOOP_OPTIMIZER
+# define LOOP_OPTIMIZER      0
+#endif
+#ifdef SALVIA_NO_CONST
+# undef PROPAGATE_CONSTANTS
+# undef T_OPTIMIZER
+# undef DIV_OPTIMIZER
+# define PROPAGATE_CONSTANTS 0
+# define T_OPTIMIZER         0
+# define DIV_OPTIMIZER       0
+#endif
+
+/* [Salvia/Xbox360] ESTADO FUNCIONAL: el DRC PPC arranca y juega bien con estas
+ * dos features desactivadas. LOOP_DETECTION/LOOP_OPTIMIZER (idle-skip + pinned
+ * loops para poll/idle loops) todavia provocan un hang en el port PPC — quedan
+ * PENDIENTES de depurar como optimizacion de rendimiento. Por eso las apagamos
+ * por DEFECTO en Xbox 360, para que el build normal sea funcional sin depender
+ * de acordarse del define. Para reactivarlas (p.ej. para depurarlas) define
+ * SALVIA_ENABLE_LOOP; se puede combinar con SALVIA_NO_LOOPDET / SALVIA_NO_LOOPOPT
+ * para bisecar cual de las dos es la culpable. */
+#if defined(_XBOX) && !defined(SALVIA_ENABLE_LOOP)
+# undef LOOP_DETECTION
+# undef LOOP_OPTIMIZER
+# define LOOP_DETECTION      0
+# define LOOP_OPTIMIZER      0
+#endif
 
 #define MAX_LITERAL_OFFSET      0x200	// max. MOVA, MOV @(PC) offset
 #define MAX_LOCAL_TARGETS       (BLOCK_INSN_LIMIT / 4)
@@ -2567,6 +2649,18 @@ static void rcache_create(void)
   cache_reg_t tmp_reg;
   guest_reg_t tmp_guest;
 
+	/* [Salvia/Xbox360] BUG CRITICO: upstream inicializaba cada cache_reg con
+	 * compound-literal `{.hreg=..,.htype=..}` que ZERO-inicializa el resto de
+	 * campos. La reescritura campo-a-campo para VS2010 (que no soporta esa
+	 * sintaxis) dejaba .flags/.type/.locked/.stamp/.gregs con BASURA de pila.
+	 * El bit HRF_PINNED basura en .flags sobrevive al `flags &= HRF_PINNED`
+	 * de rcache_free_vreg y marca registros como "pinned" fantasma, que
+	 * rcache_allocate descarta -> "no registers to evict" -> NULL-write.
+	 * Ponemos tmp_reg a cero antes de usarlo (los campos se sobrescriben con
+	 * .hreg/.htype en cada iteracion, el resto queda a 0 = HR_FREE, sin flags). */
+	memset(&tmp_reg, 0, sizeof(tmp_reg));
+	memset(&tmp_guest, 0, sizeof(tmp_guest));
+
 	  /* Para el primer registro */
 	tmp_reg.hreg = RET_REG;
 	tmp_reg.htype = HRT_TEMP;
@@ -3426,7 +3520,14 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
     if (op_flags[i] & OF_BTARGET) {
       if (branch_target_count < ARRAY_SIZE(branch_targets)){
         /* 2. Asigna los valores manualmente */
-		tmp_link.pc = pc;
+		tmp_link.pc   = pc;
+		/* [Salvia/Xbox360] CRITICO: inicializar .ptr=NULL (los otros campos
+		 * tambien). El upstream usaba compound-literal que zero-inicializa;
+		 * sin esto .ptr sale basura y emit_branch_linkage_code (`!targets[v].ptr`)
+		 * cree que un target sin resolver ya esta resuelto -> salta a basura. */
+		tmp_link.ptr  = NULL;
+		tmp_link.bl   = NULL;
+		tmp_link.mask = 0;
 		/* Si la estructura tiene m?s campos (como 'addr' o 'target'), 
 		   aseg?rate de inicializarlos a 0 para replicar el comportamiento de C99 */
 
@@ -3507,7 +3608,9 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
           if (m3 && count_bits(m3) < count_bits(rcache_vregs_reg) &&
               pinned_loop_count < ARRAY_SIZE(pinned_loops)-1) {
             pinned_loops[pinned_loop_count].pc = base_pc + 2 * v;
-			pinned_loops[pinned_loop_count].mask = m3; 
+			pinned_loops[pinned_loop_count].mask = m3;
+			pinned_loops[pinned_loop_count].ptr = NULL; /* [Salvia] evita .ptr stale (leido en 5167) */
+			pinned_loops[pinned_loop_count].bl  = NULL;
 			pinned_loop_count++;
           } else
             op_flags[v] &= ~OF_BASIC_LOOP;
@@ -3594,7 +3697,14 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
 #if LOOP_DETECTION
       drcf.loop_type = op_flags[i] & OF_LOOP;
       drcf.delay_reg = -1;
+#ifdef SALVIA_NO_POLLING
+      /* [Salvia/Xbox360] Diagnostico: fuerza polling off (las lecturas de
+       * poll-loops NO usan los stubs sh2_drc_read*_poll con MF_POLLING).
+       * Aisla si el hang de LOOP_DETECTION viene del path de poll. */
+      drcf.polling = 0;
+#else
       drcf.polling = (drcf.loop_type == OF_POLL_LOOP ? MF_POLLING : 0);
+#endif
 #endif
 
       rcache_clean();
@@ -3645,6 +3755,7 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
 			blx_targets[blx_target_count].pc   = pc;
 			blx_targets[blx_target_count].ptr  = tcache_ptr;
 			blx_targets[blx_target_count].mask = 0x1;
+			blx_targets[blx_target_count].bl   = NULL; /* [Salvia] evita .bl stale */
 			blx_target_count++;
           emith_jump_patchable(tcache_ptr);
         } else {
@@ -3665,6 +3776,7 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
 			blx_targets[blx_target_count].pc   = pc;
 			blx_targets[blx_target_count].ptr  = tcache_ptr;
 			blx_targets[blx_target_count].mask = 0x01;
+			blx_targets[blx_target_count].bl   = NULL; /* [Salvia] evita .bl stale */
 			blx_target_count++;
           emith_jump_cond_patchable(DCOND_LT, tcache_ptr);
         } else {
@@ -3750,6 +3862,20 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
 
     opd = &ops[i];
     op = FETCH_OP(pc);
+#ifdef SALVIA_DUMP_PC
+    /* [Salvia/Xbox360] Volcado dirigido para depurar Doom: imprime cada
+     * instruccion SH2 en una ventana de +-0x40 alrededor del PC objetivo,
+     * segun se compila. op=opcode, cyc=ciclos, sz=tamano(0/1/2=B/W/L),
+     * imm=desplazamiento/inmediato, src/dst=mascaras de reg leidos/escritos
+     * (bits: 0-15=R0-R15, 16=PC,17=PPC,18=PR,19=SR,20=GBR,21=VBR,22=MACH,
+     * 23=MACL). Define SALVIA_DUMP_PC=0x02049284 (el poll donde se atasca). */
+    if (pc + 0x40 >= (u32)(SALVIA_DUMP_PC) && pc <= (u32)(SALVIA_DUMP_PC) + 0x40) {
+      extern void lprintf(const char *fmt, ...);
+      lprintf("[dump] %csh2 pc=%08x op=%04x cyc=%d sz=%d imm=%08x src=%08x dst=%08x\n",
+        sh2->is_slave ? 's' : 'm', pc, op, opd->cycles, opd->size,
+        (unsigned)opd->imm, (unsigned)opd->source, (unsigned)opd->dest);
+    }
+#endif
 #if (DRC_DEBUG & 4)
     DasmSH2(sh2dasm_buff, pc, op);
     if (op_flags[i] & OF_BTARGET) {
@@ -5145,6 +5271,7 @@ end_op:
           blx_targets[blx_target_count].pc   = target_pc;
 			blx_targets[blx_target_count].ptr  = target;
 			blx_targets[blx_target_count].mask = 0x02;
+			blx_targets[blx_target_count].bl   = NULL; /* [Salvia] evita .bl stale */
 			blx_target_count++;
           if (cond != -1)
             emith_jump_cond_patchable(cond, target);
@@ -5169,6 +5296,7 @@ end_op:
             target = tcache_ptr;
             blx_targets[blx_target_count].pc   = target_pc;
 			blx_targets[blx_target_count].ptr  = target;
+			blx_targets[blx_target_count].mask = 0; /* [Salvia] externo via dispatcher */
 			blx_targets[blx_target_count].bl   = bl;
 			blx_target_count++;
             emith_jump_cond_patchable(cond, target);

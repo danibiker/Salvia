@@ -4,7 +4,73 @@
  *
  * This work is licensed under the terms of MAME license.
  * See COPYING file in the top-level directory.
+ *
+ * Xbox 360 XDK / Visual Studio 2010 adaptation
  */
+
+/* Xbox 360 / MSVC specific headers */
+#include <ppcintrinsics.h>
+
+/* Type definitions for compatibility */
+#ifndef _EMIT_PPC_TYPES_DEFINED
+#define _EMIT_PPC_TYPES_DEFINED
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef unsigned __int64 u64;
+typedef signed char s8;
+typedef signed short s16;
+typedef signed int s32;
+typedef signed __int64 s64;
+#endif
+
+/* MSVC replacements for GCC builtins */
+#ifdef _MSC_VER
+static __inline int msvc_builtin_ffs(unsigned int x) {
+	unsigned long index;
+	if (_BitScanForward(&index, x))
+		return (int)(index + 1);
+	return 0;
+}
+
+static __inline int msvc_builtin_clz(unsigned int x) {
+	unsigned long index;
+	if (_BitScanReverse(&index, x))
+		return 31 - (int)index;
+	return 32;
+}
+
+static __inline int msvc_builtin_ctz(unsigned int x) {
+	unsigned long index;
+	if (_BitScanForward(&index, x))
+		return (int)index;
+	return 32;
+}
+
+static __inline int msvc_builtin_popcount(unsigned int x) {
+	x = x - ((x >> 1) & 0x55555555);
+	x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
+	x = (x + (x >> 4)) & 0x0F0F0F0F;
+	x = x + (x >> 8);
+	x = x + (x >> 16);
+	return x & 0x0000003F;
+}
+
+static __inline int msvc_builtin_parity(unsigned int x) {
+	x ^= x >> 16;
+	x ^= x >> 8;
+	x ^= x >> 4;
+	x ^= x >> 2;
+	x ^= x >> 1;
+	return x & 1;
+}
+
+#define __builtin_ffs msvc_builtin_ffs
+#define __builtin_clz msvc_builtin_clz
+#define __builtin_ctz msvc_builtin_ctz
+#define __builtin_popcount msvc_builtin_popcount
+#define __builtin_parity msvc_builtin_parity
+#endif
 
 // NB bit numbers are reversed in PPC (MSB is bit 0). The emith_* functions and
 // macros must take this into account.
@@ -42,6 +108,11 @@
 // for OSX PIC code, on function calls r12 must contain the called address
 #define TOC_REG		2
 #define RET_REG		3
+/* PARAM_REGS restaurado a {3..10} (r4 INCLUIDO).  Removerlo causaba
+ * los "host register 4 is locked" + "rcache_free_tmp fail" que se
+ * observaron en runtime: el rcache marca r4 como param-disponible
+ * por defecto y otros paths del backend sí lo usan; al excluirlo
+ * de PARAM_REGS el allocator queda inconsistente. */
 #define PARAM_REGS	{ 3, 4, 5, 6, 7, 8, 9, 10 }
 #define PRESERVED_REGS	{ 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 }
 #define TEMPORARY_REGS	{ 12 }
@@ -407,7 +478,7 @@ enum { OPS_STD, OPS_STDU /*,OPS_STQ*/ };
 #define	PPC_MCRCR_REG(crt, crf) \
 	PPC_OP_REG(OP__CR,OPC_MCRF,(crt)<<2,(crf)<<1,_)
 
-#ifdef __powerpc64__
+#if 0 /* Xbox 360 is 32-bit */
 #define PTR_SCALE			3
 #define PPC_LDP_IMM			PPC_LDX_IMM
 #define PPC_LDP_REG			PPC_LDX_REG
@@ -510,8 +581,8 @@ enum { OPS_STD, OPS_STDU /*,OPS_STQ*/ };
 	EMIT_PTR(ptr, PPC_B(val_ & 0x03ffffffc)); \
 }
 
-#define EMITH_JMP_START(cond) \
-{	int cond_m = emith_cond_check(cond); \
+#define EMITH_JMP_START(cond) { \
+	int cond_m = emith_cond_check(cond); \
 	u8 *cond_ptr; \
 	JMP_POS(cond_ptr)
 
@@ -519,8 +590,8 @@ enum { OPS_STD, OPS_STDU /*,OPS_STQ*/ };
 	JMP_EMIT(cond, cond_ptr); \
 }
 
-#define EMITH_JMP3_START(cond) \
-{	int cond_m = emith_cond_check(cond); \
+#define EMITH_JMP3_START(cond) { \
+	int cond_m = emith_cond_check(cond); \
 	u8 *cond_ptr, *else_ptr; \
 	JMP_POS(cond_ptr)
 
@@ -616,9 +687,13 @@ static void emith_set_compare_flags(int ra, int rb, s32 imm)
 
 #define emith_move_r_r_ptr(d, s) \
 	EMIT(PPC_MOV_REG(d, s))
+#define emith_move_r_r_ptr_c(cond, d, s) \
+	emith_move_r_r_ptr(d, s)
 
 #define emith_move_r_r(d, s) \
 	emith_move_r_r_ptr(d, s)
+#define emith_move_r_r_c(cond, d, s) \
+	emith_move_r_r(d, s)
 
 #define emith_mvn_r_r(d, s) \
 	EMIT(PPC_MVN_REG(d, s))
@@ -806,6 +881,8 @@ static void emith_set_compare_flags(int ra, int rb, s32 imm)
 
 #define emith_and_r_r(d, s) \
 	emith_and_r_r_r(d, d, s)
+#define emith_and_r_r_c(cond, d, s) \
+	emith_and_r_r(d, s)
 
 #define emith_or_r_r(d, s) \
 	emith_or_r_r_r(d, d, s)
@@ -855,7 +932,7 @@ static void emith_set_compare_flags(int ra, int rb, s32 imm)
 
 static void emith_move_imm(int r, int ptr, uintptr_t imm)
 {
-#ifdef __powerpc64__
+#if 0 /* Xbox 360 is 32-bit */
 	if (ptr && (s32)imm != imm) {
 		emith_move_imm(r, 0, imm >> 32);
 		if (imm >> 32)
@@ -878,12 +955,42 @@ static void emith_move_imm(int r, int ptr, uintptr_t imm)
 
 #define emith_move_r_imm(r, imm) \
 	emith_move_imm(r, 0, (u32)(imm))
+#define emith_move_r_imm_c(cond, r, imm) \
+	emith_move_r_imm(r, imm)
 
+/* [Salvia/Xbox360] El nombre "_s8_" del macro es por compatibilidad con
+ * otros backends (ARM/ARM64/x86 emiten MOV con imm8).  PPC `addi` soporta
+ * imm signed 16-bit nativo (±32KB) en una sola instruccion — usarlo.
+ *
+ * IMPORTANTE: este macro lo usa CALL_STACK para guardar el offset entre
+ * `rtsret` y el final de la emision del BSR/JSR (compiler.c L5266/5327).
+ * Ese offset se suma a LR en `sh2_drc_dispatcher_call` para construir la
+ * direccion host de retorno predicha que se cachea en sh2->rts_cache.
+ *
+ * En PPC cada instruccion son 4 bytes, y la cola del BSR (FLUSH_CYCLES +
+ * sync_t + rcache_clean + emit_jump con fallback mtctr/bctr) emite mas
+ * codigo host que en ARM.  Es completamente normal pasarse de 127 bytes
+ * (s8 range), y el truncado silencioso a 8 bits hace wrap a negativo —
+ * RTS aterriza ANTES de la propia secuencia BSR y la maquina se rompe.
+ *
+ * Sintomas observados antes del fix:
+ *  - Doom 32X: master termina en PC=0 tras la primera vuelta (RTS predicho
+ *    cae en codigo basura).
+ *  - NBA Jam 32X: loop infinito a 0x60009d8 escribiendo a ROM (RTS retorna
+ *    al medio del setup del BSR y re-ejecuta codigo de push).
+ *
+ * Logueamos si el offset excede s16 (no deberia con bloques DRC normales). */
 #define emith_move_r_imm_s8_patchable(r, imm) \
-	EMIT(PPC_ADD_IMM(r, Z0, (s8)(imm)))
+	EMIT(PPC_ADD_IMM(r, Z0, (s16)(imm)))
 #define emith_move_r_imm_s8_patch(ptr, imm) do { \
 	u32 *ptr_ = (u32 *)ptr; \
-	EMIT_PTR(ptr_, (*ptr_ & 0xffff0000) | (u16)(s8)(imm)); \
+	s32 v_ = (s32)(imm); \
+	if (v_ < -0x8000 || v_ > 0x7fff) { \
+		extern void lprintf(const char *fmt, ...); \
+		lprintf("[DRC-PPC] WARN: s8_patch out of s16 range imm=%d ptr=%p\n", \
+			v_, (void *)(ptr_)); \
+	} \
+	EMIT_PTR(ptr_, (*ptr_ & 0xffff0000) | ((u32)v_ & 0xffff)); \
 } while (0)
 
 // arithmetic, immediate - can only be ADDI, since SUBI doesn't exist
@@ -903,12 +1010,16 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 
 #define emith_add_r_imm(r, imm) \
 	emith_add_r_r_imm(r, r, imm)
+#define emith_add_r_imm_c(cond, r, imm) \
+	emith_add_r_imm(r, imm)
 
 #define emith_addf_r_imm(r, imm) \
 	emith_addf_r_r_imm(r, imm)
 
 #define emith_sub_r_imm(r, imm) \
 	emith_sub_r_r_imm(r, r, imm)
+#define emith_sub_r_imm_c(cond, r, imm) \
+	emith_sub_r_imm(r, imm)
 
 #define emith_subf_r_imm(r, imm) \
 	emith_subf_r_r_imm(r, r, imm)
@@ -956,6 +1067,8 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 // NB: no SUBI, since ADDI takes a signed imm
 #define emith_sub_r_r_imm(d, s, imm) \
 	emith_add_r_r_imm(d, s, -(imm))
+#define emith_sub_r_r_imm_c(cond, d, s, imm) \
+	emith_sub_r_r_imm(d, s, imm)
 
 #define emith_subf_r_r_imm(d, s, imm) do { \
 	emith_sub_r_r_imm(FNZ, s, imm); \
@@ -979,21 +1092,31 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 
 #define emith_or_r_imm(r, imm) \
 	emith_log_imm(OR, r, r, imm)
+#define emith_or_r_imm_c(cond, r, imm) \
+	emith_or_r_imm(r, imm)
 
 #define emith_eor_r_imm_ptr(r, imm) \
 	emith_log_imm(XOR, r, r, imm)
+#define emith_eor_r_imm_ptr_c(cond, r, imm) \
+	emith_eor_r_imm_ptr(r, imm)
 
 #define emith_eor_r_imm(r, imm) \
 	emith_eor_r_imm_ptr(r, imm)
+#define emith_eor_r_imm_c(cond, r, imm) \
+	emith_eor_r_imm(r, imm)
 
 /* NB: BIC #imm not available; use AND #~imm instead */
 #define emith_bic_r_imm(r, imm) \
 	emith_log_imm(AND, r, r, ~(imm))
+#define emith_bic_r_imm_c(cond, r, imm) \
+	emith_bic_r_imm(r, imm)
 
 #define emith_tst_r_imm(r, imm) do { \
 	emith_log_imm(AND, FNZ, r, imm); \
 	emith_cmp_ra = emith_cmp_rb = -1; \
 } while (0)
+#define emith_tst_r_imm_c(cond, r, imm) \
+	emith_tst_r_imm(r, imm)
 
 #define emith_and_r_r_imm(d, s, imm) \
 	emith_log_imm(AND, d, s, imm)
@@ -1017,6 +1140,8 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 
 #define emith_ror(d, s, cnt) \
 	EMIT(PPC_ROLW_IMM(d, s, 32-(cnt)))
+#define emith_ror_c(cond, d, s, cnt) \
+	emith_ror(d, s, cnt)
 
 #define emith_rol(d, s, cnt) \
 	EMIT(PPC_ROLW_IMM(d, s, cnt)); \
@@ -1113,6 +1238,8 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 #define emith_clear_msb(d, s, count) /* bits to clear */ \
 	EMIT(PPC_BFXW_IMM(d, s, count, 32-(count)))
 
+#define emith_clear_msb_c(cond, d, s, count) \
+	emith_clear_msb(d, s, count)
 
 #define emith_sext(d, s, count) /* bits to keep */ do { \
 	if (count == 8) \
@@ -1138,70 +1265,104 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 
 #define emith_mula_s64(dlo, dhi, s1, s2) \
 	EMIT_PPC_MACLS_REG(dlo, dhi, s1, s2)
+#define emith_mula_s64_c(cond, dlo, dhi, s1, s2) \
+	emith_mula_s64(dlo, dhi, s1, s2)
 
 // load/store. offs has 16 bits signed, which is currently sufficient
 #define emith_read_r_r_offs_ptr(r, ra, offs) \
 	EMIT(PPC_LDP_IMM(r, ra, offs))
+#define emith_read_r_r_offs_ptr_c(cond, r, ra, offs) \
+	emith_read_r_r_offs_ptr(r, ra, offs)
 
 #define emith_read_r_r_offs(r, ra, offs) \
 	EMIT(PPC_LDW_IMM(r, ra, offs))
+#define emith_read_r_r_offs_c(cond, r, ra, offs) \
+	emith_read_r_r_offs(r, ra, offs)
  
 #define emith_read_r_r_r_ptr(r, ra, rm) \
 	EMIT(PPC_LDP_REG(r, ra, rm))
 
 #define emith_read_r_r_r(r, ra, rm) \
 	EMIT(PPC_LDW_REG(r, ra, rm))
+#define emith_read_r_r_r_c(cond, r, ra, rm) \
+	emith_read_r_r_r(r, ra, rm)
 
 #define emith_read8_r_r_offs(r, ra, offs) \
 	EMIT(PPC_LDB_IMM(r, ra, offs))
+#define emith_read8_r_r_offs_c(cond, r, ra, offs) \
+	emith_read8_r_r_offs(r, ra, offs)
 
 #define emith_read8_r_r_r(r, ra, rm) \
 	EMIT(PPC_LDB_REG(r, ra, rm))
+#define emith_read8_r_r_r_c(cond, r, ra, rm) \
+	emith_read8_r_r_r(r, ra, rm)
 
 #define emith_read16_r_r_offs(r, ra, offs) \
 	EMIT(PPC_LDH_IMM(r, ra, offs))
+#define emith_read16_r_r_offs_c(cond, r, ra, offs) \
+	emith_read16_r_r_offs(r, ra, offs)
 
 #define emith_read16_r_r_r(r, ra, rm) \
 	EMIT(PPC_LDH_REG(r, ra, rm))
+#define emith_read16_r_r_r_c(cond, r, ra, rm) \
+	emith_read16_r_r_r(r, ra, rm)
 
 #define emith_read8s_r_r_offs(r, ra, offs) do { \
 	EMIT(PPC_LDB_IMM(r, ra, offs)); \
 	EMIT(PPC_EXTSB_REG(r, r)); \
 } while (0)
+#define emith_read8s_r_r_offs_c(cond, r, ra, offs) \
+	emith_read8s_r_r_offs(r, ra, offs)
 
 #define emith_read8s_r_r_r(r, ra, rm) do { \
 	EMIT(PPC_LDB_REG(r, ra, rm)); \
 	EMIT(PPC_EXTSB_REG(r, r)); \
 } while (0)
+#define emith_read8s_r_r_r_c(cond, r, ra, rm) \
+	emith_read8s_r_r_r(r, ra, rm)
 
 #define emith_read16s_r_r_offs(r, ra, offs) do { \
 	EMIT(PPC_LDH_IMM(r, ra, offs)); \
 	EMIT(PPC_EXTSH_REG(r, r)); \
 } while (0)
+#define emith_read16s_r_r_offs_c(cond, r, ra, offs) \
+	emith_read16s_r_r_offs(r, ra, offs)
 
 #define emith_read16s_r_r_r(r, ra, rm) do { \
 	EMIT(PPC_LDH_REG(r, ra, rm)); \
 	EMIT(PPC_EXTSH_REG(r, r)); \
 } while (0)
+#define emith_read16s_r_r_r_c(cond, r, ra, rm) \
+	emith_read16s_r_r_r(r, ra, rm)
 
 
 #define emith_write_r_r_offs_ptr(r, ra, offs) \
 	EMIT(PPC_STP_IMM(r, ra, offs))
+#define emith_write_r_r_offs_ptr_c(cond, r, ra, offs) \
+	emith_write_r_r_offs_ptr(r, ra, offs)
 
 #define emith_write_r_r_r_ptr(r, ra, rm) \
 	EMIT(PPC_STP_REG(r, ra, rm))
+#define emith_write_r_r_r_ptr_c(cond, r, ra, rm) \
+	emith_write_r_r_r_ptr(r, ra, rm)
 
 #define emith_write_r_r_offs(r, ra, offs) \
 	EMIT(PPC_STW_IMM(r, ra, offs))
+#define emith_write_r_r_offs_c(cond, r, ra, offs) \
+	emith_write_r_r_offs(r, ra, offs)
 
 #define emith_write_r_r_r(r, ra, rm) \
 	EMIT(PPC_STW_REG(r, ra, rm))
+#define emith_write_r_r_r_c(cond, r, ra, rm) \
+	emith_write_r_r_r(r, ra, rm)
 
 #define emith_ctx_read_ptr(r, offs) \
 	emith_read_r_r_offs_ptr(r, CONTEXT_REG, offs)
 
 #define emith_ctx_read(r, offs) \
 	emith_read_r_r_offs(r, CONTEXT_REG, offs)
+#define emith_ctx_read_c(cond, r, offs) \
+	emith_ctx_read(r, offs)
 
 #define emith_ctx_write_ptr(r, offs) \
 	emith_write_r_r_offs_ptr(r, CONTEXT_REG, offs)
@@ -1222,10 +1383,14 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 } while (0)
 
 // function call handling
+/* [Salvia/Xbox360] MSVC 2010 (modo C89) no soporta mezclar declaraciones
+ * con statements.  Reordenamos las declaraciones al inicio del bloque. */
 #define emith_save_caller_regs(mask) do { \
-	int _c, _z = PTR_SIZE; u32 _m = mask & 0x1ff8; /* r3-r12 */ \
+	int _c, _z = PTR_SIZE; \
+	u32 _m = mask & 0x1ff8; /* r3-r12 */ \
+	int _s, _o; \
 	if (__builtin_parity(_m) == 1) _m |= 0x1; /* ABI align */ \
-	int _s = count_bits(_m) * _z, _o = _s; \
+	_s = count_bits(_m) * _z; _o = _s; \
 	if (_s) emith_add_r_r_ptr_imm(SP, SP, -_s); \
 	for (_c = HOST_REGS-1; _m && _c >= 0; _m &= ~(1 << _c), _c--) \
 		if (_m & (1 << _c)) \
@@ -1233,9 +1398,11 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 } while (0)
 
 #define emith_restore_caller_regs(mask) do { \
-	int _c, _z = PTR_SIZE; u32 _m = mask & 0x1ff8; \
+	int _c, _z = PTR_SIZE; \
+	u32 _m = mask & 0x1ff8; \
+	int _s, _o; \
 	if (__builtin_parity(_m) == 1) _m |= 0x1; \
-	int _s = count_bits(_m) * _z, _o = 0; \
+	_s = count_bits(_m) * _z; _o = 0; \
 	for (_c = 0; _m && _c < HOST_REGS; _m &= ~(1 << _c), _c++) \
 		if (_m & (1 << _c)) \
 			{ if (_c) emith_read_r_r_offs_ptr(_c, SP, _o); _o += _z; } \
@@ -1256,11 +1423,25 @@ static void *fptr[2];
 #define host_arg2reg(rt, arg) \
 	rt = (arg+3)
 
-#define emith_pass_arg_r(arg, reg) \
-	emith_move_r_r_ptr(arg, reg)
+/* [Salvia/Xbox360] Bug upstream: emith_pass_arg_r/imm pasaba `arg` (indice
+ * de argumento) directamente como numero de registro destino al move.  En
+ * PPC ABI los args van a r3..r10, no r0..r7 — host_arg2reg(rd, arg) hace
+ * `rd = arg+3`.  Sin esta conversion, emith_pass_arg_r(0, CONTEXT_REG)
+ * acababa moviendo CONTEXT_REG a r0 en vez de a r3, y do_sh2_cmp recibia
+ * basura como puntero SH2 (causaba lecturas dentro del code cache JIT).
+ * El call site original solo existe en DRC_CMP, por eso pasaba desapercibido
+ * en el DRC normal. */
+#define emith_pass_arg_r(arg, reg) do { \
+	int _rd; \
+	host_arg2reg(_rd, arg); \
+	emith_move_r_r_ptr(_rd, reg); \
+} while (0)
 
-#define emith_pass_arg_imm(arg, imm) \
-	emith_move_r_ptr_imm(arg, imm)
+#define emith_pass_arg_imm(arg, imm) do { \
+	int _rd; \
+	host_arg2reg(_rd, arg); \
+	emith_move_r_ptr_imm(_rd, imm); \
+} while (0)
 
 // branching
 #define emith_invert_branch(cond) /* inverted conditional branch */ \
@@ -1377,12 +1558,45 @@ static int emith_cond_check(int cond)
 	return b;
 }
 
+/* [Salvia/Xbox360] PPC `b` instruction usa desplazamiento signed 26-bit
+ * (LI[24] sign-extended y shifted left 2) — rango ±32MB.  Si target esta
+ * fuera de rango, el `& 0x03ffffff` trunca silenciosamente y aterriza en
+ * basura (sintoma observado: crash con PC=0x84004000 fuera del code cache).
+ * En Xbox 360 esto pasa cuando el .xex se carga lejos del tcache_default.
+ *
+ * Para emith_jump (no patcheable) usamos fallback a mtctr/bctr absoluto.
+ * Para emith_jump_patchable NO podemos hacer multi-instruccion porque el
+ * mecanismo emith_jump_patch asume una sola instruccion `b`/`bc` y la
+ * busca por opcode — ver linea ~1554.  Ahi solo logueamos si excede rango. */
+#define _PPC_B_INRANGE(disp_) \
+	((s32)(disp_) >= -0x02000000 && (s32)(disp_) < 0x02000000)
+
 #define emith_jump(target) do { \
-	u32 disp_ = (u8 *)target - (u8 *)tcache_ptr; \
+	s32 disp_ = (s32)((u8 *)(target) - (u8 *)tcache_ptr); \
+	if (_PPC_B_INRANGE(disp_)) { \
+		EMIT(PPC_B((uintptr_t)disp_ & 0x03ffffff)); \
+	} else { \
+		/* fallback absoluto via CTR */ \
+		emith_move_r_ptr_imm(CR, target); \
+		EMIT(PPC_MTSP_REG(CR, CTR)); \
+		EMIT(PPC_BCTRCOND(BXX)); \
+	} \
+} while (0)
+
+#define emith_jump_patchable(target) do { \
+	s32 disp_ = (s32)((u8 *)(target) - (u8 *)tcache_ptr); \
+	if (!_PPC_B_INRANGE(disp_)) { \
+		/* [Salvia/Xbox360] WARNING: jump patcheable fuera de rango +-32MB.
+		 * Emitimos b igualmente (truncado) y logueamos — el patch posterior
+		 * podria caer aqui.  Si vemos este log y NBA Jam crashea, hay que
+		 * convertir el linkage code para usar trampolines blx (ya hay
+		 * infraestructura blx_targets en compiler.c, solo falta cablearla). */ \
+		extern void lprintf(const char *fmt, ...); \
+		lprintf("[DRC-PPC] WARN: patchable jump out of range disp=%d (target=%p tcache_ptr=%p)\n", \
+			disp_, (void *)(target), (void *)tcache_ptr); \
+	} \
 	EMIT(PPC_B((uintptr_t)disp_ & 0x03ffffff)); \
 } while (0)
-#define emith_jump_patchable(target) \
-	emith_jump(target)
 
 // NB: PPC conditional branches have only +/- 64KB range
 #define emith_jump_cond(cond, target) do { \
@@ -1413,9 +1627,18 @@ static int emith_cond_check(int cond)
 	 (u8 *)target - (u8 *)ptr >= -0x8000+0x10) // mind cond_check
 #define emith_jump_patch_size() 4
 
+/* [Salvia/Xbox360] emith_jump_at escribe en posicion pre-reservada — debe
+ * ser una sola instruccion.  Si target esta fuera de rango +-32MB, hay
+ * que loguear y NO podemos hacer fallback aqui (rompiamos el ABI de
+ * linkage).  Si el log dispara hay que rediseñar para usar trampolines. */
 #define emith_jump_at(ptr, target) do { \
-	u32 disp_ = (u8 *)target - (u8 *)ptr; \
-	u32 *ptr_ = (u32 *)ptr; \
+	s32 disp_ = (s32)((u8 *)(target) - (u8 *)(ptr)); \
+	u32 *ptr_ = (u32 *)(ptr); \
+	if (!_PPC_B_INRANGE(disp_)) { \
+		extern void lprintf(const char *fmt, ...); \
+		lprintf("[DRC-PPC] WARN: jump_at out of range disp=%d (target=%p ptr=%p)\n", \
+			disp_, (void *)(target), (void *)(ptr)); \
+	} \
 	EMIT_PTR(ptr_, PPC_B((uintptr_t)disp_ & 0x03ffffff)); \
 } while (0)
 #define emith_jump_at_size() 4
@@ -1424,15 +1647,28 @@ static int emith_cond_check(int cond)
 	EMIT(PPC_MTSP_REG(r, CTR)); \
 	EMIT(PPC_BCTRCOND(BXX)); \
 } while(0)
+#define emith_jump_reg_c(cond, r) \
+	emith_jump_reg(r)
 
 #define emith_jump_ctx(offs) do { \
 	emith_ctx_read_ptr(CR, offs); \
 	emith_jump_reg(CR); \
 } while (0)
+#define emith_jump_ctx_c(cond, offs) \
+	emith_jump_ctx(offs)
 
+/* [Salvia/Xbox360] Igual que emith_jump: fallback a mtctr/bctrl si out
+ * of range +-32MB.  emith_call no se patchea, asi que es seguro emitir
+ * multi-instruccion. */
 #define emith_call(target) do { \
-	u32 disp_ = (u8 *)target - (u8 *)tcache_ptr; \
-	EMIT(PPC_BL((uintptr_t)disp_ & 0x03ffffff)); \
+	s32 disp_ = (s32)((u8 *)(target) - (u8 *)tcache_ptr); \
+	if (_PPC_B_INRANGE(disp_)) { \
+		EMIT(PPC_BL((uintptr_t)disp_ & 0x03ffffff)); \
+	} else { \
+		emith_move_r_ptr_imm(CR, target); \
+		EMIT(PPC_MTSP_REG(CR, CTR)); \
+		EMIT(PPC_BLCTRCOND(BXX)); \
+	} \
 } while(0)
 #define emith_call_cond(cond, target) \
 	emith_call(target)
@@ -1447,9 +1683,6 @@ static int emith_cond_check(int cond)
 	emith_abicall_reg(CR); \
 } while (0)
 
-#define emith_abijump(target) \
-	emith_move_r_ptr_imm(CR, target); \
-	emith_abijump_reg(CR);
 #ifdef __PS3__
 #define emith_abijump_reg(r) \
 	emith_read_r_r_offs_ptr(TOC_REG, r, PTR_SIZE); \
@@ -1460,9 +1693,13 @@ static int emith_cond_check(int cond)
 	if ((r) != CR) emith_move_r_r(CR, r); \
 	emith_jump_reg(CR)
 #endif
+#define emith_abijump_reg_c(cond, r) \
+	emith_abijump_reg(r)
 #define emith_abicall(target) \
 	emith_move_r_ptr_imm(CR, target); \
 	emith_abicall_reg(CR);
+#define emith_abicall_cond(cond, target) \
+	emith_abicall(target)
 #ifdef __PS3__
 #define emith_abicall_reg(r) do { \
 	emith_read_r_r_offs_ptr(TOC_REG, r, PTR_SIZE); \
@@ -1480,6 +1717,8 @@ static int emith_cond_check(int cond)
 
 #define emith_ret() \
 	EMIT(PPC_RET())
+#define emith_ret_c(cond) \
+	emith_ret()
 
 #define emith_ret_to_ctx(offs) do { \
 	EMIT(PPC_MFSP_REG(AT, LR)); \
@@ -1492,49 +1731,121 @@ static int emith_cond_check(int cond)
 } while (0)
 
 // NB: ABI SP alignment is 16 in 64 bit mode
+/* [Salvia/Xbox360] BUG CRITICO (causa del HANG con LOOP_DETECTION): la version
+ * heredada del backend RISC-V guardaba valor+LR en SP+0 / SP+8. En RISC-V eso
+ * es seguro porque no hay "parameter save area"; en la ABI PPC/Xbox 360 SI la
+ * hay, en SP+8..SP+8+8*PTR_SIZE, y la funcion C llamada (p32x_sh2_poll_memoryN,
+ * 3 args a/d/sh2) puede volcar ahi sus argumentos, PISANDO el LR guardado ->
+ * emith_pop_and_ret recupera un LR basura y retorna a codigo invalido -> cuelgue.
+ * Estos macros solo los usan los stubs de poll (sh2_drc_read*_poll), por eso el
+ * hang solo aparece con LOOP_DETECTION (que activa MF_POLLING). Fix: guardar
+ * valor+LR POR ENCIMA del parameter save area, en SP+STACK_EXTRA. Frame =
+ * STACK_EXTRA + 2*PTR_SIZE (= 64 en 32-bit / 128 en 64-bit, ambos alineados a 16). */
 #define emith_push_ret(r) do { \
-	int offs_ = 16 - 2*PTR_SIZE; \
-	emith_add_r_r_ptr_imm(SP, SP, -16); \
+	int offs_ = STACK_EXTRA; \
+	emith_add_r_r_ptr_imm(SP, SP, -(STACK_EXTRA + 2*PTR_SIZE)); \
 	EMIT(PPC_MFSP_REG(AT, LR)); \
 	emith_write_r_r_offs_ptr(AT, SP, offs_ + PTR_SIZE); \
 	if ((r) > 0) emith_write_r_r_offs(r, SP, offs_); \
 } while (0)
 
 #define emith_pop_and_ret(r) do { \
-	int offs_ = 16 - 2*PTR_SIZE; \
+	int offs_ = STACK_EXTRA; \
 	if ((r) > 0) emith_read_r_r_offs(r, SP, offs_); \
 	emith_read_r_r_offs_ptr(AT, SP, offs_ + PTR_SIZE); \
 	EMIT(PPC_MTSP_REG(AT, LR)); \
-	emith_add_r_r_ptr_imm(SP, SP, 16); \
+	emith_add_r_r_ptr_imm(SP, SP, STACK_EXTRA + 2*PTR_SIZE); \
 	emith_ret(); \
 } while (0)
 
 
 // this should normally be in libc clear_cache; however, it sometimes isn't.
+
+/* Naked function que emite UNA instruccion icbi.  Vive en .text del
+ * binario (siempre ejecutable), evitando la generacion dinamica de
+ * codigo en .data que tenia el approach anterior (problemas con NX
+ * y bootstrap del propio I-cache).
+ *
+ * Patron tomado de pcsxr-360 (libpcsxcore/ppc/pR3000A.c:30) que ya
+ * tiene un dynarec PowerPC funcionando en este XDK.
+ *
+ * Args (PPC EABI / Xbox 360 calling convention):
+ *   r3 = offset (int)
+ *   r4 = base   (const void *)
+ * `icbi r3, r4` con r3=0 invalida la linea que contiene r4 + 0. */
+#ifdef _XBOX
+void __declspec(naked) ppc_icbi_one(int offset, const void *base)
+{
+	__asm {
+		icbi	r3, r4
+		blr
+	}
+}
+#endif
+
 static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 {
-	int step = 32, lgstep = 5;
-	char *_base = (char *)((uptr)base & ~(step-1));
-	int count = (((char *)end - _base) >> lgstep) + 1;
+	/* C89 strict (MSVC Xbox 360): TODAS las declaraciones al inicio
+	 * del bloque, antes de cualquier statement. */
+	char *ptr;
+	char *end_ptr;
 
-	if (count <= 0) count = 1;	// make sure count is positive
-	base = _base;
+	(void)force;
 
-	asm volatile(
-	"	mtctr	%1;"
-	"0:	dcbst	0,%0;"
-	"	add	%0, %0, %2;"
-	"	bdnz	0b;"
-	"	sync"
-	: "+r"(_base) : "r"(count), "r"(step) : "ctr");
+#ifdef _XBOX
+	/* Secuencia correcta de SMC en PowerPC (PowerISA Book II 1.4 + erratas
+	 * Xenon), validada empiricamente en el dynarec PPC de dosbox-pure:
+	 *
+	 *   1. dcbst en cada linea modificada           (flush D-cache a memoria)
+	 *   2. sync                                     (espera flush)
+	 *   3. icbi en cada linea modificada            (invalida I-cache)
+	 *   4. sync                                     (espera invalidaciones)
+	 *   5. isync                                    (descarta prefetch pipeline)
+	 *
+	 * Sin el segundo sync (paso 4) en Xenon (in-order, memory model debil),
+	 * el isync puede ejecutarse antes de que los icbi terminen, dejando
+	 * lineas de I-cache obsoletas.  Sintoma observado en dosbox-pure con
+	 * codigo self-modifying (SCUMM/Monkey Island): 'Corrupt MCB chain'.
+	 *
+	 * Xenon cache line = 128 bytes.  Alinear base a linea para no dejar
+	 * bytes obsoletos al inicio. */
+	ptr     = (char *)((unsigned int)base & ~127u);
+	end_ptr = (char *)end;
 
-	asm volatile(
-	"	mtctr	%1;"
-	"0:	icbi	0,%0;"
-	"	add	%0, %0, %2;"
-	"	bdnz	0b;"
-	"	isync"
-	: "+r"(base) : "r"(count), "r"(step) : "ctr");
+	/* Paso 1: dcbst en todas las lineas. */
+	while (ptr < end_ptr) {
+		__dcbst(0, ptr);
+		ptr += 128;
+	}
+	/* Paso 2: sync — esperar a que los stores lleguen a memoria. */
+	__sync();
+
+	/* Paso 3: icbi en todas las lineas via la naked function (el XDK no
+	 * expone __icbi como intrinsic en este toolchain). */
+	ptr = (char *)((unsigned int)base & ~127u);
+	while (ptr < end_ptr) {
+		ppc_icbi_one(0, ptr);
+		ptr += 128;
+	}
+	/* Paso 4: sync — esperar a que los icbi terminen.  Critico en Xenon
+	 * por el modelo de memoria debil. */
+	__sync();
+	/* Paso 5: isync — descartar prefetch del pipeline.  El XDK no expone
+	 * __isync() como intrinsic, emitimos el opcode raw (mismo truco que
+	 * usa pcsxr-360 en libpcsxcore/ppc/pR3000A.c:2339). */
+	__emit(0x4C00012C);  /* isync */
+#else
+	/* Fallback generico (no usado en pcsxr-360 build). */
+	ptr     = (char *)((unsigned int)base & ~31u);
+	end_ptr = (char *)end;
+
+	while (ptr < end_ptr) {
+		__dcbst(0, ptr);
+		ptr += 32;
+	}
+	__sync();
+	__sync();
+#endif /* _XBOX */
 }
 
 // emitter ABI stuff
@@ -1547,27 +1858,53 @@ static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 
 // SH2 drc specific
 #define STACK_EXTRA	((8+6)*PTR_SIZE) // Param, ABI (LR,CR,FP etc) save areas
+/* [Salvia/Xbox360] BUG CRITICO upstream: el macro entry/exit allocaba
+ * frame de tamano `_s+STACK_EXTRA` pero escribia LR a offset `_o+_z` que
+ * es exactamente `_s+STACK_EXTRA+_z` — 4 bytes FUERA del frame, en el
+ * stack del caller!  Durante la ejecucion del JIT (que hace abicalls
+ * con sus propios frames), el stack del caller en OLD_SP+4 se sobreescribe
+ * por codigo intermedio.  Al volver y leer LR de esa direccion, sacamos
+ * basura y `blr` salta a un puntero invalido.  Sintoma: crash a direcciones
+ * variables entre runs (0x84004000, 0x20004000, 0x1FB54460...) tras
+ * ejecutar codigo dinamico de SDRAM lo suficiente como para que algun
+ * memhandler/dispatcher escriba al stack en el offset relevante.
+ *
+ * Fix: allocar `_s + STACK_EXTRA + _z` para incluir el slot del LR dentro
+ * del frame.  CRITICO: PPC ABI requiere SP alineado a 16, asi que el
+ * tamano se redondea hacia arriba al multiplo de 16 mas cercano.  Sin
+ * alineacion, las funciones C llamadas via abicall (incluyendo
+ * vsprintf/log_cb) hacen accesos va_list con offsets erroneos y los
+ * args salen como NULL/basura (sintoma: log spam con "(null)").
+ *
+ * Layout del frame (alineado 16):
+ *   SP+0..STACK_EXTRA-1      : linkage area (back chain, param save, etc)
+ *   SP+STACK_EXTRA           : LR save (4 bytes en 32-bit PPC)
+ *   SP+STACK_EXTRA+_z..       : registros callee-saved r14-r31
+ *   SP+stack_size            : OLD_SP (alineado 16) */
+#define SH2_DRC_STACK_SIZE	(((18 * PTR_SIZE) + STACK_EXTRA + PTR_SIZE + 15) & ~15)
 #define emith_sh2_drc_entry() do { \
-	int _c, _z = PTR_SIZE; u32 _m = 0xffffc000; /* r14-r31 */ \
-	if (__builtin_parity(_m) == 1) _m |= 0x1; /* ABI align for SP is 16 */ \
-	int _s = count_bits(_m) * _z, _o = STACK_EXTRA; \
-	EMIT(PPC_STPU_IMM(SP, SP, -_s-STACK_EXTRA)); \
+	int _c, _z = PTR_SIZE; u32 _m = 0xffffc000; int _o;/* r14-r31 */ \
+	if (__builtin_parity(_m) == 1) _m |= 0x1; \
+	_o = STACK_EXTRA; \
+	EMIT(PPC_STPU_IMM(SP, SP, -SH2_DRC_STACK_SIZE)); \
 	EMIT(PPC_MFSP_REG(AT, LR)); \
+	emith_write_r_r_offs_ptr(AT, SP, _o); /* LR DENTRO del frame */ \
+	_o += _z; \
 	for (_c = 0; _m && _c < HOST_REGS; _m &= ~(1 << _c), _c++) \
 		if (_m & (1 << _c)) \
 			{ if (_c) emith_write_r_r_offs_ptr(_c, SP, _o); _o += _z; } \
-	emith_write_r_r_offs_ptr(AT, SP, _o + _z); \
 } while (0)
 #define emith_sh2_drc_exit() do { \
-	int _c, _z = PTR_SIZE; u32 _m = 0xffffc000; \
+	int _c, _z = PTR_SIZE; u32 _m = 0xffffc000; int _o; \
 	if (__builtin_parity(_m) == 1) _m |= 0x1; \
-	int _s = count_bits(_m) * _z, _o = STACK_EXTRA; \
-	emith_read_r_r_offs_ptr(AT, SP, _o+_s + _z); \
+	_o = STACK_EXTRA; \
+	emith_read_r_r_offs_ptr(AT, SP, _o); \
 	EMIT(PPC_MTSP_REG(AT, LR)); \
+	_o += _z; \
 	for (_c = 0; _m && _c < HOST_REGS; _m &= ~(1 << _c), _c++) \
 		if (_m & (1 << _c)) \
 			{ if (_c) emith_read_r_r_offs_ptr(_c, SP, _o); _o += _z; } \
-	emith_add_r_r_ptr_imm(SP, SP, _s+STACK_EXTRA); \
+	emith_add_r_r_ptr_imm(SP, SP, SH2_DRC_STACK_SIZE); \
 	emith_ret(); \
 } while (0)
 
@@ -1609,12 +1946,12 @@ static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 		t3 = rcache_get_reg(reg, RC_GR_RMW, NULL);	\
 		emith_cmp_r_r(t3, t2);				\
 		EMITH_SJMP_START(DCOND_HI);			\
-		emith_sub_r_r_imm(t2, t3, 1);			\
+		emith_sub_r_r_imm_c(DCOND_LS, t2, t3, 1);	\
 		EMITH_SJMP_END(DCOND_HI);			\
 		/* if (reg <= 1) turns = 0 */			\
 		emith_cmp_r_imm(t3, 1);				\
 		EMITH_SJMP_START(DCOND_HI);			\
-		emith_move_r_imm(t2, 0);			\
+		emith_move_r_imm_c(DCOND_LS, t2, 0);		\
 		EMITH_SJMP_END(DCOND_HI);			\
 		/* reg -= turns */				\
 		emith_sub_r_r(t3, t2);				\
@@ -1674,11 +2011,11 @@ static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 	emith_add_r_r_r_lsr(rn, rn, mh, 31); /* sum = (MACH>>31)+(MACH>>15) */ \
 	emith_tst_r_r(rn, rn); /* (need only N and Z flags) */ \
 	EMITH_SJMP_START(DCOND_EQ); /* sum != 0 -> -ovl */ \
-	emith_move_r_imm(ml, 0x00000000);         \
-	emith_move_r_imm(mh, 0x00008000);         \
+	emith_move_r_imm_c(DCOND_NE, ml, 0x00000000); \
+	emith_move_r_imm_c(DCOND_NE, mh, 0x00008000); \
 	EMITH_SJMP_START(DCOND_MI); /* sum > 0 -> +ovl */ \
-	emith_sub_r_imm(ml, 1); /* 0xffffffff */  \
-	emith_sub_r_imm(mh, 1); /* 0x00007fff */  \
+	emith_sub_r_imm_c(DCOND_PL, ml, 1); /* 0xffffffff */ \
+	emith_sub_r_imm_c(DCOND_PL, mh, 1); /* 0x00007fff */ \
 	EMITH_SJMP_END(DCOND_MI);                 \
 	EMITH_SJMP_END(DCOND_EQ);                 \
 	EMITH_SJMP_END(DCOND_EQ);                 \
@@ -1701,10 +2038,10 @@ static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 	emith_tst_r_r(rn, rn); /* (need only N and Z flags) */ \
 	EMITH_SJMP_START(DCOND_EQ); /* sum != 0 -> overflow */ \
 	/* XXX: LSB signalling only in SH1, or in SH2 too? */ \
-	emith_move_r_imm(mh, 0x00000001); /* LSB of MACH */ \
-	emith_move_r_imm(ml, 0x80000000); /* -ovrfl */ \
+	emith_move_r_imm_c(DCOND_NE, mh, 0x00000001); /* LSB of MACH */ \
+	emith_move_r_imm_c(DCOND_NE, ml, 0x80000000); /* -ovrfl */ \
 	EMITH_SJMP_START(DCOND_MI); /* sum > 0 -> +ovrfl */ \
-	emith_sub_r_imm(ml, 1); /* 0x7fffffff */  \
+	emith_sub_r_imm_c(DCOND_PL, ml, 1); /* 0x7fffffff */ \
 	EMITH_SJMP_END(DCOND_MI);                 \
 	EMITH_SJMP_END(DCOND_EQ);                 \
 	EMITH_SJMP_END(DCOND_EQ);                 \

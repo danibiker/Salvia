@@ -718,8 +718,23 @@ void Pico32xPrepare(void)
   if (ssh2.mult_m68k_to_sh2 == 0 || ssh2.mult_sh2_to_m68k == 0)
     Pico32xSetClocks(0, PICO_SSH2_HZ);
 
+#if defined(DRC_CMP) && defined(DRC_CMP_RECORD)
+  /* [Salvia/Xbox360] DRC_CMP modo RECORD: fuerza ambos SH2 a interprete para
+   * que do_sh2_trace grabe el tracelog de referencia. Define DRC_CMP_RECORD
+   * en el preprocessor para grabar. Sin DRC_CMP_RECORD (pero con DRC_CMP) =
+   * modo COMPARE: el DRC corre y do_sh2_cmp lee el tracelog y compara. */
+  sh2_execute_prepare(&msh2, 0);
+  sh2_execute_prepare(&ssh2, 0);
+#elif defined(SALVIA_FORCE_SLAVE_INTERP)
+  /* [Salvia/Xbox360] DIAGNOSTICO: fuerza el SH2 slave a interprete y deja el
+   * master en DRC, para aislar si un crash se limita al slave (el bug
+   * conocido del dispatcher en saltos indirectos a direcciones SH2). */
+  sh2_execute_prepare(&msh2, PicoIn.opt & POPT_EN_DRC);
+  sh2_execute_prepare(&ssh2, 0);
+#else
   sh2_execute_prepare(&msh2, PicoIn.opt & POPT_EN_DRC);
   sh2_execute_prepare(&ssh2, PicoIn.opt & POPT_EN_DRC);
+#endif
 }
 
 // vim:shiftwidth=2:ts=2:expandtab
