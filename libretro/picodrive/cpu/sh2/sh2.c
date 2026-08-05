@@ -141,9 +141,9 @@ void sh2_unpack(SH2 *sh2, const unsigned char *buff)
 #include <pico/pico_int.h>
 #include <pico/debug.h>
 
-/* [Salvia/Xbox360] Redirige el printf del comparador DRC_CMP a lprintf para
- * que los reportes de divergencia salgan en el log de libretro (RetroArch),
- * no en la salida del debugger que el usuario no ve en el devkit. */
+/* [Salvia/Xbox360] Redirect the DRC_CMP comparator's printf to lprintf so the
+ * divergence reports show up in the libretro log (RetroArch), not the debugger
+ * output which is not visible on the devkit. */
 #if defined(_XBOX) || defined(_XBOX360)
 extern void lprintf(const char *fmt, ...);
 #undef printf
@@ -195,14 +195,14 @@ void do_sh2_trace(SH2 *current, int cycles)
 	int i;
 
 #ifdef SALVIA_CMP_SH2
-	/* [Salvia/Xbox360] grabar SOLO un SH2 (0=master, 1=slave), igual que
-	 * do_sh2_cmp, para evitar el trace entrelazado que se descuadra. */
+	/* [Salvia/Xbox360] record ONLY one SH2 (0=master, 1=slave), same as
+	 * do_sh2_cmp, to avoid the interleaved two-SH2 trace getting out of sync. */
 	if (current->is_slave != (SALVIA_CMP_SH2))
 		return;
 #endif
 #ifdef SALVIA_CMP_START_PC
-	/* [Salvia/Xbox360] mismo gate por PC que do_sh2_cmp: no grabar hasta que el
-	 * SH2 llegue por primera vez a SALVIA_CMP_START_PC. Ambos lados alineados. */
+	/* [Salvia/Xbox360] same PC gate as do_sh2_cmp: don't record until the SH2
+	 * first reaches SALVIA_CMP_START_PC. Both sides stay aligned. */
 	{
 		static int armed_ = 0;
 		if (!armed_) {
@@ -212,10 +212,10 @@ void do_sh2_trace(SH2 *current, int cycles)
 	}
 #endif
 #ifdef SALVIA_CMP_START_FRAME
-	/* [Salvia/Xbox360] gate por frames: no grabar hasta llegar cerca del cuelgue,
-	 * para reducir tamaño del tracelog y no trazar durante boot/menu. El COMPARE
-	 * usa el MISMO umbral, asi ambos empiezan a trazar en el mismo frame emulado
-	 * (el DRC es correcto hasta el fallo, asi que el estado coincide alli). */
+	/* [Salvia/Xbox360] frame gate: don't record until close to the point of
+	 * interest, to shrink the tracelog and skip boot/menu. COMPARE uses the SAME
+	 * threshold, so both start tracing at the same emulated frame (the DRC is
+	 * correct up to the failure, so the state matches there). */
 	if (Pico.m.frame_count < (unsigned)(SALVIA_CMP_START_FRAME))
 		return;
 #endif
@@ -289,22 +289,22 @@ void REGPARM(1) do_sh2_cmp(SH2 *current)
 	int i, ret;
 	static int cmp_stopped = 0;
 
-	/* [Salvia/Xbox360] tras la PRIMERA divergencia real paramos: no mas lecturas
-	 * del trace ni comparaciones -> log limpio con una sola divergencia. */
+	/* [Salvia/Xbox360] after the FIRST real divergence, stop: no more trace reads
+	 * or comparisons -> a clean log with a single divergence. */
 	if (cmp_stopped)
 		return;
 #ifdef SALVIA_CMP_SH2
-	/* [Salvia/Xbox360] comparar SOLO un SH2 (0=master, 1=slave). El trace
-	 * entrelazado de los dos SH2 se descuadra por el drift de ciclos; comparando
-	 * uno solo el stream es autoconsistente. do_sh2_trace filtra igual. */
+	/* [Salvia/Xbox360] compare ONLY one SH2 (0=master, 1=slave). The interleaved
+	 * two-SH2 trace drifts out of sync (cycle-count differences); comparing a
+	 * single one keeps the stream self-consistent. do_sh2_trace filters the same. */
 	if (current->is_slave != (SALVIA_CMP_SH2))
 		return;
 #endif
 #ifdef SALVIA_CMP_START_PC
-	/* [Salvia/Xbox360] gate por PC: no comparar hasta que el SH2 llegue por
-	 * PRIMERA vez a este PC (p.ej. la entrada del bucle problematico). Asi la
-	 * comparacion arranca ALINEADA justo ahi y la 1a divergencia es la
-	 * instruccion exacta mal traducida (sin la cascada del desincronizado). */
+	/* [Salvia/Xbox360] PC gate: don't compare until the SH2 first reaches this PC
+	 * (e.g. the entry of a problematic loop). This starts the comparison ALIGNED
+	 * right there, so the first divergence is the exact mistranslated instruction
+	 * (without the cascade from being out of sync). */
 	{
 		static int armed_ = 0;
 		if (!armed_) {
@@ -314,8 +314,8 @@ void REGPARM(1) do_sh2_cmp(SH2 *current)
 	}
 #endif
 #ifdef SALVIA_CMP_START_FRAME
-	/* [Salvia/Xbox360] mismo gate que do_sh2_trace: no comparar hasta el frame
-	 * umbral (el trace tampoco tiene datos antes). Ambos lados alineados. */
+	/* [Salvia/Xbox360] same gate as do_sh2_trace: don't compare until the frame
+	 * threshold (the trace has no data before it either). Both sides aligned. */
 	if (Pico.m.frame_count < (unsigned)(SALVIA_CMP_START_FRAME))
 		return;
 #endif
@@ -395,33 +395,33 @@ void REGPARM(1) do_sh2_cmp(SH2 *current)
 	sr = current->sr & 0x3f3;
 	cycles = (signed int)current->sr >> 12;
 
-	/* [Salvia/Xbox360] El tracelog graba el SR completo (con el cycle
-	 * counter empaquetado en los bits altos). Strippamos tambien sh2o->sr
-	 * a 0x3f3 para comparar solo los flags reales (T,S,I,M,Q); si no,
-	 * saltaria "bad SR" en cada instruccion donde difieran los ciclos. */
+	/* [Salvia/Xbox360] The tracelog stores the full SR (with the cycle counter
+	 * packed into the high bits). Strip sh2o->sr to 0x3f3 as well so we compare
+	 * only the real flags (T,S,I,M,Q); otherwise we'd get "bad SR" on every
+	 * instruction where the cycle counts differ. */
 	if (sr != (sh2o->sr & 0x3f3)) {
 		printf("bad SR:  %03x %03x\n", sr, sh2o->sr & 0x3f3);
 		bad = 1;
 	}
 
-	/* [Salvia/Xbox360] Ciclos: NO marcamos bad (no paramos por ciclos), pero
-	 * reportamos LA PRIMERA instruccion donde divergen — para saber si hay drift
-	 * real de ciclos (bug PPC en esa instr) o si estan alineados (=> el bug de
-	 * Doom es codegen puro, no timing). Solo master-only y alineado tiene sentido. */
+	/* [Salvia/Xbox360] Cycles: do NOT set bad (never stop on cycles), but report
+	 * the FIRST instruction where they diverge - to tell whether there is a real
+	 * cycle drift (a PPC bug at that instr) or they are aligned (=> the bug is
+	 * pure codegen, not timing). Only meaningful in aligned master-only mode. */
 	if (cycles != cycles_o) {
 		static int cyc_drift_reported = 0;
 		if (!cyc_drift_reported) {
-			printf("[cyc] PRIMER drift ciclos en pc=%08x: drc=%d ref=%d (diff=%d)\n",
+			printf("[cyc] first cycle drift at pc=%08x: drc=%d ref=%d (diff=%d)\n",
 				current->pc, cycles, cycles_o, cycles - cycles_o);
 			cyc_drift_reported = 1;
 		}
 	}
 
-	/* [Salvia/Xbox360] check de val (memoria en EA) REACTIVADO: si el master
-	 * escribe MAL a memoria (endianness/tamano de un store) con registros
-	 * correctos, este es el unico check que lo caza — y ocurre ANTES del
-	 * desincronizado por poll loops. sh2o->ea es la EA grabada por el interprete;
-	 * leemos la memoria actual (DRC) ahi y la comparamos con lo grabado. */
+	/* [Salvia/Xbox360] val (memory at EA) check: if the master writes memory
+	 * WRONG (endianness/size of a store) with correct registers, this is the only
+	 * check that catches it - and it fires BEFORE the poll-loop desync. sh2o->ea
+	 * is the EA recorded by the interpreter; read the current (DRC) memory there
+	 * and compare with the recorded value. */
 	val = local_read32(current, sh2o->ea);
 	if (val != current_val) {
 		printf("bad val @%08x: %08x %08x\n", sh2o->ea, val, current_val);
@@ -435,18 +435,18 @@ void REGPARM(1) do_sh2_cmp(SH2 *current)
 
 end:
 	printf("--\n");
-	printf("[Salvia] DRC @ ppc=%08x pc=%08x is_slave=%d (^=instruccion que diverge)\n",
+	printf("[Salvia] DRC @ ppc=%08x pc=%08x is_slave=%d (^=diverging instruction)\n",
 		current->ppc, current->pc, current->is_slave);
 	dump_regs(sh2o);
 	if (current->is_slave != current_slave)
 		dump_regs(&sh2ref[current->is_slave ^ 1]);
 #if defined(_XBOX) || defined(_XBOX360)
-	/* [Salvia/Xbox360] NO exit(1) (reinicia la consola y pierde el log) ni
-	 * PDebugDumpMem (ruta inexistente). Esta es la PRIMERA divergencia real: el
-	 * dump de arriba ya la muestra. Marcamos stop para no generar cascada y
-	 * devolvemos; el juego sigue (posiblemente se cuelga), pero el log ya tiene
-	 * la divergencia limpia con su PC/registro. */
-	printf("=== PRIMERA DIVERGENCIA (comparacion detenida aqui) ===\n");
+	/* [Salvia/Xbox360] No exit(1) (reboots the console and loses the log) nor
+	 * PDebugDumpMem (nonexistent path). This is the FIRST real divergence: the
+	 * dump above already shows it. Set the stop flag to avoid a cascade and
+	 * return; the game keeps running (possibly hangs), but the log already has the
+	 * clean divergence with its PC/register. */
+	printf("=== FIRST DIVERGENCE (comparison stopped here) ===\n");
 	cmp_stopped = 1;
 	return;
 #else

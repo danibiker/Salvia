@@ -1,77 +1,108 @@
 ===============================================================================
- PicoDrive 32X - Recompilador dinamico SH2, backend PPC para Xbox 360
- Guia de build y depuracion con DRC_CMP  (Salvia / VS2010 + XDK)
+ PicoDrive 32X - SH2 dynarec, PowerPC backend for Xbox 360
+ Build and debugging guide (Salvia / VS2010 + XDK)
 ===============================================================================
 
-RESUMEN
+SUMMARY
 -------
-El backend PPC del DRC del SH2 (cpu/drc/emit_ppc.c) fue escrito por upstream
-para ppc64le (POWER, 64-bit little-endian). Xenon (Xbox 360) es PPC 32-bit
-BIG-ENDIAN. emit_ppc.c ya trae las adaptaciones validadas para Xenon:
-  - ops de 64 bits desactivadas (#if 0 /* Xbox 360 is 32-bit */)
-  - builtins GCC -> intrinsics MSVC (_BitScanForward, etc.)
-  - LR guardado DENTRO del frame en emith_sh2_drc_entry/exit (fix critico)
-  - flush SMC correcto para Xenon (dcbst/sync/icbi/sync/isync)
-  - emith_move_r_imm_s8_patchable ampliado a s16 (prediccion de retorno RTS)
-  - fallback mtctr/bctr para saltos fuera de rango +-32MB
-  - fix emith_pass_arg_r/imm (host_arg2reg) usado por el path DRC_CMP
+The SH2 dynarec's PPC backend (cpu/drc/emit_ppc.c) was written upstream for
+ppc64le (POWER, 64-bit little-endian). Xenon (Xbox 360) is 32-bit BIG-ENDIAN
+PowerPC. emit_ppc.c carries the validated Xenon adaptations:
+  - 64-bit ops disabled (#if 0 /* Xbox 360 is 32-bit */)
+  - GCC builtins -> MSVC intrinsics (_BitScanForward, etc.)
+  - LR saved INSIDE the frame in emith_sh2_drc_entry/exit (critical fix)
+  - correct SMC flush for Xenon (dcbst/sync/icbi/sync/isync)
+  - emith_move_r_imm_s8_patchable widened to s16 (RTS return prediction)
+  - mtctr/bctr fallback for jumps out of the +-32MB range
+  - emith_pass_arg_r/imm fix (host_arg2reg), used by the DRC_CMP path
 
-ESTADO CONOCIDO: el codegen por-instruccion esta validado con DRC_CMP. El
-crash pendiente esta en el DISPATCHER de saltos indirectos (jsr/jmp @Rn, RTS):
-puede acabar saltando a una direccion SH2 (p.ej. Rn = comm port 0x20004000)
-interpretada como puntero host. Objetivo de depuracion actual.
+STATUS: THE PPC DRC WORKS. 32X games boot and play at full speed with the full
+DRC (master+slave), with LOOP_DETECTION/LOOP_OPTIMIZER turned off. Those two
+features (idle-skip + pinned loops) still cause a hang on the PPC port and are
+OFF BY DEFAULT on Xbox 360 (compiler.c); they remain a pending performance
+optimization (use SALVIA_ENABLE_LOOP + SALVIA_NO_LOOPDET/SALVIA_NO_LOOPOPT to
+debug them). Root-cause fixes resolved along the way: uninitialized structs
+from the VS2010 rewrite (rcache/branch_targets/blx/pinned) and push/pop
+clobbering the PPC parameter save area (poll stubs).
+
+KNOWN ISSUE - Doom 32X: hangs when firing / picking up an item (the 3D freezes,
+Genesis music keeps playing). Ruled out timing (no real cycle drift) and the
+data optimizers; it is a codegen bug in the renderer/comm code around
+0x0204654a/0x02049284 that DRC_CMP cannot pinpoint because the divergence
+cascades. Next step: offline SH2 disassembly of that path from the ROM.
 
 
-MODOS DE BUILD (Preprocessor Definitions de la config Xbox 360)
----------------------------------------------------------------
-El arch se selecciona con __ppc__ (+ __BIG_ENDIAN__, _XBOX). El DRC con DRC_SH2.
+BUILD MODES (Preprocessor Definitions of the Xbox 360 configuration)
+-------------------------------------------------------------------
+The arch is selected with __ppc__ (+ __BIG_ENDIAN__, _XBOX). The DRC with DRC_SH2.
 
-  (1) DRC NORMAL  (objetivo: correr juegos con el recompilador)
+  (1) NORMAL DRC  (goal: run games with the recompiler)
       ...;DRC_SH2;...
-      -> es lo que trae el vcxproj ahora en Debug|Xbox 360 y Release|Xbox 360.
+      This is the current default in Debug|Xbox 360 and Release|Xbox 360.
 
-  (2) DRC_CMP - COMPARE  (encontrar la primera divergencia DRC vs interprete)
+  (2) DRC_CMP - COMPARE  (find the first DRC-vs-interpreter divergence)
       ...;DRC_SH2;DRC_CMP;...
-      El DRC corre y, tras CADA instruccion, do_sh2_cmp() lee game:\tracelog.bin
-      y compara todos los registros SH2 + SR + ciclos. La primera divergencia
-      se loguea como "bad rX: <drc> <ref>" en el log de libretro (RetroArch).
-      NO reinicia la consola: resincroniza y sigue (cap 50 reportes).
-      Requiere un tracelog generado antes (modo RECORD).
-      NOTA: DRC_CMP desactiva PROPAGATE_CONSTANTS/LOOP_*/T_/DIV_OPTIMIZER en
-      compiler.c para mantener lockstep exacto con el interprete.
+      The DRC runs and, after EACH instruction, do_sh2_cmp() reads the tracelog
+      and compares all SH2 registers + SR. The first register/PC/SR divergence
+      is logged as "bad rX: <drc> <ref>" plus a register dump, then the
+      comparison STOPS (a single clean divergence in the log; the game keeps
+      running). Requires a tracelog produced beforehand (RECORD mode).
+      NOTE: DRC_CMP disables PROPAGATE_CONSTANTS/LOOP_*/T_/DIV_OPTIMIZER in
+      compiler.c to keep exact lockstep with the interpreter.
 
-  (3) DRC_CMP - RECORD  (generar el tracelog de referencia)
+  (3) DRC_CMP - RECORD  (generate the reference tracelog)
       ...;DRC_CMP;DRC_CMP_RECORD;...
-      Fuerza ambos SH2 a interprete (32x.c) y do_sh2_trace() ESCRIBE
-      game:\tracelog.bin. Corre el juego unos segundos y sal.
+      Forces both SH2s to the interpreter (32x.c); do_sh2_trace() WRITES the
+      tracelog. Run the game a bit past the point of interest and exit.
 
-  (4) AISLAMIENTO slave  (diagnostico del bug de dispatcher)
+  (4) Slave isolation  (is the bug master- or slave-side?)
       ...;DRC_SH2;SALVIA_FORCE_SLAVE_INTERP;...
-      master = DRC, slave = interprete. Si el crash desaparece, el bug se
-      limita al slave (tipicamente saltos indirectos a codigo de SDRAM).
+      master = DRC, slave = interpreter. If the hang/crash disappears, the bug
+      is slave-side.
 
 
-FLUJO PARA CAZAR UNA DIVERGENCIA
---------------------------------
-  1. Compila en modo RECORD (3). Arranca el juego que falla, deja correr unos
-     segundos (mismo estado inicial, SIN input, para que sea determinista).
-     Se genera game:\tracelog.bin. Cierra.
-  2. Compila en modo COMPARE (2). Arranca EL MISMO juego igual.
-  3. Mira el log de libretro: la primera linea "bad ..." indica el registro y
-     el PC donde el DRC diverge del interprete. Esa es la instruccion a
-     revisar en emit_ppc.c / compiler.c.
-  Determinismo: usa la misma consola, misma ROM, mismo reset, sin input. El
-  boot es determinista; ahi es donde aparece la corrupcion.
-
-  Alternativa: generar tracelog en PC (build Win32 interprete con DRC_CMP +
-  DRC_CMP_RECORD) y copiarlo a game:\tracelog.bin de la consola para comparar
-  el codegen PPC contra una referencia x86 conocida-buena.
+DRC_CMP GATES / FILTERS (define alongside DRC_CMP)
+-------------------------------------------------
+  SALVIA_CMP_SH2=0        compare ONLY one SH2 (0=master, 1=slave). Essential on
+                          the dual-SH2 32X: the interleaved two-SH2 trace drifts
+                          out of sync, so compare a single self-consistent stream.
+  SALVIA_CMP_START_PC=0xADDR   don't start comparing until the SH2 first reaches
+                          this PC (e.g. a loop entry), so the comparison starts
+                          ALIGNED and the first divergence is the exact culprit.
+  SALVIA_CMP_START_FRAME=N     don't start until video frame N (skip boot/menu,
+                          shrink the tracelog).
+  Use the SAME gate values in RECORD and COMPARE so both sides stay aligned.
 
 
-NOTAS
+WORKFLOW TO CATCH A DIVERGENCE
+------------------------------
+  1. Build in RECORD mode (3) with SALVIA_CMP_SH2=0 (+ a gate if useful). Run the
+     failing game a couple of seconds PAST the failure, with NO input so it is
+     deterministic. This writes the tracelog. Exit.
+  2. Build in COMPARE mode (2) with the SAME SALVIA_CMP_* defines (and usually
+     SALVIA_FORCE_SLAVE_INTERP, so the slave matches the RECORD run). Keep the
+     tracelog. Run the same game the same way.
+  3. In the libretro log, the first "bad ..." line plus "[Salvia] DRC @ pc=..."
+     is the register and PC where the DRC diverges from the interpreter - the
+     instruction to review in emit_ppc.c / compiler.c.
+  Determinism: same console, same ROM, same reset, no input.
+
+  The tracelog is buffered (256KB) and lives at game:\tracelog.bin. In COMPARE
+  mode tl_write is a defensive no-op, so it can never truncate the tracelog.
+
+
+TARGETED OPCODE DUMP
+--------------------
+  SALVIA_DUMP_PC=0xADDR   with the normal DRC build (no DRC_CMP needed), prints
+                          each SH2 instruction within +-0x40 of the address as it
+                          is compiled: op, cycles, size, immediate, and the
+                          read/written register masks. Handy to disassemble a
+                          specific code path (e.g. a loop that hangs).
+
+
+NOTES
 -----
-  - game:\ es el dir del .xex (escribible en el devkit); el current dir puede
-    ser read-only.
-  - El drift de ciclos DRC vs interprete es estructural: el comparador solo
-    reporta divergencias de ciclos > 200 (falsos positivos filtrados).
-  - Para volver a interprete puro: pon __DRC_SH2 (doble guion) en el vcxproj.
+  - game:\ is the .xex directory (writable on the devkit); the current dir may
+    be read-only.
+  - To go back to the pure interpreter: use __DRC_SH2 (double underscore) in the
+    vcxproj, or set the picodrive_drc core option to disabled.

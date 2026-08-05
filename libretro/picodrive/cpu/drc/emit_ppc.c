@@ -108,11 +108,10 @@ static __inline int msvc_builtin_parity(unsigned int x) {
 // for OSX PIC code, on function calls r12 must contain the called address
 #define TOC_REG		2
 #define RET_REG		3
-/* PARAM_REGS restaurado a {3..10} (r4 INCLUIDO).  Removerlo causaba
- * los "host register 4 is locked" + "rcache_free_tmp fail" que se
- * observaron en runtime: el rcache marca r4 como param-disponible
- * por defecto y otros paths del backend sí lo usan; al excluirlo
- * de PARAM_REGS el allocator queda inconsistente. */
+/* PARAM_REGS kept as {3..10} (r4 INCLUDED). Removing it caused the "host
+ * register 4 is locked" + "rcache_free_tmp fail" seen at runtime: the rcache
+ * marks r4 as param-available by default and other backend paths do use it, so
+ * excluding it from PARAM_REGS leaves the allocator inconsistent. */
 #define PARAM_REGS	{ 3, 4, 5, 6, 7, 8, 9, 10 }
 #define PRESERVED_REGS	{ 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 }
 #define TEMPORARY_REGS	{ 12 }
@@ -958,28 +957,28 @@ static void emith_move_imm(int r, int ptr, uintptr_t imm)
 #define emith_move_r_imm_c(cond, r, imm) \
 	emith_move_r_imm(r, imm)
 
-/* [Salvia/Xbox360] El nombre "_s8_" del macro es por compatibilidad con
- * otros backends (ARM/ARM64/x86 emiten MOV con imm8).  PPC `addi` soporta
- * imm signed 16-bit nativo (±32KB) en una sola instruccion — usarlo.
+/* [Salvia/Xbox360] The "_s8_" in the macro name is for consistency with other
+ * backends (ARM/ARM64/x86 emit MOV with an imm8). PPC `addi` supports a native
+ * signed 16-bit immediate (+-32KB) in a single instruction - use that.
  *
- * IMPORTANTE: este macro lo usa CALL_STACK para guardar el offset entre
- * `rtsret` y el final de la emision del BSR/JSR (compiler.c L5266/5327).
- * Ese offset se suma a LR en `sh2_drc_dispatcher_call` para construir la
- * direccion host de retorno predicha que se cachea en sh2->rts_cache.
+ * IMPORTANT: this macro is used by CALL_STACK to store the offset between
+ * `rtsret` and the end of the BSR/JSR emission (compiler.c). That offset is
+ * added to LR in `sh2_drc_dispatcher_call` to build the predicted host return
+ * address cached in sh2->rts_cache.
  *
- * En PPC cada instruccion son 4 bytes, y la cola del BSR (FLUSH_CYCLES +
- * sync_t + rcache_clean + emit_jump con fallback mtctr/bctr) emite mas
- * codigo host que en ARM.  Es completamente normal pasarse de 127 bytes
- * (s8 range), y el truncado silencioso a 8 bits hace wrap a negativo —
- * RTS aterriza ANTES de la propia secuencia BSR y la maquina se rompe.
+ * On PPC every instruction is 4 bytes, and the BSR tail (FLUSH_CYCLES + sync_t +
+ * rcache_clean + emit_jump with the mtctr/bctr fallback) emits more host code
+ * than on ARM. It is entirely normal to exceed 127 bytes (the s8 range), and the
+ * silent truncation to 8 bits wraps negative - RTS then lands BEFORE the BSR
+ * sequence itself and the machine breaks.
  *
- * Sintomas observados antes del fix:
- *  - Doom 32X: master termina en PC=0 tras la primera vuelta (RTS predicho
- *    cae en codigo basura).
- *  - NBA Jam 32X: loop infinito a 0x60009d8 escribiendo a ROM (RTS retorna
- *    al medio del setup del BSR y re-ejecuta codigo de push).
+ * Symptoms observed before the fix:
+ *  - Doom 32X: master ends at PC=0 after the first pass (predicted RTS lands in
+ *    garbage code).
+ *  - NBA Jam 32X: infinite loop at 0x60009d8 writing to ROM (RTS returns into the
+ *    middle of the BSR setup and re-executes push code).
  *
- * Logueamos si el offset excede s16 (no deberia con bloques DRC normales). */
+ * We log if the offset exceeds s16 (should not happen with normal DRC blocks). */
 #define emith_move_r_imm_s8_patchable(r, imm) \
 	EMIT(PPC_ADD_IMM(r, Z0, (s16)(imm)))
 #define emith_move_r_imm_s8_patch(ptr, imm) do { \
@@ -1383,8 +1382,8 @@ static void emith_add_imm(int rt, int ra, u32 imm)
 } while (0)
 
 // function call handling
-/* [Salvia/Xbox360] MSVC 2010 (modo C89) no soporta mezclar declaraciones
- * con statements.  Reordenamos las declaraciones al inicio del bloque. */
+/* [Salvia/Xbox360] MSVC 2010 (C89 mode) does not allow mixing declarations with
+ * statements. Move the declarations to the top of the block. */
 #define emith_save_caller_regs(mask) do { \
 	int _c, _z = PTR_SIZE; \
 	u32 _m = mask & 0x1ff8; /* r3-r12 */ \
@@ -1423,14 +1422,13 @@ static void *fptr[2];
 #define host_arg2reg(rt, arg) \
 	rt = (arg+3)
 
-/* [Salvia/Xbox360] Bug upstream: emith_pass_arg_r/imm pasaba `arg` (indice
- * de argumento) directamente como numero de registro destino al move.  En
- * PPC ABI los args van a r3..r10, no r0..r7 — host_arg2reg(rd, arg) hace
- * `rd = arg+3`.  Sin esta conversion, emith_pass_arg_r(0, CONTEXT_REG)
- * acababa moviendo CONTEXT_REG a r0 en vez de a r3, y do_sh2_cmp recibia
- * basura como puntero SH2 (causaba lecturas dentro del code cache JIT).
- * El call site original solo existe en DRC_CMP, por eso pasaba desapercibido
- * en el DRC normal. */
+/* [Salvia/Xbox360] Upstream bug: emith_pass_arg_r/imm passed `arg` (the argument
+ * index) directly as the destination register number of the move. In the PPC ABI
+ * args go to r3..r10, not r0..r7 - host_arg2reg(rd, arg) does `rd = arg+3`.
+ * Without this conversion, emith_pass_arg_r(0, CONTEXT_REG) ended up moving
+ * CONTEXT_REG into r0 instead of r3, and do_sh2_cmp received garbage as the SH2
+ * pointer (causing reads inside the JIT code cache). The only caller is in the
+ * DRC_CMP path, which is why it went unnoticed in the normal DRC. */
 #define emith_pass_arg_r(arg, reg) do { \
 	int _rd; \
 	host_arg2reg(_rd, arg); \
@@ -1558,16 +1556,16 @@ static int emith_cond_check(int cond)
 	return b;
 }
 
-/* [Salvia/Xbox360] PPC `b` instruction usa desplazamiento signed 26-bit
- * (LI[24] sign-extended y shifted left 2) — rango ±32MB.  Si target esta
- * fuera de rango, el `& 0x03ffffff` trunca silenciosamente y aterriza en
- * basura (sintoma observado: crash con PC=0x84004000 fuera del code cache).
- * En Xbox 360 esto pasa cuando el .xex se carga lejos del tcache_default.
+/* [Salvia/Xbox360] The PPC `b` instruction uses a signed 26-bit displacement
+ * (LI[24] sign-extended and shifted left 2) - a +-32MB range. If the target is
+ * out of range, the `& 0x03ffffff` truncates silently and lands in garbage
+ * (observed symptom: crash with PC=0x84004000 outside the code cache). On Xbox
+ * 360 this happens when the .xex is loaded far from tcache_default.
  *
- * Para emith_jump (no patcheable) usamos fallback a mtctr/bctr absoluto.
- * Para emith_jump_patchable NO podemos hacer multi-instruccion porque el
- * mecanismo emith_jump_patch asume una sola instruccion `b`/`bc` y la
- * busca por opcode — ver linea ~1554.  Ahi solo logueamos si excede rango. */
+ * For emith_jump (not patchable) we fall back to an absolute mtctr/bctr. For
+ * emith_jump_patchable we CANNOT emit multiple instructions because the
+ * emith_jump_patch mechanism assumes a single `b`/`bc` instruction and finds it
+ * by opcode - so there we only log if it exceeds the range. */
 #define _PPC_B_INRANGE(disp_) \
 	((s32)(disp_) >= -0x02000000 && (s32)(disp_) < 0x02000000)
 
@@ -1586,11 +1584,11 @@ static int emith_cond_check(int cond)
 #define emith_jump_patchable(target) do { \
 	s32 disp_ = (s32)((u8 *)(target) - (u8 *)tcache_ptr); \
 	if (!_PPC_B_INRANGE(disp_)) { \
-		/* [Salvia/Xbox360] WARNING: jump patcheable fuera de rango +-32MB.
-		 * Emitimos b igualmente (truncado) y logueamos — el patch posterior
-		 * podria caer aqui.  Si vemos este log y NBA Jam crashea, hay que
-		 * convertir el linkage code para usar trampolines blx (ya hay
-		 * infraestructura blx_targets en compiler.c, solo falta cablearla). */ \
+		/* [Salvia/Xbox360] WARNING: patchable jump out of the +-32MB range.
+		 * We emit b anyway (truncated) and log - a later patch
+		 * may land here. If this fires and a game crashes, the linkage code
+		 * must be converted to use blx trampolines (the blx_targets
+		 * infrastructure already exists in compiler.c, it just needs wiring). */ \
 		extern void lprintf(const char *fmt, ...); \
 		lprintf("[DRC-PPC] WARN: patchable jump out of range disp=%d (target=%p tcache_ptr=%p)\n", \
 			disp_, (void *)(target), (void *)tcache_ptr); \
@@ -1627,10 +1625,10 @@ static int emith_cond_check(int cond)
 	 (u8 *)target - (u8 *)ptr >= -0x8000+0x10) // mind cond_check
 #define emith_jump_patch_size() 4
 
-/* [Salvia/Xbox360] emith_jump_at escribe en posicion pre-reservada — debe
- * ser una sola instruccion.  Si target esta fuera de rango +-32MB, hay
- * que loguear y NO podemos hacer fallback aqui (rompiamos el ABI de
- * linkage).  Si el log dispara hay que rediseñar para usar trampolines. */
+/* [Salvia/Xbox360] emith_jump_at patches a pre-reserved slot, so it must be a single instruction.
+ * If the target is out of the +-32MB range we can only log; we cannot fall
+ * back here (it would break the linkage ABI). If this log ever fires it must be
+ * redesigned to use trampolines. */
 #define emith_jump_at(ptr, target) do { \
 	s32 disp_ = (s32)((u8 *)(target) - (u8 *)(ptr)); \
 	u32 *ptr_ = (u32 *)(ptr); \
@@ -1657,9 +1655,9 @@ static int emith_cond_check(int cond)
 #define emith_jump_ctx_c(cond, offs) \
 	emith_jump_ctx(offs)
 
-/* [Salvia/Xbox360] Igual que emith_jump: fallback a mtctr/bctrl si out
- * of range +-32MB.  emith_call no se patchea, asi que es seguro emitir
- * multi-instruccion. */
+/* [Salvia/Xbox360] Like emith_jump: fall back to mtctr/bctrl if out of the
+ * +-32MB range. emith_call is not patched, so emitting multiple instructions
+ * is safe. */
 #define emith_call(target) do { \
 	s32 disp_ = (s32)((u8 *)(target) - (u8 *)tcache_ptr); \
 	if (_PPC_B_INRANGE(disp_)) { \
@@ -1731,16 +1729,16 @@ static int emith_cond_check(int cond)
 } while (0)
 
 // NB: ABI SP alignment is 16 in 64 bit mode
-/* [Salvia/Xbox360] BUG CRITICO (causa del HANG con LOOP_DETECTION): la version
- * heredada del backend RISC-V guardaba valor+LR en SP+0 / SP+8. En RISC-V eso
- * es seguro porque no hay "parameter save area"; en la ABI PPC/Xbox 360 SI la
- * hay, en SP+8..SP+8+8*PTR_SIZE, y la funcion C llamada (p32x_sh2_poll_memoryN,
- * 3 args a/d/sh2) puede volcar ahi sus argumentos, PISANDO el LR guardado ->
- * emith_pop_and_ret recupera un LR basura y retorna a codigo invalido -> cuelgue.
- * Estos macros solo los usan los stubs de poll (sh2_drc_read*_poll), por eso el
- * hang solo aparece con LOOP_DETECTION (que activa MF_POLLING). Fix: guardar
- * valor+LR POR ENCIMA del parameter save area, en SP+STACK_EXTRA. Frame =
- * STACK_EXTRA + 2*PTR_SIZE (= 64 en 32-bit / 128 en 64-bit, ambos alineados a 16). */
+/* [Salvia/Xbox360] CRITICAL BUG: the version inherited from the RISC-V backend
+ * saved value+LR at SP+0 / SP+8. On RISC-V that is safe because there is no
+ * "parameter save area"; the PPC/Xbox 360 ABI DOES have one, at
+ * SP+8..SP+8+8*PTR_SIZE, and the called C function (p32x_sh2_poll_memoryN, 3
+ * args a/d/sh2) may spill its arguments there, OVERWRITING the saved LR ->
+ * emith_pop_and_ret restores a garbage LR and returns to invalid code -> hang.
+ * These macros are only used by the poll stubs (sh2_drc_read*_poll), which is
+ * why the hang only shows up with LOOP_DETECTION (which enables MF_POLLING).
+ * Fix: save value+LR ABOVE the parameter save area, at SP+STACK_EXTRA. Frame =
+ * STACK_EXTRA + 2*PTR_SIZE (= 64 on 32-bit / 128 on 64-bit, both 16-aligned). */
 #define emith_push_ret(r) do { \
 	int offs_ = STACK_EXTRA; \
 	emith_add_r_r_ptr_imm(SP, SP, -(STACK_EXTRA + 2*PTR_SIZE)); \
@@ -1761,18 +1759,17 @@ static int emith_cond_check(int cond)
 
 // this should normally be in libc clear_cache; however, it sometimes isn't.
 
-/* Naked function que emite UNA instruccion icbi.  Vive en .text del
- * binario (siempre ejecutable), evitando la generacion dinamica de
- * codigo en .data que tenia el approach anterior (problemas con NX
- * y bootstrap del propio I-cache).
+/* Naked function that emits a SINGLE icbi instruction. It lives in the binary's
+ * .text (always executable), avoiding the dynamic code generation in .data that
+ * the previous approach used (NX issues and bootstrapping the I-cache itself).
  *
- * Patron tomado de pcsxr-360 (libpcsxcore/ppc/pR3000A.c:30) que ya
- * tiene un dynarec PowerPC funcionando en este XDK.
+ * Pattern taken from pcsxr-360 (libpcsxcore/ppc/pR3000A.c:30), which already has
+ * a working PowerPC dynarec on this XDK.
  *
  * Args (PPC EABI / Xbox 360 calling convention):
  *   r3 = offset (int)
  *   r4 = base   (const void *)
- * `icbi r3, r4` con r3=0 invalida la linea que contiene r4 + 0. */
+ * `icbi r3, r4` with r3=0 invalidates the line containing r4 + 0. */
 #ifdef _XBOX
 void __declspec(naked) ppc_icbi_one(int offset, const void *base)
 {
@@ -1785,57 +1782,57 @@ void __declspec(naked) ppc_icbi_one(int offset, const void *base)
 
 static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 {
-	/* C89 strict (MSVC Xbox 360): TODAS las declaraciones al inicio
-	 * del bloque, antes de cualquier statement. */
+	/* Strict C89 (MSVC Xbox 360): ALL declarations at the top of the block,
+	 * before any statement. */
 	char *ptr;
 	char *end_ptr;
 
 	(void)force;
 
 #ifdef _XBOX
-	/* Secuencia correcta de SMC en PowerPC (PowerISA Book II 1.4 + erratas
-	 * Xenon), validada empiricamente en el dynarec PPC de dosbox-pure:
+	/* Correct SMC sequence on PowerPC (PowerISA Book II 1.4 + Xenon errata),
+	 * validated empirically against the PPC dynarec in dosbox-pure:
 	 *
-	 *   1. dcbst en cada linea modificada           (flush D-cache a memoria)
-	 *   2. sync                                     (espera flush)
-	 *   3. icbi en cada linea modificada            (invalida I-cache)
-	 *   4. sync                                     (espera invalidaciones)
-	 *   5. isync                                    (descarta prefetch pipeline)
+	 *   1. dcbst on each modified line              (flush D-cache to memory)
+	 *   2. sync                                     (wait for the flush)
+	 *   3. icbi on each modified line               (invalidate I-cache)
+	 *   4. sync                                     (wait for the invalidations)
+	 *   5. isync                                    (discard the prefetch pipeline)
 	 *
-	 * Sin el segundo sync (paso 4) en Xenon (in-order, memory model debil),
-	 * el isync puede ejecutarse antes de que los icbi terminen, dejando
-	 * lineas de I-cache obsoletas.  Sintoma observado en dosbox-pure con
-	 * codigo self-modifying (SCUMM/Monkey Island): 'Corrupt MCB chain'.
+	 * Without the second sync (step 4) on Xenon (in-order, weak memory model) the
+	 * isync can run before the icbi's finish, leaving stale I-cache lines. Symptom
+	 * observed in dosbox-pure with self-modifying code (SCUMM/Monkey Island):
+	 * 'Corrupt MCB chain'.
 	 *
-	 * Xenon cache line = 128 bytes.  Alinear base a linea para no dejar
-	 * bytes obsoletos al inicio. */
+	 * Xenon cache line = 128 bytes. Align base to a line so no stale bytes are
+	 * left at the start. */
 	ptr     = (char *)((unsigned int)base & ~127u);
 	end_ptr = (char *)end;
 
-	/* Paso 1: dcbst en todas las lineas. */
+	/* Step 1: dcbst on all lines. */
 	while (ptr < end_ptr) {
 		__dcbst(0, ptr);
 		ptr += 128;
 	}
-	/* Paso 2: sync — esperar a que los stores lleguen a memoria. */
+	/* Step 2: sync - wait for the stores to reach memory. */
 	__sync();
 
-	/* Paso 3: icbi en todas las lineas via la naked function (el XDK no
-	 * expone __icbi como intrinsic en este toolchain). */
+	/* Step 3: icbi on all lines via the naked function (the XDK does not expose
+	 * __icbi as an intrinsic in this toolchain). */
 	ptr = (char *)((unsigned int)base & ~127u);
 	while (ptr < end_ptr) {
 		ppc_icbi_one(0, ptr);
 		ptr += 128;
 	}
-	/* Paso 4: sync — esperar a que los icbi terminen.  Critico en Xenon
-	 * por el modelo de memoria debil. */
+	/* Step 4: sync - wait for the icbi's to finish. Critical on Xenon due to the
+	 * weak memory model. */
 	__sync();
-	/* Paso 5: isync — descartar prefetch del pipeline.  El XDK no expone
-	 * __isync() como intrinsic, emitimos el opcode raw (mismo truco que
-	 * usa pcsxr-360 en libpcsxcore/ppc/pR3000A.c:2339). */
+	/* Step 5: isync - discard the pipeline prefetch. The XDK does not expose
+	 * __isync() as an intrinsic, so emit the raw opcode (same trick pcsxr-360
+	 * uses in libpcsxcore/ppc/pR3000A.c:2339). */
 	__emit(0x4C00012C);  /* isync */
 #else
-	/* Fallback generico (no usado en pcsxr-360 build). */
+	/* Generic fallback (not used in the pcsxr-360 build). */
 	ptr     = (char *)((unsigned int)base & ~31u);
 	end_ptr = (char *)end;
 
@@ -1858,29 +1855,28 @@ static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 
 // SH2 drc specific
 #define STACK_EXTRA	((8+6)*PTR_SIZE) // Param, ABI (LR,CR,FP etc) save areas
-/* [Salvia/Xbox360] BUG CRITICO upstream: el macro entry/exit allocaba
- * frame de tamano `_s+STACK_EXTRA` pero escribia LR a offset `_o+_z` que
- * es exactamente `_s+STACK_EXTRA+_z` — 4 bytes FUERA del frame, en el
- * stack del caller!  Durante la ejecucion del JIT (que hace abicalls
- * con sus propios frames), el stack del caller en OLD_SP+4 se sobreescribe
- * por codigo intermedio.  Al volver y leer LR de esa direccion, sacamos
- * basura y `blr` salta a un puntero invalido.  Sintoma: crash a direcciones
- * variables entre runs (0x84004000, 0x20004000, 0x1FB54460...) tras
- * ejecutar codigo dinamico de SDRAM lo suficiente como para que algun
- * memhandler/dispatcher escriba al stack en el offset relevante.
+/* [Salvia/Xbox360] CRITICAL upstream bug: the entry/exit macro allocated a
+ * frame of size `_s+STACK_EXTRA` but wrote LR at offset `_o+_z`, which is
+ * exactly `_s+STACK_EXTRA+_z`: 4 bytes OUTSIDE the frame, in the
+ * caller's stack! During JIT execution (which makes abicalls with their own
+ * frames), the caller's stack at OLD_SP+4 gets overwritten by intermediate
+ * code. On return, reading LR from that address yields garbage and `blr` jumps
+ * to an invalid pointer. Symptom: crashes at addresses that vary between runs
+ * (0x84004000, 0x20004000, 0x1FB54460...) after running enough dynamic SDRAM
+ * code that some memhandler/dispatcher writes to the stack at the relevant
+ * offset.
  *
- * Fix: allocar `_s + STACK_EXTRA + _z` para incluir el slot del LR dentro
- * del frame.  CRITICO: PPC ABI requiere SP alineado a 16, asi que el
- * tamano se redondea hacia arriba al multiplo de 16 mas cercano.  Sin
- * alineacion, las funciones C llamadas via abicall (incluyendo
- * vsprintf/log_cb) hacen accesos va_list con offsets erroneos y los
- * args salen como NULL/basura (sintoma: log spam con "(null)").
+ * Fix: allocate `_s + STACK_EXTRA + _z` to include the LR slot inside the
+ * frame. CRITICAL: the PPC ABI requires SP 16-aligned, so the size is rounded
+ * up to the nearest multiple of 16. Without alignment, C functions called via
+ * abicall (including vsprintf/log_cb) do va_list accesses at wrong offsets and
+ * the args come out as NULL/garbage (symptom: log spam with "(null)").
  *
- * Layout del frame (alineado 16):
+ * Frame layout (16-aligned):
  *   SP+0..STACK_EXTRA-1      : linkage area (back chain, param save, etc)
- *   SP+STACK_EXTRA           : LR save (4 bytes en 32-bit PPC)
- *   SP+STACK_EXTRA+_z..       : registros callee-saved r14-r31
- *   SP+stack_size            : OLD_SP (alineado 16) */
+ *   SP+STACK_EXTRA           : LR save (4 bytes on 32-bit PPC)
+ *   SP+STACK_EXTRA+_z..       : callee-saved registers r14-r31
+ *   SP+stack_size            : OLD_SP (16-aligned) */
 #define SH2_DRC_STACK_SIZE	(((18 * PTR_SIZE) + STACK_EXTRA + PTR_SIZE + 15) & ~15)
 #define emith_sh2_drc_entry() do { \
 	int _c, _z = PTR_SIZE; u32 _m = 0xffffc000; int _o;/* r14-r31 */ \
@@ -1888,7 +1884,7 @@ static NOINLINE void host_instructions_updated(void *base, void *end, int force)
 	_o = STACK_EXTRA; \
 	EMIT(PPC_STPU_IMM(SP, SP, -SH2_DRC_STACK_SIZE)); \
 	EMIT(PPC_MFSP_REG(AT, LR)); \
-	emith_write_r_r_offs_ptr(AT, SP, _o); /* LR DENTRO del frame */ \
+	emith_write_r_r_offs_ptr(AT, SP, _o); /* LR INSIDE the frame */ \
 	_o += _z; \
 	for (_c = 0; _m && _c < HOST_REGS; _m &= ~(1 << _c), _c++) \
 		if (_m & (1 << _c)) \

@@ -18,11 +18,11 @@
 #endif
 
 #if defined(_XBOX) || defined(_XBOX360)
-/* [Salvia/Xbox360] MSVC requiere __declspec(align(N)) ANTES del tipo; el
- * macro generico ALIGNED(n) (pico_port.h) degrada a vacio en MSVC, dejando
- * el tcache con alineacion natural. Alineamos explicitamente a 128 (linea
- * de cache Xenon L1i/L1d, unidad de invalidacion icbi). No usamos 4096
- * porque el linker del XDK rechaza alineaciones mayores que su /ALIGN. */
+/* [Salvia/Xbox360] MSVC needs __declspec(align(N)) BEFORE the type; the generic
+ * ALIGNED(n) macro (pico_port.h) degrades to nothing under MSVC, leaving the
+ * tcache at natural alignment. Align explicitly to 128 (Xenon L1i/L1d cache
+ * line, the icbi invalidation unit). We don't use 4096 because the XDK linker
+ * rejects alignments larger than its /ALIGN. */
 __declspec(align(128)) u8 tcache_default[DRC_TCACHE_SIZE];
 #else
 u8 ALIGNED(PICO_PAGE_ALIGN) tcache_default[DRC_TCACHE_SIZE];

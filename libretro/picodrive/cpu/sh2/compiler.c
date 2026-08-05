@@ -44,27 +44,49 @@
 #include <ppcintrinsics.h>
 	static __inline int __builtin_ffs(int x) {
     if (x == 0) return 0;
-		// _CountLeadingZeros es la intr?nseca oficial del XDK
-		// Para FFS (Find First Set) desde la derecha:
+		// [Salvia/Xbox360] no __builtin_ffs under MSVC/XDK; _CountLeadingZeros is
+		// the XDK intrinsic and ffs(x) = 32 - clz(x & -x).
 		return 32 - _CountLeadingZeros(x & -x);
 	}
 #endif
 #endif
 
 // features
-/* [Salvia/Xbox360] En DRC_CMP necesitamos lockstep EXACTO instruccion-a-
- * instruccion con el interprete. Varias optimizaciones rompen ese lockstep
- * porque "saltan" trabajo que el interprete si hace:
- *  - LOOP_DETECTION/LOOP_OPTIMIZER: cortocircuitan poll/idle/delay loops
- *    (el DRC acaba con PC en la salida del loop, el interprete girando).
- *  - T_OPTIMIZER: elimina escrituras intermedias del flag T -> SR difiere.
- *  - DIV_OPTIMIZER: colapsa secuencias DIV0/DIV1 -> registros intermedios
- *    divergen.
- *  - PROPAGATE_CONSTANTS: inlinea literales cacheados en codegen; si el
- *    valor real cambia en runtime (SDRAM no inicializada al traducir) el
- *    DRC usa el cacheado y diverge.
- * Las demas (LINK_BRANCHES, BRANCH_CACHE, CALL_STACK, ALIAS_REGISTERS,
- * REMAP_REGISTER) son transparentes a la semantica observable. */
+/*
+ * ===========================================================================
+ * [Salvia/Xbox360] SH2 DRC feature flags and debug toggles.
+ *
+ * This is a fork of upstream picodrive with a PowerPC (Xenon, 32-bit
+ * big-endian, VS2010/XDK) backend for the SH2 dynarec. Upstream leaves all
+ * feature flags at 1; here two of them are turned OFF by default on Xbox 360
+ * (see the _XBOX block below) and a set of build-time toggles is provided to
+ * bisect codegen bugs. None of the SALVIA_* toggles are defined in the normal
+ * production build, so they are fully compiled out (zero cost).
+ *
+ * Production default (Xbox 360): everything ON except LOOP_DETECTION and
+ * LOOP_OPTIMIZER (known-hang, see below).
+ *
+ * Debug toggles (define in the project preprocessor to bisect a hang):
+ *   SALVIA_DRC_MINIMAL   - disable ALL of the below at once (bare per-block DRC)
+ *   SALVIA_NO_LINK       - disable LINK_BRANCHES + BRANCH_CACHE (block linking)
+ *   SALVIA_NO_CALLSTACK  - disable CALL_STACK (RTS return-address prediction)
+ *   SALVIA_NO_LOOP       - disable LOOP_DETECTION + LOOP_OPTIMIZER
+ *   SALVIA_NO_LOOPDET    - disable LOOP_DETECTION only
+ *   SALVIA_NO_LOOPOPT    - disable LOOP_OPTIMIZER only
+ *   SALVIA_NO_CONST      - disable PROPAGATE_CONSTANTS + T_OPTIMIZER + DIV_OPTIMIZER
+ *   SALVIA_ENABLE_LOOP   - re-enable the loop features on Xbox 360 (for debugging)
+ *   SALVIA_DUMP_PC=0xADDR - dump the SH2 opcodes of blocks near an address
+ * See also the DRC_CMP trace/compare harness (cpu/sh2/sh2.c, pico/debug.c) and
+ * its gates SALVIA_CMP_SH2 / SALVIA_CMP_START_PC / SALVIA_CMP_START_FRAME.
+ * ===========================================================================
+ */
+
+/* Under DRC_CMP we need EXACT instruction-by-instruction lockstep with the
+ * interpreter. Several optimizations break that lockstep because they "skip"
+ * work the interpreter still performs (loop short-circuiting, dropping dead T
+ * writes, collapsing DIV0/DIV1, inlining cached literals), so disable them in
+ * DRC_CMP builds. The rest (LINK_BRANCHES, BRANCH_CACHE, CALL_STACK,
+ * ALIAS_REGISTERS, REMAP_REGISTER) are transparent to observable semantics. */
 #if defined(DRC_CMP)
 #define PROPAGATE_CONSTANTS     0
 #define LOOP_DETECTION          0
@@ -84,15 +106,7 @@
 #define ALIAS_REGISTERS         1
 #define REMAP_REGISTER          1
 
-/* [Salvia/Xbox360] DIAGNOSTICO de HANG del master-DRC (bisección granular).
- * SALVIA_DRC_MINIMAL desactiva TODO (equivale a los 4 sub-toggles). Para
- * bisecar, en vez de SALVIA_DRC_MINIMAL define solo el/los sub-toggle(s) que
- * quieras desactivar y deja el resto activo:
- *   SALVIA_NO_CALLSTACK -> desactiva CALL_STACK (predicción de retorno RTS)
- *   SALVIA_NO_LINK      -> desactiva LINK_BRANCHES + BRANCH_CACHE (linking)
- *   SALVIA_NO_LOOP      -> desactiva LOOP_DETECTION + LOOP_OPTIMIZER
- *   SALVIA_NO_CONST     -> desactiva PROPAGATE_CONSTANTS + T_ + DIV_OPTIMIZER
- * Si al desactivar SOLO uno el hang desaparece, ese grupo es el culpable. */
+/* Granular bisection toggles (see the header above for the full list). */
 #ifdef SALVIA_DRC_MINIMAL
 # define SALVIA_NO_LINK
 # define SALVIA_NO_CALLSTACK
@@ -130,14 +144,13 @@
 # define DIV_OPTIMIZER       0
 #endif
 
-/* [Salvia/Xbox360] ESTADO FUNCIONAL: el DRC PPC arranca y juega bien con estas
- * dos features desactivadas. LOOP_DETECTION/LOOP_OPTIMIZER (idle-skip + pinned
- * loops para poll/idle loops) todavia provocan un hang en el port PPC — quedan
- * PENDIENTES de depurar como optimizacion de rendimiento. Por eso las apagamos
- * por DEFECTO en Xbox 360, para que el build normal sea funcional sin depender
- * de acordarse del define. Para reactivarlas (p.ej. para depurarlas) define
- * SALVIA_ENABLE_LOOP; se puede combinar con SALVIA_NO_LOOPDET / SALVIA_NO_LOOPOPT
- * para bisecar cual de las dos es la culpable. */
+/* [Salvia/Xbox360] KNOWN ISSUE: LOOP_DETECTION/LOOP_OPTIMIZER (idle-skip +
+ * pinned loops for poll/idle loops) still cause a hang on the PPC port, so they
+ * are turned OFF by default on Xbox 360. This makes the normal build (just
+ * DRC_SH2) functional without relying on a define; the games run at full speed,
+ * only this loop optimization is missing. Define SALVIA_ENABLE_LOOP to turn them
+ * back on for debugging (optionally with SALVIA_NO_LOOPDET / SALVIA_NO_LOOPOPT to
+ * bisect which of the two is at fault). */
 #if defined(_XBOX) && !defined(SALVIA_ENABLE_LOOP)
 # undef LOOP_DETECTION
 # undef LOOP_OPTIMIZER
@@ -1422,7 +1435,7 @@ static void dr_flush_tcache(int tcid)
 static void *dr_failure(void)
 {
   printf("recompilation failed\n");
-  /* Abort con crash predecible. */
+  /* Predictable crash (NULL deref) instead of silently continuing. */
   *(volatile int *)0 = 0xDEAD0003;
   return NULL;  /* unreachable */
 }
@@ -1573,7 +1586,7 @@ static inline int gconst_alloc(sh2_reg_e r)
     gconsts[n].gregs = (1 << r);
   else {
     printf("all gconst buffers in use, aborting\n");
-    /* Abort con crash predecible. */
+    /* Predictable crash (NULL deref) instead of silently continuing. */
     *(volatile int *)0 = 0xDEAD0004;
     return -1;  /* unreachable */
   }
@@ -1948,7 +1961,7 @@ static int rcache_map_reg(sh2_reg_e r, int hr)
   if (i < 0) {
     // must not happen
     printf("invalid host register %d\n", hr);
-    /* Abort con crash predecible. */
+    /* Predictable crash (NULL deref) instead of silently continuing. */
     *(volatile int *)0 = 0xDEAD0005;
     return -1;  /* unreachable */
   }
@@ -2084,7 +2097,7 @@ static int rcache_get_reg_(sh2_reg_e r, rc_gr_mode mode, int do_locking, int *hr
     // allocate a cache register
     if ((dst = rcache_allocate_vreg(rsp_d & (1 << r))) < 0) {
       printf("no registers to evict, aborting\n");
-      /* Abort con crash predecible. */
+      /* Predictable crash (NULL deref) instead of silently continuing. */
       *(volatile int *)0 = 0xDEAD0006;
       return -1;  /* unreachable */
     }
@@ -2211,7 +2224,7 @@ static int rcache_get_tmp(void)
   i = rcache_allocate_temp();
   if (i < 0) {
     printf("cannot allocate temp\n");
-    /* Abort con crash predecible. */
+    /* Predictable crash (NULL deref) instead of silently continuing. */
     *(volatile int *)0 = 0xDEAD0007;
     return -1;  /* unreachable */
   }
@@ -2228,18 +2241,17 @@ static int rcache_get_vreg_hr(int hr)
 
   i = reg_map_host[hr];
   if (i < 0 || cache_regs[i].locked) {
-    /* Diagnostico extendido: indica i, type, locked count y hreg para
-     * poder rastrear quien lockeo el registro previamente. */
+    /* Extended diagnostic: prints i, type, locked count and hreg so we can
+     * trace who locked the register previously. */
     if (i >= 0) {
       printf("host register %d is locked (i=%d type=%d locked=%d)\n",
              hr, i, cache_regs[i].type, cache_regs[i].locked);
     } else {
       printf("host register %d not in reg_map_host (i=%d)\n", hr, i);
     }
-    /* Abort con crash predecible (NULL deref) en lugar de devolver
-     * basura del stack y corromper cache_regs[basura].  El upstream
-     * usa exit(1); en Xbox 360 mejor un crash que el debugger captura
-     * con un valor sentinel reconocible. */
+    /* Predictable crash (NULL deref) instead of returning stack garbage and
+     * corrupting cache_regs[garbage]. Upstream uses exit(1); on Xbox 360 a
+     * crash the debugger catches with a recognizable sentinel is preferable. */
     *(volatile int *)0 = 0xDEAD0001;
     return -1;  /* unreachable */
   }
@@ -2384,7 +2396,7 @@ static int rcache_restore_tmp(int x)
   if (x >= 0) {
     if (cache_regs[x].type != HR_CACHED || cache_regs[x].gregs) {
       printf("invalid tmp storage %d\n", x);
-      /* Abort con crash predecible. */
+      /* Predictable crash (NULL deref) instead of silently continuing. */
       *(volatile int *)0 = 0xDEAD0008;
       return -1;  /* unreachable */
     }
@@ -2649,19 +2661,19 @@ static void rcache_create(void)
   cache_reg_t tmp_reg;
   guest_reg_t tmp_guest;
 
-	/* [Salvia/Xbox360] BUG CRITICO: upstream inicializaba cada cache_reg con
-	 * compound-literal `{.hreg=..,.htype=..}` que ZERO-inicializa el resto de
-	 * campos. La reescritura campo-a-campo para VS2010 (que no soporta esa
-	 * sintaxis) dejaba .flags/.type/.locked/.stamp/.gregs con BASURA de pila.
-	 * El bit HRF_PINNED basura en .flags sobrevive al `flags &= HRF_PINNED`
-	 * de rcache_free_vreg y marca registros como "pinned" fantasma, que
-	 * rcache_allocate descarta -> "no registers to evict" -> NULL-write.
-	 * Ponemos tmp_reg a cero antes de usarlo (los campos se sobrescriben con
-	 * .hreg/.htype en cada iteracion, el resto queda a 0 = HR_FREE, sin flags). */
+	/* [Salvia/Xbox360] CRITICAL BUG: upstream initializes each cache_reg with a
+	 * compound literal `{.hreg=..,.htype=..}`, which zero-inits the remaining
+	 * fields. The field-by-field rewrite for VS2010 (which does not support that
+	 * syntax) left .flags/.type/.locked/.stamp/.gregs holding stack GARBAGE. A
+	 * garbage HRF_PINNED bit in .flags survives the `flags &= HRF_PINNED` in
+	 * rcache_free_vreg and marks registers as phantom-"pinned", which
+	 * rcache_allocate then skips -> "no registers to evict" -> NULL write.
+	 * Zero tmp_reg before use (each iteration overwrites .hreg/.htype, the rest
+	 * stays 0 = HR_FREE with no flags), matching the upstream compound literal. */
 	memset(&tmp_reg, 0, sizeof(tmp_reg));
 	memset(&tmp_guest, 0, sizeof(tmp_guest));
 
-	  /* Para el primer registro */
+	/* first register */
 	tmp_reg.hreg = RET_REG;
 	tmp_reg.htype = HRT_TEMP;
 	cache_regs[x++] = tmp_reg;
@@ -2697,11 +2709,10 @@ static void rcache_create(void)
 
   // mapping from host_register to cache regs index
   memset(reg_map_host, -1, sizeof(reg_map_host));
-  /* IMPORTANTE: NO excluir r4 aqui.  El "if hreg==4 continue" anterior
-   * dejaba reg_map_host[4] = -1, asi que rcache_get_vreg_hr(4) (llamado
-   * con arg=1 -> r4 segun host_arg2reg) recibia i=-1 y abortaba.  El
-   * upstream itera todos los cache_regs sin exclusiones; r4 funciona
-   * como param/temp en el ABI Xenon. */
+  /* IMPORTANT: do NOT exclude r4 here. An earlier "if hreg==4 continue" left
+   * reg_map_host[4] = -1, so rcache_get_vreg_hr(4) (called with arg=1 -> r4 per
+   * host_arg2reg) got i=-1 and aborted. Upstream iterates all cache_regs with no
+   * exclusions; r4 is a normal param/temp in the Xenon ABI. */
   for (i = 0; i < x; i++) {
     if (cache_regs[i].htype)
       reg_map_host[cache_regs[i].hreg] = i;
@@ -2709,13 +2720,13 @@ static void rcache_create(void)
       rcache_vregs_reg |= (1 << i);
   }
 
-  /* 2. Primer bucle: Inicializaci?n */
+  /* init guest regs (field-by-field for VS2010, which has no compound literals) */
 	for (i = 0; i < (int)ARRAY_SIZE(guest_regs); i++) {
 		guest_regs[i].sreg  = -1;
-		guest_regs[i].flags = 0; /* Es buena pr?ctica inicializar todos los campos en MSVC */
+		guest_regs[i].flags = 0;
 	}
 
-	/* 3. Segundo bucle: Mapeo est?tico */
+	/* static mapping */
 	for (i = 0; i < (int)ARRAY_SIZE(regs_static); i += 2) {
 		for (x = (int)ARRAY_SIZE(cache_regs) - 1; x >= 0; x--) {
 			if (cache_regs[x].hreg == regs_static[i + 1]) {
@@ -2724,7 +2735,6 @@ static void rcache_create(void)
 		}
 
 		if (x >= 0) {
-			/* Asignaci?n manual compatible con VS2010 */
 			guest_regs[regs_static[i]].flags = GRF_STATIC;
 			guest_regs[regs_static[i]].sreg  = x;
 
@@ -3482,7 +3492,7 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
   if (dr_pc_base == (void *)-1) {
     printf("invalid PC, aborting: %08lx\n", (long)base_pc);
     // FIXME: be less destructive
-    /* Abort con crash predecible. */
+    /* Predictable crash (NULL deref) instead of silently continuing. */
     *(volatile int *)0 = 0xDEAD0009;
     return NULL;  /* unreachable */
   }
@@ -3519,17 +3529,15 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
       op_flags[i] &= ~OF_BTARGET;
     if (op_flags[i] & OF_BTARGET) {
       if (branch_target_count < ARRAY_SIZE(branch_targets)){
-        /* 2. Asigna los valores manualmente */
+        /* field-by-field assignment (VS2010 has no compound literals) */
 		tmp_link.pc   = pc;
-		/* [Salvia/Xbox360] CRITICO: inicializar .ptr=NULL (los otros campos
-		 * tambien). El upstream usaba compound-literal que zero-inicializa;
-		 * sin esto .ptr sale basura y emit_branch_linkage_code (`!targets[v].ptr`)
-		 * cree que un target sin resolver ya esta resuelto -> salta a basura. */
+		/* [Salvia/Xbox360] CRITICAL: init .ptr=NULL (and the other fields).
+		 * Upstream used a compound literal which zero-inits them; without this
+		 * .ptr holds garbage and emit_branch_linkage_code (`!targets[v].ptr`)
+		 * treats an unresolved target as already resolved -> jumps to garbage. */
 		tmp_link.ptr  = NULL;
 		tmp_link.bl   = NULL;
 		tmp_link.mask = 0;
-		/* Si la estructura tiene m?s campos (como 'addr' o 'target'), 
-		   aseg?rate de inicializarlos a 0 para replicar el comportamiento de C99 */
 
 		branch_targets[branch_target_count++] = tmp_link;
 	  } else {
@@ -3609,7 +3617,7 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
               pinned_loop_count < ARRAY_SIZE(pinned_loops)-1) {
             pinned_loops[pinned_loop_count].pc = base_pc + 2 * v;
 			pinned_loops[pinned_loop_count].mask = m3;
-			pinned_loops[pinned_loop_count].ptr = NULL; /* [Salvia] evita .ptr stale (leido en 5167) */
+			pinned_loops[pinned_loop_count].ptr = NULL; /* [Salvia] init .ptr (read later at loop resolve); upstream compound-literal zero-inits it */
 			pinned_loops[pinned_loop_count].bl  = NULL;
 			pinned_loop_count++;
           } else
@@ -3697,14 +3705,7 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
 #if LOOP_DETECTION
       drcf.loop_type = op_flags[i] & OF_LOOP;
       drcf.delay_reg = -1;
-#ifdef SALVIA_NO_POLLING
-      /* [Salvia/Xbox360] Diagnostico: fuerza polling off (las lecturas de
-       * poll-loops NO usan los stubs sh2_drc_read*_poll con MF_POLLING).
-       * Aisla si el hang de LOOP_DETECTION viene del path de poll. */
-      drcf.polling = 0;
-#else
       drcf.polling = (drcf.loop_type == OF_POLL_LOOP ? MF_POLLING : 0);
-#endif
 #endif
 
       rcache_clean();
@@ -3751,11 +3752,11 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
 
         if (blx_target_count < ARRAY_SIZE(blx_targets)) {
           // exit via stub in blx table (saves some 1-3 insns in the main flow)
-          /* Asignaci?n manual compatible con el compilador de Xbox 360 */
+          /* field-by-field assignment (VS2010 has no compound literals) */
 			blx_targets[blx_target_count].pc   = pc;
 			blx_targets[blx_target_count].ptr  = tcache_ptr;
 			blx_targets[blx_target_count].mask = 0x1;
-			blx_targets[blx_target_count].bl   = NULL; /* [Salvia] evita .bl stale */
+			blx_targets[blx_target_count].bl   = NULL; /* [Salvia] init .bl (upstream compound-literal zero-inits it; avoids a stale block_link) */
 			blx_target_count++;
           emith_jump_patchable(tcache_ptr);
         } else {
@@ -3772,11 +3773,11 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
         if (blx_target_count < ARRAY_SIZE(blx_targets)) {
           // exit via stub in blx table (saves some 1-3 insns in the main flow)
           emith_cmp_r_imm(sr, 0);
-          /* Asignaci?n manual compatible con MSVC / Xbox 360 */
+          /* field-by-field assignment (VS2010 has no compound literals) */
 			blx_targets[blx_target_count].pc   = pc;
 			blx_targets[blx_target_count].ptr  = tcache_ptr;
 			blx_targets[blx_target_count].mask = 0x01;
-			blx_targets[blx_target_count].bl   = NULL; /* [Salvia] evita .bl stale */
+			blx_targets[blx_target_count].bl   = NULL; /* [Salvia] init .bl (upstream compound-literal zero-inits it; avoids a stale block_link) */
 			blx_target_count++;
           emith_jump_cond_patchable(DCOND_LT, tcache_ptr);
         } else {
@@ -3863,12 +3864,12 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
     opd = &ops[i];
     op = FETCH_OP(pc);
 #ifdef SALVIA_DUMP_PC
-    /* [Salvia/Xbox360] Volcado dirigido para depurar Doom: imprime cada
-     * instruccion SH2 en una ventana de +-0x40 alrededor del PC objetivo,
-     * segun se compila. op=opcode, cyc=ciclos, sz=tamano(0/1/2=B/W/L),
-     * imm=desplazamiento/inmediato, src/dst=mascaras de reg leidos/escritos
-     * (bits: 0-15=R0-R15, 16=PC,17=PPC,18=PR,19=SR,20=GBR,21=VBR,22=MACH,
-     * 23=MACL). Define SALVIA_DUMP_PC=0x02049284 (el poll donde se atasca). */
+    /* [Salvia/Xbox360] Targeted debug dump: print each SH2 instruction within a
+     * +-0x40 window around the target PC as it is compiled. op=opcode,
+     * cyc=cycles, sz=size (0/1/2 = B/W/L), imm=displacement/immediate,
+     * src/dst=read/written register masks (bit 0-15=R0-R15, 16=PC, 17=PPC,
+     * 18=PR, 19=SR, 20=GBR, 21=VBR, 22=MACH, 23=MACL). Define e.g.
+     * SALVIA_DUMP_PC=0x02049284 to inspect a specific code path. */
     if (pc + 0x40 >= (u32)(SALVIA_DUMP_PC) && pc <= (u32)(SALVIA_DUMP_PC) + 0x40) {
       extern void lprintf(const char *fmt, ...);
       lprintf("[dump] %csh2 pc=%08x op=%04x cyc=%d sz=%d imm=%08x src=%08x dst=%08x\n",
@@ -5140,7 +5141,7 @@ static void REGPARM(2) *sh2_translate(SH2 *sh2, int tcache_id)
       if (!(op_flags[i] & OF_B_IN_DS)) {
         elprintf_sh2(sh2, EL_ANOMALY,
           "drc: illegal op %04x @ %08x", op, pc - 2);
-        /* Abort con crash predecible. */
+        /* Predictable crash (NULL deref) instead of silently continuing. */
         *(volatile int *)0 = 0xDEAD000A;
         return NULL;  /* unreachable */
       }
@@ -5271,7 +5272,7 @@ end_op:
           blx_targets[blx_target_count].pc   = target_pc;
 			blx_targets[blx_target_count].ptr  = target;
 			blx_targets[blx_target_count].mask = 0x02;
-			blx_targets[blx_target_count].bl   = NULL; /* [Salvia] evita .bl stale */
+			blx_targets[blx_target_count].bl   = NULL; /* [Salvia] init .bl (upstream compound-literal zero-inits it; avoids a stale block_link) */
 			blx_target_count++;
           if (cond != -1)
             emith_jump_cond_patchable(cond, target);
@@ -5296,7 +5297,7 @@ end_op:
             target = tcache_ptr;
             blx_targets[blx_target_count].pc   = target_pc;
 			blx_targets[blx_target_count].ptr  = target;
-			blx_targets[blx_target_count].mask = 0; /* [Salvia] externo via dispatcher */
+			blx_targets[blx_target_count].mask = 0; /* [Salvia] init .mask=0: external branch via dispatcher */
 			blx_targets[blx_target_count].bl   = bl;
 			blx_target_count++;
             emith_jump_cond_patchable(cond, target);
@@ -6565,7 +6566,7 @@ u16 scan_block(u32 base_pc, int is_slave, u8 *op_flags, u32 *end_pc_out,
         opd->source = BITMASK3(SHR_SR, GET_Rm(), GET_Rn());
         opd->dest = BITMASK2(SHR_SR, SHR_T);
         {
-			/* Usamos un puntero para asignar los campos uno a uno de forma limpia */
+			/* use a pointer to assign the fields one by one (no compound literal) */
 			struct div *d = &div(opd);
 			d->rn = GET_Rn();
 			d->rm = GET_Rm();

@@ -555,8 +555,8 @@ void pevt_dump(void)
 #include <string.h>
 static FILE *tl_f;
 
-/* [Salvia/Xbox360] En el XDK el current dir puede ser read-only; usamos
- * game:\ (donde corre el .xex) que si es escribible. */
+/* [Salvia/Xbox360] On the XDK the current dir may be read-only; use game:\
+ * (where the .xex runs), which is writable. */
 #if defined(_XBOX) || defined(_XBOX360)
 extern void lprintf(const char *fmt, ...);
 #define TRACELOG_PATH "game:\\tracelog.bin"
@@ -564,26 +564,27 @@ extern void lprintf(const char *fmt, ...);
 #define TRACELOG_PATH "tracelog"
 #endif
 
-/* [Salvia/Xbox360] BUFFER EN RAM. La version original hacia un fwrite POR CADA
- * delta de registro y por cada instruccion -> millones de escrituras minusculas
- * a game:\ hundian el modo RECORD a ~0.4 fps. Bufferizamos y volcamos en bloques
- * grandes. Un run es o RECORD o COMPARE (nunca a la vez), asi que el mismo
- * buffer/posicion se reutiliza. Los volcados cada 256KB dejan el fichero en disco
- * al dia salvo los ultimos <256KB -> graba ~1-2 s MAS ALLA del cuelgue para que la
- * primera divergencia quede dentro de lo volcado. */
+/* [Salvia/Xbox360] RAM BUFFER. The original version did one fwrite PER register
+ * delta and per instruction -> millions of tiny writes to game:\ sank RECORD
+ * mode to ~0.4 fps. Buffer and flush in large blocks. A run is either RECORD or
+ * COMPARE (never both), so the same buffer/position is reused. Flushing every
+ * 256KB keeps the on-disk file current except for the last <256KB, so record
+ * ~1-2 s PAST the point of interest to keep the first divergence within the
+ * flushed data. */
 #define TL_BUF_SIZE (256*1024)
 static unsigned char tl_buf[TL_BUF_SIZE];
-static size_t tl_buf_pos;   /* write: bytes llenados; read: bytes consumidos */
-static size_t tl_buf_len;   /* read: bytes validos leidos en el buffer */
+static size_t tl_buf_pos;   /* write: bytes filled; read: bytes consumed */
+static size_t tl_buf_len;   /* read: valid bytes read into the buffer */
 
 void tl_write(const void *ptr, size_t size)
 {
 #if defined(DRC_CMP) && !defined(DRC_CMP_RECORD)
-  /* [Salvia/Xbox360] GUARD: en modo COMPARE (DRC_CMP sin DRC_CMP_RECORD) NADIE
-   * debe escribir el trace. Si el slave-interprete (SALVIA_FORCE_SLAVE_INTERP)
-   * llamara aqui, abriria el fichero en "wb" y lo TRUNCARIA -> do_sh2_cmp leeria
-   * EOF y todo serian falsas divergencias. No-op defensivo (ademas del filtro
-   * SALVIA_CMP_SH2 en do_sh2_trace). */
+  /* [Salvia/Xbox360] GUARD: in COMPARE mode (DRC_CMP without DRC_CMP_RECORD)
+   * nobody should write the trace. If the slave interpreter
+   * (SALVIA_FORCE_SLAVE_INTERP) called here it would open the file in "wb" and
+   * TRUNCATE it -> do_sh2_cmp would read EOF and everything would be false
+   * divergences. Defensive no-op (on top of the SALVIA_CMP_SH2 filter in
+   * do_sh2_trace). */
   (void)ptr; (void)size;
   return;
 #else
@@ -591,16 +592,16 @@ void tl_write(const void *ptr, size_t size)
     tl_f = fopen(TRACELOG_PATH, "wb");
     tl_buf_pos = 0;
 #if defined(_XBOX) || defined(_XBOX360)
-    lprintf(tl_f ? "DRC_CMP: grabando trace a " TRACELOG_PATH "\n"
-                 : "DRC_CMP: NO puede abrir " TRACELOG_PATH " (escritura)\n");
+    lprintf(tl_f ? "DRC_CMP: recording trace to " TRACELOG_PATH "\n"
+                 : "DRC_CMP: cannot open " TRACELOG_PATH " (write)\n");
 #endif
   }
   if (tl_f == NULL) return;
-  if (tl_buf_pos + size > TL_BUF_SIZE) {   /* buffer lleno -> volcar */
+  if (tl_buf_pos + size > TL_BUF_SIZE) {   /* buffer full -> flush */
     fwrite(tl_buf, 1, tl_buf_pos, tl_f);
     tl_buf_pos = 0;
   }
-  if (size > TL_BUF_SIZE) {                /* escritura mayor que el buffer */
+  if (size > TL_BUF_SIZE) {                /* write larger than the buffer */
     fwrite(ptr, 1, size, tl_f);
     return;
   }
@@ -632,14 +633,14 @@ int tl_read(void *ptr, size_t size)
     tl_f = fopen(TRACELOG_PATH, "rb");
     tl_buf_pos = tl_buf_len = 0;
 #if defined(_XBOX) || defined(_XBOX360)
-    lprintf(tl_f ? "DRC_CMP: leyendo trace de " TRACELOG_PATH "\n"
-                 : "DRC_CMP: NO puede abrir " TRACELOG_PATH " (lectura)\n");
+    lprintf(tl_f ? "DRC_CMP: reading trace from " TRACELOG_PATH "\n"
+                 : "DRC_CMP: cannot open " TRACELOG_PATH " (read)\n");
 #endif
   }
   if (tl_f == NULL) return 0;
   while (got < size) {
     size_t n;
-    if (tl_buf_pos >= tl_buf_len) {          /* rellenar buffer */
+    if (tl_buf_pos >= tl_buf_len) {          /* refill buffer */
       tl_buf_len = fread(tl_buf, 1, TL_BUF_SIZE, tl_f);
       tl_buf_pos = 0;
       if (tl_buf_len == 0) break;            /* EOF */

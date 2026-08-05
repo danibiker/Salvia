@@ -109,11 +109,11 @@
 //#include "sh2.h"
 //#include "sh2comn.h"
 #undef INLINE
-/* [Salvia/Xbox360] Upstream usaba solo `static` (sin inline), dejando las
- * ~165 funciones de opcodes SH2 sin inlinear en MSVC Xbox 360 -> interprete
- * ~3x mas lento. Forzar __inline lo acelera notablemente (critico en modo
- * DRC_CMP record y con el slave forzado a interprete). En GCC, `inline` ya
- * mapea a `__inline` via la macro del proyecto. */
+/* [Salvia/Xbox360] Upstream used just `static` (no inline), leaving the ~165 SH2
+ * opcode functions un-inlined under MSVC/Xbox 360 -> the interpreter ran ~3x
+ * slower. Forcing __inline speeds it up noticeably (matters in DRC_CMP record
+ * mode and with the slave forced to the interpreter). On GCC, `inline` already
+ * maps to `__inline` via the project's macro. */
 #define INLINE static __inline
 
 //CPU_DISASSEMBLE( sh2 );
