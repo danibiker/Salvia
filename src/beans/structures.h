@@ -189,9 +189,10 @@ public:
 		lastOnlyParents = onlyParents;
 	}
 	
-	bool shouldFilter(){
-		return posYear != -1 || posManufacturer != -1 || posSystem != -1 || 
-			(onlyParents && !years.empty() && !manufacturers.empty() && !systems.empty());
+	//We call here usually when we don't have data. So if there is nothing selected,
+	//we include it by default
+	bool shouldInclude(){
+		return posYear == -1 && posManufacturer == -1 && posSystem == -1;
 	}
 
 	bool filterChanged(){
@@ -802,6 +803,7 @@ class ConfigEmu{
 		generalConfig = false;
 		no_uncompress = false;
 		menu_show_directories = false;
+		menu_directory_recursive = false;
 		integerScale = false;
 		aspectRatio = 0;
 		shaderMode = 0;
@@ -864,6 +866,8 @@ class ConfigEmu{
 	std::string keyboard_type;
 	//Show directories in the menu list
 	bool menu_show_directories;
+	//List files recursively
+	bool menu_directory_recursive;
 	//Set the default servers to connect when required
 	std::string network_default_servers;
 	//Se the default title

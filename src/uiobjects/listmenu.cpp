@@ -137,7 +137,7 @@ void ListMenu::applyFilter() {
         bool include = true;
 
         if (game->gameData == NULL) {
-            include = !gameDataFields.shouldFilter();
+            include = gameDataFields.shouldInclude();
         } else {
             include = gameDataFields.filterManufacturer(game->gameData->manufacturer) &&
 					  gameDataFields.filterYear(Constant::TipoToStr(game->gameData->year)) &&
@@ -691,12 +691,19 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
 
 	for (auto it = files.cbegin(); it != endIt; ++it) {
 		const auto& file = *it;
-    
+		
+		if (file->filename.empty())
+			continue;
+
 		GameFile* gFile = new GameFile();
 		gFile->systemid = system;
     
 		// Intercambio instantáneo de memoria en 0ms
-		gFile->longFileName.swap(file->filename); 
+		if (emu.menu_directory_recursive){
+			gFile->longFileName = !file->dir.empty() ? file->dir + Constant::getFileSep() + file->filename : file->filename; 
+		} else {
+			gFile->longFileName.swap(file->filename); 
+		}
     
 		// 1. Calculamos el nombre sin extensión una sola vez
 		const string fileNameNoExt = dir.getFileNameNoExt(gFile->longFileName);
@@ -717,7 +724,7 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
 				uniqueManufacturers.insert(data.manufacturer); // const char* directo, 0 allocs
 				uniqueYears.insert(data.year);
 				uniqueSourcefiles.insert(data.sourcefile);     // dedup en crudo; extractSystem se aplica fuera
-			} 
+			}
 		}
     
 		if (!gFileFoundInMame) {
@@ -725,7 +732,7 @@ void ListMenu::filesToList(vector<unique_ptr<FileProps>> &files, ConfigEmu emu) 
 		}
 
 		const std::string& longName = gFile->longFileName;
-		if (!longName.empty() && longName[0] == '@') {
+		if (!longName.empty() && fileNameNoExt[0] == '@') {
 			gFile->fileType = FT_ZIP_LIST;
 		} else {
 			gFile->fileType = (file->filetype == TIPODIRECTORIO) ? FT_DIR : FT_CARTRIDGE;

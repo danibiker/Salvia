@@ -147,7 +147,12 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 		if (!onlyCount && !dir.dirExists(resultado.sinopsisdir.c_str())) dir.createDirRecursive(resultado.sinopsisdir.c_str());
 	}
 
-	dir.listarFilesSuperFast(romsdir.c_str(), files, extFilter, true, false);
+	if (emulatorCfg.menu_directory_recursive){
+		dir.listFilesRecursive(romsdir.c_str(), files, extFilter, true, false);
+	} else {
+		dir.listFiles(romsdir.c_str(), files, extFilter, true, false);
+	}
+
 	std::string urlBase, fullUrl;
 
 	for (std::size_t i = 0; i < files.size(); i++) {

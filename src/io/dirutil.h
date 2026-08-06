@@ -51,9 +51,12 @@ class dirutil{
 		bool isChild(const std::string& parent, const std::string& child);
         string getExtension(string file);
         bool setFileProperties(FileProps *propFile, string ruta);
-        unsigned int listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtro, bool order, bool properties);
-		unsigned int listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool order, bool properties);
-		unsigned int listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool includeDirs, bool order, bool properties);
+        unsigned int listFiles(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtro, bool order, bool properties);
+		unsigned int listFiles(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool order, bool properties);
+		unsigned int listFiles(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool includeDirs, bool order, bool properties);
+		unsigned int listFilesRecursive(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtro, bool order, bool properties);
+		unsigned int listFilesRecursive(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool order, bool properties);
+		unsigned int listFilesRecursive(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool includeDirs, bool order, bool properties);
         string getFolder(string file);
         string getFileName(string file);
         bool changeDirAbsolute(const char *str);

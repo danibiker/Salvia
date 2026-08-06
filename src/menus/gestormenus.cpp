@@ -593,6 +593,7 @@ void GestorMenus::poblarMenuCoreOverrides(Menu *menu, CfgLoader *refConfig){
 	const std::string intScaleTxt = LanguageManager::instance()->get("menu.options.integerscale");
 	const std::string intScaleTypeTxt = LanguageManager::instance()->get("menu.options.integerscale.type");
 	const std::string showDirTxt = LanguageManager::instance()->get("menu.options.showdir");
+	const std::string recursiveFilesTxt = LanguageManager::instance()->get("menu.options.listrecursive");
 	const std::string autoOverrideTxt = LanguageManager::instance()->get("menu.core.overrides.auto");
 
 	//Aspect ratios texts
@@ -646,7 +647,9 @@ void GestorMenus::poblarMenuCoreOverrides(Menu *menu, CfgLoader *refConfig){
 		menuCore->opciones.push_back(new OpcionLista(intScaleTxt, enableScaleInt, &refConfig->emulators[i]->config.integerScale));
 		//Integer scale type
 		menuCore->opciones.push_back(new OpcionLista(intScaleTypeTxt, scaleInt, &refConfig->emulators[i]->config.scaleIntMode));
-		//Show directories
+		//Scan subfolders
+		menuCore->opciones.push_back(new OpcionBool(recursiveFilesTxt, &refConfig->emulators[i]->config.menu_directory_recursive));
+		//Show directories (no effect if menu_directory_recursive enabled)
 		menuCore->opciones.push_back(new OpcionBool(showDirTxt, &refConfig->emulators[i]->config.menu_show_directories));
 		
 		//Button to save configuration of the selected core
@@ -744,7 +747,7 @@ void GestorMenus::poblarCdList(std::string ruta){
 	}
 
 	vector<unique_ptr<FileProps>> files;
-	dir.listarFilesSuperFast(dir.getFolder(ruta).c_str(), files, CD_FILTER, "", true, false);
+	dir.listFiles(dir.getFolder(ruta).c_str(), files, CD_FILTER, "", true, false);
 	//Cada elemento del menu es un objeto FileProps con las propiedades del fichero seleccionado
 	for (std::size_t i = 0; i < files.size(); ++i) {
 		OpcionTxt *cdElem = new OpcionTxt(files[i]->filename);
@@ -1278,7 +1281,7 @@ void GestorMenus::poblarPartidasGuardadas(CfgLoader *refConfig, std::string romp
 	int found = -1;
 	vector<unique_ptr<FileProps>> files;
 
-	dir.listarFilesSuperFast(statesDir.c_str(), files, "", filterName, true, true);
+	dir.listFiles(statesDir.c_str(), files, "", filterName, true, true);
 	menuSavestates->opciones.clear();
 
 	for (int i = 0; i < MAX_SAVESTATES; ++i) {

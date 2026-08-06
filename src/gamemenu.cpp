@@ -1086,7 +1086,13 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
         vector<unique_ptr<FileProps>> files;
 		string extFilter = " " + emu->rom_extension;
         extFilter = Constant::replaceAll(extFilter, " ", ".");
-		dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, "", emu->menu_show_directories, false, false);
+
+		if (emu->menu_directory_recursive){
+			dir.listFilesRecursive(mapfilepath.c_str(), files, extFilter, "", false, false, false);
+		} else {
+			dir.listFiles(mapfilepath.c_str(), files, extFilter, "", emu->menu_show_directories, false, false);
+		}
+		
         menuData.filesToList(files, *emu);
         files.clear();
     } else {
@@ -1185,19 +1191,26 @@ FILE_STATUS GameMenu::listableZip(ListMenu &listMenu, FILE_NAVIGATION nav){
 	ConfigEmu emu = *cfgLoader->getCfgEmu();
 	FILE_STATUS ret = FS_NOZIP_TO_LIST;
 	string romFile;
+	string romFileName;
 
 	if (listMenu.curPos >= 0 && listMenu.curPos < (int)listMenu.filteredGames.size()){
 		auto game = listMenu.filteredGames.at(listMenu.curPos);
 		romFile = game->longFileName;
+		romFileName = dir.getFileName(game->longFileName);
 	}
 
-	bool selectedListableZip = !romFile.empty() && romFile[0] == '@' && nav == FS_ZIP_CD;
+	bool selectedListableZip = !romFile.empty() && !romFileName.empty() && romFileName[0] == '@' && nav == FS_ZIP_CD;
 
 	if ( selectedListableZip || !listMenu.listZipped.getInternalDir().empty() || !listMenu.listZipped.file.empty()){
 		//Try to list the contents of the directory
 		if (selectedListableZip){
-			listMenu.listZipped.dir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory, CfgLoader::configMain[cfg::roms_path].valueStr) + string(Constant::tempFileSep) : "";
-			listMenu.listZipped.file = emu.use_extension ? romFile : dir.getFileNameNoExt(romFile);
+			if (!emu.menu_directory_recursive){
+				listMenu.listZipped.dir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory, CfgLoader::configMain[cfg::roms_path].valueStr) + string(Constant::tempFileSep) : "";
+				listMenu.listZipped.file = emu.use_extension ? romFile : dir.getFileNameNoExt(romFile);
+			} else {
+				listMenu.listZipped.dir = emu.use_rom_directory ? dir.getFolder(romFile) + Constant::getFileSep() : "";
+				listMenu.listZipped.file = emu.use_extension ? dir.getFileName(romFile) : dir.getFileNameNoExt(romFile);
+			}
 		} 
 		std::string romzip = listMenu.listZipped.dir + listMenu.listZipped.file;
 
@@ -1224,7 +1237,7 @@ FILE_STATUS GameMenu::listableZip(ListMenu &listMenu, FILE_NAVIGATION nav){
 				listMenu.zippedToList(Constant::strToTipo<int>(emu.system));
 				//Solo actualizamos el path interno si es un directorio
 				if (nav == FS_ZIP_CD && (selectedListableZip || !romFile.empty())){
-					listMenu.listZipped.cd(romFile[0] != '@' ? romFile : "");
+					listMenu.listZipped.cd(romFileName[0] != '@' ? romFileName : "");
 				}
 			}
 			ret = FS_ZIP_NAVIGATION;
@@ -1281,6 +1294,7 @@ FILE_STATUS GameMenu::listableDir(ListMenu &listMenu, FILE_NAVIGATION nav){
 	}
 	
 	listMenu.listDir.dir = emu.use_rom_directory ? dirutil::getPathPrefix(emu.rom_directory, CfgLoader::configMain[cfg::roms_path].valueStr) + string(Constant::tempFileSep) : "";
+	
 	std::string fileSelected;
 	std::string rompath;
 
@@ -1302,7 +1316,7 @@ FILE_STATUS GameMenu::listableDir(ListMenu &listMenu, FILE_NAVIGATION nav){
 		ConfigEmu *emu = cfgLoader->getCfgEmu();
 		string extFilter = " " + emu->rom_extension;
 		extFilter = Constant::replaceAll(extFilter, " ", ".");
-		dir.listarFilesSuperFast(rompath.c_str(), files, extFilter, "", emu->menu_show_directories, false, false);
+		dir.listFiles(rompath.c_str(), files, extFilter, "", emu->menu_show_directories, false, false);
 		listMenu.filesToList(files, *emu);
 		if (nav == FS_DIR_CD){
 			listMenu.listDir.addRelativePath(fileSelected);

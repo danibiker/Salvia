@@ -12,6 +12,7 @@
 #include <sstream>
 #include <fstream>
 #include <iostream>
+#include <algorithm> // Requerido para std::rotate
 
 extern "C"{
 	void retro_get_system_info(struct retro_system_info *info);
@@ -479,6 +480,8 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 						cfgEmu->config.keyboard_type = value;
 					} else if (key.compare("menu_show_directories") == 0){
 						cfgEmu->config.menu_show_directories = value.compare("yes") == 0 ? true : false;
+					} else if (key.compare("menu_directory_recursive") == 0){
+						cfgEmu->config.menu_directory_recursive = value.compare("yes") == 0 ? true : false;
 					} else if (key.compare("network_default_servers") == 0){
 						cfgEmu->config.network_default_servers = value;
 					} else if (key.compare("title_bkg_assets") == 0){
@@ -515,44 +518,20 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 	}
 }
 
-//unsigned int CfgLoader::findConfigIndex(std::string propName){
-//	unsigned int selectedIndex = 0;
-//	for (int i=cfg::coreGenesis; i < cfg::MAIN_CFG_MAX; i++){
-//		if (configMain[i].name == propName){
-//			selectedIndex = i;
-//			break;
-//		}
-//	}
-//	return selectedIndex;
-//}
-
 void CfgLoader::getExecutables(std::string str, cfg::t_cfg_emu* emu){
 	Constant::splitChar(str, ';', emu->config.cores);
-	//std::string emuInternalName = Constant::Trim(emu->config.internalName);
-	//unsigned int selectedIndex = findConfigIndex(coreDefault + emuInternalName);
-	//Si tiene configurado un emulador por defecto, lo obtenemos
-	//unsigned int selectedValue = 0;
-	//if (selectedIndex < cfg::MAIN_CFG_MAX && selectedIndex > 0){
-	//	selectedValue = configMain[selectedIndex].valueInt;		
-	//} 
-	//if (selectedValue < emu->config.cores.size()){
-		//emu->config.executable = emu->config.cores[selectedValue];
-	//}
-
 	if (!emu->config.cores.empty()){
 		//Simply obtain the first of the list
 		emu->config.executable = emu->config.cores.front();
 	}
 }
 
-#include <algorithm> // Requerido para std::rotate
-
 /**
 * Gets a string from the list of executables by moving the selected one
 * to the beginning of the list. This way, when the list is loaded at startup
 * the emulator, we know that the selected one is the first element
 */
-std::string CfgLoader::getExecutablesString(const ConfigEmu& cfg){
+std::string CfgLoader::getExecutablesStringOrdered(const ConfigEmu& cfg){
 	std::string execs;
 
 	// We make a copy to modify the vector freely
@@ -728,13 +707,12 @@ std::string CfgLoader::getCoreCfgPath(){
 // Metodo para guardar la configuracion en un archivo
 std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
 	ConfigEmu& cfg = emulators.at(emuIdx).get()->config;
-	//La ruta del archivo la tendremos que recoger por parametro
+	
+	//Get the executables ordered
+	cfg.executable = CfgLoader::getExecutablesStringOrdered(cfg);
 	const std::string rutaArchivo = cfg.cfgFilePath;
-
     std::ofstream archivo(rutaArchivo.c_str());
     if (!archivo.is_open()) return "";
-
-	cfg.executable = CfgLoader::getExecutablesString(cfg);
 
     // 1. Escribimos los campos de tipo string de forma masiva
     struct MappingStr { const char* nombre; const char* descripcion; const std::string ConfigEmu::*puntero; };
@@ -749,13 +727,14 @@ std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
         {"rom_directory", "ROM Directory", &ConfigEmu::rom_directory},
         {"rom_extension", "List of supported extensions for ROMs (without the \".\")", &ConfigEmu::rom_extension},
         {"assets", "This is the directory where images and information are stored.", &ConfigEmu::assets},
+		{"title_bkg_assets", "Instead of loading the title and background from the assets directory, we load them from this path."
+							 "\n#This is useful if, for example, we have many Mame images that are actually the same as those in fbneo.", &ConfigEmu::title_bkg_assets},
         {"screen_shot_directory", "This is the directory where the screenshots in .png format are located.", &ConfigEmu::screen_shot_directory},
         {"mame_roms_xml", "Xml file with Mame game names", &ConfigEmu::mame_roms_xml},
         {"map_file", "This is the list of pre-scanned ROMs (not supported yet).", &ConfigEmu::map_file},
         {"keyboard_type", "Keyboard type. Implemented for: msx and spectrum", &ConfigEmu::keyboard_type}
     };
     
-    //archivo << "# Cadenas de texto\n";
     for (std::size_t i = 0; i < sizeof(strings)/sizeof(strings[0]); ++i) {
 		archivo << "#" << strings[i].descripcion << "\n";
         archivo << strings[i].nombre << " = " << cfg.*(strings[i].puntero) << "\n";
@@ -780,11 +759,11 @@ std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
 		"\n# e.g., yes: \"emulator.exe c:\\full\\path\\rom\\"
 		"\n# no: \"emulator.exe rom\"", &ConfigEmu::use_rom_directory},
         {"no_uncompress", "Avoids to uncompress the zip file", &ConfigEmu::no_uncompress},
-        {"menu_show_directories", "Show directories in the game list", &ConfigEmu::menu_show_directories}
+        {"menu_show_directories", "Show directories in the game list", &ConfigEmu::menu_show_directories},
+		{"menu_directory_recursive", "List directory contents recursively", &ConfigEmu::menu_directory_recursive},
         //{"generalConfig", &ConfigEmu::generalConfig}
     };
 
-    //archivo << "\n# Booleanos\n";
     for (std::size_t i = 0; i < sizeof(bools)/sizeof(bools[0]); ++i) {
 		archivo << "#" << bools[i].descripcion << "\n";
         archivo << bools[i].nombre << " = " << (cfg.*(bools[i].puntero) ? "yes" : "no") << "\n";
@@ -834,7 +813,6 @@ std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
 		"\n#SCALE FIXED 5X		 6", &ConfigEmu::scaleIntMode}
     };
 
-    //archivo << "\n# Enteros\n";
 	//The override list, has the option "auto", which is represented as -1. That's why we subtract 1
     for (std::size_t i = 0; i < sizeof(enteros)/sizeof(enteros[0]); ++i) {
 		archivo << "#" << enteros[i].descripcion << "\n";
@@ -842,5 +820,10 @@ std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
     }
 
     archivo.close();
+
+	//Restore the executable to the selected one
+	if (cfg.execIdx >= 0 && (std::size_t)cfg.execIdx < cfg.cores.size())
+		cfg.executable = cfg.cores[cfg.execIdx]; 
+
 	return LanguageManager::instance()->get("msg.core.cfg.savelocation") + rutaArchivo;
 }

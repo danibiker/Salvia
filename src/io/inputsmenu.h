@@ -316,10 +316,12 @@ int procesarAccionesMenu(ListMenu &listMenu){
 			//It's not a zip file. Try to list if it's a directory
 			FILE_STATUS fs = gameMenu->listableDir(listMenu, FS_DIR_CD);
 			if (fs == FS_DIR_ISFILE){
-				romToLaunch = listMenu.listDir.dir;
-				std::string relativePath = listMenu.listDir.getRelativePath();
-				if (!relativePath.empty()){
-					romToLaunch.append(relativePath + Constant::getFileSep());
+				if (!emu->menu_directory_recursive){
+					romToLaunch = listMenu.listDir.dir;
+					std::string relativePath = listMenu.listDir.getRelativePath();
+					if (!relativePath.empty()){
+						romToLaunch.append(relativePath + Constant::getFileSep());
+					}
 				}
 				romToLaunch.append(listMenu.listDir.file);
 			} else {

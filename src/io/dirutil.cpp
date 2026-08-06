@@ -110,20 +110,20 @@ bool dirutil::isChild(const std::string& parent, const std::string& child){
 }
 
 /**
-* Obtiene la extensión del fichero (incluyendo el punto)
+* Obtiene la extension del fichero (incluyendo el punto)
 */
 string dirutil::getExtension(string file) {
     if (file.empty()) return "";
 
-    // 1. Buscamos el último separador de carpeta para aislar el nombre
+    // 1. Buscamos el ultimo separador de carpeta para aislar el nombre
     size_t lastSep = file.find_last_of("/\\");
     size_t startSearch = (lastSep == string::npos) ? 0 : lastSep + 1;
 
     // 2. Buscamos el punto solo a partir del nombre del archivo
     size_t lastDot = file.find_last_of(".");
 
-    // 3. Verificamos que el punto esté después del separador y no sea el primer carácter del nombre
-    // (Esto evita archivos ocultos sin extensión como ".bashrc")
+    // 3. Verificamos que el punto este despues del separador y no sea el primer caracter del nombre
+    // (Esto evita archivos ocultos sin extension como ".bashrc")
     if (lastDot != string::npos && lastDot >= startSearch && lastDot > 0) {
         string ext = file.substr(lastDot);
         Constant::lowerCase(&ext);
@@ -207,22 +207,22 @@ int dirutil::findIcon(const char *filename){
     }
 }
 
-unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtro, bool order, bool properties){
+unsigned int dirutil::listFiles(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtro, bool order, bool properties){
     unsigned int totalFiles = 0;
-	return listarFilesSuperFast(strdir, filelist, filtro, "", false, order, properties);
+	return listFiles(strdir, filelist, filtro, "", false, order, properties);
 }
 
-unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool order, bool properties){
-    return listarFilesSuperFast(strdir, filelist, filtroExt, filtroName, false, order, properties);
+unsigned int dirutil::listFiles(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool order, bool properties){
+    return listFiles(strdir, filelist, filtroExt, filtroName, false, order, properties);
 }
 
-unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool includeDirs, bool order, bool properties){
+unsigned int dirutil::listFiles(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool includeDirs, bool order, bool properties){
 	unsigned int totalFiles = 0;
 
 #ifdef _XBOX
 	WIN32_FIND_DATA findData;
     HANDLE hFind = INVALID_HANDLE_VALUE;
-    // Es necesario añadir "\*" al final de la ruta para buscar todos los archivos
+    // Es necesario anyadir "\*" al final de la ruta para buscar todos los archivos
     std::string searchPath = strdir;
     if (searchPath[searchPath.length() - 1] != '\\') {
         searchPath += "\\";
@@ -234,7 +234,7 @@ unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr
     hFind = FindFirstFile(searchPath.c_str(), &findData);
 
     if (hFind == INVALID_HANDLE_VALUE) {
-        std::cout << "No se pudo abrir el directorio o está vacío: " << strdir << std::endl;
+        std::cout << "No se pudo abrir el directorio o esta vacio: " << strdir << std::endl;
         return 0;
     }
 	string extension;
@@ -286,7 +286,7 @@ unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr
 					continue;
 				}
 
-				// 2. Determinar si es un directorio (usando d_type o tu función alternativa)
+				// 2. Determinar si es un directorio (usando d_type o tu funcion alternativa)
 				bool esDirectorio = (dirp->d_type == DT_DIR); 
 				// Nota: Si no compila d_type, revierte a: bool esDirectorio = isDir(concatDir.c_str());
 
@@ -319,33 +319,83 @@ unsigned int dirutil::listarFilesSuperFast(const char *strdir, vector<unique_ptr
     return totalFiles;
 }
 
+unsigned int dirutil::listFilesRecursive(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtro, bool order, bool properties){
+	return listFilesRecursive(strdir, filelist, filtro, "", false, order, properties);
+}
+
+unsigned int dirutil::listFilesRecursive(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool order, bool properties){
+	return listFilesRecursive(strdir, filelist, filtroExt, filtroName, false, order, properties);
+}
+
+/**
+ * Lista todos los ficheros del directorio y de sus subdirectorios.
+ * Recorrido iterativo (sin recursividad real) usando una pila de directorios pendientes.
+ */
+unsigned int dirutil::listFilesRecursive(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool includeDirs, bool order, bool properties){
+	if (!strdir || !strdir[0])
+		return 0;
+
+	std::vector<std::string> pendingDirs;
+	pendingDirs.push_back(strdir);
+
+	while (!pendingDirs.empty()) {
+		std::string dir = pendingDirs.back();
+		pendingDirs.pop_back();
+
+		vector<unique_ptr<FileProps>> children;
+		listFiles(dir.c_str(), children, filtroExt, filtroName, true, false, properties);
+
+		for (size_t i = 0; i < children.size(); i++) {
+			if (children[i]->filetype == TIPODIRECTORIO) {
+				std::string childPath = children[i]->dir;
+				if (!childPath.empty() && childPath.at(childPath.length() - 1) != Constant::tempFileSep[0]) {
+					childPath += Constant::tempFileSep;
+				}
+				childPath += children[i]->filename;
+				pendingDirs.push_back(childPath);
+
+				if (includeDirs) {
+					filelist.emplace_back(std::move(children[i]));
+				}
+			} else {
+				filelist.emplace_back(std::move(children[i]));
+			}
+		}
+	}
+
+	if (order && filelist.size() > 0) {
+		std::sort(filelist.begin(), filelist.end(), FileProps::sortByTextUnique);
+	}
+	return filelist.size();
+}
+
 bool dirutil::foundFilter(std::string filtroExt, std::string filtroName, std::string extension, std::string name){
 	return (filtroExt.empty() && filtroName.empty()) ||
 						 (!filtroExt.empty() && extension.length() > 1 && filtroExt.find(extension) != string::npos) ||
 						 (!filtroName.empty() && name.find(filtroName) != string::npos);
 }
 
-// 1. Cambiado a 'const string&' para evitar copiar la cadena al entrar al método
+// 1. Cambiado a 'const string&' para evitar copiar la cadena al entrar al metodo
 string dirutil::getFileNameNoExt(const string& file) {
     
-    // 2. Encontrar el último separador
+    // 2. Encontrar el ultimo separador
     size_t lastSep = file.find_last_of("/\\");
     
-    // Calcular dónde empieza realmente el nombre del archivo
+    // Calcular donde empieza realmente el nombre del archivo
     size_t startPos = (lastSep == string::npos) ? 0 : lastSep + 1;
     
-    // 3. Buscar el último punto empezando desde el final de la cadena
+    // 3. Buscar el ultimo punto empezando desde el final de la cadena
     size_t lastDot = file.find_last_of(".");
     
-    // 4. Si el punto está antes del nombre del archivo, es que el archivo no tiene extensión
+    // 4. Si el punto esta antes del nombre del archivo, es que el archivo no tiene extension
     // (Ejemplo: "ruta.con.punto/archivo_sin_extension")
-    // También validamos que no sea un archivo oculto (ej. ".bashrc")
+    // Tambien validamos que no sea un archivo oculto (ej. ".bashrc")
     if (lastDot != string::npos && lastDot > startPos && lastDot != startPos) {
         // Devolvemos el fragmento exacto: desde startPos, con una longitud de (lastDot - startPos)
         return file.substr(startPos, lastDot - startPos);
     }
     
-    // Si no tiene extensión, devolvemos desde startPos hasta el final
+    // Si no tiene extension, devolvemos desde startPos hasta el final
     return (startPos == 0) ? file : file.substr(startPos);
 }
 
@@ -354,14 +404,14 @@ string dirutil::getFolder(string file) {
         return file;
     }
 
-    // Buscamos el último separador de cualquier tipo (\ o /)
+    // Buscamos el ultimo separador de cualquier tipo (\ o /)
     size_t found = file.find_last_of("/\\");
 
     if (found != string::npos) {
-        // Si el separador está al inicio (ej. "/file"), devolvemos "/"
+        // Si el separador esta al inicio (ej. "/file"), devolvemos "/"
         if (found == 0) return file.substr(0, 1);
         
-        // Devolvemos la ruta hasta el último separador (sin incluirlo)
+        // Devolvemos la ruta hasta el ultimo separador (sin incluirlo)
         return file.substr(0, found);
     }
 
@@ -374,18 +424,18 @@ string dirutil::getFolder(string file) {
 }
 
 /**
- * Obtiene el nombre del fichero (con extensión) de una ruta completa
+ * Obtiene el nombre del fichero (con extension) de una ruta completa
  */
 string dirutil::getFileName(string file) {
     if (isDir(file.c_str())) {
         return file;
     }
 
-    // Buscamos la última aparición de CUALQUIER separador de carpeta
+    // Buscamos la ultima aparicion de CUALQUIER separador de carpeta
     size_t found = file.find_last_of("/\\");
 
     if (found != string::npos) {
-        // Extraemos todo lo que hay después del último separador
+        // Extraemos todo lo que hay despues del ultimo separador
         return file.substr(found + 1);
     }
 
@@ -439,7 +489,7 @@ int dirutil::createDir(std::string dir) {
         for (size_t i = 0; i < dir.length(); ++i) if (dir[i] == '\\') dir[i] = sep;
     #endif
 
-    // 2. Creación recursiva (asegura que existan los padres)
+    // 2. Creacion recursiva (asegura que existan los padres)
     for (size_t i = 0; i < dir.length(); ++i) {
         if (dir[i] == sep && i > 0) {
             std::string sub = dir.substr(0, i);
@@ -459,7 +509,7 @@ int dirutil::createDir(std::string dir) {
     // 3. Crear el directorio final
     #ifdef _XBOX
         if (CreateDirectoryA(dir.c_str(), NULL) || GetLastError() == ERROR_ALREADY_EXISTS) {
-            return 1; // Éxito o ya existía
+            return 1; // exito o ya existia
         }
         return 0; // Error real (ej: disco lleno o protegido)
     #elif defined(_WIN32)
@@ -530,7 +580,7 @@ void dirutil::borrarDir(string path)
     }
 
     closedir(dir);            // <--- IMPRESCINDIBLE
-    rmdir(path.c_str());      // Borrar la carpeta actual ahora que está vacía
+    rmdir(path.c_str());      // Borrar la carpeta actual ahora que esta vacia
 #elif defined(_XBOX)
 	// En Xbox 360, las rutas deben terminar en \* para buscar contenido
 
@@ -538,14 +588,14 @@ void dirutil::borrarDir(string path)
     if (!searchPath.empty() && searchPath.at(searchPath.length() - 1) != '\\') {
         searchPath += "\\";
     }
-    std::string baseWithSlash = searchPath; // Guardamos para concatenar rápido
+    std::string baseWithSlash = searchPath; // Guardamos para concatenar rapido
     searchPath += "*";
 
     WIN32_FIND_DATA findData;
     HANDLE hFind = FindFirstFile(searchPath.c_str(), &findData);
 
     if (hFind == INVALID_HANDLE_VALUE) {
-        // En Xbox, remove() es más lento que DeleteFileA
+        // En Xbox, remove() es mas lento que DeleteFileA
         DeleteFileA(path.c_str());
         return;
     }
@@ -562,7 +612,7 @@ void dirutil::borrarDir(string path)
         if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             borrarDir(fullPath);
         } else {
-            // CRÍTICO: La Xbox 360 a veces marca archivos como READONLY si vienen de un DVD/ISO
+            // CRiTICO: La Xbox 360 a veces marca archivos como READONLY si vienen de un DVD/ISO
             if (findData.dwFileAttributes & FILE_ATTRIBUTE_READONLY) {
                 SetFileAttributesA(fullPath.c_str(), FILE_ATTRIBUTE_NORMAL);
             }
@@ -612,10 +662,10 @@ std::string dirutil::getPathPrefix(std::string filepath, std::string basePath) {
         return filepath;
     }
 
-    // 4. Concatenación inteligente (evitar game:\\roms o game:roms)
+    // 4. Concatenacion inteligente (evitar game:\\roms o game:roms)
     std::string result = BASE_PATH;
     
-    // Si la base no termina en SEP y el filepath no empieza con SEP, añadirlo
+    // Si la base no termina en SEP y el filepath no empieza con SEP, anyadirlo
     if (result.at(result.length() - 1) != Constant::tempFileSep[0] && filepath[0] != Constant::tempFileSep[0]) {
         result += Constant::tempFileSep[0];
     } 

@@ -66,7 +66,7 @@ private:
 	void parsearIdiomas(const char*, const std::string&, std::vector<FieldIdDesc>&);
 	void parsearRegiones(const char*, const std::string&, std::vector<FieldIdDesc>&);
 	void getExecutables(std::string, cfg::t_cfg_emu*);
-	std::string getExecutablesString(const ConfigEmu& cfg);
+	std::string getExecutablesStringOrdered(const ConfigEmu& cfg);
 };
 
 
