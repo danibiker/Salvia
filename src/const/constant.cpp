@@ -3,6 +3,7 @@
 std::string Constant::appDir;
 std::string Constant::appExecutable;
 char Constant::tempFileSep[2];
+float aspectRatioValues [] = {4/3.0f, 4/3.0f, 3/2.0f, 8/7.0f, 10/9.0f, 1, 5/4.0f, 16/9.0f, 16/10.0f, -1};
 
 svColor Constant::colors[clTotalColors] = {
 	{{0, 0, 0} , 0},			//clBackground
@@ -26,7 +27,6 @@ svColor Constant::colors[clTotalColors] = {
 	{{91,91,91}	 , 255},		//clAskLine 
 	{{190,190,190}, 255},		//clAskText 
 }; 
-
 
 const char *MEDIAS_TO_FIND[] = {"sstitle", "ss", "box-2D"};
 const char *ASSETS_DIR[] = {"snaptit", "snap", "box2d", "synopsis"};
@@ -75,50 +75,6 @@ const char *ICONS_PATH[] = {"menu_log.png",
 	"menu_help.png",
 	"core-cheat-options.png"
 };
-
-#ifdef _XBOX
-	const char *SDL_BTN_TO_XBOX[12] = {"A", "B", "X", "Y", "LB", "RB", "L3", "R3", "Start", "Back", "LT", "RT"};
-	std::string SDL_JOY_TO_XBOX[6] = {"Left", "Right", "Up", "Down", "LT", "RT"};
-#else
-	const char *SDL_BTN_TO_XBOX[12] = {"A", "B", "X", "Y", "L", "R", "Select", "Start", "L3", "R3", "", ""};
-	std::string SDL_JOY_TO_XBOX[6] = {"Left", "Right", "Up", "Down", "R2", "L2"};
-#endif
-//Translated later on the first lines of GestorMenus::inicializar
-std::string SDL_HAT_TO_XBOX[9] = {"","Up","Right", "", "Down", "","","", "Left"};
-std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
-
-const char *JOY_DESCRIPTIONS[] = {"JOY_BUTTON_A",
-            "JOY_BUTTON_B",
-            "JOY_BUTTON_X",
-            "JOY_BUTTON_Y",
-            "JOY_BUTTON_L",
-            "JOY_BUTTON_R",
-            "JOY_BUTTON_SELECT",
-            "JOY_BUTTON_START",
-            "JOY_BUTTON_L3",
-            "JOY_BUTTON_R3",
-            "JOY_BUTTON_UP",
-            "JOY_BUTTON_UPLEFT",
-            "JOY_BUTTON_LEFT",
-            "JOY_BUTTON_DOWNLEFT",
-            "JOY_BUTTON_DOWN",
-            "JOY_BUTTON_DOWNRIGHT",
-            "JOY_BUTTON_RIGHT",
-            "JOY_BUTTON_UPRIGHT",
-            "JOY_BUTTON_VOLUP",
-            "JOY_BUTTON_VOLDOWN",
-            "JOY_BUTTON_CLICK",
-            "JOY_AXIS1_RIGHT",
-            "JOY_AXIS1_LEFT",
-            "JOY_AXIS1_UP",
-            "JOY_AXIS1_DOWN",
-            "JOY_AXIS2_RIGHT",
-            "JOY_AXIS2_LEFT",
-            "JOY_AXIS2_UP",
-            "JOY_AXIS2_DOWN",
-            "JOY_AXIS_L2",
-            "JOY_AXIS_R2",
-            "MAXJOYBUTTONS"};
 
 const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",
 	"Nintendo - Game Boy-content.png",
@@ -175,6 +131,50 @@ const char *RDB_SYSTEM_NAMES[] = {
 	"Bandai - WonderSwan",                             // cart_wonderswan
 	"Nintendo - Virtual Boy"                           // cart_virtualboy
 };
+
+#ifdef _XBOX
+	const char *SDL_BTN_TO_XBOX[12] = {"A", "B", "X", "Y", "LB", "RB", "L3", "R3", "Start", "Back", "LT", "RT"};
+	std::string SDL_JOY_TO_XBOX[6] = {"Left", "Right", "Up", "Down", "LT", "RT"};
+#else
+	const char *SDL_BTN_TO_XBOX[12] = {"A", "B", "X", "Y", "L", "R", "Select", "Start", "L3", "R3", "", ""};
+	std::string SDL_JOY_TO_XBOX[6] = {"Left", "Right", "Up", "Down", "R2", "L2"};
+#endif
+//Translated later on the first lines of GestorMenus::inicializar
+std::string SDL_HAT_TO_XBOX[9] = {"","Up","Right", "", "Down", "","","", "Left"};
+std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
+
+const char *JOY_DESCRIPTIONS[] = {"JOY_BUTTON_A",
+            "JOY_BUTTON_B",
+            "JOY_BUTTON_X",
+            "JOY_BUTTON_Y",
+            "JOY_BUTTON_L",
+            "JOY_BUTTON_R",
+            "JOY_BUTTON_SELECT",
+            "JOY_BUTTON_START",
+            "JOY_BUTTON_L3",
+            "JOY_BUTTON_R3",
+            "JOY_BUTTON_UP",
+            "JOY_BUTTON_UPLEFT",
+            "JOY_BUTTON_LEFT",
+            "JOY_BUTTON_DOWNLEFT",
+            "JOY_BUTTON_DOWN",
+            "JOY_BUTTON_DOWNRIGHT",
+            "JOY_BUTTON_RIGHT",
+            "JOY_BUTTON_UPRIGHT",
+            "JOY_BUTTON_VOLUP",
+            "JOY_BUTTON_VOLDOWN",
+            "JOY_BUTTON_CLICK",
+            "JOY_AXIS1_RIGHT",
+            "JOY_AXIS1_LEFT",
+            "JOY_AXIS1_UP",
+            "JOY_AXIS1_DOWN",
+            "JOY_AXIS2_RIGHT",
+            "JOY_AXIS2_LEFT",
+            "JOY_AXIS2_UP",
+            "JOY_AXIS2_DOWN",
+            "JOY_AXIS_L2",
+            "JOY_AXIS_R2",
+            "MAXJOYBUTTONS"};
 
 Constant::Constant(){
 }

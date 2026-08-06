@@ -132,11 +132,8 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 
 	//Actualizar overscan en windows y xbox
 	SDL_XBOX_SetOverscan(cfgLoader->configMain[cfg::overscan_x].valueInt, cfgLoader->configMain[cfg::overscan_y].valueInt);
-	
 	SDL_WM_SetCaption("Salvia", NULL);
-
 	initFont();
-	Icons::loadIcons(overlay);
 	joystick = new Joystick();
 	keyb = new t_keyboard();
 
@@ -175,7 +172,6 @@ void Engine::stopEngine(){
 		overlay = NULL;
 	}
 #endif
-	Icons::freeIcons();
 	BadgeDownloader::instance().stop();
     SDL_Quit();
 }

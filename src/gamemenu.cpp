@@ -670,7 +670,7 @@ bool GameMenu::cargarSystemAchievementTranslation(const std::string& nombreArchi
         // Eliminar espacios en blanco al inicio/final si fuera necesario (opcional)
             
         // 1. Buscamos el inicio de la seccion
-        if (line == "[SALVIA_TO_ACHIEVEMENTS]") {
+        if (line == "[SCREENSCRAPPER_TO_ACHIEVEMENTS]") {
             seccionEncontrada = true;
             continue; // Pasamos a la siguiente linea
         }
@@ -1086,7 +1086,7 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
         vector<unique_ptr<FileProps>> files;
 		string extFilter = " " + emu->rom_extension;
         extFilter = Constant::replaceAll(extFilter, " ", ".");
-		dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, "", emu->show_directories, false, false);
+		dir.listarFilesSuperFast(mapfilepath.c_str(), files, extFilter, "", emu->menu_show_directories, false, false);
         menuData.filesToList(files, *emu);
         files.clear();
     } else {
@@ -1302,7 +1302,7 @@ FILE_STATUS GameMenu::listableDir(ListMenu &listMenu, FILE_NAVIGATION nav){
 		ConfigEmu *emu = cfgLoader->getCfgEmu();
 		string extFilter = " " + emu->rom_extension;
 		extFilter = Constant::replaceAll(extFilter, " ", ".");
-		dir.listarFilesSuperFast(rompath.c_str(), files, extFilter, "", emu->show_directories, false, false);
+		dir.listarFilesSuperFast(rompath.c_str(), files, extFilter, "", emu->menu_show_directories, false, false);
 		listMenu.filesToList(files, *emu);
 		if (nav == FS_DIR_CD){
 			listMenu.listDir.addRelativePath(fileSelected);
@@ -1572,13 +1572,14 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 	switch (hotkey){
 		case HK_RATIO:
 			*this->current_ratio = (*this->current_ratio + 1) % TOTAL_VIDEO_RATIO;
+			SDL_XBOX_SetDisplaySize(aspectRatioValues[*this->current_ratio]);
 			showSystemMessage(aspectRatioStrings[*this->current_ratio], 3000);
 			break;
 
 		case HK_SHADER:
 			#ifdef SALVIA_GPU_VIDEO
 				*this->current_shader = (*this->current_shader + 1) % TOTAL_SHADERS;
-				XBOX_SelectEffect(*current_shader);
+				XBOX_SelectEffect(*this->current_shader);
 				choosenFilter = "menu.video.shader" + Constant::TipoToStr(*this->current_shader);
 				msgShader = LanguageManager::instance()->get("msg.filter") + " " 
 					+ LanguageManager::instance()->get(choosenFilter);
@@ -2456,4 +2457,45 @@ bool GameMenu::loadBgImage(){
 		this->bg_image.closeImage();
 	}
 	return false;
+}
+
+void GameMenu::checkDisplayOptions(t_scale_props &current_video_settings){
+	const auto &cfgEmu = getCfgLoader()->getCfgEmu();
+
+	#ifdef SALVIA_GPU_VIDEO
+	// Overriding the shader mode if the core has specified something greater than 0. 
+	// 0 is actually -1 in the cfg file which represents "Auto"
+	const int currentShader = cfgEmu->shaderMode > 0 ? cfgEmu->shaderMode - 1 : *this->current_shader;
+	if (current_video_settings.filter != currentShader){
+		XBOX_SelectEffect(currentShader);
+		current_video_settings.filter = currentShader;
+	}
+
+	// Overriding the integer scale if the core has specified something greater than 0. 
+	// 0 is actually -1 in the cfg file which represents "Auto"
+	const bool currentIntegerScale = cfgEmu->integerScale > 0 ? (cfgEmu->integerScale - 1) == 1 : *this->current_integer_scale;
+	if (current_video_settings.integer_scale != currentIntegerScale){
+		SDL_XBOX_SetDisplayFullscreen(currentIntegerScale == false);
+		current_video_settings.integer_scale = currentIntegerScale;
+	}
+
+	// Overriding the integer scale type if the core has specified something greater than 0. 
+	// 0 is actually -1 in the cfg file which represents "Auto"
+	const int currentIntegerScaleType = cfgEmu->scaleIntMode > 0 ? cfgEmu->scaleIntMode - 1 : *this->current_integer_scale_type;
+	if (current_video_settings.integer_scale_type != currentIntegerScaleType){
+		SDL_XBOX_SetDisplayOverflow(currentIntegerScaleType);
+		current_video_settings.integer_scale_type = currentIntegerScaleType;
+	}
+	#endif
+
+	// Overriding the aspect ratio if the core has specified something greater than 0. 
+	// 0 is actually -1 in the cfg file which represents "Auto"
+	float currentRatio = cfgEmu->aspectRatio > 0 ? aspectRatioValues[cfgEmu->aspectRatio - 1] : aspectRatioValues[*this->current_ratio];
+	if (current_video_settings.ratio != currentRatio){
+		LOG_DEBUG("SetDisplaySize: ratio=%.3f, tex=%dx%d", currentRatio, current_video_settings.sw, current_video_settings.sh);
+		#ifdef SALVIA_GPU_VIDEO
+		SDL_XBOX_SetDisplaySize(currentRatio);
+		#endif
+		current_video_settings.ratio = currentRatio;
+	}
 }

@@ -152,15 +152,11 @@ std::string Joystick::saveButtonsRetroGame() {
 }
 
 std::string Joystick::saveButtonsRetroCore() {
-	if (!CfgLoader::coreDefault.empty()){
-		std::string coreDefaultsPath = Constant::getAppDir() + std::string(Constant::tempFileSep) + "config"
-			+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + CfgLoader::configMain[cfg::libretro_core].valueStr + CFG_EXT;
+	std::string coreDefaultsPath = Constant::getAppDir() + std::string(Constant::tempFileSep) + "config"
+		+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + CfgLoader::configMain[cfg::libretro_core].valueStr + CFG_EXT;
 
-		saveButtonsConfig(coreDefaultsPath, false);
-		return coreDefaultsPath;
-	} else {
-		return "";
-	}
+	saveButtonsConfig(coreDefaultsPath, false);
+	return coreDefaultsPath;
 }
 /**
 *

@@ -24,7 +24,6 @@ public:
 	CfgLoader();
 	~CfgLoader();
 
-	const static std::string coreDefault;
 	static cfg::t_cfg_props configMain [cfg::MAIN_CFG_MAX];
 
 	std::vector<std::unique_ptr<cfg::t_cfg_emu>> emulators;
@@ -34,7 +33,8 @@ public:
 	std::string saveCoreParams();
 	void loadCoreParams();
 	std::string saveMainParams();
-	unsigned int findConfigIndex(std::string);
+	std::string saveCoreOverrideParams(int emuIdx);
+	//unsigned int findConfigIndex(std::string);
 	
 	int getWidth();
 	int getHeight();
@@ -66,6 +66,7 @@ private:
 	void parsearIdiomas(const char*, const std::string&, std::vector<FieldIdDesc>&);
 	void parsearRegiones(const char*, const std::string&, std::vector<FieldIdDesc>&);
 	void getExecutables(std::string, cfg::t_cfg_emu*);
+	std::string getExecutablesString(const ConfigEmu& cfg);
 };
 
 

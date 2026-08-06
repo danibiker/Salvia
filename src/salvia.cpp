@@ -13,7 +13,7 @@
 
 // Puente entre los eventos SDL del frontend y el callback de teclado que
 // el core ha registrado via RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK. La
-// direccion del callback es: CORE → FRONTEND — el frontend lo INVOCA al
+// direccion del callback es: CORE -> FRONTEND - el frontend lo INVOCA al
 // recibir teclas. DOSBox-Pure y otros cores que escuchan typing dependen
 // de este puente (no leen retro_input_state(RETRO_DEVICE_KEYBOARD)).
 extern "C" void salvia_dispatch_keyboard_event(bool down, unsigned retro_keycode,
@@ -792,9 +792,7 @@ static inline void hw_refresh(const void *data, unsigned width,
     if (!data) return;
 
     const int bpp = (fmt == RETRO_PIXEL_FORMAT_XRGB8888) ? 32 : 16;
-    const float current_ratio = aspectRatioValues[*gameMenu->current_ratio];
     const unsigned row_bytes = width * (bpp / 8);
-
     SDL_Surface*& screen = gameMenu->gameScreen;
 
 	#ifdef SALVIA_GPU_VIDEO
@@ -813,30 +811,9 @@ static inline void hw_refresh(const void *data, unsigned width,
         current_video_settings.bpp = bpp;
 		SDL_FillRect(screen, NULL, Constant::colors[clBackground].color);
     }
-
-	if (current_video_settings.filter != *gameMenu->current_shader){
-		XBOX_SelectEffect(*gameMenu->current_shader);
-		current_video_settings.filter = *gameMenu->current_shader;
-	}
-
-	if (current_video_settings.integer_scale != *gameMenu->current_integer_scale){
-		SDL_XBOX_SetDisplayFullscreen(*gameMenu->current_integer_scale == false);
-		current_video_settings.integer_scale = *gameMenu->current_integer_scale;
-	}
-
-	if (current_video_settings.integer_scale_type != *gameMenu->current_integer_scale_type){
-		SDL_XBOX_SetDisplayOverflow(*gameMenu->current_integer_scale_type);
-		current_video_settings.integer_scale_type = *gameMenu->current_integer_scale_type;
-	}
 	#endif
 
-	if (current_video_settings.ratio != current_ratio){
-		LOG_DEBUG("SetDisplaySize: ratio=%.3f, tex=%dx%d", current_ratio, current_video_settings.sw, current_video_settings.sh);
-		#ifdef SALVIA_GPU_VIDEO
-		SDL_XBOX_SetDisplaySize(current_ratio);
-		#endif
-		current_video_settings.ratio = current_ratio;
-	}
+	gameMenu->checkDisplayOptions(current_video_settings);
 
 	#ifdef SALVIA_GPU_VIDEO
 	// Rotacion HW: gratis en GPU (solo remap de UVs del quad).  No usamos
@@ -1019,9 +996,10 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 			else if (id == RETRO_DEVICE_ID_JOYPAD_R2)
 				sdl_axis = AXIS_RT;
 			#endif
-		} else {
-			LOG_INFO("Indice analogico: %u", index);
-		}
+		} 
+		//else {
+		//	LOG_INFO("Indice analogico: %u", index);
+		//}
 
 		if (sdl_axis != -1) {
 			return gameMenu->joystick->inputs.g_analog_state[port][sdl_axis];
@@ -1533,82 +1511,6 @@ void closeResources() {
 	delete cfgLoader;
 }
 
-/**
-*  LogCrash — filter expression for __except.
-*
-*  GetExceptionInformation() is only valid in the filter expression,
-*  NOT in the __except handler body.  This function captures the
-*  exception record + context and writes them to "crash.log" before
-*  returning EXCEPTION_EXECUTE_HANDLER so the handler runs.
-*/
-static int LogCrash(DWORD code, EXCEPTION_POINTERS *ep) {
-#ifdef  _XBOX  
-	FILE *f = fopen("game:\\crash.log", "w");
-#else 
-	FILE *f = fopen("crash.log", "w");
-#endif
-	if (f) {
-		fprintf(f, "═══════════════════════════════════════\n");
-		fprintf(f, "  FATAL: Unhandled exception\n");
-		fprintf(f, "═══════════════════════════════════════\n");
-		fprintf(f, "  Emulator: %s\n", g_excp_emulator_path.c_str());
-		fprintf(f, "  rom:      %s\n", g_currentRompath.c_str());
-		fprintf(f, "  Code:     0x%08X\n", code);
-		if (ep && ep->ExceptionRecord) {
-			fprintf(f, "  Address:  %p\n", ep->ExceptionRecord->ExceptionAddress);
-			fprintf(f, "  Flags:    0x%X\n", ep->ExceptionRecord->ExceptionFlags);
-			if (code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2) {
-				DWORD op = (DWORD)ep->ExceptionRecord->ExceptionInformation[0];
-				void *fa = (void*)ep->ExceptionRecord->ExceptionInformation[1];
-				fprintf(f, "  Op:       %s\n", op == 0 ? "READ" : op == 1 ? "WRITE" : "DEP");
-				fprintf(f, "  Target:   %p\n", fa);
-			}
-		}
-		if (ep && ep->ContextRecord) {
-#ifdef _XBOX
-			fprintf(f, "  PC:       0x%08X\n", ep->ContextRecord->Iar);
-			fprintf(f, "  LR:       0x%08X\n", ep->ContextRecord->Lr);
-			fprintf(f, "  SP (Gpr1):0x%08X\n", ep->ContextRecord->Gpr1);
-#else
-			fprintf(f, "  EIP:      0x%08X\n", ep->ContextRecord->Eip);
-			fprintf(f, "  ESP:      0x%08X\n", ep->ContextRecord->Esp);
-			fprintf(f, "  EBP:      0x%08X\n", ep->ContextRecord->Ebp);
-#endif
-			fprintf(f, "  Call stack:\n");
-			int frame = 0;
-#ifdef _XBOX
-			DWORD base = (DWORD)GetModuleHandle(NULL);
-			DWORD *sp = (DWORD*)ep->ContextRecord->Gpr1;
-			while (sp && frame < 32) {
-				DWORD lr = 0;
-				__try {
-					lr = (DWORD)sp[2];
-					sp = (DWORD*)sp[0];
-				} __except (EXCEPTION_EXECUTE_HANDLER) { break; }
-				if (!lr) continue;
-				fprintf(f, "    [%02d] 0x%08X (+0x%X)\n", frame, lr, lr - base);
-				frame++;
-			}
-#else
-			DWORD base = (DWORD)GetModuleHandle(NULL);
-			DWORD *ebp = (DWORD*)ep->ContextRecord->Ebp;
-			while (ebp && frame < 32) {
-				DWORD ret = 0;
-				__try {
-					ret = ebp[1];
-					ebp = (DWORD*)ebp[0];
-				} __except (EXCEPTION_EXECUTE_HANDLER) { break; }
-				fprintf(f, "    [%02d] 0x%08X (+0x%X)\n", frame, ret, ret - base);
-				frame++;
-			}
-#endif
-		}
-		fprintf(f, "═══════════════════════════════════════\n");
-		fclose(f);
-	}
-	return EXCEPTION_EXECUTE_HANDLER;
-}
-
 static void __declspec(noinline) printAndDelay(){
 	const int face_h_big = Fonts::getLineSkip(Fonts::FONTBIG);
 	gameMenu->fillOverlay(clBackground);
@@ -1652,7 +1554,7 @@ static void __declspec(noinline) runGameLoop() {
 			salviaFlip(gameMenu->gameScreen);
 			gameMenu->sync->limit_fps(nextFrameTime, *gameMenu->current_sync, gameMenu->gameTicks);
 		}
-	} __except (LogCrash(GetExceptionCode(), GetExceptionInformation())) {
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
 		printAndDelay();
 		LOG_ERROR("FATAL: Unhandled exception, details written to crash.log");
 	}

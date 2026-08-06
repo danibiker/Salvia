@@ -126,6 +126,11 @@ std::string GestorMenus::guardarMainConfig(CfgLoader *refConfig){
 	return refConfig->saveMainParams();
 }
 
+std::string GestorMenus::guardarCoreOverridesConfig(t_save_override *overrides){
+	LOG_DEBUG("Guardando overrides del core actual");
+	return overrides->refConfig->saveCoreOverrideParams(overrides->emuIdx);
+}
+
 std::string GestorMenus::volverEmulacion(CONFIG_STATUS *st){
 	*st = EXIT_CONFIG;
 	return std::string("");
@@ -280,28 +285,6 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	
 	//--------Opcion de mostrar emuladores vacios---------
 	menuEmulation->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.showempty"), &refConfig->configMain[cfg::showEmptyEmulators].getBoolRef()));
-	
-	//--------menu de asignacion de cores---------
-	Menu* menuCores = new Menu(LanguageManager::instance()->get("menu.core.assign"), menuEmulation);
-	dirutil dir;
-
-	for (int i=0; i < (int)refConfig->emulators.size(); i++){
-		const int nCores = refConfig->emulators[i]->config.cores.size();
-		const std::string coreName = refConfig->emulators[i]->config.name;
-		const unsigned int cfgIndex = refConfig->findConfigIndex(CfgLoader::coreDefault + refConfig->emulators[i]->config.internalName);
-
-		if (nCores > 1 && cfgIndex > 0){
-			std::vector<std::string> coreNames;
-			for (int core=0; core < nCores; core++){
-				coreNames.push_back(dir.getFileNameNoExt(refConfig->emulators[i]->config.cores[core]));
-			}
-			OpcionLista *listaCores = new OpcionLista(coreName, coreNames, &refConfig->configMain[cfgIndex].getIntRef());
-			listaCores->callback = &GestorMenus::setDefaultEmu;
-			listaCores->context = refConfig->emulators[i].get();
-			menuCores->opciones.push_back(listaCores);
-		}
-	}
-	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.core.assign"), menuCores));
 
 	//--------Menu de gestion de discos---------
 	menuDisks = new Menu(LanguageManager::instance()->get("menu.disk.control"), menuEmulation);
@@ -439,6 +422,11 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	}
 	menuAskSavestates->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.askTitle"), askOptions, &askNumOptions));
 
+	//Preferencias del core bajo el menu de emulacion
+	Menu *menuCoreOverrides = new Menu(LanguageManager::instance()->get("menu.core.overrides"), menuEmulation);
+	poblarMenuCoreOverrides(menuCoreOverrides, refConfig);
+	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.core.overrides"), menuCoreOverrides));
+
 	// Poblar Menu Principal
     menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.video"), menuVideo, ico_video));
 	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.emulation"), menuEmulation, ico_settings));
@@ -463,6 +451,25 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	// Establecer estado inicial
     menuActual = menuRaiz;
 	resetIndexPos();
+}
+
+void GestorMenus::checkMultipleSystemCore(CfgLoader *refConfig, Menu *menu, int coreIdx){
+	if (coreIdx < 0 || (std::size_t)coreIdx >= refConfig->emulators.size()) return;
+	
+	dirutil dir;
+	const int nCores = refConfig->emulators[coreIdx]->config.cores.size();
+	const std::string emulatorTxt = LanguageManager::instance()->get("menu.core.overrides.emulator");
+
+	if (nCores > 1){
+		std::vector<std::string> coreNames;
+		for (int core=0; core < nCores; core++){
+			coreNames.push_back(dir.getFileNameNoExt(refConfig->emulators[coreIdx]->config.cores[core]));
+		}
+		OpcionLista *listaCores = new OpcionLista(emulatorTxt, coreNames, &refConfig->emulators[coreIdx]->config.execIdx);
+		listaCores->callback = &GestorMenus::setDefaultEmu;
+		listaCores->context = refConfig->emulators[coreIdx].get();
+		menu->opciones.push_back(listaCores);
+	}
 }
 
 std::string GestorMenus::gameSearchAction(void* inst){
@@ -578,6 +585,74 @@ void GestorMenus::iniciarFiltros(GameDataFields& gameDataFieldsFilter){
 	menuGameFilter->opciones.push_back(new OpcionListaRef(LanguageManager::instance()->get("menu.filter.manufacturer"), &gameDataFieldsFilter.manufacturers, &gameDataFieldsFilter.posManufacturer));
 	menuGameFilter->opciones.push_back(new OpcionListaRef(LanguageManager::instance()->get("menu.filter.year"), &gameDataFieldsFilter.years, &gameDataFieldsFilter.posYear));
 	menuGameFilter->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.filter.parents"), &gameDataFieldsFilter.onlyParents));
+}
+
+void GestorMenus::poblarMenuCoreOverrides(Menu *menu, CfgLoader *refConfig){
+	const std::string aspectTxt = LanguageManager::instance()->get("menu.options.aspect");
+	const std::string scaleOrShaderTxt = LanguageManager::instance()->get("menu.options.scale");
+	const std::string intScaleTxt = LanguageManager::instance()->get("menu.options.integerscale");
+	const std::string intScaleTypeTxt = LanguageManager::instance()->get("menu.options.integerscale.type");
+	const std::string showDirTxt = LanguageManager::instance()->get("menu.options.showdir");
+	const std::string autoOverrideTxt = LanguageManager::instance()->get("menu.core.overrides.auto");
+
+	//Aspect ratios texts
+	std::vector<std::string> aspectRates;
+	aspectRates.push_back(autoOverrideTxt);
+	for (int j=0; j < TOTAL_VIDEO_RATIO; j++){
+		aspectRates.push_back(aspectRatioStrings[j]);
+	}
+
+	//Video shader or scaler
+    std::vector<std::string> filtros;
+	filtros.push_back(autoOverrideTxt);
+
+	#if defined(_XBOX) || defined(SALVIA_GPU_VIDEO)
+		for (int i=0; i < TOTAL_SHADERS; i++){
+			filtros.push_back(videoShaderStrings[i]);
+		}
+	#else
+		for (int i=0; i < TOTAL_VIDEO_SCALE; i++){
+			filtros.push_back(videoScaleStrings[i]);
+		}
+	#endif
+
+    //Enable integer scaling
+    std::vector<std::string> enableScaleInt; 
+	enableScaleInt.push_back(autoOverrideTxt);
+	enableScaleInt.push_back(LanguageManager::instance()->get("menu.core.overrides.disabled"));
+	enableScaleInt.push_back(LanguageManager::instance()->get("menu.core.overrides.enabled"));
+	
+	//Integer scale mode
+	std::vector<std::string> scaleInt;
+	scaleInt.push_back(autoOverrideTxt);
+	for (int i=0; i < TOTAL_INT_SCALE; i++){
+		scaleInt.push_back(videoIntScaleStrings[i]);
+	}
+
+	for (std::size_t i=0; i < refConfig->emulators.size() - 1; i++){
+		Menu *menuCore = new Menu(refConfig->emulators[i]->config.name, menu);
+		menu->opciones.push_back(new OpcionSubMenu(refConfig->emulators[i]->config.name, menuCore));
+		//Check if the system has more than one core available: eg: Megadrive has picodrive and genesis-plus-gx
+		checkMultipleSystemCore(refConfig, menuCore, i);
+		//Aspect ratio list
+		menuCore->opciones.push_back(new OpcionLista(aspectTxt, aspectRates, &refConfig->emulators[i]->config.aspectRatio));
+		//Shaders list
+		#if defined(_XBOX) || defined(SALVIA_GPU_VIDEO)
+		menuCore->opciones.push_back(new OpcionLista(scaleOrShaderTxt, filtros, &refConfig->emulators[i]->config.shaderMode));
+		#else
+		menuCore->opciones.push_back(new OpcionLista(scaleOrShaderTxt, filtros, &refConfig->emulators[i]->config.scaleMode));
+		#endif
+		//Integer scale enabler button
+		menuCore->opciones.push_back(new OpcionLista(intScaleTxt, enableScaleInt, &refConfig->emulators[i]->config.integerScale));
+		//Integer scale type
+		menuCore->opciones.push_back(new OpcionLista(intScaleTypeTxt, scaleInt, &refConfig->emulators[i]->config.scaleIntMode));
+		//Show directories
+		menuCore->opciones.push_back(new OpcionBool(showDirTxt, &refConfig->emulators[i]->config.menu_show_directories));
+		
+		//Button to save configuration of the selected core
+		t_save_override *overr = new t_save_override(i, refConfig);
+		menuCore->opciones.push_back(new OpcionExec<t_save_override>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarCoreOverridesConfig, overr, this));
+	}
 }
 
 void GestorMenus::poblarMenuOverscan(Menu *menu){
@@ -1645,7 +1720,6 @@ Menu* GestorMenus::obtenerMenuActual() {
 }
 
 void GestorMenus::draw(SDL_Surface *video_page){
-	Icons icons;
 
 	TTF_Font *fontMenu = Fonts::getFont(Fonts::FONTBIG);
 	int face_h = menuActual->rowHeight;
@@ -1731,11 +1805,11 @@ void GestorMenus::draw(SDL_Surface *video_page){
 
 		if (option->icon > -1 && option->icon < max_icons){
 			marginIco = face_h;
-			SDL_Rect dstRect = {this->getX(), this->getY() + fontHeightRect - icons.icon_w_add / 2, 0, 0};
-			SDL_BlitSurface(icons.icons[option->icon], NULL, video_page, &dstRect);
+			SDL_Rect dstRect = {this->getX(), this->getY() + fontHeightRect - Icons::getInstance().icon_w_add / 2, 0, 0};
+			Icons::getInstance().drawIcon(video_page, &dstRect, option->icon);
 		}
 
-		Fonts::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX() + marginIco + icons.icon_w_add, 
+		Fonts::drawTextTransparent(video_page, fontMenu, line.c_str(), this->getX() + marginIco + Icons::getInstance().icon_w_add, 
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
 
 		if (option->tipo == OPC_KEY && !((OpcionKey *)option)->description.empty()){

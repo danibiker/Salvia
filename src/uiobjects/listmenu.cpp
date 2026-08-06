@@ -61,7 +61,6 @@ ListMenu::ListMenu(int screenw, int screenh){
     setObjectType(GUILISTBOX);
     setLayout(LAYSIMPLE, screenw, screenh);
     //set_trans_blender(255, 255, 255, 190);
-	icons = new Icons();
 	selecAlphaRec = NULL;
 	navPath = NULL;
 }
@@ -71,7 +70,6 @@ ListMenu::~ListMenu(){
 	//Respetar el orden de limpiado en la destruccion porque sino hay problemas
 	filteredGames.clear();
 	listGames.clear();
-	delete icons;
 	if (navPath) SDL_FreeSurface(navPath);
 }
 
@@ -419,12 +417,9 @@ void ListMenu::drawIconListElem(SDL_Surface *video_page, GameFile *game, SDL_Rec
 
 	// 1. Intentar obtener el icono de cartucho si aplica
 	const unsigned int posCart = getCartForSystem(game->systemid);
-	if (game->fileType == FT_CARTRIDGE && posCart < (int)icons->icons_carts.size()) {
-		icon = icons->icons_carts[posCart];
-		if (icon != NULL) {
-			SDL_BlitSurface(icon, NULL, video_page, &dstRectIcon);
+	if (game->fileType == FT_CARTRIDGE) {
+		if (Icons::getInstance().drawIconCart(video_page, &dstRectIcon, posCart))
 			return; // Si se dibuja el cartucho, terminamos aqui
-		}
 	}
 
 	// 2. Si no es cartucho (o no tenia imagen), determinar el tipo de icono generico
@@ -436,14 +431,9 @@ void ListMenu::drawIconListElem(SDL_Surface *video_page, GameFile *game, SDL_Rec
 	}
 
 	// 3. Obtener y dibujar el icono generico aplicando el desplazamiento
-	if (ico < (int)icons->icons.size()) {
-		icon = icons->icons[ico];
-		if (icon != NULL) {
-			dstRectIcon.x -= 7;
-			dstRectIcon.y -= 7;
-			SDL_BlitSurface(icon, NULL, video_page, &dstRectIcon);
-		}
-	}
+	dstRectIcon.x -= 7;
+	dstRectIcon.y -= 7;
+    Icons::getInstance().drawIcon(video_page, &dstRectIcon, ico);
 }
 
 int ListMenu::getCartForSystem(int systemid){

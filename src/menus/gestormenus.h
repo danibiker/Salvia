@@ -52,6 +52,15 @@ struct t_scrap{
 	}	
 };
 
+struct t_save_override{
+	int emuIdx;
+	CfgLoader *refConfig;
+	t_save_override(int idx, CfgLoader * cfg){
+		emuIdx = idx;
+		refConfig = cfg;
+	}
+};
+
 
 struct Menu; // Declaracion anticipada
 class OpcionSavestate;
@@ -291,7 +300,7 @@ public:
 
 class OpcionSubMenu : public Opcion {
 public:
-	//Menu al que navegar para volver
+	//Menu que contiene las opciones
     Menu* destino;
 	//Funcion estatica
 	GestorCallback callback;
@@ -463,11 +472,14 @@ private:
 	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);
 	void poblarMenuAssignFrontend(Menu* menuHotkeys, Joystick *joystick);
 	void poblarMenuRapidFire(Menu* menuRapidFire, Joystick *joystick);
+	void poblarMenuCoreOverrides(Menu *menu, CfgLoader *refConfig);
+	void checkMultipleSystemCore(CfgLoader *refConfig, Menu *menu, int coreIdx);
 	std::string guardarJoysticks(Joystick* joy);
 	std::string guardarGameJoysticks(Joystick* joy);
 	std::string guardarCoreJoysticks(Joystick* joy);
 	std::string guardarCoreConfig(CfgLoader *refConfig);
 	std::string guardarMainConfig(CfgLoader *refConfig);
+	std::string guardarCoreOverridesConfig(t_save_override *overrides);
 	std::string reloadCheats(CfgLoader *refConfig);
 	std::string descargarCheats(CfgLoader *refConfig);
 	std::string volverEmulacion(CONFIG_STATUS *st);

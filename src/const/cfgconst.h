@@ -9,12 +9,11 @@
 namespace cfg {
 	typedef enum {CFG_TYPE_INT = 0, CFG_TYPE_FLOAT, CFG_TYPE_BOOL, CFG_TYPE_STR} CFG_PROPS_TYPES;
 
-	typedef enum {emulators = 0, debug, resolution_width, resolution_height, fullscreen, path_prefix, alsaReset, background_music, mp3_file, aspectRatio, packedImages,
-			scaleMode, scaleIntMode, syncMode, shaderMode, soundMode, fastForwardMult, libretrosystem, libretro_save, libretro_state, libretro_core, libretro_core_version, 
+	typedef enum {emulators = 0, debug, resolution_width, resolution_height, fullscreen, path_prefix, aspectRatio, packedImages,
+			scaleMode, scaleIntMode, syncMode, shaderMode, fastForwardMult, libretrosystem, libretro_save, libretro_state, libretro_core, libretro_core_version, 
 			libretro_core_extensions, roms_path,
 			showFps, integerScale, animBG,
 			mainLang, scrapRegion, scrapLang, scrapOrigin, scrapUser, scrapPass, apikeytgdb, raUser, raPass, enableAchievements, hardcoreRA,
-			coreGenesis, coreSnes, corePce, corePceCd, coreFbn,
 			showEmptyEmulators, overscan_x, overscan_y, 
 			MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
 

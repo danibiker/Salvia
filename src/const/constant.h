@@ -355,6 +355,7 @@ typedef enum {cart_gba,
 			  cart_virtualboy,
 			  max_carts};
 
+extern float aspectRatioValues[]; 
 extern const char *JOY_DESCRIPTIONS[];
 extern const char *ICONS_PATH[];
 extern const char *ICONS_CARTS_PATH[];

@@ -14,7 +14,7 @@
 using namespace std;
 
 
-// Estructura para pasar múltiples datos al hilo secundario
+// Estructura para pasar multiples datos al hilo secundario
 struct DatosDestruccion {
     std::unordered_map<std::string, GameData> *vectorVacio;
 };
@@ -25,7 +25,6 @@ class ListMenu : public Object{
 		static const int waitTitleMove = 2000;
 		static const int textFps = 20;
 		static const int frameTimeText = (int)(1000 / textFps);
-		Icons *icons;
 		// El diccionario principal para mame: <nombre_zip, datos>
 		std::unordered_map<std::string, GameData> mameDatabase;
 		void loadMameDatabase(ConfigEmu& emu);

@@ -17,7 +17,6 @@ extern "C"{
 	void retro_get_system_info(struct retro_system_info *info);
 }
 
-const std::string CfgLoader::coreDefault = "core.default.";
 cfg::t_cfg_props CfgLoader::configMain [cfg::MAIN_CFG_MAX];
 
 CfgLoader::CfgLoader(){
@@ -36,49 +35,152 @@ void CfgLoader::initMainConfig(){
 	dirutil dir;
 	//Cargamos valores por defecto
 	configMain[cfg::emulators] = cfg::t_cfg_props("emulators", "");
-	configMain[cfg::debug] = cfg::t_cfg_props("debug", false);
-	configMain[cfg::resolution_width] = cfg::t_cfg_props("resolution_width", 1280);
-	configMain[cfg::resolution_height] = cfg::t_cfg_props("resolution_height", 720);
-	configMain[cfg::fullscreen] = cfg::t_cfg_props("fullscreen", false);
-	configMain[cfg::path_prefix] = cfg::t_cfg_props("path_prefix", dir.getDirActual() + Constant::getFileSep());
-	configMain[cfg::alsaReset] = cfg::t_cfg_props("alsaReset", false);
-	configMain[cfg::background_music] = cfg::t_cfg_props("background_music", false);
-	configMain[cfg::mp3_file] = cfg::t_cfg_props("mp3_file", "");
-	configMain[cfg::aspectRatio] = cfg::t_cfg_props("aspectRatio", (int)RATIO_CORE);
-	configMain[cfg::scaleMode] = cfg::t_cfg_props("scaleMode", (int)FULLSCREEN);
-	configMain[cfg::shaderMode] = cfg::t_cfg_props("shaderMode", (int)SHADER_BILINEAR);
-	configMain[cfg::syncMode] = cfg::t_cfg_props("syncMode", (int)OPT_SYNC_VIDEO);
-	configMain[cfg::soundMode] = cfg::t_cfg_props("soundMode", true);
-	configMain[cfg::libretrosystem] = cfg::t_cfg_props("libretrosystem", dir.getDirActual() + Constant::getFileSep() + "system");
-	configMain[cfg::libretro_save] = cfg::t_cfg_props("libretro_save", dir.getDirActual() + Constant::getFileSep() + "data" + Constant::getFileSep() + "saves");
-	configMain[cfg::libretro_state] = cfg::t_cfg_props("libretro_state", dir.getDirActual() + Constant::getFileSep() + "data" + Constant::getFileSep() + "states");
-	configMain[cfg::roms_path] = cfg::t_cfg_props("roms_path", "");	
-	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
-	configMain[cfg::packedImages] = cfg::t_cfg_props("packedImages", true);
-	configMain[cfg::integerScale] = cfg::t_cfg_props("integerScale", false);
-	configMain[cfg::scaleIntMode] = cfg::t_cfg_props("scaleIntMode", (int)SCALE_INT_REDUCE);
-	configMain[cfg::animBG] = cfg::t_cfg_props("animBG", (int)BG_TILES);
-	configMain[cfg::apikeytgdb] = cfg::t_cfg_props("apikey.tgdb", "");
-	configMain[cfg::mainLang] = cfg::t_cfg_props("mainLang", "");
-	configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", "");
-	configMain[cfg::scrapLang] = cfg::t_cfg_props("scrapLang", "");
-	configMain[cfg::scrapOrigin] = cfg::t_cfg_props("scrapOrigin", (int)SC_SCREENCSRAPER);
-	configMain[cfg::enableAchievements] = cfg::t_cfg_props("enableAchievements", true);
-	configMain[cfg::hardcoreRA] = cfg::t_cfg_props("hardcoreRA", true);
-	configMain[cfg::raUser] = cfg::t_cfg_props("raUser", "");
-	configMain[cfg::raPass] = cfg::t_cfg_props("raPass", "");
-	configMain[cfg::scrapUser] = cfg::t_cfg_props("scrapUser", "");
-	configMain[cfg::scrapPass] = cfg::t_cfg_props("scrapPass", "");
-	configMain[cfg::coreGenesis] = cfg::t_cfg_props(coreDefault + "genesis", (int)0);
-	configMain[cfg::coreSnes] = cfg::t_cfg_props(coreDefault + "snes", (int)0);
-	configMain[cfg::corePce] = cfg::t_cfg_props(coreDefault + "pce", (int)0);
-	configMain[cfg::corePceCd] = cfg::t_cfg_props(coreDefault + "pcecd", (int)0);
-	configMain[cfg::coreFbn] = cfg::t_cfg_props(coreDefault + "fbn", (int)0);
-	configMain[cfg::showEmptyEmulators] = cfg::t_cfg_props("showEmptyEmulators", true);
-	configMain[cfg::fastForwardMult] = cfg::t_cfg_props("fastForwardMult", (int)30);
-	configMain[cfg::overscan_x] = cfg::t_cfg_props("overscan_x", (int)0);
-	configMain[cfg::overscan_y] = cfg::t_cfg_props("overscan_y", (int)0);
+	configMain[cfg::emulators].desc = "#emulators: Sets a list of emulators in the order they will be presented in the frontend."
+									  "\n#each name is the filename of a .cfg file inside the config directory";
 
+	configMain[cfg::debug] = cfg::t_cfg_props("debug", false);
+	configMain[cfg::debug].desc = "#Enables debug mode";
+
+	configMain[cfg::resolution_width] = cfg::t_cfg_props("resolution_width", 1280);
+	configMain[cfg::resolution_width].desc = "#The screen resolution width";
+
+	configMain[cfg::resolution_height] = cfg::t_cfg_props("resolution_height", 720);
+	configMain[cfg::resolution_height].desc = "#The screen resolution height";
+
+	configMain[cfg::fullscreen] = cfg::t_cfg_props("fullscreen", false);
+	configMain[cfg::fullscreen].desc = "#The fullscreen mode or window mode";
+
+	configMain[cfg::path_prefix] = cfg::t_cfg_props("path_prefix", dir.getDirActual() + Constant::getFileSep());
+	configMain[cfg::path_prefix].desc = "#Path where the .xex or exe files for each core are stored."
+										"\n#if empty, it will be set to the executable's path";
+
+	configMain[cfg::aspectRatio] = cfg::t_cfg_props("aspectRatio", (int)RATIO_CORE);
+	configMain[cfg::aspectRatio].desc = "#The screen aspect ratio"
+										"\n#RATIO_CORE     0"
+										"\n#RATIO_4_3      1"
+										"\n#RATIO_3_2      2"
+										"\n#RATIO_8_7      3"
+										"\n#RATIO_10_9     4"
+										"\n#RATIO_1_1      5"
+										"\n#RATIO_5_4      6"
+										"\n#RATIO_16_9     7"
+										"\n#RATIO_16_10    8";
+
+	configMain[cfg::scaleMode] = cfg::t_cfg_props("scaleMode", (int)FULLSCREEN);
+	configMain[cfg::scaleMode].desc = "#Scaler used in SW mode. Not used";
+
+	configMain[cfg::shaderMode] = cfg::t_cfg_props("shaderMode", (int)SHADER_BILINEAR);
+	configMain[cfg::shaderMode].desc = "#Shader selected"
+										"\n#SHADER_NEAREST,         0"
+										"\n#SHADER_BILINEAR,        1"
+										"\n#SHADER_LCD_GRID,        2"
+										"\n#SHADER_SCANLINES,       3"
+										"\n#SHADER_CRT,             4"
+										"\n#SHADER_CRT_LOTTES,      5"
+										"\n#SHADER_CRT_EASYMODE,    6"
+										"\n#SHADER_HQ2X,            7"
+										"\n#SHADER_HQ3X,            8"
+										"\n#SHADER_HQ4X,            9"
+										"\n#SHADER_XBR_LV2_FAST,    10"
+										"\n#SHADER_XBR_HYLLIAN,     11";
+
+	configMain[cfg::syncMode] = cfg::t_cfg_props("syncMode", (int)OPT_SYNC_VIDEO);
+	configMain[cfg::syncMode].desc = "#Video Synchronization mode"
+									"\n#SYNC_TO_AUDIO	0"
+									"\n#SYNC_TO_VIDEO	1"
+									"\n#SYNC_NONE		2";
+
+	configMain[cfg::libretrosystem] = cfg::t_cfg_props("libretrosystem", dir.getDirActual() + Constant::getFileSep() + "system");
+	configMain[cfg::libretrosystem].desc = "#Directory where the libretro bios are stored";
+
+	configMain[cfg::libretro_save] = cfg::t_cfg_props("libretro_save", dir.getDirActual() + Constant::getFileSep() + "data" + Constant::getFileSep() + "saves");
+	configMain[cfg::libretro_save].desc = "#Directory to store sram data of games";
+
+	configMain[cfg::libretro_state] = cfg::t_cfg_props("libretro_state", dir.getDirActual() + Constant::getFileSep() + "data" + Constant::getFileSep() + "states");
+	configMain[cfg::libretro_state].desc = "#Directory to store savestates";
+
+	configMain[cfg::roms_path] = cfg::t_cfg_props("roms_path", "");	
+	configMain[cfg::roms_path].desc = "#The path usb:\\roms automatically scans Usb0, Usb1, and Usb2 for the target directory"
+									"\n#Or Hdd1:\\roms for the main console hard disk"
+									"\n#Or game:\\roms for this directory";
+
+	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);
+	configMain[cfg::showFps].desc = "#Show fps, memory and cpu utilization";
+
+	configMain[cfg::packedImages] = cfg::t_cfg_props("packedImages", true);
+	configMain[cfg::packedImages].desc = "#Specify if the files scraped should be packed in a .bin file (recommended)";
+
+	configMain[cfg::integerScale] = cfg::t_cfg_props("integerScale", false);
+	configMain[cfg::integerScale].desc = "#Enable or disable the screen integer scale";
+
+	configMain[cfg::scaleIntMode] = cfg::t_cfg_props("scaleIntMode", (int)SCALE_INT_REDUCE);
+	configMain[cfg::scaleIntMode].desc = "#Integer screen scale mode used when integerScale is selected"
+										"\n#SCALE INT REDUCE     0"
+										"\n#SCALE INT INCREASE   1"
+										"\n#SCALE FIXED 1X       2"
+										"\n#SCALE FIXED 2X       3"
+										"\n#SCALE FIXED 3X       4"
+										"\n#SCALE FIXED 4X       5"
+										"\n#SCALE FIXED 5X       6";
+
+	configMain[cfg::animBG] = cfg::t_cfg_props("animBG", (int)BG_TILES);
+	configMain[cfg::animBG].desc = "#Set the frontend background" 
+								"\n#Moving tiles        0"
+								"\n#Images              1"
+								"\n#Plasma hlsl         2"	
+								"\n#Purple drop hlsl    3"
+								"\n#Wormholes hlsl      4"
+								"\n#none                5";
+
+	configMain[cfg::apikeytgdb] = cfg::t_cfg_props("apikey.tgdb", "");
+	configMain[cfg::apikeytgdb].desc = "#Api key for thegamesdb";
+
+	configMain[cfg::mainLang] = cfg::t_cfg_props("mainLang", "");
+	configMain[cfg::mainLang].desc = "#mainLang: Main system lang. If not specified on xbox 360, it will try to find the configured"
+									 "\n#from the console with some of this values: es, en, fr, de, it (although only 'es' and 'en' are actually supported)";
+
+	configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", "");
+	configMain[cfg::scrapRegion].desc = "#Region for the artwork scraper";
+
+	configMain[cfg::scrapLang] = cfg::t_cfg_props("scrapLang", "");
+	configMain[cfg::scrapLang].desc = "#Language for the artwork scraper";
+
+	configMain[cfg::scrapOrigin] = cfg::t_cfg_props("scrapOrigin", (int)SC_SCREENCSRAPER);
+	configMain[cfg::scrapOrigin].desc = "#scrapOrigin: Sets the scraper source"
+										"\n#screenscraper.fr 	0"
+										"\n#thegamesdb			1";
+
+	configMain[cfg::enableAchievements] = cfg::t_cfg_props("enableAchievements", true);
+	configMain[cfg::enableAchievements].desc = "#Enable retroachievements";
+
+	configMain[cfg::hardcoreRA] = cfg::t_cfg_props("hardcoreRA", true);
+	configMain[cfg::hardcoreRA].desc = "#hardcoreRA: Sets the hardcore mode for retroachievements -> Not validated yet to use from the retroachievements team :(";
+
+	configMain[cfg::raUser] = cfg::t_cfg_props("raUser", "");
+	configMain[cfg::raUser].desc = "#retroachievements username";
+
+	configMain[cfg::raPass] = cfg::t_cfg_props("raPass", "");
+	configMain[cfg::raPass].desc = "#retroachievements password";
+
+	configMain[cfg::scrapUser] = cfg::t_cfg_props("scrapUser", "");
+	configMain[cfg::scrapUser].desc = "#Username for screenscraper.fr";
+
+	configMain[cfg::scrapPass] = cfg::t_cfg_props("scrapPass", "");
+	configMain[cfg::scrapPass].desc = "#Password for screenscraper.fr";
+
+	configMain[cfg::showEmptyEmulators] = cfg::t_cfg_props("showEmptyEmulators", true);
+	configMain[cfg::showEmptyEmulators].desc = "#Set to 'no' to hide emulators without games";
+
+	configMain[cfg::fastForwardMult] = cfg::t_cfg_props("fastForwardMult", (int)30);
+	configMain[cfg::fastForwardMult].desc = "#Specify the fast forward nultiplier. Divide it by 10 to have the actual value. 30 = 3x speed";
+
+	configMain[cfg::overscan_x] = cfg::t_cfg_props("overscan_x", (int)0);
+	configMain[cfg::overscan_x].desc = "#Sets the frontend overscan to enlarge or shrink the x axis of the frontend screen"
+		"\n#It doesn't affect the game screen";
+
+	configMain[cfg::overscan_y] = cfg::t_cfg_props("overscan_y", (int)0);
+	configMain[cfg::overscan_y].desc = "#Sets the frontend overscan to enlarge or shrink the y axis of the frontend screen"
+		"\n#It doesn't affect the game screen";
 
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));
@@ -325,6 +427,7 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 			std::unique_ptr<cfg::t_cfg_emu> cfgEmu(new cfg::t_cfg_emu);
 
 			cfgEmu->config.internalName = emuname;
+			cfgEmu->config.cfgFilePath = filepath;
 
 			while(getline(fileCfg, line)){
 				//cout << "reading line" <<endl;
@@ -375,11 +478,26 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 					} else if (key.compare("keyboard_type") == 0){
 						cfgEmu->config.keyboard_type = value;
 					} else if (key.compare("menu_show_directories") == 0){
-						cfgEmu->config.show_directories = value.compare("yes") == 0 ? true : false;
+						cfgEmu->config.menu_show_directories = value.compare("yes") == 0 ? true : false;
 					} else if (key.compare("network_default_servers") == 0){
 						cfgEmu->config.network_default_servers = value;
 					} else if (key.compare("title_bkg_assets") == 0){
 						cfgEmu->config.title_bkg_assets = value;
+					} else if (key.compare("aspectRatio") == 0){
+						//This option is to override the configMain, so the -1 value is for the auto option
+						cfgEmu->config.aspectRatio = Constant::strToTipo<int>(value) + 1;
+					} else if (key.compare("scaleMode") == 0){
+						//This option is to override the configMain, so the -1 value is for the auto option
+						cfgEmu->config.scaleMode = Constant::strToTipo<int>(value) + 1;
+					} else if (key.compare("integerScale") == 0){
+						//This option is to override the configMain, so the -1 value is for the auto option
+						cfgEmu->config.integerScale = Constant::strToTipo<int>(value) + 1;
+					} else if (key.compare("scaleIntMode") == 0){
+						//This option is to override the configMain, so the -1 value is for the auto option
+						cfgEmu->config.scaleIntMode = Constant::strToTipo<int>(value) + 1;
+					} else if (key.compare("shaderMode") == 0){
+						//This option is to override the configMain, so the -1 value is for the auto option
+						cfgEmu->config.shaderMode = Constant::strToTipo<int>(value) + 1;
 					}
 				}
 			}             
@@ -397,29 +515,61 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 	}
 }
 
-unsigned int CfgLoader::findConfigIndex(std::string propName){
-	unsigned int selectedIndex = 0;
-	for (int i=cfg::coreGenesis; i < cfg::MAIN_CFG_MAX; i++){
-		if (configMain[i].name == propName){
-			selectedIndex = i;
-			break;
-		}
-	}
-	return selectedIndex;
-}
+//unsigned int CfgLoader::findConfigIndex(std::string propName){
+//	unsigned int selectedIndex = 0;
+//	for (int i=cfg::coreGenesis; i < cfg::MAIN_CFG_MAX; i++){
+//		if (configMain[i].name == propName){
+//			selectedIndex = i;
+//			break;
+//		}
+//	}
+//	return selectedIndex;
+//}
 
 void CfgLoader::getExecutables(std::string str, cfg::t_cfg_emu* emu){
 	Constant::splitChar(str, ';', emu->config.cores);
-	std::string emuInternalName = Constant::Trim(emu->config.internalName);
-	unsigned int selectedIndex = findConfigIndex(coreDefault + emuInternalName);
+	//std::string emuInternalName = Constant::Trim(emu->config.internalName);
+	//unsigned int selectedIndex = findConfigIndex(coreDefault + emuInternalName);
 	//Si tiene configurado un emulador por defecto, lo obtenemos
-	unsigned int selectedValue = 0;
-	if (selectedIndex < cfg::MAIN_CFG_MAX && selectedIndex > 0){
-		selectedValue = configMain[selectedIndex].valueInt;		
-	} 
-	if (selectedValue < emu->config.cores.size()){
-		emu->config.executable = emu->config.cores[selectedValue];
+	//unsigned int selectedValue = 0;
+	//if (selectedIndex < cfg::MAIN_CFG_MAX && selectedIndex > 0){
+	//	selectedValue = configMain[selectedIndex].valueInt;		
+	//} 
+	//if (selectedValue < emu->config.cores.size()){
+		//emu->config.executable = emu->config.cores[selectedValue];
+	//}
+
+	if (!emu->config.cores.empty()){
+		//Simply obtain the first of the list
+		emu->config.executable = emu->config.cores.front();
 	}
+}
+
+#include <algorithm> // Requerido para std::rotate
+
+/**
+* Gets a string from the list of executables by moving the selected one
+* to the beginning of the list. This way, when the list is loaded at startup
+* the emulator, we know that the selected one is the first element
+*/
+std::string CfgLoader::getExecutablesString(const ConfigEmu& cfg){
+	std::string execs;
+
+	// We make a copy to modify the vector freely
+    std::vector<std::string> localCores = cfg.cores; 
+
+	if (cfg.execIdx > 0 && (std::size_t)cfg.execIdx < localCores.size()){
+		// std::rotate takes three iterators:
+		// 1. The beginning of the range to modify (v.begin())
+		// 2. The element that will become the FIRST (v.begin() + idx)
+		// 3. The end of the range to modify (v.begin() + idx + 1)
+		std::rotate(localCores.begin(), localCores.begin() + cfg.execIdx, localCores.begin() + cfg.execIdx + 1);
+	}
+
+	for (std::size_t i=0; i < localCores.size(); i++){
+		execs += localCores[i] + (i < localCores.size() - 1 ? ";" : "");
+	}
+	return execs;
 }
 
 int CfgLoader::getWidth(){
@@ -492,6 +642,9 @@ std::string CfgLoader::saveMainParams(){
 
 	for (int i=0; i < cfg::MAIN_CFG_MAX; i++){
 		if (configMain[i].name.empty()) continue;
+
+		if (!configMain[i].desc.empty())
+			fileMainCfg.push_back(configMain[i].desc);
 
 		line = configMain[i].name + "=";
 
@@ -570,4 +723,124 @@ std::string CfgLoader::getCoreCfgPath(){
 
 	return configMain[cfg::path_prefix].valueStr + (lastFileSep ? "" : Constant::getFileSep()) + 
 		"config" + Constant::getFileSep() + "core_" + configMain[cfg::libretro_core].valueStr + ".ini";
+}
+
+// Metodo para guardar la configuracion en un archivo
+std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
+	ConfigEmu& cfg = emulators.at(emuIdx).get()->config;
+	//La ruta del archivo la tendremos que recoger por parametro
+	const std::string rutaArchivo = cfg.cfgFilePath;
+
+    std::ofstream archivo(rutaArchivo.c_str());
+    if (!archivo.is_open()) return "";
+
+	cfg.executable = CfgLoader::getExecutablesString(cfg);
+
+    // 1. Escribimos los campos de tipo string de forma masiva
+    struct MappingStr { const char* nombre; const char* descripcion; const std::string ConfigEmu::*puntero; };
+    MappingStr strings[] = {
+        {"name", "Emulator Name", &ConfigEmu::name},
+        {"description", "Emulator description", &ConfigEmu::description},
+        {"system", "Emulated system", &ConfigEmu::system},
+        {"directory", "Emulator location, e.g.: c:\\mame", &ConfigEmu::directory},
+		{"executable", "Name of the emulator executable, e.g., mame.exe" 
+		"\n#More than one emulator can be specified separated by the character: \";\". The first one will be the default", &ConfigEmu::executable},
+        {"global_options", "Global options passed to the emulator, e.g., -sound 1", &ConfigEmu::global_options},
+        {"rom_directory", "ROM Directory", &ConfigEmu::rom_directory},
+        {"rom_extension", "List of supported extensions for ROMs (without the \".\")", &ConfigEmu::rom_extension},
+        {"assets", "This is the directory where images and information are stored.", &ConfigEmu::assets},
+        {"screen_shot_directory", "This is the directory where the screenshots in .png format are located.", &ConfigEmu::screen_shot_directory},
+        {"mame_roms_xml", "Xml file with Mame game names", &ConfigEmu::mame_roms_xml},
+        {"map_file", "This is the list of pre-scanned ROMs (not supported yet).", &ConfigEmu::map_file},
+        {"keyboard_type", "Keyboard type. Implemented for: msx and spectrum", &ConfigEmu::keyboard_type}
+    };
+    
+    //archivo << "# Cadenas de texto\n";
+    for (std::size_t i = 0; i < sizeof(strings)/sizeof(strings[0]); ++i) {
+		archivo << "#" << strings[i].descripcion << "\n";
+        archivo << strings[i].nombre << " = " << cfg.*(strings[i].puntero) << "\n";
+    }
+
+    // 2. Escribimos los campos booleanos convirtiendo a "yes/no"
+    struct MappingBool { const char* nombre; const char* descripcion; const bool ConfigEmu::*puntero; };
+    MappingBool bools[] = {
+		{"options_before_rom", "The options appear before the ROM at startup: \"yes\" o \"no\"."
+		"\n# ej. yes: emulator.exe -option1 -option2 rom"
+		"\n#     no: emulator.exe rom -option1 -option2", &ConfigEmu::options_before_rom},
+        {"use_rom_file", "A ROM file is a list of ROMs to be used."
+		"\n#If set to \"no\", the ROMs in the rom directory are scanned."
+		"\n# If set to \"yes\", a ROM file (which is basically a list of ROMs) is used"
+		"\n# instead of attempting to scan. The default is \"no\"."
+		"\n# ROM files are useful for ROMs merged with MAME, where the actual"
+		"\n# ROM names are buried inside a ZIP file.", &ConfigEmu::use_rom_file},
+        {"use_extension", "Use the extension when starting the game: \"yes\" or \"no\""
+		"\n# e.g., yes: \"emulator.exe rom.ext\""
+		"\n# no: \"emulator.exe rom\"", &ConfigEmu::use_extension},
+        {"use_rom_directory", "Use the ROM directory when launching the game: \"yes\" or \"no\""
+		"\n# e.g., yes: \"emulator.exe c:\\full\\path\\rom\\"
+		"\n# no: \"emulator.exe rom\"", &ConfigEmu::use_rom_directory},
+        {"no_uncompress", "Avoids to uncompress the zip file", &ConfigEmu::no_uncompress},
+        {"menu_show_directories", "Show directories in the game list", &ConfigEmu::menu_show_directories}
+        //{"generalConfig", &ConfigEmu::generalConfig}
+    };
+
+    //archivo << "\n# Booleanos\n";
+    for (std::size_t i = 0; i < sizeof(bools)/sizeof(bools[0]); ++i) {
+		archivo << "#" << bools[i].descripcion << "\n";
+        archivo << bools[i].nombre << " = " << (cfg.*(bools[i].puntero) ? "yes" : "no") << "\n";
+    }
+
+    // 3. Escribimos los enteros (aspectRatio, shaderMode, etc.)
+    struct MappingInt { const char* nombre; const char* descripcion; const int ConfigEmu::*puntero; };
+    MappingInt enteros[] = {
+        {"aspectRatio", "Select the screen aspect ratio"
+		"\n#AUTO          -1"
+		"\n#RATIO_CORE     0"
+		"\n#RATIO_4_3      1"
+		"\n#RATIO_3_2      2" 
+		"\n#RATIO_8_7      3"
+		"\n#RATIO_10_9     4"
+		"\n#RATIO_1_1      5"
+		"\n#RATIO_5_4      6"
+		"\n#RATIO_16_9     7"
+		"\n#RATIO_16_10    8", &ConfigEmu::aspectRatio},
+        {"shaderMode", "Shader selected"
+		"\n#AUTO                   -1"
+		"\n#SHADER_NEAREST,         0"
+		"\n#SHADER_BILINEAR,        1"
+		"\n#SHADER_LCD_GRID,        2"
+		"\n#SHADER_SCANLINES,       3"
+		"\n#SHADER_CRT,             4"
+		"\n#SHADER_CRT_LOTTES,      5"
+		"\n#SHADER_CRT_EASYMODE,    6"
+		"\n#SHADER_HQ2X,            7"
+		"\n#SHADER_HQ3X,            8"
+		"\n#SHADER_HQ4X,            9"
+		"\n#SHADER_XBR_LV2_FAST,    10"
+		"\n#SHADER_XBR_HYLLIAN,     11", &ConfigEmu::shaderMode},
+        {"scaleMode", "Scaler in SW mode. Not used", &ConfigEmu::scaleMode},
+        {"integerScale", "Enable or disable the screen integer scale"
+		"\n#AUTO                   -1"
+		"\n#DISABLED                0"
+		"\n#ENABLED                 1", &ConfigEmu::integerScale},
+        {"scaleIntMode", "Integer screen scale mode used when integerScale is selected"
+		"\n#AUTO                -1"
+		"\n#SCALE INT REDUCE	 0"
+		"\n#SCALE INT INCREASE   1"
+		"\n#SCALE FIXED 1X		 2"
+		"\n#SCALE FIXED 2X		 3"
+		"\n#SCALE FIXED 3X	     4"
+		"\n#SCALE FIXED 4X		 5"
+		"\n#SCALE FIXED 5X		 6", &ConfigEmu::scaleIntMode}
+    };
+
+    //archivo << "\n# Enteros\n";
+	//The override list, has the option "auto", which is represented as -1. That's why we subtract 1
+    for (std::size_t i = 0; i < sizeof(enteros)/sizeof(enteros[0]); ++i) {
+		archivo << "#" << enteros[i].descripcion << "\n";
+        archivo << enteros[i].nombre << " = " << (cfg.*(enteros[i].puntero) -1) << "\n";
+    }
+
+    archivo.close();
+	return LanguageManager::instance()->get("msg.core.cfg.savelocation") + rutaArchivo;
 }

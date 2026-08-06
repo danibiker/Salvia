@@ -801,14 +801,20 @@ class ConfigEmu{
         use_rom_directory = true;
 		generalConfig = false;
 		no_uncompress = false;
-		show_directories = false;
+		menu_show_directories = false;
+		integerScale = false;
+		aspectRatio = 0;
+		shaderMode = 0;
+		scaleMode = 0;
+		scaleIntMode = 0;
+		execIdx = 0;
     }
     ~ConfigEmu(){
-
     }
 
 	bool generalConfig;
 
+	std::string cfgFilePath;
 	std::string internalName;
     std::string name;
     std::string system;
@@ -817,7 +823,10 @@ class ConfigEmu{
     std::string directory;
     //Name of emulator executable, i.e. mame.exe
     std::string executable;
+	//List of cores available for the system to emulate
 	std::vector<std::string> cores;
+	//Index of the selected core executable
+	int execIdx;
     //Global options passed to emulator, i.e. -sound 1
     std::string global_options;
     std::string map_file;
@@ -854,11 +863,21 @@ class ConfigEmu{
 	//Set the keyboard type
 	std::string keyboard_type;
 	//Show directories in the menu list
-	bool show_directories;
+	bool menu_show_directories;
 	//Set the default servers to connect when required
 	std::string network_default_servers;
 	//Se the default title
 	std::string title_bkg_assets;
+	//Override the main aspect ratio
+	int aspectRatio;
+	//Override the main shader mode
+	int shaderMode;
+	//Override the main scale mode
+	int scaleMode;
+	//Override the main Integer scale
+	int integerScale;
+	//Override the main Integer scale mode
+	int scaleIntMode;
 };
 
 struct t_rom_paths{

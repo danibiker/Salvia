@@ -199,6 +199,7 @@ class GameMenu : public Engine{
 		void prevImageLoaded();
 		void findFirstImage();
 		struct retro_system_av_info getAvInfo();
+		void checkDisplayOptions(t_scale_props &current_video_settings);
     private:
 		std::vector<Message> messages;
 		th_messages messagesAchievement;
