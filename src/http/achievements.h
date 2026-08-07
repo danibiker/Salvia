@@ -20,6 +20,21 @@
 
 #include <SDL.h>
 
+/* ---------- Deteccion de endianness del host en tiempo de compilacion ----------
+ * Se usa para decidir si el core necesita byte-swap en read_memory().
+ * En hosts little-endian (PC), los cores con CPU 68000 (Genesis, Sega CD, 32X)
+ * ya hacen byte-swap de cada word de 16 bits en work_ram por rendimiento, y ese
+ * es el layout contra el que RetroAchievements escribe sus condiciones.
+ * En hosts big-endian (Xbox 360 PowerPC), el core almacena work_ram en orden
+ * nativo 68000 (BE), por lo que debemos hacer XOR de cada direccion con 1 para
+ * replicar el layout LE que esperan los logros. */
+#if defined(_XBOX) 
+#define SALVIA_HOST_IS_BIG_ENDIAN 1
+#else
+#define SALVIA_HOST_IS_BIG_ENDIAN 0
+#endif
+
+
 /* Forward declaration definido en libretro.h */
 struct retro_memory_descriptor;
 
@@ -41,6 +56,17 @@ struct MemoryMapping {
 
 #if defined(_MSC_VER) && _MSC_VER < 1900
 #define snprintf _snprintf
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+	rc_client_async_handle_t* rc_client_begin_identify_and_load_game(rc_client_t* client,
+    uint32_t console_id, const char* file_path,
+    const uint8_t* data, size_t data_size,
+    rc_client_callback_t callback, void* callback_userdata);
+#ifdef __cplusplus
+}
 #endif
 
 class ScopedLock {

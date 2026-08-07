@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
-#include <unzip/minizip-1.2.5/unzip.h>
-#include <unzip/zlib.h>
+#include <minizip/unzip.h>
+#include <zlib/zlib.h>
 #include "unziptool_common.h"
 
 const int WRITE_BUFFER_SIZE = 65536;

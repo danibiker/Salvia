@@ -28,14 +28,17 @@
 
 
 #ifdef _XBOX
+	#ifndef SALVIA_GPU_VIDEO
 	#include <io/video_direct.h>
+	#endif
 	extern "C" void XBOX_SetVideoFilter(int filterType);	
 	extern "C" void XBOX_SelectEffect(int effectID);	
 #else 
+	#ifndef SALVIA_GPU_VIDEO
 	#include <io/video.h>
 	#include <io/hqx_2/hqx.h>
+	#endif
 #endif
-
 
 static const string SNAP = "snap";
 static const string BOX2D = "box2d";
@@ -118,7 +121,6 @@ class GameMenu : public Engine{
 		Image title_image;
 		GameTicks gameTicks;
 		GestorMenus *configMenus;
-		ScalerFunc current_scaler;
 		int current_scaler_scale;
 		void processConfigChanges();
 		int *current_scaler_mode;
@@ -131,6 +133,10 @@ class GameMenu : public Engine{
 		bool romLoaded;
 		Uint32 uBkgColor;
 		int selectedFsImage;
+
+		#ifndef SALVIA_GPU_VIDEO
+		ScalerFunc current_scaler;
+		#endif
 
 		void createMenuImages(ListMenu &);
         void loadEmuCfg(ListMenu &);

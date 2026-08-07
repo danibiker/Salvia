@@ -127,7 +127,7 @@ GameMenu::~GameMenu(){
 	if (bg_screenshot) SDL_FreeSurface(bg_screenshot);
 	clearLastAchievementArea();
 
-	#ifndef _XBOX
+	#if !defined(_XBOX) && !defined(SALVIA_GPU_VIDEO)
 		hqxClose();
 	#endif
 
@@ -1773,7 +1773,7 @@ SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
 }
 
 void GameMenu::selectScalerMode(int mode){
-#ifndef _XBOX
+#if !defined(_XBOX) && !defined(SALVIA_GPU_VIDEO)
 	// 3. Selector de escalado
 	switch(mode) {
 		case FULLSCREEN:

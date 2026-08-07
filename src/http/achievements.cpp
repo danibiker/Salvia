@@ -12,20 +12,6 @@
 #include <rc_consoles.h>
 #include <libretro/libretro.h>
 
-/* ---------- Deteccion de endianness del host en tiempo de compilacion ----------
- * Se usa para decidir si el core necesita byte-swap en read_memory().
- * En hosts little-endian (PC), los cores con CPU 68000 (Genesis, Sega CD, 32X)
- * ya hacen byte-swap de cada word de 16 bits en work_ram por rendimiento, y ese
- * es el layout contra el que RetroAchievements escribe sus condiciones.
- * En hosts big-endian (Xbox 360 PowerPC), el core almacena work_ram en orden
- * nativo 68000 (BE), por lo que debemos hacer XOR de cada direccion con 1 para
- * replicar el layout LE que esperan los logros. */
-#if defined(_XBOX) 
-#define SALVIA_HOST_IS_BIG_ENDIAN 1
-#else
-#define SALVIA_HOST_IS_BIG_ENDIAN 0
-#endif
-
 void clearBadgeCache();
 static const std::string SALVIA_USER_AGENT = "Salvia/1.0";
 

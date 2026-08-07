@@ -49,3 +49,6 @@ Distro360/**
 *.log
 libretro/snes9x/external/**
 libretro/snes9x/win32/libpng/**
+tools/*.exe
+tools/*.idc
+tools/XexTool.txt

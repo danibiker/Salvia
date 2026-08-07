@@ -15,7 +15,10 @@ SDL_image-1.2.12\VisualC\SDL_image.vcxproj ^
 SDL_ttf360\SDL_ttf360.vcxproj ^
 libSDLx360\libSDLx360.vcxproj ^
 wolfssl\IDE\XBOX360\wolfssl.vcxproj ^
-curl\projects\Windows\VC10\lib\libcurl.vcxproj
+curl\projects\Windows\VC10\lib\libcurl.vcxproj ^
+minizip\minizip.vcxproj ^
+zlib\zlib.vcxproj ^
+rcheevos\rcheevos.vcxproj
 
 echo =======================================================
 echo Compilando %PLATFORM% (Modo Silencioso)

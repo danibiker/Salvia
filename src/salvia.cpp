@@ -698,6 +698,7 @@ static inline void rotate_buffer_16bpp(const uint16_t* src, unsigned sw, unsigne
 	}
 }
 
+#ifndef SALVIA_GPU_VIDEO
 static inline void sw_refresh(const void *data, unsigned width, unsigned height, std::size_t pitch) {
     if (!data || width == 0 || height == 0 || *gameMenu->current_scaler_mode == NO_VIDEO) 
 		return;	
@@ -783,7 +784,7 @@ static inline void sw_refresh(const void *data, unsigned width, unsigned height,
 	//Escalamos la imagen con el escalador que hay almacenado en el puntero a funcion
 	gameMenu->current_scaler(scaleProps);
 }
-
+#endif
 /**
 *
 */

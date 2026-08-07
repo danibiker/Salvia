@@ -7,7 +7,7 @@
 #include <vector>
 #include <set>
 #include <algorithm>
-#include "unzip/minizip-1.2.5/unzip.h"
+#include <minizip/unzip.h>
 #include <direct.h>        // _mkdir (Windows)
 
 // -----------------------------------------------------------------------

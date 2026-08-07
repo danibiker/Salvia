@@ -10,7 +10,10 @@ set PLATFORM="Win32"
 set MS_OPTS=/t:Rebuild /p:Platform=%PLATFORM% /v:q /nologo /clp:NoSummary /p:DeployOnBuild=false
 
 set LIBS=wolfssl\IDE\XBOX360\wolfssl.vcxproj ^
-curl\projects\Windows\VC10\lib\libcurl.vcxproj
+curl\projects\Windows\VC10\lib\libcurl.vcxproj ^
+minizip\minizip.vcxproj ^
+zlib\zlib.vcxproj ^
+rcheevos\rcheevos.vcxproj
 
 echo =======================================================
 echo Compilando %PLATFORM% (Modo Silencioso)
