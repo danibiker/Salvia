@@ -54,52 +54,53 @@ const char SYMBOLS_TO_SPACE[] = ":-._/\\|,;";
 // Caracteres que queremos eliminar por completo (ruido)
 const char SYMBOLS_TO_REMOVE[] = "\"\'!?*#¿¡";
 
-const char *ICONS_PATH[] = {"menu_log.png",
-	"folder.png",
-	"file.png",
-	"file.png",
-	"zip.png",
-	"image.png",
-	"zip.png",
-	"menu_osd.png",
-	"setting.png",
-	"core-options.png",
-	"subsetting.png",
-	"core-input-remapping-options.png",
-	"loadstate.png",
-	"menu_saving.png",
-	"resume.png",
-	"screenshot.png",
-	"achievement-list.png",
-	"menu_shutdown.png",
-	"menu_help.png",
-	"core-cheat-options.png"
+const char *ICONS_PATH[] = {"menu_log.png",		// page_white_text
+	"folder.png",								// folder
+	"file.png",									// page_white
+	"file.png",									// page_white_gear
+	"zip.png",									// page_white_compressed
+	"image.png",								// page_white_picture
+	"zip.png",									// page_white_zip
+	"menu_osd.png",								// ico_video
+	"setting.png",								// ico_settings
+	"core-options.png",							// ico_settings_core
+	"subsetting.png",							// ico_subsettings
+	"core-input-remapping-options.png",			// ico_remap
+	"loadstate.png",							// ico_savestates
+	"menu_saving.png",							// ico_saving
+	"resume.png",								// ico_return
+	"screenshot.png",							// ico_scrapper
+	"achievement-list.png",						// ico_achievements
+	"menu_shutdown.png",						// ico_shutdown
+	"menu_help.png",							// ico_help
+	"core-cheat-options.png"					// ico_cheats
 };
 
-const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",
-	"Nintendo - Game Boy-content.png",
-	"Sega - Master System-content.png",
-	"Sega - Mega Drive - Genesis-content.png",
-	"Nintendo - SNES-content.png",
-	"Sega - 32X-content.png",
-	"Sega - Game Gear-content.png",
-	"Sega - Mega-CD - Sega CD-content.png",
-	"Nintendo - NES-content.png",
-	"NEC - PC Engine-content.png",
-	"Sony - PlayStation-content.png",
-	"NEC - PC Engine CD-content.png",
-	"Arcade - STGSingle-content.png",
-	"SNK - Neo Geo Pocket Color-content.png",
-	"Sinclair - ZX Spectrum-content.png",
-	"Microsoft - MSX-content.png",
-	"DOS-content.png",
-	"DOOM-content.png",
-	"NEC - PC Engine SuperGrafx-content.png",
-	"Quake.png",
-	"default-content.png",
-	"The 3DO Company - 3DO-content.png",
-	"Bandai - WonderSwan-content.png",
-	"Nintendo - Virtual Boy-content.png"
+const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",  // cart_gba
+	"Nintendo - Game Boy-content.png",										  // cart_gb
+	"Sega - Master System-content.png",										  // cart_sms
+	"Sega - Mega Drive - Genesis-content.png",								  // cart_genesis
+	"Nintendo - SNES-content.png",											  // cart_snes
+	"Sega - 32X-content.png",												  // cart_32x
+	"Sega - Game Gear-content.png",											  // cart_gg
+	"Sega - Mega-CD - Sega CD-content.png",									  // cart_mcd
+	"Nintendo - NES-content.png",											  // cart_nes
+	"NEC - PC Engine-content.png",											  // cart_pce
+	"Sony - PlayStation-content.png",										  // cart_psx
+	"NEC - PC Engine CD-content.png",										  // cart_pce_cd
+	"Arcade - STGSingle-content.png",										  // cart_mame 
+	"SNK - Neo Geo Pocket Color-content.png",								  // cart_neogeo_pocket
+	"Sinclair - ZX Spectrum-content.png",									  // cart_zx
+	"Microsoft - MSX-content.png",											  // cart_msx
+	"DOS-content.png",														  // cart_dos
+	"DOOM-content.png",														  // cart_doom
+	"NEC - PC Engine SuperGrafx-content.png",								  // cart_supergrafx
+	"Quake.png",															  // cart_quake
+	"default-content.png",													  // cart_default
+	"The 3DO Company - 3DO-content.png",									  // cart_3do
+	"Bandai - WonderSwan-content.png",										  // cart_wonderswan
+	"Nintendo - Virtual Boy-content.png",									  // cart_virtualboy
+	"Atari - Lynx-content.png"												  // cart_atarilynx
 };
 
 // Nombres de sistema de libretro-database (ficheros rdb/ y carpetas cht/), indexado por
@@ -129,7 +130,8 @@ const char *RDB_SYSTEM_NAMES[] = {
 	"",                                                // cart_default
 	"The 3DO Company - 3DO",                           // cart_3do
 	"Bandai - WonderSwan",                             // cart_wonderswan
-	"Nintendo - Virtual Boy"                           // cart_virtualboy
+	"Nintendo - Virtual Boy",                          // cart_virtualboy
+	"Atari - Lynx"									   // cart_atarilynx
 };
 
 #ifdef _XBOX

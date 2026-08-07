@@ -102,8 +102,12 @@ set MS_OPTS_360=/t:Rebuild /p:Platform=%PLATFORM_XBOX% /v:q /nologo /clp:NoSumma
 	set NAME[21]=beetle-vb-libretro
 	set  SLN[21]=beetle-vb-libretro\vb\vb.sln
 	set PLAT[21]=Both
+	
+	set NAME[22]=beetle-lynx-libretro
+	set  SLN[22]=beetle-lynx-libretro\beetle-lynx-libretro.sln
+	set PLAT[22]=Both
 
-	for /l %%i in (0,1,21) do (
+	for /l %%i in (0,1,22) do (
 		set "_n=!NAME[%%i]!"
 		set "_s=!SLN[%%i]!"
 		set "_p=!PLAT[%%i]!"

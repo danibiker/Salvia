@@ -49,6 +49,8 @@ static char retro_system_directory[4096];
 static bool libretro_supports_input_bitmasks;
 static int system_color_depth = 16;
 
+static double last_sound_rate;
+
 extern MDFNGI EmulatedLynx;
 MDFNGI *MDFNGameInfo = &EmulatedLynx;
 
@@ -187,6 +189,11 @@ static bool MDFNI_LoadGame(const uint8_t *data, size_t size)
 	// and automatically load all files in it?
 	// End load per-game settings
 	//
+
+	// Force the sound buffer of the new CSystem to be (re)initialized on
+	// the next retro_run(), even if the requested sample rate is unchanged.
+	last_sound_rate = 0;
+
 	char bios_path[2048];
 	snprintf(bios_path, sizeof(bios_path),"%s" SLASH "%s", retro_system_directory, "lynxboot.img");
 
@@ -429,7 +436,6 @@ static void update_input(void)
 void retro_run(void)
 {
    static int16_t sound_buf[0x10000];
-   static double last_sound_rate;
    EmulateSpecStruct spec = {0};
    bool updated           = false;
 

@@ -460,6 +460,8 @@ int ListMenu::getCartForSystem(int systemid){
 			return cart_gg;
 		case 25:
 			return cart_neogeo_pocket;
+		case 28:
+			return cart_atarilynx;
 		case 29:
 			return cart_3do;
 		case 31:

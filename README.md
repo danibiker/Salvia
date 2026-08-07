@@ -56,6 +56,8 @@ Salvia provides the following emulators from the latests releases:
   - beetle-wswan
 * Virtual Boy
   - beetle-vb
+* Atari Lynx
+  - beetle-lynx
 * Arcade
   - FBNeo
   - FBANext (ported from the magicseb repository)
@@ -92,6 +94,7 @@ system/
 ├── bios_MD.bin
 ├── gba_bios.bin
 ├── goldstar.bin
+├── lynxboot.img
 ├── NstDatabase.xml
 ├── panafz1-kanji.bin
 ├── panafz1.bin
@@ -170,6 +173,7 @@ You are now ready to place your backup games into their respective directories:
 ```
 Usb0:\Roms
 ├── 3do\                 (3DO --> iso bin cue chd)
+├── atarilynx\           (Atari Lynx --> lnx lyx bll o zip)
 ├── dos\                 (MS-DOS --> zip dosz exe com bat iso chd cue ins img ima vhd jrc m3u m3u8 conf)
 ├── fbneo\               (Arcade FBNeo --> zip 7z cue ccd chd)
 │   ├── neocd\           (NeoGeo CD --> cue ccd chd)
@@ -199,7 +203,7 @@ Usb0:\Roms
 └── wonderswan\          (Wonderswan --> zip ws wsc)
 ```
 
-To change these paths, you can manually modify the **roms_path** field within the main configuration file (salvia.cfg). Alternatively, this can be adjusted via the in-game menu: Options > Emulation > Roms Main Directory. This property now defines the parent directory for all emulator ROMs. Notably, if configured as usb:\..., the system will dynamically detect the correct USB port, eliminating the need to specify Usb0 or Usb1.
+To change these paths, you can manually modify the **roms_path** field within the main configuration file (salvia.cfg). Alternatively, this can be adjusted via the in-game menu: Options > Emulation > Roms Main Directory. This property now defines the parent directory for all emulator ROMs. Notably, if configured as usb:\YOUR_ROMS_DIR, the system will dynamically detect the correct USB port, eliminating the need to specify Usb0 or Usb1. To load games from the internal hard disk you must use Hdd:\YOUR_ROMS_DIR
 
 <img width="1275" height="301" alt="image" src="https://github.com/user-attachments/assets/8272f1bb-9f65-4e78-aba9-409f8715476c" />
 

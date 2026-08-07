@@ -349,6 +349,7 @@ typedef enum {cart_gba,
 			  cart_3do,
 			  cart_wonderswan,
 			  cart_virtualboy,
+			  cart_atarilynx,
 			  max_carts};
 
 extern float aspectRatioValues[]; 
