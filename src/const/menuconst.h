@@ -20,16 +20,17 @@ static const enum aspectRatio { RATIO_CORE=0, RATIO_4_3, RATIO_3_2, RATIO_8_7, R
 static const enum videoShaders {
 	SHADER_NEAREST,         /* 0 */
 	SHADER_BILINEAR,        /* 1 - Sharp-Bilinear-Simple */
-	SHADER_LCD_GRID,        /* 2 - LCD3x (handhelds, Gigaherz) */
-	SHADER_SCANLINES,       /* 3 */
-	SHADER_CRT,             /* 4 - CRT-Geom */
-	SHADER_CRT_LOTTES,      /* 5 */
-	SHADER_CRT_EASYMODE,    /* 6 */
-	SHADER_HQ2X,            /* 7 */
-	SHADER_HQ3X,            /* 8 */
-	SHADER_HQ4X,            /* 9 */
-	SHADER_XBR_LV2_FAST,    /* 10 */
-	SHADER_XBR_HYLLIAN,     /* 11 - 5xBR v3.8a (rounded) smooth blend */
+	SHADER_BILINEAR_STD,    /* 2 - Bilinear clasico (hardware LINEAR) */
+	SHADER_LCD_GRID,        /* 3 - LCD3x (handhelds, Gigaherz) */
+	SHADER_SCANLINES,       /* 4 */
+	SHADER_CRT,             /* 5 - CRT-Geom */
+	SHADER_CRT_LOTTES,      /* 6 */
+	SHADER_CRT_EASYMODE,    /* 7 */
+	SHADER_HQ2X,            /* 8 */
+	SHADER_HQ3X,            /* 9 */
+	SHADER_HQ4X,            /* 10 */
+	SHADER_XBR_LV2_FAST,    /* 11 */
+	SHADER_XBR_HYLLIAN,     /* 12 - 5xBR v3.8a (rounded) smooth blend */
 	TOTAL_SHADERS
 };
 

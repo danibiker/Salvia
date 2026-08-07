@@ -34,9 +34,10 @@
 #define max(a,b) (((a) > (b)) ? (a) : (b))
 #endif
 
-/* 0=Nearest,1=Sharp-Bilinear,2=LCD3x,3=Scanlines,4=CRT-Geom,5=CRT-Lottes,
-   6=CRT-Easymode,7=HQ2x,8=HQ3x,9=HQ4x,10=xBR-lv2-fast,11=5xBR-Hyllian */
-#define NUM_EFFECTS 12
+/* 0=Nearest,1=Sharp-Bilinear,2=Bilinear,3=LCD3x,4=Scanlines,5=CRT-Geom,
+   6=CRT-Lottes,7=CRT-Easymode,8=HQ2x,9=HQ3x,10=HQ4x,11=xBR-lv2-fast,
+   12=5xBR-Hyllian */
+#define NUM_EFFECTS 13
 
 /* Flags de compilacion (mismos presets que en Xbox). */
 #define PS_FLAGS_DEFAULT         (D3DXSHADER_PARTIALPRECISION | D3DXSHADER_PREFER_FLOW_CONTROL)
@@ -374,16 +375,20 @@ static void InitShaders(void)
 
     CreateShader(g_strShaderNormalSource,            &g_shaders[0],  PS_FLAGS_DEFAULT);
     CreateShader(g_strShaderSharpBilinearSource,     &g_shaders[1],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderLCDGridSource,           &g_shaders[2],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderScanlinesSource,         &g_shaders[3],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderCRTSource,               &g_shaders[4],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderCRTLottesSource,         &g_shaders[5],  PS_FLAGS_FULL_PRECISION);
-    CreateShader(g_strShaderCRTEasymodeSource,       &g_shaders[6],  PS_FLAGS_FULL_PRECISION);
-    CreateShader(g_strShaderHQ2xSource,              &g_shaders[7],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderHQ3xSource,              &g_shaders[8],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderHQ4xSource,              &g_shaders[9],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderXBRlv2FastSource,        &g_shaders[10], PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderXBRHyllianRoundedSource, &g_shaders[11], PS_FLAGS_FULL_PRECISION);
+    /* 2 = Bilinear clasico: reutiliza el SOURCE de Normal (mismo passthrough)
+       pero compila su propio objeto; el overlay reengancha g_shaders[g_current_effect]
+       cada frame y un slot NULL daria negro en Xenon. Solo cambia el sampler a LINEAR. */
+    CreateShader(g_strShaderNormalSource,            &g_shaders[2],  PS_FLAGS_DEFAULT);
+    CreateShader(g_strShaderLCDGridSource,           &g_shaders[3],  PS_FLAGS_DEFAULT);
+    CreateShader(g_strShaderScanlinesSource,         &g_shaders[4],  PS_FLAGS_DEFAULT);
+    CreateShader(g_strShaderCRTSource,               &g_shaders[5],  PS_FLAGS_DEFAULT);
+    CreateShader(g_strShaderCRTLottesSource,         &g_shaders[6],  PS_FLAGS_FULL_PRECISION);
+    CreateShader(g_strShaderCRTEasymodeSource,       &g_shaders[7],  PS_FLAGS_FULL_PRECISION);
+    CreateShader(g_strShaderHQ2xSource,              &g_shaders[8],  PS_FLAGS_DEFAULT);
+    CreateShader(g_strShaderHQ3xSource,              &g_shaders[9],  PS_FLAGS_DEFAULT);
+    CreateShader(g_strShaderHQ4xSource,              &g_shaders[10], PS_FLAGS_DEFAULT);
+    CreateShader(g_strShaderXBRlv2FastSource,        &g_shaders[11], PS_FLAGS_DEFAULT);
+    CreateShader(g_strShaderXBRHyllianRoundedSource, &g_shaders[12], PS_FLAGS_FULL_PRECISION);
 }
 
 static void DestroyShaders(void)
@@ -405,13 +410,13 @@ static void SetSampler0Filter(D3DTEXTUREFILTERTYPE f)
 static int EffectScale(void)
 {
 //    switch (g_current_effect) {
-//		case 7:  return 2; /* HQ2x */
-//		case 8:  return 3; /* HQ3x */
-//		case 9:  return 4; /* HQ4x */
-//		case 10: return 3; /* xBR-lv2-fast */
-//		case 11: return 3; /* 5xBR-Hyllian (rendered at 3x via HQ3x infra) */
-//		default: return 1; /* 0=Nearest, 1=Sharp-Bilinear, 2=LCD-Grid-v2,
-//		                      3=Scanlines, 4=CRT-Geom, 5=CRT-Lottes, 6=CRT-Easymode */
+//		case 8:  return 2; /* HQ2x */
+//		case 9:  return 3; /* HQ3x */
+//		case 10: return 4; /* HQ4x */
+//		case 11: return 3; /* xBR-lv2-fast */
+//		case 12: return 3; /* 5xBR-Hyllian (rendered at 3x via HQ3x infra) */
+//		default: return 1; /* 0=Nearest, 1=Sharp-Bilinear, 2=Bilinear, 3=LCD-Grid-v2,
+//		                      4=Scanlines, 5=CRT-Geom, 6=CRT-Lottes, 7=CRT-Easymode */
 //    }
 	return 1;
 }
@@ -532,32 +537,41 @@ void XBOX_SelectEffect(int effectID)
         SetSampler0Filter(D3DTEXF_LINEAR);
         break;
     }
-    case 2: {
-        if (!g_shaders[2]) { g_dev->SetPixelShader(g_shaders[0]); SetSampler0Filter(D3DTEXF_LINEAR); }
+    case 2: /* Bilinear clasico: g_shaders[2] es el mismo passthrough que Normal
+             * (reutiliza su source). La UNICA diferencia con Nearest (case 0) es
+             * el sampler LINEAR vs POINT (interpolacion uniforme por hardware,
+             * sin la region nearest del Sharp-Bilinear). No usa textureDims.
+             * Enganchamos el slot [2] para casar con el restore por indice del
+             * overlay: g_shaders[g_current_effect]. */
+        g_dev->SetPixelShader(g_shaders[2] ? g_shaders[2] : g_shaders[0]);
+        SetSampler0Filter(D3DTEXF_LINEAR);
+        break;
+    case 3: {
+        if (!g_shaders[3]) { g_dev->SetPixelShader(g_shaders[0]); SetSampler0Filter(D3DTEXF_LINEAR); }
         else {
             float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
-            g_dev->SetPixelShader(g_shaders[2]);
+            g_dev->SetPixelShader(g_shaders[3]);
             g_dev->SetPixelShaderConstantF(1, dims, 1);
             SetSampler0Filter(D3DTEXF_POINT);
         }
-        break;
-    }
-    case 3: {
-        float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
-        g_dev->SetPixelShader(g_shaders[3]);
-        g_dev->SetPixelShaderConstantF(1, dims, 1);
-        SetSampler0Filter(D3DTEXF_POINT);
         break;
     }
     case 4: {
         float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
         g_dev->SetPixelShader(g_shaders[4]);
         g_dev->SetPixelShaderConstantF(1, dims, 1);
+        SetSampler0Filter(D3DTEXF_POINT);
+        break;
+    }
+    case 5: {
+        float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
+        g_dev->SetPixelShader(g_shaders[5]);
+        g_dev->SetPixelShaderConstantF(1, dims, 1);
         SetSampler0Filter(D3DTEXF_LINEAR);
         break;
     }
-    case 5:
-    case 6: {
+    case 6:
+    case 7: {
         if (!g_shaders[effectID]) { g_dev->SetPixelShader(g_shaders[0]); SetSampler0Filter(D3DTEXF_LINEAR); }
         else {
             float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
@@ -569,14 +583,14 @@ void XBOX_SelectEffect(int effectID)
         }
         break;
     }
-    case 7:
     case 8:
-    case 9: {
+    case 9:
+    case 10: {
         if (!g_shaders[effectID]) { g_dev->SetPixelShader(g_shaders[0]); SetSampler0Filter(D3DTEXF_LINEAR); }
         else {
             float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
-            LPDIRECT3DTEXTURE9 lut = (effectID == 7) ? g_hq2x_lut :
-                                     (effectID == 8) ? g_hq3x_lut : g_hq4x_lut;
+            LPDIRECT3DTEXTURE9 lut = (effectID == 8) ? g_hq2x_lut :
+                                     (effectID == 9) ? g_hq3x_lut : g_hq4x_lut;
             g_dev->SetPixelShader(g_shaders[effectID]);
             g_dev->SetPixelShaderConstantF(1, dims, 1);
             SetSampler0Filter(D3DTEXF_POINT);
@@ -590,8 +604,8 @@ void XBOX_SelectEffect(int effectID)
         }
         break;
     }
-    case 10:
-    case 11: {
+    case 11:
+    case 12: {
         if (!g_shaders[effectID]) { g_dev->SetPixelShader(g_shaders[0]); SetSampler0Filter(D3DTEXF_LINEAR); }
         else {
             float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };

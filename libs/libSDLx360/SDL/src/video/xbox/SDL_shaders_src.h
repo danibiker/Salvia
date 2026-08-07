@@ -64,6 +64,17 @@ const static char* g_strShaderSharpBilinearSource =
     "     return tex2D(detail, mod_texel / textureDims);                        \n"
     " }                                                                         \n";
 
+/* NOTA: el filtro "Bilinear clasico" (effect 2) NO define un source propio:   *
+ * reutiliza g_strShaderNormalSource (el mismo passthrough que Nearest). La     *
+ * diferencia con Nearest (effect 0) es solo el estado del sampler (LINEAR vs   *
+ * POINT), que fija XBOX_SelectEffect.                                          *
+ *                                                                              *
+ * IMPORTANTE: aun reutilizando el source, el slot 2 SI compila su propio       *
+ * objeto pixel shader (initShaders). El render del overlay reengancha el       *
+ * shader del juego con pixelShaders[g_current_effect] cada frame; si ese slot  *
+ * fuese NULL, en Xenon (sin pipeline de funcion fija) la pantalla se pone      *
+ * NEGRA. En PC un shader NULL cae en funcion fija y colaba por accidente.      */
+
 /* Scanlines: Simulates CRT scanline effect.                                  *
  * Darkens alternating lines aligned to source pixel rows using sin().        *
  * s0 = game texture, c1 = textureDims                                       *
