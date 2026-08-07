@@ -21,6 +21,7 @@ git subtree add --prefix=libretro/opera-libretro https://github.com/libretro/ope
 git subtree add --prefix=libretro/beetle-wswan-libretro https://github.com/libretro/beetle-wswan-libretro master --squash
 git subtree add --prefix=libretro/beetle-vb-libretro https://github.com/libretro/beetle-vb-libretro master --squash
 git subtree add --prefix=libretro/beetle-lynx-libretro https://github.com/libretro/beetle-lynx-libretro master --squash
+git subtree add --prefix=libretro/beetle-ngp-libretro https://github.com/libretro/beetle-ngp-libretro master --squash
 
 ###########################################################################################################
 # External libraries
@@ -53,6 +54,7 @@ git subtree pull --prefix=libretro/opera-libretro https://github.com/libretro/op
 git subtree pull --prefix=libretro/beetle-wswan-libretro https://github.com/libretro/beetle-wswan-libretro master --squash
 git subtree pull --prefix=libretro/beetle-vb-libretro https://github.com/libretro/beetle-vb-libretro master --squash
 git subtree pull --prefix=libretro/beetle-lynx-libretro https://github.com/libretro/beetle-lynx-libretro master --squash
+git subtree pull --prefix=libretro/beetle-ngp-libretro https://github.com/libretro/beetle-ngp-libretro master --squash
 
 ###########################################################################################################
 # Merging conflicts

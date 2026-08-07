@@ -38,6 +38,8 @@ Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug_beetle_lynx|Win32 = Debug_beetle_lynx|Win32
 		Debug_beetle_lynx|Xbox 360 = Debug_beetle_lynx|Xbox 360
+		Debug_beetle_ngp|Win32 = Debug_beetle_ngp|Win32
+		Debug_beetle_ngp|Xbox 360 = Debug_beetle_ngp|Xbox 360
 		Debug_beetle_pcfx|Win32 = Debug_beetle_pcfx|Win32
 		Debug_beetle_pcfx|Xbox 360 = Debug_beetle_pcfx|Xbox 360
 		Debug_beetle_psx|Win32 = Debug_beetle_psx|Win32
@@ -80,6 +82,8 @@ Global
 		Release_3DOX|Xbox 360 = Release_3DOX|Xbox 360
 		Release_beetle_lynx|Win32 = Release_beetle_lynx|Win32
 		Release_beetle_lynx|Xbox 360 = Release_beetle_lynx|Xbox 360
+		Release_beetle_ngp|Win32 = Release_beetle_ngp|Win32
+		Release_beetle_ngp|Xbox 360 = Release_beetle_ngp|Xbox 360
 		Release_beetle_psx|Win32 = Release_beetle_psx|Win32
 		Release_beetle_psx|Xbox 360 = Release_beetle_psx|Xbox 360
 		Release_beetlepce_fx|Win32 = Release_beetlepce_fx|Win32
@@ -129,6 +133,11 @@ Global
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_beetle_lynx|Xbox 360.ActiveCfg = Debug_beetle_lynx|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_beetle_lynx|Xbox 360.Build.0 = Debug_beetle_lynx|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_beetle_lynx|Xbox 360.Deploy.0 = Debug_beetle_lynx|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_beetle_ngp|Win32.ActiveCfg = Debug_beetle_ngp|Win32
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_beetle_ngp|Win32.Build.0 = Debug_beetle_ngp|Win32
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_beetle_ngp|Xbox 360.ActiveCfg = Debug_beetle_ngp|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_beetle_ngp|Xbox 360.Build.0 = Debug_beetle_ngp|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_beetle_ngp|Xbox 360.Deploy.0 = Debug_beetle_ngp|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_beetle_pcfx|Win32.ActiveCfg = Debug_beetle_pcfx|Win32
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_beetle_pcfx|Win32.Build.0 = Debug_beetle_pcfx|Win32
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Debug_beetle_pcfx|Xbox 360.ActiveCfg = Debug_beetle_pcfx|Xbox 360
@@ -232,6 +241,11 @@ Global
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_beetle_lynx|Xbox 360.ActiveCfg = Release_beetle_lynx|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_beetle_lynx|Xbox 360.Build.0 = Release_beetle_lynx|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_beetle_lynx|Xbox 360.Deploy.0 = Release_beetle_lynx|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_beetle_ngp|Win32.ActiveCfg = Release_beetle_ngp|Win32
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_beetle_ngp|Win32.Build.0 = Release_beetle_ngp|Win32
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_beetle_ngp|Xbox 360.ActiveCfg = Release_beetle_ngp|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_beetle_ngp|Xbox 360.Build.0 = Release_beetle_ngp|Xbox 360
+		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_beetle_ngp|Xbox 360.Deploy.0 = Release_beetle_ngp|Xbox 360
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_beetle_psx|Win32.ActiveCfg = Release_beetle_psx|Win32
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_beetle_psx|Win32.Build.0 = Release_beetle_psx|Win32
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.Release_beetle_psx|Xbox 360.ActiveCfg = Release_beetle_psx|Xbox 360
@@ -339,6 +353,8 @@ Global
 		{18DFBCD7-520F-4659-A7B3-75C102713C21}.ReleaseTyrQuake|Xbox 360.Deploy.0 = ReleaseTyrQuake|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_beetle_lynx|Win32.ActiveCfg = Debug|Win32
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_beetle_lynx|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_beetle_ngp|Win32.ActiveCfg = Debug_beetle_ngp|Win32
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_beetle_ngp|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_beetle_pcfx|Win32.ActiveCfg = Debug|Win32
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_beetle_pcfx|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Debug_beetle_psx|Win32.ActiveCfg = Debug|Win32
@@ -381,6 +397,8 @@ Global
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_3DOX|Xbox 360.ActiveCfg = Release|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_beetle_lynx|Win32.ActiveCfg = Release|Win32
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_beetle_lynx|Xbox 360.ActiveCfg = Release|Xbox 360
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_beetle_ngp|Win32.ActiveCfg = Release|Win32
+		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_beetle_ngp|Xbox 360.ActiveCfg = Release|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_beetle_psx|Win32.ActiveCfg = Release|Win32
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_beetle_psx|Xbox 360.ActiveCfg = Release|Xbox 360
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.Release_beetlepce_fx|Win32.ActiveCfg = Release|Win32
@@ -427,6 +445,8 @@ Global
 		{AD499DA6-1348-4309-8D37-ADBFFB3AFF8E}.ReleaseTyrQuake|Xbox 360.ActiveCfg = Release|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_beetle_lynx|Win32.ActiveCfg = Debug|Win32
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_beetle_lynx|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_beetle_ngp|Win32.ActiveCfg = Debug_beetle_ngp|Win32
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_beetle_ngp|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_beetle_pcfx|Win32.ActiveCfg = Debug|Win32
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_beetle_pcfx|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Debug_beetle_psx|Win32.ActiveCfg = Debug|Win32
@@ -469,6 +489,8 @@ Global
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_3DOX|Xbox 360.ActiveCfg = Release|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_beetle_lynx|Win32.ActiveCfg = Release|Win32
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_beetle_lynx|Xbox 360.ActiveCfg = Release|Xbox 360
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_beetle_ngp|Win32.ActiveCfg = Release|Win32
+		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_beetle_ngp|Xbox 360.ActiveCfg = Release|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_beetle_psx|Win32.ActiveCfg = Release|Win32
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_beetle_psx|Xbox 360.ActiveCfg = Release|Xbox 360
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.Release_beetlepce_fx|Win32.ActiveCfg = Release|Win32
@@ -515,6 +537,8 @@ Global
 		{E1276D9A-E2AC-4D34-A8B5-57BEC7B6E09F}.ReleaseTyrQuake|Xbox 360.ActiveCfg = Release|Xbox 360
 		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Debug_beetle_lynx|Win32.ActiveCfg = Debug|Win32
 		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Debug_beetle_lynx|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Debug_beetle_ngp|Win32.ActiveCfg = Debug_beetle_ngp|Win32
+		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Debug_beetle_ngp|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Debug_beetle_pcfx|Win32.ActiveCfg = Debug|Win32
 		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Debug_beetle_pcfx|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Debug_beetle_psx|Win32.ActiveCfg = Debug|Win32
@@ -559,6 +583,8 @@ Global
 		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Release_3DOX|Xbox 360.ActiveCfg = Release|Xbox 360
 		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Release_beetle_lynx|Win32.ActiveCfg = Release|Win32
 		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Release_beetle_lynx|Xbox 360.ActiveCfg = Release|Xbox 360
+		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Release_beetle_ngp|Win32.ActiveCfg = Release|Win32
+		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Release_beetle_ngp|Xbox 360.ActiveCfg = Release|Xbox 360
 		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Release_beetle_psx|Win32.ActiveCfg = Release|Win32
 		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Release_beetle_psx|Xbox 360.ActiveCfg = Release|Xbox 360
 		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.Release_beetlepce_fx|Win32.ActiveCfg = Release|Win32
@@ -605,6 +631,8 @@ Global
 		{2BD5534E-00E2-4BEA-AC96-D9A92EA24696}.ReleaseTyrQuake|Xbox 360.ActiveCfg = Release|Xbox 360
 		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Debug_beetle_lynx|Win32.ActiveCfg = Debug|Win32
 		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Debug_beetle_lynx|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Debug_beetle_ngp|Win32.ActiveCfg = Debug_beetle_ngp|Win32
+		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Debug_beetle_ngp|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Debug_beetle_pcfx|Win32.ActiveCfg = Debug|Win32
 		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Debug_beetle_pcfx|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Debug_beetle_psx|Win32.ActiveCfg = Debug|Win32
@@ -647,6 +675,8 @@ Global
 		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Release_3DOX|Xbox 360.ActiveCfg = Release|Xbox 360
 		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Release_beetle_lynx|Win32.ActiveCfg = Release|Win32
 		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Release_beetle_lynx|Xbox 360.ActiveCfg = Release|Xbox 360
+		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Release_beetle_ngp|Win32.ActiveCfg = Release|Win32
+		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Release_beetle_ngp|Xbox 360.ActiveCfg = Release|Xbox 360
 		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Release_beetle_psx|Win32.ActiveCfg = Release|Win32
 		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Release_beetle_psx|Xbox 360.ActiveCfg = Release|Xbox 360
 		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.Release_beetlepce_fx|Win32.ActiveCfg = Release|Win32
@@ -693,6 +723,8 @@ Global
 		{019DBD2A-273D-4BA4-BF86-B5EFE2ED76B1}.ReleaseTyrQuake|Xbox 360.ActiveCfg = Release|Xbox 360
 		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Debug_beetle_lynx|Win32.ActiveCfg = Debug|Win32
 		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Debug_beetle_lynx|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Debug_beetle_ngp|Win32.ActiveCfg = Debug_beetle_ngp|Win32
+		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Debug_beetle_ngp|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Debug_beetle_pcfx|Win32.ActiveCfg = Debug|Win32
 		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Debug_beetle_pcfx|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Debug_beetle_psx|Win32.ActiveCfg = Debug|Win32
@@ -735,6 +767,8 @@ Global
 		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Release_3DOX|Xbox 360.ActiveCfg = Release|Xbox 360
 		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Release_beetle_lynx|Win32.ActiveCfg = Release|Win32
 		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Release_beetle_lynx|Xbox 360.ActiveCfg = Release|Xbox 360
+		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Release_beetle_ngp|Win32.ActiveCfg = Release|Win32
+		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Release_beetle_ngp|Xbox 360.ActiveCfg = Release|Xbox 360
 		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Release_beetle_psx|Win32.ActiveCfg = Release|Win32
 		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Release_beetle_psx|Xbox 360.ActiveCfg = Release|Xbox 360
 		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.Release_beetlepce_fx|Win32.ActiveCfg = Release|Win32
@@ -781,6 +815,8 @@ Global
 		{D6973076-9317-4EF2-A0B8-B7A18AC0713E}.ReleaseTyrQuake|Xbox 360.ActiveCfg = Release|Xbox 360
 		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Debug_beetle_lynx|Win32.ActiveCfg = Debug|Win32
 		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Debug_beetle_lynx|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Debug_beetle_ngp|Win32.ActiveCfg = Debug_beetle_ngp|Win32
+		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Debug_beetle_ngp|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Debug_beetle_pcfx|Win32.ActiveCfg = Debug|Win32
 		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Debug_beetle_pcfx|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Debug_beetle_psx|Win32.ActiveCfg = Debug|Win32
@@ -823,6 +859,8 @@ Global
 		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Release_3DOX|Xbox 360.ActiveCfg = Release|Xbox 360
 		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Release_beetle_lynx|Win32.ActiveCfg = Release|Win32
 		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Release_beetle_lynx|Xbox 360.ActiveCfg = Release|Xbox 360
+		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Release_beetle_ngp|Win32.ActiveCfg = Release|Win32
+		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Release_beetle_ngp|Xbox 360.ActiveCfg = Release|Xbox 360
 		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Release_beetle_psx|Win32.ActiveCfg = Release|Win32
 		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Release_beetle_psx|Xbox 360.ActiveCfg = Release|Xbox 360
 		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.Release_beetlepce_fx|Win32.ActiveCfg = Release|Win32
@@ -869,6 +907,8 @@ Global
 		{7B4A3C20-D8E1-4F5A-9B6C-2E3F5A8D1C09}.ReleaseTyrQuake|Xbox 360.ActiveCfg = Release|Xbox 360
 		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Debug_beetle_lynx|Win32.ActiveCfg = Debug|Win32
 		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Debug_beetle_lynx|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Debug_beetle_ngp|Win32.ActiveCfg = Debug_beetle_ngp|Win32
+		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Debug_beetle_ngp|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Debug_beetle_pcfx|Win32.ActiveCfg = Debug|Win32
 		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Debug_beetle_pcfx|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Debug_beetle_psx|Win32.ActiveCfg = Debug|Win32
@@ -911,6 +951,8 @@ Global
 		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Release_3DOX|Xbox 360.ActiveCfg = Release|Xbox 360
 		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Release_beetle_lynx|Win32.ActiveCfg = Release|Win32
 		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Release_beetle_lynx|Xbox 360.ActiveCfg = Release|Xbox 360
+		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Release_beetle_ngp|Win32.ActiveCfg = Release|Win32
+		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Release_beetle_ngp|Xbox 360.ActiveCfg = Release|Xbox 360
 		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Release_beetle_psx|Win32.ActiveCfg = Release|Win32
 		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Release_beetle_psx|Xbox 360.ActiveCfg = Release|Xbox 360
 		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.Release_beetlepce_fx|Win32.ActiveCfg = Release|Win32
@@ -955,6 +997,8 @@ Global
 		{DA6F56B4-06A4-441D-AD70-AC5A7D51FADB}.ReleaseTyrQuake|Xbox 360.ActiveCfg = Release|Xbox 360
 		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Debug_beetle_lynx|Win32.ActiveCfg = Debug|Win32
 		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Debug_beetle_lynx|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Debug_beetle_ngp|Win32.ActiveCfg = Debug_beetle_ngp|Win32
+		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Debug_beetle_ngp|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Debug_beetle_pcfx|Win32.ActiveCfg = Debug|Win32
 		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Debug_beetle_pcfx|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Debug_beetle_psx|Win32.ActiveCfg = Debug|Win32
@@ -997,6 +1041,8 @@ Global
 		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Release_3DOX|Xbox 360.ActiveCfg = Release|Xbox 360
 		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Release_beetle_lynx|Win32.ActiveCfg = Release|Win32
 		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Release_beetle_lynx|Xbox 360.ActiveCfg = Release|Xbox 360
+		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Release_beetle_ngp|Win32.ActiveCfg = Release|Win32
+		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Release_beetle_ngp|Xbox 360.ActiveCfg = Release|Xbox 360
 		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Release_beetle_psx|Win32.ActiveCfg = Release|Win32
 		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Release_beetle_psx|Xbox 360.ActiveCfg = Release|Xbox 360
 		{C58530D1-B5B9-4333-A664-D9588B5FE527}.Release_beetlepce_fx|Win32.ActiveCfg = Release|Win32
@@ -1043,6 +1089,8 @@ Global
 		{C58530D1-B5B9-4333-A664-D9588B5FE527}.ReleaseTyrQuake|Xbox 360.ActiveCfg = Release|Xbox 360
 		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Debug_beetle_lynx|Win32.ActiveCfg = Debug|Win32
 		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Debug_beetle_lynx|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Debug_beetle_ngp|Win32.ActiveCfg = Debug_beetle_ngp|Win32
+		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Debug_beetle_ngp|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Debug_beetle_pcfx|Win32.ActiveCfg = Debug|Win32
 		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Debug_beetle_pcfx|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Debug_beetle_psx|Win32.ActiveCfg = Debug|Win32
@@ -1085,6 +1133,8 @@ Global
 		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Release_3DOX|Xbox 360.ActiveCfg = Release|Xbox 360
 		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Release_beetle_lynx|Win32.ActiveCfg = Release|Win32
 		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Release_beetle_lynx|Xbox 360.ActiveCfg = Release|Xbox 360
+		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Release_beetle_ngp|Win32.ActiveCfg = Release|Win32
+		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Release_beetle_ngp|Xbox 360.ActiveCfg = Release|Xbox 360
 		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Release_beetle_psx|Win32.ActiveCfg = Release|Win32
 		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Release_beetle_psx|Xbox 360.ActiveCfg = Release|Xbox 360
 		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.Release_beetlepce_fx|Win32.ActiveCfg = Release|Win32
@@ -1131,6 +1181,8 @@ Global
 		{D3BA1C9B-B470-4769-AE2B-0BDEFB8BBF73}.ReleaseTyrQuake|Xbox 360.ActiveCfg = Release|Xbox 360
 		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Debug_beetle_lynx|Win32.ActiveCfg = Debug|Win32
 		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Debug_beetle_lynx|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Debug_beetle_ngp|Win32.ActiveCfg = Debug_beetle_ngp|Win32
+		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Debug_beetle_ngp|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Debug_beetle_pcfx|Win32.ActiveCfg = Debug|Win32
 		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Debug_beetle_pcfx|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Debug_beetle_psx|Win32.ActiveCfg = Debug|Win32
@@ -1173,6 +1225,8 @@ Global
 		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Release_3DOX|Xbox 360.ActiveCfg = Release|Xbox 360
 		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Release_beetle_lynx|Win32.ActiveCfg = Release|Win32
 		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Release_beetle_lynx|Xbox 360.ActiveCfg = Release|Xbox 360
+		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Release_beetle_ngp|Win32.ActiveCfg = Release|Win32
+		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Release_beetle_ngp|Xbox 360.ActiveCfg = Release|Xbox 360
 		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Release_beetle_psx|Win32.ActiveCfg = Release|Win32
 		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Release_beetle_psx|Xbox 360.ActiveCfg = Release|Xbox 360
 		{D14D24E2-5844-412D-94F4-A68376F54EF5}.Release_beetlepce_fx|Win32.ActiveCfg = Release|Win32

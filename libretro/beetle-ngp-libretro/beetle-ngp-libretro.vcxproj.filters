@@ -1,0 +1,145 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\core">
+      <UniqueIdentifier>{846ecc1a-1ec3-49ae-bce0-64fd979fb301}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\core\TLCS-900h">
+      <UniqueIdentifier>{af317894-b201-43b0-8d3c-c7ce4966f7b4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\core\z80">
+      <UniqueIdentifier>{2adb8efe-7cba-4233-b034-8164bec2ab1e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\core\mednafen">
+      <UniqueIdentifier>{ed9653cc-d5c6-4dc3-9552-80f6412e59c7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\core\libretro-common">
+      <UniqueIdentifier>{1c028968-ce8d-47a9-8942-eff27c5043ab}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="libretro.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\sound.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\T6W28_Apu.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\bios.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\biosHLE.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\dma.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\flash.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\gfx.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\interrupt.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\mem.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\rom.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\rtc.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\system.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\Z80_interface.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\TLCS-900h\TLCS900h_interpret.c">
+      <Filter>Source Files\core\TLCS-900h</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\TLCS-900h\TLCS900h_interpret_dst.c">
+      <Filter>Source Files\core\TLCS-900h</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\TLCS-900h\TLCS900h_interpret_reg.c">
+      <Filter>Source Files\core\TLCS-900h</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\TLCS-900h\TLCS900h_interpret_single.c">
+      <Filter>Source Files\core\TLCS-900h</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\TLCS-900h\TLCS900h_interpret_src.c">
+      <Filter>Source Files\core\TLCS-900h</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\ngp\TLCS-900h\TLCS900h_registers.c">
+      <Filter>Source Files\core\TLCS-900h</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\hw_cpu\z80-fuse\z80.c">
+      <Filter>Source Files\core\z80</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\hw_cpu\z80-fuse\z80_ops.c">
+      <Filter>Source Files\core\z80</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\sound\Blip_Buffer.cpp">
+      <Filter>Source Files\core\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\sound\Stereo_Buffer.cpp">
+      <Filter>Source Files\core\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\mempatcher.cpp">
+      <Filter>Source Files\core\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\state.c">
+      <Filter>Source Files\core\mednafen</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\streams\file_stream.c">
+      <Filter>Source Files\core\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\compat_posix_string.c">
+      <Filter>Source Files\core\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\compat_snprintf.c">
+      <Filter>Source Files\core\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\compat_strl.c">
+      <Filter>Source Files\core\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\fopen_utf8.c">
+      <Filter>Source Files\core\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\encodings\encoding_utf.c">
+      <Filter>Source Files\core\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files\core\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\file\file_path.c">
+      <Filter>Source Files\core\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\time\rtime.c">
+      <Filter>Source Files\core\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\string\stdstring.c">
+      <Filter>Source Files\core\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="mednafen\settings.c">
+      <Filter>Source Files\core\mednafen</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

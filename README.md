@@ -58,6 +58,9 @@ Salvia provides the following emulators from the latests releases:
   - beetle-vb
 * Atari Lynx
   - beetle-lynx
+* Neo Geo Pocket
+  - beetle-ngp ──|─> They use different romsets
+  - FBNeo ───────|
 * Arcade
   - FBNeo
   - FBANext (ported from the magicseb repository)
@@ -190,6 +193,7 @@ Usb0:\Roms
 ├── msx\                 (FBNeo MSX --> zip)
 ├── nes\                 (Nintendo Nes/Famicom --> nes fds unf unif zip)
 ├── ngp\                 (FBNeo NeoGeo Pocket --> zip)
+├── ngp-beetle\          (Beetle NeoGeo Pocket --> zip ngp ngc ngpc npc)
 ├── pce\                 (PcEngine/Turbografx16 --> zip pce)
 ├── pcecd\               (PcEngineCD/TurbografxCD --> zip pce chd cue ccd toc m3u)
 ├── pcfx\                (PCFX/Supergrafx --> zip pce sgx)
@@ -264,7 +268,7 @@ Usb0:\Roms
         └── paprium.zip  (Paprium game containing 'Paprium (World)(2020)(WaterMelon).bin')
 ```
 #### Other FBNEO cores
-The MSX, ZX-Spectrum and NeoGeo Pocket rely on FBNEO. Search a compatible romset for these cores.
+The MSX, ZX-Spectrum and NeoGeo Pocket (ngp now supported also by beetle-ngp) rely on FBNEO. Search a compatible romset for these cores.
 For MSX and ZX Spectrum cores, an on-screen overlay keyboard is available and can be enabled by pressing the default shortcut SELECT + X
 
 <img width="1281" height="722" alt="image" src="https://github.com/user-attachments/assets/01e73cc0-96b4-4e67-82e5-b78738a58989" />
