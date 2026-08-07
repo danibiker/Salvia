@@ -1,0 +1,88 @@
+MEDNAFEN_DIR := $(CORE_DIR)/mednafen
+CORE_EMU_DIR := $(MEDNAFEN_DIR)/lynx
+LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro-common
+
+INCFLAGS := -I$(CORE_DIR) -I$(MEDNAFEN_DIR) -I$(MEDNAFEN_DIR)/include -I$(MEDNAFEN_DIR)/intl -I$(MEDNAFEN_DIR)/hw_sound -I$(MEDNAFEN_DIR)/hw_cpu -I$(MEDNAFEN_DIR)/hw_misc -I$(LIBRETRO_COMM_DIR)/include
+
+ifneq (,$(findstring msvc2003,$(platform)))
+   INCFLAGS += -I$(LIBRETRO_COMM_DIR)/include/compat/msvc
+endif
+
+SOURCES_C   :=
+SOURCES_CXX := \
+	$(CORE_EMU_DIR)/cart.cpp \
+	$(CORE_EMU_DIR)/c65c02.cpp \
+	$(CORE_EMU_DIR)/memmap.cpp \
+	$(CORE_EMU_DIR)/mikie.cpp \
+	$(CORE_EMU_DIR)/ram.cpp \
+	$(CORE_EMU_DIR)/rom.cpp \
+	$(CORE_EMU_DIR)/susie.cpp \
+	$(CORE_EMU_DIR)/system.cpp
+
+ifeq ($(NEED_BLIP), 1)
+SOURCES_CXX += $(MEDNAFEN_DIR)/sound/Blip_Buffer.cpp
+endif
+
+ifeq ($(NEED_CRC32), 1)
+   FLAGS += -DWANT_CRC32
+	SOURCES_C += $(CORE_DIR)/scrc32.c
+endif
+
+ifeq ($(NEED_DEINTERLACER), 1)
+   FLAGS += -DNEED_DEINTERLACER
+endif
+
+ifeq ($(NEED_BPP), 8)
+FLAGS += -DWANT_8BPP
+endif
+
+ifeq ($(NEED_BPP), 16)
+FLAGS += -DWANT_16BPP
+endif
+
+ifeq ($(WANT_NEW_API), 1)
+FLAGS += -DWANT_NEW_API
+endif
+
+ifeq ($(NO_COMPUTED_GOTO), 1)
+FLAGS += -DNO_COMPUTED_GOTO
+endif
+
+ifeq ($(NEED_STEREO_SOUND), 1)
+FLAGS += -DWANT_STEREO_SOUND
+endif
+
+ifeq ($(FRONTEND_SUPPORTS_RGB565), 1)
+FLAGS += -DFRONTEND_SUPPORTS_RGB565
+endif
+
+ifneq ($(HAVE_NO_LANGEXTRA), 1)
+FLAGS += -DHAVE_NO_LANGEXTRA
+endif
+
+SOURCES_CXX += \
+	$(MEDNAFEN_DIR)/settings.cpp \
+	$(MEDNAFEN_DIR)/state.cpp \
+	$(MEDNAFEN_DIR)/mempatcher.cpp \
+	$(MEDNAFEN_DIR)/md5.cpp \
+	$(MEDNAFEN_DIR)/sound/Stereo_Buffer.cpp \
+	$(MEDNAFEN_DIR)/endian.cpp \
+	$(CORE_DIR)/libretro.cpp
+
+ifneq ($(STATIC_LINKING), 1)
+SOURCES_C += \
+	$(LIBRETRO_COMM_DIR)/streams/file_stream.c \
+	$(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
+        $(LIBRETRO_COMM_DIR)/compat/compat_posix_string.c \
+        $(LIBRETRO_COMM_DIR)/compat/compat_snprintf.c \
+	$(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
+	$(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c \
+	$(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c \
+	$(LIBRETRO_COMM_DIR)/file/file_path.c \
+	$(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c \
+	$(LIBRETRO_COMM_DIR)/time/rtime.c \
+	$(LIBRETRO_COMM_DIR)/string/stdstring.c
+endif
+
+SOURCES_C += \
+	$(MEDNAFEN_DIR)/file.c

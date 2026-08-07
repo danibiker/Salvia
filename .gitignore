@@ -1,0 +1,7 @@
+*.o
+*.so
+*.dll
+*.dylib
+/old
+.vscode
+.clang-format
