@@ -1,0 +1,8 @@
+*.a
+*.o
+*.so
+*.dll
+*.dylib
+/old
+
+.vscode/pro-deployer.json
