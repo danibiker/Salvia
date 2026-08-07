@@ -4897,12 +4897,7 @@
     <Copy Condition="'$(DeployOnBuild)' == 'false'" SourceFiles="$(ImageXexOutput)" DestinationFolder="$(ProjectDir)Distro360" />
   </Target>
   <!-- Comprime el XEX generado por ImageXex (LZX via xextool). Solo plataforma Xbox 360. -->
-  <Target Name="CompressXex"
-          AfterTargets="ImageXex"
-          BeforeTargets="Deploy;DeployToHardDrive"
-          Condition="'$(Platform)' == 'Xbox 360' and '$(DeployOnBuild)' == 'false' and Exists('$(ImageXexOutput)') and Exists('$(ProjectDir)tools\xextool.exe')"
-          Inputs="$(ImageXexOutput)"
-          Outputs="$(ImageXexOutput).stamp">
+  <Target Name="CompressXex" AfterTargets="ImageXex" BeforeTargets="Deploy;DeployToHardDrive" Condition="'$(Platform)' == 'Xbox 360' and '$(DeployOnBuild)' == 'false' and Exists('$(ImageXexOutput)') and Exists('$(ProjectDir)tools\xextool.exe')" Inputs="$(ImageXexOutput)" Outputs="$(ImageXexOutput).stamp">
     <Message Importance="high" Text="Comprimiendo XEX (xextool): $(ImageXexOutput)" />
     <Exec Command="&quot;$(ProjectDir)tools\xextool.exe&quot; -c c &quot;$(ImageXexOutput)&quot;" />
     <Touch Files="$(ImageXexOutput).stamp" AlwaysCreate="true" />

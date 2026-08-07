@@ -71,11 +71,7 @@ static const char *TMP_DIR = "tmp";
 static const std::string BIOS_ONLY = "@bios-only";
 static const std::string ASSETS_ICONS_DIR = "\\assets\\xmb\\retrosystem\\png\\";
 
-#ifdef _XBOX
-	const bool SMOOTH_RESIZE = false;
-#else 
-	const bool SMOOTH_RESIZE = true;
-#endif
+const bool SMOOTH_RESIZE = true;
 
 typedef enum {
     cursor_hidden,

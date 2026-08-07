@@ -52,3 +52,4 @@ libretro/snes9x/win32/libpng/**
 tools/*.exe
 tools/*.idc
 tools/XexTool.txt
+production/**

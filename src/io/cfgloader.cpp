@@ -102,7 +102,7 @@ void CfgLoader::initMainConfig(){
 
 	configMain[cfg::roms_path] = cfg::t_cfg_props("roms_path", "");	
 	configMain[cfg::roms_path].desc = "#The path usb:\\roms automatically scans Usb0, Usb1, and Usb2 for the target directory"
-									"\n#Or Hdd1:\\roms for the main console hard disk"
+									"\n#Or Hdd:\\roms for the main console hard disk"
 									"\n#Or game:\\roms for this directory";
 
 	configMain[cfg::showFps] = cfg::t_cfg_props("showFps", false);

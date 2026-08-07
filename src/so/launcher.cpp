@@ -126,8 +126,6 @@ void Launcher::initDrives() {
     //mount("MemUnit0:","\\Device\\Mu0");      // Unidad de memoria A
     //mount("MemUnit1:","\\Device\\Mu1");      // Unidad de memoria B
     //mount("IntMu:",   "\\Device\\BuiltInMuSfc"); // Memoria interna 4GB (Slim)
-    
-    // El CD/DVD es fundamental si el emulador se quema en un disco
     //mount("Cd:",     "\\Device\\Cdrom0");
     #endif
 }
