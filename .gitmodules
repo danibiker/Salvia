@@ -1,0 +1,6 @@
+[submodule "libretro/picodrive/cpu/cyclone"]
+	path = libretro/picodrive/cpu/cyclone
+	url = https://github.com/irixxxx/cyclone68000.git
+[submodule "libretro/picodrive/platform/libpicofe"]
+	path = libretro/picodrive/platform/libpicofe
+	url = https://github.com/irixxxx/libpicofe.git
