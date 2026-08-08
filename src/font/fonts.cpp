@@ -276,26 +276,54 @@ void Fonts::drawTextCentTransparent(SDL_Surface* surface, TTF_Font* font, const 
 	drawTextTransparent(surface, font, dato, x, y, color, bg);
 }
 
+// Funcion auxiliar estatica o privada para verificar si tiene texto real legible
+bool tieneTextoLegible(const char* str) {
+    if (!str) return false;
+    while (*str) {
+        // Si encontramos cualquier caracter que no sea espacio, tabulador o salto de linea
+        if (*str != ' ' && *str != '\t' && *str != '\n' && *str != '\r') {
+            return true; // Contiene texto real renderizable
+        }
+        str++;
+    }
+    return false; // Solo contiene espacios en blanco o esta totalmente vacio
+}
+
+// Saltamos el BOM UTF-8 (EF BB BF) inicial, SDL_ttf no lo entiende y devolveraa
+// "Text has zero width" (el BOM es un caracter de anchura cero sin glifo).
+static const char* skipUtf8Bom(const char* str){
+    if (str &&
+        (unsigned char)str[0] == 0xEF &&
+        (unsigned char)str[1] == 0xBB &&
+        (unsigned char)str[2] == 0xBF) {
+        return str + 3;
+    }
+    return str;
+}
+
 SDL_Surface *Fonts::renderUtf8Blended(TTF_Font* font, const char* dato, const SDL_Color& color){
-	if (font && dato != NULL && dato[0] != '\0') {
+	const char* text = skipUtf8Bom(dato);
+	if (font && tieneTextoLegible(text)) {
 		ScopedFontLock lock(mutex);
-		return TTF_RenderUTF8_Blended(font, dato, color);
+		return TTF_RenderUTF8_Blended(font, text, color);
 	}
 	return NULL;
 }
 
 SDL_Surface *Fonts::renderUtf8Solid(TTF_Font* font, const char* dato, const SDL_Color& color){
-	if (font && dato != NULL && dato[0] != '\0') {
+	const char* text = skipUtf8Bom(dato);
+	if (font && tieneTextoLegible(text)) {
 		ScopedFontLock lock(mutex);
-		return TTF_RenderUTF8_Solid(font, dato, color);
+		return TTF_RenderUTF8_Solid(font, text, color);
 	}
 	return NULL;
 }
 
 SDL_Surface *Fonts::renderUtf8Shaded(TTF_Font* font, const char* dato, const SDL_Color& bg, const SDL_Color& fg){
-	if (font && dato != NULL && dato[0] != '\0') {
+	const char* text = skipUtf8Bom(dato);
+	if (font && tieneTextoLegible(text)) {
 		ScopedFontLock lock(mutex);
-		return TTF_RenderUTF8_Shaded(font, dato, bg, fg);
+		return TTF_RenderUTF8_Shaded(font, text, bg, fg);
 	}
 	return NULL;
 }

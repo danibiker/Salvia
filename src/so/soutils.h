@@ -12,8 +12,8 @@ public:
 	SOUtils();
 	~SOUtils();
 
-	static void pedirTextoAsync(const std::string& titulo, const std::string& subtitulo,
-								SOUtilsKeyboardCallback callback, void* userData);
+	static void pedirTextoAsync(std::string titulo, std::string subtitulo, std::string textoPorDefecto,
+							  SOUtilsKeyboardCallback callback, void* userData);
 	static void updateKeyboard();
 
 private:
@@ -23,5 +23,8 @@ private:
 	static SOUtilsKeyboardCallback s_callback;
 	static void* s_userData;
 	static bool s_pending;
+	static wchar_t* wTitulo;
+    static wchar_t* wSub;
+	static wchar_t* wDefaultText;
 #endif
 };

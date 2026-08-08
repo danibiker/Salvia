@@ -14,23 +14,17 @@ Icons::Icons() {
 // Libera de forma segura toda la memoria dinamica de SDL.
 Icons::~Icons() {
     for (std::size_t i = 0; i < icons.size(); ++i) {
-        if (icons[i] != NULL) {
-            SDL_FreeSurface(icons[i]);
-            icons[i] = NULL;
-        }
+        icons[i].clear();
     }
     for (std::size_t i = 0; i < icons_carts.size(); ++i) {
-        if (icons_carts[i] != NULL) {
-            SDL_FreeSurface(icons_carts[i]);
-            icons_carts[i] = NULL;
-        }
+        icons_carts[i].clear();
     }
 }
 
 // Acceso seguro al array de iconos estandar
 SDL_Surface* Icons::getIcon(std::size_t posicion) const {
     if (posicion < icons.size()) {
-        return icons[posicion];
+		return icons[posicion].srf;
     }
     return NULL;
 }
@@ -38,7 +32,7 @@ SDL_Surface* Icons::getIcon(std::size_t posicion) const {
 // Acceso seguro al array de iconos de cartuchos
 SDL_Surface* Icons::getIconCart(std::size_t posicion) const {
     if (posicion < icons_carts.size()) {
-        return icons_carts[posicion];
+        return icons_carts[posicion].srf;
     }
     return NULL;
 }
@@ -83,8 +77,8 @@ SDL_Surface* Icons::loadAndResizeIcon(SDL_Surface* dest, const std::string& file
 
 // Dibuja el icono del sistema cargandolo bajo demanda (Lazy Loading)
 bool Icons::drawIcon(SDL_Surface* dest, SDL_Rect* dstRect, std::size_t icoPos) {
-    // Proteccion estricta contra desbordamientos de array
-    if (icoPos >= max_icons) {
+    // Proteccion estricta contra desbordamientos de array y evitar reintento de carga
+	if (icoPos >= max_icons || (icoPos < max_icons && icoPos >= 0 && icons[icoPos].failed)) {
         return false; 
     }
 
@@ -93,10 +87,11 @@ bool Icons::drawIcon(SDL_Surface* dest, SDL_Rect* dstRect, std::size_t icoPos) {
     // Si no esta cargado en memoria, lo procesamos ahora
     if (ico == NULL) {
         int face_h = Fonts::getLineSkip(Fonts::FONTBIG) + icon_w_add;
-        icons[icoPos] = loadAndResizeIcon(dest, ICONS_PATH[icoPos], face_h);
+		icons[icoPos].srf = loadAndResizeIcon(dest, ICONS_PATH[icoPos], face_h);
         ico = getIcon(icoPos);
         
         if (ico == NULL) {
+			icons[icoPos].failed = true;
             return false; // Error al cargar o procesar el archivo
         }
     }
@@ -108,7 +103,7 @@ bool Icons::drawIcon(SDL_Surface* dest, SDL_Rect* dstRect, std::size_t icoPos) {
 // Dibuja el icono del cartucho cargandolo bajo demanda (Lazy Loading)
 bool Icons::drawIconCart(SDL_Surface* dest, SDL_Rect* dstRect, std::size_t icoPos) {
     // Proteccion estricta contra desbordamientos de array
-    if (icoPos >= max_carts) {
+    if (icoPos >= max_carts || (icoPos < max_icons && icoPos >= 0 && icons_carts[icoPos].failed)) {
         return false; 
     }
 
@@ -117,10 +112,11 @@ bool Icons::drawIconCart(SDL_Surface* dest, SDL_Rect* dstRect, std::size_t icoPo
     // Si no esta cargado en memoria, lo procesamos ahora
     if (ico == NULL) {
         int face_h = Fonts::getLineSkip(Fonts::FONTBIG) - icon_w_add / 2;
-        icons_carts[icoPos] = loadAndResizeIcon(dest, ICONS_CARTS_PATH[icoPos], face_h);
+        icons_carts[icoPos].srf = loadAndResizeIcon(dest, ICONS_CARTS_PATH[icoPos], face_h);
         ico = getIconCart(icoPos);
         
         if (ico == NULL) {
+			icons_carts[icoPos].failed = true;
             return false; // Error al cargar o procesar el archivo
         }
     }

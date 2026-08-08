@@ -1113,6 +1113,13 @@ void GameMenu::loadEmuCfg(ListMenu &menuData){
 	//	filePackage.Pack(dir.getPathPrefix(emu->assets), packetAssetsFile.c_str());
 	//	LOG_DEBUG("Creating assets in %s\n", emu->assets.c_str());
 	//}
+	loadBgImageAndTitleEmu();	
+}
+
+void GameMenu::loadBgImageAndTitleEmu(){
+	ConfigEmu *emu = cfgLoader->getCfgEmu();
+	const std::string assetsDir = getAssetsDir(emu);
+	dirutil dir;
 
 	//Se carga la imagen del emulador que va en el titulo
 	std::string titleEmuImg = dir.getPathPrefix(assetsDir + Constant::getFileSep() + TITLE_EMU_FILENAME);

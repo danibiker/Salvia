@@ -517,6 +517,8 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
 		menuData.listZipped.dir = dir.getFolder(menuBeforeExit.zipname);
 		menuData.listZipped.file = dir.getFileName(menuBeforeExit.zipname);
 		FILE_STATUS fs = gameMenu.listableZip(menuData, FS_ZIP_CD);
+		//Load the background and the title
+		gameMenu.loadBgImageAndTitleEmu();
 	} else {
 		if (menuBeforeExit.relativePath[0] != '\0'){
 			menuData.listDir.setRelativePath(menuBeforeExit.relativePath);

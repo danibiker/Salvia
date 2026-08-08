@@ -7,10 +7,39 @@
 
 #include <const/constant.h>
 
+struct t_icon{
+	SDL_Surface* srf;
+	bool failed;
+
+	t_icon(){
+		srf = NULL;
+		failed = false;
+	}
+
+	t_icon(SDL_Surface* srf, bool failed){
+		this->srf = srf;
+		this->failed = failed;
+	}
+
+	~t_icon(){
+		if (srf != NULL){
+			SDL_FreeSurface(srf);
+			srf = NULL;
+		}
+	}
+
+	void clear(){
+		if (srf != NULL){
+			SDL_FreeSurface(srf);
+			srf = NULL;
+		}
+	}
+};
+
 class Icons {
 private:
-	std::array<SDL_Surface*, max_icons> icons;
-	std::array<SDL_Surface*, max_carts> icons_carts;
+	std::array<t_icon, max_icons> icons;
+	std::array<t_icon, max_carts> icons_carts;
 
     // Constructor privado: nadie fuera de esta clase puede hacer "Icons miObjeto;"
     Icons(); 

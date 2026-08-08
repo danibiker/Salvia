@@ -1,6 +1,20 @@
 #include <uiobjects/textarea.h>
 #include <io/dirutil.h>
 
+// El BOM UTF-8 (EF BB BF) no tiene glifo y hace que SDL_ttf falle con
+// "Text has zero width". Se elimina siempre al inicio de cualquier texto.
+static bool hasUtf8Bom(const std::string& s){
+	return (s.size() >= 3 &&
+	        (unsigned char)s[0] == 0xEF &&
+	        (unsigned char)s[1] == 0xBB &&
+	        (unsigned char)s[2] == 0xBF);
+}
+
+static void stripUtf8Bom(std::string& s){
+	if (hasUtf8Bom(s))
+		s.erase(0, 3);
+}
+
 TextArea::TextArea(){
     init();
 }
@@ -87,6 +101,8 @@ bool TextArea::loadTextFile(std::string filepathToOpen) {
     // Leemos el archivo linea por linea para respetar los retornos de carro originales
     while (std::getline(fileRomTxt, rawLine)) {
 		t_line line;
+        // El BOM UTF-8 solo puede aparecer al principio del archivo, en la primera linea
+        stripUtf8Bom(rawLine);
         // Creamos una nueva linea en nuestro vector para este parrafo
         lines.push_back(std::move(line));
         int currentLineW = 0;
@@ -146,6 +162,10 @@ std::vector<t_line> TextArea::wrapStringWithFont(const std::string& fulltxt, TTF
     
     std::size_t start = 0;
     std::size_t length = fulltxt.length();
+
+    // Saltamos el BOM UTF-8 si el texto lo trae al principio
+    if (hasUtf8Bom(fulltxt))
+        start = 3;
 
     // Reutilizamos un único buffer dinámico para extraer palabras sin reservar memoria continuamente
     std::string word;
@@ -217,6 +237,20 @@ std::vector<t_line> TextArea::wrapTextFileWithFont(const std::string& filepathTo
     // Abrir el archivo en modo binario para controlar manualmente \r y \n
     std::ifstream file(filepathToOpen.c_str(), std::ios::binary);
     if (!file.is_open()) return out;
+
+    // Saltamos el BOM UTF-8 (EF BB BF) si el archivo lo trae al principio.
+    // Si no es un BOM, rebobinamos para procesarlo desde el inicio.
+    if ((unsigned char)file.peek() == 0xEF) {
+        char bom[3];
+        file.read(bom, 3);
+        if (file.gcount() != 3 ||
+            (unsigned char)bom[0] != 0xEF ||
+            (unsigned char)bom[1] != 0xBB ||
+            (unsigned char)bom[2] != 0xBF) {
+            file.clear();
+            file.seekg(0, std::ios::beg);
+        }
+    }
 
     // Preasignamos un tamaño estimado inicial para evitar realojamientos del vector
     out.reserve(50); 

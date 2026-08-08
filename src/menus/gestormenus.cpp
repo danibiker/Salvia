@@ -892,7 +892,7 @@ std::string GestorMenus::changeRAUser(void* inst, void *value) {
 	data->config = (CfgLoader*)inst;
 
 	SOUtils::pedirTextoAsync("RetroAchievements", LanguageManager::instance()->get("menu.achievement.ask.user"),
-							 &onRAUserText, data);
+			data->config->configMain[cfg::raUser].valueStr, &onRAUserText, data);
     return "";
 }
 
@@ -902,7 +902,7 @@ std::string GestorMenus::changeRAPassword(void* inst, void *value) {
 	data->config = (CfgLoader*)inst;
 
 	SOUtils::pedirTextoAsync("RetroAchievements", LanguageManager::instance()->get("menu.achievement.ask.password"),
-							 &onRAPasswordText, data);
+			data->config->configMain[cfg::raPass].valueStr, &onRAPasswordText, data);
     return "";
 }
 
@@ -913,6 +913,7 @@ std::string GestorMenus::changeRomPath(void* inst, void *value) {
 
 	SOUtils::pedirTextoAsync(LanguageManager::instance()->get("menu.options.romdir.asktitle"), 
 							 LanguageManager::instance()->get("menu.options.romdir.askpath"),
+							 data->config->configMain[cfg::roms_path].valueStr,
 							 &onRomPath, data);
     return "";
 }
@@ -943,7 +944,7 @@ std::string GestorMenus::changeScrapUser(void* inst, void *value) {
 	data->isPassword = false;
 
 	SOUtils::pedirTextoAsync("Scrapper", LanguageManager::instance()->get("menu.scrap.ask.user"),
-							 &GestorMenus::onUserText, data);
+							 data->config->configMain[data->cfgKey].valueStr, &GestorMenus::onUserText, data);
     return "";
 }
 
@@ -955,7 +956,7 @@ std::string GestorMenus::changeScrapPassword(void* inst, void *value) {
 	data->isPassword = true;
 
 	SOUtils::pedirTextoAsync("Scrapper", LanguageManager::instance()->get("menu.scrap.ask.password"),
-							 &GestorMenus::onUserText, data);
+							 data->config->configMain[data->cfgKey].valueStr, &GestorMenus::onUserText, data);
     return "";
 }
 
