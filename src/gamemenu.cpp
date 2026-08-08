@@ -1758,7 +1758,7 @@ SDL_Surface* GameMenu::clonarPantalla(SDL_Surface* src, int transparency) {
 		
 		double zoomX = (double)dstRect.w / srcDim.w;
 		double zoomY = (double)dstRect.h / srcDim.h;
-		SDL_Surface *tmp2 = zoomSurface(src, zoomX, zoomY, SMOOTH_RESIZE);
+		SDL_Surface *tmp2 = zoomSurface(src, zoomX, zoomY, false);
 		SDL_BlitSurface(tmp2, NULL, tmp, &dstRect);
 		SDL_FreeSurface(tmp2);
 
