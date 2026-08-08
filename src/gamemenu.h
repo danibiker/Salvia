@@ -174,8 +174,10 @@ class GameMenu : public Engine{
 
 			if (status == EMU_STARTED && lastStatus != EMU_STARTED){
 				BadgeDownloader::instance().stop();
+				const auto &cfgEmu = getCfgLoader()->getCfgEmu();
+				const int currentShader = cfgEmu->shaderMode > 0 ? cfgEmu->shaderMode - 1 : *this->current_shader;
 				//Restauramos el shader porque parece haber algun problema con HLSLBackground::draw
-				XBOX_SelectEffect(*current_shader);
+				XBOX_SelectEffect(currentShader);
 			}
 		}
 
