@@ -108,6 +108,9 @@ static void DrawBG(uint8 *target, uint16 RealY, bool lr, uint8 bgmap_base_raw, b
  }
 }
 
+/* Workaround para un miscompile de MSVC /O2: los extractores de bit de flip
+ * en el modo affine (hflip_xor/vflip_xor) deben escribirse como tests de bit
+ * explícitos, no como `(int32)(x << 18) >> 30` (el optimizador los calcula mal). */
 static void DrawAffine(uint8 *target, uint16 RealY, bool lr, uint32 ParamBase, uint32 BGMap_Base, bool OverplaneMode, uint16 OverplaneChar, uint32 scx, uint32 scy,
 			uint16 DestX, uint16 DestY, uint16 DestWidth, uint16 DestHeight)
 {
@@ -199,8 +202,8 @@ if(dy == 0)	/* Optimization for no rotation. */
   if(SourceX < (SourceX_Size << 9))
    bgsc = BGMap[(BGMap_Base | ((SourceX >> 6) & ~0xFFF) | ((SourceX >> 12) & 0x3F)) & 0xFFFF];
 
-  hflip_xor = ((int32)(bgsc << 18) >> 30) & 0xE;
-  vflip_xor = ((int32)(bgsc << 19) >> 31) & 0x7;
+  hflip_xor = (bgsc & 0x2000) ? 0xE : 0;
+  vflip_xor = (bgsc & 0x1000) ? 0x7 : 0;
 
   char_sub_y = vflip_xor ^ ((SourceY >> 9) & 0x7);
   char_sub_x = hflip_xor ^ ((SourceX >> 8) & 0xE);

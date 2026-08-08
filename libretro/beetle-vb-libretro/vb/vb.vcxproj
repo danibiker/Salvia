@@ -33,6 +33,9 @@
     <ClCompile Include="..\mednafen\vb\vip.c" />
     <ClCompile Include="..\mednafen\vb\vsu.c" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\mednafen\vb\vip_draw.inc" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{D381042A-F2E0-419A-86B4-A035F6C4C555}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
@@ -176,6 +179,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -192,11 +196,11 @@
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Full</Optimization>
       <PreprocessorDefinitions>_XBOX;__ppc__;MSB_FIRST;WANT_32BPP;FRONTEND_SUPPORTS_RGB565;INLINE=_inline;MEDNAFEN_VERSION_NUMERIC=931;__LIBRETRO__</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..;$(ProjectDir)..\mednafen;$(ProjectDir)..\mednafen\vb;$(ProjectDir)..\mednafen\include;$(ProjectDir)..\mednafen\hw_misc;$(ProjectDir)..\mednafen\hw_cpu;$(ProjectDir)..\mednafen\hw_sound;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..;$(ProjectDir)..\mednafen;$(ProjectDir)..\mednafen\vb;$(ProjectDir)..\mednafen\include;$(ProjectDir)..\mednafen\hw_misc;$(ProjectDir)..\mednafen\hw_cpu;$(ProjectDir)..\mednafen\hw_sound;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc___;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <StringPooling>true</StringPooling>
       <MinimalRebuild>false</MinimalRebuild>
-      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExceptionHandling>false</ExceptionHandling>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <BufferSecurityCheck>false</BufferSecurityCheck>
@@ -210,6 +214,9 @@
       <PreschedulingOptimization>true</PreschedulingOptimization>
       <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
       <CompileAs>Default</CompileAs>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

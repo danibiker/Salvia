@@ -64,4 +64,9 @@
       <Filter>Source Files\libretro-common</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\mednafen\vb\vip_draw.inc">
+      <Filter>Source Files\core</Filter>
+    </None>
+  </ItemGroup>
 </Project>
