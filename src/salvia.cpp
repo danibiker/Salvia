@@ -795,6 +795,7 @@ static inline void hw_refresh(const void *data, unsigned width,
     const int bpp = (fmt == RETRO_PIXEL_FORMAT_XRGB8888) ? 32 : 16;
     const unsigned row_bytes = width * (bpp / 8);
     SDL_Surface*& screen = gameMenu->gameScreen;
+	t_scale_props &current_video_settings = gameMenu->current_video_settings;
 
 	#ifdef SALVIA_GPU_VIDEO
     if (width  != current_video_settings.sw || height != current_video_settings.sh || bpp != current_video_settings.bpp){
@@ -814,7 +815,7 @@ static inline void hw_refresh(const void *data, unsigned width,
     }
 	#endif
 
-	gameMenu->checkDisplayOptions(current_video_settings);
+	gameMenu->checkDisplayOptions();
 
 	#ifdef SALVIA_GPU_VIDEO
 	// Rotacion HW: gratis en GPU (solo remap de UVs del quad).  No usamos

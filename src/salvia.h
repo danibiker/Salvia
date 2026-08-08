@@ -139,8 +139,6 @@ static inline uint32_t computeRomCrcFromFile(const std::string& path){
 	return crc;
 }
 
-t_scale_props current_video_settings;
-
 // Current ROM path (needed to persist last disc index on closeGame) and to add information
 // to the exception
 static std::string g_currentRompath;

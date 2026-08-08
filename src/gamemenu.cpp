@@ -2480,7 +2480,7 @@ bool GameMenu::loadBgImage(){
 	return false;
 }
 
-void GameMenu::checkDisplayOptions(t_scale_props &current_video_settings){
+void GameMenu::checkDisplayOptions(){
 	const auto &cfgEmu = getCfgLoader()->getCfgEmu();
 
 	#ifdef SALVIA_GPU_VIDEO

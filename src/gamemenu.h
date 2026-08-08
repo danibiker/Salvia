@@ -133,6 +133,7 @@ class GameMenu : public Engine{
 		bool romLoaded;
 		Uint32 uBkgColor;
 		int selectedFsImage;
+		t_scale_props current_video_settings;
 
 		#ifndef SALVIA_GPU_VIDEO
 		ScalerFunc current_scaler;
@@ -177,7 +178,8 @@ class GameMenu : public Engine{
 				const auto &cfgEmu = getCfgLoader()->getCfgEmu();
 				const int currentShader = cfgEmu->shaderMode > 0 ? cfgEmu->shaderMode - 1 : *this->current_shader;
 				//Restauramos el shader porque parece haber algun problema con HLSLBackground::draw
-				XBOX_SelectEffect(currentShader);
+				//XBOX_SelectEffect(currentShader);
+				checkDisplayOptions();
 			}
 		}
 
@@ -207,7 +209,7 @@ class GameMenu : public Engine{
 		void prevImageLoaded();
 		void findFirstImage();
 		struct retro_system_av_info getAvInfo();
-		void checkDisplayOptions(t_scale_props &current_video_settings);
+		void checkDisplayOptions();
 		void loadBgImageAndTitleEmu();
     private:
 		std::vector<Message> messages;
