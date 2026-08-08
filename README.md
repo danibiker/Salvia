@@ -59,8 +59,8 @@ Salvia provides the following emulators from the latests releases:
 * Atari Lynx
   - beetle-lynx
 * Neo Geo Pocket
-  - beetle-ngp ──|─> They use different romsets
-  - FBNeo ───────|
+  - beetle-ngp --|--> They use different romsets
+  - FBNeo -------|
 * Arcade
   - FBNeo
   - FBANext (ported from the magicseb repository)
@@ -84,13 +84,16 @@ Salvia can be installed into any directory (HDD or USB). As a suggestion, I like
 <img width="694" height="527" alt="image" src="https://github.com/user-attachments/assets/2e667993-959c-4f28-8117-97db79dd522b" />
 
 ### Bios
-The only thing needed to the emulators to work, is to provide the proper bios, as usual on every retroarch frontend. All the files needed can be downloaded from [https://github.com/Abdess/retrobios](https://github.com/Abdess/retrobios/releases/download/v2026.04.02/RetroPie_v1.22.2_Platform_BIOS_Pack.zip).
+The only thing needed for the emulators to work, is to provide the proper bios, as usual on every retroarch frontend. All the files needed can be downloaded from [https://github.com/Abdess/retrobios](https://github.com/Abdess/retrobios/releases/download/v2026.04.02/RetroPie_v1.22.2_Platform_BIOS_Pack.zip).
 The system directory should have the following files:
 
 ```
 system/
 ├── 3do_arcade_saot.bin
 ├── 3do_devkit_1.0fc2.bin
+├── 32X_G_BIOS.BIN
+├── 32X_M_BIOS.BIN
+├── 32X_S_BIOS.BIN
 ├── bios_CD_E.bin
 ├── bios_CD_J.bin
 ├── bios_CD_U.bin
