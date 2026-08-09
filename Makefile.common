@@ -1,0 +1,133 @@
+DEPS_DIR     	   := $(CORE_DIR)/deps
+LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro/libretro-common
+
+INCFLAGS := -I$(CORE_DIR) \
+            -I$(CORE_DIR)/atari800/src \
+            -I$(CORE_DIR)/libretro  \
+            -I$(LIBRETRO_COMM_DIR)/include \
+            -I$(LIBRETRO_COMM_DIR)/include/compat/zlib \
+
+ifeq ($(STATIC_LINKING), 1)
+INCFLAGS += -I$(CORE_DIR)/libretro/include
+endif
+
+SOURCES_C :=
+
+# memory_stream is consumed directly by the core's savestate code
+# (atari800/src/statesav.c). It must be linked into the core itself even
+# on statically-linked console targets (STATIC_LINKING=1): the frontend
+# does not export the libretro-common symbols this core needs, so leaving
+# it out produces undefined references to memstream_* at link time.
+SOURCES_C += $(LIBRETRO_COMM_DIR)/streams/memory_stream.c
+
+# The remaining libretro-common helpers below are only built for the
+# normal shared-core case; under STATIC_LINKING the frontend provides
+# equivalents and building our own copy would duplicate symbols.
+ifneq ($(STATIC_LINKING), 1)
+SOURCES_C += \
+	$(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
+	$(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c \
+	$(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
+	$(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c \
+	$(LIBRETRO_COMM_DIR)/file/file_path.c \
+	$(LIBRETRO_COMM_DIR)/file/file_path_io.c \
+	$(LIBRETRO_COMM_DIR)/string/stdstring.c \
+	$(LIBRETRO_COMM_DIR)/time/rtime.c \
+	$(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c
+endif
+
+SOURCES_C += \
+	$(CORE_DIR)/libretro/carts_hash.c \
+	$(CORE_DIR)/libretro/libretro-core.c \
+	$(CORE_DIR)/libretro/core-mapper.c \
+	$(CORE_DIR)/libretro/graph.c \
+	$(CORE_DIR)/libretro/vkbd.c \
+	$(CORE_DIR)/libretro/retro_strings.c \
+	$(CORE_DIR)/libretro/retro_utils.c \
+	$(CORE_DIR)/libretro/retro_disk_control.c
+
+SOURCES_C += \
+	$(CORE_DIR)/atari800/src/afile.c \
+	$(CORE_DIR)/atari800/src/antic.c \
+	$(CORE_DIR)/atari800/src/atari.c \
+	$(CORE_DIR)/atari800/src/binload.c \
+	$(CORE_DIR)/atari800/src/cartridge.c \
+	$(CORE_DIR)/atari800/src/cassette.c \
+	$(CORE_DIR)/atari800/src/compfile.c \
+	$(CORE_DIR)/atari800/src/cfg.c \
+	$(CORE_DIR)/atari800/src/cpu.c \
+	$(CORE_DIR)/atari800/src/crc32.c \
+	$(CORE_DIR)/atari800/src/devices.c \
+	$(CORE_DIR)/atari800/src/cartridge_info.c \
+	$(CORE_DIR)/atari800/src/esc.c \
+	$(CORE_DIR)/atari800/src/gtia.c \
+	$(CORE_DIR)/atari800/src/img_tape.c \
+	$(CORE_DIR)/atari800/src/log.c \
+	$(CORE_DIR)/atari800/src/memory.c \
+	$(CORE_DIR)/atari800/src/monitor.c \
+	$(CORE_DIR)/atari800/src/pbi.c \
+	$(CORE_DIR)/atari800/src/pia.c \
+	$(CORE_DIR)/atari800/src/pokey.c \
+	$(CORE_DIR)/atari800/src/pokeysnd.c \
+	$(CORE_DIR)/atari800/src/mzpokeysnd.c \
+	$(CORE_DIR)/atari800/src/remez.c \
+	$(CORE_DIR)/atari800/src/rtime.c \
+	$(CORE_DIR)/atari800/src/sio.c \
+	$(CORE_DIR)/atari800/src/sysrom.c \
+	$(CORE_DIR)/atari800/src/util.c \
+ 	$(CORE_DIR)/atari800/src/sound.c \
+	$(CORE_DIR)/atari800/src/pbi_proto80.c \
+	$(CORE_DIR)/atari800/src/af80.c \
+	$(CORE_DIR)/atari800/src/input.c \
+	$(CORE_DIR)/atari800/src/statesav.c\
+	$(CORE_DIR)/atari800/src/ui_basic.c \
+	$(CORE_DIR)/atari800/src/ui.c \
+	$(CORE_DIR)/atari800/src/artifact.c \
+	$(CORE_DIR)/atari800/src/colours.c \
+	$(CORE_DIR)/atari800/src/colours_ntsc.c \
+	$(CORE_DIR)/atari800/src/colours_pal.c \
+	$(CORE_DIR)/atari800/src/colours_external.c \
+	$(CORE_DIR)/atari800/src/screen.c \
+	$(CORE_DIR)/atari800/src/cycle_map.c \
+	$(CORE_DIR)/atari800/src/pbi_mio.c \
+	$(CORE_DIR)/atari800/src/pbi_bb.c \
+	$(CORE_DIR)/atari800/src/pbi_scsi.c \
+	$(CORE_DIR)/atari800/src/ide.c \
+	$(CORE_DIR)/atari800/src/xep80.c \
+	$(CORE_DIR)/atari800/src/xep80_fonts.c \
+	$(CORE_DIR)/atari800/src/file_export.c \
+	$(CORE_DIR)/atari800/src/filter_ntsc.c \
+	$(CORE_DIR)/atari800/src/atari_ntsc/atari_ntsc.c \
+	$(CORE_DIR)/libretro/platform.c 
+#	$(CORE_DIR)/atari800/src/videomode.c\
+#	$(CORE_DIR)/atari800/src/pal_blending.c \
+
+SOURCES_C += \
+	$(CORE_DIR)/atari800/src/roms/altirraos_xl.c \
+	$(CORE_DIR)/atari800/src/roms/altirraos_800.c \
+	$(CORE_DIR)/atari800/src/roms/altirra_basic.c \
+	$(CORE_DIR)/atari800/src/roms/altirra_5200_os.c \
+	$(CORE_DIR)/atari800/src/roms/altirra_5200_charset.c
+
+ZLIB_INCFLAGS = -I$(DEPS_DIR)/zlib
+ZLIB_SOURCES_C = \
+	$(DEPS_DIR)/zlib/adler32.c \
+	$(DEPS_DIR)/zlib/crc32.c \
+	$(DEPS_DIR)/zlib/deflate.c \
+	$(DEPS_DIR)/zlib/gzclose.c \
+	$(DEPS_DIR)/zlib/gzlib.c \
+	$(DEPS_DIR)/zlib/gzread.c \
+	$(DEPS_DIR)/zlib/gzwrite.c \
+	$(DEPS_DIR)/zlib/inffast.c \
+	$(DEPS_DIR)/zlib/inflate.c \
+	$(DEPS_DIR)/zlib/inftrees.c \
+	$(DEPS_DIR)/zlib/trees.c \
+	$(DEPS_DIR)/zlib/zutil.c
+
+ifeq ($(SYSTEM_ZLIB), 1)
+   INCFLAGS += $(shell pkg-config --cflags zlib)
+   LIBS += $(shell pkg-config --libs zlib)
+else
+   INCFLAGS += $(ZLIB_INCFLAGS)
+   SOURCES_C += $(ZLIB_SOURCES_C)
+endif
