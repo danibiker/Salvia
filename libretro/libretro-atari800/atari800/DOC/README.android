@@ -1,0 +1,39 @@
+Build instructions for the Android port
+---------------------------------------
+
+If you are looking for instructions on how to use the Android port, what the
+preferences mean etc. you should check out instead:
+
+http://pocketatari.atari.org/android
+
+To compile the android port, you are going to need:
+
+* The Android SDK
+* The Android NDK
+* The Java JDK
+* A working autotools/make environment (i.e. Cygwin on Windows)
+
+Setup the environment correctly: create an environment variable called
+ANDROID_NDK_ROOT which points to the root of the NDK
+(f.ex.:export ANDROID_NDK_ROOT='C:\cygwin\android-ndk\android-ndk-r10b\').
+Next, add the NDK root, gcc and android tools paths to PATH (f.ex. export PATH=
+"$ANDROID_NDK_ROOT:$ANDROID_NDK_ROOT//toolchains/arm-linux-androideabi-4.6/prebuilt/windows-x86_64/bin:
+/android-sdk-windows/tools/:/android-sdk-windows/platform-tools/:$PATH").
+Don't forget to also add the proper Java environment vars too (f.ex.
+export PATH="/ant/bin:$PATH"; export JAVA_HOME='c:\Java\jdk1.6.0_21\';).
+
+Note: Since newer NDKs are built for Windows and not Cygwin, make sure the NDK
+      is accessible by normal Windows methods (i.e. no symlinks in Cygwin).
+      Also, make sure the ANDROID_NDK_ROOT is set using Windows notation,
+      as shown above.
+
+Unpack the source tarball or get the CVS module. Go to the src directory and
+update the project thusly:
+android.bat update project --path android/ --name colleen --target "android-20"
+Configure the build. I use this setup:
+autoheader && autoconf && ./configure --target=android --disable-monitorbreak --enable-pagedattrib --enable-seriosound --disable-crashmenu --disable-monitorasm --disable-monitorhints --without-readline --enable-clipsound
+Then just type make and your apk package should appear in:
+android/bin/colleen-debug.apk
+
+Cheers,
+Kostas
