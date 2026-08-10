@@ -29,6 +29,8 @@ ULONG StateSav_Tell(void);
 
 
 #if defined(__LIBRETRO__)
+#include <stdint.h>
+#include <stddef.h>
 int Retro_SaveAtariState(uint8_t* data, size_t size, UBYTE SaveVerbose);
 int Retro_ReadAtariState(const uint8_t* data, size_t size);
 void Retro_SaveUBYTE(const UBYTE* data, int num);

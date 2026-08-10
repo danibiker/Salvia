@@ -35,6 +35,10 @@
 #include <stdlib.h>
 #include <unistd.h>*/
 
+#ifdef _MSC_VER
+#define strdup _strdup
+#endif
+
 static void fallback_log(enum retro_log_level level, const char* fmt, ...);
 static retro_log_printf_t log_cb = fallback_log;
 
@@ -55,11 +59,13 @@ static void fallback_log(enum retro_log_level level, const char* fmt, ...)
 // Return the directory name of filename 'filename'.
 static char* dirname_int(const char* filename)
 {
+	char* right;
+
 	if (filename == NULL)
 		return NULL;
 
 	// Find last separator
-	char* right = find_last_slash(filename);
+	right = find_last_slash(filename);
 	if (right)
 		return strleft(filename, right - filename);
 
@@ -183,6 +189,7 @@ bool dc_add_file_int(dc_storage* dc, char* filename, char* name)
 bool dc_add_file(dc_storage* dc, const char* filename)
 {
 	unsigned index = 0;
+	char name[512];
 
 	/* Verify */
 	if (dc == NULL || !filename || (*filename == '\0'))
@@ -199,11 +206,13 @@ bool dc_add_file(dc_storage* dc, const char* filename)
 	}
 
 	// Get 'name' - just the filename without extension
-	char name[512];
 	name[0] = '\0';
 	fill_pathname(name, path_basename(filename), "", sizeof(name));
 
-	if (!dc_add_file_int(dc, strdup(filename), strdup(name)))
+	/* dc_add_file_int() strdup()s both arguments internally, so passing
+	   strdup()'d copies here leaked one filename + one name on every
+	   disk/tape/m3u load. Pass the caller's pointers directly. */
+	if (!dc_add_file_int(dc, (char*)filename, name))
 		return false;
 
 	// if dc unit-type is none, get type from first image
@@ -276,9 +285,10 @@ int dc_replace_file(dc_storage* dc, int index, const char* filename)
 	}
 	else
 	{
+		char full_path_replace[RETRO_PATH_MAX] = { 0 };
+
 		dc->replace = false;
 
-		char full_path_replace[RETRO_PATH_MAX] = { 0 };
 		strncpy(full_path_replace, (char*)filename, sizeof(full_path_replace));
 
 		/* ZIP/M3U not implemented internally */
@@ -294,13 +304,15 @@ int dc_replace_file(dc_storage* dc, int index, const char* filename)
 		/* Single append */
 		else
 		{
-			// Get 'name' - just the filename without extension
+			unsigned i;
 			char name[512];
+
+			// Get 'name' - just the filename without extension
 			name[0] = '\0';
 			fill_pathname(name, path_basename(filename), "", sizeof(name));
 
 			/* Dupecheck */
-			for (unsigned i = 0; i < dc->count - 1; i++)
+			for (i = 0; i < dc->count - 1; i++)
 			{
 				if (!strcmp(dc->files[i], full_path_replace))
 				{
@@ -323,14 +335,17 @@ int dc_replace_file(dc_storage* dc, int index, const char* filename)
 
 void dc_parse_m3u(dc_storage* dc, const char* m3u_file)
 {
+	FILE* fp = NULL;
+	char* basedir;
+	char* image_name = NULL;
+	char buffer[2048];
+
 	// Verify
 	if (dc == NULL)
 		return;
 
 	if (m3u_file == NULL)
 		return;
-
-	FILE* fp = NULL;
 
 	// Try to open the file
 	if ((fp = fopen(m3u_file, "r")) == NULL)
@@ -340,13 +355,11 @@ void dc_parse_m3u(dc_storage* dc, const char* m3u_file)
 	dc_reset(dc);
 
 	// Get the m3u base dir for resolving relative path
-	char* basedir = dirname_int(m3u_file);
+	basedir = dirname_int(m3u_file);
 
 	// Disk control interface 'name' for the following file
-	char* image_name = NULL;
 
 	// Read the lines while there is line to read and we have enough space
-	char buffer[2048];
 	while ((dc->count <= DC_MAX_SIZE) && (fgets(buffer, sizeof(buffer), fp) != NULL))
 	{
 		char* string = trimwhitespace(buffer);
@@ -369,8 +382,12 @@ void dc_parse_m3u(dc_storage* dc, const char* m3u_file)
 				fill_pathname(tmp, path_basename(filename), "", sizeof(tmp));
 				image_name = strdup(tmp);
 
-				// Add the file to the struct
+				// Add the file to the struct. dc_add_file_int() copies both
+				// strings internally, so free our owned copies afterwards
+				// (otherwise every m3u entry leaked one filename + one name).
 				dc_add_file_int(dc, filename, image_name);
+				free(filename);
+				free(image_name);
 				image_name = NULL;
 			}
 

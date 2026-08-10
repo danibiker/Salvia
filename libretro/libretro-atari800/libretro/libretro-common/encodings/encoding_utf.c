@@ -25,6 +25,11 @@
 #include <stddef.h>
 #include <string.h>
 
+#ifdef _MSC_VER
+#include <string.h>
+#define strdup _strdup
+#endif
+
 #include <boolean.h>
 #include <compat/strl.h>
 #include <retro_inline.h>

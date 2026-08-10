@@ -148,13 +148,15 @@ static bool retro_environment(unsigned cmd, void *data) {
 		case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:{
 			std::string currentPath = gameMenu->getCfgLoader()->configMain[cfg::libretrosystem].valueStr;
 
-			 // Copiamos el nuevo path al buffer fijo de forma segura
-            strncpy(dirSystem, currentPath.c_str(), sizeof(dirSystem) - 1);
-            savePath[sizeof(dirSystem) - 1] = '\0'; // Aseguramos el cierre nulo
+			// strncpy_s copia, asegura el \0 y devuelve 0 si todo ha ido bien.
+			// Si currentPath es más grande que dirSystem, el programa fallara de forma segura en modo debug.
+			if (strncpy_s(dirSystem, sizeof(dirSystem), currentPath.c_str(), _TRUNCATE) != 0) {
+				// Manejo de error si la ruta era demasiado larga
+				return false;
+			}
 
-            // Entregamos SIEMPRE la misma direccion de memoria
-            *(const char**)data = dirSystem;
-            return true;
+			*(const char**)data = dirSystem;
+			return true;
 		}
 
 		case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:{

@@ -26,6 +26,11 @@
 #include <string/stdstring.h>
 #include <encodings/utf.h>
 
+#ifdef _MSC_VER
+#include <string.h>
+#define strdup _strdup
+#endif
+
 const uint8_t lr_char_props[256] = {
 	/*x0   x1   x2   x3   x4   x5   x6   x7   x8   x9   xA   xB   xC   xD   xE   xF */
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x80,0x00,0x00,0x80,0x00,0x00, /* 0x                  */

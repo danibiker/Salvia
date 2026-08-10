@@ -1,0 +1,291 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Xbox 360">
+      <Configuration>Debug</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Xbox 360">
+      <Configuration>Release</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="atari800\src\afile.c" />
+    <ClCompile Include="atari800\src\antic.c" />
+    <ClCompile Include="atari800\src\atari.c" />
+    <ClCompile Include="atari800\src\binload.c" />
+    <ClCompile Include="atari800\src\cartridge.c" />
+    <ClCompile Include="atari800\src\cassette.c" />
+    <ClCompile Include="atari800\src\compfile.c" />
+    <ClCompile Include="atari800\src\cfg.c" />
+    <ClCompile Include="atari800\src\cpu.c" />
+    <ClCompile Include="atari800\src\crc32.c" />
+    <ClCompile Include="atari800\src\devices.c" />
+    <ClCompile Include="atari800\src\cartridge_info.c" />
+    <ClCompile Include="atari800\src\esc.c" />
+    <ClCompile Include="atari800\src\gtia.c" />
+    <ClCompile Include="atari800\src\img_tape.c" />
+    <ClCompile Include="atari800\src\log.c" />
+    <ClCompile Include="atari800\src\memory.c" />
+    <ClCompile Include="atari800\src\monitor.c" />
+    <ClCompile Include="atari800\src\pbi.c" />
+    <ClCompile Include="atari800\src\pia.c" />
+    <ClCompile Include="atari800\src\pokey.c" />
+    <ClCompile Include="atari800\src\pokeysnd.c" />
+    <ClCompile Include="atari800\src\mzpokeysnd.c" />
+    <ClCompile Include="atari800\src\remez.c" />
+    <ClCompile Include="atari800\src\rtime.c" />
+    <ClCompile Include="atari800\src\sio.c" />
+    <ClCompile Include="atari800\src\sysrom.c" />
+    <ClCompile Include="atari800\src\util.c" />
+    <ClCompile Include="atari800\src\sound.c" />
+    <ClCompile Include="atari800\src\pbi_proto80.c" />
+    <ClCompile Include="atari800\src\af80.c" />
+    <ClCompile Include="atari800\src\input.c" />
+    <ClCompile Include="atari800\src\statesav.c" />
+    <ClCompile Include="atari800\src\ui_basic.c" />
+    <ClCompile Include="atari800\src\ui.c" />
+    <ClCompile Include="atari800\src\artifact.c" />
+    <ClCompile Include="atari800\src\colours.c" />
+    <ClCompile Include="atari800\src\colours_ntsc.c" />
+    <ClCompile Include="atari800\src\colours_pal.c" />
+    <ClCompile Include="atari800\src\colours_external.c" />
+    <ClCompile Include="atari800\src\screen.c" />
+    <ClCompile Include="atari800\src\cycle_map.c" />
+    <ClCompile Include="atari800\src\pbi_mio.c" />
+    <ClCompile Include="atari800\src\pbi_bb.c" />
+    <ClCompile Include="atari800\src\pbi_scsi.c" />
+    <ClCompile Include="atari800\src\ide.c" />
+    <ClCompile Include="atari800\src\xep80.c" />
+    <ClCompile Include="atari800\src\xep80_fonts.c" />
+    <ClCompile Include="atari800\src\file_export.c" />
+    <ClCompile Include="atari800\src\filter_ntsc.c" />
+    <ClCompile Include="atari800\src\atari_ntsc\atari_ntsc.c" />
+    <ClCompile Include="atari800\src\roms\altirraos_800.c" />
+    <ClCompile Include="atari800\src\roms\altirraos_xl.c" />
+    <ClCompile Include="atari800\src\roms\altirra_5200_charset.c" />
+    <ClCompile Include="atari800\src\roms\altirra_5200_os.c" />
+    <ClCompile Include="atari800\src\roms\altirra_basic.c" />
+    <ClCompile Include="libretro\carts_hash.c" />
+    <ClCompile Include="libretro\core-mapper.c" />
+    <ClCompile Include="libretro\graph.c" />
+    <ClCompile Include="libretro\libretro-common\compat\compat_strcasestr.c" />
+    <ClCompile Include="libretro\libretro-common\compat\compat_strl.c" />
+    <ClCompile Include="libretro\libretro-common\compat\fopen_utf8.c" />
+    <ClCompile Include="libretro\libretro-common\encodings\encoding_utf.c" />
+    <ClCompile Include="libretro\libretro-common\file\file_path.c" />
+    <ClCompile Include="libretro\libretro-common\file\file_path_io.c" />
+    <ClCompile Include="libretro\libretro-common\streams\memory_stream.c" />
+    <ClCompile Include="libretro\libretro-common\string\stdstring.c" />
+    <ClCompile Include="libretro\libretro-common\time\rtime.c">
+      <ObjectFileName>$(IntDir)common_rtime.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="libretro\libretro-common\vfs\vfs_implementation.c" />
+    <ClCompile Include="libretro\libretro-common\compat\compat_posix_string.c" />
+    <ClCompile Include="libretro\libretro-common\compat\compat_snprintf.c" />
+    <ClCompile Include="libretro\libretro-core.c" />
+    <ClCompile Include="libretro\platform.c" />
+    <ClCompile Include="libretro\retro_disk_control.c" />
+    <ClCompile Include="libretro\retro_strings.c" />
+    <ClCompile Include="libretro\retro_utils.c" />
+    <ClCompile Include="libretro\vkbd.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="libretro\config.h" />
+    <ClInclude Include="libretro\dirent.h" />
+    <ClInclude Include="libretro\libretro-common\include\retro_endianness.h" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{BD4D68C2-DC36-468D-AEF4-17AA4ECEC137}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>libretroatari800</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IntDir>$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <IntDir>$(Configuration)\$(Platform)\</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <IntDir>$(Configuration)\$(Platform)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <IntDir>$(Configuration)\$(Platform)\</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;__WIN32__;__i386__;__LIBRETRO__;DIR_SEP_BACKSLASH=1;NOMINMAX;INLINE=_inline</PreprocessorDefinitions>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>$(ProjectDir)deps;$(ProjectDir)libretro\libretro-common;$(ProjectDir);$(ProjectDir)atari800\src;$(ProjectDir)\libretro;$(ProjectDir)libretro\libretro-common\include;$(ProjectDir)libretro\libretro-common\include\compat\msvc;$(ProjectDir)deps\zlib;$(ProjectDir)libretro\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <StringPooling>true</StringPooling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_XBOX;__LIBRETRO__;_M_PPC;__ORDER_BIG_ENDIAN__;DIR_SEP_BACKSLASH=1;NOMINMAX;INLINE=_inline</PreprocessorDefinitions>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>$(ProjectDir)deps;$(ProjectDir)libretro\libretro-common;$(ProjectDir);$(ProjectDir)atari800\src;$(ProjectDir)\libretro;$(ProjectDir)libretro\libretro-common\include;$(ProjectDir)libretro\libretro-common\include\compat\msvc;$(ProjectDir)deps\zlib;$(ProjectDir)libretro\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <StringPooling>true</StringPooling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <CompileAs>Default</CompileAs>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;__WIN32__;__LIBRETRO__;NDEBUG;DIR_SEP_BACKSLASH=1;NOMINMAX;INLINE=_inline;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>$(ProjectDir)deps;$(ProjectDir)libretro\libretro-common;$(ProjectDir);$(ProjectDir)atari800\src;$(ProjectDir)\libretro;$(ProjectDir)libretro\libretro-common\include;$(ProjectDir)libretro\libretro-common\include\compat\msvc;$(ProjectDir)deps\zlib;$(ProjectDir)libretro\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <StringPooling>true</StringPooling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">
+    <ClCompile>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>_XBOX;__LIBRETRO__;_M_PPC;__ORDER_BIG_ENDIAN__;N_DEBUG;DIR_SEP_BACKSLASH=1;NOMINMAX;INLINE=_inline</PreprocessorDefinitions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>$(ProjectDir)deps;$(ProjectDir)libretro\libretro-common;$(ProjectDir);$(ProjectDir)atari800\src;$(ProjectDir)\libretro;$(ProjectDir)libretro\libretro-common\include;$(ProjectDir)libretro\libretro-common\include\compat\msvc;$(ProjectDir)deps\zlib;$(ProjectDir)libretro\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <StringPooling>true</StringPooling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <CompileAs>Default</CompileAs>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

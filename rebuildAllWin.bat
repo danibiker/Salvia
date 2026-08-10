@@ -14,7 +14,7 @@ set CORES=Release Release_beetlepce Release_beetlepcefast Release_beetlepce_fx ^
 Release_Gambatte Release_Nestopia Release_Snes9x Release_Snes9x_latest ^
 Release_vbanext Release_picodrive Release_prboom ReleaseTyrQuake ^
 Release_Opera3DO Release_Wonderswan Release_VirtualBoy Release_DosboxPure Release_beetle_psx ^
-Release_beetle_lynx Release_beetle_ngp Release_mame Release_finalburn
+Release_beetle_lynx Release_atari800 Release_beetle_ngp Release_mame Release_finalburn
 
 md DistroWin
 

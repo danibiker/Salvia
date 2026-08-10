@@ -43,6 +43,12 @@
 #include <string.h>
 #include <stdlib.h>
 
+#ifdef _MSC_VER
+#define strcasecmp _stricmp
+#define strncasecmp _strnicmp
+#define snprintf c99_snprintf_retro__
+#endif
+
 #include "retro_utils.h"
 #ifdef VITA
    #include "file/file_path.h"
@@ -60,11 +66,12 @@ bool file_check_extension(const char *filename, const size_t filename_size, cons
    size_t file_len = strlen(filename) > filename_size ? filename_size : strlen(filename);
    size_t ext_len = strlen(ext) > ext_size ? ext_size : strlen(ext);
 #endif
+   const char *file_ext;
 
    if( ext_len > file_len || file_len >= filename_size - 1)
       return false;
 
-   const char * file_ext = &filename[file_len - ext_len];
+   file_ext = &filename[file_len - ext_len];
 
    return (strncasecmp(file_ext, ext, filename_size) == 0);
 }
@@ -78,8 +85,9 @@ bool file_check_flag(const char *filename, const size_t filename_size, const cha
    size_t file_len = strlen(filename) > filename_size ? filename_size : strlen(filename);
    size_t flag_len = strlen(flag) > flag_size ? flag_size : strlen(flag);
 #endif
+   int i;
 
-  for (int i = 0; i < file_len; i++) {
+   for (i = 0; i < file_len; i++) {
      if (i + flag_len > file_len)
         return false;
 
@@ -96,8 +104,12 @@ bool file_exists(const char *filename)
    if (path_is_valid(filename) && !path_is_directory(filename))
 #else
    struct stat buf;
+#ifdef _MSC_VER
+   if (stat(filename, &buf) == 0 && !(buf.st_mode & S_IFDIR))
+#else
    if (stat(filename, &buf) == 0 &&
       (buf.st_mode & (S_IRUSR|S_IWUSR)) && !(buf.st_mode & S_IFDIR))
+#endif
 #endif
    {
       /* file points to user readable regular file */
@@ -169,13 +181,14 @@ the polynomial. */
 
 uint32_t crc32_calculate(uint8_t * data, uint32_t size) {
    uint32_t byte, crc, mask;
+   int i, j;
 
    crc = 0xFFFFFFFF;
 
-   for (int i = 0; i < size; i++) {
+   for (i = 0; i < size; i++) {
       byte = data[i];
       crc = crc ^ byte;
-      for (int j = 7; j >= 0; j--) {
+      for (j = 7; j >= 0; j--) {
          mask = -(crc & 1);
          crc = (crc >> 1) ^ (0xedb88320 & mask);
       }

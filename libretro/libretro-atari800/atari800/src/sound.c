@@ -269,6 +269,17 @@ void Sound_Exit(void)
 #endif /* !SOUND_CALLBACK */
 		free(sync_buffer);
 		sync_buffer = NULL;
+		/* Reset the ring indices so the torn-down state (sync_buffer == NULL)
+		   stays internally consistent. On a libretro reload, retro_sound_update()
+		   keeps pulling audio (retro_sound_finalized stays 1) and calls
+		   Sound_Callback() -> FillBuffer() even before sound is set up again. With
+		   stale indices, to_write = sync_write_pos - sync_read_pos > 0 and
+		   FillBuffer does memcpy(dst, sync_buffer + sync_read_pos, ...) = memcpy
+		   from (NULL + sync_read_pos) -> access violation at a tiny address
+		   (0x2964, 0x84, ...). With both zero, to_write == 0 and FillBuffer only
+		   emits silence until Sound_Setup() reallocates the buffer. */
+		sync_read_pos = 0;
+		sync_write_pos = 0;
 	}
 }
 

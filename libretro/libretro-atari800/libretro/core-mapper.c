@@ -443,6 +443,7 @@ int Atari_POT(int input)
 {
     int which = input / 2;
     int xval, yval, pval, result;
+    float amplitude;
 
     //if (consol_mask == 0x0f)
     //    return 228;
@@ -460,7 +461,7 @@ int Atari_POT(int input)
         return INPUT_joy_5200_center;
 
    /* Convert to amplitude */
-    float amplitude = (float)((pval > pot_analog_deadzone) ?
+    amplitude = (float)((pval > pot_analog_deadzone) ?
         (pval - pot_analog_deadzone) :
         (pval + pot_analog_deadzone)) /
         (float)(LIBRETRO_ANALOG_RANGE - pot_analog_deadzone);
@@ -490,6 +491,10 @@ int Retro_PollEvent()
    //   INDEX        0    1     2    3   4     5    6    7   8    9    10   11   12   13   14   15
 
    int i,j;
+   int mouse_l;
+   int mouse_r;
+   int16_t mouse_x,mouse_y;
+   static int mmbL=0,mmbR=0;
    static int vbt[4][16]={
       {0x80,0x0,0x0,0x0,0x01,0x02,0x04,0x08,0x10,0x40,0x0,0x0,0x0,0x0,0x0,0x0},
       {0x80,0x0,0x0,0x0,0x01,0x02,0x04,0x08,0x10,0x40,0x0,0x0,0x0,0x0,0x0,0x0},
@@ -511,9 +516,6 @@ int Retro_PollEvent()
       }
    }
 
-   int mouse_l;
-   int mouse_r;
-   int16_t mouse_x,mouse_y;
    mouse_x=mouse_y=0;
 
    if (SHOWKEY==-1 && pauseg==0)
@@ -604,7 +606,7 @@ int Retro_PollEvent()
 
        for (i = 0; i < 16; i++)
        {
-           for (int j = 0; j < 4; j++)
+           for (j = 0; j < 4; j++)
            {
                if ((joypad_bits[j] & (1 << i)) && mbt[j][i] == 0)
                    mbt[j][i] = 1;
@@ -669,9 +671,10 @@ int Retro_PollEvent()
 
    if (paddle_mode)
    {
-       for (int i = 0; i < 4; i++)
+       int pval;
+       for (i = 0; i < 4; i++)
        {
-           int pval = input_state_cb(i, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X);
+           pval = input_state_cb(i, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X);
 
            if ((pval < -pot_analog_deadzone) || (pval > pot_analog_deadzone))
            {
@@ -724,15 +727,12 @@ int Retro_PollEvent()
       mouse_r    = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_RIGHT);
    }
 
-   static int mmbL=0,mmbR=0;
-
    if(mmbL==0 && mouse_l)
    {
       mmbL=1;
       pushi=1;
       touch=1;
-   }
-   else if(mmbL==1 && !mouse_l)
+   }   else if(mmbL==1 && !mouse_l)
    {
       mmbL=0;
       pushi=0;

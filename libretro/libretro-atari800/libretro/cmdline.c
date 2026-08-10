@@ -1,4 +1,11 @@
+/* NOTE: cmdline.c is #included by libretro-core.c (never compiled standalone),
+   so the A5200_CART/A800_CART macros, RPATH, log_cb and the snprintf mapping
+   are all already in scope from libretro-core.c's own includes. */
 #include <ctype.h>
+#include <string.h>
+
+extern char RPATH[512];
+extern retro_log_printf_t log_cb;
 
 //Args for experimental_cmdline
 static char ARGUV[64][1024];
@@ -14,14 +21,6 @@ void parse_cmdline( const char *argv );
 
 void Add_Option(const char* option)
 {
-   static int first=0;
-
-   if(first==0)
-   {
-      PARAMCOUNT=0;	
-      first++;
-   }
-
    sprintf(XARGV[PARAMCOUNT++],"%s", option);
 }
 
@@ -46,6 +45,11 @@ int pre_main(const char *argv)
 {
    int i;
    bool Only1Arg;
+
+   /* pre_main() runs once per retro_load_game(); every counter must start
+      from a clean slate or a second load would keep the previous game's
+      arguments in argv (double disk mount / wrong cartridge). */
+   PARAMCOUNT = 0;
 
    parse_cmdline(argv);
 
@@ -108,6 +112,8 @@ void parse_cmdline(const char *argv)
 	
 	strcpy(buffer,argv);
 	strcat(buffer," \0");
+
+	ARGUC = 0;
 
 	for (p = buffer; *p != '\0'; p++)
    {

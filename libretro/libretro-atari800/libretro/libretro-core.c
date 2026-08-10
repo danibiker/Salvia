@@ -28,6 +28,7 @@ static dc_storage* dc;
 #include "statesav.h"
 #include "pokeysnd.h"
 #include "sound.h"
+#include "cartridge.h"
 #include "cartridge_info.h"
 
 #include "carts_hash.h"
@@ -288,9 +289,10 @@ void UpdateExternalPalette(void)
 
 extern void SIO_Dismount(int diskno);
 extern int SIO_Mount(int diskno, const char* filename, int b_open_readonly);
-extern void CART_Remove(void);
+extern void CARTRIDGE_Remove(void);
 extern int CASSETTE_Insert(const char* filename);
 extern void CASSETTE_Remove(void);
+extern int Atari800_Exit(int run_monitor);
 extern void CASSETTE_Seek(unsigned int position);
 extern int CASSETTE_hold_start;
 extern int CASSETTE_hold_start_on_reboot;
@@ -446,8 +448,9 @@ static bool retro_set_image_index(unsigned index)
 
         if (index < dc->count && dc->files[index])
         {
+            int unit;
             dc->index = index;
-            int unit = get_image_unit();
+            unit = get_image_unit();
             log_cb(RETRO_LOG_INFO,"[retro_set_image_index] Unit (%d) image (%d/%d) inserted: %s\n", dc->index + 1, unit, dc->count, dc->files[dc->index]);
             return true;
         }
@@ -472,7 +475,10 @@ static bool retro_add_image_index(void)
 {
     if (dc)
     {
-        if (dc->count <= DC_MAX_SIZE)
+        /* files[]/names[]/types[] have DC_MAX_SIZE slots (valid 0..DC_MAX_SIZE-1).
+           The old "<=" let dc->count reach DC_MAX_SIZE and then wrote
+           dc->files[DC_MAX_SIZE], one element past the arrays. */
+        if (dc->count < DC_MAX_SIZE)
         {
             dc->files[dc->count] = NULL;
             dc->names[dc->count] = NULL;
@@ -573,9 +579,7 @@ static struct retro_disk_control_ext_callback disk_interface_ext = {
 void retro_set_environment(retro_environment_t cb)
 {
     bool option_cats_supported;
-
-    environ_cb = cb;
-
+    bool no_content = true;
     static const struct retro_controller_description p1_controllers[] = {
       { "ATARI Joystick", RETRO_DEVICE_ATARI_JOYSTICK },
       { "ATARI 5200 Joystick", RETRO_DEVICE_ATARI_5200_JOYSTICK },
@@ -605,12 +609,13 @@ void retro_set_environment(retro_environment_t cb)
       { NULL, 0 }
     };
 
+    environ_cb = cb;
+
     /* Initialise core options */
     libretro_set_core_options(environ_cb, &option_cats_supported);
 
     cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
 
-    bool no_content = true;
     cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &no_content);
 }
 
@@ -630,6 +635,7 @@ static void apply_sysrom_version(int *slot, int version, int machine_idx)
 static void update_variables(void)
 {
     struct retro_variable var;
+    int colors_changed = FALSE;
 
     /* Stereo POKEY user option. Stock Atari 800/XL/XE has a single POKEY chip,
        so default is mono -- most authentic and most compatible (Bounty Bob,
@@ -657,11 +663,12 @@ static void update_variables(void)
     else if  (HandleExtension((char*)RPATH, "bin") || HandleExtension((char*)RPATH, "BIN")
            || HandleExtension((char*)RPATH, "rom") || HandleExtension((char*)RPATH, "ROM")
            || HandleExtension((char*)RPATH, "a52") || HandleExtension((char*)RPATH, "A52")) {
-        int is_a52 = HandleExtension((char*)RPATH, "a52") || HandleExtension((char*)RPATH, "A52");
-        autorunCartridge = is_a52 ? A5200_CART : A800_CART;
+        int is_a52;
         ULONG crc = 0;
         long fsize = 0;
         FILE *fp;
+        is_a52 = HandleExtension((char*)RPATH, "a52") || HandleExtension((char*)RPATH, "A52");
+        autorunCartridge = is_a52 ? A5200_CART : A800_CART;
         fp = fopen((char*)RPATH, "rb");
         if (fp != NULL) {
             CRC32_FromFile(fp, &crc);
@@ -694,6 +701,7 @@ static void update_variables(void)
         }
     }   /* bin, rom, a52 files */
     else if   (HandleExtension((char*)RPATH, "car") || HandleExtension((char*)RPATH, "CAR")) {
+        FILE *fp;
         autorunCartridge = A800_CART;
         /* Bounty Bob Strikes Back (CARTRIDGE_BBSB_40 = 18) writes to mirrored
            POKEY registers (e.g. $D210 aliasing to $D200 on a single-POKEY 800).
@@ -701,7 +709,7 @@ static void update_variables(void)
            to a nonexistent second chip and locks the game in the menu. Peek at
            the .car header (16 bytes: "CART" + 4-byte big-endian type) so we
            can force mono before Sound_Initialise(). */
-        FILE *fp = fopen((char*)RPATH, "rb");
+        fp = fopen((char*)RPATH, "rb");
         if (fp != NULL) {
             unsigned char hdr[8];
             if (fread(hdr, 1, 8, fp) == 8
@@ -909,8 +917,6 @@ static void update_variables(void)
     }
 
     /* Set colors */
-
-    int colors_changed = FALSE;
 
     /* COLOR_VARIABLE macro is defined on L128 */
     COLOR_VARIABLE(hue)
@@ -1515,6 +1521,38 @@ void libretro_emu_init_run(void)
     log_cb(RETRO_LOG_INFO, "retro_fps =%f\n", retro_fps);
     log_cb(RETRO_LOG_INFO, "RPATH =%s\n", RPATH);
 
+    /* Re-arm sound before every Atari800_Initialise().
+     *
+     * Atari800_Initialise() only (re)configures audio inside
+     *   if (Sound_enabled) { Sound_enabled = FALSE; if (Sound_Setup()) ... }
+     * and Sound_Setup() is what reallocates sync_buffer and resets
+     * sync_read_pos/sync_write_pos (via Sound_SetLatency). On the first load
+     * Sound_enabled defaults to 1, so this runs. But retro_unload_game() ->
+     * Atari800_Exit() -> Sound_Exit() sets Sound_enabled = 0 and frees
+     * sync_buffer (leaving it NULL). On the next load Sound_enabled is still
+     * 0, so Sound_Setup() is skipped: sync_buffer stays NULL while
+     * retro_sound_finalized keeps retro_run() calling Sound_Callback() ->
+     * FillBuffer(), whose memcpy(SNDBUF, sync_buffer + sync_read_pos, ...)
+     * then reads from (NULL + sync_read_pos) -> access violation at a tiny
+     * address (0x84, 0x2178, ... = the stale sync_read_pos). Forcing it TRUE
+     * makes each reload rebuild the sound buffers exactly like the first. */
+    Sound_enabled = TRUE;
+
+    /* Re-arm INPUT_direct_mouse before every Atari800_Initialise().
+     *
+     * PLATFORM_Initialise() (platform.c) unconditionally sets
+     * INPUT_direct_mouse = TRUE, but it runs AFTER INPUT_Initialise() in the
+     * init chain. INPUT_Initialise() returns FALSE (rejecting direct mouse)
+     * unless the mouse mode is pad/touch/koala -- ours is INPUT_MOUSE_OFF. On
+     * the first load INPUT_direct_mouse is still its default 0 when
+     * INPUT_Initialise() runs, so it passes and PLATFORM_Initialise() flips it
+     * on afterwards. On a reload the global persists as TRUE, so the 2nd
+     * INPUT_Initialise() fails -> Atari800_ErrExit() -> Atari800_Exit() tears
+     * down the just-mapped cart (bare "5200 Rom Kernel") and frees the sound
+     * buffers (Sound_enabled=0, no audio). Reset it so every init sees the
+     * same clean state as the first; PLATFORM_Initialise() re-enables it. */
+    { extern int INPUT_direct_mouse; INPUT_direct_mouse = FALSE; }
+
     pre_main(RPATH);
 }
 
@@ -1610,6 +1648,11 @@ void retro_init(void)
 {
     unsigned dci_version = 0;
     struct retro_log_callback log;
+    const char* system_dir = NULL;
+    const char* content_dir = NULL;
+    const char* save_dir = NULL;
+    enum retro_pixel_format fmt;
+    int i;
     dc = dc_create();
 
     libretro_runloop_active = 0;
@@ -1617,23 +1660,17 @@ void retro_init(void)
     if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
         log_cb = log.log;
 
-    const char* system_dir = NULL;
-
     if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir) && system_dir)
     {
         // if defined, use the system directory
         retro_system_directory = system_dir;
     }
 
-    const char* content_dir = NULL;
-
     if (environ_cb(RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY, &content_dir) && content_dir)
     {
         // if defined, use the system directory
         retro_content_directory = content_dir;
     }
-
-    const char* save_dir = NULL;
 
     if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &save_dir) && save_dir)
     {
@@ -1658,9 +1695,9 @@ void retro_init(void)
     log_cb(RETRO_LOG_INFO, "Retro CONTENT_DIRECTORY %s\n", retro_content_directory);
 
 #ifndef RENDER16B
-    enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+    fmt = RETRO_PIXEL_FORMAT_XRGB8888;
 #else
-    enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
+    fmt = RETRO_PIXEL_FORMAT_RGB565;
 #endif
 
     if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt))
@@ -1671,7 +1708,7 @@ void retro_init(void)
     }
 
     /* set these up early retro_set_controller_port_device() will adjust later */
-    for (int i = 0; i < 4; i++)
+    for (i = 0; i < 4; i++)
         atari_devices[i] = RETRO_DEVICE_ATARI_JOYSTICK;
 
     update_input_descriptors();
@@ -1845,7 +1882,39 @@ static void keyboard_cb(bool down, unsigned keycode,
 bool retro_load_game(const struct retro_game_info* info)
 {
     struct retro_keyboard_callback cb = { keyboard_cb };
-    environ_cb(RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, &cb);    
+    environ_cb(RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, &cb);
+
+    /* A frontend can load a second game without a full retro_deinit/
+       retro_init cycle. retro_unload_game() parked the run loop with
+       pauseg = -1; resume it, drop the previous session's disk-control
+       entries, clear stuck key state and force the palette to be
+       re-applied. */
+    pauseg = 0;
+    dc_reset(dc);
+
+    /* Unmount whatever the previous session left in the machine before
+       the next Atari800_Initialise() re-mounts the new game's media. A
+       stale cartridge/disk/tape otherwise survives into the second init
+       (and CARTRIDGE_Insert() would leak the previous cart's image). */
+    CARTRIDGE_Remove();
+    CASSETTE_Remove();
+    SIO_Dismount(1);
+    SIO_Dismount(2);
+    SIO_Dismount(3);
+    SIO_Dismount(4);
+
+    color_first_time = TRUE;
+    /* Force the virtual keyboard hidden / joystick input active on every
+       load. SHOWKEY is a tri-state used as a gate in core-mapper.c:
+         Process_key() only runs when (SHOWKEY == -1 && pauseg == 0).
+       Valid values are 1 (vkbd shown) and -1 (hidden). Setting it to 0 is an
+       invalid state that permanently gates out Process_key() -> no joystick.
+       The vkbd option handler in update_variables() only rewrites SHOWKEY when
+       the option actually changes (last_vkbd_enabled is a static that survives
+       the retro_deinit/retro_init cycle), so on the 2nd game it would not undo
+       a stray 0 and the joystick stayed dead. Use -1 (the core default). */
+    SHOWKEY = -1;
+    memset(Key_State, 0, 512);
 
     if (info!=NULL) {
         const char* full_path;
@@ -1926,6 +1995,13 @@ bool retro_load_game(const struct retro_game_info* info)
 void retro_unload_game(void) {
 
     pauseg = -1;
+
+    /* Fully tear down the Atari800 emulator (Sound_Exit, CARTRIDGE_Exit,
+       SIO_Exit, etc.) so a subsequent retro_load_game() -> pre_main() ->
+       Atari800_Initialise() starts from a clean state. Without this, the
+       second Atari800_Initialise() runs over the still-allocated first
+       session and corrupts the heap. */
+    Atari800_Exit(FALSE);
 }
 
 unsigned retro_get_region(void)

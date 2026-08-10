@@ -567,7 +567,11 @@
 /* Define to `__inline__' or `__inline' if that's what the C compiler
    calls it, or to nothing if 'inline' is not supported under any name.  */
 #ifndef __cplusplus
+#ifdef _MSC_VER
+#define inline __inline
+#else
 #define inline __inline__
+#endif
 #endif
 
 /* Define to `unsigned int' if <sys/types.h> does not define. */
@@ -626,3 +630,80 @@
 #define FS_SUCCEEDED 0
 #define FS_TYPE_DIR 1
 #endif
+
+/* ------------------------------------------------------------------------ */
+/* Microsoft Visual C (MSVC) ------------------------------------------------
+   This shared config.h is autoconf-derived and assumes a POSIX-ish or MinGW
+   environment. MSVC has none of the POSIX headers (unistd.h, dirent.h,
+   strings.h, sys/time.h, ...) and prefixes several libc functions with an
+   underscore, so the feature macros that would make core code pull those in
+   must be disabled here. MinGW defines _WIN32 but not _MSC_VER, so this
+   block only affects real MSVC builds. */
+#ifdef _MSC_VER
+
+/* Headers that MSVC simply does not ship. */
+#undef HAVE_ARPA_INET_H
+/* HAVE_DIRENT_H kept defined: we provide a C89 dirent shim at
+   libretro/dirent.h (on the include path) so SYSROM_FindInDir() can scan the
+   system directory and auto-detect real BIOS ROMs by CRC/name. */
+#undef HAVE_INTTYPES_H
+#undef HAVE_NETDB_H
+#undef HAVE_NETINET_IN_H
+#undef HAVE_STRINGS_H
+#undef HAVE_SYS_SELECT_H
+#undef HAVE_SYS_SOCKET_H
+#undef HAVE_SYS_TIME_H
+#undef HAVE_UNISTD_H
+
+#ifdef _XBOX
+#undef HAVE_SYSTEM
+#undef HAVE_GETCWD
+#endif
+/* Functions that MSVC does not provide (or does not declare). */
+#undef HAVE_FSEEKO
+#undef HAVE_GETTIMEOFDAY
+#undef HAVE_GETHOSTBYADDR
+#undef HAVE_GETHOSTBYNAME
+#undef HAVE_INET_NTOA
+#undef HAVE_NANOSLEEP
+/* HAVE_OPENDIR kept defined: opendir()/readdir()/closedir() are provided by
+   the C89 shim in libretro/dirent.h, enabling the real SYSROM_FindInDir(). */
+#undef HAVE_SELECT
+#undef HAVE_SOCKET
+#undef HAVE_STRCASECMP
+#undef HAVE_USLEEP
+#undef HAVE_MKSTEMP
+#undef HAVE_MKTEMP
+#undef HAVE_TMPNAM
+
+#undef TIME_WITH_SYS_TIME
+
+#undef _FILE_OFFSET_BITS
+#undef _LARGEFILE_SOURCE
+#undef _LARGE_FILES
+
+/* direct.h is the MSVC equivalent of unistd.h (_getcwd, _chdir, _mkdir...). */
+#define HAVE_DIRECT_H 1
+
+/* <sys/types.h> exists on MSVC and is needed for off_t (ide_internal.h). */
+#include <sys/types.h>
+
+/* MSVC provides these functions under a leading underscore. */
+#define getcwd _getcwd
+#define chmod _chmod
+
+/* VS2010 (and earlier) predate C99 snprintf/vsnprintf. Use the libretro-common
+   compat implementation (compat_snprintf.c), as <compat/msvc.h> does. */
+#include <stdio.h>
+#include <stdarg.h>
+#include <stddef.h>
+#ifndef snprintf
+#define snprintf c99_snprintf_retro__
+#endif
+#ifndef vsnprintf
+#define vsnprintf c99_vsnprintf_retro__
+#endif
+int c99_snprintf_retro__(char *outBuf, size_t size, const char *format, ...);
+int c99_vsnprintf_retro__(char *outBuf, size_t size, const char *format, va_list ap);
+
+#endif /* _MSC_VER */

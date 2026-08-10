@@ -85,6 +85,10 @@
 #  define fseeko fseek
 #  define ftello ftell
 #  define PRId64 "lld"
+#elif defined (_MSC_VER)
+#  define fseeko _fseeki64
+#  define ftello _ftelli64
+#  define PRId64 "I64d"
 #endif
 
 int IDE_enabled = 0, IDE_debug = 0;

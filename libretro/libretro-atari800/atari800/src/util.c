@@ -622,10 +622,13 @@ char *Util_getcwd(char *buf, size_t size)
 		buf[0] = '.';
 		buf[1] = '\0';
 	}
+#elif defined _XBOX
+	Util_stpcpy(buf, "game:\\", size);
 #else
 	buf[0] = '.';
 	buf[1] = '\0';
 #endif
+
 	return buf;
 }
 

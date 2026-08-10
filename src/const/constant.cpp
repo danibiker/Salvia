@@ -100,7 +100,9 @@ const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",  //
 	"The 3DO Company - 3DO-content.png",									  // cart_3do
 	"Bandai - WonderSwan-content.png",										  // cart_wonderswan
 	"Nintendo - Virtual Boy-content.png",									  // cart_virtualboy
-	"Atari - Lynx-content.png"												  // cart_atarilynx
+	"Atari - Lynx-content.png",												  // cart_atarilynx
+	"Atari - 800-content.png",												  // cart_atari800
+	"Atari - 5200-content.png"												  // cart_atari5200
 };
 
 // Nombres de sistema de libretro-database (ficheros rdb/ y carpetas cht/), indexado por

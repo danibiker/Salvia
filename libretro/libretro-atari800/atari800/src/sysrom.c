@@ -283,6 +283,7 @@ static int MatchByName(char const *filename, int len, int only_if_not_set)
 
 int SYSROM_FindInDir(char const *directory, int only_if_not_set)
 {
+#if defined(HAVE_OPENDIR)
 	DIR *dir;
 	struct dirent *entry;
 
@@ -357,6 +358,11 @@ int SYSROM_FindInDir(char const *directory, int only_if_not_set)
 
 	closedir(dir);
 	return TRUE;
+#else
+	/* MSVC has no opendir()/readdir(); ROM auto-detection via directory
+	   scanning is unavailable (ROMs are found through explicit paths). */
+	return FALSE;
+#endif
 }
 
 void SYSROM_SetDefaults(void)

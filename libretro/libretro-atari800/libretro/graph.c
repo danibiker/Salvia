@@ -264,6 +264,7 @@ void Retro_Draw_string(char *surf, signed short int x, signed short int y, const
     	unsigned char b;
 
     	int xrepeat, yrepeat;
+    	int surfw, surfh;
 
 #if defined PITCH && PITCH == 4
    	unsigned  *yptr; 
@@ -285,8 +286,8 @@ unsigned char *mbuffer=(unsigned char *)surf;
 		slen = (int)strlen(string);
 		if (slen>maxstrlen) slen = maxstrlen;
 
-	int surfw=slen * 7 * xscale;
-	int surfh=8 * yscale;
+	surfw = slen * 7 * xscale;
+	surfh = 8 * yscale;
 
 #if defined PITCH && PITCH == 4	
         linesurf =(unsigned char *)malloc(sizeof(unsigned )*surfw*surfh );
