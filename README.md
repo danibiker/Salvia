@@ -36,6 +36,8 @@ Salvia provides the following emulators from the latests releases:
 * Megadrive/Genesis/Sega CD
   - genesis-plus-gx
   - picodrive
+* Sega 32X
+  - picodrive
 * Super Nintendo/Super Famicom
   - snes9x
   - snes9x2010
@@ -60,7 +62,7 @@ Salvia provides the following emulators from the latests releases:
   - beetle-lynx
 * Neo Geo Pocket
   - beetle-ngp --|--> They use different romsets
-  - FBNeo -------|
+  - FBNeo ------|
 * Arcade
   - FBNeo
   - FBANext (ported from the magicseb repository)
@@ -192,6 +194,7 @@ You are now ready to place your backup games into their respective directories:
 
 ```
 Usb0:\Roms
+├── 32x\                 (Sega 32x --> 32x zip)
 ├── 3do\                 (3DO --> iso bin cue chd)
 ├── atari800\            (Atari 8-bit --> xfd atr dcm cas bin a52 zip atx car rom com xex m3u)
 ├── atari5200\           (Atari 5200 --> xfd atr dcm cas bin a52 zip atx car rom com xex m3u)
