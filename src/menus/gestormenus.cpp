@@ -81,6 +81,12 @@ GestorMenus::~GestorMenus() {
 		delete ((OpcionTxt *)cdromListMenu->opciones[i])->context;
 	}
 
+	// Transient per-category core-option submenus (not in todosLosMenus).
+	for (std::size_t i = 0; i < coreOptionSubmenus.size(); ++i) {
+		delete coreOptionSubmenus[i];
+	}
+	coreOptionSubmenus.clear();
+
     for(std::size_t i = 0; i < todosLosMenus.size(); i++) {
 		if (todosLosMenus[i])
 			delete todosLosMenus[i];
@@ -1117,17 +1123,26 @@ std::string GestorMenus::setControllerType(void* inst, void *index, void *values
 void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
     auto& paramsCore = refConfig->startupLibretroParams;
 	auto& paramsGame = refConfig->gameSpecificLibretroParams;
-	
-	//Param independent options
+
+	//Free the previous entries and the transient category submenus they pointed to.
+	//OpcionSubMenu does not own its destino, so the Menu* must be deleted by hand;
+	//its ~Menu cascades to the OpcionLista it holds.
+	for (std::size_t i = 0; i < menuCoreOptions->opciones.size(); ++i)
+		delete menuCoreOptions->opciones[i];
 	menuCoreOptions->opciones.clear();
+	for (std::size_t i = 0; i < coreOptionSubmenus.size(); ++i)
+		delete coreOptionSubmenus[i];
+	coreOptionSubmenus.clear();
+
+	//Param independent options (kept at the menu root)
 	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.save"), &GestorMenus::guardarCoreConfig, refConfig, this));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.version"), string(refConfig->configMain[cfg::libretro_core].valueStr) + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.extensions"), refConfig->configMain[cfg::libretro_core_extensions].valueStr));
-	
-	//Adding main core options
-	sortAndAddCoreOptions(paramsCore);
-	//Adding game options
-	sortAndAddCoreOptions(paramsGame);
+
+	//Main core options grouped by category (uncategorized ones stay at the root).
+	//Game-specific options (e.g. FBNeo dip-switches) grouped the same way.
+	addCoreOptionsByCategory(menuCoreOptions, refConfig->libretroCategories, paramsCore);
+	addCoreOptionsByCategory(menuCoreOptions, refConfig->libretroCategories, paramsGame);
 }
 
 /**
@@ -1231,39 +1246,86 @@ std::string GestorMenus::sApplyCheats(void* inst, void* value){
 /**
 *
 */
-void GestorMenus::sortAndAddCoreOptions(const std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &params){
+// Adds the visible options of `params` to `parent`, grouping them by libretro V2
+// category: options without a category go straight into `parent` (root), and each
+// category (in the order the core declared it in `categories`) becomes an
+// OpcionSubMenu whose destino holds its options. Categories referenced by an option
+// but not declared in `categories` are appended last (title = raw key) so no option
+// is ever dropped. Persistence is untouched: every OpcionLista still binds to the
+// &selected of its map entry, exactly as the old flat list did.
+void GestorMenus::addCoreOptionsByCategory(Menu *parent,
+		const std::vector<std::pair<std::string, std::string> > &categories,
+		const std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &params){
 
 	if (params.empty())
 		return;
 
-	// Estructura temporal para ordenar
-    struct TempElem {
-        std::string key;
-        std::string desc;
-    };
+	// Temp entry used to sort the visible options by description.
+	struct TempElem {
+		std::string key;
+		std::string desc;
+		std::string category;
+	};
 
-    std::vector<TempElem> sorter;
-    // 1. Llenamos el vector con la clave y la descripcion
-    for (auto it = params.begin(); it != params.end(); ++it) {
-        TempElem e = { it->first, it->second->description };
-		if (it->second->isForThisGame)
+	std::vector<TempElem> sorter;
+	for (auto it = params.begin(); it != params.end(); ++it) {
+		if (it->second->isForThisGame) {
+			TempElem e = { it->first, it->second->description, it->second->category };
 			sorter.push_back(e);
-    }
+		}
+	}
+	if (sorter.empty())
+		return;
 
-    // 2. Ordenamos por descripcion usando una lambda o funcion estatica
-    std::sort(sorter.begin(), sorter.end(), [](const TempElem& a, const TempElem& b) {
-        return Constant::compareNoCase(a.desc, b.desc);
-    });
+	std::sort(sorter.begin(), sorter.end(), [](const TempElem& a, const TempElem& b) {
+		return Constant::compareNoCase(a.desc, b.desc);
+	});
 
-    // 3. Ahora recorremos el vector ordenado y buscamos en el mapa original por KEY
-    for (auto it = sorter.begin(); it != sorter.end(); ++it) {
-        auto elem = params.find(it->key);
+	// Helper to push one OpcionLista bound to the map entry's &selected.
+	auto addOption = [&](Menu* dest, const std::string& key) {
+		auto elem = params.find(key);
 		if (elem != params.end()) {
-            LOG_INFO("Key: %s, Selected: %d", elem->first.c_str(), elem->second->selected);
-            const auto& displayItems = elem->second->labels.empty() ? elem->second->values : elem->second->labels;
-            menuCoreOptions->opciones.push_back(new OpcionLista(elem->second->description, displayItems, &elem->second->selected));
-        }
-    }
+			LOG_INFO("Key: %s, Selected: %d", elem->first.c_str(), elem->second->selected);
+			const auto& displayItems = elem->second->labels.empty() ? elem->second->values : elem->second->labels;
+			dest->opciones.push_back(new OpcionLista(elem->second->description, displayItems, &elem->second->selected));
+		}
+	};
+
+	// 1. Uncategorized options -> straight into the root (sorted), old flat behavior.
+	for (auto it = sorter.begin(); it != sorter.end(); ++it) {
+		if (it->category.empty())
+			addOption(parent, it->key);
+	}
+
+	// 2. Ordered list of categories that actually have visible options: first the
+	//    ones the core declared (kept in declaration order), then any leftover key.
+	std::vector<std::pair<std::string, std::string> > orderedCats; // key -> display desc
+	for (auto c = categories.begin(); c != categories.end(); ++c) {
+		for (auto it = sorter.begin(); it != sorter.end(); ++it) {
+			if (it->category == c->first) { orderedCats.push_back(*c); break; }
+		}
+	}
+	for (auto it = sorter.begin(); it != sorter.end(); ++it) {
+		if (it->category.empty())
+			continue;
+		bool known = false;
+		for (auto o = orderedCats.begin(); o != orderedCats.end(); ++o) {
+			if (o->first == it->category) { known = true; break; }
+		}
+		if (!known)
+			orderedCats.push_back(std::make_pair(it->category, it->category));
+	}
+
+	// 3. One submenu per category (in order), each with its options sorted by desc.
+	for (auto c = orderedCats.begin(); c != orderedCats.end(); ++c) {
+		Menu* catMenu = new Menu(c->second, parent);
+		for (auto it = sorter.begin(); it != sorter.end(); ++it) {
+			if (it->category == c->first)
+				addOption(catMenu, it->key);
+		}
+		coreOptionSubmenus.push_back(catMenu);
+		parent->opciones.push_back(new OpcionSubMenu(c->second, catMenu));
+	}
 }
 
 /**

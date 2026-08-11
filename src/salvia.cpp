@@ -208,6 +208,10 @@ static bool retro_environment(unsigned cmd, void *data) {
 			const auto* vars = static_cast<const retro_variable*>(data);
 			if (!vars) return false;
 
+			// V0 has no categories: drop any left over from a previous V2 core so the
+			// menu stays flat (all these options carry an empty category anyway).
+			gameMenu->getCfgLoader()->libretroCategories.clear();
+
 			//Some cores don't publish their options until a rom is loaded, so we need to diferenciate them
 			//from the game specific ones to be able to store them separately
 			if (!gameMenu->romLoaded && g_currentRompath.empty()){
@@ -272,6 +276,10 @@ static bool retro_environment(unsigned cmd, void *data) {
 		{
 			const retro_core_option_definition* usDefs = nullptr;
 			const retro_core_option_definition* localDefs = nullptr;
+
+			// V1 has no categories: drop any left over from a previous V2 core so the
+			// menu stays flat (applyEntry below sets an empty category on every option).
+			gameMenu->getCfgLoader()->libretroCategories.clear();
 
 			if (cmd == RETRO_ENVIRONMENT_SET_CORE_OPTIONS) {
 				usDefs = static_cast<const retro_core_option_definition*>(data);
@@ -350,6 +358,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 			//Fbneo uses lots of parameters for cheats and dips, so it is mandatory
 			//to clear them before
 			gameMenu->getCfgLoader()->gameSpecificLibretroParams.clear();
+			gameMenu->getCfgLoader()->libretroCategories.clear();
 
 			if (cmd == RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2) {
 				v2 = static_cast<const retro_core_options_v2*>(data);
@@ -368,6 +377,25 @@ static bool retro_environment(unsigned cmd, void *data) {
 			const auto defs = v2->definitions;
 			std::vector<std::string> categoriesVec(std::begin(gameCategories), std::end(gameCategories));
 
+			// Parse the category definitions (key -> display desc), preserving the
+			// order the core declares them. Used to build the per-category submenus.
+			// Localized desc comes from v2 (already the local table when _V2_INTL);
+			// fall back to the US table by key when the local desc is missing.
+			if (v2->categories) {
+				auto& cfgCats = gameMenu->getCfgLoader()->libretroCategories;
+				for (int c = 0; v2->categories[c].key != nullptr; ++c) {
+					const std::string catKey = v2->categories[c].key;
+					const char* catDesc = v2->categories[c].desc;
+					if (!catDesc && usV2 && usV2->categories) {
+						for (int k = 0; usV2->categories[k].key != nullptr; ++k) {
+							if (catKey == usV2->categories[k].key) { catDesc = usV2->categories[k].desc; break; }
+						}
+					}
+					cfgCats.push_back(std::make_pair(catKey,
+						Constant::ansiToUtf8(catDesc && *catDesc ? catDesc : catKey.c_str())));
+				}
+			}
+
 			for (int i = 0; defs[i].key != nullptr; ++i) {
 				const std::string key  = defs[i].key;
 
@@ -385,6 +413,26 @@ static bool retro_environment(unsigned cmd, void *data) {
 						}
 					}
 				}
+
+				// Para las opciones con categoria el core envia ademas desc_categorized:
+				// el mismo nombre pero SIN el prefijo redundante (p.ej. FBNeo manda
+				// "[Dipswitch] Difficulty" en desc y "Difficulty" en desc_categorized).
+				// Como las mostramos dentro de un submenu de categoria, preferimos la
+				// version categorizada; fallback a us por key y, si no, al desc normal.
+				if (defs[i].category_key) {
+					const char* catDescOpt = defs[i].desc_categorized;
+					if ((!catDescOpt || !*catDescOpt) && usV2 && usV2->definitions) {
+						for (int k = 0; usV2->definitions[k].key != nullptr; ++k) {
+							if (key == usV2->definitions[k].key) {
+								catDescOpt = usV2->definitions[k].desc_categorized;
+								break;
+							}
+						}
+					}
+					if (catDescOpt && *catDescOpt)
+						srcDesc = catDescOpt;
+				}
+
 				const std::string desc = Constant::ansiToUtf8(srcDesc ? srcDesc : "");
 
 				std::vector<std::string> values, labels;
@@ -405,14 +453,16 @@ static bool retro_environment(unsigned cmd, void *data) {
 					}
 				}
 
+				const std::string catKey = defs[i].category_key ? defs[i].category_key : "";
+
 				if (defs[i].category_key != nullptr) {
 					auto it = std::find(categoriesVec.begin(), categoriesVec.end(), defs[i].category_key);
 					if (it == categoriesVec.end())
-						applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, values, defaultIdx, labels);
+						applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, values, defaultIdx, labels, catKey);
 					else
-						applyEntry(gameMenu->getCfgLoader()->gameSpecificLibretroParams, key, desc, values, defaultIdx, labels);
+						applyEntry(gameMenu->getCfgLoader()->gameSpecificLibretroParams, key, desc, values, defaultIdx, labels, catKey);
 				} else {
-					applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, values, defaultIdx, labels);
+					applyEntry(gameMenu->getCfgLoader()->startupLibretroParams, key, desc, values, defaultIdx, labels, catKey);
 				}
 			}
 

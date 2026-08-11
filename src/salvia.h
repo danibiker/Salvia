@@ -443,10 +443,11 @@ namespace {
 					std::string description,        // Pasamos por valor para mover
 					std::vector<std::string> values, // Pasamos por valor para mover
 					int defaultIdx,
-					std::vector<std::string> labels)
+					std::vector<std::string> labels,
+					const std::string& category = "")
 	{
 		std::string validKey = cleanPerGameKey(key);
-    
+
 		auto it = data.find(validKey);
 		if (it != data.end()) {
 			if (it->second->description.empty())
@@ -457,15 +458,16 @@ namespace {
 
 			if (it->second->labels.empty() && !labels.empty())
 				it->second->labels = labels;
-        
+
 			if (it->second->cachedValue.empty() && !it->second->values.empty())
 				it->second->cachedValue = it->second->values[it->second->selected];
 
 			it->second->isForThisGame = true;
+			it->second->category = category;
 
 			LOG_DEBUG("[Core Options] SET. Key already defined %s", validKey.c_str());
 			return;
-		} 
+		}
 
 		cfg::t_emu_props *raw = new cfg::t_emu_props();
 		raw->description = std::move(description);
@@ -473,6 +475,7 @@ namespace {
 		raw->labels      = std::move(labels);
 		raw->selected    = defaultIdx;
 		raw->isForThisGame = true;
+		raw->category    = category;
 
 		if (!raw->values.empty())
 			raw->cachedValue = raw->values[defaultIdx];

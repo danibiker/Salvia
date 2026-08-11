@@ -14,7 +14,7 @@
 #include <vector>
 #include <string>
 
-// --- Definición de tipos de opciones ---
+// --- Definiciï¿½n de tipos de opciones ---
 enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_LISTA_REF, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SAVESTATE, OPC_ACHIEVEMENT, 
 	OPC_FAQ_SEARCH, OPC_FAQ_SELECT, OPC_FAQ_TXT, OPC_SHOW_IMG, OPC_UNDEFINED};
 
@@ -411,6 +411,10 @@ private:
     // Lista de todos los menus para liberar memoria al final
     std::vector<Menu*> todosLosMenus;
 	Menu* menuCoreOptions;
+	// Submenus transitorios por categoria dentro de menuCoreOptions (V2). Se
+	// recrean en cada poblarCoreOptions; hay que liberarlos a mano antes de repoblar
+	// (OpcionSubMenu no borra su destino). Runtime only.
+	std::vector<Menu*> coreOptionSubmenus;
 	Menu* menuCheats;
 	Menu* menuSavestates;
 	Menu* menuAskSavestates;
@@ -485,7 +489,7 @@ private:
 	std::string volverEmulacion(CONFIG_STATUS *st);
 	std::string salirEmulacion(CONFIG_STATUS *st);
 	std::string startScrapping(CONFIG_STATUS *st);	
-	void sortAndAddCoreOptions(const std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &params);
+	void addCoreOptionsByCategory(Menu *parent, const std::vector<std::pair<std::string, std::string> > &categories, const std::map<std::string, std::unique_ptr<cfg::t_emu_props> > &params);
 
 public:
     GestorMenus(int screenw, int screenh);

@@ -815,7 +815,9 @@ public:
 
 	GameState *gameState;
 	uint32_t lastGameTick;
+	#ifdef HAVE_SQLITE
 	AchievementDB *achievementDb;
+	#endif
 
     void initialize();
     void shutdown();

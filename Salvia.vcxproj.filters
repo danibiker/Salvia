@@ -30,9 +30,6 @@
     <Filter Include="i18n">
       <UniqueIdentifier>{90a15aba-848c-4278-a6b7-9e67c7c7b953}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\db">
-      <UniqueIdentifier>{f368115f-97f7-42ec-8273-63ac0cf57618}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source Files\io">
       <UniqueIdentifier>{e5fe074d-9b3d-4941-bc26-0e53b5776767}</UniqueIdentifier>
     </Filter>
@@ -306,9 +303,6 @@
     </ClInclude>
     <ClInclude Include="src\http\safedownloadqueue.h">
       <Filter>Source Files\http</Filter>
-    </ClInclude>
-    <ClInclude Include="src\db\sqlite_xbox_fix.h">
-      <Filter>Source Files\db</Filter>
     </ClInclude>
     <ClInclude Include="src\io\video_common.h">
       <Filter>Source Files\filters</Filter>

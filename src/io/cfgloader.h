@@ -29,6 +29,10 @@ public:
 	std::vector<std::unique_ptr<cfg::t_cfg_emu>> emulators;
 	std::map<std::string, std::unique_ptr<cfg::t_emu_props> > startupLibretroParams;
 	std::map<std::string, std::unique_ptr<cfg::t_emu_props> > gameSpecificLibretroParams;
+	// libretro V2 core-option categories (category_key -> display desc), kept in the
+	// order the core declares them. Runtime only, not persisted; used to build the
+	// per-category submenus in the core options menu.
+	std::vector<std::pair<std::string, std::string> > libretroCategories;
 
 	std::string saveCoreParams();
 	void loadCoreParams();

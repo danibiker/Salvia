@@ -26,6 +26,7 @@ namespace cfg {
 		std::vector<std::string> labels;
 		std::string description;
 		std::string cachedValue;
+		std::string category;   // libretro V2 category_key (runtime only, not persisted)
 		int selected;
 		bool isForThisGame;
 
@@ -36,13 +37,14 @@ namespace cfg {
 			*this = std::move(other);
 		}
 
-		// Operador de asignación de movimiento
+		// Operador de asignaciï¿½n de movimiento
 		t_emu_props& operator=(t_emu_props&& other) {
 			if (this != &other) {
 				values      = std::move(other.values);
 				labels      = std::move(other.labels);
 				description = std::move(other.description);
 				cachedValue = std::move(other.cachedValue);
+				category    = std::move(other.category);
 				selected    = other.selected;
 				other.selected = 0;
 			}
@@ -50,9 +52,9 @@ namespace cfg {
 		}
 
 		// VS2010 requiere que mantengas los de copia si los vas a usar
-		t_emu_props(const t_emu_props& other) 
-			: values(other.values), labels(other.labels), description(other.description), 
-			  cachedValue(other.cachedValue), selected(other.selected) {}
+		t_emu_props(const t_emu_props& other)
+			: values(other.values), labels(other.labels), description(other.description),
+			  cachedValue(other.cachedValue), category(other.category), selected(other.selected) {}
 
 		t_emu_props& operator=(const t_emu_props& other) {
 			if (this != &other) {
@@ -60,6 +62,7 @@ namespace cfg {
 				labels = other.labels;
 				description = other.description;
 				cachedValue = other.cachedValue;
+				category = other.category;
 				selected = other.selected;
 			}
 			return *this;

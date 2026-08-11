@@ -1,4 +1,8 @@
+#pragma once
+
+#ifdef HAVE_SQLITE
 #include <db/sqlite3.h>
+#endif
 #include <const/constant.h>
 #include <uiobjects/image.h>
 #include <vector>
@@ -20,6 +24,7 @@ struct GameState {
 	}
 };
 
+#ifdef HAVE_SQLITE
 class AchievementDB {
 private:
     sqlite3* db;
@@ -407,3 +412,4 @@ public:
 		}
 	}
 };
+#endif

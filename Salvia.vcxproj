@@ -5840,7 +5840,6 @@
     <ClInclude Include="src\const\cfgconst.h" />
     <ClInclude Include="src\const\constant.h" />
     <ClInclude Include="src\const\menuconst.h" />
-    <ClInclude Include="src\db\sqlite_xbox_fix.h" />
     <ClInclude Include="src\dischelper.h" />
     <ClInclude Include="src\engine.h" />
     <ClInclude Include="src\http\gamefaqs.h" />
