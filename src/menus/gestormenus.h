@@ -529,9 +529,21 @@ public:
 	std::string stopScrapping(CONFIG_STATUS *st);
 	void loadAchievements();
 
-	bool isCoreOptions(){
-		return obtenerMenuActual() == menuCoreOptions;
-	}
+	 // True si estamos en el menu de opciones de core O en cualquiera de sus submenus
+	 // de categoria (todos cuelgan de menuCoreOptions via ->padre). Necesario para que
+	 // pulsar izq/der dentro de un submenu tambien marque options_changed_flag y el core
+	 // refresque su estado (p.ej. cambio de paleta de video).
+	 bool isCoreOptions(){
+	   Menu* m = obtenerMenuActual();
+	   while (m != NULL){
+		 if (m == menuCoreOptions)
+		   return true;
+		 m = m->padre;
+	   }
+	   return false;
+	 }
+
+
 
 	bool isFrontendKeysMenu(){
 		return obtenerMenuActual() == menuAssignFrontend;

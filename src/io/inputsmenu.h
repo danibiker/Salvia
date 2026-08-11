@@ -151,15 +151,11 @@ inline int procesarGeneralConfig(){
 		if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
 			gameMenu->configMenus->cambiarValor(-1);
 			changeInConf = true;
-			if (gameMenu->configMenus->isCoreOptions()){
-				gameMenu->configMenus->options_changed_flag = true;
-			}
+			gameMenu->configMenus->options_changed_flag = gameMenu->configMenus->isCoreOptions();
 		} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
-			changeInConf = true;
-			if (gameMenu->configMenus->isCoreOptions()){
-				gameMenu->configMenus->options_changed_flag = true;
-			}
 			gameMenu->configMenus->cambiarValor(1);
+			changeInConf = true;
+			gameMenu->configMenus->options_changed_flag = gameMenu->configMenus->isCoreOptions();
 		}
 	}
 
