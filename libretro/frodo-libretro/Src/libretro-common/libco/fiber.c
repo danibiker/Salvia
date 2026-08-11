@@ -9,7 +9,11 @@
 #define WINVER 0x0400
 #define _WIN32_WINNT 0x0400
 #define WIN32_LEAN_AND_MEAN
+#ifdef _XBOX
+#include <xtl.h>
+#else
 #include <windows.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {

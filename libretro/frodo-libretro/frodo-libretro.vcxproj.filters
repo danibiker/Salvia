@@ -1,0 +1,225 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\libretro">
+      <UniqueIdentifier>{fc05b1b5-0c11-407e-a291-c20bed874ae9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libretro-common">
+      <UniqueIdentifier>{c8898f6e-91da-4527-a199-0cea9cdf57cb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Src">
+      <UniqueIdentifier>{0dc23a57-02b1-4493-8150-e9cb56cb6e8a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\frodosc">
+      <UniqueIdentifier>{f324dc00-3588-4f58-b6a2-a49f1e8f725e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\frodo">
+      <UniqueIdentifier>{6208efb2-ea57-4b05-bc38-0d426400097b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\gui">
+      <UniqueIdentifier>{d75bdfeb-0c31-4dd0-855d-fc9fec4f4569}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="libretro\core\libretro.cpp">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\string\stdstring.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\encodings\encoding_crc32.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\encodings\encoding_utf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\compat\compat_strcasestr.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\compat\compat_strl.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\streams\file_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\streams\file_stream_transforms.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\streams\trans_stream_zlib.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\file\file_path.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\file\file_path_io.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\time\rtime.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\compat\fopen_utf8.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\scandir.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\libco\libco.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\1541d64.cpp">
+      <Filter>Source Files\Src</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\1541fs.cpp">
+      <Filter>Source Files\Src</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\1541job.cpp">
+      <Filter>Source Files\Src</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\1541t64.cpp">
+      <Filter>Source Files\Src</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\Display.cpp">
+      <Filter>Source Files\Src</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\IEC.cpp">
+      <Filter>Source Files\Src</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\main.cpp">
+      <Filter>Source Files\Src</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\Prefs.cpp">
+      <Filter>Source Files\Src</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\REU.cpp">
+      <Filter>Source Files\Src</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\SID.cpp">
+      <Filter>Source Files\Src</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\SAM.cpp">
+      <Filter>Source Files\Src</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\C64_SC.cpp">
+      <Filter>Source Files\frodosc</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\CIA_SC.cpp">
+      <Filter>Source Files\frodosc</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\CPU_common.cpp">
+      <Filter>Source Files\frodosc</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\CPU1541_SC.cpp">
+      <Filter>Source Files\frodosc</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\CPUC64_SC.cpp">
+      <Filter>Source Files\frodosc</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\VIC_SC.cpp">
+      <Filter>Source Files\frodosc</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\C64.cpp">
+      <Filter>Source Files\frodo</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\CIA.cpp">
+      <Filter>Source Files\frodo</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\CPU1541.cpp">
+      <Filter>Source Files\frodo</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\CPUC64.cpp">
+      <Filter>Source Files\frodo</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\VIC.cpp">
+      <Filter>Source Files\frodo</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\core\core-mapper.cpp">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\core\graph.cpp">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\dialog.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\dlgAbout.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\dlgAlert.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\dlgFileSelect.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\dlgFloppy.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\dlgJoystick.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\dlgMain.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\dlgMisc.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\dlgSnapshot.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\dlgSound.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\dlgVideo.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\file.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\paths.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\sdlgui.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\thumb.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\unzip.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\gui\zip.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\features\features_cpu.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\compat\compat_posix_string.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="Src\libretro-common\compat\compat_snprintf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="libretro\include\scandir.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="libretro\core\vkbd_def.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

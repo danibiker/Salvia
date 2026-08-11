@@ -24,6 +24,8 @@
 
 #include "unzip.h"
 
+#include <msvc_compat.h>
+
 #ifdef NO_ERRNO_H
     extern int errno;
 #else

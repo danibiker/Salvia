@@ -35,6 +35,8 @@
 
 #include "sysdeps.h"
 
+#include <string.h>   /* memset/memcpy (VIC.cpp includes this too; VIC_SC.cpp did not) */
+
 #include "VIC.h"
 #include "C64.h"
 #include "CPUC64.h"

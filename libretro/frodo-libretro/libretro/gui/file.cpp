@@ -13,7 +13,12 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/time.h>
+#if defined(_MSC_VER)
+    #include <time/rtime.h> 
+	#include <msvc_compat.h>	
+#else
+#include <sys/time.h> 
+#endif
 #include <fcntl.h>
 #ifdef _WIN32
 #include <direct.h>
@@ -389,7 +394,7 @@ void File_MakeAbsoluteName(char *pFileName)
       return;
 
    /* Is it already an absolute name? */
-#if !defined(__psp__) && !defined(__vita__)
+#if !defined(__psp__) && !defined(__vita__) && !defined(_XBOX)
    if (File_IsRootFileName(pFileName))
       outpos = 0;
    else

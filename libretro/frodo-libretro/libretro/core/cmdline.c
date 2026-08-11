@@ -89,7 +89,13 @@ int pre_main(const char *argv)
    unsigned i;
    bool Only1Arg;
 
-   parse_cmdline(argv); 
+   /* Reset the static arg counters so repeated loads (2nd game, etc.) rebuild
+      argv cleanly. Without this ARGUC/PARAMCOUNT keep growing and skel_main
+      receives argc != 2, so the game is never mounted as drive 8. */
+   ARGUC      = 0;
+   PARAMCOUNT = 0;
+
+   parse_cmdline(argv);
 
    Only1Arg = (strcmp(ARGUV[0],"skelsdl") == 0) ? 0 : 1;
 

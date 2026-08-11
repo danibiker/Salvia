@@ -21,7 +21,7 @@ I had grown weary of juggling a multitude of different emulators, each requiring
 * **F.A.Q and Walktrough** viewer from gamefaqs.gamespot.com
 * **Fast forward**
 * **Navigate zipped files** and load contained games directly (they need to have a symbol @ as the first letter to be opened. Search "htgdb-gamepacks" in archive.org and you will thank me XD)
-* **Disc control** to change disks on PSX, SegaCD and PC Engine CD
+* **Disc control** to change disks on PSX, SegaCD, PC Engine CD and multi-disk Commodore 64 / Atari games
 * **Bios Boot** (To organize PSX memory card savegames)
 * **Buttons mapper** for each Joystick
 * Ingame **Hotkeys**
@@ -69,6 +69,12 @@ Salvia provides the following emulators from the latests releases:
   - pcsxr-360 (ported to libretro from the Wolf3s repository)
 * MS-DOS
   - dosbox-pure (with dynamic powerpc recompiler working)
+* Commodore 64
+  - frodo
+* Atari 8-bit computers (400/800/XL/XE)
+  - atari800
+* Atari 5200
+  - atari800
 * 3DO
   - 3dox (ported to libretro from the Lantus version -> "3dox - Xbox 360 New Years Day Pre-Release - V0.03")
 * Quake
@@ -94,10 +100,17 @@ system/
 ├── 32X_G_BIOS.BIN
 ├── 32X_M_BIOS.BIN
 ├── 32X_S_BIOS.BIN
+├── 5200.rom
+├── ATARIBAS.ROM
+├── ATARIOSA.ROM
+├── ATARIOSB.ROM
+├── ATARIXL.ROM
+├── BB01R4_OS.ROM
 ├── bios_CD_E.bin
 ├── bios_CD_J.bin
 ├── bios_CD_U.bin
 ├── bios_MD.bin
+├── disksys.rom
 ├── gba_bios.bin
 ├── goldstar.bin
 ├── lynxboot.img
@@ -126,6 +139,7 @@ system/
 ├── syscard1.pce
 ├── syscard2.pce
 ├── syscard3.pce
+├── XEGAME.ROM
 ├── fbneo/
 │   ├── blend/ (Not needed really but nice to have)
 │   │   ├── 1941.bld ... zupapan.bld (110 .bld files)
@@ -179,7 +193,10 @@ You are now ready to place your backup games into their respective directories:
 ```
 Usb0:\Roms
 ├── 3do\                 (3DO --> iso bin cue chd)
+├── atari800\            (Atari 8-bit --> xfd atr dcm cas bin a52 zip atx car rom com xex m3u)
+├── atari5200\           (Atari 5200 --> xfd atr dcm cas bin a52 zip atx car rom com xex m3u)
 ├── atarilynx\           (Atari Lynx --> lnx lyx bll o zip)
+├── c64\                 (Commodore 64 --> d64 t64 x64 p00 lnx lyx zip prg m3u)
 ├── dos\                 (MS-DOS --> zip dosz exe com bat iso chd cue ins img ima vhd jrc m3u m3u8 conf)
 ├── fbneo\               (Arcade FBNeo --> zip 7z cue ccd chd)
 │   ├── neocd\           (NeoGeo CD --> cue ccd chd)
@@ -247,6 +264,34 @@ Options > Input > Retropad assignments > Port Controller 1 > Joystick type
 This core features a built-in virtual keyboard, which is activated by pressing the L3 stick by default. Once the window appears, you can cycle through the various options using the L and R buttons. This interface allows you to both use the keyboard and map or modify specific keys to the controller buttons.
 
 <img width="1278" height="721" alt="image" src="https://github.com/user-attachments/assets/4f5a428b-fc2f-46d2-8ed6-3debee99cdbe" />
+
+### COMMODORE 64 (frodo)
+Just select a game and it boots and runs on its own — Salvia auto-types `LOAD"*",8,1` + `RUN` for you once the C64 reaches the `READY.` prompt. Supported formats: `d64`, `t64`, `x64`, `p00`, `prg`, `lnx`, `m3u` and `zip`.
+
+**On-screen keyboard.** Press **L3** to show/hide it. Move with the D-pad, press **A** to type the highlighted key and **B** to close it.
+
+**Program selector.** When a disk holds several programs, a selector pops up on load so you can pick which one to run (D-pad to move, **A** to launch, **B** to cancel). You can bring it back at any time with **R3**.
+
+**Multi-disk games.** Use the **Disk Control** menu (the same one used for PlayStation) to swap disks *without* resetting the machine:
+* Put an `.m3u` playlist next to your disks (one disk filename per line) and load the `.m3u`; then choose **Next Disk** whenever the game asks you to insert the next disk.
+* Or open **Select Disk** to pick another `.d64` from the same folder.
+
+Most commercial / multi-disk games use custom or turbo loaders that require **True Drive Emulation** (cycle-exact 1541 drive). Enable it in the core options (`frodo_true_drive`) — it is far more compatible (copy protection, fast loaders, multi-disk RPGs) but slower, and it only works with `.d64` images. Leave it **off** for simple single-file games, where it is unnecessary and faster. Note that with True Drive, loading takes roughly as long as it did on real hardware.
+
+**Controls.** The pad drives C64 joystick **port 2** by default (used by most games); switch to port 1 with `frodo_joystick_port` if a game needs it. The numeric keypad also works as a joystick.
+
+**Other core options:** SID sound engine and filters, drive activity LEDs, fast reset, sprite collisions and optional REU RAM expansion.
+
+### ATARI 8-BIT / 5200 (atari800)
+Runs the Atari 400/800/XL/XE home computers and the Atari 5200 console. Supported formats include `atr`, `xfd`, `xex`, `com`, `car`, `rom`, `a52` (5200), `cas`, `bin`, `atx`, `m3u` and `zip`.
+
+**On-screen keyboard.** Press **L3** to show/hide it (D-pad to move, **A** to type, **B** to close) — very useful for the many Atari titles that expect keyboard input.
+
+**BIOS.** The core boots with the built-in AltirraOS by default, so it works out of the box. If you prefer the real Atari ROMs, drop them into the `system` directory and they will be detected automatically.
+
+**Controller type.** Some games (and the 5200) need a specific controller device. Set it in Options > Input > Retropad assignments > Port Controller 1 > Joystick type.
+
+Multi-disk Atari (`.atr`) games can also be swapped from the **Disk Control** menu using an `.m3u` playlist, exactly like the C64 core.
 
 ### FBNEO
 For this core, there are two subdirectories available **neocd** (to load neogeo cd games) and  **megadrive** (it can load megadrive games for the fbneo core, but its main purpose is to load the game Paprium as Genesis-plus-gx is the gold standard for megadrive)

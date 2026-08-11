@@ -38,7 +38,23 @@
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+#endif
+
+/* The unaligned little-endian fast path (direct 16-bit pointer reads in the
+   6510 core: read_word/read_zp_word in CPUC64.cpp and read_adr_abs in
+   CPU_emulline.h) is ONLY valid on little-endian hosts. Xbox 360 is
+   big-endian PowerPC (the XDK defines _WIN32 too, plus _XBOX/_XBOX360/
+   __POWERPC__), so it MUST use the portable byte-by-byte #else branches;
+   otherwise every 16-bit read (incl. the RESET vector) is byte-swapped and
+   the CPU runs garbage -> no BASIC prompt. */
+#if defined(_WIN32) && !defined(_XBOX)
 #define LITTLE_ENDIAN_UNALIGNED 1
+#endif
+
+/* Safety net: fail the build loudly instead of silently running a byte-swapped
+   CPU if the unaligned LE fast path is ever enabled on a big-endian target. */
+#if defined(LITTLE_ENDIAN_UNALIGNED) && (defined(_XBOX) || defined(_XBOX360) || defined(__POWERPC__) || defined(WORDS_BIGENDIAN))
+#error "LITTLE_ENDIAN_UNALIGNED must NOT be enabled on a big-endian target (Xbox 360 / PowerPC)"
 #endif
 
 #endif

@@ -176,13 +176,16 @@ void IEC::NewPrefs(Prefs *prefs)
 /* Update drive LED display */
 void IEC::UpdateLEDs(void)
 {
-   if (
-            drive[0] != NULL 
-         && drive[1] != NULL 
-         && drive[2] != NULL 
-         && drive[3] != NULL)
-      the_display->UpdateLEDs(drive[0]->LED,
-            drive[1]->LED, drive[2]->LED, drive[3]->LED);
+   /* Update per drive: normally only drive 8 (drive[0]) is mounted, the rest
+      are NULL. The old code required ALL four drives to be present, so with a
+      single mounted disk the LED state never reached the display and the LEDs
+      never lit. Missing drives report DRVLED_OFF. */
+   if (the_display)
+      the_display->UpdateLEDs(
+            drive[0] ? drive[0]->LED : DRVLED_OFF,
+            drive[1] ? drive[1]->LED : DRVLED_OFF,
+            drive[2] ? drive[2]->LED : DRVLED_OFF,
+            drive[3] ? drive[3]->LED : DRVLED_OFF);
 }
 
 

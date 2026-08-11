@@ -230,9 +230,11 @@ int rfgetc(RFILE* stream);
 static bool is_t64_header(const uint8 *header);
 static bool is_lynx_header(const uint8 *header);
 static bool is_p00_header(const uint8 *header);
+static bool is_prg_file(const char *path);
 static bool parse_t64_file(RFILE *f, std::vector<c64_dir_entry> &vec, char *dir_title);
 static bool parse_lynx_file(RFILE *f, std::vector<c64_dir_entry> &vec, char *dir_title);
 static bool parse_p00_file(RFILE *f, std::vector<c64_dir_entry> &vec, char *dir_title);
+static bool parse_prg_file(RFILE *f, std::vector<c64_dir_entry> &vec, char *dir_title);
 
 /*
  *  Constructor: Prepare emulation
@@ -292,6 +294,11 @@ bool ArchDrive::change_arch(const char *path)
       {
          archive_type = TYPE_P00;
          parsed_ok    = parse_p00_file(new_file, file_info, dir_title);
+      }
+      else if (is_prg_file(path))
+      {
+         archive_type = TYPE_PRG;
+         parsed_ok    = parse_prg_file(new_file, file_info, dir_title);
       }
 
       if (!parsed_ok)
@@ -760,9 +767,25 @@ static bool is_p00_header(const uint8 *header)
 	return memcmp(header, "C64File", 7) == 0;
 }
 
+/* A raw .prg file has no magic header (it is just [load addr lo][hi][data]),
+   so it can only be recognised by its extension. */
+static bool is_prg_file(const char *path)
+{
+	size_t len = path ? strlen(path) : 0;
+	char a, b, c;
+	if (len < 4 || path[len - 4] != '.')
+		return false;
+	a = path[len - 3]; b = path[len - 2]; c = path[len - 1];
+	if (a >= 'A' && a <= 'Z') a += 32;
+	if (b >= 'A' && b <= 'Z') b += 32;
+	if (c >= 'A' && c <= 'Z') c += 32;
+	return (a == 'p' && b == 'r' && c == 'g');
+}
+
 bool IsArchFile(const char *path, const uint8 *header, long size)
 {
-	return is_t64_header(header) || is_lynx_header(header) || is_p00_header(header);
+	return is_t64_header(header) || is_lynx_header(header)
+	    || is_p00_header(header) || is_prg_file(path);
 }
 
 
@@ -931,6 +954,36 @@ static bool parse_p00_file(RFILE *f, std::vector<c64_dir_entry> &vec, char *dir_
 	return true;
 }
 
+/* A raw .prg is a .p00 without the 26-byte header: the 2-byte load address
+   is at offset 0 and the program data follows. Since archive_type != TYPE_T64,
+   open_file() copies the whole stream verbatim (address included) - correct. */
+static bool parse_prg_file(RFILE *f, std::vector<c64_dir_entry> &vec, char *dir_title)
+{
+	uint8 sa_lo = 0, sa_hi = 0;
+	int64_t size;
+
+	// Dummy directory title
+	strcpy(dir_title, "PRG FILE        ");
+
+	// Read start address (first two bytes)
+	rfseek(f, 0, SEEK_SET);
+	rfread(&sa_lo, 1, 1, f);
+	rfread(&sa_hi, 1, 1, f);
+
+	// File size (whole file, load address included)
+	rfseek(f, 0, SEEK_END);
+	size = rftell(f);
+	if (size < 2)
+		return false;
+
+	// Contains only one file. The name is not used for loading (the core
+	// auto-runs a single program with the LOAD"*" wildcard), so a generic
+	// name is fine and stays consistent between dir listing and the drive.
+	vec.reserve(1);
+	vec.push_back(c64_dir_entry((const uint8 *)"PRG", FTYPE_PRG, false, false, (size_t)size, 0, sa_lo, sa_hi));
+	return true;
+}
+
 bool ReadArchDirectory(const char *path, std::vector<c64_dir_entry> &vec)
 {
    // Open file
@@ -950,6 +1003,8 @@ bool ReadArchDirectory(const char *path, std::vector<c64_dir_entry> &vec)
          result = parse_lynx_file(f, vec, dir_title);
       else if (is_p00_header(header))
          result = parse_p00_file(f, vec, dir_title);
+      else if (is_prg_file(path))
+         result = parse_prg_file(f, vec, dir_title);
 
       rfclose(f);
       return result;

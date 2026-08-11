@@ -37,7 +37,8 @@
 enum {
 	TYPE_T64,			// C64S tape file
 	TYPE_LYNX,			// C64 LYNX archive
-	TYPE_P00			// .p00 file
+	TYPE_P00,			// .p00 file
+	TYPE_PRG			// raw .prg file (load address + data, no header)
 };
 
 // Archive file drive class

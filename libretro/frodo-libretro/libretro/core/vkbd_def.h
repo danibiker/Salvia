@@ -11,49 +11,49 @@ typedef struct {
 
 Mvk MVk[NPLGN*NLIGN*2]={
 
-	{ " 1" ," !" , MATRIX(7,0) },//0
-	{ " 2" ," \"" ,MATRIX(7,3) },
-	{ " 3" ," 3"  ,MATRIX(1,0) },
-	{ " 4" ," $"  ,MATRIX(1,3) },
-	{ " 5" ," %"  ,MATRIX(2,0) },
-	{ " 6" ," ^"  ,MATRIX(2,3) },
-	{ " 7" ," &"  ,MATRIX(3,0) },
-	{ " 8" ," *"  ,MATRIX(3,3) },
-	{ " 9" ," ("  ,MATRIX(4,0)},
-	{ " 0" ," )"  ,MATRIX(4,3)},
+	{ " 1 " ," ! " , MATRIX(7,0) },//0
+	{ " 2 " ," \" " ,MATRIX(7,3) },
+	{ " 3 " ," 3 "  ,MATRIX(1,0) },
+	{ " 4 " ," $ "  ,MATRIX(1,3) },
+	{ " 5 " ," % "  ,MATRIX(2,0) },
+	{ " 6 " ," ^ "  ,MATRIX(2,3) },
+	{ " 7 " ," & "  ,MATRIX(3,0) },
+	{ " 8 " ," * "  ,MATRIX(3,3) },
+	{ " 9 " ," ( "  ,MATRIX(4,0)},
+	{ " 0 " ," ) "  ,MATRIX(4,3)},
 
-	{ " q" ," Q"  ,MATRIX(7,6)}, //10
-	{ " w" ," W"  ,MATRIX(1,1)},
-	{ " e" ," E"  ,MATRIX(1,6)},
-	{ " r" ," R"  ,MATRIX(2,1)},
-	{ " t" ," T"  ,MATRIX(2,6)},
-	{ " y" ," Y"  ,MATRIX(3,1)},
-	{ " u" ," U"  ,MATRIX(3,6)},
-	{ " i" ," I"  ,MATRIX(4,1)},
-	{ " o" ," O"  ,MATRIX(4,6)},
-	{ " p" ," P"  ,MATRIX(5,1)},
+	{ " q " ," Q "  ,MATRIX(7,6)}, //10
+	{ " w " ," W "  ,MATRIX(1,1)},
+	{ " e " ," E "  ,MATRIX(1,6)},
+	{ " r " ," R "  ,MATRIX(2,1)},
+	{ " t " ," T "  ,MATRIX(2,6)},
+	{ " y " ," Y "  ,MATRIX(3,1)},
+	{ " u " ," U "  ,MATRIX(3,6)},
+	{ " i " ," I "  ,MATRIX(4,1)},
+	{ " o " ," O "  ,MATRIX(4,6)},
+	{ " p " ," P "  ,MATRIX(5,1)},
 
-	{ " a" ," A"  ,MATRIX(1,2)}, //20
-	{ " s" ," S"  ,MATRIX(1,5)},
-	{ " d" ," D"  ,MATRIX(2,2)},
-	{ " f" ," F"  ,MATRIX(2,5)},
-	{ " g" ," G"  ,MATRIX(3,2)},
-	{ " h" ," H"  ,MATRIX(3,5)},
-	{ " j" ," J"  ,MATRIX(4,2)},
-	{ " k" ," K"  ,MATRIX(4,5)},	
-	{ " l" ," L"  ,MATRIX(5,2)},
-	{ " ;" ," :"  ,MATRIX(6,2)},
+	{ " a " ," A "  ,MATRIX(1,2)}, //20
+	{ " s " ," S "  ,MATRIX(1,5)},
+	{ " d " ," D "  ,MATRIX(2,2)},
+	{ " f " ," F "  ,MATRIX(2,5)},
+	{ " g " ," G "  ,MATRIX(3,2)},
+	{ " h " ," H "  ,MATRIX(3,5)},
+	{ " j " ," J "  ,MATRIX(4,2)},
+	{ " k " ," K "  ,MATRIX(4,5)},	
+	{ " l " ," L "  ,MATRIX(5,2)},
+	{ " ; " ," : "  ,MATRIX(6,2)},
 
-	{ " z" ," Z"  ,MATRIX(1,4)},//30
-	{ " x" ," X"  ,MATRIX(2,7)},
-	{ " c" ," C"  ,MATRIX(2,4)},
-	{ " v" ," V"  ,MATRIX(3,7)},
-	{ " b" ," B"  ,MATRIX(3,4)},
-	{ " n" ," N"  ,MATRIX(4,7)},
-	{ " m"," M"   ,MATRIX(4,4)},
-	{ " ,"," <"   ,MATRIX(5,7)},
-	{ " ."," >"   ,MATRIX(5,4)},
-	{ " /" ," /"  ,MATRIX(6,7)},
+	{ " z " ," Z "  ,MATRIX(1,4)},//30
+	{ " x " ," X "  ,MATRIX(2,7)},
+	{ " c " ," C "  ,MATRIX(2,4)},
+	{ " v " ," V "  ,MATRIX(3,7)},
+	{ " b " ," B "  ,MATRIX(3,4)},
+	{ " n " ," N "  ,MATRIX(4,7)},
+	{ " m "," M "   ,MATRIX(4,4)},
+	{ " , "," < "   ,MATRIX(5,7)},
+	{ " . "," > "   ,MATRIX(5,4)},
+	{ " / " ," / "  ,MATRIX(6,7)},
 
 	{ "PG2","PG2" ,-2}, //40
 	{ "Esc","Esc" ,MATRIX(7,7)},
@@ -79,16 +79,16 @@ Mvk MVk[NPLGN*NLIGN*2]={
 	{ "SHR","SHR" ,MATRIX(6,4)},
 
 
-	{ "LF" ,"LF" , MATRIX(0,2)|128 },//60
-	{ " 5" ," 5" ,MATRIX(2,0)},
-	{ "RG" ,"RG"  ,MATRIX(0,2)},
-	{ " 4" ," $"  ,MATRIX(1,3)},
-	{ " 5" ," %"  ,MATRIX(2,0) },
-	{ " 6" ," ^"  ,MATRIX(2,3) },
-	{ " 7" ," &"  ,MATRIX(3,0) },
-	{ " 8" ," *"  ,MATRIX(3,3) },
-	{ " 9" ," ("  ,MATRIX(4,0)},
-	{ " 0" ," )"  ,MATRIX(4,3)},
+	{ "LF " ,"LF " , MATRIX(0,2)|128 },//60
+	{ " 5 " ," 5 " ,MATRIX(2,0)},
+	{ "RG " ,"RG "  ,MATRIX(0,2)},
+	{ " 4 " ," $ "  ,MATRIX(1,3)},
+	{ " 5 " ," % "  ,MATRIX(2,0) },
+	{ " 6 " ," ^ "  ,MATRIX(2,3) },
+	{ " 7 " ," & "  ,MATRIX(3,0) },
+	{ " 8 " ," * "  ,MATRIX(3,3) },
+	{ " 9 " ," ( "  ,MATRIX(4,0)},
+	{ " 0 " ," ) "  ,MATRIX(4,3)},
 
 	{ "HOM","HOM" ,MATRIX(6,3)}, //70
 	{ "DW" ,"DW" ,MATRIX(0,7)}, 
@@ -112,7 +112,7 @@ Mvk MVk[NPLGN*NLIGN*2]={
 	{ "SHR" ,"SHR" ,MATRIX(6,4)},	
 	{ "SPC" ,"SPC",MATRIX(7,4)},	
 	
-	{ " PG1","PG1" ,-2},//90
+	{ "PG1","PG1" ,-2},//90
 	{ "GUI","GUI"   ,-14},
 	{ "ABT","ABT"  ,-13},
 	{ "CTR" ,"CTR" ,-12},

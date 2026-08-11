@@ -43,6 +43,107 @@ struct retro_core_option_definition option_defs_us[] = {
       },
       "384x288"
    },
+   {
+      "frodo_autostart",
+      "Auto-Start Games",
+      "Automatically LOAD and RUN the game after boot. If the disk holds several programs, an on-screen selector (navigable with the D-pad) is shown instead.",
+      {
+         { "enabled",  NULL },
+         { "disabled", NULL },
+         { NULL, NULL },
+      },
+      "enabled"
+   },
+   {
+      "frodo_drive_leds",
+      "Show Drive LEDs",
+      "Show the bottom bar with the 1541 drive activity LEDs (drives 8-11).",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
+      "frodo_sid_engine",
+      "Sound (SID Engine)",
+      "SID sound emulation. Select 'None' to disable sound entirely.",
+      {
+         { "digital", NULL },
+         { "none",    NULL },
+         { NULL, NULL },
+      },
+      "digital"
+   },
+   {
+      "frodo_sid_filters",
+      "SID Filters",
+      "Emulate the SID's analog filters (more accurate sound).",
+      {
+         { "enabled",  NULL },
+         { "disabled", NULL },
+         { NULL, NULL },
+      },
+      "enabled"
+   },
+   {
+      "frodo_true_drive",
+      "True Drive Emulation (1541)",
+      "Processor-level 1541 disk drive emulation. Needed by some copy-protected or custom-loader titles, but heavier on the CPU.",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
+      "frodo_fast_reset",
+      "Fast Reset",
+      "Skip the RAM test on reset for a quicker boot.",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
+      "frodo_joystick_port",
+      "Joystick Port",
+      "Which C64 joystick port the controller drives. Most games use port 2.",
+      {
+         { "2", NULL },
+         { "1", NULL },
+         { NULL, NULL },
+      },
+      "2"
+   },
+   {
+      "frodo_sprite_collisions",
+      "Sprite Collisions",
+      "Emulate sprite-to-sprite and sprite-to-background collisions (required by most games).",
+      {
+         { "enabled",  NULL },
+         { "disabled", NULL },
+         { NULL, NULL },
+      },
+      "enabled"
+   },
+   {
+      "frodo_reu",
+      "REU RAM Expansion",
+      "Emulate a RAM Expansion Unit (only needed by specific software).",
+      {
+         { "none", NULL },
+         { "128K", NULL },
+         { "256K", NULL },
+         { "512K", NULL },
+         { NULL, NULL },
+      },
+      "none"
+   },
    { NULL, NULL, NULL, {{0}}, NULL },
 };
 

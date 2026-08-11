@@ -102,7 +102,8 @@ const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",  //
 	"Nintendo - Virtual Boy-content.png",									  // cart_virtualboy
 	"Atari - Lynx-content.png",												  // cart_atarilynx
 	"Atari - 800-content.png",												  // cart_atari800
-	"Atari - 5200-content.png"												  // cart_atari5200
+	"Atari - 5200-content.png",												  // cart_atari5200
+	"Commodore - 64-content.png"											  // cart_c64
 };
 
 // Nombres de sistema de libretro-database (ficheros rdb/ y carpetas cht/), indexado por
@@ -133,7 +134,10 @@ const char *RDB_SYSTEM_NAMES[] = {
 	"The 3DO Company - 3DO",                           // cart_3do
 	"Bandai - WonderSwan",                             // cart_wonderswan
 	"Nintendo - Virtual Boy",                          // cart_virtualboy
-	"Atari - Lynx"									   // cart_atarilynx
+	"Atari - Lynx",									   // cart_atarilynx
+	"Atari - 8-bit Family",							   // cart_atari800
+	"Atari - 5200",									   // cart_atari5200
+	""												   // cart_c64
 };
 
 #ifdef _XBOX

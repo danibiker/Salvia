@@ -23,7 +23,7 @@
 /*-----------------------------------------------------------------------
  * Here come alphasort and scandir for POSIX-like OSes
  *-----------------------------------------------------------------------*/
-#if !defined(WIN32) && !defined(__CEGCC__)
+#if !defined(WIN32) && !defined(__CEGCC__) && !defined(_XBOX)
 
 
 /**
@@ -206,9 +206,14 @@ error_out:
 /*-----------------------------------------------------------------------
  * Here come alphasort and scandir for Windows
  *-----------------------------------------------------------------------*/
-#if defined(WIN32) || defined(__CEGCC__)
+#if defined(WIN32) || defined(__CEGCC__) || defined(_XBOX)
 
+#if defined(_XBOX)
+#include <xtl.h>
+#else
 #include <windows.h>
+#endif
+
 #include <wchar.h>
 
 /*-----------------------------------------------------------------------*/

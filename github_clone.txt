@@ -23,6 +23,7 @@ git subtree add --prefix=libretro/beetle-vb-libretro https://github.com/libretro
 git subtree add --prefix=libretro/beetle-lynx-libretro https://github.com/libretro/beetle-lynx-libretro master --squash
 git subtree add --prefix=libretro/beetle-ngp-libretro https://github.com/libretro/beetle-ngp-libretro master --squash
 git subtree add --prefix=libretro/libretro-atari800 https://github.com/libretro/libretro-atari800 master --squash
+git subtree add --prefix=libretro/frodo-libretro https://github.com/libretro/frodo-libretro master --squash
 
 ###########################################################################################################
 # External libraries
@@ -57,6 +58,7 @@ git subtree pull --prefix=libretro/beetle-vb-libretro https://github.com/libretr
 git subtree pull --prefix=libretro/beetle-lynx-libretro https://github.com/libretro/beetle-lynx-libretro master --squash
 git subtree pull --prefix=libretro/beetle-ngp-libretro https://github.com/libretro/beetle-ngp-libretro master --squash
 git subtree pull --prefix=libretro/libretro-atari800 https://github.com/libretro/libretro-atari800 master --squash
+git subtree pull --prefix=libretro/frodo-libretro https://github.com/libretro/frodo-libretro master --squash
 
 ###########################################################################################################
 # Merging conflicts

@@ -34,6 +34,7 @@
 
 **/Debug/**
 **/Release/**
+**/Release*/**
 **/_UpgradeReport*/**
 *.sdf
 **/ipch/**

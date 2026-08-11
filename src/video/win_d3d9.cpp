@@ -875,9 +875,18 @@ static int RecreateDefaultResources(void)
                                          D3DPOOL_DEFAULT, &g_vb, NULL)))
         return 0;
 
-    /* Recrear textura del juego al tamano vigente. */
+    /* Recrear SOLO la textura GPU del juego (D3DPOOL_DEFAULT). La surface CPU
+       g_game_surf se CONSERVA: gameMenu->gameScreen apunta a ella y el core
+       escribe ahi cada frame. NO usar CreateGameTexture() aqui, porque libera
+       (SDL_FreeSurface) y recrea g_game_surf, dejando gameMenu->gameScreen
+       colgando -> crash en hw_refresh (write a 0xFEEEFEEE) al volver la ventana
+       de segundo plano. (Igual que hace la ruta de reset de VSync.) */
     if (g_tex_w > 0 && g_tex_h > 0) {
-        if (!CreateGameTexture(g_tex_w, g_tex_h, g_tex_bpp)) return 0;
+        D3DFORMAT fmt = (g_tex_bpp == 16) ? D3DFMT_R5G6B5 : D3DFMT_X8R8G8B8;
+        if (g_game_tex) { g_game_tex->Release(); g_game_tex = NULL; }
+        if (FAILED(g_dev->CreateTexture(g_tex_w, g_tex_h, 1, D3DUSAGE_DYNAMIC,
+                                        fmt, D3DPOOL_DEFAULT, &g_game_tex, NULL)))
+            return 0;
         UpdateVertexBuffer(g_tex_w, g_tex_h, g_aspect);
         g_dev->SetTexture(0, g_game_tex);
         g_dev->SetStreamSource(0, g_vb, 0, sizeof(VTX));

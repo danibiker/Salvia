@@ -12,7 +12,6 @@
 */
 
 #include <stdlib.h>
-#include <unistd.h>
 #include <dirent.h>
 #include <sys/types.h>
 #include <string.h>
@@ -21,6 +20,8 @@
 #include "file.h"
 #include "unzip.h"
 #include "zip.h"
+
+#include <msvc_compat.h>
 
 #ifdef QNX
 #include <sys/dir.h>

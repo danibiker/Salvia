@@ -1448,6 +1448,23 @@ static void extract_directory(char *buf, const char *path, size_t size)
 }
 
 
+/* Detect an FDS disk image by its CONTENT, so FDS games load correctly no
+   matter how the frontend delivered them: as an .fds file, or extracted from a
+   .zip into memory (where info->path may be the .zip name, or not end in
+   ".fds"). FDS images are either the fwNES format ("FDS\x1a" header) or a
+   raw/headerless disk starting with 0x01 + "*NINTENDO-HVC*". */
+static bool content_is_fds(const void *data, size_t size)
+{
+   const unsigned char *p = (const unsigned char *)data;
+   if (!p || size < 16)
+      return false;
+   if (p[0] == 'F' && p[1] == 'D' && p[2] == 'S' && p[3] == 0x1A)
+      return true;
+   if (p[0] == 0x01 && memcmp(p + 1, "*NINTENDO-HVC*", 14) == 0)
+      return true;
+   return false;
+}
+
 bool retro_load_game(const struct retro_game_info *info)
 {
    const char *dir;
@@ -1605,7 +1622,8 @@ bool retro_load_game(const struct retro_game_info *info)
    std::stringstream ss(std::string(reinterpret_cast<const char*>(info->data),
             reinterpret_cast<const char*>(info->data) + info->size));
 
-   if (info->path && (strstr(info->path, ".fds") || strstr(info->path, ".FDS")))
+   if (content_is_fds(info->data, info->size)
+         || (info->path && (strstr(info->path, ".fds") || strstr(info->path, ".FDS"))))
    {
       fds = new Api::Fds(emulator);
 
@@ -1642,8 +1660,25 @@ bool retro_load_game(const struct retro_game_info *info)
    is_pal = false;
    check_variables();
 
-   if (machine->Load(ss, favsystem))
-      return false;
+   /* Guard the load: on failure (e.g. an FDS image loaded without a valid
+      disksys.rom BIOS in the system dir) Nestopia's core throws Nes::Result.
+      This wrapper had no try/catch, so an uncaught throw crashes the frontend
+      (hard crash on Xbox 360). Catch it and fail the load cleanly instead. */
+   {
+      bool load_error = false;
+      try
+      {
+         load_error = machine->Load(ss, favsystem) ? true : false;
+      }
+      catch (...)
+      {
+         if (log_cb)
+            log_cb(RETRO_LOG_ERROR, "Nestopia: exception during Machine::Load (missing/invalid FDS BIOS?)\n");
+         return false;
+      }
+      if (load_error)
+         return false;
+   }
 
    Api::Video ivideo(emulator);
    ivideo.SetSharpness(Api::Video::DEFAULT_SHARPNESS_RGB);

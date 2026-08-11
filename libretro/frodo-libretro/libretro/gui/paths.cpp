@@ -57,7 +57,12 @@ const char *Paths_GetUserHome(void)
  */
 static void Paths_InitHomeDirs(void)
 {
+#ifdef _XBOX
+   char *psHome = NULL;
+#else 
    char *psHome = getenv("HOME");
+#endif
+
    if (psHome)
       strncpy(sUserHomeDir, psHome, FILENAME_MAX);
 #if defined(WIN32)
@@ -100,6 +105,8 @@ void Paths_Init(const char *argv0)
    strcpy(sWorkingDir, "ux0:/");
 #elif defined(PSP)
    strcpy(sWorkingDir, "ms0:/");
+#elif defined(_XBOX)
+   strcpy(sWorkingDir, "game:\\");
 #else
    if (getcwd(sWorkingDir, FILENAME_MAX) == NULL)
    {

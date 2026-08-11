@@ -712,14 +712,25 @@ bool extractAndLoadGame(std::string rompath, bool tmpDelete = true){
 	if (bios_only) {
 		// Pasar NULL al core: el core debe haber anunciado SET_SUPPORT_NO_GAME.
 		gameLoaded = retro_load_game(NULL);
-	} else {
-		struct retro_game_info game = { unzipped.extractedPath.c_str(), unzipped.memoryBuffer, unzipped.romsize, NULL };
+	} else if (!unzipped.extractedPath.empty() || !info.need_fullpath){
+		// Duplicamos el string para asegurar que la memoria no desaparezca durante la carga
+		char* safePath = NULL;
+		if (!unzipped.extractedPath.empty())
+			safePath = strdup(unzipped.extractedPath.c_str());
+
+		struct retro_game_info game = { safePath, unzipped.memoryBuffer, unzipped.romsize, NULL };
 		// Multi-disc: si es un M3U, indicamos al core qué disco cargar de inicio
 		// antes de retro_load_game (asi el savestate coincide con el disco correcto).
 		findInitialImage(rompath, isM3U);
 		// ******* Cargamos el juego en memoria **********
 		gameLoaded = retro_load_game(&game);
 		// ***********************************************
+		if (safePath != NULL) 
+			free(safePath);
+	} else {
+		LOG_ERROR("No se ha podido obtener el path del fichero extraido: %s", unzipped.originalPath.c_str());
+		gameMenu->showSystemMessage(LanguageManager::instance()->get("msg.openfileerror") + rompath, 3000);
+		return false;
 	}
 
 	// CRC32 de la ROM (para resolver el .cht via .rdb por hash; fallback a nombre).

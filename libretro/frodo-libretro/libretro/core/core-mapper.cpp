@@ -7,7 +7,11 @@
 #include "sys/timer.h"
 #else
 #include <sys/types.h>
-#include <sys/time.h>
+#if defined(_MSC_VER)
+    #include <features/features_cpu.h>
+#elif !defined(_ANDROID_) && !defined(__CELLOS_LV2__)
+    #include <sys/time.h>
+#endif
 #include <time.h>
 #endif
 
@@ -83,7 +87,12 @@ void retro_set_input_poll(retro_input_poll_t cb)
 /* in milliseconds */
 static long GetTicks(void)
 {
-#ifndef _ANDROID_
+#if defined(_MSC_VER)
+   // cpu_features_get_time_usec() devuelve un int64_t con el tiempo en microsegundos.
+   // Al dividirlo por 1000, obtenemos milisegundos idénticos al cálculo original.
+   return (long)(cpu_features_get_time_usec() / 1000);
+
+#elif !defined(_ANDROID_)
 #ifdef __CELLOS_LV2__
 
    //#warning "GetTick PS3\n"
@@ -108,7 +117,7 @@ static long GetTicks(void)
    clock_gettime(CLOCK_MONOTONIC, &now);
    return (now.tv_sec*1000000 + now.tv_nsec/1000)/1000;
 #endif
-} 
+}
 
 //NO SURE FIND BETTER WAY TO COME BACK IN MAIN THREAD IN HATARI GUI
 void gui_poll_events(void)
@@ -233,7 +242,7 @@ int Retro_PollEvent(uint8 *key_matrix, uint8 *rev_matrix, uint8 *joystick)
          }
        */
 
-      i = 1; // show vkbd toggle
+	  i = RETRO_DEVICE_ID_JOYPAD_L3; // show vkbd toggle
 
       if (          mbt[i] == 0
                 && input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, i))

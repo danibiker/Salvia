@@ -824,7 +824,7 @@ static inline void hw_refresh(const void *data, unsigned width,
 	// rotation_buffer en la rama GPU; la textura va a VRAM tal cual y
 	// los shaders (HQx/CRT/etc.) siguen trabajando con la orientacion nativa.
 	{
-		static unsigned last_hw_rotation = 0;
+		static unsigned last_hw_rotation = -100;
 		if (last_hw_rotation != g_screen_rotation){
 			SDL_XBOX_SetRotation((int)g_screen_rotation);
 			last_hw_rotation = g_screen_rotation;

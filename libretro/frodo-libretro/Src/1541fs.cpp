@@ -192,7 +192,7 @@ uint8 FSDrive::open_file(int channel, const uint8 *name, int name_len)
 	}
 
 	// Open file
-#if !defined(__vita__) && !defined(__psp__)
+#if !defined(__vita__) && !defined(__psp__) && !defined(_XBOX)
 	if (chdir(dir_path))
 		set_error(ERR_NOTREADY);
 	else if ((file[channel] = fopen(plain_name, mode_str)) != NULL) {
@@ -205,8 +205,12 @@ uint8 FSDrive::open_file(int channel, const uint8 *name, int name_len)
 	{
 	  char fullname[NAMEBUF_LENGTH];
 
+	  #ifdef _XBOX
+	  sprintf(fullname,"%s\\%s",dir_path, plain_name);
+	  #else
 	  sprintf(fullname,"%s/%s",dir_path, plain_name);
-	  if ((file[channel] = fopen(fullname, mode)) != NULL)
+	  #endif
+	  if ((file[channel] = fopen(fullname, mode_str)) != NULL)
 	  {
 	    if (mode == FMODE_READ || mode == FMODE_M)
 	    {
@@ -342,7 +346,7 @@ uint8 FSDrive::open_directory(int channel, const uint8 *pattern, int pattern_len
       {
          bool path_is_dir = false;
          /* Get file statistics */
-#if defined(__vita__) || defined(__psp__)
+#if defined(__vita__) || defined(__psp__) || defined(_XBOX)
          {
             size_t len    = strlen(dir_path) + strlen(de->d_name) + 3;
             char *buf     = (char *) malloc(len);

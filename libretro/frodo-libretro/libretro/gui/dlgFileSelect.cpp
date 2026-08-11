@@ -499,7 +499,7 @@ char* SDLGui_FileSelect(const char *path_and_name, char **zip_path, bool bAllowN
 	{
 		File_SplitPath(path, path, fname, NULL);
 		if (!(path_is_directory(path)
-#if !defined(__vita__) && !defined(__psp__)
+#if !defined(__vita__) && !defined(__psp__) && !defined(_XBOX)
 		      || getcwd(path, FILENAME_MAX)
 #endif
 		      ))

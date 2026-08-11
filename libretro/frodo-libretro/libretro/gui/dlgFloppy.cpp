@@ -17,6 +17,8 @@
 #include "sdlgui.h"
 #include "file.h"
 
+#include <msvc_compat.h>
+
 static const char * const pszDiskImageNameExts[] =
 {
 	".d64",

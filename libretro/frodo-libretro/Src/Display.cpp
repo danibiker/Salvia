@@ -27,6 +27,10 @@
 #include "retro_video.h"
 
 #include "C64.h"
+#include "IEC.h"
+#include <vector>
+#include <stdio.h>
+#include <string.h>
 #ifdef HAVE_SAM
 #include "SAM.h"
 #endif
@@ -294,16 +298,193 @@ void kbd_buf_update(C64 *TheC64)
 
 //fautoboot
 
+/* ---------------------------------------------------------------------------
+ *  Auto-start + on-screen disk program selector (joystick-driven)
+ *
+ *  On load the core waits for the C64 to reach the BASIC "READY." prompt and
+ *  then either auto-runs the game (single program on disk) or shows a list of
+ *  programs navigable with the D-pad (A = run, B = cancel). The selector can
+ *  also be re-opened at any time with the R2 button.
+ * ------------------------------------------------------------------------- */
+
+/* ReadDirectory() is defined in IEC.cpp but has no header declaration. */
+extern bool ReadDirectory(const char *path, int type, std::vector<c64_dir_entry> &vec);
+
+int autostart_enabled   = 1;   // core option frodo_autostart (1 = on)
+int autostart_countdown = 0;   // frames until we act (0 = idle)
+int autostart_mode      = 0;   // 1 = decide (auto-run vs. selector), 2 = feed chosen
+int SHOWLIST            = 0;   // 1 = program selector overlay visible
+int show_drive_leds     = 0;   // core option frodo_drive_leds (0 = hidden bottom LED bar)
+
+static char pending_load[24] = "*";
+static std::vector<c64_dir_entry> prog_list;   // FTYPE_PRG entries on the mounted disk
+static int list_sel = 0, list_top = 0;
+
+#define LIST_ROW_H     10
+#define LIST_MAX_ROWS  12
+
+static int list_rows_visible(void)
+{
+   int fits = (retroh - 48) / LIST_ROW_H;   // rows that fit with vertical margins
+   int v    = LIST_MAX_ROWS;
+   if (v > fits) v = fits;
+   if (v < 1)    v = 1;
+   return v;
+}
+
+static void read_disk_programs(void)
+{
+   int type;
+   std::vector<c64_dir_entry> all;
+
+   prog_list.clear();
+   if (!ThePrefs.DrivePath[0][0])
+      return;
+   if (!IsMountableFile(ThePrefs.DrivePath[0], type))
+      return;                       // host directory or unknown file -> no list
+   if (!ReadDirectory(ThePrefs.DrivePath[0], type, all))
+      return;
+
+   for (size_t k = 0; k < all.size(); k++)
+      if (all[k].type == FTYPE_PRG)
+         prog_list.push_back(all[k]);
+}
+
+/* Build "LOAD"NAME",8,1:RUN" and prime the keyboard-buffer feed. The C64
+   keyboard buffer is PETSCII; a raw C64 filename (bytes in the A-Z range)
+   coincides with uppercase ASCII, so we feed the name bytes verbatim. Pass
+   NULL/"*" to load the first/only program with the wildcard. */
+static void feed_load(const uint8 *name)
+{
+   char buf[80];
+
+   if (name && name[0] && !(name[0] == '*' && name[1] == 0))
+   {
+      char nm[24];
+      int  k;
+      strncpy(nm, (const char *)name, sizeof(nm) - 1);
+      nm[sizeof(nm) - 1] = 0;
+      for (k = (int)strlen(nm) - 1;
+           k >= 0 && (nm[k] == ' ' || (unsigned char)nm[k] == 0xa0); k--)
+         nm[k] = 0;                 // strip trailing (shifted) spaces
+      sprintf(buf, "\rLOAD\"%s\",8,1:\rRUN\r", nm);
+   }
+   else
+      strcpy(buf, "\rLOAD\":*\",8,1:\rRUN\r");
+
+   kbd_buf_feed(buf);
+   autoboot = true;
+}
+
+void open_program_list(void)
+{
+   read_disk_programs();
+   list_sel = 0;
+   list_top = 0;
+   SHOWKEY  = -1;                   // hide the virtual keyboard if open
+   SHOWLIST = 1;
+   Screen_SetFullUpdate(0);
+}
+
+void close_program_list(void)
+{
+   SHOWLIST = 0;
+   Screen_SetFullUpdate(0);
+}
+
+static void virtual_list(char *buffer)
+{
+   int i;
+   int total   = (int)prog_list.size();
+   int visible = list_rows_visible();
+   int rows    = (total < visible) ? total : visible;
+   if (rows < 1) rows = 1;                        // leave room for the empty message
+
+   const int row_h    = LIST_ROW_H;
+   const int title_h  = 14;
+   const int footer_h = 13;
+   const int panel_w  = 220;
+   int panel_h        = title_h + rows * row_h + footer_h;
+   int x0             = (retrow - panel_w) / 2;   // centered horizontally
+   int y0             = (retroh - panel_h) / 2;   // centered vertically
+
+   /* Retro_Screen is XRGB8888, so use plain 0xRRGGBB colours (DrawFBoxBmp /
+      Draw_text write the value verbatim; bg 0 = transparent for text). */
+   const unsigned border = 0x4E86E0;   // blue frame
+   const unsigned shade  = 0x05080F;   // drop shadow
+   const unsigned bg     = 0x101A2E;   // dark navy panel
+   const unsigned titlec = 0xFFCC33;   // amber title
+   const unsigned fg     = 0xDCDCEC;   // off-white rows
+   const unsigned dim    = 0x8892A6;   // footer / scroll markers
+   const unsigned selbg  = 0x3A7BD5;   // highlight bar
+   const unsigned selfg  = 0xFFFFFF;   // selected text
+
+   /* Soft drop shadow, then framed panel */
+   DrawFBoxBmp(buffer, x0 + 3, y0 + 3, panel_w,     panel_h,     shade);
+   DrawFBoxBmp(buffer, x0 - 2, y0 - 2, panel_w + 4, panel_h + 4, border);
+   DrawFBoxBmp(buffer, x0,     y0,     panel_w,     panel_h,     bg);
+
+   /* Centered title + separator */
+   {
+      const char *t = "SELECT PROGRAM";
+      int tw = (int)strlen(t) * 7;
+      Draw_text(buffer, x0 + (panel_w - tw) / 2, y0 + 3, titlec, 0, 1, 1, 20, "%s", t);
+      DrawFBoxBmp(buffer, x0 + 6, y0 + title_h - 2, panel_w - 12, 1, border);
+   }
+
+   if (total == 0)
+   {
+      const char *m = "no programs on disk";
+      int mw = (int)strlen(m) * 7;
+      Draw_text(buffer, x0 + (panel_w - mw) / 2, y0 + title_h + 4, dim, 0, 1, 1, 30, "%s", m);
+   }
+   else
+   {
+      for (i = 0; i < rows; i++)
+      {
+         int idx = list_top + i;
+         int yy  = y0 + title_h + i * row_h;
+         char nm[20];
+         if (idx >= total)
+            break;
+         petscii2ascii(nm, prog_list[idx].name, 17);
+         if (idx == list_sel)
+         {
+            DrawFBoxBmp(buffer, x0 + 4, yy - 1, panel_w - 8, row_h, selbg);
+            Draw_text(buffer, x0 + 10, yy, selfg, 0, 1, 1, 18, "%s", nm);
+         }
+         else
+            Draw_text(buffer, x0 + 10, yy, fg, 0, 1, 1, 18, "%s", nm);
+      }
+
+      /* Scroll hints when the list is longer than the panel */
+      if (list_top > 0)
+         Draw_text(buffer, x0 + panel_w - 13, y0 + title_h, dim, 0, 1, 1, 2, "^");
+      if (list_top + rows < total)
+         Draw_text(buffer, x0 + panel_w - 13, y0 + title_h + (rows - 1) * row_h, dim, 0, 1, 1, 2, "v");
+   }
+
+   /* Footer hint */
+   {
+      const char *h = "A=RUN   B=CANCEL";
+      int hw = (int)strlen(h) * 7;
+      Draw_text(buffer, x0 + (panel_w - hw) / 2, y0 + panel_h - footer_h + 3, dim, 0, 1, 1, 20, "%s", h);
+   }
+}
+
 void virtual_kdb(char *buffer,int vx,int vy)
 {
    int x, y;
 
-#if defined PITCH && PITCH == 4
-   unsigned *pix=(unsigned*)buffer;
-#else
-   unsigned short *pix=(unsigned short *)buffer;
-#endif
-   int page      = (NPAGE == -1) ? 0 : 50;
+   /* Compact 10x5 keyboard, centered horizontally and anchored to the bottom
+      of the screen so it takes as little space as possible. Key labels are <=3
+      chars (~21px), so 26px-wide keys fit them. Geometry is local here (the old
+      XSIDE/YSIDE/XBASE* macros made a large, upper-centered keyboard). */
+   const int kw = 26;                       /* column pitch / key width  */
+   const int kh = 14;                       /* row pitch / key height    */
+   int x0   = (retrow - NPLGN * kw) / 2;     /* center horizontally       */
+   int y0   = retroh - NLIGN * kh - 3;       /* anchor to the bottom      */
+   int page = (NPAGE == -1) ? 0 : 50;
    unsigned coul = RGB565(28, 28, 31);
    BKGCOLOR = (KCOL>0?0xFF404040:0);
 
@@ -311,16 +492,16 @@ void virtual_kdb(char *buffer,int vx,int vy)
    {
       for(y=0;y<NLIGN;y++)
       {
-         DrawBoxBmp((char*)pix,XBASE3+x*XSIDE,YBASE3+y*YSIDE, XSIDE,YSIDE, RGB565(7, 2, 1));
-         Draw_text((char*)pix,XBASE0-2+x*XSIDE ,YBASE0+YSIDE*y,coul, BKGCOLOR ,1, 1,20,
-               SHIFTON==-1?MVk[(y*NPLGN)+x+page].norml:MVk[(y*NPLGN)+x+page].shift);	
+         DrawBoxBmp(buffer, x0 + x*kw, y0 + y*kh, kw-1, kh-1, RGB565(7, 2, 1));
+         Draw_text(buffer, x0 + x*kw + 3, y0 + y*kh + 3, coul, BKGCOLOR, 1, 1, 20,
+               SHIFTON==-1?MVk[(y*NPLGN)+x+page].norml:MVk[(y*NPLGN)+x+page].shift);
       }
    }
 
-   DrawBoxBmp((char*)pix,XBASE3+vx*XSIDE,YBASE3+vy*YSIDE, XSIDE,YSIDE, RGB565(31, 2, 1));
-   Draw_text((char*)pix,XBASE0-2+vx*XSIDE ,YBASE0+YSIDE*vy,RGB565(2,31,1), BKGCOLOR ,1, 1,20,
-         SHIFTON==-1?MVk[(vy*NPLGN)+vx+page].norml:MVk[(vy*NPLGN)+vx+page].shift);	
-
+   /* Highlight the selected key */
+   DrawBoxBmp(buffer, x0 + vx*kw, y0 + vy*kh, kw-1, kh-1, RGB565(31, 2, 1));
+   Draw_text(buffer, x0 + vx*kw + 3, y0 + vy*kh + 3, RGB565(2, 31, 1), BKGCOLOR, 1, 1, 20,
+         SHIFTON==-1?MVk[(vy*NPLGN)+vx+page].norml:MVk[(vy*NPLGN)+vx+page].shift);
 }
 
 int check_vkey2(int x,int y)
@@ -336,7 +517,7 @@ int check_vkey2(int x,int y)
 
 int init_graphics(void)
 {
-	screen         = (retro_Surface*)malloc( sizeof(retro_Surface*) );
+	screen         = (retro_Surface*)malloc( sizeof(retro_Surface) );
 	screen->pixels = (unsigned char*)malloc(DISPLAY_X *( DISPLAY_Y + 16) );
 	screen->h      = DISPLAY_Y+16;
 	screen->w      = DISPLAY_X ;
@@ -398,9 +579,9 @@ C64Display::~C64Display()
    {
       free(screen->pixels);
       free(screen);
-      screen->pixels = NULL;
-      screen         = NULL;
+      screen = NULL;   /* do NOT write screen->pixels after free(screen) (use-after-free) */
    }
+   c64_disp = NULL;    /* c64_disp = this in the ctor; clear it so it never dangles */
 }
 
 
@@ -422,7 +603,7 @@ void C64Display::Update(void)
    unsigned int *pout = NULL;
    unsigned char *pin = NULL;
 
-   if(ThePrefs.ShowLEDs)
+   if(show_drive_leds)
    {
       unsigned i;
       // Draw speedometer/LEDs
@@ -486,10 +667,18 @@ void C64Display::Update(void)
       draw_string(screen, DISPLAY_X * 3/5 + 8, DISPLAY_Y + 4, "D\x12 10", black, fill_gray);
       draw_string(screen, DISPLAY_X * 4/5 + 8, DISPLAY_Y + 4, "D\x12 11", black, fill_gray);
    }
+   else
+   {
+      // LEDs hidden: the bottom strip of 'screen' is only ever written by the
+      // LED-drawing code above, so clear it to black. Otherwise the blit below
+      // leaks uninitialised pixels there (the green vertical stripes).
+      r.x = 0; r.y = DISPLAY_Y; r.w = DISPLAY_X; r.h = 16;
+      retro_FillRect(screen, &r, black);
+   }
 
 	// Update display
 	//blit c64 scr 1bit depth to emu scr 4bit depth
-	pout = (unsigned int *)Retro_Screen+((ThePrefs.ShowLEDs?0:8)*retrow);
+	pout = (unsigned int *)Retro_Screen+((show_drive_leds?0:8)*retrow);
 	pin  = (unsigned char *)screen->pixels;
 
 	for (x = 0; x < screen->w * screen->h; x++)
@@ -497,6 +686,9 @@ void C64Display::Update(void)
 
 	if (SHOWKEY==1)
       virtual_kdb(( char *)Retro_Screen,vkx,vky);
+
+   if (SHOWLIST)
+      virtual_list(( char *)Retro_Screen);
 }
 
 /* Return pointer to bitmap data */
@@ -764,6 +956,35 @@ void C64Display::PollKeyboard(uint8 *key_matrix, uint8 *rev_matrix,
    //   INDEX        0    1    2    3    4    5    6    7    8    9    10   11   12   13   14   15
    static int oldi=-1;
 
+   // Auto-start: once the C64 has reached "READY.", either auto-run the game
+   // (single program) or pop up the joystick-driven program selector.
+   if (autostart_countdown > 0)
+   {
+      if (--autostart_countdown == 0)
+      {
+         if (autostart_mode == 1)          // initial load: decide
+         {
+            read_disk_programs();
+            if (autostart_enabled)
+            {
+               if (prog_list.size() > 1)
+               {
+                  list_sel = 0;
+                  list_top = 0;
+                  SHOWKEY  = -1;
+                  SHOWLIST = 1;
+                  Screen_SetFullUpdate(0);
+               }
+               else
+                  feed_load(NULL);          // 0/1 program -> wildcard LOAD"*"
+            }
+         }
+         else if (autostart_mode == 2)     // program chosen from the selector
+            feed_load((const uint8 *)pending_load);
+         autostart_mode = 0;
+      }
+   }
+
    if (autoboot)
       kbd_buf_update(TheC64);
 
@@ -774,6 +995,67 @@ void C64Display::PollKeyboard(uint8 *key_matrix, uint8 *rev_matrix,
       // IKBD_PressSTKey(oldi,0);
       validkey(oldi,1,key_matrix,rev_matrix,joystick);
       oldi=-1;
+   }
+
+   // Toggle the disk program selector with R3 (free button; change here if
+   // your pad maps R3 elsewhere).
+   {
+      static int listtog = 0;
+      if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3) && listtog==0)
+         listtog = 1;
+      else if (listtog==1 && !input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3))
+      {
+         listtog = 0;
+         if (SHOWLIST) close_program_list();
+         else          open_program_list();
+      }
+   }
+
+   // Program selector: takes over the pad while visible (A=run, B=cancel).
+   if (SHOWLIST)
+   {
+      static int lf[4] = {0,0,0,0};
+      int total   = (int)prog_list.size();
+      int visible = list_rows_visible();
+
+      if ( input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP) && lf[0]==0 )
+         lf[0]=1;
+      else if (lf[0]==1 && ! input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP) )
+      { lf[0]=0; if (list_sel > 0) list_sel--; }
+
+      if ( input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN) && lf[1]==0 )
+         lf[1]=1;
+      else if (lf[1]==1 && ! input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN) )
+      { lf[1]=0; if (list_sel < total-1) list_sel++; }
+
+      if (list_sel < list_top)            list_top = list_sel;
+      if (list_sel >= list_top + visible) list_top = list_sel - visible + 1;
+      if (list_top < 0)                   list_top = 0;
+
+      // A (index 8) = confirm
+      if ( input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, 8) && lf[2]==0 )
+         lf[2]=1;
+      else if (lf[2]==1 && ! input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, 8) )
+      {
+         lf[2]=0;
+         if (total > 0)
+         {
+            strncpy(pending_load, (const char *)prog_list[list_sel].name, sizeof(pending_load)-1);
+            pending_load[sizeof(pending_load)-1]=0;
+            if (TheC64) TheC64->Reset();   // back to BASIC (in case a game was running)
+            autostart_mode      = 2;
+            autostart_countdown = 200;
+         }
+         close_program_list();
+      }
+
+      // B (index 0) = cancel
+      if ( input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, 0) && lf[3]==0 )
+         lf[3]=1;
+      else if (lf[3]==1 && ! input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, 0) )
+      { lf[3]=0; close_program_list(); }
+
+      return;   // don't process virtual keyboard / game input this frame
    }
 
    if(SHOWKEY==1)

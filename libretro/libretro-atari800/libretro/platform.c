@@ -305,14 +305,14 @@ int PLATFORM_Keyboard(void)
 					if (mbt[i][RETRO_DEVICE_ID_JOYPAD_R])		return AKEY_5200_1 ^ shiftctrl;
 					if (mbt[i][RETRO_DEVICE_ID_JOYPAD_L2])		return AKEY_5200_2 ^ shiftctrl;
 					if (mbt[i][RETRO_DEVICE_ID_JOYPAD_R2])		return AKEY_5200_3 ^ shiftctrl;
-					if (mbt[i][RETRO_DEVICE_ID_JOYPAD_L3])		return AKEY_5200_7 ^ shiftctrl;
+					if (mbt[i][RETRO_DEVICE_ID_JOYPAD_R3])		return AKEY_5200_7 ^ shiftctrl;
 				}
 			}
 
 			if (atari_devices[i] == RETRO_DEVICE_ATARI_JOYSTICK)
 				whichButton = RETRO_DEVICE_ID_JOYPAD_L3;
 			else if (atari_devices[i] == RETRO_DEVICE_ATARI_5200_JOYSTICK)
-				whichButton = RETRO_DEVICE_ID_JOYPAD_R3;
+				whichButton = RETRO_DEVICE_ID_JOYPAD_L3;   /* show keyboard on L3 (5200 key '7' moved to R3) */
 
 			if (mbt[i][whichButton])
 				if (!SHOWKEYDELAY)

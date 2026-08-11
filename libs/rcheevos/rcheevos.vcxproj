@@ -54,6 +54,9 @@
     <ClCompile Include="src\rhash\hash_zip.c" />
     <ClCompile Include="src\rhash\md5.c" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\rc_consoles.h" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{D14D24E2-5844-412D-94F4-A68376F54EF5}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>

@@ -19,7 +19,13 @@
  */
 
 #include <string.h>
-#include <sys/time.h> /* TODO/FIXME - get rid of gettimeofday */
+#if defined(_MSC_VER)
+    #include <time/rtime.h> 
+    // Esto te dar� acceso a las funciones multiplataforma de tiempo de Libretro
+#else
+#include <sys/time.h> 
+#endif
+
 #ifdef _WIN32
 #include <direct.h>
 #else
@@ -121,29 +127,40 @@ void Frodo::load_rom_files()
 
 int skel_main(int argc, char **argv)
 {
-	timeval tv;
-	gettimeofday(&tv, NULL);
-	srand(tv.tv_usec);
-
-	if (!init_graphics())
-		return 0;
-
-	the_app = new Frodo();
-	the_app->ArgvReceived(argc, argv);
-	the_app->ReadyToRun();
-#ifndef NO_LIBCO
-	delete the_app;
+#if defined(_MSC_VER)
+    // En Windows (VS2010), combinamos el tiempo en segundos con los ticks del reloj de la CPU
+    // Esto genera una semilla altamente variable en cada ejecuci�n sin depender de sys/time.h
+    unsigned int seed = (unsigned int)time(NULL) ^ (unsigned int)clock();
+    srand(seed);
+#else
+    // Mantenemos el comportamiento original id�ntico para Linux/macOS
+    timeval tv;
+    gettimeofday(&tv, NULL);
+    srand(tv.tv_usec);
 #endif
-	return 0;
+
+    if (!init_graphics())
+        return 0;
+
+    the_app = new Frodo();
+    the_app->ArgvReceived(argc, argv);
+    the_app->ReadyToRun();
+#ifndef NO_LIBCO
+    delete the_app;
+    the_app = NULL;
+#endif
+    return 0;
 }
 
-#ifdef NO_LIBCO
+/* Idempotent teardown of the emulator heap objects. Safe to call more than
+   once (guards + NULLs), so both the F10-quit path and the reload path
+   (retro_deinit) can call it without double-freeing. Deleting TheC64 also
+   frees the display surface via ~C64 -> ~C64Display. */
 void quit_frodo_emu(void)
 {
-	delete TheC64;
-	delete the_app;
+	if (TheC64)  { delete TheC64;  TheC64  = NULL; }
+	if (the_app) { delete the_app; the_app = NULL; }
 }
-#endif
 
 /*
  *  Constructor: Initialize member variables
@@ -165,7 +182,9 @@ void Frodo::ArgvReceived(int argc, char **argv)
 /* Arguments processed, run emulation */
 void Frodo::ReadyToRun(void)
 {
-#if defined (__vita__) || defined(__psp__)
+#if defined (_XBOX)
+	strcpy(AppDirPath, "game:\\");
+#elif defined (__vita__) || defined(__psp__)
 	strcpy(AppDirPath, "/");
 #else
 	getcwd(AppDirPath, 256);
@@ -186,6 +205,7 @@ void Frodo::ReadyToRun(void)
 
 #ifndef NO_LIBCO
 	delete TheC64;
+	TheC64 = NULL;
 #endif
 }
 
@@ -194,4 +214,53 @@ void Frodo::ReadyToRun(void)
 bool IsDirectory(const char *path)
 {
    return path_is_directory(path);
+}
+
+/* Change the disk mounted in drive 8 at runtime, WITHOUT resetting the C64.
+   Uses the same live-apply path as the built-in GUI: C64::NewPrefs() recreates
+   drive 8 with the new image (IEC::NewPrefs) and only resets the 1541 CPU if
+   true-drive emulation is being turned on (not the case here). Called from the
+   libretro disk-control callbacks. */
+void disk_change_image(const char *path)
+{
+   if (!TheC64 || !path || !path[0])
+      return;
+
+   Prefs p = ThePrefs;
+   strncpy(p.DrivePath[0], path, 255);
+   p.DrivePath[0][255] = 0;
+
+   TheC64->NewPrefs(&p);   // recreate drive 8 live (no C64 reset)
+   ThePrefs = p;
+}
+
+/* ---- Core-option mirror + live apply -------------------------------------
+   These are written by update_variables() (libretro.cpp) from the libretro
+   core options, then applied here. When the machine already exists we apply
+   live via C64::NewPrefs() (same path as the built-in GUI); before boot we
+   just set ThePrefs, which the C64 constructor reads. NOTE: Joystick1Port/
+   Joystick2Port are dead in this port, the pad routing is only JoystickSwap. */
+int fopt_sid_engine  = 1;   /* 1 = digital SID, 0 = none (no sound)          */
+int fopt_sid_filters = 1;   /* emulate SID filters                           */
+int fopt_true_drive  = 0;   /* Emul1541Proc: processor-level 1541 emulation  */
+int fopt_fast_reset  = 0;   /* skip RAM test on reset                        */
+int fopt_joy_port    = 2;   /* C64 port the controller drives: 2 or 1        */
+int fopt_sprite_coll = 1;   /* sprite collision detection                    */
+int fopt_reu         = 0;   /* REU size: 0=none,1=128K,2=256K,3=512K         */
+
+void frodo_apply_prefs(void)
+{
+   Prefs p = ThePrefs;
+
+   p.SIDType          = fopt_sid_engine ? SIDTYPE_DIGITAL : SIDTYPE_NONE;
+   p.SIDFilters       = fopt_sid_filters ? true : false;
+   p.Emul1541Proc     = fopt_true_drive ? true : false;
+   p.FastReset        = fopt_fast_reset ? true : false;
+   p.SpriteCollisions = fopt_sprite_coll ? true : false;
+   p.JoystickSwap     = (fopt_joy_port == 2);   /* swap => pad drives C64 port 2 */
+   p.REUSize          = fopt_reu;
+
+   if (TheC64)
+      TheC64->NewPrefs(&p);   /* live: reconfigures SID/REU/drive/kernal as needed */
+   ThePrefs = p;
 }

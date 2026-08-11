@@ -10,6 +10,10 @@ void genode_free_secondary_stack(void *stack);
 #endif
 
 #if defined _MSC_VER
+#ifdef _XBOX
+	#include <xtl.h>
+	#include "fiber.c"
+#else
   #include <Windows.h>
   #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_APP)
     #include "fiber.c"
@@ -20,6 +24,8 @@ void genode_free_secondary_stack(void *stack);
   #else
     #include "fiber.c"
   #endif
+#endif
+  
 #elif defined __GNUC__
   #if defined __i386__
     #include "x86.c"

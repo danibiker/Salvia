@@ -738,16 +738,23 @@ void GestorMenus::poblarCdList(std::string ruta){
 	cdromListMenu->opciones.clear();
 	std::string ext = dir.getExtension(ruta);
 	Constant::lowerCase(&ext);
-	std::unordered_set<std::string> v;
-	Constant::splitCharSet(CD_FILTER, ' ', v);
-	int nElems = v.size();
-	if (v.count(ext) <= 0 && ruta.find(BIOS_ONLY) == std::string::npos){
-		//El fichero cargado no es un cdrom y por lo tanto salimos
+
+	// Filtro del navegador de discos: extensiones que el CORE cargado declara
+	// como validas (C64: d64/t64/prg/... ; PS1: cue/chd/...) UNIDAS a las de CD
+	// (CD_FILTER), asi cualquier core con disk-control puede recargar sus propios
+	// discos via swapToNewDisc sin perder el comportamiento previo de los cores
+	// de CD. Formato "dotted" (".d64.t64...") que espera dirutil::foundFilter.
+	std::string coreExts  = CfgLoader::configMain[cfg::libretro_core_extensions].valueStr;
+	std::string extFilter = Constant::replaceAll(std::string(" ") + Constant::replaceAll(coreExts, "|", " "), " ", ".");
+	extFilter            += Constant::replaceAll(std::string(CD_FILTER), " ", ".");
+
+	if (extFilter.find(ext) == std::string::npos && ruta.find(BIOS_ONLY) == std::string::npos){
+		//El fichero cargado no es cargable por el core actual: salimos
 		return;
 	}
 
 	vector<unique_ptr<FileProps>> files;
-	dir.listFiles(dir.getFolder(ruta).c_str(), files, CD_FILTER, "", true, false);
+	dir.listFiles(dir.getFolder(ruta).c_str(), files, extFilter, "", true, false);
 	//Cada elemento del menu es un objeto FileProps con las propiedades del fichero seleccionado
 	for (std::size_t i = 0; i < files.size(); ++i) {
 		OpcionTxt *cdElem = new OpcionTxt(files[i]->filename);
