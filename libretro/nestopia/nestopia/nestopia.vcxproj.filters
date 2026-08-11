@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\libretro-common">
+      <UniqueIdentifier>{0e11ed99-9830-4c25-8e9f-3455f0c23bc8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -917,6 +920,39 @@
     </ClCompile>
     <ClCompile Include="..\source\core\vssystem\NstVsTkoBoxing.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_posix_string.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_snprintf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_strcasestr.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_strl.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\fopen_utf8.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\encodings\encoding_utf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\file\file_path.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\file\file_path_io.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\file_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\time\rtime.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files\libretro-common</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

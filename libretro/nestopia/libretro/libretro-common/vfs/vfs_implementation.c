@@ -39,6 +39,12 @@
 #  ifdef _XBOX
 #    include <xtl.h>
 #    define INVALID_FILE_ATTRIBUTES -1
+#  ifndef S_IRUSR
+#    define S_IRUSR _S_IREAD
+#  endif
+#  ifndef S_IWUSR
+#    define S_IWUSR _S_IWRITE
+#  endif
 #  else
 
 #    include <fcntl.h>

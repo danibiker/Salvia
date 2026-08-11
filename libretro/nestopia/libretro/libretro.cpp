@@ -103,7 +103,7 @@ static Api::Machine::FavoredSystem favsystem;
 static void *sram;
 static unsigned long sram_size;
 static bool is_pal;
-static byte custpal[64*3];
+static Nes::byte custpal[64*3];
 
 /* Exact audio pacing.  The APU synthesizes SAMPLERATE samples per
  * emulated second of master-clock time, so the true number of samples
@@ -1202,7 +1202,7 @@ static void check_variables(void)
       }
       else if (strcmp(var.value, "custom") == 0) {
          video.GetPalette().SetMode(Api::Video::Palette::MODE_CUSTOM);
-         video.GetPalette().SetCustom((const byte(*)[3])custpal, Api::Video::Palette::STD_PALETTE);
+         video.GetPalette().SetCustom((const Nes::byte(*)[3])custpal, Api::Video::Palette::STD_PALETTE);
       }
 
       // Fix up palette for VS. System
