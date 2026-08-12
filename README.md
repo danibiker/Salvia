@@ -211,7 +211,6 @@ Usb0:\Roms
 ├── gg\                  (GameGear --> gg zip)  
 ├── mame2003\            (M.A.M.E --> zip)
 │   └── roms\            
-│   └── samples\         
 ├── megacd\              (Sega CD --> m3u bin cue iso chd zip)
 ├── msx\                 (FBNeo MSX --> zip)
 ├── nes\                 (Nintendo Nes/Famicom --> nes fds unf unif zip)
@@ -296,10 +295,32 @@ Runs the Atari 400/800/XL/XE home computers and the Atari 5200 console. Supporte
 
 Multi-disk Atari (`.atr`) games can also be swapped from the **Disk Control** menu using an `.m3u` playlist, exactly like the C64 core.
 
-### FBNEO
+### FBNEO and FBANext
 For this core, there are two subdirectories available **neocd** (to load neogeo cd games) and  **megadrive** (it can load megadrive games for the fbneo core, but its main purpose is to load the game Paprium as Genesis-plus-gx is the gold standard for megadrive)
 
 Some games should run fullspeed but the fbneo team introduced some changes that make them slower than it should be (Altered Beast for example). For these game, use the alternative emulator FBANext
+
+### MAME 2003 Plus
+For the games that need a chd file to work, they should be placed in the same folder as the roms directory. Example for the game Killer Instinct (sad example because in XBOX 360 runs terribly slow):
+
+```
+Usb0:\Roms
+└── mame2003\            
+    └── roms\
+        └── kinst.zip
+        └── kinst\
+            └── kinst.chd
+```
+
+The samples files, though, should be placed into the system directory
+
+```
+system
+└── mame2003-plus/
+    ├── artwork/
+    ├── **samples/** armora.zip ... zektor.zip (samples .zip files)
+    └── hiscore.dat
+```
 
 #### Paprium
 To run this game, the following files must be present. Additionally, upon launching the game for the first time, you will be prompted to select your preferred language. Once selected, the game requires a restart, and this preference will be saved for future sessions.
