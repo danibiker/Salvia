@@ -1,0 +1,58 @@
+name: PX68K CI
+on: [push, pull_request]
+jobs:
+  linux-c68k:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: build with c68k
+      run: make -j$(getconf _NPROCESSORS_ONLN) C68K=1
+
+  linux-musashi:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: build with musashi
+      run: make -j$(getconf _NPROCESSORS_ONLN) C68K=0
+
+  windows-c68k:
+    runs-on: windows-latest
+    steps:
+    - uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: >-
+          base-devel
+          gcc
+          git
+          make
+          zip
+          mingw-w64-x86_64-toolchain
+          mingw-w64-x86_64-ntldd
+          mingw-w64-x86_64-zlib
+          mingw-w64-x86_64-pkg-config
+    - uses: actions/checkout@v4
+    - name: windows build with c68k
+      shell: msys2 {0}
+      run: make -j8 C68K=1
+
+  windows-musashi:
+    runs-on: windows-latest
+    steps:
+    - uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: >-
+          base-devel
+          gcc
+          git
+          make
+          zip
+          mingw-w64-x86_64-toolchain
+          mingw-w64-x86_64-ntldd
+          mingw-w64-x86_64-zlib
+          mingw-w64-x86_64-pkg-config
+    - uses: actions/checkout@v4
+    - name: windows build with c68k
+      shell: msys2 {0}
+      run: make -j8 C68K=0
