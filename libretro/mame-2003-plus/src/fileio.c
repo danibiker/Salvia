@@ -799,7 +799,12 @@ static INLINE void compose_path(char *output, const char *gamename, const char *
 		strcat(output, gamename);
 		if (filename)
 		{
-			strcat(output, "/");
+			/* Use the platform default separator here. On Xbox 360 the kernel/XDK
+			   file APIs do NOT normalize forward slashes to backslashes (desktop
+			   Win32 does), so a mixed path like "game:\roms\kinst/kinst.chd" fails
+			   to open. Hardcoding '/' broke loading CHDs (and any loose file kept in
+			   a per-game subdirectory) on Xbox. */
+			strcat(output, PATH_DEFAULT_SLASH());
 			filename_base = &output[strlen(output)];
 		}
 	}
