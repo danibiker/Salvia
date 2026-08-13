@@ -481,6 +481,8 @@ if you want manually generate the titles for each game, a script is provided in 
 
 <img width="655" height="230" alt="image" src="https://github.com/user-attachments/assets/ee3a2e89-5134-4509-b290-085b1c0be87e" />
 
-
 # Compiling
 [see COMPILING.md](COMPILING.md)
+
+# License
+This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
