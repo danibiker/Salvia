@@ -26,9 +26,11 @@
  */
 
 #include <sys/stat.h>
+#ifndef _WIN32
 #include <sys/time.h>
-#include <sys/types.h>
 #include <strings.h>
+#endif
+#include <sys/types.h>
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -42,6 +44,10 @@
 
 #include "common.h"
 #include "dosio.h"
+
+#ifdef _WIN32
+__declspec(dllimport) unsigned long __stdcall GetTickCount(void);
+#endif
 
 /*-----
  *
@@ -72,7 +78,7 @@ struct internal_file
 };
 
 #define ptrtohandle(h)							\
-    ((struct internal_handle *)((void *)(h) - sizeof(struct internal_handle)))
+    ((struct internal_handle *)((char *)(h) - sizeof(struct internal_handle)))
 
 #define isfixed(h)							\
     ((ptrtohandle(h)->p == (h)) ? 1 : 0)
@@ -91,10 +97,14 @@ struct internal_file
 
 uint32_t FAKE_GetTickCount(void)
 {
+#ifdef _WIN32
+	return GetTickCount();
+#else
 	struct timeval tv;
 
 	gettimeofday(&tv, 0);
 	return tv.tv_usec / 1000 + tv.tv_sec * 1000;
+#endif
 }
 
 static void *local_lock(void *h)
@@ -145,7 +155,7 @@ static void *local_free(void *h)
 		return NULL;
 	if (!isfixed(h))
 		return NULL;
-	ih = (void*)(h - sizeof(struct internal_handle));
+	ih = (struct internal_handle *)((char *)h - sizeof(struct internal_handle));
 	if (ih->p == &ih[1])
 	{
 		free(ih);

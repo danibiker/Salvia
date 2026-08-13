@@ -964,6 +964,7 @@ void WinDraw_DrawMenu(int menu_state, int mkey_pos, int mkey_y, int *mval_y)
 		if (drv >= 0  && mval_y[i + mkey_pos] == 0)
 		{
 			char *p;
+			char ptr[PATH_MAX];
 			if (drv < 2)
 				p = Config.FDDImage[drv];
 			else
@@ -974,7 +975,6 @@ void WinDraw_DrawMenu(int menu_state, int mkey_pos, int mkey_y, int *mval_y)
 			else
 			{
 				/* 先頭のカレントディレクトリ名を表示しない */
-				char ptr[PATH_MAX];
 				if (!strncmp(cur_dir_str, p, cur_dir_slen))
 					strncpy(ptr, p + cur_dir_slen, sizeof(ptr));
 				else

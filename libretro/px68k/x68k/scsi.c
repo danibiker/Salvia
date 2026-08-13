@@ -37,12 +37,20 @@ void SCSI_Init(void)
 	uint8_t tmp;
 	memset(SCSIIPL, 0, 0x2000);
 	memcpy(&SCSIIPL[0x20], SCSIIMG, sizeof(SCSIIMG));
+	/* Same rule as the IPL ROM (see WinX68k_LoadROMs): SCSIIPL is executed
+	 * via the CPU fetch (*(uint16_t*)), and SCSIIMG is already in native
+	 * (big-endian) 68000 word order.  Byte-swapping it is only needed on
+	 * little-endian so those native word fetches read correctly; on
+	 * big-endian the swap corrupts the SCSI IOCS routines that Human68k/
+	 * games call at $ea0000 -> execution jumps into garbage. */
+#ifndef MSB_FIRST
 	for (i=0; i<0x2000; i+=2)
 	{
 		tmp = SCSIIPL[i];
 		SCSIIPL[i] = SCSIIPL[i+1];
 		SCSIIPL[i+1] = tmp;
 	}
+#endif
 }
 
 void SCSI_Cleanup(void) { }
@@ -50,5 +58,11 @@ void FASTCALL SCSI_Write(uint32_t adr, uint8_t data) { }
 
 uint8_t FASTCALL SCSI_Read(uint32_t adr)
 {
+	/* Native byte order on big-endian (SCSIIPL is not byte-swapped there),
+	 * matching the CPU fetch and the write-side convention. */
+#ifdef MSB_FIRST
+	return SCSIIPL[adr & 0x1fff];
+#else
 	return SCSIIPL[(adr^1)&0x1fff];
+#endif
 }

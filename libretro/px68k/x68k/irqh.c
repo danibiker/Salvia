@@ -44,8 +44,8 @@ static uint32_t FASTCALL IRQH_DefaultVector(uint8_t irq)
 
 void IRQH_IRQCallBack(uint8_t irq)
 {
-	IRQH_IRQ[irq&7] = 0;
 	int i;
+	IRQH_IRQ[irq&7] = 0;
 
 #if defined (HAVE_CYCLONE)
 	m68k.irq =0;

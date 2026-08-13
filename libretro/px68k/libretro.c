@@ -4,7 +4,9 @@
 #include <ctype.h>
 #include <string.h>
 #include <math.h>
+#ifndef _WIN32
 #include <strings.h>
+#endif
 
 #include <libretro.h>
 #include <libretro_core_options.h>
@@ -254,7 +256,9 @@ static bool is_path_absolute(const char* path)
 
 static void extract_basename(char *buf, const char *path, size_t size)
 {
-   const char *base = strrchr(path, '/');
+   const char *base;
+   char *ext;
+   base = strrchr(path, '/');
    if (!base)
       base = strrchr(path, '\\');
    if (!base)
@@ -266,7 +270,7 @@ static void extract_basename(char *buf, const char *path, size_t size)
    strncpy(buf, base, size - 1);
    buf[size - 1] = '\0';
 
-   char *ext = strrchr(buf, '.');
+   ext = strrchr(buf, '.');
    if (ext)
       *ext = '\0';
 }
@@ -384,6 +388,14 @@ static void update_variable_disk_drive_swap(void)
 
 static bool set_eject_state(bool ejected)
 {
+   /* Refresh the active drive from the px68k_disk_drive option here too, not
+    * only in get_eject_state(): the frontend's swap sequence is
+    * set_eject_state(true) -> set_image_index() -> set_eject_state(false)
+    * and may never call get_eject_state(), so without this the disk change
+    * would keep targeting the previous drive (default FDD1) and choosing the
+    * drive from the option would have no effect. */
+   update_variable_disk_drive_swap();
+
    if (disk.index == disk.total_images)
       return true; /* Frontend is trying to set "no disk in tray" */
 
@@ -610,6 +622,9 @@ static void parse_cmdline(const char *argv)
                 *... do something with the word ... */
                for (c2 = 0, p2 = start_of_word; p2 < p; p2++, c2++)
                   ARGUV[ARGUC][c2] = (unsigned char) *p2;
+               ARGUV[ARGUC][c2] = '\0'; /* terminate: ARGUV is reused across
+                                         * loads, a shorter token would keep
+                                         * the previous game's path tail */
 
                ARGUC++;
 
@@ -624,6 +639,7 @@ static void parse_cmdline(const char *argv)
                 *... do something with the word ... */
                for (c2 = 0, p2 = start_of_word; p2 <p; p2++, c2++)
                   ARGUV[ARGUC][c2] = (unsigned char) *p2;
+               ARGUV[ARGUC][c2] = '\0'; /* terminate (see IN_STRING above) */
 
                ARGUC++;
 
@@ -640,6 +656,8 @@ static bool read_m3u(const char *file)
    unsigned index = 0;
    char line[MAX_PATH];
    char name[MAX_PATH];
+   char *carriage_return;
+   char *newline;
    FILE *f = fopen(file, "r");
 
    if (!f)
@@ -650,11 +668,11 @@ static bool read_m3u(const char *file)
       if (line[0] == '#')
          continue;
 
-      char *carriage_return = strchr(line, '\r');
+      carriage_return = strchr(line, '\r');
       if (carriage_return)
          *carriage_return = '\0';
 
-      char *newline = strchr(line, '\n');
+      newline = strchr(line, '\n');
       if (newline)
          *newline = '\0';
 
@@ -824,8 +842,14 @@ entry point) */
    {
 		p1 = (uint16_t *)(&IPL[i]);
 		p2 = p1 + 1;
-		/* xxx: works only for little endian guys */
+		/* IPL still holds the raw (unswapped) ROM bytes here.  The SCSI
+		 * boot pointer word 0x00fc reads as 0xfc00 through a 16-bit load
+		 * on little-endian but as 0x00fc on big-endian. */
+#ifdef MSB_FIRST
+		if (*p1 == 0x00fc && *p2 == 0x0000)
+#else
 		if (*p1 == 0xfc00 && *p2 == 0x0000)
+#endif
       {
 			scsi = 1;
 			break;
@@ -872,11 +896,18 @@ static int WinX68k_LoadROMs(void)
    /* if SCSI IPL, SCSI BIOS is established around $fc0000 */
 	WinX68k_SCSICheck();
 
+	/* The CPU fetches opcodes from IPL via *(uint16_t*)PC, which is a
+	 * native load.  On little-endian the ROM (stored MSB-first) must be
+	 * byte-swapped so those loads yield the correct 68000 words; on
+	 * big-endian the raw ROM order is already correct, so skip the swap
+	 * (doing it would feed the CPU byte-swapped opcodes -> no boot). */
+#ifndef MSB_FIRST
 	for (i = 0; i < 0x40000; i += 2) {
 		tmp = IPL[i];
 		IPL[i] = IPL[i + 1];
 		IPL[i + 1] = tmp;
 	}
+#endif
 
 	fp = file_open_c((char *)FONTFILE);
 	if (fp == 0)
@@ -920,13 +951,31 @@ void WinX68k_Reset(void)
    C68k_Set_Reg(&C68K, C68K_A7, (IPL[0x30001]<<24)|(IPL[0x30000]<<16)|(IPL[0x30003]<<8)|IPL[0x30002]);
    C68k_Set_Reg(&C68K, C68K_PC, (IPL[0x30005]<<24)|(IPL[0x30004]<<16)|(IPL[0x30007]<<8)|IPL[0x30006]);
 #endif
+   /* Initial SSP/PC live at IPL offset 0x30000 (mapped to $ff0000).  The
+    * little-endian layout stores each 16-bit half byte-swapped, hence the
+    * (hi,lo) index juggling below.  On big-endian the IPL keeps its native
+    * ROM order (no swap in WinX68k_LoadROMs), so read the 32-bit values in
+    * straight big-endian byte order instead. */
+#ifdef MSB_FIRST
+   C68k_Set_AReg(&C68K, 7, (IPL[0x30000]<<24)|(IPL[0x30001]<<16)|(IPL[0x30002]<<8)|IPL[0x30003]);
+   C68k_Set_PC(&C68K, (IPL[0x30004]<<24)|(IPL[0x30005]<<16)|(IPL[0x30006]<<8)|IPL[0x30007]);
+#else
    C68k_Set_AReg(&C68K, 7, (IPL[0x30001]<<24)|(IPL[0x30000]<<16)|(IPL[0x30003]<<8)|IPL[0x30002]);
    C68k_Set_PC(&C68K, (IPL[0x30005]<<24)|(IPL[0x30004]<<16)|(IPL[0x30007]<<8)|IPL[0x30006]);
+#endif
 #elif defined (HAVE_MUSASHI)
    m68k_pulse_reset();
 
+   /* Same IPL reset-vector byte order fix as the C68K path above: native
+    * big-endian order on MSB_FIRST (IPL is not byte-swapped there), the
+    * little-endian (hi,lo)-juggled order otherwise. */
+#ifdef MSB_FIRST
+   m68k_set_reg(M68K_REG_A7, (IPL[0x30000]<<24)|(IPL[0x30001]<<16)|(IPL[0x30002]<<8)|IPL[0x30003]);
+   m68k_set_reg(M68K_REG_PC, (IPL[0x30004]<<24)|(IPL[0x30005]<<16)|(IPL[0x30006]<<8)|IPL[0x30007]);
+#else
    m68k_set_reg(M68K_REG_A7, (IPL[0x30001]<<24)|(IPL[0x30000]<<16)|(IPL[0x30003]<<8)|IPL[0x30002]);
    m68k_set_reg(M68K_REG_PC, (IPL[0x30005]<<24)|(IPL[0x30004]<<16)|(IPL[0x30007]<<8)|IPL[0x30006]);
+#endif
 #endif /* HAVE_C68K */ /* HAVE_MUSASHI */
 
    Memory_Init();
@@ -1000,7 +1049,7 @@ static int pmain(int argc, char *argv[])
    {
       WinX68k_Cleanup();
       WinDraw_Cleanup();
-      exit (1);
+      return 1;
    }
 
    /* before moving to WinDraw_Init() */
@@ -1037,6 +1086,22 @@ static int pmain(int argc, char *argv[])
    DSound_Play();
 
    /* apply defined command line settings */
+   /* Detach any disk/HD image inherited from a previously loaded game.
+    * With save_fdd_path / save_hdd_path enabled, LoadConfig() above
+    * restored the previous game's FDD/HD images from the .ini (and the
+    * global Config keeps them across loads anyway).  If we only overwrote
+    * the single slot this game provides, a floppy game would still boot
+    * the previous game's HDD image (SASI/SCSI boots before FDD), or keep
+    * its second floppy in drive 1.  Clear everything first so ONLY the
+    * media set from this game's command line below stays attached.
+    * Skipped for argc==0 (no content) to preserve standalone behaviour. */
+   if (argc >= 2)
+   {
+      int _d;
+      for (_d = 0; _d < 2;  _d++) Config.FDDImage[_d][0] = '\0';
+      for (_d = 0; _d < 16; _d++) Config.HDImage[_d][0]  = '\0';
+   }
+
    if(argc == 3 && argv[1][0] == '-' && argv[1][1] == 'h')
       strcpy(Config.HDImage[0], argv[2]);
    else
@@ -1761,8 +1826,50 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info
 
 void retro_unload_game(void)
 {
+   int _d;
+
    RPATH[0]    = '\0';
-   firstcall   = 0;
+
+   /* Release the current content's floppy media before anything else.
+    * retro_unload_game must return all 4 drives to the same clean state as
+    * a fresh core boot; leaving it only to retro_deinit meant that when the
+    * frontend reloads content (especially a multi-disk m3u) the disk image
+    * buffers leaked and stale disks stayed "inserted" in FDD0..3.
+    *   - FDD_Cleanup() ejects+frees every drive/format (DIM/D88/XDF), with
+    *     write-back for modified images (idempotent: X_Eject no-ops on an
+    *     already-empty drive, so a later retro_deinit->FDD_Cleanup is safe).
+    *   - FDD_Init() zeroes the FDD hardware struct and the image pointers.
+    *   - Config FDD/HD paths are cleared so nothing is re-mounted from a
+    *     stale slot. */
+   FDD_Cleanup();
+   FDD_Init();
+   for (_d = 0; _d < 2;  _d++) Config.FDDImage[_d][0] = '\0';
+   for (_d = 0; _d < 16; _d++) Config.HDImage[_d][0]  = '\0';
+
+   /* Re-arm the one-shot machine boot so the NEXT content load runs
+    * pre_main() again (m68000_init + WinX68k_LoadROMs + WinX68k_Reset)
+    * against freshly allocated buffers.  Salvia does
+    * retro_unload_game() + retro_deinit() + retro_init() + retro_load_game()
+    * between games; retro_deinit() frees MEM/IPL/FONT (WinX68k_Cleanup)
+    * and retro_load_game() malloc's them again at new addresses.
+    * Leaving firstcall at 0 skipped the re-boot, so the C68K fetch table
+    * kept pointing at the previous (now freed) MEM -> access violation in
+    * C68k_Exec on the first retro_run() of the second game.
+    * ARGUC/PARAMCOUNT are one-shot accumulators as well: reset them so the
+    * next command line is parsed and rebuilt from scratch instead of being
+    * appended after the previous game's arguments. */
+   firstcall   = 1;
+   ARGUC       = 0;
+   PARAMCOUNT  = 0;
+   /* pre_main() decides whether the content came from a cmd/m3u (use the
+    * parsed ARGUV) or is a single file (use RPATH) with
+    *   Only1Arg = strcmp(ARGUV[0], "px68k") ? 1 : 0;
+    * A cmd/m3u load leaves ARGUV[0] == "px68k".  A following single .dim/.hdf
+    * never runs parse_cmdline, so without clearing it the stale "px68k" makes
+    * Only1Arg 0 while ARGUC is 0 -> no options are built -> pmain() gets no
+    * disk and the second game boots with an empty drive.  Clear ARGUV[0] so a
+    * single-file load is detected correctly (a real cmd/m3u rewrites it). */
+   ARGUV[0][0] = '\0';
 }
 
 unsigned retro_get_region(void)
@@ -1837,7 +1944,7 @@ void retro_init(void)
       strcpy(retro_browse_conf, retro_browse_directory);
 
    if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt))
-      exit(0);
+      return;
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE, &rumble) && rumble.set_rumble_state)
       rumble_cb = rumble.set_rumble_state;

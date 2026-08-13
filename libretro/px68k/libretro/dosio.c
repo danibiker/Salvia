@@ -31,7 +31,7 @@
  */
 
 #include <stdint.h>
-#ifndef USE_LIBRETRO_VFS
+#if !defined(USE_LIBRETRO_VFS) && !defined(_WIN32)
 #include <sys/param.h>
 #endif
 

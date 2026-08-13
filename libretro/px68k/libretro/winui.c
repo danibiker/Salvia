@@ -30,7 +30,9 @@
 #include <stdint.h>
 #include <sys/stat.h>
 #include <errno.h>
+#ifndef _WIN32
 #include <strings.h>
+#endif
 
 #include "common.h"
 #include "keyboard.h"

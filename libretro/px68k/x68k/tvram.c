@@ -86,7 +86,15 @@ static INLINE void TVRAM_WriteByte(uint32_t adr, uint8_t data)
 
 static INLINE void TVRAM_WriteByteMask(uint32_t adr, uint8_t data)
 {
-	data = (TVRAM[adr] & CRTC_Regs[0x2e + ((adr^1) & 1)]) | (data & (~CRTC_Regs[0x2e + ((adr ^ 1) & 1)]));
+	/* Mask register is selected by the byte's logical parity.  adr is the
+	 * storage address (byte-swapped only on little-endian), so recover the
+	 * logical low bit accordingly. */
+#ifndef MSB_FIRST
+	uint32_t mp = (adr ^ 1) & 1;
+#else
+	uint32_t mp = adr & 1;
+#endif
+	data = (TVRAM[adr] & CRTC_Regs[0x2e + mp]) | (data & (~CRTC_Regs[0x2e + mp]));
 	if (TVRAM[adr] != data)
 	{
 		TextDirtyLine[(((adr&0x1ffff)/128)-TextScrollY)&1023] = 1;
@@ -128,7 +136,15 @@ void FASTCALL TVRAM_Write(uint32_t adr, uint8_t data)
 	{
 		uint32_t *ptr = (uint32_t *)TextDrawPattern;
 		uint32_t tvram_addr = adr & 0x1ffff;
+		/* Column position in the expanded work buffer.  The ^1 undoes the
+		 * little-endian TVRAM byte swap; on big-endian TVRAM is stored
+		 * native (see TVRAM_Read/Write), so applying it would swap adjacent
+		 * character columns pairwise -> scrambled OS/loader text. */
+#ifndef MSB_FIRST
 		uint32_t workadr = ((adr & 0x1ff80) + ((adr ^ 1) & 0x7f)) << 3;
+#else
+		uint32_t workadr = ((adr & 0x1ff80) + (adr & 0x7f)) << 3;
+#endif
 		uint8_t pat = TVRAM[tvram_addr + 0x60000];
 		uint32_t t0    = ptr[(pat * 2) + 1536];
 		uint32_t t1    = ptr[(pat * 2 + 1) + 1536];
@@ -164,7 +180,13 @@ void FASTCALL TVRAM_RCUpdate(void)
 
 	for (i = 0; i < 512; i++, adr++)
    {
+		/* Native TVRAM order on big-endian: no byte-swap on the read
+		 * address (matches TVRAM_Read/Write and the expansion above). */
+#ifndef MSB_FIRST
 		tadr = adr ^ 1;
+#else
+		tadr = adr;
+#endif
 
 		pat = TVRAM[tadr + 0x60000];
 		t0 = ptr[(pat * 2) + 1536];

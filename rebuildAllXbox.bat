@@ -15,7 +15,7 @@ Release_Gambatte Release_Nestopia Release_Snes9x Release_Snes9x_latest ^
 Release_vbanext Release_picodrive Release_prboom ReleaseTyrQuake Release_pcsxr_360 ^
 Release_3DOX Release_Wonderswan Release_VirtualBoy Release_DosboxPure Release_mame ^
 Release_beetle_lynx Release_atari800 Release_c64frodo Release_c64frodoSC ^
-Release_beetle_ngp Release_fbanext Release_finalburn 
+Release_beetle_ngp Release_x68k Release_fbanext Release_finalburn 
 
 md Distro360
 

@@ -1,7 +1,9 @@
 #ifndef	__NP2_WIN32EMUL_H__
 #define	__NP2_WIN32EMUL_H__
 
+#ifndef _WIN32
 #include <sys/param.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -13,6 +15,10 @@
 
 #ifndef FASTCALL
 #define FASTCALL
+#endif
+
+#ifdef _MSC_VER
+#include <compat/msvc.h>
 #endif
 
 #ifndef	MAX_PATH

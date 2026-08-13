@@ -480,6 +480,8 @@ int ListMenu::getCartForSystem(int systemid){
 			return cart_mame;
 		case 76:
 			return cart_zx;
+		case 79:
+			return cart_x68k;
 		case 105:
 			return cart_supergrafx;
 		case 113:
