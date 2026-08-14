@@ -1,62 +1,55 @@
-# hidmouse.xex — plugin residente de ratón USB HID para Salvia (Xbox 360)
+# hidmouse.xex — Resident USB HID mouse plugin for Salvia (Xbox 360)
 
-Plugin de DashLaunch que lee un ratón USB HID (boot protocol) hookeando la pila
-USB del kernel y **publica** los deltas crudos (X/Y/rueda + botones) en una struct
-global. **Salvia solo lee** esa struct y empuja los eventos a SDL.
+DashLaunch plugin that reads a USB HID mouse (boot protocol) by hooking into the kernel's USB stack and publishes the raw deltas (X/Y/wheel + buttons) in a global struct. Salvia only reads this struct and pushes the events to SDL.
 
-Como el plugin es **residente** (cargado por DashLaunch al arranque, nunca se
-descarga), el ratón sobrevive a los `XLaunchNewImage` de Salvia (cambio de core):
-**sin crash y sin replug** — que era el problema de hacerlo dentro del `.xex` de
-Salvia.
+Because the plugin is resident (loaded by DashLaunch at boot, never unloaded), the mouse survives Salvia's `XLaunchNewImage` (core swap): without crashing or replugging — which was the problem with doing it inside Salvia's `.xex` file.
 
-Requisitos: consola CFW (RGH/JTAG), build de dashboard **17559** (retail) o **17489**
-(devkit). Otras builds → no instala (fail-safe); añade sus direcciones en
-`g_builds[]` de `main.cpp`.
+Requirements: CFW console (RGH/JTAG), dashboard build **17559** (retail) or **17489** (devkit). Other builds will not install (fail-safe). Add its addresses to `g_builds[]` in `main.cpp`.
 
-## Ficheros
+## Files
 
-- `main.cpp` — driver (hooks USB + callback de interrupción + publicación en `g_hidMouseShared`).
-- `HidMouseShared.h` — contrato compartido (struct + magic + VA).
-- `Detours.h` — detour PPC (iMoD1998).
-- `xex.xml` — config del XEX (**sysdll**, base `0x81F00000`).
-- `hidmouse.vcxproj` — proyecto (DynamicLibrary `/dll`, XDK VS2010).
+- `main.cpp` — driver (USB hooks + interrupt callback + publish to `g_hidMouseShared`).
 
-## Compilar
+- `HidMouseShared.h` — shared contract (struct + magic + VA).
 
-1. Abre `hidmouse.vcxproj` con Visual Studio + XDK de Xbox 360 (toolset 2010).
-2. Necesitas `xextool.exe` en esta carpeta (cópialo de `x360remap\hiddriver` o de tu
-   XDK) para el post-build (`-r a -m r`, fija privilegios del `.xex`).
-3. No hace falta `xkelib` (resolvemos el kernel por ordinal con `GetProcAddress`). Si
-   tu entorno exige `xkelib` para construir un sysdll, copia esa carpeta de x360remap
-   y añádela al include/lib del proyecto.
-4. Compila → `hidmouse.xex`.
+- `Detours.h` — PPC detour (iMoD1998).
 
-## Localización del canal — SIN ajustes (nada de `.map`)
+- `xex.xml` — XEX configuration (**sysdll**, base `0x81F00000`).
 
-No hay que buscar ninguna dirección ni tocar constantes. El plugin es sysdll a base
-**fija `0x81F00000`** (xex.xml), y Salvia **escanea** esa imagen buscando la firma
-de la struct (`magic` + `version`). Así encuentra `g_hidMouseShared` esté donde esté
-dentro de la imagen del plugin, y **funciona aunque recompiles el plugin y cambie el
-layout**. Si el plugin no está cargado, el escaneo (protegido con SEH) simplemente no
-encuentra la firma → no-op, sin crash.
+- `hidmouse.vcxproj` — project (DynamicLibrary `/dll`, XDK VS2010).
 
-> Detalle: si algún día cambias `baseaddr` en `xex.xml`, actualiza `HIDMOUSE_PLUGIN_BASE`
-> en `HidMouseShared.h` y en el reader de Salvia (y `HIDMOUSE_SHARED_VERSION` si cambia
-> el layout de la struct). Con la base por defecto no hay nada que tocar.
+## Compile
 
-## Desplegar
+1. Open `hidmouse.vcxproj` with Visual Studio + Xbox 360 XDK (toolset 2010).
 
-1. Copia `hidmouse.xex` a `Hdd1:\` (o donde tengas los plugins).
-2. En **DashLaunch**, añádelo como plugin (`plugin1`…`plugin5` = ruta al `.xex`) y guarda.
-3. **Reinicia la consola** (los plugins se cargan al arranque).
-4. Conecta el ratón (si estaba antes del arranque, reconéctalo: hay una ventana de
-   *blackout* de ~15 s al inicio para no reclamar durante la enumeración de boot).
+2. You need `xextool.exe` in this folder (copy it from `x360remap\hiddriver` or your XDK) for post-build (`-r a -m r`, sets privileges for `.xex`).
 
-## Probar
+3. `xkelib` is not needed (we resolve the kernel by ordinal with `GetProcAddress`). If your environment requires `xkelib` to build a sysdll, copy that folder from x360remap
+and add it to the project's include/lib.
 
-- En Salvia, mueve el ratón → responde en el menú.
-- **Lanza cores y vuelve, varias veces, sin tocar el ratón** → el ratón sigue
-  funcionando (el plugin es residente), sin crash ni replug. Es la prueba clave.
-- Sin el plugin cargado → Salvia arranca normal y el ratón no va (fail-safe).
-- Debug: pon `HIDMOUSE_PLUGIN_DEBUG 1` en `main.cpp` para trazas por `OutputDebugStringA`
-  (visibles por XBDM).
+4. Compile → `hidmouse.xex`.
+
+## Channel location — NO adjustments (no `.map`)
+
+No need to look up any addresses or touch constants. The plugin is a sysdll with a fixed base value of `0x81F00000` (xex.xml), and Salvia scans that image looking for the struct signature (`magic` + `version`). This allows it to find `g_hidMouseShared` wherever it is located within the plugin image, and it works even if you recompile the plugin and change the layout. If the plugin isn't loaded, the scan (protected with SEH) simply won't find the signature, resulting in no operation and no crash.
+
+> Note: If you ever change `baseaddr` in `xex.xml`, update `HIDMOUSE_PLUGIN_BASE` in `HidMouseShared.h` and in the Salvia reader (and `HIDMOUSE_SHARED_VERSION` if the struct layout changes). With the default base, nothing needs to be changed.
+
+## Deployment
+
+1. Copy `hidmouse.xex` to `Hdd1:\` (or wherever your plugins are located).
+
+2. In **DashLaunch**, add it as a plugin (`plugin1`…`plugin5` = path to `.xex`) and save.
+
+3. **Restart the console** (plugins load on startup).
+
+4. Connect the mouse (if it was connected before startup, reconnect it: there is a ~15-second blackout window at startup to prevent it from claiming during boot enumeration).
+
+## Testing
+
+- In Salvia, move the mouse → it responds in the menu.
+
+- **Launch cores and return, several times, without touching the mouse** → the mouse continues to work (the plugin is resident), without crashing or replugging. This is the key test.
+
+- Without the plugin loaded → Salvia starts normally and the mouse does not work (fail-safe).
+- Debug: Add `HIDMOUSE_PLUGIN_DEBUG 1` to `main.cpp` for traces via `OutputDebugStringA` (visible via XDBDM).
