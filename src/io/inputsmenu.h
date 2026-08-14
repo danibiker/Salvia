@@ -551,7 +551,9 @@ void updateMenuScreen(TileMap &tileMap, GameMenu*& gameMenu, ListMenu &listMenu)
 	if (processInputs(gameMenu, listMenu, emu->generalConfig) == 1 && gameMenu->getEmuStatus() != EMU_STARTED){
 		//Draw the background
 		if (listMenu.animateBkg && bgType >= BG_HLSL && bgType < BG_NONE){
-			HLSLBackground_setActive(bgType - BG_HLSL + 1);
+			//El flag del fondo HLSL es estado retenido (se fija en setEmuStatus/
+			//arranque/callback del menu); aqui solo limpiamos el overlay para
+			//redibujar el menu con transparencia sobre el fondo GPU.
 			gameMenu->clearOverlay();
 		} else if (listMenu.animateBkg && bgType == BG_TILES){
 			tileMap.draw(gameMenu->overlay);

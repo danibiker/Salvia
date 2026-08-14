@@ -76,6 +76,19 @@ static LPDIRECT3DVERTEXBUFFER9 g_hlslBg_vb  = NULL;
 static LPDIRECT3DVERTEXDECLARATION9 g_hlslBg_vd = NULL;
 static int g_hlslBkg_active = 0;
 
+ // Declaracion global (debe ser un puntero a punteros)
+IDirect3DPixelShader9** pixelShaders = NULL;
+
+int have_vertexbuffer=0;
+int have_direct3dtexture=0;
+static float g_display_aspect_ratio = 0.0f; /* 0 = use native pixel ratio */
+static int g_display_fullscreen = 1; /* 1 = scale to fill screen, 0 = pixel perfect size */
+static int g_display_overflow   = 0; /* 1 = integer scale puede salirse de pantalla */
+static int g_display_scale_type = 0; /* 0=reduce,1=increase,2..6=escala fija 1x..5x */
+static int g_texture_width = 0;
+static int g_texture_height = 0;
+static int g_screen_rotation = 0; /* 0..3 = 0/90/180/270 deg CCW (libretro convention) */
+
 typedef struct { float x, y, z, rhw; float u, v; } HLSL_BG_VTX;
 
 static const D3DVERTEXELEMENT9 g_hlslBg_decl[] = {
@@ -202,6 +215,15 @@ void HLSLBackground_draw(LPDIRECT3DDEVICE9 dev)
 	IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
 	IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
 	IDirect3DDevice9_DrawPrimitive(dev, D3DPT_TRIANGLESTRIP, 0, 2);
+
+	/* Restaurar c1 = dims de la textura del juego (ver nota en win_d3d9.cpp:
+	 * el fondo debe dejar c1 intacto para el shader del juego). Los shaders del
+	 * juego leen c1 como textureDims; sin esto, al volver del menu el efecto
+	 * muestrea con la resolucion del backbuffer y "desaparece". */
+	if (g_texture_width > 0) {
+		float cGameDims[4] = { (float)g_texture_width, (float)g_texture_height, 0, 0 };
+		IDirect3DDevice9_SetPixelShaderConstantF(dev, 1, cGameDims, 1);
+	}
 }
 
 void HLSLBackground_shutdown(void)
@@ -281,19 +303,6 @@ struct private_yuvhwdata {
 	Uint8 *planes[3];
 };
 
- // Declaracion global (debe ser un puntero a punteros)
-IDirect3DPixelShader9** pixelShaders = NULL;
-
-int have_vertexbuffer=0;
-int have_direct3dtexture=0;
-static float g_display_aspect_ratio = 0.0f; /* 0 = use native pixel ratio */
-static int g_display_fullscreen = 1; /* 1 = scale to fill screen, 0 = pixel perfect size */
-static int g_display_overflow   = 0; /* 1 = integer scale puede salirse de pantalla */
-static int g_display_scale_type = 0; /* 0=reduce,1=increase,2..6=escala fija 1x..5x */
-static int g_texture_width = 0;
-static int g_texture_height = 0;
-static int g_screen_rotation = 0; /* 0..3 = 0/90/180/270 deg CCW (libretro convention) */
-
 /* UVs para el "single fullscreen triangle": 3 vertices por rotacion,
  *   v0 = TL (cubre la esquina TL del rect visible)
  *   v1 = 2x TR (TL + 2*(TR-TL))
@@ -326,6 +335,9 @@ static int g_current_effect = 0;
    o hacia afuera (negativo).  Se aplica via SDL_XBOX_SetOverscan. */
 static int g_overlay_overscan_x = 0;
 static int g_overlay_overscan_y = 0;
+
+/** Especifica la resolucion de pantalla que puede ser configurada*/
+static int g_screen_resolution = 0;
 
 /* Filtro de muestreo actual del s0 segun el efecto activo (LINEAR/POINT).
  * Lo mantiene XBOX_SetSampler0Filter cuando XBOX_SelectEffect lo decide.
@@ -497,6 +509,21 @@ VideoBootStrap XBOX_bootstrap = {
 	XBOX_Available, XBOX_CreateDevice
 };
 
+const static SDL_Rect
+	RECT_1280x720 = {0,0,1280,720},
+	RECT_1280x1024 = {0,0,1280,1024},
+	RECT_1024x768 = {0,0,1024,768},
+	RECT_800x600 = {0,0,800,600},
+	RECT_640x480 = {0,0,640,480};
+
+const static SDL_Rect * const vid_modes[] = {
+	&RECT_1280x720,
+	&RECT_1280x1024,
+	&RECT_1024x768,
+	&RECT_800x600,
+	&RECT_640x480,
+	NULL
+};
 
 int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat)
 {	 
@@ -527,8 +554,11 @@ int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat)
 
     ZeroMemory(&D3D_PP, sizeof(D3D_PP));
 
-    D3D_PP.BackBufferWidth = 1280;
-    D3D_PP.BackBufferHeight = 720;
+	if (vid_modes[g_screen_resolution] != NULL) {
+		D3D_PP.BackBufferWidth = vid_modes[g_screen_resolution]->w;
+		D3D_PP.BackBufferHeight = vid_modes[g_screen_resolution]->h;
+	}
+
     D3D_PP.BackBufferFormat = D3DFMT_X8R8G8B8;
     
     // En Xbox 360, estas opciones son recomendadas para rendimiento
@@ -571,26 +601,6 @@ int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat)
 
     return (D3D_Device) ? 1 : 0;
 }
-
-const static SDL_Rect
-	RECT_1280x720 = {0,0,1280,720},
-	RECT_800x600 = {0,0,800,600},
-	RECT_640x480 = {0,0,640,480},
-	RECT_512x384 = {0,0,512,384},
-	RECT_400x300 = {0,0,400,300},
-	RECT_320x240 = {0,0,320,240},
-	RECT_320x200 = {0,0,320,200};
-const static SDL_Rect *vid_modes[] = {
-	&RECT_1280x720,
-	&RECT_800x600,
-	&RECT_640x480,
-	&RECT_512x384,
-	&RECT_400x300,
-	&RECT_320x240,
-	&RECT_320x200,
-	NULL
-};
-
 
 SDL_Rect **XBOX_ListModes(_THIS, SDL_PixelFormat *format, Uint32 flags)
 {
@@ -832,6 +842,17 @@ void SDL_XBOX_SetRotation(int rotation)
 	g_screen_rotation = (rotation >= 0 && rotation <= 3) ? rotation : 0;
 	XBOX_UpdateVertexBuffer(g_texture_width, g_texture_height, g_display_aspect_ratio);
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
+}
+
+void SDL_XBOX_SetScreenResolution(int w, int h) {
+	int i = 0;
+	while (vid_modes[i] != NULL) {
+		if (vid_modes[i]->w == w && vid_modes[i]->h == h) {
+			g_screen_resolution = i;
+			return;
+		}
+		i++;
+	}
 }
 
 /* Forward decl for XBOX_UpdateOverlayVertices, defined below */ 
@@ -1096,6 +1117,9 @@ static void XBOX_DrawOverlay(LPDIRECT3DTEXTURE9 game_texture, int useAlphaFix)
 	 * que el overlay ha tocado (shader del s0 y filtro MIN/MAG del s0).
 	 * Los uniformes (textureDims en c1), la LUT del s1 (HQx/xBR) y los
 	 * blend modes los deja como estaban ya que el overlay no los modifica.
+	 * IMPORTANTE: esta invariante depende de que HLSLBackground_draw() (que
+	 * corre justo ANTES del overlay) restaure c1 tras dibujarse; si no, c1
+	 * quedaria con la resolucion del backbuffer y romperia el shader del juego.
 	 * Asi nos ahorramos un switch enorme + SetTexture+SetPixelShaderConstantF
 	 * por cada frame mientras el menu/HUD este activo. */
 	IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)game_texture);
@@ -1295,9 +1319,10 @@ SDL_Surface *XBOX_SetVideoMode(_THIS, SDL_Surface *current,
 	current->pitch = d3dlr.Pitch;
 	current->pixels = d3dlr.pBits;
 
-
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 	IDirect3DDevice9_Present(D3D_Device,NULL,NULL,NULL,NULL);
+
+	SDL_XBOX_SetScreenResolution(width, height);
  
 	/* We're done */
 	return(current);
@@ -1452,9 +1477,11 @@ static int XBOX_RenderSurface(_THIS, SDL_Surface *surface)
 
 	/* Draw overlay on top if enabled.
 	 * Pass g_hlslBkg_active so DrawOverlay can use the alpha-fixup shader
-	 * when the HLSL background is visible. */
+	 * when the HLSL background is visible.
+	 * g_hlslBkg_active es estado RETENIDO (lo fija el frontend en las
+	 * transiciones de estado / arranque / callback del menu); ya no se
+	 * resetea por-frame aqui. */
 	hlslWasActive = g_hlslBkg_active;
-	g_hlslBkg_active = 0;
 	XBOX_DrawOverlay(this->hidden->SDL_primary, hlslWasActive);
 
 	IDirect3DDevice9_Present(D3D_Device, NULL, NULL, NULL, NULL);
@@ -1538,7 +1565,7 @@ static void XBOX_UpdateRects(_THIS, int numrects, SDL_Rect *rects)
 	IDirect3DDevice9_Clear(D3D_Device, 0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0L);
 	XBOX_DrawMainQuad();
 	if (g_hlslBkg_active) HLSLBackground_draw(D3D_Device);
-	g_hlslBkg_active = 0;
+	/* g_hlslBkg_active es estado retenido; ya no se resetea por-frame. */
 	XBOX_DrawOverlay(this->hidden->SDL_primary, 0);
 
 	IDirect3DDevice9_Present(D3D_Device, NULL, NULL, NULL, NULL);

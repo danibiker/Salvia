@@ -161,14 +161,28 @@ class GameMenu : public Engine{
 	    bool isDebug();
 		FilePackage filePackage;
 		
+		// Fondo HLSL del menu como estado RETENIDO: activo solo en estados de
+		// menu y si animBG es un tipo HLSL. Se decide en las transiciones de
+		// estado (setEmuStatus) y al arrancar, no cada frame. La capa de render
+		// (Present) solo lee el flag; ya no lo resetea por-frame.
+		void applyMenuBackground(){
+			CfgLoader* cl = getCfgLoader();
+			if (!cl) return;
+			const int animBG = cl->configMain[cfg::animBG].valueInt;
+			const bool isMenu = (status == EMU_MENU || status == EMU_MENU_FILTER || status == EMU_MENU_IMAGE_VIEWER);
+			HLSLBackground_setActive((isMenu && animBG >= BG_HLSL && animBG < BG_NONE) ? (animBG - BG_HLSL + 1) : 0);
+		}
+
 		void setEmuStatus(int tmpStat){
 			if (status == EMU_MENU_IMAGE_VIEWER){
-				//No queremos volver al visor de imagenes 
+				//No queremos volver al visor de imagenes
 				lastStatus = EMU_MENU;
 			} else {
 				lastStatus = status;
 			}
 			status = tmpStat;
+			//Fondo HLSL del menu: estado retenido decidido en cada transicion
+			applyMenuBackground();
 			//Siempre que cambiemos de estado de emulacion,
 			//reseteamos los botones del joystick
 			joystick->inputs.clearAll();

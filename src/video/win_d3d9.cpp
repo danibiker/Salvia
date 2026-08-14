@@ -274,6 +274,16 @@ void HLSLBackground::draw() {
 	m_dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
 	m_dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
 	m_dev->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, 2);
+
+	/* Restaurar c1 = dims de la textura del juego. Los shaders del juego (HQ2X,
+	 * xBR, CRT, Sharp-Bilinear...) leen c1 como textureDims; si dejamos aqui la
+	 * resolucion del backbuffer, al volver del menu el efecto muestrea con
+	 * offsets erroneos y "desaparece". El fondo debe ser transparente al
+	 * pipeline del juego. */
+	if (g_tex_w > 0) {
+		float cGameDims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
+		m_dev->SetPixelShaderConstantF(1, cGameDims, 1);
+	}
 }
 
 void HLSLBackground::shutdown() {
@@ -1024,7 +1034,9 @@ void WinD3D9_Present(void)
         DrawMainQuad();
         if (g_hlslBkg_active) g_hlslBkg.draw();
         DrawOverlay();
-        g_hlslBkg_active = 0;
+        /* g_hlslBkg_active es estado RETENIDO (lo fija el frontend en las
+         * transiciones de estado / arranque / callback del menu); la capa de
+         * render solo lo LEE, ya no lo resetea por-frame. */
         g_dev->EndScene();
     }
 

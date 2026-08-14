@@ -1662,6 +1662,9 @@ int main(int argc, char *argv[]) {
 	curlClient.init();
 
 	nextFrameTime = Constant::getTicks();
+	//Estado inicial del fondo HLSL: el constructor fija EMU_MENU directo,
+	//saltandose setEmuStatus, asi que lo sincronizamos aqui una vez.
+	gameMenu->applyMenuBackground();
 	runGameLoop();
 	closeResources();
     return 0;

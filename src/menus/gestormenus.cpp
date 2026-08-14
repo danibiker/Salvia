@@ -14,6 +14,7 @@
 #include <http/achievements.h>
 #include <so/soutils.h>
 #include <cheats/cheatmanager.h>
+#include <video/HLSLBackground.h>
 
 
 SDL_Surface* GestorMenus::imgText;
@@ -350,7 +351,9 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	//En xbox siempre mostramos pantalla completa
 	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.fullscreen"), &refConfig->configMain[cfg::fullscreen].getBoolRef()));
 	#endif
-	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef()));
+	OpcionLista *listaBkg = new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef());
+	listaBkg->callback = &GestorMenus::selectBackground;
+	menuVideo->opciones.push_back(listaBkg);
 	
 	//--------Menu de overscan---------
 	menuOverscan = new Menu(LanguageManager::instance()->get("menu.video.overscan"), menuVideo);
@@ -809,6 +812,17 @@ void GestorMenus::loadAchievements() {
         menuAchievements->opciones.push_back(new OpcionAchievement(*currentAch));
     }
     resetIndexPos();
+}
+
+std::string GestorMenus::selectBackground(void* inst, void *index, void *values) {
+	//Cambio en vivo del fondo del menu (sin salir del menu). El estado retenido
+	//se decide en setEmuStatus/arranque; aqui reflejamos el nuevo animBG.
+	//Guard de rango: solo BG_HLSL..BG_NONE mapean a un shader de fondo; el resto
+	//(tiles/imagen/none) apaga el fondo GPU.
+	if (!index) return "";
+	const int idx = *static_cast<int*>(index);
+	HLSLBackground_setActive((idx >= BG_HLSL && idx < BG_NONE) ? (idx - BG_HLSL + 1) : 0);
+	return "";
 }
 
 std::string GestorMenus::setDefaultEmu(void* inst, void *index, void *values) {
@@ -1722,7 +1736,7 @@ void GestorMenus::updateButton(const SDL_Event &event, TipoKey tipoKey){
 	if (tipoKey == KEY_JOY_BTN){
 		joyNumber = event.button.which;
 		sdlbtn    = event.button.button;
-	} else if (tipoKey == KEY_JOY_AXIS){
+	} else if (tipoKey == KEY_JOY_HAT){
 		joyNumber = event.jhat.which;
 		sdlbtn    = event.jhat.value;
 	} else {

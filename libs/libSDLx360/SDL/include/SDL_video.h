@@ -437,6 +437,9 @@ extern DECLSPEC void SDL_XBOX_SetRotation(int rotation);
    con D3DUSAGE_CPU_CACHED_MEMORY) sobrevive al Reset, no se recrea. */
 extern DECLSPEC void SDL_XBOX_SetVSync(int enabled);
 
+/* Specify the main xbox resolution */
+extern void SDL_XBOX_SetScreenResolution(int w, int h);
+
 /*
  * Set the gamma correction for each of the color channels.
  * The gamma values range (approximately) between 0.1 and 10.0

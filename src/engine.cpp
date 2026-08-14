@@ -31,9 +31,7 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		// Forzar el driver GDI: SDL solo gestiona la ventana/eventos; el
 		// render lo hace nuestra capa D3D9 (no llamamos a SDL_Flip en PC).
 		SDL_putenv("SDL_VIDEODRIVER=windib");
-	#endif
-
-	#ifdef _XBOX
+	#elif defined(_XBOX)
 		HANDLE currrentThread = GetCurrentThread();
 		SetThreadPriority(currrentThread, THREAD_PRIORITY_NORMAL);
 		// Pinear el main thread (Salvia + retro_run + dynarec PSX del core libretro) a HW thread 0.
@@ -43,6 +41,10 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		//  - Salvia ya arranca en HW thread 0 por defecto; el pin solo garantiza que el
 		//    dispatcher no migre el thread bajo presion, no cambia el patron de ejecucion.
 		XSetThreadProcessor(currrentThread, CPU_THREAD);
+
+		video_width = cfgLoader->configMain[cfg::resolution_width].valueInt;
+		video_height = cfgLoader->configMain[cfg::resolution_height].valueInt;
+		SDL_XBOX_SetScreenResolution(video_width, video_height);
 	#endif
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
@@ -126,7 +128,6 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		}
 		memset(overlay->pixels, 0, overlay->pitch * overlay->h);
 		SDL_XBOX_SetOverlayEnabled(1);
-
 	}
 #else
 	overlay = gameScreen;
