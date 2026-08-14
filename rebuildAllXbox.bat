@@ -15,7 +15,7 @@ Release_Gambatte Release_Nestopia Release_Snes9x Release_Snes9x_latest ^
 Release_vbanext Release_picodrive Release_prboom ReleaseTyrQuake Release_pcsxr_360 ^
 Release_3DOX Release_Wonderswan Release_VirtualBoy Release_DosboxPure Release_mame ^
 Release_beetle_lynx Release_atari800 Release_c64frodo Release_c64frodoSC ^
-Release_beetle_ngp Release_x68k Release_fbanext Release_finalburn 
+Release_beetle_ngp Release_x68k Release_fbanext Release_finalburn Release_default
 
 md Distro360
 
@@ -43,6 +43,19 @@ echo.
 echo =======================================================
 echo [OK] TODOS LOS NUCLEOS COMPLETADOS
 echo =======================================================
+echo.
+echo =======================================================
+echo Compilando PLUGINS
+echo =======================================================
+
+echo [+] Procesando: hidmouse...
+msbuild "plugins\hidmouse\hidmouse.vcxproj" %MS_OPTS% /p:Configuration=Release > nul
+
+echo.
+echo =======================================================
+echo [OK] TODOS LOS PLUGINS COMPLETADOS
+echo =======================================================
+
 pause
 exit /b 0
 

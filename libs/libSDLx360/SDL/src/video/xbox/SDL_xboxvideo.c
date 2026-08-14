@@ -501,8 +501,16 @@ VideoBootStrap XBOX_bootstrap = {
 int XBOX_VideoInit(_THIS, SDL_PixelFormat *vformat)
 {	 
     // 1. TODAS las declaraciones de variables al principio
-    D3DCAPS9 caps; 
+    D3DCAPS9 caps;
     HRESULT hr;
+
+#ifdef SDL_XBOX_HIDMOUSE
+    /* Instala el lector de raton USB HID nativo (hooks de kernel). Idempotente
+     * y fail-safe: si el build de dashboard no esta soportado o la consola no
+     * es CFW, no instala nada y el raton queda inactivo. Se hace aqui, al
+     * inicializar el video, porque es un buen punto emparejado con VideoQuit. */
+    XBOX_HIDMouse_Init();
+#endif
 
     if (!D3D)
         D3D = Direct3DCreate9(D3D_SDK_VERSION);
@@ -1554,6 +1562,13 @@ int XBOX_SetColors(_THIS, int firstcolor, int ncolors, SDL_Color *colors)
 */
 void XBOX_VideoQuit(_THIS)
 {
+#ifdef SDL_XBOX_HIDMOUSE
+	 /* Retira los hooks de kernel del raton USB HID y libera los ratones aun
+	  * conectados. OBLIGATORIO antes de que el .xex se descargue: si no, el
+	  * kernel saltaria a memoria liberada al conectar/desconectar cualquier
+	  * dispositivo USB. Idempotente. */
+	 XBOX_HIDMouse_Quit();
+#endif
 	 HLSLBackground_shutdown();
 	 XBOX_DestroyOverlay();
 	 if (this->hidden->SDL_primary)

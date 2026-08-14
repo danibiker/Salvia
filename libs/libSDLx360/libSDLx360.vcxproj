@@ -928,7 +928,7 @@
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <CompileAs>CompileAsC</CompileAs>
+      <CompileAs>Default</CompileAs>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <BufferSecurityCheck>true</BufferSecurityCheck>
@@ -1239,7 +1239,7 @@
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <CompileAs>CompileAsC</CompileAs>
+      <CompileAs>Default</CompileAs>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -1512,6 +1512,7 @@
     <ClCompile Include="SDL\src\audio\xbox\SDL_xboxaudio.c" />
     <ClCompile Include="SDL\src\video\xbox\SDL_xboxevents.c" />
     <ClCompile Include="SDL\src\video\xbox\SDL_xboxmouse.c" />
+    <ClCompile Include="SDL\src\video\xbox\SDL_xboxhidmouse.cpp" />
     <ClCompile Include="SDL\src\video\xbox\SDL_xboxvideo.c" />
     <ClCompile Include="SDL\SDL.c" />
     <ClCompile Include="SDL\src\events\SDL_active.c" />

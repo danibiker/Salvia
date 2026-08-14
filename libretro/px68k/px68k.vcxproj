@@ -70,9 +70,15 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="m68000\m68000.c" />
-    <ClCompile Include="m68000\musashi\m68kcpu.c" />
-    <ClCompile Include="m68000\musashi\m68kops.c" />
-    <ClCompile Include="m68000\musashi\softfloat\softfloat.c" />
+    <ClCompile Include="m68000\musashi\m68kcpu.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="m68000\musashi\m68kops.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="m68000\musashi\softfloat\softfloat.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="x68k\adpcm.c" />
     <ClCompile Include="x68k\bg.c" />
     <ClCompile Include="x68k\crtc.c" />
@@ -206,7 +212,7 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_XBOX;__LIBRETRO__;HAVE_C68K;C68K_NO_JUMP_TABLE;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;MSB_FIRST</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;__LIBRETRO__;HAVE_C68K;C68K_NO_JUMP_TABLE;__HAVE_MUSASHI;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;MSB_FIRST;inline=_inline</PreprocessorDefinitions>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <StringPooling>true</StringPooling>

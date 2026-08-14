@@ -45,3 +45,46 @@ void stub(void)
 {
 	// do something
 }
+
+/* Drena el raton USB HID nativo (implementado en SDL_xboxhidmouse.cpp) y
+ * despacha los eventos a SDL. Llamada desde mouse_update() en
+ * SDL_xboxevents.c. Se define siempre; su cuerpo solo actua cuando
+ * SDL_XBOX_HIDMOUSE esta activo (builds Xbox 360 con el toggle habilitado). */
+void XBOX_MouseUpdateHID(void)
+{
+#ifdef SDL_XBOX_HIDMOUSE
+	static Uint8 prev_buttons = 0;
+	/* Boot-mouse -> boton SDL: bit0=izq(1), bit2=medio(2), bit1=der(3). */
+	static const unsigned char sdl_btn_mask[3] = { 0x01, 0x04, 0x02 };
+	int dx = 0, dy = 0, dwheel = 0;
+	unsigned int buttons = 0;
+	Uint8 changed;
+	int i;
+
+	XBOX_HIDMouse_Drain(&dx, &dy, &dwheel, &buttons);
+
+	if (dx || dy)
+		SDL_PrivateMouseMotion(0 /*buttonstate*/, 1 /*relative*/, (Sint16)dx, (Sint16)dy);
+
+	changed = (Uint8)(buttons ^ prev_buttons);
+	for (i = 0; i < 3; ++i) {
+		if (changed & sdl_btn_mask[i])
+			SDL_PrivateMouseButton(
+				(buttons & sdl_btn_mask[i]) ? SDL_PRESSED : SDL_RELEASED,
+				(Uint8)(i + 1), 0, 0);
+	}
+	prev_buttons = (Uint8)buttons;
+
+	/* Rueda: un pulso press+release por muesca (convencion SDL 1.2). */
+	while (dwheel > 0) {
+		SDL_PrivateMouseButton(SDL_PRESSED,  SDL_BUTTON_WHEELUP, 0, 0);
+		SDL_PrivateMouseButton(SDL_RELEASED, SDL_BUTTON_WHEELUP, 0, 0);
+		--dwheel;
+	}
+	while (dwheel < 0) {
+		SDL_PrivateMouseButton(SDL_PRESSED,  SDL_BUTTON_WHEELDOWN, 0, 0);
+		SDL_PrivateMouseButton(SDL_RELEASED, SDL_BUTTON_WHEELDOWN, 0, 0);
+		++dwheel;
+	}
+#endif
+}

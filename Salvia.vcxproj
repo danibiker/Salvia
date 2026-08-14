@@ -289,6 +289,14 @@
       <Configuration>Release_c64frodo</Configuration>
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_default|Win32">
+      <Configuration>Release_default</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_default|Xbox 360">
+      <Configuration>Release_default</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release_DosboxPure|Win32">
       <Configuration>Release_DosboxPure</Configuration>
       <Platform>Win32</Platform>
@@ -578,6 +586,11 @@
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_default|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_x68k|Xbox 360'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
@@ -731,6 +744,9 @@
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_default|Win32'" Label="Configuration">
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_x68k|Win32'" Label="Configuration">
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
@@ -879,6 +895,9 @@
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_default|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_x68k|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -973,6 +992,7 @@
     <EMU_LIB_ATARI800>atari-800</EMU_LIB_ATARI800>
     <EMU_LIB_C64FRODO>frodo-c64</EMU_LIB_C64FRODO>
     <EMU_LIB_X68K>px68k</EMU_LIB_X68K>
+    <EMU_LIB_DEFAULT>default</EMU_LIB_DEFAULT>
     <SolutionName>Salvia</SolutionName>
     <BUILD_DIR>$(ProjectDir)build\$(Configuration)\$(Platform)\</BUILD_DIR>
     <COMMON_PREPROCESSOR>_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB</COMMON_PREPROCESSOR>
@@ -982,7 +1002,7 @@
     <COMMON_LIBS_XBOX_RELEASE>xnet.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xaudio2.lib;xmcore.lib;libSDLx360.lib;SDL_ttf360.lib;SDL_image.lib;libcurl.lib;wolfssl.lib;rcheevos.lib;zlib.lib;minizip.lib</COMMON_LIBS_XBOX_RELEASE>
     <COMMON_LIBS_WIN>SDLmain.lib;SDL.lib;SDL_ttf.lib;SDL_image.lib;libcurl.lib;wolfssl.lib;ws2_32.lib;advapi32.lib;bcrypt.lib;Shell32.lib;winmm.lib;d3d9.lib;d3dx9.lib;rcheevos.lib;zlib.lib;minizip.lib</COMMON_LIBS_WIN>
     <ADDITIONAL_LIB_DIRS_WIN>$(ProjectDir)libs\SDL_ttf-2.0.11\lib\x86;$(ProjectDir)libs\SDL-1.2.14\lib;$(ProjectDir)libs\SDL_image-1.2.12\lib\x86;$(ProjectDir)libs\curl\projects\Windows\VC10\lib\Win32\Release;$(DXSDK_DIR)Lib\x86;$(ProjectDir)libs\wolfssl\IDE\XBOX360\Release\Win32;$(ProjectDir)libs\rcheevos\Release\Win32;$(ProjectDir)libs\minizip\Release\Win32;$(ProjectDir)libs\zlib\Release\Win32</ADDITIONAL_LIB_DIRS_WIN>
-    <ADDITIONAL_LIB_DIRS_XBOX>libs\libSDLx360\Release;libs\SDL_ttf360\Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\wolfssl\IDE\XBOX360\Release\Xbox 360;$(ProjectDir)libs\curl\projects\Windows\VC10\lib\Xbox 360\Release;$(ProjectDir)libs\rcheevos\Release\Xbox 360;$(ProjectDir)libs\minizip\Release\Xbox 360;$(ProjectDir)libs\zlib\Release\Xbox 360</ADDITIONAL_LIB_DIRS_XBOX>
+    <ADDITIONAL_LIB_DIRS_XBOX>libs\libSDLx360\Debug;libs\SDL_ttf360\Release;$(ProjectDir)libs\SDL_image-1.2.12\VisualC\Release\Xbox 360;$(ProjectDir)libs\wolfssl\IDE\XBOX360\Release\Xbox 360;$(ProjectDir)libs\curl\projects\Windows\VC10\lib\Xbox 360\Release;$(ProjectDir)libs\rcheevos\Release\Xbox 360;$(ProjectDir)libs\minizip\Release\Xbox 360;$(ProjectDir)libs\zlib\Release\Xbox 360</ADDITIONAL_LIB_DIRS_XBOX>
     <ADDITIONAL_INCLUDE_DIRS_WIN>$(ProjectDir)\src;$(ProjectDir)\src\unzip;$(ProjectDir)\src\libretro;$(ProjectDir)\src\libretro\libchdr\include;$(ProjectDir)\libs\SDL-1.2.14\include;$(ProjectDir)\libs\SDL_ttf-2.0.11\include;$(ProjectDir)\libs\SDL_image-1.2.12;$(ProjectDir)libs\curl\include;$(ProjectDir)libs\wolfssl;$(ProjectDir)\libs\rcheevos\src;$(DXSDK_DIR)Include;$(ProjectDir)\libs\rcheevos\include;$(ProjectDir)\libs\minizip;$(ProjectDir)\libs\zlib;$(ProjectDir)\libs</ADDITIONAL_INCLUDE_DIRS_WIN>
     <ADDITIONAL_INCLUDE_DIRS_XBOX>$(ProjectDir)src;$(ProjectDir)src\libretro;$(ProjectDir)src\libretro\libchdr\include;$(ProjectDir)libs\curl\include;$(ProjectDir)libs\wolfssl;$(ProjectDir)src\unzip;libs\libSDLx360\SDL\include;libs\SDL_ttf360\include\freetype;libs\SDL_ttf360;libs\SDL_image-1.2.12;$(ProjectDir)\libs\rcheevos\src;$(ProjectDir)\libs\rcheevos\include;$(ProjectDir)\libs\minizip;$(ProjectDir)\libs\zlib;$(ProjectDir)\libs</ADDITIONAL_INCLUDE_DIRS_XBOX>
   </PropertyGroup>
@@ -1216,6 +1236,14 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_default|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_DEFAULT)$(ImageExt)</ImageXexOutput>
     <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_x68k|Xbox 360'">
@@ -1596,6 +1624,12 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <TargetName>$(EMU_LIB_NAME)</TargetName>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_default|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <TargetName>$(EMU_LIB_DEFAULT)</TargetName>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_x68k|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(BUILD_DIR)</OutDir>
@@ -1827,10 +1861,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>true</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>true</RequireFullExperience>
-      <AllowAvatarGetMetadata>true</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_x68k|Xbox 360'">
@@ -1870,10 +1901,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>true</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>true</RequireFullExperience>
-      <AllowAvatarGetMetadata>true</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_c64frodo|Xbox 360'">
@@ -1911,10 +1939,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>true</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>true</RequireFullExperience>
-      <AllowAvatarGetMetadata>true</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_atari800|Xbox 360'">
@@ -1952,10 +1977,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>true</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>true</RequireFullExperience>
-      <AllowAvatarGetMetadata>true</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_beetle_ngp|Xbox 360'">
@@ -1993,10 +2015,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>true</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>true</RequireFullExperience>
-      <AllowAvatarGetMetadata>true</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_beetle_lynx|Xbox 360'">
@@ -2034,10 +2053,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>true</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>true</RequireFullExperience>
-      <AllowAvatarGetMetadata>true</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_VirtualBoy|Xbox 360'">
@@ -2075,10 +2091,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>true</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>true</RequireFullExperience>
-      <AllowAvatarGetMetadata>true</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_Wonderswan|Xbox 360'">
@@ -2116,10 +2129,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>true</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>true</RequireFullExperience>
-      <AllowAvatarGetMetadata>true</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_TyrQuake|Xbox 360'">
@@ -2163,10 +2173,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>true</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>false</RequireFullExperience>
-      <AllowAvatarGetMetadata>true</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTyrQuake|Xbox 360'">
@@ -2210,10 +2217,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>true</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>false</RequireFullExperience>
-      <AllowAvatarGetMetadata>true</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_DosboxPure|Xbox 360'">
@@ -2227,7 +2231,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <BufferSecurityCheck>true</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_DOSBOXPURE)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_DOSBOXPURE)";$(COMMON_PREPROCESSOR_RELEASE);DEBUG_LOG</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
       <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_XBOX)</AdditionalIncludeDirectories>
       <WholeProgramOptimization>false</WholeProgramOptimization>
@@ -2265,10 +2269,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>false</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>false</RequireFullExperience>
-      <AllowAvatarGetMetadata>false</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_DosboxPure|Xbox 360'">
@@ -2315,10 +2316,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>true</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>true</RequireFullExperience>
-      <AllowAvatarGetMetadata>true</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_beetle_pcfx|Xbox 360'">
@@ -2354,10 +2352,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-      <CrossPlatformSystemLink>true</CrossPlatformSystemLink>
       <TitleID>00000000</TitleID>
-      <RequireFullExperience>true</RequireFullExperience>
-      <AllowAvatarGetMetadata>true</AllowAvatarGetMetadata>
     </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_picodrive|Xbox 360'">
@@ -2950,6 +2945,48 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_default|Xbox 360'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Full</Optimization>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_DEFAULT)";$(COMMON_PREPROCESSOR_RELEASE);LIBRETRO_NOLIB</PreprocessorDefinitions>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_XBOX);NO_LIBRETRO_LIB</AdditionalIncludeDirectories>
+      <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <StringPooling>true</StringPooling>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX)</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateMapFile>true</GenerateMapFile>
+    </Link>
+    <Deploy>
+      <DeploymentType>CopyToHardDrive</DeploymentType>
+    </Deploy>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_x68k|Xbox 360'">
     <ClCompile>
       <ExceptionHandling>Async</ExceptionHandling>
@@ -3488,6 +3525,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
+	  <TitleID>00000000</TitleID>
       <HeapSize>0x18000000</HeapSize>
     </ImageXex>
   </ItemDefinitionGroup>
@@ -3533,6 +3571,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
+	  <TitleID>00000000</TitleID>
       <HeapSize>0x18000000</HeapSize>
     </ImageXex>
   </ItemDefinitionGroup>
@@ -3578,6 +3617,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
+	  <TitleID>00000000</TitleID>
       <HeapSize>0x18000000</HeapSize>
     </ImageXex>
   </ItemDefinitionGroup>
@@ -3623,6 +3663,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
+	  <TitleID>00000000</TitleID>
       <HeapSize>0x18000000</HeapSize>
     </ImageXex>
   </ItemDefinitionGroup>
@@ -4864,6 +4905,47 @@
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_default|Win32'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN;$(COMMON_PREPROCESSOR_RELEASE);LIBRETRO_NOLIB</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <OmitFramePointers>false</OmitFramePointers>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <StringPooling>true</StringPooling>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_WIN)</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateMapFile>true</GenerateMapFile>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
+    </PostBuildEvent>
+    <Manifest>
+      <EnableDPIAwareness>true</EnableDPIAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_x68k|Win32'">
     <ClCompile>
       <ExceptionHandling>Async</ExceptionHandling>
@@ -5998,8 +6080,10 @@
     <ClCompile Include="src\engine.cpp" />
     <ClCompile Include="src\font\fonts.cpp" />
     <ClCompile Include="src\http\gamefaqs.cpp" />
+    <ClCompile Include="src\libretro\libretro_stub.c" />
+    <ClCompile Include="src\menus\gamemenu.cpp" />
+    <ClCompile Include="src\menus\menuassetloader.cpp" />
     <ClCompile Include="src\video\win_d3d9.cpp" />
-    <ClCompile Include="src\gamemenu.cpp" />
     <ClCompile Include="src\gfx\SDL_gfxBlitFunc.c">
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
@@ -6043,7 +6127,6 @@
     <ClCompile Include="src\io\xbrz\xbrz.cpp">
       <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="src\menuassetloader.cpp" />
     <ClCompile Include="src\menus\gestormenus.cpp" />
     <ClCompile Include="src\retroachievements\CHDHashed.cpp" />
     <ClCompile Include="src\retroachievements\HashCHD.cpp" />
@@ -6070,11 +6153,11 @@
     <ClInclude Include="src\dischelper.h" />
     <ClInclude Include="src\engine.h" />
     <ClInclude Include="src\http\gamefaqs.h" />
+    <ClInclude Include="src\menus\gamemenu.h" />
     <ClInclude Include="src\video\HLSLBackground.h" />
     <ClInclude Include="src\video\win_d3d9.h" />
     <ClInclude Include="src\font\Arimo_Regular.ttf.h" />
     <ClInclude Include="src\font\fonts.h" />
-    <ClInclude Include="src\gamemenu.h" />
     <ClInclude Include="src\gfx\gfx_utils.h" />
     <ClInclude Include="src\gfx\SDL_gfxBlitFunc.h" />
     <ClInclude Include="src\gfx\SDL_gfxPrimitives.h" />

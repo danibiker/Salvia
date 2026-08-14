@@ -64,8 +64,10 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 			const SDL_VideoInfo* info = SDL_GetVideoInfo();
 			video_width = info->current_w;
 			video_height = info->current_h;
-			video_flags = video_flags | SDL_FULLSCREEN;
 			// Pantalla sin borde. Parece que pantalla completa sin borde es la forma de ejecucion mas rapida
+			// Ademas, si especificamos SDL_FULLSCREEN habria que implementar una deteccion de perdida del foco
+			// porque parece que windows le asigna todos los inputs del teclado y raton y no podemos volver 
+			// al SO comodamente
 			SDL_putenv("SDL_VIDEO_WINDOW_POS=0,0");
 			video_flags = video_flags | SDL_NOFRAME;
 		} else {

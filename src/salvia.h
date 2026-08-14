@@ -8,27 +8,27 @@
 
 #include <SDL.h>
 #include <SDL_ttf.h>
-#include "SDL_thread.h"
+#include <SDL_thread.h>
 
-#include "gameMenu.h"
-#include "io/cfgloader.h"
-#include "io/dirutil.h"
+#include <menus/gameMenu.h>
+#include <const/menuconst.h>
+#include <image/icons.h>
+#include <uiobjects/listmenu.h>
+#include <uiobjects/tilemap.h>
+#include <unzip/unziptool.h>
+#include <utils/langmanager.h>
+#include <io/cfgloader.h>
+#include <io/dirutil.h>
 #include <io/progress_bar.h>
-#include "uiobjects/listmenu.h"
-#include "uiobjects/tilemap.h"
-#include "unzip/unziptool.h"
-#include "const/menuconst.h"
-#include "statesram.h"
-#include "io/inputsmenu.h"
-#include "io/inputscore.h"
-#include "image/icons.h"
-#include "utils/langmanager.h"
-#include "so/launcher.h"
-#include "dischelper.h"
+#include <io/statesram.h>
+#include <io/inputsmenu.h>
+#include <io/inputscore.h>
+#include <io/dischelper.h>
+#include <so/launcher.h>
 #include <so/soutils.h>
 
-#include "libretro/libretro.h"
-#include "libretro/vfs.h"
+#include <libretro/libretro.h>
+#include <libretro/vfs.h>
 
 CfgLoader *cfgLoader;
 GameMenu *gameMenu;
