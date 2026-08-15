@@ -42,9 +42,12 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		//    dispatcher no migre el thread bajo presion, no cambia el patron de ejecucion.
 		XSetThreadProcessor(currrentThread, CPU_THREAD);
 
-		video_width = cfgLoader->configMain[cfg::resolution_width].valueInt;
+		video_width = cfgLoader->configMain[cfg::resolution_width].valueInt;   // 0 = Auto
 		video_height = cfgLoader->configMain[cfg::resolution_height].valueInt;
-		SDL_XBOX_SetScreenResolution(video_width, video_height);
+		SDL_XBOX_SetScreenResolution(video_width, video_height);              // Auto (<=0) -> XGetVideoMode dentro
+		//Releer las dims REALES del backbuffer (imprescindible cuando se pidio "Auto":
+		//la config es 0/0 y SDL_SetVideoMode + el escalado de fuentes necesitan dims reales)
+		SDL_XBOX_GetScreenResolution(&video_width, &video_height);
 	#endif
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
@@ -73,8 +76,11 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 			SDL_putenv("SDL_VIDEO_WINDOW_POS=0,0");
 			video_flags = video_flags | SDL_NOFRAME;
 		} else {
+			//Modo ventana: cualquier resolucion del fichero de config (sin cap ni allow-list).
 			video_width = cfgLoader->configMain[cfg::resolution_width].valueInt;
 			video_height = cfgLoader->configMain[cfg::resolution_height].valueInt;
+			//Centinela "Auto" (0/0): no hay XGetVideoMode en Windows -> default 1280x720.
+			if (video_width <= 0 || video_height <= 0) { video_width = 1280; video_height = 720; }
 		}
 	#endif
 

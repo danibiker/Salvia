@@ -86,6 +86,10 @@ extern "C" void XBOX_HIDMouse_Quit(void)
 	g_shared = 0;
 }
 
+extern "C" int XBOX_isHidMousePluginConnected(){
+	return g_shared ? 1 : 0;
+}
+
 extern "C" void XBOX_HIDMouse_Drain(int* dx, int* dy, int* dwheel, unsigned int* buttons)
 {
 	/* Estado por-consumidor: ultimo valor cumulativo leido. Cada .xex se "ceba" en

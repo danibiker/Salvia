@@ -322,6 +322,8 @@ typedef enum {
 		ico_shutdown,
 		ico_help,
 		ico_cheats,
+		ico_clock,
+		ico_mouse,
 		max_icons
 }enumIco;
 

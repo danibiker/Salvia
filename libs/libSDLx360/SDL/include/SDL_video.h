@@ -437,8 +437,13 @@ extern DECLSPEC void SDL_XBOX_SetRotation(int rotation);
    con D3DUSAGE_CPU_CACHED_MEMORY) sobrevive al Reset, no se recrea. */
 extern DECLSPEC void SDL_XBOX_SetVSync(int enabled);
 
-/* Specify the main xbox resolution */
+/* Specify the main xbox resolution. w<=0 || h<=0 => "Auto": usa la resolucion
+   del dashboard via XGetVideoMode, capada a 1280x720. */
 extern void SDL_XBOX_SetScreenResolution(int w, int h);
+
+/* Devuelve las dimensiones reales del backbuffer resueltas por
+   SDL_XBOX_SetScreenResolution (necesario cuando se pidio "Auto"). */
+extern void SDL_XBOX_GetScreenResolution(int *w, int *h);
 
 /*
  * Set the gamma correction for each of the color channels.

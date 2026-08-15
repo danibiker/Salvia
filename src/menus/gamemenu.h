@@ -33,6 +33,7 @@
 	#endif
 	extern "C" void XBOX_SetVideoFilter(int filterType);	
 	extern "C" void XBOX_SelectEffect(int effectID);	
+	extern "C" int XBOX_isHidMousePluginConnected();
 #else 
 	#ifndef SALVIA_GPU_VIDEO
 	#include <io/video.h>
@@ -282,6 +283,7 @@ class GameMenu : public Engine{
 		void drawFilters(ListMenu &listMenu);
 		void drawInfoButtons(SDL_Rect &rect);
 		void drawTitle(ListMenu &listMenu, TTF_Font *fontBig);
+		void drawStatusBar(ListMenu &listMenu);
 		void drawSelectedGameAssets(ListMenu &listMenu, GameFile *game);
 		string getAssetsDir(ConfigEmu *emu);
 		std::string reduceWords(const std::string &sentence1, const std::string &sentence2);

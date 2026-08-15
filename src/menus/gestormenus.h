@@ -598,6 +598,7 @@ public:
 	static std::string gameGuidesSearchAction(void* inst, void *value);
 	static std::string gameGuideAction(void* inst, void *value);
 	static std::string selectBackground(void* inst, void *index, void *values);
+	static std::string selectResolution(void* inst, void *index, void *values);
 
 	static void onUserText(const std::string& text, void* userData);
 	static void onScrapPasswordText(const std::string& text, void* userData);

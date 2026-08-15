@@ -14,7 +14,7 @@ namespace cfg {
 			libretro_core_extensions, roms_path,
 			showFps, integerScale, animBG,
 			mainLang, scrapRegion, scrapLang, scrapOrigin, scrapUser, scrapPass, apikeytgdb, raUser, raPass, enableAchievements, hardcoreRA,
-			showEmptyEmulators, overscan_x, overscan_y, 
+			showEmptyEmulators, overscan_x, overscan_y, resolutionIndex,
 			MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
 
 	typedef enum{generalConfig = 0, name,

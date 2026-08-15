@@ -72,9 +72,37 @@ u32 *psxRecLUT;
 
 #define RECMEM_SIZE		(12*1024*1024)
 
+/* ===========================================================================
+ * [FIX SMC] Invalidacion consciente del bloque CONTENEDOR.
+ *
+ * recClear(addr) solo ponia a 0 el slot EXACTO escrito, pero el puntero de un
+ * bloque vive SOLO en su slot de ENTRADA. Una escritura self-modifying a una
+ * palabra NO-entrada de un bloque dejaba el bloque cacheado como valido pero
+ * OBSOLETO; ejecutado via el fast-path de encadenamiento (que no pasa por el
+ * dispatcher) corria codigo viejo -> salto a datos -> ejecucion desbocada
+ * (crash de Ace Combat 2 al acabar el intro). FIX GENERAL (no especifico del
+ * juego): al invalidar, recClear tambien retrocede y borra la ENTRADA de todo
+ * bloque cuyo cuerpo cubra la direccion escrita (maneja bloques solapados).
+ *
+ * Estructuras (paralelas a recRAM, indexadas por addr & 0x1fffff = offset en
+ * recRAM para todos los espejos de RAM):
+ *   - smcLen[off]  : longitud en palabras del bloque que EMPIEZA en off (0 si
+ *                    ninguno). Se fija al compilar.
+ *   - smcMaxWords  : longitud maxima de bloque compilada (cota del back-scan).
+ *   - smcCodePg[]  : 1 bit por pagina de 4KB de RAM con codigo compilado; deja
+ *                    baratas las escrituras a paginas SIN codigo (la mayoria). */
+#ifndef PCSXR_SMC_FIX
+#define PCSXR_SMC_FIX 1
+#endif
+
 static char *recMem;	/* the recompiled blocks will be here */
 static char *recRAM;	/* and the ptr to the blocks here */
 static char *recROM;	/* and here */
+#if PCSXR_SMC_FIX
+static char *smcLen;                 /* longitud (palabras) del bloque por slot de entrada */
+static u32   smcMaxWords = 1;        /* longitud maxima de bloque (cota del back-scan) */
+static unsigned char smcCodePg[0x200000 >> 12];   /* 512 paginas de 4KB de RAM con codigo */
+#endif
 
 static u32 pc;			/* recompiler pc */
 static u32 pcold;		/* recompiler oldpc */
@@ -1006,6 +1034,10 @@ static void freeMem(int all)
     if (recRAM) free(recRAM);
     if (recROM) free(recROM);
     recMem = recRAM = recROM = 0;
+#if PCSXR_SMC_FIX
+    if (smcLen) free(smcLen);
+    smcLen = 0;
+#endif
     
     if (all && psxRecLUT) {
         free(psxRecLUT); psxRecLUT = NULL;
@@ -1027,15 +1059,22 @@ static int allocMem() {
                 freeMem(1);
 		SysMessage("Error allocating memory"); return -1;
 	}
+#if PCSXR_SMC_FIX
+	smcLen = (char*) malloc(0x200000);
+	if (smcLen == NULL) { freeMem(1); SysMessage("Error allocating memory"); return -1; }
+	memset(smcLen, 0, 0x200000);
+	smcMaxWords = 1;
+	memset(smcCodePg, 0, sizeof(smcCodePg));
+#endif
 
-	for (i=0; i<0x80; i++) 
+	for (i=0; i<0x80; i++)
 		psxRecLUT[i + 0x0000] = (u32)&recRAM[(i & 0x1f) << 16];
 
 	memcpy(psxRecLUT + 0x8000, psxRecLUT, 0x80 * 4);
 	memcpy(psxRecLUT + 0xa000, psxRecLUT, 0x80 * 4);
 
 	for (i=0; i<0x08; i++) psxRecLUT[i + 0xbfc0] = (u32)&recROM[i << 16];
-	
+
 	return 0;
 }
 
@@ -1048,6 +1087,11 @@ static int recInit() {
 static void recReset() {
 	memset(recRAM, 0, 0x200000);
 	memset(recROM, 0, 0x080000);
+#if PCSXR_SMC_FIX
+	if (smcLen) memset(smcLen, 0, 0x200000);
+	smcMaxWords = 1;
+	memset(smcCodePg, 0, sizeof(smcCodePg));
+#endif
 
 	ppcInit();
 	ppcSetPtr((u32 *)recMem);
@@ -1098,8 +1142,34 @@ void recClear(u32 mem, u32 size) {
 	u32 ptr = psxRecLUT[mem >> 16];
 
 	if (ptr != NULL) {
+		/* Invalida los bloques cuya ENTRADA cae en el rango escrito. */
 		memset((void*) (ptr + (mem & 0xFFFF)), 0, size * 4);
 	}
+
+#if PCSXR_SMC_FIX
+	/* [FIX SMC] Ademas, invalida todo bloque cuya ENTRADA este ANTES del rango
+	 * escrito pero cuyo cuerpo lo cubra (escritura a mitad de bloque). Sin esto,
+	 * el bloque queda cacheado-pero-obsoleto y, ejecutado via encadenamiento, corre
+	 * codigo viejo. Solo aplica a RAM (recRAM); BIOS es inmutable. */
+	if (smcLen && ptr >= (u32)recRAM && ptr < (u32)recRAM + 0x200000) {
+		u32 off = mem & 0x1fffff;                 /* offset en recRAM para espejos de RAM */
+		u32 pg  = off >> 12;
+		/* barato: si no hay codigo compilado en esta pagina ni en la anterior
+		 * (el back-scan puede alcanzarla), no hay nada que invalidar. */
+		if (smcCodePg[pg] || (pg && smcCodePg[pg - 1])) {
+			u32 back = smcMaxWords << 2;          /* bytes a retroceder */
+			u32 lo   = (off > back) ? (off - back) : 0;
+			u32 w;
+			for (w = lo; w < off; w += 4) {
+				u32 blen = *(u32 *)(smcLen + w);
+				if (blen && (w + (blen << 2)) > off) {   /* el bloque en w cubre off */
+					*(u32 *)(recRAM + w) = 0;            /* invalida su puntero de bloque */
+					*(u32 *)(smcLen + w) = 0;            /* y su marcador de longitud */
+				}
+			}
+		}
+	}
+#endif
 }
 
 static void recNULL() {
@@ -2295,7 +2365,7 @@ static void recRecompile() {
 	PC_REC32(psxRegs.pc) = (u32)ppcPtr;
 
 	pcold = pc = psxRegs.pc;
-	
+
 	for (count=0; count<500;) {
 
 		u32 adr = pc & 0x1fffff;
@@ -2323,6 +2393,28 @@ static void recRecompile() {
     iRet();
 
 done:;
+
+#if PCSXR_SMC_FIX
+	/* [FIX SMC] Registrar longitud + paginas de ESTE bloque (ya se conoce su
+	 * rango [pcold, pc)). recClear lo usa para invalidar el bloque contenedor
+	 * ante escrituras a mitad de bloque. Solo bloques en RAM (BIOS inmutable). */
+	{
+		u32 _bank = pcold >> 16;
+		u32 _lb   = psxRecLUT[_bank];
+		if (_lb >= (u32)recRAM && _lb < (u32)recRAM + 0x200000) {
+			u32 _off = pcold & 0x1fffff;         /* = offset en recRAM (espejos de RAM) */
+			u32 _len = (pc - pcold) >> 2;
+			u32 _pg2;
+			if (_len == 0) _len = 1;
+			*(u32 *)(smcLen + _off) = _len;
+			if (_len > smcMaxWords) smcMaxWords = _len;
+			smcCodePg[_off >> 12] = 1;
+			_pg2 = (_off + (_len << 2) - 1) >> 12;           /* el bloque puede cruzar de pagina */
+			if (_pg2 > ((0x200000u >> 12) - 1)) _pg2 = (0x200000u >> 12) - 1;
+			smcCodePg[_pg2] = 1;
+		}
+	}
+#endif
 
 	a = (u32)(u8*)ptr;
 	while(a < (u32)(u8*)ppcPtr) {

@@ -29,6 +29,7 @@ void Image::init(){
     darkShift = 0xFF;
     tamAuto = true;
 	fillGaps = false;
+	bestFit = false;
     vAlign = ALIGN_MIDDLE;
     setObjectType(GUIPICTURE);
     img = NULL;
@@ -226,10 +227,14 @@ void Image::printImage(SDL_Surface *video_page){
         if (tamAuto) {
             Dimension src = {img->w, img->h};
             Dimension dst = {this->getW(), this->getH()};
-            newDim = relacionAuto(src, dst);
+            // bestFit -> COVER (rellena todo el recuadro, recorta el sobrante);
+            // por defecto -> CONTAIN (encaja dentro, puede dejar huecos).
+            newDim = bestFit ? relacionCover(src, dst) : relacionAuto(src, dst);
             newOffset = centrado(newDim, dst);
 
-            if (vAlign == ALIGN_TOP){
+            // vAlign solo aplica en CONTAIN. En bestFit el recorte lo hace
+            // stretch_blit_sdl con un srcRect CENTRAL (siempre centrado).
+            if (!bestFit && vAlign == ALIGN_TOP){
                 newOffset.h = 0;
             }
             stretch_blit_sdl(img, video_page, 0, 0, img->w, img->h, this->getX() + newOffset.w, this->getY() + newOffset.h, newDim.w, newDim.h);
@@ -237,7 +242,9 @@ void Image::printImage(SDL_Surface *video_page){
             normal_blit_sdl(img, video_page, this->getX(), this->getY(), this->getW(), this->getH());
         }
 
-		if (drawShadow)
+		// La sombra asume modo CONTAIN (imagen dentro del recuadro con huecos);
+		// en bestFit/COVER no hay huecos y su geometria caeria fuera del recuadro.
+		if (drawShadow && !bestFit)
 			printShadow(video_page);
     }
 }
@@ -342,6 +349,23 @@ Dimension Image::relacion(const Dimension &src, const Dimension &dst) {
     return dim;
 }
 
+// "Best fit" tipo COVER: escala para CUBRIR dst manteniendo el aspect ratio; la
+// dimension que sobra se recorta (no quedan huecos). Es la rama OPUESTA a
+// relacion/relacionAuto (que hacen CONTAIN, encajar dentro dejando huecos).
+Dimension Image::relacionCover(const Dimension &src, const Dimension &dst) {
+    Dimension dim;
+    if ((long)src.h * dst.w > (long)dst.h * src.w) {
+        // Imagen relativamente mas alta -> ajustamos el ANCHO; la altura desborda y se recorta.
+        dim.w = dst.w;
+        dim.h = (src.h * dst.w) / src.w;
+    } else {
+        // Imagen relativamente mas ancha -> ajustamos la ALTURA; el ancho desborda y se recorta.
+        dim.h = dst.h;
+        dim.w = (src.w * dst.h) / src.h;
+    }
+    return dim;
+}
+
 Dimension Image::centrado(const Dimension &src, const Dimension &dst) {
     Dimension offset;
     offset.h = (dst.h - src.h) >> 1; // El desplazamiento de bits (>> 1) es igual a / 2
@@ -376,7 +400,7 @@ void Image::setTamAuto(bool b, const SDL_Rect &fr){
 void Image::softMove(const float &dt, const int &button){
 	if (img == NULL) return;
 
-	// CALCULAR LOS INCREMENTOS (5% del tamaño de la pantalla/contenedor)
+	// CALCULAR LOS INCREMENTOS (5% del tamaï¿½o de la pantalla/contenedor)
 	const float incrementX = img->w * 0.05f;
 	const float incrementY = img->h * 0.05f;
 
@@ -385,7 +409,7 @@ void Image::softMove(const float &dt, const int &button){
 	bool itleft  = button == JOY_BUTTON_LEFT || button == JOY_BUTTON_DOWNLEFT || button == JOY_BUTTON_UPLEFT;
 	bool itright = button == JOY_BUTTON_RIGHT || button == JOY_BUTTON_DOWNRIGHT || button == JOY_BUTTON_UPRIGHT;
 
-	// REGISTRAR LOS TAPS (Modifican el destino, no la posición actual)
+	// REGISTRAR LOS TAPS (Modifican el destino, no la posiciï¿½n actual)
 	if (itup){
 		targetY -= incrementY;
 	} else if (itdown){
@@ -398,7 +422,7 @@ void Image::softMove(const float &dt, const int &button){
 		targetX += incrementX;
 	}
 
-	// CONTROL DE LÍMITES SOBRE EL DESTINO
+	// CONTROL DE Lï¿½MITES SOBRE EL DESTINO
 	if (targetX < 0) targetX = 0;
 	if (targetY < 0) targetY = 0;
 
@@ -409,20 +433,20 @@ void Image::softMove(const float &dt, const int &button){
 		targetY = (float)(img->h - fitRect.h);
 	}
 
-	// CONTROL DE LÍMITES SOBRE EL DESTINO
+	// CONTROL DE Lï¿½MITES SOBRE EL DESTINO
 	if (targetX < 0) targetX = 0;
 	if (targetY < 0) targetY = 0;
 
-	// INTERPOLACIÓN SUAVE CON DELTA TIME EN SEGUNDOS
+	// INTERPOLACIï¿½N SUAVE CON DELTA TIME EN SEGUNDOS
 	// Convertimos los milisegundos (ej: 17) a fracciones de segundo (ej: 0.017)
 	float dtSegundos = dt / 1000.0f; 
-	const float easingFactor = 10.0f; // Fuerza del suavizado (mayor número = más rápido)
+	const float easingFactor = 10.0f; // Fuerza del suavizado (mayor nï¿½mero = mï¿½s rï¿½pido)
 
 	// Calculamos las posiciones intermedias de este frame
 	float currentX = fitRect.x + (targetX - fitRect.x) * easingFactor * dtSegundos;
 	float currentY = fitRect.y + (targetY - fitRect.y) * easingFactor * dtSegundos;
 
-	// Evitamos temblores o saltos infinitos cuando esté extremadamente cerca del destino
+	// Evitamos temblores o saltos infinitos cuando estï¿½ extremadamente cerca del destino
 	if (fabsf(targetX - currentX) < 0.1f) currentX = targetX;
 	if (fabsf(targetY - currentY) < 0.1f) currentY = targetY;
 
@@ -437,15 +461,35 @@ void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
 	
 	if (!src || !dest || src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) return;
 
-	SDL_Rect dstRect = {
-        fillGaps ? this->getX() : dst_x,
-        fillGaps ? this->getY() : dst_y,
-        dst_w, dst_h
-    };
+	// Rectangulos de origen/destino del blit final. En bestFit (COVER) la
+	// superficie escalada (dst_w x dst_h) es MAYOR que el recuadro, asi que
+	// mostramos solo su porcion CENTRAL del tamano del recuadro (getW x getH);
+	// esto lo centra de forma determinista, sin clip ni coordenadas negativas.
+	SDL_Rect dstRect;
+	SDL_Rect srcCropRect;
+	SDL_Rect* pSrcRect = NULL;
+	if (bestFit) {
+		const int boxW = this->getW();
+		const int boxH = this->getH();
+		srcCropRect.x = (Sint16)((dst_w - boxW) / 2);   // recorte central horizontal
+		srcCropRect.y = (Sint16)((dst_h - boxH) / 2);   // recorte central vertical
+		srcCropRect.w = (Uint16)boxW;
+		srcCropRect.h = (Uint16)boxH;
+		pSrcRect = &srcCropRect;
+		dstRect.x = (Sint16)this->getX();
+		dstRect.y = (Sint16)this->getY();
+		dstRect.w = (Uint16)boxW;
+		dstRect.h = (Uint16)boxH;
+	} else {
+		dstRect.x = (Sint16)(fillGaps ? this->getX() : dst_x);
+		dstRect.y = (Sint16)(fillGaps ? this->getY() : dst_y);
+		dstRect.w = (Uint16)dst_w;
+		dstRect.h = (Uint16)dst_h;
+	}
 
 	// --- 1. Cache hit: blit directo y salir ---
     if (cachedSurface && lastW == dst_w && lastH == dst_h) {
-        SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
+        SDL_BlitSurface(cachedSurface, pSrcRect, dest, &dstRect);
         return;
     }
 
@@ -457,14 +501,14 @@ void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
 	} else {
 		double zoomX = (double)dst_w / src_w;
 		double zoomY = (double)dst_h / src_h;
-		// zoomSurface (SDL_gfx) siempre devuelve una superficie RGBA de 32 bits genérica
+		// zoomSurface (SDL_gfx) siempre devuelve una superficie RGBA de 32 bits genï¿½rica
 		zoomedSurface = zoomSurface(src, zoomX, zoomY, true); //SMOOTH_RESIZE = TRUE
 	}
 
 	if (!zoomedSurface) return;
 
-	// --- 3. Procesar Canal Alfa según 'keepAlpha' ---
-	// Si tiene alfa por píxel, optimizamos el formato RGBA para que coincida con la pantalla
+	// --- 3. Procesar Canal Alfa segï¿½n 'keepAlpha' ---
+	// Si tiene alfa por pï¿½xel, optimizamos el formato RGBA para que coincida con la pantalla
 	// usando SDL_DisplayFormatAlpha. Esto acelera el Blit enormemente.
 	SDL_Surface* finalSurface = SDL_ConvertSurface(zoomedSurface, dest->format, dest->flags);
 	SDL_FreeSurface(zoomedSurface);
@@ -476,7 +520,7 @@ void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
 		SDL_SetAlpha(finalSurface, SDL_RLEACCEL, 0xFF);
 	} else {
 		if (src->format->Amask != 0) {
-			// Alfa por píxel: Desactivamos el alfa global para que no rompa el mapa de bits
+			// Alfa por pï¿½xel: Desactivamos el alfa global para que no rompa el mapa de bits
 			SDL_SetAlpha(finalSurface, 0, 0); 
 			finalSurface->flags |= SDL_SRCALPHA;
 		} 
@@ -495,7 +539,7 @@ void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
     if (this->darkShift < 0xFF && finalSurface) {
         /*Uint8 factor = 255 - this->darkShift; // 255 = sin oscurecer, 0 = negro total
 		if (keepAlpha && src->format->Amask != 0) {
-			// ALFA POR PÍXEL: Modulamos los canales RGB píxel a píxel respetando el canal Alfa original
+			// ALFA POR Pï¿½XEL: Modulamos los canales RGB pï¿½xel a pï¿½xel respetando el canal Alfa original
 			if (SDL_MUSTLOCK(finalSurface)) SDL_LockSurface(finalSurface);
 
 			Uint32* pixels = (Uint32*)finalSurface->pixels;
@@ -516,25 +560,25 @@ void Image::stretch_blit_sdl(SDL_Surface*& src, SDL_Surface* dest,
 				g = (g * factor) / 255;
 				b = (b * factor) / 255;
 
-				// Reensamblamos el píxel manteniendo intacto el Alfa ('a') original
+				// Reensamblamos el pï¿½xel manteniendo intacto el Alfa ('a') original
 				pixels[i] = (r << fmt->Rshift) | (g << fmt->Gshift) | (b << fmt->Bshift) | (a << fmt->Ashift);
 			}
 
 			if (SDL_MUSTLOCK(finalSurface)) SDL_UnlockSurface(finalSurface);
 		} else {*/
-			// SIN ALFA POR PÍXEL: Podemos usar boxRGBA de forma segura ya que no hay bordes transparentes
+			// SIN ALFA POR Pï¿½XEL: Podemos usar boxRGBA de forma segura ya que no hay bordes transparentes
 			boxRGBA(finalSurface, 0, 0, dst_w - 1, dst_h - 1, 0, 0, 0, this->darkShift);
 		//}
     }
 
-	// --- 5. Guardar en Caché y Renderizar ---
+	// --- 5. Guardar en Cachï¿½ y Renderizar ---
     if (cachedSurface) SDL_FreeSurface(cachedSurface);
 	
 	cachedSurface = finalSurface;
     lastW = dst_w;
     lastH = dst_h;
 
-	SDL_BlitSurface(cachedSurface, NULL, dest, &dstRect);
+	SDL_BlitSurface(cachedSurface, pSrcRect, dest, &dstRect);
 }
 
 void Image::convertirGrises16Bits(SDL_Surface* surface) {
@@ -552,7 +596,7 @@ void Image::convertirGrises16Bits(SDL_Surface* surface) {
         // SDL_GetRGBA funciona correctamente con 16 bits detectando el formato
         SDL_GetRGBA(pixels[i], surface->format, &r, &g, &b, &a);
 
-        // Cálculo de luminosidad (Gris)
+        // Cï¿½lculo de luminosidad (Gris)
         Uint8 v = (Uint8)(0.299f * r + 0.587f * g + 0.114f * b);
 
         // Volvemos a empaquetar en el formato original de 16 bits
@@ -572,8 +616,8 @@ void Image::convertirGrises16Bits(SDL_Surface* surface) {
         if (cachedSurface) SDL_FreeSurface(cachedSurface);
 
         // =====================================================================
-        // PASO 1: NORMALIZACIÓN (El secreto para que no salgan imágenes negras)
-        // Creamos una superficie temporal con un formato estándar RGBA de 32 bits
+        // PASO 1: NORMALIZACIï¿½N (El secreto para que no salgan imï¿½genes negras)
+        // Creamos una superficie temporal con un formato estï¿½ndar RGBA de 32 bits
         // =====================================================================
         SDL_Surface* normalizedSrc = SDL_CreateRGBSurface(
             SDL_SWSURFACE, src_w, src_h, 32,
@@ -586,13 +630,13 @@ void Image::convertirGrises16Bits(SDL_Surface* surface) {
 
         if (!normalizedSrc) return;
 
-        // Guardamos el alfa del origen y lo desactivamos momentáneamente para hacer
-        // una copia exacta del bloque de píxeles (incluyendo el color de fondo cielo)
+        // Guardamos el alfa del origen y lo desactivamos momentï¿½neamente para hacer
+        // una copia exacta del bloque de pï¿½xeles (incluyendo el color de fondo cielo)
         Uint32 srcFlags = src->flags & SDL_SRCALPHA;
         Uint8 srcAlpha = src->format->alpha;
         SDL_SetAlpha(src, 0, 0);
 
-        // Copiamos la porción exacta (src_x, src_y) al inicio de nuestra superficie normalizada
+        // Copiamos la porciï¿½n exacta (src_x, src_y) al inicio de nuestra superficie normalizada
         SDL_Rect srcRect = {src_x, src_y, src_w, src_h};
         SDL_BlitSurface(src, &srcRect, normalizedSrc, NULL);
 
@@ -617,9 +661,9 @@ void Image::convertirGrises16Bits(SDL_Surface* surface) {
         if (!zoomedSurface) return;
 
         // =====================================================================
-        // PASO 3: PREPARACIÓN DE LA CACHÉ Y RENDERIZADO FINAL
+        // PASO 3: PREPARACIï¿½N DE LA CACHï¿½ Y RENDERIZADO FINAL
         // =====================================================================
-        // Clonamos la estructura exacta que nos devolvió zoomSurface
+        // Clonamos la estructura exacta que nos devolviï¿½ zoomSurface
         cachedSurface = SDL_CreateRGBSurface(
             SDL_SWSURFACE, dst_w, dst_h,
             zoomedSurface->format->BitsPerPixel,
@@ -632,13 +676,13 @@ void Image::convertirGrises16Bits(SDL_Surface* surface) {
             return;
         }
 
-        // Copia directa del contenido escalado a la caché sin mezclas intermedias
+        // Copia directa del contenido escalado a la cachï¿½ sin mezclas intermedias
         SDL_SetAlpha(zoomedSurface, 0, 0);
         SDL_BlitSurface(zoomedSurface, NULL, cachedSurface, NULL);
         SDL_FreeSurface(zoomedSurface);
 
-        // CONDICIÓN INTELIGENTE: Si el PNG original manejaba transparencias reales
-        // le indicamos a la caché que use mezcla nativa al dibujar en la pantalla
+        // CONDICIï¿½N INTELIGENTE: Si el PNG original manejaba transparencias reales
+        // le indicamos a la cachï¿½ que use mezcla nativa al dibujar en la pantalla
         if (src->format->Amask != 0 || (src->flags & SDL_SRCCOLORKEY)) {
             SDL_SetAlpha(cachedSurface, SDL_SRCALPHA, srcAlpha);
         } else {
@@ -671,7 +715,7 @@ void Image::convertirGrises16Bits(SDL_Surface* surface) {
        return;
    }
 
-   // --- (Re)crear caché ---
+   // --- (Re)crear cachï¿½ ---
    if (cachedSurface) SDL_FreeSurface(cachedSurface);
    cachedSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, dst_w, dst_h, 32,
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
@@ -740,7 +784,7 @@ void Image::convertirGrises16Bits(SDL_Surface* surface) {
    SDL_FreeSurface(cachedSurface);
    cachedSurface = converted;
 
-   // --- Configuración alfa ---
+   // --- Configuraciï¿½n alfa ---
    if (aMask != 0 || (src->flags & SDL_SRCCOLORKEY)) {
        cachedSurface->flags |= SDL_SRCALPHA;
        cachedSurface->format->alpha = src->format->alpha;
@@ -748,7 +792,7 @@ void Image::convertirGrises16Bits(SDL_Surface* surface) {
        cachedSurface->flags &= ~SDL_SRCALPHA;
    }
 
-   // --- FillGaps: envolver caché en superficie mayor con fondo rojo ---
+   // --- FillGaps: envolver cachï¿½ en superficie mayor con fondo rojo ---
    const int offsetX = dst_x - this->getX();
    const int offsetY = dst_y - this->getY();
    SDL_Rect dstRect = {this->getX(), this->getY(), 0, 0};

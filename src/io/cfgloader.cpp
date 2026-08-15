@@ -48,6 +48,9 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::resolution_height] = cfg::t_cfg_props("resolution_height", 720);
 	configMain[cfg::resolution_height].desc = "#The screen resolution height";
 
+	configMain[cfg::resolutionIndex] = cfg::t_cfg_props("resolutionIndex", (int)0);
+	configMain[cfg::resolutionIndex].desc = "#Screen mode";
+
 	configMain[cfg::fullscreen] = cfg::t_cfg_props("fullscreen", false);
 	configMain[cfg::fullscreen].desc = "#The fullscreen mode or window mode";
 

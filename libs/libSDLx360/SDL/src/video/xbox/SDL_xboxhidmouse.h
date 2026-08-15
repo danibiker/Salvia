@@ -54,6 +54,10 @@ void XBOX_HIDMouse_Drain(int* dx, int* dy, int* dwheel, unsigned int* buttons);
  * SDL_xboxmouse.c; llamada desde mouse_update() en SDL_xboxevents.c. */
 void XBOX_MouseUpdateHID(void);
 
+/** Indica si se ha podido cargar el plugin del raton */
+int XBOX_isHidMousePluginConnected();
+
+
 #ifdef __cplusplus
 }
 #endif

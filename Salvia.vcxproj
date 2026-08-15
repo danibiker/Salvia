@@ -3525,7 +3525,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-	  <TitleID>00000000</TitleID>
+      <TitleID>00000000</TitleID>
       <HeapSize>0x18000000</HeapSize>
     </ImageXex>
   </ItemDefinitionGroup>
@@ -3571,7 +3571,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-	  <TitleID>00000000</TitleID>
+      <TitleID>00000000</TitleID>
       <HeapSize>0x18000000</HeapSize>
     </ImageXex>
   </ItemDefinitionGroup>
@@ -3617,7 +3617,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-	  <TitleID>00000000</TitleID>
+      <TitleID>00000000</TitleID>
       <HeapSize>0x18000000</HeapSize>
     </ImageXex>
   </ItemDefinitionGroup>
@@ -3663,7 +3663,7 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
     <ImageXex>
-	  <TitleID>00000000</TitleID>
+      <TitleID>00000000</TitleID>
       <HeapSize>0x18000000</HeapSize>
     </ImageXex>
   </ItemDefinitionGroup>
@@ -5751,14 +5751,14 @@
     <ClCompile>
       <ExceptionHandling>Async</ExceptionHandling>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
-      <Optimization>Full</Optimization>
+      <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN;__x86_64__;$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <CompileAs>CompileAsCpp</CompileAs>
       <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>

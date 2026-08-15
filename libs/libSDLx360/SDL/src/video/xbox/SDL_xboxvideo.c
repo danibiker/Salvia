@@ -845,14 +845,31 @@ void SDL_XBOX_SetRotation(int rotation)
 }
 
 void SDL_XBOX_SetScreenResolution(int w, int h) {
-	int i = 0;
-	while (vid_modes[i] != NULL) {
+	int i;
+	if (w <= 0 || h <= 0) {
+		/* "Auto": resolucion configurada en el dashboard del sistema. */
+		XVIDEO_MODE vm;
+		ZeroMemory(&vm, sizeof(vm));
+		XGetVideoMode(&vm);
+		w = (int)vm.dwDisplayWidth;
+		h = (int)vm.dwDisplayHeight;
+		/* Cap de rendimiento: maximo 1280x720 (el scaler HW sube a la pantalla). */
+		if (w > 1280 && h > 720) { w = 1280; h = 720; }
+	}
+	for (i = 0; vid_modes[i] != NULL; i++) {
 		if (vid_modes[i]->w == w && vid_modes[i]->h == h) {
 			g_screen_resolution = i;
 			return;
 		}
-		i++;
 	}
+	/* No esta en la allow-list -> 1280x720 (indice 0). */
+	g_screen_resolution = 0;
+}
+
+void SDL_XBOX_GetScreenResolution(int *w, int *h) {
+	const SDL_Rect *m = vid_modes[g_screen_resolution >= 0 ? g_screen_resolution : 0];
+	if (w) *w = m->w;
+	if (h) *h = m->h;
 }
 
 /* Forward decl for XBOX_UpdateOverlayVertices, defined below */ 

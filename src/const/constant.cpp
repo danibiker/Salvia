@@ -73,7 +73,9 @@ const char *ICONS_PATH[] = {"menu_log.png",		// page_white_text
 	"achievement-list.png",						// ico_achievements
 	"menu_shutdown.png",						// ico_shutdown
 	"menu_help.png",							// ico_help
-	"core-cheat-options.png"					// ico_cheats
+	"core-cheat-options.png",					// ico_cheats
+	"clock.png",								// ico_clock	
+	"input_MOUSE.png"							// ico_mouse
 };
 
 const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",  // cart_gba

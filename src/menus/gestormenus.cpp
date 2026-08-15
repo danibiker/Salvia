@@ -354,7 +354,32 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	OpcionLista *listaBkg = new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef());
 	listaBkg->callback = &GestorMenus::selectBackground;
 	menuVideo->opciones.push_back(listaBkg);
-	
+
+	//Resolucion de pantalla (se aplica al REINICIAR). Entrada 0 = "Auto"
+	//(Xbox: XGetVideoMode del dashboard, capado a 720p; Windows: default 1280x720).
+	std::vector<std::string> resList;
+	resList.push_back("Auto");
+	for (int i=0; i < TOTAL_SCREEN_RES; i++){
+		resList.push_back(Constant::string_format("%dx%d", g_screenResolutions[i].w, g_screenResolutions[i].h));
+	}
+
+	{
+		const int rw = refConfig->configMain[cfg::resolution_width].valueInt;
+		const int rh = refConfig->configMain[cfg::resolution_height].valueInt;
+		if (rw > 0 && rh > 0){
+			const std::string cur = Constant::string_format("%dx%d", rw, rh);
+			int f = -1;
+			for (int i=1; i < (int)resList.size(); i++){ if (resList[i] == cur){ f = i; break; } }
+			//valor del fichero fuera de la lista (p.ej. Windows editado a mano) -> anadir para no perderlo
+			if (f < 0){ resList.push_back(cur); f = (int)resList.size() - 1; }
+			refConfig->configMain[cfg::resolutionIndex].setPropValue(f);
+		}
+	}
+	OpcionLista *listaRes = new OpcionLista(LanguageManager::instance()->get("menu.video.resolution"), resList, &refConfig->configMain[cfg::resolutionIndex].getIntRef());
+	listaRes->callback = &GestorMenus::selectResolution;
+	listaRes->context  = refConfig;
+	menuVideo->opciones.push_back(listaRes);
+
 	//--------Menu de overscan---------
 	menuOverscan = new Menu(LanguageManager::instance()->get("menu.video.overscan"), menuVideo);
 	poblarMenuOverscan(menuOverscan);
@@ -822,6 +847,25 @@ std::string GestorMenus::selectBackground(void* inst, void *index, void *values)
 	if (!index) return "";
 	const int idx = *static_cast<int*>(index);
 	HLSLBackground_setActive((idx >= BG_HLSL && idx < BG_NONE) ? (idx - BG_HLSL + 1) : 0);
+	return "";
+}
+
+std::string GestorMenus::selectResolution(void* inst, void *index, void *values) {
+	//Escribe la resolucion elegida en la config; se aplica al REINICIAR (el arranque
+	//la lee). Parseamos la etiqueta seleccionada ("1280x720") para soportar tambien
+	//entradas anadidas fuera de la lista estandar; "Auto" -> centinela 0/0.
+	if (!inst || !index || !values) return "";
+	CfgLoader* cfg = static_cast<CfgLoader*>(inst);
+	const int idx = *static_cast<int*>(index);
+	std::vector<std::string>* labels = static_cast<std::vector<std::string>*>(values);
+	if (idx < 0 || idx >= (int)labels->size()) return "";
+	int w = 0, h = 0; char sep = 0;
+	std::istringstream iss(labels->at(idx));
+	if ((iss >> w >> sep >> h) && sep == 'x'){   //"1280x720"
+		cfg->setWidth(w);  cfg->setHeight(h);
+	} else {
+		cfg->setWidth(0);  cfg->setHeight(0);    //"Auto"
+	}
 	return "";
 }
 
