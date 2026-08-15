@@ -89,8 +89,11 @@ u32 *psxRecLUT;
  *   - smcLen[off]  : longitud en palabras del bloque que EMPIEZA en off (0 si
  *                    ninguno). Se fija al compilar.
  *   - smcMaxWords  : longitud maxima de bloque compilada (cota del back-scan).
- *   - smcCodePg[]  : 1 bit por pagina de 4KB de RAM con codigo compilado; deja
- *                    baratas las escrituras a paginas SIN codigo (la mayoria). */
+ *   - smcCov[word] : 1 byte por PALABRA de RAM; 1 = esa palabra esta dentro de
+ *                    un bloque compilado. Gate de granularidad de palabra: las
+ *                    escrituras a DATOS (la mayoria) salen sin back-scan aunque
+ *                    compartan pagina con codigo. Critico para juegos con
+ *                    muchas escrituras (p.ej. Quake2). */
 #ifndef PCSXR_SMC_FIX
 #define PCSXR_SMC_FIX 1
 #endif
@@ -101,7 +104,12 @@ static char *recROM;	/* and here */
 #if PCSXR_SMC_FIX
 static char *smcLen;                 /* longitud (palabras) del bloque por slot de entrada */
 static u32   smcMaxWords = 1;        /* longitud maxima de bloque (cota del back-scan) */
-static unsigned char smcCodePg[0x200000 >> 12];   /* 512 paginas de 4KB de RAM con codigo */
+/* 1 byte por PALABRA de RAM: 1 = esa palabra esta dentro de un bloque compilado.
+ * Gate de granularidad de PALABRA (no de pagina de 4KB): asi las escrituras a
+ * DATOS -aunque compartan pagina con codigo- no disparan el back-scan; solo lo
+ * hacen las escrituras que pisan codigo real. Critico para juegos con muchas
+ * escrituras (Quake2). Indexado por (addr & 0x1fffff) >> 2. */
+static char *smcCov;
 #endif
 
 static u32 pc;			/* recompiler pc */
@@ -1036,7 +1044,8 @@ static void freeMem(int all)
     recMem = recRAM = recROM = 0;
 #if PCSXR_SMC_FIX
     if (smcLen) free(smcLen);
-    smcLen = 0;
+    if (smcCov) free(smcCov);
+    smcLen = smcCov = 0;
 #endif
     
     if (all && psxRecLUT) {
@@ -1061,10 +1070,11 @@ static int allocMem() {
 	}
 #if PCSXR_SMC_FIX
 	smcLen = (char*) malloc(0x200000);
-	if (smcLen == NULL) { freeMem(1); SysMessage("Error allocating memory"); return -1; }
+	smcCov = (char*) malloc(0x200000 >> 2);   /* 1 byte/palabra = 512KB */
+	if (smcLen == NULL || smcCov == NULL) { freeMem(1); SysMessage("Error allocating memory"); return -1; }
 	memset(smcLen, 0, 0x200000);
+	memset(smcCov, 0, 0x200000 >> 2);
 	smcMaxWords = 1;
-	memset(smcCodePg, 0, sizeof(smcCodePg));
 #endif
 
 	for (i=0; i<0x80; i++)
@@ -1089,8 +1099,8 @@ static void recReset() {
 	memset(recROM, 0, 0x080000);
 #if PCSXR_SMC_FIX
 	if (smcLen) memset(smcLen, 0, 0x200000);
+	if (smcCov) memset(smcCov, 0, 0x200000 >> 2);
 	smcMaxWords = 1;
-	memset(smcCodePg, 0, sizeof(smcCodePg));
 #endif
 
 	ppcInit();
@@ -1114,9 +1124,56 @@ static void recError() {
 	SysRunGui();
 }
 
+/* ===========================================================================
+ * Red de seguridad del dispatcher.
+ *
+ * Si el recompilador fuese a ejecutar un bloque con un PC invitado invalido
+ * (no alineado, o en un banco de RAM sin mapear) o con un puntero de bloque
+ * fuera del code cache, el `bctrl` de recRun saltaria a basura: como esa
+ * direccion suele caer en memoria ejecutable (el code cache), el host
+ * ejecutaria codigo salvaje y COLGARIA la consola (SEH no lo puede capturar
+ * una vez perdido el contexto).  Lo detectamos AQUI, con el stack aun intacto,
+ * volcamos un diagnostico detallado y lanzamos una excepcion estructurada que
+ * el __except de runGameLoop() (frontend) captura para descargar el juego y
+ * volver al menu de forma limpia. */
+extern void pcsxr_log(int level, const char *format, ...);
+extern void pcsxr_raise_fatal(void);   /* libretro_core.cpp: RaiseException(...) */
+
+#define CPU_HIST_N 16
+static u32 cpuHist[CPU_HIST_N];   /* ultimos PCs despachados (rastro para el log) */
+static u32 cpuHistIdx = 0;
+
+static void cpuFatalInvalid(u32 badpc, u32 blockptr) {
+    int i;
+    u32 k = cpuHistIdx;
+    pcsxr_log(1, "[CPU] ESTADO INVALIDO: pc=%08x bloque=%08x recMem=%08x..%08x cyc=%u\n",
+        (unsigned)badpc, (unsigned)blockptr,
+        (unsigned)recMem, (unsigned)recMem + RECMEM_SIZE, (unsigned)psxRegs.cycle);
+    pcsxr_log(1, "[CPU] sp=%08x ra=%08x gp=%08x k0=%08x  EPC=%08x Cause=%08x Status=%08x\n",
+        (unsigned)psxRegs.GPR.n.sp, (unsigned)psxRegs.GPR.n.ra, (unsigned)psxRegs.GPR.n.gp,
+        (unsigned)psxRegs.GPR.n.k0, (unsigned)psxRegs.CP0.n.EPC,
+        (unsigned)psxRegs.CP0.n.Cause, (unsigned)psxRegs.CP0.n.Status);
+    for (i = 1; i <= CPU_HIST_N; i++)
+        pcsxr_log(1, "[CPU]   pc[-%2d] = %08x\n", i,
+            (unsigned)cpuHist[(k - i) & (CPU_HIST_N - 1)]);
+    pcsxr_log(1, "[CPU] descargando juego y volviendo al menu.\n");
+
+    Config.CpuRunning = 0;   /* frena el bucle por si la excepcion no se propagara */
+    frame_done = 1;
+    pcsxr_raise_fatal();     /* no retorna: unwind hasta el __except del frontend */
+}
+
 __inline static void execute() {
     void (**recFunc)();
     char *p;
+
+    cpuHist[cpuHistIdx++ & (CPU_HIST_N - 1)] = psxRegs.pc;
+
+    /* pc invitado invalido (no alineado o banco sin mapear) => saltaria a basura */
+    if ((psxRegs.pc & 3) || psxRecLUT[psxRegs.pc >> 16] == 0) {
+        cpuFatalInvalid(psxRegs.pc, 0);
+        return;
+    }
 
     p = (char*) PC_REC(psxRegs.pc);
 
@@ -1125,6 +1182,13 @@ __inline static void execute() {
     if (*recFunc == 0) {
         recRecompile();
     }
+
+    /* el puntero de bloque debe apuntar dentro del code cache */
+    if ((u32)*recFunc < (u32)recMem || (u32)*recFunc >= (u32)recMem + RECMEM_SIZE) {
+        cpuFatalInvalid(psxRegs.pc, (u32)*recFunc);
+        return;
+    }
+
     recRun(*recFunc, (u32) & psxRegs, (u32) & psxM_2);
 }
 
@@ -1151,12 +1215,12 @@ void recClear(u32 mem, u32 size) {
 	 * escrito pero cuyo cuerpo lo cubra (escritura a mitad de bloque). Sin esto,
 	 * el bloque queda cacheado-pero-obsoleto y, ejecutado via encadenamiento, corre
 	 * codigo viejo. Solo aplica a RAM (recRAM); BIOS es inmutable. */
-	if (smcLen && ptr >= (u32)recRAM && ptr < (u32)recRAM + 0x200000) {
+	if (smcCov && ptr >= (u32)recRAM && ptr < (u32)recRAM + 0x200000) {
 		u32 off = mem & 0x1fffff;                 /* offset en recRAM para espejos de RAM */
-		u32 pg  = off >> 12;
-		/* barato: si no hay codigo compilado en esta pagina ni en la anterior
-		 * (el back-scan puede alcanzarla), no hay nada que invalidar. */
-		if (smcCodePg[pg] || (pg && smcCodePg[pg - 1])) {
+		/* Gate de granularidad de PALABRA: solo si la palabra escrita esta
+		 * dentro de un bloque compilado hay algo que invalidar. Las escrituras
+		 * a datos (la mayoria) salen aqui sin back-scan. */
+		if (smcCov[off >> 2]) {
 			u32 back = smcMaxWords << 2;          /* bytes a retroceder */
 			u32 lo   = (off > back) ? (off - back) : 0;
 			u32 w;
@@ -2404,14 +2468,15 @@ done:;
 		if (_lb >= (u32)recRAM && _lb < (u32)recRAM + 0x200000) {
 			u32 _off = pcold & 0x1fffff;         /* = offset en recRAM (espejos de RAM) */
 			u32 _len = (pc - pcold) >> 2;
-			u32 _pg2;
+			u32 _wi, _we;
 			if (_len == 0) _len = 1;
 			*(u32 *)(smcLen + _off) = _len;
 			if (_len > smcMaxWords) smcMaxWords = _len;
-			smcCodePg[_off >> 12] = 1;
-			_pg2 = (_off + (_len << 2) - 1) >> 12;           /* el bloque puede cruzar de pagina */
-			if (_pg2 > ((0x200000u >> 12) - 1)) _pg2 = (0x200000u >> 12) - 1;
-			smcCodePg[_pg2] = 1;
+			/* Marcar como "cubierta por codigo" cada palabra del bloque. */
+			_wi = _off >> 2;
+			_we = _wi + _len;
+			if (_we > (0x200000u >> 2)) _we = (0x200000u >> 2);
+			for (; _wi < _we; _wi++) smcCov[_wi] = 1;
 		}
 	}
 #endif

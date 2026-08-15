@@ -843,6 +843,16 @@ void pcsxr_log(enum retro_log_level level, const char *format, ...)
    }
 }
 
+/* Lanzada por la red de seguridad del recompilador (cpuFatalInvalid en
+ * pR3000A.c) cuando detecta que iba a saltar a una direccion invalida. Lanza
+ * una excepcion estructurada que el __except de runGameLoop() (salvia.cpp)
+ * captura para descargar el juego y volver al menu, en vez de que el host
+ * salte a basura y cuelgue la consola. */
+extern "C" void pcsxr_raise_fatal(void)
+{
+   RaiseException(0xE0000101u, EXCEPTION_NONCONTINUABLE, 0, NULL);
+}
+
 /* ======================================================================
  * EMULATOR SETUP
  *
