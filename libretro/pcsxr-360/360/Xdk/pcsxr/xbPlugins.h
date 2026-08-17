@@ -141,17 +141,8 @@ unsigned short CALLBACK PEOPS110_SPUreadRegister(unsigned long reg);
 //freeze.c
 long CALLBACK PEOPS110_SPUfreeze(unsigned long ulFreezeMode,SPUFreeze_t * pF);
 
-/* CDR */
-long ISOopen(void);
-long ISOinit(void);
-long ISOshutdown(void);
-long ISOopen(void);
-long ISOclose(void);
-long ISOgetTN(unsigned char *);
-long ISOgetTD(unsigned char , unsigned char *);
-long ISOreadTrack(unsigned char *);
-unsigned char *ISOgetBuffer(void);
-unsigned char *ISOgetBufferSub(void);
+/* CDR: los ISO* los declara ahora cdriso.h (port integro ReARMed, firmas nuevas
+ * int/void*). Se quitan de aqui para evitar redefinicion con distinto tipo. */
 
 /* NULL GPU */
 //typedef long (* GPUopen)(unsigned long *, char *, char *);

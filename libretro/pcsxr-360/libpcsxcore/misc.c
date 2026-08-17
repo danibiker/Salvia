@@ -23,6 +23,7 @@
 
 #include "misc.h"
 #include "cdrom.h"
+#include "cdrom-async.h"
 #include "mdec.h"
 #include "ppf.h"
 
@@ -66,17 +67,13 @@ void mmssdd( char *b, char *p )
 	s = block / 75;				// seconds
 	d = block - s * 75;			// seconds rest
 
-	m = ((m / 10) << 4) | m % 10;
-	s = ((s / 10) << 4) | s % 10;
-	d = ((d / 10) << 4) | d % 10;	
-
+	/* [XBOX360] tiempo en DECIMAL (como el misc.c/cdra_* moderno), sin BCD */
 	p[0] = m;
 	p[1] = s;
 	p[2] = d;
 }
 
-#define incTime() \
-	time[0] = btoi(time[0]); time[1] = btoi(time[1]); time[2] = btoi(time[2]); \
+#define incTime() /* [XBOX360] tiempo en DECIMAL, sin btoi/itob */ \
 	time[2]++; \
 	if(time[2] == 75) { \
 	time[2] = 0; \
@@ -85,12 +82,11 @@ void mmssdd( char *b, char *p )
 	time[1] = 0; \
 	time[0]++; \
 	} \
-	} \
-	time[0] = itob(time[0]); time[1] = itob(time[1]); time[2] = itob(time[2]);
+	}
 
 #define READTRACK() \
-	if (CDR_readTrack(time) == -1) return -1; \
-	buf = CDR_getBuffer(); \
+	if (cdra_readTrack(time)) return -1; \
+	buf = (u8 *)cdra_getBuffer(); \
 	if (buf == NULL) return -1; else CheckPPFCache(buf, time[0], time[1], time[2]);
 
 #define READDIR(_dir) \
@@ -151,7 +147,7 @@ int LoadCdrom() {
 		return 0;
 	}
 
-	time[0] = itob(0); time[1] = itob(2); time[2] = itob(0x10);
+	time[0] = 0; time[1] = 2; time[2] = 0x10;
 
 	READTRACK();
 
@@ -252,7 +248,7 @@ int LoadCdromFile(const char *filename, EXE_HEADER *head) {
 
 	sscanf(filename, "cdrom:\\%256s", exename);
 
-	time[0] = itob(0); time[1] = itob(2); time[2] = itob(0x10);
+	time[0] = 0; time[1] = 2; time[2] = 0x10;
 
 	READTRACK();
 
@@ -295,9 +291,9 @@ int CheckCdrom() {
 
 	FreePPFCache();
 
-	time[0] = itob(0);
-	time[1] = itob(2);
-	time[2] = itob(0x10);
+	time[0] = 0;
+	time[1] = 2;
+	time[2] = 0x10;
 
 	READTRACK();
 
@@ -537,7 +533,7 @@ static const char PcsxHeader[32] = "STv4 PCSX v" PACKAGE_VERSION;
 
 // Savestate Versioning!
 // If you make changes to the savestate version, please increment the value below.
-static const u32 SaveVersion = 0x8b410006;
+static const u32 SaveVersion = 0x8b410007; /* bumped: nuevo layout cdr (cdrom.c de pcsx_rearmed) */
 
 /* ---------------------------------------------------------------------------
  * In-memory savestate stream � backs the gzfreeze() macro.

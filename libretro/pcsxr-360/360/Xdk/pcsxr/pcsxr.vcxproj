@@ -82,7 +82,7 @@
       <Optimization>Disabled</Optimization>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <AdditionalIncludeDirectories>../../common/;../../../libpcsxcore/;../../lib/zlib-1.2.5/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>__DYNAREC_GUARD_VERBOSE;NO_GUI;LIBRETRO;NDEBUG;_XBOX;__BIG_ENDIAN__;__BIGENDIAN__;__ppc__;__PPC__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NO_GUI;LIBRETRO;_XBOX;__BIG_ENDIAN__;__BIGENDIAN__;__ppc__;__PPC__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ExceptionHandling>false</ExceptionHandling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -127,6 +127,7 @@
       <AssemblerListingLocation>$(IntDir)$(ProjectName)\</AssemblerListingLocation>
       <ObjectFileName>$(IntDir)$(ProjectName)\</ObjectFileName>
       <ProgramDataBaseFileName>$(IntDir)$(ProjectName)\vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+      <CompileAs>Default</CompileAs>
     </ClCompile>
     <Lib>
       <AdditionalDependencies>core.lib;video.lib;audio.lib;input.lib;cdrom.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -137,10 +138,7 @@
     <ClCompile Include="bram.cpp" />
     <ClCompile Include="video_stub.cpp" />
     <ClCompile Include="libretro_core.cpp" />
-    <ClCompile Include="..\..\common\sys\time.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">CompileAsC</CompileAs>
-    </ClCompile>
+    <ClCompile Include="..\..\common\sys\time.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\common\sys\mman.h" />

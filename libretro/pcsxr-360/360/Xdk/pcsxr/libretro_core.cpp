@@ -138,10 +138,11 @@ extern int      duck_gpu_enabled;
  * tenemos que matchearlo para que el linker resuelva el simbolo. */
 extern "C" void duck_true_color_set_active(int active);
 
-/* Async CD-ROM prefetch toggle (cdriso_async.c).  Hot-reloadable from
- * the libretro option pcsxr360_cdrom_prefetch.  When OFF, cdra_read()
- * bypasses the ring buffer and goes straight to the sync backend. */
-extern "C" void cdra_set_enabled(int enabled);
+/* Async CD-ROM prefetch (port integro pcsx_rearmed: cdrom-async.c).
+ * La opcion pcsxr360_cdrom_prefetch mapea a cdra_set_buf_count(): N buffers
+ * de prefetch (worker en HW4) o 0 = sin prefetch (lectura sync directa). */
+#include "cdrom-async.h"
+#define CD_PREFETCH_BUFS 64
 
 /* Runtime selector for the gpu_unai SW renderer ported from
  * PCSX-ReARMed.  Defined in plugins/gpu_unai/gpu_unai_driver.cpp.
@@ -463,7 +464,7 @@ static void check_game_fixes(void) {
      * because it's a pure latency-hiding win for CHD games and harmless
      * for BIN/CUE.  Disable only to rule it out when debugging CD-related
      * issues.  (extern "C" decl is at file scope above.) */
-    cdra_set_enabled(read_bool_var("pcsxr360_cdrom_prefetch", true) ? 1 : 0);
+    cdra_set_buf_count(read_bool_var("pcsxr360_cdrom_prefetch", true) ? CD_PREFETCH_BUFS : 0);
     /* gpu_unai mantiene DOS structs de config: la externa (ext) que es la
      * que toca el frontend, y la interna `gpu_unai.config` que es la que
      * consulta `DitheringEnabled()` en el inner loop. Hay que llamar a
@@ -768,10 +769,17 @@ static void poll_libretro_input(void) {
                                      RETRO_DEVICE_INDEX_ANALOG_RIGHT,
                                      RETRO_DEVICE_ID_ANALOG_Y);
 
-        libretro_analog[port][0] = (uint8_t)((lx / 256) + 128);
-        libretro_analog[port][1] = (uint8_t)((ly / 256) + 128);
-        libretro_analog[port][2] = (uint8_t)((rx / 256) + 128);
-        libretro_analog[port][3] = (uint8_t)((ry / 256) + 128);
+        /* Mapeo simetrico [-32768..32767] -> [0..255], centro 0x80.
+         * OJO: NO usar (v/256)+128: la division entera trunca hacia cero, asi
+         * que la mitad negativa (adelante / izquierda) queda sesgada ~1 unidad
+         * hacia el centro y tope en 0x01 en vez del 0x00 real, mientras la
+         * positiva si llega a 0xFF -> asimetria adelante/atras que Ape Escape
+         * (100% analogico) delata. El desplazamiento +32768 y >>8 es lineal y
+         * simetrico: -32768->0x00, 0->0x80, +32767->0xFF. */
+        libretro_analog[port][0] = (uint8_t)(((int)lx + 32768) >> 8);
+        libretro_analog[port][1] = (uint8_t)(((int)ly + 32768) >> 8);
+        libretro_analog[port][2] = (uint8_t)(((int)rx + 32768) >> 8);
+        libretro_analog[port][3] = (uint8_t)(((int)ry + 32768) >> 8);
     }
 }
 
@@ -914,8 +922,8 @@ static int emu_setup(void) {
         Config.Mcd2[0] = '\0';
     }
 
-	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] cdrIsoInit\n");
-    cdrIsoInit();
+	/* [XBOX360] cdrIsoInit ya no existe (port integro): cdra_init() (=ISOinit)
+	 * se llama en LoadPlugins. */
 	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] SetIsoFile\n");
     /* En modo BIOS-only seteamos un path dummy para que UsingIso()
      * devuelva true durante LoadPlugins.  Sin esto, LoadPlugins toma
@@ -1012,8 +1020,8 @@ static int emu_setup(void) {
         SetCdOpenCaseTime((s64)-1);
     } else {
         pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling CDR_open...\n");
-        ret = CDR_open();
-        if (ret < 0) { pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] CDR_open FAILED\n"); return -1; }
+        ret = cdra_open();
+        if (ret < 0) { pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] cdra_open FAILED\n"); return -1; }
     }
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling GPU_open...\n");
     ret = GPU_open(NULL);
@@ -1111,8 +1119,8 @@ static void emu_teardown(void) {
     if (PAD2_close) PAD2_close();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] PAD1_close\n");
     if (PAD1_close) PAD1_close();
-	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] CDR_close\n");
-    if (CDR_close)  CDR_close();
+	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] cdra_close\n");
+    cdra_close();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] GPU_close\n");
     if (GPU_close)  GPU_close();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] SPU_close\n");
@@ -1287,12 +1295,12 @@ static bool dc_set_eject_state(bool ejected) {
          * nunca llamamos CDR_open, asi que cdHandle es NULL.  ISOclose
          * tolera handle NULL (early-return) pero llamarlo en bucle no
          * cuesta y nos protege de estados huerfanos. */
-        if (CDR_close && !disk_ejected) CDR_close();
+        if (!disk_ejected) cdra_close();
     } else {
         /* Swap the backing file, then close the shell shortly */
         if (disk_current < disk_count && disk_images[disk_current][0]) {
             SetIsoFile(disk_images[disk_current]);
-            if (CDR_open) CDR_open();
+            cdra_open();
         }
         /* +2 s keeps the lid-open window long enough for the BIOS to see
          * both states; games treat the close transition as a fresh TOC. */

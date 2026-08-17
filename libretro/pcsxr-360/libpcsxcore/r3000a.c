@@ -360,7 +360,40 @@ void schedule_timeslice(void) {
 	psxRegs.next_interupt = c + min;
 }
 
+/* ---- Diagnostico TEMPORAL de eventos (autocontenido; NO usa la
+ * instrumentacion global de gpu.h, asi que enlaza sin g_xbox_soft_*).
+ * Vuelca ~1 linea por segundo emulado (o si branch_tests explota, senal
+ * de spin) con los dispatches de cada PSXINT y el avance del reloj (dcyc).
+ * Lectura:
+ *   - bt (branch_tests) enorme + dcyc pequeno  -> spin / timeslices diminutos.
+ *   - algun evento con count enorme            -> ese es el que tormentea.
+ *   - bt y counts normales + dcyc ~= PSXCLK    -> el core NO es el cuello
+ *                                                 (mirar render/audio).
+ * Poner PCSXR_EVT_DIAG a 0 para quitarlo. */
+#define PCSXR_EVT_DIAG 0
+#if PCSXR_EVT_DIAG
+static unsigned int g_evt_cnt[PSXINT_COUNT];
+static unsigned int g_evt_bt, g_evt_lastcyc;
+static void evt_diag_tick(void) {
+	unsigned int dcyc = psxRegs.cycle - g_evt_lastcyc;
+	g_evt_bt++;
+	if (dcyc >= (unsigned int)PSXCLK || g_evt_bt >= 3000000u) {
+		SysPrintf("[EVTDIAG] bt=%u cdr=%u cdrd=%u cddma=%u cdlid=%u cdplay=%u cddbuf=%u spuirq=%u spuupd=%u gpudma=%u spudma=%u dcyc=%u\n",
+			g_evt_bt, g_evt_cnt[PSXINT_CDR], g_evt_cnt[PSXINT_CDREAD],
+			g_evt_cnt[PSXINT_CDRDMA], g_evt_cnt[PSXINT_CDRLID], g_evt_cnt[PSXINT_CDRPLAY],
+			g_evt_cnt[PSXINT_CDRDBUF], g_evt_cnt[PSXINT_SPU_IRQ], g_evt_cnt[PSXINT_SPU_UPDATE],
+			g_evt_cnt[PSXINT_GPUDMA], g_evt_cnt[PSXINT_SPUDMA], dcyc);
+		{ int k; for (k = 0; k < PSXINT_COUNT; k++) g_evt_cnt[k] = 0; }
+		g_evt_bt = 0;
+		g_evt_lastcyc = psxRegs.cycle;
+	}
+}
+#endif
+
 void psxBranchTest() {
+#if PCSXR_EVT_DIAG
+	evt_diag_tick();
+#endif
 #if PCSXR_DIAG_INSTRUMENTATION
 	diag_psx_branch_test_calls++;
 	/* Sampleo periodico del PC para el histograma.  No hace falta proteger
@@ -379,8 +412,11 @@ void psxBranchTest() {
 			for (irq = 0, irq_bits = psxRegs.interrupt; irq_bits != 0; irq++, irq_bits >>= 1) {
 				if (!(irq_bits & 1))
 					continue;
-				if ((psxRegs.cycle - psxRegs.intCycle[irq].sCycle) >= psxRegs.intCycle[irq].cycle) {
+				if ((s32)(psxRegs.cycle - psxRegs.intCycle[irq].sCycle - psxRegs.intCycle[irq].cycle) >= 0) { /* wrap-safe s32: tolera sCycle futuro (modelo acumulado CDRPLAYREAD_INT) */
 					psxRegs.interrupt &= ~(1u << irq);
+#if PCSXR_EVT_DIAG
+					if (irq < PSXINT_COUNT) g_evt_cnt[irq]++;
+#endif
 					/* Marcar que estamos en este IRQ handler para que el
 					 * GPU watchdog pueda identificar cuelgues aqui (ver
 					 * gpu.h, PCSXR_DIAG_INSTRUMENTATION).  Cuando esa
@@ -396,15 +432,15 @@ void psxBranchTest() {
 					switch (irq) {
 						case PSXINT_SIO: if (!Config.Sio) sioInterrupt(); break;
 						case PSXINT_CDR: cdrInterrupt(); break;
-						case PSXINT_CDREAD: cdrReadInterrupt(); break;
+						case PSXINT_CDREAD: cdrPlayReadInterrupt(); break;
 						case PSXINT_GPUDMA: gpuInterrupt(); break;
 						case PSXINT_MDECOUTDMA: mdec1Interrupt(); break;
 						case PSXINT_SPUDMA: spuInterrupt(); break;
 						case PSXINT_MDECINDMA: mdec0Interrupt(); break;
 						case PSXINT_GPUOTCDMA: gpuotcInterrupt(); break;
 						case PSXINT_CDRDMA: cdrDmaInterrupt(); break;
-						case PSXINT_CDRPLAY: cdrPlayInterrupt(); break;
-						case PSXINT_CDRDBUF: cdrDecodedBufferInterrupt(); break;
+						case PSXINT_CDRPLAY: break; /* n/a: cdrom.c moderno fusiona el play en cdrPlayReadInterrupt (PSXINT_CDREAD) */
+						case PSXINT_CDRDBUF: break; /* n/a: cdrom.c moderno no usa decoded-buffer IRQ */
 						case PSXINT_CDRLID: cdrLidSeekInterrupt(); break;
 						/* Cycle-driven SPU IRQ events (port from pcsx_rearmed) */
 						case PSXINT_SPU_IRQ: spuDelayedIrq(); break;

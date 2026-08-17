@@ -214,6 +214,17 @@ extern psxRegisters psxRegs;
 	      psxRegs.next_interupt = abs_; } \
 } while (0)
 
+/* pcsx_rearmed cdrom.c usa set_event_raw_abs (de psxevents.h upstream).
+ * Aqui el macro CDRPLAYREAD_INT ya arma psxRegs.interrupt e intCycle[];
+ * solo falta adelantar next_interupt para el fast-path de psxBranchTest.
+ * schedule_timeslice() lo recalcula tras cada tanda de eventos. */
+#define set_event_raw_abs(e, abs) do { \
+	u32 abs_ = (abs); \
+	(void)(e); \
+	if ((s32)(psxRegs.next_interupt - abs_) > 0) \
+		psxRegs.next_interupt = abs_; \
+} while (0)
+
 void schedule_timeslice(void);
 
 #if defined(__BIGENDIAN__)
