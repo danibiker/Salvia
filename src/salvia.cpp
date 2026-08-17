@@ -506,7 +506,30 @@ static bool retro_environment(unsigned cmd, void *data) {
 				}
 
 				if (port->available_types.size() > 0){
-					port->current_device_id = port->available_types[0].first;
+					// [XBOX360] Default sensato: NO quedarnos en "Disabled"
+					// (RETRO_DEVICE_NONE). joyTypeIdx (indice en available_types) es lo
+					// que updateTypes() aplica al core via retro_set_controller_port_device.
+					// Solo lo ajustamos si apunta a NONE o esta fuera de rango (no pisamos
+					// una eleccion valida ya hecha por el usuario/perfil). Preferimos
+					// RETRO_DEVICE_JOYPAD: en dosbox-pure es "Use Gamepad Mapper" (el Pad
+					// Mapper); en pcsxr-360 es "standard". Si no hay JOYPAD, el primer tipo
+					// que no sea Disabled.
+					int curIdx = gameMenu->joystick->inputs.joyTypeIdx[i];
+					bool needDefault = (curIdx < 0
+						|| curIdx >= (int)port->available_types.size()
+						|| port->available_types[curIdx].first == RETRO_DEVICE_NONE);
+					if (needDefault) {
+						int chosen = -1, firstNonNone = -1;
+						for (std::size_t k = 0; k < port->available_types.size(); ++k) {
+							unsigned tid = port->available_types[k].first;
+							if (tid == RETRO_DEVICE_JOYPAD) { chosen = (int)k; break; }
+							if (firstNonNone < 0 && tid != RETRO_DEVICE_NONE) firstNonNone = (int)k;
+						}
+						if (chosen < 0) chosen = (firstNonNone >= 0) ? firstNonNone : 0;
+						gameMenu->joystick->inputs.joyTypeIdx[i] = chosen;
+					}
+					port->current_device_id =
+						port->available_types[gameMenu->joystick->inputs.joyTypeIdx[i]].first;
 				}
 			}
 			gameMenu->configMenus->poblarJoystickTypes(gameMenu->joystick);
@@ -1610,7 +1633,7 @@ static void __declspec(noinline) runGameLoop() {
 		}
 	} __except (EXCEPTION_EXECUTE_HANDLER) {
 		printAndDelay();
-		LOG_ERROR("FATAL: Unhandled exception, details written to crash.log");
+		LOG_ERROR("FATAL: Unhandled exception");
 	}
 }
 

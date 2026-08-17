@@ -464,6 +464,9 @@ namespace {
 
 			it->second->isForThisGame = true;
 			it->second->category = category;
+			// El default lo declara el core (no se persiste); lo refrescamos
+			// siempre, incluso en claves ya cargadas de config, para "restaurar".
+			it->second->defaultSelected = defaultIdx;
 
 			LOG_DEBUG("[Core Options] SET. Key already defined %s", validKey.c_str());
 			return;
@@ -474,6 +477,7 @@ namespace {
 		raw->values      = std::move(values);
 		raw->labels      = std::move(labels);
 		raw->selected    = defaultIdx;
+		raw->defaultSelected = defaultIdx;
 		raw->isForThisGame = true;
 		raw->category    = category;
 

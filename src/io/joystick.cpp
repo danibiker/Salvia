@@ -54,9 +54,9 @@ bool Joystick::init_all_joysticks() {
         g_joysticks[joyId] = SDL_JoystickOpen(joyId);
 		if (g_joysticks[joyId]) {
 			inputs.names[joyId] = Constant::Trim(SDL_JoystickName(joyId));
-			//inputs.names[joyId] = "Retropad Default";
-			//Loading default values
-			inputs.axisAsPad[joyId] = true;
+			/* axisAsPad must be false by default to allow analog-joystick-able cores 
+			 * as dosbox-pure or tyrquake to use the input properly */
+			inputs.axisAsPad[joyId] = false;
 			inputs.joyTypeIdx[joyId] = 0;
 			//Setting mappers for the frontend
 			configMapperFrontend(inputs.mapperFrontend, joyId);
@@ -491,8 +491,16 @@ bool Joystick::pollKeys(SDL_Surface* screen){
                     axisState[idxPos] = (val >  DEADZONE);
                     axisState[idxNeg] = (val < -DEADZONE);
                 } else {
-                    inputs.g_analog_state[p][axis] = event.jaxis.value;
-					//LOG_INFO("axis: %d=%d", axis, inputs.g_analog_state[p][axis]);
+					int32_t raw = event.jaxis.value;
+                    // [XBOX360] Clamp SIMETRICO a +-32767 (estandar libretro/RetroArch). El unico
+                    // valor problematico es INT16_MIN (-32768): al golpear el stick a fondo
+                    // (izquierda rapida) SDL entrega -32768, y los cores que NIEGAN el eje
+                    // para mapeos invertidos (dosbox-pure, meta=-1) calculan -(-32768), que
+                    // NO cabe en int16 -> se queda -32768 y el input "se desactiva" en esa
+                    // direccion. El positivo ya llega como maximo a +32767. Rango completo
+                    // simetrico (lo que espera pcsxr-360; su "andar vs correr" era del core).
+					if (raw < -32767) raw = -32767;
+                    inputs.g_analog_state[p][axis] = (int16_t)raw;
                 }
                 break;
             }

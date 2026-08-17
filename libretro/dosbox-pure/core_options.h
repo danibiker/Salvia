@@ -264,7 +264,7 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 			{ "240",  "On (240 FPS)" },
 			{ "360",  "On (360 FPS)" },
 		},
-		"false"
+		"true"
 	},
 	#ifndef DBP_STANDALONE
 	{
@@ -519,7 +519,7 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 			{ "500000",  "Pentium III, 600 MHz from 1999 (500000 cps)" },
 			{ "1000000", "AMD Athlon, 1.2 GHz from 2000 (1000000 cps)" },
 		},
-		"auto"
+		"max"
 	},
 	{
 		"dosbox_pure_cycles_max",
@@ -677,7 +677,7 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 			{ "4mb", "Enabled - 4MB memory, Low Resolution Only" },
 			{ "off", "Disabled" },
 		},
-		"8mb",
+		"off",
 	},
 	{
 		"dosbox_pure_voodoo_perf",
@@ -880,7 +880,7 @@ static retro_core_option_v2_definition option_defs[DBP_Option::_OPTIONS_TOTAL] =
 			{ "512", "512 MB" },
 			{ "1024", "1024 MB" },
 		},
-		"16"
+		"32"
 	},
 	{
 		"dosbox_pure_modem",

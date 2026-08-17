@@ -65,6 +65,7 @@ static struct {
    u32 buf_cnt, thread_exit, do_prefetch, prefetch_failed, have_subchannel;
    u32 total_lba, prefetch_lba_wflag;
    int check_eject_delay;
+   u32 worker_own;   // [XBOX360] Strategy B: worker con handles propios (sin read_lock)
 
    // single sector cache, not touched by the thread
    __declspec(align(64)) u8 buf_local[CD_FRAMESIZE_RAW_ALIGNED];
@@ -78,22 +79,30 @@ static void lbacache_do(u32 lba, u32 cdda_bit)
    int ret;
 
    lba2msf(lba + 150, &msf[0], &msf[1], &msf[2]);
-   slock_lock(acdrom.read_lock);
-   if (g_cd_handle)
-      ret = rcdrom_readSector(g_cd_handle, lba, buf);
-   else if (cdda_bit)
-      ret = ISOreadCDDA(msf, buf);
-   else
-      ret = ISOreadTrack(msf, buf);
-   if (acdrom.have_subchannel) {
+   if (acdrom.worker_own) {
+      /* Strategy B: handles propios del worker, SIN read_lock -> lee en
+       * paralelo con el emu (que usa los handles primarios). */
+      ret = cdriso_worker_read(msf, cdda_bit ? 1 : 0, buf,
+               acdrom.have_subchannel ? buf_sub : NULL);
+      slock_lock(acdrom.buf_lock);
+   } else {
+      slock_lock(acdrom.read_lock);
       if (g_cd_handle)
-         ret |= rcdrom_readSub(g_cd_handle, lba, buf_sub);
+         ret = rcdrom_readSector(g_cd_handle, lba, buf);
+      else if (cdda_bit)
+         ret = ISOreadCDDA(msf, buf);
       else
-         ret |= ISOreadSub(msf, buf_sub);
-   }
+         ret = ISOreadTrack(msf, buf);
+      if (acdrom.have_subchannel) {
+         if (g_cd_handle)
+            ret |= rcdrom_readSub(g_cd_handle, lba, buf_sub);
+         else
+            ret |= ISOreadSub(msf, buf_sub);
+      }
 
-   slock_lock(acdrom.buf_lock);
-   slock_unlock(acdrom.read_lock);
+      slock_lock(acdrom.buf_lock);
+      slock_unlock(acdrom.read_lock);
+   }
    acdrom_dbg("c  %d:%02d:%02d %2d m%d f%d\n", msf[0], msf[1], msf[2], ret,
          buf[12+3], ((buf[12+4+2] >> 5) & 1) + 1);
    if (ret) {
@@ -193,6 +202,10 @@ void cdra_stop_thread(void)
       sthread_join(acdrom.thread);
       acdrom.thread = NULL;
    }
+   /* [XBOX360] Strategy B: cerrar los handles propios del worker DESPUES del
+    * join (el worker ya no esta leyendo). Idempotente si no habia (NULL). */
+   cdriso_worker_close();
+   acdrom.worker_own = 0;
    if (acdrom.cond) { scond_free(acdrom.cond); acdrom.cond = NULL; }
    if (acdrom.buf_lock) { slock_free(acdrom.buf_lock); acdrom.buf_lock = NULL; }
    if (acdrom.read_lock) { slock_free(acdrom.read_lock); acdrom.read_lock = NULL; }
@@ -208,6 +221,12 @@ static void cdra_start_thread(void)
    acdrom.prefetch_failed = 0;
    if (acdrom.buf_cnt == 0)
       return;
+   /* [XBOX360] Strategy B: intentar handles propios para el worker. Si la
+    * imagen los soporta (CHD o BIN/CUE de un fichero) worker_own=1 y NO se usa
+    * read_lock; si no (multifile/.sub externo/comprimido, o disco aun no
+    * abierto en la llamada de retro_init) worker_own=0 -> camino read_lock.
+    * g_cd_handle (cdrom fisico) siempre usa read_lock. */
+   acdrom.worker_own = (!g_cd_handle && cdriso_worker_open()) ? 1 : 0;
    acdrom.buf_cache = calloc(acdrom.buf_cnt, sizeof(acdrom.buf_cache[0]));
    acdrom.buf_lock = slock_new();
    acdrom.read_lock = slock_new();
@@ -220,8 +239,9 @@ static void cdra_start_thread(void)
          acdrom.buf_cache[i].lba_wflag = ~0;
    }
    if (acdrom.thread) {
-      SysPrintf("cdrom precache: %d buffers%s\n",
-            acdrom.buf_cnt, acdrom.have_subchannel ? " +sub" : "");
+      SysPrintf("cdrom precache: %d buffers%s%s\n",
+            acdrom.buf_cnt, acdrom.have_subchannel ? " +sub" : "",
+            acdrom.worker_own ? " (own handle)" : " (shared+lock)");
    }
    else {
       SysPrintf("cdrom precache thread init failed.\n");
@@ -359,8 +379,9 @@ static int cdra_do_read(const unsigned char *time, int is_cdda,
          if (hit)
             break;
       }
-      if (acdrom.read_lock) {
-         // maybe still prefetching
+      if (acdrom.read_lock && !acdrom.worker_own) {
+         // maybe still prefetching. Solo en modo shared-handle: con worker_own
+         // el worker lee por handles propios y el emu por los suyos, sin lock.
          slock_lock(acdrom.read_lock);
          read_locked = 1;
          hit = lbacache_get(lba, buf, buf_sub, is_cdda);

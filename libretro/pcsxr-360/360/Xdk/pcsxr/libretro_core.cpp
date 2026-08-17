@@ -144,6 +144,14 @@ extern "C" void duck_true_color_set_active(int active);
 #include "cdrom-async.h"
 #define CD_PREFETCH_BUFS 64
 
+/* [XBOX360] LidInterrupt() (cdrom.c, declarado en cdrom.h dentro de extern "C"):
+ * "patea" la maquina de estados de la tapa (cdrLidSeekInterrupt) para que un
+ * cambio de disco se DETECTE aunque el juego no sondee el status del CD. Sin
+ * esto, la deteccion depende de que el juego haga polling (FFVII si -> va; MGS
+ * al pedir el CD1 en el arranque no lo hace igual -> no detectaba el insert).
+ * Declaracion minima aqui para no arrastrar todo cdrom.h. */
+extern "C" void LidInterrupt(void);
+
 /* Runtime selector for the gpu_unai SW renderer ported from
  * PCSX-ReARMed.  Defined in plugins/gpu_unai/gpu_unai_driver.cpp.
  * Mutually exclusive with duck_gpu_enabled — the GP0 dispatch
@@ -281,24 +289,22 @@ void retro_set_environment(retro_environment_t cb) {
          * Coste: +2MB RAM, ~10-15% mas fillrate por el doble store en
          * ShadePixel. */
         { "pcsxr360_true_color",         "True Color 24-bit (SwanStation + XRGB8888 only); auto|enabled|disabled" },
-        /* CD-ROM async prefetch: worker thread pinned to core 2 pre-reads the
-         * next 8 sectors after each successful CDR_readTrack into an in-memory
-         * ring buffer.  When the game requests one of those sectors, it's
-         * served zero-latency from the ring (no chd_read / fread / decompress).
-         * Biggest benefit: CHD-compressed games where each cold-cache sector
-         * costs 1-5ms of zlib decompression on the PPC -- prefetch hides that
-         * behind emulator CPU work.  BIN/CUE gets a small benefit too (disk
-         * I/O latency overlap).  Disable if you see crashes or hangs you
-         * suspect are CD-related so you can rule it out. */
-        { "pcsxr360_cdrom_prefetch",     "CD-ROM async prefetch (core 2 worker); enabled|disabled" },
-		{ "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
-        { "pcsxr360_fix_parasite_eve2",  "Game Fix (PEOPS): Parasite Eve 2 (counter); disabled|enabled" },
-        { "pcsxr360_fix_dark_forces",    "Game Fix (PEOPS): Dark Forces / Duke Nukem (GPU); disabled|enabled" },
-        { "pcsxr360_fix_front_mission3", "Game Fix (PEOPS): Front Mission 3 (CPU); disabled|enabled" },
-        { "pcsxr360_fix_ignore_brightness", "GPU Fix: Ignore black brightness; disabled|enabled" },
-        { "pcsxr360_fix_lazy_update",    "GPU Fix: Lazy screen update; disabled|enabled" },
-        { "pcsxr360_fix_quads_to_tris",  "GPU Fix: Draw quads with triangles; disabled|enabled" },
-        //{ "pcsxr360_load_delay",         "CPU Fix: R3000A load-delay slots (Soul Calibur); enabled|disabled" },
+        /* CD-ROM async prefetch: worker thread (HW4) que lee sectores por
+         * delante en RAM. ON usa Strategy B (handles propios, sin read_lock)
+         * para CHD/BIN de un fichero. DEFAULT ON: en la practica el buffer
+         * stdio de 64KB (cdriso.c) ya oculta la latencia del USB leyendo ~28
+         * sectores por operacion, asi que las lecturas SINCRONAS llegan de
+         * sobra (NFS3 verificado) y el hilo de prefetch no aporta diferencia
+         * perceptible. Se deja como opcion para almacenamiento con latencia
+         * alta que el buffer no cubra. */
+        { "pcsxr360_cdrom_prefetch",        "CD-ROM async prefetch (worker HW4); enabled|disabled" },
+		{ "pcsxr360_slow_boot",             "Slow Boot (show BIOS intro); disabled|enabled" },
+        { "pcsxr360_fix_parasite_eve2",     "PEOPS Game Fix: Parasite Eve 2 (counter); disabled|enabled" },
+        { "pcsxr360_fix_dark_forces",       "PEOPS Game Fix: Dark Forces / Duke Nukem (GPU); disabled|enabled" },
+        { "pcsxr360_fix_front_mission3",    "PEOPS Game Fix: Front Mission 3 (CPU); disabled|enabled" },
+        { "pcsxr360_fix_ignore_brightness", "PEOPS GPU Fix: Ignore black brightness; disabled|enabled" },
+        { "pcsxr360_fix_lazy_update",       "PEOPS GPU Fix: Lazy screen update; disabled|enabled" },
+        { "pcsxr360_fix_quads_to_tris",     "PEOPS GPU Fix: Draw quads with triangles; disabled|enabled" },
         { NULL, NULL }
     };
     cb(RETRO_ENVIRONMENT_SET_VARIABLES, variables);
@@ -457,13 +463,15 @@ static void check_game_fixes(void) {
     gpu_unai_config_ext.dithering = g_pcsxr_dithering;
     iUseDither = g_pcsxr_dithering;
 
-    /* CD-ROM async prefetch (worker thread on core 2, see cdriso_async.c).
-     * Toggleable in caliente: cdra_set_enabled() flips a flag that the
-     * read path checks on every call.  When OFF, cdra_read() falls
-     * through to the sync path with no thread interaction.  Default ON
-     * because it's a pure latency-hiding win for CHD games and harmless
-     * for BIN/CUE.  Disable only to rule it out when debugging CD-related
-     * issues.  (extern "C" decl is at file scope above.) */
+    /* CD-ROM async prefetch (worker thread en HW4, cdrom-async.c).
+     * ON  -> cdra_set_buf_count(N): crea el worker de prefetch
+     *        (cdriso_worker_*), si la imagen lo soporta (CHD o BIN/CUE de un
+     *        fichero) el worker usa HANDLES PROPIOS y el emu no espera (sin
+     *        read_lock). Multifile/.sub externo/comprimido caen al camino
+     *        shared+read_lock.
+     * OFF -> cdra_set_buf_count(0): sin worker, lecturas SINCRONAS en el hilo
+     *        de emulacion (probado: NFS3 va bien asi en USB lento).
+     * Toggle en caliente (check_variables arranca/para el worker). */
     cdra_set_buf_count(read_bool_var("pcsxr360_cdrom_prefetch", true) ? CD_PREFETCH_BUFS : 0);
     /* gpu_unai mantiene DOS structs de config: la externa (ext) que es la
      * que toca el frontend, y la interna `gpu_unai.config` que es la que
@@ -1291,6 +1299,10 @@ static bool dc_set_eject_state(bool ejected) {
     if (ejected) {
         /* Open the shell permanently until we insert */
         SetCdOpenCaseTime((s64)-1);
+        /* [XBOX360] Patear la maquina de tapa ANTES de cerrar (disco viejo aun
+         * abierto): STANDBY -> LID_OPEN y se auto-reprograma, sin depender del
+         * polling del juego (MGS al arrancar no sondea como FFVII). */
+        LidInterrupt();
         /* CDR_close solo si previamente abierto: en BIOS-only inicial
          * nunca llamamos CDR_open, asi que cdHandle es NULL.  ISOclose
          * tolera handle NULL (early-return) pero llamarlo en bucle no
@@ -1305,6 +1317,11 @@ static bool dc_set_eject_state(bool ejected) {
         /* +2 s keeps the lid-open window long enough for the BIOS to see
          * both states; games treat the close transition as a fresh TOC. */
         SetCdOpenCaseTime((s64)time(NULL) + 2);
+        /* [XBOX360] Patear la maquina de tapa: arranca con shell OPEN
+         * (cdOpenCaseTime futuro) y a los ~2s ve el cierre -> CheckCdrom ->
+         * re-lee el TOC del disco nuevo. Asi el juego detecta el insert aunque
+         * no sondee el status del CD. */
+        LidInterrupt();
     }
 
     disk_ejected = ejected;

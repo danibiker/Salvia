@@ -38,6 +38,14 @@ int ISOreadCDDA(const unsigned char *time, void *buffer);
 int ISOreadSub(const unsigned char *time, void *buffer);
 int ISOgetStatus(struct CdrStat *stat);
 
+/* [XBOX360] Strategy B: camino de lectura del worker de prefetch con handles
+ * PROPIOS (sin read_lock). cdriso_worker_open() devuelve 1 si la imagen soporta
+ * handles independientes (CHD o BIN/CUE de un fichero). Ver cdriso.c. */
+int  cdriso_worker_open(void);
+void cdriso_worker_close(void);
+int  cdriso_worker_read(const unsigned char *time, int is_cdda,
+	void *out_cd, void *out_sub);
+
 extern void * (*ISOgetBuffer)(void);
 
 extern unsigned int cdrIsoMultidiskCount;

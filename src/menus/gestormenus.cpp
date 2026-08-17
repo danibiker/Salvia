@@ -128,6 +128,35 @@ std::string GestorMenus::guardarCoreConfig(CfgLoader *refConfig){
 	return refConfig->saveCoreParams();
 }
 
+// Restaura TODAS las opciones del core (core + game-specific) a su valor por
+// defecto. El default lo declara el core en el parse (applyEntry -> defaultSelected).
+// setParameter sirve values[selected] en GET_VARIABLE, asi que basta reponer
+// selected (+ cachedValue para coherencia inmediata) y marcar el cambio para que
+// el core lo relea. Persistimos para que el reset sobreviva a recargas.
+// NOTA: las opciones init-only (threading/widescreen/gpu_renderer) quedan en su
+// default pero solo surten efecto al recargar el core.
+std::string GestorMenus::restaurarCoreConfig(CfgLoader *refConfig){
+	LOG_DEBUG("Restaurando opciones del core a sus valores por defecto");
+	for (auto it = refConfig->startupLibretroParams.begin();
+	     it != refConfig->startupLibretroParams.end(); ++it) {
+		cfg::t_emu_props *p = it->second.get();
+		int d = (p->defaultSelected >= 0 && p->defaultSelected < (int)p->values.size())
+		        ? p->defaultSelected : 0;
+		p->selected = d;
+		if (!p->values.empty()) p->cachedValue = p->values[d];
+	}
+	for (auto it = refConfig->gameSpecificLibretroParams.begin();
+	     it != refConfig->gameSpecificLibretroParams.end(); ++it) {
+		cfg::t_emu_props *p = it->second.get();
+		int d = (p->defaultSelected >= 0 && p->defaultSelected < (int)p->values.size())
+		        ? p->defaultSelected : 0;
+		p->selected = d;
+		if (!p->values.empty()) p->cachedValue = p->values[d];
+	}
+	options_changed_flag = true;   // el core relee en el proximo GET_VARIABLE_UPDATE
+	return LanguageManager::instance()->get("menu.core.options.restore.applied");
+}
+
 std::string GestorMenus::guardarMainConfig(CfgLoader *refConfig){
 	LOG_DEBUG("Guardando valores principales de configuracion");
 	return refConfig->saveMainParams();
@@ -1194,6 +1223,7 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
 
 	//Param independent options (kept at the menu root)
 	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.save"), &GestorMenus::guardarCoreConfig, refConfig, this));
+	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.restore"), &GestorMenus::restaurarCoreConfig, refConfig, this));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.version"), string(refConfig->configMain[cfg::libretro_core].valueStr) + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.extensions"), refConfig->configMain[cfg::libretro_core_extensions].valueStr));
 
