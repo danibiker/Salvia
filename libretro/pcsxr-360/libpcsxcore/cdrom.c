@@ -824,6 +824,11 @@ void cdrPlayReadInterrupt(void)
 		cdr.DriveState = DRIVESTATE_PAUSED;
 	}
 	else {
+		/* Gate async igual que en datos: no descomprimir CDDA en el hilo emu. */
+		if (!cdra_peek(cdr.SetSectorPlay, 1)) {
+			CDRPLAYREAD_INT(cdReadTime, 0);
+			return;
+		}
 		cdra_readCDDA(cdr.SetSectorPlay, read_buf);
 	}
 
@@ -1511,6 +1516,15 @@ static void cdrReadInterrupt(void)
 	int is_start;
 
 	cd_diag_bump(1);
+	/* [XBOX360] Gate async: si el sector de datos aun no esta prefetcheado por
+	 * el worker, actua como "drive busy" -> pide que lo traiga y re-agenda esta
+	 * IRQ, SIN bloquear el hilo de emulacion descomprimiendo el hunk (eso daba
+	 * stalls de 15-340ms por seek). Cuando este listo, ReadTrack sera un hit
+	 * inmediato. El juego solo ve latencia de CD (realista), el emu no se para. */
+	if (!cdra_peek(cdr.SetSectorPlay, 0)) {
+		CDRPLAYREAD_INT((cdr.Mode & MODE_SPEED) ? (cdReadTime / 2) : cdReadTime, 0);
+		return;
+	}
 	memcpy(subqPos, cdr.SetSectorPlay, sizeof(subqPos));
 	msfiAdd(subqPos, cdr.SubqForwardSectors);
 	UpdateSubq(subqPos);

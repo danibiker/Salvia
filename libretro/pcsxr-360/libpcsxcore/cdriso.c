@@ -109,19 +109,9 @@ struct chd_img_s {
 	unsigned int sector_in_hunk;
 };
 static struct chd_img_s *chd_img;
-/* [XBOX360] Strategy B: handle CHD PROPIO del worker de prefetch (prefetch ON).
- * Con handles independientes, el hilo de emulacion no espera al worker (se
- * elimina read_lock). Ver cdriso_worker_open/close/read mas abajo. */
-static struct chd_img_s *chd_img_worker;
 #else
 #define chd_img 0
 #endif
-
-/* [XBOX360] handles propios del worker de prefetch (Strategy B). Para BIN/CUE
- * de un solo fichero y CHD. Si no se pueden abrir (multifile, .sub externo,
- * comprimido .z) cdra_worker_ok=0 y se cae al camino con read_lock. */
-static FILE *cdHandle_worker = NULL;
-static int   cdra_worker_ok = 0;
 
 static int (*cdimg_read_func)(FILE *f, unsigned int base, void *dest, int sector);
 static int (*cdimg_read_sub_func)(FILE *f, int sector, void *dest);
@@ -209,16 +199,11 @@ static off_t get_size(FILE *f)
 static void set_static_stdio_buffer(FILE *f)
 {
 #if !defined(fopen) // no stdio redirect
-	/* [XBOX360] USB lento: agrandar el buffer stdio de 16K reduce el numero de
-	 * lecturas USB en streaming secuencial (NFS3), donde el prefetcher no
-	 * llegaba a tiempo y el hilo de emulacion se bloqueaba en una lectura
-	 * sincrona -> "congelado" con audio en bucle. PERO no pasarse: el emu y el
-	 * worker comparten este FILE buffer via read_lock (cdrom-async.c), y un
-	 * setvbuf en bloque rellena TODO el buffer en un fread bloqueante que
-	 * retiene read_lock; con 256K ese refill (~decenas de ms en USB) supera el
-	 * presupuesto de un frame -> stutters brutales. 64K es el punto optimo:
-	 * refill < ~1 frame, y el worker repone la cache a menudo. Buffer estatico
-	 * unico OK porque el acceso esta serializado por read_lock. */
+	/* [XBOX360] Agrandar el buffer stdio (16K por defecto es < sector) reduce el
+	 * numero de lecturas fisicas en streaming secuencial. El acceso al handle lo
+	 * hace SOLO el hilo lector (cdrom-async.c), asi que un buffer estatico unico
+	 * es seguro. No pasarse: un setvbuf muy grande rellena todo el buffer en un
+	 * fread bloqueante; 32K es un buen compromiso (refill corto). */
 	static char buf[32 * 1024];
 	if (f) {
 		int r;
@@ -227,18 +212,6 @@ static void set_static_stdio_buffer(FILE *f)
 		if (r)
 			SysPrintf("cdriso: setvbuf %d %d\n", r, errno);
 	}
-#endif
-}
-
-// [XBOX360] Strategy B: el worker de prefetch tiene su PROPIO FILE*, que se usa
-// a la vez que el del emu -> necesita su propio buffer estatico (compartir el de
-// arriba corromperia el buffering al leer los dos handles concurrentemente).
-static void set_static_stdio_buffer_worker(FILE *f)
-{
-#if !defined(fopen) // no stdio redirect
-	static char buf_w[64 * 1024];
-	if (f)
-		setvbuf(f, buf_w, _IOFBF, sizeof(buf_w));
 #endif
 }
 
@@ -1374,9 +1347,7 @@ finish:
 }
 
 #ifdef HAVE_CHD
-/* [XBOX360] Helpers CHD con CONTEXTO explicito (Strategy B): el emu usa chd_img
- * y el worker de prefetch usa chd_img_worker, mismo codigo sin duplicar y sin
- * estado compartido -> lecturas concurrentes sin lock. */
+/* [XBOX360] Helpers CHD con CONTEXTO explicito (struct chd_img_s *c). */
 static unsigned char *chd_get_sector_ctx(struct chd_img_s *c,
 	unsigned int current_buffer, unsigned int sector_in_hunk)
 {
@@ -1764,217 +1735,6 @@ static void DecodeRawSubData(unsigned char *subbuffer) {
 // read track
 // time: byte 0 - minute; byte 1 - second; byte 2 - frame (non-bcd)
 // buf: if NULL, data is kept in internal buffer accessible by ISOgetBuffer()
-/* ===================================================================== *
- * [XBOX360] Strategy B: camino de lectura del WORKER de prefetch.
- *
- * Espeja ISOreadTrack/ISOreadCDDA/ISOreadSub pero usando handles PROPIOS
- * (cdHandle_worker / chd_img_worker) y solo metadata read-only (ti[],
- * numtracks, cdimg_read_func, cddaBigEndian, subChanMixed...). Asi el worker
- * y el emu leen en paralelo sin compartir estado mutable -> se elimina
- * read_lock. Activo solo si cdriso_worker_open() tuvo exito (CHD o BIN/CUE de
- * un fichero; multifile/.sub externo/comprimido caen al camino con read_lock).
- * ===================================================================== */
-static int worker_readCDDA(const unsigned char *time, void *buffer)
-{
-	unsigned int track, track_start = 0, cddaCurPos;
-	int ret = -1, ret_clear = -1;
-
-	cddaCurPos = msf2sec(time);
-
-	for (track = numtracks; ; track--) {
-		track_start = ti[track].start;
-		if (track_start <= cddaCurPos)
-			break;
-		if (track == 1)
-			break;
-	}
-
-	if (track == numtracks && cddaCurPos >= ti[track].start + ti[track].length)
-		return -1;
-	if (ti[track].type != CDRT_CDDA) { ret_clear = 0; goto clear_return; }
-	if (track < numtracks && cddaCurPos >= ti[track].start + ti[track].length) {
-		ret_clear = 0; goto clear_return;
-	}
-
-#ifdef HAVE_CHD
-	if (chd_img_worker)
-		ret = cdread_chd_ctx(chd_img_worker, buffer,
-			(int)(ti[track].start_offset + (cddaCurPos - track_start)));
-	else
-#endif
-		ret = cdimg_read_func(cdHandle_worker, ti[track].start_offset,
-			buffer, cddaCurPos - track_start);
-	if (ret != CD_FRAMESIZE_RAW)
-		goto clear_return;
-
-	if (cddaBigEndian && buffer) {
-		unsigned char tmp, *buf = buffer;
-		int i;
-		for (i = 0; i < CD_FRAMESIZE_RAW / 2; i++) {
-			tmp = buf[i * 2];
-			buf[i * 2] = buf[i * 2 + 1];
-			buf[i * 2 + 1] = tmp;
-		}
-	}
-	return 0;
-
-clear_return:
-	if (buffer)
-		memset(buffer, 0, CD_FRAMESIZE_RAW);
-	return ret_clear;
-}
-
-static int worker_readTrack(const unsigned char *time, void *buf)
-{
-	int sector = msf2sec(time);
-	long ret;
-
-	if (!cdHandle_worker && !chd_img_worker)
-		return -1;
-
-	if (sector >= (int)(ti[1].start + ti[1].length) &&
-	    numtracks > 1 && ti[2].type == CDRT_CDDA)
-		return worker_readCDDA(time, buf);
-
-	sector -= 2 * 75;
-
-#ifdef HAVE_CHD
-	if (chd_img_worker)
-		ret = cdread_chd_ctx(chd_img_worker, buf, sector);
-	else
-#endif
-		ret = cdimg_read_func(cdHandle_worker, 0, buf, sector);
-
-	if (ret < 12*2 + 2048)
-		return -1;
-	return 0;
-}
-
-static int worker_readSub(const unsigned char *time, void *buffer)
-{
-	int ret, sector = msf2sec(time);
-
-	if (sector >= (int)(ti[1].start + ti[1].length))
-		return -1;
-	sector -= 2 * 75;
-
-#ifdef HAVE_CHD
-	if (chd_img_worker) {
-		if (!subChanMixed)
-			return -1;
-		if ((ret = cdread_sub_chd_ctx(chd_img_worker, sector, buffer)))
-			return ret;
-	}
-	else
-#endif
-	if (cdimg_read_sub_func != NULL) {
-		/* BIN con sub mezclado en el mismo fichero: cdread_sub_sub_mixed usa el
-		 * FILE* que le pasemos -> el del worker. */
-		if ((ret = cdread_sub_sub_mixed(cdHandle_worker, sector, buffer)))
-			return ret;
-	}
-	else {
-		return -1; /* .sub externo no soportado por el worker (open lo filtra) */
-	}
-
-	if (subChanRaw)
-		DecodeRawSubData(buffer);
-	return 0;
-}
-
-// time: msf non-bcd. Devuelve 0 si ok; nonzero si fallo (mismo criterio que
-// la secuencia ISOreadTrack/CDDA + ISOreadSub de lbacache_do).
-int cdriso_worker_read(const unsigned char *time, int is_cdda,
-	void *out_cd, void *out_sub)
-{
-	int ret;
-
-	if (!cdra_worker_ok)
-		return -1;
-
-	if (is_cdda)
-		ret = worker_readCDDA(time, out_cd);
-	else
-		ret = worker_readTrack(time, out_cd);
-
-	if (out_sub)
-		ret |= worker_readSub(time, out_sub);
-
-	return ret;
-}
-
-// Abre los handles PROPIOS del worker para la imagen ya abierta por ISOopen.
-// Devuelve 1 si el worker puede operar con handles independientes (CHD o
-// BIN/CUE de un fichero sin .sub externo), 0 si no (usar camino read_lock).
-int cdriso_worker_open(void)
-{
-	const char *name = GetIsoFile();
-
-	cdra_worker_ok = 0;
-
-	if (compr_img)          /* comprimido .z: estado mutable unico, no soportado */
-		return 0;
-
-#ifdef HAVE_CHD
-	if (chd_img) {
-		FILE *f = fopen(name, "rb");
-		if (!f)
-			return 0;
-		set_static_stdio_buffer_worker(f);
-		chd_img_worker = calloc(1, sizeof(*chd_img_worker));
-		if (!chd_img_worker) { fclose(f); return 0; }
-		if (chd_open_file(f, CHD_OPEN_READ, NULL, &chd_img_worker->chd) != CHDERR_NONE) {
-			free(chd_img_worker); chd_img_worker = NULL;
-			fclose(f); return 0;
-		}
-		chd_img_worker->header = chd_get_header(chd_img_worker->chd);
-		chd_img_worker->buffer = malloc(chd_img_worker->header->hunkbytes * 2);
-		if (!chd_img_worker->buffer) {
-			chd_close(chd_img_worker->chd);
-			free(chd_img_worker); chd_img_worker = NULL;
-			fclose(f); return 0;
-		}
-		chd_img_worker->sectors_per_hunk =
-			chd_img_worker->header->hunkbytes / (CD_FRAMESIZE_RAW + SUB_FRAMESIZE);
-		chd_img_worker->current_hunk[0] = (unsigned int)-1;
-		chd_img_worker->current_hunk[1] = (unsigned int)-1;
-		cdHandle_worker = f; /* chd_open_file NO es owner del FILE*: lo cerramos nosotros */
-		cdra_worker_ok = 1;
-		return 1;
-	}
-#endif
-
-	/* BIN/CUE de UN fichero, sin multifile y sin .sub externo (subHandle):
-	 * esos casos no guardan nombre de fichero para reabrir -> read_lock path. */
-	if (cdHandle && !multifile && subHandle == NULL) {
-		cdHandle_worker = fopen(name, "rb");
-		if (!cdHandle_worker)
-			return 0;
-		set_static_stdio_buffer_worker(cdHandle_worker);
-		cdra_worker_ok = 1;
-		return 1;
-	}
-
-	return 0;
-}
-
-void cdriso_worker_close(void)
-{
-	cdra_worker_ok = 0;
-#ifdef HAVE_CHD
-	if (chd_img_worker) {
-		chd_close(chd_img_worker->chd);
-		free(chd_img_worker->buffer);
-		free(chd_img_worker);
-		chd_img_worker = NULL;
-	}
-#endif
-	if (cdHandle_worker) {
-		fclose(cdHandle_worker);
-		cdHandle_worker = NULL;
-	}
-}
-
 int ISOreadTrack(const unsigned char *time, void *buf)
 {
 	int sector = msf2sec(time);

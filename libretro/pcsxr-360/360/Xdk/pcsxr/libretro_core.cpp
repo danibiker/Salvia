@@ -142,7 +142,11 @@ extern "C" void duck_true_color_set_active(int active);
  * La opcion pcsxr360_cdrom_prefetch mapea a cdra_set_buf_count(): N buffers
  * de prefetch (worker en HW4) o 0 = sin prefetch (lectura sync directa). */
 #include "cdrom-async.h"
-#define CD_PREFETCH_BUFS 64
+/* [XBOX360] Ventana de read-ahead (sectores). El worker mantiene ~esta cantidad
+ * cacheada por delante del cabezal, absorbiendo los picos de I/O/descompresion
+ * (hasta ~340ms) sin que el emu tenga que esperar. 128 sect * 2452B ~= 300KB;
+ * a 2x (6.5ms/sector) da ~830ms de colchon, cubre de sobra un pico de 340ms. */
+#define CD_PREFETCH_BUFS 128
 
 /* [XBOX360] LidInterrupt() (cdrom.c, declarado en cdrom.h dentro de extern "C"):
  * "patea" la maquina de estados de la tapa (cdrLidSeekInterrupt) para que un
@@ -586,13 +590,14 @@ static void check_game_fixes(void) {
     iUseDither = g_pcsxr_dithering;
 
     /* CD-ROM async prefetch (worker thread en HW4, cdrom-async.c).
-     * ON  -> cdra_set_buf_count(N): crea el worker de prefetch
-     *        (cdriso_worker_*), si la imagen lo soporta (CHD o BIN/CUE de un
-     *        fichero) el worker usa HANDLES PROPIOS y el emu no espera (sin
-     *        read_lock). Multifile/.sub externo/comprimido caen al camino
-     *        shared+read_lock.
+     * ON  -> cdra_set_buf_count(N): arranca el hilo lector. El worker es el
+     *        UNICO que lee/descomprime la imagen (chd_img); el emu solo lee de
+     *        buf_cache. En gameplay, un cache-miss RE-AGENDA la IRQ del CD
+     *        (drive-busy, cdra_peek) en vez de descomprimir un hunk en el hilo
+     *        de emulacion -> elimina los stalls de 15-340ms por seek (CHD).
+     *        REQUERIDO para quitar esos stutters: dejar esta opcion en ON.
      * OFF -> cdra_set_buf_count(0): sin worker, lecturas SINCRONAS en el hilo
-     *        de emulacion (probado: NFS3 va bien asi en USB lento).
+     *        de emulacion (descomprime el hunk ahi -> vuelven los stutters).
      * Toggle en caliente (check_variables arranca/para el worker). */
     cdra_set_buf_count(read_bool_var("pcsxr360_cdrom_prefetch", true) ? CD_PREFETCH_BUFS : 0);
     /* gpu_unai mantiene DOS structs de config: la externa (ext) que es la

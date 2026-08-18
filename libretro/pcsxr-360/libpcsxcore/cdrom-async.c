@@ -60,12 +60,12 @@ static struct {
    sthread_t *thread;
    slock_t *read_lock;
    slock_t *buf_lock;
-   scond_t *cond;
+   scond_t *cond;          // emu -> worker: hay peticion (do_prefetch)
+   scond_t *read_done_cond; // worker -> emu: acabo de cachear un sector (para block-wait)
    struct cached_buf *buf_cache;
    u32 buf_cnt, thread_exit, do_prefetch, prefetch_failed, have_subchannel;
    u32 total_lba, prefetch_lba_wflag;
    int check_eject_delay;
-   u32 worker_own;   // [XBOX360] Strategy B: worker con handles propios (sin read_lock)
 
    // single sector cache, not touched by the thread
    __declspec(align(64)) u8 buf_local[CD_FRAMESIZE_RAW_ALIGNED];
@@ -79,35 +79,34 @@ static void lbacache_do(u32 lba, u32 cdda_bit)
    int ret;
 
    lba2msf(lba + 150, &msf[0], &msf[1], &msf[2]);
-   if (acdrom.worker_own) {
-      /* Strategy B: handles propios del worker, SIN read_lock -> lee en
-       * paralelo con el emu (que usa los handles primarios). */
-      ret = cdriso_worker_read(msf, cdda_bit ? 1 : 0, buf,
-               acdrom.have_subchannel ? buf_sub : NULL);
-      slock_lock(acdrom.buf_lock);
-   } else {
+   if (g_cd_handle) {
+      /* CD fisico: el handle lo comparten emu y worker -> read_lock. */
       slock_lock(acdrom.read_lock);
-      if (g_cd_handle)
-         ret = rcdrom_readSector(g_cd_handle, lba, buf);
-      else if (cdda_bit)
+      ret = rcdrom_readSector(g_cd_handle, lba, buf);
+      if (acdrom.have_subchannel)
+         ret |= rcdrom_readSub(g_cd_handle, lba, buf_sub);
+      slock_lock(acdrom.buf_lock);
+      slock_unlock(acdrom.read_lock);
+   } else {
+      /* [XBOX360] ISO/CHD: el worker es el UNICO hilo que lee/descomprime la
+       * imagen (chd_img). El emu NUNCA la toca (bloquea-espera esta cache o
+       * re-agenda la IRQ), asi que NO hace falta read_lock: sin contencion ni
+       * el deadlock/starvation del viejo modo shared+lock. La descompresion de
+       * hunk (15-340ms) ocurre aqui, en HW4, no en el hilo de emulacion. */
+      if (cdda_bit)
          ret = ISOreadCDDA(msf, buf);
       else
          ret = ISOreadTrack(msf, buf);
-      if (acdrom.have_subchannel) {
-         if (g_cd_handle)
-            ret |= rcdrom_readSub(g_cd_handle, lba, buf_sub);
-         else
-            ret |= ISOreadSub(msf, buf_sub);
-      }
-
+      if (acdrom.have_subchannel)
+         ret |= ISOreadSub(msf, buf_sub);
       slock_lock(acdrom.buf_lock);
-      slock_unlock(acdrom.read_lock);
    }
    acdrom_dbg("c  %d:%02d:%02d %2d m%d f%d\n", msf[0], msf[1], msf[2], ret,
          buf[12+3], ((buf[12+4+2] >> 5) & 1) + 1);
    if (ret) {
       acdrom.do_prefetch = 0;
       acdrom.prefetch_failed = 1;
+      scond_signal(acdrom.read_done_cond); /* que un emu bloqueado no se cuelgue */
       slock_unlock(acdrom.buf_lock);
       SysPrintf("prefetch: read failed for lba %d: %d\n", lba, ret);
       return;
@@ -121,6 +120,8 @@ static void lbacache_do(u32 lba, u32 cdda_bit)
       if (acdrom.have_subchannel)
          memcpy(acdrom.buf_cache[i].buf_sub, buf_sub, sizeof(buf_sub));
    }
+   /* despertar a un emu que este bloqueado esperando ESTE (o cualquier) sector */
+   scond_signal(acdrom.read_done_cond);
    slock_unlock(acdrom.buf_lock);
 #ifdef HAVE_LIBRETRO
    if (g_cd_handle)
@@ -202,11 +203,8 @@ void cdra_stop_thread(void)
       sthread_join(acdrom.thread);
       acdrom.thread = NULL;
    }
-   /* [XBOX360] Strategy B: cerrar los handles propios del worker DESPUES del
-    * join (el worker ya no esta leyendo). Idempotente si no habia (NULL). */
-   cdriso_worker_close();
-   acdrom.worker_own = 0;
    if (acdrom.cond) { scond_free(acdrom.cond); acdrom.cond = NULL; }
+   if (acdrom.read_done_cond) { scond_free(acdrom.read_done_cond); acdrom.read_done_cond = NULL; }
    if (acdrom.buf_lock) { slock_free(acdrom.buf_lock); acdrom.buf_lock = NULL; }
    if (acdrom.read_lock) { slock_free(acdrom.read_lock); acdrom.read_lock = NULL; }
    free(acdrom.buf_cache);
@@ -221,17 +219,15 @@ static void cdra_start_thread(void)
    acdrom.prefetch_failed = 0;
    if (acdrom.buf_cnt == 0)
       return;
-   /* [XBOX360] Strategy B: intentar handles propios para el worker. Si la
-    * imagen los soporta (CHD o BIN/CUE de un fichero) worker_own=1 y NO se usa
-    * read_lock; si no (multifile/.sub externo/comprimido, o disco aun no
-    * abierto en la llamada de retro_init) worker_own=0 -> camino read_lock.
-    * g_cd_handle (cdrom fisico) siempre usa read_lock. */
-   acdrom.worker_own = (!g_cd_handle && cdriso_worker_open()) ? 1 : 0;
+   /* [XBOX360] El worker es el UNICO que lee/descomprime chd_img (ISO); el emu
+    * solo lee de buf_cache (block-wait en boot, gate+reschedule en gameplay),
+    * sin read_lock para ISO -> sin contencion ni cuelgue al cargar. */
    acdrom.buf_cache = calloc(acdrom.buf_cnt, sizeof(acdrom.buf_cache[0]));
    acdrom.buf_lock = slock_new();
    acdrom.read_lock = slock_new();
    acdrom.cond = scond_new();
-   if (acdrom.buf_cache && acdrom.buf_lock && acdrom.read_lock && acdrom.cond)
+   acdrom.read_done_cond = scond_new();
+   if (acdrom.buf_cache && acdrom.buf_lock && acdrom.read_lock && acdrom.cond && acdrom.read_done_cond)
    {
       int i;
       acdrom.thread = pcsxr_sthread_create(cdra_prefetch_thread, PCSXRT_CDR);
@@ -239,9 +235,8 @@ static void cdra_start_thread(void)
          acdrom.buf_cache[i].lba_wflag = ~0;
    }
    if (acdrom.thread) {
-      SysPrintf("cdrom precache: %d buffers%s%s\n",
-            acdrom.buf_cnt, acdrom.have_subchannel ? " +sub" : "",
-            acdrom.worker_own ? " (own handle)" : " (shared+lock)");
+      SysPrintf("cdrom precache: %d buffers%s (async reader)\n",
+            acdrom.buf_cnt, acdrom.have_subchannel ? " +sub" : "");
    }
    else {
       SysPrintf("cdrom precache thread init failed.\n");
@@ -259,23 +254,6 @@ void cdra_shutdown(void)
    cdra_close();
 }
 
-/* [XBOX360][DIAG A] Reporte de memoria fisica libre. Sirve para distinguir el
- * cuelgue acumulativo de cdra_open (tras varias cargas) entre una FUGA (mem
- * baja monotonamente) y un BLOQUEO (mem estable pero se para en un paso). Quitar
- * junto con los checkpoints cuando (A) este resuelto. */
-static void cdra_diag_mem(const char *where)
-{
-#if defined(_XBOX)
-   MEMORYSTATUS ms;
-   ms.dwLength = sizeof(ms);
-   GlobalMemoryStatus(&ms);
-   SysPrintf("[cdra][%s] avail phys: %u KB\n", where,
-         (unsigned)(ms.dwAvailPhys / 1024));
-#else
-   (void)where;
-#endif
-}
-
 int cdra_open(void)
 {
    const char *name = GetIsoFile();
@@ -283,7 +261,6 @@ int cdra_open(void)
    int ret = -1, ret2;
 
    acdrom_dbg("%s %s\n", __func__, name);
-   cdra_diag_mem("open-enter");
    acdrom.have_subchannel = 0;
    if (!name[0] || !strncmp(name, "cdrom:", 6)) {
       g_cd_handle = rcdrom_open(name, &acdrom.total_lba, &acdrom.have_subchannel);
@@ -294,23 +271,17 @@ int cdra_open(void)
    // try ISO even if it's cdrom:// as it might work through libretro vfs
    if (name[0] && ret < 0) {
       ret = ISOopen(name);
-      SysPrintf("[cdra] after ISOopen ret=%d\n", ret);
       if (ret == 0) {
          u8 msf[3];
          ISOgetTD(0, msf);
          acdrom.total_lba = MSF2SECT(msf[0], msf[1], msf[2]);
-         SysPrintf("[cdra] after ISOgetTD total_lba=%u\n", acdrom.total_lba);
          msf[0] = 0; msf[1] = 2; msf[2] = 16;
          ret2 = ISOreadSub(msf, buf_sub);
          acdrom.have_subchannel = (ret2 == 0);
-         SysPrintf("[cdra] after ISOreadSub sub=%d\n", acdrom.have_subchannel);
       }
    }
-   if (ret == 0) {
-      SysPrintf("[cdra] before start_thread\n");
+   if (ret == 0)
       cdra_start_thread();
-   }
-   cdra_diag_mem("open-exit");
    return ret;
 }
 
@@ -371,51 +342,105 @@ static int cdra_do_read(const unsigned char *time, int is_cdda,
       void *buf, void *buf_sub)
 {
    u32 lba = MSF2SECT(time[0], time[1], time[2]);
-   int hit = 0, ret = -1, read_locked = 0;
-   do
-   {
-      if (acdrom.buf_lock) {
+   u32 cdda_bit = is_cdda ? (1u << 31) : 0;
+   int ret = -1;
+
+   /* --- CD fisico: handle compartido emu/worker -> read_lock (raro en 360). --- */
+   if (g_cd_handle) {
+      int hit = 0, read_locked = 0;
+      do {
          hit = lbacache_get(lba, buf, buf_sub, is_cdda);
-         if (hit)
-            break;
-      }
-      if (acdrom.read_lock && !acdrom.worker_own) {
-         // maybe still prefetching. Solo en modo shared-handle: con worker_own
-         // el worker lee por handles propios y el emu por los suyos, sin lock.
-         slock_lock(acdrom.read_lock);
-         read_locked = 1;
-         hit = lbacache_get(lba, buf, buf_sub, is_cdda);
-         if (hit) {
-            hit = 2;
-            break;
+         if (hit) break;
+         if (acdrom.read_lock) {
+            slock_lock(acdrom.read_lock);
+            read_locked = 1;
+            hit = lbacache_get(lba, buf, buf_sub, is_cdda);
+            if (hit) break;
          }
-      }
-      acdrom.do_prefetch = 0;
-      if (g_cd_handle) {
+         acdrom.do_prefetch = 0;
          if (buf_sub)
             ret = rcdrom_readSub(g_cd_handle, lba, buf_sub);
          else
             ret = rcdrom_readSector(g_cd_handle, lba, buf);
-      }
-      else if (buf_sub)
-         ret = ISOreadSub(time, buf_sub);
-      else if (is_cdda)
-         ret = ISOreadCDDA(time, buf);
-      else
-         ret = ISOreadTrack(time, buf);
-      if (ret)
-         SysPrintf("cdrom read failed for lba %d: %d\n", lba, ret);
+      } while (0);
+      if (read_locked)
+         slock_unlock(acdrom.read_lock);
+      if (hit) ret = 0;
+      acdrom.check_eject_delay = ret ? 0 : 100;
+      return ret;
    }
-   while (0);
-   if (read_locked)
-      slock_unlock(acdrom.read_lock);
-   if (hit)
-      ret = 0;
-   acdrom.check_eject_delay = ret ? 0 : 100;
-   acdrom_dbg("f%c %d:%02d:%02d %d%s\n",
-      buf_sub ? 's' : (is_cdda ? 'c' : 'd'),
-      time[0], time[1], time[2], hit, ret ? " ERR" : "");
-   return ret;
+
+   /* --- ISO/CHD sin hilo lector (init fallo, o antes de arrancarlo): lectura
+    *     directa; seguro porque nadie mas toca chd_img. --- */
+   if (!acdrom.thread) {
+      if (buf_sub)      ret = ISOreadSub(time, buf_sub);
+      else if (is_cdda) ret = ISOreadCDDA(time, buf);
+      else              ret = ISOreadTrack(time, buf);
+      acdrom.check_eject_delay = ret ? 0 : 100;
+      return ret;
+   }
+
+   /* --- ISO/CHD con hilo lector: el worker es el UNICO dueno de chd_img -> el
+    *     emu NUNCA lee chd_img en paralelo (no hay race ni read_lock). Bloquea-
+    *     espera a que el worker cachee el sector. Las lecturas de gameplay ya
+    *     pasaron cdra_peek (=> hit inmediato); las de boot esperan al worker
+    *     (raras). Se comprueba la cache EN LINEA con buf_lock tomado (no via
+    *     lbacache_get, que re-tomaria buf_lock -> auto-deadlock). --- */
+   {
+      u32 i;
+      /* Sector fuera de rango: el worker nunca lo cachearia -> no bloquear. */
+      if (acdrom.total_lba && lba >= acdrom.total_lba) {
+         acdrom.check_eject_delay = 0;
+         return -1;
+      }
+      slock_lock(acdrom.buf_lock);
+      for (;;) {
+         i = lba % acdrom.buf_cnt;
+         if ((lba | cdda_bit) == acdrom.buf_cache[i].lba_wflag) {
+            if (buf)     memcpy(buf, acdrom.buf_cache[i].buf, CD_FRAMESIZE_RAW);
+            if (buf_sub) memcpy(buf_sub, acdrom.buf_cache[i].buf_sub, SUB_FRAMESIZE);
+            ret = 0;
+            break;
+         }
+         if (acdrom.prefetch_failed) { ret = -1; break; }
+         /* pedir este sector al worker y dormir hasta que cachee alguno */
+         acdrom.prefetch_lba_wflag = lba | cdda_bit;
+         acdrom.do_prefetch = 1;
+         scond_signal(acdrom.cond);
+         scond_wait(acdrom.read_done_cond, acdrom.buf_lock);
+      }
+      slock_unlock(acdrom.buf_lock);
+      acdrom.check_eject_delay = ret ? 0 : 100;
+      return ret;
+   }
+}
+
+/* [XBOX360] Gate no bloqueante para las IRQ de lectura de gameplay: pide al
+ * worker que traiga desde `time` y devuelve 1 si ese sector YA esta cacheado
+ * (leible sin stall). Si devuelve 0, el llamador re-agenda la IRQ del CD
+ * (drive-busy) en vez de que el emu descomprima el hunk. */
+int cdra_peek(const unsigned char *time, int is_cdda)
+{
+   u32 cdda_bit = is_cdda ? (1u << 31) : 0;
+   u32 lba = MSF2SECT(time[0], time[1], time[2]);
+   int hit;
+   /* Sin worker (CD fisico o hilo no arrancado), si el prefetch fallo, o si el
+    * sector esta fuera de rango (el worker no lo traeria -> reschedule infinito):
+    * que el llamador siga por la ruta normal (lee sincrono / reporta error). */
+   if (!acdrom.thread || g_cd_handle || acdrom.prefetch_failed)
+      return 1;
+   if (acdrom.total_lba && lba >= acdrom.total_lba)
+      return 1;
+   slock_lock(acdrom.buf_lock);
+   hit = ((lba | cdda_bit) == acdrom.buf_cache[lba % acdrom.buf_cnt].lba_wflag);
+   /* Desliza SIEMPRE el ancla de read-ahead a la posicion actual (aunque haya
+    * hit) para que el worker mantenga cacheada la ventana [lba, lba+buf_cnt) por
+    * delante del juego -> los siguientes sectores tambien haran hit. */
+   acdrom.prefetch_lba_wflag = lba | cdda_bit;
+   acdrom.do_prefetch = 1;
+   scond_signal(acdrom.cond);
+   slock_unlock(acdrom.buf_lock);
+   return hit;
 }
 
 // time: msf in non-bcd format
