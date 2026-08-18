@@ -32,7 +32,7 @@ DWORD WINAPI keyPressSimulated(LPVOID lpParam) {
 }
 
 void update_input() {
-	gameMenu->joystick->pollKeys(gameMenu->overlay);
+	gameMenu->joystick->pollKeys(gameMenu->getEmuStatus());
 	gameMenu->running = !gameMenu->joystick->evento.quit;
 
 	if (gameMenu->isOnscreenKeybEnabled()){

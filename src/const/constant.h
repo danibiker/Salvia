@@ -106,6 +106,17 @@ typedef enum {
     clTotalColors
 } enumColors;
 
+enum status_emu
+{
+	//The emulation has ben started and it's running
+	EMU_STARTED = 0, 
+	//The menu is showing so, the emulation is paused
+	EMU_MENU, 
+	EMU_MENU_OVERLAY,
+	EMU_MENU_FILTER,
+	EMU_MENU_IMAGE_VIEWER
+};
+
 
 struct svColor{
 	SDL_Color sdlColor;
@@ -366,7 +377,8 @@ extern const char *ICONS_CARTS_PATH[];
 // indexado por el enum cart_*. "" = sistema sin base de cheats por CRC. Independiente
 // de ICONS_CARTS_PATH (que es solo para los iconos del listado).
 extern const char *RDB_SYSTEM_NAMES[];
-extern const std::string CFG_EXT;
+extern const std::string CFG_JOY_EXT;
+extern const std::string CORE_OPT_EXT;
 extern const std::string RETROPAD_INI;
 extern const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS;
 extern const std::string ROUTE_SCRAP_TRANSLATIONS;

@@ -64,7 +64,7 @@ bool Joystick::init_all_joysticks() {
 			configMapperRetro(inputs.mapperCore, joyId);
 		}
 	}
-	std::string ruta = Constant::getAppDir() + Constant::getFileSep() + "retropad.ini";
+	std::string ruta = Constant::getAppDir() + Constant::getFileSep() + RETROPAD_INI;
 	loadButtonsRetro(ruta);
 	return true;
 }
@@ -143,7 +143,7 @@ void Joystick::configMapperRetro(t_joy_mapper& mapper, int joyId){
 std::string Joystick::saveButtonsRetroGame() {
 	if (!romPaths.rompath.empty()){
 		dirutil dir;
-		std::string rutaGuardado = dir.getFolder(romPaths.rompath) + Constant::getFileSep() + dir.getFileNameNoExt(romPaths.rompath) + CFG_EXT;
+		std::string rutaGuardado = dir.getFolder(romPaths.rompath) + Constant::getFileSep() + dir.getFileNameNoExt(romPaths.rompath) + CFG_JOY_EXT;
 		saveButtonsConfig(rutaGuardado, false);
 		return rutaGuardado;
 	} else {
@@ -153,7 +153,7 @@ std::string Joystick::saveButtonsRetroGame() {
 
 std::string Joystick::saveButtonsRetroCore() {
 	std::string coreDefaultsPath = Constant::getAppDir() + std::string(Constant::tempFileSep) + "config"
-		+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + CfgLoader::configMain[cfg::libretro_core].valueStr + CFG_EXT;
+		+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + CfgLoader::configMain[cfg::libretro_core].valueStr + CFG_JOY_EXT;
 
 	saveButtonsConfig(coreDefaultsPath, false);
 	return coreDefaultsPath;
@@ -193,7 +193,9 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
         signature += "|";
         for (int i = 0; i < MAX_AXIS; i++)    signature += Constant::intToString(inputs.mapperCore.sdlToAxis[p][i]) + ",";
         signature += (inputs.axisAsPad[p] ? "1" : "0");
-		signature += inputs.joyTypeIdx[p];
+		
+		if (!hotkeysAndFrontend)
+			signature += inputs.joyTypeIdx[p];
 
         // 2. Verificar si esta configuración exacta ya fue guardada
         bool yaEscrito = false;
@@ -247,12 +249,14 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
                 axis += Constant::intToString(inputs.mapperCore.sdlToAxis[p][i]) + (i < MAX_AXIS - 1 ? "," : "");
             fileConfigJoystick.push_back(axis);
 
-            fileConfigJoystick.push_back("anal=" + std::string(inputs.axisAsPad[p] ? "1" : "0"));
-
 			//Si estamos guardando la configuracion general, no tenemos en cuenta el tipo de joystick
-			//porque es dependiente del core elegido. Lo dejamos a 0 siempre
-			int joyType = hotkeysAndFrontend ? 0 : inputs.joyTypeIdx[p];
-			fileConfigJoystick.push_back("joytype=" + Constant::TipoToStr(joyType));
+			//ni el analogico porque es independiente del core elegido
+			if (!hotkeysAndFrontend){
+				int joyType = inputs.joyTypeIdx[p];
+				int anal = inputs.axisAsPad[p] ? 1 : 0;
+				fileConfigJoystick.push_back("anal=" + Constant::TipoToStr(anal));
+				fileConfigJoystick.push_back("joytype=" + Constant::TipoToStr(joyType));
+			}
             fileConfigJoystick.push_back(""); // Linea en blanco
         }
     }
@@ -297,6 +301,10 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
 		for (int i = 0; i < MAX_AXIS; i++) 
 			axis += Constant::intToString(inputs.mapperFrontend.sdlToAxis[0][i]) + (i < MAX_AXIS - 1 ? "," : "");
 		fileConfigJoystick.push_back(axis);
+
+		std::string anal = "anal=";
+		anal += Constant::intToString(inputs.frontAxisAsPad);
+		fileConfigJoystick.push_back(anal);
 	}
     FileList::guardarVector(ruta, fileConfigJoystick);
 	Fileio::commit(ruta.c_str());
@@ -371,8 +379,12 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
                     for (std::size_t j = 0; j < MAX_HATS && j < pf.hats.size(); j++)    inputs.mapperCore.setHatFromSdl(p, j, pf.hats[j]);
                     for (std::size_t j = 0; j < MAX_AXIS && j < pf.axis.size(); j++)    inputs.mapperCore.setAxisFromSdl(p, j, pf.axis[j]);
                     inputs.axisAsPad[p] = pf.anal;
-					inputs.joyTypeIdx[p] = pf.joyTypeIdx;
 					inputs.names[p] = profileName;
+					//First assign the joystick type...
+					inputs.joyTypeIdx[p] = pf.joyTypeIdx;
+					//... and afterwards, make sure is not RETRO_DEVICE_NONE if there are more options
+					//this is needed for dosbox-pure, to assign the default option to a joystick controller
+					getCkeckedJoyTypeIndex(p);
                 }
             }
         } else if (currentSection == "[HOTKEYS]" || currentSection == "[FRONTEND]") {
@@ -386,10 +398,57 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
             } else if (line.find("axis=") == 0) {
                 std::vector<int> v = Constant::splitInt(line.substr(5), ',');
                 for (std::size_t j = 0; j < MAX_AXIS && j < v.size(); j++) targetMapper.setAxisFromSdl(0, j, v[j]);
-            }
+            } else if (line.find("anal=") == 0){
+				//Set a proper option for the frontend and don't rely only with the option assigned to the core
+				inputs.frontAxisAsPad = (line.substr(5) == "1");
+			}
         }
     }
     return true;
+}
+
+/**
+* get the joytype index and make sure that the one we select is not RETRO_DEVICE_NONE if we
+* have other options. Choose always RETRO_DEVICE_JOYPAD, if there was no device set
+*/
+int Joystick::getCkeckedJoyTypeIndex(int jPos){
+	if (jPos < 0 || jPos >= MAX_PLAYERS)
+		return 0;
+
+	t_controller_port *port = &g_ports[jPos];
+
+	if (port->available_types.size() > 0){
+		// [XBOX360] Default sensato: NO quedarnos en "Disabled"
+		// (RETRO_DEVICE_NONE). joyTypeIdx (indice en available_types) es lo
+		// que updateTypes() aplica al core via retro_set_controller_port_device.
+		// Solo lo ajustamos si apunta a NONE o esta fuera de rango (no pisamos
+		// una eleccion valida ya hecha por el usuario/perfil). Preferimos
+		// RETRO_DEVICE_JOYPAD: en dosbox-pure es "Use Gamepad Mapper" (el Pad
+		// Mapper); en pcsxr-360 es "standard". Si no hay JOYPAD, el primer tipo
+		// que no sea Disabled.
+		int curIdx = inputs.joyTypeIdx[jPos];
+		bool needDefault = (curIdx < 0
+			|| curIdx >= (int)port->available_types.size()
+			|| port->available_types[curIdx].first == RETRO_DEVICE_NONE);
+
+		LOG_DEBUG("needDefault %u...", needDefault ? 1 : 0);
+
+		if (needDefault) {
+			int chosen = -1, firstNonNone = -1;
+			for (std::size_t k = 0; k < port->available_types.size(); ++k) {
+				unsigned tid = port->available_types[k].first;
+				if (tid == RETRO_DEVICE_JOYPAD) { chosen = (int)k; break; }
+				if (firstNonNone < 0 && tid != RETRO_DEVICE_NONE) 
+					firstNonNone = (int)k;
+			}
+			if (chosen < 0) chosen = (firstNonNone >= 0) ? firstNonNone : 0;
+			LOG_DEBUG("chosen %d...", chosen);
+			inputs.joyTypeIdx[jPos] = chosen;
+		}
+		port->current_device_id = port->available_types[inputs.joyTypeIdx[jPos]].first;
+		LOG_DEBUG("port->current_device_id %d...", port->current_device_id);
+	}
+	return inputs.joyTypeIdx[jPos];
 }
 
 /**
@@ -407,7 +466,7 @@ void Joystick::close_joysticks() {
 /**
 *
 */
-bool Joystick::pollKeys(SDL_Surface* screen){
+bool Joystick::pollKeys(int gameStatus){
     SDL_Event event;
 
 	inputs.mouse_rel_x = 0;
@@ -480,7 +539,9 @@ bool Joystick::pollKeys(SDL_Surface* screen){
 				combinedAxis = (axis == XBOX_COMBINED_TRIGGER_AXIS); 
 				#endif
 
-                if (inputs.axisAsPad[p] || combinedAxis) {
+				const bool isPadInput = gameStatus == EMU_STARTED ? (inputs.axisAsPad[p] || combinedAxis) : inputs.frontAxisAsPad;
+
+				if (isPadInput) {
                     // Pre-calculamos los índices para evitar multiplicar por 2 varias veces
                     const int idxNeg = axis << 1;      // axis * 2
                     const int idxPos = idxNeg | 1;     // axis * 2 + 1

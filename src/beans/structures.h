@@ -581,6 +581,9 @@ struct t_joy_state {
 	t_joy_mapper mapperCore;
 	t_joy_mapper mapperHotkeys;
 
+	//Enables or disables the axis as pad only for the frontend
+	bool frontAxisAsPad;
+
 	std::string names[MAX_PLAYERS];
 	bool axisAsPad[MAX_PLAYERS];
 	int joyTypeIdx[MAX_PLAYERS];
@@ -600,6 +603,7 @@ struct t_joy_state {
 		memset(joyTypeIdx, 0, sizeof(joyTypeIdx));
 		memset(rapidFire, 0, sizeof(rapidFire));
 		rapidFireRateIdx = 1;
+		frontAxisAsPad = false;
 		turboPhaseOn = true;
 		mouse_x = mouse_y = mouse_rel_x = mouse_rel_y = 0;
 		memset(mouse_buttons, 0, sizeof(mouse_buttons));

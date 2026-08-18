@@ -128,6 +128,17 @@ std::string GestorMenus::guardarCoreConfig(CfgLoader *refConfig){
 	return refConfig->saveCoreParams();
 }
 
+// romPaths (global de salvia.h): ruta del juego cargado, para el guardado por-juego.
+extern t_rom_paths romPaths;
+
+// Guarda las opciones del core en un fichero JUNTO AL JUEGO (mismo nombre base
+// + .opt). En la carga (launchGame -> CfgLoader::loadCoreParamsForGame) tiene
+// prioridad sobre las opciones generales del core.
+std::string GestorMenus::guardarCoreConfigGame(CfgLoader *refConfig){
+	LOG_DEBUG("Guardando opciones del core para el juego actual");
+	return refConfig->saveGameCoreParams(romPaths.rompath);
+}
+
 // Restaura TODAS las opciones del core (core + game-specific) a su valor por
 // defecto. El default lo declara el core en el parse (applyEntry -> defaultSelected).
 // setParameter sirve values[selected] en GET_VARIABLE, asi que basta reponer
@@ -1223,6 +1234,7 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
 
 	//Param independent options (kept at the menu root)
 	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.save"), &GestorMenus::guardarCoreConfig, refConfig, this));
+	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.savegame"), &GestorMenus::guardarCoreConfigGame, refConfig, this));
 	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.restore"), &GestorMenus::restaurarCoreConfig, refConfig, this));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.version"), string(refConfig->configMain[cfg::libretro_core].valueStr) + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.extensions"), refConfig->configMain[cfg::libretro_core_extensions].valueStr));
@@ -1499,6 +1511,8 @@ void GestorMenus::poblarMenuAssignFrontend(Menu* menuAssign, Joystick *joystick)
 	int num_port_buttons = sizeof(FRONTEND_BTN_VAL) / sizeof(FRONTEND_BTN_VAL[0]);
 	TipoKey type = KEY_JOY_BTN;
 	t_joy_state *input = &joystick->inputs;
+
+	menuAssign->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.controller.analogpad"), &joystick->inputs.frontAxisAsPad));
 
 	for (int i=0; i < num_port_buttons; i++){
 		const std::string text = FRONTEND_BTN_TXT[i];

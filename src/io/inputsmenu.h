@@ -396,8 +396,7 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 		}
 		
 	} else {
-		gameMenu->joystick->pollKeys(gameMenu->overlay);
-		
+		gameMenu->joystick->pollKeys(gameMenu->getEmuStatus());
 
 		if (gameMenu->isOnscreenKeybEnabled()){
 			//Se procesan las acciones del teclado que se muestra en un overlay. Solo MSX y SPECTRUM

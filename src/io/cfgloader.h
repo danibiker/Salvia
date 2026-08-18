@@ -36,6 +36,17 @@ public:
 
 	std::string saveCoreParams();
 	void loadCoreParams();
+	// [XBOX360] Opciones del core POR JUEGO: fichero junto al juego con su mismo
+	// nombre base + CORE_OPT_EXT. En la carga, si existe se aplican en lugar de
+	// las generales del core. Ver launchGame (salvia.cpp).
+	std::string getGameCoreCfgPath(const std::string& gamePath);
+	std::string saveGameCoreParams(const std::string& gamePath);
+	void loadCoreParamsForGame(const std::string& gamePath);
+	// Resetea startupLibretroParams a los defaults declarados por el core.
+	void resetCoreParamsToDefaults();
+	// Aplica un fichero de opciones (key=indice) actualizando `selected` in-place
+	// sobre las entradas existentes (crea minima si falta). Devuelve true si existia.
+	bool applyCoreParamsFile(const std::string& path);
 	std::string saveMainParams();
 	std::string saveCoreOverrideParams(int emuIdx);
 	//unsigned int findConfigIndex(std::string);

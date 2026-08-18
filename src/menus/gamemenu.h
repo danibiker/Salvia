@@ -57,17 +57,6 @@ extern std::string aspectRatioStrings[TOTAL_VIDEO_RATIO];
 extern std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
 extern t_rom_paths romPaths;
 
-enum status_emu
-{
-	//The emulation has ben started and it's running
-	EMU_STARTED = 0, 
-	//The menu is showing so, the emulation is paused
-	EMU_MENU, 
-	EMU_MENU_OVERLAY,
-	EMU_MENU_FILTER,
-	EMU_MENU_IMAGE_VIEWER
-};
-
 enum FILE_STATUS
 {
 	FS_ZIP_NAVIGATION = 0, 

@@ -266,19 +266,52 @@ static void set_retro_memmap(void);
 void retro_set_environment(retro_environment_t cb) {
     environ_cb = cb;
 
-    struct retro_variable variables[] = {
-        { "pcsxr360_gpu_renderer",       "GPU Renderer (restart core to apply); Unai|Peops|SwanStation" },
-		{ "pcsxr360_threading",          "GPU Thread (restart core to apply); enabled|disabled" },
-		{ "pcsxr360_widescreen",         "Widescreen hack 16:9 GTE FOV (restart core to apply); disabled|enabled" },
-		{ "pcsxr360_pixel_format",       "Pixel Format; RGB565|XRGB8888" },
-        { "pcsxr360_auto_frameskip",     "Auto frameskip (skip render on overload); disabled|enabled" },
+    /* [XBOX360] Opciones en formato libretro V2 CON CATEGORIAS: el menu de core
+     * options de Salvia las agrupa en submenus por category_key. La LECTURA de
+     * valores NO cambia (sigue por RETRO_ENVIRONMENT_GET_VARIABLE con las mismas
+     * keys en read_bool_var / check_pixel_format / check_game_fixes /
+     * check_gpu_renderer_initial_only / check_threading_initial_only). Salvia
+     * siempre reporta version 2, asi que la rama V2 siempre corre. Los value
+     * strings deben ser IDENTICOS a los de antes (los compara la lectura); el
+     * label NULL hace que se muestre el value tal cual. desc = etiqueta plana
+     * (fallback), desc_categorized = etiqueta corta que se ve en el submenu. */
+    static struct retro_core_option_v2_category option_cats[] = {
+        { "video",       "Video",              NULL },
+        { "performance", "Performance",        NULL },
+        { "system",      "System",             NULL },
+        { "gamefixes",   "Game Fixes (PEOPS)", NULL },
+        { NULL, NULL, NULL }
+    };
+
+    static struct retro_core_option_v2_definition option_defs[] = {
+        /* ---------- Video ---------- */
+        {
+            "pcsxr360_gpu_renderer",
+            "GPU Renderer (restart core to apply)", "GPU Renderer (restart to apply)",
+            NULL, NULL, "video",
+            { { "Unai", NULL }, { "Peops", NULL }, { "SwanStation", NULL }, { NULL, NULL } },
+            "Unai"
+        },
+        {
+            "pcsxr360_pixel_format",
+            "Pixel Format", "Pixel Format",
+            NULL, NULL, "video",
+            { { "RGB565", NULL }, { "XRGB8888", NULL }, { NULL, NULL } },
+            "RGB565"
+        },
         /* Dithering: respeta el bit de dither que el juego setea en GP1.
          * Cuando ON, las primitivas de Gouraud/lighting/blending pasan por el
          * camino con offsets de la matriz Bayer 4x4 y reclamp por canal:
          * imagen mas fiel a la PSX original pero ~15-20% mas fillrate.
          * Cuando OFF, todas las primitivas saltan el dither. Aplica a los 3
          * renderers (Unai, Peops, SwanStation). Cambia en caliente. */
-        { "pcsxr360_dithering",          "Dithering (PSX-style color quantization); enabled|disabled" },
+        {
+            "pcsxr360_dithering",
+            "Dithering (PSX-style color quantization)", "Dithering",
+            NULL, NULL, "video",
+            { { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
         /* True Color (24-bit internal rendering): elimina banding sin dither.
          * Mantiene un framebuffer paralelo 8-bit/canal junto al BGR555 normal.
          * Solo aplica al renderer SwanStation + pixel_format XRGB8888 (los
@@ -288,7 +321,38 @@ void retro_set_environment(retro_environment_t cb) {
          *   - disabled: forzado OFF
          * Coste: +2MB RAM, ~10-15% mas fillrate por el doble store en
          * ShadePixel. */
-        { "pcsxr360_true_color",         "True Color 24-bit (SwanStation + XRGB8888 only); auto|enabled|disabled" },
+        {
+            "pcsxr360_true_color",
+            "True Color 24-bit (SwanStation + XRGB8888 only)", "True Color 24-bit (SwanStation+XRGB8888)",
+            NULL, NULL, "video",
+            { { "auto", NULL }, { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
+            "auto"
+        },
+        {
+            "pcsxr360_widescreen",
+            "Widescreen hack 16:9 GTE FOV (restart core to apply)", "Widescreen 16:9 GTE FOV (restart to apply)",
+            NULL, NULL, "video",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+
+        /* ---------- Performance ---------- */
+        {
+            "pcsxr360_threading",
+            "GPU Thread (restart core to apply)", "GPU Thread (restart to apply)",
+            NULL, NULL, "performance",
+            { { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
+            "enabled"
+        },
+        {
+            "pcsxr360_auto_frameskip",
+            "Auto frameskip (skip render on overload)", "Auto Frameskip (on overload)",
+            NULL, NULL, "performance",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+
+        /* ---------- System ---------- */
         /* CD-ROM async prefetch: worker thread (HW4) que lee sectores por
          * delante en RAM. ON usa Strategy B (handles propios, sin read_lock)
          * para CHD/BIN de un fichero. DEFAULT ON: en la practica el buffer
@@ -297,17 +361,75 @@ void retro_set_environment(retro_environment_t cb) {
          * sobra (NFS3 verificado) y el hilo de prefetch no aporta diferencia
          * perceptible. Se deja como opcion para almacenamiento con latencia
          * alta que el buffer no cubra. */
-        { "pcsxr360_cdrom_prefetch",        "CD-ROM async prefetch (worker HW4); enabled|disabled" },
-		{ "pcsxr360_slow_boot",             "Slow Boot (show BIOS intro); disabled|enabled" },
-        { "pcsxr360_fix_parasite_eve2",     "PEOPS Game Fix: Parasite Eve 2 (counter); disabled|enabled" },
-        { "pcsxr360_fix_dark_forces",       "PEOPS Game Fix: Dark Forces / Duke Nukem (GPU); disabled|enabled" },
-        { "pcsxr360_fix_front_mission3",    "PEOPS Game Fix: Front Mission 3 (CPU); disabled|enabled" },
-        { "pcsxr360_fix_ignore_brightness", "PEOPS GPU Fix: Ignore black brightness; disabled|enabled" },
-        { "pcsxr360_fix_lazy_update",       "PEOPS GPU Fix: Lazy screen update; disabled|enabled" },
-        { "pcsxr360_fix_quads_to_tris",     "PEOPS GPU Fix: Draw quads with triangles; disabled|enabled" },
-        { NULL, NULL }
+        {
+            "pcsxr360_cdrom_prefetch",
+            "CD-ROM async prefetch (worker HW4)", "CD-ROM async prefetch (HW4 worker)",
+            NULL, NULL, "system",
+            { { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
+            "enabled"
+        },
+        {
+            "pcsxr360_slow_boot",
+            "Slow Boot (show BIOS intro)", "Slow Boot (BIOS intro)",
+            NULL, NULL, "system",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+
+        /* ---------- Game Fixes (PEOPS) ---------- */
+        {
+            "pcsxr360_fix_parasite_eve2",
+            "PEOPS Game Fix: Parasite Eve 2 (counter)", "Parasite Eve 2 (counter)",
+            NULL, NULL, "gamefixes",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+        {
+            "pcsxr360_fix_dark_forces",
+            "PEOPS Game Fix: Dark Forces / Duke Nukem (GPU)", "Dark Forces / Duke Nukem (GPU)",
+            NULL, NULL, "gamefixes",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+        {
+            "pcsxr360_fix_front_mission3",
+            "PEOPS Game Fix: Front Mission 3 (CPU)", "Front Mission 3 (CPU)",
+            NULL, NULL, "gamefixes",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+        {
+            "pcsxr360_fix_ignore_brightness",
+            "PEOPS GPU Fix: Ignore black brightness", "Ignore black brightness (GPU)",
+            NULL, NULL, "gamefixes",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+        {
+            "pcsxr360_fix_lazy_update",
+            "PEOPS GPU Fix: Lazy screen update", "Lazy screen update (GPU)",
+            NULL, NULL, "gamefixes",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+        {
+            "pcsxr360_fix_quads_to_tris",
+            "PEOPS GPU Fix: Draw quads with triangles", "Draw quads with triangles (GPU)",
+            NULL, NULL, "gamefixes",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+
+        { NULL, NULL, NULL, NULL, NULL, NULL, {{ NULL, NULL }}, NULL }
     };
-    cb(RETRO_ENVIRONMENT_SET_VARIABLES, variables);
+
+    static const struct retro_core_options_v2 options_v2 = { option_cats, option_defs };
+
+    unsigned options_ver = 0;
+    if (cb)
+        cb(RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION, &options_ver);
+    if (options_ver >= 2)
+        cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2, (void*)&options_v2);
 
     /* Declare supported PSX controller types per port so the frontend can
      * expose a type-selector UI (matching pcsx-rearmed's approach). */

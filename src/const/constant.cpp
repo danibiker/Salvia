@@ -30,7 +30,11 @@ svColor Constant::colors[clTotalColors] = {
 
 const char *MEDIAS_TO_FIND[] = {"sstitle", "ss", "box-2D"};
 const char *ASSETS_DIR[] = {"snaptit", "snap", "box2d", "synopsis"};
-const std::string CFG_EXT = ".cfg";
+const std::string CFG_JOY_EXT = ".joy";
+// [XBOX360] Extension para el fichero de OPCIONES DE CORE por-juego (junto al
+// juego, mismo nombre base). Distinta de CFG_JOY_EXT (.joy = mapeo de joystick por
+// juego) para que no colisionen en el mismo directorio.
+const std::string CORE_OPT_EXT = ".opt";
 const std::string RETROPAD_INI = "retropad.ini";
 const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS = "\\assets\\extra\\achievement_translations.cfg";
 const std::string ROUTE_SCRAP_TRANSLATIONS = "\\assets\\extra\\scrap_translations.cfg";

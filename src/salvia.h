@@ -224,7 +224,7 @@ DWORD WINAPI th_printLoading(LPVOID data) {
 					SDL_BlitSurface(ctx->rawSurface, nullptr, gameMenu->overlay, &ctx->drawRect);
 				}
 				//Procesamos las hotkeys
-				gameMenu->joystick->pollKeys(gameMenu->overlay);
+				gameMenu->joystick->pollKeys(gameMenu->getEmuStatus());
 				HOTKEYS_LIST hotkey = gameMenu->joystick->findHotkey();
 				if (hotkey == HK_EXIT_GAME){
 					LOG_ERROR("Requested exit");

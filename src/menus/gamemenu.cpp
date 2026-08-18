@@ -2260,16 +2260,19 @@ void GameMenu::setRomPaths(std::string rp){
 	romPaths.cht = cheatsDir + Constant::getFileSep() + dir.getFileNameNoExt(rp) + ".cht";
 
 	//Loading the joystick configuration if exists
-	std::string ruta = dir.getFolder(rp) + Constant::getFileSep() + dir.getFileNameNoExt(rp) + CFG_EXT;
+	std::string ruta = dir.getFolder(rp) + Constant::getFileSep() + dir.getFileNameNoExt(rp) + CFG_JOY_EXT;
 
 	std::string coreDefaultsPath = Constant::getAppDir() + std::string(Constant::tempFileSep) + "config"
-		+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + coreName + CFG_EXT;
+		+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + coreName + CFG_JOY_EXT;
 
 	if (dir.fileExists(ruta.c_str())){
+		//Primero comprobamos si existe el fichero de configuracion del joystick en la ruta del juego
 		joystick->loadButtonsRetro(ruta);
 	} else if (dir.fileExists(coreDefaultsPath.c_str())){
+		//Comprobamos si existe en la ruta de configuracion del core
 		joystick->loadButtonsRetro(coreDefaultsPath);
 	} else {
+		//Finalmente y en ultima instancia, comprobamos si existe en la ruta del .ini y lo cargamos
 		std::string rutaIni = Constant::getAppDir() + Constant::getFileSep() + RETROPAD_INI;
 		joystick->loadButtonsRetro(rutaIni);
 	}

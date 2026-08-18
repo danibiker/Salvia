@@ -482,6 +482,7 @@ private:
 	std::string guardarGameJoysticks(Joystick* joy);
 	std::string guardarCoreJoysticks(Joystick* joy);
 	std::string guardarCoreConfig(CfgLoader *refConfig);
+	std::string guardarCoreConfigGame(CfgLoader *refConfig);
 	std::string restaurarCoreConfig(CfgLoader *refConfig);
 	std::string guardarMainConfig(CfgLoader *refConfig);
 	std::string guardarCoreOverridesConfig(t_save_override *overrides);

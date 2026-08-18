@@ -495,42 +495,14 @@ static bool retro_environment(unsigned cmd, void *data) {
 				for (unsigned j = 0; j < info[i].num_types; j++) {
 					unsigned id = info[i].types[j].id;
 					const char* desc = info[i].types[j].desc;
-
 					if (desc == NULL) {
 						LOG_DEBUG("Puerto %d: Se recibio un descriptor NULL para el ID %u. Saltando...", i, id);
 						continue; 
 					}
-
 					LOG_DEBUG("Puerto %d soporta: %s (ID: %u)", i, desc, id);
 					port->available_types.push_back(std::make_pair(id, desc));
 				}
-
-				if (port->available_types.size() > 0){
-					// [XBOX360] Default sensato: NO quedarnos en "Disabled"
-					// (RETRO_DEVICE_NONE). joyTypeIdx (indice en available_types) es lo
-					// que updateTypes() aplica al core via retro_set_controller_port_device.
-					// Solo lo ajustamos si apunta a NONE o esta fuera de rango (no pisamos
-					// una eleccion valida ya hecha por el usuario/perfil). Preferimos
-					// RETRO_DEVICE_JOYPAD: en dosbox-pure es "Use Gamepad Mapper" (el Pad
-					// Mapper); en pcsxr-360 es "standard". Si no hay JOYPAD, el primer tipo
-					// que no sea Disabled.
-					int curIdx = gameMenu->joystick->inputs.joyTypeIdx[i];
-					bool needDefault = (curIdx < 0
-						|| curIdx >= (int)port->available_types.size()
-						|| port->available_types[curIdx].first == RETRO_DEVICE_NONE);
-					if (needDefault) {
-						int chosen = -1, firstNonNone = -1;
-						for (std::size_t k = 0; k < port->available_types.size(); ++k) {
-							unsigned tid = port->available_types[k].first;
-							if (tid == RETRO_DEVICE_JOYPAD) { chosen = (int)k; break; }
-							if (firstNonNone < 0 && tid != RETRO_DEVICE_NONE) firstNonNone = (int)k;
-						}
-						if (chosen < 0) chosen = (firstNonNone >= 0) ? firstNonNone : 0;
-						gameMenu->joystick->inputs.joyTypeIdx[i] = chosen;
-					}
-					port->current_device_id =
-						port->available_types[gameMenu->joystick->inputs.joyTypeIdx[i]].first;
-				}
+				gameMenu->joystick->getCkeckedJoyTypeIndex(i);
 			}
 			gameMenu->configMenus->poblarJoystickTypes(gameMenu->joystick);
             return true;
@@ -1324,7 +1296,14 @@ int launchGame(std::string rompath, bool tmpDelete){
 	gameMenu->fillOverlay(clBackground);
 	Fonts::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, Constant::colors[clWhite].sdlColor, 0);
 	salviaFlip(gameMenu->gameScreen);
-	
+
+	// [XBOX360] Opciones de core POR JUEGO: si existe <juego>.opt junto al juego,
+	// aplicarlas ANTES de extractAndLoadGame -> retro_load_game, para que el core
+	// las lea en su primera pasada (incluye init-only). Si no hay, se (re)aplican
+	// las generales del core.
+	if (!bios_only)
+		gameMenu->getCfgLoader()->loadCoreParamsForGame(rompath);
+
 	//Cargamos el juego en memoria o lo extraemos al disco
 	bool gameLoaded = extractAndLoadGame(rompath, tmpDelete);
 	if(!gameLoaded) {
