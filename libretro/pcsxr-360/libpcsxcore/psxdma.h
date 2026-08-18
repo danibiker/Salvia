@@ -50,9 +50,9 @@ DMA_INTERRUPT_2(0);
 HW_DMA6_CHCR_2 &= SWAP32(~0x01000000); \
 DMA_INTERRUPT_2(6);
 
-#define cdrDmaInterrupt() \
-HW_DMA3_CHCR_2 &= SWAP32(~0x01000000); \
-DMA_INTERRUPT_2(3);
+/* cdrDmaInterrupt es ahora una funcion real definida en cdrom.c
+ * (port de pcsx_rearmed), no un macro. */
+void cdrDmaInterrupt(void);
 
 #define spuInterrupt() \
 HW_DMA4_CHCR_2 &= SWAP32(~0x01000000); \

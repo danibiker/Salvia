@@ -24,21 +24,39 @@ void CurlClient::init(){
 	int err = 0;
 
 	#ifdef _XBOX
-		// 1. Comprobar si XNet ya esta corriendo (via una funcion simple)
-		XNetStartupParams xsp;
-		memset(&xsp, 0, sizeof(xsp));
-		xsp.cfgSizeOfStruct = sizeof(XNetStartupParams);
-		xsp.cfgFlags = XNET_STARTUP_BYPASS_SECURITY; 
-		err = XNetStartup(&xsp);
-			
-		// Esperar a que la interfaz tenga una IP valida y estado activo
 		XNADDR xnAddr;
 		DWORD dwStatus;
+		int intentos = 0;
+		const int MAX_INTENTOS = 25; // 25 * 200ms = 5 segundos máximo
+
+		LOG_DEBUG("Iniciando comprobacion de red en Xbox 360...\n");
+
 		do {
 			dwStatus = XNetGetTitleXnAddr(&xnAddr);
-			LOG_DEBUG("Esperando configuracion de red...\n");
-			Sleep(200);
-		} while (dwStatus == XNET_GET_XNADDR_PENDING || dwStatus == XNET_GET_XNADDR_NONE);
+			
+			// Si da NONE de inmediato, no hay inicialización o hardware básico
+			if (dwStatus == XNET_GET_XNADDR_NONE) {
+				LOG_DEBUG("Error: Red no inicializada o sin conexion (NONE).\n");
+				return;
+			}
+
+			// Si sigue pendiente (0x00000000), esperamos
+			if (dwStatus == XNET_GET_XNADDR_PENDING) {
+				LOG_DEBUG("Esperando configuracion de red (PENDING)...\n");
+				Sleep(200);
+				intentos++;
+			}
+
+		} while (dwStatus == XNET_GET_XNADDR_PENDING && intentos < MAX_INTENTOS);
+
+		// VALIDACIÓN REAL DE IP: 
+		// Debe tener asignada una IP Estática, por DHCP o por PPPoE.
+		// Si no tiene ninguno de estos bits, la IP no es válida para trafico.
+		DWORD maskIP = XNET_GET_XNADDR_STATIC | XNET_GET_XNADDR_DHCP | XNET_GET_XNADDR_PPPOE;
+		if ((dwStatus & maskIP) == 0) {
+			LOG_DEBUG("Timeout o Error: La Xbox no obtuvo una IP valida.\n");
+			return;
+		}
 	#endif
 
 		WORD wVersionRequested;
@@ -46,19 +64,21 @@ void CurlClient::init(){
 		wVersionRequested = MAKEWORD( 1, 1 );
 		err = WSAStartup( wVersionRequested, &wsaData );
 		if ( err != 0 ){
-			// initialization failed
+			LOG_DEBUG("WSAStartup fallo.\n");
 			return;
 		}
  
 		if (LOBYTE( wsaData.wVersion ) != 1 || HIBYTE( wsaData.wVersion ) != 1 ){
 			WSACleanup( );
+			LOG_DEBUG("Version de Winsock no soportada.\n");
 			return; 
 		}
 
 	#ifdef _XBOX
-		// La IP esta en xnAddr.ina.s_addr
+		// Llegar aqui significa que dwStatus == XNET_GET_XNADDR_VALID y la IP es 100% real
 		char ipStr[64];
-		sprintf(ipStr, "IP de mi Xbox: %d.%d.%d.%d\n", 
+		// Usamos sprintf_s en VS2010 por seguridad contra desbordamientos
+		sprintf_s(ipStr, sizeof(ipStr), "IP de mi Xbox: %d.%d.%d.%d\n", 
 				xnAddr.ina.S_un.S_un_b.s_b1, xnAddr.ina.S_un.S_un_b.s_b2, 
 				xnAddr.ina.S_un.S_un_b.s_b3, xnAddr.ina.S_un.S_un_b.s_b4);
 		LOG_DEBUG(ipStr);
@@ -66,13 +86,12 @@ void CurlClient::init(){
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 
-	// Diagnostico de capacidades de la libcurl compilada: backend TLS (wolfSSL),
-	// HTTP/2 (nghttp2) y compresiones. Clave para saber que fingerprint podemos imitar.
+	// Diagnostico de capacidades de la libcurl compilada
 	{
 		curl_version_info_data *vinfo = curl_version_info(CURLVERSION_NOW);
-		LOG_DEBUG("cURL: %s", curl_version());
+		LOG_DEBUG("cURL: %s\n", curl_version()); // Añadido \n para formateo de log
 		if (vinfo) {
-			LOG_DEBUG("  HTTP2=%s BROTLI=%s LIBZ=%s",
+			LOG_DEBUG("  HTTP2=%s BROTLI=%s LIBZ=%s\n",
 				(vinfo->features & CURL_VERSION_HTTP2)  ? "SI" : "NO",
 				(vinfo->features & CURL_VERSION_BROTLI) ? "SI" : "NO",
 				(vinfo->features & CURL_VERSION_LIBZ)   ? "SI" : "NO");

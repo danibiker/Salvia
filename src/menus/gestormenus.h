@@ -482,6 +482,8 @@ private:
 	std::string guardarGameJoysticks(Joystick* joy);
 	std::string guardarCoreJoysticks(Joystick* joy);
 	std::string guardarCoreConfig(CfgLoader *refConfig);
+	std::string guardarCoreConfigGame(CfgLoader *refConfig);
+	std::string restaurarCoreConfig(CfgLoader *refConfig);
 	std::string guardarMainConfig(CfgLoader *refConfig);
 	std::string guardarCoreOverridesConfig(t_save_override *overrides);
 	std::string reloadCheats(CfgLoader *refConfig);
@@ -597,6 +599,8 @@ public:
 	static std::string gameSearchAction(void* inst);
 	static std::string gameGuidesSearchAction(void* inst, void *value);
 	static std::string gameGuideAction(void* inst, void *value);
+	static std::string selectBackground(void* inst, void *index, void *values);
+	static std::string selectResolution(void* inst, void *index, void *values);
 
 	static void onUserText(const std::string& text, void* userData);
 	static void onScrapPasswordText(const std::string& text, void* userData);

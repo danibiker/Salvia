@@ -14,7 +14,7 @@ namespace cfg {
 			libretro_core_extensions, roms_path,
 			showFps, integerScale, animBG,
 			mainLang, scrapRegion, scrapLang, scrapOrigin, scrapUser, scrapPass, apikeytgdb, raUser, raPass, enableAchievements, hardcoreRA,
-			showEmptyEmulators, overscan_x, overscan_y, 
+			showEmptyEmulators, overscan_x, overscan_y, resolutionIndex,
 			MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
 
 	typedef enum{generalConfig = 0, name,
@@ -28,9 +28,10 @@ namespace cfg {
 		std::string cachedValue;
 		std::string category;   // libretro V2 category_key (runtime only, not persisted)
 		int selected;
+		int defaultSelected;    // indice por defecto declarado por el core (para "restaurar valores por defecto")
 		bool isForThisGame;
 
-		t_emu_props() : selected(0), isForThisGame(false) {}
+		t_emu_props() : selected(0), defaultSelected(0), isForThisGame(false) {}
 
 		// Constructor de movimiento
 		t_emu_props(t_emu_props&& other) {
@@ -46,6 +47,7 @@ namespace cfg {
 				cachedValue = std::move(other.cachedValue);
 				category    = std::move(other.category);
 				selected    = other.selected;
+				defaultSelected = other.defaultSelected;
 				other.selected = 0;
 			}
 			return *this;
@@ -54,7 +56,8 @@ namespace cfg {
 		// VS2010 requiere que mantengas los de copia si los vas a usar
 		t_emu_props(const t_emu_props& other)
 			: values(other.values), labels(other.labels), description(other.description),
-			  cachedValue(other.cachedValue), category(other.category), selected(other.selected) {}
+			  cachedValue(other.cachedValue), category(other.category), selected(other.selected),
+			  defaultSelected(other.defaultSelected) {}
 
 		t_emu_props& operator=(const t_emu_props& other) {
 			if (this != &other) {
@@ -64,6 +67,7 @@ namespace cfg {
 				cachedValue = other.cachedValue;
 				category = other.category;
 				selected = other.selected;
+				defaultSelected = other.defaultSelected;
 			}
 			return *this;
 		}

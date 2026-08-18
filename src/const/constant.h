@@ -56,7 +56,7 @@ static const double bkgFrameTimeTick = 1000.0 / bkgSpeedPixPerS;
 static const unsigned long KEYRETRASO = 500;
 static const int JOYHATOFFSET = 100;
 static const int JOYAXISOFFSET = 200;
-static const int DEADZONE = 23000;
+static const int DEADZONE = 10000;
 static const int DEADZONE_ANAL = 300;
 static const unsigned long DBLCLICKSPEED = 300; //tiempo en ms para poder hacer un doble click
 static const unsigned long KEYDOWNSPEED = 50;
@@ -105,6 +105,17 @@ typedef enum {
 	clAskText, 
     clTotalColors
 } enumColors;
+
+enum status_emu
+{
+	//The emulation has ben started and it's running
+	EMU_STARTED = 0, 
+	//The menu is showing so, the emulation is paused
+	EMU_MENU, 
+	EMU_MENU_OVERLAY,
+	EMU_MENU_FILTER,
+	EMU_MENU_IMAGE_VIEWER
+};
 
 
 struct svColor{
@@ -322,6 +333,8 @@ typedef enum {
 		ico_shutdown,
 		ico_help,
 		ico_cheats,
+		ico_clock,
+		ico_mouse,
 		max_icons
 }enumIco;
 
@@ -353,6 +366,7 @@ typedef enum {cart_gba,
 			  cart_atari800,
 			  cart_atari5200,
 			  cart_c64,
+			  cart_x68k,
 			  max_carts};
 
 extern float aspectRatioValues[]; 
@@ -363,7 +377,8 @@ extern const char *ICONS_CARTS_PATH[];
 // indexado por el enum cart_*. "" = sistema sin base de cheats por CRC. Independiente
 // de ICONS_CARTS_PATH (que es solo para los iconos del listado).
 extern const char *RDB_SYSTEM_NAMES[];
-extern const std::string CFG_EXT;
+extern const std::string CFG_JOY_EXT;
+extern const std::string CORE_OPT_EXT;
 extern const std::string RETROPAD_INI;
 extern const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS;
 extern const std::string ROUTE_SCRAP_TRANSLATIONS;

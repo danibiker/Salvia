@@ -26,5 +26,6 @@ static char rcsid =
 #endif
 
 #include "SDL_xboxvideo.h"
+#include "SDL_xboxhidmouse.h"   /* toggle SDL_XBOX_HIDMOUSE + API del lector USB HID */
 
 /* Functions to be exported */

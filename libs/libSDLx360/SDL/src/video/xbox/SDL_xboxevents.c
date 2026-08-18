@@ -63,6 +63,7 @@ static char rcsid =
 #include "SDL_events_c.h"
 #include "SDL_xboxvideo.h"
 #include "SDL_xboxevents_c.h"
+#include "SDL_xboxhidmouse.h"   /* toggle SDL_XBOX_HIDMOUSE + XBOX_MouseUpdateHID */
 
 
 static SDLKey DIK_keymap[256];
@@ -287,7 +288,13 @@ static SDL_keysym *TranslateKey(UINT scancode, SDL_keysym *keysym, int pressed)
 
 static void mouse_update(void)
 {
-#if !defined(_XBOX_DONT_USE_DEVICES) && defined(SDL_XBOX_MOUSE)
+#if defined(SDL_XBOX_HIDMOUSE)
+	/* Raton USB HID nativo (hooks de kernel, retail RGH/JTAG). El drenaje de
+	 * deltas y el despacho SDL viven en XBOX_MouseUpdateHID (SDL_xboxmouse.c),
+	 * que a su vez lee SDL_xboxhidmouse.cpp. Tiene prioridad sobre la ruta xbdm
+	 * de abajo (que solo sirve en devkit). */
+	XBOX_MouseUpdateHID();
+#elif !defined(_XBOX_DONT_USE_DEVICES) && defined(SDL_XBOX_MOUSE)
 	/* Lectura de ratón USB vía Xbox Debug Manager. DmGetMouseChanges
 	 * devuelve estado RELATIVO (deltas) — la mayoría de ratones USB se
 	 * mueven en delta así que esto encaja bien con la convención de

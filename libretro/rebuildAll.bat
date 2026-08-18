@@ -148,9 +148,14 @@ set MS_OPTS_360=/t:Rebuild /p:Platform=%PLATFORM_XBOX% /v:q /nologo /clp:NoSumma
 	set NAME[26]=frodo-libretro
 	set  SLN[26]=frodo-libretro\frodo-libretro.sln
 	set PLAT[26]=Both
-	set  CFG[26]=ReleaseSC
+	set  CFG[26]=%CONFIG%SC
+	
+	set NAME[27]=px68k
+	set  SLN[27]=px68k\px68k.sln
+	set PLAT[27]=Both
+	set  CFG[27]=%CONFIG%
 
-	for /l %%i in (0,1,26) do (
+	for /l %%i in (0,1,27) do (
 		set "_n=!NAME[%%i]!"
 		set "_s=!SLN[%%i]!"
 		set "_p=!PLAT[%%i]!"

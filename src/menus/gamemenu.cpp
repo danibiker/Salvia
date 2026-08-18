@@ -64,6 +64,7 @@ GameMenu::GameMenu(CfgLoader *cfgLoader) : m_csInited(false)
 	bg_image.setH(this->overlay->h);
 	bg_image.fillGaps = true;
 	bg_image.darkShift = 150;
+	bg_image.bestFit = true;
 
 	if (!joystick->init_all_joysticks()){
 		configButtonsJOY();
@@ -316,7 +317,9 @@ void GameMenu::refreshScreen(ListMenu &listMenu){
 		if (!game->longFileName.empty()){
             if (listMenu.layout == LAYBOXES) {
 				//Draw the title. It can be an image or a text
-				drawTitle(listMenu, fontBig);				
+				drawTitle(listMenu, fontBig);
+				//Draw a status bar with the time, connection status and mouse availability 
+				drawStatusBar(listMenu);
 				//Draw the scrapping process text
 				showScrapProcess(listMenu);
 				//Horizontal separation line
@@ -449,6 +452,66 @@ void GameMenu::drawSelectedGameAssets(ListMenu &listMenu, GameFile *game){
 	}
 }
 
+void GameMenu::drawStatusBar(ListMenu &listMenu){
+	static uint32_t lastTick = 0;
+	static SDL_Surface *srfHora = NULL;
+	static char stringLastHora[9] = {0};
+	char stringHora[9] = {0}; 
+	TTF_Font *fontsmall;
+	
+	const int x = listMenu.marginX;
+	const int y = (listMenu.marginY - face_h_small) / 2;
+	SDL_Rect dstRectHora;
+	int mouseSupport = 0;
+	SDL_Rect dstRectIcoMouse = {x, y - Icons::getInstance().icon_w_add, face_h_big, face_h_big};
+
+	// Forzar actualizacion si es la primera vez que se ejecuta o si pasaron 10 segundos
+	if (srfHora == NULL || this->gameTicks.ticks > lastTick + FPS_DESIRED * 10 || this->gameTicks.ticks == 0){
+		lastTick = this->gameTicks.ticks;
+		fontsmall = Fonts::getFont(Fonts::FONTSMALL);
+		
+		SYSTEMTIME horaLocal;
+		GetLocalTime(&horaLocal);
+
+		// Formateo seguro
+		sprintf_s(stringHora, sizeof(stringHora), "%02d:%02d", horaLocal.wHour, horaLocal.wMinute);
+		
+		// strncmp evita leer memoria basura fuera del array de 9 bytes
+		if (strncmp(stringLastHora, stringHora, 5) != 0){
+			strncpy_s(stringLastHora, sizeof(stringLastHora), stringHora, _TRUNCATE);
+			if (srfHora != NULL) SDL_FreeSurface(srfHora);
+			srfHora = Fonts::renderUtf8Solid(fontsmall, stringHora, Constant::colors[clWhite].sdlColor);
+		}
+	}
+	
+	if (overlay == NULL) return;
+
+	//Dibujamos si esta cargado el plugin de dashlaunch para el mouse. En Windows no lo dibujamos 
+	#ifdef _XBOX
+	mouseSupport = XBOX_isHidMousePluginConnected();
+	if (mouseSupport){
+		Icons::getInstance().drawIcon(overlay, &dstRectIcoMouse, ico_mouse);
+	} else {
+		dstRectIcoMouse.w = 0;
+		dstRectIcoMouse.h = 0;
+	}
+	#else
+		dstRectIcoMouse.w = 0;
+		dstRectIcoMouse.h = 0;
+	#endif
+
+	//Dibujamos el tiempo
+	if (srfHora != NULL){
+		SDL_Rect dstRectIco = {x + dstRectIcoMouse.w / 2, y - Icons::getInstance().icon_w_add, 0, 0};
+		Icons::getInstance().drawIcon(overlay, &dstRectIco, ico_clock);
+		dstRectHora.x = dstRectIco.x + face_h_big + Icons::getInstance().icon_w_add;
+		dstRectHora.y = y;
+		dstRectHora.w = srfHora->w;
+		dstRectHora.h = srfHora->h;
+		SDL_BlitSurface(srfHora, NULL, overlay, &dstRectHora);
+	}
+}
+
 void GameMenu::drawTitle(ListMenu &listMenu, TTF_Font *fontBig){
 	const SDL_Color &textColor = Constant::colors[clWhite].sdlColor;
 	const ConfigEmu emu = *cfgLoader->getCfgEmu();
@@ -552,8 +615,8 @@ void GameMenu::drawInfoButtons(SDL_Rect &rect){
 			drawnRect.w = 0;
 		}
 
-		if (!joystick->infoButtons[i].mergeNext){
-			x += drawnRect.w + (i + 1 < joystick->infoButtons.size() ? face_h_big * 2 : 0);
+		if (joystick->infoButtons[i].mergeNext){
+			x += drawnRect.w + (i + 1 < joystick->infoButtons.size() ? face_h_big : 0);
 		} else {
 			x += drawnRect.w + (i + 1 < joystick->infoButtons.size() ? face_h_big : 0);
 		}
@@ -2197,16 +2260,19 @@ void GameMenu::setRomPaths(std::string rp){
 	romPaths.cht = cheatsDir + Constant::getFileSep() + dir.getFileNameNoExt(rp) + ".cht";
 
 	//Loading the joystick configuration if exists
-	std::string ruta = dir.getFolder(rp) + Constant::getFileSep() + dir.getFileNameNoExt(rp) + CFG_EXT;
+	std::string ruta = dir.getFolder(rp) + Constant::getFileSep() + dir.getFileNameNoExt(rp) + CFG_JOY_EXT;
 
 	std::string coreDefaultsPath = Constant::getAppDir() + std::string(Constant::tempFileSep) + "config"
-		+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + coreName + CFG_EXT;
+		+ std::string(Constant::tempFileSep) + PREFIX_DEFAULTS + coreName + CFG_JOY_EXT;
 
 	if (dir.fileExists(ruta.c_str())){
+		//Primero comprobamos si existe el fichero de configuracion del joystick en la ruta del juego
 		joystick->loadButtonsRetro(ruta);
 	} else if (dir.fileExists(coreDefaultsPath.c_str())){
+		//Comprobamos si existe en la ruta de configuracion del core
 		joystick->loadButtonsRetro(coreDefaultsPath);
 	} else {
+		//Finalmente y en ultima instancia, comprobamos si existe en la ruta del .ini y lo cargamos
 		std::string rutaIni = Constant::getAppDir() + Constant::getFileSep() + RETROPAD_INI;
 		joystick->loadButtonsRetro(rutaIni);
 	}

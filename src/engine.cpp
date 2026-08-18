@@ -31,9 +31,7 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		// Forzar el driver GDI: SDL solo gestiona la ventana/eventos; el
 		// render lo hace nuestra capa D3D9 (no llamamos a SDL_Flip en PC).
 		SDL_putenv("SDL_VIDEODRIVER=windib");
-	#endif
-
-	#ifdef _XBOX
+	#elif defined(_XBOX)
 		HANDLE currrentThread = GetCurrentThread();
 		SetThreadPriority(currrentThread, THREAD_PRIORITY_NORMAL);
 		// Pinear el main thread (Salvia + retro_run + dynarec PSX del core libretro) a HW thread 0.
@@ -43,6 +41,13 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		//  - Salvia ya arranca en HW thread 0 por defecto; el pin solo garantiza que el
 		//    dispatcher no migre el thread bajo presion, no cambia el patron de ejecucion.
 		XSetThreadProcessor(currrentThread, CPU_THREAD);
+
+		video_width = cfgLoader->configMain[cfg::resolution_width].valueInt;   // 0 = Auto
+		video_height = cfgLoader->configMain[cfg::resolution_height].valueInt;
+		SDL_XBOX_SetScreenResolution(video_width, video_height);              // Auto (<=0) -> XGetVideoMode dentro
+		//Releer las dims REALES del backbuffer (imprescindible cuando se pidio "Auto":
+		//la config es 0/0 y SDL_SetVideoMode + el escalado de fuentes necesitan dims reales)
+		SDL_XBOX_GetScreenResolution(&video_width, &video_height);
 	#endif
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
@@ -64,13 +69,18 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 			const SDL_VideoInfo* info = SDL_GetVideoInfo();
 			video_width = info->current_w;
 			video_height = info->current_h;
-			video_flags = video_flags | SDL_FULLSCREEN;
 			// Pantalla sin borde. Parece que pantalla completa sin borde es la forma de ejecucion mas rapida
+			// Ademas, si especificamos SDL_FULLSCREEN habria que implementar una deteccion de perdida del foco
+			// porque parece que windows le asigna todos los inputs del teclado y raton y no podemos volver 
+			// al SO comodamente
 			SDL_putenv("SDL_VIDEO_WINDOW_POS=0,0");
 			video_flags = video_flags | SDL_NOFRAME;
 		} else {
+			//Modo ventana: cualquier resolucion del fichero de config (sin cap ni allow-list).
 			video_width = cfgLoader->configMain[cfg::resolution_width].valueInt;
 			video_height = cfgLoader->configMain[cfg::resolution_height].valueInt;
+			//Centinela "Auto" (0/0): no hay XGetVideoMode en Windows -> default 1280x720.
+			if (video_width <= 0 || video_height <= 0) { video_width = 1280; video_height = 720; }
 		}
 	#endif
 
@@ -124,7 +134,6 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		}
 		memset(overlay->pixels, 0, overlay->pitch * overlay->h);
 		SDL_XBOX_SetOverlayEnabled(1);
-
 	}
 #else
 	overlay = gameScreen;

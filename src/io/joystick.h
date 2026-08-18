@@ -2,8 +2,8 @@
 
 #include <map>
 #include <vector>
+
 #include <libretro/libretro.h>
-#include <beans/structures.h>
 #include <io/cursorgestor.h>
 #include <io/hotkeys.h>
 #include <beans/structures.h>
@@ -106,7 +106,7 @@ class Joystick{
         Joystick();
         ~Joystick();
 
-		bool pollKeys(SDL_Surface* screen);
+		bool pollKeys(int);
 		bool init_all_joysticks();
 		void close_joysticks();
 		int getNumJoysticks(){return mNumJoysticks;}
@@ -119,6 +119,10 @@ class Joystick{
 		void updateTypes();
 		HOTKEYS_LIST findHotkey();
 		void setInfoButtons();
+
+		// Get the joytype index and make sure that the one we select is not RETRO_DEVICE_NONE if we
+		// have other options. Choose always RETRO_DEVICE_JOYPAD, if there was no device set
+		int getCkeckedJoyTypeIndex(int);
 
 		//Array para poder detectar la pulsacion del start en xbox360
 		int8_t startHoldFrames[MAX_PLAYERS];

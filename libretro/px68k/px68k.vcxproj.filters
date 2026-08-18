@@ -1,0 +1,249 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\m68000">
+      <UniqueIdentifier>{3e91ff8c-20ea-4484-bbe6-80d0693561c0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\c68k">
+      <UniqueIdentifier>{01766cf4-1f70-40ba-8cf1-c9a7dcd2d5fd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\x68k">
+      <UniqueIdentifier>{16342cfc-2de0-4fd1-909b-fdf5357c37a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libretro">
+      <UniqueIdentifier>{d353270b-c41f-4c13-9a42-4b6e210267b7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\fmgen">
+      <UniqueIdentifier>{704caf3b-0d11-426d-8083-bec7f7d0bd8d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libretro-common">
+      <UniqueIdentifier>{6897ff51-6bab-43c8-9290-c50152451ad9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\musashi">
+      <UniqueIdentifier>{8baa37f1-4c83-46a7-9f80-506e0b5762c6}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="libretro.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="m68000\m68000.c">
+      <Filter>Source Files\m68000</Filter>
+    </ClCompile>
+    <ClCompile Include="m68000\c68k\c68k.c">
+      <Filter>Source Files\c68k</Filter>
+    </ClCompile>
+    <ClCompile Include="m68000\c68k\c68kexec.c">
+      <Filter>Source Files\c68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\adpcm.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\bg.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\crtc.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\disk_d88.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\disk_dim.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\disk_xdf.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\dmac.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\fdc.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\fdd.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\gvram.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\ioc.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\irqh.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\mem_wrap.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\mercury.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\mfp.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\midi.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\palette.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\pia.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\rtc.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\sasi.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\scc.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\scsi.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\sram.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\sysport.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="x68k\tvram.c">
+      <Filter>Source Files\x68k</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\dosio.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\dswin.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\fake.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\joystick.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\keyboard.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\mouse.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\peace.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\prop.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\state.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\timer.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\windraw.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\winui.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="fmgen\fmg_wrap.cpp">
+      <Filter>Source Files\fmgen</Filter>
+    </ClCompile>
+    <ClCompile Include="fmgen\fmgen.cpp">
+      <Filter>Source Files\fmgen</Filter>
+    </ClCompile>
+    <ClCompile Include="fmgen\fmtimer.cpp">
+      <Filter>Source Files\fmgen</Filter>
+    </ClCompile>
+    <ClCompile Include="fmgen\opm.cpp">
+      <Filter>Source Files\fmgen</Filter>
+    </ClCompile>
+    <ClCompile Include="fmgen\opna.cpp">
+      <Filter>Source Files\fmgen</Filter>
+    </ClCompile>
+    <ClCompile Include="fmgen\psg.cpp">
+      <Filter>Source Files\fmgen</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\compat_posix_string.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\compat_snprintf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\compat_strcasestr.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\compat_strl.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\fopen_utf8.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\encodings\encoding_utf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\file\file_path.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\file\file_path_io.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\file\retro_dirent.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\streams\file_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\streams\file_stream_transforms.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\string\stdstring.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\time\rtime.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="m68000\musashi\m68kcpu.c">
+      <Filter>Source Files\musashi</Filter>
+    </ClCompile>
+    <ClCompile Include="m68000\musashi\m68kops.c">
+      <Filter>Source Files\musashi</Filter>
+    </ClCompile>
+    <ClCompile Include="m68000\musashi\softfloat\softfloat.c">
+      <Filter>Source Files\musashi</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="libretro-common\include\compat\msvc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="libretro_core_options.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="libretro_core_options_intl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="libretro-common\include\libretro.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="libretro\compiler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

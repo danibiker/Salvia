@@ -1097,8 +1097,56 @@ static void intReset() {
 	psxRegs.ICache_valid = FALSE;
 }
 
+/* [JIT DEBUG] Sonda: ¿ejecuta el INTERPRETE el bloque a0017cc8 (donde el
+ * recompilador salta a pc=1)? Compara si llegar ahi es correcto y con que
+ * estado de registros (sp/ra). Poner PCSXR_INT_PROBE a 0 para quitarla.
+ *   - Nunca loguea + juego avanza  => el interp NO pasa por 0x17cc8 => el
+ *     recompilador DIVERGE antes (salto erroneo aguas arriba).
+ *   - Loguea con sp valido         => ambos llegan, pero el interp tiene el
+ *     estado bueno => corrupcion de registros aguas arriba en el recompilador.
+ *   - Loguea con sp=0 (igual)      => ambos llegan igual => el bug es el
+ *     CODEGEN del propio bloque (su JR terminal / su fuente). */
+#ifndef PCSXR_INT_PROBE
+#define PCSXR_INT_PROBE 1
+#endif
+#if PCSXR_INT_PROBE
+extern void pcsxr_log(int level, const char *format, ...);
+static u32 _intLast = 0;
+/* Direcciones de la cadena del recompilador (offset fisico en RAM), en orden
+ * cronologico hacia el crash. Registramos la PRIMERA vez (cyc>150M) que el
+ * interprete pisa cada una. Las que alcance vs las que no localizan el punto
+ * exacto donde el recompilador se desvia del camino correcto. */
+static const u32 _intWatch[9] = {
+	0x10ec0, 0x10ec8, 0x10ed0, 0x10ed8,   /* pre-cadena */
+	0x15a14, 0x161e4,                     /* -> syscall */
+	0x16878, 0x174f8, 0x17cc8             /* retorno syscall -> data -> pc=1 */
+};
+static unsigned char _intSeen[9] = {0,0,0,0,0,0,0,0,0};
+#endif
+
 static void intExecute() {
 	while (Config.CpuRunning && !frame_done) {
+#if PCSXR_INT_PROBE
+		{
+			u32 _pc  = psxRegs.pc;
+			u32 _seg = _pc & 0xff000000u;
+			u32 _ph  = _pc & 0x1fffff;
+			int _ram = (_seg == 0x00000000u || _seg == 0x80000000u || _seg == 0xa0000000u);
+			if (_ram && psxRegs.cycle > 150000000u) {
+				int _i;
+				for (_i = 0; _i < 9; _i++) {
+					if (_ph == _intWatch[_i] && !_intSeen[_i]) {
+						_intSeen[_i] = 1;
+						pcsxr_log(1, "[INT] visto %05x  pc=%08x <- %08x  cyc=%u sp=%08x ra=%08x\n",
+							(unsigned)_intWatch[_i], (unsigned)_pc, (unsigned)_intLast,
+							(unsigned)psxRegs.cycle,
+							(unsigned)psxRegs.GPR.n.sp, (unsigned)psxRegs.GPR.n.ra);
+					}
+				}
+			}
+			_intLast = _pc;
+		}
+#endif
 		execI();
 	}
 }

@@ -23,6 +23,7 @@
 
 #include "plugins.h"
 #include "cdriso.h"
+#include "cdrom-async.h"   /* [XBOX360] interfaz cdra_* (port integro ReARMed) */
 
 static char IsoFile[MAXPATHLEN] = "";
 static s64 cdOpenCaseTime = 0;
@@ -303,7 +304,7 @@ static int LoadCDRplugin(const char *CDRdll) {
 	void *drv;
 
 	if (CDRdll == NULL) {
-		cdrIsoInit();
+		/* [XBOX360] CD via cdra_ISO directo (port integro ReARMed); sin cdrIsoInit */
 		return 0;
 	}
 
@@ -905,7 +906,7 @@ int LoadPlugins() {
 	if (LoadSIO1plugin(Plugin) == -1) return -1;
 #endif
 
-	ret = CDR_init();
+	ret = cdra_init();
 	if (ret < 0) { SysMessage (_("Error initializing CD-ROM plugin: %d"), ret); return -1; }
 	ret = GPU_init();
 	if (ret < 0) { SysMessage (_("Error initializing GPU plugin: %d"), ret); return -1; }
@@ -937,7 +938,7 @@ void ReleasePlugins() {
 	}
 	NetOpened = FALSE;
 
-	if (hCDRDriver != NULL || cdrIsoActive()) CDR_shutdown();
+	cdra_shutdown(); /* [XBOX360] cdra_* directo (sin plugin CDR clasico) */
 	if (hGPUDriver != NULL) GPU_shutdown();
 	if (hSPUDriver != NULL) SPU_shutdown();
 	if (hPAD1Driver != NULL) PAD1_shutdown();
@@ -966,18 +967,9 @@ void ReleasePlugins() {
 // for CD swap\r
 int ReloadCdromPlugin()
 {
-       if (hCDRDriver != NULL || cdrIsoActive()) CDR_shutdown();
-       if (hCDRDriver != NULL) SysCloseLibrary(hCDRDriver); hCDRDriver = NULL;
-
-       if (UsingIso()) {
-               LoadCDRplugin(NULL);
-       } else {
-               char Plugin[MAXPATHLEN];
-               sprintf(Plugin, "%s/%s", Config.PluginsDir, Config.Cdr);
-               if (LoadCDRplugin(Plugin) == -1) return -1;
-       }
-
-       return CDR_init();
+       /* [XBOX360] CD swap via cdra_* directo: cerrar y reabrir el IsoFile actual */
+       cdra_close();
+       return cdra_open();
 }
 
 

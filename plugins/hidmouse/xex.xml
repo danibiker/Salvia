@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Config del XEX del plugin residente. sysdll = DLL de sistema cargable por
+     DashLaunch como plugin. baseaddr fija = las globales del plugin (incl.
+     g_hidMouseShared) quedan en VAs estables. -->
+<xex>
+  <format>
+    <compressed/>
+  </format>
+  <mediatypes>
+    <flash/>
+  </mediatypes>
+  <version major="2" minor="0" build="0x4497" qfe="0"/>
+  <baseaddr addr="0x81F00000"/>
+  <sysdll/>
+</xex>

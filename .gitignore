@@ -54,3 +54,5 @@ tools/*.exe
 tools/*.idc
 tools/XexTool.txt
 production/**
+*.pdb
+*.xdb

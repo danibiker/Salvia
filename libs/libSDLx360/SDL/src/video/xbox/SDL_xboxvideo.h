@@ -116,6 +116,8 @@ void SDL_XBOX_SetRotation(int rotation);
    con D3DUSAGE_CPU_CACHED_MEMORY) sobrevive al Reset, no se recrea. */
 void SDL_XBOX_SetVSync(int enabled);
 
+void SDL_XBOX_SetScrenResolution(int w, int h);
+
 #endif /* _SDL_nullvideo_h */
 
  

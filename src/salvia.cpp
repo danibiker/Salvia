@@ -495,19 +495,14 @@ static bool retro_environment(unsigned cmd, void *data) {
 				for (unsigned j = 0; j < info[i].num_types; j++) {
 					unsigned id = info[i].types[j].id;
 					const char* desc = info[i].types[j].desc;
-
 					if (desc == NULL) {
 						LOG_DEBUG("Puerto %d: Se recibio un descriptor NULL para el ID %u. Saltando...", i, id);
 						continue; 
 					}
-
 					LOG_DEBUG("Puerto %d soporta: %s (ID: %u)", i, desc, id);
 					port->available_types.push_back(std::make_pair(id, desc));
 				}
-
-				if (port->available_types.size() > 0){
-					port->current_device_id = port->available_types[0].first;
-				}
+				gameMenu->joystick->getCkeckedJoyTypeIndex(i);
 			}
 			gameMenu->configMenus->poblarJoystickTypes(gameMenu->joystick);
             return true;
@@ -1301,7 +1296,14 @@ int launchGame(std::string rompath, bool tmpDelete){
 	gameMenu->fillOverlay(clBackground);
 	Fonts::drawTextCentTransparent(gameMenu->overlay, Fonts::getFont(Fonts::FONTBIG), initMsg.c_str(), 0, -face_h_big / 2, true, true, Constant::colors[clWhite].sdlColor, 0);
 	salviaFlip(gameMenu->gameScreen);
-	
+
+	// [XBOX360] Opciones de core POR JUEGO: si existe <juego>.opt junto al juego,
+	// aplicarlas ANTES de extractAndLoadGame -> retro_load_game, para que el core
+	// las lea en su primera pasada (incluye init-only). Si no hay, se (re)aplican
+	// las generales del core.
+	if (!bios_only)
+		gameMenu->getCfgLoader()->loadCoreParamsForGame(rompath);
+
 	//Cargamos el juego en memoria o lo extraemos al disco
 	bool gameLoaded = extractAndLoadGame(rompath, tmpDelete);
 	if(!gameLoaded) {
@@ -1610,7 +1612,7 @@ static void __declspec(noinline) runGameLoop() {
 		}
 	} __except (EXCEPTION_EXECUTE_HANDLER) {
 		printAndDelay();
-		LOG_ERROR("FATAL: Unhandled exception, details written to crash.log");
+		LOG_ERROR("FATAL: Unhandled exception");
 	}
 }
 
@@ -1662,6 +1664,9 @@ int main(int argc, char *argv[]) {
 	curlClient.init();
 
 	nextFrameTime = Constant::getTicks();
+	//Estado inicial del fondo HLSL: el constructor fija EMU_MENU directo,
+	//saltandose setEmuStatus, asi que lo sincronizamos aqui una vez.
+	gameMenu->applyMenuBackground();
 	runGameLoop();
 	closeResources();
     return 0;

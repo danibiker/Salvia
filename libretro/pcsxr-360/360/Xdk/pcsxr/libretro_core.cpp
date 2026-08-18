@@ -138,10 +138,19 @@ extern int      duck_gpu_enabled;
  * tenemos que matchearlo para que el linker resuelva el simbolo. */
 extern "C" void duck_true_color_set_active(int active);
 
-/* Async CD-ROM prefetch toggle (cdriso_async.c).  Hot-reloadable from
- * the libretro option pcsxr360_cdrom_prefetch.  When OFF, cdra_read()
- * bypasses the ring buffer and goes straight to the sync backend. */
-extern "C" void cdra_set_enabled(int enabled);
+/* Async CD-ROM prefetch (port integro pcsx_rearmed: cdrom-async.c).
+ * La opcion pcsxr360_cdrom_prefetch mapea a cdra_set_buf_count(): N buffers
+ * de prefetch (worker en HW4) o 0 = sin prefetch (lectura sync directa). */
+#include "cdrom-async.h"
+#define CD_PREFETCH_BUFS 64
+
+/* [XBOX360] LidInterrupt() (cdrom.c, declarado en cdrom.h dentro de extern "C"):
+ * "patea" la maquina de estados de la tapa (cdrLidSeekInterrupt) para que un
+ * cambio de disco se DETECTE aunque el juego no sondee el status del CD. Sin
+ * esto, la deteccion depende de que el juego haga polling (FFVII si -> va; MGS
+ * al pedir el CD1 en el arranque no lo hace igual -> no detectaba el insert).
+ * Declaracion minima aqui para no arrastrar todo cdrom.h. */
+extern "C" void LidInterrupt(void);
 
 /* Runtime selector for the gpu_unai SW renderer ported from
  * PCSX-ReARMed.  Defined in plugins/gpu_unai/gpu_unai_driver.cpp.
@@ -257,19 +266,52 @@ static void set_retro_memmap(void);
 void retro_set_environment(retro_environment_t cb) {
     environ_cb = cb;
 
-    struct retro_variable variables[] = {
-        { "pcsxr360_gpu_renderer",       "GPU Renderer (restart core to apply); Unai|Peops|SwanStation" },
-		{ "pcsxr360_threading",          "GPU Thread (restart core to apply); enabled|disabled" },
-		{ "pcsxr360_widescreen",         "Widescreen hack 16:9 GTE FOV (restart core to apply); disabled|enabled" },
-		{ "pcsxr360_pixel_format",       "Pixel Format; RGB565|XRGB8888" },
-        { "pcsxr360_auto_frameskip",     "Auto frameskip (skip render on overload); disabled|enabled" },
+    /* [XBOX360] Opciones en formato libretro V2 CON CATEGORIAS: el menu de core
+     * options de Salvia las agrupa en submenus por category_key. La LECTURA de
+     * valores NO cambia (sigue por RETRO_ENVIRONMENT_GET_VARIABLE con las mismas
+     * keys en read_bool_var / check_pixel_format / check_game_fixes /
+     * check_gpu_renderer_initial_only / check_threading_initial_only). Salvia
+     * siempre reporta version 2, asi que la rama V2 siempre corre. Los value
+     * strings deben ser IDENTICOS a los de antes (los compara la lectura); el
+     * label NULL hace que se muestre el value tal cual. desc = etiqueta plana
+     * (fallback), desc_categorized = etiqueta corta que se ve en el submenu. */
+    static struct retro_core_option_v2_category option_cats[] = {
+        { "video",       "Video",              NULL },
+        { "performance", "Performance",        NULL },
+        { "system",      "System",             NULL },
+        { "gamefixes",   "Game Fixes (PEOPS)", NULL },
+        { NULL, NULL, NULL }
+    };
+
+    static struct retro_core_option_v2_definition option_defs[] = {
+        /* ---------- Video ---------- */
+        {
+            "pcsxr360_gpu_renderer",
+            "GPU Renderer (restart core to apply)", "GPU Renderer (restart to apply)",
+            NULL, NULL, "video",
+            { { "Unai", NULL }, { "Peops", NULL }, { "SwanStation", NULL }, { NULL, NULL } },
+            "Unai"
+        },
+        {
+            "pcsxr360_pixel_format",
+            "Pixel Format", "Pixel Format",
+            NULL, NULL, "video",
+            { { "RGB565", NULL }, { "XRGB8888", NULL }, { NULL, NULL } },
+            "RGB565"
+        },
         /* Dithering: respeta el bit de dither que el juego setea en GP1.
          * Cuando ON, las primitivas de Gouraud/lighting/blending pasan por el
          * camino con offsets de la matriz Bayer 4x4 y reclamp por canal:
          * imagen mas fiel a la PSX original pero ~15-20% mas fillrate.
          * Cuando OFF, todas las primitivas saltan el dither. Aplica a los 3
          * renderers (Unai, Peops, SwanStation). Cambia en caliente. */
-        { "pcsxr360_dithering",          "Dithering (PSX-style color quantization); enabled|disabled" },
+        {
+            "pcsxr360_dithering",
+            "Dithering (PSX-style color quantization)", "Dithering",
+            NULL, NULL, "video",
+            { { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
         /* True Color (24-bit internal rendering): elimina banding sin dither.
          * Mantiene un framebuffer paralelo 8-bit/canal junto al BGR555 normal.
          * Solo aplica al renderer SwanStation + pixel_format XRGB8888 (los
@@ -279,28 +321,115 @@ void retro_set_environment(retro_environment_t cb) {
          *   - disabled: forzado OFF
          * Coste: +2MB RAM, ~10-15% mas fillrate por el doble store en
          * ShadePixel. */
-        { "pcsxr360_true_color",         "True Color 24-bit (SwanStation + XRGB8888 only); auto|enabled|disabled" },
-        /* CD-ROM async prefetch: worker thread pinned to core 2 pre-reads the
-         * next 8 sectors after each successful CDR_readTrack into an in-memory
-         * ring buffer.  When the game requests one of those sectors, it's
-         * served zero-latency from the ring (no chd_read / fread / decompress).
-         * Biggest benefit: CHD-compressed games where each cold-cache sector
-         * costs 1-5ms of zlib decompression on the PPC -- prefetch hides that
-         * behind emulator CPU work.  BIN/CUE gets a small benefit too (disk
-         * I/O latency overlap).  Disable if you see crashes or hangs you
-         * suspect are CD-related so you can rule it out. */
-        { "pcsxr360_cdrom_prefetch",     "CD-ROM async prefetch (core 2 worker); enabled|disabled" },
-		{ "pcsxr360_slow_boot",          "Slow Boot (show BIOS intro); disabled|enabled" },
-        { "pcsxr360_fix_parasite_eve2",  "Game Fix (PEOPS): Parasite Eve 2 (counter); disabled|enabled" },
-        { "pcsxr360_fix_dark_forces",    "Game Fix (PEOPS): Dark Forces / Duke Nukem (GPU); disabled|enabled" },
-        { "pcsxr360_fix_front_mission3", "Game Fix (PEOPS): Front Mission 3 (CPU); disabled|enabled" },
-        { "pcsxr360_fix_ignore_brightness", "GPU Fix: Ignore black brightness; disabled|enabled" },
-        { "pcsxr360_fix_lazy_update",    "GPU Fix: Lazy screen update; disabled|enabled" },
-        { "pcsxr360_fix_quads_to_tris",  "GPU Fix: Draw quads with triangles; disabled|enabled" },
-        //{ "pcsxr360_load_delay",         "CPU Fix: R3000A load-delay slots (Soul Calibur); enabled|disabled" },
-        { NULL, NULL }
+        {
+            "pcsxr360_true_color",
+            "True Color 24-bit (SwanStation + XRGB8888 only)", "True Color 24-bit (SwanStation+XRGB8888)",
+            NULL, NULL, "video",
+            { { "auto", NULL }, { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
+            "auto"
+        },
+        {
+            "pcsxr360_widescreen",
+            "Widescreen hack 16:9 GTE FOV (restart core to apply)", "Widescreen 16:9 GTE FOV (restart to apply)",
+            NULL, NULL, "video",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+
+        /* ---------- Performance ---------- */
+        {
+            "pcsxr360_threading",
+            "GPU Thread (restart core to apply)", "GPU Thread (restart to apply)",
+            NULL, NULL, "performance",
+            { { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
+            "enabled"
+        },
+        {
+            "pcsxr360_auto_frameskip",
+            "Auto frameskip (skip render on overload)", "Auto Frameskip (on overload)",
+            NULL, NULL, "performance",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+
+        /* ---------- System ---------- */
+        /* CD-ROM async prefetch: worker thread (HW4) que lee sectores por
+         * delante en RAM. ON usa Strategy B (handles propios, sin read_lock)
+         * para CHD/BIN de un fichero. DEFAULT ON: en la practica el buffer
+         * stdio de 64KB (cdriso.c) ya oculta la latencia del USB leyendo ~28
+         * sectores por operacion, asi que las lecturas SINCRONAS llegan de
+         * sobra (NFS3 verificado) y el hilo de prefetch no aporta diferencia
+         * perceptible. Se deja como opcion para almacenamiento con latencia
+         * alta que el buffer no cubra. */
+        {
+            "pcsxr360_cdrom_prefetch",
+            "CD-ROM async prefetch (worker HW4)", "CD-ROM async prefetch (HW4 worker)",
+            NULL, NULL, "system",
+            { { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
+            "enabled"
+        },
+        {
+            "pcsxr360_slow_boot",
+            "Slow Boot (show BIOS intro)", "Slow Boot (BIOS intro)",
+            NULL, NULL, "system",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+
+        /* ---------- Game Fixes (PEOPS) ---------- */
+        {
+            "pcsxr360_fix_parasite_eve2",
+            "PEOPS Game Fix: Parasite Eve 2 (counter)", "Parasite Eve 2 (counter)",
+            NULL, NULL, "gamefixes",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+        {
+            "pcsxr360_fix_dark_forces",
+            "PEOPS Game Fix: Dark Forces / Duke Nukem (GPU)", "Dark Forces / Duke Nukem (GPU)",
+            NULL, NULL, "gamefixes",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+        {
+            "pcsxr360_fix_front_mission3",
+            "PEOPS Game Fix: Front Mission 3 (CPU)", "Front Mission 3 (CPU)",
+            NULL, NULL, "gamefixes",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+        {
+            "pcsxr360_fix_ignore_brightness",
+            "PEOPS GPU Fix: Ignore black brightness", "Ignore black brightness (GPU)",
+            NULL, NULL, "gamefixes",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+        {
+            "pcsxr360_fix_lazy_update",
+            "PEOPS GPU Fix: Lazy screen update", "Lazy screen update (GPU)",
+            NULL, NULL, "gamefixes",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+        {
+            "pcsxr360_fix_quads_to_tris",
+            "PEOPS GPU Fix: Draw quads with triangles", "Draw quads with triangles (GPU)",
+            NULL, NULL, "gamefixes",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+
+        { NULL, NULL, NULL, NULL, NULL, NULL, {{ NULL, NULL }}, NULL }
     };
-    cb(RETRO_ENVIRONMENT_SET_VARIABLES, variables);
+
+    static const struct retro_core_options_v2 options_v2 = { option_cats, option_defs };
+
+    unsigned options_ver = 0;
+    if (cb)
+        cb(RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION, &options_ver);
+    if (options_ver >= 2)
+        cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2, (void*)&options_v2);
 
     /* Declare supported PSX controller types per port so the frontend can
      * expose a type-selector UI (matching pcsx-rearmed's approach). */
@@ -456,14 +585,16 @@ static void check_game_fixes(void) {
     gpu_unai_config_ext.dithering = g_pcsxr_dithering;
     iUseDither = g_pcsxr_dithering;
 
-    /* CD-ROM async prefetch (worker thread on core 2, see cdriso_async.c).
-     * Toggleable in caliente: cdra_set_enabled() flips a flag that the
-     * read path checks on every call.  When OFF, cdra_read() falls
-     * through to the sync path with no thread interaction.  Default ON
-     * because it's a pure latency-hiding win for CHD games and harmless
-     * for BIN/CUE.  Disable only to rule it out when debugging CD-related
-     * issues.  (extern "C" decl is at file scope above.) */
-    cdra_set_enabled(read_bool_var("pcsxr360_cdrom_prefetch", true) ? 1 : 0);
+    /* CD-ROM async prefetch (worker thread en HW4, cdrom-async.c).
+     * ON  -> cdra_set_buf_count(N): crea el worker de prefetch
+     *        (cdriso_worker_*), si la imagen lo soporta (CHD o BIN/CUE de un
+     *        fichero) el worker usa HANDLES PROPIOS y el emu no espera (sin
+     *        read_lock). Multifile/.sub externo/comprimido caen al camino
+     *        shared+read_lock.
+     * OFF -> cdra_set_buf_count(0): sin worker, lecturas SINCRONAS en el hilo
+     *        de emulacion (probado: NFS3 va bien asi en USB lento).
+     * Toggle en caliente (check_variables arranca/para el worker). */
+    cdra_set_buf_count(read_bool_var("pcsxr360_cdrom_prefetch", true) ? CD_PREFETCH_BUFS : 0);
     /* gpu_unai mantiene DOS structs de config: la externa (ext) que es la
      * que toca el frontend, y la interna `gpu_unai.config` que es la que
      * consulta `DitheringEnabled()` en el inner loop. Hay que llamar a
@@ -768,10 +899,17 @@ static void poll_libretro_input(void) {
                                      RETRO_DEVICE_INDEX_ANALOG_RIGHT,
                                      RETRO_DEVICE_ID_ANALOG_Y);
 
-        libretro_analog[port][0] = (uint8_t)((lx / 256) + 128);
-        libretro_analog[port][1] = (uint8_t)((ly / 256) + 128);
-        libretro_analog[port][2] = (uint8_t)((rx / 256) + 128);
-        libretro_analog[port][3] = (uint8_t)((ry / 256) + 128);
+        /* Mapeo simetrico [-32768..32767] -> [0..255], centro 0x80.
+         * OJO: NO usar (v/256)+128: la division entera trunca hacia cero, asi
+         * que la mitad negativa (adelante / izquierda) queda sesgada ~1 unidad
+         * hacia el centro y tope en 0x01 en vez del 0x00 real, mientras la
+         * positiva si llega a 0xFF -> asimetria adelante/atras que Ape Escape
+         * (100% analogico) delata. El desplazamiento +32768 y >>8 es lineal y
+         * simetrico: -32768->0x00, 0->0x80, +32767->0xFF. */
+        libretro_analog[port][0] = (uint8_t)(((int)lx + 32768) >> 8);
+        libretro_analog[port][1] = (uint8_t)(((int)ly + 32768) >> 8);
+        libretro_analog[port][2] = (uint8_t)(((int)rx + 32768) >> 8);
+        libretro_analog[port][3] = (uint8_t)(((int)ry + 32768) >> 8);
     }
 }
 
@@ -843,6 +981,16 @@ void pcsxr_log(enum retro_log_level level, const char *format, ...)
    }
 }
 
+/* Lanzada por la red de seguridad del recompilador (cpuFatalInvalid en
+ * pR3000A.c) cuando detecta que iba a saltar a una direccion invalida. Lanza
+ * una excepcion estructurada que el __except de runGameLoop() (salvia.cpp)
+ * captura para descargar el juego y volver al menu, en vez de que el host
+ * salte a basura y cuelgue la consola. */
+extern "C" void pcsxr_raise_fatal(void)
+{
+   RaiseException(0xE0000101u, EXCEPTION_NONCONTINUABLE, 0, NULL);
+}
+
 /* ======================================================================
  * EMULATOR SETUP
  *
@@ -904,8 +1052,8 @@ static int emu_setup(void) {
         Config.Mcd2[0] = '\0';
     }
 
-	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] cdrIsoInit\n");
-    cdrIsoInit();
+	/* [XBOX360] cdrIsoInit ya no existe (port integro): cdra_init() (=ISOinit)
+	 * se llama en LoadPlugins. */
 	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] SetIsoFile\n");
     /* En modo BIOS-only seteamos un path dummy para que UsingIso()
      * devuelva true durante LoadPlugins.  Sin esto, LoadPlugins toma
@@ -1002,8 +1150,8 @@ static int emu_setup(void) {
         SetCdOpenCaseTime((s64)-1);
     } else {
         pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling CDR_open...\n");
-        ret = CDR_open();
-        if (ret < 0) { pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] CDR_open FAILED\n"); return -1; }
+        ret = cdra_open();
+        if (ret < 0) { pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] cdra_open FAILED\n"); return -1; }
     }
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] Calling GPU_open...\n");
     ret = GPU_open(NULL);
@@ -1101,8 +1249,8 @@ static void emu_teardown(void) {
     if (PAD2_close) PAD2_close();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] PAD1_close\n");
     if (PAD1_close) PAD1_close();
-	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] CDR_close\n");
-    if (CDR_close)  CDR_close();
+	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] cdra_close\n");
+    cdra_close();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] GPU_close\n");
     if (GPU_close)  GPU_close();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] SPU_close\n");
@@ -1273,20 +1421,29 @@ static bool dc_set_eject_state(bool ejected) {
     if (ejected) {
         /* Open the shell permanently until we insert */
         SetCdOpenCaseTime((s64)-1);
+        /* [XBOX360] Patear la maquina de tapa ANTES de cerrar (disco viejo aun
+         * abierto): STANDBY -> LID_OPEN y se auto-reprograma, sin depender del
+         * polling del juego (MGS al arrancar no sondea como FFVII). */
+        LidInterrupt();
         /* CDR_close solo si previamente abierto: en BIOS-only inicial
          * nunca llamamos CDR_open, asi que cdHandle es NULL.  ISOclose
          * tolera handle NULL (early-return) pero llamarlo en bucle no
          * cuesta y nos protege de estados huerfanos. */
-        if (CDR_close && !disk_ejected) CDR_close();
+        if (!disk_ejected) cdra_close();
     } else {
         /* Swap the backing file, then close the shell shortly */
         if (disk_current < disk_count && disk_images[disk_current][0]) {
             SetIsoFile(disk_images[disk_current]);
-            if (CDR_open) CDR_open();
+            cdra_open();
         }
         /* +2 s keeps the lid-open window long enough for the BIOS to see
          * both states; games treat the close transition as a fresh TOC. */
         SetCdOpenCaseTime((s64)time(NULL) + 2);
+        /* [XBOX360] Patear la maquina de tapa: arranca con shell OPEN
+         * (cdOpenCaseTime futuro) y a los ~2s ve el cierre -> CheckCdrom ->
+         * re-lee el TOC del disco nuevo. Asi el juego detecta el insert aunque
+         * no sondee el status del CD. */
+        LidInterrupt();
     }
 
     disk_ejected = ejected;

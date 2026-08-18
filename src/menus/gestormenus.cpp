@@ -14,6 +14,7 @@
 #include <http/achievements.h>
 #include <so/soutils.h>
 #include <cheats/cheatmanager.h>
+#include <video/HLSLBackground.h>
 
 
 SDL_Surface* GestorMenus::imgText;
@@ -125,6 +126,46 @@ std::string GestorMenus::guardarCoreJoysticks(Joystick* joy){
 std::string GestorMenus::guardarCoreConfig(CfgLoader *refConfig){
 	LOG_DEBUG("Guardando valores del core actual");
 	return refConfig->saveCoreParams();
+}
+
+// romPaths (global de salvia.h): ruta del juego cargado, para el guardado por-juego.
+extern t_rom_paths romPaths;
+
+// Guarda las opciones del core en un fichero JUNTO AL JUEGO (mismo nombre base
+// + .opt). En la carga (launchGame -> CfgLoader::loadCoreParamsForGame) tiene
+// prioridad sobre las opciones generales del core.
+std::string GestorMenus::guardarCoreConfigGame(CfgLoader *refConfig){
+	LOG_DEBUG("Guardando opciones del core para el juego actual");
+	return refConfig->saveGameCoreParams(romPaths.rompath);
+}
+
+// Restaura TODAS las opciones del core (core + game-specific) a su valor por
+// defecto. El default lo declara el core en el parse (applyEntry -> defaultSelected).
+// setParameter sirve values[selected] en GET_VARIABLE, asi que basta reponer
+// selected (+ cachedValue para coherencia inmediata) y marcar el cambio para que
+// el core lo relea. Persistimos para que el reset sobreviva a recargas.
+// NOTA: las opciones init-only (threading/widescreen/gpu_renderer) quedan en su
+// default pero solo surten efecto al recargar el core.
+std::string GestorMenus::restaurarCoreConfig(CfgLoader *refConfig){
+	LOG_DEBUG("Restaurando opciones del core a sus valores por defecto");
+	for (auto it = refConfig->startupLibretroParams.begin();
+	     it != refConfig->startupLibretroParams.end(); ++it) {
+		cfg::t_emu_props *p = it->second.get();
+		int d = (p->defaultSelected >= 0 && p->defaultSelected < (int)p->values.size())
+		        ? p->defaultSelected : 0;
+		p->selected = d;
+		if (!p->values.empty()) p->cachedValue = p->values[d];
+	}
+	for (auto it = refConfig->gameSpecificLibretroParams.begin();
+	     it != refConfig->gameSpecificLibretroParams.end(); ++it) {
+		cfg::t_emu_props *p = it->second.get();
+		int d = (p->defaultSelected >= 0 && p->defaultSelected < (int)p->values.size())
+		        ? p->defaultSelected : 0;
+		p->selected = d;
+		if (!p->values.empty()) p->cachedValue = p->values[d];
+	}
+	options_changed_flag = true;   // el core relee en el proximo GET_VARIABLE_UPDATE
+	return LanguageManager::instance()->get("menu.core.options.restore.applied");
 }
 
 std::string GestorMenus::guardarMainConfig(CfgLoader *refConfig){
@@ -350,8 +391,35 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	//En xbox siempre mostramos pantalla completa
 	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.fullscreen"), &refConfig->configMain[cfg::fullscreen].getBoolRef()));
 	#endif
-	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef()));
-	
+	OpcionLista *listaBkg = new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef());
+	listaBkg->callback = &GestorMenus::selectBackground;
+	menuVideo->opciones.push_back(listaBkg);
+
+	//Resolucion de pantalla (se aplica al REINICIAR). Entrada 0 = "Auto"
+	//(Xbox: XGetVideoMode del dashboard, capado a 720p; Windows: default 1280x720).
+	std::vector<std::string> resList;
+	resList.push_back("Auto");
+	for (int i=0; i < TOTAL_SCREEN_RES; i++){
+		resList.push_back(Constant::string_format("%dx%d", g_screenResolutions[i].w, g_screenResolutions[i].h));
+	}
+
+	{
+		const int rw = refConfig->configMain[cfg::resolution_width].valueInt;
+		const int rh = refConfig->configMain[cfg::resolution_height].valueInt;
+		if (rw > 0 && rh > 0){
+			const std::string cur = Constant::string_format("%dx%d", rw, rh);
+			int f = -1;
+			for (int i=1; i < (int)resList.size(); i++){ if (resList[i] == cur){ f = i; break; } }
+			//valor del fichero fuera de la lista (p.ej. Windows editado a mano) -> anadir para no perderlo
+			if (f < 0){ resList.push_back(cur); f = (int)resList.size() - 1; }
+			refConfig->configMain[cfg::resolutionIndex].setPropValue(f);
+		}
+	}
+	OpcionLista *listaRes = new OpcionLista(LanguageManager::instance()->get("menu.video.resolution"), resList, &refConfig->configMain[cfg::resolutionIndex].getIntRef());
+	listaRes->callback = &GestorMenus::selectResolution;
+	listaRes->context  = refConfig;
+	menuVideo->opciones.push_back(listaRes);
+
 	//--------Menu de overscan---------
 	menuOverscan = new Menu(LanguageManager::instance()->get("menu.video.overscan"), menuVideo);
 	poblarMenuOverscan(menuOverscan);
@@ -811,6 +879,36 @@ void GestorMenus::loadAchievements() {
     resetIndexPos();
 }
 
+std::string GestorMenus::selectBackground(void* inst, void *index, void *values) {
+	//Cambio en vivo del fondo del menu (sin salir del menu). El estado retenido
+	//se decide en setEmuStatus/arranque; aqui reflejamos el nuevo animBG.
+	//Guard de rango: solo BG_HLSL..BG_NONE mapean a un shader de fondo; el resto
+	//(tiles/imagen/none) apaga el fondo GPU.
+	if (!index) return "";
+	const int idx = *static_cast<int*>(index);
+	HLSLBackground_setActive((idx >= BG_HLSL && idx < BG_NONE) ? (idx - BG_HLSL + 1) : 0);
+	return "";
+}
+
+std::string GestorMenus::selectResolution(void* inst, void *index, void *values) {
+	//Escribe la resolucion elegida en la config; se aplica al REINICIAR (el arranque
+	//la lee). Parseamos la etiqueta seleccionada ("1280x720") para soportar tambien
+	//entradas anadidas fuera de la lista estandar; "Auto" -> centinela 0/0.
+	if (!inst || !index || !values) return "";
+	CfgLoader* cfg = static_cast<CfgLoader*>(inst);
+	const int idx = *static_cast<int*>(index);
+	std::vector<std::string>* labels = static_cast<std::vector<std::string>*>(values);
+	if (idx < 0 || idx >= (int)labels->size()) return "";
+	int w = 0, h = 0; char sep = 0;
+	std::istringstream iss(labels->at(idx));
+	if ((iss >> w >> sep >> h) && sep == 'x'){   //"1280x720"
+		cfg->setWidth(w);  cfg->setHeight(h);
+	} else {
+		cfg->setWidth(0);  cfg->setHeight(0);    //"Auto"
+	}
+	return "";
+}
+
 std::string GestorMenus::setDefaultEmu(void* inst, void *index, void *values) {
 	if (!inst || !index || !values) return "";
 
@@ -1136,6 +1234,8 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
 
 	//Param independent options (kept at the menu root)
 	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.save"), &GestorMenus::guardarCoreConfig, refConfig, this));
+	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.savegame"), &GestorMenus::guardarCoreConfigGame, refConfig, this));
+	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.restore"), &GestorMenus::restaurarCoreConfig, refConfig, this));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.version"), string(refConfig->configMain[cfg::libretro_core].valueStr) + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.extensions"), refConfig->configMain[cfg::libretro_core_extensions].valueStr));
 
@@ -1411,6 +1511,8 @@ void GestorMenus::poblarMenuAssignFrontend(Menu* menuAssign, Joystick *joystick)
 	int num_port_buttons = sizeof(FRONTEND_BTN_VAL) / sizeof(FRONTEND_BTN_VAL[0]);
 	TipoKey type = KEY_JOY_BTN;
 	t_joy_state *input = &joystick->inputs;
+
+	menuAssign->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.controller.analogpad"), &joystick->inputs.frontAxisAsPad));
 
 	for (int i=0; i < num_port_buttons; i++){
 		const std::string text = FRONTEND_BTN_TXT[i];
@@ -1722,7 +1824,7 @@ void GestorMenus::updateButton(const SDL_Event &event, TipoKey tipoKey){
 	if (tipoKey == KEY_JOY_BTN){
 		joyNumber = event.button.which;
 		sdlbtn    = event.button.button;
-	} else if (tipoKey == KEY_JOY_AXIS){
+	} else if (tipoKey == KEY_JOY_HAT){
 		joyNumber = event.jhat.which;
 		sdlbtn    = event.jhat.value;
 	} else {

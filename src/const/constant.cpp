@@ -30,7 +30,11 @@ svColor Constant::colors[clTotalColors] = {
 
 const char *MEDIAS_TO_FIND[] = {"sstitle", "ss", "box-2D"};
 const char *ASSETS_DIR[] = {"snaptit", "snap", "box2d", "synopsis"};
-const std::string CFG_EXT = ".cfg";
+const std::string CFG_JOY_EXT = ".joy";
+// [XBOX360] Extension para el fichero de OPCIONES DE CORE por-juego (junto al
+// juego, mismo nombre base). Distinta de CFG_JOY_EXT (.joy = mapeo de joystick por
+// juego) para que no colisionen en el mismo directorio.
+const std::string CORE_OPT_EXT = ".opt";
 const std::string RETROPAD_INI = "retropad.ini";
 const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS = "\\assets\\extra\\achievement_translations.cfg";
 const std::string ROUTE_SCRAP_TRANSLATIONS = "\\assets\\extra\\scrap_translations.cfg";
@@ -73,7 +77,9 @@ const char *ICONS_PATH[] = {"menu_log.png",		// page_white_text
 	"achievement-list.png",						// ico_achievements
 	"menu_shutdown.png",						// ico_shutdown
 	"menu_help.png",							// ico_help
-	"core-cheat-options.png"					// ico_cheats
+	"core-cheat-options.png",					// ico_cheats
+	"clock.png",								// ico_clock	
+	"input_MOUSE.png"							// ico_mouse
 };
 
 const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",  // cart_gba
@@ -103,7 +109,8 @@ const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",  //
 	"Atari - Lynx-content.png",												  // cart_atarilynx
 	"Atari - 800-content.png",												  // cart_atari800
 	"Atari - 5200-content.png",												  // cart_atari5200
-	"Commodore - 64-content.png"											  // cart_c64
+	"Commodore - 64-content.png",											  // cart_c64
+	"Sharp - X68000-content.png"											  // cart_x68k
 };
 
 // Nombres de sistema de libretro-database (ficheros rdb/ y carpetas cht/), indexado por
@@ -137,7 +144,8 @@ const char *RDB_SYSTEM_NAMES[] = {
 	"Atari - Lynx",									   // cart_atarilynx
 	"Atari - 8-bit Family",							   // cart_atari800
 	"Atari - 5200",									   // cart_atari5200
-	""												   // cart_c64
+	"",												   // cart_c64
+	""												   // cart_x68k
 };
 
 #ifdef _XBOX

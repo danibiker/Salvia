@@ -14,7 +14,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02111-1307 USA.           *
  ***************************************************************************/
 
 #ifndef __CDROM_H__
@@ -30,100 +30,46 @@ extern "C" {
 #include "plugins.h"
 #include "psxmem.h"
 #include "psxhw.h"
-#include "psxcommon.h"
 
-	
-#define btoi(b)     ((b) / 16 * 10 + (b) % 16) // BCD to u_char 
-#define itob(i)     ((i) / 10 * 16 + (i) % 10) // u_char to BCD
+#define btoi(b)     ((b) / 16 * 10 + (b) % 16) /* BCD to u_char */
+#define itob(i)     ((i) / 10 * 16 + (i) % 10) /* u_char to BCD */
 
-#define MSF2SECT(m, s, f)		(((m) * 60 + (s) - 2) * 75 + (f))
+#define ABS_CD(x) ((x >= 0) ? x : -x)
+#define MIN_VALUE(a,b) ((a) < (b) ? (a) : (b))
+#define MAX_VALUE(a,b) ((a) > (b) ? (a) : (b))
 
 #define CD_FRAMESIZE_RAW		2352
 #define DATA_SIZE				(CD_FRAMESIZE_RAW - 12)
 
+/* CD_FRAMESIZE_RAW aligned to a cache line for DMA buffers
+ * (assuming a cache line of max. 64 bytes) */
+#define CD_FRAMESIZE_RAW_ALIGNED	2368
+
 #define SUB_FRAMESIZE			96
 
-typedef struct {
-	unsigned char OCUP;
-	unsigned char Reg1Mode;
-	unsigned char Reg2;
-	unsigned char CmdProcess;
-	unsigned char Ctrl;
-	unsigned char Stat;
+#define MSF2SECT(m, s, f)		(((m) * 60 + (s) - 2) * 75 + (f))
 
-	unsigned char StatP;
+enum cdrType {
+	CDRT_UNKNOWN = 0,
+	CDRT_DATA = 1,
+	CDRT_CDDA = 2,
+};
 
-	unsigned char Transfer[CD_FRAMESIZE_RAW];
-	unsigned int  transferIndex;
-
-	unsigned char Prev[4];
-	unsigned char Param[8];
-	unsigned char Result[16];
-
-	unsigned char ParamC;
-	unsigned char ParamP;
-	unsigned char ResultC;
-	unsigned char ResultP;
-	unsigned char ResultReady;
-	unsigned char Cmd;
-	unsigned char Readed;
-	unsigned char SetlocPending;
-	u32 Reading;
-
-	unsigned char ResultTN[6];
-	unsigned char ResultTD[4];
-	unsigned char SetSectorPlay[4];
-	unsigned char SetSectorEnd[4];
-	unsigned char SetSector[4];
-	unsigned char Track;
-	boolean Play, Muted;
-	int CurTrack;
-	int Mode, File, Channel;
-	int Reset;
-	int RErr;
-	int FirstSector;
-
-	xa_decode_t Xa;
-
-	int Init;
-
-	u16 Irq;
-	u8 IrqRepeated;
-	u32 eCycle;
-
-	u8 Seeked;
-	u8 ReadRescheduled;
-
-	u8 DriveState;
-	u8 FastForward;
-	u8 FastBackward;
-
-	u8 AttenuatorLeftToLeft, AttenuatorLeftToRight;
-	u8 AttenuatorRightToRight, AttenuatorRightToLeft;
-	u8 AttenuatorLeftToLeftT, AttenuatorLeftToRightT;
-	u8 AttenuatorRightToRightT, AttenuatorRightToLeftT;
-
-	struct {
-		unsigned char Track;
-		unsigned char Index;
-		unsigned char Relative[3];
-		unsigned char Absolute[3];
-	} subq;
-	unsigned char TrackChanged;
-} cdrStruct;
-
-extern cdrStruct cdr;
+static __inline void lba2msf(unsigned int lba, u8 *m, u8 *s, u8 *f) {
+	*m = lba / 75 / 60;
+	lba = lba - *m * 75 * 60;
+	*s = lba / 75;
+	lba = lba - *s * 75;
+	*f = lba;
+}
 
 void cdrReset();
-void cdrAttenuate(s16 *buf, int samples, int stereo);
 
-void cdrInterrupt();
-void cdrReadInterrupt();
-void cdrDecodedBufferInterrupt();
-void cdrLidSeekInterrupt();
-void cdrPlayInterrupt();
-//void cdrDmaInterrupt();
-void LidInterrupt();
+void cdrInterrupt(void);
+void cdrPlayReadInterrupt(void);
+void cdrLidSeekInterrupt(void);
+void cdrDmaInterrupt(void);
+void LidInterrupt(void);
 unsigned char cdrRead0(void);
 unsigned char cdrRead1(void);
 unsigned char cdrRead2(void);
@@ -138,5 +84,3 @@ int cdrFreeze(psxSaveState_t *f, int Mode);
 }
 #endif
 #endif
-
-

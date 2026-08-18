@@ -202,5 +202,11 @@
     <ClCompile Include="..\..\..\libpcsxcore\gte_divider.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\libpcsxcore\cdrom-async.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\libpcsxcore\pcsxr-threads.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

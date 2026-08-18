@@ -48,6 +48,9 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::resolution_height] = cfg::t_cfg_props("resolution_height", 720);
 	configMain[cfg::resolution_height].desc = "#The screen resolution height";
 
+	configMain[cfg::resolutionIndex] = cfg::t_cfg_props("resolutionIndex", (int)0);
+	configMain[cfg::resolutionIndex].desc = "#Screen mode";
+
 	configMain[cfg::fullscreen] = cfg::t_cfg_props("fullscreen", false);
 	configMain[cfg::fullscreen].desc = "#The fullscreen mode or window mode";
 
@@ -334,13 +337,13 @@ void CfgLoader::parsearIdiomas(const char* xmlData, const std::string& isoCode,
 
     if (result.status != pugi::status_ok) return;
 
-    // VS2010: Construcción manual del nombre del nodo
+    // VS2010: Construccion manual del nombre del nodo
     std::string nombreNodo = "nom_" + isoCode;
 
-    // Acceso al nodo raíz
+    // Acceso al nodo raiz
     pugi::xml_node langues = doc.child("Data").child("langues");
 
-    // Iteración compatible con C++03 (Visual Studio 2010)
+    // Iteracion compatible con C++03 (Visual Studio 2010)
     for (pugi::xml_node langue = langues.child("langue"); langue; langue = langue.next_sibling("langue")) 
     {
         // Obtenemos los valores. child_value() devuelve "" si no lo encuentra.
@@ -367,13 +370,13 @@ void CfgLoader::parsearRegiones(const char* xmlData, const std::string& isoCode,
 
     if (result.status != pugi::status_ok) return;
 
-    // VS2010: Construcción manual del nombre del nodo
+    // VS2010: Construccion manual del nombre del nodo
     std::string nombreNodo = "nom_" + isoCode;
 
-    // Acceso al nodo raíz
+    // Acceso al nodo raiz
     pugi::xml_node langues = doc.child("Data").child("regions");
 
-    // Iteración compatible con C++03 (Visual Studio 2010)
+    // Iteracion compatible con C++03 (Visual Studio 2010)
     for (pugi::xml_node langue = langues.child("region"); langue; langue = langue.next_sibling("region")) 
     {
         // Obtenemos los valores. child_value() devuelve "" si no lo encuentra.
@@ -670,28 +673,95 @@ std::string CfgLoader::saveCoreParams(){
 }
 
 void CfgLoader::loadCoreParams(){
-	std::string corepath = getCoreCfgPath();
+	applyCoreParamsFile(getCoreCfgPath());
+}
+
+// Aplica un fichero de opciones de core (lineas "key=indice", '#'=comentario)
+// ACTUALIZANDO `selected` in-place sobre las entradas existentes (conserva
+// values/labels que el core rellena en SET_CORE_OPTIONS); si la key no existe
+// aun, crea una entrada minima. Robusto tanto antes como despues de que el core
+// declare las opciones. Devuelve true si el fichero existia y tenia contenido.
+bool CfgLoader::applyCoreParamsFile(const std::string& path){
 	std::vector<std::string> fileConfig;
-	FileList::cargarVector(corepath, fileConfig);
+	FileList::cargarVector(path, fileConfig);
+	if (fileConfig.empty()) return false;
 
-	if (fileConfig.empty()) return;
-
-	if (fileConfig.size() > 0){
-		std::string linea = "";
-		std::size_t pos = 0;
-
-        for (unsigned int i=0; i<fileConfig.size(); i++){
-            linea = fileConfig.at(i);
-			if (linea.empty() || linea[0] == '#') continue;
-
-			if ((pos = linea.find("=")) != std::string::npos){
+	std::size_t pos = 0;
+	for (unsigned int i=0; i<fileConfig.size(); i++){
+		std::string linea = fileConfig.at(i);
+		if (linea.empty() || linea[0] == '#') continue;
+		if ((pos = linea.find("=")) != std::string::npos){
+			std::string key = linea.substr(0, pos);
+			int idx = Constant::strToTipo<int>(Constant::Trim(linea.substr(pos + 1)));
+			std::map<std::string, std::unique_ptr<cfg::t_emu_props> >::iterator it = startupLibretroParams.find(key);
+			if (it != startupLibretroParams.end()){
+				it->second->selected = idx;
+			} else {
 				cfg::t_emu_props *ptr = new cfg::t_emu_props();
-				std::string value = Constant::Trim(linea.substr(pos + 1));
-				ptr->selected = Constant::strToTipo<int>(value);
-				startupLibretroParams[linea.substr(0, pos)] = std::unique_ptr<cfg::t_emu_props>(ptr);
+				ptr->selected = idx;
+				startupLibretroParams[key] = std::unique_ptr<cfg::t_emu_props>(ptr);
 			}
 		}
 	}
+	return true;
+}
+
+// Ruta del fichero de opciones de core POR JUEGO: junto al juego, mismo nombre
+// base + CORE_OPT_EXT (.opt). Distinta del .cfg del joystick por-juego.
+std::string CfgLoader::getGameCoreCfgPath(const std::string& gamePath){
+	dirutil dir;
+	return dir.getFolder(gamePath) + Constant::getFileSep() + dir.getFileNameNoExt(gamePath) + CORE_OPT_EXT;
+}
+
+// Resetea TODAS las opciones (startupLibretroParams) a su valor por defecto
+// declarado por el core (defaultSelected, poblado por applyEntry en
+// SET_CORE_OPTIONS). Base para recargar limpio al cambiar de juego.
+void CfgLoader::resetCoreParamsToDefaults(){
+	for (std::map<std::string, std::unique_ptr<cfg::t_emu_props> >::iterator it = startupLibretroParams.begin();
+	     it != startupLibretroParams.end(); ++it) {
+		cfg::t_emu_props *p = it->second.get();
+		int d = (p->defaultSelected >= 0 && p->defaultSelected < (int)p->values.size())
+		        ? p->defaultSelected : 0;
+		p->selected = d;
+	}
+}
+
+// En la carga del juego, por CAPAS para no arrastrar opciones del juego anterior:
+//   1) reset a los defaults del core (base limpia);
+//   2) aplicar el config GENERAL del core (config/core_<core>.ini) si existe;
+//   3) si hay fichero especifico del juego (<juego>.opt), sobreescribe.
+// Asi, un juego SIN fichero propio vuelve a las opciones generales (o a los
+// defaults si no hay config general), en vez de heredar las del juego anterior.
+void CfgLoader::loadCoreParamsForGame(const std::string& gamePath){
+	dirutil dir;
+	resetCoreParamsToDefaults();
+	applyCoreParamsFile(getCoreCfgPath());
+	std::string gamecfg = getGameCoreCfgPath(gamePath);
+	if (dir.fileExists(gamecfg.c_str())){
+		LOG_DEBUG("Cargando opciones de core especificas del juego: %s", gamecfg.c_str());
+		applyCoreParamsFile(gamecfg);
+	}
+}
+
+// Igual que saveCoreParams pero al fichero por-juego (junto al juego).
+std::string CfgLoader::saveGameCoreParams(const std::string& gamePath){
+	if (gamePath.empty())
+		return LanguageManager::instance()->get("msg.key.cfg.load");
+
+	std::vector<std::string> fileCoreCfg;
+	std::string optionValues;
+	for (auto it = startupLibretroParams.begin(); it != startupLibretroParams.end(); ++it) {
+		optionValues = "";
+		for (std::size_t i=0; i < it->second->values.size(); i++){
+			optionValues += it->second->values[i] + (i<it->second->values.size() - 1 ? " | " : "");
+		}
+		fileCoreCfg.push_back("#" + optionValues);
+		fileCoreCfg.push_back(it->first + "=" + Constant::TipoToStr(it->second->selected));
+	}
+
+	std::string gamecfg = getGameCoreCfgPath(gamePath);
+	FileList::guardarVector(gamecfg, fileCoreCfg);
+	return LanguageManager::instance()->get("msg.cfg.savelocation") + gamecfg;
 }
 
 std::string CfgLoader::getCoreCfgPath(){
@@ -702,7 +772,7 @@ std::string CfgLoader::getCoreCfgPath(){
 	}
 
 	return configMain[cfg::path_prefix].valueStr + (lastFileSep ? "" : Constant::getFileSep()) + 
-		"config" + Constant::getFileSep() + "core_" + configMain[cfg::libretro_core].valueStr + ".ini";
+		"config" + Constant::getFileSep() + "core_" + configMain[cfg::libretro_core].valueStr + CORE_OPT_EXT;
 }
 
 // Metodo para guardar la configuracion en un archivo

@@ -47,6 +47,9 @@
     <ClCompile Include="SDL\src\video\xbox\SDL_xboxmouse.c">
       <Filter>Source Files\Xbox</Filter>
     </ClCompile>
+    <ClCompile Include="SDL\src\video\xbox\SDL_xboxhidmouse.cpp">
+      <Filter>Source Files\Xbox</Filter>
+    </ClCompile>
     <ClCompile Include="SDL\src\video\xbox\SDL_xboxvideo.c">
       <Filter>Source Files\Xbox</Filter>
     </ClCompile>

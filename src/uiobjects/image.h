@@ -42,6 +42,10 @@ class Image : public Object{
         bool tamAuto;
         int vAlign;
         bool fillGaps;
+        // best fit (tipo "cover"): escala la imagen para CUBRIR todo el recuadro
+        // manteniendo su aspect ratio, recortando lo que sobra (sin huecos).
+        // Solo aplica en modo tamAuto. Alternativa al CONTAIN por defecto.
+        bool bestFit;
 		bool keepAlpha;
 		bool drawShadow;
 		Dimension newDim;
@@ -51,6 +55,7 @@ class Image : public Object{
 
 		static void convertirGrises16Bits(SDL_Surface*);
         static Dimension relacion(const Dimension &src, const Dimension &dst );
+        static Dimension relacionCover(const Dimension &src, const Dimension &dst );
         static Dimension centrado(const Dimension &src, const Dimension &dst);
 
 		Dimension relacionAuto(const Dimension &src, const Dimension &dst );

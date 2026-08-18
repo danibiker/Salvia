@@ -13,9 +13,23 @@ static const enum videoScale { FULLSCREEN=0, SCALE1X, SCALE2X, SCALE2X_ADV,
 static const enum videoScaleIntegerType {SCALE_INT_REDUCE=0, SCALE_INT_INCREASE, SCALE_INT_1X, SCALE_INT_2X, SCALE_INT_3X, SCALE_INT_4X, SCALE_INT_5X, TOTAL_INT_SCALE};
 
 
-static const enum aspectRatio { RATIO_CORE=0, RATIO_4_3, RATIO_3_2, RATIO_8_7, RATIO_10_9, 
+static const enum aspectRatio { RATIO_CORE=0, RATIO_4_3, RATIO_3_2, RATIO_8_7, RATIO_10_9,
 	RATIO_1_1, RATIO_5_4, RATIO_16_9, RATIO_16_10, TOTAL_VIDEO_RATIO
 };
+
+// Resoluciones estandar ofrecidas en el menu de video (la entrada 0 del menu es
+// "Auto"; estas van a continuacion). En Xbox coinciden con la allow-list del
+// backend (vid_modes) y estan capadas a <=720p por rendimiento. En Windows el
+// fichero de config puede definir cualquier resolucion (el menu la anade como
+// entrada extra si no esta en esta lista).
+struct t_screen_res { int w, h; };
+static const t_screen_res g_screenResolutions[] = {
+#ifdef WIN
+	{3840, 2160}, {2560, 1440}, {1920, 1080},
+#endif
+	{1280, 720}, {1024, 768}, {800, 600}, {640, 480}
+};
+#define TOTAL_SCREEN_RES (int)(sizeof(g_screenResolutions)/sizeof(g_screenResolutions[0]))
 
 static const enum videoShaders {
 	SHADER_NEAREST,         /* 0 */

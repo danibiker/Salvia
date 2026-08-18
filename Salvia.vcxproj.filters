@@ -9,9 +9,6 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
     </Filter>
-    <Filter Include="Source Files\filters">
-      <UniqueIdentifier>{48d57c08-2d2f-4508-a161-18badc8ddf08}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source Files\frontend">
       <UniqueIdentifier>{a18d684a-452e-4ae1-822c-29792654f581}</UniqueIdentifier>
     </Filter>
@@ -42,39 +39,33 @@
     <Filter Include="Source Files\cheats">
       <UniqueIdentifier>{78c871d8-1661-495d-bff5-44c890aab6ad}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\frontend\menus">
+      <UniqueIdentifier>{fdfd4269-cd2e-465e-a510-69791b273493}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\soft_filters">
+      <UniqueIdentifier>{48d57c08-2d2f-4508-a161-18badc8ddf08}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\const\constant.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\io\filelist.h">
       <Filter>Header Files</Filter>
     </ClCompile>
     <ClCompile Include="src\io\hqx_2\hq2x.c">
-      <Filter>Source Files\filters</Filter>
+      <Filter>Source Files\soft_filters</Filter>
     </ClCompile>
     <ClCompile Include="src\io\xbrz\xbrz.cpp">
-      <Filter>Source Files\filters</Filter>
+      <Filter>Source Files\soft_filters</Filter>
     </ClCompile>
     <ClCompile Include="src\io\hq2xbox\hq2xx.cpp">
-      <Filter>Source Files\filters</Filter>
+      <Filter>Source Files\soft_filters</Filter>
     </ClCompile>
     <ClCompile Include="src\io\hqx_2\hq3x.c">
-      <Filter>Source Files\filters</Filter>
+      <Filter>Source Files\soft_filters</Filter>
     </ClCompile>
     <ClCompile Include="src\io\hqx_2\init.c">
-      <Filter>Source Files\filters</Filter>
-    </ClCompile>
-    <ClCompile Include="src\salvia.cpp">
-      <Filter>Source Files\frontend</Filter>
+      <Filter>Source Files\soft_filters</Filter>
     </ClCompile>
     <ClCompile Include="src\engine.cpp">
-      <Filter>Source Files\frontend</Filter>
-    </ClCompile>
-    <ClCompile Include="src\gamemenu.cpp">
-      <Filter>Source Files\frontend</Filter>
-    </ClCompile>
-    <ClCompile Include="src\menus\gestormenus.cpp">
       <Filter>Source Files\frontend</Filter>
     </ClCompile>
     <ClCompile Include="src\io\cursorgestor.cpp">
@@ -152,9 +143,6 @@
     <ClCompile Include="src\io\filepackage.cpp">
       <Filter>Source Files\io</Filter>
     </ClCompile>
-    <ClCompile Include="src\menuassetloader.cpp">
-      <Filter>Source Files\frontend</Filter>
-    </ClCompile>
     <ClCompile Include="src\video\win_d3d9.cpp">
       <Filter>Source Files\video</Filter>
     </ClCompile>
@@ -178,6 +166,24 @@
     </ClCompile>
     <ClCompile Include="src\retroachievements\HashCHD.cpp">
       <Filter>Source Files\retroachievements</Filter>
+    </ClCompile>
+    <ClCompile Include="src\const\constant.cpp">
+      <Filter>Source Files\frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menus\gamemenu.cpp">
+      <Filter>Source Files\frontend\menus</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menus\gestormenus.cpp">
+      <Filter>Source Files\frontend\menus</Filter>
+    </ClCompile>
+    <ClCompile Include="src\libretro\libretro_stub.c">
+      <Filter>Source Files\so</Filter>
+    </ClCompile>
+    <ClCompile Include="src\salvia.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menus\menuassetloader.cpp">
+      <Filter>Source Files\frontend\menus</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -244,9 +250,6 @@
     <ClInclude Include="src\compat\dirent.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\gamemenu.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\font\fonts.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -281,31 +284,19 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\io\video.h">
-      <Filter>Source Files\filters</Filter>
+      <Filter>Source Files\soft_filters</Filter>
     </ClInclude>
     <ClInclude Include="src\io\hq2xbox\hq2xx.h">
-      <Filter>Source Files\filters</Filter>
-    </ClInclude>
-    <ClInclude Include="src\statesram.h">
-      <Filter>Source Files\frontend</Filter>
+      <Filter>Source Files\soft_filters</Filter>
     </ClInclude>
     <ClInclude Include="src\io\video_direct.h">
-      <Filter>Source Files\filters</Filter>
-    </ClInclude>
-    <ClInclude Include="src\image\lodepng.h">
-      <Filter>Source Files\image</Filter>
-    </ClInclude>
-    <ClInclude Include="src\http\scrapper.h">
-      <Filter>Source Files\http</Filter>
-    </ClInclude>
-    <ClInclude Include="src\image\icons.h">
-      <Filter>Source Files\image</Filter>
+      <Filter>Source Files\soft_filters</Filter>
     </ClInclude>
     <ClInclude Include="src\http\safedownloadqueue.h">
       <Filter>Source Files\http</Filter>
     </ClInclude>
     <ClInclude Include="src\io\video_common.h">
-      <Filter>Source Files\filters</Filter>
+      <Filter>Source Files\soft_filters</Filter>
     </ClInclude>
     <ClInclude Include="src\io\progress_bar.h">
       <Filter>Header Files</Filter>
@@ -316,17 +307,8 @@
     <ClInclude Include="src\audio\audiorate.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\salvia.h">
-      <Filter>Source Files\frontend</Filter>
-    </ClInclude>
-    <ClInclude Include="src\dischelper.h">
-      <Filter>Source Files\frontend</Filter>
-    </ClInclude>
     <ClInclude Include="src\http\achievements.h">
       <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\io\hotkeys.h">
-      <Filter>Source Files\io</Filter>
     </ClInclude>
     <ClInclude Include="src\io\inputscore.h">
       <Filter>Source Files\io</Filter>
@@ -336,9 +318,6 @@
     </ClInclude>
     <ClInclude Include="src\io\keyboard.h">
       <Filter>Source Files\io</Filter>
-    </ClInclude>
-    <ClInclude Include="src\so\soutils.h">
-      <Filter>Source Files\so</Filter>
     </ClInclude>
     <ClInclude Include="src\unzip\ZipBrowser.h">
       <Filter>Header Files</Filter>
@@ -362,6 +341,33 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\cheats\rdbreader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\menus\gamemenu.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\dischelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\statesram.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\salvia.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\image\icons.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\image\lodepng.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\http\scrapper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\io\hotkeys.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\so\soutils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
