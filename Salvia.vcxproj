@@ -2986,6 +2986,9 @@
     <Deploy>
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
+    <ImageXex>
+      <TitleID>58499999</TitleID>
+    </ImageXex>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_x68k|Xbox 360'">
     <ClCompile>
