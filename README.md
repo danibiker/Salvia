@@ -29,6 +29,7 @@ I had grown weary of juggling a multitude of different emulators, each requiring
 * **Animated** or static frontend **backgrounds**
 * Game **library search filters** (for FBNeo, FBANext and Mame 2003 plus)
 * **Per-core** libretro configuration
+* **Mouse support** via dashlaunch plugin
 
 ## Emulators
 Salvia provides the following emulators from the latests releases:
@@ -36,13 +37,13 @@ Salvia provides the following emulators from the latests releases:
 * Megadrive/Genesis/Sega CD
   - genesis-plus-gx
   - picodrive
+* Master System/Game Gear/SG-1000
+  - genesis-plus-gx
 * Sega 32X
   - picodrive
 * Super Nintendo/Super Famicom
   - snes9x
   - snes9x2010
-* Master System/Game Gear/SG-1000
-  - genesis-plus-gx
 * Nes/Famicom
   - nestopia
 * GameBoy/GameBoy Color
@@ -73,6 +74,8 @@ Salvia provides the following emulators from the latests releases:
   - dosbox-pure (with dynamic powerpc recompiler working)
 * Commodore 64
   - frodo
+* Sharp X68000
+  - px68k
 * Atari 8-bit computers (400/800/XL/XE)
   - atari800
 * Atari 5200
@@ -142,6 +145,14 @@ system/
 ├── syscard2.pce
 ├── syscard3.pce
 ├── XEGAME.ROM
+├── keropi/
+│   ├── config
+│   ├── cgrom.dat
+│   ├── iplrom.dat
+│   ├── iplrom30.dat
+│   ├── iplromco.dat
+│   ├── iplromxv.dat
+│   └── sram.dat
 ├── fbneo/
 │   ├── blend/ (Not needed really but nice to have)
 │   │   ├── 1941.bld ... zupapan.bld (110 .bld files)
@@ -226,18 +237,29 @@ Usb0:\Roms
 ├── snes\                (Super Nintendo/Super Famicom --> zip sfc smc fig gd3 gd7 dx2 bsx swc)
 ├── spectrum\            (FBNeo ZX Spectrum --> zip)
 ├── virtualboy\          (Virtual Boy --> zip vb vboy bin)
-└── wonderswan\          (Wonderswan --> zip ws wsc)
+├── wonderswan\          (Wonderswan --> zip ws wsc)
+└── x68000\              (X68000 --> dim img d88 88d hdm dup 2hd xdf hdf cmd m3u)
 ```
 
-To change these paths, you can manually modify the **roms_path** field within the main configuration file (salvia.cfg). Alternatively, this can be adjusted via the in-game menu: Options > Emulation > Roms Main Directory. This property now defines the parent directory for all emulator ROMs. Notably, if configured as usb:\YOUR_ROMS_DIR, the system will dynamically detect the correct USB port, eliminating the need to specify Usb0 or Usb1. To load games from the internal hard disk you must use Hdd:\YOUR_ROMS_DIR
+To change this paths, you can manually modify the **roms_path** field within the main configuration file (salvia.cfg). Alternatively, this can be adjusted via the in-game menu: Options > Emulation > Roms Main Directory. This property now defines the parent directory for all emulator ROMs. Notably, if configured as usb:\YOUR_ROMS_DIR, the system will dynamically detect the correct USB port, eliminating the need to specify Usb0 or Usb1. To load games from the internal hard disk you must use Hdd:\YOUR_ROMS_DIR
 
 <img width="1275" height="301" alt="image" src="https://github.com/user-attachments/assets/8272f1bb-9f65-4e78-aba9-409f8715476c" />
+
+### Mouse support in XBOX 360
+To enable mouse support, it's mandatory for your consele to have the last kernel available 17559, and a DashLaunch plugin must be installed. Inside the salvia-360.zip archive you downloaded previously, you will find a "plugins" directory with a file named hidmouse.xex. Copy that file to the internal hdd of your console or whatever you want, open the dashlaunch utility and add it into the plugins section. 
+
+<img width="1124" height="677" alt="image" src="https://github.com/user-attachments/assets/fb0c8cac-4b5e-43d9-84e5-0c9f70c6f9cc" />
+
+After saving and rebooting the console, once you launch Salvia, you will find an icon on your top left screen corner indicating that the mouse support is enabled.
+
+<img width="650" height="511" alt="image" src="https://github.com/user-attachments/assets/f7bec58e-1d7a-46ae-85cc-6bfa8111d458" />
+
+> Note that for the plugin to detect the mouse, the console must be booted without the mouse plugged in. Once the Salvia frontend is launched, you can plug the mouse in
 
 ### Hotkeys
 Hotkeys can be accessed via the menu: Options > Input > Hotkeys. By default, the SELECT button acts as the primary hotkey enabler and must be pressed first, followed by the corresponding function button to execute the desired action. For instance, the 'SELECT + START' combination exits the emulation, returning you to the game selection screen. Another essential shortcut is 'SELECT + Y', which brings up an overlay containing the options menu or returns to the game emulation if pressed again. The remaining options are fairly self-explanatory.
 
 <img width="1279" height="381" alt="image" src="https://github.com/user-attachments/assets/1cdfb429-d4f4-40ef-baf9-d13c7808c39e" />
-
 
 ## Core Configurations
 
@@ -247,8 +269,6 @@ The psx core needs some .sbi files to work properly with certain PAL titles. If 
 This files can be downloaded from [psxdatacenter.com](https://psxdatacenter.com/sbifiles.html). You can use the Firefox plugin [DownThemAll](https://www.downthemall.net/) to download them easily:
 
 <img width="985" height="458" alt="image" src="https://github.com/user-attachments/assets/782e1da3-6ca9-492e-a2e2-2b3d5e7daf8e" />
-
-
 
 Certain games are only compatible with a DualShock controller. If required by the title, this can be configured directly within the Options menu:
 Options > Input > Retropad assignments > Port Controller 1 > Joystick type
