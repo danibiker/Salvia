@@ -98,6 +98,29 @@ u32 *psxRecLUT;
 #define PCSXR_SMC_FIX 1
 #endif
 
+/* ===========================================================================
+ * [FASTMEM] Fast-path inline para accesos a memoria con direccion VARIABLE.
+ *
+ * Hoy casi todo load/store llama a la funcion C (psxMemRead/Write) — bl +
+ * flush de volatiles + LUT + byteswap en C. picodrive, en cambio, accede a la
+ * RAM inline sin llamar a C. Este fast-path replica el decode de psxMemRead*_2
+ * (LUT psxMemRLUT, con el carve-out de scratchpad/registros HW) EN LINEA, y solo
+ * cae a la funcion C para lo no-RAM (registros HW/GPU/no-mapeado).
+ *
+ * Diseno seguro para el asignador: se reutiliza preMemRead() (deja ea en ARG1=r3
+ * y vuelca los volatiles r0-r12); el fast-path usa r4-r6 (volatiles ya vaciados)
+ * como scratch crudo y deja el resultado en r3 igual que el camino lento, asi el
+ * estado del asignador es identico tomemos la rama que tomemos. NO ahorra el
+ * flush de volatiles (r14-r31 se conservan como ya hoy), pero si la llamada C,
+ * el LUT-en-C y el byteswap-en-C.
+ *
+ * Validado en HW (GT2 50->60fps estables, Ace Combat/SMC, Tomb Raider 3 OK):
+ * ON por defecto. Poner a 0 revierte al camino C clasico (biseccion si algun
+ * juego futuro diera problemas en el camino de memoria). */
+#ifndef PCSXR_FASTMEM
+#define PCSXR_FASTMEM 1
+#endif
+
 static char *recMem;	/* the recompiled blocks will be here */
 static char *recRAM;	/* and the ptr to the blocks here */
 static char *recROM;	/* and here */
@@ -1661,13 +1684,110 @@ static void preMemWrite(int size)
 	}
 
 	InvalidateCPURegs();
-	
+
 }
+
+#if PCSXR_FASTMEM
+/* [FASTMEM] Tipo de load para emitFastLoad. */
+enum { FML_LB, FML_LBU, FML_LH, FML_LHU, FML_LW };
+
+/* Emite el fast-path inline de lectura de RAM con direccion VARIABLE, dejando el
+ * valor (extendido segun `kind`) en _Rt_. Reutiliza preMemRead (r3=ea; vuelca
+ * r0-r12); r4/r5/r6 = scratch crudo. Ambas ramas (RAM inline / C) dejan el valor
+ * crudo en r3 -> estado del asignador consistente. Solo se llama con _Rt_ != 0. */
+static void emitFastLoad(u32 func, int kind)
+{
+	u32 *slow1, *slow2, *notHW, *done;
+	preMemRead();                       /* ARG1(r3) = ea ; vuelca r0-r12 */
+	SRWI(4, 3, 16);                     /* r4 = t = ea >> 16 */
+	RLWINM(5, 4, 0, 19, 31);            /* r5 = t & 0x1fff */
+	CMPLWI(5, 0x1f80);                  /* banco scratchpad/HW (0x1f80/0x9f80/0xbf80)? */
+	BNE_L(notHW);
+	RLWINM(6, 3, 0, 16, 31);            /* r6 = ea & 0xffff */
+	CMPLWI(6, 0x400);
+	BGE_L(slow1);                       /* registro HW (off >= 0x400) -> C */
+	B_DST(notHW);                       /* no-HW y scratchpad (off<0x400) siguen al LUT */
+	LIW(5, (u32)psxMemRLUT);            /* r5 = &psxMemRLUT[0] */
+	SLWI(4, 4, 2);                      /* r4 = t * 4 */
+	LWZX(5, 5, 4);                      /* r5 = psxMemRLUT[t] */
+	CMPLWI(5, 0);
+	BEQ_L(slow2);                       /* no mapeado -> C */
+	RLWINM(6, 3, 0, 16, 31);            /* r6 = ea & 0xffff */
+	if (kind == FML_LB || kind == FML_LBU) {
+		LBZX(3, 5, 6);                 /* byte (sin byte-swap) */
+	} else if (kind == FML_LH || kind == FML_LHU) {
+		LHBRX(3, 5, 6);                /* half con byte-swap (LE->BE) */
+	} else {
+		LWBRX(3, 5, 6);                /* word con byte-swap (LE->BE) */
+	}
+	B_L(done);
+	B_DST(slow1);
+	B_DST(slow2);
+	CALLFunc(func);                     /* r3 = psxMemReadN_2(ea) */
+	B_DST(done);
+	if (kind == FML_LB) {
+		EXTSB(PutHWReg32(_Rt_), 3);    /* sign-extend byte */
+	} else if (kind == FML_LH) {
+		EXTSH(PutHWReg32(_Rt_), 3);    /* sign-extend half */
+	} else {
+		MR(PutHWReg32(_Rt_), 3);       /* LBU/LHU/LW: cero-extension ya hecha */
+	}
+}
+
+#if PCSXR_SMC_FIX
+/* Emite el fast-path inline de escritura a RAM con direccion VARIABLE. `size` =
+ * 1/2/4. Reutiliza preMemWrite (r3=ea, r4=valor enmascarado; vuelca r0-r12);
+ * r5/r6/r7 = scratch. Cae a C (que hace write + recClear) si: es registro HW, la
+ * palabra pertenece a codigo (gate smcCov -> hay que invalidar), o el banco no es
+ * escribible (psxMemWLUT NULL: BIOS/no-mapeado/cache-isolada, ver psxmem.c). Con
+ * smcCov==0 la palabra no es codigo -> recClear seria no-op, se omite. Requiere
+ * PCSXR_SMC_FIX (usa smcCov). */
+static void emitFastStore(u32 func, int size)
+{
+	u32 *slow1, *slow2, *slow3, *notHW, *done;
+	preMemWrite(size);                  /* ARG1(r3)=ea, ARG2(r4)=val ; vuelca r0-r12 */
+	SRWI(5, 3, 16);                     /* r5 = t = ea >> 16 */
+	RLWINM(6, 5, 0, 19, 31);            /* r6 = t & 0x1fff */
+	CMPLWI(6, 0x1f80);
+	BNE_L(notHW);
+	RLWINM(7, 3, 0, 16, 31);            /* r7 = ea & 0xffff */
+	CMPLWI(7, 0x400);
+	BGE_L(slow1);                       /* registro HW -> C */
+	B_DST(notHW);
+	RLWINM(7, 3, 30, 13, 31);           /* r7 = (ea & 0x1fffff) >> 2  (indice de palabra) */
+	LIW(6, (u32)smcCov);                /* r6 = base smcCov (estable; realloc solo en reset->flush) */
+	LBZX(6, 6, 7);                      /* r6 = smcCov[idx] */
+	CMPLWI(6, 0);
+	BNE_L(slow2);                       /* la palabra es codigo -> C (write + recClear) */
+	LIW(6, (u32)psxMemWLUT);            /* r6 = &psxMemWLUT[0] */
+	SLWI(5, 5, 2);                      /* r5 = t * 4 */
+	LWZX(6, 6, 5);                      /* r6 = psxMemWLUT[t] */
+	CMPLWI(6, 0);
+	BEQ_L(slow3);                       /* readonly/no-mapeado/cache-isolada -> C */
+	RLWINM(7, 3, 0, 16, 31);            /* r7 = ea & 0xffff */
+	if (size == 1) {
+		STBX(4, 6, 7);                 /* byte (sin byte-swap) */
+	} else if (size == 2) {
+		STHBRX(4, 6, 7);               /* half con byte-swap */
+	} else {
+		STWBRX(4, 6, 7);               /* word con byte-swap */
+	}
+	B_L(done);
+	B_DST(slow1);
+	B_DST(slow2);
+	B_DST(slow3);
+	CALLFunc(func);                     /* psxMemWriteN_2(ea,val) : write + recClear en C */
+	B_DST(done);
+}
+#endif /* PCSXR_SMC_FIX */
+#endif /* PCSXR_FASTMEM */
 
 static void recLB() {
 	u32 func = (u32) psxMemRead8_2;
 
-
+#if PCSXR_FASTMEM
+	if (_Rt_) { emitFastLoad(func, FML_LB); return; }
+#endif
 	preMemRead();
 	CALLFunc(func);
 	if (_Rt_) {
@@ -1678,6 +1798,9 @@ static void recLB() {
 static void recLBU() {
 	u32 func = (u32) psxMemRead8_2;
 
+#if PCSXR_FASTMEM
+	if (_Rt_) { emitFastLoad(func, FML_LBU); return; }
+#endif
 	preMemRead();
 	CALLFunc(func);
 
@@ -1689,6 +1812,9 @@ static void recLBU() {
 static void recLH() {
 	u32 func = (u32) psxMemRead16_2;
 
+#if PCSXR_FASTMEM
+	if (_Rt_) { emitFastLoad(func, FML_LH); return; }
+#endif
 	preMemRead();
 	CALLFunc(func);
 	if (_Rt_) {
@@ -1699,6 +1825,9 @@ static void recLH() {
 static void recLHU() {
 	u32 func = (u32) psxMemRead16_2;
 
+#if PCSXR_FASTMEM
+	if (_Rt_) { emitFastLoad(func, FML_LHU); return; }
+#endif
 	preMemRead();
 	CALLFunc(func);
 	if (_Rt_) {
@@ -1776,6 +1905,10 @@ static void recLW() {
 //		SysPrintf("unhandled r32 %x\n", addr);
 	}
 
+#if PCSXR_FASTMEM
+	if (_Rt_) { emitFastLoad(func, FML_LW); return; }
+#endif
+
 	preMemRead();
 	CALLFunc(func);
 	if (_Rt_) {
@@ -1787,9 +1920,12 @@ void recClear32(u32 addr) {
 	recClear(addr, 1);
 }
 
-static void recSB() {	
+static void recSB() {
 	u32 func = (u32) psxMemWrite8_2;
 
+#if PCSXR_FASTMEM && PCSXR_SMC_FIX
+	emitFastStore(func, 1); return;
+#endif
 	preMemWrite(1);
 	CALLFunc((u32) func);
 }
@@ -1797,6 +1933,9 @@ static void recSB() {
 static void recSH() {
 	u32 func = (u32) psxMemWrite16_2;
 
+#if PCSXR_FASTMEM && PCSXR_SMC_FIX
+	emitFastStore(func, 2); return;
+#endif
 	preMemWrite(2);
 	CALLFunc(func);
 }
@@ -1804,6 +1943,9 @@ static void recSH() {
 static void recSW() {
 	u32 func = (u32) psxMemWrite32_2;
 
+#if PCSXR_FASTMEM && PCSXR_SMC_FIX
+	emitFastStore(func, 4); return;
+#endif
 	preMemWrite(4);
 	CALLFunc(func);
 }
