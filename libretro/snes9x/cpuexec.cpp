@@ -14,9 +14,6 @@
 #include "spc7110.h"
 #include "bsflash.h"
 #include "snapshot.h"
-#ifdef _XBOX
-#include <ppcintrinsics.h>
-#endif
 #ifdef DEBUGGER
 #include "debug.h"
 #include "missing.h"

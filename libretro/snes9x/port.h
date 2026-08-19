@@ -15,10 +15,26 @@
 #include <string.h>
 #include <sys/types.h>
 
+//#if _MSC_VER <= 1600
+////    // Definimos los equivalentes de Microsoft para funciones POSIX
+//    #define strcasecmp _stricmp
+//    #define strncasecmp _strnicmp
+//#endif
+//
+//#if _MSC_VER <= 1600  || defined(__WIN32__)
+//	#define snprintf _snprintf // needs ANSI compliant name
+//#endif
+
+#if defined(_MSC_VER) && _MSC_VER <= 1600
+	#include <msvc.h>
+#endif
+
 #ifdef __WIN32__
 #define NOMINMAX 1
 #include <windows.h>
 #endif
+
+
 
 #ifndef PIXEL_FORMAT
 #define PIXEL_FORMAT RGB565
@@ -78,7 +94,7 @@ typedef uint64_t			uint64;
 #endif
 #endif  /* __WIN32__ */
 
-#if defined(__DJGPP) || defined(__WIN32__)
+#if defined(__DJGPP) || defined(__WIN32__) || defined (_XBOX)
 #define SLASH_STR	"\\"
 #define SLASH_CHAR	'\\'
 #else

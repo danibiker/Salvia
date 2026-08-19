@@ -18,6 +18,67 @@
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\apu\apu.cpp" />
+    <ClCompile Include="..\apu\bapu\dsp\sdsp.cpp" />
+    <ClCompile Include="..\apu\bapu\smp\smp.cpp" />
+    <ClCompile Include="..\apu\bapu\smp\smp_state.cpp" />
+    <ClCompile Include="..\bml.cpp" />
+    <ClCompile Include="..\bsflash.c" />
+    <ClCompile Include="..\bsx.c" />
+    <ClCompile Include="..\c4emu.c" />
+    <ClCompile Include="..\cheats2.cpp" />
+    <ClCompile Include="..\clip.cpp" />
+    <ClCompile Include="..\controls.cpp" />
+    <ClCompile Include="..\cpu.cpp" />
+    <ClCompile Include="..\cpuexec.cpp" />
+    <ClCompile Include="..\cpuops.cpp" />
+    <ClCompile Include="..\crosshairs.cpp" />
+    <ClCompile Include="..\dma.cpp" />
+    <ClCompile Include="..\dsp.c" />
+    <ClCompile Include="..\filter\snes_ntsc.c" />
+    <ClCompile Include="..\fscompat.cpp" />
+    <ClCompile Include="..\fxemu.c" />
+    <ClCompile Include="..\gfx.cpp" />
+    <ClCompile Include="..\globals.cpp" />
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_posix_string.c" />
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_snprintf.c" />
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_strcasestr.c" />
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_strl.c" />
+    <ClCompile Include="..\libretro\libretro-common\compat\fopen_utf8.c" />
+    <ClCompile Include="..\libretro\libretro-common\encodings\encoding_deflate.c" />
+    <ClCompile Include="..\libretro\libretro-common\encodings\encoding_utf.c" />
+    <ClCompile Include="..\libretro\libretro-common\file\file_path.c" />
+    <ClCompile Include="..\libretro\libretro-common\file\file_path_io.c" />
+    <ClCompile Include="..\libretro\libretro-common\file\retro_dirent.c" />
+    <ClCompile Include="..\libretro\libretro-common\streams\file_stream.c" />
+    <ClCompile Include="..\libretro\libretro-common\streams\file_stream_transforms.c" />
+    <ClCompile Include="..\libretro\libretro-common\string\stdstring.c" />
+    <ClCompile Include="..\libretro\libretro-common\time\rtime.c" />
+    <ClCompile Include="..\libretro\libretro-common\vfs\vfs_hybrid.c" />
+    <ClCompile Include="..\libretro\libretro-common\vfs\vfs_implementation.c" />
+    <ClCompile Include="..\libretro\libretro.cpp" />
+    <ClCompile Include="..\loadzip.cpp" />
+    <ClCompile Include="..\memmap.cpp" />
+    <ClCompile Include="..\msu1.c" />
+    <ClCompile Include="..\obc1.c" />
+    <ClCompile Include="..\ppu.cpp" />
+    <ClCompile Include="..\sa1.cpp" />
+    <ClCompile Include="..\sa1cpu.cpp" />
+    <ClCompile Include="..\sa1hw.c" />
+    <ClCompile Include="..\sdd1.c" />
+    <ClCompile Include="..\seta.c" />
+    <ClCompile Include="..\sha256.cpp" />
+    <ClCompile Include="..\snapshot.cpp" />
+    <ClCompile Include="..\spc7110.c" />
+    <ClCompile Include="..\srtc.c" />
+    <ClCompile Include="..\tile.c" />
+    <ClCompile Include="..\zipfile.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\libretro\libretro-common\include\retro_inline.h" />
+    <ClInclude Include="..\port.h" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{137C4DDA-0E01-4BF9-8643-930CA2C4B498}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
@@ -94,21 +155,28 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>__WIN32__;_LIB;__LIBRETRO__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>__WIN32__;_LIB;__LIBRETRO__;INLINE=__inline;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <MinimalRebuild>false</MinimalRebuild>
-      <AdditionalIncludeDirectories>$(SolutionDir)libretro;$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)libretro;$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)libretro\libretro-common\include\compat</AdditionalIncludeDirectories>
       <StructMemberAlignment>Default</StructMemberAlignment>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <BufferSecurityCheck>false</BufferSecurityCheck>
-      <CompileAs>CompileAsCpp</CompileAs>
-      <FloatingPointModel>Precise</FloatingPointModel>
+      <CompileAs>Default</CompileAs>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <StringPooling>false</StringPooling>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <FunctionLevelLinking>false</FunctionLevelLinking>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <Lib>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
     <ClCompile>
@@ -116,15 +184,15 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>MSB_FIRST;_XBOX;_DEBUG;__LIBRETRO__;__powerpc__;__BIG_ENDIAN__</PreprocessorDefinitions>
+      <PreprocessorDefinitions>MSB_FIRST;_XBOX;__LIBRETRO__;__powerpc__;__BIG_ENDIAN__;INLINE=__inline</PreprocessorDefinitions>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <MinimalRebuild>false</MinimalRebuild>
-      <AdditionalIncludeDirectories>$(SolutionDir)libretro;$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)libretro;$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)libretro\libretro-common\include\compat</AdditionalIncludeDirectories>
       <StructMemberAlignment>Default</StructMemberAlignment>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <BufferSecurityCheck>true</BufferSecurityCheck>
-      <CompileAs>CompileAsCpp</CompileAs>
+      <CompileAs>Default</CompileAs>
       <FloatingPointModel>Fast</FloatingPointModel>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
     </ClCompile>
@@ -141,8 +209,8 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>false</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>__WIN32__;_LIB;__LIBRETRO__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)libretro;$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>__WIN32__;_LIB;__LIBRETRO__;INLINE=__inline;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)libretro;$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)libretro\libretro-common\include\compat</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
@@ -150,6 +218,8 @@
       <ExceptionHandling>Sync</ExceptionHandling>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <FloatingPointModel>Fast</FloatingPointModel>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <StringPooling>true</StringPooling>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -163,11 +233,11 @@
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>MSB_FIRST;_XBOX;NDEBUG;__LIBRETRO__;__powerpc__;__BIG_ENDIAN__</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)libretro;$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>MSB_FIRST;_XBOX;NDEBUG;__LIBRETRO__;__powerpc__;__BIG_ENDIAN__;INLINE=__inline</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)libretro;$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)libretro\libretro-common\include\compat</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -175,14 +245,15 @@
       <FloatingPointModel>Fast</FloatingPointModel>
       <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <ExceptionHandling>false</ExceptionHandling>
+      <ExceptionHandling>Sync</ExceptionHandling>
       <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
       <PreschedulingOptimization>true</PreschedulingOptimization>
       <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
-      <StructMemberAlignment>16Bytes</StructMemberAlignment>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <StructMemberAlignment>Default</StructMemberAlignment>
       <StringPooling>true</StringPooling>
+      <CompileAs>Default</CompileAs>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -192,68 +263,6 @@
     </Link>
     <Lib />
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <None Include="ReadMe.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="..\apu\apu.cpp" />
-    <ClCompile Include="..\apu\bapu\dsp\sdsp.cpp" />
-    <ClCompile Include="..\apu\bapu\smp\smp.cpp" />
-    <ClCompile Include="..\apu\bapu\smp\smp_state.cpp" />
-    <ClCompile Include="..\bml.cpp" />
-    <ClCompile Include="..\bsx.cpp" />
-    <ClCompile Include="..\c4.cpp" />
-    <ClCompile Include="..\c4emu.cpp" />
-    <ClCompile Include="..\cheats.cpp" />
-    <ClCompile Include="..\cheats2.cpp" />
-    <ClCompile Include="..\clip.cpp" />
-    <ClCompile Include="..\conffile.cpp" />
-    <ClCompile Include="..\controls.cpp" />
-    <ClCompile Include="..\cpu.cpp" />
-    <ClCompile Include="..\cpuexec.cpp" />
-    <ClCompile Include="..\cpuops.cpp" />
-    <ClCompile Include="..\crosshairs.cpp" />
-    <ClCompile Include="..\dma.cpp" />
-    <ClCompile Include="..\dsp.cpp" />
-    <ClCompile Include="..\dsp1.cpp" />
-    <ClCompile Include="..\dsp2.cpp" />
-    <ClCompile Include="..\dsp3.cpp" />
-    <ClCompile Include="..\dsp4.cpp" />
-    <ClCompile Include="..\filter\snes_ntsc.c" />
-    <ClCompile Include="..\fscompat.cpp" />
-    <ClCompile Include="..\fxemu.cpp" />
-    <ClCompile Include="..\fxinst.cpp" />
-    <ClCompile Include="..\gfx.cpp" />
-    <ClCompile Include="..\globals.cpp" />
-    <ClCompile Include="..\libretro\libretro.cpp" />
-    <ClCompile Include="..\loadzip.cpp" />
-    <ClCompile Include="..\memmap.cpp" />
-    <ClCompile Include="..\movie.cpp" />
-    <ClCompile Include="..\msu1.cpp" />
-    <ClCompile Include="..\obc1.cpp" />
-    <ClCompile Include="..\ppu.cpp" />
-    <ClCompile Include="..\sa1.cpp" />
-    <ClCompile Include="..\sa1cpu.cpp" />
-    <ClCompile Include="..\screenshot.cpp" />
-    <ClCompile Include="..\sdd1.cpp" />
-    <ClCompile Include="..\sdd1emu.cpp" />
-    <ClCompile Include="..\seta.cpp" />
-    <ClCompile Include="..\seta010.cpp" />
-    <ClCompile Include="..\seta011.cpp" />
-    <ClCompile Include="..\seta018.cpp" />
-    <ClCompile Include="..\sha256.cpp" />
-    <ClCompile Include="..\snapshot.cpp" />
-    <ClCompile Include="..\spc7110.cpp" />
-    <ClCompile Include="..\srtc.cpp" />
-    <ClCompile Include="..\stream.cpp" />
-    <ClCompile Include="..\tile.cpp" />
-    <ClCompile Include="..\tileimpl-h2x1.cpp" />
-    <ClCompile Include="..\tileimpl-n1x1.cpp" />
-    <ClCompile Include="..\tileimpl-n2x1.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\apu\bapu\smp\smp.hpp" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

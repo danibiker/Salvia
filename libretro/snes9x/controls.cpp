@@ -20,17 +20,6 @@
 #include "crosshairs.h"
 #include "display.h"
 
-#if _MSC_VER <= 1600
-	#include <sstream>
-    // Definimos los equivalentes de Microsoft para funciones POSIX
-    #define strcasecmp _stricmp
-    #define strncasecmp _strnicmp
-#endif
-
-#if _MSC_VER <= 1600  || defined(__WIN32__)
-	#define snprintf _snprintf // needs ANSI compliant name
-#endif
-
 using namespace	std;
 
 #define NONE					(-2)

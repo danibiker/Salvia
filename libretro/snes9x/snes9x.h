@@ -15,6 +15,7 @@
 #include "65c816.h"
 #include "messages.h"
 
+
 /* All core file I/O goes through the libretro VFS via the
    file_stream_transforms wrappers (RFILE). The frontend supplies the
    VFS interface when available (see retro_set_environment);
@@ -282,10 +283,18 @@ struct SSNESGameFixes
 
 void S9xMessage(int, int, const char *);
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern struct SSettings			Settings;
 extern struct SCPUState			CPU;
 extern struct STimings			Timings;
 extern struct SSNESGameFixes	SNESGameFixes;
 extern char						String[513];
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

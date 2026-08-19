@@ -44,6 +44,9 @@ extern "C"  {
       #define vsnprintf c99_vsnprintf_retro__
    #endif
    int c99_vsnprintf_retro__(char *s, size_t len, const char *format, va_list ap);
+
+   # define S_IRUSR  S_IREAD                      /* read, user */
+   # define S_IWUSR  S_IWRITE                     /* write, user */
 #endif
 
 #ifdef __cplusplus

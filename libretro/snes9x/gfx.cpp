@@ -25,7 +25,9 @@ extern "C" { uint8 *tile_VRAM; uint8 *tile_FillRAM;
 
 extern struct SCheatData		Cheat;
 extern struct SLineData			LineData[240];
+extern "C" {
 extern struct SLineMatrixData	LineMatrixData[240];
+}
 
 void S9xComputeClipWindows (void);
 

@@ -11,10 +11,6 @@
 #include <assert.h>
 
 #include "snes9x.h"
-#ifdef _XBOX
-#include <xtl.h>
-#endif
-
 
 #ifdef JMA_SUPPORT
 #include "jma/s9x-jma.h"

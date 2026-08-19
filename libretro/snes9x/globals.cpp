@@ -17,28 +17,19 @@
 #include "missing.h"
 #endif
 
-#ifdef _XBOX
-__declspec(align(128)) struct SCPUState		CPU;
-__declspec(align(128)) struct SRegisters		Registers;
-__declspec(align(128)) struct SPPU				PPU;
-__declspec(align(128)) struct SICPU			ICPU;
-__declspec(align(128)) struct InternalPPU		IPPU;
-__declspec(align(128)) struct STimings			Timings;
-__declspec(align(128)) struct SGFX				GFX;
-__declspec(align(128)) struct SBG				BG;
-#else
 struct SCPUState		CPU;
+struct SICPU			ICPU;
 struct SRegisters		Registers;
 struct SPPU				PPU;
-struct SICPU			ICPU;
 struct InternalPPU		IPPU;
+struct SDMA				DMA[8];
 struct STimings			Timings;
 struct SGFX				GFX;
 struct SBG				BG;
-#endif
-struct SDMA				DMA[8];
 struct SLineData		LineData[240];
+extern "C" {
 struct SLineMatrixData	LineMatrixData[240];
+}
 struct SDSP0			DSP0;
 struct SDSP1			DSP1;
 struct SDSP2			DSP2;
@@ -58,7 +49,9 @@ struct SRTCData			RTCData;
 struct SBSX				BSX;
 struct SMSU1			MSU1;
 struct SMulti			Multi;
+extern "C" {
 struct SSettings		Settings;
+}
 struct SSNESGameFixes	SNESGameFixes;
 #ifdef DEBUGGER
 struct Missing			missing;
@@ -68,7 +61,9 @@ struct Watch			watches[16];
 CMemory					Memory;
 
 char	String[513];
+extern "C" {
 uint8	OpenBus = 0;
+}
 uint8	*HDMAMemPointers[8];
 uint16	BlackColourMap[256];
 uint16	DirectColourMaps[8][256];

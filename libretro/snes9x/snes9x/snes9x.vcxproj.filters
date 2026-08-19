@@ -13,177 +13,192 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\core">
+      <UniqueIdentifier>{bf20b371-b640-4223-883b-897a38b2bfed}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\apu">
+      <UniqueIdentifier>{712fbc74-1b88-420b-a68c-4af919641a56}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libretro-common">
+      <UniqueIdentifier>{2bc2c112-fd66-4548-95d1-1649daea6ab6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\core_c">
+      <UniqueIdentifier>{062c5136-d7cf-4cc3-98dd-43d8279fcb7b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="ReadMe.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="..\filter\snes_ntsc.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\apu\apu.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\apu</Filter>
     </ClCompile>
     <ClCompile Include="..\apu\bapu\dsp\sdsp.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\apu\bapu\smp\smp.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\apu</Filter>
     </ClCompile>
     <ClCompile Include="..\apu\bapu\smp\smp_state.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\apu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\apu\bapu\smp\smp.cpp">
+      <Filter>Source Files\apu</Filter>
     </ClCompile>
     <ClCompile Include="..\bml.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\bsx.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\c4.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\c4emu.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\cheats.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\cheats2.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\clip.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\conffile.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\controls.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\cpu.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\cpuexec.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\cpuops.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\crosshairs.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\dma.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\dsp.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\dsp1.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\dsp2.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\dsp3.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\dsp4.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\fscompat.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\fxemu.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\fxinst.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\gfx.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\globals.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\loadzip.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\memmap.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\movie.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\msu1.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\obc1.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\ppu.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\sa1.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\sa1cpu.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\screenshot.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\sdd1.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\sdd1emu.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\seta.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\seta010.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\seta011.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\seta018.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\sha256.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\snapshot.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\spc7110.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\srtc.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\stream.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\tile.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\tileimpl-h2x1.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\tileimpl-n1x1.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\tileimpl-n2x1.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\libretro\libretro.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_posix_string.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_snprintf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_strcasestr.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\compat_strl.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\compat\fopen_utf8.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\encodings\encoding_deflate.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\encodings\encoding_utf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\file\file_path.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\file\file_path_io.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\file_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\file_stream_transforms.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\string\stdstring.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\time\rtime.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\vfs\vfs_hybrid.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\file\retro_dirent.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\snapshot.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\bsflash.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\bsx.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\c4emu.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\dsp.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\fxemu.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\msu1.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\obc1.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\sa1hw.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\sdd1.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\seta.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filter\snes_ntsc.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\spc7110.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\srtc.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\tile.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
+    <ClCompile Include="..\zipfile.c">
+      <Filter>Source Files\core_c</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\apu\bapu\smp\smp.hpp">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="..\libretro\libretro-common\include\retro_inline.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\port.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

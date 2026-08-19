@@ -12,12 +12,6 @@
 #include "port.h"
 #include "memmap.h"
 
-#ifdef _MSC_VER
-    // Definimos los equivalentes de Microsoft para funciones POSIX
-    #define strcasecmp _stricmp
-    #define strncasecmp _strnicmp
-#endif
-
 using std::string;
 
 bool SplitPath::ext_is(const string &other)

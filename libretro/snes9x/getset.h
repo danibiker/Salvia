@@ -34,7 +34,15 @@
 			S9xDoHEventProcessing(); \
 	}
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern uint8	OpenBus;
+
+#ifdef __cplusplus
+}
+#endif
 
 static inline int32 memory_speed (uint32 address)
 {
