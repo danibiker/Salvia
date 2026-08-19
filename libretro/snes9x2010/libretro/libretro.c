@@ -1631,8 +1631,6 @@ static void report_buttons(void)
 			break;
 		}
 	}
-	*/
-	input_vars.turbo_enable = 0;
 }
 
 /* Direct-render path for RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER.

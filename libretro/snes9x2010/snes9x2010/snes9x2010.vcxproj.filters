@@ -13,15 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Source Files\libz">
-      <UniqueIdentifier>{b7b7404d-1f78-4247-8340-a168f4e83280}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source Files\libretro-common">
       <UniqueIdentifier>{0bea21d7-ec77-4819-88d6-9314b7cc7379}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\apu.c">
@@ -102,30 +96,6 @@
     <ClCompile Include="..\src\msu1.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\deps\libz\adler32.c">
-      <Filter>Source Files\libz</Filter>
-    </ClCompile>
-    <ClCompile Include="..\deps\libz\deflate.c">
-      <Filter>Source Files\libz</Filter>
-    </ClCompile>
-    <ClCompile Include="..\deps\libz\inffast.c">
-      <Filter>Source Files\libz</Filter>
-    </ClCompile>
-    <ClCompile Include="..\deps\libz\inflate.c">
-      <Filter>Source Files\libz</Filter>
-    </ClCompile>
-    <ClCompile Include="..\deps\libz\inftrees.c">
-      <Filter>Source Files\libz</Filter>
-    </ClCompile>
-    <ClCompile Include="..\deps\libz\libz-crc32.c">
-      <Filter>Source Files\libz</Filter>
-    </ClCompile>
-    <ClCompile Include="..\deps\libz\trees.c">
-      <Filter>Source Files\libz</Filter>
-    </ClCompile>
-    <ClCompile Include="..\deps\libz\zutil.c">
-      <Filter>Source Files\libz</Filter>
-    </ClCompile>
     <ClCompile Include="..\libretro\libretro-common\compat\compat_posix_string.c">
       <Filter>Source Files\libretro-common</Filter>
     </ClCompile>
@@ -160,9 +130,6 @@
       <Filter>Source Files\libretro-common</Filter>
     </ClCompile>
     <ClCompile Include="..\libretro\libretro-common\streams\trans_stream_pipe.c">
-      <Filter>Source Files\libretro-common</Filter>
-    </ClCompile>
-    <ClCompile Include="..\libretro\libretro-common\streams\trans_stream_zlib.c">
       <Filter>Source Files\libretro-common</Filter>
     </ClCompile>
     <ClCompile Include="..\libretro\libretro-common\encodings\encoding_crc32.c">
@@ -206,6 +173,18 @@
     </ClCompile>
     <ClCompile Include="..\src\hdpack.c">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\msu1_pack.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\formats\png\rpng_apng.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\streams\trans_stream_deflate.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\libretro\libretro-common\encodings\encoding_deflate.c">
+      <Filter>Source Files\libretro-common</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

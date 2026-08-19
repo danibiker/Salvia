@@ -94,10 +94,19 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>__LIBRETRO__;__WIN32__;_DEBUG;FRONTEND_SUPPORTS_RGB565;RIGHTSHIFT_IS_SAR;HAVE_RPNG;HAVE_RWEBP;HAVE_RDDS;HAVE_ZLIB;INLINE=_inline</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)libretro\libretro-common\include\compat\zlib;$(SolutionDir)deps\libz;$(SolutionDir)src</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>__LIBRETRO__;__WIN32__;FRONTEND_SUPPORTS_RGB565;RIGHTSHIFT_IS_SAR;HAVE_RPNG;HAVE_RWEBP;HAVE_RDDS;INLINE=_inline;STATIC_LINKING</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)src</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <UndefinePreprocessorDefinitions>FAST_LSB_WORD_ACCESS</UndefinePreprocessorDefinitions>
+      <UndefinePreprocessorDefinitions>
+      </UndefinePreprocessorDefinitions>
+      <StringPooling>false</StringPooling>
+      <MinimalRebuild>false</MinimalRebuild>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FunctionLevelLinking>false</FunctionLevelLinking>
+      <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -110,8 +119,8 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_XBOX;MSB_FIRST;_XBOX360;__LIBRETRO__;RIGHTSHIFT_IS_SAR;__LIBXENON__;__ppc__;_DEBUG;_LIB;HAVE_RPNG;HAVE_RWEBP;HAVE_RDDS;HAVE_ZLIB;INLINE=_inline</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)libretro\libretro-common\include\compat\zlib;$(SolutionDir)deps\libz;$(SolutionDir)src</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_XBOX;MSB_FIRST;_XBOX360;__LIBRETRO__;RIGHTSHIFT_IS_SAR;__LIBXENON__;__ppc__;_DEBUG;_LIB;HAVE_RPNG;HAVE_RWEBP;HAVE_RDDS;INLINE=_inline;STATIC_LINKING</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)src</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <CompileAs>CompileAsC</CompileAs>
@@ -126,12 +135,19 @@
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>__LIBRETRO__;RIGHTSHIFT_IS_SAR;WIN32;NDEBUG;HAVE_RPNG;HAVE_RWEBP;HAVE_RDDS;HAVE_ZLIB;INLINE=_inline</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)libretro\libretro-common\include\compat\zlib;$(SolutionDir)deps\libz;$(SolutionDir)src</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>__LIBRETRO__;RIGHTSHIFT_IS_SAR;WIN32;NDEBUG;HAVE_RPNG;HAVE_RWEBP;HAVE_RDDS;INLINE=_inline;STATIC_LINKING</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)src</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <StringPooling>true</StringPooling>
+      <ExceptionHandling>false</ExceptionHandling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -151,10 +167,10 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>false</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>_XBOX;_XBOX360;MSB_FIRST;__LIBRETRO__;RIGHTSHIFT_IS_SAR;__LIBXENON__;__ppc__;NDEBUG;HAVE_RPNG;HAVE_RWEBP;HAVE_RDDS;HAVE_ZLIB;INLINE=_inline;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;_XBOX360;MSB_FIRST;__LIBRETRO__;RIGHTSHIFT_IS_SAR;__LIBXENON__;__ppc__;NDEBUG;HAVE_RPNG;HAVE_RWEBP;HAVE_RDDS;INLINE=_inline;STATIC_LINKING;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <CompileAs>CompileAsC</CompileAs>
-      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)libretro\libretro-common\include\compat\zlib;$(SolutionDir)deps\libz;$(SolutionDir)src</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)libretro\libretro-common\include;$(SolutionDir)src</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <FloatingPointModel>Fast</FloatingPointModel>
@@ -173,17 +189,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="ReadMe.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="..\deps\libz\adler32.c" />
-    <ClCompile Include="..\deps\libz\deflate.c" />
-    <ClCompile Include="..\deps\libz\inffast.c" />
-    <ClCompile Include="..\deps\libz\inflate.c" />
-    <ClCompile Include="..\deps\libz\inftrees.c" />
-    <ClCompile Include="..\deps\libz\libz-crc32.c" />
-    <ClCompile Include="..\deps\libz\trees.c" />
-    <ClCompile Include="..\deps\libz\zutil.c" />
     <ClCompile Include="..\filter\snes_ntsc.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
@@ -203,6 +208,7 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="..\libretro\libretro-common\encodings\encoding_crc32.c" />
+    <ClCompile Include="..\libretro\libretro-common\encodings\encoding_deflate.c" />
     <ClCompile Include="..\libretro\libretro-common\encodings\encoding_utf.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
@@ -215,6 +221,7 @@
     <ClCompile Include="..\libretro\libretro-common\formats\dds\rdds.c" />
     <ClCompile Include="..\libretro\libretro-common\formats\image_transfer.c" />
     <ClCompile Include="..\libretro\libretro-common\formats\png\rpng.c" />
+    <ClCompile Include="..\libretro\libretro-common\formats\png\rpng_apng.c" />
     <ClCompile Include="..\libretro\libretro-common\formats\png\rpng_encode.c" />
     <ClCompile Include="..\libretro\libretro-common\formats\vp8\rvp8.c" />
     <ClCompile Include="..\libretro\libretro-common\formats\webp\rwebp.c" />
@@ -231,8 +238,8 @@
     </ClCompile>
     <ClCompile Include="..\libretro\libretro-common\streams\rzip_stream.c" />
     <ClCompile Include="..\libretro\libretro-common\streams\trans_stream.c" />
+    <ClCompile Include="..\libretro\libretro-common\streams\trans_stream_deflate.c" />
     <ClCompile Include="..\libretro\libretro-common\streams\trans_stream_pipe.c" />
-    <ClCompile Include="..\libretro\libretro-common\streams\trans_stream_zlib.c" />
     <ClCompile Include="..\libretro\libretro-common\string\stdstring.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
@@ -282,6 +289,7 @@
     </ClCompile>
     <ClCompile Include="..\src\memmap.c" />
     <ClCompile Include="..\src\msu1.c" />
+    <ClCompile Include="..\src\msu1_pack.c" />
     <ClCompile Include="..\src\obc1.c">
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">CompileAsC</CompileAs>
     </ClCompile>
