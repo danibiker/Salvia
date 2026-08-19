@@ -6,12 +6,11 @@
  * IN 'COPYING'. PLEASE READ THESE TERMS BEFORE DISTRIBUTING.       *
  *                                                                  *
  * THE OggVorbis SOURCE CODE IS (C) COPYRIGHT 1994-2015             *
- * by the Xiph.Org Foundation http://www.xiph.org/                  *
+ * by the Xiph.Org Foundation https://xiph.org/                     *
  *                                                                  *
  ********************************************************************
 
  function: floor backend 0 implementation
- last mod: $Id: floor0.c 19457 2015-03-03 00:15:29Z giles $
 
  ********************************************************************/
 
@@ -30,6 +29,7 @@
 #include "os.h"
 
 #include "misc.h"
+#include <stdio.h>
 
 typedef struct {
   int ln;
@@ -90,8 +90,8 @@ static vorbis_info_floor *floor0_unpack (vorbis_info *vi,oggpack_buffer *opb){
   for(j=0;j<info->numbooks;j++){
     info->books[j]=oggpack_read(opb,8);
     if(info->books[j]<0 || info->books[j]>=ci->books)goto err_out;
-    if(ci->book_param[info->books[j]]->maptype==0)goto err_out;
-    if(ci->book_param[info->books[j]]->dim<1)goto err_out;
+    if(ci->decbooks[info->books[j]].maptype==0)goto err_out;
+    if(ci->decbooks[info->books[j]].dim<1)goto err_out;
   }
   return(info);
 
@@ -171,7 +171,7 @@ static void *floor0_inverse1(vorbis_block *vb,vorbis_look_floor *i){
 
     if(booknum!=-1 && booknum<info->numbooks){ /* be paranoid */
       codec_setup_info  *ci=vb->vd->vi->codec_setup;
-      codebook *b=ci->fullbooks+info->books[booknum];
+      dec_codebook *b=ci->decbooks+info->books[booknum];
       float last=0.f;
 
       /* the additional b->dim is a guard against any possible stack

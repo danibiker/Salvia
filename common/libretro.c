@@ -134,6 +134,16 @@ static bool libretro_supports_bitmasks = false;
 #define DEFAULT_MEMSIZE_MB 64
 #endif
 
+/* Bounds for frontend-driven hunk sizing via
+ * RETRO_ENVIRONMENT_GET_MEMORY_STATUS: take at most 1/4 of the memory the
+ * frontend reports free, cap it, and never shrink below the per-platform
+ * DEFAULT_MEMSIZE_MB chosen above. The cap keeps the reservation sane on
+ * desktops with gigabytes free while still covering the largest mods; the
+ * floor preserves the current tuned behaviour on constrained targets and
+ * on any frontend that cannot answer the query. */
+#define HUNK_FREE_SHIFT 2      /* free >> 2  == a quarter of reported free RAM */
+#define HUNK_MAX_MB     256u   /* upper bound; ample for the biggest Quake mods */
+
 /* Use 44.1 kHz by default (matches CD
  * audio tracks) */
 #define AUDIO_SAMPLERATE_DEFAULT 44100
@@ -145,13 +155,28 @@ static bool libretro_supports_bitmasks = false;
  * acceptable audio quality. */
 #define AUDIO_SAMPLERATE_22KHZ 22050
 #define AUDIO_SAMPLERATE_48KHZ 48000
-static uint16_t audio_samplerate = AUDIO_SAMPLERATE_DEFAULT;
+/* Widened from uint16_t: the "Sound Samplerate (Hint)" option can select
+ * 96000, which does not fit in 16 bits. */
+static int audio_samplerate = AUDIO_SAMPLERATE_DEFAULT;
+
+/* Backported from prboom's "Sound Samplerate (Hint)" option.  Lets the core
+ * render directly at the host's preferred rate.  Guarded so this builds
+ * against an older in-tree libretro.h as well as a newer one that already
+ * defines it (data is unsigned* Hz). */
+#ifndef RETRO_ENVIRONMENT_GET_TARGET_SAMPLE_RATE
+#define RETRO_ENVIRONMENT_GET_TARGET_SAMPLE_RATE (81 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+#endif
 
 /* Linear output buffer.  S_PaintChannels writes
  * exactly samples_per_frame stereo frames into this
  * buffer per S_Update; audio_step then hands it
  * straight to audio_batch_cb.  No ring, no wrap. */
 static int16_t audio_out_buffer[AUDIO_BUFFER_SIZE];
+
+/* Float output buffer, used only when float output was negotiated.  The engine
+ * writes normalized float [-1,1] here (snd_float_buffer points at it) instead
+ * of audio_out_buffer; audio_step then pushes it via audio_batch_cb_float. */
+static float audio_out_buffer_f[AUDIO_BUFFER_SIZE];
 
 /* Initial cap on stereo frames per audio_batch_cb
  * invocation.  RetroArch typically accepts up to
@@ -362,6 +387,13 @@ retro_video_refresh_t video_cb;
  * retro_set_audio_sample below -- we accept the
  * callback registration but throw it away. */
 static retro_audio_sample_batch_t audio_batch_cb;
+/* Float audio output, negotiated once in retro_load_game via
+ * RETRO_ENVIRONMENT_GET_AUDIO_SAMPLE_BATCH_FLOAT.  use_float_output stays 0
+ * (and audio_batch_cb_float NULL) on any frontend that doesn't support it,
+ * which keeps the deterministic int16 path.  s_float_output / snd_float_buffer
+ * live in snd_mix.c and are declared in sound.h (included above). */
+static retro_audio_sample_batch_float_t audio_batch_cb_float = NULL;
+static int use_float_output = 0;
 retro_environment_t environ_cb;
 static retro_input_poll_t poll_cb;
 static retro_input_state_t input_cb;
@@ -861,6 +893,61 @@ static float sanitise_framerate(float target)
    return supported_framerates[i - 1];
 }
 
+/* The framerate-appropriate sample rate, used as the "auto" fallback when the
+ * frontend can't report a target rate.  Preserves the prior behaviour for the
+ * fps/rate combinations the SFX resampler is sensitive to (see the
+ * AUDIO_SAMPLERATE_* notes above). */
+static int framerate_to_samplerate(float fr)
+{
+   if (fr == 40.0f || fr == 72.0f || fr == 119.0f)
+      return AUDIO_SAMPLERATE_22KHZ;
+   if (fr == 120.0f)
+      return AUDIO_SAMPLERATE_48KHZ;
+   return AUDIO_SAMPLERATE_DEFAULT;
+}
+
+/* Snap a host target rate to the nearest value the option advertises.
+ * Identical thresholds to the prboom backport this came from. */
+static int nearest_supported_rate(unsigned host_rate)
+{
+   if      (host_rate <= (32000u + 44100u) / 2) return 32000;
+   else if (host_rate <= (44100u + 48000u) / 2) return 44100;
+   else if (host_rate <= (48000u + 96000u) / 2) return 48000;
+   return 96000;
+}
+
+/* Resolve the "Sound Samplerate (Hint)" core option to a concrete rate.
+ * "auto" asks the frontend for its target rate via
+ * RETRO_ENVIRONMENT_GET_TARGET_SAMPLE_RATE and snaps to the nearest advertised
+ * value; if the frontend doesn't implement the call, it falls back to the
+ * framerate-appropriate rate (the prior default), so frontends without the
+ * call see no change.  An explicit "32000".."96000" is taken verbatim.
+ * Resolved at startup, before SNDDMA_Init reads audio_samplerate. */
+static void update_audio_samplerate(void)
+{
+   struct retro_variable var;
+   int chosen = framerate_to_samplerate(framerate);
+
+   var.key   = "tyrquake_sound_samplerate";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (!strcmp(var.value, "auto"))
+      {
+         unsigned host_rate = 0;
+         if (environ_cb(RETRO_ENVIRONMENT_GET_TARGET_SAMPLE_RATE, &host_rate)
+               && host_rate > 0)
+            chosen = nearest_supported_rate(host_rate);
+         /* else: keep the framerate-derived fallback above */
+      }
+      else
+         chosen = atoi(var.value);  /* "32000".."96000" */
+   }
+
+   audio_samplerate = chosen;
+}
+
 static void update_variables(bool startup)
 {
    struct retro_variable var;
@@ -904,16 +991,9 @@ static void update_variables(bool startup)
 
       frametime_usec = 1000.0f / framerate;
 
-      /* Certain framerates require specific
-       * sample rates to avoid distorted audio */
-      if ((framerate == 40.0f) ||
-          (framerate == 72.0f) ||
-          (framerate == 119.0f))
-         audio_samplerate = AUDIO_SAMPLERATE_22KHZ;
-      else if (framerate == 120.0f)
-         audio_samplerate = AUDIO_SAMPLERATE_48KHZ;
-      else
-         audio_samplerate = AUDIO_SAMPLERATE_DEFAULT;
+      /* Resolve the sound-samplerate hint now that framerate is known (it is
+       * the "auto" fallback).  Supersedes the old framerate-only derivation. */
+      update_audio_samplerate();
    }
 
    var.key = "tyrquake_resolution";
@@ -1251,6 +1331,32 @@ bool retro_load_game(const struct retro_game_info *info)
    parms.basedir = g_rom_dir;
    parms.savedir = g_save_dir;
    parms.use_exernal_savedir = use_external_savedir ? 1 : 0;
+
+   /* Size the Quake hunk from the memory the frontend actually has, when it
+    * can tell us. We only ever grow above the default and clamp hard, so a
+    * frontend that does not implement the query (returns false) keeps the
+    * compile-time default computed above. */
+   {
+      struct retro_memory_status memstat;
+      memstat.free = memstat.total = 0;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_MEMORY_STATUS, &memstat) && memstat.free)
+      {
+         unsigned free_mb = (unsigned)(memstat.free / (1024 * 1024));
+         unsigned budget  = free_mb >> HUNK_FREE_SHIFT;
+         if (budget > HUNK_MAX_MB)
+            budget = HUNK_MAX_MB;
+         if (budget > MEMSIZE_MB)
+            MEMSIZE_MB = budget;
+         log_cb(RETRO_LOG_INFO,
+                "Frontend reports %u MB free; sizing Quake hunk to %u MB.\n",
+                free_mb, MEMSIZE_MB);
+      }
+      else
+         log_cb(RETRO_LOG_INFO,
+                "Frontend has no memory-status query; using default %u MB hunk.\n",
+                MEMSIZE_MB);
+   }
+
    parms.memsize = MEMSIZE_MB * 1024 * 1024;
    argv[0] = empty_string;
 
@@ -1422,6 +1528,26 @@ bool retro_load_game(const struct retro_game_info *info)
     * backends, not just the Vulkan one. */
    vid.numpages = 0x40000000;
 
+   /* Negotiate float audio output once, now that the game is loaded and the
+    * audio path is up (Host_Init -> SNDDMA_Init ran above).  If the frontend
+    * supports it we commit to float for this game's lifetime; otherwise the
+    * int16 path is used unchanged.  Contract: negotiate once per loaded game,
+    * never mix formats.  Older frontends return false here, so they keep the
+    * int16 path transparently. */
+   use_float_output     = 0;
+   audio_batch_cb_float = NULL;
+   {
+      struct retro_audio_sample_float_callback fcb;
+      fcb.batch = NULL;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_SAMPLE_BATCH_FLOAT, &fcb)
+            && fcb.batch)
+      {
+         audio_batch_cb_float = fcb.batch;
+         use_float_output     = 1;
+      }
+   }
+   s_float_output = use_float_output;
+
    return true;
 }
 
@@ -1429,6 +1555,13 @@ bool retro_load_game(const struct retro_game_info *info)
 
 void retro_unload_game(void)
 {
+   /* Tear down float-output negotiation; a fresh retro_load_game re-negotiates
+    * against whatever frontend loads the next game. */
+   audio_batch_cb_float = NULL;
+   use_float_output     = 0;
+   s_float_output       = 0;
+   snd_float_buffer     = NULL;
+
    rhi_shutdown();
 }
 
@@ -1816,6 +1949,35 @@ static void audio_step(void)
     * the unwritten tail will be retried in the next
     * loop iteration. */
    audio_frames_remaining = audio_samplerate / framerate;
+
+   /* Float output path: push the engine's normalized-float buffer through the
+    * negotiated float batch callback.  Identical chunking / partial-write
+    * backpressure to the int16 path below -- only the buffer type and the
+    * callback differ. */
+   if (use_float_output)
+   {
+      float *audio_out_ptr_f = audio_out_buffer_f;
+      do
+      {
+         unsigned audio_frames_to_write =
+               (audio_frames_remaining > audio_batch_frames_max) ?
+                     audio_batch_frames_max : audio_frames_remaining;
+         unsigned audio_frames_written  =
+               audio_batch_cb_float(audio_out_ptr_f, audio_frames_to_write);
+
+         if (audio_frames_written == 0)
+            break;	/* frontend can't accept any more this frame */
+
+         if (audio_frames_written < audio_frames_to_write)
+            audio_batch_frames_max = audio_frames_written;
+
+         audio_frames_remaining -= audio_frames_written;
+         audio_out_ptr_f        += audio_frames_written << 1;
+      }
+      while (audio_frames_remaining > 0);
+      return;
+   }
+
    audio_out_ptr          = audio_out_buffer;
    do
    {
@@ -1852,6 +2014,12 @@ qboolean SNDDMA_Init(dma_t *dma)
     * linear output buffer; audio_step then hands
     * that buffer straight to audio_batch_cb. */
    shm->buffer            = (unsigned char *volatile)audio_out_buffer;
+
+   /* Float output buffer shares the same one-frame linear layout.  Hand the
+    * engine its pointer; s_float_output is (re)asserted from the negotiation
+    * result so a reload picks up the current frontend's capability. */
+   snd_float_buffer       = audio_out_buffer_f;
+   s_float_output         = use_float_output;
 
    return true;
 }
