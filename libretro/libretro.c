@@ -186,6 +186,7 @@
 #include <libretro.h>
 #include <vfs/vfs.h>
 #include <streams/file_stream.h>
+#include <vfs/vfs_hybrid.h>
 #include "libretro_core_options.h"
 #include "hdpack.h"
 
@@ -232,18 +233,6 @@ void linearFree(void* mem);
 #define VIDEO_REFRESH_RATE_PAL  (PAL_MASTER_CLOCK / (SNES_CYCLES_PER_SCANLINE * SNES_MAX_PAL_VCOUNTER))
 #define VIDEO_REFRESH_RATE_NTSC (NTSC_MASTER_CLOCK / (SNES_CYCLES_PER_SCANLINE * SNES_MAX_NTSC_VCOUNTER))
 
-/* Pre-zeroed silence buffer used in place of real SPC output when
-   audio_muted is set. Sized for one worst-case PAL frame at the
-   highest effective SPC rate (ticks=4 speedup, ~651 stereo). The
-   '+ a bit' rounds up to a tidy power of two. RetroArch's audio_batch_cb
-   only reads (frame_count * 2) shorts, so over-sizing is harmless and
-   keeps the math simple if rates change.
-
-   Declared non-const so it lives in BSS (zero file footprint, zero
-   initialized at startup) rather than .rodata; we never write to it. */
-#define MUTE_BUFFER_FRAMES 768
-static int16_t mute_buffer[MUTE_BUFFER_FRAMES * 2];
-
 /* Backing buffer for the in-memory STREAM abstraction (see snes9x.h).
  * Upstream libretro-common dropped memstream_set_buffer/get_last_size and
  * now requires the buffer at memstream_open() time, so we publish it here
@@ -257,27 +246,68 @@ void S9xSetStreamBuffer(uint8_t *buffer, uint64_t size)
 	s9x_stream_buffer_size = size;
 }
 
-/* Set when the frontend has signalled that audio should not be played
-   (either user has disabled audio or a frontend-controlled fast-forward
-   path has set RETRO_AVENABLE_HARD_DISABLE_AUDIO). When set, we still
-   call audio_batch_cb every frame - skipping it would let RetroArch's
-   audio ring drain and pull DRC out of steady-state tracking - but
-   substitute the silence buffer for the SPC's actual output. */
-static bool audio_muted;
+/* Set when the frontend has signalled RETRO_AV_ENABLE_HARD_DISABLE_AUDIO,
+   i.e. "you may skip audio work entirely this frame". That also sets
+   Settings.HardDisableAudio, so dsp_run() returns at its head, the DSP cursor
+   never advances and S9xDrainAudio reports no samples at all. Nothing is
+   uploaded, and nothing needs to be: libretro.h defines the flag as a promise
+   that the frontend will never need this audio, and RetroArch only raises it
+   around runahead's discarded frames, where it has suspended its own
+   consumption for the same frames - audio_driver_sample_batch() returns on the
+   suspended flag before it reads anything the core hands over. The ring drains
+   during runahead whatever the core does, because it is the frontend that
+   stopped consuming.
+
+   Deliberately NOT keyed off a clear RETRO_AV_ENABLE_AUDIO. That bit only
+   means "the frontend will discard these samples"; the frontend keeps the
+   resulting core state. Preemptive Frames (runahead without a second
+   instance) replays frames with audio suspended but hard-disable clear, and
+   the state left behind by those replays is the state the emulation carries
+   forward. Skipping audio generation there freezes every audio-side cursor -
+   the MSU-1 play offset above all - while the CPU/APU advance, so the MSU-1
+   stream falls a replay window behind on each rollback and, under continuous
+   input, stops progressing altogether. Suspension must cost output, never
+   state. */
+static bool audio_hard_disabled;
 
 /* MSU-1 Enhanced Audio: when enabled AND an MSU1 cart is loaded, the whole
    output pipeline runs at 44.1 kHz (the SPC's ~32040 Hz output is resampled up
    and the MSU1 stream mixes in at its native rate, avoiding the intermediate
-   downsample). Latched at content load so the reported sample rate is stable
-   for the frontend. `msu1_enhanced_pref` is the user's option; the active rate
-   is only raised when MSU1 is actually present. */
+   downsample).
+
+   `msu1_enhanced_pref` is the user's option, which check_variables() may
+   rewrite at any point during a run. `msu1_enhanced_latched` is the copy the
+   audio path runs on, taken once at content load, immediately before the
+   frontend queries retro_get_system_av_info(). The two have to be separate:
+   the rate is reported once and cannot be renegotiated afterwards without
+   SET_SYSTEM_AV_INFO, which is only legal from inside retro_run() and tears
+   down the frontend's audio and video drivers to service. Latching keeps the
+   reported rate and the emitted rate in agreement for the whole lifetime of
+   the loaded content, and makes the option's "takes effect on next content
+   load" description true instead of aspirational. The active rate is only
+   raised when MSU1 is actually present. */
 #define MSU1_ENHANCED_RATE 44100
-static bool msu1_enhanced_pref = false;
+static bool msu1_enhanced_pref    = true;
+static bool msu1_enhanced_latched = false;
+
+/* True while the enhanced-audio streaming upsampler holds valid in-flight
+   state (frame pair + phase). Cleared whenever the enhanced path is not the
+   one feeding the frontend, so state never leaks across mode changes. */
+static bool msu1_enh_running = false;
 
 /* True when 44.1 kHz output is actually in effect (option on AND MSU1 active). */
 static bool msu1_enhanced_active(void)
 {
-	return msu1_enhanced_pref && Settings.MSU1;
+	return msu1_enhanced_latched && Settings.MSU1;
+}
+
+/* Take the option's value for this content. Called at the tail of the load
+   path, after check_variables() has read the option and before the frontend
+   asks for av_info. */
+static void msu1_latch_playback_rate(void)
+{
+	msu1_enhanced_latched = msu1_enhanced_pref;
+	msu1_enh_running      = false;
 }
 
 enum
@@ -312,6 +342,8 @@ static bool update_audio_latency = false;
 extern s9xcommand_t keymap[1024];
 bool overclock_cycles = false;
 extern int fx_cycle_accuracy; /* fxemu.c SuperFX cycle-cost toggle */
+extern int fx_hw_timing;      /* fxemu.c hardware-derived GSU timing toggle */
+extern uint32_t SuperFXHwTimingPct;
 bool reduce_sprite_flicker = false;
 bool pseudo_hires_blend = false;
 extern uint16_t joypad[8];
@@ -322,10 +354,6 @@ static struct
 	int16_t retro_mouse_state[2][2];
 	int16_t retro_justifier_state[2][2];
 	int16_t retro_scope_state[2];
-	uint8_t turbo_state[5];
-	uint8_t turbo_delay;
-	uint8_t turbo_enable;
-	bool switch_state;
 } input_vars;
 
 static uint8_t aspect_ratio_mode = ASPECT_RATIO_4_3;
@@ -361,7 +389,7 @@ static void *owned_screen_buffer  = NULL;
 static void *owned_ntsc_buffer    = NULL;
 static uint32_t retro_devices[2];
 
-// filter
+/* filter */
 static int snes_ntsc_filter = 0;
 static snes_ntsc_t snes_ntsc;
 static snes_ntsc_setup_t ntsc_setup;
@@ -480,7 +508,7 @@ static void check_variables(bool first_run)
 	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
 		msu1_enhanced_pref = (strcmp(var.value, "enabled") == 0);
 	else
-		msu1_enhanced_pref = false;
+		msu1_enhanced_pref = true;
 
 	var.key = "snes9x_2010_frameskip";
 	var.value = NULL;
@@ -543,7 +571,22 @@ static void check_variables(bool first_run)
 		 * and this value feeds the per-line instruction budget, so it must be
 		 * bit-identical across platforms for deterministic SuperFX execution. */
 		Settings.SuperFXSpeedPerLine = 625500u * (uint32_t)freq;
+		/* The hardware timing mode scales its flat 1364-cycle line budget
+		   from the same option: 10 MHz (the default) == 100%. */
+		SuperFXHwTimingPct = (uint32_t) freq * 10;
 		reset_sfx = true;
+	}
+
+	var.key = "snes9x_2010_superfx_timing";
+	var.value = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+	{
+		int newval = (!strcmp(var.value, "hardware")) ? 1 : 0;
+		if (newval != fx_hw_timing)
+		{
+			fx_hw_timing = newval;
+			reset_sfx = true;
+		}
 	}
 
 	var.key = "snes9x_2010_superfx_cycle_accuracy";
@@ -557,18 +600,6 @@ static void check_variables(bool first_run)
 			reset_sfx = true;
 		}
 	}
-
-   	var.key = "snes9x_2010_turbodelay";
-   	var.value = NULL;
-   	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   	{
-      		if (strcmp(var.value, "medium") == 0)
-        		input_vars.turbo_delay = 5;
-      		else if (strcmp(var.value, "slow") == 0)
-        		input_vars.turbo_delay = 7;
-      		else
-        		input_vars.turbo_delay = 3;
-   	}
 
 	var.key = "snes9x_2010_overclock_cycles";
 	var.value = NULL;
@@ -710,7 +741,7 @@ static void check_variables(bool first_run)
 	     (Settings.ForcePAL  != prev_force_pal)))
       retro_set_audio_buff_status_cb();
 
-//
+/*  */
 	if (old_filter != snes_ntsc_filter)
 		snes_ntsc_init(&snes_ntsc, &ntsc_setup);
 
@@ -811,14 +842,12 @@ void retro_set_environment(retro_environment_t cb)
 		{ 0, 0 }
 	};
 
-	struct retro_vfs_interface_info vfs_iface_info;
-
 	environ_cb = cb;
 
 	libretro_supports_option_categories = false;
 
 	libretro_set_core_options(environ_cb, &local_bool_val);
-  
+
         libretro_supports_option_categories = local_bool_val;
 
 	/* (No option-visibility callback: the bilinear and hires options
@@ -849,10 +878,19 @@ void retro_set_environment(retro_environment_t cb)
 		environ_cb(RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO, (void*)subsystems);
 	}
 
-	vfs_iface_info.required_interface_version = 1;
-	vfs_iface_info.iface                      = NULL;
-	if (environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface_info))
-		filestream_vfs_init(&vfs_iface_info);
+#ifndef STATIC_LINKING
+	/*
+	   Hybrid VFS replaces the wholesale v1 adoption, and the sidecar
+	   loaders (MSU-1 data/audio, HD packs) now go through filestream
+	   instead of raw stdio - previously they bypassed the VFS entirely
+	   and were simply broken on sandboxed storage while everything
+	   else worked. Plain paths serve locally (no per-read frontend
+	   indirection - MSU-1 streams audio continuously); the frontend is
+	   consulted only for URIs or after local failure on sandboxed
+	   platforms. log_cb may be unset this early; NULL means no-log.
+	*/
+	vfs_hybrid_init(environ_cb, NULL);
+#endif
 }
 
 void retro_get_system_info(struct retro_system_info *info)
@@ -894,87 +932,183 @@ static void audio_upload_samples(void)
 	if (n <= 0)
 		return;
 
-	if (audio_muted)
-	{
-		src = mute_buffer;
-		if (n > MUTE_BUFFER_FRAMES * 2)
-			n = MUTE_BUFFER_FRAMES * 2;
-	}
+	if (audio_hard_disabled || !msu1_enhanced_active())
+		msu1_enh_running = false;
+
+	/* Nothing to upload: see audio_hard_disabled. In practice this is
+	   unreachable - dsp_run() has already declined to produce anything, so the
+	   drain above reported zero and returned - but the flag is the contract and
+	   the check is where the contract belongs. */
+	if (audio_hard_disabled)
+		return;
 
 	/* MSU-1 Enhanced Audio path: run the whole frame at 44.1 kHz. The SPC's
 	   ~32040 Hz output is linearly upsampled to 44.1 kHz, then the MSU1 stream
 	   mixes in at its native rate (no downsample), and the 44.1 kHz result
 	   ships to the frontend. Only taken when an MSU1 cart is loaded and the
 	   option is on; every other game skips this entirely. */
-	if (!audio_muted && msu1_enhanced_active())
+	if (msu1_enhanced_active())
 	{
-		/* 44.1 kHz needs more room per frame than the 32 kHz mute buffer:
-		   PAL worst case is 44100/50 = 882 frames, plus up to ~1.6% for the
-		   APU speedup hack. 1024 covers it with margin. */
-		#define MSU1_ENH_FRAMES 1024
-		static int16_t enh_buffer[MSU1_ENH_FRAMES * 2];
+		/* Staging size, not a worst case: the loop below runs one pass per
+		   chunk until the input batch is consumed, so no frame count has to
+		   fit here. That matters because the batch is not bounded by the
+		   per-frame sample count - S9xDrainAudio hands over whatever the DSP
+		   accumulated, up to the full landing buffer, which the 44100/32040
+		   ratio turns into far more output frames than one chunk holds. Long
+		   frames are real: the DSP's own overflow clamp cites Top Gear 3000
+		   emitting ~2600 stereo samples in a single frame. The old fixed cap
+		   discarded every input frame past the first 1024 output frames, and
+		   discarded them permanently - it is heard as breakup, not latency. */
+		#define MSU1_ENH_CHUNK 1024
+		static int16_t enh_buffer[MSU1_ENH_CHUNK * 2];
+		/* Streaming upsampler state, persistent across batches: the frame
+		   pair being interpolated and the 16.16 phase between them. The old
+		   fixed-count loop restarted the phase at 0 every batch, truncated
+		   away the fractional output frame (a steady ~0.1% deficit against
+		   the rate reported to the frontend, parking DRC off-centre), and
+		   flattened the interpolation at the batch tail (l1 = l0 hold).
+		   Driving the loop by source consumption instead makes the seam
+		   exact and the long-run output count converge to
+		   in_frames * out_rate / in_rate with no truncation loss.
+
+		   The pair, the phase and the fill count live in struct MSU1 so
+		   snapshot.c carries them (v9); they are emulation-timeline state,
+		   not scratch, and Preemptive Frames rolls the timeline back. */
+		int16_t  enh_cur_l = (int16_t) MSU1.MSU1_EnhCurL;
+		int16_t  enh_cur_r = (int16_t) MSU1.MSU1_EnhCurR;
+		int16_t  enh_nxt_l = (int16_t) MSU1.MSU1_EnhNxtL;
+		int16_t  enh_nxt_r = (int16_t) MSU1.MSU1_EnhNxtR;
+		uint64_t enh_frac  = MSU1.MSU1_EnhFrac;
+		int      enh_fill  = (int) MSU1.MSU1_EnhFill;
+
 		int   in_frames  = n >> 1;
-		/* Number of 44.1 kHz output frames for this batch of SPC frames. */
+		int   in_pos     = 0;
+		uint32_t in_rate  = S9xGetAudioSampleRate();
 		uint32_t out_rate = (uint32_t) ((double) MSU1_ENHANCED_RATE
-			* (double) S9xGetAudioSampleRate() / 32040.0);
-		int   out_frames;
-		int   i;
-		/* 16.16 step through the SPC (source) buffer per output frame. */
-		uint32_t step = (uint32_t) (((uint64_t) S9xGetAudioSampleRate() << 16) / out_rate);
-		uint32_t pos  = 0;
+			* (double) in_rate / 32040.0);
+		/* 32.32 step through the SPC (source) stream per output frame;
+		   always < 1.0 here (upsampling), so each output shifts in at most
+		   one source frame. 32 fractional bits keep the long-run output
+		   count exact against the rate reported to the frontend (16.16
+		   truncation alone leaves a ~18 ppm surplus). */
+		uint64_t step = ((uint64_t) in_rate << 32) / out_rate;
 
-		out_frames = (int) (((uint64_t) in_frames * out_rate) / S9xGetAudioSampleRate());
-		if (out_frames > MSU1_ENH_FRAMES)
-			out_frames = MSU1_ENH_FRAMES;
-
-		for (i = 0; i < out_frames; i++)
+		if (!msu1_enh_running)
 		{
-			uint32_t idx = pos >> 16;
-			uint32_t frac = pos & 0xffff;
-			int32_t  l0, r0, l1, r1;
-
-			if ((int) idx >= in_frames) idx = in_frames - 1;
-			l0 = src[idx * 2 + 0];
-			r0 = src[idx * 2 + 1];
-			if ((int) idx + 1 < in_frames)
-			{
-				l1 = src[idx * 2 + 2];
-				r1 = src[idx * 2 + 3];
-			}
-			else
-			{
-				l1 = l0;
-				r1 = r0;
-			}
-
-			enh_buffer[i * 2 + 0] = (int16_t) (l0 + (((l1 - l0) * (int32_t) frac) >> 16));
-			enh_buffer[i * 2 + 1] = (int16_t) (r0 + (((r1 - r0) * (int32_t) frac) >> 16));
-			pos += step;
+			enh_frac = 0;
+			enh_fill = 0;
+			msu1_enh_running = true;
 		}
 
-		/* Mix MSU1 at the 44.1 kHz output rate (native: step == 1.0). */
-		if (MSU1.MSU1_AudioPlay)
-			S9xMSU1Mix(enh_buffer, (size_t) out_frames, out_rate);
+		/* A zero step would leave the phase standing still: the emit loop
+		   would fill a chunk without consuming a source frame and the outer
+		   loop would never terminate. out_rate is in_rate scaled by
+		   44100/32040 so this is unreachable, but the termination argument
+		   rests on it, so bail rather than trust the arithmetic. */
+		if (!step)
+		{
+			msu1_enh_running = false;
+			return;
+		}
 
-		audio_batch_cb(enh_buffer, (size_t) out_frames);
+		/* One pass per output chunk. The upsampler state carries across
+		   passes exactly as it carries across batches, so a chunk boundary is
+		   indistinguishable from a batch boundary and no source frame is
+		   dropped at either. */
+		for (;;)
+		{
+			int out_frames = 0;
+
+			/* (Re)fill the frame pair from this batch. */
+			while (enh_fill < 2 && in_pos < in_frames)
+			{
+				if (enh_fill == 0)
+				{
+					enh_cur_l = src[in_pos * 2 + 0];
+					enh_cur_r = src[in_pos * 2 + 1];
+				}
+				else
+				{
+					enh_nxt_l = src[in_pos * 2 + 0];
+					enh_nxt_r = src[in_pos * 2 + 1];
+				}
+				enh_fill++;
+				in_pos++;
+			}
+
+			/* Short of a frame pair; the rest arrives with the next batch. */
+			if (enh_fill < 2)
+				break;
+
+			while (enh_fill == 2 && out_frames < MSU1_ENH_CHUNK)
+			{
+				/* 64-bit product: |nxt - cur| * t can reach 65535 * 65535,
+				   overflowing int32 (signed UB) on full-scale transients. */
+				uint32_t t = (uint32_t) (enh_frac >> 16) & 0xffff;
+				enh_buffer[out_frames * 2 + 0] = (int16_t) (enh_cur_l +
+					(int32_t) (((int64_t) (enh_nxt_l - enh_cur_l) * (int32_t) t) >> 16));
+				enh_buffer[out_frames * 2 + 1] = (int16_t) (enh_cur_r +
+					(int32_t) (((int64_t) (enh_nxt_r - enh_cur_r) * (int32_t) t) >> 16));
+				out_frames++;
+
+				enh_frac += step;
+				while (enh_frac >= ((uint64_t) 1 << 32))
+				{
+					enh_frac -= (uint64_t) 1 << 32;
+					enh_cur_l = enh_nxt_l;
+					enh_cur_r = enh_nxt_r;
+					if (in_pos < in_frames)
+					{
+						enh_nxt_l = src[in_pos * 2 + 0];
+						enh_nxt_r = src[in_pos * 2 + 1];
+						in_pos++;
+					}
+					else
+					{
+						/* Batch exhausted; nxt refills next batch. */
+						enh_fill = 1;
+						break;
+					}
+				}
+			}
+
+			/* Mix MSU1 at the 44.1 kHz output rate (native: step == 1.0). */
+			if (out_frames > 0)
+			{
+				if (MSU1.MSU1_AudioPlay)
+					S9xMSU1Mix(enh_buffer, (size_t) out_frames, out_rate);
+				audio_batch_cb(enh_buffer, (size_t) out_frames);
+			}
+
+			/* Input exhausted; anything else is a full chunk with more
+			   behind it. */
+			if (enh_fill < 2)
+				break;
+		}
+
+		MSU1.MSU1_EnhCurL = enh_cur_l;
+		MSU1.MSU1_EnhCurR = enh_cur_r;
+		MSU1.MSU1_EnhNxtL = enh_nxt_l;
+		MSU1.MSU1_EnhNxtR = enh_nxt_r;
+		MSU1.MSU1_EnhFrac = enh_frac;
+		MSU1.MSU1_EnhFill = (uint8_t) enh_fill;
 		return;
 	}
 
-	/* MSU1 audio mix (normal ~32040 Hz path): S9xDrainAudio returns a const
-	   pointer into the SPC landing buffer, so when MSU1 is streaming we copy
-	   the SPC output into a writable scratch buffer, add the (downsampled) MSU1
-	   stream, and ship that. No-op for non-MSU1 carts and when nothing plays. */
-	if (!audio_muted && Settings.MSU1 && MSU1.MSU1_AudioPlay)
-	{
-		static int16_t msu_mix_buffer[MUTE_BUFFER_FRAMES * 2];
-		int frames = n >> 1;
-		if (frames > MUTE_BUFFER_FRAMES)
-			frames = MUTE_BUFFER_FRAMES;
-		memcpy(msu_mix_buffer, src, (size_t) frames * 2 * sizeof(int16_t));
-		S9xMSU1Mix(msu_mix_buffer, (size_t) frames, S9xGetAudioSampleRate());
-		audio_batch_cb(msu_mix_buffer, (size_t) frames);
-		return;
-	}
+	/* MSU1 audio mix (normal ~32040 Hz path). S9xDrainAudio hands back a
+	   pointer into landing_buffer, which is a plain static array - the const on
+	   the return type says the DSP owns the cursor, not that the samples are
+	   immutable. The DSP does not run again until the next retro_run and
+	   audio_batch_cb consumes synchronously, so the mix happens in place and the
+	   same pointer ships straight to the frontend.
+
+	   This used to stage through a 768-frame scratch copy and clamp the batch to
+	   fit it, silently dropping every frame past the clamp - the same defect the
+	   enhanced path had, on the path every MSU-1 game takes by default. Neither
+	   the clamp nor the copy was ever needed. No-op for non-MSU1 carts and when
+	   nothing is playing. */
+	if (Settings.MSU1 && MSU1.MSU1_AudioPlay)
+		S9xMSU1Mix((int16_t *) src, (size_t) n >> 1, S9xGetAudioSampleRate());
 
 	audio_batch_cb(src, (size_t)n >> 1);
 }
@@ -1388,22 +1522,20 @@ void retro_reset (void)
 }
 
 uint16_t snes_lut[] = {
-	SNES_B_MASK,		// 32768
-	SNES_Y_MASK,		// 16384
-	SNES_SELECT_MASK,	// 8192
-	SNES_START_MASK,	// 4096
-	SNES_UP_MASK,		// 2048
-	SNES_DOWN_MASK,		// 1024
-	SNES_LEFT_MASK,		// 512
-	SNES_RIGHT_MASK,	// 256
-	SNES_A_MASK,		// 128
-	SNES_X_MASK,		// 64
-	SNES_TL_MASK,		// 32
-	SNES_TR_MASK		// 16
+	SNES_B_MASK,		/* 32768 */
+	SNES_Y_MASK,		/* 16384 */
+	SNES_SELECT_MASK,	/* 8192 */
+	SNES_START_MASK,	/* 4096 */
+	SNES_UP_MASK,		/* 2048 */
+	SNES_DOWN_MASK,		/* 1024 */
+	SNES_LEFT_MASK,		/* 512 */
+	SNES_RIGHT_MASK,	/* 256 */
+	SNES_A_MASK,		/* 128 */
+	SNES_X_MASK,		/* 64 */
+	SNES_TL_MASK,		/* 32 */
+	SNES_TR_MASK		/* 16 */
 };
 
-#define SWITCH_L2	(input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2))
-#define PRESSED_R2 	(input_cb(port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2))
 
 static void report_buttons(void)
 {
@@ -1438,38 +1570,6 @@ static void report_buttons(void)
 						joypad[port] |= button_press;
 					else
 						joypad[port] &= ~button_press;
-				}
-
-				if (input_vars.turbo_enable == 1)
-				{
-					if (PRESSED_R2)
-					{
-						if (input_vars.turbo_state[port])
-							input_vars.turbo_state[port]--;
-						else
-						{
-							input_vars.turbo_state[port] = input_vars.turbo_delay;
-							joypad[port] |= 0x4000;		// Button Y
-						}
-					}
-					else
-						input_vars.turbo_state[port] = 0;
-				}
-
-				if (input_vars.turbo_enable == 2)
-				{
-					if (PRESSED_R2)
-					{
-						if (input_vars.turbo_state[port])
-							input_vars.turbo_state[port]--;
-						else
-						{
-							input_vars.turbo_state[port] = input_vars.turbo_delay;
-							joypad[port] |= 0x8000;		// Button B
-						}
-					}
-					else
-						input_vars.turbo_state[port] = 0;
 				}
 			}
 			break;
@@ -1535,36 +1635,7 @@ static void report_buttons(void)
 			break;
 		}
 	}
-
-   	if (SWITCH_L2 && !input_vars.switch_state)
-   	{
-		struct retro_message message;
-        input_vars.switch_state = true;
-		message.frames = 120;
-		message.msg = NULL;
-
-		switch (input_vars.turbo_enable)
-		{
-			case 0:
-				input_vars.turbo_enable = 1;
-				message.msg = "The button Y is mapped to R2 and autofire enabled.";
-			break;
-			case 1:
-				input_vars.turbo_enable = 2;
-				message.msg = "The button B is mapped to R2 and autofire enabled.";
-			break;
-			case 2:
-				input_vars.turbo_enable = 0;
-				message.msg = "The button mapping has been cancelled.";
-			break;
-		}
-		environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, (void *)&message);
-   	}
-   	else if (!SWITCH_L2 && input_vars.switch_state)
-		input_vars.switch_state = false;
 }
-#undef SWITCH_L2
-#undef PRESSED_R2
 
 /* Direct-render path for RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER.
  *
@@ -1736,18 +1807,20 @@ void retro_run(void)
 	okay = (environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &result));
 	if (okay)
 	{
-		bool audioEnabled = 0 != (result & 0x02);
 		bool videoEnabled = 0 != (result & 0x01);
 		bool hardDisableAudio = 0 != (result & 0x08);
 		IPPU.RenderThisFrame = videoEnabled;
 
-		audio_muted = !audioEnabled || hardDisableAudio;
+		/* RETRO_AV_ENABLE_AUDIO (0x02) is intentionally ignored: it says the
+		   frontend will throw these samples away, not that the core may stop
+		   producing them. See audio_hard_disabled. */
+		audio_hard_disabled = hardDisableAudio;
 		Settings.HardDisableAudio = hardDisableAudio;
 	}
 	else
 	{
 		IPPU.RenderThisFrame = true;
-		audio_muted = false;
+		audio_hard_disabled = false;
 		Settings.HardDisableAudio = false;
 	}
 
@@ -1803,6 +1876,34 @@ void retro_run(void)
 	audio_upload_samples();
 }
 
+/* Decide whether this (de)serialisation may take the fast in-place path.
+ *
+ * "Fast" here means the state is one the core itself produced moments ago and
+ * is about to consume again, so S9xUnfreezeFromStream can read the big blocks
+ * straight into VRAM/WRAM/SRAM/fillram instead of staging them through
+ * local copies. The staging exists so a truncated or corrupt state cannot
+ * half-apply, which matters for a file off disk and does not matter for
+ * runahead, preemptive frames or netplay rollback.
+ *
+ * RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT is the supported way to ask. Every
+ * context other than NORMAL is a frontend-internal state, and all three of
+ * them want the fast path. RETRO_AV_ENABLE_FAST_SAVESTATES carries the same
+ * information from the same frontend flag but is deprecated, so it is only
+ * the fallback for frontends that do not answer the context query. */
+static uint8_t savestate_wants_fast_path(void)
+{
+	enum retro_savestate_context context = RETRO_SAVESTATE_CONTEXT_NORMAL;
+	enum retro_av_enable_flags   av      = (enum retro_av_enable_flags) 0;
+
+	if (environ_cb(RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT, &context))
+		return (context != RETRO_SAVESTATE_CONTEXT_NORMAL) ? TRUE : FALSE;
+
+	if (environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &av))
+		return (0 != (av & RETRO_AV_ENABLE_FAST_SAVESTATES)) ? TRUE : FALSE;
+
+	return FALSE;
+}
+
 size_t retro_serialize_size(void)
 {
 	int32_t size = SnapshotSize();
@@ -1815,9 +1916,7 @@ size_t retro_serialize_size(void)
 
 bool retro_serialize(void *data, size_t size)
 {
-	int result = -1;
-	if (environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &result))
-		Settings.FastSavestates = 0 != (result & 0x04);
+	Settings.FastSavestates = savestate_wants_fast_path();
 
 	S9xSetStreamBuffer((uint8_t*)data, (uint64_t)size);
 
@@ -1829,9 +1928,7 @@ bool retro_serialize(void *data, size_t size)
 
 bool retro_unserialize(const void * data, size_t size)
 {
-	int result = -1;
-	if (environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &result))
-		Settings.FastSavestates = 0 != (result & 0x04);
+	Settings.FastSavestates = savestate_wants_fast_path();
 
 	S9xSetStreamBuffer((uint8_t*)data, (uint64_t)size);
 
@@ -1950,8 +2047,6 @@ static void init_descriptors(void)
 		{ INDEX, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,    "Start" },
 
 	struct retro_input_descriptor desc[] = {
-		{ 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2,     "Switch Autofire Button" },
-		{ 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2,     "AutoFire Button" },
 		describe_buttons(0)
 		describe_buttons(1)
 		describe_buttons(2)
@@ -2053,6 +2148,8 @@ bool retro_load_game(const struct retro_game_info *game)
 		libretro_sw_fb_checked  = true;
 		libretro_supports_sw_fb = false;
 	}
+
+	msu1_latch_playback_rate();
 
 	return TRUE;
 }
@@ -2201,6 +2298,7 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
 	}
 
 	Settings.MSU1 = FALSE;
+	msu1_latch_playback_rate();
 	return (true);
 }
 
@@ -2353,6 +2451,33 @@ void S9xDeinitUpdate(int width, int height)
 		   in cpuexec.c, so the phase advances either way). */
 		int burst_phase = (int)(ICPU.Frame % 3);
 
+		if (width > 512)
+		{
+			/* HD Mode 7 4x frame. The filter's output tops out at
+			   SNES_NTSC_OUT_WIDTH(256) = 602 px, so input columns
+			   beyond 512 add no information -- and the lores blitter,
+			   fed 1024-px rows, would write ~2400 px per line into the
+			   602-px-pitch buffer (garbage plus overflow within the
+			   allocation). Box-downsample each row 2:1 in place
+			   (per-channel floor average via the LSB-exact halving-add
+			   identity, as in S9xMode7VertResample) and take the hires
+			   path; 4x sub-pixel detail survives as anti-aliasing.
+			   In-place is safe: x ascends, reads at 2x/2x+1 stay ahead
+			   of the write at x. */
+			int y, x;
+			for (y = 0; y < height; y++)
+			{
+				uint16_t *row = GFX.Screen + (size_t) y * (GFX.Pitch >> 1);
+				for (x = 0; x < 512; x++)
+				{
+					uint16_t a = row[2 * x];
+					uint16_t b = row[2 * x + 1];
+					row[x] = (uint16_t) (((a & 0xF7DE) >> 1) + ((b & 0xF7DE) >> 1) + (a & b & 0x0821));
+				}
+			}
+			width = 512;
+		}
+
 		if (width == 512)
 			snes_ntsc_blit_hires(&snes_ntsc, GFX.Screen, GFX.Pitch / 2, burst_phase, width, height, ntsc_screen_buffer, (long)ntsc_out_pitch);
 		else
@@ -2430,7 +2555,7 @@ const char* S9xGetDirectory(uint32_t dirtype)
 {
 	const char *directory = NULL;
 
-	if (dirtype == BIOS_DIR)
+	if (dirtype == BIOS_DIR || dirtype == SAT_DIR)
 	{
 		if (!environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &directory) ||
 		    !directory)
