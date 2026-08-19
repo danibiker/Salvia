@@ -38,11 +38,16 @@
 
 #ifdef _WIN32
 #  include <malloc.h>
-#  define rint(x)   (floor((x)+0.5f)) 
+#  define rint(x)   (floor((x)+0.5f))
 #  define NO_FLOAT_MATH_LIB
 #  define FAST_HYPOT(a, b) sqrt((a)*(a) + (b)*(b))
-#  define LITTLE_ENDIAN 1
-#  define BYTE_ORDER LITTLE_ENDIAN
+#  if !defined(MSB_FIRST) && !defined(__ppc__)
+#    define LITTLE_ENDIAN 1
+#    define BYTE_ORDER LITTLE_ENDIAN
+#  else
+#    define BIG_ENDIAN 1
+#    define BYTE_ORDER BIG_ENDIAN
+#  endif
 #endif
 
 #ifdef HAVE_ALLOCA_H

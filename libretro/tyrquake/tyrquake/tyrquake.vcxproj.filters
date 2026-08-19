@@ -33,6 +33,12 @@
     <Filter Include="Header Files\net">
       <UniqueIdentifier>{1d0dcf1d-a7a2-48f1-a9c9-89b03bc66100}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\tremor">
+      <UniqueIdentifier>{40ce9f35-41e1-4514-b573-22ac7458b733}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\tremor">
+      <UniqueIdentifier>{c5a73e46-7073-4278-8be8-e39cf75e33d7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\libretro-common\file\retro_dirent.c">
@@ -125,9 +131,6 @@
     <ClCompile Include="..\deps\libvorbis\lib\codebook.c">
       <Filter>Source Files\vorbis</Filter>
     </ClCompile>
-    <ClCompile Include="..\deps\libvorbis\lib\envelope.c">
-      <Filter>Source Files\vorbis</Filter>
-    </ClCompile>
     <ClCompile Include="..\deps\libvorbis\lib\floor0.c">
       <Filter>Source Files\vorbis</Filter>
     </ClCompile>
@@ -149,19 +152,10 @@
     <ClCompile Include="..\deps\libvorbis\lib\mdct.c">
       <Filter>Source Files\vorbis</Filter>
     </ClCompile>
-    <ClCompile Include="..\deps\libvorbis\lib\psy.c">
-      <Filter>Source Files\vorbis</Filter>
-    </ClCompile>
     <ClCompile Include="..\deps\libvorbis\lib\registry.c">
       <Filter>Source Files\vorbis</Filter>
     </ClCompile>
     <ClCompile Include="..\deps\libvorbis\lib\res0.c">
-      <Filter>Source Files\vorbis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\deps\libvorbis\lib\sharedbook.c">
-      <Filter>Source Files\vorbis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\deps\libvorbis\lib\smallft.c">
       <Filter>Source Files\vorbis</Filter>
     </ClCompile>
     <ClCompile Include="..\deps\libvorbis\lib\synthesis.c">
@@ -172,12 +166,6 @@
     </ClCompile>
     <ClCompile Include="..\deps\libvorbis\lib\window.c">
       <Filter>Source Files\vorbis</Filter>
-    </ClCompile>
-    <ClCompile Include="..\deps\libogg\src\bitwise.c">
-      <Filter>Source Files\ogg</Filter>
-    </ClCompile>
-    <ClCompile Include="..\deps\libogg\src\framing.c">
-      <Filter>Source Files\ogg</Filter>
     </ClCompile>
     <ClCompile Include="..\common\alias_model.c">
       <Filter>Source Files\common</Filter>
@@ -452,6 +440,63 @@
     <ClCompile Include="..\common\dpmaster.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\sharedbook.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\snd_vorbis_float.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\decode_stubs.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\lookup.c">
+      <Filter>Source Files\vorbis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libogg\src\bitwise.c">
+      <Filter>Source Files\ogg</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\libogg\src\framing.c">
+      <Filter>Source Files\ogg</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\block.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\codebook.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\floor0.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\floor1.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\info.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\mapping0.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\mdct.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\registry.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\res012.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\sharedbook.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\synthesis.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\vorbisfile.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\window.c">
+      <Filter>Source Files\tremor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\deps\libvorbis\lib\backends.h">
@@ -516,6 +561,54 @@
     </ClInclude>
     <ClInclude Include="..\common\r_subdiv.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\asm_arm.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\backends.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\block.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\codebook.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\codec_internal.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\config_types.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\ivorbiscodec.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\ivorbisfile.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\lsp_lookup.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\mdct.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\mdct_lookup.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\misc.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\os.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\registry.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\window.h">
+      <Filter>Header Files\tremor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\deps\tremor\window_lookup.h">
+      <Filter>Header Files\tremor</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

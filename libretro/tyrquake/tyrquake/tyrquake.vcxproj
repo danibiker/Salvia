@@ -103,6 +103,7 @@
     <ClCompile Include="..\common\snd_opus.c" />
     <ClCompile Include="..\common\snd_umx.c" />
     <ClCompile Include="..\common\snd_vorbis.c" />
+    <ClCompile Include="..\common\snd_vorbis_float.c" />
     <ClCompile Include="..\common\snd_wave.c" />
     <ClCompile Include="..\common\sprite_model.c" />
     <ClCompile Include="..\common\surf_atlas.c" />
@@ -127,25 +128,73 @@
     <ClCompile Include="..\deps\libFLAC\stream_decoder.c" />
     <ClCompile Include="..\deps\libogg\src\bitwise.c" />
     <ClCompile Include="..\deps\libogg\src\framing.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\bitrate.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\block.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\codebook.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\envelope.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\floor0.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\floor1.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\info.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\lpc.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\lsp.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\mapping0.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\mdct.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\psy.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\registry.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\res0.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\sharedbook.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\smallft.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\synthesis.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\vorbisfile.c" />
-    <ClCompile Include="..\deps\libvorbis\lib\window.c" />
+    <ClCompile Include="..\deps\libvorbis\lib\bitrate.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\block.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\codebook.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\decode_stubs.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\floor0.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\floor1.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\info.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\lookup.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\lpc.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\lsp.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\mapping0.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\mdct.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\registry.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\res0.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\sharedbook.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\synthesis.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\vorbisfile.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\libvorbis\lib\window.c">
+      <AdditionalOptions>/FI"..\deps\libvorbis\lib\fvorbis_rename.h" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\deps\tremor\block.c" />
+    <ClCompile Include="..\deps\tremor\codebook.c" />
+    <ClCompile Include="..\deps\tremor\floor0.c" />
+    <ClCompile Include="..\deps\tremor\floor1.c" />
+    <ClCompile Include="..\deps\tremor\info.c" />
+    <ClCompile Include="..\deps\tremor\mapping0.c" />
+    <ClCompile Include="..\deps\tremor\mdct.c" />
+    <ClCompile Include="..\deps\tremor\registry.c" />
+    <ClCompile Include="..\deps\tremor\res012.c" />
+    <ClCompile Include="..\deps\tremor\sharedbook.c" />
+    <ClCompile Include="..\deps\tremor\synthesis.c" />
+    <ClCompile Include="..\deps\tremor\vorbisfile.c" />
+    <ClCompile Include="..\deps\tremor\window.c" />
     <ClCompile Include="..\libretro-common\compat\compat_posix_string.c" />
     <ClCompile Include="..\libretro-common\compat\compat_snprintf.c" />
     <ClCompile Include="..\libretro-common\compat\compat_strcasestr.c" />
@@ -184,6 +233,22 @@
     <ClInclude Include="..\deps\libvorbis\lib\scales.h" />
     <ClInclude Include="..\deps\libvorbis\lib\smallft.h" />
     <ClInclude Include="..\deps\libvorbis\lib\window.h" />
+    <ClInclude Include="..\deps\tremor\asm_arm.h" />
+    <ClInclude Include="..\deps\tremor\backends.h" />
+    <ClInclude Include="..\deps\tremor\block.h" />
+    <ClInclude Include="..\deps\tremor\codebook.h" />
+    <ClInclude Include="..\deps\tremor\codec_internal.h" />
+    <ClInclude Include="..\deps\tremor\config_types.h" />
+    <ClInclude Include="..\deps\tremor\ivorbiscodec.h" />
+    <ClInclude Include="..\deps\tremor\ivorbisfile.h" />
+    <ClInclude Include="..\deps\tremor\lsp_lookup.h" />
+    <ClInclude Include="..\deps\tremor\mdct.h" />
+    <ClInclude Include="..\deps\tremor\mdct_lookup.h" />
+    <ClInclude Include="..\deps\tremor\misc.h" />
+    <ClInclude Include="..\deps\tremor\os.h" />
+    <ClInclude Include="..\deps\tremor\registry.h" />
+    <ClInclude Include="..\deps\tremor\window.h" />
+    <ClInclude Include="..\deps\tremor\window_lookup.h" />
     <ClInclude Include="..\libretro-common\include\net\net_compat.h" />
     <ClInclude Include="..\libretro-common\include\net\net_socket.h" />
   </ItemGroup>
@@ -257,9 +322,9 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>DEBUG;USE_CODEC_VORBIS;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;USE_CODEC_VORBIS;VORBIS_USE_TREMOR;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline</PreprocessorDefinitions>
       <CallAttributedProfiling>Callcap</CallAttributedProfiling>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps\vulkan;$(ProjectDir)..\deps\vulkan\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps;$(ProjectDir)..\deps\vulkan;$(ProjectDir)..\deps\vulkan\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)$(Platform)\%(RelativeDir)</ObjectFileName>
       <FloatingPointModel>Fast</FloatingPointModel>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -283,9 +348,9 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>NDEBUG;__ppc__;MSB_FIRST;_XBOX360;_XBOX;USE_CODEC_VORBIS;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline;S_IRUSR=0400;S_IWUSR=0200;HAVE_SOCKET_LEGACY</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;__ppc__;MSB_FIRST;_XBOX360;_XBOX;USE_CODEC_VORBIS;VORBIS_USE_TREMOR;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline;S_IRUSR=0400;S_IWUSR=0200;HAVE_SOCKET_LEGACY</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps\vulkan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps;$(ProjectDir)..\deps\vulkan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)$(Platform)\%(RelativeDir)</ObjectFileName>
       <FloatingPointModel>Fast</FloatingPointModel>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -314,10 +379,10 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>NDEBUG;ALPHA_TEXTURES;USE_CODEC_VORBIS;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;ALPHA_TEXTURES;USE_CODEC_VORBIS;VORBIS_USE_TREMOR;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline</PreprocessorDefinitions>
       <CallAttributedProfiling>Callcap</CallAttributedProfiling>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps\vulkan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ObjectFileName>$(IntDir)$(Platform)\%(RelativeDir)</ObjectFileName>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps;$(ProjectDir)..\deps\vulkan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)%(RelativeDir)\</ObjectFileName>
       <FloatingPointModel>Fast</FloatingPointModel>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <StringPooling>true</StringPooling>
@@ -341,10 +406,10 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <PrecompiledHeaderOutputFile>$(OutDir)$(ProjectName).pch</PrecompiledHeaderOutputFile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>NDEBUG;__ppc__;MSB_FIRST;_XBOX360;_XBOX;USE_CODEC_VORBIS;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline;S_IRUSR=0400
+      <PreprocessorDefinitions>NDEBUG;__ppc__;MSB_FIRST;_XBOX360;_XBOX;USE_CODEC_VORBIS;VORBIS_USE_TREMOR;USE_CODEC_FLAC;USE_CODEC_WAVE;FRONTEND_SUPPORTS_RGB565;HAVE_STRINGS_H;HAVE_STDINT_H;HAVE_INTTYPES_H;__LIBRETRO__;NQ_HACK;TYR_VERSION=0.62;INLINE=_inline;S_IRUSR=0400
 ;S_IWUSR=0200;HAVE_SOCKET_LEGACY</PreprocessorDefinitions>
       <CallAttributedProfiling>Disabled</CallAttributedProfiling>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps\vulkan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\common;$(ProjectDir)..\libretro-common;$(ProjectDir)..\libretro-common\include;$(ProjectDir)..\libretro-common\include\compat\msvc;$(ProjectDir)..\deps\libFLAC\include;$(ProjectDir)..\deps\libFLAC;$(ProjectDir)..\deps\libogg\include;$(ProjectDir)..\deps\libogg;$(ProjectDir)..\deps\libvorbis\include;$(ProjectDir)..\deps\libvorbis;$(ProjectDir)..\deps;$(ProjectDir)..\deps\vulkan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)$(Platform)\%(RelativeDir)</ObjectFileName>
       <FloatingPointModel>Fast</FloatingPointModel>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
