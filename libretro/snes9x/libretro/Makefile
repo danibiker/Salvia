@@ -53,7 +53,7 @@ endif
 # Unix
 ifneq (,$(findstring unix,$(platform)))
    CFLAGS += $(LTO)
-   CXXFLAGS += $(LTO) -DUNZIP_SUPPORT
+   CXXFLAGS += $(LTO)
    LDFLAGS += $(LTO)
    TARGET := $(TARGET_NAME)_libretro.so
    fpic := -fPIC
@@ -61,7 +61,6 @@ ifneq (,$(findstring unix,$(platform)))
    CC = gcc
    SHARED := -shared -z defs
    else
-   LIBS += -lz
    SHARED := -shared -Wl,--version-script=link.T -Wl,-z,defs
    endif
 
@@ -597,14 +596,14 @@ CXXFLAGS += -D_CRT_SECURE_NO_DEPRECATE
 # Windows
 else
    CFLAGS += $(LTO)
-   CXXFLAGS += $(LTO) -DUNZIP_SUPPORT
+   CXXFLAGS += $(LTO)
    LDFLAGS += $(LTO)
    TARGET := $(TARGET_NAME)_libretro.dll
    CC ?= gcc
    CXX ?= g++
    SHARED := -shared -static-libgcc -static-libstdc++ -s -Wl,--version-script=link.T
    CXXFLAGS += -D__WIN32__
-   LIBS += -lz -lcrypt32
+   LIBS += -lcrypt32
 endif
 
 CORE_DIR := ..
@@ -645,6 +644,58 @@ endif
    endif
 endif
 
+# GCC 10+ parallelizes the LTRANS stage with -flto=auto, which also
+# silences the lto-wrapper "using serial compilation of N LTRANS jobs"
+# warning. Clang and older GCC reject the value, so probe the final
+# toolchain and keep plain -flto on failure. Only an unmodified
+# default is upgraded; LTO set on the command line is left alone.
+#
+# The probe compiles only. It must not link: mingw's ld cannot write an
+# executable to /dev/null ("final link failed: file truncated"), so a
+# linking probe fails on every Windows build regardless of whether the
+# compiler supports the flag, which left those builds on plain -flto.
+# -flto= arguments are validated during compilation, so -c is enough to
+# tell a supported value from an unsupported one.
+ifeq ($(LTO),-flto)
+   ifeq (,$(findstring cl.exe,$(CC)))
+      ifeq ($(shell printf 'int main(void){return 0;}' | $(CC) -flto=auto -x c - -c -o ltoprobe.tmp.o 2>/dev/null && echo yes),yes)
+         LTO := -flto=auto
+      endif
+      $(shell rm -f ltoprobe.tmp.o)
+   endif
+endif
+
+# The emulated machine's memory is one byte array reinterpreted through
+# every width the SNES buses use, so the tree violates C/C++ type-based
+# aliasing rules in too many places to enumerate, and the violations are
+# inherent to the design rather than incidental.  GCC 9's LTO acts on
+# those rules across translation units and miscompiles the sprite/tile
+# path: the linux/x86_64 buildbot (GCC 9.4) shipped nightlies that
+# render Yoshi's Island with garbled sprites and broken collision, while
+# a local build of the same commit with GCC 12/13 is correct
+# (libretro/snes9x#314 and a second report).  Verified by bisection:
+# GCC 9 + LTO reproduces the shipped binary's frame hashes exactly,
+# GCC 9 without LTO or with this flag matches GCC 13 byte for byte.
+#
+# Correctness must not depend on which compiler happens not to exploit
+# the rules, so opt out of type-based aliasing everywhere it can be
+# expressed.  MSVC has no equivalent switch and does not perform this
+# class of optimisation by default.
+ifeq (,$(findstring msvc,$(platform)))
+CFLAGS   += -fno-strict-aliasing
+CXXFLAGS += -fno-strict-aliasing
+endif
+
+# Statically linked frontends compile their own libretro-common, so
+# Makefile.common keeps the vendored copy (including vfs_hybrid.c) out
+# of the archive; the define lets libretro.cpp compile the matching
+# call site out.  Evaluated here, before the msvc lib.exe block resets
+# STATIC_LINKING, so it keys off the same value the source split sees.
+ifeq ($(STATIC_LINKING),1)
+CFLAGS   += -DSTATIC_LINKING
+CXXFLAGS += -DSTATIC_LINKING
+endif
+
 include Makefile.common
 
 OBJECTS := $(SOURCES_CXX:.cpp=.o) $(SOURCES_C:.c=.o)
@@ -661,11 +712,9 @@ else
 endif
 
 CXXFLAGS	+= $(CODE_DEFINES) $(WARNINGS_DEFINES) $(fpic)
-CXXFLAGS	+= -DRIGHTSHIFT_IS_SAR -D__LIBRETRO__ -DALLOW_CPU_OVERCLOCK
+CXXFLAGS	+= -D__LIBRETRO__ -DALLOW_CPU_OVERCLOCK
 CFLAGS		+= $(CODE_DEFINES) $(WARNINGS_DEFINES) $(fpic)
-CFLAGS		+= -DRIGHTSHIFT_IS_SAR -D__LIBRETRO__ -DALLOW_CPU_OVERCLOCK
-CFLAGS          += -DHAVE_STDINT_H
-CXXFLAGS        += -DHAVE_STDINT_H
+CFLAGS		+= -D__LIBRETRO__ -DALLOW_CPU_OVERCLOCK
 ifeq (,$(findstring msvc,$(platform)))
 ifeq ($(HAVE_STRINGS_H), 1)
 CXXFLAGS += -DHAVE_STRINGS_H

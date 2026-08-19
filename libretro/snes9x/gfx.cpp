@@ -10,9 +10,18 @@
 #include "controls.h"
 #include "crosshairs.h"
 #include "cheats.h"
-#include "movie.h"
-#include "screenshot.h"
 #include "display.h"
+#include <vector>
+#include <string>
+
+/* Extracted from SGFX so the struct stays C-visible for tile.c. */
+static std::vector<uint16> GFXScreenBuffer;
+std::string GFXInfoString;
+
+/* tile.c-side bridges (C linkage): VRAM/FillRAM for the C tile renderer
+   without pulling memmap.h into C. Set in S9xGraphicsInit. */
+extern "C" { uint8 *tile_VRAM; uint8 *tile_FillRAM;
+             uint8 TileMode7Hires = 0; uint8 TileMode7HiresBilinear = 0; }
 
 extern struct SCheatData		Cheat;
 extern struct SLineData			LineData[240];
@@ -24,11 +33,6 @@ void (*S9xCustomDisplayString) (const char *, int, int, bool, int) = NULL;
 
 static void SetupOBJ (void);
 static void DrawOBJS (int);
-static void DisplayTime (void);
-static void DisplayFrameRate (void);
-static void DisplayPressedKeys (void);
-static void DisplayWatchedAddresses (void);
-static void DisplayStringFromBottom (const char *, int, int, bool);
 static void DrawBackground (int, uint8, uint8);
 static void DrawBackgroundMosaic (int, uint8, uint8);
 static void DrawBackgroundOffset (int, uint8, uint8, int);
@@ -37,7 +41,6 @@ static inline void DrawBackgroundMode7 (int, void (*DrawMath) (uint32, uint32, i
 static inline void DrawBackdrop (void);
 static inline void RenderScreen (bool8);
 static uint16 get_crosshair_color (uint8);
-static void S9xDisplayStringType (const char *, int, int, bool, int);
 
 #define TILE_PLUS(t, x)	(((t) & 0xfc00) | ((t + x) & 0x3ff))
 
@@ -53,8 +56,17 @@ bool8 S9xGraphicsInit (void)
 	S9xFixColourBrightness();
 	S9xBuildDirectColourMaps();
 
-	GFX.ScreenBuffer.resize(MAX_SNES_WIDTH * (MAX_SNES_HEIGHT + 64));
-	GFX.Screen = &GFX.ScreenBuffer[GFX.RealPPL * 32];
+	/* Buffers sized for the widest supported frame (Mode 7 hires 4x,
+	   1024 px), snes9x2010's model: Pitch is the max buffer width and
+	   RealPPL derives from it; narrower frames use the left part of each
+	   row, and RenderedScreenWidth controls what the frontend sees. */
+	GFX.Pitch      = sizeof(uint16) * MAX_SNES_WIDTH_4X;
+	GFX.RealPPL    = MAX_SNES_WIDTH_4X;
+	GFX.ScreenSize = MAX_SNES_WIDTH_4X * MAX_SNES_HEIGHT;
+	tile_VRAM      = Memory.VRAM;
+	tile_FillRAM   = Memory.FillRAM;
+	GFXScreenBuffer.resize(MAX_SNES_WIDTH_4X * (MAX_SNES_HEIGHT + 64));
+	GFX.Screen = &GFXScreenBuffer[GFX.RealPPL * 32];
 	GFX.ZERO = (uint16 *) malloc(sizeof(uint16) * 0x10000);
 	GFX.SubScreen  = (uint16 *) malloc(GFX.ScreenSize * sizeof(uint16));
 	GFX.ZBuffer    = (uint8 *)  malloc(GFX.ScreenSize);
@@ -117,15 +129,24 @@ void S9xGraphicsScreenResize (void)
 	IPPU.InterlaceOBJ = Memory.FillRAM[0x2133] & 2;
 	IPPU.PseudoHires = Memory.FillRAM[0x2133] & 8;
 
-	if (PPU.BGMode == 5 || PPU.BGMode == 6 || IPPU.PseudoHires)
 	{
-		IPPU.DoubleWidthPixels = TRUE;
-		IPPU.RenderedScreenWidth = SNES_WIDTH << 1;
-	}
-	else
-	{
-		IPPU.DoubleWidthPixels = FALSE;
-		IPPU.RenderedScreenWidth = SNES_WIDTH;
+		/* From snes9x2010: the Mode7Hires option forces a wider frame when
+		   it starts in Mode 7 so the M7 hires renderers have room to
+		   write; 4x only for Mode 7 with the 4x setting. */
+		bool8 cond_1 = (PPU.BGMode == 5 || PPU.BGMode == 6 || IPPU.PseudoHires
+				|| (Settings.Mode7Hires && PPU.BGMode == 7));
+		bool8 cond_q = (PPU.BGMode == 7 && Settings.Mode7Hires == 4);
+		int width_factor = cond_q ? 4 : (cond_1 ? 2 : 1);
+		IPPU.DoubleWidthPixels = cond_1;
+		IPPU.QuadWidthPixels = cond_q;
+		IPPU.RenderedScreenWidth = SNES_WIDTH * width_factor;
+
+		/* M7 vertical-2x post-pass: arm when the frame starts in Mode 7
+		   with hires + the vertical option; the whole frame gets
+		   bilinear-Y at end of frame. Mid-frame Mode 7 entry currently
+		   renders without the vertical pass (snes9x2010 additionally arms
+		   from its mid-frame width-promotion hook; not ported yet). */
+		IPPU.M7VertStartY = (cond_1 && PPU.BGMode == 7 && Settings.Mode7HiresVertical) ? 0 : -1;
 	}
 
 	if (IPPU.Interlace)
@@ -188,7 +209,7 @@ void S9xStartScreenRefresh (void)
 	}
 
 	if (GFX.InfoStringTimeout > 0 && --GFX.InfoStringTimeout == 0)
-		GFX.InfoString.clear();
+		GFXInfoString.clear();
 
 	IPPU.TotalEmulatedFrames++;
 }
@@ -198,6 +219,11 @@ void S9xEndScreenRefresh (void)
 	if (IPPU.RenderThisFrame)
 	{
 		FLUSH_REDRAW();
+
+		/* Mode 7 vertical-2x post-pass: expand the frame to
+		   PPU.ScreenHeight*2 rows in place before it is handed to the
+		   frontend. No-op when M7VertStartY is -1. */
+		S9xMode7VertResample();
 
 		if (GFX.DoInterlace && S9xInterlaceField() == 0)
 		{
@@ -214,13 +240,6 @@ void S9xEndScreenRefresh (void)
 			}
 
 			S9xControlEOF();
-
-			if (Settings.TakeScreenshot)
-				S9xDoScreenshot(IPPU.RenderedScreenWidth, IPPU.RenderedScreenHeight);
-
-			if (Settings.AutoDisplayMessages)
-				S9xDisplayMessages(GFX.Screen, GFX.RealPPL, IPPU.RenderedScreenWidth, IPPU.RenderedScreenHeight, 1);
-
 			S9xDeinitUpdate(IPPU.RenderedScreenWidth, IPPU.RenderedScreenHeight);
 		}
 	}
@@ -456,20 +475,38 @@ void S9xUpdateScreen (void)
 			PPU.RecomputeClipWindows = FALSE;
 		}
 
-		if (!IPPU.DoubleWidthPixels && (PPU.BGMode == 5 || PPU.BGMode == 6 || IPPU.PseudoHires))
+		if (!IPPU.DoubleWidthPixels && (PPU.BGMode == 5 || PPU.BGMode == 6 || IPPU.PseudoHires
+				|| (Settings.Mode7Hires && PPU.BGMode == 7)))
 		{
+			// Mid-frame width promotion: the game switched into a hires
+			// mode (or Mode 7 with the hires option) partway down the
+			// frame, so rows already rendered at 1x must be widened in
+			// place. 4x only for Mode 7 with the 4x setting; from
+			// snes9x2010. This is the common path for Mode 7 games:
+			// HUDs render in another mode first, so frame start never
+			// sees BGMode == 7.
+			int factor = (PPU.BGMode == 7 && Settings.Mode7Hires == 4) ? 4 : 2;
+
 			// Have to back out of the regular speed hack
 			for (uint32 y = 0; y < GFX.StartY; y++)
 			{
 				uint16	*p = GFX.Screen + y * GFX.PPL + 255;
-				uint16	*q = GFX.Screen + y * GFX.PPL + 510;
+				uint16	*q = GFX.Screen + y * GFX.PPL + 256 * factor - 1;
 
-				for (int x = 255; x >= 0; x--, p--, q -= 2)
-					*q = *(q + 1) = *p;
+				for (int x = 255; x >= 0; x--, p--)
+					for (int i = 0; i < factor; i++, q--)
+						*q = *p;
 			}
 
 			IPPU.DoubleWidthPixels = TRUE;
-			IPPU.RenderedScreenWidth = 512;
+			IPPU.QuadWidthPixels = (factor == 4);
+			IPPU.RenderedScreenWidth = SNES_WIDTH * factor;
+
+			// M7 vertical-2x post-pass: arm now if entering Mode 7
+			// mid-frame. Rows above GFX.StartY (HUD) get row-replicated
+			// by the post-pass; rows from here on get bilinear-Y.
+			if (PPU.BGMode == 7 && Settings.Mode7HiresVertical)
+				IPPU.M7VertStartY = (int32) GFX.StartY;
 		}
 
 		if (!IPPU.DoubleHeightPixels && IPPU.Interlace && (PPU.BGMode == 5 || PPU.BGMode == 6))
@@ -754,7 +791,7 @@ static void DrawOBJS (int D)
 	void (*DrawTile) (uint32, uint32, uint32, uint32) = NULL;
 	void (*DrawClippedTile) (uint32, uint32, uint32, uint32, uint32, uint32) = NULL;
 
-	int	PixWidth = IPPU.DoubleWidthPixels ? 2 : 1;
+	int	PixWidth = IPPU.QuadWidthPixels ? 4 : (IPPU.DoubleWidthPixels ? 2 : 1);
 	BG.InterlaceLine = S9xInterlaceField() ? 8 : 0;
 	GFX.Z1 = 2;
 	int sprite_limit = (Settings.MaxSpriteTilesPerLine == 128) ? 128 : 32;
@@ -867,7 +904,7 @@ static void DrawBackground (int bg, uint8 Zh, uint8 Zl)
 	uint32	Lines;
 	int		OffsetMask  = (BG.TileSizeH == 16) ? 0x3ff : 0x1ff;
 	int		OffsetShift = (BG.TileSizeV == 16) ? 4 : 3;
-	int		PixWidth = IPPU.DoubleWidthPixels ? 2 : 1;
+	int		PixWidth = IPPU.QuadWidthPixels ? 4 : (IPPU.DoubleWidthPixels ? 2 : 1);
 	bool8	HiresInterlace = IPPU.Interlace && IPPU.DoubleWidthPixels;
 
 	void (*DrawTile) (uint32, uint32, uint32, uint32);
@@ -1084,7 +1121,7 @@ static void DrawBackgroundMosaic (int bg, uint8 Zh, uint8 Zl)
 	int	Lines;
 	int	OffsetMask  = (BG.TileSizeH == 16) ? 0x3ff : 0x1ff;
 	int	OffsetShift = (BG.TileSizeV == 16) ? 4 : 3;
-	int	PixWidth = IPPU.DoubleWidthPixels ? 2 : 1;
+	int	PixWidth = IPPU.QuadWidthPixels ? 4 : (IPPU.DoubleWidthPixels ? 2 : 1);
 	bool8	HiresInterlace = IPPU.Interlace && IPPU.DoubleWidthPixels;
 
 	void (*DrawPix) (uint32, uint32, uint32, uint32, uint32, uint32);
@@ -1264,7 +1301,7 @@ static void DrawBackgroundOffset (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 	int	Offset2Mask  = (BG.OffsetSizeH == 16) ? 0x3ff : 0x1ff;
 	int	Offset2Shift = (BG.OffsetSizeV == 16) ? 4 : 3;
 	int	OffsetEnableMask = 0x2000 << bg;
-	int	PixWidth = IPPU.DoubleWidthPixels ? 2 : 1;
+	int	PixWidth = IPPU.QuadWidthPixels ? 4 : (IPPU.DoubleWidthPixels ? 2 : 1);
 	bool8	HiresInterlace = IPPU.Interlace && IPPU.DoubleWidthPixels;
 
 	void (*DrawClippedTile) (uint32, uint32, uint32, uint32, uint32, uint32);
@@ -1492,7 +1529,7 @@ static void DrawBackgroundOffsetMosaic (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 	int	OffsetShift  = (BG.TileSizeV   == 16) ? 4 : 3;
 	int	Offset2Shift = (BG.OffsetSizeV == 16) ? 4 : 3;
 	int	OffsetEnableMask = 0x2000 << bg;
-	int	PixWidth = IPPU.DoubleWidthPixels ? 2 : 1;
+	int	PixWidth = IPPU.QuadWidthPixels ? 4 : (IPPU.DoubleWidthPixels ? 2 : 1);
 	bool8	HiresInterlace = IPPU.Interlace && IPPU.DoubleWidthPixels;
 
 	void (*DrawPix) (uint32, uint32, uint32, uint32, uint32, uint32);
@@ -1687,6 +1724,13 @@ static void DrawBackgroundOffsetMosaic (int bg, uint8 Zh, uint8 Zl, int VOffOff)
 
 static inline void DrawBackgroundMode7 (int bg, void (*DrawMath) (uint32, uint32, int), void (*DrawNomath) (uint32, uint32, int), int D)
 {
+	/* The C tile renderer samples Mode 7 through de-interleaved
+	   tilemap/graphics planes (Mode7TileMap/Mode7Gfx in tile.c); refresh
+	   them from current VRAM before sampling, exactly where snes9x2010's
+	   caller does. VRAM is VBlank-stable across a frame's Mode 7
+	   rendering, so one snapshot covers every clip segment below. */
+	S9xMode7DeinterleaveVRAM();
+
 	for (int clip = 0; clip < GFX.Clip[bg].Count; clip++)
 	{
 		GFX.ClipColors = !(GFX.Clip[bg].DrawMode[clip] & 1);
@@ -1702,6 +1746,14 @@ static inline void DrawBackdrop (void)
 {
 	uint32	Offset = GFX.StartY * GFX.PPL;
 
+	/* The C tile renderer's backdrop functions derive ScreenColors from
+	   RealScreenColors per call (ClipColors ? BlackColourMap :
+	   RealScreenColors), matching snes9x2010's caller contract where the
+	   caller sets RealScreenColors first. The old tileimpl backdrop read
+	   GFX.ScreenColors set by earlier tile draws instead, so on a frame
+	   where the backdrop draws first RealScreenColors was still NULL. */
+	GFX.RealScreenColors = IPPU.ScreenColors;
+
 	for (int clip = 0; clip < GFX.Clip[5].Count; clip++)
 	{
 		GFX.ClipColors = !(GFX.Clip[5].DrawMode[clip] & 1);
@@ -1711,406 +1763,6 @@ static inline void DrawBackdrop (void)
 		else
 			GFX.DrawBackdropNomath(Offset, GFX.Clip[5].Left[clip], GFX.Clip[5].Right[clip]);
 	}
-}
-
-void S9xReRefresh (void)
-{
-	// Be careful when calling this function from the thread other than the emulation one...
-	// Here it's assumed no drawing occurs from the emulation thread when Settings.Paused is TRUE.
-	if (Settings.Paused)
-		S9xDeinitUpdate(IPPU.RenderedScreenWidth, IPPU.RenderedScreenHeight);
-}
-
-void S9xSetInfoString (const char *string)
-{
-	if (Settings.InitialInfoStringTimeout > 0)
-	{
-		GFX.InfoString = string;
-		GFX.InfoStringTimeout = Settings.InitialInfoStringTimeout;
-		S9xReRefresh();
-	}
-}
-
-#include "var8x10font.h"
-static const int font_width = 8;
-static const int font_height = 10;
-
-static inline int CharWidth(uint8 c)
-{
-	return font_width - var8x10font_kern[c - 32][0] - var8x10font_kern[c - 32][1];
-}
-
-static int StringWidth(const char* str)
-{
-	int length = strlen(str);
-	int pixcount = 0;
-
-	if (length > 0)
-		pixcount++;
-
-	for (int i = 0; i < length; i++)
-	{
-		pixcount += (CharWidth(str[i]) - 1);
-	}
-
-	return pixcount;
-}
-
-static void VariableDisplayChar(int x, int y, uint8 c, bool monospace = false, int overlap = 0)
-{
-	int cindex = c - 32;
-	int crow = cindex >> 4;
-	int ccol = cindex & 15;
-	int cwidth = font_width - (monospace ? 0 : (var8x10font_kern[cindex][0] + var8x10font_kern[cindex][1]));
-
-	int	line = crow * font_height;
-	int	offset = ccol * font_width + (monospace ? 0 : var8x10font_kern[cindex][0]);
-	int scale = IPPU.RenderedScreenWidth / SNES_WIDTH;
-
-	uint16* s = GFX.Screen + y * GFX.RealPPL + x * scale;
-
-	for (int h = 0; h < font_height; h++, line++, s += GFX.RealPPL - cwidth * scale)
-	{
-		for (int w = 0; w < cwidth; w++, s++)
-		{
-			if (var8x10font[line][offset + w] == '#')
-				*s = Settings.DisplayColor;
-			else if (var8x10font[line][offset + w] == '.')
-				*s = 0x0000;
-			//            else if (!monospace && w >= overlap)
-			//                *s = (*s & 0xf7de) >> 1;
-			//                *s = (*s & 0xe79c) >> 2;
-
-			if (scale > 1)
-			{
-				s[1] = s[0];
-				s++;
-			}
-		}
-	}
-}
-
-void S9xVariableDisplayString(const char* string, int linesFromBottom,	int pixelsFromLeft, bool allowWrap, int type)
-{
-	if (GFX.ScreenBuffer.empty() || IPPU.RenderedScreenWidth == 0)
-		return;
-
-	bool monospace = true;
-	if (type == S9X_NO_INFO)
-	{
-		if (linesFromBottom <= 0)
-			linesFromBottom = 1;
-
-		if (linesFromBottom >= 5 && !Settings.DisplayPressedKeys)
-		{
-			if (!Settings.DisplayPressedKeys)
-				linesFromBottom -= 3;
-			else
-				linesFromBottom -= 1;
-		}
-
-		if (pixelsFromLeft > 128)
-			pixelsFromLeft = SNES_WIDTH - StringWidth(string);
-
-		monospace = false;
-	}
-
-	int min_lines = 1;
-	std::string msg(string);
-	//for (auto& c : msg)
-	for (int i=0; i < msg.length(); i++){
-		char c = msg[i];
-		if (c == '\n')
-			min_lines++;
-	}
-
-
-	if (min_lines > linesFromBottom)
-		linesFromBottom = min_lines;
-
-	int dst_x = pixelsFromLeft;
-	int dst_y = IPPU.RenderedScreenHeight - (font_height)*linesFromBottom;
-	int len = strlen(string);
-
-	if (IPPU.RenderedScreenHeight % 224 && !Settings.ShowOverscan)
-		dst_y -= 8;
-	else if (Settings.ShowOverscan)
-		dst_y += 8;
-
-	int overlap = 0;
-
-	for (int i = 0; i < len; i++)
-	{
-		int cindex = (uint8)string[i] - 32;
-		int char_width = font_width - (monospace ? 1 : (var8x10font_kern[cindex][0] + var8x10font_kern[cindex][1]));
-
-		if (dst_x + char_width > SNES_WIDTH || string[i] == '\n')
-		{
-			if (!allowWrap)
-				break;
-
-			linesFromBottom--;
-			dst_y = IPPU.RenderedScreenHeight - font_height * linesFromBottom;
-			dst_x = pixelsFromLeft;
-
-			if (dst_y >= IPPU.RenderedScreenHeight)
-				break;
-		}
-
-		if (string[i] == '\n')
-			continue;
-
-		VariableDisplayChar(dst_x, dst_y, string[i], monospace, overlap);
-
-		dst_x += char_width - 1;
-		overlap = 1;
-	}
-}
-
-static void DisplayStringFromBottom(const char* string, int linesFromBottom, int pixelsFromLeft, bool allowWrap)
-{
-	if (S9xCustomDisplayString)
-	{
-		S9xCustomDisplayString(string, linesFromBottom, pixelsFromLeft, allowWrap, S9X_NO_INFO);
-		return;
-	}
-
-	S9xVariableDisplayString(string, linesFromBottom, pixelsFromLeft, allowWrap, S9X_NO_INFO);
-}
-
-static void S9xDisplayStringType(const char* string, int linesFromBottom, int pixelsFromLeft, bool allowWrap, int type)
-{
-	if (S9xCustomDisplayString)
-	{
-		S9xCustomDisplayString(string, linesFromBottom, pixelsFromLeft, allowWrap, type);
-		return;
-	}
-
-	S9xVariableDisplayString(string, linesFromBottom, pixelsFromLeft, allowWrap, type);
-}
-
-static void DisplayTime (void)
-{
-	char string[10];
-
-	time_t rawtime;
-	struct tm *timeinfo;
-
-	time (&rawtime);
-	timeinfo = localtime(&rawtime);
-
-	sprintf(string, "%02u:%02u", timeinfo->tm_hour, timeinfo->tm_min);
-	S9xDisplayString(string, 0, 0, false);
-}
-
-static void DisplayFrameRate (void)
-{
-	char	string[10];
-	static uint32 lastFrameCount = 0, calcFps = 0;
-	static time_t lastTime = time(NULL);
-
-	time_t currTime = time(NULL);
-	if (lastTime != currTime) {
-		if (lastFrameCount < IPPU.TotalEmulatedFrames) {
-			calcFps = (IPPU.TotalEmulatedFrames - lastFrameCount) / (uint32)(currTime - lastTime);
-		}
-		lastTime = currTime;
-		lastFrameCount = IPPU.TotalEmulatedFrames;
-	}
-	sprintf(string, "%u fps", calcFps);
-	S9xDisplayString(string, 2, IPPU.RenderedScreenWidth - (font_width - 1) * strlen(string) - 1, false);
-
-#ifdef DEBUGGER
-	const int	len = 8;
-	sprintf(string, "%02d/%02d %02d", (int) IPPU.DisplayedRenderedFrameCount, (int) Memory.ROMFramesPerSecond, (int) IPPU.FrameCount);
-#else
-	const int	len = 5;
-	sprintf(string, "%02d/%02d",      (int) IPPU.DisplayedRenderedFrameCount, (int) Memory.ROMFramesPerSecond);
-#endif
-
-	S9xDisplayString(string, 1, IPPU.RenderedScreenWidth - (font_width - 1) * len - 1, false);
-}
-
-static void DisplayPressedKeys (void)
-{
-	static unsigned char	KeyMap[]   = { '0', '1', '2', 'R', 'L', 'X', 'A', 225, 224, 227, 226, 'S', 's', 'Y', 'B' };
-	static int		KeyOrder[] = { 8, 10, 7, 9, 0, 6, 14, 13, 5, 1, 4, 3, 2, 11, 12 }; // < ^ > v   A B Y X  L R  S s
-
-	enum controllers	controller;
-    int					line = Settings.DisplayMovieFrame && S9xMovieActive() ? 2 : 1;
-	int8				ids[4];
-	char				string[255];
-
-	for (int port = 0; port < 2; port++)
-	{
-		S9xGetController(port, &controller, &ids[0], &ids[1], &ids[2], &ids[3]);
-
-		switch (controller)
-		{
-			case CTL_MOUSE:
-			{
-				uint8 buf[5];
-				if (!MovieGetMouse(port, buf))
-					break;
-				int16 x = READ_WORD(buf);
-				int16 y = READ_WORD(buf + 2);
-				uint8 buttons = buf[4];
-				sprintf(string, "#%d %d: (%03d,%03d) %c%c", port + 1, ids[0] + 1, x, y,
-						(buttons & 0x40) ? 'L' : ' ', (buttons & 0x80) ? 'R' : ' ');
-				S9xDisplayStringType(string, line++, 1, false, S9X_PRESSED_KEYS_INFO);
-				break;
-			}
-
-			case CTL_SUPERSCOPE:
-			{
-				uint8 buf[6];
-				if (!MovieGetScope(port, buf))
-					break;
-				int16 x = READ_WORD(buf);
-				int16 y = READ_WORD(buf + 2);
-				uint8 buttons = buf[4];
-				sprintf(string, "#%d %d: (%03d,%03d) %c%c%c%c", port + 1, ids[0] + 1, x, y,
-						(buttons & 0x80) ? 'F' : ' ', (buttons & 0x40) ? 'C' : ' ',
-						(buttons & 0x20) ? 'T' : ' ', (buttons & 0x10) ? 'P' : ' ');
-				S9xDisplayStringType(string, line++, 1, false, S9X_PRESSED_KEYS_INFO);
-				break;
-			}
-
-			case CTL_JUSTIFIER:
-			{
-				uint8 buf[11];
-				if (!MovieGetJustifier(port, buf))
-					break;
-				int16 x1 = READ_WORD(buf);
-				int16 x2 = READ_WORD(buf + 2);
-				int16 y1 = READ_WORD(buf + 4);
-				int16 y2 = READ_WORD(buf + 6);
-				uint8 buttons = buf[8];
-				bool8 offscreen1 = buf[9];
-				bool8 offscreen2 = buf[10];
-				sprintf(string, "#%d %d: (%03d,%03d) %c%c%c / (%03d,%03d) %c%c%c", port + 1, ids[0] + 1,
-						x1, y1, (buttons & 0x80) ? 'T' : ' ', (buttons & 0x20) ? 'S' : ' ', offscreen1 ? 'O' : ' ',
-						x2, y2, (buttons & 0x40) ? 'T' : ' ', (buttons & 0x10) ? 'S' : ' ', offscreen2 ? 'O' : ' ');
-				S9xDisplayStringType(string, line++, 1, false, S9X_PRESSED_KEYS_INFO);
-				break;
-			}
-
-			case CTL_JOYPAD:
-			{
-				sprintf(string, "#%d %d:                  ", port + 1, ids[0] + 1);
-				uint16 pad = MovieGetJoypad(ids[0]);
-				for (int i = 0; i < 15; i++)
-				{
-					int j = KeyOrder[i];
-					int mask = (1 << (j + 1));
-					string[6 + i]= (pad & mask) ? KeyMap[j] : ' ';
-				}
-
-				S9xDisplayStringType(string, line++, 1, false, S9X_PRESSED_KEYS_INFO);
-				break;
-			}
-
-			case CTL_MP5:
-			{
-				for (int n = 0; n < 4; n++)
-				{
-					if (ids[n] != -1)
-					{
-						sprintf(string, "#%d %d:                  ", port + 1, ids[n] + 1);
-						uint16 pad = MovieGetJoypad(ids[n]);
-						for (int i = 0; i < 15; i++)
-						{
-							int j = KeyOrder[i];
-							int mask = (1 << (j + 1));
-							string[6 + i]= (pad & mask) ? KeyMap[j] : ' ';
-						}
-
-						S9xDisplayStringType(string, line++, 1, false, S9X_PRESSED_KEYS_INFO);
-					}
-				}
-
-				break;
-			}
-
-			case CTL_MACSRIFLE:
-			{
-				/*
-				uint8 buf[6], *p = buf;
-				MovieGetScope(port, buf);
-				int16 x = READ_WORD(p);
-				int16 y = READ_WORD(p + 2);
-				uint8 buttons = buf[4];
-				sprintf(string, "#%d %d: (%03d,%03d) %c%c%c%c", port, ids[0], x, y,
-						(buttons & 0x80) ? 'F' : ' ', (buttons & 0x40) ? 'C' : ' ',
-						(buttons & 0x20) ? 'T' : ' ', (buttons & 0x10) ? 'P' : ' ');
-				S9xDisplayString(string, line++, 1, false);
-				*/
-				break;
-			}
-
-			case CTL_NONE:
-			{
-				// Display Nothing
-				break;
-			}
-		}
-	}
-}
-
-static void DisplayWatchedAddresses (void)
-{
-	for (unsigned int i = 0; i < sizeof(watches) / sizeof(watches[0]); i++)
-	{
-		if (!watches[i].on)
-			break;
-
-		int32	displayNumber = 0;
-		char	buf[64];
-
-		for (int r = 0; r < watches[i].size; r++)
-			displayNumber += (Cheat.CWatchRAM[(watches[i].address - 0x7E0000) + r]) << (8 * r);
-
-		if (watches[i].format == 1)
-			sprintf(buf, "%s,%du = %u", watches[i].desc, watches[i].size, (unsigned int) displayNumber);
-		else
-		if (watches[i].format == 3)
-			sprintf(buf, "%s,%dx = %X", watches[i].desc, watches[i].size, (unsigned int) displayNumber);
-		else // signed
-		{
-			if (watches[i].size == 1)
-				displayNumber = (int32) ((int8)  displayNumber);
-			else if (watches[i].size == 2)
-				displayNumber = (int32) ((int16) displayNumber);
-			else if (watches[i].size == 3)
-				if (displayNumber >= 8388608)
-					displayNumber -= 16777216;
-
-			sprintf(buf, "%s,%ds = %d", watches[i].desc, watches[i].size, (int) displayNumber);
-		}
-
-		S9xDisplayString(buf, 6 + i, 1, false);
-	}
-}
-
-void S9xDisplayMessages (uint16 *screen, int ppl, int width, int height, int scale)
-{
-	if (Settings.DisplayTime)
-		DisplayTime();
-
-	if (Settings.DisplayFrameRate)
-		DisplayFrameRate();
-
-	if (Settings.DisplayWatchedAddresses)
-		DisplayWatchedAddresses();
-
-	if (Settings.DisplayPressedKeys)
-		DisplayPressedKeys();
-
-	if (Settings.DisplayMovieFrame && S9xMovieActive())
-		S9xDisplayString(GFX.FrameDisplayString, 1, 1, false);
-
-	if (!GFX.InfoString.empty())
-		S9xDisplayString(GFX.InfoString.c_str(), 5, 1, true);
 }
 
 static uint16 get_crosshair_color (uint8 color)
@@ -2149,7 +1801,8 @@ void S9xDrawCrosshair (const char *crosshair, uint8 fgcolor, uint8 bgcolor, int1
 	x -= 7;
 	y -= 7;
 
-	if (IPPU.DoubleWidthPixels)  { cx = 2; x *= 2; W *= 2; }
+	if (IPPU.QuadWidthPixels)         { cx = 4; x *= 4; W *= 4; }
+	else if (IPPU.DoubleWidthPixels)  { cx = 2; x *= 2; W *= 2; }
 	if (IPPU.DoubleHeightPixels) { rx = 2; y *= 2; H *= 2; }
 
 	fg = get_crosshair_color(fgcolor);

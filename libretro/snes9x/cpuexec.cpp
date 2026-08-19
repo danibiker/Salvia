@@ -10,8 +10,10 @@
 #include "dma.h"
 #include "apu/apu.h"
 #include "fxemu.h"
+#include "srtc.h"
+#include "spc7110.h"
+#include "bsflash.h"
 #include "snapshot.h"
-#include "movie.h"
 #ifdef _XBOX
 #include <ppcintrinsics.h>
 #endif
@@ -42,7 +44,6 @@ void S9xMainLoop (void)
 	if (CPU.Flags & SCAN_KEYS_FLAG)
 	{
 		CPU.Flags &= ~SCAN_KEYS_FLAG;
-		S9xMovieUpdate();
 	}
 
 	for (;;)
@@ -146,11 +147,13 @@ void S9xMainLoop (void)
 			Op = CPU.PCBase[Registers.PCw];
 			CPU.Cycles += CPU.MemSpeed;
 			Opcodes = ICPU.S9xOpcodes;
-#ifdef _XBOX
-			// Prefetch: siguiente byte de instruccion y entrada de tabla de opcodes
-			__dcbt(0, &CPU.PCBase[Registers.PCw + 1]);
-			__dcbt(0, &Opcodes[Op]);
-#endif
+
+			if (CPU.Cycles > 1000000)
+			{
+				CPU.Flags |= HALTED_FLAG;
+				S9xMessage(S9X_FATAL_ERROR, 0, "CPU is deadlocked");
+				return;
+			}
 		}
 		else
 		{
@@ -255,20 +258,25 @@ void S9xDoHEventProcessing (void)
 			break;
 
 		case HC_HCOUNTER_MAX_EVENT:
-			// Deadlock check: movido aqui desde el inner loop para evitar un branch por instruccion
-			if (CPU.Cycles > 1000000)
-			{
-				Settings.StopEmulation = true;
-				CPU.Flags |= HALTED_FLAG;
-				S9xMessage(S9X_FATAL_ERROR, 0, "CPU is deadlocked");
-				return;
-			}
+			if (Settings.SRTC)
+				S9xSRTCTick();
+			if (Settings.SPC7110RTC)
+				S9xSPC7110RTCTick();
+			if (Settings.BS)
+				S9xBSFlashTick();
 
 			if (Settings.SuperFX)
 			{
-				if (!SuperFX.oneLineDone)
+				// The ported GSU core does not gate internally; run only
+				// with GO set and a bus grant, as the snes9x2010 call
+				// sites do (see CHECK_EXEC_SUPERFX).
+				if (!SuperFX.oneLineDone && CHECK_EXEC_SUPERFX())
 					S9xSuperFXExec();
 				SuperFX.oneLineDone = FALSE;
+				// Ticks every line, whether or not the GSU ran; see the
+				// comment on the function for why it cannot live in the
+				// exec above.  No-op unless fx_cel_delay is set (FX SKIING only).
+				S9xSuperFXCelDelayTick();
 			}
 
 			S9xAPUEndScanline();

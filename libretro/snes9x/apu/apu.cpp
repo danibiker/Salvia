@@ -11,22 +11,22 @@
 #include "../msu1.h"
 #include "../snapshot.h"
 #include "../display.h"
-#include "resampler.h"
 
 #include "bapu/snes/snes.hpp"
 
-static const int APU_DEFAULT_INPUT_RATE = 31950; // ~59.94Hz
 static const int APU_SAMPLE_BLOCK       = 48;
 static const int APU_NUMERATOR_NTSC     = 15664;
 static const int APU_DENOMINATOR_NTSC   = 328125;
 static const int APU_NUMERATOR_PAL      = 34176;
 static const int APU_DENOMINATOR_PAL    = 709379;
 
-// Max number of samples we'll ever generate before call to port API and
-// moving the samples to the resampler.
-// This is 535 sample frames, which corresponds to 1 video frame + some leeway
-// for use with SoundSync, multiplied by 2, for left and right samples.
-static const int MINIMUM_BUFFER_SIZE = 550 * 2;
+/* The DSP writes stereo pairs straight into this buffer across a frame, and
+   S9xDrainAudio hands the caller a pointer to them at end of frame. One NTSC
+   frame is ~534 stereo frames and one PAL frame ~641; 2048 leaves room for
+   the APU speedup hack and for a frontend that runs a long frame without
+   draining. */
+static const int LANDING_BUFFER_FRAMES = 2048;
+static int16 landing_buffer[LANDING_BUFFER_FRAMES * 2];
 
 namespace SNES {
 #include "bapu/dsp/blargg_endian.h"
@@ -40,8 +40,6 @@ static void *callback_data = NULL;
 static bool8 sound_in_sync = true;
 static bool8 sound_enabled = false;
 
-static Resampler resampler;
-
 static int32 reference_time;
 static uint32 remainder;
 
@@ -52,77 +50,54 @@ static int timing_hack_denominator = 256;
 static uint32 ratio_numerator = APU_NUMERATOR_NTSC;
 static uint32 ratio_denominator = APU_DENOMINATOR_NTSC;
 
-static double dynamic_rate_multiplier = 1.0;
 } // namespace spc
 
-namespace msu {
-// Always 16-bit, Stereo; 1.5x dsp buffer to never overflow
-static Resampler resampler;
-	// ANTES:
-    // static std::vector<int16_t> resampler_buffer;
-
-    // DESPUÉS: raw pointer gestionado explícitamente
-    static int16_t *resampler_buffer     = NULL;
-    static int      resampler_buffer_cap = 0;
-} // namespace msu
-
-static void UpdatePlaybackRate(void);
-static void SPCSnapshotCallback(void);
 static inline int S9xAPUGetClock(int32);
 static inline int S9xAPUGetClockRemainder(int32);
 
-bool8 S9xMixSamples(uint8 *dest, int sample_count)
+/* Hand the caller this frame's samples and reset the DSP cursor.
+ *
+ * Zero-copy: the pointer goes straight into the frontend's audio callback.
+ * That callback is synchronous - it queues into the frontend's own buffer
+ * before returning - and the DSP cannot run between the cursor reset here and
+ * the callback's read, because DSP catch-up only happens inside
+ * S9xAPUExecute, which the port does not call while uploading. So the data
+ * stays intact for exactly as long as it needs to.
+ *
+ * No internal resampler and no per-frame sample-count alignment: whatever the
+ * DSP produced this frame is what the frontend gets, and the frontend's own
+ * resampler plus dynamic rate control absorb the per-frame variation, which
+ * is what DRC is for. */
+const int16 * S9xDrainAudio(int *sample_count)
 {
-    int16 *out = (int16 *)dest;
+    int count = SNES::dsp.spc_dsp.sample_count();
 
-    if (Settings.Mute)
-    {
-        memset(out, 0, sample_count << 1);
-        S9xClearSamples();
-        spc::sound_in_sync = true;
-        return true;
-    }
+    if (count > LANDING_BUFFER_FRAMES * 2)
+        count = LANDING_BUFFER_FRAMES * 2;
 
-    if (spc::resampler.avail() < sample_count)
-    {
-        memset(out, 0, sample_count << 1);
-        return false;
-    }
+    *sample_count = count;
 
-    spc::resampler.read((short *)out, sample_count);
+    SNES::dsp.spc_dsp.set_output(landing_buffer, LANDING_BUFFER_FRAMES * 2);
 
-    if (Settings.MSU1)
-    {
-        // DESPUÉS:
-		if (msu::resampler_buffer_cap < sample_count)
-		{
-			delete[] msu::resampler_buffer;
-			msu::resampler_buffer     = new int16_t[sample_count];
-			msu::resampler_buffer_cap = sample_count;
-		}
-		msu::resampler.read(msu::resampler_buffer, sample_count);
-        for (int i = 0; i < sample_count; ++i)
-        {
-            int32 mixed = (int32)out[i] + msu::resampler_buffer[i];
-            out[i] = ((int16)mixed != mixed) ? (mixed >> 31) ^ 0x7fff : mixed;
-        }
-    }
+    spc::sound_in_sync = true;
 
-    if (spc::resampler.space_empty() >= 1024 * 2 || !Settings.SoundSync ||
-        Settings.TurboMode || Settings.Mute)
-        spc::sound_in_sync = true;
-    else
-        spc::sound_in_sync = false;
-
-    return true;
+    return landing_buffer;
 }
 
 int S9xGetSampleCount(void)
 {
-	int avail = spc::resampler.avail();
-	if (Settings.MSU1) // return minimum available samples, otherwise we can run into the assert above due to partial sample generation in msu1
-		avail = Resampler::min(avail, msu::resampler.avail());
-    return avail;
+    return SNES::dsp.spc_dsp.sample_count();
+}
+
+/* The rate the DSP actually emits at, which is what the frontend must be told
+   now that the core no longer resamples. 32040 Hz, scaled by the APU speedup
+   hack. Integer round-to-nearest: 32040 * 256 fits in 32 bits and the
+   denominator is 1..256, so this is exact and keeps the audio path free of
+   floating point. */
+uint32 S9xGetAudioSampleRate(void)
+{
+    unsigned denom = (unsigned) spc::timing_hack_denominator;
+    return (uint32) (((unsigned) (32040 * 256) + denom / 2) / denom);
 }
 
 void S9xLandSamples(void)
@@ -130,28 +105,12 @@ void S9xLandSamples(void)
     if (spc::callback != NULL)
         spc::callback(spc::callback_data);
 
-    if (spc::resampler.space_empty() >= 1024 * 2 || !Settings.SoundSync ||
-        Settings.TurboMode || Settings.Mute)
-        spc::sound_in_sync = true;
-    else
-        spc::sound_in_sync = false;
+    spc::sound_in_sync = true;
 }
 
 void S9xClearSamples(void)
 {
-    spc::resampler.clear();
-    if (Settings.MSU1)
-        msu::resampler.clear();
-}
-
-bool8 S9xSyncSound(void)
-{
-    if (!Settings.SoundSync || spc::sound_in_sync)
-        return true;
-
-    S9xLandSamples();
-
-    return (spc::sound_in_sync);
+    SNES::dsp.spc_dsp.set_output(landing_buffer, LANDING_BUFFER_FRAMES * 2);
 }
 
 void S9xSetSamplesAvailableCallback(apu_callback callback, void *data)
@@ -160,53 +119,13 @@ void S9xSetSamplesAvailableCallback(apu_callback callback, void *data)
     spc::callback_data = data;
 }
 
-void S9xUpdateDynamicRate(int avail, int buffer_size)
-{
-    spc::dynamic_rate_multiplier = 1.0 + (Settings.DynamicRateLimit * (buffer_size - 2 * avail)) /
-                                             (double)(1000 * buffer_size);
-
-    UpdatePlaybackRate();
-}
-
-static void UpdatePlaybackRate(void)
-{
-    if (Settings.SoundInputRate == 0)
-        Settings.SoundInputRate = APU_DEFAULT_INPUT_RATE;
-
-    double time_ratio = (double)Settings.SoundInputRate * spc::timing_hack_numerator / (Settings.SoundPlaybackRate * spc::timing_hack_denominator);
-
-    if (Settings.DynamicRateControl)
-    {
-        time_ratio *= spc::dynamic_rate_multiplier;
-    }
-
-    spc::resampler.time_ratio(time_ratio);
-
-    if (Settings.MSU1)
-    {
-        time_ratio = time_ratio * 44100 / 32040;
-        msu::resampler.time_ratio(time_ratio);
-    }
-}
-
 bool8 S9xInitSound(int buffer_ms)
 {
-    // The resampler and spc unit use samples (16-bit short) as arguments.
-    int buffer_size_samples = MINIMUM_BUFFER_SIZE;
-    int requested_buffer_size_samples = Settings.SoundPlaybackRate * buffer_ms * 2 / 1000;
+    (void) buffer_ms;
 
-    if (requested_buffer_size_samples > buffer_size_samples)
-        buffer_size_samples = requested_buffer_size_samples;
+    SNES::dsp.spc_dsp.set_output(landing_buffer, LANDING_BUFFER_FRAMES * 2);
 
-    spc::resampler.resize(buffer_size_samples);
-    msu::resampler.resize(buffer_size_samples * 3 / 2);
-
-    SNES::dsp.spc_dsp.set_output(&spc::resampler);
-    S9xMSU1SetOutput(&msu::resampler);
-
-    UpdatePlaybackRate();
-
-    spc::sound_enabled = S9xOpenSoundDevice();
+    spc::sound_enabled = true;
 
     return (spc::sound_enabled);
 }
@@ -223,21 +142,9 @@ void S9xSetSoundMute(bool8 mute)
         Settings.Mute = true;
 }
 
-void S9xDumpSPCSnapshot(void)
-{
-    SNES::dsp.spc_dsp.dump_spc_snapshot();
-}
-
-static void SPCSnapshotCallback(void)
-{
-    S9xSPCDump(S9xGetFilenameInc((".spc"), SPC_DIR).c_str());
-    printf("Dumped key-on triggered spc snapshot.\n");
-}
-
 bool8 S9xInitAPU(void)
 {
-    spc::resampler.clear();
-    msu::resampler.clear();
+    S9xClearSamples();
 
     return true;
 }
@@ -245,11 +152,6 @@ bool8 S9xInitAPU(void)
 void S9xDeinitAPU(void)
 {
     S9xMSU1DeInit();
-    // ANTES: msu::resampler_buffer.clear();
-    // DESPUÉS:
-    delete[] msu::resampler_buffer;
-    msu::resampler_buffer     = NULL;
-    msu::resampler_buffer_cap = 0;
 }
 
 static inline int S9xAPUGetClock(int32 cpucycles)
@@ -296,7 +198,7 @@ void S9xAPUEndScanline(void)
     S9xAPUExecute();
     SNES::dsp.synchronize();
 
-    if (spc::resampler.space_filled() >= APU_SAMPLE_BLOCK)
+    if (SNES::dsp.spc_dsp.sample_count() >= APU_SAMPLE_BLOCK)
         S9xLandSamples();
 }
 
@@ -310,8 +212,6 @@ void S9xAPUTimingSetSpeedup(int ticks)
     spc::ratio_numerator = Settings.PAL ? APU_NUMERATOR_PAL : APU_NUMERATOR_NTSC;
     spc::ratio_denominator = Settings.PAL ? APU_DENOMINATOR_PAL : APU_DENOMINATOR_NTSC;
     spc::ratio_denominator = spc::ratio_denominator * spc::timing_hack_denominator / spc::timing_hack_numerator;
-
-    UpdatePlaybackRate();
 }
 
 void S9xResetAPU(void)
@@ -322,7 +222,6 @@ void S9xResetAPU(void)
     SNES::cpu.reset();
     SNES::smp.power();
     SNES::dsp.power();
-    SNES::dsp.spc_dsp.set_spc_snapshot_callback(SPCSnapshotCallback);
 
     S9xClearSamples();
 }
@@ -481,32 +380,4 @@ void S9xAPULoadBlarggState(uint8 *oldblock)
 
     // blargg stores CPUIx in regs_in
     memcpy(SNES::cpu.registers, regs_in + 4, 4);
-}
-
-bool8 S9xSPCDump(const char *filename)
-{
-    FILE *fs;
-    uint8 buf[SPC_FILE_SIZE];
-    size_t ignore;
-
-    fs = fopen(filename, "wb");
-    if (!fs)
-        return false;
-
-    S9xSetSoundMute(true);
-
-    SNES::smp.save_spc(buf);
-
-    ignore = fwrite(buf, SPC_FILE_SIZE, 1, fs);
-
-    if (ignore == 0)
-    {
-        fprintf(stderr, "Couldn't write file %s.\n", filename);
-    }
-
-    fclose(fs);
-
-    S9xSetSoundMute(false);
-
-    return true;
 }

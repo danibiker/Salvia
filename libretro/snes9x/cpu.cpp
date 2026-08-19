@@ -96,7 +96,6 @@ static void S9xSoftResetCPU (void)
 
 void S9xReset (void)
 {
-	S9xResetSaveTimer(FALSE);
 
 	memset(Memory.RAM, 0x55, sizeof(Memory.RAM));
 	memset(Memory.VRAM, 0x00, sizeof(Memory.VRAM));
@@ -107,7 +106,7 @@ void S9xReset (void)
 	S9xResetPPU();
 	S9xResetDMA();
 	S9xResetAPU();
-    S9xResetMSU();
+    S9xResetMSU1();
 
 	if (Settings.DSP)
 		S9xResetDSP();
@@ -133,7 +132,6 @@ void S9xReset (void)
 
 void S9xSoftReset (void)
 {
-	S9xResetSaveTimer(FALSE);
 
 	memset(Memory.FillRAM, 0, 0x8000);
 
@@ -144,7 +142,7 @@ void S9xSoftReset (void)
 	S9xSoftResetPPU();
 	S9xResetDMA();
 	S9xSoftResetAPU();
-    S9xResetMSU();
+    S9xResetMSU1();
 
 	if (Settings.DSP)
 		S9xResetDSP();
@@ -166,4 +164,14 @@ void S9xSoftReset (void)
 		S9xMSU1Init();
 
 	S9xInitCheatData();
+}
+
+extern "C" void S9xSuperFXIRQHook (void)
+{
+	CPU.IRQExternal = TRUE;
+}
+
+extern "C" void S9xSuperFXIRQClearHook (void)
+{
+	CPU.IRQExternal = FALSE;
 }

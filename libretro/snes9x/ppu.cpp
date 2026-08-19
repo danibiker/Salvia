@@ -12,11 +12,7 @@
 #include "sdd1.h"
 #include "srtc.h"
 #include "controls.h"
-#include "movie.h"
 #include "display.h"
-#ifdef NETPLAY_SUPPORT
-#include "netplay.h"
-#endif
 #ifdef DEBUGGER
 #include "debug.h"
 #include "missing.h"
@@ -1676,6 +1672,15 @@ uint8 S9xGetCPU (uint16 Address)
 				return ((byte & 0x80) | (OpenBus & 0x70) | Model->_5A22);
 
 			case 0x4211: // TIMEUP
+				// The main loop only latches CPU.IRQLine at opcode boundaries, so a $4211 read landing after the
+				// H/V-timer trigger cycle but before that boundary would miss the IRQ; latch it here as hardware would
+				// (Traverse: Starlight & Prairie polls $4210 as a 16-bit read and waits on this flag in bit 15).
+				if (!CPU.IRQLine && Timings.NextIRQTimer != 0x0fffffff &&
+					CPU.Cycles >= Timings.NextIRQTimer)
+				{
+					S9xUpdateIRQPositions(false);
+					CPU.IRQLine = TRUE;
+				}
 				byte = 0;
 				if (CPU.IRQLine)
 				{
@@ -1747,6 +1752,100 @@ void S9xResetPPUFast (void)
 	memset(IPPU.TileCached[TILE_2BIT_ODD], 0, MAX_2BIT_TILES);
 	memset(IPPU.TileCached[TILE_4BIT_EVEN], 0, MAX_4BIT_TILES);
 	memset(IPPU.TileCached[TILE_4BIT_ODD], 0, MAX_4BIT_TILES);
+}
+
+void S9xMode7VertResample (void)
+{
+	int32 y, m7_start;
+	uint32 ppl;
+	uint32 width;
+
+	if (IPPU.M7VertStartY < 0)
+		return;
+
+	/* (snes9x2010 aborts its software-framebuffer hook here; this port
+	   has no such hook -- GFX.Screen is always the persistent buffer,
+	   sized MAX_SNES_WIDTH_4X x (MAX_SNES_HEIGHT + 64).) */
+	m7_start = IPPU.M7VertStartY;
+	ppl      = GFX.PPL;
+	width    = IPPU.RenderedScreenWidth;
+
+	/* An interlaced frame is already two fields tall: the renderer writes
+	   PPU.ScreenHeight rows at twice the normal stride, so the frame
+	   already occupies 2 * PPU.ScreenHeight physical rows. Doubling again
+	   here would need four times the height - 956 rows at 239-line
+	   overscan against the 510 the buffer holds - and the bottom-up walk
+	   writes those rows before anything notices, roughly 850 KB past the
+	   end of GFXScreenBuffer and straight through whatever the allocator
+	   put after it. Interlace already provides the vertical resolution
+	   this pass exists to synthesise, so skip it. */
+	if (ppl != (uint32) GFX.RealPPL)
+		return;
+
+	/* Backstop for any future path that arms the pass with a taller frame
+	   or a wider stride: refuse rather than write past the buffer. The
+	   usable region below GFX.Screen is (MAX_SNES_HEIGHT + 32) rows of
+	   RealPPL, the 64 rows of slack in GFXScreenBuffer less the 32-row
+	   offset GFX.Screen sits at. */
+	{
+		uint32 max_rows = ((uint32) GFX.RealPPL * (MAX_SNES_HEIGHT + 32)) / ppl;
+
+		if ((uint32) PPU.ScreenHeight * 2 > max_rows)
+			return;
+	}
+
+	/* Bottom-up walk over the original PPU.ScreenHeight rows. */
+	for (y = (int32)PPU.ScreenHeight - 1; y >= 0; y--)
+	{
+		uint16 *src      = GFX.Screen + (uint32)y * ppl;
+		uint16 *dst_even = GFX.Screen + (uint32)(2 * y    ) * ppl;
+		uint16 *dst_odd  = GFX.Screen + (uint32)(2 * y + 1) * ppl;
+
+		if (y >= m7_start && y + 1 < (int32)PPU.ScreenHeight)
+		{
+			/* M7 plane: bilinear-Y. dst_even = src; dst_odd =
+			 * (src + src_below) / 2 per channel. RGB565 is unpacked
+			 * with a fast trick: average packed values by taking the
+			 * low bits separately to avoid cross-channel carry. */
+			uint16 *src_below = GFX.Screen + (uint32)(y + 1) * ppl;
+			uint32 x;
+			for (x = 0; x < width; x++)
+			{
+				uint16 a = src[x];
+				uint16 b = src_below[x];
+				/* Blend each channel of RGB565 independently
+				 * with the same overflow-safe, floor-exact
+				 * halving-add identity used by the tile
+				 * compositor (src/tile.c tile_color_add_half)
+				 * and the pseudo-hires post-pass in libretro.c:
+				 *   ((a & 0xF7DE) >> 1) + ((b & 0xF7DE) >> 1)
+				 *   + (a & b & 0x0821)
+				 * The final term restores the per-channel low
+				 * bit that both operands share, making the
+				 * result bit-exact to per-channel
+				 * floor((ca + cb) / 2). Without it the red and
+				 * blue LSBs (bits 11 and 0; green's field LSB is
+				 * always 0 here) are dropped whenever both source
+				 * pixels are odd, biasing interpolated Mode 7
+				 * scanlines one level dark. */
+				uint16 blend = ((a & 0xF7DE) >> 1) + ((b & 0xF7DE) >> 1)
+				               + (a & b & 0x0821);
+				dst_odd[x]  = blend;
+			}
+			memmove(dst_even, src, width * sizeof(uint16));
+		}
+		else
+		{
+			/* HUD region or last M7 row: row replication. memcpy is
+			 * safe for dst_odd (no overlap with src for y >= 1; for
+			 * y = 0 dst_odd row 1 doesn't overlap src row 0). memmove
+			 * for dst_even because dst_even == src when y == 0. */
+			memcpy (dst_odd,  src, width * sizeof(uint16));
+			memmove(dst_even, src, width * sizeof(uint16));
+		}
+	}
+
+	IPPU.RenderedScreenHeight = PPU.ScreenHeight * 2;
 }
 
 void S9xSoftResetPPU (void)

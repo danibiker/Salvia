@@ -68,18 +68,6 @@ static BOOST::uint8_t const initial_regs [SPC_DSP::register_count] =
 	out += 2;\
 }
 
-#define SPC_DSP_OUT_HOOK(l, r)  \
-    {                           \
-        resampler->push_sample(l, r);  \
-        if (Settings.MSU1)      \
-            S9xMSU1Generate(2); \
-    }
-
-void SPC_DSP::set_output( Resampler *resampler )
-{
-	this->resampler = resampler;
-}
-
 void SPC_DSP::set_output( sample_t* out, int size )
 {
 	require( (size & 1) == 0 ); // must be even
@@ -673,7 +661,9 @@ inline void SPC_DSP::decode_brr( voice_t* v )
 		// Shift sample based on header
 		int const shift = header >> 4;
 		if (shift <= 12)
-			s = (s << shift) >> 1;
+			/* s is signed and routinely negative here; shifting it left
+			   is undefined, so do the shift in unsigned and come back. */
+			s = (int) ((unsigned) s << shift) >> 1;
 		else
 			s &= ~0x7ff;
 
@@ -864,13 +854,10 @@ inline void SPC_DSP::voice_output( voice_t const* v, int ch )
 	int amp = (m.t_output * (int8_t) VREG(v->regs,voll + ch)) >> 7;
 	amp *= ((stereo_switch & (1 << (v->voice_number + ch * voice_count))) ? 1 : 0);
 	
-	#ifdef __LIBRETRO__
 	// Apply user-set volume (if set)
+	// 16384 / 100 is approx 163.84.
 	if (Settings.ChannelsVolumePercent[v->voice_number] < 100)
-	{
-	    amp = amp * Settings.ChannelsVolumePercent[v->voice_number] / 100;
-	}
-	#endif
+		amp = (amp * Settings.ChannelsVolumePercent[v->voice_number] * 164) >> 14;
 	
 	// Add to output total
 	m.t_main_out [ch] += amp;
@@ -1081,13 +1068,20 @@ ECHO_CLOCK( 27 )
 	}
 
 	// Output sample to DAC
-	#ifdef SPC_DSP_OUT_HOOK
-		SPC_DSP_OUT_HOOK( l, r );
-	#else
+	{
+		/* Clamp to the end of the caller's buffer. A pathological long
+		   frame - Top Gear 3000 periodically emits ~2600 stereo samples in
+		   one frame, roughly 5x the ~530 nominal - can otherwise run the
+		   cursor past out_end and corrupt whatever follows the buffer.
+		   Dropping the overflow is inaudible, and the frontend's dynamic
+		   rate control absorbs the per-frame count variation. */
 		sample_t* out = m.out;
-		WRITE_SAMPLES( l, r, out );
-		m.out = out;
-	#endif
+		if ( out + 2 <= m.out_end )
+		{
+			WRITE_SAMPLES( l, r, out );
+			m.out = out;
+		}
+	}
 }
 ECHO_CLOCK( 28 )
 {
@@ -1177,6 +1171,15 @@ void SPC_DSP::run( int clocks_remain )
 {
 	require( clocks_remain > 0 );
 
+	/* The frontend has granted permission to skip audio work entirely for this
+	   frame and guaranteed the resulting state is thrown away or restored
+	   afterwards, so decline to advance the DSP at all: no voices, no echo
+	   writes, no phase. The output cursor therefore does not move,
+	   S9xDrainAudio reports nothing, and the libretro port uploads nothing.
+	   The caller zeroes its clock either way, so nothing accumulates. */
+	if ( Settings.HardDisableAudio )
+		return;
+
 	int const phase = m.phase;
 	m.phase = (phase + clocks_remain) & 31;
 	switch ( phase )
@@ -1253,6 +1256,8 @@ void SPC_DSP::load( uint8_t const regs [register_count] )
 {
 	memcpy( m.external_regs, regs, sizeof m.regs );
 	memset( m.regs, 0, sizeof m.regs);
+	m.regs[66] = 0x01;
+	m.regs[82] = 0x01;
 	m.regs[r_flg] = 0xE0;
 	memset( &m.regs [register_count], 0, offsetof (state_t,ram) - register_count );
 
