@@ -6,18 +6,18 @@
  * IN 'COPYING'. PLEASE READ THESE TERMS BEFORE DISTRIBUTING.       *
  *                                                                  *
  * THE OggVorbis SOURCE CODE IS (C) COPYRIGHT 1994-2015             *
- * by the Xiph.Org Foundation http://www.xiph.org/                  *
+ * by the Xiph.Org Foundation https://xiph.org/                     *
  *                                                                  *
  ********************************************************************
 
  function: PCM data vector blocking, windowing and dis/reassembly
- last mod: $Id: block.c 19457 2015-03-03 00:15:29Z giles $
 
  Handle windowing, overlap-add, etc of the PCM vectors.  This is made
  more amusing by Vorbis' current two allowed block sizes.
 
  ********************************************************************/
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ogg/ogg.h>
@@ -232,17 +232,11 @@ static int _vds_shared_init(vorbis_dsp_state *v,vorbis_info *vi,int encp){
     v->analysisp=1;
   }else{
     /* finish the codebooks */
-    if(!ci->fullbooks){
-      ci->fullbooks=_ogg_calloc(ci->books,sizeof(*ci->fullbooks));
-      for(i=0;i<ci->books;i++){
-        if(ci->book_param[i]==NULL)
-          goto abort_books;
-        if(vorbis_book_init_decode(ci->fullbooks+i,ci->book_param[i]))
-          goto abort_books;
-        /* decode codebooks are now standalone after init */
-        vorbis_staticbook_destroy(ci->book_param[i]);
-        ci->book_param[i]=NULL;
-      }
+    if(ci->decbooks==NULL)
+      goto abort_books;
+    for(i=0;i<ci->books;i++){
+      if(vorbis_book_init_decode(ci->decbooks+i))
+        goto abort_books;
     }
   }
 
@@ -286,6 +280,13 @@ static int _vds_shared_init(vorbis_dsp_state *v,vorbis_info *vi,int encp){
       vorbis_staticbook_destroy(ci->book_param[i]);
       ci->book_param[i]=NULL;
     }
+    if(ci->decbooks!=NULL){
+      vorbis_decbook_clear(ci->decbooks+i);
+    }
+  }
+  if(ci->decbooks!=NULL){
+    _ogg_free(ci->decbooks);
+    ci->decbooks=NULL;
   }
   vorbis_dsp_clear(v);
   return -1;
@@ -392,15 +393,18 @@ float **vorbis_analysis_buffer(vorbis_dsp_state *v, int vals){
   private_state *b=v->backend_state;
 
   /* free header, header1, header2 */
-  if(b->header)
-	  _ogg_free(b->header);
-  if(b->header1)
-	  _ogg_free(b->header1);
-  if(b->header2)
-	  _ogg_free(b->header2);
-  b->header  = NULL;
-  b->header1 = NULL;
-  b->header2 = NULL;
+  if(b->header) {
+    _ogg_free(b->header);
+    b->header=NULL;
+  }
+  if(b->header1) {
+    _ogg_free(b->header1);
+    b->header1=NULL;
+  }
+  if(b->header2) {
+    _ogg_free(b->header2);
+    b->header2=NULL;
+  }
 
   /* Do we have enough storage space for the requested buffer? If not,
      expand the PCM (and envelope) storage */
@@ -593,15 +597,19 @@ int vorbis_analysis_blockout(vorbis_dsp_state *v,vorbis_block *vb){
   if(v->W){
     if(!v->lW || !v->nW){
       vbi->blocktype=BLOCKTYPE_TRANSITION;
+      /*fprintf(stderr,"-");*/
     }else{
       vbi->blocktype=BLOCKTYPE_LONG;
+      /*fprintf(stderr,"_");*/
     }
   }else{
     if(_ve_envelope_mark(v)){
       vbi->blocktype=BLOCKTYPE_IMPULSE;
+      /*fprintf(stderr,"|");*/
 
     }else{
       vbi->blocktype=BLOCKTYPE_PADDING;
+      /*fprintf(stderr,".");*/
 
     }
   }

@@ -6,12 +6,11 @@
  * IN 'COPYING'. PLEASE READ THESE TERMS BEFORE DISTRIBUTING.       *
  *                                                                  *
  * THE OggVorbis SOURCE CODE IS (C) COPYRIGHT 1994-2015             *
- * by the Xiph.Org Foundation http://www.xiph.org/                  *
+ * by the Xiph.Org Foundation https://xiph.org/                     *
  *                                                                  *
  ********************************************************************
 
  function: maintain the info structure, info <-> header packets
- last mod: $Id: info.c 19441 2015-01-21 01:17:41Z xiphmont $
 
  ********************************************************************/
 
@@ -20,7 +19,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 #include <ogg/ogg.h>
 #include "vorbis/codec.h"
 #include "codec_internal.h"
@@ -31,8 +29,8 @@
 #include "misc.h"
 #include "os.h"
 
-#define GENERAL_VENDOR_STRING "Xiph.Org libVorbis 1.3.5"
-#define ENCODE_VENDOR_STRING "Xiph.Org libVorbis I 20150105 (⛄⛄⛄⛄)"
+#define GENERAL_VENDOR_STRING "Xiph.Org libVorbis 1.3.7"
+#define ENCODE_VENDOR_STRING "Xiph.Org libVorbis I 20200704 (Reducing Environment)"
 
 /* helpers */
 static void _v_writestring(oggpack_buffer *o,const char *s, int bytes){
@@ -46,6 +44,10 @@ static void _v_readstring(oggpack_buffer *o,char *buf,int bytes){
   while(bytes--){
     *buf++=oggpack_read(o,8);
   }
+}
+
+static int _v_toupper(int c) {
+  return (c >= 'a' && c <= 'z') ? (c & ~('a' - 'A')) : c;
 }
 
 void vorbis_comment_init(vorbis_comment *vc){
@@ -65,11 +67,13 @@ void vorbis_comment_add(vorbis_comment *vc,const char *comment){
 }
 
 void vorbis_comment_add_tag(vorbis_comment *vc, const char *tag, const char *contents){
-  char *comment=alloca(strlen(tag)+strlen(contents)+2); /* +2 for = and \0 */
+  /* Length for key and value +2 for = and \0 */
+  char *comment=_ogg_malloc(strlen(tag)+strlen(contents)+2);
   strcpy(comment, tag);
   strcat(comment, "=");
   strcat(comment, contents);
   vorbis_comment_add(vc, comment);
+  _ogg_free(comment);
 }
 
 /* This is more or less the same as strncasecmp - but that doesn't exist
@@ -77,7 +81,7 @@ void vorbis_comment_add_tag(vorbis_comment *vc, const char *tag, const char *con
 static int tagcompare(const char *s1, const char *s2, int n){
   int c=0;
   while(c < n){
-    if(toupper(s1[c]) != toupper(s2[c]))
+    if(_v_toupper(s1[c]) != _v_toupper(s2[c]))
       return !0;
     c++;
   }
@@ -88,27 +92,30 @@ char *vorbis_comment_query(vorbis_comment *vc, const char *tag, int count){
   long i;
   int found = 0;
   int taglen = strlen(tag)+1; /* +1 for the = we append */
-  char *fulltag = alloca(taglen+ 1);
+  char *fulltag = _ogg_malloc(taglen+1);
 
   strcpy(fulltag, tag);
   strcat(fulltag, "=");
 
   for(i=0;i<vc->comments;i++){
     if(!tagcompare(vc->user_comments[i], fulltag, taglen)){
-      if(count == found)
+      if(count == found) {
         /* We return a pointer to the data, not a copy */
-              return vc->user_comments[i] + taglen;
-      else
+        _ogg_free(fulltag);
+        return vc->user_comments[i] + taglen;
+      } else {
         found++;
+      }
     }
   }
+  _ogg_free(fulltag);
   return NULL; /* didn't find anything */
 }
 
 int vorbis_comment_query_count(vorbis_comment *vc, const char *tag){
   int i,count=0;
   int taglen = strlen(tag)+1; /* +1 for the = we append */
-  char *fulltag = alloca(taglen+1);
+  char *fulltag = _ogg_malloc(taglen+1);
   strcpy(fulltag,tag);
   strcat(fulltag, "=");
 
@@ -117,6 +124,7 @@ int vorbis_comment_query_count(vorbis_comment *vc, const char *tag){
       count++;
   }
 
+  _ogg_free(fulltag);
   return count;
 }
 
@@ -181,9 +189,13 @@ void vorbis_info_clear(vorbis_info *vi){
       }
       if(ci->fullbooks)
         vorbis_book_clear(ci->fullbooks+i);
+      if(ci->decbooks)
+        vorbis_decbook_clear(ci->decbooks+i);
     }
     if(ci->fullbooks)
         _ogg_free(ci->fullbooks);
+    if(ci->decbooks)
+      _ogg_free(ci->decbooks);
 
     for(i=0;i<ci->psys;i++)
       _vi_psy_free(ci->psy_param[i]);
@@ -198,6 +210,7 @@ void vorbis_info_clear(vorbis_info *vi){
 
 static int _vorbis_unpack_info(vorbis_info *vi,oggpack_buffer *opb){
   codec_setup_info     *ci=vi->codec_setup;
+  int bs;
   if(!ci)return(OV_EFAULT);
 
   vi->version=oggpack_read(opb,32);
@@ -206,12 +219,16 @@ static int _vorbis_unpack_info(vorbis_info *vi,oggpack_buffer *opb){
   vi->channels=oggpack_read(opb,8);
   vi->rate=oggpack_read(opb,32);
 
-  vi->bitrate_upper=oggpack_read(opb,32);
-  vi->bitrate_nominal=oggpack_read(opb,32);
-  vi->bitrate_lower=oggpack_read(opb,32);
+  vi->bitrate_upper=(ogg_int32_t)oggpack_read(opb,32);
+  vi->bitrate_nominal=(ogg_int32_t)oggpack_read(opb,32);
+  vi->bitrate_lower=(ogg_int32_t)oggpack_read(opb,32);
 
-  ci->blocksizes[0]=1<<oggpack_read(opb,4);
-  ci->blocksizes[1]=1<<oggpack_read(opb,4);
+  bs = oggpack_read(opb,4);
+  if(bs<0)goto err_out;
+  ci->blocksizes[0]=1<<bs;
+  bs = oggpack_read(opb,4);
+  if(bs<0)goto err_out;
+  ci->blocksizes[1]=1<<bs;
 
   if(vi->rate<1)goto err_out;
   if(vi->channels<1)goto err_out;
@@ -266,9 +283,10 @@ static int _vorbis_unpack_books(vorbis_info *vi,oggpack_buffer *opb){
   /* codebooks */
   ci->books=oggpack_read(opb,8)+1;
   if(ci->books<=0)goto err_out;
+  ci->decbooks=_ogg_calloc(ci->books,sizeof(*ci->decbooks));
+  if(ci->decbooks==NULL)goto err_out;
   for(i=0;i<ci->books;i++){
-    ci->book_param[i]=vorbis_staticbook_unpack(opb);
-    if(!ci->book_param[i])goto err_out;
+    if(vorbis_decbook_unpack(ci->decbooks+i,opb)<0)goto err_out;
   }
 
   /* time backend settings; hooks are unused */
@@ -583,7 +601,8 @@ int vorbis_analysis_headerout(vorbis_dsp_state *v,
   oggpack_buffer opb;
   private_state *b=v->backend_state;
 
-  if(!b||vi->channels<=0){
+  if(!b||vi->channels<=0||vi->channels>256){
+    b = NULL;
     ret=OV_EFAULT;
     goto err_out;
   }
@@ -642,7 +661,7 @@ int vorbis_analysis_headerout(vorbis_dsp_state *v,
   memset(op_code,0,sizeof(*op_code));
 
   if(b){
-    oggpack_writeclear(&opb);
+    if(vi->channels>0)oggpack_writeclear(&opb);
     if(b->header)_ogg_free(b->header);
     if(b->header1)_ogg_free(b->header1);
     if(b->header2)_ogg_free(b->header2);

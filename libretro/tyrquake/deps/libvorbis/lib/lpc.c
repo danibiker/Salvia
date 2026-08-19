@@ -6,12 +6,11 @@
  * IN 'COPYING'. PLEASE READ THESE TERMS BEFORE DISTRIBUTING.       *
  *                                                                  *
  * THE OggVorbis SOURCE CODE IS (C) COPYRIGHT 1994-2009             *
- * by the Xiph.Org Foundation http://www.xiph.org/                  *
+ * by the Xiph.Org Foundation https://xiph.org/                     *
  *                                                                  *
  ********************************************************************
 
   function: LPC low level routines
-  last mod: $Id: lpc.c 16227 2009-07-08 06:58:46Z xiphmont $
 
  ********************************************************************/
 
@@ -64,13 +63,6 @@ float vorbis_lpc_from_data(float *data,float *lpci,int n,int m){
   double error;
   double epsilon;
   int i,j;
-
-  /* libretro: GCC -Wmaybe-uninitialized cannot prove the loop below
-   * executes at least once (it would not, if a caller passed m == -1).
-   * Seed aut[0] so the read at "error=aut[0]..." is well-defined even
-   * in that pathological case. The loop overwrites aut[0] for any
-   * m >= 0, which is the only way this is actually called. */
-  aut[0] = 0;
 
   /* autocorrelation, p+1 lag coefficients */
   j=m+1;

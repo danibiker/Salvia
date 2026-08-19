@@ -6,12 +6,11 @@
  * IN 'COPYING'. PLEASE READ THESE TERMS BEFORE DISTRIBUTING.       *
  *                                                                  *
  * THE OggVorbis SOURCE CODE IS (C) COPYRIGHT 1994-2015             *
- * by the Xiph.Org Foundation http://www.xiph.org/                  *
+ * by the Xiph.Org Foundation https://xiph.org/                     *
  *                                                                  *
  ********************************************************************
 
  function: floor backend 1 implementation
- last mod: $Id: floor1.c 19457 2015-03-03 00:15:29Z giles $
 
  ********************************************************************/
 
@@ -26,6 +25,7 @@
 #include "misc.h"
 #include "scales.h"
 
+#include <stdio.h>
 
 #define floor1_rangedB 140 /* floor 1 fixed at -140dB to 0dB range */
 
@@ -61,6 +61,11 @@ static void floor1_free_info(vorbis_info_floor *i){
 static void floor1_free_look(vorbis_look_floor *i){
   vorbis_look_floor1 *look=(vorbis_look_floor1 *)i;
   if(look){
+    /*fprintf(stderr,"floor 1 bit usage %f:%f (%f total)\n",
+            (float)look->phrasebits/look->frames,
+            (float)look->postbits/look->frames,
+            (float)(look->postbits+look->phrasebits)/look->frames);*/
+
     memset(look,0,sizeof(*look));
     _ogg_free(look);
   }
@@ -812,7 +817,7 @@ int floor1_encode(oggpack_buffer *opb,vorbis_block *vb,
           if(val<-headroom)
             val=headroom-val-1;
           else
-            val=-1-(val<<1);
+            val=-1-(val*2);
         else
           if(val>=headroom)
             val= val+headroom;
@@ -874,6 +879,18 @@ int floor1_encode(oggpack_buffer *opb,vorbis_block *vb,
         /* write it */
         look->phrasebits+=
           vorbis_book_encode(books+info->class_book[class],cval,opb);
+
+#ifdef TRAIN_FLOOR1
+        {
+          FILE *of;
+          char buffer[80];
+          sprintf(buffer,"line_%dx%ld_class%d.vqd",
+                  vb->pcmend/2,posts-2,class);
+          of=fopen(buffer,"a");
+          fprintf(of,"%d\n",cval);
+          fclose(of);
+        }
+#endif
       }
 
       /* write post values */
@@ -884,6 +901,20 @@ int floor1_encode(oggpack_buffer *opb,vorbis_block *vb,
           if(out[j+k]<(books+book)->entries)
             look->postbits+=vorbis_book_encode(books+book,
                                                out[j+k],opb);
+          /*else
+            fprintf(stderr,"+!");*/
+
+#ifdef TRAIN_FLOOR1
+          {
+            FILE *of;
+            char buffer[80];
+            sprintf(buffer,"line_%dx%ld_%dsub%d.vqd",
+                    vb->pcmend/2,posts-2,class,bookas[k]);
+            of=fopen(buffer,"a");
+            fprintf(of,"%d\n",out[j+k]);
+            fclose(of);
+          }
+#endif
         }
       }
       j+=cdim;
@@ -927,7 +958,7 @@ static void *floor1_inverse1(vorbis_block *vb,vorbis_look_floor *in){
   codec_setup_info   *ci=vb->vd->vi->codec_setup;
 
   int i,j,k;
-  codebook *books=ci->fullbooks;
+  dec_codebook *books=ci->decbooks;
 
   /* unpack wrapped/predicted values from stream */
   if(oggpack_read(&vb->opb,1)==1){

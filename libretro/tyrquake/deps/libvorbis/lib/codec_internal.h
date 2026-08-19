@@ -6,12 +6,11 @@
  * IN 'COPYING'. PLEASE READ THESE TERMS BEFORE DISTRIBUTING.       *
  *                                                                  *
  * THE OggVorbis SOURCE CODE IS (C) COPYRIGHT 1994-2009             *
- * by the Xiph.Org Foundation http://www.xiph.org/                  *
+ * by the Xiph.Org Foundation https://xiph.org/                     *
  *                                                                  *
  ********************************************************************
 
  function: libvorbis codec headers
- last mod: $Id: codec_internal.h 16227 2009-07-08 06:58:46Z xiphmont $
 
  ********************************************************************/
 
@@ -119,6 +118,7 @@ typedef struct codec_setup_info {
   vorbis_info_residue    *residue_param[64];
   static_codebook        *book_param[256];
   codebook               *fullbooks;
+  dec_codebook           *decbooks;
 
   vorbis_info_psy        *psy_param[4]; /* encode only */
   vorbis_info_psy_global psy_g_param;
