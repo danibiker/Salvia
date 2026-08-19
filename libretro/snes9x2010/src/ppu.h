@@ -245,12 +245,12 @@
 #define MEM_CPU_JOYSER0 0x4016
 #define MEM_CPU_JOYSER1 0x4017
 #define MEM_CPU_NMITIMEN 0x4200
-#define MEM_CPU_JOY1L	0x4218 // JOY1L
-#define MEM_CPU_JOY1H	0x4219 // JOY1H
-#define MEM_CPU_JOY2L	0x421A // JOY2L
-#define MEM_CPU_JOY2H	0x421B // JOY2H
-#define MEM_CPU_JOY3L	0x421C // JOY3L
-#define MEM_CPU_JOY3H	0x421D // JOY3H
+#define MEM_CPU_JOY1L	0x4218 /* JOY1L */
+#define MEM_CPU_JOY1H	0x4219 /* JOY1H */
+#define MEM_CPU_JOY2L	0x421A /* JOY2L */
+#define MEM_CPU_JOY2H	0x421B /* JOY2H */
+#define MEM_CPU_JOY3L	0x421C /* JOY3L */
+#define MEM_CPU_JOY3H	0x421D /* JOY3H */
 #define MEM_CPU_JOY4L	0x421E
 #define MEM_CPU_JOY4H	0x421F
 
@@ -568,6 +568,7 @@ struct SLineMatrixData
 extern const uint8_t	mul_brightness[16][32];
 extern struct SBG	BG;
 extern struct SGFX	GFX;
+extern uint8_t brightness_cap[64];
 
 #define H_FLIP		0x4000
 #define V_FLIP		0x8000
@@ -578,11 +579,42 @@ extern struct SGFX	GFX;
 	((C2) & RGB_REMOVE_LOW_BITS_MASK)) >> 1) + \
 	((C1) & (C2) & RGB_LOW_BITS_MASK)) | ALPHA_BITS_MASK)
 
+/* Exact per-channel saturating RGB addition, transplanted from mainline
+ * snes9x's COLOR_ADD::fn with its RGB565 constants (5-bit lanes at bit
+ * 11 / 6 / 0, then the green top bit propagated into the extra low
+ * green bit). The previous form approximated the full-strength add
+ * through the X2 half-add table (halve, table-double), which loses the
+ * low bit per channel and saturates through the table instead of per
+ * channel; visible as off-by-one channels in additive color math.
+ * Expression macro with the same argument rules as COLOR_SUB below. */
+#define CADD_RB_MASK   ((0x1F << 11) | 0x1F)
+#define CADD_G_MASK    (0x1F << 6)
+#define CADD_RB_CARRY  ((0x20 << 11) | 0x20)
+#define CADD_G_CARRY   (0x20 << 6)
+#define COLOR_ADD_RAW(C1, C2) \
+	((uint16_t) ((((((C1) & CADD_RB_MASK) + ((C2) & CADD_RB_MASK)) & CADD_RB_MASK) \
+		| ((((C1) & CADD_G_MASK) + ((C2) & CADD_G_MASK)) & CADD_G_MASK)) \
+		| ((uint16_t) ((((((C1) & CADD_G_MASK) + ((C2) & CADD_G_MASK)) & CADD_G_CARRY) \
+			| ((((C1) & CADD_RB_MASK) + ((C2) & CADD_RB_MASK)) & CADD_RB_CARRY)) >> 5) * 0x1f)))
 #define COLOR_ADD(C1, C2) \
-	(GFX.X2[((((C1) & RGB_REMOVE_LOW_BITS_MASK) + \
-	((C2) & RGB_REMOVE_LOW_BITS_MASK)) >> 1) + \
-	((C1) & (C2) & RGB_LOW_BITS_MASK)] | \
-	(((C1) ^ (C2)) & RGB_LOW_BITS_MASK))
+	((uint16_t) (COLOR_ADD_RAW((C1), (C2)) | ((COLOR_ADD_RAW((C1), (C2)) & 0x0400) >> 5)))
+
+/* Brightness-capped additive math, from mainline snes9x. ScreenColors
+ * are pre-scaled by master brightness, so a plain saturating add clamps
+ * at 31 instead of at the brightness-scaled maximum; on hardware the
+ * math runs on raw CGRAM values and brightness is applied at the DAC
+ * (ares packs displayBrightness into the output and scales afterward).
+ * brightness_cap[] clamps each 5-bit channel sum to XB[0x1f]. Selected
+ * by S9xSelectTileRenderers when PPU.Brightness != 0xf. The half-add
+ * form is unaffected (halving cannot exceed the scaled maximum), so
+ * COLOR_ADD_BRIGHTNESS1_2 aliases COLOR_ADD1_2, and the token-pasted
+ * REGMATH/MATHS1_2 selectors work with Op = ADD_BRIGHTNESS unchanged. */
+#define COLOR_ADD_BRIGHTNESS(C1, C2) \
+	((uint16_t) (((uint16_t) brightness_cap[(((C1) >> 11) & 0x1f) + (((C2) >> 11) & 0x1f)] << 11) | \
+		((uint16_t) brightness_cap[(((C1) >>  6) & 0x1f) + (((C2) >>  6) & 0x1f)] <<  6) | \
+		(((uint16_t) brightness_cap[(((C1) >>  6) & 0x1f) + (((C2) >>  6) & 0x1f)] & 0x10) << 1) | \
+		((uint16_t) brightness_cap[ ((C1)        & 0x1f) + ( (C2)        & 0x1f)])))
+#define COLOR_ADD_BRIGHTNESS1_2(C1, C2) COLOR_ADD1_2((C1), (C2))
 
 #define COLOR_SUB1_2(C1, C2) \
 	GFX.ZERO[(((C1) | RGB_HI_BITS_MASKx2) - \
@@ -606,17 +638,21 @@ extern struct SGFX	GFX;
  * arguments here. (Left as a macro on purpose: it is instantiated
  * across many DrawTile* template variants and must inline at every
  * site.) */
+#define CSUB_RBMASK  (THIRD_COLOR_MASK | FIRST_COLOR_MASK)
+#define CSUB_RB(C1, C2) \
+	(((int) (((C1) & CSUB_RBMASK) | ((0x20 << 0) | (0x20 << 11)))) - \
+	 ((int) ((C2) & CSUB_RBMASK)))
+#define CSUB_G(C1, C2) \
+	(((int) (((C1) & SECOND_COLOR_MASK) | (0x20 << 6))) - \
+	 ((int) ((C2) & SECOND_COLOR_MASK)))
+#define CSUB_SAT(C1, C2) \
+	((((CSUB_G((C1), (C2)) & (0x20 << 6)) | \
+	   (CSUB_RB((C1), (C2)) & ((0x20 << 11) | (0x20 << 0)))) >> 5) * 0x1f)
+#define COLOR_SUB_RAW(C1, C2) \
+	((uint16_t) (((CSUB_RB((C1), (C2)) & CSUB_RBMASK) | \
+		(CSUB_G((C1), (C2)) & SECOND_COLOR_MASK)) & CSUB_SAT((C1), (C2))))
 #define COLOR_SUB(C1, C2) \
-	((uint16_t) (ALPHA_BITS_MASK \
-		+ ((((C1) & FIRST_COLOR_MASK)  > ((C2) & FIRST_COLOR_MASK))  \
-			? (uint16_t) (((C1) & FIRST_COLOR_MASK)  - ((C2) & FIRST_COLOR_MASK))  \
-			: (uint16_t) 0) \
-		+ ((((C1) & SECOND_COLOR_MASK) > ((C2) & SECOND_COLOR_MASK)) \
-			? (uint16_t) (((C1) & SECOND_COLOR_MASK) - ((C2) & SECOND_COLOR_MASK)) \
-			: (uint16_t) 0) \
-		+ ((((C1) & THIRD_COLOR_MASK)  > ((C2) & THIRD_COLOR_MASK))  \
-			? (uint16_t) (((C1) & THIRD_COLOR_MASK)  - ((C2) & THIRD_COLOR_MASK))  \
-			: (uint16_t) 0)))
+	((uint16_t) (COLOR_SUB_RAW((C1), (C2)) | ((COLOR_SUB_RAW((C1), (C2)) & 0x0400) >> 5)))
 
 void S9xUpdateScreen (void);
 void S9xMode7VertResample (void);

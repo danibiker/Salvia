@@ -217,9 +217,16 @@
 #ifndef MSB_FIRST
 
 #define GET_LE16(addr)		(*(uint16_t *) (addr))
-#define GET_LE32(addr)		(*(uint32_t *) (addr))
+/* Byte loads: the source may be unaligned (savestate buffers). */
+#define GET_LE32(addr)		((uint32_t) ((const uint8_t *) (addr))[0] | \
+				 ((uint32_t) ((const uint8_t *) (addr))[1] << 8) | \
+				 ((uint32_t) ((const uint8_t *) (addr))[2] << 16) | \
+				 ((uint32_t) ((const uint8_t *) (addr))[3] << 24))
 #define SET_LE16(addr, data)	((void) (*(uint16_t *) (addr) = (uint16_t) (data)))
-#define SET_LE32(addr, data)	((void) (*(uint32_t *) (addr) = (uint32_t) (data)))
+#define SET_LE32(addr, data)	((void) (((uint8_t *) (addr))[0] = (uint8_t) (data), \
+				 ((uint8_t *) (addr))[1] = (uint8_t) ((data) >> 8), \
+				 ((uint8_t *) (addr))[2] = (uint8_t) ((data) >> 16), \
+				 ((uint8_t *) (addr))[3] = (uint8_t) ((data) >> 24)))
 
 #else
 
@@ -863,9 +870,11 @@ static INLINE void dsp_decode_brr( dsp_voice_t* v )
 		int p1    = pos [BRR_BUF_SIZE - 1];
 		int p2    = pos [BRR_BUF_SIZE - 2] >> 1;
 
-		s = (s << shift) >> 1;
+		/* Left-shifting a negative value is UB; go through unsigned for
+		 * the same two's-complement bit pattern. */
+		s = (int) ((unsigned) s << shift) >> 1;
 		if (shift >= 0xD) /* handle invalid range */
-			s = (s >> 25) << 11; /* same as: s = (s < 0 ? -0x800 : 0) */
+			s = (s >> 25) * 0x800; /* same as: s = (s < 0 ? -0x800 : 0) */
 		
       if (filter)
       {
@@ -898,7 +907,7 @@ static INLINE void dsp_decode_brr( dsp_voice_t* v )
 		s = (int16_t) (s * 2);
 		pos [BRR_BUF_SIZE] = pos [0] = s; /* second copy simplifies wrap-around */
 
-      nybbles <<= 4;
+      nybbles = (int) ((unsigned) nybbles << 4);
 	}
 }
 
@@ -3786,8 +3795,8 @@ static void NO_OPTIMIZE to_apu_from_state (uint8_t **buf, void *var, size_t size
 	*buf += size;
 }
 
-// work around optimization bug in android GCC
-// similar to this: http://jeffq.com/blog/over-aggressive-gcc-optimization-can-cause-sigbus-crash-when-using-memcpy-with-the-android-ndk/
+/* work around optimization bug in android GCC
+   similar to this: http://jeffq.com/blog/over-aggressive-gcc-optimization-can-cause-sigbus-crash-when-using-memcpy-with-the-android-ndk/ */
 #if defined(ANDROID) || defined(__QNX__)
 void __attribute__((optimize(0))) S9xAPUSaveState (uint8_t *block)
 #else
@@ -3803,7 +3812,7 @@ void S9xAPUSaveState (uint8_t *block)
 	SET_LE32(ptr, spc_remainder);
 	ptr += sizeof(int32_t);
 
-	//zero out the rest of the save state block
+	/* zero out the rest of the save state block */
 	memset(ptr, 0, SPC_SAVE_STATE_BLOCK_SIZE - (ptr - block));
 }
 

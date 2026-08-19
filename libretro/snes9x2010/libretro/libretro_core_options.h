@@ -96,15 +96,15 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "snes9x_2010_msu1_enhanced_audio",
       "MSU-1 Enhanced Audio",
       NULL,
-      "Run the entire audio pipeline at 44.1 kHz for MSU-1 games. Normally MSU-1's 44.1 kHz PCM stream is downsampled to the SNES's native ~32 kHz before output, losing quality. When enabled, the SPC sound is resampled up to 44.1 kHz and the MSU-1 stream is mixed in at its native rate, so the enhanced audio reaches the frontend without an intermediate downsample. Has no effect on non-MSU-1 games. Changing this takes effect on the next content load.",
+      "Run the entire audio pipeline at 44.1 kHz for MSU-1 games. When disabled, MSU-1's 44.1 kHz PCM stream is decimated to the SNES's native ~32 kHz before output with no anti-alias filtering, folding the track's top octave into the audible band as slight hiss. When enabled, the SPC sound is resampled up to 44.1 kHz and the MSU-1 stream passes through bit-exactly at its native rate. Has no effect on non-MSU-1 games. Changing this takes effect on the next content load.",
       NULL,
       NULL,
       {
-         { "disabled", NULL },
          { "enabled",  NULL },
+         { "disabled", NULL },
          { NULL, NULL },
       },
-      "disabled"
+      "enabled"
    },
    {
       "snes9x_2010_aspect",
@@ -122,21 +122,6 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { NULL, NULL},
       },
       "auto"
-   },
-   {
-      "snes9x_2010_turbodelay",
-      "Set Autofire Pulse",
-      NULL,
-      "Fire interval: medium - 6 frames, fast - 4 frames, slow - 8 frames.",
-      NULL,
-      NULL,
-      {
-         { "medium", "Medium" },
-         { "fast", "Fast" },
-         { "slow", "Slow "},
-         { NULL, NULL },
-      },
-      "medium"
    },
    {
       "snes9x_2010_blargg",
@@ -240,6 +225,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "disabled"
    },
    {
+      "snes9x_2010_superfx_timing",
+      "SuperFX Timing Model (Experimental)",
+      NULL,
+      "'Legacy' keeps the shipped per-line budgets (including the cycle-accuracy toggle below). 'Hardware-derived' charges each instruction its approximate real GSU cycle cost (cache-aware fetches, 5-cycle memory accesses, amortized plot flushes), matching ares/MiSTer wait states; backported from mainline Snes9x. When set to 'Hardware-derived', the cycle-accuracy toggle is ignored. Works together with the SuperFX Overclock option.",
+      NULL,
+      "hacks",
+      {
+         { "legacy",   "Legacy" },
+         { "hardware", "Hardware-derived" },
+         { NULL, NULL },
+      },
+      "legacy"
+   },
+   {
       "snes9x_2010_superfx_cycle_accuracy",
       "SuperFX Cycle Accuracy",
       NULL,
@@ -283,7 +282,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
    },
    {
       "snes9x_2010_mode7_hires",
-      "Mode 7 - Hires (Restart)",
+      "Mode 7 - Hires",
       NULL,
       "Render Mode 7 backgrounds at higher resolution. 2x renders at 512 px (smoother diagonals); 4x renders at 1024 px (smoothest, more expensive). The 2x_hv / 4x_hv variants additionally double the output vertically (448 rows) via an end-of-frame bilinear-Y average of adjacent rendered rows; HUD / sprites / non-M7 layers are row-duplicated. Smooths row-to-row transitions on Mode 7 ground textures but does not add per-line detail (the M7 plane still samples at 224 source rows). Affects only Mode 7 (driving / racing / overhead-rotation games). Other modes are unchanged. Default off.",
       NULL,

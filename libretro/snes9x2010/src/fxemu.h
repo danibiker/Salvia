@@ -162,11 +162,20 @@ struct FxInfo_s
 	uint8_t	oneLineDone;
 };
 
-#define CHECK_EXEC_SUPERFX() ((Memory.FillRAM[0x3000 + GSU_SFR] & FLG_G) && (Memory.FillRAM[0x3000 + GSU_SCMR] & 0x18) == 0x18)
+/* Run when GO is set and at least one of RAN/RON is granted, not only
+ * when both are: the GSU itself runs on GO alone (ares gates only the
+ * S-CPU bus view on RAN/RON), and several titles start it with a
+ * single grant bit. Ported from mainline snes9x (af4ec50b). */
+extern int      fx_hw_timing;           /* 0 = legacy/cycle-accuracy budgets, 1 = hardware costs */
+extern uint32_t SuperFXHwTimingPct;     /* overclock percentage for the hardware budget */
+
+#define CHECK_EXEC_SUPERFX() ((Memory.FillRAM[0x3000 + GSU_SFR] & FLG_G) && (Memory.FillRAM[0x3000 + GSU_SCMR] & 0x18) != 0)
 
 extern struct FxInfo_s	SuperFX;
 
 void S9xResetSuperFX (void);
+void S9xSuperFXCelDelayTick (void);
+extern int fx_cel_delay;
 void S9xSuperFXExec (void);
 
 #endif

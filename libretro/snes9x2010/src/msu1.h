@@ -56,6 +56,44 @@ struct SMSU1
 	uint8_t		MSU1_AudioRepeat;
 	uint8_t		MSU1_AudioBusy;
 	uint8_t		MSU1_DataBusy;
+
+	/* Resampler state (snapshot v8, extended in v10). Cur/Nxt hold the
+	   two adjacent 44.1 kHz source frames (volume already applied) that
+	   S9xMSU1Mix is interpolating between; RsmpFrac is the 16.16 fractional
+	   position between them. Persisting this across mix calls keeps batch
+	   boundaries seamless, and serialising it keeps savestate replay
+	   byte-exact through the interpolator.
+
+	   Prv and Nx2 (v10) are the outer two points of the 4-point Catmull-Rom
+	   (Hermite) kernel that replaced 2-point linear. Linear's triangular
+	   kernel rolls off hard and folds image energy back into the passband:
+	   measured against full-scale sines on the 44.1 -> 32.04 kHz
+	   downsample, it loses ~27 dB SNR at 1 kHz and ~17 dB at 3 kHz versus
+	   this kernel. */
+	uint32_t	MSU1_RsmpFrac;
+	int32_t		MSU1_RsmpPrvL;
+	int32_t		MSU1_RsmpPrvR;
+	int32_t		MSU1_RsmpCurL;
+	int32_t		MSU1_RsmpCurR;
+	int32_t		MSU1_RsmpNxtL;
+	int32_t		MSU1_RsmpNxtR;
+	int32_t		MSU1_RsmpNx2L;
+	int32_t		MSU1_RsmpNx2R;
+	uint8_t		MSU1_RsmpPrimed;
+
+	/* Enhanced-audio (44.1 kHz pipeline) SPC upsampler state (snapshot v9).
+	   Owned and driven by the libretro layer, which is where that resampler
+	   lives, but parked here because struct MSU1 is what snapshot.c
+	   serialises and the enhanced path only exists on MSU-1 carts. It has to
+	   round-trip through savestates for the same reason MSU1_Rsmp* does:
+	   Preemptive Frames rolls the emulator back and replays, and any audio
+	   phase left un-rewound reseats mid-waveform on every rollback. */
+	uint64_t	MSU1_EnhFrac;	/* 32.32 phase between EnhCur and EnhNxt */
+	int32_t		MSU1_EnhCurL;
+	int32_t		MSU1_EnhCurR;
+	int32_t		MSU1_EnhNxtL;
+	int32_t		MSU1_EnhNxtR;
+	uint8_t		MSU1_EnhFill;	/* valid frames in the pair: 0..2 */
 };
 
 extern struct SMSU1	MSU1;

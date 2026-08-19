@@ -381,6 +381,20 @@ struct FxRegs_s
 	uint32_t	vSCBRDirty;				/* If SCBR is written, our cached screen pointers need updating */
 	
 	uint8_t	*avRegAddr;				/* To reference avReg in snapshot.cpp */
+
+	uint32_t	vHwFillMask;			/* Hardware-timing billing state: cache lines that have
+						   already been charged their 16-byte fill cost.  Not
+						   serialized (snapshot.c lists fields explicitly), so
+						   after a savestate load line fills are re-charged once;
+						   the mispricing is bounded and one-time. */
+	uint32_t	vCelHoldLines;			/* Winter Gold pose-cel hold (fx_cel_delay): lines left
+						   to keep $70:EBC0 zeroed from CPU view.  Like
+						   vHwFillMask, deliberately not serialized: the hold
+						   spans one frame of a race-start handshake and only
+						   that game sets a delay, so a savestate landing inside
+						   the window at worst re-times that publish by a frame.
+						   See S9xSuperFXCelDelayTick. */
+	uint8_t		vCelHeld;			/* The cel value being held back (0 = none). */
 };
 
 extern struct FxRegs_s	GSU;
