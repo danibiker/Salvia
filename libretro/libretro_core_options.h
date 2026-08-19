@@ -125,6 +125,38 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "enabled"
    },
    {
+      "snes9x_mode7_hires",
+      "HD Mode 7 Scale",
+      NULL,
+      "Render Mode 7 backgrounds at a higher horizontal resolution. 2x/4x sample the rotation matrix at sub-pixel steps; the _hv variants additionally resample vertically for square pixels. From snes9x2010.",
+      NULL,
+      NULL,
+      {
+         { "disabled", NULL },
+         { "2x",       "2x" },
+         { "4x",       "4x" },
+         { "2x_hv",    "2x (H+V)" },
+         { "4x_hv",    "4x (H+V)" },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
+      "snes9x_mode7_hires_bilinear",
+      "HD Mode 7 Filtering",
+      NULL,
+      "Texture sampling filter for HD Mode 7. 'Stable' bilinear snaps to texel centres to avoid shimmer; 'Smooth' is full bilinear.",
+      NULL,
+      NULL,
+      {
+         { "disabled", NULL },
+         { "stable",   "Stable" },
+         { "smooth",   "Smooth" },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
       "snes9x_hires_blend",
       "Hi-Res Blending",
       NULL,
@@ -213,6 +245,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { NULL, NULL },
       },
       "100%"
+   },
+   {
+      "snes9x_superfx_timing",
+      "SuperFX Timing Model (Experimental)",
+      NULL,
+      "'Compatibility' runs the GSU with snes9x2010's field-tested per-line budget. 'Hardware-derived' charges each instruction its approximate real GSU cycle cost (cache-aware fetches, 5-cycle memory accesses, amortized plot flushes), matching ares/MiSTer wait states; backported from mainline Snes9x. More accurate, less field-tested. Works together with SuperFX Overclocking.",
+      NULL,
+      "hacks",
+      {
+         { "compat",   "Compatibility (snes9x2010)" },
+         { "hardware", "Hardware-derived" },
+         { NULL, NULL },
+      },
+      "compat"
    },
    {
       "snes9x_overclock_cycles",
@@ -613,6 +659,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "White"
    },
    {
+      "snes9x_msu1_enhanced_audio",
+      "MSU-1 Enhanced Audio",
+      NULL,
+      "Run the audio pipeline at 44.1 kHz when an MSU-1 game is loaded. When disabled, MSU-1's 44.1 kHz PCM stream is decimated to the SNES's native ~32 kHz output with no anti-alias filtering, folding the track's top octave into the audible band as slight hiss. When enabled, the MSU-1 stream passes through bit-exactly and the SPC sound is upsampled cleanly. Has no effect on non-MSU-1 games. Changing this takes effect on the next content load.",
+      NULL,
+      NULL,
+      {
+         { "enabled",  NULL },
+         { "disabled", NULL },
+         { NULL, NULL },
+      },
+      "enabled"
+   },
+   {
       "snes9x_show_advanced_av_settings",
       "Show Advanced Audio/Video Settings",
       NULL,
@@ -685,20 +745,6 @@ struct retro_core_option_v2_definition option_defs_us[] = {
    {
       "snes9x_layer_5",
       "Show Sprite Layer",
-      NULL,
-      NULL,
-      NULL,
-      "advanced_av",
-      {
-         { "enabled",  NULL },
-         { "disabled", NULL },
-         { NULL, NULL },
-      },
-      "enabled"
-   },
-   {
-      "snes9x_gfx_clip",
-      "Enable Graphic Clip Windows",
       NULL,
       NULL,
       NULL,

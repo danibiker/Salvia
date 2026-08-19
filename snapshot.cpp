@@ -13,9 +13,10 @@
 #include "fxemu.h"
 #include "sdd1.h"
 #include "srtc.h"
+#include "bsflash.h"
 #include "snapshot.h"
+#include "bytestream.h"
 #include "controls.h"
-#include "movie.h"
 #include "display.h"
 #include "language.h"
 #include "gfx.h"
@@ -155,19 +156,6 @@ enum
 struct SDMASnapshot
 {
 	struct SDMA	dma[8];
-};
-
-struct SnapshotMovieInfo
-{
-	uint32	MovieInputDataSize;
-};
-
-struct SnapshotScreenshotInfo
-{
-	uint16	Width;
-	uint16	Height;
-	uint8	Interlaced;
-	uint8	Data[MAX_SNES_WIDTH * MAX_SNES_HEIGHT * 3];
 };
 
 static struct Obsolete
@@ -959,224 +947,101 @@ static FreezeData	SnapBSX[] =
 #undef STRUCT
 #define STRUCT	struct SMSU1
 
+/* struct SMSU1 was replaced wholesale at version 13: the flags moved out of
+   the packed status byte into individual fields (rebuilt into STATUS on every
+   read), the offsets were renamed to say what they address, and the resampler
+   carries its interpolation state here so a savestate resumes mid-waveform
+   instead of reseating. Version 12 and older snapshots have none of these
+   fields, so they load with MSU1 state zeroed and S9xMSU1PostLoadState
+   re-derives what it can from the track and offsets. */
 static FreezeData	SnapMSU1[] =
 {
-	INT_ENTRY(9, MSU1_STATUS),
-	INT_ENTRY(9, MSU1_DATA_SEEK),
-	INT_ENTRY(9, MSU1_DATA_POS),
-	INT_ENTRY(9, MSU1_TRACK_SEEK),
-	INT_ENTRY(9, MSU1_CURRENT_TRACK),
-	INT_ENTRY(9, MSU1_RESUME_TRACK),
-	INT_ENTRY(9, MSU1_VOLUME),
-	INT_ENTRY(9, MSU1_CONTROL),
-	INT_ENTRY(9, MSU1_AUDIO_POS),
-	INT_ENTRY(9, MSU1_RESUME_POS)
+	INT_ENTRY(13, MSU1_STATUS),
+	INT_ENTRY(13, MSU1_DataSeekOffset),
+	INT_ENTRY(13, MSU1_DataReadOffset),
+	INT_ENTRY(13, MSU1_AudioPlayOffset),
+	INT_ENTRY(13, MSU1_AudioLoopOffset),
+	INT_ENTRY(13, MSU1_CurrentTrack),
+	INT_ENTRY(13, MSU1_VolumeB),
+	INT_ENTRY(13, MSU1_AudioResumeTrack),
+	INT_ENTRY(13, MSU1_AudioResumeOffset),
+	INT_ENTRY(13, MSU1_Control),
+	INT_ENTRY(13, MSU1_AudioError),
+	INT_ENTRY(13, MSU1_AudioPlay),
+	INT_ENTRY(13, MSU1_AudioRepeat),
+	INT_ENTRY(13, MSU1_AudioBusy),
+	INT_ENTRY(13, MSU1_DataBusy),
+	INT_ENTRY(13, MSU1_RsmpFrac),
+	INT_ENTRY(13, MSU1_RsmpPrvL),
+	INT_ENTRY(13, MSU1_RsmpPrvR),
+	INT_ENTRY(13, MSU1_RsmpCurL),
+	INT_ENTRY(13, MSU1_RsmpCurR),
+	INT_ENTRY(13, MSU1_RsmpNxtL),
+	INT_ENTRY(13, MSU1_RsmpNxtR),
+	INT_ENTRY(13, MSU1_RsmpNx2L),
+	INT_ENTRY(13, MSU1_RsmpNx2R),
+	INT_ENTRY(13, MSU1_RsmpPrimed),
+	/* The SPC -> 44.1 kHz upsampler that feeds MSU-1 Enhanced Audio. Its
+	   frame pair and 32.32 phase are emulation-timeline state, not scratch:
+	   they carry across batch boundaries by design, and Preemptive Frames
+	   rewinds the timeline. Left un-rewound, every rollback reseats the
+	   interpolator mid-waveform against a frame pair belonging to the
+	   discarded future. */
+	INT_ENTRY(14, MSU1_EnhFrac),
+	INT_ENTRY(14, MSU1_EnhCurL),
+	INT_ENTRY(14, MSU1_EnhCurR),
+	INT_ENTRY(14, MSU1_EnhNxtL),
+	INT_ENTRY(14, MSU1_EnhNxtR),
+	INT_ENTRY(14, MSU1_EnhFill)
 };
 
 #undef STRUCT
-#define STRUCT	struct SnapshotScreenshotInfo
-
-static FreezeData	SnapScreenshot[] =
-{
-	INT_ENTRY(6, Width),
-	INT_ENTRY(6, Height),
-	INT_ENTRY(6, Interlaced),
-	ARRAY_ENTRY(6, Data, MAX_SNES_WIDTH * MAX_SNES_HEIGHT * 3, uint8_ARRAY_V)
-};
-
-#undef STRUCT
-#define STRUCT	struct SnapshotMovieInfo
-
-static FreezeData	SnapMovie[] =
-{
-	INT_ENTRY(6, MovieInputDataSize)
-};
-
-static int UnfreezeBlock (STREAM, const char *, uint8 *, int);
-static int UnfreezeBlockCopy (STREAM, const char *, uint8 **, int);
-static int UnfreezeStruct (STREAM, const char *, void *, FreezeData *, int, int);
-static int UnfreezeStructCopy (STREAM, const char *, uint8 **, FreezeData *, int, int);
+static int UnfreezeBlock (ByteStream *, const char *, uint8 *, int);
+static int UnfreezeBlockCopy (ByteStream *, const char *, uint8 **, int);
+static int UnfreezeStructCopy (ByteStream *, const char *, uint8 **, FreezeData *, int, int);
 static void UnfreezeStructFromCopy (void *, FreezeData *, int, uint8 *, int);
-static void FreezeBlock (STREAM, const char *, uint8 *, int);
-static void FreezeStruct (STREAM, const char *, void *, FreezeData *, int);
-static bool CheckBlockName(STREAM stream, const char *name, int &len);
-static void SkipBlockWithName(STREAM stream, const char *name);
+static void FreezeBlock (ByteStream *, const char *, uint8 *, int);
+static void FreezeStruct (ByteStream *, const char *, void *, FreezeData *, int);
+static bool CheckBlockName(ByteStream *stream, const char *name, int &len);
+static void SkipBlockWithName(ByteStream *stream, const char *name);
 
-
-void S9xResetSaveTimer (bool8 dontsave)
-{
-	static time_t	t = -1;
-
-	if (!Settings.DontSaveOopsSnapshot && !dontsave && t != -1 && time(NULL) - t > 300)
-	{
-		auto filename = S9xGetFilename("oops", SNAPSHOT_DIR);
-		S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, SAVE_INFO_OOPS);
-		S9xFreezeGame(filename.c_str());
-	}
-
-	t = time(NULL);
-}
 
 uint32 S9xFreezeSize()
 {
-    nulStream stream;
+    /* Sizing pass: no buffer, so the writes only advance the cursor. */
+    ByteStream stream;
+    bs_init(&stream, NULL, 0);
     S9xFreezeToStream(&stream);
-    return stream.size();
+    return (uint32) bs_pos(&stream);
 }
 
 bool8 S9xFreezeGameMem (uint8 *buf, uint32 bufSize)
 {
-    memStream mStream(buf, bufSize);
-	S9xFreezeToStream(&mStream);
+    ByteStream stream;
+    bs_init(&stream, buf, bufSize);
+	S9xFreezeToStream(&stream);
 
 	return (TRUE);
 }
 
-bool8 S9xFreezeGame (const char *filename)
-{
-	STREAM	stream = NULL;
-
-	if (S9xOpenSnapshotFile(filename, FALSE, &stream))
-	{
-		S9xFreezeToStream(stream);
-		S9xCloseSnapshotFile(stream);
-
-		S9xResetSaveTimer(TRUE);
-
-		auto base = S9xBasename(filename);
-		if (S9xMovieActive())
-			sprintf(String, MOVIE_INFO_SNAPSHOT " %s", base.c_str());
-		else
-			sprintf(String, SAVE_INFO_SNAPSHOT " %s", base.c_str());
-
-		S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, String);
-
-		return (TRUE);
-	}
-
-	return (FALSE);
-}
-
 int S9xUnfreezeGameMem (const uint8 *buf, uint32 bufSize)
 {
-    memStream stream(buf, bufSize);
-	int result = S9xUnfreezeFromStream(&stream);
+    ByteStream stream;
+    bs_init(&stream, (void *) buf, bufSize);
 
-	return result;
+	return S9xUnfreezeFromStream(&stream);
 }
 
-void S9xMessageFromResult(int result, const char* base)
-{
-    switch(result)
-    {
-        case WRONG_FORMAT:
-            S9xMessage(S9X_ERROR, S9X_WRONG_FORMAT, SAVE_ERR_WRONG_FORMAT);
-            break;
-
-        case WRONG_VERSION:
-            S9xMessage(S9X_ERROR, S9X_WRONG_VERSION, SAVE_ERR_WRONG_VERSION);
-            break;
-
-        case WRONG_MOVIE_SNAPSHOT:
-            S9xMessage(S9X_ERROR, S9X_WRONG_MOVIE_SNAPSHOT, MOVIE_ERR_SNAPSHOT_WRONG_MOVIE);
-            break;
-
-        case NOT_A_MOVIE_SNAPSHOT:
-            S9xMessage(S9X_ERROR, S9X_NOT_A_MOVIE_SNAPSHOT, MOVIE_ERR_SNAPSHOT_NOT_MOVIE);
-            break;
-
-        case SNAPSHOT_INCONSISTENT:
-            S9xMessage(S9X_ERROR, S9X_SNAPSHOT_INCONSISTENT, MOVIE_ERR_SNAPSHOT_INCONSISTENT);
-            break;
-
-        case FILE_NOT_FOUND:
-        default:
-            sprintf(String, SAVE_ERR_ROM_NOT_FOUND, base);
-            S9xMessage(S9X_ERROR, S9X_ROM_NOT_FOUND, String);
-            break;
-    }
-}
-
-bool8 S9xUnfreezeGame (const char *filename)
-{
-	STREAM	stream = NULL;
-
-	auto base = S9xBasename(filename);
-	auto path = splitpath(filename);
-	S9xResetSaveTimer(path.ext_is(".oops") || path.ext_is(".oop"));
-
-	if (S9xOpenSnapshotFile(filename, TRUE, &stream))
-	{
-		int	result;
-
-		result = S9xUnfreezeFromStream(stream);
-		S9xCloseSnapshotFile(stream);
-
-		if (result != SUCCESS)
-		{
-            S9xMessageFromResult(result, base.c_str());
-			return (FALSE);
-		}
-
-		if (S9xMovieActive())
-		{
-			if (S9xMovieReadOnly())
-				sprintf(String, MOVIE_INFO_REWIND " %s", base.c_str());
-			else
-				sprintf(String, MOVIE_INFO_RERECORD " %s", base.c_str());
-		}
-		else
-			sprintf(String, SAVE_INFO_LOAD " %s", base.c_str());
-
-		S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, String);
-
-		return (TRUE);
-	}
-
-	sprintf(String, SAVE_ERR_SAVE_NOT_FOUND, base.c_str());
-	S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, String);
-
-	return (FALSE);
-}
-
-bool8 S9xUnfreezeScreenshot(const char *filename, uint16 **image_buffer, int &width, int &height)
-{
-    STREAM	stream = NULL;
-
-    auto base = S9xBasename(filename);
-
-    if(S9xOpenSnapshotFile(filename, TRUE, &stream))
-    {
-        int	result;
-
-        result = S9xUnfreezeScreenshotFromStream(stream, image_buffer, width, height);
-        S9xCloseSnapshotFile(stream);
-
-        if(result != SUCCESS)
-        {
-            S9xMessageFromResult(result, base.c_str());
-            return (FALSE);
-        }
-
-        return (TRUE);
-    }
-
-    sprintf(String, SAVE_ERR_SAVE_NOT_FOUND, base.c_str());
-    S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, String);
-
-    return (FALSE);
-}
-
-void S9xFreezeToStream (STREAM stream)
+void S9xFreezeToStream (ByteStream *stream)
 {
 	char	buffer[8192];
 	uint8	*soundsnapshot = new uint8[SPC_SAVE_STATE_BLOCK_SIZE];
 
 	sprintf(buffer, "%s:%04d\n", SNAPSHOT_MAGIC, SNAPSHOT_VERSION);
-	WRITE_STREAM(buffer, strlen(buffer), stream);
+	bs_write(stream, buffer, strlen(buffer));
 
 	sprintf(buffer, "NAM:%06d:%s%c", 8, "Removed", 0);
-	WRITE_STREAM(buffer, strlen(buffer) + 1, stream);
+	bs_write(stream, buffer, strlen(buffer) + 1);
 
 	FreezeStruct(stream, "CPU", &CPU, SnapCPU, COUNT(SnapCPU));
 
@@ -1260,61 +1125,15 @@ void S9xFreezeToStream (STREAM stream)
 		FreezeStruct(stream, "BSX", &BSX, SnapBSX, COUNT(SnapBSX));
 
 	if (Settings.MSU1)
+	{
+		S9xMSU1PreSaveState();
 		FreezeStruct(stream, "MSU", &MSU1, SnapMSU1, COUNT(SnapMSU1));
-
-	if (Settings.SnapshotScreenshots)
-	{
-		SnapshotScreenshotInfo	*ssi = new SnapshotScreenshotInfo;
-
-		ssi->Width  = min(IPPU.RenderedScreenWidth,  MAX_SNES_WIDTH);
-		ssi->Height = min(IPPU.RenderedScreenHeight, MAX_SNES_HEIGHT);
-		ssi->Interlaced = GFX.DoInterlace;
-
-		uint8	*rowpix = ssi->Data;
-		uint16	*screen = GFX.Screen;
-
-		for (int y = 0; y < ssi->Height; y++, screen += GFX.RealPPL)
-		{
-			for (int x = 0; x < ssi->Width; x++)
-			{
-				uint32	r, g, b;
-
-				DECOMPOSE_PIXEL(screen[x], r, g, b);
-				*(rowpix++) = r;
-				*(rowpix++) = g;
-				*(rowpix++) = b;
-			}
-		}
-
-		memset(rowpix, 0, sizeof(ssi->Data) + ssi->Data - rowpix);
-
-		FreezeStruct(stream, "SHO", ssi, SnapScreenshot, COUNT(SnapScreenshot));
-
-		delete ssi;
-	}
-
-	if (S9xMovieActive())
-	{
-		uint8	*movie_freeze_buf;
-		uint32	movie_freeze_size;
-
-		S9xMovieFreeze(&movie_freeze_buf, &movie_freeze_size);
-		if (movie_freeze_buf)
-		{
-			struct SnapshotMovieInfo mi;
-
-			mi.MovieInputDataSize = movie_freeze_size;
-			FreezeStruct(stream, "MOV", &mi, SnapMovie, COUNT(SnapMovie));
-			FreezeBlock (stream, "MID", movie_freeze_buf, movie_freeze_size);
-
-			delete [] movie_freeze_buf;
-		}
 	}
 
 	delete [] soundsnapshot;
 }
 
-int S9xUnfreezeFromStream (STREAM stream)
+int S9xUnfreezeFromStream (ByteStream *stream)
 {
 	const bool8 fast = Settings.FastSavestates;
 
@@ -1323,7 +1142,7 @@ int S9xUnfreezeFromStream (STREAM stream)
 	char	buffer[PATH_MAX + 1];
 
 	len = strlen(SNAPSHOT_MAGIC) + 1 + 4 + 1;
-	if (READ_STREAM(buffer, len, stream) != (unsigned int ) len)
+	if (bs_read(stream, buffer, len) != (unsigned int ) len)
 		return (WRONG_FORMAT);
 
 	if (strncmp(buffer, SNAPSHOT_MAGIC, strlen(SNAPSHOT_MAGIC)) != 0)
@@ -1363,8 +1182,6 @@ int S9xUnfreezeFromStream (STREAM stream)
 	uint8	*local_rtc_data      = NULL;
 	uint8	*local_bsx_data      = NULL;
 	uint8	*local_msu1_data     = NULL;
-	uint8	*local_screenshot    = NULL;
-	uint8	*local_movie_data    = NULL;
 
 	do
 	{
@@ -1503,39 +1320,6 @@ int S9xUnfreezeFromStream (STREAM stream)
 		result = UnfreezeStructCopy(stream, "MSU", &local_msu1_data, SnapMSU1, COUNT(SnapMSU1), version);
 		if (result != SUCCESS && Settings.MSU1)
 			break;
-
-		result = UnfreezeStructCopy(stream, "SHO", &local_screenshot, SnapScreenshot, COUNT(SnapScreenshot), version);
-
-		SnapshotMovieInfo	mi;
-
-		result = UnfreezeStruct(stream, "MOV", &mi, SnapMovie, COUNT(SnapMovie), version);
-		if (result != SUCCESS)
-		{
-			if (S9xMovieActive())
-			{
-				result = NOT_A_MOVIE_SNAPSHOT;
-				break;
-			}
-		}
-		else
-		{
-			result = UnfreezeBlockCopy(stream, "MID", &local_movie_data, mi.MovieInputDataSize);
-			if (result != SUCCESS)
-			{
-				if (S9xMovieActive())
-				{
-					result = NOT_A_MOVIE_SNAPSHOT;
-					break;
-				}
-			}
-
-			if (S9xMovieActive())
-			{
-				result = S9xMovieUnfreeze(local_movie_data, mi.MovieInputDataSize);
-				if (result != SUCCESS)
-					break;
-			}
-		}
 
 		result = SUCCESS;
 	} while (false);
@@ -1731,8 +1515,10 @@ int S9xUnfreezeFromStream (STREAM stream)
 
 		if (local_superfx)
 		{
-			GSU.pfPlot = fx_PlotTable[GSU.vMode];
-			GSU.pfRpix = fx_PlotTable[GSU.vMode + 5];
+			// Opcode/plot dispatch rebinds from vMode inside
+			// fx_readRegisterSpace() on the next S9xSuperFXExec; only the
+			// register-window pointer needs reseating here.
+			GSU.avRegAddr = (uint8 *) &GSU.avReg;
 		}
 
 		if (local_sa1 && local_sa1_registers)
@@ -1745,80 +1531,22 @@ int S9xUnfreezeFromStream (STREAM stream)
 			S9xSDD1PostLoadState();
 
 		if (local_spc7110)
-			S9xSPC7110PostLoadState(version);
+			S9xSPC7110PostLoadState();
 
 		if (local_srtc)
-			S9xSRTCPostLoadState(version);
+			S9xSRTCPostLoadState();
 
 		if (local_bsx_data)
+		{
 			S9xBSXPostLoadState();
+			// The flash chip's transient command state is not serialized;
+			// return it to array-read mode, as a real chip after power-up.
+			S9xBSFlashReset();
+		}
 
 		if (local_msu1_data)
 			S9xMSU1PostLoadState();
 
-		if (local_movie_data)
-		{
-			// restore last displayed pad_read status
-			extern bool8	pad_read, pad_read_last;
-			bool8			pad_read_temp = pad_read;
-
-			pad_read = pad_read_last;
-			S9xUpdateFrameCounter(-1);
-			pad_read = pad_read_temp;
-		}
-
-		if (local_screenshot)
-		{
-			SnapshotScreenshotInfo	*ssi = new SnapshotScreenshotInfo;
-
-			UnfreezeStructFromCopy(ssi, SnapScreenshot, COUNT(SnapScreenshot), local_screenshot, version);
-
-			IPPU.RenderedScreenWidth  = min(ssi->Width,  MAX_SNES_WIDTH);
-			IPPU.RenderedScreenHeight = min(ssi->Height, MAX_SNES_HEIGHT);
-			const bool8 scaleDownX = IPPU.RenderedScreenWidth  < ssi->Width;
-			const bool8 scaleDownY = IPPU.RenderedScreenHeight < ssi->Height && ssi->Height > SNES_HEIGHT_EXTENDED;
-			GFX.DoInterlace = ssi->Interlaced;
-
-			uint8	*rowpix = ssi->Data;
-			uint16	*screen = GFX.Screen;
-
-			for (int y = 0; y < IPPU.RenderedScreenHeight; y++, screen += GFX.RealPPL)
-			{
-				for (int x = 0; x < IPPU.RenderedScreenWidth; x++)
-				{
-					uint32	r, g, b;
-
-					r = *(rowpix++);
-					g = *(rowpix++);
-					b = *(rowpix++);
-
-					if (scaleDownX)
-					{
-						r = (r + *(rowpix++)) >> 1;
-						g = (g + *(rowpix++)) >> 1;
-						b = (b + *(rowpix++)) >> 1;
-
-						if (x + x + 1 >= ssi->Width)
-							break;
-					}
-
-					screen[x] = BUILD_PIXEL(r, g, b);
-				}
-
-				if (scaleDownY)
-				{
-					rowpix += 3 * ssi->Width;
-					if (y + y + 1 >= ssi->Height)
-						break;
-				}
-			}
-
-			// black out what we might have missed
-			for (uint32 y = IPPU.RenderedScreenHeight; y < (uint32) (MAX_SNES_HEIGHT); y++)
-				memset(GFX.Screen + y * GFX.RealPPL, 0, GFX.RealPPL * 2);
-
-			delete ssi;
-		}
 	}
 
 	if (local_cpu)				delete [] local_cpu;
@@ -1846,100 +1574,7 @@ int S9xUnfreezeFromStream (STREAM stream)
 	if (local_srtc)				delete [] local_srtc;
 	if (local_rtc_data)			delete [] local_rtc_data;
 	if (local_bsx_data)			delete [] local_bsx_data;
-	if (local_screenshot)		delete [] local_screenshot;
-	if (local_movie_data)		delete [] local_movie_data;
-
 	return (result);
-}
-
-// load screenshot from file, allocating memory for it
-int S9xUnfreezeScreenshotFromStream(STREAM stream, uint16 **image_buffer, int &width, int &height)
-{
-    int		result = SUCCESS;
-    int		version, len;
-    char	buffer[PATH_MAX + 1];
-
-    len = strlen(SNAPSHOT_MAGIC) + 1 + 4 + 1;
-    if(READ_STREAM(buffer, len, stream) != (unsigned int)len)
-        return (WRONG_FORMAT);
-
-    if(strncmp(buffer, SNAPSHOT_MAGIC, strlen(SNAPSHOT_MAGIC)) != 0)
-        return (WRONG_FORMAT);
-
-    version = atoi(&buffer[strlen(SNAPSHOT_MAGIC) + 1]);
-    if(version > SNAPSHOT_VERSION)
-        return (WRONG_VERSION);
-
-    result = UnfreezeBlock(stream, "NAM", (uint8 *)buffer, PATH_MAX);
-    if(result != SUCCESS)
-        return (result);
-
-    uint8	*local_screenshot = NULL;
-
-    // skip all blocks until screenshot
-    SkipBlockWithName(stream, "CPU");
-    SkipBlockWithName(stream, "REG");
-    SkipBlockWithName(stream, "PPU");
-    SkipBlockWithName(stream, "DMA");
-    SkipBlockWithName(stream, "VRA");
-    SkipBlockWithName(stream, "RAM");
-    SkipBlockWithName(stream, "SRA");
-    SkipBlockWithName(stream, "FIL");
-    SkipBlockWithName(stream, "SND");
-    SkipBlockWithName(stream, "CTL");
-    SkipBlockWithName(stream, "TIM");
-    SkipBlockWithName(stream, "SFX");
-    SkipBlockWithName(stream, "SA1");
-    SkipBlockWithName(stream, "SAR");
-    SkipBlockWithName(stream, "DP1");
-    SkipBlockWithName(stream, "DP2");
-    SkipBlockWithName(stream, "DP4");
-    SkipBlockWithName(stream, "CX4");
-    SkipBlockWithName(stream, "ST0");
-    SkipBlockWithName(stream, "OBC");
-    SkipBlockWithName(stream, "OBM");
-    SkipBlockWithName(stream, "S71");
-    SkipBlockWithName(stream, "SRT");
-    SkipBlockWithName(stream, "CLK");
-    SkipBlockWithName(stream, "BSX");
-    SkipBlockWithName(stream, "MSU");
-    result = UnfreezeStructCopy(stream, "SHO", &local_screenshot, SnapScreenshot, COUNT(SnapScreenshot), version);
-
-
-    if(result == SUCCESS && local_screenshot)
-    {
-        SnapshotScreenshotInfo	*ssi = new SnapshotScreenshotInfo;
-
-        UnfreezeStructFromCopy(ssi, SnapScreenshot, COUNT(SnapScreenshot), local_screenshot, version);
-
-        width = min(ssi->Width, MAX_SNES_WIDTH);
-        height = min(ssi->Height, MAX_SNES_HEIGHT);
-
-        *image_buffer = (uint16 *)malloc(width * height * sizeof(uint16));
-
-        uint8	*rowpix = ssi->Data;
-        uint16	*screen = (*image_buffer);
-
-        for(int y = 0; y < height; y++, screen += width)
-        {
-            for(int x = 0; x < width; x++)
-            {
-                uint32	r, g, b;
-
-                r = *(rowpix++);
-                g = *(rowpix++);
-                b = *(rowpix++);
-
-                screen[x] = BUILD_PIXEL(r, g, b);
-            }
-        }
-
-        delete ssi;
-    }
-
-    if(local_screenshot)		delete[] local_screenshot;
-
-    return (result);
 }
 
 static int FreezeSize (int size, int type)
@@ -1959,7 +1594,7 @@ static int FreezeSize (int size, int type)
 	}
 }
 
-static void FreezeStruct (STREAM stream, const char *name, void *base, FreezeData *fields, int num_fields)
+static void FreezeStruct (ByteStream *stream, const char *name, void *base, FreezeData *fields, int num_fields)
 {
 	int	len = 0;
 	int	i, j;
@@ -2081,7 +1716,7 @@ static void FreezeStruct (STREAM stream, const char *name, void *base, FreezeDat
 	delete [] block;
 }
 
-static void FreezeBlock (STREAM stream, const char *name, uint8 *block, int size)
+static void FreezeBlock (ByteStream *stream, const char *name, uint8 *block, int size)
 {
 	char	buffer[20];
 
@@ -2100,18 +1735,18 @@ static void FreezeBlock (STREAM stream, const char *name, uint8 *block, int size
 
 	buffer[11] = 0;
 
-	WRITE_STREAM(buffer, 11, stream);
-	WRITE_STREAM(block, size, stream);
+	bs_write(stream, buffer, 11);
+	bs_write(stream, block, size);
 }
 
-static bool CheckBlockName(STREAM stream, const char *name, int &len)
+static bool CheckBlockName(ByteStream *stream, const char *name, int &len)
 {
 	char	buffer[16];
 	len = 0;
 
-	size_t	l = READ_STREAM(buffer, 11, stream);
+	size_t	l = bs_read(stream, buffer, 11);
 	buffer[l] = 0;
-	REVERT_STREAM(stream, FIND_STREAM(stream) - l, 0);
+	bs_seek(stream, bs_pos(stream) - l);
 
 	if (buffer[4] == '-')
 	{
@@ -2136,25 +1771,25 @@ static bool CheckBlockName(STREAM stream, const char *name, int &len)
 	return true;
 }
 
-static void SkipBlockWithName(STREAM stream, const char *name)
+static void SkipBlockWithName(ByteStream *stream, const char *name)
 {
 	int len;
 	bool matchesName = CheckBlockName(stream, name, len);
 	if (matchesName)
 	{
-		long rewind = FIND_STREAM(stream);
+		long rewind = bs_pos(stream);
 		rewind += len + 11;
-		REVERT_STREAM(stream, rewind, 0);
+		bs_seek(stream, rewind);
 	}
 }
 
-static int UnfreezeBlock (STREAM stream, const char *name, uint8 *block, int size)
+static int UnfreezeBlock (ByteStream *stream, const char *name, uint8 *block, int size)
 {
 	char	buffer[20];
 	int		len = 0, rem = 0;
-	long	rewind = FIND_STREAM(stream);
+	long	rewind = bs_pos(stream);
 
-	size_t	l = READ_STREAM(buffer, 11, stream);
+	size_t	l = bs_read(stream, buffer, 11);
 	buffer[l] = 0;
 
 	if (l != 11 || strncmp(buffer, name, 3) != 0 || buffer[3] != ':')
@@ -2163,7 +1798,7 @@ static int UnfreezeBlock (STREAM stream, const char *name, uint8 *block, int siz
 #ifdef DEBUGGER
 		fprintf(stdout, "absent: %s(%d); next: '%.11s'\n", name, size, buffer);
 #endif
-		REVERT_STREAM(stream, FIND_STREAM(stream) - l, 0);
+		bs_seek(stream, bs_pos(stream) - l);
 		return (WRONG_FORMAT);
 	}
 
@@ -2191,20 +1826,20 @@ static int UnfreezeBlock (STREAM stream, const char *name, uint8 *block, int siz
 		memset(block, 0, size);
 	}
 
-	if (READ_STREAM(block, len, stream) != (unsigned int) len)
+	if (bs_read(stream, block, len) != (unsigned int) len)
 	{
-		REVERT_STREAM(stream, rewind, 0);
+		bs_seek(stream, rewind);
 		return (WRONG_FORMAT);
 	}
 
 	if (rem)
 	{
 		char	*junk = new char[rem];
-		len = READ_STREAM(junk, rem, stream);
+		len = bs_read(stream, junk, rem);
 		delete [] junk;
 		if (len != rem)
 		{
-			REVERT_STREAM(stream, rewind, 0);
+			bs_seek(stream, rewind);
 			return (WRONG_FORMAT);
 		}
 	}
@@ -2212,7 +1847,7 @@ static int UnfreezeBlock (STREAM stream, const char *name, uint8 *block, int siz
 	return (SUCCESS);
 }
 
-static int UnfreezeBlockCopy (STREAM stream, const char *name, uint8 **block, int size)
+static int UnfreezeBlockCopy (ByteStream *stream, const char *name, uint8 **block, int size)
 {
 	int	result;
 
@@ -2236,26 +1871,7 @@ static int UnfreezeBlockCopy (STREAM stream, const char *name, uint8 **block, in
 	return (SUCCESS);
 }
 
-static int UnfreezeStruct (STREAM stream, const char *name, void *base, FreezeData *fields, int num_fields, int version)
-{
-	int		result;
-	uint8	*block = NULL;
-
-	result = UnfreezeStructCopy(stream, name, &block, fields, num_fields, version);
-	if (result != SUCCESS)
-	{
-		if (block != NULL)
-			delete [] block;
-		return (result);
-	}
-
-	UnfreezeStructFromCopy(base, fields, num_fields, block, version);
-	delete [] block;
-
-	return (SUCCESS);
-}
-
-static int UnfreezeStructCopy (STREAM stream, const char *name, uint8 **block, FreezeData *fields, int num_fields, int version)
+static int UnfreezeStructCopy (ByteStream *stream, const char *name, uint8 **block, FreezeData *fields, int num_fields, int version)
 {
 	int	len = 0;
 

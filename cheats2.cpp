@@ -185,12 +185,6 @@ static inline void S9xSetByteFree(uint8 Byte, uint32 Address)
     }
 }
 
-void S9xInitWatchedAddress(void)
-{
-    for (unsigned int i = 0; i < sizeof(watches) / sizeof(watches[0]); i++)
-        watches[i].on = false;
-}
-
 void S9xInitCheatData(void)
 {
     Cheat.RAM = Memory.RAM;
@@ -228,7 +222,7 @@ void S9xUpdateCheatInMemory(SCheat &c)
                 /* Condition is now false, let the byte stand */
                 c.cond_true = false;
             }
-            else if (c.saved_byte == c.cond_byte && !c.cond_true)
+            else if (c.saved_byte == c.cond_byte)
             {
                 c.cond_true = true;
                 S9xSetByteFree(c.byte, c.address);
@@ -627,6 +621,9 @@ static void S9xLoadCheatsFromBMLNode(bml_node &n)
             continue;
 
         auto index = S9xAddCheatGroup(name, code);
+        if (index == -1)
+            continue;
+
         if (enable)
             S9xEnableCheatGroup(index);
     }
@@ -636,14 +633,14 @@ static void S9xLoadCheatsFromBMLNode(bml_node &n)
 
 static bool8 S9xLoadCheatFileClassic(const std::string &filename)
 {
-    FILE *fs;
+    RFILE *fs;
     uint8 data[28];
 
-    fs = fopen(filename.c_str(), "rb");
+    fs = rfopen(filename.c_str(), "rb");
     if (!fs)
         return (FALSE);
 
-    while (fread(data, 1, 28, fs) == 28)
+    while (rfread(data, 1, 28, fs) == 28)
     {
         SCheat c;
         c.enabled = (data[0] & 4) == 0;
@@ -660,7 +657,7 @@ static bool8 S9xLoadCheatFileClassic(const std::string &filename)
             S9xEnableCheatGroup(Cheat.group.size() - 1);
     }
 
-    fclose(fs);
+    rfclose(fs);
 
     return TRUE;
 }
@@ -685,39 +682,6 @@ bool8 S9xLoadCheatFile(const std::string &filename)
     }
 
     return (TRUE);
-}
-
-bool8 S9xSaveCheatFile(const std::string &filename)
-{
-    unsigned int i;
-    FILE *file = NULL;
-
-    if (Cheat.group.size() == 0)
-    {
-        remove(filename.c_str());
-        return TRUE;
-    }
-
-    file = fopen(filename.c_str(), "w");
-
-    if (!file)
-        return FALSE;
-
-    for (i = 0; i < Cheat.group.size(); i++)
-    {
-        fprintf(file,
-                "cheat\n"
-                "  name: %s\n"
-                "  code: %s\n"
-                "%s\n",
-                Cheat.group[i].name.c_str(),
-                S9xCheatGroupToText(i).c_str(),
-                Cheat.group[i].enabled ? "  enable\n" : "");
-    }
-
-    fclose(file);
-
-    return TRUE;
 }
 
 void S9xCheatsDisable(void)
@@ -756,38 +720,4 @@ void S9xCheatsEnable(void)
             S9xEnableCheatGroup(i);
         }
     }
-}
-
-int S9xImportCheatsFromDatabase(const std::string &filename)
-{
-    char sha256_txt[65];
-    char hextable[] = "0123456789abcdef";
-    unsigned int i;
-
-    bml_node bml;
-    if (!bml.parse_file(filename))
-        return -1; // No file
-
-    for (i = 0; i < 32; i++)
-    {
-        sha256_txt[i * 2]     = hextable[Memory.ROMSHA256[i] >> 4];
-        sha256_txt[i * 2 + 1] = hextable[Memory.ROMSHA256[i] & 0xf];
-    }
-    sha256_txt[64] = '\0';
-
-    for (auto &c : bml.child)
-    {
-        if (!strcasecmp(c.name.c_str(), "cartridge"))
-        {
-            auto n = c.find_subnode("sha256");
-
-            if (n && !strcasecmp(n->data.c_str(), sha256_txt))
-            {
-                S9xLoadCheatsFromBMLNode(c);
-                return 0;
-            }
-        }
-    }
-
-    return -2; /* No codes */
 }

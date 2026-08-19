@@ -1,7 +1,12 @@
 #include "libretro.h"
+#include <streams/file_stream.h>
+#include <vfs/vfs_hybrid.h>
+#include <file/file_path.h>
 #include "libretro_core_options.h"
 
 #include "snes9x.h"
+extern "C" { extern uint8 TileMode7Hires; extern uint8 TileMode7HiresBilinear; }
+#include "fxemu.h"
 #include "memmap.h"
 #include "srtc.h"
 #include "apu/apu.h"
@@ -10,9 +15,7 @@
 #include "snapshot.h"
 #include "controls.h"
 #include "cheats.h"
-#include "movie.h"
 #include "display.h"
-#include "conffile.h"
 #include "crosshairs.h"
 #include <stdio.h>
 #include <vector>
@@ -27,6 +30,8 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include "filter/snes_ntsc.h"
+
+static void reset_button_cache(void);
 
 #define RETRO_DEVICE_JOYPAD_MULTITAP ((1 << 8) | RETRO_DEVICE_JOYPAD)
 #define RETRO_DEVICE_LIGHTGUN_SUPER_SCOPE ((1 << 8) | RETRO_DEVICE_LIGHTGUN)
@@ -85,6 +90,15 @@ const int MAX_SNES_WIDTH_NTSC = ((SNES_NTSC_OUT_WIDTH(256) + 3) / 4) * 4;
 
 static bool show_lightgun_settings = true;
 static bool show_advanced_av_settings = true;
+/* snes9x_msu1_enhanced_audio core option. The live user preference and the
+   value the audio pipeline actually runs on are kept separate: the preference
+   is only copied into msu1_enhanced_latched at content load, immediately
+   before the frontend queries retro_get_system_av_info(). That keeps the
+   reported sample rate and the rate the core emits at in agreement for the
+   whole lifetime of the loaded content, with no need to renegotiate av_info
+   from inside a load callback. */
+static bool msu1_enhanced_pref    = true;
+static bool msu1_enhanced_latched = false;
 
 static void extract_basename(char *buf, const char *path, size_t size)
 {
@@ -184,6 +198,29 @@ static bool setting_superscope_reverse_buttons = false;
 void retro_set_environment(retro_environment_t cb)
 {
     environ_cb = cb;
+
+#ifndef STATIC_LINKING
+    /*
+       Hybrid VFS replaces the wholesale v1 adoption. MSU-1 makes this
+       core an unusually direct beneficiary: PCM sidecars stream
+       continuously during gameplay, and every one of those reads paid
+       the frontend-callback indirection on every platform. Plain
+       paths now serve through the local implementation directly;
+       the frontend is consulted only for URI-shaped paths or after a
+       local failure on sandboxed platforms, so Android keeps exactly
+       the reachability it had - plus dirent coverage the old v1-only
+       wiring never provided. log_cb is unset this early; the hybrid
+       treats NULL as no-log.
+    */
+    vfs_hybrid_init(cb, NULL);
+#else
+    /*
+       Statically linked frontends share one libretro-common with the
+       core: the local implementation and the "frontend VFS" are the
+       same code, so the hybrid is semantically void there and its
+       object is excluded from the archive (see Makefile.common).
+    */
+#endif
 
     static const struct retro_subsystem_memory_info multi_a_memory[] = {
         { "srm", RETRO_MEMORY_SNES_SUFAMI_TURBO_A_RAM },
@@ -342,6 +379,63 @@ static void update_variables(void)
     char key[256];
     struct retro_variable var;
 
+    var.key = "snes9x_msu1_enhanced_audio";
+    var.value = NULL;
+
+    msu1_enhanced_pref = true;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        msu1_enhanced_pref = !strcmp(var.value, "enabled");
+
+    var.key = "snes9x_mode7_hires";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        int prev = Settings.Mode7Hires;
+        if (strcmp(var.value, "4x_hv") == 0)
+        {
+            Settings.Mode7Hires = 4;
+            Settings.Mode7HiresVertical = 1;
+        }
+        else if (strcmp(var.value, "2x_hv") == 0)
+        {
+            Settings.Mode7Hires = 2;
+            Settings.Mode7HiresVertical = 1;
+        }
+        else if (strcmp(var.value, "4x") == 0)
+        {
+            Settings.Mode7Hires = 4;
+            Settings.Mode7HiresVertical = 0;
+        }
+        else if (strcmp(var.value, "2x") == 0)
+        {
+            Settings.Mode7Hires = 2;
+            Settings.Mode7HiresVertical = 0;
+        }
+        else
+        {
+            Settings.Mode7Hires = 0;
+            Settings.Mode7HiresVertical = 0;
+        }
+        TileMode7Hires = (uint8) Settings.Mode7Hires;
+        /* Live option switch: refresh frontend geometry (max/base sizes,
+           aspect) the same way the aspect option does. */
+        if (prev != Settings.Mode7Hires)
+            g_geometry_update = true;
+    }
+
+    var.key = "snes9x_mode7_hires_bilinear";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+    {
+        if (strcmp(var.value, "smooth") == 0)
+            Settings.Mode7HiresBilinear = 2;
+        else if (strcmp(var.value, "stable") == 0)
+            Settings.Mode7HiresBilinear = 1;
+        else
+            Settings.Mode7HiresBilinear = 0;
+        TileMode7HiresBilinear = (uint8) Settings.Mode7HiresBilinear;
+    }
+
     var.key = "snes9x_hires_blend";
     var.value = NULL;
 
@@ -361,7 +455,20 @@ static void update_variables(void)
     {
         int freq = atoi(var.value);
         Settings.SuperFXClockMultiplier = freq;
+        /* 6255000 is snes9x2010's default per-line budget (625500 per MHz at
+           its "10 MHz" default); the GSU executor and its per-opcode cycle
+           costs are snes9x2010's, so 100% here must mean the same speed the
+           reference core ships with (libretro/snes9x#314). */
+        SuperFXSpeedPerLineHz = (uint32) ((uint64) 6255000 * freq / 100);
+        SuperFXHwTimingPct = freq;
+        S9xSuperFXRecomputeSpeedPerLine();
     }
+
+    var.key = "snes9x_superfx_timing";
+    var.value = NULL;
+
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var))
+        fx_hw_timing = !strcmp(var.value, "hardware") ? 1 : 0;
 
     var.key = "snes9x_up_down_allowed";
     var.value = NULL;
@@ -397,10 +504,6 @@ static void update_variables(void)
     Settings.BG_Forced=disabled_layers;
 
     //for some reason, Transparency seems to control both the fixed color and the windowing registers?
-    var.key="snes9x_gfx_clip";
-    var.value=NULL;
-    Settings.DisableGraphicWindows=(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && !strcmp("disabled", var.value));
-
     var.key="snes9x_gfx_transp";
     var.value=NULL;
     Settings.Transparency=!(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && !strcmp("disabled", var.value));
@@ -791,22 +894,184 @@ static void update_variables(void)
     }
 }
 
-void S9xSyncSpeed() {
+/* Chunk size for the enhanced-audio upsampler's output staging buffer. This is
+   not a worst case: audio_upload_samples() loops until the input batch is
+   consumed, uploading a chunk at a time, so no frame count has to fit here.
+   That matters because the input batch is not bounded by the per-frame sample
+   count - S9xDrainAudio hands over whatever the DSP accumulated, up to a full
+   2048-frame landing buffer, which at the 44100/32040 output ratio would want
+   2818 output frames. */
+#define MSU1_ENH_CHUNK 1024
 
-    if (Settings.Mute) {
-        S9xClearSamples();
+/* True while the enhanced upsampler holds valid in-flight state; cleared
+   whenever the enhanced path is not the one feeding the frontend, so state
+   never leaks across a mode change. */
+static bool msu1_enh_running = false;
+
+static bool msu1_enhanced_active(void)
+{
+    return msu1_enhanced_latched && Settings.MSU1;
+}
+
+/* The frontend is clocked at 44.1 kHz scaled by however far the SPC rate has
+   been pushed, so the ratio the upsampler works to stays exact. */
+static uint32_t msu1_enhanced_output_rate(void)
+{
+    return (uint32_t) (44100.0 * (double) S9xGetAudioSampleRate() / 32040.0);
+}
+
+/* Frame-boundary hook from cpuexec. The audio upload used to happen here,
+   mid-frame at the start of vblank; it now happens at the end of retro_run so
+   one call to the core produces exactly one video frame and one consecutive
+   run of audio samples. Nothing else needs doing at this point - throttling
+   is the frontend's job. */
+void S9xSyncSpeed() {}
+
+/* Deliver this frame's audio. Zero-copy in the normal case: S9xDrainAudio
+   returns a pointer into the DSP's landing buffer and that pointer goes
+   straight to the frontend. */
+static void audio_upload_samples(void)
+{
+    int count = 0;
+    const int16_t *src = S9xDrainAudio(&count);
+
+    if (count <= 0)
+        return;
+
+    /* Muted means hard-disabled (see retro_run), which is a promise from the
+       frontend that it will never need this audio - libretro.h says as much,
+       and RetroArch only ever sets the bit around runahead's discarded frames,
+       where it has suspended its own consumption for the same frames.
+       audio_driver_sample_batch() returns on the suspended flag before it
+       reads anything the core hands over, so uploading here would be filling a
+       buffer nobody looks at. Drop the frame instead.
+
+       In practice this is unreachable now that the DSP declines to run at all
+       under the same flag - the drain above reports nothing and the function
+       has already returned - but the flag is the contract and the check is
+       where the contract belongs. */
+    if (Settings.Mute || !msu1_enhanced_active())
+        msu1_enh_running = false;
+
+    if (Settings.Mute)
+        return;
+
+    /* MSU-1 Enhanced Audio: run the frame at 44.1 kHz so the MSU-1 stream
+       mixes in at its native rate instead of being decimated to the SPC's
+       ~32040 Hz (libretro/snes9x#309). The SPC side is linearly upsampled
+       here; the interpolator's frame pair and 32.32 phase live in struct MSU1
+       so they survive savestates and rollback. */
+    if (msu1_enhanced_active())
+    {
+        static int16_t enh_buffer[MSU1_ENH_CHUNK * 2];
+
+        int16_t  cur_l = (int16_t) MSU1.MSU1_EnhCurL;
+        int16_t  cur_r = (int16_t) MSU1.MSU1_EnhCurR;
+        int16_t  nxt_l = (int16_t) MSU1.MSU1_EnhNxtL;
+        int16_t  nxt_r = (int16_t) MSU1.MSU1_EnhNxtR;
+        uint64_t frac  = MSU1.MSU1_EnhFrac;
+        int      fill  = (int) MSU1.MSU1_EnhFill;
+
+        int      in_frames  = count >> 1;
+        int      in_pos     = 0;
+        uint32_t in_rate    = S9xGetAudioSampleRate();
+        uint32_t out_rate   = msu1_enhanced_output_rate();
+        uint64_t step       = out_rate
+                            ? (((uint64_t) in_rate << 32) / out_rate) : 0;
+
+        if (!msu1_enh_running)
+        {
+            frac = 0;
+            fill = 0;
+            msu1_enh_running = true;
+        }
+
+        /* A zero step would leave the phase standing still: the emit loop
+           would fill a chunk without consuming an input frame and the outer
+           loop would never terminate. out_rate is in_rate scaled by
+           44100/32040 so this is unreachable, but the loop's termination
+           argument rests on it, so bail rather than trust the arithmetic. */
+        if (!step)
+        {
+            msu1_enh_running = false;
+            return;
+        }
+
+        /* One pass per output chunk. The upsampler state carries across
+           passes exactly as it carries across batches, so a batch that spans
+           several chunks is indistinguishable from several smaller batches -
+           no input frame is dropped at a chunk boundary. */
+        for (;;)
+        {
+            int out_frames = 0;
+
+            while (fill < 2 && in_pos < in_frames)
+            {
+                if (fill == 0) { cur_l = src[in_pos * 2]; cur_r = src[in_pos * 2 + 1]; }
+                else           { nxt_l = src[in_pos * 2]; nxt_r = src[in_pos * 2 + 1]; }
+                fill++;
+                in_pos++;
+            }
+
+            /* Short of a frame pair: the rest arrives with the next batch. */
+            if (fill < 2)
+                break;
+
+            while (fill == 2 && out_frames < MSU1_ENH_CHUNK)
+            {
+                /* 64-bit product: |nxt - cur| * t reaches 65535 * 65535, which
+                   overflows int32 on full-scale transients. */
+                uint32_t t = (uint32_t) (frac >> 16) & 0xffff;
+                enh_buffer[out_frames * 2] = (int16_t) (cur_l +
+                    (int32_t) (((int64_t) (nxt_l - cur_l) * (int32_t) t) >> 16));
+                enh_buffer[out_frames * 2 + 1] = (int16_t) (cur_r +
+                    (int32_t) (((int64_t) (nxt_r - cur_r) * (int32_t) t) >> 16));
+                out_frames++;
+
+                frac += step;
+                while (frac >= ((uint64_t) 1 << 32))
+                {
+                    frac -= (uint64_t) 1 << 32;
+                    cur_l = nxt_l; cur_r = nxt_r;
+                    if (in_pos < in_frames)
+                    {
+                        nxt_l = src[in_pos * 2];
+                        nxt_r = src[in_pos * 2 + 1];
+                        in_pos++;
+                    }
+                    else
+                    {
+                        fill = 1;   /* nxt refills from the next batch */
+                        break;
+                    }
+                }
+            }
+
+            if (out_frames > 0)
+            {
+                S9xMSU1Mix(enh_buffer, (size_t) out_frames, out_rate);
+                audio_batch_cb(enh_buffer, (size_t) out_frames);
+            }
+
+            /* Input exhausted; anything else is a full chunk and there is
+               more where it came from. */
+            if (fill < 2)
+                break;
+        }
+
+        MSU1.MSU1_EnhCurL = cur_l; MSU1.MSU1_EnhCurR = cur_r;
+        MSU1.MSU1_EnhNxtL = nxt_l; MSU1.MSU1_EnhNxtR = nxt_r;
+        MSU1.MSU1_EnhFrac = frac;
+        MSU1.MSU1_EnhFill = (uint8_t) fill;
+
         return;
     }
 
-    static std::vector<int16_t> audio_buffer;
+    /* Normal path: mix MSU-1 into the landing buffer at the SPC's own rate. */
+    if (Settings.MSU1)
+        S9xMSU1Mix((int16_t *) src, (size_t)(count >> 1), S9xGetAudioSampleRate());
 
-    size_t avail = S9xGetSampleCount();
-
-    if (audio_buffer.size() < avail)
-        audio_buffer.resize(avail);
-
-    S9xMixSamples((uint8*)&audio_buffer[0], avail);
-    audio_batch_cb(&audio_buffer[0], avail >> 1);
+    audio_batch_cb(src, (size_t)(count >> 1));
 }
 
 void retro_get_system_info(struct retro_system_info *info)
@@ -876,10 +1141,15 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 
     info->geometry.base_width = width;
     info->geometry.base_height = height;
-    info->geometry.max_width = MAX_SNES_WIDTH_NTSC;
+    info->geometry.max_width = MAX_SNES_WIDTH_NTSC > MAX_SNES_WIDTH_4X
+                                   ? MAX_SNES_WIDTH_NTSC : MAX_SNES_WIDTH_4X;
     info->geometry.max_height = MAX_SNES_HEIGHT;
     info->geometry.aspect_ratio = get_aspect_ratio(width, height);
-    info->timing.sample_rate = 32040;
+    /* What the core actually emits: the DSP's own rate, or the enhanced
+       44.1 kHz cadence when the MSU-1 path is upsampling. */
+    info->timing.sample_rate = msu1_enhanced_active()
+                             ? (double) msu1_enhanced_output_rate()
+                             : (double) S9xGetAudioSampleRate();
     info->timing.fps = retro_get_region() == RETRO_REGION_NTSC ? 21477272.0 / 357366.0 : 21281370.0 / 425568.0;
 
     g_screen_gun_width = width;
@@ -894,12 +1164,14 @@ unsigned retro_api_version()
 
 void retro_reset()
 {
+    reset_button_cache();
     S9xSoftReset();
 }
 
 static unsigned snes_devices[8];
 void retro_set_controller_port_device(unsigned port, unsigned device)
 {
+    reset_button_cache();
     if (port < 8)
     {
         int offset = snes_devices[0] == RETRO_DEVICE_JOYPAD_MULTITAP ? 4 : 1;
@@ -1014,7 +1286,7 @@ static void init_descriptors(void)
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,		"R" },
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT,	"Select" },
         { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,		"Start" },
-
+    
         { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
         { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,		"D-Pad Up" },
         { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
@@ -1066,7 +1338,7 @@ static void init_descriptors(void)
         { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,		"R" },
         { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT,	"Select" },
         { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,		"Start" },
-	    
+
         { 5, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
         { 5, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,		"D-Pad Up" },
         { 5, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
@@ -1079,7 +1351,7 @@ static void init_descriptors(void)
         { 5, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,		"R" },
         { 5, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT,	"Select" },
         { 5, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,		"Start" },
-	    
+        
         { 6, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
         { 6, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,		"D-Pad Up" },
         { 6, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
@@ -1139,9 +1411,20 @@ static int is_bsx (uint8 *p)
     return (0);
 }
 
+/* The header probe reads 32 bytes from p, so the caller must have that much
+   left. Anything smaller than a header offset plus a header is not a cart of
+   that layout anyway. */
+static int is_bsx_at (const uint8 *data, size_t size, size_t offset)
+{
+    if (!data || offset + 32 > size)
+        return (0);
+
+    return (is_bsx((uint8 *) data + offset));
+}
+
 static bool8 LoadBIOS(uint8 *biosrom, const char *biosname, int biossize)
 {
-    FILE	*fp;
+    RFILE	*fp;
     char	name[PATH_MAX + 1];
     bool8 r = FALSE;
 
@@ -1149,22 +1432,22 @@ static bool8 LoadBIOS(uint8 *biosrom, const char *biosname, int biossize)
     strcat(name, SLASH_STR);
     strcat(name, biosname);
 
-    fp = fopen(name, "rb");
+    fp = rfopen(name, "rb");
     if (!fp)
     {
         strcpy(name, S9xGetDirectory(BIOS_DIR).c_str());
         strcat(name, SLASH_STR);
         strcat(name, biosname);
 
-        fp = fopen(name, "rb");
+        fp = rfopen(name, "rb");
     }
 
     if (fp)
     {
         size_t size;
 
-        size = fread((void *) biosrom, 1, biossize, fp);
-        fclose(fp);
+        size = rfread((void *) biosrom, 1, biossize, fp);
+        rfclose(fp);
         if (size == (unsigned int) biossize)
             r = TRUE;
     }
@@ -1179,6 +1462,26 @@ static bool8 is_SufamiTurbo_Cart (const uint8 *data, uint32 size)
         return (TRUE);
     else
         return (FALSE);
+}
+
+/* MSU-1 tracks are 44.1 kHz PCM. Mixing them into the SPC's ~32040 Hz stream
+   decimates them through an interpolator with no anti-alias filtering, which
+   folds 16.02-22.05 kHz track content down into the 10-16 kHz band as audible
+   hiss (libretro/snes9x#309). The enhanced path avoids that by running the
+   frame at 44.1 kHz - see audio_upload_samples. That changes the rate the core
+   emits at, so the frontend has to agree on it.
+
+   It is told the ordinary way: retro_get_system_av_info() reports the enhanced
+   rate, and the frontend calls it once, straight after retro_load_game()
+   returns. Nothing has to be renegotiated, so this runs at the tail of the
+   load path with no environment call attached. SET_SYSTEM_AV_INFO would be
+   wrong here twice over - it may only be issued from retro_run(), and it tears
+   down and rebuilds the frontend's audio and video drivers, which at this
+   point in the load sequence have not necessarily been brought up yet. */
+static void msu1_latch_playback_rate(void)
+{
+    msu1_enhanced_latched = msu1_enhanced_pref;
+    msu1_enh_running      = false;
 }
 
 bool retro_load_game(const struct retro_game_info *game)
@@ -1205,7 +1508,8 @@ bool retro_load_game(const struct retro_game_info *game)
         }
 
         else
-        if ((is_bsx((uint8 *) game->data + 0x7fc0)==1) | (is_bsx((uint8 *) game->data + 0xffc0)==1)) {
+        if (is_bsx_at((const uint8 *) game->data, game->size, 0x7fc0) == 1 ||
+            is_bsx_at((const uint8 *) game->data, game->size, 0xffc0) == 1) {
             if ((rom_loaded = LoadBIOS(biosrom,"BS-X.bin",0x100000)))
             rom_loaded = Memory.LoadMultiCartMem(biosrom, 0x100000, (const uint8_t*)game->data, game->size, 0, 0);
         }
@@ -1233,13 +1537,15 @@ bool retro_load_game(const struct retro_game_info *game)
         if (randomize_memory)
         {
             srand(time(NULL));
-            for(int lcv = 0; lcv < sizeof(Memory.RAM); lcv++)
+            for(size_t lcv = 0; lcv < sizeof(Memory.RAM); lcv++)
                 Memory.RAM[lcv] = rand() % 256;
         }
     }
 
     if (!rom_loaded && log_cb)
         log_cb(RETRO_LOG_ERROR, "ROM loading failed...\n");
+
+    msu1_latch_playback_rate();
 
     Memory.ClearSRAM();
 
@@ -1375,6 +1681,8 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
         g_geometry_update = true;
     }
 
+    msu1_latch_playback_rate();
+
     return rom_loaded;
 }
 
@@ -1423,12 +1731,8 @@ void retro_init(void)
     Settings.MacsRifleMaster = TRUE;
     Settings.FrameTimePAL = 20000;
     Settings.FrameTimeNTSC = 16667;
-    Settings.SixteenBitSound = TRUE;
     Settings.Stereo = TRUE;
-    Settings.SoundPlaybackRate = 32040;
-    Settings.SoundInputRate = 32040;
     Settings.Transparency = TRUE;
-    Settings.AutoDisplayMessages = TRUE;
     Settings.InitialInfoStringTimeout = 120;
     Settings.HDMATimingHack = 100;
     Settings.BlockInvalidVRAMAccessMaster = TRUE;
@@ -1483,8 +1787,40 @@ void retro_init(void)
         libretro_supports_bitmasks = true;
 }
 
-#define MAP_BUTTON(id, name) S9xMapButton((id), S9xGetCommandT((name)), false)
+#define MAP_BUTTON(id, name) S9xMapButton((id), S9xGetCommandT((name)))
 #define MAKE_BUTTON(pad, btn) (((pad)<<4)|(btn))
+
+/* Peripheral reports are edges, not state. The Super Scope's
+   phys/next/read triple emulates one shot per trigger pull unless turbo
+   is engaged: S9xSetJoypadLatch clears FIRE/CURSOR out of next_buttons
+   after every read, so re-reporting a held trigger each frame re-arms it
+   and the scope free-fires with turbo off. The Justifier and mouse
+   handlers are written to the same press/release contract. Pads do not
+   go through here at all - they are absolute state via
+   S9xSetJoypadButtons - so this cache cannot desync the way the old
+   whole-input one did in libretro/snes9x#313. It still has to be
+   dropped whenever the core's own copy can change underneath it:
+   savestate load restores the peripheral button state, and a device
+   change or reset rebuilds it. */
+static uint8 peripheral_button_cache[MAKE_BUTTON(3 + 1, 0)];
+
+static void reset_button_cache(void)
+{
+    memset(peripheral_button_cache, 0, sizeof(peripheral_button_cache));
+}
+
+static void report_button(uint32 id, bool pressed)
+{
+    if (id < sizeof(peripheral_button_cache))
+    {
+        if (peripheral_button_cache[id] == (uint8) pressed)
+            return;
+        peripheral_button_cache[id] = (uint8) pressed;
+    }
+
+    S9xReportButton(id, pressed);
+}
+
 
 #define PAD_1 1
 #define PAD_2 2
@@ -1495,20 +1831,35 @@ void retro_init(void)
 #define PAD_7 7
 #define PAD_8 8
 
-#define BTN_B RETRO_DEVICE_ID_JOYPAD_B
-#define BTN_Y RETRO_DEVICE_ID_JOYPAD_Y
-#define BTN_SELECT RETRO_DEVICE_ID_JOYPAD_SELECT
-#define BTN_START RETRO_DEVICE_ID_JOYPAD_START
-#define BTN_UP RETRO_DEVICE_ID_JOYPAD_UP
-#define BTN_DOWN RETRO_DEVICE_ID_JOYPAD_DOWN
-#define BTN_LEFT RETRO_DEVICE_ID_JOYPAD_LEFT
-#define BTN_RIGHT RETRO_DEVICE_ID_JOYPAD_RIGHT
-#define BTN_A RETRO_DEVICE_ID_JOYPAD_A
-#define BTN_X RETRO_DEVICE_ID_JOYPAD_X
-#define BTN_L RETRO_DEVICE_ID_JOYPAD_L
-#define BTN_R RETRO_DEVICE_ID_JOYPAD_R
-#define BTN_FIRST BTN_B
-#define BTN_LAST BTN_R
+/* RETRO_DEVICE_ID_JOYPAD_* (0..11) -> SNES joypad register bits. Pad
+   state is written straight into the core as an absolute mask every
+   frame; the pads are not in the keymap at all. */
+#define RETRO_PAD_ID_COUNT (RETRO_DEVICE_ID_JOYPAD_R + 1)
+
+static const uint16 retro_to_snes_mask[RETRO_PAD_ID_COUNT] =
+{
+    SNES_B_MASK,       /* B      */
+    SNES_Y_MASK,       /* Y      */
+    SNES_SELECT_MASK,  /* SELECT */
+    SNES_START_MASK,   /* START  */
+    SNES_UP_MASK,      /* UP     */
+    SNES_DOWN_MASK,    /* DOWN   */
+    SNES_LEFT_MASK,    /* LEFT   */
+    SNES_RIGHT_MASK,   /* RIGHT  */
+    SNES_A_MASK,       /* A      */
+    SNES_X_MASK,       /* X      */
+    SNES_TL_MASK,      /* L      */
+    SNES_TR_MASK,      /* R      */
+};
+
+static uint16 snes_pad_mask(int16_t joy_bits)
+{
+    uint16 mask = 0;
+    for (int i = 0; i < RETRO_PAD_ID_COUNT; i++)
+        if (joy_bits & (1 << i))
+            mask |= retro_to_snes_mask[i];
+    return mask;
+}
 
 #define MOUSE_X RETRO_DEVICE_ID_MOUSE_X
 #define MOUSE_Y RETRO_DEVICE_ID_MOUSE_Y
@@ -1531,6 +1882,7 @@ static int scope_button_count = sizeof( scope_buttons ) / sizeof( int );
 #define SUPER_SCOPE_CURSOR 3
 #define SUPER_SCOPE_TURBO 4
 #define SUPER_SCOPE_START 5
+#define SUPER_SCOPE_OFFSCREEN 6
 
 #define JUSTIFIER_TRIGGER 2
 #define JUSTIFIER_START 3
@@ -1538,117 +1890,37 @@ static int scope_button_count = sizeof( scope_buttons ) / sizeof( int );
 
 #define MACS_RIFLE_TRIGGER 2
 
-#define BTN_POINTER (BTN_LAST + 1)
+/* Keymap IDs. Only the peripherals are in the keymap now, occupying
+   MAKE_BUTTON(pad 1-3, slot 2-6) i.e. 0x12-0x36, so the two pointer IDs
+   just have to sit clear of that range. */
+#define BTN_POINTER 0x90
 #define BTN_POINTER2 (BTN_POINTER + 1)
 
 
 static void map_buttons()
 {
-    MAP_BUTTON(MAKE_BUTTON(PAD_1, BTN_A), "Joypad1 A");
-    MAP_BUTTON(MAKE_BUTTON(PAD_1, BTN_B), "Joypad1 B");
-    MAP_BUTTON(MAKE_BUTTON(PAD_1, BTN_X), "Joypad1 X");
-    MAP_BUTTON(MAKE_BUTTON(PAD_1, BTN_Y), "Joypad1 Y");
-    MAP_BUTTON(MAKE_BUTTON(PAD_1, BTN_SELECT), "{Joypad1 Select,Mouse1 L}");
-    MAP_BUTTON(MAKE_BUTTON(PAD_1, BTN_START), "{Joypad1 Start,Mouse1 R}");
-    MAP_BUTTON(MAKE_BUTTON(PAD_1, BTN_L), "Joypad1 L");
-    MAP_BUTTON(MAKE_BUTTON(PAD_1, BTN_R), "Joypad1 R");
-    MAP_BUTTON(MAKE_BUTTON(PAD_1, BTN_LEFT), "Joypad1 Left");
-    MAP_BUTTON(MAKE_BUTTON(PAD_1, BTN_RIGHT), "Joypad1 Right");
-    MAP_BUTTON(MAKE_BUTTON(PAD_1, BTN_UP), "Joypad1 Up");
-    MAP_BUTTON(MAKE_BUTTON(PAD_1, BTN_DOWN), "Joypad1 Down");
-    S9xMapPointer((BTN_POINTER), S9xGetCommandT("Pointer Mouse1+Superscope+Justifier1+MacsRifle"), false);
-    S9xMapPointer((BTN_POINTER2), S9xGetCommandT("Pointer Mouse2+Justifier2"), false);
+    reset_button_cache();
+    /* Joypads deliberately absent: report_buttons() writes their
+       absolute state into the core directly. Only the peripherals go
+       through the keymap, on exactly the MAKE_BUTTON slots the report
+       paths already use - mouse buttons on pad-N slots 2/3, Super Scope
+       on pad-2 slots 2-6, Justifier 1 on pad-2 slots 2-4, Justifier 2
+       and the MACS Rifle likewise. */
+    MAP_BUTTON(MAKE_BUTTON(PAD_1, MOUSE_LEFT), "Mouse1 L");
+    MAP_BUTTON(MAKE_BUTTON(PAD_1, MOUSE_RIGHT), "Mouse1 R");
 
-    MAP_BUTTON(MAKE_BUTTON(PAD_2, BTN_B), "Joypad2 B");
-    MAP_BUTTON(MAKE_BUTTON(PAD_2, BTN_Y), "Joypad2 Y");
-    MAP_BUTTON(MAKE_BUTTON(PAD_2, BTN_SELECT), "{Joypad2 Select,Mouse2 L,Superscope Fire,Justifier1 Trigger,MacsRifle Trigger}");
-    MAP_BUTTON(MAKE_BUTTON(PAD_2, BTN_START), "{Joypad2 Start,Mouse2 R,Superscope Cursor,Justifier1 Start}");
-    MAP_BUTTON(MAKE_BUTTON(PAD_2, BTN_UP), "{Joypad2 Up,Superscope ToggleTurbo,Justifier1 AimOffscreen}");
-    MAP_BUTTON(MAKE_BUTTON(PAD_2, BTN_DOWN), "{Joypad2 Down,Superscope Pause}");
-    MAP_BUTTON(MAKE_BUTTON(PAD_2, BTN_LEFT), "{Joypad2 Left,Superscope AimOffscreen}");
-    MAP_BUTTON(MAKE_BUTTON(PAD_2, BTN_RIGHT), "Joypad2 Right");
-    MAP_BUTTON(MAKE_BUTTON(PAD_2, BTN_A), "Joypad2 A");
-    MAP_BUTTON(MAKE_BUTTON(PAD_2, BTN_X), "Joypad2 X");
-    MAP_BUTTON(MAKE_BUTTON(PAD_2, BTN_L), "Joypad2 L");
-    MAP_BUTTON(MAKE_BUTTON(PAD_2, BTN_R), "Joypad2 R");
+    MAP_BUTTON(MAKE_BUTTON(PAD_2, SUPER_SCOPE_TRIGGER), "{Mouse2 L,Superscope Fire,Justifier1 Trigger,MacsRifle Trigger}");
+    MAP_BUTTON(MAKE_BUTTON(PAD_2, SUPER_SCOPE_CURSOR), "{Mouse2 R,Superscope Cursor,Justifier1 Start}");
+    MAP_BUTTON(MAKE_BUTTON(PAD_2, SUPER_SCOPE_TURBO), "{Superscope ToggleTurbo,Justifier1 AimOffscreen}");
+    MAP_BUTTON(MAKE_BUTTON(PAD_2, SUPER_SCOPE_START), "Superscope Pause");
+    MAP_BUTTON(MAKE_BUTTON(PAD_2, SUPER_SCOPE_OFFSCREEN), "Superscope AimOffscreen");
 
-    MAP_BUTTON(MAKE_BUTTON(PAD_3, BTN_B), "Joypad3 B");
-    MAP_BUTTON(MAKE_BUTTON(PAD_3, BTN_Y), "Joypad3 Y");
-    MAP_BUTTON(MAKE_BUTTON(PAD_3, BTN_SELECT), "{Joypad3 Select,Justifier2 Trigger}");
-    MAP_BUTTON(MAKE_BUTTON(PAD_3, BTN_START), "{Joypad3 Start,Justifier2 Start}");
-    MAP_BUTTON(MAKE_BUTTON(PAD_3, BTN_UP), "{Joypad3 Up,Justifier2 AimOffscreen}");
-    MAP_BUTTON(MAKE_BUTTON(PAD_3, BTN_DOWN), "Joypad3 Down");
-    MAP_BUTTON(MAKE_BUTTON(PAD_3, BTN_LEFT), "Joypad3 Left");
-    MAP_BUTTON(MAKE_BUTTON(PAD_3, BTN_RIGHT), "Joypad3 Right");
-    MAP_BUTTON(MAKE_BUTTON(PAD_3, BTN_A), "Joypad3 A");
-    MAP_BUTTON(MAKE_BUTTON(PAD_3, BTN_X), "Joypad3 X");
-    MAP_BUTTON(MAKE_BUTTON(PAD_3, BTN_L), "Joypad3 L");
-    MAP_BUTTON(MAKE_BUTTON(PAD_3, BTN_R), "Joypad3 R");
+    MAP_BUTTON(MAKE_BUTTON(PAD_3, JUSTIFIER_TRIGGER), "Justifier2 Trigger");
+    MAP_BUTTON(MAKE_BUTTON(PAD_3, JUSTIFIER_START), "Justifier2 Start");
+    MAP_BUTTON(MAKE_BUTTON(PAD_3, JUSTIFIER_OFFSCREEN), "Justifier2 AimOffscreen");
 
-    MAP_BUTTON(MAKE_BUTTON(PAD_4, BTN_A), "Joypad4 A");
-    MAP_BUTTON(MAKE_BUTTON(PAD_4, BTN_B), "Joypad4 B");
-    MAP_BUTTON(MAKE_BUTTON(PAD_4, BTN_X), "Joypad4 X");
-    MAP_BUTTON(MAKE_BUTTON(PAD_4, BTN_Y), "Joypad4 Y");
-    MAP_BUTTON(MAKE_BUTTON(PAD_4, BTN_SELECT), "Joypad4 Select");
-    MAP_BUTTON(MAKE_BUTTON(PAD_4, BTN_START), "Joypad4 Start");
-    MAP_BUTTON(MAKE_BUTTON(PAD_4, BTN_L), "Joypad4 L");
-    MAP_BUTTON(MAKE_BUTTON(PAD_4, BTN_R), "Joypad4 R");
-    MAP_BUTTON(MAKE_BUTTON(PAD_4, BTN_LEFT), "Joypad4 Left");
-    MAP_BUTTON(MAKE_BUTTON(PAD_4, BTN_RIGHT), "Joypad4 Right");
-    MAP_BUTTON(MAKE_BUTTON(PAD_4, BTN_UP), "Joypad4 Up");
-    MAP_BUTTON(MAKE_BUTTON(PAD_4, BTN_DOWN), "Joypad4 Down");
-
-    MAP_BUTTON(MAKE_BUTTON(PAD_5, BTN_A), "Joypad5 A");
-    MAP_BUTTON(MAKE_BUTTON(PAD_5, BTN_B), "Joypad5 B");
-    MAP_BUTTON(MAKE_BUTTON(PAD_5, BTN_X), "Joypad5 X");
-    MAP_BUTTON(MAKE_BUTTON(PAD_5, BTN_Y), "Joypad5 Y");
-    MAP_BUTTON(MAKE_BUTTON(PAD_5, BTN_SELECT), "Joypad5 Select");
-    MAP_BUTTON(MAKE_BUTTON(PAD_5, BTN_START), "Joypad5 Start");
-    MAP_BUTTON(MAKE_BUTTON(PAD_5, BTN_L), "Joypad5 L");
-    MAP_BUTTON(MAKE_BUTTON(PAD_5, BTN_R), "Joypad5 R");
-    MAP_BUTTON(MAKE_BUTTON(PAD_5, BTN_LEFT), "Joypad5 Left");
-    MAP_BUTTON(MAKE_BUTTON(PAD_5, BTN_RIGHT), "Joypad5 Right");
-    MAP_BUTTON(MAKE_BUTTON(PAD_5, BTN_UP), "Joypad5 Up");
-    MAP_BUTTON(MAKE_BUTTON(PAD_5, BTN_DOWN), "Joypad5 Down");
-
-    MAP_BUTTON(MAKE_BUTTON(PAD_6, BTN_A), "Joypad6 A");
-    MAP_BUTTON(MAKE_BUTTON(PAD_6, BTN_B), "Joypad6 B");
-    MAP_BUTTON(MAKE_BUTTON(PAD_6, BTN_X), "Joypad6 X");
-    MAP_BUTTON(MAKE_BUTTON(PAD_6, BTN_Y), "Joypad6 Y");
-    MAP_BUTTON(MAKE_BUTTON(PAD_6, BTN_SELECT), "Joypad6 Select");
-    MAP_BUTTON(MAKE_BUTTON(PAD_6, BTN_START), "Joypad6 Start");
-    MAP_BUTTON(MAKE_BUTTON(PAD_6, BTN_L), "Joypad6 L");
-    MAP_BUTTON(MAKE_BUTTON(PAD_6, BTN_R), "Joypad6 R");
-    MAP_BUTTON(MAKE_BUTTON(PAD_6, BTN_LEFT), "Joypad6 Left");
-    MAP_BUTTON(MAKE_BUTTON(PAD_6, BTN_RIGHT), "Joypad6 Right");
-    MAP_BUTTON(MAKE_BUTTON(PAD_6, BTN_UP), "Joypad6 Up");
-    MAP_BUTTON(MAKE_BUTTON(PAD_6, BTN_DOWN), "Joypad6 Down");
-	
-    MAP_BUTTON(MAKE_BUTTON(PAD_7, BTN_A), "Joypad7 A");
-    MAP_BUTTON(MAKE_BUTTON(PAD_7, BTN_B), "Joypad7 B");
-    MAP_BUTTON(MAKE_BUTTON(PAD_7, BTN_X), "Joypad7 X");
-    MAP_BUTTON(MAKE_BUTTON(PAD_7, BTN_Y), "Joypad7 Y");
-    MAP_BUTTON(MAKE_BUTTON(PAD_7, BTN_SELECT), "Joypad7 Select");
-    MAP_BUTTON(MAKE_BUTTON(PAD_7, BTN_START), "Joypad7 Start");
-    MAP_BUTTON(MAKE_BUTTON(PAD_7, BTN_L), "Joypad7 L");
-    MAP_BUTTON(MAKE_BUTTON(PAD_7, BTN_R), "Joypad7 R");
-    MAP_BUTTON(MAKE_BUTTON(PAD_7, BTN_LEFT), "Joypad7 Left");
-    MAP_BUTTON(MAKE_BUTTON(PAD_7, BTN_RIGHT), "Joypad7 Right");
-    MAP_BUTTON(MAKE_BUTTON(PAD_7, BTN_UP), "Joypad7 Up");
-    MAP_BUTTON(MAKE_BUTTON(PAD_7, BTN_DOWN), "Joypad7 Down");
-	
-    MAP_BUTTON(MAKE_BUTTON(PAD_8, BTN_A), "Joypad8 A");
-    MAP_BUTTON(MAKE_BUTTON(PAD_8, BTN_B), "Joypad8 B");
-    MAP_BUTTON(MAKE_BUTTON(PAD_8, BTN_X), "Joypad8 X");
-    MAP_BUTTON(MAKE_BUTTON(PAD_8, BTN_Y), "Joypad8 Y");
-    MAP_BUTTON(MAKE_BUTTON(PAD_8, BTN_SELECT), "Joypad8 Select");
-    MAP_BUTTON(MAKE_BUTTON(PAD_8, BTN_START), "Joypad8 Start");
-    MAP_BUTTON(MAKE_BUTTON(PAD_8, BTN_L), "Joypad8 L");
-    MAP_BUTTON(MAKE_BUTTON(PAD_8, BTN_R), "Joypad8 R");
-    MAP_BUTTON(MAKE_BUTTON(PAD_8, BTN_LEFT), "Joypad8 Left");
-    MAP_BUTTON(MAKE_BUTTON(PAD_8, BTN_RIGHT), "Joypad8 Right");
-    MAP_BUTTON(MAKE_BUTTON(PAD_8, BTN_UP), "Joypad8 Up");
-    MAP_BUTTON(MAKE_BUTTON(PAD_8, BTN_DOWN), "Joypad8 Down");
+    S9xMapPointer((BTN_POINTER), S9xGetCommandT("Pointer Mouse1+Superscope+Justifier1+MacsRifle"));
+    S9xMapPointer((BTN_POINTER2), S9xGetCommandT("Pointer Mouse2+Justifier2"));
 }
 
 static int16_t snes_mouse_state[2][2] = {{0}, {0}};
@@ -1723,13 +1995,13 @@ static void input_handle_pointer_lightgun( unsigned port, unsigned gun_device, i
         switch (gun_device)
         {
         case RETRO_DEVICE_LIGHTGUN_SUPER_SCOPE:
-            S9xReportButton(MAKE_BUTTON(PAD_2, setting_superscope_reverse_buttons ? SUPER_SCOPE_CURSOR : SUPER_SCOPE_TRIGGER), false);
+            report_button(MAKE_BUTTON(PAD_2, setting_superscope_reverse_buttons ? SUPER_SCOPE_CURSOR : SUPER_SCOPE_TRIGGER), false);
             break;
         case RETRO_DEVICE_LIGHTGUN_JUSTIFIER:
-            S9xReportButton(MAKE_BUTTON(PAD_2, JUSTIFIER_TRIGGER), false);
+            report_button(MAKE_BUTTON(PAD_2, JUSTIFIER_TRIGGER), false);
             break;
         case RETRO_DEVICE_LIGHTGUN_MACS_RIFLE:
-            S9xReportButton(MAKE_BUTTON(PAD_2, MACS_RIFLE_TRIGGER), false);
+            report_button(MAKE_BUTTON(PAD_2, MACS_RIFLE_TRIGGER), false);
             break;
         default:
             break;
@@ -1772,13 +2044,13 @@ static void input_handle_pointer_lightgun( unsigned port, unsigned gun_device, i
                     }
                 }
             }
-            S9xReportButton(MAKE_BUTTON(PAD_2, SUPER_SCOPE_START), start_pressed);
-            S9xReportButton(MAKE_BUTTON(PAD_2, SUPER_SCOPE_TRIGGER), trigger_pressed);
-            S9xReportButton(MAKE_BUTTON(PAD_2, SUPER_SCOPE_CURSOR), cursor_pressed);
+            report_button(MAKE_BUTTON(PAD_2, SUPER_SCOPE_START), start_pressed);
+            report_button(MAKE_BUTTON(PAD_2, SUPER_SCOPE_TRIGGER), trigger_pressed);
+            report_button(MAKE_BUTTON(PAD_2, SUPER_SCOPE_CURSOR), cursor_pressed);
             bool old_turbo = turbo_pressed;
             turbo_pressed = turbo_pressed && !snes_superscope_turbo_latch;
             snes_superscope_turbo_latch = old_turbo;
-            S9xReportButton(MAKE_BUTTON(PAD_2, SUPER_SCOPE_TURBO), turbo_pressed);
+            report_button(MAKE_BUTTON(PAD_2, SUPER_SCOPE_TURBO), turbo_pressed);
             break;
         }
 
@@ -1797,15 +2069,15 @@ static void input_handle_pointer_lightgun( unsigned port, unsigned gun_device, i
                     trigger_pressed = true;
                 }
             }
-            S9xReportButton(MAKE_BUTTON(PAD_2, JUSTIFIER_TRIGGER), trigger_pressed || offscreen);
-            S9xReportButton(MAKE_BUTTON(PAD_2, JUSTIFIER_START), start_pressed ? 1 : 0 );
-            S9xReportButton(MAKE_BUTTON(PAD_2, JUSTIFIER_OFFSCREEN), offscreen);
+            report_button(MAKE_BUTTON(PAD_2, JUSTIFIER_TRIGGER), trigger_pressed || offscreen);
+            report_button(MAKE_BUTTON(PAD_2, JUSTIFIER_START), start_pressed ? 1 : 0 );
+            report_button(MAKE_BUTTON(PAD_2, JUSTIFIER_OFFSCREEN), offscreen);
             break;
         }
         case RETRO_DEVICE_LIGHTGUN_MACS_RIFLE:
         {
             int pressed = input_state_cb(port, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_PRESSED);
-            S9xReportButton(MAKE_BUTTON(PAD_2, MACS_RIFLE_TRIGGER),pressed);
+            report_button(MAKE_BUTTON(PAD_2, MACS_RIFLE_TRIGGER),pressed);
             break;
         }
         case RETRO_DEVICE_NONE:
@@ -1832,12 +2104,11 @@ static void report_buttons()
                 else
                 {
                     joy_bits = 0;
-                    for (int i = 0; i < (RETRO_DEVICE_ID_JOYPAD_R3+1); i++)
+                    for (int i = 0; i < RETRO_PAD_ID_COUNT; i++)
                         joy_bits |= input_state_cb(port * offset, RETRO_DEVICE_JOYPAD, 0, i) ? (1 << i) : 0;
                 }
 
-                for (int i = BTN_FIRST; i <= BTN_LAST; i++)
-                    S9xReportButton(MAKE_BUTTON(port * offset + 1, i), joy_bits & (1 << i));
+                S9xSetJoypadButtons(port * offset, snes_pad_mask(joy_bits));
                 break;
 
             case RETRO_DEVICE_JOYPAD_MULTITAP:
@@ -1848,13 +2119,12 @@ static void report_buttons()
                     else
                     {
                         joy_bits = 0;
-                        for (int i = 0; i < (RETRO_DEVICE_ID_JOYPAD_R3+1); i++)
+                        for (int i = 0; i < RETRO_PAD_ID_COUNT; i++)
                             joy_bits |= input_state_cb(port * offset + j, RETRO_DEVICE_JOYPAD, 0, i) ? (1 << i) : 0;
                     }
 
-                    for (int i = BTN_FIRST; i <= BTN_LAST; i++)
-                        S9xReportButton(MAKE_BUTTON(port * offset + j + 1, i), joy_bits & (1 << i));
-				}
+                    S9xSetJoypadButtons(port * offset + j, snes_pad_mask(joy_bits));
+                }
                 break;
 
             case RETRO_DEVICE_MOUSE:
@@ -1864,7 +2134,7 @@ static void report_buttons()
                 snes_mouse_state[port][1] += _y;
                 S9xReportPointer(BTN_POINTER + port, snes_mouse_state[port][0], snes_mouse_state[port][1]);
                 for (int i = MOUSE_LEFT; i <= MOUSE_LAST; i++)
-                    S9xReportButton(MAKE_BUTTON(port + 1, i), input_state_cb(port, RETRO_DEVICE_MOUSE, 0, i));
+                    report_button(MAKE_BUTTON(port + 1, i), input_state_cb(port, RETRO_DEVICE_MOUSE, 0, i));
                 break;
 
             case RETRO_DEVICE_LIGHTGUN_SUPER_SCOPE:
@@ -1896,7 +2166,7 @@ static void report_buttons()
                                 super_scope_button_id = SUPER_SCOPE_TRIGGER;
                             }
                         }
-                        S9xReportButton(MAKE_BUTTON(PAD_2, super_scope_button_id), btn);
+                        report_button(MAKE_BUTTON(PAD_2, super_scope_button_id), btn);
                     }
                 }
                 break;
@@ -1915,15 +2185,15 @@ static void report_buttons()
 
                         /* Trigger ? */
                         int btn_trigger = input_state_cb( port, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_TRIGGER );
-                        S9xReportButton(MAKE_BUTTON(PAD_2, JUSTIFIER_TRIGGER), btn_trigger || btn_offscreen_shot);
+                        report_button(MAKE_BUTTON(PAD_2, JUSTIFIER_TRIGGER), btn_trigger || btn_offscreen_shot);
 
                         /* Start Button ? */
                         int btn_start = input_state_cb( port, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_START );
-                        S9xReportButton(MAKE_BUTTON(PAD_2, JUSTIFIER_START), btn_start ? 1 : 0 );
+                        report_button(MAKE_BUTTON(PAD_2, JUSTIFIER_START), btn_start ? 1 : 0 );
 
                         /* Aiming off-screen ? */
                         int btn_offscreen = input_state_cb( port, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN );
-                        S9xReportButton(MAKE_BUTTON(PAD_2, JUSTIFIER_OFFSCREEN), btn_offscreen || btn_offscreen_shot);
+                        report_button(MAKE_BUTTON(PAD_2, JUSTIFIER_OFFSCREEN), btn_offscreen || btn_offscreen_shot);
                     }
 
                     /* Second Gun? */
@@ -1938,15 +2208,15 @@ static void report_buttons()
 
                         /* Trigger ? */
                         int btn_trigger = input_state_cb( second, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_TRIGGER );
-                        S9xReportButton(MAKE_BUTTON(PAD_3, JUSTIFIER_TRIGGER), btn_trigger || btn_offscreen_shot);
+                        report_button(MAKE_BUTTON(PAD_3, JUSTIFIER_TRIGGER), btn_trigger || btn_offscreen_shot);
 
                         /* Start Button ? */
                         int btn_start = input_state_cb( second, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_START );
-                        S9xReportButton(MAKE_BUTTON(PAD_3, JUSTIFIER_START), btn_start ? 1 : 0 );
+                        report_button(MAKE_BUTTON(PAD_3, JUSTIFIER_START), btn_start ? 1 : 0 );
 
                         /* Aiming off-screen ? */
                         int btn_offscreen = input_state_cb( second, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN );
-                        S9xReportButton(MAKE_BUTTON(PAD_3, JUSTIFIER_OFFSCREEN), btn_offscreen || btn_offscreen_shot);
+                        report_button(MAKE_BUTTON(PAD_3, JUSTIFIER_OFFSCREEN), btn_offscreen || btn_offscreen_shot);
                     }
                 }
                 break;
@@ -1961,7 +2231,7 @@ static void report_buttons()
                     {
                         /* Trigger ? */
                         int btn_trigger = input_state_cb( port, RETRO_DEVICE_LIGHTGUN, 0, RETRO_DEVICE_ID_LIGHTGUN_TRIGGER );
-                        S9xReportButton(MAKE_BUTTON(PAD_2, MACS_RIFLE_TRIGGER), btn_trigger);
+                        report_button(MAKE_BUTTON(PAD_2, MACS_RIFLE_TRIGGER), btn_trigger);
                     }
                 }
                 break;
@@ -1993,20 +2263,40 @@ void retro_run()
     bool okay = environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &result);
     if (okay)
     {
-        bool audioEnabled = 0 != (result & 2);
-        bool videoEnabled = 0 != (result & 1);
+        bool videoEnabled     = 0 != (result & 1);
+        bool hardDisableAudio = 0 != (result & 8);
+
         IPPU.RenderThisFrame = videoEnabled;
-        S9xSetSoundMute(!audioEnabled);
+
+        /* RETRO_AV_ENABLE_AUDIO (0x02) is deliberately ignored. It says the
+           frontend will discard these samples, not that the core may stop
+           producing them - and the state the frames leave behind is kept.
+           Preemptive Frames replays frames with audio suspended and
+           hard-disable clear, then carries the replayed state forward, so
+           muting there freezes every audio-side cursor - the MSU-1 play
+           offset above all - while the CPU and APU advance. The stream falls
+           a replay window behind on every rollback, which is heard as the
+           music slowing and popping.
+
+           RETRO_AV_ENABLE_HARD_DISABLE_AUDIO (0x08) is the bit that grants
+           permission to skip the work: RetroArch only sets it where the
+           resulting state is discarded or restored afterwards. Suspension
+           costs output, never state. */
+        S9xSetSoundMute(hardDisableAudio);
+        Settings.HardDisableAudio = hardDisableAudio;
     }
     else
     {
         IPPU.RenderThisFrame = true;
         S9xSetSoundMute(false);
+        Settings.HardDisableAudio = FALSE;
     }
 
     poll_cb();
     report_buttons();
     S9xMainLoop();
+
+    audio_upload_samples();
 }
 
 void retro_deinit()
@@ -2046,14 +2336,14 @@ void* retro_get_memory_data(unsigned type)
             data = RTCData.reg;
             break;
         case RETRO_MEMORY_SYSTEM_RAM:
-        data = Memory.RAM;
-        break;
+            data = Memory.RAM;
+            break;
         case RETRO_MEMORY_VIDEO_RAM:
-        data = Memory.VRAM;
-        break;
-        //case RETRO_MEMORY_ROM:
-        //	data = Memory.ROM;
-        //	break;
+            data = Memory.VRAM;
+            break;
+        case RETRO_MEMORY_ROM:
+            data = Memory.ROM;
+            break;
         default:
             data = NULL;
             break;
@@ -2085,15 +2375,43 @@ size_t retro_get_memory_size(unsigned type)
         case RETRO_MEMORY_VIDEO_RAM:
             size = 64 * 1024;
             break;
-        //case RETRO_MEMORY_ROM:
-        //	size = Memory.CalculatedSize;
-        //	break;
+        case RETRO_MEMORY_ROM:
+            size = Memory.CalculatedSize;
+            break;
         default:
             size = 0;
             break;
     }
 
     return size;
+}
+
+/* Decide whether this (de)serialisation may take the fast in-place path.
+ *
+ * "Fast" means the state is one the core itself produced moments ago and is
+ * about to consume again, so the big blocks can be read straight into
+ * VRAM/WRAM/SRAM/fillram instead of being staged through local copies. The
+ * staging exists so a truncated or corrupt state cannot half-apply, which
+ * matters for a file off disk and does not matter for runahead, preemptive
+ * frames or netplay rollback.
+ *
+ * RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT is the supported query; every
+ * context other than NORMAL is a frontend-internal state and wants the fast
+ * path. RETRO_AV_ENABLE_FAST_SAVESTATES carries the same information from the
+ * same frontend flag but libretro.h marks it deprecated, so it stays only as
+ * the fallback for frontends that do not answer the context query. */
+static bool savestate_wants_fast_path(void)
+{
+    enum retro_savestate_context context = RETRO_SAVESTATE_CONTEXT_NORMAL;
+    int                          av      = 0;
+
+    if (environ_cb(RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT, &context))
+        return context != RETRO_SAVESTATE_CONTEXT_NORMAL;
+
+    if (environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &av))
+        return 0 != (av & RETRO_AV_ENABLE_FAST_SAVESTATES);
+
+    return false;
 }
 
 size_t retro_serialize_size()
@@ -2103,13 +2421,8 @@ size_t retro_serialize_size()
 
 bool retro_serialize(void *data, size_t size)
 {
-    int result = -1;
-    bool okay = false;
-    okay = environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &result);
-    if (okay)
-    {
-        Settings.FastSavestates = 0 != (result & 4);
-    }
+    Settings.FastSavestates = savestate_wants_fast_path();
+
     if (S9xFreezeGameMem((uint8_t*)data,size) == FALSE)
         return false;
 
@@ -2118,13 +2431,10 @@ bool retro_serialize(void *data, size_t size)
 
 bool retro_unserialize(const void* data, size_t size)
 {
-    int result = -1;
-    bool okay = false;
-    okay = environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &result);
-    if (okay)
-    {
-        Settings.FastSavestates = 0 != (result & 4);
-    }
+    reset_button_cache();
+
+    Settings.FastSavestates = savestate_wants_fast_path();
+
     if (S9xUnfreezeGameMem((const uint8_t*)data,size) != SUCCESS)
         return false;
 
@@ -2208,6 +2518,31 @@ bool8 S9xDeinitUpdate(int width, int height)
     {
         burst_phase = (burst_phase + 1) % 3;
 
+        if (width > 512)
+        {
+            /* HD Mode 7 4x frame. The NTSC filter models a composite
+               signal whose output tops out at SNES_NTSC_OUT_WIDTH(256)
+               = 602 px, so input columns beyond 512 add no information
+               -- and the lores blitter, fed 1024-px rows, would write
+               ~2400 px per line into a 604-px-pitch buffer (garbage
+               plus heap overflow). Box-downsample each row 2:1 in
+               place (per-channel floor average via the LSB-exact
+               halving-add identity, as in S9xMode7VertResample) and
+               use the hires path; the 4x sub-pixel detail survives as
+               anti-aliasing. In-place is safe: x ascends, so reads at
+               2x/2x+1 stay ahead of the write at x. */
+            for (int y = 0; y < height; y++)
+            {
+                uint16 *row = GFX.Screen + (size_t) y * (GFX.Pitch >> 1);
+                for (int x = 0; x < 512; x++)
+                {
+                    uint16 a = row[2 * x], b = row[2 * x + 1];
+                    row[x] = ((a & 0xF7DE) >> 1) + ((b & 0xF7DE) >> 1) + (a & b & 0x0821);
+                }
+            }
+            width = 512;
+        }
+
         if (width == 512)
             snes_ntsc_blit_hires(snes_ntsc, GFX.Screen, GFX.Pitch / 2, burst_phase, width, height, snes_ntsc_buffer, MAX_SNES_WIDTH_NTSC * 2);
         else
@@ -2276,7 +2611,6 @@ bool8 S9xContinueUpdate(int width, int height)
 }
 
 // Dummy functions that should probably be implemented correctly later.
-void S9xParsePortConfig(ConfigFile&, int) {}
 const char* S9xStringInput(const char* in) { return in; }
 
 #ifdef _WIN32
@@ -2298,18 +2632,8 @@ std::string S9xGetDirectory(s9x_getdirtype type)
     return std::string("");
 }
 void S9xInitInputDevices() {}
-void S9xHandlePortCommand(s9xcommand_t, short, short) {}
-bool S9xPollButton(uint32, bool*) { return false; }
-void S9xToggleSoundChannel(int) {}
-std::string S9xGetFilenameInc(std::string in, s9x_getdirtype) { return ""; }
 const char* S9xBasename(const char* in) { return in; }
 bool8 S9xInitUpdate() { return TRUE; }
-void S9xExtraUsage() {}
-bool8 S9xOpenSoundDevice() { return TRUE; }
-bool S9xPollAxis(uint32, short*) { return FALSE; }
-void S9xParseArg(char**, int&, int) {}
-void S9xExit() {}
-bool S9xPollPointer(uint32, short*, short*) { return false; }
 
 void S9xMessage(int type, int, const char* s)
 {
@@ -2333,30 +2657,6 @@ void S9xMessage(int type, int, const char* s)
             log_cb(RETRO_LOG_DEBUG, "%s\n", s);
             break;
     }
-}
-
-bool8 S9xOpenSnapshotFile(const char* filepath, bool8 read_only, STREAM *file)
-{
-    if(read_only)
-    {
-        if((*file = OPEN_STREAM(filepath, "rb")) != 0)
-        {
-            return (TRUE);
-        }
-    }
-    else
-    {
-        if((*file = OPEN_STREAM(filepath, "wb")) != 0)
-        {
-            return (TRUE);
-        }
-    }
-    return (FALSE);
-}
-
-void S9xCloseSnapshotFile(STREAM file)
-{
-    CLOSE_STREAM(file);
 }
 
 void S9xAutoSaveSRAM()

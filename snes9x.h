@@ -15,43 +15,23 @@
 #include "65c816.h"
 #include "messages.h"
 
-#ifdef ZLIB
-#include <zlib.h>
-#define FSTREAM					gzFile
-#define READ_FSTREAM(p, l, s)	gzread(s, p, l)
-#define WRITE_FSTREAM(p, l, s)	gzwrite(s, p, l)
-#define GETS_FSTREAM(p, l, s)	gzgets(s, p, l)
-#define GETC_FSTREAM(s)			gzgetc(s)
-#define OPEN_FSTREAM(f, m)		gzopen(f, m)
-#define REOPEN_FSTREAM(f, m)		gzdopen(f, m)
-#define FIND_FSTREAM(f)			gztell(f)
-#define REVERT_FSTREAM(s, o, p)	gzseek(s, o, p)
-#define CLOSE_FSTREAM(s)			gzclose(s)
-#else
-#define FSTREAM					FILE *
-#define READ_FSTREAM(p, l, s)	fread(p, 1, l, s)
-#define WRITE_FSTREAM(p, l, s)	fwrite(p, 1, l, s)
-#define GETS_FSTREAM(p, l, s)	fgets(p, l, s)
-#define GETC_FSTREAM(s)			fgetc(s)
-#define OPEN_FSTREAM(f, m)		fopen(f, m)
-#define REOPEN_FSTREAM(f, m)		fdopen(f, m)
-#define FIND_FSTREAM(s)			ftell(s)
-#define REVERT_FSTREAM(s, o, p)	fseek(s, o, p)
-#define CLOSE_FSTREAM(s)			fclose(s)
-#endif
+/* All core file I/O goes through the libretro VFS via the
+   file_stream_transforms wrappers (RFILE). The frontend supplies the
+   VFS interface when available (see retro_set_environment);
+   filestream falls back to its local implementation otherwise.
+   Compressed (.gz) stream support from the old ZLIB build is gone --
+   under libretro the frontend handles compressed content itself. */
+#include <streams/file_stream_transforms.h>
+#define FSTREAM					RFILE *
+#define READ_FSTREAM(p, l, s)	rfread(p, 1, l, s)
+#define WRITE_FSTREAM(p, l, s)	rfwrite(p, 1, l, s)
+#define GETS_FSTREAM(p, l, s)	rfgets(p, l, s)
+#define GETC_FSTREAM(s)			rfgetc(s)
+#define OPEN_FSTREAM(f, m)		rfopen(f, m)
+#define FIND_FSTREAM(s)			rftell(s)
+#define REVERT_FSTREAM(s, o, p)	rfseek(s, o, p)
+#define CLOSE_FSTREAM(s)			rfclose(s)
 
-#include "stream.h"
-
-#define STREAM					Stream *
-#define READ_STREAM(p, l, s)	s->read(p,l)
-#define WRITE_STREAM(p, l, s)	s->write(p,l)
-#define GETS_STREAM(p, l, s)	s->gets(p,l)
-#define GETC_STREAM(s)			s->get_char()
-#define OPEN_STREAM(f, m)		openStreamFromFSTREAM(f, m)
-#define REOPEN_STREAM(f, m)		reopenStreamFromFd(f, m)
-#define FIND_STREAM(s)			s->pos()
-#define REVERT_STREAM(s, o, p)	s->revert(p, o)
-#define CLOSE_STREAM(s)			s->closeStream()
 
 #define SNES_WIDTH					256
 #define SNES_HEIGHT					224
@@ -233,29 +213,23 @@ struct SSettings
 	uint32	FrameTimeNTSC;
 	uint32	FrameTime;
 
-	bool8	SoundSync;
-	bool8	SixteenBitSound;
-	uint32	SoundPlaybackRate;
-	uint32	SoundInputRate;
 	bool8	Stereo;
 	bool8	ReverseStereo;
 	bool8	Mute;
-	bool8	DynamicRateControl;
-	int32	DynamicRateLimit; /* Multiplied by 1000 */
+	/* The frontend has stated it will never need this frame's audio and that
+	   the state left behind will be discarded or restored. The DSP declines to
+	   run at all while this is set - see SPC_DSP::run. Distinct from Mute,
+	   which only says the output is not wanted. */
+	bool8	HardDisableAudio;
 	int32	InterpolationMethod;
 
 	bool8	Transparency;
+	int32	Mode7Hires;				// 0 off, 2 = 2x, 4 = 4x Mode 7 hires
+	int32	Mode7HiresVertical;		// 2x vertical resample post-pass
+	int32	Mode7HiresBilinear;		// 0 nearest, 1 stable, 2 smooth
 	uint8	BG_Forced;
-	bool8	DisableGraphicWindows;
 	uint16  ForcedBackdrop;
 
-	bool8	DisplayTime;
-	bool8	DisplayFrameRate;
-	bool8	DisplayWatchedAddresses;
-	bool8	DisplayPressedKeys;
-	bool8	DisplayMovieFrame;
-	bool	DisplayIndicators;
-	bool8	AutoDisplayMessages;
 	uint32	InitialInfoStringTimeout;
 	uint16	DisplayColor;
 	bool8	BilinearFilter;
@@ -270,32 +244,15 @@ struct SSettings
 	bool8	BlockInvalidVRAMAccess;
 	int32	HDMATimingHack;
 
-	bool8	ForcedPause;
-	bool8	Paused;
-	bool8	StopEmulation;
-
 	uint32	SkipFrames;
 	uint32	TurboSkipFrames;
 	uint32	AutoMaxSkipFrames;
 	bool8	TurboMode;
 	uint32	HighSpeedSeek;
-	bool8	FrameAdvance;
-	bool8	Rewinding;
 
-	bool8	NetPlay;
-	bool8	NetPlayServer;
-	char	ServerName[128];
-	int		Port;
-
-	bool8	MovieTruncate;
-	bool8	MovieNotifyIgnored;
-	bool8	WrongMovieStateProtection;
 	bool8	DumpStreams;
 	int		DumpStreamsMaxFrames;
 
-	bool8	TakeScreenshot;
-	int8	StretchScreenshots;
-	bool8	SnapshotScreenshots;
 	char    InitialSnapshotFilename[PATH_MAX + 1];
 	bool8	FastSavestates;
 
@@ -323,21 +280,6 @@ struct SSNESGameFixes
 	uint8	Uniracers;
 };
 
-enum
-{
-	PAUSE_NETPLAY_CONNECT		= (1 << 0),
-	PAUSE_TOGGLE_FULL_SCREEN	= (1 << 1),
-	PAUSE_EXIT					= (1 << 2),
-	PAUSE_MENU					= (1 << 3),
-	PAUSE_INACTIVE_WINDOW		= (1 << 4),
-	PAUSE_WINDOW_ICONISED		= (1 << 5),
-	PAUSE_RESTORE_GUI			= (1 << 6),
-	PAUSE_FREEZE_FILE			= (1 << 7)
-};
-
-void S9xSetPause(uint32);
-void S9xClearPause(uint32);
-void S9xExit(void);
 void S9xMessage(int, int, const char *);
 
 extern struct SSettings			Settings;
