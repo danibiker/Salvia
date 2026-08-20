@@ -25,6 +25,8 @@ git subtree add --prefix=libretro/beetle-ngp-libretro https://github.com/libretr
 git subtree add --prefix=libretro/libretro-atari800 https://github.com/libretro/libretro-atari800 master --squash
 git subtree add --prefix=libretro/frodo-libretro https://github.com/libretro/frodo-libretro master --squash
 git subtree add --prefix=libretro/px68k https://github.com/libretro/px68k-libretro master --squash
+git subtree add --prefix=libretro/prboom https://github.com/libretro/libretro-prboom master --squash
+git subtree add --prefix=libretro/cannonball https://github.com/libretro/cannonball master --squash
 
 ###########################################################################################################
 # External libraries
@@ -61,6 +63,8 @@ git subtree pull --prefix=libretro/beetle-ngp-libretro https://github.com/libret
 git subtree pull --prefix=libretro/libretro-atari800 https://github.com/libretro/libretro-atari800 master --squash
 git subtree pull --prefix=libretro/frodo-libretro https://github.com/libretro/frodo-libretro master --squash
 git subtree pull --prefix=libretro/px68k https://github.com/libretro/px68k-libretro master --squash
+git subtree pull --prefix=libretro/prboom https://github.com/libretro/libretro-prboom master --squash
+git subtree pull --prefix=libretro/cannonball https://github.com/libretro/cannonball master --squash
 
 ###########################################################################################################
 # Merging conflicts

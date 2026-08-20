@@ -322,6 +322,8 @@ void OHiScore_flash_entry(OHiScore* self, uint32_t adr)
     Video_write_text16(&video, adr + (self->initial_selected << 1), tile);
 }
 
+#define NUM_ENTRIES 28
+
 /* High Score Input */
 /* */
 /* Source: 0xD33A */static 
@@ -329,8 +331,8 @@ void OHiScore_do_input(OHiScore* self, uint32_t adr)
 {
     /* Read Steering Left / Right & Denote Letter To Be Highlighted */
 
-    const static uint8_t ENTRIES = 28; /* 28 Possible entries we can select from */
-    const static uint8_t DELETE = ENTRIES - 1;
+    const static uint8_t ENTRIES = NUM_ENTRIES; /* 28 Possible entries we can select from */
+    const static uint8_t DELETE = NUM_ENTRIES - 1;
     
     int16_t position = OHiScore_read_controls(self) + self->letter_selected;
 

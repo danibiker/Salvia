@@ -18,6 +18,8 @@ extern "C" {
 #include <boolean.h>
 #include <retro_inline.h>
 
+#include <compat/msvc.h>
+
 enum {NORMAL = 1, INTERLEAVE2 = 2, INTERLEAVE4 = 4};
 
 typedef struct RomLoader

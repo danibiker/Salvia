@@ -1,0 +1,216 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\libretro-common">
+      <UniqueIdentifier>{3153bf46-594c-472a-8d18-7d409f702c10}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\core">
+      <UniqueIdentifier>{e5a5bf2b-f917-48cb-9700-2da4caa6cdb8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\core\engine">
+      <UniqueIdentifier>{89973243-1154-4771-8748-743c9a1c0113}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libretro">
+      <UniqueIdentifier>{f01f39cd-a545-4f0c-88d7-9578647796b3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="deps\libretro-common\file\file_path.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\file\file_path_io.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\file\retro_dirent.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\compat\compat_posix_string.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\compat\compat_snprintf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\compat\compat_strcasestr.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\compat\compat_strl.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\compat\fopen_utf8.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\encodings\encoding_crc32.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\encodings\encoding_utf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\streams\file_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\streams\file_stream_transforms.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\string\stdstring.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libretro-common\time\rtime.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\oanimseq.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\outrun.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\oattractai.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\obonus.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\ocrash.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\oferrari.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\ohiscore.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\ohud.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\oinitengine.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\oinputs.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\olevelobjs.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\ologo.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\omap.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\omusic.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\ooutputs.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\opalette.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\oroad.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\osmoke.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\osprite.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\osprites.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\ostats.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\otiles.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\otraffic.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\outils.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\romloader.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\roms.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\trackloader.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\utils.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\video.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\frontend\config.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\frontend\menu.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\frontend\ttrial.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\hwaudio\segapcm.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\hwaudio\soundchip.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\hwaudio\ym2151.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\hwvideo\hwroad.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\hwvideo\hwsprites.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\hwvideo\hwtiles.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\libretro\audio.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\libretro\ffeedback.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\libretro\input.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\libretro\lr_options.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\libretro\main.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\audio\osound.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main\engine\audio\osoundint.c">
+      <Filter>Source Files\core\engine</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="deps\libretro-common\include\compat\msvc.h">
+      <Filter>Resource Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

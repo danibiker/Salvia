@@ -154,8 +154,13 @@ set MS_OPTS_360=/t:Rebuild /p:Platform=%PLATFORM_XBOX% /v:q /nologo /clp:NoSumma
 	set  SLN[27]=px68k\px68k.sln
 	set PLAT[27]=Both
 	set  CFG[27]=%CONFIG%
+	
+	set NAME[28]=cannonball
+	set  SLN[28]=cannonball\cannonball.sln
+	set PLAT[28]=Both
+	set  CFG[28]=%CONFIG%
 
-	for /l %%i in (0,1,27) do (
+	for /l %%i in (0,1,28) do (
 		set "_n=!NAME[%%i]!"
 		set "_s=!SLN[%%i]!"
 		set "_p=!PLAT[%%i]!"

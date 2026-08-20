@@ -491,11 +491,13 @@ static void update_variables(bool startup)
       {
          config.controls.analog = 1;
          input.analog = 1;
+         input.gamepad = 1; /* keep gamepad in sync: OInputs_tick gates the analog path on both */
       }
       else if (strcmp(var.value, "OFF") == 0)
       {
          config.controls.analog = 0;
          input.analog = 0;
+         input.gamepad = 0;
       }
    }
 
@@ -1254,10 +1256,15 @@ static void process_events(void)
       ret = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
    else
    {
-      for (i = 0; i < (RETRO_DEVICE_ID_JOYPAD_R+1); i++)
+      for (i = 0; i < (sizeof(binds) / sizeof(binds[0])); i++)
       {
+         /* Store the bit at the RETRO joy id position, matching every consumer
+          * below (which reads 1 << binds[i].joy_id / 1 << RETRO_DEVICE_ID_JOYPAD_*).
+          * binds[] is not in joy-id order, so using the loop index here crossed
+          * the bits and broke the D-Pad steering fallback on frontends without
+          * GET_INPUT_BITMASKS. */
          if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, binds[i].joy_id))
-            ret |= (1 << i);
+            ret |= (1 << binds[i].joy_id);
       }
    }
 

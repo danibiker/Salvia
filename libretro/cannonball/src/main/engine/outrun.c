@@ -586,38 +586,14 @@ static void Outrun_main_switch(Outrun* self)
     OInitEngine_update_engine(&oinitengine);
 
     /* -------------------------------------------------------------------------------------------- */
-    /* Debugging Only */
+    /* NOTE: Here used to live a "Debugging Only" road-fork chooser guarded by #ifndef NDEBUG.       */
+    /* Its unconditional else branch overwrote car_x_pos / oroad.car_x_bak with road_width_bak every */
+    /* frame during normal driving, wiping out the player's steering (the car sprite still leaned    */
+    /* because steering_adjust was untouched, but the car never moved laterally). That only bit      */
+    /* Debug builds (NDEBUG undefined), so Release/RetroArch appeared fine. Removed so gameplay is    */
+    /* identical in Debug and Release. If the dev fork-selector is ever needed again, gate it behind */
+    /* a dedicated opt-in macro and only touch car_x_pos when fork_chosen != 0.                      */
     /* -------------------------------------------------------------------------------------------- */
-#ifndef NDEBUG
-    {
-        if (oinitengine.rd_split_state != 0)
-        {
-            if (!self->fork_chosen)
-            {
-                if (oinitengine.camera_x_off < 0)
-                    self->fork_chosen = -1;
-                else
-                    self->fork_chosen = 1;        
-            }
-        }
-        else if (self->fork_chosen)
-            self->fork_chosen = 0;
-
-        /* Hack to allow user to choose road fork with left/right */
-        if (self->fork_chosen == -1)
-        {
-            oroad.road_width_bak = oroad.road_width >> 16; 
-            oroad.car_x_bak = -oroad.road_width_bak; 
-            oinitengine.car_x_pos = oroad.car_x_bak;
-        }
-        else
-        {
-            oroad.road_width_bak = oroad.road_width >> 16; 
-            oroad.car_x_bak = oroad.road_width_bak; 
-            oinitengine.car_x_pos = oroad.car_x_bak;
-        } 
-    }
-#endif
 }
 
 /* Setup Jump Table. Move from ROM to RAM. */

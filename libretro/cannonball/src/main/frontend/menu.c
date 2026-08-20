@@ -704,6 +704,7 @@ static void Menu_tick_menu(Menu* self)
                 if (++config.controls.analog >= 2)
                     config.controls.analog = 0;
                 input.analog = config.controls.analog;
+                input.gamepad = config.controls.analog; /* keep gamepad in sync (see OInputs_tick) */
                 lr_options_set_frontend_variable_int(&config.controls.analog);
             }
             else if (SELECTED(ENTRY_REDEFKEY))
