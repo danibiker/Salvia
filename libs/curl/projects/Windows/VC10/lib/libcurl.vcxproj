@@ -76,7 +76,7 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <AdditionalIncludeDirectories>..\..\..\..\include;..\..\..\..\lib;..\..\..\..\..\wolfssl;..\..\..\..\..\wolfssl\wolfssl;..\..\..\..\..\wolfssl\IDE\XBOX360;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_DEBUG;HAVE_CONFIG_H;BUILDING_LIBCURL;CURL_STATICLIB;USE_WOLFSSL;WOLFSSL_USER_SETTINGS;HTTP_ONLY;CURL_DISABLE_MEMDEBUG;HAVE_GETHOSTBYNAME;HAVE_STRUCT_HOSTENT;CURL_DISABLE_TCP_KEEPALIVE=0;PIX_NOT_SUPPORTED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;HAVE_CONFIG_H;BUILDING_LIBCURL;CURL_STATICLIB;USE_WOLFSSL;WOLFSSL_USER_SETTINGS;HTTP_ONLY;CURL_DISABLE_MEMDEBUG;HAVE_GETHOSTBYNAME;HAVE_STRUCT_HOSTENT;CURL_DISABLE_TCP_KEEPALIVE=0;PIX_NOT_SUPPORTED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <WarningLevel>Level4</WarningLevel>
@@ -384,6 +384,7 @@
     <ClInclude Include="..\..\..\..\lib\config-os400.h" />
     <ClInclude Include="..\..\..\..\lib\config-riscos.h" />
     <ClInclude Include="..\..\..\..\lib\config-win32.h" />
+    <ClInclude Include="..\..\..\..\lib\config-xbox360.h" />
     <ClInclude Include="..\..\..\..\lib\conncache.h" />
     <ClInclude Include="..\..\..\..\lib\connect.h" />
     <ClInclude Include="..\..\..\..\lib\content_encoding.h" />

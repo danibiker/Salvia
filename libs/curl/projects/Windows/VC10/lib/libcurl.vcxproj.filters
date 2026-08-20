@@ -1196,6 +1196,9 @@
     <ClInclude Include="..\..\..\..\lib\vtls\x509asn1.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\..\lib\config-xbox360.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\..\..\lib\libcurl.rc">

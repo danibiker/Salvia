@@ -480,10 +480,15 @@ UDP_GetAddrFromName(const char *name, netadr_t *addr)
     if (!hostentry)
 	return -1;
 
-    /* memcpy avoids the strict-aliasing violation of dereferencing
-     * h_addr_list[0] (a char *) through an int *. */
-    memcpy(&addr->ip.l, hostentry->h_addr_list[0], sizeof(addr->ip.l));
-    addr->port = htons(port);
+	if (hostentry->h_addr_list && hostentry->h_addr_list[0]){
+		/* memcpy avoids the strict-aliasing violation of dereferencing
+         * h_addr_list[0] (a char *) through an int *. */
+		memcpy(&addr->ip.l, hostentry->h_addr_list[0], sizeof(addr->ip.l));
+		addr->port = htons(port);
+	} else {
+		return -1;
+	}
+    
 
     return 0;
 }

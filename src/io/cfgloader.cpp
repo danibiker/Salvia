@@ -803,7 +803,8 @@ std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
         {"screen_shot_directory", "This is the directory where the screenshots in .png format are located.", &ConfigEmu::screen_shot_directory},
         {"mame_roms_xml", "Xml file with Mame game names", &ConfigEmu::mame_roms_xml},
         {"map_file", "This is the list of pre-scanned ROMs (not supported yet).", &ConfigEmu::map_file},
-        {"keyboard_type", "Keyboard type. Implemented for: msx and spectrum", &ConfigEmu::keyboard_type}
+        {"keyboard_type", "Keyboard type. Implemented for: msx and spectrum", &ConfigEmu::keyboard_type},
+		{"network_default_servers", "List of servers to use. Quake specific", &ConfigEmu::network_default_servers}
     };
     
     for (std::size_t i = 0; i < sizeof(strings)/sizeof(strings[0]); ++i) {
