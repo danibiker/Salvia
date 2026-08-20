@@ -1,0 +1,79 @@
+/* Emacs style mode select   -*- C++ -*-
+ *-----------------------------------------------------------------------------
+ *
+ *
+ *  PrBoom: a Doom port merged with LxDoom and LSDLDoom
+ *  based on BOOM, a modified and improved DOOM engine
+ *  Copyright (C) 1999 by
+ *  id Software, Chi Hoang, Lee Killough, Jim Flynn, Rand Phares, Ty Halderman
+ *  Copyright (C) 1999-2000 by
+ *  Jess Haas, Nicolas Kalkhof, Colin Phipps, Florian Schulze
+ *  Copyright 2005, 2006 by
+ *  Florian Schulze, Colin Phipps, Neil Stevens, Andrey Budko
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License
+ *  as published by the Free Software Foundation; either version 2
+ *  of the License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+ *  02111-1307, USA.
+ *
+ * DESCRIPTION:
+ *  MapObj data. Map Objects or mobjs are actors, entities,
+ *  thinker, take-your-pick... anything that moves, acts, or
+ *  suffers state changes of more or less violent nature.
+ *
+ *-----------------------------------------------------------------------------*/
+
+#ifndef __D_THINK__
+#define __D_THINK__
+
+typedef void (*arg0_t)();
+typedef void (*arg1_t)(void *);
+typedef void (*arg2_t)(void *, void *);
+typedef void (*argi_t)(int);
+
+typedef union {
+    arg0_t arg0;
+    arg1_t arg1;
+    arg2_t arg2;
+    argi_t argi;
+} actionf_t;
+
+//typedef  void (*actionf_t)();
+
+/* Historically, "think_t" is yet another
+ *  function pointer to a routine to handle
+ *  an actor.
+ */
+typedef actionf_t  think_t;
+
+
+/* Doubly linked list of actors. */
+typedef struct thinker_s
+{
+  struct thinker_s*   prev;
+  struct thinker_s*   next;
+  think_t             function;
+
+  /* killough 8/29/98: we maintain thinkers in several equivalence classes,
+   * according to various criteria, so as to allow quicker searches.
+   */
+
+  struct thinker_s *cnext, *cprev; /* Next, previous thinkers in same class */
+
+  /* killough 11/98: count of how many other objects reference
+   * this one using pointers. Used for garbage collection.
+   */
+  unsigned references;
+} thinker_t;
+
+#endif

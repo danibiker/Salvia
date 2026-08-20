@@ -1,0 +1,1970 @@
+/* Emacs style mode select   -*- C++ -*-
+ *-----------------------------------------------------------------------------
+ *
+ *
+ *  PrBoom: a Doom port merged with LxDoom and LSDLDoom
+ *  based on BOOM, a modified and improved DOOM engine
+ *  Copyright (C) 1999 by
+ *  id Software, Chi Hoang, Lee Killough, Jim Flynn, Rand Phares, Ty Halderman
+ *  Copyright (C) 1999-2004 by
+ *  Jess Haas, Nicolas Kalkhof, Colin Phipps, Florian Schulze
+ *  Copyright 2005, 2006 by
+ *  Florian Schulze, Colin Phipps, Neil Stevens, Andrey Budko
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License
+ *  as published by the Free Software Foundation; either version 2
+ *  of the License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+ *  02111-1307, USA.
+ *
+ * DESCRIPTION:
+ *      All the clipping: columns, horizontal spans, sky columns.
+ *
+ *-----------------------------------------------------------------------------*/
+//
+// 4/25/98, 5/2/98 killough: reformatted, beautified
+
+#include "doomstat.h"
+#include <math.h> /* sqrt for the seg texture-u range */
+#include "r_main.h"
+#include "r_bsp.h"
+#include "r_segs.h"
+#include "r_plane.h"
+#include "r_things.h"
+#include "r_dynlight.h"
+#include "vid_mode.h"
+#include "u_dynlight.h"
+#include "p_sectorportal.h"
+#include "p_lineportal.h"
+#include "u_brightmap.h"
+#include "p_ffloor.h"
+#include "r_draw.h"
+#include "r_drawcmd.h"
+#include "p_slope.h"
+#include "w_wad.h"
+#include "v_video.h"
+#include "lprintf.h"
+#include "i_system.h"
+
+// OPTIMIZE: closed two sided lines as single sided
+
+// killough 1/6/98: replaced globals with statics where appropriate
+
+// True if any of the segs textures might be visible.
+static dbool    segtextured;
+static dbool    markfloor;      // False if the back side is the same plane.
+static dbool    markceiling;
+static dbool    maskedtexture;
+static int      toptexture;
+static int      bottomtexture;
+static int      midtexture;
+static int      seg_lineportal;   /* line index of this seg's portal, or -1 */
+
+dbool           r_wiggle_fix = 0;
+
+static fixed_t  toptexheight, midtexheight, bottomtexheight; // cph
+
+angle_t         rw_normalangle; // angle to line origin
+int             rw_angle1;
+fixed_t         rw_distance;
+
+//
+// regular wall
+//
+static int      rw_x;
+static int      rw_stopx;
+static angle_t  rw_centerangle;
+static fixed_t  rw_offset;
+static fixed_t  rw_uclamp_lo;  /* the seg's own texture-u range; edge */
+static fixed_t  rw_uclamp_hi;  /* columns extrapolate past it otherwise */
+static fixed_t  rw_scale;
+static fixed_t  rw_scalestep;
+static fixed_t  rw_midtexturemid;
+static fixed_t  rw_toptexturemid;
+static fixed_t  rw_bottomtexturemid;
+static int      rw_lightlevel;
+static int      worldtop;
+static int      worldbottom;
+static int      worldhigh;
+static int      worldlow;
+static dbool    rw_anyslope;    /* any sloped plane borders this seg */
+static fixed_t  pixhigh;
+static fixed_t  pixlow;
+static fixed_t  pixhighstep;
+static fixed_t  pixlowstep;
+static fixed_t  topfrac;
+static fixed_t  topstep;
+static fixed_t  bottomfrac;
+static fixed_t  bottomstep;
+static fixed_t  waterfrac;       // 3D-floor water surface screen-y, per column
+static fixed_t  waterstep;
+static fixed_t  mwfrac[MAXMOREWATER];   // stacked see-through surfaces, per column
+static fixed_t  mwstep[MAXMOREWATER];
+static int      *maskedtexturecol; // dropoff overflow
+
+//
+// R_FixWiggle()
+// Dynamic wall/texture rescaler, AKA "WiggleHack II"
+//  by Kurt "kb1" Baumgardner ("kb") and Andrey "Entryway" Budko ("e6y")
+//
+//  [kb] When the rendered view is positioned, such that the viewer is
+//   looking almost parallel down a wall, the result of the scale
+//   calculation in R_ScaleFromGlobalAngle becomes very large. And, the
+//   taller the wall, the larger that value becomes. If these large
+//   values were used as-is, subsequent calculations would overflow,
+//   causing full-screen HOM, and possible program crashes.
+//
+//  Therefore, vanilla Doom clamps this scale calculation, preventing it
+//   from becoming larger than 0x400000 (64*FRACUNIT). This number was
+//   chosen carefully, to allow reasonably-tight angles, with reasonably
+//   tall sectors to be rendered, within the limits of the fixed-point
+//   math system being used. When the scale gets clamped, Doom cannot
+//   properly render the wall, causing an undesirable wall-bending
+//   effect that I call "floor wiggle". Not a crash, but still ugly.
+//
+//  Modern source ports offer higher video resolutions, which worsens
+//   the issue. And, Doom is simply not adjusted for the taller walls
+//   found in many PWADs.
+//
+//  This code attempts to correct these issues, by dynamically
+//   adjusting the fixed-point math, and the maximum scale clamp,
+//   on a wall-by-wall basis. This has 2 effects:
+//
+//  1. Floor wiggle is greatly reduced and/or eliminated.
+//  2. Overflow is no longer possible, even in levels with maximum
+//     height sectors (65535 is the theoretical height, though Doom
+//     cannot handle sectors > 32767 units in height.
+//
+//  The code is not perfect across all situations. Some floor wiggle can
+//   still be seen, and some texture strips may be slightly misaligned in
+//   extreme cases. These effects cannot be corrected further, without
+//   increasing the precision of various renderer variables, and, 
+//   possibly, creating a noticable performance penalty.
+//   
+
+static int			max_rwscale = 64 * FRACUNIT;
+static int			heightbits = 12;
+static int			heightunit = (1 << 12);
+static int			invhgtbits = 4;
+ 
+static const struct
+{
+	int clamp;
+	int heightbits;
+}	
+	scale_values[8] = {
+		{2048 * FRACUNIT, 12}, {1024 * FRACUNIT, 12},
+		{1024 * FRACUNIT, 11}, { 512 * FRACUNIT, 11},
+		{ 512 * FRACUNIT, 10}, { 256 * FRACUNIT, 10},
+		{ 256 * FRACUNIT,  9}, { 128 * FRACUNIT,  9}
+	
+};
+
+void R_FixWiggle (sector_t *sector)
+{
+	static int	lastheight = 0;
+	int		height = (sector->ceilingheight - sector->floorheight) >> FRACBITS;
+
+	// disallow negative heights. using 1 forces cache initialization
+	if (height < 1)
+		height = 1;
+
+	// early out?
+	if (height != lastheight)
+	{
+		lastheight = height;
+
+		// initialize, or handle moving sector
+		if (height != sector->cachedheight)
+		{
+			sector->cachedheight = height;
+			sector->scaleindex = 0;
+			height >>= 7;
+
+			// calculate adjustment
+			while (height >>= 1)
+				sector->scaleindex++;
+		}
+
+		// fine-tune renderer for this wall
+		max_rwscale = scale_values[sector->scaleindex].clamp;
+		heightbits = scale_values[sector->scaleindex].heightbits;
+		heightunit = (1 << heightbits);
+		invhgtbits = FRACBITS - heightbits;
+
+		/* hor+ widescreen: the wall scale (rw_scale) at the oblique
+		 * edge columns of a widened FOV grows by ~centerxfrac/focallength
+		 * (= 1/cos of the wider half-angle) relative to the vanilla
+		 * +/-45deg view.  The wiggle fix clamps rw_scale at max_rwscale,
+		 * and clamping is exactly what produces visible wiggle, so with
+		 * the vanilla clamp the widened side columns get clamped far more
+		 * often and wiggle reappears there even though the fix is active.
+		 * Scale the clamp up by the same factor so the legitimately
+		 * larger edge scales are not clipped.  projectionx == focallength
+		 * (the widened horizontal anchor); at 4:3 it equals centerxfrac
+		 * and the factor is unity, leaving max_rwscale unchanged. */
+		{
+			if (projectionx && projectionx < centerxfrac)
+			{
+				int64_t w = ((int64_t)max_rwscale * centerxfrac) / projectionx;
+				/* keep within the fixed-point headroom the chosen
+				 * heightbits allows (2048<<FRACBITS is the table max) */
+				if (w > (int64_t)2048 * FRACUNIT)
+					w = (int64_t)2048 * FRACUNIT;
+				max_rwscale = (int)w;
+			}
+		}
+	}
+}
+
+//
+// R_ScaleFromGlobalAngle
+// Returns the texture mapping scale
+//  for the current line (horizontal span)
+//  at the given angle.
+// rw_distance must be calculated first.
+//
+// killough 5/2/98: reformatted, cleaned up
+// CPhipps - moved here from r_main.c
+
+static fixed_t R_ScaleFromGlobalAngle(angle_t visangle)
+{
+   /* The angle sums must be unsigned: with a signed int (as in vanilla),
+    * a seg whose normal deviates from the view angle by more than ANG90
+    * -- the classic long-wall / near-parallel "wiggle" geometry -- makes
+    * angleb negative, and the arithmetic shift then indexes finesine with
+    * a negative subscript (caught by ASan as a global out-of-bounds read).
+    * An unsigned full-width shift always lands in [0, FINEANGLES-1], is
+    * value-identical for every index the signed form kept in range (the
+    * table's last FINEANGLES/4 entries duplicate the first), and is the
+    * mathematically correct wraparound for the overflow cases that
+    * previously read garbage. */
+   angle_t anglea = ANG90 + (visangle-viewangle);
+   angle_t angleb = ANG90 + (visangle-rw_normalangle);
+   int     den = FixedMul(rw_distance, finesine[anglea>>ANGLETOFINESHIFT]);
+   // proff 11/06/98: Changed for high-res
+   fixed_t num = FixedMul(projectiony, finesine[angleb>>ANGLETOFINESHIFT]);
+   fixed_t scale;
+
+   if (den > (num >> 16))
+   {
+      scale = FixedDiv(num, den);
+
+      // [kb] When this evaluates True, the scale is clamped,
+		//  and there will be some wiggling.
+      if (scale > max_rwscale)
+         scale = max_rwscale;
+      else if (scale <  256)
+         scale = 256;
+   }
+   else
+      scale = max_rwscale;
+
+   return scale;
+}
+
+//
+// R_RenderMaskedSegRange
+//
+
+void R_RenderMaskedSegRange(drawseg_t *ds, int x1, int x2)
+{
+   int water_seg = 0;
+   int glow_bright = 0;
+   fixed_t water_surfz = 0;
+   int      texnum;
+   sector_t tempsec;      // killough 4/13/98
+   const rpatch_t *patch;
+   R_DrawColumn_f colfunc;
+   draw_column_vars_t dcvars;
+   angle_t angle;
+   fixed_t mulo, muhi;
+
+   R_SetDefaultDrawColumnVars(&dcvars);
+
+   /* Calculate light table.
+    * Use different light tables
+    * for horizontal / vertical / diagonal. Diagonal?
+    */
+   curline     = ds->curline;  // OPTIMIZE: get rid of LIGHTSEGSHIFT globally
+   colfunc     = R_GetDrawColumnFunc(RDC_PIPELINE_STANDARD, drawvars.filterwall, drawvars.filterz);
+
+   /* Boom 260 / ZDoom TranslucentLine: route this line's midtexture columns
+    * through the blending batch type (restored before returning), at the line's
+    * own alpha.  translucent == 2 is an additive ("Add" renderstyle) light beam
+    * (mode 3).  translucent == 1 is alpha glass: the two weights the renderer
+    * has always had -- 50/50 (a 16) and 25/75 (a 8) -- keep their cheap
+    * shift-only kernels (modes 1/2), so existing glass is no slower; only other
+    * alphas pay for the per-channel multiply (mode 4).  Boom/Hexen lines that
+    * carry no alpha default to 16 (the old 50/50). */
+   if (curline->linedef->translucent)
+   {
+      int a = curline->linedef->alpha ? curline->linedef->alpha : 16;
+      R_SetTransAlpha(a);
+      if (curline->linedef->translucent == 2)
+         R_SetSpriteTranslucency(3);
+      else if (a == 16)
+         R_SetSpriteTranslucency(1);
+      else if (a == 8)
+         R_SetSpriteTranslucency(2);
+      else
+         R_SetSpriteTranslucency(4);
+   }
+   frontsector = curline->frontsector;
+   backsector  = curline->backsector;
+   texnum      = curline->sidedef->midtexture;
+
+   if (!comp[comp_maskedanim])
+      texnum = texturetranslation[texnum];
+
+   // killough 4/13/98: get correct lightlevel for 2s normal textures
+   rw_lightlevel = R_FakeFlat(frontsector, &tempsec, NULL, NULL, FALSE) ->lightlevel;
+
+   maskedtexturecol = ds->maskedtexturecol;
+
+   rw_scalestep = ds->scalestep;
+   spryscale    = ds->scale1 + (x1 - ds->x1)*rw_scalestep;
+   mfloorclip   = ds->sprbottomclip;
+   mceilingclip = ds->sprtopclip;
+
+   /* find positioning */
+   if (curline->linedef->flags & ML_DONTPEGBOTTOM)
+   {
+      dcvars.texturemid = frontsector->floorheight > backsector->floorheight
+         ? frontsector->floorheight : backsector->floorheight;
+      dcvars.texturemid = dcvars.texturemid + textureheight[texnum] - viewz;
+   }
+   else
+   {
+      dcvars.texturemid =frontsector->ceilingheight<backsector->ceilingheight
+         ? frontsector->ceilingheight : backsector->ceilingheight;
+      dcvars.texturemid = dcvars.texturemid - viewz;
+   }
+
+   dcvars.texturemid += curline->sidedef->rowoffset;
+
+   /* GLDEFS wall glow: a glow-listed texture is itself a light source, so
+    * draw it through the undimmed base colormap -- otherwise a lava fall in
+    * a dark hall renders dimmer than the pool it casts.  One table lookup
+    * per masked range, gated off entirely when no walls{} entries bind. */
+   glow_bright = u_glow_walls_present && !fixedcolormap && fullcolormap &&
+                 U_GlowForWallTexture(texnum) != NULL;
+
+   if (fixedcolormap)
+   {
+      dcvars.colormap = fixedcolormap;
+      dcvars.nextcolormap = dcvars.colormap; // for filtering -- POPE
+   }
+
+   patch = R_CacheTextureCompositePatchNum(texnum);
+
+   /* the seg's own texture-u range; see R_StoreWallRange */
+   {
+      double sdx = (double)ds->curline->v2->x - (double)ds->curline->v1->x;
+      double sdy = (double)ds->curline->v2->y - (double)ds->curline->v1->y;
+      double slen = sqrt(sdx*sdx + sdy*sdy);
+      if (slen > 2147483520.0)
+         slen = 2147483520.0;
+      mulo = ds->curline->sidedef->textureoffset + ds->curline->offset;
+      muhi = mulo + (fixed_t)slen - 1;
+      if (muhi < mulo)
+         muhi = mulo;
+   }
+
+   /* draw the columns */
+
+   /* A swimmable 3D-floor whose surface sits above this sector's floor is a
+    * water body: render its 2-sided "glass" midtexture as a submerged volume
+    * (darken what is behind it) instead of an alpha-blended texture. */
+   {
+      const ffloor_t *ffw;
+      for (ffw = frontsector->ffloors; ffw; ffw = ffw->next)
+         if (ffw->type == FFLOOR_SWIMMABLE &&
+             ffw->model->ceilingheight > frontsector->floorheight)
+         { water_seg = 1; water_surfz = ffw->model->ceilingheight; break; }
+   }
+
+   /* Water seg: darken the whole submerged opening.  Every column in the seg's
+    * range is darkened from the projected water-surface line down to the floor
+    * clip -- not only the columns where the glass midtexture is present, which
+    * would leave a visible bright cut-off at oblique angles -- and bounded at
+    * the real surface height so the area above the waterline stays bright.  The
+    * glass texture itself is not drawn; the darkened background is the water. */
+   if (water_seg)
+   {
+      /* Darken the submerged opening ROW-MAJOR: compute each column's surface
+       * line and vertical [yl,yh] span, then sweep rows and darken each row's
+       * contiguous x-run in one SSE2-friendly pass.  Much faster than the
+       * per-column vertical walk, which strided across a cache line per pixel. */
+      extern void R_WaterDarkenSpan(int y, int x1, int x2, int surf_y);
+      static int wcol_yl[MAX_SCREENWIDTH], wcol_yh[MAX_SCREENWIDTH],
+                 wcol_surf[MAX_SCREENWIDTH];
+      fixed_t sc = ds->scale1 + (x1 - ds->x1)*rw_scalestep;
+      int wx, y, ylmin = viewheight, yhmax = -1;
+      for (wx = x1; wx <= x2; wx++, sc += rw_scalestep)
+      {
+         int64_t st = ((int64_t) centeryfrac << FRACBITS) -
+                      (int64_t)(water_surfz - viewz) * sc;
+         int surf = (int)(st >> (FRACBITS*2));
+         int yl = surf;
+         int yh = ds->sprbottomclip[wx] - 1;
+         if (yl <= ds->sprtopclip[wx])
+            yl = ds->sprtopclip[wx] + 1;
+         if (yh >= viewheight)
+            yh = viewheight - 1;
+         wcol_surf[wx] = surf;
+         if (yl <= yh)
+         {
+            wcol_yl[wx] = yl; wcol_yh[wx] = yh;
+            if (yl < ylmin) ylmin = yl;
+            if (yh > yhmax) yhmax = yh;
+         }
+         else { wcol_yl[wx] = 1; wcol_yh[wx] = 0; }   /* empty */
+         maskedtexturecol[wx] = INT_MAX;
+      }
+      for (y = ylmin; y <= yhmax; y++)
+      {
+         int rx = x1;
+         while (rx <= x2)
+         {
+            while (rx <= x2 && !(y >= wcol_yl[rx] && y <= wcol_yh[rx])) rx++;
+            if (rx > x2) break;
+            {
+               int rs = rx;
+               while (rx <= x2 && (y >= wcol_yl[rx] && y <= wcol_yh[rx])) rx++;
+               /* depth is ~constant across the run (surf varies slowly); use
+                * the run's left surf -- any sub-band error is invisible. */
+               R_WaterDarkenSpan(y, rs, rx - 1, wcol_surf[rs]);
+            }
+         }
+      }
+      /* Surface band: paint the lit water surface AT the waterline -- the row
+       * each column's true surface line projects to -- not at the window top.
+       * The band runs a fixed height DOWN from that line (the surface seen at a
+       * grazing angle), brightest at the line and fading into the volume below.
+       * Nothing is drawn above the waterline: the dry wall there is untouched.
+       * Columns whose surface projects above the visible opening (looking up
+       * from deep water) draw no band -- the whole column is already deep. */
+      {
+         extern void R_WaterSurfaceBand(int x, int yl, int yh, int surf_line,
+                                        int band_h);
+         int band_h = viewheight / 18;         /* ~5.5% of the view */
+         if (band_h < 2) band_h = 2;
+         for (wx = x1; wx <= x2; wx++)
+         {
+            int yl = wcol_yl[wx], yh = wcol_yh[wx];
+            int sline = wcol_surf[wx];
+            int bl_top, bl_bot;
+            if (yl > yh) continue;             /* empty column */
+            bl_top = sline; if (bl_top < yl) bl_top = yl;
+            bl_bot = sline + band_h - 1; if (bl_bot > yh) bl_bot = yh;
+            if (bl_top <= bl_bot)
+               R_WaterSurfaceBand(wx, bl_top, bl_bot, sline, band_h);
+         }
+      }
+      R_UnlockTextureCompositePatchNum(texnum);
+      curline = NULL;
+      return;
+   }
+
+   for (dcvars.x = x1 ; dcvars.x <= x2 ; dcvars.x++, spryscale += rw_scalestep)
+   {
+      if (maskedtexturecol[dcvars.x] == INT_MAX) // dropoff overflow
+         continue;
+
+      // calculate texture offset - POPE
+      angle = (ds->rw_centerangle + xtoviewangle[dcvars.x]) >> ANGLETOFINESHIFT;
+      dcvars.texu = ds->rw_offset - FixedMul(finetangent[angle], ds->rw_distance);
+      if (drawvars.filterwall == RDRAW_FILTER_LINEAR)
+      {
+         /* see R_RenderSegLoop: keep both linear taps inside the seg */
+         fixed_t lo = mulo + (FRACUNIT>>1);
+         fixed_t hi = muhi - (FRACUNIT>>1);
+         if (lo > hi)
+            lo = hi = mulo + ((muhi - mulo) >> 1);
+         if (dcvars.texu < lo)
+            dcvars.texu = lo;
+         else if (dcvars.texu > hi)
+            dcvars.texu = hi;
+         dcvars.texu -= (FRACUNIT>>1);
+      }
+      else
+      {
+         if (dcvars.texu < mulo)
+            dcvars.texu = mulo;
+         else if (dcvars.texu > muhi)
+            dcvars.texu = muhi;
+      }
+
+      if (!fixedcolormap)
+         dcvars.z = spryscale; // for filtering -- POPE
+      dcvars.colormap = glow_bright ? fullcolormap
+                                    : R_ColourMap(rw_lightlevel,spryscale);
+      dcvars.nextcolormap = glow_bright ? fullcolormap
+                                        : R_ColourMap(rw_lightlevel+1,spryscale); // for filtering -- POPE
+
+      // killough 3/2/98:
+      //
+      // This calculation used to overflow and cause crashes in Doom:
+      //
+      // sprtopscreen = centeryfrac - FixedMul(dcvars.texturemid, spryscale);
+      //
+      // This code fixes it, by using double-precision intermediate
+      // arithmetic and by skipping the drawing of 2s normals whose
+      // mapping to screen coordinates is totally out of range:
+
+      {
+         int64_t t = ((int64_t) centeryfrac << FRACBITS) -
+            (int64_t) dcvars.texturemid * spryscale;
+         if (t + (int64_t) textureheight[texnum] * spryscale < 0 ||
+               t > (int64_t) MAX_SCREENHEIGHT << FRACBITS*2)
+            continue;        // skip if the texture is out of screen's range
+         sprtopscreen = (long)(t >> FRACBITS);
+      }
+
+      dcvars.iscale = 0xffffffffu / (unsigned) spryscale;
+
+      // killough 1/25/98: here's where Medusa came in, because
+      // it implicitly assumed that the column was all one patch.
+      // Originally, Doom did not construct complete columns for
+      // multipatched textures, so there were no header or trailer
+      // bytes in the column referred to below, which explains
+      // the Medusa effect. The fix is to construct TRUE columns
+      // when forming multipatched textures (see r_data.c).
+
+      // draw the texture
+      R_DrawMaskedColumn(
+            patch,
+            colfunc,
+            &dcvars,
+            R_GetPatchColumnWrapped(patch, maskedtexturecol[dcvars.x]),
+            R_GetPatchColumnWrapped(patch, maskedtexturecol[dcvars.x]-1),
+            R_GetPatchColumnWrapped(patch, maskedtexturecol[dcvars.x]+1)
+            );
+
+      maskedtexturecol[dcvars.x] = INT_MAX; // dropoff overflow
+   }
+
+   R_UnlockTextureCompositePatchNum(texnum);
+
+   if (curline->linedef->translucent)
+      R_SetSpriteTranslucency(0);
+
+   curline = NULL; /* cph 2001/11/18 - must clear curline now we're done with it, so R_ColourMap doesn't try using it for other things */
+}
+
+/* R_RenderThickSides: draw the vertical faces of solid ZDoom 3D-floor
+ * slabs in this drawseg's back sector, clipped to the slab's projected
+ * top/bottom and to the seg's saved column clip bounds.  Modeled on
+ * R_RenderMaskedSegRange (projection) and R_RenderSegLoop (opaque emit).
+ * Gated by the caller on backsector->ffloors, so non-3D maps never
+ * reach here. */
+void R_RenderThickSides(drawseg_t *ds)
+{
+   sector_t        *back;
+   const ffloor_t  *ff;
+   draw_column_vars_t dcvars;
+   R_DrawColumn_f   colfunc;
+   fixed_t          scalestep;
+   int              used_translucent = 0;
+
+   back = ds->curline ? ds->curline->backsector : NULL;
+   if (!back || !back->ffloors || !ds->sprtopclip || !ds->sprbottomclip)
+      return;
+
+   R_SetDefaultDrawColumnVars(&dcvars);
+   colfunc  = R_GetDrawColumnFunc(RDC_PIPELINE_STANDARD,
+                                  drawvars.filterwall, drawvars.filterz);
+   curline   = ds->curline;
+   scalestep = ds->scalestep;
+
+   for (ff = back->ffloors; ff; ff = ff->next)
+   {
+      fixed_t        top, bot;
+      int            texnum, x, texheight;
+      const rpatch_t *patch;
+      side_t         *cs;
+      fixed_t        spryscale;
+      int            light;
+      int            translucent, tlmode;
+
+      /* Slab visibility: solid, render-only, and swimmable slabs all draw.
+       * Translucency follows ZDoom -- a swimmable (water) slab blends, and so
+       * does any slab the mapper made see-through with reduced alpha (a glass
+       * pane is a solid or render-only slab with alpha < 255).  This renderer
+       * has two blend weights, so the continuous alpha is bucketed: the
+       * fainter 25/75 blend below 128, the 50/50 blend up to 224.  At/above
+       * 224 the slab is within ~12%% of opaque, which neither blend can
+       * approximate without looking far too transparent, so it stays opaque. */
+      if (ff->type != FFLOOR_SOLID && ff->type != FFLOOR_RENDERONLY &&
+          ff->type != FFLOOR_SWIMMABLE)
+         continue;
+      if (ff->type == FFLOOR_SWIMMABLE)
+         tlmode = 1;
+      else if (ff->alpha < 128)
+         tlmode = 2;
+      else if (ff->alpha < 224)
+         tlmode = 1;
+      else
+         tlmode = 0;
+      translucent = (tlmode != 0);
+      top = ff->model->ceilingheight;
+      bot = ff->model->floorheight;
+      if (bot >= top)
+         continue;
+
+      cs = (ff->controlline && ff->controlline->sidenum[0] != NO_INDEX)
+         ? &sides[ff->controlline->sidenum[0]] : NULL;
+      texnum = 0;
+      if (cs)
+         texnum = cs->midtexture ? cs->midtexture : cs->toptexture;
+      if (!texnum)
+         texnum = ds->curline->sidedef->midtexture;
+      if (!texnum)
+         continue;
+      texnum    = texturetranslation[texnum];
+      patch     = R_CacheTextureCompositePatchNum(texnum);
+      texheight = textureheight[texnum] >> FRACBITS;
+      light     = ff->model->lightlevel;
+      spryscale = ds->scale1;
+
+      /* The standard column drawer batches through the run kernel and honours
+       * the translucency mode set here; a water slab's columns blend 50/50,
+       * an opaque slab's overwrite.  Switching the mode between slabs flushes
+       * the pending batch on the next column (type change), so mixed stacks
+       * stay correct. */
+      R_SetSpriteTranslucency(tlmode);
+      if (translucent)
+         used_translucent = 1;
+
+      for (x = ds->x1; x <= ds->x2; x++, spryscale += scalestep)
+      {
+         int     yl, yh;
+         int64_t tt, tb;
+         angle_t angle;
+         fixed_t texu;
+         int     tc;
+
+         tt = ((int64_t) centeryfrac) -
+              ((int64_t) FixedMul(top - viewz, spryscale));
+         tb = ((int64_t) centeryfrac) -
+              ((int64_t) FixedMul(bot - viewz, spryscale));
+         yl = (int)(tt >> FRACBITS);
+         yh = (int)(tb >> FRACBITS);
+
+         if (yl < ds->sprtopclip[x] + 1)
+            yl = ds->sprtopclip[x] + 1;
+         if (yh > ds->sprbottomclip[x] - 1)
+            yh = ds->sprbottomclip[x] - 1;
+         if (yl > yh || yl < 0 || yh >= viewheight)
+         {
+            if (yl < 0) yl = 0;
+            if (yh >= viewheight) yh = viewheight - 1;
+            if (yl > yh)
+               continue;
+         }
+
+         angle = (ds->rw_centerangle + xtoviewangle[x]) >> ANGLETOFINESHIFT;
+         texu  = ds->rw_offset - FixedMul(finetangent[angle], ds->rw_distance);
+         tc    = texu >> FRACBITS;
+
+         dcvars.x         = x;
+         dcvars.yl        = yl;
+         dcvars.yh        = yh;
+         dcvars.iscale    = 0xffffffffu / (unsigned) spryscale;
+         dcvars.texturemid = top - viewz;
+         dcvars.texheight = texheight;
+         dcvars.z         = spryscale;
+         dcvars.colormap     = R_ColourMap(light, spryscale);
+         dcvars.nextcolormap = R_ColourMap(light + 1, spryscale);
+         dcvars.source    = R_GetTextureColumn(patch, tc);
+         colfunc(&dcvars);
+      }
+
+      R_DrawCmdAdoptTextureLock(texnum);
+   }
+
+   /* If any slab drew translucent, the last batch may still be pending in TL
+    * mode; flush it and restore opaque so the following sprite pass is not
+    * blended.  Skipped when all slabs were opaque, leaving that path's flush
+    * timing (and output) unchanged. */
+   if (used_translucent)
+   {
+      R_ResetColumnBuffer();
+      R_SetSpriteTranslucency(0);
+   }
+
+   curline = NULL;
+}
+
+
+//
+// R_RenderSegLoop
+// Draws zero, one, or two textures (and possibly a masked texture) for walls.
+// Can draw or mark the starting pixel of floor and ceiling textures.
+// CALLED: CORE LOOPING ROUTINE.
+//
+
+static int didsolidcol; /* True if at least one column was marked solid */
+
+#define DL_WALL_CHUNK 8        /* min band height (px) for wall dynamic-light falloff */
+#define MAX_WALL_BANDS 16       /* cap bands/column so tall near walls stay bounded */
+
+/* Emit one wall column split into vertical light bands.  A screen row maps to
+ * a world z (the horizon row is at viewz, stepping by the column's iscale of
+ * world height per pixel), so the point-light boost is evaluated per band and
+ * the wall shows a round pool of light instead of one flat vertical stripe.
+ * The texture source/mapping is unchanged -- only [yl,yh] is subdivided and
+ * the colourmap re-picked per band, exactly as the flat span chunking does. */
+/* Route a lit band's colour tint: columns the wall-run kernel will draw get
+ * the tint packed into dcvars.tint (applied through a tinted composed LUT at
+ * draw time -- identical output to the RMW replay, since the kernel writes
+ * exactly lut[texel] and the per-channel saturating add commutes with the
+ * table lookup); columns that replay through their drawer fn keep the
+ * recorded framebuffer RMW pass.  The eligibility test is the replay's own
+ * (R_DrawCmdColumnKernelClass), so emit and replay can never disagree. */
+/* Per-seg GLDEFS flat-glow state (set in R_RenderSegLoop's prologue): the
+ * front sector's glowing floor/ceiling, plane heights in map units, glow
+ * colour components and fade heights.  NULL/zeroed when the seg is unlit by
+ * glow; the emitter's fast path stays untouched then. */
+static const void *seg_glow_f, *seg_glow_c;
+static int seg_bright_mid, seg_bright_top, seg_bright_bot;
+static int seg_glow_fz, seg_glow_cz;
+static int seg_glow_fr, seg_glow_fg, seg_glow_fb, seg_glow_fh;
+static int seg_glow_cr, seg_glow_cg, seg_glow_cb, seg_glow_ch;
+
+/* Per-band glow contribution at world height wz: light-level boost added to
+ * *ll and colour adds (DL_TINT_SHIFT units) into the tint accumulators.
+ * Weight falls linearly from the plane over the def's height. */
+static void R_GlowBandBoost(int wz, int *ll, int *tr, int *tg, int *tb)
+{
+   if (seg_glow_f)
+   {
+      int dz = wz - seg_glow_fz;
+      if (dz >= 0 && dz < seg_glow_fh)
+      {
+         int w = ((seg_glow_fh - dz) << 8) / seg_glow_fh;   /* 0..256 */
+         *ll += (176 * w) >> 8;
+         *tr += (seg_glow_fr * w) >> 1;   /* w/256 * col * 128, tint units */
+         *tg += (seg_glow_fg * w) >> 1;
+         *tb += (seg_glow_fb * w) >> 1;
+      }
+   }
+   if (seg_glow_c)
+   {
+      int dz = seg_glow_cz - wz;
+      if (dz >= 0 && dz < seg_glow_ch)
+      {
+         int w = ((seg_glow_ch - dz) << 8) / seg_glow_ch;
+         *ll += (176 * w) >> 8;
+         *tr += (seg_glow_cr * w) >> 1;
+         *tg += (seg_glow_cg * w) >> 1;
+         *tb += (seg_glow_cb * w) >> 1;
+      }
+   }
+}
+
+static void R_RouteWallTint(draw_column_vars_t *dc, R_DrawColumn_f cf,
+                            int yl, int yh)
+{
+   int ar, ag, ab;
+   if (!(dl_tint_r | dl_tint_g | dl_tint_b))
+   {
+      dc->tint = 0;
+      return;
+   }
+   ar = dl_tint_r >> DL_TINT_SHIFT;
+   ag = dl_tint_g >> DL_TINT_SHIFT;
+   ab = dl_tint_b >> DL_TINT_SHIFT;
+   if (R_DrawCmdColumnKernelClass(dc, cf) == 2)
+   {
+      /* Clamp to the channel maximum before packing: exact, since any add
+       * at or past a channel's max saturates identically.  Carried at
+       * VID_TINT_BITS per channel so a 10-bit amount fits unchanged. */
+      if (ar > VID_CMAX_R) ar = VID_CMAX_R;
+      if (ag > VID_CMAX_G) ag = VID_CMAX_G;
+      if (ab > VID_CMAX_B) ab = VID_CMAX_B;
+      dc->tint = ((unsigned)ar << (2*VID_TINT_BITS))
+               | ((unsigned)ag << VID_TINT_BITS)
+               | (unsigned)ab;
+   }
+   else
+   {
+      dc->tint = 0;
+      if (ar | ag | ab)
+         R_WallTintRecord(dc->x, yl, yh, ar, ag, ab);
+   }
+}
+
+static void R_EmitLitWallColumn(draw_column_vars_t *dc, R_DrawColumn_f cf,
+                                int base_ll, fixed_t scale, int z_filter,
+                                int lit)
+{
+   const int yl = dc->yl, yh = dc->yh;
+   int cy, step = DL_WALL_CHUNK;
+
+   /* GLDEFS flat glow: does this column reach into a glowing plane's fade
+    * band at all?  Columns outside every band -- the vast majority even on
+    * glowing segs -- keep the single-band fast path below. */
+   int column_glow = 0;
+   if (seg_glow_f || seg_glow_c)
+   {
+      int wz_top = (int)((viewz + (int64_t)(centery - yl) * dc->iscale) >> FRACBITS);
+      int wz_bot = (int)((viewz + (int64_t)(centery - yh) * dc->iscale) >> FRACBITS);
+      column_glow = (seg_glow_f && wz_bot <  seg_glow_fz + seg_glow_fh) ||
+                    (seg_glow_c && wz_top >  seg_glow_cz - seg_glow_ch);
+   }
+
+   /* Falloff disabled (default): one boost for the whole column, sampled at
+    * its mid height -- a single colourmap and one draw command, the cheap
+    * pre-falloff behaviour.  The colour tint still applies, just uniformly up
+    * the column instead of pooling.  This is the fast path that keeps busy,
+    * tall-walled scenes from paying the per-band cost. */
+   if (!dynlight_wall_falloff && !column_glow)
+   {
+      int mid = (yl + yh) >> 1;
+      int wz  = (int)((viewz + (int64_t)(centery - mid) * dc->iscale) >> FRACBITS);
+      int ll  = base_ll + (lit ? R_SegColumnBoost(wz) : 0);
+      if (!lit)
+         dl_tint_r = dl_tint_g = dl_tint_b = 0;
+      if (ll > 255) ll = 255;
+      dc->colormap = R_ColourMap(ll, scale);
+      if (z_filter) dc->nextcolormap = R_ColourMap(ll + 1, scale);
+      R_RouteWallTint(dc, cf, yl, yh);
+      R_DrawCmdEmitColumn(dc, cf);
+      dc->tint = 0;
+      return;
+   }
+
+   /* Fine DL_WALL_CHUNK granularity normally, but cap the band count so an
+    * unusually tall/near column (which would otherwise cost dozens of boost
+    * evals) is bounded; on such columns the wall fills the view and the light
+    * pool is large, so the coarser step is not visible.  Ordinary walls stay
+    * exactly at DL_WALL_CHUNK. */
+   { int h = yh - yl + 1; int s2 = (h + MAX_WALL_BANDS - 1) / MAX_WALL_BANDS;
+     if (s2 > step) step = s2; }
+   for (cy = yl; cy <= yh; cy += step)
+   {
+      int ey = cy + step - 1;
+      int mid, wz, ll;
+      if (ey > yh) ey = yh;
+      mid = (cy + ey) >> 1;
+      wz  = (int)((viewz + (int64_t)(centery - mid) * dc->iscale) >> FRACBITS);
+      ll  = base_ll + (lit ? R_SegColumnBoost(wz) : 0);
+      if (!lit)
+         dl_tint_r = dl_tint_g = dl_tint_b = 0;
+      if (column_glow)
+      {
+         int gtr = 0, gtg = 0, gtb = 0;
+         R_GlowBandBoost(wz, &ll, &gtr, &gtg, &gtb);
+         dl_tint_r += gtr; dl_tint_g += gtg; dl_tint_b += gtb;
+      }
+      if (ll > 255) ll = 255;
+      dc->colormap = R_ColourMap(ll, scale);
+      if (z_filter)
+         dc->nextcolormap = R_ColourMap(ll + 1, scale);
+      dc->yl = cy;
+      dc->yh = ey;
+      R_RouteWallTint(dc, cf, cy, ey);
+      R_DrawCmdEmitColumn(dc, cf);
+   }
+   dc->tint = 0;
+   dc->yl = yl;
+   dc->yh = yh;
+}
+
+static void R_RenderSegLoop (void)
+{
+   const rpatch_t *tex_patch;
+   draw_column_vars_t dcvars;
+   R_DrawColumn_f colfunc = R_GetDrawColumnFunc(RDC_PIPELINE_STANDARD, drawvars.filterwall, drawvars.filterz);
+   fixed_t  texturecolumn = 0;   // shut up compiler warning
+
+   /* These are all invariant across the column loop, yet the original code
+    * re-evaluated them on every column.  Hoist them once:
+    *  - linear_filter: drawvars.filterwall is a global the compiler cannot
+    *    prove unchanged across the colfunc() calls, so the LINEAR test (up
+    *    to five times per column) never got hoisted on its own.
+    *  - the three tier composite-texture patches: midtexture/toptexture/
+    *    bottomtexture are seg-constant (set in R_StoreWallRange before this
+    *    runs), but each tier was Cache-locked and Unlocked once *per column*.
+    *    Lock each once around the whole loop and reuse the cached pointer, so
+    *    the per-column lock churn and &texture_composites[id] lookup are gone
+    *    from the renderer's hottest loop. */
+   /* Which optional dcvars fields the selected drawers will read:
+    * LinearUV reads nextsource, RoundedUV reads prevsource and
+    * nextsource (both selected by filterwall), and the *_LinearZ
+    * dither drawers read nextcolormap (selected by filterz,
+    * independent of filterwall) -- the same split as the span setup
+    * in r_plane.c.  The half-texel texturecolumn centering stays
+    * LINEAR-only, as in the original filter code. */
+   const int linear_filter = (drawvars.filterwall == RDRAW_FILTER_LINEAR);
+   const int uv_filter     = (drawvars.filterwall != RDRAW_FILTER_POINT);
+   const int z_filter      = (drawvars.filterz == RDRAW_FILTER_LINEAR);
+   const rpatch_t *midpatch = midtexture    ? R_CacheTextureCompositePatchNum(midtexture)    : NULL;
+   const rpatch_t *toppatch = toptexture    ? R_CacheTextureCompositePatchNum(toptexture)    : NULL;
+   const rpatch_t *botpatch = bottomtexture ? R_CacheTextureCompositePatchNum(bottomtexture) : NULL;
+   /* Per-tier fullbright mask bases (column-major width*height, 1 = bright),
+    * NULL when the texture has no brightmap.  Indexed per column exactly as
+    * R_GetTextureColumn indexes the texture's own pixels. */
+   const uint8_t  *midmask = midtexture    ? U_BrightmaskForTexture(midtexture)    : NULL;
+   const uint8_t  *topmask = toptexture    ? U_BrightmaskForTexture(toptexture)    : NULL;
+   const uint8_t  *botmask = bottomtexture ? U_BrightmaskForTexture(bottomtexture) : NULL;
+
+   /* Dynamic point lights: whether any active light reaches this seg.  Gating
+    * here keeps the per-column world-position reconstruction (and the
+    * per-band vertical falloff at emit time) off unlit segs entirely. */
+   const int seg_has_dynlight = R_DynLightsActive() && curline &&
+                                R_SegPrepareLights(curline) > 0;
+   /* seg line in map units, relative to the view origin, for the per-column
+    * ray/line intersection that places each wall column in the world. */
+   const int seg_l1x = seg_has_dynlight ? (curline->v1->x - viewx) >> FRACBITS : 0;
+   const int seg_l1y = seg_has_dynlight ? (curline->v1->y - viewy) >> FRACBITS : 0;
+   const int seg_ldx = seg_has_dynlight ? (curline->v2->x - curline->v1->x) >> FRACBITS : 0;
+   const int seg_ldy = seg_has_dynlight ? (curline->v2->y - curline->v1->y) >> FRACBITS : 0;
+   const int view_mx = viewx >> FRACBITS;
+   const int view_my = viewy >> FRACBITS;
+
+   /* GLDEFS flat glow: glowing floor/ceiling of the seg's front sector.
+    * u_glow_present keeps this at one global test on unglowing wads; the two
+    * table lookups per seg only run when any glow definitions exist. */
+   seg_glow_f = seg_glow_c = NULL;
+   seg_bright_mid = seg_bright_top = seg_bright_bot = 0;
+   if (u_glow_walls_present && !fixedcolormap && fullcolormap)
+   {
+      seg_bright_mid = midtexture    && U_GlowForWallTexture(midtexture) != NULL;
+      seg_bright_top = toptexture    && U_GlowForWallTexture(toptexture) != NULL;
+      seg_bright_bot = bottomtexture && U_GlowForWallTexture(bottomtexture) != NULL;
+   }
+   if (u_glow_present && frontsector)
+   {
+      seg_glow_f = U_GlowForFlat(frontsector->floorpic);
+      seg_glow_c = U_GlowForFlat(frontsector->ceilingpic);
+      if (seg_glow_f)
+      {
+         int col = U_GlowColor(seg_glow_f);
+         seg_glow_fz = frontsector->floorheight >> FRACBITS;
+         seg_glow_fh = U_GlowHeight(seg_glow_f);
+         seg_glow_fr = (col >> 16) & 0xff;
+         seg_glow_fg = (col >> 8) & 0xff;
+         seg_glow_fb = col & 0xff;
+      }
+      if (seg_glow_c)
+      {
+         int col = U_GlowColor(seg_glow_c);
+         seg_glow_cz = frontsector->ceilingheight >> FRACBITS;
+         seg_glow_ch = U_GlowHeight(seg_glow_c);
+         seg_glow_cr = (col >> 16) & 0xff;
+         seg_glow_cg = (col >> 8) & 0xff;
+         seg_glow_cb = col & 0xff;
+      }
+   }
+
+   R_SetDefaultDrawColumnVars(&dcvars);
+
+   /* Visual line portals: a portal line's wall is a window, claimed per
+    * column below.  Portal scenes render one depth only, so a portal line
+    * seen through a portal draws its own texture. */
+   seg_lineportal = -1;
+   if (line_portals_active && lineportals && !r_in_skybox && curline &&
+       curline->linedef)
+   {
+      int lnum = (int)(curline->linedef - lines);
+      if ((unsigned)lnum < (unsigned)numlines && lineportals[lnum].active)
+         seg_lineportal = lnum;
+   }
+
+   for ( ; rw_x < rw_stopx ; rw_x++)
+   {
+      /* cache the per-column clip bounds in locals for the body of the
+       * iteration; the array slots are only re-read/written here, so we
+       * load once, work in registers, and store back at the end.  This
+       * removes the repeated ceilingclip[rw_x]/floorclip[rw_x] address
+       * computations from the renderer's hottest loop. */
+      int cc_rwx = ceilingclip[rw_x];
+      int fc_rwx = floorclip[rw_x];
+      /* Per-column dynamic-light state: whether a light reaches this column's
+       * wall point and, if so, its world (x,y); the vertical falloff is then
+       * applied per tier band in R_EmitLitWallColumn. */
+      int col_lit = 0, col_wx = 0, col_wy = 0;
+
+      /* mark floor / ceiling areas */
+      int yh = bottomfrac>>heightbits;
+      int yl = (topfrac+heightunit-1)>>heightbits;
+
+      // no space above wall?
+      int bottom,top = cc_rwx+1;
+
+      if (yl < top)
+         yl = top;
+
+      if (markceiling)
+      {
+         bottom = yl-1;
+
+         if (bottom >= fc_rwx)
+            bottom = fc_rwx-1;
+
+         if (top <= bottom)
+         {
+            ceilingplane->top[rw_x] = top;
+            ceilingplane->bottom[rw_x] = bottom;
+            ceilingplane->modified = 1;
+         }
+         // SoM: this should be set here
+         cc_rwx = bottom;
+      }
+
+      //      yh = bottomfrac>>heightbits;
+
+      bottom = fc_rwx-1;
+      if (yh > bottom)
+         yh = bottom;
+
+      if (markfloor)
+      {
+
+         top  = yh < cc_rwx ? cc_rwx : yh;
+
+         if (++top <= bottom)
+         {
+            floorplane->top[rw_x] = top;
+            floorplane->bottom[rw_x] = bottom;
+            floorplane->modified = 1;
+         }
+         // SoM: This should be set here to prevent overdraw
+         fc_rwx = top;
+      }
+
+      /* 3D-floor water surface: a translucent span from the surface line down
+       * to the bottom of the visible floor area, covering the submerged wall
+       * and floor (drawn opaque first; the water blends over them).  Uses the
+       * floor's bottom ('bottom', still the pre-update fc_rwx-1) as the lower
+       * bound and the ceiling clip as the upper. */
+      if (waterplane)
+      {
+         int wtop = waterfrac >> heightbits;
+         if (wtop < cc_rwx + 1)
+            wtop = cc_rwx + 1;
+         if (wtop <= bottom)
+         {
+            waterplane->top[rw_x] = wtop;
+            waterplane->bottom[rw_x] = bottom;
+            waterplane->modified = 1;
+         }
+         waterfrac += waterstep;
+      }
+
+      /* stacked see-through surfaces: each spans from its own projected
+       * surface down to the floor area, but its top is clamped below the
+       * surface above it so two blended layers do not double over the same
+       * pixels.  Surfaces are ordered top-down, so the running 'above'
+       * y rises as we descend the stack. */
+      if (nmorewater)
+      {
+         int w;
+         int above = (waterplane ? (waterfrac - waterstep) >> heightbits
+                                 : cc_rwx) ;
+         if (above < cc_rwx)
+            above = cc_rwx;
+         for (w = 0; w < nmorewater; w++)
+         {
+            int wtop = mwfrac[w] >> heightbits;
+            if (wtop < above + 1)
+               wtop = above + 1;
+            if (wtop <= bottom)
+            {
+               morewater[w]->top[rw_x] = wtop;
+               morewater[w]->bottom[rw_x] = bottom;
+               morewater[w]->modified = 1;
+            }
+            if ((mwfrac[w] >> heightbits) > above)
+               above = mwfrac[w] >> heightbits;
+            mwfrac[w] += mwstep[w];
+         }
+      }
+
+      // texturecolumn and lighting are independent of wall tiers
+      if (segtextured)
+      {
+         // calculate texture offset
+         /* Masking to half a revolution keeps the subscript inside the
+          * 4096-entry finetangent table when the wiggle geometry (a seg
+          * normal more than ANG90 off the view angle) pushes the sum past
+          * ANG180.  tan has period pi, so the mask is the mathematically
+          * correct wraparound and the identity for every index the
+          * vanilla expression kept in range. */
+         angle_t angle = ((rw_centerangle+xtoviewangle[rw_x])
+                          >>ANGLETOFINESHIFT) & (FINEANGLES/2 - 1);
+
+         texturecolumn = rw_offset-FixedMul(finetangent[angle],rw_distance);
+         if (linear_filter)
+         {
+            /* The linear kernel blends floor(u - 1/2) and the next
+             * column, so a u clamped merely to [lo, hi] still reads
+             * one texel past the seg on each side once the half-texel
+             * shift is applied; at a seg's first column that wraps to
+             * the far side of the texture and the strip returns.
+             * Pull the clamp in by half a texel so both taps stay
+             * inside the seg (CLAMP_TO_EDGE: the edge column goes
+             * sharp instead of blending across the wrap). */
+            fixed_t lo = rw_uclamp_lo + (FRACUNIT>>1);
+            fixed_t hi = rw_uclamp_hi - (FRACUNIT>>1);
+            if (lo > hi)
+               lo = hi = rw_uclamp_lo + ((rw_uclamp_hi - rw_uclamp_lo) >> 1);
+            if (texturecolumn < lo)
+               texturecolumn = lo;
+            else if (texturecolumn > hi)
+               texturecolumn = hi;
+            texturecolumn -= (FRACUNIT>>1);
+         }
+         else
+         {
+            if (texturecolumn < rw_uclamp_lo)
+               texturecolumn = rw_uclamp_lo;
+            else if (texturecolumn > rw_uclamp_hi)
+               texturecolumn = rw_uclamp_hi;
+         }
+         dcvars.texu = texturecolumn; // for filtering -- POPE
+         texturecolumn >>= FRACBITS;
+
+         {
+            int ll = rw_lightlevel;
+            /* Dynamic point lights: reconstruct the wall point's world
+             * position for this column.  Gated on R_SegPrepareLights so the
+             * trig runs only for segs a light can actually reach.  The boost
+             * itself is applied per vertical band at emit time so the wall
+             * gets a round pool rather than a uniform vertical stripe. */
+            if (seg_has_dynlight)
+            {
+               /* intersect the view ray through this column with the seg's
+                * line to get the wall point's world (x,y); exact, integer. */
+               unsigned rang = (viewangle + xtoviewangle[rw_x])
+                               >> ANGLETOFINESHIFT;
+               fixed_t cr = finecosine[rang], sr = finesine[rang];
+               int64_t denom = (int64_t)cr * seg_ldy - (int64_t)sr * seg_ldx;
+               if (denom != 0)
+               {
+                  int64_t num = ((int64_t)seg_l1x * seg_ldy -
+                                 (int64_t)seg_l1y * seg_ldx) * FRACUNIT;
+                  int64_t t = num / denom;         /* map units along ray */
+                  if (t > 0)
+                  {
+                     col_wx  = view_mx + (int)((t * cr) >> FRACBITS);
+                     col_wy  = view_my + (int)((t * sr) >> FRACBITS);
+                     /* horizontal light filter for this column; if nothing
+                      * reaches it, fall back to the plain single-colourmap
+                      * path (no per-band split). */
+                     col_lit = R_SegColumnPrepare(col_wx, col_wy) > 0;
+                  }
+               }
+            }
+            /* Unlit columns keep the single-colourmap fast path; lit columns
+             * defer the colourmap to R_EmitLitWallColumn (per band). */
+            if (!col_lit)
+            {
+               dcvars.colormap = R_ColourMap(ll,rw_scale);
+               /* Only the *_LinearZ dither drawers read nextcolormap; skip the
+                * extra colormap lookup otherwise. */
+               if (z_filter)
+                  dcvars.nextcolormap = R_ColourMap(ll+1,rw_scale); // for filtering -- POPE
+            }
+         }
+         dcvars.z = rw_scale; // for filtering -- POPE
+
+         dcvars.x = rw_x;
+         dcvars.iscale = 0xffffffffu / (unsigned)rw_scale;
+      }
+
+      // draw the wall tiers
+      if (midtexture && seg_lineportal >= 0)
+      {
+         /* Visual line portal: this wall is a window.  Claim the column for
+          * the composite instead of drawing the texture -- the wall still
+          * seals the column below (cc/fc are set to the closed values by the
+          * one-sided path), so everything behind it stays hidden and the
+          * claim is already clipped by anything nearer. */
+         if (yl <= yh)
+            R_LinePortalClaim(rw_x, yl, yh, seg_lineportal);
+      }
+      else if (midtexture)
+      {
+
+         dcvars.yl = yl;     // single sided line
+         dcvars.yh = yh;
+         dcvars.texturemid = rw_midtexturemid;
+         tex_patch = midpatch;
+         dcvars.source = R_GetTextureColumn(tex_patch, texturecolumn);
+         dcvars.brightmask = midmask
+            ? midmask + (texturecolumn & tex_patch->widthmask) * tex_patch->height
+            : NULL;
+         if (uv_filter)
+         {
+            dcvars.prevsource = R_GetTextureColumn(tex_patch, texturecolumn-1);
+            dcvars.nextsource = R_GetTextureColumn(tex_patch, texturecolumn+1);
+         }
+         dcvars.texheight = midtexheight;
+         if (seg_bright_mid)
+         {
+            dcvars.colormap = fullcolormap;
+            if (z_filter)
+               dcvars.nextcolormap = fullcolormap;
+            R_DrawCmdEmitColumn(&dcvars, colfunc);
+         }
+         else if (col_lit || seg_glow_f || seg_glow_c)
+            R_EmitLitWallColumn(&dcvars, colfunc, rw_lightlevel, rw_scale, z_filter, col_lit);
+         else
+            R_DrawCmdEmitColumn(&dcvars, colfunc);
+         tex_patch = NULL;
+         cc_rwx = viewheight;
+         fc_rwx = -1;
+      }
+      else
+      {
+
+         // two sided line
+         if (toptexture)
+         {
+            // top wall
+            int mid = pixhigh>>heightbits;
+            pixhigh += pixhighstep;
+
+            if (mid >= fc_rwx)
+               mid = fc_rwx-1;
+
+            if (mid >= yl)
+            {
+               dcvars.yl = yl;
+               dcvars.yh = mid;
+               dcvars.texturemid = rw_toptexturemid;
+               tex_patch = toppatch;
+               dcvars.source = R_GetTextureColumn(tex_patch,texturecolumn);
+               dcvars.brightmask = topmask
+                  ? topmask + (texturecolumn & tex_patch->widthmask) * tex_patch->height
+                  : NULL;
+               if (uv_filter)
+               {
+                  dcvars.prevsource = R_GetTextureColumn(tex_patch,texturecolumn-1);
+                  dcvars.nextsource = R_GetTextureColumn(tex_patch,texturecolumn+1);
+               }
+               dcvars.texheight = toptexheight;
+               if (seg_bright_top)
+               {
+                  dcvars.colormap = fullcolormap;
+                  if (z_filter)
+                     dcvars.nextcolormap = fullcolormap;
+                  R_DrawCmdEmitColumn(&dcvars, colfunc);
+               }
+               else if (col_lit || seg_glow_f || seg_glow_c)
+                  R_EmitLitWallColumn(&dcvars, colfunc, rw_lightlevel, rw_scale, z_filter, col_lit);
+               else
+                  R_DrawCmdEmitColumn(&dcvars, colfunc);
+               tex_patch = NULL;
+               cc_rwx = mid;
+            }
+            else
+               cc_rwx = yl-1;
+         }
+         else  // no top wall
+         {
+
+            if (markceiling)
+               cc_rwx = yl-1;
+         }
+
+         if (bottomtexture)          // bottom wall
+         {
+            int mid = (pixlow+heightunit-1)>>heightbits;
+            pixlow += pixlowstep;
+
+            // no space above wall?
+            if (mid <= cc_rwx)
+               mid = cc_rwx+1;
+
+            if (mid <= yh)
+            {
+               dcvars.yl = mid;
+               dcvars.yh = yh;
+               dcvars.texturemid = rw_bottomtexturemid;
+               tex_patch = botpatch;
+               dcvars.source = R_GetTextureColumn(tex_patch, texturecolumn);
+               dcvars.brightmask = botmask
+                  ? botmask + (texturecolumn & tex_patch->widthmask) * tex_patch->height
+                  : NULL;
+               if (uv_filter)
+               {
+                  dcvars.prevsource = R_GetTextureColumn(tex_patch, texturecolumn-1);
+                  dcvars.nextsource = R_GetTextureColumn(tex_patch, texturecolumn+1);
+               }
+               dcvars.texheight = bottomtexheight;
+               if (seg_bright_bot)
+               {
+                  dcvars.colormap = fullcolormap;
+                  if (z_filter)
+                     dcvars.nextcolormap = fullcolormap;
+                  R_DrawCmdEmitColumn(&dcvars, colfunc);
+               }
+               else if (col_lit || seg_glow_f || seg_glow_c)
+                  R_EmitLitWallColumn(&dcvars, colfunc, rw_lightlevel, rw_scale, z_filter, col_lit);
+               else
+                  R_DrawCmdEmitColumn(&dcvars, colfunc);
+               tex_patch = NULL;
+               fc_rwx = mid;
+            }
+            else
+               fc_rwx = yh+1;
+         }
+         else        // no bottom wall
+         {
+            if (markfloor)
+               fc_rwx = yh+1;
+         }
+
+         // cph - if we completely blocked further sight through this column,
+         // add this info to the solid columns array for r_bsp.c
+         if ((markceiling || markfloor) &&
+               (fc_rwx <= cc_rwx + 1)) {
+            solidcol[rw_x] = 1; didsolidcol = 1;
+         }
+
+         // save texturecol for backdrawing of masked mid texture
+         if (maskedtexture)
+            maskedtexturecol[rw_x] = texturecolumn;
+      }
+
+      /* store the cached clip bounds back for this column */
+      /* Two-sided visual line portal: the window is the opening between the
+       * upper and lower texture bands, which is exactly the span the clip
+       * arrays now bound.  Claim it and seal the column, so nothing behind
+       * the line can draw into the window. */
+      if (seg_lineportal >= 0 && backsector && cc_rwx + 1 <= fc_rwx - 1)
+      {
+         R_LinePortalClaim(rw_x, cc_rwx + 1, fc_rwx - 1, seg_lineportal);
+         cc_rwx = viewheight;
+         fc_rwx = -1;
+      }
+
+      ceilingclip[rw_x] = cc_rwx;
+      floorclip[rw_x]   = fc_rwx;
+
+      rw_scale += rw_scalestep;
+      topfrac += topstep;
+      bottomfrac += bottomstep;
+   }
+
+   /* release the per-tier composite patches locked once before the loop */
+   /* The emitted records still point into these composites; hand the
+    * locks to the command buffer, which unlocks them after replay. */
+   if (midpatch) R_DrawCmdAdoptTextureLock(midtexture);
+   if (toppatch) R_DrawCmdAdoptTextureLock(toptexture);
+   if (botpatch) R_DrawCmdAdoptTextureLock(bottomtexture);
+}
+
+// killough 5/2/98: move from r_main.c, made static, simplified
+
+static fixed_t R_PointToDist(fixed_t x, fixed_t y)
+{
+   fixed_t dx = D_abs(x - viewx);
+   fixed_t dy = D_abs(y - viewy);
+
+   if (dy > dx)
+   {
+      fixed_t t = dx;
+      dx = dy;
+      dy = t;
+   }
+
+   return FixedDiv(dx, finesine[(tantoangle[FixedDiv(dy,dx) >> DBITS]
+            + ANG90) >> ANGLETOFINESHIFT]);
+}
+
+/* World hit of the view ray through screen column x with the current
+ * seg's line, for sloped plane heights at the clipped seg ends.  The
+ * seg's vertices may sit well past the clip, so the heights must come
+ * from the ray/line intersection, not the vertices.  Doubles: this
+ * runs at most four times per sloped seg. */
+static void R_SlopeWallPoint(int x, fixed_t *wx, fixed_t *wy)
+{
+   angle_t ang = viewangle + xtoviewangle[x];
+   double rdx = finecosine[ang >> ANGLETOFINESHIFT] / 65536.0;
+   double rdy = finesine[ang >> ANGLETOFINESHIFT] / 65536.0;
+   double p1x = curline->v1->x / 65536.0, p1y = curline->v1->y / 65536.0;
+   double ldx = (curline->v2->x - curline->v1->x) / 65536.0;
+   double ldy = (curline->v2->y - curline->v1->y) / 65536.0;
+   double vx = viewx / 65536.0, vy = viewy / 65536.0;
+   double den = ldx * rdy - ldy * rdx;
+   double tt;
+
+   if (den == 0)
+   {
+      *wx = curline->v1->x;
+      *wy = curline->v1->y;
+      return;
+   }
+   tt = ((vx - p1x) * rdy - (vy - p1y) * rdx) / den;
+   *wx = (fixed_t)((p1x + tt * ldx) * 65536.0);
+   *wy = (fixed_t)((p1y + tt * ldy) * 65536.0);
+}
+
+//
+// R_StoreWallRange
+// A wall segment will be drawn
+//  between start and stop pixels (inclusive).
+//
+#ifdef PRBOOM_RENDER_PROFILE
+static void R_StoreWallRange_impl(const int start, const int stop);
+
+void R_StoreWallRange(const int start, const int stop)
+{
+   extern double prof_storewall_usec;
+   double _t0 = I_RenderProfileUsec();
+   R_StoreWallRange_impl(start, stop);
+   prof_storewall_usec += (I_RenderProfileUsec() - _t0);
+}
+static void R_StoreWallRange_impl(const int start, const int stop)
+#else
+void R_StoreWallRange(const int start, const int stop)
+#endif
+{
+   fixed_t hyp;
+   angle_t offsetangle;
+   int     ffloorseg = 0;
+
+   if (ds_p == drawsegs+maxdrawsegs)   // killough 1/98 -- fix 2s line HOM
+   {
+      unsigned pos = ds_p - drawsegs; // jff 8/9/98 fix from ZDOOM1.14a
+      unsigned newmax = maxdrawsegs ? maxdrawsegs*2 : 128; // killough
+      drawsegs = realloc(drawsegs,newmax*sizeof(*drawsegs));
+      ds_p = drawsegs + pos;          // jff 8/9/98 fix from ZDOOM1.14a
+      maxdrawsegs = newmax;
+   }
+
+   if(curline->miniseg == FALSE) // figgi -- skip minisegs
+      curline->linedef->flags |= ML_MAPPED;
+
+   sidedef = curline->sidedef;
+   linedef = curline->linedef;
+
+   // mark the segment as visible for auto map
+   linedef->flags |= ML_MAPPED;
+
+   // calculate rw_distance for scale calculation
+   rw_normalangle = curline->angle + ANG90;
+
+   offsetangle = rw_normalangle-rw_angle1;
+
+   if (D_abs(offsetangle) > ANG90)
+      offsetangle = ANG90;
+
+   hyp = (viewx==curline->v1->x && viewy==curline->v1->y)?
+      0 : R_PointToDist (curline->v1->x, curline->v1->y);
+   rw_distance = FixedMul(hyp, finecosine[offsetangle>>ANGLETOFINESHIFT]);
+
+   ds_p->x1 = rw_x = start;
+   ds_p->x2 = stop;
+   ds_p->curline = curline;
+   rw_stopx = stop+1;
+
+   {     // killough 1/6/98, 2/1/98: remove limit on openings
+      extern int *openings; // dropoff overflow
+      extern size_t maxopenings;
+      size_t pos = lastopening - openings;
+      size_t need = (rw_stopx - start)*4 + pos;
+      if (need > maxopenings)
+      {
+         drawseg_t *ds;                //jff 8/9/98 needed for fix from ZDoom
+         int *oldopenings = openings; // dropoff overflow
+         int *oldlast = lastopening; // dropoff overflow
+
+         do
+            maxopenings = maxopenings ? maxopenings*2 : 16384;
+         while (need > maxopenings);
+         openings = realloc(openings, maxopenings * sizeof(*openings));
+         lastopening = openings + pos;
+
+         // jff 8/9/98 borrowed fix for openings from ZDOOM1.14
+         // [RH] We also need to adjust the openings pointers that
+         //    were already stored in drawsegs.
+         for (ds = drawsegs; ds < ds_p; ds++)
+         {
+#define ADJUST(p) if (ds->p + ds->x1 >= oldopenings && ds->p + ds->x1 <= oldlast)\
+            ds->p = ds->p - oldopenings + openings;
+            ADJUST (maskedtexturecol);
+            ADJUST (sprtopclip);
+            ADJUST (sprbottomclip);
+         }
+#undef ADJUST
+      }
+   }  // killough: end of code to remove limits on openings
+
+   if (r_wiggle_fix)
+      R_FixWiggle(frontsector);
+   else
+   {
+      /* reset back to defaults */
+      max_rwscale = 64 * FRACUNIT;
+      heightbits  = 12;
+      heightunit  = (1 << 12);
+      invhgtbits  = 4;
+   }
+
+   // calculate scale at both ends and step
+
+   ds_p->scale1 = rw_scale =
+      R_ScaleFromGlobalAngle (viewangle + xtoviewangle[start]);
+
+   if (stop > start)
+   {
+      ds_p->scale2 = R_ScaleFromGlobalAngle (viewangle + xtoviewangle[stop]);
+      ds_p->scalestep = rw_scalestep = (ds_p->scale2-rw_scale) / (stop-start);
+   }
+   else
+   {
+      ds_p->scale2 = ds_p->scale1;
+      ds_p->scalestep = 0;
+   }
+
+   // calculate texture boundaries
+   //  and decide if floor / ceiling marks are needed
+
+   worldtop = frontsector->ceilingheight - viewz;
+   worldbottom = frontsector->floorheight - viewz;
+   rw_anyslope = frontsector->floor_slope || frontsector->ceiling_slope ||
+     (backsector && (backsector->floor_slope || backsector->ceiling_slope));
+
+   midtexture = toptexture = bottomtexture = maskedtexture = 0;
+   ds_p->maskedtexturecol = NULL;
+
+   if (!backsector)
+   {
+      // single sided line
+      midtexture = texturetranslation[sidedef->midtexture];
+      midtexheight = (linedef->r_flags & RF_MID_TILE) ? 0 : textureheight[midtexture] >> FRACBITS;
+
+      // a single sided line is terminal, so it must mark ends
+      markfloor = markceiling = TRUE;
+
+      if (linedef->flags & ML_DONTPEGBOTTOM)
+      {         // bottom of texture at bottom
+         fixed_t vtop = frontsector->floorheight +
+            textureheight[sidedef->midtexture];
+         rw_midtexturemid = vtop - viewz;
+      }
+      else        // top of texture at top
+         rw_midtexturemid = worldtop;
+
+      rw_midtexturemid += FixedMod(sidedef->rowoffset, textureheight[midtexture]);
+
+      ds_p->silhouette = SIL_BOTH;
+      ds_p->sprtopclip = screenheightarray;
+      ds_p->sprbottomclip = negonearray;
+      ds_p->bsilheight = INT_MAX;
+      ds_p->tsilheight = INT_MIN;
+   }
+   else      // two sided line
+   {
+      ds_p->sprtopclip = ds_p->sprbottomclip = NULL;
+      ds_p->silhouette = 0;
+
+      /* a 2s line whose back sector carries 3D-floor slabs needs full
+       * clip info kept so the post-pass can draw the slab faces */
+      ffloorseg = (backsector->ffloors != NULL);
+
+
+      if (linedef->r_flags & RF_CLOSED) { /* cph - closed 2S line e.g. door */
+         // cph - killough's (outdated) comment follows - this deals with both
+         // "automap fixes", his and mine
+         // killough 1/17/98: this test is required if the fix
+         // for the automap bug (r_bsp.c) is used, or else some
+         // sprites will be displayed behind closed doors. That
+         // fix prevents lines behind closed doors with dropoffs
+         // from being displayed on the automap.
+
+         ds_p->silhouette = SIL_BOTH;
+         ds_p->sprbottomclip = negonearray;
+         ds_p->bsilheight = INT_MAX;
+         ds_p->sprtopclip = screenheightarray;
+         ds_p->tsilheight = INT_MIN;
+
+      } else { /* not solid - old code */
+
+         if (frontsector->floorheight > backsector->floorheight)
+         {
+            ds_p->silhouette = SIL_BOTTOM;
+            ds_p->bsilheight = frontsector->floorheight;
+         }
+         else
+            if (backsector->floorheight > viewz)
+            {
+               ds_p->silhouette = SIL_BOTTOM;
+               ds_p->bsilheight = INT_MAX;
+            }
+
+         if (frontsector->ceilingheight < backsector->ceilingheight)
+         {
+            ds_p->silhouette |= SIL_TOP;
+            ds_p->tsilheight = frontsector->ceilingheight;
+         }
+         else
+            if (backsector->ceilingheight < viewz)
+            {
+               ds_p->silhouette |= SIL_TOP;
+               ds_p->tsilheight = INT_MIN;
+            }
+      }
+
+      worldhigh = backsector->ceilingheight - viewz;
+      worldlow = backsector->floorheight - viewz;
+
+      // hack to allow height changes in outdoor areas
+      if (frontsector->ceilingpic == skyflatnum
+            && backsector->ceilingpic == skyflatnum)
+         worldtop = worldhigh;
+
+      markfloor = worldlow != worldbottom
+         || frontsector->floor_slope || backsector->floor_slope
+         || backsector->floorpic != frontsector->floorpic
+         || backsector->lightlevel != frontsector->lightlevel
+
+         // killough 3/7/98: Add checks for (x,y) offsets
+         || backsector->floor_xoffs != frontsector->floor_xoffs
+         || backsector->floor_yoffs != frontsector->floor_yoffs
+
+         // killough 4/15/98: prevent 2s normals
+         // from bleeding through deep water
+         || frontsector->heightsec != -1
+
+         // killough 4/17/98: draw floors if different light levels
+         || backsector->floorlightsec != frontsector->floorlightsec
+         ;
+
+      markceiling = worldhigh != worldtop
+         || frontsector->ceiling_slope || backsector->ceiling_slope
+         || backsector->ceilingpic != frontsector->ceilingpic
+         || backsector->lightlevel != frontsector->lightlevel
+
+         // killough 3/7/98: Add checks for (x,y) offsets
+         || backsector->ceiling_xoffs != frontsector->ceiling_xoffs
+         || backsector->ceiling_yoffs != frontsector->ceiling_yoffs
+
+         // killough 4/15/98: prevent 2s normals
+         // from bleeding through fake ceilings
+         || (frontsector->heightsec != -1 &&
+               frontsector->ceilingpic!=skyflatnum)
+
+         // killough 4/17/98: draw ceilings if different light levels
+         || backsector->ceilinglightsec != frontsector->ceilinglightsec
+         ;
+
+      /* Stacked-sector portals: a window's edge is invisible to the classic
+       * property comparison -- by design the window's heights, pics and
+       * light match its neighbours -- but the window plane no longer merges
+       * with theirs (portal id is part of the visplane identity), so
+       * without a mark here the window plane never receives spans and the
+       * neighbour plane paints the flat over the window.  Force the mark
+       * whenever the two REAL sectors differ and either side is portaled;
+       * curline's sectors are used because the frontsector/backsector
+       * globals may have been rewritten by R_FakeFlat. */
+      if (sector_portals_active && curline->backsector)
+      {
+         int fs = (int)(curline->frontsector - sectors);
+         int bs = (int)(curline->backsector - sectors);
+         if (fs != bs &&
+             (unsigned)fs < (unsigned)numsectors &&
+             (unsigned)bs < (unsigned)numsectors)
+         {
+            if (ceilingportals[fs].active | ceilingportals[bs].active)
+               markceiling = TRUE;
+            if (floorportals[fs].active | floorportals[bs].active)
+               markfloor = TRUE;
+         }
+      }
+
+      if (backsector->ceilingheight <= frontsector->floorheight
+            || backsector->floorheight >= frontsector->ceilingheight)
+         markceiling = markfloor = TRUE;   // closed door
+
+      if (worldhigh < worldtop)   // top texture
+      {
+         toptexture = texturetranslation[sidedef->toptexture];
+         toptexheight = (linedef->r_flags & RF_TOP_TILE) ? 0 : textureheight[toptexture] >> FRACBITS;
+         rw_toptexturemid = linedef->flags & ML_DONTPEGTOP ? worldtop :
+            backsector->ceilingheight+textureheight[sidedef->toptexture]-viewz;
+         rw_toptexturemid += FixedMod(sidedef->rowoffset, textureheight[toptexture]);
+      }
+
+      if (worldlow > worldbottom) // bottom texture
+      {
+         bottomtexture = texturetranslation[sidedef->bottomtexture];
+         bottomtexheight = (linedef->r_flags & RF_BOT_TILE) ? 0 : textureheight[bottomtexture] >> FRACBITS;
+         rw_bottomtexturemid = linedef->flags & ML_DONTPEGBOTTOM ? worldtop :
+            worldlow;
+         rw_bottomtexturemid += FixedMod(sidedef->rowoffset, textureheight[bottomtexture]);
+      }
+
+      // allocate space for masked texture tables
+      if (sidedef->midtexture)    // masked midtexture
+      {
+         maskedtexture = TRUE;
+         ds_p->maskedtexturecol = maskedtexturecol = lastopening - rw_x;
+         lastopening += rw_stopx - rw_x;
+      }
+   }
+
+   // calculate rw_offset (only needed for textured lines)
+   segtextured = midtexture | toptexture | bottomtexture | maskedtexture;
+
+   if (segtextured)
+   {
+      rw_offset = FixedMul (hyp, -finesine[offsetangle >>ANGLETOFINESHIFT]);
+
+      rw_offset += sidedef->textureoffset + curline->offset;
+
+      /* The seg covers whole screen columns, so the first and last
+       * column's ray centres land slightly past the seg's vertices
+       * and the per-angle texture offset extrapolates beyond the
+       * seg's own u range.  On textures whose content is
+       * discontinuous across the horizontal wrap that single column
+       * samples the wrong side and draws a tall one-pixel strip
+       * (Chex Quest 3 E1M1: the first column of a 19-unit STONPOIS
+       * piece computes u = -0.0135, floors to -1, wraps to column 63
+       * on the far side of the painted trim diagonal).  The overshoot
+       * is measured in texels, so it is resolution independent and
+       * hits 320x200 hardest, and it survives any precision fix
+       * because the exact u for that ray really is outside the seg.
+       * Clamp to the seg's range, as hardware renderers implicitly do
+       * by interpolating endpoint texture coordinates.  The lower
+       * bound is the seg's chained textureoffset + offset, not zero,
+       * so intentional negative-offset tiling keeps its wrap. */
+      {
+         double sdx = (double)curline->v2->x - (double)curline->v1->x;
+         double sdy = (double)curline->v2->y - (double)curline->v1->y;
+         double slen = sqrt(sdx*sdx + sdy*sdy);
+         if (slen > 2147483520.0)
+            slen = 2147483520.0;
+         rw_uclamp_lo = sidedef->textureoffset + curline->offset;
+         rw_uclamp_hi = rw_uclamp_lo + (fixed_t)slen - 1;
+         if (rw_uclamp_hi < rw_uclamp_lo)
+            rw_uclamp_hi = rw_uclamp_lo;
+      }
+
+      rw_centerangle = ANG90 + viewangle - rw_normalangle;
+
+      rw_lightlevel = frontsector->lightlevel;
+   }
+
+   // Remember the vars used to determine fractional U texture
+   // coords for later - POPE
+   ds_p->rw_offset = rw_offset;
+   ds_p->rw_distance = rw_distance;
+   ds_p->rw_centerangle = rw_centerangle;
+
+   // if a floor / ceiling plane is on the wrong side of the view
+   // plane, it is definitely invisible and doesn't need to be marked.
+
+   // killough 3/7/98: add deep water check
+   if (frontsector->heightsec == -1)
+   {
+      if (frontsector->floorheight >= viewz &&
+            !frontsector->floor_slope)             // above view plane
+         markfloor = FALSE;
+      if (frontsector->ceilingheight <= viewz &&
+            !frontsector->ceiling_slope &&
+            frontsector->ceilingpic != skyflatnum)   // below view plane
+         markceiling = FALSE;
+   }
+
+   // calculate incremental stepping values for texture edges
+   worldtop >>= invhgtbits;
+   worldbottom >>= invhgtbits;
+
+   topstep = -FixedMul (rw_scalestep, worldtop);
+   topfrac = (centeryfrac >> invhgtbits) - FixedMul (worldtop, rw_scale);
+
+   bottomstep = -FixedMul (rw_scalestep,worldbottom);
+   bottomfrac = (centeryfrac >> invhgtbits) - FixedMul (worldbottom, rw_scale);
+
+   /* 3D-floor (swimmable) water surface: project its height the same way as
+    * the wall edges so R_RenderSegLoop can bound the translucent span. */
+   if (waterplane)
+   {
+      int worldwater = (waterplane->height - viewz) >> invhgtbits;
+      waterstep = -FixedMul (rw_scalestep, worldwater);
+      waterfrac = (centeryfrac >> invhgtbits) - FixedMul (worldwater, rw_scale);
+   }
+
+   /* same projection for each stacked see-through surface below the topmost */
+   {
+      int w;
+      for (w = 0; w < nmorewater; w++)
+      {
+         int worldw = (morewater[w]->height - viewz) >> invhgtbits;
+         mwstep[w] = -FixedMul (rw_scalestep, worldw);
+         mwfrac[w] = (centeryfrac >> invhgtbits) - FixedMul (worldw, rw_scale);
+      }
+   }
+
+   if (backsector)
+   {
+      worldhigh >>= invhgtbits;
+      worldlow >>= invhgtbits;
+
+      if (worldhigh < worldtop)
+      {
+         pixhigh = (centeryfrac >> invhgtbits) - FixedMul (worldhigh, rw_scale);
+         pixhighstep = -FixedMul (rw_scalestep,worldhigh);
+      }
+      if (worldlow > worldbottom)
+      {
+         pixlow = (centeryfrac >> invhgtbits) - FixedMul (worldlow, rw_scale);
+         pixlowstep = -FixedMul (rw_scalestep,worldlow);
+      }
+   }
+
+   /* Sloped sector planes: a plane's edge along the wall is a straight
+    * 3D line, and perspective projection maps lines to lines, so the
+    * per-column screen boundary is still linear -- only the endpoint
+    * heights differ.  Re-derive frac/step from the plane heights at the
+    * clipped seg's first and last column rays. */
+   if (rw_anyslope)
+   {
+      fixed_t wx1, wy1, wx2, wy2, s1, s2;
+      int span = rw_stopx - 1 - rw_x;
+
+      R_SlopeWallPoint(rw_x, &wx1, &wy1);
+      R_SlopeWallPoint(rw_stopx - 1, &wx2, &wy2);
+      s1 = rw_scale;
+      s2 = span > 0 ? rw_scale + rw_scalestep * span : rw_scale;
+
+      if (frontsector->ceiling_slope)
+      {
+         fixed_t z1 = (P_PlaneZatPoint(frontsector->ceiling_slope, wx1, wy1)
+                       - viewz) >> invhgtbits;
+         fixed_t z2 = (P_PlaneZatPoint(frontsector->ceiling_slope, wx2, wy2)
+                       - viewz) >> invhgtbits;
+         fixed_t f2;
+         topfrac = (centeryfrac >> invhgtbits) - FixedMul(z1, s1);
+         f2      = (centeryfrac >> invhgtbits) - FixedMul(z2, s2);
+         topstep = span > 0 ? (f2 - topfrac) / span : 0;
+      }
+      if (frontsector->floor_slope)
+      {
+         fixed_t z1 = (P_PlaneZatPoint(frontsector->floor_slope, wx1, wy1)
+                       - viewz) >> invhgtbits;
+         fixed_t z2 = (P_PlaneZatPoint(frontsector->floor_slope, wx2, wy2)
+                       - viewz) >> invhgtbits;
+         fixed_t f2;
+         bottomfrac = (centeryfrac >> invhgtbits) - FixedMul(z1, s1);
+         f2         = (centeryfrac >> invhgtbits) - FixedMul(z2, s2);
+         bottomstep = span > 0 ? (f2 - bottomfrac) / span : 0;
+      }
+      if (backsector)
+      {
+         if (worldhigh < worldtop && backsector->ceiling_slope)
+         {
+            fixed_t z1 = (P_PlaneZatPoint(backsector->ceiling_slope, wx1, wy1)
+                          - viewz) >> invhgtbits;
+            fixed_t z2 = (P_PlaneZatPoint(backsector->ceiling_slope, wx2, wy2)
+                          - viewz) >> invhgtbits;
+            fixed_t f2;
+            pixhigh = (centeryfrac >> invhgtbits) - FixedMul(z1, s1);
+            f2      = (centeryfrac >> invhgtbits) - FixedMul(z2, s2);
+            pixhighstep = span > 0 ? (f2 - pixhigh) / span : 0;
+         }
+         if (worldlow > worldbottom && backsector->floor_slope)
+         {
+            fixed_t z1 = (P_PlaneZatPoint(backsector->floor_slope, wx1, wy1)
+                          - viewz) >> invhgtbits;
+            fixed_t z2 = (P_PlaneZatPoint(backsector->floor_slope, wx2, wy2)
+                          - viewz) >> invhgtbits;
+            fixed_t f2;
+            pixlow = (centeryfrac >> invhgtbits) - FixedMul(z1, s1);
+            f2     = (centeryfrac >> invhgtbits) - FixedMul(z2, s2);
+            pixlowstep = span > 0 ? (f2 - pixlow) / span : 0;
+         }
+      }
+   }
+
+   // render it
+   if (markceiling) {
+      if (ceilingplane)   // killough 4/11/98: add NULL ptr checks
+         ceilingplane = R_CheckPlane (ceilingplane, rw_x, rw_stopx-1);
+      else
+         markceiling = 0;
+   }
+
+   if (markfloor) {
+      if (floorplane)     // killough 4/11/98: add NULL ptr checks
+         /* cph 2003/04/18  - ceilingplane and floorplane might be the same
+          * visplane (e.g. if both skies); R_CheckPlane doesn't know about
+          * modifications to the plane that might happen in parallel with the check
+          * being made, so we have to override it and split them anyway if that is
+          * a possibility, otherwise the floor marking would overwrite the ceiling
+          * marking, resulting in HOM. */
+         if (markceiling && ceilingplane == floorplane)
+            floorplane = R_DupPlane (floorplane, rw_x, rw_stopx-1);
+         else
+            floorplane = R_CheckPlane (floorplane, rw_x, rw_stopx-1);
+      else
+         markfloor = 0;
+   }
+
+   /* The translucent water surface is its own plane; reserve this seg's
+    * column range in it so R_RenderSegLoop can write the spans. */
+   if (waterplane)
+      waterplane = R_CheckPlane (waterplane, rw_x, rw_stopx-1);
+   {
+      int w;
+      for (w = 0; w < nmorewater; w++)
+         morewater[w] = R_CheckPlane (morewater[w], rw_x, rw_stopx-1);
+   }
+
+   didsolidcol = 0;
+   R_RenderSegLoop();
+
+   /* cph - if a column was made solid by this wall, we _must_ save full clipping info */
+   if (backsector && didsolidcol) {
+      if (!(ds_p->silhouette & SIL_BOTTOM)) {
+         ds_p->silhouette |= SIL_BOTTOM;
+         ds_p->bsilheight = backsector->floorheight;
+      }
+      if (!(ds_p->silhouette & SIL_TOP)) {
+         ds_p->silhouette |= SIL_TOP;
+         ds_p->tsilheight = backsector->ceilingheight;
+      }
+   }
+
+   // save sprite clipping info
+   if ((ds_p->silhouette & SIL_TOP || maskedtexture || ffloorseg) && !ds_p->sprtopclip)
+   {
+      memcpy (lastopening, ceilingclip+start, sizeof(int)*(rw_stopx-start)); // dropoff overflow
+      ds_p->sprtopclip = lastopening - start;
+      lastopening += rw_stopx - start;
+   }
+   if ((ds_p->silhouette & SIL_BOTTOM || maskedtexture || ffloorseg) && !ds_p->sprbottomclip)
+   {
+      memcpy (lastopening, floorclip+start, sizeof(int)*(rw_stopx-start)); // dropoff overflow
+      ds_p->sprbottomclip = lastopening - start;
+      lastopening += rw_stopx - start;
+   }
+   if (maskedtexture && !(ds_p->silhouette & SIL_TOP))
+   {
+      ds_p->silhouette |= SIL_TOP;
+      ds_p->tsilheight = INT_MIN;
+   }
+   if (maskedtexture && !(ds_p->silhouette & SIL_BOTTOM))
+   {
+      ds_p->silhouette |= SIL_BOTTOM;
+      ds_p->bsilheight = INT_MAX;
+   }
+   ds_p++;
+}

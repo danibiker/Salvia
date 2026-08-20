@@ -1,0 +1,530 @@
+/* Emacs style mode select   -*- C++ -*-
+ *-----------------------------------------------------------------------------
+ *
+ *
+ *  PrBoom: a Doom port merged with LxDoom and LSDLDoom
+ *  based on BOOM, a modified and improved DOOM engine
+ *  Copyright (C) 1999 by
+ *  id Software, Chi Hoang, Lee Killough, Jim Flynn, Rand Phares, Ty Halderman
+ *  Copyright (C) 1999-2000 by
+ *  Jess Haas, Nicolas Kalkhof, Colin Phipps, Florian Schulze
+ *  Copyright 2005, 2006 by
+ *  Florian Schulze, Colin Phipps, Neil Stevens, Andrey Budko
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License
+ *  as published by the Free Software Foundation; either version 2
+ *  of the License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+ *  02111-1307, USA.
+ *
+ * DESCRIPTION:
+ *      Refresh/rendering module, shared data struct definitions.
+ *
+ *-----------------------------------------------------------------------------*/
+
+#ifndef __R_DEFS__
+#define __R_DEFS__
+
+// Screenwidth.
+#include "doomdef.h"
+
+// Some more or less basic data types
+// we depend on.
+#include "m_fixed.h"
+
+// We rely on the thinker data struct
+// to handle sound origins in sectors.
+#include "d_think.h"
+
+// SECTORS do store MObjs anyway.
+#include "p_mobj.h"
+
+// Silhouette, needed for clipping Segs (mainly)
+// and sprites representing things.
+#define SIL_NONE    0
+#define SIL_BOTTOM  1
+#define SIL_TOP     2
+#define SIL_BOTH    3
+
+#define MAXDRAWSEGS   256
+
+//
+// INTERNAL MAP TYPES
+//  used by play and refresh
+//
+
+//
+// Your plain vanilla vertex.
+// Note: transformed values not buffered locally,
+// like some DOOM-alikes ("wt", "WebView") do.
+//
+typedef struct
+{
+  fixed_t x, y;
+} vertex_t;
+
+// Each sector has a degenmobj_t in its center for sound origin purposes.
+typedef struct
+{
+  thinker_t thinker;  // not used for anything
+  fixed_t x, y, z;
+} degenmobj_t;
+
+//
+// The SECTORS record, at runtime.
+// Stores things/mobjs.
+//
+
+typedef struct
+{
+  // [kb] for R_FixWiggle()
+  int	cachedheight;
+  int	scaleindex;
+
+  dbool   no_toptextures;
+  dbool   no_bottomtextures;
+  fixed_t floorheight;
+  fixed_t ceilingheight;
+
+  /* sloped planes (ZDoom Plane_Align); NULL = flat.  See p_slope.c. */
+  struct secplane_s *floor_slope;
+  struct secplane_s *ceiling_slope;
+  int nexttag,firsttag;  // killough 1/30/98: improves searches for tags.
+  int soundtraversed;    // 0 = untraversed, 1,2 = sndlines-1
+  mobj_t *soundtarget;   // thing that made a sound (or null)
+  int blockbox[4];       // mapblock bounding box for height changes
+  degenmobj_t soundorg;  // origin for any sounds played by the sector
+  int validcount;        // if == validcount, already checked
+  mobj_t *thinglist;     // list of mobjs in sector
+
+  /* killough 8/28/98: friction is a sector property, not an mobj property.
+   * these fields used to be in mobj_t, but presented performance problems
+   * when processed as mobj properties. Fix is to make them sector properties.
+   */
+  int friction,movefactor;
+
+  // thinker_t for reversable actions
+  void *floordata;    // jff 2/22/98 make thinkers on
+  void *ceilingdata;  // floors, ceilings, lighting,
+  void *lightingdata; // independent of one another
+
+  // jff 2/26/98 lockout machinery for stairbuilding
+  int stairlock;   // -2 on first locked -1 after thinker done 0 normally
+  int prevsec;     // -1 or number of sector for previous step
+  int nextsec;     // -1 or number of next step sector
+
+  // killough 3/7/98: support flat heights drawn at another sector's heights
+  int heightsec;    // other sector, or -1 if no other sector
+
+  int bottommap, midmap, topmap; // killough 4/4/98: dynamic colormaps
+
+  // list of mobjs that are at least partially in the sector
+  // thinglist is a subset of touching_thinglist
+  struct msecnode_s *touching_thinglist;               // phares 3/14/98
+
+  int linecount;
+  struct line_s **lines;
+
+  // killough 10/98: support skies coming from sidedefs. Allows scrolling
+  // skies and other effects. No "level info" kind of lump is needed,
+  // because you can use an arbitrary number of skies per level with this
+  // method. This field only applies when skyflatnum is used for floorpic
+  // or ceilingpic, because the rest of Doom needs to know which is sky
+  // and which isn't, etc.
+
+  int sky;
+
+  // killough 3/7/98: floor and ceiling texture offsets
+  fixed_t   floor_xoffs,   floor_yoffs;
+  fixed_t ceiling_xoffs, ceiling_yoffs;
+
+  // killough 4/11/98: support for lightlevels coming from another sector
+  int floorlightsec, ceilinglightsec;
+
+  short floorpic;
+  short ceilingpic;
+  short lightlevel;
+  short special;
+  short oldspecial;      //jff 2/16/98 remembers if sector WAS secret (automap)
+  short tag;
+  int   seqType;         /* Hexen: sound-sequence type (SEQTYPE_*) */
+
+  /* ZDoom 3D floors (Sector_Set3DFloor): slabs attached to this
+   * sector, geometry living in their control sectors (p_ffloor.c) */
+  struct ffloor_s *ffloors;
+
+  /* per-sector 3D skybox (SkyPicker 9081): index into the skyboxes[]
+   * camera table, or -1 to use the level default sky/skyview. */
+  int skybox;
+
+  /* ZDoom UDMF per-plane light: lightfloor/lightceiling adjust the floor and
+   * ceiling plane light relative to lightlevel, or set it absolutely when the
+   * matching *_absolute flag is set.  Zero/!absolute (the binary default, and
+   * Z_Calloc's initial state) leaves plane light equal to sector light. */
+  short lightfloor, lightceiling;
+  byte  lightfloor_absolute, lightceiling_absolute;
+} sector_t;
+
+//
+// The SideDef.
+//
+
+typedef struct
+{
+  fixed_t textureoffset; // add this to the calculated texture column
+  fixed_t rowoffset;     // add this to the calculated texture top
+  short toptexture;      // Texture indices. We do not maintain names here.
+  short bottomtexture;
+  short midtexture;
+  sector_t* sector;      // Sector the SideDef is facing.
+
+  // killough 4/4/98, 4/11/98: highest referencing special linedef's type,
+  // or lump number of special effect. Allows texture names to be overloaded
+  // for other functions.
+
+  int special;
+
+} side_t;
+
+//
+// Move clipping aid for LineDefs.
+//
+typedef enum
+{
+  ST_HORIZONTAL,
+  ST_VERTICAL,
+  ST_POSITIVE,
+  ST_NEGATIVE
+} slopetype_t;
+
+typedef struct line_s
+{
+  vertex_t *v1, *v2;     // Vertices, from v1 to v2.
+  fixed_t dx, dy;        // Precalculated v2 - v1 for side checking.
+  unsigned short flags;           // Animation related.
+  short special;
+  short tag;
+  /* Hexen line special arguments (args[0..4]).  Zero for Doom/Heretic maps;
+   * filled from the Hexen-format linedef.  Consumed by the Hexen line
+   * specials / ACS layer added later. */
+  /* Widened from unsigned char: ZDoom UDMF args are full ints (line ids,
+   * tags and TIDs in large maps exceed 255; heights can be negative). */
+  int args[5];
+  /* 32-bit: ZDoom UDMF maps can have far more than 65535 sidedefs (MyHouse
+   * has ~301k), so a 16-bit index silently wraps and points at the wrong
+   * sidedef -> wrong sector. */
+  int sidenum[2];                   // Visual appearance: SideDefs.
+  fixed_t bbox[4];       // A bounding box, for the linedef's extent
+  slopetype_t slopetype; // To aid move clipping.
+  sector_t *frontsector; // Front and back sector.
+  sector_t *backsector;
+  int validcount;        // if == validcount, already checked
+  void *specialdata;     // thinker_t for reversable actions
+  int firsttag,nexttag;  // killough 4/17/98: improves searches for tags.
+  int r_validcount;      // cph: if == gametic, r_flags already done
+  int translucent;       /* 0 opaque; 1 = ZDoom/Boom translucent (alpha blend
+                            of the 2s midtexture); 2 = additive ("Add"
+                            renderstyle) light beam.  Weight is `alpha`. */
+  unsigned char alpha;   /* blend weight 0..32 (=alpha*32) for translucent != 0 */
+  enum {                 // cph:
+    RF_TOP_TILE  = 1,     // Upper texture needs tiling
+    RF_MID_TILE = 2,     // Mid texture needs tiling
+    RF_BOT_TILE = 4,     // Lower texture needs tiling
+    RF_IGNORE   = 8,     // Renderer can skip this line
+    RF_CLOSED   =16,     // Line blocks view
+  } r_flags;
+  degenmobj_t soundorg;  // sound origin for switches/buttons
+} line_t;
+
+
+// phares 3/14/98
+//
+// Sector list node showing all sectors an object appears in.
+//
+// There are two threads that flow through these nodes. The first thread
+// starts at touching_thinglist in a sector_t and flows through the m_snext
+// links to find all mobjs that are entirely or partially in the sector.
+// The second thread starts at touching_sectorlist in an mobj_t and flows
+// through the m_tnext links to find all sectors a thing touches. This is
+// useful when applying friction or push effects to sectors. These effects
+// can be done as thinkers that act upon all objects touching their sectors.
+// As an mobj moves through the world, these nodes are created and
+// destroyed, with the links changed appropriately.
+//
+// For the links, NULL means top or end of list.
+
+typedef struct msecnode_s
+{
+  sector_t          *m_sector; // a sector containing this object
+  struct mobj_s     *m_thing;  // this object
+  struct msecnode_s *m_tprev;  // prev msecnode_t for this thing
+  struct msecnode_s *m_tnext;  // next msecnode_t for this thing
+  struct msecnode_s *m_sprev;  // prev msecnode_t for this sector
+  struct msecnode_s *m_snext;  // next msecnode_t for this sector
+  dbool   visited; // killough 4/4/98, 4/7/98: used in search algorithms
+} msecnode_t;
+
+//
+// The LineSeg.
+//
+typedef struct
+{
+  vertex_t *v1, *v2;
+  fixed_t offset;
+  angle_t angle;
+  side_t* sidedef;
+  line_t* linedef;
+
+  // figgi -- needed for glnodes
+  float     length;
+  dbool     miniseg;
+
+
+  // Sector references.
+  // Could be retrieved from linedef, too
+  // (but that would be slower -- killough)
+  // backsector is NULL for one sided lines
+
+  sector_t *frontsector, *backsector;
+} seg_t;
+
+
+//
+// A SubSector.
+// References a Sector.
+// Basically, this is a list of LineSegs,
+//  indicating the visible walls that define
+//  (all or some) sides of a convex BSP leaf.
+//
+
+typedef struct subsector_s
+{
+  sector_t *sector;
+  int numlines, firstline;
+
+  /* Hexen: the polyobject rendered inside this subsector, if any. */
+  struct polyobj_s *poly;
+} subsector_t;
+
+/* Hexen polyobjects: a group of segs anchored at a start spot, moved and
+ * rotated at runtime by rewriting the seg vertices.  Collision goes through
+ * a parallel blockmap of polyblock_t links; rendering attaches the group to
+ * the subsector containing its centre. */
+typedef struct polyobj_s
+{
+  int numsegs;
+  seg_t **segs;
+  degenmobj_t startSpot;
+  vertex_t *originalPts;   /* the base for rotations */
+  vertex_t *prevPts;       /* restores the old points when a move is blocked */
+  angle_t angle;
+  int tag;                 /* reference tag from the editor */
+  int bbox[4];             /* blockmap coordinates */
+  int validcount;          /* dedup in the blockmap line iterator */
+  dbool crush;             /* should the polyobj attempt to crush mobjs? */
+  dbool hurt;
+  int seqType;
+  void *specialdata;       /* the mover thinker while the poly is moving */
+  subsector_t *subsector;
+  /* Several polyobjs can resolve to the same render subsector (ZDoom
+   * maps stack geometry; vanilla Hexen fataled on this).  The subsector
+   * holds the head and this chains the rest. */
+  struct polyobj_s *subnext;
+} polyobj_t;
+
+typedef struct polyblock_s
+{
+  polyobj_t *polyobj;
+  struct polyblock_s *prev;
+  struct polyblock_s *next;
+} polyblock_t;
+
+#define PO_LINE_START 1     /* polyobj line start special */
+#define PO_LINE_EXPLICIT 5
+
+extern polyobj_t *polyobjs; /* list of all poly-objects on the level */
+extern int po_NumPolyobjs;
+
+
+//
+// BSP node.
+//
+typedef struct
+{
+  fixed_t  x,  y, dx, dy;        // Partition line.
+  fixed_t bbox[2][4];            // Bounding box for each child.
+  unsigned int children[2];      // If NF_SUBSECTOR it is a subsector.
+} node_t;
+
+//
+// OTHER TYPES
+//
+
+// This could be wider for >8 bit display.
+// Indeed, true color support is posibble
+// precalculating 24bpp lightmap/colormap LUT.
+// from darkening PLAYPAL to all black.
+// Could use even more than 32 levels.
+
+typedef uint8_t lighttable_t;
+
+//
+// Masked 2s linedefs
+//
+
+typedef struct drawseg_s
+{
+  seg_t *curline;
+  int x1, x2;
+  fixed_t scale1, scale2, scalestep;
+  int silhouette;                       // 0=none, 1=bottom, 2=top, 3=both
+  fixed_t bsilheight;                   // do not clip sprites above this
+  fixed_t tsilheight;                   // do not clip sprites below this
+
+  // Added for filtering (fractional texture u coord) support - POPE
+  fixed_t rw_offset, rw_distance, rw_centerangle; 
+  
+  // Pointers to lists for sprite clipping,
+  // all three adjusted so [x1] is first value.
+
+  int *sprtopclip, *sprbottomclip, *maskedtexturecol; // dropoff overflow
+} drawseg_t;
+
+typedef struct
+{
+  int width,height;
+  int leftoffset,topoffset;
+  int lumpnum;
+} patchnum_t;
+
+//
+// A vissprite_t is a thing that will be drawn during a refresh.
+// i.e. a sprite object that is partly visible.
+//
+
+typedef struct vissprite_s
+{
+  int x1, x2;
+  fixed_t gx, gy;              // for line side calculation
+  fixed_t gz, gzt;             // global bottom / top for silhouette clipping
+  fixed_t startfrac;           // horizontal position of x1
+  fixed_t scale;
+  fixed_t xiscale;             // negative if flipped
+  fixed_t texturemid;
+  int patch;
+  uint64_t mobjflags;
+
+  /* When non-NULL this vissprite is a voxel model rather than a sprite
+   * billboard; voxangle is the model's yaw relative to the view (the
+   * rasteriser rotates the voxel grid by it).  patch/startfrac/xiscale
+   * are unused for voxels. */
+  const void *voxel;
+  angle_t     voxangle;
+
+  // for color translation and shadow draw, maxbright frames as well
+  const lighttable_t *colormap;
+
+  // killough 3/27/98: height sector for underwater/fake ceiling support
+  int heightsec;
+
+  /* DECORATE custom colour remap: when non-NULL, a 256-byte palette
+   * translation table built from an actor's Translation property, used in
+   * place of the player-flag translations.  NULL for ordinary sprites. */
+  const uint8_t *xlat;
+  /* DECORATE render style: 0 = opaque, 1 = translucent (alpha lerp),
+   * 2 = additive ("Add").  alpha is the blend weight 0..32 (= alpha * 32),
+   * used only when translucent != 0.  Both 0 for ordinary/vanilla sprites. */
+  int            translucent;
+  int            alpha;
+  /* Dynamic-light colour tint (565 channel adds), applied to the sprite's
+   * opaque texels in R_DrawVisSprite.  Zero for white light / unlit. */
+  int            tint_r, tint_g, tint_b;
+  /* Self-illuminated (FF_FULLBRIGHT): ignores distance light because it
+   * emits.  In HDR10 output this is what gets pushed above SDR white. */
+  int            emissive;
+} vissprite_t;
+
+//
+// Sprites are patches with a special naming convention
+//  so they can be recognized by R_InitSprites.
+// The base name is NNNNFx or NNNNFxFx, with
+//  x indicating the rotation, x = 0, 1-7.
+// The sprite and frame specified by a thing_t
+//  is range checked at run time.
+// A sprite is a patch_t that is assumed to represent
+//  a three dimensional object and may have multiple
+//  rotations pre drawn.
+// Horizontal flipping is used to save space,
+//  thus NNNNF2F5 defines a mirrored patch.
+// Some sprites will only have one picture used
+// for all views: NNNNF0
+//
+
+typedef struct
+{
+  // If false use 0 for any position.
+  // Note: as eight entries are available,
+  //  we might as well insert the same name eight times.
+  dbool   rotate;
+
+  // Lump to use for view angles 0-7.
+  short lump[8];
+
+  // Flip bit (1 = flip) to use for view angles 0-7.
+  uint8_t flip[8];
+
+} spriteframe_t;
+
+//
+// A sprite definition:
+//  a number of animation frames.
+//
+
+typedef struct
+{
+  int numframes;
+  spriteframe_t *spriteframes;
+} spritedef_t;
+
+//
+// Now what is a visplane, anyway?
+//
+// Go to http://classicgaming.com/doom/editing/ to find out -- killough
+//
+
+/* sloped-plane equation a*x + b*y + c*z + d = 0 (16.16, c > 0) */
+typedef struct secplane_s
+{
+  fixed_t a, b, c, d;
+} secplane_t;
+
+typedef struct visplane
+{
+  struct visplane *next;        // Next visplane in hash chain -- killough
+  int picnum, lightlevel, minx, maxx;
+  fixed_t height;
+  const secplane_t *slope;      /* tilted plane (NULL = horizontal) */
+  fixed_t xoffs, yoffs;         // killough 2/28/98: Support scrolling flats
+  byte modified;              // set when a seg actually writes a span here
+  byte translucent;           // 3D-floor water surface: blend 50/50 on draw
+  int skybox;                 /* per-sector 3D skybox index, or -1 (default) */
+  byte wallglow;              /* a GLDEFS-glowing wall line pools onto this plane */
+  int portal;                 /* stacked-sector portal id: 0 none, +(sec+1)
+                               * ceiling window, -(sec+1) floor window */
+  unsigned int pad1;          // leave pads for [minx-1]/[maxx+1]
+  unsigned int top[MAX_SCREENWIDTH];
+  unsigned int pad2, pad3;    // killough 2/8/98, 4/25/98
+  unsigned int bottom[MAX_SCREENWIDTH];
+  unsigned int pad4; // dropoff overflow
+} visplane_t;
+
+#endif
