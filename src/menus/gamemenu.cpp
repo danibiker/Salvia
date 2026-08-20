@@ -1243,13 +1243,22 @@ vector<string> GameMenu::launchProgram(const std::string& fullPathRom){
 
 /**
 * Comprueba si el emulador para ejecutar el juego es el que hay cargado actualmente.
-* Devuelve true si es el actual
-* Devuelve false si hay que cargar el emulador correspondiente
+* Hay algunos cores que no se desinicializan correctamente e implica mucha investigacion
+* portearlos. Para esos casos (ej: PRBOOM), se define el preprocesador RELOAD_CORE, para que
+* haga un reinicio de todo el frontend. Esto tiene sus desventajas, pero es la forma mas limpia
+* de mantenerse actualizado upstream con el git de algunos cores
+*
+* Devuelve true si se puede abrir el juego con el core actual
+* Devuelve false si hay que cargar otro core
 */
 bool GameMenu::emuCanLaunchGame(){
+#ifndef RELOAD_CORE
 	ConfigEmu* emu = cfgLoader->getCfgEmu();
 	const std::string execActual = Constant::getAppExecutable();
 	return emu->executable.find(execActual) != string::npos;
+#else
+	return false;
+#endif
 }
 
 /**

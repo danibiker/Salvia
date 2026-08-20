@@ -132,6 +132,8 @@ wchar_t *utf8_to_utf16_string_alloc(const char *str);
  **/
 char *utf16_to_utf8_string_alloc(const wchar_t *str);
 
+bool local_to_utf8_string(const char *in, char *s, size_t len);
+
 RETRO_END_DECLS
 
 #endif

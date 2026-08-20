@@ -201,8 +201,8 @@ static void ensure_sprites(int limit)
     int old = num_sprites;
     num_sprites *= 2;
 
-    sprnames = realloc(sprnames, num_sprites * sizeof(*sprnames));
-    memset(sprnames + old, 0, (num_sprites - old) * sizeof(*sprnames));
+    sprnames = realloc((void *)sprnames, num_sprites * sizeof(*sprnames));
+    memset((void *)(sprnames + old), 0, (num_sprites - old) * sizeof(*sprnames));
   }
 }
 
@@ -297,7 +297,7 @@ void dsda_FreeTables(void)
 {
   if (states     && states   != state_seed)    free(states);
   if (mobjinfo   && mobjinfo != mobjinfo_seed)  free(mobjinfo);
-  if (sprnames   && sprnames != sprnames_seed)  free(sprnames);
+  if (sprnames   && sprnames != sprnames_seed)  free((void *)sprnames);
   if (S_sfx      && S_sfx    != S_sfx_seed)     free(S_sfx);
   if (S_music    && S_music  != S_music_seed)   free(S_music);
   if (deh_codeptr)                              free(deh_codeptr);
@@ -378,7 +378,7 @@ void dsda_InitTables(void)
 
     /* sprnames: 0-based, terminator slot after the names. */
     sprnames = malloc((num_sprites + 1) * sizeof(*sprnames));
-    memcpy(sprnames, seed_sprnames, num_sprites * sizeof(*sprnames));
+    memcpy((void *)sprnames, seed_sprnames, num_sprites * sizeof(*sprnames));
     sprnames[num_sprites] = NULL;
 
     S_sfx = malloc(num_sfx * sizeof(*S_sfx));
@@ -448,7 +448,7 @@ void dsda_InitTables(void)
 
     /* sprnames: 0-based, terminator slot after the names. */
     sprnames = malloc((num_sprites + 1) * sizeof(*sprnames));
-    memcpy(sprnames, seed_sprnames, num_sprites * sizeof(*sprnames));
+    memcpy((void *)sprnames, seed_sprnames, num_sprites * sizeof(*sprnames));
     sprnames[num_sprites] = NULL;
 
     S_sfx = malloc(num_sfx * sizeof(*S_sfx));
@@ -511,7 +511,7 @@ void dsda_InitTables(void)
     if (spr_alloc < DEHEXTRA_SPR_END)
       spr_alloc = DEHEXTRA_SPR_END;
     sprnames = malloc((spr_alloc + 1) * sizeof(*sprnames));
-    memcpy(sprnames, sprnames_seed, num_sprites * sizeof(*sprnames));
+    memcpy((void *)sprnames, sprnames_seed, num_sprites * sizeof(*sprnames));
     if (num_sprites < DEHEXTRA_SPR_END)
     {
       int s;

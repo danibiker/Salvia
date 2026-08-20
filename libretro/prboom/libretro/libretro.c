@@ -2266,6 +2266,7 @@ bool retro_load_game(const struct retro_game_info *info)
    unsigned i;
    int argc = 0;
    char **argv = load_argv;
+   quit_pressed = false;
 
    /* Free any leftover heap pointers from a previous session.
     * Belt-and-braces: retro_unload_game also frees, but if a
@@ -3293,7 +3294,7 @@ static void process_gamepad_buttons(int16_t ret, unsigned num_buttons, action_lu
    for (i = 0; i < num_buttons; i++)
    {
       event_t event = {0};
-      new_input[i]  = ret & (1 << i);
+      new_input[i]  = (ret & (1 << i)) != 0;
 
       if(new_input[i] && !old_input[i])
       {
@@ -3494,7 +3495,7 @@ process_input(void)
             process_gamepad_buttons(ret, gp->num_buttons, gp->action_lut);
          }
 			process_gamepad_left_analog();
-			process_gamepad_right_analog(ret & (1 << RETRO_DEVICE_ID_JOYPAD_Y), ret & (1 << RETRO_DEVICE_ID_JOYPAD_L2));
+			process_gamepad_right_analog((ret & (1 << RETRO_DEVICE_ID_JOYPAD_Y)) != 0, (ret & (1 << RETRO_DEVICE_ID_JOYPAD_L2)) != 0);
 			break;
       case RETRO_DEVICE_KEYBOARD:
          {

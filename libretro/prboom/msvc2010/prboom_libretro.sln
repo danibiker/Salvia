@@ -1,0 +1,26 @@
+
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "prboom_libretro", "prboom_libretro.vcxproj", "{B1187A54-2C94-4992-B754-4E29B2B8F9F0}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Debug|Xbox 360 = Debug|Xbox 360
+		Release|Win32 = Release|Win32
+		Release|Xbox 360 = Release|Xbox 360
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B1187A54-2C94-4992-B754-4E29B2B8F9F0}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B1187A54-2C94-4992-B754-4E29B2B8F9F0}.Debug|Win32.Build.0 = Debug|Win32
+		{B1187A54-2C94-4992-B754-4E29B2B8F9F0}.Debug|Xbox 360.ActiveCfg = Debug|Xbox 360
+		{B1187A54-2C94-4992-B754-4E29B2B8F9F0}.Debug|Xbox 360.Build.0 = Debug|Xbox 360
+		{B1187A54-2C94-4992-B754-4E29B2B8F9F0}.Release|Win32.ActiveCfg = Release|Win32
+		{B1187A54-2C94-4992-B754-4E29B2B8F9F0}.Release|Win32.Build.0 = Release|Win32
+		{B1187A54-2C94-4992-B754-4E29B2B8F9F0}.Release|Xbox 360.ActiveCfg = Release|Xbox 360
+		{B1187A54-2C94-4992-B754-4E29B2B8F9F0}.Release|Xbox 360.Build.0 = Release|Xbox 360
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

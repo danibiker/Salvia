@@ -27,7 +27,7 @@
 #if (defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)) \
     && !defined(GEKKO) && !defined(__CELLOS_LV2__)
 #define PRB_CPU_X86 1
-#if defined(_MSC_VER) && !defined(__clang__)
+#if defined(_MSC_VER) && !defined(__clang__) && !defined(_XBOX)
 #include <intrin.h>
 #endif
 #endif
@@ -112,7 +112,9 @@ uint64_t cpu_features_get(void)
  * above).  The threaded wall replay only needs it to size "Auto", so a small
  * portable query is enough; anything unknown answers 1, which selects the
  * single-threaded path. */
-#if defined(_WIN32)
+#if defined(_XBOX)
+#include <xtl.h>
+#elif defined(_WIN32)
 #include <windows.h>
 #elif defined(HAVE_UNISTD_H) || defined(__unix__) || defined(__APPLE__) || defined(__linux__)
 #include <unistd.h>
@@ -120,7 +122,9 @@ uint64_t cpu_features_get(void)
 
 unsigned cpu_features_get_core_amount(void)
 {
-#if defined(_WIN32)
+#if defined (_XBOX)
+	return 3;
+#elif defined(_WIN32)
    SYSTEM_INFO si;
    GetSystemInfo(&si);
    return (unsigned)si.dwNumberOfProcessors;

@@ -677,7 +677,7 @@ void R_Deinit(void)
     * doesn't leave c_zlight itself in a worse state. */
    if (c_zlight)
    {
-      free(c_zlight);
+      free((void *)c_zlight);
       c_zlight = NULL;
    }
 

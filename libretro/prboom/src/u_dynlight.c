@@ -364,7 +364,7 @@ static void glow_resolve_color(glowdef_t *g, const uint8_t *texels, int count)
 static void glow_build_flat_tab(void)
 {
   int i;
-  free(glow_flat_tab);
+  free((void *)glow_flat_tab);
   glow_flat_tab = (const glowdef_t **) calloc(numflats, sizeof(*glow_flat_tab));
   glow_flat_n = numflats;
   for (i = 0; i < num_glow_defs; i++)
@@ -427,7 +427,7 @@ int u_glow_walls_present;
 static void glow_build_wtex_tab(void)
 {
   int i;
-  free(glow_wtex_tab);
+  free((void *)glow_wtex_tab);
   glow_wtex_tab = (const glowdef_t **) calloc(numtextures,
                                               sizeof(*glow_wtex_tab));
   glow_wtex_n = numtextures;
@@ -578,7 +578,7 @@ static int                    sprite_light_n; /* numsprites when built, 0 = stal
 static void U_BuildSpriteLightTable(void)
 {
   int sp;
-  free(sprite_light);
+  free((void *)sprite_light);
   sprite_light = malloc(numsprites * sizeof *sprite_light);
   for (sp = 0; sp < numsprites; sp++)
     sprite_light[sp] = sprnames[sp] ? U_DynLightForSprite(sprnames[sp]) : NULL;
@@ -610,6 +610,6 @@ void U_FreeDynLights(void)
 {
   free(defs);  defs = NULL;   num_defs = cap_defs = 0;
   free(binds); binds = NULL;  num_binds = cap_binds = 0;
-  free(sprite_light); sprite_light = NULL; sprite_light_n = 0;
+  free((void *)sprite_light); sprite_light = NULL; sprite_light_n = 0;
   dl_loaded = false;
 }
