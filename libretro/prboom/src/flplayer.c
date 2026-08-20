@@ -62,7 +62,9 @@ const music_player_t fl_player =
   NULL,
   NULL,
   NULL,
-  NULL
+  NULL,
+  NULL,  /* serialize */
+  NULL   /* unserialize */
 };
 
 #else // HAVE_LIBFLUIDSYNTH
@@ -177,6 +179,7 @@ static int fl_init (int samplerate)
   {
     log_cb (RETRO_LOG_WARN, "fl_init: error creating fluidsynth object\n");
     delete_fluid_settings (f_set);
+    f_set = NULL;
     return 0;
   }
 
@@ -187,9 +190,18 @@ static int fl_init (int samplerate)
   {
     log_cb (RETRO_LOG_WARN, "fl_init: error loading soundfont %s\n", snd_soundfont);
     delete_fluid_synth (f_syn);
+    f_syn = NULL;
     delete_fluid_settings (f_set);
+    f_set = NULL;
+    f_font = 0;
     return 0;
   }
+
+  /* Apply current volume as gain.  Without this the synth defaults
+   * to FluidSynth's stock 0.2 gain until the first fl_setvolume
+   * call lands -- which is fine for steady-state but means the
+   * very first ms of music after init is at the wrong level. */
+  fluid_synth_set_gain(f_syn, 0.5f * (float)f_volume / 15.0f);
 
   return 1;
 }
@@ -275,6 +287,17 @@ static void fl_resume (void)
 }
 static void fl_play (const void *handle, int looping)
 {
+  /* Guard against fl_init having failed (no soundfont, fluidsynth
+   * object creation failure, or samplerate too low).  In those
+   * paths f_syn is NULL but the music_player_t vtable still points
+   * at this function, so I_PlaySong -> fl_play would dereference
+   * NULL inside fluidsynth.  Setting f_playing = 0 also makes the
+   * subsequent fl_render guard short-circuit cleanly. */
+  if (!f_syn)
+  {
+    f_playing = 0;
+    return;
+  }
   eventpos = 0;
   f_looping = looping;
   f_playing = 1;
@@ -289,6 +312,12 @@ static void fl_stop (void)
   int i;
   f_playing = 0;
 
+  /* Same NULL-syn guard as fl_play.  fl_stop is also called from
+   * fl_render's MIDI_META_END_OF_TRACK branch, but if fl_render
+   * itself is NULL-syn-guarded it never reaches that branch. */
+  if (!f_syn)
+    return;
+
   for (i = 0; i < 16; i++)
   {
     fluid_synth_cc (f_syn, i, 123, 0); // ALL NOTES OFF
@@ -299,34 +328,42 @@ static void fl_stop (void)
 static void fl_setvolume (int v)
 { 
   f_volume = v;
+
+  /* Map Doom's 0..15 MIDI volume scale onto FluidSynth's gain knob.
+   *
+   * Previously the synth ran at fixed gain and we did a software
+   * float-multiply in fl_writesamples_ex.  By pushing the volume
+   * into fluid_synth_set_gain we can switch to fluid_synth_write_s16
+   * and skip an entire float buffer + per-sample clamp + cast pass.
+   *
+   * Coefficient choice: the old code produced peak amplitude
+   * 16384*v/15 (~half int16 max at v=15), so we aim for the same
+   * peak from FluidSynth's int16 output.  FluidSynth's gain knob
+   * scales linearly; 0.5 produces approximately half-scale peaks
+   * with typical SoundFonts, so gain = 0.5 * v / 15.  Users who
+   * want full-scale music can just turn it up further at the
+   * libretro frontend mixer. */
+  if (f_syn)
+    fluid_synth_set_gain(f_syn, 0.5f * (float)v / 15.0f);
 }
 
 
 static void fl_writesamples_ex (short *dest, int nsamp)
-{ // does volume conversion and then writes samples
-  int i;
-  float multiplier = 16384.0f / 15.0f * f_volume;
+{
+  /* Write int16 stereo directly from FluidSynth.  Volume is handled
+   * via the synth gain (set in fl_setvolume), and FluidSynth clamps
+   * internally to int16 range, so this path has no software float
+   * buffer, no per-sample clamp, and no float->int conversion. */
+  fluid_synth_write_s16(f_syn, nsamp, dest, 0, 2, dest, 1, 2);
+}
 
-  static float *fbuff = NULL;
-  static int fbuff_siz = 0;
-
-  if (nsamp * 2 > fbuff_siz)
-  {
-    fbuff = realloc (fbuff, nsamp * 2 * sizeof (float));
-    fbuff_siz = nsamp * 2;
-  }
-
-  fluid_synth_write_float (f_syn, nsamp, fbuff, 0, 2, fbuff, 1, 2);
-
-  for (i = 0; i < nsamp * 2; i++)
-  {
-    // data is NOT already clipped
-    if (fbuff[i] > 1.0f)
-      fbuff[i] = 1.0f;
-    if (fbuff[i] < -1.0f)
-      fbuff[i] = -1.0f;
-    dest[i] = (short) (fbuff[i] * multiplier);
-  }
+static void fl_writesamples_ex_f (float *dest, int nsamp)
+{
+  /* Float twin of fl_writesamples_ex.  Volume is already folded into the
+   * synth gain (fl_setvolume), so this is a straight float stereo render
+   * with no extra scaling; used on the float-output path to skip the
+   * int16 narrowing that fluid_synth_write_s16 performs. */
+  fluid_synth_write_float(f_syn, nsamp, dest, 0, 2, dest, 1, 2);
 }
 
 static void writesysex (unsigned char *data, int len)
@@ -356,27 +393,83 @@ static void writesysex (unsigned char *data, int len)
   }
 }  
 
-static void fl_render (void *vdest, unsigned length)
+/* Apply a single MIDI event to the synth, with no audio rendering and
+ * no iteration control.  Used both by fl_render's inner loop and by
+ * fl_unserialize during fast-forward replay.  END_OF_TRACK is NOT
+ * handled here -- it affects iteration control (looping / stopping)
+ * rather than synth state, and is left to the caller. */
+static void fl_apply_event (midi_event_t *currevent)
 {
-  short *dest = vdest;
-  
+  switch (currevent->event_type)
+  {
+    case MIDI_EVENT_NOTE_OFF:
+      fluid_synth_noteoff (f_syn, currevent->data.channel.channel, currevent->data.channel.param1);
+      break;
+    case MIDI_EVENT_NOTE_ON:
+      fluid_synth_noteon (f_syn, currevent->data.channel.channel, currevent->data.channel.param1, currevent->data.channel.param2);
+      break;
+    case MIDI_EVENT_AFTERTOUCH:
+      // not supported
+      break;
+    case MIDI_EVENT_CONTROLLER:
+      fluid_synth_cc (f_syn, currevent->data.channel.channel, currevent->data.channel.param1, currevent->data.channel.param2);
+      break;
+    case MIDI_EVENT_PROGRAM_CHANGE:
+      fluid_synth_program_change (f_syn, currevent->data.channel.channel, currevent->data.channel.param1);
+      break;
+    case MIDI_EVENT_CHAN_AFTERTOUCH:
+      fluid_synth_channel_pressure (f_syn, currevent->data.channel.channel, currevent->data.channel.param1);
+      break;
+    case MIDI_EVENT_PITCH_BEND:
+      fluid_synth_pitch_bend (f_syn, currevent->data.channel.channel, currevent->data.channel.param1 | currevent->data.channel.param2 << 7);
+      break;
+    case MIDI_EVENT_SYSEX:
+    case MIDI_EVENT_SYSEX_SPLIT:
+      writesysex (currevent->data.sysex.data, currevent->data.sysex.length);
+      break;
+    case MIDI_EVENT_META:
+      if (currevent->data.meta.type == MIDI_META_SET_TEMPO)
+        spmc = MIDI_spmc (midifile, currevent, f_soundrate);
+      /* END_OF_TRACK intentionally left to the caller (see header). */
+      break;
+    default: //uhh
+      break;
+  }
+}
+
+/* Core MIDI event loop + render.  is_float selects the output buffer
+ * type: int16 stereo (the canonical path) or normalized float stereo
+ * (used only when the frontend negotiated float audio output).  Writes
+ * are addressed off vdest by the running frame offset (sampleswritten),
+ * so the s16 path is byte-identical to the old running-pointer code. */
+static void fl_render_core (void *vdest, unsigned length, int is_float)
+{
   unsigned sampleswritten = 0;
   unsigned samples;
 
   midi_event_t *currevent;
 
-  log_cb(RETRO_LOG_INFO, "Test 1\n");
-
-  if (!f_playing || f_paused)
-  { 
-    // save CPU time and allow for seamless resume after pause
-    memset (vdest, 0, length * 4);
-    //fl_writesamples_ex (vdest, length);
+  /* No active synth (fl_init failed -- soundfont missing, etc.):
+   * write silence to the output buffer and return.  Without this
+   * guard, the event-loop below would dereference NULL inside
+   * fluid_synth_noteon / _noteoff / _cc / fluid_synth_write_float
+   * and crash.  fl_play already sets f_playing = 0 in this state,
+   * so most calls hit the existing !f_playing branch above; this
+   * is defense in depth for any path that reaches fl_render with
+   * f_playing = 1 but f_syn = NULL (e.g. an unusual ordering of
+   * S_RestartMusic transitions). */
+  if (!f_syn)
+  {
+    memset (vdest, 0, length * (is_float ? 8u : 4u));
     return;
   }
 
-  log_cb(RETRO_LOG_INFO, "Test 2\n");
-
+  if (!f_playing || f_paused)
+  { 
+    /* save CPU time and allow for seamless resume after pause */
+    memset (vdest, 0, length * (is_float ? 8u : 4u));
+    return;
+  }
 
   while (1)
   {
@@ -399,73 +492,42 @@ static void fl_render (void *vdest, unsigned length)
 
     if (samples)
     {
-      fl_writesamples_ex (dest, samples);
+      if (is_float) fl_writesamples_ex_f ((float *)vdest + sampleswritten * 2, samples);
+      else          fl_writesamples_ex   ((short *)vdest + sampleswritten * 2, samples);
       sampleswritten += samples;
       f_delta -= samples;
-      dest += samples * 2;
     }
 
     // process event
-    switch (currevent->event_type)
+    fl_apply_event (currevent);
+
+    // END_OF_TRACK affects iteration control (looping / stopping)
+    // and is therefore handled here rather than inside fl_apply_event.
+    if (currevent->event_type == MIDI_EVENT_META &&
+        currevent->data.meta.type == MIDI_META_END_OF_TRACK)
     {
-      case MIDI_EVENT_NOTE_OFF:
-        fluid_synth_noteoff (f_syn, currevent->data.channel.channel, currevent->data.channel.param1);
-        break;
-      case MIDI_EVENT_NOTE_ON:
-        fluid_synth_noteon (f_syn, currevent->data.channel.channel, currevent->data.channel.param1, currevent->data.channel.param2);
-        break;
-      case MIDI_EVENT_AFTERTOUCH:
-        // not suipported?
-        break;
-      case MIDI_EVENT_CONTROLLER:
-        fluid_synth_cc (f_syn, currevent->data.channel.channel, currevent->data.channel.param1, currevent->data.channel.param2);
-        break;
-      case MIDI_EVENT_PROGRAM_CHANGE:
-        fluid_synth_program_change (f_syn, currevent->data.channel.channel, currevent->data.channel.param1);
-        break;
-      case MIDI_EVENT_CHAN_AFTERTOUCH:
-        fluid_synth_channel_pressure (f_syn, currevent->data.channel.channel, currevent->data.channel.param1);
-        break;
-      case MIDI_EVENT_PITCH_BEND:
-        fluid_synth_pitch_bend (f_syn, currevent->data.channel.channel, currevent->data.channel.param1 | currevent->data.channel.param2 << 7);
-        break;
-      case MIDI_EVENT_SYSEX:
-      case MIDI_EVENT_SYSEX_SPLIT:
-        writesysex (currevent->data.sysex.data, currevent->data.sysex.length);
-        break;
-      case MIDI_EVENT_META: 
-        if (currevent->data.meta.type == MIDI_META_SET_TEMPO)
-          spmc = MIDI_spmc (midifile, currevent, f_soundrate);
-        else if (currevent->data.meta.type == MIDI_META_END_OF_TRACK)
-        {
-          if (f_looping)
-          {
-            int i;
-            eventpos = 0;
-            f_delta += eventdelta;
-            // fix buggy songs that forget to terminate notes held over loop point
-            // sdl_mixer does this as well
-            for (i = 0; i < 16; i++)
-              fluid_synth_cc (f_syn, i, 123, 0); // ALL NOTES OFF
-            continue;
-          }
-          // stop, write leadout
-          fl_stop ();
-          samples = length - sampleswritten;
-          if (samples)
-          {
-            fl_writesamples_ex (dest, samples);
-            sampleswritten += samples;
-            // timecodes no longer relevant
-            dest += samples * 2;
-      
-          }
-          return;
-        }
-        break; // not interested in most metas
-      default: //uhh
-        break;
-      
+      if (f_looping)
+      {
+        int i;
+        eventpos = 0;
+        f_delta += eventdelta;
+        // fix buggy songs that forget to terminate notes held over loop point
+        // sdl_mixer does this as well
+        for (i = 0; i < 16; i++)
+          fluid_synth_cc (f_syn, i, 123, 0); // ALL NOTES OFF
+        continue;
+      }
+      // stop, write leadout
+      fl_stop ();
+      samples = length - sampleswritten;
+      if (samples)
+      {
+        if (is_float) fl_writesamples_ex_f ((float *)vdest + sampleswritten * 2, samples);
+        else          fl_writesamples_ex   ((short *)vdest + sampleswritten * 2, samples);
+        sampleswritten += samples;
+        // timecodes no longer relevant
+      }
+      return;
     }
     // event processed so advance midiclock
     f_delta += eventdelta;
@@ -482,10 +544,10 @@ static void fl_render (void *vdest, unsigned length)
     samples = length - sampleswritten;
     if (samples)
     {
-      fl_writesamples_ex (dest, samples);
+      if (is_float) fl_writesamples_ex_f ((float *)vdest + sampleswritten * 2, samples);
+      else          fl_writesamples_ex   ((short *)vdest + sampleswritten * 2, samples);
       sampleswritten += samples;
       f_delta -= samples; // save offset
-      dest += samples * 2;
     }
   }
   else
@@ -494,6 +556,132 @@ static void fl_render (void *vdest, unsigned length)
   }
 }  
 
+/* Public render entry points: s16 (canonical) and float (used only when
+ * the frontend negotiated float audio output). */
+static void fl_render (void *vdest, unsigned length)
+{
+  fl_render_core (vdest, length, 0);
+}
+
+static void fl_render_float (void *vdest, unsigned length)
+{
+  fl_render_core (vdest, length, 1);
+}
+
+
+/* State save/restore -----------------------------------------------------
+ *
+ * Captures the small amount of cross-event state -- flat-list event
+ * index, sub-event timing accumulator, current tempo (samples per
+ * MIDI clock), and the loop/pause flags -- so a save state can resume
+ * MIDI playback from where it was instead of letting the song drift
+ * past the load point.
+ *
+ * On restore we tear down the fluidsynth voice/program state via the
+ * existing reset calls and then replay every event from index 0 up to
+ * the saved eventpos through fl_apply_event.  That walk drives the
+ * synth's channel programs, controllers, and pitch bends back to the
+ * values they had at save time without rendering any audio; notes that
+ * were keyed on at the saved position get re-keyed and resume via the
+ * normal fluid_synth_write_s16 path.
+ *
+ * Wire format is small (~32 bytes), suitable for runahead's per-frame
+ * save/restore.  The accumulated SYSEX buffer is not serialised: in
+ * practice DOOM MUS files never emit mid-multi-event SYSEX, and the
+ * accumulator is always empty at any event boundary; if the edge case
+ * is ever hit, the in-flight SYSEX is dropped and the next event
+ * resyncs the synth.  Documented for posterity.
+ */
+
+#define FL_STATE_MAGIC         0x464C5053u  /* 'FLPS' */
+#define FL_STATE_VERSION       1u
+#define FL_STATE_FLAG_LOOPING  0x01u
+#define FL_STATE_FLAG_PAUSED   0x02u
+
+typedef struct {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t flags;
+    uint32_t eventpos;
+    double   f_delta;
+    double   spmc;
+} fl_state_t;
+
+static size_t fl_serialize (void *dest, size_t cap)
+{
+  fl_state_t s;
+
+  if (!f_syn)               return 0;
+  if (!events || !midifile) return 0;
+  if (!f_playing)           return 0;
+
+  if (!dest)
+    return sizeof(fl_state_t);
+  if (cap < sizeof(fl_state_t))
+    return 0;
+
+  s.magic    = FL_STATE_MAGIC;
+  s.version  = FL_STATE_VERSION;
+  s.flags    = (f_looping ? FL_STATE_FLAG_LOOPING : 0u)
+             | (f_paused  ? FL_STATE_FLAG_PAUSED  : 0u);
+  s.eventpos = (uint32_t)eventpos;
+  s.f_delta  = f_delta;
+  s.spmc     = spmc;
+  memcpy (dest, &s, sizeof s);
+  return sizeof s;
+}
+
+static int fl_unserialize (const void *src, size_t size)
+{
+  fl_state_t s;
+  uint32_t i;
+
+  if (!f_syn)                       return 0;
+  if (!events || !midifile)         return 0;
+  if (size < sizeof(fl_state_t))    return 0;
+
+  memcpy (&s, src, sizeof s);
+  if (s.magic   != FL_STATE_MAGIC)   return 0;
+  if (s.version != FL_STATE_VERSION) return 0;
+
+  /* Tear down synth voice/program state and rewind to event 0,
+   * mirroring fl_play's initialisation.  Then replay every event
+   * up to the saved eventpos via fl_apply_event so the synth
+   * arrives at the same channel/program/controller state as it
+   * had at save time. */
+  fluid_synth_program_reset (f_syn);
+  fluid_synth_system_reset  (f_syn);
+  sysexbufflen = 0;
+  eventpos     = 0;
+  f_delta      = 0.0;
+  spmc         = MIDI_spmc (midifile, NULL, f_soundrate);
+
+  for (i = 0; i < s.eventpos; i++)
+  {
+    midi_event_t *ev = events[i];
+    if (!ev)
+      break;
+    /* If a corrupt save points past an END_OF_TRACK, stop replaying
+     * rather than spinning -- the well-formed case never reaches
+     * past EOT because fl_render's loop branch resets eventpos. */
+    if (ev->event_type == MIDI_EVENT_META &&
+        ev->data.meta.type == MIDI_META_END_OF_TRACK)
+      break;
+    fl_apply_event (ev);
+  }
+
+  /* Restore saved bookkeeping last so any SET_TEMPO events replayed
+   * above don't clobber the precise saved spmc (replay rounds tempo
+   * through MIDI_spmc again -- normally identical but the saved
+   * value is canonical). */
+  eventpos  = s.eventpos;
+  f_delta   = s.f_delta;
+  spmc      = s.spmc;
+  f_looping = (s.flags & FL_STATE_FLAG_LOOPING) ? 1 : 0;
+  f_paused  = (s.flags & FL_STATE_FLAG_PAUSED)  ? 1 : 0;
+  f_playing = 1;
+  return 1;
+}
 
 const music_player_t fl_player =
 {
@@ -507,7 +695,10 @@ const music_player_t fl_player =
   fl_unregistersong,
   fl_play,
   fl_stop,
-  fl_render
+  fl_render,
+  fl_serialize,
+  fl_unserialize,
+  fl_render_float
 };
 
 

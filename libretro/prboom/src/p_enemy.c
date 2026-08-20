@@ -48,6 +48,8 @@
 #include "p_tick.h"
 #include "m_bbox.h"
 #include "lprintf.h"
+#include "hexen/p_spec_hexen.h"
+#include "hexen/p_acs.h"
 
 #ifdef PSX
 #include <stddef.h>
@@ -140,14 +142,24 @@ void P_NoiseAlert(mobj_t *target, mobj_t *emitter)
 // P_CheckMeleeRange
 //
 
-static dbool   P_CheckMeleeRange(mobj_t *actor)
+dbool P_CheckMeleeRange(mobj_t *actor)
 {
   mobj_t *pl = actor->target;
+  /* MBF21: use the per-thing melee range (default MELEERANGE) instead of
+   * the hardcoded constant; LONGMELEE bumps it further (revenant).  Gated
+   * on mbf21_features so vanilla/boom/mbf/prboom keep the exact constant. */
+  fixed_t range = MELEERANGE;
+  if (mbf21_features)
+    {
+      range = actor->info->meleerange;
+      if (actor->flags2 & MF2_LONGMELEE)
+        range += 12*FRACUNIT;
+    }
 
   return  // killough 7/18/98: friendly monsters don't attack other friends
     pl && !(actor->flags & pl->flags & MF_FRIEND) &&
     (P_AproxDistance(pl->x-actor->x, pl->y-actor->y) <
-     MELEERANGE - 20*FRACUNIT + pl->info->radius) &&
+     range - 20*FRACUNIT + pl->info->radius) &&
     P_CheckSight(actor, actor->target);
 }
 
@@ -214,6 +226,11 @@ static dbool   P_CheckMissileRange(mobj_t *actor)
 
   dist >>= FRACBITS;
 
+  /* MBF21: SHORTMRANGE caps the attack distance (archvile).  flags2 is
+   * zero outside complevel 21, so vanilla behaviour is unchanged. */
+  if ((actor->flags2 & MF2_SHORTMRANGE) && dist > 14*64)
+    return FALSE;
+
   if (actor->info->maxattackrange > 0 && dist > actor->info->maxattackrange)
     return FALSE;     // too far away
 
@@ -224,9 +241,17 @@ static dbool   P_CheckMissileRange(mobj_t *actor)
   if (actor->flags & MF_MISSILEMORE)
     dist >>= 1;
 
+  /* MBF21: RANGEHALF uses half distance for the probability roll;
+   * HIGHERMPROB lowers the minimum-distance floor from 150 to 50. */
+  if (actor->flags2 & MF2_RANGEHALF)
+    dist >>= 1;
+
   // Some mobs (eg. Cyberdemon) have a minimum attack chance
   if (dist > actor->info->minmissilechance)
     dist = actor->info->minmissilechance;
+
+  if ((actor->flags2 & MF2_HIGHERMPROB) && dist > 50)
+    dist = 50;
 
   if (P_Random(pr_missrange) < dist)
     return FALSE;
@@ -319,6 +344,12 @@ static dbool   P_Move(mobj_t *actor, dbool   dropoff) /* killough 9/12/98 */
   int movefactor = ORIG_FRICTION_FACTOR;    // killough 10/98
   int friction = ORIG_FRICTION;
   int speed;
+
+  /* A blasted thing (Disc of Repulsion) is being carried by the blast's
+   * momentum; don't let its own step-move override the throw until the blast
+   * wears off (ResetBlasted clears the flag once it comes to rest). */
+  if (actor->flags2 & MF2_BLASTED)
+    return TRUE;
 
   if (actor->movedir == DI_NODIR)
     return FALSE;
@@ -1064,7 +1095,8 @@ void A_Look(mobj_t *actor)
           sound = actor->info->seesound;
           break;
         }
-      if (actor->flags & MF_FULLVOLSIGHT)
+      if ((actor->flags & MF_FULLVOLSIGHT) ||
+          (actor->flags2 & (MF2_FULLVOLSOUNDS | MF2_BOSS))) /* MBF21 */
         S_StartSound(NULL, sound);          // full volume
       else
         S_StartSound(actor, sound);
@@ -1118,7 +1150,7 @@ void A_Chase(mobj_t *actor)
     A_FaceTarget(actor);
   else if (actor->movedir < 8)
     {
-      int delta = (actor->angle &= (7<<29)) - (actor->movedir << 29);
+      int delta = (int)((actor->angle &= (7u<<29)) - ((angle_t)actor->movedir << 29));
       if (delta > 0)
         actor->angle -= ANG90/2;
       else
@@ -1253,11 +1285,17 @@ void A_PosAttack(mobj_t *actor)
   A_FaceTarget(actor);
   angle = actor->angle;
   slope = P_AimLineAttack(actor, angle, MISSILERANGE, 0); /* killough 8/2/98 */
-  S_StartSound(actor, sfx_pistol);
+  /* a SNDINFO binding (grunt/attack) lands in attacksound; vanilla
+   * leaves the field 0 and the enum supplies the pistol */
+  S_StartSound(actor,
+               actor->info->attacksound ? actor->info->attacksound
+                                        : sfx_pistol);
 
   // killough 5/5/98: remove dependence on order of evaluation:
   t = P_Random(pr_posattack);
-  angle += (t - P_Random(pr_posattack))<<20;
+  /* the jitter add must wrap mod 2^32 (vanilla kept angle_t bits in an
+   * int); do the wrap in angle_t -- defined, bit-identical */
+  angle = (int)((angle_t)angle + (t - P_Random(pr_posattack)) * (1<<20));
   damage = (P_Random(pr_posattack)%5 + 1)*3;
   P_LineAttack(actor, angle, MISSILERANGE, slope, damage);
 }
@@ -1268,14 +1306,16 @@ void A_SPosAttack(mobj_t* actor)
 
   if (!actor->target)
     return;
-  S_StartSound(actor, sfx_shotgn);
+  S_StartSound(actor,
+               actor->info->attacksound ? actor->info->attacksound
+                                        : sfx_shotgn);
   A_FaceTarget(actor);
   bangle = actor->angle;
   slope = P_AimLineAttack(actor, bangle, MISSILERANGE, 0); /* killough 8/2/98 */
   for (i=0; i<3; i++)
     {  // killough 5/5/98: remove dependence on order of evaluation:
       int t = P_Random(pr_sposattack);
-      int angle = bangle + ((t - P_Random(pr_sposattack))<<20);
+      int angle = (int)((angle_t)bangle + (t - P_Random(pr_sposattack)) * (1<<20));
       int damage = ((P_Random(pr_sposattack)%5)+1)*3;
       P_LineAttack(actor, angle, MISSILERANGE, slope, damage);
     }
@@ -1287,14 +1327,16 @@ void A_CPosAttack(mobj_t *actor)
 
   if (!actor->target)
     return;
-  S_StartSound(actor, sfx_shotgn);
+  S_StartSound(actor,
+               actor->info->attacksound ? actor->info->attacksound
+                                        : sfx_shotgn);
   A_FaceTarget(actor);
   bangle = actor->angle;
   slope = P_AimLineAttack(actor, bangle, MISSILERANGE, 0); /* killough 8/2/98 */
 
   // killough 5/5/98: remove dependence on order of evaluation:
   t = P_Random(pr_cposattack);
-  angle = bangle + ((t - P_Random(pr_cposattack))<<20);
+  angle = (int)((angle_t)bangle + (t - P_Random(pr_cposattack)) * (1<<20));
   damage = ((P_Random(pr_cposattack)%5)+1)*3;
   P_LineAttack(actor, angle, MISSILERANGE, slope, damage);
 }
@@ -1360,7 +1402,9 @@ void A_TroopAttack(mobj_t *actor)
   if (P_CheckMeleeRange(actor))
     {
       int damage;
-      S_StartSound(actor, sfx_claw);
+      S_StartSound(actor,
+                   actor->info->attacksound ? actor->info->attacksound
+                                            : sfx_claw);
       damage = (P_Random(pr_troopattack)%8+1)*3;
       P_DamageMobj(actor->target, actor, actor, damage);
       return;
@@ -1384,6 +1428,77 @@ void A_HeadAttack(mobj_t *actor)
 {
   if (!actor->target)
     return;
+
+  if (raven)
+    {
+      /* Heretic Iron Lich.  The Doom cacodemon path below fires
+       * MT_HEADSHOT, whose enum value indexes a non-missile slot in
+       * Heretic's mobjinfo table (speed 0) -- P_SpawnMissile would then
+       * divide the range by that zero speed and raise SIGFPE.  Use the
+       * actual Iron Lich attack (ice ball / fire column / whirlwind),
+       * matching vanilla Heretic. */
+      static const int atkResolve1[] = { 50, 150 };
+      static const int atkResolve2[] = { 150, 200 };
+      mobj_t *target = actor->target;
+      mobj_t *fire, *baseFire, *mo;
+      int randAttack, dist, i;
+
+      A_FaceTarget(actor);
+      if (P_CheckMeleeRange(actor))
+        {
+          int damage = (1 + (P_Random(pr_heretic) & 7)) * 6;  /* HITDICE(6) */
+          P_DamageMobj(target, actor, actor, damage);
+          return;
+        }
+
+      /* far = beyond 8 sectors (512 map units) */
+      dist = (P_AproxDistance(actor->x - target->x, actor->y - target->y)
+              > 8 * 64 * FRACUNIT);
+      randAttack = P_Random(pr_headattack);
+      if (randAttack < atkResolve1[dist])
+        {                       /* ice ball */
+          P_SpawnMissile(actor, target, HERETIC_MT_HEADFX1);
+          S_StartSound(actor, heretic_sfx_hedat2);
+        }
+      else if (randAttack < atkResolve2[dist])
+        {                       /* fire column */
+          fire = baseFire = P_SpawnMissile(actor, target, HERETIC_MT_HEADFX3);
+          if (fire)
+            {
+              S_StartSound(actor, heretic_sfx_hedat1);
+              P_SetMobjState(fire, HERETIC_S_HEADFX3_4);  /* don't grow */
+              for (i = 0; i < 5; i++)
+                {
+                  fire = P_SpawnMobj(baseFire->x, baseFire->y, baseFire->z,
+                                     HERETIC_MT_HEADFX3);
+                  if (i == 0)
+                    S_StartSound(actor, heretic_sfx_hedat1);
+                  P_SetTarget(&fire->target, baseFire->target);
+                  fire->angle = baseFire->angle;
+                  fire->momx = baseFire->momx;
+                  fire->momy = baseFire->momy;
+                  fire->momz = baseFire->momz;
+                  fire->damage = 0;
+                  fire->health = (i + 1) * 2;
+                  P_CheckMissileSpawn(fire);
+                }
+            }
+        }
+      else
+        {                       /* whirlwind */
+          mo = P_SpawnMissile(actor, target, HERETIC_MT_WHIRLWIND);
+          if (mo)
+            {
+              mo->z -= 32 * FRACUNIT;
+              P_SetTarget(&mo->special1.m, target);
+              mo->special2.i = 50;        /* active sound timer */
+              mo->health = 20 * TICRATE;  /* duration */
+              S_StartSound(actor, heretic_sfx_hedat3);
+            }
+        }
+      return;
+    }
+
   A_FaceTarget (actor);
   if (P_CheckMeleeRange(actor))
     {
@@ -1552,6 +1667,9 @@ mobj_t* corpsehit;
 mobj_t* vileobj;
 fixed_t viletryx;
 fixed_t viletryy;
+/* MBF21: A_HealChase heals corpses within an arbitrary radius; A_VileChase
+ * uses the archvile's radius.  PIT_VileCheck reads this. */
+fixed_t viletryradius;
 
 static dbool   PIT_VileCheck(mobj_t *thing)
 {
@@ -1567,7 +1685,7 @@ static dbool   PIT_VileCheck(mobj_t *thing)
   if (thing->info->raisestate == S_NULL)
     return TRUE;        // monster doesn't have a raise state
 
-  maxdist = thing->info->radius + mobjinfo[MT_VILE].radius;
+  maxdist = thing->info->radius + viletryradius;
 
   if (D_abs(thing->x-viletryx) > maxdist || D_abs(thing->y-viletryy) > maxdist)
     return TRUE;                // not actually touching
@@ -1630,6 +1748,8 @@ void A_VileChase(mobj_t* actor)
         actor->x + actor->info->speed*xspeed[actor->movedir];
       viletryy =
         actor->y + actor->info->speed*yspeed[actor->movedir];
+
+      viletryradius = mobjinfo[MT_VILE].radius;
 
       xl = (viletryx - bmaporgx - MAXRADIUS*2)>>MAPBLOCKSHIFT;
       xh = (viletryx - bmaporgx + MAXRADIUS*2)>>MAPBLOCKSHIFT;
@@ -2087,7 +2207,8 @@ void A_Scream(mobj_t *actor)
     }
 
   // Check for bosses.
-  if (actor->flags & MF_FULLVOLDEATH)
+  if ((actor->flags & MF_FULLVOLDEATH) ||
+      (actor->flags2 & (MF2_FULLVOLSOUNDS | MF2_BOSS))) /* MBF21 */
     S_StartSound(NULL, sound); // full volume
   else
     S_StartSound(actor, sound);
@@ -2115,7 +2236,97 @@ void A_Fall(mobj_t *actor)
 //
 void A_Explode(mobj_t *thingy)
 {
-  P_RadiusAttack( thingy, thingy->target, 128 );
+  int damage   = 128;
+  int distance = 128;
+  dbool damagesource = true;
+
+  /* Raven gives many actors their own blast damage/radius, and the
+   * firebombs raise themselves before bursting; several Hexen player
+   * projectiles also spare their shooter from the splash.  Without this
+   * they all used the Doom 128/128 default. */
+  if (raven)
+  {
+    switch (thingy->type)
+    {
+      case HERETIC_MT_FIREBOMB:        /* time bomb of the ancients */
+      case HEXEN_MT_FIREBOMB:
+        thingy->z += 32 * FRACUNIT;
+        thingy->flags &= ~MF_SHADOW;
+        break;
+      case HERETIC_MT_MNTRFX2:         /* minotaur floor fire */
+        damage = 24;
+        distance = damage;
+        break;
+      case HERETIC_MT_SOR2FX1:         /* D'Sparil missile */
+        damage = 80 + (P_Random(pr_heretic) & 31);
+        distance = damage;
+        break;
+      case HEXEN_MT_MNTRFX2:           /* minotaur floor fire */
+        damage = 24;
+        break;
+      case HEXEN_MT_BISHOP:            /* bishop radius death */
+        damage = 25 + (P_Random(pr_heretic) & 15);
+        break;
+      case HEXEN_MT_HAMMER_MISSILE:    /* fighter hammer */
+        damage = 128;
+        damagesource = false;
+        break;
+      case HEXEN_MT_FSWORD_MISSILE:    /* fighter runesword */
+        damage = 64;
+        damagesource = false;
+        break;
+      case HEXEN_MT_CIRCLEFLAME:       /* cleric flame secondary */
+        damage = 20;
+        damagesource = false;
+        break;
+      case HEXEN_MT_SORCBALL1:         /* sorcerer balls */
+      case HEXEN_MT_SORCBALL2:
+      case HEXEN_MT_SORCBALL3:
+        distance = 255;
+        damage = 255;
+        thingy->special_args[0] = 1;   /* don't play bounce */
+        break;
+      case HEXEN_MT_SORCFX1:           /* sorcerer spell 1 */
+        damage = 30;
+        break;
+      case HEXEN_MT_SORCFX4:           /* sorcerer spell 4 */
+        damage = 20;
+        break;
+      case HEXEN_MT_TREEDESTRUCTIBLE:
+        damage = 10;
+        break;
+      case HEXEN_MT_DRAGON_FX2:
+        damage = 80;
+        damagesource = false;
+        break;
+      case HEXEN_MT_MSTAFF_FX:         /* mage bloodscourge */
+        damage = 64;
+        distance = 192;
+        damagesource = false;
+        break;
+      case HEXEN_MT_MSTAFF_FX2:
+        damage = 80;
+        distance = 192;
+        damagesource = false;
+        break;
+      case HEXEN_MT_POISONCLOUD:       /* flechette gas */
+        damage = 4;
+        distance = 40;
+        break;
+      case HEXEN_MT_ZXMAS_TREE:
+      case HEXEN_MT_ZSHRUB2:
+        damage = 30;
+        distance = 64;
+        break;
+      default:
+        break;
+    }
+  }
+
+  P_RadiusAttackHexen(thingy, thingy->target, damage, distance, damagesource);
+  if (hexen && thingy->z <= thingy->floorz + (distance << FRACBITS) &&
+      thingy->type != HEXEN_MT_POISONCLOUD)
+    P_HitFloor(thingy);
   retro_set_rumble_damage(60, 500.f);
 }
 
@@ -2125,11 +2336,112 @@ void A_Explode(mobj_t *thingy)
 // if on first boss level
 //
 
+/* Heretic boss deaths: map 8 of each episode ends with a tag-666 floor
+ * lower when the last episode boss dies (Ironliches, Maulotaurs, or
+ * D'Sparil per episode); episodes past the first also slay every
+ * remaining monster.  Vanilla heretic A_BossDeath. */
+static void Heretic_A_BossDeath(mobj_t *actor)
+{
+    void P_Massacre(void);      /* heretic/p_action.c */
+    mobj_t *mo;
+    thinker_t *think;
+    line_t dummyLine;
+    static const mobjtype_t bossType[6] = {
+        HERETIC_MT_HEAD,
+        HERETIC_MT_MINOTAUR,
+        HERETIC_MT_SORCERER2,
+        HERETIC_MT_HEAD,
+        HERETIC_MT_MINOTAUR,
+        -1
+    };
+
+    if (gamemap != 8)
+    {                           // Not a boss level
+        return;
+    }
+    if (gameepisode < 1 || gameepisode > 6)
+    {
+        return;
+    }
+    if (actor->type != bossType[gameepisode - 1])
+    {                           // Not considered a boss in this episode
+        return;
+    }
+    // Make sure all bosses are dead
+    for (think = thinkercap.next; think != &thinkercap; think = think->next)
+    {
+        if (think->function.arg1 != (void (*)(void *)) P_MobjThinker)
+        {                       // Not a mobj thinker
+            continue;
+        }
+        mo = (mobj_t *) think;
+        if ((mo != actor) && (mo->type == actor->type) && (mo->health > 0))
+        {                       // Found a living boss
+            return;
+        }
+    }
+    if (gameepisode > 1)
+    {                           // Kill any remaining monsters
+        P_Massacre();
+    }
+    memset(&dummyLine, 0, sizeof(dummyLine));
+    dummyLine.tag = 666;
+    EV_DoFloor(&dummyLine, FLEV_LOWERFLOOR);
+}
+
 void A_BossDeath(mobj_t *mo)
 {
   thinker_t *th;
   line_t    junk;
   int       i;
+
+  if (heretic)
+  {
+    Heretic_A_BossDeath(mo);
+    return;
+  }
+
+  /* MBF21: when the dying thing carries MBF21 boss flags, qualification
+   * and the triggered action are driven by those flags instead of the
+   * hardcoded type/map checks below.  Gated on mbf21_features so vanilla/
+   * boom/mbf/prboom demos take the unchanged path. */
+  if (mbf21_features && (mo->flags2 &
+        (MF2_MAP07BOSS1 | MF2_MAP07BOSS2 | MF2_E1M8BOSS | MF2_E2M8BOSS |
+         MF2_E3M8BOSS  | MF2_E4M6BOSS  | MF2_E4M8BOSS)))
+  {
+    /* make sure there is a player alive for victory */
+    for (i = 0; i < MAXPLAYERS; i++)
+      if (playeringame[i] && players[i].health > 0)
+        break;
+    if (i == MAXPLAYERS)
+      return;
+
+    /* all bosses of this type dead? */
+    for (th = thinkercap.next; th != &thinkercap; th = th->next)
+      if (th->function.arg1 == (void (*)(void *))P_MobjThinker)
+      {
+        mobj_t *mo2 = (mobj_t *) th;
+        if (mo2 != mo && mo2->type == mo->type && mo2->health > 0)
+          return;
+      }
+
+    memset(&junk, 0, sizeof(junk));
+    if (mo->flags2 & MF2_MAP07BOSS1)
+      { junk.tag = 666; EV_DoFloor(&junk, FLEV_LOWERFLOORTOLOWEST); }
+    if (mo->flags2 & MF2_MAP07BOSS2)
+      { junk.tag = 667; EV_DoFloor(&junk, FLEV_RAISETOTEXTURE); }
+    if (mo->flags2 & MF2_E1M8BOSS)
+      { junk.tag = 666; EV_DoFloor(&junk, FLEV_LOWERFLOORTOLOWEST); }
+    if (mo->flags2 & MF2_E2M8BOSS)
+      G_ExitLevel();
+    if (mo->flags2 & MF2_E3M8BOSS)
+      G_ExitLevel();
+    if (mo->flags2 & MF2_E4M6BOSS)
+      { junk.tag = 666; EV_DoDoor(&junk, blazeOpen); }
+    if (mo->flags2 & MF2_E4M8BOSS)
+      { junk.tag = 666; EV_DoFloor(&junk, FLEV_LOWERFLOORTOLOWEST); }
+    return;
+  }
 
   // numbossactions == 0 means to use the defaults.
   // numbossactions == -1 means to do nothing.
@@ -2355,6 +2667,16 @@ mobj_t **braintargets;
 int    numbraintargets_alloc;
 int    numbraintargets;
 
+/* Releases the icon-of-sin landing list, capacity included, so the next
+ * session grows its own array from empty. */
+void P_EnemyDeinit(void)
+{
+   Z_Free(braintargets);
+   braintargets           = NULL;
+   numbraintargets_alloc  = 0;
+   numbraintargets        = 0;
+}
+
 struct brain_s brain;   // killough 3/26/98: global state of boss brain
 
 // killough 3/26/98: initialize icon landings at level startup,
@@ -2574,8 +2896,8 @@ void A_Mushroom(mobj_t *actor)
     for (j = -n; j <= n; j += 8)
       {
   mobj_t target = *actor, *mo;
-  target.x += i << FRACBITS;    // Aim in many directions from source
-  target.y += j << FRACBITS;
+  target.x += i * FRACUNIT;    // Aim in many directions from source
+  target.y += j * FRACUNIT;
   target.z += P_AproxDistance(i,j) << (FRACBITS+2); // Aim up fairly high
   mo = P_SpawnMissile(actor, &target, MT_FATSHOT);  // Launch fireball
   mo->momx >>= 1;
@@ -2598,7 +2920,7 @@ void A_Spawn(mobj_t *mo)
   if (mo->state->misc1)
     {
       /* mobj_t *newmobj = */
-      P_SpawnMobj(mo->x, mo->y, (mo->state->misc2 << FRACBITS) + mo->z,
+      P_SpawnMobj(mo->x, mo->y, (mo->state->misc2 * FRACUNIT) + mo->z,
       mo->state->misc1 - 1);
       /* CPhipps - no friendlyness (yet)
    newmobj->flags = (newmobj->flags & ~MF_FRIEND) | (mo->flags & MF_FRIEND);
@@ -2655,4 +2977,4243 @@ void A_LineEffect(mobj_t *mo)
     P_CrossSpecialLine(&junk, 0, mo);
   mo->state->misc1 = junk.special;
   mo->player = oldplayer;
+}
+
+/* ====================================================================
+ * MBF21 codepointers (thing side)
+ *
+ * Each reads its parameters from the calling state's args[] and is inert
+ * unless mbf21_features is active (the actor's state->args are only
+ * populated by an MBF21 deh patch, and the gate makes them no-ops at lower
+ * complevels regardless).  Mechanics follow the MBF21 spec.
+ * ==================================================================== */
+
+/* Heal a nearby corpse within 'radius', like the archvile but
+ * parameterised; returns TRUE if one was raised.  Adapted from
+ * A_VileChase. */
+static dbool P_HealCorpse(mobj_t *actor, fixed_t radius,
+                          statenum_t healstate, int healsound)
+{
+  int xl, xh, yl, yh, bx, by;
+
+  if (actor->movedir != DI_NODIR)
+  {
+    viletryx = actor->x + actor->info->speed*xspeed[actor->movedir];
+    viletryy = actor->y + actor->info->speed*yspeed[actor->movedir];
+    viletryradius = radius;
+
+    xl = (viletryx - bmaporgx - MAXRADIUS*2)>>MAPBLOCKSHIFT;
+    xh = (viletryx - bmaporgx + MAXRADIUS*2)>>MAPBLOCKSHIFT;
+    yl = (viletryy - bmaporgy - MAXRADIUS*2)>>MAPBLOCKSHIFT;
+    yh = (viletryy - bmaporgy + MAXRADIUS*2)>>MAPBLOCKSHIFT;
+
+    vileobj = actor;
+    for (bx=xl ; bx<=xh ; bx++)
+      for (by=yl ; by<=yh ; by++)
+        if (!P_BlockThingsIterator(bx,by,PIT_VileCheck))
+        {
+          mobjinfo_t *info;
+          mobj_t *temp = actor->target;
+          actor->target = corpsehit;
+          A_FaceTarget(actor);
+          actor->target = temp;
+
+          P_SetMobjState(actor, healstate);
+          S_StartSound(corpsehit, healsound);
+          info = corpsehit->info;
+
+          P_SetMobjState(corpsehit,info->raisestate);
+
+          if (comp[comp_vile])
+            corpsehit->height <<= 2;
+          else
+          {
+            corpsehit->height = info->height;
+            corpsehit->radius = info->radius;
+          }
+
+          corpsehit->flags =
+            (info->flags & ~MF_FRIEND) | (actor->flags & MF_FRIEND);
+          corpsehit->intflags = corpsehit->intflags | MIF_RESURRECTED;
+
+          if (!((corpsehit->flags ^ MF_COUNTKILL) & (MF_FRIEND | MF_COUNTKILL)))
+            totallive++;
+
+          corpsehit->health = info->spawnhealth;
+          P_SetTarget(&corpsehit->target, NULL);
+
+          if (mbf_features)
+          {
+            P_SetTarget(&corpsehit->lastenemy, NULL);
+            corpsehit->flags &= ~MF_JUSTHIT;
+          }
+
+          P_UpdateThinker(&corpsehit->thinker);
+          return TRUE;
+        }
+  }
+  return FALSE;
+}
+
+/* True if t2 lies within 'fov' of t1's facing angle. */
+static dbool P_CheckFov(mobj_t *t1, mobj_t *t2, angle_t fov)
+{
+  angle_t angle, minang, maxang;
+  angle = R_PointToAngle2(t1->x, t1->y, t2->x, t2->y);
+  minang = t1->angle - fov / 2;
+  maxang = t1->angle + fov / 2;
+  return (minang > maxang) ? (angle >= minang || angle <= maxang)
+                           : (angle >= minang && angle <= maxang);
+}
+
+/* Melee-range check for A_MonsterMeleeAttack (distance + sight, ignoring
+ * friend-on-friend). */
+static dbool P_CheckRange(mobj_t *actor, fixed_t range)
+{
+  mobj_t *pl = actor->target;
+  return pl &&
+    !(actor->flags & pl->flags & MF_FRIEND) &&
+    P_AproxDistance(pl->x-actor->x, pl->y-actor->y) < range &&
+    P_CheckSight(actor, actor->target);
+}
+
+/* Home a missile toward *seekTarget by up to turnMax per call (halving the
+ * turn rate once within thresh).  Adapted from A_Tracer's seeking math. */
+static dbool P_SeekerMissile(mobj_t *actor, mobj_t **seekTarget,
+                             angle_t thresh, angle_t turnMax)
+{
+  angle_t exact, delta;
+  fixed_t dist, slope;
+  int dir;
+  mobj_t *target = *seekTarget;
+
+  if (!target)
+    return FALSE;
+  if (!(target->flags & MF_SHOOTABLE)) /* target died */
+  {
+    *seekTarget = NULL;
+    return FALSE;
+  }
+
+  exact = R_PointToAngle2(actor->x, actor->y, target->x, target->y);
+  if (exact > actor->angle)
+  {
+    delta = exact - actor->angle;
+    dir = 1;                 /* clockwise */
+  }
+  else
+  {
+    delta = actor->angle - exact;
+    dir = 0;
+  }
+  if (delta > thresh)
+  {
+    delta >>= 1;
+    if (delta > turnMax)
+      delta = turnMax;
+  }
+  if (dir)
+    actor->angle += delta;
+  else
+    actor->angle -= delta;
+
+  exact = actor->angle >> ANGLETOFINESHIFT;
+  actor->momx = FixedMul(actor->info->speed, finecosine[exact]);
+  actor->momy = FixedMul(actor->info->speed, finesine[exact]);
+
+  dist = P_AproxDistance(target->x - actor->x, target->y - actor->y);
+  dist = dist / actor->info->speed;
+  if (dist < 1)
+    dist = 1;
+  slope = (target->z + (target->height >> 1) -
+           (actor->z + (actor->height >> 1))) / dist;
+  actor->momz = slope;
+  return TRUE;
+}
+
+/* Search surrounding blockmap for a valid auto-target within fov/distance.
+ * Adapted from Hexen's rough monster search (as used by dsda). */
+mobj_t *P_RoughTargetSearch(mobj_t *mo, angle_t fov, int distance)
+{
+  int startX, startY, count, bx, by;
+  mobj_t *link;
+
+  startX = (mo->x - bmaporgx) >> MAPBLOCKSHIFT;
+  startY = (mo->y - bmaporgy) >> MAPBLOCKSHIFT;
+
+  for (count = 0; count <= distance; count++)
+    for (by = startY - count; by <= startY + count; by++)
+    {
+      if (by < 0 || by >= bmapheight)
+        continue;
+      for (bx = startX - count; bx <= startX + count; bx++)
+      {
+        /* only scan the ring at radius 'count' */
+        if (count && bx != startX - count && bx != startX + count &&
+            by != startY - count && by != startY + count)
+          continue;
+        if (bx < 0 || bx >= bmapwidth)
+          continue;
+        for (link = blocklinks[by*bmapwidth + bx]; link; link = link->bnext)
+        {
+          if (!(link->flags & MF_SHOOTABLE))
+            continue;
+          if (link == mo->target)
+            continue;
+          if (mo->target &&
+              !((link->flags ^ mo->target->flags) & MF_FRIEND) &&
+              mo->target->target != link &&
+              !(deathmatch && link->player && mo->target->player))
+            continue;
+          if (fov > 0 && !P_CheckFov(mo, link, fov))
+            continue;
+          if (!P_CheckSight(mo, link))
+            continue;
+          return link;
+        }
+      }
+    }
+  return NULL;
+}
+
+void A_SpawnObject(mobj_t *actor)
+{
+  int type, angle, ofs_x, ofs_y, ofs_z, vel_x, vel_y, vel_z;
+  angle_t an;
+  int fan, dx, dy;
+  mobj_t *mo;
+
+  if (!mbf21_features || !actor->state->args[0])
+    return;
+
+  type  = actor->state->args[0] - 1;
+  angle = actor->state->args[1];
+  ofs_x = actor->state->args[2];
+  ofs_y = actor->state->args[3];
+  ofs_z = actor->state->args[4];
+  vel_x = actor->state->args[5];
+  vel_y = actor->state->args[6];
+  vel_z = actor->state->args[7];
+
+  an = actor->angle + (unsigned int)(((int64_t)angle << 16) / 360);
+  fan = an >> ANGLETOFINESHIFT;
+  dx = FixedMul(ofs_x, finecosine[fan]) - FixedMul(ofs_y, finesine[fan]);
+  dy = FixedMul(ofs_x, finesine[fan])   + FixedMul(ofs_y, finecosine[fan]);
+
+  mo = P_SpawnMobj(actor->x + dx, actor->y + dy, actor->z + ofs_z, type);
+  if (!mo)
+    return;
+
+  mo->angle = an;
+  mo->momx = FixedMul(vel_x, finecosine[fan]) - FixedMul(vel_y, finesine[fan]);
+  mo->momy = FixedMul(vel_x, finesine[fan])   + FixedMul(vel_y, finecosine[fan]);
+  mo->momz = vel_z;
+
+  if (mo->info->flags & (MF_MISSILE | MF_BOUNCES))
+  {
+    if (actor->info->flags & (MF_MISSILE | MF_BOUNCES))
+    {
+      P_SetTarget(&mo->target, actor->target);
+      P_SetTarget(&mo->tracer, actor->tracer);
+    }
+    else
+    {
+      P_SetTarget(&mo->target, actor);
+      P_SetTarget(&mo->tracer, actor->target);
+    }
+  }
+}
+
+void A_MonsterProjectile(mobj_t *actor)
+{
+  int type, angle, pitch, spawnofs_xy, spawnofs_z, an;
+  mobj_t *mo;
+
+  if (!mbf21_features || !actor->target || !actor->state->args[0])
+    return;
+
+  type        = actor->state->args[0] - 1;
+  angle       = actor->state->args[1];
+  pitch       = actor->state->args[2];
+  spawnofs_xy = actor->state->args[3];
+  spawnofs_z  = actor->state->args[4];
+
+  A_FaceTarget(actor);
+  mo = P_SpawnMissile(actor, actor->target, type);
+  if (!mo)
+    return;
+
+  mo->angle += (unsigned int)(((int64_t)angle << 16) / 360);
+  an = mo->angle >> ANGLETOFINESHIFT;
+  mo->momx = FixedMul(mo->info->speed, finecosine[an]);
+  mo->momy = FixedMul(mo->info->speed, finesine[an]);
+  mo->momz += FixedMul(mo->info->speed, DegToSlope(pitch));
+
+  an = (actor->angle - ANG90) >> ANGLETOFINESHIFT;
+  mo->x += FixedMul(spawnofs_xy, finecosine[an]);
+  mo->y += FixedMul(spawnofs_xy, finesine[an]);
+  mo->z += spawnofs_z;
+
+  P_SetTarget(&mo->tracer, actor->target);
+}
+
+void A_MonsterMeleeAttack(mobj_t *actor)
+{
+  int damagebase, damagemod, hitsound, range, damage;
+
+  if (!mbf21_features || !actor->target)
+    return;
+
+  damagebase = actor->state->args[0];
+  damagemod  = actor->state->args[1];
+  hitsound   = actor->state->args[2];
+  range      = actor->state->args[3];
+
+  if (range == 0)
+    range = actor->info->meleerange;
+  range += actor->target->info->radius - 20 * FRACUNIT;
+
+  A_FaceTarget(actor);
+  if (!P_CheckRange(actor, range))
+    return;
+
+  S_StartSound(actor, hitsound);
+  /* MBF21 allows damagemod == 0 (deterministic damage); guard the modulo. */
+  damage = ((damagemod > 0 ? (P_Random(pr_mbf21) % damagemod) : 0) + 1) * damagebase;
+  P_DamageMobj(actor->target, actor, actor, damage);
+}
+
+void A_RadiusDamage(mobj_t *actor)
+{
+  if (!mbf21_features || !actor->state)
+    return;
+  /* args[0] = damage, args[1] = blast radius */
+  P_RadiusAttackEx(actor, actor->target,
+                   actor->state->args[0], actor->state->args[1]);
+}
+
+void A_NoiseAlert(mobj_t *actor)
+{
+  if (!mbf21_features || !actor->target)
+    return;
+  P_NoiseAlert(actor->target, actor);
+}
+
+void A_HealChase(mobj_t *actor)
+{
+  int state, sound;
+  if (!mbf21_features || !actor)
+    return;
+  state = actor->state->args[0];
+  sound = actor->state->args[1];
+  if (!P_HealCorpse(actor, actor->info->radius, state, sound))
+    A_Chase(actor);
+}
+
+void A_SeekTracer(mobj_t *actor)
+{
+  angle_t threshold, maxturnangle;
+  if (!mbf21_features || !actor)
+    return;
+  threshold    = FixedToAngle(actor->state->args[0]);
+  maxturnangle = FixedToAngle(actor->state->args[1]);
+  P_SeekerMissile(actor, &actor->tracer, threshold, maxturnangle);
+}
+
+void A_FindTracer(mobj_t *actor)
+{
+  angle_t fov;
+  int dist;
+  if (!mbf21_features || !actor || actor->tracer)
+    return;
+  fov  = FixedToAngle(actor->state->args[0]);
+  dist =             (actor->state->args[1]);
+  P_SetTarget(&actor->tracer, P_RoughTargetSearch(actor, fov, dist));
+}
+
+void A_ClearTracer(mobj_t *actor)
+{
+  if (!mbf21_features || !actor)
+    return;
+  P_SetTarget(&actor->tracer, NULL);
+}
+
+void A_JumpIfHealthBelow(mobj_t *actor)
+{
+  int state, health;
+  if (!mbf21_features || !actor)
+    return;
+  state  = actor->state->args[0];
+  health = actor->state->args[1];
+  if (actor->health < health)
+    P_SetMobjState(actor, state);
+}
+
+void A_JumpIfTargetInSight(mobj_t *actor)
+{
+  int state;
+  angle_t fov;
+  if (!mbf21_features || !actor || !actor->target)
+    return;
+  state =             (actor->state->args[0]);
+  fov   = FixedToAngle(actor->state->args[1]);
+  if (fov > 0 && !P_CheckFov(actor, actor->target, fov))
+    return;
+  if (P_CheckSight(actor, actor->target))
+    P_SetMobjState(actor, state);
+}
+
+void A_JumpIfTargetCloser(mobj_t *actor)
+{
+  int state, distance;
+  if (!mbf21_features || !actor || !actor->target)
+    return;
+  state    = actor->state->args[0];
+  distance = actor->state->args[1];
+  if (distance > P_AproxDistance(actor->x - actor->target->x,
+                                 actor->y - actor->target->y))
+    P_SetMobjState(actor, state);
+}
+
+void A_JumpIfTracerInSight(mobj_t *actor)
+{
+  int state;
+  angle_t fov;
+  if (!mbf21_features || !actor || !actor->tracer)
+    return;
+  state =             (actor->state->args[0]);
+  fov   = FixedToAngle(actor->state->args[1]);
+  if (fov > 0 && !P_CheckFov(actor, actor->tracer, fov))
+    return;
+  if (P_CheckSight(actor, actor->tracer))
+    P_SetMobjState(actor, state);
+}
+
+void A_JumpIfTracerCloser(mobj_t *actor)
+{
+  int state, distance;
+  if (!mbf21_features || !actor || !actor->tracer)
+    return;
+  state    = actor->state->args[0];
+  distance = actor->state->args[1];
+  if (distance > P_AproxDistance(actor->x - actor->tracer->x,
+                                 actor->y - actor->tracer->y))
+    P_SetMobjState(actor, state);
+}
+
+void A_JumpIfFlagsSet(mobj_t *actor)
+{
+  int state;
+  uint64_t flags, flags2;
+  if (!mbf21_features || !actor)
+    return;
+  state  = actor->state->args[0];
+  /* args[] is a 32-bit (signed) long on LLP64 targets; cast through
+   * uint32_t first so a flag value with bit 31 set is not sign-extended
+   * into the high 32 bits of the 64-bit flag word. */
+  flags  = (uint64_t)(uint32_t)actor->state->args[1];
+  flags2 = (uint64_t)(uint32_t)actor->state->args[2];
+  if ((actor->flags & flags) == flags &&
+      (actor->flags2 & flags2) == flags2)
+    P_SetMobjState(actor, state);
+}
+
+void A_AddFlags(mobj_t *actor)
+{
+  uint64_t flags, flags2;
+  dbool update_blockmap;
+  if (!mbf21_features || !actor)
+    return;
+  /* see A_JumpIfFlagsSet: avoid sign-extending a bit-31 flag value */
+  flags  = (uint64_t)(uint32_t)actor->state->args[0];
+  flags2 = (uint64_t)(uint32_t)actor->state->args[1];
+  update_blockmap = ((flags & MF_NOBLOCKMAP) && !(actor->flags & MF_NOBLOCKMAP))
+                 || ((flags & MF_NOSECTOR)   && !(actor->flags & MF_NOSECTOR));
+  if (update_blockmap)
+    P_UnsetThingPosition(actor);
+  actor->flags  |= flags;
+  actor->flags2 |= flags2;
+  if (update_blockmap)
+    P_SetThingPosition(actor);
+}
+
+void A_RemoveFlags(mobj_t *actor)
+{
+  uint64_t flags, flags2;
+  dbool update_blockmap;
+  if (!mbf21_features || !actor)
+    return;
+  /* see A_JumpIfFlagsSet: avoid sign-extending a bit-31 flag value */
+  flags  = (uint64_t)(uint32_t)actor->state->args[0];
+  flags2 = (uint64_t)(uint32_t)actor->state->args[1];
+  update_blockmap = ((flags & MF_NOBLOCKMAP) && (actor->flags & MF_NOBLOCKMAP))
+                 || ((flags & MF_NOSECTOR)   && (actor->flags & MF_NOSECTOR));
+  if (update_blockmap)
+    P_UnsetThingPosition(actor);
+  actor->flags  &= ~flags;
+  actor->flags2 &= ~flags2;
+  if (update_blockmap)
+    P_SetThingPosition(actor);
+}
+
+/* ------------------------------------------------------------------------
+ * Hexen monster codepointers (active port).
+ *
+ * Ported from the dormant vanilla-Hexen actor code and adapted to this
+ * core's API.  These let Hexen enemies actually attack; the look/chase/
+ * face/pain/death pointers they share with the Doom/Heretic AI are already
+ * implemented.  Started with the Ettin (the first enemy encountered).
+ * --------------------------------------------------------------------- */
+
+#define HX_HITDICE(a) ((1 + (P_Random(pr_heretic) & 7)) * (a))
+
+int P_SubRandom(void);  /* heretic/p_action.c */
+dbool P_SetMobjStateNF(mobj_t *mobj, statenum_t state);  /* heretic/p_action.c */
+extern fixed_t FloatBobOffsets[64];
+
+/* Hexen corpse queue: monster corpses register here as they settle, and
+ * once the queue is full the oldest corpse is removed so a long fight does
+ * not leave an unbounded pile.  Reset by P_InitCreatureCorpseQueue at level
+ * load. */
+/* exposed for hub map archiving (hexen/sv_save.c) */
+mobj_t *corpseQueue[CORPSEQUEUESIZE];
+int     corpseQueueSlot;
+
+void A_QueueCorpse(mobj_t *actor)
+{
+  mobj_t *corpse;
+
+  if (corpseQueueSlot >= CORPSEQUEUESIZE)
+  {                             /* too many corpses: drop the oldest */
+    corpse = corpseQueue[corpseQueueSlot % CORPSEQUEUESIZE];
+    if (corpse)
+      P_RemoveMobj(corpse);
+  }
+  corpseQueue[corpseQueueSlot % CORPSEQUEUESIZE] = actor;
+  corpseQueueSlot++;
+}
+
+/* Drop a mobj from the corpse queue when it is removed by any other
+ * means, so the queue never holds a freed pointer for A_QueueCorpse's
+ * eviction to re-remove (from dsda-doom). */
+void A_DeQueueCorpse(mobj_t *actor)
+{
+  int slot;
+
+  for (slot = 0; slot < CORPSEQUEUESIZE; slot++)
+  {
+    if (corpseQueue[slot] == actor)
+    {
+      corpseQueue[slot] = NULL;
+      break;
+    }
+  }
+}
+
+void P_InitCreatureCorpseQueue(void)
+{
+  corpseQueueSlot = 0;
+  memset(corpseQueue, 0, sizeof(corpseQueue));
+}
+
+/* Demon (and Demon-2) gib death: fling five chunk actors outward. */
+static void Hexen_DemonChunks(mobj_t *actor, mobjtype_t first)
+{
+  mobj_t *mo;
+  angle_t angle;
+  int     i;
+
+  for (i = 0; i < 5; i++)
+  {
+    mo = P_SpawnMobj(actor->x, actor->y, actor->z + 45 * FRACUNIT,
+                     (mobjtype_t)(first + i));
+    if (!mo)
+      continue;
+    angle = (i == 0) ? actor->angle + ANG90 : actor->angle - ANG90;
+    mo->momz = 8 * FRACUNIT;
+    mo->momx = FixedMul((P_Random(pr_heretic) << 10) + FRACUNIT,
+                        finecosine[angle >> ANGLETOFINESHIFT]);
+    mo->momy = FixedMul((P_Random(pr_heretic) << 10) + FRACUNIT,
+                        finesine[angle >> ANGLETOFINESHIFT]);
+    P_SetTarget(&mo->target, actor);
+  }
+}
+
+void A_DemonDeath(mobj_t *actor)
+{
+  Hexen_DemonChunks(actor, HEXEN_MT_DEMONCHUNK1);
+}
+
+void A_Demon2Death(mobj_t *actor)
+{
+  Hexen_DemonChunks(actor, HEXEN_MT_DEMON2CHUNK1);
+}
+
+/* Hexen drifting fog.  A FogSpawner map thing (editor number 10000) emits
+ * fog patches that weave and drift along its angle for a scripted lifetime,
+ * then fade.  Speed/spread/lifetime come from the spawner's mapthing args. */
+void A_FogSpawn(mobj_t *actor)
+{
+  mobj_t *mo = NULL;
+  angle_t delta;
+
+  if (actor->special1.i-- > 0)
+    return;
+  actor->special1.i = actor->special_args[2];   /* reset frequency count */
+
+  switch (P_Random(pr_heretic) % 3)
+  {
+    case 0: mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_FOGPATCHS); break;
+    case 1: mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_FOGPATCHM); break;
+    case 2: mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_FOGPATCHL); break;
+  }
+  if (mo)
+  {
+    delta = actor->special_args[1];
+    if (delta == 0)
+      delta = 1;
+    mo->angle = actor->angle +
+      (((P_Random(pr_heretic) % delta) - (delta >> 1)) << 24);
+    P_SetTarget(&mo->target, actor);
+    if (actor->special_args[0] < 1)
+      actor->special_args[0] = 1;
+    mo->special_args[0] = (P_Random(pr_heretic) % (actor->special_args[0])) + 1;
+    mo->special_args[3] = actor->special_args[3];   /* lifetime */
+    mo->special_args[4] = 1;                         /* moving */
+    mo->special2.i = P_Random(pr_heretic) & 63;
+  }
+}
+
+void A_FogMove(mobj_t *actor)
+{
+  int     speed = actor->special_args[0] << FRACBITS;
+  angle_t angle;
+  int     weaveindex;
+
+  if (!(actor->special_args[4]))
+    return;
+  if (actor->special_args[3]-- <= 0)
+  {
+    P_SetMobjStateNF(actor, actor->info->deathstate);
+    return;
+  }
+  if ((actor->special_args[3] % 4) == 0)
+  {
+    weaveindex = actor->special2.i;
+    actor->z += FloatBobOffsets[weaveindex] >> 1;
+    actor->special2.i = (weaveindex + 1) & 63;
+  }
+  angle = actor->angle >> ANGLETOFINESHIFT;
+  actor->momx = FixedMul(speed, finecosine[angle]);
+  actor->momy = FixedMul(speed, finesine[angle]);
+}
+
+/* Hexen breakable shrubs/trees.  On first damage the bush becomes a taller
+ * shootable target (A_TreeDeath); a second, fire-damage hit sends it to its
+ * burning melee state. */
+void A_TreeDeath(mobj_t *actor)
+{
+  if (!(actor->flags2 & MF2_FIREDAMAGE))
+  {
+    actor->height <<= 2;
+    actor->flags |= MF_SHOOTABLE;
+    actor->flags &= ~(MF_CORPSE | MF_DROPOFF);
+    actor->health = 35;
+    return;
+  }
+  P_SetMobjState(actor, actor->info->meleestate);
+}
+
+void A_PoisonShroom(mobj_t *actor)
+{
+  actor->tics = 128 + (P_Random(pr_heretic) << 1);
+}
+
+/* Hexen corpse/gib decoration: gibs float up then sink back, lynched
+ * corpses drip blood, and a sitting corpse can be exploded into bits. */
+void A_FloatGib(mobj_t *actor)
+{
+  actor->floorclip -= FRACUNIT;
+}
+
+void A_SinkGib(mobj_t *actor)
+{
+  actor->floorclip += FRACUNIT;
+}
+
+void A_DelayGib(mobj_t *actor)
+{
+  actor->tics -= P_Random(pr_heretic) >> 2;
+}
+
+void A_CorpseBloodDrip(mobj_t *actor)
+{
+  if (P_Random(pr_heretic) > 128)
+    return;
+  P_SpawnMobj(actor->x, actor->y, actor->z + actor->height / 2,
+              HEXEN_MT_CORPSEBLOODDRIP);
+}
+
+void A_CorpseExplode(mobj_t *actor)
+{
+  mobj_t *mo;
+  int     i;
+
+  for (i = (P_Random(pr_heretic) & 3) + 3; i; i--)
+  {
+    mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_CORPSEBIT);
+    if (!mo)
+      continue;
+    P_SetMobjState(mo, mo->info->spawnstate + (P_Random(pr_heretic) % 3));
+    mo->momz = ((P_Random(pr_heretic) & 7) + 5) * (3 * FRACUNIT / 4);
+    mo->momx = P_SubRandom() << (FRACBITS - 6);
+    mo->momy = P_SubRandom() << (FRACBITS - 6);
+  }
+  /* spawn a skull */
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_CORPSEBIT);
+  if (mo)
+  {
+    P_SetMobjState(mo, HEXEN_S_CORPSEBIT_4);
+    mo->momz = ((P_Random(pr_heretic) & 7) + 5) * (3 * FRACUNIT / 4);
+    mo->momx = P_SubRandom() << (FRACBITS - 6);
+    mo->momy = P_SubRandom() << (FRACBITS - 6);
+    S_StartSound(mo, hexen_sfx_fired_death);
+  }
+  P_RemoveMobj(actor);
+}
+
+/* Hexen frozen death.  An ice/frost kill freezes the victim solid
+ * (A_FreezeDeath): it becomes a brittle, shootable, pushable statue.  When
+ * that statue is hit or its timer runs out it shatters (A_FreezeDeathChunks)
+ * into a shower of ice chunks; if the victim was a player, the view is
+ * attached to a head-sized chunk so you watch yourself fall apart.
+ * A_IceSetTics gives each chunk a random lifetime (shorter on lava, longer
+ * on ice); A_IceCheckHeadDone retires the view chunk once it has landed. */
+void A_IceSetTics(mobj_t *actor)
+{
+  int floor;
+
+  actor->tics = 70 + (P_Random(pr_heretic) & 63);
+  floor = P_GetThingFloorType(actor);
+  if (floor == FLOOR_LAVA)
+    actor->tics >>= 2;
+  else if (floor == FLOOR_ICE)
+    actor->tics <<= 1;
+}
+
+void A_IceCheckHeadDone(mobj_t *actor)
+{
+  if (actor->special2.i == 666)
+    P_SetMobjState(actor, HEXEN_S_ICECHUNK_HEAD2);
+}
+
+void A_FreezeDeath(mobj_t *actor)
+{
+  int r = P_Random(pr_heretic);
+
+  actor->tics = 75 + r + P_Random(pr_heretic);
+  actor->flags  |= MF_SOLID | MF_SHOOTABLE | MF_NOBLOOD;
+  actor->flags2 |= MF2_PUSHABLE | MF2_TELESTOMP | MF2_PASSMOBJ | MF2_SLIDE;
+  actor->height <<= 2;
+  S_StartSound(actor, hexen_sfx_freeze_death);
+
+  if (actor->player)
+  {
+    actor->player->damagecount = 0;
+    actor->player->bonuscount  = 0;
+    /* the damage/bonus palette tints clear themselves on the next status-bar
+     * tic now that the counts are zeroed */
+  }
+  /* Monsters with an ACS death-action special would fire it here; the core
+   * has no ACS, so there is nothing to execute. */
+}
+
+void A_FreezeDeathChunks(mobj_t *actor)
+{
+  int     i;
+  int     r1, r2, r3;
+  mobj_t *mo;
+
+  if (actor->momx || actor->momy || actor->momz)
+  {
+    actor->tics = 105;            /* still sliding: wait until it settles */
+    return;
+  }
+  S_StartSound(actor, hexen_sfx_freeze_shatter);
+
+  for (i = 12 + (P_Random(pr_heretic) & 15); i >= 0; i--)
+  {
+    r1 = P_Random(pr_heretic);
+    r2 = P_Random(pr_heretic);
+    r3 = P_Random(pr_heretic);
+    mo = P_SpawnMobj(actor->x + (((r3 - 128) * actor->radius) >> 7),
+                     actor->y + (((r2 - 128) * actor->radius) >> 7),
+                     actor->z + (r1 * actor->height / 255),
+                     HEXEN_MT_ICECHUNK);
+    if (!mo)
+      continue;
+    P_SetMobjState(mo, mo->info->spawnstate + (P_Random(pr_heretic) % 3));
+    mo->momz = FixedDiv(mo->z - actor->z, actor->height) << 2;
+    mo->momx = P_SubRandom() << (FRACBITS - 7);
+    mo->momy = P_SubRandom() << (FRACBITS - 7);
+    A_IceSetTics(mo);
+  }
+
+  if (actor->player)
+  {                               /* attach the view to a head chunk */
+    mo = P_SpawnMobj(actor->x, actor->y, actor->z + VIEWHEIGHT,
+                     HEXEN_MT_ICECHUNK);
+    if (mo)
+    {
+      P_SetMobjState(mo, HEXEN_S_ICECHUNK_HEAD);
+      mo->momz = FixedDiv(mo->z - actor->z, actor->height) << 2;
+      mo->momx = P_SubRandom() << (FRACBITS - 7);
+      mo->momy = P_SubRandom() << (FRACBITS - 7);
+      mo->flags2 |= MF2_ICEDAMAGE;  /* forces the blue palette */
+      mo->flags2 &= ~MF2_FOOTCLIP;
+      mo->player  = actor->player;
+      actor->player = NULL;
+      mo->health  = actor->health;
+      mo->angle   = actor->angle;
+      mo->player->mo = mo;
+      mo->player->lookdir = 0;
+    }
+  }
+  P_SetMobjState(actor, HEXEN_S_FREETARGMOBJ);
+  actor->flags2 |= MF2_DONTDRAW;
+}
+
+/* Banishment Device projectile trail.  The lead missile sheds three ring
+ * effects as it flies; each carries a short lifetime counted down by
+ * A_CheckTeleRing before collapsing into its death state.  Any of them
+ * teleports what it touches (see P_DamageMobj). */
+#define TELEPORT_LIFE 1
+
+static void TeloSpawn(mobj_t *actor, mobjtype_t type)
+{
+  mobj_t *mo;
+
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z, type);
+  if (mo)
+  {
+    mo->special1.i = TELEPORT_LIFE;     /* lifetime countdown */
+    mo->angle = actor->angle;
+    P_SetTarget(&mo->target, actor->target);
+    mo->momx = actor->momx >> 1;
+    mo->momy = actor->momy >> 1;
+    mo->momz = actor->momz >> 1;
+  }
+}
+
+void A_TeloSpawnA(mobj_t *actor)
+{
+  TeloSpawn(actor, HEXEN_MT_TELOTHER_FX2);
+}
+
+void A_TeloSpawnB(mobj_t *actor)
+{
+  TeloSpawn(actor, HEXEN_MT_TELOTHER_FX3);
+}
+
+void A_TeloSpawnC(mobj_t *actor)
+{
+  TeloSpawn(actor, HEXEN_MT_TELOTHER_FX4);
+}
+
+void A_TeloSpawnD(mobj_t *actor)
+{
+  TeloSpawn(actor, HEXEN_MT_TELOTHER_FX5);
+}
+
+void A_CheckTeleRing(mobj_t *actor)
+{
+  if (actor->special1.i-- <= 0)
+    P_SetMobjState(actor, actor->info->deathstate);
+}
+
+/* Raising/sinking things out of and into the floor: thrust spikes (fast,
+ * speed in special2) and, later, raised wraiths.  P_SpawnDirt scatters the
+ * digging debris. */
+dbool A_SinkMobj(mobj_t *actor)
+{
+  if (actor->floorclip < actor->info->height)
+  {
+    switch (actor->type)
+    {
+      case HEXEN_MT_THRUSTFLOOR_DOWN:
+      case HEXEN_MT_THRUSTFLOOR_UP:
+        actor->floorclip += 6 * FRACUNIT;
+        break;
+      default:
+        actor->floorclip += FRACUNIT;
+        break;
+    }
+    return false;
+  }
+  return true;
+}
+
+dbool A_RaiseMobj(mobj_t *actor)
+{
+  int done = true;
+
+  /* raise a mobj from the ground */
+  if (actor->floorclip > 0)
+  {
+    switch (actor->type)
+    {
+      case HEXEN_MT_WRAITHB:
+        actor->floorclip -= 2 * FRACUNIT;
+        break;
+      case HEXEN_MT_THRUSTFLOOR_DOWN:
+      case HEXEN_MT_THRUSTFLOOR_UP:
+        actor->floorclip -= actor->special2.i * FRACUNIT;
+        break;
+      default:
+        actor->floorclip -= 2 * FRACUNIT;
+        break;
+    }
+    if (actor->floorclip <= 0)
+    {
+      actor->floorclip = 0;
+      done = true;
+    }
+    else
+      done = false;
+  }
+  return done;                  /* reached target height */
+}
+
+void P_SpawnDirt(mobj_t *actor, fixed_t radius)
+{
+  fixed_t x, y, z;
+  int dtype = 0;
+  mobj_t *mo;
+  angle_t angle;
+
+  angle = P_Random(pr_heretic) << 5;    /* <<24 >>19 */
+  x = actor->x + FixedMul(radius, finecosine[angle]);
+  y = actor->y + FixedMul(radius, finesine[angle]);
+  z = actor->z + (P_Random(pr_heretic) << 9) + FRACUNIT;
+  switch (P_Random(pr_heretic) % 6)
+  {
+    case 0: dtype = HEXEN_MT_DIRT1; break;
+    case 1: dtype = HEXEN_MT_DIRT2; break;
+    case 2: dtype = HEXEN_MT_DIRT3; break;
+    case 3: dtype = HEXEN_MT_DIRT4; break;
+    case 4: dtype = HEXEN_MT_DIRT5; break;
+    case 5: dtype = HEXEN_MT_DIRT6; break;
+  }
+  mo = P_SpawnMobj(x, y, z, dtype);
+  if (mo)
+    mo->momz = P_Random(pr_heretic) << 10;
+}
+
+/* Thrust spikes.  special1 holds the dirt clump mobj, special2 the raise
+ * speed; args[0] marks raised, args[1] marks bloody. */
+void A_ThrustInitUp(mobj_t *actor)
+{
+  actor->special2.i = 5;        /* raise speed */
+  actor->special_args[0] = 1;   /* mark as up */
+  actor->floorclip = 0;
+  actor->flags = MF_SOLID;
+  actor->flags2 = MF2_NOTELEPORT | MF2_FOOTCLIP;
+  P_SetTarget(&actor->special1.m, NULL);
+}
+
+void A_ThrustInitDn(mobj_t *actor)
+{
+  mobj_t *mo;
+
+  actor->special2.i = 5;        /* raise speed */
+  actor->special_args[0] = 0;   /* mark as down */
+  actor->floorclip = actor->info->height;
+  actor->flags = 0;
+  actor->flags2 = MF2_NOTELEPORT | MF2_FOOTCLIP | MF2_DONTDRAW;
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_DIRTCLUMP);
+  P_SetTarget(&actor->special1.m, mo);
+}
+
+void A_ThrustRaise(mobj_t *actor)
+{
+  if (A_RaiseMobj(actor))
+  {                             /* reached its target height */
+    actor->special_args[0] = 1;
+    if (actor->special_args[1])
+      P_SetMobjStateNF(actor, HEXEN_S_BTHRUSTINIT2_1);
+    else
+      P_SetMobjStateNF(actor, HEXEN_S_THRUSTINIT2_1);
+  }
+
+  /* lose the dirt clump */
+  if (actor->floorclip < actor->height && actor->special1.m)
+  {
+    P_RemoveMobj(actor->special1.m);
+    P_SetTarget(&actor->special1.m, NULL);
+  }
+
+  /* spawn some dirt */
+  if (P_Random(pr_heretic) < 40)
+    P_SpawnDirt(actor, actor->radius);
+  actor->special2.i++;          /* increase raise speed */
+}
+
+void A_ThrustLower(mobj_t *actor)
+{
+  if (A_SinkMobj(actor))
+  {
+    actor->special_args[0] = 0;
+    if (actor->special_args[1])
+      P_SetMobjStateNF(actor, HEXEN_S_BTHRUSTINIT1_1);
+    else
+      P_SetMobjStateNF(actor, HEXEN_S_THRUSTINIT1_1);
+  }
+}
+
+void A_ThrustBlock(mobj_t *actor)
+{
+  actor->flags |= MF_SOLID;
+}
+
+void A_ThrustImpale(mobj_t *actor)
+{
+  /* impale all shootables in radius */
+  PIT_ThrustSpike(actor);
+}
+
+/* A smashed Suit of Armor bursts into chunks and may free an item. */
+void A_SoAExplode(mobj_t *actor)
+{
+  mobj_t *mo = NULL;
+  int i;
+  int r1, r2, r3;
+
+  for (i = 0; i < 10; i++)
+  {
+    r1 = P_Random(pr_heretic);
+    r2 = P_Random(pr_heretic);
+    r3 = P_Random(pr_heretic);
+    mo = P_SpawnMobj(actor->x + (r3 - 128) * (1<<12),
+                     actor->y + (r2 - 128) * (1<<12),
+                     actor->z + (r1 * actor->height / 256),
+                     HEXEN_MT_ZARMORCHUNK);
+    if (mo)
+    {
+      P_SetMobjState(mo, mo->info->spawnstate + i);
+      mo->momz = ((P_Random(pr_heretic) & 7) + 5) * FRACUNIT;
+      mo->momx = P_SubRandom() << (FRACBITS - 6);
+      mo->momy = P_SubRandom() << (FRACBITS - 6);
+    }
+  }
+  if (actor->special_args[0])
+  {                             /* spawn an item */
+    P_SpawnMobj(actor->x, actor->y, actor->z,
+                TranslateThingType[actor->special_args[0]]);
+  }
+  S_StartSound(mo, hexen_sfx_suitofarmor_break);
+  P_RemoveMobj(actor);
+}
+
+/* Flechette.  The Cleric's bag becomes a drifting poison cloud
+ * (A_PoisonBagInit) that lives a randomized two dozen tics
+ * (A_PoisonBagCheck) while bobbing and splashing 4/40 gas damage
+ * (A_PoisonBagDamage via A_Explode); the Fighter's grenade and the
+ * Mage's firebomb count down with A_CheckThrowBomb, settling with
+ * A_SmBounce and expiring through A_BounceCheck. */
+void A_PoisonBagInit(mobj_t *actor)
+{
+  mobj_t *mo;
+
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z + 28 * FRACUNIT,
+                   HEXEN_MT_POISONCLOUD);
+  if (!mo)
+    return;
+  mo->momx = 1;                 /* missiles must move to touch things */
+  mo->special1.i = 24 + (P_Random(pr_heretic) & 7);
+  mo->special2.i = 0;
+  P_SetTarget(&mo->target, actor->target);
+  mo->radius = 20 * FRACUNIT;
+  mo->height = 30 * FRACUNIT;
+  mo->flags &= ~MF_NOCLIP;
+}
+
+void A_PoisonBagCheck(mobj_t *actor)
+{
+  if (!--actor->special1.i)
+    P_SetMobjState(actor, HEXEN_S_POISONCLOUD_X1);
+}
+
+void A_PoisonBagDamage(mobj_t *actor)
+{
+  int bobIndex;
+
+  A_Explode(actor);
+
+  bobIndex = actor->special2.i;
+  actor->z += FloatBobOffsets[bobIndex] >> 4;
+  actor->special2.i = (bobIndex + 1) & 63;
+}
+
+void A_CheckThrowBomb(mobj_t *actor)
+{
+  if (D_abs(actor->momx) < 3 * FRACUNIT / 2 &&
+      D_abs(actor->momy) < 3 * FRACUNIT / 2 &&
+      actor->momz < 2 * FRACUNIT &&
+      actor->state == &states[HEXEN_S_THROWINGBOMB6])
+  {
+    P_SetMobjState(actor, HEXEN_S_THROWINGBOMB7);
+    actor->z = actor->floorz;
+    actor->momz = 0;
+    actor->flags2 &= ~MF2_FLOORBOUNCE;
+    actor->flags &= ~MF_MISSILE;
+  }
+  if (!--actor->health)
+    P_SetMobjState(actor, actor->info->deathstate);
+}
+
+void A_SmBounce(mobj_t *actor)
+{
+  /* give some more momentum (x, y and z) */
+  actor->z = actor->floorz + FRACUNIT;
+  actor->momz = (2 * FRACUNIT) + (P_Random(pr_heretic) << 10);
+  actor->momx = (P_Random(pr_heretic) % 3) << FRACBITS;
+  actor->momy = (P_Random(pr_heretic) % 3) << FRACBITS;
+}
+
+void A_NoGravity(mobj_t *actor)
+{
+  actor->flags |= MF_NOGRAVITY;
+}
+
+/* Hexen bell (Winnowing Hall's clocktower).  The bell is a hanging
+ * MF_SPAWNCEILING|MF_NOGRAVITY decoration whose "death" is its ring: when
+ * shot, P_KillMobj corpse-ifies it like any other shootable - it strips
+ * MF_NOGRAVITY and quarters the height - and the long BBLL ring animation
+ * plays.  A_BellReset1 on the first ring frame immediately restores the
+ * hanging flags so the bell never actually falls, and A_BellReset2 on the
+ * final frame re-arms it as a shootable with fresh health so it can be rung
+ * again. */
+void A_BellReset1(mobj_t *actor)
+{
+  actor->flags |= MF_NOGRAVITY;
+  actor->height <<= 2;
+}
+
+void A_BellReset2(mobj_t *actor)
+{
+  actor->flags |= MF_SHOOTABLE;
+  actor->flags &= ~MF_CORPSE;
+  actor->health = 5;
+}
+
+/* Hexen breakable pottery.  ZPottery decorations are shootable; on death
+ * they run A_PotteryExplode, flinging a handful of pottery-bit gibs.  Each
+ * bit picks a random resting sprite (A_PotteryChooseBit) and lingers until
+ * a player looks at it, then crumbles (A_PotteryCheck). */
+void A_PotteryExplode(mobj_t *actor)
+{
+  mobj_t *mo = NULL;
+  int     i;
+
+  for (i = (P_Random(pr_heretic) & 3) + 3; i; i--)
+  {
+    mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_POTTERYBIT1);
+    if (!mo)
+      continue;
+    P_SetMobjState(mo, mo->info->spawnstate + (P_Random(pr_heretic) % 5));
+    mo->momz = ((P_Random(pr_heretic) & 7) + 5) * (3 * FRACUNIT / 4);
+    mo->momx = P_SubRandom() << (FRACBITS - 6);
+    mo->momy = P_SubRandom() << (FRACBITS - 6);
+  }
+  if (mo)
+    S_StartSound(mo, hexen_sfx_pottery_explode);
+  /* (Pots scripted to drop an item on break need the ACS thing-spawn args,
+   * which aren't wired up here; the plain shatter is unaffected.) */
+  P_RemoveMobj(actor);
+}
+
+void A_PotteryChooseBit(mobj_t *actor)
+{
+  P_SetMobjState(actor, actor->info->deathstate + (P_Random(pr_heretic) % 5) + 1);
+  actor->tics = 256 + (P_Random(pr_heretic) << 1);
+}
+
+void A_PotteryCheck(mobj_t *actor)
+{
+  mobj_t *pmo;
+
+  if (netgame)
+    return;
+  pmo = players[consoleplayer].mo;
+  if (pmo && P_CheckSight(actor, pmo) &&
+      (abs((int)R_PointToAngle2(pmo->x, pmo->y, actor->x, actor->y)
+           - (int)pmo->angle) <= ANG45))
+  {
+    /* a player is looking at the bit: back up one state (the waiting frame) */
+    P_SetMobjState(actor, (statenum_t)(actor->state - &states[0] - 1));
+  }
+}
+
+/* Hexen tree leaf-spawner.  ZLeafSpawner things (the trees) periodically
+ * fling a few leaf sprites out on the wind; each leaf drifts, occasionally
+ * gets another upward gust (A_LeafThrust), and fades out (A_LeafCheck). */
+void A_LeafSpawn(mobj_t *actor)
+{
+  mobj_t *mo;
+  int     i;
+
+  for (i = (P_Random(pr_heretic) & 3) + 1; i; i--)
+  {
+    fixed_t x = actor->x + (P_SubRandom() << 14);
+    fixed_t y = actor->y + (P_SubRandom() << 14);
+    fixed_t z = actor->z + (P_Random(pr_heretic) << 14);
+    mobjtype_t type = HEXEN_MT_LEAF1 + (P_Random(pr_heretic) & 1);
+
+    mo = P_SpawnMobj(x, y, z, type);
+    if (mo)
+    {
+      P_ThrustMobj(mo, actor->angle, (P_Random(pr_heretic) << 9) + 3 * FRACUNIT);
+      P_SetTarget(&mo->target, actor);
+      mo->special1.i = 0;
+    }
+  }
+}
+
+void A_LeafThrust(mobj_t *actor)
+{
+  if (P_Random(pr_heretic) > 96)
+    return;
+  actor->momz += (P_Random(pr_heretic) << 9) + FRACUNIT;
+}
+
+void A_LeafCheck(mobj_t *actor)
+{
+  actor->special1.i++;
+  if (actor->special1.i >= 20)
+  {
+    P_SetMobjState(actor, HEXEN_S_NULL);
+    return;
+  }
+  if (P_Random(pr_heretic) > 64)
+  {
+    if (!actor->momx && !actor->momy && actor->target)
+      P_ThrustMobj(actor, actor->target->angle,
+                   (P_Random(pr_heretic) << 9) + FRACUNIT);
+    return;
+  }
+  P_SetMobjState(actor, HEXEN_S_LEAF1_8);
+  actor->momz = (P_Random(pr_heretic) << 9) + FRACUNIT;
+  if (actor->target)
+    P_ThrustMobj(actor, actor->target->angle,
+                 (P_Random(pr_heretic) << 9) + 2 * FRACUNIT);
+  actor->flags |= MF_MISSILE;
+}
+
+void A_EttinAttack(mobj_t *actor)
+{
+  if (!actor->target)
+    return;
+  if (P_CheckMeleeRange(actor))
+    P_DamageMobj(actor->target, actor, actor, HX_HITDICE(2));
+}
+
+/* Hexen: the Centaur raises its shield when hurt, becoming briefly
+ * invulnerable and reflecting missiles, then either lowers it or lunges
+ * into melee.  A_SetReflective also makes the Centaur invulnerable; the
+ * generic forms are shared with other reflective Hexen actors. */
+void A_SetInvulnerable(mobj_t *actor)
+{
+  actor->flags2 |= MF2_INVULNERABLE;
+}
+
+void A_UnSetInvulnerable(mobj_t *actor)
+{
+  actor->flags2 &= ~MF2_INVULNERABLE;
+}
+
+void A_SetReflective(mobj_t *actor)
+{
+  actor->flags2 |= MF2_REFLECTIVE;
+  if (actor->type == HEXEN_MT_CENTAUR || actor->type == HEXEN_MT_CENTAURLEADER)
+    A_SetInvulnerable(actor);
+}
+
+void A_UnSetReflective(mobj_t *actor)
+{
+  actor->flags2 &= ~MF2_REFLECTIVE;
+  if (actor->type == HEXEN_MT_CENTAUR || actor->type == HEXEN_MT_CENTAURLEADER)
+    A_UnSetInvulnerable(actor);
+}
+
+void A_CentaurDefend(mobj_t *actor)
+{
+  A_FaceTarget(actor);
+  if (P_CheckMeleeRange(actor) && P_Random(pr_heretic) < 32)
+  {
+    A_UnSetInvulnerable(actor);
+    P_SetMobjState(actor, actor->info->meleestate);
+  }
+}
+
+void A_CentaurAttack(mobj_t *actor)
+{
+  if (!actor->target)
+    return;
+  if (P_CheckMeleeRange(actor))
+    P_DamageMobj(actor->target, actor, actor, P_Random(pr_heretic) % 7 + 3);
+}
+
+void A_WraithMelee(mobj_t *actor)
+{
+  int amount;
+
+  if (!actor->target)
+    return;
+  /* steal health from the target */
+  if (P_CheckMeleeRange(actor) && (P_Random(pr_heretic) < 220))
+  {
+    amount = HX_HITDICE(2);
+    P_DamageMobj(actor->target, actor, actor, amount);
+    actor->health += amount;
+  }
+}
+
+void A_WraithMissile(mobj_t *actor)
+{
+  mobj_t *mo;
+
+  if (!actor->target)
+    return;
+  mo = P_SpawnMissile(actor, actor->target, HEXEN_MT_WRAITHFX1);
+  if (mo)
+    S_StartSound(actor, hexen_sfx_wraith_missile_fire);
+}
+
+void A_WraithInit(mobj_t *actor)
+{
+  actor->z += 48 * FRACUNIT;
+  actor->special1.i = 0;            /* index into FloatBobOffsets */
+}
+
+void A_WraithRaiseInit(mobj_t *actor)
+{
+  actor->flags2 &= ~MF2_DONTDRAW;
+  actor->flags2 &= ~MF2_NONSHOOTABLE;
+  actor->flags |= MF_SHOOTABLE | MF_SOLID;
+  actor->floorclip = actor->info->height;
+}
+
+void A_WraithRaise(mobj_t *actor)
+{
+  if (A_RaiseMobj(actor))
+  {
+    /* reached its target height */
+    P_SetMobjState(actor, HEXEN_S_WRAITH_CHASE1);
+  }
+  P_SpawnDirt(actor, actor->radius);
+}
+
+void A_WraithFX2(mobj_t *actor)
+{
+  mobj_t *mo;
+  angle_t angle;
+  int i;
+
+  for (i = 0; i < 2; i++)
+  {
+    mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_WRAITHFX2);
+    if (mo)
+    {
+      if (P_Random(pr_heretic) < 128)
+        angle = actor->angle + (P_Random(pr_heretic) << 22);
+      else
+        angle = actor->angle - (P_Random(pr_heretic) << 22);
+      mo->momz = 0;
+      mo->momx = FixedMul((P_Random(pr_heretic) << 7) + FRACUNIT,
+                          finecosine[angle >> ANGLETOFINESHIFT]);
+      mo->momy = FixedMul((P_Random(pr_heretic) << 7) + FRACUNIT,
+                          finesine[angle >> ANGLETOFINESHIFT]);
+      P_SetTarget(&mo->target, actor);
+      mo->floorclip = 10 * FRACUNIT;
+    }
+  }
+}
+
+void A_WraithFX3(mobj_t *actor)
+{
+  mobj_t *mo;
+  int numdropped = P_Random(pr_heretic) % 15;
+  int i;
+
+  for (i = 0; i < numdropped; i++)
+  {
+    mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_WRAITHFX3);
+    if (mo)
+    {
+      mo->x += (P_Random(pr_heretic) - 128) * 2048;
+      mo->y += (P_Random(pr_heretic) - 128) * 2048;
+      mo->z += (P_Random(pr_heretic) << 10);
+      P_SetTarget(&mo->target, actor);
+    }
+  }
+}
+
+void A_WraithFX4(mobj_t *actor)
+{
+  mobj_t *mo;
+  int chance = P_Random(pr_heretic);
+  int spawn4, spawn5;
+
+  if (chance < 10)
+  {
+    spawn4 = TRUE;
+    spawn5 = FALSE;
+  }
+  else if (chance < 20)
+  {
+    spawn4 = FALSE;
+    spawn5 = TRUE;
+  }
+  else if (chance < 25)
+  {
+    spawn4 = TRUE;
+    spawn5 = TRUE;
+  }
+  else
+  {
+    spawn4 = FALSE;
+    spawn5 = FALSE;
+  }
+
+  if (spawn4)
+  {
+    mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_WRAITHFX4);
+    if (mo)
+    {
+      mo->x += (P_Random(pr_heretic) - 128) * 4096;
+      mo->y += (P_Random(pr_heretic) - 128) * 4096;
+      mo->z += (P_Random(pr_heretic) << 10);
+      P_SetTarget(&mo->target, actor);
+    }
+  }
+  if (spawn5)
+  {
+    mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_WRAITHFX5);
+    if (mo)
+    {
+      mo->x += (P_Random(pr_heretic) - 128) * 2048;
+      mo->y += (P_Random(pr_heretic) - 128) * 2048;
+      mo->z += (P_Random(pr_heretic) << 10);
+      P_SetTarget(&mo->target, actor);
+    }
+  }
+}
+
+void A_WraithLook(mobj_t *actor)
+{
+  A_Look(actor);
+}
+
+void A_WraithChase(mobj_t *actor)
+{
+  int weaveindex = actor->special1.i;
+
+  actor->z += FloatBobOffsets[weaveindex];
+  actor->special1.i = (weaveindex + 2) & 63;
+  A_Chase(actor);
+  A_WraithFX4(actor);
+}
+
+void A_CentaurAttack2(mobj_t *actor)
+{
+  if (!actor->target)
+    return;
+  P_SpawnMissile(actor, actor->target, HEXEN_MT_CENTAUR_FX);
+  S_StartSound(actor, hexen_sfx_centaurleader_attack);
+}
+
+void A_CentaurDropStuff(mobj_t *actor)
+{
+  mobj_t *mo;
+  angle_t angle;
+
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z + 45 * FRACUNIT,
+                   HEXEN_MT_CENTAUR_SHIELD);
+  if (mo)
+  {
+    angle = actor->angle + ANG90;
+    mo->momz = FRACUNIT * 8 + (P_Random(pr_heretic) << 10);
+    mo->momx = FixedMul(((P_Random(pr_heretic) - 128) * 2048) + FRACUNIT,
+                        finecosine[angle >> ANGLETOFINESHIFT]);
+    mo->momy = FixedMul(((P_Random(pr_heretic) - 128) * 2048) + FRACUNIT,
+                        finesine[angle >> ANGLETOFINESHIFT]);
+    P_SetTarget(&mo->target, actor);
+  }
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z + 45 * FRACUNIT,
+                   HEXEN_MT_CENTAUR_SWORD);
+  if (mo)
+  {
+    angle = actor->angle - ANG90;
+    mo->momz = FRACUNIT * 8 + (P_Random(pr_heretic) << 10);
+    mo->momx = FixedMul(((P_Random(pr_heretic) - 128) * 2048) + FRACUNIT,
+                        finecosine[angle >> ANGLETOFINESHIFT]);
+    mo->momy = FixedMul(((P_Random(pr_heretic) - 128) * 2048) + FRACUNIT,
+                        finesine[angle >> ANGLETOFINESHIFT]);
+    P_SetTarget(&mo->target, actor);
+  }
+}
+
+void A_SetShootable(mobj_t *actor)
+{
+  actor->flags2 &= ~MF2_NONSHOOTABLE;
+  actor->flags |= MF_SHOOTABLE;
+}
+
+void A_UnSetShootable(mobj_t *actor)
+{
+  actor->flags2 |= MF2_NONSHOOTABLE;
+  actor->flags &= ~MF_SHOOTABLE;
+}
+
+void A_SetAltShadow(mobj_t *actor)
+{
+  actor->flags &= ~MF_SHADOW;
+  actor->flags |= MF_ALTSHADOW;
+}
+
+void A_SpeedFade(mobj_t *actor)
+{
+  actor->flags |= MF_SHADOW;
+  actor->flags &= ~MF_ALTSHADOW;
+  if (actor->target)
+    actor->sprite = actor->target->sprite;
+}
+
+void A_DropMace(mobj_t *actor)
+{
+  mobj_t *mo;
+
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z + (actor->height >> 1),
+                   HEXEN_MT_ETTIN_MACE);
+  if (mo)
+  {
+    mo->momx = (P_Random(pr_heretic) - 128) * 2048;
+    mo->momy = (P_Random(pr_heretic) - 128) * 2048;
+    mo->momz = FRACUNIT * 10 + (P_Random(pr_heretic) << 10);
+    P_SetTarget(&mo->target, actor);
+  }
+}
+
+void A_CheckFloor(mobj_t *actor)
+{
+  if (actor->z <= actor->floorz)
+  {
+    actor->z = actor->floorz;
+    actor->flags2 &= ~MF2_LOGRAV;
+    P_SetMobjState(actor, actor->info->deathstate);
+  }
+}
+
+/* Hexen magic bridge: three balls orbit the (invisible) bridge thing. */
+int orbitTableX[256] = {
+    983025, 982725, 981825, 980340, 978255, 975600, 972330, 968490,
+    964065, 959070, 953475, 947325, 940590, 933300, 925440, 917025,
+    908055, 898545, 888495, 877905, 866775, 855135, 842985, 830310,
+    817155, 803490, 789360, 774735, 759660, 744120, 728130, 711690,
+    694845, 677565, 659880, 641805, 623340, 604500, 585285, 565725,
+    545820, 525600, 505050, 484200, 463065, 441645, 419955, 398010,
+    375840, 353430, 330810, 307995, 285000, 261825, 238485, 215010,
+    191400, 167685, 143865, 119955, 95970, 71940, 47850, 23745,
+    -375, -24495, -48600, -72690, -96720, -120705, -144600, -168420,
+    -192150, -215745, -239220, -262545, -285720, -308715, -331530, -354135,
+    -376530, -398700, -420630, -442320, -463725, -484860, -505695, -526230,
+    -546450, -566340, -585885, -605085, -623925, -642375, -660435, -678105,
+    -695370, -712215, -728625, -744600, -760125, -775200, -789795, -803925,
+    -817575, -830715, -843375, -855510, -867135, -878235, -888810, -898845,
+    -908340, -917295, -925695, -933540, -940815, -947520, -953670, -959235,
+    -964215, -968625, -972450, -975690, -978330, -980400, -981870, -982740,
+    -983025, -982725, -981825, -980340, -978255, -975600, -972330, -968490,
+    -964065, -959070, -953475, -947325, -940590, -933300, -925440, -917025,
+    -908055, -898545, -888495, -877905, -866775, -855135, -842985, -830310,
+    -817155, -803490, -789360, -774735, -759660, -744120, -728130, -711690,
+    -694845, -677565, -659880, -641805, -623340, -604485, -585285, -565725,
+    -545820, -525600, -505050, -484200, -463065, -441645, -419955, -398010,
+    -375840, -353430, -330810, -307995, -285000, -261825, -238485, -215010,
+    -191400, -167685, -143865, -119955, -95970, -71940, -47850, -23745,
+    375, 24495, 48600, 72690, 96720, 120705, 144600, 168420,
+    192150, 215745, 239220, 262545, 285720, 308715, 331530, 354135,
+    376530, 398700, 420630, 442320, 463725, 484860, 505695, 526230,
+    546450, 566340, 585885, 605085, 623925, 642375, 660435, 678105,
+    695370, 712215, 728625, 744600, 760125, 775200, 789795, 803925,
+    817575, 830715, 843375, 855510, 867135, 878235, 888810, 898845,
+    908340, 917295, 925695, 933540, 940815, 947520, 953670, 959235,
+    964215, 968625, 972450, 975690, 978330, 980400, 981870, 982740
+};
+
+int orbitTableY[256] = {
+    375, 24495, 48600, 72690, 96720, 120705, 144600, 168420,
+    192150, 215745, 239220, 262545, 285720, 308715, 331530, 354135,
+    376530, 398700, 420630, 442320, 463725, 484860, 505695, 526230,
+    546450, 566340, 585885, 605085, 623925, 642375, 660435, 678105,
+    695370, 712215, 728625, 744600, 760125, 775200, 789795, 803925,
+    817575, 830715, 843375, 855510, 867135, 878235, 888810, 898845,
+    908340, 917295, 925695, 933540, 940815, 947520, 953670, 959235,
+    964215, 968625, 972450, 975690, 978330, 980400, 981870, 982740,
+    983025, 982725, 981825, 980340, 978255, 975600, 972330, 968490,
+    964065, 959070, 953475, 947325, 940590, 933300, 925440, 917025,
+    908055, 898545, 888495, 877905, 866775, 855135, 842985, 830310,
+    817155, 803490, 789360, 774735, 759660, 744120, 728130, 711690,
+    694845, 677565, 659880, 641805, 623340, 604500, 585285, 565725,
+    545820, 525600, 505050, 484200, 463065, 441645, 419955, 398010,
+    375840, 353430, 330810, 307995, 285000, 261825, 238485, 215010,
+    191400, 167685, 143865, 119955, 95970, 71940, 47850, 23745,
+    -375, -24495, -48600, -72690, -96720, -120705, -144600, -168420,
+    -192150, -215745, -239220, -262545, -285720, -308715, -331530, -354135,
+    -376530, -398700, -420630, -442320, -463725, -484860, -505695, -526230,
+    -546450, -566340, -585885, -605085, -623925, -642375, -660435, -678105,
+    -695370, -712215, -728625, -744600, -760125, -775200, -789795, -803925,
+    -817575, -830715, -843375, -855510, -867135, -878235, -888810, -898845,
+    -908340, -917295, -925695, -933540, -940815, -947520, -953670, -959235,
+    -964215, -968625, -972450, -975690, -978330, -980400, -981870, -982740,
+    -983025, -982725, -981825, -980340, -978255, -975600, -972330, -968490,
+    -964065, -959070, -953475, -947325, -940590, -933300, -925440, -917025,
+    -908055, -898545, -888495, -877905, -866775, -855135, -842985, -830310,
+    -817155, -803490, -789360, -774735, -759660, -744120, -728130, -711690,
+    -694845, -677565, -659880, -641805, -623340, -604485, -585285, -565725,
+    -545820, -525600, -505050, -484200, -463065, -441645, -419955, -398010,
+    -375840, -353430, -330810, -307995, -285000, -261825, -238485, -215010,
+    -191400, -167685, -143865, -119955, -95970, -71940, -47850, -23745
+};
+
+void A_BridgeOrbit(mobj_t *actor)
+{
+  if (actor->target->special1.i)
+  {
+    /* The bridge is going away: S_NULL removes this ball, which also
+     * releases its target reference, so touching the mobj past this
+     * point is use-after-free (vanilla falls through onto the stale
+     * pointers and survives by accident; with reference-counted
+     * targets it would crash). */
+    P_SetMobjState(actor, HEXEN_S_NULL);
+    return;
+  }
+  actor->special_args[0] += 3;
+  actor->special_args[0] &= 0xff;
+  actor->x = actor->target->x + orbitTableX[actor->special_args[0]];
+  actor->y = actor->target->y + orbitTableY[actor->special_args[0]];
+  actor->z = actor->target->z;
+}
+
+void A_BridgeInit(mobj_t *actor)
+{
+  byte startangle;
+  mobj_t *ball1, *ball2, *ball3;
+  fixed_t cx, cy, cz;
+
+  cx = actor->x;
+  cy = actor->y;
+  cz = actor->z;
+  startangle = P_Random(pr_heretic);
+  actor->special1.i = 0;
+
+  /* spawn the orbit triad */
+  ball1 = P_SpawnMobj(cx, cy, cz, HEXEN_MT_BRIDGEBALL);
+  ball1->special_args[0] = startangle;
+  P_SetTarget(&ball1->target, actor);
+
+  ball2 = P_SpawnMobj(cx, cy, cz, HEXEN_MT_BRIDGEBALL);
+  ball2->special_args[0] = (startangle + 85) & 255;
+  P_SetTarget(&ball2->target, actor);
+
+  ball3 = P_SpawnMobj(cx, cy, cz, HEXEN_MT_BRIDGEBALL);
+  ball3->special_args[0] = (startangle + 170) & 255;
+  P_SetTarget(&ball3->target, actor);
+
+  A_BridgeOrbit(ball1);
+  A_BridgeOrbit(ball2);
+  A_BridgeOrbit(ball3);
+}
+
+/* Thing_Remove on a bridge: fade it out gracefully -- unsolid, the
+ * FREE_BRIDGE sequence, and the removal flag the orbiting balls watch. */
+void A_BridgeRemove(mobj_t *actor)
+{
+  actor->special1.i = true;     /* removing the bridge */
+  actor->flags &= ~MF_SOLID;
+  P_SetMobjState(actor, HEXEN_S_FREE_BRIDGE1);
+}
+
+void A_FlameCheck(mobj_t *actor)
+{
+  if (!actor->special_args[0]--)      /* called every 8 tics */
+    P_SetMobjState(actor, HEXEN_S_NULL);
+}
+
+void A_BatSpawnInit(mobj_t *actor)
+{
+  actor->special1.i = 0;              /* frequency count */
+}
+
+void A_BatSpawn(mobj_t *actor)
+{
+  mobj_t *mo;
+  int delta;
+  angle_t angle;
+
+  /* countdown until next spawn */
+  if (actor->special1.i-- > 0)
+    return;
+  actor->special1.i = actor->special_args[0];   /* reset frequency count */
+
+  delta = actor->special_args[1];
+  if (delta == 0)
+    delta = 1;
+  angle = actor->angle +
+          (((P_Random(pr_heretic) % delta) - (delta >> 1)) << 24);
+  mo = P_SpawnMissileAngle(actor, HEXEN_MT_BAT, angle, 0);
+  if (mo)
+  {
+    mo->special_args[0] = P_Random(pr_heretic) & 63;  /* floatbob index */
+    mo->special_args[4] = actor->special_args[4];     /* turn degrees */
+    mo->special2.i = actor->special_args[3] << 3;     /* lifetime */
+    P_SetTarget(&mo->target, actor);
+  }
+}
+
+void A_BatMove(mobj_t *actor)
+{
+  angle_t newangle;
+  fixed_t speed;
+
+  if (actor->special2.i < 0)
+    P_SetMobjState(actor, actor->info->deathstate);
+  actor->special2.i -= 2;             /* called every 2 tics */
+
+  if (P_Random(pr_heretic) < 128)
+    newangle = actor->angle + ANG1 * actor->special_args[4];
+  else
+    newangle = actor->angle - ANG1 * actor->special_args[4];
+
+  /* adjust momentum vector to new direction */
+  newangle >>= ANGLETOFINESHIFT;
+  speed = FixedMul(actor->info->speed, P_Random(pr_heretic) << 10);
+  actor->momx = FixedMul(speed, finecosine[newangle]);
+  actor->momy = FixedMul(speed, finesine[newangle]);
+
+  if (P_Random(pr_heretic) < 15)
+    S_StartSound(actor, hexen_sfx_bat_scream);
+
+  /* handle Z movement */
+  actor->z = actor->target->z + 2 * FloatBobOffsets[actor->special_args[0]];
+  actor->special_args[0] = (actor->special_args[0] + 3) & 63;
+}
+
+void A_IceGuyLook(mobj_t *actor)
+{
+  fixed_t dist;
+  fixed_t an;
+
+  A_Look(actor);
+  if (P_Random(pr_heretic) < 64)
+  {
+    dist = ((P_Random(pr_heretic) - 128) * actor->radius) >> 7;
+    an = (actor->angle + ANG90) >> ANGLETOFINESHIFT;
+
+    P_SpawnMobj(actor->x + FixedMul(dist, finecosine[an]),
+                actor->y + FixedMul(dist, finesine[an]),
+                actor->z + 60 * FRACUNIT,
+                HEXEN_MT_ICEGUY_WISP1 + (P_Random(pr_heretic) & 1));
+  }
+}
+
+void A_IceGuyChase(mobj_t *actor)
+{
+  fixed_t dist;
+  fixed_t an;
+  mobj_t *mo;
+
+  A_Chase(actor);
+  if (P_Random(pr_heretic) < 128)
+  {
+    dist = ((P_Random(pr_heretic) - 128) * actor->radius) >> 7;
+    an = (actor->angle + ANG90) >> ANGLETOFINESHIFT;
+
+    mo = P_SpawnMobj(actor->x + FixedMul(dist, finecosine[an]),
+                     actor->y + FixedMul(dist, finesine[an]),
+                     actor->z + 60 * FRACUNIT,
+                     HEXEN_MT_ICEGUY_WISP1 + (P_Random(pr_heretic) & 1));
+    if (mo)
+    {
+      mo->momx = actor->momx;
+      mo->momy = actor->momy;
+      mo->momz = actor->momz;
+      P_SetTarget(&mo->target, actor);
+    }
+  }
+}
+
+void A_IceGuyAttack(mobj_t *actor)
+{
+  fixed_t an;
+
+  if (!actor->target)
+    return;
+  an = (actor->angle + ANG90) >> ANGLETOFINESHIFT;
+  P_SpawnMissileXYZ(actor->x + FixedMul(actor->radius >> 1, finecosine[an]),
+                    actor->y + FixedMul(actor->radius >> 1, finesine[an]),
+                    actor->z + 40 * FRACUNIT, actor, actor->target,
+                    HEXEN_MT_ICEGUY_FX);
+  an = (actor->angle - ANG90) >> ANGLETOFINESHIFT;
+  P_SpawnMissileXYZ(actor->x + FixedMul(actor->radius >> 1, finecosine[an]),
+                    actor->y + FixedMul(actor->radius >> 1, finesine[an]),
+                    actor->z + 40 * FRACUNIT, actor, actor->target,
+                    HEXEN_MT_ICEGUY_FX);
+  S_StartSound(actor, actor->info->attacksound);
+}
+
+void A_IceGuyMissilePuff(mobj_t *actor)
+{
+  P_SpawnMobj(actor->x, actor->y, actor->z + 2 * FRACUNIT,
+              HEXEN_MT_ICEFX_PUFF);
+}
+
+void A_IceGuyDie(mobj_t *actor)
+{
+  actor->momx = 0;
+  actor->momy = 0;
+  actor->momz = 0;
+  actor->height <<= 2;
+  A_FreezeDeathChunks(actor);
+}
+
+void A_IceGuyMissileExplode(mobj_t *actor)
+{
+  mobj_t *mo;
+  unsigned int i;
+
+  for (i = 0; i < 8; i++)
+  {
+    mo = P_SpawnMissileAngle(actor, HEXEN_MT_ICEGUY_FX2, i * ANG45,
+                             -(3 * FRACUNIT) / 10);
+    if (mo)
+      P_SetTarget(&mo->target, actor->target);
+  }
+}
+
+/*
+ * Heresiarch (Sorcerer boss).
+ *
+ * Sorcerer variables: special1 = angle of ball 1 (others relative);
+ * special2 = which ball type to stop at; args[0] = defense time;
+ * args[1] = full rotations since stopping mode; args[2] = target orbit
+ * speed; args[3] = movement mode; args[4] = current orbit speed.
+ * Ball variables: special1 = previous angle (for woosh); special2 =
+ * rapid-fire countdown (FX4); args[0] = suppress bounce sound.
+ */
+
+dbool P_TestMobjLocation(mobj_t *mobj);  /* heretic/p_action.c */
+
+#ifndef ANGLE_MAX
+#define ANGLE_MAX 0xffffffffu
+#endif
+
+#define SORCBALL_INITIAL_SPEED     7
+#define SORCBALL_TERMINAL_SPEED    25
+#define SORCBALL_SPEED_ROTATIONS   5
+#define SORC_DEFENSE_TIME          255
+#define SORC_DEFENSE_HEIGHT        45
+#define BOUNCE_TIME_UNIT           (35 / 2)
+#define SORCFX4_RAPIDFIRE_TIME     (6 * 3)   /* 3 seconds */
+#define SORCFX4_SPREAD_ANGLE       20
+
+#define SORC_DECELERATE    0
+#define SORC_ACCELERATE    1
+#define SORC_STOPPING      2
+#define SORC_FIRESPELL     3
+#define SORC_STOPPED       4
+#define SORC_NORMAL        5
+#define SORC_FIRING_SPELL  6
+
+#define BALL1_ANGLEOFFSET  0
+#define BALL2_ANGLEOFFSET  (ANGLE_MAX / 3)
+#define BALL3_ANGLEOFFSET  ((ANGLE_MAX / 3) * 2)
+
+void A_SorcUpdateBallAngle(mobj_t *actor)
+{
+  if (actor->type == HEXEN_MT_SORCBALL1)
+    actor->target->special1.i += ANG1 * actor->target->special_args[4];
+}
+
+void A_AccelBalls(mobj_t *actor)
+{
+  mobj_t *sorc = actor->target;
+
+  if (sorc->special_args[4] < sorc->special_args[2])
+    sorc->special_args[4]++;
+  else
+  {
+    sorc->special_args[3] = SORC_NORMAL;
+    if (sorc->special_args[4] >= SORCBALL_TERMINAL_SPEED)
+    {
+      /* reached terminal velocity - stop balls */
+      A_StopBalls(sorc);
+    }
+  }
+}
+
+void A_DecelBalls(mobj_t *actor)
+{
+  mobj_t *sorc = actor->target;
+
+  if (sorc->special_args[4] > sorc->special_args[2])
+    sorc->special_args[4]--;
+  else
+    sorc->special_args[3] = SORC_NORMAL;
+}
+
+void A_SpeedBalls(mobj_t *actor)
+{
+  actor->special_args[3] = SORC_ACCELERATE;        /* speed mode */
+  actor->special_args[2] = SORCBALL_TERMINAL_SPEED;
+}
+
+void A_SlowBalls(mobj_t *actor)
+{
+  actor->special_args[3] = SORC_DECELERATE;        /* slow mode */
+  actor->special_args[2] = SORCBALL_INITIAL_SPEED;
+}
+
+void A_StopBalls(mobj_t *actor)
+{
+  int chance = P_Random(pr_heretic);
+
+  actor->special_args[3] = SORC_STOPPING;
+  actor->special_args[1] = 0;                      /* reset rotation counter */
+
+  if ((actor->special_args[0] <= 0) && (chance < 200))
+    actor->special2.i = HEXEN_MT_SORCBALL2;        /* blue */
+  else if ((actor->health < (actor->info->spawnhealth >> 1)) &&
+           (chance < 200))
+    actor->special2.i = HEXEN_MT_SORCBALL3;        /* green */
+  else
+    actor->special2.i = HEXEN_MT_SORCBALL1;        /* yellow */
+}
+
+void A_SorcOffense1(mobj_t *actor)
+{
+  mobj_t *mo;
+  angle_t ang1, ang2;
+  mobj_t *parent = actor->target;
+
+  ang1 = actor->angle + ANG1 * 70;
+  ang2 = actor->angle - ANG1 * 70;
+  mo = P_SpawnMissileAngle(parent, HEXEN_MT_SORCFX1, ang1, 0);
+  if (mo)
+  {
+    P_SetTarget(&mo->target, parent);
+    P_SetTarget(&mo->special1.m, parent->target);
+    mo->special_args[4] = BOUNCE_TIME_UNIT;
+    mo->special_args[3] = 15;          /* bounce time in seconds */
+  }
+  mo = P_SpawnMissileAngle(parent, HEXEN_MT_SORCFX1, ang2, 0);
+  if (mo)
+  {
+    P_SetTarget(&mo->target, parent);
+    P_SetTarget(&mo->special1.m, parent->target);
+    mo->special_args[4] = BOUNCE_TIME_UNIT;
+    mo->special_args[3] = 15;
+  }
+}
+
+void A_SorcOffense2(mobj_t *actor)
+{
+  angle_t ang1;
+  mobj_t *mo;
+  int delta, index;
+  mobj_t *parent = actor->target;
+  mobj_t *dest = parent->target;
+  int dist;
+
+  index = actor->special_args[4] << 5;
+  actor->special_args[4] += 15;
+  actor->special_args[4] &= 0xff;
+  delta = (finesine[index]) * SORCFX4_SPREAD_ANGLE;
+  delta = (delta >> FRACBITS) * ANG1;
+  ang1 = actor->angle + delta;
+  mo = P_SpawnMissileAngle(parent, HEXEN_MT_SORCFX4, ang1, 0);
+  if (mo)
+  {
+    mo->special2.i = 35 * 5 / 2;       /* 5 seconds */
+    dist = P_AproxDistance(dest->x - mo->x, dest->y - mo->y);
+    dist = dist / mo->info->speed;
+    if (dist < 1)
+      dist = 1;
+    mo->momz = (dest->z - mo->z) / dist;
+  }
+}
+
+void A_CastSorcererSpell(mobj_t *actor)
+{
+  mobj_t *mo;
+  int spell = actor->type;
+  angle_t ang1, ang2;
+  fixed_t z;
+  mobj_t *parent = actor->target;
+
+  S_StartSound(NULL, hexen_sfx_sorcerer_spellcast);
+
+  /* put sorcerer into throw spell animation */
+  if (parent->health > 0)
+    P_SetMobjStateNF(parent, HEXEN_S_SORC_ATTACK4);
+
+  switch (spell)
+  {
+    case HEXEN_MT_SORCBALL1:           /* offensive */
+      A_SorcOffense1(actor);
+      break;
+    case HEXEN_MT_SORCBALL2:           /* defensive */
+      z = parent->z - parent->floorclip + SORC_DEFENSE_HEIGHT * FRACUNIT;
+      mo = P_SpawnMobj(actor->x, actor->y, z, HEXEN_MT_SORCFX2);
+      parent->flags2 |= MF2_REFLECTIVE | MF2_INVULNERABLE;
+      parent->special_args[0] = SORC_DEFENSE_TIME;
+      if (mo)
+        P_SetTarget(&mo->target, parent);
+      break;
+    case HEXEN_MT_SORCBALL3:           /* reinforcements */
+      ang1 = actor->angle - ANG45;
+      ang2 = actor->angle + ANG45;
+      if (actor->health < (actor->info->spawnhealth / 3))
+      {                                /* spawn 2 at a time */
+        mo = P_SpawnMissileAngle(parent, HEXEN_MT_SORCFX3, ang1,
+                                 4 * FRACUNIT);
+        if (mo)
+          P_SetTarget(&mo->target, parent);
+        mo = P_SpawnMissileAngle(parent, HEXEN_MT_SORCFX3, ang2,
+                                 4 * FRACUNIT);
+        if (mo)
+          P_SetTarget(&mo->target, parent);
+      }
+      else
+      {
+        if (P_Random(pr_heretic) < 128)
+          ang1 = ang2;
+        mo = P_SpawnMissileAngle(parent, HEXEN_MT_SORCFX3, ang1,
+                                 4 * FRACUNIT);
+        if (mo)
+          P_SetTarget(&mo->target, parent);
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+void A_SorcSpinBalls(mobj_t *actor)
+{
+  mobj_t *mo;
+  fixed_t z;
+
+  A_SlowBalls(actor);
+  actor->special_args[0] = 0;          /* currently no defense */
+  actor->special_args[3] = SORC_NORMAL;
+  actor->special_args[4] = SORCBALL_INITIAL_SPEED;
+  actor->special1.i = ANG1;
+  z = actor->z - actor->floorclip + actor->info->height;
+
+  mo = P_SpawnMobj(actor->x, actor->y, z, HEXEN_MT_SORCBALL1);
+  if (mo)
+  {
+    P_SetTarget(&mo->target, actor);
+    mo->special2.i = SORCFX4_RAPIDFIRE_TIME;
+  }
+  mo = P_SpawnMobj(actor->x, actor->y, z, HEXEN_MT_SORCBALL2);
+  if (mo)
+    P_SetTarget(&mo->target, actor);
+  mo = P_SpawnMobj(actor->x, actor->y, z, HEXEN_MT_SORCBALL3);
+  if (mo)
+    P_SetTarget(&mo->target, actor);
+}
+
+void A_SorcBallOrbit(mobj_t *actor)
+{
+  int x, y;
+  angle_t angle, baseangle;
+  int mode = actor->target->special_args[3];
+  mobj_t *parent = actor->target;
+  int dist = parent->radius - (actor->radius << 1);
+  angle_t prevangle = actor->special1.i;
+
+  if (actor->target->health <= 0)
+    P_SetMobjState(actor, actor->info->painstate);
+
+  baseangle = (angle_t) parent->special1.i;
+  switch (actor->type)
+  {
+    case HEXEN_MT_SORCBALL1:
+      angle = baseangle + BALL1_ANGLEOFFSET;
+      break;
+    case HEXEN_MT_SORCBALL2:
+      angle = baseangle + BALL2_ANGLEOFFSET;
+      break;
+    case HEXEN_MT_SORCBALL3:
+      angle = baseangle + BALL3_ANGLEOFFSET;
+      break;
+    default:
+      I_Error("corrupted sorcerer");
+      return;
+  }
+  actor->angle = angle;
+  angle >>= ANGLETOFINESHIFT;
+
+  switch (mode)
+  {
+    case SORC_NORMAL:                  /* balls rotating normally */
+      A_SorcUpdateBallAngle(actor);
+      break;
+    case SORC_DECELERATE:
+      A_DecelBalls(actor);
+      A_SorcUpdateBallAngle(actor);
+      break;
+    case SORC_ACCELERATE:
+      A_AccelBalls(actor);
+      A_SorcUpdateBallAngle(actor);
+      break;
+    case SORC_STOPPING:
+      if ((parent->special2.i == actor->type) &&
+          (parent->special_args[1] > SORCBALL_SPEED_ROTATIONS) &&
+          (abs((int) angle - (int) (parent->angle >> ANGLETOFINESHIFT)) <
+           (30 << 5)))
+      {
+        /* can stop now */
+        actor->target->special_args[3] = SORC_FIRESPELL;
+        actor->target->special_args[4] = 0;
+        /* set angle so ball angle == sorcerer angle */
+        switch (actor->type)
+        {
+          case HEXEN_MT_SORCBALL1:
+            parent->special1.i = (int) (parent->angle - BALL1_ANGLEOFFSET);
+            break;
+          case HEXEN_MT_SORCBALL2:
+            parent->special1.i = (int) (parent->angle - BALL2_ANGLEOFFSET);
+            break;
+          case HEXEN_MT_SORCBALL3:
+            parent->special1.i = (int) (parent->angle - BALL3_ANGLEOFFSET);
+            break;
+          default:
+            break;
+        }
+      }
+      else
+        A_SorcUpdateBallAngle(actor);
+      break;
+    case SORC_FIRESPELL:               /* casting spell */
+      if (parent->special2.i == actor->type)
+      {
+        /* put sorcerer into special throw spell anim */
+        if (parent->health > 0)
+          P_SetMobjStateNF(parent, HEXEN_S_SORC_ATTACK1);
+
+        if (actor->type == HEXEN_MT_SORCBALL1 &&
+            P_Random(pr_heretic) < 200)
+        {
+          S_StartSound(NULL, hexen_sfx_sorcerer_spellcast);
+          actor->special2.i = SORCFX4_RAPIDFIRE_TIME;
+          actor->special_args[4] = 128;
+          parent->special_args[3] = SORC_FIRING_SPELL;
+        }
+        else
+        {
+          A_CastSorcererSpell(actor);
+          parent->special_args[3] = SORC_STOPPED;
+        }
+      }
+      break;
+    case SORC_FIRING_SPELL:
+      if (parent->special2.i == actor->type)
+      {
+        if (actor->special2.i-- <= 0)
+        {
+          /* done rapid firing */
+          parent->special_args[3] = SORC_STOPPED;
+          /* back to orbit balls */
+          if (parent->health > 0)
+            P_SetMobjStateNF(parent, HEXEN_S_SORC_ATTACK4);
+        }
+        else
+        {
+          /* do rapid fire spell */
+          A_SorcOffense2(actor);
+        }
+      }
+      break;
+    case SORC_STOPPED:                 /* balls stopped */
+    default:
+      break;
+  }
+
+  if ((angle < prevangle) &&
+      (parent->special_args[4] == SORCBALL_TERMINAL_SPEED))
+  {
+    parent->special_args[1]++;         /* bump rotation counter */
+    /* completed full rotation - make woosh sound */
+    S_StartSound(actor, hexen_sfx_sorcerer_ballwoosh);
+  }
+  actor->special1.i = angle;           /* set previous angle */
+  x = parent->x + FixedMul(dist, finecosine[angle]);
+  y = parent->y + FixedMul(dist, finesine[angle]);
+  actor->x = x;
+  actor->y = y;
+  actor->z = parent->z - parent->floorclip + parent->info->height;
+}
+
+void A_SorcBossAttack(mobj_t *actor)
+{
+  actor->special_args[3] = SORC_ACCELERATE;
+  actor->special_args[2] = SORCBALL_INITIAL_SPEED;
+}
+
+void A_SpawnFizzle(mobj_t *actor)
+{
+  fixed_t x, y, z;
+  fixed_t dist = 5 * FRACUNIT;
+  angle_t angle = actor->angle >> ANGLETOFINESHIFT;
+  fixed_t speed = actor->info->speed;
+  angle_t rangle;
+  mobj_t *mo;
+  int ix;
+
+  x = actor->x + FixedMul(dist, finecosine[angle]);
+  y = actor->y + FixedMul(dist, finesine[angle]);
+  z = actor->z - actor->floorclip + (actor->height >> 1);
+  for (ix = 0; ix < 5; ix++)
+  {
+    mo = P_SpawnMobj(x, y, z, HEXEN_MT_SORCSPARK1);
+    if (mo)
+    {
+      rangle = angle + ((P_Random(pr_heretic) % 5) << 1);
+      mo->momx = FixedMul(P_Random(pr_heretic) % speed, finecosine[rangle]);
+      mo->momy = FixedMul(P_Random(pr_heretic) % speed, finesine[rangle]);
+      mo->momz = FRACUNIT * 2;
+    }
+  }
+}
+
+void A_BounceCheck(mobj_t *actor)
+{
+  if (actor->special_args[4]-- <= 0)
+  {
+    if (actor->special_args[3]-- <= 0)
+    {
+      P_SetMobjState(actor, actor->info->deathstate);
+      switch (actor->type)
+      {
+        case HEXEN_MT_SORCBALL1:
+        case HEXEN_MT_SORCBALL2:
+        case HEXEN_MT_SORCBALL3:
+          S_StartSound(NULL, hexen_sfx_sorcerer_bigballexplode);
+          break;
+        case HEXEN_MT_SORCFX1:
+          S_StartSound(NULL, hexen_sfx_sorcerer_headscream);
+          break;
+        default:
+          break;
+      }
+    }
+    else
+      actor->special_args[4] = BOUNCE_TIME_UNIT;
+  }
+}
+
+void A_SorcFX1Seek(mobj_t *actor)
+{
+  A_BounceCheck(actor);
+  P_SeekerMissile(actor, &actor->special1.m, ANG1 * 2, ANG1 * 6);
+}
+
+void A_SorcFX2Split(mobj_t *actor)
+{
+  mobj_t *mo;
+
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_SORCFX2);
+  if (mo)
+  {
+    P_SetTarget(&mo->target, actor->target);
+    mo->special_args[0] = 0;           /* CW */
+    mo->special1.i = actor->angle;
+    P_SetMobjStateNF(mo, HEXEN_S_SORCFX2_ORBIT1);
+  }
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_SORCFX2);
+  if (mo)
+  {
+    P_SetTarget(&mo->target, actor->target);
+    mo->special_args[0] = 1;           /* CCW */
+    mo->special1.i = actor->angle;
+    P_SetMobjStateNF(mo, HEXEN_S_SORCFX2_ORBIT1);
+  }
+  P_SetMobjStateNF(actor, HEXEN_S_NULL);
+}
+
+void A_SorcFX2Orbit(mobj_t *actor)
+{
+  angle_t angle;
+  fixed_t x, y, z;
+  mobj_t *parent = actor->target;
+  fixed_t dist = parent->info->radius;
+
+  if ((parent->health <= 0) ||         /* sorcerer is dead */
+      (!parent->special_args[0]))      /* time expired */
+  {
+    P_SetMobjStateNF(actor, actor->info->deathstate);
+    parent->special_args[0] = 0;
+    parent->flags2 &= ~MF2_REFLECTIVE;
+    parent->flags2 &= ~MF2_INVULNERABLE;
+  }
+
+  if (actor->special_args[0] && (parent->special_args[0]-- <= 0))
+  {                                    /* time expired */
+    P_SetMobjStateNF(actor, actor->info->deathstate);
+    parent->special_args[0] = 0;
+    parent->flags2 &= ~MF2_REFLECTIVE;
+  }
+
+  /* move to new position based on angle */
+  if (actor->special_args[0])          /* counter clock-wise */
+  {
+    actor->special1.i += ANG1 * 10;
+    angle = ((angle_t) actor->special1.i) >> ANGLETOFINESHIFT;
+    x = parent->x + FixedMul(dist, finecosine[angle]);
+    y = parent->y + FixedMul(dist, finesine[angle]);
+    z = parent->z - parent->floorclip + SORC_DEFENSE_HEIGHT * FRACUNIT;
+    z += FixedMul(15 * FRACUNIT, finecosine[angle]);
+    /* spawn trailer */
+    P_SpawnMobj(x, y, z, HEXEN_MT_SORCFX2_T1);
+  }
+  else                                 /* clock wise */
+  {
+    actor->special1.i -= ANG1 * 10;
+    angle = ((angle_t) actor->special1.i) >> ANGLETOFINESHIFT;
+    x = parent->x + FixedMul(dist, finecosine[angle]);
+    y = parent->y + FixedMul(dist, finesine[angle]);
+    z = parent->z - parent->floorclip + SORC_DEFENSE_HEIGHT * FRACUNIT;
+    z += FixedMul(20 * FRACUNIT, finesine[angle]);
+    /* spawn trailer */
+    P_SpawnMobj(x, y, z, HEXEN_MT_SORCFX2_T1);
+  }
+
+  actor->x = x;
+  actor->y = y;
+  actor->z = z;
+}
+
+void A_SpawnBishop(mobj_t *actor)
+{
+  mobj_t *mo;
+
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_BISHOP);
+  if (mo)
+  {
+    if (!P_TestMobjLocation(mo))
+      P_SetMobjState(mo, HEXEN_S_NULL);
+  }
+  P_SetMobjState(actor, HEXEN_S_NULL);
+}
+
+void A_SorcererBishopEntry(mobj_t *actor)
+{
+  P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_SORCFX3_EXPLOSION);
+  S_StartSound(actor, actor->info->seesound);
+}
+
+void A_SorcFX4Check(mobj_t *actor)
+{
+  if (actor->special2.i-- <= 0)
+    P_SetMobjStateNF(actor, actor->info->deathstate);
+}
+
+void A_SorcBallPop(mobj_t *actor)
+{
+  S_StartSound(NULL, hexen_sfx_sorcerer_ballpop);
+  actor->flags &= ~MF_NOGRAVITY;
+  actor->flags2 |= MF2_LOGRAV;
+  actor->momx = ((P_Random(pr_heretic) % 10) - 5) * FRACUNIT;
+  actor->momy = ((P_Random(pr_heretic) % 10) - 5) * FRACUNIT;
+  actor->momz = (2 + (P_Random(pr_heretic) % 3)) << FRACBITS;
+  actor->special2.i = 4 * FRACUNIT;    /* initial bounce factor */
+  actor->special_args[4] = BOUNCE_TIME_UNIT;
+  actor->special_args[3] = 5;          /* bounce time in seconds */
+}
+
+/*
+ * Korax (the final boss).
+ *
+ * Korax variables: special1 = last teleport destination; special2 = set
+ * once the "below half health" script has run.
+ * Reserved scripts: 249 (below-half), 250-254 (command), 255 (death).
+ * Reserved TIDs: 245 (Korax), 248 (first teleport), 249 (teleport),
+ * 250-254 (command scripts), 255 (death spawn spots).
+ */
+
+#define KORAX_SPIRIT_LIFETIME   (5 * (35 / 5))   /* 5 seconds */
+#define KORAX_COMMAND_HEIGHT    (120 * FRACUNIT)
+#define KORAX_COMMAND_OFFSET    (27 * FRACUNIT)
+
+#define KORAX_TID                (245)
+#define KORAX_FIRST_TELEPORT_TID (248)
+#define KORAX_TELEPORT_TID       (249)
+
+#ifndef ANG60
+#define ANG60 (ANG180 / 3)
+#endif
+
+static void KoraxFire1(mobj_t *actor, int type);
+static void KoraxFire2(mobj_t *actor, int type);
+static void KoraxFire3(mobj_t *actor, int type);
+static void KoraxFire4(mobj_t *actor, int type);
+static void KoraxFire5(mobj_t *actor, int type);
+static void KoraxFire6(mobj_t *actor, int type);
+static void KSpiritInit(mobj_t *spirit, mobj_t *korax);
+
+void A_KoraxChase(mobj_t *actor)
+{
+  mobj_t *spot;
+  int lastfound;
+  int args[3] = {0, 0, 0};
+
+  if ((!actor->special2.i) &&
+      (actor->health <= (actor->info->spawnhealth / 2)))
+  {
+    lastfound = 0;
+    spot = P_FindMobjFromTID(KORAX_FIRST_TELEPORT_TID, &lastfound);
+    if (spot)
+      P_HexenTeleport(actor, spot->x, spot->y, spot->angle, TRUE);
+
+    CheckACSPresent(249);
+    P_StartACS(249, 0, args, actor, NULL, 0);
+    actor->special2.i = 1;             /* don't run again */
+
+    return;
+  }
+
+  if (!actor->target)
+    return;
+  if (P_Random(pr_heretic) < 30)
+  {
+    P_SetMobjState(actor, actor->info->missilestate);
+  }
+  else if (P_Random(pr_heretic) < 30)
+  {
+    S_StartSound(NULL, hexen_sfx_korax_active);
+  }
+
+  /* teleport away */
+  if (actor->health < (actor->info->spawnhealth >> 1))
+  {
+    if (P_Random(pr_heretic) < 10)
+    {
+      lastfound = actor->special1.i;
+      spot = P_FindMobjFromTID(KORAX_TELEPORT_TID, &lastfound);
+      actor->special1.i = lastfound;
+      if (spot)
+        P_HexenTeleport(actor, spot->x, spot->y, spot->angle, TRUE);
+    }
+  }
+}
+
+void A_KoraxStep(mobj_t *actor)
+{
+  A_Chase(actor);
+}
+
+void A_KoraxStep2(mobj_t *actor)
+{
+  S_StartSound(NULL, hexen_sfx_korax_step);
+  A_Chase(actor);
+}
+
+static void KSpiritInit(mobj_t *spirit, mobj_t *korax)
+{
+  int i;
+  mobj_t *tail, *next;
+
+  spirit->health = KORAX_SPIRIT_LIFETIME;
+
+  P_SetTarget(&spirit->special1.m, korax);   /* swarm around korax */
+  spirit->special2.i = 32 + (P_Random(pr_heretic) & 7); /* float bob index */
+  spirit->special_args[0] = 10;        /* initial turn value */
+  spirit->special_args[1] = 0;         /* initial look angle */
+
+  /* spawn a tail for spirit */
+  tail = P_SpawnMobj(spirit->x, spirit->y, spirit->z, HEXEN_MT_HOLY_TAIL);
+  P_SetTarget(&tail->special2.m, spirit);    /* parent */
+  for (i = 1; i < 3; i++)
+  {
+    next = P_SpawnMobj(spirit->x, spirit->y, spirit->z, HEXEN_MT_HOLY_TAIL);
+    P_SetMobjState(next, next->info->spawnstate + 1);
+    P_SetTarget(&tail->special1.m, next);
+    tail = next;
+  }
+  P_SetTarget(&tail->special1.m, NULL);      /* last tail bit */
+}
+
+void A_KoraxBonePop(mobj_t *actor)
+{
+  mobj_t *mo;
+  int args[5];
+
+  args[0] = args[1] = args[2] = args[3] = args[4] = 0;
+
+  /* spawn 6 spirits equalangularly */
+  mo = P_SpawnMissileAngle(actor, HEXEN_MT_KORAX_SPIRIT1, ANG60 * 0,
+                           5 * FRACUNIT);
+  if (mo)
+    KSpiritInit(mo, actor);
+  mo = P_SpawnMissileAngle(actor, HEXEN_MT_KORAX_SPIRIT2, ANG60 * 1,
+                           5 * FRACUNIT);
+  if (mo)
+    KSpiritInit(mo, actor);
+  mo = P_SpawnMissileAngle(actor, HEXEN_MT_KORAX_SPIRIT3, ANG60 * 2,
+                           5 * FRACUNIT);
+  if (mo)
+    KSpiritInit(mo, actor);
+  mo = P_SpawnMissileAngle(actor, HEXEN_MT_KORAX_SPIRIT4, ANG60 * 3,
+                           5 * FRACUNIT);
+  if (mo)
+    KSpiritInit(mo, actor);
+  mo = P_SpawnMissileAngle(actor, HEXEN_MT_KORAX_SPIRIT5, ANG60 * 4,
+                           5 * FRACUNIT);
+  if (mo)
+    KSpiritInit(mo, actor);
+  mo = P_SpawnMissileAngle(actor, HEXEN_MT_KORAX_SPIRIT6, ANG60 * 5,
+                           5 * FRACUNIT);
+  if (mo)
+    KSpiritInit(mo, actor);
+
+  CheckACSPresent(255);
+  P_StartACS(255, 0, args, actor, NULL, 0);  /* death script */
+}
+
+void A_KoraxDecide(mobj_t *actor)
+{
+  if (P_Random(pr_heretic) < 220)
+    P_SetMobjState(actor, HEXEN_S_KORAX_MISSILE1);
+  else
+    P_SetMobjState(actor, HEXEN_S_KORAX_COMMAND1);
+}
+
+void A_KoraxMissile(mobj_t *actor)
+{
+  int type = P_Random(pr_heretic) % 6;
+  int sound = 0;
+
+  S_StartSound(actor, hexen_sfx_korax_attack);
+
+  switch (type)
+  {
+    case 0:
+      type = HEXEN_MT_WRAITHFX1;
+      sound = hexen_sfx_wraith_missile_fire;
+      break;
+    case 1:
+      type = HEXEN_MT_DEMONFX1;
+      sound = hexen_sfx_demon_missile_fire;
+      break;
+    case 2:
+      type = HEXEN_MT_DEMON2FX1;
+      sound = hexen_sfx_demon_missile_fire;
+      break;
+    case 3:
+      type = HEXEN_MT_FIREDEMON_FX6;
+      sound = hexen_sfx_fired_attack;
+      break;
+    case 4:
+      type = HEXEN_MT_CENTAUR_FX;
+      sound = hexen_sfx_centaurleader_attack;
+      break;
+    case 5:
+      type = HEXEN_MT_SERPENTFX;
+      sound = hexen_sfx_centaurleader_attack;
+      break;
+  }
+
+  /* fire all 6 missiles at once */
+  S_StartSound(NULL, sound);
+  KoraxFire1(actor, type);
+  KoraxFire2(actor, type);
+  KoraxFire3(actor, type);
+  KoraxFire4(actor, type);
+  KoraxFire5(actor, type);
+  KoraxFire6(actor, type);
+}
+
+void A_KoraxCommand(mobj_t *actor)
+{
+  int args[5];
+  fixed_t x, y, z;
+  angle_t ang;
+  int numcommands;
+
+  S_StartSound(actor, hexen_sfx_korax_command);
+
+  /* shoot stream of lightning to ceiling */
+  ang = (actor->angle - ANG90) >> ANGLETOFINESHIFT;
+  x = actor->x + FixedMul(KORAX_COMMAND_OFFSET, finecosine[ang]);
+  y = actor->y + FixedMul(KORAX_COMMAND_OFFSET, finesine[ang]);
+  z = actor->z + KORAX_COMMAND_HEIGHT;
+  P_SpawnMobj(x, y, z, HEXEN_MT_KORAX_BOLT);
+
+  args[0] = args[1] = args[2] = args[3] = args[4] = 0;
+
+  if (actor->health <= (actor->info->spawnhealth >> 1))
+    numcommands = 5;
+  else
+    numcommands = 4;
+
+  switch (P_Random(pr_heretic) % numcommands)
+  {
+    case 0:
+      CheckACSPresent(250);
+      P_StartACS(250, 0, args, actor, NULL, 0);
+      break;
+    case 1:
+      CheckACSPresent(251);
+      P_StartACS(251, 0, args, actor, NULL, 0);
+      break;
+    case 2:
+      CheckACSPresent(252);
+      P_StartACS(252, 0, args, actor, NULL, 0);
+      break;
+    case 3:
+      CheckACSPresent(253);
+      P_StartACS(253, 0, args, actor, NULL, 0);
+      break;
+    case 4:
+      CheckACSPresent(254);
+      P_StartACS(254, 0, args, actor, NULL, 0);
+      break;
+  }
+}
+
+#define KORAX_DELTAANGLE          (85 * ANG1)
+#define KORAX_ARM_EXTENSION_SHORT (40 * FRACUNIT)
+#define KORAX_ARM_EXTENSION_LONG  (55 * FRACUNIT)
+
+#define KORAX_ARM1_HEIGHT (108 * FRACUNIT)
+#define KORAX_ARM2_HEIGHT (82 * FRACUNIT)
+#define KORAX_ARM3_HEIGHT (54 * FRACUNIT)
+#define KORAX_ARM4_HEIGHT (104 * FRACUNIT)
+#define KORAX_ARM5_HEIGHT (86 * FRACUNIT)
+#define KORAX_ARM6_HEIGHT (53 * FRACUNIT)
+
+/*
+ * Arm projectiles; arm positions numbered:
+ *   1 top left      4 top right
+ *   2 middle left   5 middle right
+ *   3 lower left    6 lower right
+ */
+
+static void KoraxFire1(mobj_t *actor, int type)
+{
+  angle_t ang;
+  fixed_t x, y, z;
+
+  ang = (actor->angle - KORAX_DELTAANGLE) >> ANGLETOFINESHIFT;
+  x = actor->x + FixedMul(KORAX_ARM_EXTENSION_SHORT, finecosine[ang]);
+  y = actor->y + FixedMul(KORAX_ARM_EXTENSION_SHORT, finesine[ang]);
+  z = actor->z - actor->floorclip + KORAX_ARM1_HEIGHT;
+  P_SpawnKoraxMissile(x, y, z, actor, actor->target, type);
+}
+
+static void KoraxFire2(mobj_t *actor, int type)
+{
+  angle_t ang;
+  fixed_t x, y, z;
+
+  ang = (actor->angle - KORAX_DELTAANGLE) >> ANGLETOFINESHIFT;
+  x = actor->x + FixedMul(KORAX_ARM_EXTENSION_LONG, finecosine[ang]);
+  y = actor->y + FixedMul(KORAX_ARM_EXTENSION_LONG, finesine[ang]);
+  z = actor->z - actor->floorclip + KORAX_ARM2_HEIGHT;
+  P_SpawnKoraxMissile(x, y, z, actor, actor->target, type);
+}
+
+static void KoraxFire3(mobj_t *actor, int type)
+{
+  angle_t ang;
+  fixed_t x, y, z;
+
+  ang = (actor->angle - KORAX_DELTAANGLE) >> ANGLETOFINESHIFT;
+  x = actor->x + FixedMul(KORAX_ARM_EXTENSION_LONG, finecosine[ang]);
+  y = actor->y + FixedMul(KORAX_ARM_EXTENSION_LONG, finesine[ang]);
+  z = actor->z - actor->floorclip + KORAX_ARM3_HEIGHT;
+  P_SpawnKoraxMissile(x, y, z, actor, actor->target, type);
+}
+
+static void KoraxFire4(mobj_t *actor, int type)
+{
+  angle_t ang;
+  fixed_t x, y, z;
+
+  ang = (actor->angle + KORAX_DELTAANGLE) >> ANGLETOFINESHIFT;
+  x = actor->x + FixedMul(KORAX_ARM_EXTENSION_SHORT, finecosine[ang]);
+  y = actor->y + FixedMul(KORAX_ARM_EXTENSION_SHORT, finesine[ang]);
+  z = actor->z - actor->floorclip + KORAX_ARM4_HEIGHT;
+  P_SpawnKoraxMissile(x, y, z, actor, actor->target, type);
+}
+
+static void KoraxFire5(mobj_t *actor, int type)
+{
+  angle_t ang;
+  fixed_t x, y, z;
+
+  ang = (actor->angle + KORAX_DELTAANGLE) >> ANGLETOFINESHIFT;
+  x = actor->x + FixedMul(KORAX_ARM_EXTENSION_LONG, finecosine[ang]);
+  y = actor->y + FixedMul(KORAX_ARM_EXTENSION_LONG, finesine[ang]);
+  z = actor->z - actor->floorclip + KORAX_ARM5_HEIGHT;
+  P_SpawnKoraxMissile(x, y, z, actor, actor->target, type);
+}
+
+static void KoraxFire6(mobj_t *actor, int type)
+{
+  angle_t ang;
+  fixed_t x, y, z;
+
+  ang = (actor->angle + KORAX_DELTAANGLE) >> ANGLETOFINESHIFT;
+  x = actor->x + FixedMul(KORAX_ARM_EXTENSION_LONG, finecosine[ang]);
+  y = actor->y + FixedMul(KORAX_ARM_EXTENSION_LONG, finesine[ang]);
+  z = actor->z - actor->floorclip + KORAX_ARM6_HEIGHT;
+  P_SpawnKoraxMissile(x, y, z, actor, actor->target, type);
+}
+
+void A_KSpiritWeave(mobj_t *actor)
+{
+  fixed_t newX, newY;
+  int weaveXY, weaveZ;
+  int angle;
+
+  weaveXY = actor->special2.i >> 16;
+  weaveZ = actor->special2.i & 0xFFFF;
+  angle = (actor->angle + ANG90) >> ANGLETOFINESHIFT;
+  newX = actor->x - FixedMul(finecosine[angle],
+                             FloatBobOffsets[weaveXY] << 2);
+  newY = actor->y - FixedMul(finesine[angle],
+                             FloatBobOffsets[weaveXY] << 2);
+  weaveXY = (weaveXY + (P_Random(pr_heretic) % 5)) & 63;
+  newX += FixedMul(finecosine[angle], FloatBobOffsets[weaveXY] << 2);
+  newY += FixedMul(finesine[angle], FloatBobOffsets[weaveXY] << 2);
+  P_TryMove(actor, newX, newY, FALSE);
+  actor->z -= FloatBobOffsets[weaveZ] << 1;
+  weaveZ = (weaveZ + (P_Random(pr_heretic) % 5)) & 63;
+  actor->z += FloatBobOffsets[weaveZ] << 1;
+  actor->special2.i = weaveZ + (weaveXY << 16);
+}
+
+static void A_KSpiritSeeker(mobj_t *actor, angle_t thresh, angle_t turnMax)
+{
+  int dir;
+  int dist;
+  angle_t delta;
+  angle_t angle;
+  mobj_t *target;
+  fixed_t newZ;
+  fixed_t deltaZ;
+
+  target = actor->special1.m;
+  if (target == NULL)
+    return;
+  dir = P_FaceMobj(actor, target, &delta);
+  if (delta > thresh)
+  {
+    delta >>= 1;
+    if (delta > turnMax)
+      delta = turnMax;
+  }
+  if (dir)
+  {                                    /* turn clockwise */
+    actor->angle += delta;
+  }
+  else
+  {                                    /* turn counter clockwise */
+    actor->angle -= delta;
+  }
+  angle = actor->angle >> ANGLETOFINESHIFT;
+  actor->momx = FixedMul(actor->info->speed, finecosine[angle]);
+  actor->momy = FixedMul(actor->info->speed, finesine[angle]);
+
+  if (!(leveltime & 15)
+      || actor->z > target->z + (target->info->height)
+      || actor->z + actor->height < target->z)
+  {
+    newZ = target->z + ((P_Random(pr_heretic) * target->info->height) >> 8);
+    deltaZ = newZ - actor->z;
+    if (abs(deltaZ) > 15 * FRACUNIT)
+    {
+      if (deltaZ > 0)
+        deltaZ = 15 * FRACUNIT;
+      else
+        deltaZ = -15 * FRACUNIT;
+    }
+    dist = P_AproxDistance(target->x - actor->x, target->y - actor->y);
+    dist = dist / actor->info->speed;
+    if (dist < 1)
+      dist = 1;
+    actor->momz = deltaZ / dist;
+  }
+}
+
+void A_KSpiritRoam(mobj_t *actor)
+{
+  if (actor->health-- <= 0)
+  {
+    S_StartSound(actor, hexen_sfx_spirit_die);
+    P_SetMobjState(actor, HEXEN_S_KSPIRIT_DEATH1);
+  }
+  else
+  {
+    if (actor->special1.m)
+    {
+      A_KSpiritSeeker(actor, actor->special_args[0] * ANG1,
+                      actor->special_args[0] * ANG1 * 2);
+    }
+    A_KSpiritWeave(actor);
+    if (P_Random(pr_heretic) < 50)
+    {
+      S_StartSound(NULL, hexen_sfx_spirit_active);
+    }
+  }
+}
+
+void A_KBolt(mobj_t *actor)
+{
+  /* countdown lifetime */
+  if (actor->special1.i-- <= 0)
+    P_SetMobjState(actor, HEXEN_S_NULL);
+}
+
+#define KORAX_BOLT_HEIGHT   (48 * FRACUNIT)
+#define KORAX_BOLT_LIFETIME 3
+
+void A_KBoltRaise(mobj_t *actor)
+{
+  mobj_t *mo;
+  fixed_t z;
+
+  /* spawn a child upward */
+  z = actor->z + KORAX_BOLT_HEIGHT;
+
+  if ((z + KORAX_BOLT_HEIGHT) < actor->ceilingz)
+  {
+    mo = P_SpawnMobj(actor->x, actor->y, z, HEXEN_MT_KORAX_BOLT);
+    if (mo)
+      mo->special1.i = KORAX_BOLT_LIFETIME;
+  }
+}
+
+/*
+ * Morphed monsters (pigs).  special1 = remaining morph tics, special2 =
+ * the original monster type to restore.
+ */
+
+dbool P_UpdateMorphedMonster(mobj_t *actor, int tics)
+{
+  mobj_t *fog;
+  fixed_t x;
+  fixed_t y;
+  fixed_t z;
+  mobjtype_t moType;
+  mobj_t *mo;
+  mobj_t oldMonster;
+
+  actor->special1.i -= tics;
+  if (actor->special1.i > 0)
+    return FALSE;
+  moType = actor->special2.i;
+  switch (moType)
+  {
+    case HEXEN_MT_WRAITHB:             /* these must remain morphed */
+    case HEXEN_MT_SERPENT:
+    case HEXEN_MT_SERPENTLEADER:
+    case HEXEN_MT_MINOTAUR:
+      return FALSE;
+    default:
+      break;
+  }
+  x = actor->x;
+  y = actor->y;
+  z = actor->z;
+  oldMonster = *actor;                 /* save pig vars */
+
+  P_RemoveMobjFromTIDList(actor);
+  P_SetMobjState(actor, HEXEN_S_FREETARGMOBJ);
+  mo = P_SpawnMobj(x, y, z, moType);
+  if (P_TestMobjLocation(mo) == FALSE)
+  {                                    /* didn't fit */
+    P_RemoveMobj(mo);
+    mo = P_SpawnMobj(x, y, z, oldMonster.type);
+    mo->angle = oldMonster.angle;
+    mo->flags = oldMonster.flags;
+    mo->health = oldMonster.health;
+    P_SetTarget(&mo->target, oldMonster.target);
+    mo->special = oldMonster.special;
+    mo->special1.i = 5 * 35;           /* next try in 5 seconds */
+    mo->special2.i = moType;
+    mo->tid = oldMonster.tid;
+    memcpy(mo->special_args, oldMonster.special_args,
+           sizeof(mo->special_args));
+    P_InsertMobjIntoTIDList(mo, oldMonster.tid);
+    return FALSE;
+  }
+  mo->angle = oldMonster.angle;
+  P_SetTarget(&mo->target, oldMonster.target);
+  mo->tid = oldMonster.tid;
+  mo->special = oldMonster.special;
+  memcpy(mo->special_args, oldMonster.special_args,
+         sizeof(mo->special_args));
+  P_InsertMobjIntoTIDList(mo, oldMonster.tid);
+  fog = P_SpawnMobj(x, y, z + TELEFOGHEIGHT, HEXEN_MT_TFOG);
+  S_StartSound(fog, hexen_sfx_teleport);
+  return TRUE;
+}
+
+void A_PigLook(mobj_t *actor)
+{
+  if (P_UpdateMorphedMonster(actor, 10))
+    return;
+  A_Look(actor);
+}
+
+void A_PigChase(mobj_t *actor)
+{
+  if (P_UpdateMorphedMonster(actor, 3))
+    return;
+  A_Chase(actor);
+}
+
+void A_PigAttack(mobj_t *actor)
+{
+  if (P_UpdateMorphedMonster(actor, 18))
+    return;
+  if (!actor->target)
+    return;
+  if (P_CheckMeleeRange(actor))
+  {
+    P_DamageMobj(actor->target, actor, actor, 2 + (P_Random(pr_heretic) & 1));
+    S_StartSound(actor, hexen_sfx_pig_attack);
+  }
+}
+
+void A_PigPain(mobj_t *actor)
+{
+  A_Pain(actor);
+  if (actor->z <= actor->floorz)
+    actor->momz = (7 * FRACUNIT) / 2;
+}
+
+/*
+ * Death Wyvern.  The dragon flies a circuit of map spots: special1 holds
+ * the current destination spot, and each spot's args list the TIDs of the
+ * spots reachable from it.
+ */
+
+static void DragonSeek(mobj_t *actor, angle_t thresh, angle_t turnMax)
+{
+  int dir;
+  int dist;
+  angle_t delta;
+  angle_t angle;
+  mobj_t *target;
+  int search;
+  int i;
+  int bestArg;
+  angle_t bestAngle;
+  angle_t angleToSpot, angleToTarget;
+  mobj_t *mo;
+
+  target = actor->special1.m;
+  if (target == NULL)
+    return;
+  dir = P_FaceMobj(actor, target, &delta);
+  if (delta > thresh)
+  {
+    delta >>= 1;
+    if (delta > turnMax)
+      delta = turnMax;
+  }
+  if (dir)
+  {                                    /* turn clockwise */
+    actor->angle += delta;
+  }
+  else
+  {                                    /* turn counter clockwise */
+    actor->angle -= delta;
+  }
+  angle = actor->angle >> ANGLETOFINESHIFT;
+  actor->momx = FixedMul(actor->info->speed, finecosine[angle]);
+  actor->momy = FixedMul(actor->info->speed, finesine[angle]);
+  if (actor->z + actor->height < target->z
+      || target->z + target->height < actor->z)
+  {
+    dist = P_AproxDistance(target->x - actor->x, target->y - actor->y);
+    dist = dist / actor->info->speed;
+    if (dist < 1)
+      dist = 1;
+    actor->momz = (target->z - actor->z) / dist;
+  }
+  else
+  {
+    dist = P_AproxDistance(target->x - actor->x, target->y - actor->y);
+    dist = dist / actor->info->speed;
+  }
+  if (target->flags & MF_SHOOTABLE && P_Random(pr_heretic) < 64)
+  {                  /* attack the destination mobj if it's attackable */
+    mobj_t *oldTarget;
+
+    if (abs((int) actor->angle -
+            (int) R_PointToAngle2(actor->x, actor->y,
+                                  target->x, target->y)) < ANG45 / 2)
+    {
+      oldTarget = actor->target;
+      actor->target = target;
+      if (P_CheckMeleeRange(actor))
+      {
+        P_DamageMobj(actor->target, actor, actor, HX_HITDICE(10));
+        S_StartSound(actor, hexen_sfx_dragon_attack);
+      }
+      else if (P_Random(pr_heretic) < 128 && P_CheckMissileRange(actor))
+      {
+        P_SpawnMissile(actor, target, HEXEN_MT_DRAGON_FX);
+        S_StartSound(actor, hexen_sfx_dragon_attack);
+      }
+      actor->target = oldTarget;
+    }
+  }
+  if (dist < 4)
+  {                                    /* hit the target thing */
+    if (actor->target && P_Random(pr_heretic) < 200)
+    {
+      bestArg = -1;
+      bestAngle = ANGLE_MAX;
+      angleToTarget = R_PointToAngle2(actor->x, actor->y,
+                                      actor->target->x, actor->target->y);
+      for (i = 0; i < 5; i++)
+      {
+        int mo_x, mo_y;
+        if (!target->special_args[i])
+          continue;
+        search = -1;
+        mo = P_FindMobjFromTID(target->special_args[i], &search);
+        /* fix wyvern + porkalator bug */
+        if (mo == NULL)
+        {
+          lprintf(LO_WARN,
+                  "DragonSeek: P_FindMobjFromTID() returned NULL mobj!\n");
+          mo_x = 0;
+          mo_y = 0;
+        }
+        else
+        {
+          mo_x = mo->x;
+          mo_y = mo->y;
+        }
+        angleToSpot = R_PointToAngle2(actor->x, actor->y, mo_x, mo_y);
+        if ((angle_t) abs((int) angleToSpot - (int) angleToTarget) <
+            bestAngle)
+        {
+          bestAngle = abs((int) angleToSpot - (int) angleToTarget);
+          bestArg = i;
+        }
+      }
+      if (bestArg != -1)
+      {
+        search = -1;
+        P_SetTarget(&actor->special1.m,
+                    P_FindMobjFromTID(target->special_args[bestArg],
+                                      &search));
+      }
+    }
+    else
+    {
+      do
+      {
+        i = (P_Random(pr_heretic) >> 2) % 5;
+      }
+      while (!target->special_args[i]);
+      search = -1;
+      P_SetTarget(&actor->special1.m,
+                  P_FindMobjFromTID(target->special_args[i], &search));
+    }
+  }
+}
+
+void A_DragonInitFlight(mobj_t *actor)
+{
+  int search;
+
+  search = -1;
+  do
+  {            /* find the first thing with a tid identical to the dragon's */
+    P_SetTarget(&actor->special1.m,
+                P_FindMobjFromTID(actor->tid, &search));
+    if (search == -1)
+    {
+      P_SetMobjState(actor, actor->info->spawnstate);
+      return;
+    }
+  }
+  while (actor->special1.m == actor);
+  P_RemoveMobjFromTIDList(actor);
+}
+
+void A_DragonFlight(mobj_t *actor)
+{
+  angle_t angle;
+
+  DragonSeek(actor, 4 * ANG1, 8 * ANG1);
+  if (actor->target)
+  {
+    if (!(actor->target->flags & MF_SHOOTABLE))
+    {                                  /* target died */
+      P_SetTarget(&actor->target, NULL);
+      return;
+    }
+    angle = R_PointToAngle2(actor->x, actor->y, actor->target->x,
+                            actor->target->y);
+    if (abs((int) actor->angle - (int) angle) < ANG45 / 2
+        && P_CheckMeleeRange(actor))
+    {
+      P_DamageMobj(actor->target, actor, actor, HX_HITDICE(8));
+      S_StartSound(actor, hexen_sfx_dragon_attack);
+    }
+    else if (abs((int) actor->angle - (int) angle) <= ANG1 * 20)
+    {
+      P_SetMobjState(actor, actor->info->missilestate);
+      S_StartSound(actor, hexen_sfx_dragon_attack);
+    }
+  }
+  else
+  {
+    P_LookForPlayers(actor, TRUE);
+  }
+}
+
+void A_DragonFlap(mobj_t *actor)
+{
+  A_DragonFlight(actor);
+  if (P_Random(pr_heretic) < 240)
+    S_StartSound(actor, hexen_sfx_dragon_wingflap);
+  else
+    S_StartSound(actor, actor->info->activesound);
+}
+
+void A_DragonAttack(mobj_t *actor)
+{
+  P_SpawnMissile(actor, actor->target, HEXEN_MT_DRAGON_FX);
+}
+
+void A_DragonFX2(mobj_t *actor)
+{
+  mobj_t *mo;
+  int i;
+  int r1, r2, r3;
+  int delay;
+
+  delay = 16 + (P_Random(pr_heretic) >> 3);
+  for (i = 1 + (P_Random(pr_heretic) & 3); i; i--)
+  {
+    r1 = P_Random(pr_heretic);
+    r2 = P_Random(pr_heretic);
+    r3 = P_Random(pr_heretic);
+    mo = P_SpawnMobj(actor->x + (r3 - 128) * (1<<14),
+                     actor->y + (r2 - 128) * (1<<14),
+                     actor->z + (r1 - 128) * (1<<12),
+                     HEXEN_MT_DRAGON_FX2);
+    if (mo)
+    {
+      mo->tics = delay + (P_Random(pr_heretic) & 3) * i * 2;
+      P_SetTarget(&mo->target, actor->target);
+    }
+  }
+}
+
+void A_DragonPain(mobj_t *actor)
+{
+  A_Pain(actor);
+  if (!actor->special1.m)
+  {                                    /* no destination spot yet */
+    P_SetMobjState(actor, HEXEN_S_DRAGON_INIT);
+  }
+}
+
+void A_DragonCheckCrash(mobj_t *actor)
+{
+  if (actor->z <= actor->floorz)
+    P_SetMobjState(actor, HEXEN_S_DRAGON_CRASH1);
+}
+
+/*
+ * Class bosses (the Fighter, Cleric, and Mage of the Shadow Wood
+ * seven portals).  special2 = strafe timer.
+ */
+
+#define CLASS_BOSS_STRAFE_RANGE (64 * 10 * FRACUNIT)
+
+void A_FastChase(mobj_t *actor)
+{
+  int delta;
+  fixed_t dist;
+  angle_t ang;
+  mobj_t *target;
+
+  if (actor->reactiontime)
+    actor->reactiontime--;
+
+  /* modify target threshold */
+  if (actor->threshold)
+    actor->threshold--;
+
+  if (gameskill == sk_nightmare || fastparm)
+  {                            /* monsters move faster in nightmare mode */
+    actor->tics -= actor->tics / 2;
+    if (actor->tics < 3)
+      actor->tics = 3;
+  }
+
+  /* turn towards movement direction if not there yet */
+  if (actor->movedir < 8)
+  {
+    actor->angle &= (7u << 29);
+    delta = (int)(actor->angle - ((angle_t)actor->movedir << 29));
+    if (delta > 0)
+      actor->angle -= ANG90 / 2;
+    else if (delta < 0)
+      actor->angle += ANG90 / 2;
+  }
+
+  if (!actor->target || !(actor->target->flags & MF_SHOOTABLE))
+  {                                    /* look for a new target */
+    if (P_LookForPlayers(actor, TRUE))
+      return;                          /* got a new target */
+    P_SetMobjState(actor, actor->info->spawnstate);
+    return;
+  }
+
+  /* don't attack twice in a row */
+  if (actor->flags & MF_JUSTATTACKED)
+  {
+    actor->flags &= ~MF_JUSTATTACKED;
+    if (gameskill != sk_nightmare && !fastparm)
+      P_NewChaseDir(actor);
+    return;
+  }
+
+  /* strafe */
+  if (actor->special2.i > 0)
+  {
+    actor->special2.i--;
+  }
+  else
+  {
+    target = actor->target;
+    actor->special2.i = 0;
+    actor->momx = actor->momy = 0;
+    dist = P_AproxDistance(actor->x - target->x, actor->y - target->y);
+    if (dist < CLASS_BOSS_STRAFE_RANGE)
+    {
+      if (P_Random(pr_heretic) < 100)
+      {
+        ang = R_PointToAngle2(actor->x, actor->y, target->x, target->y);
+        if (P_Random(pr_heretic) < 128)
+          ang += ANG90;
+        else
+          ang -= ANG90;
+        ang >>= ANGLETOFINESHIFT;
+        actor->momx = FixedMul(13 * FRACUNIT, finecosine[ang]);
+        actor->momy = FixedMul(13 * FRACUNIT, finesine[ang]);
+        actor->special2.i = 3;         /* strafe time */
+      }
+    }
+  }
+
+  /* check for missile attack */
+  if (actor->info->missilestate)
+  {
+    if (gameskill < sk_nightmare && !fastparm && actor->movecount)
+      goto nomissile;
+    if (!P_CheckMissileRange(actor))
+      goto nomissile;
+    P_SetMobjState(actor, actor->info->missilestate);
+    actor->flags |= MF_JUSTATTACKED;
+    return;
+  }
+nomissile:
+
+  /* possibly choose another target */
+  if (netgame && !actor->threshold && !P_CheckSight(actor, actor->target))
+  {
+    if (P_LookForPlayers(actor, TRUE))
+      return;                          /* got a new target */
+  }
+
+  /* chase towards player */
+  if (!actor->special2.i)
+  {
+    if (--actor->movecount < 0 || !P_Move(actor, FALSE))
+      P_NewChaseDir(actor);
+  }
+}
+
+void A_FighterAttack(mobj_t *actor)
+{
+  extern void A_FSwordAttack2(mobj_t *actor);
+
+  if (!actor->target)
+    return;
+  A_FSwordAttack2(actor);
+}
+
+void A_ClericAttack(mobj_t *actor)
+{
+  extern void A_CHolyAttack3(mobj_t *actor);
+
+  if (!actor->target)
+    return;
+  A_CHolyAttack3(actor);
+}
+
+void A_MageAttack(mobj_t *actor)
+{
+  extern void A_MStaffAttack2(mobj_t *actor);
+
+  if (!actor->target)
+    return;
+  A_MStaffAttack2(actor);
+}
+
+void A_ClassBossHealth(mobj_t *actor)
+{
+  if (netgame && !deathmatch)          /* co-op only */
+  {
+    if (!actor->special1.i)
+    {
+      actor->health *= 5;
+      actor->special1.i = TRUE;        /* has been initialized */
+    }
+  }
+}
+
+void A_DemonAttack1(mobj_t *actor)
+{
+  if (!actor->target)
+    return;
+  if (P_CheckMeleeRange(actor))
+    P_DamageMobj(actor->target, actor, actor, HX_HITDICE(2));
+}
+
+void A_DemonAttack2(mobj_t *actor)
+{
+  mobj_t *mo;
+  int     fireBall;
+
+  if (!actor->target)
+    return;
+  if (actor->type == HEXEN_MT_DEMON)
+    fireBall = HEXEN_MT_DEMONFX1;
+  else
+    fireBall = HEXEN_MT_DEMON2FX1;
+  mo = P_SpawnMissile(actor, actor->target, fireBall);
+  if (mo)
+  {
+    mo->z += 30 * FRACUNIT;
+    S_StartSound(actor, hexen_sfx_demon_missile_fire);
+  }
+}
+
+/* ------------------------------------------------------------------------
+ * Serpent (HEXEN_MT_SERPENT / HEXEN_MT_SERPENTLEADER)
+ *
+ * The burrowing snake: it swims hidden beneath a liquid floor, humps up to
+ * the surface to strike, melees with its head, and (the "leader" variant)
+ * spits a missile.  It is constrained to its starting floor terrain -- a
+ * move that would change the floor flat is reverted -- so it never leaves
+ * the water/lava/sludge it spawned in.  On death the head detaches.
+ *
+ * Adapted to this core: pr_hexen -> pr_heretic, S_StartMobjSound ->
+ * S_StartSound, HITDICE -> HX_HITDICE, the 4-arg P_TryMove, and the
+ * fork's fast-monster test (nightmare skill or -fast).
+ * --------------------------------------------------------------------- */
+
+#define SERPENT_FAST (gameskill == sk_nightmare || fastparm)
+
+static dbool P_CheckMeleeRange2(mobj_t *actor)
+{
+  mobj_t *mo;
+  fixed_t dist;
+
+  if (!actor->target)
+    return false;
+  mo = actor->target;
+  dist = P_AproxDistance(mo->x - actor->x, mo->y - actor->y);
+  if (dist >= MELEERANGE * 2 || dist < MELEERANGE)
+    return false;
+  if (!P_CheckSight(actor, mo))
+    return false;
+  if (mo->z > actor->z + actor->height)
+    return false;               /* target is higher */
+  if (actor->z > mo->z + mo->height)
+    return false;               /* attacker is higher */
+  return true;
+}
+
+void A_SerpentChase(mobj_t *actor)
+{
+  int delta;
+  int oldX, oldY, oldFloor;
+
+  if (actor->reactiontime)
+    actor->reactiontime--;
+  if (actor->threshold)
+    actor->threshold--;
+
+  if (SERPENT_FAST)
+  {
+    actor->tics -= actor->tics / 2;
+    if (actor->tics < 3)
+      actor->tics = 3;
+  }
+
+  /* turn towards movement direction if not there yet */
+  if (actor->movedir < 8)
+  {
+    actor->angle &= (7u << 29);
+    delta = (int)(actor->angle - ((angle_t)actor->movedir << 29));
+    if (delta > 0)
+      actor->angle -= ANG90 / 2;
+    else if (delta < 0)
+      actor->angle += ANG90 / 2;
+  }
+
+  if (!actor->target || !(actor->target->flags & MF_SHOOTABLE))
+  {
+    if (P_LookForPlayers(actor, true))
+      return;
+    P_SetMobjState(actor, actor->info->spawnstate);
+    return;
+  }
+
+  /* don't attack twice in a row */
+  if (actor->flags & MF_JUSTATTACKED)
+  {
+    actor->flags &= ~MF_JUSTATTACKED;
+    if (!SERPENT_FAST)
+      P_NewChaseDir(actor);
+    return;
+  }
+
+  /* check for melee attack */
+  if (actor->info->meleestate && P_CheckMeleeRange(actor))
+  {
+    if (actor->info->attacksound)
+      S_StartSound(actor, actor->info->attacksound);
+    P_SetMobjState(actor, actor->info->meleestate);
+    return;
+  }
+
+  if (netgame && !actor->threshold && !P_CheckSight(actor, actor->target))
+  {
+    if (P_LookForPlayers(actor, true))
+      return;
+  }
+
+  /* chase towards player, but stay on the same floor terrain */
+  oldX = actor->x;
+  oldY = actor->y;
+  oldFloor = actor->subsector->sector->floorpic;
+  if (--actor->movecount < 0 || !P_Move(actor, false))
+    P_NewChaseDir(actor);
+  if (actor->subsector->sector->floorpic != oldFloor)
+  {
+    P_TryMove(actor, oldX, oldY, 0);
+    P_NewChaseDir(actor);
+  }
+
+  if (actor->info->activesound && P_Random(pr_heretic) < 3)
+    S_StartSound(actor, actor->info->activesound);
+}
+
+void A_SerpentWalk(mobj_t *actor)
+{
+  int delta;
+
+  if (actor->reactiontime)
+    actor->reactiontime--;
+  if (actor->threshold)
+    actor->threshold--;
+
+  if (SERPENT_FAST)
+  {
+    actor->tics -= actor->tics / 2;
+    if (actor->tics < 3)
+      actor->tics = 3;
+  }
+
+  if (actor->movedir < 8)
+  {
+    actor->angle &= (7u << 29);
+    delta = (int)(actor->angle - ((angle_t)actor->movedir << 29));
+    if (delta > 0)
+      actor->angle -= ANG90 / 2;
+    else if (delta < 0)
+      actor->angle += ANG90 / 2;
+  }
+
+  if (!actor->target || !(actor->target->flags & MF_SHOOTABLE))
+  {
+    if (P_LookForPlayers(actor, true))
+      return;
+    P_SetMobjState(actor, actor->info->spawnstate);
+    return;
+  }
+
+  if (actor->flags & MF_JUSTATTACKED)
+  {
+    actor->flags &= ~MF_JUSTATTACKED;
+    if (!SERPENT_FAST)
+      P_NewChaseDir(actor);
+    return;
+  }
+
+  if (actor->info->meleestate && P_CheckMeleeRange(actor))
+  {
+    if (actor->info->attacksound)
+      S_StartSound(actor, actor->info->attacksound);
+    P_SetMobjState(actor, HEXEN_S_SERPENT_ATK1);
+    return;
+  }
+
+  if (netgame && !actor->threshold && !P_CheckSight(actor, actor->target))
+  {
+    if (P_LookForPlayers(actor, true))
+      return;
+  }
+
+  if (--actor->movecount < 0 || !P_Move(actor, false))
+    P_NewChaseDir(actor);
+}
+
+void A_SerpentHumpDecide(mobj_t *actor)
+{
+  if (actor->type == HEXEN_MT_SERPENTLEADER)
+  {
+    if (P_Random(pr_heretic) > 30)
+      return;
+    else if (P_Random(pr_heretic) < 40)
+    {
+      P_SetMobjState(actor, HEXEN_S_SERPENT_SURFACE1);
+      return;
+    }
+  }
+  else if (P_Random(pr_heretic) > 3)
+    return;
+
+  if (!P_CheckMeleeRange(actor))
+  {
+    if (actor->type == HEXEN_MT_SERPENTLEADER && P_Random(pr_heretic) < 128)
+    {
+      P_SetMobjState(actor, HEXEN_S_SERPENT_SURFACE1);
+    }
+    else
+    {
+      P_SetMobjState(actor, HEXEN_S_SERPENT_HUMP1);
+      S_StartSound(actor, hexen_sfx_serpent_active);
+    }
+  }
+}
+
+void A_SerpentCheckForAttack(mobj_t *actor)
+{
+  if (!actor->target)
+    return;
+  if (actor->type == HEXEN_MT_SERPENTLEADER)
+  {
+    if (!P_CheckMeleeRange(actor))
+    {
+      P_SetMobjState(actor, HEXEN_S_SERPENT_ATK1);
+      return;
+    }
+  }
+  if (P_CheckMeleeRange2(actor))
+  {
+    P_SetMobjState(actor, HEXEN_S_SERPENT_WALK1);
+  }
+  else if (P_CheckMeleeRange(actor))
+  {
+    if (P_Random(pr_heretic) < 32)
+      P_SetMobjState(actor, HEXEN_S_SERPENT_WALK1);
+    else
+      P_SetMobjState(actor, HEXEN_S_SERPENT_ATK1);
+  }
+}
+
+void A_SerpentChooseAttack(mobj_t *actor)
+{
+  if (!actor->target || P_CheckMeleeRange(actor))
+    return;
+  if (actor->type == HEXEN_MT_SERPENTLEADER)
+    P_SetMobjState(actor, HEXEN_S_SERPENT_MISSILE1);
+}
+
+void A_SerpentMeleeAttack(mobj_t *actor)
+{
+  if (!actor->target)
+    return;
+  if (P_CheckMeleeRange(actor))
+  {
+    P_DamageMobj(actor->target, actor, actor, HX_HITDICE(5));
+    S_StartSound(actor, hexen_sfx_serpent_meleehit);
+  }
+  if (P_Random(pr_heretic) < 96)
+    A_SerpentCheckForAttack(actor);
+}
+
+void A_SerpentMissileAttack(mobj_t *actor)
+{
+  if (!actor->target)
+    return;
+  P_SpawnMissile(actor, actor->target, HEXEN_MT_SERPENTFX);
+}
+
+void A_SerpentHide(mobj_t *actor)
+{
+  actor->flags2 |= MF2_DONTDRAW;
+  actor->floorclip = 0;
+}
+
+void A_SerpentUnHide(mobj_t *actor)
+{
+  actor->flags2 &= ~MF2_DONTDRAW;
+  actor->floorclip = 24 * FRACUNIT;
+}
+
+void A_SerpentRaiseHump(mobj_t *actor)
+{
+  actor->floorclip -= 4 * FRACUNIT;
+}
+
+void A_SerpentLowerHump(mobj_t *actor)
+{
+  actor->floorclip += 4 * FRACUNIT;
+}
+
+void A_SerpentBirthScream(mobj_t *actor)
+{
+  S_StartSound(actor, hexen_sfx_serpent_birth);
+}
+
+void A_SerpentDiveSound(mobj_t *actor)
+{
+  S_StartSound(actor, hexen_sfx_serpent_active);
+}
+
+void A_SerpentHeadPop(mobj_t *actor)
+{
+  P_SpawnMobj(actor->x, actor->y, actor->z + 45 * FRACUNIT,
+              HEXEN_MT_SERPENT_HEAD);
+}
+
+void A_SerpentHeadCheck(mobj_t *actor)
+{
+  if (actor->z <= actor->floorz)
+  {
+    if (P_GetThingFloorType(actor) >= FLOOR_LIQUID)
+    {
+      P_HitFloor(actor);
+      P_SetMobjState(actor, HEXEN_S_NULL);
+    }
+    else
+    {
+      P_SetMobjState(actor, HEXEN_S_SERPENT_HEAD_X1);
+    }
+  }
+}
+
+void A_SerpentSpawnGibs(mobj_t *actor)
+{
+  mobj_t *mo;
+  int     r1, r2;
+  int     i;
+  static const int gib[3] =
+    { HEXEN_MT_SERPENT_GIB1, HEXEN_MT_SERPENT_GIB2, HEXEN_MT_SERPENT_GIB3 };
+
+  for (i = 0; i < 3; i++)
+  {
+    r1 = P_Random(pr_heretic);
+    r2 = P_Random(pr_heretic);
+    mo = P_SpawnMobj(actor->x + (r2 - 128) * (1<<12),
+                     actor->y + (r1 - 128) * (1<<12),
+                     actor->floorz + FRACUNIT, gib[i]);
+    if (mo)
+    {
+      mo->momx = (P_Random(pr_heretic) - 128) * 64;
+      mo->momy = (P_Random(pr_heretic) - 128) * 64;
+      mo->floorclip = 6 * FRACUNIT;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------------
+ * Fire Demon / Afrit (HEXEN_MT_FIREDEMON)
+ *
+ * A floating monster that bobs up and down, strafes around its target,
+ * sheds a shower of bouncing fire rocks, and lobs a fireball.  Uses a
+ * custom float/strafe chase rather than the standard ground AI.
+ *
+ * Adapted to this core: pr_hexen -> pr_heretic, S_StartMobjSound ->
+ * S_StartSound.  FaceMovementDirection and FIREDEMON_ATTACK_RANGE are
+ * provided locally; FloatBobOffsets, P_SetTarget, P_CheckMissileRange and
+ * the chase helpers already exist.
+ * --------------------------------------------------------------------- */
+
+extern fixed_t FloatBobOffsets[64];
+#define FIREDEMON_ATTACK_RANGE (64 * 8 * FRACUNIT)
+
+static void FaceMovementDirection(mobj_t *actor)
+{
+  switch (actor->movedir)
+  {
+    case DI_EAST:      actor->angle = 0   << 24; break;
+    case DI_NORTHEAST: actor->angle = 32  << 24; break;
+    case DI_NORTH:     actor->angle = 64  << 24; break;
+    case DI_NORTHWEST: actor->angle = 96  << 24; break;
+    case DI_WEST:      actor->angle = 128 << 24; break;
+    case DI_SOUTHWEST: actor->angle = 160 << 24; break;
+    case DI_SOUTH:     actor->angle = 192 << 24; break;
+    case DI_SOUTHEAST: actor->angle = 224 << 24; break;
+    default: break;
+  }
+}
+
+void A_FiredSpawnRock(mobj_t *actor)
+{
+  mobj_t *mo;
+  int     x, y, z;
+  int     rtype = 0;
+
+  switch (P_Random(pr_heretic) % 5)
+  {
+    case 0: rtype = HEXEN_MT_FIREDEMON_FX1; break;
+    case 1: rtype = HEXEN_MT_FIREDEMON_FX2; break;
+    case 2: rtype = HEXEN_MT_FIREDEMON_FX3; break;
+    case 3: rtype = HEXEN_MT_FIREDEMON_FX4; break;
+    case 4: rtype = HEXEN_MT_FIREDEMON_FX5; break;
+  }
+
+  x = actor->x + ((P_Random(pr_heretic) - 128) * 4096);
+  y = actor->y + ((P_Random(pr_heretic) - 128) * 4096);
+  z = actor->z + ((P_Random(pr_heretic)) << 11);
+  mo = P_SpawnMobj(x, y, z, rtype);
+  if (mo)
+  {
+    P_SetTarget(&mo->target, actor);
+    mo->momx = (P_Random(pr_heretic) - 128) * 1024;
+    mo->momy = (P_Random(pr_heretic) - 128) * 1024;
+    mo->momz = (P_Random(pr_heretic) << 10);
+    mo->special1.i = 2;        /* number of bounces */
+  }
+
+  actor->special2.i = 0;
+  actor->flags &= ~MF_JUSTATTACKED;
+}
+
+void A_FiredRocks(mobj_t *actor)
+{
+  A_FiredSpawnRock(actor);
+  A_FiredSpawnRock(actor);
+  A_FiredSpawnRock(actor);
+  A_FiredSpawnRock(actor);
+  A_FiredSpawnRock(actor);
+}
+
+void A_FiredChase(mobj_t *actor)
+{
+  int      weaveindex = actor->special1.i;
+  mobj_t  *target = actor->target;
+  angle_t  ang;
+  fixed_t  dist;
+
+  if (actor->reactiontime)
+    actor->reactiontime--;
+  if (actor->threshold)
+    actor->threshold--;
+
+  /* float up and down */
+  actor->z += FloatBobOffsets[weaveindex];
+  actor->special1.i = (weaveindex + 2) & 63;
+
+  /* keep above a minimum height */
+  if (actor->z < actor->floorz + (64 * FRACUNIT))
+    actor->z += 2 * FRACUNIT;
+
+  if (!actor->target || !(actor->target->flags & MF_SHOOTABLE))
+  {
+    P_LookForPlayers(actor, true);
+    return;
+  }
+
+  /* strafe */
+  if (actor->special2.i > 0)
+  {
+    actor->special2.i--;
+  }
+  else
+  {
+    actor->special2.i = 0;
+    actor->momx = actor->momy = 0;
+    dist = P_AproxDistance(actor->x - target->x, actor->y - target->y);
+    if (dist < FIREDEMON_ATTACK_RANGE)
+    {
+      if (P_Random(pr_heretic) < 30)
+      {
+        ang = R_PointToAngle2(actor->x, actor->y, target->x, target->y);
+        if (P_Random(pr_heretic) < 128)
+          ang += ANG90;
+        else
+          ang -= ANG90;
+        ang >>= ANGLETOFINESHIFT;
+        actor->momx = FixedMul(8 * FRACUNIT, finecosine[ang]);
+        actor->momy = FixedMul(8 * FRACUNIT, finesine[ang]);
+        actor->special2.i = 3;  /* strafe time */
+      }
+    }
+  }
+
+  FaceMovementDirection(actor);
+
+  /* normal movement */
+  if (!actor->special2.i)
+  {
+    if (--actor->movecount < 0 || !P_Move(actor, false))
+      P_NewChaseDir(actor);
+  }
+
+  /* missile attack */
+  if (!(actor->flags & MF_JUSTATTACKED))
+  {
+    if (P_CheckMissileRange(actor) && (P_Random(pr_heretic) < 20))
+    {
+      P_SetMobjState(actor, actor->info->missilestate);
+      actor->flags |= MF_JUSTATTACKED;
+      return;
+    }
+  }
+  else
+  {
+    actor->flags &= ~MF_JUSTATTACKED;
+  }
+
+  if (actor->info->activesound && P_Random(pr_heretic) < 3)
+    S_StartSound(actor, actor->info->activesound);
+}
+
+void A_FiredAttack(mobj_t *actor)
+{
+  mobj_t *mo;
+
+  if (!actor->target)
+    return;
+  mo = P_SpawnMissile(actor, actor->target, HEXEN_MT_FIREDEMON_FX6);
+  if (mo)
+    S_StartSound(actor, hexen_sfx_fired_attack);
+}
+
+void A_FiredSplotch(mobj_t *actor)
+{
+  mobj_t *mo;
+
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_FIREDEMON_SPLOTCH1);
+  if (mo)
+  {
+    mo->momx = (P_Random(pr_heretic) - 128) * 2048;
+    mo->momy = (P_Random(pr_heretic) - 128) * 2048;
+    mo->momz = FRACUNIT * 3 + (P_Random(pr_heretic) << 10);
+  }
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_FIREDEMON_SPLOTCH2);
+  if (mo)
+  {
+    mo->momx = (P_Random(pr_heretic) - 128) * 2048;
+    mo->momy = (P_Random(pr_heretic) - 128) * 2048;
+    mo->momz = FRACUNIT * 3 + (P_Random(pr_heretic) << 10);
+  }
+}
+
+int P_SubRandom(void);  /* heretic/p_action.c */
+
+/* --------------------------------------------------------------------------
+ * Bishop -- a floating caster that bobs in the air, fires homing missiles
+ * (HEXEN_MT_BISH_FX, which seek and weave), and teleport-blurs around when
+ * pressed.  dsda-doom p_enemy.c.
+ * ------------------------------------------------------------------------ */
+void A_BishopAttack(mobj_t *actor)
+{
+  if (!actor->target)
+    return;
+  S_StartSound(actor, actor->info->attacksound);
+  if (P_CheckMeleeRange(actor))
+  {
+    P_DamageMobj(actor->target, actor, actor, HX_HITDICE(4));
+    return;
+  }
+  actor->special1.i = (P_Random(pr_heretic) & 3) + 5;   /* burst count */
+}
+
+void A_BishopAttack2(mobj_t *actor)
+{
+  mobj_t *mo;
+
+  if (!actor->target || !actor->special1.i)
+  {
+    actor->special1.i = 0;
+    P_SetMobjState(actor, HEXEN_S_BISHOP_WALK1);
+    return;
+  }
+  mo = P_SpawnMissile(actor, actor->target, HEXEN_MT_BISH_FX);
+  if (mo)
+  {
+    P_SetTarget(&mo->special1.m, actor->target);
+    mo->special2.i = 16;          /* high word x/y weave, low word z */
+  }
+  actor->special1.i--;
+}
+
+void A_BishopChase(mobj_t *actor)
+{
+  actor->z -= FloatBobOffsets[actor->special2.i] >> 1;
+  actor->special2.i = (actor->special2.i + 4) & 63;
+  actor->z += FloatBobOffsets[actor->special2.i] >> 1;
+}
+
+void A_BishopDecide(mobj_t *actor)
+{
+  if (P_Random(pr_heretic) < 220)
+    return;
+  P_SetMobjState(actor, HEXEN_S_BISHOP_BLUR1);
+}
+
+void A_BishopDoBlur(mobj_t *actor)
+{
+  actor->special1.i = (P_Random(pr_heretic) & 3) + 3;   /* number of blurs */
+  if (P_Random(pr_heretic) < 120)
+    P_ThrustMobj(actor, actor->angle + ANG90, 11 * FRACUNIT);
+  else if (P_Random(pr_heretic) > 125)
+    P_ThrustMobj(actor, actor->angle - ANG90, 11 * FRACUNIT);
+  else
+    P_ThrustMobj(actor, actor->angle, 11 * FRACUNIT);    /* forward */
+  S_StartSound(actor, hexen_sfx_bishop_blur);
+}
+
+void A_BishopSpawnBlur(mobj_t *actor)
+{
+  mobj_t *mo;
+
+  if (!--actor->special1.i)
+  {
+    actor->momx = 0;
+    actor->momy = 0;
+    if (P_Random(pr_heretic) > 96)
+      P_SetMobjState(actor, HEXEN_S_BISHOP_WALK1);
+    else
+      P_SetMobjState(actor, HEXEN_S_BISHOP_ATK1);
+  }
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_BISHOPBLUR);
+  if (mo)
+    mo->angle = actor->angle;
+}
+
+void A_BishopPuff(mobj_t *actor)
+{
+  mobj_t *mo;
+
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z + 40 * FRACUNIT,
+                   HEXEN_MT_BISHOP_PUFF);
+  if (mo)
+    mo->momz = FRACUNIT / 2;
+}
+
+void A_BishopPainBlur(mobj_t *actor)
+{
+  mobj_t *mo;
+  int     r1, r2, r3;
+
+  if (P_Random(pr_heretic) < 64)
+  {
+    P_SetMobjState(actor, HEXEN_S_BISHOP_BLUR1);
+    return;
+  }
+  r1 = P_SubRandom();
+  r2 = P_SubRandom();
+  r3 = P_SubRandom();
+  mo = P_SpawnMobj(actor->x + (r3 << 12), actor->y + (r2 << 12),
+                   actor->z + (r1 << 11), HEXEN_MT_BISHOPPAINBLUR);
+  if (mo)
+    mo->angle = actor->angle;
+}
+
+void A_BishopMissileSeek(mobj_t *actor)
+{
+  /* Use the file-local 4-arg seeker (aims at target centre, equivalent to
+   * the 5-arg variant with seekcenter); the global 5-arg P_SeekerMissile is
+   * shadowed by the static one in this translation unit. */
+  P_SeekerMissile(actor, &actor->special1.m, ANG1 * 2, ANG1 * 3);
+}
+
+void A_BishopMissileWeave(mobj_t *actor)
+{
+  fixed_t newX, newY;
+  int     weaveXY, weaveZ;
+  int     angle;
+
+  weaveXY = actor->special2.i >> 16;
+  weaveZ = actor->special2.i & 0xFFFF;
+  angle = (actor->angle + ANG90) >> ANGLETOFINESHIFT;
+  newX = actor->x - FixedMul(finecosine[angle], FloatBobOffsets[weaveXY] << 1);
+  newY = actor->y - FixedMul(finesine[angle], FloatBobOffsets[weaveXY] << 1);
+  weaveXY = (weaveXY + 2) & 63;
+  newX += FixedMul(finecosine[angle], FloatBobOffsets[weaveXY] << 1);
+  newY += FixedMul(finesine[angle], FloatBobOffsets[weaveXY] << 1);
+  P_TryMove(actor, newX, newY, 0);
+  actor->z -= FloatBobOffsets[weaveZ];
+  weaveZ = (weaveZ + 2) & 63;
+  actor->z += FloatBobOffsets[weaveZ];
+  actor->special2.i = weaveZ + (weaveXY << 16);
+}
+
+/* --------------------------------------------------------------------------
+ * Hexen Minotaur (Dark Servant) lifetime behaviour.  The combat codepointers
+ * (A_MinotaurAtk1/2/3, A_MinotaurDecide, A_MinotaurCharge, A_MntrFloorFire)
+ * are shared with the Heretic Maulotaur and live in heretic/p_action.c, now
+ * game-aware.  The functions below are Hexen-only: the summoned minotaur
+ * fades in on spawn, hunts the nearest valid target (attacking monsters when
+ * it has a player master), roams when idle, and stomps itself after
+ * MAULATORTICS of life.  Ported from dsda-doom p_enemy.c.
+ * ------------------------------------------------------------------------ */
+#define MINOTAUR_LOOK_DIST (16 * 54 * FRACUNIT)
+
+dbool P_SetMobjStateNF(mobj_t *mobj, statenum_t state);  /* heretic/p_action.c */
+dbool P_TestMobjLocation(mobj_t *mobj);                  /* heretic/p_action.c */
+dbool P_GivePower(player_t *player, int power);          /* p_inter.c */
+void  A_MinotaurLook(mobj_t *actor);
+
+void A_MinotaurFade0(mobj_t *actor)
+{
+  actor->flags &= ~MF_ALTSHADOW;
+  actor->flags |= MF_SHADOW;
+}
+
+void A_MinotaurFade1(mobj_t *actor)
+{
+  actor->flags &= ~MF_SHADOW;
+  actor->flags |= MF_ALTSHADOW;
+}
+
+void A_MinotaurFade2(mobj_t *actor)
+{
+  actor->flags &= ~MF_SHADOW;
+  actor->flags &= ~MF_ALTSHADOW;
+}
+
+/* The summoned Minotaur self-destructs after MAULATORTICS.  special_args[0]
+ * holds the leveltime at which it was spawned (set by the Dark Servant
+ * summon when that artifact lands); a map-placed minotaur with a zero start
+ * simply ages from level start.  Returns false if the actor was killed. */
+static dbool CheckMinotaurAge(mobj_t *mo)
+{
+  if ((unsigned)(leveltime - mo->special_args[0]) >= (unsigned)MAULATORTICS)
+  {
+    P_DamageMobj(mo, NULL, NULL, 10000);
+    return FALSE;
+  }
+  return TRUE;
+}
+
+void A_MinotaurRoam(mobj_t *actor)
+{
+  actor->flags &= ~MF_SHADOW;     /* in case pain skipped his fade-in */
+  actor->flags &= ~MF_ALTSHADOW;
+
+  if (!CheckMinotaurAge(actor))
+    return;
+
+  if (P_Random(pr_heretic) < 30)
+    A_MinotaurLook(actor);        /* adjust to closest target */
+
+  if (P_Random(pr_heretic) < 6)
+  {
+    actor->movedir = P_Random(pr_heretic) % 8;
+    FaceMovementDirection(actor);
+  }
+  if (!P_Move(actor, false))
+  {
+    if (P_Random(pr_heretic) & 1)
+      actor->movedir = (actor->movedir + 1) % 8;
+    else
+      actor->movedir = (actor->movedir + 7) % 8;
+    FaceMovementDirection(actor);
+  }
+}
+
+void A_MinotaurLook(mobj_t *actor)
+{
+  mobj_t    *mo = NULL;
+  player_t  *player;
+  thinker_t *think;
+  fixed_t    dist;
+  int        i;
+  mobj_t    *master = actor->special1.m;
+
+  P_SetTarget(&actor->target, NULL);
+  if (deathmatch)                 /* quick search for players */
+  {
+    for (i = 0; i < MAXPLAYERS; i++)
+    {
+      if (!playeringame[i])
+        continue;
+      player = &players[i];
+      mo = player->mo;
+      if (mo == master)
+        continue;
+      if (mo->health <= 0)
+        continue;
+      dist = P_AproxDistance(actor->x - mo->x, actor->y - mo->y);
+      if (dist > MINOTAUR_LOOK_DIST)
+        continue;
+      P_SetTarget(&actor->target, mo);
+      break;
+    }
+  }
+
+  if (!actor->target)             /* near-player monster search */
+  {
+    if (master && (master->health > 0) && (master->player))
+      mo = P_RoughTargetSearch(master, 0, 20);
+    else
+      mo = P_RoughTargetSearch(actor, 0, 20);
+    P_SetTarget(&actor->target, mo);
+  }
+
+  if (!actor->target)             /* normal monster search */
+  {
+    for (think = thinkercap.next; think != &thinkercap; think = think->next)
+    {
+      if (think->function.arg1 != (void (*)(void *))P_MobjThinker)
+        continue;
+      mo = (mobj_t *) think;
+      if (!(mo->flags & MF_COUNTKILL))
+        continue;
+      if (mo->health <= 0)
+        continue;
+      if (!(mo->flags & MF_SHOOTABLE))
+        continue;
+      dist = P_AproxDistance(actor->x - mo->x, actor->y - mo->y);
+      if (dist > MINOTAUR_LOOK_DIST)
+        continue;
+      if ((mo == master) || (mo == actor))
+        continue;
+      if ((mo->type == HEXEN_MT_MINOTAUR)
+          && (mo->special1.m == actor->special1.m))
+        continue;
+      P_SetTarget(&actor->target, mo);
+      break;                      /* found mobj to attack */
+    }
+  }
+
+  if (actor->target)
+    P_SetMobjStateNF(actor, HEXEN_S_MNTR_WALK1);
+  else
+    P_SetMobjStateNF(actor, HEXEN_S_MNTR_ROAM1);
+}
+
+void A_MinotaurChase(mobj_t *actor)
+{
+  actor->flags &= ~MF_SHADOW;     /* in case pain skipped his fade-in */
+  actor->flags &= ~MF_ALTSHADOW;
+
+  if (!CheckMinotaurAge(actor))
+    return;
+
+  if (P_Random(pr_heretic) < 30)
+    A_MinotaurLook(actor);        /* adjust to closest target */
+
+  if (!actor->target || (actor->target->health <= 0)
+      || !(actor->target->flags & MF_SHOOTABLE))
+  {                               /* look for a new target */
+    P_SetMobjState(actor, HEXEN_S_MNTR_LOOK1);
+    return;
+  }
+
+  FaceMovementDirection(actor);
+  actor->reactiontime = 0;
+
+  if (actor->info->meleestate && P_CheckMeleeRange(actor))
+  {
+    if (actor->info->attacksound)
+      S_StartSound(actor, actor->info->attacksound);
+    P_SetMobjState(actor, actor->info->meleestate);
+    return;
+  }
+
+  if (actor->info->missilestate && P_CheckMissileRange(actor))
+  {
+    P_SetMobjState(actor, actor->info->missilestate);
+    return;
+  }
+
+  if (!P_Move(actor, false))
+    P_NewChaseDir(actor);
+
+  if (actor->info->activesound && P_Random(pr_heretic) < 6)
+    S_StartSound(actor, actor->info->activesound);
+}
+
+void A_SmokePuffExit(mobj_t *actor)
+{
+  P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_MNTRSMOKEEXIT);
+}
+
+/* A_Summon -- the Dark Servant's HEXEN_MT_SUMMON_FX missile runs this on
+ * impact: spawn a Minotaur bound to the summoning player as its master, with
+ * the spawn time recorded so CheckMinotaurAge can stomp it after its life
+ * expires.  If the minotaur doesn't fit, drop the artifact back instead. */
+void A_Summon(mobj_t *actor)
+{
+  mobj_t *mo;
+  mobj_t *master;
+
+  mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_MINOTAUR);
+  if (!mo)
+    return;
+
+  if (P_TestMobjLocation(mo) == false || !actor->special1.m)
+  {                             /* didn't fit - revert to the artifact */
+    P_SetMobjState(mo, HEXEN_S_NULL);
+    mo = P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_SUMMONMAULATOR);
+    if (mo)
+      mo->flags |= MF_DROPPED;
+    return;
+  }
+
+  /* special_args is int[] in this fork, so the spawn time goes straight into
+   * slot 0 (dsda byte-packs it across four slots); CheckMinotaurAge reads
+   * special_args[0] the same way. */
+  mo->special_args[0] = leveltime;
+  master = actor->special1.m;
+  if (master->flags & MF_CORPSE)
+  {                             /* master already dead - no master */
+    P_SetTarget(&mo->special1.m, NULL);
+  }
+  else
+  {
+    P_SetTarget(&mo->special1.m, actor->special1.m);
+    if (master->player)
+      P_GivePower(master->player, pw_minotaur);
+  }
+
+  P_SpawnMobj(actor->x, actor->y, actor->z, HEXEN_MT_MNTRSMOKE);
+  S_StartSound(actor, hexen_sfx_maulator_active);
 }

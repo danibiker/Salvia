@@ -115,6 +115,44 @@ dbool messageNeedsInput; // timed message = no input from user
 
 void (*messageRoutine)(int response);
 
+
+/* Menu feedback sounds: this file speaks doom sfx ids, but under the raven
+ * games those numeric ids land on entirely different entries in the unified
+ * sound table -- hexen's "select entry" came out as a player scream.
+ * Translate to each game's vanilla menu sounds (heretic MN_menu uses the
+ * door close for select/open/close, the switch for the cursor, the key-up
+ * blip for sliders and the chat beep for messages; hexen uses the hammer
+ * clank for the cursor, the light door close for select/open, the platform
+ * stop for close and the key pickup for sliders). */
+static int M_MenuSound(int sfx)
+{
+  if (heretic)
+    switch (sfx)
+    {
+      case sfx_pstop:  return heretic_sfx_switch;
+      case sfx_pistol: return heretic_sfx_dorcls;
+      case sfx_swtchn: return heretic_sfx_dorcls;
+      case sfx_swtchx: return heretic_sfx_dorcls;
+      case sfx_stnmov: return heretic_sfx_keyup;
+      case sfx_itemup: return heretic_sfx_chat;
+      case sfx_oof:    return heretic_sfx_plroof;
+      default:         return sfx;
+    }
+  if (hexen)
+    switch (sfx)
+    {
+      case sfx_pstop:  return hexen_sfx_fighter_hammer_hitwall;
+      case sfx_pistol: return hexen_sfx_door_light_close;
+      case sfx_swtchn: return hexen_sfx_door_light_close;
+      case sfx_swtchx: return hexen_sfx_platform_stop;
+      case sfx_stnmov: return hexen_sfx_pickup_key;
+      case sfx_itemup: return hexen_sfx_chat;
+      case sfx_oof:    return hexen_sfx_chat;
+      default:         return sfx;
+    }
+  return sfx;
+}
+
 #define SAVESTRINGSIZE  24
 
 /* killough 8/15/98: when changes are allowed to sync-critical variables */
@@ -254,6 +292,8 @@ void M_DrawMainMenu(void);
 void M_DrawReadThis1(void);
 void M_DrawReadThis2(void);
 void M_DrawNewGame(void);
+void M_ChooseClass(int choice);   /* Hexen class-selection menu */
+void M_DrawClass(void);
 void M_DrawEpisode(void);
 void M_DrawOptions(void);
 void M_DrawSound(void);
@@ -295,6 +335,9 @@ static int M_GetPixelWidth(const char*);
 void M_DrawKeybnd(void);
 void M_DrawWeapons(void);
 static void M_DrawMenuString(int,int,int);
+static void M_DrawTextB(int x, int y, const char *text);
+static void M_DrawTextBColor(int x, int y, const char *text, int color);
+static int M_TextBWidth(const char *text);
 static void M_DrawStringCentered(int,int,int,const char*);
 void M_DrawStatusHUD(void);
 void M_DrawExtHelp(void);
@@ -305,8 +348,10 @@ void M_DrawChatStrings(void);
 void M_Compat(int);       // killough 10/98
 void M_ChangeDemoSmoothTurns(void);
 void M_ChangeFramerate(void);
+void M_ChangeAspectRatio(void);
 void M_ChangeMouseLook(void);
 void M_ChangeMaxViewPitch(void);
+void M_ChangeMidiPlayer(void);
 void M_General(int);      // killough 10/98
 void M_DrawCompat(void);  // killough 10/98
 void M_DrawGeneral(void); // killough 10/98
@@ -374,8 +419,136 @@ menu_t MainDef =
 void M_DrawMainMenu(void)
 {
   // CPhipps - patch drawing updated
-  V_DrawNamePatch(94, 2, 0, "M_DOOM", CR_DEFAULT, VPT_STRETCH);
+  /* M_DOOM is Doom's main-menu title; Heretic uses M_HTIC instead. */
+  if (hexen)
+  {
+    /* Hexen's main menu: the HEXEN title (M_HTIC in HEXEN.WAD) plus two
+     * animated flaming bulls flanking the menu.  The bulls are the FBUL
+     * sprite frames (FBULA0..); vanilla cycles frame = (gametic/5) % 7 and
+     * draws the left bull at +2 frames out of phase from the right.
+     * FBUL* live in the sprite namespace, so they must be looked up with
+     * ns_sprites -- W_CheckNumForName()'s ns_global default never finds
+     * them. */
+    static int maulobase = -2;   /* -2 = unlooked-up, -1 = absent */
+    if (maulobase == -2)
+      maulobase = (W_CheckNumForName)("FBULA0", ns_sprites);
+    if (W_CheckNumForName("M_HTIC") >= 0)
+      V_DrawNamePatch(88, 0, 0, "M_HTIC", CR_DEFAULT, VPT_STRETCH);
+    if (maulobase >= 0)
+    {
+      int frame = (gametic / 5) % 7;
+      V_DrawNumPatch(37,  80, 0, maulobase + (frame + 2) % 7, CR_DEFAULT, VPT_STRETCH);
+      V_DrawNumPatch(278, 80, 0, maulobase + frame,           CR_DEFAULT, VPT_STRETCH);
+    }
+    return;
+  }
+  if (heretic)
+  {
+    /* Heretic's main menu: the HERETIC title (M_HTIC) flanked by two skulls
+     * that spin in opposite directions.  The skull frames are M_SKL00..17
+     * (18 frames, in the global namespace); vanilla advances at
+     * frame = (gametic/3) % 18 and mirrors the left skull (17 - frame). */
+    static int skullbase = -2;   /* -2 = unlooked-up, -1 = absent */
+    if (skullbase == -2)
+      skullbase = W_CheckNumForName("M_SKL00");
+    if (W_CheckNumForName("M_HTIC") >= 0)
+      V_DrawNamePatch(88, 0, 0, "M_HTIC", CR_DEFAULT, VPT_STRETCH);
+    if (skullbase >= 0)
+    {
+      int frame = (gametic / 3) % 18;
+      V_DrawNumPatch(40,  10, 0, skullbase + (17 - frame), CR_DEFAULT, VPT_STRETCH);
+      V_DrawNumPatch(232, 10, 0, skullbase + frame,        CR_DEFAULT, VPT_STRETCH);
+    }
+    return;
+  }
+  else if (W_CheckNumForName("M_DOOM") >= 0)
+    /* Center the title horizontally rather than using vanilla's fixed
+     * x=94 (which assumes the ~124-wide stock M_DOOM).  ZDoom packs ship
+     * much larger title graphics -- ZDCMP2's M_DOOM is 260 wide -- which
+     * at the fixed offset ran off the right of the 320-virtual page and,
+     * once VPT_STRETCH scaled it by SCREENWIDTH/320, blew up far past the
+     * screen.  Centering matches GZDoom and leaves the stock logo within
+     * ~4px of its original spot. */
+    V_DrawNamePatch((320 - V_NamePatchWidth("M_DOOM")) / 2, 2, 0,
+                    "M_DOOM", CR_DEFAULT, VPT_STRETCH);
 }
+
+/////////////////////////////
+//
+// RAVEN (HERETIC / HEXEN) MAIN MENU
+//
+// Heretic and Hexen share a main menu that differs from Doom's: "new game /
+// options / game files / info / quit game", with load/save tucked under a
+// "game files" submenu.  These items have no patch lumps, so M_Drawer renders
+// their alttext through the big FONTB font (the raven path).
+//
+
+void M_RavenFiles(int choice);
+
+enum
+{
+  rv_newgame,
+  rv_options,
+  rv_files,
+  rv_info,
+  rv_quit,
+  rv_main_end
+} raven_main_e;
+
+menuitem_t RavenMainMenu[] =
+{
+  {1, "", M_NewGame,    'n', "new game"},
+  {1, "", M_Options,    'o', "options"},
+  {1, "", M_RavenFiles, 'g', "game files"},
+  {1, "", M_ReadThis,   'i', "info"},
+  {1, "", M_QuitDOOM,   'q', "quit game"}
+};
+
+menu_t RavenMainDef =
+{
+  rv_main_end,
+  NULL,
+  RavenMainMenu,
+  M_DrawMainMenu,
+  110, 56,
+  0
+};
+
+enum
+{
+  rv_loadgame,
+  rv_savegame,
+  rv_files_end
+} raven_files_e;
+
+menuitem_t RavenFilesMenu[] =
+{
+  {1, "", M_LoadGame, 'l', "load game"},
+  {1, "", M_SaveGame, 's', "save game"}
+};
+
+menu_t RavenFilesDef =
+{
+  rv_files_end,
+  &RavenMainDef,
+  RavenFilesMenu,
+  NULL,
+  110, 60,
+  0
+};
+
+void M_RavenFiles(int choice)
+{
+  M_SetupNextMenu(&RavenFilesDef);
+}
+
+/* The active main menu: Heretic and Hexen share the Raven menu; Doom uses
+ * MainDef. */
+static menu_t *M_MainMenuDef(void)
+{
+  return raven ? &RavenMainDef : &MainDef;
+}
+
 
 /////////////////////////////
 //
@@ -468,12 +641,12 @@ void M_ReadThis2(int choice)
 
 void M_FinishReadThis(int choice)
 {
-  M_SetupNextMenu(&MainDef);
+  M_SetupNextMenu(M_MainMenuDef());
 }
 
 void M_FinishHelp(int choice)        // killough 10/98
 {
-  M_SetupNextMenu(&MainDef);
+  M_SetupNextMenu(M_MainMenuDef());
 }
 
 //
@@ -485,8 +658,14 @@ void M_FinishHelp(int choice)        // killough 10/98
 void M_DrawReadThis1(void)
 {
   inhelpscreens = TRUE;
-  if (gamemode == shareware)
-    V_DrawNamePatch(0, 0, 0, "HELP2", CR_DEFAULT, VPT_STRETCH);
+  if (raven)
+    /* Heretic and Hexen HELP1/HELP2 are raw 320x200 bitmaps, not patch_t graphics;
+     * drawing them through the patch decoder reads a bogus width/height and
+     * tries to allocate ~4 GB.  Use the raw-screen blit (same path used for
+     * Heretic's TITLE/CREDIT pages). */
+    V_DrawRawScreen("HELP1");
+  else if (gamemode == shareware)
+    V_DrawNamePatchFullScreenCached(0, "HELP2", CR_DEFAULT);
   else
     M_DrawCredits();
 }
@@ -499,10 +678,12 @@ void M_DrawReadThis1(void)
 void M_DrawReadThis2(void)
 {
   inhelpscreens = TRUE;
-  if (gamemode == shareware)
+  if (raven)
+    V_DrawRawScreen("HELP2");
+  else if (gamemode == shareware)
     M_DrawCredits();
   else
-    V_DrawNamePatch(0, 0, 0, "CREDIT", CR_DEFAULT, VPT_STRETCH);
+    V_DrawNamePatchFullScreenCached(0, "CREDIT", CR_DEFAULT);
 }
 
 /////////////////////////////
@@ -538,6 +719,11 @@ menu_t EpiDef =
 // This is for customized episode menus
 int EpiCustom;
 short EpiMenuEpi[8], EpiMenuMap[8];
+/* Start-map lump name for each episode entry.  ZDoom MAPINFO allows an
+ * episode to point at an arbitrarily named map (e.g. ZDCMP2) that does not
+ * fit the MAPnn/ExMy pattern G_ValidateMapName understands; keep the raw
+ * name so the episode can be launched by name via G_DeferedInitNewName. */
+char EpiMenuName[8][9];
 
 //
 //    M_Episode
@@ -547,10 +733,69 @@ int epi;
 void M_AddEpisode(const char *map, char *def)
 {
   if (!EpiCustom) {
+     int k;
      EpiCustom = true;
      // No more than 4 Eps expected when having UMAPINFO (prevent SIGILv1.2 from showing twice)
      if (EpiDef.numitems > 4)
         EpiDef.numitems = 4;
+     /* Issue #173: SIGIL.wad (the non-compat UMAPINFO build) ships a
+      * single `episode = E5M1` definition.  That fires this function
+      * exactly once on top of the four episodes M_Init already set
+      * up for Ultimate Doom, flipping EpiCustom to true.  From here
+      * on M_ChooseSkill switches to the EpiCustom code path:
+      *
+      *     G_DeferedInitNew(choice, EpiMenuEpi[epi], EpiMenuMap[epi])
+      *
+      * instead of the default `epi+1, 1` mapping.  But EpiMenuEpi[]
+      * and EpiMenuMap[] are only ever written by THIS function, and
+      * vanilla DOOM 1 episodes never pass through it -- their menu
+      * entries come from the static EpisodeMenu[] table and the
+      * gamemode-driven numitems setup in M_Init.  So slots 0..3
+      * stay at the BSS-zero default, and selecting Episode 2 / 3 / 4
+      * launches G_DeferedInitNew with (epi=0, map=0), which the
+      * engine clamps to E1M1 (Hangar).
+      *
+      * Backfill the slots that M_Init already populated: vanilla
+      * Doom episodes start at map 1 of their own episode number,
+      * matching the non-EpiCustom default formula.
+      *
+      * Issue: M_ChooseSkill launches the EpiCustom path by map *name*
+      * via G_DeferedInitNewName(choice, EpiMenuName[epi]), not by the
+      * EpiMenuEpi/EpiMenuMap numbers.  The loop below must therefore also
+      * seed EpiMenuName[k] for the vanilla episodes; otherwise those slots
+      * stay BSS-empty ("") and G_DeferedInitNewName, given an empty name,
+      * falls through to its default e=1,m=1 -- so selecting Episode 2/3/4
+      * (e.g. when SIGIL's UMAPINFO appends E5 and flips EpiCustom) silently
+      * relaunches E1M1.  Vanilla Doom episodes start at E<k+1>M1. */
+     for (k = 0; k < EpiDef.numitems; k++)
+     {
+        EpiMenuEpi[k] = k + 1;
+        EpiMenuMap[k] = 1;
+        EpiMenuName[k][0] = 'E';
+        EpiMenuName[k][1] = (char)('1' + k);
+        EpiMenuName[k][2] = 'M';
+        EpiMenuName[k][3] = '1';
+        EpiMenuName[k][4] = 0;
+     }
+     /* Doom II (and the other commercial IWADs) has no episode menu of its
+      * own -- M_Init leaves EpiDef.numitems at 0 and New Game jumps straight
+      * to the skill screen.  When a mod adds its own episode without first
+      * clearing, the base game's single implicit episode should remain, the
+      * way other source ports keep the IWAD's default "Hell on Earth" entry
+      * and append the mod's episode after it.  Seed that base entry now so the
+      * menu shows both; a subsequent 'clearepisodes' (def == "-") still wipes
+      * it by resetting numitems to 0 below. */
+     if (gamemode == commercial && EpiDef.numitems == 0)
+     {
+        strncpy(EpiMenuName[0], "MAP01", 8);
+        EpiMenuName[0][8] = 0;
+        EpiMenuEpi[0]  = 1;
+        EpiMenuMap[0]  = 1;
+        EpisodeMenu[0].name[0]  = 0;        /* no graphic; drawn as alttext */
+        EpisodeMenu[0].alttext  = "Hell on Earth";
+        EpisodeMenu[0].alphaKey = 'h';
+        EpiDef.numitems = 1;
+     }
   }
   if (*def == '-')	// means 'clear'
   {
@@ -559,12 +804,35 @@ void M_AddEpisode(const char *map, char *def)
   else
   {
     int episodenum, mapnum;
-    const char *gfx = strtok(def, "\n");
-    const char *txt = strtok(NULL, "\n");
-    const char *alpha = strtok(NULL, "\n");
+    /* Split def in place on newlines into up to three fields without strtok
+     * (avoids its static state). def is caller-owned and persists, and txt
+     * is stored as a long-lived alttext pointer into it. */
+    char *gfx = def;
+    char *txt = NULL;
+    char *alpha = NULL;
+    char *nl = strchr(gfx, '\n');
+    if (nl)
+    {
+      *nl = '\0';
+      txt = nl + 1;
+      nl  = strchr(txt, '\n');
+      if (nl)
+      {
+        *nl   = '\0';
+        alpha = nl + 1;
+      }
+    }
     if (EpiDef.numitems >= 8)
        return;
+    /* G_ValidateMapName returns 0 and leaves episodenum/mapnum UNSET for a
+     * non-standard ZDoom map name (e.g. ZDCMP2).  Initialise them so the
+     * uninitialised stack values never reach EpiMenuEpi/Map (which caused a
+     * crash on skill select), and keep the raw name for a by-name launch. */
+    episodenum = 0;
+    mapnum     = 0;
     G_ValidateMapName(map, &episodenum, &mapnum);
+    strncpy(EpiMenuName[EpiDef.numitems], map, 8);
+    EpiMenuName[EpiDef.numitems][8] = 0;
     EpiMenuEpi[EpiDef.numitems] = episodenum;
     EpiMenuMap[EpiDef.numitems] = mapnum;
     strncpy(EpisodeMenu[EpiDef.numitems].name, gfx, 8);
@@ -583,10 +851,26 @@ void M_AddEpisode(const char *map, char *def)
   }
 }
 
+/* Custom skill (difficulty) names from MAPINFO.  A Skill block's Name string
+ * is stored here by index (0 = baby ... 4 = nightmare); M_ApplySkillNames
+ * copies any that were set over the stock New Game menu captions.  Names are
+ * strdup'd so the menu's borrowed alttext pointer stays valid for the session. */
+#define MAX_SKILL_NAMES 5
+static char *custom_skill_names[MAX_SKILL_NAMES];
+
+void M_SetSkillName(int index, const char *name)
+{
+  if (index < 0 || index >= MAX_SKILL_NAMES || !name)
+    return;
+  free(custom_skill_names[index]);
+  custom_skill_names[index] = strdup(name);
+}
+
 void M_DrawEpisode(void)
 {
   // CPhipps - patch drawing updated
-  V_DrawNamePatch(54, EpiDef.y - 25, 0, "M_EPISOD", CR_DEFAULT, VPT_STRETCH);
+  if (W_CheckNumForName("M_EPISOD") >= 0)
+    V_DrawNamePatch(54, EpiDef.y - 25, 0, "M_EPISOD", CR_DEFAULT, VPT_STRETCH);
 }
 
 void M_Episode(int choice)
@@ -598,6 +882,7 @@ void M_Episode(int choice)
   }
 
   epi = choice;
+  M_ApplySkillNames();
   M_SetupNextMenu(&NewDef);
 }
 
@@ -639,6 +924,25 @@ menu_t NewDef =
   hurtme          // lastOn
 };
 
+/* Apply any MAPINFO custom skill names over the stock New Game captions.
+ * Called as the skill menu is entered so a mod's difficulty names appear.
+ *
+ * The menu prefers a drawable patch (M_JKILL, M_ROUGH, ...) over alttext and
+ * only falls back to text when a patch is missing.  The stock skill patches
+ * exist, so to make a custom name actually show we must also clear that item's
+ * patch name -- that forces M_DrawNewGame's "any missing patch -> draw the
+ * whole menu as text" path, so every skill (custom or not) renders as text. */
+void M_ApplySkillNames(void)
+{
+  int i;
+  for (i = 0; i < newg_end && i < MAX_SKILL_NAMES; i++)
+    if (custom_skill_names[i])
+    {
+      NewGameMenu[i].alttext = custom_skill_names[i];
+      NewGameMenu[i].name[0] = 0;     /* drop the patch: draw as text */
+    }
+}
+
 //
 // M_NewGame
 //
@@ -646,8 +950,123 @@ menu_t NewDef =
 void M_DrawNewGame(void)
 {
   // CPhipps - patch drawing updated
-  V_DrawNamePatch(96, 14, 0, "M_NEWG", CR_DEFAULT, VPT_STRETCH);
-  V_DrawNamePatch(54, 38, 0, "M_SKILL",CR_DEFAULT, VPT_STRETCH);
+  if (W_CheckNumForName("M_NEWG") >= 0)
+    V_DrawNamePatch(96, 14, 0, "M_NEWG", CR_DEFAULT, VPT_STRETCH);
+  if (W_CheckNumForName("M_SKILL") >= 0)
+    V_DrawNamePatch(54, 38, 0, "M_SKILL",CR_DEFAULT, VPT_STRETCH);
+}
+
+/////////////////////////////
+//
+// HEXEN CLASS SELECT MENU
+//
+// Hexen picks a player class (Fighter/Cleric/Mage) before the skill
+// screen.  There are no per-item graphic lumps, so the items render as
+// alttext through the big FONTB font (the raven path in M_Drawer).
+//
+
+enum
+{
+  class_fighter,
+  class_cleric,
+  class_mage,
+  class_end
+} class_e;
+
+menuitem_t ClassMenu[] =
+{
+  {1, "", M_ChooseClass, 'f', NULL},
+  {1, "", M_ChooseClass, 'c', NULL},
+  {1, "", M_ChooseClass, 'm', NULL}
+};
+
+menu_t ClassDef =
+{
+  class_end,       // # of menu items
+  &MainDef,        // previous menu
+  ClassMenu,       // menuitem_t ->
+  M_DrawClass,     // drawing routine ->
+  66, 60,          // x,y
+  class_fighter    // lastOn
+};
+
+void M_DrawClass(void)
+{
+  /* The authentic Hexen class screen draws the "choose class:" heading and
+   * the three class names in the big FONTB font (rendered red, like the
+   * skill menu), with a framed player model of the highlighted class on the
+   * right.  An earlier version drew the heading/list in the small FONTA font
+   * in green; that does not match Hexen, which uses FONTB here just like
+   * every other big-font menu. */
+  static const char *const boxlump[3]  = { "M_FBOX",  "M_CBOX",  "M_MBOX"  };
+  static const char *const walkfmt[3]  = { "M_FWALK%d", "M_CWALK%d", "M_MWALK%d" };
+  int sel = (itemOn >= 0 && itemOn < class_end) ? itemOn : 0;
+  char walkname[9];
+
+  /* Cycle the four walk frames so the model turns in place as in the
+   * original.  gametic advances while the class screen sits over the demo
+   * walk, giving roughly seven frames a second. */
+  snprintf(walkname, sizeof(walkname), walkfmt[sel], 1 + ((gametic >> 2) & 3));
+
+  /* Heading and class list in the big FONTB font (M_DrawTextB uppercases
+   * and renders through FONTB; the alttext for the ClassMenu items is left
+   * NULL so the generic item loop in M_Drawer does not draw over them). */
+  M_DrawTextB(34, 24, "CHOOSE CLASS:");
+  M_DrawTextB(ClassDef.x, ClassDef.y + 0 * LINEHEIGHT, "FIGHTER");
+  M_DrawTextB(ClassDef.x, ClassDef.y + 1 * LINEHEIGHT, "CLERIC");
+  M_DrawTextB(ClassDef.x, ClassDef.y + 2 * LINEHEIGHT, "MAGE");
+
+  /* Framed model of the highlighted class (box behind, walking model on
+   * top).  The box is 112x136 at (174,8); its black model window sits in the
+   * upper portion, so centre the ~44x66 walking model horizontally and seat
+   * it inside that window rather than below the frame. */
+  if (W_CheckNumForName(boxlump[sel]) >= 0)
+    V_DrawNamePatch(174, 8, 0, boxlump[sel], CR_DEFAULT, VPT_STRETCH);
+  if (W_CheckNumForName(walkname) >= 0)
+  {
+    int lump = W_GetNumForName(walkname);
+    int bx = 174, bw = 112;
+    int mw = R_NumPatchWidth(lump);
+    /* Centre the visible figure horizontally in the 112-wide box and seat it
+     * inside the black model window in the upper part of the frame.
+     * V_DrawNumPatch applies the patch's own offsets. */
+    V_DrawNumPatch(bx + (bw - mw) / 2, 24, 0, lump, CR_DEFAULT, VPT_STRETCH);
+  }
+}
+
+void M_ChooseClass(int choice)
+{
+  pclass_t pc = PCLASS_FIGHTER;
+  int i;
+
+  if (choice == class_cleric)
+    pc = PCLASS_CLERIC;
+  else if (choice == class_mage)
+    pc = PCLASS_MAGE;
+
+  for (i = 0; i < MAXPLAYERS; i++)
+    PlayerClass[i] = pc;
+
+  /* Hexen's skill names are per class.  The skill menu (NewGameMenu)
+   * still carries Doom's alttext, which M_Drawer would otherwise draw
+   * through the big FONTB font ("i'm too young to die", ...).  Now that
+   * the class is known, substitute the matching Hexen skill titles. */
+  {
+    static const char *const fighter_skills[5] =
+      { "squire", "knight", "warrior", "berserker", "titan" };
+    static const char *const cleric_skills[5] =
+      { "altar boy", "acolyte", "priest", "cardinal", "pope" };
+    static const char *const mage_skills[5] =
+      { "apprentice", "enchanter", "sorcerer", "warlock", "archmage" };
+    const char *const *skills = (pc == PCLASS_CLERIC) ? cleric_skills :
+                                (pc == PCLASS_MAGE)   ? mage_skills :
+                                                        fighter_skills;
+    for (i = 0; i < newg_end && i < 5; i++)
+      NewGameMenu[i].alttext = (char *)skills[i];
+  }
+
+  /* Proceed to skill selection, exactly as the non-Hexen New Game path. */
+  M_SetupNextMenu(&NewDef);
 }
 
 /* cph - make `New Game' restart the level in a netgame */
@@ -671,8 +1090,15 @@ void M_NewGame(int choice)
     return;
   }
 
-  if ( EpiDef.numitems == 0 )
+  /* Hexen chooses a player class before skill; other games go straight to
+   * the skill (or episode) menu. */
+  if (hexen)
+    M_SetupNextMenu(&ClassDef);
+  else if ( EpiDef.numitems == 0 )
+  {
+    M_ApplySkillNames();
     M_SetupNextMenu(&NewDef);
+  }
   else
     M_SetupNextMenu(&EpiDef);
 }
@@ -683,7 +1109,10 @@ static void M_VerifyNightmare(int ch)
   if (ch != 'y')
     return;
 
-  G_DeferedInitNew(nightmare,epi+1,1);
+  if (!EpiCustom)
+    G_DeferedInitNew(sk_nightmare,epi+1,1);
+  else
+    G_DeferedInitNewName(sk_nightmare, EpiMenuName[epi]);
   M_ClearMenus ();
 }
 
@@ -696,7 +1125,7 @@ void M_ChooseSkill(int choice)
     }
 
   if (!EpiCustom) G_DeferedInitNew(choice,epi+1,1);
-  else G_DeferedInitNew(choice, EpiMenuEpi[epi], EpiMenuMap[epi]);
+  else G_DeferedInitNewName(choice, EpiMenuName[epi]);
   M_ClearMenus ();
 }
 
@@ -756,7 +1185,12 @@ void M_DrawLoad(void)
 
   //jff 3/15/98 use symbolic load position
   // CPhipps - patch drawing updated
-  V_DrawNamePatch(72 ,LOADGRAPHIC_Y, 0, "M_LOADG", CR_DEFAULT, VPT_STRETCH);
+  /* M_LOADG is a Doom-only title graphic; draw the Heretic title in its
+   * big font instead. */
+  if (raven)
+    M_DrawTextB(70, LOADGRAPHIC_Y, "LOAD GAME");
+  else
+    V_DrawNamePatch(72 ,LOADGRAPHIC_Y, 0, "M_LOADG", CR_DEFAULT, VPT_STRETCH);
   for (i = 0 ; i < load_end ; i++) {
     M_DrawSaveLoadBorder(LoadDef.x,LoadDef.y+LINEHEIGHT*i);
     M_WriteText(LoadDef.x,LoadDef.y+LINEHEIGHT*i,savegamestrings[i], CR_DEFAULT);
@@ -770,6 +1204,13 @@ void M_DrawLoad(void)
 void M_DrawSaveLoadBorder(int x,int y)
 {
   int i;
+
+  /* Heretic has none of Doom's M_LSLEFT/M_LSCNTR/M_LSRGHT border graphics.
+   * The Doom path tiles the centre patch 24 times per slot, which at a high
+   * internal resolution is a huge number of stretched blits per frame for a
+   * border that does not even exist here -- so skip it for Heretic and Hexen. */
+  if (raven)
+    return;
 
   V_DrawNamePatch(x-8, y+7, 0, "M_LSLEFT", CR_DEFAULT, VPT_STRETCH);
 
@@ -895,7 +1336,10 @@ void M_DrawSave(void)
 
   //jff 3/15/98 use symbolic load position
   // CPhipps - patch drawing updated
-  V_DrawNamePatch(72, LOADGRAPHIC_Y, 0, "M_SAVEG", CR_DEFAULT, VPT_STRETCH);
+  if (raven)
+    M_DrawTextB(70, LOADGRAPHIC_Y, "SAVE GAME");
+  else
+    V_DrawNamePatch(72, LOADGRAPHIC_Y, 0, "M_SAVEG", CR_DEFAULT, VPT_STRETCH);
   for (i = 0 ; i < load_end ; i++)
     {
     M_DrawSaveLoadBorder(LoadDef.x,LoadDef.y+LINEHEIGHT*i);
@@ -1018,6 +1462,26 @@ char msgNames[2][9]  = {"M_MSGOFF","M_MSGON"};
 
 void M_DrawOptions(void)
 {
+  /* Heretic and Hexen have none of Doom's option-screen graphics
+   * (M_OPTTTL, M_MSGON/M_MSGOFF, M_GDHIGH/M_GDLOW).  Drawing a missing
+   * lump is not free: the name lookup and the patch drawer each log an
+   * error line through the frontend every call, so this routine alone
+   * produced six error-log lines per displayed frame under the Raven
+   * games -- enough to drag the whole frame down on frontends whose log
+   * output goes to a console.  Draw the same information in the big
+   * Raven font instead, like the other Raven menu screens do. */
+  if (raven)
+  {
+    M_DrawTextB(160 - M_TextBWidth("OPTIONS") / 2, 15, "OPTIONS");
+
+    M_DrawTextB(OptionsDef.x + 120, OptionsDef.y + LINEHEIGHT*messages,
+                showMessages ? "ON" : "OFF");
+
+    M_DrawTextB(OptionsDef.x + 150, OptionsDef.y + LINEHEIGHT*4,
+                screenblocks ? "HIGH" : "LOW");
+    return;
+  }
+
   // CPhipps - patch drawing updated
   // proff/nicolas 09/20/98 -- changed for hi-res
   V_DrawNamePatch(108, 15, 0, "M_OPTTTL", CR_DEFAULT, VPT_STRETCH);
@@ -1068,28 +1532,6 @@ static void M_QuitResponse(int ch)
 {
   if (ch != 'y')
     return;
-#ifndef __LIBRETRO__
-  if ((!netgame || demoplayback) // killough 12/98
-      && !nosfxparm && snd_card) // avoid delay if no sound card
-  {
-    int i;
-
-    if (gamemode == commercial)
-      S_StartSound(NULL,quitsounds2[(gametic>>2)&7]);
-    else
-      S_StartSound(NULL,quitsounds[(gametic>>2)&7]);
-
-    // wait till all sounds stopped or 3 seconds are over
-    i = 30;
-    while (i>0) {
-      I_uSleep(100000); // CPhipps - don't thrash cpu in this loop
-      if (!I_AnySoundStillPlaying())
-        break;
-      i--;
-    }
-  }
-#endif
-
   quit_pressed = true;
 }
 
@@ -1145,8 +1587,13 @@ menu_t SoundDef =
 
 void M_DrawSound(void)
 {
-  // CPhipps - patch drawing updated
-  V_DrawNamePatch(60, 38, 0, "M_SVOL", CR_DEFAULT, VPT_STRETCH);
+  /* M_SVOL is Doom-only; under the Raven games draw the title in the big
+   * font instead of logging two missing-lump errors per frame. */
+  if (raven)
+    M_DrawTextB(160 - M_TextBWidth("SOUND VOLUME") / 2, 38, "SOUND VOLUME");
+  else
+    // CPhipps - patch drawing updated
+    V_DrawNamePatch(60, 38, 0, "M_SVOL", CR_DEFAULT, VPT_STRETCH);
 
   M_DrawThermo(SoundDef.x,SoundDef.y+LINEHEIGHT*(sfx_vol+1),16,snd_SfxVolume);
 
@@ -1242,8 +1689,14 @@ void M_DrawMouse(void)
 {
   int mhmx,mvmx; /* jff 4/3/98 clamp drawn position    99max mead */
 
-  // CPhipps - patch drawing updated
-  V_DrawNamePatch(60, 38, 0, "M_MSENS", CR_DEFAULT, VPT_STRETCH);
+  /* M_MSENS is Doom-only; under the Raven games draw the title in the big
+   * font instead of logging two missing-lump errors per frame. */
+  if (raven)
+    M_DrawTextB(160 - M_TextBWidth("MOUSE SENSITIVITY") / 2, 38,
+                "MOUSE SENSITIVITY");
+  else
+    // CPhipps - patch drawing updated
+    V_DrawNamePatch(60, 38, 0, "M_MSENS", CR_DEFAULT, VPT_STRETCH);
 
   //jff 4/3/98 clamp horizontal sensitivity display
   mhmx = mouseSensitivity_horiz>99? 99 : mouseSensitivity_horiz; /*mead*/
@@ -1305,7 +1758,7 @@ char tempstring[80];
 void M_QuickSave(void)
 {
   if (!usergame && (!demoplayback || netgame)) { /* killough 10/98 */
-    S_StartSound(NULL,sfx_oof);
+    S_StartSound(NULL,M_MenuSound(sfx_oof));
     return;
   }
 
@@ -1321,7 +1774,7 @@ void M_QuickSave(void)
   }
   sprintf(tempstring,s_QSPROMPT,savegamestrings[quickSaveSlot]); // Ty 03/27/98 - externalized
   M_DoSave(quickSaveSlot);
-  S_StartSound(NULL,sfx_swtchx);
+  S_StartSound(NULL,M_MenuSound(sfx_swtchx));
 }
 
 /////////////////////////////
@@ -1333,7 +1786,7 @@ static void M_QuickLoadResponse(int ch)
 {
   if (ch == 'y') {
     M_LoadSelect(quickSaveSlot);
-    S_StartSound(NULL,sfx_swtchx);
+    S_StartSound(NULL,M_MenuSound(sfx_swtchx));
   }
 }
 
@@ -1758,7 +2211,6 @@ static void M_DrawItem(const setup_menu_t* s)
         CR_DEFAULT, VPT_STRETCH);
 
   else { // Draw the item string
-    char *p, *t;
     int w = 0;
     int color =
   flags & S_SELECT ? CR_SELECT :
@@ -1768,16 +2220,32 @@ static void M_DrawItem(const setup_menu_t* s)
     /* killough 10/98:
      * Enhance to support multiline text separated by newlines.
      * This supports multiline items on horizontally-crowded menus.
+     *
+     * The item text is a constant from a static table, so the common
+     * single-line case is drawn in place with no allocation. Only the
+     * rare multiline item (one containing '\n') needs the strdup/strtok
+     * split, so the per-frame malloc/free is confined to that case
+     * instead of running for every item every frame.
      */
 
-    for (p = t = strdup(s->m_text); (p = strtok(p,"\n")); y += 8, p = NULL)
-      {      /* killough 10/98: support left-justification: */
-  strcpy(menu_buffer,p);
+    if (!strchr(s->m_text, '\n'))
+      {
+  strcpy(menu_buffer, s->m_text);
   if (!(flags & S_LEFTJUST))
     w = M_GetPixelWidth(menu_buffer) + 4;
-  M_DrawMenuString(x - w, y ,color);
+  M_DrawMenuString(x - w, y, color);
       }
-    free(t);
+    else
+      {
+  char *p, *t;
+  for (p = t = strdup(s->m_text); (p = strtok(p,"\n")); y += 8, p = NULL)
+    {      /* killough 10/98: support left-justification: */
+      strcpy(menu_buffer,p);
+      w = (flags & S_LEFTJUST) ? 0 : M_GetPixelWidth(menu_buffer) + 4;
+      M_DrawMenuString(x - w, y ,color);
+    }
+  free(t);
+      }
   }
 }
 
@@ -1884,7 +2352,7 @@ static void M_DrawSetting(const setup_menu_t* s)
                         6*SCREENWIDTH/320, 6*SCREENHEIGHT/200,
                  (uint8_t)ch);
 
-      if (!ch) // don't show this item in automap mode
+      if (!ch && W_CheckNumForName("M_PALNO") >= 0) // don't show this item in automap mode
   V_DrawNamePatch(x+1,y,0,"M_PALNO", CR_DEFAULT, VPT_STRETCH);
       return;
     }
@@ -2332,7 +2800,7 @@ void M_DrawKeybnd(void)
 
   // Set up the Key Binding screen
 
-  M_DrawBackground("FLOOR4_6", 0); // Draw background
+  M_DrawBackground(g_menu_flat, 0); // Draw background
 
   // proff/nicolas 09/20/98 -- changed for hi-res
   M_DrawTitle(84, 2, "M_KEYBND", CR_DEFAULT, "KEY BINDINGS", CR_GOLD);
@@ -2441,7 +2909,7 @@ void M_DrawWeapons(void)
 {
   menuactive = mnact_full;
 
-  M_DrawBackground("FLOOR4_6", 0); // Draw background
+  M_DrawBackground(g_menu_flat, 0); // Draw background
 
   // proff/nicolas 09/20/98 -- changed for hi-res
   M_DrawTitle(109, 2, "M_WEAP", CR_DEFAULT, "WEAPONS", CR_GOLD);
@@ -2533,7 +3001,7 @@ void M_DrawStatusHUD(void)
 {
   menuactive = mnact_full;
 
-  M_DrawBackground("FLOOR4_6", 0); // Draw background
+  M_DrawBackground(g_menu_flat, 0); // Draw background
 
   // proff/nicolas 09/20/98 -- changed for hi-res
   M_DrawTitle(59, 2, "M_STAT", CR_DEFAULT, "STATUS BAR / HUD", CR_GOLD);
@@ -2665,7 +3133,10 @@ static void M_DrawColPal(void)
 
   // proff/nicolas 09/20/98 -- changed for hi-res
   // CPhipps - patch drawing updated
-  V_DrawNamePatch(COLORPALXORIG-5, COLORPALYORIG-5, 0, "M_COLORS", CR_DEFAULT, VPT_STRETCH);
+  /* Doom-only graphics; absent under Heretic/Hexen, where drawing them
+   * would log two missing-lump errors per patch per frame. */
+  if (W_CheckNumForName("M_COLORS") >= 0)
+    V_DrawNamePatch(COLORPALXORIG-5, COLORPALYORIG-5, 0, "M_COLORS", CR_DEFAULT, VPT_STRETCH);
 
   // Draw the cursor around the paint chip
   // (cpx,cpy) is the upper left-hand corner of the paint chip
@@ -2673,7 +3144,8 @@ static void M_DrawColPal(void)
   cpx = COLORPALXORIG+color_palette_x*(CHIP_SIZE+1)-1;
   cpy = COLORPALYORIG+color_palette_y*(CHIP_SIZE+1)-1;
   // proff 12/6/98: Drawing of colorchips completly changed for hi-res, it now uses a patch
-  V_DrawNamePatch(cpx,cpy,0,"M_PALSEL",CR_DEFAULT,VPT_STRETCH); // PROFF_GL_FIX
+  if (W_CheckNumForName("M_PALSEL") >= 0)
+    V_DrawNamePatch(cpx,cpy,0,"M_PALSEL",CR_DEFAULT,VPT_STRETCH);
 }
 
 // The drawing part of the Automap Setup initialization. Draw the
@@ -2683,7 +3155,7 @@ void M_DrawAutoMap(void)
 {
   menuactive = mnact_full;
 
-  M_DrawBackground("FLOOR4_6", 0); // Draw background
+  M_DrawBackground(g_menu_flat, 0); // Draw background
 
   // CPhipps - patch drawing updated
   M_DrawTitle(109, 2, "M_AUTO", CR_DEFAULT, "AUTOMAP", CR_GOLD);
@@ -2791,7 +3263,7 @@ void M_DrawEnemy(void)
 {
   menuactive = mnact_full;
 
-  M_DrawBackground("FLOOR4_6", 0); // Draw background
+  M_DrawBackground(g_menu_flat, 0); // Draw background
 
   // proff/nicolas 09/20/98 -- changed for hi-res
   M_DrawTitle(114, 2, "M_ENEM", CR_DEFAULT, "ENEMIES", CR_GOLD);
@@ -2827,11 +3299,14 @@ enum {
   general_title_video,
   general_fps,
   general_gamma,
+  general_aspect,
+  general_llturn,
 
   general_title_sound,
   general_sndchan,
   general_pitch,
   general_mus_external,
+  general_midi_player,
 
   general_title_freelook,
   general_mouselook,
@@ -2845,9 +3320,20 @@ enum {
 #define G_YA3 (G_YA2 + 16)
 #define GF_X 76
 
-static const char *framerates[] = {"35fps", "40fps", "50fps", "60fps", "70fps", "72fps", "75fps", "90fps", "100fps", "119fps", "120fps", "140fps", "144fps", "155fps", "160fps", "165fps", "180fps", "200fps", "240fps", "244fps", "300fps", "320fps", "360fps", "480fps", "540fps", NULL};
+static const char *framerates[] = {"35fps", "40fps", "50fps", "60fps", "70fps", "72fps", "75fps", "90fps", "100fps", "105fps", "119fps", "120fps", "140fps", "144fps", "155fps", "160fps", "165fps", "175fps", "180fps", "200fps", "210fps", "240fps", "244fps", "245fps", "280fps", "300fps", "315fps", "320fps", "350fps", "360fps", "385fps", "420fps", "455fps", "480fps", "490fps", "540fps", NULL};
 static const char *gamma_lvls[] = {"OFF", "Lv. 1", "Lv. 2", "Lv. 3", "Lv. 4", NULL};
+static const char *aspect_opts[] = {"4:3", "16:9", "16:10", "32:9", "21:9", NULL};
+static const char *sndchan_opts[] = {"8", "16", "32", NULL};
 static const char *mus_external_opts[] = {"Never", "Always", "Only IWAD", NULL};
+static const char *midi_player_opts[] = {
+  "Off",
+  "Adlib",
+#ifdef HAVE_LIBFLUIDSYNTH
+  "Fluidsynth",
+#endif
+  "libretro",
+  NULL
+};
 
 setup_menu_t gen_settings1[] = { // General Settings screen1
 
@@ -2859,17 +3345,26 @@ setup_menu_t gen_settings1[] = { // General Settings screen1
   {"Gamma Correction", S_CHOICE, m_null, G_X,
   G_YA + general_gamma*8, {"usegamma"}, 0, 0, NULL, gamma_lvls},
 
+  {"Aspect Ratio", S_CHOICE, m_null, G_X,
+  G_YA + general_aspect*8, {"render_aspect"}, 0, 0, M_ChangeAspectRatio, aspect_opts},
+
+  {"Low-Latency Turning", S_YESNO, m_null, G_X,
+  G_YA + general_llturn*8, {"lowlatency_turning"}, 0, 0, NULL, NULL},
+
 
   SETUP_MENU_TITLE("Sound & Music", G_X, G_YA2 + general_title_sound*8 - 2),
 
-  {"Number of Sound Channels", S_NUM|S_PRGWARN, m_null, G_X,
-   G_YA2 + general_sndchan*8, {"snd_channels"}, 0, 0, NULL, NULL},
+  {"Number of Sound Channels", S_CHOICE|S_PRGWARN, m_null, G_X,
+   G_YA2 + general_sndchan*8, {"snd_channels"}, 0, 0, NULL, sndchan_opts},
 
   {"Enable v1.1 Pitch Effects", S_YESNO, m_null, G_X,
    G_YA2 + general_pitch*8, {"pitched_sounds"}, 0, 0, NULL, NULL},
 
   {"Play external MP3 files", S_CHOICE, m_null, G_X,
    G_YA2 + general_mus_external*8, {"mus_load_external"}, 0, 0, NULL, mus_external_opts},
+
+  {"MIDI Hardware", S_CHOICE, m_null, G_X,
+   G_YA2 + general_midi_player*8, {"midi_player"}, 0, 0, M_ChangeMidiPlayer, midi_player_opts},
 
 
   SETUP_MENU_TITLE("Freelook", G_X, G_YA3 + general_title_freelook*8 - 2),
@@ -2904,11 +3399,17 @@ enum {
   general_smooth,
   general_smoothfactor,
   general_defskill,
+  general_persist,
+  general_bloodcap,
 };
 
 
 #define G_YB  60
 #define G_YB1 (G_YB+20)
+
+static const char *gen_bloodcapstrings[] = {
+  "256", "512", "1024", "2048", "4096", "Unlimited", NULL
+};
 
 static const char *gen_skillstrings[] = {
   // Dummy first option because defaultskill is 1-based
@@ -2937,6 +3438,12 @@ setup_menu_t gen_settings2[] = { // General Settings screen2
 
   {"Default skill level", S_CHOICE, m_null, G_X,
     G_YB1 + general_defskill*8, {"default_skill"}, 0, 0, NULL, gen_skillstrings},
+
+  {"Persistent State", S_YESNO, m_null, G_X,
+   G_YB1 + general_persist*8, {"persistent_state"}, 0, 0, NULL, NULL},
+
+  {"Persistent Blood Cap", S_CHOICE, m_null, G_X,
+   G_YB1 + general_bloodcap*8, {"persistent_blood_cap"}, 0, 0, NULL, gen_bloodcapstrings},
 
   SETUP_MENU_PREV(gen_settings1, KB_PREV, KB_Y+20*8),
   SETUP_MENU_NEXT(gen_settings3, KB_NEXT, KB_Y+20*8),
@@ -2999,7 +3506,7 @@ setup_menu_t gen_settings3[] = { // General Settings screen2
   {"Stretch sky on freelook", S_YESNO, m_null, G_X,
    G_YC2 + general_skystretch*8, {"render_stretchsky"}, 0, 0, M_ChangeMouseLook, NULL},
 
-  {"Wiggle geometry fix", S_YESNO, m_null, G_X,
+  {"Wall Wiggle Fix", S_YESNO, m_null, G_X,
    G_YC2 + general_wigglefix*8, {"r_wiggle_fix"}, 0, 0, NULL, NULL},
 
   {"Fullscreen menu background", S_YESNO, m_null, G_X,
@@ -3025,6 +3532,27 @@ void M_ChangeFramerate(void)
 {
   R_InitInterpolation();
   G_ScaleMovementToFramerate();
+}
+
+/* Apply the new display aspect ratio immediately.  The platform
+ * layer owns the framebuffer width, so it recomputes SCREENWIDTH
+ * for the current height, reallocates its buffers, pushes the new
+ * geometry to the frontend and triggers a view-size recalc.  The
+ * renderer derives FOV from the resulting buffer dimensions. */
+void M_ChangeAspectRatio(void)
+{
+  I_SetAspectRatio();
+}
+
+/* Re-issue I_RegisterSong / I_PlaySong on the currently playing
+ * track so the new "MIDI Hardware" choice applies immediately
+ * rather than waiting for the next S_ChangeMusic call.  No-op
+ * for MP3 streams (mp_player isn't a MIDI player) and when no
+ * music is playing.  See S_RestartMusic for the full skip
+ * conditions. */
+void M_ChangeMidiPlayer(void)
+{
+  S_RestartMusic();
 }
 
 void M_ChangeMouseLook(void)
@@ -3080,7 +3608,7 @@ void M_DrawGeneral(void)
 {
   menuactive = mnact_full;
 
-  M_DrawBackground("FLOOR4_6", 0); // Draw background
+  M_DrawBackground(g_menu_flat, 0); // Draw background
 
   // proff/nicolas 09/20/98 -- changed for hi-res
   M_DrawTitle(114, 2, "M_GENERL", CR_DEFAULT, "GENERAL", CR_GOLD);
@@ -3270,7 +3798,7 @@ void M_DrawCompat(void)
 {
   menuactive = mnact_full;
 
-  M_DrawBackground("FLOOR4_6", 0); // Draw background
+  M_DrawBackground(g_menu_flat, 0); // Draw background
 
   M_DrawTitle(52, 2, "M_COMPAT", CR_DEFAULT, "DOOM COMPATIBILITY", CR_GOLD);
   M_DrawInstructions();
@@ -3390,7 +3918,7 @@ void M_DrawMessages(void)
 {
   menuactive = mnact_full;
 
-  M_DrawBackground("FLOOR4_6", 0); // Draw background
+  M_DrawBackground(g_menu_flat, 0); // Draw background
 
   // CPhipps - patch drawing updated
   M_DrawTitle(103, 2, "M_MESS", CR_DEFAULT, "MESSAGES", CR_GOLD);
@@ -3463,7 +3991,7 @@ void M_DrawChatStrings(void)
 {
   menuactive = mnact_full;
 
-  M_DrawBackground("FLOOR4_6", 0); // Draw background
+  M_DrawBackground(g_menu_flat, 0); // Draw background
 
   // CPhipps - patch drawing updated
   M_DrawTitle(83, 2, "M_CHAT", CR_DEFAULT, "CHAT STRINGS", CR_GOLD);
@@ -3492,7 +4020,7 @@ static void M_SelectDone(setup_menu_t* ptr)
 {
   ptr->m_flags &= ~S_SELECT;
   ptr->m_flags |= S_HILITE;
-  S_StartSound(NULL,sfx_itemup);
+  S_StartSound(NULL,M_MenuSound(sfx_itemup));
   setup_select = FALSE;
   colorbox_active = FALSE;
   if (print_warning_about_changes)     // killough 8/15/98
@@ -3676,7 +4204,7 @@ void M_ExtHelpNextScreen(int choice)
       // when finished with extended help screens, return to Main Menu
 
       extended_help_index = 1;
-      M_SetupNextMenu(&MainDef);
+      M_SetupNextMenu(M_MainMenuDef());
     }
 }
 
@@ -3731,7 +4259,7 @@ void M_DrawExtHelp(void)
   namebfr[4] = extended_help_index/10 + 0x30;
   namebfr[5] = extended_help_index%10 + 0x30;
   // CPhipps - patch drawing updated
-  V_DrawNamePatch(0, 0, 0, namebfr, CR_DEFAULT, VPT_STRETCH);
+  V_DrawNamePatchFS(0, 0, 0, namebfr, CR_DEFAULT, VPT_STRETCH);
 }
 
 //
@@ -3985,7 +4513,7 @@ void M_DrawHelp (void)
 {
   menuactive = mnact_full;
 
-  M_DrawBackground("FLOOR4_6", 0);
+  M_DrawBackground(g_menu_flat, 0);
 
   M_DrawScreenItems(helpstrings);
 }
@@ -4087,6 +4615,11 @@ dbool M_Responder (event_t* ev) {
   if (ch == -1)
     return FALSE; // we can't use the event here
 
+  /* A usable menu key may change something drawn behind the floating menu
+   * (e.g. the screen-size slider, or toggling on-screen messages), so drop
+   * the frozen-view cache and let the next frame recompose once. */
+  D_InvalidateFrozenView();
+
   // Save Game string input
 
    if (saveStringEnter) {
@@ -4141,7 +4674,7 @@ dbool M_Responder (event_t* ev) {
       messageRoutine(ch);
 
     menuactive = mnact_inactive;
-    S_StartSound(NULL,sfx_swtchx);
+    S_StartSound(NULL,M_MenuSound(sfx_swtchx));
     return TRUE;
   }
 
@@ -4161,14 +4694,14 @@ dbool M_Responder (event_t* ev) {
       currentMenu = &HelpDef;         // killough 10/98: new help screen
 
       itemOn = 0;
-      S_StartSound(NULL,sfx_swtchn);
+      S_StartSound(NULL,M_MenuSound(sfx_swtchn));
       return TRUE;
       }
 
     if (ch == key_savegame)     // Save Game
       {
       M_StartControlPanel();
-      S_StartSound(NULL,sfx_swtchn);
+      S_StartSound(NULL,M_MenuSound(sfx_swtchn));
       M_SaveGame(0);
       return TRUE;
       }
@@ -4176,7 +4709,7 @@ dbool M_Responder (event_t* ev) {
     if (ch == key_loadgame)     // Load Game
       {
       M_StartControlPanel();
-      S_StartSound(NULL,sfx_swtchn);
+      S_StartSound(NULL,M_MenuSound(sfx_swtchn));
       M_LoadGame(0);
       return TRUE;
       }
@@ -4186,20 +4719,20 @@ dbool M_Responder (event_t* ev) {
       M_StartControlPanel ();
       currentMenu = &SoundDef;
       itemOn = sfx_vol;
-      S_StartSound(NULL,sfx_swtchn);
+      S_StartSound(NULL,M_MenuSound(sfx_swtchn));
       return TRUE;
       }
 
     if (ch == key_quicksave)      // Quicksave
       {
-      S_StartSound(NULL,sfx_swtchn);
+      S_StartSound(NULL,M_MenuSound(sfx_swtchn));
       M_QuickSave();
       return TRUE;
       }
 
     if (ch == key_endgame)      // End game
       {
-      S_StartSound(NULL,sfx_swtchn);
+      S_StartSound(NULL,M_MenuSound(sfx_swtchn));
       M_EndGame(0);
       return TRUE;
       }
@@ -4207,20 +4740,20 @@ dbool M_Responder (event_t* ev) {
     if (ch == key_messages)      // Toggle messages
       {
       M_ChangeMessages(0);
-      S_StartSound(NULL,sfx_swtchn);
+      S_StartSound(NULL,M_MenuSound(sfx_swtchn));
       return TRUE;
       }
 
     if (ch == key_quickload)      // Quickload
       {
-      S_StartSound(NULL,sfx_swtchn);
+      S_StartSound(NULL,M_MenuSound(sfx_swtchn));
       M_QuickLoad();
       return TRUE;
       }
 
     if (ch == key_quit)       // Quit DOOM
       {
-      S_StartSound(NULL,sfx_swtchn);
+      S_StartSound(NULL,M_MenuSound(sfx_swtchn));
       has_exited = TRUE;
       return TRUE;
       }
@@ -4246,7 +4779,7 @@ dbool M_Responder (event_t* ev) {
       if ((automapmode & am_active) || chat_on)
         return FALSE;
       M_SizeDisplay(0);
-      S_StartSound(NULL,sfx_stnmov);
+      S_StartSound(NULL,M_MenuSound(sfx_stnmov));
       return TRUE;
       }
 
@@ -4255,14 +4788,14 @@ dbool M_Responder (event_t* ev) {
       if ((automapmode & am_active) || chat_on)     // allow
         return FALSE;                   // key_hud==key_zoomin
       M_SizeDisplay(1);                                             //  ^
-      S_StartSound(NULL,sfx_stnmov);                                //  |
+      S_StartSound(NULL,M_MenuSound(sfx_stnmov));                                //  |
       return TRUE;                                                  // phares
       }
 
     /* killough 10/98: allow key shortcut into Setup menu */
     if (ch == key_setup) {
       M_StartControlPanel();
-      S_StartSound(NULL,sfx_swtchn);
+      S_StartSound(NULL,M_MenuSound(sfx_swtchn));
       M_SetupNextMenu(&SetupDef);
       return TRUE;
     }
@@ -4274,7 +4807,7 @@ dbool M_Responder (event_t* ev) {
     if (ch == key_escape)                                     // phares
       {
       M_StartControlPanel ();
-      S_StartSound(NULL,sfx_swtchn);
+      S_StartSound(NULL,M_MenuSound(sfx_swtchn));
       return TRUE;
       }
     return FALSE;
@@ -4423,7 +4956,7 @@ dbool M_Responder (event_t* ev) {
              value > ptr1->var.def->maxvalue))
           value = ptr1->var.def->maxvalue;
         if (*ptr1->var.def->location.pi != value)
-          S_StartSound(NULL,sfx_pstop);
+          S_StartSound(NULL,M_MenuSound(sfx_pstop));
         *ptr1->var.def->location.pi = value;
       }
       if (ptr1->var.def->type == def_str) {
@@ -4435,7 +4968,7 @@ dbool M_Responder (event_t* ev) {
         if (value < 0)
           value = 0;
         if (old_value != value)
-          S_StartSound(NULL,sfx_pstop);
+          S_StartSound(NULL,M_MenuSound(sfx_pstop));
         *ptr1->var.def->location.ppsz = ptr1->selectstrings[value];
       }
     }
@@ -4451,7 +4984,7 @@ dbool M_Responder (event_t* ev) {
              value > ptr1->var.def->maxvalue))
           value = ptr1->var.def->maxvalue;
         if (*ptr1->var.def->location.pi != value)
-          S_StartSound(NULL,sfx_pstop);
+          S_StartSound(NULL,M_MenuSound(sfx_pstop));
         *ptr1->var.def->location.pi = value;
       }
       if (ptr1->var.def->type == def_str) {
@@ -4463,7 +4996,7 @@ dbool M_Responder (event_t* ev) {
         if (ptr1->selectstrings[value] == NULL)
           value = old_value;
         if (old_value != value)
-          S_StartSound(NULL,sfx_pstop);
+          S_StartSound(NULL,M_MenuSound(sfx_pstop));
         *ptr1->var.def->location.ppsz = ptr1->selectstrings[value];
       }
     }
@@ -4624,7 +5157,7 @@ dbool M_Responder (event_t* ev) {
         {
     if (++color_palette_y == 16)
       color_palette_y = 0;
-    S_StartSound(NULL,sfx_itemup);
+    S_StartSound(NULL,M_MenuSound(sfx_itemup));
     return TRUE;
         }
 
@@ -4632,7 +5165,7 @@ dbool M_Responder (event_t* ev) {
         {
     if (--color_palette_y < 0)
       color_palette_y = 15;
-    S_StartSound(NULL,sfx_itemup);
+    S_StartSound(NULL,M_MenuSound(sfx_itemup));
     return TRUE;
         }
 
@@ -4640,7 +5173,7 @@ dbool M_Responder (event_t* ev) {
         {
     if (--color_palette_x < 0)
       color_palette_x = 15;
-    S_StartSound(NULL,sfx_itemup);
+    S_StartSound(NULL,M_MenuSound(sfx_itemup));
     return TRUE;
         }
 
@@ -4648,7 +5181,7 @@ dbool M_Responder (event_t* ev) {
         {
     if (++color_palette_x == 16)
       color_palette_x = 0;
-    S_StartSound(NULL,sfx_itemup);
+    S_StartSound(NULL,M_MenuSound(sfx_itemup));
     return TRUE;
         }
 
@@ -4818,7 +5351,7 @@ dbool M_Responder (event_t* ev) {
 
     ptr1->m_flags |= S_SELECT;
     setup_select = TRUE;
-    S_StartSound(NULL,sfx_itemup);
+    S_StartSound(NULL,M_MenuSound(sfx_itemup));
     return TRUE;
   }
 
@@ -4831,7 +5364,7 @@ dbool M_Responder (event_t* ev) {
         {
     currentMenu = currentMenu->prevMenu;
     itemOn = currentMenu->lastOn;
-    S_StartSound(NULL,sfx_swtchn);
+    S_StartSound(NULL,M_MenuSound(sfx_swtchn));
         }
     ptr1->m_flags &= ~(S_HILITE|S_SELECT);// phares 4/19/98
     setup_active = FALSE;
@@ -4847,7 +5380,7 @@ dbool M_Responder (event_t* ev) {
     set_general_active = FALSE;    // killough 10/98
           set_compat_active = FALSE;    // killough 10/98
     HU_Start();    // catch any message changes // phares 4/19/98
-    S_StartSound(NULL,sfx_swtchx);
+    S_StartSound(NULL,M_MenuSound(sfx_swtchx));
     return TRUE;
   }
 
@@ -4873,7 +5406,7 @@ dbool M_Responder (event_t* ev) {
       print_warning_about_changes = FALSE; // killough 10/98
       while (current_setup_menu[set_menu_itemon++].m_flags&S_SKIP);
       current_setup_menu[--set_menu_itemon].m_flags |= S_HILITE;
-      S_StartSound(NULL,sfx_pstop);  // killough 10/98
+      S_StartSound(NULL,M_MenuSound(sfx_pstop));  // killough 10/98
       return TRUE;
     }
       }
@@ -4895,7 +5428,7 @@ dbool M_Responder (event_t* ev) {
       print_warning_about_changes = FALSE; // killough 10/98
       while (current_setup_menu[set_menu_itemon++].m_flags&S_SKIP);
       current_setup_menu[--set_menu_itemon].m_flags |= S_HILITE;
-      S_StartSound(NULL,sfx_pstop);  // killough 10/98
+      S_StartSound(NULL,M_MenuSound(sfx_pstop));  // killough 10/98
       return TRUE;
     }
       }
@@ -4915,7 +5448,7 @@ dbool M_Responder (event_t* ev) {
       itemOn = 0;
     else
       itemOn++;
-    S_StartSound(NULL,sfx_pstop);
+    S_StartSound(NULL,M_MenuSound(sfx_pstop));
   }
       while(currentMenu->menuitems[itemOn].status==-1);
       return TRUE;
@@ -4929,7 +5462,7 @@ dbool M_Responder (event_t* ev) {
       itemOn = currentMenu->numitems-1;
     else
       itemOn--;
-    S_StartSound(NULL,sfx_pstop);
+    S_StartSound(NULL,M_MenuSound(sfx_pstop));
   }
       while(currentMenu->menuitems[itemOn].status==-1);
       return TRUE;
@@ -4940,7 +5473,7 @@ dbool M_Responder (event_t* ev) {
       if (currentMenu->menuitems[itemOn].routine &&
     currentMenu->menuitems[itemOn].status == 2)
   {
-    S_StartSound(NULL,sfx_stnmov);
+    S_StartSound(NULL,M_MenuSound(sfx_stnmov));
     currentMenu->menuitems[itemOn].routine(0);
   }
       return TRUE;
@@ -4951,7 +5484,7 @@ dbool M_Responder (event_t* ev) {
       if (currentMenu->menuitems[itemOn].routine &&
     currentMenu->menuitems[itemOn].status == 2)
   {
-    S_StartSound(NULL,sfx_stnmov);
+    S_StartSound(NULL,M_MenuSound(sfx_stnmov));
     currentMenu->menuitems[itemOn].routine(1);
   }
       return TRUE;
@@ -4966,12 +5499,12 @@ dbool M_Responder (event_t* ev) {
     if (currentMenu->menuitems[itemOn].status == 2)
       {
         currentMenu->menuitems[itemOn].routine(1);   // right arrow
-        S_StartSound(NULL,sfx_stnmov);
+        S_StartSound(NULL,M_MenuSound(sfx_stnmov));
       }
     else
       {
         currentMenu->menuitems[itemOn].routine(itemOn);
-        S_StartSound(NULL,sfx_pistol);
+        S_StartSound(NULL,M_MenuSound(sfx_pistol));
       }
   }
       //jff 3/24/98 remember last skill selected
@@ -4983,7 +5516,7 @@ dbool M_Responder (event_t* ev) {
     {
       currentMenu->lastOn = itemOn;
       M_ClearMenus ();
-      S_StartSound(NULL,sfx_swtchx);
+      S_StartSound(NULL,M_MenuSound(sfx_swtchx));
       return TRUE;
     }
 
@@ -5010,7 +5543,7 @@ dbool M_Responder (event_t* ev) {
     else
       currentMenu = currentMenu->prevMenu;
     itemOn = currentMenu->lastOn;
-    S_StartSound(NULL,sfx_swtchn);
+    S_StartSound(NULL,M_MenuSound(sfx_swtchn));
   }
       return TRUE;
     }
@@ -5021,14 +5554,14 @@ dbool M_Responder (event_t* ev) {
   if (currentMenu->menuitems[i].alphaKey == ch)
     {
       itemOn = i;
-      S_StartSound(NULL,sfx_pstop);
+      S_StartSound(NULL,M_MenuSound(sfx_pstop));
       return TRUE;
     }
       for (i = 0;i <= itemOn;i++)
   if (currentMenu->menuitems[i].alphaKey == ch)
     {
       itemOn = i;
-      S_StartSound(NULL,sfx_pstop);
+      S_StartSound(NULL,M_MenuSound(sfx_pstop));
       return TRUE;
     }
     }
@@ -5066,7 +5599,7 @@ void M_StartControlPanel (void)
 
   default_verify = 0;                  // killough 10/98
   menuactive = mnact_float;
-  currentMenu = &MainDef;         // JDC
+  currentMenu = M_MainMenuDef();  // JDC (Heretic/Hexen use the Raven menu)
   itemOn = currentMenu->lastOn;   // JDC
   print_warning_about_changes = FALSE;   // killough 11/98
 }
@@ -5079,6 +5612,80 @@ void M_StartControlPanel (void)
 // killough 9/29/98: Significantly reformatted source
 //
 
+/* Draw a string in Heretic's big FONTB menu font. FONTB_S+1 is glyph '!'
+ * (ASCII 33); characters below 33 (space) advance a fixed width. Used for
+ * Heretic menu items, which have no per-item graphic lumps. */
+/* Shared FONTB lookup: -1 when the big Raven font is absent, else the
+ * lump index of the first glyph ('!').  Cached after the first call. */
+static int M_FontBBase(void)
+{
+  static int fontb_base = -2;   /* -2 = not looked up, -1 = absent */
+
+  if (fontb_base == -2)
+  {
+    int s = W_CheckNumForName("FONTB_S");
+    fontb_base = (s >= 0) ? s + 1 : -1;
+  }
+  return fontb_base;
+}
+
+/* Pixel width of a string as M_DrawTextBColor will render it, for
+ * centring FONTB text the way Doom's pre-positioned title patches are. */
+static int M_TextBWidth(const char *text)
+{
+  int   base = M_FontBBase();
+  int   w    = 0;
+  char  c;
+
+  if (base < 0)
+    return M_StringWidth(text);
+
+  while ((c = *text++) != 0)
+  {
+    if (c >= 'a' && c <= 'z')
+      c -= 'a' - 'A';
+    if (c < 33 || c > 90)
+      w += 8;
+    else
+      w += R_NumPatchWidth(base + c - 33) - 1;
+  }
+  return w;
+}
+
+static void M_DrawTextBColor(int x, int y, const char *text, int color)
+{
+  int  fontb_base = M_FontBBase();
+  char c;
+
+  if (fontb_base < 0)
+  {
+    M_WriteText(x, y, text, color);   /* fall back to the small font */
+    return;
+  }
+
+  while ((c = *text++) != 0)
+  {
+    /* FONTB only has glyphs for ASCII 33('!')..90('Z') -- uppercase only.
+     * Uppercase letters and treat anything outside the range as a space so
+     * an index past FONTB_E can't run into sprite/texture lumps. */
+    if (c >= 'a' && c <= 'z')
+      c -= 'a' - 'A';
+    if (c < 33 || c > 90)
+      x += 8;
+    else
+    {
+      int lump = fontb_base + c - 33;
+      V_DrawNumPatch(x, y, 0, lump, color, VPT_STRETCH | VPT_TRANS);
+      x += R_NumPatchWidth(lump) - 1;
+    }
+  }
+}
+
+static void M_DrawTextB(int x, int y, const char *text)
+{
+  M_DrawTextBColor(x, y, text, CR_DEFAULT);
+}
+
 void M_Drawer (void)
 {
   inhelpscreens = FALSE;
@@ -5087,23 +5694,34 @@ void M_Drawer (void)
   // killough 9/29/98: simplified code, removed 40-character width limit
   if (messageToPrint)
     {
-      /* cph - strdup string to writable memory */
-      char *ms = strdup(messageString);
-      char *p = ms;
-
+      /* The message text is constant while displayed, and M_Drawer runs
+       * every frame, so walk it line by line without copying it to a
+       * writable buffer -- M_WriteText only needs a start pointer and a
+       * length-bounded view, so no per-frame strdup/free is needed. */
+      const char *p = messageString;
       int y = 100 - M_StringHeight(messageString)/2;
+
       while (*p)
       {
-        char *string = p, c;
-        while ((c = *p) && *p != '\n')
-          p++;
-        *p = 0;
-        M_WriteText(160 - M_StringWidth(string)/2, y, string, CR_DEFAULT);
+        const char *line = p;
+        char        tmp[128];
+        int         len  = 0;
+
+        while (p[len] && p[len] != '\n')
+          len++;
+
+        if (len > (int)sizeof(tmp) - 1)
+          len = (int)sizeof(tmp) - 1;
+        memcpy(tmp, line, len);
+        tmp[len] = 0;
+
+        M_WriteText(160 - M_StringWidth(tmp)/2, y, tmp, CR_DEFAULT);
         y += hu_font[0].height;
-        if ((*p = c))
+
+        p += len;
+        if (*p == '\n')
           p++;
       }
-      free(ms);
     }
   else
     if (menuactive)
@@ -5122,10 +5740,17 @@ void M_Drawer (void)
   y = currentMenu->y;
   max = currentMenu->numitems;
 
+  /* An item that has a text label (alttext) but no drawable patch -- either
+   * an empty patch name or a name whose lump is absent -- forces the whole
+   * menu onto the text path.  ZDoom episodes/skills defined with `name` but
+   * no `picname` (e.g. ZDCMP2's `episode ZDCMP2 { name = "ZDCMP2" }`) reach
+   * M_AddEpisode with an empty patch name; without this they were neither
+   * counted as missing nor drawn as a patch, so the entry rendered blank. */
   for (i = 0; i < max; i++)
-    if (currentMenu->menuitems[i].name[0])
-      if (W_CheckNumForName(currentMenu->menuitems[i].name) < 0)
-        lumps_missing++;
+    if (currentMenu->menuitems[i].alttext &&
+        (!currentMenu->menuitems[i].name[0] ||
+         W_CheckNumForName(currentMenu->menuitems[i].name) < 0))
+      lumps_missing++;
 
   if (lumps_missing == 0)
     for (i=0;i<max;i++)
@@ -5140,15 +5765,32 @@ void M_Drawer (void)
     {
       const char *alttext = currentMenu->menuitems[i].alttext;
       if (alttext)
-        M_WriteText(x, y+8-(M_StringHeight(alttext)/2), alttext, CR_DEFAULT);
+      {
+        if (raven)
+          M_DrawTextB(x, y, alttext);     /* Heretic/Hexen big FONTB font */
+        else
+          M_WriteText(x, y+8-(M_StringHeight(alttext)/2), alttext, CR_DEFAULT);
+      }
       y += LINEHEIGHT;
     }
 
   // DRAW SKULL
 
   // CPhipps - patch drawing updated
-  V_DrawNamePatch(x + SKULLXOFF, currentMenu->y - 5 + itemOn*LINEHEIGHT,0,
-      skullName[whichSkull], CR_DEFAULT, VPT_STRETCH);
+  /* The Doom skull cursor lumps (M_SKULL1/2) do not exist in Heretic or
+   * Hexen, which use the blinking arrow selector M_SLCTR1/2 instead.  Pick
+   * the right cursor for the game; whichSkull already provides the blink
+   * phase. */
+  if (raven)
+    {
+      const char *selName = whichSkull ? "M_SLCTR1" : "M_SLCTR2";
+      if (W_CheckNumForName(selName) >= 0)
+        V_DrawNamePatch(x - 28, currentMenu->y - 1 + itemOn*LINEHEIGHT, 0,
+            selName, CR_DEFAULT, VPT_STRETCH);
+    }
+  else if (W_CheckNumForName(skullName[whichSkull]) >= 0)
+    V_DrawNamePatch(x + SKULLXOFF, currentMenu->y - 5 + itemOn*LINEHEIGHT,0,
+        skullName[whichSkull], CR_DEFAULT, VPT_STRETCH);
       }
 }
 
@@ -5241,6 +5883,31 @@ void M_DrawThermo(int x,int y,int thermWidth,int thermDot )
   int horizScaler; //Used to allow more thermo range for mouse sensitivity.
   thermWidth = (thermWidth > 200) ? 200 : thermWidth; //Clamp to 200 max
   horizScaler = (thermWidth > 23) ? (200 / thermWidth) : 8; //Dynamic range
+
+  /* Heretic and Hexen have none of Doom's M_THERM* graphics but ship
+   * their own slider set (M_SLDLT/M_SLDMD1/M_SLDMD2/M_SLDRT/M_SLDKB).
+   * Drawing the missing Doom lumps logged two error lines through the
+   * frontend per draw -- a 100-step sensitivity slider is over 200 such
+   * draws, more than 400 log lines per displayed frame.  Build the
+   * slider from the native lumps instead, using the vanilla Raven
+   * layout: 8px trough cells between two end caps, with the knob riding
+   * the trough (the lumps' own draw offsets do the fine alignment). */
+  if (raven)
+  {
+    int track = x + 8;                        /* trough interior start */
+    int cells = (thermWidth * horizScaler + 7) / 8;
+
+    V_DrawNamePatch(track - 32, y, 0, "M_SLDLT", CR_DEFAULT, VPT_STRETCH);
+    for (i = 0, xx = track; i < cells; i++, xx += 8)
+      V_DrawNamePatch(xx, y, 0, (i & 1) ? "M_SLDMD2" : "M_SLDMD1",
+                      CR_DEFAULT, VPT_STRETCH);
+    V_DrawNamePatch(xx, y, 0, "M_SLDRT", CR_DEFAULT, VPT_STRETCH);
+
+    V_DrawNamePatch(track + 4 + thermDot * horizScaler, y + 7, 0,
+                    "M_SLDKB", CR_DEFAULT, VPT_STRETCH);
+    return;
+  }
+
   xx = x;
   V_DrawNamePatch(xx, y, 0, "M_THERML", CR_DEFAULT, VPT_STRETCH);
   xx += 8;
@@ -5292,7 +5959,7 @@ int M_StringWidth(const char* string)
   int i, c, w = 0;
   size_t string_len = strlen(string);
   for (i = 0;(size_t)i < string_len; i++)
-    w += (c = toupper(string[i]) - HU_FONTSTART) < 0 || c >= HU_FONTSIZE ?
+    w += (c = toupper((unsigned char)string[i]) - HU_FONTSTART) < 0 || c >= HU_FONTSIZE ?
       4 : hu_font[c].width;
   return w;
 }
@@ -5349,6 +6016,16 @@ void M_WriteText (int x,int y, const char* string, int cm)
     w = hu_font[c].width;
     if (cx+w > SCREENWIDTH)
       break;
+    /* Defensive skip for glyphs the font does not provide: HU_Init zeroes
+     * hu_font, so an unpopulated slot has lumpnum <= 0.  Heretic's FONTA has
+     * no '_' (and other high-ASCII) glyphs, so the save-name cursor would
+     * otherwise call V_DrawNumPatch with lump 0 and crash decoding it as a
+     * patch (mirrors the same guard in hu_lib.c). */
+    if (hu_font[c].lumpnum <= 0)
+    {
+      cx += 4;
+      continue;
+    }
     // proff/nicolas 09/20/98 -- changed for hi-res
     // CPhipps - patch drawing updated
     V_DrawNumPatch(cx, cy, 0, hu_font[c].lumpnum, cm, flags);
@@ -5390,6 +6067,26 @@ void M_InitHelpScreen(void)
 {
   setup_menu_t* src;
 
+  /* Snapshot original m_flags so subsequent calls (other gamemodes
+   * across libretro retro_load_game cycles) can re-evaluate the
+   * "hide PLASMA/BFG in shareware, hide SSG outside commercial"
+   * rules from the original baseline.  Without this, m_flags=S_SKIP
+   * is permanent: once shareware hides PLASMA/BFG, a later commercial
+   * session would still hide them. */
+  static int helpstrings_flags_saved[
+    sizeof(helpstrings) / sizeof(helpstrings[0])];
+  static int helpstrings_flags_savedflag = 0;
+  size_t i;
+
+  if (!helpstrings_flags_savedflag) {
+    for (i = 0; i < sizeof(helpstrings)/sizeof(helpstrings[0]); i++)
+      helpstrings_flags_saved[i] = helpstrings[i].m_flags;
+    helpstrings_flags_savedflag = 1;
+  } else {
+    for (i = 0; i < sizeof(helpstrings)/sizeof(helpstrings[0]); i++)
+      helpstrings[i].m_flags = helpstrings_flags_saved[i];
+  }
+
   src = helpstrings;
   while (!(src->m_flags & S_END)) {
 
@@ -5408,8 +6105,42 @@ void M_InitHelpScreen(void)
 //
 void M_Init(void)
 {
+  /* Snapshot fields that the gamemode-dependent block below mutates
+   * destructively, so subsequent M_Init calls (e.g. on libretro
+   * retro_load_game without a process restart) see a clean baseline.
+   * Without this:
+   *   - MainDef.numitems decrements toward zero each commercial-mode
+   *     session (line "MainDef.numitems--" below);
+   *   - MainDef.y drifts down 8 px each commercial-mode session
+   *     ("MainDef.y += 8" below);
+   *   - ResetButtonName remains "WARNB0"/"WARNA0" forever once a
+   *     wad without M_BUTT1/M_BUTT2 triggers the strcpy fallback at
+   *     the end of M_Init, even if a later wad has the originals.
+   */
+  static int  maindef_numitems_saved = -1;
+  static int  maindef_y_saved        = -1;
+  static char resetbutton_saved[2][8];
+  static int  resetbutton_savedflag  = 0;
+
+  if (maindef_numitems_saved < 0) {
+    maindef_numitems_saved = MainDef.numitems;
+    maindef_y_saved        = MainDef.y;
+  } else {
+    MainDef.numitems = maindef_numitems_saved;
+    MainDef.y        = maindef_y_saved;
+  }
+
+  if (!resetbutton_savedflag) {
+    memcpy(resetbutton_saved[0], ResetButtonName[0], 8);
+    memcpy(resetbutton_saved[1], ResetButtonName[1], 8);
+    resetbutton_savedflag = 1;
+  } else {
+    memcpy(ResetButtonName[0], resetbutton_saved[0], 8);
+    memcpy(ResetButtonName[1], resetbutton_saved[1], 8);
+  }
+
   M_InitDefaults();                // killough 11/98
-  currentMenu = &MainDef;
+  currentMenu = M_MainMenuDef();   /* Heretic/Hexen use the Raven menu */
   menuactive = mnact_inactive;
   itemOn = currentMenu->lastOn;
   whichSkull = 0;
@@ -5462,6 +6193,92 @@ void M_Init(void)
       break;
     default:
       break;
+    }
+
+  /* Back-navigation: the shared menu_t structs name Doom's menus as their
+   * previous menu, so backing out of Options (and the other screens) under
+   * Heretic/Hexen landed on Doom's main menu -- five Doom items rendered in
+   * the Raven font, missing the "game files" entry.  Point the previous-menu
+   * links at the Raven menus instead: Load and Save are entered through the
+   * Game Files submenu, so they back out to it; the skill menu backs out to
+   * the class menu under Hexen (the commercial-mode block above just pointed
+   * it at Doom's MainDef, since Hexen identifies as commercial) and to the
+   * episode menu under Heretic.  The non-Raven branch restores the Doom
+   * wiring so a Doom session after a Raven one in the same process (libretro
+   * content reload) is not left with Raven links. */
+  if (raven)
+  {
+    OptionsDef.prevMenu = &RavenMainDef;
+    EpiDef.prevMenu     = &RavenMainDef;
+    ReadDef1.prevMenu   = &RavenMainDef;
+    ClassDef.prevMenu   = &RavenMainDef;
+    LoadDef.prevMenu    = &RavenFilesDef;
+    SaveDef.prevMenu    = &RavenFilesDef;
+    NewDef.prevMenu     = hexen ? &ClassDef : &EpiDef;
+  }
+  else
+  {
+    OptionsDef.prevMenu = &MainDef;
+    EpiDef.prevMenu     = &MainDef;
+    ReadDef1.prevMenu   = &MainDef;
+    ClassDef.prevMenu   = &MainDef;
+    LoadDef.prevMenu    = &MainDef;
+    SaveDef.prevMenu    = &MainDef;
+    /* The commercial case above owns NewDef.prevMenu (Doom II has no
+     * episode menu); restore the episode link only when it did not. */
+    if (gamemode != commercial)
+      NewDef.prevMenu = &EpiDef;
+  }
+
+  /* Heretic's menus reuse Doom's menuitem tables, whose patch lumps
+   * (M_EPI1.., M_JKILL..) and English alttext ("Episode 1", "Ultra-
+   * Violence.") do not belong to Heretic.  The lumps are absent from
+   * HERETIC.WAD, so M_Drawer falls back to drawing the Doom alttext
+   * through the big FONTB font -- showing "episode 1" and the Doom
+   * skill names.  Substitute the real Heretic episode and skill names,
+   * matching vanilla Heretic.  E6 (the SoSR "Fate's Path" deathmatch
+   * set) is kept selectable with its widely-used name; any further
+   * episodes detected (e.g. via add-on wads) keep a lowercase
+   * "episode N" label so they render sanely in FONTB rather than the
+   * Doom-style capitalised alttext. */
+  if (heretic)
+    {
+      static const char *const heretic_episodes[] =
+        {
+          "city of the damned",
+          "hell's maw",
+          "the dome of d'sparil",
+          "the ossuary",
+          "the stagnant demesne",
+          "fate's path"
+        };
+      static char heretic_epi_fallback[MAX_EPISODE_NUM][16];
+      static const char *const heretic_skills[] =
+        {
+          "thou needeth a wet-nurse",
+          "yellowbellies-r-us",
+          "bringest them oneth",
+          "thou art a smite-meister",
+          "black plague possesses thee"
+        };
+      const int num_named = (int)(sizeof(heretic_episodes) /
+                                  sizeof(heretic_episodes[0]));
+      int i;
+
+      for (i = 0; i < EpiDef.numitems; i++)
+        {
+          if (i < num_named)
+            EpisodeMenu[i].alttext = (char *)heretic_episodes[i];
+          else if (i < MAX_EPISODE_NUM)
+            {
+              snprintf(heretic_epi_fallback[i],
+                       sizeof(heretic_epi_fallback[i]), "episode %d", i + 1);
+              EpisodeMenu[i].alttext = heretic_epi_fallback[i];
+            }
+        }
+
+      for (i = 0; i < newg_end && i < 5; i++)
+        NewGameMenu[i].alttext = (char *)heretic_skills[i];
     }
 
   M_InitHelpScreen();   // init the help screen       // phares 4/08/98

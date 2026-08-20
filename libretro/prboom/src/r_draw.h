@@ -73,6 +73,11 @@ typedef struct {
   const uint8_t       *source; // first pixel in a column
   const uint8_t       *prevsource; // first pixel in previous column
   const uint8_t       *nextsource; // first pixel in next column
+  /* Per-texel fullbright mask aligned to `source` (same column height and
+   * row index): where mask[texel] != 0 the texel ignores the distance
+   * light and draws at full brightness.  NULL when the texture has no
+   * brightmap. */
+  const uint8_t       *brightmask;
   const lighttable_t  *colormap;
   const lighttable_t  *nextcolormap;
   const uint8_t       *translation;
@@ -80,6 +85,12 @@ typedef struct {
   // 1 if R_DrawColumn* is currently drawing a masked column, otherwise 0
   int                 drawingmasked;
   enum sloped_edge_type_e edgetype;
+  /* Dynamic-light colour tint for this column, packed (r<<16)|(g<<8)|b in
+   * 565 channel-add units (each clamped to 255 -- exact, since any add at or
+   * above a channel's max saturates identically).  Zero for untinted columns.
+   * Only the wall-run kernel consumes it (see R_DrawWallColumnRun); columns
+   * that replay through their drawer fn record an RMW tint instead. */
+  unsigned int        tint;
 } draw_column_vars_t;
 
 void R_SetDefaultDrawColumnVars(draw_column_vars_t *dcvars);
@@ -94,8 +105,18 @@ typedef struct {
   fixed_t             xstep;
   fixed_t             ystep;
   const uint8_t       *source; // start of a 64*64 tile image
+  /* 64x64 row-major fullbright mask (1 = bright) for this flat, aligned to
+   * the span `spot` index, or NULL when the flat has no brightmap. */
+  const uint8_t       *brightmask;
   const lighttable_t  *colormap;
   const lighttable_t  *nextcolormap;
+  /* Worker-private composed tables when the plane fill is threaded, NULL on
+   * the serial path.  The composed colormap cache is a single entry keyed on
+   * the colormap pointer, so two workers resolving different colormaps would
+   * each rewrite the other's table and be handed the wrong colours -- a data
+   * race that is also a correctness bug.  Set by the plane replay; every
+   * record belongs to exactly one worker. */
+  struct wallscratch_s *ws;
 } draw_span_vars_t;
 
 typedef struct {
@@ -123,6 +144,62 @@ extern uint8_t playernumtotrans[MAXPLAYERS]; // CPhipps - what translation table
 extern uint8_t       *translationtables;
 
 typedef void (*R_DrawColumn_f)(draw_column_vars_t *dcvars);
+
+/* Wall-run kernel (r_draw.c): classification of drawers it reproduces,
+ * and row-major rasterization of an x-adjacent record run.  Used by the
+ * draw-record replay in r_drawcmd.c. */
+int R_WallColumnKernelClass(R_DrawColumn_f fn);
+const uint16_t *R_ComposedColormap(const lighttable_t *colormap);
+const uint16_t *R_ComposedPalette(void);
+/* Per-worker scratch for the wall-run kernel.
+ *
+ * The kernel resolves a composed colour table per run and, for dynamic
+ * light tints, builds tinted tables from it.  Single-threaded those lived
+ * in file-scope caches; with the replay split across workers two threads
+ * resolving different colormaps would each rewrite the other's table and
+ * hand back a pointer to the wrong colours -- a data race that is also a
+ * correctness bug.  Each worker therefore carries its own tables.  The
+ * caches keep their single-entry keying: adjacent wall columns share a
+ * light band, so the hit rate is unchanged within a worker's column range.
+ *
+ * Roughly 17KB per worker, private to that worker for the whole replay. */
+#define WALL_TINT_POOL 8
+
+typedef struct wallscratch_s
+{
+   /* 16bpp composed colormap+palette cache */
+   const lighttable_t *cm;
+   const uint16_t     *pal;
+   uint16_t            lut[256];
+   /* 16bpp composed palette (no colormap) cache */
+   const uint16_t     *nolight_pal;
+   uint16_t            nolight_lut[256];
+   /* 16bpp tint tables */
+   uint16_t            tintbuf[256];
+   uint16_t            pool[WALL_TINT_POOL][256];
+   /* truecolor equivalents (r_drawtc.c) */
+   const lighttable_t *cm_tc;
+   const uint32_t     *pal_tc;
+   uint32_t            lut_tc[256];
+   const uint32_t     *nolight_pal_tc;
+   uint32_t            nolight_lut_tc[256];
+   uint32_t            tintbuf_tc[256];
+   uint32_t            pool_tc[WALL_TINT_POOL][256];
+} wallscratch_t;
+
+/* Resolve the composed tables through a worker's private cache. */
+const uint16_t *R_ScratchComposedColormap(wallscratch_t *ws,
+                                          const lighttable_t *colormap);
+const uint16_t *R_ScratchComposedPalette(wallscratch_t *ws);
+
+/* Resolve through the span's worker scratch when it has one, else through
+ * the shared cache. */
+const uint16_t *R_SpanComposedColormap(const draw_span_vars_t *dsvars,
+                                       const lighttable_t *colormap);
+
+void R_DrawWallColumnRun(wallscratch_t *ws,
+                         const draw_column_vars_t *const *cols,
+                         int n, int pointz);
 R_DrawColumn_f R_GetDrawColumnFunc(enum column_pipeline_e type,
                                    enum draw_filter_type_e filter,
                                    enum draw_filter_type_e filterz);
@@ -133,6 +210,16 @@ R_DrawSpan_f R_GetDrawSpanFunc(enum draw_filter_type_e filter,
                                enum draw_filter_type_e filterz);
 void R_DrawSpan(draw_span_vars_t *dsvars);
 
+/* When nonzero, R_DrawSpan blends its output 50/50 against the framebuffer
+ * instead of overwriting it; set around a translucent 3D-floor surface. */
+extern int r_span_translucent;
+
+/* Underwater tint: mean colour of a flat, and a 50/50 blend of the whole 3D
+ * view toward a colour (applied when the camera is inside a 3D-floor water
+ * volume). */
+uint16_t R_FlatAverageColor565(int picnum);
+void R_TintView(uint16_t color);
+
 void R_InitBuffer(int width, int height);
 
 // Initialize color translation tables, for player rendering etc.
@@ -142,5 +229,16 @@ void R_InitTranslationTables(void);
 // which gets rid of the unnecessary reset of various variables during
 // column drawing.
 void R_ResetColumnBuffer(void);
+
+/* Raven translucent sprite mode: 0 opaque, 1 MF_SHADOW (50%), 2 MF_ALTSHADOW (25%) */
+void R_SetSpriteTranslucency(int mode);
+void R_SetTransAlpha(int a32);   /* blend weight alpha*32 (0..32) for modes 3/4 */
+
+/* Dynamic-light colour tint for wall bands: record lit bands during the BSP
+ * walk, replay the additive chroma over the framebuffer after R_DrawCmdReplay. */
+void R_WallTintClear(void);
+void R_WallTintRecord(int x, int yl, int yh, int ar, int ag, int ab);
+void R_WallTintReplay(void);
+void R_TintLUT(uint16_t *dst, const uint16_t *src, int ar, int ag, int ab);
 
 #endif

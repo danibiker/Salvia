@@ -60,6 +60,9 @@
 #include "p_saveg.h"
 #include "p_tick.h"
 #include "p_map.h"
+#include "p_user.h"
+#include "p_conversation.h"
+#include "p_zacs.h"
 #include "d_main.h"
 #include "wi_stuff.h"
 #include "hu_stuff.h"
@@ -74,9 +77,13 @@
 #include "sounds.h"
 #include "r_data.h"
 #include "r_sky.h"
+#include "hexen/p_mapinfo.h"
+#include "hexen/sv_save.h"
+#include "hexen/p_acs.h"
 #include "d_deh.h"              // Ty 3/27/98 deh declarations
 #include "p_inter.h"
 #include "g_game.h"
+#include "dsda_hacked.h"
 #include "lprintf.h"
 #include "i_main.h"
 #include "i_system.h"
@@ -103,6 +110,14 @@ skill_t         gameskill;
 dbool           respawnmonsters;
 int             gameepisode;
 int             gamemap;
+
+/* Hexen hub travel: the player start position the next map is entered at
+ * (args[0] of the matching player start), and the pending Teleport_NewMap
+ * destination staged by G_Completed.  A LeaveMap of -1 means
+ * Teleport_EndGame. */
+int RebornPosition;
+static int LeaveMap;
+static int LeavePosition;
 mapentry_t*     gamemapinfo;
 dbool           paused;
 // CPhipps - moved *_loadgame vars here
@@ -114,6 +129,11 @@ dbool           deathmatch;    // only if started as net death
 dbool           netgame;       // only TRUE if packets are broadcast
 dbool           playeringame[MAXPLAYERS];
 player_t        players[MAXPLAYERS];
+/* ACS ChangeCamera target (NULL = the player's own view); see doomstat.h. */
+struct mobj_s  *zacs_view_camera;
+/* Hexen: per-player chosen class (PCLASS_*); PCLASS_NULL for Doom/Heretic.
+ * Copied into players[].class at spawn. */
+pclass_t        PlayerClass[MAXPLAYERS];
 int             consoleplayer; // player taking events and displaying
 int             displayplayer; // view being displayed
 int             gametic;
@@ -147,6 +167,15 @@ int     key_strafeleft;
 int     key_straferight;
 int     key_fire;
 int     key_use;
+int     key_use_artifact;
+int     pending_artifact = 0;  /* Heretic: artifact staged for use this tic */
+int     inventory = 0;         /* Heretic: inventory bar currently displayed */
+int     inventoryTics = 0;     /* Heretic: tics until the bar auto-closes */
+int     key_inv_left;
+int     key_inv_right;
+int     key_fly_up;
+int     key_fly_down;
+int     key_jump;
 int     key_strafe;
 int     key_speed;
 int     key_escape = KEYD_ESCAPE;                           // phares 4/13/98
@@ -205,6 +234,10 @@ int     mousebstrafe;
 int     mousebforward;
 int     mousebbackward;
 int     mlooky;
+/* Heretic keyboard-look: signed per-tic look step staged by the gamepad
+ * right stick (when mouselook is off) and consumed into cmd->lookfly in
+ * G_BuildTiccmd.  Negative = look down, positive = look up. */
+int     gamepad_lookdelta;
 
 #define MAXPLMOVE   (forwardmove[1])
 #define TURBOTHRESHOLD  0x32
@@ -224,6 +257,8 @@ static dbool   mousearray[4];
 static dbool   *mousebuttons = &mousearray[1];    // allow [-1]
 
 // mouse values are used once
+int lowlatency_turning; /* config: apply pending mouse turn to the view
+                         * every rendered frame (m_misc.c, general menu) */
 static int   mousex;
 static int   mousey;
 
@@ -242,6 +277,13 @@ mobj_t **bodyque = 0;                   // phares 8/10/98
 static void G_DoSaveGame (dbool   menu);
 static const uint8_t* G_ReadDemoHeader(const uint8_t* demo_p, size_t size, dbool   failonerror);
 static mapentry_t *G_LookupMapinfo(int episode, int map);
+mapentry_t *G_LookupMapinfoByName(const char *lumpname);
+
+/* Named next-map carried from G_DoCompleted to G_DoWorldDone when a ZDoom
+ * MAPINFO next/nextsecret target is an arbitrary lump name that does not fit
+ * MAPnn/ExMy (e.g. ZDCMP2 looping to itself).  Empty == numeric next map.
+ * Declared here (ahead of G_DoCompleted) so it is in scope at every use. */
+static char g_nextmapname[9];
 
 //
 // G_BuildTiccmd
@@ -339,10 +381,90 @@ void G_BuildTiccmd(ticcmd_t* cmd)
   if (gamekeydown[key_fire] || mousebuttons[mousebfire])
     cmd->buttons |= BT_ATTACK;
 
-  if (gamekeydown[key_use] || mousebuttons[mousebforward])
+  /* Use / open door.  In Hexen the spacebar is the jump key, so the use
+   * action there comes from E (and the mouse); Heretic and Doom keep the
+   * configured use key (spacebar by default). */
+  if (mousebuttons[mousebforward] ||
+      (raven && gamekeydown['e']) ||
+      (!hexen && gamekeydown[key_use]))
     {
       cmd->buttons |= BT_USE;
     }
+
+  /* Hexen jump: stage the request in the arti byte's top bit; P_MovePlayer
+   * turns it into upward momentum when the player is on the ground. */
+  if (hexen && gamekeydown[key_jump])
+    cmd->arti |= AFLAG_JUMP;
+
+  /* Heretic/Hexen inventory input: cycle the ready artifact with the inv keys
+   * and use it with the use-artifact key. inv_ptr/curpos and readyArtifact
+   * live in p_user.c; we just nudge the cursor and stage the artifact to use. */
+  if (raven)
+  {
+    extern int inv_ptr, curpos;
+
+    if (gamekeydown[key_inv_right])
+    {
+      gamekeydown[key_inv_right] = FALSE;
+      if (players[consoleplayer].inventorySlotNum > 0)
+      {
+        inventoryTics = 5 * 35;        /* keep the bar up for 5s */
+        if (!inventory)
+          inventory = TRUE;            /* first press just opens the bar */
+        else
+        {
+          inv_ptr++;
+          if (inv_ptr >= players[consoleplayer].inventorySlotNum)
+            inv_ptr = players[consoleplayer].inventorySlotNum - 1;
+          else if (++curpos > 6)
+            curpos = 6;
+        }
+        players[consoleplayer].readyArtifact =
+          players[consoleplayer].inventory[inv_ptr].type;
+      }
+    }
+    if (gamekeydown[key_inv_left])
+    {
+      gamekeydown[key_inv_left] = FALSE;
+      if (players[consoleplayer].inventorySlotNum > 0)
+      {
+        inventoryTics = 5 * 35;
+        if (!inventory)
+          inventory = TRUE;
+        else
+        {
+          inv_ptr--;
+          if (inv_ptr < 0)
+            inv_ptr = 0;
+          else if (--curpos < 0)
+            curpos = 0;
+        }
+        players[consoleplayer].readyArtifact =
+          players[consoleplayer].inventory[inv_ptr].type;
+      }
+    }
+    if (gamekeydown[key_use_artifact])
+    {
+      gamekeydown[key_use_artifact] = FALSE;
+      /* If the inventory bar is open, the use key just closes it (selecting
+       * the highlighted artifact as ready) rather than using immediately --
+       * matching Heretic. Otherwise it uses the ready artifact. */
+      if (inventory)
+      {
+        inventory = FALSE;
+        players[consoleplayer].readyArtifact =
+          players[consoleplayer].inventory[inv_ptr].type;
+      }
+      else
+      {
+        /* Single-player: route the artifact-use request through a dedicated
+         * pending global rather than the ticcmd, whose ring-buffer slots are
+         * reused across tics and would drop or duplicate the request. The
+         * ticcmd arti field stays reserved for a future netgame/demo path. */
+        pending_artifact = players[consoleplayer].readyArtifact;
+      }
+    }
+  }
 
   // Toggle between the top 2 favorite weapons.                   // phares
   // If not currently aiming one of these, switch to              // phares
@@ -478,6 +600,33 @@ void G_BuildTiccmd(ticcmd_t* cmd)
      else
         mlooky += mousey;
   }
+  else if (raven && gamepad_lookdelta)
+  {
+     /* Heretic keyboard look without mouselook: encode the staged look step
+      * into the low nibble of cmd->lookfly (signed -8..+7), which
+      * P_MovePlayer decodes into player->lookdir.  Clamp to the encodable
+      * range and mask to the nibble so negative steps wrap correctly. */
+     int look = gamepad_lookdelta;
+     if (look > 7)
+        look = 7;
+     else if (look < -7)
+        look = -7;
+     cmd->lookfly = (uint8_t)((cmd->lookfly & 0xF0) | (look & 0x0F));
+     gamepad_lookdelta = 0;
+  }
+
+  /* Heretic/Hexen flight: the fly up/down keys stage a vertical step into the
+   * high nibble of cmd->lookfly (signed -8..+7), which P_MovePlayer applies to
+   * player->flyheight while the flight power is active. */
+  if (raven && (gamekeydown[key_fly_up] || gamekeydown[key_fly_down]))
+  {
+     int fly = 0;
+     if (gamekeydown[key_fly_up])
+        fly = 7;
+     else if (gamekeydown[key_fly_down])
+        fly = -7;
+     cmd->lookfly = (uint8_t)((cmd->lookfly & 0x0F) | ((fly & 0x0F) << 4));
+  }
 
   mousex = mousey = 0;
 
@@ -499,6 +648,74 @@ void G_BuildTiccmd(ticcmd_t* cmd)
     cmd->buttons = special_event;
     special_event = 0;
   }
+}
+
+/* Mouse turn accumulated since the last ticcmd, as a view angle delta.
+ * R_SetupFrame adds this to the rendered view angle every frame, so the
+ * camera answers the mouse at frame rate while the simulation still
+ * consumes the identical counts at the next tic: G_BuildTiccmd folds
+ * mousex into cmd->angleturn (a short, so it wraps exactly like the
+ * angle's top sixteen bits) and zeroes the accumulator, at which point
+ * the preview returns to zero in the same frame.  The ticcmd is never
+ * altered, so demos record byte-identical with the feature on or off.
+ *
+ * Inert while strafing (the same condition under which G_BuildTiccmd
+ * turns mousex into sidemove), during demo playback (mouse events are
+ * not driving the player), and outside levels. */
+dbool G_PendingTurnActive(void)
+{
+  /* A script-frozen player (a dialogue overlay) holds the view still: the tic
+   * command's angleturn is already zeroed for the freeze, so the low-latency
+   * preview must be suppressed too, or the view would still swing with the
+   * turn input every rendered frame (visibly worse above 35 fps, where the
+   * preview runs many times per tic). */
+  if (P_ConversationIsActive() ||
+      (players[consoleplayer].cheats & CF_TOTALLYFROZEN))
+    return false;
+  return lowlatency_turning && !demoplayback && gamestate == GS_LEVEL &&
+         !menuactive && !paused;
+}
+
+angle_t G_PendingTurn(void)
+{
+  int D_PendingLocalTurn(void);
+
+  if (!G_PendingTurnActive())
+    return 0;
+  return (angle_t) D_PendingLocalTurn() << 16;
+}
+
+/* The freelook analogue of G_PendingTurn.  mlooky is the look input
+ * G_BuildTiccmd has accumulated since P_SetPitch last consumed it, so
+ * the pitch the next tic will commit is simply the latest pitch plus
+ * that backlog, clamped as the tic will clamp it.
+ *
+ * The preview is only valid for pitch that mlooky itself drives, which
+ * is why the caller must check G_PendingPitchActive first: under the
+ * Heretic/Hexen keyboard- and gamepad-look path (mouselook off) the
+ * pitch moves per tic from lookdir with no backlog to anchor on, so
+ * overriding the renderer's interpolated pitch there would replace a
+ * smooth ramp with raw 35Hz steps.  The same applies during the
+ * post-teleport reaction pause and under the full-screen automap,
+ * where P_SetPitch leaves mlooky unconsumed. */
+dbool G_PendingPitchActive(const mobj_t *mo)
+{
+  if (P_ConversationIsActive() ||
+      (players[consoleplayer].cheats & CF_TOTALLYFROZEN))
+    return false;
+  return movement_mouselook && !mo->reactiontime &&
+         !((automapmode & am_active) && !(automapmode & am_overlay));
+}
+
+angle_t G_PendingPitch(const mobj_t *mo)
+{
+  angle_t pitch = mo->pitch;
+
+  if (!G_PendingPitchActive(mo))
+    return pitch;
+  pitch += (angle_t) (mlooky << 16);
+  P_CheckPitch(&pitch);
+  return pitch;
 }
 
 //
@@ -552,12 +769,30 @@ static void G_DoLoadLevel (void)
    *  we look for an actual index, instead of simply
    *  setting one.
    */
-  skyflatnum = R_FlatNumForName ( SKYFLATNAME );
+  /* Hexen's sky-flat lump is "F_SKY" (Doom and Heretic use "F_SKY1"); a
+   * ceiling painted with the sky flat is what the renderer treats as open
+   * sky, so getting this wrong leaves sky sectors drawing garbage. */
+  skyflatnum = R_FlatNumForName ( hexen ? "F_SKY" : SKYFLATNAME );
 
   /* skytexture set through UMAPINFO */
   if (gamemapinfo && gamemapinfo->skytexture[0])
   {
     skytexture = R_TextureNumForName(gamemapinfo->skytexture);
+  }
+  /* Hexen picks the sky per map through its MAPINFO: a primary sky (Sky1),
+   * an alternate sky (Sky2) used for the lightning flash and as the scrolling
+   * backdrop when DoubleSky is set, and a horizontal scroll speed for each.
+   * skytexture tracks Sky1 (the lightning code swaps it to Sky2 mid-flash). */
+  else if (hexen)
+  {
+    Sky1Texture      = P_GetMapSky1Texture(gamemap);
+    Sky2Texture      = P_GetMapSky2Texture(gamemap);
+    Sky1ScrollDelta  = P_GetMapSky1ScrollDelta(gamemap);
+    Sky2ScrollDelta  = P_GetMapSky2ScrollDelta(gamemap);
+    Sky1ColumnOffset = 0;
+    Sky2ColumnOffset = 0;
+    DoubleSky        = P_GetMapDoubleSky(gamemap);
+    skytexture       = Sky1Texture;
   }
   /* DOOM determines the sky texture to be used
    * depending on the current episode, and the game version.
@@ -598,8 +833,17 @@ static void G_DoLoadLevel (void)
   {
     if (playeringame[i] && players[i].playerstate == PST_DEAD)
       players[i].playerstate = PST_REBORN;
+    /* A script-driven dialogue freezes the player with CF_TOTALLYFROZEN and is
+     * expected to lift it when the conversation ends.  If the level is left or
+     * soft-reset mid-conversation (or the conversation never cleared it), the
+     * flag would otherwise persist into the freshly loaded level and leave the
+     * player unable to move or open doors.  A fresh level never starts frozen,
+     * so clear it here. */
+    players[i].cheats &= ~CF_TOTALLYFROZEN;
     memset (players[i].frags,0,sizeof(players[i].frags));
   }
+  /* Drop any dialogue HUD and per-player input latches from a prior level. */
+  Z_ACSHudClear();
 
   // initialize the msecnode_t freelist.                     phares 3/25/98
   // any nodes in the freelist are gone by now, cleared
@@ -614,6 +858,21 @@ static void G_DoLoadLevel (void)
   }
 
   P_SetupLevel (gameepisode, gamemap, 0, gameskill);
+
+  {
+    /* P_SetupLevel could not build a usable level (e.g. a UDMF map whose
+     * node format we cannot decode).  Don't run or render it -- drop back
+     * to the demo/title screen so the core stays responsive instead of
+     * ticking and rendering a level with no player mobj or BSP. */
+    extern dbool level_setup_failed;
+    if (level_setup_failed)
+    {
+      gamestate = GS_DEMOSCREEN;
+      gameaction = ga_nothing;
+      return;
+    }
+  }
+
   if (!demoplayback) /* Don't switch views if playing a demo */
     displayplayer = consoleplayer;    /* view the guy you are playing */
   gameaction = ga_nothing;
@@ -749,11 +1008,6 @@ void G_Ticker (void)
 
   // CPhipps - player colour changing
   if (!demoplayback && mapcolor_plyr[consoleplayer] != mapcolor_me) {
-    // Changed my multiplayer colour - Inform the whole game
-#ifdef HAVE_NET
-    int net_cl = LONG(mapcolor_me);
-    D_NetSendMisc(nm_plcolour, sizeof(net_cl), &net_cl);
-#endif
     G_ChangedPlayerColour(consoleplayer, mapcolor_me);
   }
   P_MapStart();
@@ -958,14 +1212,88 @@ static void G_PlayerFinishLevel(int player)
 {
   player_t *p = &players[player];
 
-  memset(p->powers, 0, sizeof p->powers);
-  memset(p->cards, 0, sizeof p->cards);
+  /* Heretic end-of-level housekeeping (vanilla G_PlayerFinishLevel):
+   * artifact stacks shrink to one of each, any Wings of Wrath are used up
+   * (flight does not carry between maps), and a morphed player reverts --
+   * the pre-morph weapon rides in the chicken mobj's special1.  The rain
+   * trackers point at PU_LEVEL mobjs and must not dangle into the next
+   * map.  The morph restore applies to hexen's pig as well. */
+  if (heretic)
+  {
+    int i;
+
+    for (i = 0; i < p->inventorySlotNum; i++)
+      p->inventory[i].count = 1;
+    p->artifactCount = p->inventorySlotNum;
+
+    if (!deathmatch)
+      for (i = 0; i < 16; i++)
+        P_PlayerUseArtifact(p, arti_fly);
+  }
+
+  if (raven && (p->chickenTics || p->morphTics) && p->mo)
+  {
+    p->readyweapon = p->mo->special1.i;       /* restore weapon */
+    p->chickenTics = 0;
+    p->morphTics = 0;
+  }
+
+  if (raven)
+  {
+    p->lookdir = 0;
+    p->rain1 = NULL;
+    p->rain2 = NULL;
+    p->poisoncount = 0;
+  }
+
+  /* Hexen keys and flight are hub-scoped: both survive Teleport_NewMap
+   * within a cluster.  Keys are stripped when the destination lies in a
+   * different cluster (or the game is ending), matching G_PlayerExitMap;
+   * flight carries within a cluster, while leaving the cluster burns any
+   * banked flight artifacts (up to 25) before stripping the power. */
+  {
+    dbool different_cluster = (!hexen || LeaveMap == -1 ||
+        P_GetMapCluster(gamemap) != P_GetMapCluster(P_TranslateMapWarp(LeaveMap)));
+    int flight_carryover = 0;
+
+    if (hexen && !deathmatch)
+    {
+      if (!different_cluster)
+        flight_carryover = p->powers[pw_flight];
+      else
+      {
+        int i;
+        for (i = 0; i < 25; i++)
+        {
+          p->powers[pw_flight] = 0;
+          P_PlayerUseArtifact(p, hexen_arti_fly);
+        }
+      }
+    }
+
+    memset(p->powers, 0, sizeof p->powers);
+    p->powers[pw_flight] = flight_carryover;
+
+    if (different_cluster)
+      memset(p->cards, 0, sizeof p->cards);
+
+  }
 
   p->mo = NULL;           // cph - this is allocated PU_LEVEL so it's gone
   p->extralight = 0;      /* cancel gun flashes */
   p->fixedcolormap = 0;   /* cancel ir gogles */
   p->damagecount = 0;     /* no palette changes */
   p->bonuscount = 0;
+}
+
+/* The player start to use for (re)spawning: the RebornPosition start on
+ * Hexen maps when present, position 0 otherwise. */
+static mapthing_t *G_PlayerStart(int playernum)
+{
+  if (hexen && RebornPosition > 0 && RebornPosition < MAX_PLAYER_STARTS &&
+      playerstarts[RebornPosition][playernum].options)
+    return &playerstarts[RebornPosition][playernum];
+  return &playerstarts[0][playernum];
 }
 
 // CPhipps - G_SetPlayerColour
@@ -1035,13 +1363,37 @@ void G_PlayerReborn (int player)
   p->usedown = p->attackdown = true;  // don't do anything immediately
   p->playerstate = PST_LIVE;
   p->health = initial_health;  // Ty 03/12/98 - use dehacked values
+
+  if (hexen)
+  {
+    /* Hexen player: class comes from the chosen PlayerClass[]; the player
+     * starts with the first weapon (fists/equivalent) of that class and an
+     * empty mana pool (mana is picked up in the level).  The per-class
+     * weapon identity is resolved through WeaponInfo[slot][class]. */
+    int j;
+    p->class = PlayerClass[player];
+    p->readyweapon = p->pendingweapon = WP_FIRST;
+    p->weaponowned[WP_FIRST] = true;
+    p->maxmana = MAX_MANA;
+    for (j = 0; j < NUMMANA; j++)
+      p->mana[j] = 0;
+    return;
+  }
+
   p->readyweapon = p->pendingweapon = WP_PISTOL;
   p->weaponowned[WP_FIST] = true;
   p->weaponowned[WP_PISTOL] = true;
-  p->ammo[AM_CLIP] = initial_bullets; // Ty 03/12/98 - use dehacked values
+
+  /* Heretic reuses the WP_FIST / WP_PISTOL slots for the staff and gold
+   * wand (see heretic_weaponinfo). The gold wand uses am_goldwand ammo and
+   * the player starts with 50; Doom starts with AM_CLIP bullets. */
+  if (heretic)
+    p->ammo[am_goldwand] = 50;
+  else
+    p->ammo[AM_CLIP] = initial_bullets; // Ty 03/12/98 - use dehacked values
 
   for (i=0 ; i<NUMAMMO ; i++)
-    p->maxammo[i] = maxammo[i];
+    p->maxammo[i] = heretic ? heretic_maxammo[i] : maxammo[i];
 }
 
 /*
@@ -1064,14 +1416,14 @@ static dbool   G_CheckSpot(int playernum, mapthing_t *mthing)
   {
      /* first spawn of level, before corpses */
      for (i=0 ; i<playernum ; i++)
-        if (players[i].mo->x == mthing->x << FRACBITS
-              && players[i].mo->y == mthing->y << FRACBITS)
+        if (players[i].mo->x == mthing->x * FRACUNIT
+              && players[i].mo->y == mthing->y * FRACUNIT)
            return FALSE;
      return TRUE;
   }
 
-  x = mthing->x << FRACBITS;
-  y = mthing->y << FRACBITS;
+  x = mthing->x * FRACUNIT;
+  y = mthing->y * FRACUNIT;
 
   // killough 4/2/98: fix bug where P_CheckPosition() uses a non-solid
   // corpse to detect collisions with other players in DM starts
@@ -1119,9 +1471,38 @@ static dbool   G_CheckSpot(int playernum, mapthing_t *mthing)
 /* BUG: an can end up negative, because mthing->angle is (signed) short.
  * We have to emulate original Doom's behaviour, deferencing past the start
  * of the array, into the previous array (finetangent) */
-    an = ( ANG45 * ((signed)mthing->angle/45) ) >> ANGLETOFINESHIFT;
-    xa = finecosine[an];
-    ya = finesine[an];
+    /* the multiply must wrap (angles 225..315 overflow through bit 31 and
+     * the negative an drives the emulation switch below); do the wrap in
+     * unsigned arithmetic -- bit-identical, defined -- and reinterpret. */
+    an = (int)( ANG45 * (angle_t)((signed)mthing->angle/45) ) >> ANGLETOFINESHIFT;
+    /* A negative an (negative mthing->angle in a hostile/corrupt wad) must
+     * not index the tables directly: vanilla dereferenced past the start of
+     * finesine into finetangent, and the switch below hardcodes exactly the
+     * values that layout produced.  Read the tables only when in range and
+     * let the emulation switch supply the negative cases -- for every
+     * compatibility level, since the direct read never had defined contents
+     * to preserve (it depended on link-time array adjacency). */
+    if (an >= 0)
+    {
+      xa = finecosine[an];
+      ya = finesine[an];
+    }
+    else
+      switch (an) {
+      case -4096: xa = finetangent[2048];   // finecosine[-4096]
+          	ya = finetangent[0];      // finesine[-4096]
+          	break;
+      case -3072: xa = finetangent[3072];   // finecosine[-3072]
+          	ya = finetangent[1024];   // finesine[-3072]
+          	break;
+      case -2048: xa = finesine[0];   // finecosine[-2048]
+          	ya = finetangent[2048];   // finesine[-2048]
+          	break;
+      case -1024: xa = finesine[1024];     // finecosine[-1024]
+          	ya = finetangent[3072];  // finesine[-1024]
+          	break;
+      default:	I_Error("G_CheckSpot: unexpected angle %d\n",an);
+      }
 
     if (compatibility_level <= finaldoom_compatibility || compatibility_level == prboom_4_compatibility)
       switch (an) {
@@ -1186,7 +1567,7 @@ void G_DeathMatchSpawnPlayer (int playernum)
    }
 
    /* no good spot, so the player will probably get stuck */
-   P_SpawnPlayer (playernum, &playerstarts[playernum]);
+   P_SpawnPlayer (playernum, G_PlayerStart(playernum));
 }
 
 /*
@@ -1219,32 +1600,37 @@ void G_DoReborn (int playernum)
       return;
    }
 
-   if (G_CheckSpot (playernum, &playerstarts[playernum]) )
+   if (G_CheckSpot (playernum, G_PlayerStart(playernum)) )
    {
-      P_SpawnPlayer (playernum, &playerstarts[playernum]);
+      P_SpawnPlayer (playernum, G_PlayerStart(playernum));
       return;
    }
 
    /* try to spawn at one of the other players spots */
    for (i=0 ; i<MAXPLAYERS ; i++)
    {
-      if (G_CheckSpot (playernum, &playerstarts[i]) )
+      if (G_CheckSpot (playernum, G_PlayerStart(i)) )
       {
-         P_SpawnPlayer (playernum, &playerstarts[i]);
+         P_SpawnPlayer (playernum, G_PlayerStart(i));
          return;
       }
    }
 
    /* he's going to be inside something.  Too bad. */
-   P_SpawnPlayer (playernum, &playerstarts[playernum]);
+   P_SpawnPlayer (playernum, G_PlayerStart(playernum));
 }
 
 // DOOM Par Times
-int pars[4][10] = {
+// killough/BFG: Episode 4 (Thy Flesh Consumed) par times were absent
+// from the original Ultimate DOOM release; the values below were added
+// in DOOM 3 BFG Edition.  The table is [5][10] so gameepisode 4 (E4) is
+// in bounds -- previously it was [4][10] and E4 read past the end.
+int pars[5][10] = {
   {0},
   {0,30,75,120,90,165,180,180,30,165},
   {0,90,90,90,120,90,360,240,30,170},
-  {0,90,45,90,150,90,90,165,30,135}
+  {0,90,45,90,150,90,90,165,30,135},
+  {0,165,255,135,150,180,390,135,360,180}
 };
 
 // DOOM II Par Times
@@ -1268,6 +1654,16 @@ dbool   secretexit;
 void G_ExitLevel (void)
 {
   secretexit = FALSE;
+  gameaction = ga_completed;
+}
+
+/* Hexen Teleport_NewMap: stage the destination (a MAPINFO warp number and an
+ * arrival start position) and complete the level.  map -1 ends the game. */
+void G_Completed(int map, int position)
+{
+  secretexit = false;
+  LeaveMap = map;
+  LeavePosition = position;
   gameaction = ga_completed;
 }
 
@@ -1300,8 +1696,36 @@ void G_DoCompleted (void)
   if (automapmode & am_active)
     AM_Stop();
 
+  /* Hexen: hub travel within a cluster loads the next map directly; a
+   * cluster change (or any deathmatch exit) goes through the interlude
+   * first -- the CLUSxMSG text screen or the frag tally -- and the staged
+   * destination is consumed by G_DoWorldDone when it ends. */
+  if (hexen)
+  {
+    if (LeaveMap == -1)
+    { /* Teleport_EndGame */
+      gameaction = ga_victory;
+      return;
+    }
+    wminfo.nextep = gameepisode - 1;
+    wminfo.next = P_TranslateMapWarp(LeaveMap) - 1;
+    RebornPosition = LeavePosition;
+    if (!deathmatch &&
+        P_GetMapCluster(gamemap) ==
+        P_GetMapCluster(P_TranslateMapWarp(LeaveMap)))
+    {
+      gameaction = ga_worlddone;
+      return;
+    }
+    gamestate = GS_INTERMISSION;
+    automapmode &= ~am_active;
+    WI_Start(&wminfo);
+    return;
+  }
+
   wminfo.lastmapinfo = gamemapinfo;
   wminfo.nextmapinfo = NULL;
+  g_nextmapname[0] = 0;
   if (gamemapinfo)
   {
     const char *next = "";
@@ -1316,9 +1740,21 @@ void G_DoCompleted (void)
        next = gamemapinfo->nextmap;
     if (next[0])
     {
-      G_ValidateMapName(next, &wminfo.nextep, &wminfo.next);
-      wminfo.nextep--;
-      wminfo.next--;
+      if (!G_ValidateMapName(next, &wminfo.nextep, &wminfo.next))
+      {
+        /* Arbitrary ZDoom next-map name (e.g. ZDCMP2 looping to itself):
+         * carry the name for G_DoWorldDone and use placeholder 0-based
+         * ints so the numeric intermission machinery stays in range. */
+        strncpy(g_nextmapname, next, 8);
+        g_nextmapname[8] = 0;
+        wminfo.nextep = 0;
+        wminfo.next   = 0;
+      }
+      else
+      {
+        wminfo.nextep--;
+        wminfo.next--;
+      }
       wminfo.didsecret = players[consoleplayer].didsecret;
       wminfo.partime = gamemapinfo->partime;
       goto frommapinfo;	// skip past the default setup.
@@ -1374,6 +1810,17 @@ void G_DoCompleted (void)
         if (gamemap == 9)
           {
             // returning from secret level
+            if (heretic)
+              {
+                /* vanilla heretic afterSecret: E1M9 returns to E1M7, the
+                 * middle episodes to M5, episode 5 to M4 (0-biased here) */
+                static const int after_secret[5] = { 6, 4, 4, 4, 3 };
+                if (gameepisode >= 1 && gameepisode <= 5)
+                  wminfo.next = after_secret[gameepisode - 1];
+                else
+                  wminfo.next = 0;
+              }
+            else
             switch (gameepisode)
               {
               case 1:
@@ -1388,22 +1835,29 @@ void G_DoCompleted (void)
               case 4:
                 wminfo.next = 2;
                 break;
-              case 5:
-                wminfo.next = 6;
-                break;
               }
           }
         else
           wminfo.next = gamemap;          // go to next level
     }
 
+  /* Par lookups are bounds-guarded: the tables cover Doom's episodes and
+   * maps only, and Heretic reaches episode 6 (no par times exist for it
+   * at all; its intermission shows none). */
+  wminfo.partime = 0;
   if ( gamemode == commercial )
-    wminfo.partime = TICRATE*cpars[gamemap-1];
-  else
+  {
+    if (gamemap >= 1 && gamemap <= 34)
+      wminfo.partime = TICRATE*cpars[gamemap-1];
+  }
+  else if (!heretic && gameepisode >= 1 && gameepisode <= 4
+           && gamemap >= 1 && gamemap <= 9)
     wminfo.partime = TICRATE*pars[gameepisode][gamemap];
 
 frommapinfo:
-  wminfo.nextmapinfo = G_LookupMapinfo(wminfo.nextep+1, wminfo.next+1);
+  wminfo.nextmapinfo = g_nextmapname[0]
+                       ? G_LookupMapinfoByName(g_nextmapname)
+                       : G_LookupMapinfo(wminfo.nextep+1, wminfo.next+1);
   wminfo.maxkills = totalkills;
   wminfo.maxitems = totalitems;
   wminfo.maxsecret = totalsecret;
@@ -1438,6 +1892,13 @@ frommapinfo:
 // G_WorldDone
 //
 
+/* The staged Teleport_NewMap destination (warp number); the hexen
+ * intermission needs it to pick the cluster message. */
+int G_GetLeaveMap(void)
+{
+  return LeaveMap;
+}
+
 void G_WorldDone (void)
 {
   gameaction = ga_worlddone;
@@ -1459,7 +1920,7 @@ void G_WorldDone (void)
         F_StartFinale();
       return;
     }
-    else if (gamemapinfo->endpic && gamemapinfo->endpic[0] && gamemapinfo->nointermission)
+    else if (gamemapinfo->endpic[0] && gamemapinfo->nointermission)
     {
       // game ends without a status screen.
       gameaction = ga_victory;
@@ -1494,8 +1955,28 @@ void G_DoWorldDone (void)
   idmusnum = -1;             //jff 3/17/98 allow new level's music to be loaded
   gamestate = GS_LEVEL;
   gameepisode = wminfo.nextep + 1;
+
+  /* Hexen hub travel: archive the departing map and restore the
+   * destination's archived state when revisiting (sv_save.c). */
+  if (hexen)
+  {
+    SV_MapTeleport(wminfo.next + 1, RebornPosition);
+    gameaction = ga_nothing;
+    AM_clearMarks();
+    return;
+  }
+
   gamemap = wminfo.next + 1;
-  gamemapinfo = G_LookupMapinfo(gameepisode, gamemap);
+  if (g_nextmapname[0])
+  {
+    /* Named next map (ZDoom MAPINFO): resolve by name so P_SetupLevel loads
+     * the right lump; the numeric gameepisode/gamemap are placeholders. */
+    mapentry_t *me = G_LookupMapinfoByName(g_nextmapname);
+    gamemapinfo = me ? me : G_LookupMapinfo(gameepisode, gamemap);
+    g_nextmapname[0] = 0;
+  }
+  else
+    gamemapinfo = G_LookupMapinfo(gameepisode, gamemap);
   G_DoLoadLevel();
   gameaction = ga_nothing;
   AM_clearMarks();           //jff 4/12/98 clear any marks on the automap
@@ -1545,12 +2026,12 @@ static uint64_t G_Signature(void)
    computed = TRUE;
    if (gamemode == commercial)
     for (map = haswolflevels ? 32 : 30; map; map--)
-      sprintf(name, "map%02d", map), s = G_UpdateSignature(s, name);
+      sprintf(name, "map%02u", (unsigned)(map & 0xff)), s = G_UpdateSignature(s, name);
    else
     for (episode = gamemode==retail ? 4 :
      gamemode==shareware ? 1 : 3; episode; episode--)
       for (map = 9; map; map--)
-  sprintf(name, "E%dM%d", episode, map), s = G_UpdateSignature(s, name);
+  sprintf(name, "E%uM%u", (unsigned)(episode & 0xff), (unsigned)(map & 0xff)), s = G_UpdateSignature(s, name);
   }
   return s;
 }
@@ -1598,6 +2079,13 @@ void G_LoadGame(int slot, dbool   command)
 static void G_LoadGameErr(const char *msg)
 {
   Z_Free(savebuffer);                // Free the savegame buffer
+  /* Null the globals here so callers (G_DoLoadGame's error paths)
+   * can fall through to their trailing Z_Free(savebuffer) without
+   * causing a double-free.  Matches the post-save pattern in
+   * G_DoSaveGame / G_DoSaveGameToBuffer where savebuffer/save_p
+   * are nulled together. */
+  savebuffer = NULL;
+  save_p     = NULL;
   M_ForcedLoadGame(msg);             // Print message asking for 'Y' to force
   if (command_loadgame)              // If this was a command-line -loadgame
     {
@@ -1613,7 +2101,7 @@ const char * comp_lev_str[MAX_COMPATIBILITY_LEVEL] =
 { "doom v1.2", "doom v1.666", "doom/doom2 v1.9", "ultimate doom", "final doom",
   "dosdoom compatibility", "tasdoom compatibility", "\"boom compatibility\"", "boom v2.01", "boom v2.02", "lxdoom v1.3.2+",
   "MBF", "PrBoom 2.03beta", "PrBoom v2.1.0-2.1.1", "PrBoom v2.1.2-v2.2.6",
-  "PrBoom v2.3.x", "PrBoom 2.4.0", "Current PrBoom"  };
+  "PrBoom v2.3.x", "PrBoom 2.4.0", "Current PrBoom", "MBF21"  };
 
 // comp_options_by_version removed - see G_Compatibility
 
@@ -1637,6 +2125,8 @@ static const size_t num_version_headers = sizeof(version_headers) / sizeof(versi
 //
 // Load the game from the internal savebuffer
 //
+void G_SetLoadMapName(const char *mn);
+
 static int G_DoLoadGameFromSaveBuffer(int length)
 {
   int isok;
@@ -1644,6 +2134,10 @@ static int G_DoLoadGameFromSaveBuffer(int length)
   int savegame_compatibility = -1;
 
   gameaction = ga_nothing;
+
+  /* Bound the read: the specials loader uses this to validate records and to
+   * tell a legacy stream from a current one (see p_saveg.c). */
+  P_SetSaveBufferEnd(savebuffer + length);
 
   save_p = savebuffer + SAVESTRINGSIZE;
 
@@ -1668,6 +2162,27 @@ static int G_DoLoadGameFromSaveBuffer(int length)
 
   save_p += VERSIONSIZE;
 
+  /* Raven layout tag (see G_DoSaveGameToSaveBuffer).  Reject saves written by
+   * an older build whose Heretic/Hexen struct layout differs, rather than
+   * deserialising them misaligned and crashing.  Not forced-loadable: a
+   * layout mismatch is unrecoverable, unlike a wad/checksum mismatch. */
+  if (raven)
+  {
+    /* RVN2: the raven mobj record became the full struct (the legacy
+     * truncated layout lost tid/special/damage/floorclip) and hexen saves
+     * gained the world state (ACS, polyobjs, sound sequences).
+     * RVN3 (hexen only): the hub map archives ride in the savegame.
+     * RVN4 (hexen only): the map archives gained the vanilla sound-
+     * sequence segment.
+     * RVN5 (heretic only): the ambient sound cursor rides in the save. */
+    char raven_magic[4] = { 'R','V','N','5' };
+    if (hexen)
+      raven_magic[3] = '4';
+    if (memcmp(save_p, raven_magic, sizeof raven_magic))
+      return -2;
+    save_p += sizeof raven_magic;
+  }
+
   // CPhipps - always check savegames even when forced,
   //  only print a warning if forced
   {  // killough 3/16/98: check lump name checksum (independent of order)
@@ -1687,6 +2202,8 @@ static int G_DoLoadGameFromSaveBuffer(int length)
   save_p += strlen((const char*)save_p)+1;
 
   compatibility_level = (savegame_compatibility >= prboom_4_compatibility) ? *save_p : savegame_compatibility;
+  if (raven) /* raven ignores compat gates; old saves may carry mbf21 */
+    compatibility_level = best_compatibility;
   if (savegame_compatibility < prboom_6_compatibility)
     compatibility_level = map_old_comp_levels[compatibility_level];
   save_p++;
@@ -1694,6 +2211,21 @@ static int G_DoLoadGameFromSaveBuffer(int length)
   gameskill = *save_p++;
   gameepisode = *save_p++;
   gamemap = *save_p++;
+
+  /* Recover the stored map lump name (see G_DoSaveGameToBuffer).  A non-empty
+   * name re-enters the level by lump, which is the only way to reach a ZDoom
+   * MAPINFO map whose lump is not MAPnn/ExMy; otherwise the numeric gamemap
+   * would silently load a different (often IWAD) lump and the thinker/special
+   * stream would not match the level, crashing the unarchive. */
+  {
+    char mn[9];
+    memcpy(mn, save_p, sizeof(mn));
+    save_p += sizeof(mn);
+    mn[8] = 0;
+    if (mn[0])
+      G_SetLoadMapName(mn);
+  }
+
   gamemapinfo = G_LookupMapinfo(gameepisode, gamemap);
 
   for (i=0 ; i<MAXPLAYERS ; i++)
@@ -1729,10 +2261,26 @@ static int G_DoLoadGameFromSaveBuffer(int length)
 
   // dearchive all the modifications
   P_MapStart();
+  P_UnArchiveACS ();   /* hexen world vars + deferred scripts (no-op otherwise) */
   P_UnArchivePlayers ();
   P_UnArchiveWorld ();
+  P_UnArchivePolyobjs (); /* hexen (no-op otherwise) */
   P_UnArchiveThinkers ();
-  P_UnArchiveSpecials ();
+  if (hexen)
+    P_CreateTIDList (); /* thing IDs hang off the freshly loaded mobjs */
+  if (P_UnArchiveSpecials ())
+  {
+    /* The stream desynchronised mid-restore (incompatible save): the world
+     * is half-loaded and must not tick.  Re-initialise the target map fresh
+     * so the game stays runnable after the frontend reports the failure. */
+    P_SetSaveBufferEnd(NULL);
+    G_InitNew (gameskill, gameepisode, gamemap);
+    return -4;
+  }
+  P_UnArchiveScripts (); /* hexen ACS script states + map vars (no-op otherwise) */
+  P_UnArchiveSounds ();  /* hexen active sound sequences (no-op otherwise) */
+  P_UnArchiveAmbientSound ();  /* heretic ambient cursor (no-op otherwise) */
+  SV_UnArchiveMaps (); /* hexen hub map archives (no-op otherwise) */
   P_UnArchiveRNG ();    // killough 1/18/98: load RNG information
   P_UnArchiveMap ();    // killough 1/22/98: load automap information
   P_MapEnd();
@@ -1782,6 +2330,8 @@ void G_DoLoadGame(void)
 
   // done
   Z_Free (savebuffer);
+  savebuffer = NULL;
+  save_p     = NULL;
 }
 
 bool G_DoLoadGameFromBuffer(void *data, size_t length)
@@ -1790,6 +2340,7 @@ bool G_DoLoadGameFromBuffer(void *data, size_t length)
   savebuffer = data;
 
   err = G_DoLoadGameFromSaveBuffer(length);
+  P_SetSaveBufferEnd(NULL);
 
   // done
   savebuffer = NULL;
@@ -1816,9 +2367,6 @@ void G_SaveGame(int slot, char *description)
   // CPhipps - store info in special_event
   special_event = BT_SPECIAL | (BTS_SAVEGAME & BT_SPECIALMASK) |
     ((slot << BTS_SAVESHIFT) & BTS_SAVEMASK);
-#ifdef HAVE_NET
-  D_NetSendMisc(nm_savegamename, strlen(savedescription)+1, savedescription);
-#endif
 }
 
 // Check for overrun and realloc if necessary -- Lee Killough 1/22/98
@@ -1876,6 +2424,26 @@ static int G_DoSaveGameToSaveBuffer() {
 
   save_p += VERSIONSIZE;
 
+  /* Raven (Heretic/Hexen) layout tag.  The shared PrBoom version header only
+   * identifies the file format, not the in-memory struct layout, and this
+   * fork has grown mobj_t / player_t with Heretic/Hexen fields.  A savegame
+   * written by an older build of this core therefore passes the version
+   * check but deserialises with the wrong field offsets, desynchronising the
+   * thinker/special stream and crashing in P_UnArchiveSpecials.  Stamp a
+   * layout magic for raven games so an incompatible old save is rejected
+   * cleanly instead.  Bump RAVEN_SAVE_MAGIC whenever a raven-affecting struct
+   * layout changes.  Doom saves are untouched (the shared format is shared
+   * with upstream). */
+  if (raven)
+  {
+    char raven_magic[4] = { 'R','V','N','5' };
+    if (hexen)
+      raven_magic[3] = '4';
+    CheckSaveGame(sizeof raven_magic);
+    memcpy(save_p, raven_magic, sizeof raven_magic);
+    save_p += sizeof raven_magic;
+  }
+
   { /* killough 3/16/98, 12/98: store lump name checksum */
     uint64_t checksum = G_Signature();
     memcpy(save_p, &checksum, sizeof checksum);
@@ -1897,7 +2465,7 @@ static int G_DoSaveGameToSaveBuffer() {
     *save_p++ = 0;
   }
 
-  CheckSaveGame(GAME_OPTION_SIZE+MIN_MAXPLAYERS+14);
+  CheckSaveGame(GAME_OPTION_SIZE+MIN_MAXPLAYERS+14+9);
 
   *save_p++ = compatibility_level;
 
@@ -1905,6 +2473,18 @@ static int G_DoSaveGameToSaveBuffer() {
   *save_p++ = gameepisode;
   *save_p++ = gamemap;
 
+  /* The numeric gamemap byte cannot name a ZDoom MAPINFO map whose lump is not
+   * MAPnn/ExMy (e.g. ZDCMP2).  Store the current map's lump name so the load
+   * path can re-enter the right level by name; an empty string means the
+   * numeric episode/map is sufficient (ordinary Doom/Heretic maps). */
+  {
+    char mn[9];
+    memset(mn, 0, sizeof(mn));
+    if (gamemapinfo && gamemapinfo->mapname)
+      strncpy(mn, gamemapinfo->mapname, 8);
+    memcpy(save_p, mn, sizeof(mn));
+    save_p += sizeof(mn);
+  }
   for (i=0 ; i<MAXPLAYERS ; i++)
     *save_p++ = playeringame[i];
 
@@ -1930,6 +2510,8 @@ static int G_DoSaveGameToSaveBuffer() {
   // killough 11/98: save revenant tracer state
   *save_p++ = (gametic-basetic) & 255;
 
+  P_ArchiveACS();      /* hexen world vars + deferred scripts (no-op otherwise) */
+
   P_ArchivePlayers();
 
   // phares 9/13/98: Move mobj_t->index out of P_ArchiveThinkers so the
@@ -1939,6 +2521,7 @@ static int G_DoSaveGameToSaveBuffer() {
   P_ThinkerToIndex();
 
   P_ArchiveWorld();
+  P_ArchivePolyobjs(); /* hexen (no-op otherwise) */
   P_ArchiveThinkers();
 
   // phares 9/13/98: Move index->mobj_t out of P_ArchiveThinkers, simply
@@ -1947,6 +2530,10 @@ static int G_DoSaveGameToSaveBuffer() {
   P_IndexToThinker();
 
   P_ArchiveSpecials();
+  P_ArchiveScripts();  /* hexen ACS script states + map vars (no-op otherwise) */
+  P_ArchiveSounds();   /* hexen active sound sequences (no-op otherwise) */
+  P_ArchiveAmbientSound();   /* heretic ambient cursor (no-op otherwise) */
+  SV_ArchiveMaps();    /* hexen hub map archives (no-op otherwise) */
   P_ArchiveRNG();    // killough 1/18/98: save RNG information
   P_ArchiveMap();    // killough 1/22/98: save automap information
 
@@ -2009,12 +2596,59 @@ bool G_DoSaveGameToBuffer(void *buf, size_t size) {
 static skill_t d_skill;
 static int     d_episode;
 static int     d_map;
+/* Deferred start-map lump name for ZDoom MAPINFO episodes whose start map
+ * is not a MAPnn/ExMy lump (e.g. ZDCMP2).  Empty == use the d_episode/d_map
+ * numeric path. */
+static char    d_mapname[9];
+
+/* Set the deferred start-map lump name used by the next G_InitNew (consumed
+ * and cleared there).  Used by the savegame loader to re-enter a named map. */
+void G_SetLoadMapName(const char *mn)
+{
+  if (!mn) { d_mapname[0] = 0; return; }
+  strncpy(d_mapname, mn, 8);
+  d_mapname[8] = 0;
+}
 
 void G_DeferedInitNew(skill_t skill, int episode, int map)
 {
   d_skill = skill;
   d_episode = episode;
   d_map = map;
+  d_mapname[0] = 0;
+  gameaction = ga_newgame;
+}
+
+/* G_DeferedInitNewName -- start a new game on a map identified by lump name.
+ * ZDoom MAPINFO episodes may point at a map whose lump name is arbitrary
+ * (e.g. ZDCMP2) rather than MAPnn/ExMy.  When the name resolves to a
+ * standard MAPnn/ExMy we feed the usual numeric path; otherwise the raw
+ * name is carried through to G_InitNew, which looks the map up by name. */
+void G_DeferedInitNewName(skill_t skill, const char *mapname)
+{
+  int e = 1, m = 1;
+
+  d_skill = skill;
+  /* Launch by lump name when the name is non-standard (e.g. ZDCMP2), OR when
+   * it parses as MAPnn/ExMy but the map number cannot be launched numerically.
+   * MAP00 is the case in point: it validates (lump "MAP00" round-trips) yet
+   * G_InitNew clamps any map < 1 up to 1, which would silently start MAP01
+   * instead of the named lump.  Carrying the name through makes G_InitNew
+   * resolve the real MAP00 lump by name. */
+  if (mapname && mapname[0] &&
+      (!G_ValidateMapName(mapname, &e, &m) || m < 1))
+  {
+    strncpy(d_mapname, mapname, 8);
+    d_mapname[8] = 0;
+    d_episode = 1;
+    d_map = 1;
+  }
+  else
+  {
+    d_mapname[0] = 0;
+    d_episode = e;
+    d_map = m;
+  }
   gameaction = ga_newgame;
 }
 
@@ -2182,6 +2816,15 @@ void G_ReloadDefaults(void)
   if (compatibility_level == (unsigned) -1)
     compatibility_level = best_compatibility;
 
+  /* Raven: the heretic and hexen sim predates and ignores the
+   * Boom/MBF compatibility gates, and mbf21's extra flag semantics
+   * break it outright (heretic players take no damage, hexen monsters
+   * never attack).  dsda-doom pins raven to a fixed level for the
+   * same reason; pin to best_compatibility, which is what 'auto' has
+   * always resolved to for these games. */
+  if (raven)
+    compatibility_level = best_compatibility;
+
   if (mbf_features)
     memcpy(comp, default_comp, sizeof comp);
   G_Compatibility();
@@ -2194,6 +2837,9 @@ void G_ReloadDefaults(void)
 
 void G_DoNewGame (void)
 {
+  /* a fresh game forgets any hub map archives */
+  if (hexen)
+    SV_HubInit();
   G_ReloadDefaults();            // killough 3/1/98
   netgame = FALSE;               // killough 3/29/98
   deathmatch = FALSE;
@@ -2212,10 +2858,25 @@ void G_SetFastParms(int fast_pending)
   static int fast = 0;            // remembers fast state
   int i;
   if (fast != fast_pending) {     /* only change if necessary */
+    /* MBF21: a thing with a "Fast speed" (altspeed) uses it under fast/
+     * nightmare.  Swap speed<->altspeed on toggle.  altspeed is
+     * NO_ALTSPEED for stock things, so this is inert for vanilla. */
+    for (i=0; i<num_mobj_types; i++)
+      if (mobjinfo[i].altspeed != NO_ALTSPEED)
+      {
+        int swap = mobjinfo[i].speed;
+        mobjinfo[i].speed = mobjinfo[i].altspeed;
+        mobjinfo[i].altspeed = swap;
+      }
     if ((fast = fast_pending))
       {
-        for (i=S_SARG_RUN1; i<=S_SARG_PAIN2; i++)
-          if (states[i].tics != 1 || demo_compatibility) // killough 4/10/98
+        /* MBF21: halve the tics of every SKILL5FAST frame.  The demon's
+         * default states carry the flag (set in D_BuildBEXTables), so this
+         * reproduces the vanilla SARG behaviour for stock content while
+         * also honouring the flag on MBF21 deh-modified frames. */
+        for (i=0; i<num_states; i++)
+          if ((states[i].flags & STATEF_SKILL5FAST) &&
+              (states[i].tics != 1 || demo_compatibility)) // killough 4/10/98
             states[i].tics >>= 1;  // don't change 1->0 since it causes cycles
         mobjinfo[MT_BRUISERSHOT].speed = 20*FRACUNIT;
         mobjinfo[MT_HEADSHOT].speed = 20*FRACUNIT;
@@ -2223,8 +2884,9 @@ void G_SetFastParms(int fast_pending)
       }
     else
       {
-        for (i=S_SARG_RUN1; i<=S_SARG_PAIN2; i++)
-          states[i].tics <<= 1;
+        for (i=0; i<num_states; i++)
+          if (states[i].flags & STATEF_SKILL5FAST)
+            states[i].tics <<= 1;
         mobjinfo[MT_BRUISERSHOT].speed = 15*FRACUNIT;
         mobjinfo[MT_HEADSHOT].speed = 10*FRACUNIT;
         mobjinfo[MT_TROOPSHOT].speed = 10*FRACUNIT;
@@ -2249,8 +2911,8 @@ mapentry_t *G_LookupMapinfo(int episode, int map)
 {
   char lumpname[9];
   unsigned i;
-  if (gamemode == commercial) snprintf(lumpname, 9, "MAP%02d", map);
-  else snprintf(lumpname, 9, "E%dM%d", episode, map);
+  if (gamemode == commercial) snprintf(lumpname, 9, "MAP%02u", (unsigned)(map & 0xff));
+  else snprintf(lumpname, 9, "E%uM%u", (unsigned)(episode & 0xff), (unsigned)(map & 0xff));
   for (i = 0; i < U_mapinfo.mapcount; i++)
   {
     if (!stricmp(lumpname, U_mapinfo.maps[i].mapname))
@@ -2290,11 +2952,41 @@ int G_ValidateMapName(const char *mapname, int *pEpi, int *pMap)
   M_Strupr(mapuname);
 
 
-  if (sscanf(mapuname, "MAP%d", &map) == 1)
-    snprintf(lumpname, 9, "MAP%02d", map);
-  else if (sscanf(mapuname, "E%dM%d", &epi, &map) == 2)
-    snprintf(lumpname, 9, "E%dM%d", epi, map);
-  else return 0;
+  /* Hand-rolled parse to avoid sscanf (slow due to format-string
+   * parsing overhead, plus internal malloc on musl/older Android/
+   * console libcs).  Map names are short and the format is fully
+   * constrained: "MAPnn" or "EnMn". */
+  {
+    const char *p = mapuname;
+    char       *end;
+    long        v;
+
+    if (p[0] == 'M' && p[1] == 'A' && p[2] == 'P')
+    {
+      v = strtol(p + 3, &end, 10);
+      if (end != p + 3)
+      {
+        map = (int)v;
+        snprintf(lumpname, 9, "MAP%02u", (unsigned)(map & 0xff));
+      }
+      else return 0;
+    }
+    else if (p[0] == 'E')
+    {
+      char *map_start;
+      v = strtol(p + 1, &end, 10);
+      if (end == p + 1 || *end != 'M')
+        return 0;
+      epi = (int)v;
+      map_start = end + 1;
+      v = strtol(map_start, &end, 10);
+      if (end == map_start)
+        return 0;
+      map = (int)v;
+      snprintf(lumpname, 9, "E%uM%u", (unsigned)(epi & 0xff), (unsigned)(map & 0xff));
+    }
+    else return 0;
+  }
 
   if (pEpi) *pEpi = epi;
   if (pMap) *pMap = map;
@@ -2312,6 +3004,14 @@ void G_InitNew(skill_t skill, int episode, int map)
 {
   int i;
 
+  /* Hexen: a fresh game must not inherit ACS world variables or deferred
+   * cross-map scripts from the previous one.  Hub travel re-enters here for
+   * every map transition (sv_save.c), and that must NOT reset ACS world
+   * state: world variables and the deferred-script store are exactly the
+   * state that persists across maps within a hub. */
+  if (hexen && !SV_IsHubTravel())
+    P_ACSInitNewGame();
+
   if (paused)
     {
       paused = FALSE;
@@ -2324,6 +3024,29 @@ void G_InitNew(skill_t skill, int episode, int map)
   if (episode < 1)
     episode = 1;
 
+  if (heretic)
+    {
+      /* Heretic is mapped onto the Doom 'registered' gamemode, but it has
+       * more than three episodes (the registered/extended set runs E1..E5,
+       * and UMAPINFO or extra IWAD content can add more).  The plain Doom
+       * clamp below would force any episode past 3 down to 3 -- which made
+       * the 6-episode menu start episodes 3..6 all at E3M1.  Clamp instead
+       * to the highest episode whose ExM1 map actually exists, mirroring
+       * how the episode menu counts available episodes. */
+      int last = 1;
+      int e;
+      for (e = 1; e <= MAX_EPISODE_NUM; e++)
+        {
+          char mapname[9];
+          sprintf(mapname, "E%uM1", (unsigned)e);
+          if (W_CheckNumForName(mapname) == -1)
+            break;
+          last = e;
+        }
+      if (episode > last)
+        episode = last;
+    }
+  else
   if (gamemode == retail)
     {
       if (episode > MAX_EPISODE_NUM)
@@ -2357,10 +3080,21 @@ void G_InitNew(skill_t skill, int episode, int map)
   usergame = TRUE;                // will be set FALSE if a demo
   paused = FALSE;
   automapmode &= ~am_active;
+  g_nextmapname[0] = 0;           // a fresh game has no carried next map
   gameepisode = episode;
   gamemap = map;
   gameskill = skill;
-  gamemapinfo = G_LookupMapinfo(gameepisode, gamemap);
+  /* A ZDoom MAPINFO episode may start on an arbitrarily named map; when a
+   * deferred name is pending, resolve the map info by name (the numeric
+   * episode/map are placeholders).  P_SetupLevel then loads the named lump. */
+  if (d_mapname[0])
+  {
+    mapentry_t *me = G_LookupMapinfoByName(d_mapname);
+    gamemapinfo = me ? me : G_LookupMapinfo(gameepisode, gamemap);
+    d_mapname[0] = 0;
+  }
+  else
+    gamemapinfo = G_LookupMapinfo(gameepisode, gamemap);
 
   totalleveltimes = 0; // cph
 
@@ -2382,7 +3116,8 @@ void G_ReadDemoTiccmd (ticcmd_t* cmd)
 
   if (*demo_p == DEMOMARKER)
     G_CheckDemoStatus();      // end of demo data stream
-  else if (demoplayback && demo_p + (longtics?5:4) > demobuffer + demolength)
+  else if (demoplayback &&
+           demo_p + (longtics?5:4) + (raven?2:0) > demobuffer + demolength)
   {
     lprintf(LO_WARN, "G_ReadDemoTiccmd: missing DEMOMARKER\n");
     G_CheckDemoStatus();
@@ -2398,6 +3133,20 @@ void G_ReadDemoTiccmd (ticcmd_t* cmd)
       cmd->angleturn = (((signed int)(*demo_p++))<<8) + lowbyte;
     }
     cmd->buttons = (unsigned char)*demo_p++;
+    if (raven)
+    {
+      /* Raven demo tics carry two extra bytes: look/fly and the artifact
+       * used this tic. */
+      cmd->lookfly = (unsigned char)*demo_p++;
+      cmd->arti    = (unsigned char)*demo_p++;
+    }
+    else
+    {
+      /* arti/lookfly are not part of the Doom demo format; clear them so a
+       * stale ring-buffer value can't leak into playback. */
+      cmd->arti    = 0;
+      cmd->lookfly = 0;
+    }
     // e6y: ability to play tasdoom demos directly
     if (compatibility_level == tasdoom_compatibility)
     {
@@ -2615,8 +3364,10 @@ static dbool   CheckForOverrun(const uint8_t *start_p, const uint8_t *current_p,
   {
     if (failonerror)
       I_Error("G_ReadDemoHeader: wrong demo header\n");
-    else
-      return TRUE;
+    /* I_Error is non-fatal in this core (it logs and returns), so we must
+     * still report the overrun to the caller -- otherwise G_ReadDemoHeader
+     * keeps reading past the end of the demo buffer and crashes. */
+    return TRUE;
   }
   return FALSE;
 }
@@ -2641,6 +3392,64 @@ static const uint8_t* G_ReadDemoHeader(const uint8_t *demo_p, size_t size, dbool
    // Old demos turn on demo_compatibility => compatibility; new demos load
    // compatibility flag, and other flags as well, as a part of the demo.
 
+   /* Vanilla Hexen demos are versionless: skill, episode, map, then for
+    * each of MAXPLAYERS a presence byte and a class byte.  The vvHeretic
+    * extension bits some tools put on the first presence byte (0x20
+    * -respawn, 0x10 -longtics, 0x02 -nomonsters) are honoured; retail
+    * lumps carry a plain 1 there. */
+   if (hexen)
+   {
+#define HEXEN_DEMO_MAXPLAYERS 8
+      int i;
+      int skill, episode, map;
+
+      if (CheckForOverrun(header_p, demo_p, size, 3 + 2 * HEXEN_DEMO_MAXPLAYERS,
+                          failonerror))
+         return NULL;
+
+      skill   = *demo_p++;
+      episode = *demo_p++;
+      map     = *demo_p++;
+
+      longtics = 0;
+      deathmatch = FALSE;
+      consoleplayer = 0;
+      respawnparm = fastparm = nomonsters = FALSE;
+      if (*demo_p & 0x20)
+         respawnparm = TRUE;
+      if (*demo_p & 0x10)
+         longtics = 1;
+      if (*demo_p & 0x02)
+         nomonsters = TRUE;
+
+      for (i = 0; i < HEXEN_DEMO_MAXPLAYERS; i++)
+      {
+         /* the on-disk header always carries vanilla hexen's 8 player
+          * slots, regardless of this engine's MAXPLAYERS */
+         if (i < MAXPLAYERS)
+         {
+            playeringame[i] = (*demo_p++) != 0;
+            PlayerClass[i]  = *demo_p++ + 1;
+         }
+         else
+            demo_p += 2;
+      }
+
+      if (playeringame[1])
+      {
+         netgame = TRUE;
+         netdemo = TRUE;
+      }
+
+      if (gameaction != ga_loadgame)
+         G_InitNew(skill, episode, map);
+
+      for (i = 0; i < MAXPLAYERS; i++)
+         players[i].cheats = 0;
+
+      return demo_p;
+   }
+
    //e6y: check for overrun
    if (CheckForOverrun(header_p, demo_p, size, 1, failonerror))
       return NULL;
@@ -2654,10 +3463,16 @@ static const uint8_t* G_ReadDemoHeader(const uint8_t *demo_p, size_t size, dbool
      // This prepended 255 is here to prevent non-UMAPINFO ports from recognizing the demo.
      demover = *demo_p++;
      if (!U_mapinfo.mapcount)
+     {
        I_Error("UMAPINFO not loaded but trying to play a demo recorded with it");
+       return NULL;
+     }
    }
    else if (U_mapinfo.mapcount)
+   {
      I_Error("UMAPINFO loaded but trying to play a demo recorded without it");
+     return NULL;
+   }
 
    // e6y
    // Handling of unrecognized demo formats
@@ -2666,9 +3481,11 @@ static const uint8_t* G_ReadDemoHeader(const uint8_t *demo_p, size_t size, dbool
    // BOOM's demoversion starts from 200
    if (!((demover >=   0  && demover <=   4) ||
             (demover >= 104  && demover <= 111) ||
-            (demover >= 200  && demover <= 214)))
+            (demover >= 200  && demover <= 214) ||
+            (demover == 221)))
    {
       I_Error("G_ReadDemoHeader: Unknown demo format %d.", demover);
+      return NULL; /* I_Error is non-fatal here; bail rather than parse garbage */
    }
 
    if (demover < 200)     // Autodetect old demos
@@ -2786,6 +3603,11 @@ static const uint8_t* G_ReadDemoHeader(const uint8_t *demo_p, size_t size, dbool
             longtics = 1;
             demo_p++;
             break;
+         case 221:
+            compatibility_level = mbf21_compatibility;
+            longtics = 1;
+            demo_p++;
+            break;
       }
       //e6y: check for overrun
       if (CheckForOverrun(header_p, demo_p, size, 5, failonerror))
@@ -2812,7 +3634,10 @@ static const uint8_t* G_ReadDemoHeader(const uint8_t *demo_p, size_t size, dbool
    }
 
    if (sizeof(comp_lev_str)/sizeof(comp_lev_str[0]) != MAX_COMPATIBILITY_LEVEL)
+   {
       I_Error("G_ReadDemoHeader: compatibility level strings incomplete");
+      return NULL;
+   }
    lprintf(LO_INFO, "G_DoPlayDemo: playing demo with %s compatibility\n",
          comp_lev_str[compatibility_level]);
 
@@ -2821,6 +3646,20 @@ static const uint8_t* G_ReadDemoHeader(const uint8_t *demo_p, size_t size, dbool
       //e6y: check for overrun
       if (CheckForOverrun(header_p, demo_p, size, 4, failonerror))
          return NULL;
+
+      /* Heretic demos share the doom 1.2 header layout; the vvHeretic
+       * extension bits some tools put on the first presence byte (0x20
+       * -respawn, 0x10 -longtics, 0x02 -nomonsters) are honoured here.
+       * Retail lumps carry a plain 1. */
+      if (heretic)
+      {
+         if (*demo_p & 0x20)
+            respawnparm = TRUE;
+         if (*demo_p & 0x10)
+            longtics = 1;
+         if (*demo_p & 0x02)
+            nomonsters = TRUE;
+      }
 
       for (i=0; i<4; i++)  // intentionally hard-coded 4 -- killough
          playeringame[i] = *demo_p++;
@@ -2867,6 +3706,23 @@ void G_DoPlayDemo(void)
   demolength = W_LumpLength(demolumpnum);
 
   demo_p = G_ReadDemoHeader(demobuffer, demolength, TRUE);
+
+  if (!demo_p)
+  {
+    /* Invalid / truncated demo header.  G_ReadDemoHeader has already
+     * logged the reason.  Don't enter playback with a NULL demo pointer
+     * (the ticker would dereference it); release the lump and advance the
+     * title-screen demo loop to the next item instead. */
+    if (demolumpnum != -1)
+    {
+      W_UnlockLumpNum(demolumpnum);
+      demolumpnum = -1;
+    }
+    gameaction = ga_nothing;
+    demoplayback = FALSE;
+    D_AdvanceDemo();
+    return;
+  }
 
   gameaction = ga_nothing;
   usergame = FALSE;
@@ -2919,4 +3775,29 @@ void doom_printf(const char *s, ...)
 #endif
   va_end(v);
   players[consoleplayer].message = msg;  // set new message
+}
+
+/* G_Deinit
+ *
+ * Reset session-spanning g_game state.  Called from D_DoomDeinit.
+ *
+ * demolumpnum: cached lump index from G_DoPlayDemo's W_GetNumForName.
+ * If a session ends mid-demo (without G_CheckDemoStatus running),
+ * this index keeps pointing into the previous wad's lump table.  On
+ * next session it would either index wrong content or feed
+ * W_UnlockLumpNum a stale index that decrements an unrelated lump's
+ * lock count.  Reset to -1 here; the underlying lump table is about
+ * to be torn down by W_Exit anyway, so an explicit unlock isn't
+ * needed (and would be unsafe with a possibly-stale index).
+ *
+ * forced_loadgame / command_loadgame: the load-game error paths
+ * leave these in whichever state the last load attempt landed
+ * them.  Clean them so a fresh session doesn't inherit a "forced"
+ * or "from-command-line" flag that no longer applies.
+ */
+void G_Deinit(void)
+{
+   demolumpnum     = -1;
+   forced_loadgame = FALSE;
+   command_loadgame = FALSE;
 }

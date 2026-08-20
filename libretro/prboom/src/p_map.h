@@ -38,6 +38,10 @@
 #include "d_player.h"
 
 #define USERANGE        (64*FRACUNIT)
+
+/* Hexen: use the readied puzzle artifact against a special-129 line/thing */
+dbool P_UsePuzzleItem(player_t *player, int itemType);
+void PIT_ThrustSpike(mobj_t *actor);
 #define MELEERANGE      (64*FRACUNIT)
 #define MISSILERANGE    (32*64*FRACUNIT)
 
@@ -49,6 +53,7 @@
 #define STEPSIZE     (24 * FRACUNIT)
 
 // killough 3/15/98: add fourth argument to P_TryMove
+void    P_MapDeinit(void);
 dbool P_TryMove(mobj_t *thing, fixed_t x, fixed_t y, dbool dropoff);
 
 // killough 8/9/98: extra argument for telefragging
@@ -63,7 +68,11 @@ fixed_t P_AimLineAttack(mobj_t *t1,angle_t angle,fixed_t distance, uint64_t mask
 void    P_LineAttack(mobj_t *t1, angle_t angle, fixed_t distance,
                      fixed_t slope, int damage );
 void    P_RadiusAttack(mobj_t *spot, mobj_t *source, int damage);
+void    P_RadiusAttackEx(mobj_t *spot, mobj_t *source, int damage, int distance);
+void    P_RadiusAttackHexen(mobj_t *spot, mobj_t *source, int damage, int distance, dbool damageSource);
 dbool P_CheckPosition(mobj_t *thing, fixed_t x, fixed_t y);
+mobj_t *P_CheckOnmobj(mobj_t *thing); /* raven on-mobj z check */
+void P_BounceWall(mobj_t *mo); /* hexen wall-bouncing missiles */
 
 //jff 3/19/98 P_CheckSector(): new routine to replace P_ChangeSector()
 dbool P_ChangeSector(sector_t* sector,dbool crunch);
@@ -88,6 +97,7 @@ extern fixed_t tmceilingz;
 extern line_t *ceilingline;
 extern line_t *floorline;      // killough 8/23/98
 extern mobj_t *linetarget;     // who got hit (or NULL)
+extern mobj_t *BlockingMobj;     /* Raven: last thing that blocked a move */
 extern msecnode_t *sector_list;                             // phares 3/16/98
 extern fixed_t tmbbox[4];         // phares 3/20/98
 extern line_t *blockline;   // killough 8/11/98

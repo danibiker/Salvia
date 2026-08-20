@@ -61,8 +61,52 @@ void W_InitCache(void)
 
 void W_DoneCache(void)
 {
+   /* Explicitly free every cached lump block before releasing the
+    * cachelump array itself.  Two reasons:
+    *
+    *  - The Z_Malloc below uses a back-pointer to &cachelump[lump]
+    *    .cache (so PU_CACHE auto-purges NULL the slot correctly --
+    *    see comment on W_CacheLumpNum).  At Z_Close time, PU_STATIC
+    *    blocks are freed before PU_CACHE.  cachelump itself is
+    *    PU_STATIC; if we let Z_Close handle it, cachelump would be
+    *    freed first, then each PU_CACHE cache block's Z_Free would
+    *    write *(&cachelump[lump].cache) = NULL through a now-
+    *    dangling back-pointer.  Heap corruption.  By explicitly
+    *    freeing cache blocks here while cachelump is still live,
+    *    Z_Close has no cachelump-pointing blocks left to encounter.
+    *
+    *  - Locked cache blocks are PU_STATIC and never auto-purge.
+    *    Without this loop, they'd survive until Z_Close at
+    *    retro_deinit and only get reclaimed at process end.  This
+    *    is the same per-session-leak shape we fixed elsewhere. */
    if (cachelump)
+   {
+      int i;
+      for (i = 0; i < numlumps; i++)
+         if (cachelump[i].cache)
+            free(cachelump[i].cache);
       free(cachelump);
+      cachelump = NULL;
+   }
+}
+
+/* W_InvalidateLumpCache
+ * Drop the cached copy of a lump so the next W_CacheLumpNum re-reads
+ * it from its (possibly replaced) backing store.  W_ReplaceLumpData
+ * calls this: without it, a lump cached before replacement keeps
+ * serving the old bytes forever.  Invalidating a locked lump would
+ * yank memory out from under a live caller, so that is a bug. */
+void W_InvalidateLumpCache(int lump)
+{
+  if (!cachelump || lump < 0 || lump >= numlumps)
+    return;
+  if (!cachelump[lump].cache)
+    return;
+  if (cachelump[lump].locks > 0)
+    I_Error("W_InvalidateLumpCache: lump %.8s is locked",
+            lumpinfo[lump].name);
+  Z_Free(cachelump[lump].cache);
+  cachelump[lump].cache = NULL;
 }
 
 /* W_CacheLumpNum
@@ -75,8 +119,27 @@ const void *W_CacheLumpNum(int lump)
 {
   const int locks = 1;
 
+  /* Pass &cachelump[lump].cache as the user back-pointer so that
+   * when this PU_CACHE block is auto-purged (Z_Malloc's cache-
+   * purge under MEMORY_LOW pressure, or an explicit Z_FreeTags
+   * (PU_CACHE)), the cachelump[lump].cache slot is NULLed.
+   * Otherwise the next W_CacheLumpNum sees a non-NULL but freed
+   * pointer, skips the re-read branch, and returns it -- caller
+   * dereferences freed memory.  Same bug shape as r_patch.c
+   * patch->data; fires routinely under MEMORY_LOW.
+   *
+   * The deinit-time concern (cachelump is PU_STATIC, freed before
+   * PU_CACHE blocks at Z_Close, so a back-pointer would dangle)
+   * is handled by W_DoneCache: it explicitly frees every
+   * cachelump[i].cache BEFORE freeing cachelump itself.  By the
+   * time Z_Close runs, no blocks back-pointing into cachelump
+   * remain. */
   if (!cachelump[lump].cache)      // read the lump in
-    W_ReadLump(lump, Z_Malloc(W_LumpLength(lump), PU_CACHE, &cachelump[lump].cache));
+  {
+    cachelump[lump].cache = Z_Malloc(W_LumpLength(lump), PU_CACHE,
+                                     &cachelump[lump].cache);
+    W_ReadLump(lump, cachelump[lump].cache);
+  }
 
   /* cph - if wasn't locked but now is, tell z_zone to hold it */
   if (!cachelump[lump].locks && locks) {

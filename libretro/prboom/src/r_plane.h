@@ -48,16 +48,45 @@ extern fixed_t yslope[], distscale[];
 void R_InitPlanes(void);
 void R_ClearPlanes(void);
 void R_DrawPlanes (void);
+/* Emits sky visplane columns into the wall draw-record list.  Call after the
+ * BSP walk and before R_DrawCmdReplay so both share one dispatch. */
+void R_DrawPlanesEmitSky (void);
 
 visplane_t *R_FindPlane(
-                        fixed_t height,
-                        int picnum,
-                        int lightlevel,
-                        fixed_t xoffs,  /* killough 2/28/98: add x-y offsets */
-                        fixed_t yoffs
-                       );
+  fixed_t height,
+  int picnum,
+  int lightlevel,
+  fixed_t xoffs,                /* killough 2/28/98: add x-y offsets */
+  fixed_t yoffs,
+  const secplane_t *slope,      /* tilted plane or NULL */
+  int skybox, int portal);                  /* per-sector 3D skybox index, or -1 */
 
 visplane_t *R_CheckPlane(visplane_t *pl, int start, int stop);
 visplane_t *R_DupPlane(const visplane_t *pl, int start, int stop);
+visplane_t *R_FindWaterPlane(fixed_t height, int picnum, int lightlevel);
+
+/* collect the union per-column span [top,bottom] of all modified sky
+ * visplanes using skybox index sbidx, into caller arrays sized viewwidth.
+ * Returns 1 if any column is covered. */
+int R_CollectSkyboxSpan(int sbidx, short *out_top, short *out_bot);
+int R_CollectPortalIds(int *out_ids, int maxids);
+int R_CollectPortalSpan(int portal, short *out_top, short *out_bot);
+
+/* Default-skybox reveal mask (see r_plane.c): per-pixel ground truth of
+ * which sky pixels the main pass left showing the skybox scene. */
+extern int sky_reveal_active;
+extern int sky_row_min, sky_row_max;
+void R_SkyRevealBuild(void);
+void R_SkyRevealCoverCol(int x, int y1, int y2);
+int  R_SkyRevealExtents(short *out_top, short *out_bot);
+int  R_SkyRevealTest(int x, int y);
+
+/* visual line portal claims (see r_plane.c) */
+extern int lp_any;
+void R_LinePortalClearClaims(void);
+void R_LinePortalClaim(int x, int y1, int y2, int portal);
+void R_LinePortalReveal(void);
+int  R_LinePortalSpan(int portal, short *out_top, short *out_bot);
+int  R_LinePortalIds(int *out_ids, int maxids);
 
 #endif

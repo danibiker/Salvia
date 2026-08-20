@@ -59,6 +59,9 @@ static screeninfo_t wipe_scr;
 
 static int y_lookup[MAX_SCREENWIDTH];
 
+/* Non-zero while a melt is in progress. */
+static dbool wipe_go;
+
 static int wipe_initMelt(int ticks)
 {
   int i;
@@ -91,50 +94,93 @@ static int wipe_doMelt(int ticks)
 
    while (ticks--)
    {
-      for (i=0;i<(SCREENWIDTH);i++)
+      int y;
+
+      /* Advance every column's melt position by one tick.  The melt
+       * math is unchanged; it is only split out of the paint loop so
+       * the paint can run row-major below. */
+      for (i = 0; i < SCREENWIDTH; i++)
       {
-         if (y_lookup[i]<0)
+         if (y_lookup[i] < 0)
          {
             y_lookup[i]++;
             done = FALSE;
-            continue;
          }
-         if (y_lookup[i] < SCREENHEIGHT)
+         else if (y_lookup[i] < SCREENHEIGHT)
          {
-            uint8_t *s, *d;
-            int j, dy;
-
-            /* cph 2001/07/29 -
-             *  The original melt rate was 8 pixels/sec, i.e. 25 frames to melt
-             *  the whole screen, so make the melt rate depend on SCREENHEIGHT
-             *  so it takes no longer in high res
-             */
-            dy = (y_lookup[i] < 16) ? y_lookup[i]+1 : SCREENHEIGHT/25;
-            if (y_lookup[i]+dy >= SCREENHEIGHT)
+            /* cph 2001/07/29: melt rate depends on SCREENHEIGHT
+             * so the wipe takes the same wall-clock time at any
+             * vertical resolution. */
+            int dy = (y_lookup[i] < 16) ? y_lookup[i]+1
+                                        : SCREENHEIGHT/25;
+            if (y_lookup[i] + dy > SCREENHEIGHT)
                dy = SCREENHEIGHT - y_lookup[i];
-
-            s = wipe_scr_end.data    + (y_lookup[i] * SURFACE_BYTE_PITCH +(i * SURFACE_PIXEL_DEPTH));
-            d = wipe_scr.data        + (y_lookup[i] * SURFACE_BYTE_PITCH +(i * SURFACE_PIXEL_DEPTH));
-            for (j=dy;j;j--) {
-
-               d[0] = s[0];
-               d[1] = s[1];
-
-               d += SURFACE_BYTE_PITCH;
-               s += SURFACE_BYTE_PITCH;
-            }
             y_lookup[i] += dy;
-            s = wipe_scr_start.data  + (i * SURFACE_PIXEL_DEPTH);
-            d = wipe_scr.data        + (y_lookup[i] *  SURFACE_BYTE_PITCH +(i * SURFACE_PIXEL_DEPTH));
-            for (j=SCREENHEIGHT-y_lookup[i];j;j--) {
-
-               d[0] = s[0];
-               d[1] = s[1];
-
-               d += SURFACE_BYTE_PITCH;
-               s += SURFACE_BYTE_PITCH;
-            }
             done = FALSE;
+         }
+         /* else: column already at SCREENHEIGHT, no advance. */
+      }
+
+      /* Paint the frame row-major.  The old loop walked columns and
+       * copied two bytes at a time with a full row pitch between
+       * writes -- at 2560x1600 that is four million strided
+       * write-allocates per wipe frame, which is what made the melt
+       * hitch at high resolutions.  Per destination row, a pixel at
+       * column i shows the end screen when the column's boundary
+       * (max(0, y_lookup[i])) is still below this row, else the
+       * start screen scrolled down by that boundary, exactly as
+       * before; the writes are now sequential, and since the melt
+       * boundaries vary slowly across columns the end-screen pixels
+       * form long horizontal runs that copy with memcpy.
+       *
+       * Under the direct-render path screens[0].data (= wipe_scr.data)
+       * rotates per frame, so every frame still paints the full
+       * screen rather than relying on previous frames' writes. */
+      for (y = 0; y < SCREENHEIGHT; y++)
+      {
+         /* Byte-addressed: the melt is a pure copy with no colour maths,
+          * so the same loop serves every surface width -- pixel offsets
+          * just scale by SURFACE_PIXEL_DEPTH.  Nothing here converts
+          * between formats. */
+         uint8_t *drow =
+            wipe_scr.data + (size_t)y * SURFACE_BYTE_PITCH;
+         const uint8_t *erow =
+            wipe_scr_end.data + (size_t)y * SURFACE_BYTE_PITCH;
+
+         i = 0;
+         while (i < SCREENWIDTH)
+         {
+            int b = y_lookup[i] < 0 ? 0 : y_lookup[i];
+
+            if (b > y)
+            {
+               /* End-screen run: extend while the boundary stays
+                * below this row. */
+               int run = i + 1;
+               while (run < SCREENWIDTH)
+               {
+                  int rb = y_lookup[run] < 0 ? 0 : y_lookup[run];
+                  if (rb <= y)
+                     break;
+                  run++;
+               }
+               memcpy(drow + (size_t)i * SURFACE_PIXEL_DEPTH,
+                      erow + (size_t)i * SURFACE_PIXEL_DEPTH,
+                      (size_t)(run - i) * SURFACE_PIXEL_DEPTH);
+               i = run;
+            }
+            else
+            {
+               /* Start-screen pixel, scrolled down by the boundary:
+                * dest row y reads source row y - b. */
+               const uint8_t *srow =
+                  wipe_scr_start.data
+                     + (size_t)(y - b) * SURFACE_BYTE_PITCH;
+               memcpy(drow + (size_t)i * SURFACE_PIXEL_DEPTH,
+                      srow + (size_t)i * SURFACE_PIXEL_DEPTH,
+                      SURFACE_PIXEL_DEPTH);
+               i++;
+            }
          }
       }
    }
@@ -183,18 +229,41 @@ int wipe_EndScreen(void)
 // killough 3/5/98: reformatted and cleaned up
 int wipe_ScreenWipe(int ticks)
 {
-   static dbool   go;                               // when zero, stop the wipe
-   if (!go)                                         // initial stuff
+   if (!wipe_go)                                    // initial stuff
    {
-      go = 1;
+      wipe_go = 1;
       wipe_scr = screens[0];
       wipe_initMelt(ticks);
    }
+   /* Refresh wipe_scr.data each call: under direct-render
+    * (libretro SW framebuffer), screens[0].data points at the
+    * frontend's current frame buffer and rotates per frame.
+    * The wipe blender writes pixels through wipe_scr.data, so we
+    * have to re-bind to the live screens[0].data on every entry.
+    * Other fields (height, not_on_heap) are stable so the
+    * struct-copy pattern from initial setup still works. */
+   wipe_scr.data = screens[0].data;
    // do a piece of wipe-in
    if (wipe_doMelt(ticks))     // final stuff
    {
       wipe_exitMelt(ticks);
-      go = 0;
+      wipe_go = 0;
    }
-   return !go;
+   return !wipe_go;
+}
+
+/* Stops any melt still in progress and drops the references to its
+ * buffers.  Those buffers are reachable through screens[SRC_SCR] and
+ * screens[DEST_SCR], which V_FreeScreens releases, so the next session
+ * starts a wipe from screens of its own. */
+void wipe_Shutdown(void)
+{
+  wipe_go = 0;
+
+  wipe_scr_start.data   = NULL;
+  wipe_scr_start.height = 0;
+  wipe_scr_end.data     = NULL;
+  wipe_scr_end.height   = 0;
+  wipe_scr.data         = NULL;
+  wipe_scr.height       = 0;
 }

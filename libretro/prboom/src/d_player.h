@@ -80,9 +80,84 @@ typedef enum
   // No damage, no health loss.
   CF_GODMODE          = 2,
   // Not really a cheat, just a debug aid.
-  CF_NOMOMENTUM       = 4
+  CF_NOMOMENTUM       = 4,
+  // ACS SetPlayerProperty(PROP_TOTALLYFROZEN): hold the player completely
+  // still -- no movement, turning, or weapon use -- while script-driven
+  // content (e.g. a dialogue overlay) is on screen.
+  CF_TOTALLYFROZEN    = 8
 
 } cheat_t;
+
+
+/* Raven (Heretic/Hexen) inventory model.  Defined unconditionally -- the
+ * enum and struct are harmless in a Doom build and let the shared player
+ * code compile.  The Hexen artifacts/puzzle items are included so Hexen
+ * stays reachable; Heretic uses only arti_none..NUMARTIFACTS. */
+typedef enum
+{
+  arti_none,
+  arti_invulnerability,
+  arti_invisibility,
+  arti_health,
+  arti_superhealth,
+  arti_tomeofpower,
+  arti_torch,
+  arti_firebomb,
+  arti_egg,
+  arti_fly,
+  arti_teleport,
+  NUMARTIFACTS,
+
+  /* hexen */
+  hexen_arti_none = arti_none,
+  hexen_arti_invulnerability,
+  hexen_arti_health,
+  hexen_arti_superhealth,
+  hexen_arti_healingradius,
+  hexen_arti_summon,
+  hexen_arti_torch,
+  hexen_arti_egg,
+  hexen_arti_fly,
+  hexen_arti_blastradius,
+  hexen_arti_poisonbag,
+  hexen_arti_teleportother,
+  hexen_arti_speed,
+  hexen_arti_boostmana,
+  hexen_arti_boostarmor,
+  hexen_arti_teleport,
+  hexen_arti_firstpuzzitem,
+  hexen_arti_puzzskull = hexen_arti_firstpuzzitem,
+  hexen_arti_puzzgembig,
+  hexen_arti_puzzgemred,
+  hexen_arti_puzzgemgreen1,
+  hexen_arti_puzzgemgreen2,
+  hexen_arti_puzzgemblue1,
+  hexen_arti_puzzgemblue2,
+  hexen_arti_puzzbook1,
+  hexen_arti_puzzbook2,
+  hexen_arti_puzzskull2,
+  hexen_arti_puzzfweapon,
+  hexen_arti_puzzcweapon,
+  hexen_arti_puzzmweapon,
+  hexen_arti_puzzgear1,
+  hexen_arti_puzzgear2,
+  hexen_arti_puzzgear3,
+  hexen_arti_puzzgear4,
+  HEXEN_NUMARTIFACTS
+} artitype_t;
+
+/* The ticcmd `arti` byte normally carries an artitype_t (<= HEXEN_NUMARTIFACTS,
+ * well under 0x80).  Hexen reuses its top bit to request a jump this tic. */
+#define AFLAG_JUMP 0x80
+#define AFLAG_MASK 0x7f
+
+#define NUMINVENTORYSLOTS HEXEN_NUMARTIFACTS
+
+typedef struct
+{
+  int type;
+  int count;
+} inventory_t;
 
 
 //
@@ -112,6 +187,10 @@ typedef struct player_s
   int                 armorpoints;
   // Armor type is 0-2.
   int                 armortype;
+
+  /* Hexen: four independent armor pieces (fixed-point save-percent units).
+   * Doom/Heretic use the scalar armorpoints/armortype above instead. */
+  int                 hexen_armorpoints[NUMARMOR];
 
   // Power ups. invinc and invis are tic counters.
   int                 powers[NUMPOWERS];
@@ -187,6 +266,34 @@ typedef struct player_s
   fixed_t prev_viewz;
   angle_t prev_viewangle;
   angle_t prev_viewpitch;
+
+  /* Raven (Heretic/Hexen) inventory + flight.  Inert in a Doom session
+   * (heretic == false); added here so the shared player code can compile
+   * against these fields once the Raven gameplay lands. */
+  inventory_t inventory[NUMINVENTORYSLOTS];
+  artitype_t  readyArtifact;
+  int         artifactCount;
+  int         inventorySlotNum;
+  int         flyheight;
+  /* Heretic player extras (inert for Doom). */
+  int         lookdir;        /* free look pitch */
+  dbool       centering;      /* true while recentering the view to level */
+  int         flamecount;     /* phoenix-rod flame duration */
+  int         chickenTics;    /* >0 while morphed into a chicken */
+  int         chickenPeck;    /* chicken peck countdown */
+  struct mobj_s *rain1;       /* active rainmaker 1 */
+  struct mobj_s *rain2;       /* active rainmaker 2 */
+  int         pclass;         /* player class (Heretic: single class) */
+  int         class;          /* Hexen player class (pclass_t); PCLASS_NULL
+                               * for Doom/Heretic.  Used by the Hexen player
+                               * and weapon code. */
+  int         mana[NUMMANA];  /* Hexen two-mana ammo (MANA_1, MANA_2) */
+  int         maxmana;        /* Hexen mana cap */
+  int         morphTics;      /* Hexen: >0 while morphed (pig) */
+  int         poisoncount;    /* Hexen: poison severity; ticks damage */
+  struct mobj_s *poisoner;    /* Hexen: who poisoned the player */
+  int         jumpTics;       /* Hexen: cooldown before the next jump */
+  int         pieces;         /* Hexen: collected fourth-weapon pieces (WPIECE*) */
 
 } player_t;
 

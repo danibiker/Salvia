@@ -39,13 +39,24 @@
 #endif
 #include <fcntl.h>
 
+#ifdef HAVE_MMAP
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
+
 #include "doomstat.h"
 #include "d_net.h"
 #include "doomtype.h"
 #include "i_system.h"
 
 #include "w_wad.h"
+#include "w_pk3.h"
 #include "lprintf.h"
+
+#ifdef HAVE_MMAP
+/* Core option "prboom-mmap_wads" (default off); see libretro.c. */
+extern int prboom_mmap_wads;
+#endif
 
 #include <sys/stat.h>
 
@@ -82,7 +93,7 @@ void ExtractFileBase (const char *path, char *dest)
 
   while ((*src) && (*src != '.') && (++length<9))
   {
-    *dest++ = toupper(*src);
+    *dest++ = toupper((unsigned char)*src);
     (void)*src++;
   }
   /* cph - length check removed, just truncate at 8 chars.
@@ -136,6 +147,46 @@ static void W_AddFile(wadfile_info_t *wadfile)
    filelump_t  *fileinfo = NULL;
    filelump_t *fileinfo2free=NULL; //killough
    filelump_t singleinfo;
+   dbool is_archive = FALSE;
+   dbool is_wad     = FALSE;
+
+   /* Baked-in WAD: the bytes are a const array compiled into the core, not
+    * a file.  Treat it exactly like the precached-into-memory path -- parse
+    * the header and directory straight out of the embedded buffer -- but
+    * with no filestream_open and no handle.  This runs identically in
+    * MEMORY_LOW and normal builds (W_ReadLump also special-cases
+    * embedded_data), so the engine never touches the filesystem for it. */
+   if (wadfile->embedded_data)
+   {
+      lprintf(LO_INFO, " adding %s (embedded)\n",
+              wadfile->name ? wadfile->name : "prboom.wad");
+      startlump = numlumps;
+
+      memcpy(&header, wadfile->embedded_data, sizeof(header));
+      if (strncmp(header.identification, "IWAD", 4) &&
+          strncmp(header.identification, "PWAD", 4))
+         I_Error("W_AddFile: embedded wad has no IWAD or PWAD id");
+      header.numlumps     = LONG(header.numlumps);
+      header.infotableofs = LONG(header.infotableofs);
+      length = header.numlumps * sizeof(filelump_t);
+      fileinfo2free = fileinfo = malloc(length);
+      memcpy(fileinfo, &wadfile->embedded_data[header.infotableofs], length);
+      numlumps += header.numlumps;
+
+      lumpinfo = realloc(lumpinfo, numlumps * sizeof(lumpinfo_t));
+      lump_p = &lumpinfo[startlump];
+      for (i = startlump; (int)i < numlumps; i++, lump_p++, fileinfo++)
+      {
+         lump_p->wadfile = wadfile;
+         lump_p->position = LONG(fileinfo->filepos);
+         lump_p->size = LONG(fileinfo->size);
+         lump_p->li_namespace = ns_global;
+         strncpy(lump_p->name, fileinfo->name, 8);
+         lump_p->source = wadfile->src;
+      }
+      free(fileinfo2free);
+      return;
+   }
 
    // open the file and add to directory
    wadfile->handle = filestream_open(wadfile->name,
@@ -157,21 +208,124 @@ static void W_AddFile(wadfile_info_t *wadfile)
 #ifndef MEMORY_LOW
    // precache into memory instead of reading from disk
    wadfile->length = filestream_get_size(wadfile->handle);
-   wadfile->data = malloc(wadfile->length);
-   if ( rfread(wadfile->data, wadfile->length, 1, wadfile->handle) != 1)
-      I_Error("W_AddFile: couldn't read wad data");
+
+   /* Everything downstream - mmap, malloc, the lump directory's 32-bit
+    * size field - is bounded by what a wad can legally describe, and the
+    * format's offsets are 32-bit by specification.  A file past that is
+    * malformed rather than merely large, and refusing it here is better
+    * than narrowing it into a size_t further down, where a negative
+    * value becomes enormous. */
+   if (wadfile->length > (int64_t)0x7fffffff)
+      I_Error("W_AddFile: %s is %lld bytes; the wad format cannot describe "
+              "a file past 2GB", wadfile->name, (long long)wadfile->length);
+   wadfile->data   = NULL;
+#ifdef HAVE_MMAP
+   wadfile->mmapped = 0;
+   /* When the core option is enabled, memory-map the WAD so only the lumps
+    * actually touched are paged in, instead of reading the whole file up
+    * front.  Needs a real filesystem path (need_fullpath cores have one);
+    * any failure -- archives inside a VFS, unmappable paths, an mmap()
+    * error -- falls through to the malloc()+read path below.  The mapping is
+    * PROT_READ: WAD bytes are only ever a memcpy source (W_ReadLump / the
+    * directory parse), never written in place, and the memcache hands lumps
+    * back as private copies. */
+   if (prboom_mmap_wads && wadfile->length > 0)
+   {
+      const char *rp = filestream_get_path(wadfile->handle);
+      if (rp)
+      {
+         int fd = open(rp, O_RDONLY);
+         if (fd >= 0)
+         {
+            void *m = mmap(NULL, (size_t)wadfile->length,
+                           PROT_READ, MAP_PRIVATE, fd, 0);
+            close(fd);
+            if (m != MAP_FAILED)
+            {
+               wadfile->data    = (unsigned char *)m;
+               wadfile->mmapped = 1;
+            }
+         }
+      }
+   }
 #endif
+   if (!wadfile->data)
+   {
+      wadfile->data = malloc(wadfile->length);
+      if ( rfread(wadfile->data, wadfile->length, 1, wadfile->handle) != 1)
+         I_Error("W_AddFile: couldn't read wad data");
+   }
+
+   /* PK3/ZIP archive: translate it into a synthesized PWAD image and let
+    * the normal directory parse below consume that image.  Detected by
+    * magic, not extension, so renamed archives work too. */
+   if (W_IsPK3(wadfile->data, wadfile->length))
+   {
+      int64_t newlen = 0;
+      unsigned char *image = W_TranslatePK3(wadfile->data, wadfile->length,
+                                            &newlen, wadfile->name);
+      if (!image)
+         I_Error("W_AddFile: couldn't translate PK3 archive %s",
+                 wadfile->name);
+#ifdef HAVE_MMAP
+      if (wadfile->mmapped)
+      {
+         munmap(wadfile->data, (size_t)wadfile->length);
+         wadfile->mmapped = 0;
+      }
+      else
+#endif
+         free(wadfile->data);
+      wadfile->data   = image;
+      wadfile->length = newlen;
+      is_archive      = TRUE;
+   }
+#else
+   /* The synthesized-image translation needs the whole archive in memory. */
+   {
+      char magic[4];
+      if (rfread(magic, 4, 1, wadfile->handle) == 1 &&
+          magic[0] == 'P' && magic[1] == 'K' &&
+          magic[2] == 0x03 && magic[3] == 0x04)
+         I_Error("W_AddFile: PK3/ZIP archives are not supported in "
+                 "low-memory builds (%s)", wadfile->name);
+      rfseek(wadfile->handle, 0, SEEK_SET);
+   }
+#endif
+
+   /* A WAD directory is recognised by the file's own magic, as the archive
+    * check above is, so an IWAD or PWAD parses under any name -- an
+    * extensionless SAF document path included.  The .wad / .gwa suffixes
+    * still select the directory parse on their own, which keeps a
+    * malformed wad reported as such rather than swallowed as one lump. */
+   {
+      char magic[4];
+      dbool have_magic = FALSE;
+#ifdef MEMORY_LOW
+      have_magic = (rfread(magic, sizeof(magic), 1, wadfile->handle) == 1);
+      rfseek(wadfile->handle, 0, SEEK_SET);
+#else
+      if (wadfile->length >= (int64_t)sizeof(magic))
+      {
+         memcpy(magic, wadfile->data, sizeof(magic));
+         have_magic = TRUE;
+      }
+#endif
+      if (have_magic && (!strncmp(magic, "IWAD", 4) ||
+                         !strncmp(magic, "PWAD", 4)))
+         is_wad = TRUE;
+   }
+
+   if (wadfile_name_len > 4 &&
+       (!strcasecmp(wadfile->name + wadfile_name_len - 4, ".wad") ||
+        !strcasecmp(wadfile->name + wadfile_name_len - 4, ".gwa")))
+      is_wad = TRUE;
 
    //jff 8/3/98 use logical output routine
    lprintf (LO_INFO," adding %s\n",wadfile->name);
    startlump = numlumps;
 
-   if (  wadfile_name_len <=4 ||
-         (
-          strcasecmp(wadfile->name + wadfile_name_len - 4,".wad") &&
-          strcasecmp(wadfile->name + wadfile_name_len - 4,".gwa")
-         )
-      )
+   if (!is_archive && !is_wad)
    {
       // single lump file
       fileinfo = &singleinfo;
@@ -179,7 +333,7 @@ static void W_AddFile(wadfile_info_t *wadfile)
 #ifdef MEMORY_LOW
       singleinfo.size = LONG(filestream_get_size(wadfile->handle));
 #else
-      singleinfo.size = wadfile->length;
+      singleinfo.size = (int)wadfile->length;   /* bounded above */
 #endif
       ExtractFileBase(wadfile->name, singleinfo.name);
       numlumps++;
@@ -307,14 +461,14 @@ unsigned W_LumpNameHash(const char *s)
 {
   unsigned hash;
   if (!s[0]) return 0;
-  (void) ((hash =        toupper(s[0]), s[1]) &&
-          (hash = hash*3+toupper(s[1]), s[2]) &&
-          (hash = hash*2+toupper(s[2]), s[3]) &&
-          (hash = hash*2+toupper(s[3]), s[4]) &&
-          (hash = hash*2+toupper(s[4]), s[5]) &&
-          (hash = hash*2+toupper(s[5]), s[6]) &&
-          (hash = hash*2+toupper(s[6]),
-           hash = hash*2+toupper(s[7]))
+  (void) ((hash =        toupper((unsigned char)s[0]), s[1]) &&
+          (hash = hash*3+toupper((unsigned char)s[1]), s[2]) &&
+          (hash = hash*2+toupper((unsigned char)s[2]), s[3]) &&
+          (hash = hash*2+toupper((unsigned char)s[3]), s[4]) &&
+          (hash = hash*2+toupper((unsigned char)s[4]), s[5]) &&
+          (hash = hash*2+toupper((unsigned char)s[5]), s[6]) &&
+          (hash = hash*2+toupper((unsigned char)s[6]),
+           hash = hash*2+toupper((unsigned char)s[7]))
          );
   return hash;
 }
@@ -477,6 +631,9 @@ void W_Init(void)
   W_CoalesceMarkedResource("C_START", "C_END", ns_colormaps);
   W_CoalesceMarkedResource("B_START", "B_END", ns_prboom);
   W_CoalesceMarkedResource("HI_START", "HI_END", ns_hires);
+  /* modern-format PK3 members synthesized by W_TranslatePK3 */
+  W_CoalesceMarkedResource("PD_START", "PD_END", ns_pk3_deferred);
+  W_CoalesceMarkedResource("TX_START", "TX_END", ns_zdoom_tx);
 
   // killough 1/31/98: initialize lump hash table
   W_HashLumps();
@@ -495,7 +652,12 @@ void W_Exit(void)
       {
          filestream_close(wadfiles[i].handle);
 #ifndef MEMORY_LOW
-         free(wadfiles[i].data);
+#ifdef HAVE_MMAP
+         if (wadfiles[i].mmapped)
+            munmap(wadfiles[i].data, (size_t)wadfiles[i].length);
+         else
+#endif
+            free(wadfiles[i].data);
          wadfiles[i].data = NULL;
 #endif
          wadfiles[i].handle = NULL;
@@ -510,11 +672,28 @@ void W_ReleaseAllWads(void)
 
    for(i = 0; i < numwadfiles; i++)
    {
+      /* Free the name string strdup'd in D_AddFile (system malloc,
+       * which maps to Z_Malloc PU_STATIC).  This was previously
+       * leaked per session because W_ReleaseAllWads wasn't called
+       * from D_DoomDeinit at all -- but with that hookup added, the
+       * names need releasing too or each retro_load_game leaks
+       * numwadfiles strings of ~PATH_MAX bytes. */
+      if(wadfiles[i].name)
+      {
+         free((void *)wadfiles[i].name);
+         wadfiles[i].name = NULL;
+      }
+
       if(wadfiles[i].handle)
       {
          filestream_close(wadfiles[i].handle);
 #ifndef MEMORY_LOW
-         free(wadfiles[i].data);
+#ifdef HAVE_MMAP
+         if (wadfiles[i].mmapped)
+            munmap(wadfiles[i].data, (size_t)wadfiles[i].length);
+         else
+#endif
+            free(wadfiles[i].data);
          wadfiles[i].data = NULL;
 #endif
          wadfiles[i].handle = NULL;
@@ -540,6 +719,28 @@ int W_LumpLength (int lump)
   return lumpinfo[lump].size;
 }
 
+/* W_ReplaceLumpData
+ * Repoint a lump at a caller-owned buffer.  Implemented through the
+ * embedded-wad path, which W_ReadLump serves with a straight memcpy in
+ * both normal and MEMORY_LOW builds. */
+void W_ReplaceLumpData(int lump, const void *data, int size)
+{
+  wadfile_info_t *wf;
+
+  if (lump < 0 || lump >= numlumps)
+    I_Error("W_ReplaceLumpData: %i >= numlumps", lump);
+  wf = calloc(1, sizeof(*wf));
+  if (!wf)
+    I_Error("W_ReplaceLumpData: out of memory");
+  wf->name = NULL;
+  wf->embedded_data = data;
+  wf->embedded_length = size;
+  lumpinfo[lump].wadfile = wf;
+  lumpinfo[lump].position = 0;
+  lumpinfo[lump].size = size;
+  W_InvalidateLumpCache(lump);
+}
+
 //
 // W_ReadLump
 // Loads the lump into the given buffer,
@@ -552,6 +753,14 @@ void W_ReadLump(int lump, void *dest)
 
    if (l->wadfile)
    {
+      /* Baked-in WAD: copy straight out of the embedded const array,
+       * regardless of MEMORY_LOW (there is no handle to read from). */
+      if (l->wadfile->embedded_data)
+      {
+         if (l->size > 0)
+            memcpy(dest, &l->wadfile->embedded_data[l->position], l->size);
+         return;
+      }
 #ifdef MEMORY_LOW
       if (l->size > 0)
       {

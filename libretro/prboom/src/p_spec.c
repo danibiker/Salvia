@@ -41,6 +41,12 @@
 
 #include "doomstat.h"
 #include "p_spec.h"
+#include "p_slope.h"
+#include "p_vslope.h"
+#include "u_zanimdefs.h"
+#include "map_format.h"
+#include "hexen/p_spec_hexen.h"
+#include "p_saveg.h"
 #include "p_tick.h"
 #include "p_setup.h"
 #include "m_random.h"
@@ -48,8 +54,12 @@
 #include "m_argv.h"
 #include "w_wad.h"
 #include "r_main.h"
+#include "r_sky.h"
+#include "hexen/p_lightning.h"
+#include "hexen/p_anim.h"
 #include "p_maputl.h"
 #include "p_map.h"
+#include "p_user.h"
 #include "g_game.h"
 #include "p_inter.h"
 #include "s_sound.h"
@@ -108,6 +118,16 @@ static anim_t*  lastanim;
 static anim_t*  anims;                // new structure w/o limits -- killough
 static size_t maxanims;
 
+/* Releases the animated-texture table.  P_InitPicAnims grows it to a
+ * high-water mark, so the capacity is cleared with the pointer. */
+void P_SpecDeinit(void)
+{
+   Z_Free(anims);
+   anims    = NULL;
+   lastanim = NULL;
+   maxanims = 0;
+}
+
 // Default animation definitions for Doom
 const animdef_t doom_animdefs[] =
 {
@@ -138,6 +158,21 @@ const animdef_t doom_animdefs[] =
   {TRUE,	"SFALL4",	"SFALL1",	8},
   {TRUE,	"WFALL4",	"WFALL1",	8},
   {TRUE,	"DBRAIN4",	"DBRAIN1",	8},
+
+  {-1,        "",             "",	0},
+};
+
+/* Heretic's animated flats and textures. istexture: FALSE = flat. */
+static const animdef_t heretic_animdefs[] =
+{
+  {FALSE,	"FLTWAWA3",	"FLTWAWA1",	8}, /* water       */
+  {FALSE,	"FLTSLUD3",	"FLTSLUD1",	8}, /* sludge      */
+  {FALSE,	"FLTTELE4",	"FLTTELE1",	6}, /* teleport    */
+  {FALSE,	"FLTFLWW3",	"FLTFLWW1",	9}, /* river west  */
+  {FALSE,	"FLTLAVA4",	"FLTLAVA1",	8}, /* lava        */
+  {FALSE,	"FLATHUH4",	"FLATHUH1",	8}, /* super lava  */
+  {TRUE,	"LAVAFL3",	"LAVAFL1",	6}, /* lavaflow    */
+  {TRUE,	"WATRWAL3",	"WATRWAL1",	4}, /* waterfall   */
 
   {-1,        "",             "",	0},
 };
@@ -174,14 +209,19 @@ void P_InitPicAnims (void)
 {
   int         i;
   const animdef_t *animdefs; //jff 3/23/98 pointer to animation lump
-  int         lump = W_CheckNumForName("ANIMATED"); // cph - new wad lump handling
+  int         lump = -1;
   //  Init animation
 
-  // read from predefined or wad lump if available, otherwise use known table
-  if (lump == -1)
-    animdefs = doom_animdefs;
-  else
+  // Heretic uses its own built-in animation table. The ANIMATED lump carried
+  // by prboom.wad holds Doom flat/texture names absent from a Heretic IWAD, so
+  // those animations would silently never register (lava, water, etc. would be
+  // static). For Doom, prefer an ANIMATED lump and fall back to the table.
+  if (heretic)
+    animdefs = heretic_animdefs;
+  else if ((lump = W_CheckNumForName("ANIMATED")) != -1)
     animdefs = (const animdef_t *)W_CacheLumpNum(lump);
+  else
+    animdefs = doom_animdefs;
 
   lastanim = anims;
   for (i=0 ; animdefs[i].istexture != -1 ; i++)
@@ -229,10 +269,69 @@ void P_InitPicAnims (void)
     W_UnlockLumpNum(lump);
 }
 
-///////////////////////////////////////////////////////////////
-//
-// Linedef and Sector Special Implementation Utility Functions
-//
+/* ==========================================================================
+ * Raven floor terrain types (Hexen/Heretic)
+ *
+ * Each flat (floor texture) can map to a terrain type -- water, lava,
+ * sludge, ice -- which drives splashes, sprite floorclipping, fire/ice
+ * monster behaviour, and the burrowing Serpent's surface/dive logic.
+ * TerrainTypes[] is indexed by floorpic (flat number relative to firstflat)
+ * and is filled at level init from the flat-name table below.
+ * ======================================================================== */
+
+int *TerrainTypes = NULL;
+
+static const struct
+{
+  const char *name;
+  int         type;
+} TerrainTypeDefs[2][6] =
+{
+  { /* Heretic */
+    { "FLTWAWA1", FLOOR_WATER  },
+    { "FLTFLWW1", FLOOR_WATER  },
+    { "FLTLAVA1", FLOOR_LAVA   },
+    { "FLATHUH1", FLOOR_LAVA   },
+    { "FLTSLUD1", FLOOR_SLUDGE },
+    { "END",      -1           }
+  },
+  { /* Hexen */
+    { "X_005", FLOOR_WATER  },
+    { "X_001", FLOOR_LAVA   },
+    { "X_009", FLOOR_SLUDGE },
+    { "F_033", FLOOR_ICE    },
+    { "END",   -1           },
+    { "END",   -1           }
+  }
+};
+
+void P_InitTerrainTypes(void)
+{
+  int i;
+  int lump;
+  int size;
+
+  if (!raven)
+    return;
+
+  size = (numflats + 1) * (int)sizeof(int);
+  TerrainTypes = (int *)Z_Malloc(size, PU_STATIC, 0);
+  memset(TerrainTypes, 0, size);
+  for (i = 0; TerrainTypeDefs[hexen][i].type != -1; i++)
+  {
+    lump = (W_CheckNumForName)(TerrainTypeDefs[hexen][i].name, ns_flats);
+    if (lump != -1)
+      TerrainTypes[lump - firstflat] = TerrainTypeDefs[hexen][i].type;
+  }
+}
+
+int P_GetThingFloorType(mobj_t *thing)
+{
+  if (!TerrainTypes)
+    return FLOOR_SOLID;
+  return TerrainTypes[thing->subsector->sector->floorpic];
+}
+
 ///////////////////////////////////////////////////////////////
 
 //
@@ -777,7 +876,7 @@ int P_FindLineFromLineTag(const line_t *line, int start)
 }
 
 // Hash the sector tags across the sectors and linedefs.
-static void P_InitTagLists(void)
+void P_InitTagLists(void)
 {
   register int i;
 
@@ -868,7 +967,7 @@ dbool P_CanUnlockGenDoor
       )
       {
         player->message = s_PD_ANY; // Ty 03/27/98 - externalized
-        S_StartSound(player->mo,sfx_oof);             // killough 3/20/98
+        S_StartSound(player->mo,g_sfx_oof);           // killough 3/20/98
         return FALSE;
       }
       break;
@@ -880,7 +979,7 @@ dbool P_CanUnlockGenDoor
       )
       {
         player->message = skulliscard? s_PD_REDK : s_PD_REDC; // Ty 03/27/98 - externalized
-        S_StartSound(player->mo,sfx_oof);             // killough 3/20/98
+        S_StartSound(player->mo,g_sfx_oof);           // killough 3/20/98
         return FALSE;
       }
       break;
@@ -892,7 +991,7 @@ dbool P_CanUnlockGenDoor
       )
       {
         player->message = skulliscard? s_PD_BLUEK : s_PD_BLUEC; // Ty 03/27/98 - externalized
-        S_StartSound(player->mo,sfx_oof);             // killough 3/20/98
+        S_StartSound(player->mo,g_sfx_oof);           // killough 3/20/98
         return FALSE;
       }
       break;
@@ -904,7 +1003,7 @@ dbool P_CanUnlockGenDoor
       )
       {
         player->message = skulliscard? s_PD_YELLOWK : s_PD_YELLOWC; // Ty 03/27/98 - externalized
-        S_StartSound(player->mo,sfx_oof);             // killough 3/20/98
+        S_StartSound(player->mo,g_sfx_oof);           // killough 3/20/98
         return FALSE;
       }
       break;
@@ -916,7 +1015,7 @@ dbool P_CanUnlockGenDoor
       )
       {
         player->message = skulliscard? s_PD_REDK : s_PD_REDS; // Ty 03/27/98 - externalized
-        S_StartSound(player->mo,sfx_oof);             // killough 3/20/98
+        S_StartSound(player->mo,g_sfx_oof);           // killough 3/20/98
         return FALSE;
       }
       break;
@@ -928,7 +1027,7 @@ dbool P_CanUnlockGenDoor
       )
       {
         player->message = skulliscard? s_PD_BLUEK : s_PD_BLUES; // Ty 03/27/98 - externalized
-        S_StartSound(player->mo,sfx_oof);             // killough 3/20/98
+        S_StartSound(player->mo,g_sfx_oof);           // killough 3/20/98
         return FALSE;
       }
       break;
@@ -940,7 +1039,7 @@ dbool P_CanUnlockGenDoor
       )
       {
         player->message = skulliscard? s_PD_YELLOWK : s_PD_YELLOWS; // Ty 03/27/98 - externalized
-        S_StartSound(player->mo,sfx_oof);             // killough 3/20/98
+        S_StartSound(player->mo,g_sfx_oof);           // killough 3/20/98
         return FALSE;
       }
       break;
@@ -959,7 +1058,7 @@ dbool P_CanUnlockGenDoor
       )
       {
         player->message = s_PD_ALL6; // Ty 03/27/98 - externalized
-        S_StartSound(player->mo,sfx_oof);             // killough 3/20/98
+        S_StartSound(player->mo,g_sfx_oof);           // killough 3/20/98
         return FALSE;
       }
       if
@@ -976,7 +1075,7 @@ dbool P_CanUnlockGenDoor
       )
       {
         player->message = s_PD_ALL3; // Ty 03/27/98 - externalized
-        S_StartSound(player->mo,sfx_oof);             // killough 3/20/98
+        S_StartSound(player->mo,g_sfx_oof);           // killough 3/20/98
         return FALSE;
       }
       break;
@@ -1147,9 +1246,105 @@ dbool P_WasSecret(const sector_t *sec)
 //  crossed. Change is qualified by demo_compatibility.
 //
 // CPhipps - take a line_t pointer instead of a line number, as in MBF
+/* Raven: Heretic walk-over (cross) line specials.  Heretic renumbered a
+ * number of Doom's linedef types -- most importantly special 100 is a fast
+ * "raise door" here, not Doom's build-stairs -- so the Doom dispatcher below
+ * would run the wrong action (e.g. building stairs instead of opening the
+ * door that releases an ambush monster).  This mirrors Heretic's own table. */
+static void P_CrossHereticSpecialLine(line_t *line, int side, mobj_t *thing)
+{
+  /* Triggers a non-player mobj is allowed to activate. */
+  if (!thing->player)
+  {
+    switch (line->special)
+    {
+      case 39:   /* teleport */
+      case 97:   /* teleport (re-triggerable) */
+      case 4:    /* raise door */
+        break;
+      default:
+        return;
+    }
+  }
+
+  switch (line->special)
+  {
+    /* Single-use triggers (W1) */
+    case 2:   EV_DoDoor(line, open);                 line->special = 0; break;
+    case 3:   EV_DoDoor(line, close);                line->special = 0; break;
+    case 4:   EV_DoDoor(line, normal);               line->special = 0; break;
+    case 5:   EV_DoFloor(line, FLEV_RAISEFLOOR);     line->special = 0; break;
+    case 6:   EV_DoCeiling(line, fastCrushAndRaise); line->special = 0; break;
+    case 8:   EV_BuildStairs(line, build8);          line->special = 0; break;
+    case 106: EV_BuildStairs(line, turbo16);         line->special = 0; break;
+    case 10:  EV_DoPlat(line, downWaitUpStay, 0);    line->special = 0; break;
+    case 12:  EV_LightTurnOn(line, 0);               line->special = 0; break;
+    case 13:  EV_LightTurnOn(line, 255);             line->special = 0; break;
+    case 16:  EV_DoDoor(line, close30ThenOpen);      line->special = 0; break;
+    case 17:  EV_StartLightStrobing(line);           line->special = 0; break;
+    case 19:  EV_DoFloor(line, FLEV_LOWERFLOOR);     line->special = 0; break;
+    case 22:  EV_DoPlat(line, raiseToNearestAndChange, 0); line->special = 0; break;
+    case 25:  EV_DoCeiling(line, crushAndRaise);     line->special = 0; break;
+    case 30:  EV_DoFloor(line, FLEV_RAISETOTEXTURE); line->special = 0; break;
+    case 35:  EV_LightTurnOn(line, 35);              line->special = 0; break;
+    case 36:  EV_DoFloor(line, FLEV_TURBOLOWER);     line->special = 0; break;
+    case 37:  EV_DoFloor(line, FLEV_LOWERANDCHANGE); line->special = 0; break;
+    case 38:  EV_DoFloor(line, FLEV_LOWERFLOORTOLOWEST); line->special = 0; break;
+    case 39:  EV_Teleport(line, side, thing);        line->special = 0; break;
+    case 40:  EV_DoCeiling(line, raiseToHighest);
+              EV_DoFloor(line, FLEV_LOWERFLOORTOLOWEST); line->special = 0; break;
+    case 44:  EV_DoCeiling(line, lowerAndCrush);     line->special = 0; break;
+    case 52:  G_ExitLevel();                         line->special = 0; break;
+    case 53:  EV_DoPlat(line, perpetualRaise, 0);    line->special = 0; break;
+    case 54:  EV_StopPlat(line);                     line->special = 0; break;
+    case 56:  EV_DoFloor(line, FLEV_RAISEFLOORCRUSH); line->special = 0; break;
+    case 57:  EV_CeilingCrushStop(line);             line->special = 0; break;
+    case 58:  EV_DoFloor(line, FLEV_RAISEFLOOR24);   line->special = 0; break;
+    case 59:  EV_DoFloor(line, FLEV_RAISEFLOOR24ANDCHANGE); line->special = 0; break;
+    case 104: EV_TurnTagLightsOff(line);             line->special = 0; break;
+    case 105: G_SecretExitLevel();                   line->special = 0; break;
+
+    /* Re-doable triggers (WR) */
+    case 72:  EV_DoCeiling(line, lowerAndCrush);     break;
+    case 73:  EV_DoCeiling(line, crushAndRaise);     break;
+    case 74:  EV_CeilingCrushStop(line);             break;
+    case 75:  EV_DoDoor(line, close);                break;
+    case 76:  EV_DoDoor(line, close30ThenOpen);      break;
+    case 77:  EV_DoCeiling(line, fastCrushAndRaise); break;
+    case 79:  EV_LightTurnOn(line, 35);              break;
+    case 80:  EV_LightTurnOn(line, 0);               break;
+    case 81:  EV_LightTurnOn(line, 255);             break;
+    case 82:  EV_DoFloor(line, FLEV_LOWERFLOORTOLOWEST); break;
+    case 83:  EV_DoFloor(line, FLEV_LOWERFLOOR);     break;
+    case 84:  EV_DoFloor(line, FLEV_LOWERANDCHANGE); break;
+    case 86:  EV_DoDoor(line, open);                 break;
+    case 87:  EV_DoPlat(line, perpetualRaise, 0);    break;
+    case 88:  EV_DoPlat(line, downWaitUpStay, 0);    break;
+    case 89:  EV_StopPlat(line);                     break;
+    case 90:  EV_DoDoor(line, normal);               break;
+    case 100: EV_DoDoor(line, blazeRaise);           break;
+    case 91:  EV_DoFloor(line, FLEV_RAISEFLOOR);     break;
+    case 92:  EV_DoFloor(line, FLEV_RAISEFLOOR24);   break;
+    case 93:  EV_DoFloor(line, FLEV_RAISEFLOOR24ANDCHANGE); break;
+    case 94:  EV_DoFloor(line, FLEV_RAISEFLOORCRUSH); break;
+    case 95:  EV_DoPlat(line, raiseToNearestAndChange, 0); break;
+    case 96:  EV_DoFloor(line, FLEV_RAISETOTEXTURE); break;
+    case 97:  EV_Teleport(line, side, thing);        break;
+    case 98:  EV_DoFloor(line, FLEV_TURBOLOWER);     break;
+    default:  break;
+  }
+}
+
 void P_CrossSpecialLine(line_t *line, int side, mobj_t *thing)
 {
   int         ok;
+
+  /* Raven: Heretic has its own walk-over special table. */
+  if (heretic)
+  {
+    P_CrossHereticSpecialLine(line, side, thing);
+    return;
+  }
 
   //  Things that should never trigger lines
   if (!thing->player)
@@ -2215,6 +2410,139 @@ void P_ShootSpecialLine
 
 
 //
+/* Heretic terrain splash hook (stubbed to a solid-floor no-op in this
+ * core's heretic/p_action.c); declared locally as p_mobj.c does. */
+int P_HitFloor(mobj_t *thing);
+
+/* Raven: lava and other fire attacks damage through a static fire-typed
+ * inflictor, so P_DamageMobj can route burn deaths (and skip the thrust a
+ * positioned inflictor would otherwise apply: the inflictor sits at the map
+ * origin, so without MF2_NODMGTHRUST it would shove the victim toward 0,0
+ * every hit). */
+
+mobj_t LavaInflictor;
+
+void P_InitLava(void)
+{
+  if (!raven)
+    return;
+  memset(&LavaInflictor, 0, sizeof(mobj_t));
+  LavaInflictor.type = hexen ? HEXEN_MT_CIRCLEFLAME : HERETIC_MT_PHOENIXFX2;
+  LavaInflictor.flags2 = MF2_FIREDAMAGE | MF2_NODMGTHRUST;
+}
+
+/* Hexen: terrain-driven floor damage; the only special flat is lava. */
+void P_PlayerOnSpecialFlat(player_t *player, int floorType)
+{
+  if (player->mo->z != player->mo->floorz)
+    return;                     /* not touching the floor */
+
+  switch (floorType)
+  {
+    case FLOOR_LAVA:
+      if (!(leveltime & 31))
+      {
+        P_DamageMobj(player->mo, &LavaInflictor, NULL, 10);
+        S_StartSound(player->mo, hexen_sfx_lava_sizzle);
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+/* Raven: Heretic uses its own sector-special numbering.  Several values
+ * that mean "damage" under Doom mean "scroll/current", "wind" or "low
+ * friction" in Heretic (and vice-versa), so running the Doom handler on a
+ * Heretic map makes harmless current sectors -- e.g. the water past the
+ * E1M1 teleporter -- injure the player.  This mirrors the Doom-lineage
+ * P_HitFloor terrain stub (a no-op here) and dsda-doom's Heretic table.
+ * Lava damage goes through the fire-typed LavaInflictor (see P_InitLava)
+ * so burn deaths route correctly; MF2_NODMGTHRUST keeps the origin-placed
+ * inflictor from shoving the player. */
+static void P_PlayerInHereticSector(player_t *player, sector_t *sector)
+{
+  /* Heretic wind/scroll push magnitudes (sector special - base index). */
+  static const int pushTab[5] =
+  {
+    2048 * 5,
+    2048 * 10,
+    2048 * 25,
+    2048 * 30,
+    2048 * 35
+  };
+
+  switch (sector->special)
+  {
+    case 7:                            /* Damage_Sludge */
+      if (!(leveltime & 31))
+        P_DamageMobj(player->mo, NULL, NULL, 4);
+      break;
+
+    case 5:                            /* Damage_LavaWimpy */
+      if (!(leveltime & 15))
+      {
+        P_DamageMobj(player->mo, &LavaInflictor, NULL, 5);
+        P_HitFloor(player->mo);
+      }
+      break;
+
+    case 16:                           /* Damage_LavaHefty */
+      if (!(leveltime & 15))
+      {
+        P_DamageMobj(player->mo, &LavaInflictor, NULL, 8);
+        P_HitFloor(player->mo);
+      }
+      break;
+
+    case 4:                            /* Scroll_EastLavaDamage */
+      P_Thrust(player, 0, 2048 * 28);
+      if (!(leveltime & 15))
+      {
+        P_DamageMobj(player->mo, &LavaInflictor, NULL, 5);
+        P_HitFloor(player->mo);
+      }
+      break;
+
+    case 9:                            /* SecretArea */
+      player->secretcount++;
+      sector->special = 0;
+      break;
+
+    case 11:                           /* Exit_SuperDamage (unused in Heretic) */
+      break;
+
+    case 25: case 26: case 27: case 28: case 29:   /* Scroll_North */
+      P_Thrust(player, ANG90, pushTab[sector->special - 25]);
+      break;
+
+    case 20: case 21: case 22: case 23: case 24:   /* Scroll_East */
+      P_Thrust(player, 0, pushTab[sector->special - 20]);
+      break;
+
+    case 30: case 31: case 32: case 33: case 34:   /* Scroll_South */
+      P_Thrust(player, ANG270, pushTab[sector->special - 30]);
+      break;
+
+    case 35: case 36: case 37: case 38: case 39:   /* Scroll_West */
+      P_Thrust(player, ANG180, pushTab[sector->special - 35]);
+      break;
+
+    case 40: case 41: case 42: case 43: case 44: case 45:
+    case 46: case 47: case 48: case 49: case 50: case 51:
+      /* Wind specials: handled in P_XYMovement, inert here. */
+      break;
+
+    case 15:                           /* Friction_Low */
+      /* Handled in P_XYMovement / P_Thrust, inert here. */
+      break;
+
+    default:
+      /* Unknown special: ignore (do not exit, matching the Doom path). */
+      break;
+  }
+}
+
 // P_PlayerInSpecialSector()
 //
 // Called every tick frame
@@ -2231,6 +2559,22 @@ void P_PlayerInSpecialSector (player_t* player)
   // Falling, not all the way down yet?
   // Sector specials don't apply in mid-air
   if (player->mo->z != sector->floorheight)
+    return;
+
+  /* Raven: Heretic has its own sector-special table. */
+  if (heretic)
+  {
+    P_PlayerInHereticSector(player, sector);
+    return;
+  }
+
+  /* Hexen uses an entirely different sector-special model (the byte is not
+   * a Doom-style damage/scroll selector), so running the Doom handler on it
+   * misreads benign Hexen specials as Doom damage -- e.g. the player taking
+   * continuous pain (red palette flash) just standing in Winnowing Hall.
+   * Skip it until the Hexen sector-special layer lands, matching the other
+   * hexen-gated safe boundaries in p_setup/p_map. */
+  if (hexen)
     return;
 
   // Has hit ground.
@@ -2290,6 +2634,36 @@ void P_PlayerInSpecialSector (player_t* player)
   }
   else //jff 3/14/98 handle extended sector types for secrets and damage
   {
+    /* MBF21: instant-death sector (bit 12).  The damage-type bits select
+     * the variant.  Inert below complevel 21. */
+    if (mbf21_features && (sector->special & DEATH_MASK))
+    {
+      int i;
+      switch ((sector->special & DAMAGE_MASK) >> DAMAGE_SHIFT)
+      {
+        case 0: /* kill player, unless protected */
+          if (!player->powers[pw_invulnerability] && !player->powers[pw_ironfeet])
+            P_DamageMobj(player->mo, NULL, NULL, 10000);
+          break;
+        case 1: /* kill player, ignore protection */
+          P_DamageMobj(player->mo, NULL, NULL, 10000);
+          break;
+        case 2: /* kill all players, then exit */
+          for (i = 0; i < MAXPLAYERS; i++)
+            if (playeringame[i])
+              P_DamageMobj(players[i].mo, NULL, NULL, 10000);
+          G_ExitLevel();
+          break;
+        case 3: /* kill all players, then secret exit */
+          for (i = 0; i < MAXPLAYERS; i++)
+            if (playeringame[i])
+              P_DamageMobj(players[i].mo, NULL, NULL, 10000);
+          G_SecretExitLevel();
+          break;
+      }
+      return;
+    }
+
     switch ((sector->special&DAMAGE_MASK)>>DAMAGE_SHIFT)
     {
       case 0: // no damage
@@ -2353,6 +2727,20 @@ void P_UpdateSpecials (void)
   int         pic;
   int         i;
 
+  /* Heretic: advance the ambient-sound sequencer once per tic. */
+  if (heretic)
+    P_AmbientSound();
+
+  /* Hexen: advance the lightning storm, scroll the sky, animate the
+   * ANIMDEFS flats/textures, and scroll the 100-103 walls. */
+  if (hexen)
+  {
+    P_UpdateLightning();
+    Sky1ColumnOffset += Sky1ScrollDelta;
+    Sky2ColumnOffset += Sky2ScrollDelta;
+    P_AnimateHexenSurfaces();
+  }
+
   // Downcount level timer, exit level if elapsed
   if (levelTimer == TRUE)
   {
@@ -2396,6 +2784,10 @@ void P_UpdateSpecials (void)
     }
   }
 
+  /* ZDoom ANIMDEFS frame-list animations */
+  if (U_ZAnimPresent)
+    U_UpdateZAnims();
+
   // Check buttons (retriggerable switches) and change texture on timeout
   for (i = 0; i < MAXBUTTONS; i++)
     if (buttonlist[i].btimer)
@@ -2428,7 +2820,7 @@ void P_UpdateSpecials (void)
             /* since the buttonlist array is usually zeroed out,
              * button popouts generally appear to come from (0,0) */
             so = (mobj_t *)&buttonlist[i].soundorg;
-          S_StartSound(so, sfx_swtchn);
+          S_StartSound(so, g_sfx_swtchn);
         }
         memset(&buttonlist[i],0,sizeof(button_t));
       }
@@ -2498,6 +2890,34 @@ void P_SpawnSpecials (void)
   {
     if (!sector->special)
       continue;
+
+    /* ZDoom Doom-in-Hexen sector specials wrap the Doom types at +64
+     * (dLight_Flicker=65 ... dDamage_SuperHellslime=80, dSector_Door*=74/75,
+     * up to dDamage_LavaHefty=89) and carry Boom's generalized flags
+     * shifted up by 3: damage 0x0300, secret 0x0400, friction 0x0800 and
+     * push 0x1000 correspond to Boom's 0x60/0x80/0x100/0x200.  Translate
+     * the base type, shift the flags down, and fall through to the Doom
+     * initialization: the per-tic P_PlayerInSpecialSector logic and the
+     * secret counting below then work on Doom/Boom numbers throughout.
+     * Light_Phased(1) approximates as Doom's glowing light; base types
+     * with no Doom equivalent (the 200s scroll/carry group) are cleared
+     * rather than misinterpreted. */
+    if (map_format.zdoom)
+    {
+      int base = sector->special & 0xFF;
+      int bits = sector->special & (0x0300 | 0x0400 | 0x0800 | 0x1000);
+
+      if (base >= 65 && base <= 89)
+        base -= 64;
+      else if (base == 1)
+        base = 8;
+      else
+        base = 0;
+
+      sector->special = base | (bits >> 3);
+      if (!sector->special)
+        continue;
+    }
 
     if (sector->special&SECRET_MASK) //jff 3/15/98 count extended
       totalsecret++;                 // secret sectors too
@@ -2574,6 +2994,12 @@ void P_SpawnSpecials (void)
 
   P_InitTagLists();   // killough 1/30/98: Create xref tables for tags
 
+  /* ZDoom-numbered line specials: the Boom initializers below would read
+   * them as Doom/Boom line types (e.g. ZDoom 100 Scroll_Texture_Left looks
+   * like a Boom scroller).  Skip them all until the translation layer. */
+  if (!map_format.zdoom)
+  {
+
   P_SpawnScrollers(); // killough 3/7/98: Add generalized scrollers
 
   P_SpawnFriction();  // phares 3/12/98: New friction model using linedefs
@@ -2623,7 +3049,48 @@ void P_SpawnSpecials (void)
         for (s = -1; (s = P_FindSectorFromLineTag(lines+i,s)) >= 0;)
           sectors[s].sky = i | PL_SKYFLAT;
         break;
+
+      // killough 4/11/98: translucent 2s normal textures.  The classic
+      // implementation selects a TRANMAP blend lump; this renderer blends
+      // directly on the RGB565 framebuffer, so the line is just flagged
+      // (tag 0: this line; otherwise every same-tagged line).
+      case 260:
+        if (!lines[i].tag)
+          lines[i].translucent = 1;
+        else
+          for (s = -1; (s = P_FindLineFromLineTag(lines+i,s)) >= 0;)
+            lines[s].translucent = 1;
+        break;
    }
+
+  } /* !map_format.zdoom */
+  else
+  {
+    /* ZDoom TranslucentLine(lineid, amount) is a static property applied at
+     * level load; arg0 zero means the line itself, otherwise the lines
+     * carrying that Line_SetIdentification id.  The blend is the renderer's
+     * 50/50 regardless of amount. */
+    for (i = 0; i < numlines; i++)
+      if (lines[i].special == 208)
+      {
+        if (!lines[i].args[0])
+          lines[i].translucent = 1;
+        else
+        {
+          int search = -1;
+          line_t *tl;
+          while ((tl = P_FindHexenLine(lines[i].args[0], &search)) != NULL)
+            tl->translucent = 1;
+        }
+        lines[i].special = 0;
+      }
+
+    /* Plane_Align (181) slopes are likewise static */
+    P_SpawnZDoomSlopes();
+
+    /* thing-based vertex slopes (1504/1505) recorded at thing load */
+    P_SpawnVertexSlopes();
+  }
 }
 
 // killough 2/28/98:
@@ -2866,6 +3333,29 @@ static void P_SpawnScrollers(void)
           s = lines[i].sidenum[0];
           Add_Scroller(sc_side, -sides[s].textureoffset,
                        sides[s].rowoffset, -1, s, accel);
+          break;
+
+        /* MBF21: tag-controlled side scrollers, scrolling every tagged
+         * line's first side by this line's sidedef offsets / 8.  1024 is
+         * uncontrolled, 1025 is controlled by this line's sidedef sector,
+         * 1026 is controlled and accelerative.  Inert below complevel 21. */
+        case 1024:
+        case 1025:
+        case 1026:
+          if (mbf21_features)
+          {
+            int sided = lines[i].sidenum[0];
+            fixed_t sdx = -sides[sided].textureoffset / 8;
+            fixed_t sdy =  sides[sided].rowoffset / 8;
+            if (special > 1024)
+              control = sides[*l->sidenum].sector - sectors;
+            if (special == 1026)
+              accel = 1;
+            for (s=-1; (s = P_FindLineFromLineTag(l,s)) >= 0;)
+              if (s != i)
+                Add_Scroller(sc_side, sdx, sdy, control,
+                             lines[s].sidenum[0], accel);
+          }
           break;
 
         case 48:                  // scroll first side
@@ -3392,3 +3882,233 @@ static void P_SpawnPushers(void)
 // phares 3/20/98: End of Pusher effects
 //
 ////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////
+//
+// Heretic ambient sound sequences
+//
+// Map things with editor numbers 1200-1299 register an ambient-sound
+// sequence (P_AddAmbientSfx). P_AmbientSound, called once per tic, walks the
+// active sequence's command list -- playing sounds and waiting random delays
+// -- to produce Heretic's environmental audio (drips, screams, bells, etc).
+// Ported from the Raven/dsda implementation.
+//
+////////////////////////////////////////////////////////////////////////////
+
+#define MAX_AMBIENT_SFX 8       /* max sequences active on one level */
+
+typedef enum
+{
+  afxcmd_play,                  /* (sound)         */
+  afxcmd_playabsvol,            /* (sound, volume) */
+  afxcmd_playrelvol,            /* (sound, volume) */
+  afxcmd_delay,                 /* (ticks)         */
+  afxcmd_delayrand,             /* (andbits)       */
+  afxcmd_end                    /* ()              */
+} afxcmd_t;
+
+static int *LevelAmbientSfx[MAX_AMBIENT_SFX];
+static int *AmbSfxPtr;
+static int  AmbSfxCount;
+static int  AmbSfxTics;
+static int  AmbSfxVolume;
+static int  AmbSfxPtrIndex;
+
+static int AmbSndSeqInit[] = { afxcmd_end };
+
+static int AmbSndSeq1[] = {      /* Scream */
+  afxcmd_play, heretic_sfx_amb1, afxcmd_end };
+static int AmbSndSeq2[] = {      /* Squish */
+  afxcmd_play, heretic_sfx_amb2, afxcmd_end };
+static int AmbSndSeq3[] = {      /* Drops */
+  afxcmd_play, heretic_sfx_amb3,
+  afxcmd_delay, 16, afxcmd_delayrand, 31,
+  afxcmd_play, heretic_sfx_amb7,
+  afxcmd_delay, 16, afxcmd_delayrand, 31,
+  afxcmd_play, heretic_sfx_amb3,
+  afxcmd_delay, 16, afxcmd_delayrand, 31,
+  afxcmd_play, heretic_sfx_amb7,
+  afxcmd_delay, 16, afxcmd_delayrand, 31,
+  afxcmd_play, heretic_sfx_amb3,
+  afxcmd_delay, 16, afxcmd_delayrand, 31,
+  afxcmd_play, heretic_sfx_amb7,
+  afxcmd_delay, 16, afxcmd_delayrand, 31,
+  afxcmd_end };
+static int AmbSndSeq4[] = {      /* SlowFootSteps */
+  afxcmd_play, heretic_sfx_amb4,
+  afxcmd_delay, 15, afxcmd_playrelvol, heretic_sfx_amb11, -3,
+  afxcmd_delay, 15, afxcmd_playrelvol, heretic_sfx_amb4, -3,
+  afxcmd_delay, 15, afxcmd_playrelvol, heretic_sfx_amb11, -3,
+  afxcmd_delay, 15, afxcmd_playrelvol, heretic_sfx_amb4, -3,
+  afxcmd_delay, 15, afxcmd_playrelvol, heretic_sfx_amb11, -3,
+  afxcmd_delay, 15, afxcmd_playrelvol, heretic_sfx_amb4, -3,
+  afxcmd_delay, 15, afxcmd_playrelvol, heretic_sfx_amb11, -3,
+  afxcmd_end };
+static int AmbSndSeq5[] = {      /* Heartbeat */
+  afxcmd_play, heretic_sfx_amb5, afxcmd_delay, 35,
+  afxcmd_play, heretic_sfx_amb5, afxcmd_delay, 35,
+  afxcmd_play, heretic_sfx_amb5, afxcmd_delay, 35,
+  afxcmd_play, heretic_sfx_amb5, afxcmd_end };
+static int AmbSndSeq6[] = {      /* Bells */
+  afxcmd_play, heretic_sfx_amb6,
+  afxcmd_delay, 17, afxcmd_playrelvol, heretic_sfx_amb6, -8,
+  afxcmd_delay, 17, afxcmd_playrelvol, heretic_sfx_amb6, -8,
+  afxcmd_delay, 17, afxcmd_playrelvol, heretic_sfx_amb6, -8,
+  afxcmd_end };
+static int AmbSndSeq7[] = {      /* Growl */
+  afxcmd_play, heretic_sfx_bstsit, afxcmd_end };
+static int AmbSndSeq8[] = {      /* Magic */
+  afxcmd_play, heretic_sfx_amb8, afxcmd_end };
+static int AmbSndSeq9[] = {      /* Laughter */
+  afxcmd_play, heretic_sfx_amb9,
+  afxcmd_delay, 16, afxcmd_playrelvol, heretic_sfx_amb9, -4,
+  afxcmd_delay, 16, afxcmd_playrelvol, heretic_sfx_amb9, -4,
+  afxcmd_delay, 16, afxcmd_playrelvol, heretic_sfx_amb10, -4,
+  afxcmd_delay, 16, afxcmd_playrelvol, heretic_sfx_amb10, -4,
+  afxcmd_delay, 16, afxcmd_playrelvol, heretic_sfx_amb10, -4,
+  afxcmd_end };
+static int AmbSndSeq10[] = {     /* FastFootsteps */
+  afxcmd_play, heretic_sfx_amb4,
+  afxcmd_delay, 8, afxcmd_playrelvol, heretic_sfx_amb11, -3,
+  afxcmd_delay, 8, afxcmd_playrelvol, heretic_sfx_amb4, -3,
+  afxcmd_delay, 8, afxcmd_playrelvol, heretic_sfx_amb11, -3,
+  afxcmd_delay, 8, afxcmd_playrelvol, heretic_sfx_amb4, -3,
+  afxcmd_delay, 8, afxcmd_playrelvol, heretic_sfx_amb11, -3,
+  afxcmd_delay, 8, afxcmd_playrelvol, heretic_sfx_amb4, -3,
+  afxcmd_delay, 8, afxcmd_playrelvol, heretic_sfx_amb11, -3,
+  afxcmd_end };
+
+static int *AmbientSfx[] = {
+  AmbSndSeq1, AmbSndSeq2, AmbSndSeq3, AmbSndSeq4, AmbSndSeq5,
+  AmbSndSeq6, AmbSndSeq7, AmbSndSeq8, AmbSndSeq9, AmbSndSeq10
+};
+#define NUM_AMBIENT_SEQ ((int)(sizeof(AmbientSfx)/sizeof(AmbientSfx[0])))
+
+void P_AddAmbientSfx(int sequence)
+{
+  if (AmbSfxCount == MAX_AMBIENT_SFX)
+    return;                     /* silently cap rather than abort the level */
+  if (sequence < 0 || sequence >= NUM_AMBIENT_SEQ)
+    return;
+  LevelAmbientSfx[AmbSfxCount++] = AmbientSfx[sequence];
+}
+
+void P_InitAmbientSound(void)
+{
+  AmbSfxCount    = 0;
+  AmbSfxVolume   = 0;
+  AmbSfxTics     = 10 * TICRATE;
+  AmbSfxPtrIndex = -1;
+  AmbSfxPtr      = AmbSndSeqInit;
+}
+
+/* Heretic savegame support: the ambient walker consumes pr_heretic randoms
+ * on every command boundary, so loading must restore the exact mid-sequence
+ * position or the post-load timeline (and demo-style RNG stream) diverges
+ * from the saved one.  The registered sequence list itself is rebuilt
+ * deterministically by P_SpawnMapThing during level setup, so only the
+ * cursor needs saving: slot index (-1 = the init sequence), the offset of
+ * the command pointer within that sequence, the tic countdown and the
+ * running volume. */
+void P_ArchiveAmbientSound(void)
+{
+  const int *base;
+  int offset;
+
+  if (!heretic)
+    return;
+
+  CheckSaveGame(4 * sizeof(int));
+
+  base = (AmbSfxPtrIndex < 0) ? AmbSndSeqInit : LevelAmbientSfx[AmbSfxPtrIndex];
+  offset = (int)(AmbSfxPtr - base);
+
+  memcpy(save_p, &AmbSfxPtrIndex, sizeof(int)); save_p += sizeof(int);
+  memcpy(save_p, &offset,         sizeof(int)); save_p += sizeof(int);
+  memcpy(save_p, &AmbSfxTics,     sizeof(int)); save_p += sizeof(int);
+  memcpy(save_p, &AmbSfxVolume,   sizeof(int)); save_p += sizeof(int);
+}
+
+void P_UnArchiveAmbientSound(void)
+{
+  int *base;
+  int offset;
+
+  if (!heretic)
+    return;
+
+  memcpy(&AmbSfxPtrIndex, save_p, sizeof(int)); save_p += sizeof(int);
+  memcpy(&offset,         save_p, sizeof(int)); save_p += sizeof(int);
+  memcpy(&AmbSfxTics,     save_p, sizeof(int)); save_p += sizeof(int);
+  memcpy(&AmbSfxVolume,   save_p, sizeof(int)); save_p += sizeof(int);
+
+  /* The slot list was rebuilt by level setup before this runs; reject a
+   * cursor that no longer fits rather than dereferencing past it. */
+  if (AmbSfxPtrIndex < 0 || AmbSfxPtrIndex >= AmbSfxCount)
+  {
+    AmbSfxPtrIndex = -1;
+    base = AmbSndSeqInit;
+    offset = 0;                 /* the init sequence is a lone afxcmd_end */
+  }
+  else
+    base = LevelAmbientSfx[AmbSfxPtrIndex];
+  if (offset < 0)
+    offset = 0;
+  AmbSfxPtr = base + offset;
+}
+
+void P_AmbientSound(void)
+{
+  afxcmd_t cmd;
+  int      sound;
+  dbool    done;
+
+  if (!AmbSfxCount)             /* no ambient sequences on this level */
+    return;
+  if (--AmbSfxTics)
+    return;
+
+  done = FALSE;
+  do
+  {
+    cmd = (afxcmd_t)(*AmbSfxPtr++);
+    switch (cmd)
+    {
+      case afxcmd_play:
+        AmbSfxVolume = P_Random(pr_heretic) >> 2;
+        S_StartAmbientSound(NULL, *AmbSfxPtr++, AmbSfxVolume);
+        break;
+      case afxcmd_playabsvol:
+        sound        = *AmbSfxPtr++;
+        AmbSfxVolume = *AmbSfxPtr++;
+        S_StartAmbientSound(NULL, sound, AmbSfxVolume);
+        break;
+      case afxcmd_playrelvol:
+        sound         = *AmbSfxPtr++;
+        AmbSfxVolume += *AmbSfxPtr++;
+        if (AmbSfxVolume < 0)
+          AmbSfxVolume = 0;
+        else if (AmbSfxVolume > 127)
+          AmbSfxVolume = 127;
+        S_StartAmbientSound(NULL, sound, AmbSfxVolume);
+        break;
+      case afxcmd_delay:
+        AmbSfxTics = *AmbSfxPtr++;
+        done = TRUE;
+        break;
+      case afxcmd_delayrand:
+        AmbSfxTics = P_Random(pr_heretic) & (*AmbSfxPtr++);
+        done = TRUE;
+        break;
+      case afxcmd_end:
+        AmbSfxTics     = 6 * TICRATE + P_Random(pr_heretic);
+        AmbSfxPtrIndex = P_Random(pr_heretic) % AmbSfxCount;
+        AmbSfxPtr      = LevelAmbientSfx[AmbSfxPtrIndex];
+        done = TRUE;
+        break;
+      default:
+        done = TRUE;
+        break;
+    }
+  } while (!done);
+}

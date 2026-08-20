@@ -228,6 +228,15 @@
 #define MF_ISMONSTER        LONGLONG(0x0000004000000000)
 // doesn't fall down after being killed (for the Lost Soul)
 #define MF_DONTFALL         LONGLONG(0x0000008000000000)
+/* Raven (Hexen): alternate translucent draw style.  Bit 42 is free in
+ * the MF_ flag space; the value matches dsda-doom's MF_ALTSHADOW.  Note
+ * this is an MF_ (flags) bit and is distinct from the equally-valued
+ * MF2_CANTLEAVEFLOORPIC, which lives in the separate flags2 field. */
+#define MF_ALTSHADOW        LONGLONG(0x0000040000000000)
+/* Raven (Hexen): a frozen corpse -- the brittle statue an ice death leaves
+ * behind, shattered by A_FreezeDeathChunks or another hit.  Bit 43 is free;
+ * the value matches dsda-doom's MF_ICECORPSE. */
+#define MF_ICECORPSE        LONGLONG(0x0000080000000000)
 
 
 // The flags below are switching order, starting from the most significant bit,
@@ -250,6 +259,86 @@ enum {
   MIF_RESURRECTED = 0x00000004, // Object has been resurrected
 };
 
+// MBF21 thing flags ("MBF21 Bits" dehacked field).  These live in a
+// separate flags2 namespace because the main flags field is full.
+// Values are fixed by the MBF21 spec and must not be renumbered.
+#define MF2_LOGRAV        0x00000001 /* lower gravity (1/8) */
+#define MF2_SHORTMRANGE   0x00000002 /* short missile range (archvile) */
+#define MF2_DMGIGNORED    0x00000004 /* other things ignore its attacks (archvile) */
+#define MF2_NORADIUSDMG   0x00000008 /* doesn't take splash damage */
+#define MF2_FORCERADIUSDMG 0x00000010 /* causes splash damage even if target shouldn't */
+#define MF2_HIGHERMPROB   0x00000020 /* higher missile attack probability (cyberdemon) */
+#define MF2_RANGEHALF     0x00000040 /* use half distance for missile attack probability */
+#define MF2_NOTHRESHOLD   0x00000080 /* no targeting threshold (archvile) */
+#define MF2_LONGMELEE     0x00000100 /* long melee range (revenant) */
+#define MF2_BOSS          0x00000200 /* full volume see/death sound & splash immunity */
+#define MF2_MAP07BOSS1    0x00000400 /* tag 666 "boss" on doom2 map 7 (mancubus) */
+#define MF2_MAP07BOSS2    0x00000800 /* tag 667 "boss" on doom2 map 7 (arachnotron) */
+#define MF2_E1M8BOSS      0x00001000 /* E1M8 boss (baron) */
+#define MF2_E2M8BOSS      0x00002000 /* E2M8 boss (cyberdemon) */
+#define MF2_E3M8BOSS      0x00004000 /* E3M8 boss (mastermind) */
+#define MF2_E4M6BOSS      0x00008000 /* E4M6 boss (cyberdemon) */
+#define MF2_E4M8BOSS      0x00010000 /* E4M8 boss (mastermind) */
+#define MF2_RIP           0x00020000 /* ripper projectile (does not disappear on impact) */
+#define MF2_FULLVOLSOUNDS 0x00040000 /* full volume see/death sounds */
+
+/* Raven (Heretic/Hexen) thing flags.  The fork's flags2 field doubles as the
+ * MBF21 flag word (bits 0..18 above), so these occupy free bits 19 and up.
+ * They are deliberately NOT given dsda-doom's bit values: dsda uses a single
+ * unified namespace where the MBF21 names take different bits than this fork
+ * assigns them.  What matters is internal consistency -- Raven code sets and
+ * tests these by name -- so any free bits work, and keeping the MBF21 bits
+ * untouched protects the existing DSDHacked/MBF21 behaviour.  64-bit (ull)
+ * because flags2 is uint64_t.  Names already present above (e.g. MF2_LOGRAV)
+ * have the same meaning for Raven and are reused as-is. */
+#define MF2_WINDTHRUST    0x0000000000100000ull /* pushed by wind */
+#define MF2_FLOORBOUNCE   0x0000000000200000ull /* bounces off the floor */
+#define MF2_THRUGHOST     0x0000000000400000ull /* missile passes through ghosts */
+#define MF2_FLY           0x0000000000800000ull /* fly mode active */
+#define MF2_FOOTCLIP      0x0000000001000000ull /* feet may be clipped */
+#define MF2_SPAWNFLOAT    0x0000000002000000ull /* spawn at random float z */
+#define MF2_NOTELEPORT    0x0000000004000000ull /* does not teleport */
+#define MF2_PUSHABLE      0x0000000008000000ull /* can be pushed by others */
+#define MF2_SLIDE         0x0000000010000000ull /* slides against walls */
+#define MF2_ONMOBJ        0x0000000020000000ull /* resting on top of another mobj */
+#define MF2_PASSMOBJ      0x0000000040000000ull /* z block checking (pass over/under) */
+#define MF2_CANNOTPUSH    0x0000000080000000ull /* cannot push pushables */
+#define MF2_FEETARECLIPPED 0x0000000100000000ull /* feet currently clipped */
+#define MF2_FIREDAMAGE    0x0000000200000000ull /* does fire damage */
+#define MF2_NODMGTHRUST   0x0000000400000000ull /* no thrust on damage */
+#define MF2_TELESTOMP     0x0000000800000000ull /* can telestomp */
+#define MF2_FLOATBOB      0x0000001000000000ull /* float-bob z movement */
+#define MF2_DONTDRAW      0x0000002000000000ull /* no vissprite */
+#define MF2_IMPACT        0x0000004000000000ull /* missile activates impact specials */
+#define MF2_PUSHWALL      0x0000008000000000ull /* can push walls */
+#define MF2_MCROSS        0x0000010000000000ull /* activates monster-cross lines */
+#define MF2_PCROSS        0x0000020000000000ull /* activates projectile-cross lines */
+#define MF2_CANTLEAVEFLOORPIC 0x0000040000000000ull /* stay within a floor type */
+#define MF2_NONSHOOTABLE  0x0000080000000000ull /* non-shootable but solid */
+#define MF2_INVULNERABLE  0x0000100000000000ull /* invulnerable */
+#define MF2_DORMANT       0x0000200000000000ull /* dormant */
+#define MF2_ICEDAMAGE     0x0000400000000000ull /* does ice damage */
+#define MF2_SEEKERMISSILE 0x0000800000000000ull /* seeker missile */
+#define MF2_REFLECTIVE    0x0001000000000000ull /* reflects missiles */
+#define MF2_CANUSEWALLS   0x0002000000000000ull /* can activate use lines */
+#define MF2_COUNTSECRET   0x0004000000000000ull /* pickup counts as secret */
+#define MF2_BLASTED       0x0008000000000000ull /* blasted by Hexen disc */
+
+/* Heretic weapon-ammo pickup amounts (encoded in the spawnhealth field of
+ * the weapon mobjinfo entries). */
+#define AMMO_GWND_WIMPY 10
+#define AMMO_GWND_HEFTY 50
+#define AMMO_CBOW_WIMPY 5
+#define AMMO_CBOW_HEFTY 20
+#define AMMO_BLSR_WIMPY 10
+#define AMMO_BLSR_HEFTY 25
+#define AMMO_SKRD_WIMPY 20
+#define AMMO_SKRD_HEFTY 100
+#define AMMO_PHRD_WIMPY 1
+#define AMMO_PHRD_HEFTY 10
+#define AMMO_MACE_WIMPY 20
+#define AMMO_MACE_HEFTY 100
+
 
 // Map Object definition.
 //
@@ -269,6 +358,14 @@ enum {
 // for better memory usage (if only for cache).
 /* cph 2006/08/28 - move Prev[XYZ] fields to the end of the struct. Add any
  * other new fields to the end, and make sure you don't break savegames! */
+
+/* Heretic: general-purpose actor scratch.  Many Heretic codepointers stash
+ * either an int (.i) or a mobj pointer (.m) per actor. */
+typedef struct
+{
+    int i;
+    struct mobj_s *m;
+} specialval_t;
 
 typedef struct mobj_s
 {
@@ -322,6 +419,7 @@ typedef struct mobj_s
     int                 tics;   // state tic counter
     state_t*            state;
     uint64_t            flags;
+    uint64_t            flags2;    /* MBF21 thing flags (MF2_*) */
     int                 intflags;  // killough 9/15/98: internal flags
     int                 health;
 
@@ -363,6 +461,10 @@ typedef struct mobj_s
     // new field: last known enemy -- killough 2/15/98
     struct mobj_s*      lastenemy;
 
+    /* Hexen hub travel: index assigned while archiving a map's mobjs so
+     * cross-references can be restored (sv_save.c). */
+    int                 archiveNum;
+
     // killough 8/2/98: friction properties part of sectors,
     // not objects -- removed friction properties from here
     // e6y: restored friction properties here
@@ -381,6 +483,35 @@ typedef struct mobj_s
     short               iden_num;
 
     fixed_t             pad; // cph - needed so I can get the size unambiguously on amd64
+
+    /* Heretic actor scratch (inert for Doom actors, which never touch them). */
+    specialval_t        special1;
+    specialval_t        special2;
+    int                 special_args[5];
+    short               special;    /* Hexen: action special fired on death/use */
+    short               tid;        /* Hexen: thing id for TID lookups */
+    int                 damage;     /* Heretic: per-missile damage override */
+
+    /* Raven (Hexen/Heretic): how far the sprite is sunk into the floor, used
+     * by liquid terrain and the burrowing Serpent.  Appended at the end of
+     * the struct so it does not shift any existing field offsets.  Stored
+     * here so the actor logic works; sprite-render floorclipping is not
+     * applied yet. */
+    fixed_t             floorclip;
+
+    /* DECORATE user variables: lazily allocated per-actor int storage,
+     * indexed by the slots its actor type declares with "var int".  The
+     * ZACS VM (which is what reads/writes these) is not serialised, so this
+     * pointer is nulled across save/load rather than archived -- consistent
+     * with the rest of the ZDoom-ACS runtime state. */
+    int                *user_vars;
+
+    /* DECORATE custom colour remap: a 256-byte palette translation table
+     * built from the actor's Translation property (e.g. the recoloured imp
+     * fireball), or NULL.  Points into a long-lived table owned by the
+     * DECORATE registrar, so it is not freed per-actor; like user_vars it is
+     * runtime-only render state and is not archived across save/load. */
+    const uint8_t      *translation;
 
     // SEE WARNING ABOVE ABOUT POINTER FIELDS!!!
 } mobj_t;
@@ -417,15 +548,42 @@ extern int iquetail;
 void    P_RespawnSpecials(void);
 mobj_t  *P_SpawnMobj(fixed_t x, fixed_t y, fixed_t z, mobjtype_t type);
 void    P_RemoveMobj(mobj_t *th);
+
+/* Hexen thing-id (TID) list. */
+void    P_CreateTIDList(void);
+void    P_InsertMobjIntoTIDList(mobj_t *mobj, short tid);
+void    P_RemoveMobjFromTIDList(mobj_t *mobj);
+void    P_RipperBlood(mobj_t *mo, mobj_t *bleeder);
+void    P_ResetBloodQueue(void); /* persistent-state blood ring */
+void    P_BloodSplatter(fixed_t x, fixed_t y, fixed_t z, mobj_t *originator);
+void    P_BloodSplatter2(fixed_t x, fixed_t y, fixed_t z, mobj_t *originator);
+mobj_t *P_FindMobjFromTID(short tid, int *searchPosition);
+extern short hexen_thing_tid;
+extern short hexen_thing_height;
+extern int   hexen_thing_args[5];
+extern int   hexen_thing_special;
 dbool   P_SetMobjState(mobj_t *mobj, statenum_t state);
 void    P_MobjThinker(mobj_t *mobj);
 void    P_SpawnPuff(fixed_t x, fixed_t y, fixed_t z);
 void    P_SpawnBlood(fixed_t x, fixed_t y, fixed_t z, int damage);
 mobj_t  *P_SpawnMissile(mobj_t *source, mobj_t *dest, mobjtype_t type);
-void    P_SpawnPlayerMissile(mobj_t *source, mobjtype_t type);
+mobj_t  *P_SpawnPlayerMissile(mobj_t *source, mobjtype_t type);
+/* Hexen: P_SPMAngle variant spawning at a caller-supplied position. */
+mobj_t  *P_SPMAngleXYZ(mobj_t *source, fixed_t x, fixed_t y, fixed_t z,
+                       mobjtype_t type, angle_t angle);
+mobj_t  *P_SPMAngle(mobj_t *source, mobjtype_t type, angle_t angle);
+mobj_t  *P_SpawnMissileAngle(mobj_t *source, mobjtype_t type, angle_t angle, fixed_t momz);
+mobj_t  *P_SpawnMissileAngleSpeed(mobj_t *source, mobjtype_t type, angle_t angle, fixed_t momz, fixed_t speed);
+mobj_t  *P_SpawnMissileXYZ(fixed_t x, fixed_t y, fixed_t z, mobj_t *source, mobj_t *dest, mobjtype_t type);
+mobj_t  *P_SpawnKoraxMissile(fixed_t x, fixed_t y, fixed_t z, mobj_t *source, mobj_t *dest, mobjtype_t type);
+void     P_ThrustMobj(mobj_t *mo, angle_t angle, fixed_t move);
+void     P_BlasterMobjThinker(mobj_t *mobj);
+int      P_FaceMobj(mobj_t *source, mobj_t *target, angle_t *delta);
+mobj_t  *P_RoughTargetSearch(mobj_t *mo, angle_t fov, int distance);
 dbool   P_IsDoomnumAllowed(int doomnum);
 void    P_SpawnMapThing (const mapthing_t*  mthing);
 void    P_SpawnPlayer(int n, const mapthing_t *mthing);
 void    P_CheckMissileSpawn(mobj_t*);  // killough 8/2/98
 void    P_ExplodeMissile(mobj_t*);    // killough
+int P_HitFloor(mobj_t *thing); /* terrain splash; returns the floortype_t */
 #endif

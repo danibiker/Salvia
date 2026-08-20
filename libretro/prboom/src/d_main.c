@@ -56,14 +56,16 @@
 #include "doomdef.h"
 #include "doomtype.h"
 #include "doomstat.h"
+#include "hexen/sn_sonix.h"
 #include "d_net.h"
 #include "dstrings.h"
 #include "sounds.h"
 #include "z_zone.h"
 #include "w_wad.h"
+#include "p_map.h"
+#include "prboom_wad_data.h"
 #include "s_sound.h"
 #include "v_video.h"
-#include "r_patch.h"
 #include "f_finale.h"
 #include "f_wipe.h"
 #include "m_argv.h"
@@ -79,14 +81,19 @@
 #include "st_stuff.h"
 #include "am_map.h"
 #include "p_setup.h"
+#include "p_zacs.h"
 #include "r_draw.h"
 #include "r_main.h"
+#include "hexen/p_mapinfo.h"
 #include "r_fps.h"
 #include "d_main.h"
 #include "d_deh.h"  // Ty 04/08/98 - Externalizations
+#include "dsda_hacked.h"
 #include "lprintf.h"  // jff 08/03/98 - declaration of lprintf
 #include "am_map.h"
 #include "u_mapinfo.h"
+#include "u_decorate.h"
+#include "u_zmapinfo.h"
 
 void GetFirstMap(int *ep, int *map); // Ty 08/29/98 - add "-warp x" functionality
 static void D_PageDrawer(void);
@@ -194,29 +201,88 @@ static void D_Wipe(void)
 
 // wipegamestate can be set to -1 to force a wipe on the next draw
 gamestate_t    wipegamestate = GS_DEMOSCREEN;
+
+/* Tracks the previously drawn gamestate.  D_Display consults it to decide
+ * when to reinstate the base palette, so it starts each session unset. */
+static gamestate_t oldgamestate = -1;
 extern dbool setsizeneeded;
 extern int     showMessages;
 
+/* Frozen-view cache: while a menu (or pause) holds the world still in a
+ * non-demo single-player game, P_Ticker does not advance and interpolation
+ * is disabled (see p_tick.c / r_fps.c), so the composed level frame -- 3D
+ * view, automap, status bar and HUD -- is identical every display frame.
+ * R_RenderPlayerView nonetheless re-renders the whole scene each frame,
+ * which at high internal resolution costs several ms (~14 ms at 4K) for a
+ * picture that never changes.  Cache the finished frame once and memcpy it
+ * back on subsequent frozen frames, the same way the static title/page and
+ * intermission backgrounds are cached.  The menu and pause overlays are
+ * drawn afterwards every frame, so they stay live. */
+static uint16_t   *frozen_cache       = NULL;
+static int         frozen_cache_w     = -1;
+static int         frozen_cache_h     = -1;
+static const uint16_t *frozen_cache_pal = NULL;
+static dbool       frozen_cache_valid = FALSE;
+
 void D_Display (void)
 {
-  dbool wipe, viewactive, isborder = FALSE;
-  static dbool isborderstate        = FALSE;
-  static dbool borderwillneedredraw = FALSE;
-  static gamestate_t oldgamestate = -1;
+  dbool wipe, viewactive;
 
-  // Reentrancy.
+  /* If the libretro MIDI player declined to register a track because the
+   * frontend's MIDI output was not yet up (the title music registers on
+   * the first frames after load, before RetroArch's MIDI driver is
+   * ready), re-register it now that output is available.  No-op in every
+   * other case. */
+  S_RetryDeferredMusic();
+
+  /* Wipe re-entry path: while a wipe is in progress, every
+   * subsequent retro_run goes here so the wipe blend can advance
+   * one step per display frame without the rest of the draw
+   * pipeline running.  Bracket it with I_StartDisplay /
+   * I_EndDisplay so the direct-framebuffer acquisition happens
+   * (otherwise the blender would write to a stale fb pointer
+   * left over from before the wipe).  wipe_ScreenWipe reads the
+   * fresh screens[0].data we just bound and writes blended
+   * pixels into the current frontend buffer. */
   if (in_d_wipe)
   {
+     if (!I_StartDisplay())
+        return;
      D_Wipe();
+     I_EndDisplay();
      return;
   }
 
-  if (!I_StartDisplay())
-    return;
-
-  // save the current screen if about to wipe
+  /* Issue #183: detect the wipe transition and capture the start
+   * screen BEFORE I_StartDisplay rebinds screens[0] to a fresh
+   * frontend buffer.  Under libretro direct-render, every
+   * I_StartDisplay swaps screens[0].data to whatever buffer the
+   * frontend hands us via GET_CURRENT_SOFTWARE_FRAMEBUFFER -- that
+   * buffer has never been written by us, so wipe_StartScreen run
+   * after I_StartDisplay would capture stale / uninitialised
+   * pixels into wipe_scr_start.  The wipe then animates from that
+   * garbage downward instead of from the previous frame, and the
+   * "old screen sliding off the bottom" portion of the melt shows
+   * column-wise garbage right up until the last few wipe ticks.
+   *
+   * Running wipe_StartScreen here, between the previous frame's
+   * I_FinishUpdate (which restored screens[0].data to the
+   * persistent screen_buf and -- as part of the same #183 fix --
+   * snapshotted the just-presented frame into screen_buf) and this
+   * frame's I_StartDisplay, means screens[0] still points at
+   * screen_buf with the previous frame's pixels in it.  Capturing
+   * from there yields the correct wipe-start content.
+   *
+   * The fallback (non-direct-render) path is unaffected: there
+   * screens[0].data is always screen_buf, and screen_buf is the
+   * actual render target across frames, so both before-
+   * I_StartDisplay and after-I_StartDisplay readings return the
+   * same content. */
   if ((wipe = gamestate != wipegamestate))
     wipe_StartScreen();
+
+  if (!I_StartDisplay())
+    return;
 
   if (gamestate != GS_LEVEL) { // Not a level
     switch (oldgamestate) {
@@ -241,63 +307,121 @@ void D_Display (void)
       break;
     }
   } else if (gametic != basetic) { // In a level
-    dbool redrawborderstuff;
-
     HU_Erase();
 
     if (setsizeneeded) {               // change the view size if needed
       R_ExecuteSetViewSize();
       oldgamestate = -1;            // force background redraw
+      frozen_cache_valid = FALSE;   // a resized view must be recomposed
     }
 
-    // Work out if the player view is visible, and if there is a border
+    // Work out if the player view is visible
     viewactive = (!(automapmode & am_active) || (automapmode & am_overlay)) && !inhelpscreens;
-    isborder = viewactive ? (viewheight != SCREENHEIGHT) : (!inhelpscreens && (automapmode & am_active));
 
-    if (oldgamestate != GS_LEVEL) {
-      redrawborderstuff = isborder;
-    } else {
-      // CPhipps -
-      // If there is a border, and either there was no border last time,
-      // or the border might need refreshing, then redraw it.
-      redrawborderstuff = isborder && (!isborderstate || borderwillneedredraw);
-      // The border may need redrawing next time if the border surrounds the screen,
-      // and there is a menu being displayed
-      borderwillneedredraw = viewactive
-        ? (menuactive && isborder)
-        : (!inhelpscreens && menuactive == mnact_full);
-    }
+    /* Note: the upstream redrawborderstuff / borderwillneedredraw
+     * state machine that gates partial vs full status-bar redraws
+     * has been replaced by an unconditional refresh below.  Under
+     * libretro direct-render the frontend rotates framebuffers
+     * each frame, so cross-frame partial-redraw optimisations
+     * write to a buffer that doesn't get displayed -- forcing
+     * a full BG -> FG status-bar copy each frame is the simplest
+     * correct alternative, and the cost (~20 KB at 320x200) is
+     * a small fraction of the full-screen memcpy we avoid by
+     * direct-rendering. */
 
     // Now do the drawing
-    if (viewactive)
-      R_RenderPlayerView (&players[displayplayer]);
-    if (automapmode & am_active)
-      AM_Drawer();
-    ST_Drawer(
-        ((viewheight != SCREENHEIGHT)
-         || ((automapmode & am_active) && !(automapmode & am_overlay))),
-        redrawborderstuff,
-        (menuactive == mnact_full));
-    HU_Drawer();
+    /* A failed or incomplete level load (e.g. a UDMF map whose node format
+     * we cannot decode) can leave the player with no mobj.  R_SetupFrame
+     * dereferences player->mo immediately, so guard the 3D view here rather
+     * than crash; the frame just renders empty. */
+    {
+      /* Is the world frozen behind a menu/pause?  This mirrors the gate in
+       * P_Ticker exactly: a single-player, non-demo game with a menu up (or
+       * an explicit pause) advances no tics, so every layer below renders
+       * the same pixels each frame.  viewz==1 is the level-load sentinel
+       * P_Ticker also excludes. */
+      const dbool frozen =
+        (paused
+         || (menuactive && !demoplayback && !netgame
+             && players[consoleplayer].viewz != 1))
+        && !(automapmode & am_active);  /* the automap can still pan/zoom */
+
+      const size_t fb_bytes = (size_t)SCREENWIDTH * SCREENHEIGHT
+                              * SURFACE_PIXEL_DEPTH;
+
+      if (frozen
+          && frozen_cache_valid
+          && frozen_cache
+          && frozen_cache_w   == SCREENWIDTH
+          && frozen_cache_h   == SCREENHEIGHT
+          && frozen_cache_pal == V_Palette16)
+      {
+        /* Fast path: copy the previously composed frozen frame back. */
+        memcpy(screens[0].data, frozen_cache, fb_bytes);
+      }
+      else
+      {
+        if (viewactive && players[displayplayer].mo)
+          R_RenderPlayerView (&players[displayplayer]);
+        if (automapmode & am_active)
+          AM_Drawer();
+        ST_Drawer(
+            ((viewheight != SCREENHEIGHT)
+             || ((automapmode & am_active) && !(automapmode & am_overlay))),
+            TRUE,
+            (menuactive == mnact_full));
+        HU_Drawer();
+
+        /* If the world is frozen, snapshot the finished frame so the next
+         * frozen display frames can skip the whole compose.  Allocated
+         * lazily; on malloc failure we simply never take the fast path. */
+        if (frozen)
+        {
+          if (!frozen_cache)
+            frozen_cache = (uint16_t*)malloc((size_t)MAX_SCREENWIDTH
+                                             * MAX_SCREENHEIGHT
+                                             * SURFACE_PIXEL_DEPTH);
+          if (frozen_cache)
+          {
+            memcpy(frozen_cache, screens[0].data, fb_bytes);
+            frozen_cache_w     = SCREENWIDTH;
+            frozen_cache_h     = SCREENHEIGHT;
+            frozen_cache_pal   = V_Palette16;
+            frozen_cache_valid = TRUE;
+          }
+        }
+        else
+          frozen_cache_valid = FALSE;
+      }
+    }
   }
 
-  isborderstate      = isborder;
   oldgamestate = wipegamestate = gamestate;
 
   // draw pause pic
   if (paused && (menuactive != mnact_full)) {
     // Simplified the "logic" here and no need for x-coord caching - POPE
-    V_DrawNamePatch((320 - V_NamePatchWidth("M_PAUSE"))/2, 4,
-                    0, "M_PAUSE", CR_DEFAULT, VPT_STRETCH);
+    {
+      /* Raven names its pause graphic PAUSED; M_PAUSE is Doom's.  Looking
+       * up the wrong one crashes the patch cache. */
+      const char *pause_patch = raven ? "PAUSED" : "M_PAUSE";
+      V_DrawNamePatch((320 - V_NamePatchWidth(pause_patch))/2, 4,
+                      0, pause_patch, CR_DEFAULT, VPT_STRETCH);
+    }
   }
 
   // menus go directly to the screen
   M_Drawer();          // menu is drawn even on top of everything
-#ifdef HAVE_NET
-  NetUpdate();         // send out any new accumulation
-#else
-  D_BuildNewTiccmds();
-#endif
+
+  /* Input collection lives entirely in TryRunTics, which runs
+   * once per retro_run.  The upstream code polled input again
+   * here -- at display rates higher than the 35 Hz gametic rate
+   * this fed every poll-result into the SAME outstanding ticcmd
+   * via the angleturn += / buttons |= accumulation in
+   * D_BuildNewTiccmds's "else" branch, doubling any turn input
+   * across consecutive frames and making the same physical mouse
+   * motion produce different in-game turns at different display
+   * fps.  TryRunTics is the single source of truth. */
 
   // normal update
   if (!wipe)
@@ -349,16 +473,122 @@ void D_PageTicker(void)
 //
 // D_PageDrawer
 //
+// The page/title screen is a single full-screen patch stretched to the
+// current resolution.  At high internal resolutions (e.g. 2560x1200) that
+// stretch runs the per-pixel column drawer over millions of pixels, and
+// D_Display calls this every frame -- so a static, unchanging image was
+// being fully re-rasterised 120 times a second (the title screen measured
+// ~10 ms/frame at 4K while live gameplay is ~2 ms).
+//
+// Since the result depends only on the page lump, the screen dimensions
+// and the palette, rasterise it once into a persistent buffer and memcpy
+// that into the frame buffer on subsequent frames.  A full-screen memcpy
+// of SCREENWIDTH*SCREENHEIGHT*2 bytes is a cheap streaming copy compared
+// with the stretched-patch redraw.  The cache is rebuilt whenever the
+// page, the resolution or the palette (V_Palette16) changes.  The
+// M_DrawCredits() branch (pagename == NULL) is not cached.
+//
+static uint16_t   *page_cache       = NULL;
+static const char *page_cache_name  = NULL;
+static int         page_cache_w     = -1;
+static int         page_cache_h     = -1;
+static const uint16_t *page_cache_pal = NULL;
+
+void D_InvalidateFrozenView(void)
+{
+  frozen_cache_valid = FALSE;
+}
+
+void D_FreePageCache(void)
+{
+  free(page_cache);
+  page_cache      = NULL;
+  page_cache_name = NULL;
+  page_cache_w    = -1;
+  page_cache_h    = -1;
+  page_cache_pal  = NULL;
+
+  free(frozen_cache);
+  frozen_cache       = NULL;
+  frozen_cache_w     = -1;
+  frozen_cache_h     = -1;
+  frozen_cache_pal   = NULL;
+  frozen_cache_valid = FALSE;
+}
+
 static void D_PageDrawer(void)
 {
   // proff/nicolas 09/14/98 -- now stretchs bitmaps to fullscreen!
   // CPhipps - updated for new patch drawing
   // proff - added M_DrawCredits
+
+  /* Heretic and Hexen's full-screen lumps (TITLE, CREDIT, HELP1, HELP2)
+   * are raw 320x200 bitmaps, not Doom patch_t graphics, so they render
+   * through the raw-screen blit rather than the patch decoder.  They are
+   * otherwise just as static and just as expensive to re-stretch every
+   * frame, so they share the same page cache; only the render-on-miss call
+   * differs. */
   if (pagename)
   {
-    V_DrawNamePatch(0, 0, 0, pagename, CR_DEFAULT, VPT_STRETCH);
+    const size_t fb_bytes = (size_t)SCREENWIDTH * SCREENHEIGHT
+                            * SURFACE_PIXEL_DEPTH;
+
+    if (!page_cache
+        || page_cache_name != pagename
+        || page_cache_w    != SCREENWIDTH
+        || page_cache_h    != SCREENHEIGHT
+        || page_cache_pal  != V_Palette16)
+    {
+      /* (Re)build the cache.  Render the stretched image once into the
+       * persistent page_cache by temporarily pointing screens[0] and the
+       * renderer's cached top-left at it, then restore.  The frontend
+       * buffer always has SCREENWIDTH pitch when direct-rendering (the
+       * direct path is gated on pitch == SCREENPITCH), so the cache is
+       * layout-compatible with both the direct and fallback buffers. */
+      unsigned char  *saved_data       = screens[0].data;
+      uint16_t       *saved_short_tl    = drawvars.short_topleft;
+      unsigned int   *saved_int_tl      = drawvars.int_topleft;
+
+      if (!page_cache)
+        page_cache = (uint16_t*)malloc((size_t)MAX_SCREENWIDTH
+                                       * MAX_SCREENHEIGHT
+                                       * SURFACE_PIXEL_DEPTH);
+
+      if (page_cache)
+      {
+        screens[0].data        = (unsigned char *)page_cache;
+        drawvars.short_topleft = page_cache;
+        drawvars.int_topleft   = (unsigned int *)page_cache;
+
+        if (raven)
+          V_DrawRawScreen(pagename);
+        else if (!V_DrawRGBAFullScreen(0, W_CheckNumForName(pagename)))
+          V_DrawNamePatchFS(0, 0, 0, pagename, CR_DEFAULT, VPT_STRETCH);
+
+        screens[0].data        = saved_data;
+        drawvars.short_topleft = saved_short_tl;
+        drawvars.int_topleft   = saved_int_tl;
+
+        page_cache_name = pagename;
+        page_cache_w    = SCREENWIDTH;
+        page_cache_h    = SCREENHEIGHT;
+        page_cache_pal  = V_Palette16;
+      }
+      else
+      {
+        /* Allocation failed -- fall back to drawing directly every
+         * frame (correct, just not accelerated). */
+        if (raven)
+          V_DrawRawScreen(pagename);
+        else if (!V_DrawRGBAFullScreen(0, W_CheckNumForName(pagename)))
+          V_DrawNamePatchFS(0, 0, 0, pagename, CR_DEFAULT, VPT_STRETCH);
+        return;
+      }
+    }
+
+    memcpy(screens[0].data, page_cache, fb_bytes);
   }
-  else
+  else if (!heretic)
     M_DrawCredits();
 }
 
@@ -378,12 +608,36 @@ void D_AdvanceDemo (void)
 
 static void D_SetPageName(const char *name)
 {
+  /* Heretic and Hexen's full-screen title lump is named TITLE, not Doom's
+   * TITLEPIC; the rest of the demo-sequence page names (HELP1/HELP2/CREDIT)
+   * match.  Map the one that differs so the boot title does not abort on a
+   * missing lump. */
+  if (raven && name && !strcmp(name, "TITLEPIC"))
+    name = "TITLE";
   pagename = name;
+}
+
+/* The title screen plays the base game's title theme unless a MAPINFO defines
+ * a TITLEMAP with its own Music (ZDoom's way of theming the menu/title), in
+ * which case that lump plays instead -- e.g. hdoom's tracker title music.
+ * Returns nonzero when a TITLEMAP music lump was found and started. */
+static int D_StartTitleMapMusic(void)
+{
+  mapentry_t *me = G_LookupMapinfoByName("TITLEMAP");
+  if (me && me->music[0] && W_CheckNumForName(me->music) >= 0)
+  {
+    S_ChangeMusicByName(me->music, TRUE);
+    return 1;
+  }
+  return 0;
 }
 
 static void D_DrawTitle1(const char *name)
 {
-  S_StartMusic(mus_intro);
+  /* mus_intro maps to the Heretic title lump (MUS_TITL) under Heretic and to
+   * Doom's title music otherwise; see the Heretic remap in S_ChangeMusic. */
+  if (!D_StartTitleMapMusic())
+    S_StartMusic(mus_intro);
   pagetic = (TICRATE*170)/35;
   if (W_CheckNumForName("SIGILINT") != -1) // Sigil: Longer wait before playing a demo to give the title theme time to end.
     pagetic = (TICRATE*404)/35;
@@ -392,7 +646,12 @@ static void D_DrawTitle1(const char *name)
 
 static void D_DrawTitle2(const char *name)
 {
-  S_StartMusic(mus_dm2ttl);
+  if (D_StartTitleMapMusic())
+    ;                           /* a MAPINFO TITLEMAP theme takes precedence */
+  else if (raven)
+    S_StartMusic(mus_intro);    /* raven title theme (per-game remap) */
+  else
+    S_StartMusic(mus_dm2ttl);
   D_SetPageName(name);
 }
 
@@ -482,12 +741,6 @@ void D_DoAdvanceDemo(void)
   pagetic = TICRATE * 11;         /* killough 11/98: default behavior */
   gamestate = GS_DEMOSCREEN;
 
-#ifdef HAVE_NET
-  if (netgame && !demoplayback) {
-    demosequence = 0;
-    return;
-  }
-#endif
 
   if (!demostates[++demosequence][gamemode].func)
     demosequence = 0;
@@ -519,27 +772,48 @@ void D_AddFile (const char *file, wad_source_t source)
   size_t gwa_filename_len;
   size_t file_len         = strlen(file);
   char *gwa_filename      = NULL;
+  char *wad_filename      = NULL;
 
   wadfiles = realloc(wadfiles, sizeof(*wadfiles)*(numwadfiles+1));
-  wadfiles[numwadfiles].name =
-    AddDefaultExtension(strcpy(malloc(file_len + 5), file), ".wad");
+  /* Zero the fresh slot: realloc leaves it uninitialised, and a non-NULL
+   * embedded_data here would make W_AddFile wrongly treat this file WAD as
+   * a baked-in one and dereference garbage.  memset also covers handle/data
+   * and guards against future struct fields. */
+  memset(&wadfiles[numwadfiles], 0, sizeof(wadfiles[numwadfiles]));
+  /* A path that already resolves is used exactly as handed over, so
+   * extensionless files -- Android SAF document URIs among them --
+   * open under the name the IWAD scan identified them by.  The
+   * default extension is for the bare stem form, `-file foo`. */
+  wad_filename = strcpy(malloc(file_len + 5), file);
+  if (!path_is_valid(wad_filename))
+    AddDefaultExtension(wad_filename, ".wad");
+  wadfiles[numwadfiles].name = wad_filename;
   wadfiles[numwadfiles].src = source; // Ty 08/29/98
   numwadfiles++;
   // proff: automatically try to add the gwa files
   // proff - moved from w_wad.c
-  gwa_filename     = AddDefaultExtension(strcpy(malloc(file_len + 5), file), ".wad");
+  gwa_filename     = strcpy(malloc(file_len + 5), wad_filename);
   gwa_filename_len = strlen(gwa_filename);
 
-  if (gwa_filename_len > 4)
-    if (!strcasecmp(gwa_filename+(gwa_filename_len - 4),".wad"))
-    {
-      char *ext = &gwa_filename[gwa_filename_len - 4];
-      ext[1]    = 'g'; ext[2] = 'w'; ext[3] = 'a';
-      wadfiles  = realloc(wadfiles, sizeof(*wadfiles)*(numwadfiles+1));
-      wadfiles[numwadfiles].name = gwa_filename;
-      wadfiles[numwadfiles].src = source; // Ty 08/29/98
-      numwadfiles++;
-    }
+  if (gwa_filename_len > 4
+      && !strcasecmp(gwa_filename+(gwa_filename_len - 4),".wad"))
+  {
+    char *ext = &gwa_filename[gwa_filename_len - 4];
+    ext[1]    = 'g'; ext[2] = 'w'; ext[3] = 'a';
+    wadfiles  = realloc(wadfiles, sizeof(*wadfiles)*(numwadfiles+1));
+    memset(&wadfiles[numwadfiles], 0, sizeof(wadfiles[numwadfiles]));
+    wadfiles[numwadfiles].name = gwa_filename;
+    wadfiles[numwadfiles].src = source; // Ty 08/29/98
+    numwadfiles++;
+  }
+  else
+  {
+    /* Not a .wad path -- the gwa_filename buffer we allocated above
+     * is unused.  Without this free, every D_AddFile of a non-.wad
+     * file (e.g. .deh, .bex, .lmp) leaked one ~PATH_MAX-byte malloc
+     * per call. */
+    free(gwa_filename);
+  }
 }
 
 // killough 10/98: support -dehout filename
@@ -574,13 +848,22 @@ static bool CheckIWAD(const char *iwadname,GameMode_t *gmode,dbool *hassec)
 		  RETRO_VFS_FILE_ACCESS_HINT_NONE
 		  )))
   {
-    int ud=0,rg=0,sw=0,cm=0,sc=0;
+    int ud=0,rg=0,sw=0,cm=0,sc=0,htic=0,hexn=0;
 
     // Identify IWAD correctly
     wadinfo_t header;
 
     // read IWAD header
-    if (rfread(&header, sizeof(header), 1, fp) == 1 && !strncmp(header.identification, "IWAD", 4))
+    /* Accept either "IWAD" or "PWAD" identification.  The libretro
+     * frontend's retro_load_game promotes PWAD-magic files that
+     * carry a PLAYPAL lump (a complete standalone game like
+     * chex.wad) to -iwad routing; this is where that routing lands.
+     * The rest of the CheckIWAD logic -- scanning the lump table for
+     * level markers -- is identical for either magic, so just widen
+     * the accepted header strings here. */
+    if (rfread(&header, sizeof(header), 1, fp) == 1 &&
+        (!strncmp(header.identification, "IWAD", 4) ||
+         !strncmp(header.identification, "PWAD", 4)))
     {
       int64_t length;
       filelump_t *fileinfo;
@@ -620,8 +903,26 @@ static bool CheckIWAD(const char *iwadname,GameMode_t *gmode,dbool *hassec)
                   fileinfo[length].name[4] == '2')
                 ++sc;
         }
+        else if (!strncmp(fileinfo[length].name, "M_HTIC", 6))
+        {
+          /* M_HTIC is the Heretic main-menu title graphic; it is unique to
+           * a Heretic IWAD (Doom never carries it).  This distinguishes a
+           * Heretic IWAD from Doom even though both use ExMy level names.
+           * NOTE: Hexen IWADs also carry M_HTIC, so Hexen must be tested
+           * before Heretic below (see the hexn check). */
+          ++htic;
+        }
+        else if (!strncmp(fileinfo[length].name, "MAPINFO", 7) &&
+                 fileinfo[length].name[7] == 0)
+        {
+          /* All Hexen IWADs carry a MAPINFO lump, but MAPINFO alone is NOT
+           * a Hexen signature: ZDoom-targeted standalone Doom-engine wads
+           * (chex3.wad) carry one too.  The hexn check below therefore
+           * also requires Hexen's other invariants. */
+          ++hexn;
+        }
 
-        free(fileinfo);
+      free(fileinfo);
       }
       else // missing IWAD tag in header
       {
@@ -637,7 +938,43 @@ static bool CheckIWAD(const char *iwadname,GameMode_t *gmode,dbool *hassec)
 
     *gmode = indetermined;
     *hassec = FALSE;
-    if (cm>=30)
+    if (hexn && htic && cm && !sw && !rg && !ud)
+    {
+      /* Hexen IWAD.  The signature is the conjunction of Hexen's lump-table
+       * invariants: a MAPINFO lump, the M_HTIC title patch shared with
+       * Heretic, MAP## level markers, and no ExMy markers.  MAPINFO alone
+       * is not enough -- ZDoom-targeted standalone Doom wads (chex3.wad,
+       * ExMy maps, no M_HTIC) carry one and must fall through to the Doom
+       * gamemode logic below.
+       * Hexen uses MAP## levels like commercial Doom and shares
+       * a great deal of code with Heretic, so set both the hexen flag and the
+       * raven umbrella (raven == heretic || hexen).  The full game has 30+
+       * maps; the 4-map demo IWAD also carries MAPINFO, so treat anything
+       * with the Hexen signature as commercial and let the map count stand. */
+      extern dbool hexen;
+      extern dbool raven;
+      hexen       = true;
+      raven       = true;
+      gamemission = hexen_mission;
+      *gmode      = commercial;
+    }
+    else if (htic)
+    {
+      /* Heretic IWAD.  Episodes use the same ExMy markers as Doom, so the
+       * sw/rg counts above already tallied them: shareware is E1 only,
+       * the registered/extended set has E1..E3 (and the SoSR E4..E5).
+       * Map the Doom gamemode slots onto Heretic's episode layout. */
+      extern dbool heretic;
+      extern dbool raven;
+      heretic = true;
+      raven   = true;
+      gamemission = heretic_mission;
+      if (rg >= 18 || ud >= 9)
+        *gmode = registered;   /* full Heretic (3+ episodes) */
+      else
+        *gmode = shareware;    /* Heretic shareware (E1 only) */
+    }
+    else if (cm>=30)
     {
       *gmode = commercial;
       *hassec = sc>=2;
@@ -720,7 +1057,7 @@ static bool IdentifyVersion (void)
   // locate the IWAD and determine game mode from it
 
   iwad = FindIWADFile();
-  lprintf(LO_INFO, "iwad: %s\n", iwad);
+  lprintf(LO_INFO, "iwad: %s\n", iwad ? iwad : "(none)");
 
   if (iwad && *iwad)
   {
@@ -732,16 +1069,22 @@ static bool IdentifyVersion (void)
     /* jff 8/23/98 set gamemission global appropriately in all cases
      * cphipps 12/1999 - no version output here, leave that to the caller
      */
+    if (raven)
+    {
+      /* CheckIWAD already recognised a Heretic or Hexen IWAD and set
+       * gamemission = heretic_mission / hexen_mission; do not overwrite it
+       * with a Doom mission below.  (Hexen and commercial Doom both use
+       * MAP## levels, so without this the commercial branch would reset
+       * gamemission to doom2 and the game would identify and behave as
+       * Doom 2 -- loading the Doom status bar, switch list and so on.) */
+    }
+    else
     switch(gamemode)
     {
       case retail:
       case registered:
       case shareware:
-        i = strlen(iwad);
         gamemission = doom;
-        if ( (i>=11 && !strncasecmp(iwad+i-11,"heretic.wad",11)) ||
-             (i>=13 && (!strncasecmp(iwad+i-13,"hereticsr.wad",13))) )
-          return I_Error("IdentifyVersion: Heretic is not supported");
         break;
       case commercial:
         i = strlen(iwad);
@@ -845,7 +1188,7 @@ static bool FindResponseFile (void)
             indexinfile = 0;
             indexinfile++;  // SKIP PAST ARGV[0] (KEEP IT)
             do {
-               while (size > 0 && isspace(*infile)) { infile++; size--; }
+               while (size > 0 && isspace((unsigned char)*infile)) { infile++; size--; }
                if (size > 0) {
                   char *s = malloc(size+1);
                   char *p = s;
@@ -853,7 +1196,7 @@ static bool FindResponseFile (void)
 
                   while (size > 0) {
                      // Whitespace terminates the token unless quoted
-                     if (!quoted && isspace(*infile)) break;
+                     if (!quoted && isspace((unsigned char)*infile)) break;
                      if (*infile == '\"') {
                         // Quotes are removed but remembered
                         infile++; size--; quoted ^= 1;
@@ -1067,15 +1410,44 @@ bool D_DoomMainSetup(void)
   if (!IdentifyVersion())
      goto failed;
 
-  // Load prboom.wad after IWAD but before everything else
-  {
-    char *data_wad_path = I_FindFile(PACKAGE ".wad", NULL);
+  /* Hexen binds both Use and Jump, but the stock key defaults put key_use
+   * and key_jump on the spacebar (harmless in Doom/Heretic, which have no
+   * jump).  The gamepad layouts post these keycodes into the event queue,
+   * so identical values make every Use press jump and every Jump press
+   * use.  When they collide under Hexen, move Use to 'e' per the Hexen
+   * keyboard scheme (spacebar is Jump, E is Use - see kbd_hexen_desc). */
+  if (hexen && key_use == key_jump)
+    key_use = 'e';
 
-    if (!data_wad_path)
-      lprintf(LO_INFO, PACKAGE ".wad not found - internal default data will be used\n");
-    else
-      D_AddFile(data_wad_path, source_pre);
-    free(data_wad_path);
+  /* D_BuildBEXTables above seeded the dynamic tables before the game type
+   * was known (it runs before IdentifyVersion), so they were seeded as
+   * Doom. Now that IdentifyVersion has set heretic/gamemission, re-seed so
+   * Heretic gets its own states/mobjinfo/sprites/sounds. dsda_InitTables
+   * frees the previous copies first, so re-running is safe. For Doom this
+   * is a harmless reseed of identical data. */
+  dsda_InitTables();
+
+  /* Select the weapon frame table for the game now that the type is known,
+   * so the player's weapon psprite is driven by the correct (Heretic vs
+   * Doom) weapon states. */
+  D_InitWeaponInfo();
+
+  // prboom.wad is baked into the core: add it as an embedded WAD here,
+  // after the IWAD but before everything else.  The engine no longer looks
+  // for prboom.wad on the filesystem -- the compiled-in copy is always used,
+  // so the data is guaranteed present and cannot be overridden or omitted.
+  {
+    char *embed_name = malloc(sizeof(PACKAGE ".wad"));
+    wadfiles = realloc(wadfiles, sizeof(*wadfiles) * (numwadfiles + 1));
+    memset(&wadfiles[numwadfiles], 0, sizeof(wadfiles[numwadfiles]));
+    /* name is a label only (never opened); malloc'd so W_ReleaseAllWads
+     * frees it uniformly with every other entry. */
+    strcpy(embed_name, PACKAGE ".wad");
+    wadfiles[numwadfiles].name = embed_name;
+    wadfiles[numwadfiles].src  = source_pre;
+    wadfiles[numwadfiles].embedded_data   = prboom_wad_data;
+    wadfiles[numwadfiles].embedded_length = (int)prboom_wad_data_len;
+    numwadfiles++;
   }
 
   // e6y: DEH files preloaded in wrong order
@@ -1100,6 +1472,23 @@ bool D_DoomMainSetup(void)
     // cph - code cleaned and made smaller
     const char* doomverstr;
 
+    if (hexen)
+    {
+      doomverstr = "Hexen: Beyond Heretic";
+    }
+    else if (heretic)
+    {
+      /* The Doom gamemode slots are reused for Heretic (see IdentifyVersion):
+       * shareware = E1 only, registered = the full game. Distinguish the
+       * Shadow of the Serpent Riders release by its extra episodes (E4). */
+      if (gamemode == shareware)
+        doomverstr = "Heretic Shareware";
+      else if (W_CheckNumForName("E4M1") >= 0)
+        doomverstr = "Heretic: Shadow of the Serpent Riders";
+      else
+        doomverstr = "Heretic Registered";
+    }
+    else
     switch ( gamemode ) {
     case retail:
       doomverstr = "The Ultimate DOOM";
@@ -1275,6 +1664,9 @@ bool D_DoomMainSetup(void)
 
   lprintf(LO_INFO,"\n");     // killough 3/6/98: add a newline, by popular demand :)
 
+  /* ZDoom LANGUAGE strings apply first so DEHACKED keeps the last word */
+  U_ZLanguageApplyStrings();
+
   // e6y
   // option to disable automatic loading of dehacked-in-wad lump
   if (!M_CheckParm ("-nodeh"))
@@ -1384,17 +1776,68 @@ bool D_DoomMainSetup(void)
       data = (const char *)W_CacheLumpNum(p);
       U_ParseMapInfo(data, W_LumpLength(p));
     }
+
+    /* ZDoom wads carry episode structure in a MAPINFO lump instead;
+     * translate it into the UMAPINFO tables when no UMAPINFO took
+     * precedence.  Hexen and Heretic interpret MAPINFO themselves. */
+    if (!hexen && !heretic && !U_mapinfo.mapcount &&
+        (p = W_CheckNumForName("MAPINFO")) >= 0)
+    {
+      const char *data;
+      lprintf(LO_INFO,"U_ParseZMapInfo: Translating ZDoom MAPINFO.\n");
+      data = (const char *)W_CacheLumpNum(p);
+      U_ParseZMapInfo(data, W_LumpLength(p));
+    }
   }
 
 
-#ifdef HAVE_NET
-  // CPhipps - now wait for netgame start
-  D_CheckNetGame();
-#endif
+  /* ZDoom DECORATE decorations: register static props before the sprite
+   * definitions and the editor-number hash freeze (Doom game only -- the
+   * shared mobjinfo table would expose them to Heretic lookups too). */
+  if (!hexen && !heretic && W_CheckNumForName("DECORATE") >= 0)
+    U_RegisterDecorateThings();
+  /* ZDoom DECORATE weapons: repoint Doom weapon slots to custom state
+   * chains.  After decorations (shared state/sprite growth), before R_Init,
+   * Doom game only. */
+  if (!hexen && !heretic && W_CheckNumForName("DECORATE") >= 0)
+    U_RegisterDecorateWeapons();
+  /* ZDoom DECORATE monster replacements: clone the stock monsters a mod
+   * stands in for and record the editor-number redirect.  After weapons,
+   * before R_Init (shares state/sprite growth), Doom game only. */
+  if (!hexen && !heretic && W_CheckNumForName("DECORATE") >= 0)
+    U_RegisterDecorateMonsters();
+  /* The death system spawns the SexActor-derived follow-on actors by class
+   * name, so register them after the monster replacements (shares state/
+   * sprite growth), Doom game only. */
+  if (!hexen && !heretic && W_CheckNumForName("DECORATE") >= 0)
+    U_RegisterDecorateSexActors();
+  /* ZDoom map-spot utility things (MapSpot 9001 etc.) are needed for ACS
+   * SpawnSpot on Doom-game ZDoom maps whether or not a DECORATE lump is
+   * present, but must stay out of Heretic/Hexen, which share the mobjinfo
+   * table and define some of these editor numbers natively. */
+  if (!hexen && !heretic)
+    U_RegisterZDoomUtilityThings();
+
+  /* ZDoom LOADACS: register the global ACS libraries named by a root
+   * LOADACS lump so they are loaded for every map (alongside the map's own
+   * BEHAVIOR imports).  Parsed once here; loaded per-map in
+   * Z_ACSLoadBehavior, which itself runs only for ZDoom-namespace UDMF maps
+   * (never for Hexen/Heretic, which use their own ACS engine).  Gate the
+   * parse to the Doom game too, both to match that path and so a Hexen or
+   * Heretic mod that happens to ship a LOADACS lump is left untouched. */
+  if (!hexen && !heretic)
+    Z_ACSLoadGlobalLibraries();
 
   //jff 9/3/98 use logical output routine
   lprintf(LO_INFO,"R_Init: Init DOOM refresh daemon - ");
   R_Init();
+
+  if (hexen)
+  {
+    lprintf(LO_INFO,"\nP_LoadMapInfo: Parsing Hexen MAPINFO.\n");
+    P_LoadMapInfo();
+    SN_InitSequenceScript();
+  }
 
   //jff 9/3/98 use logical output routine
   lprintf(LO_INFO,"\nP_Init: Init Playloop state.\n");
@@ -1430,13 +1873,35 @@ bool D_DoomMainSetup(void)
 
   // start the apropriate game based on parms
 
+  /* Hexen is class-based; until the class-selection menu exists, default
+   * every player to the Fighter (matching the Fighter foundation defaults
+   * the runtime tables are seeded with).  This makes player->class correct
+   * at spawn so the class-indexed weapon/mana code resolves to the Fighter
+   * rather than the empty PCLASS_NULL column. */
+  if (hexen)
+  {
+    int pc;
+    pclass_t startclass = PCLASS_FIGHTER;
+    int p = M_CheckParm("-class");
+
+    if (p && p + 1 < myargc)
+    {
+      const char *c = myargv[p + 1];
+      if (!strcasecmp(c, "cleric") || !strcasecmp(c, "c"))
+        startclass = PCLASS_CLERIC;
+      else if (!strcasecmp(c, "mage") || !strcasecmp(c, "m"))
+        startclass = PCLASS_MAGE;
+      else /* "fighter"/"f"/anything else */
+        startclass = PCLASS_FIGHTER;
+    }
+
+    for (pc = 0; pc < MAXPLAYERS; pc++)
+      PlayerClass[pc] = startclass;
+  }
+
   if (gameaction != ga_playdemo)
   {
-#ifdef HAVE_NET
-    if (autostart || netgame)
-#else
     if (autostart)
-#endif
     {
       // sets first map and first episode if unknown
       GetFirstMap(&startepisode, &startmap);
@@ -1445,13 +1910,6 @@ bool D_DoomMainSetup(void)
     else
       D_StartTitle(); // start up intro loop
   }
-
-  /* Ensure the 16-bit palette is built before the first D_Display call.
-   * On a second load cycle the static oldgamestate inside D_Display
-   * retains its value from the previous run, so V_SetPalette(0) may
-   * not be called before D_PageDrawer tries to render. */
-  V_SetPalette(0);
-
   return true;
 
 failed:
@@ -1461,15 +1919,9 @@ failed:
 //
 // D_DoomMain
 //
-#ifdef HAVE_NET
-extern void D_QuitNetGame (void);
-#endif
 
 void D_DoomLoop(void)
 {
-   //Doom loop
-   WasRenderedInTryRunTics = FALSE;
-
    if (ffmap == gamemap) ffmap = 0;
 
    TryRunTics (); // will run at least one tic
@@ -1478,12 +1930,13 @@ void D_DoomLoop(void)
    if (players[displayplayer].mo) // cph 2002/08/10
       S_UpdateSounds(players[displayplayer].mo);// move positional sounds
 
-   if (!movement_smooth || !WasRenderedInTryRunTics || gamestate != wipegamestate)
-   {
-      // Update display, next frame, with current state.
-      D_Display();
-      return;
-   }
+   /* Always render the next frame.  The libretro frontend drives
+    * one D_Display per retro_run; there is no equivalent of the
+    * netgame "skip-display-when-already-rendered-during-tic-wait"
+    * optimisation that the original WasRenderedInTryRunTics flag
+    * gated, because libretro's TryRunTics is a non-blocking single
+    * tic-step that never calls D_Display itself. */
+   D_Display();
 }
 
 //foward decl
@@ -1492,36 +1945,75 @@ void M_QuitDOOM(int choice);
 void D_DoomDeinit(void)
 {
   lprintf(LO_INFO,"D_DoomDeinit:\n");
-  //Deinit
+  /* Deinit, in dependency order:
+   *   - level data (PU_LEVEL/PU_LEVSPEC) before anything else, since
+   *     mobj thinkers etc. don't reference subsystem state being torn
+   *     down later;
+   *   - render-derived data (patches, screens, palettes) before sound,
+   *     music, and wad cleanup, so we don't accidentally re-cache a
+   *     lump after the wads close;
+   *   - W_ReleaseAllWads last so file handles stay open through the
+   *     rest of deinit, even though nothing currently re-reads.
+   *
+   * W_ReleaseAllWads (rather than W_Exit) does the FULL teardown:
+   * close handles, free wadfile data + name strings, free wadfiles
+   * array, free lumpinfo, and W_DoneCache to free cachelump.
+   * Without this, every retro_load_game leaked:
+   *   - cachelump (~32KB for shareware DOOM)
+   *   - lumpinfo (~100KB for DOOM2)
+   *   - wadfiles array
+   *   - wadfile name strings
+   * and -- worse -- the next session's W_Init iterated the previous
+   * session's stale wadfiles[] entries and re-opened the previous
+   * IWAD on top of the new one, accumulating both lump tables
+   * (with session 1's lumps shadowing session 2's where names
+   * collided).  Z_Close at retro_deinit eventually reclaims the
+   * memory but only at process end -- between sessions everything
+   * stayed orphaned and broken.
+   *
+   * Nothing between D_DoomDeinit returning and the next
+   * D_DoomMainSetup's W_Init touches cachelump / wadfiles /
+   * lumpinfo, so the full teardown is safe.
+   */
+  oldgamestate  = -1;
+  wipegamestate = GS_DEMOSCREEN;
+  in_d_wipe     = FALSE;
+  wipe_Shutdown();
+
+  /* Run state belongs to the session that set it, so the next session
+   * opens on its own title page with no game in progress and the demo
+   * sequence at the start. */
+  gameaction   = ga_nothing;
+  gamestate    = GS_DEMOSCREEN;
+  usergame     = FALSE;
+  paused       = FALSE;
+  advancedemo  = FALSE;
+  demosequence = -1;
+  pagetic      = 0;
+  I_InitGraphicsShutdown();
+
   M_QuitDOOM(0);
-#ifdef HAVE_NET
-  D_QuitNetGame();
-  I_ShutdownNetwork();
-#endif
-  M_SaveDefaults ();
-  W_Exit();
-  //W_ReleaseAllWads();
-  U_FreeMapInfo();
+  M_SaveDefaults();
+  P_Deinit();
+  P_MapDeinit();
+  P_SpecDeinit();
+  P_SwitchDeinit();
+  P_EnemyDeinit();
+  R_InterpolationDeinit();
+  R_FlushAllPatches();
+  R_Deinit();
+  AM_Deinit();
+  G_Deinit();
+  D_FreePageCache();
+  V_FreeScreens();
+  V_DestroyTrueColorPalette();
+  S_Shutdown();
   I_ShutdownSound();
   I_ShutdownMusic();
-
-  /* Do NOT call Z_Free-based cleanup here (V_FreeScreens,
-   * R_FlushAllPatches, P_Deinit, V_DestroyUnusedTrueColorPalettes, etc.)
-   *
-   * All zone memory is bulk-freed by Z_Close() in retro_deinit().
-   * Calling Z_Free on individual blocks here is unsafe because W_Exit()
-   * above may have already freed overlapping zone blocks, leaving stale
-   * pointers (0xFEEEFEEE pattern in MSVC debug).
-   *
-   * Just NULL out the pointers so the next load cycle doesn't use
-   * dangling references. */
-  R_FlushPatchesPointers();
-  V_FreeScreensPointers();
-  P_DeinitPointers();
-
-  /* Reset display state for reinit */
-  in_d_wipe = false;
-  wipegamestate = GS_DEMOSCREEN;
+  U_FreeMapInfo();
+  D_FreeBEXTables();
+  M_FreeDefaults();
+  W_ReleaseAllWads();
 }
 
 //

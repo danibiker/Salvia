@@ -33,10 +33,40 @@
  */
 
 #include "doomstat.h"
+#include "sounds.h"
 
 // Game Mode - identify IWAD as shareware, retail etc.
 GameMode_t gamemode = indetermined;
 GameMission_t   gamemission = doom;
+
+/* Raven game identification.  'heretic' is set when a Heretic IWAD is loaded;
+ * 'raven' is the union (heretic || hexen) used by code shared between the two.
+ * Both default off so a Doom session is byte-for-byte unaffected. */
+dbool heretic;
+dbool hexen;
+dbool raven;
+mobjtype_t g_mt_player = MT_PLAYER; /* player mobjtype; set per-game */
+int g_s_play      = S_PLAY;      /* player idle state; set per-game */
+int g_s_play_run1 = S_PLAY_RUN1; /* first player run state; set per-game */
+int g_s_play_atk1 = S_PLAY_ATK1; /* first player attack state; set per-game */
+int g_s_play_atk2 = S_PLAY_ATK2; /* second player attack state; set per-game */
+
+mobjtype_t g_mt_tfog = MT_TFOG;      /* teleport-fog mobjtype; set per-game */
+mobjtype_t g_mt_teleportman = MT_TELEPORTMAN; /* teleport-dest mobjtype; per-game */
+int g_telefog_height = 0;            /* teleport-fog spawn height; set per-game */
+int g_sfx_telept = sfx_telept;       /* teleport sound; set per-game */
+/* World feedback sounds referenced from shared code by doom id; the raven
+ * games resolve them to their own entries at game init (dsda_hacked.c). */
+int g_sfx_doropn  = sfx_doropn;
+int g_sfx_dorcls  = sfx_dorcls;
+int g_sfx_stnmov  = sfx_stnmov;       /* door/floor/ceiling movement */
+int g_sfx_stnmov_plats = sfx_stnmov;  /* plat movement */
+int g_sfx_pstart  = sfx_pstart;
+int g_sfx_pstop   = sfx_pstop;
+int g_sfx_swtchn  = sfx_swtchn;
+int g_sfx_oof     = sfx_oof;
+int g_sfx_respawn = sfx_itmbk;
+const char *g_menu_flat = "FLOOR4_6"; /* fullscreen-menu background flat; set per-game */
 
 // Language.
 Language_t   language = english;

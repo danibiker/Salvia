@@ -64,7 +64,12 @@ void *(Z_Malloc)(size_t size, int tag, void **ptr);
 void (Z_Free)(void *ptr);
 void (Z_FreeTags)(int lowtag, int hightag);
 void (Z_ChangeTag)(void *ptr, int tag);
+/* Z_ChangeUser updates the back-pointer of an already-allocated block.
+ * Use it to clear the back-pointer before the variable that owns it
+ * goes out of scope, or to transfer ownership between structures. */
+void (Z_ChangeUser)(void *ptr, void **user);
 bool (Z_Init)(void);
+void Z_SetHeapCap(int bytes);
 void Z_Close(void);
 void *(Z_Calloc)(size_t n, size_t n2, int tag, void **user);
 void *(Z_Realloc)(void *p, size_t n, int tag, void **user);
@@ -79,11 +84,21 @@ void Z_SetPurgeLimit(int size);
 #undef calloc
 #undef strdup
 
+/* The build force-includes this header into every translation unit, which
+ * routes even vendored libretro-common code through the zone allocator.
+ * The zone is not thread safe -- one global block list, no locking -- so any
+ * TU whose allocations can happen off the main thread must opt out and use
+ * the C library directly.  rthreads does exactly that: thread_wrap frees its
+ * own argument block on the spawned thread, which raced against main-thread
+ * zone traffic (caught by ThreadSanitizer) before this guard existed.
+ * Objects needing it set Z_ZONE_NO_ALLOC_OVERRIDE in Makefile.common. */
+#ifndef Z_ZONE_NO_ALLOC_OVERRIDE
 #define malloc(n)          Z_Malloc(n,PU_STATIC,0)
 #define free(p)            Z_Free(p)
 #define realloc(p,n)       Z_Realloc(p,n,PU_STATIC,0)
 #define calloc(n1,n2)      Z_Calloc(n1,n2,PU_STATIC,0)
 #define strdup(s)          Z_Strdup(s,PU_STATIC,0)
+#endif
 
 
 void Z_ZoneHistory(char *);

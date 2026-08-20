@@ -60,6 +60,32 @@ extern  dbool   fastparm; // checkparm of -fast
 extern GameMode_t gamemode;
 extern GameMission_t  gamemission;
 
+/* Raven (Heretic/Hexen) game identification; see doomstat.c. */
+extern dbool heretic;
+extern dbool hexen;
+extern dbool raven;
+extern mobjtype_t g_mt_player;
+extern int g_s_play;       /* player idle state; set per-game */
+extern int g_s_play_run1;  /* first player run state; set per-game */
+extern int g_s_play_atk1;  /* first player attack state; set per-game */
+extern int g_s_play_atk2;  /* second player attack state; set per-game */
+
+#define TELEFOGHEIGHT (32*FRACUNIT)
+extern mobjtype_t g_mt_tfog;      /* teleport-fog mobjtype; set per-game */
+extern mobjtype_t g_mt_teleportman; /* teleport-dest mobjtype; set per-game */
+extern int g_telefog_height;      /* teleport-fog spawn height; set per-game */
+extern int g_sfx_telept;          /* teleport sound; set per-game */
+extern int g_sfx_doropn;
+extern int g_sfx_dorcls;
+extern int g_sfx_stnmov;
+extern int g_sfx_stnmov_plats;
+extern int g_sfx_pstart;
+extern int g_sfx_pstop;
+extern int g_sfx_swtchn;
+extern int g_sfx_oof;
+extern int g_sfx_respawn;
+extern const char *g_menu_flat;
+
 // Set if homebrew PWAD stuff has been added.
 extern  dbool   modifiedgame;
 
@@ -70,6 +96,10 @@ extern complevel_t compatibility_level, default_compatibility_level;
 #define compatibility (compatibility_level<=boom_compatibility_compatibility)
 #define demo_compatibility (compatibility_level < boom_compatibility_compatibility)
 #define mbf_features (compatibility_level>=mbf_compatibility)
+/* MBF21 (complevel 21): the new feature set layered on top of boom/mbf.
+ * Every MBF21-specific behavioral change must gate on this so it stays
+ * inert for vanilla/boom/mbf/prboom demos and playback. */
+#define mbf21_features (compatibility_level>=mbf21_compatibility)
 
 // v1.1-like pitched sounds
 extern int pitched_sounds;        // killough
@@ -223,6 +253,10 @@ extern  int   gametic;
 // Bookkeeping on players - state.
 extern  player_t  players[MAXPLAYERS];
 
+/* ACS ChangeCamera: when non-NULL the player's view follows this actor
+ * instead of the player's own body (set/cleared by line special 132). */
+extern  struct mobj_s *zacs_view_camera;
+
 // Alive? Disconnected?
 extern  dbool   playeringame[MAXPLAYERS];
 extern  dbool   realplayeringame[MAXPLAYERS];
@@ -233,7 +267,10 @@ extern  size_t     num_deathmatchstarts; // killough
 extern  mapthing_t *deathmatch_p;
 
 // Player spawn spots.
-extern  mapthing_t playerstarts[];
+/* Hexen player starts carry a position number (the start spot a
+ * Teleport_NewMap line sends the player to) in args[0]. */
+#define MAX_PLAYER_STARTS 8
+extern  mapthing_t playerstarts[MAX_PLAYER_STARTS][MAXPLAYERS];
 
 // Intermission stats.
 // Parameters for world map / intermission.
@@ -250,6 +287,9 @@ extern  dbool precache;
 //  to force a wipe on the next draw
 extern  gamestate_t     wipegamestate;
 
+extern  int             lowlatency_turning;     /* per-frame mouse turn */
+extern  int             persistent_state;       /* debris stays on the floor */
+extern  int             persistent_blood_cap;   /* resting blood ring size choice */
 extern  int             mouseSensitivity_horiz; // killough
 extern  int             mouseSensitivity_vert;
 

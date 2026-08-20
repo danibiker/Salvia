@@ -32,6 +32,11 @@ extern "C" {
 
 
 struct retro_core_option_v2_category option_cats_us[] = {
+   {
+      "audio",
+      "Audio",
+      "Configure audio output, including the synthesis/output sample rate."
+   },
    { NULL, NULL, NULL },
 };
 
@@ -57,10 +62,86 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "320x200"
    },
    {
+      "prboom-render_threads",
+      "Threaded Rendering",
+      NULL,
+      "Fill walls and floors/ceilings across several CPU threads. Scene traversal stays single-threaded and only the pixel filling is split, so the image is identical to the single-threaded renderer -- unlike the screenspace split used by other ports, this cannot split or drop a sprite at a thread boundary. Filling is the bulk of the frame at high internal resolutions, so the benefit grows with resolution; at 320x200 there is little to gain. 'Auto' uses up to 4 threads, which measured fastest and steadiest on a 16-core test system; higher counts spend more on handing out work than they save and vary more between runs. 8 is selectable if it suits your CPU.",
+      NULL,
+      NULL,
+      {
+         { "OFF",  "Off (single-threaded)" },
+         { "Auto", NULL },
+         { "2",    "2 threads" },
+         { "4",    "4 threads" },
+         { "8",    "8 threads" },
+         { NULL, NULL },
+      },
+      "OFF"
+   },
+   {
+      "prboom-color_format",
+      "Color Format (Restart Required)",
+      NULL,
+      "Output colour depth. '16bits' is the classic RGB565 renderer. '24bits' renders in full 8-bit-per-channel truecolor, which removes the banding the 16-bit light ramp introduces in distance shading and smooth gradients. '30bits' outputs true HDR10 -- PQ-encoded Rec.2020 at 10 bits per channel, carrying absolute luminance -- so emissive content can be rendered brighter than SDR white on an HDR display. It requires a frontend that presents HDR10 natively; otherwise the core falls back to 24bits automatically.",
+      NULL,
+      NULL,
+      {
+         { "16bits",             NULL },
+         { "24bits (truecolor)", NULL },
+         { "30bits (HDR)",       "30bits (HDR10)" },
+         { NULL, NULL },
+      },
+      "16bits"
+   },
+   {
+      "prboom-hdr_emissive",
+      "HDR Emissive Boost",
+      NULL,
+      "How far above SDR white self-illuminated content (muzzle flashes, plasma, rockets, explosions, powerups and brightmapped texels) is rendered when the Color Format is 30bits. Higher values glow harder. Only affects HDR10 output; ignored in 16- and 24-bit modes.",
+      NULL,
+      NULL,
+      {
+         { "off", "Off" },
+         { "2x",  "2x" },
+         { "4x",  "4x" },
+         { "8x",  "8x" },
+         { NULL, NULL },
+      },
+      "2x"
+   },
+   {
       "prboom-mouse_on",
       "Mouse Active When Using Gamepad",
       NULL,
       "Allows you to use mouse inputs even when User 1's device type isn't set to 'RetroKeyboard/Mouse'.",
+      NULL,
+      NULL,
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
+      "prboom-wall_decals",
+      "Wall Bullet Decals",
+      NULL,
+      "Stamp scuff marks on walls where hitscan shots land. Off by default, matching ZDoom mods that do not request bullet decals; enable for the classic wall-chip marks.",
+      NULL,
+      NULL,
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
+      "prboom-dynlight_wall_falloff",
+      "Dynamic Light Wall Falloff",
+      NULL,
+      "Give GLDEFS point lights a vertical light pool on walls (brightest at the light's height, fading up and down) instead of a single level per wall column. Off by default; the per-band shading is noticeably heavier on tall, close, heavily-lit walls.",
       NULL,
       NULL,
       {
@@ -89,6 +170,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "Rumble Effects",
       NULL,
       "Enables haptic feedback when using a rumble-equipped gamepad.",
+      NULL,
+      NULL,
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
+      "prboom-mmap_wads",
+      "Memory-Map WAD Files (Restart Required)",
+      NULL,
+      "Load WAD data by memory-mapping the file instead of reading it fully into RAM. Lowers memory use and speeds up loading of large WADs, since only the lumps actually used are paged in. Falls back to a normal read for archives, if mapping fails, or on builds without memory-mapping support. Leave disabled to perform all WAD file I/O up front at load time.",
       NULL,
       NULL,
       {
@@ -140,6 +235,42 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "16"
    },
 #endif
+   {
+      "prboom-complevel",
+      "Compatibility Level (Restart Required)",
+      NULL,
+      "Forces a demo-compatibility level. 'Default' uses the engine's automatic choice. Set 'MBF21' to play MBF21 WADs that require complevel 21.",
+      NULL,
+      NULL,
+      {
+         { "-1", "Default (Auto)" },
+         { "4",  "Ultimate Doom" },
+         { "5",  "Final Doom" },
+         { "9",  "Boom" },
+         { "11", "MBF" },
+         { "17", "PrBoom latest" },
+         { "18", "MBF21" },
+         { NULL, NULL },
+      },
+      "-1"
+   },
+   {
+      "prboom-sound_samplerate",
+      "Sound Samplerate (Hint)",
+      "Sound Samplerate (Hint)",
+      "Audio output rate. prboom synthesizes MIDI and tracker music in real time, so it has no fixed native rate and can render directly at whichever rate you pick. Higher rates lower latency, push aliasing above the audible range, avoid the frontend resampler's low-pass smearing, and give the sound-effect and music-stream resamplers finer time resolution. 'Auto' queries the frontend's target rate and snaps to the nearest supported value.",
+      "Audio output rate. prboom has no fixed native rate (music is synthesized in real time), so it renders directly at the chosen rate. Higher rates lower latency, reduce aliasing, and avoid resampler smearing. 'Auto' matches the frontend's target rate.",
+      "audio",
+      {
+         { "auto",  "Auto" },
+         { "32000", "32 kHz" },
+         { "44100", "44 kHz" },
+         { "48000", "48 kHz" },
+         { "96000", "96 kHz" },
+         { NULL, NULL },
+      },
+      "auto"
+   },
    { NULL, NULL, NULL, NULL, NULL, NULL, {{0}}, NULL },
 };
 

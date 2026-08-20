@@ -34,8 +34,10 @@
  *-----------------------------------------------------------------------------*/
 
 #include "doomstat.h"
+#include "r_rendermt.h"
 #include "w_wad.h"
 #include "r_main.h"
+#include "i_system.h"
 #include "r_draw.h"
 #include "r_filter.h"
 #include "v_video.h"
@@ -43,6 +45,32 @@
 #include "g_game.h"
 #include "am_map.h"
 #include "lprintf.h"
+#include "r_drawtc.h"
+#include "vid_mode.h"
+
+/* Wall-run kernel vector paths (see R_DrawWallColumnRun): vectorize
+ * the per-lane frac mask/shift/step arithmetic of the dense band and
+ * pair the texel/table lookups, which stay scalar on both ISAs (no
+ * byte gather below AVX2 and none on NEON).  SSE2 is baseline on
+ * x86-64; NEON is baseline on AArch64 and opt-in on ARMv7
+ * (-mfpu=neon).  Everything else keeps the portable band loop.  The
+ * frac adds run in unsigned lanes on both paths, the same bits as the
+ * signed C arithmetic mod 2^32. */
+#if defined(__SSE2__) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2) || defined(_M_X64)
+#define WALL_RUN_SSE2 1
+#include <emmintrin.h>
+#elif defined(__ARM_NEON) || defined(__ARM_NEON__) || defined(_M_ARM64)
+#define WALL_RUN_NEON 1
+#include <arm_neon.h>
+#endif
+
+
+#if defined(__SSE2__)
+#include <emmintrin.h>
+#elif defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
+#include <string.h>
 
 //
 // All drawing to the view buffer is accomplished in this file.
@@ -53,10 +81,116 @@
 //  and the total size == width*height*depth/8.,
 //
 
+#ifdef PRBOOM_RENDER_PROFILE
+double prof_wallfill_usec = 0.0;  /* us spent writing wall/sprite columns to the framebuffer (R_FlushColumns) */
+double prof_storewall_usec = 0.0; /* us spent in R_StoreWallRange (wall seg setup + RenderSegLoop) */
+double prof_findplane_usec = 0.0; /* us spent in R_FindPlane (visplane hash + alloc) */
+double prof_sprproj_usec = 0.0;   /* us spent in R_ProjectSprite (sprite projection/selection, inside bsp+walls) */
+#endif
+
 uint8_t *viewimage;
 int  viewwidth;
 int  scaledviewwidth;
 int  viewheight;
+
+/* Shared composed colormap+palette table.
+ *
+ * Point-sampled drawing turns an 8-bit texel into a 16-bit pixel via two
+ * dependent lookups plus index arithmetic: V_Palette16[colormap[texel]*64
+ * + 63] (the colormap applies the per-distance light level, V_Palette16
+ * converts the lit index to RGB565 at full/point weight 63).  Because the
+ * colormap is constant across a span or column, that whole expression is
+ * a fixed function of the texel, so it can be pre-composed into a single
+ * 256-entry 8bpp->16bpp table and the inner loop reduced to one lookup.
+ *
+ * The table is shared by the floor/ceiling spans AND the wall/sprite
+ * point columns: both draw their colormaps from the same set of light-
+ * level colormaps (R_ColourMap / planezlight / fixedcolormap), so a span
+ * and a column at the same light level use the identical colormap pointer
+ * and reuse the same composed table.  Keying on the colormap pointer means
+ * the 256-entry build happens once per distinct light level per frame and
+ * amortises across every span and column at that level -- which is why a
+ * column, too short to amortise a private rebuild, still benefits here.
+ * Keying also on V_Palette16 rebuilds on a palette/gamma/video-mode
+ * change.  Restricted to point sampling with a single colormap: the
+ * filtered (Linear/Rounded UV) and dithered (LinearZ) paths blend several
+ * palette weights / two colormaps per pixel and cannot use one table. */
+static const lighttable_t *composed_cm  = NULL;
+static const uint16_t     *composed_pal = NULL;
+static uint16_t            composed_lut[256];
+
+/* Worker-private variants of the composed-table caches below.  Same keying
+ * and same values; the storage is the caller's so concurrent workers cannot
+ * clobber each other's table. */
+const uint16_t *R_ScratchComposedColormap(wallscratch_t *ws,
+                                          const lighttable_t *colormap)
+{
+   if (colormap != ws->cm || V_Palette16 != ws->pal)
+   {
+      int i;
+      for (i = 0; i < 256; i++)
+         ws->lut[i] = V_Palette16[ colormap[i]*64 + (64-1) ];
+      ws->cm  = colormap;
+      ws->pal = V_Palette16;
+   }
+   return ws->lut;
+}
+
+const uint16_t *R_ScratchComposedPalette(wallscratch_t *ws)
+{
+   if (V_Palette16 != ws->nolight_pal)
+   {
+      int i;
+      for (i = 0; i < 256; i++)
+         ws->nolight_lut[i] = V_Palette16[ i*64 + (64-1) ];
+      ws->nolight_pal = V_Palette16;
+   }
+   return ws->nolight_lut;
+}
+
+static INLINE const uint16_t *R_GetComposedColormap(const lighttable_t *colormap)
+{
+   if (colormap != composed_cm || V_Palette16 != composed_pal)
+   {
+      int i;
+      for (i = 0; i < 256; i++)
+         composed_lut[i] = V_Palette16[ colormap[i]*64 + (64-1) ];
+      composed_cm  = colormap;
+      composed_pal = V_Palette16;
+   }
+   return composed_lut;
+}
+
+/* No-colormap variant for the patch/HUD/UI point column
+ * (R_DrawColumn16_PointUV): that path has no colormap (full-bright 2D
+ * blitting), so the per-pixel expression is just V_Palette16[texel*64+63].
+ * That is still a fixed 8bpp->16bpp function of the texel, composable into
+ * one table keyed solely on V_Palette16 (rebuilt on a palette/gamma/video-
+ * mode change).  Speeds HUD/status-bar/menu blits and the title/inter-
+ * mission background-cache builds, which all run through this column. */
+static const uint16_t *composed_nolight_pal = NULL;
+static uint16_t        composed_nolight_lut[256];
+
+static INLINE const uint16_t *R_GetComposedPalette(void)
+{
+   if (V_Palette16 != composed_nolight_pal)
+   {
+      int i;
+      for (i = 0; i < 256; i++)
+         composed_nolight_lut[i] = V_Palette16[ i*64 + (64-1) ];
+      composed_nolight_pal = V_Palette16;
+   }
+   return composed_nolight_lut;
+}
+
+const uint16_t *R_SpanComposedColormap(const draw_span_vars_t *dsvars,
+                                       const lighttable_t *colormap)
+{
+   if (dsvars->ws)
+      return R_ScratchComposedColormap(dsvars->ws, colormap);
+   return R_GetComposedColormap(colormap);
+}
+
 
 // Color tables for different players,
 //  translate a limited part to another
@@ -74,6 +208,7 @@ typedef enum
    COL_NONE,
    COL_OPAQUE,
    COL_TRANS,
+   COL_ALTTRANS,
    COL_FLEXTRANS,
    COL_FUZZ,
    COL_FLEXADD
@@ -83,6 +218,125 @@ static int    temp_x = 0;
 static int    tempyl[4], tempyh[4];
 static uint16_t short_tempbuf[MAX_SCREENHEIGHT * 4];
 static int    startx = 0;
+
+/* Raven translucent sprites (Hexen MF_SHADOW/MF_ALTSHADOW, Heretic ghosts).
+ * The batching column drawers consult these instead of hardcoding the opaque
+ * type/flushers, so a translucent sprite gets its own batch type (breaking
+ * any run shared with neighbouring opaque columns) and blending flushers.
+ * R_SetSpriteTranslucency selects the mode around a sprite's draw; the
+ * default is the opaque set.  The blend works directly on the RGB565
+ * framebuffer: 50/50 for SHADOW, 25/75 for ALTSHADOW. */
+static void R_FlushWhole16(void);
+static void R_FlushHT16(void);
+static void R_FlushQuad16(void);
+static void R_FlushWholeTL16(void);
+static void R_FlushHTTL16(void);
+static void R_FlushQuadTL16(void);
+static void R_FlushWholeADD16(void);
+static void R_FlushHTADD16(void);
+static void R_FlushQuadADD16(void);
+static void R_FlushWholeLERP16(void);
+static void R_FlushHTLERP16(void);
+static void R_FlushQuadLERP16(void);
+
+/* Per-line/-surface blend weight, alpha*32 in 0..32, consumed by the LERP and
+ * ADD flushers.  Set via R_SetTransAlpha before the masked draw; the fixed
+ * TL/ALTTRANS paths ignore it. */
+static int  tl_alpha = 16;
+static int  tl_temptype = COL_OPAQUE;
+static void (*tl_flush_whole)(void) = R_FlushWhole16;
+static void (*tl_flush_ht)(void)    = R_FlushHT16;
+static void (*tl_flush_quad)(void)  = R_FlushQuad16;
+
+/* Non-inline linkage for the composed lookup tables, for the direct
+ * sprite column path in r_things.c. */
+const uint16_t *R_ComposedColormap(const lighttable_t *colormap)
+{
+  return R_GetComposedColormap(colormap);
+}
+
+const uint16_t *R_ComposedPalette(void)
+{
+  return R_GetComposedPalette();
+}
+
+void R_SetTransAlpha(int a32)
+{
+  if (VID_TRUECOLOR)
+  {
+    R_SetTransAlphaTC(a32);
+    return;
+  }
+  tl_alpha = a32 < 0 ? 0 : (a32 > 32 ? 32 : a32);
+}
+
+void R_SetSpriteTranslucency(int mode)
+{
+  if (VID_TRUECOLOR)
+  {
+    R_SetSpriteTranslucencyTC(mode);
+    return;
+  }
+  if (mode == 4)
+  {
+    /* per-alpha lerp: dst + (src-dst)*tl_alpha/32 (ZDoom alpha glass) */
+    tl_temptype    = COL_FLEXTRANS;
+    tl_flush_whole = R_FlushWholeLERP16;
+    tl_flush_ht    = R_FlushHTLERP16;
+    tl_flush_quad  = R_FlushQuadLERP16;
+  }
+  else if (mode == 3)
+  {
+    /* per-alpha additive: dst += src*tl_alpha/32, saturating (light beam) */
+    tl_temptype    = COL_FLEXADD;
+    tl_flush_whole = R_FlushWholeADD16;
+    tl_flush_ht    = R_FlushHTADD16;
+    tl_flush_quad  = R_FlushQuadADD16;
+  }
+  else if (mode)
+  {
+    tl_temptype    = (mode == 2) ? COL_ALTTRANS : COL_TRANS;
+    tl_flush_whole = R_FlushWholeTL16;
+    tl_flush_ht    = R_FlushHTTL16;
+    tl_flush_quad  = R_FlushQuadTL16;
+  }
+  else
+  {
+    tl_temptype    = COL_OPAQUE;
+    tl_flush_whole = R_FlushWhole16;
+    tl_flush_ht    = R_FlushHT16;
+    tl_flush_quad  = R_FlushQuad16;
+  }
+}
+
+/* 50/50 RGB565 blend: mask off each channel's low bit, halve, add. */
+#define TL_BLEND565(s, d) \
+  ((uint16_t)((((s) & 0xF7DEu) >> 1) + (((d) & 0xF7DEu) >> 1)))
+
+/* Per-channel RGB565 blends parameterised by a 0..32 weight (= alpha*32).
+ * Channels are kept separate so each value is <= 0x3F and value*a fits in the
+ * 16-bit lane the SSE2/NEON kernels use, making these scalar references and
+ * those vector kernels bit-identical.  LERP565A interpolates dst->src (glass);
+ * ADD565A adds a fraction of src to dst, clamped (additive light beam). */
+static INLINE uint16_t LERP565A(uint16_t s, uint16_t d, int a)
+{
+  int r = ((d >> 11) & 0x1F) + ((((int)((s >> 11) & 0x1F) - (int)((d >> 11) & 0x1F)) * a) >> 5);
+  int g = ((d >>  5) & 0x3F) + ((((int)((s >>  5) & 0x3F) - (int)((d >>  5) & 0x3F)) * a) >> 5);
+  int b =  ((d)      & 0x1F) + ((((int)((s)       & 0x1F) - (int)((d)       & 0x1F)) * a) >> 5);
+  return (uint16_t)((r << 11) | (g << 5) | b);
+}
+
+static INLINE uint16_t ADD565A(uint16_t s, uint16_t d, int a)
+{
+  int r = ((d >> 11) & 0x1F) + (((int)((s >> 11) & 0x1F) * a) >> 5);
+  int g = ((d >>  5) & 0x3F) + (((int)((s >>  5) & 0x3F) * a) >> 5);
+  int b =  ((d)      & 0x1F) + (((int)((s)       & 0x1F) * a) >> 5);
+  if (r > 0x1F) r = 0x1F;
+  if (g > 0x3F) g = 0x3F;
+  if (b > 0x1F) b = 0x1F;
+  return (uint16_t)((r << 11) | (g << 5) | b);
+}
+
 static int    temptype = COL_NONE;
 static int    commontop, commonbot;
 // SoM 7-28-04: Fix the fuzz problem.
@@ -163,6 +417,9 @@ static void (*R_FlushQuadColumn)(void) = R_QuadFlushError;
 
 static void R_FlushColumns(void)
 {
+#ifdef PRBOOM_RENDER_PROFILE
+   double _t0 = I_RenderProfileUsec();
+#endif
    if(temp_x != 4 || commontop >= commonbot)
       R_FlushWholeColumns();
    else
@@ -171,6 +428,9 @@ static void R_FlushColumns(void)
       R_FlushQuadColumn();
    }
    temp_x = 0;
+#ifdef PRBOOM_RENDER_PROFILE
+   prof_wallfill_usec += (I_RenderProfileUsec() - _t0);
+#endif
 }
 
 //
@@ -182,6 +442,11 @@ static void R_FlushColumns(void)
 //
 void R_ResetColumnBuffer(void)
 {
+   if (VID_TRUECOLOR)
+   {
+      R_ResetColumnBufferTC();
+      return;
+   }
    // haleyjd 10/06/05: this must not be done if temp_x == 0!
    if(temp_x)
       R_FlushColumns();
@@ -276,12 +541,636 @@ static void R_FlushQuad16(void)
    uint16_t *dest   = drawvars.short_topleft + commontop * SURFACE_SHORT_PITCH + startx;
    int        count = commonbot - commontop + 1;
 
+   /* Each row copies the 4 transposed columns, which are 4 contiguous
+    * uint16_t in the source (the transpose buffer is 4-wide) to 4 adjacent
+    * pixels in the destination -- i.e. exactly 8 contiguous bytes from a
+    * contiguous source.  The original wrote them as four separate 16-bit
+    * stores.  Collapse to a single 8-byte move: memcpy(,,8) lowers to one
+    * unaligned movq/str on every target the core builds for, makes no
+    * alignment assumption (dest = topleft + startx is only 2-byte aligned),
+    * and is endian-agnostic (a byte copy, so bit-identical on LE and BE).
+    * The whole quad-column path is the common wall-fill case, so this is the
+    * pixel-write hot loop. */
    while(--count >= 0)
    {
-      dest[0] = source[0];
-      dest[1] = source[1];
-      dest[2] = source[2];
-      dest[3] = source[3];
+      memcpy(dest, source, 4 * sizeof(uint16_t));
+      source += 4;
+      dest += SURFACE_SHORT_PITCH;
+   }
+}
+
+/* Translucent flushers: as the opaque trio, but each pixel store blends the
+ * column sample against the destination.  COL_ALTTRANS blends twice toward
+ * the destination (~25%% sprite), matching Hexen's fainter alt-shadow. */
+static void R_FlushWholeTL16(void)
+{
+   int alt = (temptype == COL_ALTTRANS);
+
+   while(--temp_x >= 0)
+   {
+      int yl           = tempyl[temp_x];
+      uint16_t *source = &short_tempbuf[temp_x + (yl << 2)];
+      uint16_t *dest   = drawvars.short_topleft + yl * SURFACE_SHORT_PITCH + startx + temp_x;
+      int   count      = tempyh[temp_x] - yl + 1;
+
+      while(--count >= 0)
+      {
+         uint16_t px = TL_BLEND565(*source, *dest);
+         if (alt)
+            px = TL_BLEND565(px, *dest);
+         *dest   = px;
+         source += 4;
+         dest   += SURFACE_SHORT_PITCH;
+      }
+   }
+}
+
+static void R_FlushHTTL16(void)
+{
+   uint16_t *source;
+   uint16_t *dest;
+   int count, colnum = 0;
+   int yl, yh;
+   int alt = (temptype == COL_ALTTRANS);
+
+   while(colnum < 4)
+   {
+      yl = tempyl[colnum];
+      yh = tempyh[colnum];
+
+      if(yl < commontop)
+      {
+         source = &short_tempbuf[colnum + (yl << 2)];
+         dest   = drawvars.short_topleft + yl * SURFACE_SHORT_PITCH + startx + colnum;
+         count  = commontop - yl;
+
+         while(--count >= 0)
+         {
+            uint16_t px = TL_BLEND565(*source, *dest);
+            if (alt)
+               px = TL_BLEND565(px, *dest);
+            *dest   = px;
+            source += 4;
+            dest   += SURFACE_SHORT_PITCH;
+         }
+      }
+
+      if(yh > commonbot)
+      {
+         source = &short_tempbuf[colnum + ((commonbot + 1) << 2)];
+         dest   = drawvars.short_topleft + (commonbot + 1) * SURFACE_SHORT_PITCH + startx + colnum;
+         count  = yh - commonbot;
+
+         while(--count >= 0)
+         {
+            uint16_t px = TL_BLEND565(*source, *dest);
+            if (alt)
+               px = TL_BLEND565(px, *dest);
+            *dest   = px;
+            source += 4;
+            dest   += SURFACE_SHORT_PITCH;
+         }
+      }
+      ++colnum;
+   }
+}
+
+static void R_FlushQuadTL16(void)
+{
+   uint16_t *source = &short_tempbuf[commontop << 2];
+   uint16_t *dest   = drawvars.short_topleft + commontop * SURFACE_SHORT_PITCH + startx;
+   int        count = commonbot - commontop + 1;
+   int        alt   = (temptype == COL_ALTTRANS);
+
+   /* Two rows per step: the transpose buffer is contiguous (8 lanes in one
+    * load), the framebuffer rows are a pitch apart (two 64-bit halves).
+    * The vector arithmetic is the TL_BLEND565 mask/shift/add per 16-bit
+    * lane, so the output is bit-identical to the scalar rows below, which
+    * also finish any odd row. */
+#if defined(WALL_RUN_SSE2)
+   {
+      const __m128i mask = _mm_set1_epi16((short)0xF7DEu);
+      while (count >= 2)
+      {
+         __m128i s  = _mm_loadu_si128((const __m128i *)source);
+         __m128i d0 = _mm_loadl_epi64((const __m128i *)dest);
+         __m128i d1 = _mm_loadl_epi64((const __m128i *)(dest + SURFACE_SHORT_PITCH));
+         __m128i d  = _mm_unpacklo_epi64(d0, d1);
+         __m128i dh = _mm_srli_epi16(_mm_and_si128(d, mask), 1);
+         __m128i px = _mm_add_epi16(_mm_srli_epi16(_mm_and_si128(s, mask), 1), dh);
+         if (alt)
+            px = _mm_add_epi16(_mm_srli_epi16(_mm_and_si128(px, mask), 1), dh);
+         _mm_storel_epi64((__m128i *)dest, px);
+         _mm_storel_epi64((__m128i *)(dest + SURFACE_SHORT_PITCH),
+                          _mm_unpackhi_epi64(px, px));
+         source += 8;
+         dest   += 2 * SURFACE_SHORT_PITCH;
+         count  -= 2;
+      }
+   }
+#elif defined(WALL_RUN_NEON)
+   {
+      const uint16x8_t mask = vdupq_n_u16(0xF7DEu);
+      while (count >= 2)
+      {
+         uint16x8_t s  = vld1q_u16(source);
+         uint16x8_t d  = vcombine_u16(vld1_u16(dest),
+                                      vld1_u16(dest + SURFACE_SHORT_PITCH));
+         uint16x8_t dh = vshrq_n_u16(vandq_u16(d, mask), 1);
+         uint16x8_t px = vaddq_u16(vshrq_n_u16(vandq_u16(s, mask), 1), dh);
+         if (alt)
+            px = vaddq_u16(vshrq_n_u16(vandq_u16(px, mask), 1), dh);
+         vst1_u16(dest, vget_low_u16(px));
+         vst1_u16(dest + SURFACE_SHORT_PITCH, vget_high_u16(px));
+         source += 8;
+         dest   += 2 * SURFACE_SHORT_PITCH;
+         count  -= 2;
+      }
+   }
+#endif
+
+   while(--count >= 0)
+   {
+      int i;
+      for (i = 0; i < 4; i++)
+      {
+         uint16_t px = TL_BLEND565(source[i], dest[i]);
+         if (alt)
+            px = TL_BLEND565(px, dest[i]);
+         dest[i] = px;
+      }
+      source += 4;
+      dest += SURFACE_SHORT_PITCH;
+   }
+}
+
+/* Channel split/pack helpers for the vector blend kernels: R/G/B in separate
+ * 16-bit lanes so channel*alpha (<= 0x3F*32) stays inside the lane and the
+ * result is bit-identical to the LERP565A / ADD565A scalar references. */
+#if defined(WALL_RUN_SSE2)
+#define SR(v) _mm_and_si128(_mm_srli_epi16(v,11),_mm_set1_epi16(0x1F))
+#define SG(v) _mm_and_si128(_mm_srli_epi16(v, 5),_mm_set1_epi16(0x3F))
+#define SB(v) _mm_and_si128(v,                   _mm_set1_epi16(0x1F))
+#define SPACK(r,g,b) _mm_or_si128(_mm_or_si128(_mm_slli_epi16(r,11),_mm_slli_epi16(g,5)),b)
+#elif defined(WALL_RUN_NEON)
+#define NR(v) vandq_u16(vshrq_n_u16(v,11),vdupq_n_u16(0x1F))
+#define NG(v) vandq_u16(vshrq_n_u16(v, 5),vdupq_n_u16(0x3F))
+#define NB(v) vandq_u16(v,                vdupq_n_u16(0x1F))
+#define NPACK(r,g,b) vorrq_u16(vorrq_u16(vshlq_n_u16(r,11),vshlq_n_u16(g,5)),b)
+#endif
+
+/* Additive flushers: dst += src*tl_alpha/32 per channel, saturating -- the map's
+ * "Add" renderstyle light beams.  Whole/HT scalar; the quad path vectorises the
+ * common run. */
+static void R_FlushWholeADD16(void)
+{
+   while(--temp_x >= 0)
+   {
+      int yl           = tempyl[temp_x];
+      uint16_t *source = &short_tempbuf[temp_x + (yl << 2)];
+      uint16_t *dest   = drawvars.short_topleft + yl * SURFACE_SHORT_PITCH + startx + temp_x;
+      int   count      = tempyh[temp_x] - yl + 1;
+
+      while(--count >= 0)
+      {
+         *dest   = ADD565A(*source, *dest, tl_alpha);
+         source += 4;
+         dest   += SURFACE_SHORT_PITCH;
+      }
+   }
+}
+
+static void R_FlushHTADD16(void)
+{
+   uint16_t *source;
+   uint16_t *dest;
+   int count, colnum = 0;
+   int yl, yh;
+
+   while(colnum < 4)
+   {
+      yl = tempyl[colnum];
+      yh = tempyh[colnum];
+
+      if(yl < commontop)
+      {
+         source = &short_tempbuf[colnum + (yl << 2)];
+         dest   = drawvars.short_topleft + yl * SURFACE_SHORT_PITCH + startx + colnum;
+         count  = commontop - yl;
+
+         while(--count >= 0)
+         {
+            *dest   = ADD565A(*source, *dest, tl_alpha);
+            source += 4;
+            dest   += SURFACE_SHORT_PITCH;
+         }
+      }
+
+      if(yh > commonbot)
+      {
+         source = &short_tempbuf[colnum + ((commonbot + 1) << 2)];
+         dest   = drawvars.short_topleft + (commonbot + 1) * SURFACE_SHORT_PITCH + startx + colnum;
+         count  = yh - commonbot;
+
+         while(--count >= 0)
+         {
+            *dest   = ADD565A(*source, *dest, tl_alpha);
+            source += 4;
+            dest   += SURFACE_SHORT_PITCH;
+         }
+      }
+      ++colnum;
+   }
+}
+
+static void R_FlushQuadADD16(void)
+{
+   uint16_t *source = &short_tempbuf[commontop << 2];
+   uint16_t *dest   = drawvars.short_topleft + commontop * SURFACE_SHORT_PITCH + startx;
+   int        count = commonbot - commontop + 1;
+
+#if defined(WALL_RUN_SSE2)
+   {
+      __m128i va = _mm_set1_epi16((short)tl_alpha);
+      __m128i rm = _mm_set1_epi16(0x1F), gm = _mm_set1_epi16(0x3F);
+      while (count >= 2)
+      {
+         __m128i s  = _mm_loadu_si128((const __m128i *)source);
+         __m128i d0 = _mm_loadl_epi64((const __m128i *)dest);
+         __m128i d1 = _mm_loadl_epi64((const __m128i *)(dest + SURFACE_SHORT_PITCH));
+         __m128i d  = _mm_unpacklo_epi64(d0, d1);
+         __m128i r  = _mm_min_epi16(_mm_add_epi16(SR(d), _mm_srli_epi16(_mm_mullo_epi16(SR(s), va), 5)), rm);
+         __m128i g  = _mm_min_epi16(_mm_add_epi16(SG(d), _mm_srli_epi16(_mm_mullo_epi16(SG(s), va), 5)), gm);
+         __m128i b  = _mm_min_epi16(_mm_add_epi16(SB(d), _mm_srli_epi16(_mm_mullo_epi16(SB(s), va), 5)), rm);
+         __m128i px = SPACK(r, g, b);
+         _mm_storel_epi64((__m128i *)dest, px);
+         _mm_storel_epi64((__m128i *)(dest + SURFACE_SHORT_PITCH), _mm_unpackhi_epi64(px, px));
+         source += 8;
+         dest   += 2 * SURFACE_SHORT_PITCH;
+         count  -= 2;
+      }
+   }
+#elif defined(WALL_RUN_NEON)
+   {
+      uint16x8_t va = vdupq_n_u16((uint16_t)tl_alpha);
+      uint16x8_t rm = vdupq_n_u16(0x1F), gm = vdupq_n_u16(0x3F);
+      while (count >= 2)
+      {
+         uint16x8_t s = vld1q_u16(source);
+         uint16x8_t d = vcombine_u16(vld1_u16(dest), vld1_u16(dest + SURFACE_SHORT_PITCH));
+         uint16x8_t r = vminq_u16(vaddq_u16(NR(d), vshrq_n_u16(vmulq_u16(NR(s), va), 5)), rm);
+         uint16x8_t g = vminq_u16(vaddq_u16(NG(d), vshrq_n_u16(vmulq_u16(NG(s), va), 5)), gm);
+         uint16x8_t b = vminq_u16(vaddq_u16(NB(d), vshrq_n_u16(vmulq_u16(NB(s), va), 5)), rm);
+         uint16x8_t px = NPACK(r, g, b);
+         vst1_u16(dest, vget_low_u16(px));
+         vst1_u16(dest + SURFACE_SHORT_PITCH, vget_high_u16(px));
+         source += 8;
+         dest   += 2 * SURFACE_SHORT_PITCH;
+         count  -= 2;
+      }
+   }
+#endif
+
+   while(--count >= 0)
+   {
+      int i;
+      for (i = 0; i < 4; i++)
+         dest[i] = ADD565A(source[i], dest[i], tl_alpha);
+      source += 4;
+      dest += SURFACE_SHORT_PITCH;
+   }
+}
+
+/* Per-alpha lerp flushers: dst + (src-dst)*tl_alpha/32 per channel -- ZDoom
+ * alpha glass at its true alpha rather than the bucketed 50/50.  Same shape as
+ * the additive trio; the diff is signed so the quad uses an arithmetic shift. */
+/* Submerged 3D-floor water (matching GZDoom's hardware look): rather than
+ * alpha-blending the water surface texture over the scene, the swimmable-water
+ * midtexture darkens the geometry behind it toward a dark blue-grey, fading
+ * with depth below the surface line.  Deep water lands near-black with a faint
+ * blue; near the surface it stays lighter and bluer.  This reproduces the
+ * reference profile (surface ~RGB 56,69,85 -> deep ~15,15,15) and composites
+ * correctly because it darkens whatever is behind, sidestepping the draw-order
+ * problem of overlaying a translucent plane that later geometry paints over. */
+static INLINE uint16_t R_WaterDarken1(uint16_t d, int keep, int bluelift)
+{
+   int dr = (d >> 11) & 0x1F, dg = (d >> 5) & 0x3F, db = d & 0x1F;
+   int nr = (dr * keep) >> 5;
+   int ng = (dg * keep) >> 5;
+   int nb = ((db * keep) >> 5) + bluelift;
+   if (nb > 31) nb = 31;
+   return (uint16_t)((nr << 11) | (ng << 5) | nb);
+}
+
+/* Darken one screen column [yl..yh] with depth below surf_y.
+ * SIMD CANDIDATE: this per-pixel RGB565 darken over a vertical run is a prime
+ * SSE2/NEON target -- unpack 8 px to channels, multiply by keep, shift, add
+ * blue, repack; keep/bluelift vary slowly so they can be recomputed per short
+ * block.  Mirrors the existing quad-column LERP/ADD flushers. */
+/* Per-depth curve LUT (keep = scene fraction /32, bl = additive blue).  The
+ * curve depends only on depth, so precompute it once; the inner loops then read
+ * the table instead of recomputing the curve per pixel. */
+#define MAXWATERDEPTH 4096
+static unsigned char water_keep_lut[MAXWATERDEPTH];
+static unsigned char water_bl_lut[MAXWATERDEPTH];
+static int water_lut_ready = 0;
+static void R_BuildWaterLUT(void)
+{
+   int depth;
+   for (depth = 0; depth < MAXWATERDEPTH; depth++)
+   {
+      /* Keep grades the scene fraction from ~26/32 just under the surface
+       * down to a dark floor over a long depth range, so the submerged
+       * geometry stays visible-but-dark (a tinted volume you can see the
+       * wall/floor through) instead of being crushed to near-black a few
+       * rows down.  Matches the reference, where the underwater wall reads
+       * through as dark grey-green rather than vanishing. */
+      int keep = 26 - (depth / 3);
+      int bl;
+      if (keep < 11) keep = 11;        /* deep: dark, geometry just visible */
+      /* Surface band: a brighter, bluer lit strip right at the waterline
+       * (light entering the surface), widened so it reads as a water
+       * surface rather than a one-pixel line, then falling off into the
+       * dark volume below.  The deep volume keeps only a faint constant
+       * blue so it stays dark blue-grey, not a blue wash. */
+      if (depth < 6)
+         bl = 16;                      /* lit surface line */
+      else if (depth < 56)
+         bl = 16 - ((depth - 6) / 4);  /* falloff over ~50px: 16 -> 4 */
+      else
+         bl = 2;                       /* deep: faint constant blue */
+      if (bl < 2) bl = 2;
+      water_keep_lut[depth] = (unsigned char)keep;
+      water_bl_lut[depth]   = (unsigned char)bl;
+   }
+   water_lut_ready = 1;
+}
+
+/* Row-major water darken: darken a horizontal run [x1..x2] at a constant row y.
+ * keep/bl are constant across the row, so this is both cache-friendly
+ * (contiguous writes) and SIMD-friendly.  SSE2 does 8 RGB565 px/iter; other
+ * targets use the scalar tail.  This is the hot path (the submerged volume). */
+void R_WaterDarkenSpan(int y, int x1, int x2, int surf_y)
+{
+   uint16_t *dest = drawvars.short_topleft + y * SURFACE_SHORT_PITCH + x1;
+   int n = x2 - x1 + 1;
+   int depth = y - surf_y, keep, bl;
+   if (n <= 0) return;
+   if (!water_lut_ready) R_BuildWaterLUT();
+   if (depth < 0) depth = 0;
+   if (depth >= MAXWATERDEPTH) depth = MAXWATERDEPTH - 1;
+   keep = water_keep_lut[depth];
+   bl   = water_bl_lut[depth];
+#if defined(__SSE2__)
+   {
+      const __m128i vkeep = _mm_set1_epi16((short)keep);
+      const __m128i vbl   = _mm_set1_epi16((short)bl);
+      const __m128i mr = _mm_set1_epi16((short)0xF800);
+      const __m128i mg = _mm_set1_epi16((short)0x07E0);
+      const __m128i mb = _mm_set1_epi16((short)0x001F);
+      const __m128i b31= _mm_set1_epi16(31);
+      while (n >= 8)
+      {
+         __m128i d = _mm_loadu_si128((const __m128i *)dest);
+         __m128i r = _mm_srli_epi16(_mm_and_si128(d, mr), 11);
+         __m128i g = _mm_srli_epi16(_mm_and_si128(d, mg), 5);
+         __m128i b = _mm_and_si128(d, mb);
+         r = _mm_srli_epi16(_mm_mullo_epi16(r, vkeep), 5);
+         g = _mm_srli_epi16(_mm_mullo_epi16(g, vkeep), 5);
+         b = _mm_srli_epi16(_mm_mullo_epi16(b, vkeep), 5);
+         b = _mm_add_epi16(b, vbl);
+         b = _mm_min_epi16(b, b31);
+         d = _mm_or_si128(_mm_or_si128(_mm_slli_epi16(r, 11),
+                                       _mm_slli_epi16(g, 5)), b);
+         _mm_storeu_si128((__m128i *)dest, d);
+         dest += 8; n -= 8;
+      }
+   }
+#endif
+   while (n-- > 0)
+   {
+      uint16_t d = *dest;
+      int nr = (((d >> 11) & 0x1F) * keep) >> 5;
+      int ng = (((d >> 5) & 0x3F) * keep) >> 5;
+      int nb = (((d & 0x1F) * keep) >> 5) + bl;
+      if (nb > 31) nb = 31;
+      *dest++ = (uint16_t)((nr << 11) | (ng << 5) | nb);
+   }
+}
+
+/* Lit water-surface band drawn AT the waterline.  Renders one column run
+ * [yl..yh] (already clamped to the band's vertical extent) of the water
+ * surface: surf_line is the row the true surface projects to and band_h the
+ * band height below it.  Strongest right at the line and fading into the
+ * volume, blended over the already-darkened water.  A cheap ripple (a per-row,
+ * per-column sinusoid via a small table) breaks the flat edge so it reads as a
+ * water surface caustic rather than a ruled line.  Nothing is drawn above
+ * surf_line, so the dry wall above the waterline is left untouched. */
+static const signed char water_ripple[8] =
+   { 0, 2, 3, 2, 0, -2, -3, -2 };
+void R_WaterSurfaceBand(int x, int yl, int yh, int surf_line, int band_h)
+{
+   uint16_t *dest = drawvars.short_topleft + yl * SURFACE_SHORT_PITCH + x;
+   int y;
+   for (y = yl; y <= yh; y++, dest += SURFACE_SHORT_PITCH)
+   {
+      int row = y - surf_line;          /* 0 at the surface line, grows down */
+      int fade, rip, b, g, r;
+      uint16_t d;
+      if (row < 0 || row >= band_h) continue;
+      fade = 12 - (row * 12) / band_h;  /* 12 at the line -> 0 at band bottom */
+      rip  = water_ripple[(x + (row << 1)) & 7];   /* small surface wobble */
+      fade += rip;
+      if (fade <= 0) continue;
+      d = *dest;
+      r =  (d >> 11) & 0x1F;
+      g =  (d >> 5)  & 0x3F;
+      b =   d        & 0x1F;
+      /* lift toward a desaturated lit blue-grey caustic, scaled by fade */
+      b += (fade * (29 - b)) >> 5;
+      g += (fade * (22 - g)) >> 6;
+      r += (fade * (10 - r)) >> 6;
+      if (b > 31) b = 31;
+      if (b < 0)  b = 0;
+      if (g > 63) g = 63;
+      if (g < 0)  g = 0;
+      if (r > 31) r = 31;
+      if (r < 0)  r = 0;
+      *dest = (uint16_t)((r << 11) | (g << 5) | b);
+   }
+}
+
+/* Per-column (vertical) darken, used by the floor post-pass where spans are
+ * naturally columnar.  LUT-driven; strided, so not the hot path. */
+/* Blue-grey caustic lift for the water-surface plane.  The translucent water
+ * flat blended 50/50 over the dark volume reads too dim, so brighten + blue-
+ * tint its column span: brightest at the surface line (bandtop), easing to a
+ * gentle floor in the depths, so the water level reads as lit water rather
+ * than a near-black void while the depths stay dark-blue. */
+void R_WaterSurfaceLift(int x, int y0, int y1, int bandtop)
+{
+   uint16_t *dest = drawvars.short_topleft + y0 * SURFACE_SHORT_PITCH + x;
+   int span = y1 - bandtop + 1;
+   int y;
+   if (span < 1) span = 1;
+   for (y = y0; y <= y1; y++, dest += SURFACE_SHORT_PITCH)
+   {
+      uint16_t d = *dest;
+      int r = (d >> 11) & 0x1F, g = (d >> 5) & 0x3F, b = d & 0x1F;
+      int row  = y - bandtop;            /* 0 at the waterline */
+      int fade = 14 - (row * 9) / span;  /* bright at line -> gentle floor */
+      if (fade < 4)
+         fade = 4;
+      b += (fade * (31 - b)) >> 5;
+      g += (fade * (26 - g)) >> 6;
+      r += (fade * (8  - r)) >> 6;
+      if (b > 31) b = 31;
+      if (b < 0)  b = 0;
+      if (g > 63) g = 63;
+      if (g < 0)  g = 0;
+      if (r > 31) r = 31;
+      if (r < 0)  r = 0;
+      *dest = (uint16_t)((r << 11) | (g << 5) | b);
+   }
+}
+
+void R_WaterDarkenColumn(int x, int yl, int yh, int surf_y)
+{
+   uint16_t *dest = drawvars.short_topleft + yl * SURFACE_SHORT_PITCH + x;
+   int y, depth;
+   if (!water_lut_ready) R_BuildWaterLUT();
+   for (y = yl; y <= yh; y++, dest += SURFACE_SHORT_PITCH)
+   {
+      depth = y - surf_y; if (depth < 0) depth = 0;
+      if (depth >= MAXWATERDEPTH) depth = MAXWATERDEPTH - 1;
+      {
+         uint16_t d = *dest;
+         int keep = water_keep_lut[depth];
+         int nr = (((d >> 11) & 0x1F) * keep) >> 5;
+         int ng = (((d >> 5) & 0x3F) * keep) >> 5;
+         int nb = (((d & 0x1F) * keep) >> 5) + water_bl_lut[depth];
+         if (nb > 31) nb = 31;
+         *dest = (uint16_t)((nr << 11) | (ng << 5) | nb);
+      }
+   }
+}
+
+static void R_FlushWholeLERP16(void)
+{
+   while(--temp_x >= 0)
+   {
+      int yl           = tempyl[temp_x];
+      uint16_t *source = &short_tempbuf[temp_x + (yl << 2)];
+      uint16_t *dest   = drawvars.short_topleft + yl * SURFACE_SHORT_PITCH + startx + temp_x;
+      int   count      = tempyh[temp_x] - yl + 1;
+
+      while(--count >= 0)
+      {
+         *dest   = LERP565A(*source, *dest, tl_alpha);
+         source += 4;
+         dest   += SURFACE_SHORT_PITCH;
+      }
+   }
+}
+
+static void R_FlushHTLERP16(void)
+{
+   uint16_t *source;
+   uint16_t *dest;
+   int count, colnum = 0;
+   int yl, yh;
+
+   while(colnum < 4)
+   {
+      yl = tempyl[colnum];
+      yh = tempyh[colnum];
+
+      if(yl < commontop)
+      {
+         source = &short_tempbuf[colnum + (yl << 2)];
+         dest   = drawvars.short_topleft + yl * SURFACE_SHORT_PITCH + startx + colnum;
+         count  = commontop - yl;
+
+         while(--count >= 0)
+         {
+            *dest   = LERP565A(*source, *dest, tl_alpha);
+            source += 4;
+            dest   += SURFACE_SHORT_PITCH;
+         }
+      }
+
+      if(yh > commonbot)
+      {
+         source = &short_tempbuf[colnum + ((commonbot + 1) << 2)];
+         dest   = drawvars.short_topleft + (commonbot + 1) * SURFACE_SHORT_PITCH + startx + colnum;
+         count  = yh - commonbot;
+
+         while(--count >= 0)
+         {
+            *dest   = LERP565A(*source, *dest, tl_alpha);
+            source += 4;
+            dest   += SURFACE_SHORT_PITCH;
+         }
+      }
+      ++colnum;
+   }
+}
+
+static void R_FlushQuadLERP16(void)
+{
+   uint16_t *source = &short_tempbuf[commontop << 2];
+   uint16_t *dest   = drawvars.short_topleft + commontop * SURFACE_SHORT_PITCH + startx;
+   int        count = commonbot - commontop + 1;
+
+#if defined(WALL_RUN_SSE2)
+   {
+      __m128i va = _mm_set1_epi16((short)tl_alpha);
+      while (count >= 2)
+      {
+         __m128i s  = _mm_loadu_si128((const __m128i *)source);
+         __m128i d0 = _mm_loadl_epi64((const __m128i *)dest);
+         __m128i d1 = _mm_loadl_epi64((const __m128i *)(dest + SURFACE_SHORT_PITCH));
+         __m128i d  = _mm_unpacklo_epi64(d0, d1);
+         __m128i r  = _mm_add_epi16(SR(d), _mm_srai_epi16(_mm_mullo_epi16(_mm_sub_epi16(SR(s), SR(d)), va), 5));
+         __m128i g  = _mm_add_epi16(SG(d), _mm_srai_epi16(_mm_mullo_epi16(_mm_sub_epi16(SG(s), SG(d)), va), 5));
+         __m128i b  = _mm_add_epi16(SB(d), _mm_srai_epi16(_mm_mullo_epi16(_mm_sub_epi16(SB(s), SB(d)), va), 5));
+         __m128i px = SPACK(r, g, b);
+         _mm_storel_epi64((__m128i *)dest, px);
+         _mm_storel_epi64((__m128i *)(dest + SURFACE_SHORT_PITCH), _mm_unpackhi_epi64(px, px));
+         source += 8;
+         dest   += 2 * SURFACE_SHORT_PITCH;
+         count  -= 2;
+      }
+   }
+#elif defined(WALL_RUN_NEON)
+   {
+      int16x8_t va = vdupq_n_s16((int16_t)tl_alpha);
+      while (count >= 2)
+      {
+         uint16x8_t s = vld1q_u16(source);
+         uint16x8_t d = vcombine_u16(vld1_u16(dest), vld1_u16(dest + SURFACE_SHORT_PITCH));
+         int16x8_t  dr = vreinterpretq_s16_u16(NR(d)), dg = vreinterpretq_s16_u16(NG(d)), db = vreinterpretq_s16_u16(NB(d));
+         int16x8_t  pr = vshrq_n_s16(vmulq_s16(vsubq_s16(vreinterpretq_s16_u16(NR(s)), dr), va), 5);
+         int16x8_t  pg = vshrq_n_s16(vmulq_s16(vsubq_s16(vreinterpretq_s16_u16(NG(s)), dg), va), 5);
+         int16x8_t  pb = vshrq_n_s16(vmulq_s16(vsubq_s16(vreinterpretq_s16_u16(NB(s)), db), va), 5);
+         uint16x8_t r = vreinterpretq_u16_s16(vaddq_s16(dr, pr));
+         uint16x8_t g = vreinterpretq_u16_s16(vaddq_s16(dg, pg));
+         uint16x8_t b = vreinterpretq_u16_s16(vaddq_s16(db, pb));
+         uint16x8_t px = NPACK(r, g, b);
+         vst1_u16(dest, vget_low_u16(px));
+         vst1_u16(dest + SURFACE_SHORT_PITCH, vget_high_u16(px));
+         source += 8;
+         dest   += 2 * SURFACE_SHORT_PITCH;
+         count  -= 2;
+      }
+   }
+#endif
+
+   while(--count >= 0)
+   {
+      int i;
+      for (i = 0; i < 4; i++)
+         dest[i] = LERP565A(source[i], dest[i], tl_alpha);
       source += 4;
       dest += SURFACE_SHORT_PITCH;
    }
@@ -478,7 +1367,7 @@ static void R_DrawColumn16_PointUV(draw_column_vars_t *dcvars)
    }
 
    if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
       R_FlushColumns();
 
    if(!temp_x)
@@ -486,15 +1375,15 @@ static void R_DrawColumn16_PointUV(draw_column_vars_t *dcvars)
       startx = dcvars->x;
       tempyl[0] = commontop = dcvars->yl;
       tempyh[0] = commonbot = dcvars->yh;
-      temptype = (COL_OPAQUE);
+      temptype = tl_temptype;
 
 
 
 
 
-      R_FlushWholeColumns = R_FlushWhole16;
-      R_FlushHTColumns = R_FlushHT16;
-      R_FlushQuadColumn = R_FlushQuad16;
+      R_FlushWholeColumns = tl_flush_whole;
+      R_FlushHTColumns = tl_flush_ht;
+      R_FlushQuadColumn = tl_flush_quad;
 
       dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -517,6 +1406,9 @@ static void R_DrawColumn16_PointUV(draw_column_vars_t *dcvars)
 
    {
       const uint8_t *source = dcvars->source;
+      /* No colormap on this path: composed palette table collapses
+       * V_Palette16[texel*64+63] to lut[texel] (see R_GetComposedPalette). */
+      const uint16_t *lut = R_GetComposedPalette();
       count++;
 
       if (dcvars->texheight == 128)
@@ -524,7 +1416,7 @@ static void R_DrawColumn16_PointUV(draw_column_vars_t *dcvars)
 
          while(count--)
          {
-            *dest = (V_Palette16[ ((source[(frac & ((127<<16)|0xffff))>>16]))*64 + ((64 -1)) ]);
+            *dest = lut[ source[(frac & ((127<<16)|0xffff))>>16] ];
             ;
             dest += 4;
             frac += fracstep;
@@ -535,7 +1427,7 @@ static void R_DrawColumn16_PointUV(draw_column_vars_t *dcvars)
 
          while (count--)
          {
-            *dest = (V_Palette16[ ((source[(frac)>>16]))*64 + ((64 -1)) ]);
+            *dest = lut[ source[(frac)>>16] ];
             ;
             dest += 4;
             frac += fracstep;
@@ -549,17 +1441,17 @@ static void R_DrawColumn16_PointUV(draw_column_vars_t *dcvars)
             fixed_t fixedt_heightmask = (heightmask<<16)|0xffff;
             while ((count-=2)>=0)
             {
-               *dest = (V_Palette16[ ((source[(frac & fixedt_heightmask)>>16]))*64 + ((64 -1)) ]);
+               *dest = lut[ source[(frac & fixedt_heightmask)>>16] ];
                ;
                dest += 4;
                frac += fracstep;
-               *dest = (V_Palette16[ ((source[(frac & fixedt_heightmask)>>16]))*64 + ((64 -1)) ]);
+               *dest = lut[ source[(frac & fixedt_heightmask)>>16] ];
                ;
                dest += 4;
                frac += fracstep;
             }
             if (count & 1)
-               *dest = (V_Palette16[ ((source[(frac & fixedt_heightmask)>>16]))*64 + ((64 -1)) ]);
+               *dest = lut[ source[(frac & fixedt_heightmask)>>16] ];
             ;
          }
          else
@@ -579,7 +1471,7 @@ static void R_DrawColumn16_PointUV(draw_column_vars_t *dcvars)
 
 
 
-               *dest = (V_Palette16[ ((source[(frac)>>16]))*64 + ((64 -1)) ]);
+               *dest = lut[ source[(frac)>>16] ];
                ;
                dest += 4;
                if ((frac += fracstep) >= (int)heightmask) frac -= heightmask;;
@@ -643,7 +1535,7 @@ static void R_DrawColumn16_PointUV_PointZ(draw_column_vars_t *dcvars)
    }
 
    if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
       R_FlushColumns();
 
    if(!temp_x)
@@ -651,15 +1543,15 @@ static void R_DrawColumn16_PointUV_PointZ(draw_column_vars_t *dcvars)
       startx = dcvars->x;
       tempyl[0] = commontop = dcvars->yl;
       tempyh[0] = commonbot = dcvars->yh;
-      temptype = (COL_OPAQUE);
+      temptype = tl_temptype;
 
 
 
 
 
-      R_FlushWholeColumns = R_FlushWhole16;
-      R_FlushHTColumns = R_FlushHT16;
-      R_FlushQuadColumn = R_FlushQuad16;
+      R_FlushWholeColumns = tl_flush_whole;
+      R_FlushHTColumns = tl_flush_ht;
+      R_FlushQuadColumn = tl_flush_quad;
 
       dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -684,15 +1576,131 @@ static void R_DrawColumn16_PointUV_PointZ(draw_column_vars_t *dcvars)
 
    {
       const uint8_t *source = dcvars->source;
-      const lighttable_t *colormap = dcvars->colormap;
+      /* Shared composed colormap+palette table: collapses
+       * V_Palette16[colormap[texel]*64+63] to lut[texel].  Reuses the
+       * table the spans (and other lit columns) already built for this
+       * colormap pointer, so there is no per-column rebuild cost. */
+      const uint16_t *lut = R_GetComposedColormap(dcvars->colormap);
       count++;
+
+      /* Brightmap path: where the per-texel mask is set the texel ignores
+       * the distance light and is drawn through the undimmed base map
+       * (fullcolormap, band 0).  fullcolormap's composed table is snapshot
+       * into a column-local array first, because the shared composed_lut
+       * cache holds a single entry -- fetching the distance `lut` would
+       * otherwise evict it.  Kept as one general loop (handles every
+       * texheight); the SIMD select lands in a later step. */
+      if (dcvars->brightmask)
+      {
+         const uint8_t *mask = dcvars->brightmask;
+         uint16_t lut_bright[256];
+         const uint16_t *bsrc = R_GetComposedColormap(fullcolormap
+                                                      ? fullcolormap
+                                                      : dcvars->colormap);
+         unsigned heightmask = dcvars->texheight ? dcvars->texheight - 1 : 0;
+         int npot = (dcvars->texheight &&
+                     (dcvars->texheight & heightmask)) ? 1 : 0;
+         memcpy(lut_bright, bsrc, sizeof(lut_bright));
+         /* re-fetch the distance table: the snapshot above may have
+          * replaced it in the shared cache */
+         lut = R_GetComposedColormap(dcvars->colormap);
+
+         if (npot)
+         {
+            unsigned h = dcvars->texheight;
+            unsigned hs = h << 16;
+            if (frac < 0)
+               while ((frac += hs) < 0);
+            else
+               while (frac >= (int)hs)
+                  frac -= hs;
+            while (count--)
+            {
+               unsigned t = (frac >> 16);
+               *dest = (mask[t] ? lut_bright : lut)[ source[t] ];
+               dest += 4;
+               if ((frac += fracstep) >= (int)hs) frac -= hs;
+            }
+         }
+         else
+         {
+            fixed_t fmask = dcvars->texheight
+                            ? ((heightmask << 16) | 0xffff)
+                            : 0xffffffffu;
+#if defined(__SSE2__)
+            /* Vectorise the per-pixel frac->texel index for four pixels at
+             * once (packed add, mask, logical shift), matching the scalar
+             * (frac & fmask) >> 16 exactly.  The gather and the stride-4
+             * transpose-buffer stores stay scalar -- there is no SSE2
+             * gather and dest is column-interleaved (dest[0], dest[4], ...)
+             * -- with a per-lane select on the mask bit.  Tail is scalar. */
+            if (count >= 4)
+            {
+               unsigned blocks = (unsigned)count >> 2;
+               __m128i vf  = _mm_set_epi32(frac + 3*fracstep, frac + 2*fracstep,
+                                           frac + fracstep,   frac);
+               const __m128i vfs = _mm_set1_epi32(fracstep * 4);
+               const __m128i vm  = _mm_set1_epi32((int)fmask);
+               unsigned consumed = blocks << 2;
+               while (blocks--)
+               {
+                  uint32_t t[4];
+                  __m128i vt = _mm_srli_epi32(_mm_and_si128(vf, vm), 16);
+                  _mm_storeu_si128((__m128i *)t, vt);
+                  dest[0]  = (mask[t[0]] ? lut_bright : lut)[ source[t[0]] ];
+                  dest[4]  = (mask[t[1]] ? lut_bright : lut)[ source[t[1]] ];
+                  dest[8]  = (mask[t[2]] ? lut_bright : lut)[ source[t[2]] ];
+                  dest[12] = (mask[t[3]] ? lut_bright : lut)[ source[t[3]] ];
+                  dest += 16;
+                  vf = _mm_add_epi32(vf, vfs);
+               }
+               frac += (fixed_t)consumed * fracstep;
+               count -= consumed;
+            }
+#elif defined(__ARM_NEON)
+            if (count >= 4)
+            {
+               unsigned blocks = (unsigned)count >> 2;
+               const int32_t fb4[4] = { frac, frac + fracstep,
+                                        frac + 2*fracstep, frac + 3*fracstep };
+               int32x4_t vf = vld1q_s32(fb4);
+               const int32x4_t vfs = vdupq_n_s32(fracstep * 4);
+               const int32x4_t vm  = vdupq_n_s32((int)fmask);
+               unsigned consumed = blocks << 2;
+               while (blocks--)
+               {
+                  uint32_t t[4];
+                  uint32x4_t vt = vshrq_n_u32(
+                     vreinterpretq_u32_s32(vandq_s32(vf, vm)), 16);
+                  vst1q_u32(t, vt);
+                  dest[0]  = (mask[t[0]] ? lut_bright : lut)[ source[t[0]] ];
+                  dest[4]  = (mask[t[1]] ? lut_bright : lut)[ source[t[1]] ];
+                  dest[8]  = (mask[t[2]] ? lut_bright : lut)[ source[t[2]] ];
+                  dest[12] = (mask[t[3]] ? lut_bright : lut)[ source[t[3]] ];
+                  dest += 16;
+                  vf = vaddq_s32(vf, vfs);
+               }
+               frac += (fixed_t)consumed * fracstep;
+               count -= consumed;
+            }
+#endif
+            while (count--)
+            {
+               unsigned t = (frac & fmask) >> 16;
+               *dest = (mask[t] ? lut_bright : lut)[ source[t] ];
+               dest += 4;
+               frac += fracstep;
+            }
+         }
+         return;
+      }
 
       if (dcvars->texheight == 128)
       {
 
          while(count--)
          {
-            *dest = (V_Palette16[ (colormap[(source[(frac & ((127<<16)|0xffff))>>16])])*64 + ((64 -1)) ]);
+            *dest = lut[ source[(frac & ((127<<16)|0xffff))>>16] ];
             ;
             dest += 4;
             frac += fracstep;
@@ -703,7 +1711,7 @@ static void R_DrawColumn16_PointUV_PointZ(draw_column_vars_t *dcvars)
 
          while (count--)
          {
-            *dest = (V_Palette16[ (colormap[(source[(frac)>>16])])*64 + ((64 -1)) ]);
+            *dest = lut[ source[(frac)>>16] ];
             ;
             dest += 4;
             frac += fracstep;
@@ -717,17 +1725,17 @@ static void R_DrawColumn16_PointUV_PointZ(draw_column_vars_t *dcvars)
             fixed_t fixedt_heightmask = (heightmask<<16)|0xffff;
             while ((count-=2)>=0)
             {
-               *dest = (V_Palette16[ (colormap[(source[(frac & fixedt_heightmask)>>16])])*64 + ((64 -1)) ]);
+               *dest = lut[ source[(frac & fixedt_heightmask)>>16] ];
                ;
                dest += 4;
                frac += fracstep;
-               *dest = (V_Palette16[ (colormap[(source[(frac & fixedt_heightmask)>>16])])*64 + ((64 -1)) ]);
+               *dest = lut[ source[(frac & fixedt_heightmask)>>16] ];
                ;
                dest += 4;
                frac += fracstep;
             }
             if (count & 1)
-               *dest = (V_Palette16[ (colormap[(source[(frac & fixedt_heightmask)>>16])])*64 + ((64 -1)) ]);
+               *dest = lut[ source[(frac & fixedt_heightmask)>>16] ];
             ;
          }
          else
@@ -747,7 +1755,7 @@ static void R_DrawColumn16_PointUV_PointZ(draw_column_vars_t *dcvars)
 
 
 
-               *dest = (V_Palette16[ (colormap[(source[(frac)>>16])])*64 + ((64 -1)) ]);
+               *dest = lut[ source[(frac)>>16] ];
                ;
                dest += 4;
                if ((frac += fracstep) >= (int)heightmask) frac -= heightmask;;
@@ -770,6 +1778,17 @@ static void R_DrawColumn16_PointUV_LinearZ(draw_column_vars_t *dcvars)
    const fixed_t fracstep = dcvars->iscale;
    const fixed_t slope_texu = dcvars->texu;
    int count = dcvars->yh - dcvars->yl;
+
+   /* Brightmapped columns take the point/point drawer, the only one
+    * carrying the fullbright select.  The filtered/dithered variants blend
+    * several colormap lookups per pixel with no single table to redirect,
+    * so a masked surface trades that smoothing for correct fullbright --
+    * the same trade R_DrawColumn16_LinearUV already makes when minified. */
+   if (dcvars->brightmask)
+   {
+      R_DrawColumn16_PointUV_PointZ(dcvars);
+      return;
+   }
 
    if (count < 0)
       return;
@@ -812,7 +1831,7 @@ static void R_DrawColumn16_PointUV_LinearZ(draw_column_vars_t *dcvars)
    }
 
       if(temp_x == 4 ||
-            (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+            (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
          R_FlushColumns();
 
       if(!temp_x)
@@ -820,15 +1839,15 @@ static void R_DrawColumn16_PointUV_LinearZ(draw_column_vars_t *dcvars)
          startx = dcvars->x;
          tempyl[0] = commontop = dcvars->yl;
          tempyh[0] = commonbot = dcvars->yh;
-         temptype = (COL_OPAQUE);
+         temptype = tl_temptype;
 
 
 
 
 
-         R_FlushWholeColumns = R_FlushWhole16;
-         R_FlushHTColumns = R_FlushHT16;
-         R_FlushQuadColumn = R_FlushQuad16;
+         R_FlushWholeColumns = tl_flush_whole;
+         R_FlushHTColumns = tl_flush_ht;
+         R_FlushQuadColumn = tl_flush_quad;
 
          dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -952,6 +1971,12 @@ static void R_DrawColumn16_LinearUV(draw_column_vars_t *dcvars)
 
    const fixed_t slope_texu = (dcvars->source == dcvars->nextsource) ? 0 : dcvars->texu & 0xffff;
 
+   if (dcvars->brightmask)
+   {
+      R_DrawColumn16_PointUV_PointZ(dcvars);
+      return;
+   }
+
    if (dcvars->iscale > drawvars.mag_threshold)
    {
       R_GetDrawColumnFunc(RDC_PIPELINE_STANDARD,
@@ -1004,7 +2029,7 @@ static void R_DrawColumn16_LinearUV(draw_column_vars_t *dcvars)
 
 
    if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
       R_FlushColumns();
 
    if(!temp_x)
@@ -1012,15 +2037,15 @@ static void R_DrawColumn16_LinearUV(draw_column_vars_t *dcvars)
       startx = dcvars->x;
       tempyl[0] = commontop = dcvars->yl;
       tempyh[0] = commonbot = dcvars->yh;
-      temptype = (COL_OPAQUE);
+      temptype = tl_temptype;
 
 
 
 
 
-      R_FlushWholeColumns = R_FlushWhole16;
-      R_FlushHTColumns = R_FlushHT16;
-      R_FlushQuadColumn = R_FlushQuad16;
+      R_FlushWholeColumns = tl_flush_whole;
+      R_FlushHTColumns = tl_flush_ht;
+      R_FlushQuadColumn = tl_flush_quad;
 
       dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -1162,6 +2187,12 @@ static void R_DrawColumn16_LinearUV_PointZ(draw_column_vars_t *dcvars)
 
    const fixed_t slope_texu = (dcvars->source == dcvars->nextsource) ? 0 : dcvars->texu & 0xffff;
 
+   if (dcvars->brightmask)
+   {
+      R_DrawColumn16_PointUV_PointZ(dcvars);
+      return;
+   }
+
    if (dcvars->iscale > drawvars.mag_threshold)
    {
       R_GetDrawColumnFunc(RDC_PIPELINE_STANDARD,
@@ -1213,7 +2244,7 @@ static void R_DrawColumn16_LinearUV_PointZ(draw_column_vars_t *dcvars)
    }
 
    if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
       R_FlushColumns();
 
    if(!temp_x)
@@ -1221,15 +2252,15 @@ static void R_DrawColumn16_LinearUV_PointZ(draw_column_vars_t *dcvars)
       startx = dcvars->x;
       tempyl[0] = commontop = dcvars->yl;
       tempyh[0] = commonbot = dcvars->yh;
-      temptype = (COL_OPAQUE);
+      temptype = tl_temptype;
 
 
 
 
 
-      R_FlushWholeColumns = R_FlushWhole16;
-      R_FlushHTColumns = R_FlushHT16;
-      R_FlushQuadColumn = R_FlushQuad16;
+      R_FlushWholeColumns = tl_flush_whole;
+      R_FlushHTColumns = tl_flush_ht;
+      R_FlushQuadColumn = tl_flush_quad;
 
       dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -1351,6 +2382,12 @@ static void R_DrawColumn16_LinearUV_LinearZ(draw_column_vars_t *dcvars)
 
    const fixed_t slope_texu = (dcvars->source == dcvars->nextsource) ? 0 : dcvars->texu & 0xffff;
 
+   if (dcvars->brightmask)
+   {
+      R_DrawColumn16_PointUV_PointZ(dcvars);
+      return;
+   }
+
    if (dcvars->iscale > drawvars.mag_threshold)
    {
       R_GetDrawColumnFunc(RDC_PIPELINE_STANDARD,
@@ -1402,7 +2439,7 @@ static void R_DrawColumn16_LinearUV_LinearZ(draw_column_vars_t *dcvars)
    }
 
    if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
       R_FlushColumns();
 
    if(!temp_x)
@@ -1410,15 +2447,15 @@ static void R_DrawColumn16_LinearUV_LinearZ(draw_column_vars_t *dcvars)
       startx = dcvars->x;
       tempyl[0] = commontop = dcvars->yl;
       tempyh[0] = commonbot = dcvars->yh;
-      temptype = (COL_OPAQUE);
+      temptype = tl_temptype;
 
 
 
 
 
-      R_FlushWholeColumns = R_FlushWhole16;
-      R_FlushHTColumns = R_FlushHT16;
-      R_FlushQuadColumn = R_FlushQuad16;
+      R_FlushWholeColumns = tl_flush_whole;
+      R_FlushHTColumns = tl_flush_ht;
+      R_FlushQuadColumn = tl_flush_quad;
 
       dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -1553,6 +2590,12 @@ static void R_DrawColumn16_RoundedUV(draw_column_vars_t *dcvars)
   const fixed_t fracstep = dcvars->iscale;
   const fixed_t slope_texu = dcvars->texu;
 
+  if (dcvars->brightmask)
+  {
+     R_DrawColumn16_PointUV_PointZ(dcvars);
+     return;
+  }
+
   if (dcvars->iscale > drawvars.mag_threshold)
   {
     R_GetDrawColumnFunc(RDC_PIPELINE_STANDARD,
@@ -1607,7 +2650,7 @@ static void R_DrawColumn16_RoundedUV(draw_column_vars_t *dcvars)
    {
 
       if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
          R_FlushColumns();
 
       if(!temp_x)
@@ -1615,15 +2658,15 @@ static void R_DrawColumn16_RoundedUV(draw_column_vars_t *dcvars)
          startx = dcvars->x;
          tempyl[0] = commontop = dcvars->yl;
          tempyh[0] = commonbot = dcvars->yh;
-         temptype = (COL_OPAQUE);
+         temptype = tl_temptype;
 
 
 
 
 
-         R_FlushWholeColumns = R_FlushWhole16;
-         R_FlushHTColumns = R_FlushHT16;
-         R_FlushQuadColumn = R_FlushQuad16;
+         R_FlushWholeColumns = tl_flush_whole;
+         R_FlushHTColumns = tl_flush_ht;
+         R_FlushQuadColumn = tl_flush_quad;
 
          dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -1760,6 +2803,12 @@ static void R_DrawColumn16_RoundedUV_PointZ(draw_column_vars_t *dcvars)
    const fixed_t fracstep = dcvars->iscale;
    const fixed_t slope_texu = dcvars->texu;
 
+   if (dcvars->brightmask)
+   {
+      R_DrawColumn16_PointUV_PointZ(dcvars);
+      return;
+   }
+
    if (dcvars->iscale > drawvars.mag_threshold)
    {
       R_GetDrawColumnFunc(RDC_PIPELINE_STANDARD,
@@ -1817,7 +2866,7 @@ static void R_DrawColumn16_RoundedUV_PointZ(draw_column_vars_t *dcvars)
    {
 
       if(temp_x == 4 ||
-            (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+            (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
          R_FlushColumns();
 
       if(!temp_x)
@@ -1825,15 +2874,15 @@ static void R_DrawColumn16_RoundedUV_PointZ(draw_column_vars_t *dcvars)
          startx = dcvars->x;
          tempyl[0] = commontop = dcvars->yl;
          tempyh[0] = commonbot = dcvars->yh;
-         temptype = (COL_OPAQUE);
+         temptype = tl_temptype;
 
 
 
 
 
-         R_FlushWholeColumns = R_FlushWhole16;
-         R_FlushHTColumns = R_FlushHT16;
-         R_FlushQuadColumn = R_FlushQuad16;
+         R_FlushWholeColumns = tl_flush_whole;
+         R_FlushHTColumns = tl_flush_ht;
+         R_FlushQuadColumn = tl_flush_quad;
 
          dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -1971,6 +3020,12 @@ static void R_DrawColumn16_RoundedUV_LinearZ(draw_column_vars_t *dcvars)
    const fixed_t fracstep = dcvars->iscale;
    const fixed_t slope_texu = dcvars->texu;
 
+   if (dcvars->brightmask)
+   {
+      R_DrawColumn16_PointUV_PointZ(dcvars);
+      return;
+   }
+
    if (dcvars->iscale > drawvars.mag_threshold)
    {
       R_GetDrawColumnFunc(RDC_PIPELINE_STANDARD,
@@ -2029,7 +3084,7 @@ static void R_DrawColumn16_RoundedUV_LinearZ(draw_column_vars_t *dcvars)
    {
 
       if(temp_x == 4 ||
-            (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+            (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
          R_FlushColumns();
 
       if(!temp_x)
@@ -2037,15 +3092,15 @@ static void R_DrawColumn16_RoundedUV_LinearZ(draw_column_vars_t *dcvars)
          startx = dcvars->x;
          tempyl[0] = commontop = dcvars->yl;
          tempyh[0] = commonbot = dcvars->yh;
-         temptype = (COL_OPAQUE);
+         temptype = tl_temptype;
 
 
 
 
 
-         R_FlushWholeColumns = R_FlushWhole16;
-         R_FlushHTColumns = R_FlushHT16;
-         R_FlushQuadColumn = R_FlushQuad16;
+         R_FlushWholeColumns = tl_flush_whole;
+         R_FlushHTColumns = tl_flush_ht;
+         R_FlushQuadColumn = tl_flush_quad;
 
          dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -2243,7 +3298,7 @@ static void R_DrawTranslatedColumn16_PointUV(draw_column_vars_t *dcvars)
    }
 
    if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
       R_FlushColumns();
 
    if(!temp_x)
@@ -2251,15 +3306,15 @@ static void R_DrawTranslatedColumn16_PointUV(draw_column_vars_t *dcvars)
       startx = dcvars->x;
       tempyl[0] = commontop = dcvars->yl;
       tempyh[0] = commonbot = dcvars->yh;
-      temptype = (COL_OPAQUE);
+      temptype = tl_temptype;
 
 
 
 
 
-      R_FlushWholeColumns = R_FlushWhole16;
-      R_FlushHTColumns = R_FlushHT16;
-      R_FlushQuadColumn = R_FlushQuad16;
+      R_FlushWholeColumns = tl_flush_whole;
+      R_FlushHTColumns = tl_flush_ht;
+      R_FlushQuadColumn = tl_flush_quad;
 
       dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -2419,7 +3474,7 @@ static void R_DrawTranslatedColumn16_PointUV_PointZ(draw_column_vars_t *dcvars)
    }
 
    if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
       R_FlushColumns();
 
    if(!temp_x)
@@ -2427,15 +3482,15 @@ static void R_DrawTranslatedColumn16_PointUV_PointZ(draw_column_vars_t *dcvars)
       startx = dcvars->x;
       tempyl[0] = commontop = dcvars->yl;
       tempyh[0] = commonbot = dcvars->yh;
-      temptype = (COL_OPAQUE);
+      temptype = tl_temptype;
 
 
 
 
 
-      R_FlushWholeColumns = R_FlushWhole16;
-      R_FlushHTColumns = R_FlushHT16;
-      R_FlushQuadColumn = R_FlushQuad16;
+      R_FlushWholeColumns = tl_flush_whole;
+      R_FlushHTColumns = tl_flush_ht;
+      R_FlushQuadColumn = tl_flush_quad;
 
       dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -2593,7 +3648,7 @@ static void R_DrawTranslatedColumn16_PointUV_LinearZ(draw_column_vars_t *dcvars)
    {
 
       if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
          R_FlushColumns();
 
       if(!temp_x)
@@ -2601,15 +3656,15 @@ static void R_DrawTranslatedColumn16_PointUV_LinearZ(draw_column_vars_t *dcvars)
          startx = dcvars->x;
          tempyl[0] = commontop = dcvars->yl;
          tempyh[0] = commonbot = dcvars->yh;
-         temptype = (COL_OPAQUE);
+         temptype = tl_temptype;
 
 
 
 
 
-         R_FlushWholeColumns = R_FlushWhole16;
-         R_FlushHTColumns = R_FlushHT16;
-         R_FlushQuadColumn = R_FlushQuad16;
+         R_FlushWholeColumns = tl_flush_whole;
+         R_FlushHTColumns = tl_flush_ht;
+         R_FlushQuadColumn = tl_flush_quad;
 
          dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -2802,7 +3857,7 @@ static void R_DrawTranslatedColumn16_LinearUV(draw_column_vars_t *dcvars)
    {
 
       if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
          R_FlushColumns();
 
       if(!temp_x)
@@ -2810,15 +3865,15 @@ static void R_DrawTranslatedColumn16_LinearUV(draw_column_vars_t *dcvars)
          startx = dcvars->x;
          tempyl[0] = commontop = dcvars->yl;
          tempyh[0] = commonbot = dcvars->yh;
-         temptype = (COL_OPAQUE);
+         temptype = tl_temptype;
 
 
 
 
 
-         R_FlushWholeColumns = R_FlushWhole16;
-         R_FlushHTColumns = R_FlushHT16;
-         R_FlushQuadColumn = R_FlushQuad16;
+         R_FlushWholeColumns = tl_flush_whole;
+         R_FlushHTColumns = tl_flush_ht;
+         R_FlushQuadColumn = tl_flush_quad;
 
          dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -3014,7 +4069,7 @@ static void R_DrawTranslatedColumn16_LinearUV_PointZ(draw_column_vars_t *dcvars)
    {
 
       if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
          R_FlushColumns();
 
       if(!temp_x)
@@ -3022,15 +4077,15 @@ static void R_DrawTranslatedColumn16_LinearUV_PointZ(draw_column_vars_t *dcvars)
          startx = dcvars->x;
          tempyl[0] = commontop = dcvars->yl;
          tempyh[0] = commonbot = dcvars->yh;
-         temptype = (COL_OPAQUE);
+         temptype = tl_temptype;
 
 
 
 
 
-         R_FlushWholeColumns = R_FlushWhole16;
-         R_FlushHTColumns = R_FlushHT16;
-         R_FlushQuadColumn = R_FlushQuad16;
+         R_FlushWholeColumns = tl_flush_whole;
+         R_FlushHTColumns = tl_flush_ht;
+         R_FlushQuadColumn = tl_flush_quad;
 
          dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -3231,7 +4286,7 @@ static void R_DrawTranslatedColumn16_LinearUV_LinearZ(draw_column_vars_t *dcvars
    {
 
       if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
          R_FlushColumns();
 
       if(!temp_x)
@@ -3239,15 +4294,15 @@ static void R_DrawTranslatedColumn16_LinearUV_LinearZ(draw_column_vars_t *dcvars
          startx = dcvars->x;
          tempyl[0] = commontop = dcvars->yl;
          tempyh[0] = commonbot = dcvars->yh;
-         temptype = (COL_OPAQUE);
+         temptype = tl_temptype;
 
 
 
 
 
-         R_FlushWholeColumns = R_FlushWhole16;
-         R_FlushHTColumns = R_FlushHT16;
-         R_FlushQuadColumn = R_FlushQuad16;
+         R_FlushWholeColumns = tl_flush_whole;
+         R_FlushHTColumns = tl_flush_ht;
+         R_FlushQuadColumn = tl_flush_quad;
 
          dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -3445,7 +4500,7 @@ static void R_DrawTranslatedColumn16_RoundedUV(draw_column_vars_t *dcvars)
    {
 
       if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
          R_FlushColumns();
 
       if(!temp_x)
@@ -3453,15 +4508,15 @@ static void R_DrawTranslatedColumn16_RoundedUV(draw_column_vars_t *dcvars)
          startx = dcvars->x;
          tempyl[0] = commontop = dcvars->yl;
          tempyh[0] = commonbot = dcvars->yh;
-         temptype = (COL_OPAQUE);
+         temptype = tl_temptype;
 
 
 
 
 
-         R_FlushWholeColumns = R_FlushWhole16;
-         R_FlushHTColumns = R_FlushHT16;
-         R_FlushQuadColumn = R_FlushQuad16;
+         R_FlushWholeColumns = tl_flush_whole;
+         R_FlushHTColumns = tl_flush_ht;
+         R_FlushQuadColumn = tl_flush_quad;
 
          dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -3657,7 +4712,7 @@ static void R_DrawTranslatedColumn16_RoundedUV_PointZ(draw_column_vars_t *dcvars
    {
 
       if(temp_x == 4 ||
-         (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+         (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
          R_FlushColumns();
 
       if(!temp_x)
@@ -3665,15 +4720,15 @@ static void R_DrawTranslatedColumn16_RoundedUV_PointZ(draw_column_vars_t *dcvars
          startx = dcvars->x;
          tempyl[0] = commontop = dcvars->yl;
          tempyh[0] = commonbot = dcvars->yh;
-         temptype = (COL_OPAQUE);
+         temptype = tl_temptype;
 
 
 
 
 
-         R_FlushWholeColumns = R_FlushWhole16;
-         R_FlushHTColumns = R_FlushHT16;
-         R_FlushQuadColumn = R_FlushQuad16;
+         R_FlushWholeColumns = tl_flush_whole;
+         R_FlushHTColumns = tl_flush_ht;
+         R_FlushQuadColumn = tl_flush_quad;
 
          dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -3867,7 +4922,7 @@ static void R_DrawTranslatedColumn16_RoundedUV_LinearZ(draw_column_vars_t *dcvar
    {
 
       if(temp_x == 4 ||
-            (temp_x && (temptype != (COL_OPAQUE) || temp_x + startx != dcvars->x)))
+            (temp_x && (temptype != tl_temptype || temp_x + startx != dcvars->x)))
          R_FlushColumns();
 
       if(!temp_x)
@@ -3875,15 +4930,15 @@ static void R_DrawTranslatedColumn16_RoundedUV_LinearZ(draw_column_vars_t *dcvar
          startx = dcvars->x;
          tempyl[0] = commontop = dcvars->yl;
          tempyh[0] = commonbot = dcvars->yh;
-         temptype = (COL_OPAQUE);
+         temptype = tl_temptype;
 
 
 
 
 
-         R_FlushWholeColumns = R_FlushWhole16;
-         R_FlushHTColumns = R_FlushHT16;
-         R_FlushQuadColumn = R_FlushQuad16;
+         R_FlushWholeColumns = tl_flush_whole;
+         R_FlushHTColumns = tl_flush_ht;
+         R_FlushQuadColumn = tl_flush_quad;
 
          dest = &short_tempbuf[dcvars->yl << 2];
 
@@ -4957,11 +6012,334 @@ static R_DrawColumn_f drawcolumnfuncs[RDRAW_FILTER_MAXFILTERS][RDRAW_FILTER_MAXF
 R_DrawColumn_f R_GetDrawColumnFunc(enum column_pipeline_e type,
                                    enum draw_filter_type_e filter,
                                    enum draw_filter_type_e filterz) {
-  R_DrawColumn_f result = drawcolumnfuncs[filterz][filter][type];
+  R_DrawColumn_f result;
+  if (VID_TRUECOLOR)
+    return R_GetDrawColumnFuncTC(type, filter, filterz);
+  result = drawcolumnfuncs[filterz][filter][type];
   if (result == NULL)
     I_Error("R_GetDrawColumnFunc: undefined function (%d, %d, %d)",
             type, filter, filterz);
   return result;
+}
+
+/* Classify a column drawer for the wall-run kernel below: 1 for the
+ * unlit point drawer (composed palette), 2 for the lit point drawer
+ * (composed colormap), 0 for everything else.  Only these two are
+ * reproduced by R_DrawWallColumnRun; records using any other drawer
+ * replay individually. */
+int R_WallColumnKernelClass(R_DrawColumn_f fn)
+{
+  if (VID_TRUECOLOR)
+    return R_WallColumnKernelClassTC(fn);
+  if (fn == R_DrawColumn16_PointUV)
+    return 1;
+  if (fn == R_DrawColumn16_PointUV_PointZ)
+    return 2;
+  return 0;
+}
+
+/* Row-major rasterization of a run of x-adjacent wall columns,
+ * writing the framebuffer directly instead of going through the
+ * 4-column temp buffer and its transposing flush.  The caller (the
+ * draw-record replay) guarantees: x ascends by one across the run,
+ * drawingmasked is clear, and every column's texheight is zero or a
+ * power of two, so the texel fetch is a mask in every lane.
+ *
+ * Per-pixel arithmetic is exactly the point drawers':
+ *   frac(y) = texturemid + (y - centery) * iscale
+ *   texel   = source[(int)(frac & mask) >> 16]
+ *
+ * The shift is arithmetic on purpose: the drawers index
+ * source[frac>>16] on the signed frac, so for texheight 0 (mask all
+ * ones) a negative frac on the first rows must read the column
+ * padding at index -1, exactly as they do, rather than a huge
+ * unsigned index.  For the power-of-two masks the & clears the sign
+ * bit and the arithmetic shift is identical to the logical one.
+ *   pixel   = lut[texel]
+ * The drawers compute frac iteratively from yl; starting the iteration
+ * at the run's first row instead is the same integer sequence (adds
+ * are associative mod 2^32), so every written pixel is bit-identical
+ * to individual replay -- only the visit order changes, and solid
+ * wall pixels are disjoint.  frac advances every row whether or not
+ * the column covers it, which keeps the row loop uniform (and is the
+ * shape a vector version of this kernel wants). */
+#define WALL_RUN_MAX 64
+
+void R_DrawWallColumnRun(wallscratch_t *ws,
+                         const draw_column_vars_t *const *cols,
+                         int n, int pointz)
+{
+  const uint8_t     *src[WALL_RUN_MAX];
+  const lighttable_t *cmap[WALL_RUN_MAX];
+  fixed_t            frac[WALL_RUN_MAX];
+  fixed_t            step[WALL_RUN_MAX];
+  unsigned int       mask[WALL_RUN_MAX];
+  int                cyl[WALL_RUN_MAX];
+  int                cyh[WALL_RUN_MAX];
+  const uint16_t    *lut = NULL;
+  const uint16_t    *lanelut[WALL_RUN_MAX];
+  int                lane_mode = 0;
+  int                ymin, ymax, dtop, dbot, y, j;
+  int                x0 = cols[0]->x;
+
+  if (VID_TRUECOLOR)
+  {
+    R_DrawWallColumnRunTC(ws, cols, n, pointz);
+    return;
+  }
+
+  ymin = cols[0]->yl;
+  ymax = cols[0]->yh;
+  for (j = 0; j < n; j++)
+  {
+    const draw_column_vars_t *c = cols[j];
+    cyl[j]  = c->yl;
+    cyh[j]  = c->yh;
+    if (c->yl < ymin) ymin = c->yl;
+    if (c->yh > ymax) ymax = c->yh;
+    src[j]  = c->source;
+    step[j] = c->iscale;
+    cmap[j] = c->colormap;
+    mask[j] = ((unsigned int)(c->texheight - 1) << 16) | 0xffffu;
+  }
+  for (j = 0; j < n; j++)
+    frac[j] = cols[j]->texturemid + (ymin - centery) * step[j];
+
+  /* Resolve the per-texel table up front where one table covers the
+   * whole run.  The unlit drawer's palette table is shared by nature.
+   * The lit drawer's composed table is keyed on a single colormap, so
+   * it applies whenever every lane carries the same colormap -- which
+   * adjacent wall columns usually do (same light band): measured ~77%
+   * of runs on freedoom E1M1.  A run with mixed colormaps falls back
+   * to the table's defining expression per pixel,
+   * V_Palette16[colormap[texel]*64 + 63], the same values either way. */
+  if (!pointz)
+    lut = R_ScratchComposedPalette(ws);
+  else
+  {
+    for (j = 1; j < n; j++)
+      if (cmap[j] != cmap[0])
+        break;
+    if (j == n)
+      lut = R_ScratchComposedColormap(ws, cmap[0]);
+  }
+
+  /* Dynamic-light colour tint (dcvars.tint, packed r:g:b channel adds).
+   * The kernel writes exactly lut[texel] per pixel, so folding the tint into
+   * the table -- clamp(lut[i] + tint) per channel -- yields bit-identical
+   * pixels to the old post-pass framebuffer RMW while touching 256 entries
+   * instead of every drawn pixel.  The uniform case (one colormap, one tint
+   * across the run: adjacent wall columns in the same light pool) tints the
+   * shared table once and falls through to the unchanged fast paths below.
+   * Mixed runs resolve a small per-run pool of tinted tables with lane
+   * sharing; if the pool ever overflows, the excess lanes draw untinted and
+   * record the old RMW tint instead (the replay pass runs after this), so the
+   * output cannot change, only the route. */
+  {
+    unsigned tint0 = cols[0]->tint;
+    unsigned anytint = 0;
+    int      same = 1;
+    for (j = 0; j < n; j++)
+    {
+      anytint |= cols[j]->tint;
+      if (cols[j]->tint != tint0)
+        same = 0;
+    }
+    if (anytint)
+    {
+      if (lut && same)
+      {
+        R_TintLUT(ws->tintbuf, lut,
+                  (int)(tint0 >> (2*VID_TINT_BITS)) & VID_TINT_MASK,
+                  (int)(tint0 >> VID_TINT_BITS) & VID_TINT_MASK,
+                  (int)tint0 & VID_TINT_MASK);
+        lut = ws->tintbuf;
+      }
+      else
+      {
+        const lighttable_t       *pool_cm[WALL_TINT_POOL];
+        unsigned                  pool_tint[WALL_TINT_POOL];
+        int pooln = 0, k;
+
+        for (j = 0; j < n; j++)
+        {
+          unsigned t = cols[j]->tint;
+          if (!t)
+          {
+            lanelut[j] = NULL;          /* per-pixel defining expression */
+            continue;
+          }
+          for (k = 0; k < pooln; k++)
+            if (pool_cm[k] == cmap[j] && pool_tint[k] == t)
+              break;
+          if (k < pooln)
+            lanelut[j] = ws->pool[k];
+          else if (pooln < WALL_TINT_POOL)
+          {
+            R_TintLUT(ws->pool[pooln], R_ScratchComposedColormap(ws, cmap[j]),
+                      (int)(t >> (2*VID_TINT_BITS)) & VID_TINT_MASK,
+                      (int)(t >> VID_TINT_BITS) & VID_TINT_MASK,
+                      (int)t & VID_TINT_MASK);
+            pool_cm[pooln] = cmap[j];
+            pool_tint[pooln] = t;
+            lanelut[j] = ws->pool[pooln++];
+          }
+          else
+          {
+            /* pool exhausted: draw untinted, tint via the RMW replay pass */
+            lanelut[j] = NULL;
+            R_WallTintRecord(cols[j]->x, cyl[j], cyh[j],
+                             (int)(t >> (2*VID_TINT_BITS)) & VID_TINT_MASK,
+                             (int)(t >> VID_TINT_BITS) & VID_TINT_MASK,
+                             (int)t & VID_TINT_MASK);
+          }
+        }
+        lane_mode = 1;
+      }
+    }
+  }
+
+  /* Every lane covers one contiguous row interval, so the rows where
+   * ALL lanes are covered form exactly [max yl, min yh] -- the dense
+   * band, ~91% of run pixels here.  The ragged head and tail above and
+   * below it keep the per-pixel coverage test; the dense band drops it.
+   * frac advances every row in every lane throughout, as before, so
+   * the per-pixel arithmetic is unchanged -- this only removes tests
+   * and table indirections that cannot change the written values. */
+  /* Seed from cols[0] directly (cyl[0]/cyh[0] hold the same values):
+   * the function requires n >= 1 -- cols[0] is dereferenced above
+   * unconditionally -- but the compiler cannot see that across the
+   * call boundary and warns that the arrays may be uninitialized. */
+  dtop = cols[0]->yl;
+  dbot = cols[0]->yh;
+  for (j = 1; j < n; j++)
+  {
+    if (cyl[j] > dtop) dtop = cyl[j];
+    if (cyh[j] < dbot) dbot = cyh[j];
+  }
+
+#define WALL_RUN_RAGGED_ROW(EXPR)                          \
+  {                                                        \
+    uint16_t *row = drawvars.short_topleft                 \
+                  + y * SURFACE_SHORT_PITCH + x0;          \
+    for (j = 0; j < n; j++)                                \
+    {                                                      \
+      if (y >= cyl[j] && y <= cyh[j])                      \
+      {                                                    \
+        int texel = src[j][(int)(frac[j] & mask[j]) >> 16]; \
+        row[j] = EXPR;                                     \
+      }                                                    \
+      frac[j] += step[j];                                  \
+    }                                                      \
+  }
+
+#define WALL_RUN_DENSE_ROW(EXPR)                           \
+  {                                                        \
+    uint16_t *row = drawvars.short_topleft                 \
+                  + y * SURFACE_SHORT_PITCH + x0;          \
+    for (j = 0; j < n; j++)                                \
+    {                                                      \
+      int texel = src[j][(int)(frac[j] & mask[j]) >> 16];   \
+      row[j] = EXPR;                                       \
+      frac[j] += step[j];                                  \
+    }                                                      \
+  }
+
+  if (lane_mode)
+  {
+    /* Mixed colormaps/tints: every lane writes through its own resolved
+     * table (or the defining expression when untinted); coverage-tested
+     * everywhere, which is exact for the dense band too. */
+    for (y = ymin; y <= ymax; y++)
+      WALL_RUN_RAGGED_ROW(lanelut[j]
+                          ? lanelut[j][texel]
+                          : (pointz ? V_Palette16[ cmap[j][texel] * 64 + 63 ]
+                                    : R_ScratchComposedPalette(ws)[texel]))
+    return;
+  }
+
+  if (dtop > dbot)
+  {
+    /* No row covers every lane; the whole run is ragged. */
+    if (lut)
+      for (y = ymin; y <= ymax; y++)
+        WALL_RUN_RAGGED_ROW(lut[texel])
+    else
+      for (y = ymin; y <= ymax; y++)
+        WALL_RUN_RAGGED_ROW(V_Palette16[ cmap[j][texel] * 64 + 63 ])
+    return;
+  }
+
+  if (lut)
+  {
+    for (y = ymin; y < dtop; y++)
+      WALL_RUN_RAGGED_ROW(lut[texel])
+#if defined(WALL_RUN_SSE2)
+#define WALL_RUN_VEC4(J)                                              \
+      {                                                               \
+        __m128i f = _mm_loadu_si128((const __m128i *)&frac[J]);       \
+        __m128i m = _mm_loadu_si128((const __m128i *)&mask[J]);       \
+        __m128i s = _mm_loadu_si128((const __m128i *)&step[J]);       \
+        _mm_storeu_si128((__m128i *)idx4,                             \
+                         _mm_srai_epi32(_mm_and_si128(f, m), 16));    \
+        _mm_storeu_si128((__m128i *)&frac[J], _mm_add_epi32(f, s));   \
+      }
+#elif defined(WALL_RUN_NEON)
+#define WALL_RUN_VEC4(J)                                              \
+      {                                                               \
+        uint32x4_t f = vld1q_u32((const uint32_t *)&frac[J]);         \
+        uint32x4_t m = vld1q_u32(&mask[J]);                           \
+        uint32x4_t s = vld1q_u32((const uint32_t *)&step[J]);         \
+        vst1q_s32(idx4,                                               \
+                  vshrq_n_s32(vreinterpretq_s32_u32(vandq_u32(f, m)),  \
+                              16));                                   \
+        vst1q_u32((uint32_t *)&frac[J], vaddq_u32(f, s));             \
+      }
+#endif
+
+#ifdef WALL_RUN_VEC4
+    for (y = dtop; y <= dbot; y++)
+    {
+      uint16_t *row = drawvars.short_topleft
+                    + y * SURFACE_SHORT_PITCH + x0;
+      int j4 = n & ~3;
+      for (j = 0; j < j4; j += 4)
+      {
+        int32_t      idx4[4];
+        uint16_t     out4[4];
+        WALL_RUN_VEC4(j)
+        out4[0] = lut[src[j + 0][idx4[0]]];
+        out4[1] = lut[src[j + 1][idx4[1]]];
+        out4[2] = lut[src[j + 2][idx4[2]]];
+        out4[3] = lut[src[j + 3][idx4[3]]];
+        memcpy(&row[j], out4, 4 * sizeof(uint16_t));
+      }
+      for (; j < n; j++)
+      {
+        row[j] = lut[ src[j][(int)(frac[j] & mask[j]) >> 16] ];
+        frac[j] += step[j];
+      }
+    }
+#undef WALL_RUN_VEC4
+#else
+    for (y = dtop; y <= dbot; y++)
+      WALL_RUN_DENSE_ROW(lut[texel])
+#endif
+    for (y = dbot + 1; y <= ymax; y++)
+      WALL_RUN_RAGGED_ROW(lut[texel])
+  }
+  else
+  {
+    for (y = ymin; y < dtop; y++)
+      WALL_RUN_RAGGED_ROW(V_Palette16[ cmap[j][texel] * 64 + 63 ])
+    for (y = dtop; y <= dbot; y++)
+      WALL_RUN_DENSE_ROW(V_Palette16[ cmap[j][texel] * 64 + 63 ])
+    for (y = dbot + 1; y <= ymax; y++)
+      WALL_RUN_RAGGED_ROW(V_Palette16[ cmap[j][texel] * 64 + 63 ])
+  }
+
+#undef WALL_RUN_RAGGED_ROW
+#undef WALL_RUN_DENSE_ROW
 }
 
 void R_SetDefaultDrawColumnVars(draw_column_vars_t *dcvars)
@@ -4977,12 +6355,14 @@ void R_SetDefaultDrawColumnVars(draw_column_vars_t *dcvars)
    dcvars->source        = NULL;
    dcvars->prevsource    = NULL;
    dcvars->nextsource    = NULL;
+   dcvars->brightmask    = NULL;
    dcvars->colormap      = colormaps[0];
    dcvars->nextcolormap  = colormaps[0];
    dcvars->translation   = NULL;
    dcvars->edgeslope     = 0;
    dcvars->drawingmasked = 0;
    dcvars->edgetype      = drawvars.sprite_edges;
+   dcvars->tint          = 0;
 }
 
 //
@@ -5068,10 +6448,229 @@ static void R_DrawSpan16_PointUV_PointZ(draw_span_vars_t *dsvars)
    const fixed_t ystep = dsvars->ystep;
    const uint8_t *source = dsvars->source;
 
-
-   const uint8_t *colormap = dsvars->colormap;
-
    uint16_t *dest = drawvars.short_topleft + dsvars->y* SCREENWIDTH + dsvars->x1;
+
+   /* Shared composed colormap+palette table (see R_GetComposedColormap):
+    * collapses V_Palette16[colormap[texel]*64+63] to one lookup, rebuilt
+    * only when the colormap pointer or V_Palette16 changes. */
+   const uint16_t *lut = R_SpanComposedColormap(dsvars, dsvars->colormap);
+
+   /* Brightmap path: where the 64x64 row-major mask is set, the texel is
+    * drawn through the undimmed base map (fullcolormap) instead of the
+    * distance-lit table.  fullcolormap's composed table is snapshot into
+    * a local first (the shared composed_lut cache is single-entry, so
+    * fetching the distance `lut` would evict it).  Kept scalar; the SIMD
+    * select lands in a later step.  NULL mask -> the vectorised path
+    * below runs unchanged. */
+   if (dsvars->brightmask)
+   {
+      const uint8_t  *mask = dsvars->brightmask;
+      uint16_t        lut_bright[256];
+      const uint16_t *bsrc = R_SpanComposedColormap(dsvars, fullcolormap
+                                                   ? fullcolormap
+                                                   : dsvars->colormap);
+      memcpy(lut_bright, bsrc, sizeof(lut_bright));
+      lut = R_SpanComposedColormap(dsvars, dsvars->colormap);
+
+#if defined(__SSE2__)
+      /* Same spot-index vectorisation as the non-brightmap path: four
+       * (xtemp|ytemp) indices per iteration with packed arithmetic
+       * shifts/masks, then a scalar gather -- here a per-lane select
+       * between the distance and fullbright tables on the mask bit.  The
+       * spot math is identical to the scalar loop below (srai matches the
+       * signed >> on fixed_t), so the output is bit-identical. */
+      if (count >= 8)
+      {
+         unsigned blocks = count >> 2;
+         __m128i vx  = _mm_set_epi32(xfrac + 3*xstep, xfrac + 2*xstep,
+                                     xfrac + xstep,   xfrac);
+         __m128i vy  = _mm_set_epi32(yfrac + 3*ystep, yfrac + 2*ystep,
+                                     yfrac + ystep,   yfrac);
+         const __m128i vxs   = _mm_set1_epi32(xstep * 4);
+         const __m128i vys   = _mm_set1_epi32(ystep * 4);
+         const __m128i m63   = _mm_set1_epi32(63);
+         const __m128i m4032 = _mm_set1_epi32(4032);
+         unsigned consumed   = blocks << 2;
+
+         while (blocks--)
+         {
+            uint32_t idx[4];
+            __m128i xt   = _mm_and_si128(_mm_srai_epi32(vx, 16), m63);
+            __m128i yt   = _mm_and_si128(_mm_srai_epi32(vy, 10), m4032);
+            __m128i spot = _mm_or_si128(xt, yt);
+
+            _mm_storeu_si128((__m128i *)idx, spot);
+
+            dest[0] = (mask[idx[0]] ? lut_bright : lut)[ source[idx[0]] ];
+            dest[1] = (mask[idx[1]] ? lut_bright : lut)[ source[idx[1]] ];
+            dest[2] = (mask[idx[2]] ? lut_bright : lut)[ source[idx[2]] ];
+            dest[3] = (mask[idx[3]] ? lut_bright : lut)[ source[idx[3]] ];
+            dest += 4;
+
+            vx = _mm_add_epi32(vx, vxs);
+            vy = _mm_add_epi32(vy, vys);
+         }
+
+         xfrac += (fixed_t)consumed * xstep;
+         yfrac += (fixed_t)consumed * ystep;
+         count -= consumed;
+      }
+#elif defined(__ARM_NEON)
+      if (count >= 8)
+      {
+         unsigned blocks = count >> 2;
+         const int32_t xbase[4] = { xfrac, xfrac + xstep,
+                                    xfrac + 2*xstep, xfrac + 3*xstep };
+         const int32_t ybase[4] = { yfrac, yfrac + ystep,
+                                    yfrac + 2*ystep, yfrac + 3*ystep };
+         int32x4_t vx = vld1q_s32(xbase);
+         int32x4_t vy = vld1q_s32(ybase);
+         const int32x4_t vxs   = vdupq_n_s32(xstep * 4);
+         const int32x4_t vys   = vdupq_n_s32(ystep * 4);
+         const int32x4_t m63   = vdupq_n_s32(63);
+         const int32x4_t m4032 = vdupq_n_s32(4032);
+         unsigned consumed     = blocks << 2;
+
+         while (blocks--)
+         {
+            uint32_t idx[4];
+            int32x4_t xt   = vandq_s32(vshrq_n_s32(vx, 16), m63);
+            int32x4_t yt   = vandq_s32(vshrq_n_s32(vy, 10), m4032);
+            int32x4_t spot = vorrq_s32(xt, yt);
+
+            vst1q_u32(idx, vreinterpretq_u32_s32(spot));
+
+            dest[0] = (mask[idx[0]] ? lut_bright : lut)[ source[idx[0]] ];
+            dest[1] = (mask[idx[1]] ? lut_bright : lut)[ source[idx[1]] ];
+            dest[2] = (mask[idx[2]] ? lut_bright : lut)[ source[idx[2]] ];
+            dest[3] = (mask[idx[3]] ? lut_bright : lut)[ source[idx[3]] ];
+            dest += 4;
+
+            vx = vaddq_s32(vx, vxs);
+            vy = vaddq_s32(vy, vys);
+         }
+
+         xfrac += (fixed_t)consumed * xstep;
+         yfrac += (fixed_t)consumed * ystep;
+         count -= consumed;
+      }
+#endif
+
+      while (count)
+      {
+         const fixed_t xtemp = (xfrac >> 16) & 63;
+         const fixed_t ytemp = (yfrac >> 10) & 4032;
+         const fixed_t spot  = xtemp | ytemp;
+         xfrac += xstep;
+         yfrac += ystep;
+         *dest++ = (mask[spot] ? lut_bright : lut)[ source[spot] ];
+         count--;
+      }
+      return;
+   }
+
+#if defined(__SSE2__)
+   /* The per-pixel index math (two arithmetic shifts, two masks, an OR,
+    * and the two fixed-point accumulator adds) is the bulk of this loop;
+    * the texel/LUT gather is cheap because the 64x64 source tile and the
+    * 256-entry LUT stay resident in L1.  SSE2 has no gather, so the
+    * gather + store stay scalar, but computing four spot indices at once
+    * removes most of the loop's arithmetic.  Output is bit-identical to
+    * the scalar path: srai matches the signed >> on fixed_t, and the
+    * mask/or and accumulator progression are the same per lane.
+    *
+    * Spans shorter than 8 px (screen edges, and any span too narrow to
+    * amortise the vector setup over more than one iteration) fall through
+    * to the scalar loop below; the vector block handles the count & ~3
+    * prefix and the scalar loop finishes the remainder with the same
+    * xfrac/yfrac. */
+   if (count >= 8)
+   {
+      unsigned blocks = count >> 2;
+      __m128i vx  = _mm_set_epi32(xfrac + 3*xstep, xfrac + 2*xstep,
+                                  xfrac + xstep,   xfrac);
+      __m128i vy  = _mm_set_epi32(yfrac + 3*ystep, yfrac + 2*ystep,
+                                  yfrac + ystep,   yfrac);
+      const __m128i vxs   = _mm_set1_epi32(xstep * 4);
+      const __m128i vys   = _mm_set1_epi32(ystep * 4);
+      const __m128i m63   = _mm_set1_epi32(63);
+      const __m128i m4032 = _mm_set1_epi32(4032);
+      unsigned consumed   = blocks << 2;
+
+      while (blocks--)
+      {
+         uint32_t idx[4];
+         __m128i xt   = _mm_and_si128(_mm_srai_epi32(vx, 16), m63);
+         __m128i yt   = _mm_and_si128(_mm_srai_epi32(vy, 10), m4032);
+         __m128i spot = _mm_or_si128(xt, yt);
+
+         _mm_storeu_si128((__m128i *)idx, spot);
+
+         dest[0] = lut[ source[idx[0]] ];
+         dest[1] = lut[ source[idx[1]] ];
+         dest[2] = lut[ source[idx[2]] ];
+         dest[3] = lut[ source[idx[3]] ];
+         dest += 4;
+
+         vx = _mm_add_epi32(vx, vxs);
+         vy = _mm_add_epi32(vy, vys);
+      }
+
+      /* Advance scalar accumulators past the vectorised prefix and
+       * leave only count & 3 iterations for the scalar tail. */
+      xfrac += (fixed_t)consumed * xstep;
+      yfrac += (fixed_t)consumed * ystep;
+      count -= consumed;
+   }
+#elif defined(__ARM_NEON)
+   /* NEON counterpart of the SSE2 path above: compute four spot indices
+    * per iteration with packed arithmetic shifts/masks, gather and store
+    * scalar (NEON has no gather, and the L1-resident tile/LUT make scalar
+    * loads cheap).  vshrq_n_s32 is an arithmetic (sign-propagating) shift,
+    * matching the signed >> on fixed_t, so output is bit-identical to the
+    * scalar path -- verified over 300k spans across widths, full 32-bit
+    * signed fracs and both-sign steps.  Same count >= 8 entry threshold
+    * and scalar tail as the SSE2 path. */
+   if (count >= 8)
+   {
+      unsigned blocks = count >> 2;
+      const int32_t xbase[4] = { xfrac, xfrac + xstep,
+                                 xfrac + 2*xstep, xfrac + 3*xstep };
+      const int32_t ybase[4] = { yfrac, yfrac + ystep,
+                                 yfrac + 2*ystep, yfrac + 3*ystep };
+      int32x4_t vx = vld1q_s32(xbase);
+      int32x4_t vy = vld1q_s32(ybase);
+      const int32x4_t vxs   = vdupq_n_s32(xstep * 4);
+      const int32x4_t vys   = vdupq_n_s32(ystep * 4);
+      const int32x4_t m63   = vdupq_n_s32(63);
+      const int32x4_t m4032 = vdupq_n_s32(4032);
+      unsigned consumed     = blocks << 2;
+
+      while (blocks--)
+      {
+         uint32_t idx[4];
+         int32x4_t xt   = vandq_s32(vshrq_n_s32(vx, 16), m63);
+         int32x4_t yt   = vandq_s32(vshrq_n_s32(vy, 10), m4032);
+         int32x4_t spot = vorrq_s32(xt, yt);
+
+         vst1q_u32(idx, vreinterpretq_u32_s32(spot));
+
+         dest[0] = lut[ source[idx[0]] ];
+         dest[1] = lut[ source[idx[1]] ];
+         dest[2] = lut[ source[idx[2]] ];
+         dest[3] = lut[ source[idx[3]] ];
+         dest += 4;
+
+         vx = vaddq_s32(vx, vxs);
+         vy = vaddq_s32(vy, vys);
+      }
+
+      xfrac += (fixed_t)consumed * xstep;
+      yfrac += (fixed_t)consumed * ystep;
+      count -= consumed;
+   }
+#endif
+
    while (count)
    {
       const fixed_t xtemp = (xfrac >> 16) & 63;
@@ -5080,13 +6679,23 @@ static void R_DrawSpan16_PointUV_PointZ(draw_span_vars_t *dsvars)
       const fixed_t spot = xtemp | ytemp;
       xfrac += xstep;
       yfrac += ystep;
-      *dest++ = V_Palette16[ (colormap[(source[spot])])*64 + ((64 -1)) ];
+      *dest++ = lut[ source[spot] ];
       count--;
    }
 }
 
 static void R_DrawSpan16_PointUV_LinearZ(draw_span_vars_t *dsvars)
 {
+   /* Brightmapped flats take the point/point span drawer, the only
+    * one with the fullbright select; filtered spans blend several
+    * lookups per pixel with no single table to redirect, so a masked
+    * flat trades that smoothing for correct fullbright. */
+   if (dsvars->brightmask)
+   {
+      R_DrawSpan16_PointUV_PointZ(dsvars);
+      return;
+   }
+   {
    unsigned count = dsvars->x2 - dsvars->x1 + 1;
    fixed_t xfrac = dsvars->xfrac;
    fixed_t yfrac = dsvars->yfrac;
@@ -5121,10 +6730,20 @@ static void R_DrawSpan16_PointUV_LinearZ(draw_span_vars_t *dsvars)
 
 
    }
+   }
 }
 
 static void R_DrawSpan16_LinearUV_PointZ(draw_span_vars_t *dsvars)
 {
+   /* Brightmapped flats take the point/point span drawer, the only
+    * one with the fullbright select; filtered spans blend several
+    * lookups per pixel with no single table to redirect, so a masked
+    * flat trades that smoothing for correct fullbright. */
+   if (dsvars->brightmask)
+   {
+      R_DrawSpan16_PointUV_PointZ(dsvars);
+      return;
+   }
    if ((D_abs(dsvars->xstep) > drawvars.mag_threshold)
          || (D_abs(dsvars->ystep) > drawvars.mag_threshold))
    {
@@ -5159,6 +6778,15 @@ static void R_DrawSpan16_LinearUV_PointZ(draw_span_vars_t *dsvars)
 
 static void R_DrawSpan16_LinearUV_LinearZ(draw_span_vars_t *dsvars)
 {
+   /* Brightmapped flats take the point/point span drawer, the only
+    * one with the fullbright select; filtered spans blend several
+    * lookups per pixel with no single table to redirect, so a masked
+    * flat trades that smoothing for correct fullbright. */
+   if (dsvars->brightmask)
+   {
+      R_DrawSpan16_PointUV_PointZ(dsvars);
+      return;
+   }
    if ((D_abs(dsvars->xstep) > drawvars.mag_threshold)
          || (D_abs(dsvars->ystep) > drawvars.mag_threshold))
    {
@@ -5203,6 +6831,15 @@ static void R_DrawSpan16_LinearUV_LinearZ(draw_span_vars_t *dsvars)
 
 static void R_DrawSpan16_RoundedUV_PointZ(draw_span_vars_t *dsvars)
 {
+   /* Brightmapped flats take the point/point span drawer, the only
+    * one with the fullbright select; filtered spans blend several
+    * lookups per pixel with no single table to redirect, so a masked
+    * flat trades that smoothing for correct fullbright. */
+   if (dsvars->brightmask)
+   {
+      R_DrawSpan16_PointUV_PointZ(dsvars);
+      return;
+   }
    if ((D_abs(dsvars->xstep) > drawvars.mag_threshold)
          || (D_abs(dsvars->ystep) > drawvars.mag_threshold))
    {
@@ -5234,6 +6871,15 @@ static void R_DrawSpan16_RoundedUV_PointZ(draw_span_vars_t *dsvars)
 
 static void R_DrawSpan16_RoundedUV_LinearZ(draw_span_vars_t *dsvars)
 {
+   /* Brightmapped flats take the point/point span drawer, the only
+    * one with the fullbright select; filtered spans blend several
+    * lookups per pixel with no single table to redirect, so a masked
+    * flat trades that smoothing for correct fullbright. */
+   if (dsvars->brightmask)
+   {
+      R_DrawSpan16_PointUV_PointZ(dsvars);
+      return;
+   }
    if ((D_abs(dsvars->xstep) > drawvars.mag_threshold)
          || (D_abs(dsvars->ystep) > drawvars.mag_threshold))
    {
@@ -5274,6 +6920,141 @@ static void R_DrawSpan16_RoundedUV_LinearZ(draw_span_vars_t *dsvars)
    }
 }
 
+/* Translucent point-sampled span: the opaque PointUV_PointZ kernel with a
+ * 50/50 RGB565 blend against the framebuffer on store, used to lay a
+ * see-through 3D-floor (swimmable) surface over whatever was drawn beneath
+ * it.  Point sampling only -- a translucent water surface does not need the
+ * filtered/dithered variants.  The SSE2/NEON blocks mirror the opaque
+ * kernel's index math exactly (so the texel gather is bit-identical) and add
+ * only the load-blend-store of the destination; the blend folds the masked
+ * half-sum of source and dest, the same arithmetic as TL_BLEND565. */
+static void R_DrawSpan16_TL(draw_span_vars_t *dsvars)
+{
+   unsigned count = dsvars->x2 - dsvars->x1 + 1;
+   fixed_t xfrac = dsvars->xfrac;
+   fixed_t yfrac = dsvars->yfrac;
+   const fixed_t xstep = dsvars->xstep;
+   const fixed_t ystep = dsvars->ystep;
+   const uint8_t *source = dsvars->source;
+   uint16_t *dest = drawvars.short_topleft + dsvars->y * SCREENWIDTH + dsvars->x1;
+   const uint16_t *lut = R_SpanComposedColormap(dsvars, dsvars->colormap);
+
+#if defined(__SSE2__)
+   if (count >= 8)
+   {
+      unsigned blocks = count >> 2;
+      __m128i vx  = _mm_set_epi32(xfrac + 3*xstep, xfrac + 2*xstep,
+                                  xfrac + xstep,   xfrac);
+      __m128i vy  = _mm_set_epi32(yfrac + 3*ystep, yfrac + 2*ystep,
+                                  yfrac + ystep,   yfrac);
+      const __m128i vxs   = _mm_set1_epi32(xstep * 4);
+      const __m128i vys   = _mm_set1_epi32(ystep * 4);
+      const __m128i m63   = _mm_set1_epi32(63);
+      const __m128i m4032 = _mm_set1_epi32(4032);
+      /* 0xF7DE clears each channel's low bit so the >>1 cannot bleed across
+       * the R/G/B field boundaries; halving both operands and adding is the
+       * 50/50 blend, vectorised four pixels at a time. */
+      const __m128i mlow  = _mm_set1_epi16((short)0xF7DE);
+      unsigned consumed   = blocks << 2;
+
+      while (blocks--)
+      {
+         uint32_t idx[4];
+         __m128i xt   = _mm_and_si128(_mm_srai_epi32(vx, 16), m63);
+         __m128i yt   = _mm_and_si128(_mm_srai_epi32(vy, 10), m4032);
+         __m128i spot = _mm_or_si128(xt, yt);
+         __m128i src4, dst4, blended;
+
+         _mm_storeu_si128((__m128i *)idx, spot);
+
+         /* gather the four source texels through the LUT into the low four
+          * lanes of a 16-bit vector, load the four destination pixels, blend */
+         src4 = _mm_set_epi16(0, 0, 0, 0,
+                              (short)lut[source[idx[3]]],
+                              (short)lut[source[idx[2]]],
+                              (short)lut[source[idx[1]]],
+                              (short)lut[source[idx[0]]]);
+         dst4 = _mm_loadl_epi64((const __m128i *)dest);
+         blended = _mm_add_epi16(
+                      _mm_srli_epi16(_mm_and_si128(src4, mlow), 1),
+                      _mm_srli_epi16(_mm_and_si128(dst4, mlow), 1));
+         _mm_storel_epi64((__m128i *)dest, blended);
+         dest += 4;
+
+         vx = _mm_add_epi32(vx, vxs);
+         vy = _mm_add_epi32(vy, vys);
+      }
+
+      xfrac += (fixed_t)consumed * xstep;
+      yfrac += (fixed_t)consumed * ystep;
+      count -= consumed;
+   }
+#elif defined(__ARM_NEON)
+   if (count >= 8)
+   {
+      unsigned blocks = count >> 2;
+      const int32_t xbase[4] = { xfrac, xfrac + xstep,
+                                 xfrac + 2*xstep, xfrac + 3*xstep };
+      const int32_t ybase[4] = { yfrac, yfrac + ystep,
+                                 yfrac + 2*ystep, yfrac + 3*ystep };
+      int32x4_t vx = vld1q_s32(xbase);
+      int32x4_t vy = vld1q_s32(ybase);
+      const int32x4_t vxs   = vdupq_n_s32(xstep * 4);
+      const int32x4_t vys   = vdupq_n_s32(ystep * 4);
+      const int32x4_t m63   = vdupq_n_s32(63);
+      const int32x4_t m4032 = vdupq_n_s32(4032);
+      const uint16x4_t mlow = vdup_n_u16(0xF7DE);
+      unsigned consumed     = blocks << 2;
+
+      while (blocks--)
+      {
+         uint32_t idx[4];
+         uint16_t s4[4];
+         uint16x4_t src4, dst4, blended;
+         int32x4_t xt   = vandq_s32(vshrq_n_s32(vx, 16), m63);
+         int32x4_t yt   = vandq_s32(vshrq_n_s32(vy, 10), m4032);
+         int32x4_t spot = vorrq_s32(xt, yt);
+
+         vst1q_u32(idx, vreinterpretq_u32_s32(spot));
+
+         s4[0] = lut[source[idx[0]]];
+         s4[1] = lut[source[idx[1]]];
+         s4[2] = lut[source[idx[2]]];
+         s4[3] = lut[source[idx[3]]];
+         src4 = vld1_u16(s4);
+         dst4 = vld1_u16(dest);
+         blended = vadd_u16(vshr_n_u16(vand_u16(src4, mlow), 1),
+                            vshr_n_u16(vand_u16(dst4, mlow), 1));
+         vst1_u16(dest, blended);
+         dest += 4;
+
+         vx = vaddq_s32(vx, vxs);
+         vy = vaddq_s32(vy, vys);
+      }
+
+      xfrac += (fixed_t)consumed * xstep;
+      yfrac += (fixed_t)consumed * ystep;
+      count -= consumed;
+   }
+#endif
+
+   while (count)
+   {
+      const fixed_t xtemp = (xfrac >> 16) & 63;
+      const fixed_t ytemp = (yfrac >> 10) & 4032;
+      const fixed_t spot = xtemp | ytemp;
+      uint16_t s = lut[source[spot]];
+      xfrac += xstep;
+      yfrac += ystep;
+      *dest = TL_BLEND565(s, *dest);
+      dest++;
+      count--;
+   }
+}
+
+/* Set by the plane drawer around a translucent 3D-floor surface pass. */
+int r_span_translucent = 0;
+
 static R_DrawSpan_f drawspanfuncs[RDRAW_FILTER_MAXFILTERS][RDRAW_FILTER_MAXFILTERS] = {
     {
       NULL,
@@ -5303,7 +7084,10 @@ static R_DrawSpan_f drawspanfuncs[RDRAW_FILTER_MAXFILTERS][RDRAW_FILTER_MAXFILTE
 
 R_DrawSpan_f R_GetDrawSpanFunc(enum draw_filter_type_e filter,
                                enum draw_filter_type_e filterz) {
-  R_DrawSpan_f result = drawspanfuncs[filterz][filter];
+  R_DrawSpan_f result;
+  if (VID_TRUECOLOR)
+    return R_GetDrawSpanFuncTC(filter, filterz);
+  result = drawspanfuncs[filterz][filter];
   if (result == NULL)
     I_Error("R_GetDrawSpanFunc: undefined function (%d, %d)",
             filter, filterz);
@@ -5311,7 +7095,105 @@ R_DrawSpan_f R_GetDrawSpanFunc(enum draw_filter_type_e filter,
 }
 
 void R_DrawSpan(draw_span_vars_t *dsvars) {
+  if (VID_TRUECOLOR) {
+    R_DrawSpanTC(dsvars);
+    return;
+  }
+  if (r_span_translucent) {
+    R_DrawSpan16_TL(dsvars);
+    return;
+  }
   R_GetDrawSpanFunc(drawvars.filterfloor, drawvars.filterz)(dsvars);
+}
+
+/*
+ * R_FlatAverageColor565 -- the mean RGB565 colour of a flat, used to tint
+ * the view when the camera is submerged in a 3D-floor water volume so the
+ * tint matches the water surface the player sees.  Strided sample (the flat
+ * is flat-shaded enough that every 7th texel is representative) averaged per
+ * channel; cached on (picnum, palette) since it only changes on a palette
+ * swap.
+ */
+uint16_t R_FlatAverageColor565(int picnum)
+{
+   static int       lastpic = -1;
+   static uint16_t *lastpal = NULL;
+   static uint16_t  lastcol = 0;
+   const uint8_t   *flat;
+   unsigned long    sr = 0, sg = 0, sb = 0, n = 0;
+   int              i, synthetic;
+   int              lump = firstflat + flattranslation[picnum];
+
+   if (picnum == lastpic && V_Palette16 == lastpal)
+      return lastcol;
+
+   synthetic = R_IsSyntheticFlat(picnum);
+   flat = synthetic ? R_GetSyntheticFlat(picnum)
+                    : (const uint8_t *)W_CacheLumpNum(lump);
+
+   for (i = 0; i < 4096; i += 7)
+   {
+      uint16_t c = VID_PAL16(flat[i], VID_NUMCOLORWEIGHTS - 1);
+      sr += (c >> 11) & 0x1F;
+      sg += (c >> 5)  & 0x3F;
+      sb +=  c        & 0x1F;
+      n++;
+   }
+
+   if (!synthetic)
+      W_UnlockLumpNum(lump);
+
+   if (!n)
+      n = 1;
+   lastcol = (uint16_t)(((sr / n) << 11) | ((sg / n) << 5) | (sb / n));
+   lastpic = picnum;
+   lastpal = V_Palette16;
+   return lastcol;
+}
+
+/*
+ * R_TintView -- blend the 3D view 50/50 toward a constant colour, the
+ * underwater tint applied after the scene is drawn.  Scalar, SSE2 and NEON;
+ * the SSE2/NEON paths fold eight RGB565 pixels per step with the same masked
+ * half-sum as TL_BLEND565 and fall back to the scalar tail for the < 8
+ * remainder of each row.
+ */
+void R_TintView(uint16_t color)
+{
+   uint16_t *base = drawvars.short_topleft;
+   int y;
+#if defined(__SSE2__)
+   const __m128i vcol = _mm_set1_epi16((short)color);
+   const __m128i mlow = _mm_set1_epi16((short)0xF7DE);
+   const __m128i vch  = _mm_srli_epi16(_mm_and_si128(vcol, mlow), 1);
+#elif defined(__ARM_NEON)
+   const uint16x8_t vcol = vdupq_n_u16(color);
+   const uint16x8_t mlow = vdupq_n_u16(0xF7DE);
+   const uint16x8_t vch  = vshrq_n_u16(vandq_u16(vcol, mlow), 1);
+#endif
+
+   for (y = 0; y < viewheight; y++)
+   {
+      uint16_t *row = base + y * SCREENWIDTH;
+      int x = 0;
+#if defined(__SSE2__)
+      for (; x + 8 <= viewwidth; x += 8)
+      {
+         __m128i px = _mm_loadu_si128((const __m128i *)(row + x));
+         __m128i bl = _mm_add_epi16(vch, _mm_srli_epi16(_mm_and_si128(px, mlow), 1));
+         _mm_storeu_si128((__m128i *)(row + x), bl);
+      }
+#elif defined(__ARM_NEON)
+      for (; x + 8 <= viewwidth; x += 8)
+      {
+         uint16x8_t px = vld1q_u16(row + x);
+         uint16x8_t bl = vaddq_u16(vch, vshrq_n_u16(vandq_u16(px, mlow), 1));
+         vst1q_u16(row + x, bl);
+      }
+#endif
+      for (; x < viewwidth; x++)
+         row[x] = TL_BLEND565(color, row[x]);
+   }
 }
 
 //
@@ -5336,4 +7218,114 @@ void R_InitBuffer(int width, int height)
 
   for (i=0; i<FUZZTABLE; i++)
 	  fuzzoffset[i] = fuzzoffset_org[i] * SURFACE_SHORT_PITCH;
+
+  if (VID_TRUECOLOR)
+    R_InitBufferTC();
+}
+
+/* --- Dynamic-light colour tint for wall bands (see r_dynlight/r_segs) -------
+ * Wall columns are queued and flushed as one batch (R_DrawCmdReplay), but the
+ * BSP clip guarantees each screen pixel is written by exactly one wall column,
+ * so a colour tint recorded per lit band at emit time can be replayed over the
+ * framebuffer afterwards with no overdraw hazard -- and without touching the
+ * batched/quad column flush at all. */
+typedef struct { int x, yl, yh; short ar, ag, ab; } wall_tint_t;
+static wall_tint_t *wall_tints = NULL;
+static int          wall_tint_count = 0, wall_tint_cap = 0;
+
+void R_WallTintClear(void)
+{
+   wall_tint_count = 0;
+}
+
+/* Reached only when a run exhausts its tint pool (more than WALL_TINT_POOL
+ * distinct colormap/tint pairs across 64 lanes), which is rare.  Under the
+ * threaded replay several workers can reach it at once, so the append is
+ * serialised.  Records from different workers land at disjoint columns and
+ * each worker's own records keep their relative order, so the replayed
+ * result does not depend on the interleaving. */
+void R_WallTintRecord(int x, int yl, int yh, int ar, int ag, int ab)
+{
+   wall_tint_t *t;
+   if (yh < yl || (!ar && !ag && !ab))
+      return;
+   R_RenderMTTintLock();
+   if (wall_tint_count == wall_tint_cap)
+   {
+      wall_tint_cap = wall_tint_cap ? wall_tint_cap * 2 : 4096;
+      wall_tints = (wall_tint_t *) realloc(wall_tints,
+                                           wall_tint_cap * sizeof(*wall_tints));
+      if (!wall_tints)
+         I_Error("R_WallTintRecord: allocation failed");
+   }
+   t = &wall_tints[wall_tint_count++];
+   t->x = x; t->yl = yl; t->yh = yh;
+   t->ar = (short)ar; t->ag = (short)ag; t->ab = (short)ab;
+   R_RenderMTTintUnlock();
+}
+
+/* Additively tint a 256-entry composed colour LUT toward a light's chroma;
+ * used for sprites, whose opaque texels are looked up through the LUT so a
+ * tinted LUT colours exactly the drawn pixels and skips transparent ones. */
+void R_TintLUT(uint16_t *dst, const uint16_t *src, int ar, int ag, int ab)
+{
+   int i;
+   for (i = 0; i < 256; i++)
+   {
+      unsigned px = src[i];
+#if defined(ABGR1555)
+      int r = (px      ) & 0x1f, g = (px >> 5) & 0x1f, b = (px >> 10) & 0x1f;
+      r += ar;        if (r > 31) r = 31;
+      g += (ag >> 1); if (g > 31) g = 31;
+      b += ab;        if (b > 31) b = 31;
+      dst[i] = (uint16_t)((b << 10) | (g << 5) | r);
+#else
+      int r = (px >> 11) & 0x1f, g = (px >> 5) & 0x3f, b = px & 0x1f;
+      r += ar; if (r > 31) r = 31;
+      g += ag; if (g > 63) g = 63;
+      b += ab; if (b > 31) b = 31;
+      dst[i] = (uint16_t)((r << 11) | (g << 5) | b);
+#endif
+   }
+}
+
+void R_WallTintReplay(void)
+{
+   int i;
+   if (VID_TRUECOLOR)
+   {
+      /* Same records, replayed through the truecolor saturating-add kernel
+       * (the recorded ar/ag/ab stay in 565 channel units; the TC kernel
+       * widens them to the active channel width). */
+      for (i = 0; i < wall_tint_count; i++)
+      {
+         const wall_tint_t *t = &wall_tints[i];
+         R_WallTintRunTC(t->x, t->yl, t->yh, t->ar, t->ag, t->ab);
+      }
+      return;
+   }
+   for (i = 0; i < wall_tint_count; i++)
+   {
+      const wall_tint_t *t = &wall_tints[i];
+      uint16_t *d = drawvars.short_topleft + t->yl * SURFACE_SHORT_PITCH + t->x;
+      int n = t->yh - t->yl + 1;
+      int ar = t->ar, ag = t->ag, ab = t->ab;
+      for (; n > 0; n--, d += SURFACE_SHORT_PITCH)
+      {
+         unsigned px = *d;
+#if defined(ABGR1555)
+         int r = (px      ) & 0x1f, g = (px >> 5) & 0x1f, b = (px >> 10) & 0x1f;
+         r += ar;        if (r > 31) r = 31;
+         g += (ag >> 1); if (g > 31) g = 31;
+         b += ab;        if (b > 31) b = 31;
+         *d = (uint16_t)((b << 10) | (g << 5) | r);
+#else
+         int r = (px >> 11) & 0x1f, g = (px >> 5) & 0x3f, b = px & 0x1f;
+         r += ar; if (r > 31) r = 31;
+         g += ag; if (g > 63) g = 63;
+         b += ab; if (b > 31) b = 31;
+         *d = (uint16_t)((r << 11) | (g << 5) | b);
+#endif
+      }
+   }
 }

@@ -41,6 +41,11 @@
 //
 void S_Init(int sfxVolume, int musicVolume);
 
+// Releases per-session sound state: stops playing sounds and music,
+// frees the channels buffer, and clears cached music lump numbers
+// so the next session re-resolves them against the new WAD.
+void S_Shutdown(void);
+
 // Kills all sounds
 void S_Stop(void);
 
@@ -56,12 +61,14 @@ void S_Start(void);
 //  using <sound_id> from sounds.h
 //
 void S_StartSound(void *origin, int sound_id);
+void S_StartAmbientSound(void *origin, int sound_id, int volume);
 
 // killough 4/25/98: mask used to indicate sound origin is player item pickup
 #define PICKUP_SOUND (0x8000)
 
 // Stop sound for thing at <origin>
 void S_StopSound(void* origin);
+dbool S_GetSoundPlayingInfo(void *origin, int sound_id);
 
 // Start music using <music_id> from sounds.h
 void S_StartMusic(int music_id);
@@ -70,8 +77,26 @@ void S_StartMusic(int music_id);
 void S_ChangeMusic(int music_id, int looping);
 void S_ChangeMusicByName(char* lumpname, int looping);
 
+/* Hexen: parse the SNDINFO lump, rewriting each S_sfx[].name from its
+ * logical tag to the real lump and recording per-map music.  Must run
+ * before the sound precache (I_InitSound) so samples load by the correct
+ * lump name. */
+void S_HexenLoadSndInfo(void);
+const char *S_HexenMapSong(int map);
+
 // Stops the music fer sure.
 void S_StopMusic(void);
+
+/* Re-registers and re-plays the currently playing track using
+ * the current I_RegisterSong dispatch (i.e. the latest
+ * midi_player setting).  No-op if nothing is playing or if the
+ * current track is an MP3 stream. */
+void S_RestartMusic(void);
+
+/* Retry a music registration deferred by the libretro MIDI player while
+ * the frontend MIDI output was not yet available (title music at boot).
+ * No-op unless in that exact deferred state.  Called every frame. */
+void S_RetryDeferredMusic(void);
 
 // Stop and resume music, during game PAUSE.
 void S_PauseSound(void);

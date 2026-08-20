@@ -32,6 +32,8 @@
  *-----------------------------------------------------------------------------*/
 
 #include "doomstat.h"
+#include "hexen/sn_sonix.h"
+#include "hexen/p_acs.h"
 #include "m_random.h"
 #include "r_main.h"
 #include "p_spec.h"
@@ -67,7 +69,7 @@ void T_PlatRaise(plat_t* plat)
                || plat->type == raiseToNearestAndChange)
          {
             if (!(leveltime&7))
-               S_StartSound((mobj_t *)&plat->sector->soundorg, sfx_stnmov);
+               if (!hexen) S_StartSound((mobj_t *)&plat->sector->soundorg, g_sfx_stnmov_plats);
          }
 
          // if encountered an obstacle, and not a crush type, reverse direction
@@ -75,7 +77,7 @@ void T_PlatRaise(plat_t* plat)
          {
             plat->count  = plat->wait;
             plat->status = PLAT_DOWN;
-            S_StartSound((mobj_t *)&plat->sector->soundorg, sfx_pstart);
+            if (!hexen) S_StartSound((mobj_t *)&plat->sector->soundorg, g_sfx_pstart);
          }
          else if (res == RES_PASTDEST) // end of stroke
          {
@@ -84,7 +86,7 @@ void T_PlatRaise(plat_t* plat)
             {
                plat->count  = plat->wait;
                plat->status = PLAT_WAITING;
-               S_StartSound((mobj_t *)&plat->sector->soundorg, sfx_pstop);
+               if (!hexen) S_StartSound((mobj_t *)&plat->sector->soundorg, g_sfx_pstop);
             }
             else /* else go into stasis awaiting next toggle activation */
             {
@@ -119,7 +121,7 @@ void T_PlatRaise(plat_t* plat)
             {                           /* is silent, instant, no waiting */
                plat->count  = plat->wait;
                plat->status = PLAT_WAITING;
-               S_StartSound((mobj_t *)&plat->sector->soundorg,sfx_pstop);
+               if (!hexen) S_StartSound((mobj_t *)&plat->sector->soundorg,g_sfx_pstop);
             }
             else // instant toggles go into stasis awaiting next activation
             {
@@ -154,16 +156,100 @@ void T_PlatRaise(plat_t* plat)
             else
                plat->status = PLAT_DOWN;   // if at top, start down
 
-#ifdef HEXEN
-            SN_StartSequence((mobj_t *)&plat->sector->soundorg, 
-                  SEQ_PLATFORM+plat->sector->seqType);
-#else
-            S_StartSound((mobj_t *)&plat->sector->soundorg,sfx_pstart);
-#endif
+            /* Hexen plats live in their own layer (EV_DoHexenPlat /
+             * Hexen_EV_StopPlat, which removes rather than stasises), so
+             * this shared stasis path is never reached on hexen maps. */
+            S_StartSound((mobj_t *)&plat->sector->soundorg,g_sfx_pstart);
          }
          break; //jff 1/27/98 don't pickup code added later to in_stasis
 
       case PLAT_IN_STASIS: // do nothing if in stasis
+         break;
+   }
+}
+
+/* Hexen plats run their own thinker: the type set differs (the doom removal
+ * switches above don't know the hexen types, which would leave a hexen
+ * Plat_DownWaitUpStay cycling forever), and the sound-sequence layer starts
+ * and stops with the strokes instead of doom's point sounds. */
+void T_HexenPlatRaise(plat_t *plat)
+{
+   result_e res;
+
+   switch (plat->status)
+   {
+      case PLAT_UP:
+         res = T_MovePlane(plat->sector, plat->speed, plat->high,
+                           plat->crush, 0, 1);
+         if (res == RES_CRUSHED && !plat->crush)
+         {
+            plat->count  = plat->wait;
+            plat->status = PLAT_DOWN;
+            if (hexen)
+               SN_StartSequence((mobj_t *) &plat->sector->soundorg,
+                                SEQ_PLATFORM + plat->sector->seqType);
+            else
+               S_StartSound((mobj_t *) &plat->sector->soundorg, g_sfx_pstart);
+         }
+         else if (res == RES_PASTDEST)
+         {
+            plat->count  = plat->wait;
+            plat->status = PLAT_WAITING;
+            if (hexen)
+               SN_StopSequence((mobj_t *) &plat->sector->soundorg);
+            else
+               S_StartSound((mobj_t *) &plat->sector->soundorg, g_sfx_pstop);
+            switch (plat->type)
+            {
+               case PLAT_DOWNWAITUPSTAY:
+               case PLAT_DOWNBYVALUEWAITUPSTAY:
+                  P_RemoveActivePlat(plat);
+                  break;
+               default:
+                  break;
+            }
+         }
+         break;
+
+      case PLAT_DOWN:
+         res = T_MovePlane(plat->sector, plat->speed, plat->low,
+                           FALSE, 0, -1);
+         if (res == RES_PASTDEST)
+         {
+            plat->count  = plat->wait;
+            plat->status = PLAT_WAITING;
+            switch (plat->type)
+            {
+               case PLAT_UPWAITDOWNSTAY:
+               case PLAT_UPBYVALUEWAITDOWNSTAY:
+                  P_RemoveActivePlat(plat);
+                  break;
+               default:
+                  break;
+            }
+            if (hexen)
+               SN_StopSequence((mobj_t *) &plat->sector->soundorg);
+            else
+               S_StartSound((mobj_t *) &plat->sector->soundorg, g_sfx_pstop);
+         }
+         break;
+
+      case PLAT_WAITING:
+         if (!--plat->count)
+         {
+            if (plat->sector->floorheight == plat->low)
+               plat->status = PLAT_UP;
+            else
+               plat->status = PLAT_DOWN;
+            if (hexen)
+               SN_StartSequence((mobj_t *) &plat->sector->soundorg,
+                                SEQ_PLATFORM + plat->sector->seqType);
+            else
+               S_StartSound((mobj_t *) &plat->sector->soundorg, g_sfx_pstart);
+         }
+         break;
+
+      default:
          break;
    }
 }
@@ -187,7 +273,6 @@ int EV_DoPlat
   int             secnum = -1;
   int                rtn = 0;
 
-#ifndef HEXEN
   /* Activate all <type> plats that are in_stasis */
   switch(type)
   {
@@ -203,18 +288,15 @@ int EV_DoPlat
     default:
       break;
   }
-#endif
 
   /* act on all sectors tagged the same as the activating linedef */
   while ((secnum = P_FindSectorFromLineTag(line,secnum)) >= 0)
   {
      sector_t *sec = &sectors[secnum];
 
-#ifndef HEXEN
      /* don't start a second floor function if already moving */
      if (P_SectorActive(floor_special,sec)) /* jff 2/23/98 multiple thinkers */
         continue;
-#endif
 
      /* Create a thinker */
      rtn = 1;
@@ -246,7 +328,7 @@ int EV_DoPlat
            //jff 3/14/98 clear old field as well
            sec->oldspecial = 0;
 
-           S_StartSound((mobj_t *)&sec->soundorg,sfx_stnmov);
+           S_StartSound((mobj_t *)&sec->soundorg,g_sfx_stnmov_plats);
            break;
 
         case raiseAndChange:
@@ -256,7 +338,7 @@ int EV_DoPlat
            plat->wait    = 0;
            plat->status  = PLAT_UP;
 
-           S_StartSound((mobj_t *)&sec->soundorg,sfx_stnmov);
+           S_StartSound((mobj_t *)&sec->soundorg,g_sfx_stnmov_plats);
            break;
 
         case downWaitUpStay:
@@ -269,7 +351,7 @@ int EV_DoPlat
            plat->high   = sec->floorheight;
            plat->wait   = 35*PLATWAIT;
            plat->status = PLAT_DOWN;
-           S_StartSound((mobj_t *)&sec->soundorg,sfx_pstart);
+           S_StartSound((mobj_t *)&sec->soundorg,g_sfx_pstart);
            break;
 
         case blazeDWUS:
@@ -282,7 +364,7 @@ int EV_DoPlat
            plat->high   = sec->floorheight;
            plat->wait   = 35*PLATWAIT;
            plat->status = PLAT_DOWN;
-           S_StartSound((mobj_t *)&sec->soundorg,sfx_pstart);
+           S_StartSound((mobj_t *)&sec->soundorg,g_sfx_pstart);
            break;
 
         case perpetualRaise:
@@ -300,7 +382,7 @@ int EV_DoPlat
            plat->wait = 35*PLATWAIT;
            plat->status = P_Random(pr_plats)&1;
 
-           S_StartSound((mobj_t *)&sec->soundorg,sfx_pstart);
+           S_StartSound((mobj_t *)&sec->soundorg,g_sfx_pstart);
            break;
 
         case toggleUpDn: //jff 3/14/98 add new type to support instant toggle
@@ -413,6 +495,11 @@ void P_AddActivePlat(plat_t* plat)
 void P_RemoveActivePlat(plat_t* plat)
 {
    platlist_t *list = plat->list;
+   if (hexen)
+   {
+      SN_StopSequence((mobj_t *)&plat->sector->soundorg);
+      P_TagFinished(plat->sector->tag);
+   }
    plat->sector->floordata = NULL; //jff 2/23/98 multiple thinkers
    P_RemoveThinker(&plat->thinker);
    if ((*list->prev = list->next))

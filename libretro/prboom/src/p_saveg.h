@@ -43,7 +43,20 @@ void P_UnArchiveWorld(void);
 void P_ArchiveThinkers(void);
 void P_UnArchiveThinkers(void);
 void P_ArchiveSpecials(void);
-void P_UnArchiveSpecials(void);
+
+/* hexen world state (no-ops outside hexen) */
+void P_ArchiveACS(void);
+void P_UnArchiveACS(void);
+void P_ArchiveScripts(void);
+void P_UnArchiveScripts(void);
+void P_ArchivePolyobjs(void);
+void P_UnArchivePolyobjs(void);
+void P_ArchiveSounds(void);
+/* heretic ambient sequence cursor (lives in p_spec.c with the walker) */
+void P_ArchiveAmbientSound(void);
+void P_UnArchiveAmbientSound(void);
+void P_UnArchiveSounds(void);
+int P_UnArchiveSpecials(void);
 void P_ThinkerToIndex(void); /* phares 9/13/98: save soundtarget in savegame */
 void P_IndexToThinker(void); /* phares 9/13/98: save soundtarget in savegame */
 
@@ -56,6 +69,7 @@ void P_ArchiveMap(void);
 void P_UnArchiveMap(void);
 
 extern uint8_t *save_p;
+void P_SetSaveBufferEnd(const uint8_t *end);
 void CheckSaveGame(size_t,const char*, int);              /* killough */
 #define CheckSaveGame(a) (CheckSaveGame)(a, __FILE__, __LINE__)
 

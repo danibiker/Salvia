@@ -248,6 +248,18 @@ int markpointnum_max = 0;       // killough 2/22/98
 
 static dbool   stopped = TRUE;
 
+/* Track the last (level, episode) AM_LevelInit ran for, so toggling
+ * automap mid-level reuses the existing geometry-derived scale and
+ * boundaries instead of recomputing.  These were function-local
+ * statics in AM_Start originally, but on libretro they had to
+ * survive across content loads -- and the previous session's
+ * (gamemap, gameepisode) collided with the new session's on
+ * matching slots, skipping AM_LevelInit and leaving the new map's
+ * automap with the previous map's scale_mtof / min_scale_mtof /
+ * boundaries.  Promoted to file scope so AM_Deinit can reset them. */
+static int am_lastlevel = -1;
+static int am_lastepisode = -1;
+
 //
 // AM_activateNewScale()
 //
@@ -539,21 +551,43 @@ void AM_Stop (void)
 */
 void AM_Start(void)
 {
-  static int lastlevel = -1, lastepisode = -1;
-
   if (!stopped)
     AM_Stop();
   stopped = false;
 
-  if (lastlevel != gamemap || lastepisode != gameepisode)
+  if (am_lastlevel != gamemap || am_lastepisode != gameepisode)
   {
     AM_LevelInit();
-    lastlevel   = gamemap;
-    lastepisode = gameepisode;
+    am_lastlevel   = gamemap;
+    am_lastepisode = gameepisode;
   }
 
   AM_initVariables();
   AM_loadPics();
+}
+
+/*
+ * AM_Deinit()
+ *
+ * Called from D_DoomDeinit.  Resets the AM_Start (level, episode)
+ * cache so a subsequent retro_load_game's AM_Start always
+ * re-runs AM_LevelInit -- otherwise the new session's matching
+ * (gamemap, gameepisode) reuses the previous WAD's geometry-
+ * derived scale/boundaries.  Also forces stopped back to its
+ * initial-state value.
+ */
+void AM_Deinit(void)
+{
+  am_lastlevel   = -1;
+  am_lastepisode = -1;
+  stopped        = TRUE;
+
+  /* The mark list is grown to a high-water mark and reused, so the
+   * capacity falls back to zero with the pointer. */
+  Z_Free(markpoints);
+  markpoints       = NULL;
+  markpointnum     = 0;
+  markpointnum_max = 0;
 }
 
 /*
@@ -1575,7 +1609,19 @@ void AM_Drawer (void)
      return;
 
   if (!(automapmode & am_overlay)) // cph - If not overlay mode, clear background for the automap
-    V_FillRect(f_x, f_y, f_w, f_h, (uint8_t)mapcolor_back); //jff 1/5/98 background default color
+    {
+      /* mapcolor_back defaults to 247, which jff chose as a symbolic
+       * "transparent/black" token -- AM_drawFline already maps 247 -> 0
+       * before drawing.  Index 247 is black in Doom's palette but bright
+       * red in Heretic's, so filling the background with the raw 247 paints
+       * the whole automap red under Heretic.  Apply the same 247 -> 0
+       * translation here; index 0 is black in both palettes, so this is a
+       * no-op for Doom and fixes the red Heretic automap. */
+      int back = mapcolor_back;
+      if (back == 247) // jff 4/3/98 247 is the symbolic black token
+        back = 0;
+      V_FillRect(f_x, f_y, f_w, f_h, (uint8_t)back); //jff 1/5/98 background default color
+    }
   if (automapmode & am_grid)
     AM_drawGrid(mapcolor_grid);      //jff 1/7/98 grid default color
   AM_drawWalls();

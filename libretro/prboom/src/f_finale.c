@@ -40,7 +40,9 @@
 #include "s_sound.h"
 #include "sounds.h"
 #include "d_deh.h"  // Ty 03/22/98 - externalizations
-#include "f_finale.h" // CPhipps - hmm...
+#include "f_finale.h"
+#include "heretic/f_finale.h"
+#include "hexen/f_finale.h" // CPhipps - hmm...
 
 // Stage of animation:
 //  0 = text, 1 = art screen, 2 = character cast
@@ -77,6 +79,8 @@ static int midstage;                 // whether we're in "mid-stage"
 */
 void F_StartFinale (void)
 {
+  if (heretic) { Heretic_F_StartFinale(); return; }
+  if (hexen) { Hexen_F_StartFinale(); return; }
   gameaction   = ga_nothing;
   gamestate    = GS_FINALE;
   automapmode &= ~am_active;
@@ -107,11 +111,7 @@ void F_StartFinale (void)
      case registered:
      case retail:
         {
-#ifdef HEXEN
-           S_StartSongName("hall", false);
-#else
            S_ChangeMusic(mus_victor, true);
-#endif
 
            switch (gameepisode)
            {
@@ -204,10 +204,10 @@ void F_StartFinale (void)
 
 dbool   F_Responder (event_t *event)
 {
-#ifndef HEXEN
-  if (FinaleStage == 2)
+  if (heretic) return Heretic_F_Responder(event);
+  if (hexen) return Hexen_F_Responder(event);
+  if (!hexen && FinaleStage == 2)
     return F_CastResponder (event);
-#endif
 
   return FALSE;
 }
@@ -238,6 +238,8 @@ static float Get_TextSpeed(void)
 void F_Ticker(void)
 {
   int i;
+  if (heretic) { Heretic_F_Ticker(); return; }
+  if (hexen) { Hexen_F_Ticker(); return; }
 
   if (!demo_compatibility)
     WI_checkForAccelerate();  // killough 3/28/98: check for acceleration
@@ -432,9 +434,25 @@ void F_StartCast (void)
   castattacking = FALSE;
   S_ChangeMusic(mus_evil, TRUE);
 
-  // Fallback to CREDIT if Cast background is missing (eg. Doom1)
-  if (W_CheckNumForName(bgcastcall) == -1)
-     bgcastcall = "CREDIT";
+  /* Re-evaluate the BOSSBACK fallback each call.  Without snapshotting,
+   * once a wad without BOSSBACK triggers the "bgcastcall = CREDIT"
+   * line below, the global pointer permanently reads "CREDIT" -- so a
+   * later session whose wad does have BOSSBACK would still render
+   * CREDIT.  Snapshot the original pointer (which may itself have
+   * been DEH-replaced; capturing whatever was there at first call is
+   * fine) and restore it before re-checking.
+   */
+  {
+    static const char *bgcastcall_saved = NULL;
+    if (!bgcastcall_saved)
+      bgcastcall_saved = bgcastcall;
+    else
+      bgcastcall = bgcastcall_saved;
+
+    // Fallback to CREDIT if Cast background is missing (eg. Doom1)
+    if (W_CheckNumForName(bgcastcall) == -1)
+       bgcastcall = "CREDIT";
+  }
 }
 
 
@@ -642,7 +660,7 @@ void F_CastDrawer (void)
 
   // erase the entire screen to a background
   // CPhipps - patch drawing updated
-  V_DrawNamePatch(0,0,0, bgcastcall, CR_DEFAULT, VPT_STRETCH); // Ty 03/30/98 bg texture extern
+  V_DrawNamePatchFS(0,0,0, bgcastcall, CR_DEFAULT, VPT_STRETCH); // Ty 03/30/98 bg texture extern
 
   F_CastPrint (*(castorder[castnum].name));
 
@@ -715,6 +733,8 @@ static void F_BunnyScroll (void)
 */
 void F_Drawer (void)
 {
+  if (heretic) { Heretic_F_Drawer(); return; }
+  if (hexen) { Hexen_F_Drawer(); return; }
   if (!FinaleStage)
     F_TextWrite ();
   else if (FinaleStage == 2)
@@ -729,7 +749,7 @@ void F_Drawer (void)
        F_BunnyScroll ();
     else
     {
-      V_DrawNamePatch(0, 0, 0, gamemapinfo->endpic, CR_DEFAULT, VPT_STRETCH);
+      V_DrawNamePatchFullScreenCached(0, gamemapinfo->endpic, CR_DEFAULT);
       // e6y: wide-res
       //V_FillBorder(-1, 0);
     }
@@ -741,21 +761,21 @@ void F_Drawer (void)
       // CPhipps - patch drawing updated
       case 1:
         if ( gamemode == retail )
-          V_DrawNamePatch(0, 0, 0, "CREDIT", CR_DEFAULT, VPT_STRETCH);
+          V_DrawNamePatchFullScreenCached(0, "CREDIT", CR_DEFAULT);
         else
-          V_DrawNamePatch(0, 0, 0, "HELP2", CR_DEFAULT, VPT_STRETCH);
+          V_DrawNamePatchFullScreenCached(0, "HELP2", CR_DEFAULT);
         break;
       case 2:
-        V_DrawNamePatch(0, 0, 0, "VICTORY2", CR_DEFAULT, VPT_STRETCH);
+        V_DrawNamePatchFullScreenCached(0, "VICTORY2", CR_DEFAULT);
         break;
       case 3:
         F_BunnyScroll ();
         break;
       case 4:
-           V_DrawNamePatch(0, 0, 0, "ENDPIC", CR_DEFAULT, VPT_STRETCH);
+           V_DrawNamePatchFullScreenCached(0, "ENDPIC", CR_DEFAULT);
            break;
       case 5:
-           V_DrawNamePatch(0, 0, 0, "SIGILEND", CR_DEFAULT, VPT_STRETCH);
+           V_DrawNamePatchFullScreenCached(0, "SIGILEND", CR_DEFAULT);
            break;
     }
   }

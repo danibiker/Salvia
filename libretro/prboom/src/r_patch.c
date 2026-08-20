@@ -241,16 +241,64 @@ static void createPatch(int id) {
   postsDataSize = numPostsTotal * sizeof(rpost_t);
 
   // allocate our data chunk
-  dataSize = pixelDataSize + columnsDataSize + postsDataSize;
-  patch->data = (unsigned char*)Z_Malloc(dataSize, PU_CACHE, (void **)&patch->data);
+  /* The pixel region carries one extra column's worth of 0xff padding:
+   * masked drawing rebases texturemid per post (source = pixels +
+   * topdelta), and a sloped-edge or rounding overshoot of one sub-texel
+   * above the post start wraps through the texheight modulo to the
+   * texture's bottom row, i.e. a read at pixels[col*height + topdelta +
+   * height-1].  For the last column with topdelta > 0 that lands past
+   * the pixel region, in the rcolumn_t array, whose pointer bytes vary
+   * per process -- the rendered pixel then differs from run to run.
+   * The padding keeps that read inside deterministic 0xff bytes. */
+  /* The rcolumn_t/rpost_t arrays hold pointers and need 8-byte alignment,
+   * but they were carved at pixels + pixelDataSize + height: pixelDataSize
+   * is only 4-aligned and the trailing padding column's height is
+   * arbitrary, so for most patch heights the structs landed on odd
+   * addresses (UBSan: misaligned member access; x86 tolerated it, strict
+   * targets fault).  Round the carve offset up to 8; the pixel region and
+   * its padding column keep their exact size, only the gap grows. */
+  dataSize = ((pixelDataSize + patch->height + 7) & ~7)
+             + columnsDataSize + postsDataSize;
+  /* Pass &patch->data as the user back-pointer so that when this
+   * PU_CACHE block is auto-purged (Z_Malloc's cache-purge under
+   * memory pressure, or an explicit Z_FreeTags(PU_CACHE)), the
+   * patch->data slot in `patches[]` is NULLed.  Otherwise the next
+   * R_CachePatchNum sees a non-NULL but freed patch->data, skips
+   * the re-create branch, and returns a patchnum whose pixels /
+   * columns / posts pointers point into freed memory.  Use-after-
+   * free, fires routinely under MEMORY_LOW (16MB cap, frequent
+   * cache purges).
+   *
+   * The deinit-time concern (Z_Close walks PU_STATIC before
+   * PU_CACHE; if patches[] were freed first, this Z_Free would
+   * write into freed memory) is handled by R_FlushAllPatches in
+   * D_DoomDeinit: it explicitly Z_Free's every patches[i].data
+   * BEFORE freeing patches[].  The Z_Free's back-pointer write to
+   * &patches[i].data is safe because patches[] is still alive
+   * throughout R_FlushAllPatches's loop.  By the time Z_Close
+   * runs, no patches.data blocks remain. */
+  /* Eight bytes of 0xff lead padding before the pixels: the filtered
+   * drawers index source[frac>>16] on the signed frac, which reaches
+   * -1 on a column's first rows when the half-texel centering pushes
+   * frac below zero.  For every column but the first that lands on
+   * the previous column's last byte; for column 0 it landed on the
+   * allocation header's padding -- an uninitialised byte, so the
+   * blended output depended on the allocator.  Eight bytes (not one)
+   * keep the rcolumn_t/rpost_t arrays after the pixels aligned.
+   * Companion to the trailing padding column below. */
+  dataSize += 8;
+  patch->data = (unsigned char*)Z_Malloc(dataSize, PU_CACHE,
+                                         (void **)&patch->data);
   memset(patch->data, 0, dataSize);
+  memset(patch->data, 0xff, 8);
 
   // set out pixel, column, and post pointers into our data array
-  patch->pixels = patch->data;
-  patch->columns = (rcolumn_t*)((unsigned char*)patch->pixels + pixelDataSize);
+  patch->pixels = patch->data + 8;
+  patch->columns = (rcolumn_t*)((unsigned char*)patch->pixels
+                  + ((pixelDataSize + patch->height + 7) & ~7));
   patch->posts = (rpost_t*)((unsigned char*)patch->columns + columnsDataSize);
 
-  memset(patch->pixels, 0xff, (patch->width*patch->height));
+  memset(patch->pixels, 0xff, (patch->width*patch->height + patch->height));
 
   // fill in the pixels, posts, and columns
   numPostsUsedSoFar = 0;
@@ -308,8 +356,22 @@ static void createPatch(int id) {
 
       // fill in the post's pixels
       oldColumnPixelData = (const uint8_t *)oldColumn + 3;
-      for (y=0; y<oldColumn->length; y++) {
-        patch->pixels[x * patch->height + top + y] = oldColumnPixelData[y];
+      {
+        /* DeePsea tall patches accumulate topdelta, so a post's top (and a
+         * deliberately overlong or malformed post's length) can run past the
+         * patch height.  Each column owns exactly patch->height pixel slots, so
+         * writing top+y >= height spills into the next column's pixels and
+         * renders as torn vertical garbage (e.g. ZDCMP2's CRIP seaweed sprite,
+         * which the map author flagged as not displaying in software mode).
+         * Clamp the copy to the column. */
+        int copylen = oldColumn->length;
+        if (top >= patch->height)
+          copylen = 0;
+        else if (top + copylen > patch->height)
+          copylen = patch->height - top;
+        for (y=0; y<copylen; y++) {
+          patch->pixels[x * patch->height + top + y] = oldColumnPixelData[y];
+        }
       }
 
       oldColumn = (const column_t *)((const uint8_t *)oldColumn + oldColumn->length + 4);
@@ -399,6 +461,66 @@ static void removePostFromColumn(rcolumn_t *column, int post) {
 }
 
 //---------------------------------------------------------------------------
+/* A texture whose single "patch" is a raw flat lump (R_InitTextures
+ * appends these for ZDoom-style flats-on-walls).  Flats carry no patch
+ * structure to replicate vanilla column bugs from: build the composite
+ * directly as 64 full-height columns of one post each, transposing the
+ * row-major flat into column-major pixels. */
+static void createFlatCompositePatch(rpatch_t *composite_patch,
+                                     const texture_t *texture)
+{
+  int x, y;
+  int pixelDataSize, columnsDataSize, postsDataSize, dataSize;
+  const uint8_t *flat;
+  int lump = texture->patches[0].patch;
+
+  composite_patch->width = texture->width;
+  composite_patch->height = texture->height;
+  composite_patch->widthmask = texture->widthmask;
+  composite_patch->leftoffset = 0;
+  composite_patch->topoffset = 0;
+  composite_patch->isNotTileable = 0;
+
+  pixelDataSize = (composite_patch->width * composite_patch->height + 4) & ~3;
+  columnsDataSize = sizeof(rcolumn_t) * composite_patch->width;
+  postsDataSize = composite_patch->width * sizeof(rpost_t);
+
+  /* same layout as the patch-built composite: eight bytes of 0xff lead
+   * padding for the filtered drawers' frac==-1 reads, and a trailing
+   * padding column for post-relative bottom-row wraps */
+  /* columns offset rounded to 8 for rcolumn_t alignment; see createPatch */
+  dataSize = 8 + ((pixelDataSize + composite_patch->height + 7) & ~7)
+             + columnsDataSize + postsDataSize;
+  composite_patch->data = (unsigned char *)Z_Malloc(dataSize, PU_STATIC, NULL);
+  memset(composite_patch->data, 0, dataSize);
+  memset(composite_patch->data, 0xff, 8);
+
+  composite_patch->pixels = composite_patch->data + 8;
+  composite_patch->columns = (rcolumn_t *)((unsigned char *)composite_patch->pixels
+                             + ((pixelDataSize + composite_patch->height + 7) & ~7));
+  composite_patch->posts = (rpost_t *)((unsigned char *)composite_patch->columns
+                           + columnsDataSize);
+
+  flat = (const uint8_t *)W_CacheLumpNum(lump);
+  for (x = 0; x < composite_patch->width; x++)
+  {
+    rpost_t *post = &composite_patch->posts[x];
+
+    composite_patch->columns[x].pixels =
+      composite_patch->pixels + x * composite_patch->height;
+    composite_patch->columns[x].numPosts = 1;
+    composite_patch->columns[x].posts = post;
+    post->topdelta = 0;
+    post->length = composite_patch->height;
+    post->slope = 0;
+
+    for (y = 0; y < composite_patch->height; y++)
+      composite_patch->columns[x].pixels[y] =
+        flat[y * composite_patch->width + x];
+  }
+  W_UnlockLumpNum(lump);
+}
+
 static void createTextureCompositePatch(int id) {
   rpatch_t *composite_patch;
   texture_t *texture;
@@ -422,6 +544,13 @@ static void createTextureCompositePatch(int id) {
   composite_patch = &texture_composites[id];
 
   texture = textures[id];
+
+  if (texture->patchcount == 1 &&
+      lumpinfo[texture->patches[0].patch].li_namespace == ns_flats)
+  {
+    createFlatCompositePatch(composite_patch, texture);
+    return;
+  }
 
   composite_patch->width = texture->width;
   composite_patch->height = texture->height;
@@ -467,16 +596,34 @@ static void createTextureCompositePatch(int id) {
   postsDataSize = numPostsTotal * sizeof(rpost_t);
 
   // allocate our data chunk
-  dataSize = pixelDataSize + columnsDataSize + postsDataSize;
-  composite_patch->data = (unsigned char*)Z_Malloc(dataSize, PU_STATIC, (void **)&composite_patch->data);
+  /* One extra column of 0xff padding after the pixels, for the same
+   * post-relative bottom-row wrap as in the single-patch case above. */
+  /* columns offset rounded to 8 for rcolumn_t alignment; see createPatch */
+  dataSize = ((pixelDataSize + composite_patch->height + 7) & ~7)
+             + columnsDataSize + postsDataSize;
+  /* See r_patch.c:238 — back-pointer would point into texture_composites[],
+   * unsafe at teardown.  No user back-pointer here. */
+  /* Eight bytes of 0xff lead padding before the pixels: the filtered
+   * drawers index source[frac>>16] on the signed frac, which reaches
+   * -1 on a column's first rows when the half-texel centering pushes
+   * frac below zero.  For every column but the first that lands on
+   * the previous column's last byte; for column 0 it landed on the
+   * allocation header's padding -- an uninitialised byte, so the
+   * blended output depended on the allocator.  Eight bytes (not one)
+   * keep the rcolumn_t/rpost_t arrays after the pixels aligned.
+   * Companion to the trailing padding column below. */
+  dataSize += 8;
+  composite_patch->data = (unsigned char*)Z_Malloc(dataSize, PU_STATIC, NULL);
   memset(composite_patch->data, 0, dataSize);
+  memset(composite_patch->data, 0xff, 8);
 
   // set out pixel, column, and post pointers into our data array
-  composite_patch->pixels = composite_patch->data;
-  composite_patch->columns = (rcolumn_t*)((unsigned char*)composite_patch->pixels + pixelDataSize);
+  composite_patch->pixels = composite_patch->data + 8;
+  composite_patch->columns = (rcolumn_t*)((unsigned char*)composite_patch->pixels
+                             + ((pixelDataSize + composite_patch->height + 7) & ~7));
   composite_patch->posts = (rpost_t*)((unsigned char*)composite_patch->columns + columnsDataSize);
 
-  memset(composite_patch->pixels, 0xff, (composite_patch->width*composite_patch->height));
+  memset(composite_patch->pixels, 0xff, (composite_patch->width*composite_patch->height + composite_patch->height));
 
   numPostsUsedSoFar = 0;
 

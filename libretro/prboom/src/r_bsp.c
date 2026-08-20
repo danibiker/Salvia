@@ -36,8 +36,15 @@
 #include "r_main.h"
 #include "r_segs.h"
 #include "r_plane.h"
+#include "r_dynlight.h"
+#include "p_sectorportal.h"
+
+/* set per subsector: the true sector index before any FakeFlat rewrite */
+int r_real_secnum = -1;
 #include "r_things.h"
-#include "r_bsp.h" // cph - sanity checking
+#include "r_bsp.h"
+#include "p_lineportal.h"
+#include "p_ffloor.h"
 #include "v_video.h"
 #include "lprintf.h"
 
@@ -140,6 +147,13 @@ static void R_RecalcLineFlags(void)
     )
       )
     linedef->r_flags = RF_CLOSED;
+  else if (line_portals_active && lineportals &&
+           lineportals[linedef - lines].active)
+    /* A visual line portal's opening shows its partner's surroundings, not
+     * the sector behind it, so the line blocks the view exactly as a closed
+     * door does -- otherwise the back sector draws through the window and
+     * the composite has nothing left to paint into. */
+    linedef->r_flags = RF_CLOSED;
   else {
     // Reject empty lines used for triggers
     //  and special events.
@@ -147,6 +161,15 @@ static void R_RecalcLineFlags(void)
     // identical light levels on both sides,
     // and no middle texture.
     // CPhipps - recode for speed, not certain if this is portable though
+    //
+    // A 3D-floor (ZDoom Sector_Set3DFloor) sector is most often the same
+    // floor/ceiling/light as the sector beside it -- a platform you can walk
+    // onto -- and differs only by the slab inside it.  Such a line must NOT be
+    // treated as an empty trigger line: the slab's faces (and surfaces) are
+    // rendered from the drawseg this line produces, so force it to render.
+    if (backsector->ffloors || frontsector->ffloors) {
+      linedef->r_flags = 0; return;
+    }
     if (backsector->ceilingheight != frontsector->ceilingheight
   || backsector->floorheight != frontsector->floorheight
   || curline->sidedef->midtexture
@@ -204,12 +227,31 @@ sector_t *R_FakeFlat(sector_t *sec, sector_t *tempsec,
                      dbool   back)
 {
   if (floorlightlevel)
-    *floorlightlevel = sec->floorlightsec == -1 ?
+  {
+    int fl = sec->floorlightsec == -1 ?
       sec->lightlevel : sectors[sec->floorlightsec].lightlevel;
+    /* ZDoom UDMF per-plane light: absolute replaces, otherwise adds. */
+    if (sec->lightfloor_absolute)
+      fl = sec->lightfloor;
+    else
+      fl += sec->lightfloor;
+    if (fl < 0)   fl = 0;
+    if (fl > 255) fl = 255;
+    *floorlightlevel = fl;
+  }
 
   if (ceilinglightlevel)
-    *ceilinglightlevel = sec->ceilinglightsec == -1 ? // killough 4/11/98
+  {
+    int cl = sec->ceilinglightsec == -1 ? // killough 4/11/98
       sec->lightlevel : sectors[sec->ceilinglightsec].lightlevel;
+    if (sec->lightceiling_absolute)
+      cl = sec->lightceiling;
+    else
+      cl += sec->lightceiling;
+    if (cl < 0)   cl = 0;
+    if (cl > 255) cl = 255;
+    *ceilinglightlevel = cl;
+  }
 
   if (sec->heightsec != -1)
     {
@@ -468,6 +510,22 @@ static dbool   R_CheckBBox(const fixed_t *bspcoord)
 //
 // killough 1/31/98 -- made static, polished
 
+/* Hexen: render a polyobject's segs inside its current subsector, before
+ * the subsector's own segs.  The vertices were rewritten by the polyobj
+ * movement code, so R_AddLine draws them where they now stand. */
+static void R_AddPolyLines(polyobj_t *poly)
+{
+  int polyCount;
+  seg_t **polySeg;
+
+  polyCount = poly->numsegs;
+  polySeg = poly->segs;
+  while (polyCount--)
+  {
+    R_AddLine(*polySeg++);
+  }
+}
+
 static void R_Subsector(int num)
 {
   int         count;
@@ -479,6 +537,11 @@ static void R_Subsector(int num)
 
   sub = &subsectors[num];
   frontsector = sub->sector;
+  /* identity-keyed lookups (stacked-sector portals, wall glow) must use the
+   * REAL sector: frontsector may be rewritten to &tempsec by R_FakeFlat or
+   * the 3D-floor override below, and a pointer difference against that
+   * stack copy indexes wildly out of the per-sector tables. */
+  r_real_secnum = (int)(sub->sector - sectors);
   count = sub->numlines;
   line = &segs[sub->firstline];
 
@@ -486,11 +549,70 @@ static void R_Subsector(int num)
   frontsector = R_FakeFlat(frontsector, &tempsec, &floorlightlevel,
                            &ceilinglightlevel, FALSE);   // killough 4/11/98
 
+  /* ZDoom solid 3D floors: a Sector_Set3DFloor slab fills this sector's
+   * whole footprint, so within the sector the slab's top is the effective
+   * floor whenever the view is above it, and the slab's bottom is the
+   * effective ceiling whenever the view is below it.  Swap the height and
+   * flat used for both the wall extents (frontsector drives R_AddLine) and
+   * the visplane, reusing the ordinary floor/ceiling path; the slab's other
+   * face is drawn separately by the thickside pass.  Pick the topmost slab
+   * below the view for the floor and the lowest slab above it for the
+   * ceiling so a stack resolves to the nearest surfaces. */
+  if (frontsector->ffloors)
+  {
+    const ffloor_t *ff;
+    fixed_t   bestfloor = frontsector->floorheight;
+    fixed_t   bestceil  = frontsector->ceilingheight;
+    const ffloor_t *floorff = NULL;
+    const ffloor_t *ceilff  = NULL;
+
+    for (ff = frontsector->ffloors; ff; ff = ff->next)
+    {
+      fixed_t ftop, fbot;
+      /* opaque slabs (solid + render-only) get a surface; swimmable
+       * (translucent) slabs are left for a later alpha-aware pass */
+      if (ff->type != FFLOOR_SOLID && ff->type != FFLOOR_RENDERONLY)
+        continue;
+      /* a translucent slab (alpha < 224, the same cutoff the thickside pass
+       * uses to keep near-opaque slabs solid) is not an opaque surface: the
+       * real floor below must stay visible through it, so it is not chosen as
+       * the floor/ceiling here but laid over as a translucent plane below. */
+      if (ff->alpha < 224)
+        continue;
+      ftop = ff->model->ceilingheight;
+      fbot = ff->model->floorheight;
+      if (fbot >= ftop)
+        continue;
+      if (ftop <= viewz && ftop > bestfloor) { bestfloor = ftop; floorff = ff; }
+      if (fbot >= viewz && fbot < bestceil)  { bestceil  = fbot; ceilff  = ff; }
+    }
+
+    if (floorff || ceilff)
+    {
+      if (frontsector != &tempsec)
+      {
+        tempsec = *frontsector;
+        frontsector = &tempsec;
+      }
+      if (floorff)
+      {
+        tempsec.floorheight = bestfloor;
+        tempsec.floorpic    = floorff->model->floorpic;
+      }
+      if (ceilff)
+      {
+        tempsec.ceilingheight = bestceil;
+        tempsec.ceilingpic    = ceilff->model->ceilingpic;
+      }
+    }
+  }
+
   // killough 3/7/98: Add (x,y) offsets to flats, add deep water check
   // killough 3/16/98: add floorlightlevel
   // killough 10/98: add support for skies transferred from sidedefs
 
-  floorplane = frontsector->floorheight < viewz || // killough 3/7/98
+  floorplane = frontsector->floor_slope ||        /* sloped: never cull */
+    frontsector->floorheight < viewz || // killough 3/7/98
     (frontsector->heightsec != -1 &&
      sectors[frontsector->heightsec].ceilingpic == skyflatnum) ?
     R_FindPlane(frontsector->floorheight,
@@ -499,10 +621,17 @@ static void R_Subsector(int num)
                 frontsector->floorpic,
                 floorlightlevel,                // killough 3/16/98
                 frontsector->floor_xoffs,       // killough 3/7/98
-                frontsector->floor_yoffs
+                frontsector->floor_yoffs,
+                frontsector->floor_slope,
+                frontsector->floorpic == skyflatnum ? frontsector->skybox : -1,
+                floorportals &&
+                (unsigned)r_real_secnum < (unsigned)numsectors &&
+                floorportals[r_real_secnum].active
+                  ? -r_real_secnum - 1 : 0
                 ) : NULL;
 
-  ceilingplane = frontsector->ceilingheight > viewz ||
+  ceilingplane = frontsector->ceiling_slope ||    /* sloped: never cull */
+    frontsector->ceilingheight > viewz ||
     frontsector->ceilingpic == skyflatnum ||
     (frontsector->heightsec != -1 &&
      sectors[frontsector->heightsec].floorpic == skyflatnum) ?
@@ -512,8 +641,71 @@ static void R_Subsector(int num)
                 frontsector->ceilingpic,
                 ceilinglightlevel,              // killough 4/11/98
                 frontsector->ceiling_xoffs,     // killough 3/7/98
-                frontsector->ceiling_yoffs
+                frontsector->ceiling_yoffs,
+                frontsector->ceiling_slope,
+                frontsector->ceilingpic == skyflatnum ? frontsector->skybox : -1,
+                ceilingportals &&
+                (unsigned)r_real_secnum < (unsigned)numsectors &&
+                ceilingportals[r_real_secnum].active
+                  ? r_real_secnum + 1 : 0
                 ) : NULL;
+
+  /* ZDoom swimmable 3D floors (water) AND translucent solid/render-only
+   * slabs (a see-through grating or glass walkway, alpha 1..223): unlike an
+   * opaque slab the real floor is still drawn, and the slab's top is a
+   * translucent surface laid over it.  Only the common above-surface case is
+   * handled (view above the top); its span is bounded per-column in
+   * R_RenderSegLoop and it is drawn after the opaque planes.  waterplane is
+   * reset every subsector so a stale plane never leaks into an ordinary one. */
+  waterplane = NULL;
+  nmorewater = 0;
+  if (frontsector->ffloors)
+  {
+    const ffloor_t *ff;
+    /* gather every see-through surface at or below the view, then sort
+     * top-down: the highest becomes waterplane (the existing nearest-surface
+     * path, unchanged for a lone slab) and the rest become stacked planes. */
+    const ffloor_t *cand[MAXMOREWATER + 1];
+    fixed_t         candh[MAXMOREWATER + 1];
+    int             ncand = 0;
+    int             i, j;
+
+    for (ff = frontsector->ffloors; ff; ff = ff->next)
+    {
+      fixed_t wtop;
+      if (ff->type != FFLOOR_SWIMMABLE &&
+          !((ff->type == FFLOOR_SOLID || ff->type == FFLOOR_RENDERONLY) &&
+            ff->alpha > 0 && ff->alpha < 224))
+        continue;
+      wtop = ff->model->ceilingheight;        /* slab/water surface height */
+      if (ff->model->floorheight >= wtop)
+        continue;
+      if (wtop > viewz)                        /* only above-surface case */
+        continue;
+      if (ncand < MAXMOREWATER + 1)
+      {
+        for (i = ncand; i > 0 && candh[i - 1] < wtop; i--)
+        {
+          candh[i] = candh[i - 1];
+          cand[i]  = cand[i - 1];
+        }
+        candh[i] = wtop;
+        cand[i]  = ff;
+        ncand++;
+      }
+    }
+
+    if (ncand > 0)
+    {
+      waterplane = R_FindWaterPlane(candh[0],
+                                    cand[0]->model->floorpic,
+                                    cand[0]->model->lightlevel);
+      for (j = 1; j < ncand; j++)
+        morewater[nmorewater++] = R_FindWaterPlane(candh[j],
+                                    cand[j]->model->floorpic,
+                                    cand[j]->model->lightlevel);
+    }
+  }
 
   // killough 9/18/98: Fix underwater slowdown, by passing real sector
   // instead of fake one. Improve sprite lighting by basing sprite
@@ -528,7 +720,24 @@ static void R_Subsector(int num)
   // real sector, or you must account for the lighting in some other way,
   // like passing it as an argument.
 
+  /* GLDEFS wall glow: tag the planes of glowing sectors (see r_dynlight) */
+  if ((floorplane || ceilingplane) &&
+      R_SectorWallGlow(r_real_secnum))
+  {
+    if (floorplane)   floorplane->wallglow = 1;
+    if (ceilingplane) ceilingplane->wallglow = 1;
+  }
+
   R_AddSprites(sub, (floorlightlevel+ceilinglightlevel)/2);
+
+  /* Hexen: render the polyobj in the subsector first */
+  if (sub->poly)
+  {
+    polyobj_t *po;
+    for (po = sub->poly; po; po = po->subnext)
+      R_AddPolyLines(po);
+  }
+
   while (count--)
   {
     if (line->miniseg == FALSE)
@@ -551,9 +760,37 @@ void R_RenderBSPNode(int bspnum)
   while (!(bspnum & NF_SUBSECTOR))  // Found a subsector?
     {
       const node_t *bsp = &nodes[bspnum];
+      int side;
 
-      // Decide which side the view point is on.
-      int side = R_PointOnSide(viewx, viewy, bsp);
+      /* Decide which side the view point is on.  This is R_PointOnSide
+       * inlined: it is the single hottest caller (once per node, every
+       * frame) and GCC does not inline the out-of-line function here, so
+       * the call overhead was pure waste.  Inlining keeps R_PointOnSide's
+       * cheap paths -- axis-aligned splits (dx==0 / dy==0, the majority of
+       * Doom nodes) resolve with compares and no multiply, and the
+       * sign-bit test skips the multiply in the general case too -- rather
+       * than the PSX-style unconditional double cross-product. */
+      {
+         fixed_t ndx = bsp->dx;
+         fixed_t ndy = bsp->dy;
+
+         if (!ndx)
+            side = (viewx <= bsp->x) ? (ndy > 0) : (ndy < 0);
+         else if (!ndy)
+            side = (viewy <= bsp->y) ? (ndx < 0) : (ndx > 0);
+         else
+         {
+            fixed_t dx = viewx - bsp->x;
+            fixed_t dy = viewy - bsp->y;
+
+            /* quick sign-bit decision */
+            if ((ndy ^ ndx ^ dx ^ dy) < 0)
+               side = (ndy ^ dx) < 0;
+            else
+               side = FixedMul(dy, ndx>>FRACBITS) >= FixedMul(ndy>>FRACBITS, dx);
+         }
+      }
+
       // Recursively divide front space.
       R_RenderBSPNode(bsp->children[side]);
 
