@@ -1,0 +1,148 @@
+/* Emacs style mode select   -*- C++ -*-
+ *-----------------------------------------------------------------------------
+ *
+ *
+ *  PrBoom: a Doom port merged with LxDoom and LSDLDoom
+ *  based on BOOM, a modified and improved DOOM engine
+ *  Copyright (C) 1999 by
+ *  id Software, Chi Hoang, Lee Killough, Jim Flynn, Rand Phares, Ty Halderman
+ *  Copyright (C) 1999-2000 by
+ *  Jess Haas, Nicolas Kalkhof, Colin Phipps, Florian Schulze
+ *  Copyright 2005, 2006 by
+ *  Florian Schulze, Colin Phipps, Neil Stevens, Andrey Budko
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License
+ *  as published by the Free Software Foundation; either version 2
+ *  of the License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+ *  02111-1307, USA.
+ *
+ * DESCRIPTION:
+ *  Sky rendering. The DOOM sky is a texture map like any
+ *  wall, wrapping around. A 1024 columns equal 360 degrees.
+ *  The default sky map is 256 columns and repeats 4 times
+ *  on a 320 screen?
+ *
+ *-----------------------------------------------------------------------------*/
+
+#include "r_sky.h"
+#include "r_main.h"
+#include "r_state.h"
+#include "doomstat.h"
+
+//
+// sky mapping
+//
+int skyflatnum;
+int skytexture;
+int skytexturemid;
+
+skyview_t skyview;   /* 3D skybox camera (SkyViewpoint 9080); active==0 if none */
+
+/* Hexen dual-sky support.  Sky1 is the regular sky; during a lightning flash
+ * the renderer swaps Sky1 to the brighter Sky2.  With DoubleSky a second sky
+ * (Sky2) scrolls behind a foreground sky (Sky1) that has transparent areas.
+ * Each sky has its own horizontal scroll speed. */
+int     Sky1Texture;
+int     Sky2Texture;
+fixed_t Sky1ColumnOffset;
+fixed_t Sky2ColumnOffset;
+fixed_t Sky1ScrollDelta;
+fixed_t Sky2ScrollDelta;
+dbool   DoubleSky;
+
+dbool   r_stretchsky; // user option, named after ZDoom's
+dbool   skystretch;
+
+//
+// R_InitSkyMap
+// Called whenever the view size changes.
+//
+void R_InitSkyMap (void)
+{
+  if (!movement_mouselook && !raven)
+  {
+    skystretch = FALSE;
+    skytexturemid = 100*FRACUNIT;
+    if (viewwidth != 0)
+    {
+      skyiscale = (fixed_t)(((uint64_t)FRACUNIT * SCREENWIDTH * 200) / (viewwidth * SCREENHEIGHT));
+    }
+  }
+  else
+  {
+    int skyheight;
+
+    if (!textureheight)
+      return;
+
+    // There are various combinations for sky rendering depending on how tall the sky is:
+    //        h <  128: Unstretched and tiled, centered on horizon
+    // 128 <= h <  200: Can possibly be stretched. When unstretched, the baseline is
+    //                  28 rows below the horizon so that the top of the texture
+    //                  aligns with the top of the screen when looking straight ahead.
+    //                  When stretched, it is scaled to 228 pixels with the baseline
+    //                  in the same location as an unstretched 128-tall sky, so the top
+    //					of the texture aligns with the top of the screen when looking
+    //                  fully up.
+    //        h == 200: Unstretched, baseline is on horizon, and top is at the top of
+    //                  the screen when looking fully up.
+    //        h >  200: Unstretched, but the baseline is shifted down so that the top
+    //                  of the texture is at the top of the screen when looking fully up.
+
+    skyheight = textureheight[skytexture]>>FRACBITS;
+
+    /* Heretic skies are declared 128 tall but their single patch is really
+     * 200 (see R_HackedSkyPatch in r_plane.c, which draws them from the raw
+     * patch).  Use the true 200 height here so the h==200 case below picks
+     * the correct baseline/scale instead of the 128-tall stretch path. */
+    if (heretic && textures[skytexture]->patchcount == 1)
+    {
+      int pnum = textures[skytexture]->patches[0].patch;
+      const rpatch_t *p = R_CachePatchNum(pnum);
+      int realh = p->height;
+      R_UnlockPatchNum(pnum);
+      if (realh == 200)
+        skyheight = 200;
+    }
+
+    skystretch = FALSE;
+    skytexturemid = 0;
+    if (skyheight >= 128 && skyheight < 200)
+    {
+      skystretch = (r_stretchsky && (skyheight >= 128));
+      skytexturemid = -28*FRACUNIT;
+    }
+    else if (skyheight > 200)
+    {
+      skytexturemid = (200 - skyheight) * FRACUNIT;
+    }
+
+    if (viewwidth != 0 && viewheight != 0)
+    {
+      skyiscale = (fixed_t)(((uint64_t)FRACUNIT * SCREENWIDTH * 200) / (viewwidth * SCREENHEIGHT));
+      // line below is from zdoom, but it works incorrectly with prboom
+      // with widescreen resolutions (eg 1280x720) by some reasons
+      //skyiscale = (fixed_t)((int64_t)skyiscale * fieldofview / 2048);
+    }
+
+    if (skystretch)
+    {
+      skyiscale = (fixed_t)((int64_t)skyiscale * skyheight / SKYSTRETCH_HEIGHT);
+      skytexturemid = (int)((int64_t)skytexturemid * skyheight / SKYSTRETCH_HEIGHT);
+    }
+    else
+    {
+      skytexturemid = 100*FRACUNIT;
+    }
+  }
+}

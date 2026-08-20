@@ -1,0 +1,194 @@
+/* Emacs style mode select   -*- C++ -*-
+ *-----------------------------------------------------------------------------
+ *
+ *
+ *  PrBoom: a Doom port merged with LxDoom and LSDLDoom
+ *  based on BOOM, a modified and improved DOOM engine
+ *  Copyright (C) 1999 by
+ *  id Software, Chi Hoang, Lee Killough, Jim Flynn, Rand Phares, Ty Halderman
+ *  Copyright (C) 1999-2000 by
+ *  Jess Haas, Nicolas Kalkhof, Colin Phipps, Florian Schulze
+ *  Copyright 2005, 2006 by
+ *  Florian Schulze, Colin Phipps, Neil Stevens, Andrey Budko
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License
+ *  as published by the Free Software Foundation; either version 2
+ *  of the License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+ *  02111-1307, USA.
+ *
+ * DESCRIPTION:
+ *      WAD I/O functions.
+ *
+ *-----------------------------------------------------------------------------*/
+
+
+#ifndef __W_WAD__
+#define __W_WAD__
+
+#include <stdint.h>
+#include <streams/file_stream.h>
+
+//
+// TYPES
+//
+
+typedef struct
+{
+  char identification[4];                  // Should be "IWAD" or "PWAD".
+  int  numlumps;
+  int  infotableofs;
+} wadinfo_t;
+
+typedef struct
+{
+  int  filepos;
+  int  size;
+  char name[8];
+} filelump_t;
+
+//
+// WADFILE I/O related stuff.
+//
+
+// CPhipps - defined enum in wider scope
+// Ty 08/29/98 - add source field to identify where this lump came from
+typedef enum {
+  // CPhipps - define elements in order of 'how new/unusual'
+  source_iwad=0,    // iwad file load 
+  source_pre,       // predefined lump
+  source_auto_load, // lump auto-loaded by config file
+  source_pwad,      // pwad file load
+  source_lmp,       // lmp file load
+  source_net        // CPhipps
+} wad_source_t;
+
+// killough 4/17/98: namespace tags, to prevent conflicts between resources
+typedef enum {
+  ns_global=0,
+  ns_sprites,
+  ns_flats,
+  ns_colormaps,
+  ns_hires,
+  ns_prboom,
+  /* PK3 members in formats the engine cannot consume yet (PNG, Ogg,
+   * WAV, FLAC).  Quarantined out of ns_global so a modern-format asset
+   * sharing a name with an IWAD lump can never reach the wrong loader;
+   * future consumers (PNG patches, sample decoders) look them up here. */
+  ns_pk3_deferred,
+  /* ZDoom TEXTURES/ folder members: standalone wall textures, registered
+   * by R_InitTextures from the TX_START/TX_END group. */
+  ns_zdoom_tx
+} lumpinfo_namespace_t;
+
+// CPhipps - changed wad init
+// We _must_ have the wadfiles[] the same as those actually loaded, so there 
+// is no point having these separate entities. This belongs here.
+typedef struct {
+  const char* name;
+  wad_source_t src;
+  RFILE* handle;
+#ifndef MEMORY_LOW
+  unsigned char *data;
+  int position;
+  /* The file's size on disk, from filestream_get_size, which returns
+   * int64_t.  This was an int, so a file at or above 2GB narrowed and
+   * the result went on to mmap(), malloc() and munmap() as a size_t -
+   * a negative value there becomes enormous.  No valid wad is that
+   * large, but "no valid input reaches it" is not the same as "the code
+   * is safe", and the assignment was silent. */
+  int64_t length;
+#ifdef HAVE_MMAP
+  int mmapped;   /* data came from mmap(); munmap() it rather than free() */
+#endif
+#endif
+  /* Embedded (baked-in) WAD support.  When embedded_data is non-NULL the
+   * wad's bytes live in a const array compiled into the core rather than on
+   * the filesystem: W_AddFile reads the header/directory from it and skips
+   * filestream_open, and W_ReadLump memcpys lumps out of it.  Works in both
+   * normal and MEMORY_LOW builds (these fields are outside the #ifndef so
+   * the embedded path is always available). */
+  const unsigned char *embedded_data;
+  int embedded_length;
+} wadfile_info_t;
+
+extern wadfile_info_t *wadfiles;
+
+extern size_t numwadfiles; // CPhipps - size of the wadfiles array
+
+void W_Init(void); // CPhipps - uses the above array
+
+/* Swap a lump's backing bytes for a caller-owned buffer (e.g. a decoded
+ * PNG).  Must run before the lump is first cached; the buffer must stay
+ * valid for the program's lifetime. */
+void W_ReplaceLumpData(int lump, const void *data, int size);
+
+/* drop a lump's cached copy; see w_memcache.c */
+void W_InvalidateLumpCache(int lump);
+void W_ReleaseAllWads(void); // Proff - Added for iwad switching
+void W_InitCache(void);
+void W_DoneCache(void);
+
+typedef struct
+{
+  // WARNING: order of some fields important (see info.c).
+
+  char  name[9];
+  int   size;
+
+  // killough 1/31/98: hash table fields, used for ultra-fast hash table lookup
+  int index, next;
+
+  // haleyjd 05/21/02: renamed from "namespace"
+  lumpinfo_namespace_t li_namespace;
+
+  wadfile_info_t *wadfile;
+  int position;
+  wad_source_t source;
+} lumpinfo_t;
+
+extern lumpinfo_t *lumpinfo;
+extern int        numlumps;
+
+// killough 4/17/98: if W_CheckNumForName() called with only
+// one argument, pass ns_global as the default namespace
+
+#define W_FindNumFromName(name, lump) (W_FindNumFromName)(name, ns_global, lump)
+int     (W_FindNumFromName)(const char *name, lumpinfo_namespace_t ns, int lump);
+int     W_ListNumFromName(const char *name, int lump);
+#define W_CheckNumForName(name) (W_CheckNumForName)(name, ns_global)
+static INLINE int     (W_CheckNumForName)(const char *name, lumpinfo_namespace_t ns)
+        { return (W_FindNumFromName)(name, ns, -1); }
+int     W_GetNumForName (const char* name);
+char*   W_GetNameForNum (const int lump);
+int     W_LumpLength (int lump);
+void    W_ReadLump (int lump, void *dest);
+// CPhipps - modified for 'new' lump locking
+const void* W_CacheLumpNum (int lump);
+const void* W_LockLumpNum(int lump);
+void    W_UnlockLumpNum(int lump);
+
+// CPhipps - convenience macros
+//#define W_CacheLumpNum(num) (W_CacheLumpNum)((num),1)
+#define W_CacheLumpName(name) W_CacheLumpNum (W_GetNumForName(name))
+
+//#define W_UnlockLumpNum(num) (W_UnlockLumpNum)((num),1)
+#define W_UnlockLumpName(name) W_UnlockLumpNum (W_GetNumForName(name))
+
+char *AddDefaultExtension(char *, const char *);  // killough 1/18/98
+void ExtractFileBase(const char *, char *);       // killough
+unsigned W_LumpNameHash(const char *s);           // killough 1/31/98
+void W_HashLumps(void);                           // cph 2001/07/07 - made public
+
+void W_Exit(void);
+
+#endif
