@@ -1,0 +1,80 @@
+LIBRETRO_COMM_DIR := $(CORE_DIR)/deps/libretro-common
+INCFLAGS := -I$(CORE_DIR)/src/main \
+	    -I$(CORE_DIR)/src/main/libretro \
+	    -I$(LIBRETRO_COMM_DIR)/include \
+	    -I$(CORE_DIR)/deps
+
+ifneq (,$(findstring msvc200,$(platform)))
+INCFLAGS += -I$(LIBRETRO_COMM_DIR)/include/compat/msvc
+endif
+
+FLAGS += -D__LIBRETRO__
+
+SOURCES_C := \
+	     $(CORE_DIR)/src/main/engine/osmoke.c \
+	     $(CORE_DIR)/src/main/roms.c \
+	     $(CORE_DIR)/src/main/romloader.c \
+	     $(CORE_DIR)/src/main/trackloader.c \
+	     $(CORE_DIR)/src/main/utils.c \
+	     $(CORE_DIR)/src/main/video.c \
+	     $(CORE_DIR)/src/main/frontend/menu.c \
+	     $(CORE_DIR)/src/main/frontend/config.c \
+	     $(CORE_DIR)/src/main/frontend/ttrial.c \
+	     $(CORE_DIR)/src/main/hwaudio/ym2151.c \
+	     $(CORE_DIR)/src/main/engine/oferrari.c \
+	     $(CORE_DIR)/src/main/engine/oroad.c \
+	     $(CORE_DIR)/src/main/engine/ohud.c \
+	     $(CORE_DIR)/src/main/engine/outrun.c \
+	     $(CORE_DIR)/src/main/engine/osprites.c \
+	     $(CORE_DIR)/src/main/engine/ooutputs.c \
+	     $(CORE_DIR)/src/main/engine/outils.c \
+	     $(CORE_DIR)/src/main/engine/oinitengine.c \
+	     $(CORE_DIR)/src/main/engine/olevelobjs.c \
+	     $(CORE_DIR)/src/main/engine/oinputs.c \
+	     $(CORE_DIR)/src/main/engine/oattractai.c \
+	     $(CORE_DIR)/src/main/engine/ohiscore.c \
+	     $(CORE_DIR)/src/main/engine/omusic.c \
+	     $(CORE_DIR)/src/main/engine/audio/osound.c \
+	     $(CORE_DIR)/src/main/engine/audio/osoundint.c \
+	     $(CORE_DIR)/src/main/hwvideo/hwsprites.c \
+	     $(CORE_DIR)/src/main/hwvideo/hwtiles.c \
+	     $(CORE_DIR)/src/main/hwvideo/hwroad.c \
+	     $(CORE_DIR)/src/main/hwaudio/segapcm.c \
+	     $(CORE_DIR)/src/main/hwaudio/soundchip.c \
+	     $(CORE_DIR)/src/main/engine/ologo.c \
+	     $(CORE_DIR)/src/main/engine/ostats.c \
+	     $(CORE_DIR)/src/main/engine/otiles.c \
+	     $(CORE_DIR)/src/main/engine/opalette.c \
+	     $(CORE_DIR)/src/main/engine/osprite.c \
+	     $(CORE_DIR)/src/main/engine/oanimseq.c \
+	     $(CORE_DIR)/src/main/engine/obonus.c \
+	     $(CORE_DIR)/src/main/engine/ocrash.c \
+	     $(CORE_DIR)/src/main/engine/otraffic.c \
+	     $(CORE_DIR)/src/main/engine/omap.c \
+	     $(CORE_DIR)/src/main/libretro/main.c \
+	     $(CORE_DIR)/src/main/libretro/lr_options.c \
+	     $(CORE_DIR)/src/main/libretro/ffeedback.c \
+	     $(CORE_DIR)/src/main/libretro/audio.c \
+	     $(CORE_DIR)/src/main/libretro/input.c \
+
+ifeq ($(STATIC_LINKING),1)
+else
+SOURCES_C += \
+	       $(LIBRETRO_COMM_DIR)/file/file_path.c \
+	       $(LIBRETRO_COMM_DIR)/file/file_path_io.c \
+	       $(LIBRETRO_COMM_DIR)/file/retro_dirent.c \
+	       $(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
+	       $(LIBRETRO_COMM_DIR)/compat/compat_snprintf.c \
+	       $(LIBRETRO_COMM_DIR)/compat/compat_posix_string.c \
+	       $(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c \
+	       $(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
+	       $(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c \
+	       $(LIBRETRO_COMM_DIR)/encodings/encoding_crc32.c \
+	       $(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c \
+	       $(LIBRETRO_COMM_DIR)/streams/file_stream.c \
+	       $(LIBRETRO_COMM_DIR)/streams/file_stream_transforms.c \
+	       $(LIBRETRO_COMM_DIR)/string/stdstring.c \
+	       $(LIBRETRO_COMM_DIR)/time/rtime.c
+endif
+
+SOURCES_CXX :=
