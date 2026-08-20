@@ -46,6 +46,20 @@ int skyflatnum;
 int skytexture;
 int skytexturemid;
 
+skyview_t skyview;   /* 3D skybox camera (SkyViewpoint 9080); active==0 if none */
+
+/* Hexen dual-sky support.  Sky1 is the regular sky; during a lightning flash
+ * the renderer swaps Sky1 to the brighter Sky2.  With DoubleSky a second sky
+ * (Sky2) scrolls behind a foreground sky (Sky1) that has transparent areas.
+ * Each sky has its own horizontal scroll speed. */
+int     Sky1Texture;
+int     Sky2Texture;
+fixed_t Sky1ColumnOffset;
+fixed_t Sky2ColumnOffset;
+fixed_t Sky1ScrollDelta;
+fixed_t Sky2ScrollDelta;
+dbool   DoubleSky;
+
 dbool   r_stretchsky; // user option, named after ZDoom's
 dbool   skystretch;
 
@@ -55,7 +69,7 @@ dbool   skystretch;
 //
 void R_InitSkyMap (void)
 {
-  if (!movement_mouselook)
+  if (!movement_mouselook && !raven)
   {
     skystretch = FALSE;
     skytexturemid = 100*FRACUNIT;
@@ -86,6 +100,21 @@ void R_InitSkyMap (void)
     //                  of the texture is at the top of the screen when looking fully up.
 
     skyheight = textureheight[skytexture]>>FRACBITS;
+
+    /* Heretic skies are declared 128 tall but their single patch is really
+     * 200 (see R_HackedSkyPatch in r_plane.c, which draws them from the raw
+     * patch).  Use the true 200 height here so the h==200 case below picks
+     * the correct baseline/scale instead of the 128-tall stretch path. */
+    if (heretic && textures[skytexture]->patchcount == 1)
+    {
+      int pnum = textures[skytexture]->patches[0].patch;
+      const rpatch_t *p = R_CachePatchNum(pnum);
+      int realh = p->height;
+      R_UnlockPatchNum(pnum);
+      if (realh == 200)
+        skyheight = 200;
+    }
+
     skystretch = FALSE;
     skytexturemid = 0;
     if (skyheight >= 128 && skyheight < 200)
@@ -95,12 +124,11 @@ void R_InitSkyMap (void)
     }
     else if (skyheight > 200)
     {
-      skytexturemid = (200 - skyheight) << FRACBITS;
+      skytexturemid = (200 - skyheight) * FRACUNIT;
     }
 
     if (viewwidth != 0 && viewheight != 0)
     {
-      //skyiscale = 200 * FRACUNIT / freelookviewheight;
       skyiscale = (fixed_t)(((uint64_t)FRACUNIT * SCREENWIDTH * 200) / (viewwidth * SCREENHEIGHT));
       // line below is from zdoom, but it works incorrectly with prboom
       // with widescreen resolutions (eg 1280x720) by some reasons

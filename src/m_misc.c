@@ -36,6 +36,7 @@
 #include "config.h"
 
 #include <stdarg.h>
+#include <stdlib.h>
 #include <errno.h>
 #ifdef _MSC_VER
 #include <io.h>
@@ -65,6 +66,7 @@
 #include "lprintf.h"
 #include "d_main.h"
 #include "r_draw.h"
+#include "r_main.h"
 #include "r_demo.h"
 #include "r_fps.h"
 #include "r_sky.h"
@@ -148,7 +150,7 @@ int M_ReadFile(char const *name, uint8_t **buffer)
 char* M_Strupr(char* str)
 {
   char* p;
-  for (p=str; *p; p++) *p = toupper(*p);
+  for (p=str; *p; p++) *p = toupper((unsigned char)*p);
   return str;
 }
 
@@ -172,6 +174,7 @@ extern int movement_maxviewpitch;
 
 int         mus_pause_opt; // 0 = kill music, 1 = pause, 2 = continue
 int         mus_load_external; // 0 = never load external music files, 1 = always load it, 2 = only from iwads
+int         midi_player; // 0 = off, 1 = adlib (OPL), 2 = fluidsynth
 
 extern const char* chat_macros[];
 
@@ -288,14 +291,20 @@ default_t defaults[] =
   {"Sound settings",{NULL},{0},UL,UL,def_none,ss_none, NULL, NULL},
   {"pitched_sounds",{&pitched_sounds, NULL},{0, NULL},0,1, // killough 2/21/98
    def_bool,ss_gen, NULL, NULL}, // enables variable pitch in sound effects (from id's original code)
-  {"samplerate",{&snd_samplerate, NULL},{11025, NULL},11025,48000, def_int,ss_none, NULL, NULL},
   {"sfx_volume",{&snd_SfxVolume, NULL},{8, NULL},0,15, def_int,ss_none, NULL, NULL},
   {"music_volume",{&snd_MusicVolume, NULL},{8, NULL},0,15, def_int,ss_none, NULL, NULL},
   {"mus_pause_opt",{&mus_pause_opt, NULL},{2, NULL},0,2, // CPhipps - music pausing
    def_int, ss_none, NULL, NULL}, // 0 = kill music when paused, 1 = pause music, 2 = let music continue
   {"mus_load_external", {&mus_load_external, NULL},  {2, NULL},0,2,
     def_int,ss_gen, NULL, NULL}, // 0 = never load external music files, 1 = always load it, 2 = only from iwads
-  {"snd_channels",{&default_numChannels, NULL},{8, NULL},1,32,
+  {"midi_player", {&midi_player, NULL}, {1, NULL}, 0,
+#ifdef HAVE_LIBFLUIDSYNTH
+   3,
+#else
+   2,
+#endif
+   def_int, ss_gen, NULL, NULL}, // 0 = off, 1 = Adlib (OPL), [2 = Fluidsynth if built], last = libretro raw MIDI
+  {"snd_channels",{&default_numChannels, NULL},{0, NULL},0,2,
    def_int,ss_gen, NULL, NULL}, // number of audio events simultaneously // killough
 
   {"Video settings",{NULL, NULL},{0, NULL},UL,UL,def_none,ss_none, NULL, NULL},
@@ -303,8 +312,14 @@ default_t defaults[] =
    def_int,ss_none, NULL, NULL},
   {"usegamma",{&usegamma, NULL},{0, NULL},0,4, //jff 3/6/98 fix erroneous upper limit in range
    def_int,ss_gen, NULL, NULL}, // gamma correction level // killough 1/18/98
-  {"uncapped_framerate", {&movement_smooth, NULL},  {3, NULL},0,24,
+  {"uncapped_framerate", {&movement_smooth, NULL},  {3, NULL},0,35,
    def_int,ss_gen, NULL, NULL},
+  {"lowlatency_turning", {&lowlatency_turning, NULL}, {1, NULL},0,1,
+   def_bool,ss_gen, NULL, NULL}, /* per-frame turn preview on the view */
+  {"persistent_state", {&persistent_state, NULL}, {0, NULL},0,1,
+   def_bool,ss_gen, NULL, NULL}, /* debris rests instead of expiring */
+  {"persistent_blood_cap", {&persistent_blood_cap, NULL}, {1, NULL},0,5,
+   def_int,ss_gen, NULL, NULL}, /* resting blood kept: 256..4096, unlimited */
   {"filter_wall",{(int*)&drawvars.filterwall, NULL},{RDRAW_FILTER_POINT, NULL},
    RDRAW_FILTER_POINT, RDRAW_FILTER_ROUNDED, def_int,ss_gen, NULL, NULL},
   {"filter_floor",{(int*)&drawvars.filterfloor, NULL},{RDRAW_FILTER_POINT, NULL},
@@ -323,6 +338,8 @@ default_t defaults[] =
    RDRAW_MASKEDCOLUMNEDGE_SQUARE, RDRAW_MASKEDCOLUMNEDGE_SLOPED, def_int,ss_gen, NULL, NULL},
   {"render_stretchsky",{&r_stretchsky, NULL},{1, NULL},0,1,
    def_bool,ss_gen,NULL, NULL},
+  {"render_aspect",{&render_aspect, NULL},{0, NULL},0,4,
+   def_int,ss_gen,NULL, NULL},
   {"r_wiggle_fix",{(int*)&r_wiggle_fix, NULL},{1, NULL},0,1,
    def_bool,ss_gen,NULL, NULL},
 
@@ -389,6 +406,18 @@ default_t defaults[] =
    0,MAX_KEY,def_key,ss_keys, NULL, NULL}, // duh
   {"key_use",         {&key_use, NULL},            {' ', NULL}           ,
    0,MAX_KEY,def_key,ss_keys, NULL, NULL}, // key to open a door, use a switch
+  {"key_use_artifact", {&key_use_artifact, NULL},  {'q', NULL}           ,
+   0,MAX_KEY,def_key,ss_keys, NULL, NULL}, // Heretic/Hexen: use the ready artifact
+  {"key_inv_left",    {&key_inv_left, NULL},       {'c', NULL}           ,
+   0,MAX_KEY,def_key,ss_keys, NULL, NULL}, // Heretic/Hexen: previous inventory item
+  {"key_inv_right",   {&key_inv_right, NULL},      {'v', NULL}           ,
+   0,MAX_KEY,def_key,ss_keys, NULL, NULL}, // Heretic/Hexen: next inventory item
+  {"key_fly_up",      {&key_fly_up, NULL},         {'x', NULL}           ,
+   0,MAX_KEY,def_key,ss_keys, NULL, NULL}, // Heretic/Hexen: fly up
+  {"key_fly_down",    {&key_fly_down, NULL},       {'z', NULL}           ,
+   0,MAX_KEY,def_key,ss_keys, NULL, NULL}, // Heretic/Hexen: fly down
+  {"key_jump",        {&key_jump, NULL},           {' ', NULL}           ,
+   0,MAX_KEY,def_key,ss_keys, NULL, NULL}, // Hexen: jump
   {"key_strafe",      {&key_strafe, NULL},         {KEYD_RALT, NULL}      ,
    0,MAX_KEY,def_key,ss_keys, NULL, NULL}, // key to use with arrows to strafe
   {"key_speed",       {&key_speed, NULL},          {KEYD_RSHIFT, NULL}    ,
@@ -852,6 +881,16 @@ default_t defaults[] =
 int numdefaults;
 static char *defaultfile;
 
+/* Per-entry flag tracking whether defaults[i].defaultvalue.psz has
+ * been replaced by a heap-allocated strdup via the -baseconfig path
+ * in M_LoadDefaultsFile.  M_LoadDefaultsFile uses this to free the
+ * previous strdup before overwriting on subsequent calls (otherwise
+ * each retro_load_game with -baseconfig leaks one strdup per
+ * overridden entry).  Sized to match defaults[] at file scope so
+ * we don't have to thread an allocator through M_LoadDefaults. */
+static dbool defaultvalue_is_heap[
+   sizeof(defaults)/sizeof(defaults[0])];
+
 //
 // M_SaveDefaults
 //
@@ -859,7 +898,17 @@ static char *defaultfile;
 void M_SaveDefaults (void)
 {
   int   i;
-  RFILE *f = filestream_open (defaultfile,
+  RFILE *f;
+
+  /* M_LoadDefaults sets defaultfile from -config, falling back to
+   * a malloc'd PATH_MAX buffer.  If D_DoomMainSetup failed before
+   * M_LoadDefaults ran, defaultfile is still BSS-NULL.  Don't
+   * filestream_open(NULL) -- behavior depends on the libretro VFS
+   * impl and at minimum is wasted work. */
+  if (!defaultfile)
+    return;
+
+  f = filestream_open (defaultfile,
         RETRO_VFS_FILE_ACCESS_WRITE,
         RETRO_VFS_FILE_ACCESS_HINT_NONE);
   if (!f)
@@ -937,7 +986,7 @@ void M_LoadDefaultsFile (char *file, dbool   basedefault)
   char  def[80] = {0};
   char  strparm[100] = {0};
   char* newstring = NULL;   // killough
-  int   parm;
+  int   parm = 0;
   dbool   isstring;
   // read the file in, overriding any set defaults
   RFILE *f = filestream_open (file,
@@ -951,7 +1000,7 @@ void M_LoadDefaultsFile (char *file, dbool   basedefault)
       if (rfscanf(f, "%79s %99[^\n]\n", def, strparm) == 2)
       {
         //jff 3/3/98 skip lines not starting with an alphanum
-        if (!isalnum(def[0]))
+        if (!isalnum((unsigned char)def[0]))
           continue;
 
         if (strparm[0] == '"') {
@@ -963,10 +1012,15 @@ void M_LoadDefaultsFile (char *file, dbool   basedefault)
           strparm[len-1] = 0; // clears trailing double-quote mark
           strcpy(newstring, strparm+1); // clears leading double-quote mark
         } else if ((strparm[0] == '0') && (strparm[1] == 'x')) {
-          // CPhipps - allow ints to be specified in hex
-          sscanf(strparm+2, "%x", &parm);
+          // CPhipps - allow ints to be specified in hex.
+          // Use strtoul directly instead of sscanf("%x") -- sscanf is
+          // slow (format-string parsing overhead, plus internal malloc
+          // on musl and most non-glibc libcs).
+          parm = (int)strtoul(strparm + 2, NULL, 16);
         } else {
-          sscanf(strparm, "%i", &parm);
+          // strtol with base 0 mirrors the original "%i" semantics:
+          // 0x/0X -> hex, leading 0 -> octal, else decimal.
+          parm = (int)strtol(strparm, NULL, 0);
           // Keycode hack removed
         }
 
@@ -999,8 +1053,17 @@ void M_LoadDefaultsFile (char *file, dbool   basedefault)
               free(*(u.s));
               *(u.s) = newstring;
 
-              if(basedefault)
+              if(basedefault) {
+                /* Free the previous strdup if we already replaced
+                 * this entry with a heap value on an earlier call.
+                 * Without this, every retro_load_game with the
+                 * same -baseconfig leaks one strdup per overridden
+                 * entry. */
+                if (defaultvalue_is_heap[i])
+                   free((char *)defaults[i].defaultvalue.psz);
                 defaults[i].defaultvalue.psz = strdup(newstring);
+                defaultvalue_is_heap[i] = TRUE;
+              }
             }
             break;
           }
@@ -1059,4 +1122,56 @@ void M_LoadDefaults (void)
   log_cb(RETRO_LOG_INFO, " Default file: %s\n",defaultfile);
 
   M_LoadDefaultsFile(defaultfile, FALSE);
+}
+
+/* M_FreeDefaults
+ *
+ * Releases the heap allocations M_LoadDefaults makes per call:
+ *
+ *  - For every def_str entry, *defaults[i].location.ppsz is the
+ *    strdup'd default value (or, if the user customized it, a
+ *    later strdup from M_LoadDefaultsFile).  Free and NULL it so
+ *    the next M_LoadDefaults strdups into a clean slot instead
+ *    of leaking the previous session's allocation.
+ *  - defaultfile is the strdup'd / malloc'd config file path.
+ *    Free and NULL it.
+ *
+ * Called from D_DoomDeinit.  Per-session leak before this fix
+ * was ~105 strdups (every def_str entry in the defaults table)
+ * plus defaultfile every retro_load_game.
+ *
+ * Note: defaults[i].defaultvalue.psz can also become a heap
+ * allocation via the -baseconfig path in M_LoadDefaultsFile.
+ * That heap allocation is intentionally NOT freed here -- the
+ * next M_LoadDefaults reads it at line 1028 (strdup into
+ * *location.ppsz), so it has to survive across sessions.
+ * Cross-session leak of the previous strdup is prevented at the
+ * mutation site (M_LoadDefaultsFile's `if (basedefault)` block)
+ * via the defaultvalue_is_heap[] flag, which frees the previous
+ * heap value before overwriting.  At process end, Z_Close
+ * reclaims any still-live entries.
+ */
+void M_FreeDefaults(void)
+{
+   int i;
+
+   /* numdefaults is set by M_LoadDefaults before it populates the
+    * table, so it is zero until a session has allocated anything.
+    * A load that fails before that point reaches this teardown with
+    * every location.ppsz still holding its compile-time value, which
+    * is not a zone allocation. */
+   for (i = 0; i < numdefaults; i++)
+   {
+      if (IS_STRING(defaults[i]) && defaults[i].location.ppsz)
+      {
+         union { const char **c; char **s; } u;
+         u.c = defaults[i].location.ppsz;
+         free(*u.s);
+         *u.s = NULL;
+      }
+   }
+
+   free(defaultfile);
+   defaultfile = NULL;
+   numdefaults = 0;
 }

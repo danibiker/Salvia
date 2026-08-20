@@ -59,7 +59,7 @@
 // NUMSPRITES is an enum from info.h where all these are listed
 // as SPR_xxxx
 
-const char *sprnames[NUMSPRITES+1] = {
+const char *sprnames_seed[NUMSPRITES+1] = {
   "TROO","SHTG","PUNG","PISG","PISF","SHTF","SHT2","CHGG","CHGF","MISG",
   "MISF","SAWG","PLSG","PLSF","BFGG","BFGF","BLUD","PUFF","BAL1","BAL2",
   "PLSS","PLSE","MISL","BFS1","BFE1","BFE2","TFOG","IFOG","PLAY","POSS",
@@ -85,6 +85,9 @@ const char *sprnames[NUMSPRITES+1] = {
   NULL
 };
 
+/* DSDHacked: see states above. */
+const char **sprnames = sprnames_seed;
+
 // ********************************************************************
 // State or "frame" information
 // ********************************************************************
@@ -104,7 +107,16 @@ const char *sprnames[NUMSPRITES+1] = {
 // parts where frame rewiring is done for more details and the
 // extended way a BEX file can handle this.
 
-state_t states[NUMSTATES] = {
+/* The trailing MBF21 state fields (args[8], flags) are intentionally left
+ * to default zero here and are inert unless an MBF21 deh patch sets them
+ * and mbf21_features is active.  Silence -Wmissing-field-initializers
+ * (-Wextra) for this array rather than touching every entry. */
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
+state_t state_seed[NUMSTATES] = {
     {SPR_TROO,0,-1,{(arg0_t)NULL},S_NULL,0,0},  // S_NULL
     {SPR_SHTG,4,0,{(arg0_t)A_Light0},S_NULL,0,0}, // S_LIGHTDONE
     {SPR_PUNG,0,1,{(arg0_t)A_WeaponReady},S_PUNCH,0,0}, // S_PUNCH
@@ -1185,6 +1197,13 @@ state_t states[NUMSTATES] = {
   {SPR_PLAY,21,5,{(arg0_t)NULL},S_PLAY_GDIE9,0,0},        // S_PLAY_GDIE8
   {SPR_PLAY,22,-1,{(arg0_t)NULL},S_NULL,0,0},             // S_PLAY_GDIE9
 };
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+
+/* DSDHacked: 'states' starts pointing at the static seed array above and is
+ * repointed at a growable allocation by dsda_InitTables(). */
+state_t *states = state_seed;
 
 // ********************************************************************
 // Object "Thing" definitions
@@ -1210,7 +1229,18 @@ state_t states[NUMSTATES] = {
 //
 // This goes on for the next 3000+ lines...
 
-mobjinfo_t mobjinfo[NUMMOBJTYPES] = {
+/* The trailing MBF21 fields (flags2, infighting_group, projectile_group,
+ * splash_group, ripsound, altspeed, meleerange) are intentionally left
+ * to default zero-initialisation here and given their real defaults at
+ * runtime in D_BuildBEXTables().  Silence -Wmissing-field-initializers
+ * (-Wextra) for this array rather than appending boilerplate to every
+ * one of the hundreds of entries. */
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
+mobjinfo_t mobjinfo_seed[NUMMOBJTYPES] = {
   {   // MT_PLAYER
      "DoomPlayer", // actorname
     -1,   // doomednum
@@ -5745,3 +5775,9 @@ mobjinfo_t mobjinfo[NUMMOBJTYPES] = {
     200,            // minmissilechance
   },
 };
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+
+/* DSDHacked: see states above. */
+mobjinfo_t *mobjinfo = mobjinfo_seed;

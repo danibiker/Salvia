@@ -41,6 +41,7 @@
 #include "doomstat.h"
 #include "m_random.h"
 #include "lprintf.h"
+#include "tables.h"
 
 /*
 ===============
@@ -92,7 +93,7 @@ int (P_Random)(pr_class_t pr_class)
     (rng.prndindex = (rng.prndindex + 1) & 255) :
     (rng. rndindex = (rng. rndindex + 1) & 255) ;
 
-  unsigned long boom;
+  uint32_t boom;
 
   // killough 3/31/98:
   // If demo sync insurance is not requested, use
@@ -137,8 +138,36 @@ int (P_Random)(pr_class_t pr_class)
 void M_ClearRandom (void)
 {
   int i;
-  unsigned long seed = rngseed*2+1;    // add 3/26/98: add rngseed
+  uint32_t seed = rngseed*2+1;         // add 3/26/98: add rngseed
   for (i=0; i<NUMPRCLASS; i++)         // go through each pr_class and set
     rng.seed[i] = seed *= 69069ul;     // each starting seed differently
   rng.prndindex = rng.rndindex = 0;    // clear two compatibility indices
+}
+
+/* MBF21: random hitscan spread helpers.  'spread' is a maximum angle in
+ * fixed-point *degrees* (not BAM).  Returns a signed angle in BAM. */
+int P_RandomHitscanAngle(pr_class_t pr_class, fixed_t spread)
+{
+  int t;
+  int64_t spread_bam;
+
+  /* FixedToAngle doesn't handle negatives; take the magnitude. */
+  spread_bam = (spread < 0 ? FixedToAngle(-spread) : FixedToAngle(spread));
+  t = P_Random(pr_class);
+  return (int)((spread_bam * (t - P_Random(pr_class))) / 255);
+}
+
+/* MBF21: as above but converted to a slope value (clamped to +/-90deg). */
+int P_RandomHitscanSlope(pr_class_t pr_class, fixed_t spread)
+{
+  int angle = P_RandomHitscanAngle(pr_class, spread);
+
+  if (angle > (int)ANG90)
+    return finetangent[0];
+  else if (-angle >= (int)ANG90)
+    /* >=: at angle == -ANG90 exactly, (ANG90 - angle) >> ANGLETOFINESHIFT
+     * is 4096 -- one past the table -- so the clamp must own that case. */
+    return finetangent[FINEANGLES/2 - 1];
+  else
+    return finetangent[(ANG90 - angle) >> ANGLETOFINESHIFT];
 }

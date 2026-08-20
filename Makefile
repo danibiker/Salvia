@@ -46,6 +46,12 @@ ifneq ($(GIT_VERSION)," unknown")
 	CFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
 endif
 
+# Optional per-phase render profiler (logs R_RenderProfile timings).
+# Enable with: make RENDER_PROFILE=1
+ifeq ($(RENDER_PROFILE), 1)
+	CFLAGS += -DPRBOOM_RENDER_PROFILE
+endif
+
 LIBS    :=
 
 ifeq (,$(findstring msvc,$(platform)))
@@ -76,12 +82,17 @@ ifeq ($(platform), unix)
    SHARED := -shared -Wl,--version-script=libretro/link.T -Wl,--no-undefined -Wl,--as-needed
    CFLAGS += -std=c99
    CFLAGS += -D_POSIX_C_SOURCE=199309L
+   # _DEFAULT_SOURCE: _POSIX_C_SOURCE alone hides madvise()/MADV_DONTNEED,
+   # which libretro-common's memmap.c (data_transfer's page machinery) uses.
+   CFLAGS += -D_DEFAULT_SOURCE
+   CFLAGS += -DHAVE_MMAP
 else ifeq ($(platform), linux-portable)
 	EXT    ?= so
    TARGET := $(TARGET_NAME)_libretro.$(EXT)
    fpic := -fPIC -nostdlib
    SHARED := -shared -Wl,--version-script=libretro/link.T
 	LIBS =
+   CFLAGS += -DHAVE_MMAP
 else ifeq ($(platform), osx)
 	EXT    ?= dylib
    TARGET := $(TARGET_NAME)_libretro.$(EXT)
@@ -90,6 +101,7 @@ else ifeq ($(platform), osx)
    OSXVER = `sw_vers -productVersion | cut -d. -f 2`
    OSX_LT_MAVERICKS = `(( $(OSXVER) <= 9)) && echo "YES"`
    LDFLAGS += -framework CoreFoundation
+   CFLAGS += -DHAVE_MMAP
 ifeq ($(OSX_LT_MAVERICKS),YES)
    fpic += -mmacosx-version-min=10.1
 endif
@@ -107,6 +119,7 @@ else ifneq (,$(findstring ios,$(platform)))
    fpic := -fPIC
    LDFLAGS += -framework CoreFoundation
    SHARED := -dynamiclib
+   CFLAGS += -DHAVE_MMAP
 
 ifeq ($(IOSSDK),)
    IOSSDK := $(shell xcodebuild -version -sdk iphoneos Path)
@@ -239,6 +252,9 @@ else ifneq (,$(filter $(platform), ps3 psl1ght))
 	ifeq ($(platform), psl1ght)
 		PLATFORM_DEFINES += -D__PSL1GHT__ -DHAVE_STRLWR -I$(PS3DEV)/ppu/include
 	endif
+	# The PSL1GHT ppu toolchain ships no pthread implementation, so the
+	# rthreads pthreads backend does not build.  Threaded rendering is off.
+	HAVE_THREADS = 0
 
 # PS2
 else ifeq ($(platform), ps2)
@@ -249,6 +265,11 @@ else ifeq ($(platform), ps2)
    CFLAGS += -DHAVE_STRLWR -DPS2 -G0 -ffast-math -DABGR1555 -DNO_FAST_SQRT
    STATIC_LINKING = 1
    HAVE_LOW_MEMORY = 1
+   # rthreads pulls in ps2sdkapi.h, which is not on the include path here,
+   # and the EE is single-core with very little RAM to spare for per-thread
+   # renderer state.  Threaded rendering is off.
+   HAVE_THREADS = 0
+
 # PSP1
 else ifeq ($(platform), psp1)
 	EXT=a
@@ -280,6 +301,11 @@ else ifeq ($(platform), ctr)
 	CFLAGS += -Wall -mword-relocations
 	CFLAGS += -fomit-frame-pointer -ffast-math
 	STATIC_LINKING = 1
+	# rthreads uses ctr_pthread.h, which needs libctru's headers on the
+	# include path.  Re-enable with HAVE_THREADS=1 once
+	# -I$(DEVKITPRO)/libctru/include is added; the app core budget on old3DS
+	# makes the win marginal, so it stays off by default.
+	HAVE_THREADS = 0
 
 # emscripten
 else ifeq ($(platform), emscripten)
@@ -304,6 +330,9 @@ else ifeq ($(platform), ngc)
 #  CFLAGS += -DGEKKO -DHW_DOL -mcpu=750 -mhard-float -isystem /opt/devkitpro/devkitPPC/powerpc-eabi/include -I /opt/devkitpro/libogc2/include
    STATIC_LINKING = 1
    HAVE_LOW_MEMORY = 1
+   # Single-core Gekko, and rthreads' GEKKO backend needs libogc headers that
+   # are not on the include path here.  Threaded rendering is off.
+   HAVE_THREADS = 0
 
 else ifeq ($(platform), wii)
    EXT=a
@@ -314,6 +343,9 @@ else ifeq ($(platform), wii)
    CFLAGS += -DGEKKO -DHW_RVL -mrvl -mcpu=750 -meabi -mhard-float
 #  CFLAGS += -DGEKKO -DHW_RVL -mcpu=750 -mhard-float -isystem /opt/devkitpro/devkitPPC/powerpc-eabi/include -I /opt/devkitpro/libogc2/include
    STATIC_LINKING = 1
+   # Single-core Broadway, and rthreads' GEKKO backend needs libogc headers
+   # that are not on the include path here.  Threaded rendering is off.
+   HAVE_THREADS = 0
 
 else ifeq ($(platform), wiiu)
    EXT=a
@@ -325,6 +357,11 @@ else ifeq ($(platform), wiiu)
 #  CFLAGS += -DGEKKO -DHW_RVL -DWIIU -mcpu=750 -mhard-float
    CFLAGS += -ffunction-sections -fdata-sections -D__wiiu__ -D__wut__ # -isystem /opt/devkitpro/devkitPPC/powerpc-eabi/include -I /opt/devkitpro/wut/include
    STATIC_LINKING = 1
+   # This block defines GEKKO, so rthreads selects its libogc backend and
+   # pulls in ogc/lwp_watchdog.h -- wrong for a wut build and not on the
+   # include path.  Threaded rendering is off until rthreads grows a wut
+   # backend selected ahead of the GEKKO one.
+   HAVE_THREADS = 0
 
 # Nintendo Switch (libtransistor)
 else ifeq ($(platform), switch)
@@ -643,11 +680,31 @@ endif
 ifeq ($(STATIC_LINKING),1)
 SHARED=
 fpic=
+# Statically linked frontends compile their own libretro-common; the core
+# must not wire up the hybrid VFS there (see Makefile.common / libretro.c).
+CFLAGS += -DSTATIC_LINKING
+endif
+
+# rthreads uses its pthreads backend on every hosted non-Win32 target.  On
+# glibc before 2.34 and on the musl-based handheld toolchains, pthread_create,
+# pthread_join, pthread_detach, pthread_mutex_trylock and pthread_cancel live
+# in libpthread rather than libc, and the shared-object link lines here use
+# --no-undefined, so the library has to be requested explicitly or the link
+# fails.  Skipped where LIBS is deliberately empty (Win32/MSVC, linux-portable
+# with -nostdlib) and for the console targets, which archive a .a and are
+# linked by the frontend.
+ifneq ($(HAVE_THREADS), 0)
+ifneq ($(STATIC_LINKING), 1)
+ifeq (,$(findstring msvc,$(platform)))
+ifneq ($(LIBS),)
+LIBS += -lpthread
+endif
+endif
+endif
 endif
 
 LDFLAGS += $(LIBS)
 
-CFLAGS += -DHAVE_LIBMAD -DMUSIC_SUPPORT
 
 ifeq ($(WANT_FLUIDSYNTH), 1)
 CFLAGS += -DHAVE_LIBFLUIDSYNTH
@@ -747,3 +804,18 @@ uninstall:
 
 .PHONY: clean clean-objs install uninstall
 endif
+
+# rpng is vendored verbatim and must run on raw libc, outside the
+# z_zone malloc-macro regime: on GEKKO it includes newlib's <malloc.h>
+# (for memalign), whose malloc prototype the function-like macros
+# mangle into a syntax error, and it memaligns its output buffer there,
+# which must never meet Z_Free.  u_png.c frees rpng-owned buffers with
+# (free) for the same reason.
+libretro/libretro-common/formats/png/rpng.o: libretro/libretro-common/formats/png/rpng.c
+	$(CC) $(filter-out -include z_zone.h,$(CFLAGS)) -c $(OBJOUT)$@ $<
+
+# rjpeg, like rpng, is vendored verbatim and allocates with raw libc;
+# keep it out of the z_zone malloc-macro regime (u_png.c frees its buffers
+# with (free) at the single zone-crossing point).
+libretro/libretro-common/formats/jpeg/rjpeg.o: libretro/libretro-common/formats/jpeg/rjpeg.c
+	$(CC) $(filter-out -include z_zone.h,$(CFLAGS)) -c $(OBJOUT)$@ $<

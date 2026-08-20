@@ -76,6 +76,10 @@ typedef enum {
   doom2,        // DOOM 2
   pack_tnt,     // TNT mission pack
   pack_plut,    // Plutonia pack
+  /* Raven games appended last so existing ordinal comparisons such as
+   * (gamemission >= pack_tnt) keep their meaning for the Doom missions. */
+  heretic_mission, // Heretic
+  hexen_mission,   // Hexen
   none
 } GameMission_t;
 
@@ -152,6 +156,22 @@ typedef enum {
 #define MTF_FRIEND            128
 #define MTF_RESERVED          256
 
+/* Hexen reuses the mapthing options word with a different layout from Doom:
+ * the low skill/ambush bits match, but bit 16 is MTF_DORMANT, bits 32/64/128
+ * are the per-class spawn bits, and bits 256/512/1024 are positive "appears
+ * in this game mode" bits (single/coop/deathmatch) rather than Doom's NOT*
+ * bits.  These overlap MTF_NOTSINGLE/NOTDM/NOTCOOP/FRIEND/RESERVED
+ * numerically, so Hexen things must be filtered with these names, not the
+ * Doom ones. */
+#define MTF_HEXEN_DORMANT      16
+#define MTF_HEXEN_FIGHTER      32
+#define MTF_HEXEN_CLERIC       64
+#define MTF_HEXEN_MAGE         128
+#define MTF_HEXEN_GSINGLE      256
+#define MTF_ZDOOM_FRIENDLY 0x2000  /* ZDoom hexen-format MBF-friendly bit */
+#define MTF_HEXEN_GCOOP        512
+#define MTF_HEXEN_GDEATHMATCH  1024
+
 typedef enum {
   sk_none=-1, //jff 3/24/98 create unpicked skill setting
   sk_baby=0,
@@ -172,6 +192,21 @@ typedef enum {
   it_blueskull,
   it_yellowskull,
   it_redskull,
+  DOOM_NUMCARDS,
+
+  /* Hexen keys (0-based; STEEL .. CASTLE).  Line specials reference them as
+   * lock 1-11, i.e. cards[lock - 1]. */
+  key_1 = 0,
+  key_2,
+  key_3,
+  key_4,
+  key_5,
+  key_6,
+  key_7,
+  key_8,
+  key_9,
+  key_a,
+  key_b,
   NUMCARDS
 } card_t;
 
@@ -192,14 +227,100 @@ typedef enum {
   WP_NOCHANGE              // No pending weapon change.
 } weapontype_t;
 
+/* Heretic's chicken-morph beak occupies the heretic_weaponinfo row that
+ * doom uses for the super shotgun (index 8); it is never weaponowned, so
+ * weapon cycling cannot reach it.  Vanilla heretic instead places wp_beak
+ * past NUMWEAPONS with oversized tables. */
+#define HERETIC_WP_BEAK      WP_SUPERSHOTGUN
+#define MAXCHICKENHEALTH     30
+
+/* Hexen player classes.  Numbering matches the original Hexen / dsda-doom
+ * pclass_t so the (currently dormant) Hexen player and weapon code resolves
+ * against it.  Inert for Doom/Heretic, which leave player->class at
+ * PCLASS_NULL. */
+typedef enum
+{
+  PCLASS_NULL,
+  PCLASS_FIGHTER,
+  PCLASS_CLERIC,
+  PCLASS_MAGE,
+  PCLASS_PIG,
+  NUMCLASSES
+} pclass_t;
+
+/* Hexen weapon slots.  Hexen has four weapons per class, selected by slot
+ * rather than by the Doom weapon identity, so these alias the low
+ * weapontype_t ordinals (0-3) that a Hexen game uses.  The 2D Hexen weapon
+ * tables are indexed [WP_*][class]. */
+#define WP_FIRST  ((weapontype_t)0)
+#define WP_SECOND ((weapontype_t)1)
+#define WP_THIRD  ((weapontype_t)2)
+#define WP_FOURTH ((weapontype_t)3)
+
+/* Hexen mana (the two-mana ammo model).  MANA_NONE/MANA_BOTH are sentinels
+ * used by the weapon tables; MANA_1/MANA_2 index player->mana[]. */
+typedef enum
+{
+  MANA_1,
+  MANA_2,
+  NUMMANA,
+  MANA_BOTH,
+  MANA_NONE
+} manatype_t;
+
+#define MAX_MANA 200   /* Hexen per-mana cap */
+
+/* Hexen armor.  Unlike Doom/Heretic (a single armorpoints value with a
+ * 1-or-2 armortype), Hexen tracks four independent armor pieces; the
+ * absorbed fraction is the sum of all four plus a per-class innate save.
+ * armorpoints are stored as fixed-point "save percent" units. */
+typedef enum
+{
+  ARMOR_ARMOR,
+  ARMOR_SHIELD,
+  ARMOR_HELMET,
+  ARMOR_AMULET,
+  NUMARMOR
+} armortype_t;
+
+/* Hexen fourth-weapon assembly pieces (bitmask in player->pieces). */
+#define WPIECE1 1
+#define WPIECE2 2
+#define WPIECE3 4
+
+/* Raven (Hexen/Heretic) floor terrain types.  Any type >= FLOOR_LIQUID is a
+ * liquid surface (it floorclips sprites and lets things sink/splash). */
+typedef enum
+{
+  FLOOR_SOLID,
+  FLOOR_ICE,
+  FLOOR_LIQUID,
+  FLOOR_WATER,
+  FLOOR_LAVA,
+  FLOOR_SLUDGE
+} floortype_t;
+
 // Ammunition types defined.
 typedef enum {
   AM_CLIP,    // Pistol / chaingun ammo.
   AM_SHELL,   // Shotgun / double barreled shotgun.
   AM_CELL,    // Plasma rifle, BFG.
   AM_MISL,    // Missile launcher.
-  NUMAMMO,
-  AM_NOAMMO   // Unlimited for chainsaw / fist.
+  DOOM_NUMAMMO,
+
+  /* Heretic ammo, overlaid on the same slots (a Heretic game never uses
+   * the Doom ammo names and vice versa). Heretic has six types, so the
+   * ammo[] / maxammo[] arrays are sized to the larger count via NUMAMMO. */
+  am_goldwand = 0,
+  am_crossbow,
+  am_blaster,
+  am_skullrod,
+  am_phoenixrod,
+  am_mace,
+  HERETIC_NUMAMMO,
+
+  NUMAMMO = HERETIC_NUMAMMO,  /* array sizing: max of Doom(4)/Heretic(6) */
+  AM_NOAMMO   // Unlimited for chainsaw / fist / staff / gauntlets.
 } ammotype_t;
 
 // Power up artifacts.
@@ -210,6 +331,18 @@ typedef enum {
   pw_ironfeet,
   pw_allmap,
   pw_infrared,
+
+  /* Raven (Heretic/Hexen). Defined unconditionally so the shared power code
+   * compiles; Heretic uses weaponlevel2/flight/shield/health2. */
+  pw_weaponlevel2,
+  pw_flight,
+  pw_shield,
+  pw_health2,
+
+  /* Hexen */
+  pw_speed,
+  pw_minotaur,
+
   NUMPOWERS
 } powertype_t;
 
@@ -218,8 +351,17 @@ typedef enum {
   INVULNTICS  = (30*TICRATE),
   INVISTICS   = (60*TICRATE),
   INFRATICS   = (120*TICRATE),
-  IRONTICS    = (60*TICRATE)
+  IRONTICS    = (60*TICRATE),
+  WPNLEV2TICS = (40*TICRATE),
+  FLIGHTTICS  = (60*TICRATE),
+  SPEEDTICS   = (45*TICRATE),
+  MORPHTICS   = (40*TICRATE),
+  MAULATORTICS = (25*TICRATE)
 } powerduration_t;
+
+/* A power whose remaining time drops below this starts blinking the player
+ * (and re-use of the matching artifact is refused above it). */
+#define BLINKTHRESHOLD (4*32)
 
 // DOOM keyboard definition.
 // This is the stuff configured by Setup.Exe.
@@ -316,5 +458,48 @@ typedef enum {
 #define MORE_FRICTION_MOMENTUM 15000       // mud factor based on momentum
 #define ORIG_FRICTION          0xE800      // original value
 #define ORIG_FRICTION_FACTOR   2048        // original value
+
+/* Hexen sound sequences.  SEQ_* names a compiled sequence script; a moving
+ * sector's seqType (SEQTYPE_*) selects which platform/door sequence plays. */
+enum
+{
+  SEQ_PLATFORM,
+  SEQ_PLATFORM_HEAVY,         /* same script as a normal platform */
+  SEQ_PLATFORM_METAL,
+  SEQ_PLATFORM_CREAK,         /* same script as a normal platform */
+  SEQ_PLATFORM_SILENCE,
+  SEQ_PLATFORM_LAVA,
+  SEQ_PLATFORM_WATER,
+  SEQ_PLATFORM_ICE,
+  SEQ_PLATFORM_EARTH,
+  SEQ_PLATFORM_METAL2,
+  SEQ_DOOR_STONE,
+  SEQ_DOOR_HEAVY,
+  SEQ_DOOR_METAL,
+  SEQ_DOOR_CREAK,
+  SEQ_DOOR_SILENCE,
+  SEQ_DOOR_LAVA,
+  SEQ_DOOR_WATER,
+  SEQ_DOOR_ICE,
+  SEQ_DOOR_EARTH,
+  SEQ_DOOR_METAL2,
+  SEQ_ESOUND_WIND,
+  SEQ_NUMSEQ
+};
+
+typedef enum
+{
+  SEQTYPE_STONE,
+  SEQTYPE_HEAVY,
+  SEQTYPE_METAL,
+  SEQTYPE_CREAK,
+  SEQTYPE_SILENCE,
+  SEQTYPE_LAVA,
+  SEQTYPE_WATER,
+  SEQTYPE_ICE,
+  SEQTYPE_EARTH,
+  SEQTYPE_METAL2,
+  SEQTYPE_NUMSEQ
+} seqtype_t;
 
 #endif          // __DOOMDEF__

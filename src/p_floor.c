@@ -33,6 +33,8 @@
  *-----------------------------------------------------------------------------*/
 
 #include "doomstat.h"
+#include "hexen/sn_sonix.h"
+#include "hexen/p_acs.h"
 #include "r_main.h"
 #include "p_map.h"
 #include "p_spec.h"
@@ -246,8 +248,8 @@ void T_MoveFloor(floormove_t* floor)
     floor->direction
   );
 
-  if (!(leveltime&7))     /* make the floormove sound */
-    S_StartSound((mobj_t *)&floor->sector->soundorg, sfx_stnmov);
+  if (!hexen && !(leveltime&7))     /* make the floormove sound */
+    S_StartSound((mobj_t *)&floor->sector->soundorg, g_sfx_stnmov);
 
   if (res == RES_PASTDEST)    /* if destination height is reached */
   {
@@ -297,6 +299,11 @@ void T_MoveFloor(floormove_t* floor)
      }
 
      floor->sector->floordata = NULL; //jff 2/22/98
+     if (hexen)
+     {
+        SN_StopSequence((mobj_t *)&floor->sector->soundorg);
+        P_TagFinished(floor->sector->tag);
+     }
      P_RemoveThinker(&floor->thinker);//remove this floor from list of movers
 
      //jff 2/26/98 implement stair retrigger lockout while still building
@@ -327,7 +334,8 @@ void T_MoveFloor(floormove_t* floor)
      }
 
      // make floor stop sound
-     S_StartSound((mobj_t *)&floor->sector->soundorg, sfx_pstop);
+     if (!hexen)
+        S_StartSound((mobj_t *)&floor->sector->soundorg, g_sfx_pstop);
   }
 }
 
@@ -394,7 +402,7 @@ void T_MoveElevator(elevator_t* elevator)
 
   // make floor move sound
   if (!(leveltime&7))
-    S_StartSound((mobj_t *)&elevator->sector->soundorg, sfx_stnmov);
+    S_StartSound((mobj_t *)&elevator->sector->soundorg, g_sfx_stnmov);
 
   if (res == RES_PASTDEST)            // if destination height acheived
   {
@@ -403,7 +411,7 @@ void T_MoveElevator(elevator_t* elevator)
     P_RemoveThinker(&elevator->thinker);    // remove elevator from actives
 
     // make floor stop sound
-    S_StartSound((mobj_t *)&elevator->sector->soundorg, sfx_pstop);
+    S_StartSound((mobj_t *)&elevator->sector->soundorg, g_sfx_pstop);
   }
 }
 

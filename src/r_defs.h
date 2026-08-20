@@ -90,11 +90,14 @@ typedef struct
   int	cachedheight;
   int	scaleindex;
 
-  int iSectorID; // proff 04/05/2000: needed for OpenGL and used in debugmode by the HUD to draw sectornum
   dbool   no_toptextures;
   dbool   no_bottomtextures;
   fixed_t floorheight;
   fixed_t ceilingheight;
+
+  /* sloped planes (ZDoom Plane_Align); NULL = flat.  See p_slope.c. */
+  struct secplane_s *floor_slope;
+  struct secplane_s *ceiling_slope;
   int nexttag,firsttag;  // killough 1/30/98: improves searches for tags.
   int soundtraversed;    // 0 = untraversed, 1,2 = sndlines-1
   mobj_t *soundtarget;   // thing that made a sound (or null)
@@ -153,6 +156,22 @@ typedef struct
   short special;
   short oldspecial;      //jff 2/16/98 remembers if sector WAS secret (automap)
   short tag;
+  int   seqType;         /* Hexen: sound-sequence type (SEQTYPE_*) */
+
+  /* ZDoom 3D floors (Sector_Set3DFloor): slabs attached to this
+   * sector, geometry living in their control sectors (p_ffloor.c) */
+  struct ffloor_s *ffloors;
+
+  /* per-sector 3D skybox (SkyPicker 9081): index into the skyboxes[]
+   * camera table, or -1 to use the level default sky/skyview. */
+  int skybox;
+
+  /* ZDoom UDMF per-plane light: lightfloor/lightceiling adjust the floor and
+   * ceiling plane light relative to lightlevel, or set it absolutely when the
+   * matching *_absolute flag is set.  Zero/!absolute (the binary default, and
+   * Z_Calloc's initial state) leaves plane light equal to sector light. */
+  short lightfloor, lightceiling;
+  byte  lightfloor_absolute, lightceiling_absolute;
 } sector_t;
 
 //
@@ -189,13 +208,21 @@ typedef enum
 
 typedef struct line_s
 {
-  int iLineID;           // proff 04/05/2000: needed for OpenGL
   vertex_t *v1, *v2;     // Vertices, from v1 to v2.
   fixed_t dx, dy;        // Precalculated v2 - v1 for side checking.
   unsigned short flags;           // Animation related.
   short special;
   short tag;
-  unsigned short sidenum[2];        // Visual appearance: SideDefs.
+  /* Hexen line special arguments (args[0..4]).  Zero for Doom/Heretic maps;
+   * filled from the Hexen-format linedef.  Consumed by the Hexen line
+   * specials / ACS layer added later. */
+  /* Widened from unsigned char: ZDoom UDMF args are full ints (line ids,
+   * tags and TIDs in large maps exceed 255; heights can be negative). */
+  int args[5];
+  /* 32-bit: ZDoom UDMF maps can have far more than 65535 sidedefs (MyHouse
+   * has ~301k), so a 16-bit index silently wraps and points at the wrong
+   * sidedef -> wrong sector. */
+  int sidenum[2];                   // Visual appearance: SideDefs.
   fixed_t bbox[4];       // A bounding box, for the linedef's extent
   slopetype_t slopetype; // To aid move clipping.
   sector_t *frontsector; // Front and back sector.
@@ -204,6 +231,10 @@ typedef struct line_s
   void *specialdata;     // thinker_t for reversable actions
   int firsttag,nexttag;  // killough 4/17/98: improves searches for tags.
   int r_validcount;      // cph: if == gametic, r_flags already done
+  int translucent;       /* 0 opaque; 1 = ZDoom/Boom translucent (alpha blend
+                            of the 2s midtexture); 2 = additive ("Add"
+                            renderstyle) light beam.  Weight is `alpha`. */
+  unsigned char alpha;   /* blend weight 0..32 (=alpha*32) for translucent != 0 */
   enum {                 // cph:
     RF_TOP_TILE  = 1,     // Upper texture needs tiling
     RF_MID_TILE = 2,     // Mid texture needs tiling
@@ -253,7 +284,6 @@ typedef struct
   side_t* sidedef;
   line_t* linedef;
 
-  int iSegID; // proff 11/05/2000: needed for OpenGL
   // figgi -- needed for glnodes
   float     length;
   dbool     miniseg;
@@ -280,7 +310,49 @@ typedef struct subsector_s
 {
   sector_t *sector;
   int numlines, firstline;
+
+  /* Hexen: the polyobject rendered inside this subsector, if any. */
+  struct polyobj_s *poly;
 } subsector_t;
+
+/* Hexen polyobjects: a group of segs anchored at a start spot, moved and
+ * rotated at runtime by rewriting the seg vertices.  Collision goes through
+ * a parallel blockmap of polyblock_t links; rendering attaches the group to
+ * the subsector containing its centre. */
+typedef struct polyobj_s
+{
+  int numsegs;
+  seg_t **segs;
+  degenmobj_t startSpot;
+  vertex_t *originalPts;   /* the base for rotations */
+  vertex_t *prevPts;       /* restores the old points when a move is blocked */
+  angle_t angle;
+  int tag;                 /* reference tag from the editor */
+  int bbox[4];             /* blockmap coordinates */
+  int validcount;          /* dedup in the blockmap line iterator */
+  dbool crush;             /* should the polyobj attempt to crush mobjs? */
+  dbool hurt;
+  int seqType;
+  void *specialdata;       /* the mover thinker while the poly is moving */
+  subsector_t *subsector;
+  /* Several polyobjs can resolve to the same render subsector (ZDoom
+   * maps stack geometry; vanilla Hexen fataled on this).  The subsector
+   * holds the head and this chains the rest. */
+  struct polyobj_s *subnext;
+} polyobj_t;
+
+typedef struct polyblock_s
+{
+  polyobj_t *polyobj;
+  struct polyblock_s *prev;
+  struct polyblock_s *next;
+} polyblock_t;
+
+#define PO_LINE_START 1     /* polyobj line start special */
+#define PO_LINE_EXPLICIT 5
+
+extern polyobj_t *polyobjs; /* list of all poly-objects on the level */
+extern int po_NumPolyobjs;
 
 
 //
@@ -327,7 +399,6 @@ typedef struct drawseg_s
   int *sprtopclip, *sprbottomclip, *maskedtexturecol; // dropoff overflow
 } drawseg_t;
 
-// proff: Added for OpenGL
 typedef struct
 {
   int width,height;
@@ -352,11 +423,34 @@ typedef struct vissprite_s
   int patch;
   uint64_t mobjflags;
 
+  /* When non-NULL this vissprite is a voxel model rather than a sprite
+   * billboard; voxangle is the model's yaw relative to the view (the
+   * rasteriser rotates the voxel grid by it).  patch/startfrac/xiscale
+   * are unused for voxels. */
+  const void *voxel;
+  angle_t     voxangle;
+
   // for color translation and shadow draw, maxbright frames as well
   const lighttable_t *colormap;
 
   // killough 3/27/98: height sector for underwater/fake ceiling support
   int heightsec;
+
+  /* DECORATE custom colour remap: when non-NULL, a 256-byte palette
+   * translation table built from an actor's Translation property, used in
+   * place of the player-flag translations.  NULL for ordinary sprites. */
+  const uint8_t *xlat;
+  /* DECORATE render style: 0 = opaque, 1 = translucent (alpha lerp),
+   * 2 = additive ("Add").  alpha is the blend weight 0..32 (= alpha * 32),
+   * used only when translucent != 0.  Both 0 for ordinary/vanilla sprites. */
+  int            translucent;
+  int            alpha;
+  /* Dynamic-light colour tint (565 channel adds), applied to the sprite's
+   * opaque texels in R_DrawVisSprite.  Zero for white light / unlit. */
+  int            tint_r, tint_g, tint_b;
+  /* Self-illuminated (FF_FULLBRIGHT): ignores distance light because it
+   * emits.  In HDR10 output this is what gets pushed above SDR white. */
+  int            emissive;
 } vissprite_t;
 
 //
@@ -407,12 +501,25 @@ typedef struct
 // Go to http://classicgaming.com/doom/editing/ to find out -- killough
 //
 
+/* sloped-plane equation a*x + b*y + c*z + d = 0 (16.16, c > 0) */
+typedef struct secplane_s
+{
+  fixed_t a, b, c, d;
+} secplane_t;
+
 typedef struct visplane
 {
   struct visplane *next;        // Next visplane in hash chain -- killough
   int picnum, lightlevel, minx, maxx;
   fixed_t height;
+  const secplane_t *slope;      /* tilted plane (NULL = horizontal) */
   fixed_t xoffs, yoffs;         // killough 2/28/98: Support scrolling flats
+  byte modified;              // set when a seg actually writes a span here
+  byte translucent;           // 3D-floor water surface: blend 50/50 on draw
+  int skybox;                 /* per-sector 3D skybox index, or -1 (default) */
+  byte wallglow;              /* a GLDEFS-glowing wall line pools onto this plane */
+  int portal;                 /* stacked-sector portal id: 0 none, +(sec+1)
+                               * ceiling window, -(sec+1) floor window */
   unsigned int pad1;          // leave pads for [minx-1]/[maxx+1]
   unsigned int top[MAX_SCREENWIDTH];
   unsigned int pad2, pad3;    // killough 2/8/98, 4/25/98

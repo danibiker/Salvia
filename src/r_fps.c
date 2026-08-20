@@ -33,9 +33,13 @@
  */
 
 #include "doomstat.h"
+#include "m_random.h"
+#include "heretic/p_action.h"
 #include "r_defs.h"
 #include "r_state.h"
 #include "p_spec.h"
+#include "hexen/p_spec_hexen.h"
+#include "hexen/po_man.h"
 #include "r_demo.h"
 #include "r_fps.h"
 
@@ -48,10 +52,9 @@ typedef enum
   INTERP_Vertex,
   INTERP_WallPanning,
   INTERP_FloorPanning,
-  INTERP_CeilingPanning
+  INTERP_CeilingPanning,
+  INTERP_SectorLight
 } interpolation_type_e;
-
-dbool   WasRenderedInTryRunTics;
 
 typedef struct
 {
@@ -85,6 +88,38 @@ void R_InterpolateView (player_t *player)
 
   viewplayer = player;
 
+  /* ACS ChangeCamera: when a camera actor is active the view follows it
+   * instead of the player's body.  A camera mobj has no player viewheight,
+   * so the eye sits at the actor's own z.  Interpolate from its previous
+   * position like any other viewer; a change of viewer resets the lerp. */
+  if (zacs_view_camera)
+  {
+    mobj_t *cam = zacs_view_camera;
+    if (cam != oviewer || NoInterpolate)
+    {
+      R_ResetViewInterpolation();
+      oviewer = cam;
+    }
+    frac = NoInterpolate ? FRACUNIT : tic_vars.frac;
+    if (movement_smooth)
+    {
+      viewx = cam->PrevX + FixedMul(frac, cam->x - cam->PrevX);
+      viewy = cam->PrevY + FixedMul(frac, cam->y - cam->PrevY);
+      viewz = cam->PrevZ + FixedMul(frac, cam->z - cam->PrevZ);
+      viewangle = cam->angle + viewangleoffset;
+      viewpitch = cam->pitch + viewpitchoffset;
+    }
+    else
+    {
+      viewx = cam->x;
+      viewy = cam->y;
+      viewz = cam->z;
+      viewangle = cam->angle + viewangleoffset;
+      viewpitch = cam->pitch + viewpitchoffset;
+    }
+    return;
+  }
+
   if (player->mo != oviewer || NoInterpolate)
   {
     R_ResetViewInterpolation();
@@ -113,6 +148,14 @@ void R_InterpolateView (player_t *player)
 
     viewangle = R_SmoothPlaying_Get(player->mo->angle) + viewangleoffset;
     viewpitch = R_SmoothPlaying_Get(player->mo->pitch) + viewpitchoffset;
+  }
+
+  /* Hexen earthquake: jitter the camera while a local quake is happening. */
+  if (hexen && localQuakeHappening[displayplayer])
+  {
+    int intensity = localQuakeHappening[displayplayer];
+    viewx += ((M_Random() % (intensity << 2)) - (intensity << 1)) * FRACUNIT;
+    viewy += ((M_Random() % (intensity << 2)) - (intensity << 1)) * FRACUNIT;
   }
 }
 
@@ -148,6 +191,9 @@ static void R_CopyInterpToOld (int i)
     oldipos[i][0] = ((sector_t*)curipos[i].address)->ceiling_xoffs;
     oldipos[i][1] = ((sector_t*)curipos[i].address)->ceiling_yoffs;
     break;
+  case INTERP_SectorLight:
+    oldipos[i][0] = ((sector_t*)curipos[i].address)->lightlevel;
+    break;
   }
 }
 
@@ -177,6 +223,9 @@ static void R_CopyBakToInterp (int i)
     ((sector_t*)curipos[i].address)->ceiling_xoffs = bakipos[i][0];
     ((sector_t*)curipos[i].address)->ceiling_yoffs = bakipos[i][1];
     break;
+  case INTERP_SectorLight:
+    ((sector_t*)curipos[i].address)->lightlevel = (short) bakipos[i][0];
+    break;
   }
 }
 
@@ -196,7 +245,7 @@ static void R_DoAnInterpolation (int i, fixed_t smoothratio)
     break;
   case INTERP_Vertex:
     adr1 = &((vertex_t*)curipos[i].address)->x;
-////    adr2 = &((vertex_t*)curipos[i].Address)->y;
+    adr2 = &((vertex_t*)curipos[i].address)->y;
     break;
   case INTERP_WallPanning:
     adr1 = &((side_t*)curipos[i].address)->rowoffset;
@@ -210,6 +259,19 @@ static void R_DoAnInterpolation (int i, fixed_t smoothratio)
     adr1 = &((sector_t*)curipos[i].address)->ceiling_xoffs;
     adr2 = &((sector_t*)curipos[i].address)->ceiling_yoffs;
     break;
+
+  case INTERP_SectorLight:
+    {
+      /* lightlevel is a short, so it cannot ride the fixed_t pointer
+       * path above; lerp it in place with the same old/bak protocol */
+      sector_t *sec = (sector_t *) curipos[i].address;
+      fixed_t cur = sec->lightlevel;
+
+      bakipos[i][0] = cur;
+      sec->lightlevel =
+        (short) (oldipos[i][0] + FixedMul(cur - oldipos[i][0], smoothratio));
+      return;
+    }
 
  default:
     return;
@@ -240,6 +302,21 @@ void R_UpdateInterpolations()
 }
 
 int interpolations_max = 0;
+
+/* Releases the interpolation slot arrays.  R_SetInterpolation only grows
+ * them past the current capacity, so the mark is cleared with the
+ * pointers. */
+void R_InterpolationDeinit(void)
+{
+   Z_Free(oldipos);
+   Z_Free(bakipos);
+   Z_Free(curipos);
+   oldipos            = NULL;
+   bakipos            = NULL;
+   curipos            = NULL;
+   interpolations_max = 0;
+   numinterpolations  = 0;
+}
 
 static void R_SetInterpolation(interpolation_type_e type, void *posptr)
 {
@@ -384,7 +461,19 @@ static void R_InterpolationGetData(thinker_t *th,
     *posptr1 = ((ceiling_t *)th)->sector;
   }
   else
+  if (th->function.arg1 == (void (*)(void *))T_HexenMoveCeiling)
+  {
+    *type1 = INTERP_SectorCeiling;
+    *posptr1 = ((ceiling_t *)th)->sector;
+  }
+  else
   if (th->function.arg1 == (void (*)(void *))T_VerticalDoor)
+  {
+    *type1 = INTERP_SectorCeiling;
+    *posptr1 = ((vldoor_t *)th)->sector;
+  }
+  else
+  if (th->function.arg1 == (void (*)(void *))T_HexenVerticalDoor)
   {
     *type1 = INTERP_SectorCeiling;
     *posptr1 = ((vldoor_t *)th)->sector;
@@ -396,6 +485,41 @@ static void R_InterpolationGetData(thinker_t *th,
     *posptr1 = ((elevator_t *)th)->sector;
     *type2 = INTERP_SectorCeiling;
     *posptr2 = ((elevator_t *)th)->sector;
+  }
+  else
+  if (th->function.arg1 == (void (*)(void *))T_HexenBuildPillar)
+  {
+    *type1 = INTERP_SectorFloor;
+    *posptr1 = ((pillar_t *)th)->sector;
+    *type2 = INTERP_SectorCeiling;
+    *posptr2 = ((pillar_t *)th)->sector;
+  }
+  else
+  if (th->function.arg1 == (void (*)(void *))T_FloorWaggle)
+  {
+    *type1 = INTERP_SectorFloor;
+    *posptr1 = ((planeWaggle_t *)th)->sector;
+  }
+  else
+  if (th->function.arg1 == (void (*)(void *))T_Glow)
+  {
+    /* Ramp lights only: glows and fades step lightlevel a little every
+     * tic, so they interpolate cleanly.  Flashes, strobes, and flickers
+     * are square waves -- interpolating them would soften hard strobes
+     * into pulses and change the look, so they stay stepped. */
+    *type1 = INTERP_SectorLight;
+    *posptr1 = ((glow_t *)th)->sector;
+  }
+  else
+  if (th->function.arg1 == (void (*)(void *))T_HexenLight)
+  {
+    const light_t *light = (const light_t *) th;
+
+    if (light->type == LITE_FADE || light->type == LITE_GLOW)
+    {
+      *type1 = INTERP_SectorLight;
+      *posptr1 = light->sector;
+    }
   }
   else
   if (th->function.arg1 == (void (*)(void *))T_Scroll)
@@ -419,6 +543,33 @@ static void R_InterpolationGetData(thinker_t *th,
   }
 }
 
+/* Hexen polyobjects: the mover thinkers carry the polyobj tag (both
+ * thinker structs lay it out right after the thinker header), and the
+ * polyobj moves its segs' vertices directly, so vertex interpolation is
+ * what smooths it.  Returns the polyobj a mover thinker drives, or NULL
+ * for every other thinker. */
+static polyobj_t *R_PolyobjForThinker(thinker_t *th)
+{
+  int num;
+  int i;
+
+  if (!hexen)
+    return NULL;
+
+  if (th->function.arg1 == (void (*)(void *))T_RotatePoly ||
+      th->function.arg1 == (void (*)(void *))T_MovePoly)
+    num = ((polyevent_t *) th)->polyobj;
+  else if (th->function.arg1 == (void (*)(void *))T_PolyDoor)
+    num = ((polydoor_t *) th)->polyobj;
+  else
+    return NULL;
+
+  for (i = 0; i < po_NumPolyobjs; i++)
+    if (polyobjs[i].tag == num)
+      return &polyobjs[i];
+  return NULL;
+}
+
 void R_ActivateThinkerInterpolations(thinker_t *th)
 {
   void *posptr1;
@@ -436,6 +587,21 @@ void R_ActivateThinkerInterpolations(thinker_t *th)
 
     if(posptr2)
       R_SetInterpolation (type2, posptr2);
+  }
+
+  {
+    const polyobj_t *po = R_PolyobjForThinker(th);
+
+    if (po)
+    {
+      int i;
+
+      for (i = 0; i < po->numsegs; i++)
+      {
+        R_SetInterpolation (INTERP_Vertex, po->segs[i]->v1);
+        R_SetInterpolation (INTERP_Vertex, po->segs[i]->v2);
+      }
+    }
   }
 }
 
@@ -455,5 +621,20 @@ void R_StopInterpolationIfNeeded(thinker_t *th)
     R_StopInterpolation (type1, posptr1);
     if(posptr2)
       R_StopInterpolation (type2, posptr2);
+  }
+
+  {
+    const polyobj_t *po = R_PolyobjForThinker(th);
+
+    if (po)
+    {
+      int i;
+
+      for (i = 0; i < po->numsegs; i++)
+      {
+        R_StopInterpolation (INTERP_Vertex, po->segs[i]->v1);
+        R_StopInterpolation (INTERP_Vertex, po->segs[i]->v2);
+      }
+    }
   }
 }

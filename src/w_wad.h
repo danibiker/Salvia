@@ -35,6 +35,7 @@
 #ifndef __W_WAD__
 #define __W_WAD__
 
+#include <stdint.h>
 #include <streams/file_stream.h>
 
 //
@@ -78,7 +79,15 @@ typedef enum {
   ns_flats,
   ns_colormaps,
   ns_hires,
-  ns_prboom
+  ns_prboom,
+  /* PK3 members in formats the engine cannot consume yet (PNG, Ogg,
+   * WAV, FLAC).  Quarantined out of ns_global so a modern-format asset
+   * sharing a name with an IWAD lump can never reach the wrong loader;
+   * future consumers (PNG patches, sample decoders) look them up here. */
+  ns_pk3_deferred,
+  /* ZDoom TEXTURES/ folder members: standalone wall textures, registered
+   * by R_InitTextures from the TX_START/TX_END group. */
+  ns_zdoom_tx
 } lumpinfo_namespace_t;
 
 // CPhipps - changed wad init
@@ -91,8 +100,25 @@ typedef struct {
 #ifndef MEMORY_LOW
   unsigned char *data;
   int position;
-  int length;
+  /* The file's size on disk, from filestream_get_size, which returns
+   * int64_t.  This was an int, so a file at or above 2GB narrowed and
+   * the result went on to mmap(), malloc() and munmap() as a size_t -
+   * a negative value there becomes enormous.  No valid wad is that
+   * large, but "no valid input reaches it" is not the same as "the code
+   * is safe", and the assignment was silent. */
+  int64_t length;
+#ifdef HAVE_MMAP
+  int mmapped;   /* data came from mmap(); munmap() it rather than free() */
 #endif
+#endif
+  /* Embedded (baked-in) WAD support.  When embedded_data is non-NULL the
+   * wad's bytes live in a const array compiled into the core rather than on
+   * the filesystem: W_AddFile reads the header/directory from it and skips
+   * filestream_open, and W_ReadLump memcpys lumps out of it.  Works in both
+   * normal and MEMORY_LOW builds (these fields are outside the #ifndef so
+   * the embedded path is always available). */
+  const unsigned char *embedded_data;
+  int embedded_length;
 } wadfile_info_t;
 
 extern wadfile_info_t *wadfiles;
@@ -100,6 +126,14 @@ extern wadfile_info_t *wadfiles;
 extern size_t numwadfiles; // CPhipps - size of the wadfiles array
 
 void W_Init(void); // CPhipps - uses the above array
+
+/* Swap a lump's backing bytes for a caller-owned buffer (e.g. a decoded
+ * PNG).  Must run before the lump is first cached; the buffer must stay
+ * valid for the program's lifetime. */
+void W_ReplaceLumpData(int lump, const void *data, int size);
+
+/* drop a lump's cached copy; see w_memcache.c */
+void W_InvalidateLumpCache(int lump);
 void W_ReleaseAllWads(void); // Proff - Added for iwad switching
 void W_InitCache(void);
 void W_DoneCache(void);

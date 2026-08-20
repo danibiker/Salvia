@@ -97,16 +97,12 @@ typedef enum
 // contains the weighted versions of each palette color for filtering
 // operations
 extern uint16_t *V_Palette16;
+/* Truecolor palette, same [colour*64 + weight] layout with the active
+ * 32-bit format's native channel width.  NULL unless VID_TRUECOLOR. */
+extern uint32_t *V_PaletteTC;
 
 #define VID_PAL16(color, weight) V_Palette16[ (color)*VID_NUMCOLORWEIGHTS + (weight) ]
-
-extern const char *default_videomode;
-
-void V_InitMode(void);
-
-// video mode query interface
-int V_GetNumPixelBits(void);
-int V_GetPixelDepth(void);
+#define VID_PALTC(color, weight) V_PaletteTC[ (color)*VID_NUMCOLORWEIGHTS + (weight) ]
 
 //jff 4/24/98 loads color translation lumps
 void V_InitColorTranslation(void);
@@ -121,8 +117,6 @@ extern void V_CopyRect(int srcx,  int srcy,  int srcscrn,
                              enum patch_translation_e flags);
 
 void V_FillRect(int x, int y, int width, int height, uint8_t colour);
-extern void V_FillRect_f(int x, int y,
-                             int width, int height, uint8_t colour);
 
 // CPhipps - patch drawing
 // Consolidated into the 3 really useful functions:
@@ -135,6 +129,24 @@ extern void V_DrawNumPatch(int x, int y, int scrn,
 // V_DrawNamePatch - Draws the patch from lump "name"
 #define V_DrawNamePatch(x,y,s,n,t,f) V_DrawNumPatch(x,y,s,W_GetNumForName(n),t,f)
 
+/* fullscreen page draw: centers wide offset-less patches (issue #195) */
+extern void V_DrawNumPatchFS(int x, int y, int scrn,
+                             int lump, int cm, enum patch_translation_e flags);
+#define V_DrawNamePatchFS(x,y,s,n,t,f) V_DrawNumPatchFS(x,y,s,W_GetNumForName(n),t,f)
+
+/* Draws a static full-screen art lump stretched to the whole surface,
+ * caching the rendered result (see v_video.c).  For finale / help art
+ * screens that redraw the same lump every frame. */
+extern void V_DrawNumPatchFullScreenCached(int scrn, int lump, int cm);
+#define V_DrawNamePatchFullScreenCached(s,n,cm) \
+  V_DrawNumPatchFullScreenCached(s, W_GetNumForName(n), cm)
+
+/* Draw a full-screen art lump from its retained native-colour image when one
+ * exists (full-colour title/menu/intermission backdrops); returns 1 on success
+ * or 0 when there is no native copy and the caller should use the indexed
+ * patch path instead. */
+int V_DrawRGBAFullScreen(int scrn, int lump);
+
 /* cph -
  * Functions to return width & height of a patch.
  * Doesn't really belong here, but is often used in conjunction with
@@ -145,10 +157,17 @@ extern void V_DrawNumPatch(int x, int y, int scrn,
 
 /* cphipps 10/99: function to tile a flat over the screen */
 extern void V_DrawBackground(const char* flatname, int scrn);
+void V_DrawRawScreen(const char *lump_name);
+void V_SetRawPalette(const char *lump_name);
+void V_RestorePalette(void);
+void V_DrawRawScreenSection(const char *lump_name, int src_row,
+                            int dst_row, int num_rows);
 
-void V_DestroyUnusedTrueColorPalettes(void);
+void V_DestroyTrueColorPalette(void);
+void V_UpdateTrueColorPalette(void);
 // CPhipps - function to set the palette to palette number pal.
 void V_SetPalette(int pal);
+void V_SetPaletteBlend(int pal1, int pal2, fixed_t t); /* frame-rate flash fades */
 
 // CPhipps - function to plot a pixel
 

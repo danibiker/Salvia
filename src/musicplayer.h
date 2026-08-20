@@ -32,6 +32,8 @@
 #ifndef MUSICPLAYER_H
 #define MUSICPLAYER_H
 
+#include <stddef.h>
+
 /*
 Anything that implements all of these functions can play music in prboomplus.
 
@@ -45,7 +47,6 @@ Timing: If you're outputting to render, your timing should come solely from the
 calls to render, and not some external timing source.  That's why things stay
 synced.
 */
-
 
 typedef struct
 {
@@ -82,43 +83,39 @@ typedef struct
   // s16 stereo, with samplerate as specified in init.  player needs to be able to handle
   // just about anything for nsamp.  render can be called even during pause+stop.
   void (*render)(void *dest, unsigned nsamp);
+
+  // Optional: save player-specific playback state (song position,
+  // tempo, channel state, etc.) so a save state can resume music
+  // from the same point on load.  Returns the number of bytes
+  // written to dest, or 0 if there is nothing to save, dest is too
+  // small, or the player does not implement state save.  Pass dest
+  // == NULL to query the maximum size the player might write.
+  //
+  // Implementations must be efficient: this is called every save
+  // state, including high-frequency saves driven by features such
+  // as runahead.  Targeting tens of bytes is ideal; hundreds is
+  // tolerable.  Avoid kilobytes.
+  size_t (*serialize)(void *dest, size_t cap);
+
+  // Optional: restore the state previously written by serialize().
+  // Returns 1 on success, 0 if the data is unrecognised, mismatched
+  // against the currently loaded song, or the player does not
+  // implement state restore.  On failure the player should leave
+  // playback running as-is; the caller treats this as a soft error.
+  int (*unserialize)(const void *src, size_t size);
+
+  // Optional: render float stereo, normalized to [-1.0, 1.0], at the
+  // samplerate given to init().  Only used when the libretro frontend
+  // negotiated float audio output (RETRO_ENVIRONMENT_GET_AUDIO_SAMPLE_
+  // BATCH_FLOAT); the caller passes a float* dest and the same nsamp
+  // contract as render().  Leave NULL for integer-native backends
+  // (MOD) -- the caller renders them via render() and widens to
+  // float.  Implementing this lets backends with a float-native
+  // stage (Ogg via rvorbis, MIDI via fluidsynth, OPL via its
+  // float FIR resampler, MP3 via libmad's 28-bit synth) skip a
+  // float->int16->float round-trip and feed the float mixer
+  // directly.
+  void (*render_float)(void *dest, unsigned nsamp);
 } music_player_t;
 
-
-
-// helper for deferred load dll
-
-#ifdef _MSC_VER
-#if 1
-#define TESTDLLLOAD(a,b)
-#else
-#define TESTDLLLOAD(a,b)                                                           \
-  if (1)                                                                           \
-  {                                                                                \
-    HMODULE h = LoadLibrary (a);                                                   \
-    if (!h)                                                                        \
-    {                                                                              \
-      lprintf (LO_INFO, a " not found!\n");                                        \
-      return 0;                                                                    \
-    }                                                                              \
-    FreeLibrary (h);                                                               \
-    if (b && FAILED (__HrLoadAllImportsForDll (a)))                                \
-    {                                                                              \
-      lprintf (LO_INFO, "Couldn't get all symbols from " a "\n");                  \
-      return 0;                                                                    \
-    }                                                                              \
-  }
-#endif
-
-#else // _MSC_VER
-#define TESTDLLLOAD(a,b)
-
-#endif // _MSC_VER
-
-
-
-
-
-
-
-#endif // MUSICPLAYER_H
+#endif /* MUSICPLAYER_H */

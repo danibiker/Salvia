@@ -97,7 +97,23 @@ typedef struct {
   unsigned short sidenum[2];
 } PACKEDATTR maplinedef_t;
 
-#define NO_INDEX ((unsigned short)-1)
+/* Hexen-format linedef: the Doom special/tag pair is replaced by a one-byte
+ * special and five one-byte args.  Geometry (v1/v2/flags/sidenum) is the
+ * same as Doom. */
+typedef struct {
+  unsigned short v1;
+  unsigned short v2;
+  unsigned short flags;
+  unsigned char  special;
+  unsigned char  args[5];
+  unsigned short sidenum[2];
+} PACKEDATTR hexen_maplinedef_t;
+
+/* -1 rather than 0xffff: line_t.sidenum is now a 32-bit int (UDMF maps can
+ * have >65535 sidedefs, so 65535 is a valid index and cannot be the sentinel).
+ * The on-disk binary formats still use 0xffff for "no sidedef"; the loaders
+ * translate that to NO_INDEX. */
+#define NO_INDEX (-1)
 
 //
 // LineDef attributes.
@@ -142,6 +158,39 @@ typedef struct {
 //jff 3/21/98 Set if line absorbs use by player
 //allow multiple push/switch triggers to be used on one push
 #define ML_PASSUSE      512
+
+/* MBF21 line flags (only honoured at complevel 21). */
+#define ML_BLOCKLANDMONSTERS 0x1000 /* bit 12: blocks non-floating monsters */
+#define ML_BLOCKPLAYERS      0x2000 /* bit 13: blocks players */
+
+/* Hexen line activation.  Hexen reuses the linedef flags word: bit 9 marks a
+ * repeatable special and bits 10-12 hold the activation class (how the line is
+ * triggered).  These overlap the Doom/MBF21 bit assignments above, but only
+ * apply on Hexen-format maps where those Doom flags are not used. */
+#define ML_REPEATSPECIAL 0x0200      /* bit 9: special may retrigger */
+/* bit 14: ZDoom/UDMF secondary activation -- the line also fires for a monster
+ * (monstercross / monsteruse / monsteractivate) when its primary SPAC class is
+ * a player class.  The single-slot SPAC field can hold only one class, so this
+ * carries the "monsters may also trigger it" modifier alongside it. */
+#define ML_MONSTERSCANACTIVATE 0x4000
+#define HML_SPAC_SHIFT   10
+#define HML_SPAC_MASK    0x1c00
+#define GET_SPAC(flags)  (((flags) & HML_SPAC_MASK) >> HML_SPAC_SHIFT)
+
+/* Activation classes (the value GET_SPAC returns). */
+#define SPAC_CROSS   0           /* player crosses the line                */
+#define SPAC_USE     1           /* player presses use on the line         */
+#define SPAC_MCROSS  2           /* monster crosses the line               */
+#define SPAC_IMPACT  3           /* projectile hits the line               */
+#define SPAC_PUSH    4           /* player bumps the line                  */
+#define SPAC_PCROSS  5           /* projectile crosses the line            */
+#define SPAC_NONE    6           /* no runtime activation.  Not a Hexen
+                                  * value: synthesized for ZDoom UDMF lines
+                                  * carrying static specials (Plane_Align,
+                                  * Sector_Set3DFloor, ...) with no
+                                  * activation flags -- GET_SPAC of a bare
+                                  * flags word is SPAC_CROSS, which would
+                                  * fire those specials on walkover.       */
 
 // Sector definition, from editing.
 typedef struct {
@@ -196,6 +245,21 @@ typedef struct {
   short type;
   short options;
 } PACKEDATTR mapthing_t;
+
+/* Hexen-format thing: adds a thing id (tid), a spawn height, and a one-byte
+ * special with five one-byte args.  The Doom fields (x/y/angle/type/options)
+ * are present but reordered and the options field is a different width. */
+typedef struct {
+  short tid;
+  short x;
+  short y;
+  short height;
+  short angle;
+  short type;
+  short options;
+  unsigned char special;
+  unsigned char args[5];
+} PACKEDATTR hexen_mapthing_t;
 
 #ifdef _MSC_VER
 #pragma pack(pop)

@@ -37,6 +37,8 @@
 #include "hu_stuff.h"
 #include "hu_lib.h"
 #include "st_stuff.h" /* jff 2/16/98 need loc of status bar */
+#include "p_zacs.h"
+#include "p_conversation.h"
 #include "w_wad.h"
 #include "s_sound.h"
 #include "dstrings.h"
@@ -296,6 +298,52 @@ void HU_Init(void)
 
   shiftxform = english_shiftxform;
 
+  /* Zero the patchnum arrays before re-populating them from the
+   * wad.  HU_Init runs every retro_load_game; the conditional
+   * R_SetPatchNum calls below ("if STCFNx exists" / "if BOXxx
+   * exists") skip on miss, so without this a session 2 wad that
+   * lacks one of these glyphs would inherit the previous wad's
+   * lumpnum -- pointing into a different lump table or at a
+   * stale lump after W_Exit/re-Init.  hu_font2 and hu_fontk
+   * already overwrite unconditionally (hu_font2 has an `else`
+   * fallback assignment, hu_fontk has no `if` guard), so they
+   * don't need zeroing, but doing it for hu_font and hu_msgbg
+   * is enough to fix the cross-session staleness. */
+  memset(hu_font,  0, sizeof(hu_font));
+  memset(hu_msgbg, 0, sizeof(hu_msgbg));
+
+  /* Heretic and Hexen use their own font (the FONTA set, between the
+   * FONTA_S and FONTA_E markers) rather than Doom's STCFN glyphs. FONTA01 is
+   * the first printable character ('!', ASCII 33), which is exactly
+   * HU_FONTSTART, so lump (FONTA_S + 1 + i) maps to hu_font[i]. The font is
+   * uppercase-only, so fold lowercase letters onto their uppercase glyph.
+   * Without this, Hexen left hu_font zeroed (the Doom STCFN lumps are
+   * absent), so any menu drawn through hu_font -- e.g. the General setup
+   * screen -- fed lump 0 to the patch cache and tried to allocate a bogus
+   * (size_t)-1024 patch. */
+  if (raven && W_CheckNumForName("FONTA_S") != -1)
+  {
+    int base = W_GetNumForName("FONTA_S") + 1;
+    int last = W_CheckNumForName("FONTA_E");
+    int count = (last > base) ? (last - base) : 0;
+
+    for (i = 0; i < HU_FONTSIZE; i++)
+    {
+      int ch = HU_FONTSTART + i;
+      int src = ch - HU_FONTSTART;             /* glyph index into FONTA */
+
+      if (ch >= 'a' && ch <= 'z')              /* uppercase fold */
+        src = (ch - 32) - HU_FONTSTART;
+
+      if (src >= 0 && (count == 0 || src < count))
+        R_SetPatchNum(&hu_font[i], W_GetNameForNum(base + src));
+
+      hu_font2[i] = hu_font[i];                /* no separate big font */
+    }
+    /* hu_fontk (STKEYS) is Doom-only; leave it zeroed for Heretic. */
+    return;
+  }
+
   // load the heads-up font
   j = HU_FONTSTART;
   for (i=0;i<HU_FONTSIZE;i++,j++)
@@ -365,6 +413,8 @@ void HU_Start(void)
 
   if (headsupactive)                    // stop before starting
     HU_Stop();
+
+  Z_ACSHudClear();                      // drop any leftover ACS hud text
 
   plr = &players[displayplayer];        // killough 3/7/98
   message_on = FALSE;
@@ -1269,6 +1319,12 @@ void HU_Drawer(void)
 
   // display the interactive buffer for chat entry
   HUlib_drawIText(&w_chat);
+
+  /* draw any positioned ACS HudMessage text on top of the HUD */
+  Z_ACSHudDrawer();
+
+  /* draw an active Strife-style conversation over the HUD */
+  P_ConversationDrawer();
 }
 
 //
@@ -1307,6 +1363,12 @@ void HU_Ticker(void)
 {
   int i, rc;
   char c;
+
+  /* tick down any positioned ACS HudMessage hold timers */
+  Z_ACSHudTicker();
+
+  /* advance an active Strife-style conversation */
+  P_ConversationTicker();
 
   // tick down message counter if message is up
   if (message_counter && !--message_counter)

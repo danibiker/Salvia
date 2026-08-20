@@ -38,8 +38,13 @@
 #include "m_bbox.h"
 #include "r_main.h"
 #include "p_maputl.h"
+#include "p_ffloor.h"
+#include "map_format.h"
+#include "p_slope.h"
 #include "p_map.h"
 #include "p_setup.h"
+#include "hexen/po_man.h"
+#include "lprintf.h"
 
 //
 // P_AproxDistance
@@ -180,6 +185,33 @@ fixed_t lowfloor;
 sector_t *openfrontsector; // made global                    // phares
 sector_t *openbacksector;  // made global
 
+/* Clip the computed opening against solid 3D-floor slabs on both
+ * sides of the line, for the thing currently being moved.  Outside a
+ * movement clip (no tmthing) or off slab-bearing maps this is free. */
+extern mobj_t *ffloor_clip_thing;   /* p_map.c: thing being position-checked */
+
+static void P_FFloorAdjustOpening(fixed_t x, fixed_t y)
+{
+  mobj_t *mo = ffloor_clip_thing;
+
+  if (!mo)
+    return;
+  if (openfrontsector->ffloors)
+  {
+    openbottom = P_FFloorAdjustFloorZ(openfrontsector, x, y, mo->z,
+                                      mo->height, openbottom);
+    opentop = P_FFloorAdjustCeilingZ(openfrontsector, x, y, mo->z,
+                                     mo->height, opentop);
+  }
+  if (openbacksector->ffloors)
+  {
+    openbottom = P_FFloorAdjustFloorZ(openbacksector, x, y, mo->z,
+                                      mo->height, openbottom);
+    opentop = P_FFloorAdjustCeilingZ(openbacksector, x, y, mo->z,
+                                     mo->height, opentop);
+  }
+}
+
 void P_LineOpening(const line_t *linedef)
 {
   if (linedef->sidenum[1] == NO_INDEX)      // single sided line
@@ -206,6 +238,48 @@ void P_LineOpening(const line_t *linedef)
       openbottom = openbacksector->floorheight;
       lowfloor = openfrontsector->floorheight;
     }
+
+  P_FFloorAdjustOpening(ffloor_clip_thing ? ffloor_clip_thing->x : 0,
+                        ffloor_clip_thing ? ffloor_clip_thing->y : 0);
+
+  openrange = opentop - openbottom;
+}
+
+/* P_LineOpeningAt: as P_LineOpening, with the heights evaluated at a
+ * point for sloped sectors.  Flat sectors take exactly the constant
+ * heights, so behaviour off sloped maps is bit-identical. */
+void P_LineOpeningAt(const line_t *linedef, fixed_t x, fixed_t y)
+{
+  fixed_t fc, bc, ff, bf;
+
+  if (linedef->sidenum[1] == NO_INDEX)      /* single sided line */
+    {
+      openrange = 0;
+      return;
+    }
+
+  openfrontsector = linedef->frontsector;
+  openbacksector = linedef->backsector;
+
+  fc = P_CeilingZAtPoint(openfrontsector, x, y);
+  bc = P_CeilingZAtPoint(openbacksector, x, y);
+  ff = P_FloorZAtPoint(openfrontsector, x, y);
+  bf = P_FloorZAtPoint(openbacksector, x, y);
+
+  opentop = fc < bc ? fc : bc;
+  if (ff > bf)
+    {
+      openbottom = ff;
+      lowfloor = bf;
+    }
+  else
+    {
+      openbottom = bf;
+      lowfloor = ff;
+    }
+
+  P_FFloorAdjustOpening(x, y);
+
   openrange = opentop - openbottom;
 }
 
@@ -365,6 +439,43 @@ dbool P_BlockLinesIterator(int x, int y, dbool func(line_t*))
   if (x<0 || y<0 || x>=bmapwidth || y>=bmapheight)
     return TRUE;
   offset = y*bmapwidth+x;
+
+  /* Hexen: polyobject segs live in a parallel blockmap; their linedefs'
+   * vertices move with the poly, so they must be offered to the iterator
+   * here (the static line blockmap still holds them at their original
+   * anchor position). */
+  if (map_format.polyobjs && PolyBlockMap)
+  {
+    int i;
+    seg_t **tempSeg;
+    polyblock_t *polyLink;
+
+    polyLink = PolyBlockMap[offset];
+    while (polyLink)
+    {
+      if (polyLink->polyobj)
+      {
+        if (polyLink->polyobj->validcount != validcount)
+        {
+          polyLink->polyobj->validcount = validcount;
+          tempSeg = polyLink->polyobj->segs;
+          for (i = 0; i < polyLink->polyobj->numsegs; i++, tempSeg++)
+          {
+            if ((*tempSeg)->linedef->validcount == validcount)
+            {
+              continue;
+            }
+            (*tempSeg)->linedef->validcount = validcount;
+            if (!func((*tempSeg)->linedef))
+            {
+              return false;
+            }
+          }
+        }
+      }
+      polyLink = polyLink->next;
+    }
+  }
   offset = *(blockmap+offset);
   list = blockmaplump+offset;     // original was reading         // phares
                                   // delmiting 0 as linedef 0     // phares

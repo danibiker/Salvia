@@ -10,11 +10,93 @@
 
 #include "libretro.h"
 
+#include <formats/rwav.h>
+#include <formats/rvorbis.h>
+
+/* Whole-lump Ogg Vorbis decode to interleaved s16 -- the contract the
+ * old stb_vorbis_decode_memory call had: returns the frame count per
+ * channel and a malloc'd interleaved int16 buffer, or a negative count
+ * on error.  Decodes with libretro-common's rvorbis. */
+static int I_OggDecodeMemory(const unsigned char *mem, int len,
+                             int *channels, int *sample_rate,
+                             short **output)
+{
+   rvorbis      *v;
+   rvorbis_info  info;
+   int           err = 0;
+   unsigned int  total;
+   size_t        cap_frames, have = 0;
+   int16_t      *pcm;
+
+   *output = NULL;
+   v = rvorbis_open_memory(mem, len, &err, NULL);
+   if (!v)
+      return -1;
+   info         = rvorbis_get_info(v);
+   *channels    = info.channels;
+   *sample_rate = (int)info.sample_rate;
+   if (info.channels < 1)
+   {
+      rvorbis_close(v);
+      return -1;
+   }
+
+   /* A well-formed Ogg states its length on the last page's granule;
+    * allocate exactly, falling back to grow-by-doubling when the stream
+    * does not say. */
+   total      = rvorbis_stream_length_in_samples(v);
+   cap_frames = total ? (size_t)total : 4096;
+   pcm        = malloc(cap_frames * (size_t)info.channels * sizeof(int16_t));
+   if (!pcm)
+   {
+      rvorbis_close(v);
+      return -1;
+   }
+
+   for (;;)
+   {
+      int got;
+      if (have == cap_frames)
+      {
+         int16_t *np;
+         cap_frames *= 2;
+         np = realloc(pcm, cap_frames * (size_t)info.channels * sizeof(int16_t));
+         if (!np)
+         {
+            free(pcm);
+            rvorbis_close(v);
+            return -1;
+         }
+         pcm = np;
+      }
+      got = rvorbis_get_samples_s16_interleaved(v, info.channels,
+            pcm + have * (size_t)info.channels,
+            (int)((cap_frames - have) * (size_t)info.channels));
+      if (got <= 0)
+         break;
+      have += (size_t)got;
+   }
+   rvorbis_close(v);
+   if (!have)
+   {
+      free(pcm);
+      return -1;
+   }
+   *output = (short *)pcm;
+   return (int)have;
+}
+
+
 #include "../src/i_sound.h"
+#include "../src/doomstat.h"
+#include "../src/dsda_hacked.h"
 #include "../src/musicplayer.h"
 #include "../src/flplayer.h"
 #include "../src/oplplayer.h"
 #include "../src/madplayer.h"
+#include "../src/modplayer.h"
+#include "../src/oggplayer.h"
+#include "../src/libretro_midiout.h"
 
 #include "../src/lprintf.h"
 #include "../src/doomdef.h"
@@ -26,15 +108,65 @@
 
 #include "../src/mus2mid.h"
 
-#define SAMPLERATE    		(4 * 11025)
-#define SAMPLECOUNT_35		(SAMPLERATE / 35)
+/* The audio output rate is no longer a compile-time constant.  prboom's
+ * music is synthesised in real time (OPL/Fluidsynth MIDI, the mod tracker,
+ * Ogg/MP3 streams), so there is no single "native" rate the core must emit
+ * at -- we can pick whichever supported rate best matches the host's audio
+ * device and let the synths render straight to it.  Higher rates lower
+ * latency, push aliasing images above the audible band, sidestep the
+ * frontend resampler's low-pass smearing, and give the SFX/stream
+ * resamplers finer time-domain resolution.
+ *
+ * snd_samplerate_output holds the rate currently in force (one of the
+ * SND_SAMPLERATE_* values).  Everything that used to reference the old
+ * SAMPLERATE macro now reads this variable through the alias below, so a
+ * single assignment in I_SetSoundRate() retunes the whole pipeline.  It
+ * defaults to 44100 so behaviour is unchanged until the core option is
+ * read. */
+#define SND_SAMPLERATE_32K      32000
+#define SND_SAMPLERATE_44K      44100
+#define SND_SAMPLERATE_48K      48000
+#define SND_SAMPLERATE_96K      96000
+#define SND_SAMPLERATE_MIN      SND_SAMPLERATE_32K
+#define SND_SAMPLERATE_MAX      SND_SAMPLERATE_96K
+#define SND_SAMPLERATE_DEFAULT  SND_SAMPLERATE_44K
+
+int snd_samplerate_output = SND_SAMPLERATE_DEFAULT;
+
+/* SAMPLERATE was a macro used throughout the mixer and loaders.  Keep the
+ * name as a read-only alias of the runtime variable so the body of this
+ * file needs no churn beyond the few spots that genuinely must size for
+ * the worst case (the static mixbuffer) or re-init the synths. */
+#define SAMPLERATE      (snd_samplerate_output)
+
+/* SAMPLECOUNT_35 (samples per 35Hz tic) tracks the active rate and is only
+ * the degenerate fallback when tic_vars.sample_step is 0.  The static
+ * mixbuffer, however, must be sized for the worst case -- the highest
+ * supported rate at the slowest tic rate -- so that switching up to 96 kHz
+ * at runtime can never overrun it. */
+#define SAMPLECOUNT_35      (SAMPLERATE / 35)
+#define SAMPLECOUNT_35_MAX  (SND_SAMPLERATE_MAX / 35)
 #define NUM_CHANNELS		32
 #define BUFMUL           4
-#define MIXBUFFERSIZE   (SAMPLECOUNT_35*BUFMUL)
+#define MIXBUFFERSIZE   (SAMPLECOUNT_35_MAX*BUFMUL)
 #define MAX_CHANNELS    32
 
 static const void *music_handle;
 static void *song_data;
+
+/* Generic music save-state: counter of samples rendered since the
+ * current song started.  Tracked by the wrapper, NOT by the backend,
+ * so it's available for every backend (including ones with no
+ * backend-level serialize/unserialize, e.g. mp_player).  Reset to
+ * zero in I_PlaySong; advanced inside the render call site. */
+static uint64_t music_samples_played;
+
+/* Last looping flag passed to I_PlaySong, captured so the generic
+ * restore path can call current_player->play() again with the same
+ * argument it was given originally.  Separate from the (latently
+ * buggy) file-scope `looping` static which is read by
+ * I_QrySongPlaying -- leaving that alone here. */
+static int music_last_looping;
 
 extern retro_audio_sample_batch_t audio_batch_cb;
 extern retro_log_printf_t log_cb;
@@ -42,45 +174,64 @@ extern int gametic;
 extern int snd_SfxVolume;
 extern int snd_MusicVolume;
 
-int lengths[NUMSFX];
+int *lengths = NULL;
+/* Per-sfx 16.16 playback step at the output rate (orig_rate / SAMPLERATE),
+ * recorded by the loader; samples are stored at their native rate and the
+ * mixer advances through them at this step. */
+static unsigned int *sfx_steps = NULL;
+/* Per-sfx native (source) sample rate in Hz, retained alongside sfx_steps
+ * so the step table can be recomputed for a new output rate without
+ * reloading every lump (see I_RecalcSfxSteps).  Mirrors the link aliasing
+ * that lengths/sfx_steps use. */
+static unsigned int *sfx_orig_rate = NULL;
+static int lengths_size = 0;
 int snd_card = 1;
 int mus_card = 0;
-int snd_samplerate= 11025;
 
-typedef struct
-{
-   // SFX id of the playing sound effect.
-   // Used to catch duplicates (like chainsaw).
-   int id;
-   // The channel step amount...
-   unsigned int step;
-   // ... and a 0.16 bit remainder of last step.
-   unsigned int stepremainder;
-   unsigned int samplerate;
-   // The channel data pointers, start and end.
-   const unsigned char* data;
-   const unsigned char* enddata;
-   // Hardware left and right channel volume lookup.
-   int *leftvol_lookup;
-   int *rightvol_lookup;
-} channel_info_t;
+/* 16.16 resample step that plays a sound recorded at `rate` Hz at the
+ * current output rate.  Clamped to a minimum of 1 so a (degenerate) zero
+ * never stalls a channel forever. */
+#define STEP_FROM_RATE(rate) \
+   ((unsigned int)(((uint64_t)(rate) << 16) / (uint64_t)SAMPLERATE))
 
-channel_info_t channelinfo[MAX_CHANNELS];
-
-// The global mixing buffer.
-// Basically, samples from all active internal channels
-//  are modifed and added, and stored in the buffer
-//  that is submitted to the audio device.
+/* The global mixing buffer.
+ * Basically, samples from all active internal channels
+ *  are modifed and added, and stored in the buffer
+ *  that is submitted to the audio device. */
 int16_t mixbuffer[MIXBUFFERSIZE];
 
+/* Parallel float output buffer, used only when the frontend negotiated
+ * float audio (use_float_output). Normalized to [-1.0, 1.0]. Both are
+ * statically sized for the worst case, exactly like mixbuffer. */
+float fmixbuffer[MIXBUFFERSIZE];
+
+/* Set once in retro_load_game (see libretro.c). When use_float_output is
+ * zero the entire float path is dead and the int16 path is byte-identical
+ * to before. */
+extern int use_float_output;
+extern retro_audio_sample_batch_float_t audio_batch_cb_float;
+
 typedef struct
 {
-    uint8_t *snd_start_ptr, *snd_end_ptr;
+    int16_t *snd_start_ptr, *snd_end_ptr;
     unsigned int starttic;
     int sfxid;
-    int *leftvol, *rightvol;
+    int leftvol, rightvol;   /* 0..127 per-channel volume scalars */
     int handle;
+    /* Playback cursor: integer sample pointer plus a 16-bit fractional
+     * accumulator, advanced by the 16.16 step (FRACUNIT plays at the
+     * recorded rate; the raven games randomize it per sound -- vanilla
+     * pitch jitter).  Splitting the position this way keeps it exact
+     * for sounds of any length; a single 32-bit 16.16 position wraps
+     * after 65536 samples (~1.5s) and the channel never ends. */
+    int16_t *cur;
+    unsigned int frac, step_fx;
 } channel_t;
+
+/* Playback-rate multiplier per vanilla pitch value: 2^((p-128)/64) in
+ * 16.16, so 128 is unity and each +/-64 doubles or halves the rate.
+ * Built once at init. */
+static unsigned int steptable[256];
 
 // list of possible music players
 static const music_player_t *music_players[] =
@@ -89,9 +240,10 @@ static const music_player_t *music_players[] =
   &fl_player, // flplayer.h
 #endif
   &opl_synth_player, // oplplayer.h
-#ifdef HAVE_LIBMAD
-  &mp_player, // madplayer.h
-#endif
+  &libretro_midi_player, // libretro_midiout.h (raw MIDI to the frontend)
+  &mp_player, // madplayer.h (MP3 via rmp3)
+  &mod_player, // modplayer.h (MOD/S3M/XM via rmodtracker)
+  &ogg_player, // oggplayer.h (Ogg Vorbis via rvorbis)
   NULL
 };
 #define NUM_MUS_PLAYERS ((int)(sizeof (music_players) / sizeof (music_player_t *) - 1))
@@ -99,95 +251,270 @@ static const music_player_t *music_players[] =
 /* Music player currently used */
 music_player_t* current_player = NULL;
 
+/* True once I_InitMusic has brought the synth backends up; gates the music
+ * re-init path in I_SetSoundRate so a rate set before I_InitMusic (the
+ * normal startup order: update_variables runs before I_Init) doesn't
+ * shutdown/init backends that haven't been initialised yet, nor
+ * double-initialise them ahead of I_InitMusic's own init pass. */
+static int music_system_up = 0;
+
 static channel_t channels[NUM_CHANNELS];
 
-int vol_lookup[128*256];
-
-static double R_ceil(double x)
-{
-   if (x > LONG_MAX)
-      return x; /* big floats are all ints */
-   return ((long)(x+(0.99999999999999997)));
-}
-
-
-static double R_floor(double x)
-{
-   double y;
-   static const double twoTo52 = 4.50359962737049600e15;              /* 0x1p52 */
-   union {double f; uint64_t i;} u = {x};
-   int e = u.i >> 52 & 0x7ff;
-
-   if (e >= 0x3ff+52 || x == 0)
-      return x;
-   /* y = int(x) - x, where int(x) is an integer neighbor of x */
-   if (u.i >> 63)
-      y = (double)(x - twoTo52) + twoTo52 - x;
-   else
-      y = (double)(x + twoTo52) - twoTo52 - x;
-   /* special case because of non-nearest rounding modes */
-   if (e <= 0x3ff-1)
-      return u.i >> 63 ? -1 : 0;
-   if (y > 0)
-      return x + y - 1;
-   return x + y;
-}
 
 /* i_sound */
 
-/* This function loads the sound data from the WAD lump
- * for a single sound effect. */
-static void* I_SndLoadSample(const char* sfxname, int* len)
+/* Load a single sound effect from its DS<name> WAD lump and resample
+ * it to the libretro output rate.
+ *
+ * DMX SFX format: 8-byte header (uint16 type=3, uint16 sample_rate,
+ * uint32 length) followed by `length` unsigned 8-bit PCM samples.
+ *
+ * Resampling here is nearest-neighbour with a 16.16 fixed-point step
+ * accumulator -- one add and one shift per output sample, no float
+ * division and no per-sample floor() call.  The previous version
+ * computed (float)i/times + R_floor() per sample, which was both
+ * slower and used custom-rolled R_ceil/R_floor functions that did
+ * IEEE-754 bit hacks the hardware can do for free.
+ *
+ * The output is no longer padded to a multiple of SAMPLECOUNT_35 --
+ * that padding (up to ~1259 silent bytes per loaded SFX) was a hold-
+ * over from a buffering scheme the libretro mixer doesn't use; the
+ * mix loop terminates each channel via the snd_start_ptr/snd_end_ptr
+ * comparison. */
+static void* I_SndLoadSample(const char* sfxname, int* len, unsigned int* step,
+                             unsigned int* out_rate)
 {
-    int i, x, padded_sfx_len, sfxlump_num, sfxlump_len;
-    char sfxlump_name[20];
-    const uint8_t *sfxlump_data, *sfxlump_sound;
-    uint8_t *padded_sfx_data;
-    uint16_t orig_rate;
-    float times;
+    int             out_i, sfxlump_num, sfxlump_len;
+    char            sfxlump_name[20];
+    const uint8_t  *sfxlump_data, *sfxlump_sound;
+    int16_t        *out_data;
+    uint16_t        orig_rate;
 
-    sprintf (sfxlump_name, "DS%s", sfxname);
+    /* Doom sfx lumps are DS<name> (DSPISTOL); Heretic uses the bare name
+     * (GLDHIT, IMPAT1, ...). Build the right one. W_CheckNumForName
+     * uppercases internally. */
+    {
+        extern dbool raven;   /* doomstat.h: heretic||hexen */
+        if (raven)
+            snprintf(sfxlump_name, sizeof(sfxlump_name), "%s", sfxname);
+        else
+            snprintf(sfxlump_name, sizeof(sfxlump_name), "DS%s", sfxname);
+    }
 
-    // check if the sound lump exists
+    /* check if the sound lump exists */
     if (W_CheckNumForName(sfxlump_name) == -1)
-        return 0;
+    {
+        /* ZDoom-based mods bind SNDINFO logical names directly to lumps
+         * that do not follow Doom's DS<name> convention (e.g. a lump named
+         * SOULSWA1, not DSSOULSWA1).  When the conventional name misses,
+         * fall back to the bare sfx name so those lumps are reachable.
+         * DS<name> keeps priority so an IWAD's real DSxxxx is never shadowed
+         * by an unrelated bare lump of the same stem. */
+        snprintf(sfxlump_name, sizeof(sfxlump_name), "%s", sfxname);
+        if (W_CheckNumForName(sfxlump_name) == -1)
+            return 0;
+    }
 
     sfxlump_num = W_GetNumForName (sfxlump_name);
     sfxlump_len = W_LumpLength (sfxlump_num);
 
-    // if it's not at least 9 bytes (8 byte header + at least 1 sample), it's
-    // not in the correct format
+    /* DMX header is 8 bytes; need at least one PCM byte after it. */
     if (sfxlump_len < 9)
         return 0;
 
-    /* load it */
     sfxlump_data    = W_CacheLumpNum (sfxlump_num);
+
+    /* Some ZDoom-based mods ship sound effects as RIFF/WAVE lumps rather
+     * than the vanilla DMX format.  Detect the "RIFF" magic and decode
+     * with RWAV (libretro-common formats/wav); everything else falls
+     * through to the DMX path below unchanged.  Both paths produce the
+     * same output contract: native-rate signed-16-bit mono PCM with one
+     * extra trailing sample duplicated for the mixer's cur[1] fetch, and
+     * a 16.16 *step computed from the source rate. */
+    if (   sfxlump_len >= 12
+        && sfxlump_data[0] == 'R' && sfxlump_data[1] == 'I'
+        && sfxlump_data[2] == 'F' && sfxlump_data[3] == 'F')
+    {
+        rwav_t    wav;
+        size_t    n;
+        uint32_t  wav_rate;
+
+        if (rwav_load(&wav, sfxlump_data, (size_t)sfxlump_len) != RWAV_ITERATE_DONE)
+        {
+            W_UnlockLumpNum (sfxlump_num);
+            return 0;
+        }
+
+        if (wav.numsamples == 0 || wav.numchannels == 0)
+        {
+            rwav_free(&wav);
+            W_UnlockLumpNum (sfxlump_num);
+            return 0;
+        }
+
+        out_data = (int16_t*)malloc((wav.numsamples + 1) * sizeof(int16_t));
+        if (!out_data)
+        {
+            rwav_free(&wav);
+            W_UnlockLumpNum (sfxlump_num);
+            return 0;
+        }
+
+        /* RWAV gives 8-bit unsigned or 16-bit signed PCM, interleaved per
+         * channel.  Convert to signed-16-bit mono: 8-bit is centre-128
+         * like DMX ((s - 128) << 8); multi-channel is averaged down with
+         * round-half-away (plain acc/ch truncates toward zero, a signal-
+         * correlated half-LSB bias; mono, the common case, divides by 1
+         * and is untouched). */
+        if (wav.bitspersample == 8)
+        {
+            const uint8_t *src = (const uint8_t*)wav.samples;
+            unsigned       ch  = wav.numchannels;
+            int            h   = (int)ch / 2;
+            for (n = 0; n < wav.numsamples; n++)
+            {
+                int acc = 0;
+                unsigned c;
+                for (c = 0; c < ch; c++)
+                    acc += ((int)src[n * ch + c] - 128) << 8;
+                out_data[n] = (int16_t)((acc >= 0 ? acc + h : acc - h) / (int)ch);
+            }
+        }
+        else /* 16-bit (rwav only ever yields 8 or 16) */
+        {
+            const int16_t *src = (const int16_t*)wav.samples;
+            unsigned        ch = wav.numchannels;
+            int             h  = (int)ch / 2;
+            for (n = 0; n < wav.numsamples; n++)
+            {
+                int acc = 0;
+                unsigned c;
+                for (c = 0; c < ch; c++)
+                    acc += src[n * ch + c];
+                out_data[n] = (int16_t)((acc >= 0 ? acc + h : acc - h) / (int)ch);
+            }
+        }
+        out_data[wav.numsamples] = out_data[wav.numsamples - 1];
+
+        wav_rate = wav.samplerate ? wav.samplerate : 11025;
+        *step = STEP_FROM_RATE(wav_rate);
+        if (out_rate) *out_rate = wav_rate;
+
+        *len = (int)wav.numsamples;
+        rwav_free(&wav);
+        W_UnlockLumpNum (sfxlump_num);
+        return (void *)(out_data);
+    }
+
+    /* Some ZDoom-based mods ship sound effects as Ogg Vorbis lumps.  Detect
+     * the "OggS" magic and decode with rvorbis into the same output
+     * contract as the WAV path: native-rate signed-16-bit mono PCM with one
+     * duplicated trailing sample for the mixer's cur[1] fetch and a 16.16
+     * *step from the source rate. */
+    if (   sfxlump_len >= 4
+        && sfxlump_data[0] == 'O' && sfxlump_data[1] == 'g'
+        && sfxlump_data[2] == 'g' && sfxlump_data[3] == 'S')
+    {
+        short   *pcm    = NULL;
+        int      channels = 0, rate = 0;
+        int      samples;
+        unsigned int ogg_rate;
+
+        samples = I_OggDecodeMemory(sfxlump_data, sfxlump_len,
+                                    &channels, &rate, &pcm);
+        if (samples <= 0 || !pcm || channels < 1)
+        {
+            if (pcm) free(pcm);
+            W_UnlockLumpNum (sfxlump_num);
+            return 0;
+        }
+
+        out_data = (int16_t*)malloc(((size_t)samples + 1) * sizeof(int16_t));
+        if (!out_data)
+        {
+            free(pcm);
+            W_UnlockLumpNum (sfxlump_num);
+            return 0;
+        }
+
+        /* rvorbis yields interleaved signed-16 per channel; average to
+         * mono to match the mixer's single-channel sample store. */
+        if (channels == 1)
+        {
+            memcpy(out_data, pcm, (size_t)samples * sizeof(int16_t));
+        }
+        else
+        {
+            int i, c;
+            for (i = 0; i < samples; i++)
+            {
+                int acc = 0;
+                for (c = 0; c < channels; c++)
+                    acc += pcm[i * channels + c];
+                out_data[i] = (int16_t)(acc / channels);
+            }
+        }
+        out_data[samples] = out_data[samples - 1];
+
+        ogg_rate = rate ? (unsigned int)rate : 11025;
+        *step = STEP_FROM_RATE(ogg_rate);
+        if (out_rate) *out_rate = ogg_rate;
+
+        *len = samples;
+        free(pcm);
+        W_UnlockLumpNum (sfxlump_num);
+        return (void *)(out_data);
+    }
+
     sfxlump_sound   = sfxlump_data + 8;
     sfxlump_len    -= 8;
 
-    /* get original sample rate from DMX header */
+    /* Get original sample rate from DMX header (offset 2, little-
+     * endian uint16). */
     memcpy(&orig_rate, sfxlump_data+2, 2);
     orig_rate       = SHORT (orig_rate);
+    if (orig_rate == 0)
+        orig_rate = 11025;  /* defensive: malformed lump */
 
-    times           = 48000.0f / (float)orig_rate;
-
-    padded_sfx_len  = ((sfxlump_len * R_ceil(times) + (SAMPLECOUNT_35-1)) / SAMPLECOUNT_35) * SAMPLECOUNT_35;
-    padded_sfx_data = (uint8_t*)malloc(padded_sfx_len);
-
-    for (i = 0; i < padded_sfx_len; i++)
+    /* Samples are kept at the lump's native rate; the mixer's per-channel
+     * 16.16 stepping (added for the raven pitch jitter) resamples at mix
+     * time, with linear interpolation between adjacent samples in the
+     * inner loop.  Storing native-rate audio instead of upsampling to the
+     * output rate at load cuts the resident sound data to a quarter
+     * (11025 -> 44100 was a 4x expansion: ~28 MB for hexen's set) and
+     * removes the per-lump resample pass from startup.
+     *
+     * Convert unsigned 8-bit PCM (centre 128) to signed 16-bit:
+     * (s - 128) << 8.  One extra sample is appended duplicating the last,
+     * so the mixer's interpolated fetch of cur[1] at the final sample
+     * stays in bounds; the reported length excludes it. */
+    out_data = (int16_t*)malloc(((size_t)sfxlump_len + 1) * sizeof(int16_t));
+    if (!out_data)
     {
-        x = R_floor ((float)i/times);
-
-        if (x < sfxlump_len) // 8 was already subtracted
-            padded_sfx_data[i] = sfxlump_sound[x];
-        else
-            padded_sfx_data[i] = 128; // fill the rest with silence
+        W_UnlockLumpNum (sfxlump_num);
+        return 0;
     }
+    for (out_i = 0; out_i < sfxlump_len; out_i++)
+        /* * 256, not << 8: half the samples are negative after recentring,
+         * and left-shifting a negative int is undefined (UBSan, C99 6.5.7).
+         * The multiply compiles to the same shift with defined semantics. */
+        out_data[out_i] = (int16_t)(((int)sfxlump_sound[out_i] - 128) * 256);
+    out_data[sfxlump_len] = out_data[sfxlump_len - 1];
 
-    Z_Free ((void*) sfxlump_data); //  free original lump
+    *step = STEP_FROM_RATE(orig_rate);
+    if (out_rate) *out_rate = orig_rate;
 
-    *len = padded_sfx_len;
-    return (void *)(padded_sfx_data);
+    /* Release the cached lump back to the zone via the cache's
+     * lock-count mechanism.  The previous Z_Free here freed the
+     * lump's memory directly, leaving cachelump[sfxlump_num].cache
+     * pointing at freed memory and the lock count non-zero -- so
+     * the next W_CacheLumpNum on the same lump (e.g. on the next
+     * S_Init / content load) returned the dangling pointer
+     * instead of re-reading.  Use the proper unlock path. */
+    W_UnlockLumpNum (sfxlump_num);
+
+    *len = sfxlump_len;
+    return (void *)(out_data);
 }
 
 //
@@ -202,24 +529,36 @@ static void* I_SndLoadSample(const char* sfxname, int* len)
 
 void I_SetChannels(void)
 {
+   int i;
+
+   {
+      int p;
+      double base = 1.0;
+      /* steptable[p] = 2^((p-128)/64) * FRACUNIT without libm: walk the
+       * ratio incrementally from the midpoint in both directions. */
+      const double ratio = 1.0108892860517005; /* 2^(1/64) */
+      steptable[128] = 1 << 16;
+      for (p = 129; p < 256; p++)
+      {
+         base *= ratio;
+         steptable[p] = (unsigned int)(base * 65536.0 + 0.5);
+      }
+      base = 1.0;
+      for (p = 127; p >= 0; p--)
+      {
+         base /= ratio;
+         steptable[p] = (unsigned int)(base * 65536.0 + 0.5);
+      }
+   }
+
    /* Init internal lookups (raw data, mixing buffer, channels).
     * This function sets up internal lookups used during
     * the mixing process.
     */
 
-   int i, j;
-
    /* Okay, reset internal mixing channels to zero. */
    for (i = 0; i < NUM_CHANNELS; i++)
       memset(&channels[i], 0, sizeof(channel_t));
-
-   /* Generates volume lookup tables which also turn the unsigned
-    * samples into signed samples. */
-   for (i = 0; i < 128; i++)
-   {
-      for (j = 0; j < 256; j++)
-         vol_lookup[i*256+j] = (i*(j-128)*256)/127;
-   }
 }
 
 
@@ -231,20 +570,38 @@ void I_SetSfxVolume(int volume)
 void I_SetMusicVolume(int volume)
 {
    snd_MusicVolume = volume;
-
-#ifdef MUSIC_SUPPORT
    if (current_player)
       current_player->setvolume(volume);
-#endif
 }
 
 /* Retrieve the raw data lump index
  * for a given SFX name. */
 int I_GetSfxLumpNum(sfxinfo_t* sfx)
 {
+    extern dbool raven;   /* doomstat.h: heretic||hexen */
     char namebuf[9];
-    sprintf(namebuf, "ds%s", sfx->name);
-    return W_GetNumForName(namebuf);
+
+    /* Doom names its sfx lumps DS<name> (e.g. DSPISTOL); Heretic and Hexen
+     * use the bare lump name with no prefix (for Hexen the SNDINFO step has
+     * already rewritten sfx->name to the real lump). W_GetNumForName
+     * uppercases internally. */
+    if (raven)
+        snprintf(namebuf, sizeof(namebuf), "%s", sfx->name);
+    else
+        snprintf(namebuf, sizeof(namebuf), "ds%s", sfx->name);
+
+    {
+        int n = W_CheckNumForName(namebuf);
+        if (n < 0 && !raven)
+        {
+            /* ZDoom mods may bind a logical name to a lump that lacks the
+             * DS prefix; mirror I_SndLoadSample's bare-name fallback so this
+             * presence check agrees with what the loader can actually read. */
+            snprintf(namebuf, sizeof(namebuf), "%s", sfx->name);
+            n = W_CheckNumForName(namebuf);
+        }
+        return n;
+    }
 }
 
 void I_StopSound (int handle)
@@ -311,8 +668,21 @@ int I_StartSound (int id, int channel, int vol, int sep, int pitch, int priority
     channels[slot].handle = ++currenthandle;
 
     // Set pointers to raw sound data start & end.
-    channels[slot].snd_start_ptr = (uint8_t*)S_sfx[id].data;
+    channels[slot].snd_start_ptr = (int16_t*)S_sfx[id].data;
     channels[slot].snd_end_ptr   = channels[slot].snd_start_ptr + lengths[id];
+    channels[slot].cur           = channels[slot].snd_start_ptr;
+    channels[slot].frac          = 0;
+    /* Playback step = the sound's native-rate step times the pitch
+     * multiplier.  The raven games honor vanilla's per-sound pitch
+     * jitter always; doom only when the v1.1 pitch effects setting is
+     * enabled, matching prboom's pitched_sounds.  The engine computes
+     * (and draws RNG for) doom's pitch either way, exactly as vanilla
+     * and prboom do, so demo sync is unaffected by the toggle. */
+    channels[slot].step_fx       = (raven || pitched_sounds)
+       ? (unsigned int)(((uint64_t)sfx_steps[id] * steptable[pitch & 0xff]) >> 16)
+       : sfx_steps[id];
+    if (!channels[slot].step_fx)
+        channels[slot].step_fx = 1;   /* defensive: never a zero step */
 
     // Save starting gametic.
     channels[slot].starttic      = gametic;
@@ -333,10 +703,10 @@ int I_StartSound (int id, int channel, int vol, int sep, int pitch, int priority
     if (leftvol < 0 || leftvol > 127)
        I_Error("addsfx: leftvol out of bounds");
 
-    // Get the proper lookup table piece
-    //  for this volume level???
-    channels[slot].leftvol = &vol_lookup[leftvol*256];
-    channels[slot].rightvol = &vol_lookup[rightvol*256];
+    /* Store the per-channel volume scalars (0..127); the mixer scales
+     * each 16-bit sample by these directly. */
+    channels[slot].leftvol  = leftvol;
+    channels[slot].rightvol = rightvol;
 
     // Preserve sound SFX id,
     //  e.g. for avoiding duplicates of chainsaw.
@@ -358,106 +728,233 @@ dbool   I_SoundIsPlaying (int handle)
     return 0;
 }
 
-//
-// This function loops all active (internal) sound
-//  channels, retrieves a given number of samples
-//  from the raw sound data, modifies it according
-//  to the current (internal) channel parameters,
-//  mixes the per channel samples into the global
-//  mixbuffer, clamping it to the allowed range,
-//  and sets up everything for transferring the
-//  contents of the mixbuffer to the (two)
-//  hardware channels (left and right, that is).
-//
-// This function currently supports only 16bit.
-//
+/* Mix one frame's worth of audio and submit it to libretro.
+ *
+ * Determinism: called exactly once per retro_run.  The number of
+ * frames produced is fixed by tic_vars.sample_step (audio rate /
+ * video fps), so each retro_run call submits the same-sized audio
+ * batch every time -- no rate jitter, no underrun catch-up.
+ *
+ * Pipeline:
+ *   1. Music (if any) renders int16 stereo straight into mixbuffer;
+ *      otherwise mixbuffer gets zeroed.
+ *   2. For each active SFX channel, accumulate its volume-scaled
+ *      contribution into 32-bit dl/dr, then clamp to int16 and
+ *      write back to mixbuffer.
+ *   3. One audio_batch_cb submission for the whole frame.
+ *
+ * Optimisations vs the previous version:
+ *   - No separate mad_audio_buf; music renders directly into the
+ *     output buffer.  Saves a 5 KB stack alloc + memset + read-back.
+ *   - Active channels collected into a compact list once per call,
+ *     so the inner per-sample loop iterates ~8 entries (typical
+ *     gameplay) instead of 32.
+ *   - Channel-end handling moved out of the inner loop: when a
+ *     channel runs dry mid-frame, NULL its start_ptr inline; no
+ *     more 48-byte memset per channel completion.
+ *   - Off-by-one fixed (was writing out_frames+1 frames into a
+ *     buffer the submit loop only read out_frames from).
+ *   - Single audio_batch_cb call (libretro guarantees full-batch
+ *     consumption for the standard frontends; the retry loop
+ *     guarded a non-issue).
+ */
+/* Per-chunk inner mix. Both variants advance channel state identically
+ * (the interpolation/stepping lives in mix_inner.h, included once each); they
+ * differ only in accumulator type, seed, and clamp/store. */
+static void mix_chunk_s16(int16_t *out, int chunk,
+                          channel_t **active, int n_active)
+{
+   int f;
+   for (f = 0; f < chunk; f++)
+   {
+#define MIX_ACC            int
+#define MIX_SEED0          (out[0])
+#define MIX_SEED1          (out[1])
+#define MIX_ADD(acc, s, v) ((acc) + (((s) * (v)) >> 7))
+#define MIX_STORE0(a)      (out[0] = (int16_t)((a) >  0x7fff ?  0x7fff : \
+                                               ((a) < -0x8000 ? -0x8000 : (a))))
+#define MIX_STORE1(a)      (out[1] = (int16_t)((a) >  0x7fff ?  0x7fff : \
+                                               ((a) < -0x8000 ? -0x8000 : (a))))
+#define MIX_ADVANCE        (out += 2)
+#include "mix_inner.h"
+#undef MIX_ACC
+#undef MIX_SEED0
+#undef MIX_SEED1
+#undef MIX_ADD
+#undef MIX_STORE0
+#undef MIX_STORE1
+#undef MIX_ADVANCE
+   }
+}
+
+/* out holds the music already widened to float [-1,1]; SFX accumulate in
+ * place. SFX term is (s * v / 128) / 32768 to match the int16 path's scaling. */
+static void mix_chunk_f32(float *out, int chunk,
+                          channel_t **active, int n_active)
+{
+   int f;
+   for (f = 0; f < chunk; f++)
+   {
+#define MIX_ACC            float
+#define MIX_SEED0          (out[0])
+#define MIX_SEED1          (out[1])
+#define MIX_ADD(acc, s, v) ((acc) + (float)(s) * (v) * (1.0f / (128.0f * 32768.0f)))
+#define MIX_STORE0(a)      (out[0] = ((a) >  1.0f ?  1.0f : ((a) < -1.0f ? -1.0f : (a))))
+#define MIX_STORE1(a)      (out[1] = ((a) >  1.0f ?  1.0f : ((a) < -1.0f ? -1.0f : (a))))
+#define MIX_ADVANCE        (out += 2)
+#include "mix_inner.h"
+#undef MIX_ACC
+#undef MIX_SEED0
+#undef MIX_SEED1
+#undef MIX_ADD
+#undef MIX_STORE0
+#undef MIX_STORE1
+#undef MIX_ADVANCE
+   }
+}
 
 void I_UpdateSound(void)
 {
-   // Mix current sound data. Data, from raw sound, for right and left.
-   uint8_t sample;
-   int dl, dr, frames, out_frames, step, chan;
-   int16_t mad_audio_buf[SAMPLECOUNT_35 * 2] = { 0 }; // initialize all zero
+   /* Compact list of currently-playing SFX channels, rebuilt each
+    * call.  Pointer-based so the inner loop has one indirection
+    * fewer than indexing channels[] by integer. */
+   channel_t *active[NUM_CHANNELS];
+   int        n_active = 0;
+   int        i;
+   int        out_frames;
 
-   // Pointers in global mixbuffer, left, right, end.
-   int16_t *leftend;
-
-   // Left and right channel are in global mixbuffer, alternating.
-   int16_t *leftout  = mixbuffer;
-   int16_t *rightout = mixbuffer+1;
-   step       = 2;
-   frames     = 0;
-
-   out_frames = (tic_vars.sample_step)? tic_vars.sample_step : SAMPLECOUNT_35;
-
-#ifdef MUSIC_SUPPORT
-   if (music_handle && current_player)
-     current_player->render(mad_audio_buf, out_frames);
-   else
-#endif
-      memset(mad_audio_buf, 0, out_frames * 4);
-
-   // Determine end, for left channel only (right channel is implicit).
-   leftend = mixbuffer + out_frames * step;
-
-   // Mix sounds into the mixing buffer.
-   // Loop over step*SAMPLECOUNT, that is 512 values for two channels.
-
-   while (leftout <= leftend)
+   /* sample_step is 16.16 fixed-point samples-per-frame.  Carry the
+    * fractional remainder across frames so the emitted frame count is
+    * floor or floor+1 each call and the long-run average equals
+    * sample_rate/fps exactly -- otherwise the dropped fraction makes the
+    * core under-produce at any fps that doesn't divide the sample rate,
+    * engaging the frontend resampler and drifting A/V sync. */
+   if (tic_vars.sample_step)
    {
-      // Reset left/right value.
-      dl = mad_audio_buf[frames * 2 + 0];
-      dr = mad_audio_buf[frames * 2 + 1];
+      static fixed_t sample_acc = 0;
+      sample_acc += tic_vars.sample_step;
+      out_frames  = sample_acc >> FRACBITS;
+      sample_acc &= (FRACUNIT - 1);
+   }
+   else
+      out_frames = SAMPLECOUNT_35;
 
-      for (chan=0; chan<NUM_CHANNELS; chan++)
+   /* Step 1: music into the canonical buffer.
+    *
+    * When float output is active and the current backend renders float
+    * natively (Ogg via rvorbis, MIDI via fluidsynth, OPL via its float
+    * FIR resampler), it writes straight into fmixbuffer, skipping the
+    * int16->float widen below.  Integer-native backends (MOD) have
+    * render_float == NULL, so they render int16 into mixbuffer and get
+    * widened in Step 1b. */
+   if (music_handle && current_player &&
+       use_float_output && current_player->render_float)
+   {
+      current_player->render_float(fmixbuffer, out_frames);
+      music_samples_played += (uint64_t)out_frames;
+   }
+   else
+   {
+      if (music_handle && current_player)
       {
-         // Check channel, if active.
-         if (channels[chan].snd_start_ptr)
+         current_player->render(mixbuffer, out_frames);
+         music_samples_played += (uint64_t)out_frames;
+      }
+      else
+         memset(mixbuffer, 0, (size_t)out_frames * 2 * sizeof(int16_t));
+
+      /* Step 1b: float output -- widen the int16 music into the float
+       * buffer once; SFX then accumulate into it in place.  Integer-native
+       * backends take this path; float-native ones handled it above.
+       * Skipped entirely on the int16 path. */
+      if (use_float_output)
+      {
+         int n = out_frames * 2;
+         int k;
+         for (k = 0; k < n; k++)
+            fmixbuffer[k] = (float)mixbuffer[k] * (1.0f / 32768.0f);
+      }
+   }
+
+   /* Step 2: gather active SFX channels. */
+   for (i = 0; i < NUM_CHANNELS; i++)
+   {
+      if (channels[i].snd_start_ptr)
+         active[n_active++] = &channels[i];
+   }
+
+   /* Step 3: per-sample mix.  When there are no SFX active we can
+    * skip the mix loop entirely -- the buffer already holds music
+    * (or silence) and is ready to submit. */
+   if (n_active > 0)
+   {
+      /* Determine the longest contiguous prefix of frames during
+       * which all active channels still have data.  After this
+       * boundary, at least one channel runs out -- we re-collect
+       * the survivors and mix the remainder.  This lets the inner
+       * loop run without any per-sample end-of-channel check
+       * (which becomes the dominant cost when many channels are
+       * active). */
+      int frames_left = out_frames;
+      int base        = 0;
+
+      while (frames_left > 0 && n_active > 0)
+      {
+         int chunk = frames_left;
+         int j;
+
+         /* Find the smallest "remaining samples" across active
+          * channels; that's our chunk length. */
+         for (j = 0; j < n_active; j++)
          {
-            // Get the raw data from the channel.
-            sample = *channels[chan].snd_start_ptr;
+            channel_t *c = active[j];
+            /* Remaining output frames before this channel's read cursor
+             * crosses its sample end, at its playback step. */
+            int64_t left_fx = (((int64_t)(c->snd_end_ptr - c->cur)) << 16) -
+                              c->frac;
+            int     rem     = (int)((left_fx + c->step_fx - 1) / c->step_fx);
+            if (rem < chunk)
+               chunk = rem;
+         }
+         if (chunk <= 0)
+            chunk = 1;  /* defensive; shouldn't happen */
 
-            // Add left and right part for this channel (sound) to the
-            // current data. Adjust volume accordingly.
-            dl += channels[chan].leftvol[sample];
-            dr += channels[chan].rightvol[sample];
+         /* Mix this chunk into the active output format.  Both variants
+          * step channel state identically; only seed/add/store differ
+          * (see mix_inner.h). */
+         if (use_float_output)
+            mix_chunk_f32(fmixbuffer + (size_t)base * 2, chunk, active, n_active);
+         else
+            mix_chunk_s16(mixbuffer  + (size_t)base * 2, chunk, active, n_active);
 
-            channels[chan].snd_start_ptr++;
+         base        += chunk;
+         frames_left -= chunk;
 
-            if (!(channels[chan].snd_start_ptr < channels[chan].snd_end_ptr))
-               memset(&channels[chan], 0, sizeof(channel_t));
+         /* Reap any channels that just hit end-of-data and rebuild
+          * the active list in place. */
+         {
+            int dst = 0;
+            for (j = 0; j < n_active; j++)
+            {
+               if (active[j]->cur >= active[j]->snd_end_ptr)
+                  memset(active[j], 0, sizeof(channel_t));
+               else
+                  active[dst++] = active[j];
+            }
+            n_active = dst;
          }
       }
 
-      // Clamp to range. Left hardware channel.
-      // Has been char instead of short.
-      // if (dl > 127) *leftout = 127;
-      // else if (dl < -128) *leftout = -128;
-      // else *leftout = dl;
-
-      if (dl > 0x7fff)
-         *leftout = 0x7fff;
-      else if (dl < -0x8000)
-         *leftout = -0x8000;
-      else
-         *leftout = dl;
-
-      // Same for right hardware channel.
-      if (dr > 0x7fff)
-         *rightout = 0x7fff;
-      else if (dr < -0x8000)
-         *rightout = -0x8000;
-      else
-         *rightout = dr;
-
-      // Increment current pointers in mixbuffer.
-      leftout += step;
-      rightout += step;
-      frames++;
+      /* If we exited because n_active reached 0 with frames left, the
+       * rest of the buffer already holds music/silence -- no further
+       * work needed (the float buffer was widened up front). */
    }
 
-   for (frames = 0; frames < out_frames; )
-      frames += audio_batch_cb(mixbuffer + (frames << 1), out_frames - frames);
+   /* Step 4: hand off to libretro -- float or int16 per negotiation. */
+   if (use_float_output)
+      audio_batch_cb_float(fmixbuffer, out_frames);
+   else
+      audio_batch_cb(mixbuffer, out_frames);
 }
 
 void I_UpdateSoundParams (int handle, int vol, int sep, int pitch)
@@ -480,8 +977,8 @@ void I_UpdateSoundParams (int handle, int vol, int sep, int pitch)
          if (leftvol < 0 || leftvol > 127)
             I_Error("I_UpdateSoundParams: leftvol out of bounds.");
 
-         channels[i].leftvol = &vol_lookup[leftvol*256];
-         channels[i].rightvol = &vol_lookup[rightvol*256];
+         channels[i].leftvol  = leftvol;
+         channels[i].rightvol = rightvol;
          return;
       }
    }
@@ -492,7 +989,7 @@ void I_ShutdownSound(void)
 {
    int i;
 
-   for(i = 0; i < NUMSFX; i++)
+   for(i = 0; i < num_sfx; i++)
    {
       if (!S_sfx[i].link)
       {
@@ -500,23 +997,65 @@ void I_ShutdownSound(void)
          S_sfx[i].data = NULL;
       }
    }
+
+   /* The per-sfx tables are grown to a high-water mark and only
+    * reallocated past it, so the mark falls back to zero with the
+    * pointers. */
+   free(lengths);
+   free(sfx_steps);
+   free(sfx_orig_rate);
+   lengths       = NULL;
+   sfx_steps     = NULL;
+   sfx_orig_rate = NULL;
+   lengths_size  = 0;
 }
 
 void I_InitSound(void)
 {
   int i;
 
-  memset(&lengths, 0, sizeof(int)*NUMSFX);
+  /* Hexen indirects sfx through SNDINFO: the precache below loads each
+   * sample by S_sfx[].name, so the logical names must already have been
+   * rewritten to real lumps.  This runs before S_Init (which used to do it,
+   * too late -- after the precache had already failed to NULL).  Also
+   * records the per-map music. */
+  {
+    extern dbool hexen;          /* doomstat.h */
+    extern void  S_HexenLoadSndInfo(void); /* s_sound.h */
+    extern void  U_ZDoomLoadSndInfo(void); /* u_zsndinfo.h */
+    if (hexen)
+      S_HexenLoadSndInfo();
+    else
+      U_ZDoomLoadSndInfo();
+  }
 
-  for (i = 1; i < NUMSFX; i++)
+  /* lengths[] tracks the (growable) sfx count; reallocate to cover any
+   * dsdhacked-added sounds. */
+  if (lengths_size < num_sfx)
+  {
+    lengths = (int*)realloc(lengths, num_sfx * sizeof(int));
+    sfx_steps = (unsigned int*)realloc(sfx_steps, num_sfx * sizeof(unsigned int));
+    sfx_orig_rate = (unsigned int*)realloc(sfx_orig_rate, num_sfx * sizeof(unsigned int));
+    lengths_size = num_sfx;
+  }
+  memset(lengths, 0, sizeof(int) * num_sfx);
+  memset(sfx_steps, 0, sizeof(unsigned int) * num_sfx);
+  memset(sfx_orig_rate, 0, sizeof(unsigned int) * num_sfx);
+
+  for (i = 1; i < num_sfx; i++)
   {
      // Alias? Example is the chaingun sound linked to pistol.
      if (!S_sfx[i].link) // Load data from WAD file.
-        S_sfx[i].data = I_SndLoadSample( S_sfx[i].name, &lengths[i] );
+        S_sfx[i].data = I_SndLoadSample( S_sfx[i].name, &lengths[i],
+                                         &sfx_steps[i], &sfx_orig_rate[i] );
      else // Previously loaded already?
      {
         S_sfx[i].data = S_sfx[i].link->data;
-        lengths[i]    = lengths[(S_sfx[i].link - S_sfx)/sizeof(sfxinfo_t)];
+        /* link - S_sfx is already an element index (pointer subtraction of
+         * sfxinfo_t*); do not divide by sizeof again. */
+        lengths[i]       = lengths[S_sfx[i].link - S_sfx];
+        sfx_steps[i]     = sfx_steps[S_sfx[i].link - S_sfx];
+        sfx_orig_rate[i] = sfx_orig_rate[S_sfx[i].link - S_sfx];
      }
   }
 
@@ -524,17 +1063,6 @@ void I_InitSound(void)
 
   if (log_cb)
     log_cb(RETRO_LOG_INFO, "I_InitSound: \n");
-}
-
-dbool I_AnySoundStillPlaying(void)
-{
-   int i;
-   dbool   result = false;
-
-   for (i = 0; i < MAX_CHANNELS; i++)
-      result |= channelinfo[i].data != NULL;
-
-   return result;
 }
 
 /* MUSIC API */
@@ -545,15 +1073,15 @@ static int	musicdies=-1;
 void I_PlaySong(int handle, int looping)
 {
   (void)handle;
-  musicdies = gametic + TICRATE * 30;
+  musicdies              = gametic + TICRATE * 30;
+  music_last_looping     = looping;
+  music_samples_played   = 0;
 
-#ifdef MUSIC_SUPPORT
   if (current_player)
   {
      current_player->play(music_handle, looping);
      current_player->setvolume(snd_MusicVolume);
   }
-#endif
 }
 
 void I_PauseSong (int handle)
@@ -565,11 +1093,8 @@ void I_PauseSong (int handle)
 
 void I_ResumeSong (int handle)
 {
-   (void)handle;
-#ifdef MUSIC_SUPPORT
    if (current_player)
       current_player->resume();
-#endif
 }
 
 void I_StopSong(int handle)
@@ -585,54 +1110,278 @@ void I_StopSong(int handle)
 
 void I_UnRegisterSong(int handle)
 {
-   (void)handle;
-
-#ifdef MUSIC_SUPPORT
   if (current_player)
+  {
     current_player->stop();
+    /* Release the backend's parsed song, not just the playback state.
+     * stop() only halts playback and frees per-iteration state (e.g. OPL's
+     * track iterators); the song parse itself -- OPL's MIDI_LoadFileSpecial
+     * handle, the libretro MIDI player's lm_midifile/lm_events -- is owned
+     * by registersong() and must be released here.  Omitting this (as the
+     * code did after the c62e559 refactor) leaks the parse on every
+     * re-registration AND leaves the previous MIDI backend holding stale
+     * song state, so an on-the-fly "MIDI Hardware" change
+     * (M_ChangeMidiPlayer -> S_RestartMusic -> S_StopMusic -> here ->
+     * I_RegisterSong) never cleanly takes effect.  music_handle is the
+     * value registersong() returned, which is what unregistersong() expects. */
+    if (music_handle)
+      current_player->unregistersong(music_handle);
+  }
 
    free(song_data);
    music_handle = NULL;
    song_data    = NULL;
-#endif
+}
+
+/* ------------------------------------------------------------------ */
+/* Save-state hooks for music position.                               */
+/*                                                                    */
+/* Each music backend may optionally implement serialize/unserialize  */
+/* on its music_player_t vtable.  These wrappers dispatch to whichever*/
+/* backend is currently active and return 0 when no playback is in    */
+/* progress or the backend doesn't implement state save.  The libretro*/
+/* layer treats a 0 result as "no music state to record" -- a save    */
+/* state with zero music payload restores to "music keeps running"    */
+/* (status quo behaviour before this hook existed), so absence is     */
+/* safe.                                                              */
+
+/* Generic music-state wire format -- the cross-backend layer.
+ *
+ * Every save written by this wrapper starts with a fixed 16-byte
+ * GMUS header that records only the cross-backend-meaningful state:
+ * the rendered-sample count since I_PlaySong.  Any backend-specific
+ * fast-path payload (e.g. 'OPLS' track positions, 'FLPS' eventpos)
+ * is appended after the header.  Layout:
+ *
+ *   uint32_t  magic    = 'GMUS'
+ *   uint32_t  version  = 1
+ *   uint64_t  samples_played
+ *   [optional backend payload, variable length]
+ *
+ * The GMUS prefix is what makes cross-backend save/load work: a
+ * state written while the OPL backend was active still carries the
+ * same opening header as a state written while MP3 was active, so
+ * the reader can always extract the sample count.  The reader tries
+ * the active backend's fast path on the appended payload first and
+ * only falls through to render-replay (stop, restart, render() into
+ * a throwaway buffer until samples_played catches up) if either:
+ *
+ *   - the active backend has no unserialize (e.g. mp_player), or
+ *   - the active backend rejected the appended payload because it
+ *     was written by a different backend (OPLS appended payload,
+ *     read while fl_player or mp_player is active, or vice versa).
+ *
+ * Same-backend save/load is unchanged from the pre-wrapper world:
+ * 16 bytes of GMUS overhead, then the backend's existing fast-path
+ * unserialize takes over.  Cross-backend save/load is slower (the
+ * render-replay walk is O(samples_played)) but correct -- the song
+ * resumes at the right position instead of drifting past it.  The
+ * cross-backend path is also the only available option for backends
+ * whose internal state cannot be event-replayed, MP3 being the
+ * motivating case (the decoder's bit-reservoir state is not
+ * addressable, so re-decoding from the start to the saved sample
+ * count is the only way to resume cleanly).
+ */
+#define MUSIC_GENERIC_MAGIC     0x474D5553u   /* 'GMUS' */
+#define MUSIC_GENERIC_VERSION   1u
+#define MUSIC_GENERIC_HDR_SIZE  16u
+
+size_t I_MusicSerializeMaxSize(void)
+{
+   size_t total = MUSIC_GENERIC_HDR_SIZE;
+   if (current_player && current_player->serialize)
+   {
+      size_t n = current_player->serialize(NULL, 0);
+      if (n > 0)
+         total += n;
+   }
+   return total;
+}
+
+size_t I_MusicSerialize(void *dest, size_t cap)
+{
+   uint8_t *p = (uint8_t*)dest;
+   uint32_t magic;
+   uint32_t version;
+   size_t   total = MUSIC_GENERIC_HDR_SIZE;
+
+   if (!music_handle || !current_player)
+      return 0;
+   if (cap < total)
+      return 0;
+
+   /* GMUS header first -- the cross-backend portion every reader
+    * can extract regardless of which backend was active at save
+    * time.  16 bytes. */
+   magic   = MUSIC_GENERIC_MAGIC;
+   version = MUSIC_GENERIC_VERSION;
+   memcpy(p + 0, &magic,                4);
+   memcpy(p + 4, &version,              4);
+   memcpy(p + 8, &music_samples_played, 8);
+
+   /* Then the backend's fast-path payload, if any.  It writes into
+    * the buffer immediately after the GMUS header; on load the
+    * wrapper hands the backend exactly this slice.  A backend that
+    * declines (no song active, no fast-path implemented, or its
+    * payload wouldn't fit in the remaining cap) leaves the result
+    * at just the 16-byte GMUS header -- a valid state on its own,
+    * restored via render-replay. */
+   if (current_player->serialize)
+   {
+      size_t n = current_player->serialize(p + total, cap - total);
+      if (n > 0)
+         total += n;
+   }
+   return total;
+}
+
+int I_MusicUnserialize(const void *src, size_t size)
+{
+   if (size == 0)
+      return 1;  /* nothing to restore is success */
+
+   {
+      const uint8_t *p = (const uint8_t*)src;
+      uint32_t magic;
+      uint32_t version;
+      uint64_t target;
+      short    tmpbuf[1024];   /* 512 stereo frames per replay chunk */
+
+      if (!music_handle || !current_player)
+         return 0;
+      if (size < MUSIC_GENERIC_HDR_SIZE)
+         return 0;
+
+      /* GMUS header is mandatory: any save written by this wrapper
+       * carries it regardless of which backend was active.  Reading
+       * it gives us the sample count we'll need if the backend's
+       * fast path declines (cross-backend save/load, or a backend
+       * with no unserialize at all). */
+      memcpy(&magic,   p + 0, 4);
+      memcpy(&version, p + 4, 4);
+      memcpy(&target,  p + 8, 8);
+      if (magic   != MUSIC_GENERIC_MAGIC)   return 0;
+      if (version != MUSIC_GENERIC_VERSION) return 0;
+
+      /* Try the backend's fast path on the appended payload.  Same-
+       * backend save/load lands here and event-replays in a few ms,
+       * unchanged from the pre-wrapper world.  Cross-backend save/
+       * load (e.g. OPLS payload, fl_player active) gets a rejection
+       * from the backend's magic check and falls through below. */
+      if (current_player->unserialize && size > MUSIC_GENERIC_HDR_SIZE)
+      {
+         if (current_player->unserialize(p + MUSIC_GENERIC_HDR_SIZE,
+                                          size - MUSIC_GENERIC_HDR_SIZE) == 1)
+            return 1;
+      }
+
+      /* Render-replay fallback using the GMUS sample count.  This
+       * is the cross-backend path and the only path for backends
+       * with no unserialize (mp_player).  Runahead's common case
+       * (save and restore at the same sample position) short-circuits
+       * here as a no-op, preserving the in-flight synth state. */
+      if (target == music_samples_played)
+         return 1;
+
+      current_player->stop();
+      current_player->play(music_handle, music_last_looping);
+      music_samples_played = 0;
+
+      while (music_samples_played < target)
+      {
+         uint64_t want  = target - music_samples_played;
+         unsigned chunk = (want > 512) ? 512u : (unsigned)want;
+         current_player->render(tmpbuf, chunk);
+         music_samples_played += chunk;
+      }
+      return 1;
+   }
 }
 
 int I_RegisterSong(const void* data, size_t len)
 {
+  music_player_t *chosen_midi = NULL;
   music_handle = NULL;
 
-#if defined(MUSIC_SUPPORT)
-  // Now you can hear title music in deca.wad
-  // http://www.doomworld.com/idgames/index.php?id=8808
-  // Ability to use mp3 and ogg as inwad lump
+  /* Pick the MIDI player according to the user's "MIDI Hardware"
+   * menu setting (defaults table in m_misc.c, midi_player_opts in
+   * m_menu.c).  Non-MIDI inputs (e.g. MP3 lumps via mp_player)
+   * are unaffected -- they go through the autodetect loop below
+   * regardless of the MIDI choice. */
+  switch (midi_player)
+  {
+     case 0: /* Off: no MIDI playback */
+        chosen_midi = NULL;
+        break;
+     case 1: /* Adlib (OPL) */
+        chosen_midi = (music_player_t *)&opl_synth_player;
+        break;
+#ifdef HAVE_LIBFLUIDSYNTH
+     case 2: /* Fluidsynth */
+        chosen_midi = (music_player_t *)&fl_player;
+        break;
+     case 3: /* libretro raw MIDI out */
+        chosen_midi = (music_player_t *)&libretro_midi_player;
+        break;
+#else
+     case 2: /* libretro raw MIDI out (Fluidsynth not built) */
+        chosen_midi = (music_player_t *)&libretro_midi_player;
+        break;
+#endif
+     default:
+        chosen_midi = (music_player_t *)&opl_synth_player;
+        break;
+  }
+
+  /* Now you can hear title music in deca.wad
+   * http://www.doomworld.com/idgames/index.php?id=8808
+   * Ability to use mp3 and ogg as inwad lump */
 
   if (len > 4 && memcmp(data, "MUS", 3) != 0)
   {
-     // The header has no MUS signature
-     // Let's try to load this song with the music players
+     /* The header has no MUS signature
+      * Let's try to load this song with the music players */
      int i;
      for (i = 0; i < NUM_MUS_PLAYERS; i++)
      {
-        music_handle = music_players[i]->registersong(data, len);
+        const music_player_t *p = music_players[i];
+
+        /* Skip MIDI players the user did not select.  Non-MIDI
+         * players (e.g. mp_player) are not in this skip set, so
+         * MP3-as-music streams keep working under any midi_player
+         * value -- including "Off". */
+        if (p == &opl_synth_player && chosen_midi != (music_player_t *)&opl_synth_player)
+           continue;
+#ifdef HAVE_LIBFLUIDSYNTH
+        if (p == &fl_player && chosen_midi != (music_player_t *)&fl_player)
+           continue;
+#endif
+        if (p == &libretro_midi_player && chosen_midi != (music_player_t *)&libretro_midi_player)
+           continue;
+
+        music_handle = p->registersong(data, len);
         if (music_handle)
         {
-           current_player = (music_player_t*)music_players[i];
+           current_player = (music_player_t *)p;
            break;
         }
      }
   }
 
-  // e6y: from Chocolate-Doom
-  // Assume a MUS file and try to convert
-  if (!music_handle)
+  /* e6y: from Chocolate-Doom
+   * Assume a MUS file and try to convert -- but only if the user
+   * has a MIDI player selected.  Under "Off", we skip the whole
+   * mus2mid path; the song fails to load and I_PlaySong's
+   * current_player guard turns playback into a no-op. */
+  if (!music_handle && chosen_midi)
   {
      int result;
      MEMFILE *instream  = mem_fopen_read(data, len);
      MEMFILE *outstream = mem_fopen_write();
 
-     // e6y: from chocolate-doom
-     // New mus -> mid conversion code thanks to Ben Ryves <benryves@benryves.com>
-     // This plays back a lot of music closer to Vanilla Doom - eg. tnt.wad map02
+     /* e6y: from chocolate-doom
+      * New mus -> mid conversion code thanks to Ben Ryves <benryves@benryves.com>
+      * This plays back a lot of music closer to Vanilla Doom - eg. tnt.wad map02 */
      result = mus2mid(instream, outstream);
 
      if (result != 0)
@@ -665,9 +1414,9 @@ int I_RegisterSong(const void* data, size_t len)
         void *outbuf;
         size_t outbuf_len;
         mem_get_buf(outstream, &outbuf, &outbuf_len);
-        music_handle = opl_synth_player.registersong(outbuf, outbuf_len);
+        music_handle = chosen_midi->registersong(outbuf, outbuf_len);
         if(music_handle)
-           current_player = (music_player_t*)&opl_synth_player;
+           current_player = chosen_midi;
      }
 
      mem_fclose(instream);
@@ -677,7 +1426,6 @@ int I_RegisterSong(const void* data, size_t len)
   /* Failed to load */
   if (!music_handle)
      lprintf(LO_ERROR, "I_RegisterSong: couldn't load music song.\n");
-#endif
 
   return !!music_handle;
 }
@@ -690,10 +1438,40 @@ int I_QrySongPlaying(int handle)
   return looping || musicdies > gametic;
 }
 
+/* Is the currently registered music being decoded by mp_player
+ * (an MP3 stream)?  Used by S_RestartMusic to decide whether a
+ * MIDI-hardware change should trigger a restart -- mp_player is
+ * not a MIDI player and is unaffected by the midi_player setting,
+ * so its tracks must not be torn down. */
+int I_MusicIsMP3(void)
+{
+   return current_player == (music_player_t *)&mp_player;
+}
+
+/* The libretro raw-MIDI player declines to register a song while the
+ * frontend's MIDI output is not yet available (e.g. the MIDI driver is
+ * still coming up during the first frames after load).  That is exactly
+ * when the very first track -- the title music -- is registered, so it
+ * would stay silent forever: S_ChangeMusic latches mus_playing and never
+ * retries.  This reports whether the user has the libretro MIDI player
+ * selected and that output is now available, so the per-frame music
+ * update can re-register a track that was deferred.  Returns 0 unless
+ * the libretro player is the chosen MIDI backend and it is ready now. */
+int I_MidiLibretroReady(void)
+{
+#ifdef HAVE_LIBFLUIDSYNTH
+   int is_libretro_selected = (midi_player == 3);
+#else
+   int is_libretro_selected = (midi_player == 2);
+#endif
+   if (is_libretro_selected)
+      return I_LibretroMidiAvailable();
+   return 0;
+}
+
 // try register external music file (not in WAD)
 int I_RegisterMusicFile( const char* filename, musicinfo_t *song )
 {
-#ifdef MUSIC_SUPPORT
   int len = M_ReadFile(filename, (uint8_t**) &song_data);
   if (len == -1)
   {
@@ -714,46 +1492,7 @@ int I_RegisterMusicFile( const char* filename, musicinfo_t *song )
   song->data    = 0;
   song->handle  = 0;
   song->lumpnum = 0;
-#endif
   return 0;
-}
-
-/* NSM helper routine for some of the streaming audio.
- * Assumes 16bit signed interleaved stereo. */
-void I_ResampleStream (void *dest, unsigned nsamp, void (*proc)(void *dest, unsigned nsamp),
-      unsigned sratein, unsigned srateout)
-{
-   unsigned i;
-   int                   j   = 0;
-   int16_t           *sout   = dest;
-   static int16_t     *sin   = NULL;
-   static unsigned sinsamp   = 0;
-   static unsigned remainder = 0;
-   unsigned step             = (sratein << 16) / (unsigned) srateout;
-   unsigned nreq             = (step * nsamp + remainder) >> 16;
-
-   if (nreq > sinsamp)
-   {
-      sin = realloc(sin, (nreq + 1) * 4);
-      if (!sinsamp) // avoid pop when first starting stream
-         sin[0] = sin[1] = 0;
-      sinsamp = nreq;
-   }
-
-   proc (sin + 2, nreq);
-
-   for (i = 0; i < nsamp; i++)
-   {
-      *sout++ = ((unsigned) sin[j + 0] * (0x10000 - remainder) +
-            (unsigned) sin[j + 2] * remainder) >> 16;
-      *sout++ = ((unsigned) sin[j + 1] * (0x10000 - remainder) +
-            (unsigned) sin[j + 3] * remainder) >> 16;
-      remainder += step;
-      j += remainder >> 16 << 1;
-      remainder &= 0xffff;
-   }
-   sin[0] = sin[nreq * 2];
-   sin[1] = sin[nreq * 2 + 1];
 }
 
 void I_InitMusic(void)
@@ -761,6 +1500,7 @@ void I_InitMusic(void)
    int i;
    for (i = 0; music_players[i]; i++)
       music_players[i]->init (SAMPLERATE);
+   music_system_up = 1;
 }
 
 void I_ShutdownMusic(void)
@@ -768,4 +1508,116 @@ void I_ShutdownMusic(void)
    int i;
    for (i = 0; music_players[i]; i++)
       music_players[i]->shutdown ();
+   music_system_up = 0;
+}
+
+/* Recompute every sfx's 16.16 playback step for the current output rate
+ * from its retained native rate.  Cheap (one 64-bit divide per sfx, no
+ * lump I/O) and safe to call at any time: a channel that is mid-playback
+ * keeps its cur/frac cursor and simply advances at the new step from the
+ * next mixed sample on.  Channels whose sfxid still resolves are also
+ * retuned so an in-flight sound doesn't keep playing at the old pitch. */
+static void I_RecalcSfxSteps(void)
+{
+   int i;
+
+   if (!sfx_steps || !sfx_orig_rate)
+      return;
+
+   for (i = 0; i < num_sfx; i++)
+   {
+      if (sfx_orig_rate[i])
+      {
+         sfx_steps[i] = STEP_FROM_RATE(sfx_orig_rate[i]);
+         if (!sfx_steps[i])
+            sfx_steps[i] = 1;
+      }
+   }
+
+   /* Retune any active channels.  step_fx may carry vanilla pitch jitter
+    * (raven / pitched_sounds) baked in at I_StartSound time; we can't
+    * recover the original pitch byte here, so recompute from the base
+    * step only.  The audible effect of dropping a one-frame pitch jitter
+    * across a rate switch is nil. */
+   for (i = 0; i < NUM_CHANNELS; i++)
+   {
+      if (channels[i].snd_start_ptr)
+      {
+         unsigned int s = sfx_steps[channels[i].sfxid];
+         channels[i].step_fx = s ? s : 1;
+      }
+   }
+}
+
+/* Set the desired audio output rate.  Clamps to a supported value.  If the
+ * rate is unchanged this is a no-op.  Otherwise it retunes the SFX step
+ * table in place and, if music is playing, re-inits the synth backends at
+ * the new rate and resumes the current song at its saved sample position
+ * (the same render-replay path the save-state code uses, which is the only
+ * rate-agnostic way to resume the opaque synth/decoder state).  Returns the
+ * rate in force afterwards. */
+int I_SetSoundRate(int rate)
+{
+   int old_rate = snd_samplerate_output;
+
+   /* Snap to the nearest supported rate so a caller passing a raw host
+    * rate (e.g. 22050 or 192000) still lands on something we render at. */
+   if      (rate <= (SND_SAMPLERATE_32K + SND_SAMPLERATE_44K) / 2)
+      rate = SND_SAMPLERATE_32K;
+   else if (rate <= (SND_SAMPLERATE_44K + SND_SAMPLERATE_48K) / 2)
+      rate = SND_SAMPLERATE_44K;
+   else if (rate <= (SND_SAMPLERATE_48K + SND_SAMPLERATE_96K) / 2)
+      rate = SND_SAMPLERATE_48K;
+   else
+      rate = SND_SAMPLERATE_96K;
+
+   if (rate == old_rate)
+      return old_rate;
+
+   snd_samplerate_output = rate;
+
+   /* SFX: just retune; samples are stored at native rate. */
+   I_RecalcSfxSteps();
+
+   /* Music: re-init every synth backend at the new rate so their internal
+    * rate-derived tables (OPL envelope/LFO scaling via Chip__Setup, the
+    * fluidsynth synth.sample-rate, the stream resampler steps, etc.) are
+    * rebuilt for the new rate.
+    *
+    * We deliberately do NOT resume the song from here.  Per-song,
+    * rate-derived state lives in each backend's registersong() (the libretro
+    * MIDI player's samples-per-MIDI-clock lm_spmc, fluidsynth's spmc, the
+    * ogg resampler's ogg_step, OPL's per-track timing), so a bare
+    * shutdown()/init()/play() would leave that state stale -> wrong tempo or
+    * pitch.  The correct, backend-agnostic resume is a full re-registration
+    * from the song lump, which the s_sound.c layer owns: the libretro layer
+    * calls S_RestartMusic() after this returns.
+    *
+    * For backends whose rate state is fully re-derived per render call and
+    * not at registersong (the MP3 resampler reads mp_samplerate_target live;
+    * the mod renderer reads mod_rate live), S_RestartMusic's early-out for
+    * non-lump tracks is harmless -- they simply keep decoding and pick up the
+    * new rate on the next render.
+    *
+    * Skipped until I_InitMusic has run (normal startup order sets the rate
+    * first), since I_InitMusic will init the backends at the new rate itself.
+    *
+    * NOTE: backends own the lifetime of the parsed song handle across
+    * shutdown(); we leave music_handle/current_player untouched so the
+    * non-lump backends above keep a valid handle.  S_RestartMusic replaces
+    * both for the lump-backed case via I_UnRegisterSong + I_RegisterSong. */
+   if (music_system_up)
+   {
+      int i;
+      for (i = 0; music_players[i]; i++)
+      {
+         music_players[i]->shutdown();
+         music_players[i]->init(SAMPLERATE);
+      }
+   }
+
+   if (log_cb)
+      log_cb(RETRO_LOG_INFO, "I_SetSoundRate: output rate %d Hz\n", rate);
+
+   return rate;
 }

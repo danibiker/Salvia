@@ -2,13 +2,15 @@ DEPS_DIR           = $(ROOT_DIR)/deps
 LIBRETRO_DIR       = $(ROOT_DIR)/libretro
 LIBRETRO_COMM_DIR  = $(ROOT_DIR)/libretro/libretro-common
 
-INCFLAGS    = -I$(ROOT_DIR) -I$(CORE_DIR) -I$(DEPS_DIR)/libmad -I$(LIBRETRO_COMM_DIR)/include
+INCFLAGS    = -I$(ROOT_DIR) -I$(CORE_DIR) -I$(LIBRETRO_COMM_DIR)/include
 
 ifneq (,$(findstring msvc2003,$(platform)))
 INCFLAGS += -I$(LIBRETRO_COMM_DIR)/include/compat/msvc
 endif
 
-COREDEFINES = -D__LIBRETRO__ -DFPM_DEFAULT
+COREDEFINES = \
+              -DHAVE_RVORBIS -DHAVE_RMP3 -DHAVE_RMODTRACKER -DHAVE_RWAV \
+              -DHAVE_RPNG -DHAVE_RJPEG
 
 ifneq (,$(findstring msvc,$(platform)))
 COREDEFINES += -DINLINE="_inline"
@@ -30,21 +32,42 @@ SOURCES_C := $(LIBRETRO_DIR)/libretro.c \
 				 $(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c \
 				 $(LIBRETRO_COMM_DIR)/file/file_path.c \
 				 $(LIBRETRO_COMM_DIR)/file/file_path_io.c \
-				 $(LIBRETRO_COMM_DIR)/time/rtime.c
+				 $(LIBRETRO_COMM_DIR)/time/rtime.c \
+				 $(LIBRETRO_COMM_DIR)/formats/png/rpng.c \
+				 $(LIBRETRO_COMM_DIR)/formats/png/rpng_apng.c \
+				 $(LIBRETRO_COMM_DIR)/formats/jpeg/rjpeg.c \
+				 $(LIBRETRO_COMM_DIR)/formats/wav/rwav.c \
+				 $(LIBRETRO_COMM_DIR)/streams/trans_stream.c \
+				 $(LIBRETRO_COMM_DIR)/streams/trans_stream_pipe.c \
+				 $(LIBRETRO_COMM_DIR)/streams/trans_stream_deflate.c \
+				 $(LIBRETRO_COMM_DIR)/encodings/encoding_deflate.c \
+				 $(LIBRETRO_COMM_DIR)/encodings/encoding_crc32.c \
+				 $(LIBRETRO_COMM_DIR)/formats/vorbis/rvorbis.c \
+				 $(LIBRETRO_COMM_DIR)/formats/mp3/rmp3.c \
+				 $(LIBRETRO_COMM_DIR)/formats/mod/rmodtracker.c \
+				 $(LIBRETRO_COMM_DIR)/formats/data_transfer.c \
+				 $(LIBRETRO_COMM_DIR)/formats/audio_transfer.c \
+				 $(LIBRETRO_COMM_DIR)/formats/image_transfer.c \
+				 $(LIBRETRO_COMM_DIR)/memmap/memmap.c
 
-SOURCES_C += $(DEPS_DIR)/libmad/bit.c \
-				 $(DEPS_DIR)/libmad/decoder.c \
-				 $(DEPS_DIR)/libmad/fixed.c \
-				 $(DEPS_DIR)/libmad/frame.c \
-				 $(DEPS_DIR)/libmad/huffman.c \
-				 $(DEPS_DIR)/libmad/layer3.c \
-				 $(DEPS_DIR)/libmad/layer12.c \
-				 $(DEPS_DIR)/libmad/stream.c \
-				 $(DEPS_DIR)/libmad/synth.c \
-				 $(DEPS_DIR)/libmad/timer.c
+# The hybrid VFS only exists for dynamically loaded builds.  When the core is
+# statically linked, frontend and core share one libretro-common: griffin's
+# filestream is already local-first, and vfs_hybrid.o's reference to
+# filestream_set_mapped_ptr_cb - present in this tree's file_stream.c but not
+# in the frontend snapshot's - forces the linker to pull our file_stream.o
+# out of the archive, colliding every other filestream_* symbol with griffin.
+# The other vendored objects survive as archive members precisely because
+# nothing references symbols griffin lacks; keep the hybrid out so that
+# invariant holds.
+ifneq ($(STATIC_LINKING), 1)
+SOURCES_C += $(LIBRETRO_COMM_DIR)/vfs/vfs_hybrid.c \
+				 $(LIBRETRO_COMM_DIR)/file/retro_dirent.c
+endif
 
 SOURCES_C += $(CORE_DIR)/am_map.c \
+				 $(CORE_DIR)/i_cpu_features.c \
 				 $(CORE_DIR)/d_deh.c \
+				 $(CORE_DIR)/dsda_hacked.c \
 				 $(CORE_DIR)/d_items.c \
 				 $(CORE_DIR)/d_main.c \
 				 $(CORE_DIR)/doomstat.c \
@@ -74,6 +97,27 @@ SOURCES_C += $(CORE_DIR)/am_map.c \
 				 $(CORE_DIR)/p_pspr.c \
 				 $(CORE_DIR)/p_saveg.c \
 				 $(CORE_DIR)/p_setup.c \
+				 $(CORE_DIR)/scanner.c \
+				 $(CORE_DIR)/udmf.c \
+				 $(CORE_DIR)/w_pk3.c \
+				 $(CORE_DIR)/map_format.c \
+				 $(CORE_DIR)/heretic/info.c \
+				 $(CORE_DIR)/heretic/sounds.c \
+				 $(CORE_DIR)/heretic/p_action.c \
+				 $(CORE_DIR)/heretic/in_lude.c \
+				 $(CORE_DIR)/heretic/f_finale.c \
+				 $(CORE_DIR)/hexen/sounds.c \
+				 $(CORE_DIR)/hexen/info.c \
+				 $(CORE_DIR)/hexen/p_mapinfo.c \
+				 $(CORE_DIR)/hexen/p_lightning.c \
+				 $(CORE_DIR)/hexen/p_anim.c \
+				 $(CORE_DIR)/hexen/f_finale.c \
+				 $(CORE_DIR)/hexen/in_lude.c \
+				 $(CORE_DIR)/hexen/sn_sonix.c \
+				 $(CORE_DIR)/hexen/p_acs.c \
+				 $(CORE_DIR)/hexen/po_man.c \
+				 $(CORE_DIR)/hexen/sv_save.c \
+				 $(CORE_DIR)/hexen/p_spec_hexen.c \
 				 $(CORE_DIR)/p_sight.c \
 				 $(CORE_DIR)/p_spec.c \
 				 $(CORE_DIR)/p_switch.c \
@@ -83,8 +127,12 @@ SOURCES_C += $(CORE_DIR)/am_map.c \
 				 $(CORE_DIR)/r_bsp.c \
 				 $(CORE_DIR)/r_data.c \
 				 $(CORE_DIR)/r_draw.c \
+				 $(CORE_DIR)/r_drawtc.c \
+				 $(CORE_DIR)/vid_mode.c \
 				 $(CORE_DIR)/r_main.c \
 				 $(CORE_DIR)/r_plane.c \
+				 $(CORE_DIR)/r_drawcmd.c \
+				 $(CORE_DIR)/r_rendermt.c \
 				 $(CORE_DIR)/r_segs.c \
 				 $(CORE_DIR)/r_sky.c \
 				 $(CORE_DIR)/r_things.c \
@@ -105,7 +153,6 @@ SOURCES_C += $(CORE_DIR)/am_map.c \
 				 $(CORE_DIR)/z_bmalloc.c \
 				 $(CORE_DIR)/lprintf.c \
 				 $(CORE_DIR)/wi_stuff.c \
-				 $(CORE_DIR)/md5.c \
 				 $(CORE_DIR)/d_client.c \
 				 $(CORE_DIR)/memio.c \
 				 $(CORE_DIR)/mus2mid.c \
@@ -114,11 +161,36 @@ SOURCES_C += $(CORE_DIR)/am_map.c \
 				 $(CORE_DIR)/opl_queue.c \
 				 $(CORE_DIR)/oplplayer.c \
 				 $(CORE_DIR)/flplayer.c \
+				 $(CORE_DIR)/libretro_midiout.c \
 				 $(CORE_DIR)/midifile.c \
 				 $(CORE_DIR)/madplayer.c \
+				 $(CORE_DIR)/modplayer.c \
+				 $(CORE_DIR)/oggplayer.c \
 				 $(CORE_DIR)/u_scanner.c \
 				 $(CORE_DIR)/u_mapinfo.c \
 				 $(CORE_DIR)/u_musinfo.c \
+				 $(CORE_DIR)/u_decorate.c \
+				 $(CORE_DIR)/u_zsndinfo.c \
+   $(CORE_DIR)/p_slope.c \
+   $(CORE_DIR)/p_vslope.c \
+   $(CORE_DIR)/p_skybox.c \
+   $(CORE_DIR)/p_sectorportal.c \
+   $(CORE_DIR)/p_lineportal.c \
+   $(CORE_DIR)/p_zacs.c \
+   $(CORE_DIR)/p_conversation.c \
+   $(CORE_DIR)/u_png.c \
+   $(CORE_DIR)/u_ztextures.c \
+   $(CORE_DIR)/u_zsecact.c \
+   $(CORE_DIR)/p_ffloor.c \
+				 $(CORE_DIR)/u_zmapinfo.c \
+				 $(CORE_DIR)/u_zanimdefs.c \
+				 $(CORE_DIR)/u_brightmap.c \
+				 $(CORE_DIR)/u_dynlight.c \
+				 $(CORE_DIR)/r_dynlight.c \
+				 $(CORE_DIR)/u_voxel.c \
+				 $(CORE_DIR)/r_voxel.c \
+				 $(CORE_DIR)/u_decaldef.c \
+				 $(CORE_DIR)/r_decal.c \
 
 
 ifeq ($(WANT_FLUIDSYNTH), 1)
@@ -176,6 +248,27 @@ endif
 # See https://doom.fandom.com/wiki/Zone_memory
 ifneq (,$(findstring msvc,$(platform)))
 else
+
+# Threaded rendering support.  rthreads carries backends for every console
+# target libretro builds for (Win32/Xbox/PS2/PS3/PSP/Vita/3DS/Switch/GEKKO/
+# Orbis/Android/Apple/Haiku/BSD/Emscripten), so this is on by default; a
+# platform without a usable backend opts out with HAVE_THREADS=0 and the
+# renderer falls back to the single-threaded path with the core option
+# forced off.
+ifneq ($(HAVE_THREADS), 0)
+SOURCES_C += $(LIBRETRO_COMM_DIR)/rthreads/rthreads.c
+INCFLAGS  += -DHAVE_THREADS
+endif
+
+# rthreads frees a thread's argument block on the spawned thread, and
+# rthreads.h drags in windows.h on Win32; both are incompatible with the zone
+# allocator macros that z_zone.h force-includes everywhere, so it opts out.  Applied
+# with `override` so a command-line CFLAGS (sanitizer or profiling build)
+# cannot silently drop it.  r_rendermt.c is the only prboom translation unit
+# that includes the threading headers -- see src/r_rendermt.h.
+$(LIBRETRO_COMM_DIR)/rthreads/rthreads.o: override CFLAGS += -DZ_ZONE_NO_ALLOC_OVERRIDE
+$(CORE_DIR)/r_rendermt.o:                   override CFLAGS += -DZ_ZONE_NO_ALLOC_OVERRIDE
+
 INCFLAGS += -include z_zone.h
 endif
 

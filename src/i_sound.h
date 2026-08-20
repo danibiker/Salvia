@@ -46,6 +46,34 @@
 
 extern int mus_opl_gain; // NSM  fine tune OPL output level
 
+/* User-selected MIDI playback hardware:
+ *   0 = Off (no MIDI playback at all)
+ *   1 = Adlib (OPL2/OPL3 emulation, opl_synth_player)
+ *   2 = Fluidsynth (only valid if HAVE_LIBFLUIDSYNTH; falls back
+ *       to silence if the build doesn't include fluidsynth)
+ *   last = libretro raw MIDI output (libretro_midi_player): streams
+ *       MIDI events to the frontend's MIDI interface for host-side
+ *       synthesis; declines (silence) if the frontend exposes none.
+ *       The numeric value is 3 when fluidsynth is built, 2 otherwise,
+ *       since the Fluidsynth entry is compiled in conditionally -- see
+ *       midi_player_opts[] in m_menu.c and the dispatch in
+ *       libretro_sound.c, which use matching #ifdefs. */
+extern int midi_player;
+
+/* Active audio output rate in Hz (one of 32000/44100/48000/96000).  Set
+ * from the "Sound Samplerate (Hint)" core option before I_InitSound /
+ * I_InitMusic so the SFX loaders, mixer step tables and music synths are
+ * all built for the same rate.  prboom has no fixed output rate (MIDI and
+ * tracker music are synthesised in real time), so the libretro layer
+ * chooses one that matches the host. */
+extern int snd_samplerate_output;
+
+/* Sets the desired output rate.  Clamps to a supported value; if the rate
+ * actually changes and the sound system is already running, rebuilds the
+ * SFX step table and re-inits the music backends so the new rate takes
+ * effect immediately.  Returns the rate in force afterwards. */
+int  I_SetSoundRate(int rate);
+
 // Init at program start...
 void I_InitSound(void);
 
@@ -72,9 +100,6 @@ void I_StopSound(int handle);
 //  to see if a channel is still playing.
 // Returns 0 if no longer playing, 1 if playing.
 dbool   I_SoundIsPlaying(int handle);
-
-// Called by m_menu.c to let the quit sound play and quit right after it stops
-dbool   I_AnySoundStillPlaying(void);
 
 // Updates the volume, separation,
 //  and pitch of a sound channel.
@@ -113,7 +138,27 @@ void I_StopSong(int handle);
 // See above (register), then think backwards
 void I_UnRegisterSong(int handle);
 
-// CPhipps - put these in config file
-extern int snd_samplerate;
+/* Returns 1 if the currently registered track is being decoded by
+ * the MP3 player (mp_player), 0 otherwise (MIDI player, or nothing
+ * registered).  Used by S_RestartMusic to skip MIDI-hardware-driven
+ * restarts on MP3 streams. */
+int I_MusicIsMP3(void);
+
+/* libretro raw-MIDI bridge (implemented in libretro.c) and the
+ * deferred-registration readiness check (implemented in
+ * libretro_sound.c).  I_MidiLibretroReady returns nonzero when the
+ * libretro MIDI player is the selected backend and the frontend's MIDI
+ * output is available, so a track that was deferred at boot (title
+ * music) can be re-registered. */
+int I_LibretroMidiAvailable(void);
+int I_MidiLibretroReady(void);
+
+/* Save-state support for music.  These dispatch to the active music
+ * backend's optional serialize/unserialize callbacks; backends that
+ * don't implement them produce zero-byte saves, which the caller
+ * treats as "no music state recorded" and restore as a no-op. */
+size_t I_MusicSerializeMaxSize(void);
+size_t I_MusicSerialize(void *dest, size_t cap);
+int    I_MusicUnserialize(const void *src, size_t size);
 
 #endif

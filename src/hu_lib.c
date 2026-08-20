@@ -185,13 +185,40 @@ void HUlib_drawTextLine
     }
     else  if (c != ' ' && c >= l->sc && c <= 127)
     {
-      w = l->f[c - l->sc].width;
-      if (x+w > BASE_WIDTH)
-        break;
-      // killough 1/18/98 -- support multiple lines:
-      // CPhipps - patch drawing updated
-      V_DrawNumPatch(x, y, FG, l->f[c - l->sc].lumpnum, l->cm, VPT_TRANS | VPT_STRETCH);
-      x += w;
+      /* Final Doom IWADs (TNT, Plutonia) stop their STCFN%d glyph
+       * range at STCFN121, omitting the bargraph block chars 122..127
+       * that the alternate HUD's ammo/health/armor widgets pad with
+       * every frame.  prboom.wad doesn't supply STCFN122..127 either
+       * (only STCFN096), and the DIG%d fallback in HU_Init doesn't
+       * cover this range either, so hu_font[i] / hu_font2[i] for
+       * those characters stay at the HU_Init memset(0) -- meaning
+       * lumpnum == 0.  Lump 0 in a Doom IWAD is the MAP01 marker
+       * (size 0), so W_CacheLumpNum(0) returns NULL and the next
+       * createPatch SEGVs on oldPatch->width.
+       *
+       * Defensive skip: if the font slot was never populated by
+       * R_SetPatchNum (lumpnum <= 0), advance x by a small fallback
+       * width and don't try to draw the missing glyph.  Stock DOOM
+       * and DOOM 2 IWADs go up to STCFN125 or further so this branch
+       * doesn't fire there; only Final Doom and other narrow-font
+       * IWADs benefit.  fixes issue #197. */
+      int lump = l->f[c - l->sc].lumpnum;
+      if (lump <= 0)
+      {
+        if (x + 4 > BASE_WIDTH)
+          break;
+        x += 4;
+      }
+      else
+      {
+        w = l->f[c - l->sc].width;
+        if (x+w > BASE_WIDTH)
+          break;
+        // killough 1/18/98 -- support multiple lines:
+        // CPhipps - patch drawing updated
+        V_DrawNumPatch(x, y, FG, lump, l->cm, VPT_TRANS | VPT_STRETCH);
+        x += w;
+      }
     }
     else
     {
@@ -468,8 +495,21 @@ void HUlib_drawMBg
   const patchnum_t* bgp
 )
 {
-  // If no valid background is given, use a blackbox
-  if ( bgp == NULL || !bgp->width )
+  /* The 9-patch background expects every slot to be a real loaded
+   * patch.  If any are missing -- HU_Init only calls R_SetPatchNum
+   * when W_CheckNumForName succeeds, so missing slots stay at the
+   * memset(0) seed with lumpnum == 0 and width == 0 -- fall back to
+   * the same flat-black V_DrawBox the NULL-bgp branch uses.
+   *
+   * The original check only looked at bgp[0] (`!bgp->width`), which
+   * handles the all-9-missing case cleanly (e.g. no prboom.wad
+   * loaded and the IWAD doesn't define BOX* patches itself) but
+   * would crash on a partial set: bgp[0] loaded, bgp[5] absent, the
+   * V_DrawNumPatch(bgp[5].lumpnum=0) call below ends up handing
+   * createPatch a NULL pointer from W_CacheLumpNum (lump 0 is the
+   * IWAD's first marker, size 0) and SEGVs.  Same shape as the
+   * Final Doom font-glyph bug fixed in the previous commit. */
+  if (bgp == NULL || !bgp->width)
   {
     fline_t boxdiag = {
       { x,   y },
@@ -482,6 +522,26 @@ void HUlib_drawMBg
     int xs = bgp[0].width;
     int ys = bgp[0].height;
     int i,j;
+    int k;
+    int all_present = 1;
+
+    for (k = 0; k < 9; k++)
+    {
+      if (bgp[k].lumpnum <= 0 || !bgp[k].width)
+      {
+        all_present = 0;
+        break;
+      }
+    }
+    if (!all_present)
+    {
+      fline_t boxdiag = {
+        { x,   y },
+        { x+w, y+h },
+      };
+      V_DrawBox(&boxdiag, 0);
+      return;
+    }
 
     // CPhipps - patch drawing updated
     // top rows

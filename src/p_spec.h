@@ -86,6 +86,10 @@
 #define PUSH_MASK       0x200
 #define PUSH_SHIFT      9
 
+/* MBF21 sector specials (only honoured at complevel 21). */
+#define DEATH_MASK          0x1000 /* bit 12: instant-death sector */
+#define KILL_MONSTERS_MASK  0x2000 /* bit 13: kill grounded monsters */
+
 //jff 02/04/98 Define masks, shifts, for fields in
 // generalized linedef types
 
@@ -358,6 +362,12 @@ typedef enum
   genPerpetual,
   toggleUpDn,   //jff 3/14/98 added to support instant toggle type
 
+  /* Hexen plat movement types */
+  PLAT_PERPETUALRAISE,
+  PLAT_DOWNWAITUPSTAY,
+  PLAT_DOWNBYVALUEWAITUPSTAY,
+  PLAT_UPWAITDOWNSTAY,
+  PLAT_UPBYVALUEWAITDOWNSTAY,
 } plattype_e;
 
 // p_doors
@@ -382,6 +392,12 @@ typedef enum
   genBlazeClose,
   genCdO,
   genBlazeCdO,
+
+  /* Hexen door movement types (args-driven, used by T_HexenVerticalDoor) */
+  DREV_NORMAL,
+  DREV_CLOSE30THENOPEN,
+  DREV_CLOSE,
+  DREV_OPEN,
 } vldoor_e;
 
 // p_ceilng
@@ -407,6 +423,21 @@ typedef enum
   genCrusher,
   genSilentCrusher,
 
+  /* Hexen ceiling movement types (handled by T_HexenMoveCeiling) */
+  CLEV_LOWERTOFLOOR,
+  CLEV_RAISETOHIGHEST,
+  CLEV_LOWERANDCRUSH,
+  CLEV_CRUSHANDRAISE,
+  CLEV_LOWERBYVALUE,
+  CLEV_RAISEBYVALUE,
+  CLEV_CRUSHRAISEANDSTAY,
+  CLEV_MOVETOVALUETIMES8,
+  /* ZDoom additions (Ceiling_Lower/RaiseInstant move by value*8 at
+   * instant speed, mirroring the FLEV TIMES8INSTANT pattern) */
+  CLEV_LOWERTIMES8INSTANT,
+  CLEV_RAISETIMES8INSTANT,
+  CLEV_MOVETOVALUE,          /* Ceiling_MoveToValue: dest in raw map units */
+  CLEV_RAISETONEAREST,       /* Ceiling_RaiseToNearest: next higher neighbour */
 } ceiling_e;
 
 // p_floor
@@ -466,7 +497,19 @@ typedef enum
 
   /* new types for stair builders */
   FLEV_BUILDSTAIR,
-  FLEV_GENBUILDSTAIR
+  FLEV_GENBUILDSTAIR,
+
+  /* Hexen value-driven floor movers */
+  FLEV_LOWERFLOORBYVALUE,
+  FLEV_RAISEFLOORBYVALUE,
+  FLEV_RAISEBYVALUETIMES8,
+  FLEV_LOWERBYVALUETIMES8,
+  FLEV_LOWERTIMES8INSTANT,
+  FLEV_RAISETIMES8INSTANT,
+  FLEV_MOVETOVALUETIMES8,
+  /* ZDoom Floor_MoveToValue: like MOVETOVALUETIMES8 without the *8 */
+  FLEV_MOVETOVALUE,
+  FLEV_RAISEBUILDSTEP
 } floor_e;
 
 typedef enum
@@ -637,6 +680,67 @@ typedef struct
   /* killough 10/98: sector tag for gradual lighting effects */
   int lighttag;
 } vldoor_t;
+
+/* Hexen pillar: moves a sector's floor and ceiling toward each other (build)
+ * or apart (open) at the same time. */
+typedef struct
+{
+  thinker_t thinker;
+  sector_t *sector;
+  int       ceilingSpeed;
+  int       floorSpeed;
+  int       floordest;
+  int       ceilingdest;
+  int       direction;
+  dbool     crush;
+} pillar_t;
+
+/* Hexen floor waggle: oscillates a sector floor up and down (FloatBob table)
+ * for a duration, easing the amplitude in at the start and out at the end. */
+enum
+{
+  WGLSTATE_EXPAND,
+  WGLSTATE_STABLE,
+  WGLSTATE_REDUCE
+};
+
+typedef struct
+{
+  thinker_t thinker;
+  sector_t *sector;
+  fixed_t   originalHeight;
+  fixed_t   accumulator;
+  fixed_t   accDelta;
+  fixed_t   targetScale;
+  fixed_t   scale;
+  fixed_t   scaleDelta;
+  int       ticker;
+  int       state;
+} planeWaggle_t;
+
+/* Hexen sector light effects (driven by T_Light). */
+typedef enum
+{
+  LITE_RAISEBYVALUE,
+  LITE_LOWERBYVALUE,
+  LITE_CHANGETOVALUE,
+  LITE_FADE,
+  LITE_GLOW,
+  LITE_FLICKER,
+  LITE_STROBE
+} lighttype_t;
+
+typedef struct
+{
+  thinker_t   thinker;
+  sector_t   *sector;
+  lighttype_t type;
+  int         value1;
+  int         value2;
+  int         tics1;
+  int         tics2;
+  int         count;
+} light_t;
 
 // p_doors
 
@@ -888,6 +992,8 @@ void T_Glow
 void T_PlatRaise
 ( plat_t* plat );
 
+void T_HexenPlatRaise(plat_t *plat); /* hexen plat thinker */
+
 // p_doors
 
 void T_VerticalDoor
@@ -1056,6 +1162,11 @@ int EV_DoGenLockedDoor
 void P_InitPicAnims
 ( void );
 
+void P_InitTerrainTypes(void);
+int  P_GetThingFloorType(mobj_t *thing);
+int  P_HitFloor(mobj_t *thing);
+extern int *TerrainTypes;
+
 void P_InitSwitchList
 ( void );
 
@@ -1063,11 +1174,18 @@ void P_InitSwitchList
 void P_SpawnSpecials
 ( void );
 
+/* killough 1/30/98: tag-search hash chains; needed by P_Find*FromLineTag */
+void P_InitTagLists
+(
+  void
+);
+
 // every tic
 void P_UpdateSpecials
 ( void );
 
 // when needed
+dbool Heretic_P_UseSpecialLine(mobj_t *thing, line_t *line, int side);
 dbool P_UseSpecialLine
 ( mobj_t* thing,
   line_t* line,
@@ -1078,6 +1196,12 @@ void P_ShootSpecialLine
   line_t* line );
 
 void P_CrossSpecialLine(line_t *line, int side, mobj_t *thing);
+
+/* Raven fire-typed damage inflictor (lava, Cleric flame strike). */
+extern mobj_t LavaInflictor;
+void P_InitLava(void);
+void P_PlayerOnSpecialFlat(player_t *player, int floorType);
+
 
 void P_PlayerInSpecialSector
 ( player_t* player );
@@ -1136,5 +1260,10 @@ int P_ActivateInStasisCeiling
 ( line_t* line );
 
 mobj_t* P_GetPushThing(int);                                // phares 3/23/98
+
+/* Heretic ambient sound sequences */
+void P_AddAmbientSfx(int sequence);
+void P_InitAmbientSound(void);
+void P_AmbientSound(void);
 
 #endif

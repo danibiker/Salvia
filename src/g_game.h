@@ -35,6 +35,13 @@
 #include "doomdef.h"
 #include "d_event.h"
 #include "d_ticcmd.h"
+#include "tables.h" /* angle_t, for G_PendingTurn */
+#include "u_mapinfo.h" /* mapentry_t, for G_LookupMapinfoByName */
+
+/* Look up a ZDoom/UMAPINFO map entry by its lump name (e.g. "TITLEMAP"), or
+ * NULL if none.  Declared here so callers outside g_game.c get the right
+ * (pointer) return type instead of an implicit int. */
+mapentry_t *G_LookupMapinfoByName(const char *lumpname);
 
 //
 // GAME
@@ -47,10 +54,16 @@
 #define MAX_EPISODE_NUM 7
 
 dbool   G_Responder(event_t *ev);
+angle_t G_PendingTurn(void); /* frame-rate turn preview */
+dbool   G_PendingTurnActive(void);
+struct mobj_s;
+angle_t G_PendingPitch(const struct mobj_s *mo); /* freelook preview */
+dbool   G_PendingPitchActive(const struct mobj_s *mo);
 dbool   G_CheckDemoStatus(void);
 void G_DeathMatchSpawnPlayer(int playernum);
 void G_InitNew(skill_t skill, int episode, int map);
 void G_DeferedInitNew(skill_t skill, int episode, int map);
+void G_DeferedInitNewName(skill_t skill, const char *mapname);
 void G_DeferedPlayDemo(const char *demo); // CPhipps - const
 void G_LoadGame(int slot, dbool   is_command); // killough 5/15/98
 void G_ForcedLoadGame(void);           // killough 5/15/98: forced loadgames
@@ -59,8 +72,12 @@ bool G_DoLoadGameFromBuffer(void *data, size_t length);
 bool G_DoSaveGameToBuffer(void *buf, size_t size);
 void G_SaveGame(int slot, char *description); // Called by M_Responder.
 void G_ExitLevel(void);
+/* Hexen Teleport_NewMap (map -1 = Teleport_EndGame) */
+void G_Completed(int map, int position);
+extern int RebornPosition;
 void G_SecretExitLevel(void);
 void G_WorldDone(void);
+int G_GetLeaveMap(void); /* hexen: staged Teleport_NewMap warp number */
 void G_EndGame(void); /* cph - make m_menu.c call a G_* function for this */
 void G_Ticker(void);
 void G_ReloadDefaults(void);     // killough 3/1/98: loads game defaults
@@ -78,6 +95,9 @@ const uint8_t *G_ReadOptions(const uint8_t *demo_p);   /* killough 3/1/98 - cph:
 uint8_t *G_WriteOptions(uint8_t *demo_p);        // killough 3/1/98
 void G_PlayerReborn(int player);
 void G_RestartLevel(void); // CPhipps - menu involked level restart
+
+/* Reset session-spanning g_game statics.  Called from D_DoomDeinit. */
+void G_Deinit(void);
 void G_DoVictory(void);
 void G_BuildTiccmd (ticcmd_t* cmd); // CPhipps - move decl to header
 void G_ChangedPlayerColour(int pn, int cl); // CPhipps - On-the-fly player colour changing
@@ -107,6 +127,15 @@ extern int  key_straferight;
 
 extern int  key_fire;
 extern int  key_use;
+extern int  key_use_artifact;
+extern int  pending_artifact;
+extern int  inventory;
+extern int  inventoryTics;
+extern int  key_inv_left;
+extern int  key_inv_right;
+extern int  key_fly_up;
+extern int  key_fly_down;
+extern int  key_jump;
 extern int  key_strafe;
 extern int  key_speed;
 extern int  key_escape;                                             // phares
@@ -171,6 +200,8 @@ extern int  mousebforward;
 extern int  mousebbackward;
 extern int  mouse_double_click_use;
 extern int  mlooky;
+extern pclass_t PlayerClass[MAXPLAYERS]; /* Hexen per-player class */
+
 extern int FinaleStage; // cph -
 extern int FinaleCount; // made static
 
@@ -181,7 +212,7 @@ extern int  bodyquesize;       // killough 2/8/98: adustable corpse limit
 
 // killough 5/2/98: moved from d_deh.c:
 // Par times (new item with BOOM) - from g_game.c
-extern int pars[4][10];  // hardcoded array size
+extern int pars[5][10];  // hardcoded array size
 extern int cpars[32];    // hardcoded array size
 // CPhipps - Make savedesciption visible in wider scope
 #define SAVEDESCLEN 32

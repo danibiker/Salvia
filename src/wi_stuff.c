@@ -39,6 +39,9 @@
 #include "r_main.h"
 #include "v_video.h"
 #include "wi_stuff.h"
+#include "u_zmapinfo.h"
+#include "heretic/in_lude.h"
+#include "hexen/in_lude.h"
 #include "s_sound.h"
 #include "sounds.h"
 #include "lprintf.h"  // jff 08/03/98 - declaration of lprintf
@@ -427,6 +430,34 @@ void WI_levelNameLump(char* buf, dbool   isNextLevel)
 // Args:    none
 // Returns: void
 //
+// The background is a single full-screen patch stretched to the current
+// resolution, redrawn every frame by every WI_draw* path.  At high
+// internal resolutions that stretch runs the per-pixel column drawer over
+// millions of pixels, which made the intermission cost ~11 ms/frame at 4K
+// even though the background image is static (only the foreground stat
+// counters animate, and those are drawn on top afterwards).
+//
+// Cache the rasterised background, keyed on the resolved lump name, the
+// dimensions and the palette, and memcpy it into the frame buffer on
+// subsequent frames instead of re-rasterising.  The animated map overlays
+// (WI_drawAnimatedBack) and the counters draw on top as before, so only
+// the expensive static layer is accelerated.
+static uint16_t       *wi_bg_cache      = NULL;
+static char            wi_bg_cache_name[9] = {0};
+static int             wi_bg_cache_w    = -1;
+static int             wi_bg_cache_h    = -1;
+static const uint16_t *wi_bg_cache_pal  = NULL;
+
+void WI_FreeBackgroundCache(void)
+{
+  free(wi_bg_cache);
+  wi_bg_cache         = NULL;
+  wi_bg_cache_name[0] = 0;
+  wi_bg_cache_w       = -1;
+  wi_bg_cache_h       = -1;
+  wi_bg_cache_pal     = NULL;
+}
+
 static void WI_slamBackground(void)
 {
   char  name[9];  // limited to 8 characters
@@ -447,8 +478,58 @@ static void WI_slamBackground(void)
       // default intermission for extra custom episodes
       strcpy(name, "INTERPIC");
   }
-  // background
-  V_DrawNamePatch(0, 0, FB, name, CR_DEFAULT, VPT_STRETCH);
+
+  // background -- cached: the resolved patch stretched to the screen is a
+  // pure function of name + dimensions + palette, none of which change
+  // between frames of a given intermission screen.
+  {
+    const size_t fb_bytes = (size_t)SCREENWIDTH * SCREENHEIGHT
+                            * SURFACE_PIXEL_DEPTH;
+
+    if (!wi_bg_cache
+        || strcmp(wi_bg_cache_name, name)
+        || wi_bg_cache_w   != SCREENWIDTH
+        || wi_bg_cache_h   != SCREENHEIGHT
+        || wi_bg_cache_pal != V_Palette16)
+    {
+      unsigned char *saved_data     = screens[FB].data;
+      uint16_t      *saved_short_tl  = drawvars.short_topleft;
+      unsigned int  *saved_int_tl    = drawvars.int_topleft;
+
+      if (!wi_bg_cache)
+        wi_bg_cache = (uint16_t*)malloc((size_t)MAX_SCREENWIDTH
+                                        * MAX_SCREENHEIGHT
+                                        * SURFACE_PIXEL_DEPTH);
+
+      if (wi_bg_cache)
+      {
+        screens[FB].data       = (unsigned char *)wi_bg_cache;
+        drawvars.short_topleft = wi_bg_cache;
+        drawvars.int_topleft   = (unsigned int *)wi_bg_cache;
+
+        if (!V_DrawRGBAFullScreen(FB, W_CheckNumForName(name)))
+          V_DrawNamePatchFS(0, 0, FB, name, CR_DEFAULT, VPT_STRETCH);
+
+        screens[FB].data       = saved_data;
+        drawvars.short_topleft = saved_short_tl;
+        drawvars.int_topleft   = saved_int_tl;
+
+        strcpy(wi_bg_cache_name, name);
+        wi_bg_cache_w   = SCREENWIDTH;
+        wi_bg_cache_h   = SCREENHEIGHT;
+        wi_bg_cache_pal = V_Palette16;
+      }
+      else
+      {
+        /* allocation failed -- draw directly, uncached */
+        if (!V_DrawRGBAFullScreen(FB, W_CheckNumForName(name)))
+          V_DrawNamePatchFS(0, 0, FB, name, CR_DEFAULT, VPT_STRETCH);
+        return;
+      }
+    }
+
+    memcpy(screens[FB].data, wi_bg_cache, fb_bytes);
+  }
 }
 
 
@@ -867,6 +948,11 @@ static void WI_drawPercent(int x, int y, int p)
 // CPhipps - static
 //         - largely rewritten to display hours and use slightly better algorithm
 
+/* ZDoom MAPINFO sucktime: hours past which the level clock shows SUCKS
+ * (chex3.wad sets 1 on every map); 0 keeps the vanilla never-in-practice
+ * 100-hour threshold.  Applies to the level time only. */
+static int wi_suckhours;
+
 static void WI_drawTime(int x, int y, int t)
 {
   int   n;
@@ -874,7 +960,7 @@ static void WI_drawTime(int x, int y, int t)
   if (t<0)
     return;
 
-  if (t < 100*60*60)
+  if (t < (wi_suckhours ? wi_suckhours*60*60 : 100*60*60))
     for(;;) {
       n = t % 60;
       t /= 60;
@@ -900,6 +986,7 @@ static void WI_drawTime(int x, int y, int t)
 //
 void WI_End(void)
 {
+  WI_FreeBackgroundCache();
   if (deathmatch)
     WI_endDeathmatchStats();
   else if (netgame)
@@ -934,7 +1021,9 @@ void WI_initNoState(void)
 static void WI_drawTimeStats(int cnt_time, int cnt_total_time, int cnt_par)
 {
   V_DrawNamePatch(SP_TIMEX, SP_TIMEY, FB, time1, CR_DEFAULT, VPT_STRETCH);
+  wi_suckhours = gamemapinfo ? U_ZMapSuckTime(gamemapinfo) : 0;
   WI_drawTime(320/2 - SP_TIMEX, SP_TIMEY, cnt_time);
+  wi_suckhours = 0;
 
   V_DrawNamePatch(SP_TIMEX, (SP_TIMEY+200)/2, FB, total, CR_DEFAULT, VPT_STRETCH);
   WI_drawTime(320/2 - SP_TIMEX, (SP_TIMEY+200)/2, cnt_total_time);
@@ -1939,6 +2028,8 @@ void WI_checkForAccelerate(void)
 //
 void WI_Ticker(void)
 {
+  if (heretic) { IN_Ticker(); return; }
+  if (hexen) { Hexen_IN_Ticker(); return; }
   // counter for general background animation
   bcnt++;
 
@@ -2034,6 +2125,8 @@ void WI_loadData(void)
 //
 void WI_Drawer (void)
 {
+  if (heretic) { IN_Drawer(); return; }
+  if (hexen) { Hexen_IN_Drawer(); return; }
   switch (state)
   {
     case StatCount:
@@ -2097,6 +2190,8 @@ void WI_initVariables(wbstartstruct_t* wbstartstruct)
 //
 void WI_Start(wbstartstruct_t* wbstartstruct)
 {
+  if (heretic) { IN_Start(wbstartstruct); return; }
+  if (hexen) { Hexen_IN_Start(wbstartstruct); return; }
   WI_initVariables(wbstartstruct);
   WI_loadData();
 

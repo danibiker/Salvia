@@ -37,16 +37,12 @@
 extern int ms_to_next_tick;
 dbool   I_StartDisplay(void);
 void I_EndDisplay(void);
-int I_GetTime_RealTime(void);     /* killough */
-#ifndef PRBOOM_SERVER
-fixed_t I_GetTimeFrac (void);
-#endif
-void I_GetTime_SaveMS(void);
+
+/* High-resolution wall-clock in microseconds (libretro perf interface),
+ * for the optional -DPRBOOM_RENDER_PROFILE render profiler. */
+double I_RenderProfileUsec(void);
 
 unsigned long I_GetRandomTimeSeed(void); /* cphipps */
-
-void I_uSleep(unsigned long usecs);
-
 /* cphipps - I_SigString
  * Returns a string describing a signal number
  */

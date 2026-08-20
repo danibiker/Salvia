@@ -37,20 +37,38 @@
 #include "p_mobj.h"
 #include "p_maputl.h"
 #include "p_map.h"
+#include "u_decorate.h"
+#include "p_conversation.h"
+#include "p_slope.h"
 #include "p_setup.h"
+#include "p_tick.h"
 #include "p_spec.h"
+#include "map_format.h"
+#include "hexen/p_spec_hexen.h"
+#include "hexen/p_acs.h"
+
+extern mobjtype_t PuffType;   /* puff actor the next hitscan/melee spawns */
 #include "s_sound.h"
 #include "sounds.h"
 #include "p_inter.h"
+#include "u_zsecact.h"
+#include "p_ffloor.h"
 #include "m_random.h"
 #include "m_bbox.h"
 #include "lprintf.h"
+#include "r_decal.h"
 
 #ifdef PSX
 #include <stddef.h>
 #endif
 
 static mobj_t    *tmthing;
+mobj_t *ffloor_clip_thing;   /* p_maputl's 3D-floor opening clip context */
+
+/* Raven (Hexen/Heretic): the most recent thing that blocked a move -- read
+ * by missile-impact codepointers (e.g. the Cleric Flame Strike) to know what
+ * was hit.  Only maintained for Raven games. */
+mobj_t *BlockingMobj;
 static fixed_t   tmx;
 static fixed_t   tmy;
 static int pe_x; // Pain Elemental position for Lost Soul checks // phares
@@ -90,6 +108,17 @@ line_t **spechit;                // new code -- killough
 static int spechit_max;          // killough
 
 int numspechit;
+
+/* Releases the crossed-special-lines list.  The array is grown to a
+ * high-water mark and reused, so the capacity has to fall back to zero
+ * with the pointer for the next session to allocate its own. */
+void P_MapDeinit(void)
+{
+   Z_Free(spechit);
+   spechit     = NULL;
+   spechit_max = 0;
+   numspechit  = 0;
+}
 
 // Temporary holder for thing_sectorlist threads
 msecnode_t* sector_list = NULL;                             // phares 3/16/98
@@ -274,7 +303,7 @@ dbool P_TeleportMove (mobj_t* thing,fixed_t x,fixed_t y, dbool boss)
 
   // kill anything occupying the position
 
-  tmthing = thing;
+  tmthing = ffloor_clip_thing = thing;
 
   tmx = x;
   tmy = y;
@@ -292,8 +321,16 @@ dbool P_TeleportMove (mobj_t* thing,fixed_t x,fixed_t y, dbool boss)
   // Any contacted lines the step closer together
   // will adjust them.
 
-  tmfloorz = tmdropoffz = newsubsec->sector->floorheight;
-  tmceilingz = newsubsec->sector->ceilingheight;
+  tmfloorz = tmdropoffz = P_FloorZAtPoint(newsubsec->sector, x, y);
+  tmceilingz = P_CeilingZAtPoint(newsubsec->sector, x, y);
+  if (newsubsec->sector->ffloors)
+  {
+    tmfloorz = P_FFloorAdjustFloorZ(newsubsec->sector, x, y, thing->z,
+                                    thing->height, tmfloorz);
+    tmdropoffz = tmfloorz;
+    tmceilingz = P_FFloorAdjustCeilingZ(newsubsec->sector, x, y, thing->z,
+                                        thing->height, tmceilingz);
+  }
 
   validcount++;
   numspechit = 0;
@@ -313,6 +350,9 @@ dbool P_TeleportMove (mobj_t* thing,fixed_t x,fixed_t y, dbool boss)
   // the move is ok,
   // so unlink from the old position & link into the new position
 
+  {
+    sector_t *zsa_oldsector = thing->subsector->sector;
+
   P_UnsetThingPosition (thing);
 
   thing->floorz = tmfloorz;
@@ -323,6 +363,13 @@ dbool P_TeleportMove (mobj_t* thing,fixed_t x,fixed_t y, dbool boss)
   thing->y = y;
 
   P_SetThingPosition (thing);
+
+  /* ZDoom sector actions: teleport arrivals fire the destination
+   * sector's Enter (silent-teleport chains rely on this) */
+  if (map_format.zdoom && thing->player &&
+      thing->subsector->sector != zsa_oldsector)
+    U_ZSecActTrigger(thing->subsector->sector, ZSECACT_ENTER, thing);
+  }
 
   thing->PrevX = x;
   thing->PrevY = y;
@@ -416,6 +463,28 @@ dbool PIT_CheckLine (line_t* ld)
   // killough 7/24/98: allow player to move out of 1s wall, to prevent sticking
   if (!ld->backsector) // one sided line
     {
+      /* Heretic: missiles hitting a one-sided special wall remember it so
+       * the failed move can gun-trigger it (vanilla PIT_CheckLine +
+       * CheckMissileImpact). */
+      if (heretic && (tmthing->flags & MF_MISSILE) && ld->special)
+      {
+        if (numspechit >= spechit_max)
+        {
+          spechit_max = spechit_max ? spechit_max * 2 : 8;
+          spechit = realloc(spechit, sizeof *spechit * spechit_max);
+        }
+        spechit[numspechit++] = ld;
+      }
+
+      /* Hexen: a thing running or shooting into a wall fires its push or
+       * impact activation (vanilla PIT_CheckLine; blasted things take
+       * impact damage here too). */
+      if (hexen)
+      {
+        if (tmthing->flags2 & MF2_BLASTED)
+          P_DamageMobj(tmthing, NULL, NULL, (int)(tmthing->info->mass >> 5));
+        P_CheckForPushSpecial(ld, 0, tmthing);
+      }
       blockline = ld;
       return tmunstuck && !untouched(ld) &&
   FixedMul(tmx-tmthing->x,ld->dy) > FixedMul(tmy-tmthing->y,ld->dx);
@@ -424,19 +493,40 @@ dbool PIT_CheckLine (line_t* ld)
   // killough 8/10/98: allow bouncing objects to pass through as missiles
   if (!(tmthing->flags & (MF_MISSILE | MF_BOUNCES)))
     {
-      if (ld->flags & ML_BLOCKING)           // explicitly blocking everything
-  return tmunstuck && !untouched(ld);  // killough 8/1/98: allow escape
+      if (ld->flags & ML_BLOCKING ||        // explicitly blocking everything
+          /* MBF21: line blocks players (bit 13).  Hexen-format maps use
+           * bit 13 for ZDoom's monsters-can-activate (sanitized away at
+           * load) and bit 12 as part of the activation field, so the
+           * MBF21 reading only applies to Doom-format maps. */
+          (mbf21_features && !map_format.hexen && tmthing->player &&
+           (ld->flags & ML_BLOCKPLAYERS)))
+        {
+          if (hexen)
+          {
+            if (tmthing->flags2 & MF2_BLASTED)
+              P_DamageMobj(tmthing, NULL, NULL, (int)(tmthing->info->mass >> 5));
+            P_CheckForPushSpecial(ld, 0, tmthing);
+          }
+          return tmunstuck && !untouched(ld);  // killough 8/1/98: allow escape
+        }
 
       // killough 8/9/98: monster-blockers don't affect friends
       if (!(tmthing->flags & MF_FRIEND || tmthing->player)
-    && ld->flags & ML_BLOCKMONSTERS)
+    && (ld->flags & ML_BLOCKMONSTERS ||
+        /* MBF21: line blocks land (non-floating) monsters (bit 12).
+         * On hexen-format maps bit 12 belongs to the activation field
+         * (any SPAC of push/pcross would read as this), so Doom-format
+         * maps only. */
+        (mbf21_features && !map_format.hexen &&
+         (ld->flags & ML_BLOCKLANDMONSTERS) &&
+         !(tmthing->flags & MF_FLOAT))))
   return FALSE; // block monsters only
     }
 
   // set openrange, opentop, openbottom
   // these define a 'window' from one sector to another across this line
 
-  P_LineOpening (ld);
+  P_LineOpeningAt(ld, tmx, tmy);    /* heights at the move point (slopes) */
 
   // adjust floor & ceiling heights
 
@@ -479,6 +569,30 @@ dbool PIT_CheckLine (line_t* ld)
 // PIT_CheckThing
 //
 
+/* MBF21: decide whether a projectile from source may NOT damage target,
+ * based on projectile groups.  A PG_GROUPLESS target has no immunity even
+ * to its own species; a PG_DEFAULT target keeps vanilla same-species
+ * immunity; otherwise things in the same group are mutually immune.  Only
+ * consulted under mbf21_features, so vanilla behaviour is unchanged. */
+static dbool P_ProjectileImmune(mobj_t *target, mobj_t *source)
+{
+  return
+    ( /* PG_GROUPLESS means no immunity, even to own species */
+      mobjinfo[target->type].projectile_group != PG_GROUPLESS ||
+      target == source
+    ) &&
+    (
+      ( /* default behaviour, and things are the same type */
+        mobjinfo[target->type].projectile_group == PG_DEFAULT &&
+        source->type == target->type
+      ) ||
+      ( /* special behaviour, and things share a group */
+        mobjinfo[target->type].projectile_group != PG_DEFAULT &&
+        mobjinfo[target->type].projectile_group == mobjinfo[source->type].projectile_group
+      )
+    );
+}
+
 static dbool PIT_CheckThing(mobj_t *thing) // killough 3/26/98: make static
 {
   fixed_t blockdist;
@@ -502,6 +616,9 @@ static dbool PIT_CheckThing(mobj_t *thing) // killough 3/26/98: make static
 
   if (thing == tmthing)
     return TRUE;
+
+  if (raven)
+    BlockingMobj = thing;
 
   /* killough 11/98:
    *
@@ -529,6 +646,24 @@ static dbool PIT_CheckThing(mobj_t *thing) // killough 3/26/98: make static
       return TRUE;
     }
 
+  /* Raven MF2_PASSMOBJ things move over and under each other; imps,
+   * wizards, and bishops are kept from stacking on their own kind. */
+  if (raven && (tmthing->flags2 & MF2_PASSMOBJ))
+    {
+      if ((tmthing->type == HERETIC_MT_IMP || tmthing->type == HERETIC_MT_WIZARD)
+          && (thing->type == HERETIC_MT_IMP || thing->type == HERETIC_MT_WIZARD))
+        return FALSE;           /* don't fly over other imps/wizards */
+      if (tmthing->type == HEXEN_MT_BISHOP && thing->type == HEXEN_MT_BISHOP)
+        return FALSE;           /* don't fly over other bishops */
+      if ((hexen ? tmthing->z >= thing->z + thing->height
+                 : tmthing->z >  thing->z + thing->height)
+          && !(thing->flags & MF_SPECIAL))
+        return TRUE;            /* over thing */
+      if (tmthing->z + tmthing->height < thing->z
+          && !(thing->flags & MF_SPECIAL))
+        return TRUE;            /* under thing */
+    }
+
   // check for skulls slamming into things
 
   if (tmthing->flags & MF_SKULLFLY)
@@ -536,16 +671,99 @@ static dbool PIT_CheckThing(mobj_t *thing) // killough 3/26/98: make static
       // A flying skull is smacking something.
       // Determine damage amount, and the skull comes to a dead stop.
 
-      int damage = ((P_Random(pr_skullfly)%8)+1)*tmthing->info->damage;
+      int damage;
+
+      if (hexen && tmthing->type == HEXEN_MT_MINOTAUR)
+        {
+          /* slamming minotaurs shouldn't move non-creatures */
+          if (!(thing->flags & MF_COUNTKILL))
+            return FALSE;
+        }
+      else if (hexen && tmthing->type == HEXEN_MT_HOLY_FX)
+        {
+          /* The Wraithverge spirit: it latches onto whatever it brushes,
+           * chewing at it while it circles -- 12 per bite on monsters, 3 on
+           * players and bosses at the cost of its own lifetime, with the
+           * holy puff and attack shriek about half the time. */
+          if (thing->flags & MF_SHOOTABLE && thing != tmthing->target)
+            {
+              if (netgame && !deathmatch && thing->player)
+                return TRUE;    /* don't attack co-op players */
+              if (thing->flags2 & MF2_REFLECTIVE
+                  && (thing->player || thing->flags2 & MF2_BOSS))
+                {
+                  P_SetTarget(&tmthing->special1.m, tmthing->target);
+                  P_SetTarget(&tmthing->target, thing);
+                  return TRUE;
+                }
+              if (thing->flags & MF_COUNTKILL || thing->player)
+                P_SetTarget(&tmthing->special1.m, thing);
+              if (P_Random(pr_heretic) < 96)
+                {
+                  damage = 12;
+                  if (thing->player || thing->flags2 & MF2_BOSS)
+                    {
+                      damage = 3;
+                      /* the ghost burns out faster attacking players/bosses */
+                      tmthing->health -= 6;
+                    }
+                  P_DamageMobj(thing, tmthing, tmthing->target, damage);
+                  if (P_Random(pr_heretic) < 128)
+                    {
+                      P_SpawnMobj(tmthing->x, tmthing->y, tmthing->z,
+                                  HEXEN_MT_HOLY_PUFF);
+                      S_StartSound(tmthing, hexen_sfx_spirit_attack);
+                      if (thing->flags & MF_COUNTKILL
+                          && P_Random(pr_heretic) < 128
+                          && !S_GetSoundPlayingInfo(thing, hexen_sfx_puppybeat))
+                        {
+                          if (thing->type == HEXEN_MT_CENTAUR ||
+                              thing->type == HEXEN_MT_CENTAURLEADER ||
+                              thing->type == HEXEN_MT_ETTIN)
+                            S_StartSound(thing, hexen_sfx_puppybeat);
+                        }
+                    }
+                }
+              if (thing->health <= 0)
+                {
+                  tmthing->special1.i = 0;
+                  P_SetTarget(&tmthing->special1.m, NULL);
+                }
+            }
+          return TRUE;
+        }
+
+      damage = ((P_Random(pr_skullfly)%8)+1)*tmthing->info->damage;
 
       P_DamageMobj (thing, tmthing, tmthing, damage);
 
       tmthing->flags &= ~MF_SKULLFLY;
       tmthing->momx = tmthing->momy = tmthing->momz = 0;
 
-      P_SetMobjState (tmthing, tmthing->info->spawnstate);
+      P_SetMobjState (tmthing, raven ? tmthing->info->seestate
+                                     : tmthing->info->spawnstate);
 
       return FALSE;   // stop moving
+    }
+
+  /* Raven: a blasted (Disc of Repulsion) thing crashing into another --
+   * both take collision damage and the struck monster is shoved along. */
+  if ((tmthing->flags2 & MF2_BLASTED) && (thing->flags & MF_SHOOTABLE))
+    {
+      if (!(thing->flags2 & MF2_BOSS) && (thing->flags & MF_COUNTKILL))
+        {
+          int damage;
+          thing->momx += tmthing->momx;
+          thing->momy += tmthing->momy;
+          if ((thing->momx + thing->momy) > 3 * FRACUNIT)
+            {
+              damage = (tmthing->info->mass / 100) + 1;
+              P_DamageMobj(thing, tmthing, tmthing, damage);
+              damage = (thing->info->mass / 100) + 1;
+              P_DamageMobj(tmthing, thing, thing, damage >> 2);
+            }
+          return FALSE;
+        }
     }
 
   // missiles can hit other things
@@ -554,6 +772,14 @@ static dbool PIT_CheckThing(mobj_t *thing) // killough 3/26/98: make static
   if (tmthing->flags & MF_MISSILE || (tmthing->flags & MF_BOUNCES &&
               !(tmthing->flags & MF_SOLID)))
     {
+      /* Raven: solid-but-unshootable things and ghosts let the right
+       * missiles through. */
+      if (raven && (thing->flags2 & MF2_NONSHOOTABLE))
+        return TRUE;
+      if (raven && (thing->flags & MF_SHADOW) &&
+          (tmthing->flags2 & MF2_THRUGHOST))
+        return TRUE;
+
       // see if it went over / under
 
       if (tmthing->z > thing->z + thing->height)
@@ -562,9 +788,107 @@ static dbool PIT_CheckThing(mobj_t *thing) // killough 3/26/98: make static
       if (tmthing->z+tmthing->height < thing->z)
   return TRUE;    // underneath
 
-      if (tmthing->target && (tmthing->target->type == thing->type ||
-    (tmthing->target->type == MT_KNIGHT && thing->type == MT_BRUISER)||
-    (tmthing->target->type == MT_BRUISER && thing->type == MT_KNIGHT)))
+      /* Hexen floor-bouncers in flight only collide with solids that are
+       * not their own shooter; everything else lets them pass. */
+      if (hexen && (tmthing->flags2 & MF2_FLOORBOUNCE))
+        return (tmthing->target == thing || !(thing->flags & MF_SOLID))
+               ? TRUE : FALSE;
+
+      /* The Arc of Death: the lightning columns zap through every sprite
+       * in their path, chewing 3 (9 on centaurs, whose shields are no use)
+       * out of whatever they cross each tick they can, shoving it along,
+       * spending their own lifetime, and remembering a victim for the
+       * connecting zap segments to seek. */
+      if (hexen && (tmthing->type == HEXEN_MT_LIGHTNING_FLOOR ||
+                    tmthing->type == HEXEN_MT_LIGHTNING_CEILING))
+        {
+          if (thing->flags & MF_SHOOTABLE && thing != tmthing->target)
+            {
+              if (thing->info->mass != INT_MAX)
+                {
+                  thing->momx += tmthing->momx >> 4;
+                  thing->momy += tmthing->momy >> 4;
+                }
+              if ((!thing->player && !(thing->flags2 & MF2_BOSS))
+                  || !(leveltime & 1))
+                {
+                  if (thing->type == HEXEN_MT_CENTAUR ||
+                      thing->type == HEXEN_MT_CENTAURLEADER)
+                    P_DamageMobj(thing, tmthing, tmthing->target, 9);
+                  else
+                    P_DamageMobj(thing, tmthing, tmthing->target, 3);
+                  if (!S_GetSoundPlayingInfo(tmthing,
+                                             hexen_sfx_mage_lightning_zap))
+                    S_StartSound(tmthing, hexen_sfx_mage_lightning_zap);
+                  if (thing->flags & MF_COUNTKILL && P_Random(pr_heretic) < 64
+                      && !S_GetSoundPlayingInfo(thing, hexen_sfx_puppybeat))
+                    {
+                      if (thing->type == HEXEN_MT_CENTAUR ||
+                          thing->type == HEXEN_MT_CENTAURLEADER ||
+                          thing->type == HEXEN_MT_ETTIN)
+                        S_StartSound(thing, hexen_sfx_puppybeat);
+                    }
+                }
+              tmthing->health--;
+              if (tmthing->health <= 0 || thing->health <= 0)
+                return FALSE;
+              if (tmthing->type == HEXEN_MT_LIGHTNING_FLOOR)
+                {
+                  if (tmthing->special2.m && !tmthing->special2.m->special1.m)
+                    P_SetTarget(&tmthing->special2.m->special1.m, thing);
+                }
+              else if (!tmthing->special1.m)
+                P_SetTarget(&tmthing->special1.m, thing);
+            }
+          return TRUE;          /* lightning zaps through all sprites */
+        }
+
+      if (hexen && tmthing->type == HEXEN_MT_LIGHTNING_ZAP)
+        {
+          /* the connecting zaps feed their column's victim bookkeeping */
+          if (thing->flags & MF_SHOOTABLE && thing != tmthing->target)
+            {
+              mobj_t *lmo = tmthing->special2.m;
+              if (lmo)
+                {
+                  if (lmo->type == HEXEN_MT_LIGHTNING_FLOOR)
+                    {
+                      if (lmo->special2.m && !lmo->special2.m->special1.m)
+                        P_SetTarget(&lmo->special2.m->special1.m, thing);
+                    }
+                  else if (!lmo->special1.m)
+                    P_SetTarget(&lmo->special1.m, thing);
+                  if (!(leveltime & 3))
+                    lmo->health--;
+                }
+            }
+        }
+      else if (hexen && tmthing->type == HEXEN_MT_MSTAFF_FX2 &&
+               thing != tmthing->target)
+        {
+          /* The Bloodscourge rips through ordinary monsters (10 a touch),
+           * only detonating on players, bosses, and the class triad. */
+          if (!thing->player && !(thing->flags2 & MF2_BOSS))
+            {
+              switch (thing->type)
+                {
+                  case HEXEN_MT_FIGHTER_BOSS:   /* not flagged boss so they */
+                  case HEXEN_MT_CLERIC_BOSS:    /* can be blasted around */
+                  case HEXEN_MT_MAGE_BOSS:
+                    break;
+                  default:
+                    P_DamageMobj(thing, tmthing, tmthing->target, 10);
+                    return TRUE;
+                }
+            }
+        }
+
+      if (tmthing->target &&
+          (mbf21_features
+           ? P_ProjectileImmune(thing, tmthing->target)
+           : (tmthing->target->type == thing->type ||
+              (tmthing->target->type == MT_KNIGHT && thing->type == MT_BRUISER)||
+              (tmthing->target->type == MT_BRUISER && thing->type == MT_KNIGHT))))
       {
   if (thing == tmthing->target)
     return TRUE;                // Don't hit same species as originator.
@@ -595,13 +919,82 @@ static dbool PIT_CheckThing(mobj_t *thing) // killough 3/26/98: make static
       if (!(thing->flags & MF_SHOOTABLE))
   return !(thing->flags & MF_SOLID); // didn't do any damage
 
+      /* Hexen: a missile striking a reflective thing (the Centaur's raised
+       * shield, the Heresiarch) is blocked without damage; P_XYMovement
+       * reflects it off BlockingMobj vanilla-style.  RIP missiles are not
+       * reflected.  Damage to the shield bearer is separately shrugged off
+       * through MF2_INVULNERABLE in P_DamageMobj. */
+      if (hexen && (thing->flags2 & MF2_REFLECTIVE) &&
+          !(tmthing->flags2 & MF2_RIP))
+        return FALSE;
+
+      /* Raven ripper missiles (the Mage's Wand shots, the Bloodscourge
+       * balls): tear through with their own damage dice and a spray of
+       * blood, shoving pushable things along, and never stop traversing.
+       * The recursion through P_DamageMobj can reset the spechit
+       * accounting, so it is cleared the way dsda-doom does. */
+      if (raven && (tmthing->flags2 & MF2_RIP))
+        {
+          if (!(thing->flags & MF_NOBLOOD) &&
+              !(thing->flags2 & MF2_REFLECTIVE) &&
+              !(thing->flags2 & MF2_INVULNERABLE))
+            P_RipperBlood(tmthing, thing);
+          if (heretic)
+            S_StartSound(tmthing, heretic_sfx_ripslop);
+          damage = ((P_Random(pr_heretic) & 3) + 2) * tmthing->info->damage;
+          P_DamageMobj(thing, tmthing, tmthing->target, damage);
+          if ((thing->flags2 & MF2_PUSHABLE) &&
+              !(tmthing->flags2 & MF2_CANNOTPUSH))
+            {                   /* push thing */
+              thing->momx += tmthing->momx >> 2;
+              thing->momy += tmthing->momy >> 2;
+            }
+          numspechit = 0;
+          return TRUE;
+        }
+
       // damage / explode
 
       damage = ((P_Random(pr_damage)%8)+1)*tmthing->info->damage;
-      P_DamageMobj (thing, tmthing, tmthing->target, damage);
+      /* Hexen: a solid missile hit splatters blood (telefrag missiles, the
+       * unbleeding, the shielded, and the invulnerable excepted).  The
+       * fork's P_BloodSplatter spawns the hexen splatter type, so heretic
+       * keeps its current behaviour for now. */
+      if (hexen && damage &&
+          !(thing->flags & MF_NOBLOOD) &&
+          !(thing->flags2 & MF2_REFLECTIVE) &&
+          !(thing->flags2 & MF2_INVULNERABLE) &&
+          tmthing->type != HEXEN_MT_TELOTHER_FX1 &&
+          tmthing->type != HEXEN_MT_TELOTHER_FX2 &&
+          tmthing->type != HEXEN_MT_TELOTHER_FX3 &&
+          tmthing->type != HEXEN_MT_TELOTHER_FX4 &&
+          tmthing->type != HEXEN_MT_TELOTHER_FX5 &&
+          P_Random(pr_heretic) < 192)
+        P_BloodSplatter(tmthing->x, tmthing->y, tmthing->z, thing);
+      if (!raven || damage)
+        P_DamageMobj (thing, tmthing, tmthing->target, damage);
+
+      /* MBF21: ripper projectiles pass through and keep travelling rather
+       * than exploding on impact, optionally playing a rip sound.  flags2
+       * is zero outside complevel 21, so non-ripper missiles are unchanged. */
+      if (tmthing->flags2 & MF2_RIP)
+        {
+          if (tmthing->info->ripsound)
+            S_StartSound(tmthing, tmthing->info->ripsound);
+          return TRUE; // keep traversing
+        }
 
       // don't traverse any more
       return FALSE;
+    }
+
+  /* Raven: pushable things (the pottery) are shoved along by whatever
+   * walks into them. */
+  if (raven && (thing->flags2 & MF2_PUSHABLE) &&
+      !(tmthing->flags2 & MF2_CANNOTPUSH))
+    {
+      thing->momx += tmthing->momx >> 2;
+      thing->momy += tmthing->momy >> 2;
     }
 
   // check for special pickup
@@ -700,6 +1093,169 @@ dbool Check_Sides(mobj_t* actor, int x, int y)
 //   (monsters won't move to a dropoff)
 //  speciallines[]
 //  numspeciallines
+/* --- Raven on-mobj z checking (P_CheckOnmobj) ------------------------- */
+
+static mobj_t *onmobj;          /* generic global onmobj...used for landing on pods/players */
+
+/* Fake the zmovement so the thing's z can be tested against other mobjs
+ * before the real P_ZMovement commits anything. */
+static void P_FakeZMovement(mobj_t *mo)
+{
+  int dist;
+  int delta;
+
+  /* adjust height */
+  mo->z += mo->momz;
+  if (mo->flags & MF_FLOAT && mo->target)
+  {                             /* float down towards target if too close */
+    if (!(mo->flags & MF_SKULLFLY) && !(mo->flags & MF_INFLOAT))
+    {
+      dist = P_AproxDistance(mo->x - mo->target->x, mo->y - mo->target->y);
+      delta = (mo->target->z + (mo->height >> 1)) - mo->z;
+      if (delta < 0 && dist < -(delta * 3))
+        mo->z -= FLOATSPEED;
+      else if (delta > 0 && dist < (delta * 3))
+        mo->z += FLOATSPEED;
+    }
+  }
+  if (mo->player && mo->flags2 & MF2_FLY && !(mo->z <= mo->floorz)
+      && leveltime & 2)
+  {
+    mo->z += finesine[(FINEANGLES / 20 * leveltime >> 2) & FINEMASK];
+  }
+
+  /* clip movement */
+  if (mo->z <= mo->floorz)
+  {                             /* hit the floor */
+    mo->z = mo->floorz;
+    if (mo->momz < 0)
+      mo->momz = 0;
+    if (mo->flags & MF_SKULLFLY)
+    {                           /* the skull slammed into something */
+      mo->momz = -mo->momz;
+    }
+    if (mo->info->crashstate && (mo->flags & MF_CORPSE))
+      return;
+  }
+  else if (mo->flags2 & MF2_LOGRAV)
+  {
+    if (mo->momz == 0)
+      mo->momz = -(GRAVITY >> 3) * 2;
+    else
+      mo->momz -= GRAVITY >> 3;
+  }
+  else if (!(mo->flags & MF_NOGRAVITY))
+  {
+    if (mo->momz == 0)
+      mo->momz = -GRAVITY * 2;
+    else
+      mo->momz -= GRAVITY;
+  }
+
+  if (mo->z + mo->height > mo->ceilingz)
+  {                             /* hit the ceiling */
+    if (mo->momz > 0)
+      mo->momz = 0;
+    mo->z = mo->ceilingz - mo->height;
+    if (mo->flags & MF_SKULLFLY)
+    {                           /* the skull slammed into something */
+      mo->momz = -mo->momz;
+    }
+  }
+}
+
+static dbool PIT_CheckOnmobjZ(mobj_t *thing)
+{
+  fixed_t blockdist;
+
+  if (!(thing->flags & (MF_SOLID | MF_SPECIAL | MF_SHOOTABLE)))
+  {                             /* can't hit thing */
+    return true;
+  }
+  blockdist = thing->radius + tmthing->radius;
+  if (D_abs(thing->x - tmx) >= blockdist || D_abs(thing->y - tmy) >= blockdist)
+  {                             /* didn't hit thing */
+    return true;
+  }
+  if (thing == tmthing)
+  {                             /* don't clip against self */
+    return true;
+  }
+  if (tmthing->z > thing->z + thing->height)
+  {
+    return true;
+  }
+  else if (tmthing->z + tmthing->height < thing->z)
+  {                             /* under thing */
+    return true;
+  }
+  if (thing->flags & MF_SOLID)
+    onmobj = thing;
+  return !(thing->flags & MF_SOLID);
+}
+
+/* Checks if the thing's faked new z position rests on another mobj;
+ * returns that mobj, or NULL when the z movement is clear. */
+mobj_t *P_CheckOnmobj(mobj_t *thing)
+{
+  int xl, xh, yl, yh, bx, by;
+  sector_t *newsec;
+  fixed_t x;
+  fixed_t y;
+  mobj_t oldmo;
+
+  x = thing->x;
+  y = thing->y;
+  tmthing = ffloor_clip_thing = thing;
+  oldmo = *thing;               /* save the old mobj before the fake zmovement */
+  P_FakeZMovement(tmthing);
+
+  tmx = x;
+  tmy = y;
+
+  tmbbox[BOXTOP] = y + tmthing->radius;
+  tmbbox[BOXBOTTOM] = y - tmthing->radius;
+  tmbbox[BOXRIGHT] = x + tmthing->radius;
+  tmbbox[BOXLEFT] = x - tmthing->radius;
+
+  newsec = R_PointInSubsector(x, y)->sector;
+  ceilingline = NULL;
+
+  /* The base floor / ceiling is from the subsector that contains the
+   * point.  Any contacted lines the step closer together will adjust
+   * them. */
+  tmfloorz = tmdropoffz = newsec->floorheight;
+  tmceilingz = newsec->ceilingheight;
+
+  validcount++;
+  numspechit = 0;
+
+  if (thing->flags & MF_NOCLIP)
+  {
+    *tmthing = oldmo;
+    return NULL;
+  }
+
+  /* Check things first, possibly picking things up.  The bounding box is
+   * extended by MAXRADIUS because mobj_ts are grouped into mapblocks
+   * based on their origin point, and can overlap into adjacent blocks by
+   * up to MAXRADIUS units. */
+  xl = (tmbbox[BOXLEFT] - bmaporgx - MAXRADIUS) >> MAPBLOCKSHIFT;
+  xh = (tmbbox[BOXRIGHT] - bmaporgx + MAXRADIUS) >> MAPBLOCKSHIFT;
+  yl = (tmbbox[BOXBOTTOM] - bmaporgy - MAXRADIUS) >> MAPBLOCKSHIFT;
+  yh = (tmbbox[BOXTOP] - bmaporgy + MAXRADIUS) >> MAPBLOCKSHIFT;
+
+  for (bx = xl; bx <= xh; bx++)
+    for (by = yl; by <= yh; by++)
+      if (!P_BlockThingsIterator(bx, by, PIT_CheckOnmobjZ))
+      {
+        *tmthing = oldmo;
+        return onmobj;
+      }
+  *tmthing = oldmo;
+  return NULL;
+}
+
 //
 
 dbool P_CheckPosition (mobj_t* thing,fixed_t x,fixed_t y)
@@ -712,7 +1268,7 @@ dbool P_CheckPosition (mobj_t* thing,fixed_t x,fixed_t y)
   int     by;
   subsector_t*  newsubsec;
 
-  tmthing = thing;
+  tmthing = ffloor_clip_thing = thing;
 
   tmx = x;
   tmy = y;
@@ -735,8 +1291,16 @@ dbool P_CheckPosition (mobj_t* thing,fixed_t x,fixed_t y)
   // Any contacted lines the step closer together
   // will adjust them.
 
-  tmfloorz = tmdropoffz = newsubsec->sector->floorheight;
-  tmceilingz = newsubsec->sector->ceilingheight;
+  tmfloorz = tmdropoffz = P_FloorZAtPoint(newsubsec->sector, x, y);
+  tmceilingz = P_CeilingZAtPoint(newsubsec->sector, x, y);
+  if (newsubsec->sector->ffloors)
+  {
+    tmfloorz = P_FFloorAdjustFloorZ(newsubsec->sector, x, y, thing->z,
+                                    thing->height, tmfloorz);
+    tmdropoffz = tmfloorz;
+    tmceilingz = P_FFloorAdjustCeilingZ(newsubsec->sector, x, y, thing->z,
+                                        thing->height, tmceilingz);
+  }
   validcount++;
   numspechit = 0;
 
@@ -754,6 +1318,8 @@ dbool P_CheckPosition (mobj_t* thing,fixed_t x,fixed_t y)
   yl = (tmbbox[BOXBOTTOM] - bmaporgy - MAXRADIUS)>>MAPBLOCKSHIFT;
   yh = (tmbbox[BOXTOP] - bmaporgy + MAXRADIUS)>>MAPBLOCKSHIFT;
 
+
+  BlockingMobj = NULL;
 
   for (bx=xl ; bx<=xh ; bx++)
     for (by=yl ; by<=yh ; by++)
@@ -781,6 +1347,48 @@ dbool P_CheckPosition (mobj_t* thing,fixed_t x,fixed_t y)
 // Attempt to move to a new position,
 // crossing special lines unless MF_TELEPORT is set.
 //
+/* Hexen: a failed move fires push/impact activations on every special line
+ * the attempt touched, in reverse collection order (vanilla P_TryMove's
+ * pushline tail).  This is how the impact-activated lines that sit behind
+ * two-sided geometry -- Winnowing Hall's breakable windows -- are reached:
+ * the missile's move is rejected by the window's height opening, and the
+ * special fires from the spechit list. */
+static void Hexen_PushLineHits(mobj_t *thing)
+{
+  if (!(thing->flags & (MF_TELEPORT | MF_NOCLIP)))
+  {
+    int i;
+    int side;
+    line_t *ld;
+
+    if (thing->flags2 & MF2_BLASTED)
+      P_DamageMobj(thing, NULL, NULL, (int)(thing->info->mass >> 5));
+
+    for (i = numspechit - 1; i >= 0; i--)
+    {
+      ld = spechit[i];
+      side = P_PointOnLineSide(thing->x, thing->y, ld);
+      P_CheckForPushSpecial(ld, side, thing);
+    }
+  }
+}
+
+/* Heretic: a player's missile whose move was blocked gun-triggers every
+ * special line the attempt touched (vanilla CheckMissileImpact); this is
+ * how projectiles operate heretic's shoot-activated switches and walls,
+ * which doom reserves for hitscans. */
+static void Heretic_CheckMissileImpact(mobj_t *mobj)
+{
+  int i;
+
+  if (!numspechit || !(mobj->flags & MF_MISSILE) || !mobj->target)
+    return;
+  if (!mobj->target->player)
+    return;                     /* fired by a monster, not a player */
+  for (i = numspechit - 1; i >= 0; i--)
+    P_ShootSpecialLine(mobj->target, spechit[i]);
+}
+
 dbool P_TryMove(mobj_t* thing,fixed_t x,fixed_t y,
                   dbool dropoff) // killough 3/15/98: allow dropoff as option
   {
@@ -790,7 +1398,13 @@ dbool P_TryMove(mobj_t* thing,fixed_t x,fixed_t y,
   felldown = floatok = FALSE;               // killough 11/98
 
   if (!P_CheckPosition (thing, x, y))
-    return FALSE;   // solid wall or thing
+    {
+      if (map_format.hexen)
+        Hexen_PushLineHits(thing);
+      else if (heretic)
+        Heretic_CheckMissileImpact(thing);
+      return FALSE;   // solid wall or thing
+    }
 
   if ( !(thing->flags & MF_NOCLIP) )
     {
@@ -804,9 +1418,17 @@ dbool P_TryMove(mobj_t* thing,fixed_t x,fixed_t y,
     // too big a step up
     (!(thing->flags & MF_TELEPORT) &&
      tmfloorz - thing->z > STEPSIZE))
-  return tmunstuck
-    && !(ceilingline && untouched(ceilingline))
-    && !(  floorline && untouched(  floorline));
+        {
+          dbool unstuck = tmunstuck
+            && !(ceilingline && untouched(ceilingline))
+            && !(  floorline && untouched(  floorline));
+
+          if (map_format.hexen && !unstuck)
+            Hexen_PushLineHits(thing);
+          else if (heretic && !unstuck)
+            Heretic_CheckMissileImpact(thing);
+          return unstuck;
+        }
 
       /* killough 3/15/98: Allow certain objects to drop off
        * killough 7/24/98, 8/1/98:
@@ -855,6 +1477,9 @@ dbool P_TryMove(mobj_t* thing,fixed_t x,fixed_t y,
   // the move is ok,
   // so unlink from the old position and link into the new position
 
+  {
+    sector_t *zsa_oldsector = thing->subsector->sector;
+
   P_UnsetThingPosition (thing);
 
   oldx = thing->x;
@@ -870,13 +1495,41 @@ dbool P_TryMove(mobj_t* thing,fixed_t x,fixed_t y,
   // if any special lines were hit, do the effect
 
   if (! (thing->flags&(MF_TELEPORT|MF_NOCLIP)) )
-    while (numspechit--)
-      if (spechit[numspechit]->special)  // see if the line was crossed
-  {
-    int oldside;
-    if ((oldside = P_PointOnLineSide(oldx, oldy, spechit[numspechit])) !=
-        P_PointOnLineSide(thing->x, thing->y, spechit[numspechit]))
-      P_CrossSpecialLine(spechit[numspechit], oldside, thing);
+    {
+    if (hexen)
+      {
+      /* Crossing a hexen special line can spawn things or run scripts,
+       * recursing into the position checks and resetting numspechit
+       * mid-loop; iterate on a local index so the walk stays sane. */
+      int tempnumspechit = numspechit;
+      while (tempnumspechit--)
+        if (spechit[tempnumspechit]->special)
+          {
+          int oldside;
+          if ((oldside = P_PointOnLineSide(oldx, oldy,
+                                           spechit[tempnumspechit])) !=
+              P_PointOnLineSide(thing->x, thing->y, spechit[tempnumspechit]))
+            map_format.cross_special_line(spechit[tempnumspechit],
+                                          oldside, thing);
+          }
+      }
+    else
+      while (numspechit--)
+        if (spechit[numspechit]->special)  // see if the line was crossed
+    {
+      int oldside;
+      if ((oldside = P_PointOnLineSide(oldx, oldy, spechit[numspechit])) !=
+          P_PointOnLineSide(thing->x, thing->y, spechit[numspechit]))
+        map_format.cross_special_line(spechit[numspechit], oldside, thing);
+    }
+    }
+
+  /* ZDoom sector actions: a crossed special above may already have
+   * teleported the thing; the sector compared here is wherever it
+   * actually ended up, which is the sector whose Enter should fire. */
+  if (map_format.zdoom && thing->player &&
+      thing->subsector->sector != zsa_oldsector)
+    U_ZSecActTrigger(thing->subsector->sector, ZSECACT_ENTER, thing);
   }
 
   return TRUE;
@@ -983,7 +1636,7 @@ void P_ApplyTorque(mobj_t *mo)
        mo->y + mo->radius) - bmaporgy) >> MAPBLOCKSHIFT;
   int bx,by,flags = mo->intflags; //Remember the current state, for gear-change
 
-  tmthing = mo;
+  tmthing = ffloor_clip_thing = mo;
   validcount++; /* prevents checking same line twice */
 
   for (bx = xl ; bx <= xh ; bx++)
@@ -1041,9 +1694,15 @@ dbool P_ThingHeightClip (mobj_t* thing)
   if (onfloor)
     {
 
-    // walking monsters rise and fall with the floor
+    /* walking monsters rise and fall with the floor.  Hexen: a fast
+     * floor drop must not teleport things downward -- they only snap if
+     * still within 9 units of the new floor (or weightless); otherwise
+     * gravity brings them down naturally. */
 
-    thing->z = thing->floorz;
+    if (!hexen ||
+        (thing->z - thing->floorz < 9 * FRACUNIT) ||
+        (thing->flags & MF_NOGRAVITY))
+      thing->z = thing->floorz;
 
     /* killough 11/98: Possibly upset balance of objects hanging off ledges */
       if (thing->intflags & MIF_FALLING && thing->gear >= MAXGEAR)
@@ -1127,7 +1786,7 @@ void P_HitSlideLine (line_t* ld)
       {
       tmxmove /= 2; // absorb half the momentum
       tmymove = -tmymove/2;
-      S_StartSound(slidemo,sfx_oof); // oooff!
+      { if (!raven) S_StartSound(slidemo,sfx_oof); } // oooff! (raven slides silently)
       }
     else
       tmymove = 0; // no more movement in the Y direction
@@ -1140,7 +1799,7 @@ void P_HitSlideLine (line_t* ld)
       {
       tmxmove = -tmxmove/2; // absorb half the momentum
       tmymove /= 2;
-      S_StartSound(slidemo,sfx_oof); // oooff!                      //   ^
+      { if (!raven) S_StartSound(slidemo,sfx_oof); } // oooff! (raven slides silently)                      //   ^
       }                                                             //   |
     else                                                            // phares
       tmxmove = 0; // no more movement in the X direction
@@ -1170,7 +1829,7 @@ void P_HitSlideLine (line_t* ld)
     {
     moveangle = lineangle - deltaangle;
     movelen /= 2; // absorb
-    S_StartSound(slidemo,sfx_oof); // oooff!
+    { if (!raven) S_StartSound(slidemo,sfx_oof); } // oooff! (raven slides silently)
     moveangle >>= ANGLETOFINESHIFT;
     tmxmove = FixedMul (movelen, finecosine[moveangle]);
     tmymove = FixedMul (movelen, finesine[moveangle]);
@@ -1214,7 +1873,8 @@ dbool PTR_SlideTraverse (intercept_t* in)
   // set openrange, opentop, openbottom.
   // These define a 'window' from one sector to another across a line
 
-  P_LineOpening (li);
+  P_LineOpeningAt(li, trace.x + FixedMul(trace.dx, in->frac),
+                  trace.y + FixedMul(trace.dy, in->frac));
 
   if (openrange < slidemo->height)
     goto isblocking;  // doesn't fit
@@ -1361,6 +2021,82 @@ void P_SlideMove(mobj_t *mo)
   while (!P_TryMove(mo, mo->x+tmxmove, mo->y+tmymove, TRUE));
 }
 
+/* --- Hexen wall bouncing (the Heresiarch's balls, glass shards) -------- */
+
+static dbool PTR_BounceTraverse(intercept_t *in)
+{
+  line_t *li;
+
+  if (!in->isaline)
+    I_Error("PTR_BounceTraverse: not a line?");
+
+  li = in->d.line;
+
+  if (!(li->flags & ML_TWOSIDED))
+  {
+    if (P_PointOnLineSide(slidemo->x, slidemo->y, li))
+      return true;              /* don't hit the back side */
+    goto bounceblocking;
+  }
+
+  P_LineOpening(li);            /* set openrange, opentop, openbottom */
+  if (openrange < slidemo->height)
+    goto bounceblocking;        /* doesn't fit */
+  if (opentop - slidemo->z < slidemo->height)
+    goto bounceblocking;        /* mobj is too high */
+  return true;                  /* this line doesn't block movement */
+
+bounceblocking:                 /* the line blocks: remember the closest */
+  if (in->frac < bestslidefrac)
+  {
+    bestslidefrac = in->frac;
+    bestslideline = li;
+  }
+  return false;                 /* stop */
+}
+
+void P_BounceWall(mobj_t *mo)
+{
+  fixed_t leadx, leady;
+  int side;
+  angle_t lineangle, moveangle, deltaangle;
+  fixed_t movelen;
+
+  slidemo = mo;
+
+  /* trace along the leading corner */
+  if (mo->momx > 0)
+    leadx = mo->x + mo->radius;
+  else
+    leadx = mo->x - mo->radius;
+  if (mo->momy > 0)
+    leady = mo->y + mo->radius;
+  else
+    leady = mo->y - mo->radius;
+  bestslidefrac = FRACUNIT + 1;
+  bestslideline = NULL;
+  P_PathTraverse(leadx, leady, leadx + mo->momx, leady + mo->momy,
+                 PT_ADDLINES, PTR_BounceTraverse);
+  if (!bestslideline)
+    return;                     /* nothing to bounce off */
+
+  side = P_PointOnLineSide(mo->x, mo->y, bestslideline);
+  lineangle = R_PointToAngle2(0, 0, bestslideline->dx, bestslideline->dy);
+  if (side == 1)
+    lineangle += ANG180;
+  moveangle = R_PointToAngle2(0, 0, mo->momx, mo->momy);
+  deltaangle = (2 * lineangle) - moveangle;
+
+  deltaangle >>= ANGLETOFINESHIFT;
+
+  movelen = P_AproxDistance(mo->momx, mo->momy);
+  movelen = FixedMul(movelen, (fixed_t)(0.75 * FRACUNIT));   /* friction */
+  if (movelen < FRACUNIT)
+    movelen = 2 * FRACUNIT;
+  mo->momx = FixedMul(movelen, finecosine[deltaangle]);
+  mo->momy = FixedMul(movelen, finesine[deltaangle]);
+}
+
 //
 // P_LineAttack
 //
@@ -1501,7 +2237,7 @@ dbool PTR_ShootTraverse (intercept_t* in)
       line_t *li = in->d.line;
 
       if (li->special)
-         P_ShootSpecialLine (shootthing, li);
+         map_format.shoot_special_line(shootthing, li);
 
       if (li->flags & ML_TWOSIDED)
       {  // crosses a two sided (really 2s) line
@@ -1547,6 +2283,14 @@ dbool PTR_ShootTraverse (intercept_t* in)
 
       P_SpawnPuff (x,y,z);
 
+      /* Stamp a wall decal at the impact point.  The DECALDEF "BulletChip"
+       * is ZDoom's default scuff mark for hitscan hits; if the loaded wad
+       * defines no such decal (or its pic is absent) this is a no-op.  Off by
+       * default (most mods do not request bullet decals) -- gated on the
+       * frontend setting. */
+      if (wall_decals_enabled)
+         R_SpawnDecalByName (li, x, y, z, "BulletChip");
+
       // don't go any farther
 
       return FALSE;
@@ -1585,13 +2329,34 @@ dbool PTR_ShootTraverse (intercept_t* in)
 
    // Spawn bullet puffs or blod spots,
    // depending on target type.
-   if (in->d.thing->flags & MF_NOBLOOD)
+   // Raven games always produce the weapon's puff on a thing hit; the Doom
+   // MT_BLOOD actor has no valid Raven states.  Hexen additionally sprays
+   // blood-splatter drops on fleshy hits (and the big axe splat), after
+   // Raven's code.
+   if (raven || (in->d.thing->flags & MF_NOBLOOD))
       P_SpawnPuff (x,y,z);
    else
       P_SpawnBlood (x,y,z, la_damage);
 
    if (la_damage)
-      P_DamageMobj (th, shootthing, shootthing, la_damage);
+   {
+      if (hexen && !(in->d.thing->flags & MF_NOBLOOD) &&
+          !(in->d.thing->flags2 & MF2_INVULNERABLE))
+      {
+         if (PuffType == HEXEN_MT_AXEPUFF || PuffType == HEXEN_MT_AXEPUFF_GLOW)
+            P_BloodSplatter2(x, y, z, in->d.thing);
+         if (P_Random(pr_heretic) < 192)
+            P_BloodSplatter(x, y, z, in->d.thing);
+      }
+      if (hexen && PuffType == HEXEN_MT_FLAMEPUFF2)
+      {                         /* Cleric flame strike does fire damage */
+         P_DamageMobj (th, &LavaInflictor, shootthing, la_damage);
+      }
+      else
+      {
+         P_DamageMobj (th, shootthing, shootthing, la_damage);
+      }
+   }
 
    // don't go any farther
    return FALSE;
@@ -1671,35 +2436,89 @@ mobj_t*   usething;
 dbool PTR_UseTraverse (intercept_t* in)
 {
   int side;
+  line_t *li = in->d.line;
+  dbool use_special;
 
-  if (!in->d.line->special)
+  /* Does the player's "use" activate this line?  Doom activates any special
+   * line; Hexen/ZDoom only SPAC_USE lines.  A line carrying a cross, impact
+   * or static special (scrollers, line/sector portals, Plane_Align,
+   * Sector_Set3DFloor, ...) must NOT swallow the use -- the trace has to pass
+   * through it to reach a real door or switch behind, exactly as it passes
+   * through a plain two-sided line.  Treating every special line as a use
+   * target (the old behaviour) made such lines block use entirely, which is
+   * common in ZDoom UDMF maps (e.g. a portal/scroll line in front of a
+   * remote-tagged door). */
+  use_special = li->special &&
+                (map_format.hexen ? (GET_SPAC(li->flags) == SPAC_USE) : TRUE);
+
+  if (!use_special)
     {
-    P_LineOpening (in->d.line);
+    P_LineOpeningAt(li, trace.x + FixedMul(trace.dx, in->frac),
+                    trace.y + FixedMul(trace.dy, in->frac));
     if (openrange <= 0)
       {
-      S_StartSound (usething, sfx_noway);
+      /* Vanilla raven feedback for using a blank wall: hexen plays the
+       * class's failed-use grunt (the pig snorts), heretic says nothing,
+       * doom keeps its noway sound. */
+      if (hexen && usething->player)
+        {
+        int sound;
+
+        switch (usething->player->class)
+          {
+          case PCLASS_FIGHTER:
+            sound = hexen_sfx_player_fighter_failed_use;
+            break;
+          case PCLASS_CLERIC:
+            sound = hexen_sfx_player_cleric_failed_use;
+            break;
+          case PCLASS_MAGE:
+            sound = hexen_sfx_player_mage_failed_use;
+            break;
+          case PCLASS_PIG:
+            sound = hexen_sfx_pig_active1;
+            break;
+          default:
+            sound = hexen_sfx_None;
+            break;
+          }
+        S_StartSound(usething, sound);
+        }
+      else if (!heretic)
+        S_StartSound (usething, sfx_noway);
 
       // can't use through a wall
       return FALSE;
       }
 
-    // not a special line, but keep checking
+    // not a use-activatable line, but keep checking
 
     return TRUE;
     }
 
   side = 0;
-  if (P_PointOnLineSide (usething->x, usething->y, in->d.line) == 1)
+  if (P_PointOnLineSide (usething->x, usething->y, li) == 1)
     side = 1;
 
   //  return FALSE;   // don't use back side
 
-  P_UseSpecialLine (usething, in->d.line, side);
+  /* Hexen line specials use a byte special + args encoding handled by the
+   * Hexen specials layer (also ZDoom Doom-in-Hexen maps); Doom maps use the
+   * classic P_UseSpecialLine.  Hexen has no Boom pass-use: bit 9 is
+   * repeat-special there, so reading it as ML_PASSUSE would make every
+   * repeatable line use-through.  Stop at the first activated use line. */
+  if (map_format.hexen)
+    {
+      P_UseHexenSpecialLine (usething, li, side);
+      return FALSE;
+    }
+
+  P_UseSpecialLine (usething, li, side);
 
   //WAS can't use for than one special line in a row
   //jff 3/21/98 NOW multiple use allowed with enabling line flag
 
-  return (!demo_compatibility && (in->d.line->flags&ML_PASSUSE))?
+  return (!demo_compatibility && (li->flags&ML_PASSUSE))?
           TRUE : FALSE;
 }
 
@@ -1719,7 +2538,8 @@ dbool PTR_NoWayTraverse(intercept_t* in)
                                            // This linedef
   return ld->special || !(                 // Ignore specials
    ld->flags & ML_BLOCKING || (            // Always blocking
-   P_LineOpening(ld),                      // Find openings
+   P_LineOpeningAt(ld, trace.x + FixedMul(trace.dx, in->frac),
+                   trace.y + FixedMul(trace.dy, in->frac)), // Find openings
    openrange <= 0 ||                       // No opening
    openbottom > usething->z+24*FRACUNIT || // Too high it blocks
    opentop < usething->z+usething->height  // Too low it blocks
@@ -1731,6 +2551,122 @@ dbool PTR_NoWayTraverse(intercept_t* in)
 // P_UseLines
 // Looks for special lines in front of the player to activate.
 //
+/* +USESPECIAL things: a use-activatable decoration (e.g. a conversation NPC)
+ * directly in front of the player is switched into its Active state when used.
+ * The thing trace runs first and, on a hit, swallows the use so the player
+ * does not also trigger a line behind it. */
+static mobj_t *use_thing_hit;
+
+/* A used thing leads to one of two things: an in-script reaction via the
+ * thing's DECORATE Active state (how ACS-driven dialogue such as a visual-
+ * novel actor starts), or a native conversation owned by the engine (the
+ * Strife-style dialogue loaded from a DIALOGUE/SCRIPT lump).  The two are
+ * distinct subsystems, so the use handler asks here whether the thing has a
+ * native conversation before falling back to the Active state.
+ *
+ * A thing's conversation is keyed by its type id (the conversation id / editor
+ * number); P_ThingConversation reports that id when a conversation node exists
+ * for it, else -1.  When no conversation lump is loaded (every ordinary Doom,
+ * Heretic, Hexen or ACS map) the table is empty and this always reports -1, so
+ * the use handler takes the unchanged Active-state path. */
+static int P_ThingConversation(mobj_t *th)
+{
+  if (th && P_ConversationForSpeaker(th->type))
+    return th->type;
+  return -1;
+}
+
+static dbool P_StartConversation(mobj_t *th, mobj_t *talker, int conv)
+{
+  (void)th;
+  return P_ConversationStart(conv, talker) ? TRUE : FALSE;
+}
+
+/* True when a use-activatable thing at (th_z, th_height) is within the player's
+ * vertical reach when the player stands at p_z with the given view height.  The
+ * player's use is a horizontal ray at eye level, so a thing whose body is wholly
+ * above where the player can reach (it rode a lift up) or wholly below the
+ * player's feet does not take the use and the trace continues to the line behind
+ * it.  A thing at the player's own level always reaches, however short -- the
+ * earlier eye-point containment test wrongly rejected short same-floor actors.
+ * The 24-unit tolerance matches the step the player can reach over. */
+static dbool P_UseThingInVerticalReach(fixed_t p_z, fixed_t viewheight,
+                                       fixed_t th_z, fixed_t th_height)
+{
+  fixed_t reach_lo = p_z - 24 * FRACUNIT;
+  fixed_t reach_hi = p_z + viewheight + 24 * FRACUNIT;
+  fixed_t th_hi    = th_z + th_height;
+  if (th_hi < reach_lo || th_z > reach_hi)
+    return false;
+  return true;
+}
+
+#ifdef ACS_SELFTEST
+/* Regression check for use-activation vertical reach.  A short interactive
+ * actor (a conversation/scene starter) on the player's own floor must be
+ * within reach -- the prior eye-point test rejected it, so pressing use did
+ * nothing -- while an actor raised well above (it rode a lift up) must be out
+ * of reach so the use falls through to the switch behind it. */
+int P_UseReachSelfTest(void);
+int P_UseReachSelfTest(void)
+{
+  int fail = 0;
+  const fixed_t F  = 0;                 /* player + same-floor actor at z 0 */
+  const fixed_t VH = VIEWHEIGHT;        /* 41 units */
+
+  /* short (16-tall) actor on the same floor: must reach */
+  if (!P_UseThingInVerticalReach(F, VH, F, 16 * FRACUNIT))
+  { fail++; lprintf(LO_ERROR, "ACS-SELFTEST FAIL: short same-floor use-actor must be in reach\n"); }
+  else lprintf(LO_INFO, "ACS-SELFTEST ok:   short same-floor use-actor is in reach\n");
+
+  /* a flat 1-unit trigger actor on the same floor: must still reach */
+  if (!P_UseThingInVerticalReach(F, VH, F, 1 * FRACUNIT))
+  { fail++; lprintf(LO_ERROR, "ACS-SELFTEST FAIL: flat same-floor use-actor must be in reach\n"); }
+  else lprintf(LO_INFO, "ACS-SELFTEST ok:   flat same-floor use-actor is in reach\n");
+
+  /* an actor raised 128 units up (on a lift): must be out of reach */
+  if (P_UseThingInVerticalReach(F, VH, F + 128 * FRACUNIT, 56 * FRACUNIT))
+  { fail++; lprintf(LO_ERROR, "ACS-SELFTEST FAIL: actor raised out of reach must not take the use\n"); }
+  else lprintf(LO_INFO, "ACS-SELFTEST ok:   actor raised out of reach does not take the use\n");
+
+  return fail;
+}
+#endif /* ACS_SELFTEST */
+
+static dbool PTR_UseThingTraverse(intercept_t *in)
+{
+  mobj_t *th;
+  if (!in->d.thing)
+    return TRUE;
+  th = in->d.thing;
+  if (th == usething)
+    return TRUE;                          /* not the user itself */
+  if (U_DecorateActiveState(th->type) < 0 && P_ThingConversation(th) < 0)
+    return TRUE;                          /* neither use-activatable nor a talker */
+  if (FixedMul(USERANGE, in->frac) > USERANGE)
+    return FALSE;                         /* out of reach: stop the trace */
+  /* Vertical reach: the player's use reaches roughly eye level (a horizontal
+   * ray, as vanilla Doom use has no pitch), so a thing far above or below --
+   * e.g. a scene actor that rode a lift up while the player stayed below --
+   * must not keep swallowing the use and blocking the switch behind it.  But a
+   * thing at the player's own level must always activate regardless of how
+   * short it is, so test whether the player's reach column overlaps the thing's
+   * vertical extent rather than whether the single eye point falls inside it:
+   * the eye-point test rejected any actor shorter than the eye offset (a short
+   * conversation/scene actor on the same floor), which read as "use does
+   * nothing".  Reject only when the thing is genuinely out of reach -- its
+   * whole body above where the player can reach, or entirely below the player's
+   * feet -- using the same 24-unit step tolerance the line checks use. */
+  if (usething->player)
+  {
+    if (!P_UseThingInVerticalReach(usething->z, usething->player->viewheight,
+                                   th->z, th->height))
+      return TRUE;                        /* out of vertical reach: keep going */
+  }
+  use_thing_hit = th;
+  return FALSE;                           /* this thing takes the use */
+}
+
 void P_UseLines (player_t*  player)
 {
   int     angle;
@@ -1738,6 +2674,18 @@ void P_UseLines (player_t*  player)
   fixed_t y1;
   fixed_t x2;
   fixed_t y2;
+
+  /* while a conversation is on screen the use key drives it, not the world */
+  if (P_ConversationIsActive())
+    return;
+
+  /* A script-driven dialogue (the ZACS path) freezes the player rather than
+   * going through P_ConversationIsActive, and leaves the use bit live so the
+   * dialogue can read it to advance.  That same press must not also activate
+   * doors, switches, or the story actor behind the conversation panel, so
+   * suppress world use while the player is frozen. */
+  if (player->cheats & CF_TOTALLYFROZEN)
+    return;
 
   usething = player->mo;
 
@@ -1748,6 +2696,30 @@ void P_UseLines (player_t*  player)
   x2 = x1 + (USERANGE>>FRACBITS)*finecosine[angle];
   y2 = y1 + (USERANGE>>FRACBITS)*finesine[angle];
 
+  /* a use-activatable thing in front takes priority over a line behind it */
+  use_thing_hit = NULL;
+  P_PathTraverse(x1, y1, x2, y2, PT_ADDTHINGS, PTR_UseThingTraverse);
+  if (use_thing_hit)
+  {
+    int conv = P_ThingConversation(use_thing_hit);
+    int as;
+    /* prefer a native conversation if the thing has one; otherwise the
+     * DECORATE Active state (ACS-driven dialogue and other reactions) */
+    if (conv >= 0 && P_StartConversation(use_thing_hit, usething, conv))
+      return;
+    as = U_DecorateActiveState(use_thing_hit->type);
+    if (as >= 0)
+    {
+      /* The Active state runs its special on behalf of the using player
+       * (THINGSPEC_ThingTargets): record the player as the actor's target so
+       * an ACS script started from that state resolves its activator to the
+       * player rather than the actor. */
+      P_SetTarget(&use_thing_hit->target, usething);
+      P_SetMobjState(use_thing_hit, (statenum_t)as);
+    }
+    return;
+  }
+
   // old code:
   //
   // P_PathTraverse ( x1, y1, x2, y2, PT_ADDLINES, PTR_UseTraverse );
@@ -1755,8 +2727,160 @@ void P_UseLines (player_t*  player)
   // This added test makes the "oof" sound work on 2s lines -- killough:
 
   if (P_PathTraverse ( x1, y1, x2, y2, PT_ADDLINES, PTR_UseTraverse ))
-    if (!comp[comp_sound] && !P_PathTraverse ( x1, y1, x2, y2, PT_ADDLINES, PTR_NoWayTraverse ))
+    if (!raven && !comp[comp_sound] &&
+        !P_PathTraverse ( x1, y1, x2, y2, PT_ADDLINES, PTR_NoWayTraverse ))
       S_StartSound (usething, sfx_noway);
+}
+
+/* Hexen thrust spikes: when a spike rises under something shootable it is
+ * impaled for telefrag-scale damage and the spike turns bloody. */
+static mobj_t *tsthing;
+
+static dbool PIT_ThrustStompThing(mobj_t *thing)
+{
+  fixed_t blockdist;
+
+  if (!(thing->flags & MF_SHOOTABLE))
+    return true;
+
+  blockdist = thing->radius + tsthing->radius;
+  if (D_abs(thing->x - tsthing->x) >= blockdist ||
+      D_abs(thing->y - tsthing->y) >= blockdist ||
+      (thing->z > tsthing->z + tsthing->height))
+    return true;                /* didn't hit it */
+
+  if (thing == tsthing)
+    return true;                /* don't clip against self */
+
+  P_DamageMobj(thing, tsthing, tsthing, 10001);
+  tsthing->special_args[1] = 1; /* mark the spike as bloody */
+
+  return true;
+}
+
+void PIT_ThrustSpike(mobj_t *actor)
+{
+  int xl, xh, yl, yh, bx, by;
+  int x0, x2, y0, y2;
+
+  tsthing = actor;
+
+  x0 = actor->x - actor->info->radius;
+  x2 = actor->x + actor->info->radius;
+  y0 = actor->y - actor->info->radius;
+  y2 = actor->y + actor->info->radius;
+
+  xl = (x0 - bmaporgx - MAXRADIUS) >> MAPBLOCKSHIFT;
+  xh = (x2 - bmaporgx + MAXRADIUS) >> MAPBLOCKSHIFT;
+  yl = (y0 - bmaporgy - MAXRADIUS) >> MAPBLOCKSHIFT;
+  yh = (y2 - bmaporgy + MAXRADIUS) >> MAPBLOCKSHIFT;
+
+  /* stomp on any things contacted */
+  for (bx = xl; bx <= xh; bx++)
+    for (by = yl; by <= yh; by++)
+      P_BlockThingsIterator(bx, by, PIT_ThrustStompThing);
+}
+
+/* Hexen puzzle items.  Using a puzzle artifact traces the use range for a
+ * line or thing carrying special 129 (UsePuzzleItem) whose args[0] names the
+ * same item; on a match the special's ACS script runs with the remaining
+ * args and the special is consumed.  Failing against a wall plays the
+ * class's "can't use" grunt. */
+#define USE_PUZZLE_ITEM_SPECIAL 129
+
+static mobj_t *PuzzleItemUser;
+static int     PuzzleItemType;
+static dbool   PuzzleActivated;
+
+static dbool PTR_PuzzleItemTraverse(intercept_t *in)
+{
+  mobj_t *mobj;
+  int args[3];
+  int sound;
+
+  if (in->isaline)
+  { /* Check line */
+    if (in->d.line->special != USE_PUZZLE_ITEM_SPECIAL)
+    {
+      P_LineOpening(in->d.line);
+      if (openrange <= 0)
+      {
+        sound = hexen_sfx_None;
+        if (PuzzleItemUser->player)
+        {
+          switch (PuzzleItemUser->player->class)
+          {
+            case PCLASS_FIGHTER:
+              sound = hexen_sfx_puzzle_fail_fighter;
+              break;
+            case PCLASS_CLERIC:
+              sound = hexen_sfx_puzzle_fail_cleric;
+              break;
+            case PCLASS_MAGE:
+              sound = hexen_sfx_puzzle_fail_mage;
+              break;
+            default:
+              sound = hexen_sfx_None;
+              break;
+          }
+        }
+        S_StartSound(PuzzleItemUser, sound);
+        return false;           /* can't use through a wall */
+      }
+      return true;              /* continue searching */
+    }
+    if (P_PointOnLineSide(PuzzleItemUser->x, PuzzleItemUser->y,
+                          in->d.line) == 1)
+    { /* don't use back sides */
+      return false;
+    }
+    if (PuzzleItemType != in->d.line->args[0])
+    { /* item type doesn't match */
+      return false;
+    }
+    args[0] = in->d.line->args[2];
+    args[1] = in->d.line->args[3];
+    args[2] = in->d.line->args[4];
+    P_StartACS(in->d.line->args[1], 0, args, PuzzleItemUser, in->d.line, 0);
+    in->d.line->special = 0;
+    PuzzleActivated = true;
+    return false;               /* stop searching */
+  }
+  /* Check thing */
+  mobj = in->d.thing;
+  if (mobj->special != USE_PUZZLE_ITEM_SPECIAL)
+  { /* wrong special */
+    return true;
+  }
+  if (PuzzleItemType != mobj->special_args[0])
+  { /* item type doesn't match */
+    return true;
+  }
+  args[0] = mobj->special_args[2];
+  args[1] = mobj->special_args[3];
+  args[2] = mobj->special_args[4];
+  P_StartACS(mobj->special_args[1], 0, args, PuzzleItemUser, NULL, 0);
+  mobj->special = 0;
+  PuzzleActivated = true;
+  return false;                 /* stop searching */
+}
+
+dbool P_UsePuzzleItem(player_t *player, int itemType)
+{
+  int angle;
+  fixed_t x1, y1, x2, y2;
+
+  PuzzleItemType = itemType;
+  PuzzleItemUser = player->mo;
+  PuzzleActivated = false;
+  angle = player->mo->angle >> ANGLETOFINESHIFT;
+  x1 = player->mo->x;
+  y1 = player->mo->y;
+  x2 = x1 + (USERANGE >> FRACBITS) * finecosine[angle];
+  y2 = y1 + (USERANGE >> FRACBITS) * finesine[angle];
+  P_PathTraverse(x1, y1, x2, y2, PT_ADDLINES | PT_ADDTHINGS,
+                 PTR_PuzzleItemTraverse);
+  return PuzzleActivated;
 }
 
 
@@ -1766,6 +2890,10 @@ void P_UseLines (player_t*  player)
 
 static mobj_t *bombsource, *bombspot;
 static int bombdamage;
+/* MBF21: A_RadiusDamage can specify a blast radius distinct from the
+ * damage figure.  For vanilla callers bombdistance == bombdamage, which
+ * reproduces the original behaviour exactly. */
+static int bombdistance;
 
 
 //
@@ -1773,6 +2901,17 @@ static int bombdamage;
 // "bombsource" is the creature
 // that caused the explosion at "bombspot".
 //
+
+/* MBF21: two things in the same (non-default) splash group are immune to
+ * each other's splash damage.  Only consulted under mbf21_features. */
+static dbool P_SplashImmune(mobj_t *target, mobj_t *spot)
+{
+  return
+    mobjinfo[target->type].splash_group != SG_DEFAULT &&
+    mobjinfo[target->type].splash_group == mobjinfo[spot->type].splash_group;
+}
+
+static dbool bombdamagesource = true;
 
 dbool PIT_RadiusAttack (mobj_t* thing)
 {
@@ -1787,6 +2926,19 @@ dbool PIT_RadiusAttack (mobj_t* thing)
   if (!(thing->flags & (MF_SHOOTABLE | MF_BOUNCES)))
     return TRUE;
 
+  /* Hexen: some projectiles do not splash their shooter */
+  if (!bombdamagesource && thing == bombsource)
+    return TRUE;
+
+  if (hexen)
+  {
+    /* Hexen explosions have a vertical reach limit; without it a blast
+     * hits everything in the 2D radius regardless of height. */
+    if (D_abs((thing->z - bombspot->z) >> FRACBITS) > 2 * bombdistance)
+      return TRUE;              /* too high/low */
+  }
+  else
+  {
   // Boss spider and cyborg
   // take no damage from concussion.
 
@@ -1798,6 +2950,19 @@ dbool PIT_RadiusAttack (mobj_t* thing)
       (thing->flags & MF_NORADIUSDMG))
     return TRUE;
 
+  /* MBF21: splash-damage flags.  A thing is immune to splash if it has
+   * MF2_NORADIUSDMG or MF2_BOSS, but MF2_FORCERADIUSDMG on the source
+   * overrides that immunity.  flags2 is zero for all non-MBF21 content,
+   * so this leaves vanilla/boom/mbf behaviour unchanged. */
+  if ((thing->flags2 & (MF2_NORADIUSDMG | MF2_BOSS)) &&
+      !(bombspot->flags2 & MF2_FORCERADIUSDMG))
+    return TRUE;
+
+  /* MBF21: splash-group immunity (target vs. the explosion origin). */
+  if (mbf21_features && P_SplashImmune(thing, bombspot))
+    return TRUE;
+  }
+
   dx = D_abs(thing->x - bombspot->x);
   dy = D_abs(thing->y - bombspot->y);
 
@@ -1807,13 +2972,35 @@ dbool PIT_RadiusAttack (mobj_t* thing)
   if (dist < 0)
   dist = 0;
 
-  if (dist >= bombdamage)
+  if (dist >= bombdistance)
     return TRUE;  // out of range
 
   if ( P_CheckSight (thing, bombspot) )
     {
-    // must be in direct path
-    P_DamageMobj (thing, bombspot, bombsource, bombdamage - dist);
+    int damage;
+
+    /* must be in direct path.
+     *
+     * Doom's classic falloff (damage - dist) silently relies on every
+     * caller passing damage == distance; all Doom explosions do.  Raven
+     * explosions routinely pass independent values (flechette gas is
+     * 4/40, the Heresiarch's rapid-fire spell 20/128, bloodscourge
+     * 64/192, ...), for which the classic formula goes NEGATIVE for
+     * targets further than `damage` units: P_DamageMobj then heals the
+     * victim, and a negative player damagecount drives the pain-palette
+     * index negative, sending V_Palette16 out of bounds and crashing
+     * every 16bpp column draw.  Use the proportional falloff (as Hexen
+     * and Eternity do) whenever the two values differ. */
+    if (!hexen && bombdamage == bombdistance)
+      damage = bombdamage - dist;
+    else
+      damage = (bombdamage * (bombdistance - dist) / bombdistance) + 1;
+
+    /* Hexen: players take a quarter of splash damage. */
+    if (hexen && thing->player)
+      damage >>= 2;
+
+    P_DamageMobj (thing, bombspot, bombsource, damage);
     }
 
   return TRUE;
@@ -1824,7 +3011,8 @@ dbool PIT_RadiusAttack (mobj_t* thing)
 // P_RadiusAttack
 // Source is the creature that caused the explosion at spot.
 //
-void P_RadiusAttack(mobj_t* spot,mobj_t* source,int damage)
+void P_RadiusAttackHexen(mobj_t *spot, mobj_t *source, int damage,
+                         int distance, dbool damageSource)
 {
   int x;
   int y;
@@ -1836,7 +3024,7 @@ void P_RadiusAttack(mobj_t* spot,mobj_t* source,int damage)
 
   fixed_t dist;
 
-  dist = (damage+MAXRADIUS)<<FRACBITS;
+  dist = (distance+MAXRADIUS)<<FRACBITS;
   yh = (spot->y + dist - bmaporgy)>>MAPBLOCKSHIFT;
   yl = (spot->y - dist - bmaporgy)>>MAPBLOCKSHIFT;
   xh = (spot->x + dist - bmaporgx)>>MAPBLOCKSHIFT;
@@ -1844,10 +3032,23 @@ void P_RadiusAttack(mobj_t* spot,mobj_t* source,int damage)
   bombspot = spot;
   bombsource = source;
   bombdamage = damage;
+  bombdistance = distance;
+  bombdamagesource = damageSource;
 
   for (y=yl ; y<=yh ; y++)
     for (x=xl ; x<=xh ; x++)
       P_BlockThingsIterator (x, y, PIT_RadiusAttack );
+}
+
+void P_RadiusAttackEx(mobj_t* spot,mobj_t* source,int damage,int distance)
+{
+  P_RadiusAttackHexen(spot, source, damage, distance, true);
+}
+
+void P_RadiusAttack(mobj_t* spot,mobj_t* source,int damage)
+{
+  /* vanilla: blast radius equals the damage figure */
+  P_RadiusAttackEx(spot, source, damage, damage);
 }
 
 
@@ -1883,12 +3084,38 @@ dbool PIT_ChangeSector (mobj_t* thing)
 
   if (thing->health <= 0)
     {
-    P_SetMobjState (thing, S_GIBS);
+    if (hexen)
+      {
+      /* Hexen only crunches corpses, and its giblet state is its own --
+       * S_GIBS is a Doom state number and indexes the bell's ring
+       * animation in the Hexen table.  Dead-but-not-yet-corpse things
+       * fall through and take crushing damage below, as in vanilla. */
+      if (thing->flags & MF_CORPSE)
+        {
+        if (thing->flags & MF_NOBLOOD)
+          {
+          P_RemoveMobj(thing);
+          }
+        else if (thing->state != &states[HEXEN_S_GIBS1])
+          {
+          P_SetMobjState(thing, HEXEN_S_GIBS1);
+          thing->height = 0;
+          thing->radius = 0;
+          S_StartSound(thing, hexen_sfx_player_falling_splat);
+          }
+        return TRUE; // keep checking
+        }
+      }
+    else
+      {
+      if (!heretic) /* Heretic crushes leave the corpse state alone */
+        P_SetMobjState (thing, S_GIBS);
 
-    thing->flags &= ~MF_SOLID;
-    thing->height = 0;
-    thing->radius = 0;
-    return TRUE; // keep checking
+      thing->flags &= ~MF_SOLID;
+      thing->height = 0;
+      thing->radius = 0;
+      return TRUE; // keep checking
+      }
     }
 
   // crunch dropped items
@@ -1919,12 +3146,19 @@ dbool PIT_ChangeSector (mobj_t* thing)
 
   if (crushchange && !(leveltime&3)) {
     int t;
-    P_DamageMobj(thing,NULL,NULL,10);
+    /* Hexen movers carry their crush damage (e.g. Pillar_BuildAndCrush's
+     * fourth arg) in the crush field; Doom and Heretic pass TRUE and keep
+     * the classic 10. */
+    P_DamageMobj(thing, NULL, NULL,
+                 (hexen && crushchange > 1) ? crushchange : 10);
 
-    // spray blood in a random direction
+    // spray blood in a random direction (each game's own blood actor; the
+    // Doom MT_BLOOD slot has no valid states under the Raven tables)
     mo = P_SpawnMobj (thing->x,
                       thing->y,
-                      thing->z + thing->height/2, MT_BLOOD);
+                      thing->z + thing->height/2,
+                      hexen ? HEXEN_MT_BLOOD :
+                      heretic ? HERETIC_MT_BLOOD : MT_BLOOD);
 
     /* killough 8/10/98: remove dependence on order of evaluation */
     t = P_Random(pr_crush);
@@ -2201,7 +3435,7 @@ void P_CreateSecNodeList(mobj_t* thing,fixed_t x,fixed_t y)
     node = node->m_tnext;
     }
 
-  tmthing = thing;
+  tmthing = ffloor_clip_thing = thing;
 
   tmx = x;
   tmy = y;
@@ -2252,7 +3486,7 @@ void P_CreateSecNodeList(mobj_t* thing,fixed_t x,fixed_t y)
    */
   if ((compatibility_level < boom_compatibility_compatibility) ||
       (compatibility_level >= prboom_3_compatibility))
-    tmthing = saved_tmthing;
+    tmthing = ffloor_clip_thing = saved_tmthing;
   /* And, duh, the same for tmx/y - cph 2002/09/22
    * And for tmbbox - cph 2003/08/10 */
   if ((compatibility_level < boom_compatibility_compatibility) /* ||
@@ -2273,7 +3507,7 @@ void P_MapStart(void) {
 	if (tmthing) I_Error("P_MapStart: tmthing set!");
 }
 void P_MapEnd(void) {
-	tmthing = NULL;
+	tmthing = ffloor_clip_thing = NULL;
 }
 
 // e6y
