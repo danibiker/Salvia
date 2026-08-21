@@ -1755,8 +1755,14 @@ void retro_init(void) {
 }
 
 void retro_deinit(void) {
-    /* Nothing persistent across runs — emu_teardown is called from
-     * retro_unload_game, which the frontend invokes before retro_deinit. */
+    /* emu_teardown ya corrio (retro_unload_game).  Lo unico que persiste
+     * entre cargas es el HILO GPU: se crea una sola vez y se reutiliza,
+     * porque crearlo/destruirlo en cada carga colgaba la consola de forma
+     * intermitente dentro de CreateThread (ver el bloque "MODELO DE CICLO
+     * DE VIDA" en libpcsxcore/gpu.c).  Aqui, al cerrar el core de verdad,
+     * es donde se destruye. */
+    pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] retro_deinit: gpuDmaThreadDestroy\n");
+    gpuDmaThreadDestroy();
 }
 
 bool retro_load_game(const struct retro_game_info *game) {

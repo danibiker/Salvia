@@ -130,13 +130,8 @@ extern volatile int      s_gpu_plugin_call;
 	 * repetidos.  Implementacion en gpu.c, sub-seccion "GPU THREADING
 	 * SUBSYSTEM". */
 	void gpuDmaThreadInit(void);
-	void gpuDmaThreadShutdown(void);
-
-	/* Deprecated: el lifecycle del thread esta gestionado SOLO por
-	 * Init/Shutdown.  Esta funcion era fuente del bug que reseteaba
-	 * el flag de salida tras Init.  Se mantiene como no-op para no
-	 * romper compatibilidad de fuente (libretro_core.cpp aun la llama). */
-	void gpuThreadEnable(int enable);
+	void gpuDmaThreadShutdown(void);   /* aparca el hilo (entre juegos) */
+	void gpuDmaThreadDestroy(void);    /* teardown REAL: solo en retro_deinit */
 
 	/* Per-frame counter de QueryPerformanceCounter ticks que la CPU
 	 * emulada paso bloqueada en ring_drain esperando al GPU helper
@@ -155,8 +150,13 @@ extern volatile int      s_gpu_plugin_call;
 
 ////////////////////////////////////////////try again
 void gpuWriteStatus(u32 data);
-//u32 gpuReadStatus(void);
+u32  gpuReadStatus(void);   /* NO bloqueante; usar SIEMPRE en vez del plugin
+                             * GPU_readStatus crudo: deriva "GPU ocupada" del
+                             * ring y aplica la barrera acquire. */
 /////////////////////////////////////////
+
+/* Sincroniza (drena el ring) para accesos directos a GPU_* desde otras TUs. */
+void gpuSync(void);
 	void gpuWriteDataMem(uint32_t *, int);
 	void gpuReadDataMem(uint32_t *, int);
 

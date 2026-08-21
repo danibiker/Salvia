@@ -245,7 +245,7 @@ static void psxWiReg32(u32 add, u32 value) {
 * Gpu
 **/
 _RF(u32, gpuReadData);
-_RF(u32, GPU_readStatus);
+_RF(u32, gpuReadStatus);   /* wrapper drenante (gpu.c), no el plugin crudo GPU_readStatus */
 
 _WF(u32, gpuWriteData);
 _WF(u32, gpuWriteStatus);
@@ -402,7 +402,7 @@ void psxHwInit() {
 	// read32 handler
 	hw_read32_handler[0x1040] = _sioRead32;
 	hw_read32_handler[0x1810] = (hw_read32_t)_gpuReadData;
-	hw_read32_handler[0x1814] = (hw_read32_t)_GPU_readStatus;
+	hw_read32_handler[0x1814] = (hw_read32_t)_gpuReadStatus;
 	hw_read32_handler[0x1820] = _mdecRead0;
 	hw_read32_handler[0x1824] = _mdecRead1;
 

@@ -64,22 +64,29 @@ extern unsigned int hSyncCount;
  *   Producer (CPU emulada via gpuDmaChain) llama `chain_enqueue` que
  *   copia al ring y publica `s_ring_wpos` con barrera lwsync (release).
  *
- *   Consumer (GPU helper thread, core 4) lee `s_ring_wpos` con lwsync
+ *   Consumer (GPU helper thread, HW thread 2 via XSetThreadProcessor) lee `s_ring_wpos` con lwsync
  *   (acquire), procesa el chunk via `GPU_writeDataMem`, y publica
  *   `s_ring_rpos` con lwsync (release).
  *
- *   Sincronizacion main↔helper: cualquier acceso direct a `GPU_*` desde
- *   el thread principal (lectures, lace, status) llama `ring_drain()`
- *   primero, que espera a que el thread vacie el ring antes de tocar
- *   estado del GPU.  Eso garantiza orden de operaciones: todos los
- *   comandos encolados se procesan antes que los direct calls que
- *   siguen.
+ *   Sincronizacion main↔helper: los accesos directos a `GPU_*` desde el
+ *   thread principal que LEEN O MODIFICAN estado (datos, lace, writes de
+ *   status) llaman `ring_drain()` primero, de modo que el thread ya
+ *   proceso todo lo encolado antes.  Eso garantiza el orden: los comandos
+ *   encolados se procesan antes que los direct calls que siguen.
  *
- *   Lifecycle: el estado del thread es un enum claro
- *   (`STOPPED|RUNNING|STOPPING`) que sirve como source-of-truth.  Init
- *   crea thread → state=RUNNING.  Shutdown drena ring, marca
- *   state=STOPPING, espera al thread (con timeout), cierra handle.
- *   Idempotente y safe contra double-init/double-shutdown.
+ *   EXCEPCION: la LECTURA del registro de status (gpuReadStatus) NO drena
+ *   -- seria un sync point en cada sondeo del juego y serializaria el
+ *   pipeline.  En su lugar el status es propiedad exclusiva del main
+ *   thread y "GPU ocupada" se deriva de la ocupacion del ring, con una
+ *   barrera acquire.  Ver el comentario de gpuReadStatus.
+ *
+ *   Lifecycle: HILO PERSISTENTE.  El consumidor se crea UNA vez y vive
+ *   entre cargas de juego; Init/Shutdown solo lo REACTIVAN/APARCAN via
+ *   s_thread_state (RUNNING = productores usan el ring, STOPPED =
+ *   productores inline y consumidor idle).  Solo gpuDmaThreadDestroy
+ *   (retro_deinit) lo termina de verdad.  Ver el bloque "MODELO DE CICLO
+ *   DE VIDA" mas abajo: crear/destruir el hilo en cada carga colgaba la
+ *   consola dentro de CreateThread de forma intermitente.
  *
  *   g_pcsxr_threading_enabled: si esta a 0, NO se crea thread; las
  *   funciones encolan via direct call.  Modo single-thread completo,
@@ -255,6 +262,7 @@ static void ring_push(const uint32_t *data, uint32_t size)
      * consumer hace lwsync acquire y ve datos consistentes. */
     __lwsync();
     s_ring_wpos = wpos + size;
+
 }
 
 /* MAIN-THREAD SYNC: esperar a que el ring este vacio.  Llamado antes
@@ -269,7 +277,11 @@ static void ring_push(const uint32_t *data, uint32_t size)
  */
 static void ring_drain(void)
 {
-    LARGE_INTEGER t0, t1;
+    LARGE_INTEGER t0, t1, stall_ref, now;
+    uint32_t spins = 0;
+    uint32_t last_rpos;
+    static LARGE_INTEGER s_qpf = {0};
+    static int64_t       s_stall_ticks = 0;
 
     /* Si no hay thread (modo NO_THREADING o pre-init/post-shutdown), no
      * hay nada que drenar.  Y el ring nunca se uso. */
@@ -280,12 +292,45 @@ static void ring_drain(void)
     if (s_ring_wpos == s_ring_rpos)
         return;
 
+    /* Umbral de liveness (lazy-init): ~5 s SIN progreso de rpos = el
+     * consumidor esta colgado (bucle infinito en un comando GP0; los
+     * fallos ya los contiene el SEH del consumidor).  Solo diagnostico:
+     * en XDK no hay recuperacion segura (no TerminateThread, no se puede
+     * distinguir "lento" de "muerto" ni tomar el relevo sin carrera). */
+    if (s_qpf.QuadPart == 0) {
+        QueryPerformanceFrequency(&s_qpf);
+        s_stall_ticks = s_qpf.QuadPart * 5;
+    }
+
     QueryPerformanceCounter(&t0);
+    last_rpos = s_ring_rpos;
+    stall_ref = t0;
     while (s_ring_wpos != s_ring_rpos) {
 #if PCSXR_DIAG_INSTRUMENTATION
         s_ring_drain_spin_count++;
 #endif
         YieldProcessor();
+
+        /* Chequeo de liveness barato: cada 65536 vueltas.  Si rpos avanza,
+         * el consumidor esta vivo (solo lento) -> re-armar.  Si no avanza
+         * durante el umbral -> loguear (rate-limited), sin tocar estado. */
+        if (((++spins) & 0xFFFFu) == 0u) {
+            uint32_t cur = s_ring_rpos;
+            if (cur != last_rpos) {
+                last_rpos = cur;
+                QueryPerformanceCounter(&stall_ref);
+            } else {
+                QueryPerformanceCounter(&now);
+                if ((int64_t)(now.QuadPart - stall_ref.QuadPart) > s_stall_ticks) {
+                    static volatile uint32_t s_stall_logs = 0;
+                    if ((s_stall_logs++ & 0x7u) == 0u)
+                        pcsxr_log(RETRO_LOG_ERROR,
+                            "[PCSXR-LR] GPU consumer stalled: rpos frozen >5s (ring=%u/%u). Main sigue en spin.\n",
+                            (unsigned)s_ring_wpos, (unsigned)s_ring_rpos);
+                    stall_ref = now;   /* re-armar para no re-loguear cada iter */
+                }
+            }
+        }
     }
     /* Acquire: ver psxVuw/state writes hechos por el thread antes de rpos. */
     __lwsync();
@@ -311,6 +356,8 @@ static void gpu_thread_proc(void)
     uint64_t s_last_drain_spin = 0;
     uint64_t s_last_push_spin  = 0;
 #endif
+
+    uint32_t idle_iters = 0;   /* backoff del path idle (ver abajo) */
 
     while (s_thread_state != GPU_THREAD_STOPPING) {
         uint32_t wpos, rpos, used, ridx, chunk;
@@ -419,7 +466,19 @@ static void gpu_thread_proc(void)
                 s_last_push_spin  = cur_push_spin;
             }
 #endif
-            YieldProcessor();
+            /* Backoff adaptativo.  El hilo es PERSISTENTE (vive entre cargas
+             * de juego, ver gpuDmaThreadInit), asi que no puede quemar HW2 al
+             * 100% eternamente: en menus / entre juegos no hay trabajo.
+             * Spin duro mientras el trabajo fluye (latencia minima, que es
+             * todo el punto del solapamiento), y cedemos CPU solo tras un
+             * buen rato sin nada que hacer.  En gameplay el ring recibe
+             * trabajo constantemente, asi que practicamente nunca se llega
+             * al Sleep. */
+            if (++idle_iters < 200000u) {
+                YieldProcessor();
+            } else {
+                Sleep(1);
+            }
             continue;
         }
 
@@ -428,6 +487,8 @@ static void gpu_thread_proc(void)
         s_idle_iters = 0;
         s_last_cycle = psxRegs.cycle;
 #endif
+
+        idle_iters = 0;   /* hay trabajo: volver a spin duro (latencia minima) */
 
         ridx = rpos & RING_MASK;
         /* Limitar el chunk al tramo contiguo (no cruzar wrap). */
@@ -558,12 +619,29 @@ static void gpu_thread_proc(void)
             }
         }
 #else
-        GPU_writeDataMem(&s_ring_data[ridx], chunk);
+        /* Contencion de fallo del consumidor.  Si un comando GP0 provoca
+         * una excepcion (AV, etc.) NO debemos dejar rpos congelado: eso
+         * colgaria PARA SIEMPRE al productor en ring_drain/ring_push (el
+         * agujero de robustez del diseño previo).  Con SEH (table-based en
+         * Xbox360 PPC = coste cero en el camino sin fallo) capturamos, lo
+         * logueamos y caemos abajo a avanzar rpos igual, manteniendo el
+         * ring fluyendo.  Best-effort: el parser del plugin resincroniza en
+         * el siguiente GPU reset (GP1). */
+        __try {
+            GPU_writeDataMem(&s_ring_data[ridx], chunk);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            static volatile uint32_t s_consumer_faults = 0;
+            if ((s_consumer_faults++ & 0x3Fu) == 0u)
+                pcsxr_log(RETRO_LOG_ERROR,
+                    "[PCSXR-LR] GPU consumer exception in GPU_writeDataMem (chunk=%u words, fault #%u); continuing inline-safe\n",
+                    (unsigned)chunk, (unsigned)s_consumer_faults);
+        }
 #endif
 
         /* Release: writes del GPU (psxVuw, state) visibles antes de
          * publicar rpos.  El main thread en ring_drain hace lwsync
-         * acquire para verlas. */
+         * acquire para verlas.  Se ejecuta TAMBIEN tras una excepcion
+         * capturada arriba, para que rpos siempre avance. */
         __lwsync();
         s_ring_rpos = rpos + chunk;
     }
@@ -734,101 +812,208 @@ void gpuUpdateLace(void)
     DIAG_SET_PLUGIN_CALL(GPU_CALL_NONE);
 }
 
+/* Lectura del registro de STATUS del GPU (0x1814).  NO BLOQUEANTE.
+ *
+ * Modelo (el de pcsx_rearmed/gpulib: su hilo de render, gpu_async.c, no
+ * contiene ni una referencia a `status`):
+ *
+ *  1. El registro de status es propiedad del HILO PRINCIPAL.  El consumidor
+ *     ya no lo toca (se quitaron GPUIsBusy/GPUIsIdle de
+ *     PEOPS_GPUwriteDataMem; ver la nota [THREADING] alli).
+ *
+ *  2. "GPU ocupada" se DERIVA de la ocupacion del ring: mientras queden
+ *     comandos sin consumir, la GPU no ha terminado -> IDLE y
+ *     READYFORCOMMANDS a 0.  Es exacto, no una aproximacion, y no requiere
+ *     esperar a nadie: se conserva el solapamiento CPU/GPU.
+ *
+ *  3. Barrera ACQUIRE (__lwsync) SIEMPRE antes de leer.  Empareja con el
+ *     release que el consumidor hace al publicar s_ring_rpos, de modo que
+ *     todo lo que el consumidor haya completado (incluido el bit
+ *     GPUSTATUS_READYFORVRAM que publica primStoreImage) es visible aqui.
+ *     Este era el hueco real de la version anterior: la barrera solo estaba
+ *     en el camino de "ring vacio", asi que en el camino rapido las
+ *     escrituras del consumidor podian no verse nunca -- y de ahi venia la
+ *     necesidad de drenar (con su coste: BR2 a 40fps) o el contador de spin
+ *     heuristico.  Con la barrera en su sitio, ambos sobran.
+ *
+ * La sincronizacion real de las transferencias de VRAM sigue donde debe
+ * estar, igual que upstream: gpuReadData (0x1810) y gpuReadDataMem (DMA
+ * vram2mem) drenan el ring antes de leer los datos. */
+u32 gpuReadStatus(void)
+{
+    u32 r;
+    const int busy = (s_thread_state == GPU_THREAD_RUNNING &&
+                      s_ring_wpos != s_ring_rpos);
+
+    /* Acquire: ver todo lo que el consumidor ya publico. */
+    __lwsync();
+
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_READ_STATUS);
+    r = GPU_readStatus();
+    DIAG_SET_PLUGIN_CALL(GPU_CALL_NONE);
+
+    if (busy)
+        r &= ~(GPUSTATUS_IDLE | GPUSTATUS_READYFORCOMMANDS);
+
+    return r;
+}
+
+/* Punto de sincronizacion publico: espera a que el hilo consumidor vacie
+ * el ring.  Para callers en otras TUs (p.ej. misc.c savestate) que hacen
+ * accesos directos a GPU_* y necesitan que el trabajo encolado este
+ * completo antes.  ring_drain es static; esto lo expone. */
+void gpuSync(void)
+{
+    ring_drain();
+}
+
 /* ===========================================================================
  * Lifecycle del GPU helper thread.
  * =========================================================================== */
 
+/* Si un shutdown no consigue JOINear al consumidor, el hilo viejo sigue
+ * vivo.  En ese caso NO podemos crear otro: dos consumidores sobre el mismo
+ * ring se pisan el cursor rpos (corrupcion + rpos saltando).  Marcamos el
+ * subsistema como no disponible y corremos inline el resto de la sesion:
+ * perder el hilo GPU es infinitamente preferible a dos consumidores. */
+static int s_thread_unavailable = 0;
+
+/* ===========================================================================
+ * MODELO DE CICLO DE VIDA: HILO PERSISTENTE
+ *
+ * El hilo consumidor se crea UNA SOLA VEZ y sobrevive a las cargas/descargas
+ * de juego.  Init/Shutdown solo lo APARCAN (cambian s_thread_state), no lo
+ * crean ni lo destruyen.
+ *
+ * Por que: crear y destruir el hilo en cada carga colgaba la consola de
+ * forma intermitente tras varias cargas, dentro de `CreateThread`, que no
+ * retornaba (de ahi que el ultimo log fuese "gpuDmaThreadInit" y no saliera
+ * ningun mensaje posterior: no habia ningun sitio donde loguear).  Es un
+ * problema conocido y documentado en este repo: ver el comentario de
+ * pcsxr_sthread_create en libpcsxcore/pcsxr-threads.c ("HW0 ... puede colgar
+ * el CreateThread del hilo de GPU (gpuDmaThreadInit) de forma
+ * intermitente").  Un hilo persistente elimina la causa de raiz: cero
+ * CreateThread/CloseHandle repetidos => ni fuga de handles, ni agotamiento,
+ * ni cuelgue intermitente de creacion.
+ *
+ * El consumidor no guarda estado del juego: solo vacia el ring.  Entre
+ * juegos el ring esta vacio y el hilo entra en su path idle con backoff
+ * (Sleep tras un rato sin trabajo), asi que no quema HW2 en los menus.
+ *
+ * s_thread_state:
+ *   RUNNING  = los productores usan el ring (chain_enqueue -> ring_push)
+ *   STOPPED  = productores INLINE; el consumidor sigue vivo pero idle
+ *   STOPPING = orden de salida definitiva (solo en gpuDmaThreadDestroy)
+ * =========================================================================== */
+
+/* El hilo existe y esta en su bucle (independiente de RUNNING/STOPPED). */
+static int s_thread_created = 0;
+
 void gpuDmaThreadShutdown(void)
 {
-	if (!g_pcsxr_threading_enabled){
-		/* Modo single-thread: no hay nada que parar. */
-		s_thread_state = GPU_THREAD_STOPPED;
-		return;
-	} else {
-		DWORD wait_result;
-
-		if (s_thread_state == GPU_THREAD_STOPPED || s_thread_handle == NULL) {
-			/* Idempotente: ya cerrado o nunca abierto. */
-			s_thread_state  = GPU_THREAD_STOPPED;
-			s_thread_handle = NULL;
-			return;
-		}
-
-		/* Drenar ring antes de pedir stop, asi no perdemos comandos
-		 * pendientes que el juego (o el BIOS) ya envio. */
+	/* NO destruimos el hilo: solo lo aparcamos.  Drenado best-effort
+	 * ACOTADO (antes era un spin sin limite: si el consumidor no consumia,
+	 * no salia nunca).  En un unload los draws pendientes son irrelevantes,
+	 * el juego se esta yendo. */
+	if (s_thread_state == GPU_THREAD_RUNNING) {
+		DWORD t0 = GetTickCount();
 		while (s_ring_wpos != s_ring_rpos) {
+			if ((GetTickCount() - t0) > 250u) {
+				pcsxr_log(RETRO_LOG_DEBUG,
+					"[PCSXR-LR] GPU shutdown: ring no vacio tras 250ms (%u/%u), continuando\n",
+					(unsigned)s_ring_wpos, (unsigned)s_ring_rpos);
+				break;
+			}
 			YieldProcessor();
 		}
 		__lwsync();
-
-		/* Pedir parada y esperar al thread.  Timeout defensivo: si el thread
-		 * quedase atascado (ej. dentro de un GPU_writeDataMem patologicamente
-		 * largo), no colgamos el unload — soltamos el handle y seguimos.
-		 * TerminateThread no esta disponible en XDK Xbox 360. */
-		s_thread_state = GPU_THREAD_STOPPING;
-
-		wait_result = WaitForSingleObject(s_thread_handle, 5000);
-		if (wait_result == WAIT_TIMEOUT) {
-			pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] WARNING: GPU helper thread did not exit in 5s, leaving handle\n");
-			/* Marcamos como stopped para que la proxima init no reuse el
-			 * handle viejo.  El thread fugado eventualmente saldra solo
-			 * cuando vea STOPPING. */
-			s_thread_handle = NULL;
-			s_thread_state  = GPU_THREAD_STOPPED;
-			return;
-		}
-
-		CloseHandle(s_thread_handle);
-		s_thread_handle = NULL;
-		s_thread_state  = GPU_THREAD_STOPPED;
 	}
+
+	/* Aparcar: los productores pasan a inline; el consumidor queda idle. */
+	s_thread_state = GPU_THREAD_STOPPED;
 }
 
 void gpuDmaThreadInit(void)
 {
-    /* Idempotente: si ya hay thread, lo apagamos primero. */
-    if (s_thread_handle != NULL || s_thread_state != GPU_THREAD_STOPPED) {
-        gpuDmaThreadShutdown();
-    }
-
-    /* Reset cursors del ring.  Los hacemos ANTES de crear el thread
-     * para que el thread vea valores limpios al arrancar. */
-    s_ring_wpos = 0;
-    s_ring_rpos = 0;
-
-	if (!g_pcsxr_threading_enabled){
-		/* Modo single-thread: no creamos thread.  chain_enqueue / ring_drain
-		 * tomaran el path direct. */
+    /* NO tocamos los cursores si el hilo ya existe.  Son contadores libres:
+     * `wpos == rpos` significa "vacio" sea cual sea su valor, y el shutdown
+     * anterior ya drenó.  Resetearlos a 0 con el consumidor vivo seria una
+     * CARRERA: el consumidor podria haber leido el wpos viejo (p.ej. 5000)
+     * justo antes del reset y leer luego rpos = 0, calculando
+     * used = 5000 -> procesaria basura del ring de la sesion anterior.
+     * El cursor es propiedad exclusiva de su dueño (SPSC). */
+	if (!g_pcsxr_threading_enabled || s_thread_unavailable){
+		/* Modo single-thread: chain_enqueue / ring_drain van directos.
+		 * Si el hilo ya existe se queda aparcado e idle, sin molestar. */
 		s_thread_state = GPU_THREAD_STOPPED;
 		return;
-	} else {
-		/* Marcar RUNNING antes de ResumeThread.  El consumer hace check de
-		 * STOPPING para parar; mientras este RUNNING corre normal. */
-		s_thread_state = GPU_THREAD_RUNNING;
-
-		s_thread_handle = CreateThread(NULL, 0,
-									   (LPTHREAD_START_ROUTINE)gpu_thread_proc,
-									   NULL, CREATE_SUSPENDED, NULL);
-		if (!s_thread_handle) {
-			/* CreateThread fallo (heap exhausted, kernel handles, etc.).
-			 * Caer a modo single-thread runtime: chain_enqueue / ring_drain
-			 * detectan state != RUNNING y van direct. */
-			pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] WARNING: CreateThread for GPU helper failed, falling back to inline mode\n");
-			s_thread_state = GPU_THREAD_STOPPED;
-			return;
-		}
-
-		SetThreadPriority(s_thread_handle, THREAD_PRIORITY_NORMAL);
-		XSetThreadProcessor(s_thread_handle, 2);
-		ResumeThread(s_thread_handle);
 	}
+
+	if (s_thread_created) {
+		/* REUTILIZAR el hilo existente: nada de CreateThread (su cuelgue
+		 * intermitente era la causa del hang tras varias cargas). */
+		__lwsync();   /* release: estado consistente antes de reactivar */
+		s_thread_state = GPU_THREAD_RUNNING;
+		return;
+	}
+
+	/* Primera vez en la sesion: crear el hilo (una sola vez).  Aqui SI es
+	 * seguro poner los cursores a cero: todavia no hay consumidor. */
+	s_ring_wpos = 0;
+	s_ring_rpos = 0;
+	s_thread_state = GPU_THREAD_RUNNING;
+
+	s_thread_handle = CreateThread(NULL, 0,
+								   (LPTHREAD_START_ROUTINE)gpu_thread_proc,
+								   NULL, CREATE_SUSPENDED, NULL);
+	if (!s_thread_handle) {
+		/* CreateThread fallo (heap exhausted, kernel handles, etc.).
+		 * Caer a modo single-thread runtime: chain_enqueue / ring_drain
+		 * detectan state != RUNNING y van direct. */
+		pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] WARNING: CreateThread for GPU helper failed, falling back to inline mode\n");
+		s_thread_state      = GPU_THREAD_STOPPED;
+		s_thread_unavailable = 1;
+		return;
+	}
+
+	SetThreadPriority(s_thread_handle, THREAD_PRIORITY_NORMAL);
+	XSetThreadProcessor(s_thread_handle, 2);
+	ResumeThread(s_thread_handle);
+	s_thread_created = 1;
+	pcsxr_log(RETRO_LOG_DEBUG, "[PCSXR-LR] GPU helper thread creado (persistente, HW2)\n");
 }
 
-/* gpuThreadEnable() solia existir y reseteaba gpu_thread_exit, anulando
- * decisiones tomadas en gpuDmaThreadInit.  Eliminada por ser fuente de
- * bugs.  El lifecycle se controla SOLO via init/shutdown.  Compatibilidad
- * con callers viejos: stub no-op para no romper builds intermedios. */
-void gpuThreadEnable(int enable) { (void)enable; /* deprecated, no-op */ }
+/* Teardown REAL del hilo.  Solo para el cierre del core (retro_deinit), no
+ * entre juegos.  Si el join falla dejamos el hilo vivo y marcamos el
+ * subsistema como no disponible: nunca crear un segundo consumidor sobre el
+ * mismo ring (dos consumidores se pisan rpos). */
+void gpuDmaThreadDestroy(void)
+{
+	DWORD wait_result;
+
+	if (!s_thread_created || s_thread_handle == NULL) {
+		s_thread_state   = GPU_THREAD_STOPPED;
+		s_thread_created = 0;
+		return;
+	}
+
+	s_thread_state = GPU_THREAD_STOPPING;
+	wait_result = WaitForSingleObject(s_thread_handle, 5000);
+	if (wait_result == WAIT_TIMEOUT) {
+		pcsxr_log(RETRO_LOG_ERROR,
+			"[PCSXR-LR] ERROR: GPU helper thread no salio en 5s; se deja vivo y se deshabilita el hilo GPU\n");
+		s_thread_unavailable = 1;
+		s_thread_handle      = NULL;   /* handle fugado a proposito: el hilo lo usa */
+		s_thread_state       = GPU_THREAD_STOPPED;
+		s_thread_created     = 0;
+		return;
+	}
+
+	CloseHandle(s_thread_handle);
+	s_thread_handle  = NULL;
+	s_thread_state   = GPU_THREAD_STOPPED;
+	s_thread_created = 0;
+}
 
 void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 	u32 *ptr;

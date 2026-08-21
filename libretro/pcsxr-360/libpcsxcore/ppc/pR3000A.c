@@ -37,6 +37,14 @@ void __declspec(naked) __icbi(int offset, const void * base)
 
 u32 *psxRecLUT;
 
+/* Wrappers drenantes del ring GPU (libpcsxcore/gpu.c).  El fast-path del
+ * dynarec para lecturas de registros GPU con direccion constante DEBE usar
+ * estos, no los punteros de plugin crudos GPU_readData/GPU_readStatus: sin
+ * drenar el ring, el main observa estado GPU que el hilo consumidor aun no
+ * termino (cuelgue del FMV con SwanStation).  Coinciden con gpu.h. */
+extern u32 gpuReadData(void);
+extern u32 gpuReadStatus(void);
+
 #undef _Op_
 #define _Op_     _fOp_(psxRegs.code)
 #undef _Funct_
@@ -1884,7 +1892,7 @@ static void recLW() {
 
 					DisposeHWReg(iRegs[_Rt_].reg);
 					InvalidateCPURegs();
-					CALLFunc((u32)GPU_readData);
+					CALLFunc((u32)gpuReadData);   /* wrapper drenante, no el plugin crudo */
 
 					SetDstCPUReg(3);
 					PutHWReg32(_Rt_);
@@ -1895,7 +1903,7 @@ static void recLW() {
 
 					DisposeHWReg(iRegs[_Rt_].reg);
 					InvalidateCPURegs();
-					CALLFunc((u32)GPU_readStatus);
+					CALLFunc((u32)gpuReadStatus);   /* wrapper drenante, no el plugin crudo */
 					
 					SetDstCPUReg(3);
 					PutHWReg32(_Rt_);

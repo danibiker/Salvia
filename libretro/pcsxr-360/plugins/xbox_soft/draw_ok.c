@@ -165,6 +165,22 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y)
 		surf += PreviousPSXDisplay.Range.x0 << 2;
 	}
 
+	/* Right letterbox: limpiar los pixeles a la derecha del contenido.
+	 * Se reporta al frontend un ancho de (g_pPitch/4) px, pero el blit
+	 * solo escribe `dx` columnas desde Range.x0; las columnas finales
+	 * [Range.x0+dx .. ancho) conservaban VRAM del frame anterior (el
+	 * "ruido a la derecha" al encoger el ancho visible: codec de MGS, GT2).
+	 * Analogo al clear del margen izquierdo de arriba. */
+	{
+		int rmargin = (int)(lPitch >> 2) - PreviousPSXDisplay.Range.x0 - (int)dx;
+		if (rmargin > 0) {
+			for (column = 0; column < dy; column++) {
+				destpix = (uint32_t *)(surf + (column * lPitch));
+				TexZero(&destpix[dx], rmargin << 2);
+			}
+		}
+	}
+
 	if (PSXDisplay.RGB24)
 	{
 		for (column = 0; column < dy; column++)
@@ -356,6 +372,19 @@ void BlitScreen16(unsigned char * surf,long x,long y)
      TexZero(p, PreviousPSXDisplay.Range.x0 << 1);
    }
    surf += PreviousPSXDisplay.Range.x0 << 1;
+ }
+
+ /* Right letterbox: misma logica que BlitScreen32, pixeles de 2 bytes.
+  * Antes de `dx>>=1` para usar dx en pixeles. */
+ {
+   int rmargin = (int)(lPitch >> 1) - PreviousPSXDisplay.Range.x0 - (int)dx;
+   if (rmargin > 0) {
+     unsigned char *p;
+     for (column = 0; column < dy; column++) {
+       p = surf + (column * lPitch) + (dx << 1);
+       TexZero(p, rmargin << 1);
+     }
+   }
  }
 
  if(PSXDisplay.RGB24)

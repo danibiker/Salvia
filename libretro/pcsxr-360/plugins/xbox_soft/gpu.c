@@ -1581,8 +1581,19 @@ void PEOPS_GPUwriteDataMem(unsigned long * pMem, int iSize)
 	DEBUG_print("close",DBG_SDGECKOCLOSE);
 #endif //PEOPS_SDLOG
 
- GPUIsBusy;
- GPUIsNotReadyForCommands;
+ /* [THREADING] NO tocamos aqui los bits de status (GPUIsBusy /
+  * GPUIsNotReadyForCommands).  Esta funcion la ejecuta el HILO CONSUMIDOR
+  * del ring, asi que escribir lGPUstatusRet desde aqui convierte el
+  * registro de status en estado compartido con carrera: el hilo principal
+  * lo lee sin barrera y veia finalizaciones que no habian ocurrido (cuelgue
+  * del FMV de Silent Hill con SwanStation).
+  *
+  * Modelo adoptado (el mismo que pcsx_rearmed/gpulib, cuyo hilo de render
+  * -- gpu_async.c -- no contiene ni una referencia a `status`): el registro
+  * de status es propiedad EXCLUSIVA del hilo principal.  Este deriva
+  * "GPU ocupada" de la ocupacion del ring en gpuReadStatus()
+  * (libpcsxcore/gpu.c), que es informacion que ya posee y puede leer sin
+  * carrera ni bloqueo. */
 
 STARTVRAM:
 
@@ -1736,7 +1747,7 @@ ENDVRAM:
      if(gpuDataC == 0)
       {
        command = (unsigned char)((gdata>>24) & 0xff);
- 
+
 //if(command>=0xb0 && command<0xc0) auxprintf("b0 %x!!!!!!!!!\n",command);
 
        if(primTableCX[command])
@@ -1823,8 +1834,10 @@ ENDVRAM:
 
  lGPUdataRet=gdata;
 
- GPUIsReadyForCommands;
- GPUIsIdle;
+ /* [THREADING] Sin GPUIsReadyForCommands / GPUIsIdle: ver la nota de la
+  * entrada de esta funcion.  Marcar "idle" aqui era precisamente lo que
+  * hacia que el hilo principal viese la GPU libre al final de CADA chunk,
+  * en vez de cuando el trabajo encolado estaba realmente terminado. */
 }
 
 ////////////////////////////////////////////////////////////////////////

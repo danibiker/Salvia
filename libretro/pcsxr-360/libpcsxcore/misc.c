@@ -610,6 +610,9 @@ int SaveStateMem(void *data, size_t size, size_t *outUsed) {
 	/* gpu */
 	gpufP = (GPUFreeze_t *)malloc(sizeof(GPUFreeze_t));
 	gpufP->ulFreezeVersion = 1;
+	/* Drenar el ring: el hilo consumidor debe haber terminado de escribir
+	 * psxVuw antes de que GPU_freeze lea la VRAM para el savestate. */
+	{ extern void gpuSync(void); gpuSync(); }
 	GPU_freeze(1, gpufP);
 	psxSS_write(&ss, gpufP, sizeof(GPUFreeze_t));
 	free(gpufP);
@@ -683,6 +686,9 @@ int LoadStateMem(const void *data, size_t size) {
 	/* gpu */
 	gpufP = (GPUFreeze_t *)malloc(sizeof(GPUFreeze_t));
 	psxSS_read(&ss, gpufP, sizeof(GPUFreeze_t));
+	/* Drenar el ring antes de restaurar la VRAM, para que no queden
+	 * escrituras encoladas del consumidor que pisen el estado cargado. */
+	{ extern void gpuSync(void); gpuSync(); }
 	GPU_freeze(0, gpufP);
 	free(gpufP);
 
