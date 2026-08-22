@@ -163,6 +163,22 @@ typedef struct {
 	boolean RCntFix;
 	boolean UseNet;
 	boolean VSyncWA;
+	/* [XBOX360] Emulacion de la I-CACHE del R3000A (4 KB, 256 lineas de 16
+	 * bytes, mapeo directo).  Necesaria para el motor de Studio 33/Psygnosis:
+	 * Formula One 99 / 2001 / Arcade copian un stub de 16 bytes a una
+	 * direccion elegida para NO aliasar en cache con el descompresor, lo
+	 * ejecutan una vez para meterlo en la I-cache, descomprimen 1,63 MB
+	 * ENCIMA de su copia en RAM y lo vuelven a llamar: en hardware corre
+	 * desde la cache.  Sin esto ejecutamos los datos que lo pisaron.
+	 * Solo aplica al INTERPRETE (el dynarec no pasa por diagFetch). */
+	boolean IcacheEmulation;
+	/* [XBOX360] La misma I-cache, pero para el RECOMPILADOR: el compilador lee
+	 * las instrucciones a traves de ella, asi que si el juego pisa la RAM sin
+	 * hacer flush, al recompilar el bloque salen los bytes CACHEADOS y no la
+	 * basura nueva.  Es la semantica del hardware, pero pone en riesgo el SMC
+	 * legitimo sin flush -> por eso va en opcion aparte y APAGADA por defecto.
+	 * El contador [ICDIV] mide cuantas veces cache y RAM difieren de verdad. */
+	boolean IcacheDynarec;
 	u8 Cpu; // CPU_DYNAREC or CPU_INTERPRETER
 	u8 PsxType; // PSX_TYPE_NTSC or PSX_TYPE_PAL
 	u8 CpuBias;

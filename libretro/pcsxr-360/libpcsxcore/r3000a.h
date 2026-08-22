@@ -205,6 +205,13 @@ typedef struct {
 
 extern psxRegisters psxRegs;
 
+/* [XBOX360] I-cache del interprete (psxinterpreter.c).  Ver el comentario de
+ * Config.IcacheEmulation en psxcommon.h. */
+void psxIcacheClear(void);
+void psxIcacheConfigure(void);
+u32  psxIcacheFetchCompile(u32 pc);
+void psxIcacheStats(u32 *n, u32 *pc, u32 *cached, u32 *ram);
+
 #define set_event(e, c) do { \
 	psxRegs.interrupt |= (1 << (e)); \
 	psxRegs.intCycle[e].cycle = (c); \

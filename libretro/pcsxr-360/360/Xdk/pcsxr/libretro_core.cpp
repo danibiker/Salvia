@@ -342,6 +342,42 @@ void retro_set_environment(retro_environment_t cb) {
 
         /* ---------- Performance ---------- */
         {
+            "pcsxr360_cpu_core",
+            "CPU core (restart to apply)", "CPU Core (restart to apply)",
+            "Dynarec = recompilador PPC (rapido). Interpreter = interprete MIPS "
+            "(muy lento, solo diagnostico: aisla si un fallo viene del dynarec).",
+            NULL, "performance",
+            { { "dynarec", "Dynarec (PPC)" }, { "interpreter", "Interpreter (slow)" }, { NULL, NULL } },
+            "dynarec"
+        },
+		{
+            "pcsxr360_icache_dynarec",
+            "I-cache in Dynarec (restart to apply)",
+            "I-Cache in Dynarec (restart to apply)",
+            "Hace que el COMPILADOR del dynarec lea las instrucciones por la "
+            "I-cache. Es lo que permite que Formula One 99 vaya a velocidad "
+            "completa en vez de con el interprete. RIESGO: un juego que escriba "
+            "codigo y salte SIN hacer flush de la cache recompilaria el codigo "
+            "VIEJO; el log saca [ICDIV] n=... con las veces que cache y RAM "
+            "difieren de verdad, y n=0 significa que el cambio es inerte para "
+            "ese juego. Requiere CPU core = Dynarec.",
+            NULL, "performance",
+            { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+        {
+            "pcsxr360_icache",
+            "I-Cache in Interpreter (restart to apply)", "I-Cache in Interpreter (restart to apply)",
+            "Emula la I-cache del R3000A (4 KB, 256 lineas de 16 bytes). "
+            "Imprescindible en Formula One 99 / 2001 / Arcade: copian un stub de "
+            "16 bytes a una linea de cache libre, lo llaman para cachearlo, "
+            "descomprimen 1,63 MB encima de su copia en RAM y lo vuelven a "
+            "llamar. Solo tiene efecto con el CPU core = Interpreter.",
+            NULL, "performance",
+            { { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } },
+            "disabled"
+        },
+        {
             "pcsxr360_threading",
             "GPU Thread (restart core to apply)", "GPU Thread (restart to apply)",
             NULL, NULL, "performance",
@@ -1017,7 +1053,56 @@ static int emu_setup(void) {
     Config.Cdda    = 0;
     Config.PsxAuto = 1;
     Config.CpuBias = 2;
+
+    /* CPU core: dynarec (por defecto) o interprete.  El interprete es MUY
+     * lento pero sirve de BISECCION: si un juego falla con dynarec y va con
+     * interprete, el bug esta en el recompilador (ppc/pR3000A.c) y no en la
+     * logica del core.  Init-only: psxInit() lee Config.Cpu una sola vez. */
     Config.Cpu     = CPU_DYNAREC;
+    {
+        struct retro_variable var_cpu;
+        var_cpu.key = "pcsxr360_cpu_core";
+        var_cpu.value = NULL;
+        if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_cpu)
+            && var_cpu.value && strcmp(var_cpu.value, "interpreter") == 0) {
+            Config.Cpu = CPU_INTERPRETER;
+            pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] CPU core: INTERPRETER (diagnostico)\n");
+        }
+    }
+
+    /* I-cache del R3000A.  Por defecto ON (como upstream pcsx_rearmed): sin
+     * ella Formula One 99 revienta en jump@801F5ADC, porque su cargador
+     * descomprime 1,63 MB encima del stub de 16 bytes que acaba de dejar
+     * cacheado en 0x80023000 y despues lo llama.  intReset() la desactiva
+     * sola si el CPU core es el dynarec, que no pasa por el fetch. */
+    Config.IcacheEmulation = 1;
+    {
+        struct retro_variable var_ic;
+        var_ic.key = "pcsxr360_icache";
+        var_ic.value = NULL;
+        if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_ic)
+            && var_ic.value && strcmp(var_ic.value, "disabled") == 0) {
+            Config.IcacheEmulation = 0;
+            pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] I-cache: DESACTIVADA por opcion\n");
+        }
+    }
+
+    /* I-cache en el DYNAREC: apagada por defecto a proposito.  Es la semantica
+     * del hardware (la cache solo se invalida con el flush explicito), pero un
+     * juego con SMC sin flush recompilaria codigo viejo, asi que se activa a
+     * mano y se mide con [ICDIV]. */
+    Config.IcacheDynarec = 0;
+    {
+        struct retro_variable var_icd;
+        var_icd.key = "pcsxr360_icache_dynarec";
+        var_icd.value = NULL;
+        if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_icd)
+            && var_icd.value && strcmp(var_icd.value, "enabled") == 0) {
+            Config.IcacheDynarec = 1;
+            pcsxr_log(RETRO_LOG_INFO,
+                "[PCSXR-LR] I-cache en DYNAREC: ACTIVADA (experimental)\n");
+        }
+    }
 
     const char *system_dir = NULL;
     if (!environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir) || !system_dir) {

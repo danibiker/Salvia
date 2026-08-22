@@ -233,6 +233,27 @@ static struct {
 	u8 AttenuatorLeftToLeftT, AttenuatorLeftToRightT;
 	u8 AttenuatorRightToRightT, AttenuatorRightToLeftT;
 } cdr;
+
+/* [XBOX360] Volcado del estado del controlador de CD, para diagnosticar
+ * cuelgues dentro del handler de IRQ del juego (sondeo de registros del CD
+ * con las interrupciones desactivadas).  Lo llama el dump periodico de
+ * r3000a.c.  Solo lectura, sin efectos secundarios. */
+void cdrDiagDump(void);
+void cdrDiagDump(void)
+{
+	extern void pcsxr_log();
+	pcsxr_log(1,
+		"[CD] irqstat=%02X irqmask=%02X irq1pend=%u statp=%02X drvstate=%u\n",
+		(unsigned)cdr.IrqStat, (unsigned)cdr.IrqMask,
+		(unsigned)cdr.Irq1Pending, (unsigned)cdr.StatP,
+		(unsigned)cdr.DriveState);
+	pcsxr_log(1,
+		"[CD] resready=%u resP=%u resC=%u fifoOff=%u fifoSize=%u mode=%02X\n",
+		(unsigned)cdr.ResultReady, (unsigned)cdr.ResultP,
+		(unsigned)cdr.ResultC, (unsigned)cdr.FifoOffset,
+		(unsigned)cdr.FifoSize, (unsigned)cdr.Mode);
+}
+
 static __declspec(align(64)) s16 read_buf[CD_FRAMESIZE_RAW_ALIGNED / 2];
 
 /* struct SubQ ya esta definida (identica) en plugins.h; no redefinir aqui. */
@@ -907,8 +928,11 @@ void cdrInterrupt(void) {
 			cdr.CmdInProgress, cdr.Irq1Pending);
 		SetResultSize(1);
 		cdr.Result[0] = cdr.Irq1Pending;
-		cdr.Irq1Pending = 0;
+		/* [XBOX360] BUG: antes se ponia Irq1Pending = 0 ANTES de testearlo en
+		 * setIrq(), asi que la condicion evaluaba siempre sobre 0 y NUNCA se
+		 * entregaba DiskError (siempre DataReady).  Testear primero. */
 		setIrq((cdr.Irq1Pending & STATUS_ERROR) ? DiskError : DataReady, 0x1003);
+		cdr.Irq1Pending = 0;
 		return;
 	}
 

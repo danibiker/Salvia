@@ -47,15 +47,86 @@
 		} \
 	} \
 
-#define DmaExec_2(n) \
+/* [XBOX360] Alineado con upstream pcsx_rearmed (make_dma_func, su psxhw.c).
+ * Tres diferencias, las tres presentes en la version anterior:
+ *
+ *   1. Enmascarar el valor (0x71770703; canal 6 usa 0x51000002 | 2).  Sin
+ *      esto CHCR conserva bits reservados, y el switch de psxDma2 compara
+ *      valores EXACTOS (0x01000200/201/401), asi que caia en el default
+ *      "unknown" en vez de hacer la transferencia.
+ *   2. Ignorar escrituras identicas (value == old).
+ *   3. Disparar la DMA solo en el FLANCO 0->1 del bit 24, no por NIVEL.
+ *      Antes cualquier escritura con el bit 24 puesto relanzaba psxDma##n:
+ *      repetia la transferencia y reprogramaba GPUDMA_INT desde cero,
+ *      empujando "ocupada" hacia el futuro.  Upstream trata "escribir CHCR
+ *      con la DMA en vuelo" como anomalia y NO reinicia.
+ *
+ * El abort_func de upstream (psxAbortDma2) no se porta: solo asigna
+ * psxRegs.gpuIdleAfter, mecanismo que este arbol no tiene. */
+#define DmaExec_2(n, msk, orv) \
 	static void DmaExec_2##n##(u32 add, u32 value) { \
+		u32 old = SWAPu32(HW_DMA##n##_CHCR_2); \
+		value = (value & (msk)) | (orv); \
+		if (value == old) return; \
 		HW_DMA##n##_CHCR_2 = SWAPu32(value); \
-		\
-		if (SWAPu32(HW_DMA##n##_CHCR_2) & 0x01000000 && SWAPu32(HW_DMA_PCR_2) & (8 << (n * 4))) { \
-		psxDma##n(SWAPu32(HW_DMA##n##_MADR_2), SWAPu32(HW_DMA##n##_BCR_2), SWAPu32(HW_DMA##n##_CHCR_2)); \
+		if (((value ^ old) & 0x01000000u) && (value & 0x01000000u) && \
+		    (SWAPu32(HW_DMA_PCR_2) & (8u << ((n) * 4)))) { \
+			psxDma##n(SWAPu32(HW_DMA##n##_MADR_2), \
+				SWAPu32(HW_DMA##n##_BCR_2), value); \
 		} \
 	} \
 
+
+/* Recogida de datos de diagnostico.  Va bajo el MISMO guard que los volcados
+ * que la consumen (diag_dump_irq_counts en r3000a.c): recoger sin que nadie
+ * lea seria coste puro en CADA acceso a registro de HW. */
+#if PCSXR_DIAG_INSTRUMENTATION
+/* [XBOX360] Latch de diagnostico: guarda las ultimas direcciones de
+ * registro HW leidas (histograma circular).  Sirve para ver QUE registro
+ * sondea un bucle cuando el juego se queda colgado en su handler de IRQ. */
+volatile u32 diag_hwread_ring[8];
+volatile u32 diag_hwread_idx = 0;
+#define DIAG_HWREAD_NOTE(a) do { diag_hwread_ring[diag_hwread_idx & 7] = (a); diag_hwread_idx++; } while (0)
+
+/* Idem para ESCRITURAS: guarda (direccion << 16) | valor_bajo.  Sirve para
+ * ver si el juego llega a RECONOCER la IRQ (escritura a 0x1070 / 0x1803) o
+ * si se queda solo sondeando. */
+volatile u32 diag_hwwrite_ring[8];
+volatile u32 diag_hwwrite_idx = 0;
+#define DIAG_HWWRITE_NOTE(a, v) do { diag_hwwrite_ring[diag_hwwrite_idx & 7] = (((a) & 0xffff) << 16) | ((v) & 0xffff); diag_hwwrite_idx++; } while (0)
+
+/* [XBOX360] Anillo DEDICADO a los registros del CD (0x1800-0x1803), 64
+ * entradas.  Los anillos generales los inunda el bucle de espera del juego
+ * (que sondea 1070/1074 sin parar) y no se puede ver que hizo el callback
+ * ANTES de quedarse esperando.  Este solo captura CD, asi que sobrevive al
+ * spin.  Responde a: el callback del juego, leyo el CD o no lo toco?
+ * Ampliado a 64 entradas y con CICLO: el cargador de 0x80013A0C se come
+ * ~74M ciclos reintentando y con 16 no cabia la secuencia de comandos, ni
+ * se distinguia si eran de esa ventana o de la ronda anterior. */
+volatile u32  diag_cd_pc[64];
+volatile u32  diag_cd_addr[64];
+volatile u32  diag_cd_val[64];
+volatile u32  diag_cd_cyc[64];
+volatile char diag_cd_rw[64];
+volatile u32  diag_cd_idx = 0;
+static void diag_cd_note(u32 a, u32 v, char w)
+{
+	u32 i;
+	if ((a & 0xfffcu) != 0x1800u) return;
+	i = diag_cd_idx & 63u;
+	diag_cd_pc[i]   = psxRegs.pc;
+	diag_cd_addr[i] = a;
+	diag_cd_val[i]  = v;
+	diag_cd_cyc[i]  = psxRegs.cycle;
+	diag_cd_rw[i]   = w;
+	diag_cd_idx++;
+}
+
+#else
+#define DIAG_HWREAD_NOTE(a)        ((void)0)
+#define DIAG_HWWRITE_NOTE(a, v)    ((void)0)
+#define diag_cd_note(a, v, w)      ((void)0)
+#endif
 
 hw_read8_t *	hw_read8_handler;
 hw_read16_t *	hw_read16_handler;
@@ -76,12 +147,12 @@ hw_write32_t *	hw_write32_handler;
 //DmaExec(4);
 //DmaExec(6);
 
-DmaExec_2(0);
-DmaExec_2(1);
-DmaExec_2(2);
-DmaExec_2(3);
-DmaExec_2(4);
-DmaExec_2(6);
+DmaExec_2(0, 0x71770703u, 0u);
+DmaExec_2(1, 0x71770703u, 0u);
+DmaExec_2(2, 0x71770703u, 0u);
+DmaExec_2(3, 0x71770703u, 0u);
+DmaExec_2(4, 0x71770703u, 0u);
+DmaExec_2(6, 0x51000002u, 2u);
 
 
 static void DmaIcr(u32 add, u32 value) {
@@ -219,26 +290,85 @@ static void psxWtgt2(u32 add, u32 v) {
 	psxRcntWtarget(2, v);
 }
 
+#if PCSXR_DIAG_INSTRUMENTATION
+/* [XBOX360] Watch dedicado de TODA escritura a DICR (0x10F4-0x10F7), con PC,
+ * ancho y valor.  El anillo generico [HWWR] tiene 8 huecos y lo inunda el
+ * spin del juego, asi que solo capturaba una escritura suelta.  Aqui se ve
+ * si el juego INTENTA habilitar el bit 18 (IRQ del canal 2, la DMA de GPU)
+ * y si nosotros la perdemos: nuestro handler DmaIcr esta registrado SOLO en
+ * hw_write32_handler, mientras upstream enruta 0x10f4 tambien en la ruta de
+ * 16 bits (pcsx_rearmed psxhw.c:370). */
+volatile u32  diag_dicr_pc[16];
+volatile u32  diag_dicr_val[16];
+volatile u32  diag_dicr_after[16];
+volatile char diag_dicr_addr[16];
+volatile char diag_dicr_w[16];
+volatile u32  diag_dicr_idx = 0;
+
+static void diag_dicr_note(u32 add, u32 val, char width)
+{
+	u32 i;
+	if ((add & 0xfffcu) != 0x10f4u)
+		return;
+	i = diag_dicr_idx & 15u;
+	diag_dicr_pc[i]    = psxRegs.pc;
+	diag_dicr_val[i]   = val;
+	diag_dicr_addr[i]  = (char)(add & 0xffu);
+	diag_dicr_w[i]     = width;
+	diag_dicr_after[i] = psxHu32_2(0x10f4);   /* valor RESULTANTE */
+	diag_dicr_idx++;
+}
+
+#else
+#define diag_dicr_note(a, v, w)    ((void)0)
+#endif
+
+/* [XBOX360] CP0.Cause bit 10 (IP2) refleja EN CONTINUO el estado de la linea
+ * de interrupcion del hardware: (I_STAT & I_MASK) != 0.  No es un valor que
+ * la excepcion latchee -- el software puede leerlo en cualquier momento, y
+ * el handler de excepcion del BIOS lo hace.
+ *
+ * DIVERGENCIA CON UPSTREAM que teniamos: psxException hacia `Cause = code`
+ * y nadie mas tocaba Cause, asi que el bit 10 se quedaba a 1 PARA SIEMPRE
+ * en cuanto se tomaba una IRQ.  Un handler que consulte Cause para decidir
+ * si queda trabajo pendiente ve "si" eternamente -> no sale nunca.
+ * Upstream lo mantiene en psxHwWriteIstat / psxHwWriteImask / irq_test
+ * (pcsx_rearmed: psxhw.c:46,63 y psxevents.c:80).
+ *
+ * Devuelve la mascara de IRQs pendientes para que el llamante no tenga que
+ * releer 0x1070/0x1074 (asi lo hace irq_test de upstream). */
+u32 psxHwUpdateCauseIp(void)
+{
+	u32 pending = psxHu32_2(0x1070) & psxHu32_2(0x1074);
+	psxRegs.CP0.n.Cause &= ~0x400u;
+	if (pending)
+		psxRegs.CP0.n.Cause |= 0x400u;
+	return pending;
+}
+
 static void psxWiReg16(u32 add, u16 value) {
-//if(use_vm){
-//	if (Config.Sio) psxHu16ref(0x1070) |= SWAPu16(0x80);
-//	if (Config.SpuIrq) psxHu16ref(0x1070) |= SWAPu16(0x200);
-//	psxHu16ref(0x1070) &= SWAPu16(value);}
-//else{
 	if (Config.Sio) psxHu16ref_2(0x1070) |= SWAPu16(0x80);
 	if (Config.SpuIrq) psxHu16ref_2(0x1070) |= SWAPu16(0x200);
-	psxHu16ref_2(0x1070) &= SWAPu16(value);//}//teste
+	psxHu16ref_2(0x1070) &= SWAPu16(value);
+	psxHwUpdateCauseIp();   /* el ACK puede bajar la linea */
 }
 
 static void psxWiReg32(u32 add, u32 value) {
-//if(use_vm){
-//	if (Config.Sio) psxHu32ref(0x1070) |= SWAPu32(0x80);
-//	if (Config.SpuIrq) psxHu32ref(0x1070) |= SWAPu32(0x200);
-//	psxHu32ref(0x1070) &= SWAPu32(value);}
-//else{
 	if (Config.Sio) psxHu32ref_2(0x1070) |= SWAPu32(0x80);
 	if (Config.SpuIrq) psxHu32ref_2(0x1070) |= SWAPu32(0x200);
-	psxHu32ref_2(0x1070) &= SWAPu32(value);//}//teste
+	psxHu32ref_2(0x1070) &= SWAPu32(value);
+	psxHwUpdateCauseIp();   /* el ACK puede bajar la linea */
+}
+
+/* I_MASK (0x1074): desenmascarar o enmascarar tambien mueve la linea. */
+static void psxWiMask16(u32 add, u16 value) {
+	psxHu16ref_2(add) = SWAPu16(value);
+	psxHwUpdateCauseIp();
+}
+
+static void psxWiMask32(u32 add, u32 value) {
+	psxHu32ref_2(add) = SWAPu32(value);
+	psxHwUpdateCauseIp();
 }
 
 /**
@@ -434,6 +564,7 @@ void psxHwInit() {
 
 	// IREG
 	hw_write16_handler[0x1070] = psxWiReg16;
+	hw_write16_handler[0x1074] = psxWiMask16;
 
 	hw_write16_handler[0x1100] = (hw_write16_t)psxWcnt0;
 	hw_write16_handler[0x1104] = (hw_write16_t)psxWmod0;
@@ -452,6 +583,7 @@ void psxHwInit() {
 
 	// IREG
 	hw_write32_handler[0x1070] = psxWiReg32;
+	hw_write32_handler[0x1074] = psxWiMask32;
 //if(use_vm){
 //	hw_write32_handler[0x1088] = DmaExec0;
 //	hw_write32_handler[0x1098] = DmaExec1;
@@ -543,10 +675,13 @@ u8 psxHwRead8(u32 add) {
 	hw_read8_t func = NULL;
 	u8 r;
 
+	DIAG_HWREAD_NOTE(p);   /* tras las declaraciones: C89 */
+
 	func = hw_read8_handler[p];
 	DIAG_SET_HW_ACTIVE(p);
 	r = func(add);
 	DIAG_SET_HW_ACTIVE(0);
+	diag_cd_note(p, r, 'r');   /* tras leer: ya tenemos el valor */
 	return r;
 }
 
@@ -554,6 +689,8 @@ u16 psxHwRead16(u32 add) {
 	u32 p = add & 0xFFFF;
 	hw_read16_t func = NULL;
 	u16 r;
+
+	DIAG_HWREAD_NOTE(p);   /* tras las declaraciones: C89 */
 
 	func = hw_read16_handler[p];
 	DIAG_SET_HW_ACTIVE(p);
@@ -567,6 +704,8 @@ u32 psxHwRead32(u32 add) {
 	hw_read32_t func = NULL;
 	u32 r;
 
+	DIAG_HWREAD_NOTE(p);   /* tras las declaraciones: C89 */
+
 	func = hw_read32_handler[p];
 	DIAG_SET_HW_ACTIVE(p);
 	r = func(add);
@@ -578,30 +717,40 @@ void psxHwWrite8(u32 add, u8 value) {
 	u32 p = add & 0xFFFF;
 	hw_write8_t func = NULL;
 
+	DIAG_HWWRITE_NOTE(p, value);   /* tras las declaraciones: C89 */
+	diag_cd_note(p, value, 'w');
+
 	func = hw_write8_handler[p];
 	DIAG_SET_HW_ACTIVE(p | PSXHW_WRITE_FLAG);
 	func(add, value);
 	DIAG_SET_HW_ACTIVE(0);
+	diag_dicr_note(p, value, '8');   /* tras el handler: captura el resultado */
 }
 
 void psxHwWrite16(u32 add, u16 value) {
 	u32 p = add & 0xFFFF;
 	hw_write16_t func = NULL;
 
+	DIAG_HWWRITE_NOTE(p, value);   /* tras las declaraciones: C89 */
+
 	func = hw_write16_handler[p];
 	DIAG_SET_HW_ACTIVE(p | PSXHW_WRITE_FLAG);
 	func(add, value);
 	DIAG_SET_HW_ACTIVE(0);
+	diag_dicr_note(p, value, 'H');   /* tras el handler: captura el resultado */
 }
 
 void psxHwWrite32(u32 add, u32 value) {
 	u32 p = add & 0xFFFF;
 	hw_write32_t func = NULL;
 
+	DIAG_HWWRITE_NOTE(p, value);   /* tras las declaraciones: C89 */
+
 	func = hw_write32_handler[p];
 	DIAG_SET_HW_ACTIVE(p | PSXHW_WRITE_FLAG);
 	func(add, value);
 	DIAG_SET_HW_ACTIVE(0);
+	diag_dicr_note(p, value, 'W');   /* tras el handler: captura el resultado */
 }
 
 int psxHwFreeze(psxSaveState_t *f, int Mode) {

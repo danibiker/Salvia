@@ -23,6 +23,7 @@
 
 #include "psxcommon.h"
 #include "r3000a.h"
+#include "gpu.h"	/* PCSXR_DIAG_INSTRUMENTATION */
 #include "gte.h"
 #include "psxhle.h"
 #include <process.h>
@@ -41,9 +42,248 @@ static u32 branchPC;
 #define debugI()
 #endif
 
+/* [XBOX360] Fetch de instruccion CON GUARDA, y destino de salto enmascarado.
+ * Alineado con upstream pcsx_rearmed: fetchNoCache() comprueba el LUT y, si
+ * el PC no esta mapeado, reporta "game crash @pc, ra=..." y ejecuta un NOP;
+ * doBranchReg() enmascara el destino con ~3.
+ *
+ * Aqui los TRES sitios de fetch hacian *(u32 *)PSXM_2(pc) a pelo.  Con un PC
+ * basura PSXM_2 devuelve NULL y el ANFITRION revienta con una access
+ * violation leyendo la direccion 0 -- sin decir nada del juego.  Y jr/jalr
+ * pasaban el registro crudo, asi que el PC podia quedar DESALINEADO (visto:
+ * ra=0x00430035, pc=0x004300D5), algo imposible en un R3000A real. */
+extern void pcsxr_log(int level, const char *format, ...);
+
+/* [XBOX360] DIAGNOSTICO: lo que este fichero usa de fuera, agrupado aqui
+ * arriba para que este visible en todo el fichero.  Las definiciones viven
+ * en r3000a.c. */
+#if PCSXR_DIAG_INSTRUMENTATION
+extern void diag_sr_note(char src, u32 pc, u32 val);	/* anillo CP0.Status */
+extern void diag_rdidx_note(u32 addr, u32 val);		/* vigia del indice de drain */
+#else
+/* Sin volcados que las lean, recoger es coste puro (diag_rdidx_note esta en
+ * psxSW: cada store de 32 bits del interprete). */
+#define diag_sr_note(s, p, v)      ((void)0)
+#define diag_rdidx_note(a, v)      ((void)0)
+#endif
+
+static int s_fetch_crash_logged = 0;
+static int s_jump_align_logged = 0;
+
+/* [XBOX360] I-CACHE del R3000A.  Portado de pcsx_rearmed (fetchICache), cuyo
+ * comentario es literalmente "Formula One 2001: use old CPU cache code when the
+ * RAM location is updated with new code", y cuya core option dice "Required for
+ * Formula One 2001, Formula One Arcade and Formula One 99".
+ *
+ * 4 KB, 256 lineas de 16 bytes, mapeo directo: el indice de linea es
+ * (pc >> 4) & 0xFF.  Lo confirma el propio juego: la funcion 0x801F5808
+ * recorre las 0x60 lineas del descompresor (desde 0x80013A00) comparando
+ * ((a0>>4)+i) & 0xFF contra (a2>>4) & 0xFF y empuja a2 16 bytes por cada
+ * colision, hasta dar con una linea libre.  Sale a2 = 0x80023000 (linea 0x00,
+ * fuera del rango 0xA0..0xFF del descompresor), copia ahi 16 bytes desde
+ * 0x801F57EC, los llama para calentar la cache, y luego el descompresor
+ * escribe 0x197000 bytes (medido: end=0x801B9F00, ultimo byte 0x801B9EFF)
+ * pisando esa RAM.  Al volver, el jalr sobre 0x80023000 tiene que ejecutar el
+ * stub CACHEADO, no lo que quedo en memoria.
+ *
+ * NO se invalida en las escrituras a RAM: eso es justo lo que el juego explota.
+ * Se limpia en reset y en el flush explicito de 0xFFFE0130 (psxmem.c). */
+struct pcsxr_icache_line {
+	u32 tag;
+	u32 data[4];
+};
+static struct pcsxr_icache_line s_icache[256];
+static int s_icache_on = 0;	/* la usa el fetch del INTERPRETE */
+static int s_icache_dyn = 0;	/* la usa el compilador del DYNAREC */
+
+/* Divergencia real: veces que el compilador leyo de la cache un valor DISTINTO
+ * al que hay en RAM.  Es la medida que valida el modo dynarec: si en Ace Combat
+ * 2 / NFS3 / GT2 / ISS Pro esto se queda a 0, el cambio es demostrablemente
+ * inerte para ellos; si en Formula One 99 es >0 y el juego va, la emulacion
+ * esta haciendo su trabajo. */
+static u32 s_icdiv_n = 0;
+static u32 s_icdiv_pc = 0;
+static u32 s_icdiv_cached = 0;
+static u32 s_icdiv_ram = 0;
+/* Siguiente hito a reportar.  El volcado periodico de r3000a.c vive bajo
+ * PCSXR_DIAG_INSTRUMENTATION, que esta a 0, asi que [ICDIV] no salia NUNCA y la
+ * medicion no se hacia.  Esto se auto-reporta: la primera divergencia y luego
+ * cada x100.  Son 3-4 lineas por sesion como mucho. */
+static u32 s_icdiv_next = 1;
+
+void psxIcacheClear(void)
+{
+	memset(s_icache, 0xff, sizeof(s_icache));
+}
+
+void psxIcacheStats(u32 *n, u32 *pc, u32 *cached, u32 *ram)
+{
+	if (n)      *n = s_icdiv_n;
+	if (pc)     *pc = s_icdiv_pc;
+	if (cached) *cached = s_icdiv_cached;
+	if (ram)    *ram = s_icdiv_ram;
+}
+
+/* Un solo punto de configuracion, llamado desde psxReset() y desde intReset().
+ * En modo dynarec el INTERPRETE tambien usa la cache: el recompilador cae al
+ * interprete de vez en cuando y los dos tienen que ver los mismos bytes. */
+void psxIcacheConfigure(void)
+{
+	if (Config.Cpu == CPU_INTERPRETER) {
+		s_icache_dyn = 0;
+		s_icache_on  = Config.IcacheEmulation ? 1 : 0;
+	} else {
+		s_icache_dyn = Config.IcacheDynarec ? 1 : 0;
+		s_icache_on  = s_icache_dyn;
+	}
+	s_icdiv_n = 0;
+	s_icdiv_pc = 0;
+	s_icdiv_cached = 0;
+	s_icdiv_ram = 0;
+	s_icdiv_next = 1;
+	psxIcacheClear();
+	pcsxr_log(1, "[ICACHE] interprete=%s dynarec=%s\n",
+		s_icache_on ? "si" : "no", s_icache_dyn ? "si" : "no");
+}
+
+/* Fetch de instruccion DEL COMPILADOR del dynarec (ppc/pR3000A.c).  Con la
+ * opcion apagada se comporta exactamente como el codigo de antes. */
+u32 psxIcacheFetchCompile(u32 pc)
+{
+	struct pcsxr_icache_line *line;
+	const u32 *code;
+	u32 got, ram;
+
+	if (!s_icache_dyn || pc >= 0xa0000000u) {
+		code = (const u32 *)PSXM_2(pc & ~3u);
+		return code ? SWAP32(*code) : 0u;
+	}
+
+	line = &s_icache[(pc & 0xff0u) >> 4];
+	if (((line->tag ^ pc) & 0xfffffff0u) != 0 || pc < line->tag) {
+		code = (const u32 *)PSXM_2(pc & ~0x0fu);
+		if (code == NULL) {
+			code = (const u32 *)PSXM_2(pc & ~3u);
+			return code ? SWAP32(*code) : 0u;
+		}
+		line->tag = pc;
+		/* CAIDA A PROPOSITO: relleno hacia delante hasta el fin de linea. */
+		switch (pc & 0x0cu) {
+		case 0x00: line->data[0] = SWAP32(code[0]);
+		case 0x04: line->data[1] = SWAP32(code[1]);
+		case 0x08: line->data[2] = SWAP32(code[2]);
+		case 0x0c: line->data[3] = SWAP32(code[3]);
+		}
+		return line->data[(pc & 0x0fu) >> 2];
+	}
+
+	/* ACIERTO de linea: aqui es donde el modelo se separa de la RAM.  Se
+	 * compara con la RAM SOLO para contarlo; lo que se devuelve es siempre el
+	 * valor cacheado, que es lo que ejecutaria el hardware. */
+	got  = line->data[(pc & 0x0fu) >> 2];
+	code = (const u32 *)PSXM_2(pc & ~3u);
+	ram  = code ? SWAP32(*code) : 0u;
+	if (ram != got) {
+		if (s_icdiv_n == 0u) {
+			s_icdiv_pc     = pc;
+			s_icdiv_cached = got;
+			s_icdiv_ram    = ram;
+		}
+		s_icdiv_n++;
+		if (s_icdiv_n >= s_icdiv_next) {
+			pcsxr_log(1, "[ICDIV] n=%u pc=%08X cache=%08X ram=%08X"
+				" (1a: pc=%08X cache=%08X ram=%08X)\n",
+				(unsigned)s_icdiv_n, (unsigned)pc,
+				(unsigned)got, (unsigned)ram,
+				(unsigned)s_icdiv_pc, (unsigned)s_icdiv_cached,
+				(unsigned)s_icdiv_ram);
+			s_icdiv_next = s_icdiv_n * 100u;
+		}
+	}
+	return got;
+}
+
+static u32 diagFetchUncached(u32 pc);
+
+static u32 diagFetchCached(u32 pc)
+{
+	struct pcsxr_icache_line *line = &s_icache[(pc & 0xff0u) >> 4];
+
+	/* Fallo de linea, o salto HACIA ATRAS dentro de la linea: el R3000A
+	 * rellena desde la palabra que falla hasta el final de la linea, asi
+	 * que retroceder dentro de la misma linea obliga a recargarla. */
+	if (((line->tag ^ pc) & 0xfffffff0u) != 0 || pc < line->tag) {
+		const u32 *code = (const u32 *)PSXM_2(pc & ~0x0fu);
+		if (code == NULL)
+			return diagFetchUncached(pc);	/* que reporte el de siempre */
+		line->tag = pc;
+		/* CAIDA A PROPOSITO entre casos: rellena de la palabra que fallo
+		 * hasta el final de la linea, como el relleno hacia delante del
+		 * hardware.  NO poner breaks aqui. */
+		switch (pc & 0x0cu) {
+		case 0x00: line->data[0] = SWAP32(code[0]);
+		case 0x04: line->data[1] = SWAP32(code[1]);
+		case 0x08: line->data[2] = SWAP32(code[2]);
+		case 0x0c: line->data[3] = SWAP32(code[3]);
+		}
+	}
+	return line->data[(pc & 0x0fu) >> 2];
+}
+
+static u32 diagFetch(u32 pc)
+{
+	const u32 *code = (const u32 *)PSXM_2(pc & ~3u);
+
+	if (code == NULL) {
+		if (!s_fetch_crash_logged) {
+			s_fetch_crash_logged = 1;
+			pcsxr_log(1, "[CRASH] fetch sin mapear @%08X ra=%08X sp=%08X cyc=%u\n",
+				(unsigned)pc, (unsigned)psxRegs.GPR.n.ra,
+				(unsigned)psxRegs.GPR.n.sp, (unsigned)psxRegs.cycle);
+		}
+		return 0;	/* se ejecuta como NOP, igual que upstream */
+	}
+	/* KSEG1 (>= 0xA0000000, la BIOS de 0xBFC00000 incluida) no se cachea. */
+	if (s_icache_on && pc < 0xa0000000u)
+		return diagFetchCached(pc);
+	return SWAP32(*code);
+}
+
+/* Camino sin cache, para cuando el relleno de linea se sale del mapa. */
+static u32 diagFetchUncached(u32 pc)
+{
+	const u32 *code = (const u32 *)PSXM_2(pc & ~3u);
+	if (code == NULL) {
+		if (!s_fetch_crash_logged) {
+			s_fetch_crash_logged = 1;
+			pcsxr_log(1, "[CRASH] fetch sin mapear @%08X ra=%08X sp=%08X cyc=%u\n",
+				(unsigned)pc, (unsigned)psxRegs.GPR.n.ra,
+				(unsigned)psxRegs.GPR.n.sp, (unsigned)psxRegs.cycle);
+		}
+		return 0;
+	}
+	return SWAP32(*code);
+}
+
+/* Destino de jr/jalr: enmascara los 2 bits bajos (upstream doBranchReg) y
+ * delata el PRIMER salto desalineado, que es donde empieza de verdad el
+ * descarrilamiento (el fetch fallido ocurre decenas de instrucciones despues). */
+static u32 diagBranchTarget(u32 tar)
+{
+	if (tar & 3u) {
+		if (!s_jump_align_logged) {
+			s_jump_align_logged = 1;
+			pcsxr_log(1, "[CRASH] salto desalineado: jump@%08X -> %08X ra=%08X sp=%08X cyc=%u\n",
+				(unsigned)(psxRegs.pc - 4), (unsigned)tar,
+				(unsigned)psxRegs.GPR.n.ra,
+				(unsigned)psxRegs.GPR.n.sp, (unsigned)psxRegs.cycle);
+		}
+	}
+	return tar & ~3u;
+}
+
 #define execI(){ \
-u32 *code = (u32 *)PSXM_2(psxRegs.pc); \
-psxRegs.code = SWAP32(*code); \
+psxRegs.code = diagFetch(psxRegs.pc); \
 psxRegs.pc += 4; \
 psxRegs.cycle += BIAS; \
 psxBSC[psxRegs.code >> 26](); \
@@ -278,20 +518,17 @@ __forceinline void psxDelayTest(int reg, u32 bpc) {
 }
 
 static u32 psxBranchNoDelay(void) {
-	u32 *code;
 	u32 temp;
 
-	code = (u32 *)PSXM_2(psxRegs.pc);
-
-	psxRegs.code = SWAP32(*code);
+	psxRegs.code = diagFetch(psxRegs.pc);
 
 	switch (_Op_) {
 		case 0x00: // SPECIAL
 			switch (_Funct_) {
 				case 0x08: // JR
-					return _u32(_rRs_);
+					return diagBranchTarget(_u32(_rRs_));
 				case 0x09: // JALR
-					temp = _u32(_rRs_);
+					temp = diagBranchTarget(_u32(_rRs_));
 					if (_Rd_) { _SetLink(_Rd_); }
 					return temp;
 			}
@@ -405,7 +642,6 @@ static int psxDelayBranchTest(u32 tar1) {
 }
 
 __inline void doBranch(u32 tar) {
-	u32 *code;
 	u32 tmp;
 
 	branch2 = branch = 1;
@@ -416,9 +652,7 @@ __inline void doBranch(u32 tar) {
 		return;
 
 	// branch delay slot
-	code = (u32 *)PSXM_2(psxRegs.pc);
-
-	psxRegs.code = SWAP32(*code);
+	psxRegs.code = diagFetch(psxRegs.pc);
 
 	debugI();
 
@@ -615,10 +849,12 @@ void psxSYSCALL() {
 	psxException(0x20, branch);
 }
 
+
 void psxRFE() {
 //	SysPrintf("psxRFE\n");
 	psxRegs.CP0.n.Status = (psxRegs.CP0.n.Status & 0xfffffff0) |
 						  ((psxRegs.CP0.n.Status & 0x3c) >> 2);
+	diag_sr_note('R', psxRegs.pc, psxRegs.CP0.n.Status);
 }
 
 /*********************************************************
@@ -642,14 +878,14 @@ void psxJAL() {	_SetLink(31); doBranch(_JumpTarget_); }
 * Format:  OP rs, rd                                     *
 *********************************************************/
 void psxJR()   {
-	doBranch(_u32(_rRs_));
+	doBranch(diagBranchTarget(_u32(_rRs_)));
 
     psxJumpTest();
 
 }
 
 void psxJALR() {
-	u32 temp = _u32(_rRs_);
+	u32 temp = diagBranchTarget(_u32(_rRs_));
 	if (_Rd_) { _SetLink(_Rd_); }
 	doBranch(temp);
 }
@@ -835,9 +1071,21 @@ void psxLWR() {
 	*/
 }
 
-void psxSB() { psxMemWrite8_2 (_oB_, _u8 (_rRt_)); }
-void psxSH() { psxMemWrite16_2(_oB_, _u16(_rRt_)); }
-void psxSW() { psxMemWrite32_2(_oB_, _u32(_rRt_)); }
+void psxSB() {
+	u32 a = _oB_, v = _u8(_rRt_);
+	psxMemWrite8_2(a, (u8)v);
+}
+
+void psxSH() {
+	u32 a = _oB_, v = _u16(_rRt_);
+	psxMemWrite16_2(a, (u16)v);
+}
+
+void psxSW() {
+	u32 a = _oB_, v = _u32(_rRt_);
+	diag_rdidx_note(a, v);
+	psxMemWrite32_2(a, v);
+}
 
 
 u32 SWL_MASK[4] = { 0xffffff00, 0xffff0000, 0xff000000, 0 };
@@ -941,6 +1189,7 @@ __inline void MTC0(int reg, u32 val) {
 	switch (reg) {
 		case 12: // Status
 			psxRegs.CP0.r[12] = val;
+			diag_sr_note('M', psxRegs.pc, val);
 			psxTestSWInts();
 			break;
 
@@ -1027,9 +1276,50 @@ void psxBASIC() {
 	psxCP2BSC[_Rs_]();
 }
 
+/* Entradas realmente inicializadas de psxHLEt (psxhle.c): la tabla se
+ * declara [256] pero solo tiene 8 punteros; el resto son NULL. */
+#define PSXHLE_HANDLERS 8u
+
+/* [XBOX360] Latch de un solo disparo para el opcode 0x3b con BIOS real.
+ * Ejecutar 0x3b es la FIRMA de que la CPU se ha ido a interpretar datos:
+ * el opcode esta reservado en MIPS I y aqui no hay ninguna trampa HLE
+ * plantada (psxBiosInit_2 sale si !Config.HLE).  Antes esto caia en
+ * hleBootstrap, que rearrancaba el juego desde el CD y pisaba el PC, con
+ * lo que el descarrilamiento se convertia en un bucle de reboots y no
+ * quedaba rastro de donde habia empezado.  Ahora se delata en el sitio. */
+static int s_hle_trap_logged = 0;
+
 void psxHLE() {
-//	psxHLEt[psxRegs.code & 0xffff]();
-	psxHLEt[psxRegs.code & 0x07]();		// HDHOSHY experimental patch
+	u32 hleCode;
+	/* [XBOX360] Alineado con upstream pcsx_rearmed (OP(psxHLE) en su
+	 * psxinterpreter.c).  El opcode 0x3b esta RESERVADO en MIPS I;
+	 * PCSX-R lo secuestra como puerta al HLE del BIOS.  Antes se hacia
+	 * psxHLEt[code & 0x07] a pelo, sin mirar Config.HLE ni el rango, asi
+	 * que CUALQUIER palabra basura con los 6 bits altos = 0x3b caia en
+	 * uno de los 8 handlers.  El indice 4 es hleBootstrap, que rearranca
+	 * el juego desde el CD y pisa el PC: un descarrilamiento de la CPU se
+	 * convertia en un bucle infinito de reboots que ademas borraba la
+	 * evidencia de donde se habia ido.  Con BIOS real (Config.HLE == 0)
+	 * psxBiosInit_2 no planta ninguna trampa, asi que 0x3b NO debe
+	 * disparar nada y se trata como opcode no implementado. */
+	if (!Config.HLE) {
+		if (!s_hle_trap_logged) {
+			s_hle_trap_logged = 1;
+			pcsxr_log(1, "[HLETRAP] opcode 0x3b con BIOS real:"
+				" pc=%08X code=%08X ra=%08X sp=%08X cyc=%u\n",
+				(unsigned)(psxRegs.pc - 4), (unsigned)psxRegs.code,
+				(unsigned)psxRegs.GPR.n.ra, (unsigned)psxRegs.GPR.n.sp,
+				(unsigned)psxRegs.cycle);
+		}
+		psxNULL();
+		return;
+	}
+	hleCode = psxRegs.code & 0x03ffffffu;
+	if (hleCode >= PSXHLE_HANDLERS || psxHLEt[hleCode] == NULL) {
+		psxNULL();
+		return;
+	}
+	psxHLEt[hleCode]();
 }
 
 void (*psxBSC[64])() = {
@@ -1095,6 +1385,7 @@ static int intInit() {
 
 static void intReset() {
 	psxRegs.ICache_valid = FALSE;
+	psxIcacheConfigure();
 }
 
 /* [JIT DEBUG] Sonda: ¿ejecuta el INTERPRETE el bloque a0017cc8 (donde el
@@ -1107,10 +1398,14 @@ static void intReset() {
  *   - Loguea con sp=0 (igual)      => ambos llegan igual => el bug es el
  *     CODEGEN del propio bloque (su JR terminal / su fuente). */
 #ifndef PCSXR_INT_PROBE
-#define PCSXR_INT_PROBE 1
+/* 0 = desactivada.  Era la sonda del crash "pc=1" de Ace Combat 2: vigila
+ * direcciones FIJAS de aquella investigacion, asi que en cualquier otro juego
+ * solo produce coincidencias sin significado (p.ej. 0x174f8 en Formula One 99,
+ * que despisto durante el diagnostico).  Poner a 1 solo para re-investigar
+ * aquel caso concreto. */
+#define PCSXR_INT_PROBE 0
 #endif
 #if PCSXR_INT_PROBE
-extern void pcsxr_log(int level, const char *format, ...);
 static u32 _intLast = 0;
 /* Direcciones de la cadena del recompilador (offset fisico en RAM), en orden
  * cronologico hacia el crash. Registramos la PRIMERA vez (cyc>150M) que el

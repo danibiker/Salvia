@@ -671,6 +671,9 @@ int LoadStateMem(const void *data, size_t size) {
 	}
 
 	psxCpu->Reset();
+	/* La I-cache no viaja en el savestate: limpiarla al cargar, igual que hace
+	 * upstream en R3000ACPU_NOTIFY_AFTER_LOAD_STATE. */
+	psxIcacheClear();
 	psxSS_seek(&ss, 128 * 96 * 3, SEEK_CUR);
 
 	psxSS_read(&ss, psxM_2, 0x00200000);

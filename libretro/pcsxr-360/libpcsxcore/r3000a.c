@@ -61,6 +61,100 @@ psxRegisters psxRegs;
  *
  * Coste runtime con OFF: cero. El compilador elimina las macros DIAG_INC_*. */
 #if PCSXR_DIAG_INSTRUMENTATION
+/* [XBOX360] Anillo de transiciones de CP0.Status.  El sintoma de F1'99 es
+ * que el hilo principal corre con IEc=0 (bit 0) y por tanto ninguna IRQ se
+ * entrega: espera por siempre una variable que solo actualiza un handler.
+ * psxException / psxRFE / MTC0 son los UNICOS que tocan Status, asi que con
+ * este anillo (quien, desde que PC, y el valor resultante) se identifica al
+ * responsable de dejar IEc a 0.  src: E=exception R=rfe M=mtc0. */
+volatile u32  diag_sr_ring_pc[8];
+volatile u32  diag_sr_ring_val[8];
+volatile char diag_sr_ring_src[8];
+volatile u32  diag_sr_ring_idx = 0;
+/* [XBOX360] CP0.Cause y el opcode EN el EPC de cada evento.  Cause es lo que
+ * separa las tres hipotesis del cuelgue de F1'99: 0x00=Interrupt (handler
+ * colgado), 0x20=Syscall (funcion del BIOS girando), y cualquier otra
+ * (0x10=CpU, 0x24/0x28=AdEL/AdES, 0x0A=instruccion reservada) = fallo
+ * ESPURIO por divergencia de emulacion, que es la unica que explica que
+ * interprete y dynarec fallen igual.  El opcode identifica la instruccion. */
+volatile u32  diag_sr_ring_cause[8];
+volatile u32  diag_sr_ring_op[8];
+/* Histograma ACUMULADO de codigos de excepcion (ExcCode de Cause).
+ * El anillo de 8 puede perder el fallo si hubo trafico despues; un
+ * contador no.  Indices MIPS-I: 0=Int 4=AdEL 5=AdES 6=IBE 7=DBE
+ * 8=Sys 9=Bp 10=RI 11=CpU 12=Ovf.  Cualquier cosa que no sea 0 u 8
+ * en este juego = fallo espurio de emulacion. */
+volatile u32  diag_exc_count[16];
+volatile u32  diag_exc_first_pc[16];
+
+#endif
+
+/* pcsxr_log vive en libretro_core.cpp; se declara aqui porque las sondas de
+ * mas abajo lo usan MUCHO antes de la declaracion que hay junto al volcado
+ * periodico (mismo patron que gpu.c / cdriso.c: decl local sin header). */
+extern void pcsxr_log(int level, const char *format, ...);
+
+static int s_drain_dumped = 0;
+
+#if PCSXR_DIAG_INSTRUMENTATION
+/* Watchpoint de escritura sobre el indice de LECTURA de la cola de libgpu
+ * (0x8001A11C = gp+0x6C).  El consumidor avanza a la MITAD del ritmo del
+ * productor (~1 vs ~2 por frame), asi que lo que hace falta saber es QUIEN
+ * lo avanza y cada cuanto: si todas las escrituras vienen del handler de
+ * VBlank, el consumidor esta gobernado por VBlank en vez de por la
+ * complecion de la DMA, y ahi esta el factor 2 exacto. */
+#define DIAG_RDIDX_ADDR 0x8001A11Cu
+volatile u32 diag_rdidx_pc[16];
+volatile u32 diag_rdidx_val[16];
+volatile u32 diag_rdidx_cyc[16];
+volatile u32 diag_rdidx_idx = 0;
+
+void diag_rdidx_note(u32 addr, u32 val)
+{
+	u32 i;
+	if (addr != DIAG_RDIDX_ADDR)
+		return;
+	i = diag_rdidx_idx & 15u;
+	diag_rdidx_pc[i]  = psxRegs.pc;
+	diag_rdidx_val[i] = val;
+	diag_rdidx_cyc[i] = psxRegs.cycle;
+	diag_rdidx_idx++;
+}
+
+void diag_sr_note(char src, u32 pc, u32 val)
+{
+	u32 i = diag_sr_ring_idx & 7u;
+	const u32 *op;
+	u32 e;
+	diag_sr_ring_pc[i]  = pc;
+	diag_sr_ring_val[i] = val;
+	diag_sr_ring_src[i] = src;
+	diag_sr_ring_cause[i] = psxRegs.CP0.n.Cause;
+	op = (const u32 *)PSXM_2(pc);
+	diag_sr_ring_op[i] = op ? SWAP32(*op) : 0xFFFFFFFFu;
+	diag_sr_ring_idx++;
+	if (src == 'E') {  /* solo excepciones reales */
+		e = (psxRegs.CP0.n.Cause >> 2) & 0xfu;
+		if (diag_exc_count[e] == 0)
+			diag_exc_first_pc[e] = pc;
+		diag_exc_count[e]++;
+	}
+}
+
+#else
+#define diag_rdidx_note(a, v)      ((void)0)
+#define diag_sr_note(s, p, v)      ((void)0)
+#endif
+
+/* El diferimiento de la IRQ por opcode GTE en el pipeline (el viejo hack de
+ * "Crash Bandicoot 2") se ELIMINO: era una aproximacion con umbral que
+ * podia bloquear la IRQ para siempre.  El mecanismo real -- ejecutar el
+ * opcode GTE al entrar en la excepcion, porque el BIOS lo salta al volver --
+ * esta ahora en psxException(), igual que upstream. */
+extern void (*psxCP2[64])();          /* tabla GTE del interprete */
+extern u32 psxHwUpdateCauseIp(void);  /* psxhw.c: Cause bit 10 <- linea HW */
+
+#if PCSXR_DIAG_INSTRUMENTATION
 volatile uint32_t diag_evt_irq_count[PSXINT_COUNT];
 volatile uint32_t diag_hw_irq_set_count[11];   /* 11 bits relevantes de 0x1070 */
 volatile uint32_t diag_psx_exception_count = 0;
@@ -123,6 +217,229 @@ static void diag_dump_irq_counts(uint32_t now_cycle) {
         (unsigned)diag_hw_irq_set_count[7],
         (unsigned)diag_hw_irq_set_count[9],
         (unsigned)diag_psx_exception_count);
+    /* [XBOX360] Los tres terminos que deciden si se entrega la IRQ (ver
+     * psxBranchTest).  Cuando `except` se queda a 0 mientras las IRQs se
+     * siguen levantando, esto dice CUAL de ellos falla:
+     *   stat = I_STAT (0x1070), bits pendientes
+     *   mask = I_MASK (0x1074), bits habilitados
+     *   pend = stat & mask -> si es 0, el juego tiene la IRQ enmascarada
+     *   sr   = CP0.Status; hace falta (sr & 0x401) == 0x401 */
+    pcsxr_log(RETRO_LOG_INFO,
+        "[IRQ] stat=%08X mask=%08X pend=%08X sr=%08X sr_ok=%d\n",
+        (unsigned)psxHu32_2(0x1070), (unsigned)psxHu32_2(0x1074),
+        (unsigned)(psxHu32_2(0x1070) & psxHu32_2(0x1074)),
+        (unsigned)psxRegs.CP0.n.Status,
+        (int)((psxRegs.CP0.n.Status & 0x401) == 0x401));
+    /* [XBOX360] Ultimas 8 direcciones de registro HW leidas (0x1f80xxxx) y
+     * estado del controlador de CD.  Con el juego colgado dentro de su
+     * handler de IRQ (IEc=0), esto dice QUE registro sondea el bucle y si el
+     * CD se quedo en un estado del que no sale. */
+    {
+        extern volatile u32 diag_hwread_ring[8];
+        extern volatile u32 diag_hwread_idx;
+        extern volatile u32 diag_hwwrite_ring[8];
+        extern void cdrDiagDump(void);
+        pcsxr_log(RETRO_LOG_INFO,
+            "[HWRD] %04X %04X %04X %04X %04X %04X %04X %04X\n",
+            (unsigned)diag_hwread_ring[0], (unsigned)diag_hwread_ring[1],
+            (unsigned)diag_hwread_ring[2], (unsigned)diag_hwread_ring[3],
+            (unsigned)diag_hwread_ring[4], (unsigned)diag_hwread_ring[5],
+            (unsigned)diag_hwread_ring[6], (unsigned)diag_hwread_ring[7]);
+        pcsxr_log(RETRO_LOG_INFO,
+            "[HWWR] %08X %08X %08X %08X %08X %08X %08X %08X\n",
+            (unsigned)diag_hwwrite_ring[0], (unsigned)diag_hwwrite_ring[1],
+            (unsigned)diag_hwwrite_ring[2], (unsigned)diag_hwwrite_ring[3],
+            (unsigned)diag_hwwrite_ring[4], (unsigned)diag_hwwrite_ring[5],
+            (unsigned)diag_hwwrite_ring[6], (unsigned)diag_hwwrite_ring[7]);
+        /* [XBOX360] Volcado de las instrucciones MIPS alrededor del PC.
+         * Con el juego girando en un bucle cerrado, esto permite DECODIFICAR
+         * el bucle y saber exactamente que condicion espera, en vez de
+         * inferirlo.  8 words centrados en pc. */
+        {
+            u32 base = (psxRegs.pc - 16) & ~3u;
+            u32 *ip  = (u32 *)PSXM_2(base);
+            if (ip != NULL) {
+                pcsxr_log(RETRO_LOG_INFO,
+                    "[DIS] @%08X: %08X %08X %08X %08X\n",
+                    (unsigned)base, (unsigned)SWAP32(ip[0]),
+                    (unsigned)SWAP32(ip[1]), (unsigned)SWAP32(ip[2]),
+                    (unsigned)SWAP32(ip[3]));
+                pcsxr_log(RETRO_LOG_INFO,
+                    "[DIS] @%08X: %08X %08X %08X %08X  (pc=%08X)\n",
+                    (unsigned)(base + 16), (unsigned)SWAP32(ip[4]),
+                    (unsigned)SWAP32(ip[5]), (unsigned)SWAP32(ip[6]),
+                    (unsigned)SWAP32(ip[7]), (unsigned)psxRegs.pc);
+            }
+        }
+        {
+            u32 k;
+            /* idx: imprescindible para reconstruir el orden cronologico.
+             * El ultimo evento escrito es el slot (idx-1)&7. */
+            pcsxr_log(RETRO_LOG_INFO, "[SR] idx=%u last_slot=%u\n",
+                (unsigned)diag_sr_ring_idx,
+                (unsigned)((diag_sr_ring_idx - 1u) & 7u));
+            for (k = 0; k < 8; k++) {
+                pcsxr_log(RETRO_LOG_INFO,
+                    "[SR%u] %c pc=%08X sr=%08X iec=%u cause=%08X exc=%02X op=%08X\n",
+                    (unsigned)k, diag_sr_ring_src[k] ? diag_sr_ring_src[k] : 63,
+                    (unsigned)diag_sr_ring_pc[k], (unsigned)diag_sr_ring_val[k],
+                    (unsigned)(diag_sr_ring_val[k] & 1u),
+                    (unsigned)diag_sr_ring_cause[k],
+                    (unsigned)((diag_sr_ring_cause[k] >> 2) & 0x1fu),
+                    (unsigned)diag_sr_ring_op[k]);
+            }
+        }
+        {
+            extern volatile u32  diag_dicr_pc[16];
+            extern volatile u32  diag_dicr_val[16];
+            extern volatile u32  diag_dicr_after[16];
+            extern volatile char diag_dicr_addr[16];
+            extern volatile char diag_dicr_w[16];
+            extern volatile u32  diag_dicr_idx;
+            u32 n;
+            pcsxr_log(RETRO_LOG_INFO, "[DICR] idx=%u last_slot=%u\n",
+                (unsigned)diag_dicr_idx,
+                (unsigned)((diag_dicr_idx - 1u) & 15u));
+            for (n = 0; n < 16; n++)
+                pcsxr_log(RETRO_LOG_INFO,
+                    "[DICR%02u] %c%02X val=%08X -> %08X en2=%u pc=%08X\n",
+                    (unsigned)n, diag_dicr_w[n] ? diag_dicr_w[n] : 63,
+                    (unsigned)(unsigned char)diag_dicr_addr[n],
+                    (unsigned)diag_dicr_val[n],
+                    (unsigned)diag_dicr_after[n],
+                    (unsigned)((diag_dicr_after[n] >> 18) & 1u),
+                    (unsigned)diag_dicr_pc[n]);
+        }
+        /* Cabecera del bucle de drenado de la cola de callbacks del BIOS.
+         * El cuerpo (0x800176B0-0x800176E4) saca {funcion, arg} de las tablas
+         * 0x8001B590/0x8001B598, hace jalr, avanza el indice de lectura y
+         * salta ATRAS a 0x800175C8: es un while que vacia la cola.  Medido:
+         * solo da UNA vuelta por VBlank, asi que la condicion de salida esta
+         * en 0x800175C8 y es lo que hay que leer.  One-shot: 92 words. */
+        if (!s_drain_dumped) {
+            u32 base = 0x80017580u;
+            const u32 *ip = (const u32 *)PSXM_2(base);
+            u32 k;
+            if (ip != NULL) {
+                s_drain_dumped = 1;
+                for (k = 0; k < 92; k += 4)
+                    pcsxr_log(RETRO_LOG_INFO,
+                        "[DRAIN] @%08X: %08X %08X %08X %08X\n",
+                        (unsigned)(base + k * 4),
+                        (unsigned)SWAP32(ip[k+0]), (unsigned)SWAP32(ip[k+1]),
+                        (unsigned)SWAP32(ip[k+2]), (unsigned)SWAP32(ip[k+3]));
+            }
+        }
+        {
+            u32 n;
+            pcsxr_log(RETRO_LOG_INFO, "[RDIDX] idx=%u last_slot=%u\n",
+                (unsigned)diag_rdidx_idx,
+                (unsigned)((diag_rdidx_idx - 1u) & 15u));
+            for (n = 0; n < 16; n++)
+                pcsxr_log(RETRO_LOG_INFO,
+                    "[RDIDX%02u] pc=%08X val=%u cyc=%u\n",
+                    (unsigned)n, (unsigned)diag_rdidx_pc[n],
+                    (unsigned)diag_rdidx_val[n],
+                    (unsigned)diag_rdidx_cyc[n]);
+        }
+        /* DICR (0x10F4) y los registros del canal 2 (GPU).  DMA_INTERRUPT_2
+         * solo eleva I_STAT bit 3 si DICR tiene el bit (16+n) del canal; con
+         * n=2 eso es el bit 18.  Si dma=0 con el bit 18 PUESTO, el gate
+         * nuestro esta roto.  Si el bit 18 esta a 0, el juego no pidio esa
+         * IRQ y la cola de libgpu se drena por polling, no por ISR. */
+        {
+            u32 dicr = psxHu32_2(0x10f4);
+            pcsxr_log(RETRO_LOG_INFO,
+                "[DMA2] dicr=%08X en2=%u glob=%u sent=%u dpcr=%08X"
+                " chcr=%08X madr=%08X bcr=%08X\n",
+                (unsigned)dicr,
+                (unsigned)((dicr >> 18) & 1u),
+                (unsigned)((dicr >> 23) & 1u),
+                (unsigned)((dicr >> 31) & 1u),
+                (unsigned)psxHu32_2(0x10f0),
+                (unsigned)psxHu32_2(0x10a8),
+                (unsigned)psxHu32_2(0x10a0),
+                (unsigned)psxHu32_2(0x10a4));
+        }
+        /* Ventana de 16 words alrededor de [gp+0x6C] (el indice de LECTURA de
+         * la cola de 64 entradas del BIOS).  El indice de ESCRITURA vive
+         * cerca, en esta misma estructura.  Volcandolo en las ventanas SANAS
+         * se ve la progresion: si el de escritura sube sin que el de lectura
+         * lo siga, el consumidor no corre nunca y se sabe cual de los dos se
+         * desmadra ANTES de que sea tarde. */
+        {
+            u32 gp = psxRegs.GPR.n.gp;
+            const u32 *w = (const u32 *)PSXM_2(gp + 0x60);
+            u32 k;
+            if (w != NULL) {
+                for (k = 0; k < 16; k += 8) {
+                    pcsxr_log(RETRO_LOG_INFO,
+                        "[RING] +%02X: %08X %08X %08X %08X %08X %08X %08X %08X\n",
+                        (unsigned)(0x60 + k * 4),
+                        (unsigned)SWAP32(w[k+0]), (unsigned)SWAP32(w[k+1]),
+                        (unsigned)SWAP32(w[k+2]), (unsigned)SWAP32(w[k+3]),
+                        (unsigned)SWAP32(w[k+4]), (unsigned)SWAP32(w[k+5]),
+                        (unsigned)SWAP32(w[k+6]), (unsigned)SWAP32(w[k+7]));
+                }
+            }
+        }
+        /* Las dos variables que consulta el bucle que devuelve -1:
+         * [gp+0xF4] (puntero de cola, lo avanza otra funcion en pasos de
+         * 0xF0) contra [0x8001A154], y el byte [gp+0xC9] que sondea el
+         * otro bucle (0x80015DA4).  Si el puntero y el limite no cuadran,
+         * se ve aqui directamente. */
+        {
+            u32 gp = psxRegs.GPR.n.gp;
+            const u32 *pf4 = (const u32 *)PSXM_2(gp + 0xF4);
+            const u32 *pa154 = (const u32 *)PSXM_2(0x8001A154);
+            const unsigned char *pc9 = (const unsigned char *)PSXM_2(gp + 0xC9);
+            pcsxr_log(RETRO_LOG_INFO,
+                "[WAIT] gp=%08X [gp+F4]=%08X [8001A154]=%08X [gp+C9]=%02X\n",
+                (unsigned)gp,
+                (unsigned)(pf4 ? SWAP32(*pf4) : 0xFFFFFFFFu),
+                (unsigned)(pa154 ? SWAP32(*pa154) : 0xFFFFFFFFu),
+                (unsigned)(pc9 ? *pc9 : 0xFFu));
+        }
+        {
+            u32 e;
+            for (e = 0; e < 16; e++) {
+                if (diag_exc_count[e] == 0)
+                    continue;
+                pcsxr_log(RETRO_LOG_INFO,
+                    "[EXC] code=%u n=%u first_pc=%08X\n",
+                    (unsigned)e, (unsigned)diag_exc_count[e],
+                    (unsigned)diag_exc_first_pc[e]);
+            }
+        }
+        /* Anillo dedicado del CD (0x1800-0x1803): los 16 ultimos accesos.
+         * Sobrevive al spin del juego en 1070/1074, asi que muestra que hizo
+         * el callback ANTES de quedarse esperando.  Si aqui no aparece nada
+         * del tramo del cuelgue, el callback NUNCA toco el CD. */
+        {
+            extern volatile u32  diag_cd_pc[64];
+            extern volatile u32  diag_cd_addr[64];
+            extern volatile u32  diag_cd_val[64];
+            extern volatile u32  diag_cd_cyc[64];
+            extern volatile char diag_cd_rw[64];
+            extern volatile u32  diag_cd_idx;
+            u32 n;
+            pcsxr_log(RETRO_LOG_INFO, "[CDIO] idx=%u\n", (unsigned)diag_cd_idx);
+            /* 2 por linea para que quepa el ciclo: sin el no se distingue lo que
+             * paso en la ventana del cargador de lo de la ronda anterior. */
+            for (n = 0; n < 64; n += 2) {
+                pcsxr_log(RETRO_LOG_INFO,
+                    "[CDIO%02u] %c%04X=%02X@%08X c=%u   %c%04X=%02X@%08X c=%u\n",
+                    (unsigned)n,
+                    diag_cd_rw[n+0] ? diag_cd_rw[n+0] : 63,
+                    (unsigned)diag_cd_addr[n+0], (unsigned)diag_cd_val[n+0],
+                    (unsigned)diag_cd_pc[n+0], (unsigned)diag_cd_cyc[n+0],
+                    diag_cd_rw[n+1] ? diag_cd_rw[n+1] : 63,
+                    (unsigned)diag_cd_addr[n+1], (unsigned)diag_cd_val[n+1],
+                    (unsigned)diag_cd_pc[n+1], (unsigned)diag_cd_cyc[n+1]);
+            }
+        }
+        cdrDiagDump();
+    }
     pcsxr_log(RETRO_LOG_INFO,
         "[IRQ] evt cdr=%u cdread=%u gpudma=%u mdecout=%u spudma=%u\n",
         (unsigned)diag_evt_irq_count[PSXINT_CDR],
@@ -268,6 +585,10 @@ int psxInit() {
 
 void psxReset() {
 	psxCpu->Reset();
+	/* Despues del reset de la CPU, porque recReset() tambien se llama por
+	 * capacidad del code cache desde recRecompile() y ahi NO hay que limpiar
+	 * la I-cache: el hardware no tiene ese evento. */
+	psxIcacheConfigure();
 //if (use_vm)
 //{
 //	psxMemReset();
@@ -313,8 +634,37 @@ void psxShutdown() {
 }
 
 void psxException(u32 code, u32 bd) {
-	// Set the Cause
-	psxRegs.CP0.n.Cause = code;
+	/* [XBOX360] El handler de excepcion del BIOS NO vuelve a una
+	 * instruccion GTE: la SALTA (asume que ya estaba planificada).  Si
+	 * la excepcion cae sobre un opcode COP2 y no lo ejecutamos aqui, esa
+	 * operacion GTE se PIERDE.  Es el mecanismo real del hack conocido
+	 * como "Crash Bandicoot 2 / Hokuto no Ken".
+	 *
+	 * Antes lo aproximabamos DIFIRIENDO la IRQ mientras hubiera un GTE
+	 * en el pipeline, lo que colgaba juegos (el PC podia quedarse parado
+	 * sobre el GTE y la IRQ no llegaba nunca).  Al poner el diferimiento
+	 * a 0 se quito el cuelgue pero se empezo a PERDER la operacion GTE.
+	 * Esto es lo que hace upstream (pcsx_rearmed r3000a.c:111-121) y
+	 * cubre los dos casos sin heuristica ni umbrales. */
+	if (!Config.HLE) {
+		const u32 *ip = (const u32 *)PSXM_2(psxRegs.pc);
+		if (ip != NULL) {
+			u32 opcode = SWAP32(*ip);
+			if ((opcode >> 25) == 0x25 &&
+			    (psxRegs.CP0.n.Status & 0x40000000)) {
+				u32 saved = psxRegs.code;
+				psxRegs.code = opcode;
+				psxCP2[opcode & 0x3f]();
+				psxRegs.code = saved;
+			}
+		}
+	}
+
+	/* Set the Cause.  Preservar los bits IP (0x700): el bit 10 refleja la
+	 * linea de IRQ del hardware y lo mantiene psxHwUpdateCauseIp(), no la
+	 * excepcion.  Antes se hacia `Cause = code`, que lo borraba en cada
+	 * syscall y lo dejaba pegado a 1 tras cada IRQ. */
+	psxRegs.CP0.n.Cause = (psxRegs.CP0.n.Cause & 0x700u) | code;
 
 	// Set the EPC & PC
 	if (bd) {
@@ -335,6 +685,8 @@ void psxException(u32 code, u32 bd) {
 	// Set the Status
 	psxRegs.CP0.n.Status = (psxRegs.CP0.n.Status &~0x3f) |
 						  ((psxRegs.CP0.n.Status & 0xf) << 2);
+
+	diag_sr_note('E', psxRegs.CP0.n.EPC, psxRegs.CP0.n.Status);
 
 	if (Config.HLE) psxBiosException();
 }
@@ -455,22 +807,19 @@ void psxBranchTest() {
 	}
 
 	// Hardware interrupt check - ALWAYS runs (events above may set 0x1070)
-	if (psxHu32_2(0x1070) & psxHu32_2(0x1074)) {
+	/* Cause bit 10 debe reflejar la linea ANTES de decidir (upstream:
+	 * irq_test en psxevents.c:80).  Los eventos de arriba pueden haberla
+	 * levantado o bajado. */
+	if (psxHwUpdateCauseIp()) {
 		if ((psxRegs.CP0.n.Status & 0x401) == 0x401) {
-			u32 opcode;
-			u32 *code;
-			code = (u32 *)PSXM_2(psxRegs.pc);
-			// Crash Bandicoot 2: Don't run exceptions when GTE in pipeline
-			opcode = SWAP32(*code);
-			if (((opcode >> 24) & 0xfe) != 0x4a) {
 #ifdef PSXCPU_LOG
-				PSXCPU_LOG("Interrupt: %x %x\n", psxHu32_2(0x1070), psxHu32_2(0x1074));
+			PSXCPU_LOG("Interrupt: %x %x\n", psxHu32_2(0x1070), psxHu32_2(0x1074));
 #endif
 #if PCSXR_DIAG_INSTRUMENTATION
-				diag_psx_exception_count++;
+			diag_psx_exception_count++;
 #endif
-				psxException(0x400, 0);
-			}
+			/* code 0: el bit IP2 ya esta en Cause (psxHwUpdateCauseIp). */
+			psxException(0, 0);
 		}
 	}
 

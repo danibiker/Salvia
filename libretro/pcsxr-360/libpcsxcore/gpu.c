@@ -1040,8 +1040,16 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 
 			psxCpu->Clear(madr, size);
 
-			// already 32-bit word size ((size * 4) / 4)
-			GPUDMA_INT(size);
+			/* [XBOX360] size/4, NO size.  upstream pcsx_rearmed (psxdma.c,
+			 * casos 0x01000200 y 0x01000201) programa la complecion en
+			 * `words / 4`; el pcsxr clasico ponia `size` y ese es el valor
+			 * que heredamos -- el comentario de arriba es identico en los dos
+			 * arboles, upstream cambio el valor y dejo el comentario.
+			 * Importa porque CHCR bit 24 (DMA2 activa) es el gate del bucle
+			 * de drenado de la cola de callbacks del BIOS (0x800175C8: sale
+			 * si la DMA sigue activa).  Con `size` la DMA figura ocupada 4x
+			 * mas tiempo y el drenado saca muchas menos entradas por pasada. */
+			GPUDMA_INT(size / 4);
 			return;
 
 		case 0x01000201: // mem2vram
@@ -1063,8 +1071,16 @@ void psxDma2(u32 madr, u32 bcr, u32 chcr) { // GPU
 			gpuWriteDataMem(ptr, size);
 
 
-			// already 32-bit word size ((size * 4) / 4)
-			GPUDMA_INT(size);
+			/* [XBOX360] size/4, NO size.  upstream pcsx_rearmed (psxdma.c,
+			 * casos 0x01000200 y 0x01000201) programa la complecion en
+			 * `words / 4`; el pcsxr clasico ponia `size` y ese es el valor
+			 * que heredamos -- el comentario de arriba es identico en los dos
+			 * arboles, upstream cambio el valor y dejo el comentario.
+			 * Importa porque CHCR bit 24 (DMA2 activa) es el gate del bucle
+			 * de drenado de la cola de callbacks del BIOS (0x800175C8: sale
+			 * si la DMA sigue activa).  Con `size` la DMA figura ocupada 4x
+			 * mas tiempo y el drenado saca muchas menos entradas por pasada. */
+			GPUDMA_INT(size / 4);
 			return;
 
 		case 0x01000401: // dma chain

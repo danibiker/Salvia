@@ -814,7 +814,7 @@ static int iLoadTest() {
 static void SetBranch() {
 	int treg;
 	branch = 1;
-	psxRegs.code = PSXMu32_2(pc);
+	psxRegs.code = psxIcacheFetchCompile(pc);
 	pc+=4;
 
 	if (iLoadTest() == 1) {
@@ -879,7 +879,7 @@ static void SetBranch() {
 static void iJump(u32 branchPC) {
 	u32 *b1, *b2;
 	branch = 1;
-	psxRegs.code = PSXMu32_2(pc);
+	psxRegs.code = psxIcacheFetchCompile(pc);
 	pc+=4;
 
 	if (iLoadTest() == 1) {
@@ -948,7 +948,7 @@ static void iBranch(u32 branchPC, int savectx) {
 	}
 	
 	branch = 1;
-	psxRegs.code = PSXMu32_2(pc);
+	psxRegs.code = psxIcacheFetchCompile(pc);
 
 	// the delay test is only made when the branch is taken
 	// savectx == 0 will mean that :)
@@ -2536,7 +2536,6 @@ void execI();
 
 static void recRecompile() {
 	//static int recCount = 0;
-	char *p;
 	u32 *ptr;
 	u32 a;
 	int i;
@@ -2585,8 +2584,12 @@ static void recRecompile() {
 		u32 adr = pc & 0x1fffff;
 		u32 op;
 
-		p = (char *)PSXM_2(pc);
-		psxRegs.code = SWAP32(*(u32 *)p);
+		/* [XBOX360] El compilador lee POR LA I-CACHE: si el juego piso este
+		 * codigo en RAM sin hacer flush (Formula One 99 y su stub de 16 bytes
+		 * en 0x80023000), al recompilar hay que emitir los bytes CACHEADOS,
+		 * que son los que ejecutaria el hardware.  Con la opcion apagada esto
+		 * devuelve exactamente SWAP32(*(u32 *)PSXM_2(pc)). */
+		psxRegs.code = psxIcacheFetchCompile(pc);
 
 		pc+=4; 
 		count++;

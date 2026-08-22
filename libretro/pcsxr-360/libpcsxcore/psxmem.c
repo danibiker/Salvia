@@ -314,6 +314,7 @@ void psxMemWrite32_2(u32 mem, u32 value) {
 						memset(psxMemWLUT + 0xa000, 0, 0x80 * sizeof(void *));
 
 						psxRegs.ICache_valid = FALSE;
+						psxIcacheClear();	/* flush real de la I-cache */
 						break;
 					case 0x00: case 0x1e988:
 						if (writeok == 1) break;
