@@ -1607,7 +1607,17 @@ static void __declspec(noinline) runGameLoop() {
 			}
 
 			gameMenu->processFrontendEventsAfter();
+
+			/* Se presenta en cuanto el frame esta listo y la espera del
+			 * limitador va DESPUES: asi la latencia de input es la minima.
+			 * (Probado el orden contrario -esperar y luego presentar- para
+			 * equiespaciar las presentaciones: sin diferencia apreciable ni con
+			 * vsync ni sin el, asi que no compensa la latencia de mas.) */
+			const double flipIni = Constant::getTicks();
 			salviaFlip(gameMenu->gameScreen);
+			const double flipEnd = Constant::getTicks();
+			gameMenu->sync->note_flip(flipEnd - flipIni);
+			gameMenu->sync->note_present(flipEnd);
 			gameMenu->sync->limit_fps(nextFrameTime, *gameMenu->current_sync, gameMenu->gameTicks);
 		}
 	} __except (EXCEPTION_EXECUTE_HANDLER) {

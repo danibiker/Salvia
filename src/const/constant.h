@@ -675,6 +675,34 @@ class Constant{
 			#endif
 			}
 
+		/* Contador crudo y su frecuencia en ticks por milisegundo.  Para el
+		   bucle de espera activa del limitador: comparar ticks evita la
+		   division en coma flotante de getTicks() en cada iteracion (la
+		   division no esta pipelineada en el PPC de Xenon). */
+		static double getTickFreqMs() {
+			#if defined(_WIN32) || defined(_WIN64) || defined(_XBOX)
+				static double freqMs = 0.0;
+				if (freqMs == 0.0) {
+					LARGE_INTEGER freq;
+					QueryPerformanceFrequency(&freq);
+					freqMs = (double)freq.QuadPart / 1000.0;
+				}
+				return freqMs;
+			#else
+				return 1.0;
+			#endif
+		}
+
+		static long long getRawTicks() {
+			#if defined(_WIN32) || defined(_WIN64) || defined(_XBOX)
+				LARGE_INTEGER counter;
+				QueryPerformanceCounter(&counter);
+				return (long long)counter.QuadPart;
+			#else
+				return (long long)SDL_GetTicks();
+			#endif
+		}
+
 		static std::string sanitizePathForXbox(const std::string& fullPath) {
 			// 1. Separar ruta y nombre
 			std::size_t lastSlash = fullPath.find_last_of("\\/");

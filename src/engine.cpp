@@ -10,7 +10,7 @@
 	#include <windows.h>
 	#include <mmsystem.h> // Necesario para timeBeginPeriod
 	#include <SDL_syswm.h> // Para obtener el HWND de la ventana SDL
-	//#pragma comment(lib, "winmm.lib") // Necesario para timeBeginPeriod
+	#pragma comment(lib, "winmm.lib") // Necesario para timeBeginPeriod
 #endif
 
 Engine::Engine(){
@@ -25,8 +25,13 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 	LOG_DEBUG("Initiating engine\n");
 
 	#ifdef WIN
-		// 1. Activar la precision de 1ms en el reloj de Windows
-		//timeBeginPeriod(1);
+		// 1. Activar la precision de 1ms en el reloj de Windows.
+		// El limitador de frames (Sync::limit_fps) duerme el grueso de la espera
+		// con SDL_Delay y solo clava el instante final con espera activa; con la
+		// granularidad por defecto (15.6 ms) el sleep se pasaria y el limitador
+		// tendria que gastar en espera activa TODO el frame.  No dependemos de
+		// que la SDL lo suba por dentro en SDL_SYS_TimerInit: lo pedimos aqui.
+		timeBeginPeriod(1);
 		//SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 		// Forzar el driver GDI: SDL solo gestiona la ventana/eventos; el
 		// render lo hace nuestra capa D3D9 (no llamamos a SDL_Flip en PC).
@@ -160,9 +165,9 @@ void Engine::stopEngine(){
 	delete fonts;
 	delete sync;
 	// 3. Limpieza: Devolver el reloj del sistema a su estado normal
-	//#ifdef WIN
-	//	timeEndPeriod(1);
-	//#endif
+	#ifdef WIN
+		timeEndPeriod(1);
+	#endif
 
 #if defined(WIN) && defined(SALVIA_GPU_VIDEO)
 	// gameScreen (textura de juego) y overlay son propiedad de WinD3D9;
