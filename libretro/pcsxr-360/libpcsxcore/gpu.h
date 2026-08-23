@@ -141,6 +141,59 @@ extern volatile int      s_gpu_plugin_call;
 	 *   (b) Dump [PERF]: desglose CPU vs GPU del exec time. */
 	extern volatile uint64_t gpu_wait_ticks;
 
+	/* Modelo de "GPU ocupada" para los bits IDLE/READYFORCOMMANDS de
+	 * GPUSTAT.  0 = RING (historico), 1 = BOUNDED (acotado en ciclos
+	 * emulados, como el gpuIdleAfter de upstream), 2 = NEVER (siempre
+	 * idle, como el GPUreadStatus de gpulib).  Lo fija
+	 * check_gpu_busy_model() en libretro_core.cpp; la razon de que sea
+	 * configurable esta en el bloque de comentario de gpu.c. */
+	extern int g_gpu_busy_model;
+
+	/* Descarta el estado diferido (GP1 0x04 en cola).  Se llama en reset /
+	 * carga de juego / load state: las posiciones encoladas apuntan a un ring
+	 * que ya no significa nada. */
+	void gpuDiscardDeferred(void);
+
+#if PCSXR_DIAG_INSTRUMENTATION
+	/* Traza temporal one-shot (ver el bloque en gpu.c).  retro_run la arma en
+	 * el primer frame fuera de presupuesto y marca su entrada/salida. */
+	void diag_trace_arm(void);
+	void diag_trace_mark(int kind);
+#define DIAG_TR_RUN_IN  1
+#define DIAG_TR_RUN_OUT 2
+#endif
+
+	/* Coste medido de la espera del juego a la GPU, en CICLOS EMULADOS
+	 * (no en tiempo de host).  Lo vuelca [GPU-BUSY] en r3000a.c y los
+	 * resetea alli en cada ventana. */
+#if PCSXR_DIAG_INSTRUMENTATION
+	extern volatile u32 diag_gpu_busy_cycles;
+	extern volatile u32 diag_gpu_busy_episodes;
+	extern volatile u32 diag_gpu_status_reads;
+	extern volatile u32 diag_gpu_status_busy;
+	/* Tiempo real de rasterizado del hilo consumidor y nº de bloqueos del
+	 * productor.  Los lee [RR-PERF] en libretro_core.cpp. */
+	extern volatile uint64_t diag_gpu_thread_busy_ticks;
+	extern volatile u32      diag_gpu_drain_waits;
+	/* Sondas del diagnostico de solapamiento (ver el bloque de comentario en
+	 * gpu.c): busy del consumidor SOLO mientras el emu esta en CPU_EXEC,
+	 * tiempo que el emu pasa bloqueado en ring_push (que no entraba en
+	 * gpu_wait), y palabras pendientes en el ring al llegar al vblank. */
+	extern volatile uint64_t diag_gpu_busy_exec_ticks;
+	extern volatile uint64_t diag_push_spin_ticks;
+	extern volatile u32      diag_lace_pend_words;
+	/* Histograma de drains BLOQUEANTES por comando GP1 (ver gpu.c). */
+	extern volatile u32      diag_gp1_drain_cmd[32];
+	extern volatile u32      diag_gp1_04_defer;
+	/* Fase 1: clasificacion del vblank (ver gpu.c).  Deciden si compensa
+	 * portar la espera parcial `calc_scanout_wait` de upstream. */
+	extern volatile u32      diag_scanout_free;
+	extern volatile u32      diag_disp_alt;
+	/* Top-8 comandos GP0 por tiempo de rasterizado (ver gpu.c).  Volcarlo por
+	 * ventana: su disparador original (chunk > 50 ms) no salta en F1'99. */
+	void gpuDumpCmdHist(void);
+#endif
+
     void gpuWriteData(u32 data);
 	u32  gpuReadData(void);	
 

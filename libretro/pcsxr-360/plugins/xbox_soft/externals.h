@@ -312,6 +312,23 @@ extern VRAMLoad_t     VRAMWrite;
 extern VRAMLoad_t     VRAMRead;
 extern DATAREGISTERMODES DataWriteMode;
 extern DATAREGISTERMODES DataReadMode;
+
+/* Las dos mitades del GP1 0x04 (ver el comentario en gpu.c): la del stream la
+ * aplica el hilo CONSUMIDOR en orden, la del status el hilo PRINCIPAL. */
+void PEOPS_GPUsetStreamMode(unsigned long gdata);
+void PEOPS_GPUsetDMABits(unsigned long gdata);
+
+/* Idem para los GP1 de display 0x05-0x08: la geometria (PSXDisplay, que lee el
+ * rasterizador) la aplica el CONSUMIDOR en orden de stream; los bits de status
+ * y el bookkeeping de freeze, el PRINCIPAL.  Deferrable() dice si se puede
+ * diferir (no con frameskip/fast-forward: presentarian desde el consumidor). */
+void PEOPS_GPUsetDisplayState(unsigned long gdata);
+void PEOPS_GPUsetDisplayStatusBits(unsigned long gdata);
+int  PEOPS_GPUdisplayDeferrable(void);
+
+/* Diagnostico (ver gpu.c).  Compilada siempre; el call-site va bajo
+ * PCSXR_DIAG_INSTRUMENTATION, asi core y plugin no tienen que coincidir. */
+unsigned long PEOPS_GPUdiagDisplayOrigin(void);
 extern int            iColDepth;
 extern int            iWindowMode;
 extern char           szDispBuf[];

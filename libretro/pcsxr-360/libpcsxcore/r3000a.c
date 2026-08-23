@@ -474,6 +474,41 @@ static void diag_dump_irq_counts(uint32_t now_cycle) {
         (unsigned)diag_gpu_status_writes,
         (unsigned)diag_gpu_first_write_seen);
 
+    /* === Coste de la espera del juego a la GPU, en CICLOS EMULADOS ===
+     * DrawSync()/GPU_cw() son bucles cerrados sondeando GPUSTAT bit 26.
+     * Cada ciclo emulado que se va ahi es un ciclo que el juego NO usa para
+     * su logica, y el VBlank sigue llegando puntual (va por ciclos) -> el
+     * frontend marca 60 fps mientras el juego se mueve a medio gas.
+     *
+     * Lectura de la linea:
+     *   pct = ciclos_ocupada / ventana.  La ventana son 100M ciclos
+     *   (~177 frames), asi que pct es directamente el % del presupuesto de
+     *   cada frame que se pierde esperando al hilo GPU del host.
+     *     < 3%   -> la espera NO es el problema; mirar CPU (cycle_multiplier)
+     *     10-25% -> suficiente para tirar un juego de 60 a 30 fps de logica
+     *     > 30%  -> es LA causa
+     * Con pcsxr360_gpu_busy=never estos contadores quedan a 0 por
+     * definicion: sirve de referencia superior para comparar velocidad. */
+    {
+        extern volatile u32 diag_gpu_busy_cycles;
+        extern volatile u32 diag_gpu_busy_episodes;
+        extern volatile u32 diag_gpu_status_reads;
+        extern volatile u32 diag_gpu_status_busy;
+        extern int g_gpu_busy_model;
+        pcsxr_log(RETRO_LOG_INFO,
+            "[GPU-BUSY] model=%d polls=%u busy=%u waits=%u cycles=%u (%u%%)\n",
+            g_gpu_busy_model,
+            (unsigned)diag_gpu_status_reads,
+            (unsigned)diag_gpu_status_busy,
+            (unsigned)diag_gpu_busy_episodes,
+            (unsigned)diag_gpu_busy_cycles,
+            (unsigned)(diag_gpu_busy_cycles / (DIAG_DUMP_INTERVAL_CYCLES / 100u)));
+        diag_gpu_busy_cycles   = 0;
+        diag_gpu_busy_episodes = 0;
+        diag_gpu_status_reads  = 0;
+        diag_gpu_status_busy   = 0;
+    }
+
     /* Top-8 PCs del histograma.  Ordenado por count descendente con un
      * selection-sort in-place (la tabla es pequena, sobra).  Logueamos
      * solo los slots con count > 0 para no spamear. */

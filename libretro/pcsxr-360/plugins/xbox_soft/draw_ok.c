@@ -121,7 +121,12 @@ __inline void TexZero(void * buf, int len) {
 extern unsigned int* g_psxVuw24;
 extern int           g_pcsxr_true_color_active;
 
-static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y)
+/* La geometria llega por PARAMETRO y no de las globales PSXDisplay /
+ * PreviousPSXDisplay.  Se introdujo para un blit en el hilo GPU que se acabo
+ * descartando; se conserva porque hace explicito de que estado depende el
+ * blit, que era facil de perder de vista. */
+static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y,
+                         const PSXDisplay_t *dsp, const PSXDisplay_t *prv)
 {
 	uint32_t * destpix;
 	uint32_t * __restrict rdest;
@@ -133,8 +138,8 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y)
 	unsigned short s, s1, s2, s3, s4, s5, s6, s7;
 	uint32_t d, d1, d2, d3, d4, d5, d6, d7;
 	unsigned short row, column;
-	unsigned short dx = PreviousPSXDisplay.Range.x1;
-	unsigned short dy = PreviousPSXDisplay.DisplayMode.y;
+	unsigned short dx = prv->Range.x1;
+	unsigned short dy = prv->DisplayMode.y;
 
 	int loop = 0;
 	int offset = 0;
@@ -144,25 +149,25 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y)
 	for(loop=0; loop < 1024; loop += 128)
 		__dcbt(loop, psxVuw);
 
-	if (PreviousPSXDisplay.Range.y0) // centering needed?
+	if (prv->Range.y0) // centering needed?
 	{
-		TexZero(surf, (PreviousPSXDisplay.Range.y0 >> 1) * lPitch);
+		TexZero(surf, (prv->Range.y0 >> 1) * lPitch);
 
-		dy -= PreviousPSXDisplay.Range.y0;
-		surf += (PreviousPSXDisplay.Range.y0 >> 1) * lPitch;
+		dy -= prv->Range.y0;
+		surf += (prv->Range.y0 >> 1) * lPitch;
 
 		TexZero(surf + dy * lPitch,
-			((PreviousPSXDisplay.Range.y0 + 1) >> 1) * lPitch);
+			((prv->Range.y0 + 1) >> 1) * lPitch);
 	}
 
-	if (PreviousPSXDisplay.Range.x0)
+	if (prv->Range.x0)
 	{
 		for (column = 0; column < dy; column++)
 		{
 			destpix = (uint32_t *)(surf + (column * lPitch));
-			TexZero(destpix, PreviousPSXDisplay.Range.x0 << 2);
+			TexZero(destpix, prv->Range.x0 << 2);
 		}
-		surf += PreviousPSXDisplay.Range.x0 << 2;
+		surf += prv->Range.x0 << 2;
 	}
 
 	/* Right letterbox: limpiar los pixeles a la derecha del contenido.
@@ -172,7 +177,7 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y)
 	 * "ruido a la derecha" al encoger el ancho visible: codec de MGS, GT2).
 	 * Analogo al clear del margen izquierdo de arriba. */
 	{
-		int rmargin = (int)(lPitch >> 2) - PreviousPSXDisplay.Range.x0 - (int)dx;
+		int rmargin = (int)(lPitch >> 2) - prv->Range.x0 - (int)dx;
 		if (rmargin > 0) {
 			for (column = 0; column < dy; column++) {
 				destpix = (uint32_t *)(surf + (column * lPitch));
@@ -181,7 +186,7 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y)
 		}
 	}
 
-	if (PSXDisplay.RGB24)
+	if (dsp->RGB24)
 	{
 		for (column = 0; column < dy; column++)
 		{
@@ -329,13 +334,14 @@ static void BlitScreen32(unsigned char * surf, int32_t x, int32_t y)
 }
 
 
-void BlitScreen16(unsigned char * surf,long x,long y)
+void BlitScreen16(unsigned char * surf, long x, long y,
+                  const PSXDisplay_t *dsp, const PSXDisplay_t *prv)
 {
 
  unsigned long lu;
  unsigned short row,column;
- unsigned short dx=PreviousPSXDisplay.Range.x1;
- unsigned short dy=PreviousPSXDisplay.DisplayMode.y;
+ unsigned short dx=prv->Range.x1;
+ unsigned short dy=prv->DisplayMode.y;
  unsigned short LineOffset,SurfOffset;
  long lPitch= g_pPitch;
 
@@ -349,35 +355,35 @@ void BlitScreen16(unsigned char * surf,long x,long y)
   *
   * Same arithmetic as BlitScreen32 but with 16-bit (2 byte) pixels
   * instead of 32-bit, hence no <<2 shift on the byte counts. */
- if (PreviousPSXDisplay.Range.y0)                       // centering needed?
+ if (prv->Range.y0)                       // centering needed?
  {
-   TexZero(surf, (PreviousPSXDisplay.Range.y0 >> 1) * lPitch);
+   TexZero(surf, (prv->Range.y0 >> 1) * lPitch);
 
-   dy -= PreviousPSXDisplay.Range.y0;
-   surf += (PreviousPSXDisplay.Range.y0 >> 1) * lPitch;
+   dy -= prv->Range.y0;
+   surf += (prv->Range.y0 >> 1) * lPitch;
 
    TexZero(surf + dy * lPitch,
-           ((PreviousPSXDisplay.Range.y0 + 1) >> 1) * lPitch);
+           ((prv->Range.y0 + 1) >> 1) * lPitch);
  }
 
  /* Horizontal letterbox columns.  Match BlitScreen32: zero the left
   * margin column-by-column, then advance surf past it.  Bytes per
   * pixel is 2 here (vs 4 in 32-bit), so the shift is <<1. */
- if (PreviousPSXDisplay.Range.x0)
+ if (prv->Range.x0)
  {
    unsigned char *p;
    for (column = 0; column < dy; column++)
    {
      p = surf + (column * lPitch);
-     TexZero(p, PreviousPSXDisplay.Range.x0 << 1);
+     TexZero(p, prv->Range.x0 << 1);
    }
-   surf += PreviousPSXDisplay.Range.x0 << 1;
+   surf += prv->Range.x0 << 1;
  }
 
  /* Right letterbox: misma logica que BlitScreen32, pixeles de 2 bytes.
   * Antes de `dx>>=1` para usar dx en pixeles. */
  {
-   int rmargin = (int)(lPitch >> 1) - PreviousPSXDisplay.Range.x0 - (int)dx;
+   int rmargin = (int)(lPitch >> 1) - prv->Range.x0 - (int)dx;
    if (rmargin > 0) {
      unsigned char *p;
      for (column = 0; column < dy; column++) {
@@ -387,7 +393,7 @@ void BlitScreen16(unsigned char * surf,long x,long y)
    }
  }
 
- if(PSXDisplay.RGB24)
+ if(dsp->RGB24)
   {
    unsigned char * pD;unsigned int startxy;
 
@@ -451,7 +457,6 @@ extern time_t tStart;
 
 void DoBufferSwap(void)
 {
-
 	finalw = PSXDisplay.DisplayMode.x;
 	finalh = PSXDisplay.DisplayMode.y;
 
@@ -464,9 +469,9 @@ void DoBufferSwap(void)
 		return;
 
 	if (g_useRGB565)
-		BlitScreen16((unsigned char *)pPsxScreen, PSXDisplay.DisplayPosition.x, PSXDisplay.DisplayPosition.y);
+		BlitScreen16((unsigned char *)pPsxScreen, PSXDisplay.DisplayPosition.x, PSXDisplay.DisplayPosition.y, &PSXDisplay, &PreviousPSXDisplay);
 	else
-		BlitScreen32((unsigned char *)pPsxScreen, PSXDisplay.DisplayPosition.x, PSXDisplay.DisplayPosition.y);
+		BlitScreen32((unsigned char *)pPsxScreen, PSXDisplay.DisplayPosition.x, PSXDisplay.DisplayPosition.y, &PSXDisplay, &PreviousPSXDisplay);
 
     DisplayUpdate();
 }

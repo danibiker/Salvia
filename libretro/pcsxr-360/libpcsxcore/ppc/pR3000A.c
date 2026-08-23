@@ -764,9 +764,30 @@ static void Return()
 }
 
 static void iStoreCycle() {
+	u32 instrs, mult;
 	// what is idlecyclecount doing ?
 	/* store cycle */
-	count = (idlecyclecount + (pc - pcold) / 4) * BIAS;
+	/* [XBOX360] Antes: count = instrs * BIAS, con BIAS entero (=2).  Ahora
+	 * en centesimas (Config.CpuCycleMult), para poder expresar el 1.75 de
+	 * upstream pcsx_rearmed (CYCLE_MULT_DEFAULT 175) y para exponerlo como
+	 * core option.  Se resuelve en tiempo de COMPILACION del bloque, asi que
+	 * `count` sigue siendo un inmediato constante del ADDI: coste 0 en
+	 * runtime.  Ver el comentario de CpuCycleMult en psxcommon.h.
+	 *
+	 * Redondeo AL MAS CERCANO (+50), igual que el CLOCK_ADJUST de upstream
+	 * (new_dynarec.c: (x * m + s * 50) / 100).  Antes redondeaba al alza
+	 * (+99), que sobrecarga los bloques cortos: con mult=175 un bloque de 3
+	 * instrucciones cobraba 6 ciclos en vez de 5, un 20% de mas, y eso le
+	 * quita presupuesto a la logica del juego.
+	 *
+	 * El +50 no puede dar 0 con la core option acotada a >=50 (el minimo
+	 * real es 1 instruccion * 50 -> (50+50)/100 = 1), pero el suelo se deja
+	 * explicito: un bloque a coste 0 no haria avanzar el reloj y colgaria
+	 * los eventos (VBlank incluido) en un bucle cerrado. */
+	mult = Config.CpuCycleMult ? Config.CpuCycleMult : 200u;
+	instrs = idlecyclecount + (pc - pcold) / 4;
+	count = (instrs * mult + 50u) / 100u;
+	if (count == 0) count = 1;
 	ADDI(PutHWRegSpecial(CYCLECOUNT), GetHWRegSpecial(CYCLECOUNT), count);
 }
 

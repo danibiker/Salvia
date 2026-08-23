@@ -74,3 +74,14 @@ git config --global merge.tool kdiff3
 git config --global mergetool.kdiff3.path "C:/Program Files/KDiff3/kdiff3.exe"
 git config --global mergetool.prompt false
 git mergetool --tool=kdiff3
+
+###########################################################################################################
+# Compilando Cores con su makefile original
+###########################################################################################################
+
+Para 32-bit: 
+	make platform=win CC=i686-w64-mingw32-gcc CXX=i686-w64-mingw32-g++
+Limpieza:
+	make clean
+Debug: Para build con símbolos de debug:
+	make platform=win DEBUG=1

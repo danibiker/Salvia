@@ -182,6 +182,23 @@ typedef struct {
 	u8 Cpu; // CPU_DYNAREC or CPU_INTERPRETER
 	u8 PsxType; // PSX_TYPE_NTSC or PSX_TYPE_PAL
 	u8 CpuBias;
+	/* [XBOX360] Ciclos emulados cobrados por CADA 100 instrucciones del
+	 * R3000A (200 = 2.00 ciclos/instruccion = el CpuBias=2 historico).
+	 * Existe porque CpuBias es ENTERO y el valor de referencia de upstream
+	 * pcsx_rearmed es 1.75 (CYCLE_MULT_DEFAULT 175), que con un entero no
+	 * se puede expresar.  Lo consume el dynarec en iStoreCycle(); el
+	 * interprete se queda con CpuBias redondeado (solo se usa para
+	 * biseccion, no para jugar).  Ver pcsxr360_cycle_multiplier.
+	 *
+	 * Que significa: el VBlank llega cada 565045 ciclos SIEMPRE (va por
+	 * reloj, no por trabajo), asi que este numero fija cuantas
+	 * instrucciones puede ejecutar el juego por frame:
+	 *   200 -> 282522 instr/frame   (lo que teniamos)
+	 *   175 -> 322882 instr/frame   (default de upstream)
+	 *   100 -> 565045 instr/frame   (overclock x2 respecto al hardware)
+	 * Un juego que no termina su frame a tiempo salta al siguiente campo y
+	 * su logica se va a 30 Hz aunque el frontend siga marcando 60 fps. */
+	u32 CpuCycleMult;
 	boolean CpuRunning;
 	boolean Widescreen;
 #ifdef _WIN32
