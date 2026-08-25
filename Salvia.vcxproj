@@ -169,6 +169,14 @@
       <Configuration>Debug_TyrQuake</Configuration>
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug_uae|Win32">
+      <Configuration>Debug_uae</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug_uae|Xbox 360">
+      <Configuration>Debug_uae</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug_vbanext|Win32">
       <Configuration>Debug_vbanext</Configuration>
       <Platform>Win32</Platform>
@@ -329,6 +337,14 @@
       <Configuration>Release_fbanext</Configuration>
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_fbneo2021|Win32">
+      <Configuration>Release_fbneo2021</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_fbneo2021|Xbox 360">
+      <Configuration>Release_fbneo2021</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release_finalburn|Win32">
       <Configuration>Release_finalburn</Configuration>
       <Platform>Win32</Platform>
@@ -425,6 +441,14 @@
       <Configuration>Release_Snes9x</Configuration>
       <Platform>Xbox 360</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_uae|Win32">
+      <Configuration>Release_uae</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_uae|Xbox 360">
+      <Configuration>Release_uae</Configuration>
+      <Platform>Xbox 360</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release_vbanext|Win32">
       <Configuration>Release_vbanext</Configuration>
       <Platform>Win32</Platform>
@@ -472,6 +496,10 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_uae|Xbox 360'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -602,6 +630,16 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_uae|Xbox 360'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbneo2021|Xbox 360'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -769,6 +807,12 @@
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_uae|Win32'" Label="Configuration">
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbneo2021|Win32'" Label="Configuration">
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_cannonball|Win32'" Label="Configuration">
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
@@ -837,6 +881,9 @@
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug_uae|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug_cannonball|Xbox 360'" Label="PropertySheets">
@@ -926,6 +973,12 @@
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_uae|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbneo2021|Xbox 360'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_cannonball|Xbox 360'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -1013,6 +1066,7 @@
     <EMU_LIB_PICODRIVE>picodrive</EMU_LIB_PICODRIVE>
     <EMU_LIB_MAME2003PLUS>mame-2003-plus</EMU_LIB_MAME2003PLUS>
     <EMU_LIB_FBNEO>fbneo</EMU_LIB_FBNEO>
+    <EMU_LIB_FBNEO_2021>fbneo-2021</EMU_LIB_FBNEO_2021>
     <EMU_LIB_FBANEXT>fbanext</EMU_LIB_FBANEXT>
     <EMU_LIB_DOSBOXPURE>dosbox-pure</EMU_LIB_DOSBOXPURE>
     <EMU_LIB_PRBOOM>prboom</EMU_LIB_PRBOOM>
@@ -1028,6 +1082,7 @@
     <EMU_LIB_X68K>px68k</EMU_LIB_X68K>
     <EMU_LIB_DEFAULT>default</EMU_LIB_DEFAULT>
     <EMU_LIB_CANNONBALL>cannonball</EMU_LIB_CANNONBALL>
+    <EMU_LIB_UAE>uae</EMU_LIB_UAE>
     <SolutionName>Salvia</SolutionName>
     <BUILD_DIR>$(ProjectDir)build\$(Configuration)\$(Platform)\</BUILD_DIR>
     <COMMON_PREPROCESSOR>_CRT_SECURE_NO_WARNINGS;LIBRETRO;CURL_STATICLIB</COMMON_PREPROCESSOR>
@@ -1047,6 +1102,14 @@
     <IntDir>$(BUILD_DIR)</IntDir>
     <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_uae|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_UAE)$(ImageExt)</ImageXexOutput>
     <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_cannonball|Xbox 360'">
@@ -1281,6 +1344,22 @@
     <ImageXexOutput>$(OutDir)$(EMU_LIB_NAME)$(ImageExt)</ImageXexOutput>
     <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_uae|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_UAE)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbneo2021|Xbox 360'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+    <ImageXexOutput>$(OutDir)$(EMU_LIB_FBNEO_2021)$(ImageExt)</ImageXexOutput>
+    <RemoteRoot>usb0:\$(SolutionName)</RemoteRoot>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_cannonball|Xbox 360'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(BUILD_DIR)</OutDir>
@@ -1480,6 +1559,13 @@
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <TargetName>$(EMU_LIB_NAME)</TargetName>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_uae|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <TargetName>$(EMU_LIB_UAE)</TargetName>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_cannonball|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(BUILD_DIR)</OutDir>
@@ -1677,6 +1763,18 @@
     <TargetName>$(EMU_LIB_GAMBATTE)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <TargetName>$(EMU_LIB_NAME)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_uae|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(BUILD_DIR)</OutDir>
+    <IntDir>$(BUILD_DIR)</IntDir>
+    <TargetName>$(EMU_LIB_UAE)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbneo2021|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(BUILD_DIR)</OutDir>
     <IntDir>$(BUILD_DIR)</IntDir>
@@ -1913,6 +2011,44 @@
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);Genesis-Plus-GX.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\genesis-plus-gx\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateMapFile>true</GenerateMapFile>
+      <MapExports>true</MapExports>
+    </Link>
+    <Deploy>
+      <DeploymentFiles>$(RemoteRoot)=$(ImagePath)</DeploymentFiles>
+      <DeploymentType>CopyToHardDrive</DeploymentType>
+    </Deploy>
+    <ImageXex>
+      <TitleID>00000000</TitleID>
+    </ImageXex>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_uae|Xbox 360'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_UAE)";$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_XBOX)</AdditionalIncludeDirectories>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <StringPooling>true</StringPooling>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);libretro-uae.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);D:\develop\Github\xbox360\project\backups\libretro-uae\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -3046,6 +3182,90 @@
       <DeploymentType>CopyToHardDrive</DeploymentType>
     </Deploy>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_uae|Xbox 360'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Full</Optimization>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_UAE)";$(COMMON_PREPROCESSOR_RELEASE);DEBUG_LOG</PreprocessorDefinitions>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_XBOX)</AdditionalIncludeDirectories>
+      <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <StringPooling>true</StringPooling>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);libretro-uae.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);D:\develop\Github\xbox360\project\backups\libretro-uae\Release\Xbox 360</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateMapFile>true</GenerateMapFile>
+    </Link>
+    <Deploy>
+      <DeploymentType>CopyToHardDrive</DeploymentType>
+    </Deploy>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbneo2021|Xbox 360'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Full</Optimization>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>_XBOX;EMU_LIB_NAME="$(EMU_LIB_FBNEO_2021)";$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <CallAttributedProfiling>Disabled</CallAttributedProfiling>
+      <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_XBOX)</AdditionalIncludeDirectories>
+      <UndefinePreprocessorDefinitions>_DEBUG</UndefinePreprocessorDefinitions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
+      <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
+      <PreschedulingOptimization>true</PreschedulingOptimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <StringPooling>true</StringPooling>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
+      <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);libretro.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);D:\develop\Github\xbox360\project\FBNeo-1.0.0.02\projectfiles\visualstudio-2010-libretro-360\Release</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateMapFile>true</GenerateMapFile>
+    </Link>
+    <Deploy>
+      <DeploymentType>CopyToHardDrive</DeploymentType>
+    </Deploy>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_cannonball|Xbox 360'">
     <ClCompile>
       <ExceptionHandling>Async</ExceptionHandling>
@@ -4099,6 +4319,43 @@
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_uae|Win32'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN;__x86_64__;$(COMMON_PREPROCESSOR_RELEASE);DEBUG_LOG;NET_DEBUG</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <EnablePREfast>false</EnablePREfast>
+      <IntrinsicFunctions>false</IntrinsicFunctions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <SmallerTypeCheck>false</SmallerTypeCheck>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
+      <StringPooling>true</StringPooling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);D:\develop\Github\xbox360\project\backups\libretro-uae\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_WIN);libretro-uae.lib</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateMapFile>true</GenerateMapFile>
+      <AssemblyDebug>false</AssemblyDebug>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
+    </PostBuildEvent>
+    <Manifest>
+      <EnableDPIAwareness>true</EnableDPIAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_cannonball|Win32'">
     <ClCompile>
       <ExceptionHandling>Async</ExceptionHandling>
@@ -4580,7 +4837,7 @@
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN;__x86_64__;$(COMMON_PREPROCESSOR_DEBUG)</PreprocessorDefinitions>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <CompileAs>CompileAsCpp</CompileAs>
       <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
       <EnablePREfast>false</EnablePREfast>
@@ -4589,11 +4846,14 @@
       <SmallerTypeCheck>false</SmallerTypeCheck>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <FloatingPointModel>Fast</FloatingPointModel>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <StringPooling>false</StringPooling>
+      <FunctionLevelLinking>false</FunctionLevelLinking>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);$(ProjectDir)libretro\picodrive\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);picodrive.lib</AdditionalDependencies>
-      <IgnoreSpecificDefaultLibraries>msvcrt.lib;LIBCMTD.lib</IgnoreSpecificDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -5060,6 +5320,90 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Full</Optimization>
+      <PreprocessorDefinitions>WIN;HAVE_CHD;$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <StringPooling>true</StringPooling>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);$(ProjectDir)libretro\genesis-plus-gx\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_WIN);Genesis-Plus-GX.lib</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
+    </PostBuildEvent>
+    <Manifest>
+      <EnableDPIAwareness>true</EnableDPIAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_uae|Win32'">
+    <ClCompile>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <Optimization>Full</Optimization>
+      <PreprocessorDefinitions>WIN;$(COMMON_PREPROCESSOR_RELEASE)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <AdditionalIncludeDirectories>$(ADDITIONAL_INCLUDE_DIRS_WIN)</AdditionalIncludeDirectories>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ExceptionHandling>Async</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <StringPooling>true</StringPooling>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <OpenMPSupport>false</OpenMPSupport>
+      <CompileAsManaged>false</CompileAsManaged>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);D:\develop\Github\xbox360\project\backups\libretro-uae\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(COMMON_LIBS_WIN);libretro-uae.lib</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateMapFile>true</GenerateMapFile>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(OutDir)$(TargetName)$(TargetExt)" "$(ProjectDir)DistroWin" /Y /I</Command>
+    </PostBuildEvent>
+    <Manifest>
+      <EnableDPIAwareness>true</EnableDPIAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_fbneo2021|Win32'">
     <ClCompile>
       <ExceptionHandling>Async</ExceptionHandling>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>

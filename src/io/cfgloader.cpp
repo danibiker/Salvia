@@ -19,6 +19,7 @@ extern "C"{
 }
 
 cfg::t_cfg_props CfgLoader::configMain [cfg::MAIN_CFG_MAX];
+std::string CfgLoader::appliedFileParmsCore;
 
 CfgLoader::CfgLoader(){
 	emuCfgPos = 0;
@@ -669,7 +670,19 @@ std::string CfgLoader::saveCoreParams(){
 
 	std::string corepath = getCoreCfgPath();
 	FileList::guardarVector(corepath, fileCoreCfg);
+
+	appliedFileParmsCore = dirutil::getFileName(corepath);
 	return LanguageManager::instance()->get("msg.cfg.savelocation") + corepath;
+}
+
+bool CfgLoader::deleteCoreParams(){
+	dirutil dir;
+	const std::string corepath = getCoreCfgPath();
+	if (!corepath.empty() && dir.fileExists(corepath.c_str()) && !dir.isDir(corepath.c_str())){
+		dir.borrarArchivo(corepath);
+		return true;
+	}
+	return false;
 }
 
 void CfgLoader::loadCoreParams(){
@@ -686,6 +699,7 @@ bool CfgLoader::applyCoreParamsFile(const std::string& path){
 	FileList::cargarVector(path, fileConfig);
 	if (fileConfig.empty()) return false;
 
+	appliedFileParmsCore = dirutil::getFileName(path);
 	std::size_t pos = 0;
 	for (unsigned int i=0; i<fileConfig.size(); i++){
 		std::string linea = fileConfig.at(i);
@@ -717,6 +731,7 @@ std::string CfgLoader::getGameCoreCfgPath(const std::string& gamePath){
 // declarado por el core (defaultSelected, poblado por applyEntry en
 // SET_CORE_OPTIONS). Base para recargar limpio al cambiar de juego.
 void CfgLoader::resetCoreParamsToDefaults(){
+	appliedFileParmsCore = LanguageManager::instance()->get("menu.core.options.msg.default");
 	for (std::map<std::string, std::unique_ptr<cfg::t_emu_props> >::iterator it = startupLibretroParams.begin();
 	     it != startupLibretroParams.end(); ++it) {
 		cfg::t_emu_props *p = it->second.get();
@@ -761,7 +776,19 @@ std::string CfgLoader::saveGameCoreParams(const std::string& gamePath){
 
 	std::string gamecfg = getGameCoreCfgPath(gamePath);
 	FileList::guardarVector(gamecfg, fileCoreCfg);
+
+	appliedFileParmsCore = dirutil::getFileName(gamecfg);
 	return LanguageManager::instance()->get("msg.cfg.savelocation") + gamecfg;
+}
+
+bool CfgLoader::deleteGameParams(const std::string& gamePath){
+	dirutil dir;
+	std::string gamecfg = getGameCoreCfgPath(gamePath);
+	if (!gamePath.empty() && dir.fileExists(gamecfg.c_str()) && !dir.isDir(gamePath.c_str())){
+		dir.borrarArchivo(gamecfg);
+		return true;
+	}
+	return false;
 }
 
 std::string CfgLoader::getCoreCfgPath(){

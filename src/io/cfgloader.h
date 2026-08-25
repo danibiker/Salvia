@@ -25,6 +25,7 @@ public:
 	~CfgLoader();
 
 	static cfg::t_cfg_props configMain [cfg::MAIN_CFG_MAX];
+	static std::string appliedFileParmsCore;
 
 	std::vector<std::unique_ptr<cfg::t_cfg_emu>> emulators;
 	std::map<std::string, std::unique_ptr<cfg::t_emu_props> > startupLibretroParams;
@@ -49,6 +50,9 @@ public:
 	bool applyCoreParamsFile(const std::string& path);
 	std::string saveMainParams();
 	std::string saveCoreOverrideParams(int emuIdx);
+	
+	bool deleteCoreParams();
+	bool deleteGameParams(const std::string& gamePath);
 	//unsigned int findConfigIndex(std::string);
 	
 	int getWidth();
@@ -61,6 +65,7 @@ public:
     ConfigEmu *getPrevCfgEmu();
 	ConfigEmu *getCfgEmu();
 	ConfigEmu *findCfgEmu(std::string execName);
+	std::string getCoreCfgPath();
 
 	std::map<std::string, std::unique_ptr<cfg::t_emu_props> >& getLibretroParams();
 	int emuCfgPos;
@@ -77,7 +82,7 @@ private:
 	void loadEmuConfig(std::string);
 	int findKeyCfg(const std::string&);
 	void checkSystemLang();
-	std::string getCoreCfgPath();
+	
 	void parsearIdiomas(const char*, const std::string&, std::vector<FieldIdDesc>&);
 	void parsearRegiones(const char*, const std::string&, std::vector<FieldIdDesc>&);
 	void getExecutables(std::string, cfg::t_cfg_emu*);

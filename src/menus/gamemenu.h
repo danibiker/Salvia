@@ -163,35 +163,12 @@ class GameMenu : public Engine{
 			HLSLBackground_setActive((isMenu && animBG >= BG_HLSL && animBG < BG_NONE) ? (animBG - BG_HLSL + 1) : 0);
 		}
 
-		void setEmuStatus(int tmpStat){
-			if (status == EMU_MENU_IMAGE_VIEWER){
-				//No queremos volver al visor de imagenes
-				lastStatus = EMU_MENU;
-			} else {
-				lastStatus = status;
-			}
-			status = tmpStat;
-			//Fondo HLSL del menu: estado retenido decidido en cada transicion
-			applyMenuBackground();
-			//Siempre que cambiemos de estado de emulacion,
-			//reseteamos los botones del joystick
-			joystick->inputs.clearAll();
-
-			if (status == EMU_STARTED && lastStatus != EMU_STARTED){
-				BadgeDownloader::instance().stop();
-				//Restauramos el shader porque parece haber algun problema con HLSLBackground::draw
-				checkDisplayOptions();
-			}
-		}
-
+		void setEmuStatus(int tmpStat);
 		int getEmuStatus(){return status;}
 		int getLastStatus(){return lastStatus;}
-		bool isOnscreenKeybEnabled(){
-			return onscreenKeyboard;
-		}
-		void setOnscreenKeyboard(bool enabled){
-			onscreenKeyboard = enabled;
-		}
+
+		bool isOnscreenKeybEnabled(){return onscreenKeyboard;}
+		void setOnscreenKeyboard(bool enabled){onscreenKeyboard = enabled;}
 		void setRomPaths(std::string rp);
 		std::string getSramPath();
 		void showSystemMessage(std::string, uint32_t);

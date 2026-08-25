@@ -1797,6 +1797,32 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 	}
 }
 
+void GameMenu::setEmuStatus(int tmpStat){
+	if (status == EMU_MENU_IMAGE_VIEWER){
+		//No queremos volver al visor de imagenes
+		lastStatus = EMU_MENU;
+	} else {
+		lastStatus = status;
+	}
+	status = tmpStat;
+	//Fondo HLSL del menu: estado retenido decidido en cada transicion
+	applyMenuBackground();
+	//Siempre que cambiemos de estado de emulacion,
+	//reseteamos los botones del joystick
+	joystick->inputs.clearAll();
+
+	//Deshabilitamos el teclado si lo estabamos mostrando en el core
+	if (lastStatus == EMU_STARTED && status != EMU_STARTED && isOnscreenKeybEnabled()){
+		setOnscreenKeyboard(false);
+	}
+
+	if (status == EMU_STARTED && lastStatus != EMU_STARTED){
+		BadgeDownloader::instance().stop();
+		//Restauramos el shader porque parece haber algun problema con HLSLBackground::draw
+		checkDisplayOptions();
+	}
+}
+
 struct retro_system_av_info GameMenu::getAvInfo(){
 	struct retro_system_av_info av_info;
 	memset(&av_info, 0, sizeof(av_info));
@@ -2369,14 +2395,14 @@ void GameMenu::drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int co
             
             // Si la celda es un salto por culpa del ENTER vertical, sumamos el ancho que le corresponderia
             if (keyb.caps[row][c].h == 0) {
-                int actualW = (keyb.layoutWidth[row][c] * 70) + ((keyb.layoutWidth[row][c] - 1) * keyb.spaceX);
+                int actualW = (keyb.layoutWidth[row][c] * keyb.keyW) + ((keyb.layoutWidth[row][c] - 1) * keyb.spaceX);
                 targetX += actualW + keyb.spaceX;
             } else {
                 targetX += keyb.caps[row][c].w + keyb.spaceX;
             }
         }
 
-        int targetY = keyb.iniY + row * (40 + keyb.spaceY);
+        int targetY = keyb.iniY + row * (keyb.keyH + keyb.spaceY);
         int targetW = keyb.caps[row][col].w;
         int targetH = keyb.caps[row][col].h;
 
@@ -2427,9 +2453,11 @@ void GameMenu::drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int co
 
 void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
     // 1. GENERACION DE LA CACHE (Solo se ejecuta la primera vez)
+	const int kw = keyb.keyW;
+	const int kh = keyb.keyH;
 
-	int totalKeyboardW = (keyb.cols * (70 + keyb.spaceX));
-    int totalKeyboardH = (keyb.rows * (40 + keyb.spaceY));
+	int totalKeyboardW = (keyb.cols * (kw + keyb.spaceX));
+    int totalKeyboardH = (keyb.rows * (kh + keyb.spaceY));
     if (keyb.keyboardSurface == nullptr) {
         SDL_Surface* rawSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, totalKeyboardW, totalKeyboardH, 
                                                        this->overlay->format->BitsPerPixel,
@@ -2458,7 +2486,7 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
             for (int col = 0; col < keyb.cols; col++){
                 if (keyb.layoutWidth[row][col] == 0) continue;
                 if (keyb.caps[row][col].h == 0) {
-                    int defaultW = 70;
+                    int defaultW = kw;
                     int actualW = (keyb.layoutWidth[row][col] * defaultW) + ((keyb.layoutWidth[row][col] - 1) * keyb.spaceX);
                     currentX += actualW + keyb.spaceX;
                     continue;
@@ -2469,8 +2497,7 @@ void GameMenu::drawKeyboard(TTF_Font* font, t_keyboard& keyb){
                 }    
 
                 int keybPosX = currentX;
-                //int keybPosY = keyb.iniY + row * (40 + keyb.spaceY);
-				int keybPosY = row * (40 + keyb.spaceY);
+				int keybPosY = row * (kh + keyb.spaceY);
 
                 // Dibujamos el fondo base de la tecla con alpha = KEY_ALPHA.
                 // CLAVE: SDL_MapRGBA (no SDL_MapRGB) para que el byte alpha del

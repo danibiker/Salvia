@@ -15,7 +15,7 @@
 #include <string>
 
 // --- Definici�n de tipos de opciones ---
-enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_LISTA_REF, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SAVESTATE, OPC_ACHIEVEMENT, 
+enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_LISTA_REF, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SHOW_DYNTXT_VAL, OPC_SAVESTATE, OPC_ACHIEVEMENT, 
 	OPC_FAQ_SEARCH, OPC_FAQ_SELECT, OPC_FAQ_TXT, OPC_SHOW_IMG, OPC_UNDEFINED};
 
 enum TipoKey{KEY_JOY_BTN,KEY_JOY_HAT,KEY_JOY_AXIS, KEY_JOY_MAX};
@@ -182,6 +182,25 @@ public:
     }
 };
 
+class OpcionTxtAndDynValue : public Opcion {
+public:
+    const std::string* valor; // Puntero al string estático/dinámico externo
+    CallbackValue callback;
+    void* context;
+
+    // El constructor recibe el string externo por referencia y guarda su dirección (&v)
+    OpcionTxtAndDynValue(std::string t, const std::string& v) 
+        : Opcion(t, OPC_SHOW_DYNTXT_VAL), valor(&v), callback(NULL), context(NULL) {}
+
+    std::string ejecutar() override {
+        if (callback != NULL) {
+            // Pasamos la dirección del string original (que es lo que almacena el puntero)
+            return callback(context, (void *)valor); 
+        }
+        return "";
+    }
+};
+
 class OpcionAchievement : public Opcion {
 public:
 	AchievementState achievement;
@@ -229,7 +248,7 @@ public:
 	CallbackValue callback; // Funcion estatica
     void* context;          // El "this" de GestorMenus
 
-    OpcionBool(std::string t, bool* v) : Opcion(t, OPC_BOOLEANA), valor(v), callback(NULL), context(NULL) {}
+    OpcionBool(std::string t, bool* v, int ico = -1) : Opcion(t, OPC_BOOLEANA, ico), valor(v), callback(NULL), context(NULL) {};
 
 	std::string ejecutar() override {
 		if (callback != NULL && valor != NULL) {
@@ -330,7 +349,7 @@ public:
 	Uint32 lastTimeAsked;
 	TipoKey tipoKey;
 
-	OpcionKey(std::string t, t_joy_state *pjoyInputs, t_joy_mapper * pjoyMapper, int pgamepadId, int pBtn, TipoKey ptipoKey, std::string desc): Opcion(t, OPC_KEY){
+	OpcionKey(std::string t, t_joy_state *pjoyInputs, t_joy_mapper * pjoyMapper, int pgamepadId, int pBtn, TipoKey ptipoKey, std::string desc, int ico = -1): Opcion(t, OPC_KEY){
 		btn = pBtn;
 		gamepadId = pgamepadId;
 		tipoKey = ptipoKey;
@@ -340,6 +359,7 @@ public:
 		joyInputs = pjoyInputs;
 		joyMapper = pjoyMapper;
 		intRef = NULL;
+		this->icon = ico;
 	}
 	
 	std::string ejecutar() override {

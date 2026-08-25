@@ -103,6 +103,7 @@ typedef enum {
 	clAskBg, 	
 	clAskLine, 
 	clAskText, 
+	clHighligtOption, 
     clTotalColors
 } enumColors;
 
@@ -327,7 +328,7 @@ typedef enum {
 		ico_remap,
 		ico_savestates,
 		ico_saving,
-		ico_return,
+		ico_resume,
 		ico_scrapper,
 		ico_achievements,
 		ico_shutdown,
@@ -335,6 +336,25 @@ typedef enum {
 		ico_cheats,
 		ico_clock,
 		ico_mouse,
+		ico_reload,
+		ico_turbo,
+		ico_download,
+		ico_input_dpad_u,
+		ico_input_dpad_d,
+		ico_input_dpad_l,
+		ico_input_dpad_r,
+		ico_input_btn_d,
+		ico_input_btn_r,
+		ico_input_btn_l,
+		ico_input_btn_u,
+		ico_input_lt,
+		ico_input_rt,
+		ico_input_select,
+		ico_input_start,
+		ico_input_stick_l3,
+		ico_input_stick_r3,
+		ico_input_l2,
+		ico_input_r2,
 		max_icons
 }enumIco;
 

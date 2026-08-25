@@ -6,10 +6,7 @@
 
 #include <const/constant.h>
 
-#define KEYCAP_W 70
-#define KEYCAP_H 40
 #define TOTAL_BLINK_FRAMES 15
-
 
 struct t_cap_key{
 	int w;
@@ -23,8 +20,8 @@ struct t_cap_key{
 	int blinkingPeriod;
 
 	t_cap_key(){
-		w = KEYCAP_W;
-		h = KEYCAP_H; 
+		w = 0;
+		h = 0; 
 		keySpaces = 1;
 		keyLabel = "X";
 		retro_key = 0;
@@ -34,8 +31,8 @@ struct t_cap_key{
 	}
 
 	t_cap_key(t_cap_key* capToCopy){
-		w = capToCopy->w;
-		h = capToCopy->h;
+		//w = capToCopy->w;
+		//h = capToCopy->h;
 		retro_key = capToCopy->retro_key;
 		retro_mod = capToCopy->retro_mod;
 		character = capToCopy->character;
@@ -92,8 +89,8 @@ struct t_keyboard {
 		textColor = Constant::colors[clWhite].sdlColor;
 		textSelectedColor = Constant::colors[clBlack].sdlColor;
 		dirtyKeyb = true;
-		keyW = KEYCAP_W;
-		keyH = KEYCAP_H;
+		keyW = 0;
+		keyH = 0;
 		keyboardSurface = nullptr;
 		keyboardW = 0;
 		keyboardH = 0;
@@ -358,10 +355,13 @@ struct t_keyboard {
     void setLayout(const char** srcLayout, const int* srcLayoutW, const int* srcLayoutH, const retro_key* keyLayout, const retro_mod* modLayout, 
 					int screenW, int screenH) {
 		
+		this->keyW = screenW / (cols + 2);
+		this->keyH = this->keyW / 2;
+
 		keyboardW = cols * keyW + (cols - 1) * spaceX;
 		keyboardH = rows * keyH + rows * spaceY;
-		iniX = (screenW - keyboardW) / 2;
-		iniY = screenH - keyboardH;
+		iniX = abs(screenW - keyboardW) / 2;
+		iniY = abs(screenH - keyboardH);
 
 		// 1. Volcar la distribucion calculando anchos y altos basados en t_cap_key
 		for (int row = 0; row < rows; row++) {
@@ -384,8 +384,8 @@ struct t_keyboard {
 					caps[row][col].character = 0;
 				}
 
-				int defaultW = caps[row][col].w; // Ancho inicial por defecto
-				int defaultH = caps[row][col].h; // Alto inicial por defecto (definido en t_cap_key)
+				int defaultW = keyW; // Ancho inicial por defecto
+				int defaultH = keyH; // Alto inicial por defecto (definido en t_cap_key)
 
 				// Calcular ancho dinamico
 				if (caps[row][col].keySpaces > 0) {

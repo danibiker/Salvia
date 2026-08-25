@@ -33,6 +33,25 @@
 // Implementaciones mínimas usando stdio.h
 const char* vfs_get_path_impl(struct retro_vfs_file_handle* stream) { return NULL; }
 
+// Función que normaliza separadores y limpia múltiples barras seguidas
+std::string limpiarRutaWindows(std::string ruta) {
+    
+    // 1. Reemplazar todas las barras unix '/' por barras windows '\'
+    std::replace(ruta.begin(), ruta.end(), '/', '\\');
+
+    // 2. Eliminar barras invertidas consecutivas duplicadas
+    std::string::iterator nuevo_final = std::unique(ruta.begin(), ruta.end(), 
+        [](char a, char b) {
+            return a == '\\' && b == '\\';
+        }
+    );
+
+    // 3. Recortar el string para eliminar los caracteres sobrantes del final
+    ruta.erase(nuevo_final, ruta.end());
+
+    return ruta;
+}
+
 struct retro_vfs_file_handle* vfs_open_impl(const char* path, unsigned mode, unsigned hints) {
     if (!path || !*path) return NULL;
     
@@ -40,9 +59,11 @@ struct retro_vfs_file_handle* vfs_open_impl(const char* path, unsigned mode, uns
     if (mode & RETRO_VFS_FILE_ACCESS_WRITE) mode_str = "wb";
     if (mode & RETRO_VFS_FILE_ACCESS_UPDATE) mode_str = "rb+";
 
-    FILE* fp = fopen(path, mode_str);
+	std::string cleanPath = limpiarRutaWindows(path);
+
+	FILE* fp = fopen(cleanPath.c_str(), mode_str);
     if (!fp) {
-        LOG_ERROR("Fallo al abrir archivo: %s", path);
+        LOG_ERROR("Fallo al abrir archivo: %s", cleanPath.c_str());
         return NULL;
     }
     return (struct retro_vfs_file_handle*)fp;
@@ -119,7 +140,7 @@ int vfs_stat_impl(const char* path, int32_t* size)
 
 #if defined(_WIN32)
     struct __stat64 info;
-    if (_stat64(path, &info) != 0) return 0;
+    if (_stat64(limpiarRutaWindows(path).c_str(), &info) != 0) return 0;
 
     int flags = RETRO_VFS_STAT_IS_VALID;
     if (info.st_mode & _S_IFDIR) flags |= RETRO_VFS_STAT_IS_DIRECTORY;
@@ -127,7 +148,7 @@ int vfs_stat_impl(const char* path, int32_t* size)
     if (size) *size = (int32_t)info.st_size;
 #else
     struct stat info;
-    if (stat(path, &info) != 0) return 0;
+    if (stat(limpiarRutaWindows(path).c_str(), &info) != 0) return 0;
 
     int flags = RETRO_VFS_STAT_IS_VALID;
     if (S_ISDIR(info.st_mode))  flags |= RETRO_VFS_STAT_IS_DIRECTORY;
@@ -140,10 +161,14 @@ int vfs_stat_impl(const char* path, int32_t* size)
 int vfs_mkdir_impl(const char* dir)
 {
     if (!dir || !*dir) return -1;
+
+	std::string cleanDir = limpiarRutaWindows(dir);
+
+
 #if defined(_WIN32)
-    int ret = _mkdir(dir);
+    int ret = _mkdir(cleanDir.c_str());
 #else
-    int ret = mkdir(dir, 0755);
+    int ret = mkdir(cleanDir.c_str(), 0755);
 #endif
     /* 0 = creado, -2 = ya existía (EEXIST) */
     if (ret == 0)      return 0;
@@ -183,12 +208,12 @@ struct retro_vfs_dir_handle* vfs_opendir_impl(const char* dir, bool include_hidd
 #if defined(_WIN32)
     /* Windows necesita un patrón "dir\*" */
     char pattern[MAX_PATH];
-    snprintf(pattern, sizeof(pattern), "%s\\*", dir);
+    snprintf(pattern, sizeof(pattern), "%s\\*", limpiarRutaWindows(dir).c_str());
     h->find_handle = FindFirstFileA(pattern, &h->find_data);
     if (h->find_handle == INVALID_HANDLE_VALUE) { free(h); return NULL; }
     h->first = true;
 #else
-    h->dir = opendir(dir);
+    h->dir = opendir(limpiarRutaWindows(dir).c_str());
     if (!h->dir) { free(h); return NULL; }
 #endif
 

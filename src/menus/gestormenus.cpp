@@ -165,6 +165,21 @@ std::string GestorMenus::restaurarCoreConfig(CfgLoader *refConfig){
 		if (!p->values.empty()) p->cachedValue = p->values[d];
 	}
 	options_changed_flag = true;   // el core relee en el proximo GET_VARIABLE_UPDATE
+
+
+	//refConfig->deleteCoreParams();
+	//dirutil dir;
+	//const std::string corepath = refConfig->getCoreCfgPath();
+	//if (dir.fileExists(corepath.c_str())){
+	//	refConfig->appliedFileParmsCore = dir.getFileName(corepath);
+	//} else {
+		/** Aplicamos siempre las opciones por defecto. El usuario decide luego si quiere guardarlas como opciones del core
+		 *  o como opciones del juego. Por eso mostramos un mensaje de opciones restauradas por defecto
+		 */
+		refConfig->appliedFileParmsCore = LanguageManager::instance()->get("menu.core.options.msg.default");
+	//}
+	refConfig->deleteGameParams(romPaths.rompath);
+
 	return LanguageManager::instance()->get("menu.core.options.restore.applied");
 }
 
@@ -434,11 +449,11 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	todosLosMenus.push_back(menuHotkeys);
 	todosLosMenus.push_back(menuRapidFire);
 
-	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.paddassign"), menuAssignRetro));
-	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.frontassign"), menuAssignFrontend));
-	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.hotkeys"), menuHotkeys));
-	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.rapidfire"), menuRapidFire));
-	menuEntrada->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.saveassign"), &GestorMenus::guardarJoysticks, joystick, this));
+	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.paddassign"), menuAssignRetro, ico_remap));
+	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.frontassign"), menuAssignFrontend, ico_remap));
+	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.hotkeys"), menuHotkeys, ico_settings));
+	menuEntrada->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.options.rapidfire"), menuRapidFire, ico_turbo));
+	menuEntrada->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.saveassign"), &GestorMenus::guardarJoysticks, joystick, ico_saving, this));
 
 	//Traducciones para las teclas
 	std::size_t num_elementos = sizeof(FRONTEND_BTN_VAL) / sizeof(FRONTEND_BTN_VAL[0]);
@@ -471,12 +486,12 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 		Menu* menuControlesPuerto = new Menu(controlStr , menuAssignRetro);
 		addControlerOptions(menuControlesPuerto, controlId, joystick, refConfig);
 		addControlerButtons(menuControlesPuerto, controlId, joystick);
-		menuAssignRetro->opciones.push_back(new OpcionSubMenu(controlStr, menuControlesPuerto));
+		menuAssignRetro->opciones.push_back(new OpcionSubMenu(controlStr, menuControlesPuerto, ico_remap));
 		todosLosMenus.push_back(menuControlesPuerto);
 	}
 
-	menuAssignRetro->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savecoreassign"), &GestorMenus::guardarCoreJoysticks, joystick, this));
-	menuAssignRetro->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savegameassign"), &GestorMenus::guardarGameJoysticks, joystick, this));
+	menuAssignRetro->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savecoreassign"), &GestorMenus::guardarCoreJoysticks, joystick, ico_saving, this));
+	menuAssignRetro->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savegameassign"), &GestorMenus::guardarGameJoysticks, joystick, ico_saving, this));
 
 
 	//Poblar menu hotkeys
@@ -519,7 +534,7 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuRaiz->opciones.push_back(submenuSearchGuides);
 
 	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, ico_saving, this));
-	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, ico_return, this));
+	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, ico_resume, this));
 	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.exit"), &GestorMenus::salirEmulacion, &status, ico_shutdown, this));
 	
 	// Establecer estado inicial
@@ -728,7 +743,8 @@ void GestorMenus::poblarMenuCoreOverrides(Menu *menu, CfgLoader *refConfig){
 		
 		//Button to save configuration of the selected core
 		t_save_override *overr = new t_save_override(i, refConfig);
-		menuCore->opciones.push_back(new OpcionExec<t_save_override>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarCoreOverridesConfig, overr, this));
+		menuCore->opciones.push_back(new OpcionExec<t_save_override>(LanguageManager::instance()->get("menu.main.saveconfig"), 
+			&GestorMenus::guardarCoreOverridesConfig, overr, ico_saving, this));
 	}
 }
 
@@ -1143,7 +1159,7 @@ void GestorMenus::poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper){
 	
 
 	menuScrapper->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.scrap.other"), menuScrapOptions));
-	menuScrapper->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.scrap.start"), &GestorMenus::startScrapping, &status, this));
+	menuScrapper->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.scrap.start"), &GestorMenus::startScrapping, &status, ico_resume, this));
 }
 
 /**
@@ -1233,9 +1249,10 @@ void GestorMenus::poblarCoreOptions(CfgLoader *refConfig){
 	coreOptionSubmenus.clear();
 
 	//Param independent options (kept at the menu root)
-	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.save"), &GestorMenus::guardarCoreConfig, refConfig, this));
-	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.savegame"), &GestorMenus::guardarCoreConfigGame, refConfig, this));
-	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.restore"), &GestorMenus::restaurarCoreConfig, refConfig, this));
+	menuCoreOptions->opciones.push_back(new OpcionTxtAndDynValue(LanguageManager::instance()->get("menu.core.options.configfile"), refConfig->appliedFileParmsCore));
+	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.save"), &GestorMenus::guardarCoreConfig, refConfig, ico_saving, this));
+	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.savegame"), &GestorMenus::guardarCoreConfigGame, refConfig, ico_saving, this));
+	menuCoreOptions->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.core.options.restore"), &GestorMenus::restaurarCoreConfig, refConfig, ico_reload, this));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.version"), string(refConfig->configMain[cfg::libretro_core].valueStr) + " " + refConfig->configMain[cfg::libretro_core_version].valueStr));
 	menuCoreOptions->opciones.push_back(new OpcionTxtAndValue(LanguageManager::instance()->get("menu.core.options.extensions"), refConfig->configMain[cfg::libretro_core_extensions].valueStr));
 
@@ -1253,11 +1270,11 @@ void GestorMenus::poblarCheats(CfgLoader *refConfig){
 	menuCheats->opciones.clear();
 	// Accion fija: recargar la lista desde el .cht en disco (todos desactivados).
 	menuCheats->opciones.push_back(new OpcionExec<CfgLoader>(
-		LanguageManager::instance()->get("menu.cheats.reload"), &GestorMenus::reloadCheats, refConfig, this));
+		LanguageManager::instance()->get("menu.cheats.reload"), &GestorMenus::reloadCheats, refConfig, ico_reload, this));
 
 	// Descargar de libretro-database. Siempre disponible (re-descarga / reemplaza el .cht).
 	menuCheats->opciones.push_back(new OpcionExec<CfgLoader>(
-		LanguageManager::instance()->get("menu.cheats.download"), &GestorMenus::descargarCheats, refConfig, this));
+		LanguageManager::instance()->get("menu.cheats.download"), &GestorMenus::descargarCheats, refConfig, ico_download, this));
 
 	std::vector<Cheat>& cheats = CheatManager::instance()->list();
 	if (cheats.empty()){
@@ -1545,13 +1562,17 @@ void GestorMenus::poblarMenuRapidFire(Menu* menuRapidFire, Joystick *joystick){
 			+ std::string(" ") + Constant::TipoToStr(controlId + 1) + " " +
 			input->names[controlId];
 
+		
+
 		Menu* menuPort = new Menu(controlStr, menuRapidFire);
 		for (int sdlBtnIdx=0; sdlBtnIdx < num_port_buttons; sdlBtnIdx++){
 			const std::string text = configurablePortButtonsStr[sdlBtnIdx];
 			const int retroBtnValue = configurablePortButtons[sdlBtnIdx]; // id RETRO 0..15
-			menuPort->opciones.push_back(new OpcionBool(text, &input->rapidFire[controlId][retroBtnValue]));
+			const int ico = ico_input_btn_d + sdlBtnIdx <= ico_input_r2 ? ico_input_btn_d + sdlBtnIdx : -1;
+
+			menuPort->opciones.push_back(new OpcionBool(text, &input->rapidFire[controlId][retroBtnValue], ico));
 		}
-		menuRapidFire->opciones.push_back(new OpcionSubMenu(controlStr, menuPort));
+		menuRapidFire->opciones.push_back(new OpcionSubMenu(controlStr, menuPort, ico_remap));
 		todosLosMenus.push_back(menuPort);
 	}
 }
@@ -1565,11 +1586,12 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId, Joystick *joys
 	for (int retroBtnIdx=0; retroBtnIdx < num_port_hats; retroBtnIdx++){
 		const std::string text = configurablePortHatsStr[retroBtnIdx];
 		const int retroBtnValue = configurablePortHats[retroBtnIdx];
+		const int ico = ico_input_dpad_u + retroBtnIdx <= ico_input_dpad_r ? ico_input_dpad_u + retroBtnIdx : -1;
 
 		if (input->axisAsPad){
-			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS]));
+			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS], ico));
 		} else {
-			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_HAT, TipoKeyStr[KEY_JOY_HAT]));
+			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_HAT, TipoKeyStr[KEY_JOY_HAT], ico));
 		}
 	}
 
@@ -1580,11 +1602,12 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId, Joystick *joys
 		
 		const int btnIdx = joystick->inputs.mapperCore.getSdlBtn(controlId, retroBtnValue);
 		const int axisIdx = joystick->inputs.mapperCore.getSdlAxis(controlId, retroBtnValue);
+		const int ico = ico_input_btn_d + sdlBtnIdx <= ico_input_r2 ? ico_input_btn_d + sdlBtnIdx : -1;
 
 		if (btnIdx > -1 || axisIdx == -1){
-			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_BTN, TipoKeyStr[KEY_JOY_BTN]));	
+			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_BTN, TipoKeyStr[KEY_JOY_BTN], ico));	
 		} else if (axisIdx > -1){
-			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS]));	
+			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS], ico));	
 		} 		
 	}
 }
@@ -1707,7 +1730,7 @@ std::string GestorMenus::confirmar(t_option_action *result) {
 		k->lastTimeAsked = SDL_GetTicks();
 		status = POLLING_INPUTS;
 	} else if (opt->tipo == OPC_EXEC || opt->tipo == OPC_SAVESTATE || opt->tipo == OPC_SHOW_TXT || opt->tipo == OPC_SHOW_TXT_VAL 
-		|| opt->tipo == OPC_FAQ_SEARCH || opt->tipo == OPC_FAQ_SELECT) {
+		 || opt->tipo == OPC_SHOW_DYNTXT_VAL || opt->tipo == OPC_FAQ_SEARCH || opt->tipo == OPC_FAQ_SELECT) {
 		Opcion* e = (Opcion*)opt;
 		std::string ret = e->ejecutar();
 
@@ -1921,6 +1944,8 @@ void GestorMenus::draw(SDL_Surface *video_page){
 		std::string line;
 		std::string value;
 
+		SDL_Color valueColor = Constant::colors[clWhite].sdlColor;
+
 		if (option->tipo == OPC_SAVESTATE){
 			drawSavestateWithImage(i, (OpcionSavestate *) option, video_page);
 			continue;
@@ -1954,6 +1979,16 @@ void GestorMenus::draw(SDL_Surface *video_page){
 		} else if (option->tipo == OPC_SHOW_TXT_VAL){
 			line = option->titulo;
 			value = ((OpcionTxtAndValue *)option)->valor;
+			if (((OpcionTxtAndValue *)option)->callback == NULL){
+				valueColor = Constant::colors[clHighligtOption].sdlColor;
+			}
+		} else if (option->tipo == OPC_SHOW_DYNTXT_VAL){
+			line = option->titulo;
+			value = *((OpcionTxtAndDynValue *)option)->valor;
+
+			if (((OpcionTxtAndDynValue *)option)->callback == NULL){
+				valueColor = Constant::colors[clHighligtOption].sdlColor;
+			}
 		} else {
 			line = option->titulo;
 		}
@@ -1962,6 +1997,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
         const int fontHeightRect = screenPos * face_h;
         const int lineBackground = -1;
         SDL_Color lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
+		valueColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : valueColor;
 
         //Drawing a faded background selection rectangle
         if (i == this->curPos){
@@ -1994,7 +2030,7 @@ void GestorMenus::draw(SDL_Surface *video_page){
 		} else if (!value.empty()){
 			const int pixelDato = Fonts::getSize(fontMenu, value);
 			Fonts::drawTextTransparent(video_page, fontMenu, value.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 
-                    this->getY() + fontHeightRect, lineTextColor, lineBackground);
+                    this->getY() + fontHeightRect, valueColor);
 
 		}
     }

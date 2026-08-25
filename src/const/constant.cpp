@@ -26,6 +26,7 @@ svColor Constant::colors[clTotalColors] = {
 	{{69,69,69}	 , 255},		//clAskBg 	
 	{{91,91,91}	 , 255},		//clAskLine 
 	{{190,190,190}, 255},		//clAskText 
+	{{0,255,197}, 255}		    //clHighligtOption
 }; 
 
 const char *MEDIAS_TO_FIND[] = {"sstitle", "ss", "box-2D"};
@@ -72,14 +73,33 @@ const char *ICONS_PATH[] = {"menu_log.png",		// page_white_text
 	"core-input-remapping-options.png",			// ico_remap
 	"loadstate.png",							// ico_savestates
 	"menu_saving.png",							// ico_saving
-	"resume.png",								// ico_return
+	"resume.png",								// ico_resume
 	"screenshot.png",							// ico_scrapper
 	"achievement-list.png",						// ico_achievements
 	"menu_shutdown.png",						// ico_shutdown
 	"menu_help.png",							// ico_help
 	"core-cheat-options.png",					// ico_cheats
 	"clock.png",								// ico_clock	
-	"input_MOUSE.png"							// ico_mouse
+	"input_MOUSE.png",							// ico_mouse
+	"reload.png",								// ico_reload
+	"input_TURBO.png",							// ico_turbo
+	"menu_download.png",						// ico_download
+	"input_DPAD-U.png",							// ico_input_dpad_u
+	"input_DPAD-D.png",							// ico_input_dpad_d
+	"input_DPAD-L.png",							// ico_input_dpad_l
+	"input_DPAD-R.png",							// ico_input_dpad_r
+	"input_BTN-D.png",							// ico_input_btn_d
+	"input_BTN-R.png",							// ico_input_btn_r
+	"input_BTN-L.png",							// ico_input_btn_l
+	"input_BTN-U.png",							// ico_input_btn_u
+	"input_LT.png",								// ico_input_lt
+	"input_RT.png",								// ico_input_rt
+	"input_SELECT.png",							// ico_input_select
+	"input_START.png",							// ico_input_start
+	"input_STCK-P.png",							// ico_input_stick_l3
+	"input_STCK-P.png",							// ico_input_stick_r3
+	"input_LB.png",								// ico_input_l2
+	"input_RB.png"								// ico_input_r2
 };
 
 const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",  // cart_gba

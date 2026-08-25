@@ -58,7 +58,7 @@ class dirutil{
 		unsigned int listFilesRecursive(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool order, bool properties);
 		unsigned int listFilesRecursive(const char *strdir, vector<unique_ptr<FileProps>> &filelist, string filtroExt, string filtroName, bool includeDirs, bool order, bool properties);
         string getFolder(string file);
-        string getFileName(string file);
+        
         bool changeDirAbsolute(const char *str);
         bool borrarArchivo(string ruta);
 		void borrarDir(string path);
@@ -71,6 +71,7 @@ class dirutil{
 		static bool isDir(const char* ruta);
 		static std::string getRelativeDir(std::string filepath, std::string basePath);
 		static string dirutil::getFileNameNoExt(const string& file);
+		static string getFileName(string file);
     private:
         char rutaActual[PATH_MAX]; //Ruta actual que se esta navegando
         char* formatdate(char* str, time_t val);

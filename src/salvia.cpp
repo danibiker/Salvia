@@ -1646,6 +1646,7 @@ int main(int argc, char *argv[]) {
 	// Se cargan los textos
 	const std::string mainLang = cfgLoader->configMain[cfg::mainLang].valueStr;
 	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
+	cfgLoader->appliedFileParmsCore = LanguageManager::instance()->get("menu.core.options.msg.default");
 	gameMenu = new GameMenu(cfgLoader);
 	listMenu = new ListMenu(gameMenu->overlay->w, gameMenu->overlay->h);
 	listMenu->setLayout(LAYBOXES, gameMenu->overlay->w, gameMenu->overlay->h);
