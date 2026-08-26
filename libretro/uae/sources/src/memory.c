@@ -189,6 +189,8 @@ MEMORY_FUNCTIONS(fakeuaebootrom);
 
 static bool map_uae_boot_rom_direct(void)
 {
+	int i;
+
 	if (!fakeuaebootrom_bank.allocated_size) {
 		fakeuaebootrom_bank.start = 0xf00000;
 		fakeuaebootrom_bank.reserved_size = 65536;
@@ -196,11 +198,11 @@ static bool map_uae_boot_rom_direct(void)
 		if (!mapped_malloc (&fakeuaebootrom_bank))
 			return false;
 		// create jump table to real uae boot rom
-		for (int i = 0xff00; i < 0xfff8; i += 8) {
+		for (i = 0xff00; i < 0xfff8; i += 8) {
 			uae_u8 *p = fakeuaebootrom_bank.baseaddr + i;
+			uaecptr p2 = rtarea_base + i;
 			p[0] = 0x4e;
 			p[1] = 0xf9;
-			uaecptr p2 = rtarea_base + i;
 			p[2] = p2 >> 24;
 			p[3] = p2 >> 16;
 			p[4] = p2 >>  8;
@@ -1273,6 +1275,8 @@ static int be_cnt, be_recursive;
 
 uae_u8 *REGPARAM2 default_xlate (uaecptr addr)
 {
+	int size;
+
 	if (be_recursive) {
 		cpu_halt(CPU_HALT_OPCODE_FETCH_FROM_NON_EXISTING_ADDRESS);
 		return kickmem_xlate(2);
@@ -1282,7 +1286,7 @@ uae_u8 *REGPARAM2 default_xlate (uaecptr addr)
 		return get_real_address(addr);
 
 	be_recursive++;
-	int size = currprefs.cpu_model >= 68020 ? 4 : 2;
+	size = currprefs.cpu_model >= 68020 ? 4 : 2;
 	if (quit_program == 0) {
 		/* do this only in 68010+ mode, there are some tricky A500 programs.. */
 		if ((currprefs.cpu_model > 68000 || !currprefs.cpu_compatible) && !currprefs.mmu_model) {
@@ -1545,11 +1549,13 @@ void a3000_fakekick (int map)
 static void descramble_alg(uae_u8 *data, int size)
 {
 	uae_u8 *tbuf = xmalloc(uae_u8, size);
+	int mode, s;
+
 	memcpy(tbuf, data, size);
-	for (int mode = 0; mode < 3; mode++) {
+	for (mode = 0; mode < 3; mode++) {
 		if ((data[8] == 0x4a && data[9] == 0xfc))
 			break;
-		for (int s = 0; s < size; s++) {
+		for (s = 0; s < size; s++) {
 			int d = s;
 			if (mode == 0) {
 				if (s & 0x2000)
@@ -1675,6 +1681,7 @@ static bool load_extendedkickstart (const TCHAR *romextfile, int type)
 	struct zfile *f;
 	int size, off;
 	bool ret = false;
+	struct romdata *rd;
 
 	if (romextfile[0] == '\0')
 		return false;
@@ -1690,7 +1697,7 @@ static bool load_extendedkickstart (const TCHAR *romextfile, int type)
 	zfile_fseek (f, 0, SEEK_END);
 	size = zfile_ftell32(f);
 	extendedkickmem_bank.reserved_size = ROM_SIZE_512;
-	struct romdata *rd = get_alg_rom(romextfile);
+	rd = get_alg_rom(romextfile);
 	if (rd) {
 		size = rd->size;
 		type = EXTENDED_ROM_ALG;
@@ -1922,12 +1929,14 @@ static const uae_u8 romend[20] = {
 static int load_kickstart (void)
 {
 	TCHAR tmprom[MAX_DPATH];
+	struct zfile *f;
+
 	cloanto_rom = 0;
 	if (!_tcscmp(currprefs.romfile, _T(":AROS"))) {
 		return load_kickstart_replacement();
 	}
 	_tcscpy(tmprom, currprefs.romfile);
-	struct zfile *f = get_kickstart_filehandle(&currprefs);
+	f = get_kickstart_filehandle(&currprefs);
 	addkeydir (currprefs.romfile);
 	if (f == NULL) /* still no luck */
 		goto err;
@@ -2342,7 +2351,9 @@ bool mapped_malloc (addrbank *ab)
 static void init_mem_banks (void)
 {
 	// unsigned so i << 16 won't overflow to negative when i >= 32768
-	for (unsigned int i = 0; i < MEMORY_BANKS; i++)
+	unsigned int i;
+
+	for (i = 0; i < MEMORY_BANKS; i++)
 		put_mem_bank (i << 16, &dummy_bank, 0);
 #ifdef NATMEM_OFFSET
 	delete_shmmaps (0, 0xFFFF0000);
@@ -2357,9 +2368,11 @@ static void map_banks_set(addrbank *bank, int start, int size, int realsize)
 
 static void allocate_memory (void)
 {
+	bool bogoreset;
+
 	bogomem_aliasing = 0;
 
-	bool bogoreset = (bogomem_bank.flags & ABFLAG_NOALLOC) != 0 &&
+	bogoreset = (bogomem_bank.flags & ABFLAG_NOALLOC) != 0 &&
 		(chipmem_bank.reserved_size != currprefs.chipmem.size || bogomem_bank.reserved_size != currprefs.bogomem.size);
 
 	mapped_free(&fakeuaebootrom_bank);
@@ -2609,10 +2622,12 @@ static void allocate_memory (void)
 
 static void setmemorywidth(struct ramboard *mb, addrbank *ab)
 {
+	int i;
+
 	if (!ab || !ab->allocated_size)
 		return;
 	if (mb->force16bit) {
-		for (int i = (ab->start >> 16); i < ((ab->start + ab->allocated_size) >> 16); i++) {
+		for (i = (ab->start >> 16); i < (int)((ab->start + ab->allocated_size) >> 16); i++) {
 			if (ce_banktype[i] == CE_MEMBANK_FAST32)
 				ce_banktype[i] = CE_MEMBANK_FAST16;
 			if (ce_banktype[i] == CE_MEMBANK_CHIP32)
@@ -2620,7 +2635,7 @@ static void setmemorywidth(struct ramboard *mb, addrbank *ab)
 		}
 	}
 	if (mb->chipramtiming) {
-		for (int i = (ab->start >> 16); i < ((ab->start + ab->allocated_size) >> 16); i++) {
+		for (i = (ab->start >> 16); i < (int)((ab->start + ab->allocated_size) >> 16); i++) {
 			ce_banktype[i] = ce_banktype[0];
 		}
 	}
@@ -2636,6 +2651,7 @@ static void setmemorywidth(struct ramboard *mb, addrbank *ab)
 static void fill_ce_banks (void)
 {
 	int i;
+	addrbank *ab;
 
 	if (currprefs.cpu_model <= 68010) {
 		memset (ce_banktype, CE_MEMBANK_FAST16, sizeof ce_banktype);
@@ -2643,7 +2659,7 @@ static void fill_ce_banks (void)
 		memset (ce_banktype, CE_MEMBANK_FAST32, sizeof ce_banktype);
 	}
 
-	addrbank *ab = &get_mem_bank(0);
+	ab = &get_mem_bank(0);
 	if (ab && (ab->flags & ABFLAG_CHIPRAM)) {
 		for (i = 0; i < (0x200000 >> 16); i++) {
 			ce_banktype[i] = (currprefs.cs_mbdmac || (currprefs.chipset_mask & CSMASK_AGA)) ? CE_MEMBANK_CHIP32 : CE_MEMBANK_CHIP16;
@@ -2696,7 +2712,7 @@ static void fill_ce_banks (void)
 	setmemorywidth(&currprefs.bogomem, &bogomem_bank);
 	setmemorywidth(&currprefs.z3chipmem, &z3chipmem_bank);
 	setmemorywidth(&currprefs.mbresmem_low, &a3000lmem_bank);
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 		setmemorywidth(&currprefs.z3fastmem[i], &z3fastmem_bank[i]);
 		setmemorywidth(&currprefs.fastmem[i], &fastmem_bank[i]);
 	}
@@ -2740,8 +2756,9 @@ void map_overlay (int chip)
 		map_banks(&dummy_bank, 0, size, 0);
 		if (!isdirectjit()) {
 			if ((currprefs.chipset_mask & CSMASK_ECS_AGNUS) && bogomem_bank.allocated_size == 0) {
+				int start;
 				map_banks(cb, 0, size, chipmem_bank.allocated_size);
-				int start = chipmem_bank.allocated_size >> 16;
+				start = chipmem_bank.allocated_size >> 16;
 				if (chipmem_bank.allocated_size < 0x100000) {
 					if (currprefs.cs_1mchipjumper) {
 						int dummy = (0x100000 - chipmem_bank.allocated_size) >> 16;
@@ -2789,11 +2806,14 @@ void map_overlay (int chip)
 //   1:even 0:odd on columns for odd rows.
 static void fillpattern(addrbank *ab)
 {
+	/* C89 hoisted declarations */
+	int fillbank, fillrow;
+
 	if (currprefs.cs_memorypatternfill && aga_mode) {
 		uae_u32 fillval = 0;
-		for (int fillbank = 0; fillbank < ab->allocated_size / 2048; fillbank++) {
+		for (fillbank = 0; fillbank < (int)(ab->allocated_size / 2048); fillbank++) {
 			fillval = ~fillval;
-			for (int fillrow = fillbank * 2048; fillrow < (fillbank + 1) * 2048; fillrow += 4) {
+			for (fillrow = fillbank * 2048; fillrow < (fillbank + 1) * 2048; fillrow += 4) {
 				// Chip emulated: NEC PD42S4260 (A1200 R1).  Spec says 512x512x16.
 				*((uae_u32 *)(ab->baseaddr + fillrow)) = fillval;
 				if ((fillrow & 7) == 4) {
@@ -2803,9 +2823,9 @@ static void fillpattern(addrbank *ab)
 		}
 	} else if (currprefs.cs_memorypatternfill && (currprefs.chipset_mask & CSMASK_ECS_AGNUS)) {
 		uae_u32 fillval = 0;
-		for (int fillbank = 0; fillbank < ab->allocated_size / 1024; fillbank++) {
+		for (fillbank = 0; fillbank < (int)(ab->allocated_size / 1024); fillbank++) {
 			fillval = ~fillval;
-			for (int fillrow = fillbank * 1024; fillrow < (fillbank + 1) * 1024; fillrow += 4) {
+			for (fillrow = fillbank * 1024; fillrow < (fillbank + 1) * 1024; fillrow += 4) {
 				// Chip emulated: Generic 4256.  4 * 512x4.
 				*((uae_u32 *)(ab->baseaddr + fillrow)) = fillval;
 				if ((fillrow & 7) == 0) {
@@ -2816,9 +2836,9 @@ static void fillpattern(addrbank *ab)
 	} else if (currprefs.cs_memorypatternfill && !agnusa1000) {
 		// OCS Agnus has swapped row and column compared to ECS and AGA.
 		uae_u16 fillval = 0;
-		for (int fillbank = 0; fillbank < ab->allocated_size / 256; fillbank++) {
+		for (fillbank = 0; fillbank < (int)(ab->allocated_size / 256); fillbank++) {
 			fillval = ~fillval;
-			for (int fillrow = 0; fillrow < 256; fillrow += 2) {
+			for (fillrow = 0; fillrow < 256; fillrow += 2) {
 				// Chip emulated: Generic 4256.  16 * 512x1.
 				*((uae_u16 *)(ab->baseaddr + fillbank * 256 + fillrow)) = fillval;
 			}
@@ -2826,9 +2846,9 @@ static void fillpattern(addrbank *ab)
 	} else if (currprefs.cs_memorypatternfill) {
 		// A1000
 		uae_u16 fillval = 0;
-		for (int fillbank = 0; fillbank < ab->allocated_size / 512; fillbank++) {
+		for (fillbank = 0; fillbank < (int)(ab->allocated_size / 512); fillbank++) {
 			fillval = ~fillval;
-			for (int fillrow = 0; fillrow < 512; fillrow += 2) {
+			for (fillrow = 0; fillrow < 512; fillrow += 2) {
 				// Chip emulated: Generic 4256.  16 * 512x1.
 				*((uae_u16 *)(ab->baseaddr + fillbank * 512 + fillrow)) = fillval;
 				if (((fillrow >> 1) & 15) == 15) {
@@ -2943,12 +2963,14 @@ static void restore_roms(void)
 
 bool read_kickstart_version(struct uae_prefs *p)
 {
+	struct zfile *z;
+	uae_u8 mem[32] = { 0 };
+
 	kickstart_version = 0;
 	cloanto_rom = 0;
-	struct zfile *z = get_kickstart_filehandle(p);
+	z = get_kickstart_filehandle(p);
 	if (!z)
 		return false;
-	uae_u8 mem[32] = { 0 };
 	read_kickstart(z, mem, sizeof mem, 0, 0);
 	zfile_fclose(z);
 	kickstart_version = (mem[12] << 8) | mem[13];
@@ -2990,6 +3012,8 @@ void memory_reset (void)
 {
 	int bnk, bnk_end;
 	bool gayleorfatgary;
+	/* C89 hoisted declarations */
+	int i;
 
 	highest_ram = 0;
 	need_hardreset = false;
@@ -3232,13 +3256,14 @@ void memory_reset (void)
 #endif
 #endif
 
-	for (int i = 0; i < 2; i++) {
+	for (i = 0; i < 2; i++) {
 		if (currprefs.custom_memory_sizes[i]) {
 			map_banks (i == 0 ? &custmem1_bank : &custmem2_bank,
 				currprefs.custom_memory_addrs[i] >> 16,
 				currprefs.custom_memory_sizes[i] >> 16, 0);
 			if (currprefs.custom_memory_mask[i]) {
-				for (int j = currprefs.custom_memory_addrs[i]; j & currprefs.custom_memory_mask[i]; j += currprefs.custom_memory_sizes[i]) {
+				int j;
+				for (j = currprefs.custom_memory_addrs[i]; j & currprefs.custom_memory_mask[i]; j += currprefs.custom_memory_sizes[i]) {
 					map_banks(i == 0 ? &custmem1_bank : &custmem2_bank, j >> 16, currprefs.custom_memory_sizes[i] >> 16, 0);
 				}
 			}
@@ -3335,11 +3360,14 @@ void memory_hardreset (int mode)
 // do not map if it conflicts with custom banks
 void map_banks_cond (addrbank *bank, int start, int size, int realsize)
 {
-	for (int i = 0; i < MAX_CUSTOM_MEMORY_ADDRS; i++) {
+	int i;
+
+	for (i = 0; i < MAX_CUSTOM_MEMORY_ADDRS; i++) {
 		int cstart = currprefs.custom_memory_addrs[i] >> 16;
+		int csize;
 		if (!cstart)
 			continue;
-		int csize = currprefs.custom_memory_sizes[i] >> 16;
+		csize = currprefs.custom_memory_sizes[i] >> 16;
 		if (!csize)
 			continue;
 		if (start <= cstart && start + size >= cstart)
@@ -3407,23 +3435,28 @@ uae_u32 REGPARAM2 threadcpu_bget(uaecptr addr)
 
 static addrbank *get_bank_cpu_thread(addrbank *bank)
 {
+	/* C89 hoisted declarations */
+	int i;
+	struct addrbank_thread *at;
+	addrbank *tb;
+
 	if ((bank->flags & ABFLAG_THREADSAFE) && !(bank->flags & ABFLAG_IO))
 		return bank;
 	if (bank == &dummy_bank)
 		return bank;
 
-	for (int i = 0; i < thread_banks_used; i++) {
+	for (i = 0; i < thread_banks_used; i++) {
 		if (thread_banks[i]->orig == bank) {
 			return &thread_banks[i]->ab;
 		}
 	}
-	struct addrbank_thread *at = thread_banks[thread_banks_used];
+	at = thread_banks[thread_banks_used];
 	if (!at)
 		at = xcalloc(struct addrbank_thread, 1);
 	thread_banks[thread_banks_used++] = at;
 	at->orig = bank;
 	memcpy(&at->ab, bank, sizeof(addrbank));
-	addrbank *tb = &at->ab;
+	tb = &at->ab;
 	tb->jit_read_flag = S_READ;
 	tb->jit_write_flag = S_WRITE;
 	tb->lget = threadcpu_lget;
@@ -3583,7 +3616,9 @@ static addrbank *highram_temp_bank[65536 - 0x100];
 
 void restore_banks(void)
 {
-	for (int bnr = 0x100; bnr < 65536; bnr++) {
+	int bnr;
+
+	for (bnr = 0x100; bnr < 65536; bnr++) {
 		if (highram_temp_bank[bnr - 0x100]) {
 			map_banks(highram_temp_bank[bnr - 0x100], bnr, 1, 0);
 		} else {
@@ -3617,7 +3652,8 @@ void map_banks (addrbank *bank, int start, int size, int realsize)
 
 	if (start >= MEMORY_BANKS_24) {
 		int real_left = 0;
-		for (int bnr = start; bnr < start + size; bnr++) {
+		int bnr;
+		for (bnr = start; bnr < start + size; bnr++) {
 			highram_temp_bank[bnr - 0x100] = bank;
 		}
 		if (currprefs.address_space_24)
@@ -3634,6 +3670,8 @@ void map_banks (addrbank *bank, int start, int size, int realsize)
 
 bool validate_banks_z3(addrbank *bank, int start, int size)
 {
+	int i;
+
 	if (start < 0x1000 || size <= 0) {
 		error_log(_T("Z3 invalid map_banks(%s) start=%08x size=%08x\n"), bank->name, start << 16, size << 16);
 		cpu_halt(CPU_HALT_AUTOCONFIG_CONFLICT);
@@ -3643,7 +3681,7 @@ bool validate_banks_z3(addrbank *bank, int start, int size)
 		error_log(_T("Z3 invalid map_banks(%s) start=%08x size=%08x\n"), bank->name, start << 16, size << 16);
 		return false;
 	}
-	for (int i = start; i < start + size; i++) {
+	for (i = start; i < start + size; i++) {
 		addrbank *ab = &get_mem_bank(start << 16);
 		if (ab != &dummy_bank && ab != bank) {
 			error_log(_T("Z3 map_banks(%s) attempting to override existing memory bank '%s' at %08x!\n"), bank->name, ab->name, i << 16);
@@ -3662,6 +3700,8 @@ void map_banks_z3(addrbank *bank, int start, int size)
 
 bool validate_banks_z2(addrbank *bank, int start, int size)
 {
+	int i;
+
 	if (start < 0x20 || (start >= 0xa0 && start < 0xe9) || start >= 0xf0) {
 		error_log(_T("Z2 map_banks(%s) with invalid start address %08X\n"), bank->name, start << 16);
 		cpu_halt(CPU_HALT_AUTOCONFIG_CONFLICT);
@@ -3685,7 +3725,7 @@ bool validate_banks_z2(addrbank *bank, int start, int size)
 		cpu_halt(CPU_HALT_AUTOCONFIG_CONFLICT);
 		return false;
 	}
-	for (int i = start; i < start + size; i++) {
+	for (i = start; i < start + size; i++) {
 		addrbank *ab = &get_mem_bank(start << 16);
 		if (ab != &dummy_bank && bank != &dummy_bank) {
 			error_log(_T("Z2 map_banks(%s) attempting to override existing memory bank '%s' at %08x!\n"), bank->name, ab->name, i << 16);
@@ -3940,11 +3980,13 @@ static void REGPARAM2 empty_put(uaecptr addr, uae_u32 v)
 
 void loadboardfile(addrbank *ab, struct boardloadfile * lf)
 {
+	struct zfile* zf;
+
 	if (!ab->baseaddr)
 		return;
 	if (!lf->loadfile[0])
 		return;
-	struct zfile* zf = zfile_fopen_2x(lf->loadfile, _T("rb"));
+	zf = zfile_fopen_2x(lf->loadfile, _T("rb"));
 	if (zf) {
 		int size = lf->filesize;
 		if (!size) {

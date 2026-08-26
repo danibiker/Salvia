@@ -292,9 +292,10 @@ static void wd_addreset(void);
 
 static void freencrunit(struct wd_state *wd)
 {
+	int i;
 	if (!wd)
 		return;
-	for (int i = 0; i < MAX_SCSI_UNITS; i++) {
+	for (i = 0; i < MAX_SCSI_UNITS; i++) {
 		if (scsi_units[i] == wd) {
 			scsi_units[i] = NULL;
 		}
@@ -325,8 +326,9 @@ static struct wd_state *allocscsi(struct wd_state **wd, struct romconfig *rc, in
 	}
 	configured = true;
 	if ((*wd) == NULL) {
+		int i;
 		scsi = xcalloc(struct wd_state, 1);
-		for (int i = 0; i < MAX_SCSI_UNITS; i++) {
+		for (i = 0; i < MAX_SCSI_UNITS; i++) {
 			if (scsi_units[i] == NULL) {
 				scsi_units[i] = scsi;
 				if (rc)
@@ -351,7 +353,8 @@ static struct wd_state *getscsi(struct romconfig *rc)
 
 static struct wd_state *getscsiboard(uaecptr addr)
 {
-	for (int i = 0; scsi_units[i]; i++) {
+	int i;
+	for (i = 0; scsi_units[i]; i++) {
 		if (!scsi_units[i]->baseaddress)
 			return scsi_units[i];
 		if ((addr & ~scsi_units[i]->board_mask) == scsi_units[i]->baseaddress)
@@ -471,9 +474,10 @@ static bool is_dma_enabled(struct wd_state *wds)
 
 static void rethink_a2091(void)
 {
+	int i;
 	if (!configured)
 		return;
-	for (int i = 0; i < MAX_SCSI_UNITS; i++) {
+	for (i = 0; i < MAX_SCSI_UNITS; i++) {
 		if (scsi_units[i]) {
 			int irq = isirq(scsi_units[i]);
 			if (irq & 1)
@@ -1386,16 +1390,18 @@ static void wd_cmd_sel (struct wd_chip_state *wd, struct wd_state *wds, bool atn
 
 static void wd_cmd_reset (struct wd_chip_state *wd, bool irq, bool fast)
 {
+	int i;
+	int j;
 #if WD33C93_DEBUG > 0
 	write_log (_T("%s reset %d\n"), WD33C93, irq);
 #endif
-	for (int i = 1; i <= 0x16; i++)
+	for (i = 1; i <= 0x16; i++)
 		wd->wdregs[i] = 0;
 	wd->wdregs[0x18] = 0;
 	wd->sasr = 0;
 	wd->wd_selected = false;
 	wd->scsi = NULL;
-	for (int j = 0; j < WD_STATUS_QUEUE; j++) {
+	for (j = 0; j < WD_STATUS_QUEUE; j++) {
 		memset(&wd->status[j], 0, sizeof(status_data));
 	}
 	wd->queue_index = 0;
@@ -1546,7 +1552,8 @@ static void scsi_hsync2_comspec(struct wd_state *wds)
 
 static void scsi_hsync(void)
 {
-	for (int i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
+	int i;
+	for (i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
 		scsi_hsync2_a2091(wd_a2091[i]);
 		scsi_hsync2_a2091(wd_a2090[i]);
 		scsi_hsync2_gvp(wd_gvps1[i]);
@@ -1660,11 +1667,12 @@ uae_u8 wdscsi_get (struct wd_chip_state *wd, struct wd_state *wds)
 
 	v = wd->wdregs[wd->sasr];
 	if (wd->sasr == WD_DATA) {
+		int status;
 		if (!wd->wd_data_avail) {
 			write_log (_T("%s WD_DATA READ without data request!? %08x\n"), WD33C93, M68K_GETPC);
 			return 0;
 		}
-		int status = scsi_receive_data(wd->scsi, &v, true);
+		status = scsi_receive_data(wd->scsi, &v, true);
 #if WD33C93_DEBUG_PIO
 		write_log (_T("%s WD_DATA READ %02x %d/%d\n"), WD33C93, v, wd->scsi->offset, wd->scsi->data_len);
 #endif
@@ -1711,9 +1719,10 @@ uae_u8 wdscsi_get (struct wd_chip_state *wd, struct wd_state *wds)
 
 uae_u8 wdscsi_get_data(struct wd_chip_state *wd, struct wd_state *wds)
 {
+	uae_u8 v;
 	uae_u8 sasr = wd->sasr;
 	wd->sasr = WD_DATA;
-	uae_u8 v = wdscsi_get(wd, wds);
+	v = wdscsi_get(wd, wds);
 	wd->sasr = sasr;
 	return v;
 }
@@ -1752,13 +1761,15 @@ static void xt_command_done(struct wd_state *wds, uae_u8 status)
 	struct scsi_data *scsi = wds->scsis[XT_UNIT];
 	if (scsi->direction > 0) {
 		if (scsi->cmd[0] == 0x0c) {
+			int size;
+			int i;
 			xt_default_geometry(wds);
-			int size = wds->cdmac.xt_cyls[0] * wds->cdmac.xt_heads[0] * wds->cdmac.xt_sectors[0];
+			size = wds->cdmac.xt_cyls[0] * wds->cdmac.xt_heads[0] * wds->cdmac.xt_sectors[0];
 			wds->cdmac.xt_heads[0] = scsi->buffer[2] & 0x1f;
 			wds->cdmac.xt_cyls[0] = (scsi->buffer[0] << 8) | scsi->buffer[1];
 			wds->cdmac.xt_sectors[0] = size / (wds->cdmac.xt_cyls[0] * wds->cdmac.xt_heads[0]);
 			write_log(_T("XT_SETPARAM: Cyls=%d Heads=%d Sectors=%d\n"), wds->cdmac.xt_cyls[0], wds->cdmac.xt_heads[0], wds->cdmac.xt_sectors[0]);
-			for (int i = 0; i < 8; i++) {
+			for (i = 0; i < 8; i++) {
 				write_log(_T("%02X "), scsi->buffer[i]);
 			}
 			write_log(_T("\n"));
@@ -1788,8 +1799,9 @@ static void xt_wait_data(struct wd_state *wds, int len)
 
 static void xt_command(struct wd_state *wds)
 {
+	struct scsi_data * scsi;
 	wds->wc.scsi = wds->scsis[XT_UNIT];
-	struct scsi_data *scsi = wds->scsis[XT_UNIT];
+	scsi = wds->scsis[XT_UNIT];
 #if XT_DEBUG > 0
 	write_log(_T("XT command %02x. DMA=%d\n"), wds->cdmac.xt_cmd[0], (wds->cdmac.xt_control & XT_DMA_MODE) ? 1 : 0);
 #endif
@@ -2014,6 +2026,12 @@ static void dmac8727_cbp(struct wd_state *wd)
 
 static void a2090_st506(struct wd_state *wd, uae_u8 b)
 {
+	uaecptr cbp;
+	int i;
+	int lun;
+	int unit;
+	uaecptr dmaaddr;
+	struct scsi_data * scsi;
 	uae_u8 cb[16];
 
 	if (wd->rc->device_settings & 1)
@@ -2022,19 +2040,19 @@ static void a2090_st506(struct wd_state *wd, uae_u8 b)
 		wd->cdmac.dmac_istr &= ~(ISTR_INT_F | ISTR_INTS);
 		return;
 	}
-	uaecptr cbp = wd->cdmac.c8727_st506_cb & ~1;
+	cbp = wd->cdmac.c8727_st506_cb & ~1;
 	if (!valid_address(cbp, 16)) {
 		write_log(_T("Invalid ST-506 command block address %08x\n"), cbp);
 		return;
 	}
-	for (int i = 0; i < sizeof cb; i++) {
+	for (i = 0; i < sizeof cb; i++) {
 		cb[i] = get_byte(cbp + i);
 	}
-	int lun = cb[1] >> 5;
-	int unit = (lun & 1) ? 1 : 0;
-	uaecptr dmaaddr = (cb[6] << 16) | (cb[7] << 8) | cb[8];
+	lun = cb[1] >> 5;
+	unit = (lun & 1) ? 1 : 0;
+	dmaaddr = (cb[6] << 16) | (cb[7] << 8) | cb[8];
 	memset(cb + 12, 0, 4);
-	struct scsi_data *scsi = wd->scsis[XT506_UNIT0 + unit];
+	scsi = wd->scsis[XT506_UNIT0 + unit];
 	if (scsi) {
 		uae_u8 cmd = cb[0];
 		memcpy(scsi->cmd, cb, 6);
@@ -2044,17 +2062,25 @@ static void a2090_st506(struct wd_state *wd, uae_u8 b)
 			cb[6], cb[7], cb[8]);
 		// Set Drive Parameters? 0x0c = both drives, 0xcc = drive 1 only.
 		if (cmd == 0x0c || cmd == 0xcc) {
+			int i;
+			uae_u8 user_options;
+			uae_u8 step_rate;
+			uae_u8 heads;
+			uae_u16 cyls;
+			uae_u8 precomp;
+			uae_u8 reduce_write_current;
+			uae_u8 secs_per_track;
 			uae_u8 sdp[6];
-			for (int i = 0; i < sizeof sdp; i++) {
+			for (i = 0; i < sizeof sdp; i++) {
 				sdp[i] = get_byte(dmaaddr + i);
 			}
-			uae_u8 user_options = sdp[0] >> 4;
-			uae_u8 step_rate = sdp[0] & 15;
-			uae_u8 heads = (sdp[1] >> 4) & 15;
-			uae_u16 cyls = ((sdp[1] & 15) << 8) | sdp[2];
-			uae_u8 precomp = sdp[3];
-			uae_u8 reduce_write_current = sdp[4];
-			uae_u8 secs_per_track = sdp[5];
+			user_options = sdp[0] >> 4;
+			step_rate = sdp[0] & 15;
+			heads = (sdp[1] >> 4) & 15;
+			cyls = ((sdp[1] & 15) << 8) | sdp[2];
+			precomp = sdp[3];
+			reduce_write_current = sdp[4];
+			secs_per_track = sdp[5];
 			write_log(_T("ST-506 Set Drive Parameters %02X: CHS=%d,%d,%d %02x %02x %02x %02x\n"),
 				cmd, cyls, secs_per_track, heads,
 				user_options, step_rate, precomp, reduce_write_current);
@@ -2067,8 +2093,9 @@ static void a2090_st506(struct wd_state *wd, uae_u8 b)
 				wd->cdmac.xt_sectors[0] = secs_per_track;
 			}
 		} else if (cmd == 0x0f) { // change command block address
+			int i;
 			uae_u8 ccba[4];
-			for (int i = 0; i < sizeof ccba; i++) {
+			for (i = 0; i < sizeof ccba; i++) {
 				ccba[i] = get_byte(dmaaddr + i);
 			}
 			wd->cdmac.c8727_st506_cb = ((ccba[1] << 16) | (ccba[2] << 8) | (ccba[3] << 0)) & ~1;
@@ -2093,12 +2120,14 @@ static void a2090_st506(struct wd_state *wd, uae_u8 b)
 				scsi->cmd_len = 6;
 				scsi_emulate_analyze(scsi);
 				if (scsi->direction < 0) {
+					int i;
 					scsi_emulate_cmd(scsi);
-					for (int i = 0; i < scsi->data_len; i++) {
+					for (i = 0; i < scsi->data_len; i++) {
 						put_byte(dmaaddr + i, scsi->buffer[i]);
 					}
 				} else {
-					for (int i = 0; i < scsi->data_len; i++) {
+					int i;
+					for (i = 0; i < scsi->data_len; i++) {
 						scsi->buffer[i] = get_byte(dmaaddr + i);
 					}
 					scsi_emulate_cmd(scsi);
@@ -2110,10 +2139,11 @@ static void a2090_st506(struct wd_state *wd, uae_u8 b)
 				cb[12] = 0x21; // invalid sector address
 			}
 			if (cmd == 0x05 || cmd == 0x06 || cmd == 0x08 || cmd == 0x0a) {
+				uae_u32 lba;
+				uae_u32 add;
 				cb[12] |= 0x80; // ADV
 				// Calculate LBA of last transferred block
-				uae_u32 lba = ((cb[1] & 31) << 16) | (cb[2] << 8) | cb[3];
-				uae_u32 add;
+				lba = ((cb[1] & 31) << 16) | (cb[2] << 8) | cb[3];
 				if (cmd == 0x05 || cmd == 0x06)
 					add = cb[4];
 				else
@@ -2131,7 +2161,7 @@ static void a2090_st506(struct wd_state *wd, uae_u8 b)
 		cb[12] = 0x04; // drive not ready
 	}
 	// return status bytes
-	for (int i = 12; i < sizeof cb; i++) {
+	for (i = 12; i < sizeof cb; i++) {
 		put_byte(cbp + i, cb[i]);
 	}
 	set_dma_done(wd);
@@ -2725,20 +2755,22 @@ static void REGPARAM2 combitec_put(uaecptr addr, uae_u32 b)
 }
 static uae_u32 REGPARAM2 combitec_bget(uaecptr addr)
 {
+	uae_u32 v;
 	struct wd_state *wd = getscsiboard(addr);
 	if (!wd)
 		return 0;
 	addr &= 65535;
-	uae_u32 v = wd->rom2[addr & wd->rom2_mask];
+	v = wd->rom2[addr & wd->rom2_mask];
 	return v;
 }
 static uae_u32 REGPARAM2 combitec_wget(uaecptr addr)
 {
+	uae_u32 v;
 	struct wd_state *wd = getscsiboard(addr);
 	if (!wd)
 		return 0;
 	addr &= 65535;
-	uae_u32 v = (wd->rom2[addr & wd->rom2_mask] << 8) | wd->rom2[(addr + 1) & wd->rom2_mask];
+	v = (wd->rom2[addr & wd->rom2_mask] << 8) | wd->rom2[(addr + 1) & wd->rom2_mask];
 	return v;
 }
 static uae_u32 REGPARAM2 combitec_lget(uaecptr addr)
@@ -3902,12 +3934,15 @@ static void scsi_thread (void *wdv)
 	struct wd_state *wds = (struct wd_state*)wdv;
 	struct wd_chip_state *wd = &wds->wc;
 	for (;;) {
+		int cmd;
+		int msg;
+		int unit;
 		uae_u32 v = read_comm_pipe_u32_blocking (&wds->requests);
 		if (wds->scsi_thread_running == 0 || v == 0xfffffff)
 			break;
-		int cmd = v & 0x7f;
-		int msg = (v >> 8) & 0xff;
-		int unit = (v >> 24) & 0xff;
+		cmd = v & 0x7f;
+		msg = (v >> 8) & 0xff;
+		unit = (v >> 24) & 0xff;
 		wd_execute_cmd(wds, cmd, msg, unit);
 	}
 	wds->scsi_thread_running = -1;
@@ -3942,6 +3977,7 @@ void a3000_add_scsi_unit (int ch, struct uaedev_config_info *ci, struct romconfi
 
 bool a3000scsi_init(struct autoconfig_info *aci)
 {
+	struct wd_state * wd;
 	aci->zorro = 0;
 	aci->start = 0xdd0000;
 	aci->size = 0x10000;
@@ -3950,7 +3986,7 @@ bool a3000scsi_init(struct autoconfig_info *aci)
 	if (!aci->doinit) {
 		return true;
 	}
-	struct wd_state *wd = wd_a3000;
+	wd = wd_a3000;
 	if (!wd)
 		return false;
 	init_wd_scsi(wd, false);
@@ -4041,7 +4077,8 @@ static void a2091_free_device (struct wd_state *wd)
 
 static void a2091_free(void)
 {
-	for (int i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
+	int i;
+	for (i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
 		a2091_free_device(wd_a2091[i]);
 		a2091_free_device(wd_a2090[i]);
 	}
@@ -4078,7 +4115,8 @@ static void a2090_reset_device(struct wd_state *wd)
 
 static void a2091_reset(int hardreset)
 {
-	for (int i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
+	int i;
+	for (i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
 		a2091_reset_device(wd_a2091[i]);
 		a2090_reset_device(wd_a2090[i]);
 	}
@@ -4086,6 +4124,8 @@ static void a2091_reset(int hardreset)
 
 bool a2091_init (struct autoconfig_info *aci)
 {
+	struct wd_state * wd;
+	int slotsize;
 	ew(aci->autoconfig_raw, 0x00, 0xc0 | 0x01 | 0x10 | (expansion_is_next_board_fastram() ? 0x08 : 0x00));
 	/* A590/A2091 hardware id */
 	ew(aci->autoconfig_raw, 0x04, aci->rc->subtype == 0 ? 0x02 : 0x03);
@@ -4106,8 +4146,7 @@ bool a2091_init (struct autoconfig_info *aci)
 	if (!aci->doinit)
 		return true;
 
-	struct wd_state *wd = getscsi(aci->rc);
-	int slotsize;
+	wd = getscsi(aci->rc);
 
 	if (!wd)
 		return false;
@@ -4138,8 +4177,9 @@ bool a2091_init (struct autoconfig_info *aci)
 			zfile_fread (wd->rom, wd->rom_size, 1, z);
 			zfile_fclose (z);
 			if (wd->rom_size == 32768) {
+				int i;
 				wd->rombankswitcher = 1;
-				for (int i = wd->rom_size - 1; i >= 0; i--) {
+				for (i = wd->rom_size - 1; i >= 0; i--) {
 					wd->rom[i * 2 + 0] = wd->rom[i];
 					wd->rom[i * 2 + 1] = 0xff;
 				}
@@ -4171,6 +4211,8 @@ bool a2091_init (struct autoconfig_info *aci)
 
 static bool a2090x_init (struct autoconfig_info *aci, bool combitec)
 {
+	struct wd_state * wd;
+	int slotsize;
 	ew(aci->autoconfig_raw, 0x00, 0xc0 | 0x01 | 0x10);
 	/* A590/A2091 hardware id */
 	ew(aci->autoconfig_raw, 0x04, aci->rc->subtype ? 0x02 : 0x01);
@@ -4192,8 +4234,7 @@ static bool a2090x_init (struct autoconfig_info *aci, bool combitec)
 		return true;
 	}
 
-	struct wd_state *wd = getscsi(aci->rc);
-	int slotsize;
+	wd = getscsi(aci->rc);
 
 	if (!wd)
 		return false;
@@ -4221,10 +4262,11 @@ static bool a2090x_init (struct autoconfig_info *aci, bool combitec)
 	if (!aci->rc->autoboot_disabled && !combitec) {
 		struct zfile *z = read_device_from_romconfig(aci->rc, ROMTYPE_A2090, false);
 		if (z) {
+			int i;
 			wd->rom_size = zfile_size32(z);
 			zfile_fread (wd->rom, wd->rom_size, 1, z);
 			zfile_fclose (z);
-			for (int i = 1; i < slotsize / wd->rom_size; i++) {
+			for (i = 1; i < slotsize / wd->rom_size; i++) {
 				memcpy (wd->rom + i * wd->rom_size, wd->rom, wd->rom_size);
 			}
 			wd->rom_mask = wd->rom_size - 1;
@@ -4246,6 +4288,7 @@ bool a2090b_init (struct autoconfig_info *aci)
 }
 bool a2090b_preinit (struct autoconfig_info *aci)
 {
+	struct zfile * z;
 	struct wd_state *wd = getscsi(aci->rc);
 	if (!wd)
 		return false;
@@ -4258,7 +4301,7 @@ bool a2090b_preinit (struct autoconfig_info *aci)
 	wd->rom2 = wd->bank2.baseaddr;
 	wd->rom2_size = 65536;
 	wd->rom2_mask = wd->rom2_size - 1;
-	struct zfile *z = read_device_from_romconfig(aci->rc, ROMTYPE_A2090B, false);
+	z = read_device_from_romconfig(aci->rc, ROMTYPE_A2090B, false);
 	if (z) {
 		zfile_fread(wd->rom2, 1, wd->rom2_size, z);
 		zfile_fclose(z);
@@ -4276,7 +4319,8 @@ static void gvp_free_device (struct wd_state *wd)
 
 static void gvp_free(void)
 {
-	for (int i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
+	int i;
+	for (i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
 		gvp_free_device(wd_gvps1[i]);
 		gvp_free_device(wd_gvps2[i]);
 		gvp_free_device(wd_gvpa1208[i]);
@@ -4300,7 +4344,8 @@ static void gvp_reset_device(struct wd_state *wd)
 
 static void gvp_reset(int hardreset)
 {
-	for (int i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
+	int i;
+	for (i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
 		gvp_reset_device(wd_gvps1[i]);
 		gvp_reset_device(wd_gvps2[i]);
 		gvp_reset_device(wd_gvpa1208[i]);
@@ -4320,6 +4365,9 @@ static bool is_gvp_accelerator(void)
 
 static bool gvp_init(struct autoconfig_info *aci, bool series2, bool accel, uae_u8 gvp_id)
 {
+	struct wd_state * wd;
+	bool isscsi;
+	int i;
 	int romtype;
 	bool autoboot_disabled = false;
 	const uae_u8 *ac = gvp_scsi_ii_autoconfig;
@@ -4348,8 +4396,8 @@ static bool gvp_init(struct autoconfig_info *aci, bool series2, bool accel, uae_
 		return true;
 	}
 
-	struct wd_state *wd = getscsi(aci->rc);
-	bool isscsi = true;
+	wd = getscsi(aci->rc);
+	isscsi = true;
 
 	if (!wd)
 		return false;
@@ -4413,9 +4461,10 @@ static bool gvp_init(struct autoconfig_info *aci, bool series2, bool accel, uae_
 						break;
 				}
 			} else {
+				int i;
 				int j = 0;
 				bool oddonly = false;
-				for (int i = 0; i < 16384; i++) {
+				for (i = 0; i < 16384; i++) {
 					uae_u8 b;
 					zfile_fread(&b, 1, 1, z);
 					wd->rom[j + 16384] = b;
@@ -4461,7 +4510,7 @@ static bool gvp_init(struct autoconfig_info *aci, bool series2, bool accel, uae_
 		wd->gdmac.version = 0x00;
 	}
 
-	for (int i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		uae_u8 b = ac[i];
 		ew(wd->dmacmemory, i * 4, b);
 	}
@@ -4513,13 +4562,14 @@ static void comspec_ac(struct autoconfig_info *aci)
 
 bool comspec_init (struct autoconfig_info *aci)
 {
+	struct wd_state * wd;
 	comspec_ac(aci);
 	aci->label = _T("COMSPEC");
 	wd_addreset();
 	if (!aci->doinit)
 		return true;
 
-	struct wd_state *wd = getscsi(aci->rc);
+	wd = getscsi(aci->rc);
 	if (!wd)
 		return false;
 
@@ -4529,6 +4579,9 @@ bool comspec_init (struct autoconfig_info *aci)
 
 bool comspec_preinit (struct autoconfig_info *aci)
 {
+	int slotsize;
+	struct zfile * z;
+	struct rtc_msm_data * rtc;
 	struct wd_state *wd = getscsi(aci->rc);
 	if (!wd)
 		return false;
@@ -4547,11 +4600,11 @@ bool comspec_preinit (struct autoconfig_info *aci)
 
 	wd->rombank = 0;
 	wd->rom_size = 16384;
-	int slotsize = 65536;
+	slotsize = 65536;
 	wd->rom = xcalloc(uae_u8, slotsize);
 	memset(wd->rom, 0xff, slotsize);
 	wd->rom_mask = wd->rom_size - 1;
-	struct zfile *z = read_device_from_romconfig(aci->rc, ROMTYPE_COMSPEC, false);
+	z = read_device_from_romconfig(aci->rc, ROMTYPE_COMSPEC, false);
 	if (z) {
 		wd->rom_size = zfile_size32(z);
 		zfile_fread (wd->rom, wd->rom_size, 1, z);
@@ -4560,7 +4613,7 @@ bool comspec_preinit (struct autoconfig_info *aci)
 	}
 
 	wd->userdata = xcalloc(struct rtc_msm_data, 1);
-	struct rtc_msm_data *rtc = (struct rtc_msm_data*)wd->userdata;
+	rtc = (struct rtc_msm_data*)wd->userdata;
 	rtc->clock_control_d = 1;
 	rtc->clock_control_f = 0x4; /* 24/12 */
 	rtc->yearmode = true;

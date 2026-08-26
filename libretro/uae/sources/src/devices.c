@@ -70,7 +70,8 @@
 
 static void add_device_item(DEVICE_VOID *pp, int *cnt, DEVICE_VOID p)
 {
-	for (int i = 0; i < *cnt; i++) {
+	int i;
+	for (i = 0; i < *cnt; i++) {
 		if (pp[i] == p)
 			return;
 	}
@@ -81,7 +82,8 @@ static void add_device_item(DEVICE_VOID *pp, int *cnt, DEVICE_VOID p)
 }
 static void execute_device_items(DEVICE_VOID *pp, int cnt)
 {
-	for (int i = 0; i < cnt; i++) {
+	int i;
+	for (i = 0; i < cnt; i++) {
 		pp[i]();
 	}
 }
@@ -148,7 +150,8 @@ void device_add_exit(DEVICE_VOID p, DEVICE_VOID p2)
 }
 void device_add_reset(DEVICE_INT p)
 {
-	for (int i = 0; i < device_resets_cnt; i++) {
+	int i;
+	for (i = 0; i < device_resets_cnt; i++) {
 		if (device_resets[i] == p)
 			return;
 	}
@@ -156,7 +159,8 @@ void device_add_reset(DEVICE_INT p)
 }
 void device_add_reset_imm(DEVICE_INT p)
 {
-	for (int i = 0; i < device_resets_cnt; i++) {
+	int i;
+	for (i = 0; i < device_resets_cnt; i++) {
 		if (device_resets[i] == p)
 			return;
 	}
@@ -178,7 +182,8 @@ void device_check_config(void)
 
 void devices_reset_ext(int hardreset)
 {
-	for (int i = 0; i < device_resets_cnt; i++) {
+	int i;
+	for (i = 0; i < device_resets_cnt; i++) {
 		if (!device_reset_done[i]) {
 			device_resets[i](hardreset);
 			device_reset_done[i] = true;
@@ -426,6 +431,7 @@ void virtualdevice_init (void)
 
 void devices_restore_start(void)
 {
+	int i;
 	restore_audio_start();
 	restore_cia_start();
 	restore_blkdev_start();
@@ -433,7 +439,7 @@ void devices_restore_start(void)
 	restore_custom_start();
 	changed_prefs.bogomem.size = 0;
 	changed_prefs.chipmem.size = 0;
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 		changed_prefs.fastmem[i].size = 0;
 		changed_prefs.z3fastmem[i].size = 0;
 	}

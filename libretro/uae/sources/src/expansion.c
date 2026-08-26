@@ -183,6 +183,8 @@ static int do_mount;
 #define FILESYS_BOOTPOINT 0x01f0
 #define FILESYS_DIAGAREA 0x2000
 
+#include <uae/string.h>
+
 /* ********************************************************** */
 
 struct card_data
@@ -290,49 +292,58 @@ bool expamem_z3hack(struct uae_prefs *p)
  */
 static void addextrachip (uae_u32 sysbase)
 {
+	/* C89 hoisted declarations */
+	uae_u32 ml;
+	uae_u32 next;
+
 	if (currprefs.chipmem.size <= 0x00200000)
 		return;
 	if (sysbase & 0x80000001)
 		return;
 	if (!valid_address (sysbase, 1000))
 		return;
-	uae_u32 ml = get_long (sysbase + 322);
+	ml = get_long (sysbase + 322);
 	if (!valid_address (ml, 32))
 		return;
-	uae_u32 next;
 	while ((next = get_long (ml))) {
+		uae_u32 upper;
+		uae_u32 lower;
+		uae_u16 attr;
+		uae_u32 added;
+		uae_u32 first;
+		uae_u32 next2;
 		if (!valid_address (ml, 32))
 			return;
-		uae_u32 upper = get_long (ml + 24);
-		uae_u32 lower = get_long (ml + 20);
+		upper = get_long (ml + 24);
+		lower = get_long (ml + 20);
 		if (lower & ~0xffff) {
 			ml = next;
 			continue;
 		}
-		uae_u16 attr = get_word (ml + 14);
+		attr = get_word (ml + 14);
 		if ((attr & 0x8002) != 2) {
 			ml = next;
 			continue;
 		}
 		if (upper >= currprefs.chipmem.size)
 			return;
-		uae_u32 added = currprefs.chipmem.size - upper;
-		uae_u32 first = get_long (ml + 16);
+		added = currprefs.chipmem.size - upper;
+		first = get_long (ml + 16);
 		put_long (ml + 24, currprefs.chipmem.size); // mh_Upper
 		put_long (ml + 28, get_long (ml + 28) + added); // mh_Free
-		uae_u32 next = 0;
+		next2 = 0;
 		while (first) {
-			next = first;
-			first = get_long (next);
+			next2 = first;
+			first = get_long (next2);
 		}
-		if (next) {
-			uae_u32 bytes = get_long(next + 4);
-			if (next + bytes == 0x00200000) {
-				put_long(next + 4, currprefs.chipmem.size - next);
+		if (next2) {
+			uae_u32 bytes = get_long(next2 + 4);
+			if (next2 + bytes == 0x00200000) {
+				put_long(next2 + 4, currprefs.chipmem.size - next2);
 			} else {
 				put_long(0x00200000 + 0, 0);
 				put_long(0x00200000 + 4, added);
-				put_long(next, 0x00200000);
+				put_long(next2, 0x00200000);
 			}
 		}
 		return;
@@ -454,6 +465,8 @@ static void call_card_init(int index)
 	bool ok = false;
 	struct card_data *cd = cards[ecard];
 	struct autoconfig_info *aci = &cd->aci;
+	/* C89 hoisted declarations */
+	int i;
 
 	if (currprefs.address_space_24 && cd->cst && (cd->cst->deviceflags & EXPANSIONTYPE_FALLBACK_DISABLE)) {
 		write_log(_T("Card %d: skipping autoconfig (fallback mode)\n"), ecard);
@@ -511,13 +524,13 @@ static void call_card_init(int index)
 		if (aci->autoconfig_automatic) {
 			if (aci->autoconfigp) {
 				memset(expamem, 0xff, AUTOMATIC_AUTOCONFIG_MAX_ADDRESS);
-				for (int i = 0; i < 16; i++) {
+				for (i = 0; i < 16; i++) {
 					expamem_write(i * 4, aci->autoconfig_bytes[i]);
 				}
 				expamem_autoconfig_mode = 1;
 			} else if (aci->autoconfig_bytes) {
 				memset(expamem, 0xff, AUTOMATIC_AUTOCONFIG_MAX_ADDRESS);
-				for (int i = 0; i < 16; i++) {
+				for (i = 0; i < 16; i++) {
 					expamem_write(i * 4, aci->autoconfig_bytes[i]);
 				}
 				expamem_autoconfig_mode = 1;
@@ -525,7 +538,7 @@ static void call_card_init(int index)
 				memcpy(expamem, aci->autoconfig_raw, sizeof aci->autoconfig_raw);
 			}
 		} else {
-			for (int i = 0; i < 16 * 4; i++) {
+			for (i = 0; i < 16 * 4; i++) {
 				expamem[i] = abe->sub_banks ? abe->sub_banks[0].bank->bget(i) : abe->bget(i);
 			}
 		}
@@ -602,10 +615,11 @@ void expamem_next(addrbank *mapped, addrbank *next)
 	expamem_init_clear();
 	expamem_init_clear_zero();
 	for (;;) {
+		struct card_data *ec;
 		++ecard;
 		if (ecard >= cardno)
 			break;
-		struct card_data *ec = cards[ecard];
+		ec = cards[ecard];
 		if (ec->zorro == 3 && ec->base == 0xffffffff) {
 			write_log(_T("Autoconfig chain enumeration aborted, 32-bit address space overflow.\n"));
 			ecard = cardno;
@@ -692,6 +706,8 @@ static uae_u32 REGPARAM2 expamem_lget (uaecptr addr)
 
 static uae_u32 REGPARAM2 expamem_wget (uaecptr addr)
 {
+	uae_u32 v;
+
 	if (expamem_bank_current && expamem_bank_current != &expamem_bank) {
 		if (expamem_autoconfig_mode && (addr & 0xffff) < AUTOMATIC_AUTOCONFIG_MAX_ADDRESS) {
 			return (expamem_bget(addr) << 8) | expamem_bget(addr + 1);
@@ -702,7 +718,7 @@ static uae_u32 REGPARAM2 expamem_wget (uaecptr addr)
 		if (expamem_bank_current && expamem_bank_current != &expamem_bank)
 			return expamem_bank_current->bget(addr) << 8;
 	}
-	uae_u32 v = (expamem_bget (addr) << 8) | expamem_bget (addr + 1);
+	v = (expamem_bget (addr) << 8) | expamem_bget (addr + 1);
 	if (cpuboards[currprefs.cpuboard_type].subtypes[currprefs.cpuboard_subtype].e8) {
 		uae_u32 val = v;
 		cpuboards[currprefs.cpuboard_type].subtypes[currprefs.cpuboard_subtype].e8(addr, &val, 2, false);
@@ -752,6 +768,8 @@ static void REGPARAM2 expamem_lput (uaecptr addr, uae_u32 value)
 
 static void REGPARAM2 expamem_wput (uaecptr addr, uae_u32 value)
 {
+	struct card_data *cd;
+
 #if EXP_DEBUG
 	write_log (_T("expamem_wput %x %x\n"), addr, value);
 #endif
@@ -762,7 +780,7 @@ static void REGPARAM2 expamem_wput (uaecptr addr, uae_u32 value)
 	}
 	if (ecard >= cardno)
 		return;
-	struct card_data *cd = cards[ecard];
+	cd = cards[ecard];
 	if (!expamem_map)
 		expamem_map = cd->map;
 	if (expamem_type () != zorroIII) {
@@ -825,6 +843,8 @@ static void REGPARAM2 expamem_wput (uaecptr addr, uae_u32 value)
 
 static void REGPARAM2 expamem_bput (uaecptr addr, uae_u32 value)
 {
+	struct card_data *cd;
+
 #if EXP_DEBUG
 	write_log (_T("expamem_bput %x %x\n"), addr, value);
 #endif
@@ -835,7 +855,7 @@ static void REGPARAM2 expamem_bput (uaecptr addr, uae_u32 value)
 	}
 	if (ecard >= cardno)
 		return;
-	struct card_data *cd = cards[ecard];
+	cd = cards[ecard];
 	if (!expamem_map)
 		expamem_map = cd->map;
 	if (expamem_type() == protoautoconfig) {
@@ -897,9 +917,10 @@ static void REGPARAM2 expamem_bput (uaecptr addr, uae_u32 value)
 
 		case 0x4c:
 			if (expamem_map) {
+				addrbank *ab;
 				expamem_hi = expamem_lo = 0xff;
 				expamem_board_pointer = 0xffffffff;
-				addrbank *ab = expamem_map(&cd->aci);
+				ab = expamem_map(&cd->aci);
 				if (ab)
 					ab->start = 0xffffffff;
 				expamem_next(ab, NULL);
@@ -1345,15 +1366,16 @@ static uae_u32 REGPARAM2 uaeboard_wget(uaecptr addr)
 	addr -= uaeboard_base & 65535;
 	addr &= 65535;
 	m = uaeboard_bank.baseaddr + addr;
-	uae_u16 v = do_get_mem_word((uae_u16 *)m);
-	return v;
+	return do_get_mem_word((uae_u16 *)m);
 }
 
 static uae_u32 REGPARAM2 uaeboard_lget(uaecptr addr)
 {
+	uae_u32 v;
+
 	addr -= uaeboard_base & 65535;
 	addr &= 65535;
-	uae_u32 v = uaeboard_wget(addr) << 16;
+	v = uaeboard_wget(addr) << 16;
 	v |= uaeboard_wget(addr + 2);
 	return v;
 }
@@ -1367,11 +1389,13 @@ static uae_u32 REGPARAM2 uaeboard_bget(uaecptr addr)
 
 static void REGPARAM2 uaeboard_wput(uaecptr addr, uae_u32 w)
 {
+	uae_u8 *m;
+
 	addr -= uaeboard_base & 65535;
 	addr &= 65535;
 	if (!uaeboard_write(addr))
 		return;
-	uae_u8 *m = uaeboard_bank.baseaddr + addr;
+	m = uaeboard_bank.baseaddr + addr;
 	put_word_host(m, w);
 }
 
@@ -1456,6 +1480,7 @@ static bool expamem_init_uaeboard(struct autoconfig_info *aci)
 	struct uae_prefs *p = aci->prefs;
 	bool hide = p->uae_hide_autoconfig;
 	bool rom = p->uaeboard > 1;
+	uae_u8 *ptr;
 
 	aci->label = _T("UAE Boot ROM");
 	aci->addrbank = &uaeboard_bank;
@@ -1476,7 +1501,7 @@ static bool expamem_init_uaeboard(struct autoconfig_info *aci)
 	expamem_write(0x20, p->uaeboard); /* ser.no. Byte 2 */
 	expamem_write(0x24, 0x03); /* ser.no. Byte 3 */
 
-	uae_u8 *ptr = uaeboard_bank.baseaddr;
+	ptr = uaeboard_bank.baseaddr;
 
 	add_rtarea_pointer(aci);
 
@@ -1598,9 +1623,11 @@ static addrbank *expamem_map_fastcard(struct autoconfig_info *aci)
 	int devnum = aci->devnum;
 	uae_u32 start = ((expamem_hi | (expamem_lo >> 4)) << 16);
 	addrbank *ab = &fastmem_bank[devnum];
+	uae_u32 size;
+
 	if (start == 0x00ff0000)
 		return ab;
-	uae_u32 size = ab->allocated_size;
+	size = ab->allocated_size;
 	ab->start = start;
 	if (ab->start && size) {
 		map_banks_z2(ab, ab->start >> 16, size >> 16);
@@ -1619,6 +1646,10 @@ static bool fastmem_autoconfig(struct uae_prefs *p, struct autoconfig_info *aci,
 	uae_u8 ac[16] = { 0 };
 	int boardnum = aci->devnum;
 	bool canforceac = false;
+	/* C89 hoisted declarations */
+	uae_u8 *forceac = NULL;
+	struct ramboard *rb = NULL;
+	int i;
 
 	if (aci->cst) {
 		mid = aci->cst->memory_mid;
@@ -1649,9 +1680,6 @@ static bool fastmem_autoconfig(struct uae_prefs *p, struct autoconfig_info *aci,
 		dmc = ert->memory_callback;
 		dmc_rc = rc;
 	}
-
-	uae_u8 *forceac = NULL;
-	struct ramboard *rb = NULL;
 
 	if (!mid) {
 		if (zorro <= 2) {
@@ -1699,7 +1727,7 @@ static bool fastmem_autoconfig(struct uae_prefs *p, struct autoconfig_info *aci,
 	}
 
 	if (forceac) {
-		for (int i = 0; i < 16; i++) {
+		for (i = 0; i < 16; i++) {
 			ac[i] = forceac[i];
 			ac[0] &= ~7;
 			ac[0] |= type & 7;
@@ -1764,6 +1792,7 @@ static bool expamem_init_fastcard_2(struct autoconfig_info *aci, int zorro)
 	addrbank *bank = &fastmem_bank[aci->devnum];
 	uae_u8 type = add_memory | zorroII;
 	int size = p->fastmem[aci->devnum].size;
+	int i;
 
 	aci->label = zorro == 1 ? _T("Z1 Fast RAM") : _T("Z2 Fast RAM");
 	aci->zorro = zorro;
@@ -1792,7 +1821,7 @@ static bool expamem_init_fastcard_2(struct autoconfig_info *aci, int zorro)
 	if (aci->devnum == 0) {
 		if (ISCPUBOARDP(p, BOARD_COMMODORE, BOARD_COMMODORE_SUB_A26x0)) {
 			expamem_write(1 * 4, p->cpu_model <= 68020 ? 0x50 : 0x51);
-			for (int i = 2; i < 16; i++)
+			for (i = 2; i < 16; i++)
 				expamem_write(i * 4, a2630_autoconfig[i]);
 			type &= 7;
 			type |= a2630_autoconfig[0] & ~7;
@@ -1898,8 +1927,9 @@ void create_ks12_boot(void)
 {
 	// KS 1.2 boot resident
 	uaecptr name = ds(_T("UAE boot"));
+	uaecptr code;
 	align(2);
-	uaecptr code = here();
+	code = here();
 	// allocate fake diagarea
 	dl(0x48e73f3e); // movem.l d2-d7/a2-a6,-(sp)
 	dw(0x203c); // move.l #x,d0
@@ -1933,6 +1963,8 @@ void create_ks12_boot(void)
 void create_68060_nofpu(void)
 {
 	uaecptr code = here();
+	uae_u32 ptr;
+
 	if ((code & 0xffff0000) != 0x00f00000)
 		return;
 	if (dbg(0xf00000) != 0 || dbg(0xf00001) != 0) {
@@ -1944,7 +1976,7 @@ void create_68060_nofpu(void)
 		return;
 	if (currprefs.fpu_model == 0)
 		return;
-	uae_u32 ptr = filesys_get_entry(12);
+	ptr = filesys_get_entry(12);
 	if (ptr - 0xf00004 > 128 || ptr < 0xf00004)
 		return;
 	// first two words of UAE Boot ROM are normally unused
@@ -1960,6 +1992,16 @@ static bool expamem_init_filesys(struct autoconfig_info *aci)
 	bool ks12 = ks12orolder();
 	bool hide = p->uae_hide_autoconfig;
 	bool rom = !(ks12 || !do_mount || p->uaeboard_nodiag);
+	/* struct DiagArea - the size has to be large enough to store several device ROMTags */
+	const uae_u8 diagarea[] = {
+		0x90, 0x00, /* da_Config, da_Flags */
+		0x02, 0x00, /* da_Size */
+		FILESYS_DIAGPOINT >> 8, FILESYS_DIAGPOINT & 0xff,
+		FILESYS_BOOTPOINT >> 8, FILESYS_BOOTPOINT & 0xff,
+		0, (uae_u8)(hide ? 0 : 14), // Name offset
+		0, 0, 0, 0,
+		(uae_u8)(hide ? 0 : 'U'), (uae_u8)(hide ? 0 : 'A'), (uae_u8)(hide ? 0 : 'E'), 0
+	};
 
 	if (aci) {
 		aci->label = ks12 ? _T("Pre-KS 1.3 UAE FS ROM") : _T("UAE FS ROM");
@@ -1975,17 +2017,6 @@ static bool expamem_init_filesys(struct autoconfig_info *aci)
 	memcpy(filesys_bank.baseaddr, expamem, 0x3000);
 	return NULL;
 #endif
-
-	/* struct DiagArea - the size has to be large enough to store several device ROMTags */
-	const uae_u8 diagarea[] = {
-		0x90, 0x00, /* da_Config, da_Flags */
-		0x02, 0x00, /* da_Size */
-		FILESYS_DIAGPOINT >> 8, FILESYS_DIAGPOINT & 0xff,
-		FILESYS_BOOTPOINT >> 8, FILESYS_BOOTPOINT & 0xff,
-		0, (uae_u8)(hide ? 0 : 14), // Name offset
-		0, 0, 0, 0,
-		(uae_u8)(hide ? 0 : 'U'), (uae_u8)(hide ? 0 : 'A'), (uae_u8)(hide ? 0 : 'E'), 0
-	};
 
 	expamem_init_clear ();
 	expamem_write (0x00, Z2_MEM_64KB | zorroII | (rom ? rom_card : 0));
@@ -2058,12 +2089,14 @@ static addrbank *expamem_map_z3fastmem (struct autoconfig_info *aci)
 static bool expamem_init_z3fastmem(struct autoconfig_info *aci)
 {
 	addrbank *bank = &z3fastmem_bank[aci->devnum];
-	
 	uae_u32 size = aci->prefs->z3fastmem[aci->devnum].size;
+	int code;
+	uae_u32 start;
+	bool alwaysmapz3;
 
 	aci->label = _T("Z3 Fast RAM");
 
-	int code = (size == 0x100000 ? Z2_MEM_1MB
+	code = (size == 0x100000 ? Z2_MEM_1MB
 		: size == 0x200000 ? Z2_MEM_2MB
 		: size == 0x400000 ? Z2_MEM_4MB
 		: size == 0x800000 ? Z2_MEM_8MB
@@ -2088,8 +2121,8 @@ static bool expamem_init_z3fastmem(struct autoconfig_info *aci)
 	if (!aci->doinit)
 		return true;
 
-	uae_u32 start = bank->start;
-	bool alwaysmapz3 = aci->prefs->z3_mapping_mode != Z3MAPPING_REAL || aci->prefs->z3fastmem[aci->devnum].no_reset_unmap;
+	start = bank->start;
+	alwaysmapz3 = aci->prefs->z3_mapping_mode != Z3MAPPING_REAL || aci->prefs->z3fastmem[aci->devnum].no_reset_unmap;
 	if ((alwaysmapz3 || expamem_z3hack(aci->prefs)) && bank->allocated_size) {
 		map_banks_z3(bank, start >> 16, size >> 16);
 	}
@@ -2230,17 +2263,19 @@ uaecptr expansion_startaddress(struct uae_prefs *p, uaecptr addr, uae_u32 size)
 
 static void allocate_expamem (void)
 {
-	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+	int i;
+
+	for (i = 0; i < MAX_RTG_BOARDS; i++) {
 		memcpy(&currprefs.rtgboards[i], &changed_prefs.rtgboards[i], sizeof(struct rtgboardconfig));
 	}
 	currprefs.z3chipmem.size = changed_prefs.z3chipmem.size;
 
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 		currprefs.fastmem[i].size = changed_prefs.fastmem[i].size;
 		currprefs.z3fastmem[i].size = changed_prefs.z3fastmem[i].size;
 	}
 
-	for (int i = 0; i < MAX_ROM_BOARDS; i++) {
+	for (i = 0; i < MAX_ROM_BOARDS; i++) {
 		struct romboard *rb = &currprefs.romboards[i];
 		memcpy(rb, &changed_prefs.romboards[i], sizeof(struct romboard));
 		if (romboardmem_bank[i].reserved_size != rb->size) {
@@ -2265,7 +2300,7 @@ static void allocate_expamem (void)
 	if (currprefs.z3chipmem.size && z3fastmem_bank[0].start - z3chipmem_bank.start < currprefs.z3chipmem.size)
 		currprefs.z3chipmem.size = changed_prefs.z3chipmem.size = 0;	
 
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 		if (fastmem_bank[i].reserved_size != currprefs.fastmem[i].size) {
 			free_fastmemory(i);
 
@@ -2293,7 +2328,7 @@ static void allocate_expamem (void)
 		mapped_malloc_dynamic(&currprefs.z3fastmem[0].size, &changed_prefs.z3fastmem[0].size, &z3fastmem_bank[0], 1, _T("*"));
 		memory_hardreset(1);
 	}
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 
 		if (i == 0 && !currprefs.z3fastmem[i].manual_config)
 			continue;
@@ -2340,7 +2375,7 @@ static void allocate_expamem (void)
 
 #ifdef SAVESTATE
 	if (savestate_state == STATE_RESTORE) {
-		for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+		for (i = 0; i < MAX_RAM_BOARDS; i++) {
 			if (fastmem_bank[i].allocated_size > 0) {
 				restore_ram (fast_filepos[i], fastmem_bank[i].baseaddr);
 				if (!fastmem_bank[i].start) {
@@ -2402,7 +2437,7 @@ static uaecptr check_boot_rom (struct uae_prefs *p, int *boot_rom_type)
 		return b;
 	if (nr_directory_units (p))
 		return b;
-#ifdef WIN32
+#if defined(WIN32) || defined(_XBOX)
 	if (p->win32_automount_drives || p->win32_automount_cddrives || p->win32_automount_netdrives || p->win32_automount_removable)
 		return b;
 #endif
@@ -2450,10 +2485,12 @@ uaecptr need_uae_boot_rom (struct uae_prefs *p)
 static void add_cpu_expansions(struct uae_prefs *p, int zorro, int *fastmem_nump)
 {
 	int fastmem_num = MAX_RAM_BOARDS;
+	const struct cpuboardsubtype *cst;
+
 	if (fastmem_nump)
 		fastmem_num = *fastmem_nump;
 
-	const struct cpuboardsubtype *cst = &cpuboards[p->cpuboard_type].subtypes[p->cpuboard_subtype];
+	cst = &cpuboards[p->cpuboard_type].subtypes[p->cpuboard_subtype];
 	if (cst->init && cst->initzorro == zorro) {
 		int idx;
 		struct boardromconfig *brc = get_device_rom(p, ROMTYPE_CPUBOARD, 0, &idx);
@@ -2492,12 +2529,15 @@ static void add_cpu_expansions(struct uae_prefs *p, int zorro, int *fastmem_nump
 static void add_expansions(struct uae_prefs *p, int zorro, int *fastmem_nump, int mode)
 {
 	int fastmem_num = MAX_RAM_BOARDS;
+	int i;
+
 	if (fastmem_nump)
 		fastmem_num = *fastmem_nump;
-	for (int i = 0; expansionroms[i].name; i++) {
+	for (i = 0; expansionroms[i].name; i++) {
 		const struct expansionromtype *ert = &expansionroms[i];
 		if (ert->zorro == zorro) {
-			for (int j = 0; j < MAX_DUPLICATE_EXPANSION_BOARDS; j++) {
+			int j;
+			for (j = 0; j < MAX_DUPLICATE_EXPANSION_BOARDS; j++) {
 				struct romconfig *rc = get_device_romconfig(p, ert->romtype, j);
 				if (rc) {
 					int mid = ert->memory_mid;
@@ -2615,6 +2655,7 @@ static void expansion_parse_autoconfig(struct card_data *cd, const uae_u8 *autoc
 
 	if ((code & 0xc0) == zorroII) {
 		int slotsize;
+		int slottype;
 		// Z2
 		cd->zorro = 2;
 		code &= 7;
@@ -2626,27 +2667,29 @@ static void expansion_parse_autoconfig(struct card_data *cd, const uae_u8 *autoc
 
 		expamem_board_pointer = 0xffffffff;
 
-		for (int slottype = 0; slottype < 2; slottype++)
+		for (slottype = 0; slottype < 2; slottype++)
 		{
 			uae_u8 *slots = slots_e8;
 			int numslots = sizeof slots_e8;
 			uaecptr slotaddr = AUTOCONFIG_Z2;
+			int i;
 			if (slotsize >= 8 || slottype > 0) {
 				slots = slots_20;
 				numslots = sizeof slots_20;
 				slotaddr = AUTOCONFIG_Z2_MEM;
 			}
-			for (int i = 0; i < numslots; i++) {
+			for (i = 0; i < numslots; i++) {
 				if (((slotsize - 1) & i) == 0) {
 					bool free = true;
-					for (int j = 0; j < slotsize && j + i < numslots; j++) {
+					int j;
+					for (j = 0; j < slotsize && j + i < numslots; j++) {
 						if (slots[i + j] != 0) {
 							free = false;
 							break;
 						}
 					}
 					if (free) {
-						for (int j = 0; j < slotsize; j++) {
+						for (j = 0; j < slotsize; j++) {
 							slots[i + j] = 1;
 						}
 						expamem_board_pointer = slotaddr + i * 65536;
@@ -2660,6 +2703,7 @@ static void expansion_parse_autoconfig(struct card_data *cd, const uae_u8 *autoc
 
 	} else if ((code & 0xc0) == zorroIII) {
 		// Z3
+		uaecptr newp;
 
 		cd->zorro = 3;
 		code &= 7;
@@ -2668,7 +2712,7 @@ static void expansion_parse_autoconfig(struct card_data *cd, const uae_u8 *autoc
 		else
 			expamem_z3_size = 16 * 1024 * 1024;
 
-		uaecptr newp = (expamem_z3_pointer_real + expamem_z3_size - 1) & ~(expamem_z3_size - 1);
+		newp = (expamem_z3_pointer_real + expamem_z3_size - 1) & ~(expamem_z3_size - 1);
 		if (newp < expamem_z3_pointer_real)
 			newp = 0xffffffff;
 		expamem_z3_pointer_real = newp;
@@ -2714,6 +2758,8 @@ static void reset_ac_data(struct uae_prefs *p)
 
 static void reset_ac(struct uae_prefs *p)
 {
+	int i;
+
 	do_mount = 1;
 
 	if (need_uae_boot_rom(p) == 0)
@@ -2738,7 +2784,7 @@ static void reset_ac(struct uae_prefs *p)
 		uae_id = hackers_id;
 
 	if (restore_cardno == 0) {
-		for (int i = 0; i < MAX_EXPANSION_BOARD_SPACE; i++) {
+		for (i = 0; i < MAX_EXPANSION_BOARD_SPACE; i++) {
 			memset(&cards_set[i], 0, sizeof(struct card_data));
 		}
 	}
@@ -2781,6 +2827,7 @@ struct autoconfig_info *expansion_get_bank_data(struct uae_prefs *p, uaecptr *ad
 	for (;;) {
 		addrbank *ab = &get_mem_bank(addr);
 		if (ab && ab != &dummy_bank) {
+			uaecptr addr2;
 			aci = expansion_get_autoconfig_by_address(p, addr, 0);
 			if (aci && expansion_get_autoconfig_by_address(p, addr - 1, 0) != aci) {
 				addrbank *ab2 = ab;
@@ -2804,7 +2851,7 @@ struct autoconfig_info *expansion_get_bank_data(struct uae_prefs *p, uaecptr *ad
 				*addrp = addr;
 				return aci;
 			}
-			uaecptr addr2 = addr;
+			addr2 = addr;
 			aci = &acid;
 			memset(aci, 0, sizeof(struct autoconfig_info));
 			aci->autoconfig_bytes[0] = 0xff;
@@ -2814,14 +2861,15 @@ struct autoconfig_info *expansion_get_bank_data(struct uae_prefs *p, uaecptr *ad
 				uaecptr saddr2 = saddr;
 				addrbank *sab1 = get_sub_bank(&saddr1);
 				for (;;) {
+					addrbank *sab2;
 					saddr2 = saddr1 + 1;
-					addrbank *sab2 = get_sub_bank(&saddr2);
+					sab2 = get_sub_bank(&saddr2);
 					if (sab1 != sab2 || (saddr1 & 65535) == 65535) {
 						aci->addrbank = sab1;
 						aci->start = addr;
 						aci->size = saddr2 - addr;
 						if (sab1->name) {
-							_tcscpy(aci->name, sab1->name);
+							uae_tcslcpy(aci->name, sab1->name, sizeof aci->name / sizeof(TCHAR));
 						}
 						addr = saddr2;
 						*addrp = addr;
@@ -2835,14 +2883,14 @@ struct autoconfig_info *expansion_get_bank_data(struct uae_prefs *p, uaecptr *ad
 				}
 				return aci;
 			} else {
+				addrbank *ab2 = ab;
+				int size = 0;
 				aci->addrbank = ab;
 				aci->start = addr;
 				aci->size = ab->allocated_size;
 				if (ab->name) {
-					_tcscpy(aci->name, ab->name);
+					uae_tcslcpy(aci->name, ab->name, sizeof aci->name / sizeof(TCHAR));
 				}
-				addrbank *ab2 = ab;
-				int size = 0;
 				for (;;) {
 					addr += 65536;
 					size += 65536;
@@ -2880,17 +2928,21 @@ struct autoconfig_info *expansion_get_bank_data(struct uae_prefs *p, uaecptr *ad
 
 struct autoconfig_info *expansion_get_autoconfig_data(struct uae_prefs *p, int index)
 {
+	struct card_data *cd;
+
 	if (index >= cardno)
 		return NULL;
-	struct card_data *cd = cards[index];
+	cd = cards[index];
 	return &cd->aci;
 }
 
 struct autoconfig_info *expansion_get_autoconfig_by_address(struct uae_prefs *p, uaecptr addr, int index)
 {
+	int i;
+
 	if (index >= cardno)
 		return NULL;
-	for (int i = index; i < cardno; i++) {
+	for (i = index; i < cardno; i++) {
 		struct card_data *cd = cards[i];
 		if (cd && addr >= cd->base && addr < cd->base + cd->size)
 			return &cd->aci;
@@ -2900,7 +2952,9 @@ struct autoconfig_info *expansion_get_autoconfig_by_address(struct uae_prefs *p,
 
 struct autoconfig_info *expansion_get_autoconfig_info(struct uae_prefs *p,int romtype, int devnum)
 {
-	for (int i = 0; i < cardno; i++) {
+	int i;
+
+	for (i = 0; i < cardno; i++) {
 		struct card_data *cd = cards[i];
 		if (cd->rc) {
 			if (cd->rc->back->device_type == romtype && cd->rc->back->device_num == devnum) {
@@ -2925,9 +2979,11 @@ struct autoconfig_info *expansion_get_autoconfig_info(struct uae_prefs *p,int ro
 
 static void expansion_init_cards(struct uae_prefs *p)
 {
+	int i;
+
 	reset_ac_data(p);
 
-	for (int i = 0; i < cardno; i++) {
+	for (i = 0; i < cardno; i++) {
 		bool ok;
 		struct card_data *cd = &cards_set[i];
 		struct autoconfig_info *aci = &cd->aci;
@@ -2953,8 +3009,9 @@ static void expansion_init_cards(struct uae_prefs *p)
 			uae_u8 ac2[16];
 			const uae_u8 *a = aci->autoconfigp;
 			if (!a) {
-				for (int i = 0; i < 16; i++) {
-					ac2[i] = autoconfig_read(aci->autoconfig_raw, i * 4);
+				int k;
+				for (k = 0; k < 16; k++) {
+					ac2[k] = autoconfig_read(aci->autoconfig_raw, k * 4);
 				}
 				a = ac2;
 			}
@@ -2966,6 +3023,8 @@ static void expansion_init_cards(struct uae_prefs *p)
 
 static void set_order(struct uae_prefs *p, struct card_data *cd, int order)
 {
+	int devnum;
+
 	if (!cd)
 		return;
 	if (cd->aci.set_params) {
@@ -2980,7 +3039,7 @@ static void set_order(struct uae_prefs *p, struct card_data *cd, int order)
 		cd->rc->back->device_order = order;
 		return;
 	}
-	int devnum = (cd->flags >> 16) & 255;
+	devnum = (cd->flags >> 16) & 255;
 	if (!_tcsicmp(cd->name, _T("Z2Fast"))) {
 		p->fastmem[devnum].device_order = order;
 		return;
@@ -2998,6 +3057,8 @@ static void set_order(struct uae_prefs *p, struct card_data *cd, int order)
 
 static int get_order(struct uae_prefs *p, struct card_data *cd)
 {
+	int devnum;
+
 	if (!cd)
 		return EXPANSION_ORDER_MAX - 1;
 	if (cd->cst)
@@ -3015,7 +3076,7 @@ static int get_order(struct uae_prefs *p, struct card_data *cd)
 		return -2;
 	if (cd->rc && cd->rc->back)
 		return cd->rc->back->device_order;
-	int devnum = (cd->flags >> 16) & 255;
+	devnum = (cd->flags >> 16) & 255;
 	if (!_tcsicmp(cd->name, _T("Z2Fast")))
 		return p->fastmem[devnum].device_order;
 	if (!_tcsicmp(cd->name, _T("Z3Fast")))
@@ -3029,19 +3090,36 @@ static int get_order(struct uae_prefs *p, struct card_data *cd)
 
 bool expansion_can_move(struct uae_prefs *p, int index)
 {
+	struct card_data *cd;
+	int order1;
+
 	if (index < 0 || index >= cardno)
 		return false;
-	struct card_data *cd = cards[index];
+	cd = cards[index];
 	if (cd->aci.parent_of_previous)
 		return false;
-	int order1 = get_order(p, cd);
+	order1 = get_order(p, cd);
 	if (order1 < 0 || order1 >= EXPANSION_ORDER_MAX - 1)
 		return false;
 	return true;
 }
 
+/* label[] es TCHAR[MAX_DPATH] y las fuentes son punteros que viven en la
+ * estructura de la tarjeta. _tcscpy no acota: si una de esas cadenas se
+ * queda sin terminador, el bucle de copia se sale de la pila. Visto en
+ * Release: "mov byte ptr [ebp+edi-34h],cl" con edi=0x2b68, o sea 11 KB
+ * pasado el buffer. _tcsncpy corta por longitud sin medir la fuente
+ * primero, que es justo lo que hace falta aqui (uae_tcslcpy no vale:
+ * llama a _tcslen(src) antes de copiar). */
+#define LABELCPY(dst, src) do { \
+	_tcsncpy((dst), (src), (sizeof (dst) / sizeof(TCHAR)) - 1); \
+	(dst)[(sizeof (dst) / sizeof(TCHAR)) - 1] = 0; \
+} while (0)
+
 static void expansion_parse_cards(struct uae_prefs *p, bool log)
 {
+	int i;
+
 #ifdef __LIBRETRO__
 	if (savestate_state)
 		log = false;
@@ -3049,7 +3127,7 @@ static void expansion_parse_cards(struct uae_prefs *p, bool log)
 	if (log)
 		write_log(_T("Autoconfig board list:\n"));
 	reset_ac_data(p);
-	for (int i = 0; i < cardno; i++) {
+	for (i = 0; i < cardno; i++) {
 		bool ok;
 		struct card_data *cd = cards[i];
 		struct autoconfig_info *aci = &cd->aci;
@@ -3093,34 +3171,42 @@ static void expansion_parse_cards(struct uae_prefs *p, bool log)
 				}
 				_stprintf(label, _T("%s (%s)"), aci->cst->name, man);
 #endif
-				_tcscpy(label, aci->cst->name);
+				LABELCPY(label, aci->cst->name);
 			}
 			if (cd->rc && !label[0] && cd->rc->back) {
 				const struct expansionromtype *ert = get_device_expansion_rom(cd->rc->back->device_type);
 				if (ert) {
-					_tcscpy(label, ert->friendlyname);
+					LABELCPY(label, ert->friendlyname);
 				}
 			}
 			if (!label[0]) {
 				if (aci->label) {
-					_tcscpy(label, aci->label);
+					LABELCPY(label, aci->label);
 				} else if (aci->addrbank && aci->addrbank->label) {
-					_tcscpy(label, aci->addrbank->label);
+					LABELCPY(label, aci->addrbank->label);
 				} else {
 					_tcscpy(label, _T("<no name>"));
 				}
 			}
 			if (aci->devnum > 0) {
-				TCHAR *s = label + _tcslen(label);
-				_stprintf(s, _T(" [%d]"), aci->devnum + 1);
+				size_t len = _tcslen(label);
+				if (len + 16 < sizeof label / sizeof(TCHAR)) {
+					TCHAR *s = label + len;
+					_stprintf(s, _T(" [%d]"), aci->devnum + 1);
+				}
 			}
 
 			if ((aci->zorro == 1 || aci->zorro == 2 || aci->zorro == 3) && aci->addrbank != &expamem_none && (aci->autoconfig_raw[0] != 0xff || aci->autoconfigp)) {
 				uae_u8 ac2[16];
 				const uae_u8 *a = aci->autoconfigp;
+				uae_u32 size;
+				TCHAR sizemod;
+				uae_u8 type;
+				bool z3;
 				if (!a) {
-					for (int i = 0; i < 16; i++) {
-						ac2[i] = autoconfig_read(aci->autoconfig_raw, i * 4);
+					int k;
+					for (k = 0; k < 16; k++) {
+						ac2[k] = autoconfig_read(aci->autoconfig_raw, k * 4);
 					}
 					a = ac2;
 				}
@@ -3135,15 +3221,15 @@ static void expansion_parse_cards(struct uae_prefs *p, bool log)
 						(a[6] << 24) | (a[7] << 16) | (a[8] << 8) | a[9]);
 				}
 				expansion_parse_autoconfig(cd, a);
-				uae_u32 size = expamem_board_size;
-				TCHAR sizemod = 'K';
-				uae_u8 type = a[0];
+				size = expamem_board_size;
+				sizemod = 'K';
+				type = a[0];
 				size /= 1024;
 				if (size > 8 * 1024) {
 					sizemod = 'M';
 					size /= 1024;
 				}
-				bool z3 = (type & 0xc0) == zorroIII;
+				z3 = (type & 0xc0) == zorroIII;
 				if (log) {
 					write_log(_T("  Z%d 0x%08x 0x%08x %4d%c %s %d\n"),
 						(type & 0xc0) == zorroII ? 2 : (z3 ? 3 : 1),
@@ -3200,7 +3286,7 @@ static void expansion_parse_cards(struct uae_prefs *p, bool log)
 				if (log)
 					write_log(_T("'%s' no autoconfig %08x - %08x.\n"), aci->label ? aci->label : _T("<no name>"), cd->base, cd->base + cd->size - 1);
 			}
-			_tcscpy(aci->name, label);
+			uae_tcslcpy(aci->name, label, sizeof aci->name / sizeof(TCHAR));
 			if (cd->flags & CARD_FLAG_CHILD)
 				aci->parent_of_previous = true;
 		} else {
@@ -3214,16 +3300,20 @@ static void expansion_parse_cards(struct uae_prefs *p, bool log)
 
 int expansion_autoconfig_move(struct uae_prefs *p, int index, int dir, bool test)
 {
+	struct card_data *cd1;
+	int order1;
+	struct card_data *cd2;
+	int order2;
+	int i;
+
 	if (index < 0 || index >= cardno)
 		return -1;
 	if (!dir)
 		return -1;
-	struct card_data *cd1 = cards[index];
-	int order1 = get_order(p, cd1);
+	cd1 = cards[index];
+	order1 = get_order(p, cd1);
 	if (order1 < 0 || order1 >= EXPANSION_ORDER_MAX - 1)
 		return -1;
-	struct card_data *cd2;
-	int order2;
 	for (;;) {
 		if (index + dir < 0 || index + dir >= cardno)
 			return -1;
@@ -3244,7 +3334,7 @@ int expansion_autoconfig_move(struct uae_prefs *p, int index, int dir, bool test
 	set_order(p, cd2, order1);
 	if (p != &currprefs)
 		expansion_scan_autoconfig(p, false);
-	for (int i = 0; i < cardno; i++) {
+	for (i = 0; i < cardno; i++) {
 		if (cards[i] == cd1)
 			return i;
 	}
@@ -3257,7 +3347,8 @@ static void expansion_recalc_order(struct uae_prefs *p)
 	for (;;) {
 		int order = EXPANSION_ORDER_MAX;
 		int idx = -1;
-		for (int i = 0; i < cardno; i++) {
+		int i;
+		for (i = 0; i < cardno; i++) {
 			struct card_data *cdc = cards[i];
 			int o = get_order(p, cdc);
 			if (o >= ordermin && order > o) {
@@ -3274,7 +3365,9 @@ static void expansion_recalc_order(struct uae_prefs *p)
 
 void expansion_set_autoconfig_sort(struct uae_prefs *p)
 {
-	for (int i = 0; i < cardno; i++) {
+	int i;
+
+	for (i = 0; i < cardno; i++) {
 		set_order(p, cards[i], i + 1);
 	}
 	expansion_recalc_order(p);
@@ -3297,8 +3390,10 @@ static void check_card_child(int index, bool *inuse, int *new_cardnop)
 {
 	struct card_data *cd = &cards_set[index];
 	int new_cardno = *new_cardnop;
+	int i;
+
 	// address space "conflict" parent?
-	for (int i = 0; i < cardno; i++) {
+	for (i = 0; i < cardno; i++) {
 		struct card_data *cdc = &cards_set[i];
 		if (inuse[i])
 			continue;
@@ -3311,14 +3406,16 @@ static void check_card_child(int index, bool *inuse, int *new_cardnop)
 		}
 	}
 	// romtype parent?
-	for (int i = 0; i < cardno; i++) {
+	for (i = 0; i < cardno; i++) {
 		struct card_data *cdc = &cards_set[i];
+		const int *parent;
+		int j;
 		if (inuse[i])
 			continue;
-		const int *parent = cdc->aci.parent_romtype;
+		parent = cdc->aci.parent_romtype;
 		if (!parent)
 			continue;
-		for (int j = 0; parent[j]; j++) {
+		for (j = 0; parent[j]; j++) {
 			if (cd->rc && parent[j] == (cd->rc->back->device_type & ROMTYPE_MASK)) {
 				cards[new_cardno++] = cdc;
 				cdc->aci.parent_of_previous = true;
@@ -3327,7 +3424,7 @@ static void check_card_child(int index, bool *inuse, int *new_cardnop)
 		}
 	}
 	// named parent
-	for (int i = 0; i < cardno; i++) {
+	for (i = 0; i < cardno; i++) {
 		struct card_data *cdc = &cards_set[i];
 		if (inuse[i])
 			continue;
@@ -3343,12 +3440,15 @@ static void check_card_child(int index, bool *inuse, int *new_cardnop)
 static bool add_card_sort(int index, bool *inuse, int *new_cardnop)
 {
 	struct card_data *cd = &cards_set[index];
+	int new_cardno;
+	int index2;
+
 	if (ischild(cd))
 		return false;
-	int new_cardno = *new_cardnop;
+	new_cardno = *new_cardnop;
 	cards[new_cardno++] = cd;
 	inuse[index] = true;
-	int index2 = index + 1;
+	index2 = index + 1;
 	// any children?
 	while (index2 < cardno) {
 		struct card_data *cdc = &cards_set[index2];
@@ -3375,34 +3475,42 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 	bool inuse[MAX_EXPANSION_BOARD_SPACE];
 	struct card_data *tcards[MAX_EXPANSION_BOARD_SPACE];
 	int new_cardno = 0;
+	/* C89 hoisted declarations */
+	int i;
+	int type;
+	int idx;
+	int z;
 
 	// default sort first, sets correct parent/child order
-	for (int i = 0; i < cardno; i++) {
+	for (i = 0; i < cardno; i++) {
 		inuse[i] = false;
 		cards[i] = NULL;
 	}
 	cards[cardno] = NULL;
-	for (int type = 0; zs[type] >= 0; type++) {
+	for (type = 0; zs[type] >= 0; type++) {
 		bool changed = true;
 		int z = zs[type];
 		bool inuse2[MAX_EXPANSION_BOARD_SPACE];
 		memset(inuse2, 0, sizeof inuse2);
 		while (changed) {
+			int testorder;
 			changed = false;
 			// unmovables first
-			int testorder = 0;
-			int idx = -1;
-			for (int i = 0; i < cardno; i++) {
+			testorder = 0;
+			idx = -1;
+			for (i = 0; i < cardno; i++) {
+				struct card_data *cd;
+				int order;
 				if (inuse[i])
 					continue;
 				if (inuse2[i])
 					continue;
-				struct card_data *cd = &cards_set[i];
+				cd = &cards_set[i];
 				if (ischild(cd))
 					continue;
 				if (cd->zorro != z)
 					continue;
-				int order = get_order(p, cd);
+				order = get_order(p, cd);
 				if (cd->aci.hardwired)
 					order = -1;
 				if (order >= 0)
@@ -3422,12 +3530,13 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 		memset(inuse2, 0, sizeof inuse2);
 		while (changed) {
 			changed = false;
-			for (int i = 0; i < cardno; i++) {
+			for (i = 0; i < cardno; i++) {
+				struct card_data *cd;
 				if (inuse[i])
 					continue;
 				if (inuse2[i])
 					continue;
-				struct card_data *cd = &cards_set[i];
+				cd = &cards_set[i];
 				if (ischild(cd))
 					continue;
 				if (cd->zorro != z)
@@ -3444,12 +3553,13 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 		while (changed) {
 			// the rest
 			changed = false;
-			for (int i = 0; i < cardno; i++) {
+			for (i = 0; i < cardno; i++) {
+				struct card_data *cd;
 				if (inuse[i])
 					continue;
 				if (inuse2[i])
 					continue;
-				struct card_data *cd = &cards_set[i];
+				cd = &cards_set[i];
 				if (ischild(cd))
 					continue;
 				if (cd->zorro != z)
@@ -3460,12 +3570,12 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 			}
 		}
 	}
-	for (int i = 0; i < cardno; i++) {
+	for (i = 0; i < cardno; i++) {
 		if (inuse[i])
 			continue;
 		cards[new_cardno++] = &cards_set[i];
 	}
-	for (int i = 0; i < cardno; i++) {
+	for (i = 0; i < cardno; i++) {
 		struct autoconfig_info *aci = &cards[i]->aci;
 		tcards[i] = cards[i];
 		tcards[i]->aci.can_sort = !aci->hardwired && !aci->parent_of_previous && get_order(p, cards[i]) < EXPANSION_ORDER_MAX - 1 && get_order(p, cards[i]) >= 0;
@@ -3476,14 +3586,15 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 		new_cardno = 0;
 
 		// accelerator and hardwired first
-		for (int idx = 0; idx < cardno; idx++) {
+		for (idx = 0; idx < cardno; idx++) {
 			struct card_data *cd = tcards[idx];
 			if (!cd)
 				continue;
 			if (cd->cst || cd->aci.hardwired) {
+				int j;
 				cards[new_cardno++] = cd;
 				tcards[idx] = NULL;
-				for (int j = idx + 1; j < cardno; j++) {
+				for (j = idx + 1; j < cardno; j++) {
 					struct card_data *cdc = tcards[j];
 					if (!cdc || !ischild(cdc))
 						break;
@@ -3493,15 +3604,17 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 			}
 		}
 		// re-sort by board size
-		for (int idx = 0; idx < cardno; idx++) {
+		for (idx = 0; idx < cardno; idx++) {
 			struct card_data *cd = tcards[idx];
+			int z;
 			if (!cd)
 				continue;
-			int z = cd->zorro;
+			z = cd->zorro;
 			if ((z != 2 && z != 3 && !ischild(cd)) || cd->cst) {
+				int j;
 				cards[new_cardno++] = cd;
 				tcards[idx] = NULL;
-				for (int j = idx + 1; j < cardno; j++) {
+				for (j = idx + 1; j < cardno; j++) {
 					struct card_data *cdc = tcards[j];
 					if (!cdc || !ischild(cdc))
 						break;
@@ -3510,11 +3623,12 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 				}
 			}
 		}
-		for (int z = 2; z <= 3; z++) {
+		for (z = 2; z <= 3; z++) {
 			for (;;) {
 				int idx2 = -1;
 				uae_u32 size = 0;
-				for (int j = 0; j < cardno; j++) {
+				int j;
+				for (j = 0; j < cardno; j++) {
 					struct card_data *cdc = tcards[j];
 					if (cdc && cdc->size > size && cdc->zorro == z && !ischild(cdc)) {
 						size = cdc->size;
@@ -3525,7 +3639,7 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 					break;
 				cards[new_cardno++] = tcards[idx2];
 				tcards[idx2] = NULL;
-				for (int j = idx2 + 1; j < cardno; j++) {
+				for (j = idx2 + 1; j < cardno; j++) {
 					struct card_data *cdc = tcards[j];
 					if (!cdc || !ischild(cdc))
 						break;
@@ -3541,8 +3655,8 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 		new_cardno = 0;
 		for (;;) {
 			int order = EXPANSION_ORDER_MAX;
-			int idx = -1;
-			for (int i = 0; i < cardno; i++) {
+			idx = -1;
+			for (i = 0; i < cardno; i++) {
 				struct card_data *cd = tcards[i];
 				if (cd && get_order(p, cd) < order && !cd->aci.parent_of_previous) {
 					order = get_order(p, cd);
@@ -3552,20 +3666,21 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 			if (idx >= 0) {
 				struct card_data *cd = tcards[idx];
 				struct autoconfig_info *aci = &cd->aci;
+				int child = 0;
+				int j;
 				cards[new_cardno++] = cd;
 				tcards[idx] = NULL;
 				// sort children, if any
-				int child = 0;
-				for (int j = idx + 1; j < cardno; j++) {
+				for (j = idx + 1; j < cardno; j++) {
 					struct card_data *cdc = tcards[j];
 					if (!cdc || !cdc->aci.parent_of_previous)
 						break;
 					child++;
 				}
 				for (;;) {
-					order = EXPANSION_ORDER_MAX;
 					int cidx = -1;
-					for (int j = 0; j < child; j++) {
+					order = EXPANSION_ORDER_MAX;
+					for (j = 0; j < child; j++) {
 						struct card_data *cdc = tcards[j + idx + 1];
 						if (cdc && get_order(p, cdc) < order) {
 							order = get_order(p, cdc);
@@ -3577,7 +3692,7 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 					cards[new_cardno++] = tcards[idx + 1 + cidx];
 					tcards[idx + 1 + cidx] = NULL;
 				}
-				for (int j = 0; j < child; j++) {
+				for (j = 0; j < child; j++) {
 					if (tcards[idx + 1 + j]) {
 						cards[new_cardno++] = tcards[idx + 1 +j];
 					}
@@ -3588,7 +3703,7 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 		}
 	}
 
-	for (int i = 0; i < cardno; i++) {
+	for (i = 0; i < cardno; i++) {
 		if (tcards[i]) {
 			cards[new_cardno++] = tcards[i];
 		}
@@ -3599,6 +3714,7 @@ static void expansion_autoconfig_sort(struct uae_prefs *p)
 static void expansion_add_autoconfig(struct uae_prefs *p)
 {
 	int fastmem_num;
+	int i;
 
 	reset_ac(p);
 
@@ -3620,7 +3736,7 @@ static void expansion_add_autoconfig(struct uae_prefs *p)
 		cards_set[cardno++].map = NULL;
 	}
 
-	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+	for (i = 0; i < MAX_RTG_BOARDS; i++) {
 		struct rtgboardconfig *rbc = &p->rtgboards[i];
 		int type = gfxboard_get_configtype(rbc);
 		if (rbc->rtgmem_size && rbc->rtgmem_type >= GFXBOARD_HARDWARE && type == BOARD_NONAUTOCONFIG_BEFORE) {
@@ -3692,7 +3808,7 @@ static void expansion_add_autoconfig(struct uae_prefs *p)
 	}
 #endif
 #ifdef GFXBOARD
-	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+	for (i = 0; i < MAX_RTG_BOARDS; i++) {
 		struct rtgboardconfig *rbc = &p->rtgboards[i];
 		int type = gfxboard_get_configtype(rbc);
 		if (rbc->rtgmem_size && rbc->rtgmem_type >= GFXBOARD_HARDWARE && type <= 2) {
@@ -3745,7 +3861,7 @@ static void expansion_add_autoconfig(struct uae_prefs *p)
 	add_expansions(p, BOARD_AUTOCONFIG_Z3, &fastmem_num, 2);
 
 	// add remaining RAM boards
-	for (int i = fastmem_num; i < MAX_RAM_BOARDS; i++) {
+	for (i = fastmem_num; i < MAX_RAM_BOARDS; i++) {
 		if (p->z3fastmem[i].size) {
 			z3num = 0;
 			cards_set[cardno].flags = (2 | CARD_FLAG_CAN_Z3) | (i << 16);
@@ -3767,7 +3883,7 @@ static void expansion_add_autoconfig(struct uae_prefs *p)
 	}
 #endif
 #ifdef GFXBOARD
-	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+	for (i = 0; i < MAX_RTG_BOARDS; i++) {
 		struct rtgboardconfig *rbc = &p->rtgboards[i];
 		if (rbc->rtgmem_size && rbc->rtgmem_type >= GFXBOARD_HARDWARE && gfxboard_get_configtype(rbc) == 3) {
 			cards_set[cardno].flags = 4 | CARD_FLAG_CAN_Z3 | (i << 16);
@@ -3803,6 +3919,8 @@ void expansion_scan_autoconfig(struct uae_prefs *p, bool log)
 
 void expamem_reset (int hardreset)
 {
+	int i;
+
 	reset_ac(&currprefs);
 
 	chipdone = false;
@@ -3823,7 +3941,7 @@ void expamem_reset (int hardreset)
 		expamem_init_clear_zero ();
 	} else {
 
-		for (int i = 0; i < cardno; i++) {
+		for (i = 0; i < cardno; i++) {
 			struct card_data *cd = cards[i];
 			if (cd->ert && cd->ert->preinit) {
 				struct autoconfig_info *aci = &cd->aci;
@@ -3846,9 +3964,11 @@ void expamem_reset (int hardreset)
 
 void expansion_init (void)
 {
+	int i;
+
 	if (savestate_state != STATE_RESTORE) {
 
-		for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+		for (i = 0; i < MAX_RAM_BOARDS; i++) {
 			mapped_free(&fastmem_bank[i]);
 			fastmem_bank[i].reserved_size = 0;
 			fastmem_bank[i].mask = 0;
@@ -3868,7 +3988,7 @@ void expansion_init (void)
 		catweasel_mask = catweasel_start = 0;
 #endif
 
-		for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+		for (i = 0; i < MAX_RAM_BOARDS; i++) {
 			mapped_free(&z3fastmem_bank[i]);
 			z3fastmem_bank[i].reserved_size = 0;
 			z3fastmem_bank[i].mask = 0;
@@ -3892,7 +4012,9 @@ void expansion_init (void)
 
 void expansion_cleanup (void)
 {
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	int i;
+
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 		mapped_free (&fastmem_bank[i]);
 		mapped_free (&z3fastmem_bank[i]);
 	}
@@ -3920,9 +4042,11 @@ void expansion_cleanup (void)
 
 void expansion_map(void)
 {
+	int i;
+
 	map_banks(&expamem_bank, 0xE8, 1, 0);
 	// map non-autoconfig ram boards
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 		struct ramboard *rb = &currprefs.fastmem[i];
 		if (rb->size) {
 			if (rb->manual_config) {
@@ -3942,7 +4066,7 @@ void expansion_map(void)
 			initramboard(&z3fastmem_bank[i], rb);
 		}
 	}
-	for (int i = 0; i < MAX_ROM_BOARDS; i++) {
+	for (i = 0; i < MAX_ROM_BOARDS; i++) {
 		struct romboard *rb = &currprefs.romboards[i];
 		if (rb->size) {
 			loadboardfile(&romboardmem_bank[i], &rb->lf);
@@ -3973,12 +4097,14 @@ static void clear_bank (addrbank *ab)
 
 void expansion_clear (void)
 {
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	int i;
+
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 		clear_bank (&fastmem_bank[i]);
 		clear_bank (&z3fastmem_bank[i]);
 	}
 	clear_bank (&z3chipmem_bank);
-	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+	for (i = 0; i < MAX_RTG_BOARDS; i++) {
 		clear_bank (gfxmem_banks[i]);
 	}
 }
@@ -4070,6 +4196,10 @@ uae_u8 *restore_expansion(uae_u8 *src)
 uae_u8 *save_expansion_boards(size_t *len, uae_u8 *dstptr, int cardnum)
 {
 	uae_u8 *dst, *dstbak;
+	struct card_data *ec;
+	struct romconfig *rc;
+	int j;
+
 	if (cardnum >= cardno)
 		return NULL;
 	if (dstptr)
@@ -4079,15 +4209,15 @@ uae_u8 *save_expansion_boards(size_t *len, uae_u8 *dstptr, int cardnum)
 	save_u32(3);
 	save_u32(0);
 	save_u32(cardnum);
-	struct card_data *ec = cards[cardnum];
+	ec = cards[cardnum];
 	save_u32(ec->base);
 	save_u32(ec->size);
 	save_u32(ec->flags);
 	save_string(ec->name);
-	for (int j = 0; j < 16; j++) {
+	for (j = 0; j < 16; j++) {
 		save_u8(ec->aci.autoconfig_bytes[j]);
 	}
-	struct romconfig *rc = ec->rc;
+	rc = ec->rc;
 	if (rc && rc->back) {
 		save_u32(rc->back->device_type);
 		save_u32(rc->back->device_num);
@@ -4105,6 +4235,15 @@ uae_u8 *save_expansion_boards(size_t *len, uae_u8 *dstptr, int cardnum)
 
 uae_u8 *restore_expansion_boards(uae_u8 *src)
 {
+	/* C89 hoisted declarations */
+	TCHAR *s;
+	uae_u32 flags;
+	int cardnum;
+	struct card_data *ec;
+	int j;
+	uae_u32 dev_num;
+	uae_u32 romtype;
+
 	if (!src) {
 		restore_cardno = 0;
 #if 0
@@ -4112,14 +4251,13 @@ uae_u8 *restore_expansion_boards(uae_u8 *src)
 #endif
 		return NULL;
 	}
-	TCHAR *s;
-	uae_u32 flags = restore_u32();
+	flags = restore_u32();
 	if (!(flags & 2))
 		return src;
 	restore_u32();
-	int cardnum = restore_u32();
+	cardnum = restore_u32();
 	restore_cardno = cardnum + 1;
-	struct card_data *ec = &cards_set[cardnum];
+	ec = &cards_set[cardnum];
 	cards[cardnum] = ec;
 
 	ec->base = restore_u32();
@@ -4127,7 +4265,7 @@ uae_u8 *restore_expansion_boards(uae_u8 *src)
 	ec->flags = restore_u32();
 	s = restore_string();
 	xfree(s);
-	for (int j = 0; j < 16; j++) {
+	for (j = 0; j < 16; j++) {
 		ec->aci.autoconfig_bytes[j] = restore_u8();
 	}
 #if 0
@@ -4147,16 +4285,18 @@ uae_u8 *restore_expansion_boards(uae_u8 *src)
 		}
 	}
 #endif
-	uae_u32 dev_num = 0;
-	uae_u32 romtype = restore_u32();
+	dev_num = 0;
+	romtype = restore_u32();
 	if (romtype != 0xffffffff) {
+		struct boardromconfig* brc;
+		struct romconfig *rc;
 		dev_num = restore_u32();
 		ec->aci.devnum = dev_num;
-		struct boardromconfig* brc = get_device_rom(&currprefs, romtype, dev_num, NULL);
+		brc = get_device_rom(&currprefs, romtype, dev_num, NULL);
 		if (!brc) {
 			brc = get_device_rom_new(&currprefs, romtype, dev_num, NULL);
 		}
-		struct romconfig *rc = get_device_romconfig(&currprefs, romtype, dev_num);
+		rc = get_device_romconfig(&currprefs, romtype, dev_num);
 		if (rc) {
 			ec->rc = rc;
 			rc->back = brc;
@@ -4237,12 +4377,14 @@ uae_u8 *restore_expansion_info_old(uae_u8 *src)
 
 void restore_expansion_finish(void)
 {
+	int i;
+
 	cardno = restore_cardno;
 	restore_cardno = 0;
-	for (int i = 0; i < cardno; i++) {
+	for (i = 0; i < cardno; i++) {
 		struct card_data *ec = &cards_set[i];
-		cards[i] = ec;
 		struct romconfig *rc = ec->rc;
+		cards[i] = ec;
 		expamem_board_pointer = ec->base;
 		// Handle only IO boards, RAM boards are handled differently
 		ec->aci.doinit = false;
@@ -4974,9 +5116,11 @@ struct netdriverdata **target_ethernet_enumerate(void);
 uae_u32 ethernet_getselection(const TCHAR *name)
 {
 	struct netdriverdata **ndd = target_ethernet_enumerate();
+	int i;
+
 	if (!ndd)
 		return 0;
-	for (int i = 0; ndd && i < MAX_TOTAL_NET_DEVICES; i++) {
+	for (i = 0; ndd && i < MAX_TOTAL_NET_DEVICES; i++) {
 		if (ndd[i] && !_tcsicmp(ndd[i]->name, name))
 			return i << 16;
 	}
@@ -4986,10 +5130,12 @@ uae_u32 ethernet_getselection(const TCHAR *name)
 const TCHAR *ethernet_getselectionname(uae_u32 settings)
 {
 	struct netdriverdata **ndd = target_ethernet_enumerate();
+	int i;
+
 	if (!ndd)
 		return 0;
 	settings = (settings >> 16) & 255;
-	for (int i = 0; ndd && i < MAX_TOTAL_NET_DEVICES; i++) {
+	for (i = 0; ndd && i < MAX_TOTAL_NET_DEVICES; i++) {
 		if (i == settings)
 			return ndd[i]->name;
 	}
@@ -4999,19 +5145,24 @@ const TCHAR *ethernet_getselectionname(uae_u32 settings)
 void ethernet_updateselection(void)
 {
 	static int updated;
+	static TCHAR tmp1[MAX_DPATH];
+	static TCHAR tmp2[MAX_DPATH];
+	struct netdriverdata **ndd;
+	TCHAR *p1;
+	TCHAR *p2;
+	int i;
+
 	if (updated)
 		return;
 	updated = 1;
-	struct netdriverdata **ndd = target_ethernet_enumerate();
+	ndd = target_ethernet_enumerate();
 	if (!ndd)
 		return;
-	static TCHAR tmp1[MAX_DPATH];
-	static TCHAR tmp2[MAX_DPATH];
 	_tcscpy(tmp1, _T("Network mode"));
 	_tcscpy(tmp2, _T("netmode"));
-	TCHAR *p1 = tmp1 + _tcslen(tmp1) + 1;
-	TCHAR *p2 = tmp2 + _tcslen(tmp2) + 1;
-	for (int i = 0; ndd && i < MAX_TOTAL_NET_DEVICES; i++) {
+	p1 = tmp1 + _tcslen(tmp1) + 1;
+	p2 = tmp2 + _tcslen(tmp2) + 1;
+	for (i = 0; ndd && i < MAX_TOTAL_NET_DEVICES; i++) {
 		if (ndd[i]) {
 			TCHAR mac[20];
 			mac[0] = 0;
@@ -5027,7 +5178,7 @@ void ethernet_updateselection(void)
 	}
 	*p1 = 0;
 	*p2 = 0;
-	for (int i = 0; netsettings[i]; i++) {
+	for (i = 0; netsettings[i]; i++) {
 		struct expansionboardsettings *ebs = netsettings[i];
 		int j;
 		for (j = 0; ebs[j].name; j++);
@@ -5039,13 +5190,15 @@ void ethernet_updateselection(void)
 static void fastlane_memory_callback(struct romconfig *rc, uae_u8 *ac, int size)
 {
 	struct zfile *z = read_device_from_romconfig(rc, 0/*NULL*/, false);
+	int i;
+
 	if (z) {
 		// load autoconfig data from rom file
 		uae_u8 act[16] = { 0 };
 		zfile_fseek(z, 0x80, SEEK_SET);
 		zfile_fread(act, 1, 16, z);
 		zfile_fclose(z);
-		for(int i = 1; i < 16; i++) {
+		for(i = 1; i < 16; i++) {
 			ac[i] = ~act[i];
 			act[i] = ~act[i];
 		}
@@ -5694,7 +5847,7 @@ const struct expansionromtype expansionroms[] = {
 		{ 0xd1, 0x31, 0x00, 0x00, 0x08, 0x40, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00 },
 	},
 	{
-		_T("kommos"), _T("Kommos A500/A2000 SCSI"), _T("Jürgen Kommos"),
+		_T("kommos"), _T("Kommos A500/A2000 SCSI"), _T("Jï¿½rgen Kommos"),
 		NULL, kommos_init, NULL, kommos_add_scsi_unit, ROMTYPE_KOMMOS, 0, 0, BOARD_NONAUTOCONFIG_BEFORE, true,
 		NULL, 0,
 		false, EXPANSIONTYPE_SCSI
@@ -5928,7 +6081,7 @@ const struct expansionromtype expansionroms[] = {
 		true, 0, alf3_settings
 	},
 	{
-		_T("promigos"), _T("Promigos"), _T("Flesch und Hörnemann"),
+		_T("promigos"), _T("Promigos"), _T("Flesch und Hï¿½rnemann"),
 		NULL, promigos_init, NULL, promigos_add_scsi_unit, ROMTYPE_PROMIGOS | ROMTYPE_NOT, 0, 0, BOARD_NONAUTOCONFIG_BEFORE, true,
 		NULL, 0,
 		false, EXPANSIONTYPE_CUSTOM | EXPANSIONTYPE_SCSI

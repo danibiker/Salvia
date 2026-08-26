@@ -644,9 +644,10 @@ uae_u32 REGPARAM2 x_get_disp_ea_040(uae_u32 base, int idx)
 int getMulu68kCycles(uae_u16 src)
 {
 	int cycles = 0;
+	int bits;
 	if (currprefs.cpu_model == 68000) {
 		cycles = 38 - 4;
-		for (int bits = 0; bits < 16 && src; bits++, src >>= 1) {
+		for (bits = 0; bits < 16 && src; bits++, src >>= 1) {
 			if (src & 1)
 				cycles += 2;
 		}
@@ -659,10 +660,12 @@ int getMulu68kCycles(uae_u16 src)
 int getMuls68kCycles(uae_u16 src)
 {
 	int cycles;
+	int bits;
+	uae_u32 usrc;
 	if (currprefs.cpu_model == 68000) {
 		cycles = 38 - 4;
-		uae_u32 usrc = ((uae_u32)src) << 1;
-		for (int bits = 0; bits < 16 && usrc; bits++, usrc >>= 1) {
+		usrc = ((uae_u32)src) << 1;
+		for (bits = 0; bits < 16 && usrc; bits++, usrc >>= 1) {
 			if ((usrc & 3) == 1 || (usrc & 3) == 2) {
 				cycles += 2;
 			}
@@ -973,6 +976,8 @@ void setdivuflags(uae_u32 dividend, uae_u16 divisor)
 
 void setdivsflags(uae_s32 dividend, uae_s16 divisor)
 {
+	uae_u32 aquot;
+
 	if (currprefs.cpu_model == 68060) {
 		SET_VFLG(1);
 		SET_CFLG(0);
@@ -985,7 +990,7 @@ void setdivsflags(uae_s32 dividend, uae_s16 divisor)
 		// absolute overflow?
 		if (((uae_u32)abs(dividend) >> 16) >= (uae_u16)abs(divisor))
 			return;
-		uae_u32 aquot = (uae_u32)abs(dividend) / (uae_u16)abs(divisor);
+		aquot = (uae_u32)abs(dividend) / (uae_u16)abs(divisor);
 		if ((uae_s8)aquot == 0)
 			SET_ZFLG(1);
 		if ((uae_s8)aquot < 0)
@@ -1675,8 +1680,9 @@ void cpu_restore_fixup(void)
 // Low word: Clear + Z and N
 void ccr_68000_long_move_ae_LZN(uae_s32 src)
 {
+	uae_s16 vsrc;
 	CLEAR_CZNV();
-	uae_s16 vsrc = (uae_s16)(src & 0xffff);
+	vsrc = (uae_s16)(src & 0xffff);
 	SET_ZFLG(vsrc == 0);
 	SET_NFLG(vsrc < 0);
 }
@@ -1684,8 +1690,9 @@ void ccr_68000_long_move_ae_LZN(uae_s32 src)
 // Low word: Clear + N only
 void ccr_68000_long_move_ae_LN(uae_s32 src)
 {
+	uae_s16 vsrc;
 	CLEAR_CZNV();
-	uae_s16 vsrc = (uae_s16)(src & 0xffff);
+	vsrc = (uae_s16)(src & 0xffff);
 	SET_NFLG(vsrc < 0);
 }
 

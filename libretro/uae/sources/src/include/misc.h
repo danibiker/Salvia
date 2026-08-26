@@ -26,6 +26,7 @@
 #define HWND uintptr_t
 #endif
 
+#ifndef _XBOX
 #ifndef RECT
 typedef struct tagRECT {
   LONG left;
@@ -57,6 +58,7 @@ typedef struct _LUID {
 
 #ifndef HMONITOR
 typedef void* HMONITOR;
+#endif
 #endif
 
 #endif /* WIN32 */

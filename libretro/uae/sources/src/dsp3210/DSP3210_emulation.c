@@ -1583,9 +1583,10 @@ void SetZfield(int32_t fld1, int32_t fld2, int32_t temp)
 	if(fld1)					//need to set Zfield
 	{							//deal with write latency 1 here
 		int32_t temp2 = DSP_swapl(temp); //now LE
+		float f;
 		//float f = *((float *)&(temp2)); //input -> float (still LE IEEE) '''
 		conv.i = temp2;
-		float f = conv.f;
+		f = conv.f;
 		temp2 = DSP_swapl(DSP_float(f));
 		//DSP_history_mem[0][0] = (int32_t)(amiga_mem_base+(DSP_reg_r[fld1]>>2));
 		DSP_history_mem[0][0] = DSP_reg_r[fld1];	//>>2;
@@ -1617,11 +1618,11 @@ void doDAU5(int32_t incode)
 {
 	int32_t value, fld1, fld2;
 	float ftemp;
+	int32_t m0,m1, m2, m3;		//###
+	intfloat conv;
 	fld1=DAUXYZ(incode,2,&fld2);	//get Yfield values
 	value=GetXYfield(fld1,fld2,incode);		//read value from Yfield reg and post inc
 									//NB value is BE 
-	int32_t m0,m1, m2, m3;		//###
-	intfloat conv;
 
 	switch(Gfield(incode))
 	{

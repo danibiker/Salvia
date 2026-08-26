@@ -32,7 +32,7 @@
 #include "parser.h"
 
 #define write_logx write_log
-#define write_log_get_ts(x) NULL
+#define write_log_get_ts() NULL
 int read_log(void) { return -1; }
 int enforcermode = 0;
 
@@ -706,6 +706,9 @@ static void sersend_ce(uae_u32 v)
 static void serdatcopy(void)
 {
 	int bits;
+	TCHAR *ts;
+	TCHAR ch;
+	int i;
 
 	if (data_in_sershift || !data_in_serdat)
 		return;
@@ -721,12 +724,12 @@ static void serdatcopy(void)
 	if (seriallog > 0 || (consoleopen && seriallog < 0)) {
 		gotlogwrite = true;
 		if (seriallog_lf && seriallog > 2) {
-			TCHAR *ts = write_log_get_ts();
+			ts = write_log_get_ts();
 			if (ts)
 				write_logx(_T("%s:"), ts);
 			seriallog_lf = false;
 		}
-		TCHAR ch = docharlog(serdatshift_masked);
+		ch = docharlog(serdatshift_masked);
 		write_logx(_T("%c"), ch);
 		if (ch == 10)
 			seriallog_lf = true;
@@ -744,7 +747,7 @@ static void serdatcopy(void)
 	data_in_sershift = 1;
 
 	serdatshift_bits = 16;
-	for (int i = 15; i >= 0; i--) {
+	for (i = 15; i >= 0; i--) {
 		if (serdatshift & (1 << i))
 			break;
 		serdatshift_bits--;
@@ -795,6 +798,7 @@ static void serdatcopy(void)
 
 void serial_hsynchandler (void)
 {
+	int ch;
 #ifdef AHI
 	extern void hsyncstuff(void);
 	hsyncstuff();
@@ -804,7 +808,7 @@ void serial_hsynchandler (void)
 		if (data_in_serdatr) {
 			return;
 		}
-		int ch = ld_serial_write();
+		ch = ld_serial_write();
 		if (ch >= 0) {
 			serdatr = ch | 0x100;
 			serdatr_last_got = 0;
@@ -816,7 +820,7 @@ void serial_hsynchandler (void)
 		if (data_in_serdatr) {
 			return;
 		}
-		int ch = touch_serial_write();
+		ch = touch_serial_write();
 		if (ch >= 0) {
 			serdatr = ch | 0x100;
 			serdatr_last_got = 0;
@@ -824,7 +828,7 @@ void serial_hsynchandler (void)
 		}
 	}
 	if (seriallog > 1 && !data_in_serdatr && gotlogwrite) {
-		int ch = read_log();
+		ch = read_log();
 		if (ch > 0) {
 			serdatr = ch | 0x100;
 			serial_rx_irq ();

@@ -166,7 +166,9 @@ static void keytoscancode(int key, bool release)
 	int v = 0x40;
 	int q = 0x00;
 	int mask = release ? 0x80 : 0x00;
-	for (int i = 0; kbtable[i].ascii; i++) {
+	/* C89 hoisted declarations */
+	int i;
+	for (i = 0; kbtable[i].ascii; i++) {
 		if (kbtable[i].ascii == key) {
 			v = kbtable[i].code;
 			q = kbtable[i].qual;
@@ -354,11 +356,13 @@ void keybuf_inject(const uae_char *txt)
 {
 	uae_char *newbuf = xmalloc(uae_char, strlen(txt) + 1);
 	uae_char *p = newbuf;
+	/* C89 hoisted declarations */
+	int i, j;
 
-	for (int j = 0; j < strlen(txt); j++) {
+	for (j = 0; j < (int)strlen(txt); j++) {
 		uae_char c = txt[j];
 		bool found = false;
-		for (int i = 0; kbtable[i].ascii; i++) {
+		for (i = 0; kbtable[i].ascii; i++) {
 			if (kbtable[i].ascii == c)
 				found = true;
 		}

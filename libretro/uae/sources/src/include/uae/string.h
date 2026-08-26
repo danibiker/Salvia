@@ -62,11 +62,13 @@
 
 static inline size_t uae_tcslcpy(TCHAR *dst, const TCHAR *src, size_t size)
 {
+	size_t src_len;
+	size_t cpy_len;
 	if (size == 0) {
 		return 0;
 	}
-	size_t src_len = _tcslen(src);
-	size_t cpy_len = src_len;
+	src_len = _tcslen(src);
+	cpy_len = src_len;
 	if (cpy_len >= size) {
 		cpy_len = size - 1;
 	}
@@ -77,11 +79,14 @@ static inline size_t uae_tcslcpy(TCHAR *dst, const TCHAR *src, size_t size)
 
 static inline size_t uae_strlcpy(char *dst, const char *src, size_t size)
 {
+	size_t src_len;
+	size_t cpy_len;
+
 	if (size == 0) {
 		return 0;
 	}
-	size_t src_len = strlen(src);
-	size_t cpy_len = src_len;
+	src_len = strlen(src);
+	cpy_len = src_len;
 	if (cpy_len >= size) {
 		cpy_len = size - 1;
 	}

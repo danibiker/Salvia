@@ -124,10 +124,12 @@ static void unlock_inode(struct inode *inode)
 
 static void iput(struct inode *inode)
 {
+	struct super_block *sb;
+
 	if (!inode || inode->linked)
 		return;
 
-	struct super_block *sb = inode->i_sb;
+	sb = inode->i_sb;
 
 #if 0
 	struct inode *in;
@@ -1056,10 +1058,12 @@ repeat:
 			}
 			if (rr->u.AS.flags & 2) { // COMMENT
 				const int maxcomment = 80;
+				int l;
+				char t;
 				if (!inode->i_comment)
 					inode->i_comment = xcalloc (TCHAR, maxcomment + 1);
-				int l = p[0];
-				char t = p[l];
+				l = p[0];
+				t = p[l];
 				p[l] = 0;
 				au_copy (inode->i_comment + uaetcslen (inode->i_comment), maxcomment + 1 - uaetcslen (inode->i_comment), p + 1);
 				p[l] = t;
@@ -1508,11 +1512,12 @@ error:
 static TCHAR *get_joliet_name(char *name, unsigned char len, bool utf8)
 {
 	TCHAR *out;
+	int i;
 
 	if (utf8) {
 		/* probably never used */
 		uae_char *o = xmalloc(uae_char, len + 1);
-		for (int i = 0; i < len; i++)
+		for (i = 0; i < len; i++)
 			o[i] = name[i];
 		o[len] = 0;
 		out = utf8u(o);
@@ -1520,7 +1525,7 @@ static TCHAR *get_joliet_name(char *name, unsigned char len, bool utf8)
 	} else {
 		len /= 2;
 		out = xmalloc(TCHAR, len + 1);
-		for (int i = 0; i < len; i++)
+		for (i = 0; i < len; i++)
 			out[i] = isonum_722(name + i * 2);
 		out[len] = 0;
 	}
@@ -1969,13 +1974,14 @@ root_found:
 		sbi->s_rock = 0;
 		sbi->s_cdtv = 1; /* only convert if plain iso9660 */
 		if (sbi->s_firstdatazone != first_data_zone) {
+			TCHAR *volname;
 			sbi->s_firstdatazone = first_data_zone;
 			write_log (_T("ISOFS: changing to secondary root\n"));
 			iput(inode);
 			inode = isofs_iget(s, sbi->s_firstdatazone, 0, NULL);
 			if (IS_ERR(inode))
 				goto out_no_root;
-			TCHAR *volname = get_joliet_name(pri->volume_id, 28, sbi->s_utf8);
+			volname = get_joliet_name(pri->volume_id, 28, sbi->s_utf8);
 			if (volname && volname[0] != '\0') {
 				xfree(volume_name);
 				volume_name = volname;
@@ -2093,6 +2099,9 @@ static int isofs_name_translate(struct iso_directory_record *de, char *newn, str
 
 static int isofs_cmp(const char *name, char *compare, int dlen)
 {
+	char tmp;
+	int c;
+
 	if (!compare)
 		return 1;
 	/* we don't care about special "." and ".." files */
@@ -2104,9 +2113,9 @@ static int isofs_cmp(const char *name, char *compare, int dlen)
 			return 1;
 		}
 	}
-	char tmp = compare[dlen];
+	tmp = compare[dlen];
 	compare[dlen] = 0;
-	int c = stricmp(name, compare);
+	c = stricmp(name, compare);
 	compare[dlen] = tmp;
 	return c;
 }
@@ -2205,8 +2214,9 @@ static struct inode *isofs_find_entry(struct inode *dir, char *tmpname, TCHAR *t
 		}
 		xfree (jname);
 		if (match) {
+			struct inode *dinode;
 			isofs_normalize_block_and_offset(de, &block_saved, &offset_saved);
-			struct inode *dinode = isofs_iget(dir->i_sb, block_saved, offset_saved, nameu);
+			dinode = isofs_iget(dir->i_sb, block_saved, offset_saved, nameu);
 			iput(dinode);
 			brelse(bh);
 			return dinode;
@@ -2265,6 +2275,7 @@ static int do_isofs_readdir(struct inode *inode, struct file *filp, char *tmpnam
 	struct isofs_sb_info *sbi = ISOFS_SB(inode->i_sb);
 	struct inode *dinode = NULL;
 	int bh_block = 0;
+	TCHAR *jname = NULL;
 
 	offset = filp->f_pos & (bufsize - 1);
 	block = filp->f_pos >> bufbits;
@@ -2369,7 +2380,7 @@ static int do_isofs_readdir(struct inode *inode, struct file *filp, char *tmpnam
 			}
 		}
 #endif
-		TCHAR *jname = NULL;
+		jname = NULL;
 		if (map) {
 			if (sbi->s_joliet_level) {
 				jname = get_joliet_filename(de, inode);
@@ -2461,12 +2472,13 @@ void isofs_unmount(void *sbp)
 bool isofs_mediainfo(void *sbp, struct isofs_info *ii)
 {
 	struct super_block *sb = (struct super_block*)sbp;
-	
+	struct isofs_sb_info *sbi;
+
 	memset (ii, 0, sizeof (struct isofs_info));
 
 	if (!sb)
 		return true;
-	struct isofs_sb_info *sbi = ISOFS_SB(sb);
+	sbi = ISOFS_SB(sb);
 	ii->blocksize = 2048;
 	if (sys_command_ismedia (sb->unitnum, true)) {
 		struct device_info di;
@@ -2618,9 +2630,10 @@ struct cd_openfile_s *isofs_openfile(void *sbp, uae_u64 uniq, int flags)
 {
 	struct super_block *sb = (struct super_block*)sbp;
 	struct inode *inode = find_inode(sb, uniq);
+	struct cd_openfile_s *of;
 	if (!inode)
 		return NULL;
-	struct cd_openfile_s *of = xcalloc(struct cd_openfile_s, 1);
+	of = xcalloc(struct cd_openfile_s, 1);
 	of->sb = sb;
 	of->inode = inode;
 	return of;

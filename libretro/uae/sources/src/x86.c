@@ -4340,6 +4340,6 @@ bool x86_rt1000_init(struct autoconfig_info *aci) { return false; }
 void x86_rt1000_add_unit(int ch, struct uaedev_config_info *ci, struct romconfig *rc) {}
 void x86_doirq(uint8_t irqnum) {}
 void x86_xt_ide_bios(struct zfile *z, struct romconfig *rc) {}
-bool x86_mouse(int port, int x, int y, int z, int b) {}
+bool x86_mouse(int port, int x, int y, int z, int b) { return false; }
 
 #endif

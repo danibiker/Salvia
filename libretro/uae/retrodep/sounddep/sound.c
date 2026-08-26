@@ -155,6 +155,14 @@ int audio_is_pull(void)
    return 0;
 }
 
+bool audio_is_pull_event(void)
+{
+   /* Este backend no usa modo pull (audio_is_pull() devuelve 0), asi que
+    * nunca hay evento de pull que atender. custom.c lo llama en el bucle
+    * de espera de vsync. */
+   return false;
+}
+
 int audio_pull_buffer(void)
 {
    return 0;

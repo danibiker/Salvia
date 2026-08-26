@@ -293,8 +293,11 @@ static void debugreportsegment(struct debugsegtracker *seg, bool verbose)
 {
 	struct debugmemallocs *alloc = allocs[seg->allocid];
 	int parentid = alloc->id;
-	for (int i = 0; i < MAX_DEBUGMEMALLOCS; i++) {
-		struct debugmemallocs *a = allocs[i];
+	int i;
+	struct debugmemallocs *a;
+
+	for (i = 0; i < MAX_DEBUGMEMALLOCS; i++) {
+		a = allocs[i];
 		if (a->parentid == parentid) {
 			if (verbose) {
 				console_out_f(_T("Segment %d (%s): %08x %08x - %08x (%d)\n"),
@@ -324,10 +327,11 @@ static void debugreportalloc(struct debugmemallocs *a)
 		console_out_f(_T("AllocVec ID=%4d: %08x %08x - %08x (%d) AllocFlags: %08x PC: %08x\n"),
 			a->id, a->idtype, a->start + off, a->start + off + a->size - 1, a->size, a->data, a->pc);
 	} else if (a->type == DEBUGALLOC_SEG) {
+		int i;
 		static int lastsegment;
 		struct debugsegtracker *sg = NULL;
 		const TCHAR *name = _T("<unknown>");
-		for (int i = 0; i < MAX_DEBUGSEGS; i++) {
+		for (i = 0; i < MAX_DEBUGSEGS; i++) {
 			sg = dsegt[(i + lastsegment) % MAX_DEBUGSEGS];
 			if (sg->allocid == a->parentid) {
 				name = sg->name;
@@ -448,11 +452,14 @@ static uaecptr calc_jsr(void)
 
 void branch_stack_pop_rte(uaecptr oldpc)
 {
+	uaecptr newpc;
+	bool found;
+	int i;
 	if (!stackframes)
 		return;
-	uaecptr newpc = m68k_getpc();
-	bool found = false;
-	for (int i = stackframecntsuper - 1; i >= 0; i--) {
+	newpc = m68k_getpc();
+	found = false;
+	for (i = stackframecntsuper - 1; i >= 0; i--) {
 		struct debugstackframe *sf = &stackframessuper[i];
 		if (sf->next_pc == newpc) {
 			stackframecntsuper = i;
@@ -480,16 +487,20 @@ void branch_stack_pop_rte(uaecptr oldpc)
 
 void branch_stack_pop_rts(uaecptr oldpc)
 {
+	int cnt;
+	uaecptr newpc;
+	bool found;
+	int i;
 	if (!stackframes)
 		return;
 	if (!stackframemode) {
 		if (debug_waiting || (!regs.s && get_long_host(exec_thistask) != debug_task))
 			return;
 	}
-	int cnt = regs.s ? stackframecntsuper : stackframecnt;
-	uaecptr newpc = m68k_getpc();
-	bool found = false;
-	for (int i = cnt - 1; i >= 0; i--) {
+	cnt = regs.s ? stackframecntsuper : stackframecnt;
+	newpc = m68k_getpc();
+	found = false;
+	for (i = cnt - 1; i >= 0; i--) {
 		struct debugstackframe *sf = regs.s ? &stackframessuper[i] : &stackframes[i];
 		if (sf->next_pc == newpc) {
 			cnt = i;
@@ -512,6 +523,8 @@ void branch_stack_pop_rts(uaecptr oldpc)
 
 void branch_stack_push(uaecptr oldpc, uaecptr newpc)
 {
+	int cnt;
+	struct debugstackframe * sf;
 	if (!stackframes) {
 		return;
 	}
@@ -520,14 +533,14 @@ void branch_stack_push(uaecptr oldpc, uaecptr newpc)
 			return;
 		}
 	}
-	int cnt = regs.s ? stackframecntsuper : stackframecnt;
+	cnt = regs.s ? stackframecntsuper : stackframecnt;
 	if (cnt >= MAX_STACKFRAMES) {
 		write_log(_T("Stack frame %c max limit reached!\n"), regs.s ? 'S' : 'U');
 		stackframecntsuper = 0;
 		stackframecnt = 0;
 		return;
 	}
-	struct debugstackframe *sf = regs.s ? &stackframessuper[cnt] : &stackframes[cnt];
+	sf = regs.s ? &stackframessuper[cnt] : &stackframes[cnt];
 	sf->current_pc = regs.instruction_pc;
 	sf->next_pc = newpc;
 	sf->stack = m68k_areg(regs, 7);
@@ -569,13 +582,16 @@ bool debugmem_break_stack_push(void)
 
 void debugmem_flushcache(uaecptr addr, int size)
 {
+	int i;
 	if (!debugmem_initialized)
 		return;
 	if (size < 0) {
-		for (int i = 0; i < totalmemdata; i++) {
+		int i;
+		for (i = 0; i < totalmemdata; i++) {
 			struct debugmemdata* dm = dmd[i];
 			if (dm->flags & DEBUGMEM_WRITE_NOCACHEFLUSH) {
-				for (int j = 0; j < PAGE_SIZE; j++) {
+				int j;
+				for (j = 0; j < PAGE_SIZE; j++) {
 					dm->state[j] &= ~DEBUGMEM_WRITE_NOCACHEFLUSH;
 				}
 				dm->flags &= ~DEBUGMEM_WRITE_NOCACHEFLUSH;
@@ -585,12 +601,14 @@ void debugmem_flushcache(uaecptr addr, int size)
 	}
 	if (addr + size < debugmem_bank.start || addr >= debugmem_bank.start + debugmem_bank.allocated_size)
 		return;
-	for (int i = 0; i < (PAGE_SIZE + size - 1) / PAGE_SIZE; i++) {
+	for (i = 0; i < (PAGE_SIZE + size - 1) / PAGE_SIZE; i++) {
+		struct debugmemdata* dm;
+		int j;
 		uaecptr a = (addr & ~PAGE_SIZE) + i * PAGE_SIZE;
 		if (a < debugmem_bank.start || a >= debugmem_bank.start + debugmem_bank.allocated_size)
 			continue;
-		struct debugmemdata* dm = dmd[(a - debugmem_bank.start) / PAGE_SIZE];
-		for (int j = 0; j < PAGE_SIZE; j++) {
+		dm = dmd[(a - debugmem_bank.start) / PAGE_SIZE];
+		for (j = 0; j < PAGE_SIZE; j++) {
 			uaecptr aa = a + j;
 			if (aa < addr || aa >= addr + size)
 				continue;
@@ -601,6 +619,7 @@ void debugmem_flushcache(uaecptr addr, int size)
 
 static bool debugmem_func(uaecptr addr, int rwi, int size, uae_u32 val)
 {
+	int i;
 	bool ret = true;
 	uaecptr oaddr = addr;
 	struct debugmemdata *dmfirst = NULL;
@@ -618,7 +637,7 @@ static bool debugmem_func(uaecptr addr, int rwi, int size, uae_u32 val)
 		addr -= debugmem_bank.start;
 	}
 
-	for (int i = 0; i < size; i++) {
+	for (i = 0; i < size; i++) {
 		int offset = addr & PAGE_SIZE_MASK;
 		int page = addr / PAGE_SIZE;
 		struct debugmemdata *dm = dmd[page];
@@ -740,11 +759,17 @@ static uae_u8 *REGPARAM2 debugmem_xlate(uaecptr addr)
 
 static int debugmem_free(uaecptr addr, uae_u32 size)
 {
+	int page;
+	struct debugmemdata * dm;
+	bool ok;
+	int end;
+	int allocid;
+	int i;
 	uaecptr oaddr = addr;
 	addr -= debugmem_bank.start;
-	int page = addr / PAGE_SIZE;
-	struct debugmemdata *dm = dmd[page];
-	bool ok = true;
+	page = addr / PAGE_SIZE;
+	dm = dmd[page];
+	ok = true;
 
 	if (!(dm->flags & DEBUGMEM_ALLOCATED)) {
 		console_out_f(_T("Invalid memory free (%08x %d) Start address points to unallocated memory\n"), oaddr, size);
@@ -755,8 +780,9 @@ static int debugmem_free(uaecptr addr, uae_u32 size)
 	} else {
 		struct debugmemallocs *dma = allocs[dm->id];
 		if (dma->start == addr && dma->size == size) {
+			int i;
 			// it was valid!
-			for (int i = 0; i < dma->pages; i++) {
+			for (i = 0; i < dma->pages; i++) {
 				struct debugmemdata *dm2 = dmd[page + i];
 				memset(dm2, 0, sizeof(struct debugmemdata));
 			}
@@ -769,15 +795,16 @@ static int debugmem_free(uaecptr addr, uae_u32 size)
 	}
 
 	// report free memory error
-	int end = (size + PAGE_SIZE - 1) & ~PAGE_SIZE_MASK;
-	int allocid = -1;
-	for (int i = 0; i < end; i++) {
+	end = (size + PAGE_SIZE - 1) & ~PAGE_SIZE_MASK;
+	allocid = -1;
+	for (i = 0; i < end; i++) {
+		struct debugmemdata * dm2;
 		if (page + i >= totalmemdata) {
 			console_out_f(_T("Free end address is out of range\n"));
 			ok = false;
 			break;
 		}
-		struct debugmemdata *dm2 = dmd[page + i];
+		dm2 = dmd[page + i];
 		if ((dm2->flags & DEBUGMEM_ALLOCATED) && allocid != page + i) {
 			struct debugmemallocs *dma = allocs[dm2->id];
 			console_out_f(_T("Conflicts with existing allocation ID=%d (%08x - %08x %d)\n"),
@@ -889,6 +916,7 @@ static void setchipbank(bool activate)
 
 static struct debugmemallocs *getallocblock(void)
 {
+	struct debugmemallocs * dm;
 	int round = 0;
 	alloccnt++;
 	if (alloccnt >= MAX_DEBUGMEMALLOCS) {
@@ -905,13 +933,19 @@ static struct debugmemallocs *getallocblock(void)
 			round++;
 		}
 	}
-	struct debugmemallocs *dm = allocs[alloccnt];
+	dm = allocs[alloccnt];
 	dm->id = alloccnt;
 	return dm;
 }
 
 static struct debugmemallocs *debugmem_allocate(uae_u32 size, uae_u32 flags, uae_u32 parentid)
 {
+	int offset;
+	bool gotit;
+	int totalsize;
+	int extrasize;
+	int j;
+	int startoffset;
 	struct debugmemallocs *dm = getallocblock();
 	if (!dm)
 		return NULL;
@@ -919,13 +953,14 @@ static struct debugmemallocs *debugmem_allocate(uae_u32 size, uae_u32 flags, uae
 		console_out_f(_T("debugmem allocation larger than free space! Alloc size %d (%08x), flags %08x\n"), size, size, flags);
 		return 0;
 	}
-	int offset = debugmemptr / PAGE_SIZE;
-	bool gotit = true;
-	int totalsize = 0;
-	int extrasize = 0;
+	offset = debugmemptr / PAGE_SIZE;
+	gotit = true;
+	totalsize = 0;
+	extrasize = 0;
 	for (extrasize = HUNK_GAP; extrasize >= PAGE_SIZE; extrasize /= 2) {
+		int i;
 		totalsize = (extrasize + size + PAGE_SIZE - 1) & ~PAGE_SIZE_MASK;
-		for (int i = 0; i < totalmemdata; i++) {
+		for (i = 0; i < totalmemdata; i++) {
 			struct debugmemdata *dm = dmd[offset];
 			if (offset + totalsize / PAGE_SIZE >= totalmemdata) {
 				offset = 0;
@@ -934,7 +969,8 @@ static struct debugmemallocs *debugmem_allocate(uae_u32 size, uae_u32 flags, uae
 			gotit = true;
 			// extra + size continous space available?
 			if (!(dm->flags & DEBUGMEM_ALLOCATED)) {
-				for (int j = 0; j < totalsize / PAGE_SIZE; j++) {
+				int j;
+				for (j = 0; j < totalsize / PAGE_SIZE; j++) {
 					struct debugmemdata *dm2 = dmd[offset + j];
 					if (dm->flags & DEBUGMEM_ALLOCATED) {
 						gotit = false;
@@ -957,24 +993,25 @@ static struct debugmemallocs *debugmem_allocate(uae_u32 size, uae_u32 flags, uae
 	dm->parentid = parentid;
 	dm->start_page = offset;
 	dm->pages = totalsize / PAGE_SIZE;
-	for (int j = 0; j < dm->pages; j++) {
+	for (j = 0; j < dm->pages; j++) {
 		struct debugmemdata *dm2 = dmd[offset + j];
 		dm2->flags |= DEBUGMEM_ALLOCATED;
 		dm2->id = dm->id;
 	}
 	memset(debugmem_bank.baseaddr + offset * PAGE_SIZE, 0xa3, totalsize);
-	int startoffset = extrasize / PAGE_SIZE;
+	startoffset = extrasize / PAGE_SIZE;
 	dm->start = (offset + startoffset) * PAGE_SIZE;
 	dm->size = size;
 	dm->pc = M68K_GETPC;
-	for (int j = 0; j < (size + PAGE_SIZE - 1) / PAGE_SIZE; j++) {
+	for (j = 0; j < (size + PAGE_SIZE - 1) / PAGE_SIZE; j++) {
+		uae_u8 filler;
 		struct debugmemdata *dm2 = dmd[offset + startoffset + j];
 		dm2->flags |= DEBUGMEM_INUSE | flags;
 		if (j == 0) {
 			dm2->flags |= DEBUGMEM_STARTBLOCK;
 		}
 		memset(dm2->state, ((flags & DEBUGMEM_INITIALIZED) ? DEBUGMEM_INITIALIZED : 0) | DEBUGMEM_INUSE, PAGE_SIZE);
-		uae_u8 filler = (flags & DEBUGMEM_INITIALIZED) ? 0x00 : 0x99;
+		filler = (flags & DEBUGMEM_INITIALIZED) ? 0x00 : 0x99;
 		memset(debugmem_bank.baseaddr + (offset + startoffset + j) * PAGE_SIZE, filler, PAGE_SIZE);
 		if (j == (size + PAGE_SIZE - 1) / PAGE_SIZE - 1) {
 			if (size & PAGE_SIZE_MASK) {
@@ -994,7 +1031,8 @@ static struct debugmemallocs *debugmem_allocate(uae_u32 size, uae_u32 flags, uae
 
 static int debugmem_unreserve(uaecptr addr, uae_u32 size, bool noerror)
 {
-	for (int i = 0; i < MAX_DEBUGMEMALLOCS; i++) {
+	int i;
+	for (i = 0; i < MAX_DEBUGMEMALLOCS; i++) {
 		struct debugmemallocs *alloc = allocs[i];
 		if (alloc->type != DEBUGALLOC_SEG)
 			continue;
@@ -1019,23 +1057,26 @@ static int debugmem_unreserve(uaecptr addr, uae_u32 size, bool noerror)
 
 uaecptr debugmem_allocmem(int mode, uae_u32 size, uae_u32 flags, uae_u32 caller)
 {
+	uae_u16 aflags;
+	struct debugmemallocs * dm;
+	uaecptr mem;
 	if (!debugmem_bank.baseaddr || !size)
 		return 0;
 	if (flags & 2) // MEMF_CHIP?
 		return 0;
-	uae_u16 aflags = DEBUGMEM_READ | DEBUGMEM_WRITE;
+	aflags = DEBUGMEM_READ | DEBUGMEM_WRITE;
 	if (flags & 0x10000) // MEMF_CLEAR
 		aflags |= DEBUGMEM_INITIALIZED;
 	if (mode)
 		size += 4;
-	struct debugmemallocs *dm = debugmem_allocate(size, aflags, 0);
+	dm = debugmem_allocate(size, aflags, 0);
 	if (!dm)
 		return 0;
 	dm->type = mode ? DEBUGALLOC_ALLOCVEC : DEBUGALLOC_ALLOCMEM;
 	dm->pc = caller;
 	dm->data = flags;
 	debugreportalloc(dm);
-	uaecptr mem = dm->start + debugmem_bank.start;
+	mem = dm->start + debugmem_bank.start;
 	if (mode) {
 		put_long(mem, size);
 		mem += 4;
@@ -1045,13 +1086,14 @@ uaecptr debugmem_allocmem(int mode, uae_u32 size, uae_u32 flags, uae_u32 caller)
 
 uae_u32 debugmem_freemem(int mode, uaecptr addr, uae_u32 size, uae_u32 caller)
 {
+	int id;
 	if (!debugmem_bank.baseaddr || addr < debugmem_bank.start || addr >= debugmem_bank.start + debugmem_bank.allocated_size)
 		return 0;
 	if (mode > 0) {
 		addr -= 4;
 		size = get_long(addr);
 	}
-	int id = debugmem_free(addr, size);
+	id = debugmem_free(addr, size);
 	if (id) {
 		console_out_f(_T("ID=%d: %s(%08x,%d) %08x - %08x PC=%08x\n"), id, mode ? _T("FreeVec") : _T("AllocMem"), addr, size, addr, addr + size - 1, caller);
 	}
@@ -1094,9 +1136,10 @@ static struct debugmemallocs *debugmem_reserve(uaecptr addr, uae_u32 size, uae_u
 
 uae_u32 debugmem_exit(void)
 {
+	int i;
 	bool err = false;
 	console_out_f(_T("Debugged program exited\n"));
-	for (int i = 0; i < MAX_DEBUGMEMALLOCS; i++) {
+	for (i = 0; i < MAX_DEBUGMEMALLOCS; i++) {
 		struct debugmemallocs *dma = allocs[i];
 		if (dma->type == DEBUGALLOC_ALLOCMEM || dma->type == DEBUGALLOC_ALLOCVEC) {
 			err = true;
@@ -1128,31 +1171,37 @@ static uae_u16 gw(uae_u8 *p)
 
 static bool loadcodefiledata(struct debugcodefile *cf)
 {
+	struct zfile * zf;
+	int length;
+	uae_u8 * data2;
+	uae_u8 * data;
+	int i;
+	int linecnt;
+	int lasti;
 	TCHAR fpath[MAX_DPATH];
 	fpath[0] = 0;
 	if (cf->path)
 		_tcscat(fpath, cf->path);
 	_tcscat(fpath, cf->name);
-	struct zfile *zf = zfile_fopen_2x(fpath, _T("rb"));
+	zf = zfile_fopen_2x(fpath, _T("rb"));
 	if (!zf) {
 		console_out_f(_T("Couldn't open source file '%s'\n"), fpath);
-		return NULL;
+		return false;
 	}
-	int length;
-	uae_u8 *data2 = zfile_getdata(zf, 0, -1, &length);
+	data2 = zfile_getdata(zf, 0, -1, &length);
 	if (!data2) {
 		zfile_fclose(zf);
 		console_out_f(_T("Couldn't read source file '%s'\n"), fpath);
-		return NULL;
+		return false;
 	}
-	uae_u8 *data = xcalloc(uae_u8, length + 1);
+	data = xcalloc(uae_u8, length + 1);
 	memcpy(data, data2, length);
 	xfree(data2);
 	zfile_fclose(zf);
 	cf->data = data;
 	cf->length = length;
 	cf->lines = 1;
-	for (int i = 0; i < length; i++) {
+	for (i = 0; i < length; i++) {
 		if (data[i] == 0) {
 			data[i] = 32;
 		}
@@ -1162,17 +1211,18 @@ static bool loadcodefiledata(struct debugcodefile *cf)
 		}
 	}
 	cf->lineptr = xcalloc(uae_u8*, 1 + cf->lines + 2);
-	int linecnt = 1;
-	int lasti = 0;
-	for (int i = 0; i <= length; i++) {
+	linecnt = 1;
+	lasti = 0;
+	for (i = 0; i <= length; i++) {
 		if (data[i] == 0) {
+			int len;
 			uae_u8 *s = &data[lasti];
 			lasti = i + 1;
 			if (strlen((char*)s) >= MAX_SOURCELINELEN) {
 				s[MAX_SOURCELINELEN] = 0;
 			}
 			cf->lineptr[linecnt++] = s;
-			int len = uaestrlen((char*)s);
+			len = uaestrlen((char*)s);
 			if (len > 0 && s[len - 1] == 13)
 				s[len - 1] = 0;
 		}
@@ -1195,7 +1245,8 @@ static struct debugcodefile *preallocatecodefile(const TCHAR *path, const TCHAR 
 
 static void freecodefile(struct debugcodefile *cf)
 {
-	for (int i = 0; i < codefilecnt; i++) {
+	int i;
+	for (i = 0; i < codefilecnt; i++) {
 		struct debugcodefile *c = codefiles[i];
 		if (c == cf) {
 			xfree(codefiles[i]);
@@ -1218,7 +1269,8 @@ static struct debugcodefile *loadcodefile(const TCHAR *path, const TCHAR *name)
 
 static uae_u32 maptohunks(uae_u32 offset)
 {
-	for (int i = 1; i <= executable_last_segment; i++) {
+	int i;
+	for (i = 1; i <= executable_last_segment; i++) {
 		struct debugmemallocs *alloc = allocs[i];
 		if (offset >= alloc->relative_start && offset < alloc->relative_start + alloc->size) {
 			uae_u32 address = offset - alloc->relative_start + alloc->start + debugmem_bank.start + 8;
@@ -1230,7 +1282,8 @@ static uae_u32 maptohunks(uae_u32 offset)
 
 static struct debugsymbol *issymbol(const TCHAR *name)
 {
-	for (int i = 0; i < symbolcnt; i++) {
+	int i;
+	for (i = 0; i < symbolcnt; i++) {
 		struct debugsymbol *ds = symbols[i];
 		if (ds->allocid && !_tcsicmp(ds->name, name)) {
 			return ds;
@@ -1280,9 +1333,12 @@ static void parse_stabs(void)
 		if (!s)
 			break;
 		if (s->type == N_SO && s->string && s->string[_tcslen(s->string) - 1] != '/') {
+			int pmi;
+			int linecnt;
+			struct debugsymbol * last_func;
 			int pm = pmindex;
 			struct debugcodefile *cf = NULL;
-			for (int pmi = 0; pmi <= 5; pmi++, pm++) {
+			for (pmi = 0; pmi <= 5; pmi++, pm++) {
 				TCHAR path2[MAX_DPATH];
 				TCHAR *f = NULL, *p = NULL;
 				if (pm > 5)
@@ -1335,8 +1391,8 @@ static void parse_stabs(void)
 				continue;
 			}
 			pmindex = pm;
-			int linecnt = 0;
-			struct debugsymbol *last_func = NULL;
+			linecnt = 0;
+			last_func = NULL;
 			while (idx < stabscount) {
 				TCHAR stripname[256];
 				int type = 0;
@@ -1345,8 +1401,9 @@ static void parse_stabs(void)
 				if (s->type == N_SO)
 					break;
 				if (s->string) {
+					const TCHAR * ss;
 					_tcscpy(stripname, s->string);
-					const TCHAR *ss = _tcschr(s->string, ':');
+					ss = _tcschr(s->string, ':');
 					if (ss) {
 						mode = ss[1];
 						type = _tstol(ss + 2);
@@ -1396,7 +1453,8 @@ static void parse_stabs(void)
 					break;
 					case N_GSYM:
 					{
-						for (int i = 0; i < symbolcnt; i++) {
+						int i;
+						for (i = 0; i < symbolcnt; i++) {
 							struct debugsymbol *ds = symbols[i];
 							if (ds->name[0] == '_' && !_tcscmp(ds->name + 1, stripname)) {
 								ds->flags = SYMBOL_GLOBAL;
@@ -1484,17 +1542,20 @@ static uae_u32 getrombase(int size)
 
 static void addsimplesymbol(const TCHAR *name, uae_u32 v, int type, int flags, int segmentid, int segmentnum)
 {
+	int i;
+	int rnd;
 	if (!symbols)
 		return;
 
-	for (int i = 0; i < symbolcnt; i++) {
+	for (i = 0; i < symbolcnt; i++) {
 		struct debugsymbol *ds = symbols[i];
 		if (ds->segment == segmentid && ds->name && !_tcscmp(name, ds->name))
 			return;
 	}
 	//write_log(_T("ELF Section %d, symbol %s=%08x\n"), segmentnum, name, v);
-	int rnd = 0;
+	rnd = 0;
 	for (;;) {
+		struct debugsymbol * ds;
 		if (symbolindex >= MAX_DEBUGSYMS) {
 			symbolindex = 0;
 			rnd++;
@@ -1503,7 +1564,7 @@ static void addsimplesymbol(const TCHAR *name, uae_u32 v, int type, int flags, i
 		} else {
 			symbolindex++;
 		}
-		struct debugsymbol *ds = symbols[symbolindex];
+		ds = symbols[symbolindex];
 		if (ds->allocid == 0) {
 			ds->allocid = -1;
 			ds->name = my_strdup(name);
@@ -1520,6 +1581,16 @@ static void addsimplesymbol(const TCHAR *name, uae_u32 v, int type, int flags, i
 
 static uae_u8 *loadhunkfile(uae_u8 *file, int filelen, uae_u32 seglist, int segmentid, int *outsizep, bool rommode)
 {
+	int hunktotal;
+	int first;
+	int last;
+	uae_u32 * hunklens;
+	uae_u32 * hunkoffsets;
+	int totalsize;
+	int i;
+	uae_u32 relocate_base;
+	int outsize;
+	int hunkindex;
 	uae_u8 *p = file;
 	uae_u8 *out = NULL;
 
@@ -1531,9 +1602,9 @@ static uae_u8 *loadhunkfile(uae_u8 *file, int filelen, uae_u32 seglist, int segm
 		return 0;
 	}
 	p += 4;
-	int hunktotal = gl(p);
-	int first = gl(p + 4);
-	int last = gl(p + 8);
+	hunktotal = gl(p);
+	first = gl(p + 4);
+	last = gl(p + 8);
 	if (hunktotal > 1000 || (last - first + 1) > 1000) {
 		return 0;
 	}
@@ -1541,10 +1612,10 @@ static uae_u8 *loadhunkfile(uae_u8 *file, int filelen, uae_u32 seglist, int segm
 		return 0;
 	}
 	p += 12;
-	uae_u32 *hunklens = xcalloc(uae_u32, last + 1);
-	uae_u32 *hunkoffsets = xcalloc(uae_u32, last + 1);
-	int totalsize = 0;
-	for (int i = first; i <= last; i++) {
+	hunklens = xcalloc(uae_u32, last + 1);
+	hunkoffsets = xcalloc(uae_u32, last + 1);
+	totalsize = 0;
+	for (i = first; i <= last; i++) {
 		uae_u32 len = gl(p);
 		p += 4;
 		if ((len & 0xc0000000) == 0xc0000000) {
@@ -1555,9 +1626,9 @@ static uae_u8 *loadhunkfile(uae_u8 *file, int filelen, uae_u32 seglist, int segm
 		hunkoffsets[i] = totalsize;
 		totalsize += hunklens[i];
 	}
-	uae_u32 relocate_base = getrombase(totalsize);
-	int outsize = 0;
-	int hunkindex = -1;
+	relocate_base = getrombase(totalsize);
+	outsize = 0;
+	hunkindex = -1;
 	for (;;) {
 		uae_u32 hunktype = gl(p) & ~0xc0000000;
 		if (hunktype == 0x3e9 || hunktype == 0x3ea || hunktype == 0x3eb) {
@@ -1582,11 +1653,15 @@ static uae_u8 *loadhunkfile(uae_u8 *file, int filelen, uae_u32 seglist, int segm
 				uae_u8 *po = p;
 				p += 4;
 				for (;;) {
+					int relochunk;
+					uaecptr hunkptr;
+					uae_u8 * currenthunk;
+					int j;
 					int reloccnt = shortrel ? gw(p) : gl(p);
 					p += reladd;
 					if (!reloccnt)
 						break;
-					int relochunk = shortrel ? gw(p) : gl(p);
+					relochunk = shortrel ? gw(p) : gl(p);
 					p += reladd;
 					if (relochunk > last) {
 						xfree(hunkoffsets);
@@ -1594,9 +1669,9 @@ static uae_u8 *loadhunkfile(uae_u8 *file, int filelen, uae_u32 seglist, int segm
 						xfree(out);
 						return 0;
 					}
-					uaecptr hunkptr = hunkoffsets[relochunk] + relocate_base;
-					uae_u8 *currenthunk = out + hunkoffsets[relochunk];
-					for (int j = 0; j < reloccnt; j++) {
+					hunkptr = hunkoffsets[relochunk] + relocate_base;
+					currenthunk = out + hunkoffsets[relochunk];
+					for (j = 0; j < reloccnt; j++) {
 						uae_u32 reloc = shortrel ? gw(p) : gl(p);
 						p += reladd;
 						if (reloc >= outsize - 3) {
@@ -1646,6 +1721,12 @@ static uae_u8 *loadhunkfile(uae_u8 *file, int filelen, uae_u32 seglist, int segm
 
 static uaecptr loaddebugmemhunkfile(uae_u8 *p, uae_u32 len, uae_u32 *parentidp)
 {
+	int hunktotal;
+	int first;
+	int last;
+	uae_u32 relative_start;
+	int i;
+	int hunkcnt;
 	uae_u8 *lastptr = NULL;
 	struct debugmemallocs *hunks[1000];
 	uae_u32 lens[1000], memtypes[1000];
@@ -1657,9 +1738,9 @@ static uaecptr loaddebugmemhunkfile(uae_u8 *p, uae_u32 len, uae_u32 *parentidp)
 		return 0;
 	}
 	p += 4;
-	int hunktotal = gl(p);
-	int first = gl(p + 4);
-	int last = gl(p + 8);
+	hunktotal = gl(p);
+	first = gl(p + 4);
+	last = gl(p + 8);
 	if (hunktotal > 1000 || (last - first + 1) > 1000) {
 		console_out_f(_T("Too many hunks.\n"));
 		return 0;
@@ -1669,8 +1750,9 @@ static uaecptr loaddebugmemhunkfile(uae_u8 *p, uae_u32 len, uae_u32 *parentidp)
 		return 0;
 	}
 	p += 12;
-	uae_u32 relative_start = 0;
-	for (int i = first; i <= last; i++) {
+	relative_start = 0;
+	for (i = first; i <= last; i++) {
+		struct debugmemallocs * dma;
 		uae_u32 len = gl(p);
 		p += 4;
 		memtypes[i] = 0;
@@ -1684,7 +1766,7 @@ static uaecptr loaddebugmemhunkfile(uae_u8 *p, uae_u32 len, uae_u32 *parentidp)
 		}
 		len &= ~(0x80000000 | 0x40000000);
 		lens[i] = len * 4;
-		struct debugmemallocs *dma = debugmem_allocate(lens[i] + 8, DEBUGMEM_READ | DEBUGMEM_WRITE | DEBUGMEM_FETCH | DEBUGMEM_INITIALIZED, parentid);
+		dma = debugmem_allocate(lens[i] + 8, DEBUGMEM_READ | DEBUGMEM_WRITE | DEBUGMEM_FETCH | DEBUGMEM_INITIALIZED, parentid);
 		hunks[i] = dma;
 		dma->type = DEBUGALLOC_HUNK;
 		dma->relative_start = relative_start;
@@ -1698,32 +1780,39 @@ static uaecptr loaddebugmemhunkfile(uae_u8 *p, uae_u32 len, uae_u32 *parentidp)
 		}
 		linemapsize += lens[i];
 	}
-	int hunkcnt = first - 1;
+	hunkcnt = first - 1;
 	for (;;) {
 		uae_u32 hunktype = gl(p) & ~0xc0000000;
 
 		if (hunktype == 0x3e9 || hunktype == 0x3ea || hunktype == 0x3eb) {
+			struct debugmemallocs * memdm;
+			uae_u32 len;
+			uae_u32 hunklen;
+			uae_u32 memflags;
+			uae_u8 * mem;
+			uaecptr memaddr;
 			hunkcnt++;
 			if (hunkcnt > last) {
 				console_out_f(_T("Header hunk count does not match hunk count\n"));
 				return 0;
 			}
 
-			struct debugmemallocs *memdm = hunks[hunkcnt];
-			uae_u32 len = lens[hunkcnt];
-			uae_u32 hunklen = gl(p + 4);
+			memdm = hunks[hunkcnt];
+			len = lens[hunkcnt];
+			hunklen = gl(p + 4);
 			hunklen *= 4;
 			p += 8;
-			uae_u32 memflags = 0;
+			memflags = 0;
 			memdm->idtype = hunktype | memtypes[hunkcnt];
 			if (hunklen > len) {
 				console_out_f(_T("Hunk #%d contents (%d) larger than allocation (%d)!\n"), hunkcnt, hunklen, len);
 				return 0;
 			}
-			uae_u8 *mem = memdm->start + debugmem_bank.baseaddr;
-			uaecptr memaddr = memdm->start + debugmem_bank.start;
+			mem = memdm->start + debugmem_bank.baseaddr;
+			memaddr = memdm->start + debugmem_bank.start;
 			if (hunktype != 0x3eb) {
-				for (int c = 0; c < hunklen; c++) {
+				int c;
+				for (c = 0; c < hunklen; c++) {
 					put_byte_host(mem + 8 + c, *p++);
 				}
 			}
@@ -1742,19 +1831,23 @@ static uaecptr loaddebugmemhunkfile(uae_u8 *p, uae_u32 len, uae_u32 *parentidp)
 				}
 				p += 4;
 				for (;;) {
+					int relochunk;
+					uaecptr hunkptr;
+					uae_u8 * currenthunk;
+					int j;
 					int reloccnt = shortrel ? gw(p) : gl(p);
 					p += reladd;
 					if (!reloccnt)
 						break;
-					int relochunk = shortrel ? gw(p) : gl(p);
+					relochunk = shortrel ? gw(p) : gl(p);
 					p += reladd;
 					if (relochunk > last) {
 						console_out_f(_T("HUNK_RELOC hunk #%d is larger than last hunk (%d)!\n"), relochunk, last);
 						return 0;
 					}
-					uaecptr hunkptr = hunks[relochunk]->start + debugmem_bank.start + 8;
-					uae_u8 *currenthunk = mem + 8;
-					for (int j = 0; j < reloccnt; j++) {
+					hunkptr = hunks[relochunk]->start + debugmem_bank.start + 8;
+					currenthunk = mem + 8;
+					for (j = 0; j < reloccnt; j++) {
 						uae_u32 reloc = shortrel ? gw(p) : gl(p);
 						p += reladd;
 						if (reloc >= len - 3) {
@@ -1797,25 +1890,31 @@ static uaecptr loaddebugmemhunkfile(uae_u8 *p, uae_u32 len, uae_u32 *parentidp)
 			console_out_f(_T("Hunk %d: %d symbols loaded.\n"), hunkcnt, symcnt);
 
 		} else if (hunktype == 0x3f1) { // hunk debug
+			int size;
+			uae_u8 * p2;
 
 			p += 4;
-			int size = gl(p);
+			size = gl(p);
 			p += 4;
-			uae_u8 *p2 = p;
+			p2 = p;
 			if (size >= 12) {
 				if (gl(p) == 0x0000010b) { // "ZMAGIC"
+					int symtab_size;
+					int stringtab_size;
+					uae_u8 * stringtab;
+					int i;
 					p += 4;
-					int symtab_size = gl(p);
+					symtab_size = gl(p);
 					p += 4;
-					int stringtab_size = gl(p);
+					stringtab_size = gl(p);
 					p += 4;
-					uae_u8 *stringtab = p + symtab_size;
+					stringtab = p + symtab_size;
 					if (!stabs) {
 						stabs = xcalloc(struct stab, symtab_size / 12);
 					} else {
 						stabs = xrealloc(struct stab, stabs, stabscount + symtab_size / 12);
 					}
-					for (int i = 0; i <= symtab_size - 12; i += 12, p += 12) {
+					for (i = 0; i <= symtab_size - 12; i += 12, p += 12) {
 						struct stab *s = &stabs[stabscount++];
 						TCHAR *str = NULL;
 						int string_idx = gl(p);
@@ -1862,6 +1961,8 @@ static uae_u8 *loadelffile(uae_u8 *file, int filelen, uae_u8 *dbgfile, int debug
 
 uaecptr debugmem_reloc(uaecptr exeaddress, uae_u32 len, uaecptr dbgaddress, uae_u32 dbglen, uaecptr task, uae_u32 *stack)
 {
+	int i;
+	uaecptr execbase;
 	uae_u8 *p = get_real_address(exeaddress);
 	uae_u32 start;
 	uae_u32 parentid;
@@ -1900,18 +2001,18 @@ uaecptr debugmem_reloc(uaecptr exeaddress, uae_u32 len, uaecptr dbgaddress, uae_
 	executable_last_segment = alloccnt;
 
 	linemap = xcalloc(struct linemapping, linemapsize + 1);
-	for (int i = 0; i < linemapsize + 1; i++) {
+	for (i = 0; i < linemapsize + 1; i++) {
 		linemap[i].line = -1;
 	}
 
 	parse_stabs();
-	for (int i = 1; i <= executable_last_segment; i++) {
+	for (i = 1; i <= executable_last_segment; i++) {
 		debugreportalloc(allocs[i]);
 	}
 
 	console_out_f(_T("Executable load complete.\n"));
 
-	uaecptr execbase = get_long_debug(4);
+	execbase = get_long_debug(4);
 	exec_thistask = get_real_address(execbase + 276);
 
 	setchipbank(true);
@@ -1935,6 +2036,8 @@ static uae_char *gethunktext(uae_u8 *p, uae_char *namebuf, int len)
 static void scan_library_list(uaecptr v, int *cntp)
 {
 	while ((v = get_long_debug(v))) {
+		struct libname * found;
+		int i;
 		uae_u32 v2;
 		uae_u8 *p;
 		addrbank *b = &get_mem_bank(v);
@@ -1947,8 +2050,8 @@ static void scan_library_list(uaecptr v, int *cntp)
 		if (!(b->flags & ABFLAG_ROM) && !(b->flags & ABFLAG_ROMIN) && !(b->flags & ABFLAG_RAM))
 			return;
 		p = b->xlateaddr(v2);
-		struct libname *found = NULL;
-		for (int i = 0; i < libnamecnt; i++) {
+		found = NULL;
+		for (i = 0; i < libnamecnt; i++) {
 			struct libname *name = &libnames[i];
 			char n[256];
 			sprintf(n, "%s.library", name->aname);
@@ -1979,13 +2082,16 @@ static void scan_library_list(uaecptr v, int *cntp)
 
 void debugger_scan_libraries(void)
 {
+	uaecptr v;
+	addrbank * b;
+	int cnt;
 	if (!libnamecnt)
 		return;
-	uaecptr v = get_long_debug(4);
-	addrbank *b = &get_mem_bank(v);
+	v = get_long_debug(4);
+	b = &get_mem_bank(v);
 	if (!b || !b->check(v, 400) || !(b->flags & ABFLAG_RAM))
 		return;
-	int cnt = 0;
+	cnt = 0;
 	scan_library_list(v + 378, &cnt);
 	scan_library_list(v + 350, &cnt);
 	scan_library_list(v + 336, &cnt);
@@ -1995,10 +2101,12 @@ void debugger_scan_libraries(void)
 
 bool debugger_get_library_symbol(uaecptr base, uaecptr addr, TCHAR *out)
 {
-	for (int i = 0; i < libnamecnt; i++) {
+	int i;
+	for (i = 0; i < libnamecnt; i++) {
 		struct libname *name = &libnames[i];
 		if (name->base == base) {
-			for (int j = 0; j < libsymbolcnt; j++) {
+			int j;
+			for (j = 0; j < libsymbolcnt; j++) {
 				struct libsymbol *lvo = &libsymbols[j];
 				if (lvo->lib == name) {
 					if (lvo->value == addr) {
@@ -2022,6 +2130,7 @@ static void addlvo(struct libname *lvo, const char *name, uae_u32 bias)
 
 static bool debugger_load_fd(void)
 {
+	int i;
 	TCHAR plugin_path[MAX_DPATH];
 	TCHAR path[MAX_DPATH];
 	uae_char line[256];
@@ -2039,6 +2148,10 @@ static bool debugger_load_fd(void)
 		return false;
 
 	for (;;) {
+		int cnt;
+		int bias;
+		struct libname * lvo;
+		uae_u32 lvoid;
 		TCHAR filename[MAX_DPATH];
 		if (!my_readdir(h, filename))
 			break;
@@ -2051,21 +2164,23 @@ static bool debugger_load_fd(void)
 		if (!zf)
 			continue;
 
-		int cnt = 0;
-		int bias = -1;
-		struct libname *lvo = NULL;
-		uae_u32 lvoid = 1;
+		cnt = 0;
+		bias = -1;
+		lvo = NULL;
+		lvoid = 1;
 		if (libnamecnt > 0) {
 			lvoid = libnames[libnamecnt - 1].id;
 		}
 		for (;;) {
+			char * p3;
 			if (!zfile_fgetsa(line, sizeof(line), zf))
 				break;
 			for (;;) {
+				char c;
 				int len = uaestrlen(line);
 				if (len < 1)
 					break;
-				char c = line[len - 1];
+				c = line[len - 1];
 				if (c != 10 && c != 13 && c != 32 && c != '\t')
 					break;
 				line[len - 1] = 0;
@@ -2078,10 +2193,11 @@ static bool debugger_load_fd(void)
 					p2++;
 				}
 				if (!strcmp(p1, "base")) {
+					TCHAR * name2;
 					if (p2[0] == '_')
 						p2++;
 					lvo = &libnames[libnamecnt++];
-					TCHAR *name2 = au(p2);
+					name2 = au(p2);
 					lvo->name = name2;
 					lvo->aname = strdup(p2);
 					lvo->id = lvoid++;
@@ -2095,7 +2211,7 @@ static bool debugger_load_fd(void)
 				continue;
 			if (bias < 0 || !lvo)
 				continue;
-			char *p3 = strchr(line, '(');
+			p3 = strchr(line, '(');
 			if (p3)
 				*p3 = 0;
 			addlvo(lvo, line, bias);
@@ -2109,10 +2225,11 @@ static bool debugger_load_fd(void)
 	my_closedir(h);
 
 
-	for (int i = 0; i < libnamecnt; i++) {
+	for (i = 0; i < libnamecnt; i++) {
+		int j;
 		struct libname *libname = &libnames[i];
 		bool open = false, close = false, expunge = false, reserved = false;
-		for (int j = 0; j < libsymbolcnt; j++) {
+		for (j = 0; j < libsymbolcnt; j++) {
 			struct libsymbol *lvo = &libsymbols[j];
 			if (lvo->lib == libname) {
 				if (lvo->value == -6 * 1)
@@ -2141,6 +2258,9 @@ static bool debugger_load_fd(void)
 
 static bool debugger_load_library(const TCHAR *name)
 {
+	uae_u8 * file;
+	uae_u32 len;
+	uae_u8 * p;
 	TCHAR plugin_path[MAX_DPATH];
 	uae_char namebuf[256];
 	bool ret = false;
@@ -2164,11 +2284,10 @@ static bool debugger_load_library(const TCHAR *name)
 			return false;
 		}
 	}
-	uae_u8 *file = zfile_getdata(zf, 0, -1, &filelen);
+	file = zfile_getdata(zf, 0, -1, &filelen);
 	zfile_fclose(zf);
 
-	uae_u32 len;
-	uae_u8 *p = file;
+	p = file;
 	if (gl(p) != 0x03e7) {
 		console_out_f(_T("'%s' is not a library\n"), name);
 		goto end;
@@ -2180,6 +2299,7 @@ static bool debugger_load_library(const TCHAR *name)
 	}
 
 	for (;;) {
+		uae_u32 hunk;
 		if (p == file + filelen) {
 			ret = true;
 			goto end;
@@ -2187,20 +2307,22 @@ static bool debugger_load_library(const TCHAR *name)
 		if (p == file + filelen) {
 			goto end;
 		}
-		uae_u32 hunk = gl(p);
+		hunk = gl(p);
 		p += 4;
 		switch (hunk)
 		{
 			case 0x3e7: // HUNK_UNIT
 			{
+				uae_char * name;
 				lvo = NULL;
 				len = gl(p) * 4;
 				p += 4;
-				uae_char *name = gethunktext(p, namebuf, len);
+				name = gethunktext(p, namebuf, len);
 				if (strlen(name) > 4 && !strcmp(&name[strlen(name) - 4], "_LVO")) {
+					TCHAR * name2;
 					name[strlen(name) - 4] = 0;
 					lvo = &libnames[libnamecnt++];
-					TCHAR *name2 = au(name);
+					name2 = au(name);
 					lvo->name = name2;
 					lvo->aname = strdup(name);
 					lvo->id = lvoid++;
@@ -2210,9 +2332,10 @@ static bool debugger_load_library(const TCHAR *name)
 			break;
 			case 0x3e8: // HUNK_NAME
 			{
+				uae_char * name;
 				len = gl(p) * 4;
 				p += 4;
-				uae_char *name = gethunktext(p, namebuf, len);
+				name = gethunktext(p, namebuf, len);
 				p += len;
 			}
 			break;
@@ -2233,17 +2356,19 @@ static bool debugger_load_library(const TCHAR *name)
 			case 0x3ef: // HUNK_EXT
 			{
 				for (;;) {
+					uae_u8 type;
 					len = gl(p);
 					p += 4;
 					if (!len)
 						break;
-					uae_u8 type = len >> 24;
+					type = len >> 24;
 					len &= 0xffffff;
 					len *= 4;
 					if (type == 2) {
+						uae_u32 value;
 						uae_u8 *p2 = p;
 						p += len;
-						uae_u32 value = gl(p);
+						value = gl(p);
 						p += 4;
 						if (lvo) {
 							uae_char *name = gethunktext(p2, namebuf, len);
@@ -2480,6 +2605,28 @@ struct loadelfsection
 
 static uae_u8 *loadelffile(uae_u8 *file, int filelen, uae_u8 *dbgfile, int debugfilelen, uae_u32 seglist, int segmentid, int *outsizep, uae_u32 *startp, uae_u32 *parentidp, int mode)
 {
+	uae_u32 shnum;
+	uae_u8 * strtab, *strtabsym;
+	struct sheader * symtab_shndx, *linesheader;
+	struct debuglineheader lineheader;
+	struct symbol * symtab;
+	uae_u8 * debuginfo;
+	uae_u8 * debugstr;
+	uae_u8 * debugabbrev;
+	int debuginfo_size;
+	int debugstr_size;
+	int debugabbrev_size;
+	int symtab_num;
+	bool debuglink;
+	int i;
+	struct sheader * shp_first;
+	int section;
+	uae_u32 seg;
+	uae_u32 nextseg;
+	uae_u32 parentid;
+	int startseg;
+	struct loadelfsection * lelfs;
+	int aoutsize;
 	uae_u8 *outp = NULL;
 	uae_u8 *outptr = NULL;
 	int outsize;
@@ -2506,31 +2653,30 @@ static uae_u8 *loadelffile(uae_u8 *file, int filelen, uae_u8 *dbgfile, int debug
 	lswp(&eh->phoff);
 	lswp(&eh->shoff);
 
-	uae_u32 shnum = eh->shnum;
+	shnum = eh->shnum;
 	if (shnum == 0) {
+		struct sheader * sh;
 		if (eh->shoff == 0)
 			return NULL;
-		struct sheader *sh = (struct sheader*)p;
+		sh = (struct sheader*)p;
 		shnum = sh->size;
 		if (shnum == 0)
 			return NULL;
 		p += sizeof(struct sheader);
 	}
 
-	uae_u8 *strtab = NULL, *strtabsym = NULL;
-	struct sheader *symtab_shndx = NULL, *linesheader = NULL;
-	struct debuglineheader lineheader;
-	struct symbol *symtab = NULL;
-	uae_u8 *debuginfo = NULL;
-	uae_u8 *debugstr = NULL;
-	uae_u8 *debugabbrev = NULL;
-	int debuginfo_size;
-	int debugstr_size;
-	int debugabbrev_size;
-	int symtab_num = 0;
-	bool debuglink = false;
+	strtab = NULL;
+	strtabsym = NULL;
+	symtab_shndx = NULL;
+	linesheader = NULL;
+	symtab = NULL;
+	debuginfo = NULL;
+	debugstr = NULL;
+	debugabbrev = NULL;
+	symtab_num = 0;
+	debuglink = false;
 
-	for (int i = 0; i < shnum; i++) {
+	for (i = 0; i < shnum; i++) {
 		struct sheader *shp = (struct sheader*)(file + i * sizeof(struct sheader) + eh->shoff);
 		struct sheader sh;
 		swap_header(&sh, shp);
@@ -2552,11 +2698,12 @@ static uae_u8 *loadelffile(uae_u8 *file, int filelen, uae_u8 *dbgfile, int debug
 		}
 	}
 
-	for (int i = 0; i < shnum; i++) {
+	for (i = 0; i < shnum; i++) {
+		uae_char * name;
 		struct sheader *shp = (struct sheader*)(file + i * sizeof(struct sheader) + eh->shoff);
 		struct sheader sh;
 		swap_header(&sh, shp);
-		uae_char *name = (uae_char*)(strtabsym + sh.name);
+		name = (uae_char*)(strtabsym + sh.name);
 		if (strtabsym && !strcmp(name, ".gnu_debuglink")) {
 			debuglink = true;
 		}
@@ -2568,11 +2715,12 @@ static uae_u8 *loadelffile(uae_u8 *file, int filelen, uae_u8 *dbgfile, int debug
 		debugfilelen = 0;
 	}
 
-	for (int i = 0; i < shnum; i++) {
+	for (i = 0; i < shnum; i++) {
+		uae_char * name;
 		struct sheader *shp = (struct sheader*)(file + i * sizeof(struct sheader) + eh->shoff);
 		struct sheader sh;
 		swap_header(&sh, shp);
-		uae_char *name = (uae_char*)(strtabsym + sh.name);
+		name = (uae_char*)(strtabsym + sh.name);
 		if (sh.type == SHT_PROGBITS && !strcmp(name, ".debug_line")) {
 			swap_lineheader(&lineheader, (struct debuglineheader*)(file + sh.offset));
 			linesheader = shp;
@@ -2588,24 +2736,26 @@ static uae_u8 *loadelffile(uae_u8 *file, int filelen, uae_u8 *dbgfile, int debug
 		}
 	}
 
-	struct sheader *shp_first = (struct sheader*)(file + eh->shoff);
-	int section = -1;
-	uae_u32 seg = seglist * 4;
-	uae_u32 nextseg = 0;
-	uae_u32 parentid = 0;
-	int startseg = -1;
+	shp_first = (struct sheader*)(file + eh->shoff);
+	section = -1;
+	seg = seglist * 4;
+	nextseg = 0;
+	parentid = 0;
+	startseg = -1;
 
-	struct loadelfsection *lelfs = xcalloc(struct loadelfsection, shnum);
+	lelfs = xcalloc(struct loadelfsection, shnum);
 	outsize = 0;
-	int aoutsize = 0;
-	for (int i = 0; i < shnum; i++) {
+	aoutsize = 0;
+	for (i = 0; i < shnum; i++) {
+		uae_char * namep;
+		TCHAR * n;
 		struct sheader *shp = (struct sheader*)&shp_first[i];
 		struct sheader sh;
 		swap_header(&sh, shp);
 		lelfs[i].offsets = 0xffffffff;
 		lelfs[i].bases = 0xffffffff;
-		uae_char *namep = (uae_char*)(strtabsym + sh.name);
-		TCHAR *n = au(namep);
+		namep = (uae_char*)(strtabsym + sh.name);
+		n = au(namep);
 		write_log(_T("ELF section %d: type=%08x flags=%08x size=%08x ('%s')\n"), i, sh.type, sh.flags, sh.size, n);
 		if (sh.type == SHT_PROGBITS) {
 			if ((sh.flags & SHF_ALLOC) && sh.size) {
@@ -2650,23 +2800,26 @@ static uae_u8 *loadelffile(uae_u8 *file, int filelen, uae_u8 *dbgfile, int debug
 	}
 
 	if (mode == ELFMODE_ROM) {
+		int i;
 		relocate_base = getrombase(aoutsize);
 		if (!relocate_base)
 			goto end;
-		for (int i = 0; i < shnum; i++) {
+		for (i = 0; i < shnum; i++) {
 			if (lelfs[i].offsets != 0xffffffff)
 				lelfs[i].bases += relocate_base;
 		}
 	}
 
-	for (int i = 0; i < symtab_num; i++) {
+	for (i = 0; i < symtab_num; i++) {
+		int sflags, stype;
+		uae_u8 type;
+		uae_u8 bind;
 		struct symbol sym;
 		swap_symbol(&sym, &symtab[i]);
 		if (!sym.name)
 			continue;
-		int sflags, stype;
-		uae_u8 type = sym.info & 15;
-		uae_u8 bind = sym.info >> 4;
+		type = sym.info & 15;
+		bind = sym.info >> 4;
 		if (type == 1) {
 			stype = 0;
 		} else if (type == 2) {
@@ -2697,7 +2850,15 @@ static uae_u8 *loadelffile(uae_u8 *file, int filelen, uae_u8 *dbgfile, int debug
 
 	outsize = 0;
 	outptr = NULL;
-	for (int i = 0; i < shnum; i++) {
+	for (i = 0; i < shnum; i++) {
+		struct sheader * shsymtabp;
+		struct sheader shsymtab;
+		struct sheader * torelocp;
+		struct sheader toreloc;
+		struct symbol * symtabp;
+		struct symbol symtab;
+		int numrel;
+		int j;
 		struct sheader *shp = (struct sheader*)&shp_first[i];
 		struct sheader sh;
 		swap_header(&sh, shp);
@@ -2748,34 +2909,35 @@ static uae_u8 *loadelffile(uae_u8 *file, int filelen, uae_u8 *dbgfile, int debug
 		if (sh.type != SHT_RELA)
 			continue;
 
-		struct sheader *shsymtabp = &shp_first[sh.link];
-		struct sheader shsymtab;
+		shsymtabp = &shp_first[sh.link];
 		swap_header(&shsymtab, shsymtabp);
 
-		struct sheader *torelocp = &shp_first[sh.info];
-		struct sheader toreloc;
+		torelocp = &shp_first[sh.info];
 		swap_header(&toreloc, torelocp);
 
-		struct symbol *symtabp = (struct symbol *)(file + shsymtab.offset);
-		struct symbol symtab;
+		symtabp = (struct symbol *)(file + shsymtab.offset);
 		swap_symbol(&symtab, symtabp);
 
-		int numrel = sh.size / sh.entsize;
+		numrel = sh.size / sh.entsize;
 
-		for (int j = 0; j < numrel; j++) {
+		for (j = 0; j < numrel; j++) {
+			struct symbol * symp;
+			struct symbol sym;
+			uae_u32 shindex;
+			uae_u32 addr;
+			uae_u32 s;
+			uae_u32 relocaddr;
+			uae_char * namep;
+			bool doreloc;
+			TCHAR * name;
 
 			struct rel *relp = (struct rel*)(file + sh.offset + j * sizeof(struct rel));
 			struct rel rel;
 			swap_rel(&rel, relp);
 
-			struct symbol *symp = &symtabp[rel.info >> 8];
-			struct symbol sym;
+			symp = &symtabp[rel.info >> 8];
 			swap_symbol(&sym, symp);
 
-			uae_u32 shindex;
-			uae_u32 addr;
-			uae_u32 s;
-			uae_u32 relocaddr;
 
 			relocaddr = rel.offset;
 
@@ -2786,9 +2948,9 @@ static uae_u8 *loadelffile(uae_u8 *file, int filelen, uae_u8 *dbgfile, int debug
 					return NULL;
 				shindex = ((uae_u32*)(file + symtab_shndx->offset))[rel.info >> 8];
 			}
-			uae_char *namep = (uae_char*)(file + gl((uae_u8*)(&shp_first[shsymtab.link].offset)) + sym.name);
-			bool doreloc = false;
-			TCHAR *name = au(namep);
+			namep = (uae_char*)(file + gl((uae_u8*)(&shp_first[shsymtab.link].offset)) + sym.name);
+			doreloc = false;
+			name = au(namep);
 			switch (shindex)
 			{
 				case SHN_COMMON:
@@ -3024,6 +3186,11 @@ end:
 
 void debugmem_addsegs(TrapContext *ctx, uaecptr seg, uaecptr name, uae_u32 lock, bool residentonly)
 {
+	uaecptr seg2;
+	uaecptr resident;
+	struct debugsegtracker * sg;
+	int parentid;
+	int cnt;
 	uae_u8 *file = NULL;
 	uae_u8 *symfile = NULL;
 	int filelen, symfilelen;
@@ -3036,13 +3203,14 @@ void debugmem_addsegs(TrapContext *ctx, uaecptr seg, uaecptr name, uae_u32 lock,
 	if (!seg || !debugmem_initialized)
 		return;
 	seg *= 4;
-	uaecptr seg2 = seg;
-	uaecptr resident = 0;
+	seg2 = seg;
+	resident = 0;
 	if (residentonly) {
 		while (seg) {
+			int i;
 			uaecptr next = get_long(seg) * 4;
 			uaecptr len = get_long(seg - 4) * 4;
-			for (int i = 0; i < len - 26; i += 2) {
+			for (i = 0; i < len - 26; i += 2) {
 				uae_u16 w = get_word(seg + 4 + i);
 				if (w == 0x4afc) {
 					uae_u32 l = get_long(seg + 4 + i + 2);
@@ -3059,7 +3227,7 @@ void debugmem_addsegs(TrapContext *ctx, uaecptr seg, uaecptr name, uae_u32 lock,
 			return;
 	}
 	console_out_f(_T("Adding segment %08x, Resident %08x.\n"), seg2, resident);
-	struct debugsegtracker *sg = NULL;
+	sg = NULL;
 	for (segmentid = 0; segmentid < MAX_DEBUGSEGS; segmentid++) {
 		if (!dsegt[segmentid]->allocid) {
 			sg = dsegt[segmentid];
@@ -3072,6 +3240,7 @@ void debugmem_addsegs(TrapContext *ctx, uaecptr seg, uaecptr name, uae_u32 lock,
 		return;
 	sg->resident = resident;
 	if (name) {
+		struct zfile * zf;
 		uae_char aname[256];
 		TCHAR nativepath[MAX_DPATH];
 		nativepath[0] = 0;
@@ -3083,7 +3252,7 @@ void debugmem_addsegs(TrapContext *ctx, uaecptr seg, uaecptr name, uae_u32 lock,
 		} else {
 			get_native_path(ctx, lock, nativepath);
 		}
-		struct zfile *zf = zfile_fopen_2x(nativepath, _T("rb"));
+		zf = zfile_fopen_2x(nativepath, _T("rb"));
 		if (zf) {
 			file = zfile_getdata(zf, 0, -1, &filelen);
 			zfile_fclose(zf);
@@ -3130,8 +3299,8 @@ void debugmem_addsegs(TrapContext *ctx, uaecptr seg, uaecptr name, uae_u32 lock,
 		loadelffile(file, filelen, NULL, 0, seg, segmentid, NULL, NULL, NULL, ELFMODE_NORMAL);
 	}
 
-	int parentid = 0;
-	int cnt = 1;
+	parentid = 0;
+	cnt = 1;
 	seg = seg2;
 	while (seg) {
 		uaecptr next = get_long(seg) * 4;
@@ -3143,9 +3312,10 @@ void debugmem_addsegs(TrapContext *ctx, uaecptr seg, uaecptr name, uae_u32 lock,
 			dm->parentid = dm->id;
 		}
 		if (file && !elffile) {
+			int hunklen;
 			dm->idtype = gl(&file[fileoffset]);
 			fileoffset += 4;
-			int hunklen = gl(&file[fileoffset]);
+			hunklen = gl(&file[fileoffset]);
 			fileoffset += 4;
 			if (dm->idtype == 0x3e9 || dm->idtype == 0x3ea) {
 				fileoffset += hunklen * 4;
@@ -3167,11 +3337,12 @@ void debugmem_addsegs(TrapContext *ctx, uaecptr seg, uaecptr name, uae_u32 lock,
 					int symcnt = 0;
 					fileoffset += 4;
 					for (;;) {
+						struct debugsymbol * ds;
 						int size = gl(&file[fileoffset]);
 						fileoffset += 4;
 						if (!size)
 							break;
-						struct debugsymbol *ds = symbols[symbolcnt++];
+						ds = symbols[symbolcnt++];
 						ds->name = au((char*)&file[fileoffset]);
 						fileoffset += 4 * size;
 						ds->value = gl(&file[fileoffset]) + seg + 4;
@@ -3182,8 +3353,9 @@ void debugmem_addsegs(TrapContext *ctx, uaecptr seg, uaecptr name, uae_u32 lock,
 					}
 					console_out_f(_T("%d symbols loaded.\n"), symcnt);
 				} else if (hunktype == 0x3f1) {
+					int debugsize;
 					fileoffset += 4;
-					int debugsize = gl(&file[fileoffset]);
+					debugsize = gl(&file[fileoffset]);
 					fileoffset += 4;
 					fileoffset += debugsize * 4;
 				} else if (hunktype == 0x3f2) {
@@ -3205,11 +3377,15 @@ void debugmem_addsegs(TrapContext *ctx, uaecptr seg, uaecptr name, uae_u32 lock,
 
 void debugmem_remsegs(uaecptr seg)
 {
+	uaecptr seg2;
+	struct debugmemallocs * nextavail;
+	int i;
+	struct debugsegtracker * sg;
 	int parentid = 0;
 	if (!seg || !debugmem_initialized)
 		return;
 	seg *= 4;
-	uaecptr seg2 = seg;
+	seg2 = seg;
 	while (seg) {
 		uaecptr next = get_long(seg) * 4;
 		uaecptr len = get_long(seg - 4) * 4;
@@ -3225,8 +3401,8 @@ void debugmem_remsegs(uaecptr seg)
 
 	console_out_f(_T("Freeing segment %08x...\n"), seg2);
 
-	struct debugmemallocs *nextavail = NULL;
-	for (int i = 0; i < MAX_DEBUGMEMALLOCS; i++) {
+	nextavail = NULL;
+	for (i = 0; i < MAX_DEBUGMEMALLOCS; i++) {
 		struct debugmemallocs *alloc = allocs[i];
 		if (alloc->parentid == parentid) {
 			console_out_f(_T("Segment not freed: "));
@@ -3235,8 +3411,8 @@ void debugmem_remsegs(uaecptr seg)
 		}
 	}
 
-	struct debugsegtracker *sg = NULL;
-	for (int i = 0; i < MAX_DEBUGSEGS; i++) {
+	sg = NULL;
+	for (i = 0; i < MAX_DEBUGSEGS; i++) {
 		if (dsegt[i]->allocid == parentid) {
 			sg = dsegt[i];
 			if (nextavail)
@@ -3245,7 +3421,7 @@ void debugmem_remsegs(uaecptr seg)
 		}
 	}
 
-	for (int i = 0; i < symbolcnt; i++) {
+	for (i = 0; i < symbolcnt; i++) {
 		struct debugsymbol *ds = symbols[i];
 		if (ds->segment == parentid) {
 			ds->allocid = 0;
@@ -3395,11 +3571,14 @@ void debugmem_add_symbol(uae_u32 value, uaecptr aname)
 
 void debugmem_init(bool initmem)
 {
+	struct debugmemdata * d;
+	int i;
 	debug_waiting = false;
 	if (initmem) {
 		if (!debugmem_bank.baseaddr) {
+			uae_u32 mem;
 			int size = 0x10000000;
-			for (uae_u32 mem = 0x70000000; mem < 0xf0000000; mem += size) {
+			for (mem = 0x70000000; mem < 0xf0000000; mem += size) {
 				if (get_mem_bank_real(mem) == &dummy_bank && get_mem_bank_real(mem + size - 65536) == &dummy_bank) {
 					debugmem_bank.reserved_size = size;
 					debugmem_bank.mask = debugmem_bank.reserved_size - 1;
@@ -3445,9 +3624,11 @@ void debugmem_init(bool initmem)
 	}
 	alloccnt = 0;
 	if (!allocs) {
+		struct debugmemallocs * a;
+		int i;
 		allocs = xcalloc(struct debugmemallocs*, MAX_DEBUGMEMALLOCS);
-		struct debugmemallocs *a = xcalloc(struct debugmemallocs, MAX_DEBUGMEMALLOCS);
-		for (int i = 0; i < MAX_DEBUGMEMALLOCS; i++) {
+		a = xcalloc(struct debugmemallocs, MAX_DEBUGMEMALLOCS);
+		for (i = 0; i < MAX_DEBUGMEMALLOCS; i++) {
 			allocs[i] = a + i;
 		}
 	}
@@ -3457,55 +3638,61 @@ void debugmem_init(bool initmem)
 	}
 	totalmemdata = debugmem_bank.allocated_size / PAGE_SIZE;
 	dmd = xcalloc(struct debugmemdata*, totalmemdata);
-	struct debugmemdata *d = xcalloc(struct debugmemdata, totalmemdata);
-	for (int i = 0; i < totalmemdata; i++) {
+	d = xcalloc(struct debugmemdata, totalmemdata);
+	for (i = 0; i < totalmemdata; i++) {
 		dmd[i] = d + i;
 	}
 	debugmemptr = 0;
 	if (!dsegt) {
+		struct debugsegtracker * sg;
+		int i;
 		dsegt = xcalloc(struct debugsegtracker*, MAX_DEBUGSEGS);
-		struct debugsegtracker *sg = xcalloc(struct debugsegtracker, MAX_DEBUGSEGS);
-		for (int i = 0; i < MAX_DEBUGSEGS; i++) {
+		sg = xcalloc(struct debugsegtracker, MAX_DEBUGSEGS);
+		for (i = 0; i < MAX_DEBUGSEGS; i++) {
 			dsegt[i] = sg + i;
 		}
 	}
 	if (!symbols) {
+		struct debugsymbol * sg;
+		int i;
 		symbols = xcalloc(struct debugsymbol*, MAX_DEBUGSYMS);
-		struct debugsymbol *sg = xcalloc(struct debugsymbol, MAX_DEBUGSYMS);
-		for (int i = 0; i < MAX_DEBUGSYMS; i++) {
+		sg = xcalloc(struct debugsymbol, MAX_DEBUGSYMS);
+		for (i = 0; i < MAX_DEBUGSYMS; i++) {
 			symbols[i] = sg + i;
 		}
 	}
 	if (!stackvars) {
+		struct stackvar * sg;
+		int i;
 		stackvars = xcalloc(struct stackvar*, MAX_STACKVARS);
-		struct stackvar *sg = xcalloc(struct stackvar, MAX_STACKVARS);
-		for (int i = 0; i < MAX_STACKVARS; i++) {
+		sg = xcalloc(struct stackvar, MAX_STACKVARS);
+		for (i = 0; i < MAX_STACKVARS; i++) {
 			stackvars[i] = sg + i;
 		}
 	}
 	if (!codefiles) {
 		codefiles = xcalloc(struct debugcodefile*, MAX_DEBUGCODEFILES);
 	}
-	for (int i = 0; i < MAX_DEBUGMEMALLOCS; i++) {
+	for (i = 0; i < MAX_DEBUGMEMALLOCS; i++) {
 		xfree(allocs[i]->name);
 		memset(allocs[i], 0, sizeof(struct debugmemallocs));
 	}
-	for (int i = 0; i < totalmemdata; i++) {
+	for (i = 0; i < totalmemdata; i++) {
 		memset(dmd[i], 0, sizeof(struct debugmemdata));
 	}
-	for (int i = 0; i < MAX_DEBUGSEGS; i++) {
+	for (i = 0; i < MAX_DEBUGSEGS; i++) {
 		xfree(dsegt[i]->name);
 		memset(dsegt[i], 0, sizeof(struct debugsegtracker));
 	}
-	for (int i = 0; i < MAX_DEBUGSYMS; i++) {
+	for (i = 0; i < MAX_DEBUGSYMS; i++) {
 		xfree(symbols[i]->name);
 		memset(symbols[i], 0, sizeof(struct debugsymbol));
 	}
-	for (int i = 0; i < MAX_STACKVARS; i++) {
+	for (i = 0; i < MAX_STACKVARS; i++) {
 		xfree(stackvars[i]->name);
 		memset(stackvars[i], 0, sizeof(struct stackvar));
 	}
-	for (int i = 0; i < codefilecnt; i++) {
+	for (i = 0; i < codefilecnt; i++) {
 		struct debugcodefile *cf = codefiles[i];
 		xfree(cf->lineptr);
 		xfree(cf->data);
@@ -3565,11 +3752,13 @@ void debugmem_enable(void)
 
 static struct debugsegtracker *findsegment(uaecptr addr, struct debugmemallocs **allocp)
 {
-	for (int i = 0; i < segtrackermax; i++) {
+	int i;
+	for (i = 0; i < segtrackermax; i++) {
+		struct debugmemallocs * alloc;
 		struct debugsegtracker *seg = dsegt[i];
 		if (!seg->allocid)
 			continue;
-		struct debugmemallocs *alloc = allocs[seg->allocid];
+		alloc = allocs[seg->allocid];
 		if (addr >= alloc->start && addr < alloc->start + alloc->size) {
 			if (allocp)
 				*allocp = alloc;
@@ -3581,12 +3770,13 @@ static struct debugsegtracker *findsegment(uaecptr addr, struct debugmemallocs *
 
 static struct debugmemallocs *ismysegment(uaecptr addr)
 {
+	int i;
 	if (addr < debugmem_bank.start)
 		return NULL;
 	addr -= debugmem_bank.start;
 	if (addr >= debugmem_bank.allocated_size)
 		return NULL;
-	for (int i = 1; i <= executable_last_segment; i++) {
+	for (i = 1; i <= executable_last_segment; i++) {
 		struct debugmemallocs *alloc = allocs[i];
 		if (addr >= alloc->start && addr < alloc->start + alloc->size)
 			return alloc;
@@ -3596,12 +3786,14 @@ static struct debugmemallocs *ismysegment(uaecptr addr)
 
 bool debugmem_get_symbol_value(const TCHAR *name, uae_u32 *valp)
 {
-	for (int i = 0; i < libnamecnt; i++) {
+	int i;
+	for (i = 0; i < libnamecnt; i++) {
 		struct libname *libname = &libnames[i];
 		int lnlen = uaetcslen(libname->name);
 		// "libname/lvoname"?
 		if (!_tcsnicmp(name, libname->name, lnlen) && _tcslen(name) > lnlen + 1 && name[lnlen] == '/') {
-			for (int j = 0; j < libsymbolcnt; j++) {
+			int j;
+			for (j = 0; j < libsymbolcnt; j++) {
 				struct libsymbol *lvo = &libsymbols[j];
 				if (lvo->lib == libname) {
 					if (!_tcsicmp(name + lnlen + 1, lvo->name)) {
@@ -3617,14 +3809,14 @@ bool debugmem_get_symbol_value(const TCHAR *name, uae_u32 *valp)
 			break;
 		}
 	}
-	for (int i = 0; i < symbolcnt; i++) {
+	for (i = 0; i < symbolcnt; i++) {
 		struct debugsymbol *ds = symbols[i];
 		if (ds->allocid && !_tcscmp(ds->name, name)) {
 			*valp = ds->value;
 			return true;
 		}
 	}
-	for (int i = 0; i < symbolcnt; i++) {
+	for (i = 0; i < symbolcnt; i++) {
 		struct debugsymbol *ds = symbols[i];
 		if (ds->allocid && !_tcsicmp(ds->name, name)) {
 			*valp = ds->value;
@@ -3636,10 +3828,12 @@ bool debugmem_get_symbol_value(const TCHAR *name, uae_u32 *valp)
 
 int debugmem_get_symbol(uaecptr addr, TCHAR *out, int maxsize)
 {
+	int found;
+	int i;
 	if (out)
 		out[0] = 0;
-	int found = 0;
-	for (int i = 0; i < symbolcnt; i++) {
+	found = 0;
+	for (i = 0; i < symbolcnt; i++) {
 		struct debugsymbol *ds = symbols[i];
 		if (ds->allocid && ds->value == addr) {
 			if (out) {
@@ -3699,6 +3893,7 @@ struct debugcodefile *last_codefile;
 
 int debugmem_get_sourceline(uaecptr addr, TCHAR *out, int maxsize)
 {
+	int i;
 	if (out)
 		out[0] = 0;
 
@@ -3721,26 +3916,31 @@ int debugmem_get_sourceline(uaecptr addr, TCHAR *out, int maxsize)
 	if (addr >= debugmem_bank.allocated_size)
 		return -1;
 
-	for (int i = 1; i <= executable_last_segment; i++) {
+	for (i = 1; i <= executable_last_segment; i++) {
 		struct debugmemallocs *alloc = allocs[i];
 		if (addr >= alloc->start && addr < alloc->start + alloc->size) {
+			struct linemapping * lm;
+			int line;
+			int lastline;
+			struct debugcodefile * cf;
 			int offset = addr - alloc->start + alloc->relative_start - 8;
 			if (offset < 0)
 				return -1;
 			if (offset >= linemapsize)
 				return -1;
-			struct linemapping *lm = &linemap[offset];
-			int line = lm->line;
+			lm = &linemap[offset];
+			line = lm->line;
 			if (line < 0)
 				return -1;
 			if (!out)
 				return line;
-			int lastline = line;
+			lastline = line;
 			for (;;) {
+				struct linemapping * lm2;
 				offset++;
 				if (offset >= linemapsize)
 					break;
-				struct linemapping *lm2 = &linemap[offset];
+				lm2 = &linemap[offset];
 				if (!lm2->file)
 					continue;
 				if (lm2->file != lm->file)
@@ -3750,11 +3950,12 @@ int debugmem_get_sourceline(uaecptr addr, TCHAR *out, int maxsize)
 				lastline = lm2->line;
 				break;
 			}
-			struct debugcodefile *cf = lm->file;
+			cf = lm->file;
 			if (!cf->data) {
 				loadcodefiledata(cf);
 			}
 			if (cf->data && cf->lineptr[line] && cf->lineptr[line][0]) {
+				int j;
 				if (last_codefile != cf) {
 					TCHAR txt[256];
 					last_codefile = cf;
@@ -3766,7 +3967,7 @@ int debugmem_get_sourceline(uaecptr addr, TCHAR *out, int maxsize)
 				}
 				if (lastline - line > 10)
 					lastline = line + 10;
-				for (int j = line; j < lastline; j++) {
+				for (j = line; j < lastline; j++) {
 					TCHAR txt[256];
 					TCHAR *s = au((uae_char*)cf->lineptr[j]);
 					if (maxsize > 6 + uaetcslen(s) + 2) {
@@ -3786,13 +3987,14 @@ int debugmem_get_sourceline(uaecptr addr, TCHAR *out, int maxsize)
 
 int debugmem_get_segment(uaecptr addr, bool *exact, bool *ext, TCHAR *out, TCHAR *name)
 {
+	struct debugmemallocs * alloc;
 	if (out)
 		out[0] = 0;
 	if (name)
 		name[0] = 0;
 	if (exact)
 		*exact = false;
-	struct debugmemallocs *alloc = ismysegment(addr);
+	alloc = ismysegment(addr);
 	if (alloc) {
 		if (exact && alloc->start + 8 + debugmem_bank.start == addr)
 			*exact = true;
@@ -3824,7 +4026,8 @@ int debugmem_get_segment(uaecptr addr, bool *exact, bool *ext, TCHAR *out, TCHAR
 bool debugmem_list_segment(int mode, uaecptr addr)
 {
 	if (mode) {
-		for (int i = 0; i < segtrackermax; i++) {
+		int i;
+		for (i = 0; i < segtrackermax; i++) {
 			struct debugsegtracker *seg = dsegt[i];
 			if (!seg->allocid)
 				continue;
@@ -3833,11 +4036,12 @@ bool debugmem_list_segment(int mode, uaecptr addr)
 		}
 	} else {
 		if (addr == 0xffffffff) {
+			int i;
 			if (!executable_last_segment) {
 				console_out(_T("No executable loaded\n"));
 				return false;
 			}
-			for (int i = 1; i <= executable_last_segment; i++) {
+			for (i = 1; i <= executable_last_segment; i++) {
 				debugreportalloc(allocs[i]);
 			}
 			return true;
@@ -3848,7 +4052,8 @@ bool debugmem_list_segment(int mode, uaecptr addr)
 				return true;
 			}
 			if (ismysegment(addr)) {
-				for (int i = 1; i <= executable_last_segment; i++) {
+				int i;
+				for (i = 1; i <= executable_last_segment; i++) {
 					debugreportalloc(allocs[i]);
 				}
 				return true;
@@ -3874,12 +4079,13 @@ bool debugmem_isactive(void)
 
 uae_u32 debugmem_chiphit(uaecptr addr, uae_u32 v, int size)
 {
+	bool dbg;
 	static int recursive;
 	if (recursive) {
 		return 0xdeadf00d;
 	}
 	recursive++;
-	bool dbg = false;
+	dbg = false;
 	if (size > 0) {
 		if (debugmem_active && debugmem_mapped) {
 			console_out_f(_T("%s write to %08x, value = %08x\n"), size == 4 ? _T("Long") : (size == 2 ? _T("Word") : _T("Byte")), addr, v);
@@ -3965,18 +4171,21 @@ bool debugmem_enable_stackframe(bool enable)
 
 bool debugmem_list_stackframe(bool super)
 {
+	int cnt;
+	int i;
 	if (!debugmem_bank.baseaddr && !stackframemode) {
 		return false;
 	}
-	int cnt = super ? stackframecntsuper : stackframecnt;
+	cnt = super ? stackframecntsuper : stackframecnt;
 	if (!cnt)
 		return false;
-	for (int i = 0; i < cnt; i++) {
+	for (i = 0; i < cnt; i++) {
 		struct debugstackframe *sf = super ? &stackframessuper[i] : &stackframes[i];
+		TCHAR txt1[256], txt2[256];
+		uae_u32 sregs[16];
 		console_out_f(_T("%08x -> %08x SP=%08x"), sf->current_pc, sf->branch_pc, sf->stack);
 		if (sf->sr & 0x2000)
 			console_out_f(_T(" SR=%04x"), sf->sr);
-		TCHAR txt1[256], txt2[256];
 		if (debugmem_get_segment(sf->branch_pc, NULL, NULL, txt1, txt2)) {
 			console_out_f(_T(" %s %s"), txt1, txt2);
 		}
@@ -3984,7 +4193,6 @@ bool debugmem_list_stackframe(bool super)
 			console_out_f(_T(" %s"), txt1);
 		}
 		console_out_f(_T("\n"));
-		uae_u32 sregs[16];
 		memcpy(sregs, regs.regs, sizeof(uae_u32) * 16);
 		memcpy(regs.regs, sf->regs, sizeof(uae_u32) * 16);
 		m68k_disasm(sf->current_pc, NULL, 0xffffffff, 2);
@@ -4014,13 +4222,13 @@ struct zfile *read_executable_rom(struct zfile *z, int size, int maxblocks)
 	int len, outlen;
 	uae_u8 *out;
 	uae_u8 *file = zfile_getdata(z, 0, -1, &len);
+	uae_u8 header[8] = { 0 };
 	if (!file)
 		return NULL;
 	if (!debugmem_initialized)
 		debugmem_init(false);
 	if (!debugmem_initialized)
 		return NULL;
-	uae_u8 header[8] = { 0 };
 	zfile_fseek(z, 0, SEEK_SET);
 	zfile_fread(header, 1, sizeof(header), z);
 	zfile_fseek(z, 0, SEEK_SET);
@@ -4029,13 +4237,16 @@ struct zfile *read_executable_rom(struct zfile *z, int size, int maxblocks)
 	else
 		out = loadhunkfile(file, len, 0, -1, &outlen, true);
 	if (out) {
+		int romsize;
+		uae_u8 * temp;
+		struct zfile * zo;
 		if (outlen > size * maxblocks) {
 			write_log(_T("read_executable_rom '%s' size %d larger than max %d\n"), zfile_getname(z), outlen, size);
 			xfree(out);
 			return NULL;
 		}
-		int romsize = ((outlen + size - 1) / size) * size;
-		uae_u8 *temp = xcalloc(uae_u8, romsize);
+		romsize = ((outlen + size - 1) / size) * size;
+		temp = xcalloc(uae_u8, romsize);
 		memcpy(temp, out, outlen);
 		if (outlen < romsize && romsize == 524288) {
 			if (outlen < size - 16) {
@@ -4043,7 +4254,7 @@ struct zfile *read_executable_rom(struct zfile *z, int size, int maxblocks)
 			}
 			kickstart_fix_checksum(temp, size);
 		}
-		struct zfile *zo = zfile_fopen_empty(NULL, zfile_getname(z), romsize);
+		zo = zfile_fopen_empty(NULL, zfile_getname(z), romsize);
 		zfile_fwrite(temp, 1, romsize, zo);
 		zfile_fseek(zo, 0, SEEK_SET);
 		write_log(_T("read_executable_rom loaded '%s' size %d -> %d\n"), zfile_getname(z), outlen, romsize);

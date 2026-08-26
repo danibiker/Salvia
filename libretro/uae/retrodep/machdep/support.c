@@ -25,6 +25,29 @@
 
 extern struct flag_struct regflags;
 
+#ifdef _MSC_VER
+/* MSVC has no gettimeofday(). Declared in retrodep/sysconfig.h, which also
+ * declares struct timeval for us. 100ns FILETIME ticks since 1601-01-01;
+ * 11644473600 seconds separate that epoch from the Unix one. */
+int gettimeofday(struct timeval *tv, void *tz)
+{
+	FILETIME ft;
+	ULARGE_INTEGER t;
+
+	(void)tz;
+	if (!tv)
+		return -1;
+	GetSystemTimeAsFileTime(&ft);
+	t.LowPart  = ft.dwLowDateTime;
+	t.HighPart = ft.dwHighDateTime;
+	t.QuadPart /= 10;                       /* -> microseconds */
+	t.QuadPart -= 11644473600000000ULL;     /* -> Unix epoch */
+	tv->tv_sec  = (long)(t.QuadPart / 1000000ULL);
+	tv->tv_usec = (long)(t.QuadPart % 1000000ULL);
+	return 0;
+}
+#endif
+
 #ifndef HAVE_SIGNAL
 
 frame_time_t machdep_gethrtimebase (void)
@@ -316,6 +339,82 @@ int machdep_parse_option (struct uae_prefs *p, const char *option, const char *v
 
 void machdep_default_options (struct uae_prefs *p)
 {
+}
+
+#endif
+
+#if defined(_MSC_VER) && (_MSC_VER < 1800)
+/* Las cinco de <math.h> de C99 que MSVC 2010 no trae y que no se pueden
+ * sacar de <float.h>. Se declaran en retrodep/sysconfig.h, que ademas
+ * define las macros round()/remainder()/log1p()/expm1()/atanh() que
+ * llegan aqui. Las usa fpp_native.c (FPU 68881/68882 nativa). */
+
+double uae_msvc_round(double x)
+{
+	/* C99: al entero mas proximo, empates hacia afuera del cero (no al par,
+	 * que es lo que hace rint()). Se evita el clasico floor(x+0.5), que se
+	 * equivoca con 0.49999999999999994 porque la suma ya redondea a 1.0;
+	 * aqui a-floor(a) es exacto y la comparacion no tiene ese problema. */
+	double a = fabs(x);
+	double t = floor(a);
+	if (a - t >= 0.5)
+		t += 1.0;
+	return x < 0.0 ? -t : t;
+}
+
+double uae_msvc_remainder(double x, double y)
+{
+	/* C99 remainder(): x - n*y con n el entero MAS PROXIMO a x/y, empates al
+	 * par. No es fmod(), que trunca hacia cero. Se construye sobre fmod
+	 * justamente porque fmod si es exacto en IEEE: partir de x/y perderia
+	 * precision. */
+	double r, ay, q;
+	if (y == 0.0 || _isnan(x) || _isnan(y) || !_finite(x))
+		return (x - x) / (y - y);          /* NaN, como manda C99 */
+	if (!_finite(y))
+		return x;
+	r = fmod(x, y);                        /* |r| < |y|, con el signo de x */
+	ay = fabs(y);
+	if (fabs(r) > 0.5 * ay) {
+		r -= (r > 0.0) ? ay : -ay;
+	} else if (fabs(r) == 0.5 * ay) {
+		q = (x - r) / y;                   /* entero exacto */
+		if (fmod(q, 2.0) != 0.0)           /* empate: n se elige par */
+			r -= (r > 0.0) ? ay : -ay;
+	}
+	return r;
+}
+
+double uae_msvc_log1p(double x)
+{
+	/* log(1+x) con precision para x pequeno: el truco de Kahan compensa
+	 * el error de redondeo de (1+x). */
+	double u = 1.0 + x;
+	if (u == 1.0)
+		return x;
+	return log(u) * (x / (u - 1.0));
+}
+
+double uae_msvc_expm1(double x)
+{
+	/* exp(x)-1, misma idea. */
+	double u = exp(x);
+	if (u == 1.0)
+		return x;
+	if (u - 1.0 == -1.0)
+		return -1.0;
+	return (u - 1.0) * x / log(u);
+}
+
+double uae_msvc_atanh(double x)
+{
+	/* atanh(x) = log((1+x)/(1-x))/2, reescrito con log1p para no perder
+	 * precision cerca de cero. Se calcula sobre |x| y se aplica el signo al
+	 * final: con x negativo cercano a -1, 1+2x/(1-x) se cancela y se pierden
+	 * unos 500 ulp (comprobado); con |x| no hay cancelacion. */
+	double a = fabs(x);
+	double r = 0.5 * uae_msvc_log1p(2.0 * a / (1.0 - a));
+	return x < 0.0 ? -r : r;
 }
 
 #endif

@@ -16,7 +16,11 @@
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
+#ifdef _XBOX
+#include <xtl.h>
+#else
 #include <windows.h>
+#endif
 #include <process.h>
 
 void uae_sem_init (uae_sem_t * event, int manual_reset, int initial_state)
@@ -101,22 +105,103 @@ void uae_end_thread (uae_thread_id *tid)
    }
 }
 
-int uae_start_thread (const TCHAR *name, void (*f)(void *), void *arg, uae_thread_id *tid)
+#ifdef _XBOX
+
+/* Reparto de hardware threads en Xenon.
+ *
+ * La consola tiene 3 nucleos fisicos con 2 hardware threads cada uno:
+ *    core 0 -> HW 0 y 1     core 1 -> HW 2 y 3     core 2 -> HW 4 y 5
+ *
+ * El hilo principal (68k + chipset, que van acoplados ciclo a ciclo) se
+ * queda donde lo arranca el XDK, o sea el HW 0. Un hilo creado con
+ * _beginthreadex HEREDA el hardware thread del padre, asi que sin esto
+ * todos caian en el 0 compitiendo con la emulacion -- y encima a
+ * THREAD_PRIORITY_HIGHEST, que es por encima de ella. Eso no daba
+ * paralelismo, daba tirones.
+ *
+ * OJO: XSetThreadProcessor hay que llamarlo ANTES de que el hilo empiece a
+ * correr. Si se llama despues, el hilo ya ha arrancado en el core del padre
+ * y solo migra en el siguiente quantum. De ahi el CREATE_SUSPENDED de
+ * _beginthreadex y el ResumeThread posterior.
+ */
+#define UAE_HWTHREAD_FAST 2 /* core 1: la emulacion se bloquea esperandolos */
+#define UAE_HWTHREAD_IO   4 /* core 2: almacenamiento, rafagas largas      */
+#define UAE_HWTHREAD_BG   5 /* core 2: fondo (red, serie, impresora)       */
+
+static const struct
+{
+   const TCHAR *name;
+   DWORD hw;
+} uae_hwthread_map[] =
+{
+   /* El 68k espera a este de forma sincrona en cada acceso al chipset. */
+   { _T("cpu"),               UAE_HWTHREAD_FAST },
+   /* Almacenamiento: el Amiga los espera, pero no ciclo a ciclo. */
+   { _T("filesys"),           UAE_HWTHREAD_IO },
+   { _T("hardfile"),          UAE_HWTHREAD_IO },
+   { _T("scsi"),              UAE_HWTHREAD_IO },
+   { _T("uaescsi"),           UAE_HWTHREAD_IO },
+   { _T("ide"),               UAE_HWTHREAD_IO },
+   { _T("akiko"),             UAE_HWTHREAD_IO },
+   { _T("cdtv"),              UAE_HWTHREAD_IO },
+   { _T("cdtv-cr"),           UAE_HWTHREAD_IO },
+   { _T("cdimage_cdda_play"), UAE_HWTHREAD_IO },
+   { _T("cdimage_unpack"),    UAE_HWTHREAD_IO },
+   { NULL, 0 }
+};
+
+/* Lo que no este en la tabla se va al de fondo: si no lo hemos mirado, por
+ * definicion no sabemos que este en el camino caliente. */
+static DWORD uae_hwthread_for (const TCHAR *name)
+{
+   int i;
+
+   if (!name)
+      return UAE_HWTHREAD_BG;
+   for (i = 0; uae_hwthread_map[i].name; i++) {
+      if (!_tcscmp (name, uae_hwthread_map[i].name))
+         return uae_hwthread_map[i].hw;
+   }
+   return UAE_HWTHREAD_BG;
+}
+
+#endif /* _XBOX */
+
+static int uae_start_thread_on (const TCHAR *name, void (*f)(void *), void *arg, uae_thread_id *tid, int fast)
 {
    HANDLE hThread;
    int result = 1;
    unsigned foo;
+   unsigned initflag;
    struct thparms *thp;
+#ifdef _XBOX
+   DWORD hw = fast ? (DWORD)UAE_HWTHREAD_FAST : uae_hwthread_for (name);
+   initflag = CREATE_SUSPENDED;
+#else
+   initflag = 0;
+   (void)fast;
+#endif
 
    thp = xmalloc (struct thparms, 1);
    thp->f = f;
    thp->arg = arg;
-   hThread = (HANDLE)_beginthreadex (NULL, 0, thread_init, thp, 0, &foo);
+   hThread = (HANDLE)_beginthreadex (NULL, 0, thread_init, thp, initflag, &foo);
    if (hThread) {
       if (name) {
          /* write_log (_T("Thread '%s' started (%d)\n"), name, hThread); */
             SetThreadPriority (hThread, THREAD_PRIORITY_HIGHEST);
       }
+#ifdef _XBOX
+      /* Si fallara devuelve (DWORD)-1 y el hilo se queda donde estaba, que
+       * es exactamente el comportamiento de antes: no hay que abortar. */
+      if (XSetThreadProcessor (hThread, hw) == (DWORD)-1)
+         write_log (_T("Thread '%s': XSetThreadProcessor(%d) fallo\n"),
+            name ? name : _T("<fast>"), (int)hw);
+      else
+         write_log (_T("Thread '%s' -> HW thread %d\n"),
+            name ? name : _T("<fast>"), (int)hw);
+      ResumeThread (hThread);
+#endif
    } else {
       result = 0;
       write_log (_T("Thread '%s' failed to start!?\n"), name ? name : _T("<unknown>"));
@@ -128,9 +213,16 @@ int uae_start_thread (const TCHAR *name, void (*f)(void *), void *arg, uae_threa
    return result;
 }
 
+int uae_start_thread (const TCHAR *name, void (*f)(void *), void *arg, uae_thread_id *tid)
+{
+   return uae_start_thread_on (name, f, arg, tid, 0);
+}
+
 int uae_start_thread_fast (void (*f)(void *), void *arg, uae_thread_id *tid)
 {
-   int v = uae_start_thread (NULL, f, arg, tid);
+   /* Los arranca traps.c y el 68k se queda bloqueado esperandolos, asi que
+    * van al core 1 aunque lleguen aqui sin nombre. */
+   int v = uae_start_thread_on (NULL, f, arg, tid, 1);
    if (*tid) {
       SetThreadPriority (*tid, THREAD_PRIORITY_HIGHEST);
    }

@@ -39,6 +39,7 @@ void disasm_init(void)
 
 static void disasm_lc_mnemo(TCHAR *s)
 {
+	TCHAR * s2;
 	if (!(disasm_flags & DISASM_FLAG_LC_MNEMO) && !(disasm_flags & DISASM_FLAG_LC_SIZE)) {
 		return;
 	}
@@ -46,7 +47,7 @@ static void disasm_lc_mnemo(TCHAR *s)
 		to_lower(s, -1);
 		return;
 	}
-	TCHAR *s2 = _tcschr(s, '.');
+	s2 = _tcschr(s, '.');
 	if (s2) {
 		if (disasm_flags & DISASM_FLAG_LC_SIZE) {
 			to_lower(s2, -1);
@@ -107,11 +108,12 @@ static const TCHAR *disasm_lc_hex2(const TCHAR *s, bool noprefix)
 	}
 	if (!noprefix) {
 		if (disasm_hexprefix[0] != '$' || disasm_hexprefix[1] != 0 || s[0] != '$') {
+			const TCHAR * s2;
 			if (!copied) {
 				_tcscpy(tmp, s);
 				copied = true;
 			}
-			const TCHAR *s2 = _tcschr(tmp, '%');
+			s2 = _tcschr(tmp, '%');
 			if (s2) {
 				int len = uaetcslen(disasm_hexprefix);
 				if (s2 > tmp && s2[-1] == '$') {
@@ -200,6 +202,7 @@ static const int datasizes[] = {
 
 static void showea_val(TCHAR *buffer, uae_u16 opcode, uaecptr addr, int size)
 {
+	int i;
 	struct mnemolookup *lookup;
 	struct instr *table = &table68k[opcode];
 
@@ -291,7 +294,7 @@ static void showea_val(TCHAR *buffer, uae_u16 opcode, uaecptr addr, int size)
 		}
 	}
 skip:
-	for (int i = 0; i < size; i++) {
+	for (i = 0; i < size; i++) {
 		TCHAR name[256];
 		if (debugmem_get_symbol(addr + i, name, sizeof(name) / sizeof(TCHAR))) {
 			_stprintf(buffer + _tcslen(buffer), _T(" %s"), name);
@@ -301,6 +304,7 @@ skip:
 
 uaecptr ShowEA_disp(uaecptr *pcp, uaecptr base, TCHAR *buffer, const TCHAR *name, bool pcrel)
 {
+	int m;
 	uaecptr addr;
 	uae_u16 dp;
 	int r;
@@ -319,7 +323,7 @@ uaecptr ShowEA_disp(uaecptr *pcp, uaecptr base, TCHAR *buffer, const TCHAR *name
 		dispreg = (uae_s32)(uae_s16)(dispreg);
 	}
 
-	int m = 1 << ((dp >> 9) & 3);
+	m = 1 << ((dp >> 9) & 3);
 	mult[0] = 0;
 
 	if (currprefs.cpu_model >= 68020) {
@@ -586,8 +590,9 @@ uaecptr ShowEA(void *f, uaecptr pc, uae_u16 opcode, int reg, amodes mode, wordsi
 		break;
 	case absw:
 		{
+			uae_s16 saddr;
 			addr = (uae_s32)(uae_s16)get_iword_debug (pc);
-			uae_s16 saddr = (uae_s16)addr;
+			saddr = (uae_s16)addr;
 			if (absshort_long) {
 				_stprintf(buffer, disasm_lc_hex(_T("$%08X.%c")), addr, disasm_word);
 			} else if (saddr < 0) {
@@ -945,10 +950,12 @@ static void addmovemreg(TCHAR *out, int *prevreg, int *lastreg, int *first, int 
 
 static bool movemout(TCHAR *out, uae_u16 mask, int mode, int fpmode, bool dst)
 {
+	bool dataout;
 	unsigned int dmask, amask;
 	int prevreg = -1, lastreg = -1, first = 1;
 
 	if (mode == Apdi && !fpmode) {
+		int i;
 		uae_u8 dmask2;
 		uae_u8 amask2;
 		
@@ -956,7 +963,7 @@ static bool movemout(TCHAR *out, uae_u16 mask, int mode, int fpmode, bool dst)
 		dmask2 = (mask >> 8) & 0xff;
 		dmask = 0;
 		amask = 0;
-		for (int i = 0; i < 8; i++) {
+		for (i = 0; i < 8; i++) {
 			if (dmask2 & (1 << i))
 				dmask |= 1 << (7 - i);
 			if (amask2 & (1 << i))
@@ -966,15 +973,16 @@ static bool movemout(TCHAR *out, uae_u16 mask, int mode, int fpmode, bool dst)
 		dmask = mask & 0xff;
 		amask = (mask >> 8) & 0xff;
 		if (fpmode == 1 && mode != Apdi) {
+			int i;
 			uae_u8 dmask2 = dmask;
 			dmask = 0;
-			for (int i = 0; i < 8; i++) {
+			for (i = 0; i < 8; i++) {
 				if (dmask2 & (1 << i))
 					dmask |= 1 << (7 - i);
 			}
 		}
 	}
-	bool dataout = dmask != 0 || amask != 0;
+	dataout = dmask != 0 || amask != 0;
 	if (dst && dataout)
 		_tcscat(out, _T(","));
 	if (fpmode) {
@@ -989,12 +997,13 @@ static bool movemout(TCHAR *out, uae_u16 mask, int mode, int fpmode, bool dst)
 
 static void disasm_size(TCHAR *instrname, struct instr *dp)
 {
+	int m;
 	int size = dp->size;
 	if (dp->unsized) {
 		_tcscat(instrname, _T(" "));
 		return;
 	}
-	int m = dp->mnemo;
+	m = dp->mnemo;
 	if (dp->suse && dp->smode == immi &&
 		(m == i_MOVE || m == i_ADD || m == i_ADDA || m == i_SUB || m == i_SUBA)) {
 		_tcscat(instrname, disasm_lc_size(_T("Q")));
@@ -1036,7 +1045,8 @@ static void asm_add_extensions(uae_u16 *data, int *dcntp, int mode, uae_u32 v, i
 		data[dcnt++] = v - (pc + 2);
 	}
 	if (mode == Ad8r || mode == PC8r) {
-		for (int i = 0; i < extcnt; i++) {
+		int i;
+		for (i = 0; i < extcnt; i++) {
 			data[dcnt++] = ext[i];
 		}
 	}
@@ -1100,6 +1110,9 @@ static int asm_parse_mode020(TCHAR *s, uae_u8 *reg, uae_u32 *v, int *extcnt, uae
 
 static int asm_parse_mode(TCHAR *s, uae_u8 *reg, uae_u32 *v, int *extcnt, uae_u16 *ext)
 {
+	int dots;
+	int fullext;
+	int i;
 	TCHAR *ss = s;
 	*reg = -1;
 	*v = 0;
@@ -1146,9 +1159,9 @@ static int asm_parse_mode(TCHAR *s, uae_u8 *reg, uae_u32 *v, int *extcnt, uae_u1
 	} else {
 		*v = asmgetval(s);
 	}
-	int dots = 0;
-	int fullext = 0;
-	for (int i = 0; i < _tcslen(s); i++) {
+	dots = 0;
+	fullext = 0;
+	for (i = 0; i < _tcslen(s); i++) {
 		if (s[i] == ',') {
 			dots++;
 		} else if (s[i] == '[') {
@@ -1206,11 +1219,13 @@ static int asm_parse_mode(TCHAR *s, uae_u8 *reg, uae_u32 *v, int *extcnt, uae_u1
 		}
 		// Ad8r PC8r
 		if (s[0] == '(') {
+			uae_u8 reg2;
+			bool ispc;
 			TCHAR *s2 = s;
 			if (!asm_ispc(s + 1) && asm_isareg(s + 1) < 0 && asm_isdreg(s + 1) < 0) {
+				TCHAR * startptr, *endptr;
 				if (dots != 2)
 					return -1;
-				TCHAR *startptr, *endptr;
 				if (s[1] == '!') {
 					startptr = s + 2;
 					*v = _tcstol(startptr, &endptr, 10);
@@ -1231,8 +1246,7 @@ static int asm_parse_mode(TCHAR *s, uae_u8 *reg, uae_u32 *v, int *extcnt, uae_u1
 			} else {
 				return -1;
 			}
-			uae_u8 reg2;
-			bool ispc = asm_ispc(s2);
+			ispc = asm_ispc(s2);
 			if (ispc) {
 				*reg = 3;
 			} else {
@@ -1316,7 +1330,8 @@ static TCHAR *asm_parse_parm(TCHAR *parm, TCHAR *out)
 
 static bool m68k_asm_parse_movec(TCHAR *s, TCHAR *d)
 {
-	for (int i = 0; m2cregs[i].regname; i++) {
+	int i;
+	for (i = 0; m2cregs[i].regname; i++) {
 		if (!_tcscmp(s, m2cregs[i].regname)) {
 			uae_u16 v = m2cregs[i].regno;
 			if (asm_isareg(d) >= 0)
@@ -1339,11 +1354,12 @@ static bool m68k_asm_parse_movem(TCHAR *s, int dir)
 	uae_u16 mask = dir ? 0x8000 : 0x0001;
 	bool ret = false;
 	while(*s) {
+		int reg;
 		int dreg = asm_isdreg(s);
 		int areg = asm_isareg(s);
 		if (dreg < 0 && areg < 0)
 			break;
-		int reg = dreg >= 0 ? dreg : areg + 8;
+		reg = dreg >= 0 ? dreg : areg + 8;
 		regmask |= dir ? (mask >> reg) : (mask << reg);
 		s += 2;
 		if (*s == 0) {
@@ -1353,12 +1369,15 @@ static bool m68k_asm_parse_movem(TCHAR *s, int dir)
 			s++;
 			continue;
 		} else if (*s == '-') {
+			int dreg2;
+			int areg2;
+			int reg2;
 			s++;
-			int dreg2 = asm_isdreg(s);
-			int areg2 = asm_isareg(s);
+			dreg2 = asm_isdreg(s);
+			areg2 = asm_isareg(s);
 			if (dreg2 < 0 && areg2 < 0)
 				break;
-			int reg2 = dreg2 >= 0 ? dreg2 : areg2 + 8;
+			reg2 = dreg2 >= 0 ? dreg2 : areg2 + 8;
 			if (reg2 < reg)
 				break;
 			while (reg2 >= reg) {
@@ -1381,6 +1400,27 @@ static bool m68k_asm_parse_movem(TCHAR *s, int dir)
 
 int m68k_asm(TCHAR *sline, uae_u16 *out, uaecptr pc)
 {
+	bool firstsp;
+	int i;
+	int size;
+	int inssize;
+	TCHAR * parmp;
+	int smode;
+	int dmode;
+	uae_u8 sreg;
+	uae_u8 dreg;
+	uae_u32 sval;
+	uae_u32 dval;
+	int ssize;
+	int dsize;
+	struct mnemolookup * lookup;
+	bool fp;
+	int tsize;
+	int mnemo;
+	int found;
+	int sizemask;
+	int unsized;
+	int round;
 	TCHAR *p;
 	const TCHAR *cp1;
 	TCHAR ins[256], parms[256];
@@ -1401,8 +1441,8 @@ int m68k_asm(TCHAR *sline, uae_u16 *out, uaecptr pc)
 
 	// strip all white space except first space
 	p = line;
-	bool firstsp = true;
-	for (int i = 0; sline[i]; i++) {
+	firstsp = true;
+	for (i = 0; sline[i]; i++) {
 		TCHAR c = sline[i];
 		if (c == 32 && firstsp) {
 			firstsp = false;
@@ -1429,8 +1469,8 @@ int m68k_asm(TCHAR *sline, uae_u16 *out, uaecptr pc)
 	if (uaetcslen(ins) == 0)
 		return 0;
 
-	int size = 1;
-	int inssize = -1;
+	size = 1;
+	inssize = -1;
 	cp1 = _tcschr(line, '.');
 	if (cp1) {
 		size = cp1[1];
@@ -1447,7 +1487,7 @@ int m68k_asm(TCHAR *sline, uae_u16 *out, uaecptr pc)
 		_tcscpy(ins, line);
 	}
 
-	TCHAR *parmp = parms;
+	parmp = parms;
 	parmp = asm_parse_parm(parmp, srcea);
 	if (!parmp)
 		return 0;
@@ -1457,15 +1497,14 @@ int m68k_asm(TCHAR *sline, uae_u16 *out, uaecptr pc)
 			return 0;
 	}
 
-	int smode = -1;
-	int dmode = -1;
-	uae_u8 sreg = -1;
-	uae_u8 dreg = -1;
-	uae_u32 sval = 0;
-	uae_u32 dval = 0;
-	int ssize = -1;
-	int dsize = -1;
-	struct mnemolookup *lookup;
+	smode = -1;
+	dmode = -1;
+	sreg = -1;
+	dreg = -1;
+	sval = 0;
+	dval = 0;
+	ssize = -1;
+	dsize = -1;
 
 	dmode = asm_parse_mode(dstea, &dreg, &dval, &dextcnt, dexts);
 
@@ -1508,10 +1547,11 @@ int m68k_asm(TCHAR *sline, uae_u16 *out, uaecptr pc)
 	}
 	
 	if (dmode == Areg) {
+		TCHAR last;
 		int l = uaetcslen(ins);
 		if (l <= 2)
 			return -1;
-		TCHAR last = ins[l- 1];
+		last = ins[l- 1];
 		if (last == 'Q') {
 			last = ins[l - 2];
 			if (last != 'A') {
@@ -1532,8 +1572,8 @@ int m68k_asm(TCHAR *sline, uae_u16 *out, uaecptr pc)
 		}
 	}
 
-	bool fp = ins[0] == 'F';
-	int tsize = size;
+	fp = ins[0] == 'F';
+	tsize = size;
 
 	if (ins[uaetcslen(ins) - 1] == 'Q' && uaetcslen(ins) > 3 && !fp) {
 		quick = 1;
@@ -1551,8 +1591,9 @@ int m68k_asm(TCHAR *sline, uae_u16 *out, uaecptr pc)
 		for (lookup = lookuptab; lookup->name; lookup++) {
 			const TCHAR *ccp = _tcsstr(lookup->name, _T("cc"));
 			if (ccp) {
+				int i;
 				TCHAR tmp[256];
-				for (int i = 0; i < (fp ? 32 : 16); i++) {
+				for (i = 0; i < (fp ? 32 : 16); i++) {
 					const TCHAR *ccname = fp ? fpccnames[i] : ccnames[i];
 					_tcscpy(tmp, lookup->name);
 					_tcscpy(tmp + (ccp - lookup->name), ccname);
@@ -1580,13 +1621,14 @@ int m68k_asm(TCHAR *sline, uae_u16 *out, uaecptr pc)
 	if (!lookup->name)
 		return 0;
 
-	int mnemo = lookup->mnemo;
+	mnemo = lookup->mnemo;
 
-	int found = 0;
-	int sizemask = 0;
-	int unsized = 0;
+	found = 0;
+	sizemask = 0;
+	unsized = 0;
 
-	for (int round = 0; round < 9; round++) {
+	for (round = 0; round < 9; round++) {
+		int opcode;
 
 		if (!found && round == 8)
 			return 0;
@@ -1637,7 +1679,7 @@ int m68k_asm(TCHAR *sline, uae_u16 *out, uaecptr pc)
 			round += 5 - 1;
 		}
 
-		for (int opcode = 0; opcode < 65536; opcode++) {
+		for (opcode = 0; opcode < 65536; opcode++) {
 			struct instr *table = &table68k[opcode];
 			if (table->mnemo != mnemo)
 				continue;
@@ -1674,6 +1716,7 @@ int m68k_asm(TCHAR *sline, uae_u16 *out, uaecptr pc)
 					((table->dreg == dreg || table->dmode >= absw))
 					)
 				{
+					int i;
 					if (inssize >= 0 && tsize != inssize)
 						continue;
 
@@ -1682,7 +1725,7 @@ int m68k_asm(TCHAR *sline, uae_u16 *out, uaecptr pc)
 					asm_add_extensions(data, &dcnt, smode, sval, sextcnt, sexts, pc, tsize);
 					if (smode >= 0)
 						asm_add_extensions(data, &dcnt, dmode, dval, dextcnt, dexts, pc, tsize);
-					for (int i = 0; i < dcnt; i++) {
+					for (i = 0; i < dcnt; i++) {
 						out[i] = data[i];
 					}
 					return dcnt;
@@ -1699,15 +1742,15 @@ static void resolve_if_jmp(TCHAR *s, uae_u32 addr)
 {
 	uae_u16 opcode = get_word_debug(addr);
 	if (opcode == 0x4ef9) { // JMP x.l
+		bool ext;
 		TCHAR *p = s + _tcslen(s);
 		uae_u32 addr2 = get_long_debug(addr + 2);
+		TCHAR txt[256];
 		if (disasm_flags & (DISASM_FLAG_VAL_FORCE | DISASM_FLAG_VAL)) {
 			_stprintf(p, disasm_lc_hex(_T(" == $%08X ")), addr2);
 			
 		}
 		showea_val(p + _tcslen(p), opcode, addr2, 4);
-		TCHAR txt[256];
-		bool ext;
 		if (debugmem_get_segment(addr2, NULL, &ext, NULL, txt)) {
 			if (ext) {
 				_tcscat(p, _T(" "));
@@ -1930,6 +1973,9 @@ uae_u32 m68k_disasm_2(TCHAR *buf, int bufsize, uaecptr pc, uae_u16 *bufpc, int b
 	if (!table68k)
 		return 0;
 	while (cnt-- > 0) {
+		bool exact;
+		uaecptr segpc;
+		int srcline;
 		TCHAR instrname[256], *ccpt;
 		TCHAR segout[256], segname[256];
 		int i;
@@ -1963,7 +2009,7 @@ uae_u32 m68k_disasm_2(TCHAR *buf, int bufsize, uaecptr pc, uae_u16 *bufpc, int b
 			;
 
 		lastsegid = -1;
-		bool exact = false;
+		exact = false;
 		segid = 0;
 		if (!bufpc) {
 			if (lastpc != 0xffffffff) {
@@ -2007,6 +2053,7 @@ uae_u32 m68k_disasm_2(TCHAR *buf, int bufsize, uaecptr pc, uae_u16 *bufpc, int b
 		disasm_size(instrname, dp);
 
 		if (lookup->mnemo == i_MOVEC2 || lookup->mnemo == i_MOVE2C) {
+			int lvl;
 			uae_u16 imm = extra;
 			uae_u16 creg = imm & 0x0fff;
 			uae_u16 r = imm >> 12;
@@ -2029,7 +2076,7 @@ uae_u32 m68k_disasm_2(TCHAR *buf, int bufsize, uaecptr pc, uae_u16 *bufpc, int b
 				_tcscat(instrname, _T(","));
 				_tcscat(instrname, regs);
 			}
-			int lvl = (currprefs.cpu_model - 68000) / 10;
+			lvl = (currprefs.cpu_model - 68000) / 10;
 			if (lvl == 6)
 				lvl = 5;
 			add_disasm_word(&pc, &bufpc, &bufpcsize, 2);
@@ -2220,8 +2267,9 @@ uae_u32 m68k_disasm_2(TCHAR *buf, int bufsize, uaecptr pc, uae_u16 *bufpc, int b
 			_tcscat(instrname, _T(","));
 			pc = ShowEA(NULL, pc, opcode, 0, imm1, sz_word, instrname, &deaddr2, &actualea_dst, safemode);
 		} else if (lookup->mnemo == i_FTRAPcc) {
+			int mode;
 			pc = ShowEA(NULL, pc, opcode, dp->dreg, dp->dmode, dp->size, instrname, &seaddr2, &actualea_src, safemode);
-			int mode = opcode & 7;
+			mode = opcode & 7;
 			add_disasm_word(&pc, &bufpc, &bufpcsize, 2);
 			if (mode == 2) {
 				pc = ShowEA(NULL, pc, opcode, 0, imm1, sz_word, instrname, NULL, NULL, safemode);
@@ -2253,6 +2301,7 @@ uae_u32 m68k_disasm_2(TCHAR *buf, int bufsize, uaecptr pc, uae_u16 *bufpc, int b
 					_tcscpy(instrname, _T("FMOVEM.X "));
 					disasm_lc_mnemo(instrname);
 				} else {
+					int msk;
 					mode = 0;
 					regmask = (extra >> 10) & 7;  // FMOVEM or FMOVE control
 					fpmode = 2;
@@ -2260,7 +2309,7 @@ uae_u32 m68k_disasm_2(TCHAR *buf, int bufsize, uaecptr pc, uae_u16 *bufpc, int b
 					if (regmask == 1 || regmask == 2 || regmask == 4)
 						_tcscpy(instrname, _T("FMOVE.L "));
 					disasm_lc_mnemo(instrname);
-					int msk = regmask & 2;
+					msk = regmask & 2;
 					if (regmask & 1) {
 						msk |= 4;
 					}
@@ -2279,11 +2328,12 @@ uae_u32 m68k_disasm_2(TCHAR *buf, int bufsize, uaecptr pc, uae_u16 *bufpc, int b
 					pc = ShowEA(NULL, pc, opcode, dp->dreg, dp->dmode, dp->size, instrname, &deaddr2, &actualea_dst, safemode);
 				} else {
 					if ((opcode & 0x3f) == 0x3c && !(extra & 0x2000)) {
+						int i;
 						// FMOVEM #xxx,control registers (strange one, can have up to 3 long word immediates)
 						bool entry = false;
 						if (!(extra & (0x400 | 0x800 | 0x1000)))
 							extra |= 0x400;
-						for (int i = 0; i < 3; i++) {
+						for (i = 0; i < 3; i++) {
 							if (extra & (0x1000 >> i)) {
 								if (entry)
 									_tcscat(p, _T("/"));
@@ -2465,7 +2515,7 @@ uae_u32 m68k_disasm_2(TCHAR *buf, int bufsize, uaecptr pc, uae_u16 *bufpc, int b
 		}
 		buf = buf_out (buf, &bufsize, _T("\n"));
 
-		for (uaecptr segpc = oldpc; segpc < pc; segpc++) {
+		for (segpc = oldpc; segpc < pc; segpc++) {
 			TCHAR segout[256];
 			if (debugmem_get_symbol(segpc, segout, sizeof(segout) / sizeof(TCHAR))) {
 				_tcscat(segout, _T(":\n"));
@@ -2479,8 +2529,8 @@ uae_u32 m68k_disasm_2(TCHAR *buf, int bufsize, uaecptr pc, uae_u16 *bufpc, int b
 			}
 		}
 
-		int srcline = -1;
-		for (uaecptr segpc = oldpc; segpc < pc; segpc++) {
+		srcline = -1;
+		for (segpc = oldpc; segpc < pc; segpc++) {
 			TCHAR sourceout[256];
 			int line = debugmem_get_sourceline(segpc, sourceout, sizeof(sourceout) / sizeof(TCHAR));
 			if (line < 0)

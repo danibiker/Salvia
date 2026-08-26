@@ -32,8 +32,9 @@
 #define one_exp     0x3FFF
 #define one_sig     LIT64(0x8000000000000000)
 
+int8_t user_rnd_mode, user_rnd_prec;
+
 #define SET_PREC \
-	int8_t user_rnd_mode, user_rnd_prec; \
 	user_rnd_mode = status->float_rounding_mode; \
 	user_rnd_prec = status->floatx80_rounding_precision; \
 	status->float_rounding_mode = float_round_nearest_even; \

@@ -90,17 +90,18 @@ extern void epson_close (void);
 #define SO_LINGER 0x0080
 #define SOL_SOCKET 0xffff
 
+#ifndef _XBOX
 typedef unsigned short SOCKET;
-
 struct linger {
 	uae_u16	l_onoff;
 	uae_u16	l_linger;
 };
+#endif
 
 #undef socklen_t
 #define socklen_t size_t
 
-#ifndef __WIN32
+#if !defined(__WIN32) && !defined(_WIN32)
 #ifndef INVALID_HANDLE_VALUE
 #define INVALID_HANDLE_VALUE NULL
 #endif

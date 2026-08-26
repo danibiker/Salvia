@@ -102,6 +102,7 @@ void ata_parse_identity(uae_u8 *out, struct uaedev_config_info *uci, bool *lba, 
 
 bool ata_get_identity(struct ini_data *ini, uae_u8 *out, bool overwrite)
 {
+	int v;
 	if (!out)
 		return false;
 	if (overwrite) {
@@ -114,7 +115,6 @@ bool ata_get_identity(struct ini_data *ini, uae_u8 *out, bool overwrite)
 		}
 		xfree(out2);
 	}
-	int v;
 	if (ini_getval(ini, _T("IDENTITY"), _T("multiple_mode"), &v)) {
 		if (v) {
 			out[59 * 2 + 1] |= 1;
@@ -224,10 +224,12 @@ uae_u16 adide_encode_word(uae_u16 w)
 
 static void ide_grow_buffer(struct ide_hdf *ide, int newsize)
 {
+	uae_u8 *oldbuf;
+	int oldsize;
 	if (ide->secbuf_size >= newsize)
 		return;
-	uae_u8 *oldbuf = ide->secbuf;
-	int oldsize = ide->secbuf_size;
+	oldbuf = ide->secbuf;
+	oldsize = ide->secbuf_size;
 	ide->secbuf_size = newsize + 16384;
 	if (oldsize)
 		write_log(_T("IDE%d buffer %d -> %d\n"), ide->num, oldsize, ide->secbuf_size);
@@ -238,8 +240,9 @@ static void ide_grow_buffer(struct ide_hdf *ide, int newsize)
 
 static void sl(uae_u8 *d, int o)
 {
+	uae_u16 t;
 	o *= 2;
-	uae_u16 t = (d[o + 0] << 8) | d[o + 1];
+	t = (d[o + 0] << 8) | d[o + 1];
 	d[o + 0] = d[o + 2];
 	d[o + 1] = d[o + 3];
 	d[o + 2] = t >> 8;
@@ -247,9 +250,10 @@ static void sl(uae_u8 *d, int o)
 }
 static void ql(uae_u8 *d, int o)
 {
+	uae_u16 t;
 	sl(d, o + 1);
 	o *= 2;
-	uae_u16 t = (d[o + 0] << 8) | d[o + 1];
+	t = (d[o + 0] << 8) | d[o + 1];
 	d[o + 0] = d[o + 6];
 	d[o + 1] = d[o + 7];
 	d[o + 6] = t >> 8;
@@ -258,7 +262,8 @@ static void ql(uae_u8 *d, int o)
 
 void ata_byteswapidentity(uae_u8 *d)
 {
-	for (int i = 0; i < 512; i += 2)
+	int i;
+	for (i = 0; i < 512; i += 2)
 	{
 		uae_u8 t = d[i + 0];
 		d[i + 0] = d[i + 1];
@@ -334,12 +339,13 @@ static void ps (struct ide_hdf *ide, int offset, const TCHAR *src, int max)
 	len = uaestrlen(s);
 	for (i = 0; i < max; i += 2) {
 		char c1 = ' ';
+		char c2 = ' ';
+		uae_u16 w;
 		if (i < len)
 			c1 = s[i];
-		char c2 = ' ';
 		if (i + 1 < len)
 			c2 = s[i + 1];
-		uae_u16 w = (c1 << 0) | (c2 << 8);
+		w = (c1 << 0) | (c2 << 8);
 		if (ide->byteswap) {
 			w = (w >> 8) | (w << 8);
 		}
@@ -389,7 +395,8 @@ static bool ide_interrupt_do (struct ide_hdf *ide)
 
 bool ide_drq_check(struct ide_hdf *idep)
 {
-	for (int i = 0; idep && i < 2; i++) {
+	int i;
+	for (i = 0; idep && i < 2; i++) {
 		struct ide_hdf *ide = i == 0 ? idep : idep->pair;
 		if (ide) {
 			if (ide->regs.ide_status & IDE_STATUS_DRQ)
@@ -401,7 +408,8 @@ bool ide_drq_check(struct ide_hdf *idep)
 
 bool ide_irq_check(struct ide_hdf *idep, bool edge_triggered)
 {
-	for (int i = 0; idep && i < 2; i++) {
+	int i;
+	for (i = 0; idep && i < 2; i++) {
 		struct ide_hdf *ide = i == 0 ? idep : idep->pair;
 		if (ide->irq) {
 			if (edge_triggered) {
@@ -420,7 +428,8 @@ bool ide_irq_check(struct ide_hdf *idep, bool edge_triggered)
 bool ide_interrupt_hsync(struct ide_hdf *idep)
 {
 	bool irq = false;
-	for (int i = 0; idep && i < 2; i++) {
+	int i;
+	for (i = 0; idep && i < 2; i++) {
 		struct ide_hdf *ide = i == 0 ? idep : idep->pair;
 		if (ide) {
 			if (ide->irq_delay > 0) {
@@ -477,6 +486,7 @@ static void ide_identity_buffer(struct ide_hdf *ide)
 	int device_type = ide->atapi_device_type;
 	bool cf = ide->media_type > 0;
 	bool real = false;
+	uae_u64 totalsecs;
 	int v;
 
 	memset(ide->secbuf, 0, 512);
@@ -534,7 +544,7 @@ static void ide_identity_buffer(struct ide_hdf *ide)
 		pw(ide, 54, ide->hdhfd.cyls);
 		pw(ide, 55, ide->hdhfd.heads);
 		pw(ide, 56, ide->hdhfd.secspertrack);
-		uae_u64 totalsecs = (uae_u64)ide->hdhfd.cyls * ide->hdhfd.heads * ide->hdhfd.secspertrack;
+		totalsecs = (uae_u64)ide->hdhfd.cyls * ide->hdhfd.heads * ide->hdhfd.secspertrack;
 		pl(ide, 57, (uae_u32)totalsecs);
 		pw(ide, 59, ide->max_multiple_mode ? (0x100 | ide->max_multiple_mode >> (ide->blocksize / 512 - 1)) : 0); /* Multiple mode supported */
 		pw(ide, 62, 0x0f);
@@ -592,7 +602,8 @@ static void ide_identify_drive (struct ide_hdf *ide)
 	ide->direction = 0;
 	ide_identity_buffer(ide);
 	if (ide->adide) {
-		for (int i = 0; i < 256; i++) {
+		int i;
+		for (i = 0; i < 256; i++) {
 			uae_u16 w = (ide->secbuf[i * 2 + 0] << 8) | (ide->secbuf[i * 2 + 1] << 0);
 			uae_u16 we = adide_decode_word(w);
 			ide->secbuf[i * 2 + 0] = we >> 8;
@@ -691,13 +702,16 @@ static void ide_set_multiple_mode (struct ide_hdf *ide)
 
 static void ide_set_features (struct ide_hdf *ide)
 {
+	int type;
+	int mode;
+
 	if (ide->ata_level < 0) {
 		ide_fail(ide);
 		return;
 	}
 
-	int type = ide->regs.ide_nsector >> 3;
-	int mode = ide->regs.ide_nsector & 7;
+	type = ide->regs.ide_nsector >> 3;
+	mode = ide->regs.ide_nsector & 7;
 
 	write_log (_T("IDE%d set features %02X (%02X)\n"), ide->num, ide->regs.ide_feat, ide->regs.ide_nsector);
 	switch (ide->regs.ide_feat)
@@ -1630,7 +1644,8 @@ void ide_initialize(struct ide_hdf **idetable, int chpair)
 
 void alloc_ide_mem (struct ide_hdf **idetable, int max, struct ide_thread_state *its)
 {
-	for (int i = 0; i < max; i++) {
+	int i;
+	for (i = 0; i < max; i++) {
 		struct ide_hdf *ide;
 		if (!idetable[i]) {
 			ide = idetable[i] = xcalloc (struct ide_hdf, 1);
@@ -1709,6 +1724,7 @@ struct ide_hdf *add_ide_unit (struct ide_hdf **idetable, int max, int ch, struct
 
 
 	} else if (ci->type == UAEDEV_HDF) {
+		struct uaedev_config_info lci = { 0 };
 
 		if (!hdf_hd_open (&ide->hdhfd))
 			return NULL;
@@ -1729,13 +1745,14 @@ struct ide_hdf *add_ide_unit (struct ide_hdf **idetable, int max, int ch, struct
 
 		if (!ide->byteswap)
 			ata_byteswapidentity(ide->secbuf);
-		struct uaedev_config_info ci = { 0 };
-		ata_parse_identity(ide->secbuf, &ci, &ide->lba, &ide->lba48, &ide->max_multiple_mode);
-		ide->hdhfd.cyls = ide->hdhfd.cyls_def = ci.pcyls;
-		ide->hdhfd.heads = ide->hdhfd.heads_def = ci.pheads;
-		ide->hdhfd.secspertrack = ide->hdhfd.secspertrack_def = ci.psecs;
-		if (ci.max_lba)
-			ide->max_lba = ci.max_lba;
+		/* 'lci' era un 'ci' local que sombreaba el parametro 'ci'; al sacar
+		 * la declaracion del medio del bloque hay que renombrarlo. */
+		ata_parse_identity(ide->secbuf, &lci, &ide->lba, &ide->lba48, &ide->max_multiple_mode);
+		ide->hdhfd.cyls = ide->hdhfd.cyls_def = lci.pcyls;
+		ide->hdhfd.heads = ide->hdhfd.heads_def = lci.pheads;
+		ide->hdhfd.secspertrack = ide->hdhfd.secspertrack_def = lci.psecs;
+		if (lci.max_lba)
+			ide->max_lba = lci.max_lba;
 		if (ide->lba48 && !ide->ata_level)
 			ide->ata_level = 1;
 		if (ini_getbool(ide->hdhfd.hfd.geometry, _T("IDENTITY"), _T("disabled"), &vb)) {

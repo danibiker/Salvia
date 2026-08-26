@@ -326,7 +326,8 @@ static const struct mw_acc memwatch_access_masks[] =
 
 static void mw_help(void)
 {
-	for (int i = 0; memwatch_access_masks[i].mask; i++) {
+	int i;
+	for (i = 0; memwatch_access_masks[i].mask; i++) {
 		console_out_f(_T("%s "), memwatch_access_masks[i].name);
 	}
 	console_out_f(_T("\n"));
@@ -354,7 +355,9 @@ static int debug_out (const TCHAR *format, ...)
 
 uae_u32 get_byte_debug (uaecptr addr)
 {
-	uae_u32 v = 0xff;
+	/* volatile: TRY() es setjmp() y 'v' se asigna dentro del bloque y se
+	 * devuelve despues del longjmp (C89 7.6.2.1). */
+	volatile uae_u32 v = 0xff;
 	if (debug_mmu_mode) {
 		flagtype olds = regs.s;
 		regs.s = (debug_mmu_mode & 4) != 0;
@@ -384,7 +387,9 @@ uae_u32 get_byte_debug (uaecptr addr)
 }
 uae_u32 get_word_debug (uaecptr addr)
 {
-	uae_u32 v = 0xffff;
+	/* volatile: TRY() es setjmp() y 'v' se asigna dentro del bloque y se
+	 * devuelve despues del longjmp (C89 7.6.2.1). */
+	volatile uae_u32 v = 0xffff;
 	if (debug_mmu_mode) {
 		flagtype olds = regs.s;
 		regs.s = (debug_mmu_mode & 4) != 0;
@@ -408,7 +413,9 @@ uae_u32 get_word_debug (uaecptr addr)
 }
 uae_u32 get_long_debug (uaecptr addr)
 {
-	uae_u32 v = 0xffffffff;
+	/* volatile: TRY() es setjmp() y 'v' se asigna dentro del bloque y se
+	 * devuelve despues del longjmp (C89 7.6.2.1). */
+	volatile uae_u32 v = 0xffffffff;
 	if (debug_mmu_mode) {
 		flagtype olds = regs.s;
 		regs.s = (debug_mmu_mode & 4) != 0;
@@ -467,6 +474,7 @@ uae_u8 *get_real_address_debug(uaecptr addr)
 
 int debug_safe_addr (uaecptr addr, int size)
 {
+	addrbank *ab;
 	if (debug_mmu_mode) {
 		flagtype olds = regs.s;
 		regs.s = (debug_mmu_mode & 4) != 0;
@@ -481,7 +489,7 @@ int debug_safe_addr (uaecptr addr, int size)
 		} ENDTRY
 		regs.s = olds;
 	}
-	addrbank *ab = &get_mem_bank (addr);
+	ab = &get_mem_bank (addr);
 	if (!ab)
 		return 0;
 	if (ab->flags & ABFLAG_SAFE)
@@ -675,7 +683,7 @@ int getregidx(TCHAR **c)
 		i++;
 	}
 	tmp[i] = 0;
-	for (int i = 0; debugregs[i]; i++) {
+	for (i = 0; debugregs[i]; i++) {
 		if (!_tcsncmp(tmp, debugregs[i], _tcslen(debugregs[i]))) {
 			(*c) += _tcslen(debugregs[i]);
 			return i;
@@ -850,6 +858,8 @@ static bool readintx (TCHAR **c, uae_u32 *valp)
 static int checkvaltype2 (TCHAR **c, uae_u32 *val, TCHAR def)
 {
 	TCHAR nc;
+	TCHAR name[256];
+	int i;
 
 	ignore_ws (c);
 	nc = _totupper (**c);
@@ -873,9 +883,8 @@ static int checkvaltype2 (TCHAR **c, uae_u32 *val, TCHAR def)
 		if (readregx (c, val))
 			return 1;
 	}
-	TCHAR name[256];
 	name[0] = 0;
-	for (int i = 0; i < sizeof name / sizeof(TCHAR) - 1; i++) {
+	for (i = 0; i < sizeof name / sizeof(TCHAR) - 1; i++) {
 		nc = (*c)[i];
 		if (nc == 0 || nc == ' ')
 			break;
@@ -921,6 +930,8 @@ static int checkvaltype(TCHAR **cp, uae_u32 *val, int *size, TCHAR def)
 	bool gotop = false;
 	bool copyrest = false;
 	double out;
+	TCHAR tmp[MAX_DPATH];
+	int v2;
 
 	form[0] = 0;
 	if (size)
@@ -945,11 +956,13 @@ static int checkvaltype(TCHAR **cp, uae_u32 *val, int *size, TCHAR def)
 				*size = readsize(v, cp);
 			}
 		}
+		{
 		TCHAR *cpb = *cp;
 		ignore_ws(cp);
 		if (!isoperator(cp)) {
 			*cp = cpb;
 			break;
+		}
 		}
 		gotop = true;
 		*p++= readchar(cp);
@@ -977,9 +990,8 @@ docalc:
 		*p++ = c;
 	}
 	*p = 0;
-	TCHAR tmp[MAX_DPATH];
-	int v = calc(form, &out, tmp, sizeof(tmp) / sizeof(TCHAR));
-	if (v > 0) {
+	v2 = calc(form, &out, tmp, sizeof(tmp) / sizeof(TCHAR));
+	if (v2 > 0) {
 		*val = (uae_u32)out;
 		if (size && *size == 0) {
 			uae_s32 v = (uae_s32)(*val);
@@ -992,7 +1004,7 @@ docalc:
 			}
 		}
 		return 1;
-	} else if (v < 0) {
+	} else if (v2 < 0) {
 		console_out_f(_T("String returned: '%s'\n"), tmp);
 	}
 	return 0;
@@ -1098,13 +1110,14 @@ static bool isrom(uaecptr addr)
 static uae_u32 lastaddr(uae_u32 start)
 {
 	int lastbank = currprefs.address_space_24 ? 255 : 65535;
-
 	addrbank *ab2 = get_mem_bank_real(start + 1);
 	uae_u32 flags = ab2->flags & (ABFLAG_RAM | ABFLAG_ROM);
+	int i;
+
 	if (start == 0xffffffff) {
 		flags = ABFLAG_RAM;
 	}
-	for (int i = lastbank; i >= 0; i--) {
+	for (i = lastbank; i >= 0; i--) {
 		addrbank *ab = get_mem_bank_real(i << 16);
 		if (ab->baseaddr && (ab->flags & (ABFLAG_RAM | ABFLAG_ROM)) == flags) {
 			return (i + 1) << 16;
@@ -1132,6 +1145,7 @@ static uaecptr nextaddr(uaecptr addr, uaecptr last, uaecptr *endp, bool verbose,
 {
 	addrbank *ab;
 	int lastbank = currprefs.address_space_24 ? 255 : 65535;
+	uaecptr start;
 
 	if (addr != 0xffffffff) {
 		addrbank *ab2 = get_mem_bank_real(addr);
@@ -1156,7 +1170,7 @@ static uaecptr nextaddr(uaecptr addr, uaecptr last, uaecptr *endp, bool verbose,
 		return 0xffffffff;
 	}
 
-	uaecptr start = addr;
+	start = addr;
 
 	while (addr <= (lastbank << 16)) {
 		addrbank *ab2 = get_mem_bank_real(addr);
@@ -1232,6 +1246,9 @@ static void dump_custom_regs(bool aga, bool ext)
 	size_t len;
 	uae_u8 *p1, *p2, *p3, *p4;
 	TCHAR extra1[256], extra2[256];
+	int total;
+	int i;
+	int cnt1, cnt2;
 
 	extra1[0] = 0;
 	extra2[0] = 0;
@@ -1242,7 +1259,7 @@ static void dump_custom_regs(bool aga, bool ext)
 
 	p1 = p2 = save_custom (&len, 0, 1);
 	p1 += 4; // skip chipset type
-	for (int i = 0; i < 4; i++) {
+	for (i = 0; i < 4; i++) {
 		p4 = p1 + 0xa0 + i * 16;
 		p3 = save_audio (i, &len, 0);
 		p4[0] = p3[12];
@@ -1259,15 +1276,15 @@ static void dump_custom_regs(bool aga, bool ext)
 		p4[11] = p3[11];
 		free (p3);
 	}
-	int total = 0;
-	int i = 0;
+	total = 0;
+	i = 0;
 	while (custd[i].name) {
 		if (!(custd[i].special & CD_NONE))
 			total++;
 		i++;
 	}
-	int cnt1 = 0;
-	int cnt2 = 0;
+	cnt1 = 0;
+	cnt2 = 0;
 	i = 0;
 	while (i < total / 2 + 1) {
 		for (;;) {
@@ -1277,7 +1294,7 @@ static void dump_custom_regs(bool aga, bool ext)
 		}
 		i++;
 	}
-	for (int i = 0; i < total / 2 + 1; i++) {
+	for (i = 0; i < total / 2 + 1; i++) {
 		uae_u16 v1, v2;
 		int addr1, addr2;
 		addr1 = custd[cnt1].adr & 0x1ff;
@@ -1391,8 +1408,9 @@ static int dma_record_toggle, dma_record_frame[2];
 static void record_dma_clear(int r)
 {
 	struct dma_rec *dr = dma_record[r];
-	for (int v = 0; v < NR_DMA_REC_VPOS; v++) {
-		for (int h = 0; h < NR_DMA_REC_HPOS; h++) {
+	int v, h;
+	for (v = 0; v < NR_DMA_REC_VPOS; v++) {
+		for (h = 0; h < NR_DMA_REC_HPOS; h++) {
 			struct dma_rec *dr2 = &dr[v * NR_DMA_REC_HPOS + h];
 			memset(dr2, 0, sizeof(struct dma_rec));
 			dr2->reg = 0xffff;
@@ -1511,7 +1529,8 @@ static void set_dbg_color(int index, int extra, uae_u8 r, uae_u8 g, uae_u8 b, in
 	if (extra >= 0) {
 		debug_colors[index].l[extra] = lc((r << 16) | (g << 8) | (b << 0));
 	} else {
-		for (int i = 0; i < DMARECORD_SUBITEMS; i++) {
+		int i;
+		for (i = 0; i < DMARECORD_SUBITEMS; i++) {
 			debug_colors[index].l[i] = lc((r << 16) | (g << 8) | (b << 0));
 		}
 	}
@@ -1519,6 +1538,8 @@ static void set_dbg_color(int index, int extra, uae_u8 r, uae_u8 g, uae_u8 b, in
 
 static void set_debug_colors(void)
 {
+	int i, j;
+
 	if (debug_colors_set)
 		return;
 	debug_colors_set = true;
@@ -1533,8 +1554,8 @@ static void set_debug_colors(void)
 	set_dbg_color(DMARECORD_DISK,			0, 0xff, 0xff, 0xff, 3, _T("Disk"));
 	set_dbg_color(DMARECORD_CONFLICT,		0, 0xff, 0xb8, 0x40, 0, _T("Conflict"));
 
-	for (int i = 0; i < DMARECORD_MAX; i++) {
-		for (int j = 1; j < DMARECORD_SUBITEMS; j++) {
+	for (i = 0; i < DMARECORD_MAX; i++) {
+		for (j = 1; j < DMARECORD_SUBITEMS; j++) {
 			debug_colors[i].l[j] = debug_colors[i].l[0];
 		}
 	}
@@ -1558,6 +1579,8 @@ static void debug_draw_cycles(uae_u8 *buf, int bpp, int line, int width, int hei
 	int y, x, xx, dx, xplus, yplus;
 	struct dma_rec *dr;
 	int t;
+	bool ended = false;
+	uae_s8 intlev = 0;
 
 	if (debug_dma >= 4)
 		yplus = 2;
@@ -1584,8 +1607,6 @@ static void debug_draw_cycles(uae_u8 *buf, int bpp, int line, int width, int hei
 
 	dx = width - xplus * ((record_dma_maxhpos + 1) & ~1) - 16;
 
-	bool ended = false;
-	uae_s8 intlev = 0;
 	for (x = 0; x < record_dma_maxhpos; x++) {
 		uae_u32 c = debug_colors[0].l[0];
 		xx = x * xplus + dx;
@@ -1648,13 +1669,14 @@ static void debug_draw_heatmap(uae_u8 *buf, int bpp, int line, int width, int he
 	struct memory_heatmap *mht = heatmap;
 	int dx = 16;
 	int y = line;
+	int x;
 
 	if (y < 0 || y >= HEATMAP_HEIGHT)
 		return;
 
 	mht += y * HEATMAP_WIDTH;
 
-	for (int x = 0; x < HEATMAP_WIDTH; x++) {
+	for (x = 0; x < HEATMAP_WIDTH; x++) {
 		uae_u32 c = heatmap_debug_colors[mht->cnt * DMARECORD_MAX + mht->type];
 		//c = heatmap_debug_colors[(HEATMAP_COUNT - 1) * DMARECORD_MAX + DMARECORD_CPU_I];
 		int xx = x + dx;
@@ -1668,11 +1690,12 @@ static void debug_draw_heatmap(uae_u8 *buf, int bpp, int line, int width, int he
 void debug_draw(uae_u8 *buf, int bpp, int line, int width, int height, uae_u32 *xredcolors, uae_u32 *xgreencolors, uae_u32 *xbluescolors)
 {
 	if (!heatmap_debug_colors) {
+		int i, j;
 		heatmap_debug_colors = xcalloc(uae_u32, DMARECORD_MAX * HEATMAP_COUNT);
 		set_debug_colors();
-		for (int i = 0; i < HEATMAP_COUNT; i++) {
+		for (i = 0; i < HEATMAP_COUNT; i++) {
 			uae_u32 *cp = heatmap_debug_colors + i * DMARECORD_MAX;
-			for (int j = 0; j < DMARECORD_MAX; j++) {
+			for (j = 0; j < DMARECORD_MAX; j++) {
 				uae_u8 r = debug_colors[j].r;
 				uae_u8 g = debug_colors[j].g;
 				uae_u8 b = debug_colors[j].b;
@@ -1705,10 +1728,12 @@ static void heatmap_stats(TCHAR **c)
 	int maxcnt;
 	uae_u32 mask = MW_MASK_CPU_I;
 	const TCHAR *maskname = NULL;
+	int i, j;
+	int lines;
 
 	if (more_params(c)) {
 		if (**c == 'c' && peek_next_char(c) == 0) {
-			for (int i = 0; i < max_heatmap / HEATMAP_DIV; i++) {
+			for (i = 0; i < max_heatmap / HEATMAP_DIV; i++) {
 				struct memory_heatmap *hm = &heatmap[i];
 				memset(hm, 0, sizeof(struct memory_heatmap));
 			}
@@ -1718,7 +1743,7 @@ static void heatmap_stats(TCHAR **c)
 		if (!isdigit(peek_next_char(c))) {
 			TCHAR str[100];
 			if (next_string(c, str, sizeof str / sizeof (TCHAR), true)) {
-				for (int j = 0; memwatch_access_masks[j].mask; j++) {
+				for (j = 0; memwatch_access_masks[j].mask; j++) {
 					if (!_tcsicmp(str, memwatch_access_masks[j].name)) {
 						mask = memwatch_access_masks[j].mask;
 						maskname = memwatch_access_masks[j].name;
@@ -1744,7 +1769,8 @@ static void heatmap_stats(TCHAR **c)
 
 		int found = -1;
 		int firstaddress = 0;
-		for (int lines = 0; lines < maxlines; lines++) {
+		int lastaddress;
+		for (lines = 0; lines < maxlines; lines++) {
 
 			for (; firstaddress < max_heatmap / HEATMAP_DIV; firstaddress++) {
 				struct memory_heatmap *hm = &heatmap[firstaddress];
@@ -1755,7 +1781,6 @@ static void heatmap_stats(TCHAR **c)
 			if (firstaddress == max_heatmap / HEATMAP_DIV)
 				return;
 
-			int lastaddress;
 			for (lastaddress = firstaddress; lastaddress < max_heatmap / HEATMAP_DIV; lastaddress++) {
 				struct memory_heatmap *hm = &heatmap[lastaddress];
 				if (!(hm->mask & mask))
@@ -1778,10 +1803,11 @@ static void heatmap_stats(TCHAR **c)
 		struct heatmapstore linestore[MAX_HEATMAP_LINES] = { 0 };
 		int storecnt = 0;
 		uae_u32 maxlimit = 0xffffffff;
+		int lines1, lines2;
 
 		max = 0;
 		maxcnt = 0;
-		for (int i = 0; i < max_heatmap / HEATMAP_DIV; i++) {
+		for (i = 0; i < max_heatmap / HEATMAP_DIV; i++) {
 			struct memory_heatmap *hm = &heatmap[i];
 			if (hm->cpucnt > 0) {
 				max += hm->cpucnt;
@@ -1794,12 +1820,18 @@ static void heatmap_stats(TCHAR **c)
 			return;
 		}
 
-		for (int lines = 0; lines < maxlines; lines++) {
+		for (lines = 0; lines < maxlines; lines++) {
 
 			int found = -1;
 			int foundcnt = 0;
+			int totalcnt = 0;
+			int cntrange;
+			int lastaddress;
+			int firstaddress;
+			TCHAR tmp[100];
+			double pct;
 
-			for (int i = 0; i < max_heatmap / HEATMAP_DIV; i++) {
+			for (i = 0; i < max_heatmap / HEATMAP_DIV; i++) {
 				struct memory_heatmap *hm = &heatmap[i];
 				if (hm->cpucnt > 0 && hm->cpucnt > foundcnt && hm->cpucnt < maxlimit) {
 					foundcnt = hm->cpucnt;
@@ -1809,12 +1841,10 @@ static void heatmap_stats(TCHAR **c)
 			if (found < 0)
 				break;
 
-			int totalcnt = 0;
-			int cntrange = foundcnt * range / 100;
+			cntrange = foundcnt * range / 100;
 			if (cntrange <= 0)
 				cntrange = 1;
 
-			int lastaddress;
 			for (lastaddress = found; lastaddress < max_heatmap / HEATMAP_DIV; lastaddress++) {
 				struct memory_heatmap *hm = &heatmap[lastaddress];
 				if (hm->cpucnt == 0 || hm->cpucnt < cntrange || hm->cpucnt >= maxlimit)
@@ -1823,7 +1853,6 @@ static void heatmap_stats(TCHAR **c)
 			}
 			lastaddress--;
 
-			int firstaddress;
 			for (firstaddress = found - 1; firstaddress >= 0; firstaddress--) {
 				struct memory_heatmap *hm = &heatmap[firstaddress];
 				if (hm->cpucnt == 0 || hm->cpucnt < cntrange || hm->cpucnt >= maxlimit)
@@ -1835,8 +1864,7 @@ static void heatmap_stats(TCHAR **c)
 			firstaddress *= HEATMAP_DIV;
 			lastaddress *= HEATMAP_DIV;
 
-			TCHAR tmp[100];
-			double pct = totalcnt / max * 100.0;
+			pct = totalcnt / max * 100.0;
 			_stprintf(tmp, _T("%03d: %08x - %08x %08x (%d) %.5f%%\n"), lines + 1,
 				firstaddress, lastaddress + HEATMAP_DIV - 1,
 				lastaddress - firstaddress + HEATMAP_DIV - 1,
@@ -1852,8 +1880,8 @@ static void heatmap_stats(TCHAR **c)
 			maxlimit = foundcnt;
 		}
 
-		for (int lines1 = 0; lines1 < storecnt; lines1++) {
-			for (int lines2 = lines1 + 1; lines2 < storecnt; lines2++) {
+		for (lines1 = 0; lines1 < storecnt; lines1++) {
+			for (lines2 = lines1 + 1; lines2 < storecnt; lines2++) {
 				if (linestore[lines1].v < linestore[lines2].v) {
 					struct heatmapstore hms;
 					memcpy(&hms, &linestore[lines1], sizeof(struct heatmapstore));
@@ -1862,7 +1890,7 @@ static void heatmap_stats(TCHAR **c)
 				}
 			}
 		}
-		for (int lines1 = 0; lines1 < storecnt; lines1++) {
+		for (lines1 = 0; lines1 < storecnt; lines1++) {
 			console_out(linestore[lines1].s);
 			xfree(linestore[lines1].s);
 		}
@@ -1886,16 +1914,19 @@ static void init_heatmap(void)
 
 static void memwatch_heatmap(uaecptr addr, int rwi, int size, uae_u32 accessmask)
 {
+	struct memory_heatmap *hm;
+	int type = 0;
+	int extra = 0;
+	int i;
+
 	if (addr >= max_heatmap || !heatmap)
 		return;
-	struct memory_heatmap *hm = &heatmap[addr / HEATMAP_DIV];
+	hm = &heatmap[addr / HEATMAP_DIV];
 	if (accessmask & MW_MASK_CPU_I) {
 		hm->cpucnt++;
 	}
 	hm->cnt = HEATMAP_COUNT - 1;
-	int type = 0;
-	int extra = 0;
-	for (int i = 0; i < 32; i++) {
+	for (i = 0; i < 32; i++) {
 		if (accessmask & (1 << i)) {
 			switch (1 << i)
 			{
@@ -1959,7 +1990,8 @@ static void check_refreshed(void)
 	int max = ecs_agnus ? 512 : 256;
 	int reffail = 0;
 	evt_t c = get_cycles();
-	for (int i = 0; i < max; i++) {
+	int i;
+	for (i = 0; i < max; i++) {
 		struct refdata *rd = &refreshtable[i];
 		if (rd->cnt < 10) {
 			rd->cnt++;
@@ -1985,6 +2017,8 @@ static void check_refreshed(void)
 void debug_mark_refreshed(uaecptr rp)
 {
 	int ras;
+	struct refdata *rd;
+	evt_t c;
 	if (ecs_agnus && currprefs.chipmem.size > 0x100000) {
 		ras = (rp >> 9) & 0x3ff;
 	} else if (ecs_agnus) {
@@ -1992,8 +2026,8 @@ void debug_mark_refreshed(uaecptr rp)
 	} else {
 		ras = (rp >> 1) & 0xff;
 	}
-	struct refdata *rd = &refreshtable[ras];
-	evt_t c = get_cycles();
+	rd = &refreshtable[ras];
+	c = get_cycles();
 	rd->c = c;
 	rd->cnt = 0;
 }
@@ -2017,11 +2051,14 @@ void record_dma_vsync(int vp)
 
 void record_dma_reoffset(int vp, int oldhpos, int newhpos)
 {
+	int hp;
+	struct dma_rec *dr;
+
 	if (!dma_record[0])
 		return;
 
-	int hp = newhpos + dma_record_hoffset;
-	struct dma_rec *dr = &dma_record[dma_record_toggle][vp * NR_DMA_REC_HPOS + hp];
+	hp = newhpos + dma_record_hoffset;
+	dr = &dma_record[dma_record_toggle][vp * NR_DMA_REC_HPOS + hp];
 	dma_record_hoffset -= newhpos - oldhpos;
 #if 0
 	dr->vpos = vp;
@@ -2226,10 +2263,12 @@ void record_dma_write(uae_u16 reg, uae_u32 dat, uae_u32 addr, int hpos, int vpos
 struct dma_rec *last_dma_rec;
 void record_dma_read_value_pos(uae_u32 v, int hpos, int vpos)
 {
+	struct dma_rec *dr;
+
 	hpos += dma_record_hoffset;
 	if (hpos >= NR_DMA_REC_HPOS || vpos >= NR_DMA_REC_VPOS)
 		return;	
-	struct dma_rec *dr = &dma_record[dma_record_toggle][vpos * NR_DMA_REC_HPOS + hpos];
+	dr = &dma_record[dma_record_toggle][vpos * NR_DMA_REC_HPOS + hpos];
 	last_dma_rec = dr;
 	record_dma_read_value(v);
 }
@@ -2260,6 +2299,8 @@ void record_dma_read_value_wide(uae_u64 v, bool quad)
 
 bool record_dma_check(int hpos, int vpos)
 {
+	struct dma_rec *dr;
+
 	if (!dma_record[0]) {
 		return false;
 	}
@@ -2267,12 +2308,14 @@ bool record_dma_check(int hpos, int vpos)
 	if (hpos >= NR_DMA_REC_HPOS || vpos >= NR_DMA_REC_VPOS) {
 		return false;
 	}
-	struct dma_rec *dr = &dma_record[dma_record_toggle][vpos * NR_DMA_REC_HPOS + hpos];
+	dr = &dma_record[dma_record_toggle][vpos * NR_DMA_REC_HPOS + hpos];
 	return dr->reg != 0xffff;
 }
 
 void record_dma_denise(int hpos, int dhpos)
 {
+	struct dma_rec *dr;
+
 	if (!dma_record[0]) {
 		return;
 	}
@@ -2280,12 +2323,14 @@ void record_dma_denise(int hpos, int dhpos)
 	if (hpos >= NR_DMA_REC_HPOS || vpos >= NR_DMA_REC_VPOS) {
 		return;
 	}
-	struct dma_rec *dr = &dma_record[dma_record_toggle][vpos * NR_DMA_REC_HPOS + hpos];
+	dr = &dma_record[dma_record_toggle][vpos * NR_DMA_REC_HPOS + hpos];
 	dr->dhpos = dhpos;
 }
 
 void record_dma_clear_2(int hpos, int vpos)
 {
+	struct dma_rec *dr;
+
 	if (!dma_record[0]) {
 		return;
 	}
@@ -2293,7 +2338,7 @@ void record_dma_clear_2(int hpos, int vpos)
 	if (hpos >= NR_DMA_REC_HPOS || vpos >= NR_DMA_REC_VPOS) {
 		return;
 	}
-	struct dma_rec *dr = &dma_record[dma_record_toggle][vpos * NR_DMA_REC_HPOS + hpos];
+	dr = &dma_record[dma_record_toggle][vpos * NR_DMA_REC_HPOS + hpos];
 	dr->reg = 0xffff;
 	dr->cf_reg = 0xffff;
 }
@@ -2374,6 +2419,8 @@ static bool get_record_dma_info(struct dma_rec *drs, struct dma_rec *dr, TCHAR *
 	bool extra64 = false;
 	uae_u32 extraval;
 	bool noval = false;
+	int hpos, dhpos;
+	int ipl = 0;
 
 	if (l1)
 		l1[0] = 0;
@@ -2388,8 +2435,8 @@ static bool get_record_dma_info(struct dma_rec *drs, struct dma_rec *dr, TCHAR *
 	if (l6)
 		l6[0] = 0;
 
-	int hpos = dr->hpos;
-	int dhpos = dr->dhpos;
+	hpos = dr->hpos;
+	dhpos = dr->dhpos;
 	if (hpos < 0) {
 		struct dma_rec *dr2 = dr;
 		int cnt = 0;
@@ -2481,7 +2528,6 @@ static bool get_record_dma_info(struct dma_rec *drs, struct dma_rec *dr, TCHAR *
 	} else {
 		_tcscpy(srtext, sr);
 	}
-	int ipl = 0;
 	if (iplp) {
 		ipl = *iplp;
 		if (dr->ipl > 0) {
@@ -2702,6 +2748,7 @@ static void decode_dma_record(int hpos, int vpos, int count, int toggle, bool lo
 {
 	struct dma_rec *dr, *dr_start;
 	int h, i, maxh = 0;
+	int ipl = -2;
 
 	if (!dma_record[0] || hpos < 0 || vpos < 0)
 		return;
@@ -2727,7 +2774,6 @@ static void decode_dma_record(int hpos, int vpos, int count, int toggle, bool lo
 			maxh = maxh2;
 		}
 	}
-	int ipl = -2;
 	while (h < maxh) {
 		int cols = (logfile ? 16 : 8);
 		TCHAR l1[400];
@@ -2745,10 +2791,11 @@ static void decode_dma_record(int hpos, int vpos, int count, int toggle, bool lo
 		for (i = 0; i < cols && h < maxh; i++, h++, dr++) {
 			TCHAR l1l[16], l2l[16], l3l[16], l4l[16], l5l[16], l6l[16];
 			uae_u32 split = 0xffffffff;
+			TCHAR *p;
 
 			get_record_dma_info(dr_start, dr, l1l, l2l, l3l, l4l, l5l, l6l, &split, &ipl);
 
-			TCHAR *p = l1 + _tcslen(l1);
+			p = l1 + _tcslen(l1);
 			_stprintf(p, _T("%11s  "), l1l);
 			p = l2 + _tcslen(l2);
 			_stprintf(p, _T("%11s  "), l2l);
@@ -2764,30 +2811,33 @@ static void decode_dma_record(int hpos, int vpos, int count, int toggle, bool lo
 			if (split != 0xffffffff) {
 				if (split < 0x10000) {
 					struct instr *dp = table68k + split;
+					struct mnemolookup *lookup;
+					const TCHAR *opcodename;
+					TCHAR *ptrs[7];
+					int k;
 					if (dp->mnemo == i_ILLG) {
 						split = 0x4AFC;
 						dp = table68k + split;
 					}
-					struct mnemolookup *lookup;
 					for (lookup = lookuptab; lookup->mnemo != dp->mnemo; lookup++)
 						;
-					const TCHAR *opcodename = lookup->friendlyname;
+					opcodename = lookup->friendlyname;
 					if (!opcodename) {
 						opcodename = lookup->name;
 					}
-					TCHAR *ptrs[7];
 					ptrs[0] = &l1[_tcslen(l1)];
 					ptrs[1] = &l2[_tcslen(l2)];
 					ptrs[2] = &l3[_tcslen(l3)];
 					ptrs[3] = &l4[_tcslen(l4)];
 					ptrs[4] = &l5[_tcslen(l5)];
 					ptrs[5] = &l6[_tcslen(l6)];
-					for (int i = 0; i < 6; i++) {
-						if (!opcodename[i]) {
+					for (k = 0; k < 6; k++) {
+						TCHAR *pk;
+						if (!opcodename[k]) {
 							break;
 						}
-						TCHAR *p = ptrs[i];
-						p[-1] = opcodename[i];
+						pk = ptrs[k];
+						pk[-1] = opcodename[k];
 					}
 				} else {
 					l1[_tcslen(l1) - 1] = '*';
@@ -3374,7 +3424,7 @@ static void illg_init (void)
 		}
 		addr = end - 1;
 	}
-	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+	for (i = 0; i < MAX_RTG_BOARDS; i++) {
 		if (currprefs.rtgboards[i].rtgmem_size)
 			memset (illghdebug + (gfxmem_banks[i]->start >> 16), 3, currprefs.rtgboards[i].rtgmem_size >> 16);
 	}
@@ -3531,10 +3581,11 @@ void debug_smc_clear(uaecptr addr, int size)
 		return;
 	smc_version++;
 	if (smc_version == 0) {
-		for (uae_u32 i = 0; i < smc_size; i += 65536) {
+		uae_u32 i, j;
+		for (i = 0; i < smc_size; i += 65536) {
 			addrbank *ab = &get_mem_bank(i);
 			if (ab->flags & (ABFLAG_RAM | ABFLAG_ROM)) {
-				for (uae_u32 j = 0; j < 65536; j++) {
+				for (j = 0; j < 65536; j++) {
 					struct smc_item *si = &smc_table[i + j];
 					if (size < 0 || (si->addr >= addr && si->addr < addr + size)) {
 						si->addr = 0xffffffff;
@@ -3552,6 +3603,7 @@ static void smc_detector(uaecptr addr, int rwi, int size, uae_u32 *valp)
 {
 	int hitcnt;
 	uaecptr hitaddr, hitpc;
+	int i;
 
 	if (!smc_table)
 		return;
@@ -3559,7 +3611,7 @@ static void smc_detector(uaecptr addr, int rwi, int size, uae_u32 *valp)
 		return;
 
 	if (rwi == 2) {
-		for (int i = 0; i < size; i++) {
+		for (i = 0; i < size; i++) {
 			struct smc_item *si = &smc_table[addr + i];
 			if (si->version != smc_version) {
 				si->version = smc_version;
@@ -3573,7 +3625,7 @@ static void smc_detector(uaecptr addr, int rwi, int size, uae_u32 *valp)
 		return;
 	}
 	hitpc = 0xffffffff;
-	for (int i = 0; i < size && hitpc == 0xffffffff && addr + i < smc_size; i += 2) {
+	for (i = 0; i < size && hitpc == 0xffffffff && addr + i < smc_size; i += 2) {
 		struct smc_item *si = &smc_table[addr + i];
 		if (si->version == smc_version) {
 			hitpc = si->addr;
@@ -3621,9 +3673,10 @@ uae_u8 *save_debug_memwatch (size_t *len, uae_u8 *dstptr)
 {
 	uae_u8 *dstbak, *dst;
 	int total;
+	int i;
 
 	total = 0;
-	for (int i = 0; i < MEMWATCH_TOTAL; i++) {
+	for (i = 0; i < MEMWATCH_TOTAL; i++) {
 		if (mwnodes[i].size > 0)
 			total++;
 	}
@@ -3636,7 +3689,7 @@ uae_u8 *save_debug_memwatch (size_t *len, uae_u8 *dstptr)
 		dstbak = dst = xmalloc (uae_u8, 1000);
 	save_u32 (1);
 	save_u8 (total);
-	for (int i = 0; i < MEMWATCH_TOTAL; i++) {
+	for (i = 0; i < MEMWATCH_TOTAL; i++) {
 		struct memwatch_node *m = &mwnodes[i];
 		if (m->size <= 0)
 			continue;
@@ -3666,13 +3719,18 @@ uae_u8 *save_debug_memwatch (size_t *len, uae_u8 *dstptr)
 
 uae_u8 *restore_debug_memwatch (uae_u8 *src)
 {
+	int total;
+	int i;
+
 	if (restore_u32 () != 1)
 		return src;
-	int total = restore_u8 ();
-	for (int i = 0; i < total; i++) {
+	total = restore_u8 ();
+	for (i = 0; i < total; i++) {
+		int idx;
+		struct memwatch_node *m;
 		restore_store_pos ();
-		int idx = restore_u8 ();
-		struct memwatch_node *m = &mwnodes[idx];
+		idx = restore_u8 ();
+		m = &mwnodes[idx];
 		m->modval_written = restore_u8 ();
 		m->mustchange = restore_u8 ();
 		m->frozen = restore_u8 ();
@@ -3696,7 +3754,8 @@ uae_u8 *restore_debug_memwatch (uae_u8 *src)
 
 void restore_debug_memwatch_finish (void)
 {
-	for (int i = 0; i < MEMWATCH_TOTAL; i++) {
+	int i;
+	for (i = 0; i < MEMWATCH_TOTAL; i++) {
 		struct memwatch_node *m = &mwnodes[i];
 		if (m->size) {
 			if (!memwatch_enabled)
@@ -3708,16 +3767,20 @@ void restore_debug_memwatch_finish (void)
 
 void debug_check_reg(uae_u32 addr, int write, uae_u16 v)
 {
+	int reg;
+	const struct customData *cd;
+	int spc;
+
 	if (!memwatch_access_validator)
 		return;
-	int reg = addr & 0x1ff;
-	const struct customData *cd = &custd[reg >> 1];
+	reg = addr & 0x1ff;
+	cd = &custd[reg >> 1];
 
 	if (((addr & 0xfe00) != 0xf000 && (addr & 0xffff0000) != 0) || ((addr & 0xffff0000) != 0 && (addr & 0xffff0000) != 0x00df0000) || (addr & 0x0600)) {
 		write_log(_T("Mirror custom register %08x (%s) %s access. PC=%08x\n"), addr, cd->name, write ? _T("write") : _T("read"), M68K_GETPC);
 	}
 
-	int spc = cd->special;
+	spc = cd->special;
 	if ((spc & CD_AGA) && !(currprefs.chipset_mask & CSMASK_AGA))
 		spc |= CD_NONE;
 	if ((spc & CD_ECS_DENISE) && !(currprefs.chipset_mask & CSMASK_ECS_DENISE))
@@ -3764,6 +3827,8 @@ void debug_check_reg(uae_u32 addr, int write, uae_u16 v)
 
 void debug_invalid_reg(int reg, int size, uae_u16 v)
 {
+	const struct customData *cd;
+
 	if (!memwatch_access_validator)
 		return;
 	reg &= 0x1ff;
@@ -3773,7 +3838,7 @@ void debug_invalid_reg(int reg, int size, uae_u16 v)
 		if (reg == 6) // VPOS
 			return;
 	}
-	const struct customData *cd = &custd[reg >> 1];
+	cd = &custd[reg >> 1];
 	if (size == -2 && (reg & 1)) {
 		write_log(_T("Unaligned word write to register %04x (%s) val %04x PC=%08x\n"), reg, cd->name, v, M68K_GETPC);
 	} else if (size == -1) {
@@ -3787,6 +3852,9 @@ void debug_invalid_reg(int reg, int size, uae_u16 v)
 
 static void is_valid_dma(int reg, int ptrreg, uaecptr addr)
 {
+	const struct customData *cdreg;
+	const struct customData *cdptr;
+
 	if (!memwatch_access_validator)
 		return;
 	if (reg == 0x1fe) // refresh
@@ -3797,8 +3865,8 @@ static void is_valid_dma(int reg, int ptrreg, uaecptr addr)
 	}
 	if (!(addr & ~(currprefs.chipmem.size - 1)))
 		return;
-	const struct customData *cdreg = &custd[reg >> 1];
-	const struct customData *cdptr = &custd[ptrreg >> 1];
+	cdreg = &custd[reg >> 1];
+	cdptr = &custd[ptrreg >> 1];
 	write_log(_T("DMA DAT %04x (%s), PT %04x (%s) accessed invalid memory %08x. Init: %08x, PC/COP=%08x\n"),
 		reg, cdreg->name, ptrreg, cdptr->name, addr,
 		(custom_storage[ptrreg >> 1].value << 16) | (custom_storage[(ptrreg >> 1) + 1].value),
@@ -3808,9 +3876,10 @@ static void is_valid_dma(int reg, int ptrreg, uaecptr addr)
 static void mungwall_memwatch(uaecptr addr, int rwi, int size, uae_u32 valp)
 {
 	struct mungwall_data *mwd = mungwall[addr >> 16];
+	int i;
 	if (!mwd)
 		return;
-	for (int i = 0; i < mwd->slots; i++) {
+	for (i = 0; i < mwd->slots; i++) {
 		if (!mwd->end[i])
 			continue;
 		if (addr + size > mwd->start[i] && addr < mwd->end[i]) {
@@ -3821,11 +3890,12 @@ static void mungwall_memwatch(uaecptr addr, int rwi, int size, uae_u32 valp)
 
 static void memwatch_hit_msg(int mw)
 {
+	int i;
 	console_out_f(_T("Memwatch %d: break at %08X.%c %c%c%c %08X PC=%08X "), mw, mwhit.addr,
 		mwhit.size == 1 ? 'B' : (mwhit.size == 2 ? 'W' : 'L'),
 		(mwhit.rwi & 1) ? 'R' : ' ', (mwhit.rwi & 2) ? 'W' : ' ', (mwhit.rwi & 4) ? 'I' : ' ',
 		mwhit.val, mwhit.pc);
-	for (int i = 0; memwatch_access_masks[i].mask; i++) {
+	for (i = 0; memwatch_access_masks[i].mask; i++) {
 		if (mwhit.access_mask == memwatch_access_masks[i].mask)
 			console_out_f(_T("%s (%03x)\n"), memwatch_access_masks[i].name, mwhit.reg);
 	}
@@ -3837,6 +3907,7 @@ static void memwatch_hit_msg(int mw)
 static int memwatch_func (uaecptr addr, int rwi, int size, uae_u32 *valp, uae_u32 accessmask, uae_u32 reg)
 {
 	uae_u32 val = *valp;
+	int i;
 
 	if (inside_debugger)
 		return 1;
@@ -3855,7 +3926,7 @@ static int memwatch_func (uaecptr addr, int rwi, int size, uae_u32 *valp, uae_u3
 	if (smc_table && (rwi >= 2))
 		smc_detector (addr, rwi, size, valp);
 
-	for (int i = mwnodes_start; i <= mwnodes_end; i++) {
+	for (i = mwnodes_start; i <= mwnodes_end; i++) {
 		struct memwatch_node *m = &mwnodes[i];
 		uaecptr addr2 = m->addr;
 		uaecptr addr3 = addr2 + m->size;
@@ -4256,13 +4327,14 @@ static int membank_total;
 
 static void memwatch_reset (void)
 {
-	for (int i = 0; i < membank_total; i++) {
+	int i;
+	for (i = 0; i < membank_total; i++) {
 		addrbank *ab = debug_mem_banks[i];
 		if (!ab)
 			continue;
 		map_banks_quick (ab, i, 1, 1);
 	}
-	for (int i = 0; membank_stores[i].addr; i++) {
+	for (i = 0; membank_stores[i].addr; i++) {
 		struct membank_store *ms = &membank_stores[i];
 		/* name was allocated in memwatch_remap */
 		xfree ((char*)ms->newbank.name);
@@ -4338,19 +4410,21 @@ static void memwatch_remap (uaecptr addr)
 
 static void memwatch_setup(void)
 {
+	int i;
 	memwatch_reset();
 	mwnodes_start = MEMWATCH_TOTAL - 1;
 	mwnodes_end = 0;
-	for (int i = 0; i < MEMWATCH_TOTAL; i++) {
+	for (i = 0; i < MEMWATCH_TOTAL; i++) {
 		struct memwatch_node *m = &mwnodes[i];
+		int addr, eaddr;
 		if (!m->size)
 			continue;
 		if (mwnodes_start > i)
 			mwnodes_start = i;
 		if (mwnodes_end < i)
 			mwnodes_end = i;
-		int addr = m->addr & ~65535;
-		int eaddr = (m->addr + m->size + 65535) & ~65535;
+		addr = m->addr & ~65535;
+		eaddr = (m->addr + m->size + 65535) & ~65535;
 		while (addr < eaddr) {
 			memwatch_remap(addr);
 			addr += 65536;
@@ -4381,19 +4455,21 @@ static int deinitialize_memwatch (void)
 
 static void initialize_memwatch (int mode)
 {
+	int i;
+
 	membank_total = currprefs.address_space_24 ? 256 : 65536;
 	deinitialize_memwatch ();
 	debug_mem_banks = xcalloc (addrbank*, 65536);
 	if (!debug_mem_banks)
 		return;
 	if (membank_total < 65536) {
-		for (int i = 256; i < 65536; i++) {
+		for (i = 256; i < 65536; i++) {
 			debug_mem_banks[i] = &dummy_bank;
 		}
 	}
 	debug_mem_area = xcalloc (addrbank, membank_total);
 	membank_stores = xcalloc (struct membank_store, MEMWATCH_STORE_SLOTS);
-	for (int i = 0; i < MEMWATCH_TOTAL; i++) {
+	for (i = 0; i < MEMWATCH_TOTAL; i++) {
 		struct memwatch_node *m = &mwnodes[i];
 		m->pc = 0xffffffff;
 	}
@@ -4454,9 +4530,10 @@ int debug_bankchange (int mode)
 addrbank *get_mem_bank_real(uaecptr addr)
 {
 	addrbank *ab = &get_mem_bank(addr);
+	addrbank *ab2;
 	if (!memwatch_enabled)
 		return ab;
-	addrbank *ab2 = debug_mem_banks[addr >> 16];
+	ab2 = debug_mem_banks[addr >> 16];
 	if (ab2)
 		return ab2;
 	return ab;
@@ -4477,7 +4554,7 @@ static const TCHAR *getsizechar (int size)
 
 void memwatch_dump2 (TCHAR *buf, int bufsize, int num)
 {
-	int i;
+	int i, j;
 	struct memwatch_node *mwn;
 
 	if (buf)
@@ -4511,7 +4588,7 @@ void memwatch_dump2 (TCHAR *buf, int bufsize, int num)
 					(mwn->bus_error & 2) ? _T("W") : _T(""),
 					(mwn->bus_error & 4) ? _T("P") : _T(""));
 			}
-			for (int j = 0; memwatch_access_masks[j].mask; j++) {
+			for (j = 0; memwatch_access_masks[j].mask; j++) {
 				uae_u32 mask = memwatch_access_masks[j].mask;
 				if ((mwn->access_mask & mask) == mask && (usedmask & mask) == 0) {
 					buf = buf_out(buf, &bufsize, _T(" "));
@@ -4629,8 +4706,9 @@ static void memwatch (TCHAR **c)
 		ignore_ws (c);
 		if (more_params (c)) {
 			TCHAR *cs = *c;
+			int i;
 			while (*cs) {
-				for (int i = 0; memwatch_access_masks[i].mask; i++) {
+				for (i = 0; memwatch_access_masks[i].mask; i++) {
 					const TCHAR *n = memwatch_access_masks[i].name;
 					int len = uaetcslen(n);
 					if (!_tcsnicmp(cs, n, len)) {
@@ -4721,6 +4799,7 @@ static void copymem(TCHAR **c)
 {
 	uae_u32 addr = 0, eaddr = 0, dst = 0;
 	bool err;
+	uae_u32 addrb, dstb, len;
 
 	ignore_ws(c);
 	if (!more_params(c))
@@ -4746,9 +4825,9 @@ static void copymem(TCHAR **c)
 
 	if (addr >= eaddr)
 		return;
-	uae_u32 addrb = addr;
-	uae_u32 dstb = dst;
-	uae_u32 len = eaddr - addr;
+	addrb = addr;
+	dstb = dst;
+	len = eaddr - addr;
 	if (dst <= addr) {
 		while (addr < eaddr) {
 			put_byte(dst, get_byte(addr));
@@ -4775,6 +4854,10 @@ static void writeintomem (TCHAR **c)
 	int len = 1;
 	bool fillmode = false;
 	bool err;
+	TCHAR *cb;
+	uae_u32 addrc;
+	bool retry = false;
+	uae_u32 addrb;
 
 	if (**c == 'f') {
 		fillmode = true;
@@ -4804,13 +4887,12 @@ static void writeintomem (TCHAR **c)
 
 	if (!more_params (c))
 		return;
-	TCHAR *cb = *c;
-	uae_u32 addrc = addr;
-	bool retry = false;
+	cb = *c;
+	addrc = addr;
 	for(;;) {
 		cc = peekchar(c);
 		retry = false;
-		uae_u32 addrb = addr;
+		addrb = addr;
 		if (cc == '\'' || cc == '\"') {
 			TCHAR quoted = cc;
 			next_char2(c);
@@ -4974,6 +5056,7 @@ static void memory_map_dump_3(UaeMemoryMap *map, int log)
 				int bankoffset2 = bankoffset;
 				if (sb) {
 					uaecptr daddr;
+					addrbank *dab;
 					if (!sb->bank)
 						break;
 					daddr = (j << 16) | bankoffset;
@@ -4984,7 +5067,7 @@ static void memory_map_dump_3(UaeMemoryMap *map, int log)
 						if (bankoffset2 >= 65536)
 							break;
 						daddr = (j << 16) | bankoffset2;
-						addrbank *dab = get_sub_bank(&daddr);
+						dab = get_sub_bank(&daddr);
 						if (dab != a1)
 							break;
 					}
@@ -5016,9 +5099,10 @@ static void memory_map_dump_3(UaeMemoryMap *map, int log)
 				if ((a1->flags & ABFLAG_ROM) && mirrored) {
 					TCHAR *p = txt + _tcslen (txt);
 					uae_u32 crc = 0xffffffff;
+					struct romdata *rd;
 					if (a1->check(((j << 16) | bankoffset), (size * 1024) / mirrored))
 						crc = get_crc32 (a1->xlateaddr((j << 16) | bankoffset), (size * 1024) / mirrored);
-					struct romdata *rd = getromdatabycrc (crc);
+					rd = getromdatabycrc (crc);
 					_stprintf (p, _T(" (%08X)"), crc);
 					if (rd) {
 						tmp[0] = '=';
@@ -5028,10 +5112,12 @@ static void memory_map_dump_3(UaeMemoryMap *map, int log)
 				}
 
 				if (a1 != &dummy_bank) {
-					for (int m = 0; m < mirrored2; m++) {
+					int m;
+					for (m = 0; m < mirrored2; m++) {
+						UaeMemoryRegion *r;
 						if (map->num_regions >= UAE_MEMORY_REGIONS_MAX)
 							break;
-						UaeMemoryRegion *r = &map->regions[map->num_regions];
+						r = &map->regions[map->num_regions];
 						r->start = (j << 16) + bankoffset + region_size * m;
 						r->size = region_size;
 						r->flags = 0;
@@ -5155,11 +5241,13 @@ static void print_task_info (uaecptr node, bool nonactive)
 	}
 	if (nonactive) {
 		uae_u32 sigwait = get_long_debug(node + 22);
+		int offset = kickstart_version >= 37 ? 74 : 70;
+		uae_u32 sp;
+		uae_u32 pc;
 		if (sigwait)
 			console_out_f(_T("          Waiting signals: %08x\n"), sigwait);
-		int offset = kickstart_version >= 37 ? 74 : 70;
-		uae_u32 sp = get_long_debug(node + 54) + offset;
-		uae_u32 pc = get_long_debug(sp);
+		sp = get_long_debug(node + 54) + offset;
+		pc = get_long_debug(sp);
 		console_out_f(_T("          SP: %08x PC: %08x\n"), sp, pc);
 	}
 }
@@ -5222,7 +5310,8 @@ static TCHAR *getfrombstr(uaecptr pp)
 	uae_u8 len = get_byte(pp << 2);
 	TCHAR *s = xcalloc (TCHAR, len + 1);
 	char data[256];
-	for (int i = 0; i < len; i++) {
+	int i;
+	for (i = 0; i < len; i++) {
 		data[i] = get_byte((pp << 2) + 1 + i);
 		data[i + 1] = 0;
 	}
@@ -5261,14 +5350,17 @@ static void show_exec_lists (TCHAR *t)
 	uaecptr execbase = get_long_debug (4);
 	uaecptr list = 0, node;
 	TCHAR c = t[0];
+	int i, j;
+	bool full = false;
 
 	if (c == 'o' || c == 'O') { // doslist
 		uaecptr dosbase = get_base ("dos.library", 378);
 		if (dosbase) {
 			uaecptr rootnode = get_long_debug (dosbase + 34);
 			uaecptr dosinfo = get_long_debug (rootnode + 24) << 2;
+			uaecptr doslist;
 			console_out_f (_T("ROOTNODE: %08x DOSINFO: %08x\n"), rootnode, dosinfo);
-			uaecptr doslist = get_long_debug (dosinfo + 4) << 2;
+			doslist = get_long_debug (dosinfo + 4) << 2;
 			while (doslist) {
 				int type = get_long_debug (doslist + 4);
 				uaecptr msgport = get_long_debug (doslist + 8);
@@ -5283,8 +5375,9 @@ static void show_exec_lists (TCHAR *t)
 						get_long_debug (doslist + 32) << 2, get_long_debug (doslist + 36));
 					if (fssm >= 0x100 && (fssm & 3) == 0) {
 						TCHAR *unitname = getfrombstr(get_long_debug(fssm + 4));
+						uaecptr de;
 						console_out_f (_T("   %s:%d %08x\n"), unitname, get_long_debug(fssm), get_long_debug(fssm + 8));
-						uaecptr de = get_long_debug(fssm + 8) << 2;
+						de = get_long_debug(fssm + 8) << 2;
 						if (de) {
 							console_out_f (_T("    TableSize       %u\n"), get_long_debug(de + 0));
 							console_out_f (_T("    SizeBlock       %u\n"), get_long_debug(de + 4));
@@ -5323,7 +5416,7 @@ static void show_exec_lists (TCHAR *t)
 		static const int it[] = {  1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0 };
 		static const int it2[] = { 1, 1, 1, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 6, 6, 7 };
 		list = execbase + 84;
-		for (int i = 0; i < 16; i++) {
+		for (i = 0; i < 16; i++) {
 			console_out_f (_T("%2d %d: %08X\n"), i + 1, it2[i], list);
 			if (it[i]) {
 				console_out_f (_T("  [H] %08X\n"), get_long_debug (list));
@@ -5347,7 +5440,7 @@ static void show_exec_lists (TCHAR *t)
 						if (!_tcsicmp (name, _T("cia-a")) || !_tcsicmp (name, _T("cia-b"))) {
 							static const TCHAR *ciai[] = { _T("A"), _T("B"), _T("ALRM"), _T("SP"), _T("FLG") };
 							uaecptr cia = node + 22;
-							for (int j = 0; j < 5; j++) {
+							for (j = 0; j < 5; j++) {
 								uaecptr ciap = get_long_debug (cia);
 								console_out_f (_T("        %5s: %08x"), ciai[j], ciap);
 								if (ciap) {
@@ -5400,7 +5493,7 @@ static void show_exec_lists (TCHAR *t)
 						get_word_debug(list + 16 + 4), get_byte_debug(list + 16 + 1),
 						get_long_debug(list + 16 + 6), rom_vector,
 						get_word_debug(list + 16 + 4), get_byte_debug(list + 16 + 1));
-					for (int i = 0; i < 16; i++) {
+					for (i = 0; i < 16; i++) {
 						console_out_f(_T("%02x"), get_byte_debug(list + 16 + i));
 						if (i < 15)
 							console_out_f(_T("."));
@@ -5422,9 +5515,10 @@ static void show_exec_lists (TCHAR *t)
 							(diagarea[10] << 8) | diagarea[11],
 							(diagarea[12] << 8) | diagarea[13]);
 						if (nameoffset != 0 && nameoffset != 0xffff) {
+							TCHAR *str;
 							copyromdata(config, rom, nameoffset, diagarea, 256);
 							diagarea[sizeof diagarea - 1] = 0;
-							TCHAR *str = au((char*)diagarea);
+							str = au((char*)diagarea);
 							console_out_f(_T(" '%s'\n"), str);
 							xfree(str);
 						}
@@ -5445,12 +5539,15 @@ static void show_exec_lists (TCHAR *t)
 				list = resident & 0x7fffffff;
 				continue;
 			}
+			{
 			uae_u8 *addr;
+			TCHAR *name1;
+			TCHAR *name2;
 			addr = get_real_address_debug(get_long_debug (resident + 14));
-			TCHAR *name1 = addr ? au ((char*)addr) : au("<null>");
+			name1 = addr ? au ((char*)addr) : au("<null>");
 			my_trim (name1);
 			addr = get_real_address_debug(get_long_debug (resident + 18));
-			TCHAR *name2 = addr ? au ((char*)addr) : au("<null>");
+			name2 = addr ? au ((char*)addr) : au("<null>");
 			my_trim (name2);
 			console_out_f (_T("%08X %08X: %02X %3d %02X %+3.3d '%s' ('%s')\n"),
 				list, resident,
@@ -5459,6 +5556,7 @@ static void show_exec_lists (TCHAR *t)
 				name1, name2);
 			xfree (name2);
 			xfree (name1);
+			}
 			list += 4;
 		}
 		return;
@@ -5491,7 +5589,7 @@ static void show_exec_lists (TCHAR *t)
 				my_trim (name);
 				console_out_f (_T("%08x: '%s'\n"), node, name);
 				xfree (name);
-				for (int i = 0; fsnames[i]; i++) {
+				for (i = 0; fsnames[i]; i++) {
 					uae_u32 v = get_long_debug (node + 14 + i * 4);
 					console_out_f (_T("%16s = %08x %d\n"), fsnames[i], v, v);
 				}
@@ -5509,12 +5607,13 @@ static void show_exec_lists (TCHAR *t)
 		while (get_long_debug (node)) {
 			TCHAR *name = au ((char*)get_real_address_debug(get_long_debug (node + 10)));
 			uae_u16 v = get_word_debug (node + 8);
+			uaecptr mc;
 			console_out_f (_T("%08x %d %d %s\n"), node, (int)((v >> 8) & 0xff), (uae_s8)(v & 0xff), name);
 			xfree (name);
 			console_out_f (_T("Attributes %04x First %08x Lower %08x Upper %08x Free %d\n"),
 				get_word_debug (node + 14), get_long_debug (node + 16), get_long_debug (node + 20), 
 				get_long_debug (node + 24), get_long_debug (node + 28));
-			uaecptr mc = get_long_debug (node + 16);
+			mc = get_long_debug (node + 16);
 			while (mc) {
 				uae_u32 mc1 = get_long_debug (mc);
 				uae_u32 mc2 = get_long_debug (mc + 4);
@@ -5527,7 +5626,6 @@ static void show_exec_lists (TCHAR *t)
 		return;
 	}
 
-	bool full = false;
 	switch (c)
 	{
 	case 'r': // resources
@@ -5682,8 +5780,9 @@ int instruction_breakpoint(TCHAR **c)
 			if (more_params(c)) {
 				int bpidx = readint(c, NULL);
 				if (more_params(c) && bpidx >= 0 && bpidx < BREAKPOINT_TOTAL) {
+					int regid;
 					bpn = &bpnodes[bpidx];
-					int regid = getregidx(c);
+					regid = getregidx(c);
 					if (regid >= 0) {
 						bpn->type = regid;
 						bpn->mask = 0xffffffff;
@@ -5709,12 +5808,13 @@ int instruction_breakpoint(TCHAR **c)
 			return 0;
 		} else if (nc == 'I') {
 			uae_u16 opcodes[32];
+			int w;
 			next_char(c);
 			ignore_ws(c);
 			trace_param[1] = 0x10000;
 			trace_param[2] = 0x10000;
 
-			int w = m68k_asm(*c, opcodes, 0);
+			w = m68k_asm(*c, opcodes, 0);
 			if (w > 0) {
 				trace_param[0] = opcodes[0];
 				if (w > 1) {
@@ -5916,6 +6016,7 @@ static void searchmem (TCHAR **cc)
 	uae_u8 ss[256];
 	uae_u32 addr, endaddr;
 	TCHAR nc;
+	bool out;
 
 	got = 0;
 	sslen = 0;
@@ -5987,7 +6088,7 @@ static void searchmem (TCHAR **cc)
 	}
 	console_out_f (_T("Searching from %08X to %08X..\n"), addr + 1, endaddr);
 	nextaddr_init(addr);
-	bool out = false;
+	out = false;
 	while ((addr = nextaddr(addr, endaddr, NULL, true, &out)) != 0xffffffff) {
 		if (addr == endaddr)
 			break;
@@ -6344,6 +6445,7 @@ static void find_ea (TCHAR **inptr)
 	uaecptr addr, end, end2;
 	int hits = 0;
 	bool err;
+	bool out;
 
 	addr = 0xffffffff;
 	end = lastaddr(addr);
@@ -6368,7 +6470,7 @@ static void find_ea (TCHAR **inptr)
 	console_out_f (_T("Searching from %08X to %08X\n"), addr + 1, end);
 	end2 = 0;
 	nextaddr_init(addr);
-	bool out = false;
+	out = false;
 	while((addr = nextaddr(addr, end, &end2, true, &out)) != 0xffffffff) {
 		if ((addr & 1) == 0 && addr + 6 <= end2) {
 			sea = 0xffffffff;
@@ -6468,6 +6570,7 @@ static void dma_disasm(int frames, int vp, int hp, int frames_end, int vp_end, i
 		return;
 	for (;;) {
 		struct dma_rec *dr = NULL, *drs = NULL;
+		TCHAR l1[16], l2[16], l3[16], l4[16];
 		if (dma_record_frame[0] == frames) {
 			drs = &dma_record[0][vp * NR_DMA_REC_HPOS];
 			dr = &dma_record[0][vp * NR_DMA_REC_HPOS + hp];
@@ -6477,7 +6580,6 @@ static void dma_disasm(int frames, int vp, int hp, int frames_end, int vp_end, i
 		}
 		if (!dr)
 			return;
-		TCHAR l1[16], l2[16], l3[16], l4[16];
 		if (get_record_dma_info(drs, dr, l1, l2, l3, l4, NULL, NULL, NULL, NULL)) {
 			TCHAR tmp[256];
 			_stprintf(tmp, _T(" - %02d %02X %s"), dr->ipl, dr->hpos, l2);
@@ -6539,14 +6641,16 @@ static bool debug_line (TCHAR *input)
 
 	if (asmmode) {
 		if (more_params(&inptr)) {
+			uae_u16 asmout[16];
+			int inss;
+			int i;
 			if (!_tcsicmp(inptr, _T("x"))) {
 				asmmode = false;
 				return false;
 			}
-			uae_u16 asmout[16];
-			int inss = m68k_asm(inptr, asmout, asmaddr);
+			inss = m68k_asm(inptr, asmout, asmaddr);
 			if (inss > 0) {
-				for (int i = 0; i < inss; i++) {
+				for (i = 0; i < inss; i++) {
 					put_word(asmaddr + i * 2, asmout[i]);
 				}
 				m68k_disasm(asmaddr, &nxdis, 0xffffffff, 1);
@@ -6605,9 +6709,10 @@ static bool debug_line (TCHAR *input)
 		case 'e':
 		{
 			bool aga = tolower(*inptr) == 'a';
+			bool ext;
 			if (aga)
 				next_char(&inptr);
-			bool ext = tolower(*inptr) == 'x';
+			ext = tolower(*inptr) == 'x';
 			dump_custom_regs(aga, ext);
 		}
 		break;
@@ -6675,9 +6780,11 @@ static bool debug_line (TCHAR *input)
 				}
 				if (more_params(&inptr)) {
 					uae_u16 asmout[16];
-					int inss = m68k_asm(inptr, asmout, asmaddr);
+					int inss;
+					int i;
+					inss = m68k_asm(inptr, asmout, asmaddr);
 					if (inss > 0) {
-						for (int i = 0; i < inss; i++) {
+						for (i = 0; i < inss; i++) {
 							put_word(asmaddr + i * 2, asmout[i]);
 						}
 						m68k_disasm(asmaddr, &nxdis, 1, 0xffffffff);
@@ -6998,11 +7105,14 @@ static bool debug_line (TCHAR *input)
 		case 'V':
 			{
 				static int v1 = 0, v2 = 0, v3 = 0;
+				int i, j;
 				if (*inptr == 'h') {
 					inptr++;
 					if (more_params(&inptr) && *inptr == '?') {
 						mw_help();
 					} else if (!heatmap) {
+						TCHAR buf[200];
+						TCHAR *pbuf;
 						debug_heatmap = 1;
 						init_heatmap();
 						if (more_params(&inptr)) {
@@ -7011,8 +7121,6 @@ static bool debug_line (TCHAR *input)
 								debug_heatmap = 2;
 							}
 						}
-						TCHAR buf[200];
-						TCHAR *pbuf;
 						_stprintf(buf, _T("0 dff000 200 NONE"));
 						pbuf = buf;
 						memwatch(&pbuf);
@@ -7051,7 +7159,7 @@ static bool debug_line (TCHAR *input)
 								if (more_params(&inptr)) {
 									uae_u32 rgb = readhex(&inptr, NULL);
 									if (v2 == 0) {
-										for (int i = 0; i < DMARECORD_SUBITEMS; i++) {
+										for (i = 0; i < DMARECORD_SUBITEMS; i++) {
 											debug_colors[v1].l[i] = rgb;
 										}
 									} else {
@@ -7066,8 +7174,8 @@ static bool debug_line (TCHAR *input)
 							}
 						}
 					} else {
-						for (int i = 0; i < DMARECORD_MAX; i++) {
-							for (int j = 0; j < DMARECORD_SUBITEMS; j++) {
+						for (i = 0; i < DMARECORD_MAX; i++) {
+							for (j = 0; j < DMARECORD_SUBITEMS; j++) {
 								if (j < debug_colors[i].max) {
 									console_out_f(_T("%d,%d: %08x %s %s\n"), i, j, debug_colors[i].l[j], debug_colors[i].enabled ? _T("*") : _T(" "), debug_colors[i].name);
 								}
@@ -7078,8 +7186,9 @@ static bool debug_line (TCHAR *input)
 					if (more_params(&inptr) && *inptr == '?') {
 						mw_help();
 					} else {
+						int nextcmd;
 						free_heatmap();
-						int nextcmd = peekchar(&inptr);
+						nextcmd = peekchar(&inptr);
 						if (nextcmd == 'l') {
 							next_char(&inptr);
 						}
@@ -7373,11 +7482,12 @@ void debug (void)
 			uae_u16 opcode;
 			int bpnum = -1;
 			int bp = 0;
+			int i;
 
 			pc = munge24 (m68k_getpc ());
 			opcode = currprefs.cpu_model < 68020 && (currprefs.cpu_compatible || currprefs.cpu_cycle_exact) ? regs.ir : get_word_debug (pc);
 
-			for (int i = 0; i < BREAKPOINT_TOTAL; i++) {
+			for (i = 0; i < BREAKPOINT_TOTAL; i++) {
 				struct breakpoint_node *bpn = &bpnodes[i];
 				if (check_breakpoint(bpn, pc)) {
 					int j;
@@ -7389,20 +7499,21 @@ void debug (void)
 						}
 					}
 					if (j >= BREAKPOINT_TOTAL) {
+						int max = BREAKPOINT_TOTAL;
 						if (!check_breakpoint_count(bpn, pc)) {
 							break;
 						}
-						int max = BREAKPOINT_TOTAL;
 						bpnum = i;
 						// check breakpoint chain
 						while (bpnum >= 0 && bpnodes[bpnum].chain >= 0 && bpnodes[bpnum].chain != bpnum && max > 0) {
+							struct breakpoint_node *bpn2;
 							bpnum = bpnodes[bpnum].chain;
-							struct breakpoint_node *bpn = &bpnodes[bpnum];
-							if (!check_breakpoint(bpn, pc)) {
+							bpn2 = &bpnodes[bpnum];
+							if (!check_breakpoint(bpn2, pc)) {
 								bpnum = -1;
 								break;
 							}
-							if (!check_breakpoint_count(bpn, pc)) {
+							if (!check_breakpoint_count(bpn2, pc)) {
 								bpnum = -1;
 								break;
 							}
@@ -7462,8 +7573,9 @@ void debug (void)
 						if (opcode == 0x4e75 || opcode == 0x4e73 || opcode == 0x4e77)
 							bp = -1;
 					} else if (opcode == trace_param[0]) {
+						int op;
 						bp = -1;
-						for (int op = 1; op < 3; op++) {
+						for (op = 1; op < 3; op++) {
 							if (trace_param[op] != 0x10000) {
 								uae_u16 w = 0xffff;
 								debug_get_prefetch(op, &w);
@@ -7558,7 +7670,8 @@ void debug (void)
 			savestate_capture (1);
 	}
 	if (!trace_mode) {
-		for (int i = 0; i < BREAKPOINT_TOTAL; i++) {
+		int i;
+		for (i = 0; i < BREAKPOINT_TOTAL; i++) {
 			if (bpnodes[i].enabled)
 				trace_mode = TRACE_CHECKONLY;
 		}
@@ -8117,6 +8230,8 @@ static int debug_trainer_get_ea(struct trainerpatch *tp, uaecptr pc, uae_u16 opc
 
 static void debug_trainer_enable(struct trainerpatch *tp, bool enable)
 {
+	int j;
+
 	if (tp->enabled == enable)
 		return;
 
@@ -8127,7 +8242,7 @@ static void debug_trainer_enable(struct trainerpatch *tp, bool enable)
 				tp->replacedata_original = xcalloc(uae_u16, tp->replacelength);
 				first = true;
 			}
-			for (int j = 0; j < tp->replacelength; j++) {
+			for (j = 0; j < tp->replacelength; j++) {
 				uae_u16 v = tp->replacedata[j];
 				uae_u16 m = tp->replacemaskdata[j];
 				uaecptr addr = (tp->addr - tp->offset * 2) + j * 2 + tp->replaceoffset * 2;
@@ -8141,7 +8256,7 @@ static void debug_trainer_enable(struct trainerpatch *tp, bool enable)
 				}
 			}
 		} else if (tp->replacedata_original) {
-			for (int j = 0; j < tp->replacelength; j++) {
+			for (j = 0; j < tp->replacelength; j++) {
 				uae_u16 m = tp->replacemaskdata[j];
 				uaecptr addr = (tp->addr - tp->offset * 2) + j * 2 + tp->replaceoffset * 2;
 				if (m != 0xffff) {
@@ -8181,6 +8296,7 @@ static void debug_trainer_enable(struct trainerpatch *tp, bool enable)
 			if (i < 0) {
 				write_log(_T("Trainer out of free memwatchpoints ('%s' %08x\n).\n"), tp->name, tp->addr);
 			} else {
+				TCHAR buf[256];
 				mwn->addr = tp->varaddr;
 				mwn->size = tp->varsize;
 				mwn->rwi = 1 | 2;
@@ -8199,7 +8315,6 @@ static void debug_trainer_enable(struct trainerpatch *tp, bool enable)
 				}
 				mwn->nobreak = true;
 				memwatch_setup();
-				TCHAR buf[256];
 				memwatch_dump2(buf, sizeof(buf) / sizeof(TCHAR), i);
 				write_log(_T("%s"), buf);
 			}
@@ -8218,13 +8333,14 @@ void debug_trainer_match(void)
 {
 	uaecptr pc = m68k_getpc();
 	uae_u16 opcode = x_get_word(pc);
-	for (int i = 0; i < tpptrcnt; i++) {
+	int i;
+	for (i = 0; i < tpptrcnt; i++) {
 		struct trainerpatch *tp = tpptr[i];
+		int j;
 		if (tp->first != opcode)
 			continue;
 		if (tp->addr)
 			continue;
-		int j;
 		for (j = 0; j < tp->length; j++) {
 			uae_u16 d = x_get_word(pc + (j - tp->offset) * 2);
 			if ((d & tp->maskdata[j]) != tp->data[j])
@@ -8273,7 +8389,8 @@ static int parsetrainerdata(const TCHAR *data, uae_u16 *outdata, uae_u16 *outmas
 	int len = uaetcslen(data);
 	uae_u16 v = 0, vm = 0;
 	int j = 0;
-	for (int i = 0; i < len; ) {
+	int i;
+	for (i = 0; i < len; ) {
 		TCHAR c1 = _totupper(data[i + 0]);
 		TCHAR c2 = _totupper(data[i + 1]);
 		if (c1 > 0 && c1 <= ' ') {
@@ -8336,6 +8453,9 @@ void debug_init_trainer(const TCHAR *file)
 		for (;;) {
 			TCHAR *name = NULL;
 			TCHAR *data;
+			TCHAR *p;
+			struct trainerpatch *tp;
+			int datalen;
 
 			ini_getstring_multi(ini, section, _T("name"), &name, &ictx);
 
@@ -8344,14 +8464,14 @@ void debug_init_trainer(const TCHAR *file)
 			ini_setcurrentasstart(ini, &ictx);
 			ini_setlast(ini, section, _T("data"), &ictx);
 
-			TCHAR *p = _tcschr(data, ';');
+			p = _tcschr(data, ';');
 			if (p)
 				*p = 0;
 			my_trim(data);
 
-			struct trainerpatch *tp = xcalloc(struct trainerpatch, 1);
+			tp = xcalloc(struct trainerpatch, 1);
 
-			int datalen = (uaetcslen(data) + 3) / 4;
+			datalen = (uaetcslen(data) + 3) / 4;
 			tp->data = xcalloc(uae_u16, datalen);
 			tp->maskdata = xcalloc(uae_u16, datalen);
 			tp->length = parsetrainerdata(data, tp->data, tp->maskdata);
@@ -8417,22 +8537,25 @@ void debug_init_trainer(const TCHAR *file)
 				_tcscat(s, _T(","));
 				while (*s) {
 					bool end = false;
+					TCHAR *se;
+					TCHAR *se2;
+					int evt;
 					while (*s == ' ')
 						s++;
-					TCHAR *se = _tcschr(s, ',');
+					se = _tcschr(s, ',');
 					if (se) {
 						*se = 0;
 					} else {
 						end = true;
 					}
-					TCHAR *se2 = se - 1;
+					se2 = se - 1;
 					while (se2 > s) {
 						if (*se2 != ' ')
 							break;
 						*se2 = 0;
 						se2--;
 					}
-					int evt = inputdevice_geteventid(s);
+					evt = inputdevice_geteventid(s);
 					if (evt > 0) {
 						if (tp->events) {
 							tp->events = xrealloc(int, tp->events, tp->eventcount + 1);
@@ -8478,9 +8601,10 @@ void debug_init_trainer(const TCHAR *file)
 
 bool debug_trainer_event(int evt, int state)
 {
-	for (int i = 0; i < tpptrcnt; i++) {
+	int i, j;
+	for (i = 0; i < tpptrcnt; i++) {
 		struct trainerpatch *tp = tpptr[i];
-		for (int j = 0; j < tp->eventcount; j++) {
+		for (j = 0; j < tp->eventcount; j++) {
 			if (tp->events[j] <= 0)
 				continue;
 			if (tp->events[j] == evt) {
@@ -8539,14 +8663,16 @@ static int debugsprintf_mode;
 
 static void read_bstring(char *out, int max, uae_u32 addr)
 {
+	uae_u8 l;
+	int i;
 	out[0] = 0;
 	if (!valid_address(addr, 1))
 		return;
-	uae_u8 l = get_byte(addr);
+	l = get_byte(addr);
 	if (l > max)
 		l = max;
 	addr++;
-	for (int i = 0; i < l && i < max; i++) {
+	for (i = 0; i < l && i < max; i++) {
 		uae_u8 c = 0;
 		if (valid_address(addr, 1)) {
 			c = get_byte(addr);
@@ -8562,8 +8688,9 @@ static void read_bstring(char *out, int max, uae_u32 addr)
 
 static void read_string(char *out, int max, uae_u32 addr)
 {
+	int i;
 	out[0] = 0;
-	for (int i = 0; i < max; i++) {
+	for (i = 0; i < max; i++) {
 		uae_u8 c = 0;
 		if (valid_address(addr, 1)) {
 			c = get_byte(addr);
@@ -8580,9 +8707,9 @@ static void parse_custom(char *out, int buffersize, char *format, char *p, char 
 {
 	bool gotv = false;
 	bool gots = false;
-	out[0] = 0;
 	uae_u32 v = 0;
 	char s[256];
+	out[0] = 0;
 	if (!strcmp(p, "CYCLES")) {
 		if (debugsprintf_cycles_set) {
 			v = (uae_u32)((get_cycles() - debugsprintf_cycles) / CYCLE_UNIT);
@@ -8649,7 +8776,6 @@ static void debug_sprintf_do(uae_u32 s)
 	int cnt = 0;
 	char format[MAX_DPATH];
 	char out[MAX_DPATH];
-	read_string(format, MAX_DPATH - 1, s);
 	char *p = format;
 	char *d = out;
 	bool gotm = false;
@@ -8658,6 +8784,7 @@ static void debug_sprintf_do(uae_u32 s)
 	struct dsprintfstack *stack = debugsprintf_stack;
 	char fstr[100], *fstrp;
 	int buffersize = MAX_DPATH - 1;
+	read_string(format, MAX_DPATH - 1, s);
 	fstrp = fstr;
 	*d = 0;
 	for (;;) {
@@ -8754,10 +8881,11 @@ static void debug_sprintf_do(uae_u32 s)
 
 bool debug_sprintf(uaecptr addr, uae_u32 val, int size)
 {
+	uae_u32 v = val;
+
 	if (!currprefs.debug_mem)
 		return false;
 
-	uae_u32 v = val;
 	if (size == sz_word && currprefs.cpu_model < 68020) {
 		v &= 0xffff;
 		if (!(addr & 2)) {

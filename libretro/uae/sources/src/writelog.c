@@ -24,6 +24,8 @@ void write_log (const char *fmt, ...)
     char text[512];
     va_list ap;
     int n;
+    /* C89 hoisted declarations */
+    size_t len;
 
     if (fmt == NULL)
        return;
@@ -35,7 +37,7 @@ void write_log (const char *fmt, ...)
     if (n < 0)
         return;
 
-    size_t len = strlen(text);
+    len = strlen(text);
     if (len > 0 && text[len - 1] == '\n')
         text[len - 1] = '\0';
 

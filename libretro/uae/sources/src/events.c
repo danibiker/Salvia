@@ -72,6 +72,10 @@ extern int vsync_activeheight;
 
 static bool event_check_vsync(void)
 {
+	/* C89 hoisted declarations */
+	int done;
+	int vp;
+
 	/* Keep only CPU emulation running while waiting for sync point. */
 	if (is_syncline == -1) {
 
@@ -81,10 +85,10 @@ static bool event_check_vsync(void)
 		}
 		// wait for vblank
 		audio_finish_pull();
-		int done = vsync_isdone(NULL);
+		done = vsync_isdone(NULL);
 		if (done == -2) {
 			// if no vsync thread
-			int vp = target_get_display_scanline(-1);
+			vp = target_get_display_scanline(-1);
 			if (vp < is_syncline_end)
 				done = 1;
 			else if (vp > is_syncline_end)
@@ -113,10 +117,10 @@ static bool event_check_vsync(void)
 		}
 		// wait for vblank or early vblank
 		audio_finish_pull();
-		int done = vsync_isdone(NULL);
+		done = vsync_isdone(NULL);
 		if (done == -2)
 			done = 0;
-		int vp = target_get_display_scanline(-1);
+		vp = target_get_display_scanline(-1);
 		if (vp < 0 || vp >= is_syncline_end)
 			done = 1;
 		if (!done) {
@@ -141,7 +145,7 @@ static bool event_check_vsync(void)
 		}
 		// not vblank
 		audio_finish_pull();
-		int vp = target_get_display_scanline(-1);
+		vp = target_get_display_scanline(-1);
 		if (vp <= 0) {
 #ifdef WITH_PPC
 			if (ppc_state) {
@@ -165,7 +169,7 @@ static bool event_check_vsync(void)
 		}
 		audio_finish_pull();
 		// wait for specific scanline
-		int vp = target_get_display_scanline(-1);
+		vp = target_get_display_scanline(-1);
 		if (vp < 0 || is_syncline > vp) {
 #ifdef WITH_PPC
 			if (ppc_state) {
@@ -189,7 +193,7 @@ static bool event_check_vsync(void)
 		}
 		audio_finish_pull();
 		// wait for specific scanline
-		int vp = target_get_display_scanline(-1);
+		vp = target_get_display_scanline(-1);
 		if (vp < 0 || vp >= (-(is_syncline + 100))) {
 #ifdef WITH_PPC
 			if (ppc_state) {
@@ -259,6 +263,9 @@ static bool event_check_vsync(void)
 
 void do_cycles_slow(int cycles_to_add)
 {
+	/* C89 hoisted declarations */
+	int i;
+
 #ifdef WITH_X86
 #if 0
 	if (x86_turbo_on) {
@@ -300,7 +307,7 @@ void do_cycles_slow(int cycles_to_add)
 		cycles_to_add -= (int)(nextevent - currcycle);
 		currcycle = nextevent;
 
-		for (int i = 0; i < ev_max; i++) {
+		for (i = 0; i < ev_max; i++) {
 			if (eventtab[i].active && eventtab[i].evtime == currcycle) {
 				if (eventtab[i].handler == NULL) {
 					gui_message(_T("eventtab[%d].handler is null!\n"), i);
@@ -340,11 +347,12 @@ void MISC_handler(void)
 		mintime = EVT_MAX;
 		for (i = 0; i < ev2_max; i++) {
 			struct ev2 *e = &eventtab2[i];
+			struct ev2 *e2;
 			if (e->active) {
 				if (e->evtime == ct) {
 					e->active = false;
 					e->handler(e->data);
-					struct ev2 *e2 = e->next;
+					e2 = e->next;
 					if (e2) {
 						e->next = NULL;
 						if (e2->active && e2->evtime == e->evtime + 1) {
@@ -387,6 +395,8 @@ void event2_newevent_xx(int no, evt_t t, uae_u32 data, evfunc2 func)
 {
 	evt_t et;
 	static int next = ev2_misc;
+	/* C89 hoisted declarations */
+	struct ev2 *e;
 
 	et = t + get_cycles();
 	if (no < 0) {
@@ -401,12 +411,14 @@ void event2_newevent_xx(int no, evt_t t, uae_u32 data, evfunc2 func)
 			if (no == ev2_max)
 				no = ev2_misc;
 			if (no == next) {
-				write_log (_T("out of event2's!\n"));
-				// execute most recent event immediately
 				evt_t mintime = EVT_MAX;
 				int minevent = -1;
 				evt_t ct = get_cycles();
-				for (int i = 0; i < ev2_max; i++) {
+				int i;
+
+				write_log (_T("out of event2's!\n"));
+				// execute most recent event immediately
+				for (i = 0; i < ev2_max; i++) {
 					if (eventtab2[i].active) {
 						evt_t eventtime = eventtab2[i].evtime - ct;
 						if (eventtime < mintime) {
@@ -424,7 +436,7 @@ void event2_newevent_xx(int no, evt_t t, uae_u32 data, evfunc2 func)
 		}
 		next = no;
 	}
-	struct ev2 *e = &eventtab2[no];
+	e = &eventtab2[no];
 	// if previous event has same expiry time, make sure it gets executed first.
 	if (last_event2->active && last_event2 != e && et == last_event2->evtime) {
 		last_event2->next = e;
@@ -440,7 +452,9 @@ void event2_newevent_xx(int no, evt_t t, uae_u32 data, evfunc2 func)
 
 void event2_newevent_x_replace_exists(evt_t t, uae_u32 data, evfunc2 func)
 {
-	for (int i = 0; i < ev2_max; i++) {
+	int i;
+
+	for (i = 0; i < ev2_max; i++) {
 		if (eventtab2[i].active && eventtab2[i].handler == func) {
 			eventtab2[i].active = false;
 			if (t <= 0) {
@@ -455,7 +469,9 @@ void event2_newevent_x_replace_exists(evt_t t, uae_u32 data, evfunc2 func)
 
 void event2_newevent_x_remove(evfunc2 func)
 {
-	for (int i = 0; i < ev2_max; i++) {
+	int i;
+
+	for (i = 0; i < ev2_max; i++) {
 		if (eventtab2[i].active && eventtab2[i].handler == func) {
 			eventtab2[i].active = false;
 		}
@@ -489,12 +505,14 @@ int current_hpos(void)
 
 void clear_events(void)
 {
+	int i;
+
 	nextevent = EVT_MAX;
-	for (int i = 0; i < ev_max; i++) {
+	for (i = 0; i < ev_max; i++) {
 		eventtab[i].active = 0;
 		eventtab[i].oldcycles = get_cycles();
 	}
-	for (int i = 0; i < ev2_max; i++) {
+	for (i = 0; i < ev2_max; i++) {
 		eventtab2[i].active = 0;
 	}
 }

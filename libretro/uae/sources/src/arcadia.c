@@ -454,8 +454,9 @@ int is_arcadia_rom (const TCHAR *path)
 static void nvram_write (void)
 {
 	TCHAR path[MAX_DPATH];
+	struct zfile *f;
 	cfgfile_resolve_path_out_load(currprefs.flashfile, path, MAX_DPATH, PATH_ROM);
-	struct zfile *f = zfile_fopen (path, _T("rb+"), ZFD_NORMAL);
+	f = zfile_fopen (path, _T("rb+"), ZFD_NORMAL);
 	if (!f) {
 		f = zfile_fopen (path, _T("wb"), 0);
 		if (!f)
@@ -615,8 +616,9 @@ static uae_u8 picmatic_io, picmatic_ply;
 static void alg_nvram_write (void)
 {
 	TCHAR path[MAX_DPATH];
+	struct zfile *f;
 	cfgfile_resolve_path_out_load(currprefs.flashfile, path, MAX_DPATH, PATH_ROM);
-	struct zfile *f = zfile_fopen (path, _T("rb+"), ZFD_NORMAL);
+	f = zfile_fopen (path, _T("rb+"), ZFD_NORMAL);
 	if (!f) {
 		f = zfile_fopen (path, _T("wb"), 0);
 		if (!f)
@@ -651,15 +653,18 @@ static uae_u32 REGPARAM2 alg_wget (uaecptr addr)
 
 static uae_u32 REGPARAM2 alg_bget (uaecptr addr)
 {
+	uaecptr addr2;
+	uae_u8 v;
 	if ((addr & 0xffff0001) == 0xf60001) {
 		if (alg_picmatic_nova == 1) {
 			// Picmatic 100Hz games
 			int reg = (addr >> 12) & 15;
-			uae_u8 v = 0;
 			uae_s16 x = lightpen_x[1 - picmatic_ply];
+			uae_s16 y;
+			v = 0;
 			x <<= 1;
 			x >>= currprefs.gfx_resolution;
-			uae_s16 y = lightpen_y[1 - picmatic_ply] >> currprefs.gfx_vresolution;
+			y = lightpen_y[1 - picmatic_ply] >> currprefs.gfx_vresolution;
 			if (reg == 3) {
 				v = 0xff;
 				// left trigger
@@ -684,10 +689,10 @@ static uae_u32 REGPARAM2 alg_bget (uaecptr addr)
 			return v;
 		}
 	}
-	uaecptr addr2 = addr;
+	addr2 = addr;
 	addr >>= 1;
 	addr &= ALG_NVRAM_MASK;
-	uae_u8 v = algmemory[addr];
+	v = algmemory[addr];
 	//write_log(_T("ALG BGET %08X %04X %02X %08X\n"), addr2, addr, v, M68K_GETPC);
 	return v;
 }
@@ -701,6 +706,7 @@ static void REGPARAM2 alg_wput (uaecptr addr, uae_u32 w)
 
 static void REGPARAM2 alg_bput (uaecptr addr, uae_u32 b)
 {
+	uaecptr addr2;
 	if (alg_picmatic_nova == 1 && (addr & 0xffff0000) == 0xf60000) {
 		int reg = (addr >> 12) & 15;
 		if (reg == 0) {
@@ -715,7 +721,7 @@ static void REGPARAM2 alg_bput (uaecptr addr, uae_u32 b)
 		//write_log(_T("ALG BPUT %08X %02X %08X\n"), addr, b & 255, M68K_GETPC);
 		return;
 	}
-	uaecptr addr2 = addr;
+	addr2 = addr;
 	addr >>= 1;
 	addr &= ALG_NVRAM_MASK;
 	//write_log(_T("ALG BPUT %08X %04X %02X %08X\n"), addr2, addr, b & 255, M68K_GETPC);
@@ -762,6 +768,8 @@ static uae_u8 ld_user_index;
 
 void genlock_infotext(uae_u8 *d, struct vidbuffer *dst)
 {
+	int x, y, mx, my, offset, len, dx, dy;
+	bool dm;
 	if (!ld_user_index) {
 #if 0
 		int x = 26;
@@ -780,19 +788,19 @@ void genlock_infotext(uae_u8 *d, struct vidbuffer *dst)
 #endif
 		return;
 	}
-	int x = ld_uidx_config[0] & 63;
-	int y = ld_uidx_config[1] & 63;
-	int mx = (ld_uidx_config[2] & 3) + 1;
-	int my = ((ld_uidx_config[2] >> 2) & 3) + 1;
-	bool dm = (ld_uidx_config[2] & 0x10) != 0;
-	int offset = ld_uidx_offsetd & 31;
-	int len = 32 - offset;
+	x = ld_uidx_config[0] & 63;
+	y = ld_uidx_config[1] & 63;
+	mx = (ld_uidx_config[2] & 3) + 1;
+	my = ((ld_uidx_config[2] >> 2) & 3) + 1;
+	dm = (ld_uidx_config[2] & 0x10) != 0;
+	offset = ld_uidx_offsetd & 31;
+	len = 32 - offset;
 
 	x -= 12;
 	y -= 10;
 
-	int dx = dst->inwidth * x / (86 - 12);
-	int dy = dst->inheight * y / (59 - 10);
+	dx = dst->inwidth * x / (86 - 12);
+	dy = dst->inheight * y / (59 - 10);
 
 	mx <<= currprefs.gfx_resolution;
 	my <<= currprefs.gfx_vresolution;
@@ -1106,12 +1114,14 @@ static void sony_serial_read(uae_u16 w)
 	break;
 	case 0x60: // ADDR INQ '`'
 	{
+		uae_u32 v;
+		uae_u32 m = 10000;
+		int i;
 		if (!ld_save_restore && isvideograb() && ld_direction == 0) {
 			ld_address = (uae_u32)getsetpositionvideograb(-1);
 		}
-		uae_u32 v = ld_address;
-		uae_u32 m = 10000;
-		for (int i = 0; i < 5; i++) {
+		v = ld_address;
+		for (i = 0; i < 5; i++) {
 			uae_u8 vv = ((v / m) % 10) + '0';
 			sb(vv);
 			m /= 10;
@@ -1353,9 +1363,10 @@ int alg_get_player(uae_u16 potgo)
 
 uae_u16 alg_potgor(uae_u16 potgo)
 {
+	int ply;
 	alg_potgo = potgo;
 
-	int ply = alg_get_player(alg_potgo);
+	ply = alg_get_player(alg_potgo);
 
 	if (alg_picmatic_nova == 1) {
 		potgo |= (0x1000 | 0x0100 | 0x4000 | 0x0400);
@@ -1377,9 +1388,10 @@ uae_u16 alg_potgor(uae_u16 potgo)
 }
 uae_u16 alg_joydat(int joy, uae_u16 v)
 {
+	int ply;
 	if (!alg_flag)
 		return v;
-	int ply = alg_get_player(alg_potgo);
+	ply = alg_get_player(alg_potgo);
 	v = 0;
 
 	if (alg_picmatic_nova == 1) {
@@ -1517,6 +1529,7 @@ struct romdata *get_alg_rom(const TCHAR *name)
 
 void alg_map_banks(void)
 {
+	struct romdata *rd;
 	if (!savestate_state) {
 		alg_flag = 1;
 	}
@@ -1524,7 +1537,7 @@ void alg_map_banks(void)
 		alg_nvram_read();
 		algmemory_initialized = 1;
 	}
-	struct romdata *rd = get_alg_rom(currprefs.romextfile);
+	rd = get_alg_rom(currprefs.romextfile);
 	if (rd->id == 198 || rd->id == 301 || rd->id == 302 || rd->id == 315 || rd->id == 314) {
 		map_banks(&alg_ram_bank, 0xf4, 1, 0);
 	} else if (rd->id == 182 || rd->id == 273 || rd->size < 0x40000) {
@@ -1581,6 +1594,7 @@ uae_u8 *restore_alg(uae_u8 *src)
 {
 	uae_u32 flags = restore_u32();
 	uae_u8 v;
+	int i;
 	alg_flag = restore_u32();
 	ld_value = restore_u32();
 	ld_address = restore_u32();
@@ -1601,7 +1615,7 @@ uae_u8 *restore_alg(uae_u8 *src)
 	picmatic_io = restore_u8();
 	picmatic_parallel = restore_u8();
 	ser_buf_offset  = restore_u8();
-	for (int i = 0; i < ser_buf_offset; i++) {
+	for (i = 0; i < ser_buf_offset; i++) {
 		alg_ser_buf[i] = restore_u8();
 	}
 	ld_vsync = restore_u32();
@@ -1611,7 +1625,7 @@ uae_u8 *restore_alg(uae_u8 *src)
 	ld_uidx_config[2] = restore_u8();
 	ld_uidx_offset = restore_u8();
 	ld_uidx_offsetd = restore_u8();
-	for (int i = 0; i < 32; i++) {
+	for (i = 0; i < 32; i++) {
 		ld_uidx_data[i] = restore_u8();
 	}
 	picmatic_ply = restore_u8();
@@ -1622,6 +1636,8 @@ uae_u8 *restore_alg(uae_u8 *src)
 uae_u8 *save_alg(size_t *len)
 {
 	uae_u8 *dstbak, *dst;
+	uae_u32 addr;
+	int i;
 
 	if (!alg_flag)
 		return NULL;
@@ -1629,7 +1645,7 @@ uae_u8 *save_alg(size_t *len)
 	dstbak = dst = xmalloc(uae_u8, 1000);
 	save_u32(1);
 
-	uae_u32 addr = (uae_u32)getsetpositionvideograb(-1);
+	addr = (uae_u32)getsetpositionvideograb(-1);
 
 	save_u32(alg_flag);
 	save_u32(ld_value);
@@ -1649,7 +1665,7 @@ uae_u8 *save_alg(size_t *len)
 	save_u8(picmatic_io);
 	save_u8(picmatic_parallel);
 	save_u8(ser_buf_offset);
-	for (int i = 0; i < ser_buf_offset; i++) {
+	for (i = 0; i < ser_buf_offset; i++) {
 		save_u8(alg_ser_buf[i]);
 	}
 	save_u32(ld_vsync);
@@ -1659,7 +1675,7 @@ uae_u8 *save_alg(size_t *len)
 	save_u8(ld_uidx_config[2]);
 	save_u8(ld_uidx_offset);
 	save_u8(ld_uidx_offsetd);
-	for (int i = 0; i < 32; i++) {
+	for (i = 0; i < 32; i++) {
 		save_u8(ld_uidx_data[i]);
 	}
 	save_u8(picmatic_ply);
@@ -1797,9 +1813,11 @@ static uae_u8 cubo_pic_secret[32];
 static void calculate_key(uae_u8 key, int *idxp, uae_u8 *out)
 {
 	int idx = *idxp;
+	uae_u8 b;
+	uae_u8 c;
 	out[idx] ^= key;
-	uae_u8 b = cubo_pic_secret[out[idx] >> 4];
-	uae_u8 c = cubo_pic_secret[(out[idx] & 15) + 16];
+	b = cubo_pic_secret[out[idx] >> 4];
+	c = cubo_pic_secret[(out[idx] & 15) + 16];
 	c = ~(c + b);
 	c = (c << 1) | (c >> 7);
 	c += key;
@@ -1841,31 +1859,37 @@ static char *get_bytes_from_string(const TCHAR *s)
 static uae_u32 cubo_calculate_secret(uae_u8 *key)
 {
 	uae_u8 out[4] = { 0, 0, 0, 0 };
+	TCHAR *s;
+	TCHAR *s2;
+	int idx = 0;
+	int i;
+	uae_u32 v;
 	memcpy(cubo_pic_secret, cubo_pic_secret_base, sizeof(cubo_pic_secret));
-	TCHAR *s = cubo_pic_settings;
-	TCHAR *s2 = _tcschr(s, ':');
+	s = cubo_pic_settings;
+	s2 = _tcschr(s, ':');
 	if (s2) {
+		char *cs;
 		s2++;
-		char *cs = get_bytes_from_string(s2);
+		cs = get_bytes_from_string(s2);
 		if (cs) {
 			memcpy(cubo_pic_secret, cs, strlen(cs));
 			xfree(cs);
 		}
 	}
-	int idx = 0;
-	for (int i = 0; i < 8; i++) {
+	for (i = 0; i < 8; i++) {
 		calculate_key(key[i], &idx, out);
 		calculate_key(key[i], &idx, out);
 	}
-	uae_u32 v = (out[0] << 24) | (out[1] << 16) | (out[2] << 8) | (out[3] << 0);
+	v = (out[0] << 24) | (out[1] << 16) | (out[2] << 8) | (out[3] << 0);
 	return v;
 }
 
 static uae_u8 cubo_read_pic(void)
 {
+	uae_u8 c = 0;
+	uae_u8 v = 0;
 	if (!(cubo_io_pic & 0x40))
 		return 0;
-	uae_u8 c = 0;
 	if (cubo_pic_bit_cnt >= 10 * 8) {
 		// return calculated 32-bit key
 		int offset = (cubo_pic_bit_cnt - (10 * 8)) / 8;
@@ -1889,7 +1913,6 @@ static uae_u8 cubo_read_pic(void)
 			xfree(cs);
 		}
 	}
-	uae_u8 v = 0;
 	if ((1 << (7 - (cubo_pic_bit_cnt & 7))) & c) {
 		v |= 4;
 	}
@@ -1928,8 +1951,9 @@ static void cubo_write_pic(uae_u8 v)
 				write_log(_T("Cubo PIC received %02x (%d/%d)\n"), cubo_pic_byte, offset, sizeof(cubo_pic_key));
 			}
 			if (offset == sizeof(cubo_pic_key) - 1) {
+				int i;
 				write_log(_T("Cubo PIC key in: "), cubo_key);
-				for (int i = 0; i < 8; i++) {
+				for (i = 0; i < 8; i++) {
 					write_log(_T("%02x "), cubo_pic_key[i + 2]);
 				}
 				write_log(_T("\n"));
@@ -1952,22 +1976,30 @@ extern struct zfile *cd32_flashfile;
 
 static void cubo_read_rtc(void)
 {
-	if (!cubo_nvram)
-		return;
-	
-	uae_u8 *r = &cubo_nvram[CUBO_NVRAM_SIZE];
+	uae_u8 *r;
 	struct timeval tv;
 	static int prevs100;
-	
+	time_t t;
+	struct tm *ct;
+	bool h24;
+	bool mask;
+	int h;
+	int s100;
+
+	if (!cubo_nvram)
+		return;
+
+	r = &cubo_nvram[CUBO_NVRAM_SIZE];
+
 	gettimeofday(&tv, NULL);
-	time_t t = tv.tv_sec;
+	t = tv.tv_sec;
 	t += currprefs.cs_rtc_adjust;
-	struct tm *ct = localtime(&t);
+	ct = localtime(&t);
 
-	bool h24 = (r[4] & 0x80) == 0;
-	bool mask = (r[0] & 0x08) != 0;
+	h24 = (r[4] & 0x80) == 0;
+	mask = (r[0] & 0x08) != 0;
 
-	int h = ct->tm_hour;
+	h = ct->tm_hour;
 	if (h24) {
 		r[4] = (h % 10) | ((h / 10) << 4);
 	} else {
@@ -1985,7 +2017,7 @@ static void cubo_read_rtc(void)
 
 	r[6] = (ct->tm_wday << 5) | ((ct->tm_mon + 1) % 10) | (((ct->tm_mon + 1) / 10) << 4);
 
-	int s100 = tv.tv_usec / 10000;
+	s100 = tv.tv_usec / 10000;
 	if (s100 == prevs100) {
 		s100++;
 		s100 %= 1000000;
@@ -2035,8 +2067,9 @@ static uae_u8 cubo_rtc_read(uae_u8 addr)
 {
 	uae_u8 *r = &cubo_nvram[CUBO_NVRAM_SIZE];
 	bool mask = (r[0] & 0x08) != 0;
+	uae_u8 v;
 	addr &= CUBO_RTC_SIZE - 1;
-	uae_u8 v = r[addr];
+	v = r[addr];
 	if (mask) {
 		if (addr == 5)
 			v &= 0x3f;
@@ -2049,6 +2082,7 @@ static uae_u8 cubo_rtc_read(uae_u8 addr)
 
 static void cubo_write_rtc(uae_u8 v)
 {
+	int sda, scl;
 	// bit 5 = data
 	// bit 6 = enable?
 	// bit 7 = clock
@@ -2060,8 +2094,8 @@ static void cubo_write_rtc(uae_u8 v)
 		return;
 	}
 
-	int sda = (v & 0x20) ? 1 : 0;
-	int scl = (v & 0x80) ? 1 : 0;
+	sda = (v & 0x20) ? 1 : 0;
+	scl = (v & 0x80) ? 1 : 0;
 
 	i2c_set(cubo_rtc, BITBANG_I2C_SDA, sda);
 	i2c_set(cubo_rtc, BITBANG_I2C_SCL, scl);
@@ -2220,7 +2254,8 @@ void cubo_function(int v)
 
 static void cubo_vsync(void)
 {
-	for (int i = 0; i < 16; i++) {
+	int i;
+	for (i = 0; i < 16; i++) {
 		if (dip_delay[i] >= 3) {
 			cubo_flag |= 1 << i;
 		} else if (dip_delay[i] > 0) {
@@ -2254,11 +2289,12 @@ static void arcadia_reset(int hardreset)
 
 static void check_arcadia_prefs_changed(void)
 {
+	struct boardromconfig *brc;
 	if (!config_changed)
 		return;
 	board_prefs_changed(ROMTYPE_CUBO, 0);
 	cubo_enabled = is_board_enabled(&currprefs, ROMTYPE_CUBO, 0);
-	struct boardromconfig *brc = get_device_rom(&currprefs, ROMTYPE_CUBO, 0, NULL);
+	brc = get_device_rom(&currprefs, ROMTYPE_CUBO, 0, NULL);
 	if (!brc)
 		return;
 	cubo_settings = brc->roms[0].device_settings;

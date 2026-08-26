@@ -539,6 +539,7 @@ int is_ar_pc_in_ram (void)
 /* flag writing == 1 for writing memory, 0 for reading from memory. */
 STATIC_INLINE int ar3a (uaecptr addr, uae_u8 b, int writing)
 {
+	uaecptr pc;
 	/*	if (addr < 8) //|| writing ) */
 	/*	{ */
 	/*		if (writing) */
@@ -563,7 +564,7 @@ STATIC_INLINE int ar3a (uaecptr addr, uae_u8 b, int writing)
 					wait_for_pc = get_long(m68k_areg (regs, 7) + 2); /* Get (SP+2) */
 					set_special (SPCFLAG_ACTION_REPLAY);
 
-					uaecptr pc = m68k_getpc ();
+					pc = m68k_getpc ();
 					/*		    write_log_debug ("Action Replay marked as ACTION_REPLAY_WAIT_PC, PC=%p\n",pc);*/
 				}
 				else
@@ -1127,13 +1128,14 @@ static void action_replay_cia_access_delay(uae_u32 v)
 
 void action_replay_cia_access(bool write)
 {
+	int delay;
 	if (armodel < 2)
 		return;
 	if (action_replay_flag != ACTION_REPLAY_IDLE)
 		return;
 	if (action_replay_flag == ACTION_REPLAY_INACTIVE)
 		return;
-	int delay = currprefs.cpu_cycle_exact ? 1 : 0;
+	delay = currprefs.cpu_cycle_exact ? 1 : 0;
 	if ((armode_write & ARMODE_ACTIVATE_BFE001) && !write) {
 		event2_newevent_xx(-1, delay, write, action_replay_cia_access_delay);
 	} else if ((armode_write & ARMODE_ACTIVATE_BFD100) && write) {

@@ -203,10 +203,11 @@ static uae_u32 REGPARAM2 dev_open_2(TrapContext *ctx, int type)
 	struct devstruct *dev = getdevstruct(unit);
 	struct priv_devstruct *pdev = 0;
 	int i, v;
+	uae_u16 len;
 
 	if (log_scsi)
 		write_log (_T("opening %s:%d ioreq=%08X\n"), getdevname (type), unit, ioreq);
-	uae_u16 len = trap_get_word(ctx, ioreq + 0x12);
+	len = trap_get_word(ctx, ioreq + 0x12);
 	if (len < IOSTDREQ_SIZE && len > 0)
 		return openfail(ctx, ioreq, IOERR_BADLENGTH);
 	if (!dev)
@@ -634,6 +635,7 @@ static int dev_do_io_cd (TrapContext *ctx, struct devstruct *dev, uae_u8 *iobuf,
 	int async = 0;
 	int bmask = dev->di.bytespersector - 1;
 	struct priv_devstruct *pdev = getpdevstruct(ctx, request);
+	int i;
 
 	if (!pdev)
 		return 0;
@@ -812,7 +814,7 @@ static int dev_do_io_cd (TrapContext *ctx, struct devstruct *dev, uae_u8 *iobuf,
 				io_data += 6;
 				io_actual++;
 			}
-			for (int i = toc.first_track_offset; i < toc.last_track_offset && io_length > 0; i++) {
+			for (i = toc.first_track_offset; i < toc.last_track_offset && io_length > 0; i++) {
 				if (io_offset == toc.toc[i].point) {
 					int pos = toc.toc[i].paddress;
 					trap_put_byte(ctx, io_data, (toc.toc[i].control << 4) | toc.toc[i].adr);
@@ -937,7 +939,7 @@ static int dev_do_io_cd (TrapContext *ctx, struct devstruct *dev, uae_u8 *iobuf,
 		struct cd_toc_head toc;
 		int ok = 0;
 		if (sys_command_cd_toc (dev->di.unitnum, &toc)) {
-			for (int i = toc.first_track_offset; i < toc.last_track_offset; i++) {
+			for (i = toc.first_track_offset; i < toc.last_track_offset; i++) {
 				if (i == io_offset && i + io_length <= toc.last_track_offset) {
 					ok = sys_command_cd_play (dev->di.unitnum, toc.toc[i].address, toc.toc[i + io_length].address, 0);
 					break;
@@ -955,12 +957,14 @@ static int dev_do_io_cd (TrapContext *ctx, struct devstruct *dev, uae_u8 *iobuf,
 		if (sys_command_cd_qcode (dev->di.unitnum, subq, -1, false)) {
 			if (subq[1] == AUDIO_STATUS_IN_PROGRESS || subq[1] == AUDIO_STATUS_PAUSED) {
 				uae_u8 subqdata[12];
+				int trackpos;
+				int diskpos;
 				put_byte_host(subqdata + 0, subq[4 + 0]);
 				put_byte_host(subqdata + 1, frombcd (subq[4 + 1]));
 				put_byte_host(subqdata + 2, frombcd (subq[4 + 2]));
 				put_byte_host(subqdata + 3, subq[4 + 6]);
-				int trackpos = fromlongbcd (subq + 4 + 3);
-				int diskpos = fromlongbcd (subq + 4 + 7);
+				trackpos = fromlongbcd (subq + 4 + 3);
+				diskpos = fromlongbcd (subq + 4 + 7);
 				if (command == CD_QCODELSN) {
 					trackpos = msf2lsn (trackpos);
 					diskpos = msf2lsn (diskpos);
@@ -1055,16 +1059,18 @@ static int dev_canquick(struct devstruct *dev, uae_u8 *iobuf, uaecptr request)
 static uae_u32 REGPARAM2 dev_beginio(TrapContext *ctx)
 {
 	uae_u32 request = trap_get_areg(ctx, 1);
-
 	uae_u8 *iobuf = xmalloc(uae_u8, 48);
+	uae_u8 flags;
+	int command;
+	struct priv_devstruct *pdev;
+	struct devstruct *dev;
+	int canquick;
 
 	trap_get_bytes(ctx, iobuf, request, 48);
 
-	uae_u8 flags = get_byte_host(iobuf + 30);
-	int command = get_word_host(iobuf + 28);
-	struct priv_devstruct *pdev = getpdevstruct(ctx, request);
-	struct devstruct *dev;
-	int canquick;
+	flags = get_byte_host(iobuf + 30);
+	command = get_word_host(iobuf + 28);
+	pdev = getpdevstruct(ctx, request);
 
 	put_byte_host(iobuf + 8, NT_MESSAGE);
 	if (!pdev) {
@@ -1184,7 +1190,8 @@ static uae_u32 REGPARAM2 dev_abortio (TrapContext *ctx)
 uae_u32 scsi_get_cd_drive_mask (void)
 {
 	uae_u32 mask = 0;
-	for (int i = 0; i < MAX_TOTAL_SCSI_DEVICES; i++) {
+	int i;
+	for (i = 0; i < MAX_TOTAL_SCSI_DEVICES; i++) {
 		struct devstruct *dev = &devst[i];
 		if (dev->iscd)
 			mask |= 1 << i;
@@ -1194,7 +1201,8 @@ uae_u32 scsi_get_cd_drive_mask (void)
 uae_u32 scsi_get_cd_drive_media_mask (void)
 {
 	uae_u32 mask = 0;
-	for (int i = 0; i < MAX_TOTAL_SCSI_DEVICES; i++) {
+	int i;
+	for (i = 0; i < MAX_TOTAL_SCSI_DEVICES; i++) {
 		struct devstruct *dev = &devst[i];
 		if (dev->iscd && dev->changeint_mediastate)
 			mask |= 1 << i;
@@ -1203,7 +1211,8 @@ uae_u32 scsi_get_cd_drive_media_mask (void)
 }
 int scsi_add_tape (struct uaedev_config_info *uci)
 {
-	for (int i = 4; i < MAX_TOTAL_SCSI_DEVICES; i++) {
+	int i;
+	for (i = 4; i < MAX_TOTAL_SCSI_DEVICES; i++) {
 		struct devstruct *dev = &devst[i];
 		if (dev->unitnum >= 0 || dev->drivetype > 0)
 			continue;
@@ -1246,8 +1255,8 @@ static void dev_reset (void)
 	device_func_init (0);
 	i = 0;
 	while (i < MAX_TOTAL_SCSI_DEVICES) {
-		dev = &devst[i];
 		struct device_info *discsi, discsi2;
+		dev = &devst[i];
 		if (sys_command_open (i)) {
 			discsi = sys_command_info (i, &discsi2, 0);
 			if (discsi) {
@@ -1546,6 +1555,7 @@ uae_u8 *save_scsidev (int num, size_t *len, uae_u8 *dstptr)
 	uae_u8 *dstbak, *dst;
 	struct priv_devstruct *pdev;
 	struct devstruct *dev;
+	int i;
 
 	pdev = &pdevst[num];
 	if (!pdev->inuse)
@@ -1572,7 +1582,7 @@ uae_u8 *save_scsidev (int num, size_t *len, uae_u8 *dstptr)
 		save_u32 (dev->fadecounter);
 		save_u32 (dev->fadeframes);
 		save_u32 (dev->fadetarget);
-		for (int i = 0; i < MAX_ASYNC_REQUESTS; i++) {
+		for (i = 0; i < MAX_ASYNC_REQUESTS; i++) {
 			if (dev->d_request[i]) {
 				save_u32 (dev->d_request[i]);
 				save_u32 (dev->d_request_type[i]);

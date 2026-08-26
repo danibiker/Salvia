@@ -130,7 +130,8 @@ const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",  //
 	"Atari - 800-content.png",												  // cart_atari800
 	"Atari - 5200-content.png",												  // cart_atari5200
 	"Commodore - 64-content.png",											  // cart_c64
-	"Sharp - X68000-content.png"											  // cart_x68k
+	"Sharp - X68000-content.png",											  // cart_x68k
+	"Commodore - Amiga-content.png"											  // cart_amiga
 };
 
 // Nombres de sistema de libretro-database (ficheros rdb/ y carpetas cht/), indexado por
@@ -165,7 +166,8 @@ const char *RDB_SYSTEM_NAMES[] = {
 	"Atari - 8-bit Family",							   // cart_atari800
 	"Atari - 5200",									   // cart_atari5200
 	"",												   // cart_c64
-	""												   // cart_x68k
+	"",												   // cart_x68k
+	""				    							   // cart_amiga
 };
 
 #ifdef _XBOX

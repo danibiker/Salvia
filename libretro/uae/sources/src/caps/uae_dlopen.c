@@ -3,11 +3,11 @@
 #include "uae/api.h"
 #include "uae/dlopen.h"
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
 #include "windows.h"
 #define UAE_DLOPEN_SUPPORT 1
 #else
-#if defined(HAVE_DLOPEN)
+#if defined(HAVE_DLOPEN) && !defined(_XBOX)
 #include <dlfcn.h>
 #define UAE_DLOPEN_SUPPORT 1
 #endif

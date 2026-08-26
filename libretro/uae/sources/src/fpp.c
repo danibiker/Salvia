@@ -447,10 +447,11 @@ static uae_u32 fpsr_get_vector(uae_u32 exception)
 
 static bool fpsr_check_arithmetic_exception(uae_u32 mask, fpdata *src, uae_u32 opcode, uae_u16 extra, uae_u32 ea, bool easet, uaecptr oldpc)
 {
+	uae_u32 exception;
+
 	if (!support_exceptions || jit_fpu())
 		return false;
 
-	uae_u32 exception;
 	// Any exception status bit and matching exception enable bits set?
 	exception = regs.fpsr & regs.fpcr & 0xff00;
 	// Add 68040/68060 nonmaskable exceptions. Only if no unimplemented instruction emulation.
@@ -459,8 +460,11 @@ static bool fpsr_check_arithmetic_exception(uae_u32 mask, fpdata *src, uae_u32 o
 	}
 
 	if (exception) {
+		fpdata eo;
+		uae_u32 opclass;
+		bool nonmaskable;
 		regs.fp_exp_pend = fpsr_get_vector(exception);
-		bool nonmaskable = (regs.fp_exp_pend != fpsr_get_vector(regs.fpsr & regs.fpcr));
+		nonmaskable = (regs.fp_exp_pend != fpsr_get_vector(regs.fpsr & regs.fpcr));
 		if (warned > 0) {
 			write_log(_T("FPU %s arithmetic exception pending: FPSR: %08x, FPCR: %04x (vector: %d) PC=%08x!\n"),
 				nonmaskable ? _T("nonmaskable") : _T(""), regs.fpsr, regs.fpcr, regs.fp_exp_pend, regs.instruction_pc);
@@ -483,8 +487,7 @@ static bool fpsr_check_arithmetic_exception(uae_u32 mask, fpdata *src, uae_u32 o
 		}
 
 		// data for FSAVE stack frame
-		fpdata eo;
-		uae_u32 opclass = (extra >> 13) & 7;
+		opclass = (extra >> 13) & 7;
 
 		reset_fsave_data();
 
@@ -517,10 +520,10 @@ static bool fpsr_check_arithmetic_exception(uae_u32 mask, fpdata *src, uae_u32 o
 			fpp_from_exten_fmovem(src, &fsave_data.eo[0], &fsave_data.eo[1], &fsave_data.eo[2]);
 		} else {
 			// fsave data for 68040
-			regs.fpu_exp_state = 1; // 68040 UNIMP frame
-
 			uae_u32 reg = (extra >> 7) & 7;
 			int size = (extra >> 10) & 7;
+
+			regs.fpu_exp_state = 1; // 68040 UNIMP frame
 
 			fsave_data.fpiarcu = regs.fpiar;
 
@@ -1245,6 +1248,7 @@ static bool fault_if_nonexisting_opmode(uae_u16 opcode, uae_u16 extra, uaecptr o
 
 static bool fault_if_unimplemented_680x0 (uae_u16 opcode, uae_u16 extra, uaecptr ea, bool easet, uaecptr oldpc, fpdata *src, int reg)
 {
+	uae_u16 v;
 	if (fault_if_no_fpu (opcode, extra, ea, easet, oldpc))
 		return true;
 	if (currprefs.cpu_model >= 68040 && currprefs.fpu_model && currprefs.fpu_no_unimplemented) {
@@ -1255,7 +1259,7 @@ static bool fault_if_unimplemented_680x0 (uae_u16 opcode, uae_u16 extra, uaecptr
 			fp_unimp_instruction(opcode, extra, ea, easet, oldpc, src, reg, -1);
 			return true;
 		}
-		uae_u16 v = extra & 0x7f;
+		v = extra & 0x7f;
 		/* >=0x040 are 68040/68060 only variants. 6888x = F-line exception. */
 		switch (v)
 		{
@@ -1445,12 +1449,13 @@ static int get_fpu_version (int model)
 
 static void fpu_null (void)
 {
+	int i;
 	regs.fpu_state = 0;
 	regs.fpu_exp_state = 0;
 	regs.fpcr = 0;
 	regs.fpsr = 0;
 	regs.fpiar = 0;
-	for (int i = 0; i < 8; i++)
+	for (i = 0; i < 8; i++)
 		fpnan (&regs.fp[i]);
 }
 
@@ -1527,6 +1532,7 @@ static int get_fp_value(uae_u32 opcode, uae_u16 extra, fpdata *src, uaecptr oldp
 	static const int sz2[8] = { 4, 4, 12, 12, 2, 8, 2, 0 };
 	uae_u32 exts[3];
 	int doext = 0;
+	uae_u32 adold;
 
 	if (!(extra & 0x4000)) {
 		// FPx to FPx
@@ -1676,7 +1682,7 @@ static int get_fp_value(uae_u32 opcode, uae_u16 extra, fpdata *src, uaecptr oldp
 
 	*adp = ad;
 	*adsetp = adset;
-	uae_u32 adold = ad;
+	adold = ad;
 
 	if (currprefs.fpu_model == 68060) {
 		// Skip if 68040 because FSAVE frame can store both src and dst
@@ -1902,9 +1908,9 @@ static int put_fp_value2(fpdata *value, uae_u32 opcode, uae_u16 extra, uaecptr o
 			break;
 		case 2: // X
 			{
+				uae_u32 wrd1, wrd2, wrd3;
 				if (normalize_or_fault_if_no_denormal_support(opcode, extra, ad, adset, oldpc, value))
 					return 1;
-				uae_u32 wrd1, wrd2, wrd3;
 				fpp_from_exten(value, &wrd1, &wrd2, &wrd3);
 				x_cp_put_long (ad, wrd1);
 				ad += 4;
@@ -1942,9 +1948,9 @@ static int put_fp_value2(fpdata *value, uae_u32 opcode, uae_u16 extra, uaecptr o
 			break;
 		case 5: // D
 			{
+				uae_u32 wrd1, wrd2;
 				if (normalize_or_fault_if_no_denormal_support(opcode, extra, ad, adset, oldpc, value))
 					return 1;
-				uae_u32 wrd1, wrd2;
 				fpp_from_double(value, &wrd1, &wrd2);
 				x_cp_put_long (ad, wrd1);
 				ad += 4;
@@ -2106,8 +2112,10 @@ int fpp_cond(int condition)
 			if (fpsr_set_bsun())
 				return -2;
 		}
+		{
 		int control = (regs.fpsr >> 24) & 15;
 		return condition_table[control * 32 + condition];
+		}
 	}
 
 #if 0
@@ -2810,8 +2818,9 @@ static uaecptr fmovem2mem (uaecptr ad, uae_u32 list, int incr, int regdir)
 #if SUPPORT_MMU
 		int idx = 0;
 		uae_u32 wrd[3];
+		int r, i;
 		mmu030_state[1] |= MMU030_STATEFLAG1_MOVEM1;
-		for (int r = 0; r < 8; r++) {
+		for (r = 0; r < 8; r++) {
 			if (regdir < 0)
 				reg = 7 - r;
 			else
@@ -2820,7 +2829,7 @@ static uaecptr fmovem2mem (uaecptr ad, uae_u32 list, int incr, int regdir)
 				fpp_from_exten_fmovem(&regs.fp[reg], &wrd[0], &wrd[1], &wrd[2]);
 				if (incr < 0)
 					ad -= 3 * 4;
-				for (int i = 0; i < 3; i++) {
+				for (i = 0; i < 3; i++) {
 					if (mmu030_state[0] == idx * 3 + i) {
 						if (mmu030_state[1] & MMU030_STATEFLAG1_MOVEM2) {
 							mmu030_state[1] &= ~MMU030_STATEFLAG1_MOVEM2;
@@ -2839,7 +2848,8 @@ static uaecptr fmovem2mem (uaecptr ad, uae_u32 list, int incr, int regdir)
 		}
 #endif
 	} else {
-		for (int r = 0; r < 8; r++) {
+		int r;
+		for (r = 0; r < 8; r++) {
 			uae_u32 wrd1, wrd2, wrd3;
 			if (regdir < 0)
 				reg = 7 - r;
@@ -2875,8 +2885,9 @@ static uaecptr fmovem2fpp (uaecptr ad, uae_u32 list, int incr, int regdir)
 #if SUPPORT_MMU
 		uae_u32 wrd[3];
 		int idx = 0;
+		int r, i;
 		mmu030_state[1] |= MMU030_STATEFLAG1_MOVEM1 | MMU030_STATEFLAG1_FMOVEM;
-		for (int r = 0; r < 8; r++) {
+		for (r = 0; r < 8; r++) {
 			if (regdir < 0)
 				reg = 7 - r;
 			else
@@ -2884,7 +2895,7 @@ static uaecptr fmovem2fpp (uaecptr ad, uae_u32 list, int incr, int regdir)
 			if (list & 0x80) {
 				if (incr < 0)
 					ad -= 3 * 4;
-				for (int i = 0; i < 3; i++) {
+				for (i = 0; i < 3; i++) {
 					if (mmu030_state[0] == idx * 3 + i) {
 						if (mmu030_state[1] & MMU030_STATEFLAG1_MOVEM2) {
 							mmu030_state[1] &= ~MMU030_STATEFLAG1_MOVEM2;
@@ -2908,7 +2919,8 @@ static uaecptr fmovem2fpp (uaecptr ad, uae_u32 list, int incr, int regdir)
 		}
 #endif
 	} else {
-		for (int r = 0; r < 8; r++) {
+		int r;
+		for (r = 0; r < 8; r++) {
 			uae_u32 wrd1, wrd2, wrd3;
 			if (regdir < 0)
 				reg = 7 - r;
@@ -3164,6 +3176,8 @@ static void fpuop_arithmetic2 (uae_u32 opcode, uae_u16 extra)
 	uaecptr ad = 0;
 	bool adset = false;
 	bool nonmaskable = false;
+	uae_u16 bits;
+	int mode;
 
 #if DEBUG_FPP
 	if (!isinrom ())
@@ -3203,7 +3217,7 @@ static void fpuop_arithmetic2 (uae_u32 opcode, uae_u16 extra)
 					return;
 				// Only single selected control register is allowed
 				// All control register bits unset = FPIAR
-				uae_u16 bits = extra & (0x1000 | 0x0800 | 0x0400);
+				bits = extra & (0x1000 | 0x0800 | 0x0400);
 				if (bits && bits != 0x1000 && bits != 0x0800 && bits != 0x400) {
 					// 68060 does not generate f-line if multiple bits are set
 					// but it also works unexpectedly, just do nothing for now.
@@ -3240,7 +3254,7 @@ static void fpuop_arithmetic2 (uae_u32 opcode, uae_u16 extra)
 					return;
 				// Only FPIAR can be moved to/from address register
 				// All bits unset = FPIAR
-				uae_u16 bits = extra & (0x1000 | 0x0800 | 0x0400);
+				bits = extra & (0x1000 | 0x0800 | 0x0400);
 				if (bits && bits != 0x0400 && currprefs.fpu_model == 68060) {
 					// 68060 does not generate f-line if multiple bits are set
 					// but it also works unexpectedly, just do nothing for now.
@@ -3431,7 +3445,7 @@ static void fpuop_arithmetic2 (uae_u32 opcode, uae_u16 extra)
 					return;
 				}
 
-				int mode = (extra >> 11) & 3;
+				mode = (extra >> 11) & 3;
 				switch (mode)
 				{
 					case 0:	/* static pred */
@@ -3633,13 +3647,14 @@ void fpu_clearstatus(void)
 void fpu_modechange(void)
 {
 	uae_u32 temp_ext[8][3];
+	int i;
 
 	if (currprefs.fpu_mode == changed_prefs.fpu_mode)
 		return;
 	currprefs.fpu_mode = changed_prefs.fpu_mode;
 
 	set_cpu_caches(true);
-	for (int i = 0; i < 8; i++) {
+	for (i = 0; i < 8; i++) {
 		fpp_from_exten_fmovem(&regs.fp[i], &temp_ext[i][0], &temp_ext[i][1], &temp_ext[i][2]);
 	}
 	if (currprefs.fpu_mode > 0) {
@@ -3659,7 +3674,7 @@ void fpu_modechange(void)
 		fp_init_native();
 	}
 	get_features();
-	for (int i = 0; i < 8; i++) {
+	for (i = 0; i < 8; i++) {
 		fpp_to_exten_fmovem(&regs.fp[i], temp_ext[i][0], temp_ext[i][1], temp_ext[i][2]);
 	}
 }

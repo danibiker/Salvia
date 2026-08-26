@@ -143,6 +143,7 @@ static void video_calc_gammatable(int monid)
 	struct gfx_filterdata *fd = &currprefs.gf[ad->gf_index];
 	float bri, con, gam, gams[3];
 	float max = 255;
+	int i, j;
 
 	if (gfx_hdr) {
 		bri = 0.0;
@@ -161,8 +162,8 @@ static void video_calc_gammatable(int monid)
 	lf = 64 * currprefs.gf[ad->gf_index].gfx_filter_blur / 1000;
 	hf = 256 - lf * 2;
 
-	for (int i = 0; i < (256 * 3); i++) {
-		for (int j = 0; j < 3; j++) {
+	for (i = 0; i < (256 * 3); i++) {
+		for (j = 0; j < 3; j++) {
 			float val = i - 256.0f;
 			float v;
 

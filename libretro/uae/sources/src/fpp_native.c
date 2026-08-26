@@ -113,9 +113,11 @@ void init_fpucw_x87(void)
 	if (x87_fldcw_code) {
 		return;
 	}
+	{
+	uae_u8 *c;
 	x87_fldcw_code = (uae_u8 *) uae_vm_alloc(
 		uae_vm_page_size(), UAE_VM_32BIT, UAE_VM_READ_WRITE_EXECUTE);
-	uae_u8 *c = x87_fldcw_code;
+	c = x87_fldcw_code;
 	/* mov eax,0x0 */
 	*(c++) = 0xb8;
 	*(c++) = 0x00;
@@ -137,10 +139,21 @@ void init_fpucw_x87(void)
 	*(c++) = 0xc3;
 	/* Write-protect the function */
 	uae_vm_protect(x87_fldcw_code, uae_vm_page_size(), UAE_VM_READ_EXECUTE);
+	}
 }
 
 static void set_fpucw_x87(uae_u32 m68k_cw)
 {
+	static const uae_u16 x87_cw_tab[] = {
+#ifdef USE_LONG_DOUBLE
+		0x137f, 0x1f7f, 0x177f, 0x1b7f,	/* Extended */
+#else
+		0x127f, 0x1e7f, 0x167f, 0x1a7f,	/* Double */
+#endif
+		0x107f, 0x1c7f, 0x147f, 0x187f,	/* Single */
+		0x127f, 0x1e7f, 0x167f, 0x1a7f,	/* Double */
+		0x127f, 0x1e7f, 0x167f, 0x1a7f,	/* undefined (Double) */
+	};
 #ifdef _MSC_VER
 	static int ex = 0;
 	// RN, RZ, RM, RP
@@ -158,16 +171,6 @@ static void set_fpucw_x87(uae_u32 m68k_cw)
 	return;
 #endif
 #endif
-	static const uae_u16 x87_cw_tab[] = {
-#ifdef USE_LONG_DOUBLE
-		0x137f, 0x1f7f, 0x177f, 0x1b7f,	/* Extended */
-#else
-		0x127f, 0x1e7f, 0x167f, 0x1a7f,	/* Double */
-#endif
-		0x107f, 0x1c7f, 0x147f, 0x187f,	/* Single */
-		0x127f, 0x1e7f, 0x167f, 0x1a7f,	/* Double */
-		0x127f, 0x1e7f, 0x167f, 0x1a7f,	/* undefined (Double) */
-	};
 	x87_cw = x87_cw_tab[(m68k_cw >> 4) & 0xf];
 #if defined(X86_MSVC_ASSEMBLY) && 0
 	__asm { fldcw word ptr x87_cw }
@@ -410,12 +413,15 @@ static void fp_to_exten(fpdata *fpd, uae_u32 wrd1, uae_u32 wrd2, uae_u32 wrd3)
 	floatx80 fx80;
 	fx80.high = wrd1 >> 16;
 	fx80.low = (((uae_u64)wrd2) << 32) | wrd3;
+	{
+	float64 f;
 	fs.float_exception_flags = 0;
-	float64 f = floatx80_to_float64(fx80, &fs);
+	f = floatx80_to_float64(fx80, &fs);
 	// overflow -> infinity
 	if (fs.float_exception_flags & float_flag_overflow)
 		f = 0x7ff0000000000000 | (f & 0x8000000000000000);
 	fp_to_double(fpd, f >> 32, (uae_u32)f);
+	}
 #else
     double frac;
     if ((wrd1 & 0x7fff0000) == 0 && wrd2 == 0 && wrd3 == 0) {
@@ -432,8 +438,9 @@ static void fp_from_exten(fpdata *fpd, uae_u32 *wrd1, uae_u32 *wrd2, uae_u32 *wr
 {
 #if SOFTFLOAT_CONVERSIONS
 	uae_u32 w1, w2;
+	floatx80 f;
 	fp_from_double(fpd, &w1, &w2);
-	floatx80 f = float64_to_floatx80(((uae_u64)w1 << 32) | w2, &fs);
+	f = float64_to_floatx80(((uae_u64)w1 << 32) | w2, &fs);
 	*wrd1 = f.high << 16;
 	*wrd2 = f.low >> 32;
 	*wrd3 = (uae_u32)f.low;
@@ -497,11 +504,14 @@ static uae_s64 fp_to_int(fpdata *src, int size)
     };
 
 	fptype fp = src->fp;
+#if !USE_HOST_ROUNDING
+	uae_s64 result;
+#endif
 	fp_is_init(src);
 	if (fp_is_nan(src)) {
 		uae_u32 w1, w2, w3;
-		fp_from_exten(src, &w1, &w2, &w3);
 		uae_s64 v = 0;
+		fp_from_exten(src, &w1, &w2, &w3);
 		// return mantissa
 		switch (size)
 		{
@@ -526,7 +536,7 @@ static uae_s64 fp_to_int(fpdata *src, int size)
 #if USE_HOST_ROUNDING
 	return lrintl(fp);
 #else
-	uae_s64 result = (int)fp;
+	result = (int)fp;
 	switch (regs.fpcr & 0x30)
 	{
 		case FPCR_ROUND_ZERO:
@@ -998,16 +1008,18 @@ static void fp_cmp(fpdata *a, fpdata *b)
 {
 	fptype v = 1.0;
 	if (currprefs.fpu_strict) {
+		bool a_neg, a_inf, a_zero, a_nan;
+		bool b_neg, b_inf, b_zero, b_nan;
 		fp_is_init(a);
-		bool a_neg = fp_is_neg(a);
-		bool a_inf = fp_is_infinity(a);
-		bool a_zero = fp_is_zero(a);
-		bool a_nan = fp_is_nan(a);
+		a_neg = fp_is_neg(a);
+		a_inf = fp_is_infinity(a);
+		a_zero = fp_is_zero(a);
+		a_nan = fp_is_nan(a);
 		fp_is_init(b);
-		bool b_neg = fp_is_neg(b);
-		bool b_inf = fp_is_infinity(b);
-		bool b_zero = fp_is_zero(b);
-		bool b_nan = fp_is_nan(b);
+		b_neg = fp_is_neg(b);
+		b_inf = fp_is_infinity(b);
+		b_zero = fp_is_zero(b);
+		b_nan = fp_is_nan(b);
 
 		if (a_nan || b_nan) {
 			// FCMP never returns N + NaN
@@ -1399,14 +1411,16 @@ double softfloat_tan(double v)
 	struct float_status f = { 0 };
 	uae_u32 w1, w2;
 	fpdata fpd = { 0 };
+	floatx80 fv;
+	float64 f64;
 
 	fpd.fp = v;
 	set_floatx80_rounding_precision(80, &f);
 	set_float_rounding_mode(float_round_to_zero, &f);
 	fp_from_double(&fpd, &w1, &w2);
-	floatx80 fv = float64_to_floatx80(((uae_u64)w1 << 32) | w2, &fs);
+	fv = float64_to_floatx80(((uae_u64)w1 << 32) | w2, &fs);
 	fv = floatx80_tan(fv, &fs);
-	float64 f64 = floatx80_to_float64(fv, &fs);
+	f64 = floatx80_to_float64(fv, &fs);
 	fp_to_double(&fpd, f64 >> 32, (uae_u32)f64);
 	return fpd.fp;
 #else

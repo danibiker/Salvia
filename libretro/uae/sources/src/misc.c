@@ -56,13 +56,14 @@ void to_lower (TCHAR *s, int len)
 }
 int same_aname (const TCHAR *an1, const TCHAR *an2)
 {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(_XBOX)
    return CompareString (LOCALE_INVARIANT, NORM_IGNORECASE, an1, -1, an2, -1) == CSTR_EQUAL;
 #else
    return string_is_equal(an1, an2);
 #endif
 }
 
+#ifndef _XBOX
 void png_set_expand (void) {}
 void png_destroy_read_struct (void) {}
 void png_set_strip_16 (void) {}
@@ -77,8 +78,9 @@ void png_set_read_fn (void) {}
 void png_create_info_struct (void) {}
 void png_create_read_struct (void) {}
 void png_sig_cmp (void) {}
-
 struct zfile* png_get_io_ptr = NULL;
+#endif
+
 #endif
 
 int uaestrlen(const char* s)
@@ -120,7 +122,7 @@ static volatile frame_time_t vblank_prev_time;
 static struct winuae_currentmode currentmodestruct;
 static struct winuae_currentmode *currentmode = &currentmodestruct;
 
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(_XBOX)
 typedef struct {
 	WORD  dmSize;
 	WORD  dmDriverExtra;
@@ -480,8 +482,10 @@ static void fixdriveletter(TCHAR *path)
 
 void getpathpart (TCHAR *outpath, int size, const TCHAR *inpath)
 {
+	TCHAR *p;
+
 	_tcscpy (outpath, inpath);
-	TCHAR *p = _tcsrchr (outpath, '\\');
+	p = _tcsrchr (outpath, '\\');
 	if (p)
 		p[0] = 0;
 	fixtrailing (outpath);
@@ -489,8 +493,10 @@ void getpathpart (TCHAR *outpath, int size, const TCHAR *inpath)
 
 void getfilepart (TCHAR *out, int size, const TCHAR *path)
 {
+	const TCHAR *p;
+
 	out[0] = 0;
-	const TCHAR *p = _tcsrchr (path, '\\');
+	p = _tcsrchr (path, '\\');
 	if (p)
 		_tcscpy (out, p + 1);
 	else
@@ -499,6 +505,13 @@ void getfilepart (TCHAR *out, int size, const TCHAR *path)
 
 uae_u8 *target_load_keyfile (struct uae_prefs *p, const TCHAR *path, int *sizep, TCHAR *name)
 {
+	/* rommgr.c hace keybuf = target_load_keyfile(...): sin este return
+	 * recibia un puntero basura. */
+	if (sizep)
+		*sizep = 0;
+	if (name)
+		name[0] = 0;
+	return NULL;
 #if 0
 	uae_u8 *keybuf = NULL;
 	HMODULE h;
@@ -698,9 +711,10 @@ void fullpath(TCHAR *path, int size)
 
 bool samepath(const TCHAR *p1, const TCHAR *p2)
 {
+	TCHAR path1[MAX_DPATH], path2[MAX_DPATH];
+
 	if (!_tcsicmp(p1, p2))
 		return true;
-	TCHAR path1[MAX_DPATH], path2[MAX_DPATH];
 	_tcscpy(path1, p1);
 	_tcscpy(path2, p2);
 	fixdriveletter(path1);
@@ -1707,17 +1721,19 @@ void uaenative_install (void) {}
 
 int consolehook_activate (void) { return 0; }
 void consolehook_ret(TrapContext *ctx, uaecptr condev, uaecptr oldbeginio) {}
-uaecptr consolehook_beginio(TrapContext *ctx, uaecptr request) {}
+uaecptr consolehook_beginio(TrapContext *ctx, uaecptr request) { return 0; }
 
 void filesys_addexternals (void) {}
 int target_get_volume_name (struct uaedev_mount_info *mtinf, struct uaedev_config_info *ci, bool inserted, bool fullcheck, int cnt) { return 2; }
 void target_getdate(int *y, int *m, int *d) {}
 
-unsigned char def_drawer[] = {};
+/* C89: an empty initialiser '= {}' is not valid; the matching _len is 0 so a
+ * single padding byte is equivalent. */
+unsigned char def_drawer[] = { 0 };
 unsigned int def_drawer_len = 0;
-unsigned char def_tool[] = {};
+unsigned char def_tool[] = { 0 };
 unsigned int def_tool_len = 0;
-unsigned char def_project[] = {};
+unsigned char def_project[] = { 0 };
 unsigned int def_project_len = 0;
 
 /*void fp_init_softfloat(int fpu_model) {}*/

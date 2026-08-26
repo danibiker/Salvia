@@ -293,6 +293,8 @@ static TCHAR *stacktostring(struct calcstack *st)
     if (st->s) {
         if (_tcslen(st->s) == 1 && st->s[0] >= 'a' && st->s[0] <= 'z') {
             TCHAR *s = parsedvaluess[st->s[0] - 'a'];
+            double v;
+            TCHAR tmp[256];
             if (s) {
                 xfree(st->vals);
                 st->vals = my_strdup(s);
@@ -300,8 +302,7 @@ static TCHAR *stacktostring(struct calcstack *st)
                 st->s = NULL;
                 return st->vals;
             }
-            double v = parsedvaluesd[st->s[0] - 'a'];
-            TCHAR tmp[256];
+            v = parsedvaluesd[st->s[0] - 'a'];
             _stprintf(tmp, _T("%d"), (int)v);
             xfree(st->vals);
             st->vals = my_strdup(tmp);
@@ -532,11 +533,12 @@ static bool execution_order(const TCHAR *input, double *outval, TCHAR *outstring
         }
                 // Otherwise, the token is an operator  (operator here includes both operators, and functions).
         else if(is_operator(c) || is_function(c))    {
+                        unsigned int nargs;
                         _stprintf(res, _T("_%02d"), rn);
                         calc_log ((_T("%s = "), res));
                         ++rn;
                         // It is known a priori that the operator takes n arguments.
-                        unsigned int nargs = op_arg_count(c);
+                        nargs = op_arg_count(c);
                         // If there are fewer than n values on the stack
                         if(sl < nargs) {
                                 // (Error) The user has not input sufficient values in the expression.
@@ -640,10 +642,12 @@ static bool parse_values(const TCHAR *ins, TCHAR *out)
 	TCHAR tmp;
 	TCHAR inbuf[IOBUFFERS];
 	int op;
+	TCHAR *in;
+	TCHAR *p;
 
 	_tcscpy (inbuf, ins);
-	TCHAR *in = inbuf;
-	TCHAR *p = out;
+	in = inbuf;
+	p = out;
 	op = 0;
 	if (in[0] == '-' || in[0] == '+') {
 		*p++ = '0';
@@ -705,13 +709,16 @@ static bool parse_values(const TCHAR *ins, TCHAR *out)
             *(in + 1) = ' ';
         }
         if (_totupper (*in) == 'R') {
+            TCHAR *tmpp;
+            int idx;
             if (ident >= MAX_VALUES)
                 return false;
-            TCHAR *tmpp = in + 1;
-            int idx = getregidx(&tmpp);
+            tmpp = in + 1;
+            idx = getregidx(&tmpp);
             if (idx >= 0) {
+                uae_u32 val;
                 *p++ = ident + 'a';
-                uae_u32 val = returnregx(idx);
+                val = returnregx(idx);
                 parsedvaluesd[ident++] = val;
                 in = tmpp;
             } else {
@@ -719,6 +726,7 @@ static bool parse_values(const TCHAR *ins, TCHAR *out)
             }
             op = 0;
         } else if (_istxdigit(*in) || *in == '$') {
+            bool hex = false;
 			if (ident >= MAX_VALUES)
 				return false;
             if (op > 1 && (in[-1] == '-' || in[-1] == '+')) {
@@ -726,7 +734,6 @@ static bool parse_values(const TCHAR *ins, TCHAR *out)
                 p--;
             }
             *p++ = ident + 'a';
-            bool hex = false;
             if (*in == '$') {
                 in++;
                 hex = true;
@@ -744,8 +751,9 @@ static bool parse_values(const TCHAR *ins, TCHAR *out)
             if (hex) {
                 uae_u32 val = 0;
                 while (_istxdigit(*in)) {
+                    TCHAR c;
                     val *= 16;
-                    TCHAR c = _totupper(*in);
+                    c = _totupper(*in);
                     if (_istdigit(c)) {
                         val += c - '0';
                     } else {
@@ -777,6 +785,7 @@ int calc(const TCHAR *input, double *outval, TCHAR *outstring, int maxlen)
 {
     TCHAR output[IOBUFFERS], output2[IOBUFFERS];
     int ret = -1;
+    int i;
     calc_log ((_T("IN: '%s'\n"), input));
     if (outval) {
         *outval = 0;
@@ -784,7 +793,7 @@ int calc(const TCHAR *input, double *outval, TCHAR *outstring, int maxlen)
     if (outstring) {
         outstring[0] = 0;
     }
-    for (int i = 0; i < STACK_SIZE; i++) {
+    for (i = 0; i < STACK_SIZE; i++) {
         struct calcstack *s = &stack[i];
         memset(s, 0, sizeof(struct calcstack));
     }   
@@ -802,12 +811,12 @@ int calc(const TCHAR *input, double *outval, TCHAR *outstring, int maxlen)
 			}
 		}
     }
-    for (int i = 0; i < MAX_VALUES; i++) {
+    for (i = 0; i < MAX_VALUES; i++) {
         xfree(parsedvaluess[i]);
         parsedvaluesd[i] = 0;
         parsedvaluess[i] = NULL;
     }
-    for (int i = 0; i < STACK_SIZE; i++) {
+    for (i = 0; i < STACK_SIZE; i++) {
         struct calcstack *s = &stack[i];
         xfree(s->vals);
         xfree(s->s);
@@ -818,7 +827,8 @@ int calc(const TCHAR *input, double *outval, TCHAR *outstring, int maxlen)
 
 bool iscalcformula (const TCHAR *formula)
 {
-	for (int i = 0; i < _tcslen (formula); i++) {
+	int i;
+	for (i = 0; i < _tcslen (formula); i++) {
 		TCHAR c = formula[i];
 		if (is_operator (c))
 			return true;

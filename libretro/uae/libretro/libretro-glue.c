@@ -20,6 +20,7 @@
 #include "parser.h"
 #include "inputdevice.h"
 #include "newcpu.h"
+
 extern int mouse_port[NORMAL_JPORTS];
 
 int log_scsi;
@@ -71,7 +72,8 @@ extern char full_path[RETRO_PATH_MAX];
 
 static bool flag_empty(int val[16])
 {
-   for (int x = 0; x < 16; x++)
+   int x;
+   for (x = 0; x < 16; x++)
    {
       if (val[x])
          return false;
@@ -307,8 +309,9 @@ static void retro_draw_frame_extras(void)
 
    int slx, sly;
    int mult = (video_config & PUAE_VIDEO_QUADLINE) ? 2 : 1;
+   int i;
    statusline_getpos(vb->monitor_id, &slx, &sly, vb->outwidth, vb->outheight);
-   for (int i = 0; i < TD_TOTAL_HEIGHT * mult; i++) {
+   for (i = 0; i < TD_TOTAL_HEIGHT * mult; i++) {
       int line = sly + i;
       if (line < 0)
          continue;
@@ -318,11 +321,52 @@ static void retro_draw_frame_extras(void)
 
 void print_statusbar(void)
 {
+   int FONT_WIDTH;
+   int FONT_HEIGHT;
+   int FONT_COLOR;
+   int FONT_SLOT;
+   int BOX_X;
+   int BOX_Y;
+   int BOX_WIDTH;
+   int BOX_HEIGHT;
+   int BOX_PADDING;
+   int TEXT_X;
+   int TEXT_Y;
+   int TEXT_LENGTH_NARROW;
+   int TEXT_LENGTH_WIDE;
+   int TEXT_LENGTH;
+   int CROP_WIDTH_OFFSET;
+   int TEXT_X_RESOLUTION;
+   unsigned char RESOLUTION[10];
+   int TEXT_X_MODEL;
+   int TEXT_X_MEMORY;
+   unsigned char MODEL[10];
+   unsigned char MEMORY[5];
+   float mem_size;
+   unsigned char JOYMODE1[5];
+   unsigned char JOYMODE2[5];
+   unsigned char JOYMODE3[5];
+   unsigned char JOYMODE4[5];
+   unsigned char JOYPORT1[5];
+   unsigned char JOYPORT2[5];
+   unsigned char JOYPORT3[5];
+   unsigned char JOYPORT4[5];
+   int TEXT_X_JOYMODE1;
+   int TEXT_X_JOYPORT1;
+   int TEXT_X_JOYMODE2;
+   int TEXT_X_JOYPORT2;
+   int TEXT_X_JOYMODE3;
+   int TEXT_X_JOYPORT3;
+   int TEXT_X_JOYMODE4;
+   int TEXT_X_JOYPORT4;
+   int JOY1_COLOR;
+   int JOY2_COLOR;
+
    if (opt_statusbar & STATUSBAR_BASIC && !statusbar_message_timer)
       goto end;
 
-   int FONT_WIDTH           = 1;
-   int FONT_HEIGHT          = 1;
+   FONT_WIDTH           = 1;
+   FONT_HEIGHT          = 1;
 
    if (retro_doublescan || (retrow == PUAE_VIDEO_WIDTH_S72 || retrow == PUAE_VIDEO_WIDTH_S72 * 2))
    {
@@ -350,20 +394,20 @@ void print_statusbar(void)
          FONT_WIDTH         = 4;
    }
 
-   int FONT_COLOR           = (pix_bytes == 4) ? 0xffffff : 0xffff;
-   int FONT_SLOT            = 34 * FONT_WIDTH;
+   FONT_COLOR           = (pix_bytes == 4) ? 0xffffff : 0xffff;
+   FONT_SLOT            = 34 * FONT_WIDTH;
 
-   int BOX_X                = retrox_crop;
-   int BOX_Y                = 0;
-   int BOX_WIDTH            = 0;
-   int BOX_HEIGHT           = FONT_HEIGHT * 11;
-   int BOX_PADDING          = FONT_HEIGHT * 2;
+   BOX_X                = retrox_crop;
+   BOX_Y                = 0;
+   BOX_WIDTH            = 0;
+   BOX_HEIGHT           = FONT_HEIGHT * 11;
+   BOX_PADDING          = FONT_HEIGHT * 2;
 
-   int TEXT_X               = FONT_WIDTH + retrox_crop;
-   int TEXT_Y               = 0;
-   int TEXT_LENGTH_NARROW   = 64;
-   int TEXT_LENGTH_WIDE     = 128;
-   int TEXT_LENGTH          = (((video_config & PUAE_VIDEO_DOUBLELINE) || retro_doublescan) && retrow > PUAE_VIDEO_WIDTH_S72)
+   TEXT_X               = FONT_WIDTH + retrox_crop;
+   TEXT_Y               = 0;
+   TEXT_LENGTH_NARROW   = 64;
+   TEXT_LENGTH_WIDE     = 128;
+   TEXT_LENGTH          = (((video_config & PUAE_VIDEO_DOUBLELINE) || retro_doublescan) && retrow > PUAE_VIDEO_WIDTH_S72)
          ? TEXT_LENGTH_WIDE : TEXT_LENGTH_NARROW;
 
    /* Statusbar location */
@@ -384,7 +428,7 @@ void print_statusbar(void)
 
    /* Statusbar size */
    BOX_WIDTH = retrow_crop;
-   int CROP_WIDTH_OFFSET = retrow - retrow_crop;
+   CROP_WIDTH_OFFSET = retrow - retrow_crop;
 
    if (retrow == PUAE_VIDEO_WIDTH_S72 * 2)
       CROP_WIDTH_OFFSET = PUAE_VIDEO_WIDTH - retrow;
@@ -398,17 +442,17 @@ void print_statusbar(void)
    }
 
    /* Video resolution */
-   int TEXT_X_RESOLUTION = TEXT_X + (FONT_SLOT*4) + (FONT_WIDTH*16) - (CROP_WIDTH_OFFSET/2);
-   unsigned char RESOLUTION[10] = {0};
+   TEXT_X_RESOLUTION = TEXT_X + (FONT_SLOT*4) + (FONT_WIDTH*16) - (CROP_WIDTH_OFFSET/2);
+   memset(RESOLUTION, 0, sizeof(RESOLUTION));
    snprintf(RESOLUTION, sizeof(RESOLUTION), "%4dx%3d", retrow_crop, retroh_crop);
 
    /* Model & memory */
-   int TEXT_X_MODEL  = TEXT_X + (FONT_SLOT*6) + (FONT_WIDTH*42) - CROP_WIDTH_OFFSET;
-   int TEXT_X_MEMORY = TEXT_X + (FONT_SLOT*6) + (FONT_WIDTH*16) - CROP_WIDTH_OFFSET;
+   TEXT_X_MODEL  = TEXT_X + (FONT_SLOT*6) + (FONT_WIDTH*42) - CROP_WIDTH_OFFSET;
+   TEXT_X_MEMORY = TEXT_X + (FONT_SLOT*6) + (FONT_WIDTH*16) - CROP_WIDTH_OFFSET;
 
-   unsigned char MODEL[10] = {0};
-   unsigned char MEMORY[5] = {0};
-   float mem_size = 0;
+   memset(MODEL, 0, sizeof(MODEL));
+   memset(MEMORY, 0, sizeof(MEMORY));
+   mem_size = 0;
    mem_size  = (float)(currprefs.chipmem.size / 0x80000) / 2;
    mem_size += (float)(currprefs.bogomem.size / 0x40000) / 4;
    mem_size += (float)(currprefs.fastmem[0].size / 0x100000);
@@ -453,28 +497,28 @@ void print_statusbar(void)
    }
 
    /* Joy port indicators */
-   unsigned char JOYMODE1[5] = {0};
-   unsigned char JOYMODE2[5] = {0};
-   unsigned char JOYMODE3[5] = {0};
-   unsigned char JOYMODE4[5] = {0};
+   memset(JOYMODE1, 0, sizeof(JOYMODE1));
+   memset(JOYMODE2, 0, sizeof(JOYMODE2));
+   memset(JOYMODE3, 0, sizeof(JOYMODE3));
+   memset(JOYMODE4, 0, sizeof(JOYMODE4));
 
-   unsigned char JOYPORT1[5] = {0};
-   unsigned char JOYPORT2[5] = {0};
-   unsigned char JOYPORT3[5] = {0};
-   unsigned char JOYPORT4[5] = {0};
+   memset(JOYPORT1, 0, sizeof(JOYPORT1));
+   memset(JOYPORT2, 0, sizeof(JOYPORT2));
+   memset(JOYPORT3, 0, sizeof(JOYPORT3));
+   memset(JOYPORT4, 0, sizeof(JOYPORT4));
 
    /* Joy port positions */
-   int TEXT_X_JOYMODE1 = TEXT_X;
-   int TEXT_X_JOYPORT1 = TEXT_X_JOYMODE1 + (FONT_WIDTH*13);
+   TEXT_X_JOYMODE1 = TEXT_X;
+   TEXT_X_JOYPORT1 = TEXT_X_JOYMODE1 + (FONT_WIDTH*13);
 
-   int TEXT_X_JOYMODE2 = TEXT_X + FONT_SLOT;
-   int TEXT_X_JOYPORT2 = TEXT_X_JOYMODE2 + (FONT_WIDTH*13);
+   TEXT_X_JOYMODE2 = TEXT_X + FONT_SLOT;
+   TEXT_X_JOYPORT2 = TEXT_X_JOYMODE2 + (FONT_WIDTH*13);
 
-   int TEXT_X_JOYMODE3 = TEXT_X + (FONT_SLOT*2);
-   int TEXT_X_JOYPORT3 = TEXT_X_JOYMODE3 + (FONT_WIDTH*13);
+   TEXT_X_JOYMODE3 = TEXT_X + (FONT_SLOT*2);
+   TEXT_X_JOYPORT3 = TEXT_X_JOYMODE3 + (FONT_WIDTH*13);
 
-   int TEXT_X_JOYMODE4 = TEXT_X + (FONT_SLOT*3);
-   int TEXT_X_JOYPORT4 = TEXT_X_JOYMODE4 + (FONT_WIDTH*13);
+   TEXT_X_JOYMODE4 = TEXT_X + (FONT_SLOT*3);
+   TEXT_X_JOYPORT4 = TEXT_X_JOYMODE4 + (FONT_WIDTH*13);
 
    /* Regular joyflags */
    if (!retro_mousemode)
@@ -570,8 +614,8 @@ void print_statusbar(void)
    }
 
    /* Button colorize CD32 Pad */
-   int JOY1_COLOR = FONT_COLOR;
-   int JOY2_COLOR = FONT_COLOR;
+   JOY1_COLOR = FONT_COLOR;
+   JOY2_COLOR = FONT_COLOR;
    if (is_cd32pad(0))
       JOY1_COLOR = joystick_color(jflag[0]);
    if (is_cd32pad(1))
@@ -1098,6 +1142,7 @@ int target_get_display_scanline(int displayindex)
 		return lastvpos;
 	}
 #endif
+	return -1;
 }
 
 void vsync_clear(void)
@@ -1776,7 +1821,7 @@ int retro_rmdir(const char *path)
 
 int remove_recurse(const char *path)
 {
-   struct dirent *dirp;
+   //struct dirent *dirp;
    char filename[RETRO_PATH_MAX];
    int ret   = 0;
    RDIR *dir = retro_opendir(path);
@@ -1817,6 +1862,8 @@ int fcopy(const char *src, const char *dst)
    char buf[256] = {0};
    size_t n      = 0;
    int ret       = 0;
+   FILE *fp_src;
+   FILE *fp_dst;
 
    char path_dst[RETRO_PATH_MAX] = {0};
    snprintf(path_dst, sizeof(path_dst), "%s", dst);
@@ -1828,8 +1875,8 @@ int fcopy(const char *src, const char *dst)
       path_mkdir(path_dst);
    }
 
-   FILE *fp_src = fopen(src, "rb");
-   FILE *fp_dst = fopen(dst, "wb");
+   fp_src = fopen(src, "rb");
+   fp_dst = fopen(dst, "wb");
    if (!fp_src)
       ret = -1;
    if (!fp_dst)
@@ -1982,6 +2029,7 @@ void gz_compress(const char *in, const char *out)
    char buf[BUFLEN];
    size_t len;
    int err;
+   int buflen;
    FILE *in_fp;
    gzFile out_fp;
 
@@ -1996,7 +2044,6 @@ void gz_compress(const char *in, const char *out)
    for (;;)
    {
       len = fread(buf, 1, sizeof(buf), in_fp);
-      int buflen;
 
       if (len <= 0)
       {
@@ -2049,6 +2096,19 @@ void gz_uncompress(const char *in, const char *out)
    }
 }
 
+void replace_unix_separators(char *filepath) {
+    // Si el puntero es nulo, salimos para evitar un crash
+    if (!filepath) return; 
+
+    // Recorremos el puntero carácter por carácter
+    while (*filepath != '\0') {
+        if (*filepath == '/') {
+            *filepath = '\\'; // Reemplazamos por la barra invertida
+        }
+        filepath++; // Avanzamos a la siguiente posición de memoria
+    }
+}
+
 void zip_uncompress(const char *in, const char *out, char *lastfile)
 {
    uLong i;
@@ -2090,6 +2150,11 @@ void zip_uncompress(const char *in, const char *out, char *lastfile)
 
       err = unzGetCurrentFileInfo(uf, &file_info, filename_inzip, sizeof(filename_inzip), NULL, 0, NULL, 0);
       snprintf(filename_withpath, sizeof(filename_withpath), "%s%s%s", out, DIR_SEP_STR, filename_inzip);
+
+#ifdef _WIN32
+	  replace_unix_separators(filename_withpath);
+#endif
+
       if (lastfile != NULL &&
             (dc_get_image_type(filename_inzip) == DC_IMAGE_TYPE_FLOPPY ||
              dc_get_image_type(filename_inzip) == DC_IMAGE_TYPE_CD))
@@ -2411,7 +2476,7 @@ void sevenzip_uncompress(const char *in, const char *out, char *lastfile)
    File_Close(&archiveStream.file);
 }
 #else
-void sevenzip_uncompress(char *in, char *out, char *lastfile)
+void sevenzip_uncompress(const char *in, const char *out, char *lastfile)
 {
 }
 #endif
@@ -3566,3 +3631,80 @@ chd_error chd_hunk_info(chd_file *cf, UINT32 hunknum, chd_codec_type *compressor
 }
 
 #endif /* WITH_CHD */
+
+#ifdef _XBOX
+
+extern int DeleteFileA(const char *path);
+extern int RemoveDirectoryA(const char *path);
+
+static int xbox_utf16_to_utf8(const unsigned short *in, char *out, int outsz)
+{
+	int n = 0;
+	while (*in) {
+		unsigned int c = *in++;
+		if (c >= 0xd800 && c < 0xdc00 && *in >= 0xdc00 && *in < 0xe000)
+			c = 0x10000 + ((c - 0xd800) << 10) + (*in++ - 0xdc00);
+		if (c < 0x80) {
+			if (n + 1 >= outsz) break;
+			out[n++] = (char)c;
+		} else if (c < 0x800) {
+			if (n + 2 >= outsz) break;
+			out[n++] = (char)(0xc0 | (c >> 6));
+			out[n++] = (char)(0x80 | (c & 0x3f));
+		} else if (c < 0x10000) {
+			if (n + 3 >= outsz) break;
+			out[n++] = (char)(0xe0 | (c >> 12));
+			out[n++] = (char)(0x80 | ((c >> 6) & 0x3f));
+			out[n++] = (char)(0x80 | (c & 0x3f));
+		} else {
+			if (n + 4 >= outsz) break;
+			out[n++] = (char)(0xf0 | (c >> 18));
+			out[n++] = (char)(0x80 | ((c >> 12) & 0x3f));
+			out[n++] = (char)(0x80 | ((c >> 6) & 0x3f));
+			out[n++] = (char)(0x80 | (c & 0x3f));
+		}
+	}
+	out[n] = 0;
+	return n;
+}
+
+int DeleteFileW(const unsigned short *path)
+{
+	char narrow[1024];
+	xbox_utf16_to_utf8(path, narrow, sizeof(narrow));
+	return DeleteFileA(narrow);
+}
+
+int RemoveDirectoryW(const unsigned short *path)
+{
+	char narrow[1024];
+	xbox_utf16_to_utf8(path, narrow, sizeof(narrow));
+	return RemoveDirectoryA(narrow);
+}
+
+char *getcwd(char *buf, int size)
+{
+	const char *cwd = "game:";
+	size_t len = strlen(cwd);
+	if (!buf || size < 0 || (size_t)size < len + 1)
+		return NULL;
+	memcpy(buf, cwd, len + 1);
+	return buf;
+}
+
+int chdir(const char *path)
+{
+	return 0;
+}
+
+char *_getcwd(char *buf, int size)
+{
+	return getcwd(buf, size);
+}
+
+int _chdir(const char *path)
+{
+	return chdir(path);
+}
+
+#endif

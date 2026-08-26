@@ -8,7 +8,9 @@
 #define USE_WINDOWS_FILE
 #endif
 
-#ifdef USE_WINDOWS_FILE
+#ifdef _XBOX
+#include <xtl.h>
+#elif defined(USE_WINDOWS_FILE)
 #include <windows.h>
 #else
 #include <stdio.h>

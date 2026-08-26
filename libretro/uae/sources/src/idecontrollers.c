@@ -142,14 +142,15 @@ static int dev_hd_io_secondary;
 
 static void freencrunit(struct ide_board *ide)
 {
+	int i;
 	if (!ide)
 		return;
-	for (int i = 0; i < MAX_IDE_UNITS; i++) {
+	for (i = 0; i < MAX_IDE_UNITS; i++) {
 		if (ide_boards[i] == ide) {
 			ide_boards[i] = NULL;
 		}
 	}
-	for(int i = 0; i < MAX_IDE_PORTS_BOARD; i++) {
+	for (i = 0; i < MAX_IDE_PORTS_BOARD; i++) {
 		remove_ide_unit(&ide->ide[i], 0);
 	}
 	if (ide->self_ptr)
@@ -165,12 +166,13 @@ static struct ide_board *allocide(struct ide_board **idep, struct romconfig *rc,
 	struct ide_board *ide;
 
 	if (ch < 0) {
+		int i;
 		if (*idep) {
 			freencrunit(*idep);
 			*idep = NULL;
 		}
 		ide = xcalloc(struct ide_board, 1);
-		for (int i = 0; i < MAX_IDE_UNITS; i++) {
+		for (i = 0; i < MAX_IDE_UNITS; i++) {
 			if (ide_boards[i] == NULL) {
 				ide_boards[i] = ide;
 				rc->unitdata = ide;
@@ -187,7 +189,8 @@ static struct ide_board *allocide(struct ide_board **idep, struct romconfig *rc,
 
 static struct ide_board *getideboard(uaecptr addr)
 {
-	for (int i = 0; ide_boards[i]; i++) {
+	int i;
+	for (i = 0; ide_boards[i]; i++) {
 		if (!ide_boards[i]->baseaddress && !ide_boards[i]->configured)
 			return ide_boards[i];
 		if ((addr & ~ide_boards[i]->mask) == ide_boards[i]->baseaddress)
@@ -198,7 +201,8 @@ static struct ide_board *getideboard(uaecptr addr)
 
 static void init_ide(struct ide_board *board, int ide_num, int maxunit, bool byteswap, bool adide)
 {
-	for (int i = 0; i < maxunit / 2; i++) {
+	int i;
+	for (i = 0; i < maxunit / 2; i++) {
 		struct ide_hdf **idetable = &idecontroller_drive[(ide_num + i) * 2];
 		alloc_ide_mem (idetable, 2, &idecontroller_its);
 		board->ide[i] = idetable[0];
@@ -234,10 +238,12 @@ static void add_ide_standard_unit(int ch, struct uaedev_config_info *ci, struct 
 
 static bool ide_interrupt_check(struct ide_board *board, bool edge_triggered)
 {
+	bool irq;
+	int i;
 	if (!board->configured)
 		return false;
-	bool irq = false;
-	for (int i = 0; i < MAX_IDE_PORTS_BOARD; i++) {
+	irq = false;
+	for (i = 0; i < MAX_IDE_PORTS_BOARD; i++) {
 		if (board->ide[i] && !irq) {
 			irq = ide_irq_check(board->ide[i], edge_triggered);
 		}
@@ -265,8 +271,9 @@ void x86_doirq(uint8_t irqnum);
 
 static void idecontroller_rethink(void)
 {
+	int i;
 	bool irq = false;
-	for (int i = 0; ide_boards[i]; i++) {
+	for (i = 0; ide_boards[i]; i++) {
 		if (ide_boards[i] == x86_at_ide_board[0] || ide_boards[i] == x86_at_ide_board[1]) {
 			bool x86irq = ide_rethink(ide_boards[i], true);
 			if (x86irq && ide_boards[i] == x86_at_ide_board[0]) {
@@ -281,7 +288,8 @@ static void idecontroller_rethink(void)
 
 static void idecontroller_hsync(void)
 {
-	for (int i = 0; ide_boards[i]; i++) {
+	int i;
+	for (i = 0; ide_boards[i]; i++) {
 		struct ide_board *board = ide_boards[i];
 		if (board->hsync_cnt > 0) {
 			board->hsync_cnt--;
@@ -289,7 +297,8 @@ static void idecontroller_hsync(void)
 				board->hsync_code(board);
 		}
 		if (board->configured) {
-			for (int j = 0; j < MAX_IDE_PORTS_BOARD; j++) {
+			int j;
+			for (j = 0; j < MAX_IDE_PORTS_BOARD; j++) {
 				if (board->ide[j]) {
 					ide_interrupt_hsync(board->ide[j]);
 				}
@@ -311,15 +320,17 @@ static void reset_ide(struct ide_board *board, int hardreset)
 
 static void idecontroller_reset(int hardreset)
 {
-	for (int i = 0; ide_boards[i]; i++) {
+	int i;
+	for (i = 0; ide_boards[i]; i++) {
 		reset_ide(ide_boards[i], hardreset);
 	}
 }
 
 static void idecontroller_free(void)
 {
+	int i;
 	stop_ide_thread(&idecontroller_its);
-	for (int i = 0; i < MAX_IDE_UNITS; i++) {
+	for (i = 0; i < MAX_IDE_UNITS; i++) {
 		freencrunit(ide_boards[i]);
 	}
 }
@@ -407,9 +418,10 @@ static int get_gvp_reg(uaecptr addr, struct ide_board *board)
 		reg = (addr >> 8) & 7;
 	}
 	if (!(addr & 0x400) && (addr & 0x20)) {
+		int extra;
 		if (reg < 0)
 			reg = 0;
-		int extra = (addr >> 1) & 15;
+		extra = (addr >> 1) & 15;
 		if (extra >= 8)
 			reg |= IDE_SECONDARY;
 		reg |= extra;
@@ -422,9 +434,10 @@ static int get_gvp_reg(uaecptr addr, struct ide_board *board)
 
 static int get_apollo_reg(uaecptr addr, struct ide_board *board)
 {
+	int reg;
 	if (addr & 0x4000)
 		return -1;
-	int reg = addr & 0x1fff;
+	reg = addr & 0x1fff;
 	reg >>= 10;
 	if (addr & 0x2000)
 		reg |= IDE_SECONDARY;
@@ -565,21 +578,23 @@ static int get_ateam_reg(uaecptr addr, struct ide_board *board)
 
 static int get_arriba_reg(uaecptr addr, struct ide_board *board)
 {
+	int reg;
 	if (!(addr & 0x8000))
 		return -1;
 	if (addr & 1)
 		return -1;
-	int reg = ((addr & 0x0fff) >> 9) & 7;
+	reg = ((addr & 0x0fff) >> 9) & 7;
 	return reg;
 }
 
 static int get_elsathd_reg(uaecptr addr, struct ide_board *board)
 {
+	int reg;
 	if (!(addr & 0x8000))
 		return -1;
 	if (!(addr & 1))
 		return -1;
-	int reg = ((addr & 0x0fff) >> 9) & 7;
+	reg = ((addr & 0x0fff) >> 9) & 7;
 	return reg;
 }
 
@@ -602,6 +617,7 @@ static int get_fastata4k_reg(uaecptr addr, struct ide_board *board, int *portnum
 
 static int get_accessx_reg(uaecptr addr, struct ide_board *board, int *portnum)
 {
+	int reg;
 	*portnum = 0;
 	if (!(addr & 0x8000))
 		return -1;
@@ -609,7 +625,7 @@ static int get_accessx_reg(uaecptr addr, struct ide_board *board, int *portnum)
 		return -1;
 	if (addr & 0x400)
 		*portnum = 1;
-	int reg = (addr >> 6) & 7;
+	reg = (addr >> 6) & 7;
 	if (addr & 0x200)
 		reg |= IDE_SECONDARY;
 	return reg;
@@ -617,12 +633,13 @@ static int get_accessx_reg(uaecptr addr, struct ide_board *board, int *portnum)
 
 static int get_ivst500at_reg(uaecptr addr, struct ide_board *board, int *portnum)
 {
+	int reg;
 	*portnum = 0;
 	if (addr & (0x4000 | 0x8000))
 		return -1;
 	if (!(addr & 1))
 		return -1;
-	int reg = (addr >> 2) & 7;
+	reg = (addr >> 2) & 7;
 	if (addr & 0x2000)
 		reg |= IDE_SECONDARY;
 	return reg;
@@ -650,7 +667,8 @@ static int get_dev_hd_reg(uaecptr addr, struct ide_board* board)
 
 static int getidenum(struct ide_board *board, struct ide_board **arr)
 {
-	for (int i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
+	int i;
+	for (i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
 		if (board == arr[i])
 			return i;
 	}
@@ -707,13 +725,14 @@ static uae_u32 ide_read_byte2(struct ide_board *board, uaecptr addr)
 		}
 
 	} else if (board->type == ALF_IDE || board->type == TANDEM_IDE) {
+		int regnum;
 
 		if (addr < 0x1100 || (addr & 1)) {
 			if (board->rom)
 				v = board->rom[addr & board->rom_mask];
 			return v;
 		}
-		int regnum = get_alf_reg(addr, board);
+		regnum = get_alf_reg(addr, board);
 		if (regnum >= 0) {
 			v = get_ide_reg(board, regnum);
 		}
@@ -1585,12 +1604,14 @@ static void ide_write_byte(struct ide_board *board, uaecptr addr, uae_u8 v)
 							write_log(_T("MASOBOSHI IDE DMA %s start %08x, %d\n"), (board->state2[5] & 0x80) ? _T("READ") : _T("WRITE"), board->dma_ptr, board->dma_cnt);
 							if (ide_drq_check(board->ide[0])) {
 								if (!(board->state2[5] & 0x80)) {
-									for (int i = 0; i < board->dma_cnt; i++) {
+									int i;
+									for (i = 0; i < board->dma_cnt; i++) {
 										put_ide_reg(board, IDE_DATA, get_word(board->dma_ptr & ~1));
 										board->dma_ptr += 2;
 									}
 								} else {
-									for (int i = 0; i < board->dma_cnt; i++) {
+									int i;
+									for (i = 0; i < board->dma_cnt; i++) {
 										put_word(board->dma_ptr & ~1, get_ide_reg(board, IDE_DATA));
 										board->dma_ptr += 2;
 									}
@@ -2133,11 +2154,12 @@ static addrbank ide_bank_generic = {
 
 static struct ide_board *getide(struct autoconfig_info *aci)
 {
+	int i;
 	device_add_rethink(idecontroller_rethink);
 	device_add_hsync(idecontroller_hsync);
 	device_add_exit(idecontroller_free, NULL);
 
-	for (int i = 0; i < MAX_IDE_UNITS; i++) {
+	for (i = 0; i < MAX_IDE_UNITS; i++) {
 		if (ide_boards[i]) {
 			struct ide_board *ide = ide_boards[i];
 			if (ide->rc == aci->rc) {
@@ -2174,6 +2196,8 @@ static const uae_u8 gvp_ide1_controller_autoconfig[16] = { 0xd1, 0x08, 0x00, 0x0
 
 bool gvp_ide_rom_autoconfig_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
+	int i;
 	const uae_u8 *autoconfig;
 	if (ISCPUBOARD(BOARD_GVP, BOARD_GVP_SUB_A3001SI)) {
 		autoconfig = gvp_ide1_controller_autoconfig;
@@ -2185,7 +2209,7 @@ bool gvp_ide_rom_autoconfig_init(struct autoconfig_info *aci)
 	if (!aci->doinit)
 		return true;
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	if (ISCPUBOARD(BOARD_GVP, BOARD_GVP_SUB_A3001SI)) {
 		ide->bank = &gvp_ide_rom_bank;
@@ -2208,7 +2232,7 @@ bool gvp_ide_rom_autoconfig_init(struct autoconfig_info *aci)
 	ide->rom_mask = ide->rom_size - 1;
 
 	load_rom_rc(aci->rc, ROMTYPE_CB_A3001S1, ide->rom_size, 0, ide->rom, ide->rom_size, LOADROM_FILL);
-	for (int i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		uae_u8 b = autoconfig[i];
 		ew(ide, i * 4, b);
 	}
@@ -2218,18 +2242,20 @@ bool gvp_ide_rom_autoconfig_init(struct autoconfig_info *aci)
 
 bool gvp_ide_controller_autoconfig_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
+	int i;
 	ide_add_reset();
 	if (!aci->doinit) {
 		aci->autoconfigp = gvp_ide2_controller_autoconfig;
 		return true;
 	}
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	init_ide(ide, GVP_IDE, 2, true, false);
 	ide->configured = 0;
 	ide->bank = &gvp_ide_controller_bank;
 	memset(ide->acmemory, 0xff, sizeof ide->acmemory);
-	for (int i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		uae_u8 b = gvp_ide2_controller_autoconfig[i];
 		ew(ide, i * 4, b);
 	}
@@ -2253,6 +2279,8 @@ static const uae_u8 alfplus_autoconfig[16] = { 0xd1, 38, 0x00, 0x00, 0x08, 0x2c,
 
 bool alf_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
+	int i;
 	bool alfplus = is_board_enabled(&currprefs, ROMTYPE_ALFAPLUS, 0);
 	ide_add_reset();
 	if (!aci->doinit) {
@@ -2260,7 +2288,7 @@ bool alf_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 	if (!ide)
 		return false;
 
@@ -2278,7 +2306,7 @@ bool alf_init(struct autoconfig_info *aci)
 	memset(ide->rom, 0xff, ide->rom_size);
 	ide->rom_mask = ide->rom_size - 1;
 
-	for (int i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		uae_u8 b = alfplus ? alfplus_autoconfig[i] : alf_autoconfig[i];
 		ew(ide, i * 4, b);
 	}
@@ -2286,14 +2314,15 @@ bool alf_init(struct autoconfig_info *aci)
 	if (!aci->rc->autoboot_disabled) {
 		struct zfile *z = read_device_from_romconfig_2(aci->rc, alfplus ? ROMTYPE_ALFAPLUS : ROMTYPE_ALFA);
 		if (z) {
-			for (int i = 0; i < 0x1000 / 2; i++) {
+			int i;
+			for (i = 0; i < 0x1000 / 2; i++) {
 				uae_u8 b;
 				zfile_fread(&b, 1, 1, z);
 				ide->rom[ALF_ROM_OFFSET + i * 4 + 0] = b;
 				zfile_fread(&b, 1, 1, z);
 				ide->rom[ALF_ROM_OFFSET + i * 4 + 2] = b;
 			}
-			for (int i = 0; i < 32768 - 0x1000; i++) {
+			for (i = 0; i < 32768 - 0x1000; i++) {
 				uae_u8 b;
 				zfile_fread(&b, 1, 1, z);
 				ide->rom[0x2000 + i * 4 + 1] = b;
@@ -2322,6 +2351,8 @@ const uae_u8 apollo_autoconfig_cpuboard_12xx_060[16] = { 0xd2, 0x23, 0x40, 0x00,
 
 static bool apollo_init(struct autoconfig_info *aci, int cpuboard_model)
 {
+	struct ide_board * ide;
+	int i;
 	const uae_u8 *autoconfig = apollo_autoconfig;
 	if (cpuboard_model == 1200) {
 		if (currprefs.cpu_model == 68060)
@@ -2336,7 +2367,7 @@ static bool apollo_init(struct autoconfig_info *aci, int cpuboard_model)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	if (!ide)
 		return false;
@@ -2360,21 +2391,23 @@ static bool apollo_init(struct autoconfig_info *aci, int cpuboard_model)
 	memset(ide->rom, 0xff, ide->rom_size);
 	ide->rom_mask = ide->rom_size - 1;
 	ide->keepautoconfig = false;
-	for (int i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		uae_u8 b = autoconfig[i];
 		if (cpuboard_model && i == 9 && (currprefs.cpuboard_settings & 2))
 			b |= 1; // memory disable (serial bit 0)
 		ew(ide, i * 4, b);
 	}
 	if (cpuboard_model == 1200) {
+		struct zfile * z;
 		ide->mask = 131072 - 1;
-		struct zfile *z = read_device_from_romconfig_2(aci->rc, ROMTYPE_CB_APOLLO_12xx);
+		z = read_device_from_romconfig_2(aci->rc, ROMTYPE_CB_APOLLO_12xx);
 		if (z) {
+			int i;
 			int len = zfile_size32(z);
 			// skip 68060 $f0 ROM block
 			if (len >= 65536)
 				zfile_fseek(z, 32768, SEEK_SET);
-			for (int i = 0; i < 32768; i++) {
+			for (i = 0; i < 32768; i++) {
 				uae_u8 b;
 				zfile_fread(&b, 1, 1, z);
 				ide->rom[i] = b;
@@ -2405,6 +2438,7 @@ void apollo_add_ide_unit(int ch, struct uaedev_config_info *ci, struct romconfig
 
 bool masoboshi_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
 	int rom_size = 65536;
 	uae_u8 *rom = xcalloc(uae_u8, rom_size);
 	memset(rom, 0xff, rom_size);
@@ -2420,7 +2454,7 @@ bool masoboshi_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	if (!ide)
 		return false;
@@ -2462,6 +2496,8 @@ void masoboshi_add_idescsi_unit (int ch, struct uaedev_config_info *ci, struct r
 
 bool trifecta_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
+	int i;
 	int rom_size = 65536;
 	uae_u8 *rom = xcalloc(uae_u8, rom_size);
 	memset(rom, 0xff, rom_size);
@@ -2473,7 +2509,7 @@ bool trifecta_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	if (!ide)
 		return false;
@@ -2491,7 +2527,7 @@ bool trifecta_init(struct autoconfig_info *aci)
 	if (!aci->rc->autoboot_disabled)
 		load_rom_rc(aci->rc, ROMTYPE_TRIFECTA, 32768, 0, rom, 65536, LOADROM_EVENONLY_ODDONE | LOADROM_FILL);
 
-	for (int i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		uae_u8 b = aci->ert->autoconfig[i];
 		ew(ide, i * 4, b);
 	}
@@ -2523,12 +2559,14 @@ static const uae_u8 adide_autoconfig[16] = { 0xd1, 0x02, 0x00, 0x00, 0x08, 0x17,
 
 bool adide_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
+	int i;
 	ide_add_reset();
 	if (!aci->doinit) {
 		aci->autoconfigp = adide_autoconfig;
 		return true;
 	}
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->configured = 0;
 	ide->keepautoconfig = false;
@@ -2544,7 +2582,7 @@ bool adide_init(struct autoconfig_info *aci)
 	if (!aci->rc->autoboot_disabled) {
 		load_rom_rc(aci->rc, ROMTYPE_ADIDE, 16384, 0, ide->rom, 32768, LOADROM_EVENONLY_ODDONE | LOADROM_FILL);
 	}
-	for (int i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		uae_u8 b = adide_autoconfig[i];
 		ew(ide, i * 4, b);
 	}
@@ -2559,6 +2597,7 @@ void adide_add_ide_unit(int ch, struct uaedev_config_info *ci, struct romconfig 
 
 bool mtec_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
 	uae_u8 *rom;
 	int rom_size = 32768;
 
@@ -2573,7 +2612,7 @@ bool mtec_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->configured = 0;
 	ide->bank = &ide_bank_generic;
@@ -2595,12 +2634,13 @@ void mtec_add_ide_unit(int ch, struct uaedev_config_info *ci, struct romconfig *
 
 bool rochard_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
 	ide_add_reset();
 	if (!aci->doinit) {
 		load_rom_rc(aci->rc, ROMTYPE_ROCHARD, 8192, !aci->rc->autoboot_disabled ? 8192 : 0, aci->autoconfig_raw, sizeof aci->autoconfig_raw, 0);
 		return true;
 	}
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->configured = 0;
 	ide->bank = &ide_bank_generic;
@@ -2624,6 +2664,8 @@ static void rochard_add_ide_unit(int ch, struct uaedev_config_info *ci, struct r
 
 bool buddha_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
+	int i;
 	const struct expansionromtype *ert = get_device_expansion_rom(ROMTYPE_BUDDHA);
 	bool p1 = (aci->rc->device_settings & 3) == 1;
 
@@ -2636,7 +2678,7 @@ bool buddha_init(struct autoconfig_info *aci)
 		}
 		return true;
 	}
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->configured = 0;
 	ide->bank = &ide_bank_generic;
@@ -2651,7 +2693,7 @@ bool buddha_init(struct autoconfig_info *aci)
 		ide->flashrom = flash_new(ide->rom, 65536, 65536, 0xbf, 0x5d, ide->romfile, FLASHROM_PARALLEL_EEPROM | FLASHROM_DATA_PROTECT);
 	}
 
-	for (int i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		uae_u8 b = ert->autoconfig[i];
 		if (i == 1 && (aci->rc->device_settings & 3) == 2)
 			b = 42;
@@ -2685,6 +2727,7 @@ void rochard_add_idescsi_unit(int ch, struct uaedev_config_info *ci, struct romc
 
 bool golemfast_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
 	int rom_size = 32768;
 	uae_u8 *rom;
 	
@@ -2699,7 +2742,7 @@ bool golemfast_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->rom = rom;
 	ide->configured = 0;
@@ -2733,6 +2776,7 @@ void golemfast_add_idescsi_unit(int ch, struct uaedev_config_info *ci, struct ro
 
 bool dataflyerplus_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
 	int rom_size = 16384;
 	uae_u8 *rom;
 
@@ -2747,7 +2791,7 @@ bool dataflyerplus_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->rom = rom;
 	ide->configured = 0;
@@ -2785,6 +2829,7 @@ void dataflyerplus_add_idescsi_unit(int ch, struct uaedev_config_info *ci, struc
 
 bool ateam_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
 	uae_u8 *rom;
 	int rom_size = 32768;
 
@@ -2799,7 +2844,7 @@ bool ateam_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->configured = 0;
 	ide->keepautoconfig = false;
@@ -2822,6 +2867,7 @@ void ateam_add_ide_unit(int ch, struct uaedev_config_info *ci, struct romconfig 
 
 bool fastata4k_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
 	uae_u8 *rom;
 	int rom_size = 65536;
 
@@ -2834,8 +2880,9 @@ bool fastata4k_init(struct autoconfig_info *aci)
 
 	ide_add_reset();
 	if (!aci->doinit) {
+		int type;
 		memcpy(aci->autoconfig_bytes, aci->ert->autoconfig, sizeof aci->ert->autoconfig);
-		int type = aci->rc->device_settings & 3;
+		type = aci->rc->device_settings & 3;
 		if (type == 0)
 			aci->autoconfig_bytes[1] = 25;
 		else if (type == 1)
@@ -2848,7 +2895,7 @@ bool fastata4k_init(struct autoconfig_info *aci)
 	memset(rom, 0xff, rom_size);
 	load_rom_rc(aci->rc, ROMTYPE_FASTATA4K, 65536, 0, rom, 65536, LOADROM_EVENONLY_ODDONE | LOADROM_FILL);
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->configured = 0;
 	ide->keepautoconfig = false;
@@ -2872,6 +2919,8 @@ void fastata4k_add_ide_unit(int ch, struct uaedev_config_info *ci, struct romcon
 
 bool arriba_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
+	int i;
 	const struct expansionromtype *ert = get_device_expansion_rom(ROMTYPE_ARRIBA);
 	ide_add_reset();
 	if (!aci->doinit) {
@@ -2879,7 +2928,7 @@ bool arriba_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->bank = &ide_bank_generic;
 	ide->mask = 65536 - 1;
@@ -2889,7 +2938,7 @@ bool arriba_init(struct autoconfig_info *aci)
 	ide->rom = xcalloc(uae_u8, 32768);
 	load_rom_rc(aci->rc, ROMTYPE_ARRIBA, 32768, 0, ide->rom, 32768, LOADROM_FILL);
 
-	for (int i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		uae_u8 b = ert->autoconfig[i];
 		if (i == 0 && aci->rc->autoboot_disabled)
 			b &= ~0x10;
@@ -2907,6 +2956,7 @@ void arriba_add_ide_unit(int ch, struct uaedev_config_info *ci, struct romconfig
 
 bool elsathd_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
 	uae_u8 *rom;
 	int rom_size = 16384;
 
@@ -2923,7 +2973,7 @@ bool elsathd_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->configured = 0;
 	ide->keepautoconfig = false;
@@ -2946,20 +2996,24 @@ void elsathd_add_ide_unit(int ch, struct uaedev_config_info *ci, struct romconfi
 
 bool accessx_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
 	uae_u8 *rom;
 	int rom_size = 32768;
+	uae_u8 rom2[32768];
 
 	rom = xcalloc(uae_u8, rom_size);
 	memset(rom, 0xff, rom_size);
 	load_rom_rc(aci->rc, ROMTYPE_ACCESSX, 32768, 0, rom, 32768, LOADROM_FILL);
-	uae_u8 rom2[32768];
 	memcpy(rom2, rom, 32768);
 
 	if ((rom[0] != 0xd0 && rom[1] != 0x10) && (rom[0] != 0xc0 && rom[1] != 0x10)) {
 		// descramble
 		if (aci->rc->subtype == 1) {
+			int i;
 			// 2000 variant
-			for (int i = 0; i < 32768; i += 2) {
+			for (i = 0; i < 32768; i += 2) {
+				uae_u8 b;
+				uae_u8 v;
 				int addr = 0;
 				addr |= ((i >> 7) & 1) << 0;
 				addr |= ((i >> 10) & 1) << 1;
@@ -2977,8 +3031,8 @@ bool accessx_init(struct autoconfig_info *aci)
 				addr |= ((i >> 6) & 1) << 12;
 				addr |= ((i >> 12) & 1) << 13;
 				addr |= ((i >> 5) & 1) << 14;
-				uae_u8 b = rom2[addr];
-				uae_u8 v = 0;
+				b = rom2[addr];
+				v = 0;
 				v |= ((b >> 4) & 1) << 1;
 				v |= ((b >> 5) & 1) << 2;
 				v |= ((b >> 6) & 1) << 0;
@@ -2988,8 +3042,11 @@ bool accessx_init(struct autoconfig_info *aci)
 			}
 
 		} else {
+			int i;
 			// 500 variant
-			for (int i = 0; i < 16384; i++) {
+			for (i = 0; i < 16384; i++) {
+				uae_u8 b;
+				uae_u8 v;
 				int addr = 0;
 				addr |= ((i >> 5) & 1) << 0;
 				addr |= ((i >> 4) & 1) << 1;
@@ -3007,8 +3064,8 @@ bool accessx_init(struct autoconfig_info *aci)
 				addr |= ((i >> 12) & 1) << 13;
 				if (aci->rc->autoboot_disabled)
 					addr |= 1 << 14;
-				uae_u8 b = rom2[addr];
-				uae_u8 v = 0;
+				b = rom2[addr];
+				v = 0;
 				v |= ((b >> 0) & 1) << 1;
 				v |= ((b >> 1) & 1) << 2;
 				v |= ((b >> 2) & 1) << 3;
@@ -3018,8 +3075,9 @@ bool accessx_init(struct autoconfig_info *aci)
 			}
 		}
 	} else {
+		int i;
 		int offset = aci->rc->autoboot_disabled ? 16384 : 0;
-		for (int i = 0; i < 16384; i++) {
+		for (i = 0; i < 16384; i++) {
 			rom[i * 2 + 0] = rom2[i + offset];
 			rom[i * 2 + 1] = 0xff;
 		}
@@ -3033,7 +3091,7 @@ bool accessx_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->configured = 0;
 	ide->intena = true;
@@ -3058,6 +3116,8 @@ void accessx_add_ide_unit(int ch, struct uaedev_config_info *ci, struct romconfi
 
 bool trumpcard500at_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
+	int i;
 	const struct expansionromtype *ert = get_device_expansion_rom(ROMTYPE_IVST500AT);
 	ide_add_reset();
 	if (!aci->doinit) {
@@ -3065,7 +3125,7 @@ bool trumpcard500at_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->bank = &ide_bank_generic;
 	ide->mask = 65536 - 1;
@@ -3077,7 +3137,7 @@ bool trumpcard500at_init(struct autoconfig_info *aci)
 	ide->rom = xcalloc(uae_u8, 32768);
 	load_rom_rc(aci->rc, ROMTYPE_IVST500AT, 16384, 0, ide->rom, 32768, LOADROM_EVENONLY_ODDONE);
 
-	for (int i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		uae_u8 b = ert->autoconfig[i];
 		if (i == 0 && aci->rc->autoboot_disabled)
 			b &= ~0x10;
@@ -3096,6 +3156,8 @@ void trumpcard500at_add_ide_unit(int ch, struct uaedev_config_info *ci, struct r
 
 bool tandem_init(struct autoconfig_info *aci)
 {
+	struct ide_board * ide;
+	int i;
 	const struct expansionromtype *ert = get_device_expansion_rom(ROMTYPE_TANDEM);
 	ide_add_reset();
 	if (!aci->doinit) {
@@ -3103,12 +3165,12 @@ bool tandem_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->bank = &ide_bank_generic;
 	ide->mask = 65536 - 1;
 
-	for (int i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++) {
 		uae_u8 b = ert->autoconfig[i];
 		ew(ide, i * 4, b);
 	}
@@ -3124,10 +3186,12 @@ void tandem_add_ide_unit(int ch, struct uaedev_config_info *ci, struct romconfig
 
 bool dotto_init(struct autoconfig_info *aci)
 {
+	uae_u8 * rom;
+	struct ide_board * ide;
 	const struct expansionromtype *ert = get_device_expansion_rom(ROMTYPE_DOTTO);
 	ide_add_reset();
 
-	uae_u8 *rom = xcalloc(uae_u8, 65536);
+	rom = xcalloc(uae_u8, 65536);
 	load_rom_rc(aci->rc, ROMTYPE_DOTTO, 32768, 0, rom, 65536, LOADROM_EVENONLY_ODDONE);
 
 	if (!aci->doinit) {
@@ -3135,7 +3199,7 @@ bool dotto_init(struct autoconfig_info *aci)
 		xfree(rom);
 		return true;
 	}
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	ide->bank = &ide_bank_generic;
 	ide->mask = 65536 - 1;
@@ -3159,11 +3223,13 @@ static const uae_u8 dev_autoconfig[16] = { 0xd1, 1, 0x00, 0x00, 0x77, 0x77, 0x00
 
 bool dev_hd_init(struct autoconfig_info *aci)
 {
+	uae_u8 * rom;
+	struct ide_board * ide;
 	bool ac = true;
 	const struct expansionromtype *ert = get_device_expansion_rom(ROMTYPE_DEVHD);
 	ide_add_reset();
 
-	uae_u8 *rom = xcalloc(uae_u8, 262144);
+	rom = xcalloc(uae_u8, 262144);
 	load_rom_rc(aci->rc, ROMTYPE_DEVHD, 131072, 0, rom, 262144, LOADROM_EVENONLY_ODDONE);
 	memmove(rom + 0x8000, rom, 262144 - 0x8000);
 
@@ -3187,10 +3253,11 @@ bool dev_hd_init(struct autoconfig_info *aci)
 		return true;
 	}
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 
 	if (ac) {
-		for (int i = 0; i < 16; i++) {
+		int i;
+		for (i = 0; i < 16; i++) {
 			uae_u8 b = dev_autoconfig[i];
 			ew(ide, i * 4, b);
 		}
@@ -3221,13 +3288,15 @@ void dev_hd_add_ide_unit(int ch, struct uaedev_config_info* ci, struct romconfig
 extern void x86_xt_ide_bios(struct zfile*, struct romconfig*);
 static bool x86_at_hd_init(struct autoconfig_info *aci, int type)
 {
+	struct ide_board * ide;
+	struct zfile * f;
 	static const int parent[] = { ROMTYPE_A1060, ROMTYPE_A2088, ROMTYPE_A2088T, ROMTYPE_A2286, ROMTYPE_A2386, 0 };
 	aci->parent_romtype = parent;
 	ide_add_reset();
 	if (!aci->doinit)
 		return true;
 
-	struct ide_board *ide = getide(aci);
+	ide = getide(aci);
 	if (!ide)
 		return false;
 
@@ -3235,7 +3304,7 @@ static bool x86_at_hd_init(struct autoconfig_info *aci, int type)
 	ide->configured = 1;
 	ide->bank = &ide_bank_generic;
 
-	struct zfile *f = read_device_from_romconfig_2(aci->rc, 0);
+	f = read_device_from_romconfig_2(aci->rc, 0);
 	if (f) {
 		x86_xt_ide_bios(f, aci->rc);
 		zfile_fclose(f);
@@ -3284,17 +3353,19 @@ static int x86_ide_reg(int portnum, int *unit)
 
 void x86_ide_hd_put(int portnum, uae_u16 v, int size)
 {
+	int unit;
+	int regnum;
 
 	if (portnum < 0) {
-		for (int i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
+		int i;
+		for (i = 0; i < MAX_DUPLICATE_EXPANSION_BOARDS; i++) {
 			struct ide_board *board = x86_at_ide_board[i];
 			if (board)
 				ide_reset_device(board->ide[0]);
 		}
 		return;
 	}
-	int unit;
-	int regnum = x86_ide_reg(portnum, &unit);
+	regnum = x86_ide_reg(portnum, &unit);
 	if (regnum >= 0) {
 		struct ide_board *board = x86_at_ide_board[unit];
 		if (board) {

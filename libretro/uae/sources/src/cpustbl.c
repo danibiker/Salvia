@@ -30003,7 +30003,11 @@ const struct cputbl op_smalltbl_24[] = {
 #endif
 { 0, 0 }};
 #endif /* CPUEMU_68000_ONLY */
-#endif /* CPUEMU_24 */
+/* gencpu solo emite la guarda CPUEMU_nn alrededor de la PRIMERA tabla de
+ * cada familia. Las hermanas (25 con la 24; 41..49 con la 40; 51..55 con
+ * la 50) las genera el mismo cpuemu_nn.c y se quedaban sin guarda, asi
+ * que referenciaban miles de op_*_nn que no se compilan. El #endif se
+ * mueve al final de la familia. */
 #ifndef CPUEMU_68000_ONLY
 const struct cputbl op_smalltbl_25[] = {
 { NULL, op_0000_24_ff, 0x0000, 4, { 0, 0 }, 0 }, /* OR */
@@ -31979,6 +31983,7 @@ const struct cputbl op_smalltbl_25[] = {
 { NULL, op_f620_24_ff, 0xf620, -1, { 0, 0 }, 0 }, /* MOVE16 */
 { 0, 0 }};
 #endif /* CPUEMU_68000_ONLY */
+#endif /* CPUEMU_24 */
 #ifdef CPUEMU_31
 #ifndef CPUEMU_68000_ONLY
 const struct cputbl op_smalltbl_31[] = {
@@ -46877,7 +46882,6 @@ const struct cputbl op_smalltbl_40[] = {
 { op_f800_40_ff, NULL, 0xf800, -1, { 0, 0 }, 0 }, /* LPSTOP */
 #endif
 { 0, 0 }};
-#endif /* CPUEMU_40 */
 #ifndef CPUEMU_68000_ONLY
 const struct cputbl op_smalltbl_41[] = {
 { op_0000_40_ff, NULL, 0x0000, 4, { 0, 0 }, 0 }, /* OR */
@@ -61919,6 +61923,7 @@ const struct cputbl op_smalltbl_49[] = {
 { op_e7f8_40_ff, NULL, 0xe7f8, 4, { 0, 0 }, 0 }, /* ROLW */
 { op_e7f9_40_ff, NULL, 0xe7f9, 6, { 0, 0 }, 0 }, /* ROLW */
 { 0, 0 }};
+#endif /* CPUEMU_40 */
 #ifdef CPUEMU_50
 const struct cputbl op_smalltbl_50[] = {
 { op_0000_50_ff, NULL, 0x0000, 4, { 0, 0 }, 0 }, /* OR */
@@ -64456,7 +64461,6 @@ const struct cputbl op_smalltbl_50[] = {
 { op_f800_50_ff, NULL, 0xf800, -1, { 0, 0 }, 0 }, /* LPSTOP */
 #endif
 { 0, 0 }};
-#endif /* CPUEMU_50 */
 #ifndef CPUEMU_68000_ONLY
 const struct cputbl op_smalltbl_51[] = {
 { op_0000_50_ff, NULL, 0x0000, 4, { 0, 0 }, 0 }, /* OR */
@@ -73326,3 +73330,4 @@ const struct cputbl op_smalltbl_55[] = {
 { op_e7f9_50_ff, NULL, 0xe7f9, 6, { 0, 0 }, 0 }, /* ROLW */
 { 0, 0 }};
 #endif /* CPUEMU_68000_ONLY */
+#endif /* CPUEMU_50 */

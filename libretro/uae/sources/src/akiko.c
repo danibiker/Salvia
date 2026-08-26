@@ -202,6 +202,8 @@ extern uae_u8 *cubo_nvram;
 
 static void nvram_read (void)
 {
+	int maxlen;
+	TCHAR path[MAX_DPATH];
 	cubo_nvram = NULL;
 	zfile_fclose(cd32_flashfile);
 	cd32_flashfile = NULL;
@@ -211,7 +213,7 @@ static void nvram_read (void)
 	cd32_i2c_direction = 0;
 	if (!currprefs.cs_cd32nvram)
 		return;
-	int maxlen = currprefs.cs_cd32nvram_size;
+	maxlen = currprefs.cs_cd32nvram_size;
 	if (is_board_enabled(&currprefs, ROMTYPE_CUBO, 0))
 		maxlen += 2048 + 16;
 	if (!cd32_nvram || cd32_nvram_size != maxlen) {
@@ -222,7 +224,6 @@ static void nvram_read (void)
 	if (is_board_enabled(&currprefs, ROMTYPE_CUBO, 0)) {
 		cubo_nvram = cd32_nvram + currprefs.cs_cd32nvram_size;
 	}
-	TCHAR path[MAX_DPATH];
 	cfgfile_resolve_path_out_load(currprefs.flashfile, path, MAX_DPATH, PATH_ROM);
 	cd32_flashfile = zfile_fopen (path, _T("rb+"), ZFD_NORMAL);
 	if (!cd32_flashfile)
@@ -551,6 +552,7 @@ static void cdaudiostop (void)
 
 static void subfunc (uae_u8 *data, int cnt)
 {
+	int offset;
 	if (!(cdrom_flags & CDFLAG_SUBCODE))
 		return;
 	uae_sem_wait (&sub_sem);
@@ -569,7 +571,7 @@ static void subfunc (uae_u8 *data, int cnt)
 		//write_log (_T("CD32: subcode buffer overflow 1\n"));
 		return;
 	}
-	int offset = subcodebufferoffsetw;
+	offset = subcodebufferoffsetw;
 	while (cnt > 0) {
 		if (subcodebufferinuse[offset]) {
 			write_log (_T("CD32: subcode buffer overflow 2\n"));
@@ -654,7 +656,8 @@ static bool akiko_isaudiotrack (int startlsn)
 
 static struct cd_toc *get_track (int startlsn)
 {
-	for (int i = cdrom_toc_cd_buffer.first_track_offset + 1; i <= cdrom_toc_cd_buffer.last_track_offset + 1; i++) {
+	int i;
+	for (i = cdrom_toc_cd_buffer.first_track_offset + 1; i <= cdrom_toc_cd_buffer.last_track_offset + 1; i++) {
 		struct cd_toc *s = &cdrom_toc_cd_buffer.toc[i];
 		uae_u32 addr = s->paddress;
 		if (startlsn < addr)
@@ -779,7 +782,8 @@ static int get_cdrom_toc (void)
 }
 static bool is_valid_data_sector(int sector)
 {
-	for (int i = 0; i < cdrom_toc_cd_buffer.points; i++) {
+	int i;
+	for (i = 0; i < cdrom_toc_cd_buffer.points; i++) {
 		struct cd_toc *s = &cdrom_toc_cd_buffer.toc[i];
 		if (s->point < 1 || s->point > 99)
 			continue;
@@ -823,20 +827,21 @@ static bool cdrom_can_return_data(void)
 
 static int cdrom_start_return_data (int len)
 {
+	uae_u8 checksum = 0xff;
+	int i;
 	if (!cdrom_can_return_data())
 		return 0;
 	if (len <= 0)
 		return -1;
 	cdrom_receive_length = len;
-	uae_u8 checksum = 0xff;
-	for (int i = 0; i < cdrom_receive_length; i++) {
+	for (i = 0; i < cdrom_receive_length; i++) {
 		checksum -= cdrom_result_buffer[i];
 	}
 	cdrom_result_buffer[cdrom_receive_length++] = checksum;
 #if AKIKO_DEBUG_IO_CMD
 	if (log_cd32 > 0) {
 		write_log(_T("CD32: OUT "));
-		for (int i = 0; i < cdrom_receive_length; i++) {
+		for (i = 0; i < cdrom_receive_length; i++) {
 			write_log(_T("%02X "), cdrom_result_buffer[i]);
 		}
 		write_log(_T("\n"));
@@ -1136,9 +1141,13 @@ static const int command_lengths[] = { 1, 2, 1, 1, 12, 2, 1, 1, 4, 1, 2, -1, -1,
 
 static bool cdrom_add_command_byte(uae_u8 b)
 {
+	int cmd_len;
+	uae_u8 checksum = 0;
+	int i;
+
 	cdrom_command_buffer[cdrom_command_length++] = b;
 	cdrom_command = cdrom_command_buffer[0];
-	int cmd_len = command_lengths[cdrom_command & 0x0f];
+	cmd_len = command_lengths[cdrom_command & 0x0f];
 
 #if AKIKO_DEBUG_IO
 	if (log_cd32 > 1)
@@ -1157,14 +1166,12 @@ static bool cdrom_add_command_byte(uae_u8 b)
 	if (cmd_len +  1 > cdrom_command_length)
 		return false;
 
-	uae_u8 checksum = 0;
-
 #if AKIKO_DEBUG_IO_CMD
 	if (log_cd32 > 0) {
 		write_log(_T("CD32: IN "));
 	}
 #endif
-	for (int i = 0; i < cmd_len + 1; i++) {
+	for (i = 0; i < cmd_len + 1; i++) {
 		checksum += cdrom_command_buffer[i];
 #if AKIKO_DEBUG_IO_CMD
 		if (log_cd32 > 0) {
@@ -1224,12 +1231,14 @@ static void cdrom_run_command (void)
 	if (!can_send_command())
 		return;
 
+	{
 	uae_u8 b = get_byte(cdtx_address + cdcomtxinx);
 	cdrom_add_command_byte(b);
 	cdcomtxinx++;
 
 	if (cdcomtxinx == cdcomtxcmp) {
 		set_status(CDINTERRUPT_TXDMADONE);
+	}
 	}
 }
 
@@ -1297,6 +1306,7 @@ static void cdrom_run_read (void)
 	int sector, inc;
 	int sec;
 	int seccnt;
+	int i;
 
 	if (!(cdrom_flags & CDFLAG_ENABLE))
 		return;
@@ -1326,10 +1336,10 @@ static void cdrom_run_read (void)
 			buf[1] = 0;
 			buf[2] = 0;
 			buf[3] = cdrom_sector_counter & 31;
-			for (int i = 0; i < 2352; i++) {
+			for (i = 0; i < 2352; i++) {
 				dma_put_byte(cdrom_addressdata + seccnt * 4096 + i, buf[i]);
 			}
-			for (int i = 0; i < 73 * 2; i++) {
+			for (i = 0; i < 73 * 2; i++) {
 				dma_put_byte(cdrom_addressdata + seccnt * 4096 + 0xc00 + i, 0);
 			}
 			cdrom_pbx &= ~(1 << seccnt);
@@ -1348,7 +1358,7 @@ static void cdrom_run_read (void)
 				else
 					cdrom_subcodeoffset = 128;
 				// 96 byte subchannel data
-				for (int i = 0; i < SUB_CHANNEL_SIZE; i++) {
+				for (i = 0; i < SUB_CHANNEL_SIZE; i++) {
 					dma_put_byte(subcode_address + cdrom_subcodeoffset + i, subbuf[i]);
 				}
 				dma_put_word(subcode_address + cdrom_subcodeoffset + SUB_CHANNEL_SIZE + 0, 0xffff);
@@ -1455,11 +1465,12 @@ static void akiko_internal (void)
 static void AKIKO_hsync_handler (void)
 {
 	bool framesync = false;
+	static float framecounter1, framecounter2;
+	int i;
 
 	if (!currprefs.cs_cd32cd || !akiko_inited)
 		return;
 
-	static float framecounter1, framecounter2;
 	framecounter1--;
 	if (framecounter1 <= 0) {
 		if (cdrom_seek_delay <= 0) {
@@ -1492,7 +1503,7 @@ static void AKIKO_hsync_handler (void)
 				else
 					cdrom_subcodeoffset = 128;
 				// 96 byte subchannel data
-				for (int i = 0; i < SUB_CHANNEL_SIZE; i++)
+				for (i = 0; i < SUB_CHANNEL_SIZE; i++)
 					put_byte (subcode_address + cdrom_subcodeoffset + i, subcodebuffer[subcodebufferoffset * SUB_CHANNEL_SIZE + i]);
 				put_long (subcode_address + cdrom_subcodeoffset + SUB_CHANNEL_SIZE, 0xffff0000);
 				subcodebufferinuse[subcodebufferoffset] = 0;
@@ -1525,6 +1536,8 @@ static void akiko_thread (void *null)
 	uae_u8 *tmp2;
 	int tmp3;
 	int sector;
+	int media;
+	int i;
 
 	while (akiko_thread_running || comm_pipe_has_data (&requests)) {
 
@@ -1564,7 +1577,7 @@ static void akiko_thread (void *null)
 
 		if (mediacheckcounter <= 0) {
 			mediacheckcounter = 312 * 50 * 2;
-			int media = sys_command_ismedia (unitnum, 1);
+			media = sys_command_ismedia (unitnum, 1);
 			if (media < 0) {
 				write_log (_T("CD32: device unit %d lost\n"), unitnum);
 				media = lastmediastate = cdrom_disk = 0;
@@ -1622,7 +1635,7 @@ static void akiko_thread (void *null)
 						sector++;
 					}
 				} else {
-					for (int i = 0; i < SECTOR_BUFFER_SIZE; i++)
+					for (i = 0; i < SECTOR_BUFFER_SIZE; i++)
 						sector_buffer_info_2[i] = i < blocks ? 3 : 0;
 				}
 				tmp1 = sector_buffer_info_1;
@@ -2042,8 +2055,9 @@ static void patchrom(void)
 {
 	if (currprefs.cs_cd32cd && (currprefs.cpu_model > 68020 || currprefs.cachesize || currprefs.m68k_speed != 0)) {
 		uae_u8 *p = extendedkickmem_bank.baseaddr;
+		int i;
 		if (p && extendedkickmem_bank.allocated_size >= 524288) {
-			for (int i = 0; i < 524288 - 512; i++) {
+			for (i = 0; i < 524288 - 512; i++) {
 				if (!memcmp(p + i, patchdata2, sizeof(patchdata2)))
 					return;				
 				if (!memcmp(p + i, patchdata, sizeof(patchdata))) {

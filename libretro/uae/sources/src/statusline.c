@@ -174,7 +174,9 @@ static void write_tdnumber(uae_u8 *buf, int bpp, int x, int y, int num, uae_u32 
 static uae_u32 rgbmuldiv(uae_u32 rgb, int mul, int div)
 {
 	uae_u32 out = 0;
-	for (int i = 0; i < 3; i++) {
+	int i;
+
+	for (i = 0; i < 3; i++) {
 		int v = (rgb >> (i * 8)) & 0xff;
 		v *= mul;
 		v /= div;
@@ -253,6 +255,10 @@ void draw_status_line_single(int monid, uae_u8 *buf, int bpp, int y, int totalwi
 	int x_start, j, led, border;
 	uae_u32 c1, c2, cb;
 	int mult = (video_config & PUAE_VIDEO_QUADLINE) ? 2 : 1;
+	/* C89 hoisted declarations */
+	int LED_WIDTH;
+	int TD_WIDTH;
+	int floppies;
 
 	if (!mult)
 		return;
@@ -277,8 +283,8 @@ void draw_status_line_single(int monid, uae_u8 *buf, int bpp, int y, int totalwi
             num_multip = 4;
     }
 
-    int LED_WIDTH = 16;
-    int TD_WIDTH = (LED_WIDTH * num_multip);
+    LED_WIDTH = 16;
+    TD_WIDTH = (LED_WIDTH * num_multip);
     td_led_width = TD_WIDTH;
 
     c1 = ledcolor (0x00ffffff, rc, gc, bc, alpha);
@@ -292,7 +298,7 @@ void draw_status_line_single(int monid, uae_u8 *buf, int bpp, int y, int totalwi
 
     x_start += retrox_crop;
 
-    int floppies = 1;
+    floppies = 1;
     if (gui_data.hd >= 0 || gui_data.cd >= 0 || gui_data.md >= 0)
     {
         floppies = !(opt_statusbar & STATUSBAR_BASIC) ? 1 : 0;
@@ -911,9 +917,11 @@ static void statusline_update_notification(void)
 
 void statusline_clear(void)
 {
+	int i;
+
 	statusline_text_active = NULL;
 	statusline_delay = 0;
-	for (int i = 0; i < MAX_STATUSLINE_QUEUE; i++) {
+	for (i = 0; i < MAX_STATUSLINE_QUEUE; i++) {
 		xfree(statusline_data[i].text);
 		statusline_data[i].text = NULL;
 	}
@@ -929,6 +937,8 @@ void statusline_add_message(int statustype, const TCHAR *format, ...)
 {
 	va_list parms;
 	TCHAR buffer[256];
+	/* C89 hoisted declarations */
+	int i, j;
 
 	if (isguiactive())
 		return;
@@ -938,11 +948,11 @@ void statusline_add_message(int statustype, const TCHAR *format, ...)
 	_vsntprintf(buffer + 1, 256 - 2, format, parms);
 	_tcscat(buffer, _T(" "));
 
-	for (int i = 0; i < MAX_STATUSLINE_QUEUE; i++) {
+	for (i = 0; i < MAX_STATUSLINE_QUEUE; i++) {
 		if (statusline_data[i].text != NULL && statusline_data[i].type == statustype) {
 			xfree(statusline_data[i].text);
 			statusline_data[i].text = NULL;
-			for (int j = i + 1; j < MAX_STATUSLINE_QUEUE; j++) {
+			for (j = i + 1; j < MAX_STATUSLINE_QUEUE; j++) {
 				memcpy(&statusline_data[j - 1], &statusline_data[j], sizeof(struct statusline_struct));
 			}
 			statusline_data[MAX_STATUSLINE_QUEUE - 1].text = NULL;
@@ -950,10 +960,10 @@ void statusline_add_message(int statustype, const TCHAR *format, ...)
 	}
 
 	if (statusline_data[1].text) {
-		for (int i = 0; i < MAX_STATUSLINE_QUEUE; i++) {
+		for (i = 0; i < MAX_STATUSLINE_QUEUE; i++) {
 			if (statusline_data[i].text && !_tcscmp(statusline_data[i].text, buffer)) {
 				xfree(statusline_data[i].text);
-				for (int j = i + 1; j < MAX_STATUSLINE_QUEUE; j++) {
+				for (j = i + 1; j < MAX_STATUSLINE_QUEUE; j++) {
 					memcpy(&statusline_data[j - 1], &statusline_data[j], sizeof(struct statusline_struct));
 				}
 				statusline_data[MAX_STATUSLINE_QUEUE - 1].text = NULL;
@@ -965,7 +975,7 @@ void statusline_add_message(int statustype, const TCHAR *format, ...)
 			return;
 	}
 
-	for (int i = 0; i < MAX_STATUSLINE_QUEUE; i++) {
+	for (i = 0; i < MAX_STATUSLINE_QUEUE; i++) {
 		if (statusline_data[i].text == NULL) {
 			statusline_data[i].text = my_strdup(buffer);
 			statusline_data[i].type = statustype;
@@ -978,7 +988,7 @@ void statusline_add_message(int statustype, const TCHAR *format, ...)
 	}
 	statusline_text_active = NULL;
 	xfree(statusline_data[0].text);
-	for (int i = 1; i < MAX_STATUSLINE_QUEUE; i++) {
+	for (i = 1; i < MAX_STATUSLINE_QUEUE; i++) {
 		memcpy(&statusline_data[i - 1], &statusline_data[i], sizeof(struct statusline_struct));
 	}
 	statusline_data[MAX_STATUSLINE_QUEUE - 1].text = my_strdup(buffer);
@@ -991,6 +1001,8 @@ void statusline_add_message(int statustype, const TCHAR *format, ...)
 
 void statusline_vsync(void)
 {
+	int i;
+
 	if (!statusline_data[0].text)
 		return;
 	if (statusline_delay == 0)
@@ -1004,7 +1016,7 @@ void statusline_vsync(void)
 		return;
 	statusline_text_active = NULL;
 	xfree(statusline_data[0].text);
-	for (int i = 1; i < MAX_STATUSLINE_QUEUE; i++) {
+	for (i = 1; i < MAX_STATUSLINE_QUEUE; i++) {
 		statusline_data[i - 1].text = statusline_data[i].text;
 	}
 	statusline_data[MAX_STATUSLINE_QUEUE - 1].text = NULL;

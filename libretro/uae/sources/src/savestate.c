@@ -107,10 +107,13 @@ static struct staterecord **staterecords;
 
 bool is_savestate_incompatible(void)
 {
+	int dowarn = 0;
+	/* C89 hoisted declarations */
+	int i;
+
 #ifdef __LIBRETRO__
 	return false;
 #endif
-	int dowarn = 0;
 
 #ifdef BSDSOCKET
 	if (currprefs.socket_emu)
@@ -129,7 +132,7 @@ bool is_savestate_incompatible(void)
 		dowarn = 1;
 #endif
 #ifdef FILESYS
-	for(int i = 0; i < currprefs.mountitems; i++) {
+	for(i = 0; i < currprefs.mountitems; i++) {
 		struct mountedinfo mi;
 		int type = get_filesys_unitconfig (&currprefs, i, &mi);
 		if (mi.ismounted && type != FILESYS_VIRTUAL && type != FILESYS_HARDFILE && type != FILESYS_HARDFILE_RDB)
@@ -304,6 +307,8 @@ static TCHAR *state_resolve_path(TCHAR *s, int type, bool newmode)
 {
 	TCHAR *newpath;
 	TCHAR tmp[MAX_DPATH], tmp2[MAX_DPATH];
+	/* C89 hoisted declarations */
+	int i;
 
 	if (s[0] == 0)
 		return s;
@@ -326,7 +331,7 @@ static TCHAR *state_resolve_path(TCHAR *s, int type, bool newmode)
 			return my_strdup(tmp);
 		}
 	}
-	for (int i = 0; i < MAX_PATHS; i++) {
+	for (i = 0; i < MAX_PATHS; i++) {
 		newpath = NULL;
 		if (type == SAVESTATE_PATH_FLOPPY)
 			newpath = currprefs.path_floppy.path[i];
@@ -969,6 +974,8 @@ static void save_rams (struct zfile *f, int comp)
 {
 	uae_u8 *dst;
 	size_t len;
+	/* C89 hoisted declarations */
+	int i;
 
 	dst = save_cram (&len);
 	save_chunk (f, dst, len, _T("CRAM"), comp);
@@ -979,11 +986,11 @@ static void save_rams (struct zfile *f, int comp)
 	dst = save_a3000hram (&len);
 	save_chunk (f, dst, len, _T("A3K2"), comp);
 #ifdef AUTOCONFIG
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 		dst = save_fram(&len, i);
 		save_chunk(f, dst, len, _T("FRAM"), comp);
 	}
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 		dst = save_zram(&len, i);
 		save_chunk(f, dst, len, _T("ZRAM"), comp);
 	}
@@ -1318,9 +1325,14 @@ int save_state (const TCHAR *filename, const TCHAR *description)
 	struct zfile *f;
 #ifdef __LIBRETRO__
 	int comp = 0;
-	savestate_nodialogs = 1;
 #else
 	int comp = savestate_docompress;
+#endif
+	/* C89 hoisted declarations */
+	int v;
+
+#ifdef __LIBRETRO__
+	savestate_nodialogs = 1;
 #endif
 
 	if (!savestate_specialdump && !savestate_nodialogs) {
@@ -1381,7 +1393,7 @@ int save_state (const TCHAR *filename, const TCHAR *description)
 		return 1;
 #endif
 	}
-	int v = save_state_internal (f, description, comp, true);
+	v = save_state_internal (f, description, comp, true);
 #ifdef __LIBRETRO__
 #if OPEN_LOG > 0
 	if (v)
@@ -1464,7 +1476,7 @@ bool savestate_check(void)
 
 #ifdef __LIBRETRO__
 void savestate_capture (int force) {}
-int savestate_dorewind (int pos) {}
+int savestate_dorewind (int pos) { return 0;}
 void savestate_init (void) {}
 void savestate_free (void) {}
 void savestate_rewind (void) {}
@@ -2083,9 +2095,11 @@ void savestate_init (void)
 
 void statefile_save_recording (const TCHAR *filename)
 {
+	struct zfile *zf;
+
 	if (!staterecord_statefile)
 		return;
-	struct zfile *zf = zfile_fopen(filename, _T("wb"), 0);
+	zf = zfile_fopen(filename, _T("wb"), 0);
 	if (zf) {
 		int len = zfile_size32(staterecord_statefile);
 		uae_u8 *data = zfile_getdata(staterecord_statefile, 0, len, NULL);

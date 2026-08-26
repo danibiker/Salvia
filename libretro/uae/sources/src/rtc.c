@@ -143,10 +143,12 @@ void put_clock_ricoh(struct rtc_ricoh_data *data, int addr, uae_u8 v)
 	}
 	/* alarm */
 	if (bank == 1 && addr < 0x0d) {
+		/* C89 hoisted declarations */
+		uae_u8 ov;
 #if CLOCK_DEBUG
 		write_log (_T("CLOCK ALARM W %X: %X\n"), addr, value);
 #endif
-		uae_u8 ov = data->rtc_alarm[addr];
+		ov = data->rtc_alarm[addr];
 		data->rtc_alarm[addr] = v;
 		data->rtc_alarm[0] = data->rtc_alarm[1] = data->rtc_alarm[9] = data->rtc_alarm[12] = 0;
 		data->rtc_alarm[3] &= ~0x8;

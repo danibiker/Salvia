@@ -394,11 +394,12 @@ static int release_async_request (struct devstruct *dev, uaecptr arequest)
 static void abort_async(TrapContext *ctx, struct devstruct *dev, uaecptr arequest)
 {
 	struct asyncreq *ar = get_async_request (dev, arequest, 1);
+	uae_u8 *request;
 	if (!ar) {
 		write_log (_T("%s:%d: abort async but no request %x found!\n"), getdevname(), dev->unit, arequest);
 		return;
 	}
-	uae_u8 *request = ar->request;
+	request = ar->request;
 	if (log_uaeserial)
 		write_log (_T("%s:%d asyncronous request=%08X aborted\n"), getdevname(), dev->unit, arequest);
 	put_byte_host(request + 31, IOERR_ABORTED);
@@ -454,10 +455,11 @@ void uaeser_signal (void *vdev, int sigmask)
 					}
 					while (io_length) {
 						int size = 1;
+						int status;
 						if (!(serFlags & SERF_EOFMODE)) {
 							size = io_length > sizeof(tmp) ? sizeof(tmp) : io_length;
 						}
-						int status = uaeser_read(dev->sysdata, tmp, size);
+						status = uaeser_read(dev->sysdata, tmp, size);
 						if (status > 0) {
 							trap_put_bytes(ctx, tmp, io_data, size);
 							io_actual += size;
@@ -512,7 +514,8 @@ void uaeser_signal (void *vdev, int sigmask)
 							size = io_length > sizeof(tmp) ? sizeof(tmp) : io_length;
 							trap_get_bytes(ctx, tmp, io_data, size);
 							if (serFlags & SERF_EOFMODE) {
-								for (int i = 0; i < size; i++) {
+								int i;
+								for (i = 0; i < size; i++) {
 									if (eofmatch(tmp[i], term0, term1)) {
 										size = i;
 										io_length = size;
@@ -653,12 +656,15 @@ static uae_u32 REGPARAM2 dev_beginio (TrapContext *ctx)
 	uae_u8 err = 0;
 	uae_u32 arequest = trap_get_areg(ctx, 1);
 	uae_u8 *request = xmalloc(uae_u8, IOExtSerSize);
+	uae_u8 flags;
+	int command;
+	struct devstruct *dev;
 
 	trap_get_bytes(ctx, request, arequest, IOExtSerSize);
 
-	uae_u8 flags = get_byte_host(request + 30);
-	int command = get_word_host(request + 28);
-	struct devstruct *dev = getdevstruct (get_long_host(request + 24));
+	flags = get_byte_host(request + 30);
+	command = get_word_host(request + 28);
+	dev = getdevstruct (get_long_host(request + 24));
 
 	put_byte_host(request + 8, NT_MESSAGE);
 	if (!dev) {

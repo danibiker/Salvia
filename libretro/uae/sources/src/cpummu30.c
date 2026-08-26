@@ -227,7 +227,8 @@ static void mmu030_flush_cache(uaecptr addr)
 		memset(&atc_data_cache_write, 0xff, sizeof atc_data_cache_write);
 	} else {
 		uae_u32 idx = ((addr & mmu030.translation.page.imask) >> mmu030.translation.page.size3m) | 7;
-		for (int i = 0; i < MMUFASTCACHE_ENTRIES030; i++) {
+		int i;
+		for (i = 0; i < MMUFASTCACHE_ENTRIES030; i++) {
 			if ((atc_data_cache_read[i].log | 7) == idx)
 				atc_data_cache_read[i].log = 0xffffffff;
 			if ((atc_data_cache_write[i].log | 7) == idx)
@@ -458,8 +459,6 @@ int mmu_op30_pmove(uaecptr pc, uae_u32 opcode, uae_u16 next, uaecptr extra)
 
 bool mmu_op30_ptest (uaecptr pc, uae_u32 opcode, uae_u16 next, uaecptr extra)
 {
-    mmu030.status = mmusr_030 = 0;
-    
     int level = (next&0x1C00)>>10;
     int rw = (next >> 9) & 1;
     int a = (next >> 8) & 1;
@@ -467,6 +466,8 @@ bool mmu_op30_ptest (uaecptr pc, uae_u32 opcode, uae_u16 next, uaecptr extra)
 	uae_u32 fc;
 	bool write = rw ? false : true;
     uae_u32 ret = 0;
+
+    mmu030.status = mmusr_030 = 0;
 
 	if (mmu_op30_invea(opcode))
 		return true;
@@ -838,6 +839,10 @@ static void mmu030_do_fake_prefetch(void)
 
 bool mmu030_decode_tc(uae_u32 TC, bool check)
 {
+    /* Note: 0 = Table A, 1 = Table B, 2 = Table C, 3 = Table D */
+    int i, j;
+    uae_u8 TI_bits[4] = {0,0,0,0};
+    uae_u8 shift;
 #if MMU_IPAGECACHE030
 	mmu030.mmu030_last_logical_address = 0xffffffff;
 #endif
@@ -858,10 +863,6 @@ bool mmu030_decode_tc(uae_u32 TC, bool check)
         return false;
     }
     
-    /* Note: 0 = Table A, 1 = Table B, 2 = Table C, 3 = Table D */
-    int i, j;
-    uae_u8 TI_bits[4] = {0,0,0,0};
-
     /* Reset variables before extracting new values from TC */
     for (i = 0; i < 4; i++) {
         mmu030.translation.table[i].mask = 0;
@@ -897,7 +898,7 @@ bool mmu030_decode_tc(uae_u32 TC, bool check)
 
     /* Calculate masks and shifts for each table */
     mmu030.translation.last_table = 0;
-    uae_u8 shift = 32 - mmu030.translation.init_shift;
+    shift = 32 - mmu030.translation.init_shift;
     for (i = 0; (i < 4) && TI_bits[i]; i++) {
         /* Get the shift */
         shift -= TI_bits[i];
@@ -1239,20 +1240,26 @@ static uae_u32 mmu030_table_search(uaecptr addr, uae_u32 fc, bool write, int lev
     bool write_protected = false;
     uae_u8 cache_inhibit = CACHE_ENABLE_ALL;
     bool descr_modified = false;
-        
+    int t;
+    int addr_position;
+    int next_size;
+    int descr_size;
+    int descr_num;
+    bool early_termination;
+    int old_s;
+    int i;
+
     mmu030.status = 0; /* Reset status */
         
     /* Initial values for condition variables.
      * Note: Root pointer is long descriptor. */
-    int t = 0;
-    int addr_position = 1;
-    int next_size = 0;
-    int descr_size = 8;
-    int descr_num = 0;
-    bool early_termination = false;
-    int old_s;
-    int i;
-    
+    t = 0;
+    addr_position = 1;
+    next_size = 0;
+    descr_size = 8;
+    descr_num = 0;
+    early_termination = false;
+
 	// Always use supervisor mode to access descriptors
     old_s = regs.s;
     regs.s = 1;
@@ -1790,10 +1797,12 @@ static uae_u8 mmu030fixupreg(int i)
 static void mmu030fixupmod(uae_u8 data, int dir, int idx)
 {
 #if MMU030_REG_FIXUP
+	int reg;
+	int adj;
 	if (!data)
 		return;
-	int reg = data & 7;
-	int adj = (data & (1 << 5)) ? -1 : 1;
+	reg = data & 7;
+	adj = (data & (1 << 5)) ? -1 : 1;
 	if (dir)
 		adj = -adj;
 	adj <<= (data >> 3) & 3;
@@ -2195,8 +2204,7 @@ uae_u32 mmu030_get_long(uaecptr addr, uae_u32 fc)
 		}
 	}
 	cacheablecheck(addr);
-	uae_u32 v = x_phys_get_long(addr);
-	return v;
+	return x_phys_get_long(addr);
 }
 
 uae_u16 mmu030_get_word(uaecptr addr, uae_u32 fc)
@@ -2222,8 +2230,7 @@ uae_u16 mmu030_get_word(uaecptr addr, uae_u32 fc)
 		}
 	}
 	cacheablecheck(addr);
-	uae_u16 v = x_phys_get_word(addr);
-	return v;
+	return x_phys_get_word(addr);
 }
 
 uae_u8 mmu030_get_byte(uaecptr addr, uae_u32 fc)
@@ -2249,8 +2256,7 @@ uae_u8 mmu030_get_byte(uaecptr addr, uae_u32 fc)
 		}
 	}
 	cacheablecheck(addr);
-	uae_u8 v = x_phys_get_byte(addr);
-	return v;
+	return x_phys_get_byte(addr);
 }
 
 
@@ -2470,8 +2476,9 @@ static uae_u32 uae_mmu030_get_lrmw_fcx(uaecptr addr, int size, int fc)
 uae_u32 uae_mmu030_get_lrmw(uaecptr addr, int size)
 {
 	uae_u32 fc = (regs.s ? 4 : 0) | 1;
+	uae_u32 v;
 	islrmw030 = true;
-	uae_u32 v = uae_mmu030_get_lrmw_fcx(addr, size, fc);
+	v = uae_mmu030_get_lrmw_fcx(addr, size, fc);
 	islrmw030 = false;
 	return v;
 }
@@ -2619,10 +2626,11 @@ static uaecptr mmu030_get_addr_atc(uaecptr addr, int l, uae_u32 fc, bool write) 
 uaecptr mmu030_translate(uaecptr addr, bool super, bool data, bool write)
 {
 	int fc = (super ? 4 : 0) | (data ? 1 : 2);
+	int atc_line_num;
 	if ((fc==7) || (mmu030_match_ttr(addr,fc,write)&TT_OK_MATCH) || (!mmu030.enabled)) {
 		return addr;
     }
-    int atc_line_num = mmu030_logical_is_in_atc(addr, fc, write);
+    atc_line_num = mmu030_logical_is_in_atc(addr, fc, write);
 
     if (atc_line_num>=0) {
         return mmu030_get_addr_atc(addr, atc_line_num, fc, write);
@@ -2904,6 +2912,8 @@ void m68k_do_rte_mmu030 (uaecptr a7)
 
 	} else if (frame == 0xb) {
 
+		uae_u16 v;
+		int i;
 		// get_disp_ea_020
 		uae_u32 mmu030_disp_store_0 = get_long_mmu030(a7 + 0x1c);
 		uae_u32 mmu030_disp_store_1 = get_long_mmu030(a7 + 0x1c + 4);
@@ -2925,10 +2935,10 @@ void m68k_do_rte_mmu030 (uaecptr a7)
 			mmu030_fmovem_store_1 = get_long_mmu030(a7 + 0x5c - (8 + 1) * 4);
 		}
 
-		uae_u16 v = get_word_mmu030(a7 + 0x36);
+		v = get_word_mmu030(a7 + 0x36);
 		idxsize = v & 0x0f;
 		idxsize_done = (v >> 4) & 0x0f;
-		for (int i = 0; i < idxsize_done + 1; i++) {
+		for (i = 0; i < idxsize_done + 1; i++) {
 			mmu030_ad_v[i].val = get_long_mmu030(a7 + 0x5c - (i + 1) * 4);
 		}
 
@@ -2989,7 +2999,7 @@ void m68k_do_rte_mmu030 (uaecptr a7)
 		mmu030_data_buffer_out = mmu030_data_buffer_out_v;
 		mmu030_idx = idxsize;
 		mmu030_idx_done = idxsize_done;
-		for (int i = 0; i < idxsize_done + 1; i++) {
+		for (i = 0; i < idxsize_done + 1; i++) {
 			mmu030_ad[i].val = mmu030_ad_v[i].val;
 		}
 
@@ -3113,6 +3123,7 @@ uae_u32 REGPARAM2 get_disp_ea_020_mmu030 (uae_u32 base, int idx)
 	uae_u16 dp;
 	int reg;
 	uae_u32 v;
+	uae_s32 regd;
 	int oldidx;
 	int pcadd = 0;
 
@@ -3130,7 +3141,7 @@ uae_u32 REGPARAM2 get_disp_ea_020_mmu030 (uae_u32 base, int idx)
 	pcadd += 1;
 	
 	reg = (dp >> 12) & 15;
-	uae_s32 regd = regs.regs[reg];
+	regd = regs.regs[reg];
 	if ((dp & 0x800) == 0)
 		regd = (uae_s32)(uae_s16)regd;
 	regd <<= (dp >> 9) & 3;
@@ -3203,6 +3214,7 @@ uae_u32 REGPARAM2 get_disp_ea_020_mmu030c (uae_u32 base, int idx)
 	uae_u16 dp;
 	int reg;
 	uae_u32 v;
+	uae_s32 regd;
 	int oldidx;
 	int pcadd = 0;
 
@@ -3220,7 +3232,7 @@ uae_u32 REGPARAM2 get_disp_ea_020_mmu030c (uae_u32 base, int idx)
 	pcadd += 1;
 	
 	reg = (dp >> 12) & 15;
-	uae_s32 regd = regs.regs[reg];
+	regd = regs.regs[reg];
 	if ((dp & 0x800) == 0)
 		regd = (uae_s32)(uae_s16)regd;
 	regd <<= (dp >> 9) & 3;
@@ -3352,13 +3364,15 @@ void m68k_do_rte_mmu030c (uaecptr a7)
 
 	} else if (frame == 0xb) {
 
+		uae_u16 v;
+		int i;
 		// get_disp_ea_020
 		uae_u32 mmu030_disp_store_0 = get_long_mmu030c(a7 + 0x1c);
 		uae_u32 mmu030_disp_store_1 = get_long_mmu030c(a7 + 0x1c + 4);
 		// Internal register, misc flags
 		uae_u32 ps = get_long_mmu030c(a7 + 0x28);
 		// Data buffer
-		uae_u32 mmu030_data_buffer_in_v = get_long_mmu030c(a7 + 0x2c);;
+		uae_u32 mmu030_data_buffer_in_v = get_long_mmu030c(a7 + 0x2c);
 		// Misc state data
 		uae_u32 mmu030_state_0 = get_word_mmu030c(a7 + 0x30);
 		uae_u32 mmu030_state_1 = get_word_mmu030c(a7 + 0x32);
@@ -3373,10 +3387,10 @@ void m68k_do_rte_mmu030c (uaecptr a7)
 			mmu030_fmovem_store_1 = get_long_mmu030c(a7 + 0x5c - (8 + 1) * 4);
 		}
 
-		uae_u16 v = get_word_mmu030c(a7 + 0x36);
+		v = get_word_mmu030c(a7 + 0x36);
 		idxsize = v & 0x0f;
 		idxsize_done = (v >> 4) & 0x0f;
-		for (int i = 0; i < idxsize_done + 1; i++) {
+		for (i = 0; i < idxsize_done + 1; i++) {
 			mmu030_ad_v[i].val = get_long_mmu030c(a7 + 0x5c - (i + 1) * 4);
 		}
 
@@ -3455,7 +3469,7 @@ void m68k_do_rte_mmu030c (uaecptr a7)
 		mmu030_data_buffer_out = mmu030_data_buffer_out_v;
 		mmu030_idx = idxsize;
 		mmu030_idx_done = idxsize_done;
-		for (int i = 0; i < idxsize_done + 1; i++) {
+		for (i = 0; i < idxsize_done + 1; i++) {
 			mmu030_ad[i].val = mmu030_ad_v[i].val;
 		}
 

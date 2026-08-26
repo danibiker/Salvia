@@ -163,13 +163,13 @@ using namespace std;
 #include <limits.h>
 #endif // __cplusplus
 
-#ifndef __STDC__
-#  ifdef _MSC_VER
-#    error "M$ is no longer supported. Use WinUAE instead, it's great!"
-#  else
-#error "Your compiler is not ANSI. Get a real one."
-#endif
-#endif
+//#ifndef __STDC__
+//#  ifdef _MSC_VER
+//#    pragma message "M$ is no longer supported. Use WinUAE instead, it's great!"
+//#  else
+//#error "Your compiler is not ANSI. Get a real one."
+//#endif
+//#endif
 
 #if defined(__cplusplus)
 #include <cstdarg>
@@ -549,11 +549,25 @@ extern bool use_long_double;
 #ifndef STATIC_INLINE
 #if __GNUC__ - 1 > 1 && __GNUC_MINOR__ - 1 >= 0
 #define STATIC_INLINE static __inline__ __attribute__ ((always_inline))
-#define NOINLINE __attribute__ ((noinline))
-#define NORETURN __attribute__ ((noreturn))
 #else
 #define STATIC_INLINE static __inline__
+#endif
+#endif
+
+/* NOINLINE/NORETURN must not hang off the STATIC_INLINE guard: a target that
+ * pre-defines STATIC_INLINE (see retrodep/sysconfig.h for WIN32) would then
+ * leave these undefined, and 'static int NOINLINE f(...)' fails to parse. */
+#ifndef NOINLINE
+#if __GNUC__ - 1 > 1 && __GNUC_MINOR__ - 1 >= 0
+#define NOINLINE __attribute__ ((noinline))
+#else
 #define NOINLINE
+#endif
+#endif
+#ifndef NORETURN
+#if __GNUC__ - 1 > 1 && __GNUC_MINOR__ - 1 >= 0
+#define NORETURN __attribute__ ((noreturn))
+#else
 #define NORETURN
 #endif
 #endif
@@ -624,7 +638,9 @@ extern bool use_long_double;
 #ifndef _WIN32
 #define TCHAR char
 #endif
+
 #define uae_char char
+#ifndef _XBOX
 #define _tcslen strlen
 #define _tcscpy strcpy
 #define _tcscmp strcmp
@@ -663,6 +679,7 @@ extern bool use_long_double;
 #define _tcstok strtok
 #define _wunlink unlink
 #define _tfopen fopen
+#endif
 #ifndef vsntprintf
 #define vsntprintf vsnprint
 #endif
@@ -712,7 +729,9 @@ extern bool use_long_double;
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
+#ifndef _XBOX
 #include <windows.h>
+#endif
 #else
 #ifndef HANDLE
 typedef int HANDLE;

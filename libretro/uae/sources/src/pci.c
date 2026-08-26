@@ -2445,7 +2445,7 @@ bool prometheus_init(struct autoconfig_info *aci) { return false; }
 bool prometheusfs_init(struct autoconfig_info *aci) { return false; }
 bool pci_expansion_init(struct autoconfig_info *aci) { return false; }
 
-const struct pci_board ne2000_pci_board_pcmcia = {};
+const struct pci_board ne2000_pci_board_pcmcia = { 0 }; /* C89: initializer vacio no es valido; primer miembro es un puntero */
 
 void wildfire_ncr815_irq(int id, int v) {}
 

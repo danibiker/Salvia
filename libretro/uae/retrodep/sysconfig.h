@@ -1,6 +1,61 @@
 #ifndef UAE_SYSCONFIG_H
 #define UAE_SYSCONFIG_H
 
+#ifdef _MSC_VER
+/* MSVC (VS2010) has no strcasecmp/strncasecmp/snprintf. libretro-common
+ * already ships the mappings, so reuse them instead of patching every
+ * call site. Must come first so the macros apply to all UAE sources.
+ * snprintf maps to c99_snprintf_retro__ from
+ * libretro-common/compat/compat_snprintf.c (added to the project). */
+#include <compat/msvc.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+/* chmod() y close() viven aqui en MSVC. Sin esto el compilador las da por
+ * implicitas (C4013, 'assuming extern returning int'), que en C89 significa
+ * asumir una firma que puede no coincidir. */
+#include <io.h>
+
+/* POSIX permission bits: MSVC's <sys/stat.h> only has the _S_* owner names,
+ * and its chmod() only honours read/write. Windows has no group/other
+ * permissions, so those map to 0 (used with |= and & only). */
+#ifndef S_IRUSR
+#define S_IRUSR _S_IREAD
+#endif
+#ifndef S_IWUSR
+#define S_IWUSR _S_IWRITE
+#endif
+#ifndef S_IXUSR
+#define S_IXUSR _S_IEXEC
+#endif
+#ifndef S_IRGRP
+#define S_IRGRP 0
+#define S_IWGRP 0
+#define S_IXGRP 0
+#define S_IROTH 0
+#define S_IWOTH 0
+#define S_IXOTH 0
+#endif
+
+/* autoconf would normally do this (see the 'mode_t' note further down). */
+#ifndef mode_t
+#define mode_t int
+#endif
+
+/* struct timeval lives in <winsock2.h>, which sysdeps.h deliberately keeps
+ * out via WIN32_LEAN_AND_MEAN. Declare it here and set the winsock guard so
+ * a later <winsock2.h> does not redefine it. gettimeofday() has no MSVC
+ * equivalent at all; implemented in retrodep/machdep/support.c. */
+#if !defined(_TIMEVAL_DEFINED) && !defined(_XBOX)
+#define _TIMEVAL_DEFINED
+struct timeval {
+	long tv_sec;
+	long tv_usec;
+};
+#endif
+int gettimeofday(struct timeval *tv, void *tz);
+#endif /* _MSC_VER */
+
 #define DRIVESOUND
 #define SUPPORT_THREADS
 //#define OPTIMIZED_FLAGS
@@ -33,22 +88,69 @@
 #define FPUEMU /* FPU emulation */
 #define MMUEMU /* Aranym 68040 MMU */
 #define FULLMMU /* Aranym 68040 MMU */
-#define CPUEMU_0 /* generic 680x0 emulation */
-#define CPUEMU_11 /* 68000/68010 prefetch emulation */
-#define CPUEMU_13 /* 68000/68010 cycle-exact cpu&blitter */
-#define CPUEMU_20 /* 68020 prefetch */
-#define CPUEMU_21 /* 68020 "cycle-exact" + blitter */
-#define CPUEMU_22 /* 68030 prefetch */
-#define CPUEMU_23 /* 68030 "cycle-exact" + blitter */
-#define CPUEMU_24 /* 68060 "cycle-exact" + blitter */
-#define CPUEMU_25 /* 68040 "cycle-exact" + blitter */
-#define CPUEMU_31 /* Aranym 68040 MMU */
-#define CPUEMU_32 /* Previous 68030 MMU */
-#define CPUEMU_33 /* 68060 MMU */
-#define CPUEMU_34 /* 68030 MMU + cache */
-#define CPUEMU_35 /* 68030 MMU + cache + CE */
-#define CPUEMU_40 /* generic 680x0 with JIT direct memory access */
-#define CPUEMU_50 /* generic 680x0 with indirect memory access */
+/* ==================================================================== *
+ *  MODELO DE AMIGA SOPORTADO                                           *
+ *                                                                      *
+ *  Define UNO solo. Determina que nucleos de CPU (cpuemu_NN.c) hay que  *
+ *  compilar: los no seleccionados dejan de referenciarse desde          *
+ *  cpustbl.c y newcpu.c, asi que no hace falta anadirlos al proyecto.   *
+ * ==================================================================== */
+#define UAE_MODEL_A500      /* A500/A500+/A600 - 68000/68010, OCS/ECS   */
+//#define UAE_MODEL_A1200   /* A1200          - +68020, AGA             */
+//#define UAE_MODEL_A4000   /* A4000/A3000    - +68030/040/060, FPU/MMU */
+
+/* --- Precision de la emulacion 68000 (solo UAE_MODEL_A500) ----------- *
+ *  Sin ninguno de los dos solo existe el modo "generic": es el mas
+ *  rapido, pero no emula el prefetch del 68000 y eso rompe bastantes
+ *  juegos y practicamente todas las demos.
+ *  Al activarlos hay que anadir el cpuemu_NN.c correspondiente al
+ *  proyecto (ver comentario de cada uno).                              */
+#define UAE_CPU_COMPATIBLE   /* prefetch      -> compilar cpuemu_11.c */
+#define UAE_CPU_CYCLE_EXACT  /* ciclo a ciclo -> compilar cpuemu_13.c */
+
+/* -------- Derivacion de los CPUEMU_* a partir de lo anterior --------- */
+
+/* cpuemu_0.c: nucleo generico. Genera las tablas 0..5, es decir el modo
+ * "generic" de los seis modelos de CPU. Siempre necesario.             */
+#define CPUEMU_0
+
+#ifdef UAE_CPU_COMPATIBLE
+#define CPUEMU_11 /* cpuemu_11.c: 68000/68010 prefetch      (tablas 11,12) */
+#endif
+#ifdef UAE_CPU_CYCLE_EXACT
+#define CPUEMU_13 /* cpuemu_13.c: 68000/68010 cycle-exact   (tablas 13,14) */
+#endif
+
+#if defined(UAE_MODEL_A1200) || defined(UAE_MODEL_A4000)
+#define CPUEMU_20 /* cpuemu_20.c: 68020 prefetch                          */
+#define CPUEMU_21 /* cpuemu_21.c: 68020 cycle-exact + blitter             */
+#endif
+
+#ifdef UAE_MODEL_A4000
+#define CPUEMU_22 /* cpuemu_22.c: 68030 prefetch                          */
+#define CPUEMU_23 /* cpuemu_23.c: 68030 cycle-exact + blitter             */
+#define CPUEMU_24 /* cpuemu_24.c: 68060 cycle-exact + blitter (tablas 24,25) */
+#define CPUEMU_31 /* cpuemu_31.c: 68040 MMU                               */
+#define CPUEMU_32 /* cpuemu_32.c: 68030 MMU                               */
+#define CPUEMU_33 /* cpuemu_33.c: 68060 MMU                               */
+#define CPUEMU_34 /* cpuemu_34.c: 68030 MMU + cache                       */
+#define CPUEMU_35 /* cpuemu_35.c: 68030 MMU + cache + CE                  */
+#endif
+
+/* cpuemu_40.c (JIT, acceso directo) y cpuemu_50.c (acceso indirecto).
+ * JIT esta desactivado y el acceso indirecto solo lo usan las tarjetas
+ * aceleradoras con MMU emulada, asi que ninguno hace falta.            */
+//#define CPUEMU_40
+//#define CPUEMU_50
+
+/* CPUEMU_68000_ONLY quitaria del build las instrucciones de 68020+ de
+ * cpuemu_0.c y cpustbl.c, pero NO se puede activar: ademas de los
+ * opcodes, recorta campos de 'struct regstruct' en newcpu.h (cacr, caar,
+ * itt0/1, dtt0/1, tcr, mmusr, urp, srp, buscr, mmu_*, wb2_*, wb3_*) y
+ * esos campos los usan sin guarda alguna newcpu_common.c (val_move2c /
+ * val_move2c2), cpummu.c, cpummu30.c, debug.c y newcpu.c. Upstream nunca
+ * lo define, y con el puesto el build da cientos de C2039.            */
+//#define CPUEMU_68000_ONLY
 #define ACTION_REPLAY /* Action Replay 1/2/3 support */
 //#define PICASSO96 /* Picasso96 display card emulation */
 //#define UAEGFX_INTERNAL /* built-in libs:picasso96/uaegfx.card */
@@ -590,7 +692,7 @@
 #include <streams/file_stream_transforms.h>
 #undef stderr
 #define stderr 0
-#ifndef WIN32
+#if !defined(WIN32) && !defined(_XBOX)
 #undef HANDLE
 #define HANDLE RFILE*
 #endif
@@ -605,7 +707,7 @@
 #undef _ftelli64
 #define _ftelli64 rftell
 #else /* NO_LIBRETRO_VFS = 1 */
-#ifndef WIN32
+#if !defined(WIN32) && !defined(_XBOX)
 #undef HANDLE
 #define HANDLE FILE*
 #endif
@@ -620,11 +722,11 @@
 #ifndef PATH_MAX
 #define PATH_MAX    256
 #endif
-#ifndef MAX_PATH
-#define MAX_PATH	512
-#endif
+//#ifndef MAX_PATH
+//#define MAX_PATH	512
+//#endif
 #ifndef MAX_DPATH
-#define MAX_DPATH	512
+#define MAX_DPATH	MAX_PATH
 #endif
 
 /* next */
@@ -633,9 +735,69 @@
 #define MAX_JIT_CACHE 16384
 #endif
 
-#ifdef WIN32
+#if defined(_MSC_VER) && (_MSC_VER < 1800)
+#define strtoll _strtoi64
+
+/* Las funciones de <math.h> de C99 no llegaron a MSVC hasta VS2013, y
+ * fpp_native.c / fpp_softfloat.c las usan (tambien via los alias *l del
+ * bloque __LIBRETRO__ de fpp_native.c: remainderl -> remainder, etc.).
+ * Las cuatro primeras salen de lo que si trae <float.h>; las cinco
+ * ultimas se implementan en retrodep/machdep/support.c.
+ * Todas son macros con parametros, asi que no afectan a los
+ * identificadores homonimos (fpp_native.c tiene un 'int round' local). */
+#include <math.h>
+#include <float.h>
+
+#ifndef isnan
+#define isnan(x)   (_isnan((double)(x)) != 0)
+#endif
+#ifndef isinf
+#define isinf(x)   (!_finite((double)(x)) && !_isnan((double)(x)))
+#endif
+#ifndef signbit
+#define signbit(x) (_copysign(1.0, (double)(x)) < 0.0)
+#endif
+#ifndef logb
+#define logb(x)    _logb((double)(x))
+#endif
+
+extern double uae_msvc_round(double x);
+extern double uae_msvc_remainder(double x, double y);
+extern double uae_msvc_log1p(double x);
+extern double uae_msvc_expm1(double x);
+extern double uae_msvc_atanh(double x);
+
+#ifndef round
+#define round(x)        uae_msvc_round((double)(x))
+#endif
+#ifndef remainder
+#define remainder(x, y) uae_msvc_remainder((double)(x), (double)(y))
+#endif
+#ifndef log1p
+#define log1p(x)        uae_msvc_log1p((double)(x))
+#endif
+#ifndef expm1
+#define expm1(x)        uae_msvc_expm1((double)(x))
+#endif
+#ifndef atanh
+#define atanh(x)        uae_msvc_atanh((double)(x))
+#endif
+#endif
+
+#if defined(WIN32) || defined(_XBOX)
 #define FSDB_DIR_SEPARATOR '\\'
 #define FSDB_DIR_SEPARATOR_S _T("\\")
+
+#undef HAVE_UNISTD_H
+#undef HAVE_UTIME_H
+#undef TIME_WITH_SYS_TIME
+#undef HAVE_SYS_TIME_H
+#undef HAVE_SYS_PARAM_H
+#undef HAVE_ISNAN
+#undef HAVE_ISINF
+
+#define STATIC_INLINE static __inline
+
 #else
 #define FSDB_DIR_SEPARATOR '/'
 #define FSDB_DIR_SEPARATOR_S _T("/")

@@ -336,6 +336,22 @@ void print_vkbd(void)
 
    char string[11]                   = {0};
    unsigned theme                    = opt_vkbd_theme;
+   int XSIDE                         = 0;
+   int YSIDE                         = 0;
+   int XBASEKEY                      = 0;
+   int YBASEKEY                      = 0;
+   int XBASETEXT                     = 0;
+   int YBASETEXT                     = 0;
+   int x_gap                         = 0;
+   int y_gap                         = 0;
+   int vkbd_x_gap_pad                = 0;
+   int vkbd_y_gap_pad                = 0;
+   int alt_key                       = 0;
+   int extra_key                     = 0;
+   int current_key                   = 0;
+   int current_key_pos               = 0;
+   int current_key_val               = 0;
+
    if (theme & 0x80)
    {
       text_outline = true;
@@ -433,23 +449,23 @@ void print_vkbd(void)
 
    XOFFSET      += retrox_crop;
 
-   int XSIDE     = (320 * FONT_WIDTH) / VKBDX;
-   int YSIDE     = (170 * FONT_HEIGHT) / VKBDY;
+   XSIDE        = (320 * FONT_WIDTH) / VKBDX;
+   YSIDE        = (170 * FONT_HEIGHT) / VKBDY;
 
    XPADDING      = retrow_crop - (XSIDE * VKBDX);
    YPADDING      = retroh_crop + (retroy_crop * 2) - (YSIDE * VKBDY);
 
-   int XBASEKEY  = (XPADDING > 0) ? (XPADDING / 2) : 0;
-   int YBASEKEY  = (YPADDING > 0) ? (YPADDING / 2) : 0;
+   XBASEKEY      = (XPADDING > 0) ? (XPADDING / 2) : 0;
+   YBASEKEY      = (YPADDING > 0) ? (YPADDING / 2) : 0;
 
-   int XBASETEXT = XBASEKEY + (3 * FONT_WIDTH);
-   int YBASETEXT = YBASEKEY + (3 * FONT_HEIGHT);
+   XBASETEXT     = XBASEKEY + (3 * FONT_WIDTH);
+   YBASETEXT     = YBASEKEY + (3 * FONT_HEIGHT);
 
-   int x_gap = 0;
-   int y_gap = 0;
+   x_gap = 0;
+   y_gap = 0;
 
-   int vkbd_x_gap_pad = VKBDX_GAP_PAD * FONT_WIDTH;
-   int vkbd_y_gap_pad = VKBDY_GAP_PAD * FONT_HEIGHT;
+   vkbd_x_gap_pad = VKBDX_GAP_PAD * FONT_WIDTH;
+   vkbd_y_gap_pad = VKBDY_GAP_PAD * FONT_HEIGHT;
 
    XOFFSET -= (vkbd_x_gap_pad / 2);
    YOFFSET -= (vkbd_y_gap_pad / 2);
@@ -504,12 +520,12 @@ void print_vkbd(void)
          else
          {
             /* Alternate key color */
-            for (int alt_key = 0; alt_key < vkbd_alt_keys_len; ++alt_key)
+            for (alt_key = 0; alt_key < vkbd_alt_keys_len; ++alt_key)
                 if (vkbd_alt_keys[alt_key] == vkeys[(y * VKBDX) + x + page].value)
                     BKG_COLOR = BKG_COLOR_ALT;
 
             /* Extra key color */
-            for (int extra_key = 0; extra_key < vkbd_extra_keys_len; ++extra_key)
+            for (extra_key = 0; extra_key < vkbd_extra_keys_len; ++extra_key)
                 if (vkbd_extra_keys[extra_key] == vkeys[(y * VKBDX) + x + page].value)
                     BKG_COLOR = BKG_COLOR_EXTRA;
          }
@@ -518,7 +534,7 @@ void print_vkbd(void)
          FONT_COLOR = FONT_COLOR_NORMAL;
 
          /* Pressed keys via mapper */
-         int current_key = vkeys[(y * VKBDX) + x + page].value;
+         current_key = vkeys[(y * VKBDX) + x + page].value;
          current_key = (current_key > 0) ? current_key : 0;
 
          /* Sticky + CapsLock + pressed colors */
@@ -602,8 +618,8 @@ void print_vkbd(void)
          : GRAPH_ALPHA_100;
 
 
-   int current_key_pos = 0;
-   int current_key_val = 0;
+   current_key_pos = 0;
+   current_key_val = 0;
 
    if (vkey_active)
    {
@@ -1090,6 +1106,13 @@ void input_vkbd(void)
 {
    long now  = 0;
    uint8_t i = 0;
+   int p_x;
+   int p_y;
+   int p_p;
+   float y_multiplier;
+   float vkey_height;
+   int mspeed_default = 2;
+   static int mspeed;
 
    input_vkbd_sticky();
 
@@ -1111,9 +1134,9 @@ void input_vkbd(void)
    now = retro_ticks() / 1000;
 
    /* Absolute pointer */
-   int p_x = input_state_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_X);
-   int p_y = input_state_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_Y);
-   int p_p = input_state_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_PRESSED);
+   p_x = input_state_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_X);
+   p_y = input_state_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_Y);
+   p_p = input_state_cb(0, RETRO_DEVICE_POINTER, 0, RETRO_DEVICE_ID_POINTER_PRESSED);
 
    /* Enable pointer only after first pointer press. Pointer is also disabled with joypad navigation. */
    if (!last_pointer_p && p_p)
@@ -1136,8 +1159,8 @@ void input_vkbd(void)
          if (VKBDX_GAP_POS && vkey_pos_x >= VKBDX_GAP_POS)
             vkey_pos_x = ((px - vkbd_x_min + (VKBDX_GAP_PAD * x_multiplier)) / vkey_width);
 
-         float y_multiplier = (video_config & PUAE_VIDEO_DOUBLELINE) ? 2 : 1;
-         float vkey_height = (float)(vkbd_y_max - vkbd_y_min - (VKBDY_GAP_PAD * y_multiplier)) / VKBDY;
+         y_multiplier = (video_config & PUAE_VIDEO_DOUBLELINE) ? 2 : 1;
+         vkey_height = (float)(vkbd_y_max - vkbd_y_min - (VKBDY_GAP_PAD * y_multiplier)) / VKBDY;
          vkey_pos_y = ((py - vkbd_y_min) / vkey_height);
          if (VKBDY_GAP_POS && vkey_pos_y >= VKBDY_GAP_POS)
             vkey_pos_y = ((py - vkbd_y_min - (VKBDY_GAP_PAD * y_multiplier)) / vkey_height);
@@ -1167,8 +1190,6 @@ void input_vkbd(void)
    }
 
    /* VKBD Mouse acceleration */
-   const int mspeed_default = 2;
-   static int mspeed;
    if (!vkflag[RETRO_DEVICE_ID_JOYPAD_B])
       mspeed = mspeed_default;
 

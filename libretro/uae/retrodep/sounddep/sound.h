@@ -9,6 +9,10 @@
 #ifndef OSDEP_SOUND_H
 #define OSDEP_SOUND_H
 
+#ifndef __inline__
+#define __inline__ __inline
+#endif
+
 #define SOUNDSTUFF 1
 extern void retro_audio_queue(const int16_t *data, int32_t samples);
 

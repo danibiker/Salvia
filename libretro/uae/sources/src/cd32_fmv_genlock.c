@@ -72,19 +72,20 @@ void cd32_fmv_state(int state)
 
 static void genlock_32(struct vidbuffer *vbin, struct vidbuffer *vbout, int w, int h, int d, int hoffset, int voffset, int mult)
 {
-	for (int hh = 0, sh = -voffset; hh < h; sh++, hh += mult) {
-		for (int h2 = 0; h2 < mult; h2++) {
+	int hh, sh, h2, ww, sw, w2;
+	for (hh = 0, sh = -voffset; hh < h; sh++, hh += mult) {
+		for (h2 = 0; h2 < mult; h2++) {
 			uae_u8 *d8 = vbout->bufmem + vbout->rowbytes * (hh + h2 + voffset);
 			uae_u32 *d32 = (uae_u32*)d8;
 			uae_u8 *s8 = vbin->bufmem + vbin->rowbytes * (hh + h2 + voffset) ;
 			uae_u32 *srcp = NULL;
 			if (sh >= 0 && sh < mpeg_height)
 				srcp = (uae_u32*)(mpeg_out_buffer + sh * mpeg_width * MPEG_PIXBYTES_32);
-			for (int ww = 0, sw = -hoffset; ww < w; sw++, ww += mult) {
+			for (ww = 0, sw = -hoffset; ww < w; sw++, ww += mult) {
 				uae_u32 sv = fmv_border_color;
 				if (sw >= 0 && sw < mpeg_width && srcp)
 					sv = srcp[sw];
-				for (int w2 = 0; w2 < mult; w2++) {
+				for (w2 = 0; w2 < mult; w2++) {
 					uae_u32 v;
 					if (s8[0] >= GENLOCK_VAL_32) {
 						v = *((uae_u32*)s8);
@@ -101,19 +102,20 @@ static void genlock_32(struct vidbuffer *vbin, struct vidbuffer *vbout, int w, i
 
 static void genlock_16(struct vidbuffer *vbin, struct vidbuffer *vbout, int w, int h, int d, int hoffset, int voffset, int mult)
 {
-	for (int hh = 0, sh = -voffset; hh < h; sh++, hh += mult) {
-		for (int h2 = 0; h2 < mult; h2++) {
+	int hh, sh, h2, ww, sw, w2;
+	for (hh = 0, sh = -voffset; hh < h; sh++, hh += mult) {
+		for (h2 = 0; h2 < mult; h2++) {
 			uae_u8 *d8 = vbout->bufmem + vbout->rowbytes * (hh + h2 + voffset);
 			uae_u16 *d16 = (uae_u16*)d8;
 			uae_u8 *s8 = vbin->bufmem + vbin->rowbytes * (hh + h2 + voffset) ;
 			uae_u16 *srcp = NULL;
 			if (sh >= 0 && sh < mpeg_height)
 				srcp = (uae_u16*)(mpeg_out_buffer + sh * mpeg_width * MPEG_PIXBYTES_16);
-			for (int ww = 0, sw = -hoffset; ww < w; sw++, ww += mult) {
+			for (ww = 0, sw = -hoffset; ww < w; sw++, ww += mult) {
 				uae_u16 sv = fmv_border_color_16;
 				if (sw >= 0 && sw < mpeg_width && srcp)
 					sv = srcp[sw];
-				for (int w2 = 0; w2 < mult; w2++) {
+				for (w2 = 0; w2 < mult; w2++) {
 					uae_u32 v;
 					if ((((uae_u16*)s8)[0] >> 11) >= GENLOCK_VAL_16) {
 						v = *((uae_u16*)s8);

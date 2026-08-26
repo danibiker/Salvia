@@ -73,7 +73,9 @@ static void hwtrap_check_int(void)
 
 static bool istrapwait(void)
 {
-	for (int i = 0; i < RTAREA_TRAP_DATA_NUM + RTAREA_TRAP_DATA_SEND_NUM; i++) {
+	int i;
+
+	for (i = 0; i < RTAREA_TRAP_DATA_NUM + RTAREA_TRAP_DATA_SEND_NUM; i++) {
 		uae_u8 *data = rtarea_bank.baseaddr + RTAREA_TRAP_DATA + i * RTAREA_TRAP_DATA_SLOT_SIZE;
 		uae_u8 *status = rtarea_bank.baseaddr + RTAREA_TRAP_STATUS + i * RTAREA_TRAP_STATUS_SIZE;
 		if (get_long_host(data + RTAREA_TRAP_DATA_TASKWAIT) && status[3] && status[2] >= 0x80) {
@@ -154,15 +156,17 @@ static uae_u32 REGPARAM2 rtarea_lget (uaecptr addr)
 }
 static uae_u32 REGPARAM2 rtarea_wget (uaecptr addr)
 {
+	uaecptr addr2;
+
 	addr &= 0xFFFF;
 	if (addr & 1)
 		return 0;
 
-	uaecptr addr2 = addr - RTAREA_TRAP_STATUS;
+	addr2 = addr - RTAREA_TRAP_STATUS;
 
 	if (rtarea_trap_status(addr)) {
-		int trap_offset = addr2 & (RTAREA_TRAP_STATUS_SIZE - 1);
-		int trap_slot = addr2 / RTAREA_TRAP_STATUS_SIZE;
+		int trap_offset = (int)(addr2 & (RTAREA_TRAP_STATUS_SIZE - 1));
+		int trap_slot = (int)(addr2 / RTAREA_TRAP_STATUS_SIZE);
 		// lock attempt
 		if (trap_offset == 2) {
 			if (rtarea_bank.baseaddr[addr + 1] & 0x80) {
@@ -182,13 +186,14 @@ static uae_u32 REGPARAM2 rtarea_bget (uaecptr addr)
 	hwtrap_check_int();
 	if (rtarea_trap_status(addr)) {
 		uaecptr addr2 = addr - RTAREA_TRAP_STATUS;
-		int trap_offset = addr2 & (RTAREA_TRAP_STATUS_SIZE - 1);
-		int trap_slot = addr2 / RTAREA_TRAP_STATUS_SIZE;
+		int trap_offset = (int)(addr2 & (RTAREA_TRAP_STATUS_SIZE - 1));
+		int trap_slot = (int)(addr2 / RTAREA_TRAP_STATUS_SIZE);
+		uae_u8 v;
 		if (trap_offset == 0) {
 			// 0 = busy wait, 1 = Wait()
 			rtarea_bank.baseaddr[addr] = trap_mode == 1 ? 1 : 0;
 		}
-		uae_u8 v = rtarea_bank.baseaddr[addr];
+		v = rtarea_bank.baseaddr[addr];
 #if NEW_TRAP_DEBUG
 		write_log(_T("GET TRAP SLOT %d OFFSET %d: V=%02x\n"), trap_slot, trap_offset, v);
 #endif
@@ -221,6 +226,8 @@ static bool rtarea_write(uaecptr addr)
 
 static void REGPARAM2 rtarea_bput (uaecptr addr, uae_u32 value)
 {
+	int trap_offset, trap_slot;
+
 	addr &= 0xffff;
 	if (!rtarea_write(addr))
 		return;
@@ -231,8 +238,8 @@ static void REGPARAM2 rtarea_bput (uaecptr addr, uae_u32 value)
 	if (!rtarea_trap_status(addr))
 		return;
 	addr -= RTAREA_TRAP_STATUS;
-	int trap_offset = addr & (RTAREA_TRAP_STATUS_SIZE - 1);
-	int trap_slot = addr / RTAREA_TRAP_STATUS_SIZE;
+	trap_offset = (int)(addr & (RTAREA_TRAP_STATUS_SIZE - 1));
+	trap_slot = (int)(addr / RTAREA_TRAP_STATUS_SIZE);
 #if NEW_TRAP_DEBUG
 	write_log(_T("PUT TRAP SLOT %d OFFSET %d: V=%02x\n"), trap_slot, trap_offset, (uae_u8)value);
 #endif
@@ -259,6 +266,8 @@ static void REGPARAM2 rtarea_bput (uaecptr addr, uae_u32 value)
 
 static void REGPARAM2 rtarea_wput (uaecptr addr, uae_u32 value)
 {
+	uaecptr addr2;
+
 	addr &= 0xffff;
 	value &= 0xffff;
 
@@ -268,11 +277,11 @@ static void REGPARAM2 rtarea_wput (uaecptr addr, uae_u32 value)
 	if (!rtarea_write(addr))
 		return;
 
-	uaecptr addr2 = addr - RTAREA_TRAP_STATUS;
+	addr2 = addr - RTAREA_TRAP_STATUS;
 
 	if (rtarea_trap_status(addr)) {
-		int trap_offset = addr2 & (RTAREA_TRAP_STATUS_SIZE - 1);
-		int trap_slot = addr2 / RTAREA_TRAP_STATUS_SIZE;
+		int trap_offset = (int)(addr2 & (RTAREA_TRAP_STATUS_SIZE - 1));
+		int trap_slot = (int)(addr2 / RTAREA_TRAP_STATUS_SIZE);
 		if (trap_offset == 2) {
 			value = 0;
 			if ((rtarea_bank.baseaddr[addr + 1] & 0x80) == 0) {
@@ -318,9 +327,10 @@ static void REGPARAM2 rtarea_lput (uaecptr addr, uae_u32 value)
 	rtarea_bank.baseaddr[addr + 3] = value >> 0;
 
 	if (rtarea_trap_status(addr)) {
+		int trap_offset, trap_slot;
 		addr -= RTAREA_TRAP_STATUS;
-		int trap_offset = addr & (RTAREA_TRAP_STATUS_SIZE - 1);
-		int trap_slot = addr / RTAREA_TRAP_STATUS_SIZE;
+		trap_offset = (int)(addr & (RTAREA_TRAP_STATUS_SIZE - 1));
+		trap_slot = (int)(addr / RTAREA_TRAP_STATUS_SIZE);
 #if NEW_TRAP_DEBUG
 		write_log(_T("PUT TRAP SLOT %d OFFSET %d: V=%08x\n"), trap_slot, trap_offset, value);
 #endif
@@ -436,13 +446,15 @@ uae_u32 ds_bstr_ansi (const uae_char *str)
 
 void save_rom_absolute(uaecptr addr)
 {
+	int i;
+
 	if (rombase_new)
 		return;
 	if (absolute_rom_address >= MAX_ABSOLUTE_ROM_ADDRESS) {
 		write_log(_T("MAX_ABSOLUTE_ROM_ADDRESS is too low!"));
 		abort();
 	}
-	for (int i = 0; i < absolute_rom_address; i++) {
+	for (i = 0; i < absolute_rom_address; i++) {
 		if (absolute_rom_addresses[i] == addr) {
 			write_log(_T("Address %08x already added\n"), addr);
 			return;
@@ -461,14 +473,19 @@ void add_rom_absolute(uaecptr addr)
 uae_u32 boot_rom_copy(TrapContext *ctx, uaecptr rombase, int mode)
 {
 	uaecptr reloc = 0;
+	/* C89 hoisted declarations */
+	int i;
+	int size;
+	uae_u8 *p;
+
 	if (currprefs.uaeboard < 3)
 		return 0;
 	if (!mode) {
 		rtarea_write_enabled = true;
 		protect_roms(false);
 		rombase_new = rombase;
-		int size = 4 + 2 + 4;
-		for (int i = 0; i < absolute_rom_address; i++) {
+		size = 4 + 2 + 4;
+		for (i = 0; i < absolute_rom_address; i++) {
 			uae_u32 a = absolute_rom_addresses[i];
 			if (a >= rtarea_base && a < rtarea_base + 0x10000) {
 				size += 2;
@@ -477,10 +494,10 @@ uae_u32 boot_rom_copy(TrapContext *ctx, uaecptr rombase, int mode)
 			}
 		}
 		reloc = uaeboard_alloc_ram(size);
-		uae_u8 *p = uaeboard_map_ram(reloc);
+		p = uaeboard_map_ram(reloc);
 		put_long_host(p, rtarea_base);
 		p += 4;
-		for (int i = 0; i < absolute_rom_address; i++) {
+		for (i = 0; i < absolute_rom_address; i++) {
 			uae_u32 a = absolute_rom_addresses[i];
 			if (a >= rtarea_base && a < rtarea_base + 0x10000) {
 				put_word_host(p, a & 0xffff);
@@ -489,7 +506,7 @@ uae_u32 boot_rom_copy(TrapContext *ctx, uaecptr rombase, int mode)
 		}
 		put_word_host(p, 0);
 		p += 2;
-		for (int i = 0; i < absolute_rom_address; i++) {
+		for (i = 0; i < absolute_rom_address; i++) {
 			uae_u32 a = absolute_rom_addresses[i];
 			if (a < rtarea_base || a >= rtarea_base + 0x10000) {
 				put_long_host(p, a);
@@ -510,9 +527,10 @@ uae_u32 boot_rom_copy(TrapContext *ctx, uaecptr rombase, int mode)
 void calltrap (uae_u32 n)
 {
 	if (currprefs.uaeboard > 2) {
+		uaecptr a;
 		dw(0x4eb9); // JSR rt_trampoline_ptr
 		add_rom_absolute(rt_trampoline_ptr);
-		uaecptr a = here();
+		a = here();
 		org(rt_trampoline_ptr);
 		dw(0x3f3c); // MOVE.W #n,-(SP)
 		dw(n);
@@ -558,8 +576,9 @@ static uae_u32 REGPARAM2 getchipmemsize (TrapContext *ctx)
 static uae_u32 REGPARAM2 uae_puts (TrapContext *ctx)
 {
 	uae_char buf[MAX_DPATH];
+	TCHAR *s;
 	trap_get_string(ctx, buf, trap_get_areg(ctx, 0), sizeof(uae_char));
-	TCHAR *s = au(buf);
+	s = au(buf);
 	write_log(_T("%s"), s);
 	xfree(s);
 	return 0;
@@ -590,6 +609,8 @@ void rtarea_init(void)
 {
 	uae_u32 a;
 	TCHAR uaever[100];
+	/* C89 hoisted declarations */
+	int i;
 
 	rt_straddr = 0xFF00 - 2;
 	rt_addr = 0;
@@ -621,7 +642,7 @@ void rtarea_init(void)
 	trap_entry = filesys_get_entry(10);
 	write_log(_T("TRAP_ENTRY = %08x\n"), trap_entry);
 
-	for (int i = 0; i < RTAREA_TRAP_DATA_SIZE / RTAREA_TRAP_DATA_SLOT_SIZE; i++) {
+	for (i = 0; i < RTAREA_TRAP_DATA_SIZE / RTAREA_TRAP_DATA_SLOT_SIZE; i++) {
 		uae_sem_init(&hardware_trap_event[i], 0, 0);
 		uae_sem_init(&hardware_trap_event2[i], 0, 0);
 	}

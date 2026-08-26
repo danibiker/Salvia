@@ -214,6 +214,8 @@ void cia_set_eclockphase(void)
 
 static evt_t get_e_cycles(void)
 {
+	evt_t c;
+
 	// temporary e-clock phase shortcut
 	if (blop) {
 		cia_adjust_eclock_phase(1);
@@ -233,7 +235,7 @@ static evt_t get_e_cycles(void)
 		blop2 = 0;
 	}
 
-	evt_t c = get_cycles();
+	c = get_cycles();
 	c += currprefs.cs_eclockphase * E_CYCLE_UNIT;
 	c += internaleclockphase * 2 * E_CYCLE_UNIT;
 	return c;
@@ -382,10 +384,12 @@ static void compute_passed_time_cia(int num, uae_u32 ciaclocks)
 static void compute_passed_time(void)
 {
 	evt_t ccount = get_cycles() - eventtab[ev_cia].oldcycles;
+	uae_u32 ciaclocks;
+
 	if (ccount > MAXINT) {
 		ccount = MAXINT;
 	}
-	uae_u32 ciaclocks = (uae_u32)ccount / DIV10;
+	ciaclocks = (uae_u32)ccount / DIV10;
 
 	compute_passed_time_cia(0, ciaclocks);
 	compute_passed_time_cia(1, ciaclocks);
@@ -482,19 +486,26 @@ in the same cycle.  */
 static void CIA_update_check(void)
 {
 	evt_t ccount = get_cycles() - eventtab[ev_cia].oldcycles;
+	/* C89 hoisted declarations */
+	int ciaclocks;
+	uae_u8 icr;
+	int num;
+
 	if (ccount > MAXINT) {
 		ccount = MAXINT;
 	}
-	int ciaclocks = (uae_u32)(ccount / DIV10);
+	ciaclocks = (uae_u32)(ccount / DIV10);
 	if (!ciaclocks) {
 		return;
 	}
 
-	uae_u8 icr = 0;
-	for (int num = 0; num < 2; num++) {
+	icr = 0;
+	for (num = 0; num < 2; num++) {
 		struct CIA *c = &cia[num];
 		int ovfl[2], sp;
 		bool loaded[2], loaded2[2], loaded3[3];
+		int tn;
+		int cc;
 
 		c->icr1 |= c->icr2;
 		c->icr2 = 0;
@@ -504,9 +515,9 @@ static void CIA_update_check(void)
 		ovfl[1] = 0;
 		sp = 0;
 
-		for (int tn = 0; tn < 2; tn++) {
+		for (tn = 0; tn < 2; tn++) {
 			struct CIATimer *t = &c->t[tn];
-			
+
 			loaded[tn] = false;
 			loaded2[tn] = false;
 			loaded3[tn] = false;
@@ -545,7 +556,7 @@ static void CIA_update_check(void)
 		}
 
 		// Timer A
-		int cc = 0;
+		cc = 0;
 		if ((c->t[0].cr & (CR_INMODE | CR_START)) == CR_START || c->t[0].inputpipe) {
 			cc = process_pipe(&c->t[0], ciaclocks, CR_INMODE | CR_START, &ovfl[0], loaded3[0]);
 		}
@@ -596,7 +607,7 @@ static void CIA_update_check(void)
 			c->t[1].inputpipe |= CIA_PIPE_INPUT;
 		}
 
-		for (int tn = 0; tn < 2; tn++) {
+		for (tn = 0; tn < 2; tn++) {
 			struct CIATimer *t = &c->t[tn];
 
 			if (ovfl[tn] || t->preovfl) {
@@ -666,6 +677,9 @@ static void CIA_update(void)
 static void CIA_calctimers(void)
 {
 	uae_s32 timevals[4];
+	/* C89 hoisted declarations */
+	int num;
+	uae_s32 ciatime;
 
 	timevals[0] = -1;
 	timevals[1] = -1;
@@ -674,10 +688,11 @@ static void CIA_calctimers(void)
 
 	eventtab[ev_cia].oldcycles = get_cycles();
 
-	for (int num = 0; num < 2; num++) {
+	for (num = 0; num < 2; num++) {
 		struct CIA *c = &cia[num];
 		int idx = num * 2;
 		bool counting[2] = { false, false };
+		int tn;
 
 		if ((c->t[0].cr & (CR_INMODE | CR_START)) == CR_START) {
 			int pipe = bitstodelay(c->t[0].inputpipe);
@@ -697,7 +712,7 @@ static void CIA_calctimers(void)
 			counting[1] = true;
 		}
 
-		for (int tn = 0; tn < 2; tn++) {
+		for (tn = 0; tn < 2; tn++) {
 			struct CIATimer *t = &c->t[tn];
 			bool timerspecial = t->loaddelay != 0;
 			int tnidx = idx + tn;
@@ -727,7 +742,7 @@ static void CIA_calctimers(void)
 
 	}
 
-	uae_s32 ciatime = INT_MAX;
+	ciatime = INT_MAX;
 	if (timevals[0] >= 0)
 		ciatime = timevals[0];
 	if (timevals[1] >= 0 && timevals[1] < ciatime)
@@ -779,6 +794,9 @@ void event_CIA_synced_interrupt(uae_u32 v)
 static void CIA_sync_interrupt(int num, uae_u8 icr)
 {
 	struct CIA *c = &cia[num];
+	/* C89 hoisted declarations */
+	int syncdelay;
+	int delay;
 
 	if (acc_mode()) {
 		if (!(icr & c->imask)) {
@@ -789,8 +807,8 @@ static void CIA_sync_interrupt(int num, uae_u8 icr)
 		if ((c->icr1 & ICR_MASK) == (c->icr2 & ICR_MASK)) {
 			return;
 		}
-		int syncdelay = 0;
-		int delay = get_cia_sync_cycles(&syncdelay);
+		syncdelay = 0;
+		delay = get_cia_sync_cycles(&syncdelay);
 		delay += syncdelay;
 		event2_newevent_xx(-1, DIV10 + delay, num, event_CIA_synced_interrupt);
 	} else {
@@ -1053,9 +1071,12 @@ static int tod_inc_delay(int hoffset)
 	int hoff = hoffset + 1; // 1 = HSYNC/VSYNC Agnus pin output is delayed by 1 CCK
 	evt_t c = get_e_cycles() + 6 * E_CYCLE_UNIT + hoff * CYCLE_UNIT;
 	int offset = hoff;
+	int unit;
+	int div10;
+
 	offset += TOD_INC_DELAY;
-	int unit = (E_CLOCK_LENGTH * 4) / 2; // 4 E-clocks
-	int div10 = (c / CYCLE_UNIT) % unit;
+	unit = (E_CLOCK_LENGTH * 4) / 2; // 4 E-clocks
+	div10 = (int)((c / CYCLE_UNIT) % unit);
 	offset += unit - div10;
 	offset += e_clock_tod;
 	return offset;
@@ -1098,11 +1119,12 @@ static void CIA_tod_event_check(int num)
 static void CIA_tod_check(int num)
 {
 	struct CIA *c = &cia[num];
+	int hpos;
 
 	CIA_tod_event_check(num);
 	if (!c->todon || c->tod_event_state != 1 || c->tod_offset < 0)
 		return;
-	int hpos = current_hpos();
+	hpos = current_hpos();
 	hpos -= c->tod_offset;
 	if (hpos >= 0 || !acc_mode()) {
 		// Program should see the changed TOD
@@ -1357,10 +1379,13 @@ static void bfe001_change(void)
 
 static uae_u32 getciatod(uae_u32 tod)
 {
+	uae_u32 bcdtod;
+	int i;
+
 	if (!currprefs.cs_cia6526)
 		return tod;
-	uae_u32 bcdtod = 0;
-	for (int i = 0; i < 4; i++) {
+	bcdtod = 0;
+	for (i = 0; i < 4; i++) {
 		int val = tod % 10;
 		bcdtod *= 16;
 		bcdtod += val;
@@ -1370,12 +1395,15 @@ static uae_u32 getciatod(uae_u32 tod)
 }
 static void setciatod(uae_u32 *tod, uae_u32 v)
 {
+	uae_u32 bintod;
+	int i;
+
 	if (!currprefs.cs_cia6526) {
 		*tod = v;
 		return;
 	}
-	uae_u32 bintod = 0;
-	for (int i = 0; i < 4; i++) {
+	bintod = 0;
+	for (i = 0; i < 4; i++) {
 		int val = v / 16;
 		bintod *= 10;
 		bintod += val;
@@ -1398,6 +1426,7 @@ static uae_u8 ReadCIAReg(int num, int reg)
 	struct CIA *c = &cia[num];
 	uae_u8 tmp;
 	int tnum = 0;
+	struct CIATimer *t;
 
 	switch (reg)
 	{
@@ -1408,7 +1437,7 @@ static uae_u8 ReadCIAReg(int num, int reg)
 		break;
 	}
 
-	struct CIATimer *t = &c->t[tnum];
+	t = &c->t[tnum];
 
 	switch (reg)
 	{
@@ -1605,6 +1634,7 @@ static void WriteCIAReg(int num, int reg, uae_u8 val)
 {
 	struct CIA *c = &cia[num];
 	int tnum = 0;
+	struct CIATimer *t;
 
 	switch (reg)
 	{
@@ -1615,7 +1645,7 @@ static void WriteCIAReg(int num, int reg, uae_u8 val)
 		break;
 	}
 
-	struct CIATimer *t = &c->t[tnum];
+	t = &c->t[tnum];
 
 	switch (reg) {
 	case 4:
@@ -1733,8 +1763,9 @@ static uae_u8 ReadCIAA(uae_u32 addr, uae_u32 *flags)
 	switch (reg) {
 	case 0:
 	{
+		uae_u8 v;
 		*flags |= 1;
-		uae_u8 v = DISK_status_ciaa() & 0x3c;
+		v = DISK_status_ciaa() & 0x3c;
 		v |= handle_joystick_buttons(c->pra, c->dra);
 		v |= (c->pra | (c->dra ^ 3)) & 0x03;
 		v = dongle_cia_read(0, reg, c->dra, v);
@@ -2283,6 +2314,11 @@ static int cia_cycles(int delay, int phase, int val, int post)
 
 static void cia_wait_pre(int cianummask)
 {
+#ifndef CUSTOM_SIMPLE
+	int syncdelay;
+	int delay;
+#endif
+
 	if (currprefs.cachesize || currprefs.cpu_thread)
 		return;
 #ifdef WITH_PPC
@@ -2298,8 +2334,8 @@ static void cia_wait_pre(int cianummask)
 
 #ifndef CUSTOM_SIMPLE
 	cia_now_evt = get_cycles();
-	int syncdelay = 0;
-	int delay = get_cia_sync_cycles(&syncdelay);
+	syncdelay = 0;
+	delay = get_cia_sync_cycles(&syncdelay);
 #ifdef DEBUGGER
 	if (debug_dma) {
 		cia_cycles(syncdelay, 100, 0, 0);
@@ -2370,11 +2406,13 @@ static void cia_wait_post(int cianummask, uaecptr addr, uae_u32 value, bool rw)
 static void validate_cia(uaecptr addr, int write, uae_u8 val)
 {
 	bool err = false;
+	int mask;
+
 	if (((addr >> 12) & 3) == 0 || ((addr >> 12) & 3) == 3)
 		err = true;
 	if (((addr & 0xf00) >> 8) == 11)
 		err = true;
-	int mask = addr & 0xf000;
+	mask = addr & 0xf000;
 	if (mask != 0xe000 && mask != 0xd000)
 		err = true;
 	if (mask == 0xe000 && (addr & 1) == 0)
@@ -2602,6 +2640,7 @@ static bool cia_debug(uaecptr addr, uae_u32 value, int size)
 static void REGPARAM2 cia_bput(uaecptr addr, uae_u32 value)
 {
 	int r = (addr & 0xf00) >> 8;
+	int cs;
 
 	if (cia_debug(addr, value, sz_byte))
 		return;
@@ -2620,7 +2659,7 @@ static void REGPARAM2 cia_bput(uaecptr addr, uae_u32 value)
 	}
 #endif
 
-	int cs = cia_chipselect(addr);
+	cs = cia_chipselect(addr);
 
 	if (!issinglecia() || (cs & 3) != 0) {
 		uae_u32 flags = 0;
@@ -2645,6 +2684,7 @@ static void REGPARAM2 cia_bput(uaecptr addr, uae_u32 value)
 static void REGPARAM2 cia_wput(uaecptr addr, uae_u32 v)
 {
 	int r = (addr & 0xf00) >> 8;
+	int cs;
 
 	if (cia_debug(addr, v, sz_word))
 		return;
@@ -2666,7 +2706,7 @@ static void REGPARAM2 cia_wput(uaecptr addr, uae_u32 v)
 	if (addr & 1)
 		v = (v << 8) | (v >> 8);
 
-	int cs = cia_chipselect(addr);
+	cs = cia_chipselect(addr);
 
 	if (!issinglecia() || (cs & 3) != 0) {
 		uae_u32 flags = 0;
@@ -2730,24 +2770,27 @@ static uae_u8 getclockreg(int addr, struct tm *ct)
 
 static void write_battclock(void)
 {
+	TCHAR path[MAX_DPATH];
+	struct zfile *f;
+
 	if (!currprefs.rtcfile[0] || currprefs.cs_rtc == 0)
 		return;
-	TCHAR path[MAX_DPATH];
 	cfgfile_resolve_path_out_load(currprefs.rtcfile, path, MAX_DPATH, PATH_ROM);
-	struct zfile *f = zfile_fopen_2x(path, _T("wb"));
+	f = zfile_fopen_2x(path, _T("wb"));
 	if (f) {
 		struct tm *ct;
 		time_t t = time(0);
+		uae_u8 od;
+		int i;
 		t += currprefs.cs_rtc_adjust;
 		ct = localtime(&t);
-		uae_u8 od;
 		if (currprefs.cs_rtc == 2) {
 			od = rtc_ricoh.clock_control_d;
 			rtc_ricoh.clock_control_d &= ~3;
 		} else {
 			od = rtc_msm.clock_control_d;
 		}
-		for (int i = 0; i < 13; i++) {
+		for (i = 0; i < 13; i++) {
 			uae_u8 v = getclockreg(i, ct);
 			zfile_fwrite(&v, 1, 1, f);
 		}
@@ -2790,8 +2833,9 @@ void rtc_hardreset(void)
 	}
 	if (currprefs.rtcfile[0]) {
 		TCHAR path[MAX_DPATH];
+		struct zfile *f;
 		cfgfile_resolve_path_out_load(currprefs.rtcfile, path, MAX_DPATH, PATH_ROM);
-  		struct zfile *f = zfile_fopen_2x(path, _T("rb"));
+		f = zfile_fopen_2x(path, _T("rb"));
 		if (f) {
 			int size = zfile_size32(f);
 			uae_u8 empty[16];
@@ -2832,6 +2876,7 @@ static uae_u32 REGPARAM2 clock_bget(uaecptr addr)
 {
 	struct tm *ct;
 	uae_u8 v = 0;
+	time_t t;
 
 	if ((addr & 0xffff) >= 0x8000 && currprefs.cs_fatgaryrev >= 0)
 		return dummy_get(addr, 1, false, 0);
@@ -2845,7 +2890,7 @@ static uae_u32 REGPARAM2 clock_bget(uaecptr addr)
 	if ((addr & 3) == 2 || (addr & 3) == 0 || currprefs.cs_rtc == 0) {
 		return dummy_get_safe(addr, 1, false, v);
 	}
-	time_t t = time(0);
+	t = time(0);
 	t += currprefs.cs_rtc_adjust;
 	ct = localtime(&t);
 	addr >>= 2;
@@ -3109,8 +3154,10 @@ uae_u8 *save_keyboard(size_t *len, uae_u8 *dstptr)
 
 uae_u8 *restore_keyboard(uae_u8 *src)
 {
+	uae_u32 v;
+
 	setcapslockstate(restore_u32() & 1);
-	uae_u32 v = restore_u32();
+	v = restore_u32();
 	kbstate = restore_u8();
 	restore_u8();
 	restore_u8();

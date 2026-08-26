@@ -85,10 +85,11 @@ int mmu_data_write_hit, mmu_data_write_miss;
 
 static void mmu_dump_ttr(const TCHAR * label, uae_u32 ttr)
 {
-	DUNUSED(label);
 #if MMUDEBUG > 0
 	uae_u32 from_addr, to_addr;
-
+#endif
+	DUNUSED(label);
+#if MMUDEBUG > 0
 	from_addr = ttr & MMU_TTR_LOGICAL_BASE;
 	to_addr = (ttr & MMU_TTR_LOGICAL_MASK) << 8;
 
@@ -355,7 +356,8 @@ static void flush_shortcut_cache(uaecptr addr, bool super)
 		memset(&atc_data_cache_read, 0xff, sizeof atc_data_cache_read);
 		memset(&atc_data_cache_write, 0xff, sizeof atc_data_cache_write);
 	} else {
-		for (int i = 0; i < MMUFASTCACHE_ENTRIES; i++) {
+		int i;
+		for (i = 0; i < MMUFASTCACHE_ENTRIES; i++) {
 			uae_u32 idx = ((addr & mmu_pagemaski) >> mmu_pageshift1m) | (super ? 1 : 0);
 			if (atc_data_cache_read[i].log == idx)
 				atc_data_cache_read[i].log = 0xffffffff;
@@ -1286,6 +1288,7 @@ void REGPARAM2 dfc_put_byte(uaecptr addr, uae_u8 val)
 void mmu_get_move16(uaecptr addr, uae_u32 *v, bool data, int size)
 {
 	bool super = regs.s != 0;
+	int i;
 
 	addr &= ~15;
 	if ((!mmu_ttr_enabled || mmu_match_ttr(addr,super,data) == TTR_NO_MATCH) && regs.mmu_enabled) {
@@ -1293,7 +1296,7 @@ void mmu_get_move16(uaecptr addr, uae_u32 *v, bool data, int size)
 	}
 	// MOVE16 read and cache miss: do not allocate new cache line
 	mmu_cache_state |= CACHE_DISABLE_ALLOCATE;
-	for (int i = 0; i < 4; i++) {
+	for (i = 0; i < 4; i++) {
 		v[i] = x_phys_get_long(addr + i * 4);
 	}
 }
@@ -1301,6 +1304,7 @@ void mmu_get_move16(uaecptr addr, uae_u32 *v, bool data, int size)
 void mmu_put_move16(uaecptr addr, uae_u32 *val, bool data, int size)
 {
 	bool super = regs.s != 0;
+	int i;
 
 	addr &= ~15;
 	if ((!mmu_ttr_enabled || mmu_match_ttr_write(addr,super,data,val[0],size) == TTR_NO_MATCH) && regs.mmu_enabled) {
@@ -1308,7 +1312,7 @@ void mmu_put_move16(uaecptr addr, uae_u32 *val, bool data, int size)
 	}
 	// MOVE16 write invalidates existing line and also does not allocate new cache lines.
 	mmu_cache_state = CACHE_DISABLE_MMU;
-	for (int i = 0; i < 4; i++) {
+	for (i = 0; i < 4; i++) {
 		x_phys_put_long(addr + i * 4, val[i]);
 	}
 }
@@ -1348,6 +1352,8 @@ void REGPARAM2 mmu_op_real(uae_u32 opcode, uae_u16 extra)
 		int regno;
 		uae_u32 addr;
 		uae_u32 status060 = 0;
+		bool data;
+		int ttr_match;
 
 		regno = opcode & 7;
 		write = (opcode & 32) == 0;
@@ -1356,8 +1362,8 @@ void REGPARAM2 mmu_op_real(uae_u32 opcode, uae_u16 extra)
 		write_log(_T("PTEST%c (A%d) %08x DFC=%d\n"), write ? 'W' : 'R', regno, addr, regs.dfc);
 #endif
 		mmu_flush_atc(addr, super, true);
-		bool data = (regs.dfc & 3) != 2;
-		int ttr_match = mmu_match_ttr(addr,super,data);
+		data = (regs.dfc & 3) != 2;
+		ttr_match = mmu_match_ttr(addr,super,data);
 		if (ttr_match != TTR_NO_MATCH) {
 			if (ttr_match == TTR_NO_WRITE && write) {
 				regs.mmusr = MMU_MMUSR_B;
@@ -1541,7 +1547,6 @@ void REGPARAM2 mmu_flush_cache(void)
 	if (!currprefs.mmu_model)
 		return;
 #if MMU_ICACHE
-	int len = sizeof(mmu_icache_data);
 	memset(&mmu_icache_data, 0xff, sizeof(mmu_icache_data));
 #endif
 }
@@ -1750,10 +1755,13 @@ jmp_buf* __poptry(void) {
 	}
 	else {
 		fprintf(stderr,"try stack underflow...\n");
-		// return (NULL);
 #ifndef __LIBRETRO__
 		abort();
 #endif
+		/* Con __LIBRETRO__ el abort() desaparece y la funcion se caia por el
+		 * final sin devolver valor: comportamiento indefinido que /O2 puede
+		 * aprovechar, y ademas THROW_AGAIN hace *__poptry(). */
+		return NULL;
 	}
 }
 void __pushtry(jmp_buf* j) {

@@ -734,13 +734,16 @@ static void blitter_line_write(void)
 
 static void blitter_line_minterm(uae_u16 dat)
 {
-	uae_u16 mask = blt_info.bltafwm;	
+	uae_u16 mask = blt_info.bltafwm;
+	int ashift;
+	uae_u16 blitahold;
+
 	if (dat & BLITTER_PIPELINE_LAST) {
 		mask &= blt_info.bltalwm;
 	}
 
-	int ashift = bltcon0 >> 12;
-	uae_u16 blitahold = (blt_info.bltadat & mask) >> ashift;
+	ashift = bltcon0 >> 12;
+	blitahold = (blt_info.bltadat & mask) >> ashift;
 
 	if (bltcon0 & BLTCHB) {
 		// B special case if enabled
@@ -994,7 +997,9 @@ void blitter_handler(uae_u32 data)
 static bool blitshifterdebug(uae_u16 con0, bool check)
 {
 	int cnt = 0;
-	for (int i = 0; i < 4; i++) {
+	int i;
+
+	for (i = 0; i < 4; i++) {
 		if (shifter[i]) {
 			cnt++;
 		}
@@ -1357,16 +1362,18 @@ static void blitter_doddma_new(int hpos, bool addmod)
 {
 	uaecptr *hpt = NULL;
 	bool skip = false;
+	int mod;
+	bool skipadd;
 
 	check_channel_mods(hpos, 4, &bltdpt);
 	bltdpt |= alloc_cycle_blitter_conflict_or(hpos, 4, &skip);
 	// alloc_cycle_blitter() can change modulo, old modulo is used during this cycle.
-	int mod = blit_modaddd;
+	mod = blit_modaddd;
 	if (!skip) {
 		record_dma_blit(0x00, ddat, bltdpt, hpos);
 		blit_chipmem_agnus_wput(bltdpt, ddat, MW_MASK_BLITTER_D_N);
 	}
-	bool skipadd = alloc_cycle_blitter(hpos, &bltdpt, 4, addmod ? mod : 0);
+	skipadd = alloc_cycle_blitter(hpos, &bltdpt, 4, addmod ? mod : 0);
 
 	if (!blitline && !skipadd) {
 		bltdpt += blit_add;
@@ -1545,13 +1552,19 @@ static bool decide_blitter_maybe_write2(int until_hpos, uaecptr addr, uae_u32 va
 
 		// dma transfers and processing
 		for (;;) {
+			/* C89 hoisted declarations */
+			uae_u16 dat;
+			int c;
+			bool line;
+			bool addmod;
+
 			if (!cycle_line_slot[hpos] && blt_info.blit_queued > 0) {
 				blt_info.blit_queued--;
 				if (!blt_info.blit_queued && !blt_info.blit_finald) {
 					blitter_end();
 				}
 			}
-			uae_u16 dat = blitter_pipe[hpos];
+			dat = blitter_pipe[hpos];
 			if (dat) {
 				blitter_pipe[hpos] = 0;
 			}
@@ -1569,8 +1582,8 @@ static bool decide_blitter_maybe_write2(int until_hpos, uaecptr addr, uae_u32 va
 				break;
 			}
 
-			int c = dat & 7;
-			bool line = (dat & BLITTER_PIPELINE_LINE) != 0;
+			c = dat & 7;
+			line = (dat & BLITTER_PIPELINE_LINE) != 0;
 
 			// last D write?
 			if (dat & BLITTER_PIPELINE_LASTD) {
@@ -1601,7 +1614,7 @@ static bool decide_blitter_maybe_write2(int until_hpos, uaecptr addr, uae_u32 va
 				}
 			}
 
-			bool addmod = (dat & BLITTER_PIPELINE_ADDMOD) != 0;
+			addmod = (dat & BLITTER_PIPELINE_ADDMOD) != 0;
 
 			blit_totalcyclecounter++;
 
@@ -1618,13 +1631,14 @@ static bool decide_blitter_maybe_write2(int until_hpos, uaecptr addr, uae_u32 va
 				}
 
 			} else if (c == 3 && line) { // line 2/4 (C)
+				bool skip = false;
+				uaecptr orptr;
 
 				if (!(dat & BLITTER_PIPELINE_FIRST) && blitlineloop && !(bltcon1 & BLTSUD)) {
 					blitter_line_proc_cpt_y();
 					blitlineloop = 0;
 				}
-				bool skip = false;
-				uaecptr orptr = alloc_cycle_blitter_conflict_or(hpos, 3, &skip);
+				orptr = alloc_cycle_blitter_conflict_or(hpos, 3, &skip);
 				record_dma_blit(0x70, 0, bltcpt | orptr, hpos);
 				check_channel_mods(hpos, 3, &bltcpt);
 				if (!skip) {
@@ -1711,6 +1725,8 @@ static bool decide_blitter_maybe_write2(int until_hpos, uaecptr addr, uae_u32 va
 
 			// cycle allocations
 			for (;;) {
+				/* C89 hoisted declarations */
+				bool cant;
 
 				// final D idle cycle
 				// does not need free bus
@@ -1724,7 +1740,7 @@ static bool decide_blitter_maybe_write2(int until_hpos, uaecptr addr, uae_u32 va
 					break;
 				}
 
-				bool cant = blitter_cant_access(hpos);
+				cant = blitter_cant_access(hpos);
 				if (cant) {
 					blit_misscyclecounter++;
 					break;
@@ -1757,6 +1773,13 @@ static bool decide_blitter_maybe_write2(int until_hpos, uaecptr addr, uae_u32 va
 				}
 
 				if (blt_info.blit_main) {
+					/* C89 hoisted declarations */
+					int c;
+					bool addmod;
+					uae_u16 v;
+					bool doddat;
+					int offset;
+
 					blit_cyclecounter++;
 					if (blit_cyclecounter == 0) {
 						shifter_first = 1;
@@ -1764,10 +1787,10 @@ static bool decide_blitter_maybe_write2(int until_hpos, uaecptr addr, uae_u32 va
 						blt_info.blit_finald = 0;
 						blitter_next_cycle();
 					}
-					int c = get_current_channel();
+					c = get_current_channel();
 					blt_info.got_cycle = 1;
 
-					bool addmod = false;
+					addmod = false;
 					if (c == 1 || c == 2 || c == 3) {
 						if (blitter_hcounter + 1 == blt_info.hblitsize) {
 							addmod = true;
@@ -1778,7 +1801,7 @@ static bool decide_blitter_maybe_write2(int until_hpos, uaecptr addr, uae_u32 va
 						}
 					}
 
-					uae_u16 v = CYCLE_PIPE_BLITTER | c | (addmod ? BLITTER_PIPELINE_ADDMOD : 0);
+					v = CYCLE_PIPE_BLITTER | c | (addmod ? BLITTER_PIPELINE_ADDMOD : 0);
 
 					if (blitter_hcounter == 0) {
 						v |= BLITTER_PIPELINE_FIRST;
@@ -1790,12 +1813,12 @@ static bool decide_blitter_maybe_write2(int until_hpos, uaecptr addr, uae_u32 va
 						v |= BLITTER_PIPELINE_LINE;
 					}
 
-					bool doddat = false;
+					doddat = false;
 					if (blit_cyclecounter >= 0) {
 						doddat = blitter_next_cycle();
 					}
 
-					int offset = get_rga_pipeline(hpos, RGA_PIPELINE_OFFSET_BLITTER);
+					offset = get_rga_pipeline(hpos, RGA_PIPELINE_OFFSET_BLITTER);
 					if (cycle_line_pipe[offset]) {
 						write_log("Blitter cycle conflict %d\n", cycle_line_pipe[offset]);
 					}
@@ -1918,6 +1941,10 @@ void reset_blit (int bltcon)
 static bool waitingblits (void)
 {
 	static int warned = 10;
+	/* C89 hoisted declarations */
+	bool waited;
+	int waiting;
+	int vpos_prev;
 
 	// crazy large blit size? don't wait.. (Vital / Mystic)
 	if (blt_info.vblitsize * blt_info.hblitsize * 2 > 2 * 1024 * 1024) {
@@ -1928,9 +1955,9 @@ static bool waitingblits (void)
 		return false;
 	}
 
-	bool waited = false;
-	int waiting = 0;
-	int vpos_prev = vpos;
+	waited = false;
+	waiting = 0;
+	vpos_prev = vpos;
 	while ((blt_info.blit_main || blt_info.blit_finald) && dmaen (DMA_BLITTER)) {
 		waited = true;
 		x_do_cycles (8 * CYCLE_UNIT);
@@ -1956,6 +1983,8 @@ static bool waitingblits (void)
 
 static void blitter_start_init (void)
 {
+	int bshift;
+
 	shifter_first = 0;
 	blt_info.blit_queued = 0;
 	blit_faulty = 0;
@@ -1971,7 +2000,7 @@ static void blitter_start_init (void)
 	blt_info.bltaold = 0;
 	blt_info.bltbold = 0;
 
-	int bshift = bltcon1 >> 12;
+	bshift = bltcon1 >> 12;
 	blineb = (blt_info.bltbdat >> bshift) | (blt_info.bltbdat << (16 - bshift));
 	blitonedot = 0;
 	blitlinepixel = 0;
@@ -2178,11 +2207,13 @@ end:;
 
 void check_is_blit_dangerous (uaecptr *bplpt, int planes, int words)
 {
+	int i;
+
 	blt_info.blitter_dangerous_bpl = 0;
 	if ((!blt_info.blit_main && !blt_info.blit_finald) || !blitter_cycle_exact)
 		return;
 	// too simple but better than nothing
-	for (int i = 0; i < planes; i++) {
+	for (i = 0; i < planes; i++) {
 		uaecptr bpl = bplpt[i];
 		uaecptr dpt = bltdpt & chipmem_bank.mask;
 		if (dpt >= bpl - 2 * words && dpt < bpl + 2 * words) {
@@ -2340,6 +2371,7 @@ uae_u8 *save_blitter (size_t *len, uae_u8 *dstptr, bool newstate)
 uae_u8 *restore_blitter_new(uae_u8 *src)
 {
 	uae_u8 state, tmp;
+	int i;
 
 	blt_statefile_type = 1;
 	blitter_cycle_exact = restore_u8();
@@ -2470,7 +2502,7 @@ uae_u8 *restore_blitter_new(uae_u8 *src)
 
 	blit_cyclecounter = restore_u32();
 
-	for (int i = 0; i < 4; i++) {
+	for (i = 0; i < 4; i++) {
 		blitter_pipe[i] = restore_u16();
 		if (blitter_pipe[i]) {
 			blt_info.blit_queued = BLITTER_MAX_PIPELINED_CYCLES;
@@ -2487,12 +2519,14 @@ uae_u8 *restore_blitter_new(uae_u8 *src)
 uae_u8 *save_blitter_new(size_t *len, uae_u8 *dstptr)
 {
 	uae_u8 *dstbak,*dst;
+	uae_u8 state;
+	int i;
+
 	if (dstptr)
 		dstbak = dst = dstptr;
 	else
 		dstbak = dst = xmalloc (uae_u8, 1000);
 
-	uae_u8 state;
 	save_u8(blitter_cycle_exact ? 3 : 0);
 	if (!blt_info.blit_main && !blt_info.blit_finald) {
 		state = 0;
@@ -2586,7 +2620,7 @@ uae_u8 *save_blitter_new(size_t *len, uae_u8 *dstptr)
 
 	save_u32(blit_cyclecounter);
 
-	for (int i = 0; i < 4; i++) {
+	for (i = 0; i < 4; i++) {
 		save_u16(blitter_pipe[i]);
 		save_u16(cycle_line_pipe[i]);
 		save_u8(cycle_line_slot[i]);

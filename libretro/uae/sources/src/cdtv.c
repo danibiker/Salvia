@@ -225,6 +225,7 @@ static int issub (void)
 
 static void subfunc (uae_u8 *data, int cnt)
 {
+	int offset;
 	if (!issub ())
 		return;
 	uae_sem_wait (&sub_sem);
@@ -246,7 +247,7 @@ static void subfunc (uae_u8 *data, int cnt)
 #endif
 		return;
 	}
-	int offset = subcodebufferoffsetw;
+	offset = subcodebufferoffsetw;
 	while (cnt > 0) {
 		if (subcodebufferinuse[offset]) {
 #ifdef CDTV_SUB_DEBUG
@@ -803,12 +804,16 @@ bool cdtv_front_panel (int button)
 	break;
 	case 2: // prev
 	case 3: // next
+	{
+	uae_u8 *sq;
+	int track;
+	int pos = 0;
+	int j;
 	if (!cd_playing)
 		return true;
-	uae_u8 *sq = cdrom_qcode + 4;
-	int track = frombcd (sq[1]);
-	int pos = 0;
-	for (int j = 0; j < toc.points; j++) {
+	sq = cdrom_qcode + 4;
+	track = frombcd (sq[1]);
+	for (j = 0; j < toc.points; j++) {
 		int t = toc.toc[j].track;
 		pos = toc.toc[j].paddress;
 		if (t == 1 && track == 1 && button == 2)
@@ -822,6 +827,7 @@ bool cdtv_front_panel (int button)
 	}
 	init_play (pos - 150, last_cd_position);
 	break;
+	}
 	}
 	return true;
 }
@@ -847,6 +853,7 @@ static uae_u8 get_tp_c_level (void)
 
 static void tp_check_interrupts (void)
 {
+	int mask;
 	/* MC = 1 ? */
 	if ((tp_cr & 1) != 1) {
 		get_tp_c_level ();
@@ -857,7 +864,7 @@ static void tp_check_interrupts (void)
 	stch = 0;
 	if (!(tp_ilatch & (1 << 5)) && (tp_ilatch & tp_imask)) {
 		tp_air = 0;
-		int mask = 0x10;
+		mask = 0x10;
 		while (((tp_ilatch & tp_imask) & mask) == 0)
 			mask >>= 1;
 		tp_air |= tp_ilatch & mask;
@@ -1118,6 +1125,8 @@ static void rethink_cdtv (void)
 static void CDTV_hsync_handler (void)
 {
 	static int subqcnt;
+	static int subchannelcounter;
+	int cntmax;
 
 	if (!currprefs.cs_cdtvcd || configured <= 0 || currprefs.cs_cdtvcr)
 		return;
@@ -1161,8 +1170,7 @@ static void CDTV_hsync_handler (void)
 		activate_stch = 1;
 	}
 
-	static int subchannelcounter;
-	int cntmax = (int)(maxvpos * vblank_hz / 75 - 6);
+	cntmax = (int)(maxvpos * vblank_hz / 75 - 6);
 	if (subchannelcounter > 0)
 		subchannelcounter--;
 	if (subchannelcounter <= 0) {
@@ -1682,6 +1690,7 @@ bool cdtvsram_init(struct autoconfig_info *aci)
 
 bool cdtv_init(struct autoconfig_info *aci)
 {
+	int cardsize = 0;
 	memset(dmacmemory, 0xff, sizeof dmacmemory);
 	ew(0x00, 0xc0 | 0x01);
 	ew(0x04, 0x03);
@@ -1732,7 +1741,6 @@ bool cdtv_init(struct autoconfig_info *aci)
 		cdtvscsi = 0;
 	}
 
-	int cardsize = 0;
 	if (aci && is_board_enabled(aci->prefs, ROMTYPE_CDTVSRAM, 0)) {
 		struct romconfig *rc = get_device_romconfig(aci->prefs, ROMTYPE_CDTVSRAM, 0);
 		cardsize = 64 << (rc->device_settings & 3);
@@ -1825,6 +1833,7 @@ uae_u8 *restore_cdtv_dmac (uae_u8 *src)
 uae_u8 *save_cdtv (size_t *len, uae_u8 *dstptr)
 {
 	uae_u8 *dstbak, *dst;
+	int i;
 
 	if (!currprefs.cs_cdtvcd || currprefs.cs_cdtvcr)
 		return NULL;
@@ -1861,7 +1870,7 @@ uae_u8 *save_cdtv (size_t *len, uae_u8 *dstptr)
 	save_u32 (last_play_pos);
 	save_u32 (last_play_end);
 	save_u64 (dma_wait);
-	for (int i = 0; i < sizeof (cdrom_command_input); i++)
+	for (i = 0; i < sizeof (cdrom_command_input); i++)
 		save_u8 (cdrom_command_input[i]);
 	save_u8 (cdrom_command_cnt_in);
 	save_u16 (cdtv_sectorsize);
@@ -1872,6 +1881,8 @@ uae_u8 *save_cdtv (size_t *len, uae_u8 *dstptr)
 
 uae_u8 *restore_cdtv (uae_u8 *src)
 {
+	uae_u32 v;
+	int i;
 	cdtv_free ();
 	if (!currprefs.cs_cdtvcd) {
 		changed_prefs.cs_cdtvcd = changed_prefs.cs_cdtvram = true;
@@ -1894,7 +1905,7 @@ uae_u8 *restore_cdtv (uae_u8 *src)
 	tp_ilatch2 = restore_u8 ();
 	restore_u8 ();
 	// misc cd stuff
-	uae_u32 v = restore_u32 ();
+	v = restore_u32 ();
 	cd_playing = (v & 1) ? 1 : 0;
 	cd_paused = (v & 2) ? 1 : 0;
 	cd_media = (v & 4) ? 1 : 0;
@@ -1912,7 +1923,7 @@ uae_u8 *restore_cdtv (uae_u8 *src)
 	last_play_pos = restore_u32 ();
 	last_play_end = restore_u32 ();
 	dma_wait = restore_u64 ();
-	for (int i = 0; i < sizeof (cdrom_command_input); i++)
+	for (i = 0; i < sizeof (cdrom_command_input); i++)
 		cdrom_command_input[i] = restore_u8 ();
 	cdrom_command_cnt_in = restore_u8 ();
 	cdtv_sectorsize = restore_u16 ();

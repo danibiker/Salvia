@@ -889,6 +889,18 @@ int retro_vfs_stat_impl(const char *path, int32_t *size)
 
       if ((stat_buf.st_mode & S_IFMT) == S_IFDIR)
          ret  |= RETRO_VFS_STAT_IS_DIRECTORY;
+#elif defined(_XBOX)
+      extern int xbox_stat(const char *path, struct stat *st);
+      struct stat stat_buf;
+
+      if (xbox_stat(path, &stat_buf) < 0)
+         return 0;
+
+      if (size)
+         *size = (int32_t)stat_buf.st_size;
+
+      if ((stat_buf.st_mode & S_IFMT) == S_IFDIR)
+         ret  |= RETRO_VFS_STAT_IS_DIRECTORY;
 #elif defined(_WIN32)
       /* Windows */
       struct _stat stat_buf;

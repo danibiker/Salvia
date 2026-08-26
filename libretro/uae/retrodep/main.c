@@ -15,6 +15,14 @@
 
 #undef __unix
 
+/* WinUAE define estos tres en od-win32/win32.cpp, que es su capa de target y
+ * aqui no se compila; custom.c los declara extern bajo #ifdef DEBUGGER y los
+ * usa para instrumentar el temporizado de vsync. A 0 el comportamiento es el
+ * de por defecto: sin traza y sin retardo forzado ni minimo. */
+int log_vsync = 0;
+int debug_vsync_min_delay = 0;
+int debug_vsync_forced_delay = 0;
+
 /*
  * Handle break signal
  */

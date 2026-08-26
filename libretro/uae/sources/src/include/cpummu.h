@@ -912,22 +912,25 @@ STATIC_INLINE void put_rmw_long_mmu060 (uaecptr addr, uae_u32 v)
 }
 STATIC_INLINE uae_u32 get_rmw_byte_mmu060 (uaecptr addr)
 {
+	uae_u32 v;
 	rmw_cycle = true;
-	uae_u32 v = uae_mmu060_get_byte (addr);
+	v = uae_mmu060_get_byte (addr);
 	rmw_cycle = false;
 	return v;
 }
 STATIC_INLINE uae_u32 get_rmw_word_mmu060 (uaecptr addr)
 {
+	uae_u32 v;
 	rmw_cycle = true;
-	uae_u32 v = uae_mmu060_get_word (addr);
+	v = uae_mmu060_get_word (addr);
 	rmw_cycle = false;
 	return v;
 }
 STATIC_INLINE uae_u32 get_rmw_long_mmu060 (uaecptr addr)
 {
+	uae_u32 v;
 	rmw_cycle = true;
-	uae_u32 v = uae_mmu060_get_long (addr);
+	v = uae_mmu060_get_long (addr);
 	rmw_cycle = false;
 	return v;
 }

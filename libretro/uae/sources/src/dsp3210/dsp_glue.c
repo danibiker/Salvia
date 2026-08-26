@@ -238,8 +238,9 @@ void dsp_write(uae_u8 v)
 
 uae_u8 dsp_read(void)
 {
+	uae_u8 v;
 	dsp_status_intx();
-	uae_u8 v = dsp_status;
+	v = dsp_status;
 	if (log_dsp) {
 		write_log("DSP read %02x\n", v);
 	}

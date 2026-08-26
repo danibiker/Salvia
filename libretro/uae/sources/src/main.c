@@ -115,8 +115,7 @@ uae_u32 uaerand(void)
 			xorshiftstate = 1;
 		}
 	}
-	uae_u32 r = xorshift32();
-	return r;
+	return xorshift32();
 }
 
 uae_u32 uaerandgetseed(void)
@@ -208,14 +207,16 @@ static void fixup_prefs_dim2(int monid, struct wh *wh)
 
 void fixup_prefs_dimensions (struct uae_prefs *prefs)
 {
-	for (int i = 0; i < MAX_AMIGADISPLAYS; i++) {
+	int i;
+
+	for (i = 0; i < MAX_AMIGADISPLAYS; i++) {
 		fixup_prefs_dim2(i, &prefs->gfx_monitor[i].gfx_size_fs);
 		fixup_prefs_dim2(i, &prefs->gfx_monitor[i].gfx_size_win);
 	}
 	if (prefs->gfx_apmode[1].gfx_vsync > 0)
 		prefs->gfx_apmode[1].gfx_vsyncmode = 1;
 
-	for (int i = 0; i < 2; i++) {
+	for (i = 0; i < 2; i++) {
 		struct apmode *ap = &prefs->gfx_apmode[i];
 		if (ap->gfx_backbuffers < 1)
 			ap->gfx_backbuffers = 1;
@@ -447,6 +448,8 @@ void fixup_cpu (struct uae_prefs *p)
 void fixup_prefs (struct uae_prefs *p, bool userconfig)
 {
 	int err = 0;
+	/* C89 hoisted declarations */
+	int i, j;
 
 	built_in_chipset_prefs (p);
 	fixup_cpu (p);
@@ -484,7 +487,7 @@ void fixup_prefs (struct uae_prefs *p, bool userconfig)
 		err = 1;
 	}
 
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 		if ((p->fastmem[i].size & (p->fastmem[i].size - 1)) != 0
 			|| (p->fastmem[i].size != 0 && (p->fastmem[i].size < 0x10000 || p->fastmem[i].size > 0x800000)))
 		{
@@ -503,7 +506,7 @@ void fixup_prefs (struct uae_prefs *p, bool userconfig)
 	}
 #endif
 
-	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+	for (i = 0; i < MAX_RTG_BOARDS; i++) {
 		struct rtgboardconfig *rbc = &p->rtgboards[i];
 		if (rbc->monitor_id > 0 && p->monitoremu_mon == rbc->monitor_id) {
 			error_log(_T("Video port monitor %d was allocated for graphics card %d."), rbc->monitor_id + 1, i + 1);
@@ -532,7 +535,7 @@ void fixup_prefs (struct uae_prefs *p, bool userconfig)
 				rbc->rtgmem_size = 0;
 			err = 1;
 		}
-		for (int j = 0; j < MAX_RTG_BOARDS; j++) {
+		for (j = 0; j < MAX_RTG_BOARDS; j++) {
 			struct rtgboardconfig *rbc2 = &p->rtgboards[j];
 			if (j == i)
 				continue;
@@ -543,7 +546,7 @@ void fixup_prefs (struct uae_prefs *p, bool userconfig)
 		}
 	}
 	
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 		if ((p->z3fastmem[i].size & (p->z3fastmem[i].size - 1)) != 0 || (p->z3fastmem[i].size != 0 && p->z3fastmem[i].size < 0x100000))
 		{
 			error_log (_T("Unsupported Zorro III fastmem size %d (0x%x)."), p->z3fastmem[i].size, p->z3fastmem[i].size);
@@ -607,7 +610,7 @@ void fixup_prefs (struct uae_prefs *p, bool userconfig)
 		error_log (_T("Unsupported CPU Board RAM size."));
 	}
 
-	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+	for (i = 0; i < MAX_RTG_BOARDS; i++) {
 		struct rtgboardconfig *rbc = &p->rtgboards[i];
 		if (p->chipmem.size > 0x200000 && rbc->rtgmem_size && gfxboard_get_configtype(rbc) == 2) {
 			error_log(_T("You can't use Zorro II RTG and more than 2MB chip at the same time."));
@@ -666,7 +669,7 @@ void fixup_prefs (struct uae_prefs *p, bool userconfig)
 		p->z3chipmem.size = 0;
 		err = 1;
 	}
-	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+	for (i = 0; i < MAX_RTG_BOARDS; i++) {
 		if ((p->rtgboards[i].rtgmem_size > 0 && p->rtgboards[i].rtgmem_type == GFXBOARD_UAE_Z3) && p->address_space_24) {
 			error_log (_T("UAEGFX Z3 RTG can't be used if address space is 24-bit."));
 			p->rtgboards[i].rtgmem_size = 0;
@@ -911,9 +914,11 @@ static void parse_cmdline_2 (int argc, TCHAR **argv)
 static int diskswapper_cb (struct zfile *f, void *vrsd)
 {
 	int *num = (int*)vrsd;
+	int type;
+
 	if (*num >= MAX_SPARE_DRIVES)
 		return 1;
-	int type = zfile_gettype(f);
+	type = zfile_gettype(f);
 	if (type == ZFILE_DISKIMAGE || type == ZFILE_EXECUTABLE) {
 		_tcsncpy (currprefs.dfxlist[*num], zfile_getname (f), 255);
 		(*num)++;

@@ -47,7 +47,7 @@ extern void libretro_do_restart(int argc, TCHAR **argv);
 #define MAX_FLOPPY_DRIVES 4
 #endif
 
-#ifdef WIN32
+#if defined(WIN32) || defined(_XBOX)
 #define DIR_SEP_STR "\\"
 #define DIR_SEP_CHR '\\'
 #else

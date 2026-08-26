@@ -2048,7 +2048,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_DEBUG);libretro-uae.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);D:\develop\Github\xbox360\project\backups\libretro-uae\Debug\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\uae\Debug\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -3213,7 +3213,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>$(OutDir)$(ProjectName).pdb</ProgramDatabaseFile>
       <AdditionalDependencies>$(COMMON_LIBS_XBOX_RELEASE);libretro-uae.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);D:\develop\Github\xbox360\project\backups\libretro-uae\Release\Xbox 360</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_XBOX);$(ProjectDir)libretro\uae\Release\Xbox 360</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>
       </IgnoreSpecificDefaultLibraries>
       <OptimizeReferences>true</OptimizeReferences>
@@ -4340,7 +4340,7 @@
       <FloatingPointExceptions>false</FloatingPointExceptions>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);D:\develop\Github\xbox360\project\backups\libretro-uae\Debug\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);$(ProjectDir)libretro\uae\Debug\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);libretro-uae.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
@@ -5385,7 +5385,7 @@
       <CompileAsManaged>false</CompileAsManaged>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);D:\develop\Github\xbox360\project\backups\libretro-uae\Release\Win32</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ADDITIONAL_LIB_DIRS_WIN);$(ProjectDir)libretro\uae\Release\Win32</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(COMMON_LIBS_WIN);libretro-uae.lib</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT.lib</IgnoreSpecificDefaultLibraries>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>

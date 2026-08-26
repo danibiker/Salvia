@@ -28,6 +28,15 @@
 #define MAX_STOP 30000
 #endif
 
+#ifndef MAX
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#endif
+
+#ifdef _XBOX
+#undef NO_STRICT
+extern int xbox_stat(const char *path, struct stat *st);
+#endif
+
 /* Config parse copypasta from cfgfile.c */
 static const TCHAR *cscompa[] = {
    _T("-"), _T("Generic"), _T("CDTV"), _T("CDTV-CR"), _T("CD32"), _T("A500"), _T("A500+"), _T("A600"),
@@ -78,7 +87,7 @@ unsigned short int retrox_crop = 0;
 unsigned short int retroy_crop = 0;
 float aspect_ratio = 0;
 
-extern int bplcon0;
+extern uae_u16 bplcon0;
 extern int detected_screen_resolution;
 extern int diwlastword_total;
 extern int diwfirstword_total;
@@ -406,9 +415,10 @@ void retro_fastforwarding(bool enabled)
 
 static bool paula_playing(void)
 {
+   unsigned i;
    if (paula_sndbuffer[0])
    {
-      for (unsigned i = 2; i < 20; i++)
+      for (i = 2; i < 20; i++)
       {
          int target = (i % 2 == 0) ? 0 : 1;
          if (paula_sndbuffer[i] != paula_sndbuffer[target])
@@ -699,23 +709,23 @@ static bool is_hdf_rdb(const char *path)
 static void retro_set_paths(void)
 {
    const char *system_dir = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir) && system_dir)
+   const char *content_dir = NULL;
+   const char *save_dir = NULL;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, (void *)&system_dir) && system_dir)
    {
       strlcpy(retro_system_directory,
               system_dir,
               sizeof(retro_system_directory));
    }
 
-   const char *content_dir = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY, &content_dir) && content_dir)
+   if (environ_cb(RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY, (void *)&content_dir) && content_dir)
    {
       strlcpy(retro_content_directory,
               content_dir,
               sizeof(retro_content_directory));
    }
 
-   const char *save_dir = NULL;
-   if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &save_dir) && save_dir)
+   if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, (void *)&save_dir) && save_dir)
    {
       /* If save directory is defined use it, otherwise use system directory */
       strlcpy(retro_save_directory,
@@ -771,6 +781,11 @@ static void free_puae_core_options(void)
 
 static void retro_set_core_options()
 {
+   int i = 0;
+   int j = 0;
+   int hotkey = 0;
+   int hotkeys_skipped = 0;
+
    /* Core categories */
    static struct retro_core_option_v2_category option_cats_us[] =
    {
@@ -880,7 +895,7 @@ static void retro_set_core_options()
             { "A4040", "A4000/040 (v3.1, 2M Chip + 8M Fast)" },
             { NULL, NULL },
          },
-         "A500"
+         "A600"
       },
       {
          "puae_model_hd",
@@ -898,7 +913,12 @@ static void retro_set_core_options()
             { "A4040", "A4000/040 (v3.1, 2M Chip + 8M Fast)" },
             { NULL, NULL },
          },
+#ifdef _XBOX
+		 "A600"
+#else
          "A1200"
+#endif
+
       },
       {
          "puae_model_cd",
@@ -1569,7 +1589,11 @@ static void retro_set_core_options()
             { "2", NULL },
             { NULL, NULL },
          },
+#ifdef _XBOX
+		 "1"
+#else
          "disabled"
+#endif
       },
       {
          "puae_gfx_gamma",
@@ -1606,7 +1630,7 @@ static void retro_set_core_options()
             { "24bit", "24-bit (XRGB8888)" },
             { NULL, NULL },
          },
-#if defined(VITA) || defined(__SWITCH__) || defined(DINGUX) || defined(ANDROID)
+#if defined(VITA) || defined(__SWITCH__) || defined(DINGUX) || defined(ANDROID) || defined(_XBOX)
          "16bit"
 #else
          "24bit"
@@ -2241,11 +2265,11 @@ static void retro_set_core_options()
          "puae_mapper_select",
          "RetroPad > Select",
          "Select",
-         "VKBD comes up with RetroPad Select by default.",
+         "",
          NULL,
          "retropad",
          {{ NULL, NULL }},
-         "TOGGLE_VKBD"
+         "---"
       },
       {
          "puae_mapper_start",
@@ -2265,7 +2289,7 @@ static void retro_set_core_options()
          NULL,
          "retropad",
          {{ NULL, NULL }},
-         ""
+         "MOUSE_LEFT_BUTTON"
       },
       {
          "puae_mapper_r",
@@ -2275,7 +2299,7 @@ static void retro_set_core_options()
          NULL,
          "retropad",
          {{ NULL, NULL }},
-         ""
+         "MOUSE_RIGHT_BUTTON"
       },
       {
          "puae_mapper_l2",
@@ -2285,7 +2309,7 @@ static void retro_set_core_options()
          NULL,
          "retropad",
          {{ NULL, NULL }},
-         "MOUSE_LEFT_BUTTON"
+         "---"
       },
       {
          "puae_mapper_r2",
@@ -2295,17 +2319,17 @@ static void retro_set_core_options()
          NULL,
          "retropad",
          {{ NULL, NULL }},
-         "MOUSE_RIGHT_BUTTON"
+         "---"
       },
       {
          "puae_mapper_l3",
          "RetroPad > L3",
          "L3",
-         "",
+         "VKBD comes up with RetroPad Select by default.",
          NULL,
          "retropad",
          {{ NULL, NULL }},
-         "---"
+         "TOGGLE_VKBD"
       },
       {
          "puae_mapper_r3",
@@ -2516,13 +2540,15 @@ static void retro_set_core_options()
       { NULL, NULL, NULL, NULL, NULL, NULL, {{0}}, NULL },
    };
 
+   struct retro_core_options_v2 options_us = {
+      option_cats_us,
+      option_defs_us
+   };
+   unsigned version = 0;
+
    free_puae_core_options();
 
    /* Fill in the values for all the mappers */
-   int i = 0;
-   int j = 0;
-   int hotkey = 0;
-   int hotkeys_skipped = 0;
    /* Count special hotkeys */
    while (retro_keys[j].value[0] && j < RETRO_NUM_CORE_OPTION_VALUES_MAX - 1)
    {
@@ -2712,12 +2738,6 @@ static void retro_set_core_options()
       ++i;
    }
 
-   struct retro_core_options_v2 options_us = {
-      option_cats_us,
-      option_defs_us
-   };
-
-   unsigned version = 0;
    if (!environ_cb(RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION, &version))
       version = 0;
 
@@ -3016,8 +3036,6 @@ static void retro_set_inputs(void)
       { nonport_controllers, sizeof(nonport_controllers) / sizeof(nonport_controllers[0]) },
       { NULL, 0 }
    };
-   
-   environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
 
    #define RETRO_DESCRIPTOR_BLOCK(_user)                                                                        \
    { _user, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, "Up" },                                          \
@@ -3052,6 +3070,8 @@ static void retro_set_inputs(void)
       {0},
    };
    #undef RETRO_DESCRIPTOR_BLOCK
+
+   environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
 
    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, &input_descriptors);
 
@@ -3248,6 +3268,10 @@ static bool retro_update_display(void)
 
 void retro_set_environment(retro_environment_t cb)
 {
+   bool support_no_game = true;
+   struct retro_led_interface led_interface;
+   struct retro_vfs_interface_info vfs_iface_info;
+
    environ_cb = cb;
 
    /* Must set these here for the dynamic cartridge option */
@@ -3256,16 +3280,13 @@ void retro_set_environment(retro_environment_t cb)
    retro_set_core_options();
    retro_set_inputs();
 
-   bool support_no_game = true;
    environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &support_no_game);
 
-   struct retro_led_interface led_interface;
    if (environ_cb(RETRO_ENVIRONMENT_GET_LED_INTERFACE, &led_interface))
       if (led_interface.set_led_state && !led_state_cb)
          led_state_cb = led_interface.set_led_state;
 
 #ifdef USE_LIBRETRO_VFS
-   struct retro_vfs_interface_info vfs_iface_info;
    vfs_iface_info.required_interface_version = 2;
    vfs_iface_info.iface                      = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface_info))
@@ -3369,6 +3390,7 @@ static void retro_set_geometry(unsigned video_config, bool init)
 static void update_variables(void)
 {
    struct retro_variable var = {0};
+   unsigned i;
 
    uae_model_config[0] = '\0';
    uae_config[0]       = '\0';
@@ -4091,7 +4113,7 @@ static void update_variables(void)
          if (changed_prefs.floppy_read_only != currprefs.floppy_read_only)
          {
             currprefs.floppy_read_only = changed_prefs.floppy_read_only;
-            for (unsigned i = 0; i < MAX_FLOPPY_DRIVES; i++)
+            for (i = 0; i < MAX_FLOPPY_DRIVES; i++)
             {
                if (      string_is_empty(changed_prefs.floppyslots[i].df)
                      && !string_is_empty(dc->files[i]))
@@ -4124,7 +4146,7 @@ static void update_variables(void)
             if (!opt_floppy_write_redirect)
                floppy_close_redirect(-1);
 
-            for (unsigned i = 0; i < MAX_FLOPPY_DRIVES; i++)
+            for (i = 0; i < MAX_FLOPPY_DRIVES; i++)
             {
                if (      string_is_empty(changed_prefs.floppyslots[i].df)
                      && !string_is_empty(dc->files[i]))
@@ -4160,7 +4182,7 @@ static void update_variables(void)
 
       /* Setting volume in realtime will crash on first pass */
       if (libretro_runloop_active)
-         for (unsigned i = 0; i < MAX_FLOPPY_DRIVES; i++)
+         for (i = 0; i < MAX_FLOPPY_DRIVES; i++)
             changed_prefs.dfxclickvolume_disk[i] = atoi(val);
    }
 
@@ -4202,7 +4224,7 @@ static void update_variables(void)
 
       if (libretro_runloop_active)
       {
-         for (unsigned i = 0; i < MAX_FLOPPY_DRIVES; i++)
+         for (i = 0; i < MAX_FLOPPY_DRIVES; i++)
          {
             if (!strcmp(var.value, "internal"))
             {
@@ -4410,8 +4432,9 @@ static void update_variables(void)
          opt_horizontal_offset_auto = true;
       else
       {
+         int new_horizontal_offset;
          opt_horizontal_offset_auto = false;
-         int new_horizontal_offset = atoi(var.value);
+         new_horizontal_offset = atoi(var.value);
          if (new_horizontal_offset >= -40 && new_horizontal_offset <= 40)
             opt_horizontal_offset = -new_horizontal_offset;
       }
@@ -4831,6 +4854,8 @@ static void update_variables(void)
 /* Disk Control */
 bool retro_disk_set_eject_state(bool ejected)
 {
+   unsigned i;
+
    if (dc)
    {
       if (dc->eject_state == ejected)
@@ -4878,7 +4903,7 @@ bool retro_disk_set_eject_state(bool ejected)
             case DC_IMAGE_TYPE_FLOPPY:
             case DC_IMAGE_TYPE_ARCHIVE:
                /* Need to remove duplicates from external drives */
-               for (unsigned i = 1; i < MAX_FLOPPY_DRIVES; i++)
+               for (i = 1; i < MAX_FLOPPY_DRIVES; i++)
                   if (!strcmp(currprefs.floppyslots[i].df, dc->files[dc->index]))
                   {
                      changed_prefs.floppyslots[i].df[0] = 0;
@@ -5061,8 +5086,8 @@ static struct retro_disk_control_ext_callback disk_interface_ext = {
 
 static void fallback_log(enum retro_log_level level, const char *fmt, ...)
 {
-   (void)level;
    va_list va;
+   (void)level;
    va_start(va, fmt);
    vfprintf(stderr, fmt, va);
    va_end(va);
@@ -5071,6 +5096,11 @@ static void fallback_log(enum retro_log_level level, const char *fmt, ...)
 void retro_init(void)
 {
    struct retro_log_callback log;
+   unsigned dci_version = 0;
+   static struct retro_keyboard_callback keyboard_callback = {retro_keyboard_event};
+   struct retro_core_options_update_display_callback update_display_callback = {retro_update_display};
+   bool achievements = true;
+
    log_cb = fallback_log;
    if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
       log_cb = log.log;
@@ -5084,18 +5114,15 @@ void retro_init(void)
 
    /* Disk Control interface */
    dc = dc_create();
-   unsigned dci_version = 0;
    if (environ_cb(RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION, &dci_version) && (dci_version >= 1))
       environ_cb(RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE, &disk_interface_ext);
    else
       environ_cb(RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE, &disk_interface);
 
    /* Keyboard callback */
-   static struct retro_keyboard_callback keyboard_callback = {retro_keyboard_event};
    environ_cb(RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, &keyboard_callback);
 
    /* Core option display callback */
-   struct retro_core_options_update_display_callback update_display_callback = {retro_update_display};
    environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK, &update_display_callback);
 
    /* > Ensure save state de-serialization file
@@ -5114,7 +5141,6 @@ void retro_init(void)
    if (environ_cb(RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE, NULL))
       libretro_supports_ff_override = true;
 
-   bool achievements = true;
    environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS, &achievements);
 
    memset(retro_bmp, 0, sizeof(retro_bmp));
@@ -5322,6 +5348,7 @@ void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb)
 
 void retro_audio_queue(const int16_t *data, int32_t samples)
 {
+   int x;
    if ((samples < 1) || !libretro_runloop_active)
       return;
 
@@ -5331,7 +5358,7 @@ void retro_audio_queue(const int16_t *data, int32_t samples)
    memcpy(output_audio_buffer.data + output_audio_buffer.size, data, samples * sizeof(*output_audio_buffer.data));
    output_audio_buffer.size += samples;
 #else
-   for (int x = 0; x < samples; x += 2) audio_cb(data[x], data[x + 1]);
+   for (x = 0; x < samples; x += 2) audio_cb(data[x], data[x + 1]);
 #endif
 }
 
@@ -5562,21 +5589,26 @@ static void retro_config_boot_hd(void)
       }
       if (path_is_valid(boothd_hdf))
       {
-         tmp_str = string_replace_substring(boothd_hdf, strlen(boothd_hdf), "\\", strlen("\\"), "\\\\", strlen("\\\\"));
+         /* hardfile2 es 'min': la contrabarra va literal, sin duplicar. Ademas
+          * is_hdf_rdb() de abajo abre esta misma ruta, y con las barras
+          * duplicadas dependia de que la API del sistema las colapsara. */
+         tmp_str = strdup(boothd_hdf);
 
          /* Detect RDB */
-         bool hdf_rdb = is_hdf_rdb(tmp_str);
-
-         if (hdf_rdb)
-            retro_config_append("hardfile2=rw,%s:\"%s\",0,0,0,512,0,,uae0\n", volume, tmp_str);
-         else
          {
-            /* Guesstimate surfaces */
-            unsigned surfaces = 1;
-            if ((fsize(tmp_str) / 1024) >= (1024 * 1024))
-               surfaces = 16;
+            bool hdf_rdb = is_hdf_rdb(tmp_str);
 
-            retro_config_append("hardfile2=rw,%s:\"%s\",32,%d,2,512,0,,uae0\n", volume, tmp_str, surfaces);
+            if (hdf_rdb)
+               retro_config_append("hardfile2=rw,%s:\"%s\",0,0,0,512,0,,uae0\n", volume, tmp_str);
+            else
+            {
+               /* Guesstimate surfaces */
+               unsigned surfaces = 1;
+               if ((fsize(tmp_str) / 1024) >= (1024 * 1024))
+                  surfaces = 16;
+
+               retro_config_append("hardfile2=rw,%s:\"%s\",32,%d,2,512,0,,uae0\n", volume, tmp_str, surfaces);
+            }
          }
       }
    }
@@ -5593,7 +5625,8 @@ static void retro_config_boot_hd(void)
       }
       if (path_is_directory(boothd_path))
       {
-         tmp_str = string_replace_substring(boothd_path, strlen(boothd_path), "\\", strlen("\\"), "\\\\", strlen("\\\\"));
+         /* filesystem2 es 'min': la contrabarra va literal, sin duplicar. */
+         tmp_str = strdup(boothd_path);
          retro_config_append("filesystem2=rw,%s:%s:\"%s\",0\n", volume, label, tmp_str);
       }
       else
@@ -5691,11 +5724,18 @@ static void retro_config_kickstart(void)
    if (!string_is_empty(uae_kickstart_ext))
    {
       char kickstart_ext[RETRO_PATH_MAX];
+      struct stat kickstart_st;
+      char flash_filename[RETRO_PATH_MAX];
+      char flash_filepath[RETRO_PATH_MAX];
+
       path_join(kickstart_ext, retro_system_directory, uae_kickstart_ext);
 
       /* Decide if CD32 ROM is combined based on filesize */
-      struct stat kickstart_st;
+#ifdef _XBOX
+      xbox_stat(kickstart, &kickstart_st);
+#else
       stat(kickstart, &kickstart_st);
+#endif
 
       /* Verify extended ROM if external */
       if (kickstart_st.st_size <= ROM_SIZE_512)
@@ -5751,8 +5791,6 @@ static void retro_config_kickstart(void)
       }
 
       /* NVRAM */
-      char flash_filename[RETRO_PATH_MAX];
-      char flash_filepath[RETRO_PATH_MAX];
       /* Shared */
       if (opt_shared_nvram || string_is_empty(full_path))
       {
@@ -5778,7 +5816,7 @@ static void retro_config_kickstart(void)
 static void retro_config_harddrives(void)
 {
    char *tmp_str = NULL;
-   int8_t i      = 0;
+   unsigned int i      = 0;
    uint8_t unit  = 0;
 
    if (!dc->count)
@@ -5812,9 +5850,7 @@ static void retro_config_harddrives(void)
          tmp_str = strdup(tmp_str_path);
       }
 
-#ifdef WIN32
-      tmp_str = string_replace_substring(tmp_str, strlen(tmp_str), "\\", strlen("\\"), "\\\\", strlen("\\\\"));
-#endif
+      /* filesystem2 es 'min': la contrabarra va literal, sin duplicar. */
 
       /* LHAs read-only */
       if (strendswith(dc->files[i], "lha"))
@@ -5939,7 +5975,11 @@ static void whdload_kscopy(bool legacy)
 
       if (valid && !path_is_valid(ks_dst))
       {
+#ifdef _XBOX
+         xbox_stat(ks_src, &ks_stat);
+#else
          stat(ks_src, &ks_stat);
+#endif
 
          /* Allow size exception */
          if (     ks_stat.st_size != ks_size[x]
@@ -6115,6 +6155,8 @@ static char* emu_config(int config)
    char custom_config_path[RETRO_PATH_MAX] = {0};
    char custom_config_file[RETRO_PATH_MAX] = {0};
    char temp[255];
+   FILE *custom_config_fp;
+   char filebuf[RETRO_PATH_MAX];
 
    /* Reset Kickstart */
    uae_kickstart[0] = '\0';
@@ -6126,8 +6168,6 @@ static char* emu_config(int config)
    {
       log_cb(RETRO_LOG_INFO, "Appending model preset: \"%s\"...\n", custom_config_path);
 
-      FILE *custom_config_fp;
-      char filebuf[RETRO_PATH_MAX];
       if ((custom_config_fp = fopen(custom_config_path, "r")))
       {
          while (fgets(filebuf, sizeof(filebuf), custom_config_fp))
@@ -6362,6 +6402,48 @@ static void retro_config_preset(const char *model)
 static bool retro_create_config(void)
 {
    char *tmp_str      = NULL;
+
+   /* C89 hoisted declarations */
+   char browsed_file[RETRO_PATH_MAX];
+   int zip_mode;
+   FILE *zip_m3u;
+   char zip_m3u_list[DC_MAX_SIZE][RETRO_PATH_MAX];
+   char zip_m3u_path[RETRO_PATH_MAX];
+   int zip_m3u_num;
+   RDIR *zip_dir;
+   char *zip_lastfile;
+   unsigned m3u;
+   unsigned i;
+   int l;
+   FILE *whdload_prefs_fp;
+   char whdload_prefs_path[RETRO_PATH_MAX];
+   char whdload_prefs_gz_path[RETRO_PATH_MAX];
+   FILE *whdload_prefs_gz_fp;
+   FILE *whdload_prefs_new_fp;
+   char whdload_prefs_new_path[RETRO_PATH_MAX];
+   char whdload_prefs_backup_path[RETRO_PATH_MAX];
+   char whdload_buf[256];
+   char whdload_buf_row[256];
+   char whdload_buf_new[4096];
+   char whdload_c_path[RETRO_PATH_MAX];
+   char whdload_files_zip_path[RETRO_PATH_MAX];
+   FILE *whdload_files_zip_fp;
+   char whdload_theme_path[RETRO_PATH_MAX];
+   char whdload_theme_default_path[RETRO_PATH_MAX];
+   char whdload_theme_native_path[RETRO_PATH_MAX];
+   char whdsaves_path[RETRO_PATH_MAX];
+   char whdload_hdf_gz_path[RETRO_PATH_MAX];
+   FILE *whdload_hdf_gz_fp;
+   char whdsaves_hdf_path[RETRO_PATH_MAX];
+   char whdsaves_hdf_gz_path[RETRO_PATH_MAX];
+   FILE *whdsaves_hdf_gz_fp;
+   FILE *configfile_custom;
+   char filebuf[RETRO_PATH_MAX];
+   char configfile_path[RETRO_PATH_MAX];
+   FILE *configfile;
+   char *token;
+   char uae_full_config_temp[UAE_CONFIG_SIZE];
+
    uae_full_config[0] = '\0';
 
    /* Model preset */
@@ -6376,7 +6458,7 @@ static bool retro_create_config(void)
       retro_config_preset(opt_model);
 
    /* "Browsed" file in ZIP */
-   char browsed_file[RETRO_PATH_MAX] = {0};
+   memset(browsed_file, 0, sizeof(browsed_file));
    if (!string_is_empty(full_path) && (strstr(full_path, ".zip#") || strstr(full_path, ".7z#")))
    {
       char *token = strtok(full_path, "#");
@@ -6405,21 +6487,19 @@ static bool retro_create_config(void)
             sevenzip_uncompress(full_path, retro_temp_directory, NULL);
 
          /* Default to directory mode */
-         int zip_mode = 0;
+         zip_mode = 0;
          snprintf(full_path, sizeof(full_path), "%s", retro_temp_directory);
 
-         FILE *zip_m3u;
-         char zip_m3u_list[DC_MAX_SIZE][RETRO_PATH_MAX] = {0};
-         char zip_m3u_path[RETRO_PATH_MAX] = {0};
+         memset(zip_m3u_list, 0, sizeof(zip_m3u_list));
+         memset(zip_m3u_path, 0, sizeof(zip_m3u_path));
          snprintf(zip_m3u_path, sizeof(zip_m3u_path), "%s%s%s.m3u",
                utf8_to_local_string_alloc(retro_temp_directory),
                DIR_SEP_STR,
                utf8_to_local_string_alloc(zip_basename));
-         int zip_m3u_num = 0;
+         zip_m3u_num = 0;
 
-         RDIR *zip_dir;
          zip_dir = retro_opendir(retro_temp_directory);
-         char *zip_lastfile = {0};
+         zip_lastfile = NULL;
          while (retro_readdir(zip_dir))
          {
             const char *name = retro_dirent_get_name(zip_dir);
@@ -6491,7 +6571,7 @@ static bool retro_create_config(void)
                zip_m3u = fopen(zip_m3u_path, "w");
                if (zip_m3u)
                {
-                  for (unsigned l = 0; l < zip_m3u_num; l++)
+                  for (l = 0; l < zip_m3u_num; l++)
                      fprintf(zip_m3u, "%s\n", zip_m3u_list[l]);
                   fclose(zip_m3u);
                }
@@ -6502,7 +6582,7 @@ static bool retro_create_config(void)
       }
 
       /* Inspect M3U */
-      unsigned m3u = 0;
+      m3u = 0;
       if (strendswith(full_path, "m3u"))
          m3u = dc_inspect_m3u(full_path);
 
@@ -6621,7 +6701,7 @@ static bool retro_create_config(void)
 
                /* Some debugging */
                log_cb(RETRO_LOG_INFO, "M3U parsed, %d file(s) found\n", dc->count);
-               for (unsigned i = 0; i < dc->count; i++)
+               for (i = 0; i < dc->count; i++)
                   log_cb(RETRO_LOG_DEBUG, "File %d: %s\n", i + 1, dc->files[i]);
             }
             /* Single file */
@@ -6674,18 +6754,14 @@ static bool retro_create_config(void)
                      break;
                }
 
-               FILE *whdload_prefs_fp;
-               char whdload_prefs_path[RETRO_PATH_MAX];
                path_join(whdload_prefs_path, retro_system_directory, "WHDLoad.prefs");
 
                if (!path_is_valid(whdload_prefs_path))
                {
                   log_cb(RETRO_LOG_INFO, "WHDLoad.prefs \"%s\" not found, attempting to create...\n", whdload_prefs_path);
 
-                  char whdload_prefs_gz_path[RETRO_PATH_MAX];
                   path_join(whdload_prefs_gz_path, retro_system_directory, "WHDLoad.prefs.gz");
 
-                  FILE *whdload_prefs_gz_fp;
                   if ((whdload_prefs_gz_fp = fopen(whdload_prefs_gz_path, "wb")))
                   {
                      /* Write GZ */
@@ -6700,16 +6776,13 @@ static bool retro_create_config(void)
                      log_cb(RETRO_LOG_ERROR, "Unable to create WHDLoad.prefs: \"%s\".\n", whdload_prefs_path);
                }
 
-               FILE *whdload_prefs_new_fp;
-               char whdload_prefs_new_path[RETRO_PATH_MAX];
                path_join(whdload_prefs_new_path, retro_system_directory, "WHDLoad.prefs_new");
 
-               char whdload_prefs_backup_path[RETRO_PATH_MAX];
                path_join(whdload_prefs_backup_path, retro_system_directory, "WHDLoad.prefs_backup");
 
-               char whdload_buf[256]      = {0};
-               char whdload_buf_row[256]  = {0};
-               char whdload_buf_new[4096] = {0};
+               memset(whdload_buf, 0, sizeof(whdload_buf));
+               memset(whdload_buf_row, 0, sizeof(whdload_buf_row));
+               memset(whdload_buf_new, 0, sizeof(whdload_buf_new));
                if ((whdload_prefs_fp = fopen(whdload_prefs_path, "r")))
                {
                   bool whdload_prefs_changes  = false;
@@ -6781,26 +6854,23 @@ static bool retro_create_config(void)
                   }
                }
 
-               /* WHDLoad file mode */
-               if (opt_use_whdload == 1)
-               {
-                  char whdload_path[RETRO_PATH_MAX];
-                  path_join(whdload_path, retro_save_directory, "WHDLoad");
+                /* WHDLoad file mode */
+                if (opt_use_whdload == 1)
+                {
+                   char whdload_path[RETRO_PATH_MAX];
+                   path_join(whdload_path, retro_save_directory, "WHDLoad");
 
-                  char whdload_c_path[RETRO_PATH_MAX];
-                  path_join(whdload_c_path, retro_save_directory, "WHDLoad/C");
+                   path_join(whdload_c_path, retro_save_directory, "WHDLoad/C");
 
                   /* Verify WHDLoad */
                   if (!path_is_directory(whdload_path) || (path_is_directory(whdload_path) && !path_is_directory(whdload_c_path)))
                   {
-                     log_cb(RETRO_LOG_INFO, "WHDLoad image directory \"%s\" not found, attempting to create...\n", whdload_path);
-                     path_mkdir(whdload_path);
+                      log_cb(RETRO_LOG_INFO, "WHDLoad image directory \"%s\" not found, attempting to create...\n", whdload_path);
+                      path_mkdir(whdload_path);
 
-                     char whdload_files_zip_path[RETRO_PATH_MAX];
-                     path_join(whdload_files_zip_path, retro_save_directory, "WHDLoad_files.zip");
+                      path_join(whdload_files_zip_path, retro_save_directory, "WHDLoad_files.zip");
 
-                     FILE *whdload_files_zip_fp;
-                     if ((whdload_files_zip_fp = fopen(whdload_files_zip_path, "wb")))
+                      if ((whdload_files_zip_fp = fopen(whdload_files_zip_path, "wb")))
                      {
                         /* Write ZIP */
                         fwrite(___whdload_WHDLoad_files_zip, ___whdload_WHDLoad_files_zip_len, 1, whdload_files_zip_fp);
@@ -6817,11 +6887,15 @@ static bool retro_create_config(void)
                   /* Attach directory */
                   if (path_is_directory(whdload_path) && path_is_directory(whdload_c_path))
                   {
-#ifdef WIN32
-                     tmp_str = string_replace_substring(whdload_path, strlen(whdload_path), "\\", strlen("\\"), "\\\\", strlen("\\\\"));
-#else
+                     /* Sin duplicar las barras: cfgfile.c escribe el rootdir de
+                      * filesystem2/hardfile2 con cfgfile_escape_min() y lo lee con
+                      * cfgfile_unescape(..., min=true). En modo 'min' la rama de la
+                      * contrabarra esta desactivada en LAS DOS (cfgfile.c:596 y :402),
+                      * o sea que ahi la contrabarra es literal y nadie deshace un
+                      * escapado. Duplicarlas dejaba rootdir como 'game:\\data\\...'.
+                      * En Win32 no se notaba porque la API colapsa separadores
+                      * repetidos; fuera de Win32 no tiene por que. */
                      tmp_str = strdup(whdload_path);
-#endif
                      retro_config_append("filesystem2=rw,WHDLoad:WHDLoad:\"%s\",0\n", tmp_str);
                      free(tmp_str);
                      tmp_str = NULL;
@@ -6834,11 +6908,8 @@ static bool retro_create_config(void)
                         whdload_prefs_copy();
 
                      /* Rename theme prefs if necessary */
-                     char whdload_theme_path[RETRO_PATH_MAX];
                      path_join(whdload_theme_path, retro_save_directory, "WHDLoad/Devs/system-configuration");
-                     char whdload_theme_default_path[RETRO_PATH_MAX];
                      path_join(whdload_theme_default_path, retro_save_directory, "WHDLoad/Devs/system-configuration-default");
-                     char whdload_theme_native_path[RETRO_PATH_MAX];
                      path_join(whdload_theme_native_path, retro_save_directory, "WHDLoad/Devs/system-configuration-native");
 
                      /* Default (black) */
@@ -6878,18 +6949,14 @@ static bool retro_create_config(void)
                   }
 
                   /* Verify WHDSaves */
-                  char whdsaves_path[RETRO_PATH_MAX];
                   path_join(whdsaves_path, retro_save_directory, "WHDSaves");
                   if (!path_is_directory(whdsaves_path))
                      path_mkdir(whdsaves_path);
                   /* Attach directory */
                   if (path_is_directory(whdsaves_path))
                   {
-#ifdef WIN32
-                     tmp_str = string_replace_substring(whdsaves_path, strlen(whdsaves_path), "\\", strlen("\\"), "\\\\", strlen("\\\\"));
-#else
+                     /* filesystem2 es 'min': la contrabarra va literal, sin duplicar. */
                      tmp_str = strdup(whdsaves_path);
-#endif
                      retro_config_append("filesystem2=rw,WHDSaves:WHDSaves:\"%s\",0\n", tmp_str);
                      free(tmp_str);
                      tmp_str = NULL;
@@ -6908,10 +6975,8 @@ static bool retro_create_config(void)
                   {
                      log_cb(RETRO_LOG_INFO, "WHDLoad image file \"%s\" not found, attempting to create...\n", whdload_hdf_path);
 
-                     char whdload_hdf_gz_path[RETRO_PATH_MAX];
                      path_join(whdload_hdf_gz_path, retro_save_directory, "WHDLoad.hdf.gz");
 
-                     FILE *whdload_hdf_gz_fp;
                      if ((whdload_hdf_gz_fp = fopen(whdload_hdf_gz_path, "wb")))
                      {
                         /* Write GZ */
@@ -6928,23 +6993,22 @@ static bool retro_create_config(void)
                   /* Attach HDF */
                   if (path_is_valid(whdload_hdf_path))
                   {
-                     tmp_str = string_replace_substring(whdload_hdf_path, strlen(whdload_hdf_path), "\\", strlen("\\"), "\\\\", strlen("\\\\"));
+                     /* hardfile2 es 'min': la contrabarra va literal, sin duplicar. */
+                     tmp_str = strdup(whdload_hdf_path);
                      retro_config_append("hardfile2=rw,WHDLoad:\"%s\",32,1,2,512,0,,uae0\n", tmp_str);
                      free(tmp_str);
                      tmp_str = NULL;
                   }
 
                   /* Verify WHDSaves.hdf */
-                  char whdsaves_hdf_path[RETRO_PATH_MAX] = {0};
+                  memset(whdsaves_hdf_path, 0, sizeof(whdsaves_hdf_path));
                   path_join(whdsaves_hdf_path, retro_save_directory, "WHDSaves.hdf");
                   if (!path_is_valid(whdsaves_hdf_path))
                   {
                      log_cb(RETRO_LOG_INFO, "WHDSaves image file \"%s\" not found, attempting to create...\n", whdsaves_hdf_path);
 
-                     char whdsaves_hdf_gz_path[RETRO_PATH_MAX];
                      path_join(whdsaves_hdf_gz_path, retro_save_directory, "WHDSaves.hdf.gz");
 
-                     FILE *whdsaves_hdf_gz_fp;
                      if ((whdsaves_hdf_gz_fp = fopen(whdsaves_hdf_gz_path, "wb")))
                      {
                         /* Write GZ */
@@ -6961,18 +7025,16 @@ static bool retro_create_config(void)
                   /* Attach HDF */
                   if (path_is_valid(whdsaves_hdf_path))
                   {
-                     tmp_str = string_replace_substring(whdsaves_hdf_path, strlen(whdsaves_hdf_path), "\\", strlen("\\"), "\\\\", strlen("\\\\"));
+                     /* hardfile2 es 'min': la contrabarra va literal, sin duplicar. */
+                     tmp_str = strdup(whdsaves_hdf_path);
                      retro_config_append("hardfile2=rw,WHDSaves:\"%s\",32,1,2,512,0,,uae0\n", tmp_str);
                      free(tmp_str);
                      tmp_str = NULL;
                   }
 
                   /* Attach retro_system_directory as a read only hard drive for WHDLoad kickstarts/prefs/key */
-#ifdef WIN32
-                  tmp_str = string_replace_substring(retro_system_directory, strlen(retro_system_directory), "\\", strlen("\\"), "\\\\", strlen("\\\\"));
-#else
+                  /* filesystem2 es 'min': la contrabarra va literal, sin duplicar. */
                   tmp_str = strdup(retro_system_directory);
-#endif
                   retro_config_append("filesystem2=ro,RASystem:RASystem:\"%s\",-128\n", tmp_str);
                   free(tmp_str);
                   tmp_str = NULL;
@@ -6995,7 +7057,7 @@ static bool retro_create_config(void)
 
                /* Some debugging */
                log_cb(RETRO_LOG_INFO, "M3U parsed, %d file(s) found\n", dc->count);
-               for (unsigned i = 0; i < dc->count; i++)
+               for (i = 0; i < dc->count; i++)
                   log_cb(RETRO_LOG_DEBUG, "File %d: %s\n", i + 1, dc->files[i]);
             }
             /* Single file */
@@ -7161,7 +7223,7 @@ static bool retro_create_config(void)
 
             /* Some debugging */
             log_cb(RETRO_LOG_INFO, "M3U parsed, %d file(s) found\n", dc->count);
-            for (unsigned i = 0; i < dc->count; i++)
+            for (i = 0; i < dc->count; i++)
                log_cb(RETRO_LOG_DEBUG, "File %d: %s\n", i + 1, dc->files[i]);
          }
          /* Single file */
@@ -7211,8 +7273,6 @@ static bool retro_create_config(void)
          dc_reset(dc);
 
          /* Iterate parsed file and append all rows to the temporary config */
-         FILE *configfile_custom;
-         char filebuf[RETRO_PATH_MAX];
          if ((configfile_custom = fopen(full_path, "r")))
          {
             while (fgets(filebuf, sizeof(filebuf), configfile_custom))
@@ -7313,14 +7373,11 @@ static bool retro_create_config(void)
    }
 
    /* Iterate global config file and append all rows to the temporary config */
-   char configfile_path[RETRO_PATH_MAX];
    path_join(configfile_path, retro_save_directory, LIBRETRO_PUAE_PREFIX "_global.uae");
    if (path_is_valid(configfile_path))
    {
       log_cb(RETRO_LOG_INFO, "Appending global configuration: \"%s\".\n", configfile_path);
 
-      FILE *configfile;
-      char filebuf[RETRO_PATH_MAX];
       if ((configfile = fopen(configfile_path, "r")))
       {
          while (fgets(filebuf, sizeof(filebuf), configfile))
@@ -7341,8 +7398,6 @@ static bool retro_create_config(void)
    {
       log_cb(RETRO_LOG_INFO, "Appending content configuration: \"%s\".\n", configfile_path);
 
-      FILE *configfile;
-      char filebuf[RETRO_PATH_MAX];
       if ((configfile = fopen(configfile_path, "r")))
       {
          while (fgets(filebuf, sizeof(filebuf), configfile))
@@ -7368,12 +7423,10 @@ static bool retro_create_config(void)
    if (cpu_cycle_exact_force)
       log_cb(RETRO_LOG_INFO, "Forcing Cycle-exact.\n");
 
-   /* Scan for specific rows and print the final config in debug log for copypaste purposes */
+    /* Scan for specific rows and print the final config in debug log for copypaste purposes */
    log_cb(RETRO_LOG_DEBUG, "Generated config:\n");
    log_cb(RETRO_LOG_DEBUG, "-----------------\n");
 
-   char *token;
-   char uae_full_config_temp[UAE_CONFIG_SIZE];
    strlcpy(uae_full_config_temp, uae_full_config, sizeof(uae_full_config_temp));
    for (token = strtok(uae_full_config_temp, "\n"); token; token = strtok(NULL, "\n"))
    {
@@ -8081,6 +8134,9 @@ static bool retro_update_av_info(void)
    unsigned base_height_old    = retroh_crop;
    float    aspect_ratio_old   = aspect_ratio;
 
+   struct retro_system_av_info new_av_info;
+   int statusbar_position_offset;
+
    static bool fake_ntsc_maybe = false;
    if (fake_ntsc)
       hz = currprefs.cr[CHIPSET_REFRESH_NTSC].rate;
@@ -8488,7 +8544,6 @@ static bool retro_update_av_info(void)
    update_video_center_horizontal();
 
    /* Fetch default av_info (not current!) */
-   struct retro_system_av_info new_av_info;
    retro_get_system_av_info(&new_av_info);
 
    /* Cropped geometry update */
@@ -8499,7 +8554,7 @@ static bool retro_update_av_info(void)
       new_av_info.geometry.aspect_ratio = retro_get_aspect_ratio(retrow_crop, retroh_crop, false);
 
       /* Ensure statusbar stays visible at the bottom */
-      int statusbar_position_offset = retroh - retroh_crop - retroy_crop - opt_statusbar_position_offset;
+      statusbar_position_offset = retroh - retroh_crop - retroy_crop - opt_statusbar_position_offset;
       if (opt_statusbar_position >= 0)
       {
          opt_statusbar_position = statusbar_position_offset;
@@ -8727,18 +8782,20 @@ bool retro_load_game(const struct retro_game_info *info)
    save_state_file_size = currprefs.chipmem.size + currprefs.bogomem.size + currprefs.fastmem[0].size + currprefs.z3fastmem[0].size;
    save_state_file_size += 128 * 1000;
 
-   struct retro_memory_descriptor memdesc[] = {
-      {RETRO_MEMDESC_SYSTEM_RAM, chipmem_bank.baseaddr, 0, 0, 0, 0, chipmem_bank.allocated_size, "CHIP"},
-      {RETRO_MEMDESC_SYSTEM_RAM, bogomem_bank.baseaddr, 0, 0, 0, 0, bogomem_bank.allocated_size, "SLOW"},
-      {RETRO_MEMDESC_SYSTEM_RAM, fastmem_bank[0].baseaddr, 0, 0, 0, 0, fastmem_bank[0].allocated_size, "FAST"}
-   };
+   {
+      struct retro_memory_descriptor memdesc[] = {
+         {RETRO_MEMDESC_SYSTEM_RAM, chipmem_bank.baseaddr, 0, 0, 0, 0, chipmem_bank.allocated_size, "CHIP"},
+         {RETRO_MEMDESC_SYSTEM_RAM, bogomem_bank.baseaddr, 0, 0, 0, 0, bogomem_bank.allocated_size, "SLOW"},
+         {RETRO_MEMDESC_SYSTEM_RAM, fastmem_bank[0].baseaddr, 0, 0, 0, 0, fastmem_bank[0].allocated_size, "FAST"}
+      };
 
-   struct retro_memory_map mmap = {
-      memdesc,
-      sizeof(memdesc) / sizeof(memdesc[0])
-   };
+      struct retro_memory_map mmap = {
+         memdesc,
+         sizeof(memdesc) / sizeof(memdesc[0])
+      };
 
-   environ_cb(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, &mmap);
+      environ_cb(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, &mmap);
+   }
    return true;
 }
 

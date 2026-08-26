@@ -418,7 +418,9 @@ static void makefir(void)
 	float *FIRTable = firmem + FIR_WIDTH;
 	float yscale = (float)currprefs.sound_freq / (float)PAULARATE;
 	float xscale = pi * yscale;
-	for (int i = -FIR_WIDTH; i <= FIR_WIDTH; i++)
+	int i;
+
+	for (i = -FIR_WIDTH; i <= FIR_WIDTH; i++)
 		FIRTable[i] = yscale * Sinc((float)(i) * xscale) * Hamming((float)(i) / (float)(FIR_WIDTH - 1));
 }
 
@@ -638,8 +640,9 @@ static void sinc_prehandler_paula (unsigned long best_evtime)
 	struct audio_channel_data2 *acd;
 
 	for (i = 0; i < AUDIO_CHANNELS_PAULA; i++)  {
+		int vol;
 		acd = audio_data[i];
-		int vol = acd->mixvol;
+		vol = acd->mixvol;
 		output = (acd->current_sample * vol) & acd->adk_mask;
 
 		/* if output state changes, record the state change and also
@@ -705,6 +708,8 @@ static void get_extra_channels(int *data1, int *data2, int sample1, int sample2)
 {
 	int d1 = *data1 + sample1;
 	int d2 = (data2 ? *data2 : 0) + sample2;
+	int needswap;
+
 	if (d1 < -32768)
 		d1 = -32768;
 	if (d1 > 32767)
@@ -713,7 +718,7 @@ static void get_extra_channels(int *data1, int *data2, int sample1, int sample2)
 		d2 = -32768;
 	if (d2 > 32767)
 		d2 = 32767;
-	int needswap = currprefs.sound_stereo_swap_paula ^ currprefs.sound_stereo_swap_ahi;
+	needswap = currprefs.sound_stereo_swap_paula ^ currprefs.sound_stereo_swap_ahi;
 	if (needswap) {
 		*data1 = d2;
 		if (data2)
@@ -734,8 +739,9 @@ static void do_extra_channels(int idx, int ch, int *data1, int *data2, int *data
 		get_extra_channels(data1, data2, datas[0], datas[1]);
 	} else if (ch == 1) {
 		int datas[1];
+		int d1;
 		samplexx_anti_handler(datas, idx, 1);
-		int d1 = *data1 + datas[0];
+		d1 = *data1 + datas[0];
 		if (d1 < -32768)
 			d1 = -32768;
 		if (d1 > 32767)
@@ -756,10 +762,13 @@ static void do_extra_channels(int idx, int ch, int *data1, int *data2, int *data
 
 static void get_extra_channels_sample2(int *data1, int *data2, int mode)
 {
+	int idx;
+	int i;
+
 	if (!audio_total_extra_streams)
 		return;
-	int idx = 0;
-	for (int i = 0; i < AUDIO_CHANNEL_STREAMS; i++) {
+	idx = 0;
+	for (i = 0; i < AUDIO_CHANNEL_STREAMS; i++) {
 		int ch = audio_extra_streams[i];
 		if (ch) {
 			do_extra_channels(idx, ch, data1, data2, NULL, NULL, NULL, NULL);
@@ -770,10 +779,13 @@ static void get_extra_channels_sample2(int *data1, int *data2, int mode)
 
 static void get_extra_channels_sample6(int *data1, int *data2, int *data3, int *data4, int *data5, int *data6, int mode)
 {
+	int idx;
+	int i;
+
 	if (!audio_total_extra_streams)
 		return;
-	int idx = 0;
-	for (int i = 0; i < AUDIO_CHANNEL_STREAMS; i++) {
+	idx = 0;
+	for (i = 0; i < AUDIO_CHANNEL_STREAMS; i++) {
 		int ch = audio_extra_streams[i];
 		if (ch) {
 			do_extra_channels(idx, ch, data1, data2, data3, data4, data5, data6);
@@ -1557,7 +1569,9 @@ static void update_volume(int nr, uae_u16 v)
 uae_u16 audio_dmal(void)
 {
 	uae_u16 dmal = 0;
-	for (int nr = 0; nr < AUDIO_CHANNELS_PAULA; nr++) {
+	int nr;
+
+	for (nr = 0; nr < AUDIO_CHANNELS_PAULA; nr++) {
 		struct audio_channel_data *cdp = audio_channel + nr;
 		if (cdp->dr)
 			dmal |= 1 << (nr * 2 + 1);
@@ -2056,8 +2070,10 @@ static void audio_state_channel (int nr, bool perfin)
 
 void audio_state_machine (void)
 {
+	int nr;
+
 	update_audio ();
-	for (int nr = 0; nr < AUDIO_CHANNELS_PAULA; nr++) {
+	for (nr = 0; nr < AUDIO_CHANNELS_PAULA; nr++) {
 		struct audio_channel_data *cdp = audio_channel + nr;
 		if (audio_state_channel2(nr, false)) {
 			cdp->dat_written = false;
@@ -2091,7 +2107,7 @@ void audio_reset (void)
 		}
 	}
 	audio_total_extra_streams = 0;
-	for (int i = 0; i < AUDIO_CHANNEL_STREAMS; i++) {
+	for (i = 0; i < AUDIO_CHANNEL_STREAMS; i++) {
 		audio_extra_streams[i] = 0;
 	}
 	last_cycles = get_cycles ();
@@ -2148,8 +2164,7 @@ static float rc_calculate_a0 (int sample_rate, int cutoff_freq)
 	* stop frequency more exactly, but the filter becomes less steep further
 	* from stopband. */
 	omega = (float)softfloat_tan (omega / 2.0f) * 2.0f;
-	float out = 1.0f / (1.0f + 1.0f / omega);
-	return out;
+	return 1.0f / (1.0f + 1.0f / omega);
 }
 
 void check_prefs_changed_audio (void)
@@ -2188,6 +2203,8 @@ void set_audio (void)
 	int old_mixed_size = mixed_stereo_size;
 	int sep, delay;
 	int ch;
+	/* C89 hoisted declarations */
+	int i;
 
 	ch = sound_prefs_changed ();
 	if (ch >= 0)
@@ -2315,7 +2332,7 @@ void set_audio (void)
 	} else if (sample_handler == sample16si_anti_handler || sample_handler == sample16i_anti_handler || sample_handler == sample16ss_anti_handler) {
 		sample_prehandler = anti_prehandler;
 	}
-	for (int i = 0; i < AUDIO_CHANNELS_PAULA; i++) {
+	for (i = 0; i < AUDIO_CHANNELS_PAULA; i++) {
 		struct audio_channel_data *cdp = audio_channel + i;
 		audio_data[i] = &cdp->data;
 		if (currprefs.sound_volcnt) {
@@ -2340,13 +2357,18 @@ void set_audio (void)
 
 static void update_audio_volcnt(int cycles, float evtime, bool nextsmp)
 {
+	/* C89 hoisted declarations */
+	int i, j;
+	float frac;
+
 	if (cycles) {
-		for (int i = 0; i < AUDIO_CHANNELS_PAULA; i++) {
+		for (i = 0; i < AUDIO_CHANNELS_PAULA; i++) {
 			struct audio_channel_data *cdp = audio_channel + i;
 			union sIntFlt v;
+			int cycs;
 			v.U32 = ((cdp->data.new_sample ^ 0x80) << 15) | 0x40000000;
 			v.F32 -= 3.0;
-			int cycs = cycles;
+			cycs = cycles;
 			while (cycs > 0) {
 				if (cdp->volcnt < cdp->data.audvol) {
 					cdp->volcntbuf[cdp->volcntbufcnt] = v.F32;
@@ -2363,13 +2385,14 @@ static void update_audio_volcnt(int cycles, float evtime, bool nextsmp)
 	}
 	if (!nextsmp)
 		return;
-	float frac = evtime - (int)evtime;
-	for (int i = 0; i < AUDIO_CHANNELS_PAULA; i++) {
+	frac = evtime - (int)evtime;
+	for (i = 0; i < AUDIO_CHANNELS_PAULA; i++) {
 		struct audio_channel_data *cdp = audio_channel + i;
 		float out0 = 0, out1 = 0;
 		int offs = (cdp->volcntbufcnt - FIR_WIDTH - 1) & (VOLCNT_BUFFER_SIZE - 1);
 		float v = cdp->volcntbuf[offs];
-		for (int j = 1; j < 2 * FIR_WIDTH - 1; j++) {
+		float out;
+		for (j = 1; j < 2 * FIR_WIDTH - 1; j++) {
 			float w = firmem[j];
 			out0 += v * w;
 			offs++;
@@ -2377,7 +2400,7 @@ static void update_audio_volcnt(int cycles, float evtime, bool nextsmp)
 			v = cdp->volcntbuf[offs];
 			out1 += v * w;
 		}
-		float out = out0 + frac * (out1 - out0);
+		out = out0 + frac * (out1 - out0);
 		out *= 8192;
 
 		cdp->data.last_sample = cdp->data.current_sample;
@@ -2405,6 +2428,7 @@ void update_audio (void)
 		uae_u32 best_evtime = n_cycles + 1;
 		uae_u32 rounded;
 		int i;
+		float nevtime;
 
 		for (i = 0; i < AUDIO_CHANNELS_PAULA; i++) {
 			if (audio_channel[i].evtime != MAX_EV && best_evtime > audio_channel[i].evtime)
@@ -2417,7 +2441,7 @@ void update_audio (void)
 
 		/* next_sample_evtime >= 0 so floor() behaves as expected */
 		rounded = (uae_u32)floorf (next_sample_evtime);
-		float nevtime = next_sample_evtime;
+		nevtime = next_sample_evtime;
 		if ((next_sample_evtime - rounded) >= 0.5)
 			rounded++;
 
@@ -2587,6 +2611,7 @@ void AUDxDAT_addr(int nr, uae_u16 v, uaecptr addr)
 {
 	struct audio_channel_data *cdp = audio_channel + nr;
 	int chan_ena = (dmacon & DMA_MASTER) && (dmacon & (1 << nr));
+	uae_u32 vv;
 
 #if DEBUG_AUDIO2
 	if (debugchannel(nr)) {
@@ -2613,7 +2638,7 @@ void AUDxDAT_addr(int nr, uae_u16 v, uaecptr addr)
 		cdp->dat = v;
 		cdp->dat_written = true;
 	}
-	uae_u32 vv = nr | (chan_ena ? 0x80 : 0) | (v << 8);
+	vv = nr | (chan_ena ? 0x80 : 0) | (v << 8);
 	if (!currprefs.cachesize && (cdp->per < PERIOD_LOW * CYCLE_UNIT || currprefs.cpu_compatible)) {
 		int cyc = 0;
 		if (chan_ena) {
@@ -2718,11 +2743,12 @@ void AUDxLCL(int nr, uae_u16 v)
 void AUDxPER (int nr, uae_u16 v)
 {
 	struct audio_channel_data *cdp = audio_channel + nr;
+	int per;
 
 	audio_activate ();
 	update_audio ();
 
-	int per = (v ? v : 65536) * CYCLE_UNIT;
+	per = (v ? v : 65536) * CYCLE_UNIT;
 	if (per < PERIOD_MIN * CYCLE_UNIT) {
 		/* smaller values would cause extremely high cpu usage */
 		per = PERIOD_MIN * CYCLE_UNIT;
@@ -2858,12 +2884,14 @@ void restore_audio_start(void)
 uae_u8 *restore_audio (int nr, uae_u8 *src)
 {
 	struct audio_channel_data *acd = audio_channel + nr;
+	uae_u8 flags;
+	uae_u16 p;
 
 	zerostate(nr, true);
 	acd->state = restore_u8 ();
 	acd->data.audvol = restore_u8 ();
 	acd->intreq2 = restore_u8 () ? true : false;
-	uae_u8 flags = restore_u8 ();
+	flags = restore_u8 ();
 	acd->dr = acd->dsr = false;
 	if (flags & 1)
 		acd->dr = true;
@@ -2871,7 +2899,7 @@ uae_u8 *restore_audio (int nr, uae_u8 *src)
 		acd->dsr = true;
 	acd->len = restore_u16 ();
 	acd->wlen = restore_u16 ();
-	uae_u16 p = restore_u16 ();
+	p = restore_u16 ();
 	acd->per = p ? p * CYCLE_UNIT : PERIOD_MAX;
 	acd->dat = acd->dat2 = restore_u16 ();
 	acd->lc = restore_u32 ();
@@ -2917,11 +2945,13 @@ uae_u8 *save_audio (int nr, size_t *len, uae_u8 *dstptr)
 static void audio_set_extra_channels(void)
 {
 	int index = AUDIO_CHANNELS_PAULA;
+	int i, j;
+
 	audio_total_extra_streams = 0;
-	for (int i = 0; i < AUDIO_CHANNEL_STREAMS; i++) {
+	for (i = 0; i < AUDIO_CHANNEL_STREAMS; i++) {
 		if (audio_extra_streams[i])
 			audio_total_extra_streams++;
-		for (int j = 0; j < audio_extra_streams[i]; j++) {
+		for (j = 0; j < audio_extra_streams[i]; j++) {
 			audio_data[index++] = &audio_stream[i].data[j];
 		}
 	}
@@ -2930,18 +2960,22 @@ static void audio_set_extra_channels(void)
 
 int audio_enable_stream(bool enable, int streamid, int ch, SOUND_STREAM_CALLBACK cb, void *cb_data)
 {
+	/* C89 hoisted declarations */
+	struct audio_stream_data *asd;
+	int i;
+
 	if (streamid == 0)
 		return 0;
 	if (!enable) {
 		if (streamid <= 0)
 			return 0;
 		streamid--;
-		struct audio_stream_data *asd = audio_stream + streamid;
+		asd = audio_stream + streamid;
 		audio_extra_streams[streamid] = 0;
 		asd->evtime = MAX_EV;
 	} else {
 		if (streamid < 0) {
-			for (int i = 0; i < AUDIO_CHANNEL_STREAMS; i++) {
+			for (i = 0; i < AUDIO_CHANNEL_STREAMS; i++) {
 				if (!audio_extra_streams[i]) {
 					streamid = i;
 					break;
@@ -2951,11 +2985,11 @@ int audio_enable_stream(bool enable, int streamid, int ch, SOUND_STREAM_CALLBACK
 				return 0;
 		}
 		audio_extra_streams[streamid] = ch;
-		struct audio_stream_data *asd = audio_stream + streamid;
+		asd = audio_stream + streamid;
 		asd->cb = cb;
 		asd->cb_data = cb_data;
 		asd->evtime = CYCLE_UNIT;
-		for (int i = 0; i < ch; i++) {
+		for (i = 0; i < ch; i++) {
 			struct audio_channel_data2 *acd = &asd->data[i];
 			acd->adk_mask = 0xffffffff;
 			acd->mixvol = 1;
@@ -2968,13 +3002,16 @@ int audio_enable_stream(bool enable, int streamid, int ch, SOUND_STREAM_CALLBACK
 
 void audio_state_stream_state(int streamid, int *samplep, int highestch, unsigned int evt)
 {
+	struct audio_stream_data *asd;
+	int i;
+
 	streamid--;
-	struct audio_stream_data *asd = audio_stream + streamid;
+	asd = audio_stream + streamid;
 	if (highestch > audio_extra_streams[streamid]) {
 		audio_extra_streams[streamid] = highestch;
 		audio_set_extra_channels();
 	}
-	for (int i = 0; i < audio_extra_streams[streamid]; i++) {
+	for (i = 0; i < audio_extra_streams[streamid]; i++) {
 		struct audio_channel_data2 *acd = &asd->data[i];
 		acd->last_sample = acd->current_sample;
 		acd->current_sample = samplep ? samplep[i] : 0;
@@ -2992,7 +3029,9 @@ void update_cda_sound(float clk)
 
 void audio_cda_volume(struct cd_audio_state *cas, int left, int right)
 {
-	for (int j = 0; j < 2; j++) {
+	int j;
+
+	for (j = 0; j < 2; j++) {
 		cas->cda_volume[j] = j == 0 ? left : right;
 		cas->cda_volume[j] = sound_cd_volume[j] * cas->cda_volume[j] / 32768;
 		if (cas->cda_volume[j])
@@ -3005,6 +3044,8 @@ void audio_cda_volume(struct cd_audio_state *cas, int left, int right)
 static bool audio_state_cda(int streamid, void *state)
 {
 	struct cd_audio_state *cas = (struct cd_audio_state*)state;
+	int samples[2];
+
 	if (cas->cda_bufptr >= dummy_buffer && cas->cda_bufptr <= dummy_buffer + 4) {
 		audio_enable_stream(false, cas->cda_streamid, 0, NULL, NULL);
 		cas->cda_streamid = 0;
@@ -3012,7 +3053,6 @@ static bool audio_state_cda(int streamid, void *state)
 	}
 	if (cas->cda_streamid <= 0)
 		return false;
-	int samples[2];
 	samples[0] = cas->cda_bufptr[0] * cas->cda_volume[0] / 32768;
 	samples[1] = cas->cda_bufptr[1] * cas->cda_volume[1] / 32768;
 	audio_state_stream_state(streamid, samples, 2, cda_evt);

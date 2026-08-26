@@ -315,7 +315,8 @@ static struct cputracestruct cputrace;
 #if CPUTRACE_DEBUG
 static void validate_trace (void)
 {
-	for (int i = 0; i < cputrace.memoryoffset; i++) {
+	int i;
+	for (i = 0; i < cputrace.memoryoffset; i++) {
 		struct cputracememory *ctm = &cputrace.ctm[i];
 		if (ctm->data == 0xdeadf00d) {
 			write_log (_T("unfinished write operation %d %08x\n"), i, ctm->addr);
@@ -332,12 +333,13 @@ static void debug_trace (void)
 
 STATIC_INLINE void clear_trace (void)
 {
+	struct cputracememory *ctm;
 #if CPUTRACE_DEBUG
 	validate_trace ();
 #endif
 	if (cputrace.memoryoffset == MAX_CPUTRACESIZE)
 		return;
-	struct cputracememory *ctm = &cputrace.ctm[cputrace.memoryoffset++];
+	ctm = &cputrace.ctm[cputrace.memoryoffset++];
 	if (cputrace.memoryoffset == MAX_CPUTRACESIZE) {
 		write_log(_T("CPUTRACE overflow, stopping tracing.\n"));
 		return;
@@ -348,12 +350,13 @@ STATIC_INLINE void clear_trace (void)
 }
 static void set_trace (uaecptr addr, int accessmode, int size)
 {
+	struct cputracememory *ctm;
 #if CPUTRACE_DEBUG
 	validate_trace ();
 #endif
 	if (cputrace.memoryoffset == MAX_CPUTRACESIZE)
 		return;
-	struct cputracememory *ctm = &cputrace.ctm[cputrace.memoryoffset++];
+	ctm = &cputrace.ctm[cputrace.memoryoffset++];
 	if (cputrace.memoryoffset == MAX_CPUTRACESIZE) {
 		write_log(_T("CPUTRACE overflow, stopping tracing.\n"));
 		return;
@@ -371,14 +374,16 @@ static void set_trace (uaecptr addr, int accessmode, int size)
 }
 static void add_trace (uaecptr addr, uae_u32 val, int accessmode, int size)
 {
+	int mode;
+	struct cputracememory *ctm;
 	if (cputrace.memoryoffset < 1) {
 #if CPUTRACE_DEBUG
 		write_log (_T("add_trace memoryoffset=%d!\n"), cputrace.memoryoffset);
 #endif
 		return;
 	}
-	int mode = accessmode | (size << 4);
-	struct cputracememory *ctm = &cputrace.ctm[cputrace.memoryoffset - 1];
+	mode = accessmode | (size << 4);
+	ctm = &cputrace.ctm[cputrace.memoryoffset - 1];
 	ctm->addr = addr;
 	ctm->data = val;
 	if (!ctm->mode) {
@@ -440,7 +445,8 @@ static bool check_trace (void)
 static bool get_trace(uaecptr addr, int accessmode, int size, uae_u32 *data)
 {
 	int mode = accessmode | (size << 4);
-	for (int i = 0; i < cputrace.memoryoffset; i++) {
+	int i;
+	for (i = 0; i < cputrace.memoryoffset; i++) {
 		struct cputracememory *ctm = &cputrace.ctm[i];
 		if (ctm->addr == addr && ctm->mode == mode) {
 			ctm->mode = 0;
@@ -507,8 +513,9 @@ static bool get_trace(uaecptr addr, int accessmode, int size, uae_u32 *data)
 static uae_u32 cputracefunc_x_prefetch (int o)
 {
 	uae_u32 pc = m68k_getpc ();
+	uae_u32 v;
 	set_trace (pc + o, 2, 2);
-	uae_u32 v = x2_prefetch (o);
+	v = x2_prefetch (o);
 	add_trace (pc + o, v, 2, 2);
 	return v;
 }
@@ -525,16 +532,18 @@ static uae_u32 cputracefunc2_x_prefetch (int o)
 static uae_u32 cputracefunc_x_next_iword (void)
 {
 	uae_u32 pc = m68k_getpc ();
+	uae_u32 v;
 	set_trace (pc, 2, 2);
-	uae_u32 v = x2_next_iword ();
+	v = x2_next_iword ();
 	add_trace (pc, v, 2, 2);
 	return v;
 }
 static uae_u32 cputracefunc_x_next_ilong (void)
 {
 	uae_u32 pc = m68k_getpc ();
+	uae_u32 v;
 	set_trace (pc, 2, 4);
-	uae_u32 v = x2_next_ilong ();
+	v = x2_next_ilong ();
 	add_trace (pc, v, 2, 4);
 	return v;
 }
@@ -560,24 +569,27 @@ static uae_u32 cputracefunc2_x_next_ilong (void)
 static uae_u32 cputracefunc_x_get_ilong (int o)
 {
 	uae_u32 pc = m68k_getpc ();
+	uae_u32 v;
 	set_trace (pc + o, 2, 4);
-	uae_u32 v = x2_get_ilong (o);
+	v = x2_get_ilong (o);
 	add_trace (pc + o, v, 2, 4);
 	return v;
 }
 static uae_u32 cputracefunc_x_get_iword (int o)
 {
 	uae_u32 pc = m68k_getpc ();
+	uae_u32 v;
 	set_trace (pc + o, 2, 2);
-	uae_u32 v = x2_get_iword (o);
+	v = x2_get_iword (o);
 	add_trace (pc + o, v, 2, 2);
 	return v;
 }
 static uae_u32 cputracefunc_x_get_ibyte (int o)
 {
 	uae_u32 pc = m68k_getpc ();
+	uae_u32 v;
 	set_trace (pc + o, 2, 1);
-	uae_u32 v = x2_get_ibyte (o);
+	v = x2_get_ibyte (o);
 	add_trace (pc + o, v, 2, 1);
 	return v;
 }
@@ -611,22 +623,25 @@ static uae_u32 cputracefunc2_x_get_ibyte (int o)
 
 static uae_u32 cputracefunc_x_get_long (uaecptr o)
 {
+	uae_u32 v;
 	set_trace (o, 0, 4);
-	uae_u32 v = x2_get_long (o);
+	v = x2_get_long (o);
 	add_trace (o, v, 0, 4);
 	return v;
 }
 static uae_u32 cputracefunc_x_get_word (uaecptr o)
 {
+	uae_u32 v;
 	set_trace (o, 0, 2);
-	uae_u32 v = x2_get_word (o);
+	v = x2_get_word (o);
 	add_trace (o, v, 0, 2);
 	return v;
 }
 static uae_u32 cputracefunc_x_get_byte (uaecptr o)
 {
+	uae_u32 v;
 	set_trace (o, 0, 1);
-	uae_u32 v = x2_get_byte (o);
+	v = x2_get_byte (o);
 	add_trace (o, v, 0, 1);
 	return v;
 }
@@ -773,6 +788,7 @@ static void cputracefunc2_x_do_cycles_pre (int cycles)
 
 static void cputracefunc_x_do_cycles_post(int cycles, uae_u32 v)
 {
+	struct cputracememory *ctm;
 	if (cputrace.memoryoffset < 1) {
 #if CPUTRACE_DEBUG
 		write_log (_T("cputracefunc_x_do_cycles_post memoryoffset=%d!\n"), cputrace.memoryoffset);
@@ -780,7 +796,7 @@ static void cputracefunc_x_do_cycles_post(int cycles, uae_u32 v)
 		x2_do_cycles_post(cycles, v);
 		return;
 	}
-	struct cputracememory *ctm = &cputrace.ctm[cputrace.memoryoffset - 1];
+	ctm = &cputrace.ctm[cputrace.memoryoffset - 1];
 	ctm->data = v;
 	ctm->flags = 0;
 	cputrace.cyclecounter_post = cycles;
@@ -1504,9 +1520,10 @@ bool is_cpu_tracer (void)
 }
 bool set_cpu_tracer (bool state)
 {
+	int old;
 	if (cpu_tracer < 0)
 		return false;
-	int old = cpu_tracer;
+	old = cpu_tracer;
 	if (input_record)
 		state = true;
 	cpu_tracer = 0;
@@ -1525,8 +1542,9 @@ bool set_cpu_tracer (bool state)
 
 static void invalidate_cpu_data_caches(void)
 {
+	int i, j;
 	if (currprefs.cpu_model == 68030) {
-		for (int i = 0; i < CACHELINES030; i++) {
+		for (i = 0; i < CACHELINES030; i++) {
 			dcaches030[i].valid[0] = 0;
 			dcaches030[i].valid[1] = 0;
 			dcaches030[i].valid[2] = 0;
@@ -1534,8 +1552,8 @@ static void invalidate_cpu_data_caches(void)
 		}
 	} else if (currprefs.cpu_model >= 68040) {
 		dcachelinecnt = 0;
-		for (int i = 0; i < CACHESETS060; i++) {
-			for (int j = 0; j < CACHELINES040; j++) {
+		for (i = 0; i < CACHESETS060; i++) {
+			for (j = 0; j < CACHELINES040; j++) {
 				dcaches040[i].valid[j] = false;
 			}
 		}
@@ -1553,10 +1571,11 @@ static void flush_cpu_cache_debug(uaecptr addr, int size)
 void flush_cpu_caches(bool force)
 {
 	bool doflush = currprefs.cpu_compatible || currprefs.cpu_memory_cycle_exact;
+	int i, j;
 
 	if (currprefs.cpu_model == 68020) {
 		if ((regs.cacr & 0x08) || force) { // clear instr cache
-			for (int i = 0; i < CACHELINES020; i++)
+			for (i = 0; i < CACHELINES020; i++)
 				caches020[i].valid = 0;
 			regs.cacr &= ~0x08;
 #ifdef DEBUGGER
@@ -1573,7 +1592,7 @@ void flush_cpu_caches(bool force)
 	} else if (currprefs.cpu_model == 68030) {
 		if ((regs.cacr & 0x08) || force) { // clear instr cache
 			if (doflush) {
-				for (int i = 0; i < CACHELINES030; i++) {
+				for (i = 0; i < CACHELINES030; i++) {
 					icaches030[i].valid[0] = 0;
 					icaches030[i].valid[1] = 0;
 					icaches030[i].valid[2] = 0;
@@ -1594,7 +1613,7 @@ void flush_cpu_caches(bool force)
 		}
 		if ((regs.cacr & 0x800) || force) { // clear data cache
 			if (doflush) {
-				for (int i = 0; i < CACHELINES030; i++) {
+				for (i = 0; i < CACHELINES030; i++) {
 					dcaches030[i].valid[0] = 0;
 					dcaches030[i].valid[1] = 0;
 					dcaches030[i].valid[2] = 0;
@@ -1612,8 +1631,8 @@ void flush_cpu_caches(bool force)
 			mmu_flush_cache();
 			icachelinecnt = 0;
 			icachehalfline = 0;
-			for (int i = 0; i < CACHESETS060; i++) {
-				for (int j = 0; j < CACHELINES040; j++) {
+			for (i = 0; i < CACHESETS060; i++) {
+				for (j = 0; j < CACHELINES040; j++) {
 					icaches040[i].valid[j] = false;
 				}
 			}
@@ -1627,15 +1646,16 @@ void flush_cpu_caches(bool force)
 #if VALIDATE_68040_DATACACHE > 1
 static void validate_dcache040(void)
 {
-	for (int i = 0; i < cachedsets04060; i++) {
+	int i, j, k;
+	for (i = 0; i < cachedsets04060; i++) {
 		struct cache040 *c = &dcaches040[i];
-		for (int j = 0; j < CACHELINES040; j++) {
+		for (j = 0; j < CACHELINES040; j++) {
 			if (c->valid[j]) {
 				uae_u32 addr = (c->tag[j] & cachedtag04060mask) | (i << 4);
 				if (addr < 0x200000 || (addr >= 0xd80000 && addr < 0xe00000) || (addr >= 0xe80000 && addr < 0xf00000) || (addr >= 0xa00000 && addr < 0xc00000)) {
 					write_log(_T("Chip RAM or IO address cached! %08x\n"), addr);
 				}
-				for (int k = 0; k < 4; k++) {
+				for (k = 0; k < 4; k++) {
 					if (!c->dirty[j][k]) {
 						uae_u32 v = get_long(addr + k * 4);
 						if (v != c->data[j][k]) {
@@ -1652,6 +1672,7 @@ static void validate_dcache040(void)
 static void dcache040_push_line(int index, int line, bool writethrough, bool invalidate)
 {
 	struct cache040 *c = &dcaches040[index];
+	int i;
 #if VALIDATE_68040_DATACACHE
 	if (!c->valid[line]) {
 		write_log("dcache040_push_line pushing invalid line!\n");
@@ -1659,7 +1680,7 @@ static void dcache040_push_line(int index, int line, bool writethrough, bool inv
 #endif
 	if (c->gdirty[line]) {
 		uae_u32 addr = (c->tag[line] & cachedtag04060mask) | (index << 4);
-		for (int i = 0; i < 4; i++) {
+		for (i = 0; i < 4; i++) {
 			if (c->dirty[line][i] || (!writethrough && currprefs.cpu_model == 68060)) {
 				dcache_lput(addr + i * 4, c->data[line][i]);
 				c->dirty[line][i] = false;
@@ -1677,6 +1698,8 @@ static void dcache040_push_line(int index, int line, bool writethrough, bool inv
 
 static void flush_cpu_caches_040_2(int cache, int scope, uaecptr addr, bool push, bool pushinv)
 {
+	int k, i, j;
+	uae_u32 jw;
 #if VALIDATE_68040_DATACACHE
 	write_log(_T("push %d %d %d %08x %d %d\n"), cache, scope, areg, addr, push, pushinv);
 #endif
@@ -1687,15 +1710,15 @@ static void flush_cpu_caches_040_2(int cache, int scope, uaecptr addr, bool push
 	if (cache & 2) {
 		regs.prefetch020addr = 0xffffffff;
 	}
-	for (int k = 0; k < 2; k++) {
+	for (k = 0; k < 2; k++) {
 		if (cache & (1 << k)) {
 			if (scope == 3) {
 				// all
 				if (!k) {
 					// data
-					for (int i = 0; i < cachedsets04060; i++) {
+					for (i = 0; i < cachedsets04060; i++) {
 						struct cache040 *c = &dcaches040[i];
-						for (int j = 0; j < CACHELINES040; j++) {
+						for (j = 0; j < CACHELINES040; j++) {
 							if (c->valid[j]) {
 								if (push) {
 									dcache040_push_line(i, j, false, pushinv);
@@ -1720,7 +1743,7 @@ static void flush_cpu_caches_040_2(int cache, int scope, uaecptr addr, bool push
 					pagesize = 16;
 				}
 				addr &= ~(pagesize - 1);
-				for (uae_u32 j = 0; j < pagesize; j += 16, addr += 16) {
+				for (jw = 0; jw < pagesize; jw += 16, addr += 16) {
 					int index;
 					uae_u32 tag;
 					uae_u32 tagmask;
@@ -1738,7 +1761,7 @@ static void flush_cpu_caches_040_2(int cache, int scope, uaecptr addr, bool push
 						c = &dcaches040[index];
 					}
 					tag = addr & tagmask;
-					for (int i = 0; i < CACHELINES040; i++) {
+					for (i = 0; i < CACHELINES040; i++) {
 						if (c->valid[i] && c->tag[i] == tag) {
 							if (push) {
 								dcache040_push_line(index, i, false, pushinv);
@@ -1855,21 +1878,123 @@ void REGPARAM2 op_unimpl_1_noret(uae_u32 opcode)
 }
 
 
+/* Los nucleos de CPU no seleccionados en sysconfig.h (bloque UAE_MODEL_*)
+ * no se compilan, asi que su cpuemu_NN.c no existe en el proyecto. Aqui
+ * se sustituye cada tabla ausente por NULL para no dejar referencias
+ * pendientes en el enlazado. build_cpufunctbl() ya sabe degradar a un
+ * modo disponible cuando encuentra un NULL. */
+#ifdef CPUEMU_11
+#define CPUTBL_11 op_smalltbl_11
+#define CPUTBL_12 op_smalltbl_12
+#else
+#define CPUTBL_11 NULL
+#define CPUTBL_12 NULL
+#endif
+#ifdef CPUEMU_13
+#define CPUTBL_13 op_smalltbl_13
+#define CPUTBL_14 op_smalltbl_14
+#else
+#define CPUTBL_13 NULL
+#define CPUTBL_14 NULL
+#endif
+#ifdef CPUEMU_20
+#define CPUTBL_20 op_smalltbl_20
+#else
+#define CPUTBL_20 NULL
+#endif
+#ifdef CPUEMU_21
+#define CPUTBL_21 op_smalltbl_21
+#else
+#define CPUTBL_21 NULL
+#endif
+#ifdef CPUEMU_22
+#define CPUTBL_22 op_smalltbl_22
+#else
+#define CPUTBL_22 NULL
+#endif
+#ifdef CPUEMU_23
+#define CPUTBL_23 op_smalltbl_23
+#else
+#define CPUTBL_23 NULL
+#endif
+#ifdef CPUEMU_24
+#define CPUTBL_24 op_smalltbl_24
+#define CPUTBL_25 op_smalltbl_25
+#else
+#define CPUTBL_24 NULL
+#define CPUTBL_25 NULL
+#endif
+#ifdef CPUEMU_31
+#define CPUTBL_31 op_smalltbl_31
+#else
+#define CPUTBL_31 NULL
+#endif
+#ifdef CPUEMU_32
+#define CPUTBL_32 op_smalltbl_32
+#else
+#define CPUTBL_32 NULL
+#endif
+#ifdef CPUEMU_33
+#define CPUTBL_33 op_smalltbl_33
+#else
+#define CPUTBL_33 NULL
+#endif
+#ifdef CPUEMU_34
+#define CPUTBL_34 op_smalltbl_34
+#else
+#define CPUTBL_34 NULL
+#endif
+#ifdef CPUEMU_35
+#define CPUTBL_35 op_smalltbl_35
+#else
+#define CPUTBL_35 NULL
+#endif
+#ifdef CPUEMU_40
+#define CPUTBL_40 op_smalltbl_40
+#define CPUTBL_41 op_smalltbl_41
+#define CPUTBL_42 op_smalltbl_42
+#define CPUTBL_43 op_smalltbl_43
+#define CPUTBL_44 op_smalltbl_44
+#define CPUTBL_45 op_smalltbl_45
+#else
+#define CPUTBL_40 NULL
+#define CPUTBL_41 NULL
+#define CPUTBL_42 NULL
+#define CPUTBL_43 NULL
+#define CPUTBL_44 NULL
+#define CPUTBL_45 NULL
+#endif
+#ifdef CPUEMU_50
+#define CPUTBL_50 op_smalltbl_50
+#define CPUTBL_51 op_smalltbl_51
+#define CPUTBL_52 op_smalltbl_52
+#define CPUTBL_53 op_smalltbl_53
+#define CPUTBL_54 op_smalltbl_54
+#define CPUTBL_55 op_smalltbl_55
+#else
+#define CPUTBL_50 NULL
+#define CPUTBL_51 NULL
+#define CPUTBL_52 NULL
+#define CPUTBL_53 NULL
+#define CPUTBL_54 NULL
+#define CPUTBL_55 NULL
+#endif
+
 // generic+direct, generic+direct+jit, generic+indirect, more compatible, cycle-exact, mmu, mmu+more compatible, mmu+mc+ce
 static const struct cputbl *cputbls[6][8] =
 {
 	// 68000
-	{ op_smalltbl_5, op_smalltbl_45, op_smalltbl_55, op_smalltbl_12, op_smalltbl_14, NULL, NULL, NULL },
+	{ op_smalltbl_5, CPUTBL_45, CPUTBL_55, CPUTBL_12, CPUTBL_14, NULL, NULL, NULL },
 	// 68010
-	{ op_smalltbl_4, op_smalltbl_44, op_smalltbl_54, op_smalltbl_11, op_smalltbl_13, NULL, NULL, NULL },
+	{ op_smalltbl_4, CPUTBL_44, CPUTBL_54, CPUTBL_11, CPUTBL_13, NULL, NULL, NULL },
 	// 68020
-	{ op_smalltbl_3, op_smalltbl_43, op_smalltbl_53, op_smalltbl_20, op_smalltbl_21, NULL, NULL, NULL },
+	{ op_smalltbl_3, CPUTBL_43, CPUTBL_53, CPUTBL_20, CPUTBL_21, NULL, NULL, NULL },
 	// 68030
-	{ op_smalltbl_2, op_smalltbl_42, op_smalltbl_52, op_smalltbl_22, op_smalltbl_23, op_smalltbl_32, op_smalltbl_34, op_smalltbl_35 },
+	{ op_smalltbl_2, CPUTBL_42, CPUTBL_52, CPUTBL_22, CPUTBL_23, CPUTBL_32, CPUTBL_34, CPUTBL_35 },
 	// 68040
-	{ op_smalltbl_1, op_smalltbl_41, op_smalltbl_51, op_smalltbl_25, op_smalltbl_25, op_smalltbl_31, op_smalltbl_31, op_smalltbl_31 },
+	{ op_smalltbl_1, CPUTBL_41, CPUTBL_51, CPUTBL_25, CPUTBL_25, CPUTBL_31, CPUTBL_31, CPUTBL_31 },
 	// 68060
-	{ op_smalltbl_0, op_smalltbl_40, op_smalltbl_50, op_smalltbl_24, op_smalltbl_24, op_smalltbl_33, op_smalltbl_33, op_smalltbl_33 }
+	{ op_smalltbl_0, CPUTBL_40, CPUTBL_50, CPUTBL_24, CPUTBL_24, CPUTBL_33, CPUTBL_33, CPUTBL_33 }
 };
 
 #ifdef JIT
@@ -1896,6 +2021,8 @@ static void build_cpufunctbl (void)
 	uae_u32 opcode;
 	const struct cputbl *tbl = NULL;
 	int lvl, mode, jit;
+	char cpu_table_config[512] = {0};
+	char cpu_table_temp[64] = {0};
 
 	jit = 0;
 	if (!currprefs.cachesize) {
@@ -1927,6 +2054,25 @@ static void build_cpufunctbl (void)
 	if (lvl == 6)
 		lvl = 5;
 	tbl = cputbls[lvl][mode];
+
+	if (tbl == NULL && mode != 0) {
+		/* El nucleo pedido (prefetch / cycle-exact / JIT / MMU) no se ha
+		 * compilado: ver el bloque UAE_MODEL_* de sysconfig.h. Se degrada
+		 * al modo generico, que CPUEMU_0 garantiza siempre.
+		 * Hay que desactivar tambien los flags de prefs: el resto del
+		 * emulador (custom.c, cia.c, blitter) cambia de comportamiento
+		 * segun cpu_cycle_exact, y dejarlos activos con una tabla que no
+		 * los implementa da timings incoherentes. */
+		write_log(_T("CPU core %d not compiled in, falling back to generic (CPU=%d)"),
+			mode, currprefs.cpu_model);
+		mode = 0;
+		m68k_pc_indirect = 0;
+		currprefs.cpu_cycle_exact = changed_prefs.cpu_cycle_exact = false;
+		currprefs.cpu_memory_cycle_exact = changed_prefs.cpu_memory_cycle_exact = false;
+		currprefs.blitter_cycle_exact = changed_prefs.blitter_cycle_exact = false;
+		currprefs.cpu_compatible = changed_prefs.cpu_compatible = false;
+		tbl = cputbls[lvl][mode];
+	}
 
 	if (tbl == NULL) {
 		write_log (_T("no CPU emulation cores available CPU=%d!"), currprefs.cpu_model);
@@ -2025,7 +2171,7 @@ static void build_cpufunctbl (void)
 	if (jit) {
 		cpuop_func **tmp = xmalloc(cpuop_func*, 65536);
 		memcpy(tmp, cpufunctbl, sizeof(cpuop_func*) * 65536);
-		for (int i = 0; i < 65536; i++) {
+		for (i = 0; i < 65536; i++) {
 			int offset = do_byteswap_16(i);
 			cpufunctbl[offset] = tmp[i];
 		}
@@ -2044,8 +2190,7 @@ static void build_cpufunctbl (void)
 #endif
 
 #ifdef __LIBRETRO__
-	char cpu_table_config[512] = {0};
-	char cpu_table_temp[64] = {0};
+	
 
 	snprintf(cpu_table_temp, sizeof(cpu_table_temp), _T("CPU=%d, FPU=%d%s, MMU=%d, JIT%s=%d."),
 		currprefs.cpu_model,
@@ -2063,9 +2208,9 @@ static void build_cpufunctbl (void)
 	m68k_interrupt_delay = false;
 	m68k_accurate_ipl = false;
 	if (currprefs.cpu_cycle_exact) {
-		if (tbl == op_smalltbl_14 || tbl == op_smalltbl_13 || tbl == op_smalltbl_21 || tbl == op_smalltbl_23)
+		if (tbl == CPUTBL_14 || tbl == CPUTBL_13 || tbl == CPUTBL_21 || tbl == CPUTBL_23)
 			m68k_interrupt_delay = true;
-		if (tbl == op_smalltbl_14 || tbl == op_smalltbl_13)
+		if (tbl == CPUTBL_14 || tbl == CPUTBL_13)
 			m68k_accurate_ipl = true;
 	} else if (currprefs.cpu_compatible) {
 		if (currprefs.cpu_model <= 68010 && currprefs.m68k_speed == 0) {
@@ -2116,9 +2261,9 @@ static void build_cpufunctbl (void)
 	m68k_interrupt_delay = false;
 	m68k_accurate_ipl = false;
 	if (currprefs.cpu_cycle_exact) {
-		if (tbl == op_smalltbl_14 || tbl == op_smalltbl_13 || tbl == op_smalltbl_21 || tbl == op_smalltbl_23)
+		if (tbl == CPUTBL_14 || tbl == CPUTBL_13 || tbl == CPUTBL_21 || tbl == CPUTBL_23)
 			m68k_interrupt_delay = true;
-		if (tbl == op_smalltbl_14 || tbl == op_smalltbl_13)
+		if (tbl == CPUTBL_14 || tbl == CPUTBL_13)
 			m68k_accurate_ipl = true;
 	} else if (currprefs.cpu_compatible) {
 		if (currprefs.cpu_model <= 68010 && currprefs.m68k_speed == 0) {
@@ -2345,10 +2490,11 @@ void check_prefs_changed_cpu(void)
 
 void init_m68k (void)
 {
+	int i;
 	prefs_changed_cpu ();
 	update_68k_cycles ();
 
-	for (int i = 0 ; i < 256 ; i++) {
+	for (i = 0 ; i < 256 ; i++) {
 		int j;
 		for (j = 0 ; j < 8 ; j++) {
 			if (i & (1 << j)) break;
@@ -2803,6 +2949,8 @@ static void Exception_ce000 (int nr)
 	int start, interrupt;
 	int vector_nr = nr;
 	int frame_id = 0;
+	bool g1;
+	int i;
 
 	start = 6;
 	interrupt = nr >= 24 && nr < 24 + 8;
@@ -2829,7 +2977,7 @@ static void Exception_ce000 (int nr)
 	exception_debug (nr);
 	MakeSR ();
 
-	bool g1 = generates_group1_exception(regs.ir);
+	g1 = generates_group1_exception(regs.ir);
 	if (!regs.s) {
 		regs.usp = m68k_areg (regs, 7);
 		m68k_areg (regs, 7) = regs.isp;
@@ -2874,7 +3022,7 @@ static void Exception_ce000 (int nr)
 			m68k_areg(regs, 7) -= (29 - 4) * 2;
 			exception_in_exception = -1;
 			frame_id = 8;
-			for (int i = 0; i < 15; i++) {
+			for (i = 0; i < 15; i++) {
 				x_put_word(m68k_areg(regs, 7) + 20 + i * 2, ((i + 1) << 8) | ((i + 2) << 0));
 			}
 			x_put_word(m68k_areg(regs, 7) + 18, 0); // version
@@ -3194,6 +3342,7 @@ static void Exception_normal (int nr)
 	int interrupt;
 	int vector_nr = nr;
 	bool g1 = false;
+	bool used_exception_build_stack_frame = false;
 
 	cache_default_data |= CACHE_DISABLE_ALLOCATE;
 
@@ -3241,8 +3390,6 @@ static void Exception_normal (int nr)
 			return;
 		}
 	}
-	
-	bool used_exception_build_stack_frame = false;
 
 	if (currprefs.cpu_model > 68000) {
 		uae_u32 oldpc = regs.instruction_pc;
@@ -3623,6 +3770,7 @@ static void m68k_reset_sr(void)
 static void m68k_reset2(bool hardreset)
 {
 	uae_u32 v;
+	int i;
 
 	regs.halted = 0;
 	gui_data.cpu_halted = 0;
@@ -3631,7 +3779,7 @@ static void m68k_reset2(bool hardreset)
 	regs.spcflags = 0;
 	m68k_reset_delay = 0;
 	regs.ipl[0] = regs.ipl[1] = regs.ipl_pin = 0;
-	for (int i = 0; i < IRQ_SOURCE_MAX; i++) {
+	for (i = 0; i < IRQ_SOURCE_MAX; i++) {
 		uae_interrupts2[i] = 0;
 		uae_interrupts6[i] = 0;
 		uae_interrupt = 0;
@@ -4303,8 +4451,9 @@ static void check_uae_int_request(void)
 {
 	bool irq2 = false;
 	bool irq6 = false;
+	int i;
 	if (atomic_and(&uae_interrupt, 0)) {
-		for (int i = 0; i < IRQ_SOURCE_MAX; i++) {
+		for (i = 0; i < IRQ_SOURCE_MAX; i++) {
 			if (!irq2 && uae_interrupts2[i]) {
 				uae_atomic v = atomic_and(&uae_interrupts2[i], 0);
 				if (v) {
@@ -4347,9 +4496,9 @@ static void check_uae_int_request(void)
 
 void safe_interrupt_set(int num, int id, bool i6)
 {
+	volatile uae_atomic *p;
 	if (!is_mainthread()) {
 		set_special_exter(SPCFLAG_UAEINT);
-		volatile uae_atomic *p;
 		if (i6)
 			p = &uae_interrupts6[num];
 		else
@@ -4404,6 +4553,7 @@ int cpu_sleep_millis(int ms)
 static bool haltloop_do(int vsynctimeline, frame_time_t rpt_end, int lines)
 {
 	int ovpos = vpos;
+	frame_time_t d;
 	while (lines-- >= 0) {
 		ovpos = vpos;
 		while (ovpos == vpos) {
@@ -4437,7 +4587,7 @@ static bool haltloop_do(int vsynctimeline, frame_time_t rpt_end, int lines)
 #endif
 			if (event_wait)
 				break;
-			frame_time_t d = read_processor_time() - rpt_end;
+			d = read_processor_time() - rpt_end;
 			if (d < -2 * vsynctimeline || d >= 0)
 				break;
 		}
@@ -4996,7 +5146,10 @@ This version emulates 68000's prefetch "cache" */
 static void m68k_run_1 (void)
 {
 	struct regstruct *r = &regs;
-	bool exit = false;
+	/* volatile obligatorio: TRY() es setjmp() y estas se modifican dentro
+	 * del bloque y se leen despues del longjmp. Sin volatile su valor es
+	 * indeterminado (C89 7.6.2.1) y con /O2 acaban en registros. */
+	volatile bool exit = false;
 
 	while (!exit) {
 		check_debugger();
@@ -5066,8 +5219,11 @@ static void m68k_run_1_ce (void)
 static void m68k_run_1_ce (void)
 {
 	struct regstruct *r = &regs;
-	bool first = true;
-	bool exit = false;
+	/* volatile obligatorio: TRY() es setjmp() y estas se modifican dentro
+	 * del bloque y se leen despues del longjmp. Sin volatile su valor es
+	 * indeterminado (C89 7.6.2.1) y con /O2 acaban en registros. */
+	volatile bool first = true;
+	volatile bool exit = false;
 
 	while (!exit) {
 		check_debugger();
@@ -5243,6 +5399,7 @@ static bool m68k_cs_initialized;
 static int do_specialties_thread(void)
 {
 	uae_atomic spcflags = regs.spcflags;
+	int ilvl;
 
 	if (spcflags & SPCFLAG_MODE_CHANGE)
 		return 1;
@@ -5270,7 +5427,7 @@ static int do_specialties_thread(void)
 			return 1;
 		}
 
-		int ilvl = cpu_thread_ilvl;
+		ilvl = cpu_thread_ilvl;
 		if (ilvl > 0 && (ilvl > regs.intmask || ilvl == 7)) {
 			do_interrupt(ilvl);
 		}
@@ -5357,6 +5514,8 @@ static void run_cpu_thread(void (*f)(void *))
 	int framecnt = -1;
 	int vp = 0;
 	int intlev_prev = 0;
+	frame_time_t next;
+	frame_time_t c;
 
 	cpu_thread_active = 0;
 	uae_sem_init(&cpu_in_sema, 0, 0);
@@ -5472,8 +5631,8 @@ static void run_cpu_thread(void (*f)(void *))
 			continue;
 		}
 
-		frame_time_t next = vsyncmintimepre + (vsynctimebase * vpos / (maxvpos + 1));
-		frame_time_t c = read_processor_time();
+		next = vsyncmintimepre + (vsynctimebase * vpos / (maxvpos + 1));
+		c = read_processor_time();
 		if (next - c > 0 && next - c < vsyncmaxtime * 2)
 			continue;
 
@@ -5786,13 +5945,21 @@ void cpu_halt(int id)
 	set_special(SPCFLAG_CHECK);
 }
 
-#ifdef CPUEMU_33
+/* m68k_run_2p / m68k_run_mmu030 / m68k_run_mmu040 / m68k_run_mmu060 son
+ * static de este mismo fichero y la cadena de run_func de m68k_go() los
+ * nombra sin guarda, asi que no se pueden dejar fuera del build aunque su
+ * nivel CPUEMU_nn no se compile. En un A500 son inalcanzables (hacen falta
+ * cpu_model >= 68020 o mmu_model != 0), solo ocupan sitio. */
+#if 1 /* antes: #ifdef CPUEMU_33 */
 
 /* MMU 68060  */
 static void m68k_run_mmu060 (void)
 {
 	struct flag_struct f;
-	int halt = 0;
+	/* volatile obligatorio: TRY() es setjmp() y estas se modifican dentro
+	 * del bloque y se leen despues del longjmp. Sin volatile su valor es
+	 * indeterminado (C89 7.6.2.1) y con /O2 acaban en registros. */
+	volatile int halt = 0;
 
 	check_halt();
 	while (!halt) {
@@ -5840,13 +6007,16 @@ static void m68k_run_mmu060 (void)
 
 #endif
 
-#ifdef CPUEMU_31
+#if 1 /* antes: #ifdef CPUEMU_31 */
 
 /* Aranym MMU 68040  */
 static void m68k_run_mmu040 (void)
 {
 	struct flag_struct f;
-	int halt = 0;
+	/* volatile obligatorio: TRY() es setjmp() y estas se modifican dentro
+	 * del bloque y se leen despues del longjmp. Sin volatile su valor es
+	 * indeterminado (C89 7.6.2.1) y con /O2 acaban en registros. */
+	volatile int halt = 0;
 
 	check_halt();
 	while (!halt) {
@@ -5895,13 +6065,16 @@ static void m68k_run_mmu040 (void)
 
 #endif
 
-#ifdef CPUEMU_32
+#if 1 /* antes: #ifdef CPUEMU_32 */
 
 // Previous MMU 68030
 static void m68k_run_mmu030 (void)
 {
 	struct flag_struct f;
-	int halt = 0;
+	/* volatile obligatorio: TRY() es setjmp() y estas se modifican dentro
+	 * del bloque y se leen despues del longjmp. Sin volatile su valor es
+	 * indeterminado (C89 7.6.2.1) y con /O2 acaban en registros. */
+	volatile int halt = 0;
 
 	mmu030_opcode_stageb = -1;
 	mmu030_fake_prefetch = -1;
@@ -6041,8 +6214,11 @@ insretry:
 static void m68k_run_3ce (void)
 {
 	struct regstruct *r = &regs;
-	bool exit = false;
-	int extracycles = 0;
+	/* volatile obligatorio: TRY() es setjmp() y estas se modifican dentro
+	 * del bloque y se leen despues del longjmp. Sin volatile su valor es
+	 * indeterminado (C89 7.6.2.1) y con /O2 acaban en registros. */
+	volatile bool exit = false;
+	volatile int extracycles = 0;
 
 	while (!exit) {
 		check_debugger();
@@ -6092,8 +6268,11 @@ static void m68k_run_3ce (void)
 static void m68k_run_3p(void)
 {
 	struct regstruct *r = &regs;
-	bool exit = false;
-	int cycles;
+	/* volatile obligatorio: TRY() es setjmp() y estas se modifican dentro
+	 * del bloque y se leen despues del longjmp. Sin volatile su valor es
+	 * indeterminado (C89 7.6.2.1) y con /O2 acaban en registros. */
+	volatile bool exit = false;
+	volatile int cycles;
 
 	while (!exit)  {
 		check_debugger();
@@ -6138,8 +6317,11 @@ static void m68k_run_3p(void)
 static void m68k_run_2ce (void)
 {
 	struct regstruct *r = &regs;
-	bool exit = false;
-	bool first = true;
+	/* volatile obligatorio: TRY() es setjmp() y estas se modifican dentro
+	 * del bloque y se leen despues del longjmp. Sin volatile su valor es
+	 * indeterminado (C89 7.6.2.1) y con /O2 acaban en registros. */
+	volatile bool exit = false;
+	volatile bool first = true;
 
 	while (!exit) {
 		check_debugger();
@@ -6276,14 +6458,17 @@ static void m68k_run_2ce (void)
 	}
 }
 
-#ifdef CPUEMU_20
+#if 1 /* antes: #ifdef CPUEMU_20 */
 
 // full prefetch 020 (more compatible)
 static void m68k_run_2p (void)
 {
 	struct regstruct *r = &regs;
-	bool exit = false;
-	bool first = true;
+	/* volatile obligatorio: TRY() es setjmp() y estas se modifican dentro
+	 * del bloque y se leen despues del longjmp. Sin volatile su valor es
+	 * indeterminado (C89 7.6.2.1) y con /O2 acaban en registros. */
+	volatile bool exit = false;
+	volatile bool first = true;
 
 	while (!exit) {
 		check_debugger();
@@ -6423,7 +6608,10 @@ cont:
 #ifdef WITH_THREADED_CPU
 static void cpu_thread_run_2(void *v)
 {
-	bool exit = false;
+	/* volatile obligatorio: TRY() es setjmp() y estas se modifican dentro
+	 * del bloque y se leen despues del longjmp. Sin volatile su valor es
+	 * indeterminado (C89 7.6.2.1) y con /O2 acaban en registros. */
+	volatile bool exit = false;
 	struct regstruct *r = &regs;
 
 	cpu_thread_tid = uae_thread_get_id();
@@ -6459,10 +6647,14 @@ static void cpu_thread_run_2(void *v)
 #endif
 
 /* Same thing, but don't use prefetch to get opcode.  */
+/* Same thing, but don't use prefetch to get opcode.  */
 static void m68k_run_2_000(void)
 {
 	struct regstruct *r = &regs;
-	bool exit = false;
+	/* volatile obligatorio: TRY() es setjmp() y estas se modifican dentro
+	 * del bloque y se leen despues del longjmp. Sin volatile su valor es
+	 * indeterminado (C89 7.6.2.1) y con /O2 acaban en registros. */
+	volatile bool exit = false;
 
 	while (!exit) {
 		check_debugger();
@@ -6499,15 +6691,17 @@ static void m68k_run_2_000(void)
 
 static void m68k_run_2_020(void)
 {
+	struct regstruct *r = &regs;
+	/* volatile obligatorio: TRY() es setjmp() y estas se modifican dentro
+	 * del bloque y se leen despues del longjmp. Sin volatile su valor es
+	 * indeterminado (C89 7.6.2.1) y con /O2 acaban en registros. */
+	volatile bool exit = false;
 #ifdef WITH_THREADED_CPU
 	if (currprefs.cpu_thread) {
 		run_cpu_thread(cpu_thread_run_2);
 		return;
 	}
 #endif
-
-	struct regstruct *r = &regs;
-	bool exit = false;
 
 	while (!exit) {
 		check_debugger();
@@ -6655,6 +6849,8 @@ void m68k_go (int may_quit)
 	for (;;) {
 		int restored = 0;
 		void (*run_func)(void);
+		uae_u32 s;
+		int t;
 
 		cputrace.state = -1;
 
@@ -6807,11 +7003,11 @@ void m68k_go (int may_quit)
 
 		if (!restored && hardboot) {
 			uaerandomizeseed();
-			uae_u32 s = uaerandgetseed();
+			s = uaerandgetseed();
 			uaesetrandseed(s);
 			write_log("rndseed = %08x (%u)\n", s, s);
 			// add random delay before CPU starts
-			int t = uaerand() & 0x7fff;
+			t = uaerand() & 0x7fff;
 			while (t > 255) {
 				x_do_cycles(255 * CYCLE_UNIT);
 				t -= 255;
@@ -6899,10 +7095,11 @@ void m68k_go (int may_quit)
 void m68k_disasm_ea (uaecptr addr, uaecptr *nextpc, int cnt, uae_u32 *seaddr, uae_u32 *deaddr, uaecptr lastpc)
 {
 	TCHAR *buf;
+	int pcnt;
 
 	if (!cnt)
 		return;
-	int pcnt = cnt > 0 ? cnt : -cnt;
+	pcnt = cnt > 0 ? cnt : -cnt;
 	buf = xcalloc (TCHAR, (MAX_LINEWIDTH + 1) * pcnt);
 	if (!buf)
 		return;
@@ -6914,10 +7111,11 @@ void m68k_disasm_ea (uaecptr addr, uaecptr *nextpc, int cnt, uae_u32 *seaddr, ua
 void m68k_disasm (uaecptr addr, uaecptr *nextpc, uaecptr lastpc, int cnt)
 {
 	TCHAR *buf;
+	int pcnt;
 
 	if (!cnt)
 		return;
-	int pcnt = cnt > 0 ? cnt : -cnt;
+	pcnt = cnt > 0 ? cnt : -cnt;
 	buf = xcalloc (TCHAR, (MAX_LINEWIDTH + 1) * pcnt);
 	if (!buf)
 		return;
@@ -6932,6 +7130,9 @@ void m68k_dumpstate(uaecptr *nextpc, uaecptr prevpc)
 {
 	int i, j;
 	uaecptr pc = M68K_GETPC;
+	uae_u16 w;
+	struct instr *dp;
+	struct mnemolookup *lookup;
 
 	MakeSR();
 	for (i = 0; i < 8; i++){
@@ -6997,14 +7198,11 @@ void m68k_dumpstate(uaecptr *nextpc, uaecptr prevpc)
 			console_out_f(_T(" %08x %08x (%d)"),
 				regs.cacheholdingaddr020, regs.cacheholdingdata020, regs.cacheholdingdata_valid);
 		}
-		for (int i = 0; i < 3; i++) {
-			uae_u16 w;
+		for (i = 0; i < 3; i++) {
 #ifdef DEBUGGER
 			if (!debug_get_prefetch(i, &w))
 				break;
 #endif
-			struct instr *dp;
-			struct mnemolookup *lookup;
 			dp = table68k + w;
 			for (lookup = lookuptab; lookup->mnemo != dp->mnemo; lookup++)
 				;
@@ -7024,11 +7222,12 @@ void m68k_dumpstate(uaecptr *nextpc, uaecptr prevpc)
 
 void m68k_dumpcache (bool dc)
 {
+	int i, j;
 	if (!currprefs.cpu_compatible)
 		return;
 	if (currprefs.cpu_model == 68020) {
-		for (int i = 0; i < CACHELINES020; i += 4) {
-			for (int j = 0; j < 4; j++) {
+		for (i = 0; i < CACHELINES020; i += 4) {
+			for (j = 0; j < 4; j++) {
 				int s = i + j;
 				uaecptr addr;
 				int fc;
@@ -7041,7 +7240,7 @@ void m68k_dumpcache (bool dc)
 			console_out_f (_T("\n"));
 		}
 	} else if (currprefs.cpu_model == 68030) {
-		for (int i = 0; i < CACHELINES030; i++) {
+		for (i = 0; i < CACHELINES030; i++) {
 			struct cache030 *c = dc ? &dcaches030[i] : &icaches030[i];
 			int fc;
 			uaecptr addr;
@@ -7053,16 +7252,16 @@ void m68k_dumpcache (bool dc)
 			addr = c->tag & ~1;
 			addr |= i << 4;
 			console_out_f (_T("%08X %d: "), addr, fc);
-			for (int j = 0; j < 4; j++) {
+			for (j = 0; j < 4; j++) {
 				console_out_f (_T("%08X%c "), c->data[j], c->valid[j] ? '*' : ' ');
 			}
 			console_out_f (_T("\n"));
 		}
 	} else if (currprefs.cpu_model >= 68040) {
 		uae_u32 tagmask = dc ? cachedtag04060mask : cacheitag04060mask;
-		for (int i = 0; i < cachedsets04060; i++) {
+		for (i = 0; i < cachedsets04060; i++) {
 			struct cache040 *c = dc ? &dcaches040[i] : &icaches040[i];
-			for (int j = 0; j < CACHELINES040; j++) {
+			for (j = 0; j < CACHELINES040; j++) {
 				if (c->valid[j]) {
 					uae_u32 addr = (c->tag[j] & tagmask) | (i << 4);
 					write_log(_T("%02d:%d %08x = %08x%c %08x%c %08x%c %08x%c\n"),
@@ -7089,6 +7288,7 @@ uae_u8 *restore_cpu (uae_u8 *src)
 {
 	int flags, model;
 	uae_u32 l;
+	int i, j;
 
 	changed_prefs.fpu_model = currprefs.fpu_model = 0;
 	changed_prefs.mmu_model = currprefs.mmu_model = 0;
@@ -7104,7 +7304,7 @@ uae_u8 *restore_cpu (uae_u8 *src)
 	currprefs.blitter_cycle_exact = changed_prefs.blitter_cycle_exact;
 	currprefs.cpu_frequency = changed_prefs.cpu_frequency = 0;
 	currprefs.cpu_clock_multiplier = changed_prefs.cpu_clock_multiplier = 0;
-	for (int i = 0; i < 15; i++)
+	for (i = 0; i < 15; i++)
 		regs.regs[i] = restore_u32 ();
 	regs.pc = restore_u32 ();
 	regs.irc = restore_u16 ();
@@ -7157,8 +7357,10 @@ uae_u8 *restore_cpu (uae_u8 *src)
 	}
 	set_cpu_caches (true);
 	if (flags & 0x40000000) {
+		uae_u32 v;
+		uae_u16 v16;
 		if (model == 68020) {
-			for (int i = 0; i < CACHELINES020; i++) {
+			for (i = 0; i < CACHELINES020; i++) {
 				caches020[i].data = restore_u32 ();
 				caches020[i].tag = restore_u32 ();
 				caches020[i].valid = restore_u8 () != 0;
@@ -7169,14 +7371,14 @@ uae_u8 *restore_cpu (uae_u8 *src)
 			if (flags & 0x20000000) {
 				if (flags & 0x4000000) {
 					// 3.6 new (back to 16 bits)
-					for (int i = 0; i < CPU_PIPELINE_MAX; i++) {
-						uae_u32 v = restore_u32();
+					for (i = 0; i < CPU_PIPELINE_MAX; i++) {
+						v = restore_u32();
 						regs.prefetch020[i] = v >> 16;
 						regs.prefetch020_valid[i] = (v & 1) != 0;
 					}
 				} else {
 					// old
-					uae_u32 v = restore_u32();
+					v = restore_u32();
 					regs.prefetch020[0] = v >> 16;
 					regs.prefetch020[1] = (uae_u16)v;
 					v = restore_u32();
@@ -7191,15 +7393,15 @@ uae_u8 *restore_cpu (uae_u8 *src)
 				}
 			}
 		} else if (model == 68030) {
-			for (int i = 0; i < CACHELINES030; i++) {
-				for (int j = 0; j < 4; j++) {
+			for (i = 0; i < CACHELINES030; i++) {
+				for (j = 0; j < 4; j++) {
 					icaches030[i].data[j] = restore_u32 ();
 					icaches030[i].valid[j] = restore_u8 () != 0;
 				}
 				icaches030[i].tag = restore_u32 ();
 			}
-			for (int i = 0; i < CACHELINES030; i++) {
-				for (int j = 0; j < 4; j++) {
+			for (i = 0; i < CACHELINES030; i++) {
+				for (j = 0; j < 4; j++) {
 					dcaches030[i].data[j] = restore_u32 ();
 					dcaches030[i].valid[j] = restore_u8 () != 0;
 				}
@@ -7209,21 +7411,21 @@ uae_u8 *restore_cpu (uae_u8 *src)
 			regs.cacheholdingaddr020 = restore_u32 ();
 			regs.cacheholdingdata020 = restore_u32 ();
 			if (flags & 0x4000000) {
-				for (int i = 0; i < CPU_PIPELINE_MAX; i++) {
-					uae_u32 v = restore_u32();
+				for (i = 0; i < CPU_PIPELINE_MAX; i++) {
+					v = restore_u32();
 					regs.prefetch020[i] = v >> 16;
 					regs.prefetch020_valid[i] = (v & 1) != 0;
 				}
 			} else {
-				for (int i = 0; i < CPU_PIPELINE_MAX; i++) {
+				for (i = 0; i < CPU_PIPELINE_MAX; i++) {
 					regs.prefetch020[i] = restore_u32 ();
 					regs.prefetch020_valid[i] = false;
 				}
 			}
 		} else if (model == 68040) {
 			if (flags & 0x8000000) {
-				for (int i = 0; i < ((model == 68060 && (flags & 0x4000000)) ? CACHESETS060 : CACHESETS040); i++) {
-					for (int j = 0; j < CACHELINES040; j++) {
+				for (i = 0; i < ((model == 68060 && (flags & 0x4000000)) ? CACHESETS060 : CACHESETS040); i++) {
+					for (j = 0; j < CACHELINES040; j++) {
 						struct cache040 *c = &icaches040[i];
 						c->data[j][0] = restore_u32();
 						c->data[j][1] = restore_u32();
@@ -7236,23 +7438,23 @@ uae_u8 *restore_cpu (uae_u8 *src)
 				regs.prefetch020addr = restore_u32();
 				regs.cacheholdingaddr020 = restore_u32();
 				regs.cacheholdingdata020 = restore_u32();
-				for (int i = 0; i < CPU_PIPELINE_MAX; i++)
+				for (i = 0; i < CPU_PIPELINE_MAX; i++)
 					regs.prefetch040[i] = restore_u32();
 				if (flags & 0x4000000) {
-					for (int i = 0; i < (model == 68060 ? CACHESETS060 : CACHESETS040); i++) {
-						for (int j = 0; j < CACHELINES040; j++) {
+					for (i = 0; i < (model == 68060 ? CACHESETS060 : CACHESETS040); i++) {
+						for (j = 0; j < CACHELINES040; j++) {
 							struct cache040 *c = &dcaches040[i];
 							c->data[j][0] = restore_u32();
 							c->data[j][1] = restore_u32();
 							c->data[j][2] = restore_u32();
 							c->data[j][3] = restore_u32();
 							c->tag[j] = restore_u32();
-							uae_u16 v = restore_u16();
-							c->valid[j] = (v & 1) != 0;
-							c->dirty[j][0] = (v & 0x10) != 0;
-							c->dirty[j][1] = (v & 0x20) != 0;
-							c->dirty[j][2] = (v & 0x40) != 0;
-							c->dirty[j][3] = (v & 0x80) != 0;
+							v16 = restore_u16();
+							c->valid[j] = (v16 & 1) != 0;
+							c->dirty[j][0] = (v16 & 0x10) != 0;
+							c->dirty[j][1] = (v16 & 0x20) != 0;
+							c->dirty[j][2] = (v16 & 0x40) != 0;
+							c->dirty[j][3] = (v16 & 0x80) != 0;
 							c->gdirty[j] = c->dirty[j][0] || c->dirty[j][1] || c->dirty[j][2] || c->dirty[j][3];
 						}
 					}
@@ -7334,6 +7536,7 @@ void restore_cpu_finish (void)
 uae_u8 *save_cpu_trace(size_t *len, uae_u8 *dstptr)
 {
 	uae_u8 *dstbak, *dst;
+	int i;
 
 	if (cputrace.state <= 0)
 		return NULL;
@@ -7345,7 +7548,7 @@ uae_u8 *save_cpu_trace(size_t *len, uae_u8 *dstptr)
 
 	save_u32 (2 | 4 | 16 | 32 | 64 | 128);
 	save_u16 (cputrace.opcode);
-	for (int i = 0; i < 16; i++)
+	for (i = 0; i < 16; i++)
 		save_u32 (cputrace.regs[i]);
 	save_u32 (cputrace.pc);
 	save_u16 (cputrace.irc);
@@ -7366,7 +7569,7 @@ uae_u8 *save_cpu_trace(size_t *len, uae_u8 *dstptr)
 		cputrace.pc, cputrace.startcycles,
 		cputrace.cyclecounter, cputrace.cyclecounter_pre, cputrace.cyclecounter_post,
 		cputrace.readcounter, cputrace.writecounter, cputrace.memoryoffset);
-	for (int i = 0; i < cputrace.memoryoffset; i++) {
+	for (i = 0; i < cputrace.memoryoffset; i++) {
 		save_u32 (cputrace.ctm[i].addr);
 		save_u32 (cputrace.ctm[i].data);
 		save_u32 (cputrace.ctm[i].mode);
@@ -7375,7 +7578,7 @@ uae_u8 *save_cpu_trace(size_t *len, uae_u8 *dstptr)
 	save_u32 ((uae_u32)cputrace.startcycles);
 
 	if (currprefs.cpu_model == 68020) {
-		for (int i = 0; i < CACHELINES020; i++) {
+		for (i = 0; i < CACHELINES020; i++) {
 			save_u32 (cputrace.caches020[i].data);
 			save_u32 (cputrace.caches020[i].tag);
 			save_u8 (cputrace.caches020[i].valid ? 1 : 0);
@@ -7383,13 +7586,13 @@ uae_u8 *save_cpu_trace(size_t *len, uae_u8 *dstptr)
 		save_u32 (cputrace.prefetch020addr);
 		save_u32 (cputrace.cacheholdingaddr020);
 		save_u32 (cputrace.cacheholdingdata020);
-		for (int i = 0; i < CPU_PIPELINE_MAX; i++) {
+		for (i = 0; i < CPU_PIPELINE_MAX; i++) {
 			save_u16 (cputrace.prefetch020[i]);
 		}
-		for (int i = 0; i < CPU_PIPELINE_MAX; i++) {
+		for (i = 0; i < CPU_PIPELINE_MAX; i++) {
 			save_u32 (cputrace.prefetch020[i]);
 		}
-		for (int i = 0; i < CPU_PIPELINE_MAX; i++) {
+		for (i = 0; i < CPU_PIPELINE_MAX; i++) {
 			save_u8 (cputrace.prefetch020_valid[i]);
 		}
 		save_u16(cputrace.pipeline_pos);
@@ -7404,7 +7607,7 @@ uae_u8 *save_cpu_trace(size_t *len, uae_u8 *dstptr)
 
 	save_u32(cputrace.startcycles >> 32);
 
-	for (int i = 0; i < cputrace.memoryoffset; i++) {
+	for (i = 0; i < cputrace.memoryoffset; i++) {
 		save_u32(cputrace.ctm[i].flags | 4);
 	}
 
@@ -7415,13 +7618,16 @@ uae_u8 *save_cpu_trace(size_t *len, uae_u8 *dstptr)
 
 uae_u8 *restore_cpu_trace(uae_u8 *src)
 {
+	int i;
+	uae_u32 v;
+
 	cpu_tracer = 0;
 	cputrace.state = 0;
-	uae_u32 v = restore_u32 ();
+	v = restore_u32 ();
 	if (!(v & 2))
 		return src;
 	cputrace.opcode = restore_u16 ();
-	for (int i = 0; i < 16; i++)
+	for (i = 0; i < 16; i++)
 		cputrace.regs[i] = restore_u32 ();
 	cputrace.pc = restore_u32 ();
 	cputrace.irc = restore_u16 ();
@@ -7438,7 +7644,7 @@ uae_u8 *restore_cpu_trace(uae_u8 *src)
 	cputrace.readcounter = restore_u32 ();
 	cputrace.writecounter = restore_u32 ();
 	cputrace.memoryoffset = restore_u32 ();
-	for (int i = 0; i < cputrace.memoryoffset; i++) {
+	for (i = 0; i < cputrace.memoryoffset; i++) {
 		cputrace.ctm[i].addr = restore_u32 ();
 		cputrace.ctm[i].data = restore_u32 ();
 		cputrace.ctm[i].mode = restore_u32 ();
@@ -7447,7 +7653,7 @@ uae_u8 *restore_cpu_trace(uae_u8 *src)
 
 	if (v & 4) {
 		if (currprefs.cpu_model == 68020) {
-			for (int i = 0; i < CACHELINES020; i++) {
+			for (i = 0; i < CACHELINES020; i++) {
 				cputrace.caches020[i].data = restore_u32 ();
 				cputrace.caches020[i].tag = restore_u32 ();
 				cputrace.caches020[i].valid = restore_u8 () != 0;
@@ -7455,7 +7661,7 @@ uae_u8 *restore_cpu_trace(uae_u8 *src)
 			cputrace.prefetch020addr = restore_u32 ();
 			cputrace.cacheholdingaddr020 = restore_u32 ();
 			cputrace.cacheholdingdata020 = restore_u32 ();
-			for (int i = 0; i < CPU_PIPELINE_MAX; i++) {
+			for (i = 0; i < CPU_PIPELINE_MAX; i++) {
 				cputrace.prefetch020[i] = restore_u16 ();
 			}
 			if (v & 8) {
@@ -7485,7 +7691,7 @@ uae_u8 *restore_cpu_trace(uae_u8 *src)
 					restore_u32();
 					restore_u32();
 				}
-				for (int i = 0; i < CPU_PIPELINE_MAX; i++) {
+				for (i = 0; i < CPU_PIPELINE_MAX; i++) {
 					cputrace.prefetch020_valid[i] = restore_u8() != 0;
 				}
 			}
@@ -7504,7 +7710,7 @@ uae_u8 *restore_cpu_trace(uae_u8 *src)
 
 		if (v & 128) {
 			cputrace.startcycles |= ((uae_u64)restore_u32()) << 32;
-			for (int i = 0; i < cputrace.memoryoffset; i++) {
+			for (i = 0; i < cputrace.memoryoffset; i++) {
 				cputrace.ctm[i].flags = restore_u32();
 			}
 		}
@@ -7528,8 +7734,10 @@ uae_u8 *restore_cpu_trace(uae_u8 *src)
 
 uae_u8 *restore_cpu_extra(uae_u8 *src)
 {
+	uae_u32 flags;
+
 	restore_u32 ();
-	uae_u32 flags = restore_u32 ();
+	flags = restore_u32 ();
 
 	currprefs.cpu_cycle_exact = changed_prefs.cpu_cycle_exact = (flags & 1) ? true : false;
 	currprefs.cpu_memory_cycle_exact = changed_prefs.cpu_memory_cycle_exact = currprefs.cpu_cycle_exact;
@@ -7585,6 +7793,8 @@ uae_u8 *save_cpu(size_t *len, uae_u8 *dstptr)
 {
 	uae_u8 *dstbak, *dst;
 	int model, khz;
+	int i, j;
+	uae_u16 v;
 
 	if (dstptr)
 		dstbak = dst = dstptr;
@@ -7593,7 +7803,7 @@ uae_u8 *save_cpu(size_t *len, uae_u8 *dstptr)
 	model = currprefs.cpu_model;
 	save_u32 (model);					/* MODEL */
 	save_u32(0x80000000 | 0x40000000 | 0x20000000 | 0x10000000 | 0x8000000 | 0x4000000 | 0x2000000 | (currprefs.address_space_24 ? 1 : 0)); /* FLAGS */
-	for (int i = 0;i < 15; i++)
+	for (i = 0;i < 15; i++)
 		save_u32 (regs.regs[i]);		/* D0-D7 A0-A6 */
 	save_u32 (m68k_getpc ());			/* PC */
 	save_u16 (regs.irc);				/* prefetch */
@@ -7652,7 +7862,7 @@ uae_u8 *save_cpu(size_t *len, uae_u8 *dstptr)
 	save_u32 (khz); // clock rate in KHz: -1 = fastest possible
 	save_u32 (0); // spare
 	if (model == 68020) {
-		for (int i = 0; i < CACHELINES020; i++) {
+		for (i = 0; i < CACHELINES020; i++) {
 			save_u32 (caches020[i].data);
 			save_u32 (caches020[i].tag);
 			save_u8 (caches020[i].valid ? 1 : 0);
@@ -7660,18 +7870,18 @@ uae_u8 *save_cpu(size_t *len, uae_u8 *dstptr)
 		save_u32 (regs.prefetch020addr);
 		save_u32 (regs.cacheholdingaddr020);
 		save_u32 (regs.cacheholdingdata020);
-		for (int i = 0; i < CPU_PIPELINE_MAX; i++)
+		for (i = 0; i < CPU_PIPELINE_MAX; i++)
 			save_u32 ((regs.prefetch020[i] << 16) | (regs.prefetch020_valid[i] ? 1 : 0));
 	} else if (model == 68030) {
-		for (int i = 0; i < CACHELINES030; i++) {
-			for (int j = 0; j < 4; j++) {
+		for (i = 0; i < CACHELINES030; i++) {
+			for (j = 0; j < 4; j++) {
 				save_u32 (icaches030[i].data[j]);
 				save_u8 (icaches030[i].valid[j] ? 1 : 0);
 			}
 			save_u32 (icaches030[i].tag);
 		}
-		for (int i = 0; i < CACHELINES030; i++) {
-			for (int j = 0; j < 4; j++) {
+		for (i = 0; i < CACHELINES030; i++) {
+			for (j = 0; j < 4; j++) {
 				save_u32 (dcaches030[i].data[j]);
 				save_u8 (dcaches030[i].valid[j] ? 1 : 0);
 			}
@@ -7680,11 +7890,11 @@ uae_u8 *save_cpu(size_t *len, uae_u8 *dstptr)
 		save_u32 (regs.prefetch020addr);
 		save_u32 (regs.cacheholdingaddr020);
 		save_u32 (regs.cacheholdingdata020);
-		for (int i = 0; i < CPU_PIPELINE_MAX; i++)
+		for (i = 0; i < CPU_PIPELINE_MAX; i++)
 			save_u32 (regs.prefetch020[i]);
 	} else if (model >= 68040) {
-		for (int i = 0; i < (model == 68060 ? CACHESETS060 : CACHESETS040); i++) {
-			for (int j = 0; j < CACHELINES040; j++) {
+		for (i = 0; i < (model == 68060 ? CACHESETS060 : CACHESETS040); i++) {
+			for (j = 0; j < CACHELINES040; j++) {
 				struct cache040 *c = &icaches040[i];
 				save_u32(c->data[j][0]);
 				save_u32(c->data[j][1]);
@@ -7697,18 +7907,18 @@ uae_u8 *save_cpu(size_t *len, uae_u8 *dstptr)
 		save_u32(regs.prefetch020addr);
 		save_u32(regs.cacheholdingaddr020);
 		save_u32(regs.cacheholdingdata020);
-		for (int i = 0; i < CPU_PIPELINE_MAX; i++) {
+		for (i = 0; i < CPU_PIPELINE_MAX; i++) {
 			save_u32(regs.prefetch040[i]);
 		}
-		for (int i = 0; i < (model == 68060 ? CACHESETS060 : CACHESETS040); i++) {
-			for (int j = 0; j < CACHELINES040; j++) {
+		for (i = 0; i < (model == 68060 ? CACHESETS060 : CACHESETS040); i++) {
+			for (j = 0; j < CACHELINES040; j++) {
 				struct cache040 *c = &dcaches040[i];
 				save_u32(c->data[j][0]);
 				save_u32(c->data[j][1]);
 				save_u32(c->data[j][2]);
 				save_u32(c->data[j][3]);
 				save_u32(c->tag[j]);
-				uae_u16 v = c->valid[j] ? 1 : 0;
+				v = c->valid[j] ? 1 : 0;
 				v |= c->dirty[j][0] ? 0x10 : 0;
 				v |= c->dirty[j][1] ? 0x20 : 0;
 				v |= c->dirty[j][2] ? 0x40 : 0;
@@ -8296,6 +8506,7 @@ static uae_u16 pipeline_opcode;
 static void pipeline_020(uaecptr pc)
 {
 	uae_u16 w = regs.prefetch020[1];
+	int branch;
 
 	if (regs.prefetch020_valid[1] == 0) {
 		regs.pipeline_stop = -1;
@@ -8361,7 +8572,7 @@ static void pipeline_020(uaecptr pc)
 	}
 #endif
 	// illegal instructions, TRAP, TRAPV, A-line, F-line don't stop prefetches
-	int branch = cpudatatbl[w].branch;
+	branch = cpudatatbl[w].branch;
 	if (regs.pipeline_pos > 0 && branch > 0) {
 		// Short branches (Bcc.s) still do one more prefetch.
 #if 0
@@ -8829,16 +9040,18 @@ static void fill_icache030(uae_u32 addr)
 
 				if (ce_banktype[physaddr >> 16] == CE_MEMBANK_FAST32) {
 					int i;
+					int j;
+					uaecptr baddr;
 					for (i = 0; i < 4; i++) {
 						if (c->valid[i])
 							break;
 					}
-					uaecptr baddr = physaddr & ~15;
+					baddr = physaddr & ~15;
 
 					if (currprefs.mmu_model) {
 						TRY (prb) {
 							// TODO: Need memory functions for burst row and burst column access.
-							for (int j = 0; j < 3; j++) {
+							for (j = 0; j < 3; j++) {
 								i++;
 								i &= 3;
 								c->data[i] = get_longi(baddr + i * 4);
@@ -8851,7 +9064,7 @@ static void fill_icache030(uae_u32 addr)
 							; // abort burst fetch if bus error, do not report it.
 						} ENDTRY
 					} else {
-						for (int j = 0; j < 3; j++) {
+						for (j = 0; j < 3; j++) {
 							i++;
 							i &= 3;
 							c->data[i] = get_longi(baddr + i * 4);
@@ -8872,11 +9085,12 @@ static void fill_icache030(uae_u32 addr)
 #if VALIDATE_68030_DATACACHE
 static void validate_dcache030(void)
 {
-	for (int i = 0; i < CACHELINES030; i++) {
+	int i, j;
+	for (i = 0; i < CACHELINES030; i++) {
 		struct cache030 *c = &dcaches030[i];
 		uae_u32 addr = c->tag & ~((CACHELINES030 << 4) - 1);
 		addr |= i << 4;
-		for (int j = 0; j < 4; j++) {
+		for (j = 0; j < 4; j++) {
 			if (c->valid[j]) {
 				uae_u32 v = get_long(addr);
 				if (v != c->data[j]) {
@@ -9009,16 +9223,18 @@ static void dcache030_maybe_burst(uaecptr addr, struct cache030 *c, int lws)
 
 		if (ce_banktype[physaddr >> 16] == CE_MEMBANK_FAST32) {
 			int i;
+			int j;
+			uaecptr baddr;
 			for (i = 0; i < 4; i++) {
 				if (c->valid[i])
 					break;
 			}
-			uaecptr baddr = physaddr & ~15;
+			baddr = physaddr & ~15;
 
 			if (currprefs.mmu_model) {
 				TRY (prb) {
 					// TODO: Need memory functions for burst row and burst column access.
-					for (int j = 0; j < 3; j++) {
+					for (j = 0; j < 3; j++) {
 						i++;
 						i &= 3;
 						c->data[i] = get_long(baddr + i * 4);
@@ -9031,7 +9247,7 @@ static void dcache030_maybe_burst(uaecptr addr, struct cache030 *c, int lws)
 					; // abort burst fetch if bus error
 				} ENDTRY
 			} else {
-				for (int j = 0; j < 3; j++) {
+				for (j = 0; j < 3; j++) {
 					i++;
 					i &= 3;
 					c->data[i] = get_long(baddr + i * 4);
@@ -9060,6 +9276,7 @@ static uae_u32 read_dcache030_debug(uaecptr addr, uae_u32 size, uae_u32 fc, bool
 	int width = 8 << size;
 	int offset = 8 * aligned;
 	uae_u32 out;
+	uae_u64 v64;
 
 	*cached = false;
 	if (!currprefs.cpu_data_cache) {
@@ -9097,7 +9314,7 @@ static uae_u32 read_dcache030_debug(uaecptr addr, uae_u32 size, uae_u32 fc, bool
 		*cached = true;
 	}
 
-	uae_u64 v64 = ((uae_u64)v1 << 32) | v2;
+	v64 = ((uae_u64)v1 << 32) | v2;
 	out = (uae_u32)(v64 >> (64 - (offset + width)));
 	out &= mask[size];
 	return out;
@@ -9106,10 +9323,6 @@ static uae_u32 read_dcache030_debug(uaecptr addr, uae_u32 size, uae_u32 fc, bool
 
 static bool read_dcache030_2(uaecptr addr, uae_u32 size, uae_u32 *valp)
 {
-	// data cache enabled?
-	if (!(regs.cacr & 0x100))
-		return false;
-
 	uae_u32 addr_o = addr;
 	uae_u32 fc = regs.fc030;
 	static const uae_u32 mask[3] = { 0x000000ff, 0x0000ffff, 0xffffffff };
@@ -9121,13 +9334,19 @@ static bool read_dcache030_2(uaecptr addr, uae_u32 size, uae_u32 *valp)
 	int width = 8 << size;
 	int offset = 8 * aligned;
 	uae_u32 out;
+	uae_u64 v64;
+	uae_u8 cs;
+
+	// data cache enabled?
+	if (!(regs.cacr & 0x100))
+		return false;
 
 	c1 = getdcache030(dcaches030, addr, &tag1, &lws1);
 	addr &= ~3;
 	if (!c1->valid[lws1] || c1->tag != tag1 || c1->fc != fc) {
 		// MMU validate address, returns zero if valid but uncacheable
 		// throws bus error if invalid
-		uae_u8 cs = dcache_check(addr_o, false, size);
+		cs = dcache_check(addr_o, false, size);
 		if (!(cs & CACHE_ENABLE_DATA))
 			return false;
 		v1 = dcache_lget(addr);
@@ -9157,7 +9376,7 @@ static bool read_dcache030_2(uaecptr addr, uae_u32 size, uae_u32 *valp)
 	addr += 4;
 	c2 = getdcache030(dcaches030, addr, &tag2, &lws2);
 	if (!c2->valid[lws2] || c2->tag != tag2 || c2->fc != fc) {
-		uae_u8 cs = dcache_check(addr, false, 2);
+		cs = dcache_check(addr, false, 2);
 		if (!(cs & CACHE_ENABLE_DATA))
 			return false;
 		v2 = dcache_lget(addr);
@@ -9171,7 +9390,7 @@ static bool read_dcache030_2(uaecptr addr, uae_u32 size, uae_u32 *valp)
 		v2 = c2->data[lws2];
 	}
 
-	uae_u64 v64 = ((uae_u64)v1 << 32) | v2;
+	v64 = ((uae_u64)v1 << 32) | v2;
 	out = (uae_u32)(v64 >> (64 - (offset + width)));
 	out &= mask[size];
 
@@ -9413,6 +9632,7 @@ uae_u32 fill_icache040(uae_u32 addr)
 	uae_u32 tag, addr2;
 	struct cache040 *c;
 	int line;
+	int i;
 
 	addr2 = addr & ~15;
 	lws = (addr >> 2) & 3;
@@ -9430,7 +9650,7 @@ uae_u32 fill_icache040(uae_u32 addr)
 		index = (addr >> 4) & cacheisets04060mask;
 		tag = addr & cacheitag04060mask;
 		c = &icaches040[index];
-		for (int i = 0; i < CACHELINES040; i++) {
+		for (i = 0; i < CACHELINES040; i++) {
 			if (c->valid[cache_lastline] && c->tag[cache_lastline] == tag) {
 				// cache hit
 				if (!(cs & CACHE_ENABLE_INS) || (cs & CACHE_DISABLE_MMU)) {
@@ -10142,6 +10362,7 @@ void fill_prefetch_030_ntx_continue (void)
 	uaecptr pc = m68k_getpc ();
 	uaecptr pc_orig = pc;
 	int idx = 0;
+	int i;
 
 	mmu030_idx = mmu030_idx_done = 0;
 	reset_pipeline_state();
@@ -10149,10 +10370,10 @@ void fill_prefetch_030_ntx_continue (void)
 	regs.cacheholdingaddr020 = 0xffffffff;
 
 	if (regs.prefetch020_valid[0] && regs.prefetch020_valid[1] && regs.prefetch020_valid[2]) {
-		for (int i = 2; i >= 0; i--) {
+		for (i = 2; i >= 0; i--) {
 			regs.prefetch020[i + 1] = regs.prefetch020[i];
 		}
-		for (int i = 1; i <= 3; i++) {
+		for (i = 1; i <= 3; i++) {
 #if MORE_ACCURATE_68020_PIPELINE
 			pipeline_020(pc);
 #endif

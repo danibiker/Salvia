@@ -6,9 +6,10 @@
 
 static TCHAR *initrim(TCHAR *s)
 {
+	TCHAR *s2;
 	while (*s != 0 && *s <= 32)
 		s++;
-	TCHAR *s2 = s;
+	s2 = s;
 	while (*s2)
 		s2++;
 	while (s2 > s) {
@@ -22,9 +23,10 @@ static TCHAR *initrim(TCHAR *s)
 
 void ini_free(struct ini_data *ini)
 {
+	int c;
 	if (!ini)
 		return;
-	for(int c = 0; c < ini->inilines; c++) {
+	for(c = 0; c < ini->inilines; c++) {
 		struct ini_line *il = ini->inidata[c];
 		if (il) {
 			xfree(il->section);
@@ -39,16 +41,18 @@ void ini_free(struct ini_data *ini)
 
 static void ini_sort(struct ini_data *ini)
 {
-	for(int c1 = 0; c1 < ini->inilines; c1++) {
+	int c1, c2;
+	for(c1 = 0; c1 < ini->inilines; c1++) {
 		struct ini_line *il1 = ini->inidata[c1];
 		if (il1 == NULL)
 			continue;
-		for (int c2 = c1 + 1; c2 < ini->inilines; c2++) {
+		for (c2 = c1 + 1; c2 < ini->inilines; c2++) {
 			struct ini_line *il2 = ini->inidata[c2];
+			int order = 0;
+			int sec;
 			if (il2 == NULL)
 				continue;
-			int order = 0;
-			int sec = _tcsicmp(il1->section, il2->section);
+			sec = _tcsicmp(il1->section, il2->section);
 			if (sec) {
 				if (!il1->section_order && !il2->section_order)
 					order = sec;
@@ -83,6 +87,7 @@ void ini_addnewcomment(struct ini_data *ini, const TCHAR *section, const TCHAR *
 void ini_addnewstring(struct ini_data *ini, const TCHAR *section, const TCHAR *key, const TCHAR *val)
 {
 	struct ini_line *il = xcalloc(struct ini_line, 1);
+	int cnt = 0;
 	if (!il)
 		return;
 	il->section = my_strdup(section);
@@ -95,7 +100,6 @@ void ini_addnewstring(struct ini_data *ini, const TCHAR *section, const TCHAR *k
 		il->key = my_strdup(key);
 		il->value = my_strdup(val);
 	}
-	int cnt = 0;
 	while (cnt < ini->inilines && ini->inidata[cnt])
 		cnt++;
 	if (cnt == ini->inilines) {
@@ -107,9 +111,11 @@ void ini_addnewstring(struct ini_data *ini, const TCHAR *section, const TCHAR *k
 			xfree(il);
 			return;
 		}
+		{
 		int cnt2 = cnt;
 		while (cnt2 < ini->inilines) {
 			ini->inidata[cnt2++] = NULL;
+		}
 		}
 	}
 	ini->inidata[cnt] = il;
@@ -133,15 +139,17 @@ void ini_addnewval64(struct ini_data *ini, const TCHAR *section, const TCHAR *ke
 void ini_addnewdata(struct ini_data *ini, const TCHAR *section, const TCHAR *key, const uae_u8 *data, int len)
 {
 	TCHAR *s = xcalloc(TCHAR, len * 3);
+	int w = 32;
+	int i, j;
+	TCHAR *p;
 	if (!s)
 		return;
 	_tcscpy(s, _T("\\\n"));
-	int w = 32;
-	for (int i = 0; i < len; i += w) {
+	for (i = 0; i < len; i += w) {
 		if (i > 0)
 			_tcscat(s, _T(" \\\n"));
-		TCHAR *p = s + _tcslen(s);
-		for (int j = 0; j < w && j + i < len; j++) {
+		p = s + _tcslen(s);
+		for (j = 0; j < w && j + i < len; j++) {
 			_stprintf (p, _T("%02X"), data[i + j]);
 			p += 2;
 		}
@@ -312,21 +320,23 @@ bool ini_save(struct ini_data *ini, const TCHAR *path)
 
 bool ini_nextsection(struct ini_data *ini, TCHAR *section)
 {
+	TCHAR nextsect[256];
+	const TCHAR *s;
+	int c, c2;
 	if (!ini)
 		return false;
-	TCHAR nextsect[256];
 	_tcscpy(nextsect, section);
-	const TCHAR *s = _tcschr(nextsect, '|');
+	s = _tcschr(nextsect, '|');
 	if (s) {
 		int sectionid = _tstol(s + 1);
 		_stprintf(nextsect + (s - nextsect) + 1, _T("%d"), sectionid + 1);
 	} else {
 		_tcscpy(nextsect + _tcslen(nextsect), _T("|2"));
 	}
-	for (int c = 0; c < ini->inilines; c++) {
+	for (c = 0; c < ini->inilines; c++) {
 		struct ini_line *il = ini->inidata[c];
 		if (il && !_tcsicmp(section, il->section)) {
-			for (int c2 = c + 1; c2 < ini->inilines; c2++) {
+			for (c2 = c + 1; c2 < ini->inilines; c2++) {
 				il = ini->inidata[c2];
 				if (il && !_tcsicmp(nextsect, il->section)) {
 					_tcscpy(section, nextsect);
@@ -341,11 +351,12 @@ bool ini_nextsection(struct ini_data *ini, TCHAR *section)
 
 bool ini_getstring_multi(struct ini_data *ini, const TCHAR *section, const TCHAR *key, TCHAR **out, struct ini_context *ctx)
 {
+	int start, end, c;
 	if (!ini)
 		return false;
-	int start = ctx ? ctx->start : 0;
-	int end = ctx ? (ini->inilines > ctx->end ? ctx->end : ini->inilines) : ini->inilines;
-	for (int c = start; c < end; c++) {
+	start = ctx ? ctx->start : 0;
+	end = ctx ? (ini->inilines > ctx->end ? ctx->end : ini->inilines) : ini->inilines;
+	for (c = start; c < end; c++) {
 		struct ini_line *il = ini->inidata[c];
 		if (il && !_tcsicmp(section, il->section) && (key == NULL || !_tcsicmp(key, il->key))) {
 			if (out) {
@@ -412,6 +423,7 @@ bool ini_getdata_multi(struct ini_data *ini, const TCHAR *section, const TCHAR *
 	int len;
 	bool quoted = false;
 	int j = 0;
+	int i;
 
 	if (!ini_getstring_multi(ini, section, key, &out2, ctx))
 		return false;
@@ -421,7 +433,7 @@ bool ini_getdata_multi(struct ini_data *ini, const TCHAR *section, const TCHAR *
 	if (!outp)
 		goto err;
 
-	for (int i = 0; i < len; ) {
+	for (i = 0; i < len; ) {
 		TCHAR c1 = _totupper(out2[i + 0]);
 		if (c1 == '\"') {
 			quoted = !quoted;
@@ -474,7 +486,8 @@ bool ini_getdata(struct ini_data *ini, const TCHAR *section, const TCHAR *key, u
 bool ini_getsection(struct ini_data *ini, int idx, TCHAR **section)
 {
 	const TCHAR *sptr = NULL;
-	for (int c = 0; c < ini->inilines; c++) {
+	int c;
+	for (c = 0; c < ini->inilines; c++) {
 		struct ini_line *il = ini->inidata[c];
 		if (il) {
 			if (!sptr) {
@@ -497,7 +510,8 @@ bool ini_getsection(struct ini_data *ini, int idx, TCHAR **section)
 
 bool ini_getsectionstring(struct ini_data *ini, const TCHAR *section, int idx, TCHAR **keyout, TCHAR **valout)
 {
-	for (int c = 0; c < ini->inilines; c++) {
+	int c;
+	for (c = 0; c < ini->inilines; c++) {
 		struct ini_line *il = ini->inidata[c];
 		if (il && !_tcsicmp(section, il->section)) {
 			if (idx == 0) {
@@ -527,7 +541,8 @@ void ini_setnextasstart(struct ini_data *ini, struct ini_context *ctx)
 
 void ini_setlast(struct ini_data *ini, const TCHAR *section, const TCHAR *key, struct ini_context *ctx)
 {
-	for (int c = ctx->start + 1; c < ini->inilines; c++) {
+	int c;
+	for (c = ctx->start + 1; c < ini->inilines; c++) {
 		struct ini_line *il = ini->inidata[c];
 		if (il && !_tcsicmp(section, il->section) && (key == NULL || !_tcsicmp(key, il->key))) {
 			ctx->end = c;
@@ -550,7 +565,8 @@ void ini_initcontext(struct ini_data *ini, struct ini_context *ctx)
 
 bool ini_addstring(struct ini_data *ini, const TCHAR *section, const TCHAR *key, const TCHAR *val)
 {
-	for (int c = 0; c < ini->inilines; c++) {
+	int c;
+	for (c = 0; c < ini->inilines; c++) {
 		struct ini_line *il = ini->inidata[c];
 		if (il && !_tcsicmp(section, il->section)) {
 			if (il->key == NULL)
@@ -574,7 +590,8 @@ bool ini_addstring(struct ini_data *ini, const TCHAR *section, const TCHAR *key,
 bool ini_delete(struct ini_data *ini, const TCHAR *section, const TCHAR *key)
 {
 	bool deleted = false;
-	for (int c = 0; c < ini->inilines; c++) {
+	int c;
+	for (c = 0; c < ini->inilines; c++) {
 		struct ini_line *il = ini->inidata[c];
 		if (il && !_tcsicmp(section, il->section) && (key == NULL || !_tcsicmp(key, il->key))) {
 			xfree(il->section);

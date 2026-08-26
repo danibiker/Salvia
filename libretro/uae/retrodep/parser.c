@@ -196,6 +196,31 @@ void uaeser_clearbuffers (void *vsd) {}
 int uaeser_open (void *vsd, void *user, int unit) { return 0; }
 void uaeser_close (void *vsd) {}
 
+#ifdef _XBOX
+
+int openser (const TCHAR *sername) { return 0; }
+void closeser (void) { }
+void writeser_flush (void) { }
+void writeser (int c) { }
+int checkserwrite (int spaceneeded) { return 1; }
+void flushser (void) { }
+int readseravail (bool *breakcond) { return 0; }
+int readser (int *buffer) { return 0; }
+void serialuartbreak (int v) { }
+void getserstat (int *pstatus) { }
+void setserstat (int mask, int onoff) { }
+int setbaud (long baud) { return 1; }
+void initparallel (void) { }
+int flashscreen;
+void doflashscreen (void) { }
+void hsyncstuff (void) { }
+int enumserialports (void) { return 0; }
+int enummidiports (void) { return 0; }
+void sernametodev (TCHAR *sername) { sername[0] = 0; }
+void serdevtoname (TCHAR *sername) { sername[0] = 0; }
+
+#else
+
 static HANDLE hCom = (HANDLE)INVALID_HANDLE_VALUE;
 static DCB dcb;
 static DWORD fDtrControl = DTR_CONTROL_DISABLE, fRtsControl = RTS_CONTROL_DISABLE;
@@ -228,11 +253,11 @@ static BOOL tcpserial;
 
 static bool tcp_is_connected (void)
 {
+	struct timeval tv;
 	socklen_t sa_len = sizeof(SOCKADDR_INET);
 	if (serialsocket == INVALID_SOCKET)
 		return false;
 	if (serialconn == INVALID_SOCKET) {
-		struct timeval tv;
 		fd_set_uae fd;
 		tv.tv_sec = 0;
 		tv.tv_usec = 0;
@@ -276,7 +301,7 @@ static int opentcp (const TCHAR *sername)
 {
 	int err;
 	TCHAR *port, *name;
-	const TCHAR *p;
+	const TCHAR *p, *p2;
 	bool waitmode = false;
 	const int one = 1;
 	const struct linger linger_1s = { 1, 1 };
@@ -292,7 +317,7 @@ static int opentcp (const TCHAR *sername)
 	if (p) {
 		name[p - sername] = 0;
 		port = my_strdup (p + 1);
-		const TCHAR *p2 = _tcschr (port, '/');
+		p2 = _tcschr (port, '/');
 		if (p2) {
 			port[p2 - port] = 0;
 			if (!_tcsicmp (p2 + 1, _T("wait")))
@@ -496,7 +521,7 @@ static void outser (void)
 #if 0
 	DWORD v = WaitForSingleObject (writeevent, 0);
 	if (v == WAIT_OBJECT_0) {
-		DWORD actual;
+		DWORD actual = 0;	/* a cero: ClearCommError/ReadFile/GetCommModemStatus estan en #if 0 (C4700) */
 		memcpy (outputbufferout, outputbuffer, datainoutput);
 		WriteFile (hCom, outputbufferout, datainoutput, &actual, &writeol);
 		datainoutput = 0;
@@ -556,8 +581,8 @@ void flushser(void)
 {
 	if (!tcpserial && !midi_ready && hCom) {
 #if 0
-		COMSTAT ComStat;
-		DWORD dwErrorFlags;
+		COMSTAT ComStat = {0};	/* a cero: ClearCommError/ReadFile/GetCommModemStatus estan en #if 0 (C4700) */
+		DWORD dwErrorFlags = 0;
 		ClearCommError(hCom, &dwErrorFlags, &ComStat);
 		PurgeComm(hCom, PURGE_RXCLEAR);
 #endif
@@ -572,8 +597,9 @@ void flushser(void)
 
 int readseravail(bool *breakcond)
 {
-	COMSTAT ComStat;
-	DWORD dwErrorFlags;
+	COMSTAT ComStat = {0};	/* a cero: ClearCommError/ReadFile/GetCommModemStatus estan en #if 0 (C4700) */
+	DWORD dwErrorFlags = 0;
+	int err;
 
 	if (breakcond)
 		*breakcond = false;
@@ -585,7 +611,7 @@ int readseravail(bool *breakcond)
 			tv.tv_usec = 0;
 			fd.fd_array[0] = serialconn;
 			fd.fd_count = 1;
-			int err = select (1, &fd, NULL, NULL, &tv);
+			err = select (1, &fd, NULL, NULL, &tv);
 			if (err == SOCKET_ERROR) {
 				tcp_disconnect ();
 				return 0;
@@ -619,15 +645,16 @@ int readseravail(bool *breakcond)
 
 int readser (int *buffer)
 {
-	COMSTAT ComStat;
-	DWORD dwErrorFlags;
-	DWORD actual;
+	COMSTAT ComStat = {0};	/* a cero: ClearCommError/ReadFile/GetCommModemStatus estan en #if 0 (C4700) */
+	DWORD dwErrorFlags = 0;
+	DWORD actual = 0;
+	int err;
 
 	if (tcpserial) {
 		if (tcp_is_connected ()) {
 			char buf[1];
 			buf[0] = 0;
-			int err = recv (serialconn, buf, 1, 0);
+			err = recv (serialconn, buf, 1, 0);
 			if (err == 1) {
 				*buffer = buf[0];
 				//write_log(_T(" %02X "), buf[0]);
@@ -696,7 +723,7 @@ void serialuartbreak (int v)
 
 void getserstat (int *pstatus)
 {
-	DWORD stat;
+	DWORD stat = 0;	/* a cero: ClearCommError/ReadFile/GetCommModemStatus estan en #if 0 (C4700) */
 	int status = 0;
 
 	*pstatus = 0;
@@ -1127,3 +1154,5 @@ void serdevtoname (TCHAR *sername)
 	}
 	sername[0] = 0;
 }
+
+#endif

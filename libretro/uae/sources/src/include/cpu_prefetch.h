@@ -3,7 +3,11 @@
 
 #include "uae/types.h"
 
-#ifdef CPUEMU_20
+/* Estos ayudantes son STATIC_INLINE, o extern a funciones que newcpu.c define
+ * siempre. Compilarlos no cuesta nada cuando la tabla correspondiente no se
+ * genera, y set_x_funcs() en newcpu.c los referencia sin guarda alguna: con
+ * el #ifdef puesto, un build sin CPUEMU_20..23 no compilaba. */
+#if 1 /* antes: #ifdef CPUEMU_20 */
 
 extern uae_u32 get_word_020_prefetch (int);
 extern void continue_020_prefetch(void);
@@ -30,7 +34,7 @@ STATIC_INLINE uae_u32 get_long_020_prefetch (int o)
 
 #endif
 
-#ifdef CPUEMU_21
+#if 1 /* antes: #ifdef CPUEMU_21 */
 
 STATIC_INLINE void limit_cycles_ce020(int clocks)
 {
@@ -53,12 +57,14 @@ STATIC_INLINE void limit_all_cycles_ce020(void)
 // only for CPU internal cycles
 STATIC_INLINE void do_cycles_ce020_internal(int clocks)
 {
+	int cycs;
+	int diff;
 	if (currprefs.m68k_speed < 0) {
 		regs.ce020extracycles += clocks;
 		return;
 	}
-	int cycs = clocks * cpucycleunit;
-	int diff = (int)(regs.ce020endcycle - regs.ce020startcycle);
+	cycs = clocks * cpucycleunit;
+	diff = (int)(regs.ce020endcycle - regs.ce020startcycle);
 	if (diff > 0) {
 		if (diff >= cycs) {
 			regs.ce020startcycle += cycs;
@@ -177,7 +183,7 @@ STATIC_INLINE void m68k_do_rts_ce020 (void)
 
 #endif
 
-#ifdef CPUEMU_22
+#if 1 /* antes: #ifdef CPUEMU_22 */
 
 extern void continue_030_prefetch(void);
 extern uae_u32 get_word_030_prefetch(int);
@@ -242,7 +248,7 @@ STATIC_INLINE void m68k_do_rts_030(void)
 
 #endif
 
-#ifdef CPUEMU_23
+#if 1 /* antes: #ifdef CPUEMU_23 */
 
 extern void continue_ce030_prefetch(void);
 extern uae_u32 get_word_ce030_prefetch(int);

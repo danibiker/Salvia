@@ -1,0 +1,597 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\libretro">
+      <UniqueIdentifier>{914823c8-7347-4cfa-ac2c-6eed840f5904}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\cpuA500">
+      <UniqueIdentifier>{3f0bf6e5-a00c-42a2-aeb0-5db0e29a0a63}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\retrodep">
+      <UniqueIdentifier>{58169483-931e-4cc2-924c-bd879d870596}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\archivers">
+      <UniqueIdentifier>{e1503f81-6df0-4c73-a53d-00989107742e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\archivers\dms">
+      <UniqueIdentifier>{fc909a64-90d3-4484-994a-251478705e8f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\archivers\lha">
+      <UniqueIdentifier>{450d2cc8-135b-4f28-9fe4-306c8cc12377}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\compress">
+      <UniqueIdentifier>{c8196bf7-117c-4044-a77e-ca33443b6972}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\libretro-common">
+      <UniqueIdentifier>{a2d96b6b-e712-4483-b209-fbe9bc2ee0f6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\core">
+      <UniqueIdentifier>{aac53356-8faf-4382-ac59-52f1e27e95ca}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="libretro\libretro-core.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\libretro-dc.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\libretro-glue.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\libretro-graph.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\libretro-mapper.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro\libretro-vkbd.c">
+      <Filter>Source Files\libretro</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpudefs.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_0.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_11.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_13.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpustbl.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\newcpu.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\newcpu_common.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\readcpu.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="retrodep\gui.c">
+      <Filter>Source Files\retrodep</Filter>
+    </ClCompile>
+    <ClCompile Include="retrodep\main.c">
+      <Filter>Source Files\retrodep</Filter>
+    </ClCompile>
+    <ClCompile Include="retrodep\mman.c">
+      <Filter>Source Files\retrodep</Filter>
+    </ClCompile>
+    <ClCompile Include="retrodep\parser.c">
+      <Filter>Source Files\retrodep</Filter>
+    </ClCompile>
+    <ClCompile Include="retrodep\serial_host.c">
+      <Filter>Source Files\retrodep</Filter>
+    </ClCompile>
+    <ClCompile Include="retrodep\fsdb_host.c">
+      <Filter>Source Files\retrodep</Filter>
+    </ClCompile>
+    <ClCompile Include="retrodep\machdep\support.c">
+      <Filter>Source Files\retrodep</Filter>
+    </ClCompile>
+    <ClCompile Include="retrodep\sounddep\sound.c">
+      <Filter>Source Files\retrodep</Filter>
+    </ClCompile>
+    <ClCompile Include="retrodep\threaddep\thread.c">
+      <Filter>Source Files\retrodep</Filter>
+    </ClCompile>
+    <ClCompile Include="retrodep\stubs\inputrecord.c">
+      <Filter>Source Files\retrodep</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\dms\crc_csum.c">
+      <Filter>Source Files\archivers\dms</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\dms\getbits.c">
+      <Filter>Source Files\archivers\dms</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\dms\maketbl.c">
+      <Filter>Source Files\archivers\dms</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\dms\pfile.c">
+      <Filter>Source Files\archivers\dms</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\dms\tables.c">
+      <Filter>Source Files\archivers\dms</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\dms\u_deep.c">
+      <Filter>Source Files\archivers\dms</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\dms\u_heavy.c">
+      <Filter>Source Files\archivers\dms</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\dms\u_init.c">
+      <Filter>Source Files\archivers\dms</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\dms\u_medium.c">
+      <Filter>Source Files\archivers\dms</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\dms\u_quick.c">
+      <Filter>Source Files\archivers\dms</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\dms\u_rle.c">
+      <Filter>Source Files\archivers\dms</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\lha\crcio.c">
+      <Filter>Source Files\archivers\lha</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\lha\dhuf.c">
+      <Filter>Source Files\archivers\lha</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\lha\header.c">
+      <Filter>Source Files\archivers\lha</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\lha\huf.c">
+      <Filter>Source Files\archivers\lha</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\lha\larc.c">
+      <Filter>Source Files\archivers\lha</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\lha\lhamaketbl.c">
+      <Filter>Source Files\archivers\lha</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\lha\lharc.c">
+      <Filter>Source Files\archivers\lha</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\lha\shuf.c">
+      <Filter>Source Files\archivers\lha</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\lha\slide.c">
+      <Filter>Source Files\archivers\lha</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\lha\uae_lha.c">
+      <Filter>Source Files\archivers\lha</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\lha\util.c">
+      <Filter>Source Files\archivers\lha</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\7zArcIn.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\7zBuf.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\7zCrc.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\7zCrcOpt.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\7zDec.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\7zFile.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\7zStream.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\Bcj2.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\Bra.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\Bra86.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\BraIA64.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\CpuArch.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\Delta.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\Lzma2Dec.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\LzmaDec.c">
+      <Filter>Source Files\compress</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\compat_snprintf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\compat_strcasestr.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\compat_strl.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\fopen_utf8.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\encodings\encoding_utf.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\file\file_path.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\file\file_path_io.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\file\retro_dirent.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\streams\file_stream.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\streams\file_stream_transforms.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\string\stdstring.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\time\rtime.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\vfs\vfs_implementation.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\audio.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\a2065.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\a2091.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\akiko.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\amax.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\arcadia.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\aros.rom.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\blkdev_cdimage.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\bsdsocket.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\calc.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cd32_fmv.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cd32_fmv_genlock.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cda_play.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cdrom.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cdtv.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cdtvcr.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuboard.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpummu.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpummu30.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\disasm.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\dongle.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\draco.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\ethernet.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\fdi2raw.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\flashrom.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\fpp.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\fpp_native.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\fpp_softfloat.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\gfxboard.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\gfxlib.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\gfxutil.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\hrtmon.rom.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\ide.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\idecontrollers.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\identify.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\ini.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\isofs.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\missing.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\ncr_scsi.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\ncr9x_scsi.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\pci.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\sampler.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\sana2.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\scsi.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\scsiemul.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\scsitape.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\sndboard.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\specialmonitors.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\test_card.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\traps.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\uaenet.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\uaeresource.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\uaeserial.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\x86.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\archivers\mp2\kjmp2.c">
+      <Filter>Source Files\archivers</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\caps\caps.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\caps\uae_dlopen.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\dsp3210\DSP3210_emulation.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\dsp3210\dsp_glue.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\softfloat\softfloat.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\softfloat\softfloat_decimal.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\softfloat\softfloat_fpsp.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="libretro-common\compat\compat_posix_string.c">
+      <Filter>Source Files\libretro-common</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\autoconf.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\blitfunc.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\blittable.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\blitter.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\blkdev.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cfgfile.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cia.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\crc32.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\custom.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\debug.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\devices.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\disk.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\diskutil.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\drawing.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\driveclick.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\events.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\expansion.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\filesys.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\filesys_unix.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\fsdb.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\fsdb_unix.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\fsusage.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\gayle.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\hardfile.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\hardfile_unix.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\inputdevice.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\keybuf.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\main.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\memory.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\misc.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\native2amiga.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\picasso96.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\rommgr.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\rtc.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\savestate.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\statusline.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\uaelib.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\writelog.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\zfile.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\zfile_archive.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\ar.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\debugmem.c">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="sources\src\include\sysdeps.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="retrodep\sysconfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="libretro-common\include\dirent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="libretro\libretro-core.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

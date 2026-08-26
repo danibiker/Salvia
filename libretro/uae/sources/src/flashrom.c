@@ -231,6 +231,7 @@ void *eeprom93xx_new(const uae_u8 *memory, int nwords, struct zfile *zf)
 	/* Add a new EEPROM (with 16, 64 or 256 words). */
 	struct eeprom93xx_eeprom_t *eeprom;
 	uint8_t addrbits;
+	int i;
 
 	switch (nwords) {
 	case 16:
@@ -249,7 +250,7 @@ void *eeprom93xx_new(const uae_u8 *memory, int nwords, struct zfile *zf)
 	if (eeprom) {
 		eeprom->size = nwords;
 		eeprom->addrbits = addrbits;
-		for (int i = 0; i < nwords; i++) {
+		for (i = 0; i < nwords; i++) {
 			eeprom->contents[i] = (memory[i * 2 + 0] << 8) | memory[i * 2 + 1];
 		}
 		/* Output DO is tristate, read results in 1. */
@@ -655,30 +656,33 @@ void *flash_new(uae_u8 *rom, int flashsize, int allocsize, uae_u8 mfgcode, uae_u
 void flash_free(void *fdv)
 {
 	struct flashrom_data *fd = (struct flashrom_data*)fdv;
+	int i;
 	if (!fd)
 		return;
 	if (fd->zf && fd->modified) {
 		if (fd->flags & FLASHROM_EVERY_OTHER_BYTE) {
+			int last;
 			zfile_fseek(fd->zf, (fd->flags & FLASHROM_EVERY_OTHER_BYTE_ODD) ? 1 : 0, SEEK_SET);
-			int last = fd->lastwriteoffset + 1;
+			last = fd->lastwriteoffset + 1;
 			last += 511;
 			last &= ~511;
 			if (last > fd->allocsize) {
 				last = fd->allocsize;
 			}
-			for (int i = 0; i < last; i++) {
+			for (i = 0; i < last; i++) {
 				zfile_fwrite(&fd->rom[i * 2], 1, 1, fd->zf);
 				zfile_fseek(fd->zf, 1, SEEK_CUR);
 			}
 		} else if (fd->flags & FLASHROM_SKIP_EVERY_OTHER_BYTE) {
+			int last;
 			zfile_fseek(fd->zf, 0, SEEK_SET);
-			int last = fd->lastwriteoffset + 1;
+			last = fd->lastwriteoffset + 1;
 			last += 511;
 			last &= ~511;
 			if (last > fd->allocsize) {
 				last = fd->allocsize;
 			}
-			for (int i = 0; i <  last / 2; i++) {
+			for (i = 0; i <  last / 2; i++) {
 				zfile_fwrite(&fd->rom[i * 2], 1, 1, fd->zf);
 			}
 		} else {
@@ -747,6 +751,9 @@ bool flash_write(void *fdv, uaecptr addr, uae_u8 v)
 {
 	struct flashrom_data *fd = (struct flashrom_data*)fdv;
 	int other_byte_mult = 1;
+	int oldstate;
+	bool det = false;
+	int i;
 
 	if (!fd)
 		return false;
@@ -760,8 +767,7 @@ bool flash_write(void *fdv, uaecptr addr, uae_u8 v)
 		return false;
 	}
 
-	int oldstate = fd->state;
-	bool det = false;
+	oldstate = fd->state;
 
 #if FLASH_LOG > 1
 	write_log(_T("flash write %08x %02x (%d) PC=%08x\n"), addr, v, fd->state, m68k_getpc());
@@ -831,7 +837,7 @@ bool flash_write(void *fdv, uaecptr addr, uae_u8 v)
 		det = true;
 	}
 	if (addr == 0x5555 && fd->state == 6 && v == 0x10) {
-		for (int i = 0; i < fd->allocsize; i++)  {
+		for (i = 0; i < fd->allocsize; i++)  {
 			int a = i * other_byte_mult;
 			if (fd->rom[a] != 0xff) {
 				fd->rom[a] = 0xff;
@@ -847,7 +853,7 @@ bool flash_write(void *fdv, uaecptr addr, uae_u8 v)
 	} else if (fd->state == 6 && v == 0x30) {
 		int saddr = addr & ~(fd->sectorsize - 1);
 		if (saddr < fd->allocsize) {
-			for (int i = 0; i < fd->sectorsize; i++) {
+			for (i = 0; i < fd->sectorsize; i++) {
 				int a = (saddr + i) * other_byte_mult;
 				if (fd->rom[a] != 0xff) {
 					fd->rom[a] = 0xff;
@@ -880,6 +886,7 @@ uae_u32 flash_read(void *fdv, uaecptr addr)
 	struct flashrom_data *fd = (struct flashrom_data*)fdv;
 	uae_u8 v = 0xff;
 	int other_byte_mult = 1;
+	int i;
 #if FLASH_LOG > 1
 	uaecptr oaddr = addr;
 #endif
@@ -901,7 +908,7 @@ uae_u32 flash_read(void *fdv, uaecptr addr)
 	// write data in pagebuffer when any read is done
 	if ((fd->flags & FLASHROM_PARALLEL_EEPROM) && fd->pagemodified) {
 		fd->pagemodified = false;
-		for (int i = 0; i < fd->pagesize; i++) {
+		for (i = 0; i < fd->pagesize; i++) {
 			int offset = fd->lastpagewrite + i;
 			if (fd->mpage[i]) {
 				if (fd->rom[offset] != fd->page[i]) {

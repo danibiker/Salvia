@@ -214,6 +214,9 @@ static uae_u32 emulib_ExitEmu(void)
 */
 static uae_u32 emulib_GetUaeConfig(TrapContext *ctx, uaecptr place)
 {
+	/* C89 hoisted declarations */
+	int i;
+
 	trap_put_long(ctx, place, version);
 	trap_put_long(ctx, place + 4, chipmem_bank.allocated_size);
 	trap_put_long(ctx, place + 8, bogomem_bank.allocated_size);
@@ -239,7 +242,7 @@ static uae_u32 emulib_GetUaeConfig(TrapContext *ctx, uaecptr place)
 	else
 		trap_put_byte(ctx, place + 35, 1);
 
-	for (int i = 0; i < 4; i++) {
+	for (i = 0; i < 4; i++) {
 		char *s = ua (currprefs.floppyslots[i].df);
 		trap_put_string(ctx, s, place + 36 + i * 256, 256);
 		xfree (s);
@@ -262,10 +265,13 @@ static uae_u32 emulib_SetUaeConfig(uaecptr place)
 */
 static uae_u32 emulib_GetDisk(TrapContext *ctx, uae_u32 drive, uaecptr name)
 {
+	/* C89 hoisted declarations */
+	char *n;
+
 	if (drive > 3)
 		return 0;
 
-	char *n = ua(currprefs.floppyslots[drive].df);
+	n = ua(currprefs.floppyslots[drive].df);
 	trap_put_string(ctx, (uae_u8*)n, name, 256);
 	xfree(n);
 	return 1;
@@ -391,8 +397,9 @@ static uae_u32 uaelib_demux_common(TrapContext *ctx, uae_u32 ARG0, uae_u32 ARG1,
 		case 86:
 		if (valid_address(ARG1, 1)) {
 			uae_char tmp[MAX_DPATH];
+			TCHAR *s;
 			trap_get_string(ctx, tmp, ARG1, sizeof tmp);
-			TCHAR *s = au(tmp);
+			s = au(tmp);
 			write_log(_T("DBG: %s\n"), s);
 			xfree(s);
 			return 1;

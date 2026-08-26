@@ -45,12 +45,13 @@ static void wl (uae_u8 *p, uae_u32 v)
 
 void tape_free (struct scsi_data_tape *tape)
 {
+	int i;
 	if (!tape)
 		return;
 	zfile_fclose (tape->zf);
 	zfile_fclose (tape->index);
 	zfile_closedir_archive (tape->zd);
-	for (int i = 0; i < MAX_FILESYSTEM_UNITS; i++) {
+	for (i = 0; i < MAX_FILESYSTEM_UNITS; i++) {
 		if (tapeunits[i] == tape)
 			tapeunits[i] = NULL;
 	}
@@ -151,11 +152,12 @@ bool tape_get_info (int unitnum, struct device_info *di)
 static void tape_write_filemark(struct scsi_data_tape *tape)
 {
 	TCHAR path[MAX_DPATH];
+	struct zfile *zf;
 
 	if (!tape->realdir)
 		return;
 	_stprintf(path, _T("%s%s%s"), tape->tape_dir, FSDB_DIR_SEPARATOR_S, TAPE_INDEX);
-	struct zfile *zf = zfile_fopen_2x(path, _T("a+b"));
+	zf = zfile_fopen_2x(path, _T("a+b"));
 	if (zf) {
 		zfile_fputs(zf, _T("\n"));
 		zfile_fclose(zf);
@@ -193,9 +195,10 @@ static void erase (struct scsi_data_tape *tape)
 	if (od) {
 		for (;;) {
 			TCHAR path[MAX_DPATH], filename[MAX_DPATH];
+			TCHAR *ext;
 			if (!my_readdir (od, filename))
 				break;
-			TCHAR *ext = _tcsrchr (filename, '.');
+			ext = _tcsrchr (filename, '.');
 			if (ext && !_tcsicmp (ext, _T(".tape"))) {
 				_stprintf (path, _T("%s%s%s"), tape->tape_dir, FSDB_DIR_SEPARATOR_S, filename);
 				if (my_existsfile (path))
@@ -327,8 +330,9 @@ static int tape_read (struct scsi_data_tape *tape, uae_u8 *scsi_data, int len, b
 	if (tape->zf) {
 		zfile_fseek(tape->zf, tape->file_offset, SEEK_SET);
 		if (scsi_data) {
+			uae_s64 pos;
 			got = (int)zfile_fread(scsi_data, 1, len, tape->zf);
-			uae_s64 pos = zfile_ftell(tape->zf);
+			pos = zfile_ftell(tape->zf);
 			if (log_tapeemu)
 				write_log(_T("TAPEEMU READ: Requested %ld, read %ld, pos %lld, %lld remaining.\n"), len, got, pos, zfile_size(tape->zf) - pos);
 		} else {
@@ -354,13 +358,14 @@ static int tape_write (struct scsi_data_tape *tape, uae_u8 *scsi_data, int len)
 {
 	TCHAR path[MAX_DPATH], numname[30];
 	int exists;
+	struct zfile *zf;
 
 	if (!tape->realdir)
 		return -1;
 	_stprintf (numname, _T("%05d.tape"), tape->file_number);
 	_stprintf (path, _T("%s%s%s"), tape->tape_dir, FSDB_DIR_SEPARATOR_S, numname);
 	exists = my_existsfile (path);
-	struct zfile *zf = zfile_fopen_2x (path, _T("a+b"));
+	zf = zfile_fopen_2x (path, _T("a+b"));
 	if (!zf)
 		return -1;
 	zfile_fseek (zf, 0, SEEK_END);
@@ -385,6 +390,7 @@ int scsi_tape_emulate (struct scsi_data_tape *tape, uae_u8 *cmdbuf, int scsi_cmd
 	uae_u8 *scsi_data, int *data_len, uae_u8 *r, int *reply_len, uae_u8 *s, int *sense_len)
 {
 	int len;
+	int i;
 	int lr = 0, ls = 0;
 	int scsi_len = -1;
 	int status = 0;
@@ -744,6 +750,11 @@ int scsi_tape_emulate (struct scsi_data_tape *tape, uae_u8 *cmdbuf, int scsi_cmd
 
 	case 0x12: /* INQUIRY */
 	{
+		/* 'us' era un 'char *s' que sombreaba el parametro 'uae_u8 *s';
+		 * al sacar la declaracion del medio del bloque hay que renombrarlo
+		 * para no machacar el buffer de sense data. */
+		char *us;
+		int i;
 		if (log_tapeemu)
 			write_log (_T("TAPEEMU INQUIRY\n"));
 		if ((cmdbuf[1] & 1) || cmdbuf[2] != 0)
@@ -761,16 +772,16 @@ int scsi_tape_emulate (struct scsi_data_tape *tape, uae_u8 *cmdbuf, int scsi_cmd
 		r[6] = 0x10; /* Density */
 		r[7] = 0;
 		scsi_len = lr = len < 36 ? len : 36;
-		char *s = ua (_T("UAE"));
-		memcpy (r + 8, s, strlen (s));
-		xfree (s);
-		s = ua (_T("SCSI TAPE"));
-		memcpy (r + 16, s, strlen (s));
-		xfree (s);
-		s = ua (_T("0.3"));
-		memcpy (r + 32, s, strlen (s));
-		xfree (s);
-		for (int i = 8; i < 36; i++) {
+		us = ua (_T("UAE"));
+		memcpy (r + 8, us, strlen (us));
+		xfree (us);
+		us = ua (_T("SCSI TAPE"));
+		memcpy (r + 16, us, strlen (us));
+		xfree (us);
+		us = ua (_T("0.3"));
+		memcpy (r + 32, us, strlen (us));
+		xfree (us);
+		for (i = 8; i < 36; i++) {
 			if (r[i] == 0)
 				r[i] = 32;
 		}
@@ -830,7 +841,7 @@ end:
 	if (lr > 0) {
 		if (log_tapeemu) {
 			write_log (_T("TAPEEMU REPLY: "));
-			for (int i = 0; i < lr && i < 40; i++)
+			for (i = 0; i < lr && i < 40; i++)
 				write_log (_T("%02X."), r[i]);
 			write_log (_T("\n"));
 		}
@@ -851,7 +862,7 @@ end:
 			s[9] |= 0x8;
 		if (log_tapeemu) {
 			write_log (_T("TAPEEMU SENSE: "));
-			for (int i = 0; i < ls; i++)
+			for (i = 0; i < ls; i++)
 				write_log (_T("%02X."), s[i]);
 			write_log (_T("\n"));
 		}

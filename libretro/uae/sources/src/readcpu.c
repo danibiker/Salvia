@@ -212,6 +212,7 @@ static void build_insn (int insn)
 
 	int flaglive = 0, flagdead = 0;
 	int cflow = 0;
+	unsigned char flags_set = 0, flags_used = 0;
 
 	id = defs68k[insn];
 
@@ -219,7 +220,6 @@ static void build_insn (int insn)
 	cflow = id.cflow;
 
 	// Mask of flags set/used
-	unsigned char flags_set = 0, flags_used = 0;
 
 	for (i = 0, n = 4; i < 5; i++, n--) {
 		switch (id.flaginfo[i].flagset) {

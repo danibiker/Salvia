@@ -94,9 +94,11 @@ static FILE *get_fsdb (a_inode *dir, const TCHAR *mode)
 
 static void kill_fsdb (a_inode *dir)
 {
+	TCHAR *n;
+
 	if (!dir->nname)
 		return;
-	TCHAR *n = build_nname (dir->nname, FSDB_FILE);
+	n = build_nname (dir->nname, FSDB_FILE);
 	_wunlink (n);
 	xfree (n);
 }
@@ -105,10 +107,11 @@ static void fsdb_fixup (FILE *f, uae_u8 *buf, int size, a_inode *base)
 {
 	TCHAR *nname;
 	int ret;
+	TCHAR *fnname;
 
 	if (buf[0] == 0)
 		return;
-	TCHAR *fnname = au ((char*)buf + 5 + 257);
+	fnname = au ((char*)buf + 5 + 257);
 	nname = build_nname (base->nname, fnname);
 	xfree (fnname);
 	ret = fsdb_exists (nname);

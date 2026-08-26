@@ -584,13 +584,17 @@ void gayle_dataflyer_enable(bool enable)
 
 static bool isdataflyerscsiplus(uaecptr addr, uae_u32 *v, int size)
 {
+	uaecptr addrmask;
+	uaecptr addrbase;
+	int reg;
+
 	if (!dataflyer_state)
 		return false;
-	uaecptr addrmask = addr & 0xffff;
+	addrmask = addr & 0xffff;
 	if (addrmask >= GAYLE_IRQ_4000 && addrmask <= GAYLE_IRQ_4000 + 1 && currprefs.cs_ide == IDE_A4000)
 		return false;
-	uaecptr addrbase = (addr & ~0xff) & ~0x1020;
-	int reg = ((addr & 0xffff) & ~0x2020) >> 2;
+	addrbase = (addr & ~0xff) & ~0x1020;
+	reg = ((addr & 0xffff) & ~0x2020) >> 2;
 	if (reg >= IDE_SECONDARY) {
 		reg &= ~IDE_SECONDARY;
 		if (reg >= 6) // normal IDE registers
@@ -646,9 +650,11 @@ static bool isdataflyerscsiplus(uaecptr addr, uae_u32 *v, int size)
 static bool isa4000t (uaecptr *paddr)
 {
 #ifdef NCR
+	uaecptr addr;
+
 	if (!is_a4000t_scsi())
 		return false;
-	uaecptr addr = *paddr;
+	addr = *paddr;
 	if ((addr & 0xffff) >= (GAYLE_BASE_4000 & 0xffff))
 		return false;
 	addr &= 0xff;
@@ -916,11 +922,13 @@ static void mbres_write (uaecptr addr, uae_u32 val, int size)
 static uae_u32 mbres_read (uaecptr addr, int size)
 {
 	uae_u32 v = 0;
+	uae_u32 addr2;
+	uae_u32 addr64;
 
 	addr &= 0xffff;
 
-	uae_u32 addr2 = addr & 3;
-	uae_u32 addr64 = (addr >> 6) & 3;
+	addr2 = addr & 3;
+	addr64 = (addr >> 6) & 3;
 	for (;;) {
 		if (addr64 == 1 && addr2 == 0x03) { /* RAMSEY revision */
 			if (currprefs.cs_ramseyrev >= 0)
@@ -1591,6 +1599,7 @@ static int initpcmcia (const TCHAR *path, int readonly, int type, int reset, str
 		}
 	
 	} else if (type == PCMCIA_ARCHOSHD) {
+		struct romconfig *rc;
 
 		pcmcia_disk->hfd.drive_empty = 0;
 		pcmcia_common_size = 0;
@@ -1601,7 +1610,7 @@ static int initpcmcia (const TCHAR *path, int readonly, int type, int reset, str
 		pcmcia_attrs_size = 0;
 		pcmcia_card = 1;
 
-		struct romconfig *rc = get_device_romconfig(&currprefs, ROMTYPE_ARCHOSHD, 0);
+		rc = get_device_romconfig(&currprefs, ROMTYPE_ARCHOSHD, 0);
 		if (rc) {
 			load_rom_rc(rc, ROMTYPE_ARCHOSHD, 32768, 0, pcmcia_common, pcmcia_common_size, 0);
 		}
@@ -1618,6 +1627,7 @@ static int initpcmcia (const TCHAR *path, int readonly, int type, int reset, str
 		ide_initialize(archoshd, 0);
 
 	} else if (type == PCMCIA_SURFSQUIRREL) {
+		struct romconfig *rc;
 
 		pcmcia_disk->hfd.drive_empty = 0;
 		pcmcia_common_size = 0;
@@ -1628,7 +1638,7 @@ static int initpcmcia (const TCHAR *path, int readonly, int type, int reset, str
 		pcmcia_attrs = xcalloc(uae_u8, pcmcia_attrs_size);
 		pcmcia_card = 1;
 
-		struct romconfig *rc = get_device_romconfig(&currprefs, ROMTYPE_SSQUIRREL, 0);
+		rc = get_device_romconfig(&currprefs, ROMTYPE_SSQUIRREL, 0);
 		if (rc) {
 			ncr_squirrel_init(rc, 0xa00000);
 		}
@@ -1651,9 +1661,11 @@ static int initpcmcia (const TCHAR *path, int readonly, int type, int reset, str
 
 static int archoshd_reg(uaecptr addr)
 {
+	int reg;
+
 	if ((addr & 0x7f80) != 0x7f80)
 		return -1;
-	int reg = (addr >> 2) & 7;
+	reg = (addr >> 2) & 7;
 	if (addr & 0x40)
 		reg |= IDE_SECONDARY;
 	return reg;
@@ -1875,13 +1887,17 @@ static void REGPARAM2 gayle_common_bput (uaecptr addr, uae_u32 value)
 
 static void gayle_map_pcmcia (void)
 {
+	int idx;
+	bool pcmcia_override;
+
 	if (currprefs.cs_pcmcia == 0)
 		return;
-	int idx = 0;
-	bool pcmcia_override = false;
+	idx = 0;
+	pcmcia_override = false;
 	while (!pcmcia_override) {
 		int cnt = 0;
-		for (int i = 0; i < 8; i++) {
+		int i;
+		for (i = 0; i < 8; i++) {
 			struct autoconfig_info *aci = expansion_get_autoconfig_by_address(&currprefs, 6 * 1024 * 1024 + i * 512 * 1024, idx);
 			if (aci) {
 				if (aci->zorro > 0) {
@@ -1908,7 +1924,9 @@ static void gayle_map_pcmcia (void)
 
 void gayle_free_units (void)
 {
-	for (int i = 0; i < TOTAL_IDE * 2; i++) {
+	int i;
+
+	for (i = 0; i < TOTAL_IDE * 2; i++) {
 		remove_ide_unit(idedrive, i);
 	}
 	freepcmcia (1);
@@ -2001,7 +2019,9 @@ bool gayle_init_pcmcia(struct autoconfig_info *aci)
 
 static int pcmcia_eject2(struct uae_prefs *p)
 {
-	for (int i = 0; i < MAX_EXPANSION_BOARDS; i++) {
+	int i;
+
+	for (i = 0; i < MAX_EXPANSION_BOARDS; i++) {
 		struct boardromconfig *brc_changed = &changed_prefs.expansionboard[i];
 		struct boardromconfig *brc_cur = &currprefs.expansionboard[i];
 		struct boardromconfig *brc = &p->expansionboard[i];
@@ -2029,8 +2049,10 @@ void pcmcia_eject(struct uae_prefs *p)
 // eject and insert card back after few second delay
 void pcmcia_reinsert(struct uae_prefs *p)
 {
+	int num;
+
 	pcmcia_delayed_insert_count = 0;
-	int num = pcmcia_eject2(p);
+	num = pcmcia_eject2(p);
 	if (num < 0)
 		return;
 	pcmcia_delayed_insert = num + 1;
@@ -2055,7 +2077,9 @@ static void pcmcia_card_check(int changecheck, int insertdev)
 {
 	// allow only max single PCMCIA care inserted
 	bool found = false;
-	for (int i = 0; i < MAX_EXPANSION_BOARDS; i++) {
+	int i;
+
+	for (i = 0; i < MAX_EXPANSION_BOARDS; i++) {
 		struct boardromconfig *brc_prev = &currprefs.expansionboard[i];
 		struct boardromconfig *brc = &changed_prefs.expansionboard[i];
 		if (brc->device_type) {
@@ -2074,7 +2098,7 @@ static void pcmcia_card_check(int changecheck, int insertdev)
 		}
 	}
 
-	for (int i = 0; i < MAX_EXPANSION_BOARDS; i++) {
+	for (i = 0; i < MAX_EXPANSION_BOARDS; i++) {
 		struct boardromconfig *brc_prev = &currprefs.expansionboard[i];
 		struct boardromconfig *brc = &changed_prefs.expansionboard[i];
 		if (brc->device_type) {
@@ -2088,15 +2112,16 @@ static void pcmcia_card_check(int changecheck, int insertdev)
 					} else {
 						// find matching disk (if it exist)
 						struct uaedev_config_data *ucd = NULL;
-						for (int i = 0; i < currprefs.mountitems; i++) {
-							struct uaedev_config_data *ucdx = &currprefs.mountconfig[i];
+						int j;
+						int readonly = 1;
+						for (j = 0; j < currprefs.mountitems; j++) {
+							struct uaedev_config_data *ucdx = &currprefs.mountconfig[j];
 							const struct expansionromtype *ert = get_unit_expansion_rom(ucdx->ci.controller_type);
 							if (ert && ert->romtype == brc->device_type) {
 								ucd = ucdx;
 								break;
 							}
 						}
-						int readonly = 1;
 						switch (brc->device_type & ROMTYPE_MASK)
 						{
 							case ROMTYPE_NE2KPCMCIA:

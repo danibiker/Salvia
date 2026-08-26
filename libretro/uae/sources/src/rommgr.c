@@ -64,6 +64,7 @@ static void romlist_cleanup (void);
 void romlist_add (const TCHAR *path, struct romdata *rd)
 {
 	struct romlist *rl2;
+	struct romdata *rd2;
 
 	if (path == NULL || rd == NULL) {
 		romlist_cleanup ();
@@ -74,7 +75,7 @@ void romlist_add (const TCHAR *path, struct romdata *rd)
 	rl2 = rl + romlist_cnt - 1;
 	rl2->path = my_strdup (path);
 	rl2->rd = rd;
-	struct romdata *rd2 = getromdatabyid (rd->id);
+	rd2 = getromdatabyid (rd->id);
 	if (rd2 != rd && rd2) { // replace "X" with parent name
 		rd->name = rd2->name;
 		rd->sortpriority = rd2->sortpriority;
@@ -1055,7 +1056,9 @@ static struct romdata roms[] = {
 
 void dumpromlist(void)
 {
-	for (int i = 0; roms[i].name; i++) {
+	int i;
+
+	for (i = 0; roms[i].name; i++) {
 		struct romdata *rd = &roms[i];
 		if (rd->name && rd->group == 0) {
 			write_log(_T("%s"), rd->name);
@@ -1776,7 +1779,8 @@ struct romlist *getromlistbyromtype(uae_u32 romtype, const TCHAR *romname)
 	while (roms[i].name) {
 		if (roms[i].type == romtype) {
 			struct romdata *rd = &roms[i];
-			for (int j = 0; j < romlist_cnt; j++) {
+			int j;
+			for (j = 0; j < romlist_cnt; j++) {
 				if (rl[j].rd->id == rd->id) {
 					if (romname) {
 						if (my_issamepath(rl[j].path, romname))
@@ -1985,13 +1989,15 @@ static void save_rom(uae_u8 *rom, int size)
 
 static void alg_descramble(struct romdata *rd, uae_u8 *buf, int size)
 {
+	int i;
+
 	if (rd->id == 197) {
 		// ALG Platoon
 		uae_u8 *tmp = xmalloc(uae_u8, size);
+		static const int platoon[] = { 0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15,16,24,20,28,18,26,22,30,17,25,21,29,19,27,23,31 };
 		if (tmp) {
 			memcpy(tmp, buf, size);
-			static const int platoon[] = { 0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15,16,24,20,28,18,26,22,30,17,25,21,29,19,27,23,31 };
-			for (int i = 0; i < 32; i++) {
+			for (i = 0; i < 32; i++) {
 				memcpy(buf + i * 0x2000, tmp + platoon[i] * 0x2000, 0x2000);
 			}
 			xfree(tmp);
@@ -1999,11 +2005,11 @@ static void alg_descramble(struct romdata *rd, uae_u8 *buf, int size)
 	} else if (rd->id == 182) {
 		// ALG Space Pirates (PAL R4?)
 		uae_u8 *tmp = xmalloc(uae_u8, size);
+		static const int sp[] = { 33,32,34,35,49,48,50,51,45,44,46,47,61,60,62,63,37,36,38,39,53,52,54,55,41,40,42,43,57,56,58,59,
+								  33,32,34,35,49,48,50,51,45,44,46,47,61,60,62,63,37,36,38,39,53,52,54,55,41,40,42,43,57,56,58,59 };
 		if (tmp) {
 			memcpy(tmp, buf, size);
-			static const int sp[] = { 33,32,34,35,49,48,50,51,45,44,46,47,61,60,62,63,37,36,38,39,53,52,54,55,41,40,42,43,57,56,58,59,
-									  33,32,34,35,49,48,50,51,45,44,46,47,61,60,62,63,37,36,38,39,53,52,54,55,41,40,42,43,57,56,58,59 };
-			for (int i = 0; i < 64; i++) {
+			for (i = 0; i < 64; i++) {
 				memcpy(buf + i * 0x1000, tmp + sp[i] * 0x1000, 0x1000);
 			}
 			xfree(tmp);
@@ -2011,10 +2017,10 @@ static void alg_descramble(struct romdata *rd, uae_u8 *buf, int size)
 	} else if ((rd->id == 184) || (rd->id == 185)) {
 		// ALG Johnny Rock (PAL R3)
 		uae_u8 *tmp = xmalloc(uae_u8, size);
+		static const int wsjr[] = { 0,1,3,2,4,5,7,6,8,9,11,10,12,13,15,14,16,17,19,18,20,21,23,22,24,25,27,26,28,29,31,30 };
 		if (tmp) {
 			memcpy(tmp, buf, size);
-			static const int wsjr[] = { 0,1,3,2,4,5,7,6,8,9,11,10,12,13,15,14,16,17,19,18,20,21,23,22,24,25,27,26,28,29,31,30 };
-			for (int i = 0; i < 32; i++) {
+			for (i = 0; i < 32; i++) {
 				memcpy(buf + i * 0x1000, tmp + wsjr[i] * 0x1000, 0x1000);
 			}
 			xfree(tmp);
@@ -2022,10 +2028,10 @@ static void alg_descramble(struct romdata *rd, uae_u8 *buf, int size)
 	} else if ((rd->id == 175) || (rd->id == 272)) {
 		// ALG Mad Dog (Original Rev A board, PAL R1)
 		uae_u8 *tmp = xmalloc(uae_u8, size);
+		static const int mdm[] = { 0,1,3,2,4,5,7,6,12,13,15,14,8,9,11,10,16,17,19,18,20,21,23,22,28,29,31,30,24,25,27,26 };
 		if (tmp) {
 			memcpy(tmp, buf, size);
-			static const int mdm[] = { 0,1,3,2,4,5,7,6,12,13,15,14,8,9,11,10,16,17,19,18,20,21,23,22,28,29,31,30,24,25,27,26 };
-			for (int i = 0; i < 32; i++) {
+			for (i = 0; i < 32; i++) {
 				memcpy(buf + i * 0x1000, tmp + mdm[i] * 0x1000, 0x1000);
 			}
 			xfree(tmp);
@@ -2079,15 +2085,16 @@ struct zfile *read_rom(struct romdata *prd, bool rw)
 				add = 1;
 				i++;
 			} else if (flags & ROMTYPE_QUAD) {
+				int k, kk;
 				if (i == 0) {
-					for (int k = 0; k < 4; k++) {
+					for (k = 0; k < 4; k++) {
 						read_rom_file(buf2, rd2 + k + 1, rw);
 						for (j = 0; j < size; j += 4)
 							buf[j + k] = buf2[j / 4];
 					}
 				} else {
-					for (int kk = 0; kk < 2; kk++) {
-						for (int k = 0; k < 2; k++) {
+					for (kk = 0; kk < 2; kk++) {
+						for (k = 0; k < 2; k++) {
 							read_rom_file(buf2, rd2 + k + kk * 2 + 1, rw);
 							for (j = 0; j < size / 2; j += 2) {
 								buf[j + k + kk * (rd2->size / 2)] = buf2[j / 2];
@@ -2264,8 +2271,9 @@ static struct zfile *rom_fopen2(const TCHAR *name, const TCHAR *mode, int mask)
 struct zfile *read_rom_name(const TCHAR *filename, bool rw)
 {
 	struct zfile *f;
+	int i;
 
-	for (int i = 0; i < romlist_cnt; i++) {
+	for (i = 0; i < romlist_cnt; i++) {
 		if (my_issamepath(filename, rl[i].path)) {
 			struct romdata *rd = rl[i].rd;
 			f = read_rom (rd, false);
@@ -2411,8 +2419,9 @@ int configure_rom (struct uae_prefs *p, const int *rom, int msg)
 	if ((rd->type & (ROMTYPE_EXTCD32 | ROMTYPE_EXTCDTV | ROMTYPE_ARCADIABIOS | ROMTYPE_ALG)) && !(rd->type & ROMTYPE_KICKCD32))
 		_tcscpy (p->romextfile, path);
 	if (rd->type & ROMTYPE_CD32CART) {
+		struct boardromconfig *brc;
 		_tcscpy(p->cartfile, path);
-		struct boardromconfig *brc = get_device_rom_new(p, ROMTYPE_CD32CART, 0, NULL);
+		brc = get_device_rom_new(p, ROMTYPE_CD32CART, 0, NULL);
 		if (brc)
 			_tcscpy(brc->roms[0].romfile, p->cartfile);
 	}
@@ -2464,7 +2473,9 @@ const struct expansionromtype *get_unit_expansion_rom(int hdunit)
 
 const struct expansionromtype *get_device_expansion_rom(int romtype)
 {
-	for (int i = 0; expansionroms[i].name; i++) {
+	int i;
+
+	for (i = 0; expansionroms[i].name; i++) {
 		const struct expansionromtype *ert = &expansionroms[i];
 		if ((ert->romtype & ROMTYPE_MASK) == (romtype & ROMTYPE_MASK))
 			return ert;
@@ -2474,25 +2485,28 @@ const struct expansionromtype *get_device_expansion_rom(int romtype)
 
 static void device_rom_defaults(struct uae_prefs *p, struct boardromconfig *brc, int romtype, int devnum)
 {
+	int i;
+	int order;
+
 	memset(brc, 0, sizeof(struct boardromconfig));
 	brc->device_type = romtype;
 	brc->device_num = devnum;
-	for (int i = 0; i < MAX_BOARD_ROMS; i++) {
-		brc->roms[i].device_id = 7;	
+	for (i = 0; i < MAX_BOARD_ROMS; i++) {
+		brc->roms[i].device_id = 7;
 		brc->roms[i].back = brc;
 	}
-	int order = 0;
-	for (int i = 0; i < MAX_EXPANSION_BOARDS; i++) {
+	order = 0;
+	for (i = 0; i < MAX_EXPANSION_BOARDS; i++) {
 		if (p->expansionboard[i].device_order > order)
 			order = p->expansionboard[i].device_order;
 	}
-	for (int i = 0; i < MAX_RAM_BOARDS; i++) {
+	for (i = 0; i < MAX_RAM_BOARDS; i++) {
 		if (p->fastmem[i].device_order > order)
 			order = p->fastmem[i].device_order;
 		if (p->z3fastmem[i].device_order > order)
 			order = p->z3fastmem[i].device_order;
 	}
-	for (int i = 0; i < MAX_RTG_BOARDS; i++) {
+	for (i = 0; i < MAX_RTG_BOARDS; i++) {
 		if (p->rtgboards[i].device_order > order)
 			order = p->rtgboards[i].device_order;
 	}
@@ -2504,6 +2518,10 @@ struct boardromconfig *get_device_rom_new(struct uae_prefs *p, int romtype, int 
 	int idx2;
 	static struct boardromconfig fake;
 	const struct expansionromtype *ert = get_device_expansion_rom(romtype);
+	/* C89 hoisted declarations */
+	struct boardromconfig *brc;
+	int i;
+
 	if (!ert) {
 		if (index)
 			*index = 0;
@@ -2511,21 +2529,23 @@ struct boardromconfig *get_device_rom_new(struct uae_prefs *p, int romtype, int 
 	}
 	if (index)
 		*index = ert->parentromtype ? 1 : 0;
-	struct boardromconfig *brc = get_device_rom(p, ert->parentromtype ? ert->parentromtype : romtype, devnum, &idx2);
+	brc = get_device_rom(p, ert->parentromtype ? ert->parentromtype : romtype, devnum, &idx2);
 	if (!brc) {
-		for (int i = 0; i < MAX_EXPANSION_BOARDS; i++) {
+		for (i = 0; i < MAX_EXPANSION_BOARDS; i++) {
+			int ok;
+			int j;
 			brc = &p->expansionboard[i];
 			if (brc->device_type == 0)
 				continue;
-			int ok = 0;
-			for (int j = 0; j < MAX_BOARD_ROMS; j++) {
+			ok = 0;
+			for (j = 0; j < MAX_BOARD_ROMS; j++) {
 				if (!brc->roms[j].romfile[0] && !brc->roms[j].romident[0] && !brc->roms[j].board_ram_size)
 					ok++;
 			}
 			if (ok == MAX_BOARD_ROMS)
 				memset(brc, 0, sizeof(struct boardromconfig));
 		}
-		for (int i = 0; i < MAX_EXPANSION_BOARDS; i++) {
+		for (i = 0; i < MAX_EXPANSION_BOARDS; i++) {
 			brc = &p->expansionboard[i];
 			if (brc->device_type == 0) {
 				device_rom_defaults(p, brc, romtype, devnum);
@@ -2553,15 +2573,18 @@ void clear_device_rom(struct uae_prefs *p, int romtype, int devnum, bool deleteD
 struct boardromconfig *get_device_rom(struct uae_prefs *p, int romtype, int devnum, int *index)
 {
 	const struct expansionromtype *ert = get_device_expansion_rom(romtype);
+	int parentrom;
+	int i;
+
 	if (!ert) {
 		if (index)
 			*index = 0;
 		return NULL;
 	}
-	int parentrom = ert->parentromtype ? ert->parentromtype : romtype;
+	parentrom = ert->parentromtype ? ert->parentromtype : romtype;
 	if (index)
 		*index = ert->parentromtype ? 1 : 0;
-	for (int i = 0; i < MAX_EXPANSION_BOARDS; i++) {
+	for (i = 0; i < MAX_EXPANSION_BOARDS; i++) {
 		struct boardromconfig *brc = &p->expansionboard[i];
 		if (!brc->device_type)
 			continue;
@@ -2596,9 +2619,11 @@ void board_prefs_changed(int romtype, int devnum)
 				memcpy(brc1, brc2, sizeof(struct boardromconfig));
 		}
 	} else {
-		for (int i = 0; expansionroms[i].name; i++) {
+		int i;
+		for (i = 0; expansionroms[i].name; i++) {
 			const struct expansionromtype *ert = &expansionroms[i];
-			for (int j = 0; j < MAX_BOARD_ROMS; j++) {
+			int j;
+			for (j = 0; j < MAX_BOARD_ROMS; j++) {
 				board_prefs_changed(ert->romtype, j);
 			}
 		}
@@ -2608,10 +2633,12 @@ void board_prefs_changed(int romtype, int devnum)
 bool is_board_enabled(struct uae_prefs *p, int romtype, int devnum)
 {
 	int idx;
+	struct boardromconfig *brc;
+
 	if (romtype == ROMTYPE_CPUBOARD && p->cpuboard_type) {
 		return devnum == 0;
 	}
-	struct boardromconfig *brc = get_device_rom(p, romtype, devnum, &idx);
+	brc = get_device_rom(p, romtype, devnum, &idx);
 	if (!brc)
 		return false;
 	return brc->roms[idx].romfile[0] != 0;
@@ -2646,7 +2673,7 @@ struct zfile *read_device_from_romconfig(struct romconfig *rc, uae_u32 romtype, 
 
 struct zfile *read_device_from_romconfig_2(struct romconfig *rc, uae_u32 romtype)
 {
-   read_device_from_romconfig(rc, romtype, false);
+   return read_device_from_romconfig(rc, romtype, false);
 }
 
 struct zfile *read_device_rom(struct uae_prefs *p, int romtype, int devnum, int *roms)
@@ -2655,9 +2682,10 @@ struct zfile *read_device_rom(struct uae_prefs *p, int romtype, int devnum, int 
 	struct boardromconfig *brc = get_device_rom(p, romtype, devnum, &idx);
 	if (brc) {
 		const TCHAR *romname = brc->roms[idx].romfile;
+		struct zfile *z;
 		if (isspecialrom(romname))
 			return NULL;
-		struct zfile *z = read_rom_name (romname, false);
+		z = read_rom_name (romname, false);
 		if (!z && roms) {
 			struct romlist *rl = getromlistbyids(roms, romname);
 			if (rl) {
@@ -2687,12 +2715,15 @@ int is_device_rom(struct uae_prefs *p, int romtype, int devnum)
 
 struct boardromconfig *get_boardromconfig(struct uae_prefs *p, int romtype, int *index)
 {
-	for (int i = 0; i < MAX_EXPANSION_BOARDS; i++) {
+	int i;
+
+	for (i = 0; i < MAX_EXPANSION_BOARDS; i++) {
 		struct boardromconfig *brc = &p->expansionboard[i];
 		if (!brc->device_type)
 			continue;
 		if ((brc->device_type & ROMTYPE_MASK) == (romtype & ROMTYPE_MASK)) {
-			for (int j = 0; j < MAX_BOARD_ROMS; j++) {
+			int j;
+			for (j = 0; j < MAX_BOARD_ROMS; j++) {
 				if (brc->roms[j].romfile[0]) {
 					if (index)
 						*index = j;
@@ -2708,31 +2739,37 @@ static struct zfile *parse_trumpcard_driver(struct zfile *z)
 {
 	int size;
 	uae_u8 *dp = zfile_getdata(z, 0, -1, &size);
+	/* C89 hoisted declarations */
+	uae_u8 *d;
+	struct zfile *zd;
+	int i, out;
+	int datastart;
+	uae_u8 zero;
+
 	if (!dp)
 		return z;
 	if (dp[0] != 0x00 || dp[1] != 0x00 || dp[2] != 0x03 || dp[3] != 0xf3) {
 		xfree(dp);
 		return z;
 	}
-	uae_u8 *d = dp + 0x1c + dp[11] * 4;
+	d = dp + 0x1c + dp[11] * 4;
 	if (dp >= dp + size) {
 		xfree(dp);
 		return z;
 	}
-	struct zfile *zd = zfile_fopen_empty(NULL, zfile_getname(z), 16384);
-	int i, out;
+	zd = zfile_fopen_empty(NULL, zfile_getname(z), 16384);
 	out = 0;
 	for (i = 0; i < size - 4; i++) {
+		uae_u8 v;
 		if (d[i] == 0x4e && d[i + 1] == 0x71 && d[i + 2] == 0x4e && d[i + 3] == 0x71)
 			break;
-		uae_u8 v;
 		v = (d[i] & 0xf0) | 0x0f;
 		zfile_fwrite(&v, 1, 1, zd);
 		v = (d[i] << 4) | 0x0f;
 		zfile_fwrite(&v, 1, 1, zd);
 		out += 2;
 	}
-	int datastart = i;
+	datastart = i;
 	for (; i < size - 4; i += 2) {
 		if (d[i] == 0x66 && d[i + 1] == 0x66 && d[i + 2] == 0x99 && d[i + 3] == 0x99) {
 			zfile_fwrite(&d[datastart], i - datastart + 4, 1, zd);
@@ -2740,7 +2777,7 @@ static struct zfile *parse_trumpcard_driver(struct zfile *z)
 			break;
 		}
 	}
-	uae_u8 zero = 0;
+	zero = 0;
 	while (out & 15) {
 		zfile_fwrite(&zero, 1, 1, zd);
 		out++;
@@ -2760,6 +2797,16 @@ static struct zfile *parse_trumpcard_driver(struct zfile *z)
 
 static bool load_rom_rc1(struct romconfig *rc, uae_u32 romtype, int maxfilesize, int fileoffset, uae_u8 *rom, int maxromsize, int flags, struct zfile **zf)
 {
+	/* C89 hoisted declarations */
+	struct zfile *f;
+	TCHAR *ext;
+	int cnt;
+	int pos;
+	int bytes;
+	bool eof;
+	int posend;
+	int oldpos;
+
 	if (zf) {
 		*zf = NULL;
 	}
@@ -2767,18 +2814,18 @@ static bool load_rom_rc1(struct romconfig *rc, uae_u32 romtype, int maxfilesize,
 		memset(rom, 0xff, maxromsize);
 	if (flags & LOADROM_ZEROFILL)
 		memset(rom, 0x00, maxromsize);
-	struct zfile *f = read_device_from_romconfig(rc, romtype, zf != NULL);
+	f = read_device_from_romconfig(rc, romtype, zf != NULL);
 	if (!f)
 		return false;
-	TCHAR *ext = _tcsrchr(zfile_getname(f), '.');
+	ext = _tcsrchr(zfile_getname(f), '.');
 	if ((romtype == ROMTYPE_IVSTPRO || romtype == ROMTYPE_IVSTC || romtype == ROMTYPE_IVST500AT) && ext && !_tcsicmp(ext, _T(".driver"))) {
 		f = parse_trumpcard_driver(f);
 	}
 	zfile_fseek(f, fileoffset, SEEK_SET);
-	int cnt = 0;
-	int pos = 0;
-	int bytes = 0;
-	bool eof = false;
+	cnt = 0;
+	pos = 0;
+	bytes = 0;
+	eof = false;
 	while (cnt < maxromsize && cnt < maxfilesize && pos < maxromsize) {
 		uae_u8 b = 0xff;
 		if (!eof) {
@@ -2789,7 +2836,8 @@ static bool load_rom_rc1(struct romconfig *rc, uae_u32 romtype, int maxfilesize,
 		}
 		if (eof) {
 			int bitcnt = 0;
-			for (int i = 1; i < maxromsize; i <<= 1) {
+			int i;
+			for (i = 1; i < maxromsize; i <<= 1) {
 				if (cnt & i)
 					bitcnt++;
 			}
@@ -2813,10 +2861,10 @@ static bool load_rom_rc1(struct romconfig *rc, uae_u32 romtype, int maxfilesize,
 	} else {
 		*zf = f;
 	}
-	int posend = pos;
+	posend = pos;
 	if (!(flags & LOADROM_FILL))
 		return true;
-	int oldpos = 0;
+	oldpos = 0;
 	while (pos < maxromsize) {
 		rom[pos] = rom[oldpos];
 		oldpos++;

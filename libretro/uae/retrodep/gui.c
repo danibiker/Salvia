@@ -236,6 +236,12 @@ void notify_user_parms (int msg, const TCHAR *parms, ...)
 
 int translate_message (int msg,	TCHAR *out)
 {
+	/* El cuerpo real esta desactivado, pero los llamantes usan 'out' como
+	 * cadena -- rommgr.c llega a pasarlo como formato a gui_message(). Sin
+	 * terminarlo se queda con el contenido previo de la pila. */
+	if (out)
+		out[0] = 0;
+	return 0;
 #if 0
 	msg = gettranslation (msg);
 	out[0] = 0;

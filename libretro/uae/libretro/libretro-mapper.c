@@ -1729,6 +1729,29 @@ int process_keyboard_pass_through()
 void retro_poll_event()
 {
    uint8_t i, j;
+   unsigned disable_keys = 0;
+   static float mouse_multiplier = 1;
+   static int dpadmouse_speed[2] = {0};
+   static int dpadmouse_pressed[2] = {0};
+#ifdef MOUSE_DPAD_ACCEL
+   long now = 0;
+#endif
+   int16_t retro_mouse_x[2], retro_mouse_y[2];
+   int16_t retro_mouse_l[2], retro_mouse_r[2], retro_mouse_m[2];
+   static uint8_t retro_mouse_l_state[2] = {0}, retro_mouse_r_state[2] = {0}, retro_mouse_m_state[2] = {0};
+
+   /* keep track of analog mouse motion with high precision, to allow fine-grained speed changes */
+   static float sub_pixel_remainder_leftstick_x[2] = {0, 0};
+   static float sub_pixel_remainder_leftstick_y[2] = {0, 0};
+   static float sub_pixel_remainder_rightstick_x[2] = {0, 0};
+   static float sub_pixel_remainder_rightstick_y[2] = {0, 0};
+
+   int analog_stick[2];
+   int analog_deadzone;
+   float analog_mag;
+   int j_mouse;
+   uint8_t retro_port;
+
    for (j = 0; j < RETRO_DEVICES; j++)
    {
       if (libretro_supports_bitmasks)
@@ -1751,7 +1774,6 @@ void retro_poll_event()
    }
 
    /* Keyboard pass-through */
-   unsigned disable_keys = 0;
    if (!opt_keyboard_pass_through)
       disable_keys = process_keyboard_pass_through();
    update_input(disable_keys);
@@ -1759,28 +1781,19 @@ void retro_poll_event()
    /* retro joypad take control over keyboard joy */
    /* override keydown, but allow keyup, to prevent key sticking during keyboard use, if held down on opening keyboard */
    /* keyup allowing most likely not needed on actual keyboard presses even though they get stuck also */
-   static float mouse_multiplier = 1;
-   static int dpadmouse_speed[2] = {0};
-   static int dpadmouse_pressed[2] = {0};
 #ifdef MOUSE_DPAD_ACCEL
-   long now = 0;
    now = retro_ticks() / 1000;
 #endif
 
-   int16_t retro_mouse_x[2] = {0}, retro_mouse_y[2] = {0};
-   int16_t retro_mouse_l[2] = {0}, retro_mouse_r[2] = {0}, retro_mouse_m[2] = {0};
-   static uint8_t retro_mouse_l_state[2] = {0}, retro_mouse_r_state[2] = {0}, retro_mouse_m_state[2] = {0};
+   memset(retro_mouse_x, 0, sizeof(retro_mouse_x));
+   memset(retro_mouse_y, 0, sizeof(retro_mouse_y));
+   memset(retro_mouse_l, 0, sizeof(retro_mouse_l));
+   memset(retro_mouse_r, 0, sizeof(retro_mouse_r));
+   memset(retro_mouse_m, 0, sizeof(retro_mouse_m));
 
-   /* keep track of analog mouse motion with high precision, to allow fine-grained speed changes */
-   static float sub_pixel_remainder_leftstick_x[2] = {0, 0};
-   static float sub_pixel_remainder_leftstick_y[2] = {0, 0};
-   static float sub_pixel_remainder_rightstick_x[2] = {0, 0};
-   static float sub_pixel_remainder_rightstick_y[2] = {0, 0};
+   memset(analog_stick, 0, sizeof(analog_stick));
+   analog_deadzone = opt_analogmouse_deadzone * 32768.0f / 100.0f;
 
-   int analog_stick[2] = {0};
-   int analog_deadzone = opt_analogmouse_deadzone * 32768.0f / 100.0f;
-
-   uint8_t retro_port;
    for (retro_port = 0; retro_port < MAX_JPORTS; retro_port++)
    {
       if (retro_mousemode)
@@ -2010,7 +2023,7 @@ void retro_poll_event()
          analog_stick[0] = joypad_axis[j][AXIS_LX];
          analog_stick[1] = joypad_axis[j][AXIS_LY];
 
-         float analog_mag = sqrt((analog_stick[0] * analog_stick[0]) + (analog_stick[1] * analog_stick[1]));
+         analog_mag = sqrt((analog_stick[0] * analog_stick[0]) + (analog_stick[1] * analog_stick[1]));
          if (analog_mag <= analog_deadzone)
             analog_stick[0] = analog_stick[1] = 0;
 
@@ -2056,7 +2069,7 @@ void retro_poll_event()
             analog_stick[0] = joypad_axis[j][AXIS_LX];
             analog_stick[1] = joypad_axis[j][AXIS_LY];
 
-            float analog_mag = sqrt((analog_stick[0] * analog_stick[0]) + (analog_stick[1] * analog_stick[1]));
+            analog_mag = sqrt((analog_stick[0] * analog_stick[0]) + (analog_stick[1] * analog_stick[1]));
             if (analog_mag <= analog_deadzone)
                analog_stick[0] = analog_stick[1] = 0;
 
@@ -2087,7 +2100,7 @@ void retro_poll_event()
             analog_stick[0] = joypad_axis[j][AXIS_RX];
             analog_stick[1] = joypad_axis[j][AXIS_RY];
 
-            float analog_mag = sqrt((analog_stick[0] * analog_stick[0]) + (analog_stick[1] * analog_stick[1]));
+            analog_mag = sqrt((analog_stick[0] * analog_stick[0]) + (analog_stick[1] * analog_stick[1]));
             if (analog_mag <= analog_deadzone)
                analog_stick[0] = analog_stick[1] = 0;
 
@@ -2214,7 +2227,7 @@ void retro_poll_event()
          mflag[j][RETRO_DEVICE_ID_JOYPAD_RIGHT] = 0;
 
       /* Mouse buttons to UAE */
-      int j_mouse = j;
+      j_mouse = j;
       if (retro_devices[j] == RETRO_DEVICE_PUAE_LIGHTGUN
        || retro_devices[j] == RETRO_DEVICE_PUAE_LIGHTPEN)
          j_mouse = !j;

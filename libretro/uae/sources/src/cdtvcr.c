@@ -183,6 +183,7 @@ static int get_toc (void)
 {
 	uae_u32 msf;
 	uae_u8 *p, *pl;
+	int j;
 
 	cdtvcr_4510_ram[CDTVCR_SYS_STATE] &= ~4;
 	datatrack = 0;
@@ -202,7 +203,7 @@ static int get_toc (void)
 	p[3] = msf >>  8;
 	p[4] = msf >>  0;
 	p += 5;
-	for (int j = toc.first_track_offset; j <= toc.last_track_offset; j++) {
+	for (j = toc.first_track_offset; j <= toc.last_track_offset; j++) {
 		struct cd_toc *s = &toc.toc[j];
 		p[0] = (s->adr << 0) | (s->control << 4);
 		p[1] = s->track;
@@ -334,11 +335,15 @@ static void cdtvcr_pause(bool pause)
 static void setsubchannel(uae_u8 *s)
 {
 	uae_u8 *d;
+	int track;
+	uae_u8 mins = 0, secs = 0;
+	uae_s32 trackpos;
+	uae_s32 diskpos;
 
 	// q-channel
 	d = &cdtvcr_4510_ram[CDTVCR_SUBQ];
 	s += SUB_ENTRY_SIZE;
-	int track = frombcd(s[1]);
+	track = frombcd(s[1]);
 	/* CtlAdr */
 	d[0] = s[0];
 	/* Track */
@@ -356,11 +361,10 @@ static void setsubchannel(uae_u8 *s)
 	d[8] = s[8];
 	d[9] = s[9];
 
-	uae_u8 mins = 0, secs = 0;
-	uae_s32 trackpos = msf2lsn(fromlongbcd(s + 3));
+	trackpos = msf2lsn(fromlongbcd(s + 3));
 	if (trackpos < 0)
 		trackpos = 0;
-	uae_s32 diskpos = msf2lsn(fromlongbcd(s + 7));
+	diskpos = msf2lsn(fromlongbcd(s + 7));
 	if (diskpos < 0)
 		diskpos = 0;
 	switch (cdtvcr_4510_ram[CDTVCR_PLAYLIST_TIME_MODE2])
@@ -454,9 +458,10 @@ static void cdtvcr_play_track(uae_u32 track_start, uae_u32 track_end)
 {
 	int start_found, end_found;
 	uae_u32 start, end;
+	int j;
 
 	start_found = end_found = 0;
-	for (int j = toc.first_track_offset; j <= toc.last_track_offset; j++) {
+	for (j = toc.first_track_offset; j <= toc.last_track_offset; j++) {
 		struct cd_toc *s = &toc.toc[j];
 		if (track_start == s->track) {
 			start_found++;
@@ -481,13 +486,14 @@ static void cdtvcr_read_data(uae_u32 start, uae_u32 addr, uae_u32 len)
 {
 	uae_u8 buffer[2048];
 	int didread;
-	
+	int i;
+
 	cdtvcr_wait_sectors = 0;
 	while (len) {
 		didread = sys_command_cd_read (unitnum, buffer, start, 1);
 		if (!didread)
 			break;
-		for (int i = 0; i < 2048 && len > 0; i++) {
+		for (i = 0; i < 2048 && len > 0; i++) {
 			put_byte(addr + i, buffer[i]);
 			len--;
 		}
@@ -527,11 +533,14 @@ static void cdtvcr_player_play(void)
 {
 	int start_found, end_found;
 	uae_u32 start, end;
+	int entry;
+	int track;
+	int j;
 
-	int entry = cdtvcr_4510_ram[CDTVCR_PLAYLIST_CURRENT];
-	int track = cdtvcr_4510_ram[CDTVCR_PLAYLIST_DATA + entry] & 0x7f;
+	entry = cdtvcr_4510_ram[CDTVCR_PLAYLIST_CURRENT];
+	track = cdtvcr_4510_ram[CDTVCR_PLAYLIST_DATA + entry] & 0x7f;
 	start_found = end_found = 0;
-	for (int j = toc.first_track_offset; j <= toc.last_track_offset; j++) {
+	for (j = toc.first_track_offset; j <= toc.last_track_offset; j++) {
 		struct cd_toc *s = &toc.toc[j];
 		if (track == s->track) {
 			start_found++;
@@ -555,12 +564,13 @@ static void cdtvcr_do_cmd(void)
 	uae_u32 startlsn, endlsn;
 	uae_u8 starttrack, endtrack;
 	uae_u8 *p = &cdtvcr_4510_ram[CDTVCR_CD_CMD];
+	int i;
 
 	cdtvcr_4510_ram[CDTVCR_SYS_STATE] |= 2;
 	cdtvcr_4510_ram[CDTVCR_CD_CMD_STATUS] = 2;
 	cdtvcr_4510_ram[CDTVCR_CD_CMD_STATUS2] = 0;
 	write_log(_T("CDTVCR CD command %02x\n"), p[0]);
-	for(int i = 0; i < 14; i++)
+	for(i = 0; i < 14; i++)
 		write_log(_T(".%02x"), p[i]);
 	write_log(_T("\n"));
 
@@ -904,6 +914,7 @@ static void dev_thread (void *p)
 static void CDTVCR_hsync_handler (void)
 {
 	static int subqcnt, readcnt;
+	int i;
 
 	if (!currprefs.cs_cdtvcr)
 		return;
@@ -933,12 +944,13 @@ static void CDTVCR_hsync_handler (void)
 		write_comm_pipe_u32 (&requests, 0x0101, 1);
 		subqcnt = (int)(maxvpos * vblank_hz / 75 - 1);
 		if (subcodebufferoffset != subcodebufferoffsetw) {
+			uae_u8 *d;
 			uae_sem_wait (&sub_sem);
 			cdtvcr_4510_ram[CDTVCR_SUBBANK] = cdtvcr_4510_ram[CDTVCR_SUBBANK] ? 0 : SUB_CHANNEL_SIZE + 2;
-			uae_u8 *d = &cdtvcr_4510_ram[CDTVCR_SUBC];
+			d = &cdtvcr_4510_ram[CDTVCR_SUBC];
 			d[cdtvcr_4510_ram[CDTVCR_SUBBANK] + SUB_CHANNEL_SIZE + 0] = 0x1f;
 			d[cdtvcr_4510_ram[CDTVCR_SUBBANK] + SUB_CHANNEL_SIZE + 1] = 0x3d;
-			for (int i = 0; i < SUB_CHANNEL_SIZE; i++) {
+			for (i = 0; i < SUB_CHANNEL_SIZE; i++) {
 				d[cdtvcr_4510_ram[CDTVCR_SUBBANK] + i] = subcodebuffer[subcodebufferoffset * SUB_CHANNEL_SIZE + i] & 0x3f;
 			}
 			subcodebufferinuse[subcodebufferoffset] = 0;
@@ -957,11 +969,12 @@ static void CDTVCR_hsync_handler (void)
 			uae_u8 *s = dst + 12;
 			struct cd_toc *cdtoc = &toc.toc[toc.first_track];
 			int sector = 150;
+			int msf;
 			memset (dst, 0, SUB_CHANNEL_SIZE);
 			s[0] = (cdtoc->control << 4) | (cdtoc->adr << 0);
 			s[1] = tobcd (cdtoc->track);
 			s[2] = tobcd (1);
-			int msf = lsn2msf (sector);
+			msf = lsn2msf (sector);
 			tolongbcd (s + 7, msf);
 			msf = lsn2msf (sector - cdtoc->address - 150);
 			tolongbcd (s + 3, msf);
