@@ -85,6 +85,12 @@ GameMenu::GameMenu(CfgLoader *cfgLoader) : m_csInited(false)
 	this->current_fast_forward = false;
 	processConfigChanges();
 
+	if (cfgLoader->appliedFileParmsCore.empty()){
+		//Solo indicamos el mensaje de que tenemos las opciones por defecto cargadas si efectivamente, 
+		//no hay ningun fichero de configuracion aplicado
+		cfgLoader->appliedFileParmsCore = LanguageManager::instance()->get("menu.core.options.msg.default");
+	}
+
 	fpsSurface = NULL; 
 	cpuSurface = NULL;
 	memSurface = NULL;
