@@ -1495,33 +1495,6 @@ int GameMenu::saveGameMenuPos(ListMenu &menuData){
     return ret;
 }
 
-/**
- * 
- */
-int GameMenu::recoverGameMenuPos(ListMenu &menuData, struct ListStatus &read_struct){
-    FILE* infile;
-    string filepath = Constant::getAppDir() + Constant::getFileSep() + MENUTMP;
-    int ret = 0;
-
-    // Open person.dat for reading
-    infile = fopen(filepath.c_str(), "rb");
-    if (infile == NULL) {
-        cerr << "Error openning file: " << filepath << endl;
-        return 1;
-    }
-
-    if (fread(&read_struct, sizeof(read_struct), 1, infile) > 0){
-        LOG_DEBUG("emupos: %d; inipos: %d; endpos: %d; curpos: %d; maxlines: %d; layout: %d; animateBkg: %d", read_struct.emuLoaded,  
-			read_struct.iniPos, read_struct.endPos, read_struct.curPos, read_struct.maxLines, read_struct.layout, read_struct.animateBkg);
-        //Setting the emulator selected        
-        cfgLoader->emuCfgPos = read_struct.emuLoaded;
-    } else {
-        ret = 1;
-    }
-
-    fclose(infile);
-    return ret;
-}
 
 bool GameMenu::updateFps(){
 	bool shouldUpdateFps = false;
@@ -2626,5 +2599,12 @@ void GameMenu::checkDisplayOptions(){
 		SDL_XBOX_SetDisplaySize(currentRatio);
 		#endif
 		current_video_settings.ratio = currentRatio;
+	}
+
+	// Overriding the video synchronization mode if the core has specified something greater than 0. 
+	// 0 is actually -1 in the cfg file which represents "Auto"
+	const int currentSyncType = cfgEmu->syncMode > 0 ? cfgEmu->syncMode - 1 : *this->current_sync;
+	if (*this->current_sync != currentSyncType){
+		*this->current_sync = currentSyncType;
 	}
 }

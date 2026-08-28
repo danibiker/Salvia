@@ -89,21 +89,23 @@ static FILE *get_fsdb (a_inode *dir, const TCHAR *mode)
 
 static void kill_fsdb (a_inode *dir)
 {
+	TCHAR * n;
 	if (!dir->nname)
 		return;
-	TCHAR *n = build_nname (dir->nname, FSDB_FILE);
+	n = build_nname (dir->nname, FSDB_FILE);
 	_wunlink (n);
 	xfree (n);
 }
 
 static void fsdb_fixup (FILE *f, uae_u8 *buf, int size, a_inode *base)
 {
+	TCHAR * fnname;
 	TCHAR *nname;
 	int ret;
 
 	if (buf[0] == 0)
 		return;
-	TCHAR *fnname = au ((char*)buf + 5 + 257);
+	fnname = au ((char*)buf + 5 + 257);
 	nname = build_nname (base->nname, fnname);
 	xfree (fnname);
 	ret = fsdb_exists (nname);
@@ -141,8 +143,9 @@ void fsdb_clean_dir (a_inode *dir)
 		if (buf[0] == 0)
 			continue;
 		if (pos1 != pos2) {
+			size_t isWritten;
 			fseek (f, pos1, SEEK_SET);
-			size_t isWritten = fwrite (buf, 1, sizeof buf, f);
+			isWritten = fwrite (buf, 1, sizeof buf, f);
 			if (isWritten < sizeof(buf))
 				write_log("%s:%d [%s] - Failed to write %l bytes (%l/%d)",
 							 __FILE__, __LINE__, __FUNCTION__,
@@ -287,6 +290,7 @@ static int needs_dbentry (a_inode *aino)
 
 static void write_aino (FILE *f, a_inode *aino)
 {
+	size_t isWritten;
 	uae_u8 buf[1 + 4 + 257 + 257 + 81] = { 0 };
 
 	buf[0] = aino->needs_dbentry ? 1 : 0;
@@ -298,7 +302,7 @@ static void write_aino (FILE *f, a_inode *aino)
 	ua_copy ((char*)buf + 5 + 2 * 257, 80, aino->comment ? aino->comment : _T(""));
 	buf[5 + 2 * 257 + 80] = '\0';
 	aino->db_offset = ftell (f);
-	size_t isWritten = fwrite (buf, 1, sizeof buf, f);
+	isWritten = fwrite (buf, 1, sizeof buf, f);
 	if (isWritten < sizeof(buf))
 		write_log("%s:%d [%s] - Failed to write %l bytes (%l/%d)",
 							 __FILE__, __LINE__, __FUNCTION__,
@@ -371,8 +375,9 @@ void fsdb_dir_writeback (a_inode *dir)
 	fseek (f, 0, SEEK_SET);
 	tmpbuf = 0;
 	if (size > 0) {
+		size_t isRead;
 		tmpbuf = (uae_u8*)malloc (size);
-		size_t isRead = fread (tmpbuf, 1, size, f);
+		isRead = fread (tmpbuf, 1, size, f);
 		if (isRead < (size_t)size)
 			write_log("%s:%d [%s] - Failed to read %l bytes (%l/%d)",
 						__FILE__, __LINE__, __FUNCTION__,

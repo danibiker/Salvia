@@ -117,6 +117,7 @@ static void GetSystemInfo(SYSTEM_INFO *si)
 
 static void *mmap_anon(void *addr, size_t len, int prot, int flags, off_t offset)
 {
+	int fd;
 	void *result;
 
 #if defined(MAP_SHARED) && defined(MAP_PRIVATE)
@@ -128,7 +129,6 @@ static void *mmap_anon(void *addr, size_t len, int prot, int flags, off_t offset
 	result = mmap(addr, len, prot, flags | MAP_ANONYMOUS, -1, offset);
 #else
 	/* SysV-style anonymous mapping */
-	int fd;
 	fd = open("/dev/zero", O_RDWR);
 	if (fd < 0){
 		write_log ( "MMAP: Cannot open /dev/zero for R+W. Error: ");
@@ -150,10 +150,13 @@ static void *mmap_anon(void *addr, size_t len, int prot, int flags, off_t offset
 }
 
 static void *VirtualAlloc(LPVOID lpAddress, int dwSize, DWORD flAllocationType, DWORD flProtect) {
+	void * memory;
+	void* answer;
+	long pgsz;
 #if MEMORY_DEBUG > 0
 	write_log ("VirtualAlloc Addr: 0x%08X, Size: %zu bytes (%d MB), Type: %x, Protect: %d\n", lpAddress, dwSize, dwSize/0x100000, flAllocationType, flProtect);
 #endif
-	void *memory = NULL;
+	memory = NULL;
 
 	if ((flAllocationType == MEM_COMMIT && lpAddress == NULL) || flAllocationType & MEM_RESERVE) {
 		memory = malloc(dwSize);
@@ -170,8 +173,6 @@ static void *VirtualAlloc(LPVOID lpAddress, int dwSize, DWORD flAllocationType, 
 		return lpAddress;
 	}
 
-	void* answer;
-	long pgsz;
 
 	if ((flAllocationType & (MEM_RESERVE | MEM_COMMIT)) == 0) {
 		return NULL;
@@ -253,9 +254,10 @@ static void *VirtualAlloc(LPVOID lpAddress, int dwSize, DWORD flAllocationType, 
 }
 
 static bool VirtualFree(LPVOID lpAddress, SIZE_T dwSize, DWORD dwFreeType) {
-	return true;
-	virt_alloc* str = vm;
+	virt_alloc* str;
 	int answer;
+	return true;
+	str = vm;
 
 #if MEMORY_DEBUG > 0
 	write_log ("VirtualFree: Addr: 0x%08X, Size: %d bytes (%d MB), Type: 0x%08X)\n", PTR_TO_UINT32(lpAddress), dwSize, dwSize/0x100000, dwFreeType);
@@ -297,9 +299,10 @@ void cache_free (uae_u8 *cache)
 
 uae_u8 *cache_alloc (int size)
 {
+	void * cache;
 	size = size < sysconf(_SC_PAGESIZE) ? sysconf(_SC_PAGESIZE) : size;
 
-	void *cache = mmap(0, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
+	cache = mmap(0, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON, -1, 0);
 	if (!cache) {
 		write_log ("Cache_Alloc of %d failed. ERR=%d\n", size, errno);
 	}
@@ -353,8 +356,9 @@ static uae_u64 size64;
 
 static void clear_shm (void)
 {
+	int i;
 	shm_start = NULL;
-	for (int i = 0; i < MAX_SHMID; i++) {
+	for (i = 0; i < MAX_SHMID; i++) {
 		memset (&shmids[i], 0, sizeof (struct shmid_ds));
 		shmids[i].key = -1;
 	}
@@ -957,8 +961,9 @@ void *my_shmat (int shmid, void *shmaddr, int shmflg)
 
 void unprotect_maprom (void)
 {
+	int i;
 	bool protect = false;
-	for (int i = 0; i < MAX_SHMID; i++) {
+	for (i = 0; i < MAX_SHMID; i++) {
 		DWORD old;
 		struct shmid_ds *shm = &shmids[i];
 		if (shm->mode != PAGE_READONLY)
@@ -973,13 +978,14 @@ void unprotect_maprom (void)
 
 void protect_roms (bool protect)
 {
+	struct shmid_ds * shm;
+	int i;
 	if (protect) {
 		// protect only if JIT enabled, always allow unprotect
 		if (!currprefs.cachesize || currprefs.comptrustbyte || currprefs.comptrustword || currprefs.comptrustlong)
 			return;
 	}
-	struct shmid_ds *shm;
-	for (int i = 0; i < MAX_SHMID; i++) {
+	for (i = 0; i < MAX_SHMID; i++) {
 		DWORD old;
 		shm = &shmids[i];
 		if (shm->mode != PAGE_READONLY)

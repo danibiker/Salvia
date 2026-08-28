@@ -1,0 +1,1 @@
+6590	uae_u32 pf = get_long (parmpacket + PP_FSHDSTART + 8)

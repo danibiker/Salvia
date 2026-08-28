@@ -29,7 +29,9 @@
 
 #define console_out_f write_log
 #define write_logx write_log
-#define write_log_get_ts(x) NULL
+/* Sin parametro: el unico llamante (abajo) la invoca sin argumentos, y con la
+ * (x) el preprocesador daba C4003 y expandia a nada. */
+#define write_log_get_ts() NULL
 int read_log(void) { return -1; }
 int enforcermode = 0;
 
@@ -575,6 +577,7 @@ static void serdatcopy(void)
 	data_in_serdat = 0;
 
 	if (seriallog > 0 || (consoleopen && seriallog < 0)) {
+		TCHAR ch;
 		gotlogwrite = true;
 		if (seriallog_lf && seriallog > 2) {
 			TCHAR *ts = write_log_get_ts();
@@ -582,7 +585,7 @@ static void serdatcopy(void)
 				write_logx(_T("%s:"), ts);
 			seriallog_lf = false;
 		}
-		TCHAR ch = docharlog(serdatshift_masked);
+		ch = docharlog(serdatshift_masked);
 		write_logx(_T("%c"), ch);
 		if (ch == 10)
 			seriallog_lf = true;
@@ -596,10 +599,11 @@ static void serdatcopy(void)
 
 	// if someone uses serial port as some kind of timer..
 	if (currprefs.cpu_cycle_exact) {
+		int i;
 		int per;
 
 		bits = 16 + 1;
-		for (int i = 15; i >= 0; i--) {
+		for (i = 15; i >= 0; i--) {
 			if (serdatshift & (1 << i))
 				break;
 			bits--;

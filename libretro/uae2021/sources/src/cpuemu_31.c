@@ -5026,10 +5026,14 @@ uae_u32 REGPARAM2 CPUFUNC(op_0cf9_31)(uae_u32 opcode)
 uae_u32 REGPARAM2 CPUFUNC(op_0cfc_31)(uae_u32 opcode)
 {
 {{	uae_s32 extra;
+	uae_u32 rn1;
+	uae_u32 rn2;
+	uae_u16 dst1, dst2;
 	extra = get_ilong_mmu040 (2);
-	uae_u32 rn1 = regs.regs[(extra >> 28) & 15];
-	uae_u32 rn2 = regs.regs[(extra >> 12) & 15];
-	uae_u16 dst1 = get_lrmw_word_mmu040 (rn1), dst2 = get_lrmw_word_mmu040 (rn2);
+	rn1 = regs.regs[(extra >> 28) & 15];
+	rn2 = regs.regs[(extra >> 12) & 15];
+	dst1 = get_lrmw_word_mmu040 (rn1);
+	dst2 = get_lrmw_word_mmu040 (rn2);
 	optflag_cmpw ((uae_s16)(m68k_dreg (regs, (extra >> 16) & 7)), (uae_s16)(dst1));
 	if (GET_ZFLG ()) {
 	optflag_cmpw ((uae_s16)(m68k_dreg (regs, extra & 7)), (uae_s16)(dst2));
@@ -5858,10 +5862,14 @@ uae_u32 REGPARAM2 CPUFUNC(op_0ef9_31)(uae_u32 opcode)
 uae_u32 REGPARAM2 CPUFUNC(op_0efc_31)(uae_u32 opcode)
 {
 {{	uae_s32 extra;
+	uae_u32 rn1;
+	uae_u32 rn2;
+	uae_u32 dst1, dst2;
 	extra = get_ilong_mmu040 (2);
-	uae_u32 rn1 = regs.regs[(extra >> 28) & 15];
-	uae_u32 rn2 = regs.regs[(extra >> 12) & 15];
-	uae_u32 dst1 = get_lrmw_long_mmu040 (rn1), dst2 = get_lrmw_long_mmu040 (rn2);
+	rn1 = regs.regs[(extra >> 28) & 15];
+	rn2 = regs.regs[(extra >> 12) & 15];
+	dst1 = get_lrmw_long_mmu040 (rn1);
+	dst2 = get_lrmw_long_mmu040 (rn2);
 	optflag_cmpl ((uae_s32)(m68k_dreg (regs, (extra >> 16) & 7)), (uae_s32)(dst1));
 	if (GET_ZFLG ()) {
 	optflag_cmpl ((uae_s32)(m68k_dreg (regs, extra & 7)), (uae_s32)(dst2));
@@ -32868,9 +32876,10 @@ uae_u32 REGPARAM2 CPUFUNC(op_f000_31)(uae_u32 opcode)
 	uae_u32 srcreg = (opcode & 7);
 {if (!regs.s) { Exception (8); goto endlabel12668; }
 {	uaecptr pc = m68k_getpc ();
+	uae_u16 extraa;
 	uae_u16 extra = get_iword_mmu040 (2);
 	m68k_incpci (4);
-	uae_u16 extraa = 0;
+	extraa = 0;
 	mmu_op30 (pc, opcode, extra, extraa);
 }}endlabel12668: ;
 return 4 * CYCLE_UNIT / 2;
@@ -32884,9 +32893,10 @@ uae_u32 REGPARAM2 CPUFUNC(op_f008_31)(uae_u32 opcode)
 	uae_u32 srcreg = (opcode & 7);
 {if (!regs.s) { Exception (8); goto endlabel12669; }
 {	uaecptr pc = m68k_getpc ();
+	uae_u16 extraa;
 	uae_u16 extra = get_iword_mmu040 (2);
 	m68k_incpci (4);
-	uae_u16 extraa = 0;
+	extraa = 0;
 	mmu_op30 (pc, opcode, extra, extraa);
 }}endlabel12669: ;
 return 4 * CYCLE_UNIT / 2;

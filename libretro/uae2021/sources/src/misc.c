@@ -74,7 +74,7 @@ static struct winuae_currentmode currentmodestruct;
 static struct winuae_currentmode *currentmode = &currentmodestruct;
 #endif
 
-#ifndef _WIN32
+#if !defined(WIN32) || defined(_XBOX)
 typedef struct {
 	WORD  dmSize;
 	WORD  dmDriverExtra;
@@ -378,8 +378,9 @@ void fixtrailing (TCHAR *p)
 
 void getpathpart (TCHAR *outpath, int size, const TCHAR *inpath)
 {
+	TCHAR * p;
 	_tcscpy (outpath, inpath);
-	TCHAR *p = _tcsrchr (outpath, '\\');
+	p = _tcsrchr (outpath, '\\');
 	if (p)
 		p[0] = 0;
 	fixtrailing (outpath);
@@ -387,8 +388,9 @@ void getpathpart (TCHAR *outpath, int size, const TCHAR *inpath)
 
 void getfilepart (TCHAR *out, int size, const TCHAR *path)
 {
+	const TCHAR * p;
 	out[0] = 0;
-	const TCHAR *p = _tcsrchr (path, '\\');
+	p = _tcsrchr (path, '\\');
 	if (p)
 		_tcscpy (out, p + 1);
 	else
@@ -655,12 +657,13 @@ struct MultiDisplay Displays[MAX_DISPLAYS];
 
 static struct MultiDisplay *getdisplay2 (struct uae_prefs *p, int index)
 {
+	int max;
+	int display;
 	write_log ("Multimonitor detection disabled\n");
 	Displays[0].primary = 1;
 	Displays[0].monitorname = "Display";
 
-	int max;
-	int display = index < 0 ? p->gfx_apmode[screen_is_picasso ? APMODE_RTG : APMODE_NATIVE].gfx_display - 1 : index;
+	display = index < 0 ? p->gfx_apmode[screen_is_picasso ? APMODE_RTG : APMODE_NATIVE].gfx_display - 1 : index;
 
 	max = 0;
 	while (Displays[max].monitorname)
@@ -708,9 +711,10 @@ int target_get_display (const TCHAR *name)
 }
 const TCHAR *target_get_display_name (int num, bool friendlyname)
 {
+	struct MultiDisplay * md;
 	if (num <= 0)
 		return NULL;
-	struct MultiDisplay *md = getdisplay2 (NULL, num - 1);
+	md = getdisplay2 (NULL, num - 1);
 	if (!md)
 		return NULL;
 	if (friendlyname)

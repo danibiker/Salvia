@@ -65,7 +65,8 @@ public:
     ConfigEmu *getPrevCfgEmu();
 	ConfigEmu *getCfgEmu();
 	ConfigEmu *findCfgEmu(std::string execName);
-	std::string getCoreCfgPath();
+	std::string getCoreCfgPath(bool save=false);
+	int recoverGameMenuPos(struct ListStatus &);
 
 	std::map<std::string, std::unique_ptr<cfg::t_emu_props> >& getLibretroParams();
 	int emuCfgPos;

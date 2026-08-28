@@ -181,48 +181,60 @@ static uae_u16 expamem_hi;
  */
 static void addextrachip (uae_u32 sysbase)
 {
+	uae_u32 ml;
+	uae_u32 next;
 	if (currprefs.chipmem_size <= 0x00200000)
 		return;
 	if (sysbase & 0x80000001)
 		return;
 	if (!valid_address (sysbase, 1000))
 		return;
-	uae_u32 ml = get_long (sysbase + 322);
+	ml = get_long (sysbase + 322);
 	if (!valid_address (ml, 32))
 		return;
-	uae_u32 next;
 	while ((next = get_long (ml))) {
+		uae_u32 upper;
+		uae_u32 lower;
+		uae_u16 attr;
+		uae_u32 added;
+		uae_u32 first;
+		/* Antes se llamaba next y hacia shadow del next del while de fuera. En el
+		 * original se declaraba mas abajo, justo antes del bucle que lo usa, asi
+		 * que los "ml = next" de aqui arriba veian el de la funcion. Al subirlo al
+		 * principio del bloque (C89) su ambito se extendio hacia atras y esos dos
+		 * pasaban a leer basura: de ahi el C4700. */
+		uae_u32 mem_next;
+		uae_u32 bytes;
 		if (!valid_address (ml, 32))
 			return;
-		uae_u32 upper = get_long (ml + 24);
-		uae_u32 lower = get_long (ml + 20);
+		upper = get_long (ml + 24);
+		lower = get_long (ml + 20);
 		if (lower & ~0xffff) {
 			ml = next;
 			continue;
 		}
-		uae_u16 attr = get_word (ml + 14);
+		attr = get_word (ml + 14);
 		if ((attr & 0x8002) != 2) {
 			ml = next;
 			continue;
 		}
 		if (upper >= currprefs.chipmem_size)
 			return;
-		uae_u32 added = currprefs.chipmem_size - upper;
-		uae_u32 first = get_long (ml + 16);
+		added = currprefs.chipmem_size - upper;
+		first = get_long (ml + 16);
 		put_long (ml + 24, currprefs.chipmem_size); // mh_Upper
 		put_long (ml + 28, get_long (ml + 28) + added); // mh_Free
-		uae_u32 next;
 		while (first) {
-			next = first;
-			first = get_long (next);
+			mem_next = first;
+			first = get_long (mem_next);
 		}
-		uae_u32 bytes = get_long (next + 4);
-		if (next + bytes == 0x00200000) {
-			put_long (next + 4, currprefs.chipmem_size - next);
+		bytes = get_long (mem_next + 4);
+		if (mem_next + bytes == 0x00200000) {
+			put_long (mem_next + 4, currprefs.chipmem_size - mem_next);
 		} else {
 			put_long (0x00200000 + 0, 0);
 			put_long (0x00200000 + 4, added);
-			put_long (next, 0x00200000);
+			put_long (mem_next, 0x00200000);
 		}
 		return;
 	}

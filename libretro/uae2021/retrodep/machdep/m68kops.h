@@ -7,7 +7,11 @@
 #else
 #include <retro_endianness.h>
 #if RETRO_IS_BIG_ENDIAN
+/* retro_endianness.h ya lo define (a 1) cuando MSB_FIRST: sin la guarda salta
+ * C4005 en cada .c que incluya esto. */
+#ifndef WORDS_BIGENDIAN
 #define WORDS_BIGENDIAN
+#endif
 #endif
 #include "../../sources/src/md-generic/m68kops.h"
 #endif

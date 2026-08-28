@@ -129,8 +129,13 @@ uae_u32 strncpyha (uae_u32, const char *, int);
 
 #define SB struct socketbase *sb
 
+/* En la 360 el winsockx.h del XDK ya declara SOCKET y define INVALID_SOCKET
+ * (C4142 + C4005). Guardar por INVALID_SOCKET en vez de por _XBOX: si la
+ * cabecera del sistema entro antes, se usa la suya; si no, la de UAE. */
+#ifndef INVALID_SOCKET
 typedef int SOCKET;
 #define INVALID_SOCKET -1
+#endif
 
 void bsdsocklib_seterrno (SB, int);
 void bsdsocklib_setherrno (SB, int);

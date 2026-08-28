@@ -689,6 +689,7 @@ static int dev_do_io (struct devstruct *dev, uaecptr request)
 		int msf = command == CD_TOCMSF;
 		struct cd_toc_head toc;
 		if (sys_command_cd_toc (dev->di.unitnum, &toc)) {
+			int i;
 			if (io_offset == 0 && io_length > 0) {
 				int pos = toc.lastaddress;
 				put_byte (io_data, toc.first_track);
@@ -701,7 +702,7 @@ static int dev_do_io (struct devstruct *dev, uaecptr request)
 				io_data += 6;
 				io_actual++;
 			}
-			for (int i = toc.first_track_offset; i < toc.last_track_offset && io_length > 0; i++) {
+			for (i = toc.first_track_offset; i < toc.last_track_offset && io_length > 0; i++) {
 				if (io_offset == toc.toc[i].point) {
 					int pos = toc.toc[i].paddress;
 					put_byte (io_data, (toc.toc[i].control << 4) | toc.toc[i].adr);
@@ -824,7 +825,8 @@ static int dev_do_io (struct devstruct *dev, uaecptr request)
 		struct cd_toc_head toc;
 		int ok = 0;
 		if (sys_command_cd_toc (dev->di.unitnum, &toc)) {
-			for (int i = toc.first_track_offset; i < toc.last_track_offset; i++) {
+			int i;
+			for (i = toc.first_track_offset; i < toc.last_track_offset; i++) {
 				if (i == (int)io_offset && (int)(i + io_length) <= toc.last_track_offset) {
 					ok = sys_command_cd_play (dev->di.unitnum, toc.toc[i].address, toc.toc[i + io_length].address, 0);
 					break;
@@ -841,12 +843,14 @@ static int dev_do_io (struct devstruct *dev, uaecptr request)
 		uae_u8 subq[SUBQ_SIZE];
 		if (sys_command_cd_qcode (dev->di.unitnum, subq, -1, false)) {
 			if (subq[1] == AUDIO_STATUS_IN_PROGRESS || subq[1] == AUDIO_STATUS_PAUSED) {
+				int trackpos;
+				int diskpos;
 				put_byte (io_data + 0, subq[4 + 0]);
 				put_byte (io_data + 1, frombcd (subq[4 + 1]));
 				put_byte (io_data + 2, frombcd (subq[4 + 2]));
 				put_byte (io_data + 3, subq[4 + 6]);
-				int trackpos = fromlongbcd (subq + 4 + 3);
-				int diskpos = fromlongbcd (subq + 4 + 7);
+				trackpos = fromlongbcd (subq + 4 + 3);
+				diskpos = fromlongbcd (subq + 4 + 7);
 				if (command == CD_QCODELSN) {
 					trackpos = msf2lsn (trackpos);
 					diskpos = msf2lsn (diskpos);
@@ -1030,8 +1034,9 @@ static uae_u32 REGPARAM2 dev_abortio (TrapContext *context)
 
 uae_u32 scsi_get_cd_drive_mask (void)
 {
+	int i;
 	uae_u32 mask = 0;
-	for (int i = 0; i < MAX_TOTAL_SCSI_DEVICES; i++) {
+	for (i = 0; i < MAX_TOTAL_SCSI_DEVICES; i++) {
 		struct devstruct *dev = &devst[i];
 		if (dev->iscd)
 			mask |= 1 << i;
@@ -1040,8 +1045,9 @@ uae_u32 scsi_get_cd_drive_mask (void)
 }
 uae_u32 scsi_get_cd_drive_media_mask (void)
 {
+	int i;
 	uae_u32 mask = 0;
-	for (int i = 0; i < MAX_TOTAL_SCSI_DEVICES; i++) {
+	for (i = 0; i < MAX_TOTAL_SCSI_DEVICES; i++) {
 		struct devstruct *dev = &devst[i];
 		if (dev->iscd && dev->changeint_mediastate)
 			mask |= 1 << i;
@@ -1074,8 +1080,8 @@ static void dev_reset (void)
 	device_func_init (0);
 	i = 0;
 	while (i < MAX_TOTAL_SCSI_DEVICES) {
+		struct device_info * discsi, discsi2;
 		dev = &devst[i];
-		struct device_info *discsi, discsi2;
 		if (sys_command_open (i)) {
 			discsi = sys_command_info (i, &discsi2, 0);
 			if (discsi) {

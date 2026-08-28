@@ -709,12 +709,13 @@ static uae_u64 vhd_write (struct hardfiledata *hfd, void *v, uae_u64 offset, uae
 				return written;
 			continue;
 		} else {
+			uae_u64 sectormapblock;
 			int bitmapoffsetbits;
 			int bitmapoffsetbytes;
 
 			bitmapoffsetbits = (offset / 512) % (hfd->vhd_blocksize / 512);
 			bitmapoffsetbytes = bitmapoffsetbits / 8;
-			uae_u64 sectormapblock = sectoroffset * (uae_u64)512 + (bitmapoffsetbytes & ~511);
+			sectormapblock = sectoroffset * (uae_u64)512 + (bitmapoffsetbytes & ~511);
 			if (hfd->vhd_sectormapblock != sectormapblock) {
 				// read sector bitmap
 				if (hdf_read_target (hfd, hfd->vhd_sectormap, sectormapblock, 512) != 512) {
@@ -1238,9 +1239,10 @@ int scsi_hd_emulate (struct hardfiledata *hfd, struct hd_hardfiledata *hdhfd, ua
 		break;
 	case 0x12: /* INQUIRY */
 		{
+			int alen;
 			if ((cmdbuf[1] & 1) || cmdbuf[2] != 0)
 				goto err;
-			int alen = (cmdbuf[3] << 8) | cmdbuf[4];
+			alen = (cmdbuf[3] << 8) | cmdbuf[4];
 			if (lun != 0) {
 				r[0] = 0x7f;
 			} else {
@@ -1621,13 +1623,14 @@ static int handle_scsi (uaecptr request, struct hardfiledata *hfd)
 
 void hardfile_send_disk_change (struct hardfiledata *hfd, bool insert)
 {
+	int j;
 	int newstate = insert ? 0 : 1;
 
 	uae_sem_wait (&change_sem);
 	hardfpd[hfd->unitnum].changenum++;
 	write_log (_T("uaehf.device:%d media status=%d changenum=%d\n"), hfd->unitnum, insert, hardfpd[hfd->unitnum].changenum);
 	hfd->drive_empty = newstate;
-	int j = 0;
+	j = 0;
 	while (j < MAX_ASYNC_REQUESTS) {
 		if (hardfpd[hfd->unitnum].d_request_type[j] == ASYNC_REQUEST_CHANGEINT) {
 			uae_Cause (hardfpd[hfd->unitnum].d_request_data[j]);

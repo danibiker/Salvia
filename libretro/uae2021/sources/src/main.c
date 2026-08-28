@@ -164,11 +164,12 @@ uae_u32 uaesrand (uae_u32 seed)
 
 uae_u32 uaerand (void)
 {
+	uae_u32 r;
 	if (oldhcounter != hsync_counter) {
 		srand (hsync_counter ^ randseed);
 		oldhcounter = hsync_counter;
 	}
-	uae_u32 r = rand ();
+	r = rand ();
 	//write_log (_T("rand=%08x\n"), r);
 	return r;
 }
@@ -233,12 +234,13 @@ static void fixup_prefs_dim2 (struct wh *wh)
 
 void fixup_prefs_dimensions (struct uae_prefs *prefs)
 {
+	int i;
 	fixup_prefs_dim2 (&prefs->gfx_size_fs);
 	fixup_prefs_dim2 (&prefs->gfx_size_win);
 	if (prefs->gfx_apmode[1].gfx_vsync)
 		prefs->gfx_apmode[1].gfx_vsyncmode = 1;
 
-	for (int i = 0; i < 2; i++) {
+	for (i = 0; i < 2; i++) {
 		struct apmode *ap = &prefs->gfx_apmode[i];
 		ap->gfx_vflip = 0;
 		ap->gfx_strobo = false;
@@ -326,6 +328,7 @@ void fixup_cpu (struct uae_prefs *p)
 
 void fixup_prefs (struct uae_prefs *p)
 {
+	int err;
 /** FIXME:
   * There must be a way to a) have a sane max_z3fastmem value
   * without NATMEM being used and b) a way to use fastmem and
@@ -335,7 +338,7 @@ void fixup_prefs (struct uae_prefs *p)
 	max_z3fastmem = 0x20000000;
 #endif
 
-	int err = 0;
+	err = 0;
 
 	built_in_chipset_prefs (p);
 	fixup_cpu (p);

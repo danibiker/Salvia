@@ -232,10 +232,11 @@ static void ram_wput (uaecptr addr, uae_u16 v)
 
 static uae_u32 REGPARAM2 fmv_wget (uaecptr addr)
 {
+	int mask;
 	uae_u32 v;
 	addr -= fmv_start & fmv_mask;
 	addr &= fmv_mask;
-	int mask = addr & BANK_MASK;
+	mask = addr & BANK_MASK;
 	if (mask == L64111_BASE)
 		v = l64111_wget (addr);
 	else if (mask == CL450_BASE)
@@ -265,10 +266,11 @@ static uae_u32 REGPARAM2 fmv_lget (uaecptr addr)
 
 static uae_u32 REGPARAM2 fmv_bget (uaecptr addr)
 {
+	int mask;
 	uae_u32 v;
 	addr -= fmv_start & fmv_mask;
 	addr &= fmv_mask;
-	int mask = addr & BANK_MASK;
+	mask = addr & BANK_MASK;
 	if (mask == L64111_BASE)
 		v = l64111_bget (addr);
 	else if (mask == CL450_BASE)
@@ -282,13 +284,14 @@ static uae_u32 REGPARAM2 fmv_bget (uaecptr addr)
 
 static void REGPARAM2 fmv_wput (uaecptr addr, uae_u32 w)
 {
+	int mask;
 	addr -= fmv_start & fmv_mask;
 	addr &= fmv_mask;
 #ifdef FMV_DEBUG
 	if (isdebug (addr))
 		write_log (_T("fmv_wput %04X=%04X PC=%08X\n"), addr, w & 65535, M68K_GETPC);
 #endif
-	int mask = addr & BANK_MASK;
+	mask = addr & BANK_MASK;
 	if (mask == L64111_BASE)
 		l64111_wput (addr, w);
 	else if (mask == CL450_BASE)
@@ -311,9 +314,10 @@ static void REGPARAM2 fmv_lput (uaecptr addr, uae_u32 w)
 
 static void REGPARAM2 fmv_bput (uaecptr addr, uae_u32 w)
 {
+	int mask;
 	addr -= fmv_start & fmv_mask;
 	addr &= fmv_mask;
-	int mask = addr & BANK_MASK;
+	mask = addr & BANK_MASK;
 	if (mask == L64111_BASE)
 		l64111_bput (addr, w);
 	else if (mask == CL450_BASE)

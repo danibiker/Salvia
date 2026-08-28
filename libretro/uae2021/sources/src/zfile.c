@@ -45,11 +45,12 @@ static struct zvolume *zvolume_list = NULL;
 
 const TCHAR *zfile_get_ext(const TCHAR *name)
 {
+	const TCHAR * ext;
 	const TCHAR *sep = _tcsrchr(name, '\\');
 	if (!sep) {
 		sep = _tcsrchr(name, '/');
 	}
-	const TCHAR *ext = _tcsrchr(name, '.');
+	ext = _tcsrchr(name, '.');
 	if (!ext) {
 		return NULL;
 	}
@@ -239,6 +240,9 @@ void zfile_exit (void)
 
 void zfile_fclose (struct zfile *f)
 {
+	struct zfile * pl;
+	struct zfile * nxt;
+	struct zfile * l;
 	//write_log (_T("%p\n"), f);
 	if (!f)
 		return;
@@ -259,9 +263,8 @@ void zfile_fclose (struct zfile *f)
 		zfile_fclose (f->archiveparent);
 		f->archiveparent = NULL;
 	}
-	struct zfile *pl = NULL;
-	struct zfile *nxt;
-	struct zfile *l  = zlist;
+	pl = NULL;
+	l = zlist;
 	while (l != f) {
 		if (l == 0) {
 			write_log (_T("zfile: tried to free already freed or nonexisting filehandle!\n"));
@@ -1667,9 +1670,10 @@ static struct zfile *zfile_fopen_2 (const TCHAR *name, const TCHAR *mode, int ma
 
 static void manglefilename(const TCHAR *in, TCHAR *out, int outsize)
 {
+    int i;
     //if (!target_expand_environment(in, out, outsize))
         _tcscpy(out, in);
-    for (int i = 0; i < _tcslen(out); i++) {
+    for (i = 0; i < _tcslen(out); i++) {
         // remove \\ or // in the middle of path
         if ((out[i] == '/' || out[i] == '\\') && (out[i + 1] == '/' || out[i + 1] == '\\') && i > 0) {
             memmove(out + i, out + i + 1, (_tcslen(out + i) + 1) * sizeof(TCHAR));
@@ -1821,6 +1825,7 @@ struct zfile *zfile_dup (struct zfile *zf)
         nzf = zfile_fopen_parent(zf, zf->name, 0, zf->size);
         return nzf;
 	} else { 
+		FILE * ff;
 		if (zf->zipname) {
 			nzf = openzip (zf->name);
 			if (nzf)
@@ -1828,7 +1833,7 @@ struct zfile *zfile_dup (struct zfile *zf)
 		}
         if (!zf->name || !zf->mode)
             return NULL;
-		FILE *ff = _tfopen (zf->name, zf->mode);
+		ff = _tfopen (zf->name, zf->mode);
 		if (!ff)
 			return NULL;
 		nzf = zfile_create (zf, NULL);
@@ -2207,8 +2212,9 @@ int zfile_putc (int c, struct zfile *z)
 
 int zfile_getc (struct zfile *z)
 {
+	int out;
 	checkarchiveparent (z);
-	int out = -1;
+	out = -1;
 	if (z->data) {
 		if (z->seek < z->size) {
 			out = z->data[z->seek++];
@@ -3103,14 +3109,15 @@ struct zdirectory {
 
 struct zdirectory *zfile_opendir_archive_flags (const TCHAR *path, int flags)
 {
+	struct znode * zn;
+	struct zdirectory * zd;
 	struct zvolume *zv = get_zvolume (path);
 	bool created = false;
 	if (zv == NULL) {
 		zv = zfile_fopen_archive_flags (path, flags);
 		created = true;
 	}
-	struct znode *zn = get_znode (zv, path, true);
-	struct zdirectory *zd;
+	zn = get_znode (zv, path, true);
 	if (!zn || (!zn->child && !zn->vchild)) {
 		if (created)
 			zfile_fclose_archive (zv);
@@ -3157,6 +3164,8 @@ int zfile_readdir_archive_fullpath (struct zdirectory *zd, TCHAR *out, bool full
 	if (!zd->n || (zd->filenames != NULL && zd->offset >= zd->cnt))
 		return 0;
 	if (zd->filenames == NULL) {
+		uae_u8 * buf;
+		int i;
 		struct znode *n = zd->first;
 		int cnt = 0;
 		while (n) {
@@ -3164,15 +3173,16 @@ int zfile_readdir_archive_fullpath (struct zdirectory *zd, TCHAR *out, bool full
 			n = n->sibling;
 		}
 		n = zd->first;
-		uae_u8 *buf = xmalloc (uae_u8, cnt * sizeof (TCHAR*));
+		buf = xmalloc (uae_u8, cnt * sizeof (TCHAR*));
 		zd->filenames = (TCHAR**)buf;
 		buf += cnt * sizeof (TCHAR*);
-		for (int i = 0; i < cnt; i++) {
+		for (i = 0; i < cnt; i++) {
 			zd->filenames[i] = n->name;
 			n = n->sibling;
 		}
-		for (int i = 0; i < cnt; i++) {
-			for (int j = i + 1; j < cnt; j++) {
+		for (i = 0; i < cnt; i++) {
+			int j;
+			for (j = i + 1; j < cnt; j++) {
 				if (_tcscmp (zd->filenames[i], zd->filenames[j]) > 0) {
 					TCHAR *tmp = zd->filenames[i];
 					zd->filenames[i] = zd->filenames[j];

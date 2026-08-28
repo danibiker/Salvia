@@ -22,6 +22,7 @@
 extern retro_log_printf_t log_cb;
 void write_log (const char *fmt, ...)
 {
+    size_t len;
     char text[512];
     va_list ap;
     int n;
@@ -36,7 +37,7 @@ void write_log (const char *fmt, ...)
     if (n < 0)
         return;
 
-    size_t len = strlen(text);
+    len = strlen(text);
     if (len > 0 && text[len - 1] == '\n')
         text[len - 1] = '\0';
 

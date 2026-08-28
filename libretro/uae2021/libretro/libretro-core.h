@@ -47,7 +47,11 @@ extern void libretro_do_restart(int argc, TCHAR **argv);
 #define MAX_FLOPPY_DRIVES 4
 #endif
 
-#ifdef WIN32
+/* La Xbox 360 usa contrabarras igual que Win32 pero define _XBOX, no WIN32.
+ * Sin esto DIR_SEP_CHR valia '/' en la 360 y el fopen del XDK NO convierte
+ * '/' en '\' (a diferencia del Windows de escritorio), asi que cualquier
+ * ruta construida aqui dejaba de abrirse. */
+#if defined(WIN32) || defined(_XBOX)
 #define DIR_SEP_STR "\\"
 #define DIR_SEP_CHR '\\'
 #else

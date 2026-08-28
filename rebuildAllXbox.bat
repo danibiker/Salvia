@@ -16,7 +16,7 @@ Release_vbanext Release_picodrive Release_prboom ReleaseTyrQuake Release_pcsxr_3
 Release_3DOX Release_Wonderswan Release_VirtualBoy Release_DosboxPure Release_mame ^
 Release_beetle_lynx Release_atari800 Release_c64frodo Release_c64frodoSC ^
 Release_beetle_ngp Release_x68k Release_fbanext Release_cannonball Release_uae ^
-Release_finalburn Release_default
+Release_uae2021 Release_finalburn Release_default
 
 md Distro360
 

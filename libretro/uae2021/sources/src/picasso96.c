@@ -711,6 +711,7 @@ static int p96hsync;
 
 void picasso_handle_vsync (void)
 {
+	int vsync;
 	if (currprefs.rtgmem_size == 0)
 		return;
 
@@ -720,7 +721,7 @@ void picasso_handle_vsync (void)
 		return;
 	}
 
-	int vsync = isvsync_rtg ();
+	vsync = isvsync_rtg ();
 	if (vsync < 0) {
 		p96hsync = 0;
 		picasso_handle_vsync2 ();
@@ -729,10 +730,11 @@ void picasso_handle_vsync (void)
 
 void picasso_handle_hsync (void)
 {
+	int vsync;
 	if (currprefs.rtgmem_size == 0)
 		return;
 
-	int vsync = isvsync_rtg ();
+	vsync = isvsync_rtg ();
 	if (vsync < 0) {
 		p96hsync++;
 		if (p96hsync >= p96syncrate * 3) {
@@ -1837,6 +1839,7 @@ static uaecptr uaegfx_card_install (TrapContext *ctx, uae_u32 size);
 
 static void picasso96_alloc2 (TrapContext *ctx)
 {
+	int mon;
 	int i, j, size, cnt;
 	int misscnt, depths;
 
@@ -1861,7 +1864,7 @@ static void picasso96_alloc2 (TrapContext *ctx)
 	if (p96depth (32))
 		depths++;
 
-	for (int mon = 0; Displays[mon].monitorname; mon++) {
+	for (mon = 0; Displays[mon].monitorname; mon++) {
 		struct PicassoResolution *DisplayModes = Displays[mon].DisplayModes;
 		i = 0;
 		while (DisplayModes[i].depth >= 0) {
@@ -1877,10 +1880,11 @@ static void picasso96_alloc2 (TrapContext *ctx)
 	}
 
 	cnt = 0;
-	for (int mon = 0; Displays[mon].monitorname; mon++) {
+	for (mon = 0; Displays[mon].monitorname; mon++) {
 		struct PicassoResolution *DisplayModes = Displays[mon].DisplayModes;
 		i = 0;
 		while (DisplayModes[i].depth >= 0) {
+			int k;
 			if (DisplayModes[i].rawmode) {
 				i++;
 				continue;
@@ -1904,7 +1908,6 @@ static void picasso96_alloc2 (TrapContext *ctx)
 					continue;
 				}
 			}
-			int k;
 			for (k = 0; k < cnt; k++) {
 				if (newmodes[k].res.width == DisplayModes[i].res.width &&
 					newmodes[k].res.height == DisplayModes[i].res.height &&
@@ -2200,7 +2203,8 @@ void picasso_enablescreen (int on)
 
 static void resetpalette(void)
 {
-	for (unsigned int i = 0; i < 256; i++)
+	unsigned int i;
+	for (i = 0; i < 256; i++)
 		picasso96_state.CLUT[i].Pad = 0xff;
 }
 
@@ -2421,6 +2425,7 @@ static uae_u32 REGPARAM2 picasso_SetPanning (TrapContext *ctx)
 #ifdef __x86_64__
 static void do_xor8 (uae_u8 *p, int w, uae_u32 v)
 {
+	uae_u64 vv;
 	while (ALIGN_POINTER_TO32 (p) != 7 && w) {
 		*p ^= v;
 		p++;
@@ -2433,7 +2438,7 @@ static void do_xor8 (uae_u8 *p, int w, uae_u32 v)
 	 * side. (And it is far more portable.) - Sven
 	 * was: uae_u64 vv = v | (v << 32);
 	*/
-	uae_u64 vv = (uae_u64)v | ((uae_u64)v << 32);
+	vv = (uae_u64)v | ((uae_u64)v << 32);
 	while (w >= 2 * 8) {
 		*((uae_u64*)p) ^= vv;
 		p += 8;
@@ -2637,6 +2642,7 @@ struct blitdata
 
 STATIC_INLINE int BlitRectHelper (void)
 {
+	uae_u8 Bpp;
 	struct RenderInfo *ri = blitrectdata.ri;
 	struct RenderInfo *dstri = blitrectdata.dstri;
 	unsigned long srcx = blitrectdata.srcx;
@@ -2653,7 +2659,7 @@ STATIC_INLINE int BlitRectHelper (void)
 	if (!validatecoords (dstri, dstx, dsty, width, height))
 		return 1;
 
-	uae_u8 Bpp = GetBytesPerPixel (ri->RGBFormat);
+	Bpp = GetBytesPerPixel (ri->RGBFormat);
 
 	if (opcode == BLIT_DST) {
 		write_log ( _T("WARNING: BlitRect() being called with opcode of BLIT_DST\n") );
@@ -4027,7 +4033,8 @@ static uae_u32 REGPARAM2 picasso_SetInterrupt (TrapContext *ctx)
 static uaecptr uaegfx_vblankname, uaegfx_portsname;
 static void initvblankABI (uaecptr base, uaecptr ABI)
 {
-	for (unsigned int i = 0; i < 22; i++)
+	unsigned int i;
+	for (i = 0; i < 22; i++)
 		put_byte (ABI + PSSO_BoardInfo_HardInterrupt + i, get_byte (base + CARD_PORTSIRQ + i));
 	ABI_interrupt = ABI;
 }

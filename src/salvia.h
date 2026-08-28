@@ -507,7 +507,7 @@ void initializeMenus(ListMenu &menuData, GameMenu &gameMenu, CfgLoader &cfgLoade
     struct ListStatus menuBeforeExit;
 	dirutil dir;
 
-    int retMenu = gameMenu.recoverGameMenuPos(menuData, menuBeforeExit);
+    int retMenu = cfgLoader.recoverGameMenuPos(menuBeforeExit);
     if (retMenu == 0){
         if (menuBeforeExit.layout != menuData.layout){
             menuData.setLayout(menuBeforeExit.layout, gameMenu.overlay->w, gameMenu.overlay->h);

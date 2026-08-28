@@ -133,7 +133,7 @@ float  fp_1e0 = 1, fp_1e1 = 10, fp_1e2 = 100, fp_1e4 = 10000;
 
 #define MAKE_FPSR(r)  (regs).fp_result=(r)
 
-static __inline__ void native_set_fpucw (uae_u32 m68k_cw)
+static _inline void native_set_fpucw (uae_u32 m68k_cw)
 {
 static uae_u16 x87_cw_tab[] = {
 	0x137f, 0x1f7f, 0x177f, 0x1b7f,	/* Extended */
@@ -435,13 +435,14 @@ static int get_fpu_version (void)
 
 static void fpu_null (void)
 {
+	int i;
 	regs.fpu_state = 0;
 	regs.fpcr = 0;
 	regs.fpsr = 0;
 	regs.fpiar = 0;
 	regs.fpsr_highbyte = 0;
 	regs.fp_result = 0;
-	for (int i = 0; i < 8; i++)
+	for (i = 0; i < 8; i++)
 		regs.fp[i] = 0;
 }
 
@@ -720,9 +721,9 @@ STATIC_INLINE int get_fp_value (uae_u32 opcode, uae_u16 extra, fptype *src, uaec
 			break;
 		case 2:
 			{
+				uae_u32 wrd1, wrd2, wrd3;
 				if (fault_if_4060 (opcode, extra, ad, oldpc, FPU_EXP_UNIMP_DATATYPE))
 					return -1;
-				uae_u32 wrd1, wrd2, wrd3;
 				wrd1 = x_cp_get_long (ad);
 				ad += 4;
 				wrd2 = x_cp_get_long (ad);
@@ -733,9 +734,9 @@ STATIC_INLINE int get_fp_value (uae_u32 opcode, uae_u16 extra, fptype *src, uaec
 			   break;
 		case 3:
 			{
+				uae_u32 wrd1, wrd2, wrd3;
 				if (fault_if_4060 (opcode, extra, ad, oldpc, FPU_EXP_UNIMP_DATATYPE))
 					return -1;
-				uae_u32 wrd1, wrd2, wrd3;
 				wrd1 = x_cp_get_long (ad);
 				ad += 4;
 				wrd2 = x_cp_get_long (ad);
@@ -866,9 +867,9 @@ STATIC_INLINE int put_fp_value (fptype value, uae_u32 opcode, uae_u16 extra, uae
 			break;
 		case 2:
 			{
+				uae_u32 wrd1, wrd2, wrd3;
 				if (fault_if_4060 (opcode, extra, ad, oldpc, FPU_EXP_UNIMP_DATATYPE))
 					return -1;
-				uae_u32 wrd1, wrd2, wrd3;
 				from_exten (value, &wrd1, &wrd2, &wrd3);
 				x_cp_put_long (ad, wrd1);
 				ad += 4;
@@ -879,9 +880,9 @@ STATIC_INLINE int put_fp_value (fptype value, uae_u32 opcode, uae_u16 extra, uae
 			break;
 		case 3:
 			{
+				uae_u32 wrd1, wrd2, wrd3;
 				if (fault_if_4060 (opcode, extra, ad, oldpc, FPU_EXP_UNIMP_DATATYPE))
 					return -1;
-				uae_u32 wrd1, wrd2, wrd3;
 				from_pack (value, &wrd1, &wrd2, &wrd3);
 				x_cp_put_long (ad, wrd1);
 				ad += 4;
@@ -1262,6 +1263,7 @@ void fpuop_save (uae_u32 opcode)
 
 void fpuop_restore (uae_u32 opcode)
 {
+	uae_u32 pad;
 	int fpu_version = get_fpu_version ();
 	uaecptr pc = m68k_getpc () - 2;
 	uae_u32 ad;
@@ -1285,7 +1287,7 @@ void fpuop_restore (uae_u32 opcode)
 		return;
 	regs.fpiar = pc;
 
-	uae_u32 pad = ad;
+	pad = ad;
 		if (incr < 0) {
 			ad -= 4;
 		d = x_cp_get_long (ad);

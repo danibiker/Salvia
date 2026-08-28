@@ -27,6 +27,8 @@ git subtree add --prefix=libretro/frodo-libretro https://github.com/libretro/fro
 git subtree add --prefix=libretro/px68k https://github.com/libretro/px68k-libretro master --squash
 git subtree add --prefix=libretro/prboom https://github.com/libretro/libretro-prboom master --squash
 git subtree add --prefix=libretro/cannonball https://github.com/libretro/cannonball master --squash
+git subtree add --prefix=libretro/uae https://github.com/libretro/libretro-uae master --squash
+git subtree add --prefix=libretro/uae2021 https://github.com/libretro/libretro-uae 2.6.1 --squash
 
 ###########################################################################################################
 # External libraries
@@ -65,6 +67,9 @@ git subtree pull --prefix=libretro/frodo-libretro https://github.com/libretro/fr
 git subtree pull --prefix=libretro/px68k https://github.com/libretro/px68k-libretro master --squash
 git subtree pull --prefix=libretro/prboom https://github.com/libretro/libretro-prboom master --squash
 git subtree pull --prefix=libretro/cannonball https://github.com/libretro/cannonball master --squash
+git subtree pull --prefix=libretro/uae https://github.com/libretro/libretro-uae master --squash
+git subtree pull --prefix=libretro/uae2021 https://github.com/libretro/libretro-uae 2.6.1 --squash
+
 
 ###########################################################################################################
 # Merging conflicts

@@ -283,6 +283,14 @@ int fsdb_mode_representable_p (const a_inode *aino, int amigaos_mode)
 
 static char *aname_to_nname(const char *aname, int ascii)
 {
+    size_t ll;
+    int ei;
+    char * buf;
+    char * p;
+    int repl, is_evil, j;
+    unsigned char x;
+    unsigned int i;
+    char * result;
     size_t len          = strlen(aname);
     size_t result_len   = (len * 3) + sizeof((UAEFSDB_BEGINS));
     unsigned int repl_1 = UINT_MAX;
@@ -298,7 +306,7 @@ static char *aname_to_nname(const char *aname, int ascii)
     if (c >= 'a' && c <= 'z') c -= 32;
 
     // reserved dos devices in Windows
-    size_t ll = 0;
+    ll = 0;
     if (a == 'A' && b == 'U' && c == 'X') ll = 3; // AUX
     if (a == 'C' && b == 'O' && c == 'N') ll = 3; // CON
     if (a == 'P' && b == 'R' && c == 'N') ll = 3; // PRN
@@ -311,18 +319,16 @@ static char *aname_to_nname(const char *aname, int ascii)
     }
 
     // spaces and periods at the end are a no-no in Windows
-    int ei = len - 1;
+    ei = len - 1;
     if (aname[ei] == '.' || aname[ei] == ' ') {
         repl_2 = ei;
     }
 
     // allocating for worst-case scenario here (max replacements)
-    char *buf = (char*) malloc(result_len);
-    char *p = buf;
+    buf = (char*) malloc(result_len);
+    p = buf;
 
-    int repl, is_evil, j;
-    unsigned char x;
-    for (unsigned int i = 0; i < len; i++) {
+    for (i = 0; i < len; i++) {
         x = (unsigned char) aname[i];
         repl    = 0;
         is_evil = 0;
@@ -378,7 +384,7 @@ static char *aname_to_nname(const char *aname, int ascii)
         return buf;
     }
 
-    char *result = (char*) malloc(result_len);
+    result = (char*) malloc(result_len);
     if (ll > 0) {
         _tcscpy(result, UAEFSDB_BEGINS);
         _tcscat(result, buf);
@@ -410,6 +416,9 @@ static unsigned char char_to_hex(unsigned char c)
 
 static char *nname_to_aname(const char *nname, int noconvert)
 {
+    char * result;
+    unsigned char * p;
+    int i;
     char *cresult;
     int len = strlen(nname);
     cresult = strdup(nname);
@@ -418,9 +427,9 @@ static char *nname_to_aname(const char *nname, int noconvert)
         return NULL;
     }
 
-    char *result = strdup(cresult);
-    unsigned char *p = (unsigned char *) result;
-    for (int i = 0; i < len; i++) {
+    result = strdup(cresult);
+    p = (unsigned char *) result;
+    for (i = 0; i < len; i++) {
         unsigned char c = cresult[i];
         if (c == '%' && i < len - 2) {
             *p++ = (char_to_hex(cresult[i + 1]) << 4) |
@@ -474,13 +483,14 @@ static int fsdb_get_file_info(const char *nname, fsdb_file_info *info)
 
 a_inode *custom_fsdb_lookup_aino_aname(a_inode *base, const TCHAR *aname)
 {
+    fsdb_file_info info;
+    a_inode * aino;
     const char *nname = aname_to_nname(aname, 0);
     const char *full_nname = build_nname(base->nname, nname);
 
     if (!fsdb_name_invalid(aname))
         return 0;
 
-    fsdb_file_info info;
     fsdb_get_file_info(full_nname, &info);
     if (!info.type) {
         if (info.comment) {
@@ -490,7 +500,7 @@ a_inode *custom_fsdb_lookup_aino_aname(a_inode *base, const TCHAR *aname)
         return NULL;
     }
 
-    a_inode *aino = xcalloc(a_inode, 1);
+    aino = xcalloc(a_inode, 1);
     aino->aname = nname_to_aname(nname, 0);
     aino->nname = strdup(full_nname);
 #if 0
@@ -512,11 +522,13 @@ a_inode *custom_fsdb_lookup_aino_aname(a_inode *base, const TCHAR *aname)
 
 a_inode *custom_fsdb_lookup_aino_nname(a_inode *base, const TCHAR *nname)
 {
+    const char * full_nname;
+    fsdb_file_info info;
+    a_inode * aino;
     if (!strstr(nname, UAEFSDB_BEGINS))
         return 0;
 
-    const char *full_nname = build_nname(base->nname, nname);
-    fsdb_file_info info;
+    full_nname = build_nname(base->nname, nname);
     fsdb_get_file_info(full_nname, &info);
     if (!info.type) {
         if (info.comment) {
@@ -526,7 +538,7 @@ a_inode *custom_fsdb_lookup_aino_nname(a_inode *base, const TCHAR *nname)
         return NULL;
     }
 
-    a_inode *aino = xcalloc(a_inode, 1);
+    aino = xcalloc(a_inode, 1);
     aino->aname = nname_to_aname(nname, 0);
     aino->nname = build_nname(base->nname, nname);
 #if 0

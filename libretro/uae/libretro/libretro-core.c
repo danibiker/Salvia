@@ -2289,7 +2289,7 @@ static void retro_set_core_options()
          NULL,
          "retropad",
          {{ NULL, NULL }},
-         "MOUSE_LEFT_BUTTON"
+         "---"
       },
       {
          "puae_mapper_r",
@@ -2299,7 +2299,7 @@ static void retro_set_core_options()
          NULL,
          "retropad",
          {{ NULL, NULL }},
-         "MOUSE_RIGHT_BUTTON"
+         "---"
       },
       {
          "puae_mapper_l2",
@@ -2309,7 +2309,7 @@ static void retro_set_core_options()
          NULL,
          "retropad",
          {{ NULL, NULL }},
-         "---"
+         "MOUSE_LEFT_BUTTON"
       },
       {
          "puae_mapper_r2",
@@ -2319,7 +2319,7 @@ static void retro_set_core_options()
          NULL,
          "retropad",
          {{ NULL, NULL }},
-         "---"
+         "MOUSE_RIGHT_BUTTON"
       },
       {
          "puae_mapper_l3",

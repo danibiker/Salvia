@@ -38,6 +38,8 @@
 
 static time_t fromdostime (uae_u32 dd)
 {
+	time_t time_now;
+	struct tm* tm_local;
 	struct tm tm;
 	time_t t;
 
@@ -51,8 +53,7 @@ static time_t fromdostime (uae_u32 dd)
 	t = mktime (&tm);
 	tzset ();
 #if defined(__FreeBSD__)
-	time_t time_now = time(NULL);
-	struct tm* tm_local;
+	time_now = time(NULL);
 	tm_local = localtime(&time_now);
 	t -= tm_local->tm_gmtoff;
 #elif defined(TZSET)
@@ -288,13 +289,14 @@ static void archive_close_tar (void *handle)
 
 struct zvolume *archive_directory_tar (struct zfile *z)
 {
+	time_t time_now;
+	struct tm* tm_local;
 	struct zvolume *zv;
 	struct znode *zn;
 
 	tzset ();
 #if defined(__FreeBSD__)
-	time_t time_now = time(NULL);
-	struct tm* tm_local;
+	time_now = time(NULL);
 	tm_local = localtime(&time_now);
 #endif
 	zv = zvolume_alloc (z, ArchiveFormatTAR, NULL, NULL);

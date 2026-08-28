@@ -313,7 +313,8 @@ static void xlinecheck (unsigned int start, unsigned int end)
 
 void reset_decision_table (void)
 {
-	for (int i = sizeof linestate / sizeof *linestate; i--; )
+	int i;
+	for (i = sizeof linestate / sizeof *linestate; i--; )
 		linestate[i] = LINE_UNDECIDED;
 }
 
@@ -789,11 +790,12 @@ static void pfield_init_linetoscr (void)
 	// before first bitplane pixel appears.
 	// This means "bordersprite" condition is possible under OCS/ECS too. Argh!
 	if (dip_for_drawing->nr_sprites) {
+		int end;
 		/* bordersprite off or not supported: sprites are visible until diw_end */
 		if (playfield_end < linetoscr_diw_end && hblank_right_stop > playfield_end) {
 			playfield_end = linetoscr_diw_end;
 		}
-		int end = coord_hw_to_window_x (dp_for_drawing->plfleft * 2);
+		end = coord_hw_to_window_x (dp_for_drawing->plfleft * 2);
 		if (end < visible_left_border)
 			end = visible_left_border;
 		if (end < playfield_start && end > linetoscr_diw_start) {
@@ -886,11 +888,13 @@ static void pfield_erase_hborder_sprites (void)
 // erase whole viewable area if upper or lower border
 static void pfield_erase_vborder_sprites (void)
 {
+	int pos;
+	int size;
 #ifdef __LIBRETRO__
 	if (visible_right_border <= visible_left_border)
 		return;
-	int pos = 0;
-	int size = 0;
+	pos = 0;
+	size = 0;
 	if (visible_left_border < native_ddf_left) {
 		size = res_shift_from_window (native_ddf_left - visible_left_border);
 		pos = -size;
@@ -2095,11 +2099,11 @@ static void pfield_doline_n3 (uae_u32 *pixels, int wordcount, int lineno LINEDAT
 
 static void pfield_doline_n4 (uae_u32 *pixels, int wordcount, int lineno LINEDATA_DECL)
 {
+  uae_u8 *real_bplpt[4];
 #if defined(__SYMBIAN32__) && !defined(__WINS__) && defined(USE_ASSEMBLER_CODE)
    PFIELD_DOLINE_N4 (pixels, wordcount, (uae_u8 *)&line_data[lineno], MAX_WORDS_PER_LINE * 2);
 #else
 
-  uae_u8 *real_bplpt[4];
 
   real_bplpt[0] = DATA_POINTER (0);
   real_bplpt[1] = DATA_POINTER (1);
@@ -2148,10 +2152,10 @@ static void pfield_doline_n4 (uae_u32 *pixels, int wordcount, int lineno LINEDAT
 
 static void pfield_doline_n5 (uae_u32 *pixels, int wordcount, int lineno LINEDATA_DECL)
 {
+  uae_u8 *real_bplpt[5];
 #if defined(__SYMBIAN32__) && !defined(__WINS__) && defined(USE_ASSEMBLER_CODE)
    PFIELD_DOLINE_N5 (pixels, wordcount, (uae_u8 *)&line_data[lineno], MAX_WORDS_PER_LINE * 2);
 #else
-  uae_u8 *real_bplpt[5];
 
    real_bplpt[0] = DATA_POINTER (0);
    real_bplpt[1] = DATA_POINTER (1);
@@ -2205,10 +2209,10 @@ static void pfield_doline_n5 (uae_u32 *pixels, int wordcount, int lineno LINEDAT
 
 static void pfield_doline_n6 (uae_u32 *pixels, int wordcount, int lineno LINEDATA_DECL)
 {
+  uae_u8 *real_bplpt[6];
 #if defined(__SYMBIAN32__) && !defined(__WINS__) && defined(USE_ASSEMBLER_CODE)
    PFIELD_DOLINE_N6 (pixels, wordcount, (uae_u8 *)&line_data[lineno], MAX_WORDS_PER_LINE * 2);
 #else
-  uae_u8 *real_bplpt[6];
 
    real_bplpt[0] = DATA_POINTER (0);
    real_bplpt[1] = DATA_POINTER (1);
@@ -2265,10 +2269,10 @@ static void pfield_doline_n6 (uae_u32 *pixels, int wordcount, int lineno LINEDAT
 #ifdef AGA
 static void pfield_doline_n7 (uae_u32 *pixels, int wordcount, int lineno LINEDATA_DECL)
 {
+  uae_u8 *real_bplpt[7];
 #if defined(__SYMBIAN32__) && !defined(__WINS__) && defined(USE_ASSEMBLER_CODE)
    PFIELD_DOLINE_N7 (pixels, wordcount, (uae_u8 *)&line_data[lineno], MAX_WORDS_PER_LINE * 2);
 #else
-  uae_u8 *real_bplpt[7];
    real_bplpt[0] = DATA_POINTER (0);
    real_bplpt[1] = DATA_POINTER (1);
    real_bplpt[2] = DATA_POINTER (2);
@@ -2326,10 +2330,10 @@ static void pfield_doline_n7 (uae_u32 *pixels, int wordcount, int lineno LINEDAT
 
 static void pfield_doline_n8 (uae_u32 *pixels, int wordcount, int lineno LINEDATA_DECL)
 {
+  uae_u8 *real_bplpt[8];
 #if defined(__SYMBIAN32__) && !defined(__WINS__) && defined(USE_ASSEMBLER_CODE)
    PFIELD_DOLINE_N8 (pixels, wordcount, (uae_u8 *)&line_data[lineno], MAX_WORDS_PER_LINE * 2);
 #else
-  uae_u8 *real_bplpt[8];
 
   real_bplpt[0] = DATA_POINTER (0);
   real_bplpt[1] = DATA_POINTER (1);
@@ -2937,11 +2941,12 @@ static void pfield_draw_line (int lineno, int gfx_ypos, int follow_ypos)
 		}
 
 		if (dosprites) {
+			uae_u16 oxor;
 
 			int i;
 			for (i = 0; i < dip_for_drawing->nr_sprites; i++)
 				draw_sprites_aga (curr_sprite_entries + dip_for_drawing->first_sprite_entry + i, 1);
-			uae_u16 oxor = bplxor;
+			oxor = bplxor;
 			memset (pixdata.apixels, 0, sizeof pixdata);
 			bplxor = 0;
 			do_color_changes (pfield_do_fill_line, pfield_do_linetoscr_border, lineno);
@@ -2980,6 +2985,7 @@ static void pfield_draw_line (int lineno, int gfx_ypos, int follow_ypos)
 
 static void center_image (void)
 {
+	int max_drawn_amiga_line_tmp;
 	int prev_x_adjust = visible_left_border;
 	int prev_y_adjust = thisframe_y_adjust;
 	int tmp;
@@ -3028,7 +3034,7 @@ static void center_image (void)
 	if (visible_right_border > max_diwlastword)
 		visible_right_border = max_diwlastword;
 
-	int max_drawn_amiga_line_tmp = max_drawn_amiga_line;
+	max_drawn_amiga_line_tmp = max_drawn_amiga_line;
 	if (max_drawn_amiga_line_tmp > gfxvidinfo.inheight)
 		max_drawn_amiga_line_tmp = gfxvidinfo.inheight;
 	max_drawn_amiga_line_tmp >>= linedbl;
@@ -3084,7 +3090,7 @@ static void init_drawing_frame (void)
 	int largest_res = 0;
 	int largest_count = 0;
 	int largest_count_res = 0;
-	for (int i = 0; i <= RES_MAX; i++) {
+	for (i = 0; i <= RES_MAX; i++) {
 		if (resolution_count[i])
 			largest_res = i;
 		if (resolution_count[i] >= largest_count) {
@@ -3156,7 +3162,7 @@ static void init_drawing_frame (void)
 				frame_res_cnt = 1;
 		}
 	}
-	for (int i = 0; i <= RES_MAX; i++)
+	for (i = 0; i <= RES_MAX; i++)
 		resolution_count[i] = 0;
 	lines_count = 0;
 	frame_res = -1;
@@ -3382,7 +3388,8 @@ static void lightpen_update (void)
 
 static void draw_frame2 (void)
 {
-	for (int i = 0; i < max_ypos_thisframe; i++) {
+	int i;
+	for (i = 0; i < max_ypos_thisframe; i++) {
 		int i1 = i + min_ypos_for_screen;
 		int line = i + thisframe_y_adjust_real;
 		int where2;
@@ -3423,11 +3430,12 @@ static void draw_frame2 (void)
 
 bool draw_frame (struct vidbuf_description *vb)
 {
+	int i;
 	uae_u8 oldstate[LINESTATE_SIZE];
 
 	init_row_map ();
 	memcpy (oldstate, linestate, LINESTATE_SIZE);
-	for (int i = 0; i < LINESTATE_SIZE; i++) {
+	for (i = 0; i < LINESTATE_SIZE; i++) {
 		uae_u8 v = linestate[i];
 		if (v == LINE_REMEMBERED_AS_PREVIOUS) {
 			linestate[i - 1] = LINE_DECIDED_DOUBLE;

@@ -61,7 +61,11 @@ WRes InFile_Open(CSzFile *p, const char *name) { return File_Open(p, name, 0); }
 WRes OutFile_Open(CSzFile *p, const char *name) { return File_Open(p, name, 1); }
 #endif
 
-#ifdef USE_WINDOWS_FILE
+/* Fuera en la 360: el XDK solo tiene CreateFileA, no CreateFileW. Sin esta
+ * guarda, CreateFileW quedaba implicitamente declarada devolviendo int (de ahi
+ * el C4047 al asignarla a un HANDLE) y no enlazaria. La rama ANSI de arriba
+ * (File_Open / CreateFileA) si funciona. */
+#if defined(USE_WINDOWS_FILE) && !defined(_XBOX)
 static WRes File_OpenW(CSzFile *p, const WCHAR *name, int writeMode)
 {
   p->handle = CreateFileW(name,

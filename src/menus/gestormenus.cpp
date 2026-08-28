@@ -681,6 +681,7 @@ void GestorMenus::poblarMenuCoreOverrides(Menu *menu, CfgLoader *refConfig){
 	const std::string scaleOrShaderTxt = LanguageManager::instance()->get("menu.options.scale");
 	const std::string intScaleTxt = LanguageManager::instance()->get("menu.options.integerscale");
 	const std::string intScaleTypeTxt = LanguageManager::instance()->get("menu.options.integerscale.type");
+	const std::string syncTypeTxt = LanguageManager::instance()->get("menu.options.sync");
 	const std::string showDirTxt = LanguageManager::instance()->get("menu.options.showdir");
 	const std::string recursiveFilesTxt = LanguageManager::instance()->get("menu.options.listrecursive");
 	const std::string autoOverrideTxt = LanguageManager::instance()->get("menu.core.overrides.auto");
@@ -719,6 +720,13 @@ void GestorMenus::poblarMenuCoreOverrides(Menu *menu, CfgLoader *refConfig){
 		scaleInt.push_back(videoIntScaleStrings[i]);
 	}
 
+	//Synchronization mode
+	std::vector<std::string> syncStrings;
+	syncStrings.push_back(autoOverrideTxt);
+	for (int i=0; i < TOTAL_VIDEO_SYNC; i++){
+		syncStrings.push_back(syncOptionsStrings[i]);
+	}
+
 	for (std::size_t i=0; i < refConfig->emulators.size() - 1; i++){
 		Menu *menuCore = new Menu(refConfig->emulators[i]->config.name, menu);
 		menu->opciones.push_back(new OpcionSubMenu(refConfig->emulators[i]->config.name, menuCore));
@@ -736,6 +744,9 @@ void GestorMenus::poblarMenuCoreOverrides(Menu *menu, CfgLoader *refConfig){
 		menuCore->opciones.push_back(new OpcionLista(intScaleTxt, enableScaleInt, &refConfig->emulators[i]->config.integerScale));
 		//Integer scale type
 		menuCore->opciones.push_back(new OpcionLista(intScaleTypeTxt, scaleInt, &refConfig->emulators[i]->config.scaleIntMode));
+		//Synchronization
+		menuCore->opciones.push_back(new OpcionLista(syncTypeTxt, syncStrings, &refConfig->emulators[i]->config.syncMode));
+
 		//Scan subfolders
 		menuCore->opciones.push_back(new OpcionBool(recursiveFilesTxt, &refConfig->emulators[i]->config.menu_directory_recursive));
 		//Show directories (no effect if menu_directory_recursive enabled)
@@ -768,6 +779,7 @@ void GestorMenus::poblarMenuDiscos(int options){
 	
 	OpcionTxtAndValue* nextCd = new OpcionTxtAndValue(LanguageManager::instance()->get("menu.disk.nextcd"), LanguageManager::instance()->get("menu.disk.nom3u"));
 	nextCd->callback = &GestorMenus::cdromNextSelected;
+	nextCd->context = nextCd;
 
 	//Anyadimos la opcion de seleccion de discos
 	cdromListMenu = new Menu(LanguageManager::instance()->get("menu.disk.selectcd"), menuDisks);
@@ -803,7 +815,15 @@ std::string GestorMenus::cdromNextSelected(void* inst, void *value){
 	if (disk_control.get_num_images && disk_control.get_num_images() > 1) {
 		unsigned n   = disk_control.get_num_images();
 		unsigned cur = disk_control.get_image_index ? disk_control.get_image_index() : 0;
-		swapDisc((cur + 1) % n);
+		unsigned new_idx = (cur + 1) % n;
+
+		if (swapDisc(new_idx)){
+			OpcionTxtAndValue* option = static_cast<OpcionTxtAndValue*>(inst);
+			char buf[64];
+			_snprintf(buf, sizeof(buf), LanguageManager::instance()->get("msg.cd.discnum").c_str(), new_idx + 1, n);
+			buf[sizeof(buf) - 1] = '\0';
+			option->valor = buf;
+		}
 	} else {
 		return LanguageManager::instance()->get("msg.cd.m3urequired");
 	}

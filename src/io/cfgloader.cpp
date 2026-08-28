@@ -194,6 +194,7 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::libretro_core].setPropValue(std::string(info.library_name));
 	configMain[cfg::libretro_core_version].setPropValue(std::string(info.library_version));
 	configMain[cfg::libretro_core_extensions].setPropValue(std::string(info.valid_extensions));
+	configMain[cfg::lastOptSel].setPropValue((int)-1);
 }
 
 /**
@@ -506,6 +507,9 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 					} else if (key.compare("shaderMode") == 0){
 						//This option is to override the configMain, so the -1 value is for the auto option
 						cfgEmu->config.shaderMode = Constant::strToTipo<int>(value) + 1;
+					} else if (key.compare("syncMode") == 0){
+						//This option is to override the configMain, so the -1 value is for the auto option
+						cfgEmu->config.syncMode = Constant::strToTipo<int>(value) + 1;
 					}
 				}
 			}             
@@ -668,7 +672,7 @@ std::string CfgLoader::saveCoreParams(){
 		fileCoreCfg.push_back(it->first + "=" + Constant::TipoToStr(it->second->selected));
     }
 
-	std::string corepath = getCoreCfgPath();
+	std::string corepath = getCoreCfgPath(true);
 	FileList::guardarVector(corepath, fileCoreCfg);
 
 	appliedFileParmsCore = dirutil::getFileName(corepath);
@@ -686,6 +690,13 @@ bool CfgLoader::deleteCoreParams(){
 }
 
 void CfgLoader::loadCoreParams(){
+#ifdef SYSTEM_OPT
+	//We recover the menu status to set the emuCfgPos and to store the cfg::lastOptSel
+	struct ListStatus statusMenu;
+	if (recoverGameMenuPos(statusMenu) == 0){
+		configMain[cfg::lastOptSel].setPropValue(statusMenu.emuLoaded);
+	}
+#endif
 	applyCoreParamsFile(getCoreCfgPath());
 }
 
@@ -791,15 +802,76 @@ bool CfgLoader::deleteGameParams(const std::string& gamePath){
 	return false;
 }
 
-std::string CfgLoader::getCoreCfgPath(){
+std::string CfgLoader::getCoreCfgPath(bool save){
 	std::size_t last = configMain[cfg::path_prefix].valueStr.length() <= 0 ? 0 : configMain[cfg::path_prefix].valueStr.length() - 1;
 	bool lastFileSep = true;
 	if (last < configMain[cfg::path_prefix].valueStr.length()){
 		configMain[cfg::path_prefix].valueStr[last] = Constant::getFileSep()[0];
 	}
 
-	return configMain[cfg::path_prefix].valueStr + (lastFileSep ? "" : Constant::getFileSep()) + 
-		"config" + Constant::getFileSep() + "core_" + configMain[cfg::libretro_core].valueStr + CORE_OPT_EXT;
+	std::string prefixOpt = configMain[cfg::libretro_core].valueStr;
+	std::string pathOpt = configMain[cfg::path_prefix].valueStr + (lastFileSep ? "" : Constant::getFileSep()) + 
+		"config" + Constant::getFileSep() + "core_" + prefixOpt + CORE_OPT_EXT;
+
+// If SYSTEM_OPT is defined, a system configuration file has greater preference in comparison to the core configuration
+// For example, the PUAE core can emulate 3 different systems: Amiga 500, Amiga 1200 and Amiga CD32. For this systems
+// it might be desirable to have independent configuration (Amiga 1200 is to slow so we enable frameskip, but it's not
+// needed for Amiga 500)
+#ifdef SYSTEM_OPT
+
+	//emuCfgPos will be set at the beginning to the last selected emulator
+	int systemSelected = this->emuCfgPos;
+	vector<string> v = Constant::splitChar(emulators.at(systemSelected)->config.system, '_');
+
+	//if the actual selected emulator is not found in the preprocessor defined, 
+	//load the last valid one stored in cfg::lastOptSel
+	if (!v.empty() && v.back().find(string(SYSTEM_OPT)) == string::npos){
+		systemSelected = configMain[cfg::lastOptSel].valueInt;
+		v = Constant::splitChar(emulators.at(systemSelected)->config.system, '_');
+	}
+
+	if (!v.empty() && v.back().find(string(SYSTEM_OPT)) != string::npos){
+		configMain[cfg::lastOptSel].setPropValue(systemSelected);
+		prefixOpt = v.back();
+
+		std::string tmpPathOpt = configMain[cfg::path_prefix].valueStr + (lastFileSep ? "" : Constant::getFileSep()) + 
+		"config" + Constant::getFileSep() + "core_" + prefixOpt + CORE_OPT_EXT;
+
+		if (dirutil::fileExists(tmpPathOpt.c_str()) || save){
+			pathOpt = tmpPathOpt;
+		}
+	}
+#endif
+
+	return pathOpt;
+}
+
+/**
+ * 
+ */
+int CfgLoader::recoverGameMenuPos(struct ListStatus &read_struct){
+    FILE* infile;
+    string filepath = Constant::getAppDir() + Constant::getFileSep() + MENUTMP;
+    int ret = 0;
+
+    // Open person.dat for reading
+    infile = fopen(filepath.c_str(), "rb");
+    if (infile == NULL) {
+        cerr << "Error openning file: " << filepath << endl;
+        return 1;
+    }
+
+    if (fread(&read_struct, sizeof(read_struct), 1, infile) > 0){
+        LOG_DEBUG("emupos: %d; inipos: %d; endpos: %d; curpos: %d; maxlines: %d; layout: %d; animateBkg: %d", read_struct.emuLoaded,  
+			read_struct.iniPos, read_struct.endPos, read_struct.curPos, read_struct.maxLines, read_struct.layout, read_struct.animateBkg);
+        //Setting the emulator selected        
+        emuCfgPos = read_struct.emuLoaded;
+    } else {
+        ret = 1;
+    }
+
+    fclose(infile);
+    return ret;
 }
 
 // Metodo para guardar la configuracion en un archivo
@@ -910,7 +982,12 @@ std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
 		"\n#SCALE FIXED 2X		 3"
 		"\n#SCALE FIXED 3X	     4"
 		"\n#SCALE FIXED 4X		 5"
-		"\n#SCALE FIXED 5X		 6", &ConfigEmu::scaleIntMode}
+		"\n#SCALE FIXED 5X		 6", &ConfigEmu::scaleIntMode},
+		{"syncMode", "Synchronization mode"
+		"\n#AUTO           -1"
+		"\n#SYNC_TO_AUDIO	0"
+		"\n#SYNC_TO_VIDEO   1"
+		"\n#SYNC_NONE       2", &ConfigEmu::syncMode}
     };
 
 	//The override list, has the option "auto", which is represented as -1. That's why we subtract 1

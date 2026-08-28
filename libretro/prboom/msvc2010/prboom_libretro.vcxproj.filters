@@ -831,7 +831,4 @@
       <Filter>Header Files\compat</Filter>
     </ClInclude>
   </ItemGroup>
-  <ItemGroup>
-    <None Include="..\libretro\libretro.def" />
-  </ItemGroup>
 </Project>

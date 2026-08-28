@@ -1841,7 +1841,8 @@ STATIC_INLINE int one_fetch_cycle (int pos, int ddfstop_to_test, int dma, int fm
 
 static void update_bpldats (int hpos)
 {
-	for (int i = 0; i < MAX_PLANES; i++) {
+	int i;
+	for (i = 0; i < MAX_PLANES; i++) {
 #ifdef AGA
 		fetched_aga0[i] = bplxdat[i];
 		fetched_aga1[i] = 0;
@@ -3000,8 +3001,9 @@ static void reset_decisions (void)
 	last_fetch_hpos = -1;
 
 	if (sprite_ignoreverticaluntilnextline) {
+		int i;
 		sprite_ignoreverticaluntilnextline = false;
-		for (int i = 0; i < MAX_SPRITES; i++)
+		for (i = 0; i < MAX_SPRITES; i++)
 			spr[i].ignoreverticaluntilnextline = false;
 	}
 
@@ -3145,6 +3147,7 @@ static void checklacecount (bool lace)
 
 struct chipset_refresh *get_chipset_refresh (void)
 {
+	int i;
 	int islace = interlace_seen ? 1 : 0;
 	int isntsc = (beamcon0 & 0x20) ? 0 : 1;
 	int custom = (beamcon0 & 0x80) ? 1 : 0;
@@ -3152,7 +3155,7 @@ struct chipset_refresh *get_chipset_refresh (void)
 	if (!(currprefs.chipset_mask & CSMASK_ECS_AGNUS))
 		isntsc = currprefs.ntscmode ? 1 : 0;
 
-	for (int i = 0; i < MAX_CHIPSET_REFRESH_TOTAL; i++) {
+	for (i = 0; i < MAX_CHIPSET_REFRESH_TOTAL; i++) {
 		struct chipset_refresh *cr = &currprefs.cr[i];
 		if ((cr->horiz < 0 || cr->horiz == maxhpos) &&
 			(cr->vert < 0 || cr->vert == maxvpos_display) &&
@@ -3174,6 +3177,8 @@ static bool changed_chipset_refresh (void)
 
 void compute_framesync (void)
 {
+	struct chipset_refresh * cr;
+	int i;
 	int islace = interlace_seen ? 1 : 0;
 	int isntsc = (beamcon0 & 0x20) ? 0 : 1;
 	bool found = false;
@@ -3186,7 +3191,7 @@ void compute_framesync (void)
 		vblank_hz = vblank_hz_shf;
 	}
 
-	struct chipset_refresh *cr = get_chipset_refresh ();
+	cr = get_chipset_refresh ();
 	while (cr) {
 		double v = -1;
 		if (!picasso_on && !picasso_requested_on) {
@@ -3260,7 +3265,8 @@ void compute_framesync (void)
 		int res = GET_RES_AGNUS (bplcon0);
 		int vres = islace ? 1 : 0;
 		int res2, vres2;
-			
+		int start, stop;
+
 		res2 = currprefs.gfx_resolution;
 		if (doublescan > 0)
 			res2++;
@@ -3276,8 +3282,8 @@ void compute_framesync (void)
 		if (vres2 > VRES_QUAD)
 			vres2 = VRES_QUAD;
 
-		int start = hsyncstartpos; //hbstrt;
-		int stop = hsyncendpos; //hbstop;
+		start = hsyncstartpos; //hbstrt;
+		stop = hsyncendpos; //hbstop;
 
 		gfxvidinfo.inwidth = ((maxhpos - (maxhpos - start + DISPLAY_LEFT_SHIFT / 2) + 1) * 2) << res2;
 		gfxvidinfo.inxoffset = stop * 2;
@@ -3321,7 +3327,7 @@ void compute_framesync (void)
 
 	memset (line_decisions, 0, sizeof line_decisions);
 	memset (line_drawinfo, 0, sizeof line_drawinfo);
-	for (int i = 0; i < sizeof (line_decisions) / sizeof *line_decisions; i++) {
+	for (i = 0; i < sizeof (line_decisions) / sizeof *line_decisions; i++) {
 		line_decisions[i].plfleft = -2;
 	}
 
@@ -3354,6 +3360,7 @@ void compute_framesync (void)
 /* set PAL/NTSC or custom timing variables */
 static void init_hz (bool checkvposw)
 {
+	int clk;
 	int isntsc, islace;
 	int odbl = doublescan, omaxvpos = maxvpos;
 	double ovblank = vblank_hz;
@@ -3378,7 +3385,7 @@ static void init_hz (bool checkvposw)
 	if (!(currprefs.chipset_mask & CSMASK_ECS_AGNUS))
 		isntsc = currprefs.ntscmode ? 1 : 0;
 #ifdef __LIBRETRO__
-	int clk = isntsc ? CHIPSET_CLOCK_NTSC : CHIPSET_CLOCK_PAL;
+	clk = isntsc ? CHIPSET_CLOCK_NTSC : CHIPSET_CLOCK_PAL;
 #else
 	int clk = currprefs.ntscmode ? CHIPSET_CLOCK_NTSC : CHIPSET_CLOCK_PAL;
 #endif
@@ -5937,22 +5944,28 @@ static int mavg (struct mavg_data *md, int newval, int size)
 
 static bool framewait (void)
 {
+	frame_time_t curr_time;
+	frame_time_t start;
+	int vs;
+	int status;
+	static struct mavg_data ma_frameskipt;
+	int frameskipt_avg;
+	int clockadjust;
+	int vstb;
 #ifdef __LIBRETRO__
 	return true;
 #endif
-	frame_time_t curr_time;
-	frame_time_t start;
-	int vs = isvsync_chipset ();
-	int status = 0;
+	vs = isvsync_chipset ();
+	status = 0;
 
 	is_syncline = 0;
 
-	static struct mavg_data ma_frameskipt;
-	int frameskipt_avg = mavg (&ma_frameskipt, frameskiptime, MAVG_VSYNC_SIZE);
+	frameskipt_avg = mavg (&ma_frameskipt, frameskiptime, MAVG_VSYNC_SIZE);
 
 	frameskiptime = 0;
 
 	if (vs > 0) {
+		int legacy_avg;
 
 		static struct mavg_data ma_legacy;
 		static frame_time_t vsync_time;
@@ -5974,7 +5987,7 @@ static bool framewait (void)
 				show_screen (2);
 		}
 
-		int legacy_avg = mavg (&ma_legacy, t, MAVG_VSYNC_SIZE);
+		legacy_avg = mavg (&ma_legacy, t, MAVG_VSYNC_SIZE);
 		if (t > legacy_avg)
 			legacy_avg = t;
 		t = legacy_avg;
@@ -6002,6 +6015,8 @@ static bool framewait (void)
 			return status != 0;
 
 		if (vs == -2 || vs == -3) {
+			int adjust_avg;
+			int flipdelay_avg;
 
 			// fastest possible
 			int max, adjust, flipdelay = 0, val;
@@ -6029,11 +6044,11 @@ static bool framewait (void)
 			if (adjust > vsynctimebase * 2 / 3)
 				adjust = vsynctimebase * 2 / 3;
 			
-			int adjust_avg = mavg (&ma_adjust, adjust, MAVG_VSYNC_SIZE);
+			adjust_avg = mavg (&ma_adjust, adjust, MAVG_VSYNC_SIZE);
 
 			val += adjust_avg;
 
-			int flipdelay_avg = mavg (&ma_skip, flipdelay, MAVG_VSYNC_SIZE);
+			flipdelay_avg = mavg (&ma_skip, flipdelay, MAVG_VSYNC_SIZE);
 			if (flipdelay > flipdelay_avg)
 				flipdelay_avg = flipdelay;
 			if (currprefs.gfx_apmode[0].gfx_vflip == 0) {
@@ -6061,6 +6076,7 @@ static bool framewait (void)
 			frame_shown = true;
 
 		} else {
+			int adjustx;
 
 			int max, adjust, flipdelay, flipdelay_avg;
 			static struct mavg_data ma_skip;
@@ -6079,7 +6095,7 @@ static bool framewait (void)
 				sleep_millis_main (extraframewait);
 
 			adjust = (int)now - (int)curr_time;
-			int adjustx = adjust;
+			adjustx = adjust;
 			if (adjust < 0)
 				adjust = 0;
 			if (adjust > vsynctimebase)
@@ -6116,10 +6132,12 @@ static bool framewait (void)
 	
 	status = 1;
 
-	int clockadjust = 0;
-	int vstb = vsynctimebase;
+	clockadjust = 0;
+	vstb = vsynctimebase;
 
 	if (currprefs.m68k_speed < 0) {
+		int max;
+		int adjust;
 
 #if 0
 	static uae_u32 prevtick;
@@ -6162,8 +6180,7 @@ static bool framewait (void)
 			curr_time = read_processor_time ();
 		}
 
-		int max;
-		int adjust = 0;
+		adjust = 0;
 		if ((int)curr_time - (int)vsyncwaittime > 0 && (int)curr_time - (int)vsyncwaittime < vstb / 2)
 			adjust += curr_time - vsyncwaittime;
 		adjust += clockadjust;
@@ -6284,6 +6301,7 @@ static void fpscounter (bool frameok)
 // vsync functions that are not hardware timing related
 static void vsync_handler_pre (void)
 {
+	bool frameok;
 	if (bogusframe > 0)
 		bogusframe--;
 
@@ -6323,7 +6341,7 @@ static void vsync_handler_pre (void)
 		frameskiptime += end - start;
 	}
 
-	bool frameok = framewait ();
+	frameok = framewait ();
 	
 	if (!picasso_on) {
 		if (!frame_rendered && vblank_hz_state) {
@@ -6588,15 +6606,19 @@ static uae_u16 dmal, dmal_hpos;
 
 static void dmal_emu (uae_u32 v)
 {
+	int hpos;
 	// Disk and Audio DMA bits are ignored by Agnus, Agnus only checks DMAL and master bit
 	if (!(dmacon & DMA_MASTER))
 		return;
-	int hpos = current_hpos ();
+	hpos = current_hpos ();
 	if (v >= 6) {
+		int nr;
+		uaecptr pt;
+		uae_u16 dat;
 		v -= 6;
-		int nr = v / 2;
-		uaecptr pt = audio_getpt (nr, (v & 1) != 0);
-		uae_u16 dat = chipmem_wget_indirect (pt);
+		nr = v / 2;
+		pt = audio_getpt (nr, (v & 1) != 0);
+		dat = chipmem_wget_indirect (pt);
 #ifdef DEBUGGER
 		if (debug_dma)
 			record_dma (0xaa + nr * 16, dat, pt, hpos, vpos, DMARECORD_AUDIO);
@@ -6677,7 +6699,8 @@ static void events_dmal_hsync (void)
 		return;
 	dmal_hpos = 0;
 	if (currprefs.cpu_cycle_exact) {
-		for (int i = 0; i < 6 + 8; i += 2) {
+		int i;
+		for (i = 0; i < 6 + 8; i += 2) {
 			if (dmal & (3 << i)) {
 				alloc_cycle_ext (i + 7, CYCLE_MISC);
 			}
@@ -6799,6 +6822,8 @@ STATIC_INLINE bool is_last_line (void)
 // this prepares for new line
 static void hsync_handler_post (bool onvsync)
 {
+	bool ciahsyncs;
+	bool ciavsyncs;
 	last_copper_hpos = 0;
 #ifdef CPUEMU_12
 	if (currprefs.cpu_cycle_exact || currprefs.blitter_cycle_exact) {
@@ -6808,8 +6833,8 @@ static void hsync_handler_post (bool onvsync)
 
 	// genlock active = TOD pulses only every other line/field
 	genlockhtoggle = !genlockhtoggle;
-	bool ciahsyncs = !(bplcon0 & 2) || ((bplcon0 & 2) && currprefs.genlock && (!currprefs.ntscmode || genlockhtoggle));
-	bool ciavsyncs = !(bplcon0 & 2) || ((bplcon0 & 2) && currprefs.genlock && genlockvtoggle);
+	ciahsyncs = !(bplcon0 & 2) || ((bplcon0 & 2) && currprefs.genlock && (!currprefs.ntscmode || genlockhtoggle));
+	ciavsyncs = !(bplcon0 & 2) || ((bplcon0 & 2) && currprefs.genlock && genlockvtoggle);
 
 	CIA_hsync_posthandler (ciahsyncs);
 	if (currprefs.cs_ciaatod > 0) {
@@ -8463,10 +8488,12 @@ uae_u8 *save_custom_extra (int *len, uae_u8 *dstptr)
 
 uae_u8 *restore_custom_event_delay (uae_u8 *src)
 {
+	int cnt;
+	int i;
 	if (restore_u32 () != 1)
 		return src;
-	int cnt = restore_u8 ();
-	for (int i = 0; i < cnt; i++) {
+	cnt = restore_u8 ();
+	for (i = 0; i < cnt; i++) {
 		uae_u8 type = restore_u8 ();
 		evt e = restore_u64 ();
 		uae_u32 data = restore_u32 ();
@@ -8477,10 +8504,11 @@ uae_u8 *restore_custom_event_delay (uae_u8 *src)
 }
 uae_u8 *save_custom_event_delay (int *len, uae_u8 *dstptr)
 {
+	int i;
 	uae_u8 *dstbak, *dst;
 	int cnt = 0;
 
-	for (int i = ev2_misc;  i < ev2_max; i++) {
+	for (i = ev2_misc;  i < ev2_max; i++) {
 		struct ev2 *e = &eventtab2[i];
 		if (e->active && e->handler == send_interrupt_do) {
 			cnt++;
@@ -8496,7 +8524,7 @@ uae_u8 *save_custom_event_delay (int *len, uae_u8 *dstptr)
 
 	save_u32 (1);
 	save_u8 (cnt);
-	for (int i = ev2_misc;  i < ev2_max; i++) {
+	for (i = ev2_misc;  i < ev2_max; i++) {
 		struct ev2 *e = &eventtab2[i];
 		if (e->active && e->handler == send_interrupt_do) {
 			save_u8 (1);

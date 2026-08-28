@@ -475,6 +475,7 @@ int ListMenu::getCartForSystem(int systemid){
 		case 57:
 			return cart_psx;
 		case 64:
+		case 111:
 			return cart_amiga;
 		case 66:
 			return cart_c64;
@@ -490,6 +491,8 @@ int ListMenu::getCartForSystem(int systemid){
 			return cart_msx;
 		case 114:
 			return cart_pce_cd;
+		case 130:
+			return cart_cd32;
 		case 135:
 			return cart_dos;
 		case 290:

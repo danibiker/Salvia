@@ -23,7 +23,7 @@ extern void driveclick_mix (uae_s16*, int, int);
 
 extern int soundcheck;
 
-static __inline__ void flush_sound_buffers(int32_t min_bytes_required)
+static _inline void flush_sound_buffers(int32_t min_bytes_required)
 {
     int32_t available_bytes = (char *)sndbufpt - (char *)sndbuffer;
 
@@ -37,7 +37,7 @@ static __inline__ void flush_sound_buffers(int32_t min_bytes_required)
     }
 }
 
-static __inline__ void check_sound_buffers (void)
+static _inline void check_sound_buffers (void)
 {
     flush_sound_buffers(8);
 }

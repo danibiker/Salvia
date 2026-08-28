@@ -803,10 +803,11 @@ static void initialize_mountinfo (void)
 	for (nr = 0; nr < currprefs.mountitems; nr++) {
 		struct uaedev_config_data *uci = &currprefs.mountconfig[nr];
 		if (uci->ci.controller == HD_CONTROLLER_UAE) {
+			int idx;
 			struct uaedev_config_info ci;
 			memcpy (&ci, &uci->ci, sizeof (struct uaedev_config_info));
 			ci.flags = MYVOLUMEINFO_REUSABLE;
-			int idx = set_filesys_unit_1 (-1, &ci);
+			idx = set_filesys_unit_1 (-1, &ci);
 			allocuci (&currprefs, nr, idx);
 		}
 	}
@@ -816,9 +817,11 @@ static void initialize_mountinfo (void)
 	cd_unit_number = 0;
 #ifdef SCSI
 	if (currprefs.scsi /*&& currprefs.win32_automount_cddrives*/) {
+		int i;
 		uae_u32 mask = scsi_get_cd_drive_mask ();
-		for (int i = 0; i < 32; i++) {
+		for (i = 0; i < 32; i++) {
 			if (mask & (1 << i)) {
+				int idx;
 				struct uaedev_config_info ci = { 0 };
 				_stprintf (ci.devname, _T("CD%d"), i);
 				cd_unit_number++;
@@ -827,7 +830,7 @@ static void initialize_mountinfo (void)
 				ci.sectors = 1;
 				ci.surfaces = 1;
 				ci.blocksize = 2048;
-				int idx = set_filesys_unit_1 (i + cd_unit_offset, &ci);
+				idx = set_filesys_unit_1 (i + cd_unit_offset, &ci);
 				allocuci (&currprefs, nr, idx);
 				nr++;
 			}
@@ -1656,6 +1659,8 @@ static uae_u32 filesys_media_change_reply (TrapContext *ctx, int mode)
 			xfree (u->ui.volname);
 			ui->volname = u->ui.volname = NULL;
 			if (ui->unit_type == UNIT_CDFS) {
+				struct isofs_info ii;
+				bool r;
 #ifdef SCSI		
 				uae_u64 uniq;
 				ui->cdfs_superblock = u->ui.cdfs_superblock = isofs_mount (ui->cddevno, &uniq);
@@ -1663,9 +1668,8 @@ static uae_u32 filesys_media_change_reply (TrapContext *ctx, int mode)
 					u->ui.unknown_media = true;
 				if (!u->ui.cdfs_superblock)
 					return 0;
-				struct isofs_info ii;
 				set_highcyl (ui, 0);
-				bool r = isofs_mediainfo (ui->cdfs_superblock, &ii);
+				r = isofs_mediainfo (ui->cdfs_superblock, &ii);
 				if (r && ii.media) {
 					u->ui.unknown_media = ii.unknown_media;
 					if (!ii.unknown_media) {
@@ -2593,6 +2597,7 @@ static a_inode *get_aino (Unit *unit, a_inode *base, const TCHAR *rel, int *err)
 				curr = curr->parent;
 			p++;
 		} else {
+			TCHAR * component_end;
 			a_inode *next;
 
 
@@ -2602,7 +2607,6 @@ static a_inode *get_aino (Unit *unit, a_inode *base, const TCHAR *rel, int *err)
 				break;
 			}
 
-			TCHAR *component_end;
 			component_end = _tcschr (p, '/');
 			if (component_end != 0)
 				*component_end = '\0';
@@ -2743,6 +2747,7 @@ static Unit *startup_create_unit (UnitInfo *uinfo, int num)
 
 static bool mount_cd (UnitInfo *uinfo, int nr, struct mytimeval *ctime, uae_u64 *uniq)
 {
+	struct isofs_info ii;
 	uinfo->cddevno = nr - cd_unit_offset;
 	if (!sys_command_open (uinfo->cddevno)) {
 		write_log (_T("Failed attempt to open CD unit %d\n"), uinfo->cddevno);
@@ -2753,7 +2758,6 @@ static bool mount_cd (UnitInfo *uinfo, int nr, struct mytimeval *ctime, uae_u64 
 #endif
 	uinfo->cdfs_superblock = isofs_mount(uinfo->cddevno, uniq);
 	uinfo->wasisempty = true;
-	struct isofs_info ii;
 	if (isofs_mediainfo (uinfo->cdfs_superblock, &ii)) {
 		xfree (uinfo->volname);
 		if (ii.media) {
@@ -3032,6 +3036,7 @@ static void
 
 static void free_key (Unit *unit, Key *k)
 {
+	struct lockrecord * lr;
 	Key *k1;
 	Key *prev = 0;
 	for (k1 = unit->keys; k1; k1 = k1->next) {
@@ -3045,7 +3050,6 @@ static void free_key (Unit *unit, Key *k)
 		prev = k1;
 	}
 
-	struct lockrecord *lr;
 	for (lr = k->record; lr;) {
 		struct lockrecord *next = lr->next;
 		xfree (lr);
@@ -3407,6 +3411,7 @@ static void action_make_link (Unit *unit, dpacket packet)
 		PUT_PCK_RES2 (packet, ERROR_NOT_IMPLEMENTED);
 
 	} else {
+		Unit * u;
 
 		a_inode *a3;
 		TCHAR *link = cstr (unit, target);
@@ -3418,7 +3423,7 @@ static void action_make_link (Unit *unit, dpacket packet)
 		return;
 	}
 		// try to find softlink target
-		for (Unit *u = units; u; u = u->next) {
+		for (u = units; u; u = u->next) {
 			if (u->volflags & (MYVOLUMEINFO_ARCHIVE | MYVOLUMEINFO_CDFS))
 				continue;
 			a3 = find_aino (u, 0, link, &err);
@@ -3444,6 +3449,7 @@ static void action_make_link (Unit *unit, dpacket packet)
 
 static void action_read_link (Unit *unit, dpacket packet)
 {
+	char * s;
 	uaecptr lock = GET_PCK_ARG1 (packet) << 2;
 	uaecptr name = GET_PCK_ARG2 (packet);
 	uaecptr newname = GET_PCK_ARG3 (packet);
@@ -3518,7 +3524,7 @@ static void action_read_link (Unit *unit, dpacket packet)
 	}
 	xfree (extrapath);
 	write_log (_T("got target '%s'\n"), tmp); 
-	char *s = ua_fs (tmp, -1);
+	s = ua_fs (tmp, -1);
 	for (i = 0; s[i]; i++) {
 		if (i >= size - 1)
 			break;
@@ -3892,8 +3898,9 @@ static void record_timeout (Unit *unit)
 	struct lockrecord *lr;
 
 	while (retry) {
+		struct lockrecord * prev;
 		retry = false;
-		struct lockrecord *prev = NULL;
+		prev = NULL;
 		for (lr = unit->waitingrecords; lr; lr = lr->next) {
 			lr->timeout--;
 			if (lr->timeout == 0) {
@@ -3923,8 +3930,9 @@ static void record_check_waiting (Unit *unit)
 	struct lockrecord *lr;
 
 	while (retry) {
+		struct lockrecord * prev;
 		retry = false;
-		struct lockrecord *prev = NULL;
+		prev = NULL;
 		for (lr = unit->waitingrecords; lr; lr = lr->next) {
 			Key *k = lookup_key (unit, GET_PCK_ARG1 (lr->packet));
 			if (!k || !record_hit (unit, k, lr->pos, lr->len, lr->mode)) {
@@ -3946,6 +3954,7 @@ static void record_check_waiting (Unit *unit)
 
 static int action_lock_record (Unit *unit, dpacket packet, uae_u32 msg)
 {
+	struct lockrecord * lr;
 	Key *k = lookup_key (unit, GET_PCK_ARG1 (packet));
 	uae_u32 pos = GET_PCK_ARG2 (packet);
 	uae_u32 len = GET_PCK_ARG3 (packet);
@@ -3992,7 +4001,7 @@ static int action_lock_record (Unit *unit, dpacket packet, uae_u32 msg)
 		return 1;
 	}
 
-	struct lockrecord *lr = new_record (GET_PCK_ARG1 (packet), pos, len, mode, timeout, 0);
+	lr = new_record (GET_PCK_ARG1 (packet), pos, len, mode, timeout, 0);
 	if (k->record) {
 		lr->next = k->record;
 		k->record = lr;
@@ -4007,6 +4016,8 @@ static int action_lock_record (Unit *unit, dpacket packet, uae_u32 msg)
 
 static void action_free_record (Unit *unit, dpacket packet)
 {
+	struct lockrecord * prev;
+	struct lockrecord * lr;
 	Key *k = lookup_key (unit, GET_PCK_ARG1 (packet));
 	uae_u32 pos = GET_PCK_ARG2 (packet);
 	uae_u32 len = GET_PCK_ARG3 (packet);
@@ -4020,8 +4031,7 @@ static void action_free_record (Unit *unit, dpacket packet)
 		return;
 	}
 
-	struct lockrecord *prev = NULL;
-	struct lockrecord *lr;
+	prev = NULL;
 	for (lr = k->record; lr; lr = lr->next) {
 		if (lr->pos == pos && lr->len == len) {
 			if (prev)
@@ -4433,6 +4443,7 @@ static uae_u32 REGPARAM2 fsmisc_helper (TrapContext *context)
 
 	switch (mode)
 	{
+		uae_u32 secs;
 	case 0:
 		return exall_helpder (context);
 	case 1:
@@ -4441,7 +4452,7 @@ static uae_u32 REGPARAM2 fsmisc_helper (TrapContext *context)
 		return filesys_media_change_reply (context, 1);
 	case 3:
 		t = getlocaltime ();
-		uae_u32 secs = (uae_u32)t - (8 * 365 + 2) * 24 * 60 * 60;
+		secs = (uae_u32)t - (8 * 365 + 2) * 24 * 60 * 60;
 		return secs;
 	}
 	return 0;
@@ -4976,7 +4987,9 @@ static void
 			} else {
 				int i;
 			PUT_PCK_RES1 (packet, actual);
-			for ( ; i < actual; i++)
+			/* Upstream: el for venia sin clausula de inicio y con i sin
+			 * inicializar, o sea que el bucle arrancaba en un valor cualquiera. */
+			for (i = 0; i < actual; i++)
 				put_byte (addr + i, buf[i]);
 			k->file_pos += actual;
 		}
@@ -6238,6 +6251,7 @@ static int filesys_iteration(UnitInfo *ui)
 	dpacket pck;
 	uaecptr msg;
 	uae_u32 morelocks;
+	int ret;
 
 	pck = read_comm_pipe_u32_blocking (ui->unit_pipe);
 	msg = read_comm_pipe_u32_blocking (ui->unit_pipe);
@@ -6254,7 +6268,7 @@ static int filesys_iteration(UnitInfo *ui)
 
 	put_long (get_long (morelocks), get_long (ui->self->locklist));
 	put_long (ui->self->locklist, morelocks);
-	int ret = handle_packet (ui->self, pck, msg);
+	ret = handle_packet (ui->self, pck, msg);
 	if (!ret) {
 		PUT_PCK_RES1 (pck, DOS_FALSE);
 		PUT_PCK_RES2 (pck, ERROR_ACTION_NOT_KNOWN);
@@ -6370,6 +6384,8 @@ void filesys_free_handles (void)
 {
 	Unit *u, *u1;
 	for (u = units; u; u = u1) {
+		struct lockrecord * lrnext;
+		struct lockrecord * lr;
 		Key *k1, *knext;
 		u1 = u->next;
 		for (k1 = u->keys; k1; k1 = knext) {
@@ -6379,8 +6395,6 @@ void filesys_free_handles (void)
 			xfree (k1);
 		}
 		u->keys = NULL;
-		struct lockrecord *lrnext;
-		struct lockrecord *lr;
 		for (lr = u->waitingrecords; lr; lr = lrnext) {
 			lrnext = lr->next;
 			xfree (lr);
@@ -6572,11 +6586,13 @@ static uae_u32 REGPARAM2 filesys_dev_bootfilesys (TrapContext *context)
 	}
 
 	if (get_long (parmpacket + PP_FSPTR) && !get_long (parmpacket + PP_ADDTOFSRES)) {
+		int i;
 		uaecptr fsptr = get_long (parmpacket + PP_FSPTR);
+		uae_u32 pf;
 		uip->filesysseg = fsptr;
 		// filesystem but was not added to fs.resource
-		uae_u32 pf = get_long (parmpacket + PP_FSHDSTART + 8); // fse_PatchFlags
-		for (int i = 0; i < 32; i++) {
+		pf = get_long (parmpacket + PP_FSHDSTART + 8); // fse_PatchFlags
+		for (i = 0; i < 32; i++) {
 			if (pf & (1 << i))
 				put_long (devicenode + 4 + i * 4, get_long (parmpacket + PP_FSHDSTART + 8 + 4 + i * 4));
 		}
@@ -6599,8 +6615,9 @@ static uae_u32 REGPARAM2 filesys_dev_bootfilesys (TrapContext *context)
 		fsnode = get_long (fsnode);
 	}
 	if (type == FILESYS_HARDFILE) {
+		int i;
 		uae_u32 pf = get_long (parmpacket + PP_FSHDSTART + 8); // fse_PatchFlags
-		for (int i = 0; i < 32; i++) {
+		for (i = 0; i < 32; i++) {
 			if (pf & (1 << i))
 				put_long (devicenode + 4 + i * 4, get_long (parmpacket + PP_FSHDSTART + 8 + 4 + i * 4));
 		}
@@ -6753,11 +6770,12 @@ static TCHAR *device_dupfix (uaecptr expbase, TCHAR *devname)
 
 static const TCHAR *dostypes (uae_u32 dostype)
 {
+	int i;
 	static TCHAR dt[32];
 	int j;
 
 	j = 0;
-	for (int i = 0; i < 4; i++) {
+	for (i = 0; i < 4; i++) {
 		uae_u8 c = dostype >> ((3 - i) * 8);
 		if (c >= ' ' && c <= 'z') {
 			dt[j++] = c;
@@ -6823,11 +6841,12 @@ static void dump_partinfo (struct hardfiledata *hfd, uae_u8 *pp)
 
 static void dump_rdb (UnitInfo *uip, struct hardfiledata *hfd, uae_u8 *bufrdb, uae_u8 *buf, int readblocksize)
 {
+	int i;
 	write_log (_T("RDB: HostID: %08x Flags: %08x\n"),
 		rl (bufrdb + 3 * 4), rl (bufrdb + 5 * 4));
 	write_log (_T("RDB: BL: %d BH: %d LC: %d HC: %d CB: %d HB: %d\n"),
 		rl (bufrdb + 128), rl (bufrdb + 132), rl (bufrdb + 136), rl (bufrdb + 140), rl (bufrdb + 144), rl (bufrdb + 152));
-	for (int i = 0; i < 100; i++) {
+	for (i = 0; i < 100; i++) {
 		int partblock;
 		if (i == 0)
 			partblock = rl (bufrdb + 28);
@@ -6848,7 +6867,10 @@ static void dump_rdb (UnitInfo *uip, struct hardfiledata *hfd, uae_u8 *bufrdb, u
 		}
 		dump_partinfo (hfd, buf);
 	}
-	for (int i = 0; i < 100; i++) {
+	for (i = 0; i < 100; i++) {
+		uae_u32 dostype;
+		int version;
+		int revision;
 		int fileblock;
 		if (i == 0)
 			fileblock = rl (bufrdb + 32);
@@ -6867,9 +6889,9 @@ static void dump_rdb (UnitInfo *uip, struct hardfiledata *hfd, uae_u8 *bufrdb, u
 			write_log (_T("RDB: checksum error FSHD block %d\n"), fileblock);
 			break;
 		}
-		uae_u32 dostype = rl (buf + 32);
-		int version = (buf[36] << 8) | buf[37];
-		int revision = (buf[38] << 8) | buf[39];
+		dostype = rl (buf + 32);
+		version = (buf[36] << 8) | buf[37];
+		revision = (buf[38] << 8) | buf[39];
 		write_log (_T("LSEG: %08x (%s) %d.%d\n"), dostype, dostypes (dostype), version, revision);
 	}
 }
@@ -7048,6 +7070,7 @@ static int rdb_mount (UnitInfo *uip, int unit_no, int partnum, uaecptr parmpacke
 	}
 
 	for (;;) {
+		uae_u32 rdbdostype;
 		if (fileblock == -1) {
 			if (!fsnode)
 				write_log (_T("RDB: FS %08X (%s) not in FileSystem.resource or in RDB\n"), dostype, dostypes (dostype));
@@ -7064,7 +7087,7 @@ static int rdb_mount (UnitInfo *uip, int unit_no, int partnum, uaecptr parmpacke
 			goto error;
 		}
 		fileblock = rl (buf + 16);
-		uae_u32 rdbdostype = rl (buf + 32);
+		rdbdostype = rl (buf + 32);
 		if (((dostype >> 8) == (rdbdostype >> 8) && (dostype != 0x444f5300 && (dostype & 0xffffff00) == 0x444f5300)) || (dostype == rdbdostype))
 			break;
 	}
@@ -7150,7 +7173,8 @@ static void addfakefilesys (uaecptr parmpacket, uae_u32 dostype, int ver, int re
 static uaecptr getfakefilesysseg (UnitInfo *uip)
 {
 	if (uip->filesysdir && _tcslen (uip->filesysdir) > 0) {
-		for (int i = 0; &mountinfo.ui[i] != uip; i++) {
+		int i;
+		for (i = 0; &mountinfo.ui[i] != uip; i++) {
 			UnitInfo *uip2 = &mountinfo.ui[i];
 			if (!uip2->filesysdir)
 				continue;
@@ -7165,6 +7189,9 @@ static uaecptr getfakefilesysseg (UnitInfo *uip)
 
 static int dofakefilesys (UnitInfo *uip, uaecptr parmpacket, struct uaedev_config_info *ci)
 {
+	uae_u32 fsres, fsnode;
+	int oldversion;
+	int oldrevision;
 	int i, size;
 	TCHAR tmp[MAX_DPATH];
 	uae_u8 buf[512];
@@ -7229,9 +7256,8 @@ static int dofakefilesys (UnitInfo *uip, uaecptr parmpacket, struct uaedev_confi
 		return FILESYS_HARDFILE;
 	}
 
-	uae_u32 fsres, fsnode;
-	int oldversion = -1;
-	int oldrevision = -1;
+	oldversion = -1;
+	oldrevision = -1;
 	fsres = get_long (parmpacket + PP_FSRES);
 	fsnode = get_long (fsres + 18);
 	while (get_long (fsnode)) {
@@ -7437,10 +7463,11 @@ static uae_u32 REGPARAM2 filesys_dev_storeinfo (TrapContext *context)
 			put_long (parmpacket + 52, 0); /* lowCyl */
 			put_long (parmpacket + 56, 1); /* hiCyl */
 		} else {
+			int i;
 			uae_u8 buf[512] = { 0 };
 			char *s = ua_fs (uip[unit_no].devname, -1);
 			buf[36] = strlen (s);			
-			for (int i = 0; i < buf[36]; i++)
+			for (i = 0; i < buf[36]; i++)
 				buf[37 + i] = s[i];
 			xfree (s);
 			put_long (parmpacket + 4, ROM_hardfile_resname);
@@ -7458,7 +7485,7 @@ static uae_u32 REGPARAM2 filesys_dev_storeinfo (TrapContext *context)
 			put_long (parmpacket + 72, ci->mask); /* dma mask */
 			if (ci->dostype) // forced dostype?
 				put_long (parmpacket + 80, ci->dostype); /* dostype */
-			for (int i = 0; i < 80; i++)
+			for (i = 0; i < 80; i++)
 				buf[i + 128] = get_byte (parmpacket + 16 + i);
 			dump_partinfo (&uip[unit_no].hf, buf);
 		}
@@ -7524,6 +7551,7 @@ static uae_u32 REGPARAM2 mousehack_done (TrapContext *context)
 extern void cia_heartbeat (void);
 void filesys_vsync (void)
 {
+	int i;
 	Unit *u;
 
 	if (!uae_boot_rom)
@@ -7550,7 +7578,7 @@ void filesys_vsync (void)
 		record_timeout (u);
 	}
 
-	for (int i = 0; i < currprefs.mountitems; i++) {
+	for (i = 0; i < currprefs.mountitems; i++) {
 		struct hardfiledata *hfd = get_hardfile_data (currprefs.mountconfig[i].configoffset);
 		if (!hfd)
 			continue;

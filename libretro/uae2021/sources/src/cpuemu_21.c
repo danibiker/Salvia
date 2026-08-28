@@ -4783,10 +4783,14 @@ return;
 void REGPARAM2 CPUFUNC(op_0cfc_21)(uae_u32 opcode)
 {
 {{	uae_s32 extra;
+	uae_u32 rn1;
+	uae_u32 rn2;
+	uae_u16 dst1, dst2;
 	extra = get_long_ce020_prefetch (2);
-	uae_u32 rn1 = regs.regs[(extra >> 28) & 15];
-	uae_u32 rn2 = regs.regs[(extra >> 12) & 15];
-	uae_u16 dst1 = x_get_word (rn1), dst2 = x_get_word (rn2);
+	rn1 = regs.regs[(extra >> 28) & 15];
+	rn2 = regs.regs[(extra >> 12) & 15];
+	dst1 = x_get_word (rn1);
+	dst2 = x_get_word (rn2);
 	optflag_cmpw ((uae_s16)(m68k_dreg (regs, (extra >> 16) & 7)), (uae_s16)(dst1));
 	if (GET_ZFLG ()) {
 	optflag_cmpw ((uae_s16)(m68k_dreg (regs, extra & 7)), (uae_s16)(dst2));
@@ -5539,10 +5543,14 @@ return;
 void REGPARAM2 CPUFUNC(op_0efc_21)(uae_u32 opcode)
 {
 {{	uae_s32 extra;
+	uae_u32 rn1;
+	uae_u32 rn2;
+	uae_u32 dst1, dst2;
 	extra = get_long_ce020_prefetch (2);
-	uae_u32 rn1 = regs.regs[(extra >> 28) & 15];
-	uae_u32 rn2 = regs.regs[(extra >> 12) & 15];
-	uae_u32 dst1 = x_get_long (rn1), dst2 = x_get_long (rn2);
+	rn1 = regs.regs[(extra >> 28) & 15];
+	rn2 = regs.regs[(extra >> 12) & 15];
+	dst1 = x_get_long (rn1);
+	dst2 = x_get_long (rn2);
 	optflag_cmpl ((uae_s32)(m68k_dreg (regs, (extra >> 16) & 7)), (uae_s32)(dst1));
 	if (GET_ZFLG ()) {
 	optflag_cmpl ((uae_s32)(m68k_dreg (regs, extra & 7)), (uae_s32)(dst2));

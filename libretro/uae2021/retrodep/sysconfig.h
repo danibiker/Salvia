@@ -1,6 +1,81 @@
 #ifndef UAE_SYSCONFIG_H
 #define UAE_SYSCONFIG_H
 
+#ifdef _MSC_VER
+/* MSVC (VS2010) no tiene strcasecmp/strncasecmp/snprintf. libretro-common ya
+ * trae los mapeos, asi que se reutilizan en vez de parchear cada llamada.
+ * Tiene que ir primero para que los macros valgan en todas las fuentes de UAE.
+ * snprintf acaba en c99_snprintf_retro__, de
+ * libretro-common/compat/compat_snprintf.c (anadido al proyecto). */
+#include <compat/msvc.h>
+
+/* __inline__ es sintaxis GCC. En MSVC la palabra clave es __inline, y en el
+ * arbol hay fuentes que la escriben literal (drawing.c, memory.c) ademas de
+ * cabeceras como noflags.h y el STATIC_INLINE de sysdeps.h. Se mapea aqui,
+ * que es lo primero que ve cada .c, en vez de tocar cada sitio. */
+#define __inline__ __inline
+
+#include <sys/types.h>
+#include <sys/stat.h>
+/* chmod() y close() viven aqui en MSVC. Sin esto el compilador las da por
+ * implicitas (C4013), que en C89 significa asumir una firma que puede no
+ * coincidir. */
+#include <io.h>
+
+/* Bits de permisos POSIX: el <sys/stat.h> de MSVC solo trae los nombres _S_*
+ * del propietario, y su chmod() solo honra lectura/escritura. Windows no tiene
+ * permisos de grupo ni de otros, asi que van a 0 (solo se usan con |= y &). */
+#ifndef S_IRUSR
+#define S_IRUSR _S_IREAD
+#endif
+#ifndef S_IWUSR
+#define S_IWUSR _S_IWRITE
+#endif
+#ifndef S_IXUSR
+#define S_IXUSR _S_IEXEC
+#endif
+#ifndef S_IRGRP
+#define S_IRGRP 0
+#define S_IWGRP 0
+#define S_IXGRP 0
+#define S_IROTH 0
+#define S_IWOTH 0
+#define S_IXOTH 0
+#endif
+
+/* Lo haria autoconf normalmente (ver la nota de 'mode_t' mas abajo). */
+#ifndef mode_t
+#define mode_t int
+#endif
+
+/* struct timeval vive en <winsock2.h>, que sysdeps.h mantiene fuera a
+ * proposito con WIN32_LEAN_AND_MEAN. Se declara aqui y se pone el guard de
+ * winsock para que un <winsock2.h> posterior no la redefina. gettimeofday()
+ * no tiene equivalente en MSVC: implementada en retrodep/machdep/support.c. */
+#if !defined(_TIMEVAL_DEFINED) && !defined(_XBOX)
+#define _TIMEVAL_DEFINED
+struct timeval {
+	long tv_sec;
+	long tv_usec;
+};
+#endif
+int gettimeofday(struct timeval *tv, void *tz);
+
+#if _MSC_VER < 1800
+#define strtoll _strtoi64
+/* atanh() es de C99 y no llego a MSVC hasta VS2013; fpp.c la usa. El resto de
+ * las de C99 (signbit/log1p/expm1/round/logb/remainder) NO se usan en 2.6.1,
+ * asi que no se mapean. isnan/isinf tampoco hacen falta: el bloque
+ * WIN32/_XBOX de mas abajo hace #undef de HAVE_ISNAN y HAVE_ISINF, y UAE tira
+ * entonces de su propio camino. Implementada en machdep/support.c. */
+extern double uae_msvc_atanh(double x);
+#ifndef atanh
+#define atanh(x) uae_msvc_atanh((double)(x))
+#endif
+#endif /* _MSC_VER < 1800 */
+
+#endif /* _MSC_VER */
+
 #define CAPS /* CAPS-image support */
 #define FDI2RAW /* FDI 1.0 and 2.x image support */
 //#define WITH_CHD
@@ -11,17 +86,27 @@
 //#define A_LZX
 #define A_DMS
 
-#define CPUEMU_0 /* generic 680x0 emulation */
-#define CPUEMU_11 /* 68000/68010 prefetch emulation */
-#define CPUEMU_12 /* 68000/68010 cycle-exact cpu&blitter */
-#define CPUEMU_20 /* 68020 prefetch */
-#define CPUEMU_21 /* 68020 "cycle-exact" + blitter */
-#define CPUEMU_22 /* 68030 prefetch */
-//#define CPUEMU_23 /* 68030 "cycle-exact" + blitter */
-//#define CPUEMU_24 /* 68060 "cycle-exact" + blitter */
+/* Cada CPUEMU_NN activo genera su tabla op_smalltbl_NN en cpustbl.c, y esa tabla
+ * referencia las funciones del cpuemu_NN.c correspondiente: al activar uno hay
+ * que anadir su fichero al proyecto (y al reves).
+ *
+ * OJO con el 22: cpuemu_22.c SI se compila aunque CPUEMU_22 este apagado. Las
+ * tablas 23 y 24 de cpustbl.c estan guardadas solo por CPUEMU_68000_ONLY (que
+ * nunca se define) y reutilizan las funciones op_*_22, o sea que se generan
+ * siempre y arrastran el fichero. Definir CPUEMU_22 solo añadiria la tabla 22,
+ * que en 2.6.1 unicamente usa la rama de 68060 cycle-exact, y esa cuelga de
+ * CPUEMU_33: seria ~19 KB de datos muertos. Se deja apagado a proposito. */
+#define CPUEMU_0 /* generic 680x0 emulation      -> cpuemu_0.c  */
+#define CPUEMU_11 /* 68000/68010 prefetch        -> cpuemu_11.c */
+#define CPUEMU_12 /* 68000/68010 cycle-exact     -> cpuemu_12.c */
+#define CPUEMU_20 /* 68020 prefetch              -> cpuemu_20.c */
+#define CPUEMU_21 /* 68020 "cycle-exact"         -> cpuemu_21.c */
+//#define CPUEMU_22 /* 68030 prefetch: ver la nota de arriba (cpuemu_22.c SI entra) */
+//#define CPUEMU_23 /* 68030 "cycle-exact": tabla 23 ya existe siempre (usa op_*_22) */
+//#define CPUEMU_24 /* 68060 "cycle-exact": tabla 24 ya existe siempre (usa op_*_22) */
 //#define CPUEMU_25 /* 68040 "cycle-exact" + blitter */
-#define CPUEMU_31 /* Aranym 68040 MMU */
-#define CPUEMU_32 /* Previous 68030 MMU */
+#define CPUEMU_31 /* 68040 MMU (Aranym)          -> cpuemu_31.c */
+#define CPUEMU_32 /* 68030 MMU (Previous)        -> cpuemu_32.c */
 //#define CPUEMU_33 /* 68060 MMU */
 //#define CPUEMU_34 /* 68030 MMU + cache */
 //#define CPUEMU_35 /* 68030 MMU + cache + CE */
@@ -33,7 +118,15 @@
 #define ECS_DENISE /* ECS DENISE new features */
 #define AGA /* AGA chipset emulation (ECS_DENISE must be enabled) */
 #define FILESYS /* filesys emulation */
-//#define UAE_FILESYS_THREADS
+/* Hilo por unidad virtual de filesystem, con un par de smp_comm_pipe para
+ * hablar con el hilo de emulacion. Upstream lo trae comentado en 2.6.1, pero la
+ * 5.3.1 que ya corre en la 360 lo lleva puesto: sin el, cada acceso a disco de
+ * WHDLoad bloquea el hilo de emulacion. El reparto de HW threads lo hace
+ * retrodep/threaddep/thread.c: este acaba en UAE_HWTHREAD_IO (HW4).
+ * Ojo: cambia la disposicion de unit->locklist (filesys.c 2902) y anade el
+ * protocolo de cola de locks. Si algun juego se comporta raro con discos
+ * duros, esta es la primera linea a comentar de nuevo. */
+#define UAE_FILESYS_THREADS
 //#define JIT /* JIT compiler support */
 //#define USE_JIT_FPU
 #define AUTOCONFIG /* autoconfig support, fast ram, harddrives etc.. */
@@ -487,7 +580,17 @@
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
-#if defined AC_APPLE_UNIVERSAL_BUILD
+#ifdef _XBOX
+#ifndef WORDS_BIGENDIAN
+#  define WORDS_BIGENDIAN 1
+#endif
+#ifndef __ppc__
+#  define __ppc__
+#endif
+#ifndef __POWERPC__
+#  define __POWERPC__
+#endif
+#elif defined AC_APPLE_UNIVERSAL_BUILD
 # if defined __BIG_ENDIAN__
 #  define WORDS_BIGENDIAN 1
 # endif
@@ -558,7 +661,7 @@
 #undef _ftelli64
 #define _ftelli64 rftell
 #else /* NO_LIBRETRO_VFS = 1 */
-#ifndef WIN32
+#if !defined(WIN32) && !defined(_XBOX)
 #undef HANDLE
 #define HANDLE FILE*
 #endif
@@ -573,16 +676,27 @@
 #ifndef PATH_MAX
 #define PATH_MAX    256
 #endif
-#ifndef MAX_PATH
-#define MAX_PATH	512
-#endif
+//#ifndef MAX_PATH
+//#define MAX_PATH	512
+//#endif
 #ifndef MAX_DPATH
-#define MAX_DPATH	512
+#define MAX_DPATH	MAX_PATH
 #endif
 
-#ifdef WIN32
+#if defined(WIN32) || defined(_XBOX)
 #define FSDB_DIR_SEPARATOR '\\'
 #define FSDB_DIR_SEPARATOR_S _T("\\")
+
+#undef HAVE_UNISTD_H
+#undef HAVE_UTIME_H
+#undef TIME_WITH_SYS_TIME
+#undef HAVE_SYS_TIME_H
+#undef HAVE_SYS_PARAM_H
+#undef HAVE_ISNAN
+#undef HAVE_ISINF
+
+#define STATIC_INLINE static __inline
+
 #else
 #define FSDB_DIR_SEPARATOR '/'
 #define FSDB_DIR_SEPARATOR_S _T("/")

@@ -941,9 +941,10 @@ static TCHAR *DISK_get_default_saveimagepath (const TCHAR *name)
 // 1 = image dir
 TCHAR *DISK_get_saveimagepath(const TCHAR *name, int type)
 {
+	int i;
 	int typev = type;
 
-	for (int i = 0; i < 2; i++) {
+	for (i = 0; i < 2; i++) {
 		if (typev == 1 || (typev == -1 && saveimageoriginalpath) || (typev == -2 && (saveimageoriginalpath || i == 1))) {
 			TCHAR si_name[MAX_DPATH], si_path[MAX_DPATH];
 			_tcscpy(si_name, name);
@@ -2401,11 +2402,12 @@ static void floppy_get_bootblock (uae_u8 *dst, bool ffs, bool bootable)
 }
 static void floppy_get_rootblock (uae_u8 *dst, int block, const TCHAR *disk_name, drive_type adftype)
 {
+	char * s;
 	dst[0+3] = 2;
 	dst[12+3] = 0x48;
 	dst[312] = dst[313] = dst[314] = dst[315] = (uae_u8)0xff;
 	dst[316+2] = (block + 1) >> 8; dst[316+3] = (block + 1) & 255;
-	char *s = ua ((disk_name && _tcslen (disk_name) > 0) ? disk_name : _T("empty"));
+	s = ua ((disk_name && _tcslen (disk_name) > 0) ? disk_name : _T("empty"));
 	dst[432] = strlen (s);
 	strcpy ((char*)dst + 433, s);
 	xfree (s);
@@ -2496,6 +2498,7 @@ bool disk_creatediskfile (struct uae_prefs *p, const TCHAR *name, int type, driv
 			}
 			ok = true;
 		} else {
+			bool dodos;
 			uae_u8 root[4];
 			uae_u8 rawtrack[3 * 4], dostrack[3 * 4];
 			l = track_len;
@@ -2510,7 +2513,7 @@ bool disk_creatediskfile (struct uae_prefs *p, const TCHAR *name, int type, driv
 			memcpy (dostrack, rawtrack, sizeof rawtrack);
 			dostrack[3] = 0;
 			dostrack[9] = (l * 8) >> 16; dostrack[10] = (l * 8) >> 8; dostrack[11] = (l * 8) >> 0;
-			bool dodos = ffs || bootable || (disk_name && _tcslen (disk_name) > 0);
+			dodos = ffs || bootable || (disk_name && _tcslen (disk_name) > 0);
 			for (i = 0; i < tracks; i++) {
 				uae_u8 tmp[3 * 4];
 				memcpy (tmp, rawtrack, sizeof rawtrack);
@@ -2774,6 +2777,7 @@ void disk_insert_force (int num, const TCHAR *name, bool forcedwriteprotect)
 
 static void DISK_check_change (void)
 {
+	int i;
 #ifdef __LIBRETRO__
 	/* cd_speed check is not done anywhere in WinUAE, so why not just do it here */
 	if (currprefs.cd_speed != changed_prefs.cd_speed)
@@ -2781,7 +2785,7 @@ static void DISK_check_change (void)
 #endif
 	if (currprefs.floppy_speed != changed_prefs.floppy_speed)
 		currprefs.floppy_speed = changed_prefs.floppy_speed;
-	for (int i = 0; i < MAX_FLOPPY_DRIVES; i++) {
+	for (i = 0; i < MAX_FLOPPY_DRIVES; i++) {
 /* REMOVEME:
  * nowhere used
  */
@@ -2802,8 +2806,9 @@ static void DISK_check_change (void)
 
 void DISK_vsync (void)
 {
+	int i;
 	DISK_check_change ();
-	for (int i = 0; i < MAX_FLOPPY_DRIVES; i++) {
+	for (i = 0; i < MAX_FLOPPY_DRIVES; i++) {
 		drive *drv = floppy + i;
 		if (drv->dskchange_time == 0 && _tcscmp (currprefs.floppyslots[i].df, changed_prefs.floppyslots[i].df))
 			disk_insert (i, changed_prefs.floppyslots[i].df, changed_prefs.floppyslots[i].forcedwriteprotect);
@@ -3184,8 +3189,9 @@ static void disk_doupdate_write (drive * drv, int floppybits)
 				}
 				dsklength--;
 				if (dsklength <= 0) {
+						int dr;
 					disk_dmafinished ();
-						for (int dr = 0; dr < MAX_FLOPPY_DRIVES ; dr++) {
+						for (dr = 0; dr < MAX_FLOPPY_DRIVES ; dr++) {
 						drive *drv = &floppy[dr];
 						drv->writtento = 0;
 						if (drv->motoroff)
@@ -3227,10 +3233,15 @@ static void updatetrackspeed (drive *drv, int mfmpos)
 
 static void disk_doupdate_predict (int startcycle)
 {
+	int dr;
 	int finaleventcycle = maxhpos << 8;
 	int finaleventflag = 0;
 
-	for (int dr = 0; dr < MAX_FLOPPY_DRIVES; dr++) {
+	for (dr = 0; dr < MAX_FLOPPY_DRIVES; dr++) {
+		int diskevent_flag;
+		uae_u32 tword;
+		int countcycle;
+		int mfmpos;
 		drive *drv = &floppy[dr];
 		if (drv->motoroff)
 			continue;
@@ -3238,10 +3249,10 @@ static void disk_doupdate_predict (int startcycle)
 			continue;
 		if (selected & (1 << dr))
 			continue;
-		int diskevent_flag = 0;
-		uae_u32 tword = word;
-		int countcycle = startcycle + (drv->floppybitcounter % drv->trackspeed);
-		int mfmpos = drv->mfmpos;
+		diskevent_flag = 0;
+		tword = word;
+		countcycle = startcycle + (drv->floppybitcounter % drv->trackspeed);
+		mfmpos = drv->mfmpos;
 		while (countcycle < (maxhpos << 8)) {
 			if (drv->tracktiming[0])
 				updatetrackspeed (drv, mfmpos);
@@ -3263,8 +3274,9 @@ static void disk_doupdate_predict (int startcycle)
 			if (mfmpos == drv->indexoffset)
 				diskevent_flag |= DISK_INDEXSYNC;
 			if (dskdmaen != DSKDMA_WRITE && mfmpos == drv->skipoffset) {
+				int skipcnt;
 				update_jitter ();
-				int skipcnt = disk_jitter;
+				skipcnt = disk_jitter;
 				while (skipcnt-- > 0) {
 					mfmpos++;
 					mfmpos %= drv->tracklen;
@@ -3469,9 +3481,10 @@ uae_u16 DSKBYTR (int hpos)
 
 static void DISK_start (void)
 {
+	unsigned int i;
 	unsigned int dr;
 
-	for (unsigned int i = 0; i < 3; i++)
+	for (i = 0; i < 3; i++)
 		fifo_inuse[i] = false;
 	fifo_filled = 0;
 	for (dr = 0; dr < MAX_FLOPPY_DRIVES; dr++) {
@@ -3524,6 +3537,7 @@ void DISK_hsync (void)
 
 void DISK_update (int tohpos)
 {
+	int didaccess;
 	int dr;
 	int cycles;
 /* REMOVEME:
@@ -3567,7 +3581,7 @@ void DISK_update (int tohpos)
 			drive_fill_bigbuf (drv, 0);
 		drv->mfmpos %= drv->tracklen;
 	}
-	int didaccess = 0;
+	didaccess = 0;
 	for (dr = 0; dr < MAX_FLOPPY_DRIVES; dr++) {
 		drive *drv = &floppy[dr];
 		if (drv->motoroff || !drv->trackspeed)
@@ -4047,8 +4061,9 @@ void DISK_restore_custom (uae_u32 pdskpt, uae_u16 pdsklength, uae_u16 pdskbytr)
 
 void restore_disk_finish (void)
 {
+	int i;
 	int cnt = 0;
-	for (int i = 0; i < MAX_FLOPPY_DRIVES; i++) {
+	for (i = 0; i < MAX_FLOPPY_DRIVES; i++) {
 		if (currprefs.floppyslots[i].dfxtype >= 0) {
 #ifdef __LIBRETRO__
 			/* Attempt to restore frontend 'current disk index' */
@@ -4056,8 +4071,9 @@ void restore_disk_finish (void)
 				const char *restored_df = changed_prefs.floppyslots[i].df;
 				/* Ensure restored disk path is valid */
 				if (restored_df && (*restored_df != '\0')) {
+					int dc_index;
 					/* Loop over all images in dc struct */
-					for (int dc_index = 0; dc_index < dc->count; dc_index++) {
+					for (dc_index = 0; dc_index < dc->count; dc_index++) {
 						/* Only consider floppy images... */
 						if (dc->types[dc_index] == DC_IMAGE_TYPE_FLOPPY) {
 							const char *dc_df = dc->files[dc_index];
@@ -4088,6 +4104,9 @@ void restore_disk_finish (void)
 
 uae_u8 *restore_disk (int num,uae_u8 *src)
 {
+	int mfmpos;
+	int dskready_up_time;
+	int dskready_down_time;
 	drive *drv;
 	int state, dfxtype;
 	TCHAR old[MAX_DPATH];
@@ -4132,7 +4151,7 @@ uae_u8 *restore_disk (int num,uae_u8 *src)
 	drv->cyl = restore_u8 ();
 	drv->dskready = restore_u8 () != 0;
 	drv->drive_id_scnt = restore_u8 ();
-	int mfmpos = restore_u32 ();
+	mfmpos = restore_u32 ();
 	drv->dskchange_time = 0;
 	restore_u32 ();
 	s = restore_path (SAVESTATE_PATH_FLOPPY);
@@ -4141,8 +4160,8 @@ uae_u8 *restore_disk (int num,uae_u8 *src)
 	_tcscpy (old, currprefs.floppyslots[num].df);
 	_tcsncpy (changed_prefs.floppyslots[num].df, s, 255);
 	xfree (s);
-	int dskready_up_time = restore_u16 ();
-	int dskready_down_time = restore_u16 ();
+	dskready_up_time = restore_u16 ();
+	dskready_down_time = restore_u16 ();
 	newis = changed_prefs.floppyslots[num].df[0] ? 1 : 0;
 	if (!(disabled & (1 << num))) {
 		if (!newis && old[0]) {
@@ -4175,6 +4194,7 @@ uae_u8 *restore_disk2 (int num,uae_u8 *src)
 	drive *drv = &floppy[num];
 	uae_u32 m = restore_u32 ();
 	if (m) {
+		int j;
 		drv->floppybitcounter = restore_u16 ();
 		drv->tracklen = restore_u32 ();
 		drv->trackspeed = restore_u16 ();
@@ -4182,7 +4202,7 @@ uae_u8 *restore_disk2 (int num,uae_u8 *src)
 		drv->indexoffset = restore_u32 ();
 		drv->buffered_cyl = drv->cyl;
 		drv->buffered_side = side;
-		for (int j = 0; j < (drv->tracklen + 15) / 16; j++) {
+		for (j = 0; j < (drv->tracklen + 15) / 16; j++) {
 			drv->bigmfmbuf[j] = restore_u16 ();
 			if (m & 2)
 				drv->tracktiming[j] = restore_u16 ();
@@ -4216,6 +4236,7 @@ uae_u8 *save_disk (int num, int *len, uae_u8 *dstptr, bool usepath)
 
 uae_u8 *save_disk2 (int num, int *len, uae_u8 *dstptr)
 {
+	int j;
 	uae_u8 *dstbak,*dst;
 	drive *drv = &floppy[num];
 
@@ -4241,7 +4262,7 @@ uae_u8 *save_disk2 (int num, int *len, uae_u8 *dstptr)
 	save_u16 (drv->trackspeed);
 	save_u32 (drv->skipoffset);
 	save_u32 (drv->indexoffset);
-	for (int j = 0; j < (drv->tracklen + 15) / 16; j++) {
+	for (j = 0; j < (drv->tracklen + 15) / 16; j++) {
 		save_u16 (drv->bigmfmbuf[j]);
 		if (drv->tracktiming[0])
 			save_u16 (drv->tracktiming[j]);
@@ -4255,12 +4276,13 @@ uae_u8 *save_disk2 (int num, int *len, uae_u8 *dstptr)
 
 uae_u8 *restore_floppy (uae_u8 *src)
 {
+	int i;
 	word = restore_u16 ();
 	bitoffset = restore_u8 ();
 	dma_enable = restore_u8 ();
 	disk_hpos = restore_u8 () & 0xff;
 	dskdmaen = restore_u8 ();
-	for (int i = 0; i < 3; i++) {
+	for (i = 0; i < 3; i++) {
 		fifo[i] = restore_u16 ();
 		fifo_inuse[i] = restore_u8 ();
 		if (dskdmaen == 0)
@@ -4273,6 +4295,7 @@ uae_u8 *restore_floppy (uae_u8 *src)
 
 uae_u8 *save_floppy (int *len, uae_u8 *dstptr)
 {
+	int i;
 	uae_u8 *dstbak, *dst;
 
 	if (dstptr)
@@ -4285,7 +4308,7 @@ uae_u8 *save_floppy (int *len, uae_u8 *dstptr)
 	save_u8 (dma_enable);		/* disk sync found */
 	save_u8 (disk_hpos & 0xff);	/* next bit read position */
 	save_u8 (dskdmaen);			/* dma status */
-	for (int i = 0; i < 3; i++) {
+	for (i = 0; i < 3; i++) {
 		save_u16 (fifo[i]);
 		save_u8 (fifo_inuse[i]);
 	}
@@ -4299,6 +4322,7 @@ uae_u8 *save_floppy (int *len, uae_u8 *dstptr)
 #define MAX_DISKENTRIES 4
 int disk_prevnext_name (TCHAR *imgp, int dir)
 {
+	struct zfile * zf;
 	TCHAR img[MAX_DPATH], *ext, *p, *p2, *ps, *dst[MAX_DISKENTRIES];
 	int num = -1;
 	int cnt, i;
@@ -4308,7 +4332,7 @@ int disk_prevnext_name (TCHAR *imgp, int dir)
 
 	old = my_strdup (imgp);
 
-	struct zfile *zf = zfile_fopen (imgp, _T("rb"), ZFD_NORMAL);
+	zf = zfile_fopen (imgp, _T("rb"), ZFD_NORMAL);
 	if (zf) {
 		_tcscpy (img, zfile_getname (zf));
 		zfile_fclose (zf);
@@ -4331,6 +4355,7 @@ retry:
 	cnt = 0;
 	dst[cnt] = NULL;
 	for (;;) {
+		TCHAR * ext2;
 		// disk x of y
 		p = _tcsstr (ps, _T("(disk "));
 		if (p && _istdigit (p[6])) {
@@ -4361,7 +4386,7 @@ retry:
 		ext = _tcsrchr (ps, '.');
 		if (!ext || ext - ps < 4)
 			break;
-		TCHAR *ext2 = ext - imgl + img;
+		ext2 = ext - imgl + img;
 		// name_<non numeric character>x.ext
 		if (ext[-3] == '_' && !_istdigit (ext[-2]) && _istdigit (ext[-1])) {
 			num = _tstoi (ext - 1);
@@ -4410,6 +4435,7 @@ retry:
 	if (gotone) { // was (disk x but no match, perhaps there are extra tags..
 		TCHAR *old2 = my_strdup (img);
 		for (;;) {
+			TCHAR * t;
 			ext = _tcsrchr (img, '.');
 			if (!ext)
 				break;
@@ -4417,7 +4443,7 @@ retry:
 				break;
 			if (ext[-1] != ']')
 				break;
-			TCHAR *t = _tcsrchr (img, '[');
+			t = _tcsrchr (img, '[');
 			if (!t)
 				break;
 			t[0] = 0;

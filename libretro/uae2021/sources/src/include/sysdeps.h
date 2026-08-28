@@ -117,13 +117,13 @@
 #include <limits.h>
 #endif // __cplusplus
 
-#ifndef __STDC__
-#  ifdef _MSC_VER
-#    error "M$ is no longer supported. Use WinUAE instead, it's great!"
-#  else
-#error "Your compiler is not ANSI. Get a real one."
-#endif
-#endif
+//#ifndef __STDC__
+//#  ifdef _MSC_VER
+//#    error "M$ is no longer supported. Use WinUAE instead, it's great!"
+//#  else
+//#error "Your compiler is not ANSI. Get a real one."
+//#endif
+//#endif
 
 #if defined(__cplusplus)
 #include <cstdarg>
@@ -419,11 +419,25 @@ extern int gui_message_multibutton (int flags, const char *format,...);
 #ifndef STATIC_INLINE
 #if __GNUC__ - 1 > 1 && __GNUC_MINOR__ - 1 >= 0
 #define STATIC_INLINE static __inline__ __attribute__ ((always_inline))
-#define NOINLINE __attribute__ ((noinline))
-#define NORETURN __attribute__ ((noreturn))
 #else
 #define STATIC_INLINE static __inline__
+#endif
+#endif
+
+/* NOINLINE/NORETURN no pueden colgar de la guarda de STATIC_INLINE: un target
+ * que predefina STATIC_INLINE (retrodep/sysconfig.h lo hace para WIN32/_XBOX)
+ * las dejaria sin definir, y 'static int NOINLINE f(...)' no parsea. */
+#ifndef NOINLINE
+#if __GNUC__ - 1 > 1 && __GNUC_MINOR__ - 1 >= 0
+#define NOINLINE __attribute__ ((noinline))
+#else
 #define NOINLINE
+#endif
+#endif
+#ifndef NORETURN
+#if __GNUC__ - 1 > 1 && __GNUC_MINOR__ - 1 >= 0
+#define NORETURN __attribute__ ((noreturn))
+#else
 #define NORETURN
 #endif
 #endif
@@ -471,6 +485,9 @@ extern int gui_message_multibutton (int flags, const char *format,...);
 #endif
 #define REGPARAM3
 #define uae_char char
+/* En Xbox 360 estos mapeos no valen: el XDK ya define la familia _tcs* en
+ * <tchar.h> y redefinirlos aqui choca. */
+
 #define _tcslen strlen
 #define _tcscpy strcpy
 #define _tcscmp strcmp
@@ -501,6 +518,7 @@ extern int gui_message_multibutton (int flags, const char *format,...);
 #define _wunlink unlink
 #define _tfopen fopen
 #define _vsntprintf vsnprintf
+
 #ifndef max
 #define max(a,b) ((a) > (b) ? (a) : (b))
 #endif
@@ -523,7 +541,9 @@ extern int gui_message_multibutton (int flags, const char *format,...);
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
+#ifndef _XBOX
 #include <windows.h>
+#endif
 #else
 #ifndef HANDLE
 typedef int HANDLE;
@@ -611,5 +631,7 @@ typedef int8_t INT8;
 #ifndef daylight
 #define daylight 0
 #endif
+
+
 
 #endif /* UAE_SYSDEPS_H */

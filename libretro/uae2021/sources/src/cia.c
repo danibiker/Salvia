@@ -1484,12 +1484,13 @@ STATIC_INLINE bool isgayle (void)
 
 static void cia_wait_pre (void)
 {
+	int div;
+	int cycles;
 	if (currprefs.cachesize)
 		return;
 
 #ifndef CUSTOM_SIMPLE
-	int div = (get_cycles () - eventtab[ev_cia].oldcycles) % DIV10;
-	int cycles;
+	div = (get_cycles () - eventtab[ev_cia].oldcycles) % DIV10;
 
 	if (div >= DIV10 * ECLOCK_DATA_CYCLE / 10) {
 		cycles = DIV10 - div;
@@ -1524,11 +1525,13 @@ static void cia_wait_post (uae_u32 value)
 
 static bool isgaylenocia (uaecptr addr)
 {
+	uaecptr mask;
+	bool cia;
 	// gayle CIA region is only 4096 bytes at 0xbfd000 and 0xbfe000
 	if (!isgayle ())
 		return true;
-	uaecptr mask = addr & 0xf000;
-	bool cia = mask == 0xe000 || mask == 0xd000;
+	mask = addr & 0xf000;
+	cia = mask == 0xe000 || mask == 0xd000;
 	return cia;
 }
 
@@ -1784,19 +1787,22 @@ static uae_u8 getclockreg (int addr, struct tm *ct)
 
 static void write_battclock (void)
 {
+	struct zfile * f;
 	if (!currprefs.rtcfile[0] || currprefs.cs_rtc == 0)
 		return;
-	struct zfile *f = zfile_fopen (currprefs.rtcfile, _T("wb"), ZFD_NORMAL);
+	f = zfile_fopen (currprefs.rtcfile, _T("wb"), ZFD_NORMAL);
 	if (f) {
+		uae_u8 od;
+		int i;
 //		uae_u8 zero[13] = { 0 };
 		struct tm *ct;
 		time_t t = time (0);
 		t += currprefs.cs_rtc_adjust;
 		ct = localtime (&t);
-		uae_u8 od = clock_control_d;
+		od = clock_control_d;
 		if (currprefs.cs_rtc == 2)
 			clock_control_d &= ~3;
-		for (int i = 0; i < 13; i++) {
+		for (i = 0; i < 13; i++) {
 			uae_u8 v = getclockreg (i, ct);
 			zfile_fwrite (&v, 1, 1, f);
 	}
@@ -2155,8 +2161,9 @@ uae_u8 *save_keyboard (int *len, uae_u8 *dstptr)
 
 uae_u8 *restore_keyboard (uae_u8 *src)
 {
+	uae_u32 v;
 	setcapslockstate (restore_u32 () & 1);
-	uae_u32 v = restore_u32 ();
+	v = restore_u32 ();
 	kbstate = restore_u8 ();
 	restore_u8 ();
 	restore_u8 ();

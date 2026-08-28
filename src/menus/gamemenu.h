@@ -49,7 +49,6 @@ static const string SYNOPSIS = "synopsis";
 static const string YEAR = "year";
 static const string MANUFACTURER = "manufacturer";
 static const string SYSTEM = "system";
-static const string MENUTMP = "menu.tmp";
 static const string FS_IMAGES[] = {BOX2D, SNAP, SNAPTIT};
 
 extern std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
@@ -143,7 +142,6 @@ class GameMenu : public Engine{
 		FILE_STATUS extractFileFromZip(const std::string& internalPath, const std::string& extractionPath, ZipBrowser& zb, ListMenu &listMenu);
 		std::string GetMD5(const std::string& input);
         int saveGameMenuPos(ListMenu &);
-        int recoverGameMenuPos(ListMenu &, struct ListStatus &);
         void showMessage(string);
 		bool updateFps();
 		CfgLoader * getCfgLoader();

@@ -125,7 +125,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
       <AdditionalIncludeDirectories>$(ProjectDir)..;$(ProjectDir)..\src;$(ProjectDir)..\deps\libmad;$(ProjectDir)..\libretro\libretro-common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;__LIBRETRO__;FPM_DEFAULT;INLINE=_inline;HAVE_LIBMAD;MUSIC_SUPPORT;HAVE_STRLWR;__WIN32__;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;__LIBRETRO__;FPM_DEFAULT;INLINE=_inline;HAVE_RVORBIS;HAVE_RMP3;HAVE_RMODTRACKER;HAVE_RWAV;HAVE_RPNG;HAVE_RJPEG;STATIC_LINKING;MUSIC_SUPPORT;HAVE_STRLWR</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
@@ -133,6 +133,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <CompileAs>CompileAsC</CompileAs>
       <DisableSpecificWarnings>4244;4267;4996;4146;4305;4800;4805;4723;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>

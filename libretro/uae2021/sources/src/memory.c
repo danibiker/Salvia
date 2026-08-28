@@ -2176,6 +2176,7 @@ static void add_shmmaps (uae_u32 start, addrbank *what)
  */
 uae_u8 *mapped_malloc (size_t s, const TCHAR *file)
 {
+	uae_u8 * r;
 	int id;
 	void *answer;
 	shmpiece *x;
@@ -2219,7 +2220,7 @@ uae_u8 *mapped_malloc (size_t s, const TCHAR *file)
 		return NULL;
 	nocanbang ();
 	recurse++;
-	uae_u8 *r =  mapped_malloc (s, file);
+	r = mapped_malloc (s, file);
 	recurse--;
 	return r;
 }
@@ -2982,11 +2983,13 @@ void memory_hardreset (int mode)
 // do not map if it conflicts with custom banks
 void map_banks_cond (addrbank *bank, int start, int size, int realsize)
 {
-	for (int i = 0; i < MAX_CUSTOM_MEMORY_ADDRS; i++) {
+	int i;
+	for (i = 0; i < MAX_CUSTOM_MEMORY_ADDRS; i++) {
+		int csize;
 		int cstart = currprefs.custom_memory_addrs[i] >> 16;
 		if (!cstart)
 			continue;
-		int csize = currprefs.custom_memory_sizes[i] >> 16;
+		csize = currprefs.custom_memory_sizes[i] >> 16;
 		if (!csize)
 			continue;
 		if (start <= cstart && start + size >= cstart)

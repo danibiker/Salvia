@@ -169,6 +169,13 @@ static void write_tdnumber (uae_u8 *buf, int bpp, int x, int y, int num, uae_u32
 
 void draw_status_line_single (uae_u8 *buf, int bpp, int y, int totalwidth, uae_u32 *rc, uae_u32 *gc, uae_u32 *bc, uae_u32 *alpha)
 {
+    int LED_WIDTH;
+    int TD_WIDTH;
+    int td_led_width;
+    int td_num_width;
+    int x_start, j, led, border;
+    uae_u32 c1, c2, cb;
+    int floppies;
 	int mult = (video_config & PUAE_VIDEO_QUADLINE) ? 2 : 1;
 
 	if (!mult)
@@ -194,13 +201,11 @@ void draw_status_line_single (uae_u8 *buf, int bpp, int y, int totalwidth, uae_u
             num_multip = 4;
     }
 
-    int LED_WIDTH = 16;
-    int TD_WIDTH = (LED_WIDTH * num_multip);
-    int td_led_width = TD_WIDTH;
-    int td_num_width = TD_NUM_WIDTH;
+    LED_WIDTH = 16;
+    TD_WIDTH = (LED_WIDTH * num_multip);
+    td_led_width = TD_WIDTH;
+    td_num_width = TD_NUM_WIDTH;
 
-    int x_start, j, led, border;
-    uae_u32 c1, c2, cb;
 
     c1 = ledcolor (0x00ffffff, rc, gc, bc, alpha);
     c2 = ledcolor (0x00000000, rc, gc, bc, alpha);
@@ -213,7 +218,7 @@ void draw_status_line_single (uae_u8 *buf, int bpp, int y, int totalwidth, uae_u
 
 	x_start += retrox_crop;
 
-    int floppies = 1;
+    floppies = 1;
     if (gui_data.hd >= 0 || gui_data.cd >= 0 || gui_data.md >= 0)
     {
         floppies = !(opt_statusbar & STATUSBAR_BASIC) ? 1 : 0;

@@ -8,10 +8,64 @@
 
 extern int log_filesys;
 
+#ifdef _XBOX
+
+#include <xtl.h>
+
+#ifndef INVALID_FILE_ATTRIBUTES
+#define INVALID_FILE_ATTRIBUTES ((DWORD) -1)
+#endif
+
+int xbox_stat(const char *path, struct stat *st)
+{
+	char clean[1024];
+	int i = 0, j = 0;
+	DWORD attr;
+	HANDLE h;
+	ULARGE_INTEGER sz;
+	FILETIME wt;
+
+	memset(st, 0, sizeof(*st));
+	while (path[i] && j < (int)sizeof(clean) - 1) {
+		char c = path[i++];
+		if (c == '/')
+			c = '\\';
+		if (c == '\\' && j > 0 && clean[j - 1] == '\\')
+			continue;
+		clean[j++] = c;
+	}
+	clean[j] = 0;
+
+	attr = GetFileAttributesA(clean);
+	if (attr == INVALID_FILE_ATTRIBUTES)
+		return -1;
+
+	st->st_mode = S_IRUSR | S_IWUSR;
+	st->st_mode |= (attr & FILE_ATTRIBUTE_DIRECTORY) ? S_IFDIR : S_IFREG;
+
+	if (!(attr & FILE_ATTRIBUTE_DIRECTORY)) {
+		h = CreateFileA(clean, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (h != INVALID_HANDLE_VALUE) {
+			sz.LowPart = GetFileSize(h, &sz.HighPart);
+			GetFileTime(h, NULL, NULL, &wt);
+			CloseHandle(h);
+			st->st_size = (long long)sz.QuadPart;
+			st->st_mtime = (long long)((((unsigned long long)wt.dwHighDateTime << 32) | wt.dwLowDateTime) / 10000000ULL) - 11644473600ULL;
+		}
+	}
+	return 0;
+}
+
+#endif
+
 bool my_stat (const TCHAR *name, struct mystat *ms) {
 	struct stat sonuc;
 #ifdef USE_LIBRETRO_VFS
+#if defined(_XBOX)
+	if (xbox_stat(name, &sonuc) == -1) {
+#else
 	if (stat(utf8_to_local_string_alloc(name), &sonuc) == -1) {
+#endif
 #else
 	if (stat(name, &sonuc) == -1) {
 #endif
@@ -127,7 +181,11 @@ int my_getvolumeinfo(const char *root)
 		write_log("my_getvolumeinfo '%s'\n", root);
 
 #ifdef USE_LIBRETRO_VFS
+#if defined(_XBOX)
+	if (xbox_stat(root, &sonuc) == -1)
+#else
 	if (stat(utf8_to_local_string_alloc(root), &sonuc) == -1)
+#endif
 #else
 	if (stat(root, &sonuc) == -1)
 #endif
@@ -169,12 +227,13 @@ FILE *my_opentext(const TCHAR *name)
 
 struct my_opendir_s *my_opendir(const TCHAR *name, const TCHAR *mask)
 {
+	RDIR* dir;
 	struct my_opendir_s *mod;
 	mod = xmalloc (struct my_opendir_s, 1);
 	if (!mod)
 		return NULL;
 
-	RDIR* dir = retro_opendir(name);
+	dir = retro_opendir(name);
 	if (!dir) {
 		write_log("my_opendir '%s' failed\n", name);
 		xfree(mod);
@@ -224,15 +283,15 @@ int my_mkdir(const TCHAR *name)
 
 int my_rmdir(const TCHAR *name)
 {
+	TCHAR tname[MAX_DPATH];
+	struct my_opendir_s * od;
+	int cnt;
 	if (log_filesys)
 		write_log("my_rmdir '%s'\n", name);
 
 #ifdef USE_LIBRETRO_VFS
 	return my_unlink(name);
 #else
-	struct my_opendir_s *od;
-	int cnt;
-	TCHAR tname[MAX_DPATH];
 	memset(tname, 0, sizeof(TCHAR) * MAX_DPATH);
 
 	/* SHFileOperation() ignores FOF_NORECURSION when deleting directories.. */
@@ -281,13 +340,21 @@ int my_rename(const TCHAR *oldname, const TCHAR *newname)
 struct my_openfile_s *my_open(const TCHAR *name, int flags)
 {
 	const char *name_utf8 = local_to_utf8_string_alloc(name);
+	/* C89 hoisted declarations */
+#ifdef USE_LIBRETRO_VFS
+	RFILE *fp = NULL;
+	int open_flags = RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING;
+	int fd;
+#else
+	FILE *fp = NULL;
+	char *fopen_flags;
+#endif
+	struct my_openfile_s *mos;
 
 	if (log_filesys)
 		write_log("my_open '%s' flags=%x\n", name, flags);
 
 #ifdef USE_LIBRETRO_VFS
-	RFILE *fp = NULL;
-	int open_flags = RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING;
 	if (flags & O_TRUNC || flags & O_CREAT)
 		open_flags = RETRO_VFS_FILE_ACCESS_READ_WRITE;
 
@@ -313,10 +380,9 @@ struct my_openfile_s *my_open(const TCHAR *name, int flags)
 	else if (flags & O_WRONLY)
 		open_flags = open_flags | O_WRONLY;
 
-	int fd = open(name, open_flags, 0644);
+	fd = open(name, open_flags, 0644);
 #else
-	FILE *fp = NULL;
-	char *fopen_flags = malloc(4*sizeof(char));
+	fopen_flags = malloc(4*sizeof(char));
 	strcpy(fopen_flags, "rb");
 
 	if (flags & O_WRONLY)
@@ -334,7 +400,6 @@ struct my_openfile_s *my_open(const TCHAR *name, int flags)
 	fopen_flags = NULL;
 #endif
 
-	struct my_openfile_s *mos;
 	mos = xmalloc (struct my_openfile_s, 1);
 	if (!mos)
 		return NULL;
@@ -350,14 +415,15 @@ struct my_openfile_s *my_open(const TCHAR *name, int flags)
 
 void my_close(struct my_openfile_s* mos)
 {
+	int result;
 	if (log_filesys)
 		write_log("my_close '%s'\n", mos->path);
 #ifdef USE_LIBRETRO_VFS
-	int result = filestream_close(mos->fp);
+	result = filestream_close(mos->fp);
 #elif defined(FD_OPEN)
-	int result = close(mos->fd);
+	result = close(mos->fd);
 #else
-	int result = fclose(mos->fp);
+	result = fclose(mos->fp);
 #endif
 	if (result != 0)
 		write_log("error %d closing file '%s'\n", result, mos->path);
@@ -382,27 +448,31 @@ uae_s64 my_lseek(struct my_openfile_s *mos, uae_s64 offset, int whence)
 }
 
 int my_truncate(const TCHAR *name, uae_u64 len) {
+	int result;
 	int int_len = (int)len;
+#if defined(USE_LIBRETRO_VFS) || defined(FD_OPEN)
+	struct my_openfile_s *mos;
+#endif
 	if (log_filesys)
 		write_log("my_truncate '%s' len = %d\n", name, int_len);
 #ifdef USE_LIBRETRO_VFS
-	struct my_openfile_s *mos = my_open(name, O_WRONLY);
+	mos = my_open(name, O_WRONLY);
 	if (mos == NULL) {
 		write_log("WARNING: opening file for truncation failed\n");
 		return -1;
 	}
-	int result = filestream_truncate(mos->fp, int_len);
+	result = filestream_truncate(mos->fp, int_len);
 	my_close(mos);
 #elif defined(FD_OPEN)
-	struct my_openfile_s *mos = my_open(name, O_WRONLY);
+	mos = my_open(name, O_WRONLY);
 	if (mos == NULL) {
 		write_log("WARNING: opening file for truncation failed\n");
 		return -1;
 	}
-	int result = ftruncate(mos->fd, int_len);
+	result = ftruncate(mos->fd, int_len);
 	my_close(mos);
 #else
-	int result = truncate(name, int_len);
+	result = truncate(name, int_len);
 	if (result < 0)
 		write_log("Truncate failed\n");
 #endif
@@ -477,6 +547,7 @@ void my_canonicalize_path(const TCHAR *path, TCHAR *out, int size)
 
 int my_issamevolume(const TCHAR *path1, const TCHAR *path2, TCHAR *path)
 {
+	unsigned int i;
 	TCHAR p1[MAX_DPATH];
 	TCHAR p2[MAX_DPATH];
 	unsigned int len, cnt;
@@ -490,7 +561,7 @@ int my_issamevolume(const TCHAR *path1, const TCHAR *path2, TCHAR *path)
 		return 0;
 	_tcscpy (path, p2 + len);
 	cnt = 0;
-	for (unsigned int i = 0; i < _tcslen (path); i++) {
+	for (i = 0; i < _tcslen (path); i++) {
 		if (path[i] == '\\' || path[i] == '/') {
 			path[i] = '/';
 			cnt++;

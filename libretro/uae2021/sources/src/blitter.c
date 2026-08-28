@@ -198,7 +198,8 @@ static const int blit_cycle_diagram_finalld[] =
 
 static int get_cycle_diagram_type (const int *diag)
 {
-	for (int i = 0; i < 16; i++) {
+	int i;
+	for (i = 0; i < 16; i++) {
 		if (diag == &blit_cycle_diagram[i][0])
 			return i;
 		if (diag == &blit_cycle_diagram_fill[i][0])
@@ -1761,13 +1762,13 @@ uae_u8 *restore_blitter_new (uae_u8 *src)
 
 uae_u8 *save_blitter_new (int *len, uae_u8 *dstptr)
 {
+	uae_u8 state;
 	uae_u8 *dstbak,*dst;
 	if (dstptr)
 		dstbak = dst = dstptr;
 	else
 		dstbak = dst = xmalloc (uae_u8, 1000);
 
-	uae_u8 state;
 	save_u8 (blitter_cycle_exact ? 1 : 0);
 	if (bltstate == BLT_done)
 		state = 0;

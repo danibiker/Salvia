@@ -290,9 +290,10 @@ static int opentcp (const TCHAR *sername)
 	port = NULL;
 	p = _tcschr (sername, ':');
 	if (p) {
+		const TCHAR * p2;
 		name[p - sername] = 0;
 		port = my_strdup (p + 1);
-		const TCHAR *p2 = _tcschr (port, '/');
+		p2 = _tcschr (port, '/');
 		if (p2) {
 			port[p2 - port] = 0;
 			if (!_tcsicmp (p2 + 1, _T("wait")))
@@ -572,20 +573,25 @@ void flushser(void)
 
 int readseravail(bool *breakcond)
 {
-	COMSTAT ComStat;
-	DWORD dwErrorFlags;
+	/* Las llamadas Win32 que rellenaban estas (ClearCommError, ReadFile,
+	 * GetCommModemStatus) estan en #if 0 mas abajo, pero el codigo que las LEE
+	 * no: sin inicializar se leia basura (C4700). A cero = "sin error y sin
+	 * datos", que es justo lo que quiere decir tener la serie desactivada. */
+	COMSTAT ComStat = {0};
+	DWORD dwErrorFlags = 0;
 
 	if (breakcond)
 		*breakcond = false;
 	if (tcpserial) {
 		if (tcp_is_connected ()) {
+			int err;
 			struct timeval tv;
 			fd_set_uae fd;
 			tv.tv_sec = 0;
 			tv.tv_usec = 0;
 			fd.fd_array[0] = serialconn;
 			fd.fd_count = 1;
-			int err = select (1, &fd, NULL, NULL, &tv);
+			err = select (1, &fd, NULL, NULL, &tv);
 			if (err == SOCKET_ERROR) {
 				tcp_disconnect ();
 				return 0;
@@ -619,15 +625,20 @@ int readseravail(bool *breakcond)
 
 int readser (int *buffer)
 {
-	COMSTAT ComStat;
-	DWORD dwErrorFlags;
-	DWORD actual;
+	/* Las llamadas Win32 que rellenaban estas (ClearCommError, ReadFile,
+	 * GetCommModemStatus) estan en #if 0 mas abajo, pero el codigo que las LEE
+	 * no: sin inicializar se leia basura (C4700). A cero = "sin error y sin
+	 * datos", que es justo lo que quiere decir tener la serie desactivada. */
+	COMSTAT ComStat = {0};
+	DWORD dwErrorFlags = 0;
+	DWORD actual = 0;
 
 	if (tcpserial) {
 		if (tcp_is_connected ()) {
+			int err;
 			char buf[1];
 			buf[0] = 0;
-			int err = recv (serialconn, buf, 1, 0);
+			err = recv (serialconn, buf, 1, 0);
 			if (err == 1) {
 				*buffer = buf[0];
 				//write_log(_T(" %02X "), buf[0]);
@@ -696,7 +707,11 @@ void serialuartbreak (int v)
 
 void getserstat (int *pstatus)
 {
-	DWORD stat;
+	/* Las llamadas Win32 que rellenaban estas (ClearCommError, ReadFile,
+	 * GetCommModemStatus) estan en #if 0 mas abajo, pero el codigo que las LEE
+	 * no: sin inicializar se leia basura (C4700). A cero = "sin error y sin
+	 * datos", que es justo lo que quiere decir tener la serie desactivada. */
+	DWORD stat = 0;
 	int status = 0;
 
 	*pstatus = 0;

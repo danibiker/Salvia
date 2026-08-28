@@ -39,11 +39,12 @@ extern void display_current_image(const char *image, bool inserted);
 /* Return the directory name of filename 'filename' */
 static char* dirname_int(const char* filename)
 {
+   char* right;
+   int len;
    if (filename == NULL)
       return NULL;
 
-   char* right;
-   int len = strlen(filename);
+   len = strlen(filename);
 
    if ((right = strrchr(filename, DIR_SEP_CHR)) != NULL)
       return strleft(filename, len - strlen(right));
@@ -60,6 +61,7 @@ static char* dirname_int(const char* filename)
 
 void dc_reset(dc_storage* dc)
 {
+   unsigned i;
    /* Verify */
    if (dc == NULL)
       return;
@@ -72,7 +74,7 @@ void dc_reset(dc_storage* dc)
    }
 
    /* Clean the struct */
-   for (unsigned i = 0; i < dc->count; i++)
+   for (i = 0; i < dc->count; i++)
    {
       if (dc->files[i])
          free(dc->files[i]);
@@ -99,13 +101,14 @@ dc_storage* dc_create(void)
 
    if ((dc = malloc(sizeof(dc_storage))) != NULL)
    {
+      unsigned i;
       dc->count = 0;
       dc->index = -1;
       dc->index_prev = -1;
       dc->eject_state = true;
       dc->replace = false;
       dc->command = NULL;
-      for (unsigned i = 0; i < DC_MAX_SIZE; i++)
+      for (i = 0; i < DC_MAX_SIZE; i++)
       {
          dc->files[i]  = NULL;
          dc->labels[i] = NULL;
@@ -205,13 +208,14 @@ bool dc_replace_file(dc_storage* dc, int index, const char* filename)
       dc_remove_file(dc, index);
    else
    {
+      char full_path_replace[RETRO_PATH_MAX] = {0};
+      unsigned i;
       dc->replace = false;
 
       /* Eject all floppy drives */
-      for (unsigned i = 0; i < 4; i++)
+      for (i = 0; i < 4; i++)
          changed_prefs.floppyslots[i].df[0] = 0;
 
-      char full_path_replace[RETRO_PATH_MAX] = {0};
       strlcpy(full_path_replace, (char*)filename, sizeof(full_path_replace));
 
       /* Confs & hard drive images will replace full_path and requires restarting */
@@ -231,6 +235,12 @@ bool dc_replace_file(dc_storage* dc, int index, const char* filename)
             || strendswith(full_path_replace, ".7z")
             || strendswith(full_path_replace, ".rp9"))
       {
+         char zip_m3u_path[RETRO_PATH_MAX] = {0};
+         char zip_m3u_list[DC_MAX_SIZE][RETRO_PATH_MAX] = {0};
+         int zip_mode;
+         FILE * zip_m3u;
+         int zip_m3u_num;
+         RDIR * zip_dir;
          char zip_basename[RETRO_PATH_MAX] = {0};
          snprintf(zip_basename, sizeof(zip_basename), "%s", path_basename(full_path_replace));
          path_remove_extension(zip_basename);
@@ -242,19 +252,15 @@ bool dc_replace_file(dc_storage* dc, int index, const char* filename)
             sevenzip_uncompress(full_path_replace, retro_temp_directory, NULL);
 
          /* Default to directory mode */
-         int zip_mode = 0;
+         zip_mode = 0;
          snprintf(full_path_replace, sizeof(full_path_replace), "%s", retro_temp_directory);
 
-         FILE *zip_m3u;
-         char zip_m3u_list[DC_MAX_SIZE][RETRO_PATH_MAX] = {0};
-         char zip_m3u_path[RETRO_PATH_MAX] = {0};
          snprintf(zip_m3u_path, sizeof(zip_m3u_path), "%s%s%s.m3u",
                utf8_to_local_string_alloc(retro_temp_directory),
                DIR_SEP_STR,
                utf8_to_local_string_alloc(zip_basename));
-         int zip_m3u_num = 0;
+         zip_m3u_num = 0;
 
-         RDIR *zip_dir;
          zip_dir = retro_opendir(retro_temp_directory);
          while (retro_readdir(zip_dir))
          {
@@ -302,7 +308,8 @@ bool dc_replace_file(dc_storage* dc, int index, const char* filename)
                   zip_m3u = fopen(zip_m3u_path, "w");
                   if (zip_m3u)
                   {
-                     for (unsigned l = 0; l < zip_m3u_num; l++)
+                     unsigned l;
+                     for (l = 0; l < zip_m3u_num; l++)
                         fprintf(zip_m3u, "%s\n", zip_m3u_list[l]);
                      fclose(zip_m3u);
                   }
@@ -316,12 +323,13 @@ bool dc_replace_file(dc_storage* dc, int index, const char* filename)
       /* M3U replace */
       if (strendswith(full_path_replace, "m3u"))
       {
+         unsigned i;
          /* Parse the M3U file */
          dc_parse_m3u(dc, full_path_replace, retro_save_directory);
 
          /* Some debugging */
          log_cb(RETRO_LOG_INFO, "M3U parsed, %d file(s) found\n", dc->count);
-         for (unsigned i = 0; i < dc->count; i++)
+         for (i = 0; i < dc->count; i++)
             log_cb(RETRO_LOG_DEBUG, "File %d: %s\n", i+1, dc->files[i]);
 
          /* Insert first disk */
@@ -364,12 +372,13 @@ bool dc_replace_file(dc_storage* dc, int index, const char* filename)
       /* Single append */
       else
       {
+         unsigned i;
          char image_label[RETRO_PATH_MAX];
          image_label[0] = '\0';
          fill_pathname(image_label, path_basename(full_path_replace), "", sizeof(image_label));
 
          /* Dupecheck */
-         for (unsigned i = 0; i < dc->count - 1; i++)
+         for (i = 0; i < dc->count - 1; i++)
          {
             if (!strcmp(dc->files[i], full_path_replace))
             {
@@ -602,6 +611,7 @@ static bool dc_add_m3u_disk(
       const char* disk_file, const char* usr_disk_label,
       bool usr_disk_label_set)
 {
+   char browsed_file[RETRO_PATH_MAX] = {0};
    char file_path[RETRO_PATH_MAX]  = {0};
    char file_label[RETRO_PATH_MAX] = {0};
 
@@ -616,7 +626,6 @@ static bool dc_add_m3u_disk(
       return false;
 
    /* "Browsed" file in ZIP */
-   char browsed_file[RETRO_PATH_MAX] = {0};
    if (strstr(disk_file, ".zip#") || strstr(disk_file, ".7z#"))
    {
       char *token = strtok((char*)disk_file, "#");
@@ -722,6 +731,10 @@ unsigned dc_inspect_m3u(const char* m3u_file)
 
 void dc_parse_m3u(dc_storage* dc, const char* m3u_file, const char* save_dir)
 {
+   char buffer[2048];
+   FILE* fp;
+   char* basedir;
+   unsigned int save_disk_index;
    /* Verify */
    if (dc == NULL)
       return;
@@ -729,7 +742,7 @@ void dc_parse_m3u(dc_storage* dc, const char* m3u_file, const char* save_dir)
    if (m3u_file == NULL)
       return;
 
-   FILE* fp = NULL;
+   fp = NULL;
 
    /* Try to open the file */
    if ((fp = fopen(m3u_file, "r")) == NULL)
@@ -739,11 +752,10 @@ void dc_parse_m3u(dc_storage* dc, const char* m3u_file, const char* save_dir)
    dc_reset(dc);
 
    /* Get the m3u base dir for resolving relative path */
-   char* basedir = dirname_int(m3u_file);
+   basedir = dirname_int(m3u_file);
 
    /* Read the lines while there is line to read and we have enough space */
-   unsigned int save_disk_index = 0;
-   char buffer[2048];
+   save_disk_index = 0;
    while ((dc->count <= DC_MAX_SIZE) && (fgets(buffer, sizeof(buffer), fp) != NULL))
    {
       char* string = trimwhitespace(buffer);

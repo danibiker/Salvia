@@ -4554,10 +4554,14 @@ return 28 * CYCLE_UNIT / 2;
 uae_u32 REGPARAM2 CPUFUNC(op_0cfc_0)(uae_u32 opcode)
 {
 {{	uae_s32 extra;
+	uae_u32 rn1;
+	uae_u32 rn2;
+	uae_u16 dst1, dst2;
 	extra = get_ilong (2);
-	uae_u32 rn1 = regs.regs[(extra >> 28) & 15];
-	uae_u32 rn2 = regs.regs[(extra >> 12) & 15];
-	uae_u16 dst1 = get_word (rn1), dst2 = get_word (rn2);
+	rn1 = regs.regs[(extra >> 28) & 15];
+	rn2 = regs.regs[(extra >> 12) & 15];
+	dst1 = get_word (rn1);
+	dst2 = get_word (rn2);
 	optflag_cmpw ((uae_s16)(m68k_dreg (regs, (extra >> 16) & 7)), (uae_s16)(dst1));
 	if (GET_ZFLG ()) {
 	optflag_cmpw ((uae_s16)(m68k_dreg (regs, extra & 7)), (uae_s16)(dst2));
@@ -5331,10 +5335,14 @@ return 40 * CYCLE_UNIT / 2;
 uae_u32 REGPARAM2 CPUFUNC(op_0efc_0)(uae_u32 opcode)
 {
 {{	uae_s32 extra;
+	uae_u32 rn1;
+	uae_u32 rn2;
+	uae_u32 dst1, dst2;
 	extra = get_ilong (2);
-	uae_u32 rn1 = regs.regs[(extra >> 28) & 15];
-	uae_u32 rn2 = regs.regs[(extra >> 12) & 15];
-	uae_u32 dst1 = get_long (rn1), dst2 = get_long (rn2);
+	rn1 = regs.regs[(extra >> 28) & 15];
+	rn2 = regs.regs[(extra >> 12) & 15];
+	dst1 = get_long (rn1);
+	dst2 = get_long (rn2);
 	optflag_cmpl ((uae_s32)(m68k_dreg (regs, (extra >> 16) & 7)), (uae_s32)(dst1));
 	if (GET_ZFLG ()) {
 	optflag_cmpl ((uae_s32)(m68k_dreg (regs, extra & 7)), (uae_s32)(dst2));
@@ -29618,9 +29626,10 @@ uae_u32 REGPARAM2 CPUFUNC(op_f000_0)(uae_u32 opcode)
 	uae_u32 srcreg = (opcode & 7);
 {if (!regs.s) { Exception (8); goto endlabel1801; }
 {	uaecptr pc = m68k_getpc ();
+	uae_u16 extraa;
 	uae_u16 extra = get_iword (2);
 	m68k_incpc (4);
-	uae_u16 extraa = 0;
+	extraa = 0;
 	mmu_op30 (pc, opcode, extra, extraa);
 }}endlabel1801: ;
 return 4 * CYCLE_UNIT / 2;
@@ -29634,9 +29643,10 @@ uae_u32 REGPARAM2 CPUFUNC(op_f008_0)(uae_u32 opcode)
 	uae_u32 srcreg = (opcode & 7);
 {if (!regs.s) { Exception (8); goto endlabel1802; }
 {	uaecptr pc = m68k_getpc ();
+	uae_u16 extraa;
 	uae_u16 extra = get_iword (2);
 	m68k_incpc (4);
-	uae_u16 extraa = 0;
+	extraa = 0;
 	mmu_op30 (pc, opcode, extra, extraa);
 }}endlabel1802: ;
 return 4 * CYCLE_UNIT / 2;

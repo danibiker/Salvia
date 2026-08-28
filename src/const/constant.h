@@ -70,6 +70,7 @@ static const char *CD_FILTER = ".bin .cue .img .mdf .pbp .cbn .iso .chd .m3u";
 static const char *TMP_DIR = "tmp";
 static const std::string BIOS_ONLY = "@bios-only";
 static const std::string ASSETS_ICONS_DIR = "\\assets\\xmb\\retrosystem\\png\\";
+static const std::string MENUTMP = "menu.tmp";
 
 const bool SMOOTH_RESIZE = true;
 
@@ -388,6 +389,7 @@ typedef enum {cart_gba,
 			  cart_c64,
 			  cart_x68k,
 			  cart_amiga,
+			  cart_cd32,
 			  max_carts};
 
 extern float aspectRatioValues[]; 

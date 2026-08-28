@@ -314,7 +314,10 @@ STATIC_INLINE void m68k_do_rts_ce020 (void)
 
 #endif
 
-#ifdef CPUEMU_22
+/* Ungateado a proposito: CPUEMU_22 esta apagado pero cpuemu_22.c SI se compila
+ * (las tablas 23/24 de cpustbl.c reutilizan sus funciones), y necesita estas
+ * inline. Ademas newcpu.c usa las *_ce030 sin guarda. Ver sysconfig.h. */
+#if 1 /* antes: #ifdef CPUEMU_22 */
 
 extern uae_u32 get_word_ce030_prefetch (int);
 extern void write_dcache030 (uaecptr, uae_u32, int);

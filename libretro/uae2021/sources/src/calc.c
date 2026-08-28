@@ -316,11 +316,12 @@ static bool execution_order(const TCHAR *input, double *outval)
         }
                 // Otherwise, the token is an operator  (operator here includes both operators, and functions).
         else if(is_operator(c) || is_function(c))    {
+                        unsigned int nargs;
                         _stprintf(res, _T("_%02d"), rn);
                         calc_log ((_T("%s = "), res));
                         ++rn;
                         // It is known a priori that the operator takes n arguments.
-                        unsigned int nargs = op_arg_count(c);
+                        nargs = op_arg_count(c);
                         // If there are fewer than n values on the stack
                         if(sl < nargs) {
                                 // (Error) The user has not input sufficient values in the expression.
@@ -386,14 +387,16 @@ static bool execution_order(const TCHAR *input, double *outval)
 
 static bool parse_values(const TCHAR *ins, TCHAR *out)
 {
+	TCHAR * in;
+	TCHAR * p;
 	int ident = 0;
 	TCHAR tmp;
 	TCHAR inbuf[IOBUFFERS];
 	int op;
 
 	_tcscpy (inbuf, ins);
-	TCHAR *in = inbuf;
-	TCHAR *p = out;
+	in = inbuf;
+	p = out;
 	op = 0;
 	if (in[0] == '-' || in[0] == '+') {
 		*p++ = '0';
@@ -444,7 +447,8 @@ bool calc(const TCHAR *input, double *outval)
 
 bool iscalcformula (const TCHAR *formula)
 {
-	for (int i = 0; i < _tcslen (formula); i++) {
+	int i;
+	for (i = 0; i < _tcslen (formula); i++) {
 		TCHAR c = formula[i];
 		if (is_operator (c))
 			return true;

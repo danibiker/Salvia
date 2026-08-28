@@ -53,6 +53,8 @@ struct shmid_ds {
 static struct shmid_ds shmids[MAX_SHMID];
 void protect_roms (bool protect)
 {
+    struct shmid_ds * shm;
+    int i;
     if (protect) {
         // protect only if JIT enabled, always allow unprotect
 #ifdef JIT
@@ -63,8 +65,7 @@ void protect_roms (bool protect)
             return;
 #endif
     }
-    struct shmid_ds *shm;
-    for (int i = 0; i < MAX_SHMID; i++) {
+    for (i = 0; i < MAX_SHMID; i++) {
         DWORD old;
         shm = &shmids[i];
         if (shm->mode != PAGE_READONLY)
@@ -578,6 +579,7 @@ static void cdaudiostop (void)
 
 static void subfunc (uae_u8 *data, int cnt)
 {
+	int offset;
 	if (!(cdrom_flags & CDFLAG_SUBCODE))
 		return;
 	uae_sem_wait (&sub_sem);
@@ -596,7 +598,7 @@ static void subfunc (uae_u8 *data, int cnt)
 		//write_log (_T("CD32: subcode buffer overflow 1\n"));
 		return;
 	}
-	int offset = subcodebufferoffsetw;
+	offset = subcodebufferoffsetw;
 	while (cnt > 0) {
 		if (subcodebufferinuse[offset]) {
 			write_log (_T("CD32: subcode buffer overflow 2\n"));
@@ -681,7 +683,8 @@ static bool akiko_isaudiotrack (int startlsn)
 
 static struct cd_toc *get_track (int startlsn)
 {
-	for (int i = cdrom_toc_cd_buffer.first_track_offset + 1; i <= cdrom_toc_cd_buffer.last_track_offset + 1; i++) {
+	int i;
+	for (i = cdrom_toc_cd_buffer.first_track_offset + 1; i <= cdrom_toc_cd_buffer.last_track_offset + 1; i++) {
 		struct cd_toc *s = &cdrom_toc_cd_buffer.toc[i];
 		size_t addr = (size_t)s->paddress;
 		if ((size_t)startlsn < addr)
@@ -839,9 +842,12 @@ static int command_lengths[] = { 1,2,1,1,12,2,1,1,4,1,2,-1,-1,-1,-1,-1 };
 
 static bool cdrom_add_command_byte(uae_u8 b)
 {
+	int cmd_len;
+	uae_u8 checksum;
+	int i;
 	cdrom_command_buffer[cdrom_command_length++] = b;
 	cdrom_command = cdrom_command_buffer[0];
-	int cmd_len = command_lengths[cdrom_command & 0x0f];
+	cmd_len = command_lengths[cdrom_command & 0x0f];
 
 #if AKIKO_DEBUG_IO
 	write_log(_T("CD32: IN CMD=%02X %02X IDX=0x%02X-0x%02X LEN=%d\n"), cdrom_command & 0x0f, b, cdcomtxinx, cdcomtxcmp, cmd_len);
@@ -859,12 +865,12 @@ static bool cdrom_add_command_byte(uae_u8 b)
 	if (cmd_len +  1 > cdrom_command_length)
 		return false;
 
-	uae_u8 checksum = 0;
+	checksum = 0;
 
 #if AKIKO_DEBUG_IO_CMD
 	write_log(_T("CD32: IN "));
 #endif
-	for (int i = 0; i < cmd_len + 1; i++) {
+	for (i = 0; i < cmd_len + 1; i++) {
 		checksum += cdrom_command_buffer[i];
 #if AKIKO_DEBUG_IO_CMD
 		if (i == cmd_len)
@@ -1439,12 +1445,12 @@ static void akiko_internal (void)
 
 void AKIKO_hsync_handler (void)
 {
+	static float framecounter1, framecounter2;
 	bool framesync = false;
 
 	if (!currprefs.cs_cd32cd || !akiko_inited)
 		return;
 
-	static float framecounter1, framecounter2;
 	framecounter1--;
 	if (framecounter1 <= 0) {
 		if (cdrom_seek_delay <= 0) {
@@ -1472,12 +1478,13 @@ void AKIKO_hsync_handler (void)
 		if ((cdrom_flags & CDFLAG_SUBCODE) && cdrom_playing && subcodebufferoffset != subcodebufferoffsetw) {
 			uae_sem_wait (&sub_sem);
 			if (subcodebufferinuse[subcodebufferoffset]) {
+				int i;
 				if (cdrom_subcodeoffset >= 128)
 					cdrom_subcodeoffset = 0;
 				else
 					cdrom_subcodeoffset = 128;
 				// 96 byte subchannel data
-				for (int i = 0; i < SUB_CHANNEL_SIZE; i++)
+				for (i = 0; i < SUB_CHANNEL_SIZE; i++)
 					put_byte (subcode_address + cdrom_subcodeoffset + i, subcodebuffer[subcodebufferoffset * SUB_CHANNEL_SIZE + i]);
 				put_long (subcode_address + cdrom_subcodeoffset + SUB_CHANNEL_SIZE, 0xffffffff);
 				subcodebufferinuse[subcodebufferoffset] = 0;
@@ -1511,6 +1518,7 @@ static void *akiko_thread (void *null)
 	int tmp3;
 	int offset;
 	int sector;
+	int do_prefetch;
 
 	while (akiko_thread_running || comm_pipe_has_data (&requests)) {
 
@@ -1549,8 +1557,9 @@ static void *akiko_thread (void *null)
 		}
 
 		if (mediacheckcounter <= 0) {
+			int media;
 			mediacheckcounter = 312 * 50 * 2;
-			int media = sys_command_ismedia (unitnum, 1);
+			media = sys_command_ismedia (unitnum, 1);
 			if (media < 0) {
 				write_log (_T("CD32: device unit %d lost\n"), unitnum);
 				media = lastmediastate = cdrom_disk = 0;
@@ -1571,39 +1580,60 @@ static void *akiko_thread (void *null)
 			}
 	    }
 
+		/* Fase 1, DECIDIR: con candado, porque cdrom_current_sector,
+		 * sector_buffer_sector_1 y sector_buffer_info_1 los toca el 68k. */
 		uae_sem_wait (&akiko_sem);
 		sector = cdrom_current_sector;
 		for (i = 0; i < SECTOR_BUFFER_SIZE; i++) {
 			if (sector_buffer_info_1[i] == 0xff)
 				break;
 		}
-		if (cdrom_data_end > 0 && sector >= 0 &&
-			(sector_buffer_sector_1 < 0 || sector < sector_buffer_sector_1 || sector >= sector_buffer_sector_1 + SECTOR_BUFFER_SIZE * 2 / 3 || i != SECTOR_BUFFER_SIZE)) {
-				memset (sector_buffer_info_2, 0, SECTOR_BUFFER_SIZE);
-#if AKIKO_DEBUG_IO_CMD
-				write_log (_T("filling buffer sector=%d (max=%d)\n"), sector, cdrom_data_end);
-#endif
-				sector_buffer_sector_2 = sector;
-				offset = 0;
-				while (offset < SECTOR_BUFFER_SIZE) {
-					int ok = 0;
-					if (sector < cdrom_data_end)
-						ok = sys_command_cd_rawread (unitnum, sector_buffer_2 + offset * 2352, sector, 1, 2352);
-					sector_buffer_info_2[offset] = ok ? 3 : 0;
-					offset++;
-					sector++;
-				}
-				tmp1 = sector_buffer_info_1;
-				sector_buffer_info_1 = sector_buffer_info_2;
-				sector_buffer_info_2 = tmp1;
-				tmp2 = sector_buffer_1;
-				sector_buffer_1 = sector_buffer_2;
-				sector_buffer_2 = tmp2;
-				tmp3 = sector_buffer_sector_1;
-				sector_buffer_sector_1 = sector_buffer_sector_2;
-				sector_buffer_sector_2 = tmp3;
-		}
+		do_prefetch = (cdrom_data_end > 0 && sector >= 0 &&
+			(sector_buffer_sector_1 < 0 || sector < sector_buffer_sector_1 || sector >= sector_buffer_sector_1 + SECTOR_BUFFER_SIZE * 2 / 3 || i != SECTOR_BUFFER_SIZE));
 		uae_sem_post (&akiko_sem);
+
+		if (do_prefetch) {
+			/* Fase 2, LEER: SIN candado. Los buffers _2 son privados de este
+			 * hilo (el 68k solo mira los _1, en akiko_bget2/akiko_bput2), asi que
+			 * las 64 lecturas no tienen por que bloquearlo.
+			 *
+			 * Antes esto se hacia con akiko_sem cogido, y como akiko_bget2 y
+			 * akiko_bput2 piden ese mismo semaforo, CADA acceso del 68k a un
+			 * registro de Akiko se quedaba esperando los 64 pares de
+			 * zfile_fseek+zfile_fread (150 KB). En un PC con el ISO en cache no
+			 * se nota; en la 360, contra el VFS de verdad, son decenas de ms y el
+			 * juego (que sondea esos registros mientras espera datos) se iba a
+			 * 20 fps. El hilo estaba, pero no servia de nada. */
+			memset (sector_buffer_info_2, 0, SECTOR_BUFFER_SIZE);
+#if AKIKO_DEBUG_IO_CMD
+			write_log (_T("filling buffer sector=%d (max=%d)\n"), sector, cdrom_data_end);
+#endif
+			sector_buffer_sector_2 = sector;
+			offset = 0;
+			while (offset < SECTOR_BUFFER_SIZE) {
+				int ok = 0;
+				if (sector < cdrom_data_end)
+					ok = sys_command_cd_rawread (unitnum, sector_buffer_2 + offset * 2352, sector, 1, 2352);
+				sector_buffer_info_2[offset] = ok ? 3 : 0;
+				offset++;
+				sector++;
+			}
+
+			/* Fase 3, PUBLICAR: el intercambio si va con candado, para que el 68k
+			 * no vea nunca sector_buffer_1 de un juego con
+			 * sector_buffer_sector_1 del otro. */
+			uae_sem_wait (&akiko_sem);
+			tmp1 = sector_buffer_info_1;
+			sector_buffer_info_1 = sector_buffer_info_2;
+			sector_buffer_info_2 = tmp1;
+			tmp2 = sector_buffer_1;
+			sector_buffer_1 = sector_buffer_2;
+			sector_buffer_2 = tmp2;
+			tmp3 = sector_buffer_sector_1;
+			sector_buffer_sector_1 = sector_buffer_sector_2;
+			sector_buffer_sector_2 = tmp3;
+			uae_sem_post (&akiko_sem);
+		}
 		sleep_millis (10);
 	}
 	akiko_thread_running = -1;

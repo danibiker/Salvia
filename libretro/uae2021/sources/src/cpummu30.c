@@ -282,17 +282,24 @@ void mmu_op30_pmove (uaecptr pc, uae_u32 opcode, uae_u16 next, uaecptr extra)
 
 void mmu_op30_ptest (uaecptr pc, uae_u32 opcode, uae_u16 next, uaecptr extra)
 {
+    int level;
+    int rw;
+    int a;
+    int areg;
+    uae_u32 fc;
+    bool write;
+    uae_u32 ret;
     mmu030.status = mmusr_030 = 0;
     
-    int level = (next&0x1C00)>>10;
-    int rw = (next >> 9) & 1;
-    int a = (next >> 8) & 1;
-    int areg = (next&0xE0)>>5;
-    uae_u32 fc = mmu_op30_helper_get_fc(next);
+    level = (next&0x1C00)>>10;
+    rw = (next >> 9) & 1;
+    a = (next >> 8) & 1;
+    areg = (next&0xE0)>>5;
+    fc = mmu_op30_helper_get_fc(next);
         
-    bool write = rw ? false : true;
+    write = rw ? false : true;
 
-    uae_u32 ret = 0;
+    ret = 0;
     
     /* Check this - datasheet says:
      * "When the instruction specifies an address translation cache search
@@ -703,6 +710,9 @@ int mmu030_do_match_lrmw_ttr(uae_u32 tt, TT_info comp, uaecptr addr, uae_u32 fc)
 
 
 void mmu030_decode_tc(uae_u32 TC) {
+    uae_u8 TI_bits[4] = {0,0,0,0};
+    int i, j;
+    uae_u8 shift;
         
     /* Set MMU condition */    
     if (TC & TC_ENABLE_TRANSLATION) {
@@ -715,8 +725,6 @@ void mmu030_decode_tc(uae_u32 TC) {
     }
     
     /* Note: 0 = Table A, 1 = Table B, 2 = Table C, 3 = Table D */
-    int i, j;
-    uae_u8 TI_bits[4] = {0,0,0,0};
 
     /* Reset variables before extracting new values from TC */
     for (i = 0; i < 4; i++) {
@@ -753,7 +761,7 @@ void mmu030_decode_tc(uae_u32 TC) {
 
     /* Calculate masks and shifts for each table */
     mmu030.translation.last_table = 0;
-    uae_u8 shift = 32 - mmu030.translation.init_shift;
+    shift = 32 - mmu030.translation.init_shift;
     for (i = 0; (i < 4) && TI_bits[i]; i++) {
         /* Get the shift */
         shift -= TI_bits[i];
@@ -1044,6 +1052,13 @@ void mmu030_decode_rp(uae_u64 RP) {
  * for PTEST (levels 1 to 7). Using level 0 creates an ATC entry. */
 
 uae_u32 mmu030_table_search(uaecptr addr, uae_u32 fc, bool write, int level) {
+        int t;
+        int addr_position;
+        int next_size;
+        int descr_size;
+        int descr_num;
+        bool early_termination;
+        int i;
         /* During table walk up to 7 different descriptors are used:
          * root pointer, descriptors fetched from function code lookup table,
          * tables A, B, C and D and one indirect descriptor */
@@ -1065,14 +1080,13 @@ uae_u32 mmu030_table_search(uaecptr addr, uae_u32 fc, bool write, int level) {
         
         /* Initial values for condition variables.
          * Note: Root pointer is long descriptor. */
-        int t = 0;
-        int addr_position = 1;
-        int next_size = 0;
-        int descr_size = 8;
-        int descr_num = 0;
-        bool early_termination = false;
+        t = 0;
+        addr_position = 1;
+        next_size = 0;
+        descr_size = 8;
+        descr_num = 0;
+        early_termination = false;
         
-        int i;
     
     TRY(prb) {
         /* Use super user root pointer if enabled in TC register and access is in
@@ -1802,6 +1816,7 @@ void mmu030_atc_handle_history_bit(int entry_num) {
  */
 
 void mmu030_put_long(uaecptr addr, uae_u32 val, uae_u32 fc) {
+    int atc_line_num;
     
 	//                                        addr,super,write
 	if ((!mmu030.enabled) || (mmu030_match_ttr_access(addr,fc,true)) || (fc==7)) {
@@ -1809,7 +1824,7 @@ void mmu030_put_long(uaecptr addr, uae_u32 val, uae_u32 fc) {
 		return;
     }
 
-    int atc_line_num = mmu030_logical_is_in_atc(addr, fc, true);
+    atc_line_num = mmu030_logical_is_in_atc(addr, fc, true);
 
     if (atc_line_num>=0) {
         mmu030_put_long_atc(addr, val, atc_line_num, fc);
@@ -1820,6 +1835,7 @@ void mmu030_put_long(uaecptr addr, uae_u32 val, uae_u32 fc) {
 }
 
 void mmu030_put_word(uaecptr addr, uae_u16 val, uae_u32 fc) {
+    int atc_line_num;
     
 	//                                        addr,super,write
 	if ((!mmu030.enabled) || (mmu030_match_ttr_access(addr,fc,true)) || (fc==7)) {
@@ -1827,7 +1843,7 @@ void mmu030_put_word(uaecptr addr, uae_u16 val, uae_u32 fc) {
 		return;
     }
     
-    int atc_line_num = mmu030_logical_is_in_atc(addr, fc, true);
+    atc_line_num = mmu030_logical_is_in_atc(addr, fc, true);
     
     if (atc_line_num>=0) {
         mmu030_put_word_atc(addr, val, atc_line_num, fc);
@@ -1838,6 +1854,7 @@ void mmu030_put_word(uaecptr addr, uae_u16 val, uae_u32 fc) {
 }
 
 void mmu030_put_byte(uaecptr addr, uae_u8 val, uae_u32 fc) {
+    int atc_line_num;
     
 	//                                        addr,super,write
 	if ((!mmu030.enabled) || (mmu030_match_ttr_access(addr, fc, true)) || (fc==7)) {
@@ -1845,7 +1862,7 @@ void mmu030_put_byte(uaecptr addr, uae_u8 val, uae_u32 fc) {
 		return;
     }
     
-    int atc_line_num = mmu030_logical_is_in_atc(addr, fc, true);
+    atc_line_num = mmu030_logical_is_in_atc(addr, fc, true);
 
     if (atc_line_num>=0) {
         mmu030_put_byte_atc(addr, val, atc_line_num, fc);
@@ -1856,13 +1873,14 @@ void mmu030_put_byte(uaecptr addr, uae_u8 val, uae_u32 fc) {
 }
 
 uae_u32 mmu030_get_long(uaecptr addr, uae_u32 fc) {
+    int atc_line_num;
     
 	//                                        addr,super,write
 	if ((!mmu030.enabled) || (mmu030_match_ttr_access(addr,fc,false)) || (fc==7)) {
 		return phys_get_long(addr);
     }
     
-    int atc_line_num = mmu030_logical_is_in_atc(addr, fc, false);
+    atc_line_num = mmu030_logical_is_in_atc(addr, fc, false);
 
     if (atc_line_num>=0) {
         return mmu030_get_long_atc(addr, atc_line_num, fc);
@@ -1873,13 +1891,14 @@ uae_u32 mmu030_get_long(uaecptr addr, uae_u32 fc) {
 }
 
 uae_u16 mmu030_get_word(uaecptr addr, uae_u32 fc) {
+    int atc_line_num;
     
 	//                                        addr,super,write
 	if ((!mmu030.enabled) || (mmu030_match_ttr_access(addr,fc,false)) || (fc==7)) {
 		return phys_get_word(addr);
     }
     
-    int atc_line_num = mmu030_logical_is_in_atc(addr, fc, false);
+    atc_line_num = mmu030_logical_is_in_atc(addr, fc, false);
 
     if (atc_line_num>=0) {
         return mmu030_get_word_atc(addr, atc_line_num, fc);
@@ -1890,13 +1909,14 @@ uae_u16 mmu030_get_word(uaecptr addr, uae_u32 fc) {
 }
 
 uae_u8 mmu030_get_byte(uaecptr addr, uae_u32 fc) {
+    int atc_line_num;
     
 	//                                        addr,super,write
 	if ((!mmu030.enabled) || (mmu030_match_ttr_access(addr,fc,false)) || (fc==7)) {
 		return phys_get_byte(addr);
     }
     
-    int atc_line_num = mmu030_logical_is_in_atc(addr, fc, false);
+    atc_line_num = mmu030_logical_is_in_atc(addr, fc, false);
 
     if (atc_line_num>=0) {
         return mmu030_get_byte_atc(addr, atc_line_num, fc);
@@ -1909,6 +1929,7 @@ uae_u8 mmu030_get_byte(uaecptr addr, uae_u32 fc) {
 
 /* Not commonly used access function */
 static void mmu030_put_generic(uaecptr addr, uae_u32 val, uae_u32 fc, int size, int accesssize, int flags) {
+    int atc_line_num;
     
 	//                                        addr,super,write
 	if ((!mmu030.enabled) || (mmu030_match_ttr_access(addr, fc, true)) || (fc==7)) {
@@ -1921,7 +1942,7 @@ static void mmu030_put_generic(uaecptr addr, uae_u32 val, uae_u32 fc, int size, 
 		return;
     }
     
-    int atc_line_num = mmu030_logical_is_in_atc(addr, fc, true);
+    atc_line_num = mmu030_logical_is_in_atc(addr, fc, true);
     if (atc_line_num>=0) {
         mmu030_put_atc_generic(addr, val, atc_line_num, fc, size, flags);
     } else {
@@ -1935,6 +1956,7 @@ static void mmu030_put_generic(uaecptr addr, uae_u32 val, uae_u32 fc, int size, 
     }
 }
 static uae_u32 mmu030_get_generic_lrmw(uaecptr addr, uae_u32 fc, int size, int accesssize, int flags) {
+    int atc_line_num;
     
 	//                                        addr,super,write
 	if ((!mmu030.enabled) || (mmu030_match_lrmw_ttr_access(addr,fc)) || (fc==7)) {
@@ -1945,7 +1967,7 @@ static uae_u32 mmu030_get_generic_lrmw(uaecptr addr, uae_u32 fc, int size, int a
 		return phys_get_long(addr);
     }
     
-    int atc_line_num = mmu030_logical_is_in_atc(addr, fc, true);
+    atc_line_num = mmu030_logical_is_in_atc(addr, fc, true);
     if (atc_line_num>=0) {
         return mmu030_get_atc_generic(addr, atc_line_num, fc, size, flags, true);
     } else {
@@ -1959,6 +1981,7 @@ static uae_u32 mmu030_get_generic_lrmw(uaecptr addr, uae_u32 fc, int size, int a
     }
 }
 uae_u32 mmu030_get_generic(uaecptr addr, uae_u32 fc, int size, int accesssize, int flags) {
+    int atc_line_num;
 	if (flags & MMU030_SSW_RM) {
 		return mmu030_get_generic_lrmw(addr, fc, size, accesssize, flags);
 	}
@@ -1971,7 +1994,7 @@ uae_u32 mmu030_get_generic(uaecptr addr, uae_u32 fc, int size, int accesssize, i
 		return phys_get_long(addr);
     }
     
-    int atc_line_num = mmu030_logical_is_in_atc(addr, fc, false);
+    atc_line_num = mmu030_logical_is_in_atc(addr, fc, false);
     if (atc_line_num>=0) {
         return mmu030_get_atc_generic(addr, atc_line_num, fc, size, flags, false);
     } else {
@@ -2126,11 +2149,12 @@ static uaecptr mmu030_get_addr_atc(uaecptr addr, int l, uae_u32 fc, bool write) 
 }
 uaecptr mmu030_translate(uaecptr addr, bool super, bool data, bool write)
 {
+    int atc_line_num;
 	int fc = (super ? 4 : 0) | (data ? 1 : 2);
 	if ((!mmu030.enabled) || (mmu030_match_ttr(addr,fc,write)&TT_OK_MATCH) || (fc==7)) {
 		return addr;
     }
-    int atc_line_num = mmu030_logical_is_in_atc(addr, fc, write);
+    atc_line_num = mmu030_logical_is_in_atc(addr, fc, write);
 
     if (atc_line_num>=0) {
         return mmu030_get_addr_atc(addr, atc_line_num, fc, write);
@@ -2179,8 +2203,9 @@ void m68k_do_rte_mmu030 (uaecptr a7)
 	mmu030_retry = true;
 
 	if (frame == 0xb) {
+		int i;
 		uae_u16 idxsize = get_word_mmu030 (a7 + 0x36);
-		for (int i = 0; i < idxsize + 1; i++) {
+		for (i = 0; i < idxsize + 1; i++) {
 			mmu030_ad[i].done = i < idxsize;
 			mmu030_ad[i].val = get_long_mmu030 (a7 + 0x5c - (i + 1) * 4);
 		}
@@ -2242,6 +2267,7 @@ void m68k_do_bsr_mmu030 (uaecptr oldpc, uae_s32 offset)
 
 uae_u32 REGPARAM2 get_disp_ea_020_mmu030 (uae_u32 base, int idx)
 {
+	uae_s32 regd;
 	uae_u16 dp;
 	int reg;
 	uae_u32 v;
@@ -2262,7 +2288,7 @@ uae_u32 REGPARAM2 get_disp_ea_020_mmu030 (uae_u32 base, int idx)
 	pcadd += 1;
 	
 	reg = (dp >> 12) & 15;
-	uae_s32 regd = regs.regs[reg];
+	regd = regs.regs[reg];
 	if ((dp & 0x800) == 0)
 		regd = (uae_s32)(uae_s16)regd;
 	regd <<= (dp >> 9) & 3;

@@ -104,12 +104,13 @@ static struct staterecord **staterecords;
 
 static void state_incompatible_warn (void)
 {
+	static int warned;
+	int dowarn;
+	int i;
 #ifdef __LIBRETRO__
 	return;
 #endif
-	static int warned;
-	int dowarn = 0;
-	int i;
+	dowarn = 0;
 
 #ifdef BSDSOCKET
 	if (currprefs.socket_emu)
@@ -264,6 +265,7 @@ TCHAR *restore_string_func (uae_u8 **dstp)
 }
 TCHAR *restore_path_func (uae_u8 **dstp, int type)
 {
+	int i;
 	TCHAR *newpath;
 	TCHAR *s;
 	/// REMOVEME: nowhere used: TCHAR *out = NULL;
@@ -281,7 +283,7 @@ TCHAR *restore_path_func (uae_u8 **dstp, int type)
 		xfree (s);
 		return my_strdup (tmp);
 	}
-	for (int i = 0; i < MAX_PATHS; i++) {
+	for (i = 0; i < MAX_PATHS; i++) {
 		newpath = NULL;
 		if (type == SAVESTATE_PATH_FLOPPY)
 			newpath = currprefs.path_floppy.path[i];
@@ -1136,6 +1138,7 @@ struct zfile *save_state (const TCHAR *description, uae_u64 size)
 int save_state (const TCHAR *filename, const TCHAR *description)
 #endif
 {
+	int v;
 	struct zfile *f;
 #ifdef __LIBRETRO__
 	int comp = 0;
@@ -1196,7 +1199,7 @@ int save_state (const TCHAR *filename, const TCHAR *description)
 		return 1;
 #endif
 	}
-	int v = save_state_internal (f, description, comp, true);
+	v = save_state_internal (f, description, comp, true);
 #ifdef __LIBRETRO__
 #if OPEN_LOG > 0
 	if (v)
@@ -1271,7 +1274,9 @@ bool savestate_check (void)
 
 #ifdef __LIBRETRO__
 void savestate_capture (int force) {}
-int savestate_dorewind (int pos) {}
+/* Devolver 0: el stub no retornaba nada (C4716) y hay un llamante que lo usa
+ * en un if (debug.c), o sea que leia el registro de retorno sin escribir. */
+int savestate_dorewind (int pos) { return 0; }
 void savestate_init (void) {}
 void savestate_free (void) {}
 void savestate_rewind (void) {}

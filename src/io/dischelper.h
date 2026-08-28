@@ -55,7 +55,7 @@ bool swapDisc(unsigned new_idx) {
     char buf[64];
     _snprintf(buf, sizeof(buf), LanguageManager::instance()->get("msg.cd.discnum").c_str(), new_idx + 1, n);
     buf[sizeof(buf) - 1] = '\0';
-    if (gameMenu) gameMenu->showSystemMessage(buf, 1500);
+    if (gameMenu) gameMenu->showSystemMessage(buf, 3000);
 
 	gameMenu->setEmuStatus(EMU_STARTED);
 	gameMenu->clearOverlay();
@@ -75,7 +75,7 @@ bool swapToNewDisc(const std::string& newBinPath) {
     if (!disk_control.get_num_images    || !disk_control.add_image_index   ||
         !disk_control.replace_image_index || !disk_control.set_image_index ||
         !disk_control.set_eject_state) {
-        if (gameMenu) gameMenu->showLangSystemMessage("msg.cd.dynswap", 2500);
+        if (gameMenu) gameMenu->showLangSystemMessage("msg.cd.dynswap", 3000);
         return false;
     }
 
@@ -87,7 +87,7 @@ bool swapToNewDisc(const std::string& newBinPath) {
 
     if (target_idx >= disk_control.get_num_images()) {
         if (!disk_control.add_image_index()) {
-            if (gameMenu) gameMenu->showLangSystemMessage("msg.cd.add_image_index", 2000);
+            if (gameMenu) gameMenu->showLangSystemMessage("msg.cd.add_image_index", 3000);
             return false;
         }
     }
@@ -101,7 +101,7 @@ bool swapToNewDisc(const std::string& newBinPath) {
     gi.meta = NULL;
 
     if (!disk_control.replace_image_index(target_idx, &gi)) {
-        if (gameMenu) gameMenu->showLangSystemMessage("msg.cd.replace_image_index", 2000);
+        if (gameMenu) gameMenu->showLangSystemMessage("msg.cd.replace_image_index", 3000);
         return false;
     }
 
@@ -118,7 +118,7 @@ bool swapToNewDisc(const std::string& newBinPath) {
     char buf[160];
 	_snprintf(buf, sizeof(buf), LanguageManager::instance()->get("msg.cd.dischanged").c_str(), fname.c_str());
     buf[sizeof(buf) - 1] = '\0';
-    if (gameMenu) gameMenu->showSystemMessage(buf, 2000);
+    if (gameMenu) gameMenu->showSystemMessage(buf, 3000);
 
 	gameMenu->setEmuStatus(EMU_STARTED);
 	gameMenu->clearOverlay();

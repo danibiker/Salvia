@@ -814,6 +814,7 @@ class ConfigEmu{
 		scaleMode = 0;
 		scaleIntMode = 0;
 		execIdx = 0;
+		syncMode = 0;
     }
     ~ConfigEmu(){
     }
@@ -886,6 +887,8 @@ class ConfigEmu{
 	int integerScale;
 	//Override the main Integer scale mode
 	int scaleIntMode;
+	//Override the main synchronization mode
+	int syncMode;
 };
 
 struct t_rom_paths{

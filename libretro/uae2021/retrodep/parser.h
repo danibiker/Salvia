@@ -89,12 +89,14 @@ extern void epson_close (void);
 #define SO_LINGER 0x0080
 #define SOL_SOCKET 0xffff
 
+#ifndef _XBOX
 typedef unsigned short SOCKET;
 
 struct linger {
 	uae_u16	l_onoff;
 	uae_u16	l_linger;
 };
+#endif
 
 #undef socklen_t
 #define socklen_t size_t
@@ -109,7 +111,6 @@ typedef unsigned short WORD;
 typedef unsigned int CLOCK;
 
 #define NOPARITY 0
-#define CE_BREAK 0x10
 
 typedef struct addrinfoW {
   int ai_flags;
@@ -122,6 +123,7 @@ typedef struct addrinfoW {
   struct addrinfoW *ai_next;
 } ADDRINFOW,*PADDRINFOW;
 
+#ifdef _XBOX
   typedef struct _COMSTAT {
     DWORD fCtsHold : 1;
     DWORD fDsrHold : 1;
@@ -182,9 +184,13 @@ typedef struct addrinfoW {
     DWORD WriteTotalTimeoutMultiplier;
     DWORD WriteTotalTimeoutConstant;
   } COMMTIMEOUTS,*LPCOMMTIMEOUTS;
+#endif 
 
+#ifdef _XBOX
+#define CE_BREAK 0x10
 #define MS_CTS_ON ((DWORD)0x10)
 #define MS_DSR_ON ((DWORD)0x20)
 #define MS_RING_ON ((DWORD)0x40)
 #define MS_RLSD_ON ((DWORD)0x80)
+#endif
 #endif

@@ -273,6 +273,7 @@ TCHAR *my_strdup_trim (const TCHAR *s);
 
 static TCHAR *cfgfile_unescape(const TCHAR *s, const TCHAR **endpos, TCHAR separator, bool min)
 {
+	int i;
 	bool quoted = false;
 	TCHAR *s2 = xmalloc(TCHAR, _tcslen(s) + 1);
 	TCHAR *p = s2;
@@ -280,7 +281,6 @@ static TCHAR *cfgfile_unescape(const TCHAR *s, const TCHAR **endpos, TCHAR separ
 		s++;
 		quoted = true;
 	}
-	int i;
 	for (i = 0; s[i]; i++) {
 		TCHAR c = s[i];
 		if (quoted && c == '\"') {
@@ -391,11 +391,13 @@ TCHAR *cfgfile_subst_path (const TCHAR *path, const TCHAR *subst, const TCHAR *f
 
 static TCHAR *cfgfile_get_multipath2 (struct multipath *mp, const TCHAR *path, const TCHAR *file, bool dir)
 {
-	for (int i = 0; i < MAX_PATHS; i++) {
+	int i;
+	for (i = 0; i < MAX_PATHS; i++) {
+		const TCHAR * ptr;
 #ifdef __LIBRETRO__
 		/* Hacky fix for relative LHA paths, but HDFs work without.. */
 		bool has_scheme = false;
-		for (const TCHAR *ptr = file; *ptr != 0 && *ptr != '/' && *ptr != '\\'; ++ptr)
+		for (ptr = file; *ptr != 0 && *ptr != '/' && *ptr != '\\'; ++ptr)
 			if (*ptr == ':')
 			{
 				has_scheme = true;
@@ -448,7 +450,8 @@ static TCHAR *cfgfile_get_multipath (struct multipath *mp, const TCHAR *path, co
 
 static TCHAR *cfgfile_put_multipath (struct multipath *mp, const TCHAR *s)
 {
-	for (int i = 0; i < MAX_PATHS; i++) {
+	int i;
+	for (i = 0; i < MAX_PATHS; i++) {
 		if (mp->path[i][0] && _tcscmp (mp->path[i], _T(".\\")) != 0 && _tcscmp (mp->path[i], _T("./")) != 0) {
 			if (_tcsnicmp (mp->path[i], s, _tcslen (mp->path[i])) == 0) {
 				return my_strdup (s + _tcslen (mp->path[i]));
@@ -622,10 +625,11 @@ void cfgfile_target_dwrite (struct zfile *f, const TCHAR *option, const TCHAR *f
 
 static void cfgfile_write_rom (struct zfile *f, struct multipath *mp, const TCHAR *romfile, const TCHAR *name)
 {
+	struct zfile * zf;
 	TCHAR *tmp_str = cfgfile_subst_path (mp->path[0], UNEXPANDED, romfile);
 	TCHAR *str = cfgfile_put_multipath (mp, tmp_str);
 	cfgfile_write_str (f, name, str);
-	struct zfile *zf = zfile_fopen (str, _T("rb"), ZFD_ALL);
+	zf = zfile_fopen (str, _T("rb"), ZFD_ALL);
 	if (zf) {
 		struct romdata *rd = getromdatabyzfile (zf);
 		if (rd) {
@@ -656,13 +660,15 @@ static void cfgfile_dwrite_path (struct zfile *f, struct multipath *mp, const TC
 
 static void cfgfile_adjust_path(TCHAR *path, int maxsz, struct multipath *mp)
 {
+	TCHAR * s;
 	if (path[0] == 0)
 		return;
-	TCHAR *s = target_expand_environment(path, NULL, 0);
+	s = target_expand_environment(path, NULL, 0);
 	_tcsncpy(path, s, maxsz - 1);
 	path[maxsz - 1] = 0;
 	if (mp) {
-		for (int i = 0; i < MAX_PATHS; i++) {
+		int i;
+		for (i = 0; i < MAX_PATHS; i++) {
 			if (mp->path[i][0] && _tcscmp(mp->path[i], _T(".\\")) != 0 && _tcscmp(mp->path[i], _T("./")) != 0 && (path[0] != '/' && path[0] != '\\' && !_tcschr(path, ':'))) {
 				TCHAR np[MAX_DPATH];
 				_tcscpy(np, mp->path[i]);
@@ -813,11 +819,13 @@ static void write_compatibility_cpu (struct zfile *f, struct uae_prefs *p)
 
 static void write_leds (struct zfile *f, const TCHAR *name, int mask)
 {
+	int i;
 	TCHAR tmp[MAX_DPATH];
 	tmp[0] = 0;
-	for (int i = 0; leds[i]; i++) {
+	for (i = 0; leds[i]; i++) {
+		int j;
 		bool got = false;
-		for (int j = 0; leds[j]; j++) {
+		for (j = 0; leds[j]; j++) {
 			if (leds_order[j] == i) {
 				if (mask & (1 << j)) {
 					if (got)
@@ -848,9 +856,9 @@ static void write_resolution (struct zfile *f, const TCHAR *ws, const TCHAR *hs,
 
 void cfgfile_save_options (struct zfile *f, struct uae_prefs *p, int type)
 {
+	int i;
 	struct strlist *sl;
 	TCHAR tmp[MAX_DPATH];
-	int i;
 
 	cfgfile_write_str (f, _T("config_description"), p->description);
 	cfgfile_write_bool (f, _T("config_hardware"), type & CONFIG_TYPE_HARDWARE);
@@ -950,9 +958,10 @@ void cfgfile_save_options (struct zfile *f, struct uae_prefs *p, int type)
 
 	for (i = 0; i < MAX_TOTAL_SCSI_DEVICES; i++) {
 		if (p->cdslots[i].name[0] || p->cdslots[i].inuse) {
+			TCHAR * s;
 			TCHAR tmp2[MAX_DPATH];
 			_stprintf (tmp, _T("cdimage%d"), i);
-			TCHAR *s = cfgfile_put_multipath (&p->path_cd, p->cdslots[i].name);
+			s = cfgfile_put_multipath (&p->path_cd, p->cdslots[i].name);
 			_tcscpy (tmp2, s);
 			xfree (s);
 			if (p->cdslots[i].type != SCSI_UNIT_DEFAULT || _tcschr (p->cdslots[i].name, ',') || p->cdslots[i].delayed) {
@@ -1260,13 +1269,15 @@ void cfgfile_save_options (struct zfile *f, struct uae_prefs *p, int type)
 	if (p->chipset_refreshrate > 0)
 		cfgfile_write (f, _T("chipset_refreshrate"), _T("%f"), p->chipset_refreshrate);
 		
-	for (int i = 0; i < MAX_CHIPSET_REFRESH_TOTAL; i++) {
+	for (i = 0; i < MAX_CHIPSET_REFRESH_TOTAL; i++) {
+		struct chipset_refresh * cr;
+		TCHAR * s;
 		if (p->cr[i].rate <= 0)
 			continue;
-		struct chipset_refresh *cr = &p->cr[i];
+		cr = &p->cr[i];
 		cr->index = i;
 		_stprintf (tmp, _T("%f"), cr->rate);
-		TCHAR *s = tmp + _tcslen (tmp);
+		s = tmp + _tcslen (tmp);
 		if (cr->label[0] > 0 && i < MAX_CHIPSET_REFRESH)
 			s += _stprintf (s, _T(",t=%s"), cr->label);
 		if (cr->horiz > 0)
@@ -1294,9 +1305,10 @@ void cfgfile_save_options (struct zfile *f, struct uae_prefs *p, int type)
 		if (cr->rtg)
 			_tcscat (s, _T(",rtg"));
 		if (cr->commands[0]) {
+			int j;
 			_tcscat (s, _T(","));
 			_tcscat (s, cr->commands);
-			for (int j = 0; j < _tcslen (s); j++) {
+			for (j = 0; j < _tcslen (s); j++) {
 				if (s[j] == '\n')
 					s[j] = ',';
 			}
@@ -1564,7 +1576,8 @@ int cfgfile_path_mp (const TCHAR *option, const TCHAR *value, const TCHAR *name,
 	//_tcsncpy (location, location, maxsz - 1);
 	location[maxsz - 1] = 0;
 	if (mp) {
-		for (int i = 0; i < MAX_PATHS; i++) {
+		int i;
+		for (i = 0; i < MAX_PATHS; i++) {
 			if (mp->path[i][0] && _tcscmp (mp->path[i], _T(".\\")) != 0 && _tcscmp (mp->path[i], _T("./")) != 0 && (location[0] != '/' && location[0] != '\\' && !_tcschr(location, ':'))) {
 				TCHAR np[MAX_DPATH];
 				_tcscpy (np, mp->path[i]);
@@ -1590,10 +1603,11 @@ int cfgfile_path (const TCHAR *option, const TCHAR *value, const TCHAR *name, TC
 
 int cfgfile_multipath (const TCHAR *option, const TCHAR *value, const TCHAR *name, struct multipath *mp)
 {
+	int i;
 	TCHAR tmploc[MAX_DPATH];
 	if (!cfgfile_string (option, value, name, tmploc, 256))
 		return 0;
-	for (int i = 0; i < MAX_PATHS; i++) {
+	for (i = 0; i < MAX_PATHS; i++) {
 		if (mp->path[i][0] == 0 || (i == 0 && (!_tcscmp (mp->path[i], _T(".\\")) || !_tcscmp (mp->path[i], _T("./"))))) {
 			//TCHAR *s = target_expand_environment (tmploc);
 			_tcsncpy (mp->path[i], tmploc, 256 - 1);
@@ -1607,21 +1621,24 @@ int cfgfile_multipath (const TCHAR *option, const TCHAR *value, const TCHAR *nam
 
 int cfgfile_rom (const TCHAR *option, const TCHAR *value, const TCHAR *name, TCHAR *location, int maxsz)
 {
+	TCHAR * p;
 	TCHAR id[MAX_DPATH];
 	if (!cfgfile_string (option, value, name, id, sizeof id / sizeof (TCHAR)))
 		return 0;
 	if (zfile_exists (location))
 		return 1;
-	TCHAR *p = _tcschr (id, ',');
+	p = _tcschr (id, ',');
 	if (p) {
+		uae_u32 crc32;
+		struct romdata * rd;
 		TCHAR *endptr, tmp;
 		*p = 0;
 		tmp = id[4];
 		id[4] = 0;
-		uae_u32 crc32 = _tcstol (id, &endptr, 16) << 16;
+		crc32 = _tcstol (id, &endptr, 16) << 16;
 		id[4] = tmp;
 		crc32 |= _tcstol (id + 4, &endptr, 16);
-		struct romdata *rd = getromdatabycrc (crc32);
+		rd = getromdatabycrc (crc32);
 		if (rd) {
 			struct romlist *rl = getromlistbyromdata (rd);
 			if (rl) {
@@ -1766,19 +1783,25 @@ static int cfgfile_parse_host (struct uae_prefs *p, TCHAR *option, TCHAR *value)
 				p->cdslots[i].inuse = true;
 				p->cdslots[i].name[0] = 0;
 			} else {
+			TCHAR * next;
+			int type;
+			int mode;
+			int unitnum;
 			p->cdslots[i].delayed = false;
-			TCHAR *next = _tcsrchr (value, ',');
-			int type = SCSI_UNIT_DEFAULT;
-			int mode = 0;
-			int unitnum = 0;
+			next = _tcsrchr (value, ',');
+			type = SCSI_UNIT_DEFAULT;
+			mode = 0;
+			unitnum = 0;
 			for (;;) {
+				TCHAR * next2;
+				int tmpval;
 				if (!next)
 					break;
 				*next++ = 0;
-				TCHAR *next2 = _tcschr (next, ':');
+				next2 = _tcschr (next, ':');
 				if (next2)
 					*next2++ = 0;
-				int tmpval = 0;
+				tmpval = 0;
 					if (!_tcsicmp (next, _T("delay"))) {
 					p->cdslots[i].delayed = true;
 					next = next2;
@@ -2098,13 +2121,15 @@ cfgfile_path (option, value, _T("floppy0soundext"), p->floppyslots[0].dfxclickex
 		return 1;
 	}
 	if (_tcscmp (option, _T("show_leds_enabled")) == 0 || _tcscmp (option, _T("show_leds_enabled_rtg")) == 0) {
+		TCHAR * s;
 		TCHAR tmp[MAX_DPATH];
 		int idx = _tcscmp (option, _T("show_leds_enabled")) == 0 ? 0 : 1;
 		p->leds_on_screen_mask[idx] = 0;
 		_tcscpy (tmp, value);
 		_tcscat (tmp, _T(","));
-		TCHAR *s = tmp;
+		s = tmp;
 		for (;;) {
+			int i;
 			TCHAR *s2 = s;
 			TCHAR *s3 = _tcschr (s, ':');
 			s = _tcschr (s, ',');
@@ -2113,7 +2138,7 @@ cfgfile_path (option, value, _T("floppy0soundext"), p->floppyslots[0].dfxclickex
 			if (s3 && s3 < s)
 				s = s3;
 			*s = 0;
-			for (int i = 0; leds[i]; i++) {
+			for (i = 0; leds[i]; i++) {
 				if (!_tcsicmp (s2, leds[i])) {
 					p->leds_on_screen_mask[idx] |= 1 << i;
 				}
@@ -2498,16 +2523,27 @@ cfgfile_path (option, value, _T("floppy0soundext"), p->floppyslots[0].dfxclickex
 	}
 
 	if (_tcscmp (option, _T("displaydata")) == 0 || _tcscmp (option, _T("displaydata_pal")) == 0 || _tcscmp (option, _T("displaydata_ntsc")) == 0) {
+	    TCHAR cmd[MAX_DPATH], label[16] = { 0 };
+	    int vert, horiz, lace, ntsc, framelength, vsync;
+	    bool locked;
+	    bool rtg;
+	    double rate;
+	    TCHAR * tmpp;
+	    TCHAR * end;
 	    _tcsncpy (tmpbuf, value, sizeof tmpbuf / sizeof (TCHAR) - 1);
 	    tmpbuf[sizeof tmpbuf / sizeof (TCHAR) - 1] = '\0';
 	
-	    int vert = -1, horiz = -1, lace = -1, ntsc = -1, framelength = -1, vsync = -1;
-	    bool locked = false;
-	    bool rtg = false;
-	    double rate = -1;
-	    TCHAR cmd[MAX_DPATH], label[16] = { 0 };
-	    TCHAR *tmpp = tmpbuf;
-	    TCHAR *end = tmpbuf + _tcslen (tmpbuf);
+	    vert = -1;
+	    horiz = -1;
+	    lace = -1;
+	    ntsc = -1;
+	    framelength = -1;
+	    vsync = -1;
+	    locked = false;
+	    rtg = false;
+	    rate = -1;
+	    tmpp = tmpbuf;
+	    end = tmpbuf + _tcslen (tmpbuf);
 	    cmd[0] = 0;
 	    for (;;) {
 	      TCHAR *next = _tcschr (tmpp, ',');
@@ -2561,7 +2597,8 @@ cfgfile_path (option, value, _T("floppy0soundext"), p->floppyslots[0].dfxclickex
 			tmpp++;
 		}
 		if (rate > 0) {
-			for (int i = 0; i < MAX_CHIPSET_REFRESH; i++) {
+			int i;
+			for (i = 0; i < MAX_CHIPSET_REFRESH; i++) {
 				if (_tcscmp (option, _T("displaydata_pal")) == 0) {
 	          i = CHIPSET_REFRESH_PAL;
 	          p->cr[i].rate = -1;
@@ -2793,6 +2830,8 @@ static bool parse_geo (const TCHAR *tname, struct uaedev_config_info *uci, struc
 	if (found)
 		write_log (_T("Geometry file '%s' detected\n"), tname);
 	while (zfile_fgets (buf, sizeof buf / sizeof (TCHAR), f)) {
+		TCHAR * key;
+		TCHAR * val;
 		int v;
 		TCHAR *sep;
 		
@@ -2830,8 +2869,8 @@ static bool parse_geo (const TCHAR *tname, struct uaedev_config_info *uci, struc
 			continue;
 		sep[0] = 0;
 
-		TCHAR *key = my_strdup_trim (buf);
-		TCHAR *val = my_strdup_trim (sep + 1);
+		key = my_strdup_trim (buf);
+		val = my_strdup_trim (sep + 1);
 		if (val[0] == '0' && _totupper (val[1]) == 'X') {
 			TCHAR *endptr;
 			v = _tcstol (val, &endptr, 16);
@@ -3010,6 +3049,7 @@ static int cfgfile_parse_newfilesys (struct uae_prefs *p, int nr, int type, TCHA
             || ! getintval (&tmpp, &uci.blocksize, ','))
             goto invalid_fs;
 		if (getintval2 (&tmpp, &uci.bootpri, ',', false)) {
+			TCHAR * tmpp2;
 			const TCHAR *end;
 			TCHAR *n;
 			tmpp2 = tmpp;
@@ -3030,7 +3070,7 @@ static int cfgfile_parse_newfilesys (struct uae_prefs *p, int nr, int type, TCHA
 				*tmpp++ = 0;
 				_tcscpy (uci.filesys, tmpp2);
 			}
-			TCHAR *tmpp2 = _tcschr (tmpp, ',');
+			tmpp2 = _tcschr (tmpp, ',');
 			if (tmpp2)
 				*tmpp2++ = 0;
 			uci.controller = get_filesys_controller (tmpp);
@@ -3558,8 +3598,9 @@ static int cfgfile_parse_hardware (struct uae_prefs *p, const TCHAR *option, TCH
 		int model = 0;
 		TCHAR *tmpp = _tcschr (value, ',');
 		if (tmpp) {
+			TCHAR * tmpp2;
 			*tmpp++ = 0;
-			TCHAR *tmpp2 = _tcschr (value, ',');
+			tmpp2 = _tcschr (value, ',');
 			if (tmpp2)
 				*tmpp2 = 0;
 			cfgfile_strval (option, value, option, &model, qsmodes,  0);
@@ -3583,6 +3624,7 @@ static int getconfigstoreline (const TCHAR *option, TCHAR *value);
 
 static void calcformula (struct uae_prefs *prefs, TCHAR *in)
 {
+	int i;
 	TCHAR out[MAX_DPATH], configvalue[CONFIG_BLEN];
 	TCHAR *p = out;
 	double val;
@@ -3597,15 +3639,16 @@ static void calcformula (struct uae_prefs *prefs, TCHAR *in)
 	if (!configstore)
 		return;
 	cnt1 = cnt2 = 0;
-	for (int i = 1; i < _tcslen (in) - 1; i++) {
+	for (i = 1; i < _tcslen (in) - 1; i++) {
 		TCHAR c = _totupper (in[i]);
 		if (c >= 'A' && c <='Z') {
+			TCHAR store;
 			TCHAR *start = &in[i];
 			while (_istalnum (c) || c == '_' || c == '.') {
 				i++;
 				c = in[i];
 			}
-			TCHAR store = in[i];
+			store = in[i];
 			in[i] = 0;
 			//write_log (_T("'%s'\n"), start);
 			if (!getconfigstoreline (start, configvalue))
@@ -3819,9 +3862,10 @@ void cfgfile_parse_lines (struct uae_prefs *p, const TCHAR *lines, int type)
   TCHAR *buf = my_strdup (lines);
   TCHAR *t = buf;
   for (;;) {
+    TCHAR * t2;
     if (_tcslen (t) == 0)
       break;
-    TCHAR *t2 = _tcschr (t, '\n');
+    t2 = _tcschr (t, '\n');
     if (t2)
       *t2 = 0;
     cfgfile_parse_line (p, t, type);
@@ -3921,6 +3965,8 @@ static char *cfg_fgets (char *line, int max, struct zfile *fh)
 
 static int cfgfile_load_2 (struct uae_prefs *p, const TCHAR *filename, bool real, int *type)
 {
+    char full_config[32768];
+    char * token;
 	int i;
 	struct zfile *fh;
 	char linea[CONFIG_BLEN];
@@ -3940,8 +3986,6 @@ static int cfgfile_load_2 (struct uae_prefs *p, const TCHAR *filename, bool real
 	}
 #ifdef __LIBRETRO__
     fh = NULL;
-    char full_config[32768];
-    char *token;
     strlcpy(full_config, retro_get_uae_full_config(), sizeof(full_config));
     for (token = strtok(full_config, "\n"); token; token = strtok(NULL, "\n")) {
 		strncpy(linea, token, sizeof(linea));
@@ -3957,9 +4001,10 @@ static int cfgfile_load_2 (struct uae_prefs *p, const TCHAR *filename, bool real
 		trimwsa (linea);
 		if (strlen (linea) > 0) {
 			if (linea[0] == '#' || linea[0] == ';') {
+				TCHAR * com;
 				struct strlist *u = xcalloc (struct strlist, 1);
 				u->option = NULL;
-				TCHAR *com = au (linea);
+				com = au (linea);
 				u->value = my_strdup (com);
 				xfree (com);
 				u->unknown = 1;
@@ -4924,6 +4969,7 @@ static void default_prefs_mini (struct uae_prefs *p, int type)
 
 void default_prefs (struct uae_prefs *p, int type)
 {
+	struct chipset_refresh * cr;
 	int i;
 	int roms[] = { 6, 7, 8, 9, 10, 14, 5, 4, 3, 2, 1, -1 };
 	TCHAR zero = 0;
@@ -5233,8 +5279,7 @@ void default_prefs (struct uae_prefs *p, int type)
 #endif
 
 	p->cr_selected = -1;
-	struct chipset_refresh *cr;
-	for (int i = 0; i < MAX_CHIPSET_REFRESH_TOTAL; i++) {
+	for (i = 0; i < MAX_CHIPSET_REFRESH_TOTAL; i++) {
 		cr = &p->cr[i];
 		cr->index = i;
 		cr->rate = -1;
@@ -5844,9 +5889,10 @@ static int bip_arcadia (struct uae_prefs *p, int config, int compa, int romcheck
 
 int built_in_prefs (struct uae_prefs *p, int model, int config, int compa, int romcheck)
 {
+	int v;
 	write_log(_T("built in model: %d, config: %d, compa: %d, romchk: %d\n"), model, config, compa, romcheck);
 
-	int v = 0;
+	v = 0;
 
 	buildin_default_prefs (p);
 	switch (model)

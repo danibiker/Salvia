@@ -55,8 +55,8 @@ uaecptr mmu040_movem_ea;
 
 static void mmu_dump_ttr(const TCHAR * label, uae_u32 ttr)
 {
-	DUNUSED(label);
 	uae_u32 from_addr, to_addr;
+	DUNUSED(label);
 
 	from_addr = ttr & MMU_TTR_LOGICAL_BASE;
 	to_addr = (ttr & MMU_TTR_LOGICAL_MASK) << 8;
@@ -1302,6 +1302,10 @@ jmp_buf* __poptry(void) {
 	    // return (NULL);
 		abort();
 	}
+	/* Inalcanzable: abort() no vuelve. Pero el XDK no la declara noreturn, asi que
+	 * para el compilador si existe un camino sin return (C4715) y el valor
+	 * devuelto seria el registro sin escribir. */
+	return NULL;
 }
 void __pushtry(jmp_buf* j) {
 	if (s_try_stack_size<MAX_TRY_STACK) {

@@ -22,11 +22,12 @@ int cda_audio_sectorsize;
 
 void cda_delete()
 {
+    int i;
     if (cda_audio_active) {
         cda_wait(0);
         cda_wait(1);
     }
-    for (int i = 0; i < 2; i++) {
+    for (i = 0; i < 2; i++) {
         xfree (cda_audio_buffers[i]);
         cda_audio_buffers[i] = NULL;
     }
@@ -34,6 +35,7 @@ void cda_delete()
 
 void cda_new(int num_sectors, int sectorsize, int samplerate, bool internalmode)
 {
+    int i;
     memset(&cda_audio_buffers, 0, sizeof cda_audio_buffers);
 
     cda_audio_active = false;
@@ -42,7 +44,7 @@ void cda_new(int num_sectors, int sectorsize, int samplerate, bool internalmode)
 
     cda_audio_bufsize = num_sectors * sectorsize;
     cda_audio_sectorsize = sectorsize;
-    for (int i = 0; i < 2; i++) {
+    for (i = 0; i < 2; i++) {
         cda_audio_buffer_ids[i] = 0;
         cda_audio_buffers[i] = xcalloc (uae_u8, num_sectors * ((cda_audio_bufsize + 4095) & ~4095));
     }
@@ -57,7 +59,8 @@ void cda_new(int num_sectors, int sectorsize, int samplerate, bool internalmode)
 
 void cda_setvolume(int left, int right)
 {
-    for (int j = 0; j < 2; j++) {
+    int j;
+    for (j = 0; j < 2; j++) {
         cda_audio_volume[j] = j == 0 ? left : right;
         cda_audio_volume[j] = sound_cd_volume[j] * cda_audio_volume[j] / 32768;
         if (cda_audio_volume[j])
@@ -70,12 +73,14 @@ void cda_setvolume(int left, int right)
 
 bool cda_play(int bufnum)
 {
+    uae_s16 * p;
     if (!cda_audio_active)
         return false;
 
-    uae_s16 *p = (uae_s16*)(cda_audio_buffers[bufnum]);
+    p = (uae_s16*)(cda_audio_buffers[bufnum]);
     if (cda_audio_volume[0] != 32768 || cda_audio_volume[1] != 32768) {
-        for (int i = 0; i < cda_audio_num_sectors * cda_audio_sectorsize / 4; i++) {
+        int i;
+        for (i = 0; i < cda_audio_num_sectors * cda_audio_sectorsize / 4; i++) {
             p[i * 2 + 0] = p[i * 2 + 0] * cda_audio_volume[0] / 32768;
             p[i * 2 + 1] = p[i * 2 + 1] * cda_audio_volume[1] / 32768;
         }

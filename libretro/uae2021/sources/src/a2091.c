@@ -850,6 +850,7 @@ static void wd_cmd_abort (void)
 
 void scsi_hsync (void)
 {
+	int i;
 	if (wd_data_avail < 0 && dmac_dma > 0) {
 		bool v = false;
 		do_dma ();
@@ -866,7 +867,7 @@ void scsi_hsync (void)
 	}
 	if (auxstatus & ASR_INT)
 		return;
-	for (int i = 0; i < WD_STATUS_QUEUE; i++) {
+	for (i = 0; i < WD_STATUS_QUEUE; i++) {
 		if (scsidelay_irq[i] == 1) {
 			scsidelay_irq[i] = 0;
 			doscsistatus(scsidelay_status[i]);
@@ -975,11 +976,12 @@ uae_u8 wdscsi_get (void)
 
 	v = wdregs[sasr];
 	if (sasr == WD_DATA) {
+		int status;
 		if (!wd_data_avail) {
 			write_log (_T("%s WD_DATA READ without data request!?\n"), WD33C93);
 			return 0;
 		}
-		int status = scsi_receive_data (scsi, &v);
+		status = scsi_receive_data (scsi, &v);
 #if WD33C93_DEBUG_PIO
 		write_log (_T("%s WD_DATA READ %02x %d/%d\n"), WD33C93, v, scsi->offset, scsi->data_len);
 #endif
@@ -1595,11 +1597,13 @@ static void ew (int addr, uae_u32 value)
 static void *scsi_thread (void *null)
 {
 	for (;;) {
+		int cmd;
+		int msg;
 		uae_u32 v = read_comm_pipe_u32_blocking (&requests);
 		if (scsi_thread_running == 0 || v == 0xfffffff)
 			break;
-		int cmd = v & 0x7f;
-		int msg = (v >> 8) & 0xff;
+		cmd = v & 0x7f;
+		msg = (v >> 8) & 0xff;
 		/// REMOVEME: unused : int unit = (v >> 24) & 0xff;
 		//write_log (_T("scsi_thread got msg=%d cmd=%d\n"), msg, cmd);
 		if (msg == 0) {
@@ -1849,13 +1853,15 @@ void a2091_init (void)
 			zfile_fread (rom, rom_size, 1, z);
 			zfile_fclose (z);
 			if (rl->rd->id == 56) {
+				int i;
 				rombankswitcher = 1;
-				for (int i = rom_size - 1; i >= 0; i--) {
+				for (i = rom_size - 1; i >= 0; i--) {
 					rom[i * 2 + 0] = rom[i];
 					rom[i * 2 + 1] = 0xff;
 				}
 			} else {
-			for (int i = 1; i < slotsize / rom_size; i++)
+			int i;
+			for (i = 1; i < slotsize / rom_size; i++)
 				memcpy (rom + i * rom_size, rom, rom_size);
 			}
 			rom_mask = rom_size - 1;

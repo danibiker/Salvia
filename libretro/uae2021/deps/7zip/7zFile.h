@@ -9,7 +9,11 @@
 #endif
 
 #ifdef USE_WINDOWS_FILE
+#ifdef _XBOX
+#include <xtl.h>
+#else
 #include <windows.h>
+#endif
 #else
 #include <stdio.h>
 #endif
@@ -34,7 +38,8 @@ void File_Construct(CSzFile *p);
 WRes InFile_Open(CSzFile *p, const char *name);
 WRes OutFile_Open(CSzFile *p, const char *name);
 #endif
-#ifdef USE_WINDOWS_FILE
+/* Fuera en la 360: el XDK no tiene CreateFileW. Ver 7zFile.c. */
+#if defined(USE_WINDOWS_FILE) && !defined(_XBOX)
 WRes InFile_OpenW(CSzFile *p, const WCHAR *name);
 WRes OutFile_OpenW(CSzFile *p, const WCHAR *name);
 #endif

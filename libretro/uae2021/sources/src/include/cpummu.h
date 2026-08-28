@@ -297,9 +297,10 @@ STATIC_INLINE int mmu_match_ttr(uaecptr addr, bool super, bool data, bool rmw)
 extern void mmu_bus_error_ttr_write_fault(uaecptr addr, bool super, bool data, uae_u32 val, int size, bool rmw);
 STATIC_INLINE int mmu_match_ttr_write(uaecptr addr, bool super, bool data,  uae_u32 val, int size, bool rmw)
 {
+	int res;
 	if (!mmu_ttr_enabled)
 		return TTR_NO_MATCH;
-	int res = mmu_match_ttr(addr, super, data, rmw);
+	res = mmu_match_ttr(addr, super, data, rmw);
 	if (res == TTR_NO_WRITE)
 		mmu_bus_error_ttr_write_fault(addr, super, data, val, size, rmw);
 	return res;
@@ -377,7 +378,8 @@ static ALWAYS_INLINE uaecptr mmu_get_real_address(uaecptr addr, struct mmu_atc_l
 static ALWAYS_INLINE void mmu_get_move16(uaecptr addr, uae_u32 *v, bool data, int size)
 {
 	struct mmu_atc_line *cl;
-	for (int i = 0; i < 4; i++) {
+	int i;
+	for (i = 0; i < 4; i++) {
 		uaecptr addr2 = addr + i * 4;
 		//                                       addr,super,data
 		if ((!regs.mmu_enabled) || (mmu_match_ttr(addr2,regs.s != 0,data,false)!=TTR_NO_MATCH))
@@ -443,7 +445,8 @@ static ALWAYS_INLINE void mmu_put_long(uaecptr addr, uae_u32 val, bool data, int
 static ALWAYS_INLINE void mmu_put_move16(uaecptr addr, uae_u32 *val, bool data, int size)
 {
 	struct mmu_atc_line *cl;
-	for (int i = 0; i < 4; i++) {
+	int i;
+	for (i = 0; i < 4; i++) {
 		uaecptr addr2 = addr + i * 4;
 		//                                        addr,super,data
 		if ((!regs.mmu_enabled) || (mmu_match_ttr_write(addr2,regs.s != 0,data,val[i],size,false)==TTR_OK_MATCH))

@@ -276,6 +276,9 @@ int machdep_inithrtimer (void)
 	    while (loops_to_go != 0)
 		uae_msleep (10);
 #else
+	    {
+	    /* bloque propio: en C89 estas declaraciones no pueden ir
+	     * detras de las sentencias del bloque de arriba. */
 	    int i = loops_to_go;
 	    frame_time_t bar;
 
@@ -285,6 +288,7 @@ int machdep_inithrtimer (void)
 		bar = read_processor_time ();
 		if (i != loops_to_go && bar - last_time < best_time)
 		    best_time = bar - last_time;
+	    }
 	    }
 #endif
 
@@ -326,3 +330,55 @@ void machdep_default_options (struct uae_prefs *p)
 }
 
 #endif
+
+
+#ifdef _MSC_VER
+/* MSVC no tiene gettimeofday(). Se declara en retrodep/sysconfig.h, que ademas
+ * declara struct timeval donde hace falta. FILETIME cuenta en unidades de
+ * 100 ns desde 1601-01-01; 11644473600 segundos separan esa epoca de la Unix. */
+int gettimeofday(struct timeval *tv, void *tz)
+{
+	FILETIME ft;
+	ULARGE_INTEGER t;
+
+	(void)tz;
+	if (!tv)
+		return -1;
+	GetSystemTimeAsFileTime(&ft);
+	t.LowPart  = ft.dwLowDateTime;
+	t.HighPart = ft.dwHighDateTime;
+	t.QuadPart /= 10;                       /* -> microsegundos */
+	t.QuadPart -= 11644473600000000ULL;     /* -> epoca Unix */
+	tv->tv_sec  = (long)(t.QuadPart / 1000000ULL);
+	tv->tv_usec = (long)(t.QuadPart % 1000000ULL);
+	return 0;
+}
+#endif /* _MSC_VER */
+
+#if defined(_MSC_VER) && (_MSC_VER < 1800)
+#include <math.h>
+
+/* atanh() es de C99 y MSVC 2010 no la trae; la macro de retrodep/sysconfig.h
+ * acaba aqui. De las cinco que hubo que escribir para la 5.3.1 solo hace falta
+ * esta: 2.6.1 no usa round/remainder/expm1/log1p/logb/signbit. */
+
+static double uae_msvc_log1p_helper(double x)
+{
+	/* log(1+x) con precision para x pequeno: el truco de Kahan compensa el
+	 * error de redondeo de (1+x). */
+	double u = 1.0 + x;
+	if (u == 1.0)
+		return x;
+	return log(u) * (x / (u - 1.0));
+}
+
+double uae_msvc_atanh(double x)
+{
+	/* atanh(x) = log1p(2|x|/(1-|x|))/2, con el signo restaurado al final.
+	 * Calcularlo sobre |x| y no sobre x evita ~1e-13 de error para x negativo
+	 * cerca de -1, que es el fallo que tuve que corregir en la 5.3.1. */
+	double a = fabs(x);
+	double r = 0.5 * uae_msvc_log1p_helper(2.0 * a / (1.0 - a));
+	return x < 0.0 ? -r : r;
+}
+#endif /* _MSC_VER < 1800 */
