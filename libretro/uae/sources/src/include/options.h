@@ -10,6 +10,7 @@
 #ifndef UAE_OPTIONS_H
 #define UAE_OPTIONS_H
 
+
 #include "uae/types.h"
 
 #include "traps.h"
@@ -22,6 +23,14 @@
 
 #include "zfile.h"
 #include "xwin.h"
+
+/* jit/compemu_support.cpp es la unica unidad C++ del proyecto y usa lo que
+ * declara esta cabecera. Sin la guarda, las referencias saldrian con nombre
+ * mangled de C++ y no enlazarian contra los .obj de C. Inerte al compilar
+ * como C. */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef enum { KBD_LANG_US, KBD_LANG_DK, KBD_LANG_DE, KBD_LANG_SE, KBD_LANG_FR, KBD_LANG_IT, KBD_LANG_ES } KbdLang;
 
@@ -1062,5 +1071,9 @@ extern struct uae_prefs currprefs, changed_prefs;
 
 extern int machdep_init (void);
 extern void machdep_free (void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* UAE_OPTIONS_H */

@@ -40,6 +40,12 @@
     <Filter Include="Source Files\core">
       <UniqueIdentifier>{aac53356-8faf-4382-ac59-52f1e27e95ca}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\chd">
+      <UniqueIdentifier>{6b1d9a2e-3c54-4f77-9b0e-2ad4f1c8e701}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\jit">
+      <UniqueIdentifier>{c4e70f18-52a9-4d3b-8e61-7f0b3d5a92c4}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="libretro\libretro-core.c">
@@ -72,8 +78,59 @@
     <ClCompile Include="sources\src\cpuemu_13.c">
       <Filter>Source Files\cpuA500</Filter>
     </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_20.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_21.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_22.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_23.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_24.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_31.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_32.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_33.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_34.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_35.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_40.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_50.c">
+      <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
     <ClCompile Include="sources\src\cpustbl.c">
       <Filter>Source Files\cpuA500</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\vm.c">
+      <Filter>Source Files\jit</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\jit\compemu.c">
+      <Filter>Source Files\jit</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\jit\compemu_fpp.c">
+      <Filter>Source Files\jit</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\jit\compstbl.c">
+      <Filter>Source Files\jit</Filter>
+    </ClCompile>
+    <ClCompile Include="sources\src\jit\compemu_support.cpp">
+      <Filter>Source Files\jit</Filter>
     </ClCompile>
     <ClCompile Include="sources\src\newcpu.c">
       <Filter>Source Files\cpuA500</Filter>
@@ -578,6 +635,54 @@
     </ClCompile>
     <ClCompile Include="sources\src\debugmem.c">
       <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\LzFind.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\7zip\LzmaEnc.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libchdr\src\libchdr_bitstream.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libchdr\src\libchdr_cdrom.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libchdr\src\libchdr_chd.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libchdr\src\libchdr_flac.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\libchdr\src\libchdr_huffman.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\common\entropy_common.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\common\error_private.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\common\fse_decompress.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\common\xxhash.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\common\zstd_common.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\decompress\huf_decompress.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\decompress\zstd_ddict.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\decompress\zstd_decompress.c">
+      <Filter>Source Files\chd</Filter>
+    </ClCompile>
+    <ClCompile Include="deps\zstd\lib\decompress\zstd_decompress_block.c">
+      <Filter>Source Files\chd</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

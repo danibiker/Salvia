@@ -9,12 +9,21 @@
 #ifndef UAE_LOG_H
 #define UAE_LOG_H
 
+
 /* This file is intended to be included by external libraries as well,
  * so don't pull in too much UAE-specific stuff. */
 
 #include "uae/api.h"
 #include "uae/attributes.h"
 #include "uae/types.h"
+
+/* jit/compemu_support.cpp es la unica unidad C++ del proyecto y usa lo que
+ * declara esta cabecera. Sin la guarda, las referencias saldrian con nombre
+ * mangled de C++ y no enlazarian contra los .obj de C. Inerte al compilar
+ * como C. */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef void (UAECALL *uae_log_function)(const char *format, ...) UAE_PRINTF_FORMAT(1, 2);
 #ifdef UAE
@@ -93,6 +102,10 @@ void write_log (const TCHAR *, ...) UAE_WPRINTF_FORMAT(1, 2);
 #define LOG_STUB_MAX UAE_LOG_STUB_MAX
 #define VERBOSE_STUB STUB
 
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif /* UAE_LOG_H */

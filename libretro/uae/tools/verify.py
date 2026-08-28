@@ -11,9 +11,22 @@ import io
 import re
 import sys
 
+CONST_INIT = re.compile(r'^[\s{}\d,\'"\.\-+*/()xXa-fA-F_]*$')
+
 TYPE_RE = re.compile(
     r'^(?:const\s+|static\s+|volatile\s+|unsigned\s+|signed\s+)*'
     r'(?:struct\s+\w+|union\s+\w+|enum\s+\w+|\w+)\s*\**\s*[\w\s,*\[\]]+$')
+
+# Primer declarador de una declaracion, sin inicializador: 'uae_s32 upper',
+# 'struct flag_struct oldflags', 'uae_u32 bdata[2]'. Sirve para reconocer
+# 'TIPO a,b,c = expr;', donde lo unico ejecutable es el inicializador de 'c'.
+DECL_HEAD_RE = re.compile(
+    r'^(?:(?:const|static|volatile|unsigned|signed|register)\s+)*'
+    r'(?:(?:struct|union|enum)\s+\w+|\w+)'
+    r'(?:\s*\*+\s*|\s+)'
+    r'\**\s*\w+\s*(?:\[[^\[\]]*\]\s*)*$')
+NOT_A_TYPE = frozenset(('return', 'else', 'case', 'goto', 'do', 'break',
+                        'continue', 'sizeof', 'typedef'))
 
 
 def top_level_split(body, sep):
@@ -58,6 +71,12 @@ def norm(path):
         t = raw.strip()
         if not t:
             continue
+        # gencpu pega las llaves de apertura al codigo ("{	int movem_cnt;").
+        # Sin quitarlas, una declaracion pura con '{' delante no se reconoce
+        # como tal y se cuenta como sentencia: daba una falsa diferencia.
+        t = t.lstrip('{').strip()
+        if not t:
+            continue
         # for (init; cond; step)  ->  compare the three clauses
         m = re.match(r'^\}?\s*(?:else\s+)?for\s*\((.*)$', t)
         if m:
@@ -83,14 +102,28 @@ def norm(path):
         if t.endswith(';') and t.count(';') == 1:
             b = t[:-1].strip()
             parts = top_level_split(b, ',')
+            # 'uae_s32 upper,lower,reg = expr;': el primer declarador no lleva
+            # inicializador, asi que ni norm_assign ni TYPE_RE (que se atraganta
+            # con el '=' de mas adelante) la reconocian, y la linea entera
+            # contaba como sentencia. Al hoistearla queda 'reg = expr;', que ya
+            # no coincidia: falsa diferencia en los diez cpuemu_*.c. Es una
+            # declaracion; lo unico ejecutable son sus inicializadores.
+            head = parts[0].strip()
+            is_decl = (DECL_HEAD_RE.match(head) is not None
+                       and head.split()[0] not in NOT_A_TYPE)
             res, ok = [], True
             for k, ch in enumerate(parts):
                 a = norm_assign(ch)
                 if a is None:
+                    if is_decl:
+                        continue     # declarador sin inicializador: no ejecuta
                     if k == 0 and TYPE_RE.match(b):
                         ok = False   # pure declaration: ignore
                     break
                 res.append(a)
+            if is_decl:
+                out.extend(res)      # solo los inicializadores, en orden
+                continue
             if res and ok:
                 out.extend(res)
                 continue
@@ -103,9 +136,11 @@ def norm(path):
 a = norm(sys.argv[1])
 b = norm(sys.argv[2])
 print('sentencias: antes %d  despues %d' % (len(a), len(b)))
+rc = 0
 if a == b:
     print('IDENTICAS -> orden de efectos laterales preservado')
 else:
+    rc = 1
     for i, (x, y) in enumerate(zip(a, b)):
         if x != y:
             print('primera diferencia en %d' % i)
@@ -114,3 +149,5 @@ else:
             break
     else:
         print('difieren solo en longitud')
+
+sys.exit(rc)

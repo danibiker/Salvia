@@ -29,6 +29,19 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+
+
+#ifdef JIT
+
+/* sysconfig.h y sysdeps.h van LOS PRIMEROS. El "#ifdef UAE" de aqui abajo es de
+ * WinUAE, que define UAE como macro de proyecto; en este arbol lo define
+ * sysdeps.h, asi que incluyendola despues el #ifdef veia UAE sin definir, se iba
+ * por la rama de ARAnyM y moria en el #error de FIXED_ADDRESSING -- se compilase
+ * o no el JIT. Y teniendolas aqui, el "#ifdef JIT" puede envolver el fichero
+ * ENTERO: comentar JIT en sysconfig.h deja este .obj vacio (solo LNK4221). */
+#include "sysconfig.h"
+#include "sysdeps.h"
+
 #ifdef UAE
 
 #define writemem_special writemem
@@ -57,11 +70,6 @@
 
 /* kludge for Brian, so he can compile under MSVC++ */
 #define USE_NORMAL_CALLING_CONVENTION 0
-
-#include "sysconfig.h"
-#include "sysdeps.h"
-
-#ifdef JIT
 
 #ifdef UAE
 #define bug write_log

@@ -9,7 +9,16 @@
 #ifndef UAE_VM_H
 #define UAE_VM_H
 
+
 #include "uae/types.h"
+
+/* jit/compemu_support.cpp es la unica unidad C++ del proyecto y usa lo que
+ * declara esta cabecera. Sin la guarda, las referencias saldrian con nombre
+ * mangled de C++ y no enlazarian contra los .obj de C. Inerte al compilar
+ * como C. */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define UAE_VM_WRITE 2
 #define UAE_VM_EXECUTE 4
@@ -45,5 +54,9 @@ bool uae_vm_decommit(void *address, uae_u32 size);
 int uae_vm_page_size(void);
 
 // void *uae_vm_alloc_with_flags(uae_u32 size, int protect, int flags);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* UAE_VM_H */

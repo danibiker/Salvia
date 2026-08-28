@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Static detector of non-C89 constructs (MSVC 2010 /TC).  ANALYSIS ONLY - never modifies sources."""
 import os
+
+# Raiz del arbol deducida de la ubicacion de este script (tools/ vive
+# dentro del proyecto). Antes estaba cableada a una ruta absoluta: al
+# mover el arbol, collect_types() recorria un directorio inexistente, se
+# quedaba sin tipos y CADA declaracion pasaba por sentencia -- 646 falsos
+# positivos en ficheros que compilaban limpios.
+_TREE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 import re, sys, os
 
 BUILTIN = set("""void char short int long float double signed unsigned bool _Bool
@@ -80,6 +87,26 @@ def load_all_defines(roots):
                     continue
                 for m in re.finditer(r'^\s*#\s*define\s+([A-Za-z_]\w*)', txt, re.M):
                     ALL_DEFINED.add(m.group(1))
+
+
+def load_vcxproj_defines(root):
+    """Los <PreprocessorDefinitions> del vcxproj tambien definen simbolos, y sin
+    ellos regiones enteras se toman por codigo muerto y no se revisan.
+    USE_LIBRETRO_VFS es el caso que dejo pasar errores reales."""
+    path = os.path.join(root, 'libretro-uae.vcxproj')
+    try:
+        txt = open(path, 'r', encoding='utf-8-sig', errors='replace').read()
+    except OSError:
+        return
+    for blob in re.findall(r'<PreprocessorDefinitions>([^<]*)', txt):
+        for tok in blob.split(';'):
+            tok = tok.strip()
+            if not tok or tok.startswith('%('):
+                continue
+            name = tok.split('=', 1)[0].strip()
+            if re.match(r'^[A-Za-z_]\w*$', name):
+                CFG_ON.add(name)
+                CFG_OFF.discard(name)
 
 
 def load_config(sysconfig_path):
@@ -399,7 +426,7 @@ def header_idents():
     global _HDR_IDENTS
     if _HDR_IDENTS is None:
         acc = set()
-        _r = r'C:\develop\proyectos\personal\libretro-uae'
+        _r = _TREE_ROOT
         for root in ('include', '.', os.path.join(_r, 'retrodep'),
                      os.path.join(_r, 'deps'),
                      os.path.join(_r, 'libretro'),
@@ -423,6 +450,12 @@ def header_idents():
                     # is exactly the case hoisting produces.
                     h = re.sub(r'/\*.*?\*/', ' ', h, flags=re.S)
                     h = re.sub(r'//[^\n]*', ' ', h)
+                    # 'extern "C" { ... }' envuelve la cabecera ENTERA, asi que
+                    # el borrado de cuerpos de abajo se llevaba todos los
+                    # identificadores del fichero y cualquier global declarada
+                    # ahi salia luego como UNDECLARED-VAR. Se quita la llave
+                    # del bloque de enlace, que no es un cuerpo.
+                    h = re.sub(r'extern\s*"C"\s*\{', ' ', h)
                     # a function-pointer global has its name inside parens:
                     # 'extern void (*x_phys_put_long)(uaecptr, uae_u32);'
                     acc.update(re.findall(r'\(\s*(?:[A-Za-z_]\w*\s+)?\*+\s*([A-Za-z_]\w*)\s*\)', h))
@@ -683,8 +716,9 @@ def analyse(path, decl_re):
 
 
 def main():
-    root = r'C:\develop\proyectos\personal\libretro-uae'
+    root = _TREE_ROOT
     load_config(os.path.join(root, 'retrodep', 'sysconfig.h'))
+    load_vcxproj_defines(root)
     load_all_defines([os.path.join(root, 'sources', 'src'),
                       os.path.join(root, 'retrodep'),
                       os.path.join(root, 'libretro'),
@@ -697,6 +731,11 @@ def main():
     types |= collect_types(os.path.join(root, 'libretro-common', 'include'))
     types |= collect_types(os.path.join(root, 'retrodep'))
     types |= collect_types(os.path.join(root, 'deps'))
+    # libretro/ faltaba: sus cabeceras declaran tipos propios (cdrom_file en
+    # libretro-glue.h, entre otros). Sin ellos, 'cdrom_file *file = NULL;' parece
+    # una multiplicacion, o sea una SENTENCIA, y todas las declaraciones que la
+    # siguen salian como decl-after-stmt. Falsos positivos en codigo correcto.
+    types |= collect_types(os.path.join(root, 'libretro'))
     decl_re = build_decl_re(types)
     set_typeword(types)
     summary = []

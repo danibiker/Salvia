@@ -257,17 +257,51 @@ void GestorMenus::setLayout(int layout, int screenw, int screenh){
     this->layout = layout;
 }
 
+/* LanguageManager::get() devuelve "[la.clave]" cuando la clave no esta en el
+ * .ini, que en el menu se ve feo. Para las etiquetas del stick derecho, que son
+ * claves nuevas, caemos al texto en ingles hasta que esten traducidas. */
+static std::string trOrDefault(const std::string &key, const char *fallback) {
+	std::string s = LanguageManager::instance()->get(key);
+	if (s.empty() || s[0] == '[')
+		return std::string(fallback);
+	return s;
+}
+
 // Inicializa la estructura de menus
 void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
-	SDL_JOY_TO_XBOX[0] = LanguageManager::instance()->get("menu.controls.left");
-	SDL_JOY_TO_XBOX[1] = LanguageManager::instance()->get("menu.controls.right");
-	SDL_JOY_TO_XBOX[2] = LanguageManager::instance()->get("menu.controls.up");
-	SDL_JOY_TO_XBOX[3] = LanguageManager::instance()->get("menu.controls.down");
+	/* Stick izquierdo: claves propias, no las genericas menu.controls.*, que las
+	 * usa tambien la cruceta (SDL_HAT_TO_XBOX) mas abajo. Compartiendolas, un eje
+	 * y un hat se mostraban con el mismo texto y no habia forma de distinguirlos. */
+	SDL_JOY_TO_XBOX[0] = trOrDefault("menu.controls.lstick.left",  "L-Left");
+	SDL_JOY_TO_XBOX[1] = trOrDefault("menu.controls.lstick.right", "L-Right");
+	SDL_JOY_TO_XBOX[2] = trOrDefault("menu.controls.lstick.up",    "L-Up");
+	SDL_JOY_TO_XBOX[3] = trOrDefault("menu.controls.lstick.down",  "L-Down");
+
+	/* Stick derecho. El indice depende de que eje SDL usa cada plataforma:
+	 * en la 360 es el eje 2 (X) y el 3 (Y) -> 4..7; en Windows el eje 2 son los
+	 * gatillos combinados y el stick derecho es el 3 (Y) y el 4 (X) -> 6..9.
+	 * Ver salvia.cpp, RETRO_DEVICE_INDEX_ANALOG_RIGHT. */
+#ifdef _XBOX
+	SDL_JOY_TO_XBOX[4] = trOrDefault("menu.controls.rstick.left",  "R-Left");
+	SDL_JOY_TO_XBOX[5] = trOrDefault("menu.controls.rstick.right", "R-Right");
+	SDL_JOY_TO_XBOX[6] = trOrDefault("menu.controls.rstick.up",    "R-Up");
+	SDL_JOY_TO_XBOX[7] = trOrDefault("menu.controls.rstick.down",  "R-Down");
+#else
+	SDL_JOY_TO_XBOX[6] = trOrDefault("menu.controls.rstick.up",    "R-Up");
+	SDL_JOY_TO_XBOX[7] = trOrDefault("menu.controls.rstick.down",  "R-Down");
+	SDL_JOY_TO_XBOX[8] = trOrDefault("menu.controls.rstick.left",  "R-Left");
+	SDL_JOY_TO_XBOX[9] = trOrDefault("menu.controls.rstick.right", "R-Right");
+#endif
 
 	SDL_HAT_TO_XBOX[1] = LanguageManager::instance()->get("menu.controls.up");
 	SDL_HAT_TO_XBOX[2] = LanguageManager::instance()->get("menu.controls.right");
 	SDL_HAT_TO_XBOX[4] = LanguageManager::instance()->get("menu.controls.down");
 	SDL_HAT_TO_XBOX[8] = LanguageManager::instance()->get("menu.controls.left");
+	/* Diagonales: se componen de las cuatro de arriba para no pedir claves nuevas. */
+	SDL_HAT_TO_XBOX[3]  = SDL_HAT_TO_XBOX[1] + "-" + SDL_HAT_TO_XBOX[2]; /* RIGHTUP   */
+	SDL_HAT_TO_XBOX[6]  = SDL_HAT_TO_XBOX[4] + "-" + SDL_HAT_TO_XBOX[2]; /* RIGHTDOWN */
+	SDL_HAT_TO_XBOX[9]  = SDL_HAT_TO_XBOX[1] + "-" + SDL_HAT_TO_XBOX[8]; /* LEFTUP    */
+	SDL_HAT_TO_XBOX[12] = SDL_HAT_TO_XBOX[4] + "-" + SDL_HAT_TO_XBOX[8]; /* LEFTDOWN  */
 
 	// 1. Crear contenedores de menus
     menuRaiz = new Menu(LanguageManager::instance()->get("menu.main.options"));
@@ -1891,8 +1925,11 @@ void GestorMenus::updateButton(const SDL_Event &event, TipoKey tipoKey){
 			if (k->tipoKey == KEY_JOY_BTN){
 				k->joyMapper->setBtnFromSdl(k->gamepadId, sdlbtn, k->btn);
 			} else if (k->tipoKey == KEY_JOY_HAT || k->tipoKey == KEY_JOY_AXIS){
-				// Extraemos la direccion activa del Hat (limpiamos otros bits si fuera necesario)
-				Uint8 sdlHatDir = (Uint8)(sdlbtn & (SDL_HAT_UP | SDL_HAT_DOWN | SDL_HAT_LEFT | SDL_HAT_RIGHT));
+				/* Aqui habia un 'sdlHatDir' enmascarado que no se usaba. Y no
+				 * habria cambiado nada: la mascara UP|DOWN|LEFT|RIGHT vale 15 y
+				 * los valores de hat de SDL ya caben en esos 4 bits. Se guarda
+				 * el valor tal cual, diagonales incluidas (3, 6, 9 y 12), que
+				 * ahora SDL_HAT_TO_XBOX si sabe etiquetar. */
 				k->joyMapper->setHatFromSdl(k->gamepadId, sdlbtn, k->btn);
 			}
 			
@@ -2121,19 +2158,27 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 		}
 
 		// 3. Procesar el resultado una sola vez
+		/* Las tres tablas se indexan con un id que viene del mando, asi que hay
+		 * que acotarlo: un indice fuera de rango no daba un fallo visible, daba
+		 * un texto basura. Si no hay etiqueta, se cae al numero. */
 		if (sdlIdBtn > -1) {
 			std::string keyStr = Constant::intToString(sdlIdBtn);
-			if (opt->tipoKey == KEY_JOY_BTN && isGamepadXbox)
-				keyStr = std::string(SDL_BTN_TO_XBOX[sdlIdBtn]);
-			else if (isGamepadXbox)
-				keyStr = std::string(SDL_HAT_TO_XBOX[sdlIdBtn]);
+			if (opt->tipoKey == KEY_JOY_BTN && isGamepadXbox) {
+				if (sdlIdBtn < SDL_BTN_TO_XBOX_SIZE && SDL_BTN_TO_XBOX[sdlIdBtn][0] != '\0')
+					keyStr = std::string(SDL_BTN_TO_XBOX[sdlIdBtn]);
+			} else if (isGamepadXbox) {
+				if (sdlIdBtn < SDL_HAT_TO_XBOX_SIZE && !SDL_HAT_TO_XBOX[sdlIdBtn].empty())
+					keyStr = SDL_HAT_TO_XBOX[sdlIdBtn];
+			}
 			str = (opt->tipoKey == KEY_JOY_BTN ? opt->description : TipoKeyStr[KEY_JOY_HAT]) + keyStr;
-		} 
+		}
 
 		if (sdlIdAxis > -1) {
-			std::string axisStr = isGamepadXbox ? SDL_JOY_TO_XBOX[sdlIdAxis] : Constant::intToString(sdlIdAxis);
+			std::string axisStr = Constant::intToString(sdlIdAxis);
+			if (isGamepadXbox && sdlIdAxis < SDL_JOY_TO_XBOX_SIZE && !SDL_JOY_TO_XBOX[sdlIdAxis].empty())
+				axisStr = SDL_JOY_TO_XBOX[sdlIdAxis];
 			str += (str.empty() ? "" : ", ") + TipoKeyStr[KEY_JOY_AXIS] + axisStr;
-		} 
+		}
 
 		// Resetear estado de edicion si estaba activo
 		if (opt->changeAsked && (sdlIdBtn > -1 || sdlIdAxis > -1)) {

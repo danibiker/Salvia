@@ -35,6 +35,15 @@
 #include "sysconfig.h"
 #include "newcpu.h"
 
+/* compemu_support.cpp es la UNICA unidad C++ del proyecto; todo lo demas se
+ * compila como C. Sin estas guardas, las funciones que define (build_comp,
+ * flush_icache, compile_block, EvalException...) saldrian con nombre mangled
+ * de C++ y newcpu.c / main.c / fpp.c no enlazarian contra ellas. En WinUAE no
+ * hace falta porque alli newcpu.cpp tambien es C++. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef UAE
 #ifdef CPU_64_BIT
 typedef uae_u64 uintptr;
@@ -581,6 +590,10 @@ static inline uae_u32 check_uae_p32(uintptr address, const char *file, int line)
 #define uae_p32(x) (check_uae_p32((uintptr)(x), __FILE__, __LINE__))
 #else
 #define uae_p32(x) ((uae_u32)(x))
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif /* COMPEMU_H */

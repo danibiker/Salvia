@@ -172,15 +172,50 @@ const char *RDB_SYSTEM_NAMES[] = {
 	""												   // cart_cd32
 };
 
+/* El indice es eje*2 + (valor>0), y que eje es cada stick NO coincide entre
+ * plataformas (ver salvia.cpp, RETRO_DEVICE_INDEX_ANALOG_RIGHT):
+ *   Xbox 360: eje 0/1 = stick izq X/Y, eje 2/3 = stick der X/Y. Los gatillos
+ *             son botones, no ejes (SDL de Lantus), asi que no aparecen aqui.
+ *   Windows : eje 0/1 = stick izq X/Y, eje 2 = gatillos combinados,
+ *             eje 3 = stick der Y, eje 4 = stick der X. */
 #ifdef _XBOX
-	const char *SDL_BTN_TO_XBOX[12] = {"A", "B", "X", "Y", "LB", "RB", "L3", "R3", "Start", "Back", "LT", "RT"};
-	std::string SDL_JOY_TO_XBOX[6] = {"Left", "Right", "Up", "Down", "LT", "RT"};
+	const char *SDL_BTN_TO_XBOX[SDL_BTN_TO_XBOX_SIZE] = {"A", "B", "X", "Y", "LB", "RB", "L3", "R3", "Start", "Back", "LT", "RT"};
+	std::string SDL_JOY_TO_XBOX[SDL_JOY_TO_XBOX_SIZE] = {
+		"L-Left", "L-Right", /* 0,1  eje 0: stick izq X-/X+ */
+		"L-Up",   "L-Down",  /* 2,3  eje 1: stick izq Y-/Y+ */
+		"R-Left", "R-Right", /* 4,5  eje 2: stick der X-/X+ */
+		"R-Up",   "R-Down",  /* 6,7  eje 3: stick der Y-/Y+ */
+		"",       ""         /* 8,9  sin uso en la 360      */
+	};
 #else
-	const char *SDL_BTN_TO_XBOX[12] = {"A", "B", "X", "Y", "L", "R", "Select", "Start", "L3", "R3", "", ""};
-	std::string SDL_JOY_TO_XBOX[6] = {"Left", "Right", "Up", "Down", "R2", "L2"};
+	const char *SDL_BTN_TO_XBOX[SDL_BTN_TO_XBOX_SIZE] = {"A", "B", "X", "Y", "L", "R", "Select", "Start", "L3", "R3", "", ""};
+	std::string SDL_JOY_TO_XBOX[SDL_JOY_TO_XBOX_SIZE] = {
+		"L-Left", "L-Right", /* 0,1  eje 0: stick izq X-/X+     */
+		"L-Up",   "L-Down",  /* 2,3  eje 1: stick izq Y-/Y+     */
+		"R2",     "L2",      /* 4,5  eje 2: gatillos combinados */
+		"R-Up",   "R-Down",  /* 6,7  eje 3: stick der Y-/Y+     */
+		"R-Left", "R-Right"  /* 8,9  eje 4: stick der X-/X+     */
+	};
 #endif
 //Translated later on the first lines of GestorMenus::inicializar
-std::string SDL_HAT_TO_XBOX[9] = {"","Up","Right", "", "Down", "","","", "Left"};
+/* Indexada por el valor de hat de SDL, que es una MASCARA: las diagonales son
+ * RIGHTUP=3, RIGHTDOWN=6, LEFTUP=9 y LEFTDOWN=12. Antes el array llegaba a 8 y
+ * las dos ultimas se salian. */
+std::string SDL_HAT_TO_XBOX[SDL_HAT_TO_XBOX_SIZE] = {
+	"",      /*  0 CENTERED  */
+	"Up",    /*  1 UP        */
+	"Right", /*  2 RIGHT     */
+	"",      /*  3 RIGHTUP   */
+	"Down",  /*  4 DOWN      */
+	"",      /*  5 ---       */
+	"",      /*  6 RIGHTDOWN */
+	"",      /*  7 ---       */
+	"Left",  /*  8 LEFT      */
+	"",      /*  9 LEFTUP    */
+	"",      /* 10 ---       */
+	"",      /* 11 ---       */
+	""       /* 12 LEFTDOWN  */
+};
 std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
 
 const char *JOY_DESCRIPTIONS[] = {"JOY_BUTTON_A",

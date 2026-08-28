@@ -2,6 +2,7 @@
 #ifndef SRC_MISC_H_INCLUDED
 #define SRC_MISC_H_INCLUDED 1
 
+
 /*
  * PUAE - The Un*x Amiga Emulator
  *
@@ -11,6 +12,14 @@
  */
 
 #include <stdint.h>
+
+/* jit/compemu_support.cpp es la unica unidad C++ del proyecto y usa lo que
+ * declara esta cabecera. Sin la guarda, las referencias saldrian con nombre
+ * mangled de C++ y no enlazarian contra los .obj de C. Inerte al compilar
+ * como C. */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef WIN32
 
@@ -193,5 +202,9 @@ void enumeratedisplays (void);
 void sortdisplays (void);
 extern TCHAR start_path_data[MAX_DPATH];
 extern void clipboard_reset (void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SRC_MISC_H_INCLUDED */

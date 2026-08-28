@@ -1,7 +1,16 @@
 #ifndef UAE_READCPU_H
 #define UAE_READCPU_H
 
+
 #include "uae/types.h"
+
+/* jit/compemu_support.cpp es la unica unidad C++ del proyecto y usa lo que
+ * declara esta cabecera. Sin la guarda, las referencias saldrian con nombre
+ * mangled de C++ y no enlazarian contra los .obj de C. Inerte al compilar
+ * como C. */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 ENUMDECL {
   Dreg, Areg, Aind, Aipi, Apdi, Ad16, Ad8r,
@@ -137,5 +146,9 @@ extern void exit_table68k(void);
 extern int get_no_mismatches(void);
 extern int nr_cpuop_funcs;
 extern bool opcode_loop_mode(uae_u16 opcode);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* UAE_READCPU_H */

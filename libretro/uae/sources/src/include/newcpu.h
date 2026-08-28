@@ -9,11 +9,21 @@
 #ifndef UAE_NEWCPU_H
 #define UAE_NEWCPU_H
 
+
 #include "uae/types.h"
 #include "readcpu.h"
 #include "machdep/m68k.h"
 #include "events.h"
 #include <softfloat/softfloat.h>
+
+/* jit/compemu_support.cpp es la unica unidad C++ del proyecto: usa lo que
+ * declara esta cabecera (cpufunctbl, m68k_reset, Exception, op_smalltbl_0...)
+ * y define compemu_reset / flush_icache / check_prefs_changed_comp, que llaman
+ * newcpu.c, devices.c y debug.c. Sin la guarda unos y otros no enlazan. Inerte
+ * al compilar como C. */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef SET_CFLG
 
@@ -895,5 +905,9 @@ extern bool can_cpu_tracer (void);
 
 uae_u32 process_cpu_indirect_memory_read(uae_u32 addr, int size);
 void process_cpu_indirect_memory_write(uae_u32 addr, uae_u32 data, int size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* UAE_NEWCPU_H */

@@ -409,9 +409,9 @@ void retro_set_environment(retro_environment_t cb) {
             "en Guilty Gear: ring = 16-63 %, bounded = 0 %, never = 0 %.",
             NULL, "performance",
             {
-                { "bounded", "Bounded 512 cycles (upstream)" },
-                { "ring",    "Ring (host thread, historico)" },
-                { "never",   "Never busy (max speed)" },
+                { "bounded", "Bounded (Recommended)" },
+                { "ring",    "Accurate (Host Sync - Slow)" },
+                { "never",   "Never busy (Max Speed)" },
                 { NULL, NULL }
             },
             "bounded"
@@ -429,14 +429,14 @@ void retro_set_environment(retro_environment_t cb) {
             "overclock (arriesga timing/audio en algunos juegos).",
             NULL, "performance",
             {
-                { "200", "2.00 (historico)" },
-                { "175", "1.75 (upstream default)" },
-                { "150", "1.50" },
-                { "125", "1.25" },
-                { "100", "1.00 (overclock x2)" },
+                { "200", "2.00 (Slower / Underclock)" },
+                { "175", "1.75 (Normal Speed)" },
+                { "150", "1.50 (Light Overclock)" },
+                { "125", "1.25 (Medium Overclock)" },
+                { "100", "1.00 (Heavy Overclock)" },
                 { NULL, NULL }
             },
-            "200"
+            "175"
         },
         {
             "pcsxr360_auto_frameskip",
@@ -1373,20 +1373,20 @@ static const struct game_db_entry game_db[] = {
 	*/
 
     /* --- Saturacion del stick analogico (ver pcsxr360_analog_saturation) ---
-     * El 20% esta medido por el usuario en el pad de Xbox 360, de ahi el
+     * El 8% esta medido por el usuario en el pad de Xbox 360, de ahi el
      * verified=1; los seriales, en cambio, salen de la lista de swanstation y
-     * no de un log nuestro.  Si Ape Escape no coge el 20%, mirar que CdromId
+     * no de un log nuestro.  Si Ape Escape no coge el 8%, mirar que CdromId
      * saca [GAME-DB] al cargarlo. */
-    { "SCPS10091", -1, 20, 1, "Saru! Get You! (NTSC-J)" },
-    { "SCPS91196", -1, 20, 1, "Saru! Get You! (NTSC-J)" },
-    { "SCPS91331", -1, 20, 1, "Saru! Get You! (NTSC-J)" },
-    { "SCPS45411", -1, 20, 1, "Saru! Get You! (NTSC-J)" },
-    { "SCUS94423", -1, 20, 1, "Ape Escape (NTSC-U)" },
-    { "SCES01564", -1, 20, 1, "Ape Escape (PAL)" },
-    { "SCES02028", -1, 20, 1, "Ape Escape (PAL-FR)" },
-    { "SCES02029", -1, 20, 1, "Ape Escape (PAL-DE)" },
-    { "SCES02030", -1, 20, 1, "Ape Escape (PAL-IT)" },
-    { "SCES02031", -1, 20, 1, "Ape Escape (PAL-ES)" },
+    { "SCPS10091", -1, 8, 1, "Saru! Get You! (NTSC-J)" },
+    { "SCPS91196", -1, 8, 1, "Saru! Get You! (NTSC-J)" },
+    { "SCPS91331", -1, 8, 1, "Saru! Get You! (NTSC-J)" },
+    { "SCPS45411", -1, 8, 1, "Saru! Get You! (NTSC-J)" },
+    { "SCUS94423", -1, 8, 1, "Ape Escape (NTSC-U)" },
+    { "SCES01564", -1, 8, 1, "Ape Escape (PAL)" },
+    { "SCES02028", -1, 8, 1, "Ape Escape (PAL-FR)" },
+    { "SCES02029", -1, 8, 1, "Ape Escape (PAL-DE)" },
+    { "SCES02030", -1, 8, 1, "Ape Escape (PAL-IT)" },
+    { "SCES02031", -1, 8, 1, "Ape Escape (PAL-ES)" },
 
     { NULL, -1, -1, 0, NULL }
 };

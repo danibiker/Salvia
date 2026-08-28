@@ -2097,13 +2097,14 @@ int fpp_cond(int condition)
 	condition &= 0x1f;
 #ifdef JIT
 	if (currprefs.cachesize && currprefs.compfpu) {
+		int NotANumber, I, Z, N, control;
 		// JIT reads and writes regs.fpu_result
 		fpp_is_init(&regs.fp_result);
-		int NotANumber = fpp_is_nan(&regs.fp_result);
-		int I = fpp_is_infinity(&regs.fp_result);
-		int Z = fpp_is_zero(&regs.fp_result);
-		int N = fpp_is_neg(&regs.fp_result);
-		int control = (N << 3) | (Z << 2) | (I << 1) | (NotANumber << 0);
+		NotANumber = fpp_is_nan(&regs.fp_result);
+		I = fpp_is_infinity(&regs.fp_result);
+		Z = fpp_is_zero(&regs.fp_result);
+		N = fpp_is_neg(&regs.fp_result);
+		control = (N << 3) | (Z << 2) | (I << 1) | (NotANumber << 0);
 		return condition_table[control * 32 + condition];
 	} else
 #endif

@@ -413,9 +413,19 @@ extern const std::string QUAKE_LIST_URL;
 const int QUAKE_MAPS_COUNT = 1; 
 extern const std::string QUAKE_MAPS_URL[QUAKE_MAPS_COUNT];
 extern const std::string START_FROM_EXCEPTION;
-extern const char *SDL_BTN_TO_XBOX[12];
-extern std::string SDL_JOY_TO_XBOX[6];
-extern std::string SDL_HAT_TO_XBOX[9];
+#define SDL_BTN_TO_XBOX_SIZE 12
+/* Indexada por el "boton virtual" de eje: idx = eje*2 + (valor>0), que es lo que
+ * generan GestorMenus::updateAxis y joystick.cpp al leer SDL_JOYAXISMOTION.
+ * Tenia 6 entradas y solo cubria el stick izquierdo (0..3) y el eje 2: el stick
+ * derecho cae en 4..7 en la 360 y en 6..9 en Windows (ver salvia.cpp,
+ * RETRO_DEVICE_INDEX_ANALOG_RIGHT), asi que se leia fuera del array. */
+#define SDL_JOY_TO_XBOX_SIZE 10
+/* Indexada por el VALOR de hat de SDL, que es una mascara de bits: las
+ * diagonales valen 3, 6, 9 y 12, asi que hay que llegar hasta 12. */
+#define SDL_HAT_TO_XBOX_SIZE 13
+extern const char *SDL_BTN_TO_XBOX[SDL_BTN_TO_XBOX_SIZE];
+extern std::string SDL_JOY_TO_XBOX[SDL_JOY_TO_XBOX_SIZE];
+extern std::string SDL_HAT_TO_XBOX[SDL_HAT_TO_XBOX_SIZE];
 extern std::string FRONTEND_BTN_TXT[MAXJOYBUTTONS];
 extern const std::string SCRAPPING_DAT;
 extern const std::string PASS_MASK;

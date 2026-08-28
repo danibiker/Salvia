@@ -9,10 +9,19 @@
 #ifndef UAE_UAE_H
 #define UAE_UAE_H
 
+
 #include "uae/types.h"
 
 /* warning: 'struct uae_prefs' declared inside parameter list will not be visible outside of this definition or declaration */
 #include "options.h"
+
+/* jit/compemu_support.cpp es la unica unidad C++ del proyecto y usa lo que
+ * declara esta cabecera. Sin la guarda, las referencias saldrian con nombre
+ * mangled de C++ y no enlazarian contra los .obj de C. Inerte al compilar
+ * como C. */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern void do_start_program (void);
 extern void start_program (void);
@@ -104,5 +113,9 @@ extern void uaerandomizeseed(void);
 
 int get_guid_target (uae_u8 *out);
 void filesys_addexternals (void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* UAE_UAE_H */

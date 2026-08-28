@@ -530,7 +530,13 @@ bool Joystick::pollKeys(int gameStatus){
 				if (p >= MAX_PLAYERS) break;
 
                 const unsigned int axis = (unsigned int)event.jaxis.axis;
-                if (axis >= MAX_AXIS) break;
+                /* La rama de "eje como pad" escribe en axis_state[p][axis*2+1],
+                 * asi que el limite util es MAX_AXIS/2, no MAX_AXIS: con axis
+                 * >= 16 se escribia fuera del array. Con mandos reales (<= 6
+                 * ejes) no llegaba a pasar, pero la guarda estaba mal.
+                 * g_analog_state, la otra rama, se indexa con axis a secas y
+                 * tiene MAX_ANALOG_AXIS entradas. */
+                if (axis >= MAX_AXIS / 2 || axis >= MAX_ANALOG_AXIS) break;
 				bool combinedAxis = false;
 				#ifndef _XBOX
 				//En xbox los gatillos L2 y R2 no son ejes. Se comportan como botones, al menos en la 
@@ -680,7 +686,9 @@ void Joystick::setInfoButtons(){
 		btn.description = FRONTEND_BTN_TXT[buttonsToShowInfo[i]];
 		const int sdlIdBtn = inputs.mapperFrontend.getSdlBtn(0, FRONTEND_BTN_VAL[buttonsToShowInfo[i]]);
 
-		if (sdlIdBtn == -1)
+		/* sdlIdBtn es el numero de boton que da el mando: acotarlo antes de
+		 * indexar la tabla de etiquetas, que solo tiene SDL_BTN_TO_XBOX_SIZE. */
+		if (sdlIdBtn < 0 || sdlIdBtn >= SDL_BTN_TO_XBOX_SIZE)
 			continue;
 
 		btn.text = std::string(SDL_BTN_TO_XBOX[sdlIdBtn]);

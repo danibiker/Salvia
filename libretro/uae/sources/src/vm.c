@@ -142,6 +142,10 @@ static void *uae_vm_alloc_with_flags(uae_u32 size, int flags, int protect)
 {
 	void *address = NULL;
 	static bool first_allocation = true;
+#ifdef _WIN32
+	int va_type;
+	int va_protect;
+#endif
 	if (first_allocation) {
 		/* FIXME: log contents of /proc/self/maps on Linux */
 		/* FIXME: use VirtualQuery function on Windows? */
@@ -153,11 +157,11 @@ static void *uae_vm_alloc_with_flags(uae_u32 size, int flags, int protect)
 #endif
 
 #ifdef _WIN32
-	int va_type = MEM_COMMIT | MEM_RESERVE;
+	va_type = MEM_COMMIT | MEM_RESERVE;
 	if (flags & UAE_VM_WRITE_WATCH) {
 		va_type |= MEM_WRITE_WATCH;
 	}
-	int va_protect = protect_to_native(protect);
+	va_protect = protect_to_native(protect);
 #else
 	int mmap_flags = MAP_PRIVATE | MAP_ANON;
 	int mmap_prot = protect_to_native(protect);
@@ -286,6 +290,10 @@ bool uae_vm_free(void *address, int size)
 static void *try_reserve(uintptr_t try_addr, uae_u32 size, int flags)
 {
 	void *address = NULL;
+#ifdef _WIN32
+	int va_type;
+	int va_protect;
+#endif
 	if (try_addr) {
 		uae_log("VM: Reserve  0x%-8x bytes, try address 0x%llx\n",
 				size, (uae_u64) try_addr);
@@ -293,11 +301,11 @@ static void *try_reserve(uintptr_t try_addr, uae_u32 size, int flags)
 		uae_log("VM: Reserve  0x%-8x bytes\n", size);
 	}
 #ifdef _WIN32
-	int va_type = MEM_RESERVE;
+	va_type = MEM_RESERVE;
 	if (flags & UAE_VM_WRITE_WATCH) {
 		va_type |= MEM_WRITE_WATCH;
 	}
-	int va_protect = protect_to_native(UAE_VM_NO_ACCESS);
+	va_protect = protect_to_native(UAE_VM_NO_ACCESS);
 	address = VirtualAlloc((void *) try_addr, size, va_type, va_protect);
 	if (address == NULL) {
 		return NULL;
@@ -391,11 +399,15 @@ void *uae_vm_reserve_fixed(void *want_addr, uae_u32 size, int flags)
 
 void *uae_vm_commit(void *address, uae_u32 size, int protect)
 {
+#ifdef _WIN32
+	int va_type;
+	int va_protect;
+#endif
 	uae_log("VM: Commit   0x%-8x bytes at %p (%s)\n",
 			size, address, protect_description(protect));
 #ifdef _WIN32
-	int va_type = MEM_COMMIT ;
-	int va_protect = protect_to_native(protect);
+	va_type = MEM_COMMIT;
+	va_protect = protect_to_native(protect);
 	address = VirtualAlloc(address, size, va_type, va_protect);
 #else
 #ifdef CLEAR_MEMORY_ON_COMMIT

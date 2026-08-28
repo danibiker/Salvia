@@ -687,8 +687,9 @@ static bool cdda_play_func2 (struct cdunit *cdu, int *outpos)
 					if (!(t->ctrl & 4)) {
 						if (t->enctype == ENC_CHD) {
 #ifdef WITH_CHD
+							int i;
 							do_read (cdu, t, dst, sector, 0, t->size, true);
-							for (int i = 0; i < 2352; i+=2) {
+							for (i = 0; i < 2352; i+=2) {
 								uae_u8 p;
 								p = dst[i + 0];
 								dst[i + 0] = dst[i + 1];
@@ -1455,28 +1456,50 @@ end:
 #ifdef WITH_CHD
 static int parsechd (struct cdunit *cdu, struct zfile *zcue, const TCHAR *img, const TCHAR *curdir, const TCHAR *ocurdir)
 {
+	chd_error err;
+	struct cdrom_file *cdf;
+	struct zfile *f;
+	chd_file *cf;
+	const cdrom_toc *stoc;
+	uae_u32 hunkcnt;
+	uae_u32 hunksize;
+	uae_u32 cbytes;
+	chd_codec_type compr;
+	int i;
+
 	if (curdir)
 		my_setcurrentdir(ocurdir, NULL);
 
-	chd_error err;
-	struct cdrom_file *cdf;
-	struct zfile *f = zfile_dup (zcue);
+	f = zfile_dup (zcue);
 	if (!f)
 		return 0;
 
 #ifdef __LIBRETRO__
-	if (cdu->chd_cdf)
+	if (cdu->chd_cdf) {
 		cdrom_close(cdu->chd_cdf);
-	if (cdu->chd_f)
+		cdu->chd_cdf = NULL; /* si no, quedan colgando si fallamos mas abajo */
+	}
+	if (cdu->chd_f) {
 		chd_close(cdu->chd_f);
+		cdu->chd_f = NULL;
+	}
 #endif
 
 #ifdef __LIBRETRO__
-	chd_file *cf;
-	cf = xmalloc(chd_file, sizeof(chd_file));
+	/* chd_open() reserva ella el chd_file y lo escribe en cf; si falla, NO lo
+	 * toca. El xmalloc de antes era inutil (el puntero se perdia en cuanto
+	 * chd_open escribia el suyo) y ademas pedia sizeof(chd_file) AL CUADRADO,
+	 * porque xmalloc(t,n) es malloc(sizeof(t)*n). Y err no se comprobaba: con un
+	 * CHD ilegible se seguia adelante con memoria sin inicializar. */
+	cf = NULL;
 	err = chd_open(img, CHD_OPEN_READ, NULL, &cf);
+	if (err != CHDERR_NONE || cf == NULL) {
+		write_log (_T("CHD '%s' err=%d\n"), zfile_getname (zcue), err);
+		zfile_fclose (f);
+		return 0;
+	}
 #else
-	chd_file *cf = new chd_file();
+	cf = new chd_file();
 	err = cf->open(*f, false, NULL);
 	if (err != CHDERR_NONE) {
 		write_log (_T("CHD '%s' err=%d\n"), zfile_getname (zcue), err);
@@ -1496,20 +1519,18 @@ static int parsechd (struct cdunit *cdu, struct zfile *zcue, const TCHAR *img, c
 	}
 	cdu->chd_f = cf;
 	cdu->chd_cdf = cdf;
-	
-	const cdrom_toc *stoc = cdrom_get_toc (cdf);
+
+	stoc = cdrom_get_toc (cdf);
 	cdu->tracks = stoc->numtrks;
 #ifdef __LIBRETRO__
-	uae_u32 hunkcnt = cf->header.hunkcount;
-	uae_u32 hunksize = cf->header.hunkbytes;
+	hunkcnt = cf->header.hunkcount;
+	hunksize = cf->header.hunkbytes;
 #else
-	uae_u32 hunkcnt = cf->hunk_count ();
-	uae_u32 hunksize = cf->hunk_bytes ();
+	hunkcnt = cf->hunk_count ();
+	hunksize = cf->hunk_bytes ();
 #endif
-	uae_u32 cbytes;
-	chd_codec_type compr;
 
-	for (int i = 0; i <cdu->tracks; i++) {
+	for (i = 0; i <cdu->tracks; i++) {
 		int size;
 		const cdrom_track_info *strack = &stoc->tracks[i];
 		struct cdtoc *dtrack = &cdu->toc[i];
@@ -1557,7 +1578,8 @@ static int parsechd (struct cdunit *cdu, struct zfile *zcue, const TCHAR *img, c
 #endif
 			TCHAR tmp[100];
 			uae_u32 c = (uae_u32)compr;
-			for (int j = 0; j < 4; j++) {
+			int j;
+			for (j = 0; j < 4; j++) {
 				uae_u8 b = c >> ((3 - j) * 8);
 				if (c < 10) {
 					b += '0';

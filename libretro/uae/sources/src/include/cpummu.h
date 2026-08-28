@@ -27,6 +27,7 @@
 #ifndef UAE_CPUMMU_H
 #define UAE_CPUMMU_H
 
+
 #include "uae/types.h"
 
 #define MMU_ICACHE 0
@@ -36,6 +37,14 @@
 #define CACHE_HIT_COUNT 0
 
 #include "mmu_common.h"
+
+/* jit/compemu_support.cpp es la unica unidad C++ del proyecto y usa lo que
+ * declara esta cabecera. Sin la guarda, las referencias saldrian con nombre
+ * mangled de C++ y no enlazarian contra los .obj de C. Inerte al compilar
+ * como C. */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef FULLMMU
 #define FULLMMU
@@ -1025,5 +1034,9 @@ extern void flush_mmu060 (uaecptr, int);
 extern void m68k_do_rts_mmu060 (void);
 extern void m68k_do_rte_mmu060 (uaecptr a7);
 extern void m68k_do_bsr_mmu060 (uaecptr oldpc, uae_s32 offset);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* UAE_CPUMMU_H */

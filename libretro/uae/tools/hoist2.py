@@ -27,6 +27,15 @@ TYPE_RE = re.compile(
     r'(?:struct\s+\w+|union\s+\w+|enum\s+\w+|\w+)\s*\**\s*[\w\s,*\[\]]+$')
 NAME_RE = re.compile(r'^[\w\s*]*?(\w+)\s*$')
 
+# Declaracion de un array sin inicializador ('uae_u32 bdata[2]', 'int tmpreg[16]').
+# NAME_RE no la reconoce porque acaba en ']', asi que parse_decl la rechaza. Al no
+# haber nada ejecutable, la linea entera se mueve al principio del bloque tal cual.
+ARRAY_DECL_RE = re.compile(
+    r'^(?:(?:const|static|volatile|unsigned|signed|register)\s+)*'
+    r'(?:(?:struct|union|enum)\s+\w+|\w+)'
+    r'(?:\s*\*+\s*|\s+)'
+    r'\w+\s*(?:\[[^\[\];=]*\]\s*)+$')
+
 
 def strip_noncode(line):
     out = []
@@ -153,8 +162,13 @@ def process(path, findings):
             if not body.endswith(';') or body.count(';') != 1:
                 skipped.append((ln, kind, body))
                 continue
-            parsed = parse_decl(body[:-1].strip())
+            inner = body[:-1].strip()
+            parsed = parse_decl(inner)
             if parsed is None:
+                if ARRAY_DECL_RE.match(inner):
+                    inserts.setdefault(op, []).append(indent + inner + ';')
+                    edits[ln] = []          # no queda nada en su sitio
+                    continue
                 skipped.append((ln, kind, body))
                 continue
             decl, assigns = parsed

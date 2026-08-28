@@ -2002,9 +2002,10 @@ static const struct cputbl *cputbls[6][8] =
 const struct cputbl *uaegetjitcputbl(void)
 {
 	int lvl = (currprefs.cpu_model - 68000) / 10;
+	int index;
 	if (lvl > 4)
 		lvl--;
-	int index = currprefs.comptrustbyte ? 0 : 1;
+	index = currprefs.comptrustbyte ? 0 : 1;
 	return cputbls[lvl][index];
 }
 
@@ -5724,7 +5725,7 @@ void execute_normal(void)
 {
 	struct regstruct *r = &regs;
 	int blocklen;
-	cpu_history pc_hist[MAXRUN];
+	struct cpu_history pc_hist[MAXRUN];
 	int total_cycles;
 
 	if (check_for_cache_miss ())
@@ -5827,9 +5828,9 @@ static void m68k_run_jit(void)
 				}
 				// If T0, T1 or M got set: run normal emulation loop
 				if (regs.t0 || regs.t1 || regs.m) {
-					flush_icache(3);
 					struct regstruct *r = &regs;
 					bool exit = false;
+					flush_icache(3);
 					check_debugger();
 					while (!exit && (regs.t0 || regs.t1 || regs.m)) {
 						r->instruction_pc = m68k_getpc();

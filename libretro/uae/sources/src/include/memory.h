@@ -9,6 +9,14 @@
 #ifndef UAE_MEMORY_H
 #define UAE_MEMORY_H
 
+/* jit/compemu_support.cpp es la unica unidad C++ del proyecto y usa lo que
+ * declara esta cabecera. Sin la guarda, las referencias saldrian con nombre
+ * mangled de C++ y no enlazarian contra los .obj de C. Inerte al compilar
+ * como C. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern void memory_reset(void);
 extern void memory_restore(void);
 extern void a1000_reset(void);
@@ -918,5 +926,9 @@ typedef struct UaeMemoryMap {
 } UaeMemoryMap;
 
 void uae_memory_map(UaeMemoryMap *map);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* UAE_MEMORY_H */

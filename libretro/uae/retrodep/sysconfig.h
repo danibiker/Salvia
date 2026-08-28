@@ -64,7 +64,26 @@ int gettimeofday(struct timeval *tv, void *tz);
 #define FILESYS /* filesys emulation */
 #define UAE_FILESYS_THREADS
 #define AUTOCONFIG /* autoconfig support, fast ram, harddrives etc.. */
+/* JIT: solo en Windows. El backend es x86 (jit/codegen_x86.c,
+ * jit/compemu_midfunc_x86.c), asi que en la 360 (PPC) no hay nada que compilar.
+ * Con JIT activo, sysdeps.h define ademas NATMEM_OFFSET, y build_cpufunctbl()
+ * pasa a poder elegir las tablas 40..45 / 50..55 (cpuemu_40.c / cpuemu_50.c).
+ *
+ * OJO: upstream libretro-uae NUNCA compila el JIT (el bloque esta comentado en
+ * Makefile.common), asi que esta ruta se estrena aqui. Al proyecto se le han
+ * anadido jit/compemu.c, jit/compemu_fpp.c, jit/compstbl.c,
+ * jit/compemu_support.cpp y sources/src/vm.c, las cinco excluidas de las
+ * configuraciones 'Xbox 360'.
+ *
+ * INTERRUPTOR: comentar este #define desactiva el JIT por completo sin tocar
+ * el vcxproj. Quedan como objetos vacios (solo LNK4221) los cuatro ficheros de
+ * jit/, por su #ifdef JIT, y cpuemu_40.c / cpuemu_50.c, a los que se les puso
+ * guarda propia (gencpu no la emite). La unica excepcion es sources/src/vm.c,
+ * que no depende del JIT y se sigue compilando: son cuatro funciones sin
+ * llamantes, sin coste apreciable. */
+//#ifndef _XBOX
 //#define JIT /* JIT compiler support */
+//#endif
 //#define USE_JIT_FPU
 //#define NOFLAGS_SUPPORT_GENCPU
 //#define NOFLAGS_SUPPORT_GENCOMP
@@ -95,9 +114,18 @@ int gettimeofday(struct timeval *tv, void *tz);
  *  compilar: los no seleccionados dejan de referenciarse desde          *
  *  cpustbl.c y newcpu.c, asi que no hace falta anadirlos al proyecto.   *
  * ==================================================================== */
+/* En la Xbox 360 solo se compilan cpuemu_0/11/13: el vcxproj excluye los
+ * demas de las dos configuraciones 'Xbox 360', porque son ~53.000 funciones
+ * generadas de peso muerto en el .xex para un A500. En Windows entran todos. */
+#ifdef _XBOX
 #define UAE_MODEL_A500      /* A500/A500+/A600 - 68000/68010, OCS/ECS   */
 //#define UAE_MODEL_A1200   /* A1200          - +68020, AGA             */
 //#define UAE_MODEL_A4000   /* A4000/A3000    - +68030/040/060, FPU/MMU */
+#else
+//#define UAE_MODEL_A500    /* A500/A500+/A600 - 68000/68010, OCS/ECS   */
+//#define UAE_MODEL_A1200   /* A1200          - +68020, AGA             */
+#define UAE_MODEL_A4000     /* A4000/A3000    - +68030/040/060, FPU/MMU */
+#endif
 
 /* --- Precision de la emulacion 68000 (solo UAE_MODEL_A500) ----------- *
  *  Sin ninguno de los dos solo existe el modo "generic": es el mas
@@ -137,11 +165,14 @@ int gettimeofday(struct timeval *tv, void *tz);
 #define CPUEMU_35 /* cpuemu_35.c: 68030 MMU + cache + CE                  */
 #endif
 
-/* cpuemu_40.c (JIT, acceso directo) y cpuemu_50.c (acceso indirecto).
- * JIT esta desactivado y el acceso indirecto solo lo usan las tarjetas
- * aceleradoras con MMU emulada, asi que ninguno hace falta.            */
-//#define CPUEMU_40
-//#define CPUEMU_50
+/* cpuemu_40.c (JIT, acceso directo -> tablas 40..45) y cpuemu_50.c (JIT,
+ * acceso indirecto -> tablas 50..55). build_cpufunctbl() solo las elige
+ * cuando currprefs.cachesize != 0, y cachesize solo se pone a MAX_JIT_CACHE
+ * dentro de #ifdef JIT: sin JIT serian ~14.000 funciones inalcanzables.   */
+#ifdef JIT
+#define CPUEMU_40
+#define CPUEMU_50
+#endif
 
 /* CPUEMU_68000_ONLY quitaria del build las instrucciones de 68020+ de
  * cpuemu_0.c y cpustbl.c, pero NO se puede activar: ademas de los

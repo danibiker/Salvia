@@ -32,8 +32,24 @@
     <ClCompile Include="deps\7zip\BraIA64.c" />
     <ClCompile Include="deps\7zip\CpuArch.c" />
     <ClCompile Include="deps\7zip\Delta.c" />
+    <ClCompile Include="deps\7zip\LzFind.c" />
     <ClCompile Include="deps\7zip\Lzma2Dec.c" />
     <ClCompile Include="deps\7zip\LzmaDec.c" />
+    <ClCompile Include="deps\7zip\LzmaEnc.c" />
+    <ClCompile Include="deps\libchdr\src\libchdr_bitstream.c" />
+    <ClCompile Include="deps\libchdr\src\libchdr_cdrom.c" />
+    <ClCompile Include="deps\libchdr\src\libchdr_chd.c" />
+    <ClCompile Include="deps\libchdr\src\libchdr_flac.c" />
+    <ClCompile Include="deps\libchdr\src\libchdr_huffman.c" />
+    <ClCompile Include="deps\zstd\lib\common\entropy_common.c" />
+    <ClCompile Include="deps\zstd\lib\common\error_private.c" />
+    <ClCompile Include="deps\zstd\lib\common\fse_decompress.c" />
+    <ClCompile Include="deps\zstd\lib\common\xxhash.c" />
+    <ClCompile Include="deps\zstd\lib\common\zstd_common.c" />
+    <ClCompile Include="deps\zstd\lib\decompress\huf_decompress.c" />
+    <ClCompile Include="deps\zstd\lib\decompress\zstd_ddict.c" />
+    <ClCompile Include="deps\zstd\lib\decompress\zstd_decompress.c" />
+    <ClCompile Include="deps\zstd\lib\decompress\zstd_decompress_block.c" />
     <ClCompile Include="libretro-common\compat\compat_snprintf.c" />
     <ClCompile Include="libretro-common\compat\compat_strcasestr.c" />
     <ClCompile Include="libretro-common\compat\compat_strl.c" />
@@ -165,7 +181,75 @@
     <ClCompile Include="sources\src\cpuemu_0.c" />
     <ClCompile Include="sources\src\cpuemu_11.c" />
     <ClCompile Include="sources\src\cpuemu_13.c" />
+    <ClCompile Include="sources\src\cpuemu_20.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_21.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_22.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_23.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_24.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_31.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_32.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_33.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_34.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_35.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_40.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\cpuemu_50.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="sources\src\cpustbl.c" />
+    <ClCompile Include="sources\src\vm.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\jit\compemu.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\jit\compemu_fpp.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\jit\compstbl.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="sources\src\jit\compemu_support.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="sources\src\crc32.c" />
     <ClCompile Include="sources\src\custom.c" />
     <ClCompile Include="sources\src\debug.c" />
@@ -284,9 +368,9 @@
     <ClCompile>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_LIB;inline=_inline;__LIBRETRO__;USE_LIBRETRO_VFS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_LIB;inline=_inline;__LIBRETRO__;USE_LIBRETRO_VFS;HAVE_7ZIP;_7ZIP_ST;HAVE_ZLIB;WITH_CHD;ZSTD_DISABLE_ASM</PreprocessorDefinitions>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <StringPooling>false</StringPooling>
@@ -297,7 +381,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <FunctionLevelLinking>false</FunctionLevelLinking>
       <FloatingPointModel>Fast</FloatingPointModel>
-      <AdditionalIncludeDirectories>$(ProjectDir);sources/src;sources/src/include;deps;retrodep;deps/7zip;deps/libmpeg2/include;libretro;libretro-common/include;libretro-common/include/compat/zlib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);sources/src;sources/src/include;deps;retrodep;deps/libchdr/include;deps/zstd/lib;deps/7zip;deps/libmpeg2/include;libretro;libretro-common/include;libretro-common/include/compat/zlib</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
       <CompileAsManaged>false</CompileAsManaged>
       <UseUnicodeForAssemblerListing>false</UseUnicodeForAssemblerListing>
@@ -315,7 +399,7 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_XBOX;_LIB;inline=_inline;__LIBRETRO__;USE_LIBRETRO_VFS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;_LIB;inline=_inline;__LIBRETRO__;USE_LIBRETRO_VFS;HAVE_7ZIP;_7ZIP_ST;HAVE_ZLIB;WITH_CHD;ZSTD_DISABLE_ASM</PreprocessorDefinitions>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <StringPooling>false</StringPooling>
@@ -326,7 +410,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <FunctionLevelLinking>false</FunctionLevelLinking>
       <FloatingPointModel>Fast</FloatingPointModel>
-      <AdditionalIncludeDirectories>$(ProjectDir);sources/src;sources/src/include;deps;retrodep;deps/7zip;deps/libmpeg2/include;libretro;libretro-common/include;libretro-common/include/compat/zlib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);sources/src;sources/src/include;deps;retrodep;deps/libchdr/include;deps/zstd/lib;deps/7zip;deps/libmpeg2/include;libretro;libretro-common/include;libretro-common/include/compat/zlib</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
       <CompileAsManaged>false</CompileAsManaged>
       <UseUnicodeForAssemblerListing>false</UseUnicodeForAssemblerListing>
@@ -346,10 +430,10 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>false</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;_LIB;inline=_inline;__LIBRETRO__;USE_LIBRETRO_VFS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_LIB;inline=_inline;__LIBRETRO__;USE_LIBRETRO_VFS;HAVE_7ZIP;_7ZIP_ST;HAVE_ZLIB;WITH_CHD;ZSTD_DISABLE_ASM</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ExceptionHandling>false</ExceptionHandling>
-      <AdditionalIncludeDirectories>$(ProjectDir);sources/src;sources/src/include;deps;retrodep;deps/7zip;deps/libmpeg2/include;libretro;libretro-common/include;libretro-common/include/compat/zlib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);sources/src;sources/src/include;deps;retrodep;deps/libchdr/include;deps/zstd/lib;deps/7zip;deps/libmpeg2/include;libretro;libretro-common/include;libretro-common/include/compat/zlib</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -380,10 +464,10 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>_XBOX;_LIB;inline=__inline;__LIBRETRO__;USE_LIBRETRO_VFS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;_LIB;inline=__inline;__LIBRETRO__;USE_LIBRETRO_VFS;HAVE_7ZIP;_7ZIP_ST;HAVE_ZLIB;WITH_CHD;ZSTD_DISABLE_ASM</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ExceptionHandling>false</ExceptionHandling>
-      <AdditionalIncludeDirectories>$(ProjectDir);sources/src;sources/src/include;deps;retrodep;deps/7zip;deps/libmpeg2/include;libretro;libretro-common/include;libretro-common/include/compat/zlib</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);sources/src;sources/src/include;deps;retrodep;deps/libchdr/include;deps/zstd/lib;deps/7zip;deps/libmpeg2/include;libretro;libretro-common/include;libretro-common/include/compat/zlib</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>

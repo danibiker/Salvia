@@ -9,8 +9,17 @@
 #ifndef UAE_CUSTOM_H
 #define UAE_CUSTOM_H
 
+
 #include "uae/types.h"
 #include "machdep/rpt.h"
+
+/* jit/compemu_support.cpp es la unica unidad C++ del proyecto y usa lo que
+ * declara esta cabecera. Sin la guarda, las referencias saldrian con nombre
+ * mangled de C++ y no enlazarian contra los .obj de C. Inerte al compilar
+ * como C. */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define BEAMCON0_HARDDIS	0x4000
 #define BEAMCON0_LPENDIS	0x2000
@@ -288,5 +297,9 @@ struct custom_store
 	uae_u32 pc;
 };
 extern struct custom_store custom_storage[256];
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* UAE_CUSTOM_H */

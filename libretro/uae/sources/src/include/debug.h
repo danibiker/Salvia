@@ -10,7 +10,16 @@
 #ifndef UAE_DEBUG_H
 #define UAE_DEBUG_H
 
+
 #include "uae/types.h"
+
+/* jit/compemu_support.cpp es la unica unidad C++ del proyecto y usa lo que
+ * declara esta cabecera. Sin la guarda, las referencias saldrian con nombre
+ * mangled de C++ y no enlazarian contra los .obj de C. Inerte al compilar
+ * como C. */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef D
 #define D
@@ -330,5 +339,9 @@ extern void debug_draw(uae_u8 *buf, int bpp, int line, int width, int height, ua
 STATIC_INLINE void activate_debugger (void) { };
 
 #endif /* DEBUGGER */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* UAE_DEBUG_H */

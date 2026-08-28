@@ -1576,7 +1576,10 @@ static inline void raw_pop_preserved_regs(void) {
  *************************************************************************/
 
 #ifdef UAE
-#include "exception_handler.cpp"
+/* En WinUAE este fichero se llama exception_handler.cpp; libretro-uae lo trae
+ * como .c. Como el JIT nunca se habia compilado aqui, el include apuntaba a un
+ * fichero que no existe en el arbol. */
+#include "exception_handler.c"
 #endif
 
 #ifdef UAE

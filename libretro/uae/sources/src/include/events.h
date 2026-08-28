@@ -12,11 +12,20 @@
 #ifndef UAE_EVENTS_H
 #define UAE_EVENTS_H
 
+
 #include "uae/types.h"
 
 #undef EVENT_DEBUG
 
 #include "machdep/rpt.h"
+
+/* jit/compemu_support.cpp es la unica unidad C++ del proyecto y usa lo que
+ * declara esta cabecera. Sin la guarda, las referencias saldrian con nombre
+ * mangled de C++ y no enlazarian contra los .obj de C. Inerte al compilar
+ * como C. */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define EVT_MAX 0x7fffffffffffffff
 
@@ -168,5 +177,9 @@ void event_setdsr(uae_u32);
 void event_CIA_synced_interrupt(uae_u32);
 void event_CIA_tod_inc_event(uae_u32);
 void event_DISK_handler(uae_u32 data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* UAE_EVENTS_H */
