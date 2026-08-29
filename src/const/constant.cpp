@@ -99,7 +99,11 @@ const char *ICONS_PATH[] = {"menu_log.png",		// page_white_text
 	"input_STCK-P.png",							// ico_input_stick_l3
 	"input_STCK-P.png",							// ico_input_stick_r3
 	"input_LB.png",								// ico_input_l2
-	"input_RB.png"								// ico_input_r2
+	"input_RB.png",								// ico_input_r2
+	"input_STCK-U.png",						    // ico_analog_u
+	"input_STCK-D.png",							// ico_analog_d
+	"input_STCK-L.png",							// ico_analog_l
+	"input_STCK-R.png"							// ico_analog_r
 };
 
 const char *ICONS_CARTS_PATH[] = {"Nintendo - Game Boy Advance-content.png",  // cart_gba

@@ -173,7 +173,7 @@ inline int procesarGeneralConfig(){
 		gameMenu->configMenus->volver();
 	}
 
-	int& retro_key = gameMenu->joystick->inputs.last_key_processed->key;
+	int& retro_key = gameMenu->joystick->inputs.last_key_processed.key;
 	if (retro_key != -1){
 		t_key_input *keyInput = &gameMenu->joystick->inputs.keyboard_state[retro_key];
 		LOG_DEBUG("keyInput->keyjoydown: %d, %d, %d->%c", keyInput->key, keyInput->keyMod, keyInput->unicode, keyInput->unicode);

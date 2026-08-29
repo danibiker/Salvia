@@ -329,6 +329,8 @@ int  PEOPS_GPUdisplayDeferrable(void);
 /* Diagnostico (ver gpu.c).  Compilada siempre; el call-site va bajo
  * PCSXR_DIAG_INSTRUMENTATION, asi core y plugin no tienen que coincidir. */
 unsigned long PEOPS_GPUdiagDisplayOrigin(void);
+unsigned long PEOPS_GPUdiagDisplayRect(unsigned long *mode, unsigned long *draw, int *disabled);
+void PEOPS_GPUdiagVramStats(unsigned int *nonzero, unsigned int *total);
 extern int            iColDepth;
 extern int            iWindowMode;
 extern char           szDispBuf[];

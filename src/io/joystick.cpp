@@ -7,6 +7,7 @@
 #include <io/cfgloader.h>
 #include <io/fileio.h>
 #include <cmath>
+#include <set>
 #include <libretro.h>
 
 extern void retro_set_controller_port_device(unsigned port, unsigned device);
@@ -22,9 +23,13 @@ extern retro_keyboard_event_t core_key_callback;
 // Estructura temporal para almacenar los perfiles definidos en RETROPAD_LIST
 struct PadProfile {
     std::vector<int> btns, hats, axis;
-    bool anal;
+    std::vector<int> anlg;
 	int joyTypeIdx;
-	PadProfile(): anal(false), joyTypeIdx(0) {}
+	/* 'anlg=' es una clave posterior al resto del formato. Sin este flag, un .joy
+	 * antiguo (que no la trae) aplicaria el vector vacio y machacaria los defaults
+	 * que dejo configMapperRetro, igual que hacen hoy anal= y joytype=. */
+	bool hasAnlg;
+	PadProfile(): joyTypeIdx(0), hasAnlg(false) {}
 };
 
 Joystick::Joystick(){
@@ -54,9 +59,17 @@ bool Joystick::init_all_joysticks() {
         g_joysticks[joyId] = SDL_JoystickOpen(joyId);
 		if (g_joysticks[joyId]) {
 			inputs.names[joyId] = Constant::Trim(SDL_JoystickName(joyId));
-			/* axisAsPad must be false by default to allow analog-joystick-able cores 
-			 * as dosbox-pure or tyrquake to use the input properly */
-			inputs.axisAsPad[joyId] = false;
+			/* Copia que no pisa la carga: es la que permite reconocer el mando. */
+			inputs.physicalNames[joyId] = inputs.names[joyId];
+			/* Cuantos ejes/botones/hats dice SDL que tiene el mando. Sin esto no hay
+			 * forma de saber que numero de eje es cada stick, que NO coincide entre
+			 * plataformas ni entre drivers, y es de lo primero que hace falta cuando
+			 * un remapeo no responde. */
+			LOG_INFO("Joystick %d: '%s' -> %d ejes, %d botones, %d hats", joyId,
+				inputs.names[joyId].c_str(),
+				SDL_JoystickNumAxes(g_joysticks[joyId]),
+				SDL_JoystickNumButtons(g_joysticks[joyId]),
+				SDL_JoystickNumHats(g_joysticks[joyId]));
 			inputs.joyTypeIdx[joyId] = 0;
 			//Setting mappers for the frontend
 			configMapperFrontend(inputs.mapperFrontend, joyId);
@@ -135,6 +148,17 @@ void Joystick::configMapperRetro(t_joy_mapper& mapper, int joyId){
 	for (int axis=0; axis < naxis && axis < arrNAxis; axis++){
 		mapper.setAxisFromSdl(joyId, axis, configurableSdlAxis[axis]);
 	}
+
+	/* Direcciones analogicas: por defecto IDENTIDAD, o sea cada direccion del stick
+	 * se comporta como ella misma y el core recibe el analogico de siempre. El que
+	 * quiera el stick como cruceta asigna sus cuatro direcciones a posiciones de
+	 * hat; ya no hay interruptor global (el antiguo axisAsPad).
+	 * Solo se asignan las direcciones que el mando puede dar: naxis es el numero de
+	 * direcciones fisicas disponibles (ejes * 2). Las que no lleguen quedan a -1. */
+	for (int slot = 0; slot < ANALOG_TARGETS; slot++){
+		const int virt = analogSlotAxis[slot];
+		mapper.setAnalogDst(joyId, slot, virt < naxis ? virt : -1);
+	}
 }
 
 /**
@@ -168,54 +192,133 @@ std::string Joystick::saveButtonsRetroDefault() {
 }
 
 /**
+* Lee los perfiles que YA hay en el fichero que vamos a sobrescribir.
+*
+* Hace falta porque saveButtonsConfig reescribe el fichero entero a partir de los
+* mandos CONECTADOS en ese momento: sin esto, guardar con un mando de Xbox borraba
+* el perfil que se hubiera guardado antes con, por ejemplo, uno de SNES. El formato
+* siempre admitio varios bloques 'name=' en [RETROPAD_LIST] -- lo que faltaba era
+* conservarlos.
+*
+* Los bloques se guardan como TEXTO CRUDO a proposito: de un perfil de un mando que
+* no esta conectado no queremos reinterpretar nada, solo devolverlo intacto (incluidas
+* claves que esta version no conozca).
+*
+* 'orden' preserva el orden de aparicion para que el fichero no se baraje en cada
+* guardado y los diffs sigan siendo legibles.
+*/
+static void readExistingProfiles(const std::string &ruta,
+                                 std::vector<std::string> &orden,
+                                 std::map<std::string, std::vector<std::string> > &bloques,
+                                 std::map<int, std::string> &asignaciones) {
+    std::vector<std::string> lineas;
+    std::string currentSection = "";
+    std::string currentProfile = "";
+
+    FileList::cargarVector(ruta, lineas);
+
+    for (std::size_t i = 0; i < lineas.size(); ++i) {
+        std::string line = Constant::Trim(lineas[i]);
+        if (line.empty()) continue;
+
+        if (line[0] == '[' && line[line.size() - 1] == ']') {
+            currentSection = line;
+            currentProfile = "";
+            continue;
+        }
+
+        if (currentSection == "[RETROPAD_LIST]") {
+            if (line.find("name=") == 0) {
+                currentProfile = line.substr(5);
+                if (!bloques.count(currentProfile)) orden.push_back(currentProfile);
+                bloques[currentProfile].clear();
+            } else if (!currentProfile.empty()) {
+                bloques[currentProfile].push_back(line);
+            }
+        } else if (currentSection == "[RETROPAD]") {
+            std::size_t eqPos = line.find('=');
+            if (eqPos == std::string::npos) continue;
+            std::string key = line.substr(0, eqPos);
+            int p = -1;
+            for (std::size_t c = 0; c < key.size(); c++) {
+                if (key[c] >= '0' && key[c] <= '9') { p = key[c] - '0'; break; }
+            }
+            if (p >= 0 && p < MAX_PLAYERS) asignaciones[p] = line.substr(eqPos + 1);
+        }
+    }
+}
+
+/**
 *
 */
 std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFrontend) {
     std::vector<std::string> fileConfigJoystick;
+
+    /* Lo que ya hubiera en el fichero, para fusionarlo en vez de machacarlo. */
+    std::vector<std::string> prevOrden;
+    std::map<std::string, std::vector<std::string> > prevBloques;
+    std::map<int, std::string> prevAsignacion;
+    readExistingProfiles(ruta, prevOrden, prevBloques, prevAsignacion);
+
+    /* Perfiles que escribe ESTA pasada. Un perfil previo con el mismo nombre queda
+     * sustituido por el nuevo, que es justo lo que se espera al reguardar el mismo
+     * mando; los demas se copian tal cual mas abajo. */
+    std::set<std::string> perfilesEscritos;
+
     fileConfigJoystick.push_back("[RETROPAD_LIST]");
 
     // Vector para guardar el nombre del perfil asignado a cada jugador
     std::vector<std::string> playerProfileNames(MAX_PLAYERS, "");
-    // Para rastrear firmas de configuración ya escritas y evitar duplicados
-    std::vector<std::string> savedSignatures;
+    /* Firma de mapeo -> nombre del perfil que ya la escribio. Era un vector que solo
+     * guardaba la firma, asi que al encontrar una repetida no habia forma de saber DE
+     * QUE JUGADOR era, y el codigo de abajo copiaba el nombre del jugador 0 sin
+     * comprobar nada. */
+    std::map<std::string, std::string> savedSignatures;
 
+    /* Un perfil pertenece a un MANDO, asi que tanto la condicion de "hay algo que
+     * guardar" como el nombre del bloque salen de physicalNames, no de names.
+     *
+     * Con names[] el resultado era erroneo en cuanto habia mas de un perfil en el
+     * fichero: la carga deja en names[p] el nombre del perfil aplicado, que puede ser
+     * el de OTRO mando (cuando se resuelve por el respaldo player<N>_name), y al
+     * guardar se habria sobrescrito el perfil de ese otro mando con este mapeo. */
     for (int p = 0; p < MAX_PLAYERS; p++) {
-        if (inputs.names[p].empty()) {
+        if (inputs.physicalNames[p].empty()) {
             playerProfileNames[p] = "None";
             continue;
         }
 
         // 1. Generar una "firma" única del mapeo de este jugador
         std::string signature = "";
-        for (int i = 0; i < MAX_BUTTONS; i++) signature += Constant::intToString(inputs.mapperCore.sdlToBtn[p][i]) + ",";
+        for (int i = 0; i < MAX_SDL_BUTTONS; i++)    signature += Constant::intToString(inputs.mapperCore.sdlToBtn[p][i]) + ",";
         signature += "|";
-        for (int i = 0; i < MAX_HATS; i++)    signature += Constant::intToString(inputs.mapperCore.sdlToHat[p][i]) + ",";
+        for (int i = 0; i < MAX_SDL_HAT_VALUES; i++) signature += Constant::intToString(inputs.mapperCore.sdlToHat[p][i]) + ",";
         signature += "|";
-        for (int i = 0; i < MAX_AXIS; i++)    signature += Constant::intToString(inputs.mapperCore.sdlToAxis[p][i]) + ",";
-        signature += (inputs.axisAsPad[p] ? "1" : "0");
-		
+        for (int i = 0; i < MAX_SDL_AXIS_DIRS; i++)  signature += Constant::intToString(inputs.mapperCore.sdlToAxis[p][i]) + ",";
+        signature += "|";
+        for (int i = 0; i < ANALOG_TARGETS; i++) signature += Constant::intToString(inputs.mapperCore.analogDst[p][i]) + ",";
+
 		if (!hotkeysAndFrontend)
-			signature += inputs.joyTypeIdx[p];
+			/* Era 'signature += inputs.joyTypeIdx[p]', o sea operator+=(char): metia
+			 * el CARACTER con ese codigo, no los digitos. Con joyTypeIdx==0 colaba un
+			 * '\0' en medio de la firma y la deduplicacion no distinguia tipos. */
+			signature += Constant::intToString(inputs.joyTypeIdx[p]);
 
-        // 2. Verificar si esta configuración exacta ya fue guardada
+        /* 2. Si esta configuracion exacta ya se escribio, reusar SU nombre de perfil.
+         * El bucle anterior recorria los jugadores previos pero asignaba y hacia break
+         * en la primera iteracion, sin comparar: siempre copiaba el nombre del jugador
+         * 0. Con el jugador 0 en "None" y los jugadores 1 y 2 compartiendo mapeo, el 2
+         * acababa con "player2_name=None". */
         bool yaEscrito = false;
-        for (std::size_t s = 0; s < savedSignatures.size(); s++) {
-            if (savedSignatures[s] == signature) {
-                // Buscamos que nombre le pusimos a esa firma anteriormente
-                for (int prev = 0; prev < p; prev++) {
-                    // Si encontramos al jugador previo con la misma firma, copiamos su nombre de perfil
-                    playerProfileNames[p] = playerProfileNames[prev];
-                    yaEscrito = true;
-                    break;
-                }
-                break;
-
-			}
+        std::map<std::string, std::string>::iterator itSig = savedSignatures.find(signature);
+        if (itSig != savedSignatures.end()) {
+            playerProfileNames[p] = itSig->second;
+            yaEscrito = true;
         }
 
         // 3. Si es una configuracion nueva o el nombre base ya existe, generar perfil
         if (!yaEscrito) {
-            std::string baseName = Constant::Trim(inputs.names[p]);
+            std::string baseName = Constant::Trim(inputs.physicalNames[p]);
             std::string finalMapperName = baseName;
             
             // Evitar colision de nombres de perfiles en el INI
@@ -229,77 +332,113 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
             }
 
             playerProfileNames[p] = finalMapperName;
-            savedSignatures.push_back(signature);
+            savedSignatures[signature] = finalMapperName;
+            perfilesEscritos.insert(finalMapperName);
 
             // Escribir bloque de configuracion
             fileConfigJoystick.push_back("name=" + finalMapperName);
             
             std::string btns = "btns=";
-            for (int i = 0; i < MAX_BUTTONS; i++) 
-                btns += Constant::intToString(inputs.mapperCore.sdlToBtn[p][i]) + (i < MAX_BUTTONS - 1 ? "," : "");
+            for (int i = 0; i < MAX_SDL_BUTTONS; i++)
+                btns += Constant::intToString(inputs.mapperCore.sdlToBtn[p][i]) + (i < MAX_SDL_BUTTONS - 1 ? "," : "");
             fileConfigJoystick.push_back(btns);
 
             std::string hats = "hats=";
-            for (int i = 0; i < MAX_HATS; i++) 
-                hats += Constant::intToString(inputs.mapperCore.sdlToHat[p][i]) + (i < MAX_HATS - 1 ? "," : "");
+            for (int i = 0; i < MAX_SDL_HAT_VALUES; i++)
+                hats += Constant::intToString(inputs.mapperCore.sdlToHat[p][i]) + (i < MAX_SDL_HAT_VALUES - 1 ? "," : "");
             fileConfigJoystick.push_back(hats);
 
             std::string axis = "axis=";
-            for (int i = 0; i < MAX_AXIS; i++) 
-                axis += Constant::intToString(inputs.mapperCore.sdlToAxis[p][i]) + (i < MAX_AXIS - 1 ? "," : "");
+            for (int i = 0; i < MAX_SDL_AXIS_DIRS; i++)
+                axis += Constant::intToString(inputs.mapperCore.sdlToAxis[p][i]) + (i < MAX_SDL_AXIS_DIRS - 1 ? "," : "");
             fileConfigJoystick.push_back(axis);
 
-			//Si estamos guardando la configuracion general, no tenemos en cuenta el tipo de joystick
-			//ni el analogico porque es independiente del core elegido
+            /* Fuente fisica de cada una de las 8 direcciones analogicas. Va aqui y no
+             * con anal=/joytype= porque, al contrario que esos dos, no depende del
+             * core: es una preferencia del mando, como btns= o axis=. Clave nueva;
+             * los ficheros antiguos no la traen y al cargarlos se respetan los
+             * defaults (ver 'hasAnlg' en loadButtonsRetro). */
+            std::string anlg = "anlg=";
+            for (int i = 0; i < ANALOG_TARGETS; i++)
+                anlg += Constant::intToString(inputs.mapperCore.analogDst[p][i]) + (i < ANALOG_TARGETS - 1 ? "," : "");
+            fileConfigJoystick.push_back(anlg);
+
+			//El tipo de dispositivo si depende del core, asi que solo va en los .joy.
+			//"anal=" (el viejo axisAsPad) ya no se escribe: ahora cada direccion de
+			//stick lleva su destino en anlg=. Se sigue leyendo por compatibilidad.
 			if (!hotkeysAndFrontend){
 				int joyType = inputs.joyTypeIdx[p];
-				int anal = inputs.axisAsPad[p] ? 1 : 0;
-				fileConfigJoystick.push_back("anal=" + Constant::TipoToStr(anal));
 				fileConfigJoystick.push_back("joytype=" + Constant::TipoToStr(joyType));
 			}
             fileConfigJoystick.push_back(""); // Linea en blanco
         }
     }
 
-    // 4. Seccion de asignacion por jugador
+    /* 4. Perfiles de mandos que ahora NO estan conectados: se copian tal cual.
+     * Es lo que permite tener a la vez el perfil del mando de SNES y el de Xbox en
+     * el mismo fichero aunque solo se pueda guardar con uno enchufado cada vez. */
+    for (std::size_t i = 0; i < prevOrden.size(); i++) {
+        const std::string &nombre = prevOrden[i];
+        if (perfilesEscritos.count(nombre)) continue;   /* sustituido por el de arriba */
+        if (nombre.empty() || nombre == "None") continue;
+
+        fileConfigJoystick.push_back("name=" + nombre);
+        std::vector<std::string> &bloque = prevBloques[nombre];
+        for (std::size_t l = 0; l < bloque.size(); l++) {
+            fileConfigJoystick.push_back(bloque[l]);
+        }
+        fileConfigJoystick.push_back(""); // Linea en blanco
+    }
+
+    // 5. Seccion de asignacion por jugador
     fileConfigJoystick.push_back("[RETROPAD]");
     for (int p = 0; p < MAX_PLAYERS; p++) {
-        fileConfigJoystick.push_back("player" + Constant::intToString(p) + "_name=" + playerProfileNames[p]);
+        std::string nombre = playerProfileNames[p];
+        /* Puerto sin mando conectado: conservamos lo que dijera el fichero en vez de
+         * machacarlo con "None". Su bloque de perfil sigue estando (bucle de arriba),
+         * asi que la asignacion sigue siendo valida cuando se vuelva a enchufar. */
+        if (inputs.physicalNames[p].empty()) {
+            std::map<int, std::string>::iterator itPrev = prevAsignacion.find(p);
+            if (itPrev != prevAsignacion.end() && !itPrev->second.empty()) {
+                nombre = itPrev->second;
+            }
+        }
+        fileConfigJoystick.push_back("player" + Constant::intToString(p) + "_name=" + nombre);
     }
 
 	if (hotkeysAndFrontend){
 		fileConfigJoystick.push_back(""); // Linea en blanco
 		fileConfigJoystick.push_back("[HOTKEYS]");
 		std::string btns = "btns=";
-		for (int i = 0; i < MAX_BUTTONS; i++) 
-			btns += Constant::intToString(inputs.mapperHotkeys.sdlToBtn[0][i]) + (i < MAX_BUTTONS - 1 ? "," : "");
+		for (int i = 0; i < MAX_SDL_BUTTONS; i++)
+			btns += Constant::intToString(inputs.mapperHotkeys.sdlToBtn[0][i]) + (i < MAX_SDL_BUTTONS - 1 ? "," : "");
 		fileConfigJoystick.push_back(btns);
 
 		std::string hats = "hats=";
-		for (int i = 0; i < MAX_HATS; i++) 
-			hats += Constant::intToString(inputs.mapperHotkeys.sdlToHat[0][i]) + (i < MAX_HATS - 1 ? "," : "");
+		for (int i = 0; i < MAX_SDL_HAT_VALUES; i++)
+			hats += Constant::intToString(inputs.mapperHotkeys.sdlToHat[0][i]) + (i < MAX_SDL_HAT_VALUES - 1 ? "," : "");
 		fileConfigJoystick.push_back(hats);
 
 		std::string axis = "axis=";
-		for (int i = 0; i < MAX_AXIS; i++) 
-			axis += Constant::intToString(inputs.mapperHotkeys.sdlToAxis[0][i]) + (i < MAX_AXIS - 1 ? "," : "");
+		for (int i = 0; i < MAX_SDL_AXIS_DIRS; i++)
+			axis += Constant::intToString(inputs.mapperHotkeys.sdlToAxis[0][i]) + (i < MAX_SDL_AXIS_DIRS - 1 ? "," : "");
 		fileConfigJoystick.push_back(axis);
 
 		fileConfigJoystick.push_back(""); // Linea en blanco
 		fileConfigJoystick.push_back("[FRONTEND]");
 		btns = "btns=";
-		for (int i = 0; i < MAX_BUTTONS; i++) 
-			btns += Constant::intToString(inputs.mapperFrontend.sdlToBtn[0][i]) + (i < MAX_BUTTONS - 1 ? "," : "");
+		for (int i = 0; i < MAX_SDL_BUTTONS; i++)
+			btns += Constant::intToString(inputs.mapperFrontend.sdlToBtn[0][i]) + (i < MAX_SDL_BUTTONS - 1 ? "," : "");
 		fileConfigJoystick.push_back(btns);
 
 		hats = "hats=";
-		for (int i = 0; i < MAX_HATS; i++) 
-			hats += Constant::intToString(inputs.mapperFrontend.sdlToHat[0][i]) + (i < MAX_HATS - 1 ? "," : "");
+		for (int i = 0; i < MAX_SDL_HAT_VALUES; i++)
+			hats += Constant::intToString(inputs.mapperFrontend.sdlToHat[0][i]) + (i < MAX_SDL_HAT_VALUES - 1 ? "," : "");
 		fileConfigJoystick.push_back(hats);
 
 		axis = "axis=";
-		for (int i = 0; i < MAX_AXIS; i++) 
-			axis += Constant::intToString(inputs.mapperFrontend.sdlToAxis[0][i]) + (i < MAX_AXIS - 1 ? "," : "");
+		for (int i = 0; i < MAX_SDL_AXIS_DIRS; i++)
+			axis += Constant::intToString(inputs.mapperFrontend.sdlToAxis[0][i]) + (i < MAX_SDL_AXIS_DIRS - 1 ? "," : "");
 		fileConfigJoystick.push_back(axis);
 
 		std::string anal = "anal=";
@@ -312,16 +451,38 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
 }
 
 /**
+* ★ OJO: esta carga PISA las asignaciones que haya en memoria, incluidas las que
+* el usuario acabe de hacer en el menu y no haya guardado.
 *
+* No es que haga un clear() al principio -- es mas sutil: los bucles de abajo
+* recorren TODOS los valores de btns=/hats=/axis=, y para cada hueco vacio llaman a
+* setBtnFromSdl/setHatFromSdl/setAxisFromSdl con -1. assignValue() con coreIdx=-1
+* borra la entrada directa Y la inversa (su clearPrevious del paso 3), asi que
+* cualquier mapeo que este en memoria y NO en el fichero desaparece.
+*
+* Y esto se llama al lanzar cada juego (GameMenu::setRomPaths -> <rom>.joy, o
+* config/defaults_<core>.joy, o retropad.ini). Consecuencia practica: si
+* reasignas algo en el menu y entras al juego sin usar "Guardar asignaciones",
+* el cambio se pierde y parece que el remapeo no funciona. Costo dos sesiones de
+* diagnostico averiguarlo; el volcado del final de esta funcion esta para que no
+* vuelva a pasar.
+*
+* La excepcion es 'anlg=' (direcciones analogicas), que solo se aplica si la
+* clave aparece de verdad en el fichero: ver el flag hasAnlg de PadProfile.
+*
+* Que perfil recibe cada puerto se decide DESPUES de parsear el fichero entero, en el
+* bucle del final: primero por nombre del mando conectado, y si no hay coincidencia,
+* por el player<N>_name del fichero.
 */
 bool Joystick::loadButtonsRetro(std::string ruta) {
-    
+
     std::vector<std::string> lineas;
     std::map<std::string, PadProfile> profiles;
+    /* Las lineas de [RETROPAD] ya no se aplican segun se leen: se acumulan aqui y se
+     * resuelven al final, cuando ya se conocen todos los perfiles del fichero. */
+    std::map<int, std::string> asignaciones;
     std::string currentSection = "";
     std::string currentProfileName = "";
-	int foundProfiles = 0;
-	bool foundFirstJoy = false;
 
 	FileList::cargarVector(ruta, lineas);
     if (lineas.empty()) return false;
@@ -347,63 +508,136 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
                     profiles[currentProfileName].hats = Constant::splitInt(line.substr(5), ',');
                 else if (line.find("axis=") == 0)
                     profiles[currentProfileName].axis = Constant::splitInt(line.substr(5), ',');
-                else if (line.find("anal=") == 0)
-                    profiles[currentProfileName].anal = (line.substr(5) == "1");
+                /* 'anal=' de [RETROPAD_LIST] era el viejo axisAsPad, que ya no existe:
+                 * se ignora en silencio (el parser descarta las claves desconocidas).
+                 * OJO: el 'anal=' de [FRONTEND] es OTRA cosa -- alimenta frontAxisAsPad,
+                 * que es navegar los menus con el stick -- y ese SI se sigue leyendo. */
 				else if (line.find("joytype=") == 0)
 					profiles[currentProfileName].joyTypeIdx = Constant::strToTipo<int>(line.substr(8));
+				else if (line.find("anlg=") == 0) {
+					profiles[currentProfileName].anlg = Constant::splitInt(line.substr(5), ',');
+					profiles[currentProfileName].hasAnlg = true;
+				}
             }
         } else if (currentSection == "[RETROPAD]") {
             // Formato: player0_name=Xbox Controller
             std::size_t eqPos = line.find('=');
             if (eqPos != std::string::npos) {
                 std::string key = line.substr(0, eqPos);
-                std::string profileName = line.substr(eqPos + 1);
-                
-                // Incrementamos siempre de antemano. Si entra en el 'if' del primer mando, se sobrescribira.
-				foundProfiles++;
-				int p = foundProfiles;
 
-				if (!foundFirstJoy) {
-					// Comparamos el nombre del perfil con el mando conectado al primer puerto
-					if (profileName.find(inputs.names[0]) != std::string::npos) {
-						p = 0;
-						foundFirstJoy = true;
-						// Compensamos el incremento previo ya que este caso no consume un perfil generico
-						foundProfiles--; 
-					}
-				}
-
-                if (p < MAX_PLAYERS && profiles.count(profileName)) {
-                    PadProfile& pf = profiles[profileName];
-                    for (std::size_t j = 0; j < MAX_BUTTONS && j < pf.btns.size(); j++) inputs.mapperCore.setBtnFromSdl(p, j, pf.btns[j]);
-                    for (std::size_t j = 0; j < MAX_HATS && j < pf.hats.size(); j++)    inputs.mapperCore.setHatFromSdl(p, j, pf.hats[j]);
-                    for (std::size_t j = 0; j < MAX_AXIS && j < pf.axis.size(); j++)    inputs.mapperCore.setAxisFromSdl(p, j, pf.axis[j]);
-                    inputs.axisAsPad[p] = pf.anal;
-					inputs.names[p] = profileName;
-					//First assign the joystick type...
-					inputs.joyTypeIdx[p] = pf.joyTypeIdx;
-					//... and afterwards, make sure is not RETRO_DEVICE_NONE if there are more options
-					//this is needed for dosbox-pure, to assign the default option to a joystick controller
-					getCkeckedJoyTypeIndex(p);
+                /* El numero de jugador sale de la propia clave: "player2_name" -> 2.
+                 *
+                 * Antes salia de un contador y 'key' se extraia sin llegar a usarse, con
+                 * dos consecuencias: (a) un fichero con las lineas desordenadas o con
+                 * algun jugador ausente se cargaba desplazado, porque las lineas "=None"
+                 * tambien consumian posicion; y (b) 'int p = contador' iba DESPUES del
+                 * incremento, asi que el jugador 0 solo se cargaba si el nombre del
+                 * perfil casaba con el del mando conectado al puerto 0 -- con un .joy
+                 * hecho con otro mando, el jugador 0 se quedaba sin cargar y el resto
+                 * subia una posicion. */
+                int p = -1;
+                for (std::size_t c = 0; c < key.size(); c++) {
+                    if (key[c] >= '0' && key[c] <= '9') {
+                        p = key[c] - '0';
+                        break;
+                    }
                 }
+                if (p < 0 || p >= MAX_PLAYERS) continue;   /* clave sin numero util */
+
+                asignaciones[p] = line.substr(eqPos + 1);
             }
         } else if (currentSection == "[HOTKEYS]" || currentSection == "[FRONTEND]") {
             auto& targetMapper = (currentSection == "[HOTKEYS]") ? inputs.mapperHotkeys : inputs.mapperFrontend;
             if (line.find("btns=") == 0) {
                 std::vector<int> v = Constant::splitInt(line.substr(5), ',');
-                for (std::size_t j = 0; j < MAX_BUTTONS && j < v.size(); j++) targetMapper.setBtnFromSdl(0, j, v[j]);
+                for (std::size_t j = 0; j < MAX_SDL_BUTTONS && j < v.size(); j++) targetMapper.setBtnFromSdl(0, j, v[j]);
             } else if (line.find("hats=") == 0) {
                 std::vector<int> v = Constant::splitInt(line.substr(5), ',');
-                for (std::size_t j = 0; j < MAX_HATS && j < v.size(); j++) targetMapper.setHatFromSdl(0, j, v[j]);
+                for (std::size_t j = 0; j < MAX_SDL_HAT_VALUES && j < v.size(); j++) targetMapper.setHatFromSdl(0, j, v[j]);
             } else if (line.find("axis=") == 0) {
                 std::vector<int> v = Constant::splitInt(line.substr(5), ',');
-                for (std::size_t j = 0; j < MAX_AXIS && j < v.size(); j++) targetMapper.setAxisFromSdl(0, j, v[j]);
+                for (std::size_t j = 0; j < MAX_SDL_AXIS_DIRS && j < v.size(); j++) targetMapper.setAxisFromSdl(0, j, v[j]);
             } else if (line.find("anal=") == 0){
 				//Set a proper option for the frontend and don't rely only with the option assigned to the core
 				inputs.frontAxisAsPad = (line.substr(5) == "1");
 			}
         }
     }
+
+	/* --- Que perfil recibe cada puerto -------------------------------------------
+	 * 1) Si hay un perfil cuyo name= es EXACTAMENTE el nombre del mando conectado,
+	 *    ese. Asi conviven en el mismo fichero el perfil del mando de SNES y el del
+	 *    de Xbox: se recupera el que toque segun lo que haya enchufado.
+	 * 2) Si no, lo que diga player<N>_name.
+	 *
+	 * El original comparaba con find() -- subcadena -- y solo para el puerto 0. Aqui
+	 * la comparacion es exacta, para que "Mando" no case con "Mando inalambrico".
+	 *
+	 * Con DOS MANDOS DEL MISMO MODELO el nombre no distingue cual es cual, asi que en
+	 * ese caso se salta el paso 1 y manda el fichero: si no, los dos puertos cargarian
+	 * el mismo perfil. */
+	for (int p = 0; p < MAX_PLAYERS; p++) {
+		std::string elegido = "";
+		const std::string &fisico = inputs.physicalNames[p];
+
+		if (!fisico.empty() && profiles.count(fisico)) {
+			bool nombreUnico = true;
+			for (int q = 0; q < MAX_PLAYERS; q++) {
+				if (q != p && inputs.physicalNames[q] == fisico) { nombreUnico = false; break; }
+			}
+			if (nombreUnico) elegido = fisico;
+		}
+
+		if (elegido.empty()) {
+			std::map<int, std::string>::iterator itAsig = asignaciones.find(p);
+			if (itAsig != asignaciones.end() && profiles.count(itAsig->second)) {
+				elegido = itAsig->second;
+			}
+		}
+
+		if (elegido.empty()) continue;   /* nada que aplicar a este puerto */
+
+		{
+			PadProfile& pf = profiles[elegido];
+			/* El bucle esta acotado por el minimo entre el tamano del array y lo que
+			 * traiga el fichero, asi que un .joy del formato anterior (31/31/31) se
+			 * carga igual: los indices que sobran (boton >= 24, mascara de hat >= 16)
+			 * no los usa nadie. */
+			for (std::size_t j = 0; j < MAX_SDL_BUTTONS && j < pf.btns.size(); j++)    inputs.mapperCore.setBtnFromSdl(p, j, pf.btns[j]);
+			for (std::size_t j = 0; j < MAX_SDL_HAT_VALUES && j < pf.hats.size(); j++) inputs.mapperCore.setHatFromSdl(p, j, pf.hats[j]);
+			for (std::size_t j = 0; j < MAX_SDL_AXIS_DIRS && j < pf.axis.size(); j++)  inputs.mapperCore.setAxisFromSdl(p, j, pf.axis[j]);
+			/* Solo si el fichero traia la clave: si no, se respetan los defaults de
+			 * configMapperRetro en vez de dejarlo todo a -1. */
+			if (pf.hasAnlg) {
+				for (std::size_t j = 0; j < ANALOG_TARGETS && j < pf.anlg.size(); j++)
+					inputs.mapperCore.setAnalogDst(p, j, pf.anlg[j]);
+			}
+			inputs.names[p] = elegido;
+			//First assign the joystick type...
+			inputs.joyTypeIdx[p] = pf.joyTypeIdx;
+			//... and afterwards, make sure is not RETRO_DEVICE_NONE if there are more options
+			//this is needed for dosbox-pure, to assign the default option to a joystick controller
+			getCkeckedJoyTypeIndex(p);
+
+			LOG_DEBUG("loadButtonsRetro: puerto %d ('%s') -> perfil '%s'", p,
+				fisico.empty() ? "sin mando" : fisico.c_str(), elegido.c_str());
+		}
+	}
+
+	/* Volcado del mapeo del core que queda tras cargar: solo jugador 0 y solo lo
+	 * asignado. Es lo que hace falta para distinguir "el .joy no traia esa
+	 * asignacion" de "la trae y el core no la usa" cuando un remapeo no responde. */
+	LOG_DEBUG("loadButtonsRetro: '%s' -> mapeo del core (jugador 0)", ruta.c_str());
+	for (int t = 0; t < MAX_TARGETS; t++){
+		const int b = inputs.mapperCore.getSdlBtn(0, t);
+		const int h = inputs.mapperCore.getSdlHat(0, t);
+		const int a = inputs.mapperCore.getSdlAxis(0, t);
+		if (b > -1 || h > -1 || a > -1)
+			LOG_DEBUG("   destino %d: sdlBtn %d, sdlHat %d, sdlAxis %d", t, b, h, a);
+	}
+	for (int s = 0; s < ANALOG_TARGETS; s++){
+		LOG_DEBUG("   analogico slot %d: fuente %d", s, inputs.mapperCore.getAnalogDst(0, s));
+	}
     return true;
 }
 
@@ -478,7 +712,7 @@ bool Joystick::pollKeys(int gameStatus){
         if (startHoldFrames[i] > 0) {
             if (--startHoldFrames[i] == 0) {
                 int sdlBtn = inputs.mapperCore.getSdlBtn(i, RETRO_DEVICE_ID_JOYPAD_START);
-                if ((unsigned int)sdlBtn < MAX_BUTTONS) {
+                if ((unsigned int)sdlBtn < MAX_SDL_BUTTONS) {
                     inputs.btn_state[i][sdlBtn] = false;
                 }
             }
@@ -497,7 +731,7 @@ bool Joystick::pollKeys(int gameStatus){
 				const unsigned int p = (unsigned int)event.jbutton.which;
 				if (p >= MAX_PLAYERS) break;
                 const unsigned int btn = (unsigned int)event.jbutton.button;
-                if (btn < MAX_BUTTONS) {
+                if (btn < MAX_SDL_BUTTONS) {
                     bool isDown = (event.type == SDL_JOYBUTTONDOWN);
                     inputs.btn_state[p][btn] = isDown;
                     
@@ -530,13 +764,11 @@ bool Joystick::pollKeys(int gameStatus){
 				if (p >= MAX_PLAYERS) break;
 
                 const unsigned int axis = (unsigned int)event.jaxis.axis;
-                /* La rama de "eje como pad" escribe en axis_state[p][axis*2+1],
-                 * asi que el limite util es MAX_AXIS/2, no MAX_AXIS: con axis
-                 * >= 16 se escribia fuera del array. Con mandos reales (<= 6
-                 * ejes) no llegaba a pasar, pero la guarda estaba mal.
-                 * g_analog_state, la otra rama, se indexa con axis a secas y
-                 * tiene MAX_ANALOG_AXIS entradas. */
-                if (axis >= MAX_AXIS / 2 || axis >= MAX_ANALOG_AXIS) break;
+                /* Una sola cota: MAX_ANALOG_AXIS acota a la vez g_analog_state[p][axis]
+                 * y axis_state[p][axis*2+signo], porque axis_state mide justo el doble
+                 * (MAX_SDL_AXIS_DIRS). Antes hacia falta ademas "axis >= MAX_AXIS/2"
+                 * porque axis_state median 31, un numero impar sin relacion con los ejes. */
+                if (axis >= MAX_ANALOG_AXIS) break;
 				bool combinedAxis = false;
 				#ifndef _XBOX
 				//En xbox los gatillos L2 y R2 no son ejes. Se comportan como botones, al menos en la 
@@ -545,19 +777,14 @@ bool Joystick::pollKeys(int gameStatus){
 				combinedAxis = (axis == XBOX_COMBINED_TRIGGER_AXIS); 
 				#endif
 
-				const bool isPadInput = gameStatus == EMU_STARTED ? (inputs.axisAsPad[p] || combinedAxis) : inputs.frontAxisAsPad;
+				/* En los menus manda frontAxisAsPad (navegar con el stick). Dentro del
+				 * juego ya no hay interruptor global: cada direccion con nombre lleva
+				 * su propio destino en mapperCore.analogDst, y se resuelve mas abajo.
+				 * El eje 2 de Windows (gatillos combinados) no es de ningun stick con
+				 * nombre, asi que sigue digitalizandose por la via de siempre. */
+				const bool isPadInput = gameStatus == EMU_STARTED ? combinedAxis : inputs.frontAxisAsPad;
 
-				if (isPadInput) {
-                    // Pre-calculamos los índices para evitar multiplicar por 2 varias veces
-                    const int idxNeg = axis << 1;      // axis * 2
-                    const int idxPos = idxNeg | 1;     // axis * 2 + 1
-                    const Sint16 val = event.jaxis.value;
-                    bool* axisState = inputs.axis_state[p];
-
-                    // Usamos una lógica más plana para el compilador
-                    axisState[idxPos] = (val >  DEADZONE);
-                    axisState[idxNeg] = (val < -DEADZONE);
-                } else {
+                {
 					int32_t raw = event.jaxis.value;
                     // [XBOX360] Clamp SIMETRICO a +-32767 (estandar libretro/RetroArch). El unico
                     // valor problematico es INT16_MIN (-32768): al golpear el stick a fondo
@@ -567,7 +794,67 @@ bool Joystick::pollKeys(int gameStatus){
                     // direccion. El positivo ya llega como maximo a +32767. Rango completo
                     // simetrico (lo que espera pcsxr-360; su "andar vs correr" era del core).
 					if (raw < -32767) raw = -32767;
+
+                    // El valor crudo se guarda SIEMPRE. Antes esto era el 'else' de
+                    // isPadInput, asi que con "Analog pad" activado g_analog_state dejaba de
+                    // actualizarse y se quedaba CONGELADO en el ultimo valor: mover el stick a
+                    // fondo y activarlo dejaba al core viendo deflexion maxima para siempre.
+                    // Ademas, teniendolo siempre al dia, el remapeo analogico puede
+                    // convivir con las direcciones convertidas en boton o cruceta.
                     inputs.g_analog_state[p][axis] = (int16_t)raw;
+
+                    if (isPadInput) {
+                        // Pre-calculamos los índices para evitar multiplicar por 2 varias veces
+                        const int idxNeg = axis << 1;      // axis * 2
+                        const int idxPos = idxNeg | 1;     // axis * 2 + 1
+                        const Sint16 val = event.jaxis.value;
+                        bool* axisState = inputs.axis_state[p];
+                        const bool wasPos = axisState[idxPos];
+                        const bool wasNeg = axisState[idxNeg];
+
+                        // Usamos una lógica más plana para el compilador
+                        axisState[idxPos] = (val >  DEADZONE);
+                        axisState[idxNeg] = (val < -DEADZONE);
+
+                        /* Solo en las TRANSICIONES, para no inundar el log. */
+                        if (axisState[idxPos] != wasPos || axisState[idxNeg] != wasNeg) {
+                            LOG_DEBUG("axis_state: mando %u eje %u valor %d -> virtual %d=%d, %d=%d",
+                                p, axis, (int)val, idxNeg, axisState[idxNeg] ? 1 : 0,
+                                idxPos, axisState[idxPos] ? 1 : 0);
+                        }
+                    }
+
+                    /* Destino de cada una de las dos direcciones de este eje. Si es un
+                     * boton o una posicion de cruceta, se enciende su bit simulado y a
+                     * partir de ahi getCoreBtn/getCoreHat no lo distinguen de una
+                     * pulsacion real. Si es otra direccion de eje no hay nada que hacer
+                     * aqui: lo resuelve la lectura (getAnalogTowards). */
+                    for (int sign = 0; sign < 2; sign++) {
+                        const int virt = (int)(axis << 1) | sign;
+                        const int slot = t_joy_mapper::analogSlotOfVirtual(virt);
+                        int dst;
+                        bool active;
+                        if (slot < 0) continue;   /* eje que no es de un stick con nombre */
+
+                        dst = inputs.mapperCore.getAnalogDst(p, slot);
+                        if (dst < 0) continue;
+
+                        active = sign ? (raw > DEADZONE) : (raw < -DEADZONE);
+
+                        if (dst >= ANALOG_DST_HAT_BASE) {
+                            const int h = dst - ANALOG_DST_HAT_BASE;
+                            if (h >= 0 && h < MAX_SDL_HAT_VALUES && inputs.axisSimHat[p][h] != active) {
+                                inputs.axisSimHat[p][h] = active;
+                                LOG_DEBUG("analogDst: mando %u virtual %d -> hat %d = %d", p, virt, h, active ? 1 : 0);
+                            }
+                        } else if (dst >= ANALOG_DST_BTN_BASE) {
+                            const int b = dst - ANALOG_DST_BTN_BASE;
+                            if (b >= 0 && b < MAX_SDL_BUTTONS && inputs.axisSimBtn[p][b] != active) {
+                                inputs.axisSimBtn[p][b] = active;
+                                LOG_DEBUG("analogDst: mando %u virtual %d -> boton %d = %d", p, virt, b, active ? 1 : 0);
+                            }
+                        }
+                    }
                 }
                 break;
             }
@@ -642,10 +929,10 @@ bool Joystick::pollKeys(int gameStatus){
 					inputs.keyboard_state[retro_key].keyjoydown = false;
 				}
 
-				inputs.last_key_processed->key = retro_key;
-				inputs.last_key_processed->keyMod = retro_mod;
-				inputs.last_key_processed->unicode = character;
-				inputs.last_key_processed->keyjoydown = false;
+				inputs.last_key_processed.key = retro_key;
+				inputs.last_key_processed.keyMod = retro_mod;
+				inputs.last_key_processed.unicode = character;
+				inputs.last_key_processed.keyjoydown = false;
 
 				break;
 			}

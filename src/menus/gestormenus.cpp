@@ -28,6 +28,7 @@ std::string ACTION_ASK_STR[MAX_ASK];
 std::string TipoKeyStr[KEY_JOY_MAX];
 std::string configurablePortButtonsStr[MAXJOYBUTTONS];
 std::string configurablePortHatsStr[MAXJOYBUTTONS];
+std::string configurablePortAnalogsStr[ANALOG_TARGETS];
 std::string HOTKEYS_STR[HK_MAX];
 
 extern bool swapToNewDisc(const std::string& newBinPath);
@@ -508,8 +509,28 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 		configurablePortHatsStr[i] = LanguageManager::instance()->get("menu.controls.retropad" + Constant::TipoToStr(i));
 	}
 
+	/* Direcciones analogicas. Claves nuevas: mientras no esten en los .ini se cae a
+	 * un texto en ingles, en vez de mostrar "[menu.controls.retroanalog0]". */
+	{
+		static const char *analogFallback[ANALOG_TARGETS] = {
+			"L-Analog Y- (Up)",   "L-Analog Y+ (Down)",
+			"L-Analog X- (Left)", "L-Analog X+ (Right)",
+			"R-Analog Y- (Up)",   "R-Analog Y+ (Down)",
+			"R-Analog X- (Left)", "R-Analog X+ (Right)"
+		};
+		for (int i=0; i < ANALOG_TARGETS; i++){
+			configurablePortAnalogsStr[i] = trOrDefault(
+				"menu.controls.retroanalog" + Constant::TipoToStr(i), analogFallback[i]);
+		}
+	}
+
 	for (int i=0; i < KEY_JOY_MAX; i++){
-		TipoKeyStr[i] = LanguageManager::instance()->get("menu.inputs.key" + Constant::TipoToStr(i));
+		const std::string keyName = "menu.inputs.key" + Constant::TipoToStr(i);
+		/* KEY_JOY_ANALOG es nuevo y su clave puede no estar todavia; el resto se
+		 * dejan como estaban para no enmascarar una clave que falte de verdad. */
+		TipoKeyStr[i] = (i == KEY_JOY_ANALOG)
+			? trOrDefault(keyName, "Analog: ")
+			: LanguageManager::instance()->get(keyName);
 	}
 
 	for (int controlId = 0; controlId < MAX_PLAYERS; controlId++){
@@ -1236,7 +1257,11 @@ void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joys
 			menuCoreOptions->opciones.push_back(new OpcionLista(controllerPad.current_desc, gamepads, &controllerPad.current_device_id));
 		}
 	}
-	menu->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.controller.analogpad"), &joystick->inputs.axisAsPad[controlId]));
+	/* Aqui estaba la opcion "Eje analogico como pad" (axisAsPad). Ya no existe: era
+	 * un interruptor global por jugador que solo sabia hacer "todos los ejes como
+	 * cruceta". Ahora cada una de las ocho direcciones de stick lleva su propio
+	 * destino, asi que el mismo efecto se consigue asignando las cuatro del stick
+	 * izquierdo a las cuatro posiciones de la cruceta, y ademas se puede mezclar. */
 }
 
 /**
@@ -1642,11 +1667,11 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId, Joystick *joys
 		const int retroBtnValue = configurablePortHats[retroBtnIdx];
 		const int ico = ico_input_dpad_u + retroBtnIdx <= ico_input_dpad_r ? ico_input_dpad_u + retroBtnIdx : -1;
 
-		if (input->axisAsPad){
-			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS], ico));
-		} else {
-			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_HAT, TipoKeyStr[KEY_JOY_HAT], ico));
-		}
+		/* Solo posiciones de cruceta. Antes esto elegia entre KEY_JOY_AXIS y
+		 * KEY_JOY_HAT segun axisAsPad (con un bug: la condicion era sobre un array,
+		 * o sea siempre cierta). Que el stick mueva la cruceta ya no se expresa
+		 * aqui, sino asignando las direcciones del stick a posiciones de hat. */
+		menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_HAT, TipoKeyStr[KEY_JOY_HAT], ico));
 	}
 
 	//Adding the buttons elements
@@ -1659,10 +1684,21 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId, Joystick *joys
 		const int ico = ico_input_btn_d + sdlBtnIdx <= ico_input_r2 ? ico_input_btn_d + sdlBtnIdx : -1;
 
 		if (btnIdx > -1 || axisIdx == -1){
-			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_BTN, TipoKeyStr[KEY_JOY_BTN], ico));	
+			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_BTN, TipoKeyStr[KEY_JOY_BTN], ico));
 		} else if (axisIdx > -1){
-			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS], ico));	
-		} 		
+			menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId, retroBtnValue, KEY_JOY_AXIS, TipoKeyStr[KEY_JOY_AXIS], ico));
+		}
+	}
+
+	/* Direcciones de los sticks analogicos. A diferencia de las de arriba, el 'btn'
+	 * no es un RETRO_DEVICE_ID_JOYPAD_* sino un JOY_AXIS1_* JOY_AXIS2_*, y el valor
+	 * sale de mapperCore.analogDst. Sin icono: el calculo de 'ico' de los dos
+	 * bucles anteriores asume tramos contiguos del enum y no hay iconos para esto. */
+	for (int analogIdx = 0; analogIdx < ANALOG_TARGETS; analogIdx++){
+		const std::string text = configurablePortAnalogsStr[analogIdx];
+		const int retroBtnValue = configurablePortAnalogs[analogIdx];
+		menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId,
+			retroBtnValue, KEY_JOY_ANALOG, TipoKeyStr[KEY_JOY_ANALOG], ico_analog_u + (analogIdx % 4)));
 	}
 }
 
@@ -1861,29 +1897,44 @@ void GestorMenus::updateAxis(const SDL_Event &event){
 	if (opt->tipo == OPC_KEY) {
 		OpcionKey* k = static_cast<OpcionKey*>(opt);
 		if (k && k->joyInputs) {
+			/* Se loguean TODOS los eventos de eje, no solo los que pasan la deadzone:
+			 * si un stick no responde al reasignar, lo primero que hay que saber es si
+			 * sus eventos llegan siquiera y con que numero de eje. */
+			LOG_DEBUG("updateAxis: mando %d, eje %d, valor %d (deadzone %d), destino btn %d",
+				(int)event.jaxis.which, sdlAxis, sdlAxisValue, DEADZONE, k->btn);
+
 			if (abs(sdlAxisValue) > DEADZONE) {
 				// 0 si es negativo (Izquierda/Arriba), 1 si es positivo (Derecha/Abajo)
 				int isPositive = (sdlAxisValue > 0);
 				int buttonIdx = (sdlAxis * 2) + isPositive;
-				LOG_DEBUG("Eje: %d, Valor: %d -> Boton Virtual: %d", sdlAxis, sdlAxisValue, buttonIdx);
-				k->tipoKey = KEY_JOY_AXIS;
+				/* Se decide por el DESTINO de la opcion, no por tipoKey, que se sobrescribe
+				 * aqui mismo y no sirve para saber de que clase es. */
+				const int analogSlot = t_joy_mapper::analogSlot(k->btn);
+				LOG_DEBUG("updateAxis: -> direccion fisica %d, slot de la opcion %d", buttonIdx, analogSlot);
+
+				if (analogSlot < 0) {
+					/* Las cuatro de la cruceta solo admiten posiciones de hat, y los botones
+					 * del core solo botones fisicos. Que un eje dispare algo ya no se asigna
+					 * aqui: se hace desde la entrada del stick, diciendo en que se convierte. */
+					LOG_DEBUG("updateAxis: la opcion (btn %d) no admite ejes, se ignora", k->btn);
+					return;
+				}
+
+				/* Mover OTRO eje sobre una entrada de stick significa "esta direccion se
+				 * comporta como aquella". De ahi salen el eje invertido y el intercambio
+				 * entre sticks, sin codigo especial. */
+				k->tipoKey = KEY_JOY_ANALOG;
 				k->description = TipoKeyStr[k->tipoKey];
-				resetKeyElement(buttonIdx, k->tipoKey);
-				//k->joyInputs->setAxis(buttonIdx, k->btn);
-				k->joyMapper->setAxisFromSdl(k->gamepadId, buttonIdx, k->btn);
-				//k->idx = buttonIdx;
+				k->joyMapper->setAnalogDst(k->gamepadId, analogSlot, buttonIdx);
+
+				LOG_DEBUG("updateAxis: slot %d -> destino %d", analogSlot,
+					k->joyMapper->getAnalogDst(k->gamepadId, analogSlot));
+
 				k->changeAsked = false;
 				k->lastTimeAsked = 0;
 				status = NORMAL;
 				k->joyInputs->clearAll();
-				//La posicion de la opcion 0 es el elemento que anyadimos en addControlerOptions
-				//en el orden de las inserciones en el vector.
-				if (menuActual->opciones.size() > 0 && menuActual->opciones[0]->tipo == OPC_BOOLEANA) {	
-					//Ponemos a true la opcion "Eje analagico como pad"
-					OpcionBool* b = (OpcionBool*)menuActual->opciones[0];
-					*(b->valor) = true;
-				}
-			} 
+			}
 			//else {
 				// CENTRO: Opcionalmente manejar el reposo aqui si es necesario
 			//}
@@ -1919,17 +1970,53 @@ void GestorMenus::updateButton(const SDL_Event &event, TipoKey tipoKey){
 			return;
 
 		if (k && k->joyInputs) {
+			/* Entrada de stick: pulsar un boton o una direccion de la cruceta dice
+			 * "esta direccion del stick se convierte en eso". Al cruzar la deadzone se
+			 * encendera su bit simulado y a partir de ahi es indistinguible de una
+			 * pulsacion real, asi que funciona con cualquier core. Se decide por el
+			 * DESTINO, no por tipoKey, que se sobrescribe justo debajo. */
+			const int analogSlot = t_joy_mapper::analogSlot(k->btn);
+			if (analogSlot >= 0) {
+				int dst;
+				if (tipoKey == KEY_JOY_HAT) {
+					/* Solo direcciones puras. Una diagonal (3, 6, 9 o 12) daria un
+					 * mapeo mudo: getCoreHat busca la posicion que tenga asignada la
+					 * direccion del core, que siempre es 1, 2, 4 u 8. Se ignora y se
+					 * sigue esperando, en vez de guardar algo que no hace nada. */
+					if (sdlbtn <= 0 || (sdlbtn & (sdlbtn - 1)) != 0) {
+						LOG_DEBUG("updateButton: hat %d es diagonal, se ignora", sdlbtn);
+						return;
+					}
+					dst = ANALOG_DST_HAT_BASE + sdlbtn;
+				} else {
+					dst = ANALOG_DST_BTN_BASE + sdlbtn;
+				}
+				k->tipoKey = KEY_JOY_ANALOG;
+				k->description = TipoKeyStr[k->tipoKey];
+				k->joyMapper->setAnalogDst(k->gamepadId, analogSlot, dst);
+				LOG_DEBUG("updateButton: slot %d -> destino %d", analogSlot, dst);
+				k->joyInputs->clearAll();
+				k->changeAsked = false;
+				k->lastTimeAsked = 0;
+				status = NORMAL;
+				return;
+			}
+
 			k->description = TipoKeyStr[tipoKey];
 			k->tipoKey = tipoKey;
 
 			if (k->tipoKey == KEY_JOY_BTN){
 				k->joyMapper->setBtnFromSdl(k->gamepadId, sdlbtn, k->btn);
 			} else if (k->tipoKey == KEY_JOY_HAT || k->tipoKey == KEY_JOY_AXIS){
-				/* Aqui habia un 'sdlHatDir' enmascarado que no se usaba. Y no
-				 * habria cambiado nada: la mascara UP|DOWN|LEFT|RIGHT vale 15 y
-				 * los valores de hat de SDL ya caben en esos 4 bits. Se guarda
-				 * el valor tal cual, diagonales incluidas (3, 6, 9 y 12), que
-				 * ahora SDL_HAT_TO_XBOX si sabe etiquetar. */
+				/* Solo direcciones puras, igual que en la rama de los sticks. Una
+				 * diagonal (3, 6, 9 o 12) se guardaba tal cual y producia un mapeo
+				 * MUDO: getCoreHat lee hats_state en el indice que tenga asignado el
+				 * destino, y ese indice solo puede ser 1, 2, 4 u 8. Se ignora y se
+				 * sigue esperando, en vez de guardar algo que no hace nada. */
+				if (sdlbtn <= 0 || (sdlbtn & (sdlbtn - 1)) != 0) {
+					LOG_DEBUG("updateButton: hat %d es diagonal, se ignora", sdlbtn);
+					return;
+				}
 				k->joyMapper->setHatFromSdl(k->gamepadId, sdlbtn, k->btn);
 			}
 			
@@ -2150,9 +2237,52 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 		int sdlIdBtn = -1;
 		int sdlIdAxis = -1;
 
-		if (opt->tipoKey == KEY_JOY_BTN){
+		/* Las entradas de stick salen de otra tabla y con el destino codificado en un
+		 * solo entero, asi que se resuelven aparte. Se mira el destino de la opcion y
+		 * no tipoKey, por coherencia con updateAxis/updateButton. */
+		const int analogSlot = t_joy_mapper::analogSlot(opt->btn);
+		if (analogSlot >= 0) {
+			const int dst = opt->joyMapper->getAnalogDst(opt->gamepadId, analogSlot);
+			if (dst >= ANALOG_DST_HAT_BASE) {
+				const int h = dst - ANALOG_DST_HAT_BASE;
+				std::string keyStr = Constant::intToString(h);
+				if (isGamepadXbox && h < SDL_HAT_TO_XBOX_SIZE && !SDL_HAT_TO_XBOX[h].empty())
+					keyStr = SDL_HAT_TO_XBOX[h];
+				str = TipoKeyStr[KEY_JOY_HAT] + keyStr;
+			} else if (dst >= ANALOG_DST_BTN_BASE) {
+				const int b = dst - ANALOG_DST_BTN_BASE;
+				std::string keyStr = Constant::intToString(b);
+				if (isGamepadXbox && b < SDL_BTN_TO_XBOX_SIZE && SDL_BTN_TO_XBOX[b][0] != '\0')
+					keyStr = std::string(SDL_BTN_TO_XBOX[b]);
+				str = TipoKeyStr[KEY_JOY_BTN] + keyStr;
+			} else if (dst >= 0) {
+				std::string axisStr = Constant::intToString(dst);
+				if (isGamepadXbox && dst < SDL_JOY_TO_XBOX_SIZE && !SDL_JOY_TO_XBOX[dst].empty())
+					axisStr = SDL_JOY_TO_XBOX[dst];
+				str = TipoKeyStr[KEY_JOY_ANALOG] + axisStr;
+			} else {
+				str = "-";
+			}
+
+			// Resetear estado de edicion si estaba activo
+			if (opt->changeAsked && dst > -1) {
+				opt->changeAsked = false;
+				opt->lastTimeAsked = 0;
+				status = NORMAL;
+			}
+		}
+		else if (opt->tipoKey == KEY_JOY_BTN){
 			sdlIdBtn = opt->joyMapper->getSdlBtn(opt->gamepadId, opt->btn);
-		} else if (opt->tipoKey == KEY_JOY_HAT || opt->tipoKey == KEY_JOY_AXIS){
+		} else if (opt->tipoKey == KEY_JOY_HAT){
+			/* Solo el hat. Antes se leia tambien getSdlAxis y se mostraban los dos,
+			 * porque las cuatro direcciones se podian asignar a cruceta Y a eje. Un
+			 * .joy anterior a este cambio sigue trayendo ese 'axis=' (el viejo stick
+			 * como cruceta), que ahora es codigo muerto -- nada escribe axis_state
+			 * para esas direcciones dentro del juego -- pero se seguia pintando. */
+			sdlIdBtn = opt->joyMapper->getSdlHat(opt->gamepadId, opt->btn);
+		} else if (opt->tipoKey == KEY_JOY_AXIS){
+			/* Se conserva para los gatillos: L2/R2 son botones del core alimentados
+			 * por el eje 2 combinado de Windows, y esa via sigue viva. */
 			sdlIdBtn = opt->joyMapper->getSdlHat(opt->gamepadId, opt->btn);
 			sdlIdAxis = opt->joyMapper->getSdlAxis(opt->gamepadId, opt->btn);
 		}
@@ -2187,7 +2317,9 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 			status = NORMAL;
 		}
 		
-		if (sdlIdBtn < 0 && sdlIdAxis < 0){
+		/* analogSlot >= 0 ya ha dejado 'str' puesto arriba (incluido su propio "-"),
+		 * y para esas opciones sdlIdBtn/sdlIdAxis se quedan a -1 a proposito. */
+		if (analogSlot < 0 && sdlIdBtn < 0 && sdlIdAxis < 0){
 			str = "-";
 		}
 	}

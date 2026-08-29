@@ -1219,6 +1219,84 @@ unsigned long PEOPS_GPUdiagDisplayOrigin(void)
          (unsigned long)(PSXDisplay.DisplayPosition.y & 0xffff);
 }
 
+/* Foto de la geometria de display + area de dibujo, para separar "el juego no
+ * dibuja" de "dibuja donde no se ve" de "el display esta apagado".
+ *
+ * La LEE EL HILO PRINCIPAL, y esos campos los escribe el CONSUMIDOR.  Eso es
+ * exactamente lo que invalidaba la sonda de solape que hubo aqui, asi que la
+ * condicion de validez es explicita: solo tiene sentido llamarla con el ring
+ * DRENADO (o vacio), que es cuando el consumidor esta quiescente.  El volcado
+ * [SCANOUT] la acompana de `free`, que dice cuantos de los 60 vblanks tenian
+ * el ring vacio: si free==60 la foto es buena, si no, no te la creas. */
+unsigned long PEOPS_GPUdiagDisplayRect(unsigned long *mode,
+                                       unsigned long *draw,
+                                       int *disabled)
+{
+ if(mode)
+  *mode = ((unsigned long)(PSXDisplay.DisplayMode.x & 0xffff) << 16) |
+           (unsigned long)(PSXDisplay.DisplayMode.y & 0xffff);
+ if(draw)
+  *draw = ((unsigned long)(PSXDisplay.DrawOffset.x & 0xffff) << 16) |
+           (unsigned long)(PSXDisplay.DrawOffset.y & 0xffff);
+ if(disabled)
+  *disabled = PSXDisplay.Disabled ? 1 : 0;
+ return ((unsigned long)(PSXDisplay.DisplayPosition.x & 0xffff) << 16) |
+         (unsigned long)(PSXDisplay.DisplayPosition.y & 0xffff);
+}
+
+/* Cuenta pixeles NO NEGROS dentro del rectangulo que se esta mostrando, y su
+ * suma, para separar de una vez "el rasterizador no escribe donde toca" de
+ * "escribe bien y el fallo esta despues".
+ *
+ * Es LA medida que decide entre rasterizador y presentacion cuando dos
+ * renderers reciben los mismos comandos GP0 y solo uno saca imagen: si aqui
+ * sale 0 con Unai y no-0 con Peops, los pixeles no estan llegando a la VRAM
+ * visible y el fallo es de coordenadas/recorte en el rasterizador.  Si los dos
+ * dan cuentas parecidas, la VRAM esta bien y hay que mirar mas adelante.
+ *
+ * Submuestrea 2x2 (~61k lecturas en 512x480) y corre UNA vez por segundo desde
+ * el volcado [SCANOUT], asi que el coste es irrelevante; ademas todo esto vive
+ * bajo PCSXR_DIAG_INSTRUMENTATION en el call-site.
+ *
+ * Ignora el bit 15 (mascara/STP): no se ve, y contarlo daria "no negro" a
+ * pixeles negros con la mascara puesta.
+ *
+ * Misma condicion de validez que PEOPS_GPUdiagDisplayRect: solo con el ring
+ * drenado.  Lee psxVuw, que escribe el consumidor. */
+void PEOPS_GPUdiagVramStats(unsigned int *nonzero, unsigned int *total)
+{
+ int x, y, w, h, x0, y0;
+ unsigned int nz = 0, n = 0;
+
+ if(nonzero) *nonzero = 0;
+ if(total)   *total   = 0;
+ if(!psxVuw) return;
+
+ x0 = PSXDisplay.DisplayPosition.x;
+ y0 = PSXDisplay.DisplayPosition.y;
+ w  = PSXDisplay.DisplayMode.x;
+ h  = PSXDisplay.DisplayMode.y;
+ if(w <= 0 || h <= 0) return;
+ if(x0 < 0) x0 = 0;
+ if(y0 < 0) y0 = 0;
+ if(x0 + w > 1024) w = 1024 - x0;
+ if(y0 + h > 512)  h = 512  - y0;      /* 512x480 entrelazado cabe justo */
+ if(w <= 0 || h <= 0) return;
+
+ for(y = 0; y < h; y += 2)
+  {
+   const unsigned short *row = psxVuw + (unsigned)(y0 + y) * 1024 + x0;
+   for(x = 0; x < w; x += 2)
+    {
+     n++;
+     if(row[x] & 0x7fff) nz++;
+    }
+  }
+
+ if(nonzero) *nonzero = nz;
+ if(total)   *total   = n;
+}
+
 /* Mitad de GEOMETRIA.  La ejecuta el CONSUMIDOR cuando el ring llega a la
  * posicion en la que el juego escribio el registro. */
 void PEOPS_GPUsetDisplayState(unsigned long gdata)
@@ -1960,6 +2038,41 @@ ENDVRAM:
 #else
        primFunc[gpuCommand]((unsigned char *)gpuDataM);
 #endif
+
+       /* "Se ha dibujado algo" para los renderers ALTERNATIVOS.
+        *
+        * updateLace() solo PRESENTA si bDoVSyncUpdate esta a TRUE (ver el
+        * `if(bDoVSyncUpdate ...) updateDisplay();` mas arriba, con su
+        * comentario original "some primitives drawn?").  En PEOPS lo pone
+        * prim.c en 24 sitios, uno por familia de primitiva.  Pero gpu_unai y
+        * gpu_duck traen su PROPIA tabla de primitivas y NO conocen esa
+        * variable -- cero referencias en los dos drivers --, asi que con
+        * cualquiera de ellos la pantalla solo se refrescaba de rebote: al
+        * cambiar de buffer (GP1 0x05) o al terminar una subida CPU->VRAM
+        * (FinishedVRAMWrite).
+        *
+        * Sintoma medido en Dead or Alive con Unai: emulador al 98% de
+        * velocidad, 60 vblanks/s y 60 listas de display/s, pero `disp_alt=0`
+        * -- el juego NO voltea buffer nunca -- asi que solo se presentaba en
+        * las contadas subidas 0xA0: imagen a trompicones que se percibe como
+        * "va lentisimo".  Y el replay del final de round si iba a 60 porque
+        * ahi si hay trafico que lo dispara de rebote.
+        *
+        * Regla: los comandos que ESCRIBEN en VRAM.  0x02 (fill), 0x20-0x7F
+        * (poligonos, lineas, sprites) y 0x80-0x9F (copia VRAM->VRAM).  El
+        * 0xA0 ya lo cubre FinishedVRAMWrite, el 0xC0 solo lee, y 0xE1-0xE6
+        * son estado.
+        *
+        * Solo para los alternativos: con PEOPS lo pone prim.c con criterios
+        * mas finos (mira recorte), y no queremos pisarselo.
+        *
+        * Hilos: lo escribe el CONSUMIDOR y lo lee el hilo emulador en
+        * updateLace, que es EXACTAMENTE la relacion que ya existia con
+        * prim.c; la barrera del drain la cubre.  No hay peligro nuevo. */
+       if((duck_gpu_enabled || unai_gpu_enabled) &&
+          (gpuCommand == 0x02 ||
+           (gpuCommand >= 0x20 && gpuCommand <= 0x9F)))
+        bDoVSyncUpdate = TRUE;
 #if defined(_XBOX) && PCSXR_DIAG_INSTRUMENTATION
        /* Los CONTADORES se quedan siempre: el watchdog de libpcsxcore/gpu.c
         * mira g_xbox_soft_primfunc_calls para saber si el consumidor avanza. */

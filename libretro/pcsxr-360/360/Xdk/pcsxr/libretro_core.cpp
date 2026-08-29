@@ -2872,12 +2872,43 @@ void retro_run(void) {
                 /* free     = vblanks con el ring ya vacio (nada que esperar).
                  * disp_alt = cambios de origen de display; 30 de 60 = el juego
                  *            hace flip cada dos vblanks (doble bufer, 30 Hz).
+                 *            0 = NO hace flip: o es de un solo bufer, o su
+                 *            maquina de estados esta parada.
                  * El `partial`/`full` que habia aqui era invalido y se ha
-                 * quitado: ver el comentario de gpuUpdateLace en gpu.c. */
+                 * quitado: ver el comentario de gpuUpdateLace en gpu.c.
+                 *
+                 * [DISP] responde a las tres preguntas que disp_alt=0 deja
+                 * abiertas cuando la pantalla sale negra con el juego vivo:
+                 * esta el display APAGADO (GP1 0x03), es el modo 0x0
+                 * (resolucion sin fijar), o dibuja con un offset que lo saca
+                 * del rectangulo visible.  Solo es de fiar con free=60: esos
+                 * campos los escribe el consumidor (ver PEOPS_GPUdiagDisplayRect). */
                 pcsxr_log(RETRO_LOG_DEBUG,
                     "[SCANOUT] free=%u disp_alt=%u (de 60)\n",
                     (unsigned)diag_scanout_free,
                     (unsigned)diag_disp_alt);
+                {
+                    unsigned long dmode = 0, ddraw = 0, dpos;
+                    int           doff  = 0;
+                    unsigned int  vnz = 0, vtot = 0;
+                    dpos = PEOPS_GPUdiagDisplayRect(&dmode, &ddraw, &doff);
+                    PEOPS_GPUdiagVramStats(&vnz, &vtot);
+                    /* OJO con drawoff: sale de PSXDisplay.DrawOffset, que
+                     * escribe cmdDrawOffset() en prim.c, o sea el rasterizador
+                     * de PEOPS.  Con el renderer Unai ese handler no corre y el
+                     * campo se queda en 0,0 SIEMPRE.  No sirve para comparar
+                     * renderers; solo vale dentro de una misma eleccion.
+                     * vram = pixeles no negros / muestreados del rectangulo
+                     * visible (ver PEOPS_GPUdiagVramStats): 0 = el rasterizador
+                     * no esta dejando nada donde se mira. */
+                    pcsxr_log(RETRO_LOG_DEBUG,
+                        "[DISP] pos=%u,%u mode=%ux%u drawoff=%d,%d disabled=%d"
+                        " vram=%u/%u\n",
+                        (unsigned)(dpos >> 16), (unsigned)(dpos & 0xffff),
+                        (unsigned)(dmode >> 16), (unsigned)(dmode & 0xffff),
+                        (int)(short)(ddraw >> 16), (int)(short)(ddraw & 0xffff),
+                        doff, vnz, vtot);
+                }
                 diag_scanout_free = 0;
                 diag_disp_alt     = 0;
 

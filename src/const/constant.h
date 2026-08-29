@@ -356,6 +356,10 @@ typedef enum {
 		ico_input_stick_r3,
 		ico_input_l2,
 		ico_input_r2,
+		ico_analog_u,
+		ico_analog_d,
+		ico_analog_l,
+		ico_analog_r,
 		max_icons
 }enumIco;
 
@@ -983,6 +987,27 @@ class Constant{
 				resultado.erase(resultado.length()-1);
 			}
 
+			return resultado;
+		}
+
+		static std::string separarCamelCase(const std::string& texto) {
+			std::string resultado = "";
+    
+			for (std::size_t i = 0; i < texto.length(); ++i) {
+				// Comprobamos condiciones a partir de la segunda letra
+				if (i > 0) {
+					char actual = texto[i];
+					char anterior = texto[i - 1];
+            
+					// Anyade espacio solo si la actual es mayuscula, 
+					// la anterior era minuscula y ninguna es un espacio.
+					if (::isupper(actual) && ::islower(anterior) && anterior != ' ' && actual != ' ') {
+						resultado += ' ';
+					}
+				}
+				resultado += texto[i];
+			}
+    
 			return resultado;
 		}
 

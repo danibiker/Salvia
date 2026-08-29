@@ -979,7 +979,7 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 			// 2. Obtener el indice del boton una sola vez
 			int sdlBtn = inputs->mapperCore.getSdlBtn(port, RETRO_DEVICE_ID_JOYPAD_START);
 			// 3. Validacion de rango rapida
-			if ((unsigned int)sdlBtn < MAX_BUTTONS) { 
+			if ((unsigned int)sdlBtn < MAX_SDL_BUTTONS) {
 				// Forzamos el estado true mientras haya frames de retencion
 				inputs->btn_state[port][sdlBtn] = true;
 			}
@@ -1024,34 +1024,49 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 		}
 	} 
 	else if (device == RETRO_DEVICE_ANALOG && !gameMenu->isOnscreenKeybEnabled()) {
-		int sdl_axis = -1;
+		/* Ya no hay numeros de eje cableados aqui. Cada direccion analogica del core
+		 * es un slot de mapperCore.analogDst, reasignable desde el menu y guardado
+		 * en el .joy; la diferencia entre plataformas vive en los defaults
+		 * (analogSlotAxis, beans/structures.h).
+		 *
+		 * El valor del eje se compone restando sus dos direcciones, lo que da gratis
+		 * el eje invertido, el cruzado entre sticks y el asignado a un boton.
+		 * Convencion libretro: X+ es derecha e Y+ es ABAJO. */
+		int slotNeg = -1, slotPos = -1;
 
 		if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT) {
-			sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 0 : 1;
-			//LOG_INFO("Analog Left: %u %u", id, sdl_axis);
+			if (id == RETRO_DEVICE_ID_ANALOG_X) {
+				slotNeg = t_joy_mapper::analogSlot(JOY_AXIS1_LEFT);
+				slotPos = t_joy_mapper::analogSlot(JOY_AXIS1_RIGHT);
+			} else {
+				slotNeg = t_joy_mapper::analogSlot(JOY_AXIS1_UP);
+				slotPos = t_joy_mapper::analogSlot(JOY_AXIS1_DOWN);
+			}
 		} else if (index == RETRO_DEVICE_INDEX_ANALOG_RIGHT) {
-			#ifdef _XBOX
-			sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 2 : 3;
-			#else
-			sdl_axis = (id == RETRO_DEVICE_ID_ANALOG_X) ? 4 : 3;
-			#endif
-			//LOG_INFO("Analog Right: %u %u", id, sdl_axis);
-		} else if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON) {
-			//LOG_INFO("Analog button: %u ", index);
-			// Gatillos: el core pide id = RETRO_DEVICE_ID_JOYPAD_L2 / R2
-			#ifdef _XBOX
-			if (id == RETRO_DEVICE_ID_JOYPAD_L2)
-				sdl_axis = AXIS_LT;
-			else if (id == RETRO_DEVICE_ID_JOYPAD_R2)
-				sdl_axis = AXIS_RT;
-			#endif
-		} 
-		//else {
-		//	LOG_INFO("Indice analogico: %u", index);
-		//}
+			if (id == RETRO_DEVICE_ID_ANALOG_X) {
+				slotNeg = t_joy_mapper::analogSlot(JOY_AXIS2_LEFT);
+				slotPos = t_joy_mapper::analogSlot(JOY_AXIS2_RIGHT);
+			} else {
+				slotNeg = t_joy_mapper::analogSlot(JOY_AXIS2_UP);
+				slotPos = t_joy_mapper::analogSlot(JOY_AXIS2_DOWN);
+			}
+		}
+		/* RETRO_DEVICE_INDEX_ANALOG_BUTTON (gatillos analogicos) no se atiende: cae al
+		 * return 0 del final.
+		 *
+		 * Aqui habia una rama para la 360 que leia g_analog_state[port][AXIS_LT/AXIS_RT],
+		 * dos slots reservados que NO escribe nadie, asi que devolvia siempre 0 -- pero
+		 * PARECIA que hacia algo. En la 360 los gatillos son botones digitales y llegan
+		 * por la via JOYPAD; en Windows comparten el eje 2 y se digitalizan en pollKeys.
+		 * Si algun dia se quiere el valor analogico del gatillo, hay que EMPEZAR por
+		 * producirlo en pollKeys. */
 
-		if (sdl_axis != -1) {
-			return gameMenu->joystick->inputs.g_analog_state[port][sdl_axis];
+		if (slotNeg != -1 && slotPos != -1) {
+			/* El mapeo va de direccion fisica a destino, asi que aqui se pregunta
+			 * "quien apunta a esta direccion del core": analogSlotAxis convierte el
+			 * slot con nombre en el indice virtual que el core espera recibir. */
+			return gameMenu->joystick->inputs.getCoreAnalog(port,
+				analogSlotAxis[slotNeg], analogSlotAxis[slotPos]);
 		}
 	} else if (device == RETRO_DEVICE_MOUSE && !gameMenu->isOnscreenKeybEnabled()) {
 		switch (id) {

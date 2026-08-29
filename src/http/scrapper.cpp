@@ -147,7 +147,7 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 		if (!onlyCount && !dir.dirExists(resultado.sinopsisdir.c_str())) dir.createDirRecursive(resultado.sinopsisdir.c_str());
 	}
 
-	if (emulatorCfg.menu_directory_recursive){
+	if (emulatorCfg.menu_directory_recursive || emulatorCfg.menu_show_directories){
 		dir.listFilesRecursive(romsdir.c_str(), files, extFilter, true, false);
 	} else {
 		dir.listFiles(romsdir.c_str(), files, extFilter, true, false);
@@ -157,16 +157,19 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 
 	for (std::size_t i = 0; i < files.size(); i++) {
 		FileProps* file = files.at(i).get();
-		LOG_DEBUG("Obteniendo file %s\n", dir.getFileName(file->filename).c_str());
+		LOG_DEBUG("Obteniendo fichero %s\n", dir.getFileName(file->filename).c_str());
 		resultado.clear();
 		resultado.filenameNoExt = dir.getFileNameNoExt(file->filename);
 
 		const std::string filename = Constant::getFileSep() + resultado.filenameNoExt ;
 		// Validación unificada de tipos de scraping
-		if (scrapperConfig.scrapArtType == SCRAP_NO_SCREENSHOT && archivoExiste(resultado.snapdir, filename + ".png", resultado.saveToBin)) continue;
-		if (scrapperConfig.scrapArtType == SCRAP_NO_BOX        && archivoExiste(resultado.boxdir, filename + ".png", resultado.saveToBin))  continue;
-		if (scrapperConfig.scrapArtType == SCRAP_NO_TITLE      && archivoExiste(resultado.titledir, filename + ".png", resultado.saveToBin)) continue;
-		if (scrapperConfig.scrapArtType == SCRAP_NO_METADATA   && archivoExiste(resultado.sinopsisdir, filename + ".txt", resultado.saveToBin, true)) continue;
+		if ((scrapperConfig.scrapArtType == SCRAP_NO_SCREENSHOT && archivoExiste(resultado.snapdir, filename + ".png", resultado.saveToBin))
+			|| (scrapperConfig.scrapArtType == SCRAP_NO_BOX        && archivoExiste(resultado.boxdir, filename + ".png", resultado.saveToBin))
+			|| (scrapperConfig.scrapArtType == SCRAP_NO_TITLE      && archivoExiste(resultado.titledir, filename + ".png", resultado.saveToBin))
+			|| (scrapperConfig.scrapArtType == SCRAP_NO_METADATA   && archivoExiste(resultado.sinopsisdir, filename + ".txt", resultado.saveToBin, true))){
+				LOG_DEBUG("Ya existe %s\n", dir.getFileName(file->filename).c_str());
+				continue;
+		}
 
 		if (onlyCount){
 			counterFiles++;
@@ -186,8 +189,12 @@ int Scrapper::scrapSystem(ConfigEmu& emulatorCfg, ScrapperConfig& scrapperConfig
 		peticion.regionPreferida = scrapperConfig.regionPreferida;
 		peticion.lenguaPreferida = scrapperConfig.lenguaPreferida;
 			
-		// Escapamos el nombre
+		// Limpiamos caracteres invalidos o textos entre parentesis, corchetes...
 		peticion.romnameUnscaped = Constant::limpiarNombreJuego(resultado.filenameNoExt);
+		// Si el nombre de los ficheros viene en PascalCase o camelCase, la separamos con espacios 
+		// para que tenga mayor probabilidad de encontrarse en screenscraper.fr
+		Constant::separarCamelCase(peticion.romnameUnscaped);
+		// Escapamos el nombre del juego al formato URL aceptado por curlib
 		peticion.romname = downloader.escape(peticion.romnameUnscaped);
 		
 		if (scrapperConfig.origin == SC_SCREENCSRAPER){

@@ -192,6 +192,19 @@ extern volatile int      s_gpu_plugin_call;
 	/* Top-8 comandos GP0 por tiempo de rasterizado (ver gpu.c).  Volcarlo por
 	 * ventana: su disparador original (chunk > 50 ms) no salta en F1'99. */
 	void gpuDumpCmdHist(void);
+	/* Geometria de display + area de dibujo, para el volcado [DISP].  Vive en
+	 * el plugin (plugins/xbox_soft/gpu.c) y se compila SIEMPRE, igual que
+	 * PEOPS_GPUdiagDisplayOrigin: asi el core y el plugin no tienen que
+	 * coincidir en el valor del flag para que enlace.  Se declara aqui, y no
+	 * solo en externals.h, porque quien la llama es libretro_core.cpp, que no
+	 * incluye las cabeceras del plugin.  Solo es de fiar con el ring drenado
+	 * (ver el comentario de la funcion). */
+	/* Cuenta de pixeles no negros en el rectangulo visible: decide entre
+	 * "el rasterizador no escribe donde toca" y "escribe bien". */
+	void PEOPS_GPUdiagVramStats(unsigned int *nonzero, unsigned int *total);
+	unsigned long PEOPS_GPUdiagDisplayRect(unsigned long *mode,
+	                                       unsigned long *draw,
+	                                       int *disabled);
 #endif
 
     void gpuWriteData(u32 data);

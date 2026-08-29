@@ -8,9 +8,9 @@
 #include <io/hotkeys.h>
 #include <beans/structures.h>
 
-//El comportamiento de un hat está estandarizado por el propio API: todos los hats 
-//se tratan como interruptores de posición de 8 direcciones (más la posición centrada), 
-//independientemente de cómo sea físicamente el dispositivo.
+//El comportamiento de un hat estï¿½ estandarizado por el propio API: todos los hats 
+//se tratan como interruptores de posiciï¿½n de 8 direcciones (mï¿½s la posiciï¿½n centrada), 
+//independientemente de cï¿½mo sea fï¿½sicamente el dispositivo.
 #define MAX_HAT_POSITIONS 9
 
 static int FRONTEND_BTN_VAL[] = {JOY_BUTTON_UP, JOY_BUTTON_DOWN, JOY_BUTTON_LEFT, JOY_BUTTON_RIGHT, JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_Y,
@@ -46,13 +46,37 @@ static const int configurableSdlHats[] = {
 	RETRO_DEVICE_ID_JOYPAD_LEFT  // --> SDL_HAT_LEFT  = 0x08
 };
 
+/* Indexado por direccion fisica (eje*2 + signo). Las cuatro primeras eran el
+ * "stick izquierdo como cruceta"; ahora eso se expresa desde la entrada del stick
+ * (analogDst), asi que quedan sin asignar.
+ *
+ * Lo unico que sobrevive es el eje 2 de Windows, que son los gatillos combinados:
+ * no pertenece a ningun stick con nombre y se sigue digitalizando por esta via.
+ * En la 360 ese mismo eje 2 es la X del stick DERECHO y los gatillos son botones,
+ * asi que alli no hay nada que mapear aqui -- dejarlo apuntando a R2/L2 era dato
+ * muerto y ademas contradecia al slot 5 de analogSlotAxis. */
+#ifdef _XBOX
 static const int configurableSdlAxis[] = {
-	RETRO_DEVICE_ID_JOYPAD_LEFT,   
-	RETRO_DEVICE_ID_JOYPAD_RIGHT,
-	RETRO_DEVICE_ID_JOYPAD_UP,
-	RETRO_DEVICE_ID_JOYPAD_DOWN,
-	RETRO_DEVICE_ID_JOYPAD_R2,
-	RETRO_DEVICE_ID_JOYPAD_L2
+	-1, -1, -1, -1,                 /* 0..3: stick izquierdo         */
+	-1, -1                          /* 4,5 : eje 2 = stick derecho X */
+};
+#else
+static const int configurableSdlAxis[] = {
+	-1,                             /* 0: stick izq X- */
+	-1,                             /* 1: stick izq X+ */
+	-1,                             /* 2: stick izq Y- */
+	-1,                             /* 3: stick izq Y+ */
+	RETRO_DEVICE_ID_JOYPAD_R2,      /* 4: eje de gatillos, lado negativo */
+	RETRO_DEVICE_ID_JOYPAD_L2       /* 5: eje de gatillos, lado positivo */
+};
+#endif
+
+/* Las ocho direcciones de stick que salen en el menu, en su orden. El valor es el
+ * id del enum joystickButtons; el slot se saca con t_joy_mapper::analogSlot(), y
+ * la direccion fisica a la que corresponde con analogSlotAxis (structures.h). */
+static const int configurablePortAnalogs[ANALOG_TARGETS] = {
+	JOY_AXIS1_UP,    JOY_AXIS1_DOWN,  JOY_AXIS1_LEFT,  JOY_AXIS1_RIGHT,
+	JOY_AXIS2_UP,    JOY_AXIS2_DOWN,  JOY_AXIS2_LEFT,  JOY_AXIS2_RIGHT
 };
 
 static const int configurableFrontButtons[] = {
@@ -79,7 +103,7 @@ extern t_rom_paths romPaths;
 
 struct t_controller_port {
 	int current_device_id;			// ID seleccionado actualmente (ej. RETRO_DEVICE_JOYPAD)
-	std::string current_desc;       // Descripción amigable (ej. "SuperScope")
+	std::string current_desc;       // Descripciï¿½n amigable (ej. "SuperScope")
 	// Lista de opciones que el core nos dio para este puerto
 	std::vector<std::pair<unsigned, std::string>> available_types; 
 	t_controller_port(){
