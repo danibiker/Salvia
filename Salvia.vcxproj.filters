@@ -45,6 +45,9 @@
     <Filter Include="Source Files\soft_filters">
       <UniqueIdentifier>{48d57c08-2d2f-4508-a161-18badc8ddf08}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\audio">
+      <UniqueIdentifier>{6a31f4d2-36de-4d09-86ab-7be0e5ea2e6a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\io\filelist.h">
@@ -185,12 +188,12 @@
     <ClCompile Include="src\menus\menuassetloader.cpp">
       <Filter>Source Files\frontend\menus</Filter>
     </ClCompile>
+    <ClCompile Include="libs\libretro-common\formats\mp3\rmp3.c">
+      <Filter>Source Files\audio</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\const\constant.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\audio\audiobuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\io\fileio.h">
@@ -304,9 +307,6 @@
     <ClInclude Include="src\libretro\libretro.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\audio\audiorate.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\http\achievements.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -369,6 +369,15 @@
     </ClInclude>
     <ClInclude Include="src\so\soutils.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio\audiorate.h">
+      <Filter>Source Files\audio</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio\audiobuffer.h">
+      <Filter>Source Files\audio</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio\musicplayer.h">
+      <Filter>Source Files\audio</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

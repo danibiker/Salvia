@@ -1099,6 +1099,17 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 	return 0;
 }
 
+/* Unico sitio donde se decide si toca musica de menu.  Lo consultan el hilo de
+ * audio (sdl_audio_callback, para elegir fuente) y el principal (runGameLoop,
+ * para rellenar el anillo); teniendolo aqui no pueden discrepar.
+ *
+ * Suena en todo estado MENOS con la partida en marcha y el overlay dibujado
+ * sobre ella.  En particular SI suena en EMU_MENU aunque haya ROM cargada: ese
+ * es el menu de pausa. */
+static inline bool musicWantedFor(int emuStatus) {
+	return emuStatus != EMU_STARTED && emuStatus != EMU_MENU_OVERLAY;
+}
+
 //Audio Callbacks for Libretro
 // Callback para una sola muestra (menos eficiente, pero requerido)
 /* Acumulador de la ruta de muestra suelta (ver retro_audio_sample).  A fichero y
@@ -1186,6 +1197,32 @@ void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
         }
     }
 #endif
+
+    /* Eleccion de fuente.  Musica y core nunca suenan a la vez, asi que no hace
+     * falta mezclar: basta con elegir de donde se lee.
+     *
+     * Se decide por ESTADO y no por romLoaded: el menu de pausa se abre como
+     * EMU_MENU con el juego cargado (gamemenu.cpp, HK_VIEW_MENU) y ahi SI
+     * queremos musica.  Los unicos dos estados sin musica son la partida en
+     * marcha y el overlay que se dibuja encima de ella.
+     *
+     * Leer getEmuStatus() desde el hilo de audio es leer un int: es benigno, y a
+     * cambio la conmutacion es inmediata en vez de llevar el frame de retraso
+     * que tendria si conmutase el hilo principal.
+     *
+     * readInto solo lee del anillo; el decodificado ocurre en el hilo principal
+     * (MusicPlayer::update). */
+    /* La condicion NO es solo "toca musica": tambien se sigue leyendo mientras
+     * la rampa no haya llegado abajo.  Si se conmutase en cuanto el estado deja
+     * de pedirla, el fade-out no se oiria nunca -- la fuente cambiaria de golpe
+     * antes de que el volumen bajase, que es justo el corte que el fundido
+     * viene a evitar.  El core, al arrancar, todavia no tiene nada que sonar en
+     * esos 250 ms, asi que no se pierde audio suyo. */
+    if (g_music && g_music->isActive() &&
+        (musicWantedFor(gameMenu->getEmuStatus()) || !g_music->isSilent())) {
+        g_music->readInto(samples, count);
+        return;
+    }
 
     gameMenu->g_audioBuffer.Read(samples, count);
 }
@@ -1327,6 +1364,14 @@ void closeGame(){
 		retro_unload_game();
 		retro_deinit();
 		gameMenu->romLoaded = false;
+
+		/* De vuelta al menu: reanudar el dispositivo, que el bloque de audio de
+		 * arriba dejo pausado.  No hay que recargar nada -- la musica sigue en
+		 * memoria y continua donde se quedo; de elegir fuente ya se encarga
+		 * musicWantedFor(estado) en el callback. */
+		if (audio_opened && g_music && g_music->isActive()) {
+			SDL_PauseAudio(0);
+		}
 
 		/* Descartar los descriptores capturados via SET_MEMORY_MAPS:
 		 * sus punteros apuntan a RAM interna del core que acaba de
@@ -1608,6 +1653,16 @@ void processFrontendEvents(){
 
 void closeResources() {
 	closeGame();
+
+	/* Musica: parar el dispositivo ANTES de destruir el reproductor, o el
+	 * callback podria entrar a leer un anillo que ya no existe.  El destructor
+	 * de MusicPlayer espera a su hilo de IO_THREAD antes de soltar nada. */
+	if (audio_opened) SDL_PauseAudio(1);
+	if (g_music) {
+		delete g_music;
+		g_music = NULL;
+	}
+
 	Scrapper::ShutdownScrapper();
     if (conversion_buffer != NULL) {
         free(conversion_buffer);
@@ -1655,6 +1710,16 @@ static void __declspec(noinline) runGameLoop() {
 	__try {
 		while (gameMenu->running) {
 			processFrontendEvents();
+
+			/* Musica de menu: aqui SOLO se abre o cierra el grifo.  El
+			 * decodificado corre en su propio hilo (IO_THREAD), porque cuando
+			 * vivia aqui la musica se cortaba en cuanto el menu tardaba en
+			 * listar ficheros -- el escaneo bloquea este hilo y el anillo se
+			 * vaciaba.  Mismo predicado que usa el callback para elegir fuente,
+			 * asi no pueden discrepar. */
+			if (g_music) {
+				g_music->setWanted(musicWantedFor(gameMenu->getEmuStatus()));
+			}
 
 			switch (gameMenu->getEmuStatus()){
 				case EMU_STARTED:
@@ -1722,7 +1787,24 @@ int main(int argc, char *argv[]) {
 	 * gameMenu->g_audioBuffer.  Se deja PAUSADO hasta que haya juego, que es el
 	 * mismo ciclo de siempre (closeGame pausa, initGameAudio reanuda). */
 	init_sdl_audio(AUDIO_DEVICE_RATE);
-	if (audio_opened) SDL_PauseAudio(1);
+
+	/* Musica de menu.  Si carga, el dispositivo se queda SONANDO (antes se
+	 * pausaba hasta que hubiera juego); si no hay fichero o no decodifica, se
+	 * pausa como siempre y el frontend arranca igual: quedarse sin musica no
+	 * puede impedir usar el programa. */
+	if (audio_opened) {
+		g_music = new MusicPlayer();
+		/* Volumen guardado ANTES de cargar: load() calcula el destino de la
+		 * rampa a partir de el, asi que ponerlo despues dejaria la primera
+		 * reproduccion al 100% hasta el primer cambio de estado. */
+		g_music->setVolume(cfgLoader->configMain[cfg::musicVolume].valueInt * 10);
+		const std::string musicPath = Constant::getAppDir() + Constant::getFileSep() + MUSIC_MENU_FILE;
+		if (g_music->load(musicPath, g_audio_device_rate)) {
+			SDL_PauseAudio(0);
+		} else {
+			SDL_PauseAudio(1);
+		}
+	}
 
 	listMenu = new ListMenu(gameMenu->overlay->w, gameMenu->overlay->h);
 	listMenu->setLayout(LAYBOXES, gameMenu->overlay->w, gameMenu->overlay->h);

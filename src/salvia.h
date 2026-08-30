@@ -11,6 +11,7 @@
 #include <SDL_thread.h>
 
 #include <menus/gameMenu.h>
+#include <audio/musicplayer.h>
 #include <const/menuconst.h>
 #include <image/icons.h>
 #include <uiobjects/listmenu.h>
@@ -98,6 +99,17 @@ volatile bool audio_closing = false;
  * driver de Windows abre a otra tasa el resampler usa esta y todo sigue
  * cuadrando en vez de salir desafinado. */
 static int g_audio_device_rate = AUDIO_DEVICE_RATE;
+
+/* Musica de menu.  Suena mientras no hay ROM cargada y se detiene (liberando la
+ * memoria del fichero) al entrar en un juego.  Es posible gracias a que el
+ * dispositivo esta permanentemente abierto: antes habria que haberlo abierto y
+ * cerrado al entrar y salir de cada juego. */
+#define MUSIC_MENU_FILE "assets\\music\\menu.mp3"
+
+/* Puntero y no objeto global a proposito: AudioBuffer crea un evento del kernel
+ * en su constructor, y como global eso correria ANTES de main.  Se reserva en
+ * main, como gameMenu y listMenu. */
+MusicPlayer* g_music = NULL;
 t_rom_paths romPaths;
 // CRC32 de la ROM cargada (0 si desconocido). Para resolver el .cht por hash via .rdb.
 uint32_t g_currentRomCrc = 0;
@@ -619,6 +631,14 @@ void drawLoadingProgressBar(SDL_Surface*& screen, float progress) {
  * SDL_OpenAudio/SDL_CloseAudio de libSDLx360 en la 360; ahora el desajuste se
  * resuelve remuestreando, sin tocar el dispositivo. */
 void initGameAudio(double sampleRate){
+	/* La musica NO se libera aqui.  Se libero mientras el criterio era "solo
+	 * suena sin ROM cargada", pero ahora suena tambien en el menu de pausa
+	 * (EMU_MENU con juego cargado), asi que tiene que sobrevivir a la carga: si
+	 * se liberase, cada vez que abrieras el menu habria que releer el fichero
+	 * entero de disco, y en la 360 eso es un tiron perceptible cada vez.
+	 *
+	 * Quien decide si suena o no es musicWantedFor(estado); durante la partida
+	 * no se decodifica ni se lee nada, solo se queda el fichero en RAM. */
 	if (!audio_opened){
 		/* Red de seguridad: si por lo que sea el arranque no pudo abrirlo,
 		 * intentarlo aqui -- pero SIEMPRE a la tasa del dispositivo, nunca a la

@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include <menus/gestormenus.h>
+#include <audio/musicplayer.h>   /* g_music: volumen de la musica en caliente */
 #include <const/constant.h>
 #include <const/menuconst.h>
 #include <gfx/gfx_utils.h>
@@ -444,6 +445,25 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	OpcionLista *listaBkg = new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef());
 	listaBkg->callback = &GestorMenus::selectBackground;
 	menuVideo->opciones.push_back(listaBkg);
+
+	/* Volumen de la musica de menu, en pasos de 10%.  Va aqui, junto al fondo,
+	 * porque este submenu es donde viven los ajustes de presentacion DEL
+	 * FRONTEND (fondo, resolucion, shaders) y la musica de menu es uno mas.
+	 *
+	 * Se guarda el indice 0..10 (ver cfg::musicVolume); el callback lo convierte
+	 * a porcentaje y lo aplica en vivo, asi se oye el cambio al moverlo. */
+	{
+		std::vector<std::string> volSteps;
+		for (int v = 0; v <= 100; v += 10){
+			volSteps.push_back(Constant::intToString(v) + "%");
+		}
+		OpcionLista *listaVol = new OpcionLista(
+			trOrDefault("menu.options.musicvolume", "Menu music volume"),
+			volSteps,
+			&refConfig->configMain[cfg::musicVolume].getIntRef());
+		listaVol->callback = &GestorMenus::selectMusicVolume;
+		menuVideo->opciones.push_back(listaVol);
+	}
 
 	//Resolucion de pantalla (se aplica al REINICIAR). Entrada 0 = "Auto"
 	//(Xbox: XGetVideoMode del dashboard, capado a 720p; Windows: default 1280x720).
@@ -978,6 +998,21 @@ std::string GestorMenus::selectBackground(void* inst, void *index, void *values)
 	if (!index) return "";
 	const int idx = *static_cast<int*>(index);
 	HLSLBackground_setActive((idx >= BG_HLSL && idx < BG_NONE) ? (idx - BG_HLSL + 1) : 0);
+	return "";
+}
+
+std::string GestorMenus::selectMusicVolume(void* inst, void *index, void *values) {
+	/* Cambio en vivo: el indice va en pasos de 10%.  La rampa de MusicPlayer se
+	 * encarga de llegar al nivel nuevo sin escalon, asi que se oye el ajuste
+	 * mientras se mueve la opcion.
+	 *
+	 * g_music puede ser NULL (sin dispositivo de audio, o sin fichero de
+	 * musica): el valor se queda guardado igual y se aplicara si algun dia hay
+	 * reproductor. */
+	if (!index) return "";
+	if (g_music) {
+		g_music->setVolume((*static_cast<int*>(index)) * 10);
+	}
 	return "";
 }
 

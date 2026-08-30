@@ -129,6 +129,14 @@ void CfgLoader::initMainConfig(){
 										"\n#SCALE FIXED 4X       5"
 										"\n#SCALE FIXED 5X       6";
 
+	/* Volumen de la musica de menu.  Se guarda el INDICE en pasos de 10%, igual
+	 * que scaleIntMode o animBG guardan indices: es lo que espera el widget
+	 * OpcionLista del menu.  Por defecto 7 = 70%, para que la musica quede por
+	 * debajo de los efectos del frontend y no moleste. */
+	configMain[cfg::musicVolume] = cfg::t_cfg_props("musicVolume", (int)7);
+	configMain[cfg::musicVolume].desc = "#Menu music volume, in 10% steps"
+										"\n#0 = mute ... 10 = 100%";
+
 	configMain[cfg::animBG] = cfg::t_cfg_props("animBG", (int)BG_TILES);
 	configMain[cfg::animBG].desc = "#Set the frontend background" 
 								"\n#Moving tiles        0"
