@@ -29,7 +29,10 @@ struct PadProfile {
 	 * antiguo (que no la trae) aplicaria el vector vacio y machacaria los defaults
 	 * que dejo configMapperRetro, igual que hacen hoy anal= y joytype=. */
 	bool hasAnlg;
-	PadProfile(): joyTypeIdx(0), hasAnlg(false) {}
+	/* Idem para 'dz=' (deadzone del mando), tambien posterior al formato. */
+	int  dz;
+	bool hasDz;
+	PadProfile(): joyTypeIdx(0), hasAnlg(false), dz(DEADZONE_DEFAULT_IDX), hasDz(false) {}
 };
 
 Joystick::Joystick(){
@@ -297,6 +300,10 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
         for (int i = 0; i < MAX_SDL_AXIS_DIRS; i++)  signature += Constant::intToString(inputs.mapperCore.sdlToAxis[p][i]) + ",";
         signature += "|";
         for (int i = 0; i < ANALOG_TARGETS; i++) signature += Constant::intToString(inputs.mapperCore.analogDst[p][i]) + ",";
+        /* La deadzone entra en la firma: dos mandos con el mismo mapeo pero
+         * distinto umbral NO pueden compartir perfil, o al reusar el bloque uno
+         * de los dos se quedaria con el umbral del otro. */
+        signature += "|dz" + Constant::intToString(inputs.mapperCore.deadzoneIdx[p]);
 
 		if (!hotkeysAndFrontend)
 			/* Era 'signature += inputs.joyTypeIdx[p]', o sea operator+=(char): metia
@@ -362,6 +369,12 @@ std::string Joystick::saveButtonsConfig(std::string ruta, bool hotkeysAndFronten
             for (int i = 0; i < ANALOG_TARGETS; i++)
                 anlg += Constant::intToString(inputs.mapperCore.analogDst[p][i]) + (i < ANALOG_TARGETS - 1 ? "," : "");
             fileConfigJoystick.push_back(anlg);
+
+            /* Umbral del stick para pasar a boton/cruceta, como INDICE en
+             * deadzoneValues[]. Igual que anlg=, es preferencia del mando y no
+             * del core, y los ficheros antiguos no la traen: al cargarlos se
+             * queda el default (ver 'hasDz' en loadButtonsRetro). */
+            fileConfigJoystick.push_back("dz=" + Constant::intToString(inputs.mapperCore.deadzoneIdx[p]));
 
 			//El tipo de dispositivo si depende del core, asi que solo va en los .joy.
 			//"anal=" (el viejo axisAsPad) ya no se escribe: ahora cada direccion de
@@ -518,6 +531,10 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
 					profiles[currentProfileName].anlg = Constant::splitInt(line.substr(5), ',');
 					profiles[currentProfileName].hasAnlg = true;
 				}
+				else if (line.find("dz=") == 0) {
+					profiles[currentProfileName].dz = Constant::strToTipo<int>(line.substr(3));
+					profiles[currentProfileName].hasDz = true;
+				}
             }
         } else if (currentSection == "[RETROPAD]") {
             // Formato: player0_name=Xbox Controller
@@ -611,6 +628,11 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
 			if (pf.hasAnlg) {
 				for (std::size_t j = 0; j < ANALOG_TARGETS && j < pf.anlg.size(); j++)
 					inputs.mapperCore.setAnalogDst(p, j, pf.anlg[j]);
+			}
+			/* Idem con dz=: sin la clave se queda el default (10000), que es el
+			 * valor que tenia la constante global. */
+			if (pf.hasDz) {
+				inputs.mapperCore.setDeadzoneIdx(p, pf.dz);
 			}
 			inputs.names[p] = elegido;
 			//First assign the joystick type...
@@ -803,6 +825,11 @@ bool Joystick::pollKeys(int gameStatus){
                     // convivir con las direcciones convertidas en boton o cruceta.
                     inputs.g_analog_state[p][axis] = (int16_t)raw;
 
+                    /* Umbral de ESTE mando (menu de asignacion -> clave dz= del
+                     * .joy). Se lee una vez por evento: getDeadzone acota el
+                     * indice y no queremos repetirlo en cada direccion. */
+                    const int deadzone = inputs.mapperCore.getDeadzone(p);
+
                     if (isPadInput) {
                         // Pre-calculamos los índices para evitar multiplicar por 2 varias veces
                         const int idxNeg = axis << 1;      // axis * 2
@@ -813,8 +840,8 @@ bool Joystick::pollKeys(int gameStatus){
                         const bool wasNeg = axisState[idxNeg];
 
                         // Usamos una lógica más plana para el compilador
-                        axisState[idxPos] = (val >  DEADZONE);
-                        axisState[idxNeg] = (val < -DEADZONE);
+                        axisState[idxPos] = (val >  deadzone);
+                        axisState[idxNeg] = (val < -deadzone);
 
                         /* Solo en las TRANSICIONES, para no inundar el log. */
                         if (axisState[idxPos] != wasPos || axisState[idxNeg] != wasNeg) {
@@ -839,7 +866,7 @@ bool Joystick::pollKeys(int gameStatus){
                         dst = inputs.mapperCore.getAnalogDst(p, slot);
                         if (dst < 0) continue;
 
-                        active = sign ? (raw > DEADZONE) : (raw < -DEADZONE);
+                        active = sign ? (raw > deadzone) : (raw < -deadzone);
 
                         if (dst >= ANALOG_DST_HAT_BASE) {
                             const int h = dst - ANALOG_DST_HAT_BASE;

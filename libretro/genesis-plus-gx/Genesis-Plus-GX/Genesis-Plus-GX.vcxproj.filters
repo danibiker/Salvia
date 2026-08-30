@@ -376,5 +376,11 @@
     <ClInclude Include="..\core\vdp_render.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\libretro\libretro_core_options.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\libretro\libretro_core_options_intl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

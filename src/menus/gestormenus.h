@@ -586,6 +586,11 @@ public:
 		*l->indice = 0;
 	}
 
+	/* Coloca el cursor en newPos y recoloca la ventana visible en un solo
+	 * paso.  Lo comparten navegar/nextPage/prevPage, que solo se diferencian
+	 * en el destino que calculan.  Lleva dentro el guard de menuActual/status
+	 * que antes vivia en navegar(). */
+	void moveTo(int newPos);
 	void nextPos();
     void prevPos();
 	void nextPage();

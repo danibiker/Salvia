@@ -862,42 +862,97 @@ void ListMenu::resetIndexPos(){
     this->lastSel = -1;
 }
 
-void ListMenu::nextPos(){
-    if (this->curPos < this->listSize - 1){
-        this->curPos++;
-        int posCursorInScreen = this->curPos - this->iniPos;
+/**
+* Coloca el cursor en newPos y recoloca la ventana visible de una vez.
+*
+* La ventana es [iniPos, endPos) y su tamanyo es min(maxLines, listSize), que
+* es justo lo que fijan resetIndexPos() y resizeMarginTop().  Se recalcula aqui
+* en vez de arrastrarlo con endPos - iniPos para no propagar una ventana
+* inconsistente si alguien toca esos campos por fuera.
+*
+* Antes el desplazamiento se hacia de uno en uno, asi que saltar de pagina
+* costaba maxLines-1 pasadas; ahora el destino se calcula directo y el ajuste
+* de la ventana es O(1) tanto para un paso como para una pagina entera.
+*/
+void ListMenu::moveTo(int newPos){
+    int window;
+    int maxIniPos;
+    int oldPos = this->curPos;
 
-        if (posCursorInScreen > this->maxLines - 1){
-            this->iniPos++;
-            this->endPos++;
-        }
+    if (this->listSize <= 0){
+        return;
+    }
+
+    /* Destino fuera de rango: lo acotamos.  Quien quiera dar la vuelta (ver
+     * nextPos/prevPos) ya llega aqui con el indice envuelto. */
+    if (newPos < 0){
+        newPos = 0;
+    } else if (newPos > this->listSize - 1){
+        newPos = this->listSize - 1;
+    }
+
+    this->curPos = newPos;
+
+    window = this->listSize < this->maxLines ? this->listSize : this->maxLines;
+    /* maxLines vale 0 hasta la primera resetIndexPos(); con listSize ya
+     * poblado eso dejaria la ventana a 0 y descuadraria iniPos. */
+    if (window < 1){
+        window = 1;
+    }
+
+    /* Solo se mueve la ventana si el cursor se ha salido de ella, que es el
+     * mismo criterio que aplicaba el bucle paso a paso. */
+    if (this->curPos < this->iniPos){
+        this->iniPos = this->curPos;
+    } else if (this->curPos > this->iniPos + window - 1){
+        this->iniPos = this->curPos - window + 1;
+    }
+
+    /* Y nunca dejamos hueco al final de la lista. */
+    maxIniPos = this->listSize - window;
+    if (this->iniPos > maxIniPos){
+        this->iniPos = maxIniPos;
+    }
+    if (this->iniPos < 0){
+        this->iniPos = 0;
+    }
+
+    this->endPos = this->iniPos + window;
+
+    /* Solo si el cursor se ha movido de verdad, igual que antes: estos dos
+     * campos son el estado del texto deslizante del elemento seleccionado, y
+     * tocarlos cuando no se ha movido nada reiniciaria la animacion en cada
+     * pulsacion contra el tope (lista de un solo elemento, o nextPage ya en el
+     * final). */
+    if (this->curPos != oldPos){
         this->pixelShift = 0;
         this->lastSel = -1;
     }
+}
+
+/* nextPos/prevPos DAN LA VUELTA: del ultimo elemento se pasa al primero y del
+ * primero al ultimo.  nextPage/prevPage no, se quedan en el extremo, que es lo
+ * que hacian antes al toparse con el clamp de nextPos/prevPos. */
+void ListMenu::nextPos(){
+    if (this->listSize <= 0){
+        return;
+    }
+    moveTo(this->curPos >= this->listSize - 1 ? 0 : this->curPos + 1);
 }
 
 void ListMenu::prevPos(){
-    if (this->curPos > 0){
-        this->curPos--;
-        if (this->curPos < this->iniPos && this->curPos >= 0){
-            this->iniPos--;
-            this->endPos--;
-        }
-        this->pixelShift = 0;
-        this->lastSel = -1;
+    if (this->listSize <= 0){
+        return;
     }
+    moveTo(this->curPos <= 0 ? this->listSize - 1 : this->curPos - 1);
 }
 
 void ListMenu::nextPage(){
-    for (int i=0; i < this->maxLines -1; i++){
-        nextPos();
-    }
+    moveTo(this->curPos + (this->maxLines - 1));
 }
 
 void ListMenu::prevPage(){
-    for (int i=0; i < this->maxLines -1; i++){
-        prevPos();
-    }
+    moveTo(this->curPos - (this->maxLines - 1));
 }
 
 void ListMenu::resizeMarginTop(int addedMargin, int screenH){

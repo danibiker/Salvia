@@ -33,6 +33,17 @@ extern "C" {
 
 /*
  ********************************
+ * Core Definitions
+ ********************************
+*/
+
+#if defined(M68K_OVERCLOCK_SHIFT) || defined(Z80_OVERCLOCK_SHIFT)
+#define HAVE_OVERCLOCK
+#define HAVE_EQ
+#endif
+
+/*
+ ********************************
  * Core Option Definitions
  ********************************
 */

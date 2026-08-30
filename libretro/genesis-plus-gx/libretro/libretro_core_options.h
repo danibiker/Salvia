@@ -9,6 +9,17 @@
 
 #ifndef HAVE_NO_LANGEXTRA
 #include "libretro_core_options_intl.h"
+#else
+/*
+ ********************************
+ * Core Definitions
+ ********************************
+*/
+
+#if defined(M68K_OVERCLOCK_SHIFT) || defined(Z80_OVERCLOCK_SHIFT)
+#define HAVE_OVERCLOCK
+#define HAVE_EQ
+#endif
 #endif
 
 /*
@@ -32,17 +43,6 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-/*
- ********************************
- * Core Definitions
- ********************************
-*/
-
-#if defined(M68K_OVERCLOCK_SHIFT) || defined(Z80_OVERCLOCK_SHIFT)
-#define HAVE_OVERCLOCK
-#define HAVE_EQ
 #endif
 
 /*

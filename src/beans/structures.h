@@ -479,6 +479,27 @@ static const int analogSlotAxis[ANALOG_TARGETS] = {
 #endif
 
 
+/* --------------------------------------------------------------------------
+ * DEADZONE POR MANDO
+ *
+ * Umbral a partir del cual una direccion de stick cuenta como pulsada al
+ * convertirla en boton o en cruceta (ver analogDst arriba y el manejador de
+ * SDL_JOYAXISMOTION en io/joystick.cpp).  Antes era la constante global
+ * DEADZONE = 10000 de const/constant.h, igual para todos los mandos.
+ *
+ * Se guarda el INDICE en esta tabla, no el valor: es lo que espera el widget
+ * OpcionLista del menu y lo que hace la clave 'dz=' del .joy estable si algun
+ * dia se anaden valores intermedios... siempre que se anadan AL FINAL.  Si se
+ * inserta uno en medio, los .joy ya guardados apuntaran a otro valor.
+ * -------------------------------------------------------------------------- */
+#define DEADZONE_STEPS 7
+static const int deadzoneValues[DEADZONE_STEPS] = {
+	1000, 2000, 5000, 10000, 15000, 20000, 25000
+};
+/* Indice del 2000: es el default y lo que se
+ * aplica a los .joy antiguos, que no traen la clave. */
+#define DEADZONE_DEFAULT_IDX 1
+
 struct t_joy_mapper{
 	/* SDL -> destino: indexadas por lo que entrega el mando */
 	int sdlToHat[MAX_PLAYERS][MAX_SDL_HAT_VALUES];
@@ -493,6 +514,10 @@ struct t_joy_mapper{
 	/* Direccion fisica del stick -> en que se convierte. Ver ANALOG_DST_BTN_BASE. */
 	int analogDst[MAX_PLAYERS][ANALOG_TARGETS];
 
+	/* Indice en deadzoneValues[], uno por jugador. Lo apunta directamente el
+	 * OpcionLista del menu de asignacion, de ahi que sea int y no un enum. */
+	int deadzoneIdx[MAX_PLAYERS];
+
 	t_joy_mapper(){
 		clear(sdlToHat, -1);
 		clear(sdlToAxis, -1);
@@ -503,6 +528,26 @@ struct t_joy_mapper{
 		clear(btnToSdl, -1);
 
 		clear(analogDst, -1);
+
+		for (int i = 0; i < MAX_PLAYERS; i++){
+			deadzoneIdx[i] = DEADZONE_DEFAULT_IDX;
+		}
+	}
+
+	/* Umbral en unidades de eje para este jugador. Acota el indice en vez de
+	 * fiarse de el: llega de un fichero editable a mano. */
+	int getDeadzone(int player){
+		int idx;
+		if (player < 0 || player >= MAX_PLAYERS) return deadzoneValues[DEADZONE_DEFAULT_IDX];
+		idx = deadzoneIdx[player];
+		if (idx < 0 || idx >= DEADZONE_STEPS) idx = DEADZONE_DEFAULT_IDX;
+		return deadzoneValues[idx];
+	}
+
+	void setDeadzoneIdx(int player, int idx){
+		if (player < 0 || player >= MAX_PLAYERS) return;
+		if (idx < 0 || idx >= DEADZONE_STEPS) idx = DEADZONE_DEFAULT_IDX;
+		deadzoneIdx[player] = idx;
 	}
 
 	/* JOY_AXIS1_RIGHT..JOY_AXIS2_DOWN -> slot 0..7. Cualquier otro id -> -1.
