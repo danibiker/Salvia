@@ -21,7 +21,7 @@ I had grown weary of juggling a multitude of different emulators, each requiring
 * **F.A.Q and Walktrough** viewer from gamefaqs.gamespot.com
 * **Fast forward**
 * **Navigate zipped files** and load contained games directly (they need to have a symbol @ as the first letter to be opened. Search "htgdb-gamepacks" in archive.org and you will thank me XD)
-* **Disc control** to change disks on PSX, SegaCD, PC Engine CD and multi-disk Commodore 64 / Atari games
+* **Disc control** to change disks on PSX, SegaCD, PC Engine CD and multi-disk Commodore 64 / Amiga / Atari 
 * **Bios Boot** (To organize PSX memory card savegames)
 * **Buttons mapper** for each Joystick
 * Ingame **Hotkeys**
@@ -34,11 +34,9 @@ I had grown weary of juggling a multitude of different emulators, each requiring
 ## Emulators
 Salvia provides the following emulators from the latests releases:
 
-* Megadrive/Genesis/Sega CD
+* Megadrive/Genesis/Sega CD/Master System/Game Gear/SG-1000
   - genesis-plus-gx
   - picodrive
-* Master System/Game Gear/SG-1000
-  - genesis-plus-gx
 * Sega 32X
   - picodrive
 * Super Nintendo/Super Famicom
@@ -76,6 +74,9 @@ Salvia provides the following emulators from the latests releases:
   - frodo
 * Sharp X68000
   - px68k
+* Amiga 500/1200/CD32
+  - puae2021
+  - puae
 * Atari 8-bit computers (400/800/XL/XE)
   - atari800
 * Atari 5200
@@ -86,6 +87,8 @@ Salvia provides the following emulators from the latests releases:
   - tyrquake
 * Doom
   - prboom
+* Outrun
+  - Cannonball
 
 ## Configuration
 
@@ -118,6 +121,20 @@ system/
 ├── disksys.rom
 ├── gba_bios.bin
 ├── goldstar.bin
+├── kick33180.A500
+├── kick34005.A500
+├── kick34005.CDTV
+├── kick37175.A500
+├── kick37350.A600
+├── kick39106.A1200
+├── kick39106.A4000
+├── kick40060.CD32
+├── kick40060.CD32.ext
+├── kick40063.A600
+├── kick40068.A1200
+├── kick40068.A4000
+├── WHDLoad.prefs
+├── WHDLoad.prefs_backup
 ├── lynxboot.img
 ├── NstDatabase.xml
 ├── panafz1-kanji.bin
@@ -207,14 +224,18 @@ You are now ready to place your backup games into their respective directories:
 Usb0:\Roms
 ├── 32x\                 (Sega 32x --> 32x zip)
 ├── 3do\                 (3DO --> iso bin cue chd)
+├── amiga500\            (Amiga 500 -> adf adz dms fdi raw ipf hdf hdz lha slave info cue ccd nrg mds iso chd uae m3u zip 7z)
+├── amiga1200\           (Amiga 1200 -> adf adz dms fdi raw ipf hdf hdz lha slave info cue ccd nrg mds iso chd uae m3u zip 7z)
+├── amigacd32\           (Amiga CD32 -> adf adz dms fdi raw ipf hdf hdz lha slave info cue ccd nrg mds iso chd uae m3u zip 7z)
 ├── atari800\            (Atari 8-bit --> xfd atr dcm cas bin a52 zip atx car rom com xex m3u)
 ├── atari5200\           (Atari 5200 --> xfd atr dcm cas bin a52 zip atx car rom com xex m3u)
 ├── atarilynx\           (Atari Lynx --> lnx lyx bll o zip)
 ├── c64\                 (Commodore 64 --> d64 t64 x64 p00 lnx lyx zip prg m3u)
+├── cannonball\          (Cannonball --> game)
 ├── dos\                 (MS-DOS --> zip dosz exe com bat iso chd cue ins img ima vhd jrc m3u m3u8 conf)
 ├── fbneo\               (Arcade FBNeo --> zip 7z cue ccd chd)
 │   ├── neocd\           (NeoGeo CD --> cue ccd chd)
-│   ├── megadrive\       (FBNeo Megadrive core)
+│   └── megadrive\       (FBNeo Megadrive core)
 │       └── paprium.zip  (Paprium game containing 'Paprium (World)(2020)(WaterMelon).bin')
 ├── gb\                  (Game boy --> zip gb gbc dmg)
 ├── gba\                 (Game boy advance --> gba zip)
@@ -314,6 +335,20 @@ Runs the Atari 400/800/XL/XE home computers and the Atari 5200 console. Supporte
 **Controller type.** Some games (and the 5200) need a specific controller device. Set it in Options > Input > Retropad assignments > Port Controller 1 > Joystick type.
 
 Multi-disk Atari (`.atr`) games can also be swapped from the **Disk Control** menu using an `.m3u` playlist, exactly like the C64 core.
+
+### Amiga 500/1200/CD32 (puae2021 and puae)
+For Amiga 500, the puae2021 core runs fullspeed out of the box, emulating up to A600. If you want to emulate Amiga 1200 or CD32, frameskip is highly recommended (`Core Options > Video > Frameskip` set to 1). It's also important to have the Audio Synchronization activated to this core, as it sets the internal framerate to 25fps while maintaining a frameskip of 1, producing an effective framerate of 50fps. By default the `Options > Emulation > System Advanced Settings > Amiga 1200/CD32` will be set to that value.
+
+To load multidiskette games, the easiest thing to do is to launch a compressed .zip file with the required files inside
+
+```
+Alien Breed - Tower Assault (OCS & AGA).zip
+   └── Alien Breed - Tower Assault (OCS & AGA)_Disk1.adf
+   └── Alien Breed - Tower Assault (OCS & AGA)_Disk2.adf
+   └── Alien Breed - Tower Assault (OCS & AGA)_Disk3.adf
+   └── Alien Breed - Tower Assault (OCS & AGA)_Disk4.adf
+```
+When the game ask you to change disk, it can be done easily cycling diskettes with the menu: `Options > Emulation > Disks Control > Next Disk`
 
 ### FBNEO and FBANext
 For this core, there are two subdirectories available **neocd** (to load neogeo cd games) and  **megadrive** (it can load megadrive games for the fbneo core, but its main purpose is to load the game Paprium as Genesis-plus-gx is the gold standard for megadrive)
