@@ -480,6 +480,49 @@ static const int analogSlotAxis[ANALOG_TARGETS] = {
 
 
 /* --------------------------------------------------------------------------
+ * INDICE SDL DE CADA BOTON LOGICO
+ *
+ * Indexada por JOY_BUTTON_* (A=0 .. R3=9), da el numero de boton que ENTREGA
+ * SDL para ese boton fisico. Es el gemelo de analogSlotAxis de arriba, y por el
+ * mismo motivo: DESCRIPCION DE LA PLATAFORMA, no una preferencia.
+ *
+ * En Windows es la identidad; en la 360 (SDL de Lantus) los cuatro del medio
+ * van al reves: L3/R3 ocupan el 6 y el 7, y START/SELECT el 8 y el 9.
+ *
+ * Existe porque los defaults se escribian usando JOY_BUTTON_* COMO si fuera el
+ * indice SDL (configMapperRetro y el constructor de Hotkeys), y eso solo vale en
+ * Windows: en la 360 salian START, SELECT, L3 y R3 cruzados, tanto en el mapeo
+ * del mando como en las hotkeys.
+ * -------------------------------------------------------------------------- */
+#ifdef _XBOX
+static const int sdlIndexOfLogicalBtn[] = {
+	0, 1, 2, 3,   /* A, B, X, Y     */
+	4, 5,         /* L, R           */
+	9, 8,         /* SELECT, START  <- cruzados respecto a Windows */
+	6, 7          /* L3, R3         <- idem */
+};
+#else
+static const int sdlIndexOfLogicalBtn[] = {
+	0, 1, 2, 3,   /* A, B, X, Y     */
+	4, 5,         /* L, R           */
+	6, 7,         /* SELECT, START  */
+	8, 9          /* L3, R3         */
+};
+#endif
+
+/* Traduce un JOY_BUTTON_* a indice SDL. Fuera de rango devuelve el propio id,
+ * que es el comportamiento de antes.
+ * 'static inline' y no 'static' a secas: siendo una cabecera que incluye medio
+ * proyecto, la version static suelta un C4505 (funcion sin usar) en cada unidad
+ * que no la llame -- el mismo motivo por el que analogSlotOfVirtual acabo siendo
+ * miembro de t_joy_mapper. */
+static inline int sdlBtnOf(int logicalBtn){
+	const int n = (int)(sizeof(sdlIndexOfLogicalBtn) / sizeof(sdlIndexOfLogicalBtn[0]));
+	if (logicalBtn < 0 || logicalBtn >= n) return logicalBtn;
+	return sdlIndexOfLogicalBtn[logicalBtn];
+}
+
+/* --------------------------------------------------------------------------
  * DEADZONE POR MANDO
  *
  * Umbral a partir del cual una direccion de stick cuenta como pulsada al
@@ -496,7 +539,7 @@ static const int analogSlotAxis[ANALOG_TARGETS] = {
 static const int deadzoneValues[DEADZONE_STEPS] = {
 	1000, 2000, 5000, 10000, 15000, 20000, 25000
 };
-/* Indice del 2000: es el default y lo que se
+/* Indice del 10000, que es el valor historico: es el default y lo que se
  * aplica a los .joy antiguos, que no traen la clave. */
 #define DEADZONE_DEFAULT_IDX 1
 

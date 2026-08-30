@@ -111,8 +111,18 @@ void Joystick::configMapperFrontend(t_joy_mapper& mapper, int joyId){
 	int nhats = SDL_JoystickNumHats(g_joysticks[joyId]);
 	int nbuttons = SDL_JoystickNumButtons(g_joysticks[joyId]);
 
-	for (int btn=0; btn < nbuttons && btn < arrNButtons; btn++){
-		mapper.setBtnFromSdl(joyId, btn, configurableFrontButtons[btn]);
+	/* Mismo caso que configMapperRetro: configurableFrontButtons va en orden
+	 * LOGICO (A, B, X, Y, L, R, SELECT, START, L3, R3) y el indice que entrega
+	 * SDL para cada uno lo da sdlIndexOfLogicalBtn.
+	 *
+	 * Sin esta traduccion, en la 360 el menu de asignacion del frontend mostraba
+	 * START en la opcion que esta atada a JOY_BUTTON_L3 (el filtro del listado):
+	 * L3 es el 8 del enum, el default lo ataba al SDL 8, y el SDL 8 de la 360 es
+	 * fisicamente START. */
+	for (int logical=0; logical < arrNButtons; logical++){
+		const int sdlBtn = sdlBtnOf(logical);
+		if (sdlBtn >= nbuttons) continue;      /* el mando no llega a ese boton */
+		mapper.setBtnFromSdl(joyId, sdlBtn, configurableFrontButtons[logical]);
 	}
 
 	if (nhats >= 1){
@@ -138,8 +148,15 @@ void Joystick::configMapperRetro(t_joy_mapper& mapper, int joyId){
 	int nhats = SDL_JoystickNumHats(g_joysticks[joyId]);
 	int nbuttons = SDL_JoystickNumButtons(g_joysticks[joyId]);
 
-	for (int btn=0; btn < nbuttons && btn < arrNButtons; btn++){
-		mapper.setBtnFromSdl(joyId, btn, configurablePortButtons[btn]);
+	/* configurablePortButtons va en orden LOGICO (A, B, X, Y, L, R, SELECT,
+	 * START, L3, R3, L2, R2), no en orden de indice SDL: el numero que entrega
+	 * SDL para cada uno lo da sdlIndexOfLogicalBtn, que no es la identidad en la
+	 * 360. Antes se usaba la posicion del array como indice SDL y en la 360
+	 * salian START, SELECT, L3 y R3 cruzados. */
+	for (int logical=0; logical < arrNButtons; logical++){
+		const int sdlBtn = sdlBtnOf(logical);
+		if (sdlBtn >= nbuttons) continue;      /* el mando no llega a ese boton */
+		mapper.setBtnFromSdl(joyId, sdlBtn, configurablePortButtons[logical]);
 	}
 
 	if (nhats >= 1){
