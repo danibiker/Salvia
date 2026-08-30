@@ -164,6 +164,15 @@ static bool retro_environment(unsigned cmd, void *data) {
 			gameMenu->sync->init_fps_counter((float)av_info->timing.fps);
 			gameMenu->g_audioRate.reset();
 			gameMenu->g_audioRate.init(BUFF_SIZE);
+			/* Un core puede cambiar su tasa a mitad de partida (p.ej. FBNeo al
+			 * pasar de cart a CD).  Con el dispositivo fijo esto ya no obliga a
+			 * reabrir nada: basta con recalcular el ratio del resampler. */
+			if (av_info->timing.sample_rate > 0.0){
+				gameMenu->g_audioRate.setRates(av_info->timing.sample_rate,
+					(double)g_audio_device_rate);
+				LOG_INFO("Audio: el core cambia a %.1f Hz (ratio %.4f)\n",
+					av_info->timing.sample_rate, gameMenu->g_audioRate.getBaseRatio());
+			}
 			if (av_info->geometry.aspect_ratio > 0.0f){
 				aspectRatioValues[RATIO_CORE] = av_info->geometry.aspect_ratio;
 			}
@@ -1092,16 +1101,36 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 
 //Audio Callbacks for Libretro
 // Callback para una sola muestra (menos eficiente, pero requerido)
-void retro_audio_sample(int16_t left, int16_t right) {
-	// Creamos una referencia local al buffer
-    // Esto evita que la CPU haga: gameMenu -> buscar g_audioBuffer -> llamar Write
-    AudioBuffer& audio = gameMenu->g_audioBuffer;
-    const int mode = *gameMenu->current_sync;
+/* Acumulador de la ruta de muestra suelta (ver retro_audio_sample).  A fichero y
+ * no static dentro de la funcion para que closeGame pueda vaciarlo y un juego no
+ * herede las muestras a medio bloque del anterior. */
+#define RETRO_SAMPLE_BLOCK 256
+static int16_t     g_singleSampleBlock[RETRO_SAMPLE_BLOCK * 2];
+static std::size_t g_singleSampleFrames = 0;
 
+void retro_audio_sample(int16_t left, int16_t right) {
+	/* Ruta de muestra suelta: la usan pocos cores y entregan un frame por
+	 * llamada.  Se acumula un bloque antes de remuestrear por dos motivos:
+	 * llamar al resampler frame a frame haria que el coste fijo de la llamada
+	 * dominase (a 48 kHz son 48.000 llamadas por segundo), y ademas cada lote de
+	 * un solo frame apenas deja avanzar la posicion fraccionaria.
+	 *
+	 * El resto por debajo de un bloque se queda para la siguiente tanda: son
+	 * menos de 6 ms y evita tener que enganchar un flush al final del frame. */
 	if (gameMenu->current_fast_forward && CfgLoader::configMain[cfg::fastForwardMult].valueInt > 10) return;
 
-    int16_t samples[2] = { left, right };
-    audio.Write(samples, 2);
+	g_singleSampleBlock[g_singleSampleFrames * 2]     = left;
+	g_singleSampleBlock[g_singleSampleFrames * 2 + 1] = right;
+	g_singleSampleFrames++;
+
+	if (g_singleSampleFrames >= RETRO_SAMPLE_BLOCK) {
+		const int mode = *gameMenu->current_sync;
+		if (mode != SYNC_FAST_FORWARD) {
+			gameMenu->g_audioRate.processAndWrite(gameMenu->g_audioBuffer,
+				g_singleSampleBlock, g_singleSampleFrames, mode == SYNC_TO_AUDIO);
+		}
+		g_singleSampleFrames = 0;
+	}
 }
 
 // Callback para rafagas de muestras (el que usan casi todos los cores)
@@ -1112,8 +1141,11 @@ std::size_t retro_audio_sample_batch(const int16_t * __restrict data, std::size_
 	const int mode = *gameMenu->current_sync;
     switch(mode) {
         case SYNC_TO_AUDIO:
-            // El bloqueo ya sincroniza naturalmente con el reloj de audio
-            gameMenu->g_audioBuffer.WriteBlocking(data, frames * 2);
+            /* El bloqueo ya sincroniza naturalmente con el reloj de audio, pero
+             * hay que pasar igualmente por el resampler: el dispositivo esta
+             * abierto a tasa fija y escribir crudo sonaria a destiempo. El
+             * bloqueo se conserva -- processAndWrite lo propaga al buffer. */
+            gameMenu->g_audioRate.processAndWrite(gameMenu->g_audioBuffer, data, frames, true);
             break;
         case SYNC_FAST_FORWARD:
             return frames;
@@ -1161,9 +1193,13 @@ void sdl_audio_callback(void* userdata, Uint8* stream, int len) {
 /**
 *
 */
+/* Abre el dispositivo de audio.  Se llama UNA vez por sesion, desde el arranque,
+ * con AUDIO_DEVICE_RATE: no se reabre al cargar juegos ni cuando un core pide
+ * otra tasa.  De adaptar la tasa del core a la del dispositivo se encarga
+ * AudioRateControl (audio/audiorate.h). */
 void init_sdl_audio(double sample_rate) {
 	LOG_DEBUG("init_sdl_audio %.1f\n", sample_rate);
-    SDL_AudioSpec wanted;
+    SDL_AudioSpec wanted, obtained;
     wanted.freq = (int)sample_rate;
     wanted.format = AUDIO_S16SYS;
     wanted.channels = 2;
@@ -1185,13 +1221,23 @@ void init_sdl_audio(double sample_rate) {
     }
 #endif
 
-    if (SDL_OpenAudio(&wanted, NULL) < 0) {
+    /* Con `obtained` en vez de NULL: SDL nos dice a que tasa quedo abierto de
+     * verdad.  Es el fallback de todo el diseno -- si el driver no da la tasa
+     * pedida, el resampler se ajusta a la real y el tono sigue siendo correcto,
+     * en vez de sonar desafinado por un desajuste invisible. */
+    memset(&obtained, 0, sizeof(obtained));
+    if (SDL_OpenAudio(&wanted, &obtained) < 0) {
 		string error = "Error SDL Audio: " + string(SDL_GetError());
         LOG_ERROR("%s\n", error.c_str());
         return;
     }
 	audio_opened = 1;
-	g_audio_opened_rate = wanted.freq;
+	g_audio_device_rate = (obtained.freq > 0) ? obtained.freq : wanted.freq;
+	if (g_audio_device_rate != wanted.freq) {
+		LOG_INFO("Audio: se pidio %d Hz y el driver abrio %d Hz; el resampler usa la tasa real\n",
+			wanted.freq, g_audio_device_rate);
+	}
+	LOG_INFO("Audio: dispositivo abierto a %d Hz (una sola vez por sesion)\n", g_audio_device_rate);
     SDL_PauseAudio(0); // Inicia el audio
 }
 
@@ -1257,6 +1303,9 @@ void closeGame(){
 			/* audio_opened se mantiene a 1: el device sigue abierto,
 			 * solo pausado.  En la siguiente carga se reanuda. */
 		}
+		/* Bloque a medias de la ruta de muestra suelta: si no se vacia, el
+		 * proximo juego empieza oyendo la cola del anterior. */
+		g_singleSampleFrames = 0;
 		gameMenu->g_audioRate.reset();
 #ifndef NO_SRAM
 		saveSram(romPaths.sram.c_str());
@@ -1663,6 +1712,18 @@ int main(int argc, char *argv[]) {
 	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
 
 	gameMenu = new GameMenu(cfgLoader);
+
+	/* Dispositivo de audio: se abre AQUI, una sola vez, a tasa fija, y ya no se
+	 * vuelve a abrir en toda la sesion (el ciclo SDL_OpenAudio/SDL_CloseAudio
+	 * cuelga libSDLx360 en la 360).  Cada core entrega a su tasa y AudioRateControl
+	 * la adapta.
+	 *
+	 * Tiene que ir despues de crear gameMenu: sdl_audio_callback lee
+	 * gameMenu->g_audioBuffer.  Se deja PAUSADO hasta que haya juego, que es el
+	 * mismo ciclo de siempre (closeGame pausa, initGameAudio reanuda). */
+	init_sdl_audio(AUDIO_DEVICE_RATE);
+	if (audio_opened) SDL_PauseAudio(1);
+
 	listMenu = new ListMenu(gameMenu->overlay->w, gameMenu->overlay->h);
 	listMenu->setLayout(LAYBOXES, gameMenu->overlay->w, gameMenu->overlay->h);
     tileMap.load(Constant::getAppDir() + Constant::getFileSep() + "assets" + Constant::getFileSep() + "art" + Constant::getFileSep() + "bricks2.png");

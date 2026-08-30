@@ -55,7 +55,11 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		SDL_XBOX_GetScreenResolution(&video_width, &video_height);
 	#endif
 
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
+	/* AUDIO va aqui explicitamente porque el dispositivo se abre en el arranque
+	 * (ver init_sdl_audio) y no al cargar el primer juego.  Antes funcionaba sin
+	 * pedirlo porque SDL_OpenAudio auto-inicializa el subsistema, pero conviene
+	 * que la inicializacion sea la que se declara. */
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO) < 0) {
 		//fprintf(stderr, "Error SDL_Init: %s\n", SDL_GetError());
 		LOG_ERROR("Error SDL_Init: %s\n", SDL_GetError());
 		return 1;
