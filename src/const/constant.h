@@ -323,6 +323,7 @@ typedef enum {
         page_white_picture,
         page_white_zip,
 		ico_video,
+		ico_audio,
 		ico_settings,
 		ico_settings_core,
 		ico_subsettings,
@@ -409,6 +410,7 @@ extern const std::string CORE_OPT_EXT;
 extern const std::string RETROPAD_INI;
 extern const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS;
 extern const std::string ROUTE_SCRAP_TRANSLATIONS;
+extern const std::string ROUTE_ASSETS_BGMUSIC;
 extern const std::string PREFIX_DEFAULTS;
 extern const std::string BG_FILENAME;
 extern const std::string TITLE_EMU_FILENAME;

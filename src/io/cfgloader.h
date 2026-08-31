@@ -34,6 +34,7 @@ public:
 	// order the core declares them. Runtime only, not persisted; used to build the
 	// per-category submenus in the core options menu.
 	std::vector<std::pair<std::string, std::string> > libretroCategories;
+	std::vector<std::string> musicFiles;
 
 	std::string saveCoreParams();
 	void loadCoreParams();
@@ -50,6 +51,7 @@ public:
 	bool applyCoreParamsFile(const std::string& path);
 	std::string saveMainParams();
 	std::string saveCoreOverrideParams(int emuIdx);
+	void findAllBgMusic();
 	
 	bool deleteCoreParams();
 	bool deleteGameParams(const std::string& gamePath);

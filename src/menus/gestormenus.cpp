@@ -308,14 +308,81 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	// 1. Crear contenedores de menus
     menuRaiz = new Menu(LanguageManager::instance()->get("menu.main.options"));
     Menu* menuVideo = new Menu(LanguageManager::instance()->get("menu.main.video"), menuRaiz);
+	Menu* menuAudio = new Menu(LanguageManager::instance()->get("menu.main.audio"), menuRaiz);
 	Menu* menuEmulation = new Menu(LanguageManager::instance()->get("menu.main.emulation"), menuRaiz);
 	Menu* menuEntrada = new Menu(LanguageManager::instance()->get("menu.main.input"), menuRaiz);
 	menuCoreOptions = new Menu(LanguageManager::instance()->get("menu.main.core.options"), menuRaiz);
 	menuCheats = new Menu(LanguageManager::instance()->get("menu.main.cheats"), menuRaiz);
 	menuSavestates = new Menu(LanguageManager::instance()->get("menu.main.saves"), face_h_big, this->getW() / 2 - 2 * marginX, menuRaiz);
 	menuScrapper = new Menu(LanguageManager::instance()->get("menu.main.scrapper"), menuRaiz);
-	
+	Menu* menuSearchGamesGuide = new Menu(LanguageManager::instance()->get("menu.guides.title"), face_h_big * 2, this->getW() - marginX, menuRaiz);
 	Menu* parentAchievements = new Menu(LanguageManager::instance()->get("menu.achievement.title"), menuRaiz);
+
+	//Poblar Menu de logros
+	poblarMenuLogros(parentAchievements, refConfig);
+	//Este menu no cuelga de ningun lado, pero ponemos partidas guardadas como padre
+	menuAskSavestates = new Menu(LanguageManager::instance()->get("menu.guides.search.title"), menuSavestates);
+	//Poblar Menu Emulacion
+	poblarMenuEmulacion(menuEmulation, refConfig);
+    //Poblar Menu Video
+	poblarMenuVideo(menuVideo, refConfig);
+	//Poblar Menu Audio
+	poblarMenuAudio(menuAudio, refConfig);
+	//Poblar Menu de reasignacion de botones
+	poblarMenuPad(menuEntrada, refConfig, joystick);
+	//Menu del scrapper que rellena los idiomas y lenguas
+	poblarMenuScrapper(refConfig, menuScrapper);
+
+	//Poblar menu ask
+	std::vector<std::string> askOptions;
+	for (int i=0; i < MAX_ASK; i++){
+		ACTION_ASK_STR[i] = LanguageManager::instance()->get("menu.ask.action" + Constant::TipoToStr(i));
+		askOptions.push_back(ACTION_ASK_STR[i]);
+	}
+	menuAskSavestates->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.askTitle"), askOptions, &askNumOptions));
+
+	//Poblar Menu Search Guides
+	OpcionSubMenu *submenuSearchGuides = new OpcionSubMenu(LanguageManager::instance()->get("menu.guides.search.title"), menuSearchGamesGuide, ico_help);
+	submenuSearchGuides->callback = &GestorMenus::gameSearchAction;
+	submenuSearchGuides->context = this;
+	menuGuides = new Menu(LanguageManager::instance()->get("menu.guides.title"), face_h_big * 2, this->getW() - marginX, menuSearchGamesGuide);
+	menuGuideText = new Menu(LanguageManager::instance()->get("menu.guides.content"), menuGuides);
+
+	// Poblar Menu Principal
+    menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.video"), menuVideo, ico_video));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.audio"), menuAudio, ico_audio));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.emulation"), menuEmulation, ico_settings));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.input"), menuEntrada, ico_remap));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.core.options"), menuCoreOptions, ico_settings_core));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.cheats"), menuCheats, ico_cheats));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.saves"), menuSavestates, ico_savestates));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.scrapper"), menuScrapper, ico_scrapper));
+	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.achievement.title"), parentAchievements, ico_achievements));
+	menuRaiz->opciones.push_back(submenuSearchGuides);
+	//Acciones del menu principal para guardar las opciones, volver al juego y salir de Salvia
+	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, ico_saving, this));
+	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, ico_resume, this));
+	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.exit"), &GestorMenus::salirEmulacion, &status, ico_shutdown, this));
+	
+	// Establecer estado inicial
+    menuActual = menuRaiz;
+	resetIndexPos();
+
+	todosLosMenus.push_back(menuRaiz);
+    todosLosMenus.push_back(menuVideo);
+	todosLosMenus.push_back(menuAudio);
+	todosLosMenus.push_back(menuEmulation);
+	todosLosMenus.push_back(menuEntrada);
+	todosLosMenus.push_back(menuCoreOptions);
+	todosLosMenus.push_back(menuCheats);
+	todosLosMenus.push_back(menuSavestates);
+	todosLosMenus.push_back(menuAskSavestates);
+	todosLosMenus.push_back(menuScrapper);
+	todosLosMenus.push_back(parentAchievements);
+	todosLosMenus.push_back(menuSearchGamesGuide);
+}
+
+void GestorMenus::poblarMenuLogros(Menu* parentAchievements, CfgLoader *refConfig){
 	//Creamos el submenu que contiene la lista de logros
 	const int rowAchHeight = face_h_big * 2;
 	const int menuAchWidth = this->getW() - marginX;
@@ -347,24 +414,9 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	opcionRAPassword->editable = true;
 	opcionRAPassword->setPassword(true);
 	parentAchievements->opciones.push_back(opcionRAPassword);
+}
 
-	Menu* menuSearchGamesGuide = new Menu(LanguageManager::instance()->get("menu.guides.title"), face_h_big * 2, this->getW() - marginX, menuRaiz);
-
-	//Este menu no cuelga de ningun lado, pero ponemos partidas guardadas como padre
-	menuAskSavestates = new Menu(LanguageManager::instance()->get("menu.guides.search.title"), menuSavestates);
-        
-    todosLosMenus.push_back(menuRaiz);
-    todosLosMenus.push_back(menuVideo);
-	todosLosMenus.push_back(menuEmulation);
-	todosLosMenus.push_back(menuEntrada);
-	todosLosMenus.push_back(menuCoreOptions);
-	todosLosMenus.push_back(menuCheats);
-	todosLosMenus.push_back(menuSavestates);
-	todosLosMenus.push_back(menuAskSavestates);
-	todosLosMenus.push_back(menuScrapper);
-	todosLosMenus.push_back(parentAchievements);
-	todosLosMenus.push_back(menuSearchGamesGuide);
-
+void GestorMenus::poblarMenuEmulacion(Menu* menuEmulation, CfgLoader *refConfig){
 	//Poblar menu emulacion
 	//--------Menu de sincronizacion de video---------
     std::vector<std::string> syncvals;
@@ -396,104 +448,14 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	opcionChangeRomPath->editable = true;
 	menuEmulation->opciones.push_back(opcionChangeRomPath);
 
-    //Poblar Menu Video
-	//Relacion de aspecto
-	std::vector<std::string> aspectRates;
-	for (int i=0; i < TOTAL_VIDEO_RATIO; i++){
-		aspectRatioStrings[i] = LanguageManager::instance()->get("menu.aspect.aspect" + Constant::TipoToStr(i));
-		aspectRates.push_back(aspectRatioStrings[i]);
-	}
-	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.aspect"), aspectRates, &refConfig->configMain[cfg::aspectRatio].getIntRef()));
+	//Preferencias del core bajo el menu de emulacion
+	Menu *menuCoreOverrides = new Menu(LanguageManager::instance()->get("menu.core.overrides"), menuEmulation);
+	poblarMenuCoreOverrides(menuCoreOverrides, refConfig);
+	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.core.overrides"), menuCoreOverrides));
 
-	//Escalado de video
-    std::vector<std::string> filtros;
+}
 
-#if defined(_XBOX) || defined(SALVIA_GPU_VIDEO)
-	for (int i=0; i < TOTAL_SHADERS; i++){
-		videoShaderStrings[i] = LanguageManager::instance()->get("menu.video.shader" + Constant::TipoToStr(i));
-		filtros.push_back(videoShaderStrings[i]);
-	}
-	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.scale"), filtros, &refConfig->configMain[cfg::shaderMode].getIntRef()));
-#else
-	for (int i=0; i < TOTAL_VIDEO_SCALE; i++){
-		videoScaleStrings[i] = LanguageManager::instance()->get("menu.scale.scale" + Constant::TipoToStr(i));
-		filtros.push_back(videoScaleStrings[i]);
-	}
-	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.scale"), filtros, &refConfig->configMain[cfg::scaleMode].getIntRef()));
-#endif
-	
-	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.integerscale"), &refConfig->configMain[cfg::integerScale].getBoolRef()));
-	
-	std::vector<std::string> scaleInt;
-	for (int i=0; i < TOTAL_INT_SCALE; i++){
-		videoIntScaleStrings[i] = LanguageManager::instance()->get("menu.options.integerscale.type" + Constant::TipoToStr(i));
-		scaleInt.push_back(videoIntScaleStrings[i]);
-	}
-	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.integerscale.type"), scaleInt, &refConfig->configMain[cfg::scaleIntMode].getIntRef()));
-
-
-	//Animacion del fondo de pantalla del menu
-	std::vector<std::string> bgMenu;
-	for (int i=0; i < BG_MAX; i++){
-		bgMenu.push_back(LanguageManager::instance()->get("menu.background.anim" + Constant::TipoToStr(i)));
-	}
-
-	#ifndef _XBOX
-	//En xbox siempre mostramos pantalla completa
-	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.fullscreen"), &refConfig->configMain[cfg::fullscreen].getBoolRef()));
-	#endif
-	OpcionLista *listaBkg = new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef());
-	listaBkg->callback = &GestorMenus::selectBackground;
-	menuVideo->opciones.push_back(listaBkg);
-
-	/* Volumen de la musica de menu, en pasos de 10%.  Va aqui, junto al fondo,
-	 * porque este submenu es donde viven los ajustes de presentacion DEL
-	 * FRONTEND (fondo, resolucion, shaders) y la musica de menu es uno mas.
-	 *
-	 * Se guarda el indice 0..10 (ver cfg::musicVolume); el callback lo convierte
-	 * a porcentaje y lo aplica en vivo, asi se oye el cambio al moverlo. */
-	{
-		std::vector<std::string> volSteps;
-		for (int v = 0; v <= 100; v += 10){
-			volSteps.push_back(Constant::intToString(v) + "%");
-		}
-		OpcionLista *listaVol = new OpcionLista(
-			trOrDefault("menu.options.musicvolume", "Menu music volume"),
-			volSteps,
-			&refConfig->configMain[cfg::musicVolume].getIntRef());
-		listaVol->callback = &GestorMenus::selectMusicVolume;
-		menuVideo->opciones.push_back(listaVol);
-	}
-
-	//Resolucion de pantalla (se aplica al REINICIAR). Entrada 0 = "Auto"
-	//(Xbox: XGetVideoMode del dashboard, capado a 720p; Windows: default 1280x720).
-	std::vector<std::string> resList;
-	resList.push_back("Auto");
-	for (int i=0; i < TOTAL_SCREEN_RES; i++){
-		resList.push_back(Constant::string_format("%dx%d", g_screenResolutions[i].w, g_screenResolutions[i].h));
-	}
-
-	{
-		const int rw = refConfig->configMain[cfg::resolution_width].valueInt;
-		const int rh = refConfig->configMain[cfg::resolution_height].valueInt;
-		if (rw > 0 && rh > 0){
-			const std::string cur = Constant::string_format("%dx%d", rw, rh);
-			int f = -1;
-			for (int i=1; i < (int)resList.size(); i++){ if (resList[i] == cur){ f = i; break; } }
-			//valor del fichero fuera de la lista (p.ej. Windows editado a mano) -> anadir para no perderlo
-			if (f < 0){ resList.push_back(cur); f = (int)resList.size() - 1; }
-			refConfig->configMain[cfg::resolutionIndex].setPropValue(f);
-		}
-	}
-	OpcionLista *listaRes = new OpcionLista(LanguageManager::instance()->get("menu.video.resolution"), resList, &refConfig->configMain[cfg::resolutionIndex].getIntRef());
-	listaRes->callback = &GestorMenus::selectResolution;
-	listaRes->context  = refConfig;
-	menuVideo->opciones.push_back(listaRes);
-
-	//--------Menu de overscan---------
-	menuOverscan = new Menu(LanguageManager::instance()->get("menu.video.overscan"), menuVideo);
-	poblarMenuOverscan(menuOverscan);
-	menuVideo->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.video.overscan"), menuOverscan));
+void GestorMenus::poblarMenuPad(Menu* menuEntrada, CfgLoader *refConfig, Joystick *joystick){
 	
 	menuAssignRetro = new Menu(LanguageManager::instance()->get("menu.options.paddassign"), menuEntrada);
 	menuAssignFrontend = new Menu(LanguageManager::instance()->get("menu.options.frontassign"), menuEntrada);
@@ -568,53 +530,130 @@ void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
 	menuAssignRetro->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savecoreassign"), &GestorMenus::guardarCoreJoysticks, joystick, ico_saving, this));
 	menuAssignRetro->opciones.push_back(new OpcionExec<Joystick>(LanguageManager::instance()->get("menu.options.savegameassign"), &GestorMenus::guardarGameJoysticks, joystick, ico_saving, this));
 
-
 	//Poblar menu hotkeys
 	poblarMenuHotkeys(menuHotkeys, joystick);
 	//Poblar menu disparo rapido
 	poblarMenuRapidFire(menuRapidFire, joystick);
 	//Menu de teclas para el frontend
 	poblarMenuAssignFrontend(menuAssignFrontend, joystick);
-	//Menu del scrapper que rellena los idiomas y lenguas
-	poblarMenuScrapper(refConfig, menuScrapper);
+}
 
-	//Poblar menu ask
-	std::vector<std::string> askOptions;
-	for (int i=0; i < MAX_ASK; i++){
-		ACTION_ASK_STR[i] = LanguageManager::instance()->get("menu.ask.action" + Constant::TipoToStr(i));
-		askOptions.push_back(ACTION_ASK_STR[i]);
+void GestorMenus::poblarMenuVideo(Menu* menuVideo, CfgLoader *refConfig){
+	//Relacion de aspecto
+	std::vector<std::string> aspectRates;
+	for (int i=0; i < TOTAL_VIDEO_RATIO; i++){
+		aspectRatioStrings[i] = LanguageManager::instance()->get("menu.aspect.aspect" + Constant::TipoToStr(i));
+		aspectRates.push_back(aspectRatioStrings[i]);
 	}
-	menuAskSavestates->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.askTitle"), askOptions, &askNumOptions));
+	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.aspect"), aspectRates, &refConfig->configMain[cfg::aspectRatio].getIntRef()));
 
-	//Preferencias del core bajo el menu de emulacion
-	Menu *menuCoreOverrides = new Menu(LanguageManager::instance()->get("menu.core.overrides"), menuEmulation);
-	poblarMenuCoreOverrides(menuCoreOverrides, refConfig);
-	menuEmulation->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.core.overrides"), menuCoreOverrides));
+	//Escalado de video
+    std::vector<std::string> filtros;
 
-	// Poblar Menu Principal
-    menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.video"), menuVideo, ico_video));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.emulation"), menuEmulation, ico_settings));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.input"), menuEntrada, ico_remap));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.core.options"), menuCoreOptions, ico_settings_core));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.cheats"), menuCheats, ico_cheats));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.saves"), menuSavestates, ico_savestates));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.main.scrapper"), menuScrapper, ico_scrapper));
-	menuRaiz->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.achievement.title"), parentAchievements, ico_achievements));
-
-	OpcionSubMenu *submenuSearchGuides = new OpcionSubMenu(LanguageManager::instance()->get("menu.guides.search.title"), menuSearchGamesGuide, ico_help);
-	submenuSearchGuides->callback = &GestorMenus::gameSearchAction;
-	submenuSearchGuides->context = this;
-	menuGuides = new Menu(LanguageManager::instance()->get("menu.guides.title"), face_h_big * 2, this->getW() - marginX, menuSearchGamesGuide);
-	menuGuideText = new Menu(LanguageManager::instance()->get("menu.guides.content"), menuGuides);
-	menuRaiz->opciones.push_back(submenuSearchGuides);
-
-	menuRaiz->opciones.push_back(new OpcionExec<CfgLoader>(LanguageManager::instance()->get("menu.main.saveconfig"), &GestorMenus::guardarMainConfig, refConfig, ico_saving, this));
-	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.return"), &GestorMenus::volverEmulacion, &status, ico_resume, this));
-	menuRaiz->opciones.push_back(new OpcionExec<CONFIG_STATUS>(LanguageManager::instance()->get("menu.main.exit"), &GestorMenus::salirEmulacion, &status, ico_shutdown, this));
+#if defined(_XBOX) || defined(SALVIA_GPU_VIDEO)
+	for (int i=0; i < TOTAL_SHADERS; i++){
+		videoShaderStrings[i] = LanguageManager::instance()->get("menu.video.shader" + Constant::TipoToStr(i));
+		filtros.push_back(videoShaderStrings[i]);
+	}
+	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.scale"), filtros, &refConfig->configMain[cfg::shaderMode].getIntRef()));
+#else
+	for (int i=0; i < TOTAL_VIDEO_SCALE; i++){
+		videoScaleStrings[i] = LanguageManager::instance()->get("menu.scale.scale" + Constant::TipoToStr(i));
+		filtros.push_back(videoScaleStrings[i]);
+	}
+	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.scale"), filtros, &refConfig->configMain[cfg::scaleMode].getIntRef()));
+#endif
 	
-	// Establecer estado inicial
-    menuActual = menuRaiz;
-	resetIndexPos();
+	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.options.integerscale"), &refConfig->configMain[cfg::integerScale].getBoolRef()));
+	
+	std::vector<std::string> scaleInt;
+	for (int i=0; i < TOTAL_INT_SCALE; i++){
+		videoIntScaleStrings[i] = LanguageManager::instance()->get("menu.options.integerscale.type" + Constant::TipoToStr(i));
+		scaleInt.push_back(videoIntScaleStrings[i]);
+	}
+	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.integerscale.type"), scaleInt, &refConfig->configMain[cfg::scaleIntMode].getIntRef()));
+
+
+	//Animacion del fondo de pantalla del menu
+	std::vector<std::string> bgMenu;
+	for (int i=0; i < BG_MAX; i++){
+		bgMenu.push_back(LanguageManager::instance()->get("menu.background.anim" + Constant::TipoToStr(i)));
+	}
+
+	#ifndef _XBOX
+	//En xbox siempre mostramos pantalla completa
+	menuVideo->opciones.push_back(new OpcionBool(LanguageManager::instance()->get("menu.video.fullscreen"), &refConfig->configMain[cfg::fullscreen].getBoolRef()));
+	#endif
+	OpcionLista *listaBkg = new OpcionLista(LanguageManager::instance()->get("menu.background.anim.title"), bgMenu, &refConfig->configMain[cfg::animBG].getIntRef());
+	listaBkg->callback = &GestorMenus::selectBackground;
+	menuVideo->opciones.push_back(listaBkg);
+
+	
+
+	//Resolucion de pantalla (se aplica al REINICIAR). Entrada 0 = "Auto"
+	//(Xbox: XGetVideoMode del dashboard, capado a 720p; Windows: default 1280x720).
+	std::vector<std::string> resList;
+	resList.push_back("Auto");
+	for (int i=0; i < TOTAL_SCREEN_RES; i++){
+		resList.push_back(Constant::string_format("%dx%d", g_screenResolutions[i].w, g_screenResolutions[i].h));
+	}
+
+	{
+		const int rw = refConfig->configMain[cfg::resolution_width].valueInt;
+		const int rh = refConfig->configMain[cfg::resolution_height].valueInt;
+		if (rw > 0 && rh > 0){
+			const std::string cur = Constant::string_format("%dx%d", rw, rh);
+			int f = -1;
+			for (int i=1; i < (int)resList.size(); i++){ if (resList[i] == cur){ f = i; break; } }
+			//valor del fichero fuera de la lista (p.ej. Windows editado a mano) -> anadir para no perderlo
+			if (f < 0){ resList.push_back(cur); f = (int)resList.size() - 1; }
+			refConfig->configMain[cfg::resolutionIndex].setPropValue(f);
+		}
+	}
+
+	
+	OpcionLista *listaRes = new OpcionLista(LanguageManager::instance()->get("menu.video.resolution"), resList, &refConfig->configMain[cfg::resolutionIndex].getIntRef());
+	listaRes->callback = &GestorMenus::selectResolution;
+	listaRes->context  = refConfig;
+	menuVideo->opciones.push_back(listaRes);
+
+	//--------Menu de overscan---------
+	menuOverscan = new Menu(LanguageManager::instance()->get("menu.video.overscan"), menuVideo);
+	poblarMenuOverscan(menuOverscan);
+	menuVideo->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.video.overscan"), menuOverscan));
+
+	
+}
+
+void GestorMenus::poblarMenuAudio(Menu* menuAudio, CfgLoader *refConfig){
+	/* Volumen de la musica de menu, en pasos de 10%.  Va aqui, junto al fondo,
+	 * porque este submenu es donde viven los ajustes de presentacion DEL
+	 * FRONTEND (fondo, resolucion, shaders) y la musica de menu es uno mas.
+	 *
+	 * Se guarda el indice 0..10 (ver cfg::musicVolume); el callback lo convierte
+	 * a porcentaje y lo aplica en vivo, asi se oye el cambio al moverlo. */
+	/* Interruptor general de la musica.  Va ANTES del volumen porque es el que
+	 * manda: con esto apagado el volumen es irrelevante. */
+	{
+		OpcionBool *opcionMusica = new OpcionBool(
+			trOrDefault("menu.options.musicenabled", "Menu music"),
+			&refConfig->configMain[cfg::musicEnabled].getBoolRef());
+		opcionMusica->callback = &GestorMenus::toggleMusicEnabled;
+		menuAudio->opciones.push_back(opcionMusica);
+	}
+
+	{
+		std::vector<std::string> volSteps;
+		for (int v = 0; v <= 100; v += 10){
+			volSteps.push_back(Constant::intToString(v) + "%");
+		}
+		OpcionLista *listaVol = new OpcionLista(
+			trOrDefault("menu.options.musicvolume", "Menu music volume"),
+			volSteps,
+			&refConfig->configMain[cfg::musicVolume].getIntRef());
+		listaVol->callback = &GestorMenus::selectMusicVolume;
+		menuAudio->opciones.push_back(listaVol);
+	}
 }
 
 void GestorMenus::checkMultipleSystemCore(CfgLoader *refConfig, Menu *menu, int coreIdx){
@@ -821,17 +860,34 @@ void GestorMenus::poblarMenuCoreOverrides(Menu *menu, CfgLoader *refConfig){
 		menuCore->opciones.push_back(new OpcionLista(intScaleTypeTxt, scaleInt, &refConfig->emulators[i]->config.scaleIntMode));
 		//Synchronization
 		menuCore->opciones.push_back(new OpcionLista(syncTypeTxt, syncStrings, &refConfig->emulators[i]->config.syncMode));
-
+		//Add option List of selectable background music for each core
+		addMusicOptionList(refConfig, i, menuCore->opciones);
 		//Scan subfolders
 		menuCore->opciones.push_back(new OpcionBool(recursiveFilesTxt, &refConfig->emulators[i]->config.menu_directory_recursive));
 		//Show directories (no effect if menu_directory_recursive enabled)
 		menuCore->opciones.push_back(new OpcionBool(showDirTxt, &refConfig->emulators[i]->config.menu_show_directories));
-		
 		//Button to save configuration of the selected core
 		t_save_override *overr = new t_save_override(i, refConfig);
 		menuCore->opciones.push_back(new OpcionExec<t_save_override>(LanguageManager::instance()->get("menu.main.saveconfig"), 
 			&GestorMenus::guardarCoreOverridesConfig, overr, ico_saving, this));
 	}
+}
+
+/**
+* Add a option with a list of music to be selected
+*/
+void GestorMenus::addMusicOptionList(CfgLoader *refConfig, int posCore, std::vector<Opcion*> &opciones){
+	const std::string autoOverrideTxt = LanguageManager::instance()->get("menu.core.overrides.auto");
+	const std::string bgMusicTxt = LanguageManager::instance()->get("menu.options.bgmusic");
+
+	//Music selected
+	auto it = std::find(refConfig->musicFiles.begin(), refConfig->musicFiles.end(), dirutil::getFileName(refConfig->emulators[posCore]->config.music_file));
+	//Comprobar si se encontro y calcular la posicion
+	if (it != refConfig->musicFiles.end()) {
+		//La posicion 0 sera la asignada a "auto" siempre
+		refConfig->emulators[posCore]->config.music_file_index = std::distance(refConfig->musicFiles.begin(), it);
+	} 
+	opciones.push_back(new OpcionLista(bgMusicTxt, refConfig->musicFiles, &refConfig->emulators[posCore]->config.music_file_index));
 }
 
 void GestorMenus::poblarMenuOverscan(Menu *menu){
@@ -998,6 +1054,19 @@ std::string GestorMenus::selectBackground(void* inst, void *index, void *values)
 	if (!index) return "";
 	const int idx = *static_cast<int*>(index);
 	HLSLBackground_setActive((idx >= BG_HLSL && idx < BG_NONE) ? (idx - BG_HLSL + 1) : 0);
+	return "";
+}
+
+std::string GestorMenus::toggleMusicEnabled(void* inst, void *value) {
+	/* Interruptor general.  applyMenuMusic() decide en los dos sentidos: si
+	 * queda apagado resuelve "sin cancion" y para la reproduccion liberando el
+	 * decodificador; si queda encendido, pone la del core activo.
+	 *
+	 * El corte al apagar es seco (stop() es desmontaje, no pausa).  Si se
+	 * prefiriera con fundido habria que bajar la rampa antes y liberar despues;
+	 * para un interruptor explicito del usuario no parece necesario. */
+	if (!value) return "";
+	applyMenuMusic();
 	return "";
 }
 

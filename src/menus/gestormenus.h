@@ -499,7 +499,14 @@ private:
 	void poblarMenuAssignFrontend(Menu* menuHotkeys, Joystick *joystick);
 	void poblarMenuRapidFire(Menu* menuRapidFire, Joystick *joystick);
 	void poblarMenuCoreOverrides(Menu *menu, CfgLoader *refConfig);
+	void poblarMenuVideo(Menu* menuVideo, CfgLoader *refConfig);
+	void poblarMenuPad(Menu* menuEntrada, CfgLoader *refConfig, Joystick *joystick);
+	void poblarMenuEmulacion(Menu* menuEmulation, CfgLoader *refConfig);
+	void poblarMenuAudio(Menu* menuAudio, CfgLoader *refConfig);
+	void poblarMenuLogros(Menu* parentAchievements, CfgLoader *refConfig);
 	void checkMultipleSystemCore(CfgLoader *refConfig, Menu *menu, int coreIdx);
+	void addMusicOptionList(CfgLoader *refConfig, int posCore, std::vector<Opcion*> &opciones);
+
 	std::string guardarJoysticks(Joystick* joy);
 	std::string guardarGameJoysticks(Joystick* joy);
 	std::string guardarCoreJoysticks(Joystick* joy);
@@ -628,6 +635,7 @@ public:
 	static std::string gameGuideAction(void* inst, void *value);
 	static std::string selectBackground(void* inst, void *index, void *values);
 	static std::string selectMusicVolume(void* inst, void *index, void *values);
+	static std::string toggleMusicEnabled(void* inst, void *value);
 	static std::string selectResolution(void* inst, void *index, void *values);
 
 	static void onUserText(const std::string& text, void* userData);

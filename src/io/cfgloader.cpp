@@ -28,6 +28,11 @@ CfgLoader::CfgLoader(){
 	initMainConfig();
 	loadMainConfig();
 	loadCoreParams();
+
+	// Se cargan los textos una vez que hemos cargado la configuracion y ya tenemos idioma asignado
+	const std::string mainLang = this->configMain[cfg::mainLang].valueStr;
+	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
+	findAllBgMusic();
 }
 
 CfgLoader::~CfgLoader(){
@@ -133,9 +138,19 @@ void CfgLoader::initMainConfig(){
 	 * que scaleIntMode o animBG guardan indices: es lo que espera el widget
 	 * OpcionLista del menu.  Por defecto 7 = 70%, para que la musica quede por
 	 * debajo de los efectos del frontend y no moleste. */
+	configMain[cfg::musicEnabled] = cfg::t_cfg_props("musicEnabled", true);
+	configMain[cfg::musicEnabled].desc = "#Enable or disable the menu music completely";
+
 	configMain[cfg::musicVolume] = cfg::t_cfg_props("musicVolume", (int)7);
 	configMain[cfg::musicVolume].desc = "#Menu music volume, in 10% steps"
 										"\n#0 = mute ... 10 = 100%";
+
+	/* Musica GENERAL: la que suena cuando el core activo no define la suya en
+	 * su .cfg (clave 'music_file').  Ruta relativa al directorio de la app. */
+	configMain[cfg::musicFile] = cfg::t_cfg_props("musicFile", std::string("assets\\music\\menu.mp3"));
+	configMain[cfg::musicFile].desc = "#Menu music file, relative to the app directory."
+										"\n#Used when the active core does not define its own 'music_file'."
+										"\n#Leave empty for no music.";
 
 	configMain[cfg::animBG] = cfg::t_cfg_props("animBG", (int)BG_TILES);
 	configMain[cfg::animBG].desc = "#Set the frontend background" 
@@ -476,6 +491,8 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 						cfgEmu->config.screen_shot_directory = value;
 					} else if (key.compare("assets") == 0){
 						cfgEmu->config.assets = value;
+					} else if (key.compare("music_file") == 0){
+						cfgEmu->config.music_file = value;
 					} else if (key.compare("use_rom_file") == 0){
 						cfgEmu->config.use_rom_file = value.compare("yes") == 0 ? true : false;
 					} else if (key.compare("rom_directory") == 0){
@@ -882,6 +899,20 @@ int CfgLoader::recoverGameMenuPos(struct ListStatus &read_struct){
     return ret;
 }
 
+void CfgLoader::findAllBgMusic(){
+	const std::string autoOverrideTxt = LanguageManager::instance()->get("menu.core.overrides.auto");
+	//Find all the mp3 files for the background music
+	dirutil dir;
+	std::string assetsDir = dirutil::getPathPrefix(ROUTE_ASSETS_BGMUSIC);
+	vector<unique_ptr<FileProps>> files;
+	dir.listFiles(assetsDir.c_str(), files, ".mp3", "", true, false);
+	
+	musicFiles.push_back(autoOverrideTxt);
+	for (unsigned int i=0; i < files.size(); i++){
+		musicFiles.push_back(files[i]->filename);
+	}
+}
+
 // Metodo para guardar la configuracion en un archivo
 std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
 	ConfigEmu& cfg = emulators.at(emuIdx).get()->config;
@@ -891,6 +922,13 @@ std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
 	const std::string rutaArchivo = cfg.cfgFilePath;
     std::ofstream archivo(rutaArchivo.c_str());
     if (!archivo.is_open()) return "";
+
+	//Set the music based on its index
+	if (cfg.music_file_index > 0 && cfg.music_file_index < (int)this->musicFiles.size()){
+		cfg.music_file = dirutil::getPathPrefix(this->musicFiles[cfg.music_file_index], ROUTE_ASSETS_BGMUSIC);
+	} else {
+		cfg.music_file.clear();
+	}
 
     // 1. Escribimos los campos de tipo string de forma masiva
     struct MappingStr { const char* nombre; const char* descripcion; const std::string ConfigEmu::*puntero; };
@@ -905,6 +943,8 @@ std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
         {"rom_directory", "ROM Directory", &ConfigEmu::rom_directory},
         {"rom_extension", "List of supported extensions for ROMs (without the \".\")", &ConfigEmu::rom_extension},
         {"assets", "This is the directory where images and information are stored.", &ConfigEmu::assets},
+		{"music_file", "Menu music for this core, relative to the app directory."
+					   "\n#Leave empty to use the general one from the main config (musicFile).", &ConfigEmu::music_file},
 		{"title_bkg_assets", "Instead of loading the title and background from the assets directory, we load them from this path."
 							 "\n#This is useful if, for example, we have many Mame images that are actually the same as those in fbneo.", &ConfigEmu::title_bkg_assets},
         {"screen_shot_directory", "This is the directory where the screenshots in .png format are located.", &ConfigEmu::screen_shot_directory},

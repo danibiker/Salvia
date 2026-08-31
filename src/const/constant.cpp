@@ -39,6 +39,7 @@ const std::string CORE_OPT_EXT = ".opt";
 const std::string RETROPAD_INI = "retropad.ini";
 const std::string ROUTE_ACHIEVEMENT_TRANSLATIONS = "\\assets\\extra\\achievement_translations.cfg";
 const std::string ROUTE_SCRAP_TRANSLATIONS = "\\assets\\extra\\scrap_translations.cfg";
+const std::string ROUTE_ASSETS_BGMUSIC = "assets\\music";
 const std::string PREFIX_DEFAULTS = "defaults_";
 const std::string BG_FILENAME = "background";
 //Url to obtain a list of available quake  servers
@@ -67,6 +68,7 @@ const char *ICONS_PATH[] = {"menu_log.png",		// page_white_text
 	"image.png",								// page_white_picture
 	"zip.png",									// page_white_zip
 	"menu_osd.png",								// ico_video
+	"menu_audio.png", 							// ico_audio
 	"setting.png",								// ico_settings
 	"core-options.png",							// ico_settings_core
 	"subsetting.png",							// ico_subsettings

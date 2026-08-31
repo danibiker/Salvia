@@ -56,3 +56,4 @@ tools/XexTool.txt
 production/**
 *.pdb
 *.xdb
+*.bak

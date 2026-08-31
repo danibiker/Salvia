@@ -1110,6 +1110,40 @@ static inline bool musicWantedFor(int emuStatus) {
 	return emuStatus != EMU_STARTED && emuStatus != EMU_MENU_OVERLAY;
 }
 
+/* Ruta absoluta de la musica que le toca al core activo, o cadena vacia si no
+ * hay ninguna.  Prioridad: la del core (clave 'music_file' de su .cfg) y, si no
+ * la define, la general (configMain[cfg::musicFile]). */
+static std::string resolveMenuMusicPath() {
+	if (!cfgLoader) return std::string();
+	if (!cfgLoader->configMain[cfg::musicEnabled].valueBool) return std::string();
+
+	ConfigEmu*  emu = cfgLoader->getCfgEmu();
+	std::string rel = (emu && !emu->music_file.empty())
+		? emu->music_file
+		: cfgLoader->configMain[cfg::musicFile].valueStr;
+
+	if (rel.empty()) return std::string();
+	return Constant::getAppDir() + Constant::getFileSep() + rel;
+}
+
+/* Pone (o quita) la musica que corresponde al estado actual de la config.
+ *
+ * ensureLoaded no hace nada si el fichero ya es el que suena, asi que llamar a
+ * esto de mas es barato: al moverse entre cores que comparten musica no se corta
+ * ni se reinicia la cancion. */
+void applyMenuMusic() {
+	if (!g_music || !audio_opened) return;
+
+	const std::string path = resolveMenuMusicPath();
+	if (path.empty()) {
+		g_music->stop();
+		return;
+	}
+	if (g_music->ensureLoaded(path, g_audio_device_rate)) {
+		SDL_PauseAudio(0);
+	}
+}
+
 //Audio Callbacks for Libretro
 // Callback para una sola muestra (menos eficiente, pero requerido)
 /* Acumulador de la ruta de muestra suelta (ver retro_audio_sample).  A fichero y
@@ -1719,6 +1753,17 @@ static void __declspec(noinline) runGameLoop() {
 			 * asi no pueden discrepar. */
 			if (g_music) {
 				g_music->setWanted(musicWantedFor(gameMenu->getEmuStatus()));
+
+				/* Cambio de listado (L/R) o cualquier otra via que cambie el
+				 * core activo: se detecta por el indice y no enganchando el
+				 * manejador de L/R, porque loadEmuCfg se llama desde cuatro
+				 * sitios y asi no se queda ninguno fuera.  Comparar un int por
+				 * frame es gratis; resolver la ruta solo se hace al cambiar. */
+				static int lastEmuCfgPos = -1;
+				if (cfgLoader->emuCfgPos != lastEmuCfgPos) {
+					lastEmuCfgPos = cfgLoader->emuCfgPos;
+					applyMenuMusic();
+				}
 			}
 
 			switch (gameMenu->getEmuStatus()){
@@ -1771,11 +1816,6 @@ int main(int argc, char *argv[]) {
 
 	LOG_DEBUG("appdir: %s\n", Constant::getAppDir().c_str());
 	LOG_DEBUG("appexe: %s\n", Constant::getAppExecutable().c_str());
-
-	// Se cargan los textos
-	const std::string mainLang = cfgLoader->configMain[cfg::mainLang].valueStr;
-	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
-
 	gameMenu = new GameMenu(cfgLoader);
 
 	/* Dispositivo de audio: se abre AQUI, una sola vez, a tasa fija, y ya no se
@@ -1793,17 +1833,19 @@ int main(int argc, char *argv[]) {
 	 * pausa como siempre y el frontend arranca igual: quedarse sin musica no
 	 * puede impedir usar el programa. */
 	if (audio_opened) {
+		/* Pausado de partida: applyMenuMusic() lo reanuda si de verdad hay
+		 * cancion que poner. */
+		SDL_PauseAudio(1);
+
 		g_music = new MusicPlayer();
-		/* Volumen guardado ANTES de cargar: load() calcula el destino de la
-		 * rampa a partir de el, asi que ponerlo despues dejaria la primera
-		 * reproduccion al 100% hasta el primer cambio de estado. */
+		/* Volumen ANTES de cargar: load() calcula el destino de la rampa a
+		 * partir de el, asi que ponerlo despues dejaria la primera reproduccion
+		 * al 100% hasta el primer cambio de estado. */
 		g_music->setVolume(cfgLoader->configMain[cfg::musicVolume].valueInt * 10);
-		const std::string musicPath = Constant::getAppDir() + Constant::getFileSep() + MUSIC_MENU_FILE;
-		if (g_music->load(musicPath, g_audio_device_rate)) {
-			SDL_PauseAudio(0);
-		} else {
-			SDL_PauseAudio(1);
-		}
+
+		/* La cancion la elige applyMenuMusic segun el core activo, con la
+		 * general como respaldo; ya no hay ruta fija en el codigo. */
+		applyMenuMusic();
 	}
 
 	listMenu = new ListMenu(gameMenu->overlay->w, gameMenu->overlay->h);

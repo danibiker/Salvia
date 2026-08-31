@@ -12,7 +12,7 @@ namespace cfg {
 	typedef enum {emulators = 0, debug, resolution_width, resolution_height, fullscreen, path_prefix, aspectRatio, packedImages,
 			scaleMode, scaleIntMode, syncMode, shaderMode, fastForwardMult, libretrosystem, libretro_save, libretro_state, libretro_core, libretro_core_version, 
 			libretro_core_extensions, roms_path,
-			showFps, integerScale, animBG, musicVolume,
+			showFps, integerScale, animBG, musicVolume, musicEnabled, musicFile,
 			mainLang, scrapRegion, scrapLang, scrapOrigin, scrapUser, scrapPass, apikeytgdb, raUser, raPass, enableAchievements, hardcoreRA,
 			showEmptyEmulators, overscan_x, overscan_y, resolutionIndex,
 			lastOptSel,

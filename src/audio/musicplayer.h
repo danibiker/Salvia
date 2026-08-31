@@ -99,6 +99,12 @@ extern "C" {
 class MusicPlayer;
 extern MusicPlayer* g_music;
 
+/* Definida en salvia.cpp.  Resuelve que cancion le toca al core activo (con la
+ * general como respaldo, y nada si musicEnabled esta apagado) y la pone si no es
+ * ya la que suena.  Se declara aqui, junto a g_music, porque tambien la llaman
+ * los callbacks del menu y salvia.h no se incluye desde ningun otro sitio. */
+void applyMenuMusic();
+
 class MusicPlayer {
 private:
     AudioBuffer      ring;        /* miembro fijo: nunca se libera */
@@ -152,6 +158,11 @@ private:
     int32_t fullGain() const {
         return (int32_t)(((int64_t)MUSIC_GAIN_ONE * volumePct) / 100);
     }
+
+    /* Fichero que se esta reproduciendo.  Solo sirve para que ensureLoaded()
+     * pueda decidir si hay que cambiar de cancion o no: al pasar de un core a
+     * otro que comparta musica no se debe cortar ni reiniciar nada. */
+    std::string curPath;
 
     /* Scratch.  Miembros y no locales de update(): en la 360 son 24 KB que no
      * queremos en la pila del bucle principal. */
@@ -337,6 +348,26 @@ public:
 
     int getVolume() const { return volumePct; }
 
+    /* Deja sonando `path`, cambiando de cancion solo si hace falta.
+     *
+     * Es el punto de entrada que usa el cambio de listado: si el core nuevo
+     * comparte musica con el anterior no se toca nada, y si no, se para la
+     * actual y se abre la otra.  Sin esta comparacion, moverse por la lista de
+     * cores reiniciaria la cancion en cada pulsacion de L o R.
+     *
+     * Con `path` vacio equivale a stop(). */
+    bool ensureLoaded(const std::string& path, int deviceRate) {
+        if (path.empty()) {
+            if (active) stop();
+            return false;
+        }
+        if (active && curPath == path) return true;   /* ya suena esa: nada que hacer */
+
+        return load(path, deviceRate);
+    }
+
+    const std::string& getPath() const { return curPath; }
+
     /* Cierto cuando la rampa ya esta abajo del todo y no hay intencion de
      * subirla.  Lo consulta el callback: mientras sea falso hay que SEGUIR
      * leyendo musica aunque el estado ya no la pida, porque si no el fade-out no
@@ -439,7 +470,8 @@ public:
         gain       = 0;
         gainTarget = wantPlay ? fullGain() : 0;
 
-        active = true;
+        curPath = path;
+        active  = true;
         LOG_INFO("Musica: '%s' %u Hz %u canales -> dispositivo %d Hz (ratio %.4f), streaming\n",
             path.c_str(), srcRate, srcChannels, deviceRate, rate.getBaseRatio());
 
@@ -463,6 +495,7 @@ public:
         rate.reset();
         srcChannels = 0;
         srcRate     = 0;
+        curPath.clear();
         /* Corte seco: stop() es el desmontaje (cierre de la app o recarga), no
          * una pausa.  El fundido de verdad es el de setWanted(false), que baja
          * la rampa ANTES de que nadie llame aqui. */

@@ -100,13 +100,16 @@ volatile bool audio_closing = false;
  * cuadrando en vez de salir desafinado. */
 static int g_audio_device_rate = AUDIO_DEVICE_RATE;
 
-/* Musica de menu.  Suena mientras no hay ROM cargada y se detiene (liberando la
- * memoria del fichero) al entrar en un juego.  Es posible gracias a que el
+/* Musica de menu.  Suena en todo estado menos partida en marcha y overlay sobre
+ * ella (ver musicWantedFor en salvia.cpp).  Es posible gracias a que el
  * dispositivo esta permanentemente abierto: antes habria que haberlo abierto y
- * cerrado al entrar y salir de cada juego. */
-#define MUSIC_MENU_FILE "assets\\music\\menu.mp3"
-
-/* Puntero y no objeto global a proposito: AudioBuffer crea un evento del kernel
+ * cerrado al entrar y salir de cada juego.
+ *
+ * La cancion NO esta fijada en el codigo: la elige applyMenuMusic() segun el
+ * core activo (clave 'music_file' de su .cfg) con configMain[cfg::musicFile]
+ * como respaldo, y configMain[cfg::musicEnabled] la apaga del todo.
+ *
+ * Puntero y no objeto global a proposito: AudioBuffer crea un evento del kernel
  * en su constructor, y como global eso correria ANTES de main.  Se reserva en
  * main, como gameMenu y listMenu. */
 MusicPlayer* g_music = NULL;

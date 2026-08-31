@@ -1099,6 +1099,7 @@ class ConfigEmu{
 		scaleIntMode = 0;
 		execIdx = 0;
 		syncMode = 0;
+		music_file_index = 0;
     }
     ~ConfigEmu(){
     }
@@ -1125,9 +1126,12 @@ class ConfigEmu{
     // i.e. yes: "emulator.exe -option1 -option2 rom"
     //       no: "emulator.exe rom -option1 -option2"
     bool options_before_rom;
-
     std::string assets;
-    
+    /* Musica de menu propia de este core, ruta relativa al directorio de la app.
+     * Vacia = usar la general de configMain[cfg::musicFile]. */
+    std::string music_file;
+	//Indice de la musica de fondo seleccionada
+	int music_file_index;
     std::string screen_shot_directory;
     //# A ROM file is a list of ROMs to use.  If set to "no", ROMs are
     //# scanned for in the rom_directory.  If set to "yes" a ROM file (which
