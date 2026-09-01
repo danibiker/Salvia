@@ -52,11 +52,7 @@
     <ClCompile Include="libretro\timer.c" />
     <ClCompile Include="libretro\windraw.c" />
     <ClCompile Include="libretro\winui.c" />
-    <ClCompile Include="m68000\c68k\c68k.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-    </ClCompile>
+    <ClCompile Include="m68000\c68k\c68k.c" />
     <ClCompile Include="m68000\c68k\c68kexec.c">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Disabled</Optimization>
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Disabled</InlineFunctionExpansion>
@@ -65,18 +61,24 @@
       <TrapIntegerDividesOptimization Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">false</TrapIntegerDividesOptimization>
       <PreschedulingOptimization Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">false</PreschedulingOptimization>
       <InlineAssemblyOptimization Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">false</InlineAssemblyOptimization>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="m68000\m68000.c" />
     <ClCompile Include="m68000\musashi\m68kcpu.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="m68000\musashi\m68kops.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="m68000\musashi\softfloat\softfloat.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="x68k\adpcm.c" />
@@ -131,13 +133,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -188,7 +190,7 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;__LIBRETRO__;__HAVE_C68K;__C68K_NO_JUMP_TABLE;HAVE_MUSASHI;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;inline=_inline</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;__LIBRETRO__;HAVE_C68K;C68K_NO_JUMP_TABLE;__HAVE_MUSASHI;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;inline=_inline</PreprocessorDefinitions>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <StringPooling>true</StringPooling>
@@ -212,7 +214,7 @@
       </PrecompiledHeader>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_XBOX;__LIBRETRO__;HAVE_C68K;C68K_NO_JUMP_TABLE;__HAVE_MUSASHI;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;MSB_FIRST;inline=_inline</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;NDEBUG;__LIBRETRO__;HAVE_C68K;C68K_NO_JUMP_TABLE;__HAVE_MUSASHI;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;MSB_FIRST;inline=_inline</PreprocessorDefinitions>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <StringPooling>true</StringPooling>
@@ -241,7 +243,7 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;__LIBRETRO__;__HAVE_C68K;__C68K_NO_JUMP_TABLE;HAVE_MUSASHI;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;inline=_inline</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;__LIBRETRO__;HAVE_C68K;C68K_NO_JUMP_TABLE;__HAVE_MUSASHI;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;inline=_inline</PreprocessorDefinitions>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <StringPooling>true</StringPooling>
@@ -264,12 +266,12 @@
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <Optimization>Full</Optimization>
-      <FunctionLevelLinking>false</FunctionLevelLinking>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>_XBOX;NDEBUG;__LIBRETRO__;__HAVE_C68K;__C68K_NO_JUMP_TABLE;HAVE_MUSASHI;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;MSB_FIRST;inline=_inline</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;NDEBUG;__LIBRETRO__;HAVE_C68K;C68K_NO_JUMP_TABLE;__HAVE_MUSASHI;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;MSB_FIRST;inline=_inline</PreprocessorDefinitions>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <StringPooling>false</StringPooling>
+      <StringPooling>true</StringPooling>
       <ExceptionHandling>false</ExceptionHandling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <BufferSecurityCheck>false</BufferSecurityCheck>
@@ -280,7 +282,7 @@
       <TrapIntegerDividesOptimization>true</TrapIntegerDividesOptimization>
       <PreschedulingOptimization>true</PreschedulingOptimization>
       <InlineAssemblyOptimization>true</InlineAssemblyOptimization>
-      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
