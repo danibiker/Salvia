@@ -1087,6 +1087,68 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 			//case RETRO_DEVICE_ID_MOUSE_WHEELDOWN: return (inputs->mouse_wheel < 0);
 			case RETRO_DEVICE_ID_MOUSE_MIDDLE: return inputs->mouse_buttons[1];
 		}
+	} else if (device == RETRO_DEVICE_LIGHTGUN && !gameMenu->isOnscreenKeybEnabled()) {
+		/* Pistola de luz apuntada con el raton.
+		 *
+		 * SCREEN_X/Y son ABSOLUTAS y normalizadas a [-0x7fff, 0x7fff], no
+		 * deltas: es lo que define libretro y lo que el core convierte despues
+		 * a posicion de barrido.
+		 *
+		 * La base de normalizacion sale de getMouseSurface() y NO de
+		 * SDL_GetVideoSurface(): hay que dividir por el espacio EXACTO al que
+		 * SDL acota mouse_x/mouse_y, que en Xbox no es el que devuelve
+		 * SDL_GetVideoSurface (ver el comentario largo de getMouseSurface --
+		 * con la superficie equivocada el apuntado solo alcanzaba 1/5 del ancho).
+		 *
+		 * La reticula usa esa MISMA superficie, asi que reticula y punto de
+		 * disparo coinciden por construccion y no por ajuste. */
+		switch (id) {
+			case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X:
+			case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y: {
+				SDL_Surface* vs = gameMenu->getMouseSurface();
+				int span, pos;
+				if (!vs) return 0;
+				if (id == RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X) {
+					span = vs->w - 1;
+					pos  = (int)inputs->mouse_x;
+				} else {
+					span = vs->h - 1;
+					pos  = (int)inputs->mouse_y;
+				}
+				if (span <= 0) return 0;
+				if (pos < 0)    pos = 0;
+				if (pos > span) pos = span;
+				/* pos*65534 son ~84M como maximo, dentro de int de sobra. */
+				return (int16_t)(((pos * 65534) / span) - 32767);
+			}
+			/* El raton esta ACOTADO a la pantalla, asi que por posicion nunca
+			 * apunta fuera: la respuesta honesta es 0. El disparo fuera de
+			 * pantalla se hace con RELOAD, que es el gesto de recargar de las
+			 * pistolas de verdad y lo que el core traduce al centinela. */
+			case RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN: return 0;
+
+			case RETRO_DEVICE_ID_LIGHTGUN_TRIGGER: return inputs->mouse_buttons[0];
+
+			/* Recargar va al boton MEDIO y no al derecho, aunque el derecho sea
+			 * el sitio natural: en Time Crisis el boton A del arma es el PEDAL
+			 * (cubrirse / salir), que se usa constantemente, y RELOAD solo hace
+			 * falta en los juegos que recargan disparando fuera de pantalla.
+			 * El derecho se reserva para el pedal. */
+			case RETRO_DEVICE_ID_LIGHTGUN_RELOAD:  return inputs->mouse_buttons[1];
+
+			/* AUX_A y AUX_B son los botones A y B del GunCon, que el arma
+			 * presenta al juego como Start y Cruz. Se aceptan tanto del raton
+			 * como del mando: el core DESCARTA los botones del pad en un puerto
+			 * de pistola (igual que upstream), asi que si no se recogen aqui se
+			 * quedan sin usar -- y hacen falta para los menus. */
+			case RETRO_DEVICE_ID_LIGHTGUN_AUX_A:
+				return inputs->mouse_buttons[2] ||
+				       inputs->getCoreAny(port, RETRO_DEVICE_ID_JOYPAD_START);
+			case RETRO_DEVICE_ID_LIGHTGUN_AUX_B:
+				return inputs->getCoreAny(port, RETRO_DEVICE_ID_JOYPAD_A);
+			case RETRO_DEVICE_ID_LIGHTGUN_START:
+				return inputs->getCoreAny(port, RETRO_DEVICE_ID_JOYPAD_START);
+		}
 	} else if (device == RETRO_DEVICE_KEYBOARD){
 		// Poll-based keyboard query (algunos cores lo usan; otros como
 		// DOSBox-Pure usan el callback event-based, ver
@@ -1769,6 +1831,11 @@ static void __declspec(noinline) runGameLoop() {
 			switch (gameMenu->getEmuStatus()){
 				case EMU_STARTED:
 					updateGame();
+					/* Despues de updateGame para quedar ENCIMA de los contadores de
+					 * FPS/memoria: el solape es un rect pequeno que sigue al raton y
+					 * los contadores se redibujan cada frame, asi que lo peor que
+					 * puede pasar es un parpadeo de un frame en ellos. */
+					gameMenu->drawLightgunCrosshair();
 					break;
 				case EMU_MENU:
 				case EMU_MENU_FILTER:

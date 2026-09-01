@@ -168,6 +168,12 @@ typedef struct
 // ANALOG CONTROLLER SCPH-1150
 #define PSE_PAD_TYPE_ANALOGPAD		7
 
+// Centinela de "el canon no apunta a la tele" en PadDataS.absoluteX/Y.  Es el
+// mismo valor que usa upstream (frontend/libretro.c y libpcsxcore/pad.c lo
+// llevan a mano las dos veces): esta bien fuera del rango 0..1023 util, asi que
+// ningun escalado de las opciones de calibracion puede alcanzarlo por accidente.
+#define PSXGUN_OFFSCREEN			65536
+
 
 // sucess, everything configured, and went OK.
 #define PSE_PAD_ERR_SUCCESS			0
@@ -205,7 +211,18 @@ typedef struct
 	// values are in range -128 - 127
 	unsigned char moveX, moveY;
 
-	unsigned char reserved[91];
+	// for lightgun fill those next 2 ints: posicion ABSOLUTA normalizada a
+	// 0..1023 en los dos ejes, o PSXGUN_OFFSCREEN si el canon no apunta a la
+	// tele.  Los consume el case PSE_PAD_TYPE_GUNCON de _PADpoll (plugins.c),
+	// que los convierte a posicion de barrido.
+	int absoluteX, absoluteY;
+
+	// Los 8 bytes de los dos int salen de aqui (91 -> 83), no se suman encima:
+	// nadie usa reserved ni depende del tamano del struct (no hay sizeof, no
+	// entra en savestates) y en este build hay UNA sola definicion -- Pokopom
+	// lleva su propia copia de esta cabecera pero su proyecto no esta en
+	// pcsxr.sln, asi que no se compila.
+	unsigned char reserved[83];
 
 } PadDataS;
 

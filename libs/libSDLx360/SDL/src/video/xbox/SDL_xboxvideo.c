@@ -1151,6 +1151,53 @@ static void XBOX_DrawOverlay(LPDIRECT3DTEXTURE9 game_texture, int useAlphaFix)
 	g_overlay_surface->pitch = d3dlr.Pitch;
 }
 
+
+/* Rectangulo donde se dibuja la imagen del JUEGO, expresado en PIXELES DEL
+ * OVERLAY.  Lo necesita quien dibuje sobre el overlay algo que tenga que
+ * alinearse con el contenido del juego (la reticula del lightgun).
+ *
+ * Son dos quads distintos y hay que componer sus geometrias:
+ *
+ *  - El quad del JUEGO ocupa g_visible_rect en pixeles de backbuffer: el
+ *    aspect del core lo deja pillarboxed (4:3 en 16:9 -> 960 de 1280) o no,
+ *    segun lo que reporte el core (el hack de widescreen cambia esto).
+ *  - El quad del OVERLAY cubre el backbuffer ENTERO menos el overscan, y NO
+ *    aplica el aspect.  Asi que el pixel px del overlay aparece en pantalla en
+ *    ox + px*(bbw - 2*ox)/bbw, y hay que invertir esa relacion.
+ *
+ * Sin esto, la reticula se reparte sobre toda la pantalla mientras el disparo
+ * se reparte sobre la imagen: coinciden en el centro y se separan hacia los
+ * bordes, cada uno hacia su lado. */
+void SDL_XBOX_GetGameRectOnOverlay(int *x, int *y, int *w, int *h)
+{
+	float bbw = (float)D3D_PP.BackBufferWidth;
+	float bbh = (float)D3D_PP.BackBufferHeight;
+	float ox  = (float)g_overlay_overscan_x;
+	float oy  = (float)g_overlay_overscan_y;
+	float span_x = bbw - 2.0f * ox;
+	float span_y = bbh - 2.0f * oy;
+	float left = (float)g_visible_rect.left,  top    = (float)g_visible_rect.top;
+	float right= (float)g_visible_rect.right, bottom = (float)g_visible_rect.bottom;
+
+	/* Sin juego cargado el rect esta a cero: devolver el overlay entero. */
+	if (right <= left || bottom <= top) {
+		*x = 0; *y = 0; *w = (int)bbw; *h = (int)bbh;
+		return;
+	}
+
+	if (span_x < 1.0f || span_y < 1.0f) {   /* overscan absurdo: sin inset */
+		*x = (int)left;  *y = (int)top;
+		*w = (int)(right - left);
+		*h = (int)(bottom - top);
+		return;
+	}
+
+	*x = (int)((left   - ox) * bbw / span_x);
+	*y = (int)((top    - oy) * bbh / span_y);
+	*w = (int)((right  - left) * bbw / span_x);
+	*h = (int)((bottom - top ) * bbh / span_y);
+}
+
 SDL_Surface* SDL_XBOX_GetOverlay(void)
 {
 	if (!g_overlay_surface)

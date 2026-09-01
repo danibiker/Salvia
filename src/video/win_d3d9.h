@@ -56,6 +56,8 @@ void         SDL_XBOX_SetDisplayOverflow(int overflow);
 void         SDL_XBOX_SetRotation(int rotation);
 void         SDL_XBOX_SetVSync(int enable);
 SDL_Surface* SDL_XBOX_GetOverlay(void);
+/* Rect de la imagen del juego en pixeles del overlay. */
+void         SDL_XBOX_GetGameRectOnOverlay(int *x, int *y, int *w, int *h);
 void         SDL_XBOX_SetOverlayEnabled(int enabled);
 void         SDL_XBOX_SetOverscan(int x, int y);
 

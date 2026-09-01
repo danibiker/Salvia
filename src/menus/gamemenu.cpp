@@ -23,6 +23,10 @@ GameMenu::GameMenu(CfgLoader *cfgLoader) : m_csInited(false)
     status = EMU_MENU;
 	lastStatus = EMU_MENU;
 	onscreenKeyboard = false;
+	/* Reticula del lightgun: sin dibujar todavia, asi que no hay rect que borrar. */
+	crosshairDrawn = false;
+	crosshairRect.x = crosshairRect.y = 0;
+	crosshairRect.w = crosshairRect.h = 0;
 	romLoaded = false;
 	gameTicks.ticks = 0;
 
@@ -2339,8 +2343,163 @@ void GameMenu::startScrapping(){
 	}
 }
 
+
+/* ---------------------------------------------------------------------------
+ *  Reticula del lightgun
+ * ---------------------------------------------------------------------------
+ *
+ *  Con un GunCon de verdad no hace falta: apuntas el arma fisica a la tele y el
+ *  juego no dibuja nada. Con raton no hay a donde apuntar, asi que sin reticula
+ *  el juego es injugable -- no por un fallo, sino por como es el dispositivo.
+ *
+ *  Va en el OVERLAY, no en gameScreen ni en el rasterizador del core:
+ *
+ *   - El overlay esta en pixeles de PANTALLA, el mismo espacio del que sale
+ *     inputs.mouse_x/mouse_y y por tanto el mismo del que el core saca las
+ *     coordenadas que manda al GunCon. Los dos usan la MISMA fraccion
+ *     mouse/(ancho-1), asi que reticula y punto de disparo coinciden por
+ *     construccion. Dibujando en gameScreen habria que hacer el mapeo inverso
+ *     pantalla->core atravesando escalador, aspect y overscan, y cualquier
+ *     desajuste apareceria como "el tiro no cae donde apunta la reticula", que
+ *     es el sintoma mas dificil de atribuir.
+ *   - El overlay se compone DESPUES del shader, asi que HQ2X/xBR no la
+ *     desenfocan.
+ *   - Y no obliga a tocar los tres renderers ni a pelearse con el hilo GPU.
+ *
+ *  El borrado por rect es el mismo patron que ya usan los contadores de FPS y
+ *  memoria, que tambien se actualizan durante la partida.
+ * ------------------------------------------------------------------------- */
+
+/* Superficie contra la que SDL ACOTA las coordenadas del raton, o sea el
+ * espacio en el que vienen inputs.mouse_x/mouse_y.  Cualquier normalizacion
+ * del raton (reticula del lightgun, SCREEN_X/Y del GunCon) tiene que dividir
+ * por ESTAS dimensiones y no por otras.
+ *
+ * NO usar SDL_GetVideoSurface() directamente: en libSDLx360 miente.
+ * XBOX_ResizeGameTexture() reemplaza this->screen -- que es el
+ * #define SDL_VideoSurface (current_video->screen) -- por una superficie del
+ * tamano del core, y deja ->visible (#define SDL_PublicSurface, lo que
+ * devuelve SDL_GetVideoSurface()) apuntando a la del arranque.  El acotado del
+ * raton usa SDL_VideoSurface (SDL_mouse.c), asi que en Xbox las coordenadas
+ * llegan en PIXELES DEL CORE.  Con SDL_GetVideoSurface() la reticula solo
+ * alcanzaba 1/5 del ancho y 1/3 del alto: 255/1280 y 239/720, medido con Time
+ * Crisis a 256x240 y backbuffer 720p. */
+SDL_Surface* GameMenu::getMouseSurface(){
+#ifdef _XBOX
+	/* hw_refresh guarda el resultado de XBOX_ResizeGameTexture en gameScreen,
+	 * asi que gameScreen ES SDL_VideoSurface: el mismo objeto. */
+	return gameScreen;
+#else
+	/* SDL de escritorio: SDL_VideoSurface y SDL_PublicSurface tienen las mismas
+	 * dimensiones, y aqui gameScreen NO sirve -- es la superficie del juego, a
+	 * tamano del core, mientras el raton se acota a la ventana. */
+	return SDL_GetVideoSurface();
+#endif
+}
+
+void GameMenu::drawLightgunCrosshair(){
+	if (!this->overlay) return;
+
+	/* Sin overlay propio (Windows sin SALVIA_GPU_VIDEO, ver engine.cpp) el
+	 * overlay ES gameScreen: la misma superficie y sin canal alfa.  Ahi
+	 * clearOverlayRect rellena con 0, asi que la reticula iria dejando
+	 * rectangulos NEGROS sobre la imagen del juego en vez de borrarse.  Mejor sin
+	 * reticula que con rastro.  En Xbox y en Windows con GPU son superficies
+	 * distintas y esto no hace nada. */
+	if (this->overlay == this->gameScreen) return;
+
+	/* Hay algun puerto de pistola? Se compara el tipo BASE del device id, no el
+	 * id completo: asi vale para cualquier subclase (GunCon, Justifier) y para
+	 * cualquier core, sin que el frontend tenga que conocer sus constantes. */
+	int gunPort = -1;
+	if (this->joystick){
+		for (int p = 0; p < MAX_PLAYERS; p++){
+			const int dev = this->joystick->g_ports[p].current_device_id;
+			if (dev > 0 && (dev & 0xFF) == RETRO_DEVICE_LIGHTGUN){
+				gunPort = p;
+				break;
+			}
+		}
+	}
+
+	if (gunPort < 0){
+		/* Sin pistola: borrar la ultima posicion UNA vez y no volver a tocar el
+		 * overlay. Si no se borrase, la reticula se quedaria pegada al cambiar
+		 * de dispositivo con el juego en marcha. */
+		if (this->crosshairDrawn){
+			clearOverlayRect(this->crosshairRect);
+			this->crosshairDrawn = false;
+		}
+		return;
+	}
+
+	SDL_Surface* vs = getMouseSurface();
+	if (!vs || vs->w < 2 || vs->h < 2) return;
+
+	const t_joy_state& in = this->joystick->inputs;
+
+	/* La fraccion del raton es la MISMA que manda el core al GunCon (ver la
+	 * rama RETRO_DEVICE_LIGHTGUN de salvia.cpp), pero hay que repartirla sobre
+	 * el rectangulo donde se dibuja la IMAGEN del juego, no sobre la pantalla
+	 * entera.
+	 *
+	 * Con un core 4:3 en un backbuffer 16:9 la imagen ocupa los 960 pixeles
+	 * centrales de 1280 y sobran 160 por lado; el hack de widescreen cambia ese
+	 * reparto. Repartiendo sobre la pantalla completa, reticula y disparo
+	 * coinciden en el centro y se separan hacia los bordes, cada uno hacia su
+	 * lado -- 160 px en el borde, medido con Time Crisis. */
+	int gx, gy, gw, gh;
+	SDL_XBOX_GetGameRectOnOverlay(&gx, &gy, &gw, &gh);
+	if (gw < 2 || gh < 2) { gx = 0; gy = 0; gw = this->overlay->w; gh = this->overlay->h; }
+
+	int cx = gx + (int)(((long)in.mouse_x * (gw - 1)) / (vs->w - 1));
+	int cy = gy + (int)(((long)in.mouse_y * (gh - 1)) / (vs->h - 1));
+
+	/* Tamano proporcional al alto para que se vea igual en 480p y en 720p. */
+	int rad = this->overlay->h / 48;
+	if (rad < 4) rad = 4;
+	const int gap = rad / 2 + 1;
+	const int arm = rad;
+	const int ext = rad + gap + arm + 1;
+
+	/* Borrar la posicion anterior ANTES de dibujar la nueva. */
+	if (this->crosshairDrawn)
+		clearOverlayRect(this->crosshairRect);
+
+	/* 0xRRGGBBAA: SDL_gfx toma el alfa en el byte BAJO (mira el
+	 * `(color & 255) == 255` de hlineColor), no un pixel del formato de la
+	 * superficie. Rojo opaco. */
+	const Uint32 col = 0xFF0000FFu;
+
+	/* circleColor y NO aacircleColor: la version antialiased blendea por
+	 * software contra el overlay, que esta TRANSPARENTE (negro con alfa 0).  En
+	 * _putPixelAlpha un borde con cobertura 128 sale (127,0,0) con alfa 127, y
+	 * la GPU compone con alfa RECTO -> el borde queda al doble de oscuro del que
+	 * toca: halo sucio.  Y aaellipseColor replota los pixeles de los ejes, que al
+	 * blendear se oscurecen dos veces: motas.  circleColor con alfa 255 escribe
+	 * directo (pixelColorNolock) y el replotado pasa a ser inocuo. */
+	circleColor(this->overlay, cx, cy, rad, col);
+	hlineColor(this->overlay, cx - rad - gap - arm, cx - rad - gap, cy, col);
+	hlineColor(this->overlay, cx + rad + gap, cx + rad + gap + arm, cy, col);
+	vlineColor(this->overlay, cx, cy - rad - gap - arm, cy - rad - gap, col);
+	vlineColor(this->overlay, cx, cy + rad + gap, cy + rad + gap + arm, col);
+	pixelColor(this->overlay, cx, cy, col);
+
+	/* Rect sucio para el frame siguiente. No se acota a la superficie: tanto
+	 * SDL_FillRect como las primitivas de SDL_gfx recortan solas. */
+	this->crosshairRect.x = (Sint16)(cx - ext);
+	this->crosshairRect.y = (Sint16)(cy - ext);
+	this->crosshairRect.w = (Uint16)(ext * 2 + 1);
+	this->crosshairRect.h = (Uint16)(ext * 2 + 1);
+	this->crosshairDrawn  = true;
+}
+
 void GameMenu::clearOverlay(){
 	memset(overlay->pixels, 0, overlay->pitch * overlay->h); 
+	/* Un borrado de TODA la superficie invalida el rect de la reticula: si no,
+	 * al volver al juego se borraria un rect sobre lo que acabo de pintar el
+	 * menu, dejando un agujero transparente (ver drawLightgunCrosshair). */
+	crosshairDrawn = false;
 }
 
 void GameMenu::clearOverlayRect(SDL_Rect& rect){
@@ -2351,6 +2510,10 @@ void GameMenu::fillOverlay(int colorIndex){
 	if (colorIndex < clTotalColors){
 		SDL_FillRect(this->overlay, NULL, Constant::colors[colorIndex].color);
 	}
+	/* Un borrado de TODA la superficie invalida el rect de la reticula: si no,
+	 * al volver al juego se borraria un rect sobre lo que acabo de pintar el
+	 * menu, dejando un agujero transparente (ver drawLightgunCrosshair). */
+	crosshairDrawn = false;
 }
 
 void GameMenu::fillOverlayAlpha(int colorIndex, int alpha){
@@ -2359,6 +2522,7 @@ void GameMenu::fillOverlayAlpha(int colorIndex, int alpha){
 		const Uint32 colorA = SDL_MapRGBA(this->overlay->format, col.r, col.g, col.b, alpha);
 		SDL_FillRect(this->overlay, NULL, colorA);
 	}
+	crosshairDrawn = false;   /* igual que fillOverlay */
 }
 
 void GameMenu::drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int col){

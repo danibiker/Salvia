@@ -207,6 +207,14 @@ extern volatile int      s_gpu_plugin_call;
 	                                       int *disabled);
 #endif
 
+	/* Geometria de display para el GunCon, calculada y propiedad del HILO
+	 * PRINCIPAL (plugins/xbox_soft/gpu.c).  Equivalente de GPUgetScreenInfo()
+	 * de upstream.  Se declara aqui porque la llaman libpcsxcore/plugins.c (C)
+	 * y libretro_core.cpp (C++), que no incluyen las cabeceras del plugin. */
+	void PEOPS_GPUgetScreenInfo(int *y, int *base_vres);
+	void PEOPS_GPUgetHRange(int *x0, int *span);
+	void PEOPS_GPUresetScreenInfo(void);
+
     void gpuWriteData(u32 data);
 	u32  gpuReadData(void);	
 

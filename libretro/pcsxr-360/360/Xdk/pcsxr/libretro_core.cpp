@@ -34,7 +34,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-#include <stdlib.h>   /* atoi (cycle_multiplier, analog_saturation) */
+#include <stdlib.h>   /* atoi (cycle_multiplier, analog_saturation), atof (guncon) */
 
 #include "libretro.h"
 
@@ -206,6 +206,7 @@ static retro_input_state_t        input_state_cb;
 #define RETRO_DEVICE_PSE_ANALOG    RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG,  0)
 #define RETRO_DEVICE_PSE_DUALSHOCK RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG,  1)
 #define RETRO_DEVICE_PSE_MULTITAP  RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 2)
+#define RETRO_DEVICE_PSE_GUNCON    RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_LIGHTGUN, 0)
 
 /* Per-port PSX controller type (PSE_PAD_TYPE_* values from psemu_plugin_defs.h).
  * Array size matches DS_NUM_PORTS in dualshock_pad.c (6: 2 physical + 4 MTAP slaves).
@@ -251,6 +252,44 @@ static unsigned current_pixel_format = RETRO_PIXEL_FORMAT_XRGB8888;
 
 /* ===== Input state ===== */
 static uint16_t libretro_pad_state[6];
+
+/* Deltas del raton de PSX por puerto, ya acotados al byte con signo que manda el
+ * protocolo.  Se rellenan en retro_input_poll solo para los puertos configurados
+ * como raton y los consume PSxInputReadPort via libretro_get_mouse_state. */
+static int8_t libretro_mouse_dx[4];
+static int8_t libretro_mouse_dy[4];
+
+/* Posicion absoluta del lightgun por puerto, ya normalizada a 0..1023 en los
+ * dos ejes, o PSXGUN_OFFSCREEN si el canon no apunta a la tele.  Se rellenan en
+ * retro_input_poll solo para los puertos de tipo GunCon y las consume
+ * PSxInputReadPort via libretro_get_gun_state.
+ *
+ * Arrancan en PSXGUN_OFFSCREEN a proposito: hasta que el frontend entregue una
+ * posicion, lo correcto es decirle al juego que no se apunta a nada.  Con 0,0
+ * el juego creeria que se apunta a la esquina superior izquierda. */
+static int libretro_gun_absx[4] = { PSXGUN_OFFSCREEN, PSXGUN_OFFSCREEN,
+                                    PSXGUN_OFFSCREEN, PSXGUN_OFFSCREEN };
+static int libretro_gun_absy[4] = { PSXGUN_OFFSCREEN, PSXGUN_OFFSCREEN,
+                                    PSXGUN_OFFSCREEN, PSXGUN_OFFSCREEN };
+
+#if PCSXR_DIAG_INSTRUMENTATION
+/* Ultimo SCREEN_X/Y crudo que entrego el frontend para el puerto 0, antes de
+ * normalizar.  Lo saca el volcado [DISP] junto al resultado, que es la unica
+ * forma de distinguir tres fallos que se ven igual ("el raton no mueve nada"):
+ *   raw fijo en 0        -> el frontend no da posicion
+ *   raw se mueve, pos no -> la normalizacion esta mal
+ *   los dos se mueven    -> la posicion llega y el fallo esta mas adelante */
+static int g_diag_gun_raw_x = 0;
+static int g_diag_gun_raw_y = 0;
+#endif
+
+/* Calibracion del GunCon (opciones pcsxr360_gunconadjust*).  Los ratios se
+ * guardan multiplicados por 100 (75..125) para que la normalizacion del poll
+ * sea entera: el float solo aparece al leer la opcion, no por frame. */
+static int g_guncon_adj_x    = 0;
+static int g_guncon_adj_y    = 0;
+static int g_guncon_ratio_x100 = 100;
+static int g_guncon_ratio_y100 = 100;
 static uint8_t  libretro_analog[6][4];   /* [port][lx, ly, rx, ry] */
 
 /* Umbral de saturacion del stick en unidades de eje (|v| >= umbral -> rail).
@@ -420,20 +459,27 @@ void retro_set_environment(retro_environment_t cb) {
             "pcsxr360_cycle_multiplier",
             "PSX CPU cycles per instruction (restart to apply)",
             "CPU Cycles/Instruction (restart to apply)",
-            "Ciclos emulados que cuesta cada instruccion del R3000A. El VBlank "
-            "llega cada 565045 ciclos SIEMPRE, asi que esto fija cuantas "
-            "instrucciones puede ejecutar el juego por frame: 2.00 -> 282K, "
-            "1.75 -> 323K, 1.00 -> 565K. Un juego que no termina su frame a "
-            "tiempo baja su logica a 30 Hz aunque el frontend marque 60 fps. "
-            "1.75 es el default de upstream pcsx_rearmed; por debajo es "
-            "overclock (arriesga timing/audio en algunos juegos).",
+            "Reloj de la CPU PSX como porcentaje.  Es la MISMA palanca que el "
+            "pcsx_rearmed_psxclock (alli el valor es el % directo; aqui se "
+            "guarda su inverso, 10000/%, por compatibilidad con .opt viejos, "
+            "pero la etiqueta muestra el %).  BAJARLO ralentiza la logica del "
+            "juego: util para los que van demasiado rapidos (Broken Sword se "
+            "arregla a ~30%).  SUBIRLO al 100% da mas instrucciones por frame "
+            "(overclock; arriesga timing/audio).  57% es el auto de upstream "
+            "y el default aqui.  El VBlank llega cada 565045 ciclos SIEMPRE, "
+            "asi que el % fija cuantas instrucciones caben por frame: 57% -> "
+            "323K, 30% -> ~170K, 100% -> 565K.",
             NULL, "performance",
             {
-                { "200", "2.00 (Slower / Underclock)" },
-                { "175", "1.75 (Normal Speed)" },
-                { "150", "1.50 (Light Overclock)" },
-                { "125", "1.25 (Medium Overclock)" },
-                { "100", "1.00 (Heavy Overclock)" },
+                { "400", "25% clock (muy lento)" },
+                { "333", "30% clock (lento -- juegos demasiado rapidos)" },
+                { "300", "33% clock" },
+                { "250", "40% clock" },
+                { "200", "50% clock (underclock)" },
+                { "175", "57% clock (normal / auto)" },
+                { "150", "67% clock" },
+                { "125", "80% clock" },
+                { "100", "100% clock (overclock, mas rapido)" },
                 { NULL, NULL }
             },
             "175"
@@ -468,6 +514,20 @@ void retro_set_environment(retro_environment_t cb) {
             NULL, NULL, "system",
             { { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } },
             "disabled"
+        },
+        {
+            "pcsxr360_region",
+            "Region / video timing (restart to apply)", "Region (restart to apply)",
+            "Auto = por el serial del disco (PAL a 50 Hz, NTSC a 60 Hz). Force "
+            "NTSC hace que un juego PAL corra a temporizado 60 Hz: la mayoria de "
+            "juegos PAL eran ports NTSC ralentizados, asi que esto es su "
+            "velocidad original, pero acelera el juego (y el tono del audio) un "
+            "20%. Force PAL hace lo inverso. El audio queda sincronizado; los "
+            "bordes de imagen de un PAL nativo pueden permanecer. Fijable por "
+            "juego en el .opt.",
+            NULL, "system",
+            { { "auto", NULL }, { "ntsc", "Force NTSC (60Hz)" }, { "pal", "Force PAL (50Hz)" }, { NULL, NULL } },
+            "auto"
         },
 
         {
@@ -560,6 +620,108 @@ void retro_set_environment(retro_environment_t cb) {
             "5"
         },
 
+
+        /* ---------- Input: calibracion del GunCon ----------
+         *
+         * Las cuatro NO son adorno: la conversion de posicion normalizada a
+         * posicion de BARRIDO (plugins.c, case PSE_PAD_TYPE_GUNCON) depende del
+         * temporizado real de video, y sin estas no hay forma de corregir un
+         * desvio.  Rangos y pasos IDENTICOS a upstream a proposito, para que un
+         * valor de calibracion encontrado para pcsx_rearmed valga aqui tal cual.
+         *
+         * Como distinguirlas al calibrar: dispara al centro y a las cuatro
+         * esquinas.  Desvio CONSTANTE en todas -> adjustx/adjusty.  Desvio que
+         * CRECE hacia los bordes -> ratiox/ratioy. */
+        {
+            "pcsxr360_gunconadjustx",
+            "Guncon: X axis offset", "Guncon: X offset",
+            "Desplaza el apuntado horizontal del GunCon. Cada unidad es "
+            "aproximadamente un 1% del ancho de pantalla. Para un desvio "
+            "constante hacia un lado.",
+            NULL, "input",
+            {
+                { "-40", NULL }, { "-39", NULL }, { "-38", NULL }, { "-37", NULL }, { "-36", NULL }, { "-35", NULL },
+                { "-34", NULL }, { "-33", NULL }, { "-32", NULL }, { "-31", NULL }, { "-30", NULL }, { "-29", NULL },
+                { "-28", NULL }, { "-27", NULL }, { "-26", NULL }, { "-25", NULL }, { "-24", NULL }, { "-23", NULL },
+                { "-22", NULL }, { "-21", NULL }, { "-20", NULL }, { "-19", NULL }, { "-18", NULL }, { "-17", NULL },
+                { "-16", NULL }, { "-15", NULL }, { "-14", NULL }, { "-13", NULL }, { "-12", NULL }, { "-11", NULL },
+                { "-10", NULL }, { "-9", NULL }, { "-8", NULL }, { "-7", NULL }, { "-6", NULL }, { "-5", NULL },
+                { "-4", NULL }, { "-3", NULL }, { "-2", NULL }, { "-1", NULL }, { "0", NULL }, { "1", NULL },
+                { "2", NULL }, { "3", NULL }, { "4", NULL }, { "5", NULL }, { "6", NULL }, { "7", NULL },
+                { "8", NULL }, { "9", NULL }, { "10", NULL }, { "11", NULL }, { "12", NULL }, { "13", NULL },
+                { "14", NULL }, { "15", NULL }, { "16", NULL }, { "17", NULL }, { "18", NULL }, { "19", NULL },
+                { "20", NULL }, { "21", NULL }, { "22", NULL }, { "23", NULL }, { "24", NULL }, { "25", NULL },
+                { "26", NULL }, { "27", NULL }, { "28", NULL }, { "29", NULL }, { "30", NULL }, { "31", NULL },
+                { "32", NULL }, { "33", NULL }, { "34", NULL }, { "35", NULL }, { "36", NULL }, { "37", NULL },
+                { "38", NULL }, { "39", NULL }, { "40", NULL }, { NULL, NULL }
+            },
+            "0"
+        },
+        {
+            "pcsxr360_gunconadjusty",
+            "Guncon: Y axis offset", "Guncon: Y offset",
+            "Desplaza el apuntado vertical del GunCon. Cada unidad es "
+            "aproximadamente un 1% del alto de pantalla. Para un desvio "
+            "constante hacia arriba o abajo.",
+            NULL, "input",
+            {
+                { "-40", NULL }, { "-39", NULL }, { "-38", NULL }, { "-37", NULL }, { "-36", NULL }, { "-35", NULL },
+                { "-34", NULL }, { "-33", NULL }, { "-32", NULL }, { "-31", NULL }, { "-30", NULL }, { "-29", NULL },
+                { "-28", NULL }, { "-27", NULL }, { "-26", NULL }, { "-25", NULL }, { "-24", NULL }, { "-23", NULL },
+                { "-22", NULL }, { "-21", NULL }, { "-20", NULL }, { "-19", NULL }, { "-18", NULL }, { "-17", NULL },
+                { "-16", NULL }, { "-15", NULL }, { "-14", NULL }, { "-13", NULL }, { "-12", NULL }, { "-11", NULL },
+                { "-10", NULL }, { "-9", NULL }, { "-8", NULL }, { "-7", NULL }, { "-6", NULL }, { "-5", NULL },
+                { "-4", NULL }, { "-3", NULL }, { "-2", NULL }, { "-1", NULL }, { "0", NULL }, { "1", NULL },
+                { "2", NULL }, { "3", NULL }, { "4", NULL }, { "5", NULL }, { "6", NULL }, { "7", NULL },
+                { "8", NULL }, { "9", NULL }, { "10", NULL }, { "11", NULL }, { "12", NULL }, { "13", NULL },
+                { "14", NULL }, { "15", NULL }, { "16", NULL }, { "17", NULL }, { "18", NULL }, { "19", NULL },
+                { "20", NULL }, { "21", NULL }, { "22", NULL }, { "23", NULL }, { "24", NULL }, { "25", NULL },
+                { "26", NULL }, { "27", NULL }, { "28", NULL }, { "29", NULL }, { "30", NULL }, { "31", NULL },
+                { "32", NULL }, { "33", NULL }, { "34", NULL }, { "35", NULL }, { "36", NULL }, { "37", NULL },
+                { "38", NULL }, { "39", NULL }, { "40", NULL }, { NULL, NULL }
+            },
+            "0"
+        },
+        {
+            "pcsxr360_gunconadjustratiox",
+            "Guncon: X axis response", "Guncon: X response",
+            "Escala el recorrido horizontal del GunCon. Subirlo hace que el "
+            "punto de disparo se aleje mas del centro. Para cuando el desvio "
+            "crece hacia los bordes izquierdo y derecho.",
+            NULL, "input",
+            {
+                { "0.75", NULL }, { "0.76", NULL }, { "0.77", NULL }, { "0.78", NULL }, { "0.79", NULL }, { "0.80", NULL },
+                { "0.81", NULL }, { "0.82", NULL }, { "0.83", NULL }, { "0.84", NULL }, { "0.85", NULL }, { "0.86", NULL },
+                { "0.87", NULL }, { "0.88", NULL }, { "0.89", NULL }, { "0.90", NULL }, { "0.91", NULL }, { "0.92", NULL },
+                { "0.93", NULL }, { "0.94", NULL }, { "0.95", NULL }, { "0.96", NULL }, { "0.97", NULL }, { "0.98", NULL },
+                { "0.99", NULL }, { "1.00", NULL }, { "1.01", NULL }, { "1.02", NULL }, { "1.03", NULL }, { "1.04", NULL },
+                { "1.05", NULL }, { "1.06", NULL }, { "1.07", NULL }, { "1.08", NULL }, { "1.09", NULL }, { "1.10", NULL },
+                { "1.11", NULL }, { "1.12", NULL }, { "1.13", NULL }, { "1.14", NULL }, { "1.15", NULL }, { "1.16", NULL },
+                { "1.17", NULL }, { "1.18", NULL }, { "1.19", NULL }, { "1.20", NULL }, { "1.21", NULL }, { "1.22", NULL },
+                { "1.23", NULL }, { "1.24", NULL }, { "1.25", NULL }, { NULL, NULL }
+            },
+            "1.00"
+        },
+        {
+            "pcsxr360_gunconadjustratioy",
+            "Guncon: Y axis response", "Guncon: Y response",
+            "Escala el recorrido vertical del GunCon. Subirlo hace que el punto "
+            "de disparo se aleje mas del centro. Para cuando el desvio crece "
+            "hacia los bordes superior e inferior.",
+            NULL, "input",
+            {
+                { "0.75", NULL }, { "0.76", NULL }, { "0.77", NULL }, { "0.78", NULL }, { "0.79", NULL }, { "0.80", NULL },
+                { "0.81", NULL }, { "0.82", NULL }, { "0.83", NULL }, { "0.84", NULL }, { "0.85", NULL }, { "0.86", NULL },
+                { "0.87", NULL }, { "0.88", NULL }, { "0.89", NULL }, { "0.90", NULL }, { "0.91", NULL }, { "0.92", NULL },
+                { "0.93", NULL }, { "0.94", NULL }, { "0.95", NULL }, { "0.96", NULL }, { "0.97", NULL }, { "0.98", NULL },
+                { "0.99", NULL }, { "1.00", NULL }, { "1.01", NULL }, { "1.02", NULL }, { "1.03", NULL }, { "1.04", NULL },
+                { "1.05", NULL }, { "1.06", NULL }, { "1.07", NULL }, { "1.08", NULL }, { "1.09", NULL }, { "1.10", NULL },
+                { "1.11", NULL }, { "1.12", NULL }, { "1.13", NULL }, { "1.14", NULL }, { "1.15", NULL }, { "1.16", NULL },
+                { "1.17", NULL }, { "1.18", NULL }, { "1.19", NULL }, { "1.20", NULL }, { "1.21", NULL }, { "1.22", NULL },
+                { "1.23", NULL }, { "1.24", NULL }, { "1.25", NULL }, { NULL, NULL }
+            },
+            "1.00"
+        },
         { NULL, NULL, NULL, NULL, NULL, NULL, {{ NULL, NULL }}, NULL }
     };
 
@@ -578,6 +740,8 @@ void retro_set_environment(retro_environment_t cb) {
             { "standard",  RETRO_DEVICE_JOYPAD          },
             { "dualshock", RETRO_DEVICE_PSE_DUALSHOCK   },
             { "analog",    RETRO_DEVICE_PSE_ANALOG       },
+            { "mouse",     RETRO_DEVICE_MOUSE           },
+            { "guncon",    RETRO_DEVICE_PSE_GUNCON      },
             { "multitap",  RETRO_DEVICE_PSE_MULTITAP    },
             { NULL, 0 }
         };
@@ -591,9 +755,12 @@ void retro_set_environment(retro_environment_t cb) {
         /* Salvia expone solo 4 slots (LR ports 0-3).  Los primeros 2 son
          * puertos fisicos (con opcion multitap); los ultimos 2 son slaves
          * (solo cuando el multitap esta activo, mapeados a LR 0-3). */
+        /* OJO con los contadores: van a mano y tienen que cuadrar con el numero
+         * de entradas del array, terminador aparte.  pads_physical son 6 desde
+         * que se anadieron "mouse" y "guncon"; pads_slave siguen siendo 4. */
         static const struct retro_controller_info ports[] = {
-            { pads_physical, 4 },
-            { pads_physical, 4 },
+            { pads_physical, 6 },
+            { pads_physical, 6 },
             { pads_slave, 4 },
             { pads_slave, 4 },
             { NULL, 0 }
@@ -665,6 +832,12 @@ static bool read_bool_var(const char *key, bool defval) {
  * opcion en el menu borraria el override. */
 static signed char g_db_analog_pct = -1;
 
+/* Ratio X del GunCon que la tabla por juego ha impuesto, o -1 si ninguno.
+ * Mismo motivo que el de arriba: check_guncon_calibration() se relee en cada
+ * variables-update y sin esto el override duraria hasta el primer cambio de
+ * opcion en el menu. */
+static signed char g_db_guncon_ratiox100 = -1;
+
 /* 1 si la opcion `key` sigue valiendo su default declarado `dflt` (o si no se
  * puede leer).  Es la unica forma que tenemos de distinguir "el usuario no ha
  * tocado esto" de "el usuario ha elegido esto a proposito": libretro no ofrece
@@ -701,6 +874,57 @@ static void check_analog_saturation(void) {
     if (pct > 40) pct = 40;      /* mas alla de esto el stick es un digital */
     g_analog_sat_thr = 32767 - (32767 * pct) / 100;
     if (g_analog_sat_thr < 1) g_analog_sat_thr = 1;
+}
+
+
+/* Calibracion del GunCon.  Los ratios llegan como "0.75".."1.25" y se guardan
+ * x100: el atof se paga una vez al leer la opcion, no una vez por frame.
+ *
+ * El ratio X SI admite override por juego (guncon_db[]).  Se penso que no:
+ * que la calibracion dependia solo del display y del gusto del usuario.  Lo
+ * desmiente la medida -- Time Crisis (SLUS00405) necesita 0,96 mientras que
+ * los demas juegos de GunCon van finos a 1,00, con el MISMO display.  El
+ * origen es el ancho fijo w=378 de upstream en el case PSE_PAD_TYPE_GUNCON,
+ * que para este juego se queda ~4% largo; su GP1 0x06 declara el rango
+ * estandar (x0=0x260, span=2560, ver hx= en el volcado [DISP]), asi que no
+ * hay nada que derivar de la geometria: es del juego. */
+static void check_guncon_calibration(void) {
+    struct retro_variable var = { NULL, NULL };
+
+    if (!environ_cb) return;
+
+    var.key = "pcsxr360_gunconadjustx"; var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        g_guncon_adj_x = atoi(var.value);
+
+    var.key = "pcsxr360_gunconadjusty"; var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        g_guncon_adj_y = atoi(var.value);
+
+    var.key = "pcsxr360_gunconadjustratiox"; var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        g_guncon_ratio_x100 = (int)(atof(var.value) * 100.0 + 0.5);
+
+    var.key = "pcsxr360_gunconadjustratioy"; var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+        g_guncon_ratio_y100 = (int)(atof(var.value) * 100.0 + 0.5);
+
+    /* La tabla por juego solo manda mientras la opcion siga en su default; se
+     * aplica ANTES de los clamps para que pase por ellos igual que el valor
+     * del usuario. */
+    if (g_db_guncon_ratiox100 > 0 && g_guncon_ratio_x100 == 100)
+        g_guncon_ratio_x100 = (int)g_db_guncon_ratiox100;
+
+    /* Acotado a los rangos declarados: una opcion editada a mano en el .opt no
+     * puede meter un ratio de 0 (todo al centro) ni negativo (eje invertido). */
+    if (g_guncon_adj_x < -40) g_guncon_adj_x = -40;
+    if (g_guncon_adj_x >  40) g_guncon_adj_x =  40;
+    if (g_guncon_adj_y < -40) g_guncon_adj_y = -40;
+    if (g_guncon_adj_y >  40) g_guncon_adj_y =  40;
+    if (g_guncon_ratio_x100 < 75)  g_guncon_ratio_x100 = 75;
+    if (g_guncon_ratio_x100 > 125) g_guncon_ratio_x100 = 125;
+    if (g_guncon_ratio_y100 < 75)  g_guncon_ratio_y100 = 75;
+    if (g_guncon_ratio_y100 > 125) g_guncon_ratio_y100 = 125;
 }
 
 static void check_gpu_busy_model(void) {
@@ -1002,6 +1226,15 @@ void retro_set_controller_port_device(unsigned port, unsigned device) {
             in_type[port] = PSE_PAD_TYPE_ANALOGPAD;  break;
         case RETRO_DEVICE_PSE_ANALOG:
             in_type[port] = PSE_PAD_TYPE_ANALOGJOY;  break;
+        /* Raton de PSX (SCPH-1030).  El case de _PADpoll ya existia en
+         * libpcsxcore/plugins.c; lo unico que faltaba era que alguien
+         * seleccionase el tipo y que se rellenasen moveX/moveY. */
+        case RETRO_DEVICE_MOUSE:
+            in_type[port] = PSE_PAD_TYPE_MOUSE;      break;
+        /* GunCon SLPH-00034 de Namco.  Como subclase de LIGHTGUN, no de MOUSE:
+         * el juego espera posicion ABSOLUTA de barrido, no deltas. */
+        case RETRO_DEVICE_PSE_GUNCON:
+            in_type[port] = PSE_PAD_TYPE_GUNCON;     break;
         case RETRO_DEVICE_PSE_MULTITAP:
             in_type[port] = PSE_PAD_TYPE_STANDARD; /* physical port type */
             if (port < 2) {
@@ -1025,6 +1258,29 @@ void retro_set_controller_port_device(unsigned port, unsigned device) {
  * controller type selected by the frontend via retro_set_controller_port_device. */
 extern "C" int libretro_get_pad_type(int port) {
     return (port >= 0 && port < 4) ? in_type[port] : PSE_PAD_TYPE_STANDARD;
+}
+
+/* Deltas del raton para el puerto dado, en el byte con signo que espera el
+ * protocolo.  Devuelve 0,0 para puertos que no sean raton. */
+extern "C" void libretro_get_mouse_state(int port, signed char *dx, signed char *dy) {
+    if (port < 0 || port >= 4) {
+        *dx = 0; *dy = 0;
+        return;
+    }
+    *dx = (signed char)libretro_mouse_dx[port];
+    *dy = (signed char)libretro_mouse_dy[port];
+}
+
+/* Posicion del lightgun para el case PSE_PAD_TYPE_GUNCON de _PADpoll.  Fuera de
+ * rango devuelve el centinela de "no apunta a la tele", no 0,0: un puerto
+ * invalido no es apuntar a la esquina. */
+extern "C" void libretro_get_gun_state(int port, int *absx, int *absy) {
+    if (port < 0 || port >= 4) {
+        *absx = PSXGUN_OFFSCREEN; *absy = PSXGUN_OFFSCREEN;
+        return;
+    }
+    *absx = libretro_gun_absx[port];
+    *absy = libretro_gun_absy[port];
 }
 
 /* ======================================================================
@@ -1119,6 +1375,102 @@ static void poll_libretro_input(void) {
         for (unsigned i = 0; i < BUTTON_MAP_SIZE; i++) {
             if (input_state_cb(port, RETRO_DEVICE_JOYPAD, 0, button_map[i].retro_id))
                 buttons &= ~(1 << button_map[i].psx_bit);
+        }
+
+        /* Raton de PSX.  Se lee SOLO si el puerto esta configurado como raton:
+         * asi no se paga una consulta de mas por puerto y por frame en el caso
+         * normal, y ademas los botones no se mezclan con los del joypad.
+         *
+         * El PSX espera DELTAS con signo, no coordenadas, asi que lo que da
+         * RETRO_DEVICE_MOUSE sirve tal cual: aqui no hay conversion.
+         *
+         * Los botones van en los bits 11 (izquierdo) y 10 (derecho), o sea en el
+         * byte ALTO de buttonStatus -- que es el que _PADpoll copia a
+         * mousepar[4].  Puestos en los bits 2 y 3 caen en el byte bajo
+         * (mousepar[3]) y el juego no los ve: el cursor se mueve pero no hay
+         * clics, que es exactamente el sintoma que dio Broken Sword.
+         *
+         * Logica invertida (0 = pulsado), igual que el pad; upstream hace lo
+         * mismo por la via de `buttonStatus = ~in_keystate` (plugin.c:31). */
+        if (in_type[port] == PSE_PAD_TYPE_MOUSE) {
+            const int16_t mx = input_state_cb(port, RETRO_DEVICE_MOUSE, 0,
+                                              RETRO_DEVICE_ID_MOUSE_X);
+            const int16_t my = input_state_cb(port, RETRO_DEVICE_MOUSE, 0,
+                                              RETRO_DEVICE_ID_MOUSE_Y);
+
+            /* Acotado a -128..127: el protocolo manda un byte con signo por eje
+             * y un movimiento rapido de raton entrega mucho mas que eso. */
+            libretro_mouse_dx[port] = (int8_t)(mx < -128 ? -128 : (mx > 127 ? 127 : mx));
+            libretro_mouse_dy[port] = (int8_t)(my < -128 ? -128 : (my > 127 ? 127 : my));
+
+            buttons = 0xFFFF;
+            if (input_state_cb(port, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT))
+                buttons &= ~(1 << 11);
+            if (input_state_cb(port, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_RIGHT))
+                buttons &= ~(1 << 10);
+        } else {
+            libretro_mouse_dx[port] = 0;
+            libretro_mouse_dy[port] = 0;
+        }
+
+
+        /* GunCon SLPH-00034.  Se lee SOLO si el puerto es GunCon, igual que el
+         * raton: asi no se pagan 7 consultas por puerto y por frame en el caso
+         * normal ni se mezclan botones.
+         *
+         * Normalizacion identica a upstream (frontend/libretro.c:3157): los
+         * +-32767 de libretro pasan a los 0..1023 que espera la conversion a
+         * posicion de barrido.  Con ratio 1.00 y offset 0 la cuenta se reduce a
+         * gun/64 + 512, que es exactamente el centro en 512 y los extremos en
+         * 0 y 1024.
+         *
+         * El ratio va x100 para no meter float en el poll; el error de
+         * truncacion es de una unidad sobre ~40000 antes del /64, o sea que
+         * desaparece en el resultado final de 10 bits.
+         *
+         * Los 3 botones del GunCon son Trigger, A y B, y el arma los presenta
+         * al juego como Circulo, Start y Cruz -- no es una eleccion nuestra,
+         * es lo que hace el hardware. */
+        if (in_type[port] == PSE_PAD_TYPE_GUNCON) {
+            const int gunx = input_state_cb(port, RETRO_DEVICE_LIGHTGUN, 0,
+                                            RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X);
+            const int guny = input_state_cb(port, RETRO_DEVICE_LIGHTGUN, 0,
+                                            RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y);
+            const int trigger = input_state_cb(port, RETRO_DEVICE_LIGHTGUN, 0,
+                                            RETRO_DEVICE_ID_LIGHTGUN_TRIGGER);
+            const int reload  = input_state_cb(port, RETRO_DEVICE_LIGHTGUN, 0,
+                                            RETRO_DEVICE_ID_LIGHTGUN_RELOAD);
+
+#if PCSXR_DIAG_INSTRUMENTATION
+            if (port == 0) { g_diag_gun_raw_x = gunx; g_diag_gun_raw_y = guny; }
+#endif
+
+            /* Recargar es apuntar fuera de la pantalla y disparar: por eso el
+             * reload cuenta a la vez como "fuera" y como gatillo. */
+            if (reload ||
+                input_state_cb(port, RETRO_DEVICE_LIGHTGUN, 0,
+                               RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN)) {
+                libretro_gun_absx[port] = PSXGUN_OFFSCREEN;
+                libretro_gun_absy[port] = PSXGUN_OFFSCREEN;
+            } else {
+                libretro_gun_absx[port] =
+                    ((gunx * g_guncon_ratio_x100) / 100 + g_guncon_adj_x * 655) / 64 + 512;
+                libretro_gun_absy[port] =
+                    ((guny * g_guncon_ratio_y100) / 100 + g_guncon_adj_y * 655) / 64 + 512;
+            }
+
+            buttons = 0xFFFF;
+            if (trigger || reload)
+                buttons &= ~(1 << 13);   /* Circulo */
+            if (input_state_cb(port, RETRO_DEVICE_LIGHTGUN, 0,
+                               RETRO_DEVICE_ID_LIGHTGUN_AUX_A))
+                buttons &= ~(1 << 3);    /* Start */
+            if (input_state_cb(port, RETRO_DEVICE_LIGHTGUN, 0,
+                               RETRO_DEVICE_ID_LIGHTGUN_AUX_B))
+                buttons &= ~(1 << 14);   /* Cruz */
+        } else {
+            libretro_gun_absx[port] = PSXGUN_OFFSCREEN;
+            libretro_gun_absy[port] = PSXGUN_OFFSCREEN;
         }
 
         libretro_pad_state[port] = buttons;
@@ -1391,6 +1743,31 @@ static const struct game_db_entry game_db[] = {
     { NULL, -1, -1, 0, NULL }
 };
 
+/* --- Calibracion del GunCon por juego -------------------------------------
+ * Tabla aparte de game_db[] a proposito: esto no es una bandera de "este juego
+ * necesita X" sino un numero MEDIDO, y separarla evita anadirle un quinto
+ * campo a las 87 filas de la otra.
+ *
+ * Solo Time Crisis NTSC-U, y solo porque esta medido AQUI.  El case
+ * PSE_PAD_TYPE_GUNCON usa un ancho distinto para PAL (385 en vez de 378) y con
+ * otro temporizado de display, asi que un 0,96 medido en NTSC-U no tiene
+ * ningun motivo para valer en la version europea: cada disco se mide.
+ *
+ * Como anadir un juego: dejar ratiox en 1.00, disparar al borde IZQUIERDO y al
+ * DERECHO, y mover de 0,01 en 0,01 hasta que el disparo caiga en la reticula.
+ * Si los dos lados se anulan con el MISMO valor es escala y va aqui; si cada
+ * lado pide un valor distinto es desvio de offset y va en gunconadjustx. */
+struct guncon_db_entry {
+    const char *serial;      /* 9 alfanumericos, SIN guion (formato CdromId) */
+    signed char ratiox100;   /* 75..125, el mismo x100 que la opcion */
+    const char *game;
+};
+
+static const struct guncon_db_entry guncon_db[] = {
+    { "SLUS00405", 96, "Time Crisis (NTSC-U)" },
+    { NULL, 0, NULL }
+};
+
 /* Comparacion de seriales insensible a mayusculas y acotada a 9 caracteres,
  * que es lo que cabe en CdromId (char[10] con el terminador). */
 static int game_db_serial_equal(const char *a, const char *b) {
@@ -1406,6 +1783,29 @@ static int game_db_serial_equal(const char *a, const char *b) {
     return 1;
 }
 
+/* Aplica la calibracion de pistola de guncon_db[], si el disco tiene entrada.
+ * Se llama desde game_db_apply(), asi que al entrar ya esta comprobado que hay
+ * serial y que pcsxr360_game_db sigue activada. */
+static void guncon_db_apply(void) {
+    int i;
+    for (i = 0; guncon_db[i].serial != NULL; i++) {
+        if (!game_db_serial_equal(guncon_db[i].serial, CdromId))
+            continue;
+        if (option_is_default("pcsxr360_gunconadjustratiox", "1.00")) {
+            g_db_guncon_ratiox100 = guncon_db[i].ratiox100;
+            check_guncon_calibration();
+            pcsxr_log(RETRO_LOG_INFO,
+                "[GAME-DB] %.9s: GunCon ratio X = %d.%02d por la tabla (%s)\n",
+                CdromId, (int)guncon_db[i].ratiox100 / 100,
+                (int)guncon_db[i].ratiox100 % 100, guncon_db[i].game);
+        } else {
+            pcsxr_log(RETRO_LOG_INFO,
+                "[GAME-DB] %.9s: GunCon ratio X: respeto tu ajuste\n", CdromId);
+        }
+        return;
+    }
+}
+
 static void game_db_apply(void) {
     const struct game_db_entry *e = NULL;
     int i;
@@ -1416,6 +1816,8 @@ static void game_db_apply(void) {
      * siguiente aviso de variables-update. */
     g_db_analog_pct = -1;
     check_analog_saturation();
+    g_db_guncon_ratiox100 = -1;
+    check_guncon_calibration();
 
     if (CdromId[0] == '\0') {
         pcsxr_log(RETRO_LOG_INFO, "[GAME-DB] sin serial de disco, nada que aplicar\n");
@@ -1429,6 +1831,11 @@ static void game_db_apply(void) {
         return;
     }
 
+    /* La calibracion de pistola va en su propia tabla, asi que se busca aqui
+     * y no en el bucle de abajo: un juego puede tener entrada de GunCon sin
+     * tener ninguna de arreglos, que es justo el caso de Time Crisis. */
+    guncon_db_apply();
+
     for (i = 0; game_db[i].serial != NULL; i++) {
         if (game_db_serial_equal(game_db[i].serial, CdromId)) {
             e = &game_db[i];
@@ -1437,7 +1844,7 @@ static void game_db_apply(void) {
     }
 
     if (e == NULL) {
-        pcsxr_log(RETRO_LOG_INFO, "[GAME-DB] %.9s: sin entrada en la tabla\n", CdromId);
+        pcsxr_log(RETRO_LOG_INFO, "[GAME-DB] %.9s: sin entrada en la tabla de arreglos\n", CdromId);
         return;
     }
 
@@ -1499,6 +1906,29 @@ static int emu_setup(void) {
     Config.Cdda    = 0;
     Config.PsxAuto = 1;
     Config.CpuBias = 2;
+
+    /* Region / temporizado de video.  Forzar NTSC hace que un juego PAL corra
+     * a 60 Hz (frame de 564.398 ciclos en vez de 677.332): +20% de velocidad,
+     * que para los ports NTSC ralentizados que eran la mayoria de PAL es su
+     * ritmo original.  CheckCdrom() (mas abajo, misma funcion) solo escribe
+     * Config.PsxType cuando PsxAuto sigue activo, asi que ponerlo a 0 protege
+     * el valor forzado.  Init-only: el temporizado se hornea en psxRcntInit
+     * (via EmuReset) y timing.fps solo se lee al cargar -> "restart to apply". */
+    {
+        struct retro_variable var_rg = { "pcsxr360_region", NULL };
+        if (environ_cb && environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var_rg)
+            && var_rg.value) {
+            if (strcmp(var_rg.value, "ntsc") == 0) {
+                Config.PsxAuto = 0; Config.PsxType = PSX_TYPE_NTSC;
+                pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] region: forzada NTSC (60Hz)\n");
+            } else if (strcmp(var_rg.value, "pal") == 0) {
+                Config.PsxAuto = 0; Config.PsxType = PSX_TYPE_PAL;
+                pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] region: forzada PAL (50Hz)\n");
+            } else {
+                pcsxr_log(RETRO_LOG_INFO, "[PCSXR-LR] region: auto (por serial del disco)\n");
+            }
+        }
+    }
 
     /* Ciclos por instruccion del R3000A, en centesimas.  200 = el CpuBias=2
      * historico; 175 es el default de upstream pcsx_rearmed
@@ -2317,6 +2747,7 @@ void retro_init(void) {
     check_game_fixes();
     check_gpu_busy_model();
     check_analog_saturation();
+    check_guncon_calibration();
 	pcsxr_log(RETRO_LOG_DEBUG,"[PCSXR-LR] retro_init finished\n");
 }
 
@@ -2450,6 +2881,8 @@ void retro_unload_game(void) {
      * por game_db_apply() porque se salta CheckCdrom. */
     g_db_analog_pct = -1;
     check_analog_saturation();
+    g_db_guncon_ratiox100 = -1;
+    check_guncon_calibration();
     emu_teardown();
 }
 
@@ -2582,6 +3015,7 @@ void retro_run(void) {
             check_game_fixes();
             check_gpu_busy_model();
             check_analog_saturation();
+            check_guncon_calibration();
         }
     }
 
@@ -2891,8 +3325,12 @@ void retro_run(void) {
                     unsigned long dmode = 0, ddraw = 0, dpos;
                     int           doff  = 0;
                     unsigned int  vnz = 0, vtot = 0;
+                    int           gun_y = 0, gun_vres = 0;
+                    int           gun_x0 = 0, gun_hspan = 0;
                     dpos = PEOPS_GPUdiagDisplayRect(&dmode, &ddraw, &doff);
                     PEOPS_GPUdiagVramStats(&vnz, &vtot);
+                    PEOPS_GPUgetScreenInfo(&gun_y, &gun_vres);
+                    PEOPS_GPUgetHRange(&gun_x0, &gun_hspan);
                     /* OJO con drawoff: sale de PSXDisplay.DrawOffset, que
                      * escribe cmdDrawOffset() en prim.c, o sea el rasterizador
                      * de PEOPS.  Con el renderer Unai ese handler no corre y el
@@ -2903,11 +3341,14 @@ void retro_run(void) {
                      * no esta dejando nada donde se mira. */
                     pcsxr_log(RETRO_LOG_DEBUG,
                         "[DISP] pos=%u,%u mode=%ux%u drawoff=%d,%d disabled=%d"
-                        " vram=%u/%u\n",
+                        " vram=%u/%u gun=y%+d,vres%d raw=%d,%d pos=%d,%d hx=%d+%d\n",
                         (unsigned)(dpos >> 16), (unsigned)(dpos & 0xffff),
                         (unsigned)(dmode >> 16), (unsigned)(dmode & 0xffff),
                         (int)(short)(ddraw >> 16), (int)(short)(ddraw & 0xffff),
-                        doff, vnz, vtot);
+                        doff, vnz, vtot, gun_y, gun_vres,
+                        g_diag_gun_raw_x, g_diag_gun_raw_y,
+                        libretro_gun_absx[0], libretro_gun_absy[0],
+                        gun_x0, gun_hspan);
                 }
                 diag_scanout_free = 0;
                 diag_disp_alt     = 0;

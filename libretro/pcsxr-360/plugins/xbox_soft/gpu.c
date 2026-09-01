@@ -1442,12 +1442,136 @@ void PEOPS_GPUsetDisplayState(unsigned long gdata)
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Geometria de display para el GunCon, PROPIEDAD DEL HILO PRINCIPAL
+ *
+ * El GunCon no devuelve pixeles: devuelve la posicion del BARRIDO donde el
+ * canon vio el haz.  Para convertir la posicion normalizada del raton en un
+ * scanline hace falta saber donde empieza la ventana de display y cuantas
+ * lineas ocupa -- lo que upstream saca de GPUgetScreenInfo()
+ * (plugins/gpulib/gpu.c:1210).
+ *
+ * Aqui no hay gpulib, y la informacion equivalente (PSXDisplay.Range.y0/y1,
+ * PSXDisplay.Double, PSXDisplay.PAL) vive en PSXDisplay, que es propiedad del
+ * hilo CONSUMIDOR: la mitad de geometria de los GP1 0x05..0x08 se difiere por
+ * la cola gp1q.  El poll del pad corre en el hilo EMULADOR, asi que leer
+ * PSXDisplay desde ahi es la misma trampa que invalido la sonda de solape.
+ *
+ * Solucion: mantener una copia propia calculada SOLO desde el gdata crudo,
+ * dentro de PEOPS_GPUsetDisplayStatusBits -- que ya corre en el hilo principal
+ * en los DOS caminos (el diferido la llama directamente y el directo pasa por
+ * PEOPS_GPUwriteStatus).  Son cuatro enteros por GP1, y da un valor coherente
+ * sin barreras ni drenar el ring.
+ *
+ * Los numeros raros (39/16, y el /2 de vres pero no de y) son de upstream tal
+ * cual: el ajuste fino del canon depende del temporizado real y para eso estan
+ * las opciones de calibracion, no para compensar aqui.
+ * ------------------------------------------------------------------------- */
+static short s_gunY0      = 0x010;        /* GP1 0x07 bits 0..9  (inicio) */
+static short s_gunY1      = 0x010 + 240;  /* GP1 0x07 bits 10..19 (fin)   */
+static int   s_gunPAL     = 0;            /* GP1 0x08 bit 3               */
+static int   s_gunDHeight = 0;            /* GP1 0x08 bit 2               */
+static int   s_gunVRes    = 240;          /* ya DOBLADO si DHeight        */
+static int   s_gunYOfs    = 0;
+
+/* Rango HORIZONTAL declarado por el juego en el GP1 0x06, en relojes de punto:
+ * el MISMO dominio en el que reporta el canon.  Por ahora solo se usa para
+ * medir: la conversion a barrido usa el w=378 fijo de upstream, ajustado al
+ * rango estandar de 2560 relojes (256x10 = 320x8, igual en los dos modos).  Si
+ * un juego declara otro rango, aparece como error de ESCALA que hay que anular
+ * a mano con gunconadjustratiox -- y este dato dice cuanto. */
+static short s_gunX0      = 0;
+static short s_gunXSpan   = 2560;
+
+/* Port de update_height() de gpulib (plugins/gpulib/gpu.c:151). */
+static void gunUpdateGeometry(void)
+{
+ int y    = s_gunY0 - (s_gunPAL ? 39 : 16);   /* 39 por Spyro, dice upstream */
+ int sh   = s_gunY1 - s_gunY0;
+ int tol  = 16;
+ int vres = 240;
+
+ /* La hysteresis mira el vres ANTERIOR, igual que upstream (compara contra
+  * gpu->screen.vres, que tambien guarda el valor ya doblado). */
+ if(s_gunPAL && (sh > 240 || s_gunVRes == 256)) vres = 256;
+
+ if(s_gunDHeight) { y *= 2; sh *= 2; vres *= 2; tol *= 2; }
+
+ if(sh > 0)                                   /* sh<=0 = nada en pantalla */
+  {
+   /* Centrado "auto", que es el default de upstream: si esta desviado por
+    * poco, se da por centrado. */
+   if((unsigned int)(vres - sh) <= 1 && (y < 0 ? -y : y) <= tol) y = 0;
+   if(y + sh > vres) sh = vres - y;
+  }
+
+ s_gunVRes = vres;
+ s_gunYOfs = y;
+}
+
+/* Equivalente de GPUgetScreenInfo() de upstream.
+ *
+ * Sin sincronizacion NI valor rancio: el "hilo principal" de estos comentarios
+ * es el hilo EMULADOR (gpuWriteStatus corre ahi), que es el mismo que hace el
+ * poll del pad via sio.c.  Escritor y lector son el mismo hilo, asi que lo que
+ * lee el GunCon es exactamente el ultimo GP1 que ejecuto el juego.  Esa es toda
+ * la razon de calcularlo aqui en vez de leer PSXDisplay, que es del consumidor.
+ *
+ * OJO: a vres se le deshace el doblado y al offset NO, tal cual upstream. */
+void PEOPS_GPUgetScreenInfo(int *y, int *base_vres)
+{
+ *y         = s_gunYOfs;
+ *base_vres = s_gunDHeight ? (s_gunVRes >> 1) : s_gunVRes;
+}
+
+/* Rango horizontal declarado por el juego (GP1 0x06), en relojes de punto.  De
+ * momento SOLO para diagnostico: la conversion a barrido sigue usando el w=378
+ * de upstream.  Comparar span con 2560 da el factor de escala que hay que meter
+ * en gunconadjustratiox: 2464/2560 = 0,9625, o sea ratio 0.96. */
+void PEOPS_GPUgetHRange(int *x0, int *span)
+{
+ *x0   = s_gunX0;
+ *span = s_gunXSpan;
+}
+
+/* Vuelta a los defaults de gpulib (plugins/gpulib/gpu.c:88).  Lo llama el
+ * GP1 0x00 de PEOPS_GPUwriteStatus, que tambien es del hilo principal. */
+void PEOPS_GPUresetScreenInfo(void)
+{
+ s_gunY0      = 0x010;
+ s_gunY1      = 0x010 + 240;
+ s_gunPAL     = 0;
+ s_gunDHeight = 0;
+ s_gunVRes    = 240;
+ s_gunYOfs    = 0;
+}
+
 /* Mitad de STATUS + bookkeeping de freeze.  Siempre en el hilo principal.  En
  * el camino diferido no se pasa por GPUwriteStatus, asi que el savestate
  * perderia el registro si no se anotase aqui. */
 void PEOPS_GPUsetDisplayStatusBits(unsigned long gdata)
 {
  ulStatusControl[(gdata>>24)&0xff]=gdata;
+
+ /* Copia de geometria para el GunCon (ver gunUpdateGeometry arriba).  Se hace
+  * ANTES del return del 0x08 porque el rango vertical llega en el 0x07. */
+ switch((gdata>>24)&0xff)
+  {
+   case 0x06:
+    s_gunX0    = (short)(gdata & 0x7ff);
+    s_gunXSpan = (short)(((gdata>>12) & 0xfff) - s_gunX0);
+    break;
+   case 0x07:
+    s_gunY0 = (short)(gdata & 0x3ff);
+    s_gunY1 = (short)((gdata>>10) & 0x3ff);
+    gunUpdateGeometry();
+    break;
+   case 0x08:
+    s_gunDHeight = (gdata & 0x04) ? 1 : 0;
+    s_gunPAL     = (gdata & 0x08) ? 1 : 0;
+    gunUpdateGeometry();
+    break;
+  }
 
  if(((gdata>>24)&0xff)!=0x08) return;                   // solo el 0x08 lleva bits
 
@@ -1502,6 +1626,7 @@ void PEOPS_GPUwriteStatus(unsigned long gdata)
     PSXDisplay.RGB24=FALSE;
     PSXDisplay.Interlaced=FALSE;
     bUsingTWin = FALSE;
+    PEOPS_GPUresetScreenInfo();   /* geometria del GunCon a defaults */
     return;
    //--------------------------------------------------//
    // dis/enable display 

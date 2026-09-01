@@ -22,6 +22,14 @@ extern "C" void libretro_get_pad_state(int port, uint16_t *buttons,
                                         uint8_t *lx, uint8_t *ly,
                                         uint8_t *rx, uint8_t *ry);
 
+/* Provided by libretro_core.cpp: deltas del raton de PSX ya acotados al byte
+ * con signo del protocolo.  0,0 en puertos que no sean raton. */
+extern "C" void libretro_get_mouse_state(int port, signed char *dx, signed char *dy);
+
+/* Provided by libretro_core.cpp: posicion absoluta del lightgun ya normalizada
+ * a 0..1023, o PSXGUN_OFFSCREEN si no apunta a la tele. */
+extern "C" void libretro_get_gun_state(int port, int *absx, int *absy);
+
 void PSxInputReadPort(PadDataS* pad, int port){
 	uint16_t pad_status = 0xFFFF;
 	uint8_t lx = 128, ly = 128, rx = 128, ry = 128;
@@ -34,6 +42,33 @@ void PSxInputReadPort(PadDataS* pad, int port){
 	pad->rightJoyY = ry;
 	pad->controllerType = libretro_get_pad_type(port);
 	pad->buttonStatus   = pad_status;
+
+	/* Raton de PSX: el case PSE_PAD_TYPE_MOUSE de _PADpoll (plugins.c) lee
+	 * moveX/moveY.  Son DELTAS con signo, no coordenadas, y libretro_get_mouse_state
+	 * ya los entrega acotados al byte que manda el protocolo. */
+	if (pad->controllerType == PSE_PAD_TYPE_MOUSE) {
+		signed char dx = 0, dy = 0;
+		libretro_get_mouse_state(port, &dx, &dy);
+		pad->moveX = (unsigned char)dx;
+		pad->moveY = (unsigned char)dy;
+	} else {
+		pad->moveX = 0;
+		pad->moveY = 0;
+	}
+
+	/* Lightgun: el case PSE_PAD_TYPE_GUNCON de _PADpoll (plugins.c) convierte
+	 * estos 0..1023 en posicion de BARRIDO, para lo que necesita la geometria
+	 * de display (PEOPS_GPUgetScreenInfo).  Fuera del GunCon se deja el
+	 * centinela de "no apunta a la tele" en vez de 0,0. */
+	if (pad->controllerType == PSE_PAD_TYPE_GUNCON) {
+		int absx = PSXGUN_OFFSCREEN, absy = PSXGUN_OFFSCREEN;
+		libretro_get_gun_state(port, &absx, &absy);
+		pad->absoluteX = absx;
+		pad->absoluteY = absy;
+	} else {
+		pad->absoluteX = PSXGUN_OFFSCREEN;
+		pad->absoluteY = PSXGUN_OFFSCREEN;
+	}
 };
 
 /* ===========================================================================

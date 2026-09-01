@@ -394,6 +394,10 @@ unsigned char stdpar[10] = { 0x00, 0x41, 0x5a, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf
 unsigned char mousepar[8] = { 0x00, 0x12, 0x5a, 0xff, 0xff, 0xff, 0xff };
 unsigned char analogpar[9] = { 0x00, 0xff, 0x5a, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
+/* GunCon SLPH-00034 de Namco.  9 bytes como el analogpar: start byte, ID 0x63,
+ * el 0x5a de siempre, 2 de botones y 4 de coordenadas de BARRIDO. */
+unsigned char gunconpar[9] = { 0x00, 0x63, 0x5a, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
 static int bufcount, bufc;
 
 PadDataS padd1, padd2;
@@ -405,6 +409,13 @@ PadDataS padd1, padd2;
  * via cmd 0x42 + mapping previo de cmd 0x4D. */
 extern void PSxInputSetVibration(int port, unsigned char smallMotor, unsigned char bigMotor);
 extern void PSxInputReadPort(PadDataS* pad, int port);
+
+/* Geometria de display propiedad del hilo emulador, que es este.  La calcula
+ * plugins/xbox_soft/gpu.c desde el gdata crudo de los GP1 0x07/0x08; equivale a
+ * GPU_getScreenInfo() de upstream.  Se declara aqui en vez de incluir
+ * libpcsxcore/gpu.h, que este fichero no ve, siguiendo el patron de los otros
+ * extern de arriba. */
+extern void PEOPS_GPUgetScreenInfo(int *y, int *base_vres);
 
 /* DualShock SIO state machine completo (port de Pokopom).  Habilitado
  * cuando el frontend selecciona "DualShock" (PSE_PAD_TYPE_ANALOGPAD) y
@@ -446,6 +457,40 @@ static int s_ds_current_port = 0;
  * _PADstartPoll y lo consultamos en _PADpoll para saber si delegar
  * al state machine DualShock o usar el legacy path. */
 static int s_ds_current_type = 0;
+
+/* ---------------------------------------------------------------------------
+ * Sonda de diagnostico del SIO de pads.  Gateada porque imprime en el camino
+ * caliente del SIO.  Contesta dos preguntas que desde fuera se ven igual
+ * cuando un juego dice "no hay mando conectado":
+ *
+ *   padpoll_probe      - cuenta los startPoll de cada puerto y el tipo que se
+ *                        le presenta al juego.  Si no sale NINGUNA linea de un
+ *                        puerto, el juego no lo sondea: el fallo es del juego,
+ *                        no nuestro.  Si sale y crece, el fallo es nuestro.
+ *   padpoll_cmd_probe  - saca el byte de comando del intercambio.  El camino
+ *                        legacy contesta siempre el paquete del 0x42, asi que
+ *                        un comando distinto revelaria una respuesta falsa.
+ * --------------------------------------------------------------------------- */
+#ifdef PCSXR_DIAG_PADPOLL
+static unsigned int s_padpoll_n[2]   = { 0, 0 };
+static unsigned int s_padpoll_cmd[2] = { 0, 0 };
+
+static void padpoll_probe(int port, int type) {
+    /* Los 3 primeros y luego uno cada 600 (unos 10 s a 60 Hz). */
+    unsigned int n = ++s_padpoll_n[port];
+    if (n <= 3 || (n % 600) == 0)
+        SysPrintf("[PADPOLL] port=%d n=%u type=%d\n", port + 1, n, type);
+}
+
+static void padpoll_cmd_probe(int port, int type, unsigned char cmd) {
+    unsigned int n = ++s_padpoll_cmd[port];
+    if (n <= 8 || (n % 600) == 0)
+        SysPrintf("[PADPOLL] port=%d type=%d cmd=%02x\n", port + 1, type, cmd);
+}
+#else
+#define padpoll_probe(port, type)          do { } while (0)
+#define padpoll_cmd_probe(port, type, cmd) do { } while (0)
+#endif
 
 unsigned char _PADstartPoll(PadDataS *pad) {
 	int s = 0;
@@ -506,6 +551,53 @@ unsigned char _PADstartPoll(PadDataS *pad) {
 
             memcpy(buf, mousepar, 7);
             bufcount = 6;
+            break;
+        case PSE_PAD_TYPE_GUNCON: // GUNCON - gun controller SLPH-00034 from Namco
+            /* El GunCon no reporta pixeles: reporta la posicion del BARRIDO
+             * donde el canon vio el haz.  absoluteX/Y llegan normalizados a
+             * 0..1023 (los normaliza el frontend) y aqui se convierten a
+             * coordenadas de raster, con la geometria de display que publica
+             * PEOPS_GPUgetScreenInfo -- misma cuenta que upstream
+             * (libpcsxcore/pad.c:313), constantes raras incluidas.
+             *
+             * OJO con el desplazamiento de un byte: nuestro buf[0] es el start
+             * byte y el rxData[0] de upstream es el ID, o sea buf[i+1] es su
+             * rxData[i].  Se ve en mousepar/stdpar, que llevan el 0x00 delante. */
+            gunconpar[3] = pad->buttonStatus & 0xff;
+            gunconpar[4] = pad->buttonStatus >> 8;
+
+            if (pad->absoluteX == PSXGUN_OFFSCREEN ||
+                pad->absoluteY == PSXGUN_OFFSCREEN) {
+                /* Fuera de pantalla.  Esta respuesta concreta es COMO EL JUEGO
+                 * SE ENTERA de que no apuntas a la tele; no es un valor
+                 * cualquiera ni un cero. */
+                gunconpar[5] = 0x01;
+                gunconpar[6] = 0x00;
+                gunconpar[7] = 0x0a;
+                gunconpar[8] = 0x00;
+            } else {
+                int y_ofs = 0, yres = 240;
+                int y_top, w, x, y;
+
+                PEOPS_GPUgetScreenInfo(&y_ofs, &yres);
+
+                /* Primera linea visible + el offset de centrado, y el ancho en
+                 * ciclos de reloj del canon.  Las cuatro constantes dependen de
+                 * Config.PsxType, asi que un fallo SOLO en PAL apunta aqui. */
+                y_top = (Config.PsxType ? 0x30 : 0x19) + y_ofs;
+                w     = Config.PsxType ? 385 : 378;
+
+                x = 0x40 + (w * pad->absoluteX >> 10);
+                y = y_top + (yres * pad->absoluteY >> 10);
+
+                gunconpar[5] = x & 0xff;
+                gunconpar[6] = (x >> 8) & 0xff;
+                gunconpar[7] = y & 0xff;
+                gunconpar[8] = (y >> 8) & 0xff;
+            }
+
+            memcpy(buf, gunconpar, 9);
+            bufcount = 8;
             break;
         case PSE_PAD_TYPE_NEGCON: // npc101/npc104(slph00001/slph00069)
             analogpar[1] = 0x23;
@@ -595,17 +687,30 @@ unsigned char _PADpoll(unsigned char value) {
         return ret;
     }
 
+    /* El camino legacy IGNORA el byte de comando: _PADstartPoll ya dejo en buf[]
+     * la respuesta del 0x42 antes de saber que comando iba a llegar.  Para un
+     * juego que sondea con 0x42 (todos los probados) da igual, pero si alguno
+     * pregunta otra cosa le contestamos un paquete de datos que no ha pedido.
+     * La sonda saca el comando para poder descartarlo o confirmarlo. */
+#ifdef PCSXR_DIAG_PADPOLL
+    if (bufc == 0)
+        padpoll_cmd_probe(s_ds_current_port, s_ds_current_type, value);
+#endif
+
     /* Otros tipos de pad: comportamiento legacy.  Solo devolvemos bytes
      * preasignados por _PADstartPoll.  No hay state machine. */
     if (bufc > bufcount) return 0;
     return buf[bufc++];
 }
 
+
 unsigned char CALLBACK PAD1__startPoll(int pad) {
     PadDataS padd;
 
     s_ds_current_port = 0;
     PAD1_readPort1(&padd);
+
+    padpoll_probe(0, padd.controllerType);
 
     return _PADstartPoll(&padd);
 }
@@ -665,6 +770,8 @@ unsigned char CALLBACK PAD2__startPoll(int pad) {
 
 	s_ds_current_port = 1;
 	PAD2_readPort2(&padd);
+
+	padpoll_probe(1, padd.controllerType);
 
 	return _PADstartPoll(&padd);
 }

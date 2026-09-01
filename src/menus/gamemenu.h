@@ -176,6 +176,12 @@ class GameMenu : public Engine{
 		void showAchievementMessage(const std::string &line1Str, const std::string &line2Str, const std::string &line3Str, SDL_Surface *badge);
 		void clearOverlay();
 		void clearOverlayRect(SDL_Rect&);
+		/* Reticula del lightgun: se llama una vez por frame durante la partida.
+		 * No hace nada si ningun puerto es de pistola. */
+		void drawLightgunCrosshair();
+		/* Superficie en cuyo espacio vienen inputs.mouse_x/mouse_y (ver el
+		 * comentario de la implementacion: SDL_GetVideoSurface NO sirve). */
+		SDL_Surface* getMouseSurface();
 		void fillOverlay(int colorIndex);
 		void fillOverlayAlpha(int colorIndex, int alpha);
 		SDL_Surface* clonarPantalla(SDL_Surface*, int);
@@ -200,6 +206,10 @@ class GameMenu : public Engine{
 		int lastStatus;
 		bool onscreenKeyboard;
 		SDL_Rect rectFps;
+		/* Ultima posicion dibujada de la reticula del lightgun, para borrarla en el
+		 * frame siguiente (mismo patron que los contadores de FPS/memoria). */
+		SDL_Rect crosshairRect;
+		bool     crosshairDrawn;
 		Uint32 bkgTextFps;
 		SDL_Surface* fpsSurface;
 		SDL_Surface* cpuSurface;

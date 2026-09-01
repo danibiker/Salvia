@@ -417,6 +417,10 @@ extern DECLSPEC void SDLCALL SDL_XBOX_SetDisplayOverflow(int overflow);
  */
 extern DECLSPEC SDL_Surface* SDLCALL SDL_XBOX_GetOverlay(void);
 
+/* Rect de la imagen del juego en pixeles del overlay (ver la implementacion:
+ * compone el aspect del quad del juego con el overscan del overlay). */
+extern void SDL_XBOX_GetGameRectOnOverlay(int *x, int *y, int *w, int *h);
+
 /*
 * Xbox 360: Set the overscan for the overlay surface
 */
