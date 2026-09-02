@@ -83,6 +83,10 @@ private:
 	void initMainConfig();
 	void loadMainConfig();
 	void loadEmuConfig(std::string);
+	// Traduce el nombre de preset guardado (assets\shaders) al indice vivo
+	// que usan el menu y XBOX_SelectEffect, con migracion de los valores
+	// numericos 0..12 de versiones anteriores.
+	void resolveShaderModes();
 	int findKeyCfg(const std::string&);
 	void checkSystemLang();
 	

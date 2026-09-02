@@ -10,9 +10,13 @@
  * modulo solo se encarga del render. Se obtiene el HWND con SDL_GetWMInfo
  * y se crea un IDirect3D9 propio sobre esa ventana.
  *
- * Los pixel shaders son los MISMOS que en Xbox: el HLSL vive en
- * libs/libSDLx360/SDL/src/video/xbox/SDL_shaders_src.h (header neutro
- * compartido por ambas plataformas).
+ * Los pixel shaders son los MISMOS que en Xbox, pero ya no viven en el
+ * binario: se cargan de <appDir>\assets\shaders (presets .hlslp + cuerpos
+ * .hlsl, formato estilo RetroArch). La capa de aplicacion los descubre y
+ * parsea en src/video/shaderpreset.cpp y publica la tabla resultante por la
+ * API C de src/video/salvia_shader_api.h, que este modulo implementa. Lo
+ * unico que sigue embebido es el passthrough de SDL_shaders_src.h, como
+ * fallback para que jamas se enganche un pixel shader NULL.
  */
 #pragma once
 

@@ -1928,7 +1928,7 @@ void YM2612ResetChip(void)
 {
   int i;
   // Al inicio de la función, antes de reset_channels:
-  log_cb(RETRO_LOG_DEBUG, "connect1[0] antes de reset: %p\n", ym2612.CH[0].connect1);
+  //log_cb(RETRO_LOG_DEBUG, "connect1[0] antes de reset: %p\n", ym2612.CH[0].connect1);
   
   ym2612.OPN.eg_timer     = 0;
   ym2612.OPN.eg_cnt       = 0;
@@ -1967,7 +1967,7 @@ void YM2612ResetChip(void)
   }
 
   // Al final, tras los OPNWriteReg:
-  log_cb(RETRO_LOG_DEBUG, "connect1[0] tras reset: %p\n", ym2612.CH[0].connect1);
+  //log_cb(RETRO_LOG_DEBUG, "connect1[0] tras reset: %p\n", ym2612.CH[0].connect1);
 }
 
 /* ym2612 write */

@@ -21,23 +21,21 @@
 #include <stdio.h>
 #include <string.h>
 
-/* HLSL compartido con la rama Xbox (single source of truth). */
+/* Passthrough embebido: unico shader que sigue viviendo en el binario, como
+   fallback de emergencia. El resto se cargan de assets\shaders en runtime. */
 #include "../../libs/libSDLx360/SDL/src/video/xbox/SDL_shaders_src.h"
 #include "HLSLBackground.h"
-/* LUTs de HQ2x/HQ3x/HQ4x (datos embebidos, neutros de plataforma). */
-#include "../../libs/libSDLx360/SDL/src/video/xbox/hq2x_lut.h"
-#include "../../libs/libSDLx360/SDL/src/video/xbox/hq3x_lut.h"
-#include "../../libs/libSDLx360/SDL/src/video/xbox/hq4x_lut.h"
+/* Tabla de presets publicada por src/video/shaderpreset.cpp. */
+#include "salvia_shader_api.h"
 
 #ifndef min
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 #define max(a,b) (((a) > (b)) ? (a) : (b))
 #endif
 
-/* 0=Nearest,1=Sharp-Bilinear,2=Bilinear,3=LCD3x,4=Scanlines,5=CRT-Geom,
-   6=CRT-Lottes,7=CRT-Easymode,8=HQ2x,9=HQ3x,10=HQ4x,11=xBR-lv2-fast,
-   12=5xBR-Hyllian */
-#define NUM_EFFECTS 13
+/* La lista de efectos ya no es fija: la publica la capa de aplicacion desde
+   assets\shaders (ver salvia_shader_api.h). El indice de efecto es la posicion
+   en esa tabla. */
 
 /* Flags de compilacion (mismos presets que en Xbox). */
 #define PS_FLAGS_DEFAULT         (D3DXSHADER_PARTIALPRECISION | D3DXSHADER_PREFER_FLOW_CONTROL)
@@ -65,10 +63,20 @@ static int                    g_tex_bpp    = 32;
 static LPDIRECT3DVERTEXBUFFER9 g_vb        = NULL;       /* 3 verts: triangulo fullscreen */
 static VTX                    g_verts[3];
 
-static LPDIRECT3DPIXELSHADER9 g_shaders[NUM_EFFECTS] = { NULL };
-static LPDIRECT3DTEXTURE9     g_hq2x_lut   = NULL;       /* MANAGED (sobrevive a reset) */
-static LPDIRECT3DTEXTURE9     g_hq3x_lut   = NULL;
-static LPDIRECT3DTEXTURE9     g_hq4x_lut   = NULL;
+/* ---- Tabla de shaders publicada por la app (assets\shaders) ---- */
+static const SalviaShaderPreset* g_presets = NULL;
+static int                    g_presetCount = 0;
+static LPDIRECT3DPIXELSHADER9* g_compiled  = NULL;       /* [preset], NULL = passthrough */
+static LPDIRECT3DTEXTURE9**   g_lutTex     = NULL;       /* [preset][lut], MANAGED */
+static int                    g_lutsUploaded = 0;
+
+/* Passthrough embebido. Es la red de seguridad: NUNCA se engancha un pixel
+   shader NULL, porque en Xenon eso es pantalla negra (sin pipeline de funcion
+   fija) y aqui replicamos el mismo modelo. */
+static LPDIRECT3DPIXELSHADER9 g_fallbackPS = NULL;
+/* Shader realmente enganchado ahora mismo. El overlay lo usa para restaurar
+   sin volver a indexar por g_current_effect. */
+static LPDIRECT3DPIXELSHADER9 g_activePS   = NULL;
 
 static int                    g_current_effect = 0;
 static D3DTEXTUREFILTERTYPE   g_current_filter = D3DTEXF_LINEAR;
@@ -342,71 +350,113 @@ static HRESULT CreateShader(const char* src, LPDIRECT3DPIXELSHADER9* target, DWO
     return hr;
 }
 
-/* LUT BGRA (del extractor .NET) -> D3DFMT_A8R8G8B8.
-   PC es little-endian: A8R8G8B8 se almacena en memoria como B,G,R,A, que
-   coincide con el orden de los datos .NET -> memcpy directo, SIN swap
-   (en Xenon, big-endian, si habia que reordenar). */
-static LPDIRECT3DTEXTURE9 CreateLUT(const unsigned char* data, int w, int h)
+/* Sube una LUT ya decodificada a una textura MANAGED (sobrevive al reset).
+   El contrato de salvia_shader_api.h es "words 0xAARRGGBB nativos", que en
+   x86 son bytes B,G,R,A = exactamente el layout de D3DFMT_A8R8G8B8 -> memcpy
+   por fila, sin reordenar nada. */
+static LPDIRECT3DTEXTURE9 CreateLUT(const SalviaShaderLut* src)
 {
     LPDIRECT3DTEXTURE9 tex = NULL;
     D3DLOCKED_RECT lr;
     int y;
 
-    if (FAILED(g_dev->CreateTexture(w, h, 1, 0, D3DFMT_A8R8G8B8,
+    if (!src || !src->pixels || src->width <= 0 || src->height <= 0) return NULL;
+
+    if (FAILED(g_dev->CreateTexture(src->width, src->height, 1, 0, D3DFMT_A8R8G8B8,
                                     D3DPOOL_MANAGED, &tex, NULL)) || !tex)
         return NULL;
 
     if (FAILED(tex->LockRect(0, &lr, NULL, 0))) { tex->Release(); return NULL; }
-    for (y = 0; y < h; y++)
-        memcpy((unsigned char*)lr.pBits + y * lr.Pitch, data + y * w * 4, (size_t)w * 4);
+    for (y = 0; y < src->height; y++)
+        memcpy((unsigned char*)lr.pBits + y * lr.Pitch,
+               src->pixels + (size_t)y * src->pitch, (size_t)src->width * 4);
     tex->UnlockRect(0);
     return tex;
 }
 
-static void InitLUTs(void)
+static D3DTEXTUREADDRESS MapWrap(SalviaShaderWrap w)
 {
-    if (!g_hq2x_lut) g_hq2x_lut = CreateLUT(hq2x_lut_data, HQ2X_LUT_WIDTH, HQ2X_LUT_HEIGHT);
-    if (!g_hq3x_lut) g_hq3x_lut = CreateLUT(hq3x_lut_data, HQ3X_LUT_WIDTH, HQ3X_LUT_HEIGHT);
-    if (!g_hq4x_lut) g_hq4x_lut = CreateLUT(hq4x_lut_data, HQ4X_LUT_WIDTH, HQ4X_LUT_HEIGHT);
-}
-
-static void DestroyLUTs(void)
-{
-    if (g_hq2x_lut) { g_hq2x_lut->Release(); g_hq2x_lut = NULL; }
-    if (g_hq3x_lut) { g_hq3x_lut->Release(); g_hq3x_lut = NULL; }
-    if (g_hq4x_lut) { g_hq4x_lut->Release(); g_hq4x_lut = NULL; }
-}
-
-static void InitShaders(void)
-{
-    if (g_shaders[0] != NULL) return; /* ya compilados */
-
-    InitLUTs();
-
-    CreateShader(g_strShaderNormalSource,            &g_shaders[0],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderSharpBilinearSource,     &g_shaders[1],  PS_FLAGS_DEFAULT);
-    /* 2 = Bilinear clasico: reutiliza el SOURCE de Normal (mismo passthrough)
-       pero compila su propio objeto; el overlay reengancha g_shaders[g_current_effect]
-       cada frame y un slot NULL daria negro en Xenon. Solo cambia el sampler a LINEAR. */
-    CreateShader(g_strShaderNormalSource,            &g_shaders[2],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderLCDGridSource,           &g_shaders[3],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderScanlinesSource,         &g_shaders[4],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderCRTSource,               &g_shaders[5],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderCRTLottesSource,         &g_shaders[6],  PS_FLAGS_FULL_PRECISION);
-    CreateShader(g_strShaderCRTEasymodeSource,       &g_shaders[7],  PS_FLAGS_FULL_PRECISION);
-    CreateShader(g_strShaderHQ2xSource,              &g_shaders[8],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderHQ3xSource,              &g_shaders[9],  PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderHQ4xSource,              &g_shaders[10], PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderXBRlv2FastSource,        &g_shaders[11], PS_FLAGS_DEFAULT);
-    CreateShader(g_strShaderXBRHyllianRoundedSource, &g_shaders[12], PS_FLAGS_FULL_PRECISION);
+    if (w == SALVIA_WRAP_REPEAT) return D3DTADDRESS_WRAP;
+    if (w == SALVIA_WRAP_MIRROR) return D3DTADDRESS_MIRROR;
+    return D3DTADDRESS_CLAMP;
 }
 
 static void DestroyShaders(void)
 {
-    int i;
-    for (i = 0; i < NUM_EFFECTS; i++)
-        if (g_shaders[i]) { g_shaders[i]->Release(); g_shaders[i] = NULL; }
-    DestroyLUTs();
+    int i, l;
+
+    if (g_compiled) {
+        for (i = 0; i < g_presetCount; i++)
+            if (g_compiled[i]) { g_compiled[i]->Release(); g_compiled[i] = NULL; }
+        free(g_compiled);
+        g_compiled = NULL;
+    }
+    if (g_lutTex) {
+        for (i = 0; i < g_presetCount; i++) {
+            if (!g_lutTex[i]) continue;
+            for (l = 0; l < SALVIA_SHADER_MAX_LUTS; l++)
+                if (g_lutTex[i][l]) { g_lutTex[i][l]->Release(); g_lutTex[i][l] = NULL; }
+            free(g_lutTex[i]);
+        }
+        free(g_lutTex);
+        g_lutTex = NULL;
+    }
+    if (g_fallbackPS) { g_fallbackPS->Release(); g_fallbackPS = NULL; }
+    g_activePS = NULL;
+    g_lutsUploaded = 0;
+    SalviaShader_Release();
+}
+
+static void InitShaders(void)
+{
+    int i, l;
+
+    if (g_fallbackPS != NULL) return; /* ya compilados */
+
+    /* El passthrough va PRIMERO y sin condiciones: es lo que evita que un
+       preset roto -o la ausencia total de assets\shaders- deje el pipeline
+       con un pixel shader NULL. */
+    CreateShader(g_strShaderNormalSource, &g_fallbackPS, PS_FLAGS_DEFAULT);
+    if (!g_fallbackPS) {
+        OutputDebugStringA("ERROR: no se pudo compilar el passthrough integrado\n");
+        return;
+    }
+    g_activePS = g_fallbackPS;
+
+    if (g_presetCount <= 0 || !g_presets) {
+        OutputDebugStringA("Shaders: no hay tabla registrada; solo passthrough\n");
+        return;
+    }
+
+    g_compiled = (LPDIRECT3DPIXELSHADER9*)calloc(g_presetCount, sizeof(LPDIRECT3DPIXELSHADER9));
+    g_lutTex   = (LPDIRECT3DTEXTURE9**)calloc(g_presetCount, sizeof(LPDIRECT3DTEXTURE9*));
+    if (!g_compiled || !g_lutTex) return;
+
+    for (i = 0; i < g_presetCount; i++) {
+        const SalviaShaderPass* pass = &g_presets[i].passes[g_presets[i].activePass];
+
+        /* Sin source el preset solo describe estado de sampler (Nearest,
+           Bilinear): se queda en NULL y SelectEffect usa el passthrough. */
+        if (pass->source) {
+            DWORD flags = (pass->psFlags & SALVIA_PS_FULL_PRECISION)
+                        ? PS_FLAGS_FULL_PRECISION : PS_FLAGS_DEFAULT;
+            CreateShader(pass->source, &g_compiled[i], flags);
+            if (!g_compiled[i]) {
+                char msg[160];
+                sprintf(msg, "ERROR: el preset '%s' no compila; cae a passthrough\n",
+                        g_presets[i].id);
+                OutputDebugStringA(msg);
+            }
+        }
+
+        g_lutTex[i] = (LPDIRECT3DTEXTURE9*)calloc(SALVIA_SHADER_MAX_LUTS,
+                                                  sizeof(LPDIRECT3DTEXTURE9));
+        if (!g_lutTex[i]) continue;
+        for (l = 0; l < pass->lutCount && l < SALVIA_SHADER_MAX_LUTS; l++)
+            g_lutTex[i][l] = CreateLUT(&pass->luts[l]);
+    }
+
+    g_lutsUploaded = 1;
 }
 
 static void SetSampler0Filter(D3DTEXTUREFILTERTYPE f)
@@ -529,111 +579,87 @@ static void DrawMainQuad(void)
  * =================================================================== */
 void XBOX_SelectEffect(int effectID)
 {
-    if (!g_dev || !g_shaders[0]) return;
-    if (effectID < 0 || effectID >= NUM_EFFECTS) effectID = 0;
+    const SalviaShaderPass* pass;
+    LPDIRECT3DPIXELSHADER9 ps;
+    float dims[4];
+    int i;
+
+    if (!g_dev || !g_fallbackPS) return;
+    if (g_presetCount <= 0 || !g_presets) {
+        /* Sin tabla: passthrough puro, para no dejar el pipeline sin shader. */
+        g_activePS = g_fallbackPS;
+        g_dev->SetPixelShader(g_activePS);
+        SetSampler0Filter(D3DTEXF_POINT);
+        return;
+    }
+    if (effectID < 0 || effectID >= g_presetCount) effectID = 0;
     g_current_effect = effectID;
 
-    g_dev->SetTexture(1, NULL); /* desvincula LUT por defecto */
+    pass = &g_presets[effectID].passes[g_presets[effectID].activePass];
 
-    switch (effectID) {
-    case 0:
-        g_dev->SetPixelShader(g_shaders[0]);
-        SetSampler0Filter(D3DTEXF_POINT);
-        break;
-    case 1: {
-        float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
-        g_dev->SetPixelShader(g_shaders[1]);
-        g_dev->SetPixelShaderConstantF(1, dims, 1);
-        SetSampler0Filter(D3DTEXF_LINEAR);
-        break;
-    }
-    case 2: /* Bilinear clasico: g_shaders[2] es el mismo passthrough que Normal
-             * (reutiliza su source). La UNICA diferencia con Nearest (case 0) es
-             * el sampler LINEAR vs POINT (interpolacion uniforme por hardware,
-             * sin la region nearest del Sharp-Bilinear). No usa textureDims.
-             * Enganchamos el slot [2] para casar con el restore por indice del
-             * overlay: g_shaders[g_current_effect]. */
-        g_dev->SetPixelShader(g_shaders[2] ? g_shaders[2] : g_shaders[0]);
-        SetSampler0Filter(D3DTEXF_LINEAR);
-        break;
-    case 3: {
-        if (!g_shaders[3]) { g_dev->SetPixelShader(g_shaders[0]); SetSampler0Filter(D3DTEXF_LINEAR); }
-        else {
-            float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
-            g_dev->SetPixelShader(g_shaders[3]);
-            g_dev->SetPixelShaderConstantF(1, dims, 1);
-            SetSampler0Filter(D3DTEXF_POINT);
-        }
-        break;
-    }
-    case 4: {
-        float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
-        g_dev->SetPixelShader(g_shaders[4]);
-        g_dev->SetPixelShaderConstantF(1, dims, 1);
-        SetSampler0Filter(D3DTEXF_POINT);
-        break;
-    }
-    case 5: {
-        float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
-        g_dev->SetPixelShader(g_shaders[5]);
-        g_dev->SetPixelShaderConstantF(1, dims, 1);
-        SetSampler0Filter(D3DTEXF_LINEAR);
-        break;
-    }
-    case 6:
-    case 7: {
-        if (!g_shaders[effectID]) { g_dev->SetPixelShader(g_shaders[0]); SetSampler0Filter(D3DTEXF_LINEAR); }
-        else {
-            float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
-            g_dev->SetPixelShader(g_shaders[effectID]);
-            g_dev->SetPixelShaderConstantF(1, dims, 1);
-            SetSampler0Filter(D3DTEXF_POINT);
-            g_dev->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
-            g_dev->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
-        }
-        break;
-    }
-    case 8:
-    case 9:
-    case 10: {
-        if (!g_shaders[effectID]) { g_dev->SetPixelShader(g_shaders[0]); SetSampler0Filter(D3DTEXF_LINEAR); }
-        else {
-            float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
-            LPDIRECT3DTEXTURE9 lut = (effectID == 8) ? g_hq2x_lut :
-                                     (effectID == 9) ? g_hq3x_lut : g_hq4x_lut;
-            g_dev->SetPixelShader(g_shaders[effectID]);
-            g_dev->SetPixelShaderConstantF(1, dims, 1);
-            SetSampler0Filter(D3DTEXF_POINT);
-            if (lut) {
-                g_dev->SetTexture(1, lut);
-                g_dev->SetSamplerState(1, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-                g_dev->SetSamplerState(1, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
-                g_dev->SetSamplerState(1, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
-                g_dev->SetSamplerState(1, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
-            }
-        }
-        break;
-    }
-    case 11:
-    case 12: {
-        if (!g_shaders[effectID]) { g_dev->SetPixelShader(g_shaders[0]); SetSampler0Filter(D3DTEXF_LINEAR); }
-        else {
-            float dims[4] = { (float)g_tex_w, (float)g_tex_h, 0, 0 };
-            g_dev->SetPixelShader(g_shaders[effectID]);
-            g_dev->SetPixelShaderConstantF(1, dims, 1);
-            SetSampler0Filter(D3DTEXF_POINT);
-        }
-        break;
-    }
-    default:
-        g_dev->SetPixelShader(g_shaders[0]);
-        SetSampler0Filter(D3DTEXF_POINT);
-        break;
+    /* 1. Shader. Cachear el puntero (y no indexar por g_current_effect desde
+          el bucle de dibujado) es lo que garantiza que jamas se engancha un
+          NULL: un preset que no compilo cae aqui al passthrough. */
+    ps = (g_compiled && g_compiled[effectID]) ? g_compiled[effectID] : g_fallbackPS;
+    g_activePS = ps;
+    g_dev->SetPixelShader(ps);
+
+    /* 2. c1 = textureDims, SIEMPRE. Antes habia efectos que no lo escribian;
+          ponerlo de mas es inocuo (cuesta 4 floats por cambio de efecto, no
+          por frame) y elimina la casuistica. */
+    dims[0] = (float)g_tex_w; dims[1] = (float)g_tex_h; dims[2] = 0; dims[3] = 0;
+    g_dev->SetPixelShaderConstantF(1, dims, 1);
+
+    /* 3. Sampler s0: filtro y wrap SIEMPRE. Escribir el wrap incondicionalmente
+          arregla de paso una fuga de estado que habia antes: los efectos con
+          CLAMP explicito (Lottes, Easymode, HQx) nunca lo devolvian a su sitio,
+          asi que el siguiente efecto heredaba su modo de direccionamiento. */
+    SetSampler0Filter(pass->filter == SALVIA_FILTER_LINEAR ? D3DTEXF_LINEAR : D3DTEXF_POINT);
+    g_dev->SetSamplerState(0, D3DSAMP_ADDRESSU, MapWrap(pass->wrap));
+    g_dev->SetSamplerState(0, D3DSAMP_ADDRESSV, MapWrap(pass->wrap));
+
+    /* 4. LUTs: desvincular s1..sN y enganchar las de este preset. */
+    for (i = 1; i <= SALVIA_SHADER_MAX_LUTS; i++)
+        g_dev->SetTexture(i, NULL);
+
+    for (i = 0; i < pass->lutCount && i < SALVIA_SHADER_MAX_LUTS; i++) {
+        int s = pass->luts[i].sampler;
+        LPDIRECT3DTEXTURE9 tex = (g_lutTex && g_lutTex[effectID]) ? g_lutTex[effectID][i] : NULL;
+        D3DTEXTUREFILTERTYPE f = (pass->luts[i].filter == SALVIA_FILTER_LINEAR)
+                               ? D3DTEXF_LINEAR : D3DTEXF_POINT;
+        if (!tex || s < 1 || s > SALVIA_SHADER_MAX_LUTS) continue;
+        g_dev->SetTexture(s, tex);
+        g_dev->SetSamplerState(s, D3DSAMP_MINFILTER, f);
+        g_dev->SetSamplerState(s, D3DSAMP_MAGFILTER, f);
+        g_dev->SetSamplerState(s, D3DSAMP_ADDRESSU, MapWrap(pass->luts[i].wrap));
+        g_dev->SetSamplerState(s, D3DSAMP_ADDRESSV, MapWrap(pass->luts[i].wrap));
     }
 
     if (!g_fullscreen && g_tex_w > 0)
         UpdateVertexBuffer(g_tex_w, g_tex_h, g_aspect);
 }
+
+/* =====================================================================
+ * API de registro de la tabla de shaders (salvia_shader_api.h).
+ * =================================================================== */
+extern "C" int SalviaShader_SetTable(const SalviaShaderPreset* presets, int count)
+{
+    if (!presets || count <= 0) return 0;
+    if (count > SALVIA_SHADER_MAX_PRESETS) count = SALVIA_SHADER_MAX_PRESETS;
+    g_presets = presets;
+    g_presetCount = count;
+    return 1;
+}
+
+extern "C" int SalviaShader_GetCount(void)     { return g_presetCount; }
+extern "C" int SalviaShader_LutsUploaded(void) { return g_lutsUploaded; }
+
+extern "C" void SalviaShader_Release(void)
+{
+    g_presets = NULL;
+    g_presetCount = 0;
+}
+
 
 /* =====================================================================
  * Overlay (capa ARGB sobre el quad del juego) - port de XBOX_*Overlay.
@@ -736,7 +762,7 @@ static void DrawOverlay(void)
      * passthrough.  Forces alpha=1 for any non-black pixel on GPU, replacing
      * the slow CPU loop that iterates every pixel. */
     g_dev->SetPixelShader((g_hlslBkg_active && g_hlslBkg.alphaFixShader())
-        ? g_hlslBkg.alphaFixShader() : g_shaders[0]);
+        ? g_hlslBkg.alphaFixShader() : g_fallbackPS);
     g_dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
     g_dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
 
@@ -744,10 +770,13 @@ static void DrawOverlay(void)
 
     g_dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
 
-    /* Restaurar lo que toco el overlay (textura+vb+shader+filtro del s0). */
+    /* Restaurar lo que toco el overlay (textura+vb+shader+filtro del s0).
+     * Se usa g_activePS -el puntero ya validado por SelectEffect- y NO
+     * g_compiled[g_current_effect]: esto corre cada frame con el menu abierto,
+     * y un NULL aqui seria pantalla negra en Xenon. */
     g_dev->SetTexture(0, g_game_tex);
     g_dev->SetStreamSource(0, g_vb, 0, sizeof(VTX));
-    g_dev->SetPixelShader(g_shaders[g_current_effect]);
+    g_dev->SetPixelShader(g_activePS ? g_activePS : g_fallbackPS);
     g_dev->SetSamplerState(0, D3DSAMP_MINFILTER, g_current_filter);
     g_dev->SetSamplerState(0, D3DSAMP_MAGFILTER, g_current_filter);
 }

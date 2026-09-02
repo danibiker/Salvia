@@ -1093,6 +1093,7 @@ class ConfigEmu{
 		menu_directory_recursive = false;
 		integerScale = false;
 		aspectRatio = 0;
+		shaderName = "";
 		shaderMode = 0;
 		scaleMode = 0;
 		scaleIntMode = 0;
@@ -1166,7 +1167,13 @@ class ConfigEmu{
 	std::string title_bkg_assets;
 	//Override the main aspect ratio
 	int aspectRatio;
-	//Override the main shader mode
+	//Override the main shader mode. Se desdobla en dos:
+	//  shaderName = lo que se PERSISTE en el .cfg (nombre del preset de
+	//               assets\shaders; vacio = "Auto", usar el shader global).
+	//  shaderMode = indice VIVO en la lista de shaders, +1 porque el 0 del
+	//               menu es la entrada "Auto". Lo rellena
+	//               CfgLoader::resolveShaderModes() al arrancar.
+	std::string shaderName;
 	int shaderMode;
 	//Override the main scale mode
 	int scaleMode;

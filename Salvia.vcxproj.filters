@@ -149,6 +149,9 @@
     <ClCompile Include="src\video\win_d3d9.cpp">
       <Filter>Source Files\video</Filter>
     </ClCompile>
+    <ClCompile Include="src\video\shaderpreset.cpp">
+      <Filter>Source Files\video</Filter>
+    </ClCompile>
     <ClCompile Include="src\font\fonts.cpp">
       <Filter>Source Files\io</Filter>
     </ClCompile>
@@ -332,6 +335,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\video\HLSLBackground.h">
+      <Filter>Source Files\video</Filter>
+    </ClInclude>
+    <ClInclude Include="src\video\shaderpreset.h">
+      <Filter>Source Files\video</Filter>
+    </ClInclude>
+    <ClInclude Include="src\video\salvia_shader_api.h">
       <Filter>Source Files\video</Filter>
     </ClInclude>
     <ClInclude Include="src\http\gamefaqs.h">

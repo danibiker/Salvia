@@ -1,6 +1,7 @@
 #pragma once
 
 #include "salvia.h"
+#include <video/shaderpreset.h>
 #include <http/httputil.h>
 #include <http/scrapper.h>
 #include <http/gamefaqs.h>
@@ -1919,6 +1920,13 @@ static void __declspec(noinline) runGameLoop() {
 */
 int main(int argc, char *argv[]) {
 	initPathAndLog(argv);
+
+	/* Los shaders se descubren en assets\shaders ANTES de construir CfgLoader:
+	 * la configuracion guarda el shader por NOMBRE de preset y necesita
+	 * resolverlo a indice al cargar. Aqui solo se enumera y se parsea (no toca
+	 * D3D); la publicacion al backend de video ocurre en engine.cpp. */
+	ShaderRegistry::instance()->load();
+
 	cfgLoader = new CfgLoader();
 
 	if (cfgLoader->isDebug()){

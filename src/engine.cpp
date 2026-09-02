@@ -3,6 +3,7 @@
 #include <io/keyboard.h>
 #include <http/badgedownloader.h>
 #include <image/icons.h>
+#include <video/shaderpreset.h>
 
 #ifdef _XBOX
 	#include <xtl.h>
@@ -93,6 +94,14 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 		}
 	#endif
 
+#if defined(_XBOX) || defined(SALVIA_GPU_VIDEO)
+	/* La tabla de shaders tiene que estar publicada ANTES de que el backend de
+	 * video se inicialice: initShaders() se llama desde dentro de
+	 * SDL_SetVideoMode (Xbox) y de WinD3D9_Init (Windows). Si llegase tarde,
+	 * el backend arrancaria solo con el passthrough integrado. */
+	ShaderRegistry::instance()->publish();
+#endif
+
 	gameScreen = SDL_SetVideoMode(video_width, video_height, video_bpp, video_flags);
 
 	if (!gameScreen){
@@ -146,6 +155,13 @@ int Engine::initEngine(CfgLoader* cfgLoader){
 	}
 #else
 	overlay = gameScreen;
+#endif
+
+#if defined(_XBOX) || defined(SALVIA_GPU_VIDEO)
+	/* Las LUT ya estan subidas a la GPU y sus texturas sobreviven al device
+	 * lost/reset por su cuenta, asi que soltamos los pixeles en RAM (hasta
+	 * ~470 KB con las tres tablas de HQx). */
+	ShaderRegistry::instance()->freeTransientBuffers();
 #endif
 
 	//Actualizar overscan en windows y xbox

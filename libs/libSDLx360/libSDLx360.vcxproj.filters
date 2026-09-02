@@ -253,14 +253,5 @@
     <ClInclude Include="SDL\src\video\xbox\SDL_xboxshaders.h">
       <Filter>Source Files\Xbox</Filter>
     </ClInclude>
-    <ClInclude Include="SDL\src\video\xbox\hq2x_lut.h">
-      <Filter>Source Files\Xbox</Filter>
-    </ClInclude>
-    <ClInclude Include="SDL\src\video\xbox\hq3x_lut.h">
-      <Filter>Source Files\Xbox</Filter>
-    </ClInclude>
-    <ClInclude Include="SDL\src\video\xbox\hq4x_lut.h">
-      <Filter>Source Files\Xbox</Filter>
-    </ClInclude>
   </ItemGroup>
 </Project>

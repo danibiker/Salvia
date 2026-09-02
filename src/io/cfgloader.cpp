@@ -6,6 +6,7 @@
 #include <io/filelist.h>
 #include <io/dirutil.h>
 #include <io/fileio.h>
+#include <video/shaderpreset.h>
 
 #include <libretro/libretro.h>
 
@@ -79,21 +80,17 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::scaleMode] = cfg::t_cfg_props("scaleMode", (int)FULLSCREEN);
 	configMain[cfg::scaleMode].desc = "#Scaler used in SW mode. Not used";
 
-	configMain[cfg::shaderMode] = cfg::t_cfg_props("shaderMode", (int)SHADER_BILINEAR);
-	configMain[cfg::shaderMode].desc = "#Shader selected"
-										"\n#SHADER_NEAREST,         0"
-										"\n#SHADER_BILINEAR,        1"
-										"\n#SHADER_BILINEAR_STD,    2"
-										"\n#SHADER_LCD_GRID,        3"
-										"\n#SHADER_SCANLINES,       4"
-										"\n#SHADER_CRT,             5"
-										"\n#SHADER_CRT_LOTTES,      6"
-										"\n#SHADER_CRT_EASYMODE,    7"
-										"\n#SHADER_HQ2X,            8"
-										"\n#SHADER_HQ3X,            9"
-										"\n#SHADER_HQ4X,            10"
-										"\n#SHADER_XBR_LV2_FAST,    11"
-										"\n#SHADER_XBR_HYLLIAN,     12";
+	/* El shader se guarda por NOMBRE de preset (el fichero .hlslp de
+	 * assets\shaders, sin extension) en vez de por indice: la lista es
+	 * dinamica y un indice dejaria de apuntar a lo mismo en cuanto se anadiese
+	 * o quitase un preset. El indice vivo se mantiene en valueInt, que es a lo
+	 * que se ata el menu; resolveShaderModes() sincroniza los dos.
+	 * Los valores numericos 0..12 de versiones anteriores se migran solos. */
+	configMain[cfg::shaderMode] = cfg::t_cfg_props("shaderMode",
+		std::string(ShaderRegistry::defaultId()));
+	configMain[cfg::shaderMode].desc =
+		"#Video shader: name of a preset in assets\\shaders (without the .hlslp extension)."
+		"\n#If the preset is missing, it falls back to the default one.";
 
 	configMain[cfg::syncMode] = cfg::t_cfg_props("syncMode", (int)OPT_SYNC_VIDEO);
 	configMain[cfg::syncMode].desc = "#Video Synchronization mode"
@@ -297,6 +294,56 @@ void CfgLoader::loadMainConfig(){
 	salviaConfig->config.name = "Options";
 	salviaConfig->config.title_bkg_assets = "assets\\cfg";
 	emulators.push_back(std::move(salviaConfig));
+
+	resolveShaderModes();
+}
+
+/* Traduce el nombre de preset guardado en la configuracion al indice vivo que
+ * usan el menu y XBOX_SelectEffect. Se llama al final de loadMainConfig, con el
+ * registro de shaders ya cargado (salvia.cpp lo hace antes de construir el
+ * CfgLoader).
+ *
+ * Acepta tambien los valores numericos 0..12 que guardaban las versiones
+ * anteriores: ShaderRegistry::migrateLegacyId los convierte al nombre
+ * equivalente, asi que un .cfg antiguo sigue arrancando con el mismo filtro. */
+void CfgLoader::resolveShaderModes(){
+	ShaderRegistry* shaders = ShaderRegistry::instance();
+
+	/* --- Shader global --- */
+	std::string wanted = configMain[cfg::shaderMode].valueStr;
+	int idx = shaders->indexOfStored(wanted);
+	if (idx < 0){
+		if (!wanted.empty())
+			LOG_ERROR("El shader '%s' no existe en assets\\shaders; se usa '%s'\n",
+			          wanted.c_str(), ShaderRegistry::defaultId());
+		idx = shaders->indexOf(ShaderRegistry::defaultId());
+		if (idx < 0) idx = 0;
+	}
+	configMain[cfg::shaderMode].valueInt = idx;
+	configMain[cfg::shaderMode].valueStr = shaders->idAt(idx);
+
+	/* --- Override por emulador. El 0 del menu es "Auto", de ahi el +1. --- */
+	for (std::size_t i = 0; i < emulators.size(); i++){
+		ConfigEmu& cfg = emulators[i]->config;
+		std::string name = cfg.shaderName;
+		if (name.empty() || name == "-1"){
+			cfg.shaderMode = 0;
+			cfg.shaderName = "";
+			continue;
+		}
+		int e = shaders->indexOfStored(name);
+		if (e < 0){
+			/* Si el preset ya no esta, se degrada a Auto (usar el global) y no
+			 * a otro shader cualquiera, que seria una sorpresa peor. */
+			LOG_ERROR("%s: el shader '%s' no existe; se usa Auto\n",
+			          cfg.name.c_str(), name.c_str());
+			cfg.shaderMode = 0;
+			cfg.shaderName = "";
+		} else {
+			cfg.shaderMode = e + 1;
+			cfg.shaderName = shaders->idAt(e);
+		}
+	}
 }
 
 void CfgLoader::checkSystemLang(){
@@ -530,8 +577,10 @@ void CfgLoader::loadEmuConfig(std::string emuname){
 						//This option is to override the configMain, so the -1 value is for the auto option
 						cfgEmu->config.scaleIntMode = Constant::strToTipo<int>(value) + 1;
 					} else if (key.compare("shaderMode") == 0){
-						//This option is to override the configMain, so the -1 value is for the auto option
-						cfgEmu->config.shaderMode = Constant::strToTipo<int>(value) + 1;
+						/* Nombre de preset (o un indice antiguo). Se guarda en crudo y
+						 * se resuelve a indice en resolveShaderModes(), cuando el
+						 * registro de shaders ya esta cargado. */
+						cfgEmu->config.shaderName = value;
 					} else if (key.compare("syncMode") == 0){
 						//This option is to override the configMain, so the -1 value is for the auto option
 						cfgEmu->config.syncMode = Constant::strToTipo<int>(value) + 1;
@@ -652,6 +701,10 @@ std::string CfgLoader::saveMainParams(){
 	//actualizamos algunos parametros que dependen de un indice externo
 	configMain[cfg::scrapRegion].setPropValue(region[idxRegion].shortName);
 	configMain[cfg::scrapLang].setPropValue(idioma[idxIdioma].shortName);
+	/* El menu mueve el INDICE vivo (valueInt); lo que se persiste es el nombre
+	 * del preset, porque la lista de assets\shaders es dinamica. */
+	configMain[cfg::shaderMode].setPropValue(
+		ShaderRegistry::instance()->idAt(configMain[cfg::shaderMode].valueInt));
 
 	for (int i=0; i < cfg::MAIN_CFG_MAX; i++){
 		if (configMain[i].name.empty()) continue;
@@ -930,6 +983,11 @@ std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
 		cfg.music_file.clear();
 	}
 
+    /* El menu trabaja con el indice vivo (0 = "Auto"); lo que se persiste es el
+     * nombre del preset. Se sincroniza justo antes de volcar. */
+    cfg.shaderName = (cfg.shaderMode > 0)
+        ? ShaderRegistry::instance()->idAt(cfg.shaderMode - 1) : std::string("");
+
     // 1. Escribimos los campos de tipo string de forma masiva
     struct MappingStr { const char* nombre; const char* descripcion; const std::string ConfigEmu::*puntero; };
     MappingStr strings[] = {
@@ -951,7 +1009,10 @@ std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
         {"mame_roms_xml", "Xml file with Mame game names", &ConfigEmu::mame_roms_xml},
         {"map_file", "This is the list of pre-scanned ROMs (not supported yet).", &ConfigEmu::map_file},
         {"keyboard_type", "Keyboard type. Implemented for: msx and spectrum", &ConfigEmu::keyboard_type},
-		{"network_default_servers", "List of servers to use. Quake specific", &ConfigEmu::network_default_servers}
+		{"network_default_servers", "List of servers to use. Quake specific", &ConfigEmu::network_default_servers},
+        {"shaderMode", "Video shader override: name of a preset in assets\\shaders"
+		"\n#(without the .hlslp extension). Leave EMPTY to use the global shader."
+		, &ConfigEmu::shaderName}
     };
     
     for (std::size_t i = 0; i < sizeof(strings)/sizeof(strings[0]); ++i) {
@@ -1002,21 +1063,6 @@ std::string CfgLoader::saveCoreOverrideParams(int emuIdx){
 		"\n#RATIO_5_4      6"
 		"\n#RATIO_16_9     7"
 		"\n#RATIO_16_10    8", &ConfigEmu::aspectRatio},
-        {"shaderMode", "Shader selected"
-		"\n#AUTO                   -1"
-		"\n#SHADER_NEAREST,         0"
-		"\n#SHADER_BILINEAR,        1"
-		"\n#SHADER_BILINEAR_STD,    2"
-		"\n#SHADER_LCD_GRID,        3"
-		"\n#SHADER_SCANLINES,       4"
-		"\n#SHADER_CRT,             5"
-		"\n#SHADER_CRT_LOTTES,      6"
-		"\n#SHADER_CRT_EASYMODE,    7"
-		"\n#SHADER_HQ2X,            8"
-		"\n#SHADER_HQ3X,            9"
-		"\n#SHADER_HQ4X,            10"
-		"\n#SHADER_XBR_LV2_FAST,    11"
-		"\n#SHADER_XBR_HYLLIAN,     12", &ConfigEmu::shaderMode},
         {"scaleMode", "Scaler in SW mode. Not used", &ConfigEmu::scaleMode},
         {"integerScale", "Enable or disable the screen integer scale"
 		"\n#AUTO                   -1"

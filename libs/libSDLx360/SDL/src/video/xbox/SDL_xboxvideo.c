@@ -58,10 +58,10 @@ static char rcsid =
 #include "SDL_xboxmouse_c.h"
 #include "../SDL_yuvfuncs.h"
 #include "SDL_xboxshaders.h"
-#include "hq2x_lut.h"
-#include "hq3x_lut.h"
-#include "hq4x_lut.h"
 #include "../../../../../src/video/HLSLBackground.h"
+/* Tabla de shaders publicada por la capa de aplicacion (assets\shaders).
+   Ver src/video/salvia_shader_api.h para el reparto de responsabilidades. */
+#include "../../../../../src/video/salvia_shader_api.h"
 
 #define XBOXVID_DRIVER_NAME "XBOX"
 
@@ -76,8 +76,20 @@ static LPDIRECT3DVERTEXBUFFER9 g_hlslBg_vb  = NULL;
 static LPDIRECT3DVERTEXDECLARATION9 g_hlslBg_vd = NULL;
 static int g_hlslBkg_active = 0;
 
- // Declaracion global (debe ser un puntero a punteros)
-IDirect3DPixelShader9** pixelShaders = NULL;
+/* Tabla de presets publicada por la app + objetos compilados por preset. */
+static const SalviaShaderPreset* g_presets = NULL;
+static int g_presetCount = 0;
+static IDirect3DPixelShader9** g_compiled = NULL;   /* [preset], NULL = passthrough */
+static LPDIRECT3DTEXTURE9** g_lutTex = NULL;        /* [preset][lut] */
+static int g_lutsUploaded = 0;
+
+/* Passthrough embebido: la red de seguridad. En Xenon no hay pipeline de
+   funcion fija, asi que enganchar un pixel shader NULL es PANTALLA NEGRA.
+   Este objeto se compila lo primero y jamas se deja de tener. */
+static IDirect3DPixelShader9* g_fallbackPS = NULL;
+/* Shader realmente enganchado ahora mismo. El overlay restaura este puntero
+   en vez de volver a indexar por g_current_effect. */
+static IDirect3DPixelShader9* g_activePS = NULL;
 
 int have_vertexbuffer=0;
 int have_direct3dtexture=0;
@@ -353,16 +365,9 @@ static void XBOX_SetSampler0Filter(D3DTEXTUREFILTERTYPE filter)
     IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, filter);
 }
 
-/* Total number of effects:
- *   0=Nearest, 1=Sharp-Bilinear, 2=Bilinear, 3=LCD3x, 4=Scanlines,
- *   5=CRT-Geom, 6=CRT-Lottes, 7=CRT-Easymode,
- *   8=HQ2x, 9=HQ3x, 10=HQ4x, 11=xBR-lv2-fast, 12=5xBR-Hyllian-v3.8a */
-#define NUM_EFFECTS 13
-
-/* HQ2x/HQ3x/HQ4x LUT textures (created from embedded data) */
-static LPDIRECT3DTEXTURE9 g_hq2x_lut = NULL;
-static LPDIRECT3DTEXTURE9 g_hq3x_lut = NULL;
-static LPDIRECT3DTEXTURE9 g_hq4x_lut = NULL;
+/* La lista de efectos ya no es fija: la publica la capa de aplicacion desde
+   assets\shaders. El indice de efecto es la posicion en esa tabla, y las LUT
+   vienen dentro del propio preset (clave `textures =` estilo RetroArch). */
 
 D3DVERTEXELEMENT9 decl[] = 
 {
@@ -1120,7 +1125,7 @@ static void XBOX_DrawOverlay(LPDIRECT3DTEXTURE9 game_texture, int useAlphaFix)
 	IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)g_overlay_texture);
 	IDirect3DDevice9_SetStreamSource(D3D_Device, 0, g_overlay_vb, 0, sizeof(VERTEX));
 	IDirect3DDevice9_SetPixelShader(D3D_Device,
-		(useAlphaFix && g_hlslBg_psAlphaFix) ? g_hlslBg_psAlphaFix : pixelShaders[0]);
+		(useAlphaFix && g_hlslBg_psAlphaFix) ? g_hlslBg_psAlphaFix : g_fallbackPS);
 	IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
 	IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
 
@@ -1141,7 +1146,10 @@ static void XBOX_DrawOverlay(LPDIRECT3DTEXTURE9 game_texture, int useAlphaFix)
 	 * por cada frame mientras el menu/HUD este activo. */
 	IDirect3DDevice9_SetTexture(D3D_Device, 0, (D3DBaseTexture *)game_texture);
 	IDirect3DDevice9_SetStreamSource(D3D_Device, 0, vertexBuffer, 0, sizeof(VERTEX));
-	IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[g_current_effect]);
+	/* g_activePS es el puntero YA validado por XBOX_SelectEffect. Esto corre
+	 * en cada frame con el menu/HUD activo, y en Xenon un pixel shader NULL es
+	 * pantalla negra, asi que aqui no se indexa nunca por g_current_effect. */
+	IDirect3DDevice9_SetPixelShader(D3D_Device, g_activePS ? g_activePS : g_fallbackPS);
 	IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MINFILTER, g_current_sampler_filter);
 	IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_MAGFILTER, g_current_sampler_filter);
 
@@ -2010,17 +2018,22 @@ HRESULT CreateShader(const char* source, IDirect3DPixelShader9** target, DWORD f
     return hr;
 }
 
-/* Create a LUT texture from embedded BGRA data (from .NET extraction).
-   Xbox 360 is big-endian: D3DFMT_LIN_A8R8G8B8 stores bytes as A,R,G,B.
-   Source data from .NET is B,G,R,A per pixel - we need to byte-swap. */
-static LPDIRECT3DTEXTURE9 XBOX_CreateLUTTexture(const unsigned char* data, int w, int h)
+/* Sube una LUT ya decodificada a una textura.
+   El contrato de salvia_shader_api.h es "words 0xAARRGGBB en endianness
+   nativa": en Xenon (big-endian) eso son bytes A,R,G,B en memoria, que es
+   exactamente el layout de D3DFMT_LIN_A8R8G8B8 -> memcpy por fila, sin
+   reordenar nada. El byte-swap BGRA->ARGB que habia aqui existia solo porque
+   los datos venian de un array .h en formato BGRA del extractor .NET. */
+static LPDIRECT3DTEXTURE9 XBOX_CreateLUTTexture(const SalviaShaderLut* src)
 {
     LPDIRECT3DTEXTURE9 tex = NULL;
     D3DLOCKED_RECT lr;
     HRESULT hr;
-    int x, y;
+    int y;
 
-    hr = IDirect3DDevice9_CreateTexture(D3D_Device, w, h, 1, 0,
+    if (!src || !src->pixels || src->width <= 0 || src->height <= 0) return NULL;
+
+    hr = IDirect3DDevice9_CreateTexture(D3D_Device, src->width, src->height, 1, 0,
         D3DFMT_LIN_A8R8G8B8, D3DUSAGE_CPU_CACHED_MEMORY, (D3DTexture**)&tex, NULL);
     if (FAILED(hr) || !tex) return NULL;
 
@@ -2030,346 +2043,210 @@ static LPDIRECT3DTEXTURE9 XBOX_CreateLUTTexture(const unsigned char* data, int w
         return NULL;
     }
 
-    for (y = 0; y < h; y++) {
-        const unsigned char* src_row = data + y * w * 4;
-        unsigned char* dst_row = (unsigned char*)lr.pBits + y * lr.Pitch;
-        for (x = 0; x < w; x++) {
-            /* Source: B,G,R,A (BGRA from .NET) */
-            /* Dest:   A,R,G,B (D3DFMT_LIN_A8R8G8B8 big-endian) */
-            unsigned char B = src_row[x*4+0];
-            unsigned char G = src_row[x*4+1];
-            unsigned char R = src_row[x*4+2];
-            unsigned char A = src_row[x*4+3];
-            dst_row[x*4+0] = A;
-            dst_row[x*4+1] = R;
-            dst_row[x*4+2] = G;
-            dst_row[x*4+3] = B;
-        }
+    for (y = 0; y < src->height; y++) {
+        memcpy((unsigned char*)lr.pBits + y * lr.Pitch,
+               src->pixels + (size_t)y * src->pitch,
+               (size_t)src->width * 4);
     }
 
     IDirect3DTexture9_UnlockRect(tex, 0);
     return tex;
 }
 
-static void XBOX_InitLUTTextures(void)
+static DWORD XBOX_MapWrap(SalviaShaderWrap w)
 {
-    if (!g_hq2x_lut) {
-        g_hq2x_lut = XBOX_CreateLUTTexture(hq2x_lut_data, HQ2X_LUT_WIDTH, HQ2X_LUT_HEIGHT);
-        //if (g_hq2x_lut)
-            //OutputDebugString("HQ2x LUT texture created (256x64)\n");
-        //else
-        //    OutputDebugString("ERROR: Failed to create HQ2x LUT texture\n");
-    }
-    if (!g_hq3x_lut) {
-        g_hq3x_lut = XBOX_CreateLUTTexture(hq3x_lut_data, HQ3X_LUT_WIDTH, HQ3X_LUT_HEIGHT);
-        //if (g_hq3x_lut)
-        //    OutputDebugString("HQ3x LUT texture created (256x144)\n");
-        //else
-        //    OutputDebugString("ERROR: Failed to create HQ3x LUT texture\n");
-    }
-    if (!g_hq4x_lut) {
-        g_hq4x_lut = XBOX_CreateLUTTexture(hq4x_lut_data, HQ4X_LUT_WIDTH, HQ4X_LUT_HEIGHT);
-        //if (g_hq4x_lut)
-        //    OutputDebugString("HQ4x LUT texture created (256x256)\n");
-        //else
-        //    OutputDebugString("ERROR: Failed to create HQ4x LUT texture\n");
-    }
+    if (w == SALVIA_WRAP_REPEAT) return D3DTADDRESS_WRAP;
+    if (w == SALVIA_WRAP_MIRROR) return D3DTADDRESS_MIRROR;
+    return D3DTADDRESS_CLAMP;
 }
 
-static void XBOX_DestroyLUTTextures(void)
+/* =====================================================================
+ * API de registro de la tabla de shaders (src/video/salvia_shader_api.h).
+ * La capa de aplicacion (shaderpreset.cpp) descubre y parsea assets\shaders
+ * y publica el resultado aqui ANTES de SDL_SetVideoMode, porque initShaders()
+ * se llama desde dentro de el.
+ * =================================================================== */
+int SalviaShader_SetTable(const SalviaShaderPreset* presets, int count)
 {
-    if (g_hq2x_lut) { IDirect3DTexture9_Release(g_hq2x_lut); g_hq2x_lut = NULL; }
-    if (g_hq3x_lut) { IDirect3DTexture9_Release(g_hq3x_lut); g_hq3x_lut = NULL; }
-    if (g_hq4x_lut) { IDirect3DTexture9_Release(g_hq4x_lut); g_hq4x_lut = NULL; }
+    if (!presets || count <= 0) return 0;
+    if (count > SALVIA_SHADER_MAX_PRESETS) count = SALVIA_SHADER_MAX_PRESETS;
+    g_presets = presets;
+    g_presetCount = count;
+    return 1;
+}
+
+int SalviaShader_GetCount(void)     { return g_presetCount; }
+int SalviaShader_LutsUploaded(void) { return g_lutsUploaded; }
+
+void SalviaShader_Release(void)
+{
+    g_presets = NULL;
+    g_presetCount = 0;
 }
 
 void initShaders() {
-    /* Only compile shaders once - avoid leak on repeated SDL_SetVideoMode calls */
-    if (pixelShaders != NULL) return;
+    int i, l;
 
-    /* Create LUT textures for HQ2x/HQ3x/HQ4x */
-    XBOX_InitLUTTextures();
+    if (g_fallbackPS != NULL) return;   /* ya compilados */
 
-    /* 0=Nearest, 1=Sharp-Bilinear, 2=Bilinear, 3=LCD3x, 4=Scanlines,
-       5=CRT-Geom, 6=CRT-Lottes, 7=CRT-Easymode,
-       8=HQ2x, 9=HQ3x, 10=HQ4x, 11=xBR-lv2-fast, 12=5xBR-Hyllian-v3.8a */
-    pixelShaders = (IDirect3DPixelShader9**) calloc(NUM_EFFECTS, sizeof(IDirect3DPixelShader9*));
+    /* El passthrough va PRIMERO y sin condiciones. Es lo que garantiza que ni
+       un preset roto ni la ausencia de assets\shaders puedan dejar el pipeline
+       con un pixel shader NULL (= pantalla negra en Xenon). */
+    CreateShader(g_strShaderNormalSource, &g_fallbackPS, PS_FLAGS_DEFAULT);
+    if (g_fallbackPS == NULL) {
+        OutputDebugString("ERROR: no se pudo compilar el passthrough integrado\n");
+        return;
+    }
+    g_activePS = g_fallbackPS;
+    g_pPixelShader = g_fallbackPS;
 
-    //OutputDebugString("initShaders: compiling Nearest (Normal)...\n");
-	CreateShader(g_strShaderNormalSource,        &pixelShaders[0],  PS_FLAGS_DEFAULT);
-    //OutputDebugString("initShaders: compiling Sharp-Bilinear...\n");
-	CreateShader(g_strShaderSharpBilinearSource, &pixelShaders[1],  PS_FLAGS_DEFAULT);
-    /* 2 = Bilinear clasico: reutiliza el SOURCE de Normal (mismo passthrough),
-     * pero compila su propio objeto shader. Necesario porque el render del
-     * overlay reengancha pixelShaders[g_current_effect] cada frame: un slot
-     * NULL da pantalla negra en Xenon (no hay funcion fija). La diferencia con
-     * Nearest es solo el sampler LINEAR, que fija XBOX_SelectEffect. */
-    //OutputDebugString("initShaders: compiling Bilinear (reusa Normal)...\n");
-    CreateShader(g_strShaderNormalSource,        &pixelShaders[2],  PS_FLAGS_DEFAULT);
-    //OutputDebugString("initShaders: compiling LCD-Grid-v2...\n");
-    CreateShader(g_strShaderLCDGridSource,       &pixelShaders[3],  PS_FLAGS_DEFAULT);
-    //OutputDebugString("initShaders: compiling Scanlines...\n");
-    CreateShader(g_strShaderScanlinesSource,     &pixelShaders[4],  PS_FLAGS_DEFAULT);
-    //OutputDebugString("initShaders: compiling CRT-Geom...\n");
-    CreateShader(g_strShaderCRTSource,           &pixelShaders[5],  PS_FLAGS_DEFAULT);
-    /* CRT-Lottes: usa fmod(vpos, X) sobre la coord output -> mismo riesgo que
-     * Easymode si half precision pierde bits. Por defensa, full precision. */
-    //OutputDebugString("initShaders: compiling CRT-Lottes...\n");
-    CreateShader(g_strShaderCRTLottesSource,     &pixelShaders[6],  PS_FLAGS_FULL_PRECISION);
-    /* CRT-Easymode: el mask usa fmod(floor(vpos.x), 3.0). En half precision a
-     * partir de vpos~256 el step entre valores es >=0.25, lo que rompe la
-     * division /3 y produce bandas verticales anchas en la mitad derecha de
-     * pantalla. Full precision (float32) lo resuelve. */
-    //OutputDebugString("initShaders: compiling CRT-Easymode...\n");
-    CreateShader(g_strShaderCRTEasymodeSource,   &pixelShaders[7],  PS_FLAGS_FULL_PRECISION);
-    //OutputDebugString("initShaders: compiling HQ2x...\n");
-    CreateShader(g_strShaderHQ2xSource,          &pixelShaders[8],  PS_FLAGS_DEFAULT);
-    //OutputDebugString("initShaders: compiling HQ3x...\n");
-    CreateShader(g_strShaderHQ3xSource,          &pixelShaders[9],  PS_FLAGS_DEFAULT);
-    //OutputDebugString("initShaders: compiling HQ4x...\n");
-    CreateShader(g_strShaderHQ4xSource,          &pixelShaders[10], PS_FLAGS_DEFAULT);
-    //OutputDebugString("initShaders: compiling xBR-lv2-fast...\n");
-    CreateShader(g_strShaderXBRlv2FastSource,    &pixelShaders[11], PS_FLAGS_DEFAULT);
-    /* 5xBR-Hyllian v3.8a (rounded): 21 tex2D + ~115 ALU, identico coste que
-     * v3.7a pero con smoothstep + lerp blending (sin pixel substitution).
-     * FULL_PRECISION evita problemas con saturate y los step() de epsilon
-     * pequeno cuando el optimizador colapsa precision. */
-    CreateShader(g_strShaderXBRHyllianRoundedSource, &pixelShaders[12], PS_FLAGS_FULL_PRECISION);
-    //OutputDebugString("initShaders: all 13 shaders compiled (slot 2 reusa el source de Normal).\n");
-	// Create pixel shader.
-	g_pPixelShader = pixelShaders[0];
-	XBOX_SetVideoFilter(0);
+    if (g_presetCount <= 0 || g_presets == NULL) {
+        OutputDebugString("Shaders: no hay tabla registrada; solo passthrough\n");
+        XBOX_SetVideoFilter(0);
+        return;
+    }
+
+    g_compiled = (IDirect3DPixelShader9**)calloc(g_presetCount, sizeof(IDirect3DPixelShader9*));
+    g_lutTex   = (LPDIRECT3DTEXTURE9**)calloc(g_presetCount, sizeof(LPDIRECT3DTEXTURE9*));
+    if (g_compiled == NULL || g_lutTex == NULL) return;
+
+    for (i = 0; i < g_presetCount; i++) {
+        const SalviaShaderPass* pass = &g_presets[i].passes[g_presets[i].activePass];
+
+        /* Sin source, el preset solo describe estado de sampler (asi se
+           representan Nearest y Bilinear): se queda NULL y XBOX_SelectEffect
+           engancha el passthrough. */
+        if (pass->source != NULL) {
+            DWORD flags = (pass->psFlags & SALVIA_PS_FULL_PRECISION)
+                        ? PS_FLAGS_FULL_PRECISION : PS_FLAGS_DEFAULT;
+            CreateShader(pass->source, &g_compiled[i], flags);
+            if (g_compiled[i] == NULL) {
+                char msg[160];
+                sprintf(msg, "ERROR: el preset '%s' no compila; cae a passthrough\n",
+                        g_presets[i].id);
+                OutputDebugString(msg);
+            }
+        }
+
+        g_lutTex[i] = (LPDIRECT3DTEXTURE9*)calloc(SALVIA_SHADER_MAX_LUTS,
+                                                  sizeof(LPDIRECT3DTEXTURE9));
+        if (g_lutTex[i] == NULL) continue;
+        for (l = 0; l < pass->lutCount && l < SALVIA_SHADER_MAX_LUTS; l++)
+            g_lutTex[i][l] = XBOX_CreateLUTTexture(&pass->luts[l]);
+    }
+
+    g_lutsUploaded = 1;
+    XBOX_SetVideoFilter(0);
 }
 
 void destroyShaders() {
-    int i;
-    if (pixelShaders == NULL) return;
+    int i, l;
 
-    for (i = 0; i < NUM_EFFECTS; i++) {
-        if (pixelShaders[i] != NULL) {
-            // En el XDK, si es un archivo .c, usa esta linea:
-            IDirect3DPixelShader9_Release(pixelShaders[i]);
-            
-            // Si es un archivo .cpp, usa esta:
-            // pixelShaders[i]->Release();
-            
-            pixelShaders[i] = NULL;
-        }
-    }
-    free(pixelShaders);
-    pixelShaders = NULL;
-
-    XBOX_DestroyLUTTextures();
-}
-
-void XBOX_SelectEffect(int effectID) {
-    if (!D3D_Device || !pixelShaders) return;
-
-    g_current_effect = effectID;
-
-    /* Unbind LUT from sampler s1 by default (HQ effects will re-bind it below) */
-    IDirect3DDevice9_SetTexture(D3D_Device, 1, NULL);
-
-    switch (effectID) {
-    case 0: /* Nearest Neighbor: passthrough + POINT */
-        IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-        XBOX_SetSampler0Filter(D3DTEXF_POINT);
-        break;
-
-    case 1: /* Sharp-Bilinear (rsn8887/TheMaister): nearest dentro de cada
-             * pixel-fuente, bilinear hardware solo en las transiciones. Necesita
-             * textureDims en c1 (para texel = uv*dims) y LINEAR sampler (la
-             * interpolacion del hardware hace la rampa). */
-    {
-        float dims[4];
-        IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[1]);
-        dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
-        dims[2] = 0.0f; dims[3] = 0.0f;
-        IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-        XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
-        break;
-    }
-
-    case 2: /* Bilinear clasico: pixelShaders[2] es el mismo passthrough que
-             * Normal (reutiliza su source). La UNICA diferencia con Nearest
-             * (case 0) es el sampler LINEAR en vez de POINT: la interpolacion
-             * bilineal la hace el hardware, uniforme en toda la superficie del
-             * pixel-fuente (a diferencia del Sharp-Bilinear, que solo interpola
-             * en las transiciones). No necesita textureDims. Enganchamos el
-             * slot [2] (no [0]) para que coincida con el restore por indice del
-             * overlay: pixelShaders[g_current_effect]. */
-        IDirect3DDevice9_SetPixelShader(D3D_Device,
-            pixelShaders[2] ? pixelShaders[2] : pixelShaders[0]);
-        XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
-        break;
-
-    case 3: /* LCD3x (Gigaherz): simula la rejilla LCD de handhelds (GB/GBC/
-             * GBA/DS) con modulacion sinusoidal RGB. Sampler POINT (el sample
-             * de la fuente no debe interpolarse - el patron de subpixeles ya
-             * lo genera el shader). textureDims en c1 para que el periodo
-             * coincida con un texel del source. */
-    {
-        if (pixelShaders[3] == NULL) {
-            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-            XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
-        } else {
-            float dims[4];
-            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[3]);
-            dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
-            dims[2] = 0.0f; dims[3] = 0.0f;
-            IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-            XBOX_SetSampler0Filter(D3DTEXF_POINT);
-        }
-        break;
-    }
-
-    case 4: /* Scanlines: dedicated shader + POINT + textureDims */
-    {
-        float dims[4];
-        IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[4]);
-        dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
-        dims[2] = 0.0f; dims[3] = 0.0f;
-        IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-        XBOX_SetSampler0Filter(D3DTEXF_POINT);
-        break;
-    }
-
-    case 5: /* CRT-Geom: dedicated shader + LINEAR + textureDims */
-    {
-        float dims[4];
-        IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[5]);
-        dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
-        dims[2] = 0.0f; dims[3] = 0.0f;
-        IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-        XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
-        break;
-    }
-
-    case 6: /* CRT-Lottes: Timothy Lottes' classic CRT shader. Sampler POINT
-             * (el shader usa Fetch() que snapea el UV manualmente). textureDims
-             * en c1. Bloom multi-pasa DESHABILITADO (DO_BLOOM no defined).
-             * Address mode CLAMP: el Warp barrel saca UVs fuera de [0,1] en
-             * las esquinas; con WRAP (default D3D9) se veria la fuente en
-             * mosaico. El shader ademas enmascara off-screen a negro, asi que
-             * con CLAMP queda lo correcto: negro en las esquinas curvadas. */
-    {
-        if (pixelShaders[6] == NULL) {
-            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-            XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
-        } else {
-            float dims[4];
-            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[6]);
-            dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
-            dims[2] = 0.0f; dims[3] = 0.0f;
-            IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-            XBOX_SetSampler0Filter(D3DTEXF_POINT);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
-        }
-        break;
-    }
-
-    case 7: /* CRT-Easymode (variante Salvia, estructura clonada de Lottes):
-             * Sampler POINT (el shader usa Fetch() que snapea UV manualmente,
-             * mismo patron que Lottes). textureDims en c1.xy. Address CLAMP
-             * defensivo para los Fetch en bordes. */
-    {
-        if (pixelShaders[7] == NULL) {
-            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-            XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
-        } else {
-            float dims[4];
-            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[7]);
-            dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
-            dims[2] = 0.0f; dims[3] = 0.0f;
-            IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-            XBOX_SetSampler0Filter(D3DTEXF_POINT);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
-            IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
-        }
-        break;
-    }
-
-    case 8: /* HQ2x */
-    case 9: /* HQ3x */
-    case 10: /* HQ4x */
-    {
-        if (pixelShaders[effectID] == NULL) {
-            /* Fallback to passthrough if shader failed to compile */
-            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-            XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
-        } else {
-            float dims[4];
-            LPDIRECT3DTEXTURE9 lut = (effectID == 8) ? g_hq2x_lut :
-                                     (effectID == 9) ? g_hq3x_lut : g_hq4x_lut;
-            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[effectID]);
-            dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
-            dims[2] = 0.0f; dims[3] = 0.0f;
-            IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-            XBOX_SetSampler0Filter(D3DTEXF_POINT);
-            /* Bind LUT texture to sampler s1 with POINT filtering */
-            if (lut) {
-                IDirect3DDevice9_SetTexture(D3D_Device, 1, (D3DBaseTexture*)lut);
-                IDirect3DDevice9_SetSamplerState(D3D_Device, 1, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-                IDirect3DDevice9_SetSamplerState(D3D_Device, 1, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
-                IDirect3DDevice9_SetSamplerState(D3D_Device, 1, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
-                IDirect3DDevice9_SetSamplerState(D3D_Device, 1, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+    if (g_compiled != NULL) {
+        for (i = 0; i < g_presetCount; i++) {
+            if (g_compiled[i] != NULL) {
+                IDirect3DPixelShader9_Release(g_compiled[i]);
+                g_compiled[i] = NULL;
             }
         }
-        break;
+        free(g_compiled);
+        g_compiled = NULL;
     }
 
-    case 11: /* xBR-lv2-fast: Hyllian's xBR Level 2 "fast" single-pass edge-aware
-              * upscaler. Vecindario 3x3 (9 samples) + 3 angulos (30/45/60,
-              * mas fx45i para SMOOTH_TIPS), ~1/3 del coste de xBR-lv3.
-              * Sampler s0: POINT (point-sampling para que las comparaciones YUV
-              * de edge detection sean exactas - bilinear las suaviza y arruina
-              * la deteccion). textureDims en c1 da la resolucion source para
-              * `fp = frac(uv*dims)` (subpixel position). Sin LUT, sampler s1
-              * queda sin bindear. */
-    {
-        if (pixelShaders[11] == NULL) {
-            /* Compile failure -> passthrough so the user notices something is off
-             * without crashing. */
-            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-            XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
-        } else {
-            float dims[4];
-            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[11]);
-            dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
-            dims[2] = 0.0f; dims[3] = 0.0f;
-            IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-            XBOX_SetSampler0Filter(D3DTEXF_POINT);
+    if (g_lutTex != NULL) {
+        for (i = 0; i < g_presetCount; i++) {
+            if (g_lutTex[i] == NULL) continue;
+            for (l = 0; l < SALVIA_SHADER_MAX_LUTS; l++) {
+                if (g_lutTex[i][l] != NULL) {
+                    IDirect3DTexture9_Release(g_lutTex[i][l]);
+                    g_lutTex[i][l] = NULL;
+                }
+            }
+            free(g_lutTex[i]);
         }
-        break;
+        free(g_lutTex);
+        g_lutTex = NULL;
     }
 
-    case 12: /* 5xBR-Hyllian v3.8a (rounded): evolucion de v3.7a con output
-              * SUAVIZADO via smoothstep + lerp (en lugar de pixel substitution).
-              * Mantiene el mismo 5x5 (21 tex2D) + weighted_distance + tres
-              * niveles de edge detection (lv1, edr_left a 30, edr_up a 60).
-              * Diferencia visible vs v3.7a: bordes con AA en las transiciones
-              * de subpixel, sin staircase. Mismo binding que lv2-fast:
-              * sampler s0 POINT + textureDims en c1. */
-    {
-        if (pixelShaders[12] == NULL) {
-            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
-            XBOX_SetSampler0Filter(D3DTEXF_LINEAR);
-        } else {
-            float dims[4];
-            IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[12]);
-            dims[0] = (float)g_texture_width; dims[1] = (float)g_texture_height;
-            dims[2] = 0.0f; dims[3] = 0.0f;
-            IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
-            XBOX_SetSampler0Filter(D3DTEXF_POINT);
-        }
-        break;
+    if (g_fallbackPS != NULL) {
+        IDirect3DPixelShader9_Release(g_fallbackPS);
+        g_fallbackPS = NULL;
     }
+    g_activePS = NULL;
+    g_pPixelShader = NULL;
+    g_lutsUploaded = 0;
+    SalviaShader_Release();
+}
 
-    default: /* Unknown: fallback to Nearest Neighbor */
-        IDirect3DDevice9_SetPixelShader(D3D_Device, pixelShaders[0]);
+/* Aplica el estado descrito por el preset. Sustituye al switch de 13 casos
+   que habia aqui: filtro, wrap y LUT vienen ahora del .hlslp. */
+void XBOX_SelectEffect(int effectID) {
+    const SalviaShaderPass* pass;
+    IDirect3DPixelShader9* ps;
+    float dims[4];
+    int i;
+
+    if (!D3D_Device || g_fallbackPS == NULL) return;
+
+    if (g_presetCount <= 0 || g_presets == NULL) {
+        /* Sin tabla: passthrough puro. Nunca se deja el pipeline sin shader. */
+        g_activePS = g_fallbackPS;
+        IDirect3DDevice9_SetPixelShader(D3D_Device, g_activePS);
         XBOX_SetSampler0Filter(D3DTEXF_POINT);
-        break;
+        return;
+    }
+
+    /* Clamp de rango: la rama Windows ya lo tenia, esta no. */
+    if (effectID < 0 || effectID >= g_presetCount) effectID = 0;
+    g_current_effect = effectID;
+
+    pass = &g_presets[effectID].passes[g_presets[effectID].activePass];
+
+    /* 1. Shader. Cachear el puntero (en vez de indexar por g_current_effect
+          desde el bucle de dibujado) es lo que garantiza que jamas se engancha
+          un NULL: un preset que no compilo cae aqui al passthrough. */
+    ps = (g_compiled != NULL && g_compiled[effectID] != NULL)
+       ? g_compiled[effectID] : g_fallbackPS;
+    g_activePS = ps;
+    g_pPixelShader = ps;
+    IDirect3DDevice9_SetPixelShader(D3D_Device, ps);
+
+    /* 2. c1 = textureDims, SIEMPRE. Antes habia efectos que no lo escribian;
+          ponerlo de mas cuesta 4 floats por CAMBIO de efecto (no por frame) y
+          elimina toda la casuistica. */
+    dims[0] = (float)g_texture_width;
+    dims[1] = (float)g_texture_height;
+    dims[2] = 0.0f;
+    dims[3] = 0.0f;
+    IDirect3DDevice9_SetPixelShaderConstantF(D3D_Device, 1, dims, 1);
+
+    /* 3. Sampler s0: filtro y wrap SIEMPRE. Escribir el wrap sin condiciones
+          arregla de paso una fuga de estado real que habia antes: los efectos
+          que ponian CLAMP explicito (Lottes, Easymode, HQx) nunca lo devolvian
+          a su valor, asi que el siguiente efecto heredaba su direccionamiento. */
+    XBOX_SetSampler0Filter(pass->filter == SALVIA_FILTER_LINEAR
+                           ? D3DTEXF_LINEAR : D3DTEXF_POINT);
+    IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSU, XBOX_MapWrap(pass->wrap));
+    IDirect3DDevice9_SetSamplerState(D3D_Device, 0, D3DSAMP_ADDRESSV, XBOX_MapWrap(pass->wrap));
+
+    /* 4. LUTs: desvincular s1..sN y enganchar las de este preset. */
+    for (i = 1; i <= SALVIA_SHADER_MAX_LUTS; i++)
+        IDirect3DDevice9_SetTexture(D3D_Device, i, NULL);
+
+    for (i = 0; i < pass->lutCount && i < SALVIA_SHADER_MAX_LUTS; i++) {
+        int s = pass->luts[i].sampler;
+        LPDIRECT3DTEXTURE9 tex = (g_lutTex != NULL && g_lutTex[effectID] != NULL)
+                               ? g_lutTex[effectID][i] : NULL;
+        DWORD f = (pass->luts[i].filter == SALVIA_FILTER_LINEAR)
+                ? D3DTEXF_LINEAR : D3DTEXF_POINT;
+        if (tex == NULL || s < 1 || s > SALVIA_SHADER_MAX_LUTS) continue;
+        IDirect3DDevice9_SetTexture(D3D_Device, s, (D3DBaseTexture*)tex);
+        IDirect3DDevice9_SetSamplerState(D3D_Device, s, D3DSAMP_MINFILTER, f);
+        IDirect3DDevice9_SetSamplerState(D3D_Device, s, D3DSAMP_MAGFILTER, f);
+        IDirect3DDevice9_SetSamplerState(D3D_Device, s, D3DSAMP_ADDRESSU,
+                                         XBOX_MapWrap(pass->luts[i].wrap));
+        IDirect3DDevice9_SetSamplerState(D3D_Device, s, D3DSAMP_ADDRESSV,
+                                         XBOX_MapWrap(pass->luts[i].wrap));
     }
 
     /* Update quad size: in pixel-perfect mode the scale factor may change with the effect */

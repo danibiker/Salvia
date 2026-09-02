@@ -1,0 +1,13 @@
+# Scanlines simples.
+# Generado por utils/extract_shaders.py desde SDL_shaders_src.h.
+# Formato de preset estilo RetroArch. El cuerpo es HLSL ps_3_0,
+# no GLSL: por eso la extension es .hlslp/.hlsl y no .slangp/.slang.
+
+shaders = "1"
+shader0 = "04-scanlines.hlsl"
+filter_linear0 = "false"
+wrap_mode0 = "clamp_to_edge"
+salvia_precision0 = "half"
+
+salvia_label = "Scanlines"
+salvia_label_key = "menu.video.shader4"

@@ -13,6 +13,7 @@
 #include <io/keyboard.h>
 #include "unzip/unziptool.h"
 #include "rhash/md5.h" // To generate a filename hash
+#include <video/shaderpreset.h>
 
 /* Definida en salvia.cpp devuelve los descriptores de memoria que el core
  * envio via RETRO_ENVIRONMENT_SET_MEMORY_MAPS (ej. HRAM en Game Boy). */
@@ -696,7 +697,7 @@ std::string GameMenu::reduceWords(const std::string &sentence1, const std::strin
         lastWordHits = (sortedWords[i].count > 1) ? 1 : 0;
     }
 
-	// CORRECCION: Forzar la primera letra a mayúscula si el texto no esta vacio
+	// CORRECCION: Forzar la primera letra a mayï¿½scula si el texto no esta vacio
     if (!finalSentence.empty()) {
         finalSentence[0] = static_cast<char>(::toupper(static_cast<unsigned char>(finalSentence[0])));
     }
@@ -1641,7 +1642,6 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 	#endif
 
 	std::string msgShader;
-	std::string choosenFilter;
 	ConfigEmu *emu = getCfgLoader()->getCfgEmu();
 	static int lastSync = *current_sync;
 
@@ -1654,12 +1654,19 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 
 		case HK_SHADER:
 			#ifdef SALVIA_GPU_VIDEO
-				*this->current_shader = (*this->current_shader + 1) % TOTAL_SHADERS;
-				XBOX_SelectEffect(*this->current_shader);
-				choosenFilter = "menu.video.shader" + Constant::TipoToStr(*this->current_shader);
-				msgShader = LanguageManager::instance()->get("msg.filter") + " " 
-					+ LanguageManager::instance()->get(choosenFilter);
-				showSystemMessage(msgShader, 3000);
+			{
+				/* La lista de shaders es dinamica (assets\shaders): el tope del
+				 * ciclado sale del registro, no de una constante. */
+				ShaderRegistry* shaders = ShaderRegistry::instance();
+				int totalShaders = shaders->count();
+				if (totalShaders > 0){
+					*this->current_shader = (*this->current_shader + 1) % totalShaders;
+					XBOX_SelectEffect(*this->current_shader);
+					msgShader = LanguageManager::instance()->get("msg.filter") + " "
+						+ shaders->displayName(*this->current_shader);
+					showSystemMessage(msgShader, 3000);
+				}
+			}
 			#else
 				do {
 					*this->current_scaler_mode = ((*this->current_scaler_mode + 1) % TOTAL_VIDEO_SCALE);

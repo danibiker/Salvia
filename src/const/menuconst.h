@@ -31,22 +31,9 @@ static const t_screen_res g_screenResolutions[] = {
 };
 #define TOTAL_SCREEN_RES (int)(sizeof(g_screenResolutions)/sizeof(g_screenResolutions[0]))
 
-static const enum videoShaders {
-	SHADER_NEAREST,         /* 0 */
-	SHADER_BILINEAR,        /* 1 - Sharp-Bilinear-Simple */
-	SHADER_BILINEAR_STD,    /* 2 - Bilinear clasico (hardware LINEAR) */
-	SHADER_LCD_GRID,        /* 3 - LCD3x (handhelds, Gigaherz) */
-	SHADER_SCANLINES,       /* 4 */
-	SHADER_CRT,             /* 5 - CRT-Geom */
-	SHADER_CRT_LOTTES,      /* 6 */
-	SHADER_CRT_EASYMODE,    /* 7 */
-	SHADER_HQ2X,            /* 8 */
-	SHADER_HQ3X,            /* 9 */
-	SHADER_HQ4X,            /* 10 */
-	SHADER_XBR_LV2_FAST,    /* 11 */
-	SHADER_XBR_HYLLIAN,     /* 12 - 5xBR v3.8a (rounded) smooth blend */
-	TOTAL_SHADERS
-};
+/* La lista de shaders ya no es un enum fijo: se descubre en assets\shaders al
+ * arrancar (ver src/video/shaderpreset.h). Para recorrerla usa
+ * ShaderRegistry::instance()->count() / displayName(i) / idAt(i). */
 
 static const enum ANIM_BACKGROUNDS {BG_TILES, BG_IMAGE, BG_HLSL, BG_HLSL2, BG_HLSL3, BG_NONE, BG_MAX};
 static const enum syncOptions {OPT_SYNC_AUDIO = SYNC_TO_AUDIO, OPT_SYNC_VIDEO = SYNC_TO_VIDEO, OPT_SYNC_NONE = SYNC_NONE, TOTAL_VIDEO_SYNC};

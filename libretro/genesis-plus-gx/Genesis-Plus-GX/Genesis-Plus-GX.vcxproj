@@ -213,9 +213,6 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="ReadMe.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="..\core\cart_hw\areplay.c" />
     <ClCompile Include="..\core\cart_hw\eeprom_93c.c" />
     <ClCompile Include="..\core\cart_hw\eeprom_i2c.c" />

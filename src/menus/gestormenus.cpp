@@ -11,6 +11,7 @@
 #include <io/joystick.h>
 #include <image/icons.h>
 #include <utils/langmanager.h>
+#include <video/shaderpreset.h>
 #include <http/httputil.h>
 #include <http/achievements.h>
 #include <so/soutils.h>
@@ -24,7 +25,9 @@ std::string syncOptionsStrings[TOTAL_VIDEO_SYNC];
 std::string aspectRatioStrings[TOTAL_VIDEO_RATIO];
 std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
 std::string videoIntScaleStrings[TOTAL_INT_SCALE];
-std::string videoShaderStrings[TOTAL_SHADERS];
+/* La lista de shaders es dinamica (assets\shaders), asi que ya no puede
+ * ser un array de tamano fijo. Se rellena en construirMenuVideo. */
+std::vector<std::string> videoShaderStrings;
 std::string ACTION_ASK_STR[MAX_ASK];
 std::string TipoKeyStr[KEY_JOY_MAX];
 std::string configurablePortButtonsStr[MAXJOYBUTTONS];
@@ -551,9 +554,13 @@ void GestorMenus::poblarMenuVideo(Menu* menuVideo, CfgLoader *refConfig){
     std::vector<std::string> filtros;
 
 #if defined(_XBOX) || defined(SALVIA_GPU_VIDEO)
-	for (int i=0; i < TOTAL_SHADERS; i++){
-		videoShaderStrings[i] = LanguageManager::instance()->get("menu.video.shader" + Constant::TipoToStr(i));
-		filtros.push_back(videoShaderStrings[i]);
+	{
+		ShaderRegistry* shaders = ShaderRegistry::instance();
+		videoShaderStrings.clear();
+		for (int i=0; i < shaders->count(); i++){
+			videoShaderStrings.push_back(shaders->displayName(i));
+			filtros.push_back(videoShaderStrings[i]);
+		}
 	}
 	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.scale"), filtros, &refConfig->configMain[cfg::shaderMode].getIntRef()));
 #else
@@ -812,7 +819,7 @@ void GestorMenus::poblarMenuCoreOverrides(Menu *menu, CfgLoader *refConfig){
 	filtros.push_back(autoOverrideTxt);
 
 	#if defined(_XBOX) || defined(SALVIA_GPU_VIDEO)
-		for (int i=0; i < TOTAL_SHADERS; i++){
+		for (std::size_t i=0; i < videoShaderStrings.size(); i++){
 			filtros.push_back(videoShaderStrings[i]);
 		}
 	#else

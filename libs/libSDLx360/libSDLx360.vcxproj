@@ -216,9 +216,6 @@
     <ClInclude Include="SDL\include\SDL_types.h" />
     <ClInclude Include="SDL\include\SDL_version.h" />
     <ClInclude Include="SDL\include\SDL_video.h" />
-    <ClInclude Include="SDL\src\video\xbox\hq2x_lut.h" />
-    <ClInclude Include="SDL\src\video\xbox\hq3x_lut.h" />
-    <ClInclude Include="SDL\src\video\xbox\hq4x_lut.h" />
     <ClInclude Include="SDL\src\video\xbox\SDL_xboxshaders.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
