@@ -100,6 +100,19 @@ volatile bool audio_closing = false;
  * cuadrando en vez de salir desafinado. */
 static int g_audio_device_rate = AUDIO_DEVICE_RATE;
 
+/* Ultimos fps/sample_rate que el frontend aplico del core.  Son la guarda de
+ * delta del recheck de av_info: tras un cambio de core-options se reconsulta
+ * retro_get_system_av_info y solo se reaplica (reset del limitador y del
+ * resampler) si de verdad cambiaron.  Hace falta porque algunos cores cambian
+ * su temporizado al vuelo (p.ej. nestopia al forzar la region) pero NO emiten
+ * RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, asi que el frontend se quedaria con el
+ * fps viejo (limitador capado a la tasa anterior). */
+static double g_applied_core_fps         = 0.0;
+static double g_applied_core_sample_rate = 0.0;
+/* Se pone a true cuando el core avisa de un cambio de opciones (via
+ * GET_VARIABLE_UPDATE) para reconsultar av_info una sola vez tras ese retro_run. */
+static bool   g_recheck_avinfo_pending   = false;
+
 /* Musica de menu.  Suena en todo estado menos partida en marcha y overlay sobre
  * ella (ver musicWantedFor en salvia.cpp).  Es posible gracias a que el
  * dispositivo esta permanentemente abierto: antes habria que haberlo abierto y

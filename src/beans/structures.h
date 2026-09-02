@@ -441,7 +441,7 @@ static const int XBOX_COMBINED_TRIGGER_AXIS = 2;
  * del enum joystickButtons (constant.h): JOY_AXIS1_RIGHT, _LEFT, _UP, _DOWN y
  * luego los cuatro JOY_AXIS2_*.
  *
- * ★ El slot es la direccion FISICA del stick, y el valor guardado es EN QUE SE
+ * El slot es la direccion FISICA del stick, y el valor guardado es EN QUE SE
  * CONVIERTE. Al reves que las otras tres tablas del mapper, que van de fisico a
  * id del core. Esto es lo que permite que funcione con cualquier core: si una
  * direccion se convierte en un boton, se enciende su btn_state y a partir de ahi
@@ -539,9 +539,8 @@ static inline int sdlBtnOf(int logicalBtn){
 static const int deadzoneValues[DEADZONE_STEPS] = {
 	1000, 2000, 5000, 10000, 15000, 20000, 25000
 };
-/* Indice del 10000, que es el valor historico: es el default y lo que se
- * aplica a los .joy antiguos, que no traen la clave. */
-#define DEADZONE_DEFAULT_IDX 1
+/* Indice del 5000 */
+#define DEADZONE_DEFAULT_IDX 2
 
 struct t_joy_mapper{
 	/* SDL -> destino: indexadas por lo que entrega el mando */

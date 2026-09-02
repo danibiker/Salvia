@@ -19,6 +19,30 @@
 extern "C" void salvia_dispatch_keyboard_event(bool down, unsigned retro_keycode,
                                                uint32_t character, uint16_t modifiers);
 
+/* Aplica el timing que declara el core: reconfigura el limitador de fps y el
+ * ratio del resampler (sin reabrir el dispositivo) y refresca el aspect ratio.
+ * Apunta lo aplicado en g_applied_core_* para que el recheck sepa si algo
+ * cambio.  Lo usan el handler de SET_SYSTEM_AV_INFO y el recheck tras un cambio
+ * de core-options en caliente. */
+static void applyCoreAvInfo(const struct retro_system_av_info& av) {
+	gameMenu->sync->init_fps_counter((float)av.timing.fps);
+	gameMenu->g_audioRate.reset();
+	gameMenu->g_audioRate.init(BUFF_SIZE);
+	/* Con el dispositivo fijo, un cambio de tasa no obliga a reabrir nada:
+	 * basta recalcular el ratio del resampler. */
+	if (av.timing.sample_rate > 0.0){
+		gameMenu->g_audioRate.setRates(av.timing.sample_rate,
+			(double)g_audio_device_rate);
+		LOG_INFO("Audio: el core cambia a %.1f Hz (ratio %.4f)\n",
+			av.timing.sample_rate, gameMenu->g_audioRate.getBaseRatio());
+	}
+	if (av.geometry.aspect_ratio > 0.0f){
+		aspectRatioValues[RATIO_CORE] = av.geometry.aspect_ratio;
+	}
+	g_applied_core_fps         = av.timing.fps;
+	g_applied_core_sample_rate = av.timing.sample_rate;
+}
+
 static bool retro_environment(unsigned cmd, void *data) {
 	static char dirSystem[MAX_PATH] = {0};
 	static char savePath[MAX_PATH] = {0};
@@ -160,22 +184,11 @@ static bool retro_environment(unsigned cmd, void *data) {
 		}
 
 		case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:{
-			const struct retro_system_av_info *av_info = (const struct retro_system_av_info *)data;
-			gameMenu->sync->init_fps_counter((float)av_info->timing.fps);
-			gameMenu->g_audioRate.reset();
-			gameMenu->g_audioRate.init(BUFF_SIZE);
 			/* Un core puede cambiar su tasa a mitad de partida (p.ej. FBNeo al
-			 * pasar de cart a CD).  Con el dispositivo fijo esto ya no obliga a
-			 * reabrir nada: basta con recalcular el ratio del resampler. */
-			if (av_info->timing.sample_rate > 0.0){
-				gameMenu->g_audioRate.setRates(av_info->timing.sample_rate,
-					(double)g_audio_device_rate);
-				LOG_INFO("Audio: el core cambia a %.1f Hz (ratio %.4f)\n",
-					av_info->timing.sample_rate, gameMenu->g_audioRate.getBaseRatio());
-			}
-			if (av_info->geometry.aspect_ratio > 0.0f){
-				aspectRatioValues[RATIO_CORE] = av_info->geometry.aspect_ratio;
-			}
+			 * pasar de cart a CD).  El helper reconfigura limitador + resampler
+			 * sin reabrir el dispositivo y deja anotado lo aplicado. */
+			const struct retro_system_av_info *av_info = (const struct retro_system_av_info *)data;
+			applyCoreAvInfo(*av_info);
 			return true;
 		}
 
@@ -488,8 +501,12 @@ static bool retro_environment(unsigned cmd, void *data) {
 			*updated = gameMenu->configMenus->options_changed_flag;
 			if (*updated){
 				LOG_DEBUG("Core options changed");
+				/* Tras procesar el cambio, el core puede haber alterado su
+				 * temporizado (fps/sample_rate) sin emitir SET_SYSTEM_AV_INFO.
+				 * Reconsultamos av_info una vez despues de este retro_run. */
+				g_recheck_avinfo_pending = true;
 			}
-			// IMPORTANTE: Una vez que el core sabe que hubo un cambio, 
+			// IMPORTANTE: Una vez que el core sabe que hubo un cambio,
 			// reseteamos el flag para que en el siguiente frame no vuelva a procesar todo.
 			gameMenu->configMenus->options_changed_flag = false;
 			return true;
@@ -1566,6 +1583,11 @@ int launchGame(std::string rompath, bool tmpDelete){
 	gameMenu->sync->init_fps_counter((float)av_info.timing.fps);
 	//Iniciando el sistema de audio
 	initGameAudio(av_info.timing.sample_rate);
+	/* Semilla de la guarda de delta del recheck: lo que el core declara al
+	 * cargar es la referencia contra la que se compara si luego cambia. */
+	g_applied_core_fps         = av_info.timing.fps;
+	g_applied_core_sample_rate = av_info.timing.sample_rate;
+	g_recheck_avinfo_pending   = false;
 	gameMenu->romLoaded = true;
 	//Deshabilitamos el fast forward si estaba a true y restauramos el vsync por defecto
 	if (gameMenu->current_fast_forward){
@@ -1658,6 +1680,31 @@ inline void updateGame() {
 		audio_status_cb(true, occupancy, underrun_likely);
 	}
 	retro_run();
+
+	/* Red de seguridad: si el usuario cambio una core-option en este frame, el
+	 * core ya la proceso dentro del retro_run de arriba y puede haber cambiado
+	 * su temporizado sin emitir SET_SYSTEM_AV_INFO (caso nestopia al forzar la
+	 * region: cambia fps 50<->60 pero no lo notifica, y el limitador se
+	 * quedaria capado a la tasa anterior).  Reconsultamos av_info y solo
+	 * reaplicamos si de verdad cambio, para no reiniciar el warmup del
+	 * resampler en cada cambio de cualquier otra opcion. */
+	if (g_recheck_avinfo_pending){
+		g_recheck_avinfo_pending = false;
+		struct retro_system_av_info av = gameMenu->getAvInfo();
+		/* Diferencia absoluta a mano para no depender de <cmath> (VS2010). */
+		double dfps  = av.timing.fps - g_applied_core_fps;
+		double drate = av.timing.sample_rate - g_applied_core_sample_rate;
+		if (dfps  < 0.0) dfps  = -dfps;
+		if (drate < 0.0) drate = -drate;
+		bool fps_chg  = dfps > 0.01;
+		bool rate_chg = av.timing.sample_rate > 0.0 && drate > 0.5;
+		if (fps_chg || rate_chg){
+			LOG_INFO("av_info refrescado tras cambio de opciones: fps %.4f -> %.4f, rate %.1f -> %.1f\n",
+				g_applied_core_fps, av.timing.fps,
+				g_applied_core_sample_rate, av.timing.sample_rate);
+			applyCoreAvInfo(av);
+		}
+	}
 }
 
 void processFrontendEvents(){

@@ -57,7 +57,6 @@ static const unsigned long KEYRETRASO = 500;
 static const int JOYHATOFFSET = 100;
 static const int JOYAXISOFFSET = 200;
 static const int DEADZONE = 10000;
-static const int DEADZONE_ANAL = 300;
 static const unsigned long DBLCLICKSPEED = 300; //tiempo en ms para poder hacer un doble click
 static const unsigned long KEYDOWNSPEED = 50;
 static const unsigned long MOUSEVISIBLE = 8000;
