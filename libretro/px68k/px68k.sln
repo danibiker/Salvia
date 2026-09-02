@@ -7,6 +7,8 @@ Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
 		Debug|Xbox 360 = Debug|Xbox 360
+		Release_musashi|Win32 = Release_musashi|Win32
+		Release_musashi|Xbox 360 = Release_musashi|Xbox 360
 		Release|Win32 = Release|Win32
 		Release|Xbox 360 = Release|Xbox 360
 	EndGlobalSection
@@ -16,6 +18,11 @@ Global
 		{AD1FD97F-9A2B-4A50-9CF3-3887D55B765D}.Debug|Xbox 360.ActiveCfg = Debug|Xbox 360
 		{AD1FD97F-9A2B-4A50-9CF3-3887D55B765D}.Debug|Xbox 360.Build.0 = Debug|Xbox 360
 		{AD1FD97F-9A2B-4A50-9CF3-3887D55B765D}.Debug|Xbox 360.Deploy.0 = Debug|Xbox 360
+		{AD1FD97F-9A2B-4A50-9CF3-3887D55B765D}.Release_musashi|Win32.ActiveCfg = Release_musashi|Win32
+		{AD1FD97F-9A2B-4A50-9CF3-3887D55B765D}.Release_musashi|Win32.Build.0 = Release_musashi|Win32
+		{AD1FD97F-9A2B-4A50-9CF3-3887D55B765D}.Release_musashi|Xbox 360.ActiveCfg = Release_musashi|Xbox 360
+		{AD1FD97F-9A2B-4A50-9CF3-3887D55B765D}.Release_musashi|Xbox 360.Build.0 = Release_musashi|Xbox 360
+		{AD1FD97F-9A2B-4A50-9CF3-3887D55B765D}.Release_musashi|Xbox 360.Deploy.0 = Release_musashi|Xbox 360
 		{AD1FD97F-9A2B-4A50-9CF3-3887D55B765D}.Release|Win32.ActiveCfg = Release|Win32
 		{AD1FD97F-9A2B-4A50-9CF3-3887D55B765D}.Release|Win32.Build.0 = Release|Win32
 		{AD1FD97F-9A2B-4A50-9CF3-3887D55B765D}.Release|Xbox 360.ActiveCfg = Release|Xbox 360

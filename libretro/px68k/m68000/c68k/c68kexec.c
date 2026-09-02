@@ -369,6 +369,249 @@ static uint32_t C68k_Initialised = 0;
 
 /* main exec function */
 
+/* --------------------------------------------------------------------------
+ * The XDK / MSVC PowerPC compiler miscompiles C68k_Exec when it is built as one
+ * giant function (all 16 opcode .inc files inlined into a single ~1 MB switch):
+ * the global register allocator produces wrong code on a function that large,
+ * so /O2 and /Ox make the emulated CPU run garbage and the OS never boots.
+ * GCC/Clang compile the same code fine at -O2/-Ofast.
+ *
+ * To let the XDK build C68K FULLY OPTIMIZED, the dispatch is split: each opcode
+ * group (top nibble) becomes its own function, small enough for the optimizer
+ * to handle, and C68k_Exec becomes a thin loop that fetches an opcode and calls
+ * the matching group.  The .inc files are reused UNCHANGED; only RET and the
+ * two slice-ending gotos are remapped to per-group return codes / labels.
+ * Non-MSVC compilers keep the original threaded giant switch (fastest where the
+ * compiler can handle it).
+ * -------------------------------------------------------------------------- */
+#if defined(_MSC_VER) && defined(C68K_NO_JUMP_TABLE)
+
+/* In the split model a handler's RET(n) just charges the cycles and returns to
+ * the dispatch loop, which does the fetch and the CCnt<=0 test. */
+#undef  RET
+#define RET(A) { CCnt -= (A); goto c68k_op_done; }
+
+/* group-function return codes */
+#define C68K_GR_CONT  0   /* normal: dispatch loop continues                */
+#define C68K_GR_END   1   /* handler did goto C68k_Exec_End                 */
+#define C68K_GR_REND  2   /* handler did goto C68k_Exec_Really_End          */
+#define C68K_GR_ILL   3   /* opcode not in this group -> remap + redispatch */
+
+#pragma warning(push)
+#pragma warning(disable:4102) /* C68k_Exec_End/Really_End unused in some groups */
+
+#define C68K_GROUP_BODY(incfile)                                    \
+   uintptr_t PC   = *pPC;                                           \
+   int32_t   CCnt = *pCCnt;                                         \
+   int       _ret = C68K_GR_CONT;                                   \
+   switch (Opcode)                                                  \
+   {                                                                \
+   default: _ret = C68K_GR_ILL; goto c68k_op_done;
+
+/* The switch body itself (the case labels) comes from the .inc include, which
+ * must be textually present, so each group is written out (a macro cannot host
+ * an #include).  The tail below is shared via C68K_GROUP_TAIL. */
+#define C68K_GROUP_TAIL                                             \
+   }                                                                \
+C68k_Exec_End:        _ret = C68K_GR_END;  goto c68k_op_done;       \
+C68k_Exec_Really_End: _ret = C68K_GR_REND; goto c68k_op_done;       \
+c68k_op_done:                                                       \
+   *pPC = PC; *pCCnt = CCnt;                                        \
+   return _ret;
+
+static int c68k_grp0(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_op0.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grp1(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_op1.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grp2(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_op2.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grp3(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_op3.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grp4(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_op4.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grp5(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_op5.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grp6(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_op6.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grp7(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_op7.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grp8(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_op8.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grp9(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_op9.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grpA(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_opA.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grpB(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_opB.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grpC(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_opC.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grpD(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_opD.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grpE(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_opE.inc"
+C68K_GROUP_TAIL }
+
+static int c68k_grpF(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_opF.inc"
+C68K_GROUP_TAIL }
+
+/* De-optimized copy of the op4 group.  The XDK PowerPC compiler miscompiles the
+ * RTS handler (0x4E75 -- POP the return address off the stack straight into
+ * SET_PC) at /O2; RTE (0x4E73) and RTR (0x4E77) share that POP+SET_PC pattern,
+ * so C68k_Exec routes those three opcodes here (built with optimization off)
+ * while the rest of grp4 stays fully optimized.  They are tiny handlers, so not
+ * optimizing them costs practically nothing. */
+#pragma optimize("", off)
+static int c68k_grp4_deopt(c68k_struc *CPU, uint32_t Opcode, uintptr_t *pPC, int32_t *pCCnt)
+{ C68K_GROUP_BODY("")
+#include "c68k_op4.inc"
+C68K_GROUP_TAIL }
+#pragma optimize("", on)
+
+#pragma warning(pop)
+
+#undef  C68K_GROUP_BODY
+#undef  C68K_GROUP_TAIL
+
+int32_t FASTCALL C68k_Exec(c68k_struc *cpu, int32_t cycle)
+{
+   c68k_struc *CPU = cpu;
+   uintptr_t   PC  = cpu->PC;
+   int32_t     CCnt;
+   uint32_t    Opcode;
+   int         _r;
+
+   C68k_Initialised = 1;
+
+   if (CPU->Status & (C68K_RUNNING | C68K_DISABLE | C68K_FAULTED))
+      return (CPU->Status | 0x80000000);
+
+   if (cycle <= 0)
+      return -cycle;
+
+   CPU->CycleToDo = CCnt = cycle;
+
+   CHECK_INT
+
+   if (CPU->Status & (C68K_HALTED | C68K_WAITING))
+      return CPU->CycleToDo;
+
+   CPU->CycleSup = 0;
+   CPU->Status  |= C68K_RUNNING;
+
+   for (;;)
+   {
+      CPU->CycleIO = CCnt;
+      Opcode = FETCH_WORD;
+      PC += 2;
+
+      switch (Opcode >> 12)
+      {
+      case 0x0: _r = c68k_grp0(CPU, Opcode, &PC, &CCnt); break;
+      case 0x1: _r = c68k_grp1(CPU, Opcode, &PC, &CCnt); break;
+      case 0x2: _r = c68k_grp2(CPU, Opcode, &PC, &CCnt); break;
+      case 0x3: _r = c68k_grp3(CPU, Opcode, &PC, &CCnt); break;
+      case 0x4:  /* RTE/RTS/RTR miscompile at /O2 on the XDK -> de-opt copy */
+                _r = (Opcode == 0x4E73 || Opcode == 0x4E75 || Opcode == 0x4E77)
+                      ? c68k_grp4_deopt(CPU, Opcode, &PC, &CCnt)
+                      : c68k_grp4(CPU, Opcode, &PC, &CCnt);
+                break;
+      case 0x5: _r = c68k_grp5(CPU, Opcode, &PC, &CCnt); break;
+      case 0x6: _r = c68k_grp6(CPU, Opcode, &PC, &CCnt); break;
+      case 0x7: _r = c68k_grp7(CPU, Opcode, &PC, &CCnt); break;
+      case 0x8: _r = c68k_grp8(CPU, Opcode, &PC, &CCnt); break;
+      case 0x9: _r = c68k_grp9(CPU, Opcode, &PC, &CCnt); break;
+      case 0xA: _r = c68k_grpA(CPU, Opcode, &PC, &CCnt); break;
+      case 0xB: _r = c68k_grpB(CPU, Opcode, &PC, &CCnt); break;
+      case 0xC: _r = c68k_grpC(CPU, Opcode, &PC, &CCnt); break;
+      case 0xD: _r = c68k_grpD(CPU, Opcode, &PC, &CCnt); break;
+      case 0xE: _r = c68k_grpE(CPU, Opcode, &PC, &CCnt); break;
+      default:  _r = c68k_grpF(CPU, Opcode, &PC, &CCnt); break; /* 0xF */
+      }
+
+      if (_r == C68K_GR_ILL)
+      {
+         /* Same remap the original giant-switch default did: unknown opcode ->
+          * illegal (0x4AFC) except line-A (0xAxxx) and line-F (0xFxxx). */
+         static const uint32_t JmpTable[16] = {
+            0x4AFC, 0x4AFC, 0x4AFC, 0x4AFC, 0x4AFC, 0x4AFC, 0x4AFC, 0x4AFC,
+            0x4AFC, 0x4AFC, 0xA000, 0x4AFC, 0x4AFC, 0x4AFC, 0x4AFC, 0xF000 };
+         Opcode = JmpTable[Opcode >> 12];
+         switch (Opcode >> 12)
+         {
+         case 0xA: _r = c68k_grpA(CPU, Opcode, &PC, &CCnt); break;
+         case 0xF: _r = c68k_grpF(CPU, Opcode, &PC, &CCnt); break;
+         default:  _r = c68k_grp4(CPU, Opcode, &PC, &CCnt); break; /* 0x4AFC */
+         }
+      }
+
+      if (_r == C68K_GR_REND)
+         goto C68k_Exec_Really_End;
+
+      if (_r == C68K_GR_END || CCnt <= 0)
+      {
+         CHECK_INT
+         if ((CCnt += CPU->CycleSup) > 0)
+         {
+            CPU->CycleSup = 0;
+            continue;
+         }
+         goto C68k_Exec_Really_End;
+      }
+   }
+
+C68k_Exec_Really_End:
+   CPU->Status &= ~C68K_RUNNING;
+   CPU->PC = PC;
+   return (CPU->CycleToDo - CCnt);
+}
+
+#else /* original threaded giant-switch dispatch (GCC / non-MSVC) */
+
 int32_t FASTCALL C68k_Exec(c68k_struc *cpu, int32_t cycle)
 {
     c68k_struc *CPU;
@@ -463,4 +706,6 @@ C68k_Init:
     return 0;
 #endif
 }
+
+#endif /* _MSC_VER && C68K_NO_JUMP_TABLE : split vs. threaded dispatch */
 

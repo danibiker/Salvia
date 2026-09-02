@@ -42,7 +42,21 @@ private:
     int16_t lastOutL;
     int16_t lastOutR;
 
+    // Underrun recovery.  A single fade-out to silence (below) is not enough
+    // when the producer is chronically behind (core running slow): every SDL
+    // callback then gets a little audio + a little silence, which chops rapidly
+    // and sounds like crackle.  So once we underrun we enter "priming": output
+    // clean silence and let the buffer refill to PRIME_WATERMARK before
+    // resuming, and ramp the resumed audio up from 0 with a fade-in (avoids the
+    // click of a 0 -> N step).  Net effect: smooth silence instead of crackle.
+    static const size_t FADE_FRAMES  = 256;   // ~5.3 ms @48k: long enough that the
+                                              // fade edges are inaudible (no pop)
+    bool   priming;   // holding silence until the buffer recovers
+    size_t fadeIn;    // frames left in the resume fade-in ramp
+
     static const size_t capacity = BUFF_SIZE;
+    static const size_t PRIME_WATERMARK = BUFF_SIZE / 2;  // resume when ~50% full
+                                                          // (safely > one SDL callback)
 
     size_t used(long h, long t) const {
         return (h >= t) ? (size_t)(h - t) : capacity - (size_t)(t - h);
@@ -72,7 +86,7 @@ private:
 
 public:
     AudioBuffer() : head(0), tail(0), dropsTotal(0), underrunsTotal(0),
-                    lastOutL(0), lastOutR(0) {
+                    lastOutL(0), lastOutR(0), priming(false), fadeIn(0) {
         memset(buffer, 0, sizeof(buffer));
         // Auto-reset: vuelve a no-señalizado tras despertar un hilo
         hSpaceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -146,7 +160,6 @@ public:
     void Read(int16_t* stream, size_t count) {
         size_t t = (size_t)tail;
         size_t avail = used(head, (long)t);
-        size_t to_copy = (avail < count) ? avail : count;
 
 #ifdef AUDIO_LOG
         // Trace periodico cada 2s: buffer fill level
@@ -164,8 +177,35 @@ public:
         }
 #endif
 
+        // Priming (hysteresis): after an underrun, output clean silence and let
+        // the buffer refill to PRIME_WATERMARK before resuming.  This turns the
+        // rapid, clicky chop of a chronically-behind producer into smooth
+        // silence, and resumes with a fade-in.
+        if (priming) {
+            if (avail < PRIME_WATERMARK) {
+                memset(stream, 0, count * sizeof(int16_t));
+                InterlockedIncrement(&underrunsTotal);
+                SetEvent(hSpaceEvent);
+                return;                 /* keep accumulating; don't drain tail */
+            }
+            priming = false;
+            fadeIn  = FADE_FRAMES;       /* resume: ramp the recovered audio up from 0 */
+        }
+
+        size_t to_copy = (avail < count) ? avail : count;
+
         if (to_copy > 0) {
             t = copyOut(t, stream, to_copy);
+
+            // Fade-in ramp on resume (avoids the click of a 0 -> N step).
+            if (fadeIn > 0) {
+                size_t frames = to_copy / 2;
+                for (size_t f = 0; f < frames && fadeIn > 0; f++, fadeIn--) {
+                    int num = (int)(FADE_FRAMES - fadeIn);   /* 0 .. FADE_FRAMES-1 */
+                    stream[f * 2]     = (int16_t)((int)stream[f * 2]     * num / (int)FADE_FRAMES);
+                    stream[f * 2 + 1] = (int16_t)((int)stream[f * 2 + 1] * num / (int)FADE_FRAMES);
+                }
+            }
 
             if (to_copy >= 2) {
                 lastOutL = stream[to_copy - 2];
@@ -182,27 +222,36 @@ public:
                 (unsigned long)(count - to_copy),
                 (unsigned long)avail, (unsigned long)capacity);
 #endif
-            const size_t FADE_FRAMES   = 64;
-            const size_t FADE_SAMPLES  = FADE_FRAMES * 2;
             size_t missing = count - to_copy;
-            int16_t *missingStart = stream + to_copy;
+            memset(stream + to_copy, 0, missing * sizeof(int16_t));  /* silence the gap */
 
-            size_t fadeNow = (missing < FADE_SAMPLES) ? missing : FADE_SAMPLES;
-
-            for (size_t f = 0; f < fadeNow / 2; f++) {
-                int num = (int)(FADE_FRAMES - 1 - f);
-                int den = (int)FADE_FRAMES;
-                missingStart[f * 2]     = (int16_t)((int)lastOutL * num / den);
-                missingStart[f * 2 + 1] = (int16_t)((int)lastOutR * num / den);
-            }
-
-            if (missing > fadeNow) {
-                memset(missingStart + fadeNow, 0,
-                       (missing - fadeNow) * sizeof(int16_t));
+            // Ramp the tail down to 0, ending exactly at the silence, over up to
+            // FADE_FRAMES frames -- a smooth fade regardless of how much real
+            // audio was left, so no click.
+            if (to_copy >= 2) {
+                size_t availFr = to_copy / 2;
+                size_t fadeFr  = (availFr < FADE_FRAMES) ? availFr : FADE_FRAMES;
+                size_t startFr = availFr - fadeFr;
+                for (size_t k = 0; k < fadeFr; k++) {
+                    size_t fr = startFr + k;
+                    int num = (int)(fadeFr - 1 - k);   /* ~full at start, 0 at boundary */
+                    stream[fr * 2]     = (int16_t)((int)stream[fr * 2]     * num / (int)fadeFr);
+                    stream[fr * 2 + 1] = (int16_t)((int)stream[fr * 2 + 1] * num / (int)fadeFr);
+                }
+            } else {
+                // Buffer already empty at the callback start: decay the first
+                // frames of the silence from the last delivered sample.
+                size_t fadeFr = (missing / 2 < FADE_FRAMES) ? (missing / 2) : FADE_FRAMES;
+                for (size_t k = 0; k < fadeFr; k++) {
+                    int num = (int)(fadeFr - 1 - k);
+                    stream[k * 2]     = (int16_t)((int)lastOutL * num / (int)fadeFr);
+                    stream[k * 2 + 1] = (int16_t)((int)lastOutR * num / (int)fadeFr);
+                }
             }
 
             lastOutL = 0;
             lastOutR = 0;
+            priming  = true;             /* hold silence until the buffer recovers */
 
             InterlockedIncrement(&underrunsTotal);
         }
@@ -243,6 +292,8 @@ public:
         underrunsTotal = 0;
         lastOutL = 0;
         lastOutR = 0;
+        priming = false;
+        fadeIn = 0;
         memset(buffer, 0, sizeof(buffer));
     }
 };
