@@ -520,7 +520,9 @@ static void CDAccess_Image_GenerateTOC(CDAccess_Image *self)
    self->toc.tracks[100].valid = true;
 }
 
-static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, bool image_memcache)
+/* Inner implementation: caller supplies a heap-allocated toc_streamcache
+ * so it doesn't sit on the stack. See the wrapper below. */
+static bool CDAccess_Image_ImageOpen_Impl(CDAccess_Image *self, const char *path, bool image_memcache, toc_streamcache *cache)
 {
    cdstream fp;
    static const unsigned max_args = 4;
@@ -533,12 +535,11 @@ static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, boo
    CDRFILE_TRACK_INFO TmpTrack;
    char file_base[4096];
    char file_ext[4096];
-   toc_streamcache cache;
    int32_t RunningLBA;
    long FileOffset;
    int x;
 
-   toc_streamcache_init(&cache);
+   toc_streamcache_init(cache);
    self->disc_type = DISC_TYPE_CDDA_OR_M1;
    memset(&TmpTrack, 0, sizeof(TmpTrack));
 
@@ -688,7 +689,7 @@ static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, boo
                msfoffset = args[1];
                length = args[2];
             }
-            if(!CDAccess_Image_ParseTOCFileLineInfo(self, &TmpTrack, active_track, args[0], binoffset, msfoffset, length, image_memcache, &cache))
+            if(!CDAccess_Image_ParseTOCFileLineInfo(self, &TmpTrack, active_track, args[0], binoffset, msfoffset, length, image_memcache, cache))
             {
                cdstream_close(&fp);
                return false;
@@ -707,7 +708,7 @@ static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, boo
             else
                length = args[1];
 
-            if(!CDAccess_Image_ParseTOCFileLineInfo(self, &TmpTrack, active_track, args[0], binoffset, NULL, length, image_memcache, &cache))
+            if(!CDAccess_Image_ParseTOCFileLineInfo(self, &TmpTrack, active_track, args[0], binoffset, NULL, length, image_memcache, cache))
             {
                cdstream_close(&fp);
                return false;
@@ -1395,6 +1396,22 @@ static void CDAccess_Image_destroy(CDAccess *cda)
    CDAccess_Image_Cleanup(self);
    subq_map_free(&self->SubQReplaceMap);
    free(self);
+}
+
+/* Wrapper: allocates toc_streamcache (~400 KB, 100 * 4096) on the heap
+ * so it doesn't sit on the stack. Xbox 360 thread stacks are ~64-128 KB
+ * and MSVC reserves the whole frame in the prologue, so a stack-local
+ * cache would trip _chkstk on entry. Same rationale as M3UList and
+ * CCD_File. */
+static bool CDAccess_Image_ImageOpen(CDAccess_Image *self, const char *path, bool image_memcache)
+{
+   toc_streamcache *cache = (toc_streamcache *)calloc(1, sizeof(*cache));
+   bool ret;
+   if(!cache)
+      return false;
+   ret = CDAccess_Image_ImageOpen_Impl(self, path, image_memcache, cache);
+   free(cache);
+   return ret;
 }
 
 CDAccess *CDAccess_Image_New(const char *path, bool image_memcache)

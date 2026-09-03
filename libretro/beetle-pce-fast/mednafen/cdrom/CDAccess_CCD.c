@@ -268,7 +268,10 @@ static bool CDAccess_CCD_CheckSubQSanity(CDAccess_CCD *self)
 static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_memcache)
 {
    cdstream cf;
-   CCD_File ccd;
+   /* CCD_File is ~1 MB (256 sections * 4164 bytes); allocate on the heap
+    * to avoid blowing the stack on Xbox 360 (thread stacks ~64-128 KB).
+    * Same rationale as M3UList in libretro.c MDFNI_LoadCD. */
+   CCD_File *ccd = NULL;
    char linebuf[256];
    char cur_section_name[CCD_NAME_LEN];
    char dir_path[4096];
@@ -284,15 +287,18 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
    char image_path[4096];
    char sub_path[4096];
    uint64 ss;
+   bool ret = false;
 
    img_extsd[0] = 'i'; img_extsd[1] = 'm'; img_extsd[2] = 'g'; img_extsd[3] = 0;
    sub_extsd[0] = 's'; sub_extsd[1] = 'u'; sub_extsd[2] = 'b'; sub_extsd[3] = 0;
 
-   memset(&ccd, 0, sizeof(ccd));
+   ccd = (CCD_File *)calloc(1, sizeof(*ccd));
+   if(!ccd)
+      return false;
    cur_section_name[0] = '\0';
 
    if(!cdstream_open(&cf, path))
-      return false;
+      goto end;
 
    MDFN_GetFilePathComponents(path, dir_path, file_base, file_ext, sizeof(dir_path));
 
@@ -351,7 +357,7 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
          {
             log_cb(RETRO_LOG_ERROR, "Malformed section specifier: %s", linebuf);
             cdstream_close(&cf);
-            return false;
+            goto end;
          }
 
          memcpy(cur_section_name, linebuf + 1, llen - 2);
@@ -370,7 +376,7 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
          {
             log_cb(RETRO_LOG_ERROR, "Malformed value pair specifier: %s\n", linebuf);
             cdstream_close(&cf);
-            return false;
+            goto end;
          }
 
          *eqp = '\0';
@@ -381,7 +387,7 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
          ccd_trim(v);
          ccd_strtoupper(k);
 
-         s = ccd_section_lookup(&ccd, cur_section_name, true);
+         s = ccd_section_lookup(ccd, cur_section_name, true);
          if(s)
             ccd_section_set(s, k, v);
       }
@@ -389,7 +395,7 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
 
    cdstream_close(&cf);
 
-   ds = ccd_section_lookup(&ccd, "DISC", false);
+   ds = ccd_section_lookup(ccd, "DISC", false);
    toc_entries          = (unsigned)ccd_read_int(ds, "TOCENTRIES", false);
    num_sessions         = (unsigned)ccd_read_int(ds, "SESSIONS", false);
    /* ccd_read_int returns long; don't cast it to bool directly because on
@@ -400,13 +406,13 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
    if(num_sessions != 1)
    {
       log_cb(RETRO_LOG_ERROR, "Unsupported number of sessions: %u\n", num_sessions);
-      return false;
+      goto end;
    }
 
    if(data_tracks_scrambled)
    {
       log_cb(RETRO_LOG_ERROR, "Scrambled CCD data tracks currently not supported.\n");
-      return false;
+      goto end;
    }
 
    for(te = 0; te < toc_entries; te++)
@@ -418,7 +424,7 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
       signed plba;
 
       snprintf(tmpbuf, sizeof(tmpbuf), "ENTRY %u", te);
-      ts = ccd_section_lookup(&ccd, tmpbuf, false);
+      ts = ccd_section_lookup(ccd, tmpbuf, false);
 
       session = (unsigned)ccd_read_int(ts, "SESSION", false);
       point   = (uint8_t)ccd_read_int(ts, "POINT", false);
@@ -431,7 +437,7 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
       if(session != 1)
       {
          log_cb(RETRO_LOG_ERROR, "Unsupported TOC entry Session value: %u\n", session);
-         return false;
+         goto end;
       }
 
       /* Reference: ECMA-394, page 5-14 */
@@ -446,7 +452,7 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
       {
          default:
             log_cb(RETRO_LOG_ERROR, "Unsupported TOC entry Point value: %u\n", point);
-            return false;
+            goto end;
          case 0xA0:
             self->tocd.first_track = pmin;
             self->tocd.disc_type = psec;
@@ -478,7 +484,7 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
    if(!self->img_stream)
    {
       log_cb(RETRO_LOG_ERROR, "Could not open CCD image: %s\n", image_path);
-      return false;
+      goto end;
    }
 
    ss = cdstream_size(self->img_stream);
@@ -486,13 +492,13 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
    if(ss % 2352)
    {
       log_cb(RETRO_LOG_ERROR, "CCD image size is not evenly divisible by 2352.\n");
-      return false;
+      goto end;
    }
 
    if(ss > 0x7FFFFFFF)
    {
       log_cb(RETRO_LOG_ERROR, "CCD image is too large.\n");
-      return false;
+      goto end;
    }
 
    self->img_numsectors = ss / 2352;
@@ -508,14 +514,14 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
       if(!cdstream_open(&sub_stream, sub_path))
       {
          log_cb(RETRO_LOG_ERROR, "Could not open CCD sub: %s\n", sub_path);
-         return false;
+         goto end;
       }
 
       if(cdstream_size(&sub_stream) != (uint64)self->img_numsectors * 96)
       {
          log_cb(RETRO_LOG_ERROR, "CCD SUB file size mismatch.\n");
          cdstream_close(&sub_stream);
-         return false;
+         goto end;
       }
 
       self->sub_data = (uint8_t *)malloc((size_t)self->img_numsectors * 96);
@@ -525,7 +531,12 @@ static bool CDAccess_CCD_Load(CDAccess_CCD *self, const char *path, bool image_m
 
    CDAccess_CCD_CheckSubQSanity(self);
 
-   return true;
+   ret = true;
+
+end:
+   if(ccd)
+      free(ccd);
+   return ret;
 }
 
 static bool CDAccess_CCD_Read_Raw_Sector(CDAccess *cda, uint8_t *buf, int32_t lba)
