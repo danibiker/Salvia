@@ -332,6 +332,21 @@ struct retro_core_option_v2_definition option_defs_us[] = {
    },
 
    {
+      "px68k_save_sram",
+      "Save SRAM (machine NVRAM)",
+      NULL,
+      "When enabled, the machine SRAM (boot device, clock, key-repeat and other SWITCH.X settings) is saved to sram.dat and reloaded on startup. When disabled, the machine always boots with a fresh SRAM, which the IPL re-initialises -- useful if a stale sram.dat causes trouble.",
+      NULL,
+      "media",
+      {
+         { "enabled",  NULL },
+         { "disabled", NULL },
+         { NULL,       NULL },
+      },
+      "enabled"
+   },
+
+   {
       "px68k_rumble_on_disk_read",
       "Rumble on FDD Reads",
       NULL,
@@ -518,7 +533,7 @@ struct retro_core_options_v2 *options_intl[RETRO_LANGUAGE_LAST] = {
    &options_us,      /* RETRO_LANGUAGE_ENGLISH */
    NULL,           /* RETRO_LANGUAGE_JAPANESE */
    &options_fr,      /* RETRO_LANGUAGE_FRENCH */
-   NULL,           /* RETRO_LANGUAGE_SPANISH */
+   &options_es,      /* RETRO_LANGUAGE_SPANISH */
    NULL,           /* RETRO_LANGUAGE_GERMAN */
    NULL,           /* RETRO_LANGUAGE_ITALIAN */
    NULL,           /* RETRO_LANGUAGE_DUTCH */

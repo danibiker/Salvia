@@ -33,6 +33,7 @@ typedef struct
 	int joy1_select_mapping; /* used for keyboard to joypad map for P1 Select */
 	int save_fdd_path;
 	int save_hdd_path;
+	int save_sram;      /* persist/load the machine SRAM (sram.dat) */
 	/* Cpu clock in MHz */
 	int clockmhz;
 	/* RAM Size = size * 1024 * 1024 */

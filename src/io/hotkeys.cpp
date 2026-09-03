@@ -41,18 +41,18 @@ HOTKEYS_LIST Hotkeys::procesarHotkeys(t_joy_state *inputs) {
     static Uint32 lastHotKey = 0;
 
 	int sdlBtnModif = inputs->mapperHotkeys.getSdlBtn(0, HK_MODIFIER);
-    // 1. "Early Exit": Si no hay modificador o estamos en cooldown, salimos r�pido.
+    // 1. "Early Exit": Si no hay modificador o estamos en cooldown, salimos rapido.
     if (sdlBtnModif == -1 || !inputs->getSdlBtn(0, sdlBtnModif) || (now - lastHotKey < 300)) {
         return HK_MAX;
     }
 
     // 2. Buscamos el Hotkey
     for (size_t i = 1; i < HK_MAX; i++) {
-        // Obtenemos �ndices una sola vez
+        // Obtenemos indices una sola vez
         int sdlBtn = inputs->mapperHotkeys.getSdlBtn(0, i);
         int sdlHat = inputs->mapperHotkeys.getSdlHat(0, i);
 
-        // Comprobamos Bot�n
+        // Comprobamos Boton
         if (sdlBtn > -1 && inputs->getSdlBtn(0, sdlBtn)) {
             inputs->btn_state[0][sdlBtn] = false; // Consumir evento
             lastHotKey = now;
@@ -61,7 +61,7 @@ HOTKEYS_LIST Hotkeys::procesarHotkeys(t_joy_state *inputs) {
 
         // Comprobamos Hat
         if (sdlHat > -1 && inputs->getSdlHat(0, sdlHat)) {
-            inputs->hats_state[0][sdlHat] = false; // Consumir evento (Corregido �ndice sdlHat)
+            inputs->hats_state[0][sdlHat] = false; // Consumir evento (Corregido indice sdlHat)
             lastHotKey = now;
             return static_cast<HOTKEYS_LIST>(i);
         }

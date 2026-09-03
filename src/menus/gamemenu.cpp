@@ -1656,14 +1656,39 @@ void GameMenu::processHotkeys(HOTKEYS_LIST hotkey){
 			#ifdef SALVIA_GPU_VIDEO
 			{
 				/* La lista de shaders es dinamica (assets\shaders): el tope del
-				 * ciclado sale del registro, no de una constante. */
+				 * ciclado sale del registro, no de una constante.
+				 *
+				 * La hotkey cicla el ajuste EFECTIVO, con la MISMA precedencia
+				 * que checkDisplayOptions: si el core tiene un override, mueve
+				 * el override; si esta en Auto, mueve el shader global. Antes
+				 * escribia siempre en el global y aplicaba sin mirar el
+				 * override, asi que en un core con override los dos caminos se
+				 * contradecian: la hotkey cambiaba la pantalla pero el menu
+				 * general no, porque checkDisplayOptions seguia resolviendo al
+				 * override. */
 				ShaderRegistry* shaders = ShaderRegistry::instance();
 				int totalShaders = shaders->count();
 				if (totalShaders > 0){
-					*this->current_shader = (*this->current_shader + 1) % totalShaders;
-					XBOX_SelectEffect(*this->current_shader);
+					ConfigEmu* cfgEmu = getCfgLoader()->getCfgEmu();
+					int next;
+
+					if (cfgEmu != NULL && cfgEmu->shaderMode > 0){
+						/* Override activo: el 0 del menu de overrides es "Auto",
+						 * de ahi el +1 al guardarlo. */
+						next = (cfgEmu->shaderMode - 1 + 1) % totalShaders;
+						cfgEmu->shaderMode = next + 1;
+					} else {
+						*this->current_shader = (*this->current_shader + 1) % totalShaders;
+						next = *this->current_shader;
+					}
+
+					XBOX_SelectEffect(next);
+					/* Mantener sincronizado el ultimo valor aplicado: si no,
+					 * checkDisplayOptions creeria que sigue el anterior. */
+					current_video_settings.filter = next;
+
 					msgShader = LanguageManager::instance()->get("msg.filter") + " "
-						+ shaders->displayName(*this->current_shader);
+						+ shaders->displayName(next);
 					showSystemMessage(msgShader, 3000);
 				}
 			}

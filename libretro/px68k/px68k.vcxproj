@@ -287,7 +287,7 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;__LIBRETRO__;HAVE_C68K;C68K_NO_JUMP_TABLE;__HAVE_MUSASHI;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;inline=_inline</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;__LIBRETRO__;HAVE_C68K;C68K_NO_JUMP_TABLE;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;inline=_inline</PreprocessorDefinitions>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <StringPooling>true</StringPooling>
@@ -337,7 +337,7 @@
       <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>_XBOX;NDEBUG;__LIBRETRO__;HAVE_C68K;C68K_NO_JUMP_TABLE;__HAVE_MUSASHI;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;MSB_FIRST;inline=_inline</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_XBOX;NDEBUG;__LIBRETRO__;HAVE_C68K;C68K_NO_JUMP_TABLE;USE_LIBRETRO_VFS;PX68K_VERSION="0.15+";NOMINMAX;MSB_FIRST;inline=_inline</PreprocessorDefinitions>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <StringPooling>true</StringPooling>

@@ -163,13 +163,11 @@ system/
 ├── syscard3.pce
 ├── XEGAME.ROM
 ├── keropi/
-│   ├── config
 │   ├── cgrom.dat
 │   ├── iplrom.dat
 │   ├── iplrom30.dat
 │   ├── iplromco.dat
-│   ├── iplromxv.dat
-│   └── sram.dat
+│   └── iplromxv.dat
 ├── fbneo/
 │   ├── blend/ (Not needed really but nice to have)
 │   │   ├── 1941.bld ... zupapan.bld (110 .bld files)

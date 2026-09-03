@@ -518,22 +518,20 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 				gameMenu->joystick->inputs.getAnyReleased(0, JOY_BUTTON_R)    ||
 				gameMenu->gameTicks.ticks == 0;
 
+		//Comprobamos si estando actualmente mostrando los menus, si hemos pulsado otra vez Select + Y
+		//que es el hotkey por defecto para mostrar el overlay. Pero en este caso lo usamos para volver
+		//al juego
 		if (HK_VIEW_MENU == gameMenu->joystick->hotkeys->procesarHotkeys(&gameMenu->joystick->inputs)){
 			if (gameMenu->getLastStatus() == EMU_STARTED){
+				//Si ya habiamos iniciado el juego, limpiamos el overlay
 				gameMenu->clearOverlay();
+				//Volvemos al juego
+				gameMenu->setEmuStatus(gameMenu->getLastStatus());
 			}
-			gameMenu->setEmuStatus(gameMenu->getLastStatus());
-			if (gameMenu->bg_screenshot){
-				SDL_FreeSurface(gameMenu->bg_screenshot);
-				gameMenu->bg_screenshot = NULL;
-			}
-			gameMenu->bg_screenshot = gameMenu->clonarPantalla(gameMenu->gameScreen, 180);
 			return 0;
 		}
-
 		gameMenu->running = !gameMenu->joystick->evento.quit && gameMenu->running;
 	}
-
 	return res;
 }
 

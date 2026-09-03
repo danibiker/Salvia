@@ -13,6 +13,11 @@
 static int write_enabled = 0;
 uint8_t	SRAM[0x4000];
 
+/* Base dir where sram.dat lives (the save directory, set in retro_init).
+ * winx68k_dir (keropi/BIOS dir) is the default base for firmware files; we
+ * redirect to save_base_dir only around the sram.dat I/O and restore afterwards. */
+extern char save_base_dir[];
+
 int SRAM_StateAction(StateMem *sm, int load, int data_only)
 {
 	SFORMAT StateRegs[] = 
@@ -51,31 +56,70 @@ void SRAM_Init(void)
 {
 	int i;
 	void *fp;
+	int loaded = 0;
 
 	write_enabled = 0;
 
 	for (i=0; i<0x4000; i++)
 		SRAM[i] = 0xFF;
 
-	if ((fp = file_open_c("sram.dat")))
+	/* SRAM persistence is optional (px68k_save_sram).  When off, the machine
+	 * always boots with a fresh SRAM (the IPL re-initialises it) and nothing is
+	 * written back -- see SRAM_Cleanup. */
+	if (Config.save_sram)
 	{
-		file_lread(fp, SRAM, 0x4000);
-		file_close(fp);
+		file_setcd(save_base_dir);   /* sram.dat lives in the save dir, not keropi */
+		fp = file_open_c("sram.dat");
+		file_setcd(winx68k_dir);     /* restore base dir for the other firmware files */
+
+		if (fp)
+		{
+			file_lread(fp, SRAM, 0x4000);
+			file_close(fp);
+			loaded = 1;
 
 #ifndef MSB_FIRST
-		for (i=0; i<0x4000; i+=2)
-		{
-			uint8_t tmp = SRAM[i];
-			SRAM[i]     = SRAM[i+1];
-			SRAM[i+1]   = tmp;
-		}
+			for (i=0; i<0x4000; i+=2)
+			{
+				uint8_t tmp = SRAM[i];
+				SRAM[i]     = SRAM[i+1];
+				SRAM[i+1]   = tmp;
+			}
 #endif
+		}
+	}
+
+	/* Reject an incompatible/corrupt sram.dat -- e.g. one written by an older
+	 * build with different byte-order handling, which comes back word-swapped
+	 * so its RAM-size field ($ED0008) is garbage.  A valid X68000 image holds
+	 * 1..12 MB in whole-MB steps; if it fails, discard the whole image and
+	 * start fresh so the machine re-initialises and re-saves it in the current
+	 * format.  Without this a stale file can hang the boot (black screen).
+	 * SRAM_Read() applies the correct per-endian byte order, so this is the
+	 * value the machine actually sees. */
+	if (loaded)
+	{
+		uint32_t rs = ((uint32_t)SRAM_Read(0x08) << 24) |
+		              ((uint32_t)SRAM_Read(0x09) << 16) |
+		              ((uint32_t)SRAM_Read(0x0A) <<  8) |
+		               (uint32_t)SRAM_Read(0x0B);
+		if (rs < 0x00100000 || rs > 0x00C00000 || (rs & 0x000FFFFF))
+		{
+			log_cb(RETRO_LOG_WARN,
+			   "[SRAM] incompatible sram.dat (ramsize=0x%08X) -> reinitialising\n",
+			   (unsigned)rs);
+			for (i=0; i<0x4000; i++)
+				SRAM[i] = 0xFF;
+		}
 	}
 }
 
 void SRAM_Cleanup(void)
 {
    void *fp;
+
+   if (!Config.save_sram)   /* persistence disabled: keep the machine stateless */
+      return;
 
    /* sram.dat is stored in native 68000 word order (portable LE<->BE).  On
     * little-endian the runtime SRAM[] is byte-swapped, so swap it back before
@@ -93,9 +137,13 @@ void SRAM_Cleanup(void)
    }
 #endif
 
+   file_setcd(save_base_dir);       /* sram.dat lives in the save dir, not keropi */
    if (!(fp = file_open_c("sram.dat")))
-      if (!(fp = file_create_c("sram.dat")))
-         return;
+      fp = file_create_c("sram.dat");
+   file_setcd(winx68k_dir);    /* restore base dir */
+
+   if (!fp)
+      return;
 
    file_lwrite(fp, SRAM, 0x4000);
    file_close(fp);

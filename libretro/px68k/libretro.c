@@ -104,6 +104,7 @@ const char *retro_content_directory;
 char retro_system_conf[512]; /* system directory path */
 char retro_browse_conf[512]; /* file browser default path */
 char base_dir[MAX_PATH];
+char save_base_dir[MAX_PATH];     /* base dir for writable state (sram.dat, config): save dir, not keropi */
 
 static uint8_t Core_Key_State[512];
 static uint8_t Core_old_Key_State[512];
@@ -1013,7 +1014,11 @@ extern char filepath[MAX_PATH];
 static int pmain(int argc, char *argv[])
 {
 	strcpy(winx68k_dir, retro_system_conf);
-	sprintf(winx68k_ini, "%s%cconfig", retro_system_conf, SLASH);
+	/* config (StartDir + optional saved FDD/HDD paths) is writable user state,
+	 * so it goes in the save dir alongside sram.dat -- not keropi.  Uses a
+	 * px68k-specific name to avoid colliding with other cores in a shared
+	 * save directory. */
+	sprintf(winx68k_ini, "%s%cpx68k.cfg", save_base_dir, SLASH);
 
    file_setcd(winx68k_dir);
 
@@ -1483,6 +1488,17 @@ static void update_variables(int running)
          Config.save_hdd_path = 1;
    }
 
+   var.key    = "px68k_save_sram";
+   var.value  = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (!strcmp(var.value, "disabled"))
+         Config.save_sram = 0;
+      if (!strcmp(var.value, "enabled"))
+         Config.save_sram = 1;
+   }
+
    var.key    = "px68k_rumble_on_disk_read";
    var.value  = NULL;
 
@@ -1940,6 +1956,21 @@ void retro_init(void)
 
    sprintf(retro_system_conf, "%s%ckeropi", RETRO_DIR, SLASH);
 
+   /* sram.dat is the machine NVRAM: it belongs in the writable save
+    * directory, not in the read-only-by-convention BIOS/system dir.  Use the
+    * save dir (which already falls back to the system dir) with any trailing
+    * slash stripped, so file_setcd() builds "<save_base_dir>/sram.dat" correctly. */
+   {
+      const char *sd = (retro_save_directory && retro_save_directory[0])
+                       ? retro_save_directory : RETRO_DIR;
+      size_t n;
+      strncpy(save_base_dir, sd, sizeof(save_base_dir) - 1);
+      save_base_dir[sizeof(save_base_dir) - 1] = '\0';
+      n = strlen(save_base_dir);
+      while (n > 0 && (save_base_dir[n-1] == '\\' || save_base_dir[n-1] == '/'))
+         save_base_dir[--n] = '\0';
+   }
+
    if (retro_browse_directory)
       strcpy(retro_browse_conf, retro_browse_directory);
 
@@ -1963,6 +1994,7 @@ void retro_init(void)
 
    /* set sane defaults */
    Config.save_fdd_path = 1;
+   Config.save_sram     = 1;
    Config.clockmhz      = 10;
    Config.ram_size      = 2 * 1024 *1024;
    Config.JOY_TYPE[0]   = 0;
@@ -2264,6 +2296,7 @@ static void WinX68k_Exec(void)
    int KeyIntCnt = 0, MouseIntCnt = 0;
    uint32_t t_start = timeGetTime(), t_end;
 
+
    if(!(cpu_readmem24_dword(0xed0008) == Config.ram_size))
    {
       cpu_writemem24(0xe8e00d, 0x31); /* SRAM write permission */
@@ -2472,6 +2505,7 @@ static void WinX68k_Exec(void)
       if (FrameSkipQueue > 100)
          FrameSkipQueue = 100;
    }
+
 }
 
 void retro_run(void)

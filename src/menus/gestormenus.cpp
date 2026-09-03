@@ -25,8 +25,16 @@ std::string syncOptionsStrings[TOTAL_VIDEO_SYNC];
 std::string aspectRatioStrings[TOTAL_VIDEO_RATIO];
 std::string videoScaleStrings[TOTAL_VIDEO_SCALE];
 std::string videoIntScaleStrings[TOTAL_INT_SCALE];
-/* La lista de shaders es dinamica (assets\shaders), asi que ya no puede
- * ser un array de tamano fijo. Se rellena en construirMenuVideo. */
+/* La lista de shaders es dinamica (assets\shaders), asi que ya no puede ser
+ * un array de tamano fijo. La rellena rellenarShaderStrings() bajo demanda.
+ *
+ * OJO con el orden: poblarMenuCoreOverrides (via poblarMenuEmulacion) se
+ * construye ANTES que poblarMenuVideo, y las dos necesitan esta lista. Cuando
+ * era un array de tamano fijo daba igual -siempre tenia TOTAL_SHADERS huecos-,
+ * pero un vector vacio dejaba la lista del override por core con un solo
+ * elemento ("Auto"), y un shaderMode >= 1 quedaba FUERA DE RANGO: la opcion se
+ * veia en blanco hasta que pulsabas izquierda/derecha y el modulo la metia en
+ * rango. Por eso ambos sitios llaman al helper en vez de asumir un orden. */
 std::vector<std::string> videoShaderStrings;
 std::string ACTION_ASK_STR[MAX_ASK];
 std::string TipoKeyStr[KEY_JOY_MAX];
@@ -541,6 +549,20 @@ void GestorMenus::poblarMenuPad(Menu* menuEntrada, CfgLoader *refConfig, Joystic
 	poblarMenuAssignFrontend(menuAssignFrontend, joystick);
 }
 
+/* Rellena videoShaderStrings desde el registro de shaders. Idempotente y sin
+ * dependencia de orden: la llaman tanto poblarMenuVideo como
+ * poblarMenuCoreOverrides, y la primera que entre deja la lista lista para la
+ * otra. Ver la nota de la declaracion de videoShaderStrings. */
+static void rellenarShaderStrings(){
+	ShaderRegistry* shaders = ShaderRegistry::instance();
+	if ((int)videoShaderStrings.size() == shaders->count()) return;
+
+	videoShaderStrings.clear();
+	for (int i=0; i < shaders->count(); i++){
+		videoShaderStrings.push_back(shaders->displayName(i));
+	}
+}
+
 void GestorMenus::poblarMenuVideo(Menu* menuVideo, CfgLoader *refConfig){
 	//Relacion de aspecto
 	std::vector<std::string> aspectRates;
@@ -554,13 +576,9 @@ void GestorMenus::poblarMenuVideo(Menu* menuVideo, CfgLoader *refConfig){
     std::vector<std::string> filtros;
 
 #if defined(_XBOX) || defined(SALVIA_GPU_VIDEO)
-	{
-		ShaderRegistry* shaders = ShaderRegistry::instance();
-		videoShaderStrings.clear();
-		for (int i=0; i < shaders->count(); i++){
-			videoShaderStrings.push_back(shaders->displayName(i));
-			filtros.push_back(videoShaderStrings[i]);
-		}
+	rellenarShaderStrings();
+	for (std::size_t i=0; i < videoShaderStrings.size(); i++){
+		filtros.push_back(videoShaderStrings[i]);
 	}
 	menuVideo->opciones.push_back(new OpcionLista(LanguageManager::instance()->get("menu.options.scale"), filtros, &refConfig->configMain[cfg::shaderMode].getIntRef()));
 #else
@@ -819,6 +837,7 @@ void GestorMenus::poblarMenuCoreOverrides(Menu *menu, CfgLoader *refConfig){
 	filtros.push_back(autoOverrideTxt);
 
 	#if defined(_XBOX) || defined(SALVIA_GPU_VIDEO)
+		rellenarShaderStrings();
 		for (std::size_t i=0; i < videoShaderStrings.size(); i++){
 			filtros.push_back(videoShaderStrings[i]);
 		}
