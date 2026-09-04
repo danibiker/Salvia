@@ -8,13 +8,20 @@
 #include <io/hotkeys.h>
 #include <beans/structures.h>
 
-//El comportamiento de un hat est� estandarizado por el propio API: todos los hats 
-//se tratan como interruptores de posici�n de 8 direcciones (m�s la posici�n centrada), 
-//independientemente de c�mo sea f�sicamente el dispositivo.
+//El comportamiento de un hat esta estandarizado por el propio API: todos los hats 
+//se tratan como interruptores de posicion de 8 direcciones (mas la posicion centrada), 
+//independientemente de como sea fisicamente el dispositivo.
 #define MAX_HAT_POSITIONS 9
 
+/* Acciones del frontend, en el orden en que salen en el menu de asignacion. La
+ * POSICION es lo que manda: es el sufijo de la clave i18n (menu.controls.frontkeyN)
+ * y el indice de FRONTEND_BTN_TXT. Anadir SIEMPRE al final.
+ *
+ * Los dos ultimos son los gatillos, que no son un boton en las dos plataformas: en
+ * la 360 son botones SDL (10 y 11) y en Windows las dos mitades del eje 2. Por eso
+ * se leen con getAnyTap, que mira las tres tablas del mapper. */
 static int FRONTEND_BTN_VAL[] = {JOY_BUTTON_UP, JOY_BUTTON_DOWN, JOY_BUTTON_LEFT, JOY_BUTTON_RIGHT, JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_Y,
-	JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_L3};
+	JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_L3, JOY_AXIS_L2, JOY_AXIS_R2};
 
 /* Botones del mando que salen en el menu, EN ORDEN LOGICO (el mismo del enum
  * joystickButtons). Su posicion i NO es el indice SDL: para eso esta
@@ -83,8 +90,14 @@ static const int configurablePortAnalogs[ANALOG_TARGETS] = {
 	JOY_AXIS2_UP,    JOY_AXIS2_DOWN,  JOY_AXIS2_LEFT,  JOY_AXIS2_RIGHT
 };
 
+/* Igual que configurablePortButtons: va en orden LOGICO y el indice SDL de cada uno
+ * lo da sdlBtnOf. Los dos gatillos ocupan las posiciones 10 y 11, donde sdlBtnOf cae
+ * a la identidad y da los botones SDL 10 (LT) y 11 (RT) de la 360. En Windows el
+ * mando no llega a esos botones y configMapperFrontend los salta solo; alli los
+ * gatillos entran por configurableSdlFrontAxis. */
 static const int configurableFrontButtons[] = {
-	JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y, JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_SELECT, JOY_BUTTON_START, JOY_BUTTON_L3, JOY_BUTTON_R3
+	JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y, JOY_BUTTON_L, JOY_BUTTON_R, JOY_BUTTON_SELECT, JOY_BUTTON_START, JOY_BUTTON_L3, JOY_BUTTON_R3,
+	JOY_AXIS_L2, JOY_AXIS_R2
 };
 
 static const int configurableSdlFrontHats[] = {
@@ -94,20 +107,39 @@ static const int configurableSdlFrontHats[] = {
 	JOY_BUTTON_LEFT   // --> SDL_HAT_LEFT  = 0x08
 };
 
+/* Indexada por direccion fisica (eje*2 + signo). Las cuatro primeras son el stick
+ * izquierdo navegando el menu (solo vivas con "Analog pad" encendido).
+ *
+ * Las dos ultimas van con #ifdef por el mismo motivo que su gemela del core,
+ * configurableSdlAxis: el eje 2 solo son los gatillos en Windows. En la 360 es la X
+ * del stick DERECHO y los gatillos son botones, asi que dejarlo apuntando a R2/L2
+ * ademas de ser dato muerto haria que el stick derecho disparase las acciones de
+ * menu de los gatillos. */
+#ifdef _XBOX
+static const int configurableSdlFrontAxis[] = {
+	JOY_BUTTON_LEFT,
+	JOY_BUTTON_RIGHT,
+	JOY_BUTTON_UP,
+	JOY_BUTTON_DOWN,
+	-1,                /* 4,5: eje 2 = stick derecho X */
+	-1
+};
+#else
 static const int configurableSdlFrontAxis[] = {
 	JOY_BUTTON_LEFT,   
 	JOY_BUTTON_RIGHT,
 	JOY_BUTTON_UP,
 	JOY_BUTTON_DOWN, 
-	JOY_AXIS_R2,
-	JOY_AXIS_L2
+	JOY_AXIS_R2,       /* eje de gatillos, lado negativo */
+	JOY_AXIS_L2        /* eje de gatillos, lado positivo */
 };
+#endif
 
 extern t_rom_paths romPaths;
 
 struct t_controller_port {
 	int current_device_id;			// ID seleccionado actualmente (ej. RETRO_DEVICE_JOYPAD)
-	std::string current_desc;       // Descripci�n amigable (ej. "SuperScope")
+	std::string current_desc;       // Descripcion amigable (ej. "SuperScope")
 	// Lista de opciones que el core nos dio para este puerto
 	std::vector<std::pair<unsigned, std::string>> available_types; 
 	t_controller_port(){

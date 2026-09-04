@@ -863,7 +863,7 @@ struct t_joy_state {
 	/* OR con axisSim*: una direccion de stick convertida en boton/cruceta es
 	 * indistinguible aqui de una pulsacion real, que es lo que hace que funcione
 	 * con cualquier core sin depender del tipo de dispositivo del puerto. */
-	/* ★ La cota superior de sdlBtn es nueva y hace falta: antes solo se comprobaba
+	/* La cota superior de sdlBtn es nueva y hace falta: antes solo se comprobaba
 	 * "> -1" porque el espacio de destinos y el espacio SDL median los dos 31, asi que
 	 * el "btn < MAX_BUTTONS" de la izquierda acotaba los dos por accidente. Ahora que
 	 * cada uno tiene su tamano, un id de destino valido puede traer un indice SDL que

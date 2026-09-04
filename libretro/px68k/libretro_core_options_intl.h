@@ -357,6 +357,20 @@ struct retro_core_option_v2_definition option_defs_fr[] = {
       "enabled"
    },
    {
+      "px68k_save_sram",
+      "Sauvegarder la SRAM (NVRAM de la machine)",
+      NULL,
+      "Lorsque cette option est activée, la SRAM de la machine (périphérique de démarrage, horloge, répétition du clavier et autres paramètres SWITCH.X) est enregistrée dans le fichier sram.dat et rechargée au démarrage. Lorsqu'elle est désactivée, la machine démarre toujours avec une SRAM vierge, réinitialisée par l'IPL ; utile si un fichier sram.dat obsolète est à l'origine de problèmes.",
+      NULL,
+      "media",
+      {
+         { "enabled",  NULL },
+         { "disabled", NULL },
+         { NULL,       NULL },
+      },
+      "disabled"
+   },
+   {
       "px68k_rumble_on_disk_read",
       "Faire vibrer la manette pendant la lecture des disquettes",
       NULL,
@@ -857,7 +871,7 @@ struct retro_core_option_v2_definition option_defs_es[] = {
          { "disabled", NULL },
          { NULL,       NULL },
       },
-      "enabled"
+      "disabled"
    },
    {
       "px68k_rumble_on_disk_read",

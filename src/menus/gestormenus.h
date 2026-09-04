@@ -553,6 +553,7 @@ public:
 	void setGameLoaded(std::string gn){
 		this->gameFaqsMenu.gameName = gn;
 	}
+	std::string trOrDefault(const std::string &key, const char *fallback);
 
 	Menu* menuGameFilter;
 	void iniciarFiltros(GameDataFields& gameDataFieldsFilter);

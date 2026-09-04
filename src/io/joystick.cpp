@@ -598,6 +598,35 @@ bool Joystick::loadButtonsRetro(std::string ruta) {
         }
     }
 
+	/* Relleno de hueco para los gatillos del frontend (JOY_AXIS_L2/R2). Son destinos
+	 * posteriores al formato del fichero, asi que un retropad.ini ya guardado no los
+	 * trae y las dos filas nuevas del menu saldrian sin asignar. Mismo espiritu que el
+	 * flag hasAnlg de los perfiles: solo se rellena el hueco; si el fichero SI trae una
+	 * atadura, se respeta.
+	 *
+	 * El default depende de la plataforma: en la 360 los gatillos son los botones SDL
+	 * 10 (LT) y 11 (RT); en Windows son las dos mitades del eje 2, o sea las direcciones
+	 * virtuales 5 (positivo = LT) y 4 (negativo = RT). */
+	{
+		const int triggerTarget[2] = { JOY_AXIS_L2, JOY_AXIS_R2 };
+		#ifdef _XBOX
+		const int triggerSdl[2] = { 10, 11 };
+		#else
+		const int triggerSdl[2] = { 5, 4 };
+		#endif
+		for (int t = 0; t < 2; t++){
+			const int target = triggerTarget[t];
+			if (inputs.mapperFrontend.getSdlBtn(0, target) > -1) continue;
+			if (inputs.mapperFrontend.getSdlAxis(0, target) > -1) continue;
+			#ifdef _XBOX
+			inputs.mapperFrontend.setBtnFromSdl(0, triggerSdl[t], target);
+			#else
+			inputs.mapperFrontend.setAxisFromSdl(0, triggerSdl[t], target);
+			#endif
+			LOG_DEBUG("loadButtonsRetro: gatillo (destino %d) sin asignar, se pone el default (SDL %d)", target, triggerSdl[t]);
+		}
+	}
+
 	/* --- Que perfil recibe cada puerto -------------------------------------------
 	 * 1) Si hay un perfil cuyo name= es EXACTAMENTE el nombre del mando conectado,
 	 *    ese. Asi conviven en el mismo fichero el perfil del mando de SNES y el del
@@ -820,8 +849,14 @@ bool Joystick::pollKeys(int gameStatus){
 				 * juego ya no hay interruptor global: cada direccion con nombre lleva
 				 * su propio destino en mapperCore.analogDst, y se resuelve mas abajo.
 				 * El eje 2 de Windows (gatillos combinados) no es de ningun stick con
-				 * nombre, asi que sigue digitalizandose por la via de siempre. */
-				const bool isPadInput = gameStatus == EMU_STARTED ? combinedAxis : inputs.frontAxisAsPad;
+				 * nombre, asi que sigue digitalizandose por la via de siempre.
+				 *
+				 * Ese eje se digitaliza TAMBIEN en los menus, y no solo dentro del juego:
+				 * los gatillos son acciones del frontend (JOY_AXIS_L2/R2 en
+				 * FRONTEND_BTN_VAL) y sin esto no llegaban a axis_state con "Analog pad"
+				 * apagado, que es el caso normal. En la 360 combinedAxis es siempre false
+				 * (alli los gatillos son botones), asi que no cambia nada. */
+				const bool isPadInput = combinedAxis || (gameStatus != EMU_STARTED && inputs.frontAxisAsPad);
 
                 {
 					int32_t raw = event.jaxis.value;

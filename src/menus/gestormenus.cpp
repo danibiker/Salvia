@@ -115,170 +115,7 @@ GestorMenus::~GestorMenus() {
 	imageFaq.closeImage();
 }
 
-std::string GestorMenus::guardarJoysticks(Joystick* joy){
-	LOG_DEBUG("Guardando valores del joystick");
-	return LanguageManager::instance()->get("msg.filesave") + joy->saveButtonsRetroDefault();
-}
 
-std::string GestorMenus::guardarGameJoysticks(Joystick* joy){
-	LOG_DEBUG("Guardando valores del joystick para el juego");
-	std::string msg = joy->saveButtonsRetroGame();
-	if (msg.empty()){
-		return LanguageManager::instance()->get("msg.key.cfg.load");
-	} else {
-		return LanguageManager::instance()->get("msg.filesave") + msg;
-	}
-}
-
-std::string GestorMenus::guardarCoreJoysticks(Joystick* joy){
-	LOG_DEBUG("Guardando valores del joystick para el core");
-	std::string msg = joy->saveButtonsRetroCore();
-	return LanguageManager::instance()->get("msg.filesave") + msg;
-}
-
-std::string GestorMenus::guardarCoreConfig(CfgLoader *refConfig){
-	LOG_DEBUG("Guardando valores del core actual");
-	return refConfig->saveCoreParams();
-}
-
-// romPaths (global de salvia.h): ruta del juego cargado, para el guardado por-juego.
-extern t_rom_paths romPaths;
-
-// Guarda las opciones del core en un fichero JUNTO AL JUEGO (mismo nombre base
-// + .opt). En la carga (launchGame -> CfgLoader::loadCoreParamsForGame) tiene
-// prioridad sobre las opciones generales del core.
-std::string GestorMenus::guardarCoreConfigGame(CfgLoader *refConfig){
-	LOG_DEBUG("Guardando opciones del core para el juego actual");
-	return refConfig->saveGameCoreParams(romPaths.rompath);
-}
-
-// Restaura TODAS las opciones del core (core + game-specific) a su valor por
-// defecto. El default lo declara el core en el parse (applyEntry -> defaultSelected).
-// setParameter sirve values[selected] en GET_VARIABLE, asi que basta reponer
-// selected (+ cachedValue para coherencia inmediata) y marcar el cambio para que
-// el core lo relea. Persistimos para que el reset sobreviva a recargas.
-// NOTA: las opciones init-only (threading/widescreen/gpu_renderer) quedan en su
-// default pero solo surten efecto al recargar el core.
-std::string GestorMenus::restaurarCoreConfig(CfgLoader *refConfig){
-	LOG_DEBUG("Restaurando opciones del core a sus valores por defecto");
-	for (auto it = refConfig->startupLibretroParams.begin();
-	     it != refConfig->startupLibretroParams.end(); ++it) {
-		cfg::t_emu_props *p = it->second.get();
-		int d = (p->defaultSelected >= 0 && p->defaultSelected < (int)p->values.size())
-		        ? p->defaultSelected : 0;
-		p->selected = d;
-		if (!p->values.empty()) p->cachedValue = p->values[d];
-	}
-	for (auto it = refConfig->gameSpecificLibretroParams.begin();
-	     it != refConfig->gameSpecificLibretroParams.end(); ++it) {
-		cfg::t_emu_props *p = it->second.get();
-		int d = (p->defaultSelected >= 0 && p->defaultSelected < (int)p->values.size())
-		        ? p->defaultSelected : 0;
-		p->selected = d;
-		if (!p->values.empty()) p->cachedValue = p->values[d];
-	}
-	options_changed_flag = true;   // el core relee en el proximo GET_VARIABLE_UPDATE
-
-
-	//refConfig->deleteCoreParams();
-	//dirutil dir;
-	//const std::string corepath = refConfig->getCoreCfgPath();
-	//if (dir.fileExists(corepath.c_str())){
-	//	refConfig->appliedFileParmsCore = dir.getFileName(corepath);
-	//} else {
-		/** Aplicamos siempre las opciones por defecto. El usuario decide luego si quiere guardarlas como opciones del core
-		 *  o como opciones del juego. Por eso mostramos un mensaje de opciones restauradas por defecto
-		 */
-		refConfig->appliedFileParmsCore = LanguageManager::instance()->get("menu.core.options.msg.default");
-	//}
-	refConfig->deleteGameParams(romPaths.rompath);
-
-	return LanguageManager::instance()->get("menu.core.options.restore.applied");
-}
-
-std::string GestorMenus::guardarMainConfig(CfgLoader *refConfig){
-	LOG_DEBUG("Guardando valores principales de configuracion");
-	return refConfig->saveMainParams();
-}
-
-std::string GestorMenus::guardarCoreOverridesConfig(t_save_override *overrides){
-	LOG_DEBUG("Guardando overrides del core actual");
-	return overrides->refConfig->saveCoreOverrideParams(overrides->emuIdx);
-}
-
-std::string GestorMenus::volverEmulacion(CONFIG_STATUS *st){
-	*st = EXIT_CONFIG;
-	return std::string("");
-}
-
-std::string GestorMenus::salirEmulacion(CONFIG_STATUS *st){
-	*st = EXIT_EMULATION;
-	return std::string("");
-}
-
-std::string GestorMenus::startScrapping(CONFIG_STATUS *st){
-	bool someSelected = false;
-	for (std::size_t i=0; i < scrapSelection.size() && !someSelected; i++){
-		someSelected = scrapSelection[i].selected;
-	}
-
-	if (someSelected){
-		*st = START_SCRAPPING;
-		if (menuScrapper->opciones.size() > 0) {
-			// Obtener el ultimo elemento
-			auto* baseOpt = menuScrapper->opciones.back();
-			OpcionExec<CONFIG_STATUS>* opcion = static_cast<OpcionExec<CONFIG_STATUS>*>(baseOpt);
-			if (opcion != nullptr) {
-				opcion->titulo = LanguageManager::instance()->get("menu.scrap.stop");
-				opcion->execfunc = &GestorMenus::stopScrapping;
-			}
-		}
-		return std::string("");
-	} else {
-		LOG_DEBUG("Seleccione al menos un sistema que escrapear");
-		return LanguageManager::instance()->get("msg.atleast1scrap");
-	}
-}
-
-std::string GestorMenus::stopScrapping(CONFIG_STATUS *st){
-	if (st != NULL){
-		*st = NORMAL;
-	}
-	if (menuScrapper->opciones.size() > 0) {
-		// Obtener el ultimo elemento
-		auto* baseOpt = menuScrapper->opciones.back();
-		OpcionExec<CONFIG_STATUS>* opcion = static_cast<OpcionExec<CONFIG_STATUS>*>(baseOpt);
-		if (opcion != nullptr) {
-			InterlockedExchange(&CurlClient::g_abortScrapping, 1);
-			opcion->titulo = LanguageManager::instance()->get("menu.scrap.start");
-			opcion->execfunc = &GestorMenus::startScrapping;
-		}
-	}
-	return std::string("");
-}
-
-
-void GestorMenus::setLayout(int layout, int screenw, int screenh){
-	this->marginY = face_h_big * 2;
-    clearSelectedText();
-  
-    this->setX(marginX);
-    this->setY(marginY);
-    this->setW(screenw - marginX);
-    this->setH(screenh - marginY);
-    this->centerText = false;
-    this->layout = layout;
-}
-
-/* LanguageManager::get() devuelve "[la.clave]" cuando la clave no esta en el
- * .ini, que en el menu se ve feo. Para las etiquetas del stick derecho, que son
- * claves nuevas, caemos al texto en ingles hasta que esten traducidas. */
-static std::string trOrDefault(const std::string &key, const char *fallback) {
-	std::string s = LanguageManager::instance()->get(key);
-	if (s.empty() || s[0] == '[')
-		return std::string(fallback);
-	return s;
-}
 
 // Inicializa la estructura de menus
 void GestorMenus::inicializar(CfgLoader *refConfig, Joystick *joystick) {
@@ -1744,8 +1581,12 @@ void GestorMenus::poblarMenuAssignFrontend(Menu* menuAssign, Joystick *joystick)
 		const std::string text = FRONTEND_BTN_TXT[i];
 		const int fVal = FRONTEND_BTN_VAL[i];
 
+		/* La tercera rama es para los gatillos: en Windows su atadura vive en la tabla
+		 * de ejes, y sin esto la fila arrancaba como KEY_JOY_BTN y drawKeys pintaba "-". */
 		if (input->mapperFrontend.getSdlHat(0, fVal) > -1){
 			type = KEY_JOY_HAT;
+		} else if (input->mapperFrontend.getSdlAxis(0, fVal) > -1){
+			type = KEY_JOY_AXIS;
 		} else {
 			type = KEY_JOY_BTN;
 		}
@@ -2074,6 +1915,27 @@ void GestorMenus::updateAxis(const SDL_Event &event){
 				LOG_DEBUG("updateAxis: -> direccion fisica %d, slot de la opcion %d", buttonIdx, analogSlot);
 
 				if (analogSlot < 0) {
+					/* Los gatillos son la excepcion: no son un boton en las dos plataformas
+					 * (en Windows son las dos mitades del eje 2), asi que esta es la unica
+					 * via de asignacion que les queda viva. */
+					if (k->btn == JOY_AXIS_L2 || k->btn == JOY_AXIS_R2) {
+						k->tipoKey = KEY_JOY_AXIS;
+						k->description = TipoKeyStr[k->tipoKey];
+						/* assignValue solo limpia dentro de su propia tabla, asi que hay que
+						 * soltar a mano la atadura de boton del mismo destino: si no, en la
+						 * 360 quedarian vivas las dos a la vez. */
+						k->joyMapper->setBtnFromSdl(k->gamepadId, -1, k->btn);
+						k->joyMapper->setAxisFromSdl(k->gamepadId, buttonIdx, k->btn);
+
+						LOG_DEBUG("updateAxis: gatillo (btn %d) -> direccion fisica %d", k->btn, buttonIdx);
+
+						k->changeAsked = false;
+						k->lastTimeAsked = 0;
+						status = NORMAL;
+						k->joyInputs->clearAll();
+						return;
+					}
+
 					/* Las cuatro de la cruceta solo admiten posiciones de hat, y los botones
 					 * del core solo botones fisicos. Que un eje dispare algo ya no se asigna
 					 * aqui: se hace desde la entrada del stick, diciendo en que se convierte. */
@@ -2167,6 +2029,12 @@ void GestorMenus::updateButton(const SDL_Event &event, TipoKey tipoKey){
 			k->tipoKey = tipoKey;
 
 			if (k->tipoKey == KEY_JOY_BTN){
+				/* Simetrico de la rama de los gatillos de updateAxis: un destino que admite
+				 * las dos tablas hay que soltarlo de la otra a mano, porque assignValue solo
+				 * limpia dentro de la suya. */
+				if (k->btn == JOY_AXIS_L2 || k->btn == JOY_AXIS_R2){
+					k->joyMapper->setAxisFromSdl(k->gamepadId, -1, k->btn);
+				}
 				k->joyMapper->setBtnFromSdl(k->gamepadId, sdlbtn, k->btn);
 			} else if (k->tipoKey == KEY_JOY_HAT || k->tipoKey == KEY_JOY_AXIS){
 				/* Solo direcciones puras, igual que en la rama de los sticks. Una
@@ -2443,8 +2311,10 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 			sdlIdBtn = opt->joyMapper->getSdlHat(opt->gamepadId, opt->btn);
 		} else if (opt->tipoKey == KEY_JOY_AXIS){
 			/* Se conserva para los gatillos: L2/R2 son botones del core alimentados
-			 * por el eje 2 combinado de Windows, y esa via sigue viva. */
-			sdlIdBtn = opt->joyMapper->getSdlHat(opt->gamepadId, opt->btn);
+			 * por el eje 2 combinado de Windows, y esa via sigue viva. Se mira el BOTON
+			 * y no el hat (que aqui siempre daba -1) porque en la 360 el mismo destino
+			 * esta atado a un boton fisico. */
+			sdlIdBtn = opt->joyMapper->getSdlBtn(opt->gamepadId, opt->btn);
 			sdlIdAxis = opt->joyMapper->getSdlAxis(opt->gamepadId, opt->btn);
 		}
 
@@ -2454,14 +2324,18 @@ void GestorMenus::drawKeys(int i, OpcionKey *opt, SDL_Surface *video_page){
 		 * un texto basura. Si no hay etiqueta, se cae al numero. */
 		if (sdlIdBtn > -1) {
 			std::string keyStr = Constant::intToString(sdlIdBtn);
-			if (opt->tipoKey == KEY_JOY_BTN && isGamepadXbox) {
+			/* Solo KEY_JOY_HAT trae aqui una mascara de hat. KEY_JOY_AXIS son los
+			 * gatillos, y su sdlIdBtn es un numero de boton igual que el de
+			 * KEY_JOY_BTN, asi que va a la misma tabla de etiquetas. */
+			const bool isHat = (opt->tipoKey == KEY_JOY_HAT);
+			if (!isHat && isGamepadXbox) {
 				if (sdlIdBtn < SDL_BTN_TO_XBOX_SIZE && SDL_BTN_TO_XBOX[sdlIdBtn][0] != '\0')
 					keyStr = std::string(SDL_BTN_TO_XBOX[sdlIdBtn]);
 			} else if (isGamepadXbox) {
 				if (sdlIdBtn < SDL_HAT_TO_XBOX_SIZE && !SDL_HAT_TO_XBOX[sdlIdBtn].empty())
 					keyStr = SDL_HAT_TO_XBOX[sdlIdBtn];
 			}
-			str = (opt->tipoKey == KEY_JOY_BTN ? opt->description : TipoKeyStr[KEY_JOY_HAT]) + keyStr;
+			str = (isHat ? TipoKeyStr[KEY_JOY_HAT] : TipoKeyStr[KEY_JOY_BTN]) + keyStr;
 		}
 
 		if (sdlIdAxis > -1) {
@@ -2931,4 +2805,169 @@ void GestorMenus::clearSelectedText(){
 		SDL_FreeSurface(imgText);
         imgText = NULL;
     }
+}
+
+std::string GestorMenus::guardarJoysticks(Joystick* joy){
+	LOG_DEBUG("Guardando valores del joystick");
+	return LanguageManager::instance()->get("msg.filesave") + joy->saveButtonsRetroDefault();
+}
+
+std::string GestorMenus::guardarGameJoysticks(Joystick* joy){
+	LOG_DEBUG("Guardando valores del joystick para el juego");
+	std::string msg = joy->saveButtonsRetroGame();
+	if (msg.empty()){
+		return LanguageManager::instance()->get("msg.key.cfg.load");
+	} else {
+		return LanguageManager::instance()->get("msg.filesave") + msg;
+	}
+}
+
+std::string GestorMenus::guardarCoreJoysticks(Joystick* joy){
+	LOG_DEBUG("Guardando valores del joystick para el core");
+	std::string msg = joy->saveButtonsRetroCore();
+	return LanguageManager::instance()->get("msg.filesave") + msg;
+}
+
+std::string GestorMenus::guardarCoreConfig(CfgLoader *refConfig){
+	LOG_DEBUG("Guardando valores del core actual");
+	return refConfig->saveCoreParams();
+}
+
+// romPaths (global de salvia.h): ruta del juego cargado, para el guardado por-juego.
+extern t_rom_paths romPaths;
+
+// Guarda las opciones del core en un fichero JUNTO AL JUEGO (mismo nombre base
+// + .opt). En la carga (launchGame -> CfgLoader::loadCoreParamsForGame) tiene
+// prioridad sobre las opciones generales del core.
+std::string GestorMenus::guardarCoreConfigGame(CfgLoader *refConfig){
+	LOG_DEBUG("Guardando opciones del core para el juego actual");
+	return refConfig->saveGameCoreParams(romPaths.rompath);
+}
+
+// Restaura TODAS las opciones del core (core + game-specific) a su valor por
+// defecto. El default lo declara el core en el parse (applyEntry -> defaultSelected).
+// setParameter sirve values[selected] en GET_VARIABLE, asi que basta reponer
+// selected (+ cachedValue para coherencia inmediata) y marcar el cambio para que
+// el core lo relea. Persistimos para que el reset sobreviva a recargas.
+// NOTA: las opciones init-only (threading/widescreen/gpu_renderer) quedan en su
+// default pero solo surten efecto al recargar el core.
+std::string GestorMenus::restaurarCoreConfig(CfgLoader *refConfig){
+	LOG_DEBUG("Restaurando opciones del core a sus valores por defecto");
+	for (auto it = refConfig->startupLibretroParams.begin();
+	     it != refConfig->startupLibretroParams.end(); ++it) {
+		cfg::t_emu_props *p = it->second.get();
+		int d = (p->defaultSelected >= 0 && p->defaultSelected < (int)p->values.size())
+		        ? p->defaultSelected : 0;
+		p->selected = d;
+		if (!p->values.empty()) p->cachedValue = p->values[d];
+	}
+	for (auto it = refConfig->gameSpecificLibretroParams.begin();
+	     it != refConfig->gameSpecificLibretroParams.end(); ++it) {
+		cfg::t_emu_props *p = it->second.get();
+		int d = (p->defaultSelected >= 0 && p->defaultSelected < (int)p->values.size())
+		        ? p->defaultSelected : 0;
+		p->selected = d;
+		if (!p->values.empty()) p->cachedValue = p->values[d];
+	}
+	options_changed_flag = true;   // el core relee en el proximo GET_VARIABLE_UPDATE
+
+
+	//refConfig->deleteCoreParams();
+	//dirutil dir;
+	//const std::string corepath = refConfig->getCoreCfgPath();
+	//if (dir.fileExists(corepath.c_str())){
+	//	refConfig->appliedFileParmsCore = dir.getFileName(corepath);
+	//} else {
+		/** Aplicamos siempre las opciones por defecto. El usuario decide luego si quiere guardarlas como opciones del core
+		 *  o como opciones del juego. Por eso mostramos un mensaje de opciones restauradas por defecto
+		 */
+		refConfig->appliedFileParmsCore = LanguageManager::instance()->get("menu.core.options.msg.default");
+	//}
+	refConfig->deleteGameParams(romPaths.rompath);
+
+	return LanguageManager::instance()->get("menu.core.options.restore.applied");
+}
+
+std::string GestorMenus::guardarMainConfig(CfgLoader *refConfig){
+	LOG_DEBUG("Guardando valores principales de configuracion");
+	return refConfig->saveMainParams();
+}
+
+std::string GestorMenus::guardarCoreOverridesConfig(t_save_override *overrides){
+	LOG_DEBUG("Guardando overrides del core actual");
+	return overrides->refConfig->saveCoreOverrideParams(overrides->emuIdx);
+}
+
+std::string GestorMenus::volverEmulacion(CONFIG_STATUS *st){
+	*st = EXIT_CONFIG;
+	return std::string("");
+}
+
+std::string GestorMenus::salirEmulacion(CONFIG_STATUS *st){
+	*st = EXIT_EMULATION;
+	return std::string("");
+}
+
+std::string GestorMenus::startScrapping(CONFIG_STATUS *st){
+	bool someSelected = false;
+	for (std::size_t i=0; i < scrapSelection.size() && !someSelected; i++){
+		someSelected = scrapSelection[i].selected;
+	}
+
+	if (someSelected){
+		*st = START_SCRAPPING;
+		if (menuScrapper->opciones.size() > 0) {
+			// Obtener el ultimo elemento
+			auto* baseOpt = menuScrapper->opciones.back();
+			OpcionExec<CONFIG_STATUS>* opcion = static_cast<OpcionExec<CONFIG_STATUS>*>(baseOpt);
+			if (opcion != nullptr) {
+				opcion->titulo = LanguageManager::instance()->get("menu.scrap.stop");
+				opcion->execfunc = &GestorMenus::stopScrapping;
+			}
+		}
+		return std::string("");
+	} else {
+		LOG_DEBUG("Seleccione al menos un sistema que escrapear");
+		return LanguageManager::instance()->get("msg.atleast1scrap");
+	}
+}
+
+std::string GestorMenus::stopScrapping(CONFIG_STATUS *st){
+	if (st != NULL){
+		*st = NORMAL;
+	}
+	if (menuScrapper->opciones.size() > 0) {
+		// Obtener el ultimo elemento
+		auto* baseOpt = menuScrapper->opciones.back();
+		OpcionExec<CONFIG_STATUS>* opcion = static_cast<OpcionExec<CONFIG_STATUS>*>(baseOpt);
+		if (opcion != nullptr) {
+			InterlockedExchange(&CurlClient::g_abortScrapping, 1);
+			opcion->titulo = LanguageManager::instance()->get("menu.scrap.start");
+			opcion->execfunc = &GestorMenus::startScrapping;
+		}
+	}
+	return std::string("");
+}
+
+
+void GestorMenus::setLayout(int layout, int screenw, int screenh){
+	this->marginY = face_h_big * 2;
+    clearSelectedText();
+  
+    this->setX(marginX);
+    this->setY(marginY);
+    this->setW(screenw - marginX);
+    this->setH(screenh - marginY);
+    this->centerText = false;
+    this->layout = layout;
+}
+
+/* LanguageManager::get() devuelve "[la.clave]" cuando la clave no esta en el
+ * .ini, que en el menu se ve feo. Para las etiquetas del stick derecho, que son
+ * claves nuevas, caemos al texto en ingles hasta que esten traducidas. */
+std::string GestorMenus::trOrDefault(const std::string &key, const char *fallback) {
+	std::string s = LanguageManager::instance()->get(key);
+	if (s.empty() || s[0] == '[')
+		return std::string(fallback);
+	return s;
 }

@@ -247,18 +247,31 @@ void restoreHistory(ListMenu &listMenu){
 }
 
 int procesarAccionesMenu(ListMenu &listMenu){
+	//Avanzamos uno a uno por el menu
 	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_UP)){
 		listMenu.prevPos();
 	} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_DOWN)){
 		listMenu.nextPos();
 	} 
 			
+	//Avanzamos pagina a pagina por el menu
 	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_LEFT)){
 		listMenu.prevPage();
 	} else if (gameMenu->joystick->inputs.getAnyTap(0, JOY_BUTTON_RIGHT)){
 		listMenu.nextPage();
 	} 
+	
+	//Navegamos a la siguiente letra
+	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_AXIS_R2)){
+		listMenu.navigateLetter(1);
+	}
 
+	//Navegamos a la anterior letra
+	if (gameMenu->joystick->inputs.getAnyTap(0, JOY_AXIS_L2)){
+		listMenu.navigateLetter(-1);
+	}
+
+	//Boton volver
 	if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_B)){
 		if (listMenu.listZipped.cdBack()){
 			gameMenu->listableZip(listMenu, FS_ZIP_CD_BACK);
@@ -275,6 +288,7 @@ int procesarAccionesMenu(ListMenu &listMenu){
 		restoreHistory(listMenu);
 	}
 
+	//Boton aceptar
 	if (gameMenu->joystick->inputs.getBtnTap(0, JOY_BUTTON_A)){
 		if ((std::size_t)listMenu.curPos >= listMenu.filteredGames.size()){
 			LOG_ERROR("List is empty or position is wrong");

@@ -207,7 +207,8 @@ void Engine::stopEngine(){
 	}
 #endif
 	BadgeDownloader::instance().stop();
-    SDL_Quit();
+	//No llamamos a SDL_Quit porque los subsistemas ya los hemos ido cerrando uno a uno
+	SDL_CloseAudio();
 }
 
 int Engine::initFont(){

@@ -348,6 +348,15 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
 		}
 		drawIconListElem(video_page, game, dstRectIcon);
     }
+
+	//Drawing the scrollbar
+	if (this->listSize > 1 && this->listSize > getScreenNumLines()){
+		const int scrollX = this->getX() + marginX + rectElem.w;
+		const int scrollH = face_h_big;
+		const int scrollY = this->getY() + ((this->curPos) / (float)(this->listSize - 1)) * ((getScreenNumLines() - 1) * scrollH);
+		SDL_Rect rectElemScrollbar = {scrollX + 2, scrollY, 8, scrollH};
+		rect(video_page, rectElemScrollbar.x, rectElemScrollbar.y, rectElemScrollbar.x + rectElemScrollbar.w - 1, rectElemScrollbar.y + rectElemScrollbar.h - 1, Constant::colors[clBkgMenu].sdlColor);
+	}
 }
 
 void ListMenu::drawNavBar(SDL_Surface *video_page, const SDL_Color& txtColor,
@@ -953,6 +962,27 @@ void ListMenu::nextPage(){
 
 void ListMenu::prevPage(){
     moveTo(this->curPos - (this->maxLines - 1));
+}
+
+void ListMenu::navigateLetter(int direction) {
+    if (this->listSize <= 0 || this->curPos >= filteredGames.size()) {
+        return;
+    }
+
+    const char actualLetter = filteredGames[this->curPos]->gameTitle.empty() ? 0 : filteredGames[this->curPos]->gameTitle[0];
+    const int startPos = this->curPos;
+    
+    // Avanzamos o retrocedemos una posición de forma circular
+    int nextLetterPos = (this->curPos + direction + this->listSize) % this->listSize;
+
+    // Buscamos la siguiente letra diferente
+    while (nextLetterPos != startPos && actualLetter == (filteredGames[nextLetterPos]->gameTitle.empty() ? 0 : filteredGames[nextLetterPos]->gameTitle[0])) {
+        nextLetterPos = (nextLetterPos + direction + this->listSize) % this->listSize;
+    }
+
+    if (nextLetterPos != startPos) {
+        moveTo(nextLetterPos);
+    }
 }
 
 void ListMenu::resizeMarginTop(int addedMargin, int screenH){

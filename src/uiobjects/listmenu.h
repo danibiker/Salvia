@@ -99,6 +99,7 @@ class ListMenu : public Object{
         void prevPos();
         void nextPage();
         void prevPage();
+		void navigateLetter(int direction);
 		void resizeMarginTop(int addedMargin, int screenH);
 };
 

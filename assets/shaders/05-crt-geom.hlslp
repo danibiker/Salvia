@@ -9,5 +9,5 @@ filter_linear0 = "true"
 wrap_mode0 = "clamp_to_edge"
 salvia_precision0 = "half"
 
-salvia_label = "CRT Geom"
+salvia_label = "Fake CRT Geom"
 salvia_label_key = "menu.video.shader5"

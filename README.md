@@ -12,7 +12,7 @@ I had grown weary of juggling a multitude of different emulators, each requiring
 
 ## Features
 * Integration with **retroachievements**
-* Graphic **filters** (Nearest, Sharp bilinear, LCD3x, scanlines, CRT-Geom, CRT-Lottes, CRT-EasyMode, HQ2X, HQ3X, HQ4X, XBR, 5XBR)
+* Graphic **filters** (Nearest, Sharp bilinear, LCD3x, scanlines, Fake-crt-geom, CRT-Lottes, CRT-EasyMode, HQ2X, HQ3X, HQ4X, XBR, 5XBR)
 * **Integer scaling** (reduced, increased scale or fixed 1x:5x)
 * Different **aspect ratios**
 * **Savestates**
@@ -24,12 +24,15 @@ I had grown weary of juggling a multitude of different emulators, each requiring
 * **Disc control** to change disks on PSX, SegaCD, PC Engine CD and multi-disk Commodore 64 / Amiga / Atari 
 * **Bios Boot** (To organize PSX memory card savegames)
 * **Buttons mapper** for each Joystick
+* **Mouse** support via dashlaunch plugin
+* **Lightgun** support
 * Ingame **Hotkeys**
-* Joystick **Rapid-fire**
+* **Rapid-fire**
 * **Animated** or static frontend **backgrounds**
 * Game **library search filters** (for FBNeo, FBANext and Mame 2003 plus)
 * **Per-core** libretro configuration
-* **Mouse support** via dashlaunch plugin
+* **Background music** for each system
+
 
 ## Emulators
 Salvia provides the following emulators from the latests releases:
@@ -59,6 +62,10 @@ Salvia provides the following emulators from the latests releases:
   - beetle-vb
 * Atari Lynx
   - beetle-lynx
+* Play Station 1
+  - pcsxr-360 (ported to libretro from the Wolf3s repository)
+* 3DO
+  - 3dox (ported to libretro from the Lantus version -> "3dox - Xbox 360 New Years Day Pre-Release - V0.03")
 * Neo Geo Pocket
   - beetle-ngp --|--> They use different romsets
   - FBNeo ------|
@@ -66,8 +73,10 @@ Salvia provides the following emulators from the latests releases:
   - FBNeo
   - FBANext (ported from the magicseb repository)
   - mame-2003-plus
-* Play Station 1
-  - pcsxr-360 (ported to libretro from the Wolf3s repository)
+* MSX
+  - FBNeo
+* Spectrum  
+  - FBNeo
 * MS-DOS
   - dosbox-pure (with dynamic powerpc recompiler working)
 * Commodore 64
@@ -77,12 +86,8 @@ Salvia provides the following emulators from the latests releases:
 * Amiga 500/1200/CD32
   - puae2021
   - puae
-* Atari 8-bit computers (400/800/XL/XE)
+* Atari 5200 and Atari 8-bit computers (400/800/XL/XE)
   - atari800
-* Atari 5200
-  - atari800
-* 3DO
-  - 3dox (ported to libretro from the Lantus version -> "3dox - Xbox 360 New Years Day Pre-Release - V0.03")
 * Quake
   - tyrquake
 * Doom
@@ -398,7 +403,6 @@ For MSX and ZX Spectrum cores, an on-screen overlay keyboard is available and ca
 
 <img width="1281" height="722" alt="image" src="https://github.com/user-attachments/assets/01e73cc0-96b4-4e67-82e5-b78738a58989" />
 
-
 ### QUAKE
 To load the right episode or mod of quake, a subdirectory must be created for each of them. The structure should be as follows:
 ```
@@ -485,6 +489,15 @@ The libretro cheat database offers each game in several *device* variants — `(
 - **Doom** (prboom) and **Quake** (tyrquake) accept their engine's own cheats, not RAM codes. These aren't in the online database, so you make the `.cht` yourself with the classic strings in the `code` field — Doom cheat codes (`iddqd`, `idkfa`, `idclip`, `idbeholdv`…) or Quake console commands (`god`, `noclip`, `impulse 9`…). Note: Doom cheats can't be switched back off once applied.
 - **arcade (FBNeo / MAME)** have their own cheats engine
 - Whatever the device name, the code inside must match the format the core expects — the variants listed in the table above are the ones known to work on each system.
+
+## Background music
+To add your own music while navigating through the menus, you can copy your mp3 files into the directory Usb0:\Salvia\assets\music
+There is an already provided default song named menu.mp3, but you can choose whatever music file you want for each independent core accessing to: 
+
+```
+Options > Emulation > System Advanced Settings > [Megadrive, nes...]
+```
+There is also a new menu option **Audio**, where you can disable the music or set a general volume.
 
 ## Games artwork and titles
 ### Built-in scraper
