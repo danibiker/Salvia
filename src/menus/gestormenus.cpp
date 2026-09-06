@@ -484,7 +484,44 @@ void GestorMenus::poblarMenuVideo(Menu* menuVideo, CfgLoader *refConfig){
 	poblarMenuOverscan(menuOverscan);
 	menuVideo->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.video.overscan"), menuOverscan));
 
+	//--------Menu de lightgun crosshair---------
+	Menu *menuLightgun = new Menu(LanguageManager::instance()->get("menu.video.lightgun"), menuVideo);
+	poblarMenuLightgun(menuLightgun, refConfig);
+	menuVideo->opciones.push_back(new OpcionSubMenu(LanguageManager::instance()->get("menu.video.lightgun"), menuLightgun));	
+}
+
+void GestorMenus::poblarMenuLightgun(Menu* menuLightgun, CfgLoader *refConfig){
 	
+	OpcionBool *opcionEnable = new OpcionBool(
+			trOrDefault("menu.options.lightgun.enabled", "Enable lightgun crosshair"), 
+			&refConfig->configMain[cfg::lightgunCrossEnabled].getBoolRef());
+	menuLightgun->opciones.push_back(opcionEnable);
+
+	std::vector<std::string> crossHairSizes;
+	for (int v = 0; v < LIGHTGUN_SIZES_COUNT; ++v){
+		std::string s = "Crosshair Size " + Constant::TipoToStr(v);
+		crossHairSizes.push_back(trOrDefault("menu.options.lightgun.size" + Constant::TipoToStr(v), s.c_str()));
+	}
+	OpcionLista *lista = new OpcionLista(
+		trOrDefault("menu.options.lightgun.size", "Lightgun crosshair size"),
+		crossHairSizes,
+		&refConfig->configMain[cfg::lightgunCrossSize].getIntRef());
+
+	menuLightgun->opciones.push_back(lista);
+
+
+	std::vector<std::string> crossHairThickness;
+	for (int v = 0; v < LIGHTGUN_THICKNESS_COUNT; ++v){
+		std::string s = "Crosshair thickness " + Constant::TipoToStr(v);
+		crossHairThickness.push_back(trOrDefault("menu.options.lightgun.thickness" + Constant::TipoToStr(v), s.c_str()));
+	}
+	OpcionLista *listaThick = new OpcionLista(
+		trOrDefault("menu.options.lightgun.thickness", "Lightgun crosshair thickness"),
+		crossHairThickness,
+		&refConfig->configMain[cfg::lightgunThickness].getIntRef());
+
+	menuLightgun->opciones.push_back(listaThick);
+
 }
 
 void GestorMenus::poblarMenuAudio(Menu* menuAudio, CfgLoader *refConfig){
@@ -1235,6 +1272,8 @@ void GestorMenus::addControlerOptions(Menu*& menu, int controlId, Joystick *joys
 *
 */
 void GestorMenus::poblarJoystickTypes(Joystick *joystick){
+	t_joyMenuData *menuJoystickRetro = new t_joyMenuData();
+
 	for (int i=0; i < (int)menuAssignRetro->opciones.size(); i++){
 		LOG_DEBUG("%s", menuAssignRetro->opciones[i]->titulo.c_str());
 		if (menuAssignRetro->opciones[i]->tipo == OPC_SUBMENU){
@@ -1261,7 +1300,9 @@ void GestorMenus::poblarJoystickTypes(Joystick *joystick){
 
 			OpcionLista *listaControllersTypes = new OpcionLista(LanguageManager::instance()->get("menu.controller.type"), joystickDesc, &joystick->inputs.joyTypeIdx[i]);
 			listaControllersTypes->callback = &GestorMenus::setControllerType;
-			listaControllersTypes->context = joystick;
+			menuJoystickRetro->joystick = joystick;
+			menuJoystickRetro->menu = menuAssignRetro;
+			listaControllersTypes->context = menuJoystickRetro;
 			submenuJoy->opciones.insert(submenuJoy->opciones.begin(), listaControllersTypes);
 		}
 	}
@@ -1272,8 +1313,33 @@ void GestorMenus::poblarJoystickTypes(Joystick *joystick){
 */
 std::string GestorMenus::setControllerType(void* inst, void *index, void *values) {
 	if (!inst || !index || !values) return "";
-    Joystick* joystick = static_cast<Joystick*>(inst);
-	joystick->updateTypes();
+    t_joyMenuData* joyMenu = static_cast<t_joyMenuData*>(inst);
+	joyMenu->joystick->updateTypes();
+
+	//const int idx = *static_cast<int*>(index);
+	//std::vector<std::string>* labels = static_cast<std::vector<std::string>*>(values);
+	//if (idx < 0 || idx >= (int)labels->size()) return "";
+	//LOG_DEBUG("typeSelected %s", labels->at(idx).c_str());
+	//
+	//for (int i=0; i < MAX_PLAYERS; i++){
+	//	if (joyMenu->joystick->inputs.joyTypeIdx[i] < (int)joyMenu->joystick->g_ports[i].available_types.size()){
+	//		auto joyType = joyMenu->joystick->g_ports[i].available_types[joyMenu->joystick->inputs.joyTypeIdx[i]];
+	//		int optIdx = i;
+	//		if (joyMenu->menu->opciones[optIdx]->tipo == OPC_SUBMENU){
+	//			OpcionSubMenu* submenu = static_cast<OpcionSubMenu*>(joyMenu->menu->opciones[optIdx]);
+	//			//Starting in 1 to not hide the actual joystick selection type
+	//			for (int nButton = 1; nButton < submenu->destino->opciones.size(); ++nButton){
+	//				//if (submenu->destino->opciones[nButton]->tipo == OPC_KEY){								
+	//				//	OpcionKey* key = static_cast<OpcionKey*>(submenu->destino->opciones[nButton]);
+	//				//	key->visible = ((joyType.first & RETRO_DEVICE_MASK) != RETRO_DEVICE_LIGHTGUN);
+	//				//	LOG_DEBUG("turning %s to %s", key->description.c_str(), key->visible ? "on" : "off");
+	//				//}
+	//				submenu->destino->opciones[nButton]->visible = ((joyType.first & RETRO_DEVICE_MASK) != RETRO_DEVICE_LIGHTGUN);
+	//			}
+	//		}
+	//	}
+	//}
+
 	return "";
 }
 
@@ -1700,8 +1766,6 @@ void GestorMenus::addControlerButtons(Menu*& menu, int controlId, Joystick *joys
 		menu->opciones.push_back(new OpcionKey(text, input, &input->mapperCore, controlId,
 			retroBtnValue, KEY_JOY_ANALOG, TipoKeyStr[KEY_JOY_ANALOG], ico_analog_u + (analogIdx % 4)));
 	}
-
-	
 }
 
 int GestorMenus::findAxisPos(int retroDirection){
@@ -2111,28 +2175,36 @@ void GestorMenus::draw(SDL_Surface *video_page){
     //To scroll one letter in one second. We use the face_h because the width of 
     //a letter is not fixed.
     const float pixelsScrollFps = std::max(ceil(face_h / (float)textFps), 1.0f);
+	int listPos = this->iniPos -1;
 
-	for (int i=this->iniPos; i < this->endPos && i < (int)this->menuActual->opciones.size(); i++){
+	for (int i=this->iniPos; i < this->endPos && i < (int)this->menuActual->opciones.size(); ++i){
         const auto& option = this->menuActual->opciones.at(i);
+
+		if (option->visible){
+			listPos++;
+		} else {
+			continue;
+		}
+
 		std::string line;
 		std::string value;
 
 		SDL_Color valueColor = Constant::colors[clWhite].sdlColor;
 
 		if (option->tipo == OPC_SAVESTATE){
-			drawSavestateWithImage(i, (OpcionSavestate *) option, video_page);
+			drawSavestateWithImage(listPos, (OpcionSavestate *) option, video_page);
 			continue;
 		} else if (option->tipo == OPC_ACHIEVEMENT){
-			drawAchievement(i, (OpcionAchievement *) option, video_page);
+			drawAchievement(listPos, (OpcionAchievement *) option, video_page);
 			continue;
 		} else if (option->tipo == OPC_FAQ_SEARCH){
-			drawFaqSearch(i, (OpcionGameFaq *) option, video_page);
+			drawFaqSearch(listPos, (OpcionGameFaq *) option, video_page);
 			continue;
 		} else if (option->tipo == OPC_FAQ_SELECT){
-			drawFaqSelect(i, (OpcionFaq *) option, video_page);
+			drawFaqSelect(listPos, (OpcionFaq *) option, video_page);
 			continue;
 		} else if (option->tipo == OPC_SHOW_IMG){
-			drawImage(i, (OpcionImage *) option, video_page);
+			drawImage(listPos, (OpcionImage *) option, video_page);
 			continue;
 		} else if (option->tipo == OPC_BOOLEANA){
 			line = option->titulo;// + " " + std::string(*((OpcionBool *)option)->valor ? "Y" : "N");
@@ -2166,14 +2238,14 @@ void GestorMenus::draw(SDL_Surface *video_page){
 			line = option->titulo;
 		}
 
-		const int screenPos = i - this->iniPos;
+		const int screenPos = listPos - this->iniPos;
         const int fontHeightRect = screenPos * face_h;
         const int lineBackground = -1;
-        SDL_Color lineTextColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
-		valueColor = i == this->curPos ? Constant::colors[clBlack].sdlColor : valueColor;
+        SDL_Color lineTextColor = listPos == this->curPos ? Constant::colors[clBlack].sdlColor : Constant::colors[clWhite].sdlColor;
+		valueColor = listPos == this->curPos ? Constant::colors[clBlack].sdlColor : valueColor;
 
         //Drawing a faded background selection rectangle
-        if (i == this->curPos){
+        if (listPos == this->curPos){
             int y = this->getY() + fontHeightRect;
             //Gaining some extra fps when the screen resolution is low
 			SDL_Rect rectElem = {this->getX(), y, this->getW() - marginX, face_h};
@@ -2197,9 +2269,9 @@ void GestorMenus::draw(SDL_Surface *video_page){
                     this->getY() + fontHeightRect, lineTextColor, lineBackground);
 
 		if (option->tipo == OPC_KEY && !((OpcionKey *)option)->description.empty()){
-			drawKeys(i, (OpcionKey *)option, video_page);
+			drawKeys(listPos, (OpcionKey *)option, video_page);
 		} else if (option->tipo == OPC_BOOLEANA){
-			drawBooleanSwitch(i, (OpcionBool *)option, video_page);			
+			drawBooleanSwitch(listPos, (OpcionBool *)option, video_page);			
 		} else if (!value.empty()){
 			const int pixelDato = Fonts::getSize(fontMenu, value);
 			Fonts::drawTextTransparent(video_page, fontMenu, value.c_str(), this->getX() + this->getW() - marginX - pixelDato - 1, 

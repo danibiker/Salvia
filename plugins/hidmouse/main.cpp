@@ -8,6 +8,11 @@
     se descarga), asi que el raton sobrevive a los XLaunchNewImage de Salvia: sin
     crash y sin replug.
 
+    VARIOS RATONES: se reclaman hasta HIDMOUSE_MAX_DEVICES y cada uno publica sus
+    propios acumuladores en g_hidMouseShared.dev[i] (bloque de extension), ademas de
+    seguir sumando al agregado del bloque base -- que es lo que quiere el cursor del
+    menu, y lo unico que entienden los consumidores ya compilados.
+
     Codigo de lectura HID portado del port de Salvia (SDL_xboxhidmouse.cpp), que a su
     vez viene de x360remap/hiddriver360 (EinTim23). Aqui se descarta TODO lo de
     convertir el raton en mando (XAM/XInput), mapping, calibracion y Studio: el plugin
@@ -52,8 +57,9 @@ static void PlgDbg(const char* fmt, ...) {
 #endif
 
 /* ============ Struct compartida (el canal plugin -> Salvia) ============
- * Es un GLOBAL del plugin. Tras compilar, busca su VA en el .map y ponla en
- * HIDMOUSE_SHARED_ADDR (HidMouseShared.h) para que Salvia la lea. */
+ * Es un GLOBAL del plugin. No hace falta su VA: el consumidor escanea la imagen
+ * del plugin (base fija 0x81F00000) buscando la firma magic+version, asi que
+ * puede moverse libremente al recompilar. Ver HidMouseShared.h. */
 HidMouseShared g_hidMouseShared = { 0 };
 
 /* ===================== Estructuras del stack USB (verbatim) ============ */
@@ -219,7 +225,28 @@ struct MouseSlot {
 	void*                   reportData;
 	uint16_t                reportSize;
 };
-static MouseSlot g_mice[4] = { {0} };
+static MouseSlot g_mice[HIDMOUSE_MAX_DEVICES] = { {0} };
+
+/* Recalcula lo que depende del CONJUNTO de ratones: cuantos hay conectados y el
+ * estado de botones del raton virtual agregado.
+ *
+ * El agregado hace el OR de los botones de todos los ratones en vez de quedarse
+ * con el ultimo report, que es lo que hacia antes: con dos ratones, el ultimo en
+ * reportar ponia a cero el boton que el otro tenia pulsado. Con un solo raton el
+ * OR es exactamente el valor de ese raton, asi que no cambia nada. */
+static void RefreshAggregate(void)
+{
+	uint32_t btn = 0;
+	uint32_t n   = 0;
+	for (int i = 0; i < HIDMOUSE_MAX_DEVICES; i++) {
+		if (!g_hidMouseShared.dev[i].connected)
+			continue;
+		btn |= g_hidMouseShared.dev[i].buttons;
+		n++;
+	}
+	g_hidMouseShared.numDevices = n;
+	g_hidMouseShared.buttons    = btn;
+}
 
 /* ===================== Direcciones por build ========================== */
 
@@ -311,20 +338,36 @@ static int MouseInterruptHandler(DWORD trbParam, int32_t /*a2*/)
 		return 0;
 
 	int index = -1;
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < HIDMOUSE_MAX_DEVICES; i++) {
 		if (g_mice[i].drv == drv) { index = i; break; }
 	}
 	if (index < 0)
 		return UsbdQueueAsyncTransfer(drv->deviceHandle, &drv->interruptTrb);
 
 	const BootMouseReport* r = (const BootMouseReport*)drv->interruptTrb.buffer;
+	HidMouseDevice* d = &g_hidMouseShared.dev[index];
 
-	/* Publica en la struct compartida que lee Salvia. */
+	/* 1) Slot de ESTE raton (bloque de extension): es lo que permite dos punteros
+	 *    independientes, p.ej. dos lightgun. */
+	d->accumX += r->x;
+	d->accumY += r->y;
+	if (d->hasWheel)
+		d->accumW += r->wheel;
+	d->buttons = r->buttons;
+
+	/* 2) Raton virtual agregado (bloque base): la suma de todos. Es lo que mueve el
+	 *    cursor del menu y lo unico que ve un consumidor que no conozca la
+	 *    extension. De los botones se encarga RefreshAggregate. */
 	g_hidMouseShared.accumX += r->x;
 	g_hidMouseShared.accumY += r->y;
-	if (g_mice[index].reportSize >= 4)
+	if (d->hasWheel)
 		g_hidMouseShared.accumW += r->wheel;
-	g_hidMouseShared.buttons = r->buttons;
+	RefreshAggregate();
+
+	/* Los seq van al final y detras de una barrera, para que el consumidor pueda
+	 * usarlos como "todo lo de antes ya es visible" y no leer un estado a medias. */
+	__lwsync();
+	d->seq++;
 	g_hidMouseShared.seq++;
 
 	return UsbdQueueAsyncTransfer(drv->deviceHandle, &drv->interruptTrb);
@@ -353,7 +396,7 @@ static int MouseHidAddDeviceHook(deviceHandle* dev)
 	HidSettle();
 
 	int index = -1;
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < HIDMOUSE_MAX_DEVICES; i++) {
 		if (!g_mice[i].drv) { index = i; break; }
 	}
 	if (index < 0)
@@ -409,6 +452,24 @@ static int MouseHidAddDeviceHook(deviceHandle* dev)
 	g_mice[index].reportData = rd;
 	g_mice[index].reportSize = pktSize;
 
+	/* Publica el slot en la struct compartida. Los acumuladores NO se ponen a cero:
+	 * son cumulativos y el consumidor saca el delta por diferencia, asi que
+	 * resetearlos aqui le meteria un salto enorme a quien ya estuviera cebado.
+	 * Dejandolos donde estan, el delta es 0 hasta que el raton nuevo se mueva. */
+	{
+		HidMouseDevice* d = &g_hidMouseShared.dev[index];
+		d->buttons  = 0;
+		d->hasWheel = (pktSize >= 4) ? 1u : 0u;
+		/* idVendor/idProduct vienen little-endian en el descriptor, igual que
+		 * wMaxPacketSize. */
+		d->vid      = (uint32_t)swap16(dd->idVendor);
+		d->pid      = (uint32_t)swap16(dd->idProduct);
+		d->reserved = 0;
+		__lwsync();          /* metadatos visibles ANTES de anunciar el slot */
+		d->connected = 1;
+	}
+	RefreshAggregate();
+
 	PLGDBG("RATON RECLAMADO slot=%d pktSize=%d", index, (int)pktSize);
 
 	HidSettle();
@@ -419,7 +480,7 @@ static int MouseHidAddDeviceHook(deviceHandle* dev)
 static int MouseHidRemoveDeviceHook(deviceHandle* dev)
 {
 	int index = -1;
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < HIDMOUSE_MAX_DEVICES; i++) {
 		if (g_mice[i].dev == dev) { index = i; break; }
 	}
 	if (index < 0)
@@ -436,10 +497,17 @@ static int MouseHidRemoveDeviceHook(deviceHandle* dev)
 		g_mice[index].reportData = 0;
 		g_mice[index].reportSize = 0;
 
-		/* Si no queda ningun raton, botones a 0 (evita boton "pegado"). */
-		bool any = false;
-		for (int i = 0; i < 4; i++) if (g_mice[i].drv) { any = true; break; }
-		if (!any) g_hidMouseShared.buttons = 0;
+		/* Baja el slot ANTES de recalcular, para que sus botones dejen de contar en
+		 * el OR del agregado. Antes esto solo se limpiaba cuando no quedaba NINGUN
+		 * raton, asi que desconectar uno con el boton pulsado lo dejaba pegado en el
+		 * agregado hasta que el otro reportase. Los acumuladores se quedan como
+		 * estan (cumulativos, ver el reclamo). */
+		g_hidMouseShared.dev[index].connected = 0;
+		g_hidMouseShared.dev[index].buttons   = 0;
+		g_hidMouseShared.dev[index].hasWheel  = 0;
+		g_hidMouseShared.dev[index].vid       = 0;
+		g_hidMouseShared.dev[index].pid       = 0;
+		RefreshAggregate();
 
 		delete drv;
 		dev->driver = 0;
@@ -530,7 +598,17 @@ BOOL APIENTRY DllMain(HANDLE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 		g_hidMouseShared.accumW  = 0;
 		g_hidMouseShared.buttons = 0;
 
+		/* Bloque de extension (deltas por raton). Va detras del base y se anuncia con
+		 * su propia firma: un consumidor antiguo lee el agregado y ni se entera de que
+		 * esto existe. */
+		g_hidMouseShared.extMagic   = HIDMOUSE_EXT_MAGIC;
+		g_hidMouseShared.extVersion = HIDMOUSE_EXT_VERSION;
+		g_hidMouseShared.maxDevices = HIDMOUSE_MAX_DEVICES;
+		g_hidMouseShared.numDevices = 0;
+		memset((void*)g_hidMouseShared.dev, 0, sizeof(g_hidMouseShared.dev));
+
 		if (InstallHooks()) {
+			__lwsync();   /* todo lo de arriba visible antes de anunciar el canal */
 			g_hidMouseShared.magic = HIDMOUSE_SHARED_MAGIC;   /* listo: Salvia puede leer */
 			PLGDBG0("plugin activo");
 		} else {

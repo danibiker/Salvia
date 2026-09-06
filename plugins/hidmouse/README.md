@@ -35,6 +35,19 @@ No need to look up any addresses or touch constants. The plugin is a sysdll with
 
 > Note: If you ever change `baseaddr` in `xex.xml`, update `HIDMOUSE_PLUGIN_BASE` in `HidMouseShared.h` and in the Salvia reader (and `HIDMOUSE_SHARED_VERSION` if the struct layout changes). With the default base, nothing needs to be changed.
 
+## Multiple mice (per-device deltas)
+
+The plugin claims up to `HIDMOUSE_MAX_DEVICES` (4) boot-protocol mice. The shared struct has two blocks:
+
+- **Base block (version 1, unchanged)** — `magic`, `version`, `seq`, `accumX/Y/W`, `buttons`: a single *virtual* mouse that is the **sum** of every connected mouse (buttons are the OR). This is what drives the menu cursor, and the only thing consumers compiled before this change can see.
+- **Extension block (`extMagic` = `HMX2`, `extVersion` = 2)** — `maxDevices`, `numDevices` and `dev[]`, with **one set of cumulative accumulators per mouse** plus `buttons`, `seq`, `connected`, `hasWheel` and `vid`/`pid`. This is what allows two independent pointers (e.g. two `RETRO_DEVICE_LIGHTGUN`).
+
+`HIDMOUSE_SHARED_VERSION` deliberately **stays at 1**: the consumer locates the channel by scanning for the two-word signature `magic`+`version`, so bumping it would make every already-built Salvia `.xex` silently fail to find the channel. Anything new goes *behind* the base block, announced with its own signature. Both compatibility directions work: an old plugin with a new Salvia (the ext signature does not match → one mouse, as before), and a new plugin with an old Salvia (reads the aggregate, ignores the rest).
+
+On the consumer side, Salvia reads these slots through `XBOX_HIDMouse_DeviceCount` / `DeviceConnected` / `DrainDevice` (libSDLx360, `SDL_xboxhidmouse.cpp`) and integrates each position itself. They deliberately do **not** go through SDL: SDL 1.2 has a single global cursor and would merge them again. Only the aggregate goes to SDL, which is what moves the menu cursor.
+
+Slots are assigned first-free, so a replug can reorder them — use `vid`/`pid` if you need a stable "this mouse is player 2".
+
 ## Deployment
 
 1. Copy `hidmouse.xex` to `Hdd1:\` (or wherever your plugins are located).

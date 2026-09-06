@@ -59,6 +59,13 @@ static void pressSimulatedKey(const t_cap_key &keycap) {
 
 void update_input() {
 	gameMenu->joystick->pollKeys(gameMenu->getEmuStatus());
+
+	/* Posicion de cada raton fisico. Va aqui y no dentro de pollKeys porque hace
+	 * falta la superficie contra la que SDL acota el raton, que la sabe el menu. */
+	{
+		SDL_Surface* ms = gameMenu->getMouseSurface();
+		gameMenu->joystick->updateMice(ms ? ms->w : 0, ms ? ms->h : 0);
+	}
 	gameMenu->running = !gameMenu->joystick->evento.quit;
 
 	/* Fuera del 'if': si se cierra el teclado en pantalla justo despues de pulsar,

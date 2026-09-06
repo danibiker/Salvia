@@ -14,7 +14,7 @@
 #include <vector>
 #include <string>
 
-// --- Definici�n de tipos de opciones ---
+// --- Definicion de tipos de opciones ---
 enum TipoOpcion { OPC_BOOLEANA, OPC_LISTA, OPC_LISTA_REF, OPC_SUBMENU, OPC_INT, OPC_KEY, OPC_EXEC, OPC_SHOW_TXT, OPC_SHOW_TXT_VAL, OPC_SHOW_DYNTXT_VAL, OPC_SAVESTATE, OPC_ACHIEVEMENT, 
 	OPC_FAQ_SEARCH, OPC_FAQ_SELECT, OPC_FAQ_TXT, OPC_SHOW_IMG, OPC_UNDEFINED};
 
@@ -80,9 +80,10 @@ public:
     TipoOpcion tipo;
 	int icon;
 	bool editable;
+	bool visible;
 
-    Opcion(std::string t, TipoOpcion tp) : titulo(t), tipo(tp), icon(-1), editable(false) {}
-	Opcion(std::string t, TipoOpcion tp, int ico) : titulo(t), tipo(tp), icon(ico), editable(false) {}
+    Opcion(std::string t, TipoOpcion tp) : titulo(t), tipo(tp), icon(-1), editable(false), visible(true) {}
+	Opcion(std::string t, TipoOpcion tp, int ico) : titulo(t), tipo(tp), icon(ico), editable(false), visible(true) {}
 	virtual std::string ejecutar() = 0; // Metodo virtual puro
     virtual ~Opcion() {}
 };
@@ -430,6 +431,11 @@ private:
 		}
 	};
 
+	struct t_joyMenuData{
+		Menu* menu;
+		Joystick* joystick;
+	} ;
+
     // Lista de todos los menus para liberar memoria al final
     std::vector<Menu*> todosLosMenus;
 	Menu* menuCoreOptions;
@@ -502,8 +508,9 @@ private:
 	void poblarMenuVideo(Menu* menuVideo, CfgLoader *refConfig);
 	void poblarMenuPad(Menu* menuEntrada, CfgLoader *refConfig, Joystick *joystick);
 	void poblarMenuEmulacion(Menu* menuEmulation, CfgLoader *refConfig);
-	void poblarMenuAudio(Menu* menuAudio, CfgLoader *refConfig);
+	void poblarMenuAudio(Menu* menuLightgun, CfgLoader *refConfig);
 	void poblarMenuLogros(Menu* parentAchievements, CfgLoader *refConfig);
+	void poblarMenuLightgun(Menu* menuAudio, CfgLoader *refConfig);
 	void checkMultipleSystemCore(CfgLoader *refConfig, Menu *menu, int coreIdx);
 	void addMusicOptionList(CfgLoader *refConfig, int posCore, std::vector<Opcion*> &opciones);
 
@@ -670,4 +677,3 @@ public:
         return (instanciaGestor->*execfunc)(data);
     }
 };
-

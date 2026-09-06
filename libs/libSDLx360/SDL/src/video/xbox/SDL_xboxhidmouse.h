@@ -54,6 +54,34 @@ void XBOX_HIDMouse_Drain(int* dx, int* dy, int* dwheel, unsigned int* buttons);
  * SDL_xboxmouse.c; llamada desde mouse_update() en SDL_xboxevents.c. */
 void XBOX_MouseUpdateHID(void);
 
+/* --- Canal POR RATON (no pasa por SDL) ------------------------------------
+ * SDL 1.2 tiene un unico cursor global, asi que todo lo que se empuje por
+ * SDL_PrivateMouseMotion se fusiona en uno solo. Para tener dos punteros
+ * independientes (p.ej. dos RETRO_DEVICE_LIGHTGUN) el consumidor lee estos
+ * deltas por dispositivo y se integra la posicion el mismo. Por SDL sigue yendo
+ * solo el raton virtual agregado, que es lo que mueve el cursor del menu.
+ *
+ * Requiere un plugin con el bloque de extension; con uno antiguo DeviceCount
+ * devuelve 0 y no hay nada por dispositivo (el agregado sigue funcionando). */
+
+/* Numero de SLOTS de raton que expone el plugin, conectados o no. 0 = el plugin
+ * no publica deltas por dispositivo. Los slots NO son contiguos: hay que
+ * recorrerlos preguntando por DeviceConnected. */
+int  XBOX_HIDMouse_DeviceCount(void);
+
+/* 1 si ese slot tiene un raton conectado ahora mismo. */
+int  XBOX_HIDMouse_DeviceConnected(int idx);
+
+/* VID/PID del raton del slot (0 si no se pudo leer). Los slots se asignan por
+ * primer hueco libre, asi que un replug puede reordenarlos: esto es lo que
+ * permite fijar "este raton es el jugador 2" si hace falta. */
+int  XBOX_HIDMouse_DeviceInfo(int idx, unsigned int* vid, unsigned int* pid);
+
+/* Deltas acumulados de UN slot desde la llamada anterior (misma convencion que
+ * XBOX_HIDMouse_Drain, con su propio "ultimo leido" por slot). */
+void XBOX_HIDMouse_DrainDevice(int idx, int* dx, int* dy, int* dwheel,
+                               unsigned int* buttons);
+
 /** Indica si se ha podido cargar el plugin del raton */
 int XBOX_isHidMousePluginConnected();
 

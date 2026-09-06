@@ -411,6 +411,13 @@ int processInputs(GameMenu*& gameMenu, ListMenu &listMenu, bool generalConfig){
 		
 	} else {
 		gameMenu->joystick->pollKeys(gameMenu->getEmuStatus());
+		/* Drenar tambien aqui los ratones extra: sus acumuladores viven en el
+		 * plugin y siguen creciendo mientras no se lean, asi que sin esto la mira
+		 * pegaria un salto al volver del menu. */
+		{
+			SDL_Surface* ms = gameMenu->getMouseSurface();
+			gameMenu->joystick->updateMice(ms ? ms->w : 0, ms ? ms->h : 0);
+		}
 
 		if (gameMenu->isOnscreenKeybEnabled()){
 			//Se procesan las acciones del teclado que se muestra en un overlay. Solo MSX y SPECTRUM

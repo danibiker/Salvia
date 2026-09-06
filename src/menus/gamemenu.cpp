@@ -25,9 +25,11 @@ GameMenu::GameMenu(CfgLoader *cfgLoader) : m_csInited(false)
 	lastStatus = EMU_MENU;
 	onscreenKeyboard = false;
 	/* Reticula del lightgun: sin dibujar todavia, asi que no hay rect que borrar. */
-	crosshairDrawn = false;
-	crosshairRect.x = crosshairRect.y = 0;
-	crosshairRect.w = crosshairRect.h = 0;
+	for (int i = 0; i < MAX_PLAYERS; i++){
+		crosshairDrawn[i] = false;
+		crosshairRect[i].x = crosshairRect[i].y = 0;
+		crosshairRect[i].w = crosshairRect[i].h = 0;
+	}
 	romLoaded = false;
 	gameTicks.ticks = 0;
 
@@ -2430,7 +2432,8 @@ SDL_Surface* GameMenu::getMouseSurface(){
 }
 
 void GameMenu::drawLightgunCrosshair(){
-	if (!this->overlay) return;
+	const bool enabled = this->cfgLoader->configMain[cfg::lightgunCrossEnabled].valueBool;
+	if (!this->overlay || !enabled) return;
 
 	/* Sin overlay propio (Windows sin SALVIA_GPU_VIDEO, ver engine.cpp) el
 	 * overlay ES gameScreen: la misma superficie y sin canal alfa.  Ahi
@@ -2440,35 +2443,47 @@ void GameMenu::drawLightgunCrosshair(){
 	 * distintas y esto no hace nada. */
 	if (this->overlay == this->gameScreen) return;
 
-	/* Hay algun puerto de pistola? Se compara el tipo BASE del device id, no el
-	 * id completo: asi vale para cualquier subclase (GunCon, Justifier) y para
-	 * cualquier core, sin que el frontend tenga que conocer sus constantes. */
-	int gunPort = -1;
-	if (this->joystick){
-		for (int p = 0; p < MAX_PLAYERS; p++){
+	SDL_Surface* vs = getMouseSurface();
+	const bool haveSurface = (vs && vs->w >= 2 && vs->h >= 2);
+
+	/* Una reticula POR PUERTO de pistola: con dos ratones se pueden tener dos
+	 * pistolas independientes (ver Joystick::updateMice) y cada jugador necesita
+	 * ver la suya. Que raton lleva cada puerto lo dice mouseOfPort; -1 = ese
+	 * puerto se quedo sin raton (dos pistolas y uno solo) y no se dibuja nada.
+	 *
+	 * Se compara el tipo BASE del device id, no el id completo: asi vale para
+	 * cualquier subclase (GunCon, Justifier) y para cualquier core, sin que el
+	 * frontend tenga que conocer sus constantes. */
+	int miOf[MAX_PLAYERS];
+	bool someMiceFound = false;
+	for (int p = 0; p < MAX_PLAYERS; p++){
+		int mi = -1;
+		if (haveSurface && this->joystick){
 			const int dev = this->joystick->g_ports[p].current_device_id;
 			if (dev > 0 && (dev & 0xFF) == RETRO_DEVICE_LIGHTGUN){
-				gunPort = p;
-				break;
+				mi = this->joystick->inputs.mouseOfPort[p];
+				if (mi >= t_joy_state::MAX_MICE) mi = -1;
+				else someMiceFound = true;
 			}
 		}
+		miOf[p] = mi;
 	}
 
-	if (gunPort < 0){
-		/* Sin pistola: borrar la ultima posicion UNA vez y no volver a tocar el
-		 * overlay. Si no se borrase, la reticula se quedaria pegada al cambiar
-		 * de dispositivo con el juego en marcha. */
-		if (this->crosshairDrawn){
-			clearOverlayRect(this->crosshairRect);
-			this->crosshairDrawn = false;
+	//Si no hay ratones, salimos
+	if (!someMiceFound) return;
+
+	/* Borrar TODAS las posiciones anteriores ANTES de dibujar ninguna: puerto a
+	 * puerto, el borrado de la segunda mira se comeria un trozo de la primera
+	 * cuando se cruzan. Y al dejar de haber pistola, esto la borra una vez y no
+	 * se vuelve a tocar el overlay (si no, se quedaria pegada). */
+	for (int p = 0; p < MAX_PLAYERS; p++){
+		if (this->crosshairDrawn[p]){
+			clearOverlayRect(this->crosshairRect[p]);
+			this->crosshairDrawn[p] = false;
 		}
-		return;
 	}
 
-	SDL_Surface* vs = getMouseSurface();
-	if (!vs || vs->w < 2 || vs->h < 2) return;
-
-	const t_joy_state& in = this->joystick->inputs;
+	if (!haveSurface || !this->joystick) return;
 
 	/* La fraccion del raton es la MISMA que manda el core al GunCon (ver la
 	 * rama RETRO_DEVICE_LIGHTGUN de salvia.cpp), pero hay que repartirla sobre
@@ -2484,46 +2499,76 @@ void GameMenu::drawLightgunCrosshair(){
 	SDL_XBOX_GetGameRectOnOverlay(&gx, &gy, &gw, &gh);
 	if (gw < 2 || gh < 2) { gx = 0; gy = 0; gw = this->overlay->w; gh = this->overlay->h; }
 
-	int cx = gx + (int)(((long)in.mouse_x * (gw - 1)) / (vs->w - 1));
-	int cy = gy + (int)(((long)in.mouse_y * (gh - 1)) / (vs->h - 1));
+	const int posCrossSize = this->cfgLoader->configMain[cfg::lightgunCrossSize].valueInt;
+	int sizeDivisor = LIGHTGUN_SIZES[0];
+	if (posCrossSize >= 0 && posCrossSize < LIGHTGUN_SIZES_COUNT){
+		sizeDivisor = LIGHTGUN_SIZES[posCrossSize];
+	}
+
+	const int posCrossThickness = this->cfgLoader->configMain[cfg::lightgunThickness].valueInt;
+	int lineThickness = LIGHTGUN_THICKNESS[1];
+	if (posCrossThickness >= 0 && posCrossThickness < LIGHTGUN_THICKNESS_COUNT){
+		lineThickness = LIGHTGUN_THICKNESS[posCrossThickness];
+	}
 
 	/* Tamano proporcional al alto para que se vea igual en 480p y en 720p. */
-	int rad = this->overlay->h / 48;
+	int rad = this->overlay->h / sizeDivisor;
 	if (rad < 4) rad = 4;
-	const int gap = rad / 2 + 1;
-	const int arm = rad;
+	const int gap = rad / 3 + 1;
+	const int arm = rad * 2;
 	const int ext = rad + gap + arm + 1;
-
-	/* Borrar la posicion anterior ANTES de dibujar la nueva. */
-	if (this->crosshairDrawn)
-		clearOverlayRect(this->crosshairRect);
 
 	/* 0xRRGGBBAA: SDL_gfx toma el alfa en el byte BAJO (mira el
 	 * `(color & 255) == 255` de hlineColor), no un pixel del formato de la
-	 * superficie. Rojo opaco. */
-	const Uint32 col = 0xFF0000FFu;
+	 * superficie. Un color por jugador para poder distinguir las miras cuando hay
+	 * dos; el jugador 1 se queda con el rojo de siempre. */
+	static const Uint32 crossColors[MAX_PLAYERS] = {
+		0xFF0000FFu,   /* rojo  */
+		0x30A0FFFFu,   /* azul  */
+		0x40D040FFu,   /* verde */
+		0xFFC000FFu    /* ambar */
+	};
 
-	/* circleColor y NO aacircleColor: la version antialiased blendea por
-	 * software contra el overlay, que esta TRANSPARENTE (negro con alfa 0).  En
-	 * _putPixelAlpha un borde con cobertura 128 sale (127,0,0) con alfa 127, y
-	 * la GPU compone con alfa RECTO -> el borde queda al doble de oscuro del que
-	 * toca: halo sucio.  Y aaellipseColor replota los pixeles de los ejes, que al
-	 * blendear se oscurecen dos veces: motas.  circleColor con alfa 255 escribe
-	 * directo (pixelColorNolock) y el replotado pasa a ser inocuo. */
-	circleColor(this->overlay, cx, cy, rad, col);
-	hlineColor(this->overlay, cx - rad - gap - arm, cx - rad - gap, cy, col);
-	hlineColor(this->overlay, cx + rad + gap, cx + rad + gap + arm, cy, col);
-	vlineColor(this->overlay, cx, cy - rad - gap - arm, cy - rad - gap, col);
-	vlineColor(this->overlay, cx, cy + rad + gap, cy + rad + gap + arm, col);
-	pixelColor(this->overlay, cx, cy, col);
+	const t_joy_state& in = this->joystick->inputs;
+	const uint8_t diffThickness = lineThickness / 2;
 
-	/* Rect sucio para el frame siguiente. No se acota a la superficie: tanto
-	 * SDL_FillRect como las primitivas de SDL_gfx recortan solas. */
-	this->crosshairRect.x = (Sint16)(cx - ext);
-	this->crosshairRect.y = (Sint16)(cy - ext);
-	this->crosshairRect.w = (Uint16)(ext * 2 + 1);
-	this->crosshairRect.h = (Uint16)(ext * 2 + 1);
-	this->crosshairDrawn  = true;
+	for (int p = 0; p < MAX_PLAYERS; p++){
+		const int mi = miOf[p];
+		if (mi < 0) continue;
+
+		const int cx = gx + (int)(((long)in.mice_x[mi] * (gw - 1)) / (vs->w - 1));
+		const int cy = gy + (int)(((long)in.mice_y[mi] * (gh - 1)) / (vs->h - 1));
+		const Uint32 col = crossColors[p];
+
+		/* circleColor y NO aacircleColor: la version antialiased blendea por
+		 * software contra el overlay, que esta TRANSPARENTE (negro con alfa 0).  En
+		 * _putPixelAlpha un borde con cobertura 128 sale (127,0,0) con alfa 127, y
+		 * la GPU compone con alfa RECTO -> el borde queda al doble de oscuro del que
+		 * toca: halo sucio.  Y aaellipseColor replota los pixeles de los ejes, que al
+		 * blendear se oscurecen dos veces: motas.  circleColor con alfa 255 escribe
+		 * directo (pixelColorNolock) y el replotado pasa a ser inocuo. */
+		//circleColor(this->overlay, cx, cy, rad, col);
+		
+		//hlineColor(this->overlay, cx - rad - gap - arm, cx - rad - gap, cy, col);
+		//hlineColor(this->overlay, cx + rad + gap, cx + rad + gap + arm, cy, col);
+		//vlineColor(this->overlay, cx, cy - rad - gap - arm, cy - rad - gap, col);
+		//vlineColor(this->overlay, cx, cy + rad + gap, cy + rad + gap + arm, col);
+
+		boxColor(this->overlay, cx - rad - gap - arm, cy - diffThickness, cx - rad - gap, cy + diffThickness, col); //Left
+		boxColor(this->overlay, cx + rad + gap, cy - diffThickness, cx + rad + gap + arm, cy + diffThickness, col); //Right
+		boxColor(this->overlay, cx - diffThickness, cy - rad - gap - arm, cx + diffThickness, cy - rad - gap, col); //Top
+		boxColor(this->overlay, cx - diffThickness, cy + rad + gap, cx + diffThickness, cy + rad + gap + arm, col); //Bottom
+
+		//pixelColor(this->overlay, cx, cy, col);
+
+		/* Rect sucio para el frame siguiente. No se acota a la superficie: tanto
+		 * SDL_FillRect como las primitivas de SDL_gfx recortan solas. */
+		this->crosshairRect[p].x = (Sint16)(cx - ext);
+		this->crosshairRect[p].y = (Sint16)(cy - ext);
+		this->crosshairRect[p].w = (Uint16)(ext * 2 + 1);
+		this->crosshairRect[p].h = (Uint16)(ext * 2 + 1);
+		this->crosshairDrawn[p]  = true;
+	}
 }
 
 void GameMenu::clearOverlay(){
@@ -2531,7 +2576,7 @@ void GameMenu::clearOverlay(){
 	/* Un borrado de TODA la superficie invalida el rect de la reticula: si no,
 	 * al volver al juego se borraria un rect sobre lo que acabo de pintar el
 	 * menu, dejando un agujero transparente (ver drawLightgunCrosshair). */
-	crosshairDrawn = false;
+	memset(crosshairDrawn, 0, sizeof(crosshairDrawn));
 }
 
 void GameMenu::clearOverlayRect(SDL_Rect& rect){
@@ -2545,7 +2590,7 @@ void GameMenu::fillOverlay(int colorIndex){
 	/* Un borrado de TODA la superficie invalida el rect de la reticula: si no,
 	 * al volver al juego se borraria un rect sobre lo que acabo de pintar el
 	 * menu, dejando un agujero transparente (ver drawLightgunCrosshair). */
-	crosshairDrawn = false;
+	memset(crosshairDrawn, 0, sizeof(crosshairDrawn));
 }
 
 void GameMenu::fillOverlayAlpha(int colorIndex, int alpha){
@@ -2554,7 +2599,7 @@ void GameMenu::fillOverlayAlpha(int colorIndex, int alpha){
 		const Uint32 colorA = SDL_MapRGBA(this->overlay->format, col.r, col.g, col.b, alpha);
 		SDL_FillRect(this->overlay, NULL, colorA);
 	}
-	crosshairDrawn = false;   /* igual que fillOverlay */
+	memset(crosshairDrawn, 0, sizeof(crosshairDrawn));   /* igual que fillOverlay */
 }
 
 void GameMenu::drawSelectedKey(TTF_Font* font, t_keyboard& keyb, int row, int col){

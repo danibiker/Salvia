@@ -29,6 +29,9 @@ svColor Constant::colors[clTotalColors] = {
 	{{0,255,197}, 255}		    //clHighligtOption
 }; 
 
+const int LIGHTGUN_SIZES[LIGHTGUN_SIZES_COUNT] = {100, 80, 60, 40};
+const int LIGHTGUN_THICKNESS[LIGHTGUN_THICKNESS_COUNT] = {1, 3, 5, 7};
+
 const char *MEDIAS_TO_FIND[] = {"sstitle", "ss", "box-2D"};
 const char *ASSETS_DIR[] = {"snaptit", "snap", "box2d", "synopsis"};
 const std::string CFG_JOY_EXT = ".joy";

@@ -437,6 +437,12 @@ extern const std::string PASS_MASK;
 extern const char SYMBOLS_TO_SPACE[];
 extern const char SYMBOLS_TO_REMOVE[];
 
+#define LIGHTGUN_SIZES_COUNT 4
+extern const int LIGHTGUN_SIZES[LIGHTGUN_SIZES_COUNT];
+
+#define LIGHTGUN_THICKNESS_COUNT 4
+extern const int LIGHTGUN_THICKNESS[LIGHTGUN_THICKNESS_COUNT];
+
 typedef enum {
     launch_system,          //0
     launch_spawn,           //1
@@ -450,7 +456,6 @@ enum SYNC_TYPES{
 	SYNC_NONE,
 	SYNC_FAST_FORWARD
 };
-
 
 /* SDL 1.2: Definir mascaras segun el orden de bytes del sistema */
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN

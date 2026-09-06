@@ -167,6 +167,9 @@ class Joystick{
         ~Joystick();
 
 		bool pollKeys(int);
+		/* Posicion de cada raton fisico. spanW/spanH = superficie contra la que
+		 * SDL acota su raton (GameMenu::getMouseSurface). Llamar 1 vez por poll. */
+		void updateMice(int spanW, int spanH);
 		bool init_all_joysticks();
 		void close_joysticks();
 		int getNumJoysticks(){return mNumJoysticks;}

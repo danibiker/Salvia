@@ -550,5 +550,8 @@ if you want manually generate the titles for each game, a script is provided in 
 # Compiling
 [see COMPILING.md](COMPILING.md)
 
+# Video shaders
+[see SHADERS.md](SHADERS.md)
+
 # License
 This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.

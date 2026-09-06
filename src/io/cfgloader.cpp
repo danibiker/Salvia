@@ -208,6 +208,17 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::overscan_y].desc = "#Sets the frontend overscan to enlarge or shrink the y axis of the frontend screen"
 		"\n#It doesn't affect the game screen";
 
+	configMain[cfg::lightgunCrossEnabled] = cfg::t_cfg_props("lightgunCrossEnabled", true);
+	configMain[cfg::lightgunCrossEnabled].desc = "#Enable or disable the lightgun crosshair when selected";
+
+	configMain[cfg::lightgunCrossSize] = cfg::t_cfg_props("lightgunCrossSize", (int)0);
+	configMain[cfg::lightgunCrossSize].desc = "#Set the size of the lightgun crosshair";
+
+	configMain[cfg::lightgunThickness] = cfg::t_cfg_props("lightgunThickness", (int)1);
+	configMain[cfg::lightgunThickness].desc = "#Set the thickness of the lightgun crosshair";
+	
+	
+
 	struct retro_system_info info;
 	memset(&info, 0, sizeof(info));
 	retro_get_system_info(&info);

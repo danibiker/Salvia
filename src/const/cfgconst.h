@@ -15,6 +15,7 @@ namespace cfg {
 			showFps, integerScale, animBG, musicVolume, musicEnabled, musicFile,
 			mainLang, scrapRegion, scrapLang, scrapOrigin, scrapUser, scrapPass, apikeytgdb, raUser, raPass, enableAchievements, hardcoreRA,
 			showEmptyEmulators, overscan_x, overscan_y, resolutionIndex,
+			lightgunCrossEnabled, lightgunCrossSize, lightgunThickness,
 			lastOptSel,
 			MAIN_CFG_MAX} MAIN_CFG_PROPS_KEYS;
 
@@ -39,7 +40,7 @@ namespace cfg {
 			*this = std::move(other);
 		}
 
-		// Operador de asignaci�n de movimiento
+		// Operador de asignacion de movimiento
 		t_emu_props& operator=(t_emu_props&& other) {
 			if (this != &other) {
 				values      = std::move(other.values);

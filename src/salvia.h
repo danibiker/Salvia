@@ -263,6 +263,13 @@ DWORD WINAPI th_printLoading(LPVOID data) {
 				}
 				//Procesamos las hotkeys
 				gameMenu->joystick->pollKeys(gameMenu->getEmuStatus());
+				/* Drenar tambien aqui los ratones extra: sus acumuladores viven en el
+				 * plugin y siguen creciendo mientras no se lean, asi que sin esto la mira
+				 * pegaria un salto al volver del menu. */
+				{
+					SDL_Surface* ms = gameMenu->getMouseSurface();
+					gameMenu->joystick->updateMice(ms ? ms->w : 0, ms ? ms->h : 0);
+				}
 				HOTKEYS_LIST hotkey = gameMenu->joystick->findHotkey();
 				if (hotkey == HK_EXIT_GAME){
 					LOG_ERROR("Requested exit");

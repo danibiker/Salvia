@@ -147,7 +147,7 @@ struct t_scale_props{
 // Reservamos para el caso maximo (ej. 512x512 -> 1024x1024)
 // 2048 * 1152 permite hasta Scale4x de una imagen de 512x256 o xBRZ alto
 //
-// ★ NO convertir esto en 'extern' con una definicion unica, por tentador que sea.
+// NO convertir esto en 'extern' con una definicion unica, por tentador que sea.
 // Al ser 'static' en una cabecera, CADA unidad de compilacion tiene su propia copia,
 // y de eso depende que funcione: los dos consumidores reales son menus/gamemenu.cpp
 // (hilo principal) y menus/menuassetloader.cpp, que es un HILO PERSISTENTE aparte
@@ -256,9 +256,9 @@ struct GameData {
 		description[0] = '\0';
 	}
 
-	// --- M�todos SET seguros ---
+	// --- Metodos SET seguros ---
     void setCloneof(const char* src) {
-        // Copia asegurando que no se pase del tama�o y fuerza el car�cter nulo al final
+        // Copia asegurando que no se pase del tamanyo y fuerza el caracter nulo al final
         std::strncpy(cloneof, src, sizeof(cloneof) - 1);
         cloneof[sizeof(cloneof) - 1] = '\0';
     }
@@ -767,6 +767,28 @@ struct t_joy_state {
 	int16_t mouse_rel_x;
 	int16_t mouse_rel_y;
 	bool mouse_buttons[3];
+
+	/* --- Varios ratones fisicos -------------------------------------------
+	 * Los campos de arriba son el raton de SDL, que es UNO solo: SDL 1.2 no tiene
+	 * multi-raton, y en Xbox el plugin hidmouse le pasa el AGREGADO de todos (la
+	 * suma). Eso es lo que se quiere para el cursor del menu -- cualquier raton lo
+	 * mueve -- pero no sirve para el juego: con dos pistolas, mover la del jugador
+	 * 2 movería tambien la mira del 1.
+	 *
+	 * Por eso el juego lee estos slots, uno por raton fisico. Con un solo raton
+	 * miceCount vale 1 y el slot 0 es una copia exacta del raton de SDL, asi que
+	 * no cambia nada de lo que ya funcionaba; solo al aparecer un segundo raton se
+	 * integra la posicion de cada uno por separado (ver Joystick::updateMice). */
+	static const int MAX_MICE = 4;
+	uint16_t mice_x[MAX_MICE];
+	uint16_t mice_y[MAX_MICE];
+	int16_t  mice_rel_x[MAX_MICE];
+	int16_t  mice_rel_y[MAX_MICE];
+	bool     mice_buttons[MAX_MICE][3];   /* [izq, medio, der], como mouse_buttons */
+	int      miceCount;                   /* ratones utilizables; nunca menor que 1 */
+	/* Puerto -> slot de raton, o -1 si a ese puerto no le toca ninguno (dos
+	 * pistolas con un solo raton). Lo reparte updateMice. */
+	int      mouseOfPort[MAX_PLAYERS];
 	
 	// Keyboard state for retro_keyboard_event callback (overlay support)
 	static const int MAX_RETRO_KEYS = 342;  // RETROK_LAST = 342
@@ -839,6 +861,15 @@ struct t_joy_state {
 		turboPhaseOn = true;
 		mouse_x = mouse_y = mouse_rel_x = mouse_rel_y = 0;
 		memset(mouse_buttons, 0, sizeof(mouse_buttons));
+		miceCount = 1;
+		memset(mice_x, 0, sizeof(mice_x));
+		memset(mice_y, 0, sizeof(mice_y));
+		memset(mice_rel_x, 0, sizeof(mice_rel_x));
+		memset(mice_rel_y, 0, sizeof(mice_rel_y));
+		memset(mice_buttons, 0, sizeof(mice_buttons));
+		/* Todos los puertos al slot 0 = comportamiento de un solo raton. Es tambien
+		 * el valor bueno para Windows y para cuando updateMice no llega a correr. */
+		memset(mouseOfPort, 0, sizeof(mouseOfPort));
 		for (int i = 0; i < MAX_RETRO_KEYS; ++i) {
 			keyboard_state[i] = t_key_input();
 		}

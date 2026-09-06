@@ -207,9 +207,10 @@ class GameMenu : public Engine{
 		bool onscreenKeyboard;
 		SDL_Rect rectFps;
 		/* Ultima posicion dibujada de la reticula del lightgun, para borrarla en el
-		 * frame siguiente (mismo patron que los contadores de FPS/memoria). */
-		SDL_Rect crosshairRect;
-		bool     crosshairDrawn;
+		 * frame siguiente (mismo patron que los contadores de FPS/memoria). Una por
+		 * PUERTO: con dos ratones puede haber dos pistolas a la vez. */
+		SDL_Rect crosshairRect[MAX_PLAYERS];
+		bool     crosshairDrawn[MAX_PLAYERS];
 		Uint32 bkgTextFps;
 		SDL_Surface* fpsSurface;
 		SDL_Surface* cpuSurface;

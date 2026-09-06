@@ -12,6 +12,16 @@
 
 extern void retro_set_controller_port_device(unsigned port, unsigned device);
 
+#ifdef _XBOX
+/* Canal POR RATON del plugin hidmouse (libSDLx360/SDL_xboxhidmouse.cpp). No
+ * pasa por SDL a proposito: SDL 1.2 tiene un unico cursor y volveria a
+ * fusionar los ratones. Ver Joystick::updateMice. */
+extern "C" int  XBOX_HIDMouse_DeviceCount(void);
+extern "C" int  XBOX_HIDMouse_DeviceConnected(int idx);
+extern "C" void XBOX_HIDMouse_DrainDevice(int idx, int* dx, int* dy, int* dwheel,
+                                          unsigned int* buttons);
+#endif
+
 // Bridge to the core's libretro keyboard callback (registered via
 // RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK in salvia.cpp). DOSBox-Pure
 // and similar cores depend on receiving key events through this path.
@@ -763,6 +773,107 @@ void Joystick::close_joysticks() {
 		}
 		g_joysticks[i] = NULL;
 	}
+}
+
+/* Mantiene la posicion de cada raton FISICO y reparte los ratones entre los
+ * puertos que usan raton o pistola.
+ *
+ * Por que no basta con SDL: SDL 1.2 tiene un unico cursor. En Xbox el plugin
+ * hidmouse publica los deltas de cada raton por separado, pero lo que le pasa a
+ * SDL es la SUMA de todos -- que es justo lo que se quiere en el menu, donde
+ * cualquier raton debe mover el puntero. Para el juego no sirve: con dos
+ * pistolas, moverse el jugador 2 le movería la mira al 1.
+ *
+ * Mientras haya un solo raton no se hace nada especial (el slot 0 ES el raton de
+ * SDL, copiado tal cual), asi que el comportamiento de siempre no cambia. Solo al
+ * conectar un segundo raton se pasa a integrar cada posicion a mano.
+ *
+ * spanW/spanH son las dimensiones de la superficie contra la que SDL acota su
+ * raton: hay que acotar contra la MISMA o la mira y el punto de disparo dejarian
+ * de coincidir (ver GameMenu::getMouseSurface). */
+void Joystick::updateMice(int spanW, int spanH){
+	t_joy_state &in = inputs;
+	int n = 0;
+
+#ifdef _XBOX
+	int slots[t_joy_state::MAX_MICE];
+	const int slotCount = XBOX_HIDMouse_DeviceCount();
+	/* Los slots del plugin NO son contiguos (se asignan por primer hueco libre y
+	 * un replug los reordena), asi que se compactan aqui. */
+	for (int s = 0; s < slotCount && n < t_joy_state::MAX_MICE; s++){
+		if (XBOX_HIDMouse_DeviceConnected(s)) slots[n++] = s;
+	}
+#else
+	(void)spanW; (void)spanH;
+#endif
+
+	if (n < 2){
+		/* Cero o un raton: el slot 0 es el raton de SDL. Camino de siempre, y el
+		 * unico que se recorre en Windows o sin el plugin cargado. */
+		in.miceCount = 1;
+		in.mice_x[0] = in.mouse_x;
+		in.mice_y[0] = in.mouse_y;
+		in.mice_rel_x[0] = in.mouse_rel_x;
+		in.mice_rel_y[0] = in.mouse_rel_y;
+		in.mice_buttons[0][0] = in.mouse_buttons[0];
+		in.mice_buttons[0][1] = in.mouse_buttons[1];
+		in.mice_buttons[0][2] = in.mouse_buttons[2];
+		for (int p = 0; p < MAX_PLAYERS; p++) in.mouseOfPort[p] = 0;
+		return;
+	}
+
+#ifdef _XBOX
+	const int maxX = (spanW > 1) ? (spanW - 1) : 0;
+	const int maxY = (spanH > 1) ? (spanH - 1) : 0;
+
+	if (in.miceCount < 2){
+		/* Acaba de aparecer el segundo raton: todos arrancan donde esta el cursor,
+		 * para que ninguna mira aparezca de golpe en una esquina. */
+		for (int i = 0; i < n; i++){
+			in.mice_x[i] = in.mouse_x;
+			in.mice_y[i] = in.mouse_y;
+		}
+	}
+
+	for (int i = 0; i < n; i++){
+		int dx = 0, dy = 0, dw = 0;
+		unsigned int btn = 0;
+		XBOX_HIDMouse_DrainDevice(slots[i], &dx, &dy, &dw, &btn);
+
+		int x = (int)in.mice_x[i] + dx;
+		int y = (int)in.mice_y[i] + dy;
+		if (x < 0) x = 0; else if (x > maxX) x = maxX;
+		if (y < 0) y = 0; else if (y > maxY) y = maxY;
+
+		in.mice_x[i] = (uint16_t)x;
+		in.mice_y[i] = (uint16_t)y;
+		in.mice_rel_x[i] = (int16_t)dx;
+		in.mice_rel_y[i] = (int16_t)dy;
+		/* Convencion del boot-mouse HID: bit0=izq, bit1=der, bit2=medio. Aqui se
+		 * guarda [izq, medio, der], que es el orden que deja SDL en mouse_buttons
+		 * (SDL_BUTTON_LEFT/MIDDLE/RIGHT) y el que espera retro_input_state. */
+		in.mice_buttons[i][0] = (btn & 0x01) != 0;
+		in.mice_buttons[i][1] = (btn & 0x04) != 0;
+		in.mice_buttons[i][2] = (btn & 0x02) != 0;
+	}
+	in.miceCount = n;
+
+	/* Reparto por ORDEN de puerto, no puerto->indice directo: un core puede poner
+	 * la pistola en el puerto 1 con el 0 en pad, y el mapeo directo la dejaria sin
+	 * raton. Al que se queda sin (dos pistolas y un raton) se le pone -1: mejor
+	 * ninguna mira que dos pegadas moviendose a la vez. */
+	int next = 0;
+	for (int p = 0; p < MAX_PLAYERS; p++){
+		const int dev  = g_ports[p].current_device_id;
+		const int base = dev & 0xFF;
+		if (dev > 0 && (base == RETRO_DEVICE_LIGHTGUN || base == RETRO_DEVICE_MOUSE)){
+			in.mouseOfPort[p] = (next < n) ? next : -1;
+			next++;
+		} else {
+			in.mouseOfPort[p] = -1;
+		}
+	}
+#endif
 }
 
 /**

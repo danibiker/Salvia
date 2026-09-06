@@ -1096,14 +1096,18 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 				analogSlotAxis[slotNeg], analogSlotAxis[slotPos]);
 		}
 	} else if (device == RETRO_DEVICE_MOUSE && !gameMenu->isOnscreenKeybEnabled()) {
+		/* Cada puerto de raton usa el SUYO (ver Joystick::updateMice). Con un solo
+		 * raton todos apuntan al slot 0, que es el raton de SDL de siempre. */
+		const int mi = inputs->mouseOfPort[port];
+		if ((unsigned)mi >= (unsigned)t_joy_state::MAX_MICE) return 0;
 		switch (id) {
-			case RETRO_DEVICE_ID_MOUSE_X:      return inputs->mouse_rel_x;
-			case RETRO_DEVICE_ID_MOUSE_Y:      return inputs->mouse_rel_y;
-			case RETRO_DEVICE_ID_MOUSE_LEFT:   return inputs->mouse_buttons[0];
-			case RETRO_DEVICE_ID_MOUSE_RIGHT:  return inputs->mouse_buttons[2];
+			case RETRO_DEVICE_ID_MOUSE_X:      return inputs->mice_rel_x[mi];
+			case RETRO_DEVICE_ID_MOUSE_Y:      return inputs->mice_rel_y[mi];
+			case RETRO_DEVICE_ID_MOUSE_LEFT:   return inputs->mice_buttons[mi][0];
+			case RETRO_DEVICE_ID_MOUSE_RIGHT:  return inputs->mice_buttons[mi][2];
 			//case RETRO_DEVICE_ID_MOUSE_WHEELUP:   return (inputs->mouse_wheel > 0);
 			//case RETRO_DEVICE_ID_MOUSE_WHEELDOWN: return (inputs->mouse_wheel < 0);
-			case RETRO_DEVICE_ID_MOUSE_MIDDLE: return inputs->mouse_buttons[1];
+			case RETRO_DEVICE_ID_MOUSE_MIDDLE: return inputs->mice_buttons[mi][1];
 		}
 	} else if (device == RETRO_DEVICE_LIGHTGUN && !gameMenu->isOnscreenKeybEnabled()) {
 		/* Pistola de luz apuntada con el raton.
@@ -1119,19 +1123,28 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 		 * con la superficie equivocada el apuntado solo alcanzaba 1/5 del ancho).
 		 *
 		 * La reticula usa esa MISMA superficie, asi que reticula y punto de
-		 * disparo coinciden por construccion y no por ajuste. */
+		 * disparo coinciden por construccion y no por ajuste.
+		 *
+		 * El raton del que sale todo esto es el que updateMice le haya asignado a
+		 * ESTE puerto: con dos ratones conectados, dos pistolas independientes. Con
+		 * uno solo, todos los puertos comparten el slot 0 (lo de siempre). */
+		const int  mi = inputs->mouseOfPort[port];
+		/* Sin raton asignado (dos pistolas y un solo raton) se anula lo que sale
+		 * del raton, pero NO lo que sale del mando: AUX_B y START siguen yendo, que
+		 * es lo que deja moverse por los menus del juego. */
+		const bool hasMouse = ((unsigned)mi < (unsigned)t_joy_state::MAX_MICE);
 		switch (id) {
 			case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X:
 			case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y: {
 				SDL_Surface* vs = gameMenu->getMouseSurface();
 				int span, pos;
-				if (!vs) return 0;
+				if (!vs || !hasMouse) return 0;
 				if (id == RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X) {
 					span = vs->w - 1;
-					pos  = (int)inputs->mouse_x;
+					pos  = (int)inputs->mice_x[mi];
 				} else {
 					span = vs->h - 1;
-					pos  = (int)inputs->mouse_y;
+					pos  = (int)inputs->mice_y[mi];
 				}
 				if (span <= 0) return 0;
 				if (pos < 0)    pos = 0;
@@ -1145,14 +1158,14 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 			 * pistolas de verdad y lo que el core traduce al centinela. */
 			case RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN: return 0;
 
-			case RETRO_DEVICE_ID_LIGHTGUN_TRIGGER: return inputs->mouse_buttons[0];
+			case RETRO_DEVICE_ID_LIGHTGUN_TRIGGER: return hasMouse ? inputs->mice_buttons[mi][0] : 0;
 
 			/* Recargar va al boton MEDIO y no al derecho, aunque el derecho sea
 			 * el sitio natural: en Time Crisis el boton A del arma es el PEDAL
 			 * (cubrirse / salir), que se usa constantemente, y RELOAD solo hace
 			 * falta en los juegos que recargan disparando fuera de pantalla.
 			 * El derecho se reserva para el pedal. */
-			case RETRO_DEVICE_ID_LIGHTGUN_RELOAD:  return inputs->mouse_buttons[1];
+			case RETRO_DEVICE_ID_LIGHTGUN_RELOAD:  return hasMouse ? inputs->mice_buttons[mi][1] : 0;
 
 			/* AUX_A y AUX_B son los botones A y B del GunCon, que el arma
 			 * presenta al juego como Start y Cruz. Se aceptan tanto del raton
@@ -1160,7 +1173,7 @@ int16_t retro_input_state(unsigned port, unsigned device, unsigned index, unsign
 			 * de pistola (igual que upstream), asi que si no se recogen aqui se
 			 * quedan sin usar -- y hacen falta para los menus. */
 			case RETRO_DEVICE_ID_LIGHTGUN_AUX_A:
-				return inputs->mouse_buttons[2] ||
+				return (hasMouse && inputs->mice_buttons[mi][2]) ||
 				       inputs->getCoreAny(port, RETRO_DEVICE_ID_JOYPAD_START);
 			case RETRO_DEVICE_ID_LIGHTGUN_AUX_B:
 				return inputs->getCoreAny(port, RETRO_DEVICE_ID_JOYPAD_A);
