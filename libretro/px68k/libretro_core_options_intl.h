@@ -210,23 +210,7 @@ struct retro_core_option_v2_definition option_defs_fr[] = {
          { "enabled",  NULL},
          { NULL,       NULL },
       },
-      "enabled"
-   },
-   {
-      "px68k_midi_output_type",
-      "MIDI Output Type (Restart)",
-      NULL,
-      NULL,
-      NULL,
-      "audio",
-      {
-         { "LA",       NULL },
-         { "GM",       NULL },
-         { "GS",       NULL },
-         { "XG",       NULL },
-         { NULL,       NULL },
-      },
-      "GM"
+      "disabled"
    },
    {
       "px68k_adpcm_vol",
@@ -395,10 +379,29 @@ struct retro_core_option_v2_definition option_defs_fr[] = {
       "input",
       {
          { "Mouse",    "Souris" },
-         { "Joystick", "Manette" }, /* unimplemented yet */
+         { "Joystick", "Manette" },
          { NULL,       NULL },
       },
       "Mouse"
+   },
+   {
+      "px68k_joy_mouse_speed",
+      "Vitesse du pointeur a la manette",
+      NULL,
+      "Pixels par image a fond de course quand la manette deplace le pointeur de souris (Manette / souris sur Manette).",
+      NULL,
+      "input",
+      {
+         { "2",  NULL },
+         { "4",  NULL },
+         { "6",  NULL },
+         { "8",  NULL },
+         { "12", NULL },
+         { "16", NULL },
+         { "24", NULL },
+         { NULL, NULL },
+      },
+      "8"
    },
    {
       "px68k_vbtn_swap",
@@ -705,7 +708,7 @@ struct retro_core_option_v2_definition option_defs_es[] = {
       "px68k_midi_output",
       "Salida MIDI (reinicio)",
       NULL,
-      NULL,
+      "Emula la placa MIDI CZ-6BM1. El frontend debe ofrecer una interfaz MIDI para que se oiga algo; sin salida MIDI, los juegos que detecten la placa reproducirán su música en silencio en lugar de usar el sonido FM/ADPCM interno.",
       NULL,
       "audio",
       {
@@ -713,23 +716,7 @@ struct retro_core_option_v2_definition option_defs_es[] = {
          { "enabled",  NULL},
          { NULL,       NULL },
       },
-      "enabled"
-   },
-   {
-      "px68k_midi_output_type",
-      "Tipo de salida MIDI (reinicio)",
-      NULL,
-      NULL,
-      NULL,
-      "audio",
-      {
-         { "LA",       NULL },
-         { "GM",       NULL },
-         { "GS",       NULL },
-         { "XG",       NULL },
-         { NULL,       NULL },
-      },
-      "GM"
+      "disabled"
    },
    {
       "px68k_adpcm_vol",
@@ -898,10 +885,29 @@ struct retro_core_option_v2_definition option_defs_es[] = {
       "input",
       {
          { "Mouse",    "Ratón" },
-         { "Joystick", "Mando" }, /* unimplemented yet */
+         { "Joystick", "Mando" },
          { NULL,       NULL },
       },
       "Mouse"
+   },
+   {
+      "px68k_joy_mouse_speed",
+      "Velocidad del puntero con el mando",
+      NULL,
+      "Píxeles por fotograma a fondo de recorrido cuando el mando mueve el puntero del ratón (Mando / ratón en Mando).",
+      NULL,
+      "input",
+      {
+         { "2",  NULL },
+         { "4",  NULL },
+         { "6",  NULL },
+         { "8",  NULL },
+         { "12", NULL },
+         { "16", NULL },
+         { "24", NULL },
+         { NULL, NULL },
+      },
+      "8"
    },
    {
       "px68k_vbtn_swap",

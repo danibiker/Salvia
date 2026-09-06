@@ -175,7 +175,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "px68k_midi_output",
       "MIDI Output (Restart)",
       NULL,
-      "Enable software MIDI.",
+      "Emulate the CZ-6BM1 MIDI board. The frontend must provide a MIDI interface for anything to be heard; with no MIDI output available, games that detect the board will play their music silently instead of using the internal FM/ADPCM sound.",
       NULL,
       "audio",
       {
@@ -183,23 +183,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { "enabled",  NULL},
          { NULL,       NULL },
       },
-      "enabled"
-   },
-   {
-      "px68k_midi_output_type",
-      "MIDI Output Type",
-      NULL,
-      "Sets MIDI output type.",
-      NULL,
-      "audio",
-      {
-         { "LA",       NULL },
-         { "GM",       NULL },
-         { "GS",       NULL },
-         { "XG",       NULL },
-         { NULL,       NULL },
-      },
-      "GM"
+      "disabled"
    },
    {
       "px68k_adpcm_vol",
@@ -371,10 +355,29 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "input",
       {
          { "Mouse",    NULL},
-         { "Joystick", NULL}, /* unimplemented yet */
+         { "Joystick", NULL},
          { NULL,       NULL },
       },
       "Mouse"
+   },
+   {
+      "px68k_joy_mouse_speed",
+      "Joypad Pointer Speed",
+      NULL,
+      "Pixels per frame at full deflection when the joypad drives the mouse pointer (Joy/Mouse set to Joystick).",
+      NULL,
+      "input",
+      {
+         { "2",  NULL },
+         { "4",  NULL },
+         { "6",  NULL },
+         { "8",  NULL },
+         { "12", NULL },
+         { "16", NULL },
+         { "24", NULL },
+         { NULL, NULL },
+      },
+      "8"
    },
    {
       "px68k_vbtn_swap",

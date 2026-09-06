@@ -56,9 +56,9 @@ static void LoadDefaults(void)
 	Config.WindowFDDStat = 1;
 	Config.Sound_LPF = 1;
 	Config.SoundROMEO = 1;
-	Config.MIDI_SW = 1;
+	Config.MIDI_SW = 0;		/* matches the px68k_midi_output default */
 	Config.MIDI_Reset = 1;
-	Config.MIDI_Type = 1;
+	Config.MIDI_Type = 1;	/* GM; px68k_midi_output_type is not exposed */
 	Config.XVIMode = 0;
 	Config.ToneMap = 0;
 	Config.ToneMapFile[0] = 0;

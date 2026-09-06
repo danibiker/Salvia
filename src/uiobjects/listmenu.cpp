@@ -353,7 +353,7 @@ void ListMenu::draw(SDL_Surface *video_page, bool haveFocus){
 	if (this->listSize > 1 && this->listSize > getScreenNumLines()){
 		const int scrollX = this->getX() + marginX + rectElem.w;
 		const int scrollH = face_h_big;
-		const int scrollY = this->getY() + ((this->curPos) / (float)(this->listSize - 1)) * ((getScreenNumLines() - 1) * scrollH);
+		const int scrollY = this->getY() + (int)((this->curPos) / (float)(this->listSize - 1)) * ((getScreenNumLines() - 1) * scrollH);
 		SDL_Rect rectElemScrollbar = {scrollX + 2, scrollY, 8, scrollH};
 		rect(video_page, rectElemScrollbar.x, rectElemScrollbar.y, rectElemScrollbar.x + rectElemScrollbar.w - 1, rectElemScrollbar.y + rectElemScrollbar.h - 1, Constant::colors[clBkgMenu].sdlColor);
 	}
@@ -965,7 +965,7 @@ void ListMenu::prevPage(){
 }
 
 void ListMenu::navigateLetter(int direction) {
-    if (this->listSize <= 0 || this->curPos >= filteredGames.size()) {
+    if (this->listSize <= 0 || this->curPos >= (int)filteredGames.size()) {
         return;
     }
 
