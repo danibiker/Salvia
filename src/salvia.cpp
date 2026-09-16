@@ -380,7 +380,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 				if (!intl || !intl->us) return false;
 				usDefs = intl->us;
 				const std::string lang = gameMenu->getCfgLoader()->configMain[cfg::mainLang].valueStr;
-				if (intl->local && lang != "en")
+				if (intl->local && lang != DEFAULT_LANG)
 					localDefs = intl->local;
 			}
 
@@ -459,7 +459,7 @@ static bool retro_environment(unsigned cmd, void *data) {
 				usV2 = intl->us;
 				v2 = intl->us;
 				const std::string lang = gameMenu->getCfgLoader()->configMain[cfg::mainLang].valueStr;
-				if (intl->local && lang != "en")
+				if (intl->local && lang != DEFAULT_LANG)
 					v2 = intl->local;
 			}
 

@@ -31,8 +31,8 @@ CfgLoader::CfgLoader(){
 	loadCoreParams();
 
 	// Se cargan los textos una vez que hemos cargado la configuracion y ya tenemos idioma asignado
-	const std::string mainLang = this->configMain[cfg::mainLang].valueStr;
-	LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
+	checkSystemLang();
+	
 	findAllBgMusic();
 	findAllSoundfonts();
 }
@@ -314,8 +314,6 @@ void CfgLoader::loadMainConfig(){
 	}
 	filecfg.close();
 
-	checkSystemLang();
-
 	if (fileopened){
 		if (isDebug()) LOG_DEBUG("Loading emulators", "");
 		std::string emulist;
@@ -391,7 +389,7 @@ void CfgLoader::checkSystemLang(){
 	std::string mainLang = configMain[cfg::mainLang].valueStr;
 	std::string xmlRegion, xmlLang;
 	
-	if (configMain[cfg::mainLang].valueStr.empty()){
+	if (mainLang.empty()){
 		//Try to guess the language
 #ifdef _XBOX
 		// Obtener el ID del idioma del sistema
@@ -403,7 +401,7 @@ void CfgLoader::checkSystemLang(){
 				langXbox = "es";
 				break;
 			case XC_LANGUAGE_ENGLISH:
-				langXbox = "en";
+				langXbox = DEFAULT_LANG;
 				break;
 			case XC_LANGUAGE_FRENCH:
 				langXbox = "fr";
@@ -416,19 +414,30 @@ void CfgLoader::checkSystemLang(){
 				break;
 			default:
 				// Idioma por defecto si no coincide
-				langXbox = "en";
+				langXbox = DEFAULT_LANG;
 				break;
 		}
-
-		configMain[cfg::mainLang].setPropValue(langXbox);
+		mainLang = langXbox;
 #else
-		configMain[cfg::mainLang].setPropValue(std::string("en"));
+		mainLang = DEFAULT_LANG;
 #endif
-		configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", std::string("eu"));
-		configMain[cfg::scrapLang] = cfg::t_cfg_props("scrapLang", configMain[cfg::mainLang].valueStr);
 	}
 
-	configMain[cfg::mainLang].getPropValue(mainLang);
+	bool fileFound = LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
+	if (!fileFound){
+		LOG_DEBUG("Language %s not found", mainLang);
+		mainLang = DEFAULT_LANG;
+		fileFound = LanguageManager::instance()->loadLanguage(Constant::getAppDir() + "\\assets\\i18n\\" + mainLang + ".ini");
+		if (!fileFound){
+			LOG_DEBUG("Default language %s not found", DEFAULT_LANG);
+		}
+	}
+
+
+	configMain[cfg::mainLang].setPropValue(mainLang);
+	configMain[cfg::scrapRegion] = cfg::t_cfg_props("scrapRegion", std::string("eu"));
+    configMain[cfg::scrapLang] = cfg::t_cfg_props("scrapLang", mainLang);
+	
 	xmlRegion = fileio.cargarFichero(Constant::getAppDir() + "\\assets\\i18n\\regionsListe.xml");
 	parsearRegiones(xmlRegion.c_str(), mainLang, region);
 	xmlRegion.clear();

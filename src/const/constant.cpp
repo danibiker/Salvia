@@ -56,6 +56,7 @@ const std::string START_FROM_EXCEPTION = "%$_START_FROMEXCEPTION_$%";
 const std::string SCRAPPING_DAT = "images.bin";
 const std::string TITLE_EMU_FILENAME = "title.png";
 const std::string PASS_MASK = "****";
+const std::string DEFAULT_LANG = "en";
 
 // Caracteres que queremos sustituir por un espacio (para no pegar palabras)
 const char SYMBOLS_TO_SPACE[] = ":-._/\\|,;"; 

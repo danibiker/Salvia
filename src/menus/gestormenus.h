@@ -499,6 +499,8 @@ private:
 	void drawImage(int i, OpcionImage *opcion, SDL_Surface *video_page);
 	void drawBordersMenuOverlay(SDL_Surface *video_page);
 
+	void rellenarVideoShaderStrings();
+
 	void resetAskPosition();
 	void poblarMenuScrapper(CfgLoader *refConfig, Menu* menuScrapper);
 	void poblarMenuHotkeys(Menu* menuHotkeys, Joystick *joystick);

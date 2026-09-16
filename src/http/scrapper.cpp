@@ -327,7 +327,7 @@ void Scrapper::procesarRespuestaScreenscraper(std::string& xmlData, ScraperAsk& 
 			resultado.sinopsis = it->child_value();
 			break; 
 		} 
-		else if (strcmp(lang, "en") == 0) {
+		else if (strcmp(lang, DEFAULT_LANG.c_str()) == 0) {
 			// Es ingles, lo guardamos como backup pero seguimos buscando por si aparece el preferido
 			resultado.sinopsis = it->child_value();
 		}

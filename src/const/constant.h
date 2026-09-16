@@ -436,6 +436,7 @@ extern const std::string SCRAPPING_DAT;
 extern const std::string PASS_MASK;
 extern const char SYMBOLS_TO_SPACE[];
 extern const char SYMBOLS_TO_REMOVE[];
+extern const std::string DEFAULT_LANG;
 
 #define LIGHTGUN_SIZES_COUNT 4
 extern const int LIGHTGUN_SIZES[LIGHTGUN_SIZES_COUNT];

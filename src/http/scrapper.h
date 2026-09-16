@@ -53,7 +53,7 @@ struct ScrapperConfig{
 	void clear(){	
 		scrapArtType = SCRAP_NO_METADATA;
 		regionPreferida = "eu";
-		lenguaPreferida = "en";
+		lenguaPreferida = DEFAULT_LANG;
 		origin = SC_SCREENCSRAPER;
 	}
 };
@@ -94,7 +94,7 @@ struct ScraperAsk {
 
 	ScraperAsk(){
 		regionPreferida = "eu";
-		lenguaPreferida = "en";
+		lenguaPreferida = DEFAULT_LANG;
 		sistema = 0;
 		gameid = -1;
 	}
