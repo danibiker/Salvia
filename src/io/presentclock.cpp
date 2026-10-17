@@ -9,8 +9,10 @@
 #include <SDL.h>
 
 /* El backend de video expone los contadores del hardware; en Windows devuelven
- * ceros porque D3D9 de escritorio no tiene callback de vblank. */
-#if defined(WIN) && defined(SALVIA_GPU_VIDEO)
+ * ceros porque D3D9 de escritorio no tiene callback de vblank.  Solo por WIN,
+ * como engine.h: SALVIA_GPU_VIDEO vive en const/constant.h, que aqui no se
+ * incluye, y con el la condicion salia siempre falsa (C3861 en Windows). */
+#ifdef WIN
 #include <video/win_d3d9.h>
 #endif
 

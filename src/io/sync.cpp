@@ -10,6 +10,9 @@
 #elif defined(WIN)
 #include <windows.h>
 #include <xmmintrin.h>
+/* SDL_XBOX_SetPresentInterval / SDL_XBOX_GetVBlankStats: en Windows los da la
+ * capa D3D9 propia, con los mismos nombres que en Xbox. */
+#include <video/win_d3d9.h>
 #endif
 
 /* Volcado de las estadisticas de framepacing.  Ya no es una opcion de menu: se

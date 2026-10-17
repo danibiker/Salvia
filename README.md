@@ -51,6 +51,8 @@ Salvia provides the following emulators from the latests releases:
   - gambatte
 * Game Boy Advance
   - vba-next
+* Nintendo 64
+  - xbox64 (port of wii64 with GLideN64 improvements) 
 * PC Engine/Turbografx-16/PC Engine CD
   - beetle-pce
   - beetle-pce-fast
@@ -103,7 +105,7 @@ Salvia can be installed into any directory (HDD or USB). As a suggestion, I like
 <img width="694" height="527" alt="image" src="https://github.com/user-attachments/assets/2e667993-959c-4f28-8117-97db79dd522b" />
 
 ### Bios
-The only thing needed for the emulators to work, is to provide the proper bios, as usual on every retroarch frontend. All the files needed can be downloaded from [https://github.com/Abdess/retrobios](https://github.com/Abdess/retrobios/releases/download/v2026.04.02/RetroPie_v1.22.2_Platform_BIOS_Pack.zip).
+The only thing needed for the emulators to work, is to provide the proper bios, as usual on every retroarch frontend. All the files needed can be downloaded from the RetroPie zip of [https://github.com/Abdess/retrobios](https://github.com/Abdess/retrobios/releases) .
 The system directory should have the following files:
 
 ```
@@ -167,6 +169,9 @@ system/
 ├── syscard2.pce
 ├── syscard3.pce
 ├── XEGAME.ROM
+├── RiceVideo.cfg
+├── RiceVideoLinux.ini
+├── mupen64plus.ini
 ├── keropi/
 │   ├── cgrom.dat
 │   ├── iplrom.dat
@@ -217,7 +222,7 @@ system/
 
 ```
 ### Roms
-**On Xbox 360**, the configuration files are preconfigured to read games from the "Roms" directory located at the root of your USB drive (usb:\roms). To begin, simply extract the "Roms" directory from the release archive and move it to the root of your USB device.
+**On Xbox 360**, the configuration files are preconfigured to read games from the "roms" directory wich can be copied at the root of your USB drive (usb:\roms) or at the same level of all the .xex files (game:\roms). To begin, simply extract the "Roms" directory from the release archive and move it to the root of your USB device or leave it as is.
 
 **On Windows**, the system utilizes the default "Roms" directory. You only need to copy your ROMs directly into that folder.
 
@@ -248,6 +253,7 @@ Usb0:\Roms
 │   └── roms\            
 ├── megacd\              (Sega CD --> m3u bin cue iso chd zip)
 ├── msx\                 (FBNeo MSX --> zip)
+├── n64\                 (Nintendo 64 --> zip n64 z64)
 ├── nes\                 (Nintendo Nes/Famicom --> nes fds unf unif zip)
 ├── ngp\                 (FBNeo NeoGeo Pocket --> zip)
 ├── ngp-beetle\          (Beetle NeoGeo Pocket --> zip ngp ngc ngpc npc)

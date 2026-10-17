@@ -42,6 +42,14 @@ CfgLoader::~CfgLoader(){
 
 void CfgLoader::initMainConfig(){
 	dirutil dir;
+	std::string romPath = "";
+
+	#ifdef _XBOX
+		romPath = "game:\\roms";
+	#else 
+		romPath = ".\\roms";
+	#endif
+
 	//Cargamos valores por defecto
 	configMain[cfg::emulators] = cfg::t_cfg_props("emulators", "");
 	configMain[cfg::emulators].desc = "#emulators: Sets a list of emulators in the order they will be presented in the frontend."
@@ -108,7 +116,7 @@ void CfgLoader::initMainConfig(){
 	configMain[cfg::libretro_state] = cfg::t_cfg_props("libretro_state", dir.getDirActual() + Constant::getFileSep() + "data" + Constant::getFileSep() + "states");
 	configMain[cfg::libretro_state].desc = "#Directory to store savestates";
 
-	configMain[cfg::roms_path] = cfg::t_cfg_props("roms_path", "");	
+	configMain[cfg::roms_path] = cfg::t_cfg_props("roms_path", romPath);	
 	configMain[cfg::roms_path].desc = "#The path usb:\\roms automatically scans Usb0, Usb1, and Usb2 for the target directory"
 									"\n#Or Hdd:\\roms for the main console hard disk"
 									"\n#Or game:\\roms for this directory";
